@@ -960,7 +960,9 @@
                                (= ,vname ,(caddar binds))
                                ,blk))))))
                ((and (pair? (cadar binds))
-                     (eq? (caadar binds) 'call))
+                     (or (eq? (caadar binds) 'call)
+                         (and (eq? (caadar binds) 'comparison)
+                              (length= (cadar binds) 4))))
                 ;; f()=c
                 (let* ((asgn (butlast (expand-forms (car binds))))
                        (name (cadr (cadar binds)))
@@ -1526,13 +1528,20 @@
 
    '=
    (lambda (e)
+     (define lhs (cadr e))
      (cond
-      ((and (pair? (cadr e))
-            (eq? (car (cadr e)) 'call))
+      ((and (pair? lhs)
+            (eq? (car lhs) 'call))
        (expand-forms (cons 'function (cdr e))))
+      ((and (pair? lhs)
+            (eq? (car lhs) 'comparison)
+            (length= lhs 4))
+       ;; allow defining functions that use comparison syntax
+       (expand-forms (list* 'function
+                            `(call ,(caddr lhs) ,(cadr lhs) ,(cadddr lhs)) (cddr e))))
       ((assignment? (caddr e))
        ;; chain of assignments - convert a=b=c to `b=c; a=c`
-       (let loop ((lhss (list (cadr e)))
+       (let loop ((lhss (list lhs))
                   (rhs  (caddr e)))
          (if (assignment? rhs)
              (loop (cons (cadr rhs) lhss) (caddr rhs))
@@ -1542,12 +1551,12 @@
                         ,@(map (lambda (l) `(= ,l ,rr))
                                lhss)
                         ,rr))))))
-      ((symbol-like? (cadr e))
+      ((symbol-like? lhs)
        `(= ,(cadr e) ,(expand-forms (caddr e))))
-      ((atom? (cadr e))
-       (error (string "invalid assignment location \"" (deparse (cadr e)) "\"")))
+      ((atom? lhs)
+       (error (string "invalid assignment location \"" (deparse lhs) "\"")))
       (else
-       (case (car (cadr e))
+       (case (car lhs)
          ((|.|)
           ;; a.b =
           (let ((a   (cadr (cadr e)))
@@ -1568,7 +1577,7 @@
                 ,rr))))
          ((tuple)
           ;; multiple assignment
-          (let ((lhss (cdr (cadr e)))
+          (let ((lhss (cdr lhs))
                 (x    (caddr e)))
             (if (and (pair? x) (pair? lhss) (eq? (car x) 'tuple)
                      (length= lhss (length (cdr x))))
@@ -1598,8 +1607,8 @@
           (error "unexpected \";\" in left side of indexed assignment"))
          ((ref)
           ;; (= (ref a . idxs) rhs)
-          (let ((a    (cadr (cadr e)))
-                (idxs (cddr (cadr e)))
+          (let ((a    (cadr lhs))
+                (idxs (cddr lhs))
                 (rhs  (caddr e)))
             (let* ((reuse (and (pair? a)
                                (contains (lambda (x)
@@ -1623,8 +1632,8 @@
                  ,r)))))
          ((|::|)
           ;; (= (|::| x T) rhs)
-          (let ((x (cadr (cadr e)))
-                (T (caddr (cadr e)))
+          (let ((x (cadr lhs))
+                (T (caddr lhs))
                 (rhs (caddr e)))
             (let ((e (remove-argument-side-effects x)))
               (expand-forms
@@ -1635,7 +1644,7 @@
           ;; (= (vcat . args) rhs)
           (error "use \"(a, b) = ...\" to assign multiple values"))
          (else
-          (error (string "invalid assignment location \"" (deparse (cadr e)) "\"")))))))
+          (error (string "invalid assignment location \"" (deparse lhs) "\"")))))))
 
    'abstract
    (lambda (e)
