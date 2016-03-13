@@ -433,7 +433,7 @@ function process_backtrace(process_func::Function, top_function::Symbol, t::Vect
     n = 0
     last_frame = StackTraces.UNKNOWN
     count = 0
-    for i = 1:length(t)
+    for i = eachindex(t)
         lkup = StackTraces.lookup(t[i])
         if lkup === StackTraces.UNKNOWN
             continue
