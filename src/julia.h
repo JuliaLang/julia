@@ -200,9 +200,10 @@ typedef struct _jl_lambda_info_t {
     // hidden fields:
     uint8_t jlcall_api : 1;     // the c-abi for fptr; 0 = jl_fptr_t, 1 = jl_fptr_sparam_t
     uint8_t inCompile : 1;
-    uint8_t needs_sparam_vals_ducttape : 1; // if there are intrinsic calls,
-                                            // probably require the sparams to compile successfully
-                                            // (and so unspecialized will be created for each linfo instead of linfo->def)
+    // if there are intrinsic calls, sparams are probably required to compile successfully,
+    // and so unspecialized will be created for each linfo instead of once in linfo->def.
+    // 0 = no, 1 = yes, 2 = not yet known
+    uint8_t needs_sparam_vals_ducttape : 2;
     jl_fptr_t fptr;             // jlcall entry point
 
     // On the old JIT, handles to all Functions generated for this linfo
