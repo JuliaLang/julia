@@ -568,8 +568,8 @@ ifneq (,$(filter $(ARCH), i386 i486 i586 i686))
 	$(JLDOWNLOAD) https://juliacache.s3.amazonaws.com/mingw32-libstdc++6-5.3.0-1.1.noarch.rpm && \
 	$(JLDOWNLOAD) https://juliacache.s3.amazonaws.com/mingw32-libgcc_s_sjlj1-5.3.0-1.1.noarch.rpm && \
 	$(JLDOWNLOAD) https://juliacache.s3.amazonaws.com/mingw32-libssp0-5.3.0-1.1.noarch.rpm && \
-	for i in *.rpm; do 7z x $$i; done && \
-	for i in *.cpio; do 7z x $$i; done && \
+	for i in *.rpm; do 7z x -y $$i; done && \
+	for i in *.cpio; do 7z x -y $$i; done && \
 	cp usr/i686-w64-mingw32/sys-root/mingw/bin/*.dll . && \
 	$(JLDOWNLOAD) PortableGit.7z https://github.com/git-for-windows/git/releases/download/v2.6.1.windows.1/PortableGit-2.6.1-32-bit.7z.exe
 else ifeq ($(ARCH),x86_64)
@@ -585,8 +585,8 @@ else ifeq ($(ARCH),x86_64)
 	$(JLDOWNLOAD) https://juliacache.s3.amazonaws.com/mingw64-libstdc++6-5.3.0-1.1.noarch.rpm && \
 	$(JLDOWNLOAD) https://juliacache.s3.amazonaws.com/mingw64-libgcc_s_seh1-5.3.0-1.1.noarch.rpm && \
 	$(JLDOWNLOAD) https://juliacache.s3.amazonaws.com/mingw64-libssp0-5.3.0-1.1.noarch.rpm && \
-	for i in *.rpm; do 7z x $$i; done && \
-	for i in *.cpio; do 7z x $$i; done && \
+	for i in *.rpm; do 7z x -y $$i; done && \
+	for i in *.cpio; do 7z x -y $$i; done && \
 	cp usr/x86_64-w64-mingw32/sys-root/mingw/bin/*.dll . && \
 	$(JLDOWNLOAD) PortableGit.7z https://github.com/git-for-windows/git/releases/download/v2.6.1.windows.1/PortableGit-2.6.1-64-bit.7z.exe
 else
