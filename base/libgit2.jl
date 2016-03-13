@@ -498,10 +498,13 @@ function transact(f::Function, repo::GitRepo)
     end
 end
 
-function set_ssl_cert_locations(cert_file)
-    GIT_OPT_SET_SSL_CERT_LOCATIONS = 12
-    ccall((:git_libgit2_opts, :libgit2), Cint, (Cint, Cstring, Ptr{Void}),
-                        GIT_OPT_SET_SSL_CERT_LOCATIONS, cert_file, C_NULL)
+function set_ssl_cert_locations(cert_loc)
+    cert_file = isfile(cert_loc) ? cert_loc : Cstring(C_NULL)
+    cert_dir  = isdir(cert_loc) ? cert_loc : Cstring(C_NULL)
+    cert_file == C_NULL && cert_dir == C_NULL && return
+    ccall((:git_libgit2_opts, :libgit2), Cint,
+          (Cint, Cstring, Cstring),
+          Cint(Consts.SET_SSL_CERT_LOCATIONS), cert_file, cert_dir)
 end
 
 function __init__()
@@ -511,11 +514,16 @@ function __init__()
         ccall((:git_libgit2_shutdown, :libgit2), Cint, ())
     end
 
-    # If we have a bundled ca cert file, point libgit2 at that so SSL connections work.
-    cert_file = abspath(ccall(:jl_get_julia_home, Any, ()),Base.DATAROOTDIR,"julia","cert.pem")
-    if isfile(cert_file)
-        set_ssl_cert_locations(cert_file)
+    # Look for OpenSSL env variable for CA bundle
+    cert_loc = if "SSL_CERT_DIR" in keys(ENV)
+        ENV["SSL_CERT_DIR"]
+    elseif "SSL_CERT_FILE" in keys(ENV)
+        ENV["SSL_CERT_FILE"]
+    else
+        # If we have a bundled ca cert file, point libgit2 at that so SSL connections work.
+        abspath(ccall(:jl_get_julia_home, Any, ()),Base.DATAROOTDIR,"julia","cert.pem")
     end
+    set_ssl_cert_locations(cert_loc)
 end
 
 
