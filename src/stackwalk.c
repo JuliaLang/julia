@@ -9,7 +9,14 @@
 #include "julia_internal.h"
 #include "threading.h"
 
-static void jl_unw_get(bt_context_t *context);
+// define `jl_unw_get` as a macro, since (like setjmp)
+// returning from the callee function will invalidate the context
+#ifdef _OS_WINDOWS_
+#define jl_unw_get(context) RtlCaptureContext(context)
+#else
+#define jl_unw_get(context) unw_getcontext(context)
+#endif
+
 static int jl_unw_init(bt_cursor_t *cursor, bt_context_t *context);
 static int jl_unw_step(bt_cursor_t *cursor, uintptr_t *ip, uintptr_t *sp);
 
@@ -67,6 +74,7 @@ size_t rec_backtrace_ctx(uintptr_t *data, size_t maxsize,
 size_t rec_backtrace(uintptr_t *data, size_t maxsize)
 {
     bt_context_t context;
+    memset(&context, 0, sizeof(context));
     jl_unw_get(&context);
     return rec_backtrace_ctx(data, maxsize, &context);
 }
@@ -87,6 +95,7 @@ JL_DLLEXPORT jl_value_t *jl_backtrace_from_here(int returnsp)
     const size_t maxincr = 1000;
     bt_context_t context;
     bt_cursor_t cursor;
+    memset(&context, 0, sizeof(context));
     jl_unw_get(&context);
     if (jl_unw_init(&cursor, &context)) {
         size_t n = 0, offset = 0;
@@ -179,12 +188,6 @@ static DWORD64 WINAPI JuliaGetModuleBase64(
 #endif
 }
 
-static void jl_unw_get(bt_context_t *context)
-{
-    memset(context, 0, sizeof(*context));
-    RtlCaptureContext(context);
-}
-
 int needsSymRefreshModuleList;
 BOOL (WINAPI *hSymRefreshModuleList)(HANDLE);
 static int jl_unw_init(bt_cursor_t *cursor, bt_context_t *Context)
@@ -273,17 +276,11 @@ static int jl_unw_step(bt_cursor_t *cursor, uintptr_t *ip, uintptr_t *sp)
 #elif defined(_CPU_ARM_) || defined(_CPU_PPC64_)
 // platforms on which libunwind may be broken
 
-size_t rec_backtrace(uintptr_t *data, size_t maxsize) { return 0; }
 static int jl_unw_init(bt_cursor_t *cursor, bt_context_t *context) { return 0; }
 static int jl_unw_step(bt_cursor_t *cursor, uintptr_t *ip, uintptr_t *sp) { return 0; }
 
 #else
 // stacktrace using libunwind
-
-static void jl_unw_get(bt_context_t *context)
-{
-    unw_getcontext(context);
-}
 
 static int jl_unw_init(bt_cursor_t *cursor, bt_context_t *context)
 {
