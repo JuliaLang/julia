@@ -305,7 +305,7 @@ jl_lambda_info_t *jl_new_lambda_info(jl_value_t *ast, jl_svec_t *tvars, jl_svec_
     li->line = 0;
     li->pure = 0;
     li->called = 0xff;
-    li->needs_sparam_vals_ducttape = 0;
+    li->needs_sparam_vals_ducttape = 2;
     if (ast && jl_is_expr(ast)) {
         jl_array_t *body = jl_lam_body((jl_expr_t*)ast)->args;
         if (has_meta(body, pure_sym))
