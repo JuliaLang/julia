@@ -1,6 +1,14 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
-export SpinLock, Mutex, init_lock!, destroy_lock!, lock!, trylock!, unlock!
+import Base: _uv_hook_close, unsafe_convert
+
+export SpinLock, Mutex,
+    init_lock!, destroy_lock!, lock!, trylock!, unlock!
+
+
+##########################################
+# Atomic Locks
+##########################################
 
 abstract AbstractLock
 
@@ -105,6 +113,10 @@ function unlock!(l::RecursiveTatasLock)
 end
 
 
+##########################################
+# System Mutexes
+##########################################
+
 # These are mutexes from libuv, which abstract pthread mutexes and
 # Windows critical sections. We're doing some error checking (and
 # paying for it in overhead), but regardless, in some situations,
@@ -117,11 +129,23 @@ const UV_MUTEX_SIZE = ccall(:jl_sizeof_uv_mutex, Cint, ())
 
 type Mutex <: AbstractLock
     ownertid::Int16
-    handle::Array{Int8}
-    Mutex() = (m = new(zero(Int16), zeros(Int8, UV_MUTEX_SIZE));
-               ccall(:uv_mutex_init, Void, (Ptr{Void},), m.handle);
-               finalizer(m, (x -> ccall(:uv_mutex_destroy, Void, (Ptr{Void},), x.handle)));
-               m)
+    handle::Ptr{Void}
+    function Mutex()
+        m = new(zero(Int16), Libc.malloc(UV_MUTEX_SIZE))
+        ccall(:uv_mutex_init, Void, (Ptr{Void},), m.handle)
+        finalizer(m, _uv_hook_close)
+        return m
+    end
+end
+
+unsafe_convert(::Type{Ptr{Void}}, m::Mutex) = m.handle
+
+function _uv_hook_close(x::Mutex)
+    h = x.handle
+    x.handle = C_NULL
+    ccall(:uv_mutex_destroy, Void, (Ptr{Void},), h)
+    Libc.free(h)
+    nothing
 end
 
 function lock!(m::Mutex)
@@ -131,7 +155,7 @@ function lock!(m::Mutex)
     # Temporary solution before we have gc transition support in codegen.
     # This could mess up gc state when we add codegen support.
     gc_state = ccall(:jl_gc_safe_enter, Int8, ())
-    ccall(:uv_mutex_lock, Void, (Ptr{Void},), m.handle)
+    ccall(:uv_mutex_lock, Void, (Ptr{Void},), m)
     ccall(:jl_gc_safe_leave, Void, (Int8,), gc_state)
     m.ownertid = threadid()
     return 0
@@ -141,7 +165,7 @@ function trylock!(m::Mutex)
     if m.ownertid == threadid()
         return 0
     end
-    r = ccall(:uv_mutex_trylock, Cint, (Ptr{Void},), m.handle)
+    r = ccall(:uv_mutex_trylock, Cint, (Ptr{Void},), m)
     if r == 0
         m.ownertid = threadid()
     end
@@ -153,6 +177,6 @@ function unlock!(m::Mutex)
         return Base.UV_EPERM
     end
     m.ownertid = 0
-    ccall(:uv_mutex_unlock, Void, (Ptr{Void},), m.handle)
+    ccall(:uv_mutex_unlock, Void, (Ptr{Void},), m)
     return 0
 end

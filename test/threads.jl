@@ -229,3 +229,35 @@ function test_fence()
     @test commbuf.correct[2] == true
 end
 test_fence()
+
+let async = Base.AsyncCondition(), t
+    c = Condition()
+    task = schedule(Task(function()
+        notify(c)
+        wait(c)
+        t = Timer(0.055)
+        wait(t)
+        ccall(:uv_async_send, Void, (Ptr{Void},), async)
+        ccall(:uv_async_send, Void, (Ptr{Void},), async)
+        wait(c)
+        sleep(0.055)
+        ccall(:uv_async_send, Void, (Ptr{Void},), async)
+        ccall(:uv_async_send, Void, (Ptr{Void},), async)
+    end))
+    wait(c)
+    notify(c)
+    delay1 = @elapsed wait(async)
+    notify(c)
+    delay2 = @elapsed wait(async)
+    @test istaskdone(task)
+    @test delay1 > 0.05
+    @test delay2 > 0.05
+    @test isopen(async)
+    @test !isopen(t)
+    close(t)
+    close(async)
+    @test_throws EOFError wait(async)
+    @test !isopen(async)
+    @test_throws EOFError wait(t)
+    @test_throws EOFError wait(async)
+end
