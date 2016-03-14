@@ -131,6 +131,9 @@ let n=10
 
         # rank
         let A = a[:,1:5]*a[:,1:5]'
+            # Make sure A is Hermitian even in the present of rounding error
+            # xianyi/OpenBLAS#729
+            A = (A' + A) / 2
             @test rank(A) == rank(Hermitian(A))
         end
 
