@@ -102,8 +102,12 @@ static void addOptimizationPasses(T *PM)
     PM->add(createJumpThreadingPass());         // Thread jumps
     PM->add(createDeadStoreEliminationPass());  // Delete dead stores
 #if !defined(INSTCOMBINE_BUG)
-    if (jl_options.opt_level >= 3)
+    if (jl_options.opt_level >= 3) {
+#ifdef LLVM39
+        initializeDemandedBitsPass(*PassRegistry::getPassRegistry());
+#endif
         PM->add(createSLPVectorizerPass());     // Vectorize straight-line code
+    }
 #endif
 
     PM->add(createAggressiveDCEPass());         // Delete dead instructions
