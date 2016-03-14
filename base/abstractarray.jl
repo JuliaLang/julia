@@ -332,7 +332,7 @@ function copy!(dest::AbstractArray, doffs::Integer,
     doffs+n-1 > length(dest) && throw(BoundsError(dest, doffs+n-1))
     doffs < 1 && throw(BoundsError(dest, doffs))
     soffs < 1 && throw(BoundsError(src, soffs))
-    @inbounds for i = 0:(n-1)
+    @inbounds for i = 0:(n-1) #Fixme iter
         dest[doffs+i] = src[soffs+i]
     end
     return dest
@@ -899,7 +899,7 @@ function hvcat{T<:Number}(rows::Tuple{Vararg{Int}}, xs::T...)
     a
 end
 
-function hvcat_fill(a, xs)
+function hvcat_fill(a::Array, xs::Tuple)
     k = 1
     nr, nc = size(a,1), size(a,2)
     for i=1:nr
@@ -1036,8 +1036,8 @@ function sub2ind{T<:Integer}(dims::Tuple{Vararg{Integer}}, I::AbstractVector{T}.
     s = dims[1]
     for j=2:length(I)
         Ij = I[j]
-        for i=1:M
-            indices[i] += s*(Ij[i]-1)
+        for (i, k) in zip(eachindex(indices), eachindex(Ij))
+            indices[i] += s*(Ij[k]-1)
         end
         s *= (j <= N ? dims[j] : 1)
     end
@@ -1179,7 +1179,7 @@ end
 function promote_to!{T,F}(f::F, offs, dest::AbstractArray{T}, A::AbstractArray)
     # map to dest array, checking the type of each result. if a result does not
     # match, do a type promotion and re-dispatch.
-    for i = offs:length(A)
+    for i = offs:length(A) #Fixme iter
         @inbounds Ai = A[i]
         el = f(Ai)
         S = typeof(el)
@@ -1219,8 +1219,8 @@ promote_eltype_op(op, A, B, C, D...) = (@_pure_meta; promote_op(op, eltype(A), p
 ## 1 argument
 map!{F}(f::F, A::AbstractArray) = map!(f, A, A)
 function map!{F}(f::F, dest::AbstractArray, A::AbstractArray)
-    for i = 1:length(A)
-        dest[i] = f(A[i])
+    for (i,j) in zip(eachindex(dest),eachindex(A))
+        dest[i] = f(A[j])
     end
     return dest
 end
@@ -1261,14 +1261,14 @@ end
 
 ## 2 argument
 function map!{F}(f::F, dest::AbstractArray, A::AbstractArray, B::AbstractArray)
-    for i = 1:length(A)
-        dest[i] = f(A[i], B[i])
+    for (i, j, k) in zip(eachindex(dest), eachindex(A), eachindex(B))
+        dest[i] = f(A[j], B[k])
     end
     return dest
 end
 
 function map_to!{T,F}(f::F, offs, dest::AbstractArray{T}, A::AbstractArray, B::AbstractArray)
-    for i = offs:length(A)
+    for i = offs:length(A) #Fixme iter
         @inbounds Ai, Bi = A[i], B[i]
         el = f(Ai, Bi)
         S = typeof(el)
@@ -1302,7 +1302,7 @@ ith_all(i, as) = (as[1][i], ith_all(i, tail(as))...)
 
 function map_n!{F}(f::F, dest::AbstractArray, As)
     n = length(As[1])
-    for i = 1:n
+    for i = 1:n #Fixme iter, one might make a @generated function here
         dest[i] = f(ith_all(i, As)...)
     end
     return dest
