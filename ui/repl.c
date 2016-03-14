@@ -609,6 +609,8 @@ static int is_running_under_wine()
 
 static void lock_low32() {
 #if defined(_P64) && defined(JL_DEBUG_BUILD)
+    // Wine currently has a that causes it to answer VirtualQuery incorrectly.
+    // See https://www.winehq.org/pipermail/wine-devel/2016-March/112188.html for details
     int under_wine = is_running_under_wine();
     // block usage of the 32-bit address space on win64, to catch pointer cast errors
     char *const max32addr = (char*)0xffffffffL;
