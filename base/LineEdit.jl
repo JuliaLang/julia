@@ -35,7 +35,6 @@ end
 
 type Prompt <: TextInterface
     prompt
-    first_prompt
     # A string or function to be printed before the prompt. May not change the length of the prompt.
     # This may be used for changing the color, issuing other terminal escape codes, etc.
     prompt_prefix
@@ -215,14 +214,13 @@ function refresh_multi_line(termbuf::TerminalBuffer, terminal::UnixTerminal, buf
 
     miscountnl = @windows ? (isa(Terminals.pipe_reader(terminal), Base.TTY) && !Base.ispty(Terminals.pipe_reader(terminal))) : false
     plength = strwidth(prompt)
-    pslength = length(prompt.data)
     # Now go through the buffer line by line
     while cur_row == 0 || endswith(l, '\n')
         l = readline(buf)
         cur_row += 1
         # We need to deal with UTF8 characters. Since the IOBuffer is a bytearray, we just count bytes
         llength = strwidth(l)
-        slength = length(l.data)
+        slength = sizeof(l)
         if cur_row == 1 # First line
             if line_pos < slength
                 num_chars = strwidth(l[1:line_pos])
@@ -492,7 +490,7 @@ function edit_insert(s::PromptState, c)
     str = string(c)
     edit_insert(s.input_buffer, str)
     if !('\n' in str) && eof(s.input_buffer) &&
-        ((position(s.input_buffer) + length(s.p.prompt) + sizeof(str) - 1) < width(terminal(s)))
+        ((position(s.input_buffer) + sizeof(s.p.prompt) + sizeof(str) - 1) < width(terminal(s)))
         #Avoid full update
         write(terminal(s), str)
     else
@@ -1573,7 +1571,6 @@ end
 const default_keymap_dict = keymap([default_keymap, escape_defaults])
 
 function Prompt(prompt;
-    first_prompt = prompt,
     prompt_prefix = "",
     prompt_suffix = "",
     keymap_dict = default_keymap_dict,
@@ -1584,13 +1581,13 @@ function Prompt(prompt;
     hist = EmptyHistoryProvider(),
     sticky = false)
 
-    Prompt(prompt, first_prompt, prompt_prefix, prompt_suffix, keymap_dict, keymap_func_data,
+    Prompt(prompt, prompt_prefix, prompt_suffix, keymap_dict, keymap_func_data,
         complete, on_enter, on_done, hist, sticky)
 end
 
 run_interface(::Prompt) = nothing
 
-init_state(terminal, prompt::Prompt) = PromptState(terminal, prompt, IOBuffer(), InputAreaState(1, 1), length(prompt.prompt))
+init_state(terminal, prompt::Prompt) = PromptState(terminal, prompt, IOBuffer(), InputAreaState(1, 1), #=indent(spaces)=#strwidth(prompt.prompt))
 
 function init_state(terminal, m::ModalInterface)
     s = MIState(m, m.modes[1], false, Dict{Any,Any}())
