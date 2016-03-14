@@ -1072,43 +1072,55 @@ A = sparse([1.0])
 @test_throws ArgumentError norm(sprand(5,5,0.2),3)
 @test_throws ArgumentError norm(sprand(5,5,0.2),2)
 
-# test ishermitian and issymmetric real matrices
-A = speye(5,5)
-@test ishermitian(A) == true
-@test issymmetric(A) == true
-A[1,3] = 1.0
-@test ishermitian(A) == false
-@test issymmetric(A) == false
-A[3,1] = 1.0
-@test ishermitian(A) == true
-@test issymmetric(A) == true
+# test ishermitian and issymmetric
+let
+    # real matrices
+    A = speye(5,5)
+    @test ishermitian(A) == true
+    @test issymmetric(A) == true
+    A[1,3] = 1.0
+    @test ishermitian(A) == false
+    @test issymmetric(A) == false
+    A[3,1] = 1.0
+    @test ishermitian(A) == true
+    @test issymmetric(A) == true
 
-# test ishermitian and issymmetric complex matrices
-A = speye(5,5) + im*speye(5,5)
-@test ishermitian(A) == false
-@test issymmetric(A) == true
-A[1,4] = 1.0 + im
-@test ishermitian(A) == false
-@test issymmetric(A) == false
+    # complex matrices
+    A = speye(5,5) + im*speye(5,5)
+    @test ishermitian(A) == false
+    @test issymmetric(A) == true
+    A[1,4] = 1.0 + im
+    @test ishermitian(A) == false
+    @test issymmetric(A) == false
 
-A = speye(Complex128, 5,5)
-A[3,2] = 1.0 + im
-@test ishermitian(A) == false
-@test issymmetric(A) == false
-A[2,3] = 1.0 - im
-@test ishermitian(A) == true
-@test issymmetric(A) == false
+    A = speye(Complex128, 5,5)
+    A[3,2] = 1.0 + im
+    @test ishermitian(A) == false
+    @test issymmetric(A) == false
+    A[2,3] = 1.0 - im
+    @test ishermitian(A) == true
+    @test issymmetric(A) == false
 
-A = sparse(zeros(5,5))
-@test ishermitian(A) == true
-@test issymmetric(A) == true
+    A = sparse(zeros(5,5))
+    @test ishermitian(A) == true
+    @test issymmetric(A) == true
 
-# Test with explicit zeros
-A = speye(Complex128, 5,5)
-A[3,1] = 2
-A.nzval[2] = 0.0
-@test ishermitian(A) == true
-@test issymmetric(A) == true
+    # explicit zeros
+    A = speye(Complex128, 5,5)
+    A[3,1] = 2
+    A.nzval[2] = 0.0
+    @test ishermitian(A) == true
+    @test issymmetric(A) == true
+
+    m = n = 5
+    colptr = [1, 5, 9, 13, 13, 17]
+    rowval = [1, 2, 3, 5, 1, 2, 3, 5, 1, 2, 3, 5, 1, 2, 3, 5]
+    nzval = [0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 1.0, 1.0, 0.0, 1.0, 1.0, 1.0, 0.0, 1.0, 1.0, 1.0]
+    A = SparseMatrixCSC(m, n, colptr, rowval, nzval)
+    @test issymmetric(A) == true
+    A.nzval[end - 3]  = 2.0
+    @test issymmetric(A) == false
+end
 
 # equality ==
 A1 = speye(10)
