@@ -999,3 +999,6 @@ export call
 @deprecate scale(A::AbstractArray, α::Number) A*α
 @deprecate scale(A::AbstractMatrix, x::AbstractVector) A*Diagonal(x)
 @deprecate scale(x::AbstractVector, A::AbstractMatrix) Diagonal(x)*A
+
+# 1933
+@deprecate_binding SingleAsyncWork AsyncCondition

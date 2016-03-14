@@ -23,6 +23,7 @@ export
     Serializer,
     Docs,
     Markdown,
+    Threads,
 
 # Types
     AbstractChannel,

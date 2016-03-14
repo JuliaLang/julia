@@ -2,10 +2,6 @@
 
 ## basic task functions and TLS
 
-function show(io::IO, t::Task)
-    print(io, "Task ($(t.state)) @0x$(hex(convert(UInt, pointer_from_objref(t)), WORD_SIZE>>2))")
-end
-
 # Container for a captured exception and its backtrace. Can be serialized.
 type CapturedException
     ex::Any
@@ -49,15 +45,12 @@ function showerror(io::IO, ex::CompositeException)
     end
 end
 
+function show(io::IO, t::Task)
+    print(io, "Task ($(t.state)) @0x$(hex(convert(UInt, pointer_from_objref(t)), WORD_SIZE>>2))")
+end
 
 macro task(ex)
     :(Task(()->$(esc(ex))))
-end
-
-# schedule an expression to run asynchronously, with minimal ceremony
-macro schedule(expr)
-    expr = :(()->($expr))
-    :(enq_work(Task($(esc(expr)))))
 end
 
 current_task() = ccall(:jl_get_current_task, Any, ())::Task
@@ -69,14 +62,6 @@ istaskdone(t::Task) = ((t.state == :done) | (t.state == :failed))
 Tell whether a task has started executing.
 """
 istaskstarted(t::Task) = ccall(:jl_is_task_started, Cint, (Any,), t) != 0
-
-yieldto(t::Task, x::ANY = nothing) = ccall(:jl_switchto, Any, (Any, Any), t, x)
-
-# yield to a task, throwing an exception in it
-function throwto(t::Task, exc)
-    t.exception = exc
-    yieldto(t)
-end
 
 task_local_storage() = get_task_tls(current_task())
 function get_task_tls(t::Task)
@@ -255,116 +240,6 @@ end
 next(t::Task, val) = (t.result, nothing)
 
 isempty(::Task) = error("isempty not defined for Tasks")
-
-## condition variables
-
-type Condition
-    waitq::Vector{Any}
-
-    Condition() = new([])
-end
-
-function wait(c::Condition)
-    ct = current_task()
-
-    push!(c.waitq, ct)
-
-    try
-        return wait()
-    catch
-        filter!(x->x!==ct, c.waitq)
-        rethrow()
-    end
-end
-
-notify(c::Condition, arg::ANY=nothing; all=true, error=false) = notify(c, arg, all, error)
-function notify(c::Condition, arg, all, error)
-    if all
-        for t in c.waitq
-            schedule(t, arg, error=error)
-        end
-        empty!(c.waitq)
-    elseif !isempty(c.waitq)
-        t = shift!(c.waitq)
-        schedule(t, arg, error=error)
-    end
-    nothing
-end
-
-notify1(c::Condition, arg=nothing) = notify(c, arg, all=false)
-
-notify_error(c::Condition, err) = notify(c, err, error=true)
-notify1_error(c::Condition, err) = notify(c, err, error=true, all=false)
-
-
-## scheduler and work queue
-
-global const Workqueue = Any[]
-
-function enq_work(t::Task)
-    t.state == :runnable || error("schedule: Task not runnable")
-    ccall(:uv_stop, Void, (Ptr{Void},), eventloop())
-    push!(Workqueue, t)
-    t.state = :queued
-    t
-end
-
-schedule(t::Task) = enq_work(t)
-
-function schedule(t::Task, arg; error=false)
-    # schedule a task to be (re)started with the given value or exception
-    if error
-        t.exception = arg
-    else
-        t.result = arg
-    end
-    enq_work(t)
-end
-
-# fast version of schedule(t,v);wait()
-function schedule_and_wait(t, v=nothing)
-    t.state == :runnable || error("schedule: Task not runnable")
-    if isempty(Workqueue)
-        return yieldto(t, v)
-    else
-        t.result = v
-        push!(Workqueue, t)
-        t.state = :queued
-    end
-    wait()
-end
-
-yield() = (enq_work(current_task()); wait())
-
-function wait()
-    while true
-        if isempty(Workqueue)
-            c = process_events(true)
-            if c==0 && eventloop()!=C_NULL && isempty(Workqueue)
-                # if there are no active handles and no runnable tasks, just
-                # wait for signals.
-                pause()
-            end
-        else
-            t = shift!(Workqueue)
-            t.state == :queued || throw(AssertionError("shift!(Workqueue).state == :queued"))
-            arg = t.result
-            t.result = nothing
-            t.state = :runnable
-            result = yieldto(t, arg)
-            current_task().state == :runnable || throw(AssertionError("current_task().state == :runnable"))
-            process_events(false)
-            # return when we come out of the queue
-            return result
-        end
-    end
-    assert(false)
-end
-
-function pause()
-    @unix_only    ccall(:pause, Void, ())
-    @windows_only ccall(:Sleep,stdcall, Void, (UInt32,), 0xffffffff)
-end
 
 
 ## dynamically-scoped waiting for multiple items
