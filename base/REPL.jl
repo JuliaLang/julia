@@ -507,12 +507,14 @@ function history_move_prefix(s::LineEdit.PrefixSearchState,
         if (idx == max_idx) || (startswith(hist.history[idx], prefix) && (hist.history[idx] != cur_response || hist.modes[idx] != LineEdit.mode(s)))
             m = history_move(s, hist, idx)
             if m == :ok
-                if isempty(prefix)
+                if idx == max_idx
+                    # on resuming the in-progress edit, leave the cursor where the user last had it
+                elseif isempty(prefix)
                     # on empty prefix search, move cursor to the end
                     LineEdit.move_input_end(s)
                 else
                     # otherwise, keep cursor at the prefix position as a visual cue
-                    seek(LineEdit.buffer(s), length(prefix))
+                    seek(LineEdit.buffer(s), sizeof(prefix))
                 end
                 LineEdit.refresh_line(s)
                 return :ok
@@ -551,7 +553,7 @@ function history_search(hist::REPLHistoryProvider, query_buffer::IOBuffer, respo
     if 1 <= searchstart <= endof(response_str)
         match = searchfunc(response_str, searchdata, searchstart)
         if match != 0:-1
-            seek(response_buffer, first(match)-1)
+            seek(response_buffer, prevind(response_str, first(match)))
             return true
         end
     end
@@ -564,7 +566,7 @@ function history_search(hist::REPLHistoryProvider, query_buffer::IOBuffer, respo
         if match != 0:-1 && h != response_str && haskey(hist.mode_mapping, hist.modes[idx])
             truncate(response_buffer, 0)
             write(response_buffer, h)
-            seek(response_buffer, first(match)-1)
+            seek(response_buffer, prevind(response_str, first(match)))
             hist.cur_idx = idx
             return true
         end

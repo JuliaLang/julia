@@ -158,7 +158,7 @@ end
 
 function AddCustomMode(repl)
     # Custom REPL mode tests
-    foobar_mode = LineEdit.Prompt("Test";
+    foobar_mode = LineEdit.Prompt("TestΠ";
         prompt_prefix="\e[38;5;166m",
         prompt_suffix=Base.text_colors[:white],
         on_enter = s->true,
@@ -286,15 +286,33 @@ begin
     @test ps.prefix == ""
     @test ps.parent == repl_mode
     @test LineEdit.input_string(ps) == "2 + 2"
+    @test position(LineEdit.buffer(s)) == 5
     LineEdit.history_prev_prefix(ps, hp, "")
     @test ps.parent == shell_mode
     @test LineEdit.input_string(ps) == "ls"
+    @test position(LineEdit.buffer(s)) == 2
     LineEdit.history_prev_prefix(ps, hp, "sh")
     @test ps.parent == repl_mode
     @test LineEdit.input_string(ps) == "shell"
+    @test position(LineEdit.buffer(s)) == 2
     LineEdit.history_next_prefix(ps, hp, "sh")
     @test ps.parent == repl_mode
     @test LineEdit.input_string(ps) == "wip"
+    @test position(LineEdit.buffer(s)) == 0
+    LineEdit.move_input_end(s)
+    LineEdit.history_prev_prefix(ps, hp, "é")
+    @test ps.parent == repl_mode
+    @test LineEdit.input_string(ps) == "éé"
+    @test position(LineEdit.buffer(s)) == sizeof("é") > 1
+    LineEdit.history_prev_prefix(ps, hp, "é")
+    @test ps.parent == repl_mode
+    @test LineEdit.input_string(ps) == "é"
+    @test position(LineEdit.buffer(s)) == sizeof("é")
+    LineEdit.history_next_prefix(ps, hp, "zzz")
+    @test ps.parent == repl_mode
+    @test LineEdit.input_string(ps) == "wip"
+    @test position(LineEdit.buffer(s)) == 3
+    LineEdit.accept_result(s, prefix_mode)
 
     # Test that searching backwards puts you into the correct mode and
     # skips invalid modes.
@@ -305,6 +323,7 @@ begin
     LineEdit.accept_result(s, histp)
     @test LineEdit.mode(s) == shell_mode
     @test buffercontents(LineEdit.buffer(s)) == "ls"
+    @test position(LineEdit.buffer(s)) == 0
 
     # Test that searching for `ll` actually matches `ll` after
     # both letters are types rather than jumping to `shell`
@@ -317,6 +336,7 @@ begin
     LineEdit.accept_result(s, histp)
     @test LineEdit.mode(s) == shell_mode
     @test buffercontents(LineEdit.buffer(s)) == "ll"
+    @test position(LineEdit.buffer(s)) == 0
 
     # Test that searching backwards with a one-letter query doesn't
     # return indefinitely the same match (#9352)
@@ -328,16 +348,19 @@ begin
     LineEdit.accept_result(s, histp)
     @test LineEdit.mode(s) == repl_mode
     @test buffercontents(LineEdit.buffer(s)) == "shell"
+    @test position(LineEdit.buffer(s)) == 4
 
     # Test that searching backwards doesn't skip matches (#9352)
     # (for a search with multiple one-byte characters, or UTF-8 characters)
     LineEdit.enter_search(s, histp, true)
     write(ss.query_buffer, "é") # matches right-most "é" in "éé"
     LineEdit.update_display_buffer(ss, ss)
+    @test position(ss.query_buffer) == sizeof("é")
     LineEdit.history_next_result(s, ss) # matches left-most "é" in "éé"
     LineEdit.update_display_buffer(ss, ss)
     LineEdit.accept_result(s, histp)
     @test buffercontents(LineEdit.buffer(s)) == "éé"
+    @test position(LineEdit.buffer(s)) == 0
 
     # Issue #7551
     # Enter search mode and try accepting an empty result
@@ -348,6 +371,7 @@ begin
     LineEdit.accept_result(s, histp)
     @test LineEdit.mode(s) == cur_mode
     @test buffercontents(LineEdit.buffer(s)) == ""
+    @test position(LineEdit.buffer(s)) == 0
 
     # Test that new modes can be dynamically added to the REPL and will
     # integrate nicely
@@ -361,12 +385,14 @@ begin
     LineEdit.accept_result(s, histp)
     @test LineEdit.mode(s) == foobar_mode
     @test buffercontents(LineEdit.buffer(s)) == "ls"
+    @test position(LineEdit.buffer(s)) == 0
 
     # Try the same for prefix search
     LineEdit.history_next(s, hp)
     LineEdit.history_prev_prefix(ps, hp, "l")
     @test ps.parent == foobar_mode
     @test LineEdit.input_string(ps) == "ls"
+    @test position(LineEdit.buffer(s)) == 1
 
     # Try entering search mode while in custom repl mode
     LineEdit.enter_search(s, custom_histp, true)
@@ -374,7 +400,7 @@ end
 # Simple non-standard REPL tests
 if @unix? true : (Base.windows_version() >= Base.WINDOWS_VISTA_VER)
     stdin_write, stdout_read, stdout_read, repl = fake_repl()
-    panel = LineEdit.Prompt("test";
+    panel = LineEdit.Prompt("testπ";
         prompt_prefix="\e[38;5;166m",
         prompt_suffix=Base.text_colors[:white],
         on_enter = s->true)
