@@ -68,6 +68,9 @@
 #include <llvm/Transforms/Utils/BasicBlockUtils.h>
 #include <llvm/Transforms/Instrumentation.h>
 #include <llvm/Transforms/Vectorize.h>
+#ifdef LLVM39
+#include <llvm/Transforms/Scalar/GVN.h>
+#endif
 #include <llvm/Support/Host.h>
 #include <llvm/Support/TargetSelect.h>
 #include <llvm/Support/raw_ostream.h>
