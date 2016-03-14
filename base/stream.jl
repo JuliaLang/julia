@@ -1,7 +1,5 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
-include(string(length(Core.ARGS)>=2?Core.ARGS[2]:"","uv_constants.jl"))  # include($BUILDROOT/base/uv_constants.jl)
-
 import .Libc: RawFD, dup
 @windows_only import .Libc: WindowsRawSocket
 
@@ -38,21 +36,6 @@ abstract LibuvStream <: IO
 
 # Redirectable = Union{IO, FileRedirect, Libc.RawFD} (not exported)
 
-# convert UV handle data to julia object, checking for null
-macro handle_as(hand, typ)
-    quote
-        data = uv_handle_data($(esc(hand)))
-        data == C_NULL && return
-        unsafe_pointer_to_objref(data)::($(esc(typ)))
-    end
-end
-
-# A dict of all libuv handles that are being waited on somewhere in the system
-# and should thus not be garbage collected
-const uvhandles = ObjectIdDict()
-preserve_handle(x) = uvhandles[x] = get(uvhandles,x,0)::Int+1
-unpreserve_handle(x) = (v = uvhandles[x]::Int; v == 1 ? pop!(uvhandles,x) : (uvhandles[x] = v-1); nothing)
-
 function stream_wait(x, c...) # for x::LibuvObject
     preserve_handle(x)
     try
@@ -60,28 +43,6 @@ function stream_wait(x, c...) # for x::LibuvObject
     finally
         unpreserve_handle(x)
     end
-end
-
-
-function uv_sizeof_handle(handle)
-    if !(UV_UNKNOWN_HANDLE < handle < UV_HANDLE_TYPE_MAX)
-        throw(DomainError())
-    end
-    ccall(:uv_handle_size,Csize_t,(Int32,),handle)
-end
-
-function uv_sizeof_req(req)
-    if !(UV_UNKNOWN_REQ < req < UV_REQ_TYPE_MAX)
-        throw(DomainError())
-    end
-    ccall(:uv_req_size,Csize_t,(Int32,),req)
-end
-
-for h in uv_handle_types
-@eval const $(symbol("_sizeof_"*lowercase(string(h)))) = uv_sizeof_handle($h)
-end
-for r in uv_req_types
-@eval const $(symbol("_sizeof_"*lowercase(string(r)))) = uv_sizeof_req($r)
 end
 
 nb_available(s::LibuvStream) = nb_available(s.buffer)
@@ -134,11 +95,6 @@ function uv_status_string(x)
     end
     return "invalid status"
 end
-
-uv_handle_data(handle) = ccall(:jl_uv_handle_data,Ptr{Void},(Ptr{Void},),handle)
-uv_req_data(handle) = ccall(:jl_uv_req_data,Ptr{Void},(Ptr{Void},),handle)
-uv_req_set_data(req,data) = ccall(:jl_uv_req_set_data,Void,(Ptr{Void},Any),req,data)
-uv_req_set_data(req,data::Ptr{Void}) = ccall(:jl_uv_req_set_data,Void,(Ptr{Void},Ptr{Void}),req,data)
 
 type PipeEndpoint <: LibuvStream
     handle::Ptr{Void}
@@ -262,12 +218,6 @@ uvtype(::LibuvStream) = UV_STREAM
 uvhandle(stream::LibuvStream) = stream.handle
 unsafe_convert(::Type{Ptr{Void}}, s::Union{LibuvStream, LibuvServer}) = s.handle
 
-associate_julia_struct(handle::Ptr{Void}, jlobj::ANY) =
-    ccall(:jl_uv_associate_julia_struct, Void, (Ptr{Void}, Any), handle, jlobj)
-disassociate_julia_struct(uv) = disassociate_julia_struct(uv.handle)
-disassociate_julia_struct(handle::Ptr{Void}) =
-    handle != C_NULL && ccall(:jl_uv_disassociate_julia_struct, Void, (Ptr{Void},), handle)
-
 function init_stdio(handle::Ptr{Void})
     t = ccall(:jl_uv_handle_type, Int32, (Ptr{Void},), handle)
     if t == UV_FILE
@@ -290,25 +240,6 @@ function init_stdio(handle::Ptr{Void})
         finalizer(ret, uvfinalize)
         return ret
     end
-end
-
-function reinit_stdio()
-    global uv_jl_asynccb       = cfunction(uv_asynccb, Void, (Ptr{Void},))
-    global uv_jl_timercb       = cfunction(uv_timercb, Void, (Ptr{Void},))
-    global uv_jl_alloc_buf     = cfunction(uv_alloc_buf, Void, (Ptr{Void}, Csize_t, Ptr{Void}))
-    global uv_jl_readcb        = cfunction(uv_readcb, Void, (Ptr{Void}, Cssize_t, Ptr{Void}))
-    global uv_jl_connectioncb  = cfunction(uv_connectioncb, Void, (Ptr{Void}, Cint))
-    global uv_jl_connectcb     = cfunction(uv_connectcb, Void, (Ptr{Void}, Cint))
-    global uv_jl_writecb_task  = cfunction(uv_writecb_task, Void, (Ptr{Void}, Cint))
-    global uv_jl_getaddrinfocb = cfunction(uv_getaddrinfocb, Void, (Ptr{Void},Cint,Ptr{Void}))
-    global uv_jl_recvcb        = cfunction(uv_recvcb, Void, (Ptr{Void}, Cssize_t, Ptr{Void}, Ptr{Void}, Cuint))
-    global uv_jl_sendcb        = cfunction(uv_sendcb, Void, (Ptr{Void}, Cint))
-    global uv_jl_return_spawn  = cfunction(uv_return_spawn, Void, (Ptr{Void}, Int64, Int32))
-
-    global uv_eventloop = ccall(:jl_global_event_loop, Ptr{Void}, ())
-    global STDIN = init_stdio(ccall(:jl_stdin_stream ,Ptr{Void},()))
-    global STDOUT = init_stdio(ccall(:jl_stdout_stream,Ptr{Void},()))
-    global STDERR = init_stdio(ccall(:jl_stderr_stream,Ptr{Void},()))
 end
 
 function isopen(x::Union{LibuvStream, LibuvServer})
@@ -605,142 +536,6 @@ show(io::IO, stream::Pipe) = print(io,
     uv_status_string(stream.out), ", ",
     nb_available(stream), " bytes waiting)")
 
-##########################################
-# Async Worker
-##########################################
-
-type SingleAsyncWork
-    handle::Ptr{Void}
-    cb::Function
-    function SingleAsyncWork(cb::Function)
-        this = new(Libc.malloc(_sizeof_uv_async), cb)
-        associate_julia_struct(this.handle, this)
-        preserve_handle(this)
-        err = ccall(:uv_async_init,Cint,(Ptr{Void},Ptr{Void},Ptr{Void}),eventloop(),this.handle,uv_jl_asynccb::Ptr{Void})
-        this
-    end
-end
-
-close(t::SingleAsyncWork) = ccall(:jl_close_uv,Void,(Ptr{Void},),t.handle)
-
-_uv_hook_close(uv::SingleAsyncWork) = (uv.handle = C_NULL; unpreserve_handle(uv); nothing)
-
-function uv_asynccb(handle::Ptr{Void})
-    async = @handle_as handle SingleAsyncWork
-    try
-        async.cb(async)
-    catch
-    end
-    nothing
-end
-
-##########################################
-# Timer
-##########################################
-
-type Timer
-    handle::Ptr{Void}
-    cond::Condition
-    isopen::Bool
-
-    function Timer(timeout::Real, repeat::Real=0.0)
-        timeout ≥ 0 || throw(ArgumentError("timer cannot have negative timeout of $timeout seconds"))
-        repeat ≥ 0 || throw(ArgumentError("timer cannot have negative repeat interval of $repeat seconds"))
-
-        this = new(Libc.malloc(_sizeof_uv_timer), Condition(), true)
-        err = ccall(:uv_timer_init,Cint,(Ptr{Void},Ptr{Void}),eventloop(),this.handle)
-        if err != 0
-            #TODO: this codepath is currently not tested
-            Libc.free(this.handle)
-            this.handle = C_NULL
-            throw(UVError("uv_make_timer",err))
-        end
-
-        associate_julia_struct(this.handle, this)
-        preserve_handle(this)
-
-        ccall(:uv_update_time, Void, (Ptr{Void},), eventloop())
-        ccall(:uv_timer_start, Cint, (Ptr{Void},Ptr{Void},UInt64,UInt64),
-              this.handle, uv_jl_timercb::Ptr{Void},
-              UInt64(round(timeout*1000))+1, UInt64(round(repeat*1000)))
-        return this
-    end
-end
-
-wait(t::Timer) = wait(t.cond)
-
-isopen(t::Timer) = t.isopen
-
-function close(t::Timer)
-    if t.handle != C_NULL
-        t.isopen = false
-        ccall(:uv_timer_stop, Cint, (Ptr{Void},), t.handle)
-        ccall(:jl_close_uv, Void, (Ptr{Void},), t.handle)
-    end
-    nothing
-end
-
-function _uv_hook_close(t::Timer)
-    unpreserve_handle(t)
-    disassociate_julia_struct(t)
-    t.handle = C_NULL
-    t.isopen = false
-    notify_error(t.cond, EOFError())
-    nothing
-end
-
-function uv_timercb(handle::Ptr{Void})
-    t = @handle_as handle Timer
-    if ccall(:uv_timer_get_repeat, UInt64, (Ptr{Void},), t.handle) == 0
-        # timer is stopped now
-        close(t)
-    end
-    notify(t.cond)
-    nothing
-end
-
-function sleep(sec::Real)
-    sec ≥ 0 || throw(ArgumentError("cannot sleep for $sec seconds"))
-    wait(Timer(sec))
-    nothing
-end
-
-# timer with repeated callback
-function Timer(cb::Function, timeout::Real, repeat::Real=0.0)
-    t = Timer(timeout, repeat)
-    waiter = @task begin
-        while isopen(t)
-            success = try
-                wait(t)
-                true
-            catch # ignore possible exception on close()
-                false
-            end
-            success && cb(t)
-        end
-    end
-    # must start the task right away so that it can wait for the Timer before
-    # we re-enter the event loop. this avoids a race condition. see issue #12719
-    enq_work(current_task())
-    yieldto(waiter)
-    return t
-end
-
-## event loop ##
-eventloop() = global uv_eventloop::Ptr{Void}
-#mkNewEventLoop() = ccall(:jl_new_event_loop,Ptr{Void},()) # this would probably be fine, but is nowhere supported
-
-function run_event_loop()
-    ccall(:jl_run_event_loop,Void,(Ptr{Void},),eventloop())
-end
-function process_events(block::Bool)
-    loop = eventloop()
-    if block
-        return ccall(:jl_run_once,Int32,(Ptr{Void},),loop)
-    else
-        return ccall(:jl_process_events,Int32,(Ptr{Void},),loop)
-    end
-end
 
 ## Functions for PipeEndpoint and PipeServer ##
 
@@ -1065,22 +860,6 @@ function uv_writecb_task(req::Ptr{Void}, status::Cint)
     Libc.free(req)
     nothing
 end
-
-## Libuv error handling ##
-
-type UVError <: Exception
-    prefix::AbstractString
-    code::Int32
-    UVError(p::AbstractString,code::Integer)=new(p,code)
-end
-
-struverror(err::UVError) = bytestring(ccall(:uv_strerror,Cstring,(Int32,),err.code))
-uverrorname(err::UVError) = bytestring(ccall(:uv_err_name,Cstring,(Int32,),err.code))
-
-uv_error(prefix::Symbol, c::Integer) = uv_error(string(prefix),c)
-uv_error(prefix::AbstractString, c::Integer) = c < 0 ? throw(UVError(prefix,c)) : nothing
-show(io::IO, e::UVError) = print(io, e.prefix*": "*struverror(e)*" ("*uverrorname(e)*")")
-
 
 ## server functions ##
 
