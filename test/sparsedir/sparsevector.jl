@@ -950,3 +950,20 @@ x = sparsevec(1:7, [3., 2., -1., 1., -2., -3., 3.], 15)
 @test collect(sort(x, by=abs)) == sort(collect(x), by=abs)
 @test collect(sort(x, by=sign)) == sort(collect(x), by=sign)
 @test collect(sort(x, by=inv)) == sort(collect(x), by=inv)
+
+#fill!
+for Tv in [Float32, Float64, Int64, Int32, Complex128]
+    for Ti in [Int16, Int32, Int64, BigInt]
+        sptypes = (SparseMatrixCSC{Tv, Ti}, SparseVector{Tv, Ti})
+        sizes = [(3, 4), (3,)]
+        for (siz, Sp) in zip(sizes, sptypes)
+            arr = rand(Tv, siz...)
+            sparr = Sp(arr)
+            fillval = rand(Tv)
+            fill!(sparr, fillval)
+            @test full(sparr) == fillval * ones(arr)
+            fill!(sparr, 0)
+            @test full(sparr) == zeros(arr)
+        end
+    end
+end
