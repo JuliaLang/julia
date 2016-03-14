@@ -47,8 +47,6 @@ imag(A::UnitUpperTriangular) = UpperTriangular(triu!(imag(A.data),1))
 full(A::AbstractTriangular) = convert(Matrix, A)
 parent(A::AbstractTriangular) = A.data
 
-fill!(A::AbstractTriangular, x) = (fill!(A.data, x); A)
-
 # then handle all methods that requires specific handling of upper/lower and unit diagonal
 
 function convert{Tret,T,S}(::Type{Matrix{Tret}}, A::LowerTriangular{T,S})
@@ -376,6 +374,8 @@ scale!(c::Number, A::Union{UpperTriangular,LowerTriangular}) = scale!(A,c)
 ######################
 
 A_mul_B!(A::Tridiagonal, B::AbstractTriangular) = A*full!(B)
+A_mul_B!(C::AbstractMatrix, A::AbstractTriangular, B::Tridiagonal) = A_mul_B!(C, full(A), B)
+A_mul_B!(C::AbstractMatrix, A::Tridiagonal, B::AbstractTriangular) = A_mul_B!(C, A, full(B))
 A_mul_B!(C::AbstractVector, A::AbstractTriangular, B::AbstractVector) = A_mul_B!(A, copy!(C, B))
 A_mul_B!(C::AbstractMatrix, A::AbstractTriangular, B::AbstractVecOrMat) = A_mul_B!(A, copy!(C, B))
 A_mul_B!(C::AbstractVecOrMat, A::AbstractTriangular, B::AbstractVecOrMat) = A_mul_B!(A, copy!(C, B))

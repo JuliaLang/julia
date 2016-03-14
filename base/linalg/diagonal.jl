@@ -29,8 +29,6 @@ function size(D::Diagonal,d::Integer)
     return d<=2 ? length(D.diag) : 1
 end
 
-fill!(D::Diagonal, x) = (fill!(D.diag, x); D)
-
 full(D::Diagonal) = diagm(D.diag)
 
 @inline function getindex(D::Diagonal, i::Int, j::Int)

@@ -332,3 +332,59 @@ a = [RootInt(2),RootInt(10)]
 @test a*a' == [4 20; 20 100]
 A = [RootInt(3) RootInt(5)]
 @test A*a == [56]
+
+function test_mul(C, A, B)
+    A_mul_B!(C, A, B)
+    @test full(A) * full(B) ≈ C
+    @test A*B ≈ C
+end
+
+let
+    eltypes = [Float32, Float64, Int64]
+    for k in [3, 4, 10]
+        T = rand(eltypes)
+        bi1 = Bidiagonal(rand(T, k), rand(T, k-1), rand(Bool))
+        bi2 = Bidiagonal(rand(T, k), rand(T, k-1), rand(Bool))
+        tri1 = Tridiagonal(rand(T,k-1), rand(T, k), rand(T, k-1))
+        tri2 = Tridiagonal(rand(T,k-1), rand(T, k), rand(T, k-1))
+        stri1 = SymTridiagonal(rand(T, k), rand(T, k-1))
+        stri2 = SymTridiagonal(rand(T, k), rand(T, k-1))
+        C = rand(T, k, k)
+        specialmatrices = (bi1, bi2, tri1, tri2, stri1, stri2)
+        for A in specialmatrices
+            B = specialmatrices[rand(1:length(specialmatrices))]
+            test_mul(C, A, B)
+        end
+        for S in specialmatrices
+            l = rand(1:6)
+            B = randn(k, l)
+            C = randn(k, l)
+            test_mul(C, S, B)
+            A = randn(l, k)
+            C = randn(l, k)
+            test_mul(C, A, S)
+        end
+    end
+    for T in eltypes
+        A = Bidiagonal(rand(T, 2), rand(T, 1), rand(Bool))
+        B = Bidiagonal(rand(T, 2), rand(T, 1), rand(Bool))
+        C = randn(2,2)
+        test_mul(C, A, B)
+        B = randn(2, 9)
+        C = randn(2, 9)
+        test_mul(C, A, B)
+    end
+    let
+        tri44 = Tridiagonal(randn(3), randn(4), randn(3))
+        tri33 = Tridiagonal(randn(2), randn(3), randn(2))
+        full43 = randn(4, 3)
+        full24 = randn(2, 4)
+        full33 = randn(3, 3)
+        full44 = randn(4, 4)
+        @test_throws DimensionMismatch A_mul_B!(full43, tri44, tri33)
+        @test_throws DimensionMismatch A_mul_B!(full44, tri44, tri33)
+        @test_throws DimensionMismatch A_mul_B!(full44, tri44, full43)
+        @test_throws DimensionMismatch A_mul_B!(full43, tri33, full43)
+        @test_throws DimensionMismatch A_mul_B!(full43, full43, tri44)
+    end
+end
