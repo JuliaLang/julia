@@ -2954,21 +2954,56 @@ function is_hermsym(A::SparseMatrixCSC, check::Func)
     rowval = A.rowval
     nzval = A.nzval
     tracker = copy(A.colptr)
-    @inbounds for col = 1:A.n
+    for col = 1:A.n
+        # `tracker` is updated such that, for symmetric matrices,
+        # the loop below starts from an element at or below the
+        # diagonal element of column `col`"
         for p = tracker[col]:colptr[col+1]-1
             val = nzval[p]
-            if val == 0; continue; end # In case of explicit zeros
             row = rowval[p]
-            if row < col; return false; end
-            if row == col # Diagonal element
+
+            # Ignore stored zeros
+            if val == 0;
+                continue
+            end
+
+            # If the matrix was symmetric we should have updated
+            # the tracker to start at the diagonal or below. Here
+            # we are above the diagonal so the matrix can't be symmetric.
+            if row < col
+                return false
+            end
+
+            # Diagonal element
+            if row == col
                 if val != check(val)
                     return false
                 end
             else
-                row2 = rowval[tracker[row]]
-                if row2 > col; return false; end
-                if row2 == col # A[i,j] and A[j,i] exists
-                    if val != check(nzval[tracker[row]])
+                offset = tracker[row]
+                row2 = rowval[offset]
+
+                # row2 can be less than col if the tracker didn't
+                # get updated due to stored zeros in previous elements.
+                # We therefore "catch up" here while making sure that
+                # the elements are actually zero.
+                while row2 < col
+                    if nzval[offset] != 0
+                        return false
+                    end
+                    offset += 1
+                    row2 = rowval[offset]
+                    tracker[row] += 1
+                end
+
+                # Non zero A[i,j] exists but A[j,i] does not exist
+                if row2 > col
+                    return false
+                end
+
+                # A[i,j] and A[j,i] exists
+                if row2 == col
+                    if val != check(nzval[offset])
                         return false
                     end
                     tracker[row] += 1
