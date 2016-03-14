@@ -43,10 +43,12 @@ const TAGS = Any[
 
 const ser_version = 3 # do not make changes without bumping the version #!
 
+const NTAGS = length(TAGS)
+
 function sertag(v::ANY)
     ptr = pointer_from_objref(v)
     ptags = convert(Ptr{Ptr{Void}}, pointer(TAGS))
-    @inbounds for i in eachindex(TAGS)
+    @inbounds for i in 1:NTAGS
         ptr == unsafe_load(ptags,i) && return (i+1)%Int32
     end
     return Int32(-1)
