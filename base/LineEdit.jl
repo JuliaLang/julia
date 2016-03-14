@@ -192,12 +192,10 @@ refresh_multi_line(s::ModeState) = refresh_multi_line(terminal(s), s)
 refresh_multi_line(termbuf::TerminalBuffer, s::ModeState) = refresh_multi_line(termbuf, terminal(s), s)
 refresh_multi_line(termbuf::TerminalBuffer, term, s::ModeState) = (@assert term == terminal(s); refresh_multi_line(termbuf,s))
 function refresh_multi_line(termbuf::TerminalBuffer, terminal::UnixTerminal, buf, state::InputAreaState, prompt = ""; indent = 0)
-    cols = width(terminal)
-
     _clear_input_area(termbuf, state)
 
-    curs_row = -1 # relative to prompt
-    curs_col = -1 # absolute
+    cols = width(terminal)
+    curs_row = -1 # relative to prompt (1-based)
     curs_pos = -1 # 1-based column position of the cursor
     cur_row = 0   # count of the number of rows
     buf_pos = position(buf)
@@ -205,47 +203,32 @@ function refresh_multi_line(termbuf::TerminalBuffer, terminal::UnixTerminal, buf
     # Write out the prompt string
     write_prompt(termbuf, prompt)
     prompt = prompt_string(prompt)
-
-    seek(buf, 0)
-
-    llength = 0
-
-    l = ""
-
+    # Count the '\n' at the end of the line if the terminal emulator does (specific to DOS cmd prompt)
     miscountnl = @windows ? (isa(Terminals.pipe_reader(terminal), Base.TTY) && !Base.ispty(Terminals.pipe_reader(terminal))) : false
-    plength = strwidth(prompt)
+    lindent = strwidth(prompt)
+
     # Now go through the buffer line by line
-    while cur_row == 0 || endswith(l, '\n')
+    seek(buf, 0)
+    moreinput = true # add a blank line if there is a trailing newline on the last line
+    while moreinput
         l = readline(buf)
-        cur_row += 1
-        # We need to deal with UTF8 characters. Since the IOBuffer is a bytearray, we just count bytes
+        moreinput = endswith(l, "\n")
+        # We need to deal with on-screen characters, so use strwidth to compute occupied columns
         llength = strwidth(l)
         slength = sizeof(l)
-        if cur_row == 1 # First line
-            if line_pos < slength
-                num_chars = strwidth(l[1:line_pos])
-                curs_row, curs_pos = divrem(plength + num_chars - 1, cols)
-                curs_row += 1
+        cur_row += 1
+        cmove_col(termbuf, lindent + 1)
+        write(termbuf, l)
+        # We expect to be line after the last valid output line (due to
+        # the '\n' at the end of the previous line)
+        if curs_row == -1
+            # in this case, we haven't yet written the cursor position
+            line_pos -= slength # '\n' gets an extra pos
+            if line_pos < 0 || !moreinput
+                num_chars = (line_pos >= 0 ? llength : strwidth(l[1:(line_pos + slength)]))
+                curs_row, curs_pos = divrem(lindent + num_chars - 1, cols)
+                curs_row += cur_row
                 curs_pos += 1
-            end
-            # Only count the '\n' at the end of the line if it takes up a column (specific to DOS cmd prompt)
-            cur_row += div(max(plength + llength - 1 + miscountnl, 0), cols)
-            line_pos -= slength
-            write(termbuf, l)
-        else
-            # We expect to be line after the last valid output line (due to
-            # the '\n' at the end of the previous line)
-            if curs_row == -1
-                if line_pos < slength
-                    num_chars = strwidth(l[1:line_pos])
-                    curs_row, curs_pos = divrem(indent + num_chars - 1, cols)
-                    curs_row += cur_row
-                    curs_pos += 1
-                end
-                line_pos -= slength # '\n' gets an extra pos
-                cur_row += div(max(indent + llength - 1 + miscountnl, 0), cols)
-                cmove_col(termbuf, indent + 1)
-                write(termbuf, l)
                 # There's an issue if the cursor is after the very right end of the screen. In that case we need to
                 # move the cursor to the next line, and emit a newline if needed
                 if curs_pos == cols
@@ -258,35 +241,12 @@ function refresh_multi_line(termbuf::TerminalBuffer, terminal::UnixTerminal, buf
                     curs_pos = 0
                     cmove_col(termbuf, 1)
                 end
-            else
-                cur_row += div(max(indent + llength - 1 + miscountnl, 0), cols)
-                cmove_col(termbuf, indent + 1)
-                write(termbuf, l)
             end
         end
+        cur_row += div(max(lindent + llength + miscountnl - 1, 0), cols)
+        lindent = indent
     end
-
     seek(buf, buf_pos)
-
-    # If we are at the end of the buffer, we need to put the cursor one past the
-    # last character we have written
-
-    if curs_row == -1
-        curs_pos = ((cur_row == 1 ? plength : indent)+llength-1) % cols + 1
-        curs_row = cur_row
-    end
-
-    # Same issue as above. TODO: We should figure out
-    # how to refactor this to avoid duplicating functionality.
-    if curs_pos == cols
-        if line_pos == 0 && !miscountnl
-            write(termbuf, "\n")
-            cur_row += 1
-        end
-        curs_row += 1
-        curs_pos = 0
-        cmove_col(termbuf, 1)
-    end
 
     # Let's move the cursor to the right position
     # The line first
@@ -296,7 +256,7 @@ function refresh_multi_line(termbuf::TerminalBuffer, terminal::UnixTerminal, buf
     end
 
     #columns are 1 based
-    cmove_col(termbuf, curs_pos+1)
+    cmove_col(termbuf, curs_pos + 1)
 
     # Updated cur_row,curs_row
     return InputAreaState(cur_row, curs_row)
@@ -491,7 +451,8 @@ function edit_insert(s::PromptState, c)
     edit_insert(s.input_buffer, str)
     if !('\n' in str) && eof(s.input_buffer) &&
         ((position(s.input_buffer) + sizeof(s.p.prompt) + sizeof(str) - 1) < width(terminal(s)))
-        #Avoid full update
+        # Avoid full update when appending characters to the end
+        # and an update of curs_row isn't necessary (conservatively estimated)
         write(terminal(s), str)
     else
         refresh_line(s)
