@@ -238,7 +238,7 @@ end
 function rotl90(A::AbstractMatrix)
     m,n = size(A)
     B = similar(A,(n,m))
-    for i=1:m, j=1:n
+    for i=1:m, j=1:n #Fixme iter
         B[n-j+1,i] = A[i,j]
     end
     return B
@@ -246,7 +246,7 @@ end
 function rotr90(A::AbstractMatrix)
     m,n = size(A)
     B = similar(A,(n,m))
-    for i=1:m, j=1:n
+    for i=1:m, j=1:n #Fixme iter
         B[j,m-i+1] = A[i,j]
     end
     return B
@@ -254,7 +254,7 @@ end
 function rot180(A::AbstractMatrix)
     m,n = size(A)
     B = similar(A)
-    for i=1:m, j=1:n
+    for i=1:m, j=1:n #Fixme iter
         B[m-i+1,n-j+1] = A[i,j]
     end
     return B
@@ -277,8 +277,8 @@ function transpose!(B::AbstractMatrix,A::AbstractMatrix)
 
     if m*n<=4*transposebaselength
         @inbounds begin
-            for j = 1:n
-                for i = 1:m
+            for j = 1:n #Fixme iter
+                for i = 1:m #Fixme iter
                     B[j,i] = transpose(A[i,j])
                 end
             end
@@ -299,8 +299,8 @@ end
 function transposeblock!(B::AbstractMatrix,A::AbstractMatrix,m::Int,n::Int,offseti::Int,offsetj::Int)
     if m*n<=transposebaselength
         @inbounds begin
-            for j = offsetj+(1:n)
-                for i = offseti+(1:m)
+            for j = offsetj+(1:n) #Fixme iter
+                for i = offseti+(1:m) #Fixme iter
                     B[j,i] = transpose(A[i,j])
                 end
             end
@@ -322,8 +322,8 @@ function ctranspose!(B::AbstractMatrix,A::AbstractMatrix)
 
     if m*n<=4*transposebaselength
         @inbounds begin
-            for j = 1:n
-                for i = 1:m
+            for j = 1:n #Fixme iter
+                for i = 1:m #Fixme iter
                     B[j,i] = ctranspose(A[i,j])
                 end
             end
@@ -344,8 +344,8 @@ end
 function ctransposeblock!(B::AbstractMatrix,A::AbstractMatrix,m::Int,n::Int,offseti::Int,offsetj::Int)
     if m*n<=transposebaselength
         @inbounds begin
-            for j = offsetj+(1:n)
-                for i = offseti+(1:m)
+            for j = offsetj+(1:n) #Fixme iter
+                for i = offseti+(1:m) #Fixme iter
                     B[j,i] = ctranspose(A[i,j])
                 end
             end
@@ -362,8 +362,8 @@ function ctransposeblock!(B::AbstractMatrix,A::AbstractMatrix,m::Int,n::Int,offs
     return B
 end
 function ccopy!(B, A)
-    for i = 1:length(A)
-        B[i] = ctranspose(A[i])
+    for (i,j) = zip(eachindex(B),eachindex(A))
+        B[i] = ctranspose(A[j])
     end
 end
 
@@ -377,8 +377,8 @@ function ctranspose(A::AbstractMatrix)
 end
 ctranspose{T<:Real}(A::AbstractVecOrMat{T}) = transpose(A)
 
-transpose(x::AbstractVector) = [ transpose(x[j]) for i=1, j=1:size(x,1) ]
-ctranspose{T}(x::AbstractVector{T}) = T[ ctranspose(x[j]) for i=1, j=1:size(x,1) ]
+transpose(x::AbstractVector) = [ transpose(v) for i=1, v in x ]
+ctranspose{T}(x::AbstractVector{T}) = T[ ctranspose(v) for i=1, v in x ] #Fixme comprehension
 
 _cumsum_type{T<:Number}(v::AbstractArray{T}) = typeof(+zero(T))
 _cumsum_type(v) = typeof(v[1]+v[1])
@@ -391,7 +391,7 @@ for (f, f!, fp, op) = ((:cumsum, :cumsum!, :cumsum_pairwise!, :+),
         if n < 128
             @inbounds s_ = v[i1]
             @inbounds c[i1] = ($op)(s, s_)
-            for i = i1+1:i1+n-1
+            for i = i1+1:i1+n-1 #Fixme iter
                 @inbounds s_ = $(op)(s_, v[i])
                 @inbounds c[i] = $(op)(s, s_)
             end

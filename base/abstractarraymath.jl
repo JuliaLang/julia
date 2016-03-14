@@ -113,7 +113,7 @@ function cumsum_kbn{T<:AbstractFloat}(v::AbstractVector{T})
 
     s = r[1] = v[1]
     c = zero(T)
-    for i=2:n
+    for i=2:n #Fixme iter
         vi = v[i]
         t = s + vi
         if abs(s) >= abs(vi)
@@ -128,6 +128,7 @@ function cumsum_kbn{T<:AbstractFloat}(v::AbstractVector{T})
 end
 
 # Uses K-B-N summation
+# TODO: Needs a separate LinearSlow method, this is only fast for LinearIndexing
 function cumsum_kbn{T<:AbstractFloat}(A::AbstractArray{T}, axis::Integer=1)
     dimsA = size(A)
     ndimsA = ndims(A)
@@ -179,8 +180,8 @@ end
 
 function ipermutedims(A::AbstractArray,perm)
     iperm = Array(Int,length(perm))
-    for i = 1:length(perm)
-        iperm[perm[i]] = i
+    for (i,p) = enumerate(perm)
+        iperm[p] = i
     end
     return permutedims(A,iperm)
 end
