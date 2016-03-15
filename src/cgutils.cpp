@@ -688,15 +688,15 @@ DLLEXPORT Type *julia_type_to_llvm(jl_value_t *jt)
         if (jl_is_floattype(jt)) {
 #ifndef DISABLE_FLOAT16
             if (nb == 2)
-                return Type::getHalfTy(jl_LLVMContext);
+                return T_float16;
             else
 #endif
             if (nb == 4)
-                return Type::getFloatTy(jl_LLVMContext);
+                return T_float32;
             else if (nb == 8)
-                return Type::getDoubleTy(jl_LLVMContext);
+                return T_float64;
             else if (nb == 16)
-                return Type::getFP128Ty(jl_LLVMContext);
+                return T_float128;
         }
         return Type::getIntNTy(jl_LLVMContext, nb*8);
     }
@@ -1059,11 +1059,9 @@ static void raise_exception_unless(Value *cond, Value *exc, jl_codectx_t *ctx)
     builder.CreateCondBr(cond, passBB, failBB);
     builder.SetInsertPoint(failBB);
 #ifdef LLVM37
-    builder.CreateCall(prepare_call(jlthrow_line_func), { exc,
-                        ConstantInt::get(T_int32, ctx->lineno) });
+    builder.CreateCall(prepare_call(jlthrow_func), { exc });
 #else
-    builder.CreateCall2(prepare_call(jlthrow_line_func), exc,
-                        ConstantInt::get(T_int32, ctx->lineno));
+    builder.CreateCall(prepare_call(jlthrow_func), exc);
 #endif
     builder.CreateUnreachable();
     ctx->f->getBasicBlockList().push_back(passBB);
@@ -1107,13 +1105,11 @@ static void emit_type_error(Value *x, jl_value_t *type, const std::string &msg,
 #ifdef LLVM37
     builder.CreateCall(prepare_call(jltypeerror_func),
                         { fname_val, msg_val,
-                        literal_pointer_val(type), boxed(x,ctx),
-                        ConstantInt::get(T_int32, ctx->lineno) });
+                        literal_pointer_val(type), boxed(x,ctx)});
 #else
-    builder.CreateCall5(prepare_call(jltypeerror_func),
+    builder.CreateCall4(prepare_call(jltypeerror_func),
                     fname_val, msg_val,
-                    literal_pointer_val(type), boxed(x,ctx),
-                    ConstantInt::get(T_int32, ctx->lineno));
+                    literal_pointer_val(type), boxed(x,ctx));
 #endif
 }
 

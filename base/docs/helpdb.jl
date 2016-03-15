@@ -4011,46 +4011,67 @@ Note that workers do not run a ``.juliarc.jl`` startup script, nor do they synch
 """
 addprocs()
 
-doc"""
-```rst
-..  addprocs(machines; tunnel=false, sshflags=``, max_parallel=10, exeflags=``) -> List of process identifiers
+"""
+```
+addprocs(machines; keyword_args...) -> List of process identifiers
+```
 
-Add processes on remote machines via SSH.
-Requires julia to be installed in the same location on each node, or to be available via a shared file system.
+Add processes on remote machines via SSH. Requires julia to be installed in the same
+location on each node, or to be available via a shared file system.
 
-``machines`` is a vector of machine specifications.  Worker are started for each specification.
+`machines` is a vector of machine specifications.  Worker are started for each specification.
 
-A machine specification is either a string ``machine_spec`` or a tuple - ``(machine_spec, count)``
+A machine specification is either a string `machine_spec` or a tuple - `(machine_spec, count)`.
 
-``machine_spec`` is a string of the form ``[user@]host[:port] [bind_addr[:port]]``. ``user`` defaults
-to current user, ``port`` to the standard ssh port. If ``[bind_addr[:port]]`` is specified, other
-workers will connect to this worker at the specified ``bind_addr`` and ``port``.
+`machine_spec` is a string of the form `[user@]host[:port] [bind_addr[:port]]`. `user` defaults
+to current user, `port` to the standard ssh port. If `[bind_addr[:port]]` is specified, other
+workers will connect to this worker at the specified `bind_addr` and `port`.
 
-``count`` is the number of workers to be launched on the specified host. If specified as ``:auto``
+`count` is the number of workers to be launched on the specified host. If specified as `:auto`
 it will launch as many workers as the number of cores on the specific host.
 
 
 Keyword arguments:
 
-``tunnel`` : if ``true`` then SSH tunneling will be used to connect to the worker from the master process.
+* `tunnel`: if `true` then SSH tunneling will be used to connect to the worker from the
+            master process. Default is `false`.
 
-``sshflags`` : specifies additional ssh options, e.g. :literal:`sshflags=\`-i /home/foo/bar.pem\`` .
+* `sshflags`: specifies additional ssh options, e.g.
 
-``max_parallel`` : specifies the maximum number of workers connected to in parallel at a host. Defaults to 10.
+    sshflags=`-i /home/foo/bar.pem`
 
-``dir`` :  specifies the working directory on the workers. Defaults to the host's current directory (as found by ``pwd()``)
+* `max_parallel`: specifies the maximum number of workers connected to in parallel at a host.
+                  Defaults to 10.
 
-``exename`` :  name of the julia executable. Defaults to "$JULIA_HOME/julia" or "$JULIA_HOME/julia-debug" as the case may be.
+* `dir`: specifies the working directory on the workers. Defaults to the host's current
+         directory (as found by `pwd()`)
 
-``exeflags`` :  additional flags passed to the worker processes.
+* `exename`: name of the julia executable. Defaults to `"\$JULIA_HOME/julia"` or
+             `"\$JULIA_HOME/julia-debug"` as the case may be.
+
+* `exeflags`: additional flags passed to the worker processes.
+
+* `topology`: Specifies how the workers connect to each other. Sending a message
+            between unconnected workers results in an error.
+
+  + `topology=:all_to_all`  :  All processes are connected to each other.
+                      This is the default.
+
+  + `topology=:master_slave`  :  Only the driver process, i.e. pid 1 connects to the
+                        workers. The workers do not connect to each other.
+
+  + `topology=:custom`  :  The `launch` method of the cluster manager specifes the
+                  connection topology via fields `ident` and `connect_idents` in
+                  `WorkerConfig`. A worker with a cluster manager identity `ident`
+                  will connect to all workers specified in `connect_idents`.
+
 
 Environment variables :
 
 If the master process fails to establish a connection with a newly launched worker within 60.0 seconds,
 the worker treats it a fatal situation and terminates. This timeout can be controlled via environment
-variable ``JULIA_WORKER_TIMEOUT``. The value of ``JULIA_WORKER_TIMEOUT`` on the master process, specifies
+variable `JULIA_WORKER_TIMEOUT`. The value of `JULIA_WORKER_TIMEOUT` on the master process, specifies
 the number of seconds a newly launched worker waits for connection establishment.
-```
 """
 addprocs(machines)
 
@@ -10607,15 +10628,6 @@ This is only needed if your module depends on a file that is not used via `inclu
 include_dependency
 
 doc"""
-    __precompile__(isprecompilable::Bool=true)
-
-Specify whether the file calling this function is precompilable. If `isprecompilable` is `true`, then `__precompile__` throws an exception when the file is loaded by `using`/`import`/`require` *unless* the file is being precompiled, and in a module file it causes the module to be automatically precompiled when it is imported. Typically, `__precompile__()` should occur before the `module` declaration in the file, or better yet `VERSION >= v"0.4" && __precompile__()` in order to be backward-compatible with Julia 0.3.
-
-If a module or file is *not* safely precompilable, it should call `__precompile__(false)` in order to throw an error if Julia attempts to precompile it.
-"""
-__precompile__
-
-doc"""
     randn!([rng], A::Array{Float64,N})
 
 Fill the array `A` with normally-distributed (mean 0, standard deviation 1) random numbers. Also see the rand function.
@@ -11082,7 +11094,7 @@ DivideError
 doc"""
     AssertionError([msg])
 
-The asserted condition did not evalutate to `true`.
+The asserted condition did not evaluate to `true`.
 Optional argument `msg` is a descriptive error string.
 """
 AssertionError

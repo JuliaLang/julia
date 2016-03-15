@@ -192,16 +192,22 @@ let bstream = BufferStream()
     @test isopen(bstream)
     @test isreadable(bstream)
     @test iswritable(bstream)
+    @test nb_available(bstream) == 0
     @test sprint(io -> show(io,bstream)) == "BufferStream() bytes waiting:$(nb_available(bstream.buffer)), isopen:true"
     a = rand(UInt8,10)
     write(bstream,a)
+    @test !eof(bstream)
     flush(bstream)
     b = read(bstream,UInt8)
     @test a[1] == b
     b = read(bstream,UInt8)
     @test a[2] == b
     c = zeros(UInt8,8)
+    @test nb_available(bstream) == 8
+    @test !eof(bstream)
     read!(bstream,c)
     @test c == a[3:10]
     close(bstream)
+    @test eof(bstream)
+    @test nb_available(bstream) == 0
 end

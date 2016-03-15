@@ -21,6 +21,9 @@ extern "C" {
 #  define jl_jmp_buf sigjmp_buf
 #  if defined(_CPU_ARM_)
 #    define MAX_ALIGN 8
+#  elif defined(_CPU_AARCH64_)
+// int128 is 16 bytes aligned on aarch64
+#    define MAX_ALIGN 16
 #  else
 #    define MAX_ALIGN sizeof(void*)
 #  endif
@@ -434,6 +437,7 @@ extern DLLEXPORT jl_datatype_t *jl_int32_type;
 extern DLLEXPORT jl_datatype_t *jl_uint32_type;
 extern DLLEXPORT jl_datatype_t *jl_int64_type;
 extern DLLEXPORT jl_datatype_t *jl_uint64_type;
+extern DLLEXPORT jl_datatype_t *jl_float16_type;
 extern DLLEXPORT jl_datatype_t *jl_float32_type;
 extern DLLEXPORT jl_datatype_t *jl_float64_type;
 extern DLLEXPORT jl_datatype_t *jl_floatingpoint_type;
@@ -1150,8 +1154,6 @@ DLLEXPORT void NORETURN jl_too_many_args(const char *fname, int max);
 DLLEXPORT void NORETURN jl_type_error(const char *fname, jl_value_t *expected, jl_value_t *got);
 DLLEXPORT void NORETURN jl_type_error_rt(const char *fname, const char *context,
                                 jl_value_t *ty, jl_value_t *got);
-DLLEXPORT void NORETURN jl_type_error_rt_line(const char *fname, const char *context,
-                                     jl_value_t *ty, jl_value_t *got, int line);
 DLLEXPORT void NORETURN jl_undefined_var_error(jl_sym_t *var);
 DLLEXPORT void NORETURN jl_bounds_error(jl_value_t *v, jl_value_t *t);
 DLLEXPORT void NORETURN jl_bounds_error_v(jl_value_t *v, jl_value_t **idxs, size_t nidxs);
@@ -1405,7 +1407,6 @@ extern DLLEXPORT JL_THREAD jl_value_t *jl_exception_in_transit;
 DLLEXPORT jl_task_t *jl_new_task(jl_function_t *start, size_t ssize);
 DLLEXPORT jl_value_t *jl_switchto(jl_task_t *t, jl_value_t *arg);
 DLLEXPORT void NORETURN jl_throw(jl_value_t *e);
-DLLEXPORT void NORETURN jl_throw_with_superfluous_argument(jl_value_t *e, int);
 DLLEXPORT void NORETURN jl_rethrow(void);
 DLLEXPORT void NORETURN jl_rethrow_other(jl_value_t *e);
 

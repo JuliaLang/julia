@@ -633,7 +633,9 @@ endif # x86_64
 endif # WINNT
 
 else ifeq ($(LLVM_VER),3.7.1)
-	cd llvm-$(LLVM_VER) && patch -p1 < ../llvm-3.7.1.patch && patch -p1 < ../llvm-3.7.1_2.patch
+	cd llvm-$(LLVM_VER) && patch -p1 < ../llvm-3.7.1.patch && \
+		patch -p1 < ../llvm-3.7.1_2.patch && \
+		patch -p1 < ../llvm-3.7.1_3.patch
 
 endif # LLVM_VER
 	touch -c $@
@@ -1165,6 +1167,13 @@ install-atlas: $(ATLAS_OBJ_TARGET)
 
 ## Mac gfortran BLAS wrapper ##
 GFORTBLAS_FFLAGS =
+ifeq ($(USE_BLAS64), 1)
+ifeq ($(USEIFC),1)
+GFORTBLAS_FFLAGS += -i8
+else
+GFORTBLAS_FFLAGS += -fdefault-integer-8
+endif
+endif
 ifeq ($(OS),Darwin)
 ifeq ($(USE_SYSTEM_BLAS),1)
 ifeq ($(USE_SYSTEM_LAPACK),0)
@@ -1251,10 +1260,8 @@ ARPACK_FFLAGS = $(GFORTBLAS_FFLAGS)
 ARPACK_CFLAGS =
 
 ifeq ($(USE_BLAS64), 1)
-ifeq ($(USEIFC),1)
-ARPACK_FFLAGS += -i8
-else
-ARPACK_FFLAGS += -fdefault-integer-8
+ARPACK_CFLAGS += -DBLASINT=int64_t
+ifneq ($(USEIFC),1)
 ifeq ($(USE_SYSTEM_BLAS), 0)
 ifeq ($(OPENBLAS_SYMBOLSUFFIX), 64_)
 ARPACK_FFLAGS += -cpp -ffixed-line-length-none
@@ -1588,7 +1595,7 @@ $(SUITESPARSE_OBJ_TARGET): $(SUITESPARSE_OBJ_SOURCE)
 	$(INSTALL_NAME_CMD)libcamd.$(SHLIB_EXT) $(build_shlibdir)/libcamd.$(SHLIB_EXT) && \
 	$(CC) -shared $(WHOLE_ARCHIVE) libccolamd.a $(NO_WHOLE_ARCHIVE) -o $(build_shlibdir)/libccolamd.$(SHLIB_EXT) $(LDFLAGS) -L$(build_shlibdir) -lsuitesparseconfig $(RPATH_ORIGIN) && \
 	$(INSTALL_NAME_CMD)libccolamd.$(SHLIB_EXT) $(build_shlibdir)/libccolamd.$(SHLIB_EXT) && \
-	$(CXX) -shared $(WHOLE_ARCHIVE) libcholmod.a $(NO_WHOLE_ARCHIVE) -o $(build_shlibdir)/libcholmod.$(SHLIB_EXT) $(LDFLAGS) -L$(build_shlibdir) -lcolamd -lamd -lcamd -lccolamd -lsuitesparseconfig $(LIBBLAS) $(RPATH_ORIGIN) && \
+	$(CXX) -shared $(WHOLE_ARCHIVE) libcholmod.a $(NO_WHOLE_ARCHIVE) -o $(build_shlibdir)/libcholmod.$(SHLIB_EXT) $(LDFLAGS) -L$(build_shlibdir) -lcolamd -lamd -lcamd -lccolamd -lsuitesparseconfig $(LIBLAPACK) $(LIBBLAS) $(RPATH_ORIGIN) && \
 	$(INSTALL_NAME_CMD)libcholmod.$(SHLIB_EXT) $(build_shlibdir)/libcholmod.$(SHLIB_EXT) && \
 	$(CXX) -shared $(WHOLE_ARCHIVE) libumfpack.a $(NO_WHOLE_ARCHIVE) -o $(build_shlibdir)/libumfpack.$(SHLIB_EXT) $(LDFLAGS) -L$(build_shlibdir) -lcholmod -lcolamd -lamd -lsuitesparseconfig $(LIBBLAS) $(RPATH_ORIGIN) && \
 	$(INSTALL_NAME_CMD)libumfpack.$(SHLIB_EXT) $(build_shlibdir)/libumfpack.$(SHLIB_EXT) && \

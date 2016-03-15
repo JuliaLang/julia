@@ -67,15 +67,15 @@ static Type *FTnbits(size_t nb)
 {
 #ifndef DISABLE_FLOAT16
     if (nb == 16)
-        return Type::getHalfTy(jl_LLVMContext);
+        return T_float16;
     else
 #endif
     if (nb == 32)
-        return Type::getFloatTy(jl_LLVMContext);
+        return T_float32;
     else if (nb == 64)
-        return Type::getDoubleTy(jl_LLVMContext);
+        return T_float64;
     else if (nb == 128)
-        return Type::getFP128Ty(jl_LLVMContext);
+        return T_float128;
     else
         jl_error("Unsupported Float Size");
 }

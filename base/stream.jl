@@ -51,8 +51,8 @@ end
 # A dict of all libuv handles that are being waited on somewhere in the system
 # and should thus not be garbage collected
 const uvhandles = ObjectIdDict()
-preserve_handle(x) = uvhandles[x] = get(uvhandles,x,0)+1
-unpreserve_handle(x) = (v = uvhandles[x]; v == 1 ? pop!(uvhandles,x) : (uvhandles[x] = v-1); nothing)
+preserve_handle(x) = uvhandles[x] = get(uvhandles,x,0)::Int+1
+unpreserve_handle(x) = (v = uvhandles[x]::Int; v == 1 ? pop!(uvhandles,x) : (uvhandles[x] = v-1); nothing)
 
 function stream_wait(x, c...) # for x::LibuvObject
     preserve_handle(x)
@@ -88,8 +88,13 @@ end
 nb_available(s::LibuvStream) = nb_available(s.buffer)
 
 function eof(s::LibuvStream)
+    if isopen(s) # fast path
+        nb_available(s) > 0 && return false
+    else
+        return nb_available(s) <= 0
+    end
     wait_readnb(s,1)
-    !isopen(s) && nb_available(s)<=0
+    !isopen(s) && nb_available(s) <= 0
 end
 
 const DEFAULT_READ_BUFFER_SZ = 10485760           # 10 MB
@@ -334,6 +339,11 @@ function wait_connected(x::Union{LibuvStream, LibuvServer})
 end
 
 function wait_readbyte(x::LibuvStream, c::UInt8)
+    if isopen(x) # fast path
+        search(x.buffer, c) > 0 && return
+    else
+        return
+    end
     preserve_handle(x)
     try
         while isopen(x) && search(x.buffer, c) <= 0
@@ -346,9 +356,15 @@ function wait_readbyte(x::LibuvStream, c::UInt8)
         end
         unpreserve_handle(x)
     end
+    nothing
 end
 
 function wait_readnb(x::LibuvStream, nb::Int)
+    if isopen(x) # fast path
+        nb_available(x.buffer) >= nb && return
+    else
+        return
+    end
     oldthrottle = x.throttle
     preserve_handle(x)
     try
@@ -366,12 +382,14 @@ function wait_readnb(x::LibuvStream, nb::Int)
         end
         unpreserve_handle(x)
     end
+    nothing
 end
 
 function wait_close(x::Union{LibuvStream, LibuvServer})
     if isopen(x)
         stream_wait(x, x.closenotify)
     end
+    nothing
 end
 
 function close(stream::Union{LibuvStream, LibuvServer})
@@ -897,7 +915,7 @@ function read!(s::LibuvStream, a::Array{UInt8, 1})
         finally
             s.buffer = sbuf
             if !isempty(s.readnotify.waitq)
-                start_reading(x) # resume reading iff there are currently other read clients of the stream
+                start_reading(s) # resume reading iff there are currently other read clients of the stream
             end
         end
     end
@@ -1197,17 +1215,17 @@ write(s::BufferStream, c::Char) = write(s, string(c))
 function write{T}(s::BufferStream, a::Array{T})
     rv=write(s.buffer, a)
     !(s.buffer_writes) && notify(s.r_c; all=true);
-    rv
+    return rv
 end
 function write(s::BufferStream, p::Ptr, nb::Integer)
     rv=write(s.buffer, p, nb)
     !(s.buffer_writes) && notify(s.r_c; all=true);
-    rv
+    return rv
 end
 
-function eof(s::LibuvStream)
+function eof(s::BufferStream)
     wait_readnb(s,1)
-    !isopen(s) && nb_available(s)<=0
+    return !isopen(s) && nb_available(s)<=0
 end
 
 # If buffer_writes is called, it will delay notifying waiters till a flush is called.

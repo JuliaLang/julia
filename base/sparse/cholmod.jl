@@ -808,13 +808,15 @@ get_perm(FC::FactorComponent) = get_perm(Factor(FC))
 #########################
 
 # Convertion/construction
-function convert{T<:VTypes}(::Type{Dense}, A::VecOrMat{T})
+function convert(::Type{Dense}, A::VecOrMat)
+    T = promote_type(eltype(A), Float64)
     d = allocate_dense(size(A, 1), size(A, 2), stride(A, 2), T)
     s = unsafe_load(d.p)
-    unsafe_copy!(s.x, pointer(A), length(A))
+    for i in eachindex(A)
+        unsafe_store!(s.x, A[i], i)
+    end
     d
 end
-convert(::Type{Dense}, A::VecOrMat) = Dense(float(A))
 convert(::Type{Dense}, A::Sparse) = sparse_to_dense(A)
 
 # This constructior assumes zero based colptr and rowval

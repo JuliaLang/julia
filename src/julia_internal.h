@@ -108,9 +108,6 @@ int jl_types_equal_generic(jl_value_t *a, jl_value_t *b, int useenv);
 jl_datatype_t *jl_inst_concrete_tupletype_v(jl_value_t **p, size_t np);
 jl_datatype_t *jl_inst_concrete_tupletype(jl_svec_t *p);
 
-void jl_set_datatype_super(jl_datatype_t *tt, jl_value_t *super);
-void jl_add_constructors(jl_datatype_t *t);
-
 jl_value_t *jl_nth_slot_type(jl_tupletype_t *sig, size_t i);
 void jl_compute_field_offsets(jl_datatype_t *st);
 jl_array_t *jl_new_array_for_deserialization(jl_value_t *atype, uint32_t ndims, size_t *dims,
@@ -139,6 +136,8 @@ extern JL_THREAD void *jl_stackbase;
 void jl_dump_bitcode(char *fname, const char *sysimg_data, size_t sysimg_len);
 void jl_dump_objfile(char *fname, int jit_model, const char *sysimg_data, size_t sysimg_len);
 int32_t jl_get_llvm_gv(jl_value_t *p);
+// the first argument to jl_idtable_rehash is used to return a value
+// make sure it is rooted if it is used after the function returns
 void jl_idtable_rehash(jl_array_t **pa, size_t newsz);
 
 #ifdef _OS_LINUX_
