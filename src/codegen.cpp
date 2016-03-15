@@ -1493,13 +1493,74 @@ const jl_value_t *jl_dump_function_ir(void *f, bool strip_ir_metadata, bool dump
     return jl_cstr_to_string(const_cast<char*>(stream.str().c_str()));
 }
 
-// This is expensive, but it's only used for interactive mode
+// This isn't particularly fast, but it's only used for interactive mode
 static uint64_t compute_obj_symsize(const object::ObjectFile *obj, uint64_t offset)
 {
-    for (const auto &sym_size : object::computeSymbolSizes(*obj))
-        if (offset == sym_size.first.getValue() && sym_size.first.getType() == object::SymbolRef::ST_Function
-		&& sym_size.second != 0)
-            return sym_size.second;
+    // Scan the object file for the closest symbols above and below offset in the .text section
+    uint64_t lo = 0;
+    uint64_t hi = 0;
+    bool setlo = false;
+#ifdef LLVM37
+    for (const object::SectionRef &Section : obj->sections()) {
+#else
+    llvm::error_code err;
+    for (object::section_iterator I = obj->begin_sections(), E = obj->end_sections();
+            !err && I != E; I.increment(err)) {
+        object::SectionRef Section = *I;
+#endif
+        uint64_t SAddr, SSize;
+#ifdef LLVM38
+        SAddr = Section.getAddress().get();
+        SSize = Section.getSize().get();
+#elif defined(LLVM36)
+        SAddr = Section.getAddress();
+        SSize = Section.getSize();
+#else
+        Section.getAddress(SAddr);
+        Section.getSize(SSize);
+#endif
+        if (offset < SAddr || offset >= SAddr + SSize) continue;
+        assert(hi == 0);
+
+        // test for lower and upper symbol bounds relative to other symbols
+        hi = SAddr + SSize;
+#ifdef LLVM37
+        object::section_iterator ESection = obj->section_end();
+        for (const object::SymbolRef &Sym : obj->symbols()) {
+#else
+        llvm::error_code err;
+        object::section_iterator ESection = obj->end_sections();
+        for (object::symbol_iterator I = obj->begin_symbols(), E = obj->end_symbols();
+                !err && I != E; I.increment(err)) {
+            object::SymbolRef Sym = *I;
+#endif
+            uint64_t Addr;
+            object::section_iterator Sect = ESection;
+#ifdef LLVM38
+            Sect = Sym.getSection().get();
+#else
+            if (Sym.getSection(Sect)) continue;
+#endif
+            if (Sect == ESection) continue;
+            if (Sect != Section) continue;
+#ifdef LLVM37
+            Addr = Sym.getAddress().get();
+#else
+            if (Sym.getAddress(Addr)) continue;
+#endif
+            if (Addr <= offset && Addr >= lo) {
+                // test for lower bound on symbol
+                lo = Addr;
+                setlo = true;
+            }
+            if (Addr > offset && Addr < hi) {
+                // test for upper bound on symbol
+                hi = Addr;
+            }
+        }
+    }
+    if (setlo)
+        return hi - lo;
     return 0;
 }
 
@@ -1518,7 +1579,7 @@ const jl_value_t *jl_dump_function_asm(void *f, int raw_mc)
 
     // Dump assembly code
     uint64_t symsize = 0;
-    int64_t slide = 0, SectionSlide = 0;
+    int64_t slide = 0, section_slide = 0;
 #ifdef USE_MCJIT
     uint64_t fptr = getAddressForOrCompileFunction(llvmf);
 #ifdef USE_ORCJIT
@@ -1527,26 +1588,26 @@ const jl_value_t *jl_dump_function_asm(void *f, int raw_mc)
         fptr = jl_ExecutionEngine->findSymbol(
             jl_ExecutionEngine->mangle(llvmf->getName()), true).getAddress();
 #endif
-    llvm::DIContext *context;
+    llvm::DIContext *context = NULL;
+    llvm::DIContext *&objcontext = context;
 #else
     uint64_t fptr = (uintptr_t)jl_ExecutionEngine->getPointerToFunction(llvmf);
     std::vector<JITEvent_EmittedFunctionDetails::LineStart> context;
+    llvm::DIContext *objcontext = NULL;
 #endif
-    const ObjectFile *object = NULL;
+    const object::ObjectFile *object = NULL;
     assert(fptr != 0);
     bool isJIT = true;
-    if (!jl_DI_for_fptr(fptr, &symsize, &slide, &SectionSlide, &object, &context)) {
+    if (!jl_DI_for_fptr(fptr, &symsize, &slide, &section_slide, &object, &context)) {
         isJIT = false;
-        if (!jl_dylib_DI_for_fptr(fptr, &object, &context, &slide, false,
+        if (!jl_dylib_DI_for_fptr(fptr, &object, &objcontext, &slide, &section_slide, false,
             NULL, NULL, NULL, NULL)) {
                 jl_printf(JL_STDERR, "WARNING: Unable to find function pointer\n");
                 return jl_cstr_to_string("");
         }
     }
-#ifdef LLVM37
-    if (symsize == 0)
-        symsize = compute_obj_symsize(object, fptr + slide + SectionSlide);
-#endif
+    if (symsize == 0 && object != NULL)
+        symsize = compute_obj_symsize(object, fptr + slide + section_slide);
     if (symsize == 0) {
         jl_printf(JL_STDERR, "WARNING: Could not determine size of symbol\n");
         return jl_cstr_to_string("");
@@ -1558,15 +1619,23 @@ const jl_value_t *jl_dump_function_asm(void *f, int raw_mc)
 #endif
         return (jl_value_t*)jl_pchar_to_array((char*)fptr, symsize);
     }
+
+    jl_dump_asm_internal(fptr, symsize, slide,
+#ifndef USE_MCJIT
+            context,
+#endif
+            objcontext,
 #ifdef LLVM37
-    jl_dump_asm_internal(fptr, symsize, slide, context, stream);
+            stream
+#else
+            fstream
+#endif
+            );
+
+#ifdef LLVM37
     if (isJIT)
         jl_cleanup_DI(context);
 #else
-    jl_dump_asm_internal(fptr, symsize, slide, context, fstream);
-#endif
-
-#ifndef LLVM37
     fstream.flush();
 #endif
 
