@@ -3,6 +3,9 @@
 
 type WorkerPool
     channel::RemoteChannel{Channel{Int}}
+
+    # Create a shared queue of available workers...
+    WorkerPool() = new(RemoteChannel(()->Channel{Int}(typemax(Int))))
 end
 
 
@@ -11,10 +14,10 @@ end
 
 Create a WorkerPool from a vector of worker ids.
 """
-function WorkerPool(workers=Int[])
+function WorkerPool(workers::Vector{Int})
 
     # Create a shared queue of available workers...
-    pool = WorkerPool(RemoteChannel(()->Channel{Int}(128)))
+    pool = WorkerPool()
 
     # Add workers to the pool...
     for w in workers
