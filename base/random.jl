@@ -28,7 +28,6 @@ type Close1Open2 <: FloatInterval end
 ## RandomDevice
 
 @unix_only begin
-
     immutable RandomDevice <: AbstractRNG
         file::IOStream
 
@@ -40,7 +39,6 @@ type Close1Open2 <: FloatInterval end
 end
 
 @windows_only begin
-
     immutable RandomDevice <: AbstractRNG
         buffer::Vector{UInt128}
 
