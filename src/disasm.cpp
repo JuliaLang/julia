@@ -272,11 +272,11 @@ static void print_source_line(raw_ostream &stream, DebugLoc Loc)
 #endif
 
 extern "C"
-void jl_dump_asm_internal(uintptr_t Fptr, size_t Fsize, size_t slide,
+void jl_dump_asm_internal(uintptr_t Fptr, size_t Fsize, int64_t slide,
 #ifndef USE_MCJIT
                           std::vector<JITEvent_EmittedFunctionDetails::LineStart> lineinfo,
 #else
-                          const object::ObjectFile *objectfile,
+                          DIContext *di_ctx,
 #endif
 #ifdef LLVM37
                           raw_ostream &rstream
@@ -431,16 +431,8 @@ void jl_dump_asm_internal(uintptr_t Fptr, size_t Fsize, size_t slide,
     SymbolTable DisInfo(Ctx, memoryObject);
 
 #ifdef USE_MCJIT
-    if (!objectfile) return;
-#ifdef LLVM37
-    DIContext *di_ctx = new DWARFContextInMemory(*objectfile);
-#elif LLVM36
-    DIContext *di_ctx = DIContext::getDWARFContext(*objectfile);
-#else
-    DIContext *di_ctx = DIContext::getDWARFContext(const_cast<object::ObjectFile*>(objectfile));
-#endif
     if (di_ctx == NULL) return;
-    DILineInfoTable lineinfo = di_ctx->getLineInfoForAddressRange(Fptr-slide, Fsize);
+    DILineInfoTable lineinfo = di_ctx->getLineInfoForAddressRange(Fptr+slide, Fsize);
 #else
     typedef std::vector<JITEvent_EmittedFunctionDetails::LineStart> LInfoVec;
 #endif
