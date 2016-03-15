@@ -6,7 +6,7 @@ using Base.LinAlg: BlasFloat, errorbounds, full!, naivesub!, transpose!, UnitUpp
 
 debug && println("Triangular matrices")
 
-n = 9
+n = 5
 srand(123)
 
 debug && println("Test basic type functionality")
