@@ -35,8 +35,10 @@ readdlm(input, dlm::Char, T::Type; opts...) = readdlm(input, dlm, T, '\n'; opts.
 readdlm(input; opts...) = readdlm(input, invalid_dlm(Char), '\n'; opts...)
 readdlm(input, dlm::Char; opts...) = readdlm(input, dlm, '\n'; opts...)
 
-readdlm(input, dlm::Char, eol::Char; opts...) = readdlm_auto(input, dlm, Float64, eol, true; opts...)
-readdlm(input, dlm::Char, T::Type, eol::Char; opts...) = readdlm_auto(input, dlm, T, eol, false; opts...)
+readdlm(input, dlm::Char, eol::Char; opts...) =
+    readdlm_auto(input, dlm, Float64, eol, true; opts...)
+readdlm(input, dlm::Char, T::Type, eol::Char; opts...) =
+    readdlm_auto(input, dlm, T, eol, false; opts...)
 
 function readdlm_auto(input, dlm::Char, T::Type, eol::Char, auto::Bool; opts...)
     optsd = val_opts(opts)
@@ -87,7 +89,8 @@ type DLMOffsets <: DLMHandler
     end
 end
 
-function store_cell(dlmoffsets::DLMOffsets, row::Int, col::Int, quoted::Bool, startpos::Int, endpos::Int)
+function store_cell(dlmoffsets::DLMOffsets, row::Int, col::Int,
+        quoted::Bool, startpos::Int, endpos::Int)
     offidx = dlmoffsets.offidx
     (offidx == 0) && return     # offset collection stopped to avoid choking on memory
 
@@ -137,17 +140,22 @@ type DLMStore{T,S<:ByteString} <: DLMHandler
     eol::Char
 end
 
-function DLMStore{T,S<:ByteString}(::Type{T}, dims::NTuple{2,Integer}, has_header::Bool, sbuff::S, auto::Bool, eol::Char)
+function DLMStore{T,S<:ByteString}(::Type{T}, dims::NTuple{2,Integer},
+        has_header::Bool, sbuff::S, auto::Bool, eol::Char)
     (nrows,ncols) = dims
     nrows <= 0 && throw(ArgumentError("number of rows in dims must be > 0, got $nrows"))
     ncols <= 0 && throw(ArgumentError("number of columns in dims must be > 0, got $ncols"))
     hdr_offset = has_header ? 1 : 0
-    DLMStore{T,S}(fill(SubString(sbuff,1,0), 1, ncols), Array(T, nrows-hdr_offset, ncols), nrows, ncols, 0, 0, hdr_offset, sbuff, auto, eol)
+    DLMStore{T,S}(fill(SubString(sbuff,1,0), 1, ncols), Array(T, nrows-hdr_offset, ncols),
+        nrows, ncols, 0, 0, hdr_offset, sbuff, auto, eol)
 end
 
-_chrinstr(sbuff::ByteString, chr::UInt8, startpos::Int, endpos::Int) = (endpos >= startpos) && (C_NULL != ccall(:memchr, Ptr{UInt8}, (Ptr{UInt8}, Int32, Csize_t), pointer(sbuff.data)+startpos-1, chr, endpos-startpos+1))
+_chrinstr(sbuff::ByteString, chr::UInt8, startpos::Int, endpos::Int) =
+    (endpos >= startpos) && (C_NULL != ccall(:memchr, Ptr{UInt8},
+    (Ptr{UInt8}, Int32, Csize_t), pointer(sbuff.data)+startpos-1, chr, endpos-startpos+1))
 
-function store_cell{T,S<:ByteString}(dlmstore::DLMStore{T,S}, row::Int, col::Int, quoted::Bool, startpos::Int, endpos::Int)
+function store_cell{T,S<:ByteString}(dlmstore::DLMStore{T,S}, row::Int, col::Int,
+        quoted::Bool, startpos::Int, endpos::Int)
     drow = row - dlmstore.hdr_offset
 
     ncols = dlmstore.ncols
@@ -157,7 +165,9 @@ function store_cell{T,S<:ByteString}(dlmstore::DLMStore{T,S}, row::Int, col::Int
     sbuff::S = dlmstore.sbuff
 
     endpos = prevind(sbuff, nextind(sbuff,endpos))
-    (endpos > 0) && ('\n' == dlmstore.eol) && ('\r' == Char(sbuff[endpos])) && (endpos = prevind(sbuff, endpos))
+    if (endpos > 0) && ('\n' == dlmstore.eol) && ('\r' == Char(sbuff[endpos]))
+        endpos = prevind(sbuff, endpos)
+    end
     if quoted
         startpos += 1
         endpos -= 1
@@ -191,7 +201,11 @@ function store_cell{T,S<:ByteString}(dlmstore::DLMStore{T,S}, row::Int, col::Int
         end
         if fail
             sval = SubString(sbuff, startpos, endpos)
-            ((T <: Number) && dlmstore.auto) ? throw(TypeError(:store_cell, "", Any, T)) : error("file entry \"$(sval)\" cannot be converted to $T")
+            if (T <: Number) && dlmstore.auto
+                throw(TypeError(:store_cell, "", Any, T))
+            else
+                error("file entry \"$(sval)\" cannot be converted to $T")
+            end
         end
 
         dlmstore.lastrow = drow

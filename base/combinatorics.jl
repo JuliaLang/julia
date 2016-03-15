@@ -203,8 +203,7 @@ end
 # Functions that have been moved out of base in Julia 0.5
 # Note: only the two-argument form of factorial has been moved
 for deprecatedfunc in [:combinations, :factorial, :prevprod, :levicivita,
-    :nthperm!, :nthperm, :parity, :partitions, :permutations]
-
+        :nthperm!, :nthperm, :parity, :partitions, :permutations]
     @eval begin
         $deprecatedfunc(args...) = error(string($deprecatedfunc, args,
             " has been moved to the package Combinatorics.jl.\n",

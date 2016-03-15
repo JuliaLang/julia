@@ -386,9 +386,9 @@ end
             @nexprs $N d->(j_d = min(Bmax[d], i_{d}))
             BJ = @nref $N B j
             if AI < BJ[1]
-              (@nref $N B j) = (AI, BJ[2])
+                (@nref $N B j) = (AI, BJ[2])
             elseif AI > BJ[2]
-              (@nref $N B j) = (BJ[1], AI)
+                (@nref $N B j) = (BJ[1], AI)
             end
         end
         B

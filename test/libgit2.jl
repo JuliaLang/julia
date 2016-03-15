@@ -66,7 +66,6 @@ const LIBGIT2_VER = v"0.23.0"
 #end
 
 mktempdir() do dir
-
     # test parameters
     repo_url = "https://github.com/JuliaLang/Example.jl"
     ssh_prefix = "git@"
@@ -423,7 +422,6 @@ mktempdir() do dir
             finalize(repo)
         end
     #end
-
 end
 
 #end

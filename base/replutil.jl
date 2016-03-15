@@ -35,7 +35,7 @@ end
 
 # writemime for ranges
 function writemime(io::IO, ::MIME"text/plain", r::Range)
-  show(io, r)
+    show(io, r)
 end
 
 function writemime(io::IO, ::MIME"text/plain", v::AbstractVector)
