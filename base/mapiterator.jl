@@ -47,7 +47,7 @@ wait(state::AsyncMapState) = wait(state.task_done)
 
 # Open a @sync block and initialise iterator state.
 function start(itr::AsyncMapIterator)
-    Base.sync_begin()
+    sync_begin()
     AsyncMapState(start(itr.arg_enum),  0, Condition(), false)
 end
 
@@ -55,7 +55,7 @@ end
 function done(itr::AsyncMapIterator, state::AsyncMapState)
     if !state.done && done(itr.arg_enum, state.enum_state)
         state.done = true
-        Base.sync_end()
+        sync_end()
     end
     return state.done
 end
