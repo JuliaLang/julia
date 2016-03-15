@@ -151,6 +151,11 @@ Returns a `Pass` `Result` if it does, a `Fail` `Result` if it is
 """
 macro test(ex)
     orig_ex = Expr(:quote,ex)
+    # Normalize comparison operator calls to :comparison expressions
+    if isa(ex, Expr) && ex.head == :call && length(ex.args)==3 &&
+        Base.operator_precedence(ex.args[1]) == Base.operator_precedence(:(==))
+        ex = Expr(:comparison, ex.args[2], ex.args[1], ex.args[3])
+    end
     # If the test is a comparison
     if isa(ex, Expr) && ex.head == :comparison
         # Generate a temporary for every term in the expression

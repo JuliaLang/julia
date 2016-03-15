@@ -1522,7 +1522,6 @@
    (lambda (e)
      `(call (top getfield) ,(expand-forms (cadr e)) ,(expand-forms (caddr e))))
 
-   'in   syntactic-op-to-call
    '|<:| syntactic-op-to-call
    '|>:| syntactic-op-to-call
 

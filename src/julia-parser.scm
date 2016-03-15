@@ -793,7 +793,7 @@
                    (arg2 (cadddr ex)))
                (if (or (eq? op '|<:|) (eq? op '|>:|))
                    `(,op ,arg1 ,arg2)
-                   ex)))
+                   `(call ,op ,arg1 ,arg2))))
             (else ex)))))
 
 (define closing-token?
@@ -1400,14 +1400,20 @@
 
 ;; as above, but allows both "i=r" and "i in r"
 (define (parse-iteration-spec s)
-  (let ((r (parse-eq* s)))
-    (cond ((and (pair? r) (eq? (car r) '=))  r)
-          ((eq? r ':)  r)
-          ((and (length= r 4) (eq? (car r) 'comparison)
-                (or (eq? (caddr r) 'in) (eq? (caddr r) '∈)))
-           `(= ,(cadr r) ,(cadddr r)))
-          (else
-           (error "invalid iteration specification")))))
+  (let* ((lhs (parse-pipes s))
+         (t   (peek-token s)))
+    (cond ((memq t '(= in ∈))
+           (take-token s)
+           (let* ((rhs (parse-pipes s))
+                  (t   (peek-token s)))
+             #;(if (not (or (closing-token? t) (newline? t)))
+                 ;; should be: (error "invalid iteration specification")
+                 (syntax-deprecation s (string "for " (deparse `(= ,lhs ,rhs)) " " t)
+                                     (string "for " (deparse `(= ,lhs ,rhs)) "; " t)))
+             `(= ,lhs ,rhs)))
+          ((and (eq? lhs ':) (closing-token? t))
+           ':)
+          (else (error "invalid iteration specification")))))
 
 (define (parse-comma-separated-iters s)
   (let loop ((ranges '()))

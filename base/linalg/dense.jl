@@ -248,7 +248,7 @@ function expm!{T<:BlasFloat}(A::StridedMatrix{T})
         LAPACK.gesv!(V-U, X)
 
         if s > 0            # squaring to reverse dividing by power of 2
-            for t=1:si X *= X end
+            for t=1:si; X *= X end
         end
     end
 
@@ -264,10 +264,10 @@ function expm!{T<:BlasFloat}(A::StridedMatrix{T})
     end
 
     if ilo > 1       # apply lower permutations in reverse order
-        for j in (ilo-1):-1:1 rcswap!(j, Int(scale[j]), X) end
+        for j in (ilo-1):-1:1; rcswap!(j, Int(scale[j]), X) end
     end
     if ihi < n       # apply upper permutations in forward order
-        for j in (ihi+1):n    rcswap!(j, Int(scale[j]), X) end
+        for j in (ihi+1):n;    rcswap!(j, Int(scale[j]), X) end
     end
     X
 end

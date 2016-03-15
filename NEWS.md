@@ -35,6 +35,9 @@ Language changes
   * `A <: B` is parsed as `Expr(:(<:), :A, :B)` in all cases ([#9503]). This also applies to the
     `>:` operator.
 
+  * Simple 2-argument comparisons like `A < B` are parsed as calls intead of using the
+    `:comparison` expression type.
+
 Command-line option changes
 ---------------------------
 

@@ -22,9 +22,9 @@ let
                        ("5.≥x", "5.>=x"),
                        ("5.≤x", "5.<=x")]
         ex1 = parse(ex1); ex2 = parse(ex2)
-        @test ex1.head === :comparison && (ex1.head === ex2.head)
-        @test ex1.args[1] === 5 && ex2.args[1] === 5
-        @test is(eval(Main, ex1.args[2]), eval(Main, ex2.args[2]))
+        @test ex1.head === :call && (ex1.head === ex2.head)
+        @test ex1.args[2] === 5 && ex2.args[2] === 5
+        @test is(eval(Main, ex1.args[1]), eval(Main, ex2.args[1]))
         @test ex1.args[3] === :x && (ex1.args[3] === ex2.args[3])
     end
 end
@@ -291,7 +291,7 @@ for T in (UInt8,UInt16,UInt32,UInt64)
     @test_throws OverflowError parse(T,string(big(typemax(T))+1))
 end
 
-@test parse("1 == 2|>3") == Expr(:comparison, 1, :(==), Expr(:call, :(|>), 2, 3))
+@test parse("1 == 2|>3") == Expr(:call, :(==), 1, Expr(:call, :(|>), 2, 3))
 
 # issue #12501 and pr #12502
 parse("""
