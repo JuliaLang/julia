@@ -19,6 +19,7 @@
 
 int verbose = 1;
 
+int c_int = 0;
 
 //////////////////////////////////
 // Test for proper argument register truncation
@@ -362,6 +363,20 @@ JL_DLLEXPORT struct_big test_big(struct_big a) {
     return a;
 }
 
+JL_DLLEXPORT int get_c_int(void)
+{
+    return c_int;
+}
+
+JL_DLLEXPORT void set_c_int(int i)
+{
+    c_int = i;
+}
+
+JL_DLLEXPORT void finalizer_cptr(void* v)
+{
+    set_c_int(-1);
+}
 
 //////////////////////////////////
 // Turn off verbose for automated tests, leave on for debugging

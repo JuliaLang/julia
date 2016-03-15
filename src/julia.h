@@ -927,8 +927,6 @@ JL_DLLEXPORT jl_value_t *jl_new_struct(jl_datatype_t *type, ...);
 JL_DLLEXPORT jl_value_t *jl_new_structv(jl_datatype_t *type, jl_value_t **args,
                                         uint32_t na);
 JL_DLLEXPORT jl_value_t *jl_new_struct_uninit(jl_datatype_t *type);
-JL_DLLEXPORT jl_function_t *jl_new_closure(jl_fptr_t proc, jl_value_t *env,
-                                           jl_lambda_info_t *li);
 JL_DLLEXPORT jl_lambda_info_t *jl_new_lambda_info(jl_value_t *ast,
                                                   jl_svec_t *tvars,
                                                   jl_svec_t *sparams,
