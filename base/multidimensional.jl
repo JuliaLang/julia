@@ -864,12 +864,12 @@ end
     groupslices(A, dim)
 
 Returns a vector of integers where each integer element of the returned vector
-is a group number corresponding to the unique slices along dimension `dim` as 
+is a group number corresponding to the unique slices along dimension `dim` as
 returned from `unique(A, dim)`, where `A` can be a multidimensional array.
 
 Example usage:
 
-If `C = unique(A, dim)`, `ic = groupslices(A, dim)`, and 
+If `C = unique(A, dim)`, `ic = groupslices(A, dim)`, and
 rank(A) == rank(C) == 3, then:
 
 if dim == 1
@@ -956,10 +956,10 @@ end
 """
     groupinds(ic)
 
-Returns a vector of vectors of integers wherein the vector of group slice 
-index integers as returned from `groupslices(A, dim)` is converted into a 
-grouped vector of vectors.  Each vector entry in the returned vector of 
-vectors contains all of the positional indices of slices in the original 
+Returns a vector of vectors of integers wherein the vector of group slice
+index integers as returned from `groupslices(A, dim)` is converted into a
+grouped vector of vectors.  Each vector entry in the returned vector of
+vectors contains all of the positional indices of slices in the original
 input array `A` that correspond to the unique slices along dimension `dim`
 that are present in the array `C` as returned from `unique(A, dim)`.
 """
@@ -979,16 +979,16 @@ end
 """
     firstinds(ic::Vector{Int})
     firstinds(ib::Vector{Vector{Int}})
-    
+
 Returns a vector of integers containing the first index position of each unique
 value in the input integer vector `ic`, or the first index position of each
 entry in the input vector of integer vectors `ib`.
 
 When operating on the output returned from `unique(A, dim)`, the returned
 vector of integers correspond to the positions of the first of each unique slice
-present in the original input multidimensional array `A` along dimension `dim`. 
+present in the original input multidimensional array `A` along dimension `dim`.
 
-The implementation of `firstinds` accepting a vector of integers operates on the 
+The implementation of `firstinds` accepting a vector of integers operates on the
 output returned from `groupslices(A, dim)`.
 
 The implementation of `firstinds` accepting a vector of vector of integers
@@ -1011,14 +1011,14 @@ end
 
 """
     lastinds(ic::Vector{Int})
-    
+
 Returns a vector of integers containing the last index position of each unique
 value in the input integer vector `ic`.
 
-When operating on the output returned from `groupinds(unique(A, dim))`, the 
-returned vector of integers correspond to the positions of the last of each 
-unique slice present in the original input multidimensional array `A` along 
-dimension `dim`. 
+When operating on the output returned from `groupinds(unique(A, dim))`, the
+returned vector of integers correspond to the positions of the last of each
+unique slice present in the original input multidimensional array `A` along
+dimension `dim`.
 
 The implementation of `firstinds` accepting a vector of vector of integers
 operates on the output returned from `groupinds(ic::Vector{Int})`
