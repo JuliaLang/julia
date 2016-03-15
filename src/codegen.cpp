@@ -1311,9 +1311,12 @@ void jl_extern_c(jl_function_t *f, jl_value_t *rt, jl_value_t *argt, char *name)
         } else {
             // Otherwise we use a global mapping
             assert(!imaging_mode);
-#if defined(USE_MCJIT) || defined(USE_ORCJIT)
+#if defined(USE_ORCJIT)
             jl_ExecutionEngine->addGlobalMapping(llvmf->getName(),
                     (void*)getAddressForOrCompileFunction(llvmf));
+#elif defined(USE_MCJIT)
+            jl_ExecutionEngine->addGlobalMapping(llvmf->getName(),
+                    getAddressForOrCompileFunction(llvmf));
 #else
             jl_ExecutionEngine->addGlobalMapping(llvmf,
                     jl_ExecutionEngine->getPointerToFunction(llvmf));
