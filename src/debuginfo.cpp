@@ -1016,6 +1016,21 @@ JL_DLLEXPORT jl_value_t *jl_get_dobj_data(uint64_t fptr)
         const_cast<char*>(object->getData().data()),
         object->getData().size(), false);
 }
+
+extern "C"
+JL_DLLEXPORT uint64_t jl_get_section_start(uint64_t fptr)
+{
+    std::map<size_t, ObjectInfo, revcomp> &objmap = jl_jit_events->getObjectMap();
+    std::map<size_t, ObjectInfo, revcomp>::iterator fit = objmap.lower_bound(fptr);
+
+    uint64_t ret = 0;
+    if (fit != objmap.end() && fptr < fit->first + fit->second.SectionSize) {
+        ret = fit->first;
+    }
+    uv_rwlock_rdunlock(&threadsafe);
+    return ret;
+}
+
 #endif
 
 void jl_cleanup_DI(llvm::DIContext *context)
