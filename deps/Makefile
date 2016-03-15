@@ -1872,6 +1872,9 @@ ifeq ($(OS),$(BUILD_OS))
 endif
 	echo 1 > $@
 $(GMP_OBJ_TARGET): $(GMP_SRC_TARGET) | $(build_shlibdir) $(build_includedir)
+ifeq ($(BUILD_OS),WINNT)
+	-mv $(BUILDDIR)/gmp-$(GMP_VER)/.libs/gmp.dll $(BUILDDIR)/gmp-$(GMP_VER)/.libs/libgmp.dll
+endif
 	$(INSTALL_M) $(BUILDDIR)/gmp-$(GMP_VER)/.libs/libgmp.*$(SHLIB_EXT)* $(build_shlibdir)
 	$(INSTALL_F) $(BUILDDIR)/gmp-$(GMP_VER)/gmp.h $(build_includedir)
 	$(INSTALL_NAME_CMD)libgmp.$(SHLIB_EXT) $@
