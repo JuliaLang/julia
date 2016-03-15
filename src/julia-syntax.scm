@@ -1482,6 +1482,10 @@
                                             `(call (top next) ,coll ,state))
                    ,body))))))))
 
+;; convert an operator parsed as (op a b) to (call op a b)
+(define (syntactic-op-to-call e)
+  `(call ,(car e) ,(expand-forms (cadr e)) ,(expand-forms (caddr e))))
+
 ;; table mapping expression head to a function expanding that form
 (define expand-table
   (table
@@ -1518,9 +1522,9 @@
    (lambda (e)
      `(call (top getfield) ,(expand-forms (cadr e)) ,(expand-forms (caddr e))))
 
-   'in
-   (lambda (e)
-     `(call in ,(expand-forms (cadr e)) ,(expand-forms (caddr e))))
+   'in   syntactic-op-to-call
+   '|<:| syntactic-op-to-call
+   '|>:| syntactic-op-to-call
 
    'const  expand-const-decl
    'local  expand-local-or-global-decl

@@ -365,3 +365,9 @@ let a⊂b = reduce(&, x ∈ b for x in a) && length(b)>length(a)
     @test !([1,2] ⊂ [1,3,4])
     @test !([1,2] ⊂ [1,2])
 end
+
+# issue #9503
+@test parse("x<:y") == Expr(:(<:), :x, :y)
+@test parse("x>:y") == Expr(:(>:), :x, :y)
+@test parse("x<:y<:z").head === :comparison
+@test parse("x>:y<:z").head === :comparison
