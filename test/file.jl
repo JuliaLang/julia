@@ -1004,7 +1004,6 @@ cd(dirwalk) do
     @test root == joinpath(".", "sub_dir2")
     @test dirs == []
     @test files == ["file_dir2"]
-
 end
 rm(dirwalk, recursive=true)
 

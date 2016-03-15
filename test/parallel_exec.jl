@@ -840,8 +840,7 @@ if DoFullTest
     end)
     @test length(new_pids) == num_workers
     test_n_remove_pids(new_pids)
-
-end
+end # @unix_only
 end
 
 # issue #7727

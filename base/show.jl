@@ -1147,11 +1147,9 @@ Parameter `sep::Integer` is number of spaces to put between elements.
 Alignment is reported as a vector of (left,right) tuples, one for each
 column going across the screen.
 """
-function alignment(
-    io::IO, X::AbstractVecOrMat,
-    rows::AbstractVector, cols::AbstractVector,
-    cols_if_complete::Integer, cols_otherwise::Integer, sep::Integer
-)
+function alignment(io::IO, X::AbstractVecOrMat,
+        rows::AbstractVector, cols::AbstractVector,
+        cols_if_complete::Integer, cols_otherwise::Integer, sep::Integer)
     a = Tuple{Int, Int}[]
     for j in cols # need to go down each column one at a time
         l = r = 0
@@ -1197,8 +1195,8 @@ is specified as string sep.
 `print_matrix_row` will also respect compact output for elements.
 """
 function print_matrix_row(io::IO,
-    X::AbstractVecOrMat, A::Vector,
-    i::Integer, cols::AbstractVector, sep::AbstractString)
+        X::AbstractVecOrMat, A::Vector,
+        i::Integer, cols::AbstractVector, sep::AbstractString)
     for k = 1:length(A)
         j = cols[k]
         if isassigned(X,Int(i),Int(j)) # isassigned accepts only `Int` indices
@@ -1222,9 +1220,8 @@ end
 of a bunch of rows for long matrices. Not only is the string vdots shown
 but it also repeated every M elements if desired.
 """
-function print_matrix_vdots(io::IO,
-    vdots::AbstractString, A::Vector, sep::AbstractString, M::Integer, m::Integer
-)
+function print_matrix_vdots(io::IO, vdots::AbstractString,
+        A::Vector, sep::AbstractString, M::Integer, m::Integer)
     for k = 1:length(A)
         w = A[k][1] + A[k][2]
         if k % M == m
