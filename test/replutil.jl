@@ -44,7 +44,7 @@ test_have_color(buf, "", "")
 # matches the implicit constructor -> convert method
 Base.show_method_candidates(buf, Base.MethodError(Tuple{}, (1, 1, 1)))
 let mc = String(take!(buf))
-    @test contains(mc, "\nClosest candidates are:\n  Tuple{}{T}(")
+    @test contains(mc, "\nClosest candidates are:\n  Tuple{}")
     @test !contains(mc, cfile)
 end
 
