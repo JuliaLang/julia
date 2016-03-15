@@ -40,7 +40,7 @@ length(B::BitArray) = B.len
 size(B::BitVector) = (B.len,)
 size(B::BitArray) = B.dims
 
-size(B::BitVector, d) = begin
+function size(B::BitVector, d)
     if d == 1
         return B.len
     elseif d > 1
