@@ -199,23 +199,42 @@ end
 # =======================
 
 """
-    Docs.doc!(binding, str, sig)
+    Docs.doc!(str, binding, typesig)
 
-Adds a new docstring `str` to the docsystem for `binding` and signature `sig`.
+Adds a new docstring `str` to the docsystem for `binding` and signature `typesig`.
 """
-function doc!(b::Binding, str::DocStr, sig::ANY = Union{})
-    m = get!(meta(), b, MultiDoc())
-    if haskey(m.docs, sig)
+function doc!(str::DocStr, binding::Binding, typesig::ANY = Union{})
+    initmeta() # Initialise the current module's `#meta` dict.
+    multidoc = get!(meta(), binding, MultiDoc())
+    if haskey(multidoc.docs, typesig)
         # We allow for docstrings to be updated, but print a warning since it is possible
         # that over-writing a docstring *may* have been accidental.
-        warn("replacing docs for '$b :: $sig'.")
+        warn("replacing docs for '$binding :: $typesig'.")
     else
         # The ordering of docstrings for each Binding is defined by the order in which they
         # are initially added. Replacing a specific docstring does not change it's ordering.
-        push!(m.order, sig)
+        push!(multidoc.order, typesig)
     end
-    m.docs[sig] = str
-    return b
+    multidoc.docs[typesig] = str
+    return binding
+end
+
+# When the `object` is not already a `Binding` then try to convert it to one.
+function doc!(str::DocStr, object, typesig::ANY = Union{})
+    binding = aliasof(object, object)
+    binding ≡ object && error("cannot find binding for '$object'. Use '@doc' instead.")
+    doc!(str, binding, typesig)
+end
+
+# When the docstring is not already a `DocStr` object then convert it to one.
+function doc!(str, object, typesig::ANY = Union{})
+    data = Dict(
+        :source     => :(),
+        :path       => Base.source_path(),
+        :linenumber => unsafe_load(cglobal(:jl_lineno, Int)),
+        :module     => current_module(),
+    )
+    doc!(DocStr(str, data), object, typesig)
 end
 
 # Docstring lookup.
@@ -456,7 +475,7 @@ function objectdoc(str, def, expr, sig = :(Union{}))
     docstr  = esc(docexpr(str, metadata(expr)))
     quote
         $(esc(def))
-        $(doc!)($binding, $docstr, $(esc(sig)))
+        $(doc!)($docstr, $binding, $(esc(sig)))
     end
 end
 
@@ -571,9 +590,6 @@ function docm(meta, ex, define = true)
     # Don't try to redefine expressions. This is only needed for `Base` img gen since
     # otherwise calling `loaddocs` would redefine all documented functions and types.
     def = define ? x : nothing
-
-    # Initalise the module's docstring storage.
-    initmeta()
 
     # Method / macro definitions and "call" syntax.
     #
