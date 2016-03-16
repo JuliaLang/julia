@@ -354,3 +354,9 @@ macro strquote(ex)
 end
 str_ex2a, str_ex2b = @strquote(begin x end), string(quote x end)
 @test str_ex2a == str_ex2b
+
+# Issue #15525, printing of vcat
+@test sprint(show, :([a;])) == ":([a;])"
+@test sprint(show, :([a;b])) == ":([a;b])"
+@test_repr "[a;]"
+@test_repr "[a;b]"
