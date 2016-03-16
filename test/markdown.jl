@@ -316,12 +316,32 @@ no|table
 no error
 """ == MD([Paragraph(Any["no|table no error"])])
 
-t = """a   |   b
-:-- | --:
-1   |   2
-"""
-@test plain(Markdown.parse(t)) == t
+let t = """a   |   b
+    :-- | --:
+    1   |   2
+    """
+    @test Markdown.parse(t) == MD(Table(Any[Any["a", "b"], Any["1", "2"]], [:l, :r]))
+end
 
+let text =
+    """
+    | a   |   b |
+    |:--- | ---:|
+    | 1   |   2 |
+    """,
+    table = Markdown.parse(text)
+    @test text == Markdown.plain(table)
+end
+let text =
+    """
+    | Markdown | Table |  Test |
+    |:-------- |:-----:| -----:|
+    | foo      | `bar` | *baz* |
+    | `bar`    |  baz  | *foo* |
+    """,
+    table = Markdown.parse(text)
+    @test text == Markdown.plain(table)
+end
 
 # LaTeX extension
 latex_doc = md"""
