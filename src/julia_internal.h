@@ -220,6 +220,8 @@ DLLEXPORT int jl_fs_rename(const char *src_path, const char *dst_path);
 extern DLLEXPORT jl_value_t *jl_segv_exception;
 #endif
 
+DLLEXPORT jl_value_t *(jl_array_data_owner)(jl_array_t *a);
+
 #ifdef __cplusplus
 }
 #endif

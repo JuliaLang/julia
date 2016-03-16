@@ -359,6 +359,7 @@ static Function *jlgetnthfieldchecked_func;
 static Function *resetstkoflw_func;
 #endif
 static Function *diff_gc_total_bytes_func;
+static Function *jlarray_data_owner_func;
 
 static std::vector<Type *> two_pvalue_llvmt;
 static std::vector<Type *> three_pvalue_llvmt;
@@ -2325,10 +2326,26 @@ static Value *emit_known_call(jl_value_t *ff, jl_value_t **args, size_t nargs,
                             builder.CreateCondBr(is_owned, ownedBB, mergeBB);
                             builder.SetInsertPoint(ownedBB);
                             // load owner pointer
-                            Value *own_ptr = builder.CreateLoad(
-                                builder.CreateBitCast(builder.CreateConstGEP1_32(
-                                    builder.CreateBitCast(ary,T_pint8), jl_array_data_owner_offset(nd)),
-                                    jl_ppvalue_llvmt));
+                            Value *own_ptr;
+                            if (jl_is_long(ndp)) {
+                                own_ptr = builder.CreateLoad(
+                                    builder.CreateBitCast(
+                                        builder.CreateConstGEP1_32(
+                                            builder.CreateBitCast(ary,T_pint8),
+                                            jl_array_data_owner_offset(nd)),
+                                        jl_ppvalue_llvmt));
+                            }
+                            else {
+#ifdef LLVM37
+                                own_ptr = builder.CreateCall(
+                                    prepare_call(jlarray_data_owner_func),
+                                    {ary});
+#else
+                                own_ptr = builder.CreateCall(
+                                    prepare_call(jlarray_data_owner_func),
+                                    ary);
+#endif
+                            }
                             builder.CreateBr(mergeBB);
                             builder.SetInsertPoint(mergeBB);
                             data_owner = builder.CreatePHI(jl_pvalue_llvmt, 2);
@@ -5509,6 +5526,19 @@ static void init_julia_llvm_env(Module *m)
                          Function::ExternalLinkage,
                          "jl_gc_diff_total_bytes", m);
     add_named_global(diff_gc_total_bytes_func, (void*)*jl_gc_diff_total_bytes);
+    std::vector<Type*> array_owner_args(0);
+    array_owner_args.push_back(jl_pvalue_llvmt);
+    jlarray_data_owner_func =
+        Function::Create(FunctionType::get(jl_pvalue_llvmt, array_owner_args, false),
+                         Function::ExternalLinkage,
+                         "jl_array_data_owner", m);
+    jlarray_data_owner_func->setAttributes(
+        jlarray_data_owner_func->getAttributes()
+        .addAttribute(jlarray_data_owner_func->getContext(),
+                      AttributeSet::FunctionIndex, Attribute::ReadOnly)
+        .addAttribute(jlarray_data_owner_func->getContext(),
+                      AttributeSet::FunctionIndex, Attribute::NoUnwind));
+    add_named_global(jlarray_data_owner_func, (void*)*jl_array_data_owner);
 
     // set up optimization passes
 #ifdef LLVM38

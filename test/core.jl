@@ -3527,3 +3527,17 @@ let ary = Vector{Any}(10)
         check_undef_and_fill(ary, 1:(2n + 4))
     end
 end
+
+# Make sure arrayset can handle `Array{T}` (where `T` is a type and not a
+# `TypeVar`) without crashing
+let
+    function arrayset_unknown_dim{T}(::Type{T}, n)
+        Base.arrayset(reshape(Vector{T}(1), ones(Int, n)...), 2, 1)
+    end
+    arrayset_unknown_dim(Any, 1)
+    arrayset_unknown_dim(Any, 2)
+    arrayset_unknown_dim(Any, 3)
+    arrayset_unknown_dim(Int, 1)
+    arrayset_unknown_dim(Int, 2)
+    arrayset_unknown_dim(Int, 3)
+end
