@@ -1359,12 +1359,14 @@ function map(f, As::AbstractArray...)
     return map_to_n!(f, 2, dest, As)
 end
 
-# multi-item push!, unshift! (built on top of type-specific 1-item version)
+# multi-item push!, unshift!, append! (built on top of type-specific 1-item version)
 # (note: must not cause a dispatch loop when 1-item case is not defined)
 push!(A, a, b) = push!(push!(A, a), b)
 push!(A, a, b, c...) = push!(push!(A, a, b), c...)
 unshift!(A, a, b) = unshift!(unshift!(A, b), a)
 unshift!(A, a, b, c...) = unshift!(unshift!(A, c...), a, b)
+append!(A, a, b) = append!(append!(A, a), b)
+append!(A, a, b, c...) = append!(append!(A, a, b), c...)
 
 ## hashing collections ##
 
