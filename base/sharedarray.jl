@@ -84,6 +84,7 @@ function SharedArray(T::Type, dims::NTuple; init=false, pids=Int[])
             systemerror("Error unlinking shmem segment " * shm_seg_name, rc != 0)
         end
         S = SharedArray{T,N}(dims, pids, refs, shm_seg_name)
+        finalizer(S, finalize_refs)
         shm_seg_name = ""
 
         if onlocalhost
@@ -187,6 +188,7 @@ function SharedArray{T,N}(filename::AbstractString, ::Type{T}, dims::NTuple{N,In
     end
 
     S = SharedArray{T,N}(dims, pids, refs, filename)
+    finalizer(S, finalize_refs)
 
     if onlocalhost
         init_loc_flds(S)
@@ -204,6 +206,20 @@ function SharedArray{T,N}(filename::AbstractString, ::Type{T}, dims::NTuple{N,In
                 @async remotecall_wait(p, init, S)
             end
         end
+    end
+    S
+end
+
+function finalize_refs{T,N}(S::SharedArray{T,N})
+    if length(S.pids) > 0
+        for r in S.refs
+            finalize(r)
+        end
+        empty!(S.pids)
+        empty!(S.refs)
+        init_loc_flds(S)
+        finalize(S.s)
+        S.s = Array(T, ntuple(d->0,N))
     end
     S
 end

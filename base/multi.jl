@@ -478,9 +478,19 @@ type RemoteRef{T<:AbstractChannel}
             return found
         end
         client_refs[r] = true
-        finalizer(r, send_del_client)
+        finalizer(r, finalize_rr)
         r
     end
+end
+
+function finalize_rr(rr::RemoteRef)
+    if rr.where > 0
+        send_del_client(rr)
+        rr.where = 0
+        rr.whence = 0
+        rr.id = 0
+    end
+    rr
 end
 
 let REF_ID::Int = 1
