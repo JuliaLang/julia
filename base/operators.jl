@@ -45,7 +45,7 @@ const .≥ = .>=
 isless(x::Real, y::Real) = x<y
 lexcmp(x::Real, y::Real) = isless(x,y) ? -1 : ifelse(isless(y,x), 1, 0)
 
-ifelse(c::Bool, x, y) = Intrinsics.select_value(c, x, y)
+ifelse(c::Bool, x, y) = select_value(c, x, y)
 
 cmp(x,y) = isless(x,y) ? -1 : ifelse(isless(y,x), 1, 0)
 lexcmp(x,y) = cmp(x,y)
