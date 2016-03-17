@@ -1921,7 +1921,7 @@ JL_DLLEXPORT void jl_preload_sysimg_so(const char *fname)
     }
 
     // Get handle to sys.so
-    jl_sysimg_handle = jl_load_dynamic_library_e(fname_shlib, JL_RTLD_DEFAULT | JL_RTLD_GLOBAL);
+    jl_sysimg_handle = jl_load_dynamic_library_e(fname_shlib, JL_RTLD_LOCAL | JL_RTLD_NOW);
 
     // set cpu target if unspecified by user and available from sysimg
     // otherwise default to native.
