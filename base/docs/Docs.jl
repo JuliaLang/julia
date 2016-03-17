@@ -126,7 +126,7 @@ The `.data` fields stores several values related to the docstring, such as: path
 linenumber, source code, and fielddocs.
 """
 type DocStr
-    text   :: UTF8String
+    text   :: String
     object :: Nullable
     data   :: Dict{Symbol, Any}
 

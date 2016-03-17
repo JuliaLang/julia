@@ -10,10 +10,10 @@ const DOCSTRING_DIRECTIVE = r"^(.. (function):: ).*"
 typealias Signature Tuple{Binding, Type}
 
 type State
-    files      :: Dict{UTF8String, Vector{UTF8String}}
-    validdocs  :: Dict{UTF8String, Tuple{Module, Signature, DocStr}}
+    files      :: Dict{String, Vector{String}}
+    validdocs  :: Dict{String, Tuple{Module, Signature, DocStr}}
     baddocs    :: Dict{Signature, Tuple{Module, DocStr}}
-    documented :: Dict{Signature, Tuple{Module, DocStr, UTF8String}}
+    documented :: Dict{Signature, Tuple{Module, DocStr, String}}
     errorlevel :: Int
     debug      :: Bool
     State() = new(Dict(), Dict(), Dict(), Dict(), 0, "JULIA_GENSTDLIB_DEBUG" in keys(ENV))

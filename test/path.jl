@@ -89,5 +89,5 @@ end
 test_relpath()
 
 # Test type stability
-@test isa(joinpath("a", "b"), ASCIIString)
-@test isa(joinpath(abspath("a"), "b"), ASCIIString)
+@test isa(joinpath("a", "b"), String)
+@test isa(joinpath(abspath("a"), "b"), String)
