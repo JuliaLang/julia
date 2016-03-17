@@ -200,8 +200,8 @@ h11840(::TypeConstructor) = '3'
 @test typejoin(Array{Float64},BitArray) <: AbstractArray
 @test typejoin(Array{Bool},BitArray) <: AbstractArray{Bool}
 @test typejoin(Tuple{Int,Int8},Tuple{Int8,Float64}) === Tuple{Signed,Real}
-@test Base.typeseq(typejoin(Tuple{String,String},Tuple{UTF16String,String},
-                            Tuple{String,UTF16String},Tuple{Int,String,Int}),
+@test Base.typeseq(typejoin(Tuple{String,String},Tuple{DirectIndexString,String},
+                            Tuple{String,DirectIndexString},Tuple{Int,String,Int}),
                    Tuple{Any,AbstractString,Vararg{Int}})
 @test Base.typeseq(typejoin(Tuple{Int8,Vararg{Int}},Tuple{Int8,Int8}),
                    Tuple{Int8,Vararg{Signed}})
