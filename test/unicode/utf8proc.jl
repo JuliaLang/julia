@@ -289,7 +289,7 @@ let str = ascii("This is a test")
     g = graphemes(str)
     h = hash(str)
     @test hash(g) == h
-    @test convert(UTF16String, g) == str
+    @test convert(String, g) == str
     io = IOBuffer()
     show(io, g)
     check = "length-14 GraphemeIterator{String} for \"$str\""

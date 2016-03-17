@@ -165,7 +165,7 @@ rs = RevString("foobar")
 @test parse(Float64,RevString("64")) === 46.0
 
 # reverseind
-for T in (String, UTF16String, UTF32String)
+for T in (String, CharString, GenericString)
     for prefix in ("", "abcd", "\U0001d6a4\U0001d4c1", "\U0001d6a4\U0001d4c1c", " \U0001d6a4\U0001d4c1")
         for suffix in ("", "abcde", "\U0001d4c1β\U0001d6a4", "\U0001d4c1β\U0001d6a4c", " \U0001d4c1β\U0001d6a4")
             for c in ('X', 'δ', '\U0001d6a5')
