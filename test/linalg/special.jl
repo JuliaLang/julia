@@ -128,3 +128,26 @@ for typ in [UpperTriangular,LowerTriangular,Base.LinAlg.UnitUpperTriangular,Base
     @test Base.LinAlg.A_mul_Bc(atri,qrb[:Q]) ≈ full(atri) * qrb[:Q]'
     @test Base.LinAlg.A_mul_Bc!(copy(atri),qrb[:Q]) ≈ full(atri) * qrb[:Q]'
 end
+
+let a = rand(n), b = rand(n-1), c = rand(n-1)
+   A = Diagonal(a)
+   @test expm(A) == expm(full(A))
+   @test logm(A) == logm(full(A))
+   @test sqrtm(A) == sqrtm(full(A))
+   A = Bidiagonal(a,b,true)
+   @test expm(A) == expm(full(A))
+   @test logm(A) == logm(full(A))
+   @test sqrtm(A) == sqrtm(full(A))
+   A = Bidiagonal(a,b,false)
+   @test expm(A) == expm(full(A))
+   @test logm(A) == logm(full(A))
+   @test sqrtm(A) == sqrtm(full(A))
+   A = Tridiagonal(c,a,b)
+   @test expm(A) == expm(full(A))
+   @test logm(A) == logm(full(A))
+   @test sqrtm(A) == sqrtm(full(A))
+   A = SymTridiagonal(a,b)
+   @test expm(A) == expm(full(A))
+   @test logm(A) == logm(full(A))
+   @test sqrtm(A) == sqrtm(full(A))
+end
