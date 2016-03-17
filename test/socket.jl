@@ -89,10 +89,16 @@ wait(port)
 @test readstring(connect(fetch(port))) == "Hello World\n" * ("a1\n"^100)
 wait(tsk)
 
+immutable GenericString <: AbstractString
+    string::AbstractString
+end
+Base.endof(s::GenericString) = endof(s.string)
+Base.next(s::GenericString, i::Int) = next(s.string, i)
+
 mktempdir() do tmpdir
     socketname = @windows ? ("\\\\.\\pipe\\uv-test-" * randstring(6)) : joinpath(tmpdir, "socket")
     c = Base.Condition()
-    for T in (String, UTF16String) # test for issue #9435
+    for T in (String, GenericString) # test for issue #9435
         tsk = @async begin
             s = listen(T(socketname))
             Base.notify(c)
