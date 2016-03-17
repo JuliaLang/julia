@@ -49,8 +49,8 @@ function curl(url::AbstractString, opts::Cmd=``)
             end
             wait(proc); return status, header, readall(out)
         end
+        error("strangely formatted HTTP response")
     end
-    error("strangely formatted HTTP response")
 end
 curl(url::AbstractString, data::Void, opts::Cmd=``) = curl(url,opts)
 curl(url::AbstractString, data, opts::Cmd=``) =
