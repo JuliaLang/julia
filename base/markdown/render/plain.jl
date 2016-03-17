@@ -53,6 +53,12 @@ function plain(io::IO, md::HorizontalRule)
     println(io, "-" ^ 3)
 end
 
+function plain(io::IO, l::LaTeX)
+    println(io, '$', '$')
+    println(io, l.formula)
+    println(io, '$', '$')
+end
+
 function plain(io::IO, md)
     writemime(io,  MIME"text/plain"(), md)
     println(io)
