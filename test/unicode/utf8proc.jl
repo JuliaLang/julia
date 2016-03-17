@@ -234,24 +234,22 @@ let grphtest = (("b\u0300lahβlahb\u0302láh", ["b\u0300","l","a","h",
                                                 "\U1d4c1\u0300"]),
                 ("x",["x"]),
                 ("abc",["a","b","c"]))
-    for T in (utf8,utf16,utf32)
-        for nf in (:NFC, :NFD)
-            for (s, g) in grphtest
-                s_ = T(normalize_string(s, nf))
-                g_ = map(s -> normalize_string(s, nf), g)
-                # #9261
-                if length(s_) > 0
-                    @test typeof(first(graphemes(s_))) == SubString{typeof(s_)}
-                end
-                grph = collect(graphemes(s_))
-                @test eltype(grph) == SubString{typeof(s_)}
-                @test grph == g_
-                @test length(graphemes(s_)) == length(grph)
+    for nf in (:NFC, :NFD)
+        for (s, g) in grphtest
+            s_ = normalize_string(s, nf)
+            g_ = map(s -> normalize_string(s, nf), g)
+            # #9261
+            if length(s_) > 0
+                @test typeof(first(graphemes(s_))) == SubString{typeof(s_)}
             end
-            S = [T(normalize_string(s)) for (s,g) in grphtest]
-            G = map(graphemes, S)
-            @test map(graphemes, sort!(S)) == sort!(G)
+            grph = collect(graphemes(s_))
+            @test eltype(grph) == SubString{typeof(s_)}
+            @test grph == g_
+            @test length(graphemes(s_)) == length(grph)
         end
+        S = [normalize_string(s) for (s,g) in grphtest]
+        G = map(graphemes, S)
+        @test map(graphemes, sort!(S)) == sort!(G)
     end
 end
 

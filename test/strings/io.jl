@@ -156,37 +156,21 @@ else
         close(UNICODEF);"` )
 
     # Use iconv to generate the other data
-    for encoding in ["UTF-32LE", "UTF-16BE", "UTF-16LE", "UTF-8"]
+    for encoding in ["UTF-32LE", "UTF-8"]
         output_path = joinpath(unicodedir, encoding*".unicode")
         f = Base.Filesystem.open(output_path,Base.JL_O_WRONLY|Base.JL_O_CREAT,Base.S_IRUSR | Base.S_IWUSR | Base.S_IRGRP | Base.S_IROTH)
         run(pipeline(`iconv -f $primary_encoding -t $encoding $primary_path`, f))
         Base.Filesystem.close(f)
     end
 
-    f=open(joinpath(unicodedir,"UTF-32LE.unicode"))
-    str1 = utf32(read(f, UInt32, 1112065)[2:end])
+    f = open(joinpath(unicodedir,"UTF-32LE.unicode"))
+    str1 = CharString(convert(Vector{Char}, read(f, UInt32, 1112065)[2:end]))
     close(f)
 
-    f=open(joinpath(unicodedir,"UTF-8.unicode"))
+    f = open(joinpath(unicodedir,"UTF-8.unicode"))
     str2 = String(read(f, UInt8, 4382595)[4:end])
     close(f)
     @test str1 == str2
-
-    @test str1 == utf16(read(joinpath(unicodedir,"UTF-16LE.unicode"),
-                             UInt16, 2160641)[2:end])
-
-    @test str1 == utf16(read(joinpath(unicodedir,"UTF-16LE.unicode"),
-                             UInt8, 2160641*2))
-
-    @test str1 == utf16(read(joinpath(unicodedir,"UTF-16BE.unicode"),
-                             UInt8, 2160641*2))
-
-
-    @test str1 == utf32(read(joinpath(unicodedir,"UTF-32LE.unicode"),
-                             UInt8, 1112065*4))
-
-    @test str1 == utf32(read(joinpath(unicodedir,"UTF-32BE.unicode"),
-                             UInt8, 1112065*4))
 
     str1 = "∀ ε > 0, ∃ δ > 0: |x-y| < δ ⇒ |f(x)-f(y)| < ε"
     str2 = CharString(Char[
@@ -198,7 +182,7 @@ else
     @test str1 == str2
 
     # Cleanup unicode data
-    for encoding in ["UTF-32BE", "UTF-32LE", "UTF-16BE", "UTF-16LE", "UTF-8"]
+    for encoding in ["UTF-32BE", "UTF-32LE", "UTF-8"]
         rm(joinpath(unicodedir,encoding*".unicode"))
     end
     rm(unicodedir)

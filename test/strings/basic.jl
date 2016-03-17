@@ -229,20 +229,12 @@ end
 let s = normalize_string("tést",:NFKC)
     @test bytestring(Base.unsafe_convert(Cstring, s)) == s
     @test bytestring(convert(Cstring, symbol(s))) == s
-    @test wstring(Base.unsafe_convert(Cwstring, wstring(s))) == s
 end
-let s = "ba\0d"
-    @test_throws ArgumentError Base.unsafe_convert(Cstring, s)
-    @test_throws ArgumentError Base.unsafe_convert(Cwstring, wstring(s))
-end
+@test_throws ArgumentError Base.unsafe_convert(Cstring, "ba\0d")
 
 cstrdup(s) = @windows? ccall(:_strdup, Cstring, (Cstring,), s) : ccall(:strdup, Cstring, (Cstring,), s)
 let p = cstrdup("hello")
     @test bytestring(p) == "hello" == pointer_to_string(cstrdup(p), true)
-    Libc.free(p)
-end
-let p = @windows? ccall(:_wcsdup, Cwstring, (Cwstring,), "tést") : ccall(:wcsdup, Cwstring, (Cwstring,), "tést")
-    @test wstring(p) == "tést"
     Libc.free(p)
 end
 
