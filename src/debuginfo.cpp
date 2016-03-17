@@ -238,6 +238,10 @@ public:
 #endif
         FuncInfo tmp = {&F, Size, Details.LineStarts, linfo};
         info[(size_t)(Code)] = tmp;
+#ifndef KEEP_BODIES
+        if (!jl_generating_output())
+            const_cast<Function*>(&F)->deleteBody();
+#endif
         uv_rwlock_wrunlock(&threadsafe);
     }
 

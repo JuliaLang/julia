@@ -81,7 +81,7 @@ static void jl_module_load_time_initialize(jl_module_t *m)
             jl_value_t *tt = jl_is_type(f) ? (jl_value_t*)jl_wrap_Type(f) : jl_typeof(f);
             JL_GC_PUSH1(&tt);
             tt = (jl_value_t*)jl_apply_tuple_type_v(&tt, 1);
-            jl_get_specialization1((jl_tupletype_t*)tt, NULL);
+            jl_get_specialization1((jl_tupletype_t*)tt);
             JL_GC_POP();
         }
     }
