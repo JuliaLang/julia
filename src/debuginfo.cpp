@@ -90,12 +90,11 @@ struct FuncInfo {
 struct ObjectInfo {
     const object::ObjectFile *object;
     size_t SectionSize;
+    ptrdiff_t slide;
 #ifdef LLVM39
     DIContext *context;
 #elif defined(LLVM37)
     const llvm::LoadedObjectInfo *L;
-#elif defined(LLVM36)
-    size_t slide;
 #endif
 #if defined(_OS_DARWIN_) && !defined(LLVM37)
     const char *name;
@@ -214,7 +213,7 @@ class JuliaJITEventListener: public JITEventListener
     std::map<size_t, FuncInfo, revcomp> info;
 #else
     std::map<size_t, ObjectInfo, revcomp> objectmap;
-    std::map<size_t, jl_lambda_info_t *, revcomp> linfomap;
+    std::map<size_t, std::pair<size_t, jl_lambda_info_t *>, revcomp> linfomap;
 #endif
 
 public:
@@ -254,7 +253,11 @@ public:
 #ifdef USE_MCJIT
     jl_lambda_info_t *lookupLinfo(size_t pointer)
     {
-        return linfomap.lower_bound(pointer)->second;
+        auto linfo = linfomap.lower_bound(pointer);
+        if (linfo != linfomap.end() && pointer < linfo->first + linfo->second.first)
+            return linfo->second.second;
+        else
+            return NULL;
     }
 #ifdef LLVM36
 
@@ -275,11 +278,11 @@ public:
         uv_rwlock_wrlock(&threadsafe);
         jl_gc_safe_leave(gc_state);
 #ifdef LLVM36
-        object::section_iterator Section = obj.section_begin();
-        object::section_iterator EndSection = obj.section_end();
+        object::section_iterator Section = debugObj.section_begin();
+        object::section_iterator EndSection = debugObj.section_end();
 #else
-        object::section_iterator Section = obj.begin_sections();
-        object::section_iterator EndSection = obj.end_sections();
+        object::section_iterator Section = debugObj.begin_sections();
+        object::section_iterator EndSection = debugObj.end_sections();
 #endif
 
 #if defined(_OS_WINDOWS_)
@@ -287,7 +290,7 @@ public:
         uint8_t *UnwindData = NULL;
 #if defined(_CPU_X86_64_)
         uint8_t *catchjmp = NULL;
-        for (const object::SymbolRef &sym_iter : obj.symbols()) {
+        for (const object::SymbolRef &sym_iter : debugObj.symbols()) {
             StringRef sName;
 #ifdef LLVM37
             sName = sym_iter.getName().get();
@@ -302,39 +305,41 @@ public:
                 pAddr = &catchjmp;
             }
             if (pAddr) {
-                uint64_t Addr, SectionAddr;
+                uint64_t Addr, SectionAddr, SectionLoadAddr;
 #if defined(LLVM38)
                 Addr = sym_iter.getAddress().get();
                 Section = sym_iter.getSection().get();
                 assert(Section != EndSection && Section->isText());
-                SectionAddr = L.getSectionLoadAddress(*Section);
+                SectionAddr = Section->getAddress().get();
+                SectionLoadAddr = L.getSectionLoadAddress(*Section);
 #elif defined(LLVM37)
                 Addr = sym_iter.getAddress().get();
                 sym_iter.getSection(Section);
                 assert(Section != EndSection && Section->isText());
                 Section->getName(sName);
-                SectionAddr = L.getSectionLoadAddress(sName);
+                SectionAddr = Section->getAddress();
+                SectionLoadAddr = L.getSectionLoadAddress(sName);
 #elif defined(LLVM36)
                 sym_iter.getAddress(Addr);
                 sym_iter.getSection(Section);
                 assert(Section != EndSection && Section->isText());
                 Section->getName(sName);
-                SectionAddr = L.getSectionLoadAddress(sName);
+                SectionAddr = Section->getAddress();
+                SectionLoadAddr = L.getSectionLoadAddress(sName);
 #else // LLVM35
                 sym_iter.getAddress(Addr);
                 sym_iter.getSection(Section);
                 assert(Section != EndSection);
                 assert(!Section->isText(isText) && isText);
                 Section->getAddress(SectionAddr);
+                Section->getAddress(SectionLoadAddr);
 #endif
-#ifdef LLVM36
-                Addr += SectionAddr;
-#endif
+                Addr -= SectionAddr - SectionLoadAddr;
                 *pAddr = (uint8_t*)Addr;
                 if (SectionAddrCheck)
-                    assert(SectionAddrCheck == SectionAddr);
+                    assert(SectionAddrCheck == SectionLoadAddr);
                 else
-                    SectionAddrCheck = SectionAddr;
+                    SectionAddrCheck = SectionLoadAddr;
             }
         }
         assert(catchjmp);
@@ -358,7 +363,7 @@ public:
 #endif // defined(_OS_WINDOWS_)
 
 #ifdef LLVM37
-        auto symbols = object::computeSymbolSizes(obj);
+        auto symbols = object::computeSymbolSizes(debugObj);
         bool first = true;
         for(const auto &sym_size : symbols) {
             const object::SymbolRef &sym_iter = sym_size.first;
@@ -373,24 +378,26 @@ public:
             if (Section == EndSection) continue;
             if (!Section->isText()) continue;
 #ifdef LLVM38
-            uint64_t SectionAddr = L.getSectionLoadAddress(*Section);
+            uint64_t SectionAddr = Section->getAddress().get();
+            uint64_t SectionLoadAddr = L.getSectionLoadAddress(*Section);
 #else
             StringRef secName;
             Section->getName(secName);
-            uint64_t SectionAddr = L.getSectionLoadAddress(secName);
+            uint64_t SectionAddr = Section->getAddress();
+            uint64_t SectionLoadAddr = L.getSectionLoadAddress(secName);
 #endif
-            Addr += SectionAddr;
+            Addr -= SectionAddr - SectionLoadAddr;
             StringRef sName = sym_iter.getName().get();
             uint64_t SectionSize = Section->getSize();
-#if defined(_OS_WINDOWS_)
             size_t Size = sym_size.second;
+#if defined(_OS_WINDOWS_)
             if (SectionAddrCheck)
-                assert(SectionAddrCheck == SectionAddr);
+                assert(SectionAddrCheck == SectionLoadAddr);
             else
-                SectionAddrCheck = SectionAddr;
+                SectionAddrCheck = SectionLoadAddr;
             create_PRUNTIME_FUNCTION(
                    (uint8_t*)(intptr_t)Addr, (size_t)Size, sName,
-                   (uint8_t*)(intptr_t)SectionAddr, (size_t)SectionSize, UnwindData);
+                   (uint8_t*)(intptr_t)SectionLoadAddr, (size_t)SectionSize, UnwindData);
 #endif
             StringMap<jl_lambda_info_t*>::iterator linfo_it = linfo_in_flight.find(sName);
             jl_lambda_info_t *linfo = NULL;
@@ -399,17 +406,18 @@ public:
                 linfo_in_flight.erase(linfo_it);
             }
             if (linfo)
-                linfomap[Addr] = linfo;
+                linfomap[Addr] = std::make_pair(Size, linfo);
             if (first) {
                 ObjectInfo tmp = {&debugObj,
                     (size_t)SectionSize,
+                    (ptrdiff_t)(SectionAddr - SectionLoadAddr),
 #ifdef LLVM39
                     new DWARFContextInMemory(debugObj, &L),
 #else
                     L.clone().release(),
 #endif
                     };
-                objectmap[SectionAddr] = tmp;
+                objectmap[SectionLoadAddr] = tmp;
                 first = false;
            }
         }
@@ -419,13 +427,9 @@ public:
         uint64_t Size;
         object::SymbolRef::Type SymbolType;
         StringRef sName;
-#ifdef LLVM36
-        uint64_t SectionAddr = 0;
-#else
+        uint64_t SectionLoadAddr = 0, SectionAddr = 0;
+#ifndef LLVM36
         bool isText;
-#ifdef _OS_WINDOWS_
-        uint64_t SectionAddr = 0;
-#endif
 #endif
 
 #if defined(LLVM35)
@@ -439,10 +443,13 @@ public:
 #if defined(LLVM36)
             if (!Section->isText()) continue;
             Section->getName(sName);
-            SectionAddr = L.getSectionLoadAddress(sName);
-            Addr += SectionAddr;
+            SectionAddr = Section->getAddress();
+            SectionLoadAddr = L.getSectionLoadAddress(sName);
+            Addr += SectionLoadAddr;
 #else
             if (Section->isText(isText) || !isText) continue;
+            Section->getAddress(SectionAddr);
+            Section->getAddress(SectionLoadAddr);
 #endif
             sym_iter.getName(sName);
 #ifdef _OS_DARWIN_
@@ -458,16 +465,15 @@ public:
 #   if defined(LLVM36)
             SectionSize = Section->getSize();
 #   else
-            Section->getAddress(SectionAddr);
             Section->getSize(SectionSize);
 #   endif
             if (SectionAddrCheck)
-                assert(SectionAddrCheck == SectionAddr);
+                assert(SectionAddrCheck == SectionLoadAddr);
             else
-                SectionAddrCheck = SectionAddr;
+                SectionAddrCheck = SectionLoadAddr;
             create_PRUNTIME_FUNCTION(
                    (uint8_t*)(intptr_t)Addr, (size_t)Size, sName,
-                   (uint8_t*)(intptr_t)SectionAddr, (size_t)SectionSize, UnwindData);
+                   (uint8_t*)(intptr_t)SectionLoadAddr, (size_t)SectionSize, UnwindData);
 #endif
             StringMap<jl_lambda_info_t*>::iterator linfo_it = linfo_in_flight.find(sName);
             jl_lambda_info_t *linfo = NULL;
@@ -475,6 +481,8 @@ public:
                 linfo = linfo_it->second;
                 linfo_in_flight.erase(linfo_it);
             }
+            if (linfo)
+                linfomap[Addr] = std::make_pair(Size, linfo);
             const object::ObjectFile *objfile =
 #ifdef LLVM36
                 &obj;
@@ -482,12 +490,11 @@ public:
                 obj.getObjectFile();
 #endif
             ObjectInfo tmp = {objfile, (size_t)Size,
+                (ptrdiff_t)(SectionAddr - SectionLoadAddr),
 #ifdef LLVM39
                 new DWARFContextInMemory(*objfile, &L),
 #elif defined(LLVM37)
                 L.clone().release(),
-#elif defined(LLVM36)
-                (size_t)SectionAddr,
 #endif
 #ifdef _OS_DARWIN_
                 strndup(sName.data(), sName.size()),
@@ -648,6 +655,7 @@ typedef struct {
     const llvm::object::ObjectFile *obj;
     DIContext *ctx;
     int64_t slide;
+    int64_t section_slide;
 } objfileentry_t;
 typedef std::map<uint64_t, objfileentry_t> obfiletype;
 static obfiletype objfilemap;
@@ -701,9 +709,15 @@ extern "C" void jl_register_fptrs(uint64_t sysimage_base, void **fptrs, jl_lambd
     sysimg_fvars_n = n;
 }
 
-bool jl_dylib_DI_for_fptr(size_t pointer, const llvm::object::ObjectFile **obj, llvm::DIContext **context, int64_t *slide,
+bool jl_dylib_DI_for_fptr(size_t pointer, const llvm::object::ObjectFile **obj, llvm::DIContext **context, int64_t *slide, int64_t *section_slide,
     bool onlySysImg, bool *isSysImg, void **saddr, char **name, char **filename)
 {
+    *obj = NULL;
+    *context = NULL;
+    *slide = 0;
+    *section_slide = 0;
+// GOAL: Determine containing Library
+// Assigning fname, fbase, msize
 #ifdef _OS_WINDOWS_
     IMAGEHLP_MODULE64 ModuleInfo;
     bool isvalid;
@@ -713,9 +727,13 @@ bool jl_dylib_DI_for_fptr(size_t pointer, const llvm::object::ObjectFile **obj, 
     jl_in_stackwalk = 0;
     if (isvalid) {
         char *fname = ModuleInfo.LoadedImageName;
+        if (!fname[0]) // empirically, LoadedImageName might be missing
+            fname = ModuleInfo.ImageName;
         DWORD64 fbase = ModuleInfo.BaseOfImage;
-        *isSysImg = fbase == jl_sysimage_base;
-        if (onlySysImg && !*isSysImg) {
+        bool insysimage = (fbase == jl_sysimage_base);
+        if (isSysImg)
+            *isSysImg = insysimage;
+        if (onlySysImg && insysimage) {
             return false;
         }
         static char frame_info_func[
@@ -730,14 +748,12 @@ bool jl_dylib_DI_for_fptr(size_t pointer, const llvm::object::ObjectFile **obj, 
         if (SymFromAddr(GetCurrentProcess(), dwAddress, &dwDisplacement64,
                         pSymbol)) {
             // SymFromAddr returned success
+            // errors are ignored, but are hopefully patched up by
+            // using llvm to read the object (below)
             if (name)
                 jl_copy_str(name, pSymbol->Name);
             if (saddr)
                 *saddr = (void*)(uintptr_t)pSymbol->Address;
-        }
-        else {
-            // SymFromAddr failed
-            //jl_printf(JL_STDERR,"SymFromAddr returned error : %lu\n", GetLastError());
         }
 
         // If we didn't find the filename before in the debug
@@ -756,9 +772,10 @@ bool jl_dylib_DI_for_fptr(size_t pointer, const llvm::object::ObjectFile **obj, 
 #if defined(_OS_DARWIN_)
         size_t msize = (size_t)(((uint64_t)-1)-fbase);
 #endif
+        bool insysimage = (fbase == jl_sysimage_base);
         if (isSysImg)
-            *isSysImg = fbase == jl_sysimage_base;
-        if (onlySysImg && !isSysImg) {
+            *isSysImg = insysimage;
+        if (onlySysImg && insysimage) {
             return false;
         }
         // In case we fail with the debug info lookup, we at least still
@@ -769,10 +786,20 @@ bool jl_dylib_DI_for_fptr(size_t pointer, const llvm::object::ObjectFile **obj, 
             jl_copy_str(filename, dlinfo.dli_fname);
         fname = dlinfo.dli_fname;
 #endif // ifdef _OS_WINDOWS_
+
+// GOAL: Read debuginfo from file
 #if !defined(_OS_WINDOWS_) || defined(LLVM35)
+        // TODO: need read/write lock here for objfilemap synchronization
         obfiletype::iterator it = objfilemap.find(fbase);
-        if (it == objfilemap.end()) {
-            // TODO: need write lock here for objfilemap syncronization
+        if (it != objfilemap.end()) {
+            // Return cached value
+            *obj = it->second.obj;
+            *context = it->second.ctx;
+            *slide = it->second.slide;
+            *section_slide = it->second.section_slide;
+        }
+        else {
+// GOAL: Assign errorobj
 #if defined(_OS_DARWIN_)
 #ifdef LLVM36
            std::unique_ptr<MemoryBuffer> membuf = MemoryBuffer::getMemBuffer(
@@ -792,7 +819,7 @@ bool jl_dylib_DI_for_fptr(size_t pointer, const llvm::object::ObjectFile **obj, 
                 membuf);
 #endif
             if (!origerrorobj) {
-                objfileentry_t entry = {*obj,*context,*slide};
+                objfileentry_t entry = {*obj,*context,*slide,*section_slide};
                 objfilemap[fbase] = entry;
                 return true;
             }
@@ -808,7 +835,7 @@ bool jl_dylib_DI_for_fptr(size_t pointer, const llvm::object::ObjectFile **obj, 
             // correct debug symbol file).
             uint8_t uuid[16], uuid2[16];
             if (!getObjUUID(morigobj,uuid)) {
-                objfileentry_t entry = {*obj,*context,*slide};
+                objfileentry_t entry = {*obj,*context,*slide,*section_slide};
                 objfilemap[fbase] = entry;
                 return true;
             }
@@ -826,14 +853,19 @@ bool jl_dylib_DI_for_fptr(size_t pointer, const llvm::object::ObjectFile **obj, 
 #else
             llvm::object::ObjectFile *errorobj = llvm::object::ObjectFile::createObjectFile(dsympath);
 #endif
-#else // ifdef _OS_DARWIN_
+
+#else // ifndef _OS_DARWIN_
+
             // On Linux systems we need to mmap another copy because of the permissions on the mmap'ed shared library.
+            // On Windows we need to mmap another copy since reading the in-memory copy seems to return object_error:unexpected_eof
 #ifdef LLVM35
             auto errorobj = llvm::object::ObjectFile::createObjectFile(fname);
 #else
             llvm::object::ObjectFile *errorobj = llvm::object::ObjectFile::createObjectFile(fname);
 #endif
 #endif // ifdef _OS_DARWIN_
+
+// GOAL: Assign *obj, *context, *slide (if above succeeded)
             if (errorobj) {
 #ifdef LLVM36
                 auto binary = errorobj.get().takeBinary();
@@ -852,20 +884,20 @@ bool jl_dylib_DI_for_fptr(size_t pointer, const llvm::object::ObjectFile **obj, 
 #elif defined(LLVM36)
                     *context = DIContext::getDWARFContext(**obj);
 #else
-                    *context = DIContext::getDWARFContext(*obj);
+                    *context = DIContext::getDWARFContext(const_cast<object::ObjectFile*>(*obj));
 #endif
                     *slide = -(int64_t)fbase;
 #ifdef _OS_DARWIN_
                 }
 #endif
-#ifdef _OS_WINDOWS_
-#ifdef LLVM35
+#if defined(_OS_WINDOWS_)
                 assert((*obj)->isCOFF());
                 const llvm::object::COFFObjectFile *coffobj = (const llvm::object::COFFObjectFile *)*obj;
                 const llvm::object::pe32plus_header *pe32plus;
                 coffobj->getPE32PlusHeader(pe32plus);
                 if (pe32plus != NULL) {
                     *slide = pe32plus->ImageBase - fbase;
+                    *section_slide = -(int64_t)pe32plus->ImageBase;
                 }
                 else {
                     const llvm::object::pe32_header *pe32;
@@ -873,26 +905,23 @@ bool jl_dylib_DI_for_fptr(size_t pointer, const llvm::object::ObjectFile **obj, 
                     if (pe32 == NULL) {
                         *obj = NULL;
                         *context = NULL;
+                        *slide = 0;
                     }
                     else {
                         *slide = pe32->ImageBase - fbase;
+                        *section_slide = -(int64_t)pe32->ImageBase;
                     }
                 }
 #endif
-#endif
             }
-            objfileentry_t entry = {*obj,*context,*slide};
+            // update cache
+            objfileentry_t entry = {*obj,*context,*slide,*section_slide};
             objfilemap[fbase] = entry;
         }
-        else {
-            *obj = it->second.obj;
-            *context = it->second.ctx;
-            *slide = it->second.slide;
-        }
+#endif
         return true;
     }
     return false;
-#endif
 }
 
 // *name and *filename should be either NULL or malloc'd pointer
@@ -925,8 +954,8 @@ static void jl_getDylibFunctionInfo(char **name, char **filename, size_t *line,
     llvm::DIContext *context = NULL;
     bool isSysImg;
     void *saddr;
-    int64_t slide;
-    if (!jl_dylib_DI_for_fptr(pointer, &object, &context, &slide, skipC, &isSysImg, &saddr, name, filename)) {
+    int64_t slide, section_slide;
+    if (!jl_dylib_DI_for_fptr(pointer, &object, &context, &slide, &section_slide, skipC, &isSysImg, &saddr, name, filename)) {
         *fromC = 1;
         return;
     }
@@ -951,7 +980,7 @@ static void jl_getDylibFunctionInfo(char **name, char **filename, size_t *line,
     }
 }
 
-int jl_DI_for_fptr(uint64_t fptr, uint64_t *symsize, int64_t *slide, int64_t *SectionSlide,
+int jl_DI_for_fptr(uint64_t fptr, uint64_t *symsize, int64_t *slide, int64_t *section_slide,
                       const object::ObjectFile **object,
 #ifdef USE_MCJIT
                       llvm::DIContext **context
@@ -961,6 +990,7 @@ int jl_DI_for_fptr(uint64_t fptr, uint64_t *symsize, int64_t *slide, int64_t *Se
                       )
 {
     int found = 0;
+    *slide = 0;
 #ifndef USE_MCJIT
     std::map<size_t, FuncInfo, revcomp> &fmap = jl_jit_events->getMap();
     std::map<size_t, FuncInfo, revcomp>::iterator fit = fmap.lower_bound(fptr);
@@ -969,8 +999,6 @@ int jl_DI_for_fptr(uint64_t fptr, uint64_t *symsize, int64_t *slide, int64_t *Se
         if (symsize)
             *symsize = fit->second.lengthAdr;
         *lines = fit->second.lines;
-        if (slide)
-            *slide = 0;
         found = 1;
     }
 #else // MCJIT version
@@ -980,10 +1008,9 @@ int jl_DI_for_fptr(uint64_t fptr, uint64_t *symsize, int64_t *slide, int64_t *Se
     if (fit != objmap.end() && fptr < fit->first + fit->second.SectionSize) {
         if (symsize)
             *symsize = 0;
-        if (slide)
-            *slide = 0;
+        if (section_slide)
+            *section_slide = fit->second.slide;
         *object = fit->second.object;
-        *SectionSlide = -(int64_t)fit->first;
         if (context) {
 #if defined(LLVM39)
             *context = fit->second.context;
@@ -991,7 +1018,6 @@ int jl_DI_for_fptr(uint64_t fptr, uint64_t *symsize, int64_t *slide, int64_t *Se
             *context = new DWARFContextInMemory(*fit->second.object, fit->second.L);
 #else
             *context = DIContext::getDWARFContext(*fit->second.object);
-            *slide = fit->second.slide;
 #endif
         }
         found = 1;
@@ -1007,11 +1033,12 @@ JL_DLLEXPORT jl_value_t *jl_get_dobj_data(uint64_t fptr)
 {
     const object::ObjectFile *object = NULL;
     DIContext *context;
-    int64_t SectionSlide, slide;
-    if (!jl_DI_for_fptr(fptr, NULL, NULL, &SectionSlide, &object, NULL))
-        if (!jl_dylib_DI_for_fptr(fptr, &object, &context, &slide, false, NULL, NULL, NULL, NULL))
-            assert(false);
-    assert(object != NULL);
+    int64_t slide, section_slide;
+    if (!jl_DI_for_fptr(fptr, NULL, &slide, NULL, &object, NULL))
+        if (!jl_dylib_DI_for_fptr(fptr, &object, &context, &slide, &section_slide, false, NULL, NULL, NULL, NULL))
+            return jl_nothing;
+    if (object != NULL)
+        return jl_nothing;
     return (jl_value_t*)jl_ptr_to_array_1d((jl_value_t*)jl_array_uint8_type,
         const_cast<char*>(object->getData().data()),
         object->getData().size(), false);
@@ -1059,13 +1086,13 @@ void jl_getFunctionInfo(char **name, char **filename, size_t *line,
     llvm::DIContext *context;
     const llvm::object::ObjectFile *object;
     uint64_t symsize;
-    int64_t slide, SectionSlide;
-    if (jl_DI_for_fptr(pointer, &symsize, &slide, &SectionSlide, &object, &context)) {
+    int64_t slide = 0;
+    if (jl_DI_for_fptr(pointer, &symsize, &slide, NULL, &object, &context)) {
         *outer_linfo = jl_jit_events->lookupLinfo(pointer);
         lookup_pointer(context, name, line, filename, inlinedat_line, inlinedat_file, pointer+slide, 1, fromC);
         jl_cleanup_DI(context);
+        return;
     }
-
 #else // !USE_MCJIT
 // Without MCJIT we use the FuncInfo structure containing address maps
     std::map<size_t, FuncInfo, revcomp> &info = jl_jit_events->getMap();
@@ -1136,12 +1163,13 @@ void jl_getFunctionInfo(char **name, char **filename, size_t *line,
             jl_copy_str(inlinedat_file, inlinescope.getFilename().str().c_str());
             *inlinedat_line = inlineloc.getLine();
         }
+        uv_rwlock_rdunlock(&threadsafe);
+        return;
     }
+    uv_rwlock_rdunlock(&threadsafe);
 #endif // USE_MCJIT
 
-    else {
-        jl_getDylibFunctionInfo(name, filename, line, inlinedat_file, inlinedat_line, outer_linfo, pointer, fromC, skipC, skipInline);
-    }
+    jl_getDylibFunctionInfo(name, filename, line, inlinedat_file, inlinedat_line, outer_linfo, pointer, fromC, skipC, skipInline);
 }
 
 #if defined(LLVM37) && (defined(_OS_LINUX_) || (defined(_OS_DARWIN_) && defined(LLVM_SHLIB)))

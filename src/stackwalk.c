@@ -17,6 +17,10 @@
 #define jl_unw_get(context) unw_getcontext(context)
 #endif
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 static int jl_unw_init(bt_cursor_t *cursor, bt_context_t *context);
 static int jl_unw_step(bt_cursor_t *cursor, uintptr_t *ip, uintptr_t *sp);
 
@@ -415,3 +419,7 @@ JL_DLLEXPORT void jlbacktrace(void)
     for (size_t i=0; i < n; i++)
         jl_gdblookup(jl_bt_data[i]);
 }
+
+#ifdef __cplusplus
+}
+#endif
