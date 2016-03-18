@@ -332,6 +332,11 @@ minabs(a) = mapreduce(AbsFun(), MinFun(), a)
 extrema(r::Range) = (minimum(r), maximum(r))
 extrema(x::Real) = (x, x)
 
+"""
+    extrema(itr) -> Tuple
+
+Compute both the minimum and maximum element in a single pass, and return them as a 2-tuple.
+"""
 function extrema(itr)
     s = start(itr)
     done(itr, s) && throw(ArgumentError("collection must be non-empty"))
@@ -351,6 +356,43 @@ function extrema(itr)
         end
     end
     return (vmin, vmax)
+end
+
+"""
+    extrema(A,dims) -> Array{Tuple}
+
+Compute the minimum and maximum elements of an array over the given dimensions.
+"""
+function extrema(A::AbstractArray, dims)
+    sz = [size(A)...]
+    sz[[dims...]] = 1
+    B = Array{Tuple{eltype(A),eltype(A)}}(sz...)
+    extrema!(B, A)
+end
+
+@generated function extrema!{T,N}(B, A::Array{T,N})
+    quote
+        sA = size(A)
+        sB = size(B)
+        @nloops $N i B begin
+            AI = @nref $N A i
+            (@nref $N B i) = (AI, AI)
+        end
+        Bmax = sB
+        Istart = ones(Int,ndims(A))
+        Istart[([sB...].==1) & ([sA...].!=1)] = 2
+        @inbounds @nloops $N i d->(Istart[d]:size(A,d)) begin
+            AI = @nref $N A i
+            @nexprs $N d->(j_d = min(Bmax[d], i_{d}))
+            BJ = @nref $N B j
+            if AI < BJ[1]
+              (@nref $N B j) = (AI, BJ[2])
+            elseif AI > BJ[2]
+              (@nref $N B j) = (BJ[1], AI)
+            end
+        end
+        B
+    end
 end
 
 ## all & any

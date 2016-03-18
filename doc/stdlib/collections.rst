@@ -299,11 +299,17 @@ Iterable Collections
 
    Compute the minimum value of ``A`` over the singleton dimensions of ``r``\ , and write results to ``r``\ .
 
-.. function:: extrema(itr)
+.. function:: extrema(itr) -> Tuple
 
    .. Docstring generated from Julia source
 
    Compute both the minimum and maximum element in a single pass, and return them as a 2-tuple.
+
+.. function:: extrema(A,dims) -> Array{Tuple}
+
+   .. Docstring generated from Julia source
+
+   Compute the minimum and maximum elements of an array over the given dimensions.
 
 .. function:: indmax(itr) -> Integer
 

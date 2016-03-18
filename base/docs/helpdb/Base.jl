@@ -2083,13 +2083,6 @@ appended to an internal buffer of backtraces.
 :@profile
 
 """
-    extrema(itr)
-
-Compute both the minimum and maximum element in a single pass, and return them as a 2-tuple.
-"""
-extrema
-
-"""
     isdigit(c::Union{Char,AbstractString}) -> Bool
 
 Tests whether a character is a numeric digit (0-9), or whether this is true for all elements
