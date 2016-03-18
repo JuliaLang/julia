@@ -39,7 +39,7 @@ getindex(s::AbstractString, i::Integer) = s[Int(i)]
 getindex{T<:Integer}(s::AbstractString, r::UnitRange{T}) = s[Int(first(r)):Int(last(r))]
 # TODO: handle other ranges with stride ±1 specially?
 getindex(s::AbstractString, v::AbstractVector) =
-    sprint(length(v), io->(for i in v write(io,s[i]) end))
+    sprint(length(v), io->(for i in v; write(io,s[i]) end))
 
 symbol(s::AbstractString) = symbol(bytestring(s))
 

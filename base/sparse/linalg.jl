@@ -6,14 +6,14 @@ import Base.LinAlg: checksquare
 
 # Convert from 1-based to 0-based indices
 function decrement!{T<:Integer}(A::AbstractArray{T})
-    for i in 1:length(A) A[i] -= one(T) end
+    for i in 1:length(A); A[i] -= one(T) end
     A
 end
 decrement{T<:Integer}(A::AbstractArray{T}) = decrement!(copy(A))
 
 # Convert from 0-based to 1-based indices
 function increment!{T<:Integer}(A::AbstractArray{T})
-    for i in 1:length(A) A[i] += one(T) end
+    for i in 1:length(A); A[i] += one(T) end
     A
 end
 increment{T<:Integer}(A::AbstractArray{T}) = increment!(copy(A))

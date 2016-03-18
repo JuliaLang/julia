@@ -276,7 +276,7 @@ end
 
 function det(C::Cholesky)
     dd = one(eltype(C))
-    for i in 1:size(C.factors,1) dd *= abs2(C.factors[i,i]) end
+    for i in 1:size(C.factors,1); dd *= abs2(C.factors[i,i]) end
     dd
 end
 
@@ -284,7 +284,7 @@ det(C::CholeskyPivoted) = C.rank < size(C.factors, 1) ? real(zero(eltype(C))) : 
 
 function logdet(C::Cholesky)
     dd = zero(eltype(C))
-    for i in 1:size(C.factors,1) dd += log(C.factors[i,i]) end
+    for i in 1:size(C.factors,1); dd += log(C.factors[i,i]) end
     dd + dd # instead of 2.0dd which can change the type
 end
 

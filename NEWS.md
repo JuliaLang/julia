@@ -32,6 +32,12 @@ Language changes
   * A warning is always given when a method is overwritten (previously, this was done only when the new
     and old definitions were in separate modules) ([#14759]).
 
+  * `A <: B` is parsed as `Expr(:(<:), :A, :B)` in all cases ([#9503]). This also applies to the
+    `>:` operator.
+
+  * Simple 2-argument comparisons like `A < B` are parsed as calls intead of using the
+    `:comparison` expression type.
+
 Command-line option changes
 ---------------------------
 
@@ -1690,6 +1696,7 @@ Too numerous to mention.
 [#9434]: https://github.com/JuliaLang/julia/issues/9434
 [#9452]: https://github.com/JuliaLang/julia/issues/9452
 [#9487]: https://github.com/JuliaLang/julia/issues/9487
+[#9503]: https://github.com/JuliaLang/julia/issues/9503
 [#9569]: https://github.com/JuliaLang/julia/issues/9569
 [#9575]: https://github.com/JuliaLang/julia/issues/9575
 [#9578]: https://github.com/JuliaLang/julia/issues/9578
@@ -1793,4 +1800,6 @@ Too numerous to mention.
 [#14469]: https://github.com/JuliaLang/julia/issues/14469
 [#14759]: https://github.com/JuliaLang/julia/issues/14759
 [#14798]: https://github.com/JuliaLang/julia/issues/14798
+[#15192]: https://github.com/JuliaLang/julia/issues/15192
 [#15242]: https://github.com/JuliaLang/julia/issues/15242
+[#15258]: https://github.com/JuliaLang/julia/issues/15258

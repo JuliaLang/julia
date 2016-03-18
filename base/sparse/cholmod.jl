@@ -1517,7 +1517,7 @@ end
 function logdet{Tv<:VTypes}(F::Factor{Tv})
     f = unsafe_load(get(F.p))
     res = zero(Tv)
-    for d in diag(F) res += log(abs(d)) end
+    for d in diag(F); res += log(abs(d)) end
     f.is_ll!=0 ? 2res : res
 end
 
