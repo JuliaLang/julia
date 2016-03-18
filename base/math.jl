@@ -146,6 +146,10 @@ sqrt(x::Float32) = box(Float32,sqrt_llvm(unbox(Float32,x)))
 sqrt(x::Real) = sqrt(float(x))
 @vectorize_1arg Number sqrt
 
+# 1-arg hypot
+hypot(x::Real) = abs(promote(float(x))...)
+
+# 2-arg hypot
 hypot(x::Real, y::Real) = hypot(promote(float(x), float(y))...)
 function hypot{T<:AbstractFloat}(x::T, y::T)
     x = abs(x)
@@ -164,6 +168,43 @@ function hypot{T<:AbstractFloat}(x::T, y::T)
         end
     end
     x * sqrt(one(r)+r*r)
+end
+
+# 3-arg hypot
+hypot(x::Real, y::Real, z::Real) =
+    hypot(promote(float(x), float(y), float(z))...)
+function hypot{T<:AbstractFloat}(x::T, y::T, z::T)
+    x = abs(x)
+    y = abs(y)
+    z = abs(z)
+    m = max(x, y, z)
+    if isinf(m)
+        return m
+    elseif isfinite(3*m*m) && m*m != 0 # Scaling not necessary
+        return sqrt(abs2(x) + abs2(y) + abs2(z))
+    elseif m == 0
+        o = one(m)
+        return m*sqrt(abs2(x/o) + abs2(y/o) + abs2(z/o))
+    else
+        return m*sqrt(abs2(x/m) + abs2(y/m) + abs2(z/m))
+    end
+end
+
+# varargs hypot
+hypot(w::Real, x::Real, y::Real, z::Real...) =
+    hypot(promote(float(w), float(x), float(y), float([z...])...)...)
+function hypot{T<:AbstractFloat}(w::T, x::T, y::T, z::T...)
+    a = abs([w, x, y, z...])
+    m = maximum(a)
+    if isinf(m)
+        return m
+    elseif isfinite(length(a)*m*m) && m*m != 0 # Scaling not necessary
+        return vecnorm(a)
+    elseif m == 0
+        return m*vecnorm(a/one(m))
+    else
+        return m*vecnorm(a/m)
+    end
 end
 
 atan2(y::Real, x::Real) = atan2(promote(float(y),float(x))...)
