@@ -147,7 +147,7 @@ typedef uint32_t uint_t;
 typedef int32_t int_t;
 #endif
 
-#define LLT_ALIGN(x, sz) (((x) + (sz-1)) & (-sz))
+#define LLT_ALIGN(x, sz) (((x) + (sz)-1) & -(sz))
 
 // branch prediction annotations
 #ifdef __GNUC__
