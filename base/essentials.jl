@@ -484,8 +484,9 @@ end
 macro inbounds(blk)
     return Expr(:block,
         Expr(:inbounds, true),
-        esc(blk),
-        Expr(:inbounds, :pop))
+        Expr(:local, Expr(:(=), :val, esc(blk))),
+        Expr(:inbounds, :pop),
+        :val)
 end
 
 """

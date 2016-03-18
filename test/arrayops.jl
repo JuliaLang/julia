@@ -2024,6 +2024,18 @@ end
     @test typeof(.~A) == Vector{Int}
 end
 
+# @inbounds is expression-like, returning its value; #15558
+@testset "expression-like inbounds" begin
+    local A = [1,2,3]
+    @test (@inbounds A[1]) == 1
+    f(A, i) = @inbounds i == 0 ? (return 0) : A[i]
+    @test f(A, 0) == 0
+    @test f(A, 1) == 1
+    g(A, i) = (i == 0 ? (@inbounds return 0) : (@inbounds A[i]))
+    @test g(A, 0) == 0
+    @test g(A, 1) == 1
+end
+
 @testset "issue #16247" begin
     local A = zeros(3,3)
     @test size(A[:,0x1:0x2]) == (3, 2)
