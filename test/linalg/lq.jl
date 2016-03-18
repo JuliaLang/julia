@@ -49,6 +49,7 @@ debug && println("LQ decomposition")
                 qra   = qrfact(a)
                 @test size(lqa,1) == size(a,1)
                 @test size(lqa,3) == 1
+                @test size(lqa[:Q],3) == 1
                 @test Base.LinAlg.getq(lqa) == lqa[:Q]
                 @test_throws KeyError lqa[:Z]
                 @test full(lqa') ≈ a'
