@@ -1573,8 +1573,7 @@ static bool emit_getfield_unknownidx(jl_cgval_t *ret, const jl_cgval_t &strct, V
                         builder.CreateGEP(data_pointer(strct, ctx), idx)));
             if ((unsigned)stt->ninitialized != nfields)
                 null_pointer_check(fld, ctx);
-            bool needsgcroot = true; // !strct.isimmutable; // jwn: probably want this as a llvm pass
-            *ret = mark_julia_type(fld, true, jl_any_type, ctx, needsgcroot);
+            *ret = mark_julia_type(fld, true, jl_any_type, ctx, true);
             return true;
         }
         else if (is_tupletype_homogeneous(stt->types)) {
@@ -1586,9 +1585,9 @@ static bool emit_getfield_unknownidx(jl_cgval_t *ret, const jl_cgval_t &strct, V
                 // just compute the pointer and let user load it when necessary
                 Type *fty = julia_type_to_llvm(jt);
                 Value *addr = builder.CreateGEP(builder.CreatePointerCast(ptr, PointerType::get(fty,0)), idx);
-                jl_cgval_t fieldval = mark_julia_slot(addr, jt);
-                fieldval.gcroot = strct.gcroot;
-                *ret = fieldval;
+                *ret = mark_julia_slot(addr, jt);
+                ret->gcroot = strct.gcroot;
+                ret->isimmutable = strct.isimmutable;
                 return true;
             }
             *ret = typed_load(ptr, idx, jt, ctx, stt->mutabl ? tbaa_user : tbaa_immut);
@@ -1653,13 +1652,12 @@ static jl_cgval_t emit_getfield_knownidx(const jl_cgval_t &strct, unsigned idx, 
         Value *addr =
             builder.CreateGEP(builder.CreateBitCast(boxed(strct, ctx), T_pint8),
                               ConstantInt::get(T_size, jl_field_offset(jt,idx)));
-        MDNode *tbaa = strct.isimmutable ? tbaa_immut : tbaa_user;
+        MDNode *tbaa = jt->mutabl ? tbaa_user : tbaa_immut;
         if (jl_field_isptr(jt, idx)) {
             Value *fldv = tbaa_decorate(tbaa, builder.CreateLoad(builder.CreateBitCast(addr, T_ppjlvalue)));
             if (idx >= (unsigned)jt->ninitialized)
                 null_pointer_check(fldv, ctx);
-            bool needsgcroot = true; // !strct.isimmutable; // jwn: probably want this as a llvm pass
-            jl_cgval_t ret = mark_julia_type(fldv, true, jfty, ctx, needsgcroot);
+            jl_cgval_t ret = mark_julia_type(fldv, true, jfty, ctx, true);
             return ret;
         }
         else {
@@ -1678,6 +1676,7 @@ static jl_cgval_t emit_getfield_knownidx(const jl_cgval_t &strct, unsigned idx, 
             strct.V, 0, idx);
         assert(!jt->mutabl);
         jl_cgval_t fieldval = mark_julia_slot(addr, jfty);
+        fieldval.isimmutable = strct.isimmutable;
         fieldval.gcroot = strct.gcroot;
         return fieldval;
     }
