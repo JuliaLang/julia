@@ -10,6 +10,12 @@ import Base.blasfunc
 import ..LinAlg: BlasFloat, Char, BlasInt, LAPACKException,
     DimensionMismatch, SingularException, PosDefException, chkstride1, chksquare
 
+const VERSION = Ref{VersionNumber}()
+
+function __init__()
+    VERSION[] = VersionNumber(laver()...)
+end
+
 #Generic LAPACK error handlers
 macro assertargsok() #Handle only negative info codes - use only if positive info code is useful!
     :(info[1]<0 && throw(ArgumentError("invalid argument #$(-info[1]) to LAPACK call")))
@@ -59,6 +65,17 @@ function checkfinite(A::StridedMatrix)
         end
     end
     return true
+end
+
+# LAPACK version number
+@eval function laver()
+    major = BlasInt[0]
+    minor = BlasInt[0]
+    patch = BlasInt[0]
+    ccall(($(blasfunc(:ilaver_)), liblapack), Void,
+        (Ptr{BlasInt}, Ptr{BlasInt}, Ptr{BlasInt}),
+        major, minor, patch)
+    return major[1], minor[1], patch[1]
 end
 
 # (GB) general banded matrices, LU decomposition and solver
@@ -1666,10 +1683,139 @@ Finds the generalized singular value decomposition of `A` and `B`, `U'*A*Q = D1*
 and `V'*B*Q = D2*R`. `D1` has `alpha` on its diagonal and `D2` has `beta` on its
 diagonal. If `jobu = U`, the orthogonal/unitary matrix `U` is computed. If
 `jobv = V` the orthogonal/unitary matrix `V` is computed. If `jobq = Q`,
-the orthogonal/unitary matrix `Q` is computed. If `job{u,v,q} = N`, that
-matrix is not computed.
+the orthogonal/unitary matrix `Q` is computed. If `jobu`, `jobv` or `jobq` is
+`N`, that matrix is not computed. This function is only available in LAPACK
+versions prior to 3.6.0.
 """
 ggsvd!(jobu::Char, jobv::Char, jobq::Char, A::StridedMatrix, B::StridedMatrix)
+
+
+for (f, elty) in ((:dggsvd3_, :Float64),
+                  (:sggsvd3_, :Float32))
+    @eval begin
+        function ggsvd3!(jobu::Char, jobv::Char, jobq::Char, A::StridedMatrix{$elty}, B::StridedMatrix{$elty})
+            chkstride1(A, B)
+            m, n = size(A)
+            if size(B, 2) != n
+                throw(DimensionMismatch("B has second dimension $(size(B,2)) but needs $n"))
+            end
+            p = size(B, 1)
+            k = Ref{BlasInt}()
+            l = Ref{BlasInt}()
+            lda = max(1, stride(A, 2))
+            ldb = max(1, stride(B, 2))
+            alpha = similar(A, $elty, n)
+            beta = similar(A, $elty, n)
+            ldu = max(1, m)
+            U = jobu == 'U' ? similar(A, $elty, ldu, m) : similar(A, $elty, 0)
+            ldv = max(1, p)
+            V = jobv == 'V' ? similar(A, $elty, ldv, p) : similar(A, $elty, 0)
+            ldq = max(1, n)
+            Q = jobq == 'Q' ? similar(A, $elty, ldq, n) : similar(A, $elty, 0)
+            work = Array($elty, 1)
+            lwork = BlasInt(-1)
+            iwork = Array(BlasInt, n)
+            info = Ref{BlasInt}()
+            for i = 1:2
+                ccall(($(blasfunc(f)), liblapack), Void,
+                    (Ptr{UInt8}, Ptr{UInt8}, Ptr{UInt8}, Ptr{BlasInt},
+                    Ptr{BlasInt}, Ptr{BlasInt}, Ref{BlasInt}, Ref{BlasInt},
+                    Ptr{$elty}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt},
+                    Ptr{$elty}, Ptr{$elty}, Ptr{$elty}, Ptr{BlasInt},
+                    Ptr{$elty}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt},
+                    Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt}, Ref{BlasInt}),
+                    &jobu, &jobv, &jobq, &m,
+                    &n, &p, k, l,
+                    A, &lda, B, &ldb,
+                    alpha, beta, U, &ldu,
+                    V, &ldv, Q, &ldq,
+                    work, &lwork, iwork, info)
+                @lapackerror
+                if i == 1
+                    lwork = BlasInt(work[1])
+                    resize!(work, lwork)
+                end
+            end
+            if m - k[] - l[] >= 0
+                R = triu(A[1:k[] + l[],n - k[] - l[] + 1:n])
+            else
+                R = triu([A[1:m, n - k[] - l[] + 1:n]; B[m - k[] + 1:l[], n - k[] - l[] + 1:n]])
+            end
+            return U, V, Q, alpha, beta, k[], l[], R
+        end
+    end
+end
+
+for (f, elty, relty) in ((:zggsvd3_, :Complex128, :Float64),
+                         (:cggsvd3_, :Complex64, :Float32))
+    @eval begin
+        function ggsvd3!(jobu::Char, jobv::Char, jobq::Char, A::StridedMatrix{$elty}, B::StridedMatrix{$elty})
+            chkstride1(A, B)
+            m, n = size(A)
+            if size(B, 2) != n
+                throw(DimensionMismatch("B has second dimension $(size(B,2)) but needs $n"))
+            end
+            p = size(B, 1)
+            k = Array(BlasInt, 1)
+            l = Array(BlasInt, 1)
+            lda = max(1,stride(A, 2))
+            ldb = max(1,stride(B, 2))
+            alpha = similar(A, $relty, n)
+            beta = similar(A, $relty, n)
+            ldu = max(1, m)
+            U = jobu == 'U' ? similar(A, $elty, ldu, m) : similar(A, $elty, 0)
+            ldv = max(1, p)
+            V = jobv == 'V' ? similar(A, $elty, ldv, p) : similar(A, $elty, 0)
+            ldq = max(1, n)
+            Q = jobq == 'Q' ? similar(A, $elty, ldq, n) : similar(A, $elty, 0)
+            work = Array($elty, 1)
+            lwork = BlasInt(-1)
+            rwork = Array($relty, 2n)
+            iwork = Array(BlasInt, n)
+            info = Array(BlasInt, 1)
+            for i = 1:2
+                ccall(($(blasfunc(f)), liblapack), Void,
+                    (Ptr{UInt8}, Ptr{UInt8}, Ptr{UInt8}, Ptr{BlasInt},
+                    Ptr{BlasInt}, Ptr{BlasInt}, Ptr{BlasInt}, Ptr{BlasInt},
+                    Ptr{$elty}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt},
+                    Ptr{$relty}, Ptr{$relty}, Ptr{$elty}, Ptr{BlasInt},
+                    Ptr{$elty}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt},
+                    Ptr{$elty}, Ptr{BlasInt}, Ptr{$relty}, Ptr{BlasInt},
+                    Ptr{BlasInt}),
+                    &jobu, &jobv, &jobq, &m,
+                    &n, &p, k, l,
+                    A, &lda, B, &ldb,
+                    alpha, beta, U, &ldu,
+                    V, &ldv, Q, &ldq,
+                    work, &lwork, rwork, iwork,
+                    info)
+                @lapackerror
+                if i == 1
+                    lwork = BlasInt(work[1])
+                    work = Array($elty, lwork)
+                end
+            end
+            if m - k[1] - l[1] >= 0
+                R = triu(A[1:k[1] + l[1],n - k[1] - l[1] + 1:n])
+            else
+                R = triu([A[1:m, n - k[1] - l[1] + 1:n]; B[m - k[1] + 1:l[1], n - k[1] - l[1] + 1:n]])
+            end
+            return U, V, Q, alpha, beta, k[1], l[1], R
+        end
+    end
+end
+
+"""
+    ggsvd3!(jobu, jobv, jobq, A, B) -> (U, V, Q, alpha, beta, k, l, R)
+
+Finds the generalized singular value decomposition of `A` and `B`, `U'*A*Q = D1*R`
+and `V'*B*Q = D2*R`. `D1` has `alpha` on its diagonal and `D2` has `beta` on its
+diagonal. If `jobu = U`, the orthogonal/unitary matrix `U` is computed. If
+`jobv = V` the orthogonal/unitary matrix `V` is computed. If `jobq = Q`,
+the orthogonal/unitary matrix `Q` is computed. If `jobu`, `jobv`, or `jobq` is
+`N`, that matrix is not computed. This function requires LAPACK 3.6.0.
+"""
+ggsvd3!
 
 ## Expert driver and generalized eigenvalue problem
 for (geevx, ggev, elty) in
