@@ -780,12 +780,21 @@
   (let loop ((ex (parse-pipes s))
              (first #t))
     (let ((t (peek-token s)))
-      (if (not (is-prec-comparison? t))
-          ex
-          (begin (take-token s)
-                 (if first
-                     (loop (list 'comparison ex t (parse-pipes s)) #f)
-                     (loop (append ex (list t (parse-pipes s))) #f)))))))
+      (cond ((is-prec-comparison? t)
+             (begin (take-token s)
+                    (if first
+                        (loop (list 'comparison ex t (parse-pipes s)) #f)
+                        (loop (append ex (list t (parse-pipes s))) #f))))
+            (first ex)
+            ((length= ex 4)
+             ;; only a single comparison; special chained syntax not required
+             (let ((op   (caddr ex))
+                   (arg1 (cadr ex))
+                   (arg2 (cadddr ex)))
+               (if (or (eq? op '|<:|) (eq? op '|>:|))
+                   `(,op ,arg1 ,arg2)
+                   `(call ,op ,arg1 ,arg2))))
+            (else ex)))))
 
 (define closing-token?
   (let ((closer? (Set '(else elseif catch finally #\, #\) #\] #\} #\;))))
@@ -904,13 +913,6 @@
            `(-> ,ex (block ,lno ,(parse-eq* s)))))
         (else
          ex)))))
-
-;; convert (comparison a <: b) to (<: a b)
-(define (subtype-syntax e)
-  (if (and (pair? e) (eq? (car e) 'comparison)
-           (length= e 4) (eq? (caddr e) '|<:|))
-      `(<: ,(cadr e) ,(cadddr e))
-      e))
 
 (define (parse-unary-prefix s)
   (let ((op (peek-token s)))
@@ -1031,8 +1033,7 @@
                                      (string (deparse ex) " " (deparse t))
                                      (string (deparse ex) (deparse t))))
              (take-token s)
-             (loop (list* 'curly ex
-                          (map subtype-syntax (parse-arglist s #\} )))))
+             (loop (list* 'curly ex (parse-arglist s #\} ))))
             ((#\")
              (if (and (symbol? ex) (not (operator? ex))
                       (not (ts:space? s)))
@@ -1066,7 +1067,7 @@
                           " expected \"end\", got \"" t "\""))))))
 
 (define (parse-subtype-spec s)
-  (subtype-syntax (parse-comparison s)))
+  (parse-comparison s))
 
 ;; parse expressions or blocks introduced by syntactic reserved words
 (define (parse-resword s word)
@@ -1399,14 +1400,20 @@
 
 ;; as above, but allows both "i=r" and "i in r"
 (define (parse-iteration-spec s)
-  (let ((r (parse-eq* s)))
-    (cond ((and (pair? r) (eq? (car r) '=))  r)
-          ((eq? r ':)  r)
-          ((and (length= r 4) (eq? (car r) 'comparison)
-                (or (eq? (caddr r) 'in) (eq? (caddr r) '∈)))
-           `(= ,(cadr r) ,(cadddr r)))
-          (else
-           (error "invalid iteration specification")))))
+  (let* ((lhs (parse-pipes s))
+         (t   (peek-token s)))
+    (cond ((memq t '(= in ∈))
+           (take-token s)
+           (let* ((rhs (parse-pipes s))
+                  (t   (peek-token s)))
+             #;(if (not (or (closing-token? t) (newline? t)))
+                 ;; should be: (error "invalid iteration specification")
+                 (syntax-deprecation s (string "for " (deparse `(= ,lhs ,rhs)) " " t)
+                                     (string "for " (deparse `(= ,lhs ,rhs)) "; " t)))
+             `(= ,lhs ,rhs)))
+          ((and (eq? lhs ':) (closing-token? t))
+           ':)
+          (else (error "invalid iteration specification")))))
 
 (define (parse-comma-separated-iters s)
   (let loop ((ranges '()))

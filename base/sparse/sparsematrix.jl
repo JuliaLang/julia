@@ -3119,7 +3119,7 @@ spdiagm(B::AbstractVector, d::Number=0) = spdiagm((B,), (d,))
 function expandptr{T<:Integer}(V::Vector{T})
     if V[1] != 1 throw(ArgumentError("first index must be one")) end
     res = similar(V, (Int64(V[end]-1),))
-    for i in 1:(length(V)-1), j in V[i]:(V[i+1] - 1) res[j] = i end
+    for i in 1:(length(V)-1), j in V[i]:(V[i+1] - 1); res[j] = i end
     res
 end
 
