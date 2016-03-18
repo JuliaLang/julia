@@ -167,6 +167,10 @@ prod2(itr) = invoke(prod, Tuple{Any}, itr)
 @test maximum(collect(Int16(1):Int16(100))) === Int16(100)
 @test maximum(Int32[1,2]) === Int32(2)
 
+@test extrema(reshape(1:24,2,3,4),1) == reshape([(1,2),(3,4),(5,6),(7,8),(9,10),(11,12),(13,14),(15,16),(17,18),(19,20),(21,22),(23,24)],1,3,4)
+@test extrema(reshape(1:24,2,3,4),2) == reshape([(1,5),(2,6),(7,11),(8,12),(13,17),(14,18),(19,23),(20,24)],2,1,4)
+@test extrema(reshape(1:24,2,3,4),3) == reshape([(1,19),(2,20),(3,21),(4,22),(5,23),(6,24)],2,3,1)
+
 # any & all
 
 @test any(Bool[]) == false
