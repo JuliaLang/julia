@@ -11,6 +11,11 @@ ifeq ($(USEMSVC), 1)
 SRCS += getopt
 endif
 
+HEADERS = \
+	$(JULIAHOME)/src/julia.h $(JULIAHOME)/src/julia_internal.h \
+	$(JULIAHOME)/src/julia_version.h $(JULIAHOME)/src/options.h \
+	$(wildcard $(JULIAHOME)/src/support/*.h) $(LIBUV_INC)/uv.h
+
 FLAGS = -I$(JULIAHOME)/src -I$(JULIAHOME)/src/support -I$(build_includedir)
 ifneq ($(USEMSVC), 1)
 FLAGS += -Wall -Wno-strict-aliasing -fno-omit-frame-pointer
@@ -45,9 +50,9 @@ default: release
 all: release debug
 release debug :  % : julia-%
 
-%.o: %.c
+%.o: %.c $(HEADERS)
 	@$(call PRINT_CC, $(CC) $(CPPFLAGS) $(CFLAGS) $(SHIPFLAGS) -c $< -o $@)
-%.dbg.obj: %.c
+%.dbg.obj: %.c $(HEADERS)
 	@$(call PRINT_CC, $(CC) $(CPPFLAGS) $(CFLAGS) $(DEBUGFLAGS) -c $< -o $@)
 
 ifeq ($(OS),WINNT)
