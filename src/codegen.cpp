@@ -661,6 +661,7 @@ static inline jl_cgval_t mark_julia_slot(Value *v, jl_value_t *typ)
     assert(v->getType() != T_pjlvalue);
     jl_cgval_t tagval(v, NULL, false, typ);
     tagval.ispointer = true;
+    tagval.isimmutable = true;
     return tagval;
 }
 
@@ -782,7 +783,7 @@ static Value *alloc_local(jl_sym_t *s, jl_codectx_t *ctx)
     // CreateAlloca is OK here because alloc_local is only called during prologue setup
     Value *lv = builder.CreateAlloca(vtype, 0, jl_symbol_name(s));
     vi.value = mark_julia_slot(lv, jt);
-    vi.value.isimmutable &= vi.isSA; // slot is not immutable if there are multiple assignments
+    vi.value.isimmutable = false; // slots are not immutable
     assert(vi.value.isboxed == false);
     return lv;
 }
@@ -2977,10 +2978,10 @@ static jl_cgval_t emit_call_function_object(jl_lambda_info_t *li, const jl_cgval
             else if (et->isAggregateType()) {
                 assert(at == PointerType::get(et, 0));
                 jl_cgval_t arg = i==0 ? theF : emit_expr(args[i], ctx);
-                if (arg.isimmutable && arg.ispointer) {
+                if (arg.ispointer) {
                     // can lazy load on demand, no copy needed
                     argvals[idx] = data_pointer(arg, ctx, at);
-                    mark_gc_use(arg); // jwn must be after the jlcall
+                    mark_gc_use(arg); // TODO: must be after the jlcall
                 }
                 else {
                     Value *v = emit_unbox(et, arg, jt);
@@ -3220,8 +3221,10 @@ static jl_cgval_t emit_var(jl_sym_t *sym, jl_codectx_t *ctx)
     }
 
     jl_varinfo_t &vi = ctx->vars[sym];
-    if (!vi.isArgument && !vi.isAssigned)
+    if (!vi.isArgument && !vi.isAssigned) {
         undef_var_error_if_null(V_null, sym, ctx);
+        return jl_cgval_t();
+    }
     if (vi.memloc) {
         Value *bp = vi.memloc;
         if (vi.isArgument ||  // arguments are always defined
@@ -3236,7 +3239,7 @@ static jl_cgval_t emit_var(jl_sym_t *sym, jl_codectx_t *ctx)
             return v;
         }
     }
-    else if (vi.value.isboxed || vi.value.constant || !vi.value.ispointer || (vi.isSA && !vi.isVolatile)) {
+    else if (!vi.isVolatile || !vi.isAssigned) {
         return vi.value;
     }
     else {
