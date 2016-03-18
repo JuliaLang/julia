@@ -1037,7 +1037,7 @@ JL_DLLEXPORT jl_value_t *jl_get_dobj_data(uint64_t fptr)
     if (!jl_DI_for_fptr(fptr, NULL, &slide, NULL, &object, NULL))
         if (!jl_dylib_DI_for_fptr(fptr, &object, &context, &slide, &section_slide, false, NULL, NULL, NULL, NULL))
             return jl_nothing;
-    if (object != NULL)
+    if (object == NULL)
         return jl_nothing;
     return (jl_value_t*)jl_ptr_to_array_1d((jl_value_t*)jl_array_uint8_type,
         const_cast<char*>(object->getData().data()),
