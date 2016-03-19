@@ -151,8 +151,8 @@ function show(io::IO, x::DataType)
     if (!isempty(x.parameters) || x.name === Tuple.name) && x !== Tuple
         print(io, '{')
         n = length(x.parameters)
-        for i = 1:n
-            show_type_parameter(io, x.parameters[i])
+        for (i, p) in enumerate(x.parameters)
+            show_type_parameter(io, p)
             i < n && print(io, ',')
         end
         print(io, '}')
