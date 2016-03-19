@@ -151,7 +151,12 @@ for elty in (Float32, Float64, Complex64, Complex128)
     @test_approx_eq S lS
     @test_approx_eq V' lVt
     B = rand(elty,10,10)
-    @test_throws DimensionMismatch LAPACK.ggsvd!('S','S','S',A,B)
+    # xggsvd3 replaced xggsvd in LAPACK 3.6.0
+    if LAPACK.VERSION[] < v"3.6.0"
+        @test_throws DimensionMismatch LAPACK.ggsvd!('S','S','S',A,B)
+    else
+        @test_throws DimensionMismatch LAPACK.ggsvd3!('S','S','S',A,B)
+    end
 end
 
 #geevx, ggev errors
@@ -491,4 +496,14 @@ for elty in (Float32, Float64, Complex{Float32}, Complex{Float64})
         @test_approx_eq FJulia.factors FLAPACK[1]
         @test_approx_eq FJulia.τ FLAPACK[2]
     end
+end
+
+# Issue 13976
+let A = [NaN 0.0 NaN; 0 0 0; NaN 0 NaN]
+    @test_throws ArgumentError expm(A)
+end
+
+# Issue 14065 (and 14220)
+let A = [NaN NaN; NaN NaN]
+    @test_throws ArgumentError eigfact(A)
 end
