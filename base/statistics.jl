@@ -126,7 +126,7 @@ centralize_sumabs2(A::AbstractArray, m::Number, ifirst::Int, ilast::Int) =
             @nloops $N i d->(d>1? (1:size(A,d)) : (1:1)) d->(j_d = sizeR_d==1 ? 1 : i_d) begin
                 @inbounds r = (@nref $N R j)
                 @inbounds m = (@nref $N means j)
-                for i_1 = 1:sizA1
+                for i_1 = 1:sizA1                # fixme (iter): change when #15459 is done
                     @inbounds r += abs2((@nref $N A i) - m)
                 end
                 @inbounds (@nref $N R j) = r
@@ -351,9 +351,9 @@ end
 function cov2cor!(C::AbstractMatrix, xsd::Number, ysd::AbstractArray)
     nx, ny = size(C)
     length(ysd) == ny || throw(DimensionMismatch("inconsistent dimensions"))
-    for j = 1:ny
-        for i = 1:nx
-            C[i,j] /= (xsd * ysd[j])
+    for (j, y) in enumerate(ysd)   # fixme (iter): here and in all `cov2cor!` we assume that `C` is efficiently indexed by integers
+        for i in 1:nx
+            C[i,j] /= (xsd * y)
         end
     end
     return C
@@ -361,9 +361,9 @@ end
 function cov2cor!(C::AbstractMatrix, xsd::AbstractArray, ysd::Number)
     nx, ny = size(C)
     length(xsd) == nx || throw(DimensionMismatch("inconsistent dimensions"))
-    for j = 1:ny
-        for i = 1:nx
-            C[i,j] /= (xsd[i] * ysd)
+    for j in 1:ny
+        for (i, x) in enumerate(xsd)
+            C[i,j] /= (x * ysd)
         end
     end
     return C
@@ -372,9 +372,9 @@ function cov2cor!(C::AbstractMatrix, xsd::AbstractArray, ysd::AbstractArray)
     nx, ny = size(C)
     (length(xsd) == nx && length(ysd) == ny) ||
         throw(DimensionMismatch("inconsistent dimensions"))
-    for j = 1:ny
-        for i = 1:nx
-            C[i,j] /= (xsd[i] * ysd[j])
+    for (i, x) in enumerate(xsd)
+        for (j, y) in enumerate(ysd)
+            C[i,j] /= x*y
         end
     end
     return C
@@ -550,8 +550,8 @@ function quantile!(q::AbstractArray, v::AbstractVector, p::AbstractArray;
     end
     isnan(v[end]) && throw(ArgumentError("quantiles are undefined in presence of NaNs"))
 
-    for i = 1:length(p)
-        @inbounds q[i] = _quantile(v,p[i])
+    for (i, j) in zip(eachindex(p), eachindex(q))
+        @inbounds q[j] = _quantile(v,p[i])
     end
     return q
 end
@@ -743,7 +743,7 @@ function hist2d!{HT}(H::AbstractArray{HT,2}, v::AbstractMatrix,
     if init
         fill!(H, zero(HT))
     end
-    for i = 1:size(v,1)
+    for i = 1:size(v,1)             # fixme (iter): update when #15459 is done
         x = searchsortedfirst(edg1, v[i,1]) - 1
         y = searchsortedfirst(edg2, v[i,2]) - 1
         if 1 <= x <= n && 1 <= y <= m

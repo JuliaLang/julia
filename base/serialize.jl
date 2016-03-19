@@ -116,16 +116,16 @@ function serialize(s::SerializationState, t::Tuple)
         writetag(s.io, LONGTUPLE_TAG)
         write(s.io, Int32(l))
     end
-    for e in t
-        serialize(s, e)
+    for x in t
+        serialize(s, x)
     end
 end
 
 function serialize(s::SerializationState, v::SimpleVector)
     writetag(s.io, SIMPLEVECTOR_TAG)
     write(s.io, Int32(length(v)))
-    for e in v
-        serialize(s, e)
+    for x in v
+        serialize(s, x)
     end
 end
 
