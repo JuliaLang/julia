@@ -572,7 +572,7 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int)
     # list (i.e. "(1,2,3)" or "[1,2,3]")
     elseif haskey(expr_parens, head)               # :tuple/:vcat/:cell1d
         op, cl = expr_parens[head]
-        if head === :vcat && !isempty(args) && is_expr(args[1], :row)
+        if head === :vcat
             sep = ";"
         elseif head === :hcat || head === :row
             sep = " "
@@ -581,7 +581,9 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int)
         end
         head !== :row && print(io, op)
         show_list(io, args, sep, indent)
-        if is(head, :tuple) && nargs == 1; print(io, ','); end
+        if (head === :tuple || head === :vcat) && nargs == 1
+            print(io, sep)
+        end
         head !== :row && print(io, cl)
 
     # function call
