@@ -1510,10 +1510,7 @@ static uint64_t compute_obj_symsize(const object::ObjectFile *obj, uint64_t offs
         object::SectionRef Section = *I;
 #endif
         uint64_t SAddr, SSize;
-#ifdef LLVM38
-        SAddr = Section.getAddress().get();
-        SSize = Section.getSize().get();
-#elif defined(LLVM36)
+#ifdef LLVM36
         SAddr = Section.getAddress();
         SSize = Section.getSize();
 #else
