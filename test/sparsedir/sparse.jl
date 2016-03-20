@@ -521,19 +521,24 @@ for (aa116, ss116) in [(a116, s116), (ad116, sd116)]
     end
 end
 
-# workaround issue #7197: comment out let-block
-#let S = SparseMatrixCSC(3, 3, UInt8[1,1,1,1], UInt8[], Int64[])
-S1290 = SparseMatrixCSC(3, 3, UInt8[1,1,1,1], UInt8[], Int64[])
+
+let S1290 = SparseMatrixCSC(3, 3, UInt8[1,1,1,1], UInt8[], Int64[])
     S1290[1,1] = 1
     S1290[5] = 2
     S1290[end] = 3
     @test S1290[end] == (S1290[1] + S1290[2,2])
     @test 6 == sum(diag(S1290))
     @test full(S1290)[[3,1],1] == full(S1290[[3,1],1])
-# end
+end
 
 
 # setindex tests
+let a = spzeros(5, 5)
+    a[3,2] = 0.0
+    @test countnz(a) == 0
+    @test nnz(a) == 1
+end
+
 let a = spzeros(Int, 10, 10)
     @test countnz(a) == 0
     a[1,:] = 1
@@ -547,6 +552,9 @@ let a = spzeros(Int, 10, 10)
     @test a[1,:] == sparse([1:10;])
     a[:,2] = 1:10
     @test a[:,2] == sparse([1:10;])
+    a[:,2] = 0
+    @test countnz(a) == 9
+    @test nnz(a) == 19
 end
 
 let A = spzeros(Int, 10, 20)
@@ -559,8 +567,11 @@ let A = spzeros(Int, 10, 20)
     A[6:10,11:20] = 20
     @test countnz(A) == 100
     @test A[6:10,11:20] == 20 * ones(Int, 5, 10)
+    # Storing zeros in structural nonzeros doesn't modify sparsity pattern
+    A[6:10,11:20] = 0
+    @test nnz(A) == 100
     A[4:8,8:16] = 15
-    @test countnz(A) == 121
+    @test nnz(A) == 121
     @test A[4:8,8:16] == 15 * ones(Int, 5, 9)
 end
 
@@ -587,6 +598,8 @@ let A = speye(Int, 5), I=1:10, X=reshape([trues(10); falses(15)],5,5)
     @test A[I] == A[X] == [1,0,0,0,0,0,1,0,0,0]
     A[I] = [1:10;]
     @test A[I] == A[X] == collect(1:10)
+    A[I] = zeros(Int, 10)
+    @test A[I] == A[X] == zeros(Int, 10)
 end
 
 let S = sprand(50, 30, 0.5, x->round(Int,rand(x)*100)), I = sprandbool(50, 30, 0.2)
@@ -603,10 +616,12 @@ let S = sprand(50, 30, 0.5, x->round(Int,rand(x)*100)), I = sprandbool(50, 30, 0
     @test (sum(S) + sumFI) == sumS1
 
     S[FI] = 10
+    nnz_S1 = nnz(S)
     @test sum(S) == sumS2 + 10*sum(FI)
     S[FI] = 0
+    nnz_S2 = nnz(S)
     @test sum(S) == sumS2
-
+    @test nnz_S1 == nnz_S2
     S[FI] = [1:sum(FI);]
     @test sum(S) == sumS2 + sum(1:sum(FI))
 end
@@ -1291,6 +1306,7 @@ let
     x = UpperTriangular(A)*ones(n)
     @test UpperTriangular(A)\x ≈ ones(n)
     A[2,2] = 0
+    Base.SparseArrays.dropzeros!(A)
     @test_throws LinAlg.SingularException LowerTriangular(A)\ones(n)
     @test_throws LinAlg.SingularException UpperTriangular(A)\ones(n)
 end
