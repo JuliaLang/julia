@@ -377,13 +377,12 @@ public:
 #endif
             if (Section == EndSection) continue;
             if (!Section->isText()) continue;
+            uint64_t SectionAddr = Section->getAddress();
 #ifdef LLVM38
-            uint64_t SectionAddr = Section->getAddress().get();
             uint64_t SectionLoadAddr = L.getSectionLoadAddress(*Section);
 #else
             StringRef secName;
             Section->getName(secName);
-            uint64_t SectionAddr = Section->getAddress();
             uint64_t SectionLoadAddr = L.getSectionLoadAddress(secName);
 #endif
             Addr -= SectionAddr - SectionLoadAddr;
