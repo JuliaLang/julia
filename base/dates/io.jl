@@ -133,56 +133,54 @@ function DateFormat(f::AbstractString, locale::AbstractString="english")
 end
 
 const SLOTERROR = ArgumentError("Non-digit character encountered")
-slotparse(slot,x,locale) = !ismatch(r"[^0-9\s]",x) ? slot.parser(x) : throw(SLOTERROR)
-function slotparse(slot::Slot{Month},x,locale)
+slotparse(slot,str,locale) = !ismatch(r"[^0-9\s]", str) ? slot.parser(str) : throw(SLOTERROR)
+function slotparse(slot::Slot{Month},str,locale)
     if slot.letter == 'm'
-        ismatch(r"[^0-9\s]",x) ? throw(SLOTERROR) : return Month(x)
+        ismatch(r"[^0-9\s]", str) ? throw(SLOTERROR) : return Month(str)
     elseif slot.letter == 'u'
-        return Month(MONTHTOVALUEABBR[locale][lowercase(x)])
+        return Month(MONTHTOVALUEABBR[locale][lowercase(str)])
     else
-        return Month(MONTHTOVALUE[locale][lowercase(x)])
+        return Month(MONTHTOVALUE[locale][lowercase(str)])
     end
 end
 function slotparse(slot::Slot{Millisecond},str,locale)
     ismatch(r"[^0-9\s]", str) && throw(SLOTERROR)
     return slot.parser(endswith(slot.prefix, '.') ? rpad(str, 3, '0') : str)
 end
-slotparse(slot::Slot{DayOfWeekSlot},x,locale) = nothing
+slotparse(slot::Slot{DayOfWeekSlot},str,locale) = nothing
 
-function getslot(x,slot::DelimitedSlot,locale,cursor)
-    endind = first(search(x,slot.suffix,nextind(x,cursor)))
+function getslot(str,slot::DelimitedSlot,locale,cursor)
+    endind = first(search(str, slot.suffix, nextind(str, cursor)))
     if endind == 0 # we didn't find the next delimiter
-        s = x[cursor:end]
-        index = endof(x)+1
+        s = str[cursor:end]
+        index = endof(str) + 1
     else
-        s = x[cursor:(endind-1)]
-        index = nextind(x,endind)
+        s = str[cursor:(endind - 1)]
+        index = nextind(str, endind)
     end
-    return index, slotparse(slot,s,locale)
+    return index, slotparse(slot, s, locale)
 end
-getslot(x,slot,locale,cursor) = (cursor+slot.width, slotparse(slot,x[cursor:(cursor+slot.width-1)], locale))
+function getslot(str,slot,locale,cursor)
+    cursor + slot.width, slotparse(slot, str[cursor:(cursor + slot.width - 1)], locale)
+end
 
-function parse(x::AbstractString,df::DateFormat)
-    x = strip(x)
-    startswith(x, df.slots[1].prefix) && (x = replace(x, df.slots[1].prefix, "", 1))
-    isempty(x) && throw(ArgumentError("Cannot parse empty format string"))
-    if isa(df.slots[1], DelimitedSlot) && first(search(x,df.slots[1].suffix)) == 0
+function parse(str::AbstractString,df::DateFormat)
+    str = strip(str)
+    startswith(str, df.slots[1].prefix) && (str = replace(str, df.slots[1].prefix, "", 1))
+    isempty(str) && throw(ArgumentError("Cannot parse empty format string"))
+    if isa(df.slots[1], DelimitedSlot) && first(search(str, df.slots[1].suffix)) == 0
         throw(ArgumentError("Delimiter mismatch. Couldn't find first delimiter, \"$(df.slots[1].suffix)\", in date string"))
     end
     periods = Period[]
     extra = Any[]  # Supports custom slot types such as TimeZone
     cursor = 1
     for slot in df.slots
-        cursor, pe = getslot(x,slot,df.locale,cursor)
-        pe !== nothing && (isa(pe,Period) ? push!(periods,pe) : push!(extra,pe))
-        cursor > endof(x) && break
+        cursor, pe = getslot(str, slot, df.locale, cursor)
+        pe !== nothing && (isa(pe, Period) ? push!(periods, pe) : push!(extra, pe))
+        cursor > endof(str) && break
     end
     sort!(periods,rev=true,lt=periodisless)
-    if isempty(extra)
-        return periods
-    else
-        return vcat(periods, extra)
-    end
+    return isempty(extra) ? periods : vcat(periods, extra)
 end
 
 function slotformat(slot,dt)
