@@ -210,7 +210,7 @@ end
 function slotformat(slot::Slot{Millisecond},dt,locale)
     if endswith(slot.prefix, '.')
         s = string(millisecond(dt) / 1000)[3:end]
-        return slot.width > 1 ? rpad(s, slot.width, '0') : s
+        return slot.width > 1 ? rpad(s, slot.width, '0')[1:slot.width] : s
     else
         s = string(millisecond(dt))
         return slot.width > 1 ? lpad(s, slot.width, '0')[(end - slot.width + 1):end] : s

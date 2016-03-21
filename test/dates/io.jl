@@ -17,7 +17,7 @@
 @test string(Dates.DateTime(2000,1,1,0,0,0,998)) == "2000-01-01T00:00:00.998"
 @test string(Dates.DateTime(2000,1,1,0,0,0,999)) == "2000-01-01T00:00:00.999"
 
-# DateTime parsing
+# DateTime parsing and formatting
 # Useful reference for different locales: http://library.princeton.edu/departments/tsd/katmandu/reference/months.html
 
 # Using parse directly allows for more flexibility.
@@ -29,6 +29,65 @@ end
 
 # Issue #13644: Ensure that Dates.parse returns a Period array when no custom slots are used.
 @test eltype(Dates.parse("1942-12-25T01:23:45", Dates.DateFormat("yyyy-mm-ddTHH:MM:SS", "english"))) == Dates.Period
+
+let d = Dates.Date(1996, 1, 15)
+    @test Dates.format(d, "y") == "1996"
+    @test Dates.format(d, "yy") == "96"
+    @test Dates.format(d, "yyyy") == "1996"
+    @test Dates.format(d, "yyyyyy") == "001996"
+    @test Dates.format(d, "m") == "1"
+    @test Dates.format(d, "mm") == "01"
+    @test Dates.format(d, "d") == "15"
+    @test Dates.format(d, "dd") == "15"
+end
+
+# Issue 15195
+let d = Dates.Date(typemax(Dates.Date))
+    @test Dates.format(d, "y") == "252522163911149"
+    @test Dates.format(d, "yy") == "49"
+    @test Dates.format(d, "yyyy") == "1149"
+end
+
+# Milliseconds formatting works differently when preceeded by a period
+let dt = Dates.DateTime(1,1,1,0,0,0,250)
+    @test Dates.format(dt, "s") == "250"
+    @test Dates.format(dt, "ss") == "50"
+    @test Dates.format(dt, "sss") == "250"
+    @test Dates.format(dt, "ssss") == "0250"
+    @test Dates.format(dt, ".s") == ".25"
+    @test Dates.format(dt, ".ss") == ".25"
+    @test Dates.format(dt, ".sss") == ".250"
+    @test Dates.format(dt, ".ssss") == ".2500"
+
+    @test Dates.DateTime("250", "s") == dt
+    @test Dates.DateTime("250", "ss") == dt
+    @test Dates.DateTime("250", "sss") == dt
+    @test Dates.DateTime("250", "ssss") == dt
+    @test Dates.DateTime(".25", ".s") == dt
+    @test Dates.DateTime(".25", ".ss") == dt
+    @test Dates.DateTime(".25", ".sss") == dt
+    @test Dates.DateTime(".25", ".ssss") == dt
+end
+
+let dt = Dates.DateTime(1,1,1,0,0,0,25)
+    @test Dates.format(dt, "s") == "25"
+    @test Dates.format(dt, "ss") == "25"
+    @test Dates.format(dt, "sss") == "025"
+    @test Dates.format(dt, "ssss") == "0025"
+    @test Dates.format(dt, ".s") == ".025"
+    @test Dates.format(dt, ".ss") == ".02"
+    @test Dates.format(dt, ".sss") == ".025"
+    @test Dates.format(dt, ".ssss") == ".0250"
+
+    @test Dates.DateTime("25", "s") == dt
+    @test Dates.DateTime("25", "ss") == dt
+    @test Dates.DateTime("25", "sss") == dt
+    @test Dates.DateTime("25", "ssss") == dt
+    @test Dates.DateTime(".025", ".s") == dt
+    @test Dates.DateTime(".025", ".ss") == dt
+    @test Dates.DateTime(".025", ".sss") == dt
+    @test Dates.DateTime(".025", ".ssss") == dt
+end
 
 # Common Parsing Patterns
 #'1996-January-15'
@@ -353,13 +412,7 @@ let
     @test DateTime(ds, escaped_format) == dt
 end
 
-# PR: https://github.com/JuliaLang/julia/pull/15588
-let d = typemax(Dates.Date)
-    @test Dates.format(d, "y") == "252522163911149"
-    @test Dates.format(d, "yy") == "49"
-    @test Dates.format(d, "yyyy") == "1149"
-end
-
+# PR: 15588
 let dt = Dates.DateTime(1991, 2, 3, 4, 5, 6, 7)
     @test Dates.format(dt, "y") == "1991"
     @test Dates.format(dt, "yy") == "91"
