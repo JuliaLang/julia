@@ -169,8 +169,8 @@ function convert(T::Type{UTF32String}, bytes::AbstractArray{UInt8})
 end
 
 function isvalid(::Type{UTF32String}, str::Union{Vector{UInt32}, Vector{Char}})
-    for i=1:length(str)
-        @inbounds if !isvalid(Char, UInt32(str[i])) ; return false ; end
+    for c in str
+        @inbounds if !isvalid(Char, UInt32(c)) ; return false ; end
     end
     return true
 end
