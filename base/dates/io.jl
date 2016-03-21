@@ -40,18 +40,19 @@ immutable DelimitedSlot{T<:Any} <: Slot{T}
     parser::Type{T}
     letter::Char
     width::Int
-    transition::Union{Regex,AbstractString}
+    prefix::AbstractString
+    suffix::Union{Regex,AbstractString}
 end
 
 immutable FixedWidthSlot{T<:Any} <: Slot{T}
     parser::Type{T}
     letter::Char
     width::Int
+    prefix::AbstractString
 end
 
 immutable DateFormat
     slots::Array{Slot,1}
-    prefix::AbstractString # optional transition from the start of a string to the 1st slot
     locale::AbstractString
 end
 
@@ -100,37 +101,35 @@ function DateFormat(f::AbstractString, locale::AbstractString="english")
     for m in eachmatch(Regex("(?<!\\\\)([\\Q$letters\\E])\\1*"), f)
         letter = f[m.offset]
         typ = SLOT_RULE[letter]
-
         width = length(m.match)
-        tran = replace(f[last_offset:m.offset-1], r"\\(.)", s"\1")
 
-        if isempty(params)
-            prefix = tran
-        else
-            slot = tran == "" ? FixedWidthSlot(params...) : DelimitedSlot(params..., tran)
+        suffix = replace(f[last_offset:m.offset-1], r"\\(.)", s"\1")
+        if !isempty(params)
+            slot = if suffix == ""
+                FixedWidthSlot(params..., prefix)
+            else
+                DelimitedSlot(params..., prefix, suffix)
+            end
             push!(slots,slot)
         end
 
         params = (typ,letter,width)
         last_offset = m.offset + width
+        prefix = suffix
     end
 
+    suffix = last_offset > endof(f) ? r"(?=\s|$)" : replace(f[last_offset:end], r"\\(.)", s"\1")
     if !isempty(params)
-        if last_offset > endof(f)
-            slot = DelimitedSlot(params..., r"(?=\s|$)")
+        slot = if suffix == ""
+            FixedWidthSlot(params..., prefix)
         else
-            tran = replace(f[last_offset:end], r"\\(.)", s"\1")
-            if tran == ""
-                slot = FixedWidthSlot(params...)
-            else
-                slot = DelimitedSlot(params..., tran)
-            end
+            DelimitedSlot(params..., prefix, suffix)
         end
         push!(slots,slot)
     end
 
     duplicates(slots) && throw(ArgumentError("Two separate periods of the same type detected"))
-    return DateFormat(slots,prefix,locale)
+    return DateFormat(slots,locale)
 end
 
 const SLOTERROR = ArgumentError("Non-digit character encountered")
@@ -148,7 +147,7 @@ slotparse(slot::Slot{Millisecond},x,locale) = !ismatch(r"[^0-9\s]",x) ? slot.par
 slotparse(slot::Slot{DayOfWeekSlot},x,locale) = nothing
 
 function getslot(x,slot::DelimitedSlot,locale,cursor)
-    endind = first(search(x,slot.transition,nextind(x,cursor)))
+    endind = first(search(x,slot.suffix,nextind(x,cursor)))
     if endind == 0 # we didn't find the next delimiter
         s = x[cursor:end]
         index = endof(x)+1
@@ -162,10 +161,10 @@ getslot(x,slot,locale,cursor) = (cursor+slot.width, slotparse(slot,x[cursor:(cur
 
 function parse(x::AbstractString,df::DateFormat)
     x = strip(x)
-    startswith(x, df.prefix) && (x = replace(x, df.prefix, "", 1))
+    startswith(x, df.slots[1].prefix) && (x = replace(x, df.slots[1].prefix, "", 1))
     isempty(x) && throw(ArgumentError("Cannot parse empty format string"))
-    if isa(df.slots[1], DelimitedSlot) && first(search(x,df.slots[1].transition)) == 0
-        throw(ArgumentError("Delimiter mismatch. Couldn't find first delimiter, \"$(df.slots[1].transition)\", in date string"))
+    if isa(df.slots[1], DelimitedSlot) && first(search(x,df.slots[1].suffix)) == 0
+        throw(ArgumentError("Delimiter mismatch. Couldn't find first delimiter, \"$(df.slots[1].suffix)\", in date string"))
     end
     periods = Period[]
     extra = Any[]  # Supports custom slot types such as TimeZone
@@ -207,16 +206,21 @@ function slotformat(slot::Slot{DayOfWeekSlot},dt,locale)
     return rpad(s, slot.width, ' ')
 end
 function slotformat(slot::Slot{Millisecond},dt,locale)
-    s = string(millisecond(dt) / 1000)[3:end]
-    return slot.width > 1 ? rpad(s, slot.width, '0') : s
+    if endswith(slot.prefix, '.')
+        s = string(millisecond(dt) / 1000)[3:end]
+        return slot.width > 1 ? rpad(s, slot.width, '0') : s
+    else
+        s = string(millisecond(dt))
+        return slot.width > 1 ? lpad(s, slot.width, '0')[(end - slot.width + 1):end] : s
+    end
 end
 
 function format(dt::TimeType,df::DateFormat)
-    f = df.prefix
+    f = first(df.slots).prefix
     for slot in df.slots
         f *= slotformat(slot,dt,df.locale)
         if isa(slot, DelimitedSlot)
-            f *= isa(slot.transition, AbstractString) ? slot.transition : ""
+            f *= isa(slot.suffix, AbstractString) ? slot.suffix : ""
         end
     end
     return f

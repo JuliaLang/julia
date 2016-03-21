@@ -368,6 +368,10 @@ let dt = Dates.DateTime(1991, 2, 3, 4, 5, 6, 7)
     @test Dates.format(dt, "m") == "2"
     @test Dates.format(dt, "mm") == "02"
     @test Dates.format(dt, "mmm") == "002"
+    @test Dates.format(dt, "s") == "7"
+    @test Dates.format(dt, "ssss") == "0007"
+    @test Dates.format(dt, ".s") == ".007"
+    @test Dates.format(dt, ".ssss") == ".0070"
 end
 
 let dt = Dates.DateTime(54321, 12, 13, 14, 55, 56, 997)
@@ -378,4 +382,8 @@ let dt = Dates.DateTime(54321, 12, 13, 14, 55, 56, 997)
     @test Dates.format(dt, "m") == "12"
     @test Dates.format(dt, "mm") == "12"
     @test Dates.format(dt, "mmm") == "012"
+    @test Dates.format(dt, "s") == "997"
+    @test Dates.format(dt, "ssss") == "0997"
+    @test Dates.format(dt, ".s") == ".997"
+    @test Dates.format(dt, ".ssss") == ".9970"
 end
