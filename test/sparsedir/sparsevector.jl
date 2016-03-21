@@ -672,6 +672,7 @@ let x = sprand(16, 0.5), x2 = sprand(16, 0.4)
         @test exact_equal(2.5 * x, sx)
         @test exact_equal(x .* 2.5, sx)
         @test exact_equal(2.5 .* x, sx)
+        @test exact_equal(x / 2.5, SparseVector(x.n, x.nzind, x.nzval / 2.5))
 
         xc = copy(x)
         @test is(scale!(xc, 2.5), xc)
