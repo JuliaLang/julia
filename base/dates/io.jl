@@ -133,18 +133,19 @@ function DateFormat(f::AbstractString, locale::AbstractString="english")
 end
 
 const SLOTERROR = ArgumentError("Non-digit character encountered")
-slotparse(slot,str,locale) = !ismatch(r"[^0-9\s]", str) ? slot.parser(str) : throw(SLOTERROR)
+slotparse(slot,str,locale) = isdigit(str) ? slot.parser(str) : throw(SLOTERROR)
 function slotparse(slot::Slot{Month},str,locale)
-    if slot.letter == 'm'
-        ismatch(r"[^0-9\s]", str) ? throw(SLOTERROR) : return Month(str)
+    s = if slot.letter == 'm'
+        isdigit(str) ? str : throw(SLOTERROR)
     elseif slot.letter == 'u'
-        return Month(MONTHTOVALUEABBR[locale][lowercase(str)])
+        MONTHTOVALUEABBR[locale][lowercase(str)]
     else
-        return Month(MONTHTOVALUE[locale][lowercase(str)])
+        MONTHTOVALUE[locale][lowercase(str)]
     end
+    return Month(s)
 end
 function slotparse(slot::Slot{Millisecond},str,locale)
-    ismatch(r"[^0-9\s]", str) && throw(SLOTERROR)
+    isdigit(str) || throw(SLOTERROR)
     return slot.parser(endswith(slot.prefix, '.') ? rpad(str, 3, '0') : str)
 end
 slotparse(slot::Slot{DayOfWeekSlot},str,locale) = nothing
@@ -158,10 +159,10 @@ function getslot(str,slot::DelimitedSlot,locale,cursor)
         s = str[cursor:(endind - 1)]
         index = nextind(str, endind)
     end
-    return index, slotparse(slot, s, locale)
+    return index, slotparse(slot, strip(s),locale)
 end
 function getslot(str,slot,locale,cursor)
-    cursor + slot.width, slotparse(slot, str[cursor:(cursor + slot.width - 1)], locale)
+    cursor + slot.width, slotparse(slot, strip(str[cursor:(cursor + slot.width - 1)]), locale)
 end
 
 function parse(str::AbstractString,df::DateFormat)
