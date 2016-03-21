@@ -121,6 +121,10 @@ using namespace llvm;
 #include <cstdio>
 #include <cassert>
 
+#ifdef JL_USE_PERF_JITEVENTS
+#include "PerfJITEventListener.cpp"
+#endif
+
 // LLVM version compatibility macros
 #ifdef LLVM37
 using namespace llvm::legacy;
@@ -6122,6 +6126,12 @@ extern "C" void jl_init_codegen(void)
         jl_ExecutionEngine->RegisterJITEventListener(
             JITEventListener::createOProfileJITEventListener());
 #endif // JL_USE_OPROFILE_JITEVENTS
+
+#ifdef JL_USE_PERF_JITEVENTS
+    if (jl_using_perf_jitevents)
+        jl_ExecutionEngine->RegisterJITEventListener(
+            createPerfJITEventListener());
+#endif // JL_USE_PERF_JITEVENTS
 #endif
 
     BOX_F(int8,int8);  UBOX_F(uint8,uint8);
