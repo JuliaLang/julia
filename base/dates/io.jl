@@ -69,7 +69,6 @@ setindex!(collection::SlotRule, value::Type, key::Char) = collection.rules[Int(k
 keys(c::SlotRule) = map(Char, filter(el -> isdefined(c.rules, el) && c.rules[el] != Void, eachindex(c.rules)))
 
 SLOT_RULE['y'] = Year
-SLOT_RULE['Y'] = Year
 SLOT_RULE['m'] = Month
 SLOT_RULE['u'] = Month
 SLOT_RULE['U'] = Month
@@ -184,32 +183,33 @@ function parse(x::AbstractString,df::DateFormat)
     end
 end
 
-slotformat(slot,dt,locale) = lpad(string(value(slot.parser(dt))),slot.width,"0")
-function slotformat(slot::Slot{Year},dt,locale)
-    s = lpad(string(value(slot.parser(dt))),slot.width,"0")
-    if slot.letter == 'y'
-        return s[(end-slot.width+1):end]  # Truncate the year
-    else # == 'Y'
-        return s
-    end
+function slotformat(slot,dt)
+    s = string(value(slot.parser(dt)))
+    return slot.width > 1 ? lpad(s, slot.width, '0')[(end - slot.width + 1):end] : s
 end
+slotformat(slot,dt,locale) = slotformat(slot,dt)
 function slotformat(slot::Slot{Month},dt,locale)
-    if slot.letter == 'm'
-        return lpad(month(dt),slot.width,"0")
+    s = if slot.letter == 'm'
+        slotformat(slot,dt)
     elseif slot.letter == 'u'
-        return VALUETOMONTHABBR[locale][month(dt)]
+        VALUETOMONTHABBR[locale][month(dt)]
     else
-        return VALUETOMONTH[locale][month(dt)]
+        VALUETOMONTH[locale][month(dt)]
     end
+    return rpad(s, slot.width, ' ')
 end
 function slotformat(slot::Slot{DayOfWeekSlot},dt,locale)
-    if slot.letter == 'e'
-        return VALUETODAYOFWEEKABBR[locale][dayofweek(dt)]
+    s = if slot.letter == 'e'
+        VALUETODAYOFWEEKABBR[locale][dayofweek(dt)]
     else # == 'E'
-        return VALUETODAYOFWEEK[locale][dayofweek(dt)]
+        VALUETODAYOFWEEK[locale][dayofweek(dt)]
     end
+    return rpad(s, slot.width, ' ')
 end
-slotformat(slot::Slot{Millisecond},dt,locale) = rpad(string(millisecond(dt)/1000.0)[3:end], slot.width, "0")
+function slotformat(slot::Slot{Millisecond},dt,locale)
+    s = string(millisecond(dt) / 1000)[3:end]
+    return slot.width > 1 ? rpad(s, slot.width, '0') : s
+end
 
 function format(dt::TimeType,df::DateFormat)
     f = df.prefix

@@ -215,7 +215,7 @@ const french = Dict("janv"=>1,"févr"=>2,"mars"=>3,"avril"=>4,"mai"=>5,"juin"=>6
 Dates.MONTHTOVALUEABBR["french"] = french
 Dates.VALUETOMONTHABBR["french"] = Dict(v=>k for (k,v) in french)
 
-f = "dd uuuuu yyyy"
+f = "dd uuu yyyy"
 @test Dates.Date("28 mai 2014",f;locale="french") == Dates.Date(2014,5,28)
 @test Dates.format(Dates.Date(2014,5,28),f;locale="french") == "28 mai 2014"
 @test Dates.Date("28 févr 2014",f;locale="french") == Dates.Date(2014,2,28)
@@ -238,13 +238,13 @@ f = "dduuuyy"
 f = "dduuuyyyy"
 @test Dates.Date("01Dec2009",f) == Dates.Date(2009,12,1)
 @test Dates.format(Dates.Date(2009,12,1),f) == "01Dec2009"
-f = "duy"
+f = "duyy"
 const globex = Dict("f"=>Dates.Jan,"g"=>Dates.Feb,"h"=>Dates.Mar,"j"=>Dates.Apr,"k"=>Dates.May,"m"=>Dates.Jun,
                     "n"=>Dates.Jul,"q"=>Dates.Aug,"u"=>Dates.Sep,"v"=>Dates.Oct,"x"=>Dates.Nov,"z"=>Dates.Dec)
 Dates.MONTHTOVALUEABBR["globex"] = globex
 Dates.VALUETOMONTHABBR["globex"] = Dict(v=>uppercase(k) for (k,v) in globex)
-@test Dates.Date("1F4",f;locale="globex") + Dates.Year(2010) == Dates.Date(2014,1,1)
-@test Dates.format(Dates.Date(2014,1,1),f;locale="globex") == "1F4"
+@test Dates.Date("1F14",f;locale="globex") + Dates.Year(2000) == Dates.Date(2014,1,1)
+@test Dates.format(Dates.Date(2014,1,1),f;locale="globex") == "1F14"
 
 # From Matt Bauman
 f = "yyyy-mm-ddTHH:MM:SS"
@@ -324,13 +324,6 @@ dt = Dates.DateTime(2014,8,23,17,22,15)
 @test Dates.format(Dates.DateTime(2014,11,2,0,0,0,9),Dates.RFC1123Format) == "Sun, 02 Nov 2014 00:00:00"
 @test Dates.format(Dates.DateTime(2014,12,5,0,0,0,9),Dates.RFC1123Format) == "Fri, 05 Dec 2014 00:00:00"
 
-# Issue 15195
-let f = "YY"
-    @test Dates.format(Dates.Date(1999), f) == "1999"
-    @test Dates.format(Dates.Date(9), f) == "09"
-    @test Dates.format(typemax(Dates.Date), f) == "252522163911149"
-end
-
 # Issue: https://github.com/quinnj/TimeZones.jl/issues/19
 let
     ds = "2015-07-24T05:38:19.591Z"
@@ -358,4 +351,31 @@ let
     # Ensure that the default behaviour has been restored
     @test DateTime(ds, format) == dt
     @test DateTime(ds, escaped_format) == dt
+end
+
+# PR: https://github.com/JuliaLang/julia/pull/15588
+let d = typemax(Dates.Date)
+    @test Dates.format(d, "y") == "252522163911149"
+    @test Dates.format(d, "yy") == "49"
+    @test Dates.format(d, "yyyy") == "1149"
+end
+
+let dt = Dates.DateTime(1991, 2, 3, 4, 5, 6, 7)
+    @test Dates.format(dt, "y") == "1991"
+    @test Dates.format(dt, "yy") == "91"
+    @test Dates.format(dt, "yyyy") == "1991"
+    @test Dates.format(dt, "yyyyyy") == "001991"
+    @test Dates.format(dt, "m") == "2"
+    @test Dates.format(dt, "mm") == "02"
+    @test Dates.format(dt, "mmm") == "002"
+end
+
+let dt = Dates.DateTime(54321, 12, 13, 14, 55, 56, 997)
+    @test Dates.format(dt, "y") == "54321"
+    @test Dates.format(dt, "yy") == "21"
+    @test Dates.format(dt, "yyyy") == "4321"
+    @test Dates.format(dt, "yyyyyy") == "054321"
+    @test Dates.format(dt, "m") == "12"
+    @test Dates.format(dt, "mm") == "12"
+    @test Dates.format(dt, "mmm") == "012"
 end
