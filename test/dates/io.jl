@@ -387,3 +387,6 @@ let dt = Dates.DateTime(54321, 12, 13, 14, 55, 56, 997)
     @test Dates.format(dt, ".s") == ".997"
     @test Dates.format(dt, ".ssss") == ".9970"
 end
+
+@test Dates.DateTime("25", "s") == Dates.DateTime(1,1,1,0,0,0,25)
+@test Dates.DateTime(".25", ".s") == Dates.DateTime(1,1,1,0,0,0,250)

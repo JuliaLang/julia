@@ -143,7 +143,10 @@ function slotparse(slot::Slot{Month},x,locale)
         return Month(MONTHTOVALUE[locale][lowercase(x)])
     end
 end
-slotparse(slot::Slot{Millisecond},x,locale) = !ismatch(r"[^0-9\s]",x) ? slot.parser(Base.parse(Float64,"."*x)*1000.0) : throw(SLOTERROR)
+function slotparse(slot::Slot{Millisecond},str,locale)
+    ismatch(r"[^0-9\s]", str) && throw(SLOTERROR)
+    return slot.parser(endswith(slot.prefix, '.') ? rpad(str, 3, '0') : str)
+end
 slotparse(slot::Slot{DayOfWeekSlot},x,locale) = nothing
 
 function getslot(x,slot::DelimitedSlot,locale,cursor)
