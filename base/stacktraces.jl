@@ -180,7 +180,7 @@ function show_spec_linfo(io::IO, frame::StackFrame)
             end
             first = true
             print(io, '(')
-            for i = 2:length(params)
+            for i = 2:length(params)  # fixme (iter): `eachindex` with offset?
                 first || print(io, ", ")
                 first = false
                 print(io, "::", params[i])
