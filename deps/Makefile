@@ -32,6 +32,11 @@ include $(SRCDIR)/llvm-ver.make
 
 ## Some shared configuration options ##
 
+# don't pass makefile flags through by default
+# (which would often result in unintentionally overriding the flags we are trying to set here)
+MAKEOVERRIDES =
+
+# common arguments to configure
 CONFIGURE_COMMON := --prefix=$(abspath $(build_prefix)) --build=$(BUILD_MACHINE) --libdir=$(abspath $(build_libdir)) $(CUSTOM_LD_LIBRARY_PATH)
 ifneq ($(XC_HOST),)
 CONFIGURE_COMMON += --host=$(XC_HOST)

@@ -2,7 +2,7 @@
 
 using Core.Intrinsics: llvmcall
 
-import Base: setindex!, getindex
+import Base: setindex!, getindex, unsafe_convert
 
 export
     Atomic,
