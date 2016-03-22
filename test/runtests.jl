@@ -847,13 +847,13 @@ end
 
 # foreach
 let
-    a = []
+    a = Any[]
     foreach(()->push!(a,0))
     @test a == [0]
-    a = []
+    a = Any[]
     foreach(x->push!(a,x), [1,5,10])
     @test a == [1,5,10]
-    a = []
+    a = Any[]
     foreach((args...)->push!(a,args), [2,4,6], [10,20,30])
     @test a == [(2,10),(4,20),(6,30)]
 end
