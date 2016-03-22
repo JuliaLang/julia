@@ -103,6 +103,8 @@ Currently, the `@compat` macro supports the following syntaxes:
 
 * `withenv` can be used in julia 0.3 (see [the 0.4 docs](http://docs.julialang.org/en/release-0.4/stdlib/base/#Base.withenv)). Note that you must prepend calls to `withenv` with `@compat` if you'd like to use it with the `=>` syntax.
 
+* `foreach`, similar to `map` but when the return value is not needed ([#13744](https://github.com/JuliaLang/julia/pull/13774)).
+
 ## Renamed functions
 
 * `itrunc`, `iround`, `iceil`, `ifloor` are now accessed via `trunc(T, x)`, etc. ([#9133](https://github.com/JuliaLang/julia/pull/9133)).  Truncated conversions between integer types are now `n % T` ([#8646](https://github.com/JuliaLang/julia/issues/8646)).
