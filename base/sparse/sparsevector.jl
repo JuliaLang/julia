@@ -70,24 +70,9 @@ function _sparsevector!{Tv,Ti<:Integer}(I::Vector{Ti}, V::Vector{Tv}, len::Integ
         permute!(I, p)
         permute!(V, p)
         m = length(I)
-
-        # advances to the first non-zero element
-        r = 1     # index of last processed entry
-        while r <= m
-            if V[r] == 0
-                r += 1
-            else
-                break
-            end
-        end
-        r > m && return SparseVector(len, Ti[], Tv[])
-
-        # move r-th to l-th
+        r = 1
         l = 1       # length of processed part
         i = I[r]    # row-index of current element
-        if r > 1
-            I[l] = i; V[l] = V[r]
-        end
 
         # main loop
         while r < m
@@ -97,17 +82,12 @@ function _sparsevector!{Tv,Ti<:Integer}(I::Vector{Ti}, V::Vector{Tv}, len::Integ
                 V[l] = combine(V[l], V[r])
             else  # advance l, and move r-th to l-th
                 pv = V[l]
-                if pv != 0
-                    l += 1
-                end
+                l += 1
                 i = i2
                 if l < r
                     I[l] = i; V[l] = V[r]
                 end
             end
-        end
-        if V[l] == 0
-            l -= 1
         end
         if l < m
             resize!(I, l)
@@ -188,11 +168,9 @@ function sparsevec{Tv,Ti<:Integer}(dict::Associative{Ti,Tv})
         if k > len
             len = k
         end
-        if v != 0
-            cnt += 1
-            @inbounds nzind[cnt] = k
-            @inbounds nzval[cnt] = v
-        end
+        cnt += 1
+        @inbounds nzind[cnt] = k
+        @inbounds nzval[cnt] = v
     end
     resize!(nzind, cnt)
     resize!(nzval, cnt)
@@ -208,11 +186,9 @@ function sparsevec{Tv,Ti<:Integer}(dict::Associative{Ti,Tv}, len::Integer)
     maxk = convert(Ti, len)
     for (k, v) in dict
         1 <= k <= maxk || throw(ArgumentError("an index (key) is out of bound."))
-        if v != 0
-            cnt += 1
-            @inbounds nzind[cnt] = k
-            @inbounds nzval[cnt] = v
-        end
+        cnt += 1
+        @inbounds nzind[cnt] = k
+        @inbounds nzval[cnt] = v
     end
     resize!(nzind, cnt)
     resize!(nzval, cnt)

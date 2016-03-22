@@ -66,7 +66,7 @@ end
 
 @test exact_equal(
     sparsevec([3, 3], [5.0, -5.0], 8),
-    spzeros(Float64, 8))
+    SparseVector(8, [3], [0.0]))
 
 @test exact_equal(
     sparsevec([2, 3, 6], [12.0, 18.0, 25.0]),
@@ -81,14 +81,15 @@ let x0 = SparseVector(8, [2, 3, 6], [12.0, 18.0, 25.0])
 
     @test exact_equal(
         sparsevec([2, 3, 4, 4, 6], [12.0, 18.0, 5.0, -5.0, 25.0], 8),
-        x0)
+        SparseVector(8, [2, 3, 4, 6], [12.0, 18.0, 0.0, 25.0]))
 
     @test exact_equal(
         sparsevec([1, 1, 1, 2, 3, 3, 6], [2.0, 3.0, -5.0, 12.0, 10.0, 8.0, 25.0], 8),
-        x0)
+        SparseVector(8, [1, 2, 3, 6], [0.0, 12.0, 18.0, 25.0]))
 
     @test exact_equal(
-        sparsevec([2, 3, 6, 7, 7], [12.0, 18.0, 25.0, 5.0, -5.0], 8), x0)
+        sparsevec([2, 3, 6, 7, 7], [12.0, 18.0, 25.0, 5.0, -5.0], 8),
+        SparseVector(8, [2, 3, 6, 7], [12.0, 18.0, 25.0, 0.0]))
 end
 
 # from dictionary
@@ -108,6 +109,9 @@ let x = spv_x1
 
     xc = sparsevec(a)
     @test exact_equal(xc, SparseVector(6, [2, 5, 6], [1.25, -0.75, 3.5]))
+
+    d = Dict{Int, Float64}((1 => 0.0, 2 => 1.0, 3 => 2.0))
+    @test exact_equal(sparsevec(d), SparseVector(3, [1, 2, 3], [0.0, 1.0, 2.0]))
 end
 
 # spones - copies structure, but replaces nzvals with ones
