@@ -35,7 +35,7 @@ Base.show_method_candidates(buf, Base.MethodError(method_c1,(1, 1, 1)))
 test_have_color(buf, "", "")
 
 method_c2(x::Int32, args...) = true
-method_c2(x::Int32, y::Float64 ,args...) = true
+method_c2(x::Int32, y::Float64, args...) = true
 method_c2(x::Int32, y::Float64) = true
 method_c2{T<:Real}(x::T, y::T, z::T) = true
 
@@ -296,7 +296,6 @@ let err_str,
     err_str = @except_stackframe FunctionLike()() ErrorException
     @test err_str == " in (::FunctionLike)() at $sn:$(method_defs_lineno + 7)"
 end
-
 
 # Issue #13032
 withenv("JULIA_EDITOR" => nothing, "VISUAL" => nothing, "EDITOR" => nothing) do

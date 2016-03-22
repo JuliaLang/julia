@@ -42,7 +42,25 @@ function arg_decl_parts(m::Method)
     return tv, decls, li.file, li.line
 end
 
-function show(io::IO, m::Method)
+function kwarg_decl(m::Method, kwtype::DataType)
+    sig = Tuple{kwtype, Array, m.sig.parameters...}
+    mt = kwtype.name.mt
+    d = mt.defs
+    while d !== nothing
+        if typeseq(d.sig, sig)
+            li = d.func
+            e = uncompressed_ast(li)
+            argnames = Any[(isa(n,Expr) ? n.args[1] : n) for n in e.args[1]]
+            kwargs = filter!(x->!(x in argnames || '#' in string(x)),
+                Any[x[1] for x in e.args[2][1]])
+            return kwargs
+        end
+        d = d.next
+    end
+    return ()
+end
+
+function show(io::IO, m::Method; kwtype::Nullable{DataType}=Nullable{DataType}())
     tv, decls, file, line = arg_decl_parts(m)
     ft = m.sig.parameters[1]
     d1 = decls[1]
@@ -66,6 +84,13 @@ function show(io::IO, m::Method)
     print(io, "(")
     print_joined(io, [isempty(d[2]) ? d[1] : d[1]*"::"*d[2] for d in decls[2:end]],
                  ", ", ", ")
+    if !isnull(kwtype)
+        kwargs = kwarg_decl(m, get(kwtype))
+        if !isempty(kwargs)
+            print(io, "; ")
+            print_joined(io, kwargs, ", ", ", ")
+        end
+    end
     print(io, ")")
     if line > 0
         print(io, " at ", file, ":", line)
@@ -85,10 +110,11 @@ function show_method_table(io::IO, mt::MethodTable, max::Int=-1, header::Bool=tr
     end
     d = mt.defs
     n = rest = 0
+    kwtype = isdefined(mt, :kwsorter) ? Nullable{DataType}(typeof(mt.kwsorter)) : Nullable{DataType}()
     while d !== nothing
         if max==-1 || n<max || (rest==0 && n==max && d.next === nothing)
             println(io)
-            show(io, d)
+            show(io, d; kwtype=kwtype)
             n += 1
         else
             rest += 1
@@ -148,7 +174,7 @@ function url(m::Method)
     end
 end
 
-function writemime(io::IO, ::MIME"text/html", m::Method)
+function writemime(io::IO, ::MIME"text/html", m::Method; kwtype::Nullable{DataType}=Nullable{DataType}())
     tv, decls, file, line = arg_decl_parts(m)
     ft = m.sig.parameters[1]
     d1 = decls[1]
@@ -174,6 +200,14 @@ function writemime(io::IO, ::MIME"text/html", m::Method)
     print(io, "(")
     print_joined(io, [isempty(d[2]) ? d[1] : d[1]*"::<b>"*d[2]*"</b>"
                       for d in decls[2:end]], ", ", ", ")
+    if !isnull(kwtype)
+        kwargs = kwarg_decl(m, get(kwtype))
+        if !isempty(kwargs)
+            print(io, "; <i>")
+            print_joined(io, kwargs, ", ", ", ")
+            print(io, "</i>")
+        end
+    end
     print(io, ")")
     if line > 0
         u = url(m)
@@ -194,9 +228,11 @@ function writemime(io::IO, mime::MIME"text/html", mt::MethodTable)
     what = startswith(ns, '@') ? "macro" : "generic function"
     print(io, "$n $meths for ", what, " <b>$ns</b>:<ul>")
     d = mt.defs
+    kwtype = isdefined(mt, :kwsorter) ? Nullable{DataType}(typeof(mt.kwsorter)) : Nullable{DataType}()
     while d !== nothing
         print(io, "<li> ")
-        writemime(io, mime, d)
+        writemime(io, mime, d; kwtype=kwtype)
+        print(io, "</li> ")
         d = d.next
     end
     print(io, "</ul>")
