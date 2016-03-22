@@ -371,3 +371,8 @@ end
 @test parse("x>:y") == Expr(:(>:), :x, :y)
 @test parse("x<:y<:z").head === :comparison
 @test parse("x>:y<:z").head === :comparison
+
+# issue #11169
+uncalled(x) = @test false
+fret() = uncalled(return true)
+@test fret()
