@@ -177,22 +177,44 @@ function RemoteCallbacks{P<:AbstractPayload}(credentials::Ptr{Void}, payload::Nu
     end
 end
 
-immutable FetchOptions
-    version::Cuint
-    callbacks::RemoteCallbacks
-    prune::Cint
-    update_fetchhead::Cint
-    download_tags::Cint
+if LibGit2.version() >= v"0.24.0"
+    immutable FetchOptions
+        version::Cuint
+        callbacks::RemoteCallbacks
+        prune::Cint
+        update_fetchhead::Cint
+        download_tags::Cint
+        custom_headers::StrArrayStruct
+    end
+    FetchOptions(; callbacks::RemoteCallbacks = RemoteCallbacks(),
+                   prune::Cint = Consts.FETCH_PRUNE_UNSPECIFIED,
+                   update_fetchhead::Cint = one(Cint),
+                   download_tags::Cint = Consts.REMOTE_DOWNLOAD_TAGS_AUTO,
+                   custom_headers::StrArrayStruct = StrArrayStruct()
+    ) = FetchOptions(one(Cuint),
+                     callbacks,
+                     prune,
+                     update_fetchhead,
+                     download_tags,
+                     custom_headers)
+else
+    immutable FetchOptions
+        version::Cuint
+        callbacks::RemoteCallbacks
+        prune::Cint
+        update_fetchhead::Cint
+        download_tags::Cint
+    end
+    FetchOptions(; callbacks::RemoteCallbacks = RemoteCallbacks(),
+                   prune::Cint = Consts.FETCH_PRUNE_UNSPECIFIED,
+                   update_fetchhead::Cint = one(Cint),
+                   download_tags::Cint = Consts.REMOTE_DOWNLOAD_TAGS_AUTO
+    ) = FetchOptions(one(Cuint),
+                     callbacks,
+                     prune,
+                     update_fetchhead,
+                     download_tags)
 end
-FetchOptions(; callbacks::RemoteCallbacks = RemoteCallbacks(),
-               prune::Cint = Consts.FETCH_PRUNE_UNSPECIFIED,
-               update_fetchhead::Cint = one(Cint),
-               download_tags::Cint = Consts.REMOTE_DOWNLOAD_TAGS_AUTO
-) = FetchOptions(one(Cuint),
-                 callbacks,
-                 prune,
-                 update_fetchhead,
-                 download_tags)
 
 immutable CloneOptions
     version::Cuint
@@ -227,48 +249,96 @@ CloneOptions(; checkout_opts::CheckoutOptions = CheckoutOptions(),
                remote_cb_payload)
 
 # git diff option struct
-immutable DiffOptionsStruct
-    version::Cuint
-    flags::UInt32
+if LibGit2.version() >= v"0.24.0"
+    immutable DiffOptionsStruct
+        version::Cuint
+        flags::UInt32
 
-    # options controlling which files are in the diff
-    ignore_submodules::Cint
-    pathspec::StrArrayStruct
-    notify_cb::Ptr{Void}
-    notify_payload::Ptr{Void}
+        # options controlling which files are in the diff
+        ignore_submodules::Cint
+        pathspec::StrArrayStruct
+        notify_cb::Ptr{Void}
+        progress_cb::Ptr{Void}
+        payload::Ptr{Void}
 
-    # options controlling how the diff text is generated
-    context_lines::UInt32
-    interhunk_lines::UInt32
-    id_abbrev::UInt16
-    max_size::Int64
-    old_prefix::Cstring
-    new_prefix::Cstring
+        # options controlling how the diff text is generated
+        context_lines::UInt32
+        interhunk_lines::UInt32
+        id_abbrev::UInt16
+        max_size::Int64
+        old_prefix::Cstring
+        new_prefix::Cstring
+    end
+    DiffOptionsStruct(; flags::UInt32 = Consts.DIFF_NORMAL,
+                        ignore_submodules::Cint = Cint(Consts.SUBMODULE_IGNORE_UNSPECIFIED),
+                        pathspec::StrArrayStruct = StrArrayStruct(),
+                        notify_cb::Ptr{Void} = C_NULL,
+                        progress_cb::Ptr{Void} = C_NULL,
+                        notify_payload::Ptr{Void} = C_NULL,
+                        context_lines::UInt32 = UInt32(3),
+                        interhunk_lines::UInt32 = zero(UInt32),
+                        id_abbrev::UInt16 = UInt16(7),
+                        max_size::Int64 = Int64(512*1024*1024), #zero(Int64), #512Mb
+                        old_prefix::Cstring = Cstring_NULL,
+                        new_prefix::Cstring = Cstring_NULL
+    )=DiffOptionsStruct(Consts.DIFF_OPTIONS_VERSION,
+                        flags,
+                        ignore_submodules,
+                        pathspec,
+                        notify_cb,
+                        progress_cb,
+                        notify_payload,
+                        context_lines,
+                        interhunk_lines,
+                        id_abbrev,
+                        max_size,
+                        old_prefix,
+                        new_prefix
+                    )
+else
+    immutable DiffOptionsStruct
+        version::Cuint
+        flags::UInt32
+
+        # options controlling which files are in the diff
+        ignore_submodules::Cint
+        pathspec::StrArrayStruct
+        notify_cb::Ptr{Void}
+        payload::Ptr{Void}
+
+        # options controlling how the diff text is generated
+        context_lines::UInt32
+        interhunk_lines::UInt32
+        id_abbrev::UInt16
+        max_size::Int64
+        old_prefix::Cstring
+        new_prefix::Cstring
+    end
+    DiffOptionsStruct(; flags::UInt32 = Consts.DIFF_NORMAL,
+                        ignore_submodules::Cint = Cint(Consts.SUBMODULE_IGNORE_UNSPECIFIED),
+                        pathspec::StrArrayStruct = StrArrayStruct(),
+                        notify_cb::Ptr{Void} = C_NULL,
+                        notify_payload::Ptr{Void} = C_NULL,
+                        context_lines::UInt32 = UInt32(3),
+                        interhunk_lines::UInt32 = zero(UInt32),
+                        id_abbrev::UInt16 = UInt16(7),
+                        max_size::Int64 = Int64(512*1024*1024), #zero(Int64), #512Mb
+                        old_prefix::Cstring = Cstring_NULL,
+                        new_prefix::Cstring = Cstring_NULL
+    )=DiffOptionsStruct(Consts.DIFF_OPTIONS_VERSION,
+                        flags,
+                        ignore_submodules,
+                        pathspec,
+                        notify_cb,
+                        notify_payload,
+                        context_lines,
+                        interhunk_lines,
+                        id_abbrev,
+                        max_size,
+                        old_prefix,
+                        new_prefix
+                    )
 end
-DiffOptionsStruct(; flags::UInt32 = Consts.DIFF_NORMAL,
-                    ignore_submodules::Cint = Cint(Consts.SUBMODULE_IGNORE_UNSPECIFIED),
-                    pathspec::StrArrayStruct = StrArrayStruct(),
-                    notify_cb::Ptr{Void} = C_NULL,
-                    notify_payload::Ptr{Void} = C_NULL,
-                    context_lines::UInt32 = UInt32(3),
-                    interhunk_lines::UInt32 = zero(UInt32),
-                    id_abbrev::UInt16 = UInt16(7),
-                    max_size::Int64 = Int64(512*1024*1024), #zero(Int64), #512Mb
-                    old_prefix::Cstring = Cstring_NULL,
-                    new_prefix::Cstring = Cstring_NULL
-)=DiffOptionsStruct(Consts.DIFF_OPTIONS_VERSION,
-                    flags,
-                    ignore_submodules,
-                    pathspec,
-                    notify_cb,
-                    notify_payload,
-                    context_lines,
-                    interhunk_lines,
-                    id_abbrev,
-                    max_size,
-                    old_prefix,
-                    new_prefix
-                )
 
 immutable DiffFile
     id::Oid
@@ -291,21 +361,21 @@ DiffDelta()=DiffDelta(Cint(0),UInt32(0),UInt16(0),UInt16(0),DiffFile(),DiffFile(
 
 immutable MergeOptions
     version::Cuint
-    tree_flags::Cint
+    flags::Cint
     rename_threshold::Cuint
     target_limit::Cuint
     metric::Ptr{Void}
     file_favor::Cint
     file_flags::Cuint
 end
-MergeOptions(; tree_flags::Cint = Cint(0),
+MergeOptions(; flags::Cint = Cint(0),
                rename_threshold::Cuint = Cuint(50),
                target_limit::Cuint = Cuint(200),
                metric::Ptr{Void} = C_NULL,
                file_favor::Cint = Cint(Consts.MERGE_FILE_FAVOR_NORMAL),
                file_flags::Cuint =Cuint(Consts.MERGE_FILE_DEFAULT)
 )=MergeOptions(one(Cuint),
-               tree_flags,
+               flags,
                rename_threshold,
                target_limit,
                metric,
@@ -362,16 +432,33 @@ IndexEntry() = IndexEntry(IndexTime(),
                           Ptr{UInt8}(0))
 Base.show(io::IO, ie::IndexEntry) = print(io, "IndexEntry($(string(ie.id)))")
 
-immutable RebaseOptions
-    version::Cuint
-    quiet::Cint
-    rewrite_notes_ref::Cstring
-    checkout_opts::CheckoutOptions
+
+if LibGit2.version() >= v"0.24.0"
+    immutable RebaseOptions
+        version::Cuint
+        quiet::Cint
+        inmemory::Cint
+        rewrite_notes_ref::Cstring
+        merge_opts::MergeOptions
+        checkout_opts::CheckoutOptions
+    end
+    RebaseOptions(; quiet::Cint = Cint(1),
+                    rewrite_notes_ref::Cstring = Cstring_NULL,
+                    merge_opts::MergeOptions = MergeOptions(),
+                    checkout_opts::CheckoutOptions = CheckoutOptions()) =
+        RebaseOptions(one(Cuint), quiet, rewrite_notes_ref, merge_opts, checkout_opts)
+else
+    immutable RebaseOptions
+        version::Cuint
+        quiet::Cint
+        rewrite_notes_ref::Cstring
+        checkout_opts::CheckoutOptions
+    end
+    RebaseOptions(; quiet::Cint = Cint(1),
+                    rewrite_notes_ref::Cstring = Cstring_NULL,
+                    checkout_opts::CheckoutOptions = CheckoutOptions()) =
+        RebaseOptions(one(Cuint), quiet, rewrite_notes_ref, checkout_opts)
 end
-RebaseOptions(; quiet::Cint = Cint(1),
-                rewrite_notes_ref::Cstring = Cstring_NULL,
-                checkout_opts::CheckoutOptions = CheckoutOptions()
-)=RebaseOptions(one(Cuint), quiet, rewrite_notes_ref, checkout_opts)
 
 immutable RebaseOperation
     optype::Cint
