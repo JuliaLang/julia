@@ -916,7 +916,7 @@ JL_DLLEXPORT jl_lambda_info_t *jl_instantiate_staged(jl_lambda_info_t *generator
     jl_cellset(((jl_expr_t*)jl_exprarg(ex,1))->args, 0, body);
 
     linenum = jl_box_long(generator->line);
-    jl_value_t *linenode = jl_new_struct(jl_linenumbernode_type, generator->file, linenum);
+    jl_value_t *linenode = jl_new_struct(jl_linenumbernode_type, linenum);
     jl_cellset(body->args, 0, linenode);
 
     // invoke code generator
@@ -939,6 +939,7 @@ JL_DLLEXPORT jl_lambda_info_t *jl_instantiate_staged(jl_lambda_info_t *generator
     func->name = generator->name;
     if (generator->isva)
         func->isva = 1;
+    func->file = generator->file;
     JL_GC_POP();
     return func;
 }

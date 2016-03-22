@@ -596,7 +596,9 @@
   (if (invalid-initial-token? t)
       (error (string "unexpected \"" t "\"")))
   (if (closer? t)
-      (list head)  ; empty block
+      (if add-linenums    ;; empty block
+          (list head (line-number-node s))
+          (list head))
       (let loop ((ex
                   ;; in allow-empty mode skip leading runs of operator
                   (if (and allow-empty (memv t ops))
@@ -1133,7 +1135,10 @@
               (error "let variables should end in \";\" or newline"))
           (let ((ex (parse-block s)))
             (expect-end s word)
-            `(let ,ex ,@binds))))
+            ;; don't need line info in an empty let block
+            (if (and (length= ex 2) (pair? (cadr ex)) (eq? (caadr ex) 'line))
+                `(let (block) ,@binds)
+                `(let ,ex ,@binds)))))
        ((global local)
         (let* ((lno (input-port-line (ts:port s)))
                (const (and (eq? (peek-token s) 'const)
@@ -1165,13 +1170,8 @@
                                                   (eq? (car sig) 'tuple))))
                                     (error (string "expected \"(\" in " word " definition"))
                                     sig)))
-                     (loc   (begin (if (not (eq? (peek-token s) 'end))
-                                       ;; if ends on same line, don't skip the following newline
-                                       (skip-ws-and-comments (ts:port s)))
-                                   (line-number-node s)))
                      (body  (parse-block s)))
                 (expect-end s word)
-                (add-filename-to-block! body loc)
                 (list word def body)))))
        ((abstract)
         (list 'abstract (parse-subtype-spec s)))
@@ -1179,10 +1179,9 @@
         (let ((immu? (eq? word 'immutable)))
           (if (reserved-word? (peek-token s))
               (error (string "invalid type name \"" (take-token s) "\"")))
-          (let ((sig (parse-subtype-spec s))
-                (loc (line-number-node s)))
+          (let ((sig (parse-subtype-spec s)))
             (begin0 (list 'type (if (eq? word 'type) #t #f)
-                          sig (add-filename-to-block! (parse-block s) loc))
+                          sig (parse-block s))
                     (expect-end s word)))))
        ((bitstype)
         (list 'bitstype (with-space-sensitive (parse-cond s))
@@ -1218,15 +1217,13 @@
                           '(block)
                           #f
                           finalb)
-                    (let* ((var (if nl (parse-eq s) (parse-eq* s)))
+                    (let* ((var (if nl #f (parse-eq* s)))
                            (var? (and (not nl) (or (symbol? var) (and (length= var 2) (eq? (car var) '$)))))
                            (catch-block (if (eq? (require-token s) 'finally)
                                             '(block)
                                             (parse-block s))))
                       (loop (require-token s)
-                            (if var?
-                                catch-block
-                                `(block ,var ,@(cdr catch-block)))
+                            catch-block
                             (and var? var)
                             finalb)))))
              ((and (eq? nxt 'finally)
@@ -1305,23 +1302,15 @@
         (error "invalid \"do\" syntax"))
        (else (error "unhandled reserved word")))))))
 
-(define (add-filename-to-block! body loc)
-  (if (and (length> body 1)
-           (pair? (cadr body))
-           (eq? (caadr body) 'line))
-      (set-car! (cdr body) loc))
-  body)
-
 (define (parse-do s)
   (with-bindings
    ((expect-end-current-line (input-port-line (ts:port s))))
    (without-whitespace-newline
-    (let* ((doargs (if (memv (peek-token s) '(#\newline #\;))
-                       '()
-                       (parse-comma-separated s parse-range)))
-           (loc (line-number-node s)))
+    (let ((doargs (if (memv (peek-token s) '(#\newline #\;))
+                      '()
+                      (parse-comma-separated s parse-range))))
       `(-> (tuple ,@doargs)
-           ,(begin0 (add-filename-to-block! (parse-block s) loc)
+           ,(begin0 (parse-block s)
                     (expect-end s 'do)))))))
 
 (define (macrocall-to-atsym e)

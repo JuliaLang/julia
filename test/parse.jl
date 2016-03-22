@@ -148,7 +148,7 @@ macro test999_str(args...); args; end
 @test parseall("""
 macro f(args...) end; @f ""
 """) == Expr(:toplevel,
-            Expr(:macro, Expr(:call, :f, Expr(:..., :args)), Expr(:block,)),
+            Expr(:macro, Expr(:call, :f, Expr(:..., :args)), Expr(:block, Expr(:line, 1, :none))),
             Expr(:macrocall, symbol("@f"), ""))
 
 # blocks vs. tuples
