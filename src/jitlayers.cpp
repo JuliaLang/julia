@@ -69,6 +69,10 @@ static void addOptimizationPasses(T *PM)
 
     PM->add(createEarlyCSEPass()); //// ****
 
+#ifdef USE_POLLY
+    polly::registerPollyPasses(*PM);
+#endif
+
     PM->add(createLoopIdiomPass()); //// ****
     PM->add(createLoopRotatePass());           // Rotate loops.
     // LoopRotate strips metadata from terminator, so run LowerSIMD afterwards

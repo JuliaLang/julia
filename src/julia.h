@@ -570,6 +570,7 @@ extern jl_sym_t *copyast_sym; extern jl_sym_t *fastmath_sym;
 extern jl_sym_t *pure_sym; extern jl_sym_t *simdloop_sym;
 extern jl_sym_t *meta_sym; extern jl_sym_t *list_sym;
 extern jl_sym_t *inert_sym; extern jl_sym_t *static_parameter_sym;
+extern jl_sym_t *polly_sym;
 
 // gc -------------------------------------------------------------------------
 
