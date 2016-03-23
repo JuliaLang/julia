@@ -782,7 +782,8 @@ JL_DLLEXPORT void jl_method_def(jl_svec_t *argdata, jl_lambda_info_t *f, jl_valu
         }
     }
 
-    jl_add_method_to_table(mt, argtypes, f, tvars, isstaged == jl_true);
+    f->isstaged = (isstaged == jl_true);
+    jl_add_method_to_table(mt, argtypes, f, tvars);
     if (jl_boot_file_loaded && f->code && jl_typeis(f->code, jl_array_any_type)) {
         f->code = jl_compress_ast(f, f->code);
         jl_gc_wb(f, f->code);

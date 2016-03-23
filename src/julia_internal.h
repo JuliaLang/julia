@@ -151,11 +151,10 @@ jl_value_t *jl_type_match_morespecific(jl_value_t *a, jl_value_t *b);
 int jl_types_equal_generic(jl_value_t *a, jl_value_t *b, int useenv);
 jl_datatype_t *jl_inst_concrete_tupletype_v(jl_value_t **p, size_t np);
 jl_datatype_t *jl_inst_concrete_tupletype(jl_svec_t *p);
-jl_lambda_info_t *jl_method_cache_insert(jl_methtable_t *mt, jl_tupletype_t *type,
-                                         jl_lambda_info_t *method);
-jl_methlist_t *jl_method_table_insert(jl_methtable_t *mt, jl_tupletype_t *type,
-                                      jl_lambda_info_t *method, jl_svec_t *tvars,
-                                      int8_t isstaged);
+void jl_method_cache_insert(jl_methcache_t *cache, jl_tupletype_t *type, jl_svec_t *guardsigs,
+                            jl_lambda_info_t *method, int8_t offs);
+void jl_method_table_insert(jl_methtable_t *mt, jl_tupletype_t *type,
+                            jl_lambda_info_t *method, jl_svec_t *tvars);
 int jl_is_type(jl_value_t *v);
 jl_value_t *jl_type_intersection_matching(jl_value_t *a, jl_value_t *b,
                                           jl_svec_t **penv, jl_svec_t *tvars);
@@ -169,10 +168,7 @@ jl_datatype_t *jl_wrap_vararg(jl_value_t *t);
 void jl_assign_bits(void *dest, jl_value_t *bits);
 jl_expr_t *jl_exprn(jl_sym_t *head, size_t n);
 jl_function_t *jl_new_generic_function(jl_sym_t *name, jl_module_t *module);
-void jl_add_method(jl_function_t *gf, jl_tupletype_t *types, jl_lambda_info_t *meth,
-                   jl_svec_t *tvars, int8_t isstaged);
-void jl_add_method_to_table(jl_methtable_t *mt, jl_tupletype_t *types, jl_lambda_info_t *meth,
-                            jl_svec_t *tvars, int8_t isstaged);
+void jl_add_method_to_table(jl_methtable_t *mt, jl_tupletype_t *types, jl_lambda_info_t *meth, jl_svec_t *tvars);
 jl_function_t *jl_module_call_func(jl_module_t *m);
 int jl_is_submodule(jl_module_t *child, jl_module_t *parent);
 
@@ -258,6 +254,7 @@ int32_t jl_get_llvm_gv(jl_value_t *p);
 void jl_idtable_rehash(jl_array_t **pa, size_t newsz);
 
 JL_DLLEXPORT jl_methtable_t *jl_new_method_table(jl_sym_t *name, jl_module_t *module);
+jl_methcache_t *jl_new_method_cache();
 jl_lambda_info_t *jl_get_specialization1(jl_tupletype_t *types);
 jl_function_t *jl_module_get_initializer(jl_module_t *m);
 uint32_t jl_module_next_counter(jl_module_t *m);
