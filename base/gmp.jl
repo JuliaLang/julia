@@ -49,6 +49,23 @@ type BigInt <: Integer
     end
 end
 
+type GMPRandState
+    seed_alloc::Cint
+    seed_size::Cint
+    seed_d::Ptr{Void}
+    alg::Cint
+    alg_data::Ptr{Void}
+
+    function GMPRandState()
+        randstate = new(zero(Cint), zero(Cint), C_NULL, zero(Cint), C_NULL)
+        # The default algorithm in GMP is currently MersenneTwister
+        ccall((:__gmp_randinit_default, :libgmp), Void, (Ptr{GMPRandState},),
+          &randstate)
+        finalizer(randstate, randclear)
+        randstate
+    end
+end
+
 _gmp_clear_func = C_NULL
 _mpfr_clear_func = C_NULL
 
@@ -558,5 +575,27 @@ Base.checked_rem(a::BigInt, b::BigInt) = rem(a, b)
 Base.checked_fld(a::BigInt, b::BigInt) = fld(a, b)
 Base.checked_mod(a::BigInt, b::BigInt) = mod(a, b)
 Base.checked_cld(a::BigInt, b::BigInt) = cld(a, b)
+
+
+## GMPRandState
+
+function GMPRandState(seed::UInt64)
+    randstate = GMPRandState()
+    ccall((:__gmp_randseed_ui, :libgmp), Void, (Ptr{GMPRandState}, Culong),
+      &randstate, seed)
+    randstate
+end
+
+function GMPRandState(seed::BigInt)
+    randstate = GMPRandState()
+    ccall((:__gmp_randseed, :libgmp), Void, (Ptr{GMPRandState}, Ptr{BigInt}),
+      &randstate, &seed)
+    randstate
+end
+
+
+function randclear(x::GMPRandState)
+    ccall((:__gmp_randclear, :libgmp), Void, (Ptr{GMPRandState},), &x)
+end
 
 end # module
