@@ -190,8 +190,6 @@ typedef struct _jl_lambda_info_t {
     jl_tupletype_t *specTypes;  // argument types this will be compiled for
     // a slower-but-works version of this function as a fallback
     struct _jl_lambda_info_t *unspecialized;
-    // array of all lambda infos with code generated from this one
-    jl_array_t *specializations;
     struct _jl_module_t *module;
     struct _jl_lambda_info_t *def;  // original this is specialized from
     jl_sym_t *file;
@@ -201,6 +199,11 @@ typedef struct _jl_lambda_info_t {
     int8_t pure;
     int8_t isva;
     int8_t inInference; // flags to tell if inference is running on this function
+    int8_t isstaged;
+    // cache of specializations of this method for invoke(), i.e.
+    // cases where this method was called even though it was not necessarily
+    // the most specific for the argument types.
+    struct _jl_methcache_t *invokes;
 
     // hidden fields:
     uint8_t called;  // bit flags: whether each of the first 8 arguments is called
@@ -337,27 +340,26 @@ typedef struct _jl_module_t {
 
 typedef struct _jl_methlist_t {
     JL_DATA_TYPE
-    jl_tupletype_t *sig;
-    int8_t va;
-    int8_t isstaged;
-    jl_svec_t *tvars;
-    jl_lambda_info_t *func;
-    // cache of specializations of this method for invoke(), i.e.
-    // cases where this method was called even though it was not necessarily
-    // the most specific for the argument types.
-    struct _jl_methtable_t *invokes;
-    // TODO: pointer from specialized to original method
-    //jl_function_t *orig_method;
     struct _jl_methlist_t *next;
+    jl_lambda_info_t *func;
+    jl_tupletype_t *sig;
+    jl_svec_t *tvars;
+    jl_svec_t *guardsigs;
+    int8_t va;
 } jl_methlist_t;
+
+typedef struct _jl_methcache_t {
+    JL_DATA_TYPE
+    jl_array_t *arg1;
+    jl_array_t *targ;
+    jl_methlist_t *list;
+} jl_methcache_t;
 
 typedef struct _jl_methtable_t {
     JL_DATA_TYPE
     jl_sym_t *name;
     jl_methlist_t *defs;
-    jl_methlist_t *cache;
-    jl_array_t *cache_arg1;
-    jl_array_t *cache_targ;
+    jl_methcache_t *cache;
     intptr_t max_args;  // max # of non-vararg arguments in a signature
     jl_value_t *kwsorter;  // keyword argument sorter function
     jl_module_t *module; // used for incremental serialization to locate original binding
@@ -465,6 +467,7 @@ extern JL_DLLEXPORT jl_datatype_t *jl_newvarnode_type;
 extern JL_DLLEXPORT jl_datatype_t *jl_topnode_type;
 extern JL_DLLEXPORT jl_datatype_t *jl_intrinsic_type;
 extern JL_DLLEXPORT jl_datatype_t *jl_methtable_type;
+extern JL_DLLEXPORT jl_datatype_t *jl_methcache_type;
 extern JL_DLLEXPORT jl_datatype_t *jl_method_type;
 
 extern JL_DLLEXPORT jl_svec_t *jl_emptysvec;

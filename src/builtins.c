@@ -1083,14 +1083,14 @@ jl_value_t *jl_mk_builtin_func(const char *name, jl_fptr_t fptr)
     li->name = sname;
     // TODO jb/functions: what should li->ast be?
     li->code = (jl_array_t*)jl_an_empty_cell; jl_gc_wb(li, li->code);
-    jl_method_cache_insert(jl_gf_mtable(f), jl_anytuple_type, li);
+    jl_method_cache_insert(jl_gf_mtable(f)->cache, jl_anytuple_type, jl_emptysvec, li, 0);
     return f;
 }
 
 jl_fptr_t jl_get_builtin_fptr(jl_value_t *b)
 {
     assert(jl_subtype(b, (jl_value_t*)jl_builtin_type, 1));
-    return jl_gf_mtable(b)->cache->func->fptr;
+    return jl_gf_mtable(b)->cache->list->func->fptr;
 }
 
 static void add_builtin_func(const char *name, jl_fptr_t fptr)

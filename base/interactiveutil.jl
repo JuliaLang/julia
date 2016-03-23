@@ -679,8 +679,6 @@ function summarysize(obj::MethodTable, seen, excl)
     size::Int = Core.sizeof(obj)
     size += summarysize(obj.defs, seen, excl)::Int
     size += summarysize(obj.cache, seen, excl)::Int
-    size += summarysize(obj.cache_arg1, seen, excl)::Int
-    size += summarysize(obj.cache_targ, seen, excl)::Int
     if isdefined(obj, :kwsorter)
         size += summarysize(obj.kwsorter, seen, excl)::Int
     end
@@ -689,7 +687,7 @@ end
 
 function summarysize(m::Method, seen, excl)
     size::Int = 0
-    while true
+    while true # specialized to prevent stack overflow while following this linked list
         haskey(seen, m) ? (return size) : (seen[m] = true)
         size += Core.sizeof(m)
         if isdefined(m, :func)
@@ -697,7 +695,6 @@ function summarysize(m::Method, seen, excl)
         end
         size += summarysize(m.sig, seen, excl)::Int
         size += summarysize(m.tvars, seen, excl)::Int
-        size += summarysize(m.invokes, seen, excl)::Int
         m.next === nothing && break
         m = m.next::Method
     end

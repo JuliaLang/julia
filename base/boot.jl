@@ -64,7 +64,6 @@
 #    sparams::Tuple
 #    tfunc
 #    name::Symbol
-#    specializations
 #    inferred
 #    file::Symbol
 #    line::Int

@@ -41,6 +41,7 @@ jl_datatype_t *jl_newvarnode_type;
 jl_datatype_t *jl_topnode_type;
 jl_datatype_t *jl_intrinsic_type;
 jl_datatype_t *jl_methtable_type;
+jl_datatype_t *jl_methcache_type;
 jl_datatype_t *jl_method_type;
 jl_datatype_t *jl_lambda_info_type;
 jl_datatype_t *jl_module_type;
@@ -366,12 +367,13 @@ jl_lambda_info_t *jl_new_lambda_info(jl_value_t *ast, jl_svec_t *tvars, jl_svec_
     li->inInference = 0;
     li->inCompile = 0;
     li->unspecialized = NULL;
-    li->specializations = NULL;
     li->name = anonymous_sym;
     li->def = li;
     li->line = 0;
     li->pure = 0;
     li->called = 0xff;
+    li->invokes = NULL;
+    li->isstaged = 0;
     li->needs_sparam_vals_ducttape = 2;
     if (ast != NULL) {
         JL_GC_PUSH1(&li);
@@ -385,6 +387,7 @@ JL_DLLEXPORT jl_lambda_info_t *jl_copy_lambda_info(jl_lambda_info_t *linfo)
 {
     jl_lambda_info_t *new_linfo =
         jl_new_lambda_info(NULL, linfo->sparam_syms, linfo->sparam_vals, linfo->module);
+    assert(!linfo->isstaged);
     new_linfo->code = linfo->code;
     new_linfo->slotnames = linfo->slotnames;
     new_linfo->slottypes = linfo->slottypes;
@@ -400,7 +403,6 @@ JL_DLLEXPORT jl_lambda_info_t *jl_copy_lambda_info(jl_lambda_info_t *linfo)
     new_linfo->roots = linfo->roots;
     new_linfo->specTypes = linfo->specTypes;
     new_linfo->unspecialized = linfo->unspecialized;
-    new_linfo->specializations = linfo->specializations;
     new_linfo->def = linfo->def;
     new_linfo->file = linfo->file;
     new_linfo->line = linfo->line;
@@ -581,21 +583,32 @@ jl_sym_t *jl_demangle_typename(jl_sym_t *s)
     return jl_symbol_n(&n[1], len);
 }
 
+jl_methcache_t *jl_new_method_cache()
+{
+    jl_methcache_t *cache = (jl_methcache_t*)jl_gc_allocobj(sizeof(jl_methcache_t));
+    jl_set_typeof(cache, jl_methcache_type);
+    cache->list = (jl_methlist_t*)jl_nothing;
+    cache->arg1 = (jl_array_t*)jl_nothing;
+    cache->targ = (jl_array_t*)jl_nothing;
+    return cache;
+}
+
 JL_DLLEXPORT jl_methtable_t *jl_new_method_table(jl_sym_t *name, jl_module_t *module)
 {
+    jl_methcache_t *cache = jl_new_method_cache();
+    JL_GC_PUSH1(&cache);
     jl_methtable_t *mt = (jl_methtable_t*)jl_gc_allocobj(sizeof(jl_methtable_t));
     jl_set_typeof(mt, jl_methtable_type);
     mt->name = jl_demangle_typename(name);
     mt->module = module;
     mt->defs = (jl_methlist_t*)jl_nothing;
-    mt->cache = (jl_methlist_t*)jl_nothing;
-    mt->cache_arg1 = (jl_array_t*)jl_nothing;
-    mt->cache_targ = (jl_array_t*)jl_nothing;
+    mt->cache = cache;
     mt->max_args = 0;
     mt->kwsorter = NULL;
 #ifdef JL_GF_PROFILE
     mt->ncalls = 0;
 #endif
+    JL_GC_POP();
     return mt;
 }
 
