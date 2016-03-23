@@ -1679,7 +1679,7 @@ function sort{Tv,Ti}(x::SparseVector{Tv,Ti}; kws...)
     SparseVector(n,newnzind,newnzvals)
 end
 
-function fkeep!{Tv,Ti}(x::SparseVector{Tv,Ti}, f, other, trim::Bool = true)
+function fkeep!(x::SparseVector, f, other, trim::Bool = true)
     n = x.n
     nzind = x.nzind
     nzval = x.nzval
@@ -1716,5 +1716,5 @@ droptol!(x::SparseVector, tol, trim::Bool = true) = fkeep!(x, DroptolFuncVec(), 
 
 immutable DropzerosFuncVec <: Base.Func{3} end
 (::DropzerosFuncVec){Tv,Ti}(i::Ti, x::Tv, other) = x != 0
-dropzeros!(x::SparseVector, trim::Bool = true) = fkeep!(x, DropzerosFuncVec(), Void, trim)
+dropzeros!(x::SparseVector, trim::Bool = true) = fkeep!(x, DropzerosFuncVec(), nothing, trim)
 dropzeros(x::SparseVector, trim::Bool = true) = dropzeros!(copy(x), trim)
