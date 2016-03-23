@@ -353,7 +353,7 @@ jl_lambda_info_t *jl_new_lambda_info(jl_value_t *ast, jl_svec_t *tvars, jl_svec_
     li->module = ctx;
     li->sparam_syms = tvars;
     li->sparam_vals = sparams;
-    li->tfunc = jl_nothing;
+    li->tfunc = (jl_methcache_t*)jl_nothing;
     li->fptr = NULL;
     li->jlcall_api = 0;
     li->roots = NULL;

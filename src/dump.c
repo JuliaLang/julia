@@ -462,7 +462,8 @@ static void jl_serialize_fptr(ios_t *s, void *fptr)
         write_uint16(s, *(intptr_t*)pbp);
 }
 
-static int module_in_worklist(jl_module_t *mod) {
+static int module_in_worklist(jl_module_t *mod)
+{
     int i, l = jl_array_len(serializer_worklist);
     for (i = 0; i < l; i++) {
         jl_module_t *workmod = (jl_module_t*)jl_cellref(serializer_worklist, i);
@@ -471,6 +472,43 @@ static int module_in_worklist(jl_module_t *mod) {
     }
     return 0;
 }
+
+static void jl_prune_tcache_list(jl_methlist_t *ml)
+{
+    if (!ml || ml == (void*)jl_nothing)
+        return;
+    while (ml != (void*)jl_nothing) {
+        if (!jl_is_leaf_type((jl_value_t*)ml->sig)) {
+            jl_value_t *ret = (jl_value_t*)ml->func;
+            if (jl_is_lambda_info(ret)) {
+                jl_array_t *code = ((jl_lambda_info_t*)ret)->code;
+                if (jl_is_array(code) && jl_array_len(code) > 500) {
+                    ml->func = (jl_lambda_info_t*)((jl_lambda_info_t*)ret)->rettype;
+                    jl_gc_wb(ml, ml->func);
+                }
+            }
+        }
+        ml = ml->next;
+    }
+}
+
+static void jl_prune_tcache_array(jl_array_t *a)
+{
+    if (!a || a == (void*)jl_nothing)
+        return;
+    size_t i, l = jl_array_len(a);
+    for(i = 0; i < l; i++) {
+        jl_prune_tcache_list((jl_methlist_t*)jl_cellref(a, i));
+    }
+}
+
+static void jl_prune_tcache(jl_methcache_t *cache)
+{
+    jl_prune_tcache_array(cache->arg1);
+    jl_prune_tcache_array(cache->targ);
+    jl_prune_tcache_list(cache->list);
+}
+
 
 static void jl_serialize_datatype(ios_t *s, jl_datatype_t *dt)
 {
@@ -798,29 +836,21 @@ static void jl_serialize_value_(ios_t *s, jl_value_t *v)
         jl_serialize_value(s, (jl_value_t*)li->sparam_vals);
         // don't save cached type info for code in the Core module, because
         // it might reference types in the old Base module.
-        if (li->module == jl_core_module) {
-            jl_serialize_value(s, jl_nothing);
-        }
-        else {
-            jl_array_t *tf = (jl_array_t*)li->tfunc;
-            // go through the t-func cache, replacing ASTs with just return
-            // types for abstract argument types. these ASTs are generally
-            // not needed (e.g. they don't get inlined).
-            if (tf && jl_typeis(tf, jl_array_any_type)) {
-                size_t i, l = jl_array_len(tf);
-                for(i=0; i < l; i += 3) {
-                    if (!jl_is_leaf_type(jl_cellref(tf,i))) {
-                        jl_value_t *ret = jl_cellref(tf,i+1);
-                        if (jl_is_lambda_info(ret)) {
-                            jl_array_t *code = ((jl_lambda_info_t*)ret)->code;
-                            if (jl_is_array(code) && jl_array_len(code) > 500)
-                                jl_cellset(tf, i+1, ((jl_lambda_info_t*)ret)->rettype);
-                        }
-                    }
-                }
+        jl_methcache_t *tf = li->tfunc;
+        if (tf && tf != (void*)jl_nothing) {
+            if (li->module == jl_core_module) {
+               tf->arg1 = (jl_array_t*)jl_nothing;
+               tf->targ = (jl_array_t*)jl_nothing;
+               tf->list = (jl_methlist_t*)jl_nothing;
             }
-            jl_serialize_value(s, (jl_value_t*)li->tfunc);
+            else {
+                // go through the t-func cache, replacing ASTs with just return
+                // types for abstract argument types. these ASTs are generally
+                // not needed (e.g. they don't get inlined).
+                jl_prune_tcache(tf);
+            }
         }
+        jl_serialize_value(s, (jl_value_t*)tf);
         jl_serialize_value(s, (jl_value_t*)li->name);
         jl_serialize_value(s, (jl_value_t*)li->specTypes);
         jl_serialize_value(s, (jl_value_t*)li->specializations);
@@ -1442,7 +1472,7 @@ static jl_value_t *jl_deserialize_value_(ios_t *s, jl_value_t *vtag, jl_value_t 
         jl_gc_wb(li, li->sparam_syms);
         li->sparam_vals = (jl_svec_t*)jl_deserialize_value(s, (jl_value_t**)&li->sparam_vals);
         jl_gc_wb(li, li->sparam_vals);
-        li->tfunc = jl_deserialize_value(s, (jl_value_t**)&li->tfunc);
+        li->tfunc = (jl_methcache_t*)jl_deserialize_value(s, (jl_value_t**)&li->tfunc);
         jl_gc_wb(li, li->tfunc);
         li->name = (jl_sym_t*)jl_deserialize_value(s, NULL);
         jl_gc_wb(li, li->name);

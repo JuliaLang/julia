@@ -188,7 +188,6 @@ static int8_t jl_cachearg_offset(jl_methtable_t *mt)
 */
 static jl_lambda_info_t *jl_method_cache_assoc_exact_by_type_(jl_methlist_t *ml, jl_tupletype_t *types, int8_t subtype, int8_t offs)
 {
-mt_assoc_bt_lkup:
     if (subtype)
         while (ml != (void*)jl_nothing) {
             if (cache_match_by_type(jl_svec_data(types->parameters),
@@ -208,7 +207,9 @@ mt_assoc_bt_lkup:
         }
     else
         while (ml != (void*)jl_nothing) {
-            if (jl_types_equal((jl_value_t*)types, ml->sig)) {
+            //if (jl_types_equal((jl_value_t*)types, (jl_value_t*)ml->sig)) {
+            if (jl_subtype((jl_value_t*)types, (jl_value_t*)ml->sig, 0) &&
+                jl_subtype((jl_value_t*)ml->sig, (jl_value_t*)types, 0)) {
                 return ml->func;
             }
             ml = ml->next;
@@ -450,8 +451,8 @@ static void jl_method_cache_insert_(jl_methcache_t *cache, jl_methlist_t *newrec
     jl_gc_wb(cache, newrec);
 }
 
-void jl_method_cache_insert(jl_methcache_t *cache, jl_tupletype_t *type, jl_svec_t *guardsigs,
-                            jl_lambda_info_t *method, int8_t offs)
+jl_methlist_t *jl_method_cache_insert(jl_methcache_t *cache, jl_tupletype_t *type, jl_svec_t *guardsigs,
+                                      jl_lambda_info_t *method, int8_t offs)
 {
     jl_methlist_t *newrec = (jl_methlist_t*)jl_gc_allocobj(sizeof(jl_methlist_t));
     jl_set_typeof(newrec, jl_method_type);
@@ -464,9 +465,11 @@ void jl_method_cache_insert(jl_methcache_t *cache, jl_tupletype_t *type, jl_svec
     JL_GC_PUSH1(&newrec);
     jl_method_cache_insert_(cache, newrec, offs);
     JL_GC_POP();
+    return newrec;
 }
 
-static jl_methcache_t *jl_method_convert_list_to_cache(jl_methlist_t *ml, int8_t offs) {
+static jl_methcache_t *jl_method_convert_list_to_cache(jl_methlist_t *ml, int8_t offs)
+{
     jl_methcache_t *cache = jl_new_method_cache();
     JL_GC_PUSH1(&cache);
     while (ml != (void*)jl_nothing) {
@@ -479,6 +482,21 @@ static jl_methcache_t *jl_method_convert_list_to_cache(jl_methlist_t *ml, int8_t
     return cache;
 }
 
+JL_DLLEXPORT jl_methlist_t *jl_typesig_cache_insert(jl_methcache_t *cache, jl_tupletype_t *type,
+                                                    jl_value_t *value, int8_t offs)
+{
+    assert(jl_typeof(cache) == (jl_value_t*)jl_methcache_type);
+    return jl_method_cache_insert(cache, type, jl_emptysvec, (jl_lambda_info_t*)value, offs);
+}
+
+JL_DLLEXPORT jl_value_t *jl_typesig_cache_lookup(jl_methcache_t *cache, jl_tupletype_t *type, int8_t offs)
+{
+    assert(jl_typeof(cache) == (jl_value_t*)jl_methcache_type);
+    jl_value_t *sf = (jl_value_t*)jl_method_cache_assoc_exact_by_type(cache, type, 0, offs);
+    if (!sf)
+        return jl_nothing;
+    return sf;
+}
 
 /*
   run type inference on lambda "li" in-place, for given argument types.
@@ -978,7 +996,8 @@ JL_DLLEXPORT jl_lambda_info_t *jl_instantiate_staged(jl_lambda_info_t *generator
     jl_expr_t *ex = NULL;
     jl_value_t *linenum = NULL;
     jl_svec_t *sparam_vals = env;
-    JL_GC_PUSH3(&ex, &linenum, &sparam_vals);
+    jl_lambda_info_t *func = NULL;
+    JL_GC_PUSH4(&ex, &linenum, &sparam_vals, &func);
 
     assert(generator->sparam_vals == jl_emptysvec);
     assert(jl_svec_len(generator->sparam_syms) == jl_svec_len(sparam_vals));
@@ -1021,10 +1040,14 @@ JL_DLLEXPORT jl_lambda_info_t *jl_instantiate_staged(jl_lambda_info_t *generator
         ex = newast;
     }
     // need to eval macros in the right module, but not give a warning for the `eval` call unless that results in a call to `eval`
-    jl_lambda_info_t *func = (jl_lambda_info_t*)jl_toplevel_eval_in_warn(generator->module, (jl_value_t*)ex, 1);
+    func = (jl_lambda_info_t*)jl_toplevel_eval_in_warn(generator->module, (jl_value_t*)ex, 1);
     func->name = generator->name;
     if (generator->isva)
         func->isva = 1;
+    // TODO: share tfunc cache with generator
+    //func->tfunc = generator->tfunc;
+    func->tfunc = jl_new_method_cache();
+    jl_gc_wb(func, func->tfunc);
     JL_GC_POP();
     return func;
 }
@@ -2116,6 +2139,12 @@ void jl_add_method_to_table(jl_methtable_t *mt, jl_tupletype_t *types, jl_lambda
     meth->name = n;
     if (meth->isstaged && !meth->specTypes)
         meth->specTypes = jl_anytuple_type;
+    if (meth->tfunc == (void*)jl_nothing) {
+        // all method definitions will eventually require a tfunc,
+        // so best to make it now that we know this isn't a LambdaInfo specialization
+        meth->tfunc = jl_new_method_cache();
+        jl_gc_wb(meth, meth->tfunc);
+    }
     jl_method_table_insert(mt, types, meth, tvars);
     JL_GC_POP();
 }

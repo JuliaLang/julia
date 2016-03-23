@@ -184,7 +184,7 @@ typedef struct _jl_lambda_info_t {
     // sparams is a vector of values indexed by symbols
     jl_svec_t *sparam_syms;
     jl_svec_t *sparam_vals;
-    jl_value_t *tfunc;
+    struct _jl_methcache_t *tfunc;
     jl_sym_t *name;  // for error reporting
     jl_array_t *roots;  // pointers in generated code
     jl_tupletype_t *specTypes;  // argument types this will be compiled for
@@ -343,7 +343,7 @@ typedef struct _jl_module_t {
 typedef struct _jl_methlist_t {
     JL_DATA_TYPE
     struct _jl_methlist_t *next;
-    jl_lambda_info_t *func;
+    jl_lambda_info_t *func; // TODO: actually could be any jl_value_t*
     jl_tupletype_t *sig;
     jl_svec_t *tvars;
     jl_svec_t *guardsigs;

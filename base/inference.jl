@@ -56,7 +56,7 @@ type InferenceState
     inworkq::Bool
     optimize::Bool
     inferred::Bool
-    tfunc_idx::Int
+    tfunc_bp::Union{Method, Void}
 
     function InferenceState(linfo::LambdaInfo, atypes::ANY, sparams::SimpleVector, optimize::Bool)
         @assert isa(linfo.code,Array{Any,1})
@@ -138,7 +138,7 @@ type InferenceState
             gensym_uses, gensym_init,
             ObjectIdDict(), #Dict{InferenceState, Vector{LineNum}}(),
             Vector{Tuple{InferenceState, Vector{LineNum}}}(),
-            false, false, false, optimize, false, -1)
+            false, false, false, optimize, false, nothing)
         push!(active, frame)
         nactive[] += 1
         return frame
@@ -1526,45 +1526,38 @@ function typeinf_edge(linfo::LambdaInfo, atypes::ANY, sparams::SimpleVector, nee
     if linfo.module === Core && isempty(sparams) && isempty(linfo.sparam_vals)
         atypes = Tuple
     end
-    local tfunc_idx = -1
-    local frame
+    local frame = nothing
+    offs = 0
     # check cached t-functions
     # linfo.def is the original unspecialized version of a method.
     # we aggregate all saved type inference data there.
     tf = linfo.def.tfunc
     if cached && !is(tf, nothing)
-        tfarr = tf::Array{Any,1}
-        for i = 1:3:length(tfarr)
-            if typeseq(tfarr[i], atypes)
-                code = tfarr[i + 1]
-                if isa(code, InferenceState)
-                    # inference on this signature is in progress
-                    frame = code
-                    if linfo.inInference
-                        # record the LambdaInfo where this result should be cached when it is finished
-                        @assert frame.destination === frame.linfo || frame.destination === linfo
-                        frame.destination = linfo
-                    end
-                    tfunc_idx = i
-                    break
-                elseif isa(code, Type)
-                    # sometimes just a return type is stored here. if a full AST
-                    # is not needed, we can return it.
-                    if !needtree
-                        return (nothing, code, true)
-                    end
-                elseif isa(code,LambdaInfo)
-                    @assert code.inferred
-                    return (code, code.rettype, true)
-                else
-                    # otherwise this is an InferenceState from a different bootstrap stage's
-                    # copy of the inference code; ignore it.
-                end
+        code = ccall(:jl_typesig_cache_lookup, Any, (Any, Any, Int8), tf, atypes, offs)
+        if isa(code, InferenceState)
+            # inference on this signature is in progress
+            frame = code
+            if linfo.inInference
+                # record the LambdaInfo where this result should be cached when it is finished
+                @assert frame.destination === frame.linfo || frame.destination === linfo
+                frame.destination = linfo
             end
+        elseif isa(code, Type)
+            # sometimes just a return type is stored here. if a full AST
+            # is not needed, we can return it.
+            if !needtree
+                return (nothing, code, true)
+            end
+        elseif isa(code,LambdaInfo)
+            @assert code.inferred
+            return (code, code.rettype, true)
+        else
+            # otherwise this is an InferenceState from a different bootstrap stage's
+            # copy of the inference code; ignore it.
         end
     end
 
-    if tfunc_idx == -1
+    if frame === nothing
         if caller === nothing && needtree && in_typeinf_loop && !linfo.inInference
             # if the caller needed the ast, but we are already in the typeinf loop
             # then just return early -- we can't fulfill this request
@@ -1597,20 +1590,8 @@ function typeinf_edge(linfo::LambdaInfo, atypes::ANY, sparams::SimpleVector, nee
         frame = InferenceState(linfo, atypes, sparams, optimize)
 
         if cached
-            #println(linfo)
-            #println(atypes)
-
-            if is(linfo.def.tfunc, nothing)
-                linfo.def.tfunc = Any[]
-            end
-            tfarr = linfo.def.tfunc::Array{Any,1}
-            l = length(tfarr)
-            tfunc_idx = l + 1
-            resize!(tfarr, l + 3)
-            tfarr[tfunc_idx] = atypes
-            tfarr[tfunc_idx + 1] = frame
-            tfarr[tfunc_idx + 2] = false
-            frame.tfunc_idx = tfunc_idx
+            tfunc_bp = ccall(:jl_typesig_cache_insert, Ref{Method}, (Any, Any, Any, Int8), tf, atypes, frame, offs)
+            frame.tfunc_bp = tfunc_bp
         end
     end
 
@@ -1645,7 +1626,7 @@ function typeinf_uncached(linfo::LambdaInfo, atypes::ANY, sparams::SimpleVector,
     return typeinf_edge(linfo, atypes, sparams, true, optimize, false, nothing)
 end
 function typeinf_ext(linfo::LambdaInfo, toplevel::Bool)
-    (code, _t, _) = typeinf_edge(linfo, linfo.specTypes, svec(), true, true, true, nothing)
+    (code, _t, _) = typeinf_edge(linfo, linfo.specTypes, svec(), true, true, !toplevel, nothing)
     if code.inferred
         linfo.inferred = true
         linfo.inInference = false
@@ -2009,9 +1990,8 @@ function finish(me::InferenceState)
         out.rettype = me.linfo.rettype
         out.pure = me.linfo.pure
     end
-    if me.tfunc_idx != -1
-        me.linfo.def.tfunc[me.tfunc_idx + 1] = me.linfo
-        me.linfo.def.tfunc[me.tfunc_idx + 2] = false
+    if me.tfunc_bp !== nothing
+        me.tfunc_bp.func = me.linfo
     end
 
     # update all of the callers by traversing the backedges
