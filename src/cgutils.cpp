@@ -4,482 +4,89 @@
 
 // utility procedures used in code generation
 
-template<class T> // for GlobalObject's
-static T *addComdat(T *G)
-{
-#if defined(_OS_WINDOWS_)
-    if (imaging_mode && !G->isDeclaration()) {
-#ifdef LLVM35
-        // Add comdat information to make MSVC link.exe happy
-        Comdat *jl_Comdat = G->getParent()->getOrInsertComdat(G->getName());
-        jl_Comdat->setSelectionKind(Comdat::NoDuplicates);
-        G->setComdat(jl_Comdat);
-        // add __declspec(dllexport) to everything marked for export
-        if (G->getLinkage() == GlobalValue::ExternalLinkage)
-            G->setDLLStorageClass(GlobalValue::DLLExportStorageClass);
-#endif
-    }
-#endif
-    return G;
-}
-
 static Instruction *tbaa_decorate(MDNode *md, Instruction *load_or_store)
 {
     load_or_store->setMetadata( llvm::LLVMContext::MD_tbaa, md );
     return load_or_store;
 }
 
-// Fixing up references to other modules for MCJIT
-std::set<llvm::GlobalValue*> pending_globals;
 static GlobalVariable *prepare_global(GlobalVariable *G)
 {
-    pending_globals.insert(G);
-    return G;
+    Module *M = jl_builderModule;
+    GlobalValue *local = M->getNamedValue(G->getName());
+    if (!local) {
+        local = global_proto(G, M);
+    }
+    return cast<GlobalVariable>(local);
 }
 
 static llvm::Value *prepare_call(llvm::Value *Callee)
 {
-    llvm::Function *F = dyn_cast<Function>(Callee);
-    if (!F)
-        return Callee;
-    pending_globals.insert(F);
+    if (Function *F = dyn_cast<Function>(Callee)) {
+        Module *M = jl_builderModule;
+        GlobalValue *local = M->getNamedValue(Callee->getName());
+        if (!local) {
+            local = function_proto(F, M);
+        }
+        return local;
+    }
     return Callee;
 }
 
-#if defined(USE_MCJIT) || defined(USE_ORCJIT)
-static GlobalValue *realize_pending_global(Module *M, GlobalValue *G, std::map<llvm::Module*,llvm::GlobalValue*> &FixedGlobals)
-{
-    if (M == G->getParent() && M != builtins_module) { // can happen during bootstrap
-        //std::cout << "Skipping " << std::string(G->getName()) << " due to parentage" << std::endl;
-        return nullptr;
-    }
-    // If we come across a function that is still being constructed,
-    // this use needs to remain pending
-    if (!M || M == builtins_module) {
-        pending_globals.insert(G);
-        //std::cout << "Skipping " << std::string(G->getName()) << " due to construction" << std::endl;
-        return nullptr;
-    }
-    if (!FixedGlobals.count(M)) {
-        if (GlobalVariable *GV = dyn_cast<GlobalVariable>(G)) {
-            GlobalVariable *NewGV = M->getGlobalVariable(GV->getName());
-            if (!NewGV) {
-                NewGV = new GlobalVariable(*M, GV->getType()->getElementType(),
-                                        GV->isConstant(), GlobalVariable::ExternalLinkage,
-                                        NULL, GV->getName(), NULL, GV->getThreadLocalMode(),
-                                        GV->getType()->getAddressSpace());
-                NewGV->setUnnamedAddr(GV->hasUnnamedAddr());
-                // Move over initializer
-                if (GV->hasInitializer()) {
-                    NewGV->setInitializer(GV->getInitializer());
-                    GV->setInitializer(nullptr);
-                }
-            }
-            FixedGlobals[M] = NewGV;
-        }
-        else {
-            Function *F = cast<Function>(G);
-            //std::cout << "Realizing " << std::string(F->getName()) << std::endl;
-            //if (!F->getParent()) {
-                //std::cout << "Skipping" << std::endl;
-            //    return nullptr;
-            //}
-            Function *NewF = nullptr;
-            if (!F->isDeclaration() && F->getParent() == builtins_module) {
-                // It's a definition. Actually move the function and create a
-                // declaration in the original module
-                NewF = F;
-                F->removeFromParent();
-                M->getFunctionList().push_back(F);
-                Function::Create(F->getFunctionType(),
-                    Function::ExternalLinkage,
-                    F->getName(),
-                    active_module);
-            }
-            else {
-                assert(F);
-                NewF = M->getFunction(F->getName());
-                if (!NewF) {
-                    NewF = Function::Create(F->getFunctionType(),
-                                Function::ExternalLinkage,
-                                F->getName(),
-                                M);
-                }
-            }
-            FixedGlobals[M] = NewF;
-        }
-    }
-    return FixedGlobals[M];
-}
-
-struct ExprChain {
-    ConstantExpr *Expr;
-    unsigned OpNo;
-    struct ExprChain *Next;
-};
-
-static void handleUse(Use &Use1, llvm::GlobalValue *G,
-                      std::map<llvm::Module*, llvm::GlobalValue*> &FixedGlobals,
-                      struct ExprChain *Chain, struct ExprChain *ChainEnd)
-{
-    Instruction *User = dyn_cast<Instruction>(Use1.getUser());
-    GlobalValue *GVUser = dyn_cast<GlobalValue>(Use1.getUser());
-    if (!User && !GVUser) {
-        ConstantExpr *Expr = cast<ConstantExpr>(Use1.getUser());
-        Value::use_iterator UI2 = Expr->use_begin(), E2 = Expr->use_end();
-        for (; UI2 != E2;) {
-            Use &Use2 = *UI2;
-            ++UI2;
-            struct ExprChain NextChain;
-            NextChain.Expr = Expr;
-            NextChain.OpNo = Use1.getOperandNo();
-            NextChain.Next = nullptr;
-            if (ChainEnd)
-               ChainEnd->Next = &NextChain;
-            handleUse(Use2,G,FixedGlobals,Chain ? Chain : &NextChain,&NextChain);
-        }
-        return;
-    }
-    llvm::Module *M = nullptr;
-    if (User) {
-        Function *UsedInHere = User->getParent()->getParent();
-        assert(UsedInHere);
-        M = UsedInHere->getParent();
-    } else {
-        assert(GVUser);
-        M = GVUser->getParent();
-    }
-    llvm::Constant *Replacement = realize_pending_global(M,G,FixedGlobals);
-    if (!Replacement)
-        return;
-    while (Chain) {
-        Replacement = Chain->Expr->getWithOperandReplaced(Chain->OpNo,Replacement);
-        Chain->Expr = cast<ConstantExpr>(Replacement);
-        Chain = Chain->Next;
-    }
-    Use1.set(Replacement);
-}
-
-// RAUW, but only for those users which live in a module, and create a module
-// specific copy
-static void realize_pending_globals()
-{
-    std::set<llvm::GlobalValue *> local_pending_globals;
-    std::swap(local_pending_globals,pending_globals);
-    std::map<llvm::Module*,llvm::GlobalValue*> FixedGlobals;
-    for (auto *G : local_pending_globals) {
-        Value::use_iterator UI = G->use_begin(), E = G->use_end();
-        for (; UI != E;)
-            handleUse(*(UI++),G,FixedGlobals,nullptr,nullptr);
-        FixedGlobals.clear();
-    }
-}
-
-static void realize_cycle(jl_cyclectx_t *cyclectx)
-{
-    // These need to be resolved together
-    for (auto *F : cyclectx->functions) {
-        F->removeFromParent();
-        active_module->getFunctionList().push_back(F);
-    }
-    for (auto *CU : cyclectx->CUs) {
-        NamedMDNode *NMD = active_module->getOrInsertNamedMetadata("llvm.dbg.cu");
-        NMD->addOperand(CU);
-    }
-}
-#endif
-
-template<typename T>
-#ifdef LLVM35
-static inline void add_named_global(GlobalObject *gv, T *_addr, bool dllimport = true)
-#else
-static inline void add_named_global(GlobalValue *gv, T *_addr, bool dllimport = true)
-#endif
-{
-    // cast through integer to avoid c++ pedantic warning about casting between
-    // data and code pointers
-    void *addr = (void*)(uintptr_t)_addr;
-#ifdef LLVM34
-    StringRef name = gv->getName();
-#ifdef _OS_WINDOWS_
-    std::string imp_name;
-#endif
-#endif
-
-#ifdef _OS_WINDOWS_
-    // setting JL_DLLEXPORT correctly only matters when building a binary
-    if (dllimport && imaging_mode) {
-        assert(gv->getLinkage() == GlobalValue::ExternalLinkage);
-#ifdef LLVM35
-        // add the __declspec(dllimport) attribute
-        gv->setDLLStorageClass(GlobalValue::DLLImportStorageClass);
-        // this will cause llvm to rename it, so we do the same
-        imp_name = Twine("__imp_", name).str();
-        name = StringRef(imp_name);
-#else
-        gv->setLinkage(GlobalValue::DLLImportLinkage);
-#endif
-#if defined(_P64) || defined(LLVM35)
-        // __imp_ variables are indirection pointers, so use malloc to simulate that
-        void **imp_addr = (void**)malloc(sizeof(void**));
-        *imp_addr = addr;
-        addr = (void*)imp_addr;
-#endif
-    }
-#endif // _OS_WINDOWS_
-
-#ifdef USE_ORCJIT
-    addComdat(gv);
-    jl_ExecutionEngine->addGlobalMapping(name, addr);
-#elif defined(USE_MCJIT)
-    addComdat(gv);
-    sys::DynamicLibrary::AddSymbol(name, addr);
-#else // USE_MCJIT
-    jl_ExecutionEngine->addGlobalMapping(gv, addr);
-#endif // USE_MCJIT
-}
-
 // --- string constants ---
-static std::map<const std::string, GlobalVariable*> stringConstants;
-
-#if defined(USE_MCJIT) || defined(USE_ORCJIT)
-static GlobalVariable *global_proto(GlobalVariable *G)
+static StringMap<GlobalVariable*> stringConstants;
+static Value *stringConstPtr(const std::string &txt)
 {
-    GlobalVariable *proto = new GlobalVariable(G->getType()->getElementType(),
-            G->isConstant(), GlobalVariable::ExternalLinkage,
-            NULL, G->getName(), G->getThreadLocalMode());
-    return proto;
-}
+    StringRef ctxt(txt.c_str(), strlen(txt.c_str()) + 1);
+#ifdef LLVM36
+    StringMap<GlobalVariable*>::iterator pooledval =
+        stringConstants.insert(std::pair<StringRef, GlobalVariable*>(ctxt, NULL)).first;
 #else
-static GlobalVariable *global_proto(GlobalVariable *G)
-{
-    return G;
-}
+    StringMap<GlobalVariable*>::MapEntryTy *pooledval =
+        &stringConstants.GetOrCreateValue(ctxt, (GlobalVariable*)NULL);
 #endif
+    StringRef pooledtxt = pooledval->getKey();
+    if (imaging_mode) {
+        if (pooledval->second == NULL) {
+            static int strno = 0;
+            std::stringstream ssno;
+            ssno << "_j_str" << strno++;
+            GlobalVariable *gv = new GlobalVariable(*shadow_output,
+                                    ArrayType::get(T_int8, pooledtxt.size()),
+                                    true,
+                                    GlobalVariable::PrivateLinkage,
+                                    ConstantDataArray::get(getGlobalContext(),
+                                                           ArrayRef<unsigned char>(
+                                                           (const unsigned char*)pooledtxt.data(),
+                                                           pooledtxt.size())),
+                                    ssno.str());
+            gv->setUnnamedAddr(true);
+            pooledval->second = gv;
+#if defined(USE_MCJIT) || defined(USE_ORCJIT)
+            jl_ExecutionEngine->addGlobalMapping(gv->getName(), (uintptr_t)pooledtxt.data());
+#else
+            jl_ExecutionEngine->addGlobalMapping(gv, (void*)pooledtxt.data());
+#endif
+        }
 
-static GlobalVariable *stringConst(const std::string &txt)
-{
-    GlobalVariable *gv = stringConstants[txt];
-    static int strno = 0;
-    // in inference, we can not share string constants between
-    // modules as there might be multiple compiles on the stack
-    // with calls in between them.
-    if (gv == NULL) {
-        std::stringstream ssno;
-        std::string vname;
-        ssno << strno;
-        vname += "_j_str";
-        vname += ssno.str();
-        gv = new GlobalVariable(*active_module,
-                                ArrayType::get(T_int8, txt.length()+1),
-                                true,
-                                imaging_mode ? GlobalVariable::PrivateLinkage : GlobalVariable::ExternalLinkage,
-                                ConstantDataArray::get(getGlobalContext(),
-                                                       ArrayRef<unsigned char>(
-                                                       (const unsigned char*)txt.c_str(),
-                                                       txt.length()+1)),
-                                vname);
-        gv->setUnnamedAddr(true);
-        gv = imaging_mode ? gv : prepare_global(global_proto(gv));
-        stringConstants[txt] = gv;
-        strno++;
+        GlobalVariable *v = prepare_global(pooledval->second);
+        Value *zero = ConstantInt::get(Type::getInt32Ty(jl_LLVMContext), 0);
+        Value *Args[] = { zero, zero };
+#ifdef LLVM37
+        return builder.CreateInBoundsGEP(v->getValueType(), v, Args);
+#else
+        return builder.CreateInBoundsGEP(v, Args);
+#endif
     }
     else {
-        prepare_global(gv);
+        Value *v = ConstantExpr::getIntToPtr(
+                ConstantInt::get(T_size, (uintptr_t)pooledtxt.data()),
+                T_pint8);
+        return v;
     }
-    return gv;
-
 }
 
-// --- Shadow module handling ---
-
-typedef struct {Value *gv; int32_t index;} jl_value_llvm; // uses 1-based indexing
-static std::map<void*, jl_value_llvm> jl_value_to_llvm;
-JL_DLLEXPORT std::map<Value *, void*> jl_llvm_to_jl_value;
-
-// In imaging mode, cache a fast mapping of Function * to code address
-// because this is queried in the hot path
-static std::map<Function *, uint64_t> emitted_function_symtab;
-
-#if defined(USE_MCJIT) || defined(USE_ORCJIT)
-static Function *function_proto(Function *F)
-{
-    Function *NewF = Function::Create(F->getFunctionType(),
-                                      Function::ExternalLinkage,
-                                      F->getName());
-    NewF->setAttributes(AttributeSet());
-
-    // FunctionType does not include any attributes. Copy them over manually
-    // as codegen may make decisions based on the presence of certain attributes
-    NewF->copyAttributesFrom(F);
-
-#ifdef LLVM37
-    // Declarations are not allowed to have personality routines, but
-    // copyAttributesFrom sets them anyway, so clear them again manually
-    NewF->setPersonalityFn(nullptr);
-#endif
-
-    return NewF;
-}
-
-class FunctionMover : public ValueMaterializer
-{
-public:
-    FunctionMover(llvm::Module *dest,llvm::Module *src) :
-        ValueMaterializer(), VMap(), destModule(dest), srcModule(src),
-        LazyFunctions(0)
-    {
-    }
-    ValueToValueMapTy VMap;
-    llvm::Module *destModule;
-    llvm::Module *srcModule;
-    std::vector<Function *> LazyFunctions;
-
-    Function *CloneFunctionProto(Function *F)
-    {
-        assert(!F->isDeclaration());
-        Function *NewF = Function::Create(F->getFunctionType(),
-                                          Function::ExternalLinkage,
-                                          F->getName(),
-                                          destModule);
-        LazyFunctions.push_back(F);
-        VMap[F] = NewF;
-        return NewF;
-    }
-
-    void CloneFunctionBody(Function *F)
-    {
-        Function *NewF = (Function*)(Value*)VMap[F];
-        assert(NewF != NULL);
-
-        Function::arg_iterator DestI = NewF->arg_begin();
-        for (Function::const_arg_iterator I = F->arg_begin(), E = F->arg_end(); I != E; ++I) {
-            DestI->setName(I->getName());    // Copy the name over...
-            VMap[&*I] = &*(DestI++);        // Add mapping to VMap
-        }
-
-    #ifdef LLVM36
-        // Clone debug info - Not yet public API
-        // llvm::CloneDebugInfoMetadata(NewF,F,VMap);
-    #endif
-
-        SmallVector<ReturnInst*, 8> Returns;
-        llvm::CloneFunctionInto(NewF,F,VMap,true,Returns,"",NULL,NULL,this);
-    }
-
-    Function *CloneFunction(Function *F)
-    {
-        Function *NewF = (llvm::Function*)MapValue(F,VMap,RF_None,NULL,this);
-        ResolveLazyFunctions();
-        return NewF;
-    }
-
-    void ResolveLazyFunctions()
-    {
-        while (!LazyFunctions.empty()) {
-            Function *F = LazyFunctions.back();
-            LazyFunctions.pop_back();
-
-            CloneFunctionBody(F);
-        }
-    }
-
-    Value *InjectFunctionProto(Function *F)
-    {
-        Function *NewF = destModule->getFunction(F->getName());
-        if (!NewF) {
-            NewF = function_proto(F);
-            destModule->getFunctionList().push_back(NewF);
-        }
-        return NewF;
-    }
-
-#ifdef LLVM38
-    virtual Value *materializeDeclFor(Value *V)
-#else
-    virtual Value *materializeValueFor (Value *V)
-#endif
-    {
-        Function *F = dyn_cast<Function>(V);
-        if (F) {
-            if (F->isIntrinsic()) {
-                return destModule->getOrInsertFunction(F->getName(),F->getFunctionType());
-            }
-            if (F->isDeclaration() || F->getParent() != destModule) {
-                if (F->getName().empty())
-                    return CloneFunctionProto(F);
-                Function *shadow = srcModule->getFunction(F->getName());
-                if (shadow != NULL && !shadow->isDeclaration()) {
-                    // Not truly external
-                    // Check whether we already emitted it once
-                    if (emitted_function_symtab.find(shadow) != emitted_function_symtab.end())
-                        return InjectFunctionProto(F);
-
-                    Function *oldF = destModule->getFunction(F->getName());
-                    if (oldF)
-                        return oldF;
-
-#ifndef USE_ORCJIT
-                    // Also check if this function is pending in any other module
-                    if (jl_ExecutionEngine->FindFunctionNamed(F->getName().data()))
-                        return InjectFunctionProto(F);
-#endif
-
-                    return CloneFunctionProto(shadow);
-                }
-                else if (!F->isDeclaration()) {
-                    return CloneFunctionProto(F);
-                }
-            }
-            // Still a declaration and still in a different module
-            if (F->isDeclaration() && F->getParent() != destModule) {
-                // Create forward declaration in current module
-                return InjectFunctionProto(F);
-            }
-        }
-        else if (isa<GlobalVariable>(V)) {
-            GlobalVariable *GV = cast<GlobalVariable>(V);
-            assert(GV != NULL);
-            GlobalVariable *oldGV = destModule->getGlobalVariable(GV->getName());
-            if (oldGV != NULL)
-                return oldGV;
-            GlobalVariable *newGV = new GlobalVariable(*destModule,
-                GV->getType()->getElementType(),
-                GV->isConstant(),
-                GlobalVariable::ExternalLinkage,
-                NULL,
-                GV->getName());
-            newGV->copyAttributesFrom(GV);
-            if (GV->isDeclaration())
-                return newGV;
-            if (!GV->getName().empty()) {
-                uint64_t addr = jl_ExecutionEngine->getGlobalValueAddress(GV->getName());
-                if (addr != 0) {
-                    newGV->setExternallyInitialized(true);
-                    return newGV;
-                }
-            }
-            std::map<Value*, void *>::iterator it;
-            it = jl_llvm_to_jl_value.find(GV);
-            if (it != jl_llvm_to_jl_value.end()) {
-                newGV->setInitializer(Constant::getIntegerValue(GV->getType()->getElementType(),APInt(sizeof(void*)*8,(intptr_t)it->second)));
-                newGV->setConstant(true);
-            }
-            else if (GV->hasInitializer()) {
-                Value *C = MapValue(GV->getInitializer(),VMap,RF_None,NULL,this);
-                newGV->setInitializer(cast<Constant>(C));
-            }
-            return newGV;
-        }
-        return NULL;
-    };
-};
-#else
-static Function *function_proto(Function *F)
-{
-    return F;
-}
-#endif
+// --- Debug info ---
 
 #ifdef LLVM37
 static DIType *julia_type_to_di(jl_value_t *jt, DIBuilder *dbuilder, bool isboxed = false)
@@ -569,218 +176,6 @@ static Value *literal_static_pointer_val(const void *p, Type *t)
 #endif
 }
 
-static std::vector<Constant*> jl_sysimg_gvars;
-static std::vector<Constant*> jl_sysimg_fvars;
-
-extern "C" int32_t jl_get_llvm_gv(jl_value_t *p)
-{
-    // map a jl_value_t memory location to a GlobalVariable
-    std::map<void*, jl_value_llvm>::iterator it;
-    it = jl_value_to_llvm.find(p);
-    if (it == jl_value_to_llvm.end())
-        return 0;
-    return it->second.index;
-}
-
-#ifdef HAVE_CPUID
-extern "C" {
-    extern void jl_cpuid(int32_t CPUInfo[4], int32_t InfoType);
-}
-#endif
-
-static void jl_gen_llvm_globaldata(llvm::Module *mod, ValueToValueMapTy &VMap,
-                                   const char *sysimg_data, size_t sysimg_len)
-{
-    ArrayType *gvars_type = ArrayType::get(T_psize, jl_sysimg_gvars.size());
-    addComdat(new GlobalVariable(*mod,
-                                 gvars_type,
-                                 true,
-                                 GlobalVariable::ExternalLinkage,
-                                 MapValue(ConstantArray::get(gvars_type, ArrayRef<Constant*>(jl_sysimg_gvars)), VMap),
-                                 "jl_sysimg_gvars"));
-    ArrayType *fvars_type = ArrayType::get(T_pvoidfunc, jl_sysimg_fvars.size());
-    addComdat(new GlobalVariable(*mod,
-                                 fvars_type,
-                                 true,
-                                 GlobalVariable::ExternalLinkage,
-                                 MapValue(ConstantArray::get(fvars_type, ArrayRef<Constant*>(jl_sysimg_fvars)), VMap),
-                                 "jl_sysimg_fvars"));
-    addComdat(new GlobalVariable(*mod,
-                                 T_size,
-                                 true,
-                                 GlobalVariable::ExternalLinkage,
-                                 ConstantInt::get(T_size,globalUnique+1),
-                                 "jl_globalUnique"));
-#ifdef JULIA_ENABLE_THREADING
-    addComdat(new GlobalVariable(*mod,
-                                 T_size,
-                                 true,
-                                 GlobalVariable::ExternalLinkage,
-                                 ConstantInt::get(T_size, jltls_states_func_idx),
-                                 "jl_ptls_states_getter_idx"));
-#endif
-
-    Constant *feature_string = ConstantDataArray::getString(jl_LLVMContext, jl_options.cpu_target);
-    addComdat(new GlobalVariable(*mod,
-                                 feature_string->getType(),
-                                 true,
-                                 GlobalVariable::ExternalLinkage,
-                                 feature_string,
-                                 "jl_sysimg_cpu_target"));
-
-#ifdef HAVE_CPUID
-    // For native also store the cpuid
-    if (strcmp(jl_options.cpu_target,"native") == 0) {
-        uint32_t info[4];
-
-        jl_cpuid((int32_t*)info, 1);
-        addComdat(new GlobalVariable(*mod,
-                                     T_int64,
-                                     true,
-                                     GlobalVariable::ExternalLinkage,
-                                     ConstantInt::get(T_int64,((uint64_t)info[2])|(((uint64_t)info[3])<<32)),
-                                     "jl_sysimg_cpu_cpuid"));
-    }
-#endif
-
-    if (sysimg_data) {
-        Constant *data = ConstantDataArray::get(jl_LLVMContext, ArrayRef<uint8_t>((const unsigned char*)sysimg_data, sysimg_len));
-        addComdat(new GlobalVariable(*mod, data->getType(), true,
-                                     GlobalVariable::ExternalLinkage,
-                                     data, "jl_system_image_data"));
-        Constant *len = ConstantInt::get(T_size, sysimg_len);
-        addComdat(new GlobalVariable(*mod, len->getType(), true,
-                                     GlobalVariable::ExternalLinkage,
-                                     len, "jl_system_image_size"));
-    }
-}
-
-static void jl_dump_shadow(char *fname, int jit_model, const char *sysimg_data, size_t sysimg_len,
-                           bool dump_as_bc)
-{
-#if defined(USE_MCJIT) || defined(USE_ORCJIT)
-    realize_pending_globals();
-#endif
-#ifdef JL_DEBUG_BUILD
-    verifyModule(*shadow_module);
-#endif
-
-#ifdef LLVM36
-    std::error_code err;
-    StringRef fname_ref = StringRef(fname);
-    raw_fd_ostream OS(fname_ref, err, sys::fs::F_None);
-#elif defined(LLVM35)
-    std::string err;
-    raw_fd_ostream OS(fname, err, sys::fs::F_None);
-#else
-    std::string err;
-    raw_fd_ostream OS(fname, err);
-#endif
-#ifdef LLVM37 // 3.7 simplified formatted output; just use the raw stream alone
-    raw_fd_ostream& FOS(OS);
-#else
-    formatted_raw_ostream FOS(OS);
-#endif
-
-    // We don't want to use MCJIT's target machine because
-    // it uses the large code model and we may potentially
-    // want less optimizations there.
-    Triple TheTriple = Triple(jl_TargetMachine->getTargetTriple());
-#if defined(_OS_WINDOWS_) && defined(FORCE_ELF)
-#ifdef LLVM35
-    TheTriple.setObjectFormat(Triple::COFF);
-#else
-    TheTriple.setEnvironment(Triple::UnknownEnvironment);
-#endif
-#elif defined(_OS_DARWIN_) && defined(FORCE_ELF)
-#ifdef LLVM35
-    TheTriple.setObjectFormat(Triple::MachO);
-#else
-    TheTriple.setEnvironment(Triple::MachO);
-#endif
-#endif
-#ifdef LLVM35
-    std::unique_ptr<TargetMachine>
-#else
-    OwningPtr<TargetMachine>
-#endif
-    TM(jl_TargetMachine->getTarget().createTargetMachine(
-        TheTriple.getTriple(),
-        jl_TargetMachine->getTargetCPU(),
-        jl_TargetMachine->getTargetFeatureString(),
-        jl_TargetMachine->Options,
-#if defined(_OS_LINUX_) || defined(_OS_FREEBSD_)
-        Reloc::PIC_,
-#else
-        jit_model ? Reloc::PIC_ : Reloc::Default,
-#endif
-        jit_model ? CodeModel::JITDefault : CodeModel::Default,
-        CodeGenOpt::Aggressive // -O3
-        ));
-
-#ifdef LLVM38
-    legacy::PassManager PM;
-#else
-    PassManager PM;
-#endif
-#ifndef LLVM37
-    PM.add(new TargetLibraryInfo(Triple(TM->getTargetTriple())));
-#else
-    PM.add(new TargetLibraryInfoWrapperPass(Triple(TM->getTargetTriple())));
-#endif
-#ifdef LLVM37
-// No DataLayout pass needed anymore.
-#elif defined(LLVM36)
-    PM.add(new DataLayoutPass());
-#elif defined(LLVM35)
-    PM.add(new DataLayoutPass(*jl_ExecutionEngine->getDataLayout()));
-#else
-    PM.add(new DataLayout(*jl_ExecutionEngine->getDataLayout()));
-#endif
-
-    addOptimizationPasses(&PM);
-    if (!dump_as_bc) {
-        if (TM->addPassesToEmitFile(PM, FOS, TargetMachine::CGFT_ObjectFile, false)) {
-            jl_error("Could not generate obj file for this target");
-        }
-    }
-
-    // now copy the module, since PM.run may modify it
-    ValueToValueMapTy VMap;
-#ifdef LLVM38
-    Module *clone = CloneModule(shadow_module, VMap).release();
-#else
-    Module *clone = CloneModule(shadow_module, VMap);
-#endif
-#ifdef LLVM37
-    // Reset the target triple to make sure it matches the new target machine
-    clone->setTargetTriple(TM->getTargetTriple().str());
-#ifdef LLVM38
-    clone->setDataLayout(TM->createDataLayout());
-#else
-    clone->setDataLayout(TM->getDataLayout()->getStringRepresentation());
-#endif
-#endif
-
-    // add metadata information
-    jl_gen_llvm_globaldata(clone, VMap, sysimg_data, sysimg_len);
-
-    // do the actual work
-    finalize_gc_frame(clone);
-    PM.run(*clone);
-    if (dump_as_bc)
-        WriteBitcodeToFile(clone, FOS);
-    delete clone;
-}
-
-static int32_t jl_assign_functionID(Function *functionObject, int specsig)
-{
-    // give the function an index in the constant lookup table
-    if (!imaging_mode)
-        return 0;
-    jl_sysimg_fvars.push_back(ConstantExpr::getBitCast(functionObject, T_pvoidfunc));
-    return jl_sysimg_fvars.size();
-}
 
 static Value *julia_gv(const char *cname, void *addr)
 {
@@ -794,24 +189,11 @@ static Value *julia_gv(const char *cname, void *addr)
     std::stringstream gvname;
     gvname << cname << globalUnique++;
     // no existing GlobalVariable, create one and store it
-    GlobalVariable *gv = new GlobalVariable(imaging_mode ? *shadow_module : *builtins_module, T_pjlvalue,
-                           false, imaging_mode ? GlobalVariable::InternalLinkage : GlobalVariable::ExternalLinkage,
-                           ConstantPointerNull::get((PointerType*)T_pjlvalue), gvname.str());
+    GlobalVariable *gv = new GlobalVariable(*jl_builderModule, T_pjlvalue,
+                           false, GlobalVariable::ExternalLinkage,
+                           NULL, gvname.str());
     addComdat(gv);
-
-    // make the pointer valid for this session
-#ifdef USE_MCJIT
-    jl_llvm_to_jl_value[gv] = addr;
-#else
-    void **p = (void**)jl_ExecutionEngine->getPointerToGlobal(gv);
-    *p = addr;
-#endif
-    // make the pointer valid for future sessions
-    jl_sysimg_gvars.push_back(ConstantExpr::getBitCast(gv, T_psize));
-    jl_value_llvm gv_struct;
-    gv_struct.gv = prepare_global(gv);
-    gv_struct.index = jl_sysimg_gvars.size();
-    jl_value_to_llvm[addr] = gv_struct;
+    *(void**)jl_emit_and_add_to_shadow(gv, addr) = addr;
     return builder.CreateLoad(gv);
 }
 
@@ -1183,11 +565,7 @@ static Value *emit_datatype_isbitstype(Value *dt)
 
 static void just_emit_error(const std::string &txt, jl_codectx_t *ctx)
 {
-    Value *zeros[2] = { ConstantInt::get(T_int32, 0),
-                        ConstantInt::get(T_int32, 0) };
-    builder.CreateCall(prepare_call(jlerror_func),
-                       builder.CreateGEP(stringConst(txt),
-                                         ArrayRef<Value*>(zeros)));
+    builder.CreateCall(prepare_call(jlerror_func), stringConstPtr(txt));
 }
 
 static void emit_error(const std::string &txt, jl_codectx_t *ctx)
@@ -1252,12 +630,8 @@ static void null_pointer_check(Value *v, jl_codectx_t *ctx)
 static void emit_type_error(const jl_cgval_t &x, jl_value_t *type, const std::string &msg,
                             jl_codectx_t *ctx)
 {
-    Value *zeros[2] = { ConstantInt::get(T_int32, 0),
-                        ConstantInt::get(T_int32, 0) };
-    Value *fname_val = builder.CreateGEP(stringConst(ctx->funcName),
-                                         ArrayRef<Value*>(zeros));
-    Value *msg_val = builder.CreateGEP(stringConst(msg),
-                                       ArrayRef<Value*>(zeros));
+    Value *fname_val = stringConstPtr(ctx->funcName);
+    Value *msg_val = stringConstPtr(msg);
 #ifdef LLVM37
     builder.CreateCall(prepare_call(jltypeerror_func),
                        { fname_val, msg_val,
