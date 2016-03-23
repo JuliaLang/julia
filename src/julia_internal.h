@@ -56,13 +56,13 @@ STATIC_INLINE jl_value_t *newstruct(jl_datatype_t *type)
 }
 
 void jl_generate_fptr(jl_lambda_info_t *li);
-void jl_compile_linfo(jl_lambda_info_t *li, void *cyclectx);
+void jl_compile_linfo(jl_lambda_info_t *li);
 
 // invoke (compiling if necessary) the jlcall function pointer for a method
 STATIC_INLINE jl_value_t *jl_call_method_internal(jl_lambda_info_t *meth, jl_value_t **args, uint32_t nargs)
 {
     if (__unlikely(meth->fptr == NULL)) {
-        jl_compile_linfo(meth, NULL);
+        jl_compile_linfo(meth);
         jl_generate_fptr(meth);
     }
     if (meth->jlcall_api == 0)
@@ -263,7 +263,7 @@ int32_t jl_get_llvm_gv(jl_value_t *p);
 void jl_idtable_rehash(jl_array_t **pa, size_t newsz);
 
 JL_DLLEXPORT jl_methtable_t *jl_new_method_table(jl_sym_t *name, jl_module_t *module);
-jl_lambda_info_t *jl_get_specialization1(jl_tupletype_t *types, void *cyclectx);
+jl_lambda_info_t *jl_get_specialization1(jl_tupletype_t *types);
 jl_function_t *jl_module_get_initializer(jl_module_t *m);
 uint32_t jl_module_next_counter(jl_module_t *m);
 void jl_fptr_to_llvm(jl_fptr_t fptr, jl_lambda_info_t *lam, int specsig);

@@ -1012,8 +1012,9 @@ static jl_cgval_t emit_intrinsic(intrinsic f, jl_value_t **args, size_t nargs,
         // understood that everything is implicitly rounded to 23 bits,
         // but if we start looking at more bits we need to actually do the
         // rounding first instead of carrying around incorrect low bits.
-        builder.CreateStore(FP(x), builder.CreateBitCast(prepare_global(jlfloattemp_var),FT(x->getType())->getPointerTo()), true);
-        x  = builder.CreateLoad(builder.CreateBitCast(prepare_global(jlfloattemp_var),FT(x->getType())->getPointerTo()), true);
+        Value *jlfloattemp_var = emit_static_alloca(FT(x->getType()));
+        builder.CreateStore(FP(x), jlfloattemp_var);
+        x  = builder.CreateLoad(jlfloattemp_var, true);
 #endif
         return mark_julia_type(builder.CreateFPExt(x, FTnbits(nb)), false, bt, ctx);
     }
@@ -1140,12 +1141,12 @@ static Value *emit_untyped_intrinsic(intrinsic f, Value *x, Value *y, Value *z, 
     case fma_float: {
       assert(y->getType() == x->getType());
       assert(z->getType() == y->getType());
-      Value *fmaintr = Intrinsic::getDeclaration(builtins_module, Intrinsic::fma,
+      Value *fmaintr = Intrinsic::getDeclaration(jl_Module, Intrinsic::fma,
                                    ArrayRef<Type*>(x->getType()));
 #ifdef LLVM37
-      return builder.CreateCall(prepare_call(fmaintr),{ FP(x), FP(y), FP(z) });
+      return builder.CreateCall(fmaintr,{ FP(x), FP(y), FP(z) });
 #else
-      return builder.CreateCall3(prepare_call(fmaintr), FP(x), FP(y), FP(z));
+      return builder.CreateCall3(fmaintr, FP(x), FP(y), FP(z));
 #endif
     }
     case muladd_float:
@@ -1158,8 +1159,8 @@ static Value *emit_untyped_intrinsic(intrinsic f, Value *x, Value *y, Value *z, 
 #else
       return builder.CreateCall3
 #endif
-        (prepare_call(Intrinsic::getDeclaration(builtins_module, Intrinsic::fmuladd,
-                                   ArrayRef<Type*>(x->getType()))),
+        (Intrinsic::getDeclaration(jl_Module, Intrinsic::fmuladd,
+                                   ArrayRef<Type*>(x->getType())),
          #ifdef LLVM37
          {FP(x), FP(y), FP(z)}
          #else
@@ -1181,7 +1182,7 @@ static Value *emit_untyped_intrinsic(intrinsic f, Value *x, Value *y, Value *z, 
         Value *ix = JL_INT(x); Value *iy = JL_INT(y);
         assert(ix->getType() == iy->getType());
         Value *intr =
-            Intrinsic::getDeclaration(builtins_module,
+            Intrinsic::getDeclaration(jl_Module,
                 f==checked_sadd_int ?
                 Intrinsic::sadd_with_overflow :
                 (f==checked_uadd_int ?
@@ -1195,9 +1196,9 @@ static Value *emit_untyped_intrinsic(intrinsic f, Value *x, Value *y, Value *z, 
                     Intrinsic::umul_with_overflow)))),
                 ArrayRef<Type*>(ix->getType()));
 #ifdef LLVM37
-        Value *res = builder.CreateCall(prepare_call(intr),{ix, iy});
+        Value *res = builder.CreateCall(intr,{ix, iy});
 #else
-        Value *res = builder.CreateCall2(prepare_call(intr), ix, iy);
+        Value *res = builder.CreateCall2(intr, ix, iy);
 #endif
         Value *obit = builder.CreateExtractValue(res, ArrayRef<unsigned>(1));
         raise_exception_if(obit, prepare_global(jlovferr_var), ctx);
@@ -1335,33 +1336,33 @@ static Value *emit_untyped_intrinsic(intrinsic f, Value *x, Value *y, Value *z, 
                          builder.CreateAShr(x, uint_cnvt(t,y)));
     case bswap_int:
         x = JL_INT(x);
-        return builder.CreateCall(prepare_call(
-            Intrinsic::getDeclaration(builtins_module, Intrinsic::bswap,
-                                      ArrayRef<Type*>(x->getType()))), x);
+        return builder.CreateCall(
+            Intrinsic::getDeclaration(jl_Module, Intrinsic::bswap,
+                                      ArrayRef<Type*>(x->getType())), x);
     case ctpop_int:
         x = JL_INT(x);
-        return builder.CreateCall(prepare_call(
-            Intrinsic::getDeclaration(builtins_module, Intrinsic::ctpop,
-                                      ArrayRef<Type*>(x->getType()))), x);
+        return builder.CreateCall(
+            Intrinsic::getDeclaration(jl_Module, Intrinsic::ctpop,
+                                      ArrayRef<Type*>(x->getType())), x);
     case ctlz_int: {
         x = JL_INT(x);
         Type *types[1] = {x->getType()};
-        Value *ctlz = Intrinsic::getDeclaration(builtins_module, Intrinsic::ctlz,
+        Value *ctlz = Intrinsic::getDeclaration(jl_Module, Intrinsic::ctlz,
                                       ArrayRef<Type*>(types));
 #ifdef LLVM37
-        return builder.CreateCall(prepare_call(ctlz), {x, ConstantInt::get(T_int1,0)});
+        return builder.CreateCall(ctlz, {x, ConstantInt::get(T_int1,0)});
 #else
-        return builder.CreateCall2(prepare_call(ctlz), x, ConstantInt::get(T_int1,0));
+        return builder.CreateCall2(ctlz, x, ConstantInt::get(T_int1,0));
 #endif
     }
     case cttz_int: {
         x = JL_INT(x);
         Type *types[1] = {x->getType()};
-        Value *cttz = Intrinsic::getDeclaration(builtins_module, Intrinsic::cttz, ArrayRef<Type*>(types));
+        Value *cttz = Intrinsic::getDeclaration(jl_Module, Intrinsic::cttz, ArrayRef<Type*>(types));
 #ifdef LLVM37
-        return builder.CreateCall(prepare_call(cttz), {x, ConstantInt::get(T_int1, 0)});
+        return builder.CreateCall(cttz, {x, ConstantInt::get(T_int1, 0)});
 #else
-        return builder.CreateCall2(prepare_call(cttz), x, ConstantInt::get(T_int1, 0));
+        return builder.CreateCall2(cttz, x, ConstantInt::get(T_int1, 0));
 #endif
     }
 
@@ -1378,9 +1379,9 @@ static Value *emit_untyped_intrinsic(intrinsic f, Value *x, Value *y, Value *z, 
     {
         x = FP(x);
 #ifdef LLVM34
-        return builder.CreateCall(prepare_call(
-            Intrinsic::getDeclaration(builtins_module, Intrinsic::fabs,
-                                                            ArrayRef<Type*>(x->getType()))),
+        return builder.CreateCall(
+            Intrinsic::getDeclaration(jl_Module, Intrinsic::fabs,
+                                                            ArrayRef<Type*>(x->getType())),
                                   x);
 #else
         Type *intt = JL_INTT(x->getType());
@@ -1431,34 +1432,34 @@ static Value *emit_untyped_intrinsic(intrinsic f, Value *x, Value *y, Value *z, 
     }
     case ceil_llvm: {
         x = FP(x);
-        return builder.CreateCall(prepare_call(Intrinsic::getDeclaration(builtins_module, Intrinsic::ceil,
-                                                            ArrayRef<Type*>(x->getType()))),
+        return builder.CreateCall(Intrinsic::getDeclaration(jl_Module, Intrinsic::ceil,
+                                                            ArrayRef<Type*>(x->getType())),
                                   x);
     }
     case floor_llvm: {
         x = FP(x);
-        return builder.CreateCall(prepare_call(Intrinsic::getDeclaration(builtins_module, Intrinsic::floor,
-                                                            ArrayRef<Type*>(x->getType()))),
+        return builder.CreateCall(Intrinsic::getDeclaration(jl_Module, Intrinsic::floor,
+                                                            ArrayRef<Type*>(x->getType())),
                                   x);
     }
     case trunc_llvm: {
         x = FP(x);
-        return builder.CreateCall(prepare_call(Intrinsic::getDeclaration(builtins_module, Intrinsic::trunc,
-                                                            ArrayRef<Type*>(x->getType()))),
+        return builder.CreateCall(Intrinsic::getDeclaration(jl_Module, Intrinsic::trunc,
+                                                            ArrayRef<Type*>(x->getType())),
                                   x);
     }
     case rint_llvm: {
         x = FP(x);
-        return builder.CreateCall(prepare_call(Intrinsic::getDeclaration(builtins_module, Intrinsic::rint,
-                                                            ArrayRef<Type*>(x->getType()))),
+        return builder.CreateCall(Intrinsic::getDeclaration(jl_Module, Intrinsic::rint,
+                                                            ArrayRef<Type*>(x->getType())),
                                   x);
     }
     case sqrt_llvm: {
         x = FP(x);
         raise_exception_unless(builder.CreateFCmpUGE(x, ConstantFP::get(x->getType(),0.0)),
                                prepare_global(jldomerr_var), ctx);
-        return builder.CreateCall(prepare_call(Intrinsic::getDeclaration(builtins_module, Intrinsic::sqrt,
-                                                            ArrayRef<Type*>(x->getType()))),
+        return builder.CreateCall(Intrinsic::getDeclaration(jl_Module, Intrinsic::sqrt,
+                                                            ArrayRef<Type*>(x->getType())),
                                   x);
     }
     case powi_llvm: {
@@ -1467,12 +1468,12 @@ static Value *emit_untyped_intrinsic(intrinsic f, Value *x, Value *y, Value *z, 
         Type *tx = x->getType(); // TODO: LLVM expects this to be i32
 #ifdef LLVM36
         Type *ts[1] = { tx };
-        Value *powi = Intrinsic::getDeclaration(builtins_module, Intrinsic::powi,
+        Value *powi = Intrinsic::getDeclaration(jl_Module, Intrinsic::powi,
             ArrayRef<Type*>(ts));
 #ifdef LLVM37
-        return builder.CreateCall(prepare_call(powi), {x, y});
+        return builder.CreateCall(powi, {x, y});
 #else
-        return builder.CreateCall2(prepare_call(powi), x, y);
+        return builder.CreateCall2(powi, x, y);
 #endif
 #else
         // issue #6506
@@ -1482,8 +1483,8 @@ static Value *emit_untyped_intrinsic(intrinsic f, Value *x, Value *y, Value *z, 
     }
     case sqrt_llvm_fast: {
         x = FP(x);
-        return builder.CreateCall(prepare_call(Intrinsic::getDeclaration(builtins_module, Intrinsic::sqrt,
-                                                            ArrayRef<Type*>(x->getType()))),
+        return builder.CreateCall(Intrinsic::getDeclaration(jl_Module, Intrinsic::sqrt,
+                                                            ArrayRef<Type*>(x->getType())),
                                   x);
     }
 

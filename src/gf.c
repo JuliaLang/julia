@@ -870,7 +870,7 @@ static jl_value_t *jl_call_unspecialized(jl_svec_t *sparam_vals, jl_lambda_info_
                                          jl_value_t **args, uint32_t nargs)
 {
     if (__unlikely(meth->fptr == NULL)) {
-        jl_compile_linfo(meth, NULL);
+        jl_compile_linfo(meth);
         jl_generate_fptr(meth);
     }
     assert(jl_svec_len(meth->sparam_syms) == jl_svec_len(sparam_vals));
@@ -1414,7 +1414,7 @@ jl_lambda_info_t *jl_method_lookup(jl_methtable_t *mt, jl_value_t **args, size_t
 JL_DLLEXPORT jl_value_t *jl_matching_methods(jl_value_t *types, int lim);
 
 // compile-time method lookup
-jl_lambda_info_t *jl_get_specialization1(jl_tupletype_t *types, void *cyclectx)
+jl_lambda_info_t *jl_get_specialization1(jl_tupletype_t *types)
 {
     assert(jl_nparams(types) > 0);
     if (!jl_is_leaf_type((jl_value_t*)types))
@@ -1451,7 +1451,7 @@ jl_lambda_info_t *jl_get_specialization1(jl_tupletype_t *types, void *cyclectx)
     if (sf->functionObjects.functionObject == NULL) {
         if (sf->fptr != NULL)
             goto not_found;
-        jl_compile_linfo(sf, cyclectx);
+        jl_compile_linfo(sf);
     }
     JL_GC_POP();
     return sf;
@@ -1506,7 +1506,7 @@ static int _compile_all_tvar_union(jl_methlist_t *meth, jl_tupletype_t *methsig)
             if (jl_is_leaf_type((jl_value_t*)methsig)) {
                 // usually can create a specialized version of the function,
                 // if the signature is already a leaftype
-                jl_lambda_info_t *spec = jl_get_specialization1(methsig, NULL);
+                jl_lambda_info_t *spec = jl_get_specialization1(methsig);
                 if (spec) {
                     if (methsig == meth->sig) {
                         // replace unspecialized func with newly specialized version
@@ -1545,7 +1545,7 @@ static int _compile_all_tvar_union(jl_methlist_t *meth, jl_tupletype_t *methsig)
             goto getnext; // signature wouldn't be callable / is invalid -- skip it
         }
         if (jl_is_leaf_type(sig)) {
-            if (jl_get_specialization1((jl_tupletype_t*)sig, NULL)) {
+            if (jl_get_specialization1((jl_tupletype_t*)sig)) {
                 if (!jl_has_typevars((jl_value_t*)sig)) goto getnext; // success
             }
         }
@@ -1680,7 +1680,7 @@ static void _compile_all_deq(jl_array_t *found)
                 linfo->functionID = -1;
         }
         else {
-            jl_compile_linfo(linfo, NULL);
+            jl_compile_linfo(linfo);
             assert(linfo->functionID > 0);
         }
     }
@@ -1783,7 +1783,7 @@ void jl_compile_all(void)
 
 JL_DLLEXPORT void jl_compile_hint(jl_tupletype_t *types)
 {
-    (void)jl_get_specialization1(types, NULL);
+    (void)jl_get_specialization1(types);
 }
 
 #ifdef JL_TRACE
