@@ -408,7 +408,7 @@ function show_expr_type(io::IO, ty, emph)
     elseif is(ty, IntrinsicFunction)
         print(io, "::I")
     else
-        if emph && !isleaftype(ty)
+        if emph && (!isleaftype(ty) || ty == Box)
             emphasize(io, "::$ty")
         else
             print(io, "::$ty")
