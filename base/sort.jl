@@ -426,7 +426,7 @@ function selectperm!{I<:Integer}(ix::AbstractVector{I}, v::AbstractVector,
                                  order::Ordering=Forward,
                                  initialized::Bool=false)
     if !initialized
-        @inbounds for i in eachindex(ix)
+        @inbounds for i = 1:length(ix)
             ix[i] = i
         end
     end
@@ -460,7 +460,7 @@ function sortperm!{I<:Integer}(x::AbstractVector{I}, v::AbstractVector;
         throw(ArgumentError("index vector must be the same length as the source vector, $lx != $lv"))
     end
     if !initialized
-        @inbounds for i in eachindex(v)
+        @inbounds for i = 1:length(v)
             x[i] = i
         end
     end
