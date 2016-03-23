@@ -198,19 +198,6 @@ for T in [Int8, Int16, Int32, Int64, Int128]
     end
 end
 
-# issue #11142
-s = "abcdefghij"
-sp = pointer(s)
-@test ascii(sp) == s
-@test ascii(sp,5) == "abcde"
-@test typeof(ascii(sp)) == String
-@test typeof(utf8(sp)) == String
-s = "abcde\uff\u2000\U1f596"
-sp = pointer(s)
-@test utf8(sp) == s
-@test utf8(sp,5) == "abcde"
-@test typeof(utf8(sp)) == String
-
 @test get(tryparse(BigInt, "1234567890")) == BigInt(1234567890)
 @test isnull(tryparse(BigInt, "1234567890-"))
 
@@ -274,6 +261,6 @@ str = "abcdef\uff\uffff\u10ffffABCDEF"
 
 @test "a".*["b","c"] == ["ab","ac"]
 @test ["b","c"].*"a" == ["ba","ca"]
-@test utf8("a").*["b","c"] == ["ab","ac"]
-@test "a".*map(utf8,["b","c"]) == ["ab","ac"]
+@test GenericString("a").*["b","c"] == ["ab","ac"]
+@test "a".*map(GenericString,["b","c"]) == ["ab","ac"]
 @test ["a","b"].*["c","d"]' == ["ac" "ad"; "bc" "bd"]

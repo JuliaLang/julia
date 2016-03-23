@@ -510,7 +510,7 @@ c, r, res = test_scomplete(s)
             withenv("PATH" => string(tempdir(), ":", dir)) do
                 s = string("repl-completio")
                 c,r = test_scomplete(s)
-                @test [utf8("repl-completion")] == c
+                @test ["repl-completion"] == c
                 @test s[r] == "repl-completio"
             end
 
