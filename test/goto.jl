@@ -118,3 +118,10 @@ function t1_15600(flag)
 end
 @test t1_15600(true) == 1
 @test t1_15600(false) == 2
+
+# issue #15561
+function f15561()
+    a = @goto crater
+    @label crater
+end
+@test f15561() === nothing
