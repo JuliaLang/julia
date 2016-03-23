@@ -3052,6 +3052,7 @@ f(x) = yt(x)
                     (m (or m (let ((l (make-label)))
                                (put! label-map (cadr e) l)
                                l))))
+               (emit `(null))  ;; save space for `leave` that might be needed
                (emit `(goto ,m))
                (set! handler-goto-fixups
                      (cons (list code handler-level (cadr e)) handler-goto-fixups))))
