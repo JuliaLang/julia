@@ -151,8 +151,8 @@ jl_value_t *jl_type_match_morespecific(jl_value_t *a, jl_value_t *b);
 int jl_types_equal_generic(jl_value_t *a, jl_value_t *b, int useenv);
 jl_datatype_t *jl_inst_concrete_tupletype_v(jl_value_t **p, size_t np);
 jl_datatype_t *jl_inst_concrete_tupletype(jl_svec_t *p);
-void jl_method_cache_insert(jl_methcache_t *cache, jl_tupletype_t *type, jl_svec_t *guardsigs,
-                            jl_lambda_info_t *method, int8_t offs);
+jl_methlist_t *jl_method_cache_insert(jl_methcache_t *cache, jl_tupletype_t *type, jl_svec_t *guardsigs,
+                                      jl_lambda_info_t *method, int8_t offs);
 void jl_method_table_insert(jl_methtable_t *mt, jl_tupletype_t *type,
                             jl_lambda_info_t *method, jl_svec_t *tvars);
 int jl_is_type(jl_value_t *v);
