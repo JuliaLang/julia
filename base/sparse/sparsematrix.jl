@@ -732,22 +732,22 @@ ctranspose{Tv,Ti}(A::SparseMatrixCSC{Tv,Ti}) = qftranspose(A, 1:A.n, Base.ConjFu
 ## fkeep! and children tril!, triu!, droptol!, dropzeros[!]
 
 """
-    fkeep!{Tv,Ti}(A::SparseMatrixCSC{Tv,Ti}, f, other, trim::Bool = true)
+    fkeep!(A::AbstractSparseArray, f, other, trim::Bool = true)
 
 Keep elements of `A` for which test `f` returns `true`. `f`'s signature should be
 
-    f{Tv,Ti}(i::Ti, j::Ti, x::Tv, other::Any) -> Bool
+    f(i::Integer, [j::Integer,] x, other::Any) -> Bool
 
 where `i` and `j` are an element's row and column indices, `x` is the element's value,
 and `other` is passed in from the call to `fkeep!`. This method makes a single sweep
-through `A`, requiring `O(A.n, nnz(A))`-time and no space beyond that passed in. If `trim`
-is `true`, this method trims `A.rowval` and `A.nzval` to length `nnz(A)` after dropping
-elements.
+through `A`, requiring `O(A.n, nnz(A))`-time for matrices and `O(nnz(A))`-time for vectors
+and no space beyond that passed in. If `trim` is `true`, this method trims `A.rowval` or `A.nzind` and
+`A.nzval` to length `nnz(A)` after dropping elements.
 
 Performance note: As of January 2016, `f` should be a functor for this method to perform
 well. This caveat may disappear when the work in `jb/functions` lands.
 """
-function fkeep!{Tv,Ti}(A::SparseMatrixCSC{Tv,Ti}, f, other, trim::Bool = true)
+function fkeep!(A::SparseMatrixCSC, f, other, trim::Bool = true)
     An = A.n
     Acolptr = A.colptr
     Arowval = A.rowval
@@ -811,7 +811,7 @@ droptol!(A::SparseMatrixCSC, tol, trim::Bool = true) = fkeep!(A, DroptolFunc(), 
 
 immutable DropzerosFunc <: Base.Func{4} end
 (::DropzerosFunc){Tv,Ti}(i::Ti, j::Ti, x::Tv, other) = x != 0
-dropzeros!(A::SparseMatrixCSC, trim::Bool = true) = fkeep!(A, DropzerosFunc(), Void, trim)
+dropzeros!(A::SparseMatrixCSC, trim::Bool = true) = fkeep!(A, DropzerosFunc(), nothing, trim)
 dropzeros(A::SparseMatrixCSC, trim::Bool = true) = dropzeros!(copy(A), trim)
 
 
