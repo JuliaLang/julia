@@ -15,6 +15,7 @@
 *.do
 *.o
 *.obj
+*.fmt
 *.so
 *.dylib
 *.dSYM
