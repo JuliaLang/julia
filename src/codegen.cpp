@@ -5181,13 +5181,24 @@ static void init_julia_llvm_env(Module *m)
     add_named_global(jltls_states_func, jl_get_ptls_states_getter());
     if (imaging_mode) {
         PointerType *pfunctype = jltls_states_func->getFunctionType()->getPointerTo();
+        // This is **NOT** a external variable or a normal global variable
+        // This is a special internal global slot with a special index
+        // in the global variable table.
         jltls_states_func_ptr =
             new GlobalVariable(*m, pfunctype,
-                               false, GlobalVariable::ExternalLinkage,
-                               NULL, "jl_get_ptls_states.ptr");
+                               false, GlobalVariable::InternalLinkage,
+                               ConstantPointerNull::get(pfunctype),
+                               "jl_get_ptls_states.ptr");
         addComdat(jltls_states_func_ptr);
-        void **p = (void**)jl_emit_and_add_to_shadow(jltls_states_func_ptr);
-        *p = (void*)jl_get_ptls_states_getter();
+        // make the pointer valid for this session
+#if defined(USE_MCJIT) || defined(USE_ORCJIT)
+        auto p = new uintptr_t(0);
+        jl_ExecutionEngine->addGlobalMapping(jltls_states_func_ptr->getName(),
+                                             (uintptr_t)p);
+#else
+        uintptr_t *p = (uintptr_t*)jl_ExecutionEngine->getPointerToGlobal(jltls_states_func_ptr);
+#endif
+        *p = (uintptr_t)jl_get_ptls_states_getter();
         jl_sysimg_gvars.push_back(ConstantExpr::getBitCast(jltls_states_func_ptr,
                                                            T_psize));
         jltls_states_func_idx = jl_sysimg_gvars.size();
