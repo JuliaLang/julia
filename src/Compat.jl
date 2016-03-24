@@ -886,4 +886,12 @@ if VERSION < v"0.5.0-dev+2915"
     export issymmetric
 end
 
+if VERSION < v"0.5.0-dev+977"
+    export foreach
+
+    foreach(f) = (f(); nothing)
+    foreach(f, itr) = (for x in itr; f(x); end; nothing)
+    foreach(f, itrs...) = (for z in zip(itrs...); f(z...); end; nothing)
+end
+
 end # module
