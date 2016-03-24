@@ -660,7 +660,7 @@ typedef struct {
     int64_t slide;
     int64_t section_slide;
 } objfileentry_t;
-typedef std::map<uint64_t, objfileentry_t> obfiletype;
+typedef std::map<uint64_t, objfileentry_t, revcomp> obfiletype;
 static obfiletype objfilemap;
 
 #ifdef _OS_DARWIN_
@@ -1056,6 +1056,13 @@ JL_DLLEXPORT uint64_t jl_get_section_start(uint64_t fptr)
     uint64_t ret = 0;
     if (fit != objmap.end() && fptr < fit->first + fit->second.SectionSize) {
         ret = fit->first;
+    } else {
+       obfiletype::iterator objit = objfilemap.lower_bound(fptr);
+       // Ideally we'd have a containment check here, but we can't really
+       // get the shared library size easily.
+       if (objit != objfilemap.end()) {
+           ret = objit->first;
+       }
     }
     uv_rwlock_rdunlock(&threadsafe);
     return ret;

@@ -978,6 +978,12 @@ static uint64_t getAddressForFunction(llvm::Function *llvmf)
 #endif
 }
 
+extern "C" JL_DLLEXPORT
+uint64_t jl_get_llvm_fptr(llvm::Function *llvmf)
+{
+    return getAddressForFunction(llvmf);
+}
+
 // this assumes that jl_compile_linfo has already been called
 // and forces compilation of the lambda info
 extern "C" void jl_generate_fptr(jl_lambda_info_t *li)
