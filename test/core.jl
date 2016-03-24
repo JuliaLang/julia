@@ -2185,12 +2185,6 @@ g9535() = (f9535(),f9535())
 @test g9535() == (1,2)
 @test g9535() == (3,4)
 
-# issue #9617
-let p = 15
-    @test 2p+1 == 31  # not a hex float literal
-end
-@test_throws ParseError parse("0x0.1")  # must have p or P
-
 # weak references
 type Obj; x; end
 @noinline function mk_wr(r, wr)
