@@ -781,7 +781,9 @@ ifeq ($(OS), Darwin)
   INSTALL_NAME_ID_DIR := @rpath/
   INSTALL_NAME_CMD := install_name_tool -id $(INSTALL_NAME_ID_DIR)
   INSTALL_NAME_CHANGE_CMD := install_name_tool -change
-ifeq ($(shell test `dsymutil -v | cut -d\- -f2 | cut -d. -f1` -gt 102 && echo yes), yes)
+ifneq (,$(findstring LLVM,$(shell dsymutil --version)))
+  DSYMUTIL := dsymutil
+else ifeq ($(shell test `dsymutil -v | cut -d\- -f2 | cut -d. -f1` -gt 102 && echo yes), yes)
   DSYMUTIL := dsymutil
 else
   DSYMUTIL := true -ignore
