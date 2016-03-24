@@ -112,7 +112,6 @@ Fully implemented by:
 
 - :obj:`Range`
 - :obj:`UnitRange`
-- :obj:`NDRange`
 - :obj:`Tuple`
 - :obj:`Number`
 - :obj:`AbstractArray`
