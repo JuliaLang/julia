@@ -166,6 +166,19 @@ end
 @test isempty(collect(Base.product(1:0,1:2)))
 @test length(Base.product(1:2,1:10,4:6)) == 60
 
+# flatten
+# -------
+
+import Base.flatten
+
+@test collect(flatten(Any[1:2, 4:5])) == Any[1,2,4,5]
+@test collect(flatten(Any[flatten(Any[1:2, 6:5]), flatten(Any[10:7, 10:9])])) == Any[1,2]
+@test collect(flatten(Any[flatten(Any[1:2, 4:5]), flatten(Any[6:7, 8:9])])) == Any[1,2,4,5,6,7,8,9]
+@test collect(flatten(Any[flatten(Any[1:2, 6:5]), flatten(Any[6:7, 8:9])])) == Any[1,2,6,7,8,9]
+@test collect(flatten(Any[2:1])) == Any[]
+@test eltype(flatten(UnitRange{Int8}[1:2, 3:4])) == Int8
+@test_throws ArgumentError collect(flatten(Any[]))
+
 # foreach
 let
     a = []
