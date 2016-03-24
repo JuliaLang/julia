@@ -47,6 +47,13 @@ Compiler/Runtime improvements
 Breaking changes
 ----------------
 
+  * Local variables and arguments are represented in lowered code as numbered `Slot`
+    objects instead of as symbols ([#15609]).
+
+  * The information that used to be in the `ast` field of the `LambdaStaticData` type
+    is now divided among the fields `code`, `slotnames`, `slottypes`, `slotflags`,
+    `gensymtypes`, `rettype`, `nargs`, and `isva` in the `LambdaInfo` type ([#15609]).
+
 Library improvements
 --------------------
 
@@ -173,3 +180,4 @@ Deprecated or removed
 [#15242]: https://github.com/JuliaLang/julia/issues/15242
 [#15258]: https://github.com/JuliaLang/julia/issues/15258
 [#15550]: https://github.com/JuliaLang/julia/issues/15550
+[#15609]: https://github.com/JuliaLang/julia/issues/15609
