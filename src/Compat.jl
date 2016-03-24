@@ -216,6 +216,49 @@ elseif VERSION < v"0.4.0-dev+6987"
     export pipeline
 end
 
+if VERSION < v"0.5.0-dev+961"
+    export walkdir
+
+    function walkdir(root; topdown=true, follow_symlinks=false, onerror=throw)
+        content = nothing
+        try
+            content = readdir(root)
+        catch err
+            isa(err, SystemError) || throw(err)
+            onerror(err)
+            #Need to return an empty task to skip the current root folder
+            return Task(()->())
+        end
+        dirs = Array(eltype(content), 0)
+        files = Array(eltype(content), 0)
+        for name in content
+            if isdir(joinpath(root, name))
+                push!(dirs, name)
+            else
+                push!(files, name)
+            end
+        end
+
+        function _it()
+            if topdown
+                produce(root, dirs, files)
+            end
+            for dir in dirs
+                path = joinpath(root,dir)
+                if follow_symlinks || !islink(path)
+                    for (root_l, dirs_l, files_l) in walkdir(path, topdown=topdown, follow_symlinks=follow_symlinks, onerror=onerror)
+                        produce(root_l, dirs_l, files_l)
+                    end
+                end
+            end
+            if !topdown
+                produce(root, dirs, files)
+            end
+        end
+        Task(_it)
+    end
+end
+
 function rewrite_dict(ex)
     length(ex.args) == 1 && return ex
 
