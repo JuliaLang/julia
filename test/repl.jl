@@ -348,7 +348,7 @@ begin
     LineEdit.accept_result(s, histp)
     @test LineEdit.mode(s) == repl_mode
     @test buffercontents(LineEdit.buffer(s)) == "shell"
-    @test position(LineEdit.buffer(s)) == 4
+    @test position(LineEdit.buffer(s)) == 2
 
     # Test that searching backwards doesn't skip matches (#9352)
     # (for a search with multiple one-byte characters, or UTF-8 characters)

@@ -92,19 +92,17 @@ wait(tsk)
 mktempdir() do tmpdir
     socketname = @windows ? ("\\\\.\\pipe\\uv-test-" * randstring(6)) : joinpath(tmpdir, "socket")
     c = Base.Condition()
-    for T in (String, UTF16String) # test for issue #9435
-        tsk = @async begin
-            s = listen(T(socketname))
-            Base.notify(c)
-            sock = accept(s)
-            write(sock,"Hello World\n")
-            close(s)
-            close(sock)
-        end
-        wait(c)
-        @test readstring(connect(socketname)) == "Hello World\n"
-        wait(tsk)
+    tsk = @async begin
+        s = listen(socketname)
+        Base.notify(c)
+        sock = accept(s)
+        write(sock,"Hello World\n")
+        close(s)
+        close(sock)
     end
+    wait(c)
+    @test readstring(connect(socketname)) == "Hello World\n"
+    wait(tsk)
 end
 
 @test_throws Base.UVError getaddrinfo(".invalid")

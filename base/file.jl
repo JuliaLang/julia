@@ -197,10 +197,11 @@ tempdir() = dirname(tempname())
 
 # Create and return the name of a temporary file along with an IOStream
 function mktemp(parent=tempdir())
-    b = joinpath(parent, "tmpXXXXXX")
-    p = ccall(:mkstemp, Int32, (Cstring,), b) # modifies b
+    b = joinpath(parent, "tmpXXXXXX").data
+    0x00 in b && throw(ArgumentError("path cannot contain NUL"))
+    p = ccall(:mkstemp, Int32, (Ptr{UInt8},), b) # modifies b
     systemerror(:mktemp, p == -1)
-    return (b, fdio(p, true))
+    return String(b), fdio(p, true)
 end
 
 # Create and return the name of a temporary directory

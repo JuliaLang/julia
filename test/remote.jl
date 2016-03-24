@@ -2,8 +2,8 @@
 
 # Check that serializer hasn't gone out-of-frame
 @test Serializer.sertag(Symbol) == 2
-@test Serializer.sertag(()) == 46
-@test Serializer.sertag(false) == 122
+@test Serializer.sertag(()) == 44
+@test Serializer.sertag(false) == 120
 
 # issue #1770
 let
