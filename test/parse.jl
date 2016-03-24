@@ -376,3 +376,23 @@ end
 uncalled(x) = @test false
 fret() = uncalled(return true)
 @test fret()
+
+# issue #9617
+let p = 15
+    @test 2p+1 == 31  # not a hex float literal
+end
+
+# issue #15597
+function test_parseerror(str, msg)
+    try
+        parse(str)
+        @test false
+    catch e
+        @test isa(e,ParseError) && e.msg == msg
+    end
+end
+test_parseerror("0x", "invalid numeric constant \"0x\"")
+test_parseerror("0b", "invalid numeric constant \"0b\"")
+test_parseerror("0o", "invalid numeric constant \"0o\"")
+test_parseerror("0x0.1", "hex float literal must contain \"p\" or \"P\"")
+test_parseerror("0x1.0p", "invalid numeric constant \"0x1.0\"")
