@@ -391,7 +391,7 @@ JL_DLLEXPORT jl_value_t *jl_threading_run(jl_svec_t *args)
     int8_t gc_state = jl_gc_unsafe_enter();
     JL_GC_PUSH1(&argtypes);
     argtypes = arg_type_tuple(jl_svec_data(args), jl_svec_len(args));
-    jl_lambda_info_t *li = jl_get_specialization1(argtypes, NULL);
+    jl_lambda_info_t *li = jl_get_specialization1(argtypes);
     jl_generate_fptr(li);
 
     threadwork.command = TI_THREADWORK_RUN;
