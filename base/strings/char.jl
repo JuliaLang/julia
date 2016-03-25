@@ -98,3 +98,6 @@ function show(io::IO, c::Char)
     end
     return
 end
+
+isascii(c::Char) = c < Char(0x80)
+isxdigit(c::Char) = '0'<=c<='9' || 'a'<=c<='f' || 'A'<=c<='F'
