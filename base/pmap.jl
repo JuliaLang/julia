@@ -29,7 +29,6 @@ pgenerate(f, c) = pgenerate(default_worker_pool(), f, c...)
 pgenerate(f, c1, c...) = pgenerate(a->f(a...), zip(c1, c...))
 
 
-
 """
     pmap([::WorkerPool], f, c...) -> collection
 

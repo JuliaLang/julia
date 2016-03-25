@@ -873,7 +873,6 @@ function findnz{Tv,Ti}(S::SparseMatrixCSC{Tv,Ti})
 end
 
 
-
 import Base.Random.GLOBAL_RNG
 function sprand_IJ(r::AbstractRNG, m::Integer, n::Integer, density::AbstractFloat)
     ((m < 0) || (n < 0)) && throw(ArgumentError("invalid Array dimensions"))
@@ -1084,7 +1083,6 @@ for op in (:ceil, :floor, :trunc, :round)
         ($op){T,Tv,Ti}(::Type{T},A::SparseMatrixCSC{Tv,Ti}) = @_unary_op_nz2z_z2z($op,A,T,Ti)
     end # quote
 end # macro
-
 
 
 # Operations that map nonzeros to nonzeros, and zeros to zeros

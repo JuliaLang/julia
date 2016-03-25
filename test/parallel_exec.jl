@@ -698,7 +698,6 @@ if DoFullTest
 
 
     for mapf in [map, asyncmap, (f, c) -> pmap(pool, f, c)]
-
         @test ups == bytestring(UInt8[UInt8(c) for c in mapf(x->uppercase(x), s)])
         @test ups == bytestring(UInt8[UInt8(c) for c in mapf(x->uppercase(Char(x)), s.data)])
 
@@ -737,7 +736,6 @@ if DoFullTest
         @test isa(res[1], ErrorException)
         @test res[1].msg == "EXPECTED TEST ERROR. TO BE IGNORED."
         @test ups[2:end] == string(res[2:end]...)
-
     end
 
     # retry, on error exit

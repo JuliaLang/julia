@@ -103,7 +103,6 @@ for T in (Complex64, Complex128, Complex{BigFloat})
 end
 
 
-
 # math functions
 
 # real arithmetic

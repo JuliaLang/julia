@@ -1037,5 +1037,3 @@ function pmap(f, c...; err_retry=nothing, err_stop=nothing, pids=nothing)
 
     return pmap(p, f, c...)
 end
-
-

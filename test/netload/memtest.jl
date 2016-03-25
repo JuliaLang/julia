@@ -44,7 +44,6 @@ function run_mtest(name, testf)
 end
 
 
-
 function mtest_create_strings()
     for i in 1:10^8
         string("$i")

@@ -380,7 +380,6 @@ Base.getindex(A::TSlowNIndexes, index::Int...) = error("Must use $(ndims(A)) ind
 Base.getindex{T}(A::TSlowNIndexes{T,2}, i::Int, j::Int) = A.data[i,j]
 
 
-
 type GenericIterator{N} end
 Base.start{N}(::GenericIterator{N}) = 1
 Base.next{N}(::GenericIterator{N}, i) = (i, i + 1)

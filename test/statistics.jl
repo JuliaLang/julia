@@ -301,7 +301,6 @@ for vd in [1, 2], zm in [true, false]
 end
 
 
-
 # test hist
 
 @test sum(hist([1,2,3])[2]) == 3

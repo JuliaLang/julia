@@ -84,7 +84,6 @@ function next(itr::AsyncCollector, state::AsyncCollectorState)
 end
 
 
-
 """
     AsyncGenerator(f, c...; ntasks=100) -> iterator
 
