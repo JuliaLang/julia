@@ -7,7 +7,7 @@
 
 Linux, OSX: [![Build Status](https://api.travis-ci.org/JuliaLang/julia.svg?branch=master)](https://travis-ci.org/JuliaLang/julia)
 
-Windows: [![Build status](https://ci.appveyor.com/api/projects/status/4vr88cmgo7u02644/branch/master?svg=true)](https://ci.appveyor.com/project/StefanKarpinski/julia/branch/master)
+Windows: [![Build status](https://ci.appveyor.com/api/projects/status/dvial98s5vi6ealt/branch/master?svg=true)](https://ci.appveyor.com/project/JuliaLang/julia/branch/master)
 
 Code Coverage: [![Coverage Status](https://coveralls.io/repos/JuliaLang/julia/badge.svg?branch=master)](https://coveralls.io/r/JuliaLang/julia?branch=master) [![codecov.io](http://codecov.io/github/JuliaLang/julia/coverage.svg?branch=master)](http://codecov.io/github/JuliaLang/julia?branch=master)
 
