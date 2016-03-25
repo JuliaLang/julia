@@ -86,6 +86,19 @@ end
 @test checkbounds("hello", 1:5)
 @test checkbounds("hello", [1:5;])
 
+# issue #15624 (indexing with out of bounds empty range)
+@test "hello"[10:9] == ""
+@test "hellø"[10:9] == ""
+@test SubString("hello", 1, 6)[10:9] == ""
+@test SubString("hello", 1, 0)[10:9] == ""
+@test SubString("hellø", 1, 6)[10:9] == ""
+@test SubString("hellø", 1, 0)[10:9] == ""
+@test ASCIIString("")[10:9] == ""
+@test UTF8String("")[10:9] == ""
+@test SubString("", 1, 6)[10:9] == ""
+@test SubString("", 1, 0)[10:9] == ""
+
+
 #=
 # issue #7764
 let
