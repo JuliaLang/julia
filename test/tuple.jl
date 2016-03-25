@@ -92,7 +92,6 @@ foo(x, y, z) = x + y + z
 @test map(foo, (1,2,3,4), (1,2,3,4), (1,2,3,4)) === (3,6,9,12)
 
 
-
 ## comparison ##
 @test isequal((), ())
 @test isequal((1,2,3), (1,2,3))
@@ -110,15 +109,12 @@ foo(x, y, z) = x + y + z
 @test !isless((2,1), (1,2))
 
 
-
 ## functions ##
 @test isempty(())
 @test !isempty((1,))
 
 @test reverse(()) === ()
 @test reverse((1,2,3)) === (3,2,1)
-
-
 
 
 ## specialized reduction ##

@@ -39,10 +39,10 @@ factorial(n::UInt128) = factorial_lookup(n, _fact_table128, 34)
 factorial(n::Union{Int64,UInt64}) = factorial_lookup(n, _fact_table64, 20)
 
 if Int === Int32
-factorial(n::Union{Int8,UInt8,Int16,UInt16}) = factorial(Int32(n))
-factorial(n::Union{Int32,UInt32}) = factorial_lookup(n, _fact_table64, 12)
+    factorial(n::Union{Int8,UInt8,Int16,UInt16}) = factorial(Int32(n))
+    factorial(n::Union{Int32,UInt32}) = factorial_lookup(n, _fact_table64, 12)
 else
-factorial(n::Union{Int8,UInt8,Int16,UInt16,Int32,UInt32}) = factorial(Int64(n))
+    factorial(n::Union{Int8,UInt8,Int16,UInt16,Int32,UInt32}) = factorial(Int64(n))
 end
 
 function gamma(n::Union{Int8,UInt8,Int16,UInt16,Int32,UInt32,Int64,UInt64})
@@ -200,9 +200,8 @@ function nextprod(a::Vector{Int}, x)
 end
 
 
-
-#Functions that have been moved out of base in Julia 0.5
-#Note: only the two-argument form of factorial has been moved
+# Functions that have been moved out of base in Julia 0.5
+# Note: only the two-argument form of factorial has been moved
 for deprecatedfunc in [:combinations, :factorial, :prevprod, :levicivita,
     :nthperm!, :nthperm, :parity, :partitions, :permutations]
 

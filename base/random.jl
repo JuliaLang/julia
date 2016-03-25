@@ -490,7 +490,6 @@ else
 end
 
 
-
 function RangeGenerator(r::UnitRange{BigInt})
     m = last(r) - first(r)
     m < 0 && throw(ArgumentError("range must be non-empty"))
@@ -1272,7 +1271,6 @@ let b = UInt8['0':'9';'A':'Z';'a':'z']
     randstring(n::Int) = randstring(GLOBAL_RNG, n)
     randstring() = randstring(GLOBAL_RNG)
 end
-
 
 
 # Fill S (resized as needed) with a random subsequence of A, where
