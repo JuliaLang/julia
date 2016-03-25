@@ -29,6 +29,30 @@ typealias IntTypes Union{inttypes...}
 typealias FloatTypes Union{floattypes...}
 typealias AtomicTypes Union{atomictypes...}
 
+"""
+    Threads.Atomic{T}
+
+Holds a reference to an object of type `T`, ensuring that it is only
+accessed atomically, i.e. in a thread-safe manner.
+
+Only certain "simple" types can be used atomically, namely the
+bitstypes integer and float-point types. These are `Int8`...`Int128`,
+`UInt8`...`UInt128`, and `Float16`...`Float64`.
+
+New atomic objects can be created from a non-atomic values; if none is
+specified, the atomic object is initialized with zero.
+
+Atomic objects can be accessed using the `[]` notation:
+
+```Julia
+x::Atomic{Int}
+x[] = 1
+val = x[]
+```
+
+Atomic operations use an `atomic_` prefix, such as `atomic_add!`,
+`atomic_xchg!`, etc.
+"""
 type Atomic{T<:AtomicTypes}
     value::T
     Atomic() = new(zero(T))
@@ -36,6 +60,125 @@ type Atomic{T<:AtomicTypes}
 end
 
 Atomic() = Atomic{Int}()
+
+"""
+    Threads.atomic_cas!{T}(x::Atomic{T}, cmp::T, newval::T)
+
+Atomically compare-and-set `x`
+
+Atomically compares the value in `x` with `cmp`. If equal, write
+`newval` to `x`. Otherwise, leaves `x` unmodified. Returns the old
+value in `x`. By comparing the returned value to `cmp` (via `===`) one
+knows whether `x` was modified and now holds the new value `newval`.
+
+For further details, see LLVM's `cmpxchg` instruction.
+
+This function can be used to implement transactional semantics. Before
+the transaction, one records the value in `x`. After the transaction,
+the new value is stored only if `x` has not been modified in the mean
+time.
+"""
+function atomic_cas! end
+
+"""
+    Threads.atomic_xchg!{T}(x::Atomic{T}, newval::T)
+
+Atomically exchange the value in `x`
+
+Atomically exchanges the value in `x` with `newval`. Returns the old
+value.
+
+For further details, see LLVM's `atomicrmw xchg` instruction.
+"""
+function atomic_xchg! end
+
+"""
+    Threads.atomic_add!{T}(x::Atomic{T}, val::T)
+
+Atomically add `val` to `x`
+
+Performs `x[] += val` atomically. Returns the old (!) value.
+
+For further details, see LLVM's `atomicrmw add` instruction.
+"""
+function atomic_add! end
+
+"""
+    Threads.atomic_sub!{T}(x::Atomic{T}, val::T)
+
+Atomically subtract `val` from `x`
+
+Performs `x[] -= val` atomically. Returns the old (!) value.
+
+For further details, see LLVM's `atomicrmw sub` instruction.
+"""
+function atomic_sub! end
+
+"""
+    Threads.atomic_and!{T}(x::Atomic{T}, val::T)
+
+Atomically bitwise-and `x` with `val`
+
+Performs `x[] &= val` atomically. Returns the old (!) value.
+
+For further details, see LLVM's `atomicrmw and` instruction.
+"""
+function atomic_and! end
+
+"""
+    Threads.atomic_nand!{T}(x::Atomic{T}, val::T)
+
+Atomically bitwise-nand (not-and) `x` with `val`
+
+Performs `x[] = ~(x[] & val)` atomically. Returns the old (!) value.
+
+For further details, see LLVM's `atomicrmw nand` instruction.
+"""
+function atomic_nand! end
+
+"""
+    Threads.atomic_or!{T}(x::Atomic{T}, val::T)
+
+Atomically bitwise-or `x` with `val`
+
+Performs `x[] |= val` atomically. Returns the old (!) value.
+
+For further details, see LLVM's `atomicrmw or` instruction.
+"""
+function atomic_or! end
+
+"""
+    Threads.atomic_xor!{T}(x::Atomic{T}, val::T)
+
+Atomically bitwise-xor (exclusive-or) `x` with `val`
+
+Performs `x[] \$= val` atomically. Returns the old (!) value.
+
+For further details, see LLVM's `atomicrmw xor` instruction.
+"""
+function atomic_xor! end
+
+"""
+    Threads.atomic_max!{T}(x::Atomic{T}, val::T)
+
+Atomically store the maximum of `x` and `val` in `x`
+
+Performs `x[] = max(x[], val)` atomically. Returns the old (!) value.
+
+For further details, see LLVM's `atomicrmw min` instruction.
+"""
+function atomic_max! end
+
+"""
+    Threads.atomic_min!{T}(x::Atomic{T}, val::T)
+
+Atomically store the minimum of `x` and `val` in `x`
+
+Performs `x[] = min(x[], val)` atomically. Returns the old (!) value.
+
+For further details, see LLVM's `atomicrmw max` instruction.
+"""
+function atomic_min! end
 
 unsafe_convert{T}(::Type{Ptr{T}}, x::Atomic{T}) = convert(Ptr{T}, pointer_from_objref(x))
 setindex!{T}(x::Atomic{T}, v) = setindex!(x, convert(T, v))
@@ -198,11 +341,21 @@ for op in [:+, :-, :max, :min]
     end
 end
 
-# Use sequential consistency for a memory fence. There are algorithms where this
-# is needed (where an acquire/release ordering is insufficient). This is likely
-# a very expensive operation. Given that all other atomic operations have
-# already acquire/release semantics, explicit fences should not be necessary in
-# most cases.
+"""
+    Threads.atomic_fence()
+
+Insert a sequential-consistency memory fence
+
+Inserts a memory fence with sequentially-consistent ordering
+semantics. There are algorithms where this is needed, i.e. where an
+acquire/release ordering is insufficient.
+
+This is likely a very expensive operation. Given that all other atomic
+operations in Julia already have acquire/release semantics, explicit
+fences should not be necessary in most cases.
+
+For further details, see LLVM's `fence` instruction.
+"""
 atomic_fence() = llvmcall("""
                           fence seq_cst
                           ret void
