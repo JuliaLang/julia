@@ -79,9 +79,7 @@ convert{T<:AbstractString}(::Type{SubString{T}}, s::T) = SubString(s, 1, endof(s
 bytestring{T <: ByteString}(p::SubString{T}) = bytestring(p.string.data[1+p.offset:p.offset+nextind(p, p.endof)-1])
 
 function getindex(s::AbstractString, r::UnitRange{Int})
-    if first(r) < 1 || endof(s) < last(r)
-        throw(BoundsError(s, r))
-    end
+    checkbounds(s, r) || throw(BoundsError(s, r))
     SubString(s, first(r), last(r))
 end
 
