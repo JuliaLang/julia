@@ -184,5 +184,5 @@ function test_bidirectional(exp)
     end
 end
 
-# Test 1GB of bidirectional data....
+# Test 1GB of bidirectional data
 test_bidirectional(9)

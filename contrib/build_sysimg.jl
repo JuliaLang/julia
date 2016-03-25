@@ -46,7 +46,7 @@ function build_sysimg(sysimg_path=nothing, cpu_target="native", userimg_path=not
             error( err_msg )
         end
 
-        # Copy in userimg.jl if it exists...
+        # Copy in userimg.jl if it exists
         if userimg_path != nothing
             if !isfile(userimg_path)
                 error("$userimg_path is not found, ensure it is an absolute path!")

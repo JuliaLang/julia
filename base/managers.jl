@@ -365,7 +365,7 @@ function socket_reuse_port()
             end
             getsockname(s)
         catch e
-            # This is an issue only on systems with lots of client connections, hence delay the warning....
+            # This is an issue only on systems with lots of client connections, hence delay the warning
             nworkers() > 128 && warn_once("Error trying to reuse client port number, falling back to plain socket : ", e)
             # provide a clean new socket
             return TCPSocket()
@@ -408,5 +408,3 @@ function kill(manager::ClusterManager, pid::Int, config::WorkerConfig)
                        # at our end, which will result in a cleanup of the worker.
     nothing
 end
-
-

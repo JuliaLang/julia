@@ -167,7 +167,7 @@ unmark(sock)
 @test_throws ArgumentError reset(sock)
 @test !unmark(sock)
 @test readline(sock) == "Goodbye, world...\n"
-#@test eof(sock) ## doesn't work...
+#@test eof(sock) ## doesn't work
 close(sock)
 
 # issue #4535
