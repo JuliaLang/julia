@@ -1438,20 +1438,14 @@ const jl_value_t *jl_dump_function_asm(void *f, int raw_mc)
     return jl_cstr_to_string(const_cast<char*>(stream.str().c_str()));
 }
 
-// Code coverage
+// Logging for code coverage and memory allocation
 
 const int logdata_blocksize = 32; // target getting nearby lines in the same general cache area and reducing calls to malloc by chunking
 typedef uint64_t logdata_block[logdata_blocksize];
 typedef StringMap< std::vector<logdata_block*> > logdata_t;
-static logdata_t coverageData;
 
-static void coverageVisitLine(StringRef filename, int line)
-{
-    assert(!imaging_mode);
-    if (filename == "" || filename == "none" || filename == "no file" || line < 0)
-        return;
-    std::vector<logdata_block*> &vec = coverageData[filename];
-    int block = line / logdata_blocksize;
+static void visitLine( std::vector<logdata_block*> &vec, int line, Value *addend, const char* name ) {
+    unsigned block = line / logdata_blocksize;
     line = line % logdata_blocksize;
     if (vec.size() <= block)
         vec.resize(block + 1);
@@ -1462,14 +1456,25 @@ static void coverageVisitLine(StringRef filename, int line)
     if (data[line] == 0)
         data[line] = 1;
     Value *v = ConstantExpr::getIntToPtr(
-            ConstantInt::get(T_size, (uintptr_t)&data[line]),
-            T_pint64);
-    builder.CreateStore(builder.CreateAdd(builder.CreateLoad(v, true, "lcnt"),
-                                          ConstantInt::get(T_int64, 1)),
+        ConstantInt::get(T_size, (uintptr_t)&data[line]),
+        T_pint64);
+    builder.CreateStore(builder.CreateAdd(builder.CreateLoad(v, true, name),
+                                          addend),
                         v, true); // not atomic, so this might be an underestimate,
                                   // but it's faster this way
 }
 
+// Code coverage
+
+static logdata_t coverageData;
+
+static void coverageVisitLine(StringRef filename, int line)
+{
+    assert(!imaging_mode);
+    if (filename == "" || filename == "none" || filename == "no file" || line < 0)
+        return;
+    visitLine(coverageData[filename], line, ConstantInt::get(T_int64, 1), "lcnt");
+}
 
 // Memory allocation log (malloc_log)
 
@@ -1482,28 +1487,13 @@ static void mallocVisitLine(StringRef filename, int line)
         jl_gc_sync_total_bytes();
         return;
     }
-    std::vector<logdata_block*> &vec = mallocData[filename];
-    int block = line / logdata_blocksize;
-    line = line % logdata_blocksize;
-    if (vec.size() <= block)
-        vec.resize(block + 1);
-    if (vec[block] == NULL) {
-        vec[block] = (logdata_block*)calloc(1, sizeof(logdata_block));
-    }
-    logdata_block &data = *vec[block];
-    if (data[line] == 0)
-        data[line] = 1;
-    Value *v = ConstantExpr::getIntToPtr(
-            ConstantInt::get(T_size, (uintptr_t)&data[line]),
-            T_pint64);
-    builder.CreateStore(builder.CreateAdd(builder.CreateLoad(v, true, "bytecnt"),
-                                          builder.CreateCall(prepare_call(diff_gc_total_bytes_func)
+    visitLine( mallocData[filename], line,
+               builder.CreateCall(prepare_call(diff_gc_total_bytes_func)
 #ifdef LLVM37
-                                            , {}
+                                  , {}
 #endif
-                                              )),
-                        v, true); // not atomic, so this might be an underestimate,
-                                  // but it's faster this way
+                                  ),
+                        "bytecnt");
 }
 
 // Resets the malloc counts. Needed to avoid including memory usage
@@ -1546,7 +1536,7 @@ static void write_log_data(logdata_t &logData, const char *extension)
                 std::ofstream outf(outfile.c_str(), std::ofstream::trunc | std::ofstream::out);
                 char line[1024];
                 int l = 1;
-                int block = 0;
+                unsigned block = 0;
                 while (!inf.eof()) {
                     inf.getline(line, sizeof(line));
                     if (inf.fail() && !inf.bad()) {
