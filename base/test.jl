@@ -427,7 +427,7 @@ end
 # no failures in child test sets, there is no need to include those
 # in calculating the alignment
 function get_alignment(ts::DefaultTestSet, depth::Int)
-    # The minimum width at this depth is...
+    # The minimum width at this depth is
     ts_width = 2*depth + length(ts.description)
     # If all passing, no need to look at children
     !ts.anynonpass && return ts_width

@@ -66,11 +66,11 @@ function batchsplit(c; min_batch_count=1, max_batch_size=100)
         throw(ArgumentError("max_batch_size must be > 0, got $max_batch_size"))
     end
 
-    # Split collection into batches, then peek at the first few batches...
+    # Split collection into batches, then peek at the first few batches
     batches = partition(c, max_batch_size)
     head, tail = head_and_tail(batches, min_batch_count)
 
-    # If there are not enough batches, use a smaller batch size...
+    # If there are not enough batches, use a smaller batch size
     if length(head) < min_batch_count
         batch_size = max(1, div(sum(length, head), min_batch_count))
         return partition(flatten(head), batch_size)

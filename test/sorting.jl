@@ -269,7 +269,7 @@ for n in [0:10; 100; 101; 1000; 1001]
     end
 
     v = randn_with_nans(n,0.1)
-    # TODO: alg = PartialQuickSort(n) fails here....
+    # TODO: alg = PartialQuickSort(n) fails here
     for alg in [InsertionSort, QuickSort, MergeSort],
         rev in [false,true]
         # test float sorting with NaNs
