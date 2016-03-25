@@ -62,7 +62,7 @@ with a four-space indent so that it is printed as Julia code.
   several related methods of a given function. When a function accepts many keyword
   arguments, only include a ``<keyword arguments>`` placeholder in the signature (i.e.
   ``f(x; <keyword arguments>)``), and give the complete list under an ``# Arguments``
-   section (see point 4 below).
+  section (see point 4 below).
 
 2. Include a single one-line sentence describing what the function does or what the
 object represents after the simplified signature block. If needed, provide more details
@@ -113,7 +113,7 @@ standard text.
   Julia identifiers and code excerpts should always appear between backticks `````
   to enable highlighting. Equations in the LaTeX syntax can be inserted between
   double backticks ``````. Use Unicode characters rather than their LaTeX escape sequence,
-  i.e. ````α = 1```` rather than ````\\alpha = 1````.
+  i.e. ````α = 1```` rather than :samp:`\`\`\\\\alpha = 1\`\``.
 
 7. Place the starting and ending ``"""`` characters on lines by themselves.
 
