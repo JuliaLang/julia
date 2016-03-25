@@ -371,7 +371,11 @@ public:
         bool first = true;
         for(const auto &sym_size : symbols) {
             const object::SymbolRef &sym_iter = sym_size.first;
+#ifdef LLVM39
+            object::SymbolRef::Type SymbolType = sym_iter.getType().get();
+#else
             object::SymbolRef::Type SymbolType = sym_iter.getType();
+#endif
             if (SymbolType != object::SymbolRef::ST_Function) continue;
             uint64_t Addr = sym_iter.getAddress().get();
 #ifdef LLVM38
