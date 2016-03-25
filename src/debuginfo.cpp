@@ -207,6 +207,15 @@ struct revcomp {
     { return lhs>rhs; }
 };
 
+#ifdef LLVM38
+struct strrefcomp {
+    bool operator() (const StringRef& lhs, const StringRef& rhs) const
+    {
+        return lhs.compare(rhs) > 0;
+    }
+};
+#endif
+
 class JuliaJITEventListener: public JITEventListener
 {
 #ifndef USE_MCJIT
@@ -289,6 +298,22 @@ public:
         object::section_iterator EndSection = debugObj.end_sections();
 #endif
 
+#ifdef LLVM38
+        std::map<StringRef,object::SectionRef,strrefcomp> loadedSections;
+        for (const object::SectionRef &lSection: obj.sections()) {
+            StringRef sName;
+            if (!lSection.getName(sName)) {
+                loadedSections[sName] = lSection;
+            }
+        }
+        auto getLoadAddress = [&] (const StringRef &sName) -> uint64_t {
+            auto search = loadedSections.find(sName);
+            if (search == loadedSections.end())
+                return 0;
+            return L.getSectionLoadAddress(search->second);
+        };
+#endif
+
 #if defined(_OS_WINDOWS_)
         uint64_t SectionAddrCheck = 0; // assert that all of the Sections are at the same location
         uint8_t *UnwindData = NULL;
@@ -315,7 +340,8 @@ public:
                 Section = sym_iter.getSection().get();
                 assert(Section != EndSection && Section->isText());
                 SectionAddr = Section->getAddress().get();
-                SectionLoadAddr = L.getSectionLoadAddress(*Section);
+                Section->getName(sName);
+                SectionLoadAddr = getLoadAddress(sName);
 #elif defined(LLVM37)
                 Addr = sym_iter.getAddress().get();
                 sym_iter.getSection(Section);
@@ -371,7 +397,11 @@ public:
         bool first = true;
         for(const auto &sym_size : symbols) {
             const object::SymbolRef &sym_iter = sym_size.first;
+#ifdef LLVM39
+            object::SymbolRef::Type SymbolType = sym_iter.getType().get();
+#else
             object::SymbolRef::Type SymbolType = sym_iter.getType();
+#endif
             if (SymbolType != object::SymbolRef::ST_Function) continue;
             uint64_t Addr = sym_iter.getAddress().get();
 #ifdef LLVM38
@@ -382,11 +412,11 @@ public:
             if (Section == EndSection) continue;
             if (!Section->isText()) continue;
             uint64_t SectionAddr = Section->getAddress();
-#ifdef LLVM38
-            uint64_t SectionLoadAddr = L.getSectionLoadAddress(*Section);
-#else
             StringRef secName;
             Section->getName(secName);
+#ifdef LLVM38
+            uint64_t SectionLoadAddr = getLoadAddress(secName);
+#else
             uint64_t SectionLoadAddr = L.getSectionLoadAddress(secName);
 #endif
             Addr -= SectionAddr - SectionLoadAddr;
