@@ -681,7 +681,7 @@ end
 findfirst(testf::Function, A) = findnext(testf, A, 1)
 
 # returns the index of the previous non-zero element, or 0 if all zeros
-function findprev(A, start)
+function findprev(A, start::Integer)
     for i = start:-1:1
         A[i] != 0 && return i
     end
@@ -690,7 +690,7 @@ end
 findlast(A) = findprev(A, length(A))
 
 # returns the index of the matching element, or 0 if no matching
-function findprev(A, v, start)
+function findprev(A, v, start::Integer)
     for i = start:-1:1
         A[i] == v && return i
     end
@@ -699,7 +699,7 @@ end
 findlast(A, v) = findprev(A, v, length(A))
 
 # returns the index of the previous element for which the function returns true, or zero if it never does
-function findprev(testf::Function, A, start)
+function findprev(testf::Function, A, start::Integer)
     for i = start:-1:1
         testf(A[i]) && return i
     end
@@ -711,8 +711,8 @@ function find(testf::Function, A::AbstractArray)
     # use a dynamic-length array to store the indexes, then copy to a non-padded
     # array for the return
     tmpI = Array(Int, 0)
-    for i = 1:length(A)
-        if testf(A[i])
+    for (i,a) = enumerate(A)
+        if testf(a)
             push!(tmpI, i)
         end
     end
@@ -725,8 +725,8 @@ function find(A::AbstractArray)
     nnzA = countnz(A)
     I = similar(A, Int, nnzA)
     count = 1
-    for i=1:length(A)
-        if A[i] != 0
+    for (i,a) in enumerate(A)
+        if a != 0
             I[count] = i
             count += 1
         end
@@ -823,8 +823,8 @@ end
 function findin(a, b)
     ind = Array(Int, 0)
     bset = Set(b)
-    @inbounds for i = 1:length(a)
-        a[i] in bset && push!(ind, i)
+    @inbounds for (i,ai) in enumerate(a)
+        ai in bset && push!(ind, i)
     end
     ind
 end
@@ -859,9 +859,9 @@ filter(f, As::AbstractArray) = As[map(f, As)::AbstractArray{Bool}]
 
 function filter!(f, a::Vector)
     insrt = 1
-    for curr = 1:length(a)
-        if f(a[curr])
-            a[insrt] = a[curr]
+    for acurr in a
+        if f(acurr)
+            a[insrt] = acurr
             insrt += 1
         end
     end
@@ -871,9 +871,9 @@ end
 
 function filter(f, a::Vector)
     r = Array(eltype(a), 0)
-    for i = 1:length(a)
-        if f(a[i])
-            push!(r, a[i])
+    for ai in a
+        if f(ai)
+            push!(r, ai)
         end
     end
     return r
@@ -886,8 +886,8 @@ function intersect(v1, vs...)
     ret = Array(eltype(v1),0)
     for v_elem in v1
         inall = true
-        for i = 1:length(vs)
-            if !in(v_elem, vs[i])
+        for vsi in vs
+            if !in(v_elem, vsi)
                 inall=false; break
             end
         end
