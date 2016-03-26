@@ -3726,3 +3726,18 @@ end
 @test foo1784()
 @test a[1] == true
 end
+
+# issue #14113
+module A14113
+    using Base.Test
+    # show that making several thousand methods (and lots of AST constants)
+    # doesn't cause any serious issues (for example, for the serializer)
+    # although to keep runtime on the order of several seconds for this test,
+    # only several hundred of them are compiled / called
+    for i = 1:2^14 + 256
+        r = rand(2^4)
+        code = Expr(:tuple, r...)
+        f = @eval () -> $code
+        i > (2^14 - 256) && @test [f()...] == r
+    end
+end
