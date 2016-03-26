@@ -274,20 +274,20 @@ immutable DiffFile
     id::Oid
     path::Cstring
     size::Int64
-    flags::Cuint
+    flags::UInt32
     mode::UInt16
 end
-DiffFile()=DiffFile(Oid(),Cstring_NULL,Int64(0),Cuint(0),UInt16(0))
+DiffFile()=DiffFile(Oid(),Cstring_NULL,Int64(0),UInt32(0),UInt16(0))
 
 immutable DiffDelta
     status::Cint
-    flags::Cuint
+    flags::UInt32
     similarity::UInt16
     nfiles::UInt16
     old_file::DiffFile
     new_file::DiffFile
 end
-DiffDelta()=DiffDelta(Cint(0),Cuint(0),UInt16(0),UInt16(0),DiffFile(),DiffFile())
+DiffDelta()=DiffDelta(Cint(0),UInt32(0),UInt16(0),UInt16(0),DiffFile(),DiffFile())
 
 immutable MergeOptions
     version::Cuint
@@ -334,11 +334,11 @@ immutable IndexEntry
     ctime::IndexTime
     mtime::IndexTime
 
-    dev::Cuint
-    ino::Cuint
-    mode::Cuint
-    uid::Cuint
-    gid::Cuint
+    dev::UInt32
+    ino::UInt32
+    mode::UInt32
+    uid::UInt32
+    gid::UInt32
     file_size::Int64
 
     id::Oid
@@ -350,11 +350,11 @@ immutable IndexEntry
 end
 IndexEntry() = IndexEntry(IndexTime(),
                           IndexTime(),
-                          Cuint(0),
-                          Cuint(0),
-                          Cuint(0),
-                          Cuint(0),
-                          Cuint(0),
+                          UInt32(0),
+                          UInt32(0),
+                          UInt32(0),
+                          UInt32(0),
+                          UInt32(0),
                           Int64(0),
                           Oid(),
                           UInt16(0),
@@ -471,7 +471,7 @@ type Signature
     name::AbstractString
     email::AbstractString
     time::Int64
-    time_offset::Int32
+    time_offset::Cint
 end
 
 """ Resource management helper function
