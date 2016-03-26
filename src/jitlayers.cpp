@@ -160,14 +160,6 @@ extern "C" {
   LLVM_ATTRIBUTE_NOINLINE extern void __jit_debug_register_code();
 }
 
-#if defined(_OS_DARWIN_) && defined(LLVM37) && defined(LLVM_SHLIB)
-#define CUSTOM_MEMORY_MANAGER createRTDyldMemoryManagerOSX
-extern RTDyldMemoryManager *createRTDyldMemoryManagerOSX();
-#elif defined(_OS_LINUX_) && defined(LLVM37) && defined(JL_UNW_HAS_FORMAT_IP)
-#define CUSTOM_MEMORY_MANAGER createRTDyldMemoryManagerUnix
-extern RTDyldMemoryManager *createRTDyldMemoryManagerUnix();
-#endif
-
 namespace {
 
 using namespace llvm;
@@ -190,109 +182,127 @@ void NotifyDebugger(jit_code_entry *JITCodeEntry)
     __jit_debug_descriptor.relevant_entry = JITCodeEntry;
     __jit_debug_register_code();
 }
+}
 // ------------------------ END OF TEMPORARY COPY FROM LLVM -----------------
 
-// Custom object emission notification handler for the JuliaOJIT
-// TODO: hook up RegisterJITEventListener, instead of hard-coding the GDB and JuliaListener targets
-class DebugObjectRegistrar {
-private:
-    void NotifyGDB(OwningBinary<ObjectFile> &DebugObj)
-    {
-      const char *Buffer = DebugObj.getBinary()->getMemoryBufferRef().getBufferStart();
-      size_t      Size = DebugObj.getBinary()->getMemoryBufferRef().getBufferSize();
-
-      assert(Buffer && "Attempt to register a null object with a debugger.");
-      jit_code_entry *JITCodeEntry = new jit_code_entry();
-
-      if (!JITCodeEntry) {
-          jl_printf(JL_STDERR, "WARNING: Allocation failed when registering a JIT entry!\n");
-      }
-      else {
-          JITCodeEntry->symfile_addr = Buffer;
-          JITCodeEntry->symfile_size = Size;
-
-          NotifyDebugger(JITCodeEntry);
-      }
-    }
-
-    std::vector<OwningBinary<ObjectFile>> SavedObjects;
-    std::unique_ptr<JITEventListener> JuliaListener;
-
-public:
-    DebugObjectRegistrar() : JuliaListener(CreateJuliaJITEventListener()) {}
-
-    template <typename ObjSetT, typename LoadResult>
-    void operator()(ObjectLinkingLayerBase::ObjSetHandleT, const ObjSetT &Objects,
-                    const LoadResult &LOS)
-    {
-        auto oit = Objects.begin();
-        auto lit = LOS.begin();
-        while (oit != Objects.end()) {
-#ifdef LLVM39
-            const auto &Object = (*oit)->getBinary();
-#else
-            auto &Object = *oit;
+#if defined(_OS_DARWIN_) && defined(LLVM37) && defined(LLVM_SHLIB)
+#define CUSTOM_MEMORY_MANAGER createRTDyldMemoryManagerOSX
+extern RTDyldMemoryManager *createRTDyldMemoryManagerOSX();
+#elif defined(_OS_LINUX_) && defined(LLVM37) && defined(JL_UNW_HAS_FORMAT_IP)
+#define CUSTOM_MEMORY_MANAGER createRTDyldMemoryManagerUnix
+extern RTDyldMemoryManager *createRTDyldMemoryManagerUnix();
 #endif
-            auto &LO = *lit;
-
-            OwningBinary<ObjectFile> SavedObject = LO->getObjectForDebug(*Object);
-
-            // If the debug object is unavailable, save (a copy of) the original object
-            // for our backtraces
-            if (!SavedObject.getBinary()) {
-                // This is unfortunate, but there doesn't seem to be a way to take
-                // ownership of the original buffer
-                auto NewBuffer = MemoryBuffer::getMemBufferCopy(Object->getData(), Object->getFileName());
-                auto NewObj = ObjectFile::createObjectFile(NewBuffer->getMemBufferRef());
-                SavedObject = OwningBinary<ObjectFile>(std::move(*NewObj),std::move(NewBuffer));
-            }
-            else {
-                NotifyGDB(SavedObject);
-            }
-
-            SavedObjects.push_back(std::move(SavedObject));
-
-            ORCNotifyObjectEmitted(JuliaListener.get(),
-                    *Object,
-                    *SavedObjects.back().getBinary(),
-                    *LO);
-
-            ++oit;
-            ++lit;
-        }
-    }
-};
+#ifndef CUSTOM_MEMORY_MANAGER
+#define CUSTOM_MEMORY_MANAGER() new SectionMemoryManager
+#endif
 
 // A simplified model of the LLVM ExecutionEngine that implements only the methods that Julia needs
 // but tries to roughly match the API anyways so that compatibility is easier
 class JuliaOJIT {
+    // Custom object emission notification handler for the JuliaOJIT
+    // TODO: hook up RegisterJITEventListener, instead of hard-coding the GDB and JuliaListener targets
+    class DebugObjectRegistrar {
+    public:
+        DebugObjectRegistrar(JuliaOJIT &JIT)
+            : JuliaListener(CreateJuliaJITEventListener()),
+              JIT(JIT) {}
+
+        template <typename ObjSetT, typename LoadResult>
+        void operator()(ObjectLinkingLayerBase::ObjSetHandleT H, const ObjSetT &Objects,
+                        const LoadResult &LOS)
+        {
+            auto oit = Objects.begin();
+            auto lit = LOS.begin();
+            for (; oit != Objects.end(); ++oit, ++lit) {
+#ifdef LLVM39
+                const auto &Object = (*oit)->getBinary();
+#else
+                auto &Object = *oit;
+#endif
+                auto &LO = *lit;
+
+                OwningBinary<object::ObjectFile> SavedObject = LO->getObjectForDebug(*Object);
+
+                // If the debug object is unavailable, save (a copy of) the original object
+                // for our backtraces
+                if (!SavedObject.getBinary()) {
+                    // This is unfortunate, but there doesn't seem to be a way to take
+                    // ownership of the original buffer
+                    auto NewBuffer = MemoryBuffer::getMemBufferCopy(Object->getData(), Object->getFileName());
+                    auto NewObj = ObjectFile::createObjectFile(NewBuffer->getMemBufferRef());
+                    SavedObject = OwningBinary<object::ObjectFile>(std::move(*NewObj),std::move(NewBuffer));
+                }
+                else {
+                    NotifyGDB(SavedObject);
+                }
+
+                SavedObjects.push_back(std::move(SavedObject));
+
+                ORCNotifyObjectEmitted(JuliaListener.get(),
+                        *Object,
+                        *SavedObjects.back().getBinary(),
+                        *LO);
+
+                // record all of the exported symbols defined in this object
+                // in the primary hash table for the enclosing JIT
+                for (auto &Symbol : Object->symbols()) {
+                    auto Flags = Symbol.getFlags();
+                    if (Flags & object::BasicSymbolRef::SF_Undefined)
+                        continue;
+                    if (!(Flags & object::BasicSymbolRef::SF_Exported))
+                        continue;
+                    ErrorOr<StringRef> Name = Symbol.getName();
+                    orc::JITSymbol Sym = JIT.CompileLayer.findSymbolIn(H, *Name, true);
+                    assert(Sym);
+                    // note: calling getAddress here eagerly finalizes H
+                    // as an alternative, we could store the JITSymbol instead
+                    // (which would present a lazy-initializer functor interface instead)
+                    JIT.LocalSymbolTable[*Name] = (void*)(uintptr_t)Sym.getAddress();
+                }
+            }
+        }
+
+    private:
+        void NotifyGDB(OwningBinary<object::ObjectFile> &DebugObj)
+        {
+            const char *Buffer = DebugObj.getBinary()->getMemoryBufferRef().getBufferStart();
+            size_t      Size = DebugObj.getBinary()->getMemoryBufferRef().getBufferSize();
+
+            assert(Buffer && "Attempt to register a null object with a debugger.");
+            jit_code_entry *JITCodeEntry = new jit_code_entry();
+
+            if (!JITCodeEntry) {
+                jl_printf(JL_STDERR, "WARNING: Allocation failed when registering a JIT entry!\n");
+            }
+            else {
+                JITCodeEntry->symfile_addr = Buffer;
+                JITCodeEntry->symfile_size = Size;
+
+                NotifyDebugger(JITCodeEntry);
+            }
+        }
+
+        std::vector<OwningBinary<object::ObjectFile>> SavedObjects;
+        std::unique_ptr<JITEventListener> JuliaListener;
+        JuliaOJIT &JIT;
+    };
+
 public:
     typedef orc::ObjectLinkingLayer<DebugObjectRegistrar> ObjLayerT;
     typedef orc::IRCompileLayer<ObjLayerT> CompileLayerT;
     typedef CompileLayerT::ModuleSetHandleT ModuleHandleT;
-    typedef StringMap<void*> GlobalSymbolTableT;
+    typedef StringMap<void*> SymbolTableT;
     typedef object::OwningBinary<object::ObjectFile> OwningObj;
 
     JuliaOJIT(TargetMachine &TM)
       : TM(TM),
         DL(TM.createDataLayout()),
         ObjStream(ObjBufferSV),
-        MemMgr(
-#ifdef CUSTOM_MEMORY_MANAGER
-            CUSTOM_MEMORY_MANAGER()
-#else
-            new SectionMemoryManager
-#endif
-            ) {
-#ifdef JL_DEBUG_BUILD
-            PM.add(createVerifierPass());
-#endif
-            addOptimizationPasses(&PM);
-            if (TM.addPassesToEmitMC(PM, Ctx, ObjStream))
-                llvm_unreachable("Target does not support MC emission.");
-
-            CompileLayer = std::unique_ptr<CompileLayerT>{new CompileLayerT(ObjectLayer,
-                [&](Module &M) {
+        MemMgr(CUSTOM_MEMORY_MANAGER()),
+        ObjectLayer(DebugObjectRegistrar(*this)),
+        CompileLayer(
+                ObjectLayer,
+                [this](Module &M) {
                     PM.run(M);
                     std::unique_ptr<MemoryBuffer> ObjBuffer(
                         new ObjectMemoryBuffer(std::move(ObjBufferSV)));
@@ -307,11 +317,18 @@ public:
 
                     return OwningObj(std::move(*Obj), std::move(ObjBuffer));
                 }
-            )};
+            )
+        {
+#ifdef JL_DEBUG_BUILD
+            PM.add(createVerifierPass());
+#endif
+            addOptimizationPasses(&PM);
+            if (TM.addPassesToEmitMC(PM, Ctx, ObjStream))
+                llvm_unreachable("Target does not support MC emission.");
+
             // Make sure SectionMemoryManager::getSymbolAddressInProcess can resolve
             // symbols in the program as well. The nullptr argument to the function
             // tells DynamicLibrary to load the program, not a library.
-
             std::string *ErrorStr = nullptr;
             if (sys::DynamicLibrary::LoadLibraryPermanently(nullptr, ErrorStr))
                 report_fatal_error("FATAL: unable to dlopen self\n" + *ErrorStr);
@@ -336,8 +353,9 @@ public:
        assert(successful);
     }
 
-    void *getPointerToGlobalIfAvailable(StringRef S) {
-        GlobalSymbolTableT::const_iterator pos = GlobalSymbolTable.find(S);
+    void *getPointerToGlobalIfAvailable(StringRef S)
+    {
+        SymbolTableT::const_iterator pos = GlobalSymbolTable.find(S);
         if (pos != GlobalSymbolTable.end())
             return pos->second;
         return nullptr;
@@ -379,23 +397,27 @@ public:
                         );
         SmallVector<std::unique_ptr<Module>,1> Ms;
         Ms.push_back(std::move(M));
-        return CompileLayer->addModuleSet(std::move(Ms),
+        return CompileLayer.addModuleSet(std::move(Ms),
                                           MemMgr,
                                           std::move(Resolver));
     }
 
-    void removeModule(ModuleHandleT H) { CompileLayer->removeModuleSet(H); }
+    void removeModule(ModuleHandleT H)
+    {
+        CompileLayer.removeModuleSet(H);
+    }
 
     orc::JITSymbol findSymbol(const std::string &Name, bool ExportedSymbolsOnly)
     {
+        void *Addr = nullptr;
         if (ExportedSymbolsOnly) {
             // Step 1: Check against list of known external globals
-            void *Addr = getPointerToGlobalIfAvailable(Name);
-            if (Addr != nullptr)
-                return orc::JITSymbol((uintptr_t)Addr, JITSymbolFlags::Exported);
+            Addr = getPointerToGlobalIfAvailable(Name);
         }
         // Step 2: Search all previously emitted symbols
-        return CompileLayer->findSymbol(Name, ExportedSymbolsOnly);
+        if (Addr == nullptr)
+            Addr = LocalSymbolTable[Name];
+        return orc::JITSymbol((uintptr_t)Addr, JITSymbolFlags::Exported);
     }
 
     orc::JITSymbol findUnmangledSymbol(const std::string Name)
@@ -444,11 +466,11 @@ private:
     MCContext *Ctx;
     RTDyldMemoryManager *MemMgr;
     ObjLayerT ObjectLayer;
-    std::unique_ptr<CompileLayerT> CompileLayer;
-    GlobalSymbolTableT GlobalSymbolTable;
+    CompileLayerT CompileLayer;
+    SymbolTableT GlobalSymbolTable;
+    SymbolTableT LocalSymbolTable;
 };
 
-}
 #endif
 
 #ifdef USE_ORCJIT

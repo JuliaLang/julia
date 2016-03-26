@@ -1393,9 +1393,7 @@ const jl_value_t *jl_dump_function_asm(void *f, int raw_mc)
 #endif
     const object::ObjectFile *object = NULL;
     assert(fptr != 0);
-    bool isJIT = true;
     if (!jl_DI_for_fptr(fptr, &symsize, &slide, &section_slide, &object, &context)) {
-        isJIT = false;
         if (!jl_dylib_DI_for_fptr(fptr, &object, &objcontext, &slide, &section_slide, false,
             NULL, NULL, NULL, NULL)) {
                 jl_printf(JL_STDERR, "WARNING: Unable to find function pointer\n");
@@ -1410,9 +1408,6 @@ const jl_value_t *jl_dump_function_asm(void *f, int raw_mc)
     }
 
     if (raw_mc) {
-#ifdef LLVM37
-        jl_cleanup_DI(context);
-#endif
         return (jl_value_t*)jl_pchar_to_array((char*)fptr, symsize);
     }
 
@@ -1428,10 +1423,7 @@ const jl_value_t *jl_dump_function_asm(void *f, int raw_mc)
 #endif
             );
 
-#ifdef LLVM37
-    if (isJIT)
-        jl_cleanup_DI(context);
-#else
+#ifndef LLVM37
     fstream.flush();
 #endif
 
