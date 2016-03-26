@@ -105,27 +105,27 @@ CheckoutOptions(; checkout_strategy::Cuint = Consts.CHECKOUT_SAFE,
                   our_label::Cstring = Cstring_NULL,
                   their_label::Cstring = Cstring_NULL,
                   perfdata_cb::Ptr{Void} = Ptr{Void}(0),
-                  perfdata_payload::Ptr{Void} = Ptr{Void}(0)
-)=CheckoutOptions(one(Cuint),
-                  checkout_strategy,
-                  disable_filters,
-                  dir_mode,
-                  file_mode,
-                  file_open_flags,
-                  notify_flags,
-                  notify_cb,
-                  notify_payload,
-                  progress_cb,
-                  progress_payload,
-                  paths,
-                  baseline,
-                  baseline_index,
-                  target_directory,
-                  ancestor_label,
-                  our_label,
-                  their_label,
-                  perfdata_cb,
-                  perfdata_payload)
+                  perfdata_payload::Ptr{Void} = Ptr{Void}(0)) =
+    CheckoutOptions(one(Cuint),
+                    checkout_strategy,
+                    disable_filters,
+                    dir_mode,
+                    file_mode,
+                    file_open_flags,
+                    notify_flags,
+                    notify_cb,
+                    notify_payload,
+                    progress_cb,
+                    progress_payload,
+                    paths,
+                    baseline,
+                    baseline_index,
+                    target_directory,
+                    ancestor_label,
+                    our_label,
+                    their_label,
+                    perfdata_cb,
+                    perfdata_payload)
 
 immutable RemoteCallbacks
     version::Cuint
@@ -153,20 +153,20 @@ RemoteCallbacks(; sideband_progress::Ptr{Void} = C_NULL,
                   push_update_reference::Ptr{Void} = C_NULL,
                   push_negotiation::Ptr{Void} = C_NULL,
                   transport::Ptr{Void} = C_NULL,
-                  payload::Ptr{Void} = C_NULL
-)=RemoteCallbacks(one(Cuint),
-                  sideband_progress,
-                  completion,
-                  credentials,
-                  certificate_check,
-                  transfer_progress,
-                  update_tips,
-                  pack_progress,
-                  push_transfer_progress,
-                  push_update_reference,
-                  push_negotiation,
-                  transport,
-                  payload)
+                  payload::Ptr{Void} = C_NULL) =
+    RemoteCallbacks(one(Cuint),
+                    sideband_progress,
+                    completion,
+                    credentials,
+                    certificate_check,
+                    transfer_progress,
+                    update_tips,
+                    pack_progress,
+                    push_transfer_progress,
+                    push_update_reference,
+                    push_negotiation,
+                    transport,
+                    payload)
 
 function RemoteCallbacks{P<:AbstractPayload}(credentials::Ptr{Void}, payload::Nullable{P})
     if isnull(payload)
@@ -190,8 +190,8 @@ if LibGit2.version() >= v"0.24.0"
                    prune::Cint = Consts.FETCH_PRUNE_UNSPECIFIED,
                    update_fetchhead::Cint = one(Cint),
                    download_tags::Cint = Consts.REMOTE_DOWNLOAD_TAGS_AUTO,
-                   custom_headers::StrArrayStruct = StrArrayStruct()
-    ) = FetchOptions(one(Cuint),
+                   custom_headers::StrArrayStruct = StrArrayStruct()) =
+        FetchOptions(one(Cuint),
                      callbacks,
                      prune,
                      update_fetchhead,
@@ -208,8 +208,8 @@ else
     FetchOptions(; callbacks::RemoteCallbacks = RemoteCallbacks(),
                    prune::Cint = Consts.FETCH_PRUNE_UNSPECIFIED,
                    update_fetchhead::Cint = one(Cint),
-                   download_tags::Cint = Consts.REMOTE_DOWNLOAD_TAGS_AUTO
-    ) = FetchOptions(one(Cuint),
+                   download_tags::Cint = Consts.REMOTE_DOWNLOAD_TAGS_AUTO) =
+        FetchOptions(one(Cuint),
                      callbacks,
                      prune,
                      update_fetchhead,
@@ -236,17 +236,17 @@ CloneOptions(; checkout_opts::CheckoutOptions = CheckoutOptions(),
                repository_cb::Ptr{Void} = Ptr{Void}(0),
                repository_cb_payload::Ptr{Void} = Ptr{Void}(0),
                remote_cb::Ptr{Void} = Ptr{Void}(0),
-               remote_cb_payload::Ptr{Void} = Ptr{Void}(0)
-)=CloneOptions(one(Cuint),
-               checkout_opts,
-               fetch_opts,
-               bare,
-               localclone,
-               checkout_branch,
-               repository_cb,
-               repository_cb_payload,
-               remote_cb,
-               remote_cb_payload)
+               remote_cb_payload::Ptr{Void} = Ptr{Void}(0)) =
+    CloneOptions(one(Cuint),
+                 checkout_opts,
+                 fetch_opts,
+                 bare,
+                 localclone,
+                 checkout_branch,
+                 repository_cb,
+                 repository_cb_payload,
+                 remote_cb,
+                 remote_cb_payload)
 
 # git diff option struct
 if LibGit2.version() >= v"0.24.0"
@@ -280,21 +280,20 @@ if LibGit2.version() >= v"0.24.0"
                         id_abbrev::UInt16 = UInt16(7),
                         max_size::Int64 = Int64(512*1024*1024), #zero(Int64), #512Mb
                         old_prefix::Cstring = Cstring_NULL,
-                        new_prefix::Cstring = Cstring_NULL
-    )=DiffOptionsStruct(Consts.DIFF_OPTIONS_VERSION,
-                        flags,
-                        ignore_submodules,
-                        pathspec,
-                        notify_cb,
-                        progress_cb,
-                        notify_payload,
-                        context_lines,
-                        interhunk_lines,
-                        id_abbrev,
-                        max_size,
-                        old_prefix,
-                        new_prefix
-                    )
+                        new_prefix::Cstring = Cstring_NULL) =
+        DiffOptionsStruct(Consts.DIFF_OPTIONS_VERSION,
+                          flags,
+                          ignore_submodules,
+                          pathspec,
+                          notify_cb,
+                          progress_cb,
+                          notify_payload,
+                          context_lines,
+                          interhunk_lines,
+                          id_abbrev,
+                          max_size,
+                          old_prefix,
+                          new_prefix)
 else
     immutable DiffOptionsStruct
         version::Cuint
@@ -324,20 +323,19 @@ else
                         id_abbrev::UInt16 = UInt16(7),
                         max_size::Int64 = Int64(512*1024*1024), #zero(Int64), #512Mb
                         old_prefix::Cstring = Cstring_NULL,
-                        new_prefix::Cstring = Cstring_NULL
-    )=DiffOptionsStruct(Consts.DIFF_OPTIONS_VERSION,
-                        flags,
-                        ignore_submodules,
-                        pathspec,
-                        notify_cb,
-                        notify_payload,
-                        context_lines,
-                        interhunk_lines,
-                        id_abbrev,
-                        max_size,
-                        old_prefix,
-                        new_prefix
-                    )
+                        new_prefix::Cstring = Cstring_NULL) =
+        DiffOptionsStruct(Consts.DIFF_OPTIONS_VERSION,
+                          flags,
+                          ignore_submodules,
+                          pathspec,
+                          notify_cb,
+                          notify_payload,
+                          context_lines,
+                          interhunk_lines,
+                          id_abbrev,
+                          max_size,
+                          old_prefix,
+                          new_prefix)
 end
 
 immutable DiffFile
@@ -347,7 +345,7 @@ immutable DiffFile
     flags::UInt32
     mode::UInt16
 end
-DiffFile()=DiffFile(Oid(),Cstring_NULL,Int64(0),UInt32(0),UInt16(0))
+DiffFile() = DiffFile(Oid(), Cstring_NULL, Int64(0), UInt32(0), UInt16(0))
 
 immutable DiffDelta
     status::Cint
@@ -357,7 +355,7 @@ immutable DiffDelta
     old_file::DiffFile
     new_file::DiffFile
 end
-DiffDelta()=DiffDelta(Cint(0),UInt32(0),UInt16(0),UInt16(0),DiffFile(),DiffFile())
+DiffDelta() = DiffDelta(Cint(0), UInt32(0), UInt16(0), UInt16(0), DiffFile(), DiffFile())
 
 immutable MergeOptions
     version::Cuint
@@ -373,15 +371,14 @@ MergeOptions(; flags::Cint = Cint(0),
                target_limit::Cuint = Cuint(200),
                metric::Ptr{Void} = C_NULL,
                file_favor::Cint = Cint(Consts.MERGE_FILE_FAVOR_NORMAL),
-               file_flags::Cuint =Cuint(Consts.MERGE_FILE_DEFAULT)
-)=MergeOptions(one(Cuint),
-               flags,
-               rename_threshold,
-               target_limit,
-               metric,
-               file_favor,
-               file_flags
-              )
+               file_flags::Cuint = Cuint(Consts.MERGE_FILE_DEFAULT)) =
+    MergeOptions(one(Cuint),
+                 flags,
+                 rename_threshold,
+                 target_limit,
+                 metric,
+                 file_favor,
+                 file_flags)
 
 immutable PushOptions
     version::Cuint
@@ -389,10 +386,10 @@ immutable PushOptions
     callbacks::RemoteCallbacks
 end
 PushOptions(; parallelism::Cint=one(Cint),
-              callbacks::RemoteCallbacks=RemoteCallbacks()
-)=PushOptions(one(Cuint),
-              parallelism,
-              callbacks)
+              callbacks::RemoteCallbacks=RemoteCallbacks()) =
+    PushOptions(one(Cuint),
+                parallelism,
+                callbacks)
 
 immutable IndexTime
     seconds::Int64
@@ -465,7 +462,7 @@ immutable RebaseOperation
     id::Oid
     exec::Cstring
 end
-RebaseOperation()=RebaseOperation(Cint(0), Oid(), Cstring_NULL)
+RebaseOperation() = RebaseOperation(Cint(0), Oid(), Cstring_NULL)
 Base.show(io::IO, rbo::RebaseOperation) = print(io, "RebaseOperation($(string(rbo.id)))")
 
 immutable StatusOptions
@@ -479,18 +476,18 @@ StatusOptions(; show::Cint = Consts.STATUS_SHOW_INDEX_AND_WORKDIR,
                                Consts.STATUS_OPT_RECURSE_UNTRACKED_DIRS |
                                Consts.STATUS_OPT_RENAMES_HEAD_TO_INDEX |
                                Consts.STATUS_OPT_SORT_CASE_SENSITIVELY,
-                pathspec::StrArrayStruct = StrArrayStruct()
-)=StatusOptions(one(Cuint),
-                show,
-                flags,
-                pathspec)
+                pathspec::StrArrayStruct = StrArrayStruct()) =
+    StatusOptions(one(Cuint),
+                  show,
+                  flags,
+                  pathspec)
 
 immutable StatusEntry
     status::Cuint
     head_to_index::Ptr{DiffDelta}
     index_to_workdir::Ptr{DiffDelta}
 end
-StatusEntry()=StatusEntry(Cuint(0), C_NULL, C_NULL)
+StatusEntry() = StatusEntry(Cuint(0), C_NULL, C_NULL)
 
 immutable FetchHead
     name::AbstractString
