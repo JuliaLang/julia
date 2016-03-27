@@ -558,7 +558,7 @@ Text I/O
 
    .. Docstring generated from Julia source
 
-   Read a matrix from the source where each line (separated by ``eol``\ ) gives one row, with elements separated by the given delimeter. The source can be a text file, stream or byte array. Memory mapped files can be used by passing the byte array representation of the mapped segment as source.
+   Read a matrix from the source where each line (separated by ``eol``\ ) gives one row, with elements separated by the given delimiter. The source can be a text file, stream or byte array. Memory mapped files can be used by passing the byte array representation of the mapped segment as source.
 
    If ``T`` is a numeric type, the result is an array of that type, with any non-numeric elements as ``NaN`` for floating-point types, or zero. Other useful values of ``T`` include ``ASCIIString``\ , ``AbstractString``\ , and ``Any``\ .
 
@@ -608,7 +608,7 @@ Text I/O
 
    .. Docstring generated from Julia source
 
-   Write ``A`` (a vector, matrix or an iterable collection of iterable rows) as text to ``f`` (either a filename string or an ``IO`` stream) using the given delimeter ``delim`` (which defaults to tab, but can be any printable Julia object, typically a ``Char`` or ``AbstractString``\ ).
+   Write ``A`` (a vector, matrix or an iterable collection of iterable rows) as text to ``f`` (either a filename string or an ``IO`` stream) using the given delimiter ``delim`` (which defaults to tab, but can be any printable Julia object, typically a ``Char`` or ``AbstractString``\ ).
 
    For example, two vectors ``x`` and ``y`` of the same length can be written as two columns of tab-delimited text to ``f`` by either ``writedlm(f, [x y])`` or by ``writedlm(f, zip(x, y))``\ .
 
