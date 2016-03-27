@@ -222,11 +222,11 @@ function find_start_brace(s::AbstractString; c_start='(', c_end=')')
                 in_back_ticks = true
             end
         else
-            if !in_back_ticks && !in_double_quotes && c == '\''
+            if !in_back_ticks && !in_double_quotes && c == '\'' && !done(r, i) && next(r, i)[1]!='\\'
                 in_single_quotes = !in_single_quotes
-            elseif !in_back_ticks && !in_single_quotes && c == '"'
+            elseif !in_back_ticks && !in_single_quotes && c == '"' && !done(r, i) && next(r, i)[1]!='\\'
                 in_double_quotes = !in_double_quotes
-            elseif !in_single_quotes && !in_double_quotes && c == '`'
+            elseif !in_single_quotes && !in_double_quotes && c == '`' && !done(r, i) && next(r, i)[1]!='\\'
                 in_back_ticks = !in_back_ticks
             end
         end
@@ -334,6 +334,10 @@ include("emoji_symbols.jl")
 
 const non_identifier_chars = [" \t\n\r\"\\'`\$><=:;|&{}()[],+-*/?%^~"...]
 const whitespace_chars = [" \t\n\r"...]
+# "\"'`"... is added to whitespace_chars as non of the bslash_completions
+# characters contian any of these characters. It prohibits the
+# bslash_completions function to try and complete on escaped characters in strings
+const bslash_separators = [whitespace_chars..., "\"'`"...]
 
 # Aux function to detect whether we're right after a
 # using or import keyword
@@ -350,7 +354,7 @@ end
 
 function bslash_completions(string, pos)
     slashpos = rsearch(string, '\\', pos)
-    if (rsearch(string, whitespace_chars, pos) < slashpos &&
+    if (rsearch(string, bslash_separators, pos) < slashpos &&
         !(1 < slashpos && (string[prevind(string, slashpos)]=='\\')))
         # latex / emoji symbol substitution
         s = string[slashpos:pos]
