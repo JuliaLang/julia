@@ -44,6 +44,8 @@ module CompletionFoo
     varfloat = 0.1
 
     const tuple = (1, 2)
+
+    test_y_array=[CompletionFoo.Test_y(rand()) for i in 1:10]
 end
 
 function temp_pkg_dir(fn::Function)
@@ -109,6 +111,10 @@ c,r = test_complete(s)
 @test s[r] == "x"
 
 s = "Main.CompletionFoo.bar.no_val_available"
+c,r = test_complete(s)
+@test length(c)==0
+#cannot do dot completion on infix operator
+s = "+."
 c,r = test_complete(s)
 @test length(c)==0
 
@@ -296,6 +302,31 @@ c, r, res = test_complete(s)
 @test !res
 @test length(c) == 2
 #################################################################
+
+# Test of inference based getfield completion
+s = "\"\"."
+c,r = test_complete(s)
+@test length(c)==1
+@test r == (endof(s)+1):endof(s)
+@test c[1] == "data"
+
+s = "(\"\"*\"\")."
+c,r = test_complete(s)
+@test length(c)==1
+@test r == (endof(s)+1):endof(s)
+@test c[1] == "data"
+
+s = "CompletionFoo.test_y_array[1]."
+c,r = test_complete(s)
+@test length(c)==1
+@test r == (endof(s)+1):endof(s)
+@test c[1] == "yy"
+
+s = "CompletionFoo.Test_y(rand()).y"
+c,r = test_complete(s)
+@test length(c)==1
+@test r == endof(s):endof(s)
+@test c[1] == "yy"
 
 # Test completion in multi-line comments
 s = "#=\n\\alpha"
