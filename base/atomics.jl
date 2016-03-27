@@ -66,31 +66,31 @@ for typ in atomictypes
     if VersionNumber(Base.libllvm_version) >= v"3.8"
         @eval getindex(x::Atomic{$typ}) =
             llvmcall($"""
-                     %rv = load atomic $rt %0 acquire, align $WORD_SIZE
+                     %rv = load atomic $rt %0 acquire, align $(WORD_SIZE ÷ 8)
                      ret $lt %rv
                      """, $typ, Tuple{Ptr{$typ}}, unsafe_convert(Ptr{$typ}, x))
         @eval setindex!(x::Atomic{$typ}, v::$typ) =
             llvmcall($"""
-                     store atomic $lt %1, $lt* %0 release, align $WORD_SIZE
+                     store atomic $lt %1, $lt* %0 release, align $(WORD_SIZE ÷ 8)
                      ret void
                      """, Void, Tuple{Ptr{$typ},$typ}, unsafe_convert(Ptr{$typ}, x), v)
     else
         if typ <: Integer
             @eval getindex(x::Atomic{$typ}) =
                 llvmcall($"""
-                         %rv = load atomic $rt %0 acquire, align $WORD_SIZE
+                         %rv = load atomic $rt %0 acquire, align $(WORD_SIZE ÷ 8)
                          ret $lt %rv
                          """, $typ, Tuple{Ptr{$typ}}, unsafe_convert(Ptr{$typ}, x))
             @eval setindex!(x::Atomic{$typ}, v::$typ) =
                 llvmcall($"""
-                         store atomic $lt %1, $lt* %0 release, align $WORD_SIZE
+                         store atomic $lt %1, $lt* %0 release, align $(WORD_SIZE ÷ 8)
                          ret void
                          """, Void, Tuple{Ptr{$typ},$typ}, unsafe_convert(Ptr{$typ}, x), v)
         else
             @eval getindex(x::Atomic{$typ}) =
                 llvmcall($"""
                          %iptr = bitcast $lt* %0 to $ilt*
-                         %irv = load atomic $irt %iptr acquire, align $WORD_SIZE
+                         %irv = load atomic $irt %iptr acquire, align $(WORD_SIZE ÷ 8)
                          %rv = bitcast $ilt %irv to $lt
                          ret $lt %rv
                          """, $typ, Tuple{Ptr{$typ}}, unsafe_convert(Ptr{$typ}, x))
@@ -98,21 +98,13 @@ for typ in atomictypes
                 llvmcall($"""
                          %iptr = bitcast $lt* %0 to $ilt*
                          %ival = bitcast $lt %1 to $ilt
-                         store atomic $ilt %ival, $ilt* %iptr release, align $WORD_SIZE
+                         store atomic $ilt %ival, $ilt* %iptr release, align $(WORD_SIZE ÷ 8)
                          ret void
                          """, Void, Tuple{Ptr{$typ},$typ}, unsafe_convert(Ptr{$typ}, x), v)
         end
     end
     # Note: atomic_cas! succeeded (i.e. it stored "new") if and only if the result is "cmp"
-    if VersionNumber(Base.libllvm_version) >= v"3.8"
-        @eval atomic_cas!(x::Atomic{$typ}, cmp::$typ, new::$typ) =
-            llvmcall($"""
-                     %rs = cmpxchg $lt* %0, $lt %1, $lt %2 acq_rel acquire
-                     %rv = extractvalue { $lt, i1 } %rs, 0
-                     ret $lt %rv
-                     """, $typ, Tuple{Ptr{$typ},$typ,$typ},
-                     unsafe_convert(Ptr{$typ}, x), cmp, new)
-    elseif VersionNumber(Base.libllvm_version) >= v"3.5"
+    if VersionNumber(Base.libllvm_version) >= v"3.5"
         if typ <: Integer
             @eval atomic_cas!(x::Atomic{$typ}, cmp::$typ, new::$typ) =
                 llvmcall($"""
