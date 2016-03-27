@@ -100,7 +100,7 @@ This function provides equivalent functionality, but makes no efforts to optimis
     (modify-syntax-entry ?\) ")( " table)
     ;; Here, we treat ' as punctuation (when it's used for transpose),
     ;; see our use of `julia-char-regex' for handling ' as a character
-    ;; delimeter
+    ;; delimiter
     (modify-syntax-entry ?'  "." table)
     (modify-syntax-entry ?\" "\"" table)
     (modify-syntax-entry ?` "\"" table)
@@ -333,7 +333,7 @@ This function provides equivalent functionality, but makes no efforts to optimis
   (list "end" "else" "elseif" "catch" "finally"))
 
 (defun julia-stringify-triple-quote ()
-  "Put `syntax-table' property on triple-quoted string delimeters.
+  "Put `syntax-table' property on triple-quoted string delimiters.
 
 Based on `python-syntax-stringify'."
   (let* ((string-start-pos (- (point) 3))
