@@ -856,6 +856,7 @@ bool jl_dylib_DI_for_fptr(size_t pointer, const llvm::object::ObjectFile **obj, 
                 objfilemap[fbase] = entry;
                 return true;
             }
+
 #ifdef LLVM36
             *obj = (llvm::object::MachOObjectFile *)origerrorobj.get().release();
 #elif defined(LLVM35)
@@ -864,6 +865,8 @@ bool jl_dylib_DI_for_fptr(size_t pointer, const llvm::object::ObjectFile **obj, 
             *obj = (llvm::object::MachOObjectFile *)origerrorobj;
 #endif
             llvm::object::MachOObjectFile *morigobj = (llvm::object::MachOObjectFile *)*obj;
+
+
             // First find the uuid of the object file (we'll use this to make sure we find the
             // correct debug symbol file).
             uint8_t uuid[16], uuid2[16];
@@ -910,7 +913,8 @@ bool jl_dylib_DI_for_fptr(size_t pointer, const llvm::object::ObjectFile **obj, 
                 *obj = errorobj;
 #endif
 #ifdef _OS_DARWIN_
-                if (getObjUUID(morigobj,uuid2) && memcmp(uuid,uuid2,sizeof(uuid)) == 0) {
+                if (getObjUUID((llvm::object::MachOObjectFile *)*obj,uuid2) &&
+                    memcmp(uuid,uuid2,sizeof(uuid)) == 0) {
 #endif
 #ifdef LLVM37
                     *context = new DWARFContextInMemory(**obj);
@@ -921,6 +925,23 @@ bool jl_dylib_DI_for_fptr(size_t pointer, const llvm::object::ObjectFile **obj, 
 #endif
                     *slide = -(int64_t)fbase;
 #ifdef _OS_DARWIN_
+                } else {
+                    // If we're here the, the dsym does not match the dylib. Use the original
+                    // object instead. For consistency (and to make sure we get a sensible size
+                    // for the memory buffer), we also use a fresh copy mapped from
+                    // the file rather than reusing the one in memory. We may want to revisit
+                    // that in the future (ideally, once we support fewer LLVM versions).
+                    errorobj = llvm::object::ObjectFile::createObjectFile(fname);
+#ifdef LLVM36
+                    auto binary = errorobj.get().takeBinary();
+                    *obj = binary.first.release();
+                    binary.second.release();
+#elif defined(LLVM35)
+                    *obj = errorobj.get();
+#else
+                    *obj = errorobj;
+#endif
+                    delete morigobj;
                 }
 #endif
 #if defined(_OS_WINDOWS_)
