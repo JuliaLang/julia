@@ -5731,6 +5731,7 @@ extern "C" void jl_init_codegen(void)
     InitializeNativeTarget();
     InitializeNativeTargetAsmPrinter();
     InitializeNativeTargetAsmParser();
+    InitializeNativeTargetDisassembler();
 
     Module *m, *engine_module;
     engine_module = new Module("julia", jl_LLVMContext);
