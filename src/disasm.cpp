@@ -271,7 +271,17 @@ static void print_source_line(raw_ostream &stream, DebugLoc Loc)
 }
 #endif
 
-extern "C"
+extern "C" {
+JL_DLLEXPORT LLVMDisasmContextRef jl_LLVMCreateDisasm(const char *TripleName, void *DisInfo, int TagType, LLVMOpInfoCallback GetOpInfo, LLVMSymbolLookupCallback SymbolLookUp)
+{
+    return LLVMCreateDisasm(TripleName, DisInfo, TagType, GetOpInfo, SymbolLookUp);
+}
+
+JL_DLLEXPORT size_t jl_LLVMDisasmInstruction(LLVMDisasmContextRef DC, uint8_t *Bytes, uint64_t BytesSize, uint64_t PC, char *OutString, size_t OutStringSize)
+{
+    return LLVMDisasmInstruction(DC, Bytes, BytesSize, PC, OutString, OutStringSize);
+}
+
 void jl_dump_asm_internal(uintptr_t Fptr, size_t Fsize, int64_t slide,
 #ifndef USE_MCJIT
                           std::vector<JITEvent_EmittedFunctionDetails::LineStart> lineinfo,
@@ -284,11 +294,6 @@ void jl_dump_asm_internal(uintptr_t Fptr, size_t Fsize, int64_t slide,
 #endif
                           )
 {
-    // Initialize targets and assembly printers/parsers.
-    // Avoids hard-coded targets - will generally be only host CPU anyway.
-    llvm::InitializeNativeTargetAsmParser();
-    llvm::InitializeNativeTargetDisassembler();
-
     // Get the host information
     std::string TripleName;
     if (TripleName.empty())
@@ -639,4 +644,5 @@ void jl_dump_asm_internal(uintptr_t Fptr, size_t Fsize, int64_t slide,
         if (pass == 0)
             DisInfo.createSymbols();
     }
+}
 }
