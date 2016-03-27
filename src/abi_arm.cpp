@@ -24,7 +24,7 @@ namespace {
 typedef bool AbiState;
 AbiState default_abi_state = 0;
 
-void needPassByRef(AbiState *state,jl_value_t *ty, bool *byRef, bool *inReg)
+void needPassByRef(AbiState *state,jl_value_t *ty, bool *byRef, bool *inReg, bool *byRefAttr)
 {
     return;
 }
