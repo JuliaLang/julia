@@ -173,6 +173,8 @@ function hypot{T<:Number}(x::T, y::T)
 end
 @vectorize_2arg Number hypot
 
+hypot(x::Number...) = vecnorm(x)
+
 atan2(y::Real, x::Real) = atan2(promote(float(y),float(x))...)
 atan2{T<:AbstractFloat}(y::T, x::T) = Base.no_op_err("atan2", T)
 
