@@ -10,6 +10,7 @@ module CompletionFoo
         xx :: Test_y
     end
     type_test = Test_x(Test_y(1))
+    (::Test_y)() = "", ""
     module CompletionFoo2
 
     end
@@ -39,6 +40,8 @@ module CompletionFoo
     test5(x::Array{Bool,1}) = pass
     test5(x::BitArray{1}) = pass
     test5(x::Float64) = pass
+    const a=x->x
+    test6()=[a, a]
 
     array = [1, 1]
     varfloat = 0.1
@@ -288,6 +291,12 @@ c, r, res = test_complete(s)
 @test length(c) == 1
 @test c[1] == string(methods(CompletionFoo.test5, Tuple{BitArray{1}})[1])
 
+s = "CompletionFoo.test4(CompletionFoo.test_y_array[1]()[1], CompletionFoo.test_y_array[1]()[2], "
+c, r, res = test_complete(s)
+@test !res
+@test length(c) == 1
+@test c[1] == string(methods(CompletionFoo.test4, Tuple{ASCIIString, ASCIIString})[1])
+
 ########## Test where the current inference logic fails ########
 # Fails due to inferrence fails to determine a concrete type for arg 1
 # But it returns AbstractArray{T,N} and hence is able to remove test5(x::Float64) from the suggestions
@@ -323,6 +332,12 @@ c,r = test_complete(s)
 @test c[1] == "yy"
 
 s = "CompletionFoo.Test_y(rand()).y"
+c,r = test_complete(s)
+@test length(c)==1
+@test r == endof(s):endof(s)
+@test c[1] == "yy"
+
+s = "CompletionFoo.test6()[1](CompletionFoo.Test_y(rand())).y"
 c,r = test_complete(s)
 @test length(c)==1
 @test r == endof(s):endof(s)
