@@ -225,3 +225,23 @@ f11366{T}(x::Type{Ref{T}}) = Ref{x}
 let f(T) = Type{T}
     @test Base.return_types(f, Tuple{Type{Int}}) == [Type{Type{Int}}]
 end
+
+# issue #9222
+function SimpleTest9222{T1<:Real}(pdedata, mu_actual::Vector{T1},
+        nu_actual::Vector{T1}, v0::Vector{T1}, epsilon::T1, beta::Vector{T1},
+        delta::T1, l::T1, R::T1, s0::T1, show_trace::Bool = true)
+    return 0.0
+end
+function SimpleTest9222{T1<:Real}(pdedata, mu_actual::Vector{T1},
+        nu_actual::Vector{T1}, v0::Vector{T1}, epsilon::T1, beta::Vector{T1},
+        delta::T1, l::T1, R::T1)
+    return SimpleTest9222(pdedata, mu_actual, nu_actual, v0, epsilon,
+        beta, delta, l, R, v0[1])
+end
+function foo9222()
+    v0 = rand(10)
+    mu_actual = rand(10)
+    nu_actual = rand(10)
+    SimpleTest9222(0.0, mu_actual, nu_actual, v0, 0.0, [1.0,1.0], 0.5, 5.0, 20.0)
+end
+@test 0.0 == foo9222()

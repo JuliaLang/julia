@@ -206,12 +206,10 @@ static Module *shadow_output;
 #define jl_builderModule builder.GetInsertBlock()->getParent()->getParent()
 static MDBuilder *mbuilder;
 static std::map<int, std::string> argNumberStrings;
-#ifndef USE_ORCJIT
 #ifdef LLVM38
 static legacy::PassManager *PM;
 #else
 static PassManager *PM;
-#endif
 #endif
 
 #ifdef LLVM37
@@ -1193,6 +1191,8 @@ void *jl_get_llvmf(jl_function_t *f, jl_tupletype_t *tt, bool getwrapper, bool g
         Function *f, *specf;
         jl_llvm_functions_t declarations;
         std::unique_ptr<Module> m = emit_function(linfo, &declarations);
+        finalize_gc_frame(m.get());
+        PM->run(*m.get());
         f = (llvm::Function*)declarations.functionObject;
         specf = (llvm::Function*)declarations.specFunctionObject;
         // swap declarations for definitions and destroy declarations
@@ -1214,7 +1214,7 @@ void *jl_get_llvmf(jl_function_t *f, jl_tupletype_t *tt, bool getwrapper, bool g
         if (f_decl) {
             f->setName(f_decl->getName());
         }
-        finalize_gc_frame(m.release()); // the return object `llvmf` will be the owning pointer
+        m.release(); // the return object `llvmf` will be the owning pointer
         JL_GC_POP();
         if (getwrapper || !specf) {
             return f;
@@ -1393,9 +1393,7 @@ const jl_value_t *jl_dump_function_asm(void *f, int raw_mc)
 #endif
     const object::ObjectFile *object = NULL;
     assert(fptr != 0);
-    bool isJIT = true;
     if (!jl_DI_for_fptr(fptr, &symsize, &slide, &section_slide, &object, &context)) {
-        isJIT = false;
         if (!jl_dylib_DI_for_fptr(fptr, &object, &objcontext, &slide, &section_slide, false,
             NULL, NULL, NULL, NULL)) {
                 jl_printf(JL_STDERR, "WARNING: Unable to find function pointer\n");
@@ -1410,9 +1408,6 @@ const jl_value_t *jl_dump_function_asm(void *f, int raw_mc)
     }
 
     if (raw_mc) {
-#ifdef LLVM37
-        jl_cleanup_DI(context);
-#endif
         return (jl_value_t*)jl_pchar_to_array((char*)fptr, symsize);
     }
 
@@ -1428,10 +1423,7 @@ const jl_value_t *jl_dump_function_asm(void *f, int raw_mc)
 #endif
             );
 
-#ifdef LLVM37
-    if (isJIT)
-        jl_cleanup_DI(context);
-#else
+#ifndef LLVM37
     fstream.flush();
 #endif
 
@@ -5631,7 +5623,6 @@ static void init_julia_llvm_env(Module *m)
     jl_data_layout = new DataLayout(*jl_ExecutionEngine->getDataLayout());
 #endif
 
-#ifndef USE_ORCJIT
 #ifdef LLVM38
     PM = new legacy::PassManager();
 #else
@@ -5646,7 +5637,6 @@ static void init_julia_llvm_env(Module *m)
     PM->add(jl_data_layout);
 #endif
     addOptimizationPasses(PM);
-#endif
 }
 
 // Helper to figure out what features to set for the LLVM target

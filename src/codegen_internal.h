@@ -27,10 +27,6 @@ extern int jl_DI_for_fptr(uint64_t fptr, uint64_t *symsize, int64_t *slide, int6
 extern bool jl_dylib_DI_for_fptr(size_t pointer, const object::ObjectFile **object, llvm::DIContext **context, int64_t *slide, int64_t *section_slide,
         bool onlySysImg, bool *isSysImg, void **saddr, char **name, char **filename);
 
-#ifdef USE_MCJIT
-extern void jl_cleanup_DI(llvm::DIContext *context);
-#endif
-
 #ifdef USE_ORCJIT
 extern JL_DLLEXPORT void ORCNotifyObjectEmitted(JITEventListener *Listener,
                                       const object::ObjectFile &obj,
