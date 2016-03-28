@@ -91,10 +91,8 @@ struct ObjectInfo {
     const object::ObjectFile *object;
     size_t SectionSize;
     ptrdiff_t slide;
-#ifdef LLVM39
+#ifdef LLVM37
     DIContext *context;
-#elif defined(LLVM37)
-    const llvm::LoadedObjectInfo *L;
 #endif
 #if defined(_OS_DARWIN_) && !defined(LLVM37)
     const char *name;
@@ -444,11 +442,7 @@ public:
                 ObjectInfo tmp = {&debugObj,
                     (size_t)SectionSize,
                     (ptrdiff_t)(SectionAddr - SectionLoadAddr),
-#ifdef LLVM39
                     new DWARFContextInMemory(debugObj, &L),
-#else
-                    L.clone().release(),
-#endif
                     };
                 objectmap[SectionLoadAddr] = tmp;
                 first = false;
@@ -524,11 +518,6 @@ public:
 #endif
             ObjectInfo tmp = {objfile, (size_t)Size,
                 (ptrdiff_t)(SectionAddr - SectionLoadAddr),
-#ifdef LLVM39
-                new DWARFContextInMemory(*objfile, &L),
-#elif defined(LLVM37)
-                L.clone().release(),
-#endif
 #ifdef _OS_DARWIN_
                 strndup(sName.data(), sName.size()),
 #endif
@@ -1066,10 +1055,8 @@ int jl_DI_for_fptr(uint64_t fptr, uint64_t *symsize, int64_t *slide, int64_t *se
             *section_slide = fit->second.slide;
         *object = fit->second.object;
         if (context) {
-#if defined(LLVM39)
+#if defined(LLVM37)
             *context = fit->second.context;
-#elif defined(LLVM37)
-            *context = new DWARFContextInMemory(*fit->second.object, fit->second.L);
 #else
             *context = DIContext::getDWARFContext(*fit->second.object);
 #endif
@@ -1121,13 +1108,6 @@ JL_DLLEXPORT uint64_t jl_get_section_start(uint64_t fptr)
 
 #endif
 
-void jl_cleanup_DI(llvm::DIContext *context)
-{
-#ifndef LLVM39
-    delete context;
-#endif
-}
-
 // Set *name and *filename to either NULL or malloc'd string
 void jl_getFunctionInfo(char **name, char **filename, size_t *line,
                         char **inlinedat_file, size_t *inlinedat_line, jl_lambda_info_t **outer_linfo,
@@ -1151,7 +1131,6 @@ void jl_getFunctionInfo(char **name, char **filename, size_t *line,
     if (jl_DI_for_fptr(pointer, &symsize, &slide, NULL, &object, &context)) {
         *outer_linfo = jl_jit_events->lookupLinfo(pointer);
         lookup_pointer(context, name, line, filename, inlinedat_line, inlinedat_file, pointer+slide, 1, fromC);
-        jl_cleanup_DI(context);
         return;
     }
 #else // !USE_MCJIT
