@@ -493,6 +493,10 @@ for (f, op) in ((:cumsum!, :+),
                     return B
                 end
                 size(B) == size(A) || throw(DimensionMismatch("Size of B must match A"))
+                if axis > N
+                    copy!(B, A)
+                    return B
+                end
                 if axis == 1
                     # We can accumulate to a temporary variable, which allows register usage and will be slightly faster
                     @inbounds @nloops $N i d->(d > 1 ? (1:size(A,d)) : (1:1)) begin

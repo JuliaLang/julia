@@ -1472,3 +1472,15 @@ type OOB_Functor{T}; a::T; end
 let f = OOB_Functor([1,2])
     @test_throws BoundsError map(f, [1,2,3,4,5])
 end
+
+
+# issue 15654
+@test cumprod([5], 2) == [5]
+@test cumprod([1 2; 3 4], 3) == [1 2; 3 4]
+@test cumprod([1 2; 3 4], 1) == [1 2; 3 8]
+@test cumprod([1 2; 3 4], 2) == [1 2; 3 12]
+
+@test cumsum([5], 2) == [5]
+@test cumsum([1 2; 3 4], 1) == [1 2; 4 6]
+@test cumsum([1 2; 3 4], 2) == [1 3; 3 7]
+@test cumsum([1 2; 3 4], 3) == [1 2; 3 4]
