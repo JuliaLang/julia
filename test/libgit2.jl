@@ -254,7 +254,7 @@ mktempdir() do dir
                 @test LibGit2.ishead(brref)
                 @test repo.ptr == LibGit2.owner(brref).ptr
                 @test brnch == "master"
-
+                @test LibGit2.headname(repo) == "master"
                 LibGit2.branch!(repo, test_branch, string(commit_oid1), set_head=false)
 
                 branches = map(b->LibGit2.shortname(b[1]), LibGit2.GitBranchIter(repo))
