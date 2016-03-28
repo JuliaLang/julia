@@ -290,6 +290,25 @@ mktempdir() do dir
                 finalize(repo)
             end
         #end
+
+        #@testset "status" begin
+            repo = LibGit2.GitRepo(cache_repo)
+            try
+                status = LibGit2.GitStatus(repo)
+                @test length(status) == 0
+                @test_throws BoundsError status[1]
+                repo_file = open(joinpath(cache_repo,"statusfile"), "a")
+
+                # create commits
+                println(repo_file, commit_msg1)
+                flush(repo_file)
+                LibGit2.add!(repo, test_file)
+                status = LibGit2.GitStatus(repo)
+                @test length(status) != 0
+            finally
+                finalize(repo)
+                close(repo_file)
+            end
     #end
 
     #@testset "Fetch from cache repository" begin
