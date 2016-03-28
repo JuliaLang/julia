@@ -146,6 +146,11 @@ sqrt(x::Float32) = box(Float32,sqrt_llvm(unbox(Float32,x)))
 sqrt(x::Real) = sqrt(float(x))
 @vectorize_1arg Number sqrt
 
+"""
+    hypot(x, y)
+
+Compute the hypotenuse ``\\sqrt{x^2+y^2}`` avoiding overflow and underflow.
+"""
 hypot(x::Number, y::Number) = hypot(promote(x, y)...)
 function hypot{T<:Number}(x::T, y::T)
     ax = abs(x)
@@ -173,6 +178,11 @@ function hypot{T<:Number}(x::T, y::T)
 end
 @vectorize_2arg Number hypot
 
+"""
+    hypot(x...)
+
+Compute the hypotenuse ``\\sqrt{\\sum x_i}`` avoiding overflow and underflow.
+"""
 hypot(x::Number...) = vecnorm(x)
 
 atan2(y::Real, x::Real) = atan2(promote(float(y),float(x))...)

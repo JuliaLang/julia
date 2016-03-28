@@ -315,13 +315,6 @@ Compute a "2d histogram" with respect to the bins delimited by the edges given i
 hist2d!
 
 """
-    hypot(x, y)
-
-Compute the ``\\sqrt{x^2+y^2}`` avoiding overflow and underflow.
-"""
-hypot
-
-"""
     airybi(x)
 
 Airy function ``\\operatorname{Bi}(x)``.
