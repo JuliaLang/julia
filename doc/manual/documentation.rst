@@ -335,15 +335,19 @@ Types
 .. code-block:: julia
 
     "..."
-    abstract T
+    abstract T1
 
     "..."
-    type T end
+    type T2
+        ...
+    end
 
     "..."
-    immutable T end
+    immutable T3
+        ...
+    end
 
-Adds the docstring ``"..."`` to type ``T``.
+Adds the docstring ``"..."`` to types ``T1``, ``T2``, and ``T3``.
 
 .. code-block:: julia
 
