@@ -60,6 +60,9 @@ const LIBGIT2_VER = v"0.23.0"
     @test sig.name == sig2.name
     @test sig.email == sig2.email
     @test sig.time == sig2.time
+    sig3 = LibGit2.Signature("AAA","AAA@BBB.COM")
+    @test sig3.name == sig.name
+    @test sig3.email == sig.email
 #end
 
 mktempdir() do dir
