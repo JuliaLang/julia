@@ -263,17 +263,16 @@ function get_value_getfield(ex::Expr, fn)
     get_value_getfield(ex.args[3],val) #Look up max in Base and returns the function if found.
 end
 get_value_getfield(sym, fn) = get_value(sym, fn)
+
 # Determines the return type with Base.return_types of a function call using the type information of the arguments.
 function get_type_call(expr::Expr)
     f_name = expr.args[1]
     # The if statement should find the f function. How f is found depends on how f is referenced
     if isa(f_name, TopNode)
-        f = Base.(f_name.name)
+        ft = typeof(Base.(f_name.name))
         found = true
-    elseif isa(f_name, Expr) && f_name.args[1] === TopNode(:getfield)
-        f, found = get_value_getfield(f_name, Main)
     else
-        f, found = get_value(f_name, Main)
+        ft, found = get_type(f_name, Main)
     end
     found || return (Any, false) # If the function f is not found return Any.
     args = Any[]
@@ -281,9 +280,14 @@ function get_type_call(expr::Expr)
         typ, found = get_type(ex, Main)
         found ? push!(args, typ) : push!(args, Any)
     end
-    return_types = Base.return_types(f,Tuple{args...})
-    length(return_types) == 1 || return (Any, false)
-    return (return_types[1], true)
+    # use _methods_by_ftype as the function is supplied as a type
+    mt = Base._methods_by_ftype(Tuple{ft, args...}, -1)
+    length(mt) == 1 || return (Any, false)
+    m = first(mt)
+    # Typeinference
+    linfo = Base.func_for_method_checked(m, Tuple{args...})
+    (tree, return_type) = Core.Inference.typeinf(linfo, m[1], m[2])
+    return return_type, true
 end
 # Returns the return type. example: get_type(:(Base.strip("",' ')),Main) returns (ASCIIString,true)
 function get_type(sym::Expr, fn)
