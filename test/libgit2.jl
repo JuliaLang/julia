@@ -117,6 +117,7 @@ mktempdir() do dir
 
                 remote = LibGit2.get(LibGit2.GitRemote, repo, branch)
                 @test LibGit2.url(remote) == repo_url
+                @test LibGit2.isattached(repo)
                 finalize(remote)
             finally
                 finalize(repo)
@@ -129,8 +130,18 @@ mktempdir() do dir
             try
                 @test isdir(path)
                 @test isfile(joinpath(path, LibGit2.Consts.HEAD_FILE))
+                @test LibGit2.isattached(repo)
             finally
                 finalize(repo)
+            end
+
+            path = joinpath("garbagefakery", "Example.Bare")
+            try
+                LibGit2.GitRepo(path)
+                error("unexpected")
+            catch e
+                @test typeof(e) == LibGit2.GitError
+                @test startswith(sprint(show,e),"GitError(Code:ENOTFOUND, Class:OS, Failed to resolve path")
             end
         #end
     #end
@@ -143,6 +154,8 @@ mktempdir() do dir
             try
                 @test isdir(repo_path)
                 @test isfile(joinpath(repo_path, LibGit2.Consts.HEAD_FILE))
+                @test LibGit2.isattached(repo)
+                @test LibGit2.remotes(repo) == ["origin"]
             finally
                 finalize(repo)
             end
@@ -156,6 +169,8 @@ mktempdir() do dir
                 rmt = LibGit2.get(LibGit2.GitRemote, repo, "origin")
                 try
                     @test LibGit2.fetch_refspecs(rmt)[1] == "+refs/*:refs/*"
+                    @test LibGit2.isattached(repo)
+                    @test LibGit2.remotes(repo) == ["origin"]
                 finally
                     finalize(rmt)
                 end
@@ -168,6 +183,7 @@ mktempdir() do dir
             try
                 @test isdir(test_repo)
                 @test isdir(joinpath(test_repo, ".git"))
+                @test LibGit2.isattached(repo)
             finally
                 finalize(repo)
             end
