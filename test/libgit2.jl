@@ -244,6 +244,12 @@ mktempdir() do dir
             repo = LibGit2.GitRepo(cache_repo)
             try
                 brnch = LibGit2.branch(repo)
+                brref = LibGit2.head(repo)
+                @test LibGit2.isbranch(brref)
+                @test LibGit2.name(brref) == "refs/heads/master"
+                @test LibGit2.shortname(brref) == "master"
+                @test LibGit2.ishead(brref)
+                @test repo.ptr == LibGit2.owner(brref).ptr
                 @test brnch == "master"
 
                 LibGit2.branch!(repo, test_branch, string(commit_oid1), set_head=false)
