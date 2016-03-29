@@ -133,8 +133,16 @@ end
 function upstream(ref::GitReference)
     isempty(ref) && return nothing
     ref_ptr_ptr = Ref{Ptr{Void}}(C_NULL)
-    @check ccall((:git_branch_upstream, :libgit2), Cint,
+    err = ccall((:git_branch_upstream, :libgit2), Cint,
                   (Ref{Ptr{Void}}, Ptr{Void},), ref_ptr_ptr, ref.ptr)
+    if err == Int(Error.ENOTFOUND)
+        return nothing
+    elseif err != Int(Error.GIT_OK)
+        if repo_ptr_ptr[] != C_NULL
+            finalize(GitReference(ref_ptr_ptr[]))
+        end
+        throw(Error.GitError(err))
+    end
     return GitReference(ref_ptr_ptr[])
 end
 
