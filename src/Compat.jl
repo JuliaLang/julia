@@ -375,6 +375,27 @@ if VERSION < v"0.4.0-dev+3732"
     end
 end
 
+if VERSION < v"0.5.0-dev+2396"
+    function new_style_call_overload(ex::Expr)
+        # Not a function call
+        ((ex.head === :(=) || ex.head === :function) &&
+         length(ex.args) == 2 && isexpr(ex.args[1], :call)) || return false
+        callee = (ex.args[1]::Expr).args[1]
+        # Only Expr function name can be call overload
+        isa(callee, Expr) || return false
+        callee = callee::Expr
+        # (a::A)() = ...
+        callee.head === :(::) && return true
+        # The other case is with type parameter.
+        # Filter out everything without one.
+        (callee.head === :curly && length(callee.args) >= 1) || return false
+        # Check what the type parameter applies to is a Expr(:(::))
+        return isexpr(callee.args[1], :(::))
+    end
+else
+    new_style_call_overload(ex::Expr) = false
+end
+
 function _compat(ex::Expr)
     if ex.head === :call
         f = ex.args[1]
@@ -443,6 +464,20 @@ function _compat(ex::Expr)
     elseif ex.head === :quote && isa(ex.args[1], Symbol)
         # Passthrough
         return ex
+    elseif new_style_call_overload(ex)
+        if ((ex.args[1]::Expr).args[1]::Expr).head === :(::)
+            # (:function, (:call, :(:(::), <1>), <2>), <body>) ->
+            # (:function, (:call, :(Base.call), :(:(::), <1>), <2>), <body>)
+            unshift!((ex.args[1]::Expr).args, :(Base.call))
+        else
+            # (:function, (:call, :(curly, :(:(::), <1>), <3>), <2>), <body>) ->
+            # (:function, (:call, :(curly, :(Base.call), <3>), :(:(::), <1>), <2>), <body>)
+            callexpr = ex.args[1]::Expr
+            callee = callexpr.args[1]::Expr
+            obj = callee.args[1]::Expr
+            callee.args[1] = :(Base.call)
+            insert!(callexpr.args, 2, obj)
+        end
     end
     return Expr(ex.head, map(_compat, ex.args)...)
 end

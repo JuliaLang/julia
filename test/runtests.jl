@@ -857,3 +857,39 @@ let
     foreach((args...)->push!(a,args), [2,4,6], [10,20,30])
     @test a == [(2,10),(4,20),(6,30)]
 end
+
+module CallTest
+
+using Base.Test, Compat
+
+immutable A
+    a
+end
+
+immutable B{T}
+    b::T
+end
+
+if VERSION >= v"0.4"
+    @compat (::Type{A})() = A(1)
+    @compat (::Type{B})() = B{Int}()
+    @compat (::Type{B{T}}){T}() = B{T}(zero(T))
+
+    @compat (a::A)() = a.a
+    @compat (a::A)(b) = (a.a, b)
+    @compat (b::B{T}){T}() = b.b, T
+    @compat (b::B{T}){T}(c::T) = 1
+    @compat (b::B{T}){T,T2}(c::T2) = 0
+
+    @test A() === A(1)
+    @test B() === B(0)
+    @test B{Float64}() === B(0.0)
+
+    @test A(1)() === 1
+    @test A(1)(2) === (1, 2)
+    @test B(0)() === (0, Int)
+    @test B(0)(1) === 1
+    @test B(0)(1.0) === 0
+end
+
+end
