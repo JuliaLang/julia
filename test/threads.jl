@@ -166,6 +166,8 @@ function test_atomic_read(commbuf::CommBuf, n::Int)
         var1 = commbuf.var1[]
         correct &= var1 >= var2
         var1 == n && break
+        # Temporary solution before we have gc transition support in codegen.
+        ccall(:jl_gc_safepoint, Void, ())
     end
     commbuf.correct_read = correct
 end
@@ -209,6 +211,8 @@ function test_fence(p::Peterson, id::Int, n::Int)
         atomic_fence()
         while p.flag[otherid][] != 0 && p.turn[] == otherid
             # busy wait
+            # Temporary solution before we have gc transition support in codegen.
+            ccall(:jl_gc_safepoint, Void, ())
         end
         # critical section
         p.critical[id][] = 1
@@ -260,6 +264,8 @@ function test_atomic_cas!{T}(var::Atomic{T}, range::StepRange{Int,Int})
         while true
             old = atomic_cas!(var, T(i-1), T(i))
             old == T(i-1) && break
+            # Temporary solution before we have gc transition support in codegen.
+            ccall(:jl_gc_safepoint, Void, ())
         end
     end
 end

@@ -337,6 +337,8 @@ static GlobalVariable *jltls_states_var;
 // Imaging mode only
 static GlobalVariable *jltls_states_func_ptr = NULL;
 static size_t jltls_states_func_idx = 0;
+static GlobalVariable *jl_gc_signal_page_ptr = NULL;
+static size_t jl_gc_signal_page_idx = 0;
 #endif
 
 // important functions
@@ -567,6 +569,9 @@ typedef struct {
     std::vector<bool> inbounds;
 
     CallInst *ptlsStates;
+#ifdef JULIA_ENABLE_THREADING
+    Value *signalPage;
+#endif
 
     llvm::DIBuilder *dbuilder;
     bool debug_enabled;
@@ -3490,6 +3495,12 @@ static void allocate_gc_frame(BasicBlock *b0, jl_codectx_t *ctx)
 {
     // allocate a placeholder gc instruction
     ctx->ptlsStates = builder.CreateCall(prepare_call(jltls_states_func));
+#ifdef JULIA_ENABLE_THREADING
+    if (imaging_mode) {
+        ctx->signalPage =
+            tbaa_decorate(tbaa_const, builder.CreateLoad(jl_declare_global(jl_Module, jl_gc_signal_page_ptr)));
+    }
+#endif
 }
 
 void jl_codegen_finalize_temp_arg(CallInst *ptlsStates, Type *T_pjlvalue);
@@ -3516,35 +3527,16 @@ static void finalize_gc_frame(Function *F)
 
     jl_codegen_finalize_temp_arg(ptlsStates, T_pjlvalue);
 
-    GlobalVariable *oldGV = NULL;
 #ifdef JULIA_ENABLE_THREADING
-    if (imaging_mode)
-        oldGV = jltls_states_func_ptr;
-#else
-    oldGV = jltls_states_var;
-#endif
-
-    GlobalVariable *GV = NULL;
-    if (oldGV) {
-        GV = M->getGlobalVariable(oldGV->getName(), true /* AllowLocal */);
-        if (GV == NULL) {
-            GV = new GlobalVariable(*M, oldGV->getType()->getElementType(),
-                                    oldGV->isConstant(),
-                                    GlobalValue::ExternalLinkage, NULL,
-                                    oldGV->getName());
-            GV->copyAttributesFrom(oldGV);
-        }
-    }
-
-#ifdef JULIA_ENABLE_THREADING
-    if (GV) {
+    if (imaging_mode) {
+        GlobalVariable *GV = jl_declare_global(M, jltls_states_func_ptr);
         Value *getter = tbaa_decorate(tbaa_const,
                                       new LoadInst(GV, "", ptlsStates));
         ptlsStates->setCalledFunction(getter);
     }
     ptlsStates->setAttributes(jltls_states_func->getAttributes());
 #else
-    ptlsStates->replaceAllUsesWith(GV);
+    ptlsStates->replaceAllUsesWith(jl_declare_global(M, jltls_states_var));
     ptlsStates->eraseFromParent();
 #endif
 }
@@ -5119,27 +5111,14 @@ static void init_julia_llvm_env(Module *m)
     add_named_global(jltls_states_func, jl_get_ptls_states_getter());
     if (imaging_mode) {
         PointerType *pfunctype = jltls_states_func->getFunctionType()->getPointerTo();
-        // This is **NOT** a external variable or a normal global variable
-        // This is a special internal global slot with a special index
-        // in the global variable table.
         jltls_states_func_ptr =
-            new GlobalVariable(*m, pfunctype,
-                               false, GlobalVariable::InternalLinkage,
-                               ConstantPointerNull::get(pfunctype),
-                               "jl_get_ptls_states.ptr");
-        addComdat(jltls_states_func_ptr);
-        // make the pointer valid for this session
-#if defined(USE_MCJIT) || defined(USE_ORCJIT)
-        auto p = new uintptr_t(0);
-        jl_ExecutionEngine->addGlobalMapping(jltls_states_func_ptr->getName(),
-                                             (uintptr_t)p);
-#else
-        uintptr_t *p = (uintptr_t*)jl_ExecutionEngine->getPointerToGlobal(jltls_states_func_ptr);
-#endif
-        *p = (uintptr_t)jl_get_ptls_states_getter();
-        jl_sysimg_gvars.push_back(ConstantExpr::getBitCast(jltls_states_func_ptr,
-                                                           T_psize));
-        jltls_states_func_idx = jl_sysimg_gvars.size();
+            jl_emit_sysimg_slot(m, pfunctype, "jl_get_ptls_states.ptr",
+                                (uintptr_t)jl_get_ptls_states_getter(),
+                                jltls_states_func_idx);
+        jl_gc_signal_page_ptr =
+            jl_emit_sysimg_slot(m, T_pint8, "jl_gc_signal_page.ptr",
+                                (uintptr_t)jl_gc_signal_page,
+                                jl_gc_signal_page_idx);
     }
 
 #endif
