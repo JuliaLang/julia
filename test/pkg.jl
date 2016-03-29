@@ -62,6 +62,8 @@ temp_pkg_dir() do
     str = chomp(takebuf_string(iob))
     @test startswith(str, " - Example")
     @test endswith(str, "master")
+    @test Git.attached(dir=Pkg.dir("Example"))
+    @test Git.iscommit(Git.head(dir=Pkg.dir("Example")),dir=Pkg.dir("Example"))
     Pkg.free("Example")
     Pkg.status("Example", iob)
     str = chomp(takebuf_string(iob))
@@ -195,6 +197,8 @@ temp_pkg_dir() do
         finalize(repo)
         Pkg.update()
     end
+
+    @test Git.version() > VersionNumber(join([0,0,0], '.'))
 
     #test PkgDev redirects
     begin
