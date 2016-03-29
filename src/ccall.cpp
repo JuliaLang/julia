@@ -1084,6 +1084,29 @@ static jl_cgval_t emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
         JL_GC_POP();
         return ghostValue(jl_void_type);
     }
+    if (fptr == &jl_gc_safepoint ||
+        ((!f_lib || (intptr_t)f_lib == 2) && f_name &&
+         strcmp(f_name, "jl_gc_safepoint") == 0)) {
+        assert(lrt == T_void);
+        assert(!isVa);
+        assert(nargt == 0);
+        JL_GC_POP();
+#ifdef JULIA_ENABLE_THREADING
+        builder.CreateFence(SequentiallyConsistent, SingleThread);
+        Value *addr;
+        if (imaging_mode) {
+            assert(ctx->signalPage);
+            addr = ctx->signalPage;
+        }
+        else {
+            addr = builder.CreateIntToPtr(
+                ConstantInt::get(T_size, (uintptr_t)jl_gc_signal_page), T_pint8);
+        }
+        builder.CreateLoad(addr, true);
+        builder.CreateFence(SequentiallyConsistent, SingleThread);
+#endif
+        return ghostValue(jl_void_type);
+    }
     if (fptr == (void(*)(void))&jl_is_leaf_type ||
         ((f_lib==NULL || (intptr_t)f_lib==2)
          && f_name && !strcmp(f_name, "jl_is_leaf_type"))) {

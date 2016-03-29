@@ -776,6 +776,52 @@ static void* jl_emit_and_add_to_shadow(GlobalVariable *gv, void *gvarinit = NULL
 #endif
 }
 
+// Emit a slot in the system image to be filled at sysimg init time.
+// Returns the global var. Fill `idx` with 1-base index in the sysimg gv.
+// Use as an optimization for runtime constant addresses to have one less
+// load.
+static GlobalVariable *jl_emit_sysimg_slot(Module *m, Type *typ, const char *name,
+                                           uintptr_t init, size_t &idx)
+{
+    assert(imaging_mode);
+    // This is **NOT** a external variable or a normal global variable
+    // This is a special internal global slot with a special index
+    // in the global variable table.
+    GlobalVariable *gv = new GlobalVariable(*m, typ, false,
+                                            GlobalVariable::InternalLinkage,
+                                            ConstantPointerNull::get((PointerType*)typ), name);
+    addComdat(gv);
+    // make the pointer valid for this session
+#if defined(USE_MCJIT) || defined(USE_ORCJIT)
+    auto p = new uintptr_t(init);
+    jl_ExecutionEngine->addGlobalMapping(gv->getName(), (uintptr_t)p);
+#else
+    uintptr_t *p = (uintptr_t*)jl_ExecutionEngine->getPointerToGlobal(gv);
+    *p = init;
+#endif
+    jl_sysimg_gvars.push_back(ConstantExpr::getBitCast(gv, T_psize));
+    idx = jl_sysimg_gvars.size();
+    return gv;
+}
+
+// Make sure `GV` belongs to `M` or create a declaration of `GV` in `M` (to
+// be linked later) that has the same properties.
+static GlobalVariable *jl_declare_global(Module *M, GlobalVariable *oldGV)
+{
+    if (!oldGV)
+        return NULL;
+    GlobalVariable *GV = M->getGlobalVariable(oldGV->getName(),
+                                              true /* AllowLocal */);
+    if (GV)
+        return GV;
+    GV = new GlobalVariable(*M, oldGV->getType()->getElementType(),
+                            oldGV->isConstant(),
+                            GlobalValue::ExternalLinkage, NULL,
+                            oldGV->getName());
+    GV->copyAttributesFrom(oldGV);
+    return GV;
+}
+
 static void* jl_get_global(GlobalVariable *gv)
 {
 #if defined(USE_MCJIT) || defined(USE_ORCJIT)
@@ -848,6 +894,12 @@ static void jl_gen_llvm_globaldata(llvm::Module *mod, ValueToValueMapTy &VMap,
                                  GlobalVariable::ExternalLinkage,
                                  ConstantInt::get(T_size, jltls_states_func_idx),
                                  "jl_ptls_states_getter_idx"));
+    addComdat(new GlobalVariable(*mod,
+                                 T_size,
+                                 true,
+                                 GlobalVariable::ExternalLinkage,
+                                 ConstantInt::get(T_size, jl_gc_signal_page_idx),
+                                 "jl_gc_signal_page_idx"));
 #endif
 
     Constant *feature_string = ConstantDataArray::getString(jl_LLVMContext, jl_options.cpu_target);
