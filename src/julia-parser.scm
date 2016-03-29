@@ -1139,9 +1139,7 @@
                (const (and (eq? (peek-token s) 'const)
                            (take-token s)))
                (expr  (cons word
-                            (map (lambda (x)
-                                   (short-form-function-loc x lno))
-                                 (parse-comma-separated-assignments s)))))
+			    (parse-comma-separated-assignments s))))
           (if const
               `(const ,expr)
               expr)))
