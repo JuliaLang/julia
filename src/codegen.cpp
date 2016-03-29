@@ -3561,35 +3561,34 @@ static void finalize_gc_frame(Function *F)
 
     jl_codegen_finalize_temp_arg(ptlsStates, T_pjlvalue);
 
+    GlobalVariable *oldGV = NULL;
 #ifdef JULIA_ENABLE_THREADING
-    if (imaging_mode) {
-        Value *getter;
-        if (GlobalVariable *GV = M->getGlobalVariable(jltls_states_func_ptr->getName(), true /* AllowLocal */)) {
-            getter = tbaa_decorate(tbaa_const, new LoadInst(GV, "", ptlsStates));
+    if (imaging_mode)
+        oldGV = jltls_states_func_ptr;
+#else
+    oldGV = jltls_states_var;
+#endif
+
+    GlobalVariable *GV = NULL;
+    if (oldGV) {
+        GV = M->getGlobalVariable(oldGV->getName(), true /* AllowLocal */);
+        if (GV == NULL) {
+            GV = new GlobalVariable(*M, oldGV->getType()->getElementType(),
+                                    oldGV->isConstant(),
+                                    GlobalValue::ExternalLinkage, NULL,
+                                    oldGV->getName());
+            GV->copyAttributesFrom(oldGV);
         }
-        else {
-            // If the global variable doesn't exist, we are coping code out of
-            // the shadow_module to run, in which case, we just use the
-            // function directly.
-            getter = ConstantExpr::getIntToPtr(
-                ConstantInt::get(T_size, (intptr_t)jl_get_ptls_states_getter()),
-                jltls_states_func->getFunctionType()->getPointerTo());
-        }
+    }
+
+#ifdef JULIA_ENABLE_THREADING
+    if (GV) {
+        Value *getter = tbaa_decorate(tbaa_const,
+                                      new LoadInst(GV, "", ptlsStates));
         ptlsStates->setCalledFunction(getter);
     }
     ptlsStates->setAttributes(jltls_states_func->getAttributes());
 #else
-    Module *destModule = F->getParent();
-    GlobalVariable *GV = destModule->getGlobalVariable(jltls_states_var->getName());
-    if (GV == NULL) {
-        GV = new GlobalVariable(*destModule,
-            jltls_states_var->getType()->getElementType(),
-            jltls_states_var->isConstant(),
-            GlobalVariable::ExternalLinkage,
-            NULL,
-            jltls_states_var->getName());
-        GV->copyAttributesFrom(jltls_states_var);
-    }
     ptlsStates->replaceAllUsesWith(GV);
     ptlsStates->eraseFromParent();
 #endif
