@@ -929,6 +929,7 @@ jl_sym_t *jl_lam_argname(jl_lambda_info_t *li, int i)
 // get array of var info records (for args and locals)
 jl_array_t *jl_lam_vinfo(jl_expr_t *l)
 {
+    // Should not allocate!
     assert(jl_is_expr(l));
     jl_value_t *le = jl_exprarg(l, 1);
     assert(jl_is_array(le));
@@ -1077,6 +1078,7 @@ int has_meta(jl_array_t *body, jl_sym_t *sym)
 
 static int jl_in_vinfo_array(jl_array_t *a, jl_sym_t *v)
 {
+    // Should not allocate!
     size_t i, l=jl_array_len(a);
     for(i=0; i<l; i++) {
         if (jl_cellref(jl_cellref(a,i),0) == (jl_value_t*)v)
@@ -1087,6 +1089,7 @@ static int jl_in_vinfo_array(jl_array_t *a, jl_sym_t *v)
 
 static int jl_in_sym_svec(jl_svec_t *a, jl_sym_t *v)
 {
+    // Should not allocate!
     size_t i, l = jl_svec_len(a);
     for(i=0; i<l; i++) {
         if (jl_svecref(a,i) == (jl_value_t*)v)
@@ -1097,7 +1100,14 @@ static int jl_in_sym_svec(jl_svec_t *a, jl_sym_t *v)
 
 int jl_local_in_linfo(jl_lambda_info_t *linfo, jl_sym_t *sym)
 {
-    return jl_in_vinfo_array(jl_lam_vinfo((jl_expr_t*)linfo->ast), sym) ||
+    jl_expr_t *ast;
+    if (jl_is_expr(linfo->ast))
+        ast = (jl_expr_t*)linfo->ast;
+    else
+        ast = (jl_expr_t*)jl_uncompress_ast(linfo, linfo->ast);
+    // NOTE (gc root): `ast` is not rooted here,
+    // but jl_lam_vinfo, jl_in_vinfo_array and jl_in_sym_svec do not allocate.
+    return jl_in_vinfo_array(jl_lam_vinfo(ast), sym) ||
         jl_in_sym_svec(linfo->sparam_syms, sym);
 }
 
