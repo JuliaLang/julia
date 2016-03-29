@@ -443,8 +443,13 @@ static jl_value_t *scm_to_julia_(fl_context_t *fl_ctx, value_t e, int eo)
             hd = car_(e);
             if (hd == jl_ast_ctx(fl_ctx)->jlgensym_sym)
                 return jl_box_gensym(numval(car_(cdr_(e))));
-            else if (hd == jl_ast_ctx(fl_ctx)->slot_sym)
-                return jl_new_struct(jl_slot_type, jl_box_long(numval(car_(cdr_(e)))), jl_any_type);
+            else if (hd == jl_ast_ctx(fl_ctx)->slot_sym) {
+                jl_value_t *slotnum = jl_box_long(numval(car_(cdr_(e))));
+                JL_GC_PUSH1(&slotnum);
+                jl_value_t *res = jl_new_struct(jl_slot_type, slotnum, jl_any_type);
+                JL_GC_POP();
+                return res;
+            }
             else if (hd == jl_ast_ctx(fl_ctx)->null_sym && llength(e) == 1)
                 return jl_nothing;
         }
