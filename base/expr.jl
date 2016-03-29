@@ -35,16 +35,16 @@ copy(e::Expr) = (n = Expr(e.head);
                  n.args = astcopy(e.args);
                  n.typ = e.typ;
                  n)
-copy(s::SymbolNode) = SymbolNode(s.name, s.typ)
+copy(s::Slot) = Slot(s.id, s.typ)
 
 # copy parts of an AST that the compiler mutates
-astcopy(x::Union{SymbolNode,Expr}) = copy(x)
+astcopy(x::Union{Slot,Expr}) = copy(x)
 astcopy(x::Array{Any,1}) = Any[astcopy(a) for a in x]
 astcopy(x) = x
 
 ==(x::Expr, y::Expr) = x.head === y.head && x.args == y.args
 ==(x::QuoteNode, y::QuoteNode) = x.value == y.value
-==(x::SymbolNode, y::SymbolNode) = x.name === y.name && x.typ === y.typ
+==(x::Slot, y::Slot) = x.id === y.id && x.typ === y.typ
 
 expand(x) = ccall(:jl_expand, Any, (Any,), x)
 macroexpand(x) = ccall(:jl_macroexpand, Any, (Any,), x)
@@ -133,7 +133,7 @@ end
 
 function popmeta!(body::Expr, sym::Symbol)
     body.head == :block || return false, []
-    found, metaex = findmeta_block(body)
+    found, metaex = findmeta_block(body.args)
     if !found
         return false, []
     end
@@ -151,23 +151,29 @@ function popmeta!(body::Expr, sym::Symbol)
     false, []
 end
 popmeta!(arg, sym) = (false, [])
+function popmeta!(body::Array{Any,1}, sym::Symbol)
+    ex = Expr(:block); ex.args = body
+    popmeta!(ex, sym)
+end
 
 function findmeta(ex::Expr)
     if ex.head == :function || (ex.head == :(=) && typeof(ex.args[1]) == Expr && ex.args[1].head == :call)
         body::Expr = ex.args[2]
         body.head == :block || error(body, " is not a block expression")
-        return findmeta_block(ex)
+        return findmeta_block(ex.args)
     end
     error(ex, " is not a function expression")
 end
 
-function findmeta_block(ex::Expr)
-    for a in ex.args
+findmeta(ex::Array{Any,1}) = findmeta_block(ex)
+
+function findmeta_block(exargs)
+    for a in exargs
         if isa(a, Expr)
             if (a::Expr).head == :meta
                 return true, a::Expr
             elseif (a::Expr).head == :block
-                found, exb = findmeta_block(a)
+                found, exb = findmeta_block(a.args)
                 if found
                     return found, exb
                 end

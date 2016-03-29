@@ -34,8 +34,7 @@ function arg_decl_parts(m::Method)
         tv = Any[tv...]
     end
     li = m.func
-    e = uncompressed_ast(li)
-    argnames = e.args[1]
+    argnames = li.slotnames[1:li.nargs]
     s = symbol("?")
     decls = [argtype_decl(:tvar_env => tv, get(argnames,i,s), m.sig.parameters[i])
                 for i = 1:length(m.sig.parameters)]
@@ -49,11 +48,7 @@ function kwarg_decl(m::Method, kwtype::DataType)
     while d !== nothing
         if typeseq(d.sig, sig)
             li = d.func
-            e = uncompressed_ast(li)
-            argnames = Any[(isa(n,Expr) ? n.args[1] : n) for n in e.args[1]]
-            kwargs = filter!(x->!(x in argnames || '#' in string(x)),
-                Any[x[1] for x in e.args[2][1]])
-            return kwargs
+            return filter(x->!('#' in string(x)), li.slotnames[li.nargs+1:end])
         end
         d = d.next
     end
