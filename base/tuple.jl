@@ -50,19 +50,17 @@ ntuple(f::Function, n::Integer) =
     n==5 ? (f(1),f(2),f(3),f(4),f(5),) :
     tuple(ntuple(f,n-5)..., f(n-4), f(n-3), f(n-2), f(n-1), f(n))
 
-ntuple(f, ::Type{Val{0}}) = ()
-ntuple(f, ::Type{Val{1}}) = (f(1),)
-ntuple(f, ::Type{Val{2}}) = (f(1),f(2))
-ntuple(f, ::Type{Val{3}}) = (f(1),f(2),f(3))
-ntuple(f, ::Type{Val{4}}) = (f(1),f(2),f(3),f(4))
-ntuple(f, ::Type{Val{5}}) = (f(1),f(2),f(3),f(4),f(5))
-@generated function ntuple{N}(f, ::Type{Val{N}})
-    if !isa(N,Int)
-        :(throw(TypeError(:ntuple, "", Int, $(QuoteNode(N)))))
-    else
-        M = N-5
-        :(tuple(ntuple(f, Val{$M})..., f($N-4), f($N-3), f($N-2), f($N-1), f($N)))
-    end
+# inferrable ntuple
+function ntuple{F,N}(f::F, ::Type{Val{N}})
+    Core.typeassert(N, Int)
+    _ntuple((), f, Val{N})
+end
+
+# Build up the output until it has length N
+_ntuple{F,N}(out::NTuple{N}, f::F, ::Type{Val{N}}) = out
+function _ntuple{F,N,M}(out::NTuple{M}, f::F, ::Type{Val{N}})
+    @_inline_meta
+    _ntuple((out..., f(M+1)), f, Val{N})
 end
 
 # 0 argument function
