@@ -153,7 +153,6 @@ read(::DevNullStream, ::Type{UInt8}) = throw(EOFError())
 write(::DevNullStream, ::UInt8) = 1
 close(::DevNullStream) = nothing
 flush(::DevNullStream) = nothing
-copy(::DevNullStream) = DevNull
 wait_connected(::DevNullStream) = nothing
 wait_readnb(::DevNullStream) = wait()
 wait_readbyte(::DevNullStream) = wait()
