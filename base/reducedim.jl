@@ -204,7 +204,7 @@ function _mapreducedim!{T,N}(f, op, R::AbstractArray, A::AbstractArray{T,N})
         @inbounds for IA in CartesianRange(sizeA1)
             IR = min(sizeR1, IA)
             r = R[1,IR]
-            @simd for i = 1:size(A, 1)
+            @simd for i = 1:size(A, 1)  # fixme (iter): update when #15459 is implemented (and if it does't affect @simd)
                 r = op(r, f(A[i, IA]))
             end
             R[1,IR] = r
@@ -214,7 +214,7 @@ function _mapreducedim!{T,N}(f, op, R::AbstractArray, A::AbstractArray{T,N})
         sizeA1 = Base.size_skip1(size(A), A)
         @inbounds for IA in CartesianRange(sizeA1)
             IR = min(IA, sizeR1)
-            @simd for i = 1:size(A, 1)
+            @simd for i = 1:size(A, 1)  # fixme (iter): update when #15459 is implemented (and if it does't affect @simd)
                 R[i,IR] = op(R[i,IR], f(A[i,IA]))
             end
         end
@@ -296,7 +296,7 @@ function findminmax!{T,N}(f, Rval, Rind, A::AbstractArray{T,N})
             IR = min(sizeR1, IA)
             tmpRv = Rval[1,IR]
             tmpRi = Rind[1,IR]
-            for i = 1:size(A,1)
+            for i = 1:size(A,1)  # fixme (iter): update when #15459 is implemented (and if it does't affect @simd)
                 k += 1
                 tmpAv = A[i,IA]
                 if f(tmpAv, tmpRv)
@@ -310,7 +310,7 @@ function findminmax!{T,N}(f, Rval, Rind, A::AbstractArray{T,N})
     else
         @inbounds for IA in CartesianRange(sizeA1)
             IR = min(sizeR1, IA)
-            for i = 1:size(A, 1)
+            for i = 1:size(A, 1)  # fixme (iter): update when #15459 is implemented (and if it does't affect @simd)
                 k += 1
                 tmpAv = A[i,IA]
                 if f(tmpAv, Rval[i,IR])
