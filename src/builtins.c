@@ -1074,23 +1074,10 @@ static void add_builtin(const char *name, jl_value_t *v)
     jl_set_const(jl_core_module, jl_symbol(name), v);
 }
 
-jl_value_t *jl_mk_builtin_func(const char *name, jl_fptr_t fptr)
-{
-    jl_sym_t *sname = jl_symbol(name);
-    jl_value_t *f = jl_new_generic_function_with_supertype(sname, jl_core_module, jl_builtin_type, 0);
-    jl_lambda_info_t *li = jl_new_lambda_info(NULL, jl_emptysvec, jl_emptysvec, jl_core_module);
-    li->fptr = fptr;
-    li->name = sname;
-    // TODO jb/functions: what should li->ast be?
-    li->code = (jl_array_t*)jl_an_empty_cell; jl_gc_wb(li, li->code);
-    jl_method_cache_insert(jl_gf_mtable(f)->cache, jl_anytuple_type, jl_emptysvec, li, 0);
-    return f;
-}
-
 jl_fptr_t jl_get_builtin_fptr(jl_value_t *b)
 {
     assert(jl_subtype(b, (jl_value_t*)jl_builtin_type, 1));
-    return jl_gf_mtable(b)->cache->list->func->fptr;
+    return jl_gf_mtable(b)->cache.list->func->fptr;
 }
 
 static void add_builtin_func(const char *name, jl_fptr_t fptr)
@@ -1149,6 +1136,7 @@ void jl_init_primitives(void)
     add_builtin("Module", (jl_value_t*)jl_module_type);
     add_builtin("Method", (jl_value_t*)jl_method_type);
     add_builtin("MethodTable", (jl_value_t*)jl_methtable_type);
+    add_builtin("MethodCache", (jl_value_t*)jl_methcache_type);
     add_builtin("Symbol", (jl_value_t*)jl_sym_type);
     add_builtin("GenSym", (jl_value_t*)jl_gensym_type);
     add_builtin("Slot", (jl_value_t*)jl_slot_type);

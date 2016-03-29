@@ -353,7 +353,7 @@ jl_lambda_info_t *jl_new_lambda_info(jl_value_t *ast, jl_svec_t *tvars, jl_svec_
     li->module = ctx;
     li->sparam_syms = tvars;
     li->sparam_vals = sparams;
-    li->tfunc = (jl_methcache_t*)jl_nothing;
+    li->tfunc.nothing = jl_nothing;
     li->fptr = NULL;
     li->jlcall_api = 0;
     li->roots = NULL;
@@ -373,7 +373,7 @@ jl_lambda_info_t *jl_new_lambda_info(jl_value_t *ast, jl_svec_t *tvars, jl_svec_
     li->line = 0;
     li->pure = 0;
     li->called = 0xff;
-    li->invokes = NULL;
+    li->invokes.nothing = NULL;
     li->isstaged = 0;
     li->needs_sparam_vals_ducttape = 2;
     if (ast != NULL) {
@@ -589,6 +589,7 @@ jl_methcache_t *jl_new_method_cache()
 {
     jl_methcache_t *cache = (jl_methcache_t*)jl_gc_allocobj(sizeof(jl_methcache_t));
     jl_set_typeof(cache, jl_methcache_type);
+    cache->key = NULL;
     cache->list = (jl_methlist_t*)jl_nothing;
     cache->arg1 = (jl_array_t*)jl_nothing;
     cache->targ = (jl_array_t*)jl_nothing;
@@ -597,20 +598,17 @@ jl_methcache_t *jl_new_method_cache()
 
 JL_DLLEXPORT jl_methtable_t *jl_new_method_table(jl_sym_t *name, jl_module_t *module)
 {
-    jl_methcache_t *cache = jl_new_method_cache();
-    JL_GC_PUSH1(&cache);
     jl_methtable_t *mt = (jl_methtable_t*)jl_gc_allocobj(sizeof(jl_methtable_t));
     jl_set_typeof(mt, jl_methtable_type);
     mt->name = jl_demangle_typename(name);
     mt->module = module;
     mt->defs = (jl_methlist_t*)jl_nothing;
-    mt->cache = cache;
+    mt->cache.nothing = jl_nothing;
     mt->max_args = 0;
     mt->kwsorter = NULL;
 #ifdef JL_GF_PROFILE
     mt->ncalls = 0;
 #endif
-    JL_GC_POP();
     return mt;
 }
 

@@ -168,6 +168,12 @@ typedef struct _jl_llvm_functions_t {
     void *specFunctionObject;
 } jl_llvm_functions_t;
 
+union _jl_opaque_cache_t {
+    struct _jl_methcache_t *cache;
+    struct _jl_methlist_t *list;
+    struct _jl_value_t *nothing;
+};
+
 typedef struct _jl_lambda_info_t {
     JL_DATA_TYPE
     // this holds the static data for a function:
@@ -184,7 +190,7 @@ typedef struct _jl_lambda_info_t {
     // sparams is a vector of values indexed by symbols
     jl_svec_t *sparam_syms;
     jl_svec_t *sparam_vals;
-    struct _jl_methcache_t *tfunc;
+    union _jl_opaque_cache_t tfunc;
     jl_sym_t *name;  // for error reporting
     jl_array_t *roots;  // pointers in generated code
     jl_tupletype_t *specTypes;  // argument types this will be compiled for
@@ -205,7 +211,7 @@ typedef struct _jl_lambda_info_t {
     // cache of specializations of this method for invoke(), i.e.
     // cases where this method was called even though it was not necessarily
     // the most specific for the argument types.
-    struct _jl_methcache_t *invokes;
+    union _jl_opaque_cache_t invokes;
 
     // hidden fields:
     uint8_t called;  // bit flags: whether each of the first 8 arguments is called
@@ -352,16 +358,17 @@ typedef struct _jl_methlist_t {
 
 typedef struct _jl_methcache_t {
     JL_DATA_TYPE
-    jl_array_t *arg1;
-    jl_array_t *targ;
+    jl_array_t *arg1; // Array{union _jl_opaque_cache_t}
+    jl_array_t *targ; // Array{union _jl_opaque_cache_t}
     jl_methlist_t *list;
+    jl_value_t *key;
 } jl_methcache_t;
 
 typedef struct _jl_methtable_t {
     JL_DATA_TYPE
     jl_sym_t *name;
     jl_methlist_t *defs;
-    jl_methcache_t *cache;
+    union _jl_opaque_cache_t cache;
     intptr_t max_args;  // max # of non-vararg arguments in a signature
     jl_value_t *kwsorter;  // keyword argument sorter function
     jl_module_t *module; // used for incremental serialization to locate original binding

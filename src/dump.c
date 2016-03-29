@@ -473,10 +473,31 @@ static int module_in_worklist(jl_module_t *mod)
     return 0;
 }
 
-static void jl_prune_tcache_list(jl_methlist_t *ml)
+static void jl_prune_tcache(union _jl_opaque_cache_t tc);
+static void jl_prune_tcache_array(jl_array_t *a)
 {
-    if (!ml || ml == (void*)jl_nothing)
+    if (!a || a == (void*)jl_nothing)
         return;
+    size_t i, l = jl_array_len(a);
+    for (i = 0; i < l; i++) {
+        jl_prune_tcache((union _jl_opaque_cache_t)jl_cellref(a, i));
+    }
+}
+
+static void jl_prune_tcache(union _jl_opaque_cache_t tc)
+{
+    if (tc.nothing == NULL)
+        return;
+    jl_methlist_t *ml;
+    if (jl_typeof(tc.nothing) == (jl_value_t*)jl_methcache_type) {
+        jl_methcache_t *cache = tc.cache;
+        jl_prune_tcache_array(cache->arg1);
+        jl_prune_tcache_array(cache->targ);
+        ml = cache->list;
+    }
+    else {
+        ml = tc.list;
+    }
     while (ml != (void*)jl_nothing) {
         if (!jl_is_leaf_type((jl_value_t*)ml->sig)) {
             jl_value_t *ret = (jl_value_t*)ml->func;
@@ -490,23 +511,6 @@ static void jl_prune_tcache_list(jl_methlist_t *ml)
         }
         ml = ml->next;
     }
-}
-
-static void jl_prune_tcache_array(jl_array_t *a)
-{
-    if (!a || a == (void*)jl_nothing)
-        return;
-    size_t i, l = jl_array_len(a);
-    for(i = 0; i < l; i++) {
-        jl_prune_tcache_list((jl_methlist_t*)jl_cellref(a, i));
-    }
-}
-
-static void jl_prune_tcache(jl_methcache_t *cache)
-{
-    jl_prune_tcache_array(cache->arg1);
-    jl_prune_tcache_array(cache->targ);
-    jl_prune_tcache_list(cache->list);
 }
 
 
@@ -836,21 +840,19 @@ static void jl_serialize_value_(ios_t *s, jl_value_t *v)
         jl_serialize_value(s, (jl_value_t*)li->sparam_vals);
         // don't save cached type info for code in the Core module, because
         // it might reference types in the old Base module.
-        jl_methcache_t *tf = li->tfunc;
-        if (tf && tf != (void*)jl_nothing) {
+        union _jl_opaque_cache_t *tf = &li->tfunc;
+        if (tf->nothing && tf->nothing != jl_nothing) {
             if (li->module == jl_core_module) {
-               tf->arg1 = (jl_array_t*)jl_nothing;
-               tf->targ = (jl_array_t*)jl_nothing;
-               tf->list = (jl_methlist_t*)jl_nothing;
+               tf->nothing = jl_nothing;
             }
             else {
                 // go through the t-func cache, replacing ASTs with just return
                 // types for abstract argument types. these ASTs are generally
                 // not needed (e.g. they don't get inlined).
-                jl_prune_tcache(tf);
+                jl_prune_tcache(*tf);
             }
         }
-        jl_serialize_value(s, (jl_value_t*)tf);
+        jl_serialize_value(s, tf->nothing);
         jl_serialize_value(s, (jl_value_t*)li->name);
         jl_serialize_value(s, (jl_value_t*)li->specTypes);
         jl_serialize_value(s, (jl_value_t*)li->specializations);
@@ -866,7 +868,7 @@ static void jl_serialize_value_(ios_t *s, jl_value_t *v)
         jl_serialize_value(s, (jl_value_t*)li->roots);
         jl_serialize_value(s, (jl_value_t*)li->def);
         jl_serialize_value(s, (jl_value_t*)li->unspecialized);
-        jl_serialize_value(s, (jl_value_t*)li->invokes);
+        jl_serialize_value(s, (jl_value_t*)li->invokes.nothing);
         jl_serialize_fptr(s, li->fptr);
         // save functionObject pointers
         write_int32(s, li->functionID);
@@ -1158,29 +1160,39 @@ static void remove_methods_from_replaced_modules_from_list(jl_methlist_t **pl)
     }
 }
 
+
+static void remove_methods_from_replaced_modules_from_cache(union _jl_opaque_cache_t *tc);
 static void remove_methods_from_replaced_modules_from_array(jl_array_t *a)
 {
     jl_value_t **data;
     size_t i, l = jl_array_len(a); data = (jl_value_t**)jl_array_data(a);
     for(i=0; i < l; i++) {
         if (data[i] != NULL)
-            remove_methods_from_replaced_modules_from_list((jl_methlist_t**)&data[i]);
+            remove_methods_from_replaced_modules_from_cache((union _jl_opaque_cache_t*)&data[i]);
     }
 }
 
-static void remove_methods_from_replaced_modules_from_cache(jl_methcache_t *cache)
+static void remove_methods_from_replaced_modules_from_cache(union _jl_opaque_cache_t *tc)
 {
-    remove_methods_from_replaced_modules_from_list(&cache->list);
-    if ((jl_value_t*)cache->arg1 != jl_nothing)
-        remove_methods_from_replaced_modules_from_array(cache->arg1);
-    if ((jl_value_t*)cache->targ != jl_nothing)
-        remove_methods_from_replaced_modules_from_array(cache->targ);
+    jl_methlist_t **pl;
+    if (jl_typeof(tc->nothing) == (jl_value_t*)jl_methcache_type) {
+        jl_methcache_t *cache = tc->cache;
+        if ((jl_value_t*)cache->arg1 != jl_nothing)
+            remove_methods_from_replaced_modules_from_array(cache->arg1);
+        if ((jl_value_t*)cache->targ != jl_nothing)
+            remove_methods_from_replaced_modules_from_array(cache->targ);
+        pl = &cache->list;
+    }
+    else {
+        pl = &tc->list;
+    }
+    remove_methods_from_replaced_modules_from_list(pl);
 }
 
 static void remove_methods_from_replaced_modules(jl_methtable_t *mt)
 {
     remove_methods_from_replaced_modules_from_list(&mt->defs);
-    remove_methods_from_replaced_modules_from_cache(mt->cache);
+    remove_methods_from_replaced_modules_from_cache(&mt->cache);
     remove_specializations_from_replaced_modules(mt->defs);
     if (mt->kwsorter)
         remove_methods_from_replaced_modules(jl_gf_mtable(mt->kwsorter));
@@ -1472,8 +1484,8 @@ static jl_value_t *jl_deserialize_value_(ios_t *s, jl_value_t *vtag, jl_value_t 
         jl_gc_wb(li, li->sparam_syms);
         li->sparam_vals = (jl_svec_t*)jl_deserialize_value(s, (jl_value_t**)&li->sparam_vals);
         jl_gc_wb(li, li->sparam_vals);
-        li->tfunc = (jl_methcache_t*)jl_deserialize_value(s, (jl_value_t**)&li->tfunc);
-        jl_gc_wb(li, li->tfunc);
+        li->tfunc = (union _jl_opaque_cache_t)jl_deserialize_value(s, (jl_value_t**)&li->tfunc);
+        jl_gc_wb(li, li->tfunc.nothing);
         li->name = (jl_sym_t*)jl_deserialize_value(s, NULL);
         jl_gc_wb(li, li->name);
         li->specTypes = (jl_tupletype_t*)jl_deserialize_value(s, (jl_value_t**)&li->specTypes);
@@ -1502,7 +1514,8 @@ static jl_value_t *jl_deserialize_value_(ios_t *s, jl_value_t *vtag, jl_value_t 
         li->inInference = 0;
         li->inCompile = 0;
         li->unspecialized = (jl_lambda_info_t*)jl_deserialize_value(s, (jl_value_t**)&li->unspecialized);
-        li->invokes = (jl_methcache_t*)jl_deserialize_value(s, (jl_value_t**)&li->invokes);
+        li->invokes = (union _jl_opaque_cache_t)jl_deserialize_value(s, (jl_value_t**)&li->invokes);
+        jl_gc_wb(li, li->invokes.nothing);
         if (li->unspecialized) jl_gc_wb(li, li->unspecialized);
         li->fptr = jl_deserialize_fptr(s);
         li->functionID = 0;
@@ -2294,6 +2307,7 @@ static void jl_recache_types(void)
     }
 }
 
+void jl_method_cache_rehash(union _jl_opaque_cache_t ml, int8_t offs);
 static jl_array_t *_jl_restore_incremental(ios_t *f)
 {
     if (ios_eof(f)) {
@@ -2334,32 +2348,8 @@ static jl_array_t *_jl_restore_incremental(ios_t *f)
     size_t i;
     for (i = 0; i < methtable_list.len; i++) {
         jl_methtable_t *mt = (jl_methtable_t*)methtable_list.items[i];
-        jl_methcache_t *cache = mt->cache;
         int8_t offs = (mt == jl_type_type->name->mt) ? 0 : 1;
-        jl_array_t *cache_targ = cache->targ;
-        jl_array_t *cache_arg1 = cache->arg1;
-        cache->targ = (jl_array_t*)jl_nothing;
-        cache->arg1 = (jl_array_t*)jl_nothing;
-        if (cache_targ != (void*)jl_nothing) {
-            size_t j, l = jl_array_len(cache_targ);
-            for (j = 0; j < l; j++) {
-                jl_methlist_t *ml = (jl_methlist_t*)jl_cellref(cache_targ, j);
-                while (ml != NULL && ml != (void*)jl_nothing) {
-                    jl_method_cache_insert(cache, ml->sig, ml->guardsigs, ml->func, offs);
-                    ml = ml->next;
-                }
-            }
-        }
-        if (cache_arg1 != (void*)jl_nothing) {
-            size_t j, l = jl_array_len(cache_arg1);
-            for (j = 0; j < l; j++) {
-                jl_methlist_t *ml = (jl_methlist_t*)jl_cellref(cache_arg1, j);
-                while (ml != NULL && ml != (void*)jl_nothing) {
-                    jl_method_cache_insert(cache, ml->sig, ml->guardsigs, ml->func, offs);
-                    ml = ml->next;
-                }
-            }
-        }
+        jl_method_cache_rehash(mt->cache, offs);
     }
 
     mode = last_mode;

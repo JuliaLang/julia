@@ -3185,7 +3185,7 @@ void jl_init_types(void)
     jl_symbol_type = jl_sym_type;
     jl_simplevector_type = jl_new_uninitialized_datatype(1, 1);
     jl_methtable_type = jl_new_uninitialized_datatype(6, 1);
-    jl_methcache_type = jl_new_uninitialized_datatype(3, 1);
+    jl_methcache_type = jl_new_uninitialized_datatype(4, 1);
     jl_nothing = jl_gc_alloc_0w();
 
     jl_emptysvec = (jl_svec_t*)newobj((jl_value_t*)jl_simplevector_type, 1);
@@ -3273,8 +3273,8 @@ void jl_init_types(void)
     jl_methcache_type->name->mt = jl_new_method_table(jl_methcache_type->name->name, jl_current_module);
     jl_methcache_type->super = jl_any_type;
     jl_methcache_type->parameters = jl_emptysvec;
-    jl_methcache_type->name->names = jl_svec(3, jl_symbol("arg1"), jl_symbol("targ"), jl_symbol("list")),
-    jl_methcache_type->types = jl_svec(3, jl_any_type, jl_any_type, jl_any_type);
+    jl_methcache_type->name->names = jl_svec(4, jl_symbol("arg1"), jl_symbol("targ"), jl_symbol("list"), jl_symbol("key")),
+    jl_methcache_type->types = jl_svec(4, jl_any_type, jl_any_type, jl_any_type, jl_any_type);
     jl_methcache_type->uid = jl_assign_type_uid();
     jl_methcache_type->instance = NULL;
     jl_methcache_type->struct_decl = NULL;
@@ -3548,7 +3548,7 @@ void jl_init_types(void)
                                 jl_bool_type,
                                 jl_bool_type,
                                 jl_bool_type,
-                                jl_methcache_type),
+                                jl_any_type),
                         0, 1, 10);
 
     jl_typector_type =
