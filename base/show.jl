@@ -687,9 +687,12 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int)
 
     # function calls need to transform the function from :call to :calldecl
     # so that operators are printed correctly
-    elseif head == :function && nargs==2 && is_expr(args[1], :call)
+    elseif head === :function && nargs==2 && is_expr(args[1], :call)
         show_block(io, head, Expr(:calldecl, args[1].args...), args[2], indent)
         print(io, "end")
+
+    elseif head === :function && nargs == 1
+        print(io, "function ", args[1], " end")
 
     # block with argument
     elseif head in (:for,:while,:function,:if) && nargs==2

@@ -398,3 +398,7 @@ A = reshape(1:16,4,4)
 @test sprint(show, :([a;b])) == ":([a;b])"
 @test_repr "[a;]"
 @test_repr "[a;b]"
+
+# Printing of :(function f end)
+@test sprint(show, :(function f end)) == ":(function f end)"
+@test_repr "function g end"
