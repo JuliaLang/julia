@@ -9,6 +9,12 @@ to use them, you'll need to prefix each function call with an explicit ``Pkg.``,
 
 Functions for package development (e.g. ``tag``, ``publish``, etc.) have been moved to the `PkgDev <https://github.com/JuliaLang/PkgDev.jl>`_ package. See `PkgDev README <https://github.com/JuliaLang/PkgDev.jl/blob/master/README.md#usage>`_ for the documentation of those functions.
 
+When accessing packages that are stored remotely, e.g. on Github,
+Julia uses URLs to specify their location. Currently, Julia only
+supports the ``http`` and ``https`` url protocols; e.g. ``git`` or
+``git+ssh`` are not supported. It is customary (but not necessary) to
+use a suffix ``.jl`` for Julia packages.
+
 .. function:: dir() -> AbstractString
 
    .. Docstring generated from Julia source
