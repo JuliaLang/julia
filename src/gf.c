@@ -317,7 +317,8 @@ static jl_lambda_info_t *jl_add_static_parameters(jl_lambda_info_t *l, jl_svec_t
     assert(l->specTypes == NULL);
     jl_lambda_info_t *nli = jl_copy_lambda_info(l);
     nli->sparam_vals = sp; // no gc_wb needed
-    nli->tfunc = jl_nothing;
+    nli->tfunc = NULL;
+    nli->specializations = NULL;
     nli->specTypes = types;
     if (types) jl_gc_wb(nli, types);
 
@@ -873,6 +874,33 @@ static jl_lambda_info_t *cache_method(jl_methtable_t *mt, jl_methcache_t *cache,
     }
 
     // here we infer types and specialize the method
+    jl_array_t *lilist=NULL;
+    jl_lambda_info_t *li=NULL;
+    if (method->specializations != NULL) {
+        // reuse code already generated for this combination of lambda and
+        // arguments types. this happens for inner generic functions where
+        // a new closure is generated on each call to the enclosing function.
+        lilist = method->specializations;
+        int k;
+        for(k=0; k < lilist->nrows; k++) {
+            li = (jl_lambda_info_t*)jl_cellref(lilist, k);
+            if (jl_types_equal((jl_value_t*)li->specTypes, (jl_value_t*)type))
+                break;
+        }
+        if (k == lilist->nrows) lilist=NULL;
+    }
+    if (lilist != NULL && !li->inInference) {
+        assert(li);
+        newmeth = li;
+        if (cache_as_orig)
+            jl_method_cache_insert(cache, origtype, guardsigs, newmeth, jl_cachearg_offset(mt));
+        else
+            jl_method_cache_insert(cache, type, guardsigs, newmeth, jl_cachearg_offset(mt));
+        JL_GC_POP();
+        JL_UNLOCK(codegen);
+        return newmeth;
+    }
+
     newmeth = jl_add_static_parameters(method, sparams, type);
 
     if (cache_as_orig)
@@ -881,6 +909,16 @@ static jl_lambda_info_t *cache_method(jl_methtable_t *mt, jl_methcache_t *cache,
         jl_method_cache_insert(cache, type, guardsigs, newmeth, jl_cachearg_offset(mt));
 
     if (newmeth->code != NULL) {
+        jl_array_t *spe = method->specializations;
+        if (spe == NULL) {
+            spe = jl_alloc_cell_1d(1);
+            jl_cellset(spe, 0, newmeth);
+        }
+        else {
+            jl_cell_1d_push(spe, (jl_value_t*)newmeth);
+        }
+        method->specializations = spe;
+        jl_gc_wb(method, method->specializations);
         if (jl_options.compile_enabled != JL_OPTIONS_COMPILE_OFF) // don't bother with typeinf if compile is off
             if (jl_symbol_name(newmeth->name)[0] != '@')  // don't bother with typeinf on macros
                 jl_type_infer(newmeth, jl_false);

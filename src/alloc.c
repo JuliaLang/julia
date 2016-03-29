@@ -367,6 +367,7 @@ jl_lambda_info_t *jl_new_lambda_info(jl_value_t *ast, jl_svec_t *tvars, jl_svec_
     li->inInference = 0;
     li->inCompile = 0;
     li->unspecialized = NULL;
+    li->specializations = NULL;
     li->name = anonymous_sym;
     li->def = li;
     li->line = 0;
@@ -403,6 +404,7 @@ JL_DLLEXPORT jl_lambda_info_t *jl_copy_lambda_info(jl_lambda_info_t *linfo)
     new_linfo->roots = linfo->roots;
     new_linfo->specTypes = linfo->specTypes;
     new_linfo->unspecialized = linfo->unspecialized;
+    new_linfo->specializations = linfo->specializations;
     new_linfo->def = linfo->def;
     new_linfo->file = linfo->file;
     new_linfo->line = linfo->line;

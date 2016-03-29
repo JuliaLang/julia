@@ -190,6 +190,8 @@ typedef struct _jl_lambda_info_t {
     jl_tupletype_t *specTypes;  // argument types this will be compiled for
     // a slower-but-works version of this function as a fallback
     struct _jl_lambda_info_t *unspecialized;
+    // array of all lambda infos with code generated from this one
+    jl_array_t *specializations;
     struct _jl_module_t *module;
     struct _jl_lambda_info_t *def;  // original this is specialized from
     jl_sym_t *file;

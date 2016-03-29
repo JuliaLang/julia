@@ -823,6 +823,7 @@ static void jl_serialize_value_(ios_t *s, jl_value_t *v)
         }
         jl_serialize_value(s, (jl_value_t*)li->name);
         jl_serialize_value(s, (jl_value_t*)li->specTypes);
+        jl_serialize_value(s, (jl_value_t*)li->specializations);
         write_int8(s, li->inferred);
         write_int8(s, li->pure);
         write_int8(s, li->called);
@@ -1086,7 +1087,21 @@ static int type_has_replaced_module(jl_value_t *t)
 static void remove_specializations_from_replaced_modules(jl_methlist_t *l)
 {
     while (l != (void*)jl_nothing) {
-        jl_array_t *a = l->func->roots;
+        jl_array_t *a = l->func->specializations;
+        if (a) {
+            size_t len = jl_array_len(a);
+            size_t i, insrt=0;
+            for(i=0; i < len; i++) {
+                jl_lambda_info_t *li = (jl_lambda_info_t*)jl_cellref(a, i);
+                if (!(li->rettype && type_has_replaced_module(li->rettype)) &&
+                    !(li->specTypes && type_has_replaced_module((jl_value_t*)li->specTypes))) {
+                    jl_cellset(a, insrt, li);
+                    insrt++;
+                }
+            }
+            jl_array_del_end(a, len-insrt);
+        }
+        a = l->func->roots;
         if (a) {
             size_t len = jl_array_len(a);
             size_t i;
@@ -1433,6 +1448,8 @@ static jl_value_t *jl_deserialize_value_(ios_t *s, jl_value_t *vtag, jl_value_t 
         jl_gc_wb(li, li->name);
         li->specTypes = (jl_tupletype_t*)jl_deserialize_value(s, (jl_value_t**)&li->specTypes);
         if (li->specTypes) jl_gc_wb(li, li->specTypes);
+        li->specializations = (jl_array_t*)jl_deserialize_value(s, (jl_value_t**)&li->specializations);
+        if (li->specializations) jl_gc_wb(li, li->specializations);
         li->inferred = read_int8(s);
         li->pure = read_int8(s);
         li->called = read_int8(s);
