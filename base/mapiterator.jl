@@ -144,3 +144,5 @@ function next(itr::StreamMapIterator, state::StreamMapState)
 
     return (r, state)
 end
+
+iteratorsize(::Type{StreamMapIterator}) = SizeUnknown()

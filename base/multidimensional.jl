@@ -3,7 +3,7 @@
 ### Multidimensional iterators
 module IteratorsMD
 
-import Base: eltype, length, start, done, next, last, getindex, setindex!, linearindexing, min, max, eachindex, ndims
+import Base: eltype, length, size, start, done, next, last, getindex, setindex!, linearindexing, min, max, eachindex, ndims, iteratorsize
 importall ..Base.Operators
 import Base: simd_outer_range, simd_inner_length, simd_index, @generated
 import Base: @nref, @ncall, @nif, @nexprs, LinearFast, LinearSlow, to_index, AbstractCartesianIndex
@@ -110,6 +110,7 @@ end
 end
 
 eltype{I}(::Type{CartesianRange{I}}) = I
+iteratorsize{I}(::Type{CartesianRange{I}}) = Base.HasShape()
 
 @generated function start{I<:CartesianIndex}(iter::CartesianRange{I})
     N = length(I)
@@ -142,12 +143,14 @@ start{I<:CartesianIndex{0}}(iter::CartesianRange{I}) = false
 next{I<:CartesianIndex{0}}(iter::CartesianRange{I}, state) = iter.start, true
 done{I<:CartesianIndex{0}}(iter::CartesianRange{I}, state) = state
 
-@generated function length{I<:CartesianIndex}(iter::CartesianRange{I})
+@generated function size{I<:CartesianIndex}(iter::CartesianRange{I})
     N = length(I)
-    N == 0 && return 1
+    N == 0 && return ()
     args = [:(iter.stop[$i]-iter.start[$i]+1) for i=1:N]
-    Expr(:call,:*,args...)
+    Expr(:tuple,args...)
 end
+
+length(iter::CartesianRange) = prod(size(iter))
 
 last(iter::CartesianRange) = iter.stop
 

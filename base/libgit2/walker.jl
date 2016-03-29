@@ -25,6 +25,8 @@ function Base.next(w::GitRevWalker, state)
     return (state[1], (id_ptr[], false))
 end
 
+Base.iteratorsize(::Type{GitRevWalker}) = Base.SizeUnknown()
+
 function push_head!(w::GitRevWalker)
     @check ccall((:git_revwalk_push_head, :libgit2), Cint, (Ptr{Void},), w.ptr)
     return w

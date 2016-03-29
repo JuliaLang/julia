@@ -58,6 +58,9 @@ let z = zip(1:2, 3:4, 5:6)
     @test eltype(z) == Tuple{Int,Int,Int}
 end
 
+# typed `collect`
+@test collect(Float64, Filter(isodd, [1,2,3,4]))[1] === 1.0
+
 # enumerate (issue #6284)
 let b = IOBuffer("1\n2\n3\n"), a = []
     for (i,x) in enumerate(eachline(b))
@@ -76,12 +79,19 @@ let zeb     = IOBuffer("1\n2\n3\n4\n5\n"),
     @test res == [(1, 'a'), (2, 'b'), (3, 'c'), (4, 'd'), (5, 'e')]
 end
 
+@test length(zip(cycle(1:3), 1:7)) == 7
+@test length(zip(cycle(1:3), 1:7, cycle(1:3))) == 7
+@test length(zip(1:3,Base.product(1:7,cycle(1:3)))) == 3
+@test length(zip(1:3,Base.product(1:7,cycle(1:3)),8)) == 1
+
 # rest
 # ----
 let s = "hello"
     _, st = next(s, start(s))
     @test collect(rest(s, st)) == ['e','l','l','o']
 end
+
+@test_throws MethodError collect(rest(countfrom(1), 5))
 
 # countfrom
 # ---------
@@ -115,6 +125,10 @@ let i = 0
     @test i == 10
 end
 
+@test length(take(1:3,typemax(Int))) == 3
+@test length(take(countfrom(1),3)) == 3
+@test length(take(1:6,3)) == 3
+
 # drop
 # ----
 
@@ -125,6 +139,10 @@ let i = 0
     end
     @test i == 4
 end
+
+@test length(drop(1:3,typemax(Int))) == 0
+@test Base.iteratorsize(drop(countfrom(1),3)) == Base.IsInfinite()
+@test_throws MethodError length(drop(countfrom(1), 3))
 
 # cycle
 # -----
@@ -155,6 +173,7 @@ let i = 0
     end
 end
 
+
 # product
 # -------
 
@@ -165,6 +184,7 @@ end
 @test collect(Base.product(1:2,3:4)) == [(1,3),(2,3),(1,4),(2,4)]
 @test isempty(collect(Base.product(1:0,1:2)))
 @test length(Base.product(1:2,1:10,4:6)) == 60
+@test Base.iteratorsize(Base.product(1:2, countfrom(1))) == Base.IsInfinite()
 
 # flatten
 # -------
