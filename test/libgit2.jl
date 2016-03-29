@@ -60,6 +60,9 @@ const LIBGIT2_VER = v"0.23.0"
     @test sig.name == sig2.name
     @test sig.email == sig2.email
     @test sig.time == sig2.time
+    sig3 = LibGit2.Signature("AAA","AAA@BBB.COM")
+    @test sig3.name == sig.name
+    @test sig3.email == sig.email
 #end
 
 mktempdir() do dir
@@ -117,6 +120,7 @@ mktempdir() do dir
 
                 remote = LibGit2.get(LibGit2.GitRemote, repo, branch)
                 @test LibGit2.url(remote) == repo_url
+                @test LibGit2.isattached(repo)
                 finalize(remote)
             finally
                 finalize(repo)
@@ -129,8 +133,18 @@ mktempdir() do dir
             try
                 @test isdir(path)
                 @test isfile(joinpath(path, LibGit2.Consts.HEAD_FILE))
+                @test LibGit2.isattached(repo)
             finally
                 finalize(repo)
+            end
+
+            path = joinpath("garbagefakery", "Example.Bare")
+            try
+                LibGit2.GitRepo(path)
+                error("unexpected")
+            catch e
+                @test typeof(e) == LibGit2.GitError
+                @test startswith(sprint(show,e),"GitError(Code:ENOTFOUND, Class:OS, Failed to resolve path")
             end
         #end
     #end
@@ -143,6 +157,8 @@ mktempdir() do dir
             try
                 @test isdir(repo_path)
                 @test isfile(joinpath(repo_path, LibGit2.Consts.HEAD_FILE))
+                @test LibGit2.isattached(repo)
+                @test LibGit2.remotes(repo) == ["origin"]
             finally
                 finalize(repo)
             end
@@ -156,6 +172,8 @@ mktempdir() do dir
                 rmt = LibGit2.get(LibGit2.GitRemote, repo, "origin")
                 try
                     @test LibGit2.fetch_refspecs(rmt)[1] == "+refs/*:refs/*"
+                    @test LibGit2.isattached(repo)
+                    @test LibGit2.remotes(repo) == ["origin"]
                 finally
                     finalize(rmt)
                 end
@@ -168,6 +186,7 @@ mktempdir() do dir
             try
                 @test isdir(test_repo)
                 @test isdir(joinpath(test_repo, ".git"))
+                @test LibGit2.isattached(repo)
             finally
                 finalize(repo)
             end
@@ -228,8 +247,15 @@ mktempdir() do dir
             repo = LibGit2.GitRepo(cache_repo)
             try
                 brnch = LibGit2.branch(repo)
+                brref = LibGit2.head(repo)
+                @test LibGit2.isbranch(brref)
+                @test LibGit2.name(brref) == "refs/heads/master"
+                @test LibGit2.shortname(brref) == "master"
+                @test LibGit2.ishead(brref)
+                @test LibGit2.upstream(brref) == nothing
+                @test repo.ptr == LibGit2.owner(brref).ptr
                 @test brnch == "master"
-
+                @test LibGit2.headname(repo) == "master"
                 LibGit2.branch!(repo, test_branch, string(commit_oid1), set_head=false)
 
                 branches = map(b->LibGit2.shortname(b[1]), LibGit2.GitBranchIter(repo))
@@ -290,6 +316,25 @@ mktempdir() do dir
                 finalize(repo)
             end
         #end
+
+        #@testset "status" begin
+            repo = LibGit2.GitRepo(cache_repo)
+            try
+                status = LibGit2.GitStatus(repo)
+                @test length(status) == 0
+                @test_throws BoundsError status[1]
+                repo_file = open(joinpath(cache_repo,"statusfile"), "a")
+
+                # create commits
+                println(repo_file, commit_msg1)
+                flush(repo_file)
+                LibGit2.add!(repo, test_file)
+                status = LibGit2.GitStatus(repo)
+                @test length(status) != 0
+            finally
+                finalize(repo)
+                close(repo_file)
+            end
     #end
 
     #@testset "Fetch from cache repository" begin
