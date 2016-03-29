@@ -884,7 +884,13 @@ Mathematical Functions
 
    .. Docstring generated from Julia source
 
-   Compute the :math:`\sqrt{x^2+y^2}` avoiding overflow and underflow.
+   Compute the hypotenuse :math:`\sqrt{x^2+y^2}` avoiding overflow and underflow.
+
+.. function:: hypot(x...)
+
+   .. Docstring generated from Julia source
+
+   Compute the hypotenuse :math:`\sqrt{\sum x_i}` avoiding overflow and underflow.
 
 .. function:: log(x)
 
