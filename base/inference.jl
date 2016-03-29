@@ -1531,9 +1531,8 @@ function typeinf_edge(linfo::LambdaInfo, atypes::ANY, sparams::SimpleVector, nee
     # check cached t-functions
     # linfo.def is the original unspecialized version of a method.
     # we aggregate all saved type inference data there.
-    tf = linfo.def.tfunc
-    if cached && !is(tf, nothing)
-        code = ccall(:jl_typesig_cache_lookup, Any, (Any, Any, Int8), tf, atypes, offs)
+    if cached && !is(linfo.def.tfunc, nothing)
+        code = ccall(:jl_tfunc_cache_lookup, Any, (Any, Any, Int8), linfo.def, atypes, offs)
         if isa(code, InferenceState)
             # inference on this signature is in progress
             frame = code
@@ -1590,7 +1589,7 @@ function typeinf_edge(linfo::LambdaInfo, atypes::ANY, sparams::SimpleVector, nee
         frame = InferenceState(linfo, atypes, sparams, optimize)
 
         if cached
-            tfunc_bp = ccall(:jl_typesig_cache_insert, Ref{Method}, (Any, Any, Any, Int8), tf, atypes, frame, offs)
+            tfunc_bp = ccall(:jl_tfunc_cache_insert, Ref{Method}, (Any, Any, Any, Int8), linfo.def, atypes, frame, offs)
             frame.tfunc_bp = tfunc_bp
         end
     end
