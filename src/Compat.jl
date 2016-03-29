@@ -376,13 +376,13 @@ if VERSION < v"0.4.0-dev+3732"
 end
 
 function _compat(ex::Expr)
-    if ex.head == :call
+    if ex.head === :call
         f = ex.args[1]
-        if VERSION < v"0.4.0-dev+980" && (f == :Dict || (isexpr(f, :curly) && length(f.args) == 3 && f.args[1] == :Dict))
+        if VERSION < v"0.4.0-dev+980" && (f === :Dict || (isexpr(f, :curly) && length(f.args) == 3 && f.args[1] === :Dict))
             ex = rewrite_dict(ex)
-        elseif VERSION < v"0.4.0-dev+980" && (f == :OrderedDict || (isexpr(f, :curly) && length(f.args) == 3 && f.args[1] == :OrderedDict))
+        elseif VERSION < v"0.4.0-dev+980" && (f === :OrderedDict || (isexpr(f, :curly) && length(f.args) == 3 && f.args[1] === :OrderedDict))
             ex = rewrite_ordereddict(ex)
-        elseif VERSION < v"0.4.0-dev+129" && (f == :split || f == :rsplit) && length(ex.args) >= 4 && isexpr(ex.args[4], :kw)
+        elseif VERSION < v"0.4.0-dev+129" && (f === :split || f === :rsplit) && length(ex.args) >= 4 && isexpr(ex.args[4], :kw)
             ex = rewrite_split(ex, f)
         elseif VERSION < v"0.4.0-dev+3732" && haskey(calltypes, f) && length(ex.args) > 1
             T = ex.args[1]
@@ -391,63 +391,63 @@ function _compat(ex::Expr)
             else
                 ex = Expr(:(::), Expr(:call, :convert, T, ex.args[2:end]...), T)
             end
-        elseif VERSION < v"0.4.0-dev+3732" && (f == :map && haskey(calltypes, ex.args[2]) && length(ex.args) > 2)
+        elseif VERSION < v"0.4.0-dev+3732" && (f === :map && haskey(calltypes, ex.args[2]) && length(ex.args) > 2)
             ex = Expr(:call, calltypes[ex.args[2]], ex.args[3:end]...)
-        elseif VERSION < v"0.4.0-dev+1419" && isexpr(f, :curly) && f.args[1] == :Ptr && length(ex.args) == 2 && ex.args[2] == 0
+        elseif VERSION < v"0.4.0-dev+1419" && isexpr(f, :curly) && f.args[1] === :Ptr && length(ex.args) == 2 && ex.args[2] == 0
             ex = Expr(:call, :zero, f)
-        elseif VERSION < v"0.4.0-dev+4356" && f == :chol
+        elseif VERSION < v"0.4.0-dev+4356" && f === :chol
             s = ex.args[3]
-            if isexpr(s, :curly) && s.args[1] == :Val
+            if isexpr(s, :curly) && s.args[1] === :Val
                 ex = Expr(:call, :chol, ex.args[2], s.args[2])
             end
-        elseif VERSION < v"0.4.0-dev+4739" && isexpr(f, :curly) && (f.args[1] == :Vector || f.args[1] == :Array)
-            if f.args[1] == :Vector && length(ex.args) == 1
+        elseif VERSION < v"0.4.0-dev+4739" && isexpr(f, :curly) && (f.args[1] === :Vector || f.args[1] === :Array)
+            if f.args[1] === :Vector && length(ex.args) == 1
                 ex = Expr(:call, :Array, f.args[2], 0)
             else
                 ex = Expr(:call, :Array, f.args[2], ex.args[2:end]...)
             end
-        elseif VERSION < v"0.4.0-dev+4389" && f == :withenv
+        elseif VERSION < v"0.4.0-dev+4389" && f === :withenv
             rewrite_pairs_to_tuples!(ex)
         end
-    elseif ex.head == :curly
+    elseif ex.head === :curly
         f = ex.args[1]
-        if VERSION < v"0.4.0-dev+4319" && f == :Tuple
+        if VERSION < v"0.4.0-dev+4319" && f === :Tuple
             args = ex.args[2:end]
             has_ellipsis = any(args) do arg
-                isa(arg, Expr) && (arg.head == :...)
+                isa(arg, Expr) && (arg.head === :...)
             end
             ex = if has_ellipsis
                 Expr(:call, TopNode(:tuple), args...)
             else
                 Expr(:tuple, args...)
             end
-        elseif VERSION < v"0.4.0-dev+5379" && f == :Union
+        elseif VERSION < v"0.4.0-dev+5379" && f === :Union
             ex = Expr(:call,:Union,ex.args[2:end]...)
         elseif ex == :(Ptr{Void})
             # Do no change Ptr{Void} to Ptr{Nothing}: 0.4.0-dev+768
             return ex
         end
-    elseif ex.head == :macrocall
+    elseif ex.head === :macrocall
         f = ex.args[1]
-        if f == symbol("@generated") && VERSION < v"0.4.0-dev+4387"
+        if f === symbol("@generated") && VERSION < v"0.4.0-dev+4387"
             f = ex.args[2]
             if isexpr(f, :function)
                 ex = Expr(:stagedfunction, f.args...)
             end
         end
-    elseif VERSION < v"0.4.0-dev+5322" && ex.head == :(::) && isa(ex.args[end], Symbol)
+    elseif VERSION < v"0.4.0-dev+5322" && ex.head === :(::) && isa(ex.args[end], Symbol)
         # Replace Base.Timer with Compat.Timer2 in type declarations
-        if ex.args[end] == :Timer || ex.args[end] == :(Base.Timer)
+        if ex.args[end] === :Timer || ex.args[end] == :(Base.Timer)
             ex.args[end] = :(Compat.Timer2)
         end
-    elseif ex.head == :quote && isa(ex.args[1], Symbol)
+    elseif ex.head === :quote && isa(ex.args[1], Symbol)
         # Passthrough
         return ex
     end
     return Expr(ex.head, map(_compat, ex.args)...)
 end
 function _compat(ex::Symbol)
-    if VERSION < v"0.4.0-dev+768" && ex == :Void
+    if VERSION < v"0.4.0-dev+768" && ex === :Void
         return :Nothing
     end
     return ex
