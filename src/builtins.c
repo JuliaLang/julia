@@ -113,12 +113,6 @@ JL_DLLEXPORT void JL_NORETURN jl_type_error(const char *fname, jl_value_t *expec
 
 JL_DLLEXPORT void JL_NORETURN jl_undefined_var_error(jl_sym_t *var)
 {
-    if (jl_symbol_name(var)[0] == '#') {
-        // convention for renamed variables: #...#original_name
-        char *nxt = strchr(jl_symbol_name(var) + 1, '#');
-        if (nxt)
-            var = jl_symbol(nxt+1);
-    }
     jl_throw(jl_new_struct(jl_undefvarerror_type, var));
 }
 
@@ -1084,11 +1078,11 @@ jl_value_t *jl_mk_builtin_func(const char *name, jl_fptr_t fptr)
 {
     jl_sym_t *sname = jl_symbol(name);
     jl_value_t *f = jl_new_generic_function_with_supertype(sname, jl_core_module, jl_builtin_type, 0);
-    jl_lambda_info_t *li = jl_new_lambda_info(jl_nothing, jl_emptysvec, jl_emptysvec, jl_core_module);
+    jl_lambda_info_t *li = jl_new_lambda_info(NULL, jl_emptysvec, jl_emptysvec, jl_core_module);
     li->fptr = fptr;
     li->name = sname;
     // TODO jb/functions: what should li->ast be?
-    li->ast = (jl_value_t*)jl_exprn(lambda_sym,0); jl_gc_wb(li, li->ast);
+    li->code = (jl_array_t*)jl_an_empty_cell; jl_gc_wb(li, li->code);
     jl_method_cache_insert(jl_gf_mtable(f), jl_anytuple_type, li);
     return f;
 }
@@ -1157,6 +1151,7 @@ void jl_init_primitives(void)
     add_builtin("MethodTable", (jl_value_t*)jl_methtable_type);
     add_builtin("Symbol", (jl_value_t*)jl_sym_type);
     add_builtin("GenSym", (jl_value_t*)jl_gensym_type);
+    add_builtin("Slot", (jl_value_t*)jl_slot_type);
     add_builtin("IntrinsicFunction", (jl_value_t*)jl_intrinsic_type);
     add_builtin("Function", (jl_value_t*)jl_function_type);
     add_builtin("Builtin", (jl_value_t*)jl_builtin_type);
@@ -1352,10 +1347,6 @@ static size_t jl_static_show_x_(JL_STREAM *out, jl_value_t *v,
     else if (vt == jl_gensym_type) {
         n += jl_printf(out, "GenSym(%" PRIuPTR ")",
                        (uintptr_t)((jl_gensym_t*)v)->id);
-    }
-    else if (vt == jl_symbolnode_type) {
-        n += jl_printf(out, "%s::", jl_symbol_name(jl_symbolnode_sym(v)));
-        n += jl_static_show_x(out, jl_symbolnode_type(v), depth);
     }
     else if (vt == jl_globalref_type) {
         n += jl_static_show_x(out, (jl_value_t*)jl_globalref_mod(v), depth);

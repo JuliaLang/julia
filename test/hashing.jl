@@ -95,9 +95,9 @@ let a = QuoteNode(1), b = QuoteNode(1.0)
     @test (hash(a)==hash(b)) == (a==b)
 end
 
-let a = Expr(:block, SymbolNode(:a, Any)),
-    b = Expr(:block, SymbolNode(:a, Any)),
-    c = Expr(:block, SymbolNode(:c, Any))
+let a = Expr(:block, Slot(1, Any)),
+    b = Expr(:block, Slot(1, Any)),
+    c = Expr(:block, Slot(3, Any))
     @test a == b && hash(a) == hash(b)
     @test a != c && hash(a) != hash(c)
     @test b != c && hash(b) != hash(c)

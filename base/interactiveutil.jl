@@ -225,17 +225,19 @@ versioninfo(verbose::Bool) = versioninfo(STDOUT,verbose)
 
 function code_warntype(io::IO, f, t::ANY)
     emph_io = IOContext(io, :TYPEEMPHASIZE => true)
-    ct = code_typed(f, t)
-    for ast in ct
+    for li in code_typed(f, t)
         println(emph_io, "Variables:")
-        vars = ast.args[2][1]
-        for v in vars
-            print(emph_io, "  ", v[1])
-            show_expr_type(emph_io, v[2], true)
+        for i = 1:length(li.slotnames)
+            print(emph_io, "  ", li.slotnames[i])
+            if isa(li.slottypes,Array)
+                show_expr_type(emph_io, li.slottypes[i], true)
+            end
             print(emph_io, '\n')
         end
         print(emph_io, "\nBody:\n  ")
-        show_unquoted(emph_io, ast.args[3], 2)
+        body = Expr(:body); body.args = uncompressed_ast(li)
+        body.typ = li.rettype
+        show_unquoted(emph_io, body, 2)
         print(emph_io, '\n')
     end
     nothing

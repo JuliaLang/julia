@@ -4,12 +4,13 @@ Julia ASTs
 
 .. currentmodule:: Base
 
-Julia has two AST representations. First there is a surface syntax AST returned
+Julia has two representations of code. First there is a surface syntax AST returned
 by the parser (e.g. the :func:`parse` function), and manipulated by macros.
 It is a structured representation of code as it is written,
 constructed by ``julia-parser.scm`` from a character stream.
-Next there is a lowered AST which is used by type inference and code generation.
-In the lowered form, there are generally fewer types of nodes, all macros
+Next there is a lowered form, or IR (intermediate representation), which is used by
+type inference and code generation.
+In the lowered form there are fewer types of nodes, all macros
 are expanded, and all control flow is converted to explicit branches and sequences
 of statements. The lowered form is constructed by ``julia-syntax.scm``.
 
@@ -21,17 +22,17 @@ significant rearrangement of the input syntax.
 Lowered form
 ------------
 
-The following data types exist in lowered ASTs:
+The following data types exist in lowered form:
 
 ``Expr``
     has a node type indicated by the ``head`` field, and an ``args`` field
     which is a ``Vector{Any}`` of subexpressions.
 
-``Symbol``
-    used to name local variables and static parameters within a function.
+``Slot``
+    identifies arguments and local variables by consecutive numbering.
 
 ``LambdaInfo``
-    wraps the AST of each method.
+    wraps the IR of each method.
 
 ``LineNumberNode``
     line number metadata
@@ -54,9 +55,6 @@ The following data types exist in lowered ASTs:
     forces a name to be resolved as a global in Base. This is now mostly
     redundant with ``GlobalRef(Base, :x)``.
 
-``SymbolNode``
-    used to annotate a local variable with a type
-
 ``GenSym``
     refers to a consecutively-numbered (starting at 0) static single assignment
     (SSA) variable inserted by the compiler.
@@ -74,6 +72,9 @@ These symbols appear in the ``head`` field of ``Expr``\s in lowered form.
 ``call``
     function call. ``args[1]`` is the function to call, ``args[2:end]`` are the
     arguments.
+
+``static_parameter``
+    reference a static parameter by index.
 
 ``line``
     line number and file name metadata. Unlike a ``LineNumberNode``, can also
@@ -181,22 +182,13 @@ LambdaInfo
 
 ``sparam_vals`` - The values of the static parameters (once known), indexed by ``sparam_syms``.
 
-Has an ``->ast`` field pointing to an ``Expr`` with head ``lambda``. This
-``Expr`` has the following layout:
+``code`` - An ``Any`` array of statements, or a UInt8 array with a compressed representation of the code.
 
-``args[1]``
-    ``Vector{Any}`` of argument name symbols. For varargs functions, the last
-    element is actually an ``Expr`` with head ``...``. The argument of this
-    ``Expr`` is an ``Expr`` with head ``::``. The first argument of ``::`` is a
-    symbol (the argument name), and the second argument is a type declaration.
+``slotnames`` - An array of symbols giving the name of each slot (argument or local variable).
 
-``args[2]``
-    A ``Vector{Any}`` with variable information:
+``slottypes`` - An array of types for the slots.
 
-    ``args[2][1]`` - An array of 3-element ``varinfo`` arrays, one for each
-    argument or local variable. A ``varinfo`` array has the form ``Any[:name,
-    type, bits]``. The ``bits`` field is an integer
-    describing variable properties as follows:
+``slotflags`` - A UInt8 array of slot properties, represented as bit flags:
     - 1  - captured (closed over)
     - 2  - assigned (only false if there are *no* assignment statements with this var on the left)
     - 4  - assigned by an inner function
@@ -204,15 +196,13 @@ Has an ``->ast`` field pointing to an ``Expr`` with head ``lambda``. This
     - 16 - statically assigned once
     - 32 - might be used before assigned. This flag is only valid after type inference.
 
-    ``args[2][2]`` - An array of ``varinfo`` triples for each outer variable
-    this function captures.
+``gensymtypes`` - Either an array or an Int giving the number of compiler-inserted
+    temporary locations in the function. If an array, specifies a type for each location.
 
-    ``args[2][3]`` - The types of variables represented by ``GenSym`` objects.
-    Given ``GenSym`` ``g``, its type will be at ``args[2][3][g.id+1]``.
+``nargs`` - The number of argument slots. The first ``nargs`` entries of the slots
+    arrays refer to arguments.
 
-``args[3]``
-    an ``Expr`` with head ``body`` whose arguments are the statements
-    comprising the function body.
+``isva`` - A boolean indicating whether the function is variadic.
 
 
 Surface syntax AST

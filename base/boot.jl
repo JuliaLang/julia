@@ -139,8 +139,8 @@ export
     InterruptException, OutOfMemoryError, ReadOnlyMemoryError, OverflowError,
     StackOverflowError, SegmentationFault, UndefRefError, UndefVarError, TypeError,
     # AST representation
-    Expr, GotoNode, LabelNode, LineNumberNode, QuoteNode, SymbolNode, TopNode,
-    GlobalRef, NewvarNode, GenSym,
+    Expr, GotoNode, LabelNode, LineNumberNode, QuoteNode, TopNode,
+    GlobalRef, NewvarNode, GenSym, Slot,
     # object model functions
     fieldtype, getfield, setfield!, nfields, throw, tuple, is, ===, isdefined, eval,
     # sizeof    # not exported, to avoid conflicting with Base.sizeof
@@ -217,12 +217,6 @@ type TypeError <: Exception
     got
 end
 
-type SymbolNode
-    name::Symbol
-    typ
-    SymbolNode(name::Symbol, t::ANY) = new(name, t)
-end
-
 abstract DirectIndexString <: AbstractString
 
 immutable ASCIIString <: DirectIndexString
@@ -283,11 +277,13 @@ _new(typ::Symbol, argty::Symbol) = eval(:((::Type{$typ})(n::$argty) = $(Expr(:ne
 _new(:LabelNode, :Int)
 _new(:GotoNode, :Int)
 _new(:TopNode, :Symbol)
-_new(:NewvarNode, :Symbol)
+_new(:NewvarNode, :Slot)
 _new(:QuoteNode, :ANY)
 _new(:GenSym, :Int)
 eval(:((::Type{LineNumberNode})(f::Symbol, l::Int) = $(Expr(:new, :LineNumberNode, :f, :l))))
 eval(:((::Type{GlobalRef})(m::Module, s::Symbol) = $(Expr(:new, :GlobalRef, :m, :s))))
+eval(:((::Type{Slot})(n::Int) = $(Expr(:new, :Slot, :n, Any))))
+eval(:((::Type{Slot})(n::Int, t::ANY) = $(Expr(:new, :Slot, :n, :t))))
 
 Module(name::Symbol=:anonymous, std_imports::Bool=true) = ccall(:jl_f_new_module, Any, (Any, Bool), name, std_imports)::Module
 
