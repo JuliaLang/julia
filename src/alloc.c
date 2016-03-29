@@ -309,9 +309,12 @@ JL_DLLEXPORT void jl_lambda_info_set_ast(jl_lambda_info_t *li, jl_value_t *ast)
     jl_value_t *gensym_types = jl_lam_gensyms((jl_expr_t*)ast);
     size_t ngensym = (jl_is_array(gensym_types) ? jl_array_len(gensym_types) : jl_unbox_long(gensym_types));
     li->slotnames = jl_alloc_cell_1d(nslots);
+    jl_gc_wb(li, li->slotnames);
     li->slottypes = jl_nothing;
     li->slotflags = jl_alloc_array_1d(jl_array_uint8_type, nslots);
+    jl_gc_wb(li, li->slotflags);
     li->gensymtypes = jl_box_long(ngensym);
+    jl_gc_wb(li, li->gensymtypes);
     int i;
     for(i=0; i < nslots; i++) {
         jl_value_t *vi = jl_cellref(vis, i);
