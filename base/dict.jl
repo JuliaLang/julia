@@ -1000,7 +1000,6 @@ next{K,V}(::ImmutableDict{K,V}, t) = (Pair{K,V}(t.key, t.value), t.parent)
 done(::ImmutableDict, t) = !isdefined(t, :parent)
 length(t::ImmutableDict) = count(x->1, t)
 isempty(t::ImmutableDict) = done(t, start(t))
-copy(t::ImmutableDict) = t
 function similar(t::ImmutableDict)
     while isdefined(t, :parent)
         t = t.parent
