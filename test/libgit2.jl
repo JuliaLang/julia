@@ -252,6 +252,7 @@ mktempdir() do dir
                 @test LibGit2.name(brref) == "refs/heads/master"
                 @test LibGit2.shortname(brref) == "master"
                 @test LibGit2.ishead(brref)
+                @test LibGit2.upstream(brref) == nothing
                 @test repo.ptr == LibGit2.owner(brref).ptr
                 @test brnch == "master"
                 @test LibGit2.headname(repo) == "master"
