@@ -22,7 +22,7 @@ import
 
 import Base.Rounding: rounding_raw, setrounding_raw
 
-import Base.GMP: ClongMax, CulongMax, CdoubleMax
+import Base.GMP: ClongMax, CulongMax, CdoubleMax, Limb
 
 import Base.Math.lgamma_r
 
@@ -46,7 +46,7 @@ type BigFloat <: AbstractFloat
     prec::Clong
     sign::Cint
     exp::Clong
-    d::Ptr{Culong}
+    d::Ptr{Limb}
     function BigFloat()
         N = precision(BigFloat)
         z = new(zero(Clong), zero(Cint), zero(Clong), C_NULL)
@@ -437,6 +437,9 @@ function ^(x::BigFloat, y::BigInt)
     ccall((:mpfr_pow_z, :libmpfr), Int32, (Ptr{BigFloat}, Ptr{BigFloat}, Ptr{BigInt}, Int32), &z, &x, &y, ROUNDING_MODE[end])
     return z
 end
+
+^(x::BigFloat, y::Integer)  = typemin(Clong)  <= y <= typemax(Clong)  ? x^Clong(y)  : x^BigInt(y)
+^(x::BigFloat, y::Unsigned) = typemin(Culong) <= y <= typemax(Culong) ? x^Culong(y) : x^BigInt(y)
 
 for f in (:exp, :exp2, :exp10, :expm1, :digamma, :erf, :erfc, :zeta,
           :cosh,:sinh,:tanh,:sech,:csch,:coth, :cbrt)
