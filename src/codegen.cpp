@@ -2972,9 +2972,7 @@ static jl_cgval_t emit_local(int sl, jl_codectx_t *ctx)
     }
     if (vi.memloc) {
         Value *bp = vi.memloc;
-        if (vi.isArgument ||  // arguments are always defined
-            (!vi.isAssigned && !vi.usedUndef)) {
-            // if no undef usage was found by inference, and it's either not assigned or not in env: it must be always defined
+        if (vi.isArgument || !vi.usedUndef) { // arguments are always defined
             Instruction *v = builder.CreateLoad(bp, vi.isVolatile);
             return mark_julia_type(v, true, vi.value.typ, ctx);
         }
