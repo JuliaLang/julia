@@ -387,9 +387,7 @@
         ,(method-def-expr-
           name positional-sparams (append pargl vararg)
           `(block
-            ,(if (null? lno)
-                 `(line 0 || ||)
-                 (append (car lno) '(||)))
+            ,@lno
             ,@(if (not ordered-defaults)
                   '()
                   (map make-assignment keynames vals))
@@ -417,9 +415,7 @@
                  (car not-optional))
             ,@(cdr not-optional) ,@vararg)
           `(block
-            ,@(if (null? lno) '()
-                  ;; TODO jb/functions get a better `name` for functions specified by type
-                  (list (append (car lno) (list (undot-name name)))))
+            ,@lno
             ,@stmts) isstaged)
 
         ;; call with unsorted keyword args. this sorts and re-dispatches.
@@ -434,7 +430,6 @@
              ,(if (any kwarg? pargl) (gensy) UNUSED)
              (call (|.| Core 'kwftype) ,ftype)) (:: ,kw (top Array)) ,@pargl ,@vararg)
           `(block
-            (line 0 || ||)
             ;; initialize keyword args to their defaults, or set a flag telling
             ;; whether this keyword needs to be set.
             ,@(map (lambda (name dflt flag)
@@ -1457,15 +1452,6 @@
                             (if ,g ,g
                                 ,(loop (cdr tail)))))))))))
 
-(define (expand-forms e)
-  (if (or (atom? e) (memq (car e) '(quote inert top line module toplevel jlgensym null meta)))
-      e
-      (let ((ex (get expand-table (car e) #f)))
-        (if ex
-            (ex e)
-            (cons (car e)
-                  (map expand-forms (cdr e)))))))
-
 (define (expand-for while lhs X body)
   ;; (for (= lhs X) body)
   (let ((coll  (make-jlgensym))
@@ -1488,6 +1474,15 @@
 (define (syntactic-op-to-call e)
   `(call ,(car e) ,(expand-forms (cadr e)) ,(expand-forms (caddr e))))
 
+(define (expand-forms e)
+  (if (or (atom? e) (memq (car e) '(quote inert top line module toplevel jlgensym null meta)))
+      e
+      (let ((ex (get expand-table (car e) #f)))
+        (if ex
+            (ex e)
+            (cons (car e)
+                  (map expand-forms (cdr e)))))))
+
 ;; table mapping expression head to a function expanding that form
 (define expand-table
   (table
@@ -1508,17 +1503,15 @@
 
    'block
    (lambda (e)
-     (let ((e (flatten-blocks e)))
-       (cond ((null? (cdr e)) '(null))
-             ((null? (cddr e)) (expand-forms (cadr e)))
-             (else
-              `(block
-                ,.(map (lambda (x)
-                         (if (decl? x)
-                             `(decl ,@(map expand-forms (cdr x)))
-                             (expand-forms x)))
-                       (butlast (cdr e)))
-                ,(expand-forms (last e)))))))
+     (if (null? (cdr e))
+         '(null)
+         `(block
+           ,.(map (lambda (x)
+                    (if (decl? x)
+                        `(decl ,@(map expand-forms (cdr x)))
+                        (expand-forms x)))
+                  (butlast (cdr e)))
+           ,(expand-forms (last (cdr e))))))
 
    '|.|
    (lambda (e)
@@ -2557,6 +2550,15 @@ f(x) = yt(x)
             (cons (last e2) (append tl (butlast (cdr e2))))
             (cons e2 tl)))))
 
+(define (first-non-meta blk)
+  (let loop ((xs (cdr blk)))
+    (if (null? xs)
+        #f
+        (let ((elt (car xs)))
+          (if (and (pair? elt) (eq? (car elt) 'meta))
+              (loop (cdr xs))
+              elt)))))
+
 ;; return `body` with `stmts` inserted after any meta nodes
 (define (insert-after-meta body stmts)
   (let ((meta (take-while (lambda (x) (and (pair? x)
@@ -2581,6 +2583,22 @@ f(x) = yt(x)
                          '())))
                  args)))))
 
+(define (take-statements-while pred body)
+  (let ((acc '()))
+    (define (take expr)
+      ;; returns #t as long as exprs match and we should continue
+      (cond ((and (pair? expr) (memq (car expr) '(block body)))
+             (let loop ((xs (cdr expr)))
+               (cond ((null? xs) #t)
+                     ((take (car xs)) (loop (cdr xs)))
+                     (else #f))))
+            ((pred expr)
+             (set! acc (cons expr acc))
+             #t)
+            (else #f)))
+    (take body)
+    (reverse! acc)))
+
 ;; clear capture bit for vars assigned once at the top, to avoid allocating
 ;; some unnecessary Boxes.
 (define (lambda-optimize-vars! lam)
@@ -2597,12 +2615,13 @@ f(x) = yt(x)
         (let* ((leading
                 (filter (lambda (x) (and (pair? x) (or (eq? (car x) 'method)
                                                        (eq? (car x) '=))))
-                        (take-while (lambda (e)
-                                      (or (atom? e)
-                                          (memq (car e) '(quote top line inert local
-                                                                implicit-global global
-                                                                const newvar = null method))))
-                                    (lam:body lam))))
+                        (take-statements-while
+                         (lambda (e)
+                           (or (atom? e)
+                               (memq (car e) '(quote top line inert local meta
+                                                     implicit-global global
+                                                     const newvar = null method))))
+                         (lam:body lam))))
                (unused (map cadr leading))
                (def (table)))
           ;; TODO: reorder leading statements to put assignments where the RHS is
@@ -2831,8 +2850,6 @@ f(x) = yt(x)
                           '(null)
                           (convert-assignment name mk-closure fname lam interp)))))))
           ((lambda)  ;; should only happen inside (thunk ...)
-           ;; flattening blocks helps lambda-optimize-vars! work
-           (set-car! (cdddr e) (flatten-blocks (lam:body e)))
            `(lambda ,(cadr e)
               (,(clear-capture-bits (car (lam:vinfo e)))
                () ,@(cddr (lam:vinfo e)))
@@ -2882,6 +2899,8 @@ f(x) = yt(x)
 ;; only possible returned values.
 (define (compile-body e vi lam)
   (let ((code '())
+        (filename #f)
+        (first-line #t)
         (label-counter 0)     ;; counter for generating label addresses
         (label-map (table))   ;; maps label names to generated addresses
         (label-level (table)) ;; exception handler level of each label
@@ -2989,11 +3008,25 @@ f(x) = yt(x)
                      rr)
                    (emit `(= ,(cadr e) ,rhs)))))
             ((block body)
-             (let loop ((xs (cdr e)))
-               (if (null? (cdr xs))
-                   (compile (car xs) break-labels value tail)
-                   (begin (compile (car xs) break-labels #f #f)
-                          (loop (cdr xs))))))
+             (let* ((last-fname filename)
+                    (fnm        (first-non-meta e))
+                    (fname      (if (and (length> e 1) (pair? fnm) (eq? (car fnm) 'line)
+                                         (length> fnm 2))
+                                    (caddr fnm)
+                                    filename)))
+               (if (not (eq? fname last-fname))
+                   (begin (set! filename fname)
+                          ;; don't need a filename node for start of function
+                          (if (not (eq? e (lam:body lam))) (emit `(meta push_loc ,fname)))))
+               (begin0
+                (let loop ((xs (cdr e)))
+                  (if (null? (cdr xs))
+                      (compile (car xs) break-labels value tail)
+                      (begin (compile (car xs) break-labels #f #f)
+                             (loop (cdr xs)))))
+                (if (not (eq? fname last-fname))
+                    (begin (if (not tail) (emit `(meta pop_loc)))
+                           (set! filename last-fname))))))
             ((return)
              (compile (cadr e) break-labels #t #t)
              '(null))
@@ -3136,7 +3169,17 @@ f(x) = yt(x)
             ((const) (emit e))
 
             ;; metadata
-            ((line meta boundscheck simdloop) (emit e))
+            ((line meta boundscheck simdloop)
+             (if (eq? (car e) 'line)
+                 (if first-line
+                     (begin (set! first-line #f)
+                            (emit e))
+                     ;; strip filenames out of non-initial line nodes
+                     (emit `(line ,(cadr e))))
+                 (emit e))
+             (if tail
+                 (emit-return '(null))
+                 '(null)))
             ((inbounds)
              ;; TODO: this should not be here but sometimes ends up in tail position, e.g.
              ;; `f(x) = @inbounds return x`

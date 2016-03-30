@@ -293,12 +293,11 @@ JL_DLLEXPORT void jl_lambda_info_set_ast(jl_lambda_info_t *li, jl_value_t *ast)
         li->pure = 1;
     jl_value_t *body1 = skip_meta(body);
     if (jl_is_linenode(body1)) {
-        li->file = jl_linenode_file(body1);
         li->line = jl_linenode_line(body1);
     }
     else if (jl_is_expr(body1) && ((jl_expr_t*)body1)->head == line_sym) {
-        li->file = (jl_sym_t*)jl_exprarg(body1, 1);
         li->line = jl_unbox_long(jl_exprarg(body1, 0));
+        li->file = (jl_sym_t*)jl_exprarg(body1, 1);
     }
     jl_array_t *vis = jl_lam_vinfo((jl_expr_t*)ast);
     jl_array_t *args = jl_lam_args((jl_expr_t*)ast);

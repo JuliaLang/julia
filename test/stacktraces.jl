@@ -59,7 +59,6 @@ let ct = current_task()
         try
             bad_function()
         catch
-            i_need_a_line_number_julia_bug = true # julia lowering doesn't emit a proper line number for catch
             return stacktrace()
         end
     end
@@ -70,7 +69,7 @@ let ct = current_task()
             return catch_stacktrace()
         end
     end
-    line_numbers = @__LINE__ .- [16, 10, 5]
+    line_numbers = @__LINE__ .- [15, 10, 5]
 
     # Test try...catch with stacktrace
     @test try_stacktrace()[1] == StackFrame(:try_stacktrace, @__FILE__, line_numbers[2])

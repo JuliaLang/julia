@@ -249,3 +249,7 @@ end
     end
 end
 @test functionloc(f15447)[2] > 0
+
+# issue #15280
+function f15280(x) end
+@test functionloc(f15280)[2] > 0
