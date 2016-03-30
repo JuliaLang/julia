@@ -107,6 +107,8 @@ Currently, the `@compat` macro supports the following syntaxes:
 
 * `foreach`, similar to `map` but when the return value is not needed ([#13744](https://github.com/JuliaLang/julia/pull/13774)).
 
+* `walkdir`, returns an iterator that walks the directory tree of a directory. ([#13707](https://github.com/JuliaLang/julia/pull/13707))
+
 ## Renamed functions
 
 * `itrunc`, `iround`, `iceil`, `ifloor` are now accessed via `trunc(T, x)`, etc. ([#9133](https://github.com/JuliaLang/julia/pull/9133)).  Truncated conversions between integer types are now `n % T` ([#8646](https://github.com/JuliaLang/julia/issues/8646)).
