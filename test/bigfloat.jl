@@ -1,0 +1,9 @@
+@test big(2)^big(3) == 8
+
+for T in [Int8, UInt8, Int16, UInt16, Int32, UInt32, Int64, UInt64, Int128, UInt128, BigInt]
+	@test T(2)^big(3) == 8
+	@test big(2)^T(3) == 8
+end
+
+# issue 15659
+@test with_bigfloat_precision(()->big(1/3), 53) < 1//3
