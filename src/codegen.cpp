@@ -603,7 +603,8 @@ static jl_cgval_t emit_checked_var(Value *bp, jl_sym_t *name, jl_codectx_t *ctx,
 static Value *emit_condition(jl_value_t *cond, const std::string &msg, jl_codectx_t *ctx);
 static void allocate_gc_frame(BasicBlock *b0, jl_codectx_t *ctx);
 static void jl_finalize_module(std::unique_ptr<Module> m);
-static GlobalVariable *prepare_global(GlobalVariable *G);
+static GlobalVariable *prepare_global(GlobalVariable *G, Module *M = jl_builderModule);
+
 
 // --- convenience functions for tagging llvm values with julia types ---
 
@@ -944,15 +945,6 @@ static void jl_finalize_module(std::unique_ptr<Module> uniquem)
     Module *m = uniquem.release(); // unique_ptr won't be able track what we do with this (the invariant is recovered by jl_finalize_function)
     finalize_gc_frame(m);
 #if !defined(USE_ORCJIT)
-#ifdef LLVM33
-#ifdef JL_DEBUG_BUILD
-    if (verifyModule(*m, PrintMessageAction)) {
-        m->dump();
-        gc_debug_critical_error();
-        abort();
-    }
-#endif
-#endif
     PM->run(*m);
 #endif
 #ifdef USE_MCJIT
@@ -1140,17 +1132,17 @@ void jl_extern_c(jl_function_t *f, jl_value_t *rt, jl_value_t *argt, char *name)
     Function *llvmf = jl_cfunction_object(f, rt, (jl_tupletype_t*)argt);
     if (llvmf) {
         // force eager emission of the function (llvm 3.3 gets confused otherwise and tries to do recursive compilation)
-        uint64_t Addr = getAddressForFunction(llvmf); (void)Addr;
-        // emit the function pointer and set up an alias in the execution engine
+        uint64_t Addr = getAddressForFunction(llvmf);
+
 #if defined(USE_ORCJIT) || defined(USE_MCJIT)
-        jl_ExecutionEngine->addGlobalMapping(name, Addr);
         if (imaging_mode)
              // in the old JIT, the shadow_module aliases the engine_module,
-             // otherwise, adding it as a global mapping is needed unconditionally
+             // otherwise, just point the alias to the declaration
 #endif
-        {
             llvmf = cast<Function>(shadow_output->getNamedValue(llvmf->getName()));
-            // in imaging_mode, also need to add the alias to the shadow_module
+
+        // make the alias to the shadow_module
+        GlobalAlias *GA =
 #if defined(LLVM38)
             GlobalAlias::create(llvmf->getType()->getElementType(), llvmf->getType()->getAddressSpace(),
                                 GlobalValue::ExternalLinkage, name, llvmf, shadow_output);
@@ -1160,7 +1152,13 @@ void jl_extern_c(jl_function_t *f, jl_value_t *rt, jl_value_t *argt, char *name)
 #else
             new GlobalAlias(llvmf->getType(), GlobalValue::ExternalLinkage, name, llvmf, shadow_output);
 #endif
-        }
+
+#if defined(USE_ORCJIT) || defined(USE_MCJIT)
+        // make the alias name is valid for the current session
+        jl_ExecutionEngine->addGlobalMapping(GA, (void*)(uintptr_t)Addr);
+#else
+        (void)GA; (void)Addr;
+#endif
     }
 }
 
@@ -1390,8 +1388,7 @@ const jl_value_t *jl_dump_function_asm(void *f, int raw_mc)
 #ifdef USE_MCJIT
     // Look in the system image as well
     if (fptr == 0)
-        fptr = (uintptr_t)jl_ExecutionEngine->getPointerToGlobalIfAvailable(
-            jl_ExecutionEngine->getMangledName(llvmf));
+        fptr = (uintptr_t)jl_ExecutionEngine->getPointerToGlobalIfAvailable(llvmf);
     llvm::DIContext *context = NULL;
     llvm::DIContext *&objcontext = context;
 #else
@@ -3501,7 +3498,7 @@ static void allocate_gc_frame(BasicBlock *b0, jl_codectx_t *ctx)
 #ifdef JULIA_ENABLE_THREADING
     if (imaging_mode) {
         ctx->signalPage =
-            tbaa_decorate(tbaa_const, builder.CreateLoad(jl_declare_global(jl_Module, jl_gc_signal_page_ptr)));
+            tbaa_decorate(tbaa_const, builder.CreateLoad(prepare_global(jl_gc_signal_page_ptr)));
     }
 #endif
 }
@@ -3532,14 +3529,13 @@ static void finalize_gc_frame(Function *F)
 
 #ifdef JULIA_ENABLE_THREADING
     if (imaging_mode) {
-        GlobalVariable *GV = jl_declare_global(M, jltls_states_func_ptr);
+        GlobalVariable *GV = prepare_global(jltls_states_func_ptr, M);
         Value *getter = tbaa_decorate(tbaa_const,
                                       new LoadInst(GV, "", ptlsStates));
         ptlsStates->setCalledFunction(getter);
     }
-    ptlsStates->setAttributes(jltls_states_func->getAttributes());
 #else
-    ptlsStates->replaceAllUsesWith(jl_declare_global(M, jltls_states_var));
+    ptlsStates->replaceAllUsesWith(prepare_global(jltls_states_var, M));
     ptlsStates->eraseFromParent();
 #endif
 }
@@ -5123,7 +5119,6 @@ static void init_julia_llvm_env(Module *m)
                                 (uintptr_t)jl_gc_signal_page,
                                 jl_gc_signal_page_idx);
     }
-
 #endif
 
     std::vector<Type*> args1(0);
