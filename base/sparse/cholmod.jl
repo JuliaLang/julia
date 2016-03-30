@@ -1242,11 +1242,7 @@ function cholfact!{Tv}(F::Factor{Tv}, A::Sparse{Tv}; shift::Real=0.0)
 end
 
 """
-    cholfact!(F::Factor, A::Union{SparseMatrixCSC{<:Real},
-        SparseMatrixCSC{Complex{<:Real}},
-        Symmetric{<:Real,SparseMatrixCSC{<:Real,SuiteSparse_long}},
-        Hermitian{Complex{<:Real},SparseMatrixCSC{Complex{<:Real},SuiteSparse_long}}};
-        shift = 0.0) -> CHOLMOD.Factor
+    cholfact!(F::Factor, A::Union{SparseMatrixCSC{<:Real},SparseMatrixCSC{Complex{<:Real}},Symmetric{<:Real,SparseMatrixCSC{<:Real,SuiteSparse_long}},Hermitian{Complex{<:Real},SparseMatrixCSC{Complex{<:Real},SuiteSparse_long}}}; shift = 0.0) -> CHOLMOD.Factor
 
 Compute the Cholesky (``LL'``) factorization of `A`, reusing the symbolic factorization `F`.
 
@@ -1282,14 +1278,11 @@ function cholfact(A::Sparse; shift::Real=0.0,
 end
 
 """
-    cholfact(::Union{SparseMatrixCSC{<:Real},SparseMatrixCSC{Complex{<:Real}},
-        Symmetric{<:Real,SparseMatrixCSC{<:Real,
-        SuiteSparse_long}},Hermitian{Complex{<:Real},SparseMatrixCSC{Complex{<:Real},
-        SuiteSparse_long}}}; shift = 0.0, perm=Int[]) -> CHOLMOD.Factor
+    cholfact(::Union{SparseMatrixCSC{<:Real},SparseMatrixCSC{Complex{<:Real}},Symmetric{<:Real,SparseMatrixCSC{<:Real,SuiteSparse_long}},Hermitian{Complex{<:Real},SparseMatrixCSC{Complex{<:Real},SuiteSparse_long}}}; shift = 0.0, perm = Int[]) -> CHOLMOD.Factor
 
 Compute the Cholesky factorization of a sparse positive definite matrix `A`.
 A fill-reducing permutation is used.
-`F = cholfact(A)` is most frequently used to solve systems of equations with `F\b`,
+`F = cholfact(A)` is most frequently used to solve systems of equations with `F\\b`,
 but also the methods `diag`, `det`, `logdet` are defined for `F`.
 You can also extract individual factors from `F`, using `F[:L]`.
 However, since pivoting is on by default,
@@ -1337,11 +1330,7 @@ function ldltfact!{Tv}(F::Factor{Tv}, A::Sparse{Tv}; shift::Real=0.0)
 end
 
 """
-    ldltfact!(F::Factor, A::Union{SparseMatrixCSC{<:Real},
-        SparseMatrixCSC{Complex{<:Real}},
-        Symmetric{<:Real,SparseMatrixCSC{<:Real,SuiteSparse_long}},
-        Hermitian{Complex{<:Real},SparseMatrixCSC{Complex{<:Real},SuiteSparse_long}}};
-        shift = 0.0) -> CHOLMOD.Factor
+    ldltfact!(F::Factor, A::Union{SparseMatrixCSC{<:Real},SparseMatrixCSC{Complex{<:Real}},Symmetric{<:Real,SparseMatrixCSC{<:Real,SuiteSparse_long}},Hermitian{Complex{<:Real},SparseMatrixCSC{Complex{<:Real},SuiteSparse_long}}}; shift = 0.0) -> CHOLMOD.Factor
 
 Compute the ``LDL'`` factorization of `A`, reusing the symbolic factorization `F`.
 
@@ -1377,14 +1366,11 @@ function ldltfact(A::Sparse; shift::Real=0.0,
 end
 
 """
-    ldltfact(::Union{SparseMatrixCSC{<:Real},SparseMatrixCSC{Complex{<:Real}},
-        Symmetric{<:Real,SparseMatrixCSC{<:Real,SuiteSparse_long}},
-        Hermitian{Complex{<:Real},SparseMatrixCSC{Complex{<:Real},SuiteSparse_long}}};
-        shift = 0.0, perm=Int[]) -> CHOLMOD.Factor
+    ldltfact(::Union{SparseMatrixCSC{<:Real},SparseMatrixCSC{Complex{<:Real}},Symmetric{<:Real,SparseMatrixCSC{<:Real,SuiteSparse_long}},Hermitian{Complex{<:Real},SparseMatrixCSC{Complex{<:Real},SuiteSparse_long}}}; shift = 0.0, perm=Int[]) -> CHOLMOD.Factor
 
 Compute the ``LDL'`` factorization of a sparse symmetric or Hermitian matrix.
 A fill-reducing permutation is used.
-`F = ldltfact(A)` is most frequently used to solve systems of equations `A*x = b` with `F\b`.
+`F = ldltfact(A)` is most frequently used to solve systems of equations `A*x = b` with `F\\b`.
 The returned factorization object `F` also supports the methods `diag`,
 `det`, and `logdet`. You can extract individual factors from `F` using `F[:L]`.
 However, since pivoting is on by default,
