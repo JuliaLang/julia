@@ -29,13 +29,13 @@ introducing scope blocks are:
 +--------------------------------+----------------------------------------------------------------------------------+
 | Scope name                     | block/construct introducing this kind of scope                                   |
 +================================+==================================================================================+
-| :ref:`global <man-global>`     | | module, baremodule, at interactive prompt (REPL)                               |
+| :ref:`global <man-global>`     | module, baremodule, at interactive prompt (REPL)                                 |
 +--------------------------------+------------------------------+---------------------------------------------------+
-| :ref:`local <man-local-scope>` | :ref:`soft <man-soft-scope>` | | for, while, list-comprehensions,                |
-|                                |                              |   try-catch-finally, let                          |
+| :ref:`local <man-local-scope>` | :ref:`soft <man-soft-scope>` | for, while, list-comprehensions,                  |
+|                                |                              | try-catch-finally, let                            |
 |                                +------------------------------+---------------------------------------------------+
-|                                | :ref:`hard <man-hard-scope>` | | functions (either syntax, anonymous & do-blocks)|
-|                                |                              | | type, immutable, macro                          |
+|                                | :ref:`hard <man-hard-scope>` | functions (either syntax, anonymous & do-blocks)  |
+|                                |                              | type, immutable, macro                            |
 +--------------------------------+------------------------------+---------------------------------------------------+
 
 Notably missing from this table are :ref:`begin blocks
