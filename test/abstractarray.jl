@@ -433,6 +433,9 @@ function test_map(::Type{TestAbstractArray})
     @test map(f, Int[], Int[], Complex{Int}[]) == Union{}[]
 end
 
+# issue #15689, mapping an abstract type
+@test isa(map(Set, Array[[1,2],[3,4]]), Vector{Set{Int}})
+
 function test_UInt_indexing(::Type{TestAbstractArray})
     A = [1:100...]
     _A = Expr(:quote, A)

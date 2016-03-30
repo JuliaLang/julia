@@ -54,5 +54,3 @@ length(g::Generator) = length(g.iter)
 size(g::Generator) = size(g.iter)
 
 iteratoreltype{I,T}(::Type{Generator{I,T}}) = EltypeUnknown()
-iteratoreltype{I,T}(::Type{Generator{I,Type{T}}}) = HasEltype()
-eltype{I,T}(::Type{Generator{I,Type{T}}}) = T

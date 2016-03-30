@@ -234,12 +234,16 @@ function _collect(cont, itr, ::HasEltype, isz::SizeUnknown)
     return a
 end
 
-_collect(c, itr, ::EltypeUnknown, isz::SizeUnknown) = grow_to!(_similar_for(c, Union{}, itr, isz), itr)
+_default_eltype(itr::ANY) = Union{}
+_default_eltype{I,T}(::Generator{I,Type{T}}) = T
+
+_collect(c, itr, ::EltypeUnknown, isz::SizeUnknown) =
+    grow_to!(_similar_for(c, _default_eltype(itr), itr, isz), itr)
 
 function _collect(c, itr, ::EltypeUnknown, isz::Union{HasLength,HasShape})
     st = start(itr)
     if done(itr,st)
-        return _similar_for(c, Union{}, itr, isz)
+        return _similar_for(c, _default_eltype(itr), itr, isz)
     end
     v1, st = next(itr, st)
     collect_to_with_first!(_similar_for(c, typeof(v1), itr, isz), v1, itr, st)
