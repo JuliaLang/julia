@@ -1694,6 +1694,11 @@ jl_value_t *jl_static_eval(jl_value_t *ex, void *ctx_, jl_module_t *mod,
                 }
             }
         }
+        else if (e->head == static_parameter_sym) {
+            size_t idx = jl_unbox_long(jl_exprarg(e,0));
+            if (linfo && idx <= jl_svec_len(linfo->sparam_vals))
+                return jl_svecref(linfo->sparam_vals, idx-1);
+        }
         return NULL;
     }
     return ex;
