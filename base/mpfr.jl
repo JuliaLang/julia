@@ -25,7 +25,7 @@ import
 
 import Base.Rounding: get_rounding_raw, set_rounding_raw
 
-import Base.GMP: ClongMax, CulongMax, CdoubleMax
+import Base.GMP: ClongMax, CulongMax, CdoubleMax, Limb
 
 import Base.Math.lgamma_r
 
@@ -49,7 +49,7 @@ type BigFloat <: AbstractFloat
     prec::Clong
     sign::Cint
     exp::Clong
-    d::Ptr{Culong}
+    d::Ptr{Limb}
     function BigFloat()
         N = get_bigfloat_precision()
         z = new(zero(Clong), zero(Cint), zero(Clong), C_NULL)
