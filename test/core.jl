@@ -3741,3 +3741,8 @@ module A14113
         i > (2^14 - 256) && @test [f()...] == r
     end
 end
+
+# issue #15425
+@noinline function f15425(x)
+end
+@test f15425(1) === nothing

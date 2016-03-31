@@ -3136,7 +3136,6 @@ f(x) = yt(x)
             ((const) (emit e))
 
             ;; metadata
-            ((line meta boundscheck simdloop) (emit e))
             ((inbounds)
              ;; TODO: this should not be here but sometimes ends up in tail position, e.g.
              ;; `f(x) = @inbounds return x`
@@ -3146,8 +3145,8 @@ f(x) = yt(x)
             ;; top level expressions returning values
             ((abstract_type bits_type composite_type thunk toplevel module)
              (if tail (emit-return e) (emit e)))
-            ;; other top level expressions
-            ((import importall using export)
+            ;; other top level expressions and metadata
+            ((import importall using export line meta boundscheck simdloop)
              (emit e)
              (if tail (emit-return '(null)) '(null)))
             (else
