@@ -353,7 +353,10 @@ typedef struct _jl_methlist_t {
     jl_tupletype_t *sig;
     jl_svec_t *tvars;
     jl_svec_t *guardsigs;
-    int8_t va;
+    // memoized properties of sig:
+    int8_t isleafsig; // isleaftype(sig) & !any(isType, sig) : unsorted and very fast
+    int8_t issimplesig; // all(isleaftype | isAny | isType | isVararg, sig) : sorted and fast
+    int8_t va; // isVararg(sig)
 } jl_methlist_t;
 
 typedef struct _jl_methcache_t {
