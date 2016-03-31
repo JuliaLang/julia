@@ -26,6 +26,9 @@ temp_pkg_dir() do
     @test sprint(io -> Pkg.status(io)) == "No packages installed\n"
     @test !isempty(Pkg.available())
 
+    @test_throws PkgError Pkg.installed("MyFakePackage")
+    @test Pkg.installed("Example") == nothing
+
     # check that versioninfo(io, true) doesn't error and produces some output
     # (done here since it calls Pkg.status which might error or clone metadata)
     buf = PipeBuffer()
@@ -53,6 +56,8 @@ temp_pkg_dir() do
         end
     end
 
+    Pkg.setprotocol!("")
+    @test Pkg.Cache.rewrite_url_to == nothing
     Pkg.setprotocol!("https")
     Pkg.add("Example")
     @test [keys(Pkg.installed())...] == ["Example"]
@@ -71,6 +76,10 @@ temp_pkg_dir() do
     Pkg.status("Example", iob)
     str = chomp(takebuf_string(iob))
     @test endswith(str, string(Pkg.installed("Example")))
+    Pkg.rm("Example")
+    @test isempty(Pkg.installed())
+    @test !isempty(Pkg.available("Example"))
+    @test !in("Example", keys(Pkg.installed()))
     Pkg.rm("Example")
     @test isempty(Pkg.installed())
     @test !isempty(Pkg.available("Example"))
