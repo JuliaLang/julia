@@ -1544,7 +1544,7 @@ function pmap(f, lsts...; err_retry=true, err_stop=false, pids = workers())
     nextidx = 0
     getnextidx() = (nextidx += 1)
 
-    states = map(start, lsts)
+    states = [start(lsts[idx]) for idx in 1:len]
     function getnext_tasklet()
         if is_task_in_error() && err_stop
             return nothing
