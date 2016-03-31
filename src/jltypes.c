@@ -3396,15 +3396,23 @@ void jl_init_types(void)
 
     jl_method_type =
         jl_new_datatype(jl_symbol("Method"), jl_any_type, jl_emptysvec,
-                        jl_svec(6, jl_symbol("next"),
+                        jl_svec(8, jl_symbol("next"),
                                    jl_symbol("func"),
                                    jl_symbol("sig"),
                                    jl_symbol("tvars"),
                                    jl_symbol("guardsigs"),
+                                   jl_symbol("isleafsig"),
+                                   jl_symbol("issimplesig"),
                                    jl_symbol("va")),
-                        jl_svec(6, jl_any_type, jl_any_type, jl_type_type,
-                                   jl_simplevector_type, jl_any_type, jl_bool_type),
-                        0, 1, 6);
+                        jl_svec(8, jl_any_type,
+                                   jl_any_type,
+                                   jl_type_type,
+                                   jl_simplevector_type,
+                                   jl_any_type,
+                                   jl_bool_type,
+                                   jl_bool_type,
+                                   jl_bool_type),
+                        0, 1, 8);
 
     jl_function_type = jl_new_abstracttype((jl_value_t*)jl_symbol("Function"), jl_any_type, jl_emptysvec);
     jl_builtin_type  = jl_new_abstracttype((jl_value_t*)jl_symbol("Builtin"), jl_function_type, jl_emptysvec);
