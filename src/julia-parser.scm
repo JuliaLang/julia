@@ -941,6 +941,10 @@
       (string "Dict{" (deparse (cadr ex)) #\, (deparse (caddr ex)) "}")
       "Dict"))
 
+(define (disallowed-space ex t)
+  (error (string "space before \"" t "\" not allowed in \""
+                 (deparse ex) " " (deparse t) "\"")))
+
 (define (parse-call-chain s ex one-call)
   (let loop ((ex ex))
     (let ((t (peek-token s)))
@@ -952,10 +956,7 @@
           ex
           (case t
             ((#\( )
-             (if (ts:space? s)
-                 (syntax-deprecation s
-                                     (string (deparse ex) " " (deparse t))
-                                     (string (deparse ex) (deparse t))))
+             (if (ts:space? s) (disallowed-space ex t))
              (take-token s)
              (let ((c (let ((al (parse-arglist s #\) )))
                         (receive
@@ -972,10 +973,7 @@
                    c
                    (loop c))))
             ((#\[ )
-             (if (ts:space? s)
-                 (syntax-deprecation s
-                                     (string (deparse ex) " " (deparse t))
-                                     (string (deparse ex) (deparse t))))
+             (if (ts:space? s) (disallowed-space ex t))
              (take-token s)
              ;; ref is syntax, so we can distinguish
              ;; a[i] = x  from
@@ -1007,10 +1005,7 @@
                       (loop (list* 'typed_dict_comprehension ex (cdr al))))
                      (else (error "unknown parse-cat result (internal error)"))))))
             ((|.|)
-             (if (ts:space? s)
-                 (syntax-deprecation s
-                                     (string (deparse ex) " " (deparse t))
-                                     (string (deparse ex) (deparse t))))
+             (if (ts:space? s) (disallowed-space ex t))
              (take-token s)
              (loop
               (cond ((eqv? (peek-token s) #\()
@@ -1032,10 +1027,7 @@
              (take-token s)
              (loop (list t ex)))
             ((#\{ )
-             (if (ts:space? s)
-                 (syntax-deprecation s
-                                     (string (deparse ex) " " (deparse t))
-                                     (string (deparse ex) (deparse t))))
+             (if (ts:space? s) (disallowed-space ex t))
              (take-token s)
              (loop (list* 'curly ex (parse-arglist s #\} ))))
             ((#\")
@@ -1373,10 +1365,7 @@
     (let ((nxt (peek-token s)))
       (cond
        ((eq? nxt '|.|)
-        (if (ts:space? s)
-            (syntax-deprecation s
-                                (string (deparse word) " " (deparse nxt))
-                                (string (deparse word) (deparse nxt))))
+        (if (ts:space? s) (disallowed-space word nxt))
         (take-token s)
         (loop (cons (macrocall-to-atsym (parse-unary-prefix s)) path)))
        ((or (memv nxt '(#\newline #\; #\, :))
