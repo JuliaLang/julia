@@ -279,7 +279,6 @@ oldout = STDOUT
 try
     rd, wr = redirect_stdout()
     @test dump(STDERR) == nothing
-    @test xdump(STDERR) == nothing
 finally
     redirect_stdout(oldout)
 end

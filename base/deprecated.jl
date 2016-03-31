@@ -985,7 +985,6 @@ export call
 # 1933
 @deprecate_binding SingleAsyncWork AsyncCondition
 
-
 # #12872
 @deprecate istext istextmime
 
@@ -1072,6 +1071,9 @@ end
 
 @deprecate bitunpack(B::BitArray) Array(B)
 @deprecate bitpack(A::AbstractArray) BitArray(A)
+
+# #4163
+@deprecate xdump dump
 
 # During the 0.5 development cycle, do not add any deprecations below this line
 # To be deprecated in 0.6
