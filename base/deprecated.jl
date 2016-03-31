@@ -1002,3 +1002,6 @@ export call
 
 # 1933
 @deprecate_binding SingleAsyncWork AsyncCondition
+
+# #12872
+@deprecate istext istextmime

@@ -1239,7 +1239,7 @@ export
     display,
     displayable,
     TextDisplay,
-    istext,
+    istextmime,
     MIME,
     @MIME,
     @MIME_str,
