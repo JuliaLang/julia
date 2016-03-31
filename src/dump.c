@@ -236,6 +236,9 @@ static int jl_load_sysimg_so(void)
                                                    "jl_ptls_states_getter_idx");
         *sysimg_gvars[tls_getter_idx - 1] =
             (jl_value_t*)jl_get_ptls_states_getter();
+        size_t signal_page_idx = *(size_t*)jl_dlsym(jl_sysimg_handle,
+                                                    "jl_gc_signal_page_idx");
+        *sysimg_gvars[signal_page_idx - 1] = (jl_value_t*)jl_gc_signal_page;
 #endif
         const char *cpu_target = (const char*)jl_dlsym(jl_sysimg_handle, "jl_sysimg_cpu_target");
         if (strcmp(cpu_target,jl_options.cpu_target) != 0)

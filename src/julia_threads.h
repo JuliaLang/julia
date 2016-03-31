@@ -256,16 +256,15 @@ JL_DLLEXPORT void jl_set_ptls_states_getter(jl_get_ptls_states_func f);
 // Make sure jl_gc_state() is always a rvalue
 #define jl_gc_state() ((int8_t)(jl_get_ptls_states()->gc_state))
 JL_DLLEXPORT extern volatile size_t *jl_gc_signal_page;
-STATIC_INLINE void jl_gc_safepoint(void)
-{
-    // This triggers a SegFault when we are in GC
-    // Assign it to a variable to make sure the compiler emit the load
-    // and to avoid Clang warning for -Wunused-volatile-lvalue
-    jl_signal_fence();
-    size_t v = *jl_gc_signal_page;
-    jl_signal_fence();
-    (void)v;
-}
+// This triggers a SegFault when we are in GC
+// Assign it to a variable to make sure the compiler emit the load
+// and to avoid Clang warning for -Wunused-volatile-lvalue
+#define jl_gc_safepoint() do {                          \
+        jl_signal_fence();                              \
+        size_t safepoint_load = *jl_gc_signal_page;     \
+        jl_signal_fence();                              \
+        (void)safepoint_load;                           \
+    } while (0)
 STATIC_INLINE int8_t jl_gc_state_set(int8_t state, int8_t old_state)
 {
     jl_get_ptls_states()->gc_state = state;
@@ -284,6 +283,7 @@ STATIC_INLINE int8_t jl_gc_state_save_and_set(int8_t state)
 #define jl_gc_unsafe_leave(state) ((void)jl_gc_state_set((state), 0))
 #define jl_gc_safe_enter() jl_gc_state_save_and_set(JL_GC_STATE_SAFE)
 #define jl_gc_safe_leave(state) ((void)jl_gc_state_set((state), JL_GC_STATE_SAFE))
+JL_DLLEXPORT void (jl_gc_safepoint)(void);
 
 // Locks
 #ifdef JULIA_ENABLE_THREADING

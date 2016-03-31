@@ -342,6 +342,11 @@ JL_DLLEXPORT void (jl_gc_safe_leave)(int8_t state)
     jl_gc_safe_leave(state);
 }
 
+JL_DLLEXPORT void (jl_gc_safepoint)(void)
+{
+    jl_gc_safepoint();
+}
+
 JL_DLLEXPORT void (jl_cpu_pause)(void)
 {
     jl_cpu_pause();
