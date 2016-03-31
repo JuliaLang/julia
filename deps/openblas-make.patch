@@ -1,0 +1,34 @@
+commit 7aac0aff8ec22598734f5effa2fcc107c95c0655
+diff --git a/Makefile.rule b/Makefile.rule
+index 847ee1c..6d0d8f4 100644
+--- a/Makefile.rule
++++ b/Makefile.rule
+@@ -112,7 +112,10 @@ NO_AFFINITY = 1
+ # NO_PARALLEL_MAKE = 1
+ 
+ # Force number of make jobs. The default is the number of logical CPU of the host.
+-# This is particularly useful when using distcc
++# This is particularly useful when using distcc.
++# A negative value will disable adding a -j flag to make, allowing to use a parent
++# make -j value. This is usefull to call OpenBLAS make from an other project
++# makefile
+ # MAKE_NB_JOBS = 2
+ 
+ # If you would like to know minute performance report of GotoBLAS.
+diff --git a/getarch.c b/getarch.c
+index f9c49e6..1e0b086 100644
+--- a/getarch.c
++++ b/getarch.c
+@@ -1013,7 +1013,12 @@ int main(int argc, char *argv[]){
+ #endif
+ 
+ #ifdef MAKE_NB_JOBS
++  #if MAKE_NB_JOBS > 0
+     printf("MAKE += -j %d\n", MAKE_NB_JOBS);
++  #else
++    // Let make use parent -j argument or -j1 if there
++    // is no make parent
++  #endif
+ #elif NO_PARALLEL_MAKE==1
+     printf("MAKE += -j 1\n");
+ #else
