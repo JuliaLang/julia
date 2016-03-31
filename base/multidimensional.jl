@@ -102,7 +102,7 @@ end
     startargs = fill(1, K)
     stopargs = Array(Expr, K)
     for i = 1:K
-        Bargs = [:(size(B[$j],$i)) for j = 1:length(B)]  # fixme (iter): it might be faster to use `eachindex(B)`, but is it safe to use it here?
+        Bargs = [:(size(B[$j],$i)) for j = 1:length(B)]
         stopargs[i] = :(max(size(A,$i),$(Bargs...)))
     end
     meta = Expr(:meta, :inline)

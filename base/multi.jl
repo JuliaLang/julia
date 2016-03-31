@@ -1544,13 +1544,13 @@ function pmap(f, lsts...; err_retry=true, err_stop=false, pids = workers())
     nextidx = 0
     getnextidx() = (nextidx += 1)
 
-    states = [start(lst) for lst in lsts]
+    states = map(start, lsts)
     function getnext_tasklet()
         if is_task_in_error() && err_stop
             return nothing
-        elseif !any(idx->done(lsts[idx],states[idx]), eachindex(lsts))  # fixme (iter): here `eachindex` may give speedup for unusually indexed arrays, but still won't work for OffsetArray's or non-integer indexed collections. Does it worth changing then?
-            nxts = [next(lsts[idx],states[idx]) for idx in eachindex(lsts)]
-            for idx in eachindex(lsts); states[idx] = nxts[idx][2]; end
+        elseif !any(idx->done(lsts[idx],states[idx]), 1:len)
+            nxts = [next(lsts[idx],states[idx]) for idx in 1:len]
+            for idx in 1:len; states[idx] = nxts[idx][2]; end
             nxtvals = [x[1] for x in nxts]
             return (getnextidx(), nxtvals)
         elseif !isempty(retryqueue)
