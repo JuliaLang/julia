@@ -10,9 +10,8 @@ static Instruction *tbaa_decorate(MDNode *md, Instruction *load_or_store)
     return load_or_store;
 }
 
-static GlobalVariable *prepare_global(GlobalVariable *G)
+static GlobalVariable *prepare_global(GlobalVariable *G, Module *M)
 {
-    Module *M = jl_builderModule;
     GlobalValue *local = M->getNamedValue(G->getName());
     if (!local) {
         local = global_proto(G, M);
@@ -62,11 +61,7 @@ static Value *stringConstPtr(const std::string &txt)
                                     ssno.str());
             gv->setUnnamedAddr(true);
             pooledval->second = gv;
-#if defined(USE_MCJIT) || defined(USE_ORCJIT)
-            jl_ExecutionEngine->addGlobalMapping(gv->getName(), (uintptr_t)pooledtxt.data());
-#else
             jl_ExecutionEngine->addGlobalMapping(gv, (void*)pooledtxt.data());
-#endif
         }
 
         GlobalVariable *v = prepare_global(pooledval->second);

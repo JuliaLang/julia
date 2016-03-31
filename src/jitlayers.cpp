@@ -6,6 +6,10 @@
 template <class T>
 static void addOptimizationPasses(T *PM)
 {
+#ifdef JL_DEBUG_BUILD
+    PM->add(createVerifierPass());
+#endif
+
 #ifdef __has_feature
 #   if __has_feature(address_sanitizer)
 #   if defined(LLVM37) && !defined(LLVM38)
@@ -319,9 +323,6 @@ public:
                 }
             )
         {
-#ifdef JL_DEBUG_BUILD
-            PM.add(createVerifierPass());
-#endif
             addOptimizationPasses(&PM);
             if (TM.addPassesToEmitMC(PM, Ctx, ObjStream))
                 llvm_unreachable("Target does not support MC emission.");
@@ -334,23 +335,16 @@ public:
                 report_fatal_error("FATAL: unable to dlopen self\n" + *ErrorStr);
         }
 
-    std::string getMangledName(const std::string &Name)
-    {
-        SmallString<128> FullName;
-        Mangler::getNameWithPrefix(FullName, Name, DL);
-        return FullName.str();
-    }
-
-    std::string getMangledName(const GlobalValue *GV)
-    {
-        return getMangledName(GV->getName());
-    }
-
     void addGlobalMapping(StringRef Name, uint64_t Addr)
     {
-       bool successful = GlobalSymbolTable.insert(make_pair(getMangledName(Name), (void*)Addr)).second;
-       (void)successful;
-       assert(successful);
+        bool successful = GlobalSymbolTable.insert(std::make_pair(Name, (void*)Addr)).second;
+        (void)successful;
+        assert(successful);
+    }
+
+    void addGlobalMapping(const GlobalValue *GV, void *Addr)
+    {
+        addGlobalMapping(getMangledName(GV), (uintptr_t)Addr);
     }
 
     void *getPointerToGlobalIfAvailable(StringRef S)
@@ -360,6 +354,12 @@ public:
             return pos->second;
         return nullptr;
     }
+
+    void *getPointerToGlobalIfAvailable(const GlobalValue *GV)
+    {
+        return getPointerToGlobalIfAvailable(getMangledName(GV));
+    }
+
 
     ModuleHandleT addModule(std::unique_ptr<Module> M)
     {
@@ -456,6 +456,18 @@ public:
     }
 
 private:
+    std::string getMangledName(const std::string &Name)
+    {
+        SmallString<128> FullName;
+        Mangler::getNameWithPrefix(FullName, Name, DL);
+        return FullName.str();
+    }
+
+    std::string getMangledName(const GlobalValue *GV)
+    {
+        return getMangledName(GV->getName());
+    }
+
     TargetMachine &TM;
     const DataLayout DL;
     // Should be big enough that in the common case, The
@@ -649,6 +661,12 @@ static GlobalVariable *global_proto(GlobalVariable *G, Module *M = NULL)
     GlobalVariable *proto = new GlobalVariable(G->getType()->getElementType(),
             G->isConstant(), GlobalVariable::ExternalLinkage,
             NULL, G->getName(),  G->getThreadLocalMode());
+    proto->copyAttributesFrom(G);
+#ifdef LLVM35
+    // DLLImport only needs to be set for the shadow module
+    // it just gets annoying in the JIT
+    proto->setDLLStorageClass(GlobalValue::DefaultStorageClass);
+#endif
     if (M)
         M->getGlobalList().push_back(proto);
     return proto;
@@ -660,8 +678,6 @@ static Function *function_proto(Function *F, Module *M = NULL)
     Function *NewF = Function::Create(F->getFunctionType(),
                                       Function::ExternalLinkage,
                                       F->getName(), M);
-    NewF->setAttributes(AttributeSet());
-
     // FunctionType does not include any attributes. Copy them over manually
     // as codegen may make decisions based on the presence of certain attributes
     NewF->copyAttributesFrom(F);
@@ -670,6 +686,12 @@ static Function *function_proto(Function *F, Module *M = NULL)
     // Declarations are not allowed to have personality routines, but
     // copyAttributesFrom sets them anyway, so clear them again manually
     NewF->setPersonalityFn(nullptr);
+#endif
+
+#ifdef LLVM35
+    // DLLImport only needs to be set for the shadow module
+    // it just gets annoying in the JIT
+    NewF->setDLLStorageClass(GlobalValue::DefaultStorageClass);
 #endif
 
     return NewF;
@@ -687,44 +709,28 @@ static inline void add_named_global(GlobalValue *gv, T *_addr, bool dllimport = 
     // cast through integer to avoid c++ pedantic warning about casting between
     // data and code pointers
     void *addr = (void*)(uintptr_t)_addr;
-#ifdef LLVM34
-    StringRef name = gv->getName();
-#ifdef _OS_WINDOWS_
-    std::string imp_name;
-#endif
-#endif
 
 #ifdef _OS_WINDOWS_
     // setting JL_DLLEXPORT correctly only matters when building a binary
+    // (global_proto will strip this from the JIT)
     if (dllimport && imaging_mode) {
         assert(gv->getLinkage() == GlobalValue::ExternalLinkage);
 #ifdef LLVM35
         // add the __declspec(dllimport) attribute
         gv->setDLLStorageClass(GlobalValue::DLLImportStorageClass);
-        // this will cause llvm to rename it, so we do the same
-        imp_name = Twine("__imp_", name).str();
-        name = StringRef(imp_name);
 #else
         gv->setLinkage(GlobalValue::DLLImportLinkage);
-#endif
-#if defined(_P64) || defined(LLVM35)
+#if defined(_P64)
         // __imp_ variables are indirection pointers, so use malloc to simulate that
-        void **imp_addr = (void**)malloc(sizeof(void**));
+        void **imp_addr = (void**)malloc(sizeof(void*));
         *imp_addr = addr;
         addr = (void*)imp_addr;
+#endif
 #endif
     }
 #endif // _OS_WINDOWS_
 
-#ifdef USE_ORCJIT
-    addComdat(gv);
-    jl_ExecutionEngine->addGlobalMapping(name, (uintptr_t)addr);
-#elif defined(USE_MCJIT)
-    addComdat(gv);
-    sys::DynamicLibrary::AddSymbol(name, addr);
-#else // USE_MCJIT
     jl_ExecutionEngine->addGlobalMapping(gv, addr);
-#endif // USE_MCJIT
 }
 
 static std::vector<Constant*> jl_sysimg_gvars;
@@ -769,13 +775,14 @@ static void* jl_emit_and_add_to_shadow(GlobalVariable *gv, void *gvarinit = NULL
     // make the pointer valid for this session
 #if defined(USE_MCJIT) || defined(USE_ORCJIT)
     void *slot = calloc(1, sizeof(void*));
-    jl_ExecutionEngine->addGlobalMapping(gv->getName(), (uintptr_t)slot);
+    jl_ExecutionEngine->addGlobalMapping(gv, slot);
     return slot;
 #else
     return jl_ExecutionEngine->getPointerToGlobal(shadowvar);
 #endif
 }
 
+#ifdef JULIA_ENABLE_THREADING // only used in the threading build
 // Emit a slot in the system image to be filled at sysimg init time.
 // Returns the global var. Fill `idx` with 1-base index in the sysimg gv.
 // Use as an optimization for runtime constant addresses to have one less
@@ -794,7 +801,7 @@ static GlobalVariable *jl_emit_sysimg_slot(Module *m, Type *typ, const char *nam
     // make the pointer valid for this session
 #if defined(USE_MCJIT) || defined(USE_ORCJIT)
     auto p = new uintptr_t(init);
-    jl_ExecutionEngine->addGlobalMapping(gv->getName(), (uintptr_t)p);
+    jl_ExecutionEngine->addGlobalMapping(gv, (void*)p);
 #else
     uintptr_t *p = (uintptr_t*)jl_ExecutionEngine->getPointerToGlobal(gv);
     *p = init;
@@ -803,30 +810,12 @@ static GlobalVariable *jl_emit_sysimg_slot(Module *m, Type *typ, const char *nam
     idx = jl_sysimg_gvars.size();
     return gv;
 }
-
-// Make sure `GV` belongs to `M` or create a declaration of `GV` in `M` (to
-// be linked later) that has the same properties.
-static GlobalVariable *jl_declare_global(Module *M, GlobalVariable *oldGV)
-{
-    if (!oldGV)
-        return NULL;
-    GlobalVariable *GV = M->getGlobalVariable(oldGV->getName(),
-                                              true /* AllowLocal */);
-    if (GV)
-        return GV;
-    GV = new GlobalVariable(*M, oldGV->getType()->getElementType(),
-                            oldGV->isConstant(),
-                            GlobalValue::ExternalLinkage, NULL,
-                            oldGV->getName());
-    GV->copyAttributesFrom(oldGV);
-    return GV;
-}
+#endif
 
 static void* jl_get_global(GlobalVariable *gv)
 {
 #if defined(USE_MCJIT) || defined(USE_ORCJIT)
-    void *p = (void*)(intptr_t)jl_ExecutionEngine->getPointerToGlobalIfAvailable(
-            jl_ExecutionEngine->getMangledName(gv));
+    void *p = (void*)(intptr_t)jl_ExecutionEngine->getPointerToGlobalIfAvailable(gv);
 #else
     void *p = jl_ExecutionEngine->getPointerToGlobal(
             shadow_output->getNamedValue(gv->getName()));
@@ -942,10 +931,6 @@ static void jl_gen_llvm_globaldata(llvm::Module *mod, ValueToValueMapTy &VMap,
 static void jl_dump_shadow(char *fname, int jit_model, const char *sysimg_data, size_t sysimg_len,
                            bool dump_as_bc)
 {
-#ifdef JL_DEBUG_BUILD
-    verifyModule(*shadow_output);
-#endif
-
 #ifdef LLVM36
     std::error_code err;
     StringRef fname_ref = StringRef(fname);
