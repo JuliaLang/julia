@@ -704,7 +704,10 @@ of no help if you called ``array3`` from a function like this:
 Here, you've created the same problem all over again: the compiler
 can't guess the type of ``n``, so it doesn't know the type of
 ``Val{n}``.  Attempting to use ``Val``, but doing so incorrectly, can
-easily make performance *worse* in many situations.
+easily make performance *worse* in many situations.  (Only in
+situations where you're effectively combining ``Val`` with the
+function-barrier trick, to make the kernel function more efficient,
+should code like the above be used.)
 
 An example of correct usage of ``Val`` would be:
 
