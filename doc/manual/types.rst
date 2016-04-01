@@ -1263,9 +1263,10 @@ For consistency across Julia, the call site should always pass a
 
 It's worth noting that it's extremely easy to mis-use the ``Val``
 trick, and you can easily end up making the performance of your code
-much *worse*.  If you're contemplating using ``Val``, please read the
-more extensive discussion in :ref:`the performance tips
-<man-performance-val>`.
+much *worse*.  For example, you would never want to write actual code
+as illustrated above.  For more information about the proper (and
+improper) uses of ``Val``, please read the more extensive discussion
+in :ref:`the performance tips <man-performance-val>`.
 
 .. _man-nullable-types:
 
