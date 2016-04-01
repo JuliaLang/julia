@@ -1,0 +1,88 @@
+#!/bin/bash
+
+set -e
+
+SCRIPT=$(basename $0)
+
+if [ $# -lt 2 ]; then
+  echo "usage: $SCRIPT julia-binary-dist.tar pkgversion"
+  exit 1
+fi
+
+PRODUCTBUILD=/usr/bin/productbuild
+PKGBUILD=/usr/bin/pkgbuild
+PACKAGE_ID=${PACKAGE_ID:=org.julialang.installer}
+SIGN_INST_IDENT=${SIGN_INST_IDENT:="Developer ID Installer: "}
+BINARYDIST="$(cd "$( dirname "$1" )" && pwd)"/$(basename $1)
+VERSION=$2
+
+if [ ! -f "$BINARYDIST" ]; then
+  echo "$SCRIPT: ERROR - \"$BINARYDIST\" is not a file."
+  exit 1
+fi
+
+echo "Building installer:"
+echo "	pkg identifier       = $PACKAGE_ID"
+echo "	pkg version          = $VERSION"
+echo "	pkg signing identity = \"$SIGN_INST_IDENT\""
+echo "	julia binary dist    = \"$BINARYDIST\""
+
+# Extract the distribution
+
+MYTMP=$(mktemp -d -t "$SCRIPT")
+pushd "$MYTMP"
+tar xf "$BINARYDIST"
+mv julia-* julia
+
+export DESTDIR="$MYTMP/julia"
+
+popd
+
+# Sign the distribution
+
+set +e
+
+./codesignjulia
+
+if [ $? -ne 0 ]; then
+  echo "$SCRIPT: ERROR - Codesigning failed."
+  exit 1
+fi
+
+set -e
+
+# Add the uninstall script
+
+mkdir -p "$DESTDIR/sbin"
+cp julia-uninstall "$DESTDIR/sbin/julia-uninstall"
+chmod 755 "$DESTDIR/sbin/julia-uninstall"
+
+# Create resources directory
+
+RESOURCES="$MYTMP/resources"
+mkdir -p "$RESOURCES"
+
+# Create the resource files.
+
+echo "<html><body>" > "$RESOURCES/license.html"
+cmark -t html "$DESTDIR/LICENSE.md" >> "$RESOURCES/license.html"
+echo "</html></body>" >> "$RESOURCES/license.html"
+mv "$DESTDIR/LICENSE.md" "$DESTDIR/share/doc/julia/"
+
+cp resources/conclusion.md "$RESOURCES/conclusion.md"
+cp resources/conclusion.md "$DESTDIR/share/doc/julia/distnotes.md"
+
+cp resources/readme.txt "$RESOURCES/readme.txt"
+
+cp resources/logo_hires.png "$RESOURCES/logo_hires.png"
+
+# libpcre2-posix is not needed
+rm -f "$DESTDIR/lib/julia/libpcre2-posix*.dylib"
+# juliarc.jl is not needed
+rm -f "$DESTDIR/etc/julia/juliarc.jl"
+
+$PKGBUILD --identifier $PACKAGE_ID.distribution --version $VERSION --root "$DESTDIR" "$MYTMP/julia-distribution.pkg"
+
+$PRODUCTBUILD --identifier $PACKAGE_ID --sign "$SIGN_INST_IDENT" --timestamp --version $VERSION --resources "$RESOURCES" --distribution Julia.dist --package-path "$MYTMP" julia-$VERSION.pkg
+
+rm -rf "$MYTMP"
