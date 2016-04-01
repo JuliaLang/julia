@@ -437,7 +437,7 @@ public:
 
     Function *FindFunctionNamed(const std::string &Name)
     {
-        return 0; // Functions are not kept around
+        return shadow_output->getFunction(Name);
     }
 
     void RegisterJITEventListener(JITEventListener *L)
@@ -829,8 +829,10 @@ static void* jl_get_global(GlobalVariable *gv)
 static void jl_add_to_shadow(Module *m)
 {
 #if defined(USE_MCJIT) || defined(USE_ORCJIT)
+#ifndef KEEP_BODIES
     if (!imaging_mode)
         return;
+#endif
     ValueToValueMapTy VMap;
     std::unique_ptr<Module> clone(CloneModule(m, VMap));
     for (Module::iterator I = clone->begin(), E = clone->end(); I != E; ++I) {
