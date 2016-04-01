@@ -79,18 +79,6 @@ static int sig_match_by_type_simple(jl_value_t **types, size_t n, jl_tupletype_t
     return 1;
 }
 
-static int sig_match_by_type_general(jl_value_t **types, size_t n, jl_tupletype_t *sig, int va)
-{
-    assert("TODO");
-    return 0;
-}
-
-static int sig_match_by_type_tvars(jl_value_t **types, size_t n, jl_tupletype_t *sig, int va)
-{
-    assert("TODO");
-    return 0;
-}
-
 static inline int sig_match_leaf(jl_value_t **args, jl_value_t **sig, size_t n)
 {
     // NOTE: This function is a huge performance hot spot!!
@@ -158,6 +146,7 @@ static inline int sig_match_general(jl_value_t **args, size_t n, jl_value_t **si
     assert(0 && "general sig match not implemented");
     return 0;
 }
+
 
 // ----- MethodCache helper functions ----- //
 
@@ -251,6 +240,7 @@ static int8_t jl_cachearg_offset(jl_methtable_t *mt)
 {
     return (mt == jl_type_type->name->mt) ? 0 : 1;
 }
+
 
 // ----- Sorted Type Signature Lookup Matching ----- //
 
@@ -467,8 +457,15 @@ static jl_lambda_info_t *jl_method_cache_assoc_exact(union _jl_opaque_cache_t ml
     while (ml != (void*)jl_nothing) {
         size_t lensig = jl_datatype_nfields(ml->sig);
         if (lensig == n || (ml->va && lensig <= n+1)) {
-            // TODO: more efficient (and general)
-            if (sig_match_simple(args, n, jl_svec_data(ml->sig->parameters), ml->va, lensig)) {
+            int ismatch = 0;
+            if (ml->isleafsig)
+               ismatch = sig_match_leaf(args, jl_svec_data(ml->sig->parameters), n);
+            else if (ml->issimplesig)
+               ismatch = sig_match_simple(args, n, jl_svec_data(ml->sig->parameters), ml->va, lensig);
+            else
+               ismatch = sig_match_general(args, n, jl_svec_data(ml->sig->parameters), ml->va, lensig);
+
+            if (ismatch) {
                 size_t i, l;
                 for (i = 0, l = jl_svec_len(ml->guardsigs); i < l; i++) {
                     // checking guard entries require a more
@@ -487,7 +484,8 @@ static jl_lambda_info_t *jl_method_cache_assoc_exact(union _jl_opaque_cache_t ml
     return NULL;
 }
 
-/// --- --- ///
+
+// ----- LambdaInfo specialization instantiation ----- //
 
 // return a new lambda-info that has some extra static parameters merged in.
 static jl_lambda_info_t *jl_add_static_parameters(jl_lambda_info_t *l, jl_svec_t *sp, jl_tupletype_t *types)
@@ -575,7 +573,8 @@ jl_lambda_info_t *jl_get_unspecialized(jl_lambda_info_t *method)
     return def->unspecialized;
 }
 
-/// --- --- ///
+
+// ----- Method List Insertion Management ----- //
 
 static jl_methlist_t *jl_method_list_last(jl_methlist_t *ml, unsigned *count)
 {
@@ -775,7 +774,6 @@ void print_func_loc(JL_STREAM *s, jl_lambda_info_t *li)
     }
 }
 
-
 /*
   warn about ambiguous method priorities
 
@@ -802,6 +800,7 @@ static void check_ambiguous(jl_methlist_t *ml, jl_tupletype_t *type,
     size_t tl = jl_nparams(type);
     size_t sl = jl_nparams(sig);
     // we know !jl_args_morespecific(type, sig)
+    // now we are checking that the reverse is true
     if ((tl==sl ||
          (tl==sl+1 && jl_is_va_tuple(type)) ||
          (tl+1==sl && jl_is_va_tuple(sig))) &&
@@ -822,8 +821,11 @@ static void check_ambiguous(jl_methlist_t *ml, jl_tupletype_t *type,
         jl_methlist_t *l = ml;
         JL_STREAM *s;
         while (l != (void*)jl_nothing) {
-            if (sigs_eq(isect, (jl_value_t*)l->sig, 0))
-                goto done_chk_amb;  // ok, intersection is covered
+            if (sigs_eq(isect, (jl_value_t*)l->sig, 0)) {
+                // ok, intersection is covered
+                JL_GC_POP();
+                return;
+            }
             l = l->next;
         }
         s = JL_STDERR;
@@ -836,7 +838,6 @@ static void check_ambiguous(jl_methlist_t *ml, jl_tupletype_t *type,
         jl_printf(s, ".\nTo fix, define \n    ");
         jl_static_show_func_sig(s, isect);
         jl_printf(s, "\nbefore the new definition.\n");
-    done_chk_amb:
         JL_GC_POP();
     }
 }
@@ -1094,12 +1095,12 @@ static jl_value_t *ml_matches(jl_methlist_t *ml, jl_value_t *type,
                               jl_sym_t *name, int lim);
 
 static jl_lambda_info_t *cache_method(jl_methtable_t *mt, union _jl_opaque_cache_t *cache, jl_value_t *parent, jl_tupletype_t *type,
-                                      jl_lambda_info_t *method, jl_methlist_t *m,
-                                      jl_svec_t *sparams)
+                                      jl_lambda_info_t *spec, jl_methlist_t *m, jl_svec_t *sparams)
 {
     JL_LOCK(codegen); // Might GC
     size_t i;
     jl_tupletype_t *decl = m->sig;
+    jl_lambda_info_t *method = m->func;
     int8_t isstaged = method->isstaged;
     int need_guard_entries = 0;
     int cache_as_orig = 0;
@@ -1122,7 +1123,7 @@ static jl_lambda_info_t *cache_method(jl_methtable_t *mt, union _jl_opaque_cache
             int ok=1;
             while (curr != (void*)jl_nothing) {
                 jl_value_t *slottype = jl_nth_slot_type(curr->sig, i);
-                if (slottype && curr->func!=method) {
+                if (slottype && curr->func != method) {
                     if (jl_is_type_type(slottype) &&
                         jl_type_intersection(slottype, decl_i) != jl_bottom_type) {
                         ok=0;
@@ -1138,7 +1139,7 @@ static jl_lambda_info_t *cache_method(jl_methtable_t *mt, union _jl_opaque_cache
         }
 
         int set_to_any = 0;
-        int notcalled_func = (i>0 && i<=8 && !(method->called&(1<<(i-1))) &&
+        int notcalled_func = (i>0 && i<=8 && !(spec->called&(1<<(i-1))) &&
                               jl_subtype(elt,(jl_value_t*)jl_function_type,0));
         if (decl_i == jl_ANY_flag ||
             (notcalled_func && (decl_i == (jl_value_t*)jl_any_type ||
@@ -1264,7 +1265,7 @@ static jl_lambda_info_t *cache_method(jl_methtable_t *mt, union _jl_opaque_cache
             jl_value_t *kind = (jl_value_t*)jl_typeof(jl_tparam0(elt));
             while (curr != (void*)jl_nothing) {
                 jl_value_t *slottype = jl_nth_slot_type(curr->sig, i);
-                if (slottype && curr->func!=method) {
+                if (slottype && curr->func != method) {
                     if (slottype == kind) {
                         ok=0;
                         break;
@@ -1282,7 +1283,7 @@ static jl_lambda_info_t *cache_method(jl_methtable_t *mt, union _jl_opaque_cache
                     curr = mt->defs;
                     while (curr != (void*)jl_nothing) {
                         jl_value_t *slottype = jl_nth_slot_type(curr->sig, i);
-                        if (slottype && curr->func!=method) {
+                        if (slottype && curr->func != method) {
                             if (!very_general_type(slottype) &&
                                 jl_type_intersection(slottype, (jl_value_t*)jl_type_type) !=
                                 (jl_value_t*)jl_bottom_type) {
@@ -1307,7 +1308,7 @@ static jl_lambda_info_t *cache_method(jl_methtable_t *mt, union _jl_opaque_cache
             int ok=1;
             while (curr != (void*)jl_nothing) {
                 jl_value_t *slottype = jl_nth_slot_type(curr->sig, i);
-                if (slottype && curr->func!=method) {
+                if (slottype && curr->func != method) {
                     if (jl_is_type_type(slottype) &&
                         jl_type_intersection(slottype, decl_i) != jl_bottom_type) {
                         ok=0;
@@ -1455,7 +1456,7 @@ static jl_lambda_info_t *cache_method(jl_methtable_t *mt, union _jl_opaque_cache
         return newmeth;
     }
 
-    newmeth = jl_add_static_parameters(method, sparams, type);
+    newmeth = jl_add_static_parameters(spec, sparams, type);
 
     if (cache_as_orig)
         jl_method_cache_insert(cache, parent, origtype, guardsigs, newmeth, jl_cachearg_offset(mt), 0);
