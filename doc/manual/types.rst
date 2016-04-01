@@ -1237,24 +1237,15 @@ If you apply :func:`supertype` to other type objects (or non-type objects), a
     julia> supertype(Union{Float64,Int64})
     ERROR: `supertype` has no method matching supertype(::Type{Union{Float64,Int64}})
 
+.. _man-val-trick:
+
 "Value types"
 -------------
 
 As one application of these ideas, Julia includes a parametric type,
-``Val{T}``, designated for dispatching on bits-type *values*.  For
-example, if you pass a boolean to a function, you have to test the
-value at run-time:
-
-.. doctest::
-
-    function firstlast(b::Bool)
-        return b ? "First" : "Last"
-    end
-
-    println(firstlast(true))
-
-You can instead cause the conditional to be evaluated during function
-compilation by using the ``Val`` trick:
+``Val{T}``, designated for dispatching on bits-type *values*.
+Normally, you can't dispatch on a value such as ``true`` or ``false``,
+but the ``Val`` type makes this possible:
 
 .. doctest::
 
@@ -1269,6 +1260,12 @@ numbers, tuples, etc.) can be passed via ``Val``.
 For consistency across Julia, the call site should always pass a
 ``Val`` type rather than creating an instance, i.e., use
 ``foo(Val{:bar})`` rather than ``foo(Val{:bar}())``.
+
+It's worth noting that it's extremely easy to mis-use the ``Val``
+trick, and you can easily end up making the performance of your code
+much *worse*.  If you're contemplating using ``Val``, please read the
+more extensive discussion in :ref:`the performance tips
+<man-performance-val>`.
 
 .. _man-nullable-types:
 
