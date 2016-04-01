@@ -278,10 +278,12 @@ static void gc_verify(void)
 
 typedef struct {
     uint64_t num;
+    uint64_t next;
 
     uint64_t min;
     uint64_t interv;
     uint64_t max;
+    unsigned short random[3];
 } jl_alloc_num_t;
 
 typedef struct {
@@ -295,31 +297,58 @@ typedef struct {
 JL_DLLEXPORT jl_gc_debug_env_t jl_gc_debug_env = {
     GC_MARKED_NOESC,
     0,
-    {0, 0, 0, 0},
-    {0, 0, 0, 0},
-    {0, 0, 0, 0}
+    {0, UINT64_MAX, 0, 0, 0, {0, 0, 0}},
+    {0, UINT64_MAX, 0, 0, 0, {0, 0, 0}},
+    {0, UINT64_MAX, 0, 0, 0, {0, 0, 0}}
 };
+
+static void gc_debug_alloc_setnext(jl_alloc_num_t *num)
+{
+    uint64_t interv = num->interv;
+    if (num->random[0] && num->interv != 1) {
+        // Randomly trigger GC with the same average frequency
+        double scale = log(1.0 + 1.0 / (double)(num->interv - 1));
+        double randinterv = floor(fabs(log(erand48(num->random))) / scale) + 1;
+        interv = randinterv >= UINT64_MAX ? UINT64_MAX : (uint64_t)randinterv;
+    }
+    uint64_t next = num->num + interv;
+    if (!num->interv || next > num->max || interv > next)
+        next = UINT64_MAX;
+    num->next = next;
+}
 
 static void gc_debug_alloc_init(jl_alloc_num_t *num, const char *name)
 {
-    // Not very generic and robust but good enough for a debug option
-    char buff[128];
-    sprintf(buff, "JULIA_GC_ALLOC_%s", name);
+    static const char *fmt = "JULIA_GC_ALLOC_%s";
+    char *buff = (char*)alloca(strlen(fmt) + strlen(name) + 1);
+    sprintf(buff, fmt, name);
     char *env = getenv(buff);
-    if (!env)
+    if (!env || !*env)
         return;
+    if (*env == 'r') {
+        env++;
+        srand((unsigned)uv_hrtime());
+        for (int i = 0;i < 3;i++) {
+            while (num->random[i] == 0) {
+                num->random[i] = rand();
+            }
+        }
+    }
     num->interv = 1;
-    num->max = (uint64_t)-1ll;
+    num->max = UINT64_MAX;
     sscanf(env, "%" SCNd64 ":%" SCNd64 ":%" SCNd64,
            (int64_t*)&num->min, (int64_t*)&num->interv, (int64_t*)&num->max);
+    if (num->interv == 0)
+        num->interv = 1;
+    num->next = num->min;
 }
 
 static int gc_debug_alloc_check(jl_alloc_num_t *num)
 {
-    num->num++;
-    if (num->interv == 0 || num->num < num->min || num->num > num->max)
+    if (++num->num < num->next)
         return 0;
-    return ((num->num - num->min) % num->interv) == 0;
+    gc_debug_alloc_setnext(num);
+    return 1;
 }
 
 static char *gc_stack_lo;
