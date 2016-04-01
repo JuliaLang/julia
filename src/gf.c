@@ -962,7 +962,7 @@ static void jl_method_list_insert_sorted(jl_methlist_t **pml, jl_tupletype_t *ty
 }
 
 // invalidate cached methods that overlap this definition
-static void remove_conflicting(union _jl_opaque_cache_t *pml, jl_value_t *type)
+static void invalidate_conflicting(union _jl_opaque_cache_t *pml, jl_value_t *type, jl_value_t *parent)
 {
     jl_methlist_t **pl;
     if (jl_typeof(pml->cache) == (jl_value_t*)jl_methcache_type) {
@@ -971,8 +971,7 @@ static void remove_conflicting(union _jl_opaque_cache_t *pml, jl_value_t *type)
             for(int i=0; i < jl_array_len(cache->arg1); i++) {
                 union _jl_opaque_cache_t *pl = &((union _jl_opaque_cache_t*)jl_array_data(cache->arg1))[i];
                 if (pl->nothing && pl->nothing != jl_nothing) {
-                    remove_conflicting(pl, type);
-                    jl_gc_wb(cache->arg1, jl_cellref(cache->arg1, i));
+                    invalidate_conflicting(pl, type, (jl_value_t*)cache->arg1);
                 }
             }
         }
@@ -980,25 +979,26 @@ static void remove_conflicting(union _jl_opaque_cache_t *pml, jl_value_t *type)
             for(int i=0; i < jl_array_len(cache->targ); i++) {
                 union _jl_opaque_cache_t *pl = &((union _jl_opaque_cache_t*)jl_array_data(cache->targ))[i];
                 if (pl->nothing && pl->nothing != jl_nothing) {
-                    remove_conflicting(pl, type);
-                    jl_gc_wb(cache->targ, jl_cellref(cache->targ, i));
+                    invalidate_conflicting(pl, type, (jl_value_t*)cache->targ);
                 }
             }
         }
         pl = &cache->list;
+        parent = (jl_value_t*)cache;
     }
     else {
         pl = &pml->list;
     }
     jl_methlist_t *l = *pl;
-    // TODO: this needs a jl_gc_wb
     while (l != (void*)jl_nothing) {
         if (jl_type_intersection(type, (jl_value_t*)l->sig) !=
             (jl_value_t*)jl_bottom_type) {
             *pl = l->next;
+            jl_gc_wb(parent, *pl);
         }
         else {
             pl = &l->next;
+            parent = (jl_value_t*)l;
         }
         l = l->next;
     }
@@ -1602,7 +1602,7 @@ void jl_method_table_insert(jl_methtable_t *mt, jl_tupletype_t *type,
         tvars = (jl_svec_t*)jl_svecref(tvars,0);
     JL_SIGATOMIC_BEGIN();
     jl_method_list_insert_sorted(&mt->defs, type, method, tvars, (jl_value_t*)mt);
-    remove_conflicting(&mt->cache, (jl_value_t*)type);
+    invalidate_conflicting(&mt->cache, (jl_value_t*)type, (jl_value_t*)mt);
     update_max_args(mt, type);
     JL_SIGATOMIC_END();
 }
