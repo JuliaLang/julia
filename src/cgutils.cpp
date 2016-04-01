@@ -61,7 +61,7 @@ static Value *stringConstPtr(const std::string &txt)
                                     ssno.str());
             gv->setUnnamedAddr(true);
             pooledval->second = gv;
-            jl_ExecutionEngine->addGlobalMapping(gv, (void*)pooledtxt.data());
+            jl_ExecutionEngine->addGlobalMapping(gv, (void*)(uintptr_t)pooledtxt.data());
         }
 
         GlobalVariable *v = prepare_global(pooledval->second);
