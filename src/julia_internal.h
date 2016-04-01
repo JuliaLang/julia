@@ -88,14 +88,14 @@ void *allocb(size_t sz);
 void gc_queue_binding(jl_binding_t *bnd);
 void gc_setmark_buf(void *buf, int);
 
-static inline void jl_gc_wb_binding(jl_binding_t *bnd, void *val) // val isa jl_value_t*
+STATIC_INLINE void jl_gc_wb_binding(jl_binding_t *bnd, void *val) // val isa jl_value_t*
 {
     if (__unlikely((jl_astaggedvalue(bnd)->gc_bits & 1) == 1 &&
                    (jl_astaggedvalue(val)->gc_bits & 1) == 0))
         gc_queue_binding(bnd);
 }
 
-static inline void jl_gc_wb_buf(void *parent, void *bufptr) // parent isa jl_value_t*
+STATIC_INLINE void jl_gc_wb_buf(void *parent, void *bufptr) // parent isa jl_value_t*
 {
     // if parent is marked and buf is not
     if (__unlikely((jl_astaggedvalue(parent)->gc_bits & 1) == 1))
@@ -154,7 +154,12 @@ jl_datatype_t *jl_inst_concrete_tupletype(jl_svec_t *p);
 void jl_method_table_insert(jl_methtable_t *mt, jl_tupletype_t *type,
                             jl_lambda_info_t *method, jl_svec_t *tvars);
 jl_value_t *jl_mk_builtin_func(const char *name, jl_fptr_t fptr);
-int jl_is_type(jl_value_t *v);
+STATIC_INLINE int jl_is_type(jl_value_t *v)
+{
+    jl_value_t *t = jl_typeof(v);
+    return (t == (jl_value_t*)jl_datatype_type || t == (jl_value_t*)jl_uniontype_type ||
+            t == (jl_value_t*)jl_typector_type);
+}
 jl_value_t *jl_type_intersection_matching(jl_value_t *a, jl_value_t *b,
                                           jl_svec_t **penv, jl_svec_t *tvars);
 jl_typector_t *jl_new_type_ctor(jl_svec_t *params, jl_value_t *body);
@@ -307,7 +312,7 @@ void jl_getFunctionInfo(char **name, char **filename, size_t *line,
 JL_DLLEXPORT void jl_gdblookup(uintptr_t ip);
 
 // *to is NULL or malloc'd pointer, from is allowed to be NULL
-static inline char *jl_copy_str(char **to, const char *from)
+STATIC_INLINE char *jl_copy_str(char **to, const char *from)
 {
     if (!from) {
         free(*to);

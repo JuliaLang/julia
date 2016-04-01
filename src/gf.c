@@ -34,12 +34,13 @@ static int sig_match_by_type_leaf(jl_value_t **types, jl_tupletype_t *sig, size_
     for(i=0; i < n; i++) {
         jl_value_t *decl = jl_field_type(sig, i);
         jl_value_t *a = types[i];
+        if (jl_is_type_type(a)) // decl is not Type, because it wouldn't be leafsig
+            a = jl_typeof(jl_tparam0(a));
         if (!jl_types_equal(a, decl))
             return 0;
     }
     return 1;
 }
-
 
 static int sig_match_by_type_simple(jl_value_t **types, size_t n, jl_tupletype_t *sig, size_t lensig, int va)
 {
@@ -64,6 +65,10 @@ static int sig_match_by_type_simple(jl_value_t **types, size_t n, jl_tupletype_t
                 // to match exactly either. this is cached as Type{T}.
                 // analogous to the situation with tuples.
             }
+            else if (jl_is_typevar(tp0)) {
+                if (!jl_subtype(jl_tparam0(a), ((jl_tvar_t*)tp0)->ub, 0))
+                    return 0;
+            }
             else {
                 if (!jl_types_equal(jl_tparam0(a), tp0))
                     return 0;
@@ -72,6 +77,8 @@ static int sig_match_by_type_simple(jl_value_t **types, size_t n, jl_tupletype_t
         else if (decl == (jl_value_t*)jl_any_type) {
         }
         else {
+            if (jl_is_type_type(a)) // decl is not Type, because it would be caught above
+                a = jl_typeof(jl_tparam0(a));
             if (!jl_types_equal(a, decl))
                     return 0;
         }
@@ -274,6 +281,15 @@ static jl_value_t *lookup_match(jl_value_t *a, jl_value_t *b, jl_svec_t **penv,
     return ti;
 }
 
+static int sigs_eq(jl_value_t *a, jl_value_t *b, int useenv)
+{
+    if (jl_has_typevars(a) || jl_has_typevars(b)) {
+        return jl_types_equal_generic(a,b,useenv);
+    }
+    return jl_subtype(a, b, 0) && jl_subtype(b, a, 0);
+}
+
+
 /*
   Method caches are divided into three parts: one for signatures where
   the first argument is a singleton kind (Type{Foo}), one indexed by the
@@ -358,8 +374,7 @@ static jl_methlist_t *jl_method_cache_lookup_by_type_(jl_methlist_t *ml, jl_tupl
 {
     while (ml != (void*)jl_nothing) {
         // TODO: more efficient
-        if (jl_subtype((jl_value_t*)types, (jl_value_t*)ml->sig, 0) &&
-            jl_subtype((jl_value_t*)ml->sig, (jl_value_t*)types, 0)) {
+        if (sigs_eq((jl_value_t*)types, (jl_value_t*)ml->sig, 1)) {
             return ml;
         }
         ml = ml->next;
@@ -576,21 +591,20 @@ jl_lambda_info_t *jl_get_unspecialized(jl_lambda_info_t *method)
 
 // ----- Method List Insertion Management ----- //
 
-static jl_methlist_t *jl_method_list_last(jl_methlist_t *ml, unsigned *count)
+static unsigned jl_method_list_count(jl_methlist_t *ml)
 {
-    *count = 0;
-    if (ml == (void*)jl_nothing)
-        return NULL;
-
-    while (ml->next != (void*)jl_nothing) {
+    unsigned count = 0;
+    while (ml != (void*)jl_nothing) {
+        count++;
         ml = ml->next;
-        (*count)++;
     }
-    (*count)++;
-    return ml;
+    return count;
 }
 
 static void jl_method_cache_insert_(jl_methcache_t *cache, jl_methlist_t *newrec, int8_t offs);
+static void jl_method_list_insert_sorted(jl_methlist_t **pml, jl_value_t *parent,
+                                         jl_methlist_t *newrec, int8_t isdefinition);
+
 static jl_methcache_t *jl_method_convert_list_to_cache(jl_methlist_t *ml, jl_value_t *key, int8_t offs)
 {
     jl_methcache_t *cache = jl_new_method_cache();
@@ -606,17 +620,30 @@ static jl_methcache_t *jl_method_convert_list_to_cache(jl_methlist_t *ml, jl_val
     return cache;
 }
 
-static void jl_method_list_insert_or(union _jl_opaque_cache_t *pml, jl_value_t *parent,
-                                     jl_methlist_t *newrec, jl_value_t *key, int8_t offs)
+static void jl_method_list_insert_(jl_methlist_t **pml, jl_value_t *parent,
+                                   jl_methlist_t *newrec)
+{
+    if (*pml == (void*)jl_nothing || newrec->isleafsig) {
+        // insert at head of pml list
+        newrec->next = *pml;
+        jl_gc_wb(newrec, newrec->next);
+        *pml = newrec;
+        jl_gc_wb(parent, newrec);
+    }
+    else {
+        jl_method_list_insert_sorted(pml, parent, newrec, 0);
+    }
+}
+
+static void jl_method_list_insert_generic(union _jl_opaque_cache_t *pml, jl_value_t *parent,
+                                          jl_methlist_t *newrec, jl_value_t *key, int8_t offs)
 {
     if (jl_typeof(pml->nothing) == (jl_value_t*)jl_methcache_type) {
         jl_method_cache_insert_((*pml).cache, newrec, offs);
         return;
     }
 
-    unsigned count;
-    jl_methlist_t *ml = jl_method_list_last(pml->list, &count);
-
+    unsigned count = jl_method_list_count(pml->list);
     if (count > MAX_METHLIST_COUNT) {
         pml->cache = jl_method_convert_list_to_cache(pml->list, key, offs);
         jl_gc_wb(parent, pml->cache);
@@ -624,22 +651,7 @@ static void jl_method_list_insert_or(union _jl_opaque_cache_t *pml, jl_value_t *
         return;
     }
 
-    if (ml == NULL || newrec->isleafsig) {
-        // insert at head of pml list
-        newrec->next = (*pml).list;
-        jl_gc_wb(newrec, newrec->next);
-        pml->list = newrec;
-        jl_gc_wb(parent, newrec);
-    }
-    else if (newrec->issimplesig) {
-        // insert at tail of pml list
-        ml->next = newrec;
-        jl_gc_wb(ml, newrec);
-    }
-    else {
-        // TODO: jl_method_list_insert_sorted(&pml->list, newrec, parent);
-        assert(0 && "TODO");
-    }
+    jl_method_list_insert_(&pml->list, parent, newrec);
 }
 
 static void jl_method_cache_array_insert_(jl_array_t **cache, jl_value_t *key, jl_methlist_t *newrec,
@@ -650,7 +662,7 @@ static void jl_method_cache_array_insert_(jl_array_t **cache, jl_value_t *key, j
         jl_gc_wb(parent, *cache);
     }
     union _jl_opaque_cache_t *pml = mtcache_hash_bp(cache, key, tparam, offs, (jl_value_t*)parent);
-    jl_method_list_insert_or(pml, (jl_value_t*)*cache, newrec, key, offs+1);
+    jl_method_list_insert_generic(pml, (jl_value_t*)*cache, newrec, key, offs+1);
 }
 
 static void jl_method_cache_insert_(jl_methcache_t *cache, jl_methlist_t *newrec, int8_t offs)
@@ -677,57 +689,89 @@ static void jl_method_cache_insert_(jl_methcache_t *cache, jl_methlist_t *newrec
             return;
         }
     }
-    newrec->next = cache->list;
-    jl_gc_wb(newrec, newrec->next);
-    cache->list = newrec;
-    jl_gc_wb(cache, newrec);
+    jl_method_list_insert_(&cache->list, (jl_value_t*)cache, newrec);
+}
+
+void print_func_loc(JL_STREAM *s, jl_lambda_info_t *li)
+{
+    long lno = li->line;
+    if (lno > 0) {
+        char *fname = jl_symbol_name((jl_sym_t*)li->file);
+        jl_printf(s, " at %s:%ld", fname, lno);
+    }
 }
 
 static jl_methlist_t *jl_method_cache_insert(union _jl_opaque_cache_t *cache, jl_value_t *parent,
-                                             jl_tupletype_t *type, jl_svec_t *guardsigs,
-                                             jl_lambda_info_t *method, int8_t offs, int8_t unsorted)
+                                             jl_tupletype_t *type, jl_svec_t *tvars, jl_svec_t *guardsigs,
+                                             jl_lambda_info_t *method, int8_t offs, int8_t unsorted,
+                                             int8_t isdefinition)
 {
+    assert(jl_is_tuple_type(type));
+    if (isdefinition) {
+        jl_methlist_t *l = jl_method_cache_assoc_exact_by_type(*cache, type, 0, offs);
+        if (l) {
+            // method overwritten
+            jl_module_t *newmod = method->module;
+            jl_module_t *oldmod = l->func->module;
+            JL_STREAM *s = JL_STDERR;
+            jl_printf(s, "WARNING: Method definition ");
+            jl_static_show_func_sig(s, (jl_value_t*)type);
+            jl_printf(s, " in module %s", jl_symbol_name(oldmod->name));
+            print_func_loc(s, l->func);
+            jl_printf(s, " overwritten");
+            if (oldmod != newmod)
+                jl_printf(s, " in module %s", jl_symbol_name(newmod->name));
+            print_func_loc(s, method);
+            jl_printf(s, ".\n");
+
+            JL_SIGATOMIC_BEGIN();
+            l->sig = type;
+            jl_gc_wb(l, l->sig);
+            l->tvars = tvars;
+            jl_gc_wb(l, l->tvars);
+            l->va = jl_is_va_tuple(type);
+            // TODO: `l->func` or `l->func->roots` might need to be rooted
+            l->func = method;
+            if (method)
+                jl_gc_wb(l, method);
+            JL_SIGATOMIC_END();
+            return l;
+        }
+    }
+
     jl_methlist_t *newrec = (jl_methlist_t*)jl_gc_allocobj(sizeof(jl_methlist_t));
     jl_set_typeof(newrec, jl_method_type);
     newrec->sig = type;
-    newrec->tvars = jl_emptysvec;
+    newrec->tvars = tvars;
     newrec->func = method;
     newrec->guardsigs = guardsigs;
     newrec->next = (jl_methlist_t*)jl_nothing;
     // compute the complexity of this type signature
     newrec->va = jl_is_va_tuple(type);
-    newrec->isleafsig = !newrec->va;
-    newrec->issimplesig = 1;
-    if (!unsorted) { // TODO: this is probably a temporary hack
-        size_t i, l = jl_datatype_nfields(type);
-        for (i = 0; i < l; i++) {
-            jl_value_t *decl = jl_field_type(type, i);
-            if (jl_is_type_type(decl))
-                newrec->isleafsig = 0;
-            else if (jl_is_vararg_type(decl))
-                newrec->isleafsig = 0;
-            else if (decl == (jl_value_t*)jl_any_type)
-                newrec->isleafsig = 0;
-            else if (!jl_is_leaf_type(decl))
-                newrec->isleafsig = newrec->issimplesig = 0;
-
-            if (!newrec->issimplesig)
-                break;
-        }
-    }
-    assert(newrec->issimplesig); // TODO: this assert is going away
+    newrec->issimplesig = (tvars == jl_emptysvec); // a TypeVar environment needs an complex matching test
+    newrec->isleafsig = newrec->issimplesig && !newrec->va; // entirely leaf types don't need to be sorted
     JL_GC_PUSH1(&newrec);
-    jl_method_list_insert_or(cache, parent, newrec, NULL, offs);
+    size_t i, l;
+    for (i = 0, l = jl_datatype_nfields(type); i < l && newrec->issimplesig; i++) {
+        jl_value_t *decl = jl_field_type(type, i);
+        if (decl == (jl_value_t*)jl_datatype_type)
+            newrec->isleafsig = 0; // Type{} may have a higher priority than DataType
+        else if (jl_is_type_type(decl))
+            newrec->isleafsig = 0; // Type{} may need special processing to compute the match
+        else if (jl_is_vararg_type(decl))
+            newrec->isleafsig = 0; // makes iteration easier when the endpoints are the same
+        else if (decl == (jl_value_t*)jl_any_type)
+            newrec->isleafsig = 0; // Any needs to go in the general cache
+        else if (!jl_is_leaf_type(decl)) // anything else can go through the general subtyping test
+            newrec->isleafsig = newrec->issimplesig = 0;
+    }
+    assert(isdefinition || unsorted || newrec->issimplesig); // TODO: this assert is going away
+    if (isdefinition)
+        jl_method_list_insert_sorted(&cache->list, parent, newrec, isdefinition);
+    else
+        jl_method_list_insert_generic(cache, parent, newrec, NULL, offs);
     JL_GC_POP();
     return newrec;
-}
-
-static int sigs_eq(jl_value_t *a, jl_value_t *b, int useenv)
-{
-    if (jl_has_typevars(a) || jl_has_typevars(b)) {
-        return jl_types_equal_generic(a,b,useenv);
-    }
-    return jl_subtype(a, b, 0) && jl_subtype(b, a, 0);
 }
 
 JL_DLLEXPORT int jl_args_morespecific(jl_value_t *a, jl_value_t *b)
@@ -763,15 +807,6 @@ JL_DLLEXPORT int jl_args_morespecific(jl_value_t *a, jl_value_t *b)
             return 0;
     }
     return msp;
-}
-
-void print_func_loc(JL_STREAM *s, jl_lambda_info_t *li)
-{
-    long lno = li->line;
-    if (lno > 0) {
-        char *fname = jl_symbol_name((jl_sym_t*)li->file);
-        jl_printf(s, " at %s:%ld", fname, lno);
-    }
 }
 
 /*
@@ -854,74 +889,33 @@ static int has_unions(jl_tupletype_t *type)
     return 0;
 }
 
-static void jl_method_list_insert_sorted(jl_methlist_t **pml, jl_tupletype_t *type,
-                                     jl_lambda_info_t *method, jl_svec_t *tvars,
-                                     jl_value_t *parent)
+static void jl_method_list_insert_sorted(jl_methlist_t **pml, jl_value_t *parent,
+                                         jl_methlist_t *newrec, int8_t isdefinition)
 {
     jl_methlist_t *l, **pl;
-
-    assert(jl_is_tuple_type(type));
-    l = *pml;
-    while (l != (void*)jl_nothing) {
-        if (((l->tvars==jl_emptysvec) == (tvars==jl_emptysvec)) &&
-            sigs_eq((jl_value_t*)type, (jl_value_t*)l->sig, 1)) {
-            // method overwritten
-            jl_module_t *newmod = method->module;
-            jl_module_t *oldmod = l->func->module;
-            JL_STREAM *s = JL_STDERR;
-            jl_printf(s, "WARNING: Method definition ");
-            jl_static_show_func_sig(s, (jl_value_t*)type);
-            jl_printf(s, " in module %s", jl_symbol_name(oldmod->name));
-            print_func_loc(s, l->func);
-            jl_printf(s, " overwritten");
-            if (oldmod != newmod)
-                jl_printf(s, " in module %s", jl_symbol_name(newmod->name));
-            print_func_loc(s, method);
-            jl_printf(s, ".\n");
-
-            JL_SIGATOMIC_BEGIN();
-            l->sig = type;
-            jl_gc_wb(l, l->sig);
-            l->tvars = tvars;
-            jl_gc_wb(l, l->tvars);
-            l->va = jl_is_va_tuple(type);
-            // TODO: `l->func` or `l->func->roots` might need to be rooted
-            l->func = method;
-            if (l->func)
-                jl_gc_wb(l, l->func);
-            JL_SIGATOMIC_END();
-            return;
-        }
-        l = l->next;
-    }
     pl = pml;
     l = *pml;
     jl_value_t *pa = parent;
     while (l != (void*)jl_nothing) {
-        if (jl_args_morespecific((jl_value_t*)type, (jl_value_t*)l->sig))
-            break;
-        check_ambiguous(*pml, type, l, method->name, method);
+        if (!l->isleafsig) {
+            if (jl_args_morespecific((jl_value_t*)newrec->sig, (jl_value_t*)l->sig))
+                break;
+            if (isdefinition)
+                check_ambiguous(*pml, newrec->sig, l, newrec->func->name, newrec->func);
+        }
         pl = &l->next;
         pa = (jl_value_t*)l;
         l = l->next;
     }
-    jl_methlist_t *newrec = (jl_methlist_t*)jl_gc_allocobj(sizeof(jl_methlist_t));
-    jl_set_typeof(newrec, jl_method_type);
-    newrec->sig = type;
-    newrec->tvars = tvars;
-    newrec->va = jl_is_va_tuple(type);
-    newrec->func = method;
-    newrec->guardsigs = jl_emptysvec;
-    newrec->next = l;
-    newrec->isleafsig = 0;
-    newrec->issimplesig = 0;
+
     JL_SIGATOMIC_BEGIN();
-    JL_GC_PUSH1(&newrec);
+    newrec->next = l;
+    jl_gc_wb(newrec, l);
     *pl = newrec;
     jl_gc_wb(pa, newrec);
     // if this contains Union types, methods after it might actually be
     // more specific than it. we need to re-sort them.
-    if (has_unions(type)) {
+    if (has_unions(newrec->sig)) {
         jl_value_t *item_parent = (jl_value_t*)newrec;
         jl_value_t *next_parent = 0;
         jl_methlist_t *item = newrec->next, *next;
@@ -956,7 +950,6 @@ static void jl_method_list_insert_sorted(jl_methlist_t **pml, jl_tupletype_t *ty
             item_parent = next_parent;
         }
     }
-    JL_GC_POP();
     JL_SIGATOMIC_END();
     return;
 }
@@ -1017,14 +1010,14 @@ jl_value_t *jl_mk_builtin_func(const char *name, jl_fptr_t fptr)
     // TODO jb/functions: what should li->ast be?
     li->code = (jl_array_t*)jl_an_empty_cell; jl_gc_wb(li, li->code);
     jl_methtable_t *mt = jl_gf_mtable(f);
-    jl_method_cache_insert(&mt->cache, (jl_value_t*)mt, jl_anytuple_type, jl_emptysvec, li, 0, 0);
+    jl_method_cache_insert(&mt->cache, (jl_value_t*)mt, jl_anytuple_type, jl_emptysvec, jl_emptysvec, li, 0, 0, 0);
     return f;
 }
 
 JL_DLLEXPORT jl_methlist_t *jl_tfunc_cache_insert(jl_lambda_info_t *li, jl_tupletype_t *type,
                                                   jl_value_t *value, int8_t offs)
 {
-    return jl_method_cache_insert(&li->tfunc, (jl_value_t*)li, type, jl_emptysvec, (jl_lambda_info_t*)value, offs, 1);
+    return jl_method_cache_insert(&li->tfunc, (jl_value_t*)li, type, jl_emptysvec, jl_emptysvec, (jl_lambda_info_t*)value, offs, 1, 0);
 }
 
 JL_DLLEXPORT jl_value_t *jl_tfunc_cache_lookup(jl_lambda_info_t *li, jl_tupletype_t *type, int8_t offs)
@@ -1448,9 +1441,9 @@ static jl_lambda_info_t *cache_method(jl_methtable_t *mt, union _jl_opaque_cache
         assert(li);
         newmeth = li;
         if (cache_as_orig)
-            jl_method_cache_insert(cache, parent, origtype, guardsigs, newmeth, jl_cachearg_offset(mt), 0);
+            jl_method_cache_insert(cache, parent, origtype, jl_emptysvec, guardsigs, newmeth, jl_cachearg_offset(mt), 0, 0);
         else
-            jl_method_cache_insert(cache, parent, type, guardsigs, newmeth, jl_cachearg_offset(mt), 0);
+            jl_method_cache_insert(cache, parent, type, jl_emptysvec, guardsigs, newmeth, jl_cachearg_offset(mt), 0, 0);
         JL_GC_POP();
         JL_UNLOCK(codegen);
         return newmeth;
@@ -1459,9 +1452,9 @@ static jl_lambda_info_t *cache_method(jl_methtable_t *mt, union _jl_opaque_cache
     newmeth = jl_add_static_parameters(spec, sparams, type);
 
     if (cache_as_orig)
-        jl_method_cache_insert(cache, parent, origtype, guardsigs, newmeth, jl_cachearg_offset(mt), 0);
+        jl_method_cache_insert(cache, parent, origtype, jl_emptysvec, guardsigs, newmeth, jl_cachearg_offset(mt), 0, 0);
     else
-        jl_method_cache_insert(cache, parent, type, guardsigs, newmeth, jl_cachearg_offset(mt), 0);
+        jl_method_cache_insert(cache, parent, type, jl_emptysvec, guardsigs, newmeth, jl_cachearg_offset(mt), 0, 0);
 
     if (newmeth->code != NULL) {
         jl_array_t *spe = method->specializations;
@@ -1601,7 +1594,8 @@ void jl_method_table_insert(jl_methtable_t *mt, jl_tupletype_t *type,
     if (jl_svec_len(tvars) == 1)
         tvars = (jl_svec_t*)jl_svecref(tvars,0);
     JL_SIGATOMIC_BEGIN();
-    jl_method_list_insert_sorted(&mt->defs, type, method, tvars, (jl_value_t*)mt);
+    jl_method_cache_insert((union _jl_opaque_cache_t *)&mt->defs, (jl_value_t*)mt,
+            type, tvars, jl_emptysvec, method, 0, 0, 1);
     invalidate_conflicting(&mt->cache, (jl_value_t*)type, (jl_value_t*)mt);
     update_max_args(mt, type);
     JL_SIGATOMIC_END();
