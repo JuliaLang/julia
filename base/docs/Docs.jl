@@ -52,13 +52,14 @@ will cause that specific method to be documented, as opposed to the whole functi
 docs are concatenated together in the order they were defined to provide docs for the
 function.
 """
-:(Base.DocBootstrap.@doc)
+:(Core.@doc)
 
 include("bindings.jl")
 
 import Base.Markdown: @doc_str, MD
 import Base.Meta: quot, isexpr
 import Base: Callable
+import Core.Inference.CoreDocs: lazy_iterpolate
 
 export doc
 
@@ -99,7 +100,7 @@ function argtype(expr::Expr)
     isexpr(expr, :(...)) && return :(Vararg{$(argtype(expr.args[1]))})
     argtype(expr.args[1])
 end
-argtype(::Symbol) = :Any
+argtype(other) = :Any
 
 function typevars(expr::Expr)
     isexpr(expr, :curly) && return [tvar(x) for x in expr.args[2:end]]
@@ -126,13 +127,9 @@ The `.data` fields stores several values related to the docstring, such as: path
 linenumber, source code, and fielddocs.
 """
 type DocStr
-    text   :: UTF8String
+    text   :: Core.SimpleVector
     object :: Nullable
     data   :: Dict{Symbol, Any}
-
-    DocStr(text::AbstractString, data) = new(text, Nullable(), data)
-    DocStr(object,               data) = new("", Nullable(object), data)
-    DocStr(docstr::DocStr,       data) = docstr
 end
 
 function docstr(binding::Binding, typesig::ANY = Union{})
@@ -147,7 +144,13 @@ function docstr(binding::Binding, typesig::ANY = Union{})
     end
     error("could not find matching docstring for '$binding :: $typesig'.")
 end
-docstr(object, data = Dict()) = DocStr(object, data)
+docstr(object, data = Dict()) = _docstr(object, data)
+
+_docstr(vec::Core.SimpleVector, data) = DocStr(vec,            Nullable(),       data)
+_docstr(str::AbstractString,    data) = DocStr(Core.svec(str), Nullable(),       data)
+_docstr(object,                 data) = DocStr(Core.svec(),    Nullable(object), data)
+
+_docstr(doc::DocStr, data) = (doc.data = merge(data, doc.data); doc)
 
 macro ref(x)
     binding = bindingexpr(namify(x))
@@ -157,9 +160,18 @@ end
 
 docexpr(args...) = Expr(:call, docstr, args...)
 
+function formatdoc(d::DocStr)
+    buffer = IOBuffer()
+    for part in d.text
+        formatdoc(buffer, d, part)
+    end
+    Markdown.parse(seekstart(buffer))
+end
+@noinline formatdoc(buffer, d, part) = print(buffer, part)
+
 function parsedoc(d::DocStr)
     if isnull(d.object)
-        md = Markdown.parse(d.text)
+        md = formatdoc(d)
         md.meta[:module] = d.data[:module]
         md.meta[:path]   = d.data[:path]
         d.object = Nullable(md)
@@ -282,7 +294,10 @@ function fielddoc(binding::Binding, field::Symbol)
             multidoc = dict[binding]
             if haskey(multidoc.docs, Union{})
                 fields = multidoc.docs[Union{}].data[:fields]
-                haskey(fields, field) && return Markdown.parse(fields[field])
+                if haskey(fields, field)
+                    doc = fields[field]
+                    return isa(doc, Markdown.MD) ? doc : Markdown.parse(doc)
+                end
             end
         end
     end
@@ -377,7 +392,7 @@ isdoc(s::AbstractString) = true
 
 isdoc(x) = isexpr(x, :string) ||
     (isexpr(x, :macrocall) && x.args[1] == symbol("@doc_str")) ||
-    (isexpr(x, :call) && x.args[1] == Expr(:., Base.Markdown, QuoteNode(:doc_str)))
+    (isexpr(x, :call) && x.args[1] == Base.Markdown.doc_str)
 
 function unblock(ex)
     isexpr(ex, :block) || return ex
@@ -430,7 +445,8 @@ function metadata(expr)
     # Source code for the object being documented.
     push!(args, :($(Pair)(:source, $(quot(expr)))))
     # Filename and linenumber of the docstring.
-    push!(args, :($(Pair)(:path, $(Base).@__FILE__)), :($(Pair)(:linenumber, @__LINE__)))
+    push!(args, :($(Pair)(:path, $(Base).@__FILE__)))
+    push!(args, :($(Pair)(:linenumber, $(unsafe_load(cglobal(:jl_lineno, Int))))))
     # Module in which the docstring is defined.
     push!(args, :($(Pair)(:module, $(current_module)())))
     # Field docs for concrete types.
@@ -451,9 +467,14 @@ function metadata(expr)
     :($(Dict)($(args...)))
 end
 
+function keyworddoc(str, def)
+    docstr = esc(docexpr(lazy_iterpolate(str), metadata(def)))
+    :($(keywords)[$(esc(quot(def.name)))] = $docstr)
+end
+
 function objectdoc(str, def, expr, sig = :(Union{}))
     binding = esc(bindingexpr(namify(expr)))
-    docstr  = esc(docexpr(str, metadata(expr)))
+    docstr  = esc(docexpr(lazy_iterpolate(str), metadata(expr)))
     quote
         $(esc(def))
         $(doc!)($binding, $docstr, $(esc(sig)))
@@ -480,7 +501,7 @@ end
 # Shares a single doc, `meta`, between several expressions from the tuple expression `ex`.
 function multidoc(meta, ex, define)
     out = Expr(:toplevel)
-    str = docexpr(meta, metadata(ex))
+    str = docexpr(lazy_iterpolate(meta), metadata(ex))
     ref = Ref{DocStr}()
     for (n, arg) in enumerate(ex.args)
         # The first `arg` to be documented needs to also create the docstring for the group.
@@ -508,7 +529,7 @@ more than one expression is marked then the same docstring is applied to each ex
 
 `@__doc__` has no effect when a macro that uses it is not documented.
 """
-:(Base.@__doc__)
+:(Core.@__doc__)
 
 function __doc__!(meta, def, define)
     # Two cases must be handled here to avoid redefining all definitions contained in `def`:
@@ -575,6 +596,13 @@ function docm(meta, ex, define = true)
     # Initalise the module's docstring storage.
     initmeta()
 
+    # Keywords using the `@kw_str` macro in `base/docs/basedocs.jl`.
+    #
+    #   "..."
+    #   kw"if", kw"else"
+    #
+    isa(x, Base.BaseDocs.Keyword) ? keyworddoc(meta, x) :
+
     # Method / macro definitions and "call" syntax.
     #
     #   function f(...) ... end
@@ -631,7 +659,7 @@ function docerror(ex)
     if isexpr(ex, :macrocall)
         txt *= "\n\n'$(ex.args[1])' not documentable. See 'Base.@__doc__' docs for details."
     end
-    :(error($txt, "\n"))
+    :($(error)($txt, "\n"))
 end
 
 function docm(ex)
@@ -652,20 +680,21 @@ function docm(ex)
     end
 end
 
-# Swap out the bootstrap macro with the real one
-
-Base.DocBootstrap.setexpand!(docm)
-
-# Names are resolved relative to the Base module, so inject the ones we need there.
-
-eval(Base, :(import .Docs: @doc_str))
-
-Base.DocBootstrap.loaddocs()
-
 # MD support
-
 catdoc(md::MD...) = MD(md...)
 
 include("utils.jl")
+
+# Swap out the bootstrap macro with the real one.
+Core.atdoc!(docm)
+
+function loaddocs(docs)
+    for (mod, ex, str, file, line) in docs
+        data = Dict(:path => string(file), :linenumber => line)
+        doc = docstr(str, data)
+        eval(mod, :(@doc($doc, $ex, false)))
+    end
+    empty!(docs)
+end
 
 end

@@ -3,6 +3,7 @@
 module Markdown
 
 import Base: writemime, ==
+import Core: @doc_str
 
 include("parse/config.jl")
 include("parse/util.jl")
@@ -53,8 +54,8 @@ end
 doc_str(md, file, mod) = (md.meta[:path] = file; md.meta[:module] = mod; md)
 doc_str(md::AbstractString, file, mod) = doc_str(parse(md), file, mod)
 
-macro doc_str(s, t...)
-    :(doc_str($(mdexpr(s, t...)), @__FILE__, current_module()))
+macro doc_str(s::AbstractString, t...)
+    :($(doc_str)($(mdexpr(s, t...)), $(Base).@__FILE__, $(current_module)()))
 end
 
 function Base.display(d::Base.REPL.REPLDisplay, md::Vector{MD})
