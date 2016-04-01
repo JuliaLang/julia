@@ -10,6 +10,10 @@ include = Core.include
 eval(x) = Core.eval(Base,x)
 eval(m,x) = Core.eval(m,x)
 
+# init core docsystem
+import Core: @doc, @__doc__, @doc_str
+Core.atdoc!(Core.Inference.CoreDocs.docm)
+
 include("exports.jl")
 
 if false
@@ -22,10 +26,8 @@ if false
     print(a::ANY...) = for x=a; print(x); end
 end
 
-
 ## Load essential files and libraries
 include("essentials.jl")
-include("docs/bootstrap.jl")
 include("base.jl")
 include("generator.jl")
 include("reflection.jl")
@@ -321,13 +323,6 @@ import .Dates: Date, DateTime, now
 include("sparse.jl")
 importall .SparseArrays
 
-# Documentation
-
-include("markdown/Markdown.jl")
-include("docs/Docs.jl")
-using .Docs
-using .Markdown
-
 # threads
 include("threads.jl")
 include("threadcall.jl")
@@ -338,6 +333,12 @@ include("deprecated.jl")
 # Some basic documentation
 include("docs/helpdb.jl")
 include("docs/basedocs.jl")
+
+# Documentation -- should always be included last in sysimg.
+include("markdown/Markdown.jl")
+include("docs/Docs.jl")
+using .Docs, .Markdown
+Docs.loaddocs(Core.Inference.CoreDocs.DOCS)
 
 function __init__()
     # Base library init
