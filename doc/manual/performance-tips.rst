@@ -587,6 +587,8 @@ loop. There are several possible fixes:
 -  Declare the type of ``x``: ``x::Float64 = 1``
 -  Use an explicit conversion: ``x = one(T)``
 
+.. _man-performance-kernel-functions:
+
 Separate kernel functions
 -------------------------
 
@@ -636,6 +638,87 @@ our own ``fill_twos!``.
 Functions like ``strange_twos`` occur when dealing with data of
 uncertain type, for example data loaded from an input file that might
 contain either integers, floats, strings, or something else.
+
+.. _man-performance-val:
+
+Using the ``Val{T}`` trick
+--------------------------
+
+Let's say you want to create an ``N``-dimensional array that
+has size 3 along each axis.  Such arrays can be created like this:
+
+.. doctest::
+
+    A = fill(5.0, (3, 3))
+
+This approach works very well: the compiler can figure out that ``A``
+is an ``Array{Float64,2}`` because it know the type of the fill value
+(``5.0::Float64``) and the dimensionality (``(3, 3)::NTuple{2,Int}``).
+This implies that the compiler can generate very efficient code for
+any future usage of ``A`` in the same function.
+
+But now let's say you want to support this for arbitrary dimensions;
+you might be tempted to write a function
+
+.. doctest::
+
+    function array3(fillval, N)
+        fill(fillval, ntuple(d->3, N))
+    end
+
+This works, but (as you can verify for yourself using ``@code_warntype
+array3(5.0, 2)``) the problem is that the output type cannot be
+inferred: the argument ``N`` is a *value* of type ``Int``, and
+type-inference does not (and cannot) predict its value in
+advance. This means that code using the output of this function has to
+be conservative, checking the type on each access of ``A``; such code
+will be very slow.
+
+Now, one very good way to solve such problems is by using the
+:ref:`function-barrier technique
+<man-performance-kernel-functions>`. However, in some cases you might
+want to eliminate the type-instability altogether.  In such cases, one
+approach is to make use of ``Val{T}`` (see :ref:`man-val-trick`):
+
+.. doctest::
+
+    function array3{N}(fillval, ::Type{Val{N}})
+        fill(fillval, ntuple(d->3, Val{N}))
+    end
+
+Julia has a specialized version of ``ntuple`` that accepts a
+``Val{::Int}`` as the second parameter; by passing ``N`` as a
+type-parameter, you make its "value" known to the compiler.
+Consequently, this version of ``array3`` allows the compiler to
+predict the return type.
+
+However, making use of ``Val`` can be surprisingly subtle: it would be
+of no help if you called ``array3`` from a function like this:
+
+.. doctest::
+
+    function call_array3(fillval, n)
+        A = array3(fillval, Val{n})
+    end
+
+Here, you've created the same problem all over again: the compiler
+can't guess the type of ``n``, so it doesn't know the type of
+``Val{n}``.  Attempting to use ``Val``, but doing so incorrectly, can
+easily make performance *worse* in many situations.
+
+An example of correct usage of ``Val`` would be:
+
+.. doctest::
+
+    function filter3{T,N}(A::AbstractArray{T,N})
+        kernel = array3(1, Val{N})
+        filter(A, kernel)
+    end
+
+In this example, ``N`` is specified as a parameter, so its "value" is
+known to the compiler.  Essentially, ``Val{T}`` works only when ``T``
+is either hard-coded (``Val{3}``) or already specified in the
+type-domain.
 
 Access arrays in memory order, along columns
 --------------------------------------------
