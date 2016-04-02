@@ -215,6 +215,12 @@ Iterable Collections
 
    Returns an array containing only the unique elements of the iterable ``itr``\ , in the order that the first of each set of equivalent elements originally appears. If ``dim`` is specified, returns unique regions of the array ``itr`` along ``dim``\ .
 
+.. function:: unique(itr)
+
+   .. Docstring generated from Julia source
+
+   Returns an array containing one value from ``itr`` for each unique value, as determined by ``isequal``\ .
+
 .. function:: unique(f, itr)
 
    .. Docstring generated from Julia source
