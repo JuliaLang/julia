@@ -104,6 +104,12 @@ const ⊆ = issubset
 ⊊(l::Set, r::Set) = <(l, r)
 ⊈(l::Set, r::Set) = !⊆(l, r)
 
+"""
+    unique(itr)
+
+Returns an array containing one value from `itr` for each unique value,
+as determined by `isequal`.
+"""
 function unique(C)
     out = Vector{eltype(C)}()
     seen = Set{eltype(C)}()
