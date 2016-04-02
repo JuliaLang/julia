@@ -793,7 +793,7 @@ static jl_cgval_t typed_load(Value *ptr, Value *idx_0based, jl_value_t *jltype,
 static void typed_store(Value *ptr, Value *idx_0based, const jl_cgval_t &rhs,
                         jl_value_t *jltype, jl_codectx_t *ctx, MDNode *tbaa,
                         Value *parent,  // for the write barrier, NULL if no barrier needed
-                        size_t alignment = 0)
+                        size_t alignment = 0, bool root_box = true) // if the value to store needs a box, should we root it ?
 {
     Type *elty = julia_type_to_llvm(jltype);
     assert(elty != NULL);
@@ -807,7 +807,7 @@ static void typed_store(Value *ptr, Value *idx_0based, const jl_cgval_t &rhs,
         r = emit_unbox(elty, rhs, jltype);
     }
     else {
-        r = boxed(rhs, ctx);
+        r = boxed(rhs, ctx, root_box);
         if (parent != NULL) emit_write_barrier(ctx, parent, r);
     }
     Value *data;
