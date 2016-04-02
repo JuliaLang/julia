@@ -256,7 +256,7 @@ endef
 # also, in a file named dirname.version, define variables VARNAME_BRANCH and VARNAME_SHA1
 #
 # also, define a Makefile variable VARNAME_GIT_URL to use as the clone origin
-# and a Makefile variable VARNAME_TAR_URL to use as the clone origin when NO_GIT is set
+# and a Makefile variable VARNAME_TAR_URL to use as the clone origin when DEPS_GIT is set
 # this will pass along the VARNAME_SHA1 target in $1 for its use
 #
 # this defines rules for:
@@ -269,7 +269,7 @@ endef
 define git-external
 include $(SRCDIR)/$1.version
 
-ifneq ($(NO_GIT),1)
+ifeq ($(DEPS_GIT),1)
 $2_SRC_DIR := $1
 $2_SRC_FILE := $$(SRCDIR)/srccache/$1.git
 $$($2_SRC_FILE)/HEAD: | $$(SRCDIR)/srccache
@@ -296,7 +296,7 @@ $5/$1/$4: $5/$1/.git/HEAD
 $$($2_SRC_FILE): | $$($2_SRC_FILE)/HEAD
 	touch -c $$@
 
-else # NO_GIT
+else # DEPS_GIT
 
 $2_SRC_DIR := $1-$$($2_SHA1)
 $2_SRC_FILE := $$(SRCDIR)/srccache/$$($2_SRC_DIR).tar.gz
@@ -307,7 +307,7 @@ $5/$$($2_SRC_DIR)/$3: $$($2_SRC_FILE)
 	mkdir -p $$(dir $$@) && \
 	$(TAR) -C $$(dir $$@) --strip-components 1 -xf $$<
 	touch -c $$@
-endif # NO_GIT
+endif # DEPS_GIT
 
 distclean-$1:
 	-rm -rf $5/$$($2_SRC_DIR) $$($2_SRC_FILE) $$(BUILDDIR)/$1
