@@ -262,6 +262,7 @@ static Type *T_pppint8;
 static Type *T_void;
 
 // type-based alias analysis nodes.  Indentation of comments indicates hierarchy.
+static MDNode *tbaa_gcframe;        // GC frame
 static MDNode *tbaa_user;           // User data that is mutable
 static MDNode *tbaa_immut;          // User data inside a heap-allocated immutable
 static MDNode *tbaa_value;          // Julia value
@@ -3503,7 +3504,8 @@ static void allocate_gc_frame(BasicBlock *b0, jl_codectx_t *ctx)
 #endif
 }
 
-void jl_codegen_finalize_temp_arg(CallInst *ptlsStates, Type *T_pjlvalue);
+void jl_codegen_finalize_temp_arg(CallInst *ptlsStates, Type *T_pjlvalue,
+                                  MDNode *tbaa_gcframe);
 static void finalize_gc_frame(Function *F)
 {
     Module *M = F->getParent();
@@ -3525,7 +3527,7 @@ static void finalize_gc_frame(Function *F)
     if (!ptlsStates)
         return;
 
-    jl_codegen_finalize_temp_arg(ptlsStates, T_pjlvalue);
+    jl_codegen_finalize_temp_arg(ptlsStates, T_pjlvalue, tbaa_gcframe);
 
 #ifdef JULIA_ENABLE_THREADING
     if (imaging_mode) {
@@ -4891,6 +4893,7 @@ extern "C" void jl_fptr_to_llvm(jl_fptr_t fptr, jl_lambda_info_t *lam, int specs
 static void init_julia_llvm_env(Module *m)
 {
     MDNode *tbaa_root = mbuilder->createTBAARoot("jtbaa");
+    tbaa_gcframe = tbaa_make_child("jtbaa_gcframe",tbaa_root);
     tbaa_user = tbaa_make_child("jtbaa_user",tbaa_root);
     tbaa_value = tbaa_make_child("jtbaa_value",tbaa_root);
     tbaa_immut = tbaa_make_child("jtbaa_immut",tbaa_root);
