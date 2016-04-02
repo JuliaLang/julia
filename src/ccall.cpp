@@ -493,6 +493,149 @@ static jl_cgval_t emit_cglobal(jl_value_t **args, size_t nargs, jl_codectx_t *ct
     return mark_julia_type(res, false, rt, ctx);
 }
 
+#ifdef USE_MCJIT
+class FunctionMover : public ValueMaterializer
+{
+public:
+    FunctionMover(llvm::Module *dest,llvm::Module *src) :
+        ValueMaterializer(), VMap(), destModule(dest), srcModule(src),
+        LazyFunctions(0)
+    {
+    }
+    ValueToValueMapTy VMap;
+    llvm::Module *destModule;
+    llvm::Module *srcModule;
+    std::vector<Function *> LazyFunctions;
+
+    Function *CloneFunctionProto(Function *F)
+    {
+        assert(!F->isDeclaration());
+        Function *NewF = Function::Create(F->getFunctionType(),
+                                          Function::ExternalLinkage,
+                                          F->getName(),
+                                          destModule);
+        LazyFunctions.push_back(F);
+        VMap[F] = NewF;
+        return NewF;
+    }
+
+    void CloneFunctionBody(Function *F)
+    {
+        Function *NewF = (Function*)(Value*)VMap[F];
+        assert(NewF != NULL);
+
+        Function::arg_iterator DestI = NewF->arg_begin();
+        for (Function::const_arg_iterator I = F->arg_begin(), E = F->arg_end(); I != E; ++I) {
+            DestI->setName(I->getName());    // Copy the name over...
+            VMap[&*I] = &*(DestI++);        // Add mapping to VMap
+        }
+
+    #ifdef LLVM36
+        // Clone debug info - Not yet public API
+        // llvm::CloneDebugInfoMetadata(NewF,F,VMap);
+    #endif
+
+        SmallVector<ReturnInst*, 8> Returns;
+        llvm::CloneFunctionInto(NewF,F,VMap,true,Returns,"",NULL,NULL,this);
+    }
+
+    Function *CloneFunction(Function *F)
+    {
+        Function *NewF = (llvm::Function*)MapValue(F,VMap,RF_None,NULL,this);
+        ResolveLazyFunctions();
+        return NewF;
+    }
+
+    void ResolveLazyFunctions()
+    {
+        while (!LazyFunctions.empty()) {
+            Function *F = LazyFunctions.back();
+            LazyFunctions.pop_back();
+
+            CloneFunctionBody(F);
+        }
+    }
+
+    Value *InjectFunctionProto(Function *F)
+    {
+        Function *NewF = destModule->getFunction(F->getName());
+        if (!NewF) {
+            NewF = function_proto(F);
+            destModule->getFunctionList().push_back(NewF);
+        }
+        return NewF;
+    }
+
+#ifdef LLVM38
+    virtual Value *materializeDeclFor(Value *V)
+#else
+    virtual Value *materializeValueFor (Value *V)
+#endif
+    {
+        Function *F = dyn_cast<Function>(V);
+        if (F) {
+            if (F->isIntrinsic()) {
+                return destModule->getOrInsertFunction(F->getName(),F->getFunctionType());
+            }
+            if (F->isDeclaration() || F->getParent() != destModule) {
+                if (F->getName().empty())
+                    return CloneFunctionProto(F);
+                Function *shadow = srcModule->getFunction(F->getName());
+                if (shadow != NULL && !shadow->isDeclaration()) {
+                    Function *oldF = destModule->getFunction(F->getName());
+                    if (oldF)
+                        return oldF;
+
+                    #ifdef USE_ORCJIT
+                    if (jl_ExecutionEngine->findSymbol(F->getName(), false))
+                        return InjectFunctionProto(F);
+                    #endif
+
+                    return CloneFunctionProto(shadow);
+                }
+                else if (!F->isDeclaration()) {
+                    return CloneFunctionProto(F);
+                }
+            }
+            // Still a declaration and still in a different module
+            if (F->isDeclaration() && F->getParent() != destModule) {
+                // Create forward declaration in current module
+                return InjectFunctionProto(F);
+            }
+        }
+        else if (isa<GlobalVariable>(V)) {
+            GlobalVariable *GV = cast<GlobalVariable>(V);
+            assert(GV != NULL);
+            GlobalVariable *oldGV = destModule->getGlobalVariable(GV->getName());
+            if (oldGV != NULL)
+                return oldGV;
+            GlobalVariable *newGV = new GlobalVariable(*destModule,
+                GV->getType()->getElementType(),
+                GV->isConstant(),
+                GlobalVariable::ExternalLinkage,
+                NULL,
+                GV->getName());
+            newGV->copyAttributesFrom(GV);
+            if (GV->isDeclaration())
+                return newGV;
+            if (!GV->getName().empty()) {
+                uint64_t addr = jl_ExecutionEngine->getGlobalValueAddress(GV->getName());
+                if (addr != 0) {
+                    newGV->setExternallyInitialized(true);
+                    return newGV;
+                }
+            }
+            if (GV->hasInitializer()) {
+                Value *C = MapValue(GV->getInitializer(),VMap,RF_None,NULL,this);
+                newGV->setInitializer(cast<Constant>(C));
+            }
+            return newGV;
+        }
+        return NULL;
+    };
+};
+#endif
+
 // llvmcall(ir, (rettypes...), (argtypes...), args...)
 static jl_cgval_t emit_llvmcall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
 {
@@ -643,6 +786,13 @@ static jl_cgval_t emit_llvmcall(jl_value_t **args, size_t nargs, jl_codectx_t *c
         for (std::vector<Type *>::iterator it = argtypes.begin();
             it != argtypes.end(); ++it, ++i)
             assert(*it == f->getFunctionType()->getParamType(i));
+
+#ifdef USE_MCJIT
+        if (f->getParent() != jl_Module) {
+            FunctionMover mover(jl_Module, f->getParent());
+            f = mover.CloneFunction(f);
+        }
+#endif
 
         //f->dump();
         #ifndef LLVM35
