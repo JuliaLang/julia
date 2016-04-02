@@ -547,6 +547,147 @@ Shared Arrays
 
    It's worth emphasizing that ``localindexes`` exists purely as a convenience, and you can partition work on the array among workers any way you wish.  For a SharedArray, all indexes should be equally fast for each worker process.
 
+Multi-Threading
+---------------
+
+This experimental interface supports Julia's multi-threading
+capabilities. Types and function described here might (and likely
+will) change in the future.
+
+.. function:: Threads.Atomic{T}
+
+   .. Docstring generated from Julia source
+
+   Holds a reference to an object of type ``T``\ , ensuring that it is only accessed atomically, i.e. in a thread-safe manner.
+
+   Only certain "simple" types can be used atomically, namely the bitstypes integer and float-point types. These are ``Int8``\ ...``Int128``\ , ``UInt8``\ ...``UInt128``\ , and ``Float16``\ ...``Float64``\ .
+
+   New atomic objects can be created from a non-atomic values; if none is specified, the atomic object is initialized with zero.
+
+   Atomic objects can be accessed using the ``[]`` notation:
+
+   .. code-block:: julia
+
+       x::Atomic{Int}
+       x[] = 1
+       val = x[]
+
+   Atomic operations use an ``atomic_`` prefix, such as ``atomic_add!``\ , ``atomic_xchg!``\ , etc.
+
+.. function:: Threads.atomic_cas!{T}(x::Atomic{T}, cmp::T, newval::T)
+
+   .. Docstring generated from Julia source
+
+   Atomically compare-and-set ``x``
+
+   Atomically compares the value in ``x`` with ``cmp``\ . If equal, write ``newval`` to ``x``\ . Otherwise, leaves ``x`` unmodified. Returns the old value in ``x``\ . By comparing the returned value to ``cmp`` (via ``===``\ ) one knows whether ``x`` was modified and now holds the new value ``newval``\ .
+
+   For further details, see LLVM's ``cmpxchg`` instruction.
+
+   This function can be used to implement transactional semantics. Before the transaction, one records the value in ``x``\ . After the transaction, the new value is stored only if ``x`` has not been modified in the mean time.
+
+.. function:: Threads.atomic_xchg!{T}(x::Atomic{T}, newval::T)
+
+   .. Docstring generated from Julia source
+
+   Atomically exchange the value in ``x``
+
+   Atomically exchanges the value in ``x`` with ``newval``\ . Returns the old value.
+
+   For further details, see LLVM's ``atomicrmw xchg`` instruction.
+
+.. function:: Threads.atomic_add!{T}(x::Atomic{T}, val::T)
+
+   .. Docstring generated from Julia source
+
+   Atomically add ``val`` to ``x``
+
+   Performs ``x[] += val`` atomically. Returns the old (!) value.
+
+   For further details, see LLVM's ``atomicrmw add`` instruction.
+
+.. function:: Threads.atomic_sub!{T}(x::Atomic{T}, val::T)
+
+   .. Docstring generated from Julia source
+
+   Atomically subtract ``val`` from ``x``
+
+   Performs ``x[] -= val`` atomically. Returns the old (!) value.
+
+   For further details, see LLVM's ``atomicrmw sub`` instruction.
+
+.. function:: Threads.atomic_and!{T}(x::Atomic{T}, val::T)
+
+   .. Docstring generated from Julia source
+
+   Atomically bitwise-and ``x`` with ``val``
+
+   Performs ``x[] &= val`` atomically. Returns the old (!) value.
+
+   For further details, see LLVM's ``atomicrmw and`` instruction.
+
+.. function:: Threads.atomic_nand!{T}(x::Atomic{T}, val::T)
+
+   .. Docstring generated from Julia source
+
+   Atomically bitwise-nand (not-and) ``x`` with ``val``
+
+   Performs ``x[] = ~(x[] & val)`` atomically. Returns the old (!) value.
+
+   For further details, see LLVM's ``atomicrmw nand`` instruction.
+
+.. function:: Threads.atomic_or!{T}(x::Atomic{T}, val::T)
+
+   .. Docstring generated from Julia source
+
+   Atomically bitwise-or ``x`` with ``val``
+
+   Performs ``x[] |= val`` atomically. Returns the old (!) value.
+
+   For further details, see LLVM's ``atomicrmw or`` instruction.
+
+.. function:: Threads.atomic_xor!{T}(x::Atomic{T}, val::T)
+
+   .. Docstring generated from Julia source
+
+   Atomically bitwise-xor (exclusive-or) ``x`` with ``val``
+
+   Performs ``x[] $= val`` atomically. Returns the old (!) value.
+
+   For further details, see LLVM's ``atomicrmw xor`` instruction.
+
+.. function:: Threads.atomic_max!{T}(x::Atomic{T}, val::T)
+
+   .. Docstring generated from Julia source
+
+   Atomically store the maximum of ``x`` and ``val`` in ``x``
+
+   Performs ``x[] = max(x[], val)`` atomically. Returns the old (!) value.
+
+   For further details, see LLVM's ``atomicrmw min`` instruction.
+
+.. function:: Threads.atomic_min!{T}(x::Atomic{T}, val::T)
+
+   .. Docstring generated from Julia source
+
+   Atomically store the minimum of ``x`` and ``val`` in ``x``
+
+   Performs ``x[] = min(x[], val)`` atomically. Returns the old (!) value.
+
+   For further details, see LLVM's ``atomicrmw max`` instruction.
+
+.. function:: Threads.atomic_fence()
+
+   .. Docstring generated from Julia source
+
+   Insert a sequential-consistency memory fence
+
+   Inserts a memory fence with sequentially-consistent ordering semantics. There are algorithms where this is needed, i.e. where an acquire/release ordering is insufficient.
+
+   This is likely a very expensive operation. Given that all other atomic operations in Julia already have acquire/release semantics, explicit fences should not be necessary in most cases.
+
+   For further details, see LLVM's ``fence`` instruction.
+
 Cluster Manager Interface
 -------------------------
 
