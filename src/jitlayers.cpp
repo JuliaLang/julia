@@ -397,9 +397,12 @@ public:
                         );
         SmallVector<std::unique_ptr<Module>,1> Ms;
         Ms.push_back(std::move(M));
-        return CompileLayer.addModuleSet(std::move(Ms),
-                                          MemMgr,
-                                          std::move(Resolver));
+        auto modset = CompileLayer.addModuleSet(std::move(Ms), MemMgr,
+                                                std::move(Resolver));
+        // Force LLVM to emit the module so that we can register the symbols
+        // in our lookup table.
+        CompileLayer.emitAndFinalize(modset);
+        return modset;
     }
 
     void removeModule(ModuleHandleT H)
