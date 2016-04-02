@@ -654,9 +654,13 @@ DLLEXPORT size_t rec_backtrace_ctx(ptrint_t *data, size_t maxsize, CONTEXT *Cont
 // stacktrace using libunwind
 DLLEXPORT size_t rec_backtrace(ptrint_t *data, size_t maxsize)
 {
+#if !defined(_CPU_ARM_) && !defined(_CPU_PPC64_)
     unw_context_t uc;
     unw_getcontext(&uc);
     return rec_backtrace_ctx(data, maxsize, &uc);
+#else
+    return 0;
+#endif
 }
 DLLEXPORT size_t rec_backtrace_ctx(ptrint_t *data, size_t maxsize, unw_context_t *uc)
 {
