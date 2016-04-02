@@ -414,10 +414,31 @@ to_index(A::AbstractArray) = A
 to_index{T<:AbstractArray}(A::AbstractArray{T}) = throw(ArgumentError("invalid index: $A"))
 to_index(A::AbstractArray{Colon}) = throw(ArgumentError("invalid index: $A"))
 to_index(i) = throw(ArgumentError("invalid index: $i"))
+to_index(A::AbstractArray, d, idx) = to_index(idx)
+
+# EndpointRanges (2:last, first:5, first:last)
+typealias EndPoint Union{typeof(first), typeof(last)}
+
+immutable EndpointRange{F<:Union{Int,EndPoint},L<:Union{Int,EndPoint}} <: Range{Int}
+    start::F
+    stop::L
+end
+
+colon(start::EndPoint, stop::EndPoint) = EndpointRange(start, stop)
+colon(start::EndPoint, stop::Int) = EndpointRange(start, stop)
+colon(start::Int, stop::EndPoint) = EndpointRange(start, stop)
+
+to_index(A::AbstractArray, d, idx::EndpointRange{typeof(first),typeof(last)}) = 1:size(A,d)
+to_index(A::AbstractArray, d, idx::EndpointRange{typeof(first),Int}) = 1:idx.stop
+to_index(A::AbstractArray, d, idx::EndpointRange{Int,typeof(last)}) = idx.start:size(A,d)
 
 to_indexes() = ()
 to_indexes(i1) = (to_index(i1),)
 to_indexes(i1, I...) = (to_index(i1), to_indexes(I...)...)
+
+to_array_indexes(A, I...) = _to_array_indexes(A, (), I...)
+_to_array_indexes(A, out) = out
+_to_array_indexes(A, out, i1, I...) = _to_array_indexes(A, (out..., to_index(A, length(out)+1, i1)), I...)
 
 # Addition/subtraction of ranges
 for f in (:+, :-)

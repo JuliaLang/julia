@@ -130,6 +130,10 @@ end
 checkbounds(::Type{Bool}, sz::Integer, i) = throw(ArgumentError("unable to check bounds for indices of type $(typeof(i))"))
 checkbounds(::Type{Bool}, sz::Integer, i::Real) = 1 <= i <= sz
 checkbounds(::Type{Bool}, sz::Integer, ::Colon) = true
+checkbounds(::Type{Bool}, sz::Integer, i::EndpointRange{typeof(first),typeof(last)}) = true
+checkbounds(::Type{Bool}, sz::Integer, i::EndpointRange{typeof(first),Int}) = 1 <= i.stop <= sz
+checkbounds(::Type{Bool}, sz::Integer, i::EndpointRange{Int,typeof(last)}) = 1 <= i.start <= sz
+
 function checkbounds(::Type{Bool}, sz::Integer, r::Range)
     @_propagate_inbounds_meta
     isempty(r) || (checkbounds(Bool, sz, minimum(r)) && checkbounds(Bool, sz, maximum(r)))

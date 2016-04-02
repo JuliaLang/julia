@@ -210,15 +210,15 @@ index_shape_dim(A, dim, ::Colon) = (trailingsize(A, dim),)
 # ambiguities for AbstractArray subtypes. See the note in abstractarray.jl
 
 # Note that it's most efficient to call checkbounds first, and then to_index
-@inline function _getindex(l::LinearIndexing, A::AbstractArray, I::Union{Real, AbstractArray, Colon}...)
+@inline function _getindex(l::LinearIndexing, A::AbstractArray, I::Union{Real, AbstractArray, Colon, EndpointRange}...)
     @boundscheck checkbounds(A, I...)
     _unsafe_getindex(l, A, I...)
 end
-@generated function _unsafe_getindex(::LinearIndexing, A::AbstractArray, I::Union{Real, AbstractArray, Colon}...)
+@generated function _unsafe_getindex(::LinearIndexing, A::AbstractArray, I::Union{Real, AbstractArray, Colon, EndpointRange}...)
     N = length(I)
     quote
         # This is specifically *not* inlined.
-        @nexprs $N d->(I_d = to_index(I[d]))
+        @nexprs $N d->(I_d = to_index(A, d, I[d]))
         dest = similar(A, @ncall $N index_shape A I)
         @ncall $N checksize dest I
         @ncall $N _unsafe_getindex! dest A I
@@ -305,7 +305,7 @@ _iterable(v) = repeated(v)
     _unsafe_setindex!(l, A, x, J...)
 end
 @inline function _unsafe_setindex!(::LinearIndexing, A::AbstractArray, x, J::Union{Real,AbstractArray,Colon}...)
-    _unsafe_batchsetindex!(A, _iterable(x), to_indexes(J...)...)
+    _unsafe_batchsetindex!(A, _iterable(x), to_array_indexes(A, J...)...)
 end
 
 # 1-d logical indexing: override the above to avoid calling find (in to_index)
