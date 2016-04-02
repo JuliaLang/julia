@@ -2435,7 +2435,7 @@ static bool emit_builtin_call(jl_cgval_t *ret, jl_value_t *f, jl_value_t **args,
                         emit_expr(args[2], ctx);
                     }
                     else {
-                        jl_cgval_t v = (ety == (jl_value_t*)jl_any_type ? emit_expr(args[2], ctx) : emit_expr(args[2], ctx));
+                        jl_cgval_t v = emit_expr(args[2], ctx);
                         PHINode *data_owner = NULL; // owner object against which the write barrier must check
                         if (isboxed) { // if not boxed we don't need a write barrier
                             assert(ary.isboxed);
@@ -2477,7 +2477,8 @@ static bool emit_builtin_call(jl_cgval_t *ret, jl_value_t *f, jl_value_t **args,
                             data_owner->addIncoming(own_ptr, ownedBB);
                         }
                         typed_store(emit_arrayptr(ary,args[1],ctx), idx, v,
-                                    ety, ctx, tbaa_user, data_owner);
+                                    ety, ctx, tbaa_user, data_owner, 0,
+                                    false); // don't need to root the box if we had to make one since it's being stored in the array immediatly
                     }
                     *ret = ary;
                     JL_GC_POP();
@@ -2977,7 +2978,8 @@ static jl_cgval_t emit_local(int sl, jl_codectx_t *ctx)
         Value *bp = vi.memloc;
         if (vi.isArgument || !vi.usedUndef) { // arguments are always defined
             Instruction *v = builder.CreateLoad(bp, vi.isVolatile);
-            return mark_julia_type(v, true, vi.value.typ, ctx);
+            return mark_julia_type(v, true, vi.value.typ, ctx,
+                                   vi.isAssigned); // means it's an argument so don't need an additional root
         }
         else {
             jl_cgval_t v = emit_checked_var(bp, sym, ctx, vi.isVolatile);
