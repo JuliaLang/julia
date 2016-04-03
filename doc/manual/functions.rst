@@ -204,12 +204,12 @@ without being given a name, using either of these syntaxes:
 .. doctest::
 
     julia> x -> x^2 + 2x - 1
-    #1 (generic function with 1 method)
+    (::#1) (generic function with 1 method)
 
     julia> function (x)
                x^2 + 2x - 1
            end
-    #2 (generic function with 1 method)
+    (::#3) (generic function with 1 method)
 
 This creates a function taking one argument *x* and returning the
 value of the polynomial *x*\ ^2 + 2\ *x* - 1 at that value.

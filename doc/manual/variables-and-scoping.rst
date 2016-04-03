@@ -306,11 +306,12 @@ macro definition need not come before its inner usage:
 .. doctest::
 
     julia> f = y -> x + y
-    (anonymous function)
+    (::#1) (generic function with 1 method)
 
     julia> f(3)
     ERROR: UndefVarError: x not defined
-     in anonymous at none:1
+     in (::##1#2)(::Int64) at ./none:1
+     in eval(::Module, ::Any) at ./boot.jl:237
 
     julia> x = 1
     1

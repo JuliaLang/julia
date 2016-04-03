@@ -31,8 +31,9 @@ alias :obj:`StackTrace` can be used in place of ``Vector{StackFrame}``. (Example
 
     julia> example()
     ...-element Array{StackFrame,1}:
-     example at none:1
-     eval at boot.jl:265
+      in example() at none:1
+      in eval(::Module, ::Any) at boot.jl:237
+      [inlined code] from sysimg.jl:11
      ...
 
     julia> @noinline child() = stacktrace()
@@ -46,10 +47,11 @@ alias :obj:`StackTrace` can be used in place of ``Vector{StackFrame}``. (Example
 
     julia> grandparent()
     ...-element Array{StackFrame,1}:
-     child at none:1
-     parent at none:1
-     grandparent at none:1
-     eval at boot.jl:265
+      [inlined code] from stacktraces.jl:135
+     in child() at none:1
+      in parent() at none:1
+      in grandparent() at none:1
+      in eval(::Module, ::Any) at boot.jl:237
      ...
 
 Note that when calling :func:`stacktrace` you'll typically see a frame with
@@ -77,7 +79,7 @@ returned by :func:`backtrace`:
 .. doctest::
 
     julia> top_frame = stacktrace()[1]
-    eval at boot.jl:265
+     in eval(::Module, ::Any) at boot.jl:237
 
     julia> top_frame.func
     :eval
@@ -86,7 +88,7 @@ returned by :func:`backtrace`:
     Symbol("./boot.jl")
 
     julia> top_frame.line
-    265
+    237
 
     julia> top_frame.inlined_file
     Symbol("")
@@ -125,8 +127,10 @@ helpful in many places, the most obvious application is in error handling and de
 
     julia> example()
     ...-element Array{StackFrame,1}:
-     example at none:4
-     eval at boot.jl:265
+      [inlined code] from stacktraces.jl:135
+     in example() at none:2
+      in eval(::Module, ::Any) at boot.jl:237
+      [inlined code] from sysimg.jl:11
      ...
 
 You may notice that in the example above the first stack frame points points at line 4,
@@ -154,9 +158,10 @@ returns stack information for the context of the most recent exception:
 
     julia> example()
     ...-element Array{StackFrame,1}:
-     bad_function at none:1
-     example at none:2
-     eval at boot.jl:265
+      in bad_function() at none:1
+      in example() at none:2
+      in eval(::Module, ::Any) at boot.jl:237
+      [inlined code] from sysimg.jl:11
      ...
 
 Notice that the stack trace now indicates the appropriate line number and the missing frame.
@@ -182,10 +187,11 @@ Notice that the stack trace now indicates the appropriate line number and the mi
     julia> grandparent()
     ERROR: Whoops!
     ...-element Array{StackFrame,1}:
-     child at none:1
-     parent at none:1
-     grandparent at none:3
-     eval at boot.jl:265
+      in child() at none:1
+      in parent() at none:1
+      in grandparent() at none:3
+      in eval(::Module, ::Any) at boot.jl:237
+      [inlined code] from sysimg.jl:11
      ...
 
 Comparison with :func:`backtrace`
@@ -248,7 +254,7 @@ by passing them into :func:`StackTraces.lookup`:
     Ptr{Void} @0x...
 
     julia> frame = StackTraces.lookup(pointer)
-    [inlined code from task.c:663] rec_backtrace at task.c:723
+     in jl_backtrace_from_here at stackwalk.c:103
 
     julia> println("The top frame is from $(frame.func)!")
-    The top frame is from rec_backtrace!
+    The top frame is from jl_backtrace_from_here!

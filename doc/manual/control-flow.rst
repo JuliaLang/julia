@@ -162,7 +162,8 @@ the above function results in a runtime error
 
     julia> test(2,1)
     ERROR: UndefVarError: relation not defined
-     in test at none:7
+     in test(::Int64, ::Int64) at ./none:7
+     in eval(::Module, ::Any) at ./boot.jl:237
 
 ``if`` blocks also return a value, which may seem unintuitive to users
 coming from many other languages. This value is simply the return value
@@ -193,6 +194,7 @@ conditional expression is anything but ``true`` or ``false``:
              println("true")
            end
     ERROR: TypeError: non-boolean (Int64) used in boolean context
+     in eval(::Module, ::Any) at ./boot.jl:237
 
 This error indicates that the conditional was of the wrong type:
 :obj:`Int64` rather than the required :obj:`Bool`.
@@ -365,7 +367,8 @@ For example, a recursive factorial routine could be defined like this:
 
     julia> fact(-1)
     ERROR: n must be non-negative
-     in fact at none:2
+     in fact(::Int64) at ./none:2
+     in eval(::Module, ::Any) at ./boot.jl:237
 
 
 Boolean operations *without* short-circuit evaluation can be done with the
@@ -394,6 +397,7 @@ except for the last entry in a conditional chain is an error:
 
     julia> 1 && true
     ERROR: TypeError: non-boolean (Int64) used in boolean context
+     in eval(::Module, ::Any) at ./boot.jl:237
 
 On the other hand, any type of expression can be used at the end of a conditional chain.
 It will be evaluated and returned depending on the preceding conditionals:
@@ -478,6 +482,7 @@ different variable name to test this:
 
     julia> j
     ERROR: UndefVarError: j not defined
+     in eval(::Module, ::Any) at ./boot.jl:237
 
 See :ref:`man-variables-and-scoping` for a detailed
 explanation of variable scope and how it works in Julia.
@@ -661,7 +666,8 @@ negative real value:
     julia> sqrt(-1)
     ERROR: DomainError:
     sqrt will only return a complex result if called with a complex argument. Try sqrt(complex(x)).
-     in sqrt at math.jl:146
+     in sqrt(::Int64) at ./math.jl:146
+     in eval(::Module, ::Any) at ./boot.jl:237
 
 You may define your own exceptions in the following way:
 
@@ -686,7 +692,8 @@ if the argument is negative:
 
     julia> f(-1)
     ERROR: DomainError:
-     in f at none:1
+     in f(::Int64) at ./none:1
+     in eval(::Module, ::Any) at ./boot.jl:237
 
 Note that :exc:`DomainError` without parentheses is not an exception, but a type of
 exception. It needs to be called to obtain an :exc:`Exception` object:
@@ -706,6 +713,7 @@ error reporting:
 
     julia> throw(UndefVarError(:x))
     ERROR: UndefVarError: x not defined
+     in eval(::Module, ::Any) at ./boot.jl:237
 
 This mechanism can be implemented easily by custom exception types following
 the way :exc:`UndefVarError` is written:
@@ -737,7 +745,8 @@ the :func:`sqrt` function that raises an error if its argument is negative:
 
     julia> fussy_sqrt(-1)
     ERROR: negative x not allowed
-     in fussy_sqrt at none:1
+     in fussy_sqrt(::Int64) at ./none:1
+     in eval(::Module, ::Any) at ./boot.jl:237
 
 If ``fussy_sqrt`` is called with a negative value from another function,
 instead of trying to continue execution of the calling function, it
@@ -762,7 +771,9 @@ session:
     julia> verbose_fussy_sqrt(-1)
     before fussy_sqrt
     ERROR: negative x not allowed
-     in verbose_fussy_sqrt at none:3
+     [inlined code] from ./none:1
+     in verbose_fussy_sqrt(::Int64) at ./none:3
+     in eval(::Module, ::Any) at ./boot.jl:237
 
 Warnings and informational messages
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -783,7 +794,8 @@ execution.:
 
     julia> error("Hi"); 1+1
     ERROR: Hi
-     in error at ./error.jl:21
+     in error(::ASCIIString) at ./error.jl:21
+     in eval(::Module, ::Any) at ./boot.jl:237
 
 
 The ``try/catch`` statement
@@ -842,7 +854,8 @@ assumes ``x`` is a real number and returns its square root:
 
     julia> sqrt_second(-9)
     ERROR: DomainError:
-     in sqrt_second at none:7
+     in sqrt_second(::Int64) at ./none:7
+     in eval(::Module, ::Any) at ./boot.jl:237
 
 Note that the symbol following ``catch`` will always be interpreted as a
 name for the exception, so care is needed when writing ``try/catch`` expressions
