@@ -969,6 +969,7 @@ static void jl_serialize_methtable_from_mod(ios_t *s, jl_methtable_t *mt, int8_t
             jl_serialize_value(s, name);
             write_int8(s, iskw);
             jl_serialize_value(s, ml->sig);
+            jl_serialize_value(s, ml->simplesig);
             jl_serialize_value(s, ml->func);
             jl_serialize_value(s, ml->tvars);
         }
@@ -1712,10 +1713,11 @@ static void jl_deserialize_lambdas_from_mod(ios_t *s)
         int8_t iskw = read_int8(s);
         if (iskw)
             gf = jl_get_kwsorter(((jl_datatype_t*)jl_typeof(gf))->name);
-        jl_tupletype_t *types = (jl_tupletype_t*)jl_deserialize_value(s, NULL);
+        jl_tupletype_t *type = (jl_tupletype_t*)jl_deserialize_value(s, NULL);
+        jl_tupletype_t *simpletype = (jl_tupletype_t*)jl_deserialize_value(s, NULL);
         jl_lambda_info_t *meth = (jl_lambda_info_t*)jl_deserialize_value(s, NULL);
         jl_svec_t *tvars = (jl_svec_t*)jl_deserialize_value(s, NULL);
-        jl_method_table_insert(jl_gf_mtable(gf), types, meth, tvars);
+        jl_method_table_insert(jl_gf_mtable(gf), type, simpletype, meth, tvars);
     }
 }
 

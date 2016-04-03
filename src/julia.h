@@ -349,10 +349,11 @@ typedef struct _jl_module_t {
 typedef struct _jl_methlist_t {
     JL_DATA_TYPE
     struct _jl_methlist_t *next;
-    jl_lambda_info_t *func; // TODO: actually could be any jl_value_t*
-    jl_tupletype_t *sig;
-    jl_svec_t *tvars;
+    jl_tupletype_t *sig; // the type signature for this entry
+    jl_svec_t *tvars; // the bound type variables for sig
+    jl_tupletype_t *simplesig; // a simple signature for fast rejection
     jl_svec_t *guardsigs;
+    jl_lambda_info_t *func; // TODO: actually could be any jl_value_t*
     // memoized properties of sig:
     int8_t isleafsig; // isleaftype(sig) & !any(isType, sig) : unsorted and very fast
     int8_t issimplesig; // all(isleaftype | isAny | isType | isVararg, sig) : sorted and fast
