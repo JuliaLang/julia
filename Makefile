@@ -338,6 +338,7 @@ else
 	# Copy over .dSYM directories directly
 ifeq ($(OS),Darwin)
 	-cp -a $(build_libdir)/*.dSYM $(DESTDIR)$(private_libdir)
+	-cp -a $(build_private_libdir)/*.dSYM $(DESTDIR)$(private_libdir)
 endif
 
 	for suffix in $(JL_LIBS) ; do \
