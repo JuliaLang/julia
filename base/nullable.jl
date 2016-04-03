@@ -62,3 +62,28 @@ function hash(x::Nullable, h::UInt)
         return hash(x.value, h + nullablehash_seed)
     end
 end
+
+## Methods that can't be defined until we have Nullable
+
+function findnext{T}(iter, v, state::T, failed::Nullable{T})
+    while !done(iter, state)
+        oldstate = state
+        item, state = next(iter, state)
+        if item == v
+            return Nullable(oldstate)
+        end
+    end
+    return failed
+end
+
+findnext(iter, v, state) = findnext(iter, v, state, Nullable{typeof(state)}())
+
+# For arrays, ensure findfirst returns an integer even for LinearSlow
+_findnext(A::AbstractArray, v, state::Integer) = findnext(A, v, state, oftype(state, 0))
+function _findnext(A::AbstractArray, v, state)
+    found = findnext(A, v, state)
+    isnull(found) && return 0
+    sub2ind(A, get(found)[2])
+end
+
+findfirst(A::AbstractArray, v) = _findnext(A, v, start(A))

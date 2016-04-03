@@ -1295,7 +1295,7 @@ function findnext(B::BitArray, start::Integer)
     end
     return 0
 end
-#findfirst(B::BitArray) = findnext(B, 1)  ## defined in array.jl
+findfirst(B::BitArray) = findnext(B, 1)
 
 # aux function: same as findnext(~B, start), but performed without temporaries
 function findnextnot(B::BitArray, start::Integer)
@@ -1335,7 +1335,7 @@ function findnext(B::BitArray, v, start::Integer)
     v == true && return findnext(B, start)
     return 0
 end
-#findfirst(B::BitArray, v) = findnext(B, 1, v)  ## defined in array.jl
+findfirst(B::BitArray, v) = findnext(B, v, 1)
 
 # returns the index of the first element for which the function returns true
 function findnext(testf::Function, B::BitArray, start::Integer)

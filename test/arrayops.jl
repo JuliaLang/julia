@@ -285,6 +285,7 @@ a = [0,1,2,3,0,1,2,3]
 @test findnext(a,1) == 2
 @test findnext(a,1,4) == 6
 @test findnext(a,5,4) == 0
+@test findnext(a,5,0x04) === 0x00
 @test findlast(a) == 8
 @test findlast(a.==0) == 5
 @test findlast(a.==5) == 0
@@ -298,6 +299,13 @@ a = [0,1,2,3,0,1,2,3]
 @test findprev(a,1,8) == 6
 @test findprev(isodd, [2,4,5,3,9,2,0], 7) == 5
 @test findprev(isodd, [2,4,5,3,9,2,0], 2) == 0
+let A = reshape(1:20, 5, 4)
+    B = sub(A, 1:4, 1:3)
+    @test findfirst(B,8) == 7
+    @test findfirst(B,5) == 0
+    @test get(findnext(B,8,start(B)))[2] == CartesianIndex((3,2))
+    @test isnull(findnext(B,5,start(B)))
+end
 
 ## findn ##
 

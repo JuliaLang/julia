@@ -727,15 +727,19 @@ end
 findfirst(A) = findnext(A, 1)
 
 # returns the index of the next matching element
-function findnext(A, v, start::Integer)
-    for i = start:length(A)
-        if A[i] == v
-            return i
+function findnext{T}(iter, v, state::T, failed::T)
+    while !done(iter, state)
+        oldstate = state
+        item, state = next(iter, state)
+        if item == v
+            return oldstate
         end
     end
-    return 0
+    return failed
 end
-findfirst(A, v) = findnext(A, v, 1)
+findnext(iter, v, state::Integer) = findnext(iter, v, state, oftype(state, 0))
+
+findfirst(iter, v) = findnext(iter, v, start(iter))
 
 # returns the index of the next element for which the function returns true
 function findnext(testf::Function, A, start::Integer)
