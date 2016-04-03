@@ -7,8 +7,8 @@ export DL_LOAD_PATH, RTLD_DEEPBIND, RTLD_FIRST, RTLD_GLOBAL, RTLD_LAZY, RTLD_LOC
     dlpath, find_library, dlext, dllist
 
 const DL_LOAD_PATH = ByteString[]
-@osx_only push!(DL_LOAD_PATH, "@executable_path/../lib/julia")
-@osx_only push!(DL_LOAD_PATH, "@executable_path/../lib")
+@osx_only push!(DL_LOAD_PATH, "@loader_path/julia")
+@osx_only push!(DL_LOAD_PATH, "@loader_path")
 
 # constants to match JL_RTLD_* in src/julia.h
 const RTLD_LOCAL     = 0x00000001
