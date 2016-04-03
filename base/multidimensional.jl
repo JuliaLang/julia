@@ -3,7 +3,7 @@
 ### Multidimensional iterators
 module IteratorsMD
 
-import Base: eltype, length, size, start, done, next, last, getindex, setindex!, linearindexing, min, max, eachindex, ndims, iteratorsize
+import Base: eltype, length, size, start, done, next, last, getindex, setindex!, linearindexing, min, max, eachindex, ndims, iteratorsize, sub2ind, _sub2ind
 importall ..Base.Operators
 import Base: simd_outer_range, simd_inner_length, simd_index, @generated
 import Base: @nref, @ncall, @nif, @nexprs, LinearFast, LinearSlow, to_index, AbstractCartesianIndex
@@ -49,6 +49,10 @@ length{N}(::Type{CartesianIndex{N}})=N
 
 # indexing
 getindex(index::CartesianIndex, i::Integer) = index.I[i]
+
+# conversion to linear index
+sub2ind(A::AbstractArray, I::CartesianIndex) = _sub2ind(A, I.I)
+_sub2ind(A::AbstractArray, I::CartesianIndex) = _sub2ind(A, I.I)
 
 # arithmetic, min/max
 for op in (:+, :-, :min, :max)

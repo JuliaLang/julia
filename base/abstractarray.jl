@@ -1009,6 +1009,8 @@ sub2ind(dims::Tuple{Vararg{Integer}}, I::Integer...) = _sub2ind(dims,I)
     end
     Expr(:block, meta,:($ex + 1))
 end
+sub2ind(A::AbstractArray, I::Integer...) = _sub2ind(size(A), I)
+_sub2ind(A::AbstractArray, I) = _sub2ind(size(A), I)
 
 @generated function ind2sub{N}(dims::NTuple{N,Integer}, ind::Integer)
     meta = Expr(:meta,:inline)
