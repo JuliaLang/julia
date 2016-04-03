@@ -3389,19 +3389,21 @@ void jl_init_types(void)
 
     jl_method_type =
         jl_new_datatype(jl_symbol("Method"), jl_any_type, jl_emptysvec,
-                        jl_svec(8, jl_symbol("next"),
-                                   jl_symbol("func"),
+                        jl_svec(9, jl_symbol("next"),
                                    jl_symbol("sig"),
                                    jl_symbol("tvars"),
+                                   jl_symbol("simplesig"),
                                    jl_symbol("guardsigs"),
+                                   jl_symbol("func"),
                                    jl_symbol("isleafsig"),
                                    jl_symbol("issimplesig"),
                                    jl_symbol("va")),
-                        jl_svec(8, jl_any_type,
-                                   jl_any_type,
-                                   jl_type_type,
-                                   jl_simplevector_type,
-                                   jl_any_type,
+                        jl_svec(9, jl_any_type, // Union{Method, Void}
+                                   jl_type_type, // Tuple
+                                   jl_any_type, // Union{SimpleVector, TypeVar}
+                                   jl_any_type, // Tuple
+                                   jl_any_type, // SimpleVector{Tuple}
+                                   jl_any_type, // Any
                                    jl_bool_type,
                                    jl_bool_type,
                                    jl_bool_type),
