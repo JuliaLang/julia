@@ -128,7 +128,7 @@ So, we could have defined the ``test`` function above as
 
 .. doctest::
 
-    julia> function test(x,y)
+    julia> function test1(x,y)
              if x < y
                relation = "less than"
              elseif x == y
@@ -138,7 +138,7 @@ So, we could have defined the ``test`` function above as
              end
              println("x is ", relation, " y.")
            end
-    test (generic function with 1 method)
+    test1 (generic function with 1 method)
 
 The variable ``relation`` is declared inside the ``if`` block, but used
 outside. However, when depending on this behavior, make sure all possible
@@ -147,7 +147,7 @@ the above function results in a runtime error
 
 .. doctest::
 
-    julia> function test(x,y)
+    julia> function test2(x,y)
              if x < y
                relation = "less than"
              elseif x == y
@@ -155,14 +155,14 @@ the above function results in a runtime error
              end
              println("x is ", relation, " y.")
            end
-    test (generic function with 1 method)
+    test2 (generic function with 1 method)
 
-    julia> test(1,2)
+    julia> test2(1,2)
     x is less than y.
 
-    julia> test(2,1)
+    julia> test2(2,1)
     ERROR: UndefVarError: relation not defined
-     in test(::Int64, ::Int64) at ./none:7
+     in test2(::Int64, ::Int64) at ./none:7
      in eval(::Module, ::Any) at ./boot.jl:237
 
 ``if`` blocks also return a value, which may seem unintuitive to users
@@ -238,17 +238,17 @@ together:
 
 .. doctest::
 
-    julia> test(x, y) = println(x < y ? "x is less than y"    :
+    julia> test4(x, y) = println(x < y ? "x is less than y"    :
                                 x > y ? "x is greater than y" : "x is equal to y")
-    test (generic function with 1 method)
+    test4 (generic function with 1 method)
 
-    julia> test(1, 2)
+    julia> test4(1, 2)
     x is less than y
 
-    julia> test(2, 1)
+    julia> test4(2, 1)
     x is greater than y
 
-    julia> test(1, 1)
+    julia> test4(1, 1)
     x is equal to y
 
 To facilitate chaining, the operator associates from right to left.
@@ -684,15 +684,15 @@ if the argument is negative:
 
 .. doctest::
 
-    julia> f(x) = x>=0 ? exp(-x) : throw(DomainError())
-    f (generic function with 1 method)
+    julia> g(x) = x>=0 ? exp(-x) : throw(DomainError())
+    g (generic function with 1 method)
 
-    julia> f(1)
+    julia> g(1)
     0.36787944117144233
 
-    julia> f(-1)
+    julia> g(-1)
     ERROR: DomainError:
-     in f(::Int64) at ./none:1
+     in g(::Int64) at ./none:1
      in eval(::Module, ::Any) at ./boot.jl:237
 
 Note that :exc:`DomainError` without parentheses is not an exception, but a type of
@@ -808,17 +808,17 @@ call either the real or complex square root method on demand using
 
 .. doctest::
 
-    julia> f(x) = try
+    julia> h(x) = try
              sqrt(x)
            catch
              sqrt(complex(x, 0))
            end
-    f (generic function with 1 method)
+    h (generic function with 1 method)
 
-    julia> f(1)
+    julia> h(1)
     1.0
 
-    julia> f(-1)
+    julia> h(-1)
     0.0 + 1.0im
 
 It is important to note that in real code computing this function, one would

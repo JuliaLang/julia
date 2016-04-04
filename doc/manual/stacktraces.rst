@@ -118,17 +118,17 @@ helpful in many places, the most obvious application is in error handling and de
     julia> @noinline bad_function() = undeclared_variable
     bad_function (generic function with 1 method)
 
-    julia> @noinline example() = try
+    julia> @noinline example1() = try
                bad_function()
            catch
                stacktrace()
            end
-    example (generic function with 1 method)
+    example1 (generic function with 1 method)
 
-    julia> example()
+    julia> example1()
     ...-element Array{StackFrame,1}:
       [inlined code] from stacktraces.jl:135
-     in example() at none:2
+     in example1() at none:2
       in eval(::Module, ::Any) at boot.jl:237
       [inlined code] from sysimg.jl:11
      ...
@@ -146,20 +146,20 @@ returns stack information for the context of the most recent exception:
 
 .. doctest::
 
-    julia> @noinline bad_function() = undeclared_variable
-    bad_function (generic function with 1 method)
+    julia> @noinline bad_function1() = undeclared_variable
+    bad_function1 (generic function with 1 method)
 
-    julia> @noinline example() = try
-               bad_function()
+    julia> @noinline example2() = try
+               bad_function1()
            catch
                catch_stacktrace()
            end
-    example (generic function with 1 method)
+    example2 (generic function with 1 method)
 
-    julia> example()
+    julia> example2()
     ...-element Array{StackFrame,1}:
-      in bad_function() at none:1
-      in example() at none:2
+      in bad_function1() at none:1
+      in example2() at none:2
       in eval(::Module, ::Any) at boot.jl:237
       [inlined code] from sysimg.jl:11
      ...
@@ -168,28 +168,28 @@ Notice that the stack trace now indicates the appropriate line number and the mi
 
 .. doctest::
 
-    julia> @noinline child() = error("Whoops!")
-    child (generic function with 1 method)
+    julia> @noinline child1() = error("Whoops!")
+    child1 (generic function with 1 method)
 
-    julia> @noinline parent() = child()
-    parent (generic function with 1 method)
+    julia> @noinline parent1() = child1()
+    parent1 (generic function with 1 method)
 
-    julia> @noinline function grandparent()
+    julia> @noinline function grandparent1()
                try
-                   parent()
+                   parent1()
                catch err
                    println("ERROR: ", err.msg)
                    catch_stacktrace()
                end
            end
-    grandparent (generic function with 1 method)
+    grandparent1 (generic function with 1 method)
 
-    julia> grandparent()
+    julia> grandparent1()
     ERROR: Whoops!
     ...-element Array{StackFrame,1}:
-      in child() at none:1
-      in parent() at none:1
-      in grandparent() at none:3
+      in child1() at none:1
+      in parent1() at none:1
+      in grandparent1() at none:3
       in eval(::Module, ::Any) at boot.jl:237
       [inlined code] from sysimg.jl:11
      ...
