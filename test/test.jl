@@ -11,6 +11,13 @@ using Base.Test
 @test strip("\t  hi   \n") == "hi"
 @test strip("\t  this should fail   \n") != "hi"
 
+# Test @test_fail_expected
+@test_fail_expected false
+@test_fail_expected 1 == 2
+@test_fail_expected 1 != 1
+@test_fail_expected strip("\t  hi   \n") != "hi"
+@test_fail_expected strip("\t  this should fail   \n") == "hi"
+
 a = Array(Float64, 2, 2, 2, 2, 2)
 a[1,1,1,1,1] = 10
 @test a[1,1,1,1,1] == 10
@@ -64,6 +71,7 @@ rd, wr = redirect_stdout()
 
 # Check that the fallback test set throws immediately
 @test_throws ErrorException (@test 1 == 2)
+@test_throws ErrorException (@test_fail_expected 1 != 2)
 
 @testset "no errors" begin
     @test true
