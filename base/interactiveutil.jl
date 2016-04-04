@@ -109,7 +109,7 @@ end
     function clipboard(x)
         c = clipboardcmd()
         cmd = c == :xsel  ? `xsel --nodetach --input --clipboard` :
-              c == :xclip ? `xclip -quiet -in -selection clipboard` :
+              c == :xclip ? `xclip -silent -in -selection clipboard` :
             error("unexpected clipboard command: $c")
         open(pipeline(cmd, stderr=STDERR), "w") do io
             print(io, x)
