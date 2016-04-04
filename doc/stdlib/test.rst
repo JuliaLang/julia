@@ -29,14 +29,20 @@ the results are what you expect. It can be helpful to ensure your code
 still works after you make changes, and can be used when developing as
 a way of specifying the behaviors your code should have when complete.
 
-Simple unit testing can be performed with the :func:`@test` and
-:func:`@test_throws` macros:
+Simple unit testing can be performed with the :func:`@test`, :func:`@test_fail_expected`
+and :func:`@test_throws` macros:
 
 .. function:: @test ex
 
    .. Docstring generated from Julia source
 
    Tests that the expression ``ex`` evaluates to ``true``\ . Returns a ``Pass`` ``Result`` if it does, a ``Fail`` ``Result`` if it is ``false``\ , and an ``Error`` ``Result`` if it could not be evaluated.
+
+.. function:: @test_fail_expected ex
+
+   .. Docstring generated from Julia source
+
+   Tests that the expression ``ex`` evaluates to ``false``\ . Returns a ``Pass`` ``Result`` if it does, a ``Fail`` ``Result`` if it is ``true``\ , and an ``Error`` ``Result`` if it could not be evaluated.
 
 .. function:: @test_throws extype ex
 
