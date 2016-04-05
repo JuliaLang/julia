@@ -233,8 +233,16 @@ void jl_method_cache_rehash(union _jl_opaque_cache_t ml, int8_t offs) {
 static union _jl_opaque_cache_t *mtcache_hash_bp(jl_array_t **pa, jl_value_t *ty,
                                                  int8_t tparam, int8_t offs, jl_value_t *parent)
 {
-    uintptr_t uid;
-    if (jl_is_datatype(ty) && (uid = ((jl_datatype_t*)ty)->uid)) {
+    if (jl_is_datatype(ty)) {
+        uintptr_t uid = ((jl_datatype_t*)ty)->uid;
+        if (!uid || is_kind(ty))
+            // be careful not to put non-leaf types or DataType/TypeConstructor in the cache here,
+            // since they should have a lower priority and need to go into the sorted list
+            return NULL;
+        if (*pa == (void*)jl_nothing) {
+            *pa = jl_alloc_cell_1d(INIT_CACHE_SIZE);
+            jl_gc_wb(parent, *pa);
+        }
         while (1) {
             union _jl_opaque_cache_t *pml = &((union _jl_opaque_cache_t*)jl_array_data(*pa))[uid & ((*pa)->nrows-1)];
             union _jl_opaque_cache_t ml = *pml;
@@ -717,40 +725,29 @@ static void jl_method_list_insert_generic(union _jl_opaque_cache_t *pml, jl_valu
     jl_method_list_insert_(&pml->list, parent, newrec, isdefinition);
 }
 
-static void jl_method_cache_array_insert_(jl_array_t **cache, jl_value_t *key, jl_methlist_t *newrec,
+static int jl_method_cache_array_insert_(jl_array_t **cache, jl_value_t *key, jl_methlist_t *newrec,
                                           jl_value_t *parent, int8_t tparam, int8_t offs, int8_t isdefinition)
 {
-    if (*cache == (void*)jl_nothing) {
-        *cache = jl_alloc_cell_1d(INIT_CACHE_SIZE);
-        jl_gc_wb(parent, *cache);
-    }
     union _jl_opaque_cache_t *pml = mtcache_hash_bp(cache, key, tparam, offs, (jl_value_t*)parent);
-    jl_method_list_insert_generic(pml, (jl_value_t*)*cache, newrec, key, offs+1, isdefinition);
+    if (pml)
+        jl_method_list_insert_generic(pml, (jl_value_t*)*cache, newrec, key, offs+1, isdefinition);
+    return pml != NULL;
 }
 
 static void jl_method_cache_insert_(jl_methcache_t *cache, jl_methlist_t *newrec, int8_t offs, int8_t isdefinition)
 {
     if (jl_datatype_nfields(newrec->sig) > offs) {
         jl_value_t *t1 = jl_tparam(newrec->sig, offs);
-        uintptr_t uid=0;
         // if t1 != jl_typetype_type and the argument is Type{...}, this
         // method has specializations for singleton kinds and we use
         // the table indexed for that purpose.
         if (t1 != (jl_value_t*)jl_typetype_type && jl_is_type_type(t1)) {
             jl_value_t *a0 = jl_tparam0(t1);
-            if (jl_is_datatype(a0))
-                uid = ((jl_datatype_t*)a0)->uid;
-            if (uid > 0) {
-                jl_method_cache_array_insert_(&cache->targ, a0, newrec, (jl_value_t*)cache, 1, offs, isdefinition);
+            if (jl_method_cache_array_insert_(&cache->targ, a0, newrec, (jl_value_t*)cache, 1, offs, isdefinition))
                 return;
-            }
         }
-        if (jl_is_datatype(t1))
-            uid = ((jl_datatype_t*)t1)->uid;
-        if (uid > 0) {
-            jl_method_cache_array_insert_(&cache->arg1, t1, newrec, (jl_value_t*)cache, 0, offs, isdefinition);
+        if (jl_method_cache_array_insert_(&cache->arg1, t1, newrec, (jl_value_t*)cache, 0, offs, isdefinition))
             return;
-        }
     }
     jl_method_list_insert_(&cache->list, (jl_value_t*)cache, newrec, isdefinition);
 }
