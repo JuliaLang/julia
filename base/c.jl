@@ -6,7 +6,7 @@ import Core.Intrinsics: cglobal, box
 
 cfunction(f::Function, r, a) = ccall(:jl_function_ptr, Ptr{Void}, (Any, Any, Any), f, r, a)
 
-if ccall(:jl_is_char_signed, Any, ())
+if ccall(:jl_is_char_signed, Ref{Bool}, ())
     typealias Cchar Int8
 else
     typealias Cchar UInt8
