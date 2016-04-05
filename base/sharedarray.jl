@@ -281,8 +281,8 @@ convert{TS,TA,N}(::Type{SharedArray{TS,N}}, A::Array{TA,N}) = (S = SharedArray(T
 
 function deepcopy_internal(S::SharedArray, stackdict::ObjectIdDict)
     haskey(stackdict, S) && return stackdict[S]
-    # Note: copy can be used here because SharedArrays are restricted to isbits types
-    R = copy(S)
+    R = SharedArray(eltype(S), size(S); pids = S.pids)
+    copy!(sdata(R), sdata(S))
     stackdict[S] = R
     return R
 end

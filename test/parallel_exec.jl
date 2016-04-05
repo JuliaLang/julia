@@ -401,7 +401,15 @@ pids_d = procs(d)
 remotecall_fetch(setindex!, pids_d[findfirst(id->(id != myid()), pids_d)], d, 1.0, 1:10)
 @test ds != d
 @test s != d
-
+copy!(d, s)
+@everywhere setid!(A) = A[localindexes(A)] = myid()
+@sync for p in procs(ds)
+    @async remotecall_wait(setid!, p, ds)
+end
+@test d == s
+@test ds != s
+@test first(ds) == first(procs(ds))
+@test last(ds)  == last(procs(ds))
 
 # SharedArray as an array
 # Since the data in d will depend on the nprocs, just test that these operations work
@@ -841,4 +849,3 @@ end
 v15406 = remotecall_wait(() -> 1, id_other)
 fetch(v15406)
 remotecall_wait(t -> fetch(t), id_other, v15406)
-
