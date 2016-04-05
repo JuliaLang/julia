@@ -811,7 +811,7 @@ If `dim` is specified, returns unique regions of the array `itr` along `dim`.
         # Collect index of first row for each hash
         uniquerow = Array(Int, size(A, dim))
         firstrow = Dict{Prehashed,Int}()
-        for k = 1:size(A, dim)
+        for k = 1:size(A, dim)   # fixme (iter): use `eachindex(A, dim)` after #15459 is implemented
             uniquerow[k] = get!(firstrow, Prehashed(hashes[k]), k)
         end
         uniquerows = collect(values(firstrow))
@@ -836,7 +836,7 @@ If `dim` is specified, returns unique regions of the array `itr` along `dim`.
             while any(collided)
                 # Collect index of first row for each collided hash
                 empty!(firstrow)
-                for j = 1:size(A, dim)
+                for j = 1:size(A, dim)  # fixme (iter): use `eachindex(A, dim)` after #15459 is implemented
                     collided[j] || continue
                     uniquerow[j] = get!(firstrow, Prehashed(hashes[j]), j)
                 end

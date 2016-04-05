@@ -570,7 +570,7 @@ rand{T<:Union{Signed,Unsigned,BigInt,Bool}}(rng::AbstractRNG, r::UnitRange{T}) =
 rand(rng::AbstractRNG, r::AbstractArray) = @inbounds return r[rand(rng, 1:length(r))]
 
 function rand!(rng::AbstractRNG, A::AbstractArray, g::RangeGenerator)
-    for i = 1 : length(A)
+    for i in eachindex(A)
         @inbounds A[i] = rand(rng, g)
     end
     return A
@@ -580,7 +580,7 @@ rand!{T<:Union{Signed,Unsigned,BigInt,Bool,Char}}(rng::AbstractRNG, A::AbstractA
 
 function rand!(rng::AbstractRNG, A::AbstractArray, r::AbstractArray)
     g = RangeGenerator(1:(length(r)))
-    for i = 1 : length(A)
+    for i in eachindex(A)
         @inbounds A[i] = r[rand(rng, g)]
     end
     return A

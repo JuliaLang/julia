@@ -1526,7 +1526,7 @@ pmap(f) = f()
 # as it finishes.
 # example unbalanced workload:
 # rsym(n) = (a=rand(n,n);a*a')
-# L = {rsym(200),rsym(1000),rsym(200),rsym(1000),rsym(200),rsym(1000),rsym(200),rsym(1000)};
+# L = Any[rsym(200),rsym(1000),rsym(200),rsym(1000),rsym(200),rsym(1000),rsym(200),rsym(1000)];
 # pmap(eig, L);
 function pmap(f, lsts...; err_retry=true, err_stop=false, pids = workers())
     len = length(lsts)
