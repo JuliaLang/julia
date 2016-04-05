@@ -27,8 +27,8 @@ function __init__()
         haskey(ENV,"JULIA_CPU_CORES") ? parse(Int,ENV["JULIA_CPU_CORES"]) :
                                         Int(ccall(:jl_cpu_cores, Int32, ()))
     global const SC_CLK_TCK = ccall(:jl_SC_CLK_TCK, Clong, ())
-    global const cpu_name = ccall(:jl_get_cpu_name, Any, ())::ByteString
-    global const JIT = ccall(:jl_get_JIT, Any, ())::ByteString
+    global const cpu_name = ccall(:jl_get_cpu_name, Ref{ByteString}, ())
+    global const JIT = ccall(:jl_get_JIT, Ref{ByteString}, ())
 end
 
 type UV_cpu_info_t

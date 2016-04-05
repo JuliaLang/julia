@@ -1,9 +1,9 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
 # name and module reflection
-module_name(m::Module) = ccall(:jl_module_name, Any, (Any,), m)::Symbol
-module_parent(m::Module) = ccall(:jl_module_parent, Any, (Any,), m)::Module
-current_module() = ccall(:jl_get_current_module, Any, ())::Module
+module_name(m::Module) = ccall(:jl_module_name, Ref{Symbol}, (Any,), m)
+module_parent(m::Module) = ccall(:jl_module_parent, Ref{Module}, (Any,), m)
+current_module() = ccall(:jl_get_current_module, Ref{Module}, ())
 
 function fullname(m::Module)
     m === Main && return ()
@@ -249,7 +249,7 @@ done(mt::MethodTable, m::Method) = false
 done(mt::MethodTable, i::Void) = true
 
 uncompressed_ast(l::LambdaInfo) =
-    isa(l.code,Array{Any,1}) ? l.code : ccall(:jl_uncompress_ast, Any, (Any,Any), l, l.code)
+    isa(l.code,Array{Any,1}) ? l.code::Array{Any,1} : ccall(:jl_uncompress_ast, Array{Any,1}, (Any,Any), l, l.code)
 
 # Printing code representations in IR and assembly
 function _dump_function(f, t::ANY, native, wrapper, strip_ir_metadata, dump_module)
@@ -260,11 +260,11 @@ function _dump_function(f, t::ANY, native, wrapper, strip_ir_metadata, dump_modu
         error("no method found for the specified argument types")
     end
 
-    if (native)
-        str = ccall(:jl_dump_function_asm, Any, (Ptr{Void},Cint), llvmf, 0)::ByteString
+    if native
+        str = ccall(:jl_dump_function_asm, Ref{ByteString}, (Ptr{Void},Cint), llvmf, 0)
     else
-        str = ccall(:jl_dump_function_ir, Any,
-                    (Ptr{Void}, Bool, Bool), llvmf, strip_ir_metadata, dump_module)::ByteString
+        str = ccall(:jl_dump_function_ir, Ref{ByteString},
+                    (Ptr{Void}, Bool, Bool), llvmf, strip_ir_metadata, dump_module)
     end
 
     return str
