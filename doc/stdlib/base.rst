@@ -80,7 +80,7 @@ Getting Around
 
    .. Docstring generated from Julia source
 
-   Evaluates the arguments to the function call, determines their types, and calls the ``edit`` function on the resulting expression.
+   Evaluates the arguments to the function or macro call, determines their types, and calls the ``edit`` function on the resulting expression.
 
 .. function:: less(file::AbstractString, [line])
 
@@ -98,7 +98,7 @@ Getting Around
 
    .. Docstring generated from Julia source
 
-   Evaluates the arguments to the function call, determines their types, and calls the ``less`` function on the resulting expression.
+   Evaluates the arguments to the function or macro call, determines their types, and calls the ``less`` function on the resulting expression.
 
 .. function:: clipboard(x)
 
@@ -188,7 +188,7 @@ Getting Around
 
    .. Docstring generated from Julia source
 
-   Applied to a function call, it evaluates the arguments to the specified function call, and returns the ``Method`` object for the method that would be called for those arguments. Applied to a variable, it returns the module in which the variable was bound. It calls out to the ``which`` function.
+   Applied to a function or macro call, it evaluates the arguments to the specified call, and returns the ``Method`` object for the method that would be called for those arguments. Applied to a variable, it returns the module in which the variable was bound. It calls out to the ``which`` function.
 
 .. function:: methods(f, [types])
 
@@ -1326,6 +1326,12 @@ Reflection
 
    Returns a tuple ``(filename,line)`` giving the location of a ``Method`` definition.
 
+.. function:: @functionloc
+
+   .. Docstring generated from Julia source
+
+   Applied to a function or macro call, it evaluates the arguments to the specified call, and returns a tuple ``(filename,line)`` giving the location for the method that would be called for those arguments. It calls out to the ``functionloc`` function.
+
 Internals
 ---------
 
@@ -1363,7 +1369,7 @@ Internals
 
    .. Docstring generated from Julia source
 
-   Evaluates the arguments to the function call, determines their types, and calls :func:`code_lowered` on the resulting expression.
+   Evaluates the arguments to the function or macro call, determines their types, and calls :func:`code_lowered` on the resulting expression.
 
 .. function:: code_typed(f, types; optimize=true)
 
@@ -1375,7 +1381,7 @@ Internals
 
    .. Docstring generated from Julia source
 
-   Evaluates the arguments to the function call, determines their types, and calls :func:`code_typed` on the resulting expression.
+   Evaluates the arguments to the function or macro call, determines their types, and calls :func:`code_typed` on the resulting expression.
 
 .. function:: code_warntype(f, types)
 
@@ -1387,7 +1393,7 @@ Internals
 
    .. Docstring generated from Julia source
 
-   Evaluates the arguments to the function call, determines their types, and calls :func:`code_warntype` on the resulting expression.
+   Evaluates the arguments to the function or macro call, determines their types, and calls :func:`code_warntype` on the resulting expression.
 
 .. function:: code_llvm(f, types)
 
@@ -1401,7 +1407,7 @@ Internals
 
    .. Docstring generated from Julia source
 
-   Evaluates the arguments to the function call, determines their types, and calls :func:`code_llvm` on the resulting expression.
+   Evaluates the arguments to the function or macro call, determines their types, and calls :func:`code_llvm` on the resulting expression.
 
 .. function:: code_native(f, types)
 
@@ -1413,7 +1419,7 @@ Internals
 
    .. Docstring generated from Julia source
 
-   Evaluates the arguments to the function call, determines their types, and calls :func:`code_native` on the resulting expression.
+   Evaluates the arguments to the function or macro call, determines their types, and calls :func:`code_native` on the resulting expression.
 
 .. function:: precompile(f,args::Tuple{Vararg{Any}})
 
