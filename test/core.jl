@@ -911,7 +911,7 @@ let
     @test aa == a
     aa = pointer_to_array(pointer(a), UInt16(length(a)))
     @test aa == a
-    @test_throws ErrorException pointer_to_array(pointer(a), -3)
+    @test_throws InexactError pointer_to_array(pointer(a), -3)
 end
 
 immutable FooBar
