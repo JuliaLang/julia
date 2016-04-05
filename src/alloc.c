@@ -602,7 +602,7 @@ JL_DLLEXPORT jl_methtable_t *jl_new_method_table(jl_sym_t *name, jl_module_t *mo
     jl_set_typeof(mt, jl_methtable_type);
     mt->name = jl_demangle_typename(name);
     mt->module = module;
-    mt->defs = (jl_methlist_t*)jl_nothing;
+    mt->defs.nothing = jl_nothing;
     mt->cache.nothing = jl_nothing;
     mt->max_args = 0;
     mt->kwsorter = NULL;

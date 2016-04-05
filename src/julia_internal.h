@@ -264,6 +264,8 @@ jl_function_t *jl_module_get_initializer(jl_module_t *m);
 uint32_t jl_module_next_counter(jl_module_t *m);
 void jl_fptr_to_llvm(jl_fptr_t fptr, jl_lambda_info_t *lam, int specsig);
 jl_tupletype_t *arg_type_tuple(jl_value_t **args, size_t nargs);
+typedef int (*jl_methcache_visitor_fptr)(jl_methlist_t *l, void *closure);
+int jl_methcache_visitor(union _jl_opaque_cache_t a, jl_methcache_visitor_fptr fptr, void *closure);
 
 jl_value_t *skip_meta(jl_array_t *body);
 int has_meta(jl_array_t *body, jl_sym_t *sym);

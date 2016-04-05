@@ -233,14 +233,40 @@ function methods(f::ANY)
     end
 end
 
-function length(mt::MethodTable)
-    n = 0
-    d = mt.defs
-    while !is(d,nothing)
-        n += 1
+function visit(f, mt::MethodTable)
+    mt.defs !== nothing && visit(f, mt.defs)
+    nothing
+end
+function visit(f, mc::MethodCache)
+    if mc.targ !== nothing
+        e = mc.targ::Vector{Any}
+        for i in 1:length(e)
+            isdefined(e, i) && visit(f, e[i])
+        end
+    end
+    if mc.arg1 !== nothing
+        e = mc.arg1::Vector{Any}
+        for i in 1:length(e)
+            isdefined(e, i) && visit(f, e[i])
+        end
+    end
+    mc.list !== nothing && visit(f, mc.list)
+    nothing
+end
+function visit(f, d::Method)
+    while !is(d, nothing)
+        f(d)
         d = d.next
     end
-    n
+    nothing
+end
+
+function length(mt::MethodTable)
+    n = 0
+    visit(mt) do m
+        n += 1
+    end
+    return n::Int
 end
 
 start(mt::MethodTable) = mt.defs
