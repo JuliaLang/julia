@@ -24,8 +24,18 @@
 #  include <immintrin.h>
 #endif
 
+// JL_MAX_BT_SIZE has to be restricted on Clang 7.3.0
+// See https://llvm.org/bugs/show_bug.cgi?id=27059
+#ifdef __clang__
+#   if __clang_major__==7 & __clang_minor__==3 & __clang_patchlevel__==0
+#       define JL_MAX_BT_SIZE 4312
+#   else
+#       define JL_MAX_BT_SIZE 80000
+#   endif
+#else
+#   define JL_MAX_BT_SIZE 80000
+#endif
 // This includes all the thread local states we care about for a thread.
-#define JL_MAX_BT_SIZE 80000
 typedef struct _jl_tls_states_t {
     struct _jl_gcframe_t *pgcstack;
     struct _jl_value_t *exception_in_transit;
