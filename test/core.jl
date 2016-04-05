@@ -866,8 +866,11 @@ let
    a = C_NULL
    b = C_NULL + 1
    c = C_NULL - 1
+   d = 1 + C_NULL
+   @test eltype(a) == Void
 
    @test a != b != c
+   @test b == d
    @test UInt(a) == 0
    @test UInt(b) == 1
    @test UInt(c) == typemax(UInt)

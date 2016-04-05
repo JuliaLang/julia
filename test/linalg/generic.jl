@@ -237,3 +237,5 @@ end
 
 # Issue 14657
 @test det([true false; false true]) == det(eye(Int, 2))
+
+@test_throws ArgumentError Base.LinAlg.char_uplo(:Z)
