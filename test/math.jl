@@ -25,6 +25,10 @@
 @test e^2.4 == exp(2.4)
 @test e^(2//3) == exp(2//3)
 
+@test Float16(3.) < pi
+@test pi < Float16(4.)
+@test contains(sprint(show,π),"3.14159")
+
 begin
     x = [0.0, 1.0, 2.0, 3.0, 4.0]
     clamp!(x, 1, 3)
