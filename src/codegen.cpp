@@ -979,7 +979,12 @@ static uint64_t getAddressForFunction(llvm::Function *llvmf)
 extern "C" JL_DLLEXPORT
 uint64_t jl_get_llvm_fptr(llvm::Function *llvmf)
 {
-    return getAddressForFunction(llvmf);
+    uint64_t addr = getAddressForFunction(llvmf);
+#ifdef USE_ORCJIT
+    if (!addr)
+        addr = jl_ExecutionEngine->findUnmangledSymbol(llvmf->getName()).getAddress();
+#endif
+    return addr;
 }
 
 // this assumes that jl_compile_linfo has already been called
