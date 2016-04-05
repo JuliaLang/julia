@@ -1194,34 +1194,22 @@ static jl_lambda_info_t *cache_method(jl_methtable_t *mt, union _jl_opaque_cache
             need_guard_entries = 1;
             continue;
         }
+
         if (isstaged) {
             // staged functions can't be optimized
             continue;
         }
 
-        if (!isstaged && jl_is_type_type(elt) && jl_is_tuple_type(jl_tparam0(elt)) &&
-            !(jl_subtype(decl_i, (jl_value_t*)jl_type_type, 0) && !is_kind(decl_i))) {
-            jl_methlist_t *curr = mt->defs;
-            int ok=1;
-            while (curr != (void*)jl_nothing) {
-                jl_value_t *slottype = jl_nth_slot_type(curr->sig, i);
-                if (slottype && curr->func != method) {
-                    if (jl_is_type_type(slottype) &&
-                        jl_type_intersection(slottype, decl_i) != jl_bottom_type) {
-                        ok=0;
-                        break;
-                    }
-                }
-                curr = curr->next;
-            }
-            if (ok) {
-                elt = jl_typeof(jl_tparam0(elt));
-                jl_svecset(newparams, i, elt);
-                hasnewparams = 1;
-            }
+        // avoid specializing on an argument of type Tuple
+        // unless matching a declared type of `::Type`
+        if (jl_is_type_type(elt) && jl_is_tuple_type(jl_tparam0(elt)) &&
+            (!jl_subtype(decl_i, (jl_value_t*)jl_type_type, 0) || is_kind(decl_i))) {
+            elt = jl_typeof(jl_tparam0(elt));
+            jl_svecset(newparams, i, elt);
+            hasnewparams = 1;
+            need_guard_entries = 1;
         }
 
-        int set_to_any = 0;
         int notcalled_func = (i>0 && i<=8 && !(spec->called&(1<<(i-1))) &&
                               jl_subtype(elt,(jl_value_t*)jl_function_type,0));
         if (decl_i == jl_ANY_flag ||
@@ -1234,52 +1222,8 @@ static jl_lambda_info_t *cache_method(jl_methtable_t *mt, union _jl_opaque_cache
             // and attempt to despecialize types marked Function, Callable, or Any
             // when called with a subtype of Function but is not called
             jl_svecset(newparams, i, (jl_value_t*)jl_any_type);
-            temp2 = (jl_value_t*)jl_svec_copy(newparams);
-            temp2 = (jl_value_t*)jl_apply_tuple_type((jl_svec_t*)temp2);
-            int nintr=0;
-            jl_methlist_t *curr = mt->defs;
-            int specific_decl =
-                decl_i != (jl_value_t*)jl_any_type && decl_i != (jl_value_t*)jl_ANY_flag;
-            // if this method is the only match even with the current slot
-            // set to Any, then it is safe to cache it that way.
-            while (curr != (void*)jl_nothing && (curr->func != method || specific_decl)) {
-                if (jl_type_intersection((jl_value_t*)curr->sig, (jl_value_t*)temp2) !=
-                    (jl_value_t*)jl_bottom_type) {
-                    nintr++;
-                    if (specific_decl || notcalled_func) {
-                        // ignore MAX_UNSPECIALIZED_CONFLICTS in cache_as_orig mode
-                        // fixes issue #15190
-                        break;
-                    }
-                    if (nintr > MAX_UNSPECIALIZED_CONFLICTS) break;
-                }
-                curr = curr->next;
-            }
-            if (nintr > MAX_UNSPECIALIZED_CONFLICTS) {
-                // TODO: even if different specializations of this slot need
-                // separate cache entries, have them share code.
-                jl_svecset(newparams, i, jl_tparam(type, i));
-            }
-            else {
-                set_to_any = 1;
-                if (nintr > 0) {
-                    if (specific_decl || notcalled_func)
-                        cache_with_orig = 1;
-                    else
-                        need_guard_entries = 1;
-                }
-                hasnewparams = 1;
-            }
-        }
-
-        if (set_to_any) {
-        }
-        else if (jl_is_type_type(elt) && jl_is_typector(jl_tparam0(elt)) &&
-                 decl_i == (jl_value_t*)jl_typector_type) {
-            assert(0);
-        }
-        else if (jl_is_type_type(elt) && decl_i == (jl_value_t*)jl_datatype_type) {
-            assert(0);
+            hasnewparams = 1;
+            need_guard_entries = 1;
         }
         else if (jl_is_type_type(elt) && jl_is_type_type(jl_tparam0(elt)) &&
                  // give up on specializing static parameters for Type{Type{Type{...}}}
@@ -1312,96 +1256,29 @@ static jl_lambda_info_t *cache_method(jl_methtable_t *mt, union _jl_opaque_cache
             }
             need_guard_entries = 1;
             hasnewparams = 1;
-            assert(jl_svecref(newparams,i) != (jl_value_t*)jl_bottom_type);
         }
         else if (jl_is_type_type(elt) && very_general_type(decl_i) &&
                  !jl_has_typevars(decl_i)) {
             /*
-              here's a fairly complex heuristic: if this argument slot's
-              declared type is Any, and no definition overlaps with Type
-              for this slot, then don't specialize for every Type that
-              might be passed.
+              here's a fairly simple heuristic: if this argument slot's
+              declared type is general (Type, Any, or ANY),
+              then don't specialize for every Type that got passed.
+
               Since every type x has its own type Type{x}, this would be
               excessive specialization for an Any slot.
 
-              TypeConstructors are problematic because they can be alternate
-              representations of any type. Extensionally, TC == TC.body, but
-              typeof(TC) != typeof(TC.body). This creates an ambiguity:
+              This may require guard entries due to other potential matches.
+              In particular, TypeConstructors are problematic because they can
+              be alternate representations of any type. Extensionally, TC == TC.body,
+              but typeof(TC) != typeof(TC.body). This creates an ambiguity:
               Type{TC} is type-equal to Type{TC.body}, yet a slot
               x::TypeConstructor matches the first but not the second, while
               also matching all other TypeConstructors. This means neither
               Type{TC} nor TypeConstructor is more specific.
-
-              To solve this, we identify "kind slots", which are slots
-              for which some definition specifies a kind (e.g. DataType).
-              Those tend to be in reflective functions that look at types
-              themselves. For these slots we specialize on jl_typeof(T) instead
-              of Type{T}, i.e. the kind of the type rather than the specific
-              type.
             */
-            int ok=1, kindslot=0;
-            jl_methlist_t *curr = mt->defs;
-            jl_value_t *kind = (jl_value_t*)jl_typeof(jl_tparam0(elt));
-            while (curr != (void*)jl_nothing) {
-                jl_value_t *slottype = jl_nth_slot_type(curr->sig, i);
-                if (slottype && curr->func != method) {
-                    if (slottype == kind) {
-                        ok=0;
-                        break;
-                    }
-                    if (is_kind(slottype))
-                        kindslot=1;
-                }
-                curr = curr->next;
-            }
-            if (ok) {
-                if (kindslot) {
-                    hasnewparams = 1;
-                    jl_svecset(newparams, i, kind);
-                }
-                else {
-                    curr = mt->defs;
-                    while (curr != (void*)jl_nothing) {
-                        jl_value_t *slottype = jl_nth_slot_type(curr->sig, i);
-                        if (slottype && curr->func != method) {
-                            if (!very_general_type(slottype) &&
-                                jl_type_intersection(slottype, (jl_value_t*)jl_type_type) !=
-                                (jl_value_t*)jl_bottom_type) {
-                                ok=0;
-                                break;
-                            }
-                        }
-                        curr = curr->next;
-                    }
-                    if (ok) {
-                        jl_svecset(newparams, i, jl_typetype_type);
-                        hasnewparams = 1;
-                        need_guard_entries = 1;
-                    }
-                }
-            }
-        }
-        else if (is_kind(decl_i)) {
-            // if a slot is specialized for a particular kind, it can be
-            // considered a reflective method and so only needs to be
-            // specialized for type representation, not type extent.
-            jl_methlist_t *curr = mt->defs;
-            int ok=1;
-            while (curr != (void*)jl_nothing) {
-                jl_value_t *slottype = jl_nth_slot_type(curr->sig, i);
-                if (slottype && curr->func != method) {
-                    if (jl_is_type_type(slottype) &&
-                        jl_type_intersection(slottype, decl_i) != jl_bottom_type) {
-                        ok=0;
-                        break;
-                    }
-                }
-                curr = curr->next;
-            }
-            if (ok) {
-                hasnewparams = 1;
-                jl_svecset(newparams, i, decl_i);
-            }
+            jl_svecset(newparams, i, jl_typetype_type);
+            need_guard_entries = 1;
+            hasnewparams = 1;
         }
     }
 
@@ -1480,7 +1357,7 @@ static jl_lambda_info_t *cache_method(jl_methtable_t *mt, union _jl_opaque_cache
         temp2 = (jl_value_t*)type;
     }
     if (need_guard_entries) {
-        temp = ml_matches(mt->defs, (jl_value_t*)type, lambda_sym, -1);
+        temp = ml_matches(mt->defs, (jl_value_t*)type, lambda_sym, -1); // TODO: use MAX_UNSPECIALIZED_CONFLICTS
         int guards = 0;
         if (temp == jl_false) {
             cache_with_orig = 1;
