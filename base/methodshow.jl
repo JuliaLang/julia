@@ -44,13 +44,9 @@ end
 function kwarg_decl(m::Method, kwtype::DataType)
     sig = Tuple{kwtype, Array, m.sig.parameters...}
     mt = kwtype.name.mt
-    d = mt.defs
-    while d !== nothing
-        if typeseq(d.sig, sig)
-            li = d.func
-            return filter(x->!('#' in string(x)), li.slotnames[li.nargs+1:end])
-        end
-        d = d.next
+    li = ccall(:jl_methtable_lookup, Any, (Any, Any), mt, sig)
+    if li !== nothing
+        return filter(x->!('#' in string(x)), li.slotnames[li.nargs+1:end])
     end
     return ()
 end
@@ -103,22 +99,26 @@ function show_method_table(io::IO, mt::MethodTable, max::Int=-1, header::Bool=tr
         what = startswith(ns, '@') ? "macro" : "generic function"
         print(io, "# $n $m for ", what, " \"", ns, "\":")
     end
-    d = mt.defs
-    n = rest = 0
     kwtype = isdefined(mt, :kwsorter) ? Nullable{DataType}(typeof(mt.kwsorter)) : Nullable{DataType}()
-    while d !== nothing
-        if max==-1 || n<max || (rest==0 && n==max && d.next === nothing)
+    n = rest = 0
+    local last
+    visit(mt) do d
+        if max==-1 || n<max
             println(io)
             show(io, d; kwtype=kwtype)
             n += 1
         else
             rest += 1
+            last = d
         end
-        d = d.next
     end
     if rest > 0
         println(io)
-        print(io,"... $rest methods not shown (use methods($name) to see them all)")
+        if rest == 1
+            show(io, last; kwtype=kwtype)
+        else
+            print(io,"... $rest methods not shown (use methods($name) to see them all)")
+        end
     end
 end
 
@@ -222,13 +222,11 @@ function writemime(io::IO, mime::MIME"text/html", mt::MethodTable)
     ns = string(name)
     what = startswith(ns, '@') ? "macro" : "generic function"
     print(io, "$n $meths for ", what, " <b>$ns</b>:<ul>")
-    d = mt.defs
     kwtype = isdefined(mt, :kwsorter) ? Nullable{DataType}(typeof(mt.kwsorter)) : Nullable{DataType}()
-    while d !== nothing
+    visit(mt) do d
         print(io, "<li> ")
         writemime(io, mime, d; kwtype=kwtype)
         print(io, "</li> ")
-        d = d.next
     end
     print(io, "</ul>")
 end

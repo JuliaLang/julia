@@ -371,7 +371,7 @@ typedef struct _jl_methcache_t {
 typedef struct _jl_methtable_t {
     JL_DATA_TYPE
     jl_sym_t *name;
-    jl_methlist_t *defs;
+    union _jl_opaque_cache_t defs;
     union _jl_opaque_cache_t cache;
     intptr_t max_args;  // max # of non-vararg arguments in a signature
     jl_value_t *kwsorter;  // keyword argument sorter function

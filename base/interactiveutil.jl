@@ -390,8 +390,7 @@ end
 # `methodswith` -- shows a list of methods using the type given
 function methodswith(t::Type, f::Function, showparents::Bool=false, meths = Method[])
     mt = typeof(f).name.mt
-    d = mt.defs
-    while d !== nothing
+    visit(mt) do d
         if any(x -> (type_close_enough(x, t) ||
                      (showparents ? (t <: x && (!isa(x,TypeVar) || x.ub != Any)) :
                       (isa(x,TypeVar) && x.ub != Any && t == x.ub)) &&
@@ -399,7 +398,6 @@ function methodswith(t::Type, f::Function, showparents::Bool=false, meths = Meth
                d.sig.parameters)
             push!(meths, d)
         end
-        d = d.next
     end
     return meths
 end
