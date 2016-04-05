@@ -118,7 +118,9 @@ iteratorsize{I}(::Type{CartesianRange{I}}) = Base.HasShape()
     extest = Expr(:||, cmp...)
     inc = [d < N ? :(iter.start[$d]) : :(iter.stop[$N]+1) for d = 1:N]
     exstop = :(CartesianIndex{$N}($(inc...)))
+    meta = Expr(:meta, :inline)
     quote
+        $meta
         $extest ? $exstop : iter.start
     end
 end
