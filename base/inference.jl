@@ -2361,7 +2361,7 @@ function inlineable(f::ANY, ft::ANY, e::Expr, atypes::Vector{Any}, sv::Inference
     if linfo === NF
         return NF
     end
-    if linfo.pure && isconstantargs(argexprs, atypes, sv)
+    if isa(f, ft) && linfo.pure && isconstantargs(argexprs, atypes, sv)
         # check if any arguments aren't effect_free and need to be kept around
         stmts = Any[]
         for i = 1:length(argexprs)
