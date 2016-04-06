@@ -237,7 +237,7 @@ function visit(f, mt::MethodTable)
     mt.defs !== nothing && visit(f, mt.defs)
     nothing
 end
-function visit(f, mc::MethodCache)
+function visit(f, mc::TypeMapLevel)
     if mc.targ !== nothing
         e = mc.targ::Vector{Any}
         for i in 1:length(e)
@@ -253,7 +253,7 @@ function visit(f, mc::MethodCache)
     mc.list !== nothing && visit(f, mc.list)
     nothing
 end
-function visit(f, d::Method)
+function visit(f, d::TypeMapEntry)
     while !is(d, nothing)
         f(d)
         d = d.next
@@ -268,11 +268,7 @@ function length(mt::MethodTable)
     end
     return n::Int
 end
-
-start(mt::MethodTable) = mt.defs
-next(mt::MethodTable, m::Method) = (m,m.next)
-done(mt::MethodTable, m::Method) = false
-done(mt::MethodTable, i::Void) = true
+isempty(mt::MethodTable) = (mt.defs === nothing)
 
 uncompressed_ast(l::LambdaInfo) =
     isa(l.code,Array{Any,1}) ? l.code::Array{Any,1} : ccall(:jl_uncompress_ast, Array{Any,1}, (Any,Any), l, l.code)
@@ -370,7 +366,7 @@ function which_module(m::Module, s::Symbol)
     binding_module(m, s)
 end
 
-function functionloc(m::Method)
+function functionloc(m::TypeMapEntry)
     lsd = m.func::LambdaInfo
     ln = lsd.line
     if ln <= 0
@@ -382,17 +378,22 @@ end
 functionloc(f::ANY, types::ANY) = functionloc(which(f,types))
 
 function functionloc(f)
-    m = methods(f)
-    if length(m) > 1
-        error("function has multiple methods; please specify a type signature")
-    elseif isempty(m)
+    mt = methods(f)
+    local thef = nothing
+    visit(mt) do f
+        if thef !== nothing
+            error("function has multiple methods; please specify a type signature")
+        end
+        thef = f
+    end
+    if thef === nothing
         if isa(f,Function)
             error("function has no definitions")
         else
             error("object is not callable")
         end
     end
-    functionloc(first(m))
+    functionloc(thef)
 end
 
 function function_module(f, types::ANY)

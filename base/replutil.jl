@@ -281,7 +281,7 @@ function show_method_candidates(io::IO, ex::MethodError)
     end
 
     for (func,arg_types_param) in funcs
-        for method in func.name.mt
+        visit(func.name.mt) do method
             buf = IOBuffer()
             s1 = method.sig.parameters[1]
             sig = method.sig.parameters[2:end]
@@ -345,7 +345,7 @@ function show_method_candidates(io::IO, ex::MethodError)
                     print(buf, "::$sigstr")
                 end
             end
-            special && right_matches==0 && continue
+            special && right_matches==0 && return # continue the do-block
 
             if length(t_i) > length(sig) && !isempty(sig) && Base.isvarargtype(sig[end])
                 # It ensures that methods like f(a::AbstractString...) gets the correct

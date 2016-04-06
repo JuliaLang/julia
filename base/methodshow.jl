@@ -26,7 +26,7 @@ function argtype_decl(env, n, t) # -> (argname, argtype)
     return s, string_with_env(env, t)
 end
 
-function arg_decl_parts(m::Method)
+function arg_decl_parts(m::TypeMapEntry)
     tv = m.tvars
     if !isa(tv,SimpleVector)
         tv = Any[tv]
@@ -41,7 +41,7 @@ function arg_decl_parts(m::Method)
     return tv, decls, li.file, li.line
 end
 
-function kwarg_decl(m::Method, kwtype::DataType)
+function kwarg_decl(m::TypeMapEntry, kwtype::DataType)
     sig = Tuple{kwtype, Array, m.sig.parameters...}
     mt = kwtype.name.mt
     li = ccall(:jl_methtable_lookup, Any, (Any, Any), mt, sig)
@@ -51,7 +51,7 @@ function kwarg_decl(m::Method, kwtype::DataType)
     return ()
 end
 
-function show(io::IO, m::Method; kwtype::Nullable{DataType}=Nullable{DataType}())
+function show(io::IO, m::TypeMapEntry; kwtype::Nullable{DataType}=Nullable{DataType}())
     tv, decls, file, line = arg_decl_parts(m)
     ft = m.sig.parameters[1]
     d1 = decls[1]
@@ -134,7 +134,7 @@ function inbase(m::Module)
 end
 fileurl(file) = let f = find_source_file(file); f === nothing ? "" : "file://"*f; end
 
-function url(m::Method)
+function url(m::TypeMapEntry)
     M = m.func.module
     (m.func.file == :null || m.func.file == :string) && return ""
     file = string(m.func.file)
@@ -169,7 +169,7 @@ function url(m::Method)
     end
 end
 
-function writemime(io::IO, ::MIME"text/html", m::Method; kwtype::Nullable{DataType}=Nullable{DataType}())
+function writemime(io::IO, ::MIME"text/html", m::TypeMapEntry; kwtype::Nullable{DataType}=Nullable{DataType}())
     tv, decls, file, line = arg_decl_parts(m)
     ft = m.sig.parameters[1]
     d1 = decls[1]
@@ -231,9 +231,9 @@ function writemime(io::IO, mime::MIME"text/html", mt::MethodTable)
     print(io, "</ul>")
 end
 
-# pretty-printing of Vector{Method} for output of methodswith:
+# pretty-printing of Vector{TypeMapEntry} for output of methodswith:
 
-function writemime(io::IO, mime::MIME"text/html", mt::AbstractVector{Method})
+function writemime(io::IO, mime::MIME"text/html", mt::AbstractVector{TypeMapEntry})
     print(io, summary(mt))
     if !isempty(mt)
         print(io, ":<ul>")
@@ -245,6 +245,6 @@ function writemime(io::IO, mime::MIME"text/html", mt::AbstractVector{Method})
     end
 end
 
-# override usual show method for Vector{Method}: don't abbreviate long lists
-writemime(io::IO, mime::MIME"text/plain", mt::AbstractVector{Method}) =
+# override usual show method for Vector{TypeMapEntry}: don't abbreviate long lists
+writemime(io::IO, mime::MIME"text/plain", mt::AbstractVector{TypeMapEntry}) =
     showarray(IOContext(io, :limit_output => false), mt)

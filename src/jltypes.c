@@ -3178,7 +3178,6 @@ void jl_init_types(void)
     jl_symbol_type = jl_sym_type;
     jl_simplevector_type = jl_new_uninitialized_datatype(1, 1);
     jl_methtable_type = jl_new_uninitialized_datatype(6, 1);
-    jl_methcache_type = jl_new_uninitialized_datatype(4, 1);
     jl_nothing = jl_gc_alloc_0w();
 
     jl_emptysvec = (jl_svec_t*)newobj((jl_value_t*)jl_simplevector_type, 1);
@@ -3260,22 +3259,6 @@ void jl_init_types(void)
     jl_methtable_type->pointerfree = 0;
     jl_methtable_type->mutabl = 1;
     jl_methtable_type->ninitialized = 4;
-
-    jl_methcache_type->name = jl_new_typename(jl_symbol("MethodCache"));
-    jl_methcache_type->name->primary = (jl_value_t*)jl_methcache_type;
-    jl_methcache_type->name->mt = jl_new_method_table(jl_methcache_type->name->name, jl_current_module);
-    jl_methcache_type->super = jl_any_type;
-    jl_methcache_type->parameters = jl_emptysvec;
-    jl_methcache_type->name->names = jl_svec(4, jl_symbol("arg1"), jl_symbol("targ"), jl_symbol("list"), jl_symbol("key")),
-    jl_methcache_type->types = jl_svec(4, jl_any_type, jl_any_type, jl_any_type, jl_any_type);
-    jl_methcache_type->uid = jl_assign_type_uid();
-    jl_methcache_type->instance = NULL;
-    jl_methcache_type->struct_decl = NULL;
-    jl_methcache_type->ditype = NULL;
-    jl_methcache_type->abstract = 0;
-    jl_methcache_type->pointerfree = 0;
-    jl_methcache_type->mutabl = 1;
-    jl_methcache_type->ninitialized = 3;
 
     jl_sym_type->name = jl_new_typename(jl_symbol("Symbol"));
     jl_sym_type->name->primary = (jl_value_t*)jl_sym_type;
@@ -3387,8 +3370,14 @@ void jl_init_types(void)
     jl_false = jl_box8(jl_bool_type, 0);
     jl_true  = jl_box8(jl_bool_type, 1);
 
-    jl_method_type =
-        jl_new_datatype(jl_symbol("Method"), jl_any_type, jl_emptysvec,
+    jl_typemap_level_type =
+        jl_new_datatype(jl_symbol("TypeMapLevel"), jl_any_type, jl_emptysvec,
+                        jl_svec(4, jl_symbol("arg1"), jl_symbol("targ"), jl_symbol("list"), jl_symbol("key")),
+                        jl_svec(4, jl_any_type,       jl_any_type,       jl_any_type,       jl_any_type),
+                        0, 1, 3);
+
+    jl_typemap_entry_type =
+        jl_new_datatype(jl_symbol("TypeMapEntry"), jl_any_type, jl_emptysvec,
                         jl_svec(9, jl_symbol("next"),
                                    jl_symbol("sig"),
                                    jl_symbol("tvars"),
@@ -3398,16 +3387,16 @@ void jl_init_types(void)
                                    jl_symbol("isleafsig"),
                                    jl_symbol("issimplesig"),
                                    jl_symbol("va")),
-                        jl_svec(9, jl_any_type, // Union{Method, Void}
-                                   jl_type_type, // Tuple
-                                   jl_any_type, // Union{SimpleVector, TypeVar}
-                                   jl_any_type, // Tuple
-                                   jl_any_type, // SimpleVector{Tuple}
+                        jl_svec(9, jl_any_type, // Union{TupleMapEntry, Void}
+                                   jl_type_type, // TupleType
+                                   jl_any_type, // Union{SimpleVector{TypeVar}, TypeVar}
+                                   jl_any_type, // TupleType
+                                   jl_any_type, // SimpleVector{TupleType}
                                    jl_any_type, // Any
                                    jl_bool_type,
                                    jl_bool_type,
                                    jl_bool_type),
-                        0, 1, 8);
+                        0, 1, 5);
 
     jl_function_type = jl_new_abstracttype((jl_value_t*)jl_symbol("Function"), jl_any_type, jl_emptysvec);
     jl_builtin_type  = jl_new_abstracttype((jl_value_t*)jl_symbol("Builtin"), jl_function_type, jl_emptysvec);
@@ -3606,8 +3595,8 @@ void jl_init_types(void)
     jl_compute_field_offsets(jl_typename_type);
     jl_compute_field_offsets(jl_uniontype_type);
     jl_compute_field_offsets(jl_tvar_type);
-    jl_compute_field_offsets(jl_method_type);
-    jl_compute_field_offsets(jl_methcache_type);
+    jl_compute_field_offsets(jl_typemap_level_type);
+    jl_compute_field_offsets(jl_typemap_entry_type);
     jl_compute_field_offsets(jl_methtable_type);
     jl_compute_field_offsets(jl_expr_type);
     jl_compute_field_offsets(jl_linenumbernode_type);
