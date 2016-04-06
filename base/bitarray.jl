@@ -1711,19 +1711,20 @@ maximum(B::BitArray) = isempty(B) ? throw(ArgumentError("argument must be non-em
 # arrays since there can be a 64x speedup by working at the level of Int64
 # instead of looping bit-by-bit.
 
-map(f::Function, A::BitArray) = map(specialized_bitwise_unary(f), A)
 map(f::Function, A::BitArray, B::BitArray) = map(specialized_bitwise_binary(f), A, B)
-map(f::BitFunctorUnary, A::BitArray) = map!(f, similar(A), A)
+map(f::Function, A::BitArray) = map!(f, similar(A), A)
 map(f::BitFunctorBinary, A::BitArray, B::BitArray) = map!(f, similar(A), A, B)
 
 map!(f, A::BitArray) = map!(f, A, A)
-map!(f::Function, dest::BitArray, A::BitArray) = map!(specialized_bitwise_unary(f), dest, A)
+map!(f::typeof(!), dest::BitArray, A::BitArray) = map!(~, dest, A)
+map!(f::typeof(zero), dest::BitArray, A::BitArray) = fill!(dest, false)
+map!(f::typeof(one), dest::BitArray, A::BitArray) = fill!(dest, true)
 map!(f::Function, dest::BitArray, A::BitArray, B::BitArray) = map!(specialized_bitwise_binary(f), dest, A, B)
 
 # If we were able to specialize the function to a known bitwise operation,
 # map across the chunks. Otherwise, fall-back to the AbstractArray method that
 # iterates bit-by-bit.
-function map!(f::BitFunctorUnary, dest::BitArray, A::BitArray)
+function map!(f::Union{typeof(identity), typeof(~)}, dest::BitArray, A::BitArray)
     size(A) == size(dest) || throw(DimensionMismatch("sizes of dest and A must match"))
     isempty(A) && return dest
     for i=1:length(A.chunks)-1

@@ -122,7 +122,7 @@ end
 
 reducedim_init{T}(f, op::MaxFun, A::AbstractArray{T}, region) = reducedim_initarray0(A, region, typemin(f(zero(T))))
 reducedim_init{T}(f, op::MinFun, A::AbstractArray{T}, region) = reducedim_initarray0(A, region, typemax(f(zero(T))))
-reducedim_init{T}(f::Union{AbsFun,Abs2Fun}, op::MaxFun, A::AbstractArray{T}, region) =
+reducedim_init{T}(f::Union{typeof(abs),typeof(abs2)}, op::MaxFun, A::AbstractArray{T}, region) =
     reducedim_initarray(A, region, zero(f(zero(T))))
 
 reducedim_init(f, op::AndFun, A::AbstractArray, region) = reducedim_initarray(A, region, true)
@@ -133,17 +133,17 @@ reducedim_init(f, op::OrFun, A::AbstractArray, region) = reducedim_initarray(A, 
 for (IT, RT) in ((CommonReduceResult, :(eltype(A))), (SmallSigned, :Int), (SmallUnsigned, :UInt))
     T = Union{[AbstractArray{t} for t in IT.types]..., [AbstractArray{Complex{t}} for t in IT.types]...}
     @eval begin
-        reducedim_init(f::IdFun, op::AddFun, A::$T, region) =
+        reducedim_init(f::typeof(identity), op::AddFun, A::$T, region) =
             reducedim_initarray(A, region, zero($RT))
-        reducedim_init(f::IdFun, op::MulFun, A::$T, region) =
+        reducedim_init(f::typeof(identity), op::MulFun, A::$T, region) =
             reducedim_initarray(A, region, one($RT))
-        reducedim_init(f::Union{AbsFun,Abs2Fun}, op::AddFun, A::$T, region) =
+        reducedim_init(f::Union{typeof(abs),typeof(abs2)}, op::AddFun, A::$T, region) =
             reducedim_initarray(A, region, real(zero($RT)))
-        reducedim_init(f::Union{AbsFun,Abs2Fun}, op::MulFun, A::$T, region) =
+        reducedim_init(f::Union{typeof(abs),typeof(abs2)}, op::MulFun, A::$T, region) =
             reducedim_initarray(A, region, real(one($RT)))
     end
 end
-reducedim_init(f::Union{IdFun,AbsFun,Abs2Fun}, op::AddFun, A::AbstractArray{Bool}, region) =
+reducedim_init(f::Union{typeof(identity),typeof(abs),typeof(abs2)}, op::AddFun, A::AbstractArray{Bool}, region) =
     reducedim_initarray(A, region, 0)
 
 
@@ -234,15 +234,15 @@ mapreducedim!(f, op, R::AbstractArray, A::AbstractArray) =
     (_mapreducedim!(f, to_op(op), R, A); R)
 
 reducedim!{RT}(op, R::AbstractArray{RT}, A::AbstractArray) =
-    mapreducedim!(IdFun(), op, R, A, zero(RT))
+    mapreducedim!(identity, op, R, A, zero(RT))
 
 mapreducedim(f, op, A::AbstractArray, region, v0) =
     mapreducedim!(f, op, reducedim_initarray(A, region, v0), A)
 mapreducedim{T}(f, op, A::AbstractArray{T}, region) =
     mapreducedim!(f, op, reducedim_init(f, to_op(op), A, region), A)
 
-reducedim(op, A::AbstractArray, region, v0) = mapreducedim(IdFun(), op, A, region, v0)
-reducedim(op, A::AbstractArray, region) = mapreducedim(IdFun(), op, A, region)
+reducedim(op, A::AbstractArray, region, v0) = mapreducedim(identity, op, A, region, v0)
+reducedim(op, A::AbstractArray, region) = mapreducedim(identity, op, A, region)
 
 
 ##### Specific reduction functions #####
@@ -255,24 +255,24 @@ for (fname, Op) in [(:sum, :AddFun), (:prod, :MulFun),
     @eval begin
         $(fname!)(f::Union{Function,Func{1}}, r::AbstractArray, A::AbstractArray; init::Bool=true) =
             mapreducedim!(f, $(Op)(), initarray!(r, $(Op)(), init), A)
-        $(fname!)(r::AbstractArray, A::AbstractArray; init::Bool=true) = $(fname!)(IdFun(), r, A; init=init)
+        $(fname!)(r::AbstractArray, A::AbstractArray; init::Bool=true) = $(fname!)(identity, r, A; init=init)
 
         $(fname)(f::Union{Function,Func{1}}, A::AbstractArray, region) =
             mapreducedim(f, $(Op)(), A, region)
-        $(fname)(A::AbstractArray, region) = $(fname)(IdFun(), A, region)
+        $(fname)(A::AbstractArray, region) = $(fname)(identity, A, region)
     end
 end
 
-for (fname, fbase, Fun) in [(:sumabs, :sum, :AbsFun),
-                            (:sumabs2, :sum, :Abs2Fun),
-                            (:maxabs, :maximum, :AbsFun),
-                            (:minabs, :minimum, :AbsFun)]
+for (fname, fbase, fun) in [(:sumabs, :sum, :abs),
+                            (:sumabs2, :sum, :abs2),
+                            (:maxabs, :maximum, :abs),
+                            (:minabs, :minimum, :abs)]
     fname! = symbol(fname, '!')
     fbase! = symbol(fbase, '!')
     @eval begin
         $(fname!)(r::AbstractArray, A::AbstractArray; init::Bool=true) =
-            $(fbase!)($(Fun)(), r, A; init=init)
-        $(fname)(A::AbstractArray, region) = $(fbase)($(Fun)(), A, region)
+            $(fbase!)($(fun), r, A; init=init)
+        $(fname)(A::AbstractArray, region) = $(fbase)($(fun), A, region)
     end
 end
 

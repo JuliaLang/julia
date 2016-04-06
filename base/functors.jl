@@ -10,24 +10,6 @@
 
 abstract Func{N}
 
-immutable IdFun <: Func{1} end
-(::IdFun)(x) = x
-
-immutable AbsFun <: Func{1} end
-(::AbsFun)(x) = abs(x)
-
-immutable Abs2Fun <: Func{1} end
-(::Abs2Fun)(x) = abs2(x)
-
-immutable ExpFun <: Func{1} end
-(::ExpFun)(x) = exp(x)
-
-immutable LogFun <: Func{1} end
-(::LogFun)(x) = log(x)
-
-immutable ConjFun <: Func{1} end
-(::ConjFun)(x) = conj(x)
-
 immutable AndFun <: Func{2} end
 (::AndFun)(x, y) = x & y
 
@@ -106,7 +88,6 @@ immutable DotRSFun <: Func{2} end
 immutable UnspecializedFun{N} <: Func{N}
     f::Function
 end
-(f::UnspecializedFun{1})(x) = f.f(x)
 (f::UnspecializedFun{2})(x, y) = f.f(x,y)
 
 # Special purpose functors
@@ -148,12 +129,6 @@ promote_op{T<:Integer}(::PowFun, ::Type{Bool}, ::Type{T}) = Bool
 ##############################################################################
 
 
-immutable BitFunctorUnary{T,F} <: Func{1} end
-(::BitFunctorUnary{true,  true})( p) = p | ~p # Must work for bits and ints
-(::BitFunctorUnary{false, false})(p) = p & ~p # LLVM figures them out nicely
-(::BitFunctorUnary{true,  false})(p) =  p
-(::BitFunctorUnary{false, true})( p) = ~p
-
 immutable BitFunctorBinary{TT,TF,FT,FF} <: Func{2} end
 (::BitFunctorBinary{true,  true,  true,  true })(p, q) = p | ~p
 (::BitFunctorBinary{true,  true,  true,  false})(p, q) = p | q
@@ -175,14 +150,6 @@ immutable BitFunctorBinary{TT,TF,FT,FF} <: Func{2} end
 
 # Specializations by value
 
-function specialized_unary(f::Function)
-    is(f, identity) ? IdFun()   :
-    is(f, abs)      ? AbsFun()  :
-    is(f, abs2)     ? Abs2Fun() :
-    is(f, exp)      ? ExpFun()  :
-    is(f, log)      ? LogFun()  :
-    UnspecializedFun{1}(f)
-end
 function specialized_binary(f::Function)
     is(f, +) ? AddFun() :
     is(f, -) ? SubFun() :
@@ -199,13 +166,6 @@ function specialized_binary(f::Function)
     UnspecializedFun{2}(f)
 end
 
-function specialized_bitwise_unary(f::Function)
-    is(f, identity)     ? BitFunctorUnary{true,  false}() :
-    is(f, !) | is(f, ~) ? BitFunctorUnary{false, true }() :
-    is(f, one)          ? BitFunctorUnary{true,  true }() :
-    is(f, zero)         ? BitFunctorUnary{false, false}() :
-    UnspecializedFun{1}(f)
-end
 function specialized_bitwise_binary(f::Function)
     is(f, &)  | is(f, *) | is(f, min) ? BitFunctorBinary{true,  false, false, false}() :
     is(f, |)  | is(f, max)            ? BitFunctorBinary{true,  true,  true,  false}() :

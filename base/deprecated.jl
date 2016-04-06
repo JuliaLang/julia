@@ -1020,6 +1020,22 @@ function pmap(f, c...; err_retry=nothing, err_stop=nothing, pids=nothing)
     return pmap(p, f, c...)
 end
 
+# 15692
+for (Fun, func) in [(:IdFun, :identity),
+                    (:AbsFun, :abs),
+                    (:Abs2Fun, :abs2),
+                    (:ExpFun, :exp),
+                    (:LogFun, :log),
+                    (:ConjFun, :conj),
+                    ]
+    @eval begin
+        @deprecate_binding $(Fun) typeof($(func))
+        (::Type{typeof($(func))})() = $(func)
+    end
+end
+@deprecate specialized_unary(f::Function) f
+@deprecate specialized_bitwise_unary(f::Function) f
+
 
 # During the 0.5 development cycle, do not add any deprecations below this line
 # To be deprecated in 0.6
