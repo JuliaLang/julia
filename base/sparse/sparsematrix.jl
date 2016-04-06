@@ -314,9 +314,9 @@ sparse{Tv}(A::AbstractMatrix{Tv}) = convert(SparseMatrixCSC{Tv,Int}, A)
 
 sparse(S::SparseMatrixCSC) = copy(S)
 
-sparse_IJ_sorted!(I,J,V,m,n) = sparse_IJ_sorted!(I,J,V,m,n,AddFun())
+sparse_IJ_sorted!(I,J,V,m,n) = sparse_IJ_sorted!(I,J,V,m,n,+)
 
-sparse_IJ_sorted!(I,J,V::AbstractVector{Bool},m,n) = sparse_IJ_sorted!(I,J,V,m,n,OrFun())
+sparse_IJ_sorted!(I,J,V::AbstractVector{Bool},m,n) = sparse_IJ_sorted!(I,J,V,m,n,|)
 
 function sparse_IJ_sorted!{Ti<:Integer}(I::AbstractVector{Ti}, J::AbstractVector{Ti},
                                         V::AbstractVector,
@@ -592,9 +592,9 @@ sparse(I,J,V::AbstractVector) = sparse(I, J, V, dimlub(I), dimlub(J))
 
 sparse(I,J,v::Number,m,n) = sparse(I, J, fill(v,length(I)), Int(m), Int(n))
 
-sparse(I,J,V::AbstractVector,m,n) = sparse(I, J, V, Int(m), Int(n), AddFun())
+sparse(I,J,V::AbstractVector,m,n) = sparse(I, J, V, Int(m), Int(n), +)
 
-sparse(I,J,V::AbstractVector{Bool},m,n) = sparse(I, J, V, Int(m), Int(n), OrFun())
+sparse(I,J,V::AbstractVector{Bool},m,n) = sparse(I, J, V, Int(m), Int(n), |)
 
 sparse(I,J,v::Number,m,n,combine::Union{Function,Func}) = sparse(I, J, fill(v,length(I)), Int(m), Int(n), combine)
 
@@ -926,7 +926,7 @@ function sprand{T}(r::AbstractRNG, m::Integer, n::Integer, density::AbstractFloa
     N == 1 && return rand(r) <= density ? sparse(rfn(r,1)) : spzeros(T,1,1)
 
     I,J = sprand_IJ(r, m, n, density)
-    sparse_IJ_sorted!(I, J, rfn(r,length(I)), m, n, AddFun())  # it will never need to combine
+    sparse_IJ_sorted!(I, J, rfn(r,length(I)), m, n, +)  # it will never need to combine
 end
 
 function sprand{T}(m::Integer, n::Integer, density::AbstractFloat,
@@ -936,7 +936,7 @@ function sprand{T}(m::Integer, n::Integer, density::AbstractFloat,
     N == 1 && return rand() <= density ? sparse(rfn(1)) : spzeros(T,1,1)
 
     I,J = sprand_IJ(GLOBAL_RNG, m, n, density)
-    sparse_IJ_sorted!(I, J, rfn(length(I)), m, n, AddFun())  # it will never need to combine
+    sparse_IJ_sorted!(I, J, rfn(length(I)), m, n, +)  # it will never need to combine
 end
 
 sprand(r::AbstractRNG, m::Integer, n::Integer, density::AbstractFloat) = sprand(r,m,n,density,rand,Float64)
@@ -1441,7 +1441,7 @@ end # macro
 (.-)(A::Number, B::SparseMatrixCSC) = A .- full(B)
 ( -)(A::Array , B::SparseMatrixCSC) = A  - full(B)
 
-(.*)(A::AbstractArray, B::AbstractArray) = broadcast_zpreserving(MulFun(), A, B)
+(.*)(A::AbstractArray, B::AbstractArray) = broadcast_zpreserving(*, A, B)
 (.*)(A::SparseMatrixCSC, B::Number) = SparseMatrixCSC(A.m, A.n, copy(A.colptr), copy(A.rowval), A.nzval .* B)
 (.*)(A::Number, B::SparseMatrixCSC) = SparseMatrixCSC(B.m, B.n, copy(B.colptr), copy(B.rowval), A .* B.nzval)
 
@@ -1557,13 +1557,13 @@ function Base._mapreduce{T}(f, op, ::Base.LinearSlow, A::SparseMatrixCSC{T})
     end
 end
 
-# Specialized mapreduce for AddFun/MulFun
-_mapreducezeros(f, ::Base.AddFun, T::Type, nzeros::Int, v0) =
+# Specialized mapreduce for +/*
+_mapreducezeros(f, ::typeof(+), T::Type, nzeros::Int, v0) =
     nzeros == 0 ? v0 : f(zero(T))*nzeros + v0
-_mapreducezeros(f, ::Base.MulFun, T::Type, nzeros::Int, v0) =
+_mapreducezeros(f, ::typeof(*), T::Type, nzeros::Int, v0) =
     nzeros == 0 ? v0 : f(zero(T))^nzeros * v0
 
-function Base._mapreduce{T}(f, op::Base.MulFun, A::SparseMatrixCSC{T})
+function Base._mapreduce{T}(f, op::typeof(*), A::SparseMatrixCSC{T})
     nzeros = length(A)-nnz(A)
     if nzeros == 0
         # No zeros, so don't compute f(0) since it might throw
@@ -1658,9 +1658,9 @@ function Base._mapreducedim!{T}(f, op, R::AbstractArray, A::SparseMatrixCSC{T})
     R
 end
 
-# Specialized mapreducedim for AddFun cols to avoid allocating a
+# Specialized mapreducedim for + cols to avoid allocating a
 # temporary array when f(0) == 0
-function _mapreducecols!{Tv,Ti}(f, op::Base.AddFun, R::AbstractArray, A::SparseMatrixCSC{Tv,Ti})
+function _mapreducecols!{Tv,Ti}(f, op::typeof(+), R::AbstractArray, A::SparseMatrixCSC{Tv,Ti})
     nzval = A.nzval
     m, n = size(A)
     if length(nzval) == m*n

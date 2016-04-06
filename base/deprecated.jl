@@ -1027,6 +1027,30 @@ for (Fun, func) in [(:IdFun, :identity),
                     (:ExpFun, :exp),
                     (:LogFun, :log),
                     (:ConjFun, :conj),
+                    (:AndFun, :&),
+                    (:OrFun, :|),
+                    (:XorFun, :$),
+                    (:AddFun, :+),
+                    (:DotAddFun, :.+),
+                    (:SubFun, :-),
+                    (:DotSubFun, :.-),
+                    (:MulFun, :*),
+                    (:DotMulFun, :.*),
+                    (:RDivFun, :/),
+                    (:DotRDivFun, :./),
+                    (:LDivFun, :\),
+                    (:IDivFun, :div),
+                    (:DotIDivFun, :.÷),
+                    (:ModFun, :mod),
+                    (:RemFun, :rem),
+                    (:DotRemFun, :.%),
+                    (:PowFun, :^),
+                    (:MaxFun, :scalarmax),
+                    (:MinFun, :scalarmin),
+                    (:LessFun, :<),
+                    (:MoreFun, :>),
+                    (:DotLSFun, :.<<),
+                    (:DotRSFun, :.>>),
                     ]
     @eval begin
         @deprecate_binding $(Fun) typeof($(func))
@@ -1034,7 +1058,9 @@ for (Fun, func) in [(:IdFun, :identity),
     end
 end
 @deprecate specialized_unary(f::Function) f
+@deprecate specialized_binary(f::Function) f
 @deprecate specialized_bitwise_unary(f::Function) f
+@deprecate specialized_bitwise_binary(f::Function) f
 
 
 # During the 0.5 development cycle, do not add any deprecations below this line

@@ -2,7 +2,7 @@
 
 ### Common definitions
 
-import Base: Func, AddFun, MulFun, MaxFun, MinFun, SubFun, sort
+import Base: Func, scalarmax, scalarmin, sort
 
 immutable ComplexFun <: Func{2} end
 (::ComplexFun)(x::Real, y::Real) = complex(x, y)
@@ -129,18 +129,18 @@ function sparsevec{Tv,Ti<:Integer}(I::AbstractVector{Ti}, V::AbstractVector{Tv},
 end
 
 sparsevec{Ti<:Integer}(I::AbstractVector{Ti}, V::Union{Number, AbstractVector}) =
-    sparsevec(I, V, AddFun())
+    sparsevec(I, V, +)
 
 sparsevec{Ti<:Integer}(I::AbstractVector{Ti}, V::Union{Number, AbstractVector},
     len::Integer) =
-    sparsevec(I, V, len, AddFun())
+    sparsevec(I, V, len, +)
 
 sparsevec{Ti<:Integer}(I::AbstractVector{Ti}, V::Union{Bool, AbstractVector{Bool}}) =
-    sparsevec(I, V, OrFun())
+    sparsevec(I, V, |)
 
 sparsevec{Ti<:Integer}(I::AbstractVector{Ti}, V::Union{Bool, AbstractVector{Bool}},
     len::Integer) =
-    sparsevec(I, V, len, OrFun())
+    sparsevec(I, V, len, |)
 
 sparsevec{Ti<:Integer}(I::AbstractVector{Ti}, v::Number, combine::BinaryOp) =
     sparsevec(I, fill(v, length(I)), combine)
@@ -1094,13 +1094,13 @@ end
 
 ### Binary arithmetics: +, -, *
 
-for (vop, fun, mode) in [(:_vadd, :AddFun, 1),
-                         (:_vsub, :SubFun, 1),
-                         (:_vmul, :MulFun, 0)]
+for (vop, fun, mode) in [(:_vadd, :+, 1),
+                         (:_vsub, :-, 1),
+                         (:_vmul, :*, 0)]
     @eval begin
-        $(vop)(x::AbstractSparseVector, y::AbstractSparseVector) = _binarymap($(fun)(), x, y, $mode)
-        $(vop)(x::StridedVector, y::AbstractSparseVector) = _binarymap($(fun)(), x, y, $mode)
-        $(vop)(x::AbstractSparseVector, y::StridedVector) = _binarymap($(fun)(), x, y, $mode)
+        $(vop)(x::AbstractSparseVector, y::AbstractSparseVector) = _binarymap($(fun), x, y, $mode)
+        $(vop)(x::StridedVector, y::AbstractSparseVector) = _binarymap($(fun), x, y, $mode)
+        $(vop)(x::AbstractSparseVector, y::StridedVector) = _binarymap($(fun), x, y, $mode)
     end
 end
 
@@ -1122,8 +1122,8 @@ end
 
 # definition of other binary functions
 
-for (op, fun, TF, mode) in [(:max, :MaxFun, :Real, 2),
-                            (:min, :MinFun, :Real, 2),
+for (op, fun, TF, mode) in [(:max, :(typeof(scalarmax)), :Real, 2),
+                            (:min, :(typeof(scalarmin)), :Real, 2),
                             (:complex, :ComplexFun, :Real, 1)]
     @eval begin
         $(op){Tx<:$(TF),Ty<:$(TF)}(x::AbstractSparseVector{Tx}, y::AbstractSparseVector{Ty}) =
@@ -1435,7 +1435,7 @@ At_mul_B!{Tx,Ty}(y::StridedVector{Ty}, A::SparseMatrixCSC, x::AbstractSparseVect
     At_mul_B!(one(Tx), A, x, zero(Ty), y)
 
 At_mul_B!{Tx,Ty}(α::Number, A::SparseMatrixCSC, x::AbstractSparseVector{Tx}, β::Number, y::StridedVector{Ty}) =
-    _At_or_Ac_mul_B!(MulFun(), α, A, x, β, y)
+    _At_or_Ac_mul_B!(*, α, A, x, β, y)
 
 Ac_mul_B!{Tx,Ty}(y::StridedVector{Ty}, A::SparseMatrixCSC, x::AbstractSparseVector{Tx}) =
     Ac_mul_B!(one(Tx), A, x, zero(Ty), y)
@@ -1480,7 +1480,7 @@ function *(A::SparseMatrixCSC, x::AbstractSparseVector)
 end
 
 At_mul_B(A::SparseMatrixCSC, x::AbstractSparseVector) =
-    _At_or_Ac_mul_B(MulFun(), A, x)
+    _At_or_Ac_mul_B(*, A, x)
 
 Ac_mul_B(A::SparseMatrixCSC, x::AbstractSparseVector) =
     _At_or_Ac_mul_B(DotFun(), A, x)

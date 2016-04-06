@@ -100,9 +100,9 @@ immutable CentralizedAbs2Fun{T<:Number} <: Func{1}
 end
 (f::CentralizedAbs2Fun)(x) = abs2(x - f.m)
 centralize_sumabs2(A::AbstractArray, m::Number) =
-    mapreduce(CentralizedAbs2Fun(m), AddFun(), A)
+    mapreduce(CentralizedAbs2Fun(m), +, A)
 centralize_sumabs2(A::AbstractArray, m::Number, ifirst::Int, ilast::Int) =
-    mapreduce_impl(CentralizedAbs2Fun(m), AddFun(), A, ifirst, ilast)
+    mapreduce_impl(CentralizedAbs2Fun(m), +, A, ifirst, ilast)
 
 @generated function centralize_sumabs2!{S,T,N}(R::AbstractArray{S}, A::AbstractArray{T,N}, means::AbstractArray)
     quote

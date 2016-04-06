@@ -18,16 +18,16 @@ typealias WidenReduceResult Union{SmallSigned, SmallUnsigned, Float16}
 # r_promote: promote x to the type of reduce(op, [x])
 r_promote(op, x::WidenReduceResult) = widen(x)
 r_promote(op, x) = x
-r_promote(::AddFun, x::WidenReduceResult) = widen(x)
-r_promote(::MulFun, x::WidenReduceResult) = widen(x)
-r_promote(::AddFun, x::Number) = oftype(x + zero(x), x)
-r_promote(::MulFun, x::Number) = oftype(x * one(x), x)
-r_promote(::AddFun, x) = x
-r_promote(::MulFun, x) = x
-r_promote(::MaxFun, x::WidenReduceResult) = x
-r_promote(::MinFun, x::WidenReduceResult) = x
-r_promote(::MaxFun, x) = x
-r_promote(::MinFun, x) = x
+r_promote(::typeof(+), x::WidenReduceResult) = widen(x)
+r_promote(::typeof(*), x::WidenReduceResult) = widen(x)
+r_promote(::typeof(+), x::Number) = oftype(x + zero(x), x)
+r_promote(::typeof(*), x::Number) = oftype(x * one(x), x)
+r_promote(::typeof(+), x) = x
+r_promote(::typeof(*), x) = x
+r_promote(::typeof(scalarmax), x::WidenReduceResult) = x
+r_promote(::typeof(scalarmin), x::WidenReduceResult) = x
+r_promote(::typeof(scalarmax), x) = x
+r_promote(::typeof(scalarmin), x) = x
 
 
 ## foldl && mapfoldl
@@ -49,8 +49,6 @@ function mapfoldl_impl(f, op, v0, itr, i)
 end
 
 mapfoldl(f, op, v0, itr) = mapfoldl_impl(f, op, v0, itr, start(itr))
-
-mapfoldl(f, op::Function, v0, itr) = mapfoldl_impl(f, specialized_binary(op), v0, itr, start(itr))
 
 function mapfoldl(f, op, itr)
     i = start(itr)
@@ -122,14 +120,14 @@ mapreduce_impl(f, op, A::AbstractArray, ifirst::Int, ilast::Int) =
 # handling empty arrays
 mr_empty(f, op, T) = throw(ArgumentError("reducing over an empty collection is not allowed"))
 # use zero(T)::T to improve type information when zero(T) is not defined
-mr_empty(::typeof(identity), op::AddFun, T) = r_promote(op, zero(T)::T)
-mr_empty(::typeof(abs), op::AddFun, T) = r_promote(op, abs(zero(T)::T))
-mr_empty(::typeof(abs2), op::AddFun, T) = r_promote(op, abs2(zero(T)::T))
-mr_empty(::typeof(identity), op::MulFun, T) = r_promote(op, one(T)::T)
-mr_empty(::typeof(abs), op::MaxFun, T) = abs(zero(T)::T)
-mr_empty(::typeof(abs2), op::MaxFun, T) = abs2(zero(T)::T)
-mr_empty(f, op::AndFun, T) = true
-mr_empty(f, op::OrFun, T) = false
+mr_empty(::typeof(identity), op::typeof(+), T) = r_promote(op, zero(T)::T)
+mr_empty(::typeof(abs), op::typeof(+), T) = r_promote(op, abs(zero(T)::T))
+mr_empty(::typeof(abs2), op::typeof(+), T) = r_promote(op, abs2(zero(T)::T))
+mr_empty(::typeof(identity), op::typeof(*), T) = r_promote(op, one(T)::T)
+mr_empty(::typeof(abs), op::typeof(scalarmax), T) = abs(zero(T)::T)
+mr_empty(::typeof(abs2), op::typeof(scalarmax), T) = abs2(zero(T)::T)
+mr_empty(f, op::typeof(&), T) = true
+mr_empty(f, op::typeof(|), T) = false
 
 _mapreduce(f, op, A::AbstractArray) = _mapreduce(f, op, linearindexing(A), A)
 
@@ -159,8 +157,6 @@ _mapreduce{T}(f, op, ::LinearSlow, A::AbstractArray{T}) = mapfoldl(f, op, A)
 mapreduce(f, op, A::AbstractArray) = _mapreduce(f, op, linearindexing(A), A)
 mapreduce(f, op, a::Number) = f(a)
 
-mapreduce(f, op::Function, A::AbstractArray) = mapreduce(f, specialized_binary(op), A)
-
 reduce(op, v0, itr) = mapreduce(identity, op, v0, itr)
 reduce(op, itr) = mapreduce(identity, op, itr)
 reduce(op, a::Number) = a
@@ -169,17 +165,17 @@ reduce(op, a::Number) = a
 
 ## conditions and results of short-circuiting
 
-const ShortCircuiting = Union{AndFun, OrFun}
+const ShortCircuiting = Union{typeof(&), typeof(|)}
 const ReturnsBool     = Union{EqX, Predicate}
 
-shortcircuits(::AndFun, x::Bool) = !x
-shortcircuits(::OrFun,  x::Bool) =  x
+shortcircuits(::typeof(&), x::Bool) = !x
+shortcircuits(::typeof(|),  x::Bool) =  x
 
-shorted(::AndFun) = false
-shorted(::OrFun)  = true
+shorted(::typeof(&)) = false
+shorted(::typeof(|))  = true
 
-sc_finish(::AndFun) = true
-sc_finish(::OrFun)  = false
+sc_finish(::typeof(&)) = true
+sc_finish(::typeof(|))  = false
 
 ## short-circuiting (sc) mapreduce definitions
 
@@ -222,7 +218,7 @@ mapreduce(f, op::ShortCircuiting, itr::Any)           = mapreduce_sc(f,op,itr)
 
 ## sum
 
-function mapreduce_seq_impl(f, op::AddFun, a::AbstractArray, ifirst::Int, ilast::Int)
+function mapreduce_seq_impl(f, op::typeof(+), a::AbstractArray, ifirst::Int, ilast::Int)
     s = r_promote(op, f(a[ifirst])) + f(a[ifirst+1])
     @simd for i = ifirst+2:ilast
         @inbounds ai = a[i]
@@ -238,20 +234,20 @@ sum_pairwise_blocksize(f) = 1024
 # This appears to show a benefit from a larger block size
 sum_pairwise_blocksize(::typeof(abs2)) = 4096
 
-mapreduce_impl(f, op::AddFun, A::AbstractArray, ifirst::Int, ilast::Int) =
+mapreduce_impl(f, op::typeof(+), A::AbstractArray, ifirst::Int, ilast::Int) =
     mapreduce_pairwise_impl(f, op, A, ifirst, ilast, sum_pairwise_blocksize(f))
 
-sum(f::Union{Callable,Func{1}}, a) = mapreduce(f, AddFun(), a)
-sum(a) = mapreduce(identity, AddFun(), a)
+sum(f::Union{Callable,Func{1}}, a) = mapreduce(f, +, a)
+sum(a) = mapreduce(identity, +, a)
 sum(a::AbstractArray{Bool}) = countnz(a)
-sumabs(a) = mapreduce(abs, AddFun(), a)
-sumabs2(a) = mapreduce(abs2, AddFun(), a)
+sumabs(a) = mapreduce(abs, +, a)
+sumabs2(a) = mapreduce(abs2, +, a)
 
 # Kahan (compensated) summation: O(1) error growth, at the expense
 # of a considerable increase in computational expense.
 function sum_kbn{T<:AbstractFloat}(A::AbstractArray{T})
     n = length(A)
-    c = r_promote(AddFun(), zero(T)::T)
+    c = r_promote(+, zero(T)::T)
     if n == 0
         return c
     end
@@ -272,12 +268,12 @@ end
 
 ## prod
 
-prod(f::Union{Callable,Func{1}}, a) = mapreduce(f, MulFun(), a)
-prod(a) = mapreduce(identity, MulFun(), a)
+prod(f::Union{Callable,Func{1}}, a) = mapreduce(f, *, a)
+prod(a) = mapreduce(identity, *, a)
 
 ## maximum & minimum
 
-function mapreduce_impl(f, op::MaxFun, A::AbstractArray, first::Int, last::Int)
+function mapreduce_impl(f, op::typeof(scalarmax), A::AbstractArray, first::Int, last::Int)
     # locate the first non NaN number
     v = f(A[first])
     i = first + 1
@@ -297,7 +293,7 @@ function mapreduce_impl(f, op::MaxFun, A::AbstractArray, first::Int, last::Int)
     v
 end
 
-function mapreduce_impl(f, op::MinFun, A::AbstractArray, first::Int, last::Int)
+function mapreduce_impl(f, op::typeof(scalarmin), A::AbstractArray, first::Int, last::Int)
     # locate the first non NaN number
     v = f(A[first])
     i = first + 1
@@ -317,14 +313,14 @@ function mapreduce_impl(f, op::MinFun, A::AbstractArray, first::Int, last::Int)
     v
 end
 
-maximum(f::Union{Callable,Func{1}}, a) = mapreduce(f, MaxFun(), a)
-minimum(f::Union{Callable,Func{1}}, a) = mapreduce(f, MinFun(), a)
+maximum(f::Union{Callable,Func{1}}, a) = mapreduce(f, scalarmax, a)
+minimum(f::Union{Callable,Func{1}}, a) = mapreduce(f, scalarmin, a)
 
-maximum(a) = mapreduce(identity, MaxFun(), a)
-minimum(a) = mapreduce(identity, MinFun(), a)
+maximum(a) = mapreduce(identity, scalarmax, a)
+minimum(a) = mapreduce(identity, scalarmin, a)
 
-maxabs(a) = mapreduce(abs, MaxFun(), a)
-minabs(a) = mapreduce(abs, MinFun(), a)
+maxabs(a) = mapreduce(abs, scalarmax, a)
+minabs(a) = mapreduce(abs, scalarmin, a)
 
 ## extrema
 
@@ -400,17 +396,17 @@ any(itr) = any(identity, itr)
 all(itr) = all(identity, itr)
 
 any(f::Any,       itr) = any(Predicate(f), itr)
-any(f::Predicate, itr) = mapreduce_sc_impl(f, OrFun(), itr)
+any(f::Predicate, itr) = mapreduce_sc_impl(f, |, itr)
 any(f::typeof(identity),     itr) =
     eltype(itr) <: Bool ?
-        mapreduce_sc_impl(f, OrFun(), itr) :
+        mapreduce_sc_impl(f, |, itr) :
         reduce(or_bool_only, itr)
 
 all(f::Any,       itr) = all(Predicate(f), itr)
-all(f::Predicate, itr) = mapreduce_sc_impl(f, AndFun(), itr)
+all(f::Predicate, itr) = mapreduce_sc_impl(f, &, itr)
 all(f::typeof(identity),     itr) =
     eltype(itr) <: Bool ?
-        mapreduce_sc_impl(f, AndFun(), itr) :
+        mapreduce_sc_impl(f, &, itr) :
         reduce(and_bool_only, itr)
 
 ## in & contains

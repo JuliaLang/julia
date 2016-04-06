@@ -200,10 +200,10 @@ max(x::Real, y::Real) = max(promote(x,y)...)
 min(x::Real, y::Real) = min(promote(x,y)...)
 minmax(x::Real, y::Real) = minmax(promote(x, y)...)
 
-# "Promotion" that takes a Functor into account. You can override this
+# "Promotion" that takes a function into account. You can override this
 # as needed. For example, if you need to provide a custom result type
 # for the multiplication of two types,
-#   promote_op{R<:MyType,S<:MyType}(::MulFun, ::Type{R}, ::Type{S}) = MyType{multype(R,S)}
+#   promote_op{R<:MyType,S<:MyType}(::typeof(*), ::Type{R}, ::Type{S}) = MyType{multype(R,S)}
 promote_op(::Any)    = (@_pure_meta; Bottom)
 promote_op(::Any, T) = (@_pure_meta; T)
 promote_op{R,S}(::Any, ::Type{R}, ::Type{S}) = (@_pure_meta; promote_type(R, S))
