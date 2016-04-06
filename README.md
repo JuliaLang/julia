@@ -422,11 +422,12 @@ editors. While Julia modes for
 others such as Textmate, Sublime Text, Notepad++, and Kate, are in
 `contrib/`.
 
-Two major IDEs are supported for Julia. [Juno](http://junolab.org/)
-and [Eclipse](https://github.com/JuliaComputing/JuliaDT). A notebook
-interface is available through
-[IJulia](https://github.com/JuliaLang/IJulia.jl), which adds Julia
-support to [Jupyter](http://jupyter.org/). The
+Two major IDEs are supported for Julia: [Juno](http://junolab.org/),
+which is based on [Atom](https://atom.io/), and
+[JuliaDT](https://github.com/JuliaComputing/JuliaDT), which is an
+[Eclipse](http://eclipse.org) plugin. A [Jupyter](http://jupyter.org/) notebooks interface
+is available through
+[IJulia](https://github.com/JuliaLang/IJulia.jl). The
 [Sublime-IJulia](https://github.com/quinnj/Sublime-IJulia) plugin
 enables interaction between IJulia and Sublime Text.
 
