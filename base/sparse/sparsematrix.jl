@@ -706,8 +706,8 @@ function qftranspose!{Tv,Ti}(C::SparseMatrixCSC{Tv,Ti}, A::SparseMatrixCSC{Tv,Ti
 
     C
 end
-transpose!{Tv,Ti}(C::SparseMatrixCSC{Tv,Ti}, A::SparseMatrixCSC{Tv,Ti}) = qftranspose!(C, A, 1:A.n, Base.IdFun())
-ctranspose!{Tv,Ti}(C::SparseMatrixCSC{Tv,Ti}, A::SparseMatrixCSC{Tv,Ti}) = qftranspose!(C, A, 1:A.n, Base.ConjFun())
+transpose!{Tv,Ti}(C::SparseMatrixCSC{Tv,Ti}, A::SparseMatrixCSC{Tv,Ti}) = qftranspose!(C, A, 1:A.n, identity)
+ctranspose!{Tv,Ti}(C::SparseMatrixCSC{Tv,Ti}, A::SparseMatrixCSC{Tv,Ti}) = qftranspose!(C, A, 1:A.n, conj)
 "See `qftranspose!`" ftranspose!{Tv,Ti}(C::SparseMatrixCSC{Tv,Ti}, A::SparseMatrixCSC{Tv,Ti}, f) = qftranspose!(C, A, 1:A.n, f)
 
 """
@@ -722,8 +722,8 @@ function qftranspose{Tv,Ti}(A::SparseMatrixCSC{Tv,Ti}, q::AbstractVector, f)
     Cnzval = Array{Tv}(Cnnz)
     qftranspose!(SparseMatrixCSC(Cm, Cn, Ccolptr, Crowval, Cnzval), A, q, f)
 end
-transpose{Tv,Ti}(A::SparseMatrixCSC{Tv,Ti}) = qftranspose(A, 1:A.n, Base.IdFun())
-ctranspose{Tv,Ti}(A::SparseMatrixCSC{Tv,Ti}) = qftranspose(A, 1:A.n, Base.ConjFun())
+transpose{Tv,Ti}(A::SparseMatrixCSC{Tv,Ti}) = qftranspose(A, 1:A.n, identity)
+ctranspose{Tv,Ti}(A::SparseMatrixCSC{Tv,Ti}) = qftranspose(A, 1:A.n, conj)
 "See `qftranspose`" ftranspose{Tv,Ti}(A::SparseMatrixCSC{Tv,Ti}, f) = qftranspose(A, 1:A.n, f)
 
 
@@ -2932,11 +2932,11 @@ function blkdiag(X::SparseMatrixCSC...)
 end
 
 ## Structure query functions
-issymmetric(A::SparseMatrixCSC) = is_hermsym(A, IdFun())
+issymmetric(A::SparseMatrixCSC) = is_hermsym(A, identity)
 
-ishermitian(A::SparseMatrixCSC) = is_hermsym(A, ConjFun())
+ishermitian(A::SparseMatrixCSC) = is_hermsym(A, conj)
 
-function is_hermsym(A::SparseMatrixCSC, check::Func)
+function is_hermsym(A::SparseMatrixCSC, check::Function)
     m, n = size(A)
     if m != n; return false; end
 
