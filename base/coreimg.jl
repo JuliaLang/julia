@@ -42,7 +42,10 @@ include("operators.jl")
 include("pointer.jl")
 const checked_add = +
 const checked_sub = -
-(::Type{T}){T}(arg) = convert(T, arg)::T
+if !isdefined(Main, :Base)
+    # conditional to allow redefining Core.Inference after base exists
+    (::Type{T}){T}(arg) = convert(T, arg)::T
+end
 
 # core array operations
 include("abstractarray.jl")

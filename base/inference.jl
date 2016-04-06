@@ -124,7 +124,7 @@ type InferenceState
 
         # exception handlers
         cur_hand = ()
-        handler_at = Any[ 0 for i=1:n ]
+        handler_at = Any[ () for i=1:n ]
         n_handlers = 0
 
         W = IntSet()
@@ -1401,31 +1401,24 @@ function stupdate!(state::VarTable, change::StateUpdate)
     return state
 end
 
-stupdate!(state::Tuple{}, changes::VarTable) = copy(changes)
-
 function stupdate!(state::VarTable, changes::VarTable)
+    newstate = false
     for i = 1:length(state)
         newtype = changes[i]
         oldtype = state[i]
         if schanged(newtype, oldtype)
+            newstate = state
             state[i] = smerge(oldtype, newtype)
         end
     end
-    return state
+    return newstate
 end
 
-stchanged(new::Tuple{}, old::Tuple{}) = false
-stchanged(new, old::Tuple{}) = true
+stupdate!(state::Tuple{}, changes::VarTable) = copy(changes)
 
-function stchanged(new::VarTable, old::VarTable)
-    is(old,()) && return true
-    for i = 1:length(new)
-        newtype = new[i]
-        oldtype = old[i]
-        schanged(newtype, oldtype) && return true
-    end
-    return false
-end
+stupdate!(state::Tuple{}, changes::Tuple{}) = false
+
+#### helper functions for typeinf initialization and looping ####
 
 function stchanged(new::StateUpdate, old::VarTable)
     is(old,()) && return true
@@ -1744,11 +1737,7 @@ function typeinf_frame(frame)
             delete!(W, pc)
             frame.currpc = pc
             frame.static_typeof = false
-            if frame.handler_at[pc] === 0
-                frame.handler_at[pc] = frame.cur_hand
-            else
-                frame.cur_hand = frame.handler_at[pc]
-            end
+            frame.cur_hand = frame.handler_at[pc]
             stmt = frame.linfo.code[pc]
             changes = abstract_interpret(stmt, s[pc]::Array{Any,1}, frame)
             if changes === ()
@@ -1761,9 +1750,10 @@ function typeinf_frame(frame)
             if frame.cur_hand !== ()
                 # propagate type info to exception handler
                 l = frame.cur_hand[1]
-                if stchanged(changes, s[l])
+                newstate = stupdate!(s[l], changes)
+                if newstate !== false
                     push!(W, l)
-                    s[l] = stupdate!(s[l], changes)
+                    s[l] = newstate
                 end
             end
             pc´ = pc+1
@@ -1796,10 +1786,11 @@ function typeinf_frame(frame)
                     else
                         # general case
                         frame.handler_at[l] = frame.cur_hand
-                        if stchanged(changes, s[l])
+                        newstate = stupdate!(s[l], changes)
+                        if newstate !== false
                             # add else branch to active IP list
                             push!(W, l)
-                            s[l] = stupdate!(s[l], changes)
+                            s[l] = newstate
                         end
                     end
                 elseif is(hd, :type_goto)
@@ -1845,9 +1836,10 @@ function typeinf_frame(frame)
                     l = frame.cur_hand[1]
                     old = s[l]
                     new = s[pc]::Array{Any,1}
-                    if old === () || stchanged(new, old::Array{Any,1})
+                    newstate = stupdate!(old, new)
+                    if newstate !== false
                         push!(W, l)
-                        s[l] = stupdate!(old, new)
+                        s[l] = newstate
                     end
 #                        if frame.handler_at[l] === 0
 #                            frame.n_handlers += 1
@@ -1866,9 +1858,11 @@ function typeinf_frame(frame)
                     end
                 end
             end
-            if pc´<=n && (frame.handler_at[pc´] = frame.cur_hand; true) &&
-               stchanged(changes, s[pc´])
-                s[pc´] = stupdate!(s[pc´], changes)
+            pc´ > n && break # can't proceed with the fast-path fall-through
+            frame.handler_at[pc´] = frame.cur_hand
+            newstate = stupdate!(s[pc´], changes)
+            if newstate !== false
+                s[pc´] = newstate
                 pc = pc´
             elseif pc´ in W
                 pc = pc´
@@ -2361,7 +2355,7 @@ function inlineable(f::ANY, ft::ANY, e::Expr, atypes::Vector{Any}, sv::Inference
     if linfo === NF
         return NF
     end
-    if linfo.pure && isconstantargs(argexprs, atypes, sv)
+    if isa(f, ft) && linfo.pure && isconstantargs(argexprs, atypes, sv)
         # check if any arguments aren't effect_free and need to be kept around
         stmts = Any[]
         for i = 1:length(argexprs)

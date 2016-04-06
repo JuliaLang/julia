@@ -160,7 +160,7 @@ macro test(ex)
     if isa(ex, Expr) && ex.head == :comparison
         # Generate a temporary for every term in the expression
         n = length(ex.args)
-        terms = [gensym() for i in 1:n]
+        terms = [GenSym(i) for i in 1:n]
         # Create a new block that evaluates each term in the
         # comparison indivudally
         comp_block = Expr(:block)
