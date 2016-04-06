@@ -86,9 +86,7 @@ before_install:
         export LDFLAGS="-L$(brew --prefix openblas-julia)/lib -L$(brew --prefix suite-sparse-julia)/lib";
         export DYLD_FALLBACK_LIBRARY_PATH="/usr/local/lib:/lib:/usr/lib:$(brew --prefix openblas-julia)/lib:$(brew --prefix suite-sparse-julia)/lib:$(brew --prefix arpack-julia)/lib";
         make $BUILDOPTS -C contrib -f repackage_system_suitesparse4.make;
-        JULIA_SYSIMG_BUILD_FLAGS="$JULIA_SYSIMG_BUILD_FLAGS --compile=all";
-        COMPILE_MODE="--compile=min";
-        TESTSTORUN="core ccall mmap llvmcall threads"; fi # TODO: turn this back to "all" once it's fast enough to not time out
+        TESTSTORUN="all"; fi
     - git clone -q git://git.kitenet.net/moreutils
 script:
     - make -C moreutils mispipe
@@ -107,8 +105,8 @@ script:
         /tmp/julia/bin/julia-debug -J local.ji -e 'true' && rm local.ji
     - /tmp/julia/bin/julia -e 'versioninfo()'
     - export JULIA_CPU_CORES=2 && export JULIA_TEST_MAXRSS_MB=600 && cd /tmp/julia/share/julia/test &&
-        /tmp/julia/bin/julia --check-bounds=yes $COMPILE_MODE runtests.jl $TESTSTORUN &&
-        /tmp/julia/bin/julia --check-bounds=yes $COMPILE_MODE runtests.jl libgit2-online pkg
+        /tmp/julia/bin/julia --check-bounds=yes runtests.jl $TESTSTORUN &&
+        /tmp/julia/bin/julia --check-bounds=yes runtests.jl libgit2-online pkg
     - cd `dirname $TRAVIS_BUILD_DIR` && mv julia2 julia && rm -rf julia/deps/build/julia-env
 # uncomment the following if failures are suspected to be due to the out-of-memory killer
 #    - dmesg
