@@ -728,7 +728,8 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int)
         show_unquoted(io, args[1], indent)
         print(io, "...")
 
-    elseif (nargs == 1 && head in (:return, :abstract, :const)) ||
+    elseif (nargs == 0 && head in (:break, :continue)) ||
+           (nargs == 1 && head in (:return, :abstract, :const)) ||
                           head in (:local,  :global, :export)
         print(io, head, ' ')
         show_list(io, args, ", ", indent)
