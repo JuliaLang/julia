@@ -415,13 +415,19 @@ The following distributions include julia, but the versions may be out of date d
 <a name="Editor-Terminal-Setup"/>
 ## Editor and Terminal Setup
 
-Currently, Julia editing mode support is available for Emacs, Vim, Textmate,
-Sublime Text, Notepad++, and Kate, in `contrib/`. There is early support for
-IDEs such as [Juno](http://junolab.org/),
-[Eclipse (LiClipse)](http://brainwy.github.io/liclipse/). A notebook interface
-is available through [IJulia](https://github.com/JuliaLang/IJulia.jl), which
-adds Julia support to [Jupyter](http://jupyter.org/)/[IPython](http://ipython.org). The
-[Sublime-IJulia](https://github.com/quinnj/Sublime-IJulia) plugin enables
-interaction between IJulia and Sublime Text.
+Currently, Julia editing mode support is available for a number of
+editors. While Julia modes for
+[Emacs](https://github.com/JuliaLang/julia-emacs) and
+[Vim](https://github.com/JuliaLang/julia-vim) have their own repos,
+others such as Textmate, Sublime Text, Notepad++, and Kate, are in
+`contrib/`.
+
+Two major IDEs are supported for Julia. [Juno](http://junolab.org/)
+and [Eclipse](https://github.com/JuliaComputing/JuliaDT). A notebook
+interface is available through
+[IJulia](https://github.com/JuliaLang/IJulia.jl), which adds Julia
+support to [Jupyter](http://jupyter.org/). The
+[Sublime-IJulia](https://github.com/quinnj/Sublime-IJulia) plugin
+enables interaction between IJulia and Sublime Text.
 
 In the terminal, Julia makes great use of both control-key and meta-key bindings. To make the meta-key bindings more accessible, many terminal emulator programs (e.g., `Terminal`, `iTerm`, `xterm`, etc.) allow you to use the alt or option key as meta.  See the section in the manual on [interacting with Julia](http://docs.julialang.org/en/latest/manual/interacting-with-julia/) for more details.
