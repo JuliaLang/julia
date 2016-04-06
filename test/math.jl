@@ -781,3 +781,6 @@ end
 let A = [1 2; 3 4]; B = [5 6; 7 8]; C = [9 10; 11 12]
     @test muladd(A,B,C) == A*B + C
 end
+
+@test Base.Math.f32(complex(1.0,1.0)) == complex(Float32(1.),Float32(1.))
+@test Base.Math.f16(complex(1.0,1.0)) == complex(Float16(1.),Float16(1.))
