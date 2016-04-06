@@ -793,6 +793,7 @@ function abstract_call_gf_by_type(f::ANY, argtype::ANY, e, sv)
     end
     for (m::SimpleVector) in x
         sig = m[1]
+        isstaged = m[3].isstaged
         local linfo
         linfo = try
             func_for_method(m[3], sig, m[2])
@@ -831,6 +832,7 @@ function abstract_call_gf_by_type(f::ANY, argtype::ANY, e, sv)
                 if td > type_depth(infstate.atypes)
                     # impose limit if we recur and the argument types grow beyond MAX_TYPE_DEPTH
                     if td > MAX_TYPE_DEPTH
+                        isstaged && return Any # abort! this staged function is too complex
                         sig = limit_type_depth(sig, 0, true, [])
                         break
                     else
@@ -851,6 +853,7 @@ function abstract_call_gf_by_type(f::ANY, argtype::ANY, e, sv)
                                 end
                             end
                             if limitdepth
+                                isstaged && return Any # abort! this staged function is too complex
                                 sig = Tuple{newsig...}
                                 break
                             end
@@ -858,6 +861,11 @@ function abstract_call_gf_by_type(f::ANY, argtype::ANY, e, sv)
                     end
                 end
             end
+        end
+
+        if isstaged && limitlength
+            # abort! this staged function is too complex
+            return Any
         end
 
 #        # limit argument type size growth
@@ -1042,6 +1050,7 @@ function pure_eval_call(f::ANY, fargs, argtypes::ANY, sv, e)
         return false
     end
     if !linfo.pure
+        # TODO: try to infer here if linfo is pure
         return false
     end
 
