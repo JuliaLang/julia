@@ -56,7 +56,7 @@ type InferenceState
     inworkq::Bool
     optimize::Bool
     inferred::Bool
-    tfunc_bp::Union{Method, Void}
+    tfunc_bp::Union{TypeMapEntry, Void}
 
     function InferenceState(linfo::LambdaInfo, atypes::ANY, sparams::SimpleVector, optimize::Bool)
         @assert isa(linfo.code,Array{Any,1})
@@ -718,7 +718,7 @@ end
 
 let stagedcache=Dict{Any,Any}()
     global func_for_method
-    func_for_method(m::Method, tt, env) = func_for_method(m.func, tt, env)
+    func_for_method(m::TypeMapEntry, tt, env) = func_for_method(m.func, tt, env)
     function func_for_method(func::LambdaInfo, tt, env)
         if !func.isstaged
             return func
@@ -1589,7 +1589,7 @@ function typeinf_edge(linfo::LambdaInfo, atypes::ANY, sparams::SimpleVector, nee
         frame = InferenceState(linfo, atypes, sparams, optimize)
 
         if cached
-            tfunc_bp = ccall(:jl_tfunc_cache_insert, Ref{Method}, (Any, Any, Any, Int8), linfo.def, atypes, frame, offs)
+            tfunc_bp = ccall(:jl_tfunc_cache_insert, Ref{TypeMapEntry}, (Any, Any, Any, Int8), linfo.def, atypes, frame, offs)
             frame.tfunc_bp = tfunc_bp
         end
     end

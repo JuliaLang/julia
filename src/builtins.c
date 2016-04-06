@@ -1077,7 +1077,7 @@ static void add_builtin(const char *name, jl_value_t *v)
 jl_fptr_t jl_get_builtin_fptr(jl_value_t *b)
 {
     assert(jl_subtype(b, (jl_value_t*)jl_builtin_type, 1));
-    return jl_gf_mtable(b)->cache.list->func->fptr;
+    return jl_gf_mtable(b)->cache.leaf->func.linfo->fptr;
 }
 
 static void add_builtin_func(const char *name, jl_fptr_t fptr)
@@ -1134,9 +1134,9 @@ void jl_init_primitives(void)
     add_builtin("SimpleVector", (jl_value_t*)jl_simplevector_type);
 
     add_builtin("Module", (jl_value_t*)jl_module_type);
-    add_builtin("Method", (jl_value_t*)jl_method_type);
     add_builtin("MethodTable", (jl_value_t*)jl_methtable_type);
-    add_builtin("MethodCache", (jl_value_t*)jl_methcache_type);
+    add_builtin("TypeMapEntry", (jl_value_t*)jl_typemap_entry_type);
+    add_builtin("TypeMapLevel", (jl_value_t*)jl_typemap_level_type);
     add_builtin("Symbol", (jl_value_t*)jl_sym_type);
     add_builtin("GenSym", (jl_value_t*)jl_gensym_type);
     add_builtin("Slot", (jl_value_t*)jl_slot_type);

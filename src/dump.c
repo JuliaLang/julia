@@ -473,15 +473,15 @@ static int module_in_worklist(jl_module_t *mod)
     return 0;
 }
 
-static int jl_prune_tcache(jl_methlist_t *ml, void *closure)
+static int jl_prune_tcache(jl_typemap_entry_t *ml, void *closure)
 {
     if (!jl_is_leaf_type((jl_value_t*)ml->sig)) {
-        jl_value_t *ret = (jl_value_t*)ml->func;
+        jl_value_t *ret = ml->func.value;
         if (jl_is_lambda_info(ret)) {
             jl_array_t *code = ((jl_lambda_info_t*)ret)->code;
             if (jl_is_array(code) && jl_array_len(code) > 500) {
-                ml->func = (jl_lambda_info_t*)((jl_lambda_info_t*)ret)->rettype;
-                jl_gc_wb(ml, ml->func);
+                ml->func.value = ((jl_lambda_info_t*)ret)->rettype;
+                jl_gc_wb(ml, ml->func.value);
             }
         }
     }
@@ -815,19 +815,19 @@ static void jl_serialize_value_(ios_t *s, jl_value_t *v)
         jl_serialize_value(s, (jl_value_t*)li->sparam_vals);
         // don't save cached type info for code in the Core module, because
         // it might reference types in the old Base module.
-        union _jl_opaque_cache_t *tf = &li->tfunc;
-        if (tf->nothing && tf->nothing != jl_nothing) {
+        union jl_typemap_t *tf = &li->tfunc;
+        if (tf->unknown && tf->unknown != jl_nothing) {
             if (li->module == jl_core_module) {
-               tf->nothing = jl_nothing;
+               tf->unknown = jl_nothing;
             }
             else {
                 // go through the t-func cache, replacing ASTs with just return
                 // types for abstract argument types. these ASTs are generally
                 // not needed (e.g. they don't get inlined).
-                jl_methcache_visitor(*tf, jl_prune_tcache, NULL);
+                jl_typemap_visitor(*tf, jl_prune_tcache, NULL);
             }
         }
-        jl_serialize_value(s, tf->nothing);
+        jl_serialize_value(s, tf->unknown);
         jl_serialize_value(s, (jl_value_t*)li->name);
         jl_serialize_value(s, (jl_value_t*)li->specTypes);
         jl_serialize_value(s, (jl_value_t*)li->specializations);
@@ -843,7 +843,7 @@ static void jl_serialize_value_(ios_t *s, jl_value_t *v)
         jl_serialize_value(s, (jl_value_t*)li->roots);
         jl_serialize_value(s, (jl_value_t*)li->def);
         jl_serialize_value(s, (jl_value_t*)li->unspecialized);
-        jl_serialize_value(s, (jl_value_t*)li->invokes.nothing);
+        jl_serialize_value(s, (jl_value_t*)li->invokes.unknown);
         jl_serialize_fptr(s, li->fptr);
         // save functionObject pointers
         write_int32(s, li->functionID);
@@ -933,16 +933,16 @@ struct jl_serialize_methcache_from_mod_env {
     int8_t iskw;
 };
 
-static int jl_serialize_methcache_from_mod(jl_methlist_t *ml, void *closure)
+static int jl_serialize_methcache_from_mod(jl_typemap_entry_t *ml, void *closure)
 {
     struct jl_serialize_methcache_from_mod_env *env = (struct jl_serialize_methcache_from_mod_env*)closure;
-    if (module_in_worklist(ml->func->module)) {
+    if (module_in_worklist(ml->func.linfo->module)) {
         jl_serialize_value(env->s, env->mod);
         jl_serialize_value(env->s, env->name);
         write_int8(env->s, env->iskw);
         jl_serialize_value(env->s, ml->sig);
         jl_serialize_value(env->s, ml->simplesig);
-        jl_serialize_value(env->s, ml->func);
+        jl_serialize_value(env->s, ml->func.linfo);
         jl_serialize_value(env->s, ml->tvars);
     }
     return 1;
@@ -960,7 +960,7 @@ static void jl_serialize_methtable_from_mod(ios_t *s, jl_methtable_t *mt, int8_t
     }
     assert(mt->module);
     struct jl_serialize_methcache_from_mod_env env = {s, name, mt->module, iskw};
-    jl_methcache_visitor(mt->defs, jl_serialize_methcache_from_mod, &env);
+    jl_typemap_visitor(mt->defs, jl_serialize_methcache_from_mod, &env);
 }
 
 static void jl_serialize_lambdas_from_mod(ios_t *s, jl_module_t *m)
@@ -1103,9 +1103,9 @@ static int type_has_replaced_module(jl_value_t *t)
     return 0;
 }
 
-static int remove_specializations_from_replaced_modules_visitor(jl_methlist_t *l, void *closure)
+static int remove_specializations_from_replaced_modules_visitor(jl_typemap_entry_t *l, void *closure)
 {
-    jl_array_t *a = l->func->specializations;
+    jl_array_t *a = l->func.linfo->specializations;
     if (a) {
         size_t len = jl_array_len(a);
         size_t i, insrt=0;
@@ -1119,7 +1119,7 @@ static int remove_specializations_from_replaced_modules_visitor(jl_methlist_t *l
         }
         jl_array_del_end(a, len-insrt);
     }
-    a = l->func->roots;
+    a = l->func.linfo->roots;
     if (a) {
         size_t len = jl_array_len(a);
         size_t i;
@@ -1132,11 +1132,11 @@ static int remove_specializations_from_replaced_modules_visitor(jl_methlist_t *l
     return 1;
 }
 
-static void remove_methods_from_replaced_modules_from_list(jl_methlist_t **pl)
+static void remove_methods_from_replaced_modules_from_list(jl_typemap_entry_t **pl)
 {
-    jl_methlist_t *l = *pl;
+    jl_typemap_entry_t *l = *pl;
     while (l != (void*)jl_nothing) {
-        if ((l->func && is_module_replaced(l->func->module)) ||
+        if ((l->func.linfo != NULL && is_module_replaced(l->func.linfo->module)) ||
             type_has_replaced_module((jl_value_t*)l->sig))
             *pl = l->next;
         else
@@ -1146,30 +1146,30 @@ static void remove_methods_from_replaced_modules_from_list(jl_methlist_t **pl)
 }
 
 
-static void remove_methods_from_replaced_modules_from_cache(union _jl_opaque_cache_t *tc);
+static void remove_methods_from_replaced_modules_from_cache(union jl_typemap_t *tc);
 static void remove_methods_from_replaced_modules_from_array(jl_array_t *a)
 {
     jl_value_t **data;
     size_t i, l = jl_array_len(a); data = (jl_value_t**)jl_array_data(a);
     for(i=0; i < l; i++) {
         if (data[i] != NULL)
-            remove_methods_from_replaced_modules_from_cache((union _jl_opaque_cache_t*)&data[i]);
+            remove_methods_from_replaced_modules_from_cache((union jl_typemap_t*)&data[i]);
     }
 }
 
-static void remove_methods_from_replaced_modules_from_cache(union _jl_opaque_cache_t *tc)
+static void remove_methods_from_replaced_modules_from_cache(union jl_typemap_t *tc)
 {
-    jl_methlist_t **pl;
-    if (jl_typeof(tc->nothing) == (jl_value_t*)jl_methcache_type) {
-        jl_methcache_t *cache = tc->cache;
+    jl_typemap_entry_t **pl;
+    if (jl_typeof(tc->unknown) == (jl_value_t*)jl_typemap_level_type) {
+        jl_typemap_level_t *cache = tc->node;
         if ((jl_value_t*)cache->arg1 != jl_nothing)
             remove_methods_from_replaced_modules_from_array(cache->arg1);
         if ((jl_value_t*)cache->targ != jl_nothing)
             remove_methods_from_replaced_modules_from_array(cache->targ);
-        pl = &cache->list;
+        pl = &cache->linear;
     }
     else {
-        pl = &tc->list;
+        pl = &tc->leaf;
     }
     remove_methods_from_replaced_modules_from_list(pl);
 }
@@ -1178,7 +1178,7 @@ static void remove_methods_from_replaced_modules(jl_methtable_t *mt)
 {
     remove_methods_from_replaced_modules_from_cache(&mt->defs);
     remove_methods_from_replaced_modules_from_cache(&mt->cache);
-    jl_methcache_visitor(mt->defs, remove_specializations_from_replaced_modules_visitor, NULL);
+    jl_typemap_visitor(mt->defs, remove_specializations_from_replaced_modules_visitor, NULL);
     if (mt->kwsorter)
         remove_methods_from_replaced_modules(jl_gf_mtable(mt->kwsorter));
 }
@@ -1469,8 +1469,8 @@ static jl_value_t *jl_deserialize_value_(ios_t *s, jl_value_t *vtag, jl_value_t 
         jl_gc_wb(li, li->sparam_syms);
         li->sparam_vals = (jl_svec_t*)jl_deserialize_value(s, (jl_value_t**)&li->sparam_vals);
         jl_gc_wb(li, li->sparam_vals);
-        li->tfunc = (union _jl_opaque_cache_t)jl_deserialize_value(s, (jl_value_t**)&li->tfunc);
-        jl_gc_wb(li, li->tfunc.nothing);
+        li->tfunc = (union jl_typemap_t)jl_deserialize_value(s, (jl_value_t**)&li->tfunc);
+        jl_gc_wb(li, li->tfunc.unknown);
         li->name = (jl_sym_t*)jl_deserialize_value(s, NULL);
         jl_gc_wb(li, li->name);
         li->specTypes = (jl_tupletype_t*)jl_deserialize_value(s, (jl_value_t**)&li->specTypes);
@@ -1499,8 +1499,8 @@ static jl_value_t *jl_deserialize_value_(ios_t *s, jl_value_t *vtag, jl_value_t 
         li->inInference = 0;
         li->inCompile = 0;
         li->unspecialized = (jl_lambda_info_t*)jl_deserialize_value(s, (jl_value_t**)&li->unspecialized);
-        li->invokes = (union _jl_opaque_cache_t)jl_deserialize_value(s, (jl_value_t**)&li->invokes);
-        jl_gc_wb(li, li->invokes.nothing);
+        li->invokes = (union jl_typemap_t)jl_deserialize_value(s, (jl_value_t**)&li->invokes);
+        jl_gc_wb(li, li->invokes.unknown);
         if (li->unspecialized) jl_gc_wb(li, li->unspecialized);
         li->fptr = jl_deserialize_fptr(s);
         li->functionID = 0;
@@ -2293,7 +2293,7 @@ static void jl_recache_types(void)
     }
 }
 
-void jl_method_cache_rehash(union _jl_opaque_cache_t ml, int8_t offs);
+void jl_typemap_rehash(union jl_typemap_t ml, int8_t offs);
 static jl_array_t *_jl_restore_incremental(ios_t *f)
 {
     if (ios_eof(f)) {
@@ -2335,7 +2335,7 @@ static jl_array_t *_jl_restore_incremental(ios_t *f)
     for (i = 0; i < methtable_list.len; i++) {
         jl_methtable_t *mt = (jl_methtable_t*)methtable_list.items[i];
         int8_t offs = (mt == jl_type_type->name->mt) ? 0 : 1;
-        jl_method_cache_rehash(mt->cache, offs);
+        jl_typemap_rehash(mt->cache, offs);
     }
 
     mode = last_mode;
@@ -2445,15 +2445,16 @@ void jl_init_serializer(void)
                      jl_densearray_type, jl_void_type, jl_function_type,
                      jl_typector_type, jl_typename_type, jl_builtin_type,
                      jl_task_type, jl_uniontype_type, jl_typetype_type, jl_typetype_tvar,
-                     jl_ANY_flag, jl_array_any_type, jl_intrinsic_type, jl_method_type,
-                     jl_methtable_type, jl_methcache_type, jl_voidpointer_type, jl_newvarnode_type,
+                     jl_ANY_flag, jl_array_any_type, jl_intrinsic_type,
+                     jl_methtable_type, jl_typemap_level_type, jl_typemap_entry_type,
+                     jl_voidpointer_type, jl_newvarnode_type,
                      jl_array_symbol_type, jl_anytuple_type, jl_tparam0(jl_anytuple_type),
                      jl_typeof(jl_emptytuple), jl_array_uint8_type,
                      jl_symbol_type->name, jl_gensym_type->name, jl_tuple_typename,
                      jl_ref_type->name, jl_pointer_type->name, jl_simplevector_type->name,
                      jl_datatype_type->name, jl_uniontype_type->name, jl_array_type->name,
                      jl_expr_type->name, jl_typename_type->name, jl_type_type->name,
-                     jl_methtable_type->name, jl_methcache_type->name, jl_method_type->name, jl_tvar_type->name,
+                     jl_methtable_type->name, jl_typemap_level_type->name, jl_typemap_entry_type->name, jl_tvar_type->name,
                      jl_ntuple_type->name, jl_abstractarray_type->name, jl_vararg_type->name,
                      jl_densearray_type->name, jl_void_type->name, jl_lambda_info_type->name,
                      jl_module_type->name, jl_function_type->name, jl_slot_type->name,

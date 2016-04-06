@@ -64,7 +64,7 @@ function edit(path::AbstractString, line::Integer=0)
     nothing
 end
 
-function edit(m::Method)
+function edit(m::TypeMapEntry)
     tv, decls, file, line = arg_decl_parts(m)
     edit(string(file), line)
 end
@@ -388,7 +388,7 @@ function type_close_enough(x::ANY, t::ANY)
 end
 
 # `methodswith` -- shows a list of methods using the type given
-function methodswith(t::Type, f::Function, showparents::Bool=false, meths = Method[])
+function methodswith(t::Type, f::Function, showparents::Bool=false, meths = TypeMapEntry[])
     mt = typeof(f).name.mt
     visit(mt) do d
         if any(x -> (type_close_enough(x, t) ||
@@ -403,7 +403,7 @@ function methodswith(t::Type, f::Function, showparents::Bool=false, meths = Meth
 end
 
 function methodswith(t::Type, m::Module, showparents::Bool=false)
-    meths = Method[]
+    meths = TypeMapEntry[]
     for nm in names(m)
         if isdefined(m, nm)
             f = getfield(m, nm)
@@ -416,7 +416,7 @@ function methodswith(t::Type, m::Module, showparents::Bool=false)
 end
 
 function methodswith(t::Type, showparents::Bool=false)
-    meths = Method[]
+    meths = TypeMapEntry[]
     mainmod = current_module()
     # find modules in Main
     for nm in names(mainmod)
@@ -683,7 +683,7 @@ function summarysize(obj::MethodTable, seen, excl)
     return size
 end
 
-function summarysize(m::Method, seen, excl)
+function summarysize(m::TypeMapEntry, seen, excl)
     size::Int = 0
     while true # specialized to prevent stack overflow while following this linked list
         haskey(seen, m) ? (return size) : (seen[m] = true)
@@ -694,7 +694,7 @@ function summarysize(m::Method, seen, excl)
         size += summarysize(m.sig, seen, excl)::Int
         size += summarysize(m.tvars, seen, excl)::Int
         m.next === nothing && break
-        m = m.next::Method
+        m = m.next::TypeMapEntry
     end
     return size
 end

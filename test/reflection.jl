@@ -214,7 +214,7 @@ const a_value = 1
 end
 
 # issue #13264
-@test isa((@which vcat(1...)), Method)
+@test isa((@which vcat(1...)), TupleMapEntry)
 
 # issue #13464
 let t13464 = "hey there sailor"

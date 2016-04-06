@@ -41,8 +41,8 @@ jl_datatype_t *jl_newvarnode_type;
 jl_datatype_t *jl_topnode_type;
 jl_datatype_t *jl_intrinsic_type;
 jl_datatype_t *jl_methtable_type;
-jl_datatype_t *jl_methcache_type;
-jl_datatype_t *jl_method_type;
+jl_datatype_t *jl_typemap_entry_type;
+jl_datatype_t *jl_typemap_level_type;
 jl_datatype_t *jl_lambda_info_type;
 jl_datatype_t *jl_module_type;
 jl_datatype_t *jl_errorexception_type=NULL;
@@ -353,7 +353,7 @@ jl_lambda_info_t *jl_new_lambda_info(jl_value_t *ast, jl_svec_t *tvars, jl_svec_
     li->module = ctx;
     li->sparam_syms = tvars;
     li->sparam_vals = sparams;
-    li->tfunc.nothing = jl_nothing;
+    li->tfunc.unknown = jl_nothing;
     li->fptr = NULL;
     li->jlcall_api = 0;
     li->roots = NULL;
@@ -373,7 +373,7 @@ jl_lambda_info_t *jl_new_lambda_info(jl_value_t *ast, jl_svec_t *tvars, jl_svec_
     li->line = 0;
     li->pure = 0;
     li->called = 0xff;
-    li->invokes.nothing = NULL;
+    li->invokes.unknown = NULL;
     li->isstaged = 0;
     li->needs_sparam_vals_ducttape = 2;
     if (ast != NULL) {
@@ -585,12 +585,12 @@ jl_sym_t *jl_demangle_typename(jl_sym_t *s)
     return jl_symbol_n(&n[1], len);
 }
 
-jl_methcache_t *jl_new_method_cache()
+jl_typemap_level_t *jl_new_typemap_level(void)
 {
-    jl_methcache_t *cache = (jl_methcache_t*)jl_gc_allocobj(sizeof(jl_methcache_t));
-    jl_set_typeof(cache, jl_methcache_type);
+    jl_typemap_level_t *cache = (jl_typemap_level_t*)jl_gc_allocobj(sizeof(jl_typemap_level_t));
+    jl_set_typeof(cache, jl_typemap_level_type);
     cache->key = NULL;
-    cache->list = (jl_methlist_t*)jl_nothing;
+    cache->linear = (jl_typemap_entry_t*)jl_nothing;
     cache->arg1 = (jl_array_t*)jl_nothing;
     cache->targ = (jl_array_t*)jl_nothing;
     return cache;
@@ -602,8 +602,8 @@ JL_DLLEXPORT jl_methtable_t *jl_new_method_table(jl_sym_t *name, jl_module_t *mo
     jl_set_typeof(mt, jl_methtable_type);
     mt->name = jl_demangle_typename(name);
     mt->module = module;
-    mt->defs.nothing = jl_nothing;
-    mt->cache.nothing = jl_nothing;
+    mt->defs.unknown = jl_nothing;
+    mt->cache.unknown = jl_nothing;
     mt->max_args = 0;
     mt->kwsorter = NULL;
 #ifdef JL_GF_PROFILE
