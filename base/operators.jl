@@ -102,8 +102,8 @@ immutable ElementwiseMaxFun end
 immutable ElementwiseMinFun end
 (::ElementwiseMinFun)(x, y) = min(x, y)
 
-for (op,F) in ((:+,:(AddFun())), (:*,:(MulFun())), (:&,:(AndFun())), (:|,:(OrFun())),
-               (:$,:(XorFun())), (:min,:(ElementwiseMinFun())), (:max,:(ElementwiseMaxFun())), (:kron,:kron))
+for (op,F) in ((:+,:+), (:*,:*), (:&,:&), (:|,:|),
+               (:$,:$), (:min,:(ElementwiseMinFun())), (:max,:(ElementwiseMaxFun())), (:kron,:kron))
     @eval begin
         # note: these definitions must not cause a dispatch loop when +(a,b) is
         # not defined, and must only try to call 2-argument definitions, so

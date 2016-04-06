@@ -2,7 +2,7 @@
 
 module SparseArrays
 
-using Base: Func, AddFun, OrFun
+using Base: Func
 using Base: ReshapedArray
 using Base.Sort: Forward
 using Base.LinAlg: AbstractTriangular, PosDefException

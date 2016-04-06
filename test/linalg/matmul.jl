@@ -230,7 +230,7 @@ immutable RootInt
 end
 import Base: *, promote_op
 (*)(x::RootInt, y::RootInt) = x.i*y.i
-promote_op(::Base.MulFun, ::Type{RootInt}, ::Type{RootInt}) = Int
+promote_op(::typeof(*), ::Type{RootInt}, ::Type{RootInt}) = Int
 
 a = [RootInt(3)]
 C = [0]
