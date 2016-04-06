@@ -19,48 +19,38 @@ end
 
 # REPL Symbol Completions
 function complete_symbol(sym, ffunc)
-    # Find module
-    strs = split(sym, '.')
     # Maybe be smarter in the future
     context_module = Main
-
     mod = context_module
+    name = sym
+
     lookup_module = true
     t = Union{}
-    for name in strs[1:(end-1)]
-        s = symbol(name)
-        if lookup_module
-            # If we're considering A.B.C where B doesn't exist in A, give up
-            isdefined(mod, s) || return UTF8String[]
-            b = mod.(s)
+    if rsearch(sym, non_identifier_chars) < rsearch(sym, '.')
+        # Find module
+        lookup_name, name = rsplit(sym, ".", limit=2)
+
+        ex = Base.syntax_deprecation_warnings(false) do
+            parse(lookup_name, raise=false)
+        end
+
+        b, found = get_value(ex, context_module)
+        if found
             if isa(b, Module)
                 mod = b
-            elseif Base.isstructtype(typeof(b)) && !isa(b, Tuple)
+                lookup_module = true
+            elseif Base.isstructtype(typeof(b))
                 lookup_module = false
                 t = typeof(b)
-            else
-                # A.B.C where B is neither a type nor a
-                # module. Will have to be revisited if
-                # overloading is allowed
-                return UTF8String[]
             end
-        else
-            # We're now looking for a type
-            fields = fieldnames(t)
-            found = false
-            for i in eachindex(fields)
-                s == fields[i] || continue
-                t = t.types[i]
-                (Base.isstructtype(t) && !(t <: Tuple)) || return UTF8String[]
-                found = true
-                break
-            end
-            #Same issue as above, but with types instead of modules
-            found || return UTF8String[]
+        else # If the value is not found using get_value, the expression contain an advanced expression
+            lookup_module = false
+            t, found = get_type(ex, context_module)
         end
+        found || return UTF8String[]
+        # Ensure REPLCompletion do not crash when asked to complete a tuple, #15329
+        !lookup_module && t <: Tuple && return UTF8String[]
     end
-
-    name = strs[end]
 
     suggestions = UTF8String[]
     if lookup_module
@@ -210,7 +200,7 @@ end
 
 # Returns a range that includes the method name in front of the first non
 # closed start brace from the end of the string.
-function find_start_brace(s::AbstractString)
+function find_start_brace(s::AbstractString; c_start='(', c_end=')')
     braces = 0
     r = RevString(s)
     i = start(r)
@@ -220,9 +210,9 @@ function find_start_brace(s::AbstractString)
     while !done(r, i)
         c, i = next(r, i)
         if !in_single_quotes && !in_double_quotes && !in_back_ticks
-            if c == '('
+            if c == c_start
                 braces += 1
-            elseif c == ')'
+            elseif c == c_end
                 braces -= 1
             elseif c == '\''
                 in_single_quotes = true
@@ -273,17 +263,16 @@ function get_value_getfield(ex::Expr, fn)
     get_value_getfield(ex.args[3],val) #Look up max in Base and returns the function if found.
 end
 get_value_getfield(sym, fn) = get_value(sym, fn)
+
 # Determines the return type with Base.return_types of a function call using the type information of the arguments.
 function get_type_call(expr::Expr)
     f_name = expr.args[1]
     # The if statement should find the f function. How f is found depends on how f is referenced
     if isa(f_name, TopNode)
-        f = Base.(f_name.name)
+        ft = typeof(Base.(f_name.name))
         found = true
-    elseif isa(f_name, Expr) && f_name.args[1] === TopNode(:getfield)
-        f, found = get_value_getfield(f_name, Main)
     else
-        f, found = get_value(f_name, Main)
+        ft, found = get_type(f_name, Main)
     end
     found || return (Any, false) # If the function f is not found return Any.
     args = Any[]
@@ -291,9 +280,14 @@ function get_type_call(expr::Expr)
         typ, found = get_type(ex, Main)
         found ? push!(args, typ) : push!(args, Any)
     end
-    return_types = Base.return_types(f,Tuple{args...})
-    length(return_types) == 1 || return (Any, false)
-    return (return_types[1], true)
+    # use _methods_by_ftype as the function is supplied as a type
+    mt = Base._methods_by_ftype(Tuple{ft, args...}, -1)
+    length(mt) == 1 || return (Any, false)
+    m = first(mt)
+    # Typeinference
+    linfo = Base.func_for_method_checked(m, Tuple{args...})
+    (tree, return_type) = Core.Inference.typeinf(linfo, m[1], m[2])
+    return return_type, true
 end
 # Returns the return type. example: get_type(:(Base.strip("",' ')),Main) returns (ASCIIString,true)
 function get_type(sym::Expr, fn)
@@ -464,9 +458,33 @@ function completions(string, pos)
         comp_keywords = false
     end
     startpos == 0 && (pos = -1)
-    dotpos <= startpos && (dotpos = startpos - 1)
+    dotpos < startpos && (dotpos = startpos - 1)
     s = string[startpos:pos]
     comp_keywords && append!(suggestions, complete_keyword(s))
+    # The case where dot and start pos is equal could look like: "(""*"").d","". or  CompletionFoo.test_y_array[1].y
+    # This case can be handled by finding the begining of the expresion. This is done bellow.
+    if dotpos == startpos
+        i = prevind(string, startpos)
+        while 0 < i
+            c = string[i]
+            if c in [')', ']']
+                if c==')'
+                    c_start='('; c_end=')'
+                elseif c==']'
+                    c_start='['; c_end=']'
+                end
+                frange, end_off_indentifier = find_start_brace(string[1:prevind(string, i)], c_start=c_start, c_end=c_end)
+                startpos = start(frange)
+                i = prevind(string, startpos)
+            elseif c in ["\'\"\`"...]
+                s = "$c$c"*string[startpos:pos]
+                break
+            else
+                break
+            end
+            s = string[startpos:pos]
+        end
+    end
     append!(suggestions, complete_symbol(s, ffunc))
     return sort(unique(suggestions)), (dotpos+1):pos, true
 end
