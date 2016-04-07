@@ -68,44 +68,56 @@ test_complete(s) = completions(s,endof(s))
 test_scomplete(s) = shell_completions(s,endof(s))
 test_bslashcomplete(s) = bslash_completions(s,endof(s))[2]
 
-s = ""
-c,r = test_complete(s)
-@test "CompletionFoo" in c
-@test isempty(r)
-@test s[r] == ""
+function multiline(s::AbstractString)
+    return [(s,0),
+        ("multiline = true\n"*s, 17)
+    ]
+end
 
-s = "Comp"
-c,r = test_complete(s)
-@test "CompletionFoo" in c
-@test r == 1:4
-@test s[r] == "Comp"
+for (s,delta) in multiline("")
+    c,r = test_complete(s)
+    @test "CompletionFoo" in c
+    @test isempty(r)
+    @test s[r] == ""
+end
 
-s = "Main.Comp"
-c,r = test_complete(s)
-@test "CompletionFoo" in c
-@test r == 6:9
-@test s[r] == "Comp"
+for (s,delta) in multiline("Comp")
+    c,r = test_complete(s)
+    @test "CompletionFoo" in c
+    @test r == (1:4)+delta
+    @test s[r] == "Comp"
+end
 
-s = "Main.CompletionFoo."
-c,r = test_complete(s)
-@test "bar" in c
-@test r == 20:19
-@test s[r] == ""
+for (s,delta) in multiline("Main.Comp")
+    c,r = test_complete(s)
+    @test "CompletionFoo" in c
+    @test r == (6:9)+delta
+    @test s[r] == "Comp"
+end
 
-s = "Main.CompletionFoo.f"
-c,r = test_complete(s)
-@test "foo" in c
-@test r == 20:20
-@test s[r] == "f"
-@test !("foobar" in c)
+for (s,delta) in multiline("Main.CompletionFoo.")
+    c,r = test_complete(s)
+    @test "bar" in c
+    @test r == (20:19)+delta
+    @test s[r] == ""
+end
+
+for (s,delta) in multiline("Main.CompletionFoo.f")
+    c,r = test_complete(s)
+    @test "foo" in c
+    @test r == (20:20)+delta
+    @test s[r] == "f"
+    @test !("foobar" in c)
+end
 
 # issue #6424
-s = "Main.CompletionFoo.@f"
-c,r = test_complete(s)
-@test "@foobar" in c
-@test r == 20:21
-@test s[r] == "@f"
-@test !("foo" in c)
+for (s,delta) in multiline("Main.CompletionFoo.@f")
+    c,r = test_complete(s)
+    @test "@foobar" in c
+    @test r == (20:21)+delta
+    @test s[r] == "@f"
+    @test !("foo" in c)
+end
 
 s = "Main.CompletionFoo.type_test.x"
 c,r = test_complete(s)
@@ -131,30 +143,34 @@ c,r = test_complete(s)
 @test s[r] == "y"
 
 # issue #6333
-s = "Base.return_types(getin"
-c,r = test_complete(s)
-@test "getindex" in c
-@test r == 19:23
-@test s[r] == "getin"
+for (s,delta) in multiline("Base.return_types(getin")
+    c,r = test_complete(s)
+    @test "getindex" in c
+    @test r == (19:23)+delta
+    @test s[r] == "getin"
+end
 
 # inexistent completion inside a string
-s = "Pkg.add(\"lol"
-c,r,res = test_complete(s)
-@test res == false
+for (s,delta) in multiline("Pkg.add(\"lol")
+    c,r,res = test_complete(s)
+    @test res == false
+end
 
 # test latex symbol completions
-s = "\\alpha"
-c,r = test_bslashcomplete(s)
-@test c[1] == "α"
-@test r == 1:length(s)
-@test length(c) == 1
+for (s,delta) in multiline("\\alpha")
+    c,r = test_bslashcomplete(s)
+    @test c[1] == "α"
+    @test r == (1:length(s)-delta)+delta
+    @test length(c) == 1
+end
 
 # test latex symbol completions after unicode #9209
-s = "α\\alpha"
-c,r = test_bslashcomplete(s)
-@test c[1] == "α"
-@test r == 3:sizeof(s)
-@test length(c) == 1
+for (s,delta) in multiline("α\\alpha")
+    c,r = test_bslashcomplete(s)
+    @test c[1] == "α"
+    @test r == (3:sizeof(s)-delta)+delta
+    @test length(c) == 1
+end
 
 # test emoji symbol completions
 s = "\\:koala:"
@@ -176,16 +192,18 @@ c,r = test_bslashcomplete(s)
 
 # test latex symbol completions in strings should not work when there
 # is a backslash in front of `\alpha` because it interferes with path completion on windows
-s = "cd(\"path_to_an_empty_folder_should_not_complete_latex\\\\\\alpha"
-c,r,res = test_complete(s)
-@test length(c) == 0
+for (s,delta) in multiline("cd(\"path_to_an_empty_folder_should_not_complete_latex\\\\\\alpha")
+    c,r,res = test_complete(s)
+    @test length(c) == 0
+end
 
 # test latex symbol completions in strings
-s = "\"C:\\\\ \\alpha"
-c,r,res = test_complete(s)
-@test c[1] == "α"
-@test r == 7:12
-@test length(c) == 1
+for (s,delta) in multiline("\"C:\\\\ \\alpha")
+    c,r,res = test_complete(s)
+    @test c[1] == "α"
+    @test r == (7:12)+delta
+    @test length(c) == 1
+end
 
 s = "\\a"
 c, r, res = test_complete(s)
@@ -194,25 +212,30 @@ c, r, res = test_complete(s)
 @test s[r] == "\\a"
 
 # `cd("C:\U should not make the repl crash due to escaping see comment #9137
-s = "cd(\"C:\\U"
-c,r,res = test_complete(s)
+for (s,delta) in multiline("cd(\"C:\\U")
+    c,r,res = test_complete(s)
+end
 
 # Test method completions
 s = "max("
-c, r, res = test_complete(s)
-@test !res
-@test c[1] == string(start(methods(max)))
-@test r == 1:3
-@test s[r] == "max"
+for (s, delta) in multiline(s)
+    c, r, res = test_complete(s)
+    @test !res
+    @test c[1] == string(start(methods(max)))
+    @test r == 1+delta:3+delta
+    @test s[r] == "max"
+end
 
 # Test completion of methods with input concrete args and args where typeinference determine their type
 s = "CompletionFoo.test(1,1, "
-c, r, res = test_complete(s)
-@test !res
-@test c[1] == string(methods(CompletionFoo.test, Tuple{Int, Int})[1])
-@test length(c) == 3
-@test r == 1:18
-@test s[r] == "CompletionFoo.test"
+for (s, delta) in multiline(s)
+    c, r, res = test_complete(s)
+    @test !res
+    @test c[1] == string(methods(CompletionFoo.test, Tuple{Int, Int})[1])
+    @test length(c) == 3
+    @test r == 1+delta:18+delta
+    @test s[r] == "CompletionFoo.test"
+end
 
 s = "CompletionFoo.test(CompletionFoo.array,"
 c, r, res = test_complete(s)
@@ -596,8 +619,10 @@ let #test that it can auto complete with spaces in file/path
 end
 
 # Test the completion returns nothing when the folder do not exist
-c,r = test_complete("cd(\"folder_do_not_exist_77/file")
-@test length(c) == 0
+for (s, delta) in multiline("cd(\"folder_do_not_exist_77/file")
+    c,r = test_complete(s)
+    @test length(c) == 0
+end
 
 @windows_only begin
     tmp = tempname()
@@ -606,24 +631,32 @@ c,r = test_complete("cd(\"folder_do_not_exist_77/file")
     temp_name = basename(path)
     cd(path) do
         s = "cd ..\\\\"
-        c,r = test_scomplete(s)
-        @test r == length(s)+1:length(s)
-        @test temp_name * "\\\\" in c
+        for (s,delta) in multiline(s)
+            c,r = test_scomplete(s)
+            @test r == length(s)+1:length(s)
+            @test temp_name * "\\\\" in c
+        end
 
         s = "ls $(file[1:2])"
-        c,r = test_scomplete(s)
-        @test r == length(s)-1:length(s)
-        @test file in c
+        for (s,delta) in multiline(s)
+            c,r = test_scomplete(s)
+            @test r == length(s)-1:length(s)
+            @test file in c
+        end
 
         s = "cd(\"..\\"
-        c,r = test_complete(s)
-        @test r == length(s)+1:length(s)
-        @test temp_name * "\\\\" in c
+        for (s,delta) in multiline(s)
+            c,r = test_complete(s)
+            @test r == length(s)+1:length(s)
+            @test temp_name * "\\\\" in c
+        end
 
         s = "cd(\"$(file[1:2])"
-        c,r = test_complete(s)
-        @test r == length(s) - 1:length(s)
-        @test file  in c
+        for (s,delta) in multiline(s)
+            c,r = test_complete(s)
+            @test r == length(s) - 1:length(s)
+            @test file  in c
+        end
     end
     rm(tmp)
 end
