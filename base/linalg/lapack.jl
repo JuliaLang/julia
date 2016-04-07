@@ -1572,7 +1572,7 @@ for (geev, gesvd, gesdd, ggsvd, elty, relty) in
                 end
                 chklapackerror(info[])
                 if i == 1
-                    lwork = BlasInt(real(work[1]))
+                    lwork = round(BlasInt, nextfloat(real(work[1])))
                     work = Array($elty, lwork)
                 end
             end
