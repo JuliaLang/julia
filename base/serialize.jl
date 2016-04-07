@@ -554,7 +554,7 @@ function deserialize(s::SerializationState, ::Type{LambdaInfo})
         linfo = known_object_data[lnumber]::LambdaInfo
         makenew = false
     else
-        linfo = ccall(:jl_new_lambda_info, Any, (Ptr{Void}, Ptr{Void}, Ptr{Void}, Ptr{Void}), C_NULL, C_NULL, C_NULL, C_NULL)::LambdaInfo
+        linfo = ccall(:jl_new_lambda_info, Ref{LambdaInfo}, (Ptr{Void}, Ptr{Void}, Ptr{Void}, Ptr{Void}), C_NULL, C_NULL, C_NULL, C_NULL)
         makenew = true
     end
     deserialize_cycle(s, linfo)
@@ -679,7 +679,7 @@ function deserialize(s::SerializationState, ::Type{TypeName})
     else
         name = gensym()
         mod = __deserialized_types__
-        tn = ccall(:jl_new_typename_in, Any, (Any, Any), name, mod)
+        tn = ccall(:jl_new_typename_in, Ref{TypeName}, (Any, Any), name, mod)
         makenew = true
     end
     deserialize_cycle(s, tn)

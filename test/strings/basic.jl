@@ -227,6 +227,9 @@ s = "abcde\uff\u2000\U1f596"
 sp = pointer(s)
 @test utf8(sp) == s
 @test utf8(sp,5) == "abcde"
+@test_throws ArgumentError ascii(sp)
+@test ascii(sp, 5) == "abcde"
+@test_throws ArgumentError ascii(sp, 6)
 @test typeof(utf8(sp)) == UTF8String
 
 @test get(tryparse(BigInt, "1234567890")) == BigInt(1234567890)
@@ -496,3 +499,12 @@ foobaz(ch) = reinterpret(Char, typemax(UInt32))
 @test utf8("a").*["b","c"] == ["ab","ac"]
 @test "a".*map(utf8,["b","c"]) == ["ab","ac"]
 @test ["a","b"].*["c","d"]' == ["ac" "ad"; "bc" "bd"]
+
+# Make sure NULL pointer are handled consistently by
+# `bytestring`, `ascii` and `utf8`
+@test_throws ArgumentError bytestring(Ptr{UInt8}(0))
+@test_throws ArgumentError bytestring(Ptr{UInt8}(0), 10)
+@test_throws ArgumentError ascii(Ptr{UInt8}(0))
+@test_throws ArgumentError ascii(Ptr{UInt8}(0), 10)
+@test_throws ArgumentError utf8(Ptr{UInt8}(0))
+@test_throws ArgumentError utf8(Ptr{UInt8}(0), 10)

@@ -108,8 +108,15 @@ convert(::Type{ASCIIString}, a::Vector{UInt8}) = begin
     return ASCIIString(a)
 end
 
-ascii(p::Ptr{UInt8}) = ASCIIString(bytestring(p))
-ascii(p::Ptr{UInt8}, len::Integer) = ascii(pointer_to_array(p, len))
+ascii(p::Ptr{UInt8}) =
+    ascii(p, p == C_NULL ? Csize_t(0) : ccall(:strlen, Csize_t, (Ptr{UInt8},), p))
+function ascii(p::Ptr{UInt8}, len::Integer)
+    p == C_NULL && throw(ArgumentError("cannot convert NULL to string"))
+    ary = ccall(:jl_pchar_to_array, Vector{UInt8},
+                (Ptr{UInt8}, Csize_t), p, len)
+    isvalid(ASCIIString, ary) || throw(ArgumentError("invalid ASCII sequence"))
+    ASCIIString(ary)
+end
 
 function convert(::Type{ASCIIString}, a::Array{UInt8,1}, invalids_as::ASCIIString)
     l = length(a)

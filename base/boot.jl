@@ -251,23 +251,24 @@ end
 type WeakRef
     value
     WeakRef() = WeakRef(nothing)
-    WeakRef(v::ANY) = ccall(:jl_gc_new_weakref, Any, (Any,), v)::WeakRef
+    WeakRef(v::ANY) = ccall(:jl_gc_new_weakref, Ref{WeakRef}, (Any,), v)
 end
 
 TypeVar(n::Symbol) =
-    ccall(:jl_new_typevar, Any, (Any, Any, Any), n, Union{}, Any)::TypeVar
+    ccall(:jl_new_typevar, Ref{TypeVar}, (Any, Any, Any), n, Union{}, Any)
 TypeVar(n::Symbol, ub::ANY) =
     (isa(ub,Bool) ?
-     ccall(:jl_new_typevar_, Any, (Any, Any, Any, Any), n, Union{}, Any, ub)::TypeVar :
-     ccall(:jl_new_typevar, Any, (Any, Any, Any), n, Union{}, ub::Type)::TypeVar)
+     ccall(:jl_new_typevar_, Ref{TypeVar}, (Any, Any, Any, Any), n, Union{}, Any, ub) :
+     ccall(:jl_new_typevar, Ref{TypeVar}, (Any, Any, Any), n, Union{}, ub::Type))
 TypeVar(n::Symbol, lb::ANY, ub::ANY) =
     (isa(ub,Bool) ?
-     ccall(:jl_new_typevar_, Any, (Any, Any, Any, Any), n, Union{}, lb::Type, ub)::TypeVar :
-     ccall(:jl_new_typevar, Any, (Any, Any, Any), n, lb::Type, ub::Type)::TypeVar)
+     ccall(:jl_new_typevar_, Ref{TypeVar}, (Any, Any, Any, Any), n, Union{}, lb::Type, ub) :
+     ccall(:jl_new_typevar, Ref{TypeVar}, (Any, Any, Any), n, lb::Type, ub::Type))
 TypeVar(n::Symbol, lb::ANY, ub::ANY, b::Bool) =
-    ccall(:jl_new_typevar_, Any, (Any, Any, Any, Any), n, lb::Type, ub::Type, b)::TypeVar
+    ccall(:jl_new_typevar_, Ref{TypeVar}, (Any, Any, Any, Any), n, lb::Type, ub::Type, b)
 
-TypeConstructor(p::ANY, t::ANY) = ccall(:jl_new_type_constructor, Any, (Any, Any), p::SimpleVector, t::Type)
+TypeConstructor(p::ANY, t::ANY) =
+    ccall(:jl_new_type_constructor, Ref{TypeConstructor}, (Any, Any), p::SimpleVector, t::Type)
 
 Void() = nothing
 
@@ -285,9 +286,9 @@ eval(:((::Type{GlobalRef})(m::Module, s::Symbol) = $(Expr(:new, :GlobalRef, :m, 
 eval(:((::Type{Slot})(n::Int) = $(Expr(:new, :Slot, :n, Any))))
 eval(:((::Type{Slot})(n::Int, t::ANY) = $(Expr(:new, :Slot, :n, :t))))
 
-Module(name::Symbol=:anonymous, std_imports::Bool=true) = ccall(:jl_f_new_module, Any, (Any, Bool), name, std_imports)::Module
+Module(name::Symbol=:anonymous, std_imports::Bool=true) = ccall(:jl_f_new_module, Ref{Module}, (Any, Bool), name, std_imports)
 
-Task(f::ANY) = ccall(:jl_new_task, Any, (Any, Int), f, 0)::Task
+Task(f::ANY) = ccall(:jl_new_task, Ref{Task}, (Any, Int), f, 0)
 
 # simple convert for use by constructors of types in Core
 # note that there is no actual conversion defined here,
