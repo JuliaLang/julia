@@ -201,7 +201,14 @@ c,r,res = test_complete(s)
 s = "max("
 c, r, res = test_complete(s)
 @test !res
-@test c[1] == string(start(methods(max)))
+@test let found = false
+    Base.visit(methods(max)) do m
+        if !found
+            found = (c[1] == string(m))
+        end
+    end
+    found
+end
 @test r == 1:3
 @test s[r] == "max"
 

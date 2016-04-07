@@ -2,6 +2,13 @@
 
 # Method and method-table pretty-printing
 
+function get_lambda(m::TypeMapEntry)
+    isdefined(m, :func) || return nothing
+    isa(m.func, Method) && return m.func.lambda_template
+    isa(m.func, LambdaInfo) && return m.func
+    return nothing
+end
+
 function argtype_decl(env, n, t) # -> (argname, argtype)
     if isa(n,Expr)
         n = n.args[1]  # handle n::T in arg list
@@ -33,22 +40,34 @@ function arg_decl_parts(m::TypeMapEntry)
     else
         tv = Any[tv...]
     end
-    li = m.func
-    argnames = li.slotnames[1:li.nargs]
-    s = symbol("?")
-    decls = [argtype_decl(:tvar_env => tv, get(argnames,i,s), m.sig.parameters[i])
-                for i = 1:length(m.sig.parameters)]
-    return tv, decls, li.file, li.line
+    li = get_lambda(m)
+    file, line = "", 0
+    if li !== nothing
+        argnames = li.slotnames[1:li.nargs]
+        s = symbol("?")
+        decls = Any[argtype_decl(:tvar_env => tv, get(argnames, i, s), m.sig.parameters[i])
+                    for i = 1:length(m.sig.parameters)]
+        if isdefined(li, :def)
+            file, line = li.def.file, li.def.line
+        end
+    else
+        decls = Any["" for i = 1:length(m.sig.parameters)]
+    end
+    return tv, decls, file, line
 end
 
 function kwarg_decl(m::TypeMapEntry, kwtype::DataType)
     sig = Tuple{kwtype, Array, m.sig.parameters...}
-    mt = kwtype.name.mt
-    li = ccall(:jl_methtable_lookup, Any, (Any, Any), mt, sig)
-    if li !== nothing
-        return filter(x->!('#' in string(x)), li.slotnames[li.nargs+1:end])
+    kwli = ccall(:jl_methtable_lookup, Any, (Any, Any), kwtype.name.mt, sig)
+    if kwli !== nothing
+        kwli = kwli::Method
+        return filter(x->!('#' in string(x)), kwli.lambda_template.slotnames[kwli.lambda_template.nargs+1:end])
     end
     return ()
+end
+
+function show(io::IO, m::Method)
+    print(io, m.module, '.', m.name, m.isstaged ? " [@generated] at " : " at ", m.file, ":", m.line)
 end
 
 function show(io::IO, m::TypeMapEntry; kwtype::Nullable{DataType}=Nullable{DataType}())
@@ -134,11 +153,12 @@ function inbase(m::Module)
 end
 fileurl(file) = let f = find_source_file(file); f === nothing ? "" : "file://"*f; end
 
-function url(m::TypeMapEntry)
-    M = m.func.module
-    (m.func.file == :null || m.func.file == :string) && return ""
-    file = string(m.func.file)
-    line = m.func.line
+url(m::TypeMapEntry) = url(m.func)
+function url(m::Method)
+    M = m.module
+    (m.file == :null || m.file == :string) && return ""
+    file = string(m.file)
+    line = m.line
     line <= 0 || ismatch(r"In\[[0-9]+\]", file) && return ""
     if inbase(M)
         if isempty(Base.GIT_VERSION_INFO.commit)
