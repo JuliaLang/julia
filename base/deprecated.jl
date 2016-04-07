@@ -864,15 +864,15 @@ end
 @deprecate get_rounding rounding
 
 #13465
-@deprecate cov(x::AbstractVector; corrected=true, mean=Base.mean(x)) covm(x, mean, corrected)
-@deprecate cov(X::AbstractMatrix; vardim=1, corrected=true, mean=Base.mean(X, vardim)) covm(X, mean, vardim, corrected)
-@deprecate cov(x::AbstractVector, y::AbstractVector; corrected=true, mean=(Base.mean(x), Base.mean(y))) covm(x, mean[1], y, mean[2], corrected)
-@deprecate cov(X::AbstractVecOrMat, Y::AbstractVecOrMat; vardim=1, corrected=true, mean=(Base.mean(X, vardim), Base.mean(Y, vardim))) covm(X, mean[1], Y, mean[2], vardim, corrected)
+@deprecate cov(x::AbstractVector; corrected=true, mean=Base.mean(x)) Base.covm(x, mean, corrected)
+@deprecate cov(X::AbstractMatrix; vardim=1, corrected=true, mean=Base.mean(X, vardim)) Base.covm(X, mean, vardim, corrected)
+@deprecate cov(x::AbstractVector, y::AbstractVector; corrected=true, mean=(Base.mean(x), Base.mean(y))) Base.covm(x, mean[1], y, mean[2], corrected)
+@deprecate cov(X::AbstractVecOrMat, Y::AbstractVecOrMat; vardim=1, corrected=true, mean=(Base.mean(X, vardim), Base.mean(Y, vardim))) Base.covm(X, mean[1], Y, mean[2], vardim, corrected)
 
-@deprecate cor(x::AbstractVector; mean=Base.mean(x)) corm(x, mean)
-@deprecate cor(X::AbstractMatrix; vardim=1, mean=Base.mean(X, vardim)) corm(X, mean, vardim)
-@deprecate cor(x::AbstractVector, y::AbstractVector; mean=(Base.mean(x), Base.mean(y))) corm(x, mean[1], y, mean[2])
-@deprecate cor(X::AbstractVecOrMat, Y::AbstractVecOrMat; vardim=1, mean=(Base.mean(X, vardim), Base.mean(Y, vardim))) corm(X, mean[1], Y, mean[2], vardim)
+@deprecate cor(x::AbstractVector; mean=Base.mean(x)) Base.corm(x, mean)
+@deprecate cor(X::AbstractMatrix; vardim=1, mean=Base.mean(X, vardim)) Base.corm(X, mean, vardim)
+@deprecate cor(x::AbstractVector, y::AbstractVector; mean=(Base.mean(x), Base.mean(y))) Base.corm(x, mean[1], y, mean[2])
+@deprecate cor(X::AbstractVecOrMat, Y::AbstractVecOrMat; vardim=1, mean=(Base.mean(X, vardim), Base.mean(Y, vardim))) Base.corm(X, mean[1], Y, mean[2], vardim)
 
 @deprecate_binding SparseMatrix SparseArrays
 
