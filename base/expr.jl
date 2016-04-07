@@ -6,18 +6,18 @@ symbol(s::Symbol) = s
 symbol(s::ASCIIString) = symbol(s.data)
 symbol(s::UTF8String) = symbol(s.data)
 symbol(a::Array{UInt8,1}) =
-    ccall(:jl_symbol_n, Any, (Ptr{UInt8}, Int32), a, length(a))::Symbol
+    ccall(:jl_symbol_n, Ref{Symbol}, (Ptr{UInt8}, Int32), a, length(a))
 symbol(x...) = symbol(string(x...))
 
-gensym() = ccall(:jl_gensym, Any, ())::Symbol
+gensym() = ccall(:jl_gensym, Ref{Symbol}, ())
 
 gensym(s::ASCIIString) = gensym(s.data)
 gensym(s::UTF8String) = gensym(s.data)
 gensym(a::Array{UInt8,1}) =
-    ccall(:jl_tagged_gensym, Any, (Ptr{UInt8}, Int32), a, length(a))::Symbol
+    ccall(:jl_tagged_gensym, Ref{Symbol}, (Ptr{UInt8}, Int32), a, length(a))
 gensym(ss::Union{ASCIIString, UTF8String}...) = map(gensym, ss)
 gensym(s::Symbol) =
-    ccall(:jl_tagged_gensym, Any, (Ptr{UInt8}, Int32), s, ccall(:strlen, Csize_t, (Ptr{UInt8},), s))::Symbol
+    ccall(:jl_tagged_gensym, Ref{Symbol}, (Ptr{UInt8}, Int32), s, ccall(:strlen, Csize_t, (Ptr{UInt8},), s))
 
 macro gensym(names...)
     blk = Expr(:block)
@@ -46,8 +46,8 @@ astcopy(x) = x
 ==(x::QuoteNode, y::QuoteNode) = x.value == y.value
 ==(x::Slot, y::Slot) = x.id === y.id && x.typ === y.typ
 
-expand(x) = ccall(:jl_expand, Any, (Any,), x)
-macroexpand(x) = ccall(:jl_macroexpand, Any, (Any,), x)
+expand(x::ANY) = ccall(:jl_expand, Any, (Any,), x)
+macroexpand(x::ANY) = ccall(:jl_macroexpand, Any, (Any,), x)
 
 ## misc syntax ##
 

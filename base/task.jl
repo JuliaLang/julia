@@ -53,7 +53,7 @@ macro task(ex)
     :(Task(()->$(esc(ex))))
 end
 
-current_task() = ccall(:jl_get_current_task, Any, ())::Task
+current_task() = ccall(:jl_get_current_task, Ref{Task}, ())
 istaskdone(t::Task) = ((t.state == :done) | (t.state == :failed))
 
 """
