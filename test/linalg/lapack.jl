@@ -4,6 +4,10 @@ using Base.Test
 
 import Base.LinAlg.BlasInt
 
+@test_throws ArgumentError Base.LinAlg.LAPACK.chkside('Z')
+@test_throws ArgumentError Base.LinAlg.LAPACK.chkdiag('Z')
+@test_throws ArgumentError Base.LinAlg.LAPACK.chktrans('Z')
+
 let # syevr
     srand(123)
     Ainit = randn(5,5)
