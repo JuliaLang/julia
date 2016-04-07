@@ -43,6 +43,9 @@ s1 = similar(Set([1,"hello"]))
 s2 = similar(Set{Float32}([2.0f0,3.0f0,4.0f0]))
 @test isequal(s2, Set())
 @test is(eltype(s2), Float32)
+s3 = similar(Set([1,"hello"]),Float32)
+@test isequal(s3, Set())
+@test is(eltype(s3), Float32)
 
 # show
 @test sprint(show, Set()) == "Set{Any}()"
