@@ -400,6 +400,9 @@ Julia type with the same name, prefixed by C. This can help for writing portable
 +-----------------------------------+-----------------+----------------------+-----------------------------------+
 | ``void``                          |                 |                      | ``Void``                          |
 +-----------------------------------+-----------------+----------------------+-----------------------------------+
+| ``void`` and                      |                 |                      | ``Union{}``                       |
+| ``[[noreturn]]`` or ``_Noreturn`` |                 |                      |                                   |
++-----------------------------------+-----------------+----------------------+-----------------------------------+
 | ``void*``                         |                 |                      | ``Ptr{Void}``                     |
 +-----------------------------------+-----------------+----------------------+-----------------------------------+
 | ``T*`` (where T represents an     |                 |                      | ``Ref{T}``                        |
@@ -472,6 +475,13 @@ C name                  Standard Julia Alias    Julia Base Type
 
     Julia's ``Char`` type is 32 bits, which is not the same as the wide character
     type (``wchar_t`` or ``wint_t``) on all platforms.
+
+.. warning::
+
+    A return type of ``Union{}`` means the function will not return
+    i.e. C++11 ``[[noreturn]]`` or C11 ``_Noreturn`` (e.g. ``jl_throw`` or
+    ``longjmp``). Do not use this for function that returns
+    no value (``void``) but does return.
 
 .. note::
 
