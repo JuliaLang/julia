@@ -124,7 +124,7 @@ export
     Tuple, Type, TypeConstructor, TypeName, TypeVar, Union, Void,
     SimpleVector, AbstractArray, DenseArray,
     # special objects
-    Function, LambdaInfo, MethodTable, TypeMapEntry, TypeMapLevel,
+    Function, LambdaInfo, Method, MethodTable, TypeMapEntry, TypeMapLevel,
     Module, Symbol, Task, Array, WeakRef,
     # numeric types
     Number, Real, Integer, Bool, Ref, Ptr,

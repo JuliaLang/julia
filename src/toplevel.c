@@ -544,7 +544,7 @@ jl_value_t *jl_toplevel_eval_flex(jl_value_t *e, int fast)
 
     thk->specTypes = (jl_tupletype_t*)jl_typeof(jl_emptytuple); // no gc_wb needed
     if (ewc) {
-        jl_type_infer(thk, jl_true);
+        jl_type_infer(thk);
         jl_value_t *dummy_f_arg=NULL;
         result = jl_call_method_internal(thk, &dummy_f_arg, 1);
     }
@@ -609,10 +609,11 @@ static int type_contains(jl_value_t *ty, jl_value_t *x)
     return 0;
 }
 
-void print_func_loc(JL_STREAM *s, jl_lambda_info_t *li);
+void print_func_loc(JL_STREAM *s, jl_method_t *m);
 
-void jl_check_static_parameter_conflicts(jl_lambda_info_t *li, jl_svec_t *t, jl_sym_t *fname)
+void jl_check_static_parameter_conflicts(jl_method_t *m, jl_svec_t *t)
 {
+    jl_lambda_info_t *li = m->lambda_template;
     size_t nvars = jl_array_len(li->slotnames);
 
     for(size_t i=0; i < jl_svec_len(t); i++) {
@@ -623,8 +624,8 @@ void jl_check_static_parameter_conflicts(jl_lambda_info_t *li, jl_svec_t *t, jl_
                     jl_printf(JL_STDERR,
                               "WARNING: local variable %s conflicts with a static parameter in %s",
                               jl_symbol_name(((jl_tvar_t*)tv)->name),
-                              jl_symbol_name(fname));
-                    print_func_loc(JL_STDERR, li);
+                              jl_symbol_name(m->name));
+                    print_func_loc(JL_STDERR, m);
                     jl_printf(JL_STDERR, ".\n");
                 }
             }
@@ -703,7 +704,8 @@ static jl_lambda_info_t *expr_to_lambda(jl_expr_t *f)
     // the user should only do this at the toplevel
     // the result is that the closure variables get interpolated directly into the AST
     jl_svec_t *tvar_syms = NULL;
-    JL_GC_PUSH2(&f, &tvar_syms);
+    jl_lambda_info_t *li = NULL;
+    JL_GC_PUSH3(&f, &tvar_syms, &li);
     assert(jl_is_expr(f) && ((jl_expr_t*)f)->head == lambda_sym);
     // move tvar symbol array from args[1][4] to linfo
     jl_array_t *le = (jl_array_t*)jl_exprarg(f, 1);
@@ -716,8 +718,8 @@ static jl_lambda_info_t *expr_to_lambda(jl_expr_t *f)
         jl_svecset(tvar_syms, i, jl_arrayref(tvar_syms_arr, i));
     }
     // wrap in a LambdaInfo
-    jl_lambda_info_t *li = jl_new_lambda_info((jl_value_t*)f, tvar_syms, jl_emptysvec, jl_current_module);
-    jl_preresolve_globals((jl_value_t*)li, li);
+    li = jl_new_lambda_info_uninit(tvar_syms);
+    jl_lambda_info_set_ast(li, (jl_value_t*)f);
     JL_GC_POP();
     return li;
 }
@@ -729,7 +731,8 @@ JL_DLLEXPORT void jl_method_def(jl_svec_t *argdata, jl_lambda_info_t *f, jl_valu
     jl_svec_t *tvars = (jl_svec_t*)jl_svecref(argdata,1);
     jl_methtable_t *mt;
     jl_sym_t *name;
-    JL_GC_PUSH1(&f);
+    jl_method_t *m = NULL;
+    JL_GC_PUSH2(&f, &m);
 
     if (!jl_is_lambda_info(f))
         f = expr_to_lambda((jl_expr_t*)f);
@@ -754,7 +757,10 @@ JL_DLLEXPORT void jl_method_def(jl_svec_t *argdata, jl_lambda_info_t *f, jl_valu
     if (jl_subtype(ftype, (jl_value_t*)jl_builtin_type, 0))
         jl_error("cannot add methods to a builtin function");
 
-    jl_check_static_parameter_conflicts(f, tvars, name);
+    jl_tupletype_t *sig = isstaged == jl_true ? jl_anytuple_type : argtypes;
+    m = jl_new_method(f, name, sig, isstaged == jl_true);
+    f = m->lambda_template; // because jl_new_method makes a copy
+    jl_check_static_parameter_conflicts(m, tvars);
 
     // TODO
     size_t na = jl_nparams(argtypes);
@@ -763,13 +769,13 @@ JL_DLLEXPORT void jl_method_def(jl_svec_t *argdata, jl_lambda_info_t *f, jl_valu
         if (!jl_is_type(elt) && !jl_is_typevar(elt)) {
             jl_exceptionf(jl_argumenterror_type, "invalid type for argument %s in method definition for %s at %s:%d",
                           jl_symbol_name((jl_sym_t*)jl_cellref(f->slotnames,i)),
-                          jl_symbol_name(name), jl_symbol_name(f->file),
-                          f->line);
+                          jl_symbol_name(name), jl_symbol_name(m->file),
+                          m->line);
         }
     }
 
     int ishidden = !!strchr(jl_symbol_name(name), '#');
-    for(size_t i=0; i < jl_svec_len(tvars); i++) {
+    for (size_t i=0; i < jl_svec_len(tvars); i++) {
         jl_value_t *tv = jl_svecref(tvars,i);
         if (!jl_is_typevar(tv))
             jl_type_error_rt(jl_symbol_name(name), "method definition", (jl_value_t*)jl_tvar_type, tv);
@@ -777,13 +783,13 @@ JL_DLLEXPORT void jl_method_def(jl_svec_t *argdata, jl_lambda_info_t *f, jl_valu
             jl_printf(JL_STDERR, "WARNING: static parameter %s does not occur in signature for %s",
                       jl_symbol_name(((jl_tvar_t*)tv)->name),
                       jl_symbol_name(name));
-            print_func_loc(JL_STDERR, f);
+            print_func_loc(JL_STDERR, m);
             jl_printf(JL_STDERR, ".\nThe method will not be callable.\n");
         }
     }
 
-    f->isstaged = (isstaged == jl_true);
-    jl_add_method_to_table(mt, argtypes, f, tvars);
+    jl_method_table_insert(mt, argtypes, NULL, m, tvars);
+
     if (jl_boot_file_loaded && f->code && jl_typeis(f->code, jl_array_any_type)) {
         f->code = jl_compress_ast(f, f->code);
         jl_gc_wb(f, f->code);

@@ -285,7 +285,7 @@ function get_type_call(expr::Expr)
     length(mt) == 1 || return (Any, false)
     m = first(mt)
     # Typeinference
-    linfo = Base.func_for_method_checked(m, Tuple{args...})
+    linfo = Base.func_for_method_checked(m[3].func, Tuple{args...})
     (tree, return_type) = Core.Inference.typeinf(linfo, m[1], m[2])
     return return_type, true
 end
@@ -321,7 +321,7 @@ function complete_methods(ex_org::Expr)
     out = UTF8String[]
     t_in = Tuple{Core.Typeof(func), args_ex...} # Input types
     na = length(args_ex)+1
-    for method in methods(func)
+    Base.visit(methods(func)) do method
         # Check if the method's type signature intersects the input types
         typeintersect(Tuple{method.sig.parameters[1 : min(na, end)]...}, t_in) != Union{} &&
             push!(out,string(method))

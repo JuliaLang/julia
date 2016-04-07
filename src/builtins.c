@@ -1135,6 +1135,7 @@ void jl_init_primitives(void)
 
     add_builtin("Module", (jl_value_t*)jl_module_type);
     add_builtin("MethodTable", (jl_value_t*)jl_methtable_type);
+    add_builtin("Method", (jl_value_t*)jl_method_type);
     add_builtin("TypeMapEntry", (jl_value_t*)jl_typemap_entry_type);
     add_builtin("TypeMapLevel", (jl_value_t*)jl_typemap_level_type);
     add_builtin("Symbol", (jl_value_t*)jl_sym_type);
@@ -1212,21 +1213,28 @@ static size_t jl_static_show_x_(JL_STREAM *out, jl_value_t *v,
         n += jl_static_show_x(out, (jl_value_t*)vt, depth);
         n += jl_printf(out, ">");
     }
+    else if (vt == jl_method_type) {
+        jl_method_t *m = (jl_method_t*)v;
+        n += jl_static_show_x(out, (jl_value_t*)m->module, depth);
+        n += jl_printf(out, ".%s(...)", jl_symbol_name(m->name));
+    }
     else if (vt == jl_lambda_info_type) {
         jl_lambda_info_t *li = (jl_lambda_info_t*)v;
-        n += jl_static_show_x(out, (jl_value_t*)li->module, depth);
-        if (li->specTypes) {
-            n += jl_printf(out, ".");
-            n += jl_show_svec(out, li->specTypes->parameters,
-                              jl_symbol_name(li->name), "(", ")");
+        if (li->def) {
+            n += jl_static_show_x(out, (jl_value_t*)li->def->module, depth);
+            if (li->specTypes) {
+                n += jl_printf(out, ".");
+                n += jl_show_svec(out, li->specTypes->parameters,
+                                  jl_symbol_name(li->def->name), "(", ")");
+            }
+            else {
+                n += jl_printf(out, ".%s(?)", jl_symbol_name(li->def->name));
+            }
         }
         else {
-            n += jl_printf(out, ".%s(?)", jl_symbol_name(li->name));
+            n += jl_printf(out, "<toplevel thunk> -> ");
+            n += jl_static_show_x(out, (jl_value_t*)li->code, depth);
         }
-        // The following is nice for debugging, but allocates memory and generates a lot of output
-        // so it may not be a good idea to to have it active
-        //jl_printf(out, " -> ");
-        //jl_static_show(out, !jl_is_expr(li->ast) ? jl_uncompress_ast(li, li->ast) : li->ast);
     }
     else if (vt == jl_simplevector_type) {
         n += jl_show_svec(out, (jl_svec_t*)v, "svec", "(", ")");

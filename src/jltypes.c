@@ -3488,10 +3488,42 @@ void jl_init_types(void)
     jl_svecset(jl_typename_type->types, 1, jl_module_type);
     jl_svecset(jl_methtable_type->types, 5, jl_module_type);
 
+    jl_method_type =
+        jl_new_datatype(jl_symbol("Method"),
+                        jl_any_type, jl_emptysvec,
+                        jl_svec(12,
+                                jl_symbol("name"),
+                                jl_symbol("module"),
+                                jl_symbol("file"),
+                                jl_symbol("line"),
+                                jl_symbol("specializations"),
+                                jl_symbol("tfunc"),
+                                jl_symbol("lambda_template"),
+                                jl_symbol("roots"),
+                                jl_symbol("invokes"),
+                                jl_symbol("called"),
+                                jl_symbol("isstaged"),
+                                jl_symbol("needs_sparam_vals_ducttape")),
+                        jl_svec(12,
+                                jl_sym_type,
+                                jl_module_type,
+                                jl_sym_type,
+                                jl_int32_type,
+                                jl_array_uint8_type,
+                                jl_any_type,
+                                jl_any_type,
+                                jl_array_any_type,
+                                jl_any_type,
+                                jl_int32_type,
+                                jl_bool_type,
+                                jl_bool_type),
+                        0, 1, 7);
+
     jl_lambda_info_type =
         jl_new_datatype(jl_symbol("LambdaInfo"),
                         jl_any_type, jl_emptysvec,
-                        jl_svec(25, jl_symbol("code"),
+                        jl_svec(24,
+                                jl_symbol("code"),
                                 jl_symbol("slotnames"),
                                 jl_symbol("slottypes"),
                                 jl_symbol("slotflags"),
@@ -3499,24 +3531,21 @@ void jl_init_types(void)
                                 jl_symbol("rettype"),
                                 jl_symbol("sparam_syms"),
                                 jl_symbol("sparam_vals"),
-                                jl_symbol("tfunc"),
-                                jl_symbol("name"),
-                                jl_symbol("roots"),
                                 jl_symbol("specTypes"),
-                                jl_symbol("unspecialized"),
-                                jl_symbol("specializations"),
-                                jl_symbol("module"),
+                                jl_symbol("unspecialized_ducttape"),
                                 jl_symbol("def"),
-                                jl_symbol("file"),
-                                jl_symbol("line"),
                                 jl_symbol("nargs"),
+                                jl_symbol("isva"),
                                 jl_symbol("inferred"),
                                 jl_symbol("pure"),
-                                jl_symbol("isva"),
                                 jl_symbol("inInference"),
-                                jl_symbol("isstaged"),
-                                jl_symbol("invokes")),
-                        jl_svec(25, jl_any_type,
+                                jl_symbol("inCompile"),
+                                jl_symbol("jlcall_api"),
+                                jl_symbol("fptr"),
+                                jl_symbol(""), jl_symbol(""), jl_symbol(""),
+                                jl_symbol(""), jl_symbol("")),
+                        jl_svec(24,
+                                jl_any_type,
                                 jl_array_any_type,
                                 jl_any_type,
                                 jl_array_uint8_type,
@@ -3525,23 +3554,21 @@ void jl_init_types(void)
                                 jl_simplevector_type,
                                 jl_simplevector_type,
                                 jl_any_type,
-                                jl_sym_type,
                                 jl_any_type,
-                                jl_any_type,
-                                jl_any_type,
-                                jl_any_type,
-                                jl_module_type,
-                                jl_any_type,
-                                jl_sym_type,
-                                jl_int32_type,
+                                jl_method_type,
                                 jl_int32_type,
                                 jl_bool_type,
                                 jl_bool_type,
                                 jl_bool_type,
                                 jl_bool_type,
                                 jl_bool_type,
-                                jl_any_type),
+                                jl_bool_type,
+                                jl_any_type,
+                                jl_any_type, jl_any_type, jl_any_type,
+                                jl_int32_type, jl_int32_type),
                         0, 1, 10);
+    jl_svecset(jl_lambda_info_type->types, 9, jl_lambda_info_type);
+    jl_svecset(jl_method_type->types, 6, jl_lambda_info_type);
 
     jl_typector_type =
         jl_new_datatype(jl_symbol("TypeConstructor"),
@@ -3590,13 +3617,15 @@ void jl_init_types(void)
     jl_svecset(jl_simplevector_type->types, 0, jl_long_type);
     jl_svecset(jl_typename_type->types, 6, jl_long_type);
     jl_svecset(jl_methtable_type->types, 3, jl_long_type);
+    jl_svecset(jl_lambda_info_type->types, 18, jl_voidpointer_type);
+    jl_svecset(jl_lambda_info_type->types, 19, jl_voidpointer_type);
+    jl_svecset(jl_lambda_info_type->types, 20, jl_voidpointer_type);
+    jl_svecset(jl_lambda_info_type->types, 21, jl_voidpointer_type);
 
     jl_compute_field_offsets(jl_datatype_type);
     jl_compute_field_offsets(jl_typename_type);
     jl_compute_field_offsets(jl_uniontype_type);
     jl_compute_field_offsets(jl_tvar_type);
-    jl_compute_field_offsets(jl_typemap_level_type);
-    jl_compute_field_offsets(jl_typemap_entry_type);
     jl_compute_field_offsets(jl_methtable_type);
     jl_compute_field_offsets(jl_expr_type);
     jl_compute_field_offsets(jl_linenumbernode_type);

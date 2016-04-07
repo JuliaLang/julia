@@ -34,7 +34,6 @@ function test_code_reflections(tester, freflect)
     test_code_reflection(freflect, muladd, Tuple{Float64, Float64, Float64}, tester)
 end
 
-println(STDERR, "The following 'Returned code...' warnings indicate normal behavior:")
 test_code_reflections(test_ast_reflection, code_lowered)
 test_code_reflections(test_ast_reflection, code_typed)
 test_code_reflections(test_bin_reflection, code_llvm)
@@ -214,7 +213,7 @@ const a_value = 1
 end
 
 # issue #13264
-@test isa((@which vcat(1...)), TupleMapEntry)
+@test isa((@which vcat(1...)), TypeMapEntry)
 
 # issue #13464
 let t13464 = "hey there sailor"
