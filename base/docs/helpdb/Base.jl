@@ -8135,7 +8135,7 @@ Returns an `AbstractString` or `Vector{UInt8}` containing the representation of 
 requested `mime` type, as written by `writemime` (throwing a `MethodError` if no appropriate
 `writemime` is available). An `AbstractString` is returned for MIME types with textual
 representations (such as `"text/html"` or `"application/postscript"`), whereas binary data
-is returned as `Vector{UInt8}`. (The function `istext(mime)` returns whether or not Julia
+is returned as `Vector{UInt8}`. (The function `istextmime(mime)` returns whether or not Julia
 treats a given `mime` type as text.)
 
 As a special case, if `x` is an `AbstractString` (for textual MIME types) or a
@@ -10095,11 +10095,11 @@ processes completed successfully.
 exit
 
 """
-    istext(m::MIME)
+    istextmime(m::MIME)
 
 Determine whether a MIME type is text data.
 """
-istext
+istextmime
 
 """
     merge!(collection, others...)
