@@ -243,3 +243,12 @@ function foo9222()
     SimpleTest9222(0.0, mu_actual, nu_actual, v0, 0.0, [1.0,1.0], 0.5, 5.0, 20.0)
 end
 @test 0.0 == foo9222()
+
+# branching based on inferrable conditions
+let f(x) = isa(x,Int) ? 1 : ""
+    @test Base.return_types(f, Tuple{Int}) == [Int]
+end
+
+let g() = Int <: Real ? 1 : ""
+    @test Base.return_types(g, Tuple{}) == [Int]
+end

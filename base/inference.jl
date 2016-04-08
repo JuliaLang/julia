@@ -258,18 +258,29 @@ add_tfunc(Core.Intrinsics.cglobal, 1, 2,
     (fptr, t...)->(isempty(t) ? Ptr{Void} :
                    isType(t[1]) ? Ptr{t[1].parameters[1]} : Ptr))
 add_tfunc(Core.Intrinsics.select_value, 3, 3,
-    # TODO: return Bottom if cnd is definitely not a Bool
-    (cnd, x, y)->Union{x,y})
-add_tfunc(Core.Intrinsics.arraylen, 1, 1, x->Int)
+    function (cnd, x, y)
+        if isa(cnd, Const)
+            if cnd.val === true
+                return x
+            elseif cnd.val === false
+                return y
+            else
+                return Bottom
+            end
+        end
+        (Bool ⊑ cnd) || return Bottom
+        tmerge(x, y)
+    end)
 add_tfunc(is, 2, 2,
           (x::ANY, y::ANY)->(isa(x,Const) && isa(y,Const) ? Const(x.val===y.val) : Bool))
-add_tfunc(issubtype, 2, 2, cmp_tfunc)
-add_tfunc(isa, 2, 2, cmp_tfunc)
 add_tfunc(isdefined, 1, IInf, (args...)->Bool)
 add_tfunc(Core.sizeof, 1, 1, x->Int)
-add_tfunc(nfields, 1, 1, x->Int)
+add_tfunc(nfields, 1, 1, x->(isa(x,Const) ? Const(nfields(x.val)) :
+                             isType(x) && isleaftype(x.parameters[1]) ? Const(nfields(x.parameters[1])) :
+                             Int))
 add_tfunc(_expr, 1, IInf, (args...)->Expr)
 add_tfunc(applicable, 1, IInf, (f, args...)->Bool)
+add_tfunc(Core.Intrinsics.arraylen, 1, 1, x->Int)
 add_tfunc(arraysize, 2, 2, (a,d)->Int)
 add_tfunc(pointerref, 2, 2,
           function (a,i)
@@ -306,7 +317,36 @@ function typeof_tfunc(t::ANY)
 end
 add_tfunc(typeof, 1, 1, typeof_tfunc)
 add_tfunc(typeassert, 2, 2,
-          (v, t)->(isType(t) ? typeintersect(widenconst(v),t.parameters[1]) : Any))
+          function (v, t)
+              if isType(t)
+                  if isa(v,Const)
+                      if isleaftype(t) && !isa(v.val, t.parameters[1])
+                          return Bottom
+                      end
+                      return v
+                  end
+                  return typeintersect(v, t.parameters[1])
+              end
+              return v
+          end)
+add_tfunc(isa, 2, 2,
+          function (v, t)
+              if isType(t) && isleaftype(t)
+                  if v ⊑ t.parameters[1]
+                      return Const(true)
+                  elseif isa(v,Const) || isleaftype(v)
+                      return Const(false)
+                  end
+              end
+              return Bool
+          end)
+add_tfunc(issubtype, 2, 2,
+          function (a, b)
+              if isType(a) && isType(b) && isleaftype(a) && isleaftype(b)
+                  return Const(issubtype(a.parameters[1], b.parameters[1]))
+              end
+              return Bool
+          end)
 
 function type_depth(t::ANY)
     if isa(t, Union)
