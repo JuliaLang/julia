@@ -60,8 +60,6 @@ New language features
 
   * `@__LINE__` special macro now available to reflect invocation source line number ([#12727]).
 
-  * `PROGRAM_FILE` global is now available for determining the name of the running script ([#14114]).
-
 Language changes
 ----------------
 
@@ -1634,4 +1632,3 @@ Too numerous to mention.
 [#12576]: https://github.com/JuliaLang/julia/issues/12576
 [#12727]: https://github.com/JuliaLang/julia/issues/12727
 [#12739]: https://github.com/JuliaLang/julia/issues/12739
-[#14114]: https://github.com/JuliaLang/julia/issues/14114

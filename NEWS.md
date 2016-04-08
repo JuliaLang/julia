@@ -15,6 +15,8 @@ New language features
   * `x ∈ X` is now a synonym for `x in X` in `for` loops and comprehensions,
     as it already was in comparisons ([#13824]).
 
+  * `PROGRAM_FILE` global is now available for determining the name of the running script ([#14114]).
+
 Language changes
 ----------------
 
@@ -170,6 +172,7 @@ Deprecated or removed
 [#13780]: https://github.com/JuliaLang/julia/issues/13780
 [#13824]: https://github.com/JuliaLang/julia/issues/13824
 [#13897]: https://github.com/JuliaLang/julia/issues/13897
+[#14114]: https://github.com/JuliaLang/julia/issues/14114
 [#14243]: https://github.com/JuliaLang/julia/issues/14243
 [#14413]: https://github.com/JuliaLang/julia/issues/14413
 [#14424]: https://github.com/JuliaLang/julia/issues/14424
