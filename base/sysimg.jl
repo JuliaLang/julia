@@ -172,6 +172,8 @@ include("float16.jl")
 include("cartesian.jl")
 using .Cartesian
 include("multidimensional.jl")
+include("permuteddimsarray.jl")
+using .PermutedDimsArrays
 
 include("primes.jl")
 
