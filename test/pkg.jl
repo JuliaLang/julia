@@ -52,7 +52,7 @@ temp_pkg_dir() do
                 end
             end
             @test isa(ex,Pkg.PkgError)
-            @test ex.msg == "Cannot clone Example from notarealprotocol://github.com/JuliaLang/Example.jl.git. Unsupported URL protocol"
+            @test contains(ex.msg, "Cannot clone Example from notarealprotocol://github.com/JuliaLang/Example.jl.git")
         end
     end
 
@@ -257,4 +257,28 @@ temp_pkg_dir() do
 
     # Test Pkg.Read.url works
     @test Pkg.Read.url("Example") == "git://github.com/JuliaLang/Example.jl.git"
+
+    # issue #15789, build failure warning are printed correctly.
+    # Also makes sure `Pkg.build()` works even for non-git repo
+    begin
+        pth = joinpath(Pkg.dir(), "BuildFail")
+        mkdir(pth)
+        depspath = joinpath(pth, "deps")
+        mkdir(depspath)
+        depsbuild = joinpath(depspath, "build.jl")
+        touch(depsbuild)
+        # Pkg.build works without the src directory now
+        # but it's probably fine to require it.
+        msg = readstring(`$(Base.julia_cmd()) -f -e 'redirect_stderr(STDOUT); Pkg.build("BuildFail")'`)
+        @test contains(msg, "Building BuildFail")
+        @test !contains(msg, "ERROR")
+        open(depsbuild, "w") do fd
+            println(fd, "error(\"Throw build error\")")
+        end
+        msg = readstring(`$(Base.julia_cmd()) -f -e 'redirect_stderr(STDOUT); Pkg.build("BuildFail")'`)
+        @test contains(msg, "Building BuildFail")
+        @test contains(msg, "ERROR")
+        @test contains(msg, "Pkg.build(\"BuildFail\")")
+        @test contains(msg, "Throw build error")
+    end
 end
