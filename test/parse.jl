@@ -396,3 +396,8 @@ test_parseerror("0b", "invalid numeric constant \"0b\"")
 test_parseerror("0o", "invalid numeric constant \"0o\"")
 test_parseerror("0x0.1", "hex float literal must contain \"p\" or \"P\"")
 test_parseerror("0x1.0p", "invalid numeric constant \"0x1.0\"")
+
+# issue #15798
+@test expand(Base.parse_input_line("""
+              try = "No"
+           """)) == Expr(:error, "unexpected \"=\"")
