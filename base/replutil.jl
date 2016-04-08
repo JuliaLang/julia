@@ -21,17 +21,21 @@ function writemime(io::IO, ::MIME"text/plain", f::Builtin)
     print(io, typeof(f).name.mt.name, " (built-in function)")
 end
 
-# writemime for ranges, e.g.
-#  3-element UnitRange{Int64,Int}
-#   1,2,3
-# or for more elements than fit on screen:
-#   1.0,2.0,3.0,…,6.0,7.0,8.0
-function writemime(io::IO, ::MIME"text/plain", r::Range)
+# writemime for linspace, e.g.
+# linspace(1,3,7)
+# 7-element LinSpace{Float64}:
+#   1.0,1.33333,1.66667,2.0,2.33333,2.66667,3.0
+function writemime(io::IO, ::MIME"text/plain", r::LinSpace)
     print(io, summary(r))
     if !isempty(r)
         println(io, ":")
         print_range(IOContext(io, :limit_output => true), r)
     end
+end
+
+# writemime for ranges
+function writemime(io::IO, ::MIME"text/plain", r::Range)
+  show(io, r)
 end
 
 function writemime(io::IO, ::MIME"text/plain", v::AbstractVector)
