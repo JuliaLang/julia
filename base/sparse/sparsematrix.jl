@@ -462,9 +462,6 @@ This method runs in `O(m, n, length(I))` time. The HALFPERM algorithm described 
 F. Gustavson, "Two fast algorithms for sparse matrices: multiplication and permuted
 transposition," ACM TOMS 4(3), 250-269 (1978) inspired this method's use of a pair of
 counting sorts.
-
-Performance note: As of January 2016, `combine` should be a functor for this method to
-perform well. This caveat may disappear when the work in `jb/functions` lands.
 """
 function sparse!{Tv,Ti<:Integer}(I::AbstractVector{Ti}, J::AbstractVector{Ti},
         V::AbstractVector{Tv}, m::Integer, n::Integer, combine, klasttouch::Vector{Ti},
@@ -633,9 +630,6 @@ This method implements the HALFPERM algorithm described in F. Gustavson, "Two fa
   algorithms for sparse matrices: multiplication and permuted transposition," ACM TOMS
   4(3), 250-269 (1978). The algorithm runs in `O(A.m, A.n, nnz(A))` time and requires no
   space beyond that passed in.
-
-Performance note: As of January 2016, `f` should be a functor for this method to perform
-  well. This caveat may disappear when the work in `jb/functions` lands.
 """
 function qftranspose!{Tv,Ti}(C::SparseMatrixCSC{Tv,Ti}, A::SparseMatrixCSC{Tv,Ti}, q::AbstractVector, f)
     # Attach source matrix
@@ -741,9 +735,6 @@ and `other` is passed in from the call to `fkeep!`. This method makes a single s
 through `A`, requiring `O(A.n, nnz(A))`-time for matrices and `O(nnz(A))`-time for vectors
 and no space beyond that passed in. If `trim` is `true`, this method trims `A.rowval` or `A.nzind` and
 `A.nzval` to length `nnz(A)` after dropping elements.
-
-Performance note: As of January 2016, `f` should be a functor for this method to perform
-well. This caveat may disappear when the work in `jb/functions` lands.
 """
 function fkeep!(A::SparseMatrixCSC, f, other, trim::Bool = true)
     An = A.n
