@@ -153,7 +153,7 @@ and return a `Cholesky` factorization.
 The `uplo` argument may be `:L` for using the lower part or `:U` for the upper part of `A`.
 The default is to use `:U`.
 The triangular Cholesky factor can be obtained from the factorization `F` with: `F[:L]` and `F[:U]`.
-The following functions are available for `Cholesky` objects: `size`, `\`, `inv`, `det`.
+The following functions are available for `Cholesky` objects: `size`, `\\`, `inv`, `det`.
 A `PosDefException` exception is thrown in case the matrix is not positive definite.
 """
 cholfact{T}(A::StridedMatrix{T}, uplo::Symbol, ::Type{Val{false}}) =
@@ -167,7 +167,7 @@ and return a `CholeskyPivoted` factorization.
 The `uplo` argument may be `:L` for using the lower part or `:U` for the upper part of `A`.
 The default is to use `:U`.
 The triangular Cholesky factor can be obtained from the factorization `F` with: `F[:L]` and `F[:U]`.
-The following functions are available for `PivotedCholesky` objects: `size`, `\`, `inv`, `det`, and `rank`.
+The following functions are available for `PivotedCholesky` objects: `size`, `\\`, `inv`, `det`, and `rank`.
 The argument `tol` determines the tolerance for determining the rank.
 For negative values, the tolerance is the machine precision.
 """

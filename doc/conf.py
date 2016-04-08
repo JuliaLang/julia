@@ -198,7 +198,9 @@ latex_elements = {
         \DeclareUnicodeCharacter{00D7}{\ensuremath{\times}}
         \DeclareUnicodeCharacter{00F7}{\ensuremath{\div}}
         \DeclareUnicodeCharacter{0127}{\ensuremath{\hbar}}
+        \DeclareUnicodeCharacter{025B}{\ensuremath{\varepsilon}}
         \DeclareUnicodeCharacter{03B3}{\ensuremath{\gamma}}
+        \DeclareUnicodeCharacter{03B8}{\ensuremath{\theta}}
         \DeclareUnicodeCharacter{03C0}{\ensuremath{\pi}}
         \DeclareUnicodeCharacter{03C6}{\ensuremath{\varphi}}
         \DeclareUnicodeCharacter{1D34}{\ensuremath{^{\mathrm{H}}}}
