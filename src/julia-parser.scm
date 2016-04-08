@@ -2098,7 +2098,7 @@
                (cond ((closing-token? t) #f)
                      ((newline? t) (take-token s) (loop (peek-token s)))
                      (else #t))))
-        `(macrocall @doc ,ex ,(production s))
+        `(macrocall (|.| Core (quote @doc)) ,ex ,(production s))
         ex)))
 
 ;; --- main entry point ---
