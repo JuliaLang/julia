@@ -393,6 +393,7 @@ function mod2pi(x::Int64)
   fx == x || throw(ArgumentError("Int64 argument to mod2pi is too large: $x"))
   mod2pi(fx)
 end
+@vectorize_1arg Number mod2pi
 
 # generic fallback; for number types, promotion.jl does promotion
 muladd(x,y,z) = x*y+z
