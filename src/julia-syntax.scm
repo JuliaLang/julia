@@ -2717,7 +2717,7 @@ f(x) = yt(x)
              (if (not local?) ;; not a local function; will not be closure converted to a new type
                  (cond (short e)
                        ((null? cvs)
-                        `(toplevel-butlast
+                        `(block
                           ,@sp-inits
                           (method ,name ,(cl-convert sig fname lam namemap toplevel interp)
                                   (lambda ,(cadr lam2)
@@ -2739,7 +2739,7 @@ f(x) = yt(x)
                                                              (car vi)))
                                                 (list ,@(cadr vi)) ,(caddr vi) (list ,@(cadddr vi)))
                                           ,@(cdddr newlam))))
-                          `(toplevel-butlast
+                          `(block
                             ,@top-stmts
                             ,@sp-inits
                             (method ,name ,(cl-convert sig fname lam namemap toplevel interp)
