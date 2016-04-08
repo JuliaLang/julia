@@ -239,3 +239,9 @@ end
 @test_throws DimensionMismatch Base.IteratorND(1:2, (2,3))
 
 @test collect(Base.Generator(+, [1,2], [10,20])) == [11,22]
+
+# generator with destructuring
+let d = Dict(:a=>1, :b=>2), a = Dict(3=>4, 5=>6)
+    @test Dict( v=>(k,) for (k,v) in d) == Dict(2=>(:b,), 1=>(:a,))
+    @test Dict( (x,b)=>(c,y) for (x,c) in d, (b,y) in a ) == Dict((:a,5)=>(1,6),(:b,5)=>(2,6),(:a,3)=>(1,4),(:b,3)=>(2,4))
+end
