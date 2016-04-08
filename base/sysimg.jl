@@ -48,7 +48,6 @@ include("operators.jl")
 include("pointer.jl")
 include("refpointer.jl")
 (::Type{T}){T}(arg) = convert(T, arg)::T
-include("functors.jl")
 include("checked.jl")
 importall .Checked
 
