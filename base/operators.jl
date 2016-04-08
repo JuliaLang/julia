@@ -76,6 +76,8 @@ scalarmin(x::AbstractArray, y               ) = throw(ArgumentError("ordering is
 
 ## definitions providing basic traits of arithmetic operators ##
 
+identity(x) = x
+
 +(x::Number) = x
 *(x::Number) = x
 (&)(x::Integer) = x
