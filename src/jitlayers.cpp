@@ -310,8 +310,7 @@ public:
                     PM.run(M);
                     std::unique_ptr<MemoryBuffer> ObjBuffer(
                         new ObjectMemoryBuffer(std::move(ObjBufferSV)));
-                    ErrorOr<std::unique_ptr<object::ObjectFile>> Obj =
-                        object::ObjectFile::createObjectFile(ObjBuffer->getMemBufferRef());
+                    auto Obj = object::ObjectFile::createObjectFile(ObjBuffer->getMemBufferRef());
 
                     if (!Obj) {
                         M.dump();
