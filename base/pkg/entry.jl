@@ -574,10 +574,10 @@ function build(pkgs::Vector)
     isempty(errs) && return
     println(STDERR)
     warnbanner(label="[ BUILD ERRORS ]", """
-    WARNING: $(join(map(x->x[1],errs),", "," and ")) had build errors.
+    WARNING: $(join(keys(errs),", "," and ")) had build errors.
 
      - packages with build errors remain installed in $(pwd())
-     - build the package(s) and all dependencies with `Pkg.build("$(join(map(x->x[1],errs),"\", \""))")`
+     - build the package(s) and all dependencies with `Pkg.build("$(join(keys(errs),"\", \""))")`
      - build a single package by running its `deps/build.jl` script
     """)
 end
@@ -606,7 +606,7 @@ function updatehook(pkgs::Vector)
     isempty(errs) && return
     println(STDERR)
     warnbanner(label="[ UPDATE ERRORS ]", """
-    WARNING: $(join(map(x->x[1],errs),", "," and ")) had update errors.
+    WARNING: $(join(keys(errs),", "," and ")) had update errors.
 
      - Unrelated packages are unaffected
      - To retry, run Pkg.update() again
