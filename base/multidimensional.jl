@@ -744,6 +744,17 @@ end
 
 ## permutedims
 
+## Permute array dims ##
+
+function permutedims(B::StridedArray, perm)
+    dimsB = size(B)
+    ndimsB = length(dimsB)
+    (ndimsB == length(perm) && isperm(perm)) || throw(ArgumentError("no valid permutation of dimensions"))
+    dimsP = ntuple(i->dimsB[perm[i]], ndimsB)::typeof(dimsB)
+    P = similar(B, dimsP)
+    permutedims!(P, B, perm)
+end
+
 for (V, PT, BT) in [((:N,), BitArray, BitArray), ((:T,:N), Array, StridedArray)]
     @eval @generated function permutedims!{$(V...)}(P::$PT{$(V...)}, B::$BT{$(V...)}, perm)
         quote
