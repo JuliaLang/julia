@@ -323,6 +323,19 @@ Array{T}(::Type{T}, m::Int)               = Array{T,1}(m)
 Array{T}(::Type{T}, m::Int,n::Int)        = Array{T,2}(m,n)
 Array{T}(::Type{T}, m::Int,n::Int,o::Int) = Array{T,3}(m,n,o)
 
+# docsystem basics
+macro doc(x...)
+    atdoc(x...)
+end
+macro __doc__(x)
+    Expr(:escape, Expr(:block, Expr(:meta, :doc), x))
+end
+macro doc_str(s)
+    Expr(:escape, s)
+end
+atdoc     = (str, expr) -> Expr(:escape, expr)
+atdoc!(λ) = global atdoc = λ
+
 module TopModule
     # this defines the types that lowering expects to be defined in a (top) module
     # that are usually inherited from Core, but could be defined custom for a module
