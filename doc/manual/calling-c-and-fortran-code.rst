@@ -480,8 +480,8 @@ C name                  Standard Julia Alias    Julia Base Type
 
     A return type of ``Union{}`` means the function will not return
     i.e. C++11 ``[[noreturn]]`` or C11 ``_Noreturn`` (e.g. ``jl_throw`` or
-    ``longjmp``). Do not use this for function that returns
-    no value (``void``) but does return.
+    ``longjmp``). Do not use this for functions that return
+    no value (``void``) but do return.
 
 .. note::
 
