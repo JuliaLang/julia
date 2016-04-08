@@ -1963,9 +1963,9 @@
        (let* ((argname (if (and (length= vars 1) (symbol? (car vars)))
                            (car vars)
                            (gensy)))
-              (splat (if (eq? argname (car vars))
-                         '()
-                         `((= (tuple ,@vars) ,argname)))))
+              (splat (cond ((eq? argname (car vars))  '())
+                           ((length= vars 1)          `((= ,(car vars) ,argname)))
+                           (else                      `((= (tuple ,@vars) ,argname))))))
          (expand-forms
           `(call (top Generator) (-> ,argname (block ,@splat ,expr))
                  ,(if (length= ranges 1)
