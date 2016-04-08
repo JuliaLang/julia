@@ -165,7 +165,7 @@ reduce(op, a::Number) = a
 
 ## conditions and results of short-circuiting
 
-immutable Predicate{F} <: Func{1}
+immutable Predicate{F}
     f::F
 end
 (pred::Predicate)(x) = pred.f(x)::Bool
@@ -241,7 +241,7 @@ sum_pairwise_blocksize(::typeof(abs2)) = 4096
 mapreduce_impl(f, op::typeof(+), A::AbstractArray, ifirst::Int, ilast::Int) =
     mapreduce_pairwise_impl(f, op, A, ifirst, ilast, sum_pairwise_blocksize(f))
 
-sum(f::Union{Callable,Func{1}}, a) = mapreduce(f, +, a)
+sum(f::Callable, a) = mapreduce(f, +, a)
 sum(a) = mapreduce(identity, +, a)
 sum(a::AbstractArray{Bool}) = countnz(a)
 sumabs(a) = mapreduce(abs, +, a)
@@ -272,7 +272,7 @@ end
 
 ## prod
 
-prod(f::Union{Callable,Func{1}}, a) = mapreduce(f, *, a)
+prod(f::Callable, a) = mapreduce(f, *, a)
 prod(a) = mapreduce(identity, *, a)
 
 ## maximum & minimum
@@ -317,8 +317,8 @@ function mapreduce_impl(f, op::typeof(scalarmin), A::AbstractArray, first::Int, 
     v
 end
 
-maximum(f::Union{Callable,Func{1}}, a) = mapreduce(f, scalarmax, a)
-minimum(f::Union{Callable,Func{1}}, a) = mapreduce(f, scalarmin, a)
+maximum(f::Callable, a) = mapreduce(f, scalarmax, a)
+minimum(f::Callable, a) = mapreduce(f, scalarmin, a)
 
 maximum(a) = mapreduce(identity, scalarmax, a)
 minimum(a) = mapreduce(identity, scalarmin, a)

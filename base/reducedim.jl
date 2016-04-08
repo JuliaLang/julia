@@ -245,11 +245,11 @@ for (fname, op) in [(:sum, :+), (:prod, :*),
 
     fname! = symbol(fname, '!')
     @eval begin
-        $(fname!)(f::Union{Function,Func{1}}, r::AbstractArray, A::AbstractArray; init::Bool=true) =
+        $(fname!)(f::Function, r::AbstractArray, A::AbstractArray; init::Bool=true) =
             mapreducedim!(f, $(op), initarray!(r, $(op), init), A)
         $(fname!)(r::AbstractArray, A::AbstractArray; init::Bool=true) = $(fname!)(identity, r, A; init=init)
 
-        $(fname)(f::Union{Function,Func{1}}, A::AbstractArray, region) =
+        $(fname)(f::Function, A::AbstractArray, region) =
             mapreducedim(f, $(op), A, region)
         $(fname)(A::AbstractArray, region) = $(fname)(identity, A, region)
     end

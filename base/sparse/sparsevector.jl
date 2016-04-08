@@ -2,10 +2,7 @@
 
 ### Common definitions
 
-import Base: Func, scalarmax, scalarmin, sort
-
-typealias UnaryOp Union{Function, Func{1}}
-typealias BinaryOp Union{Function, Func{2}}
+import Base: scalarmax, scalarmin, sort
 
 ### The SparseVector
 
@@ -58,7 +55,7 @@ function _sparsevector!{Ti<:Integer}(I::Vector{Ti}, V::Vector, len::Integer)
     SparseVector(len, I, V)
 end
 
-function _sparsevector!{Tv,Ti<:Integer}(I::Vector{Ti}, V::Vector{Tv}, len::Integer, combine::BinaryOp)
+function _sparsevector!{Tv,Ti<:Integer}(I::Vector{Ti}, V::Vector{Tv}, len::Integer, combine::Function)
     if !isempty(I)
         p = sortperm(I)
         permute!(I, p)
@@ -99,7 +96,7 @@ Duplicates are combined using the `combine` function, which defaults to
 `+` if no `combine` argument is provided, unless the elements of `V` are Booleans
 in which case `combine` defaults to `|`.
 """
-function sparsevec{Tv,Ti<:Integer}(I::AbstractVector{Ti}, V::AbstractVector{Tv}, combine::BinaryOp)
+function sparsevec{Tv,Ti<:Integer}(I::AbstractVector{Ti}, V::AbstractVector{Tv}, combine::Function)
     length(I) == length(V) ||
         throw(ArgumentError("index and value vectors must be the same length"))
     len = 0
@@ -112,7 +109,7 @@ function sparsevec{Tv,Ti<:Integer}(I::AbstractVector{Ti}, V::AbstractVector{Tv},
     _sparsevector!(collect(Ti, I), collect(Tv, V), len, combine)
 end
 
-function sparsevec{Tv,Ti<:Integer}(I::AbstractVector{Ti}, V::AbstractVector{Tv}, len::Integer, combine::BinaryOp)
+function sparsevec{Tv,Ti<:Integer}(I::AbstractVector{Ti}, V::AbstractVector{Tv}, len::Integer, combine::Function)
     length(I) == length(V) ||
         throw(ArgumentError("index and value vectors must be the same length"))
     maxi = convert(Ti, len)
@@ -136,10 +133,10 @@ sparsevec{Ti<:Integer}(I::AbstractVector{Ti}, V::Union{Bool, AbstractVector{Bool
     len::Integer) =
     sparsevec(I, V, len, |)
 
-sparsevec{Ti<:Integer}(I::AbstractVector{Ti}, v::Number, combine::BinaryOp) =
+sparsevec{Ti<:Integer}(I::AbstractVector{Ti}, v::Number, combine::Function) =
     sparsevec(I, fill(v, length(I)), combine)
 
-sparsevec{Ti<:Integer}(I::AbstractVector{Ti}, v::Number, len::Integer, combine::BinaryOp) =
+sparsevec{Ti<:Integer}(I::AbstractVector{Ti}, v::Number, len::Integer, combine::Function) =
     sparsevec(I, fill(v, length(I)), len, combine)
 
 
@@ -857,7 +854,7 @@ end
 # 1: f(nz, nz) -> z/nz, f(z, nz) -> nz, f(nz, z) -> nz
 # 2: f(nz, nz) -> z/nz, f(z, nz) -> z/nz, f(nz, z) -> z/nz
 
-function _binarymap{Tx,Ty}(f::BinaryOp,
+function _binarymap{Tx,Ty}(f::Function,
                            x::AbstractSparseVector{Tx},
                            y::AbstractSparseVector{Ty},
                            mode::Int)
@@ -895,7 +892,7 @@ function _binarymap{Tx,Ty}(f::BinaryOp,
     return SparseVector(n, rind, rval)
 end
 
-function _binarymap_mode_0!(f::BinaryOp, mx::Int, my::Int,
+function _binarymap_mode_0!(f::Function, mx::Int, my::Int,
                             xnzind, xnzval, ynzind, ynzval, rind, rval)
     # f(nz, nz) -> nz, f(z, nz) -> z, f(nz, z) ->  z
     ir = 0; ix = 1; iy = 1
@@ -915,7 +912,7 @@ function _binarymap_mode_0!(f::BinaryOp, mx::Int, my::Int,
     return ir
 end
 
-function _binarymap_mode_1!{Tx,Ty}(f::BinaryOp, mx::Int, my::Int,
+function _binarymap_mode_1!{Tx,Ty}(f::Function, mx::Int, my::Int,
                                    xnzind, xnzval::AbstractVector{Tx},
                                    ynzind, ynzval::AbstractVector{Ty},
                                    rind, rval)
@@ -953,7 +950,7 @@ function _binarymap_mode_1!{Tx,Ty}(f::BinaryOp, mx::Int, my::Int,
     return ir
 end
 
-function _binarymap_mode_2!{Tx,Ty}(f::BinaryOp, mx::Int, my::Int,
+function _binarymap_mode_2!{Tx,Ty}(f::Function, mx::Int, my::Int,
                                    xnzind, xnzval::AbstractVector{Tx},
                                    ynzind, ynzval::AbstractVector{Ty},
                                    rind, rval)
@@ -999,7 +996,7 @@ function _binarymap_mode_2!{Tx,Ty}(f::BinaryOp, mx::Int, my::Int,
     return ir
 end
 
-function _binarymap{Tx,Ty}(f::BinaryOp,
+function _binarymap{Tx,Ty}(f::Function,
                            x::AbstractVector{Tx},
                            y::AbstractSparseVector{Ty},
                            mode::Int)
@@ -1042,7 +1039,7 @@ function _binarymap{Tx,Ty}(f::BinaryOp,
     return dst
 end
 
-function _binarymap{Tx,Ty}(f::BinaryOp,
+function _binarymap{Tx,Ty}(f::Function,
                            x::AbstractSparseVector{Tx},
                            y::AbstractVector{Ty},
                            mode::Int)
@@ -1247,7 +1244,7 @@ function dot{Tx<:Number,Ty<:Number}(x::AbstractSparseVector{Tx}, y::AbstractVect
     return s
 end
 
-function _spdot(f::BinaryOp,
+function _spdot(f::Function,
                 xj::Int, xj_last::Int, xnzind, xnzval,
                 yj::Int, yj_last::Int, ynzind, ynzval)
     # dot product between ranges of non-zeros,
@@ -1437,7 +1434,7 @@ Ac_mul_B!{Tx,Ty}(y::StridedVector{Ty}, A::SparseMatrixCSC, x::AbstractSparseVect
 Ac_mul_B!{Tx,Ty}(α::Number, A::SparseMatrixCSC, x::AbstractSparseVector{Tx}, β::Number, y::StridedVector{Ty}) =
     _At_or_Ac_mul_B!(dot, α, A, x, β, y)
 
-function _At_or_Ac_mul_B!{Tx,Ty}(tfun::BinaryOp,
+function _At_or_Ac_mul_B!{Tx,Ty}(tfun::Function,
                                  α::Number, A::SparseMatrixCSC, x::AbstractSparseVector{Tx},
                                  β::Number, y::StridedVector{Ty})
     m, n = size(A)
@@ -1479,7 +1476,7 @@ At_mul_B(A::SparseMatrixCSC, x::AbstractSparseVector) =
 Ac_mul_B(A::SparseMatrixCSC, x::AbstractSparseVector) =
     _At_or_Ac_mul_B(dot, A, x)
 
-function _At_or_Ac_mul_B{TvA,TiA,TvX,TiX}(tfun::BinaryOp, A::SparseMatrixCSC{TvA,TiA}, x::AbstractSparseVector{TvX,TiX})
+function _At_or_Ac_mul_B{TvA,TiA,TvX,TiX}(tfun::Function, A::SparseMatrixCSC{TvA,TiA}, x::AbstractSparseVector{TvX,TiX})
     m, n = size(A)
     length(x) == m || throw(DimensionMismatch())
     Tv = promote_type(TvA, TvX)
