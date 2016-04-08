@@ -38,6 +38,8 @@ Language changes
   * Simple 2-argument comparisons like `A < B` are parsed as calls intead of using the
     `:comparison` expression type.
 
+  * The `if` keyword cannot be followed immediately by a line break ([#15763]).
+
 Command-line option changes
 ---------------------------
 
@@ -181,3 +183,4 @@ Deprecated or removed
 [#15258]: https://github.com/JuliaLang/julia/issues/15258
 [#15550]: https://github.com/JuliaLang/julia/issues/15550
 [#15609]: https://github.com/JuliaLang/julia/issues/15609
+[#15763]: https://github.com/JuliaLang/julia/issues/15763
