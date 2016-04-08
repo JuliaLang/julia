@@ -402,3 +402,9 @@ A = reshape(1:16,4,4)
 # Printing of :(function f end)
 @test sprint(show, :(function f end)) == ":(function f end)"
 @test_repr "function g end"
+
+# Issue #15765 printing of continue and break
+@test sprint(show, :(continue)) == ":(continue)"
+@test sprint(show, :(break)) == ":(break)"
+@test_repr "continue"
+@test_repr "break"
