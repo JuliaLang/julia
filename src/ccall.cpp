@@ -1013,6 +1013,10 @@ static std::string generate_func_sig(
                                                   AttributeSet::get(jl_LLVMContext, i + 1, paramattrs[i]));
         }
     }
+    if (rt == jl_bottom_type)
+        attributes = attributes.addAttribute(jl_LLVMContext,
+                                             AttributeSet::FunctionIndex,
+                                             Attribute::NoReturn);
     return "";
 }
 
