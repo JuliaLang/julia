@@ -1021,6 +1021,8 @@ function pmap(f, c...; err_retry=nothing, err_stop=nothing, pids=nothing)
 end
 
 # 15692
+typealias Func{N} Function
+deprecate(:Func)
 for (Fun, func) in [(:IdFun, :identity),
                     (:AbsFun, :abs),
                     (:Abs2Fun, :abs2),
