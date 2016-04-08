@@ -96,7 +96,8 @@
 (define (expand-toplevel-expr e)
   (cond ((or (atom? e)
              (and (pair? e)
-                  (or (memq (car e) '(toplevel line module import importall using export))
+                  (or (memq (car e) '(toplevel line module import importall using export
+                                               error incomplete))
                       (and (eq? (car e) 'global) (every symbol? (cdr e))))))
          e)
         (else
