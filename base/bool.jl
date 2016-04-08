@@ -61,3 +61,4 @@ rem(x::Bool, y::Bool) = y ? false : throw(DivideError())
 mod(x::Bool, y::Bool) = rem(x,y)
 
 promote_op(op, ::Type{Bool}, ::Type{Bool}) = typeof(op(true, true))
+promote_op{T<:Integer}(::typeof(^), ::Type{Bool}, ::Type{T}) = Bool
