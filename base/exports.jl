@@ -1057,6 +1057,7 @@ export
     catch_stacktrace,
 
 # types
+    as,
     convert,
     fieldoffset,
     fieldname,

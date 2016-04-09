@@ -48,7 +48,7 @@
 (define is-prec-comparison?
   (let ((compare-ops (Set prec-comparison)))
     (lambda (t)
-      (or (compare-ops t) (eq? t 'in)))))
+      (or (compare-ops t) (eq? t 'in) (eq? t 'as)))))
 
 ;; hash table of binary operators -> precedence
 (define prec-table (let ((t (table)))
@@ -60,6 +60,7 @@
                      (pushprec (map eval prec-names) 1)
                      t))
 (put! prec-table 'in (get prec-table '== 0)) ; add `in` to the prec-table
+(put! prec-table 'as (get prec-table '== 0)) ; add `as` to the prec-table
 (define (operator-precedence op) (get prec-table op 0))
 
 (define unary-ops '(+ - ! ¬ ~ |<:| |>:| √ ∛ ∜))

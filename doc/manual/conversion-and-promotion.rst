@@ -90,6 +90,16 @@ action:
     julia> typeof(ans)
     Float64
 
+The ``as`` operator provides a shorthand syntax for conversion:
+
+.. doctest::
+
+    julia> x = 12
+    12
+
+    julia> x as UInt8
+    0x0c
+
 Conversion isn't always possible, in which case a no method error is
 thrown indicating that ``convert`` doesn't know how to perform the
 requested conversion:
