@@ -282,10 +282,6 @@ function pointer{T,N,P<:Array,I<:Tuple{Vararg{Union{RangeIndex, NoSlice}}}}(V::S
     return pointer(V.parent, index)
 end
 
-## Convert
-convert{T,S,N}(::Type{Array{T,N}}, V::SubArray{S,N}) = copy!(Array(T, size(V)), V)
-
-
 ## Compatability
 # deprecate?
 function parentdims(s::SubArray)
