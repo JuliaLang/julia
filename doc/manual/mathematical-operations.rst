@@ -57,7 +57,7 @@ Here are some simple examples using arithmetic operators:
     julia> 3*2/12
     0.5
 
-(By convention, we tend to space less tightly binding operators less
+(By convention, we tend to space binary operators less
 tightly, but there are no syntactic constraints.)
 
 Bitwise Operators
