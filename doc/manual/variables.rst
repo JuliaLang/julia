@@ -128,9 +128,11 @@ statements:
 
     julia> else = false
     ERROR: syntax: unexpected "else"
+     in eval(::Module, ::Any) at ./boot.jl:237
 
     julia> try = "No"
     ERROR: syntax: unexpected "="
+     in eval(::Module, ::Any) at ./boot.jl:237
 
 
 Stylistic Conventions

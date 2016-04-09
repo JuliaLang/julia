@@ -290,13 +290,13 @@ such an invalid byte index, an error is thrown:
     julia> s[2]
     ERROR: UnicodeError: invalid character index
      in next(::UTF8String, ::Int64) at ./unicode/utf8.jl:65
-     in getindex(::UTF8String, ::Int64) at ./strings/basic.jl:37
+     in getindex(::UTF8String, ::Int64) at ./strings/basic.jl:38
      in eval(::Module, ::Any) at ./boot.jl:237
 
     julia> s[3]
     ERROR: UnicodeError: invalid character index
      in next(::UTF8String, ::Int64) at ./unicode/utf8.jl:65
-     in getindex(::UTF8String, ::Int64) at ./strings/basic.jl:37
+     in getindex(::UTF8String, ::Int64) at ./strings/basic.jl:38
      in eval(::Module, ::Any) at ./boot.jl:237
 
     julia> s[4]
@@ -874,6 +874,7 @@ error:
 
     julia> "DATA\xff\u2200"
     ERROR: syntax: invalid UTF-8 sequence
+     in eval(::Module, ::Any) at ./boot.jl:237
 
 Also observe the significant distinction between ``\xff`` and ``\uff``:
 the former escape sequence encodes the *byte 255*, whereas the latter

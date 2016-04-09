@@ -772,7 +772,7 @@ each field:
       (!Matched::Type{BoundsError})(::ANY)
       (!Matched::Type{BoundsError})(::ANY, !Matched::ANY)
       ...
-     in Point{Float64}(::Float64) at ./sysimg.jl:48
+     in Point{Float64}(::Float64) at ./sysimg.jl:50
      in eval(::Module, ::Any) at ./boot.jl:237
 
     julia> Point{Float64}(1.0,2.0,3.0)
