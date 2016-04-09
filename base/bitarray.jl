@@ -292,7 +292,8 @@ end
 ## Conversions ##
 
 convert{T,N}(::Type{Array{T}}, B::BitArray{N}) = convert(Array{T,N},B)
-function convert{T,N}(::Type{Array{T,N}}, B::BitArray{N})
+convert{T,N}(::Type{Array{T,N}}, B::BitArray{N}) = _convert(Array{T,N}, B) # see #15801
+function _convert{T,N}(::Type{Array{T,N}}, B::BitArray{N})
     A = Array(T, size(B))
     Bc = B.chunks
     @inbounds for i = 1:length(A)
