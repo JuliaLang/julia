@@ -164,18 +164,6 @@ function cumsum_kbn{T<:AbstractFloat}(A::AbstractArray{T}, axis::Integer=1)
     return B + C
 end
 
-## Permute array dims ##
-
-function permutedims(B::AbstractArray, perm)
-    dimsB = size(B)
-    ndimsB = length(dimsB)
-    (ndimsB == length(perm) && isperm(perm)) || throw(ArgumentError("no valid permutation of dimensions"))
-    dimsP = ntuple(i->dimsB[perm[i]], ndimsB)::typeof(dimsB)
-    P = similar(B, dimsP)
-    permutedims!(P, B, perm)
-end
-
-
 ## ipermutedims in terms of permutedims ##
 
 function ipermutedims(A::AbstractArray,perm)
