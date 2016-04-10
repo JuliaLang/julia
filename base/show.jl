@@ -387,8 +387,8 @@ function is_intrinsic_expr(x::ANY)
     isa(x, IntrinsicFunction) && return true
     if isa(x, GlobalRef)
         x = x::GlobalRef
-        return (x.mod == Base && isdefined(Base, x.name) &&
-                isa(getfield(Base, x.name), IntrinsicFunction))
+        return (isdefined(x.mod, x.name) &&
+                isa(getfield(x.mod, x.name), IntrinsicFunction))
     elseif isa(x, TopNode)
         x = x::TopNode
         return (isdefined(Base, x.name) &&
