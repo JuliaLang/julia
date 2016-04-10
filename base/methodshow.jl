@@ -3,9 +3,6 @@
 # Method and method table pretty-printing
 
 function argtype_decl(env, n, t) # -> (argname, argtype)
-    if isvarargtype(t)
-        return argtype_decl_vararg(env, n, t)
-    end
     if isa(n,Expr)
         n = n.args[1]  # handle n::T in arg list
     end
@@ -17,20 +14,35 @@ function argtype_decl(env, n, t) # -> (argname, argtype)
     if t === Any && !isempty(s)
         return s, ""
     end
-    return s, string(t)
+    if isvarargtype(t)
+        tt, tn = t.parameters[1], t.parameters[2]
+        if isa(tn, TypeVar) && !tn.bound
+            if tt === Any || (isa(tt, TypeVar) && !tt.bound)
+                return string(s, "..."), ""
+            else
+                return s, string_with_env(env, tt) * "..."
+            end
+        end
+        return s, string_with_env(env, "Vararg{", tt, ",", tn, "}")
+    elseif t == String
+        return s, "String"
+    end
+    return s, string_with_env(env, t)
 end
 
 function argtype_decl_vararg(env, n, t)
-    s = string(n.args[1])
-    if n.args[2].head == :...
-        # x... or x::T... declaration
-        if t.parameters[1] === Any
-            return string(s, "..."), ""
-        else
-            return s, string_with_env(env, t.parameters[1]) * "..."
+    if isa(n, Expr)
+        s = string(n.args[1])
+        if n.args[2].head == :...
+            # x... or x::T... declaration
+            if t.parameters[1] === Any
+                return string(s, "..."), ""
+            else
+                return s, string_with_env(env, t.parameters[1]) * "..."
+            end
+        elseif t == String
+            return s, "String"
         end
-    elseif t == String
-        return s, "String"
     end
     # x::Vararg, x::Vararg{T}, or x::Vararg{T,N} declaration
     s, length(n.args[2].args) < 4 ?
