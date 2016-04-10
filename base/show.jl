@@ -393,6 +393,8 @@ function is_intrinsic_expr(x::ANY)
         x = x::TopNode
         return (isdefined(Base, x.name) &&
                 isa(getfield(Base, x.name), IntrinsicFunction))
+    elseif isa(x, Expr)
+        return (x::Expr).typ === IntrinsicFunction
     end
     return false
 end
