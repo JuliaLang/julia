@@ -3749,3 +3749,11 @@ end
 @noinline function f15425(x)
 end
 @test f15425(1) === nothing
+
+# issue #15809 --- TODO: this code should be disallowed
+function f15809()
+    global g15809
+    g15809{T}(x::T) = T
+end
+f15809()
+@test g15809(2) === Int
