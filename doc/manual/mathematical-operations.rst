@@ -57,8 +57,9 @@ Here are some simple examples using arithmetic operators:
     julia> 3*2/12
     0.5
 
-(By convention, we tend to space less tightly binding operators less
-tightly, but there are no syntactic constraints.)
+(By convention, we tend to space operators more tightly if they get applied before
+other nearby operators. For instance, we would generally write ``-x + 2`` to reflect
+that first ``x`` gets negated, and then ``2`` is added to that result.)
 
 Bitwise Operators
 -----------------
