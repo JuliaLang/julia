@@ -367,6 +367,14 @@ p = permutedims(s, [2,1])
 @test p[1,1]==a[2,2] && p[1,2]==a[3,2]
 @test p[2,1]==a[2,3] && p[2,2]==a[3,3]
 
+# of a non-strided subarray
+a = reshape(1:60, 3, 4, 5)
+s = sub(a,:,[1,2,4],[1,5])
+c = convert(Array, s)
+for p in ([1,2,3], [1,3,2], [2,1,3], [2,3,1], [3,1,2], [3,2,1])
+    @test permutedims(s, p) == permutedims(c, p)
+end
+
 ## ipermutedims ##
 
 tensors = Any[rand(1,2,3,4),rand(2,2,2,2),rand(5,6,5,6),rand(1,1,1,1)]
