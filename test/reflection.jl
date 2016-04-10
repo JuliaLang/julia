@@ -80,11 +80,24 @@ show(iob, expand(:(x->x^2)))
 str = takebuf_string(iob)
 @test isempty(search(str, tag))
 
-# issue #13568
+module ImportIntrinsics15819
+# Make sure changing the lookup path of an intrinsic doesn't break
+# the heuristic for type instability warning.
+# This can be any intrinsic that needs boxing
+import Core.Intrinsics: sqrt_llvm, box, unbox
+sqrt15819(x::Float64) = box(Float64, sqrt_llvm(unbox(Float64, x)))
+end
+
+# issue #13568 and #15819
 @test !warntype_hastag(+, Tuple{Int,Int}, tag)
 @test !warntype_hastag(-, Tuple{Int,Int}, tag)
 @test !warntype_hastag(*, Tuple{Int,Int}, tag)
 @test !warntype_hastag(/, Tuple{Int,Int}, tag)
+@test !warntype_hastag(sqrt, Tuple{Int}, tag)
+@test !warntype_hastag(sqrt, Tuple{Float64}, tag)
+@test !warntype_hastag(^, Tuple{Float64,Int32}, tag)
+@test !warntype_hastag(^, Tuple{Float32,Int32}, tag)
+@test !warntype_hastag(ImportIntrinsics15819.sqrt15819, Tuple{Float64}, tag)
 
 end
 
