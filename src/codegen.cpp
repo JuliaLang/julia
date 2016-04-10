@@ -2736,7 +2736,6 @@ static jl_cgval_t emit_call_function_object(jl_lambda_info_t *li, const jl_cgval
                 assert(at == T_pjlvalue && et == T_pjlvalue);
                 jl_cgval_t origval = i==0 ? theF : emit_expr(args[i], ctx);
                 argvals[idx] = boxed(origval, ctx);
-                assert(!isa<UndefValue>(argvals[idx]));
             }
             else if (et->isAggregateType()) {
                 assert(at == PointerType::get(et, 0));
@@ -4841,7 +4840,7 @@ extern "C" void jl_fptr_to_llvm(jl_fptr_t fptr, jl_lambda_info_t *lam, int specs
         std::stringstream funcName;
         funcName << "jlsys_" << jl_symbol_name(lam->name) << "_" << globalUnique++;
         if (specsig) { // assumes !va
-            std::vector<Type*> fsig(0);
+            SmallVector<Type*, 8> fsig;
             jl_value_t *jlrettype = lam->rettype;
             bool retboxed;
             Type *rt;
