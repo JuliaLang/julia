@@ -400,22 +400,20 @@ function test_mt(f, str)
     io = IOBuffer()
     show(io, defs)
     strio = takebuf_string(io)
+    strio = split(strio, " at")[1]
     @test strio[1:length(str)] == str
 end
-begin
-    local f1, f2, f3, f4, f5
-    f1(x...) = [x...]
-    f2(x::Vararg{Any}) = [x...]
-    f3(x::Vararg) = [x...]
-    f4(x::Vararg{Any,3}) = [x...]
-    f5{T,N}(A::AbstractArray{T,N}, indexes::Vararg{Int,N}) = [indexes...]
-    test_mt(f1, "f1(x...)")
-    test_mt(f2, "f2(x::Vararg{Any})")
-    test_mt(f3, "f3(x::Vararg{T<:Any})")   # FIXME? better as x::Vararg?
-#    test_mt(f4, "f4(x::Vararg{Any,3})")
-    intstr = string(Int)
-    test_mt(f5, "f5{T,N}(A::AbstractArray{T,N}, indexes::Vararg{$intstr,N})")
-end
+show_f1(x...) = [x...]
+show_f2(x::Vararg{Any}) = [x...]
+show_f3(x::Vararg) = [x...]
+show_f4(x::Vararg{Any,3}) = [x...]
+show_f5{T,N}(A::AbstractArray{T,N}, indexes::Vararg{Int,N}) = [indexes...]
+test_mt(show_f1, "show_f1(x...)")
+test_mt(show_f2, "show_f2(x...)")
+test_mt(show_f3, "show_f3(x...)")
+test_mt(show_f4, "show_f4(x::Vararg{Any,3})")
+intstr = string(Int)
+test_mt(show_f5, "show_f5{T,N}(A::AbstractArray{T,N}, indexes::Vararg{$intstr,N})")
 
 # Issue #15525, printing of vcat
 @test sprint(show, :([a;])) == ":([a;])"
