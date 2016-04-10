@@ -208,11 +208,34 @@ function show(io::IO, m::Module)
     end
 end
 
+function lambdainfo_slotnames(l::LambdaInfo)
+    slotnames = l.slotnames
+    isa(slotnames, Array) || return UTF8String[]
+    names = Dict{UTF8String,Int}()
+    printnames = Vector{UTF8String}(length(slotnames))
+    for i in eachindex(slotnames)
+        name = string(slotnames[i])
+        idx = get!(names, name, i)
+        if idx != i
+            printname = "$name@_$i"
+            idx > 0 && (printnames[idx] = "$name@_$idx")
+            names[name] = 0
+        else
+            printname = name
+        end
+        printnames[i] = printname
+    end
+    printnames
+end
+
 function show(io::IO, l::LambdaInfo)
     println(io, "LambdaInfo for ", l.name)
+    # Fix slot names and types in function body
+    lambda_io = IOContext(IOContext(io, :LAMBDAINFO => l),
+                          :LAMBDA_SLOTNAMES => lambdainfo_slotnames(l))
     body = Expr(:body); body.args = uncompressed_ast(l)
     body.typ = l.rettype
-    show(io, body)
+    show(lambda_io, body)
 end
 
 function show_delim_array(io::IO, itr::Union{AbstractArray,SimpleVector}, op, delim, cl, delim_one,
@@ -498,10 +521,27 @@ show_unquoted(io::IO, ex::TopNode, ::Int, ::Int)        = print(io,"top(",ex.nam
 show_unquoted(io::IO, ex::GlobalRef, ::Int, ::Int)      = print(io, ex.mod, '.', ex.name)
 
 function show_unquoted(io::IO, ex::Slot, ::Int, ::Int)
-    print(io, "_", ex.id)
+    typ = ex.typ
+    slotid = ex.id
+    li = get(io, :LAMBDAINFO, false)
+    if isa(li, LambdaInfo)
+        slottypes = (li::LambdaInfo).slottypes
+        if isa(slottypes, Array) && slotid <= length(slottypes::Array)
+            slottype = slottypes[slotid]
+            # The Slot in assignment can somehow have an Any type
+            slottype <: typ && (typ = slottype)
+        end
+    end
+    slotnames = get(io, :LAMBDA_SLOTNAMES, false)
+    if (isa(slotnames, Vector{UTF8String}) &&
+        slotid <= length(slotnames::Vector{UTF8String}))
+        print(io, (slotnames::Vector{UTF8String})[slotid])
+    else
+        print(io, "_", slotid)
+    end
     emphstate = typeemphasize(io)
-    if emphstate || ex.typ !== Any
-        show_expr_type(io, ex.typ, emphstate)
+    if emphstate || typ !== Any
+        show_expr_type(io, typ, emphstate)
     end
 end
 
