@@ -85,19 +85,27 @@ module ImportIntrinsics15819
 # the heuristic for type instability warning.
 # This can be any intrinsic that needs boxing
 import Core.Intrinsics: sqrt_llvm, box, unbox
+# Use import
 sqrt15819(x::Float64) = box(Float64, sqrt_llvm(unbox(Float64, x)))
+# Use fully qualified name
+sqrt15819(x::Float32) = box(Float32, Core.Intrinsics.sqrt_llvm(unbox(Float32, x)))
 end
+foo11122(x) = @fastmath x - 1.0
 
-# issue #13568 and #15819
+# issue #11122, #13568 and #15819
 @test !warntype_hastag(+, Tuple{Int,Int}, tag)
 @test !warntype_hastag(-, Tuple{Int,Int}, tag)
 @test !warntype_hastag(*, Tuple{Int,Int}, tag)
 @test !warntype_hastag(/, Tuple{Int,Int}, tag)
+@test !warntype_hastag(foo11122, Tuple{Float32}, tag)
+@test !warntype_hastag(foo11122, Tuple{Float64}, tag)
+@test !warntype_hastag(foo11122, Tuple{Int}, tag)
 @test !warntype_hastag(sqrt, Tuple{Int}, tag)
 @test !warntype_hastag(sqrt, Tuple{Float64}, tag)
 @test !warntype_hastag(^, Tuple{Float64,Int32}, tag)
 @test !warntype_hastag(^, Tuple{Float32,Int32}, tag)
 @test !warntype_hastag(ImportIntrinsics15819.sqrt15819, Tuple{Float64}, tag)
+@test !warntype_hastag(ImportIntrinsics15819.sqrt15819, Tuple{Float32}, tag)
 
 end
 
