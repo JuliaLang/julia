@@ -1094,6 +1094,10 @@
                 ,body)))
 
        ((if)
+        (if (newline? (peek-token s))
+            (syntax-deprecation s "if with line break before condition" "")
+            #;(error (string "missing condition in \"if\" at " current-filename
+                           ":" (- (input-port-line (ts:port s)) 1))))
         (let* ((test (parse-cond s))
                (then (if (memq (require-token s) '(else elseif))
                          '(block)
