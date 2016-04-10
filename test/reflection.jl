@@ -299,3 +299,78 @@ let
     @test methods(m,Tuple{Int, Int})[1]==@which MacroTest.@macrotest 1 1
     @test functionloc(@which @macrotest 1 1) == @functionloc @macrotest 1 1
 end
+
+# issue #15714
+# show variable names for slots and suppress spurious type warnings
+function f15714(array_var15714)
+    for index_var15714 in eachindex(array_var15714)
+        array_var15714[index_var15714] += 0
+    end
+end
+
+function g15714(array_var15714)
+    for index_var15714 in eachindex(array_var15714)
+        array_var15714[index_var15714] += 0
+    end
+    for index_var15714 in eachindex(array_var15714)
+        array_var15714[index_var15714] += 0
+    end
+end
+
+used_dup_var_tested15714 = false
+used_unique_var_tested15714 = false
+function test_typed_ast_printing(f::ANY, types::ANY, must_used_vars)
+    li = code_typed(f, types)[1]
+    dupnames = Set()
+    slotnames = Set()
+    for name in li.slotnames
+        if name in slotnames
+            push!(dupnames, name)
+        else
+            push!(slotnames, name)
+        end
+    end
+    # Make sure must_used_vars are in slotnames
+    for name in must_used_vars
+        @test name in slotnames
+    end
+    for str in (sprint(io->code_warntype(io, f, types)),
+                sprint(io->show(io, li)))
+        for var in must_used_vars
+            @test contains(str, string(var))
+        end
+        @test !contains(str, "Any")
+        @test !contains(str, "ANY")
+        # Check that we are not printing the bare slot numbers
+        for i in 1:length(li.slotnames)
+            name = li.slotnames[i]
+            if name in dupnames
+                @test contains(str, "_$i")
+                if name in must_used_vars
+                    global used_dup_var_tested15714 = true
+                end
+            else
+                @test !contains(str, "_$i")
+                if name in must_used_vars
+                    global used_unique_var_tested15714 = true
+                end
+            end
+        end
+    end
+    # Make sure printing an AST outside LambdaInfo still works.
+    str = sprint(io->show(io, Base.uncompressed_ast(li)))
+    # Check that we are printing the slot numbers when we don't have the context
+    # Use the variable names that we know should be present in the optimized AST
+    for i in 2:length(li.slotnames)
+        name = li.slotnames[i]
+        if name in must_used_vars
+            @test contains(str, "_$i")
+        end
+    end
+end
+test_typed_ast_printing(f15714, Tuple{Vector{Float32}},
+                        [:array_var15714, :index_var15714])
+test_typed_ast_printing(g15714, Tuple{Vector{Float32}},
+                        [:array_var15714, :index_var15714])
+@test used_dup_var_tested15714
+@test used_unique_var_tested15714
