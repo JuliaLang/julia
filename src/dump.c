@@ -955,7 +955,12 @@ static int jl_serialize_methcache_from_mod(jl_typemap_entry_t *ml, void *closure
 
 static void jl_serialize_methtable_from_mod(ios_t *s, jl_methtable_t *mt, int8_t iskw)
 {
-    jl_sym_t *name = mt->name;
+    struct jl_serialize_methcache_from_mod_env env;
+    env.s = s;
+    env.mod = mt->module;
+    env.name = mt->name;
+    env.iskw = iskw;
+    assert(mt->module);
     if (iskw) {
         if (!mt->kwsorter)
             return;
@@ -963,8 +968,6 @@ static void jl_serialize_methtable_from_mod(ios_t *s, jl_methtable_t *mt, int8_t
         mt = jl_gf_mtable(mt->kwsorter);
         assert(!mt->kwsorter);
     }
-    assert(mt->module);
-    struct jl_serialize_methcache_from_mod_env env = {s, name, mt->module, iskw};
     jl_typemap_visitor(mt->defs, jl_serialize_methcache_from_mod, &env);
 }
 
