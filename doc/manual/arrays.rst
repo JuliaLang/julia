@@ -76,7 +76,9 @@ Function                                            Description
                                                     ``type`` not specified
 :func:`ones(A) <ones>`                              an array of all ones of same element type and shape of ``A``
 :func:`trues(dims...) <trues>`                      a ``Bool`` array with all values ``true``
+:func:`trues(A) <trues>`                            a ``Bool`` array with all values ``true`` and the shape of ``A``
 :func:`falses(dims...) <falses>`                    a ``Bool`` array with all values ``false``
+:func:`falses(A) <falses>`                          a ``Bool`` array with all values ``false`` and the shape of ``A``
 :func:`reshape(A, dims...) <reshape>`               an array with the same data as the given array, but with
                                                     different dimensions.
 :func:`copy(A) <copy>`                              copy ``A``
