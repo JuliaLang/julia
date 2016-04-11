@@ -406,3 +406,9 @@ test_parseerror("0x1.0p", "invalid numeric constant \"0x1.0\"")
 # TODO enable post-0.5
 #test_parseerror("if\nfalse\nend", "missing condition in \"if\" at none:1")
 test_parseerror("if false\nelseif\nend", "missing condition in \"elseif\" at none:2")
+
+# issue #15828
+@test expand(parse("x...")) == Expr(:error, "\"...\" expression outside call")
+
+# issue #15830
+@test expand(parse("foo(y = (global x)) = y")) == Expr(:error, "misplaced \"global\" declaration")
