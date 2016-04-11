@@ -191,11 +191,23 @@ Constructors
 
    Create a ``BitArray`` with all values set to ``true``\ .
 
+.. function:: trues(A)
+
+   .. Docstring generated from Julia source
+
+   Create a ``BitArray`` with all values set to ``true`` of the same shape as ``A``\ .
+
 .. function:: falses(dims)
 
    .. Docstring generated from Julia source
 
    Create a ``BitArray`` with all values set to ``false``\ .
+
+.. function:: falses(A)
+
+   .. Docstring generated from Julia source
+
+   Create a ``BitArray`` with all values set to ``false`` of the same shape as ``A``\ .
 
 .. function:: fill(x, dims)
 
