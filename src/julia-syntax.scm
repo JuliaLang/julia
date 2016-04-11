@@ -3126,6 +3126,7 @@ f(x) = yt(x)
                  (emit e)
                  #f))
             ((global) ; remove global declarations
+             (if value (error "misplaced \"global\" declaration"))
              (let ((vname (cadr e)))
                (if (var-info-for vname vi)
                    ;; issue #7264
@@ -3149,6 +3150,8 @@ f(x) = yt(x)
             ((import importall using export line meta boundscheck simdloop)
              (emit e)
              (if tail (emit-return '(null)) '(null)))
+            ((...)
+             (error "\"...\" expression outside call"))
             (else
              (error (string "unhandled expr " e))))))
     (compile e '() #t #t)
