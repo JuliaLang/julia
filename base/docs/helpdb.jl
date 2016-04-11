@@ -1875,13 +1875,6 @@ Test whether any values in `A` along the singleton dimensions of `r` are `true`,
 any!
 
 doc"""
-    falses(dims)
-
-Create a `BitArray` with all values set to `false`
-"""
-falses
-
-doc"""
     filter!(function, collection)
 
 Update `collection`, removing elements for which `function` is `false`. For associative collections, the function is passed two arguments (key and value).
@@ -8611,13 +8604,6 @@ doc"""
 Modulus after division, returning in the range \[0,`y`), if `y` is positive, or (`y`,0\] if `y` is negative.
 """
 mod
-
-doc"""
-    trues(dims)
-
-Create a `BitArray` with all values set to `true`
-"""
-trues
 
 doc"""
     qr(A [,pivot=Val{false}][;thin=true]) -> Q, R, [p]
