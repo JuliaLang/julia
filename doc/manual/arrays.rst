@@ -222,7 +222,7 @@ Comprehensions can also be written without the enclosing square brackets, produc
 an object known as a generator. This object can be iterated to produce values on
 demand, instead of allocating an array and storing them in advance
 (see <man-interfaces-iteration>).
-For example, the following expression sums a series without allocating memory::
+For example, the following expression sums a series without allocating memory:
 
 .. doctest::
 
@@ -236,7 +236,7 @@ list, parentheses are needed to separate the generator from subsequent arguments
     ERROR: syntax: invalid iteration specification
 
 All comma-separated expressions after ``for`` are interpreted as ranges. Adding
-parentheses lets us add a third argument to ``map``::
+parentheses lets us add a third argument to ``map``:
 
 .. doctest::
 
