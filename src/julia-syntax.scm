@@ -3038,6 +3038,13 @@ So far only the second case can actually occur.
            ;; mark all the vars we capture as captured
            (for-each (lambda (v) (vinfo:set-capt! v #t))
                      cv)
+           ;; if a captured variable is not an argument, but never assigned,
+           ;; then it never has a value. to handle this, it needs to be marked as
+           ;; assigned, so that it's represented as an uninitialized box for the
+           ;; undefined-var checks to go through correctly. issue #15848
+           (for-each (lambda (v) (if (and (vinfo:capt v) (not (vinfo:asgn v)))
+                                     (vinfo:set-asgn! v #t)))
+                     (list-tail vi (length args)))
            `(lambda ,args
               (,vi ,cv ,gensym_types ,sp)
               ,bod)))
