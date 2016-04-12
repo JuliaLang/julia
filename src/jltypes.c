@@ -1950,26 +1950,14 @@ int jl_assign_type_uid(void)
 
 static int is_cacheable(jl_datatype_t *type)
 {
-    // only cache concrete types
     assert(jl_is_datatype(type));
     jl_svec_t *t = type->parameters;
     if (jl_svec_len(t) == 0) return 0;
-    if (jl_is_abstracttype(type)) {
-        if (jl_has_typevars_((jl_value_t*)type,1))
-            return 0;
-    }
-    else {
-        if (jl_is_leaf_type((jl_value_t*)type))
-            return 1;
-        if (jl_has_typevars_((jl_value_t*)type,1))
-            return 0;
-        for(int i=0; i < jl_svec_len(t); i++) {
-            jl_value_t *pi = jl_svecref(t,i);
-            if (type->name == jl_tuple_typename && !jl_is_leaf_type(pi))
-                return 0;
-        }
-    }
-    return 1;
+    // cache abstract types with no type vars
+    if (jl_is_abstracttype(type))
+        return !jl_has_typevars_((jl_value_t*)type,1);
+    // ... or concrete types
+    return jl_is_leaf_type((jl_value_t*)type);
 }
 
 static void cache_insert_type(jl_value_t *type, ssize_t insert_at, int ordered)
