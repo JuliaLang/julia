@@ -491,10 +491,6 @@ JL_DLLEXPORT jl_lambda_info_t *jl_get_specialized(jl_method_t *m, jl_tupletype_t
             // copy fptr from the template method definition
             new_linfo->fptr = linfo->fptr;
             new_linfo->jlcall_api = linfo->jlcall_api;
-            new_linfo->functionObjectsDecls.functionObject = linfo->functionObjectsDecls.functionObject;
-            new_linfo->functionObjectsDecls.specFunctionObject = linfo->functionObjectsDecls.specFunctionObject;
-            new_linfo->functionID = linfo->functionID;
-            new_linfo->specFunctionID = linfo->functionID;
             if (jl_options.compile_enabled == JL_OPTIONS_COMPILE_OFF && new_linfo->fptr == NULL) {
                 jl_printf(JL_STDERR,"code missing for ");
                 jl_static_show(JL_STDERR, (jl_value_t*)new_linfo);

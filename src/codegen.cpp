@@ -869,9 +869,8 @@ static void to_function(jl_lambda_info_t *li)
     li->functionID = jl_assign_functionID(f, 0);
     if (specf)
         li->specFunctionID = jl_assign_functionID(specf, 1);
-    if (f->getFunctionType() != jl_func_sig)
-        // mark the pointer as jl_fptr_sparam_t calling convention
-        li->jlcall_api = 1;
+    // mark the pointer calling convention
+    li->jlcall_api = (f->getFunctionType() == jl_func_sig ? 0 : 1);
 
     // done compiling: restore global state
     if (old != NULL) {
