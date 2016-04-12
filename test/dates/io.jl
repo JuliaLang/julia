@@ -18,6 +18,13 @@
 # DateTime parsing
 # Useful reference for different locales: http://library.princeton.edu/departments/tsd/katmandu/reference/months.html
 
+# Using parse directly allows for more flexibility.
+let str = "1996/02/15 24:00", format = "yyyy/mm/dd HH:MM"
+    expected = [Dates.Year(1996), Dates.Month(2), Dates.Day(15), Dates.Hour(24), Dates.Minute(0)]
+    @test Dates.parse(str, Dates.DateFormat(format)) == expected
+    @test_throws ArgumentError Dates.DateTime(str, Dates.DateFormat(format))
+end
+
 # Common Parsing Patterns
 #'1996-January-15'
 dt = Dates.DateTime(1996,1,15)
