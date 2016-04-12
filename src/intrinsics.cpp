@@ -343,16 +343,10 @@ static Value *auto_unbox(jl_value_t *x, jl_codectx_t *ctx)
 static jl_value_t *staticeval_bitstype(jl_value_t *targ, const char *fname, jl_codectx_t *ctx)
 {
     // evaluate an argument at compile time to determine what type it is
-    // does bitstype validation if and only if fname != NULL
-    jl_value_t *et = expr_type(targ, ctx);
+    jl_cgval_t bt_value = emit_expr(targ, ctx);
     jl_value_t *bt = NULL;
-    if (jl_is_type_type(et) && jl_is_leaf_type(jl_tparam0(et))) {
-        bt = jl_tparam0(et);
-    }
-    else {
-        bt = jl_static_eval(targ, ctx, ctx->module, ctx->linfo, true, true);
-        if (bt) jl_add_linfo_root(ctx->linfo, bt);
-    }
+    if (jl_is_type_type(bt_value.typ))
+        bt = jl_tparam0(bt_value.typ);
     if (!bt || !jl_is_bitstype(bt)) {
         emit_error("expected bits type as first argument", ctx);
         return NULL;
@@ -386,14 +380,16 @@ static int get_bitstype_nbits(jl_value_t *bt)
 static jl_cgval_t generic_box(jl_value_t *targ, jl_value_t *x, jl_codectx_t *ctx)
 {
     // Examine the first argument //
-    jl_value_t *bt = static_eval(targ, ctx, true, true);
-    if (bt) jl_add_linfo_root(ctx->linfo, bt);
+    jl_cgval_t bt_value = emit_expr(targ, ctx);
+    jl_cgval_t v = emit_expr(x, ctx);
+    jl_value_t *bt = NULL;
+    if (jl_is_type_type(bt_value.typ))
+        bt = jl_tparam0(bt_value.typ);
 
     if (!bt || !jl_is_bitstype(bt)) {
         // it's easier to throw a good error from C than llvm
-        if (bt) targ = bt;
-        Value *arg1 = boxed(emit_expr(targ, ctx), ctx);
-        Value *arg2 = boxed(emit_expr(x, ctx), ctx);
+        Value *arg1 = boxed(bt_value, ctx);
+        Value *arg2 = boxed(v, ctx);
         Value *func = prepare_call(runtime_func[reinterpret]);
 #ifdef LLVM37
         Value *r = builder.CreateCall(func, {arg1, arg2});
@@ -408,7 +404,6 @@ static jl_cgval_t generic_box(jl_value_t *targ, jl_value_t *x, jl_codectx_t *ctx
     int nb = jl_datatype_size(bt);
 
     // Examine the second argument //
-    jl_cgval_t v = emit_expr(x, ctx);
     bool isboxed;
     Type *vxt = julia_type_to_llvm(v.typ, &isboxed);
 
@@ -476,7 +471,10 @@ static jl_cgval_t generic_box(jl_value_t *targ, jl_value_t *x, jl_codectx_t *ctx
 static jl_cgval_t generic_unbox(jl_value_t *targ, jl_value_t *x, jl_codectx_t *ctx)
 {
     // Examine the first argument //
-    jl_value_t *bt = staticeval_bitstype(targ, NULL, ctx);
+    jl_cgval_t bt_value = emit_expr(targ, ctx);
+    jl_value_t *bt = NULL;
+    if (jl_is_type_type(bt_value.typ))
+        bt = jl_tparam0(bt_value.typ);
 
     // Examine the second argument //
     jl_cgval_t v = emit_expr(x, ctx);
@@ -492,17 +490,18 @@ static jl_cgval_t generic_unbox(jl_value_t *targ, jl_value_t *x, jl_codectx_t *c
             alignment = ((jl_datatype_t*)bt)->alignment;
         }
         else {
-            if (!jl_is_leaf_type(v.typ) && !jl_is_bitstype(v.typ)) {
+            bt = v.typ;
+            if (!jl_is_leaf_type(bt) && !jl_is_bitstype(bt)) {
                 // TODO: currently doesn't handle the case where the type of neither argument is understood at compile time
                 // since codegen has no idea what size it might have
                 jl_error("codegen: failed during evaluation of a call to unbox");
                 return jl_cgval_t();
             }
-            nb = jl_datatype_size(v.typ);
-            llvmt = staticeval_bitstype(v.typ);
-            alignment = ((jl_datatype_t*)v.typ)->alignment;
+            nb = jl_datatype_size(bt);
+            llvmt = staticeval_bitstype(bt);
+            alignment = ((jl_datatype_t*)bt)->alignment;
         }
-        Value *runtime_bt = boxed(emit_expr(targ, ctx), ctx);
+        Value *runtime_bt = boxed(bt_value, ctx);
         // XXX: emit type validity check on runtime_bt (bitstype of size nb)
 
         Value *newobj = emit_allocobj(nb);
