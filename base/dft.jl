@@ -80,7 +80,8 @@ contains all of the information needed to compute `fft(A, dims)` quickly.
 To apply `P` to an array `A`, use `P * A`; in general, the syntax for applying plans is much
 like that of matrices.  (A plan can only be applied to arrays of the same size as the `A`
 for which the plan was created.)  You can also apply a plan with a preallocated output array `Â`
-by calling `A_mul_B!(Â, plan, A)`.  You can compute the inverse-transform plan by `inv(P)`
+by calling `A_mul_B!(Â, plan, A)`.  (For `A_mul_B!`, however, the input array `A` must
+be a complex floating-point array like the output `Â`.) You can compute the inverse-transform plan by `inv(P)`
 and apply the inverse plan with `P \\ Â` (the inverse plan is cached and reused for
 subsequent calls to `inv` or `\\`), and apply the inverse plan to a pre-allocated output
 array `A` with `A_ldiv_B!(A, P, Â)`.
