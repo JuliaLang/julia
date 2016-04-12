@@ -659,17 +659,17 @@ static jl_lambda_info_t *jl_typemap_assoc_exact(union jl_typemap_t ml_or_cache, 
         if (n > offs) {
             jl_value_t *a1 = args[offs];
             jl_value_t *ty = (jl_value_t*)jl_typeof(a1);
+            assert(jl_is_datatype(ty));
             if (ty == (jl_value_t*)jl_datatype_type && cache->targ != (void*)jl_nothing) {
                 ml_or_cache = mtcache_hash_lookup(cache->targ, a1, 1, offs);
                 jl_lambda_info_t *li = jl_typemap_assoc_exact(ml_or_cache, args, n, offs+1);
                 if (li)
                     return li;
             }
-            assert(jl_is_datatype(ty));
-            if (cache->arg1 != (void*)jl_nothing && offs < 2) {
+            if (cache->arg1 != (void*)jl_nothing) {
                 ml_or_cache = mtcache_hash_lookup(cache->arg1, ty, 0, offs);
                 if (jl_typeof(ml_or_cache.unknown) == (jl_value_t*)jl_typemap_entry_type &&
-                        ml_or_cache.leaf->simplesig == (void*)jl_nothing) {
+                        ml_or_cache.leaf->simplesig == (void*)jl_nothing && offs < 2 && n > 1) {
                     jl_value_t *a0 = args[1-offs];
                     jl_value_t *t0 = (jl_value_t*)jl_typeof(a0);
                     if (ml_or_cache.leaf->next==(void*)jl_nothing && n==2 && jl_datatype_nfields(ml_or_cache.leaf->sig)==2 &&
