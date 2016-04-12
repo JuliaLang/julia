@@ -122,8 +122,9 @@
                                    (julia-parse inp parse-atom))))))
       (cons expr (io.pos inp)))))
 
-(define (jl-parse-string s)
-  (parser-wrap (lambda ()
+(define (jl-parse-string s filename)
+  (with-bindings ((current-filename (symbol filename)))
+    (parser-wrap (lambda ()
                  (let ((inp  (make-token-stream (open-input-string s))))
                    ;; parse all exprs into a (toplevel ...) form
                    (let loop ((exprs '()))
@@ -137,7 +138,7 @@
                                  (else (cons 'toplevel (reverse! exprs))))
                            (if (and (pair? expr) (eq? (car expr) 'toplevel))
                                (loop (nreconc (cdr expr) exprs))
-                               (loop (cons expr exprs))))))))))
+                               (loop (cons expr exprs)))))))))))
 
 (define (jl-parse-all io filename)
   (unwind-protect
