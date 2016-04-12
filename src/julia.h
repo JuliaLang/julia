@@ -1195,7 +1195,8 @@ JL_DLLEXPORT jl_value_t *jl_restore_incremental(const char *fname);
 JL_DLLEXPORT jl_value_t *jl_restore_incremental_from_buf(const char *buf, size_t sz);
 
 // front end interface
-JL_DLLEXPORT jl_value_t *jl_parse_input_line(const char *str, size_t len);
+JL_DLLEXPORT jl_value_t *jl_parse_input_line(const char *str, size_t len,
+                                             const char *filename, size_t filename_len);
 JL_DLLEXPORT jl_value_t *jl_parse_string(const char *str, size_t len,
                                          int pos0, int greedy);
 JL_DLLEXPORT int jl_parse_depwarn(int warn);
