@@ -2231,6 +2231,9 @@ function effect_free(e::ANY, sv, allow_volatile::Bool)
         if e.head === :static_typeof
             return true
         end
+        if e.head === :static_parameter
+            return true
+        end
         ea = e.args
         if e.head === :call
             if is_known_call_p(e, is_pure_builtin, sv)
