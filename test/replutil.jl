@@ -336,3 +336,19 @@ withenv("JULIA_EDITOR" => nothing, "VISUAL" => nothing, "EDITOR" => nothing) do
     ENV["JULIA_EDITOR"] = "\"/Applications/Sublime Text.app/Contents/SharedSupport/bin/subl\" -w"
     @test Base.editor() == ["/Applications/Sublime Text.app/Contents/SharedSupport/bin/subl", "-w"]
 end
+
+# Issue #14684: `display` should prints associative types in full.
+let d = Dict(1 => 2, 3 => 45)
+    buf = IOBuffer()
+    td = TextDisplay(buf)
+    display(td, d)
+    result = bytestring(td.io)
+
+    @test contains(result, summary(d))
+
+    # Is every pair in the string?
+    # Compare by removing spaces
+    for el in d
+        @test contains(replace(result, " ", ""), string(el))
+    end
+end
