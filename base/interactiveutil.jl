@@ -227,8 +227,9 @@ function code_warntype(io::IO, f, t::ANY)
     emph_io = IOContext(io, :TYPEEMPHASIZE => true)
     for li in code_typed(f, t)
         println(emph_io, "Variables:")
-        for i = 1:length(li.slotnames)
-            print(emph_io, "  ", li.slotnames[i])
+        slotnames = lambdainfo_slotnames(li)
+        for i = 1:length(slotnames)
+            print(emph_io, "  ", slotnames[i])
             if isa(li.slottypes,Array)
                 show_expr_type(emph_io, li.slottypes[i], true)
             end
@@ -237,7 +238,10 @@ function code_warntype(io::IO, f, t::ANY)
         print(emph_io, "\nBody:\n  ")
         body = Expr(:body); body.args = uncompressed_ast(li)
         body.typ = li.rettype
-        show_unquoted(emph_io, body, 2)
+        # Fix slot names and types in function body
+        show_unquoted(IOContext(IOContext(emph_io, :LAMBDAINFO => li),
+                                          :LAMBDA_SLOTNAMES => slotnames),
+                      body, 2)
         print(emph_io, '\n')
     end
     nothing
