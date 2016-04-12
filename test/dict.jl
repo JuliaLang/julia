@@ -294,6 +294,13 @@ for d in (Dict("\n" => "\n", "1" => "\n", "\n" => "2"),
     @test !isempty(summary(values(d)))
 end
 
+# Issue #15739 - `Pair`s of `Pair`s should enclose their parts in parentheses.
+let d = Dict((1=>2) => (3=>45), (3=>10) => (10=>11))
+    buf = IOBuffer()
+    showcompact(buf, d)
+    @test bytestring(buf) == "Dict((3=>10)=>(10=>11),(1=>2)=>(3=>45))"
+end
+
 # issue #9463
 type Alpha end
 Base.show(io::IO, ::Alpha) = print(io,"α")
