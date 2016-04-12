@@ -299,6 +299,7 @@ end
 type REPLHistoryProvider <: HistoryProvider
     history::Array{AbstractString,1}
     history_file
+    start_idx::Int
     cur_idx::Int
     last_idx::Int
     last_buffer::IOBuffer
@@ -307,7 +308,7 @@ type REPLHistoryProvider <: HistoryProvider
     modes::Array{Symbol,1}
 end
 REPLHistoryProvider(mode_mapping) =
-    REPLHistoryProvider(AbstractString[], nothing, 0, -1, IOBuffer(),
+    REPLHistoryProvider(AbstractString[], nothing, 0, 0, -1, IOBuffer(),
                         nothing, mode_mapping, UInt8[])
 
 const invalid_history_message = """
@@ -369,6 +370,7 @@ function hist_from_file(hp, file)
         push!(hp.history, join(lines, '\n'))
     end
     seekend(file)
+    hp.start_idx = length(hp.history)
     hp
 end
 
@@ -665,6 +667,9 @@ function mode_keymap(julia_prompt)
     end)
 end
 
+repl_filename(repl, hp::REPLHistoryProvider) = "REPL[$(length(hp.history)-hp.start_idx)]"
+repl_filename(repl, hp) = "REPL"
+
 function setup_interface(repl::LineEditREPL; hascolor = repl.hascolor, extra_repl_keymap = Dict{Any,Any}[])
     ###
     #
@@ -704,8 +709,6 @@ function setup_interface(repl::LineEditREPL; hascolor = repl.hascolor, extra_rep
         keymap_func_data = repl,
         complete = replc,
         on_enter = return_callback)
-
-    julia_prompt.on_done = respond(Base.parse_input_line, repl, julia_prompt)
 
     # Setup help mode
     help_mode = Prompt("help?> ",
@@ -755,6 +758,9 @@ function setup_interface(repl::LineEditREPL; hascolor = repl.hascolor, extra_rep
     julia_prompt.hist = hp
     shell_mode.hist = hp
     help_mode.hist = hp
+
+    julia_prompt.on_done = respond(x->Base.parse_input_line(x,filename=repl_filename(repl,hp)), repl, julia_prompt)
+
 
     search_prompt, skeymap = LineEdit.setup_search_keymap(hp)
     search_prompt.complete = LatexCompletions()

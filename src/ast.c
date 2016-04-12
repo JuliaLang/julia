@@ -697,12 +697,13 @@ static value_t julia_to_scm_(fl_context_t *fl_ctx, jl_value_t *v)
 }
 
 // this is used to parse a line of repl input
-JL_DLLEXPORT jl_value_t *jl_parse_input_line(const char *str, size_t len)
+JL_DLLEXPORT jl_value_t *jl_parse_input_line(const char *str, size_t len, const char *filename, size_t filename_len)
 {
     jl_ast_context_t *ctx = jl_ast_ctx_enter();
     fl_context_t *fl_ctx = &ctx->fl;
     value_t s = cvalue_static_cstrn(fl_ctx, str, len);
-    value_t e = fl_applyn(fl_ctx, 1, symbol_value(symbol(fl_ctx, "jl-parse-string")), s);
+    value_t files = cvalue_static_cstrn(fl_ctx, filename, filename_len);
+    value_t e = fl_applyn(fl_ctx, 2, symbol_value(symbol(fl_ctx, "jl-parse-string")), s, files);
     jl_value_t *res = e == fl_ctx->FL_EOF ? jl_nothing : scm_to_julia(fl_ctx, e, 0);
     jl_ast_ctx_leave(ctx);
     return res;
