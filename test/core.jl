@@ -3757,3 +3757,14 @@ function f15809()
 end
 f15809()
 @test g15809(2) === Int
+
+module Macro_Yielding_Global_Assignment
+macro m()
+    quote
+        global x
+        x = 2
+    end
+end
+@m
+end
+@test Macro_Yielding_Global_Assignment.x == 2
