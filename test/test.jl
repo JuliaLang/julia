@@ -61,10 +61,11 @@ end
 @test contains(sprint(show, fails[4]), "Evaluated: 2 == 4")
 
 # Test printing of a TestSetException
-tse_str = sprint(show, Test.TestSetException(1,2,3))
+tse_str = sprint(show, Test.TestSetException(1,2,3,4))
 @test contains(tse_str, "1 passed")
 @test contains(tse_str, "2 failed")
 @test contains(tse_str, "3 errored")
+@test contains(tse_str, "4 broken")
 
 @test Test.finish(Test.FallbackTestSet()) != nothing
 
@@ -74,7 +75,7 @@ rd, wr = redirect_stdout()
 
 # Check that the fallback test set throws immediately
 @test_throws ErrorException (@test 1 == 2)
-@test_throws ErrorException (@test_fail_expected 1 != 2)
+#@test_throws ErrorException (@test_fail_expected 1 != 2)
 
 @testset "no errors" begin
     @test true
