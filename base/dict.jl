@@ -77,12 +77,10 @@ function showdict{K,V}(io::IO, t::Associative{K,V}; compact = false)
             print(io, '(')
             first = true
             n = 0
-            for (k, v) in t
+            for pair in t
                 first || print(io, ',')
                 first = false
-                show(recur_io, k)
-                print(io, "=>")
-                show(recur_io, v)
+                show(recur_io, pair)
                 n+=1
                 limit && n >= 10 && (print(io, "…"); break)
             end
