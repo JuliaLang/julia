@@ -617,13 +617,13 @@ end
 # contiguous multidimensional indexing: if the first dimension is a range,
 # we can get some performance from using copy_chunks!
 
-@inline function setindex!(B::BitArray, X::BitArray, I0::Union{Colon,UnitRange{Int}})
+@inline function setindex!(B::BitArray, X::Union{BitArray,Array}, I0::Union{Colon,UnitRange{Int}})
     @boundscheck checkbounds(B, I0)
     l0 = index_lengths(B, I0)[1]
     setindex_shape_check(X, l0)
     l0 == 0 && return B
     f0 = first(I0)
-    copy_chunks!(B.chunks, f0, X.chunks, 1, l0)
+    copy_to_bitarray_chunks!(B.chunks, f0, X, 1, l0)
     return B
 end
 
@@ -637,11 +637,11 @@ end
     return B
 end
 
-@inline function setindex!(B::BitArray, X::BitArray, I0::Union{Colon,UnitRange{Int}}, I::Union{Int,UnitRange{Int},Colon}...)
+@inline function setindex!(B::BitArray, X::Union{BitArray,Array}, I0::Union{Colon,UnitRange{Int}}, I::Union{Int,UnitRange{Int},Colon}...)
     @boundscheck checkbounds(B, I0, I...)
     _unsafe_setindex!(B, X, I0, I...)
 end
-@generated function _unsafe_setindex!(B::BitArray, X::BitArray, I0::UnitRange{Int}, I0::Union{Colon,UnitRange{Int}}, I::Union{Int,UnitRange{Int},Colon}...)
+@generated function _unsafe_setindex!(B::BitArray, X::Union{BitArray,Array}, I0::Union{Colon,UnitRange{Int}}, I::Union{Int,UnitRange{Int},Colon}...)
     N = length(I)
     rangeexp = [I[d] == Colon ? :(1:size(B, $(d+1))) : :(I[$d]) for d = 1:N]
     quote
@@ -668,7 +668,7 @@ end
                 d->nothing, # PRE
                 d->(ind += stride_lst_d - gap_lst_d), # POST
                 begin # BODY
-                    copy_chunks!(Bc, ind, X.chunks, refind, l0)
+                    copy_to_bitarray_chunks!(Bc, ind, X, refind, l0)
                     refind += l0
                 end)
 
