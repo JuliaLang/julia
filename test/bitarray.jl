@@ -81,7 +81,31 @@ for (sz,T) in allsizes
     @check_bit_operation size(b1)   Tuple{Vararg{Int}}
 
     b2 = similar(b1)
+    u1 = bitunpack(b1)
     @check_bit_operation copy!(b2, b1) T
+    @check_bit_operation copy!(b2, u1) T
+end
+
+for n in [1; 1023:1025]
+    b1 = falses(n)
+    for m in [1; 10; 1023:1025]
+        u1 = ones(Bool, m)
+        for fu! in [u->fill!(u, true), u->rand!(u)]
+            fu!(u1)
+            c1 = convert(Vector{Int}, u1)
+            for i1 in [1; 10; 53:65; 1013:1015; 1020:1025], i2 in [1; 3; 10; 511:513], l in [1; 5; 10; 511:513; 1023:1025]
+                for fb! in [b->fill!(b, false), b->rand!(b)]
+                    fb!(b1)
+                    if i1 < 1 || i1 > n || (i2 + l - 1 > m) || (i1 + l - 1 > n)
+                        @test_throws BoundsError copy!(b1, i1, u1, i2, l)
+                    else
+                        @check_bit_operation copy!(b1, i1, u1, i2, l) BitArray
+                        @check_bit_operation copy!(b1, i1, c1, i2, l) BitArray
+                    end
+                end
+            end
+        end
+    end
 end
 
 @test_throws ArgumentError size(trues(5),0)
