@@ -291,7 +291,7 @@ end
 
 ## Conversions ##
 
-convert{T,N}(::Type{Array{T}}, B::BitArray{N}) = convert(Array{T,N},B)
+convert{T,N}(::Type{Array{T}}, B::BitArray{N}) = convert(Array{T,N}, B)
 convert{T,N}(::Type{Array{T,N}}, B::BitArray{N}) = _convert(Array{T,N}, B) # see #15801
 function _convert{T,N}(::Type{Array{T,N}}, B::BitArray{N})
     A = Array(T, size(B))
@@ -302,7 +302,7 @@ function _convert{T,N}(::Type{Array{T,N}}, B::BitArray{N})
     return A
 end
 
-convert{T,N}(::Type{BitArray}, A::AbstractArray{T,N}) = convert(BitArray{N},A)
+convert{T,N}(::Type{BitArray}, A::AbstractArray{T,N}) = convert(BitArray{N}, A)
 function convert{T,N}(::Type{BitArray{N}}, A::AbstractArray{T,N})
     B = BitArray(size(A))
     Bc = B.chunks
@@ -405,7 +405,7 @@ function _unsafe_setindex!(B::BitArray, X::AbstractArray, I::BitArray)
     length(Bc) == length(Ic) || throw_boundserror(B, I)
     lc = length(Bc)
     lx = length(X)
-    last_chunk_len = Base._mod64(length(B)-1)+1
+    last_chunk_len = _mod64(length(B)-1)+1
 
     c = 1
     for i = 1:lc
@@ -1557,7 +1557,7 @@ end
 transpose(B::BitVector) = reshape(copy(B), 1, length(B))
 
 # fast 8x8 bit transpose from Henry S. Warrens's "Hacker's Delight"
-# http://www.hackersdelight.org/HDcode/transpose8.c.txt
+# http://www.hackersdelight.org/hdcodetxt/transpose8.c.txt
 function transpose8x8(x::UInt64)
     y = x
     t = (y $ (y >>> 7)) & 0x00aa00aa00aa00aa
