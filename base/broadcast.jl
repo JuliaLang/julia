@@ -223,9 +223,9 @@ function gen_broadcast_function_tobitarray(genbody::Function, nd::Int, narrays::
 end
 
 for (Bsig, Asig, gbf, gbb) in
-    ((BitArray                          , Union{Array,BitArray,Number}                   ,
+    ((BitArray                          , Union{Array,BitArray,Number}            ,
       :gen_broadcast_function_tobitarray, :gen_broadcast_body_iter_tobitarray     ),
-     (Any                               , Union{Array,BitArray,Number}                   ,
+     (Any                               , Union{Array,BitArray,Number}            ,
       :gen_broadcast_function           , :gen_broadcast_body_iter                ),
      (BitArray                          , Any                                     ,
       :gen_broadcast_function_tobitarray, :gen_broadcast_body_cartesian_tobitarray),

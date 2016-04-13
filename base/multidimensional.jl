@@ -259,7 +259,7 @@ end
     dest
 end
 
-# Always index with the exactly indices provided.
+# Always index with exactly the indices provided.
 @generated function _unsafe_getindex!(dest::AbstractArray, src::AbstractArray, I::Union{Real, AbstractVector, Colon}...)
     N = length(I)
     quote
@@ -551,7 +551,7 @@ end
 
 # contiguous multidimensional indexing: if the first dimension is a range,
 # we can get some performance from using copy_chunks!
-@inline function _unsafe_getindex!(X::BitArray, B::BitArray, I0::Union{UnitRange{Int}, Colon})
+@inline function _unsafe_getindex!(X::BitArray, B::BitArray, I0::Union{UnitRange{Int},Colon})
     copy_chunks!(X.chunks, 1, B.chunks, first(I0), index_lengths(B, I0)[1])
     return X
 end
