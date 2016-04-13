@@ -1558,7 +1558,7 @@ static jl_lambda_info_t *jl_mt_assoc_by_type(jl_methtable_t *mt, jl_datatype_t *
     jl_svec_t *env = jl_emptysvec;
     jl_method_t *func = NULL;
     jl_tupletype_t *sig = NULL;
-    JL_GC_PUSH4(&env, &m, &func, &tt);
+    JL_GC_PUSH4(&env, &m, &func, &sig);
 
     m = jl_typemap_assoc_by_type(mt->defs, tt, &env, inexact, 1, 0);
     if (m == NULL) {
@@ -1569,7 +1569,7 @@ static jl_lambda_info_t *jl_mt_assoc_by_type(jl_methtable_t *mt, jl_datatype_t *
     sig = join_tsig(tt, m->sig);
     jl_lambda_info_t *nf;
     if (!cache)
-        nf = jl_get_specialized(m->func.method, tt, env);
+        nf = jl_get_specialized(m->func.method, sig, env);
     else
         nf = cache_method(mt, &mt->cache, (jl_value_t*)mt, sig, tt, m, env);
     JL_GC_POP();
@@ -2293,7 +2293,7 @@ jl_value_t *jl_gf_invoke(jl_tupletype_t *types0, jl_value_t **args, size_t nargs
     jl_tupletype_t *tt = NULL;
     jl_tupletype_t *types = NULL;
     jl_tupletype_t *sig = NULL;
-    JL_GC_PUSH4(&types, &tpenv, &newsig, &sig);
+    JL_GC_PUSH5(&types, &tpenv, &newsig, &sig, &tt);
     jl_value_t *gf = args[0];
     types = (jl_datatype_t*)jl_argtype_with_function(gf, (jl_tupletype_t*)types0);
     jl_methtable_t *mt = jl_gf_mtable(gf);
@@ -2312,15 +2312,7 @@ jl_value_t *jl_gf_invoke(jl_tupletype_t *types0, jl_value_t **args, size_t nargs
         mfunc = NULL;
     else
         mfunc = jl_typemap_assoc_exact(m->func.method->invokes, args, nargs, jl_cachearg_offset(mt));
-    if (mfunc != NULL) {
-        if (mfunc->inInference || mfunc->inCompile) {
-            // if inference is running on this function, return a copy
-            // of the function to be compiled without inference and run.
-            JL_GC_POP();
-            return jl_call_unspecialized(mfunc->sparam_vals, jl_get_unspecialized(mfunc), args, nargs);
-        }
-    }
-    else {
+    if (mfunc == NULL) {
         tt = arg_type_tuple(args, nargs);
         if (m->tvars != jl_emptysvec) {
             jl_value_t *ti =
@@ -2336,8 +2328,12 @@ jl_value_t *jl_gf_invoke(jl_tupletype_t *types0, jl_value_t **args, size_t nargs
 
         mfunc = cache_method(mt, &m->func.method->invokes, m->func.value, sig, tt, m, tpenv);
     }
-
     JL_GC_POP();
+    if (mfunc->inInference || mfunc->inCompile) {
+        // if inference is running on this function, return a copy
+        // of the function to be compiled without inference and run.
+        return jl_call_unspecialized(mfunc->sparam_vals, jl_get_unspecialized(mfunc), args, nargs);
+    }
     return jl_call_method_internal(mfunc, args, nargs);
 }
 
