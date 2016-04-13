@@ -70,7 +70,7 @@ map(f, t::Tuple{})              = ()
 map(f, t::Tuple{Any,})          = (f(t[1]),)
 map(f, t::Tuple{Any, Any})      = (f(t[1]), f(t[2]))
 map(f, t::Tuple{Any, Any, Any}) = (f(t[1]), f(t[2]), f(t[3]))
-map(f, t::Tuple)                = (f(t[1]), map(f,tail(t))...)
+map(f, t::Tuple)                = ([f(x) for x in t]...)
 # 2 argument function
 map(f, t::Tuple{},        s::Tuple{})        = ()
 map(f, t::Tuple{Any,},    s::Tuple{Any,})    = (f(t[1],s[1]),)
@@ -81,7 +81,7 @@ heads(t::Tuple, ts::Tuple...) = (t[1], heads(ts...)...)
 tails() = ()
 tails(t::Tuple, ts::Tuple...) = (tail(t), tails(ts...)...)
 map(f, ::Tuple{}, ts::Tuple...) = ()
-map(f, ts::Tuple...) = (f(heads(ts...)...), map(f, tails(ts...)...)...)
+map(f, ts::Tuple...) = ([f([t[i] for t in ts]...) for i in 1:length(ts[1])]...)
 
 # type-stable padding
 fill_to_length{N}(t::Tuple, val, ::Type{Val{N}}) = _ftl((), val, Val{N}, t...)
