@@ -869,6 +869,30 @@ let m = 10
     end
 end
 
+# fkeep!
+let x = sparsevec(1:7, [3., 2., -1., 1., -2., -3., 3.], 7)
+    # droptol
+    xdrop = Base.droptol!(copy(x), 1.5)
+    @test exact_equal(xdrop, SparseVector(7, [1, 2, 5, 6, 7], [3., 2., -2., -3., 3.]))
+    Base.droptol!(xdrop, 2.5)
+    @test exact_equal(xdrop, SparseVector(7, [1, 6, 7], [3., -3., 3.]))
+    Base.droptol!(xdrop, 3.)
+    @test exact_equal(xdrop, SparseVector(7, Int[], Float64[]))
+
+    # dropzeros
+    xdrop = copy(x)
+    xdrop.nzval[[2, 4, 6]] = 0.0
+    Base.SparseArrays.dropzeros!(xdrop)
+    @test exact_equal(xdrop, SparseVector(7, [1, 3, 5, 7], [3, -1., -2., 3.]))
+
+    xdrop = copy(x)
+    # This will keep index 1, 3, 4, 7 in xdrop
+    f_drop(i, x, other) = (abs(x) == 1.) || (i in [1, 7])
+    Base.SparseArrays.fkeep!(xdrop, f_drop, Void)
+    @test exact_equal(xdrop, SparseVector(7, [1, 3, 4, 7], [3., -1., 1., 3.]))
+end
+
+
 # It's tempting to share data between a SparseVector and a SparseArrays,
 # but if that's done, then modifications to one or the other will cause
 # an inconsistent state:
