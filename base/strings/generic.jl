@@ -12,7 +12,7 @@ string(s::AbstractString) = s
 
 bytestring() = ""
 bytestring(s::Vector{UInt8}) =
-    ccall(:jl_pchar_to_string, Ref{ByteString}, (Ptr{UInt8},Int), s, length(s))
+    ccall(:jl_pchar_to_string, Ref{String}, (Ptr{UInt8},Int), s, length(s))
 
 convert(::Type{Vector{UInt8}}, s::AbstractString) = bytestring(s).data
 convert(::Type{Array{UInt8}}, s::AbstractString) = bytestring(s).data

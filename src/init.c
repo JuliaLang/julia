@@ -838,7 +838,6 @@ void jl_get_builtin_hooks(void)
 #endif
 
     jl_string_type = (jl_datatype_t*)core("String");
-    jl_symbolnode_type = (jl_datatype_t*)core("SymbolNode");
     jl_weakref_type = (jl_datatype_t*)core("WeakRef");
 }
 

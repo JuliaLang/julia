@@ -295,7 +295,7 @@ s = "CompletionFoo.test4(CompletionFoo.test_y_array[1]()[1], CompletionFoo.test_
 c, r, res = test_complete(s)
 @test !res
 @test length(c) == 1
-@test c[1] == string(methods(CompletionFoo.test4, Tuple{ASCIIString, ASCIIString})[1])
+@test c[1] == string(methods(CompletionFoo.test4, Tuple{String, String})[1])
 
 ########## Test where the current inference logic fails ########
 # Fails due to inferrence fails to determine a concrete type for arg 1

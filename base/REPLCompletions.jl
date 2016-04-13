@@ -47,7 +47,7 @@ function complete_symbol(sym, ffunc)
             lookup_module = false
             t, found = get_type(ex, context_module)
         end
-        found || return UTF8String[]
+        found || return String[]
         # Ensure REPLCompletion do not crash when asked to complete a tuple, #15329
         !lookup_module && t <: Tuple && return String[]
     end
