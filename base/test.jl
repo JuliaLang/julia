@@ -156,6 +156,8 @@ end
 """
     @test_fail_expected ex
 
+For use to indicate a test that should pass but currently consistantly
+fails.
 Tests that the expression `ex` evaluates to `false`.
 Returns a `Pass` `Result` if it does, a `Fail` `Result` if it is
 `true`, and an `Error` `Result` if it could not be evaluated.
@@ -232,7 +234,7 @@ function do_test(result::ExecutionResult, orig_expr; fail_expected::Bool=false)
                 value ? Pass(:test, orig_expr, expr, value) :
                         Fail(:test, orig_expr, expr, value)
             else
-                orig_expr= "Fail: $orig_expr"
+                orig_expr= "$orig_expr : Successfully Failed. Please change to @test."
             # a false value Passes
                 value ? Fail(:test, orig_expr, expr, value) :
                         Pass(:test, orig_expr, expr, value)
