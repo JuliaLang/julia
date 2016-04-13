@@ -768,7 +768,7 @@ For example::
 Numbered capture groups can also be referenced as ``\g<n>`` for disambiguation,
 as in::
 
-    julia> replace("a", r".", "\g<0>1")
+    julia> replace("a", r".", s"\g<0>1")
     julia> a1
 
 You can modify the behavior of regular expressions by some combination
