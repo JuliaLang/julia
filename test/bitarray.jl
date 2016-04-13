@@ -7,12 +7,16 @@ tc{N}(r1::BitArray{N}, r2::Union{BitArray{N},Array{Bool,N}}) = true
 tc{T}(r1::T, r2::T) = true
 tc(r1,r2) = false
 
+bitcheck(b::BitArray) = length(b.chunks) == 0 || (b.chunks[end] == b.chunks[end] & Base._msk_end(b))
+bitcheck(x) = true
+
 function check_bitop(ret_type, func, args...)
     r1 = func(args...)
     r2 = func(map(x->(isa(x, BitArray) ? bitunpack(x) : x), args)...)
     @test isa(r1, ret_type)
     @test tc(r1, r2)
     @test isequal(r1, convert(ret_type, r2))
+    @test bitcheck(r1)
 end
 
 macro check_bit_operation(ex, ret_type)
@@ -38,7 +42,7 @@ v1 = 260
 # matrices size
 n1, n2 = 17, 20
 # arrays size
-s1, s2, s3, s4 = 5, 8, 3, 4
+s1, s2, s3, s4 = 5, 8, 3, 7
 
 allsizes = [((), BitArray{0}), ((v1,), BitVector),
             ((n1,n2), BitMatrix), ((s1,s2,s3,s4), BitArray{4})]
