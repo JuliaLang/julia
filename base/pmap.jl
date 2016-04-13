@@ -48,7 +48,11 @@ and Loading Packages <man-parallel-computing-code-availability>`)
 for details.
 """
 pmap(p::WorkerPool, f, c...) = collect(pgenerate(p, f, c...))
-#pmap(f, c...) = pmap(default_worker_pool(), f, c...)  -- See depricated.jl
+
+# TODO: deprecated.jl defines pmap(f, c...; kw...) to support old kw args.
+#       When that is retierd it should be replaced by somthing like this:
+#
+#       pmap(f, c...) = pmap(default_worker_pool(), f, c...)
 
 
 

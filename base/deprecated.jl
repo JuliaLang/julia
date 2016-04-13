@@ -1011,14 +1011,14 @@ export call
 function pmap(f, c...; err_retry=nothing, err_stop=nothing, pids=nothing)
 
     if err_retry != nothing
-        depwarn("`err_retry` is deprecated, use `pmap(retry(f), c...)`.", :pmap)
+        depwarn("err_retry is deprecated, use pmap(retry(f), c...).", :pmap)
         if err_retry == true
             f = retry(f)
         end
     end
 
     if err_stop != nothing
-        depwarn("`err_stop` is deprecated, use `pmap(@catch(f), c...).", :pmap)
+        depwarn("err_stop is deprecated, use pmap(@catch(f), c...).", :pmap)
         if err_stop == false
             f = @catch(f)
         end
@@ -1027,7 +1027,7 @@ function pmap(f, c...; err_retry=nothing, err_stop=nothing, pids=nothing)
     if pids == nothing
         p = default_worker_pool()
     else
-        depwarn("`pids` is deprecated, use `pmap(::WorkerPool, f, c...).", :pmap)
+        depwarn("pids is deprecated, use pmap(::WorkerPool, f, c...).", :pmap)
         p = WorkerPool(pids)
     end
 
