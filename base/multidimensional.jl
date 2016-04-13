@@ -579,7 +579,7 @@ end
 
         storeind = 1
         Xc, Bc = X.chunks, B.chunks
-        idxlens = index_lengths(B, I0, I...) # TODO: unsplat?
+        idxlens = @ncall $N index_lengths B I0 d->I[d]
         @nloops($N, i, d->(1:idxlens[d+1]),
                 d->nothing, # PRE
                 d->(ind += stride_lst_d - gap_lst_d), # POST
@@ -603,7 +603,7 @@ end
         $(symbol(:offset_, N)) = 1
         ind = 0
         Xc, Bc = X.chunks, B.chunks
-        idxlens = index_lengths(B, I...) # TODO: unsplat?
+        idxlens = @ncall $N index_lengths B d->I[d]
         @nloops $N i d->(1:idxlens[d]) d->(@inbounds offset_{d-1} = offset_d + (I[d][i_d]-1)*stride_d) begin
             ind += 1
             unsafe_bitsetindex!(Xc, unsafe_bitgetindex(Bc, offset_0), ind)
@@ -644,13 +644,14 @@ end
 @generated function _unsafe_setindex!(B::BitArray, X::BitArray, I0::UnitRange{Int}, I::Union{Int,UnitRange{Int}}...)
     N = length(I)
     quote
-        # TODO: need to setindex_shape_check
+        idxlens = @ncall $N index_lengths B I0 d->I[d]
+        @ncall $N setindex_shape_check X idxlens[1] d->idxlens[d+1]
         isempty(X) && return B
         f0 = first(I0)
-        l0 = length(I0)
+        l0 = idxlens[1]
 
         gap_lst_1 = 0
-        @nexprs $N d->(gap_lst_{d+1} = length(I[d]))
+        @nexprs $N d->(gap_lst_{d+1} = idxlens[d+1])
         stride = 1
         ind = f0
         @nexprs $N d->begin
