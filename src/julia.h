@@ -210,6 +210,9 @@ typedef struct _jl_lambda_info_t {
     // and so unspecialized will be created for each linfo instead of once in linfo->def.
     // 0 = no, 1 = yes, 2 = not yet known
     uint8_t needs_sparam_vals_ducttape : 2;
+    // If this flag is set, the system will call a callback if a specialization
+    // is added to this lambda info. See jl_register_tracer below.
+    uint8_t traced : 1;
     jl_fptr_t fptr;             // jlcall entry point
 
     // On the old JIT, handles to all Functions generated for this linfo
@@ -1242,6 +1245,12 @@ JL_DLLEXPORT jl_value_t *jl_load(const char *fname, size_t len);
 JL_DLLEXPORT jl_value_t *jl_interpret_toplevel_expr_in(jl_module_t *m, jl_value_t *e,
                                                        jl_lambda_info_t *lam);
 JL_DLLEXPORT jl_module_t *jl_base_relative_to(jl_module_t *m);
+
+// tracing
+JL_DLLEXPORT void jl_trace_linfo(jl_lambda_info_t *li);
+JL_DLLEXPORT void jl_untrace_linfo(jl_lambda_info_t *li);
+JL_DLLEXPORT void jl_register_tracer(void (*callback)(jl_lambda_info_t *tracee));
+JL_DLLEXPORT void jl_register_newmeth_tracer(void (*callback)(jl_methlist_t *tracee));
 
 // AST access
 JL_DLLEXPORT int jl_is_rest_arg(jl_value_t *ex);

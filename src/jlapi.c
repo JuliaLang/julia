@@ -308,6 +308,31 @@ JL_DLLEXPORT const char *jl_git_commit(void)
     return commit;
 }
 
+JL_DLLEXPORT void jl_trace_linfo(jl_lambda_info_t *li)
+{
+    assert(jl_is_lambda_info(li));
+    li->traced = 1;
+}
+
+JL_DLLEXPORT void jl_untrace_linfo(jl_lambda_info_t *li)
+{
+    assert(jl_is_lambda_info(li));
+    li->traced = 0;
+}
+
+void (*jl_linfo_tracer)(jl_lambda_info_t *tracee) = 0;
+JL_DLLEXPORT void jl_register_tracer(void (*callback)(jl_lambda_info_t *tracee))
+{
+    jl_linfo_tracer = callback;
+}
+
+void (*jl_newmeth_tracer)(jl_methlist_t *tracee) = 0;
+JL_DLLEXPORT void jl_register_newmeth_tracer(void (*callback)(jl_methlist_t *tracee))
+{
+    jl_newmeth_tracer = callback;
+}
+
+
 // Create function versions of some useful macros
 JL_DLLEXPORT jl_taggedvalue_t *(jl_astaggedvalue)(jl_value_t *v)
 {
