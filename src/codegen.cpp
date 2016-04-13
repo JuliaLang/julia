@@ -2812,6 +2812,11 @@ static jl_cgval_t emit_call(jl_value_t **args, size_t arglen, jl_codectx_t *ctx,
                 return result;
             }
         }
+        if (ctx->allGeneric && (jl_is_topnode(args[0]) || jl_is_globalref(args[0]))) {
+            // inline called constants for the benefit of the interpreter
+            // TODO: nicer way to do this
+            args[0] = jl_new_struct(jl_quotenode_type, (jl_value_t*)f); jl_gc_wb(((jl_expr_t*)expr)->args, args[0]);
+        }
     }
 
     // special case for known builtin not handled by emit_builtin_call
