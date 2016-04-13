@@ -1678,3 +1678,43 @@ function sort{Tv,Ti}(x::SparseVector{Tv,Ti}; kws...)
     newnzvals = allvals[deleteat!(sinds[1:k],z)]
     SparseVector(n,newnzind,newnzvals)
 end
+
+function fkeep!(x::SparseVector, f, other, trim::Bool = true)
+    n = x.n
+    nzind = x.nzind
+    nzval = x.nzval
+
+    x_writepos = 1
+    @inbounds for xk in 1:nnz(x)
+        xi = nzind[xk]
+        xv = nzval[xk]
+        # If this element should be kept, rewrite in new position
+        if f(xi, xv, other)
+            if x_writepos != xk
+                nzind[x_writepos] = xi
+                nzval[x_writepos] = xv
+            end
+            x_writepos += 1
+        end
+    end
+
+    # Trim x's storage if necessary and desired
+    if trim
+        x_nnz = x_writepos - 1
+        if length(nzind) != x_nnz
+            resize!(nzval, x_nnz)
+            resize!(nzind, x_nnz)
+        end
+    end
+
+    x
+end
+
+immutable DroptolFuncVec <: Base.Func{3} end
+(::DroptolFuncVec){Tv,Ti}(i::Ti, x::Tv, tol::Real) = abs(x) > tol
+droptol!(x::SparseVector, tol, trim::Bool = true) = fkeep!(x, DroptolFuncVec(), tol, trim)
+
+immutable DropzerosFuncVec <: Base.Func{3} end
+(::DropzerosFuncVec){Tv,Ti}(i::Ti, x::Tv, other) = x != 0
+dropzeros!(x::SparseVector, trim::Bool = true) = fkeep!(x, DropzerosFuncVec(), nothing, trim)
+dropzeros(x::SparseVector, trim::Bool = true) = dropzeros!(copy(x), trim)
