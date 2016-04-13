@@ -1174,14 +1174,15 @@ void jl_extern_c(jl_function_t *f, jl_value_t *rt, jl_value_t *argt, char *name)
 // this is paired with jl_dump_function_ir and jl_dump_function_asm in particular ways:
 // misuse will leak memory or cause read-after-free
 extern "C" JL_DLLEXPORT
-void *jl_get_llvmf(jl_function_t *f, jl_tupletype_t *tt, bool getwrapper, bool getdeclarations)
+void *jl_get_llvmf(jl_tupletype_t *tt, bool getwrapper, bool getdeclarations)
 {
     jl_lambda_info_t *linfo = NULL;
     JL_GC_PUSH2(&linfo, &tt);
     if (tt != NULL) {
         linfo = jl_get_specialization1(tt);
         if (linfo == NULL) {
-            linfo = jl_method_lookup_by_type(jl_gf_mtable(f), tt, 0, 0);
+            linfo = jl_method_lookup_by_type(
+                ((jl_datatype_t*)jl_tparam0(tt))->name->mt, tt, 0, 0);
             if (linfo == NULL) {
                 JL_GC_POP();
                 return NULL;

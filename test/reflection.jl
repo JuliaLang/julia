@@ -276,7 +276,7 @@ definitely_not_in_sysimg() = nothing
 for (f,t) in ((definitely_not_in_sysimg,Tuple{}),
         (Base.throw_boundserror,Tuple{UnitRange{Int64},Int64}))
     t = Base.tt_cons(Core.Typeof(f), Base.to_tuple_type(t))
-    llvmf = ccall(:jl_get_llvmf, Ptr{Void}, (Any, Any, Bool, Bool), f, t, false, true)
+    llvmf = ccall(:jl_get_llvmf, Ptr{Void}, (Any, Bool, Bool), t, false, true)
     @test llvmf != C_NULL
     @test ccall(:jl_get_llvm_fptr, Ptr{Void}, (Ptr{Void},), llvmf) != C_NULL
 end
