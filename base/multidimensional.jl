@@ -627,12 +627,13 @@ end
     return B
 end
 
-@inline function setindex!(B::BitArray, x::Bool, I0::UnitRange{Int})
+@inline function setindex!(B::BitArray, x, I0::UnitRange{Int})
     @boundscheck checkbounds(B, I0)
+    y = Bool(x)
     l0 = length(I0)
     l0 == 0 && return B
     f0 = first(I0)
-    fill_chunks!(B.chunks, x, f0, l0)
+    fill_chunks!(B.chunks, y, f0, l0)
     return B
 end
 
@@ -672,13 +673,14 @@ end
     end
 end
 
-@inline function setindex!(B::BitArray, x::Bool, I0::UnitRange{Int}, I::Union{Int,UnitRange{Int}}...)
+@inline function setindex!(B::BitArray, x, I0::UnitRange{Int}, I::Union{Int,UnitRange{Int}}...)
     @boundscheck checkbounds(B, I0, I...)
     _unsafe_setindex!(B, x, I0, I...)
 end
-@generated function _unsafe_setindex!(B::BitArray, x::Bool, I0::UnitRange{Int}, I::Union{Int,UnitRange{Int}}...)
+@generated function _unsafe_setindex!(B::BitArray, x, I0::UnitRange{Int}, I::Union{Int,UnitRange{Int}}...)
     N = length(I)
     quote
+        y = Bool(x)
         f0 = first(I0)
         l0 = length(I0)
         l0 == 0 && return B
@@ -698,7 +700,7 @@ end
         @nloops($N, i, d->I[d],
                 d->nothing, # PRE
                 d->(ind += stride_lst_d - gap_lst_d), # POST
-                fill_chunks!(B.chunks, x, ind, l0) # BODY
+                fill_chunks!(B.chunks, y, ind, l0) # BODY
                 )
 
         return B
