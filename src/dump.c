@@ -57,11 +57,6 @@ static arraylist_t flagref_list;
 // during deserialization later
 static arraylist_t reinit_list;
 
-// list of any methtable objects that were deserialized in MODE_MODULE
-// and need to be rehashed after assigning the uid fields to types
-// (only used in MODE_MODULE and MODE_MODULE_POSTWORK)
-static arraylist_t methtable_list;
-
 // list of stuff that is being serialized
 // (only used by the incremental serializer in MODE_MODULE)
 static jl_array_t *serializer_worklist;
@@ -708,6 +703,17 @@ static void jl_serialize_value_(ios_t *s, jl_value_t *v)
                 arraylist_push(&reinit_list, (void*)2);
             }
         }
+        if (mode == MODE_MODULE || mode == MODE_MODULE_POSTWORK) {
+            // TypeMapLevels need to be rehashed
+            if (jl_is_mtable(v)) {
+                arraylist_push(&reinit_list, (void*)pos);
+                arraylist_push(&reinit_list, (void*)3);
+            }
+            if (jl_is_method(v) && jl_typeof(((jl_method_t*)v)->tfunc.unknown) == (jl_value_t*)jl_typemap_level_type) {
+                arraylist_push(&reinit_list, (void*)pos);
+                arraylist_push(&reinit_list, (void*)4);
+            }
+        }
         if (mode == MODE_MODULE || mode == MODE_MODULE_POSTWORK)
             pos <<= 1;
         ptrhash_put(&backref_table, v, (char*)HT_NOTFOUND + pos + 1);
@@ -896,15 +902,56 @@ static void jl_serialize_value_(ios_t *s, jl_value_t *v)
                 write_int32(s, t->size);
             }
             jl_serialize_value(s, t);
-            if ((mode == MODE_MODULE || mode == MODE_MODULE_POSTWORK) && t == jl_typename_type) {
-                if (module_in_worklist(((jl_typename_t*)v)->module)) {
-                    write_uint8(s, 0);
+            if ((mode == MODE_MODULE || mode == MODE_MODULE_POSTWORK)) {
+                if (t == jl_typename_type) {
+                    if (module_in_worklist(((jl_typename_t*)v)->module)) {
+                        write_uint8(s, 0);
+                    }
+                    else {
+                        write_uint8(s, 1);
+                        jl_typename_t *tn = (jl_typename_t*)v;
+                        jl_serialize_value(s, tn->module);
+                        jl_serialize_value(s, tn->name);
+                        return;
+                    }
                 }
-                else {
-                    write_uint8(s, 1);
-                    jl_typename_t *tn = (jl_typename_t*)v;
-                    jl_serialize_value(s, tn->module);
-                    jl_serialize_value(s, tn->name);
+                if (t == jl_typemap_level_type) {
+                    // perform some compression on the typemap levels
+                    // (which will need to be rehashed during deserialization anyhow)
+                    jl_typemap_level_t *node = (jl_typemap_level_t*)v;
+                    size_t i, l;
+                    assert( // make sure this type has the expected ordering
+                        offsetof(jl_typemap_level_t, arg1) == 0 * sizeof(jl_value_t*) &&
+                        offsetof(jl_typemap_level_t, targ) == 1 * sizeof(jl_value_t*) &&
+                        offsetof(jl_typemap_level_t, linear) == 2 * sizeof(jl_value_t*) &&
+                        offsetof(jl_typemap_level_t, key) == 3 * sizeof(jl_value_t*) &&
+                        sizeof(jl_typemap_level_t) == 4 * sizeof(jl_value_t*));
+                    if (node->arg1 != (void*)jl_nothing) {
+                        jl_array_t *a = jl_alloc_cell_1d(0);
+                        for (i = 0, l = jl_array_len(node->arg1); i < l; i++) {
+                            jl_value_t *d = jl_cellref(node->arg1, i);
+                            if (d != NULL && d != jl_nothing)
+                                jl_cell_1d_push(a, d);
+                        }
+                        jl_serialize_value(s, a);
+                    }
+                    else {
+                        jl_serialize_value(s, jl_nothing);
+                    }
+                    if (node->targ != (void*)jl_nothing) {
+                        jl_array_t *a = jl_alloc_cell_1d(0);
+                        for (i = 0, l = jl_array_len(node->targ); i < l; i++) {
+                            jl_value_t *d = jl_cellref(node->targ, i);
+                            if (d != NULL && d != jl_nothing)
+                                jl_cell_1d_push(a, d);
+                        }
+                        jl_serialize_value(s, a);
+                    }
+                    else {
+                        jl_serialize_value(s, jl_nothing);
+                    }
+                    jl_serialize_value(s, node->linear);
+                    jl_serialize_value(s, node->key);
                     return;
                 }
             }
@@ -1473,7 +1520,7 @@ static jl_value_t *jl_deserialize_value_(ios_t *s, jl_value_t *vtag, jl_value_t 
                                  NWORDS(sizeof(jl_method_t)));
         if (usetable)
             arraylist_push(&backref_list, m);
-        m->tfunc = (union jl_typemap_t)jl_deserialize_value(s, (jl_value_t**)&m->tfunc);
+        m->tfunc.unknown = jl_deserialize_value(s, (jl_value_t**)&m->tfunc);
         jl_gc_wb(m, m->tfunc.unknown);
         m->name = (jl_sym_t*)jl_deserialize_value(s, NULL);
         jl_gc_wb(m, m->name);
@@ -1670,8 +1717,6 @@ static jl_value_t *jl_deserialize_value_(ios_t *s, jl_value_t *vtag, jl_value_t 
                 }
             }
             if ((mode == MODE_MODULE || mode == MODE_MODULE_POSTWORK)) {
-                if (jl_is_mtable(v))
-                    arraylist_push(&methtable_list, v); // will resort this table, later
                 if (dt == jl_typename_type) {
                     jl_typename_t *tn = (jl_typename_t*)v;
                     tn->uid = jl_assign_type_uid(); // make sure this has a new uid
@@ -1825,6 +1870,7 @@ static void jl_finalize_serializer(ios_t *f) {
     write_int32(f, -1);
 }
 
+void jl_typemap_rehash(union jl_typemap_t ml, int8_t offs);
 static void jl_reinit_item(ios_t *f, jl_value_t *v, int how) {
     JL_TRY {
         switch (how) {
@@ -1852,6 +1898,17 @@ static void jl_reinit_item(ios_t *f, jl_value_t *v, int how) {
                 }
                 b->value = v;
                 jl_gc_wb_binding(b, v);
+                break;
+            }
+            case 3: { // rehash MethodTable
+                jl_methtable_t *mt = (jl_methtable_t*)v;
+                jl_typemap_rehash(mt->defs, 0);
+                jl_typemap_rehash(mt->cache, (mt == jl_type_type->name->mt) ? 0 : 1);
+                break;
+            }
+            case 4: { // rehash tfunc
+                jl_method_t *m = (jl_method_t*)v;
+                jl_typemap_rehash(m->tfunc, 0);
                 break;
             }
             default:
@@ -2319,7 +2376,6 @@ static void jl_recache_types(void)
     }
 }
 
-void jl_typemap_rehash(union jl_typemap_t ml, int8_t offs);
 static jl_array_t *_jl_restore_incremental(ios_t *f)
 {
     if (ios_eof(f)) {
@@ -2338,7 +2394,6 @@ static jl_array_t *_jl_restore_incremental(ios_t *f)
     arraylist_new(&backref_list, 4000);
     arraylist_push(&backref_list, jl_main_module);
     arraylist_new(&flagref_list, 0);
-    arraylist_new(&methtable_list, 0);
 
     int en = jl_gc_enable(0);
     DUMP_MODES last_mode = mode;
@@ -2356,18 +2411,9 @@ static jl_array_t *_jl_restore_incremental(ios_t *f)
     jl_deserialize_lambdas_from_mod(f); // hook up methods of external generic functions
     init_order = jl_finalize_deserializer(f); // done with f
 
-    // Resort the internal method tables
-    size_t i;
-    for (i = 0; i < methtable_list.len; i++) {
-        jl_methtable_t *mt = (jl_methtable_t*)methtable_list.items[i];
-        int8_t offs = (mt == jl_type_type->name->mt) ? 0 : 1;
-        jl_typemap_rehash(mt->cache, offs);
-    }
-
     mode = last_mode;
     jl_gc_enable(en);
     arraylist_free(&flagref_list);
-    arraylist_free(&methtable_list);
     arraylist_free(&backref_list);
     ios_close(f);
     JL_UNLOCK(dump);

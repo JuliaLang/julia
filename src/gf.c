@@ -126,7 +126,7 @@ static int sig_match_by_type_simple(jl_value_t **types, size_t n, jl_tupletype_t
             if (jl_is_type_type(a)) // decl is not Type, because it would be caught above
                 a = jl_typeof(jl_tparam0(a));
             if (!jl_types_equal(a, decl))
-                    return 0;
+                return 0;
         }
     }
     return 1;
@@ -204,9 +204,11 @@ static inline
 union jl_typemap_t mtcache_hash_lookup(jl_array_t *a, jl_value_t *ty, int8_t tparam, int8_t offs)
 {
     uintptr_t uid = ((jl_datatype_t*)ty)->uid;
+    union jl_typemap_t ml;
+    ml.unknown = jl_nothing;
     if (!uid)
-        return (union jl_typemap_t)jl_nothing;
-    union jl_typemap_t ml = (union jl_typemap_t)jl_cellref(a, uid & (a->nrows-1));
+        return ml;
+    ml.unknown = jl_cellref(a, uid & (a->nrows-1));
     if (ml.unknown != NULL && ml.unknown != jl_nothing) {
         jl_value_t *t;
         if (jl_typeof(ml.unknown) == (jl_value_t*)jl_typemap_level_type) {
@@ -220,7 +222,8 @@ union jl_typemap_t mtcache_hash_lookup(jl_array_t *a, jl_value_t *ty, int8_t tpa
         if (t == ty)
             return ml;
     }
-    return (union jl_typemap_t)jl_nothing;
+    ml.unknown = jl_nothing;
+    return ml;
 }
 
 static void mtcache_rehash(jl_array_t **pa, jl_value_t *parent, int8_t tparam, int8_t offs)
@@ -230,8 +233,9 @@ static void mtcache_rehash(jl_array_t **pa, jl_value_t *parent, int8_t tparam, i
     jl_array_t *n = jl_alloc_cell_1d(len*2);
     jl_value_t **nd = (jl_value_t**)n->data;
     size_t i;
-    for(i=0; i < len; i++) {
-        union jl_typemap_t ml = (union jl_typemap_t)d[i];
+    for (i = 0; i < len; i++) {
+        union jl_typemap_t ml;
+        ml.unknown = d[i];
         if (ml.unknown != NULL && ml.unknown != jl_nothing) {
             jl_value_t *t;
             if (jl_typeof(ml.unknown) == (jl_value_t*)jl_typemap_level_type) {
@@ -250,10 +254,24 @@ static void mtcache_rehash(jl_array_t **pa, jl_value_t *parent, int8_t tparam, i
     *pa = n;
 }
 
+// Recursively rehash a TypeMap (for example, after deserialization)
+void jl_typemap_rehash(union jl_typemap_t ml, int8_t offs);
+void jl_typemap_rehash_array(jl_array_t **pa, jl_value_t *parent, int8_t tparam, int8_t offs) {
+    size_t i, len = (*pa)->nrows;
+    for (i = 0; i < len; i++) {
+        union jl_typemap_t ml;
+        ml.unknown = jl_cellref(*pa, i);
+        assert(ml.unknown != NULL);
+        jl_typemap_rehash(ml, offs+1);
+    }
+    mtcache_rehash(pa, parent, tparam, offs);
+}
 void jl_typemap_rehash(union jl_typemap_t ml, int8_t offs) {
     if (jl_typeof(ml.unknown) == (jl_value_t*)jl_typemap_level_type) {
-        mtcache_rehash(&ml.node->targ, ml.unknown, 1, offs);
-        mtcache_rehash(&ml.node->arg1, ml.unknown, 0, offs);
+        if (ml.node->targ != (void*)jl_nothing)
+            jl_typemap_rehash_array(&ml.node->targ, ml.unknown, 1, offs);
+        if (ml.node->arg1 != (void*)jl_nothing)
+            jl_typemap_rehash_array(&ml.node->arg1, ml.unknown, 0, offs);
     }
 }
 
