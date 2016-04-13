@@ -177,8 +177,8 @@ function _iisconst(s::Symbol, sv)
 end
 
 _ieval(x::ANY, sv) =
-    ccall(:jl_interpret_toplevel_expr_in, Any, (Any, Any, Any, Any),
-          sv.mod, x, svec(), svec())
+    ccall(:jl_interpret_toplevel_expr_in, Any, (Any, Any, Ptr{Void}),
+          sv.mod, x, C_NULL)
 
 _topmod(sv::InferenceState) = _topmod(sv.mod)
 _topmod(m::Module) = ccall(:jl_base_relative_to, Any, (Any,), m)::Module

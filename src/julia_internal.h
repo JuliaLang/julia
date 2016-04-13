@@ -57,6 +57,7 @@ STATIC_INLINE jl_value_t *newstruct(jl_datatype_t *type)
 
 void jl_generate_fptr(jl_lambda_info_t *li);
 void jl_compile_linfo(jl_lambda_info_t *li);
+jl_value_t *jl_interpret_call(jl_lambda_info_t *lam, jl_value_t **args, uint32_t nargs, jl_svec_t *sparam_vals);
 
 // invoke (compiling if necessary) the jlcall function pointer for a method
 STATIC_INLINE jl_value_t *jl_call_method_internal(jl_lambda_info_t *meth, jl_value_t **args, uint32_t nargs)
@@ -67,6 +68,8 @@ STATIC_INLINE jl_value_t *jl_call_method_internal(jl_lambda_info_t *meth, jl_val
     }
     if (meth->jlcall_api == 0)
         return meth->fptr(args[0], &args[1], nargs-1);
+    else if (meth->jlcall_api == 2)
+        return jl_interpret_call(meth, args, nargs, NULL);
     else
         return ((jl_fptr_sparam_t)meth->fptr)(meth->sparam_vals, args[0], &args[1], nargs-1);
 }
