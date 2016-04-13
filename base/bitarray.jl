@@ -205,6 +205,132 @@ function fill_chunks!(Bc::Array{UInt64}, x::Bool, pos::Integer, numbits::Integer
     end
 end
 
+copy_to_bitarray_chunks!(dest::Vector{UInt64}, pos_d::Integer, src::BitArray, pos_s::Integer, numbits::Integer) =
+    copy_chunks!(dest, pos_d, src.chunks, pos_s, numbits)
+
+# pack 8 Bools encoded as one contiguous UIn64 into a single byte, e.g.:
+# 0000001:0000001:00000000:00000000:00000001:00000000:00000000:00000001 → 11001001 → 0xc9
+function pack8bools(z::UInt64)
+    z |= z >>> 7
+    z |= z >>> 14
+    z |= z >>> 28
+    z &= 0xFF
+    return z
+end
+
+function copy_to_bitarray_chunks!(Bc::Vector{UInt64}, pos_d::Int, C::Array{Bool}, pos_s::Int, numbits::Int)
+    kd0, ld0 = get_chunks_id(pos_d)
+    kd1, ld1 = get_chunks_id(pos_d + numbits - 1)
+
+    delta_kd = kd1 - kd0
+
+    u = _msk64
+    if delta_kd == 0
+        msk_d0 = msk_d1 = ~(u << ld0) | (u << (ld1+1))
+        lt0 = ld1
+    else
+        msk_d0 = ~(u << ld0)
+        msk_d1 = (u << (ld1+1))
+        lt0 = 63
+    end
+
+    bind = kd0
+    ind = pos_s
+    @inbounds if ld0 > 0
+        c = UInt64(0)
+        for j = ld0:lt0
+            c |= (UInt64(C[ind]) << j)
+            ind += 1
+        end
+        Bc[kd0] = (Bc[kd0] & msk_d0) | (c & ~msk_d0)
+        bind += 1
+    end
+
+    nc = _div64(numbits - ind + pos_s)
+    nc8 = (nc >>> 3) << 3
+    if nc8 > 0
+        ind8 = 1
+        C8 = reinterpret(UInt64, pointer_to_array(pointer(C, ind), nc8 << 6))
+        @inbounds for i = 1:nc8
+            c = UInt64(0)
+            for j = 0:7
+                c |= (pack8bools(C8[ind8]) << (j<<3))
+                ind8 += 1
+            end
+            Bc[bind] = c
+            bind += 1
+        end
+        ind += (ind8-1) << 3
+    end
+    @inbounds for i = (nc8+1):nc
+        c = UInt64(0)
+        for j = 0:63
+            c |= (UInt64(C[ind]) << j)
+            ind += 1
+        end
+        Bc[bind] = c
+        bind += 1
+    end
+    @inbounds if bind ≤ kd1
+        @assert bind == kd1
+        c = UInt64(0)
+        for j = 0:ld1
+            c |= (UInt64(C[ind]) << j)
+            ind += 1
+        end
+        Bc[kd1] = (Bc[kd1] & msk_d1) | (c & ~msk_d1)
+    end
+end
+
+function copy_to_bitarray_chunks!(Bc::Vector{UInt64}, pos_d::Int, C::Array, pos_s::Int, numbits::Int)
+    kd0, ld0 = get_chunks_id(pos_d)
+    kd1, ld1 = get_chunks_id(pos_d + numbits - 1)
+
+    delta_kd = kd1 - kd0
+
+    u = _msk64
+    if delta_kd == 0
+        msk_d0 = msk_d1 = ~(u << ld0) | (u << (ld1+1))
+        lt0 = ld1
+    else
+        msk_d0 = ~(u << ld0)
+        msk_d1 = (u << (ld1+1))
+        lt0 = 63
+    end
+
+    bind = kd0
+    ind = pos_s
+    @inbounds if ld0 > 0
+        c = UInt64(0)
+        for j = ld0:lt0
+            c |= (UInt64(Bool(C[ind])) << j)
+            ind += 1
+        end
+        Bc[kd0] = (Bc[kd0] & msk_d0) | (c & ~msk_d0)
+        bind += 1
+    end
+
+    nc = _div64(numbits - ind + pos_s)
+    @inbounds for i = 1:nc
+        c = UInt64(0)
+        for j = 0:63
+            c |= (UInt64(Bool(C[ind])) << j)
+            ind += 1
+        end
+        Bc[bind] = c
+        bind += 1
+    end
+
+    @inbounds if bind ≤ kd1
+        @assert bind == kd1
+        c = UInt64(0)
+        for j = 0:ld1
+            c |= (UInt64(Bool(C[ind])) << j)
+            ind += 1
+        end
+        Bc[kd1] = (Bc[kd1] & msk_d1) | (c & ~msk_d1)
+    end
+end
 
 ## custom iterator ##
 start(B::BitArray) = 0
@@ -268,15 +394,26 @@ function copy!(dest::BitArray, src::BitArray)
     return dest
 end
 
-function copy!(dest::BitArray, doffs::Integer, src::BitArray, soffs::Integer, n::Integer)
+function unsafe_copy!(dest::BitArray, doffs::Integer, src::Union{BitArray,Array}, soffs::Integer, n::Integer)
+    copy_to_bitarray_chunks!(dest.chunks, doffs, src, soffs, n)
+    return dest
+end
+
+function copy!(dest::BitArray, doffs::Integer, src::Array, soffs::Integer, n::Integer)
     n == 0 && return dest
     soffs < 1 && throw(BoundsError(src, soffs))
     doffs < 1 && throw(BoundsError(dest, doffs))
     soffs+n-1 > length(src) && throw(BoundsError(src, length(src)+1))
     doffs+n-1 > length(dest) && throw(BoundsError(dest, length(dest)+1))
-    copy_chunks!(dest.chunks, doffs, src.chunks, soffs, n)
-    return dest
+    return unsafe_copy!(dest, doffs, src, soffs, n)
 end
+
+function copy!(dest::BitArray, src::Array)
+    length(src) > length(dest) && throw(BoundsError(dest, length(dest)+1))
+    length(src) == 0 && return det
+    return unsafe_copy!(dest, 1, src, 1, length(src))
+end
+
 
 function reshape{N}(B::BitArray, dims::NTuple{N,Int})
     prod(dims) == length(B) ||
@@ -325,6 +462,15 @@ function convert{T,N}(::Type{BitArray{N}}, A::AbstractArray{T,N})
         end
         Bc[end] = c
     end
+    return B
+end
+
+function convert{N}(::Type{BitArray{N}}, A::Array{Bool,N})
+    B = BitArray(size(A))
+    Bc = B.chunks
+    l = length(B)
+    l == 0 && return B
+    copy_to_bitarray_chunks!(Bc, 1, A, 1, l)
     return B
 end
 
