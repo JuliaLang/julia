@@ -187,6 +187,27 @@ for T in (ASCIIString, UTF8String, UTF16String, UTF32String)
     end
 end
 
+# SubString conversions, issue #13023
+for fromT in (ASCIIString, UTF8String, UTF16String, UTF32String)
+    fstr = convert(fromT, "foo bar")
+    for toT in (ASCIIString, UTF8String, UTF16String, UTF32String)
+        sstr = convert(SubString{toT}, fstr)
+        @test fstr == sstr
+        @test typeof(sstr) == SubString{toT}
+        tstr = convert(fromT, sstr)
+        @test fstr == tstr
+        @test typeof(tstr) == fromT
+        ustr = convert(SubString{fromT}, sstr)
+        @test sstr == tstr == ustr
+        @test typeof(ustr) == SubString{fromT}
+    end
+    sstr = convert(SubString, fstr)
+    @test typeof(sstr) == SubString{fromT}
+    tstr = convert(fromT, sstr)
+    @test fstr == tstr
+    @test typeof(fstr) == typeof(tstr)
+end
+
 ## Repeat strings ##
 
 # issue #7764
