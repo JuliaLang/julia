@@ -294,6 +294,19 @@ for d in (Dict("\n" => "\n", "1" => "\n", "\n" => "2"),
     @test !isempty(summary(values(d)))
 end
 
+# Issue #15739 - Compact REPL printouts of an `Associative` use brackets when appropriate
+let d = Dict((1=>2) => (3=>45), (3=>10) => (10=>11))
+    buf = IOBuffer()
+    showcompact(buf, d)
+
+    # Check explicitly for the expected strings, since the CPU bitness effects
+    # dictionary ordering.
+    result = bytestring(buf)
+    @test contains(result, "Dict")
+    @test contains(result, "(1=>2)=>(3=>45)")
+    @test contains(result, "(3=>10)=>(10=>11)")
+end
+
 # issue #9463
 type Alpha end
 Base.show(io::IO, ::Alpha) = print(io,"α")
