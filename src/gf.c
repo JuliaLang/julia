@@ -465,6 +465,8 @@ static int is_kind(jl_value_t *v)
 static jl_value_t *ml_matches(jl_methlist_t *ml, jl_value_t *type,
                               jl_sym_t *name, int lim);
 
+extern void (*jl_linfo_tracer)(jl_lambda_info_t *tracee);
+
 static jl_lambda_info_t *cache_method(jl_methtable_t *mt, jl_tupletype_t *type,
                                       jl_lambda_info_t *method, jl_methlist_t *m,
                                       jl_svec_t *sparams)
@@ -839,6 +841,8 @@ static jl_lambda_info_t *cache_method(jl_methtable_t *mt, jl_tupletype_t *type,
     }
     JL_GC_POP();
     JL_UNLOCK(codegen);
+    if (method->traced)
+        jl_linfo_tracer(newmeth);
     return newmeth;
 }
 
@@ -2020,6 +2024,8 @@ JL_DLLEXPORT jl_function_t *jl_new_generic_function(jl_sym_t *name, jl_module_t 
     return jl_new_generic_function_with_supertype(name, module, jl_function_type, 0);
 }
 
+
+extern void (*jl_newmeth_tracer)(jl_methlist_t *tracee);
 void jl_add_method_to_table(jl_methtable_t *mt, jl_tupletype_t *types, jl_lambda_info_t *meth,
                             jl_svec_t *tvars, int8_t isstaged)
 {
@@ -2035,7 +2041,9 @@ void jl_add_method_to_table(jl_methtable_t *mt, jl_tupletype_t *types, jl_lambda
         meth->unspecialized = NULL;
     }
     meth->name = n;
-    (void)jl_method_table_insert(mt, types, meth, tvars, isstaged);
+    jl_methlist_t *newmeth = jl_method_table_insert(mt, types, meth, tvars, isstaged);
+    if (jl_newmeth_tracer)
+        jl_newmeth_tracer(newmeth);
     JL_GC_POP();
 }
 
