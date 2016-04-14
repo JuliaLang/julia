@@ -238,8 +238,9 @@ importall .Serializer
 include("channels.jl")
 include("multi.jl")
 include("workerpool.jl")
+include("pmap.jl")
 include("managers.jl")
-include("mapiterator.jl")
+include("asyncmap.jl")
 
 # code loading
 include("loading.jl")

@@ -1003,5 +1003,33 @@ export call
 # 1933
 @deprecate_binding SingleAsyncWork AsyncCondition
 
+
 # #12872
 @deprecate istext istextmime
+
+#15409
+function pmap(f, c...; err_retry=nothing, err_stop=nothing, pids=nothing)
+
+    if err_retry != nothing
+        depwarn("err_retry is deprecated, use pmap(retry(f), c...).", :pmap)
+        if err_retry == true
+            f = retry(f)
+        end
+    end
+
+    if err_stop != nothing
+        depwarn("err_stop is deprecated, use pmap(@catch(f), c...).", :pmap)
+        if err_stop == false
+            f = @catch(f)
+        end
+    end
+
+    if pids == nothing
+        p = default_worker_pool()
+    else
+        depwarn("pids is deprecated, use pmap(::WorkerPool, f, c...).", :pmap)
+        p = WorkerPool(pids)
+    end
+
+    return pmap(p, f, c...)
+end
