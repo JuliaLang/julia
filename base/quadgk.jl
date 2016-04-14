@@ -198,16 +198,16 @@ end
 # derivative p'(z), returning (p,p').
 function eigpoly(b,z,m=length(b)+1)
     d1 = z
-    d1deriv = d2 = one(z);
-    d2deriv = zero(z);
+    d1deriv = d2 = one(z)
+    d2deriv = zero(z)
     for i = 2:m
         b2 = b[i-1]^2
-        d = z * d1 - b2 * d2;
-        dderiv = d1 + z * d1deriv - b2 * d2deriv;
-        d2 = d1;
-        d1 = d;
-        d2deriv = d1deriv;
-        d1deriv = dderiv;
+        d = z * d1 - b2 * d2
+        dderiv = d1 + z * d1deriv - b2 * d2deriv
+        d2 = d1
+        d1 = d
+        d2deriv = d1deriv
+        d1deriv = dderiv
     end
     return (d1, d1deriv)
 end

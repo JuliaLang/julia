@@ -478,7 +478,7 @@ end
 
 function spawn(cmd::Cmd, stdios::StdIOSet, exitcb::Callback, closecb::Callback; chain::Nullable{ProcessChain}=Nullable{ProcessChain}())
     loop = eventloop()
-    pp = Process(cmd, C_NULL, stdios[1], stdios[2], stdios[3]);
+    pp = Process(cmd, C_NULL, stdios[1], stdios[2], stdios[3])
     pp.exitcb = exitcb
     pp.closecb = closecb
     setup_stdio(stdios) do in, out, err

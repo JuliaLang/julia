@@ -426,13 +426,13 @@ end
 
 function getindex{T}(r::FloatRange{T}, i::Integer)
     @_inline_meta
-    @boundscheck checkbounds(r, i);
+    @boundscheck checkbounds(r, i)
     convert(T, (r.start + (i-1)*r.step)/r.divisor)
 end
 
 function getindex{T}(r::LinSpace{T}, i::Integer)
     @_inline_meta
-    @boundscheck checkbounds(r, i);
+    @boundscheck checkbounds(r, i)
     convert(T, ((r.len-i)*r.start + (i-1)*r.stop)/r.divisor)
 end
 
