@@ -408,8 +408,8 @@ different sizes::
 If one process handles both 800x800 matrices and another handles both
 600x600 matrices, we will not get as much scalability as we could. The
 solution is to make a local task to "feed" work to each process when
-it completes its current task. This can be seen in the implementation of
-:func:`pmap`::
+it completes its current task. For example, consider a simple :func:`pmap`
+implementation::
 
     function pmap(f, lst)
         np = nprocs()  # determine the number of processes available
@@ -428,7 +428,7 @@ it completes its current task. This can be seen in the implementation of
                             if idx > n
                                 break
                             end
-                            results[idx] = remotecall_fetch(p, f, lst[idx])
+                            results[idx] = remotecall_fetch(f, p, lst[idx])
                         end
                     end
                 end

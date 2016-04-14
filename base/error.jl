@@ -67,7 +67,6 @@ retry(read, UVError)(io)
 """
 function retry(f::Function, condition::Function=e->true;
                n::Int=3, max_delay::Int=10)
-
     (args...) -> begin
         delay = 0.05
         for i = 1:n
