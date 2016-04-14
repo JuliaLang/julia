@@ -972,4 +972,9 @@ if VERSION < v"0.5.0-dev+977"
     foreach(f, itrs...) = (for z in zip(itrs...); f(z...); end; nothing)
 end
 
+if !isdefined(Base, :istextmime)
+    export istextmime
+    istextmime(m::@compat(Union{MIME,AbstractString})) = istext(m)
+end
+
 end # module
