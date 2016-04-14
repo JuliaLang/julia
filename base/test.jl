@@ -89,6 +89,8 @@ end
 
 The test condition couldn't be evaluated due to an exception, or
 it evaluated to something other than a `Bool`.
+In the case of `@test_fail_expected` it is used to alert for an
+unexpected `Pass` `Result`.
 """
 type Error <: Result
     test_type::Symbol
@@ -127,15 +129,20 @@ end
 """
     Broken
 
-The test condition is evaluated to be false but should not be.
+The test condition either has been explicitly skipped or is the expected
+(failed) result of a broken test.
 """
 type Broken <: Result
     test_type::Symbol
     orig_expr
 end
 function Base.show(io::IO, t::Broken)
-    print_with_color(:white, io, "Test Broken\n")
-    print(io, "  Expression: ", t.orig_expr)
+    print_with_color(:yellow, io, "Test Broken\n")
+    if t.test_type == :skipped
+        println(io, "  Skipped: ", t.orig_expr)
+    else
+        println(io, "Expression: ", t.orig_expr)
+    end
 end
 
 #-----------------------------------------------------------------------
@@ -187,7 +194,7 @@ end
 """
     @test_fail_expected ex
 
-For use to indcate a test that should pass but currently consistantly
+For use to indicate a test that should pass but currently consistently
 fails.
 Tests that the expression `ex` evaluates to `false`.
 Returns a `Broken` `Result` if it does, an `Error` `Result` if it is
@@ -204,13 +211,13 @@ end
 """
     @test_skip ex
 
-For use to indcate a test that should pass but currently intermittently
+For use to indicate a test that should pass but currently intermittently
 fails.
-Does not evaluate the expression
+Does not evaluate the expression.
 """
 macro test_skip(ex)
     orig_ex = Expr(:quote,ex)
-    testres = Broken(:test, orig_ex)
+    testres = Broken(:skipped, orig_ex)
     record(get_testset(), testres)
 end
 
