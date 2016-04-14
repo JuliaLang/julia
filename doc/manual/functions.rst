@@ -522,7 +522,7 @@ are evaluated. For example, given this definition::
 the ``b`` in ``a=b`` refers to a ``b`` in an outer scope, not the
 subsequent argument ``b``. However, if ``a`` and ``b`` were keyword
 arguments instead, then both would be created in the same scope and
-the ``b`` in ``a=b`` would refer the the subsequent argument ``b``
+the ``b`` in ``a=b`` would refer to the subsequent argument ``b``
 (shadowing any ``b`` in an outer scope), which would result in an
 undefined variable error (since the default expressions are evaluated
 left-to-right, and ``b`` has not been assigned yet).
