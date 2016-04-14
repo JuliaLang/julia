@@ -1215,7 +1215,7 @@
               ,.(map (lambda (x) `(,what ,x)) vars)
               ,.(reverse assigns)))
         (let ((x (car b)))
-          (cond ((assignment-like? x)
+          (cond ((or (assignment-like? x) (function-def? x))
                  (loop (cdr b)
                        (cons (assigned-name (cadr x)) vars)
                        (cons `(,(car x) ,(decl-var (cadr x)) ,(caddr x))
