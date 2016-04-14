@@ -165,8 +165,12 @@ reduce(op, a::Number) = a
 
 ## conditions and results of short-circuiting
 
+immutable Predicate{F} <: Func{1}
+    f::F
+end
+(pred::Predicate)(x) = pred.f(x)::Bool
+
 const ShortCircuiting = Union{typeof(&), typeof(|)}
-const ReturnsBool     = Union{EqX, Predicate}
 
 shortcircuits(::typeof(&), x::Bool) = !x
 shortcircuits(::typeof(|),  x::Bool) =  x
@@ -201,8 +205,8 @@ end
 mapreduce_no_sc(f, op, itr::Any)           =  mapfoldl(f, op, itr)
 mapreduce_no_sc(f, op, itr::AbstractArray) = _mapreduce(f, op, itr)
 
-mapreduce_sc(f::Function,    op, itr) = mapreduce_no_sc(f, op, itr)
-mapreduce_sc(f::ReturnsBool, op, itr) = mapreduce_sc_impl(f, op, itr)
+mapreduce_sc(f::Function,  op, itr) = mapreduce_no_sc(f, op, itr)
+mapreduce_sc(f::Predicate, op, itr) = mapreduce_sc_impl(f, op, itr)
 
 mapreduce_sc(f::typeof(identity), op, itr) =
     eltype(itr) <: Bool ?
@@ -411,7 +415,7 @@ all(f::typeof(identity),     itr) =
 
 ## in & contains
 
-in(x, itr) = any(EqX(x), itr)
+in(x, itr) = any(Predicate(y -> y == x), itr)
 
 const ∈ = in
 ∉(x, itr)=!∈(x, itr)
@@ -436,13 +440,10 @@ function count(pred, itr)
     return n
 end
 
-immutable NotEqZero <: Func{1} end
-(::NotEqZero)(x) = x != 0
-
 """
     countnz(A)
 
 Counts the number of nonzero values in array `A` (dense or sparse). Note that this is not a constant-time operation.
 For sparse matrices, one should usually use `nnz`, which returns the number of stored values.
 """
-countnz(a) = count(NotEqZero(), a)
+countnz(a) = count(x -> x != 0, a)

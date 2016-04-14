@@ -786,30 +786,23 @@ function fkeep!(A::SparseMatrixCSC, f, other, trim::Bool = true)
     A
 end
 
-immutable TrilFunc <: Base.Func{4} end
-immutable TriuFunc <: Base.Func{4} end
-(::TrilFunc){Tv,Ti}(i::Ti, j::Ti, x::Tv, k::Integer) = i + k >= j
-(::TriuFunc){Tv,Ti}(i::Ti, j::Ti, x::Tv, k::Integer) = j >= i + k
 function tril!(A::SparseMatrixCSC, k::Integer = 0, trim::Bool = true)
     if k > A.n-1 || k < 1-A.m
         throw(ArgumentError("requested diagonal, $k, out of bounds in matrix of size ($(A.m),$(A.n))"))
     end
-    fkeep!(A, TrilFunc(), k, trim)
+    fkeep!(A, (i, j, x, k) -> i + k >= j, k, trim)
 end
 function triu!(A::SparseMatrixCSC, k::Integer = 0, trim::Bool = true)
     if k > A.n-1 || k < 1-A.m
         throw(ArgumentError("requested diagonal, $k, out of bounds in matrix of size ($(A.m),$(A.n))"))
     end
-    fkeep!(A, TriuFunc(), k, trim)
+    fkeep!(A, (i, j, x, k) -> j >= i + k, k, trim)
 end
 
-immutable DroptolFunc <: Base.Func{4} end
-(::DroptolFunc){Tv,Ti}(i::Ti, j::Ti, x::Tv, tol::Real) = abs(x) > tol
-droptol!(A::SparseMatrixCSC, tol, trim::Bool = true) = fkeep!(A, DroptolFunc(), tol, trim)
+droptol!(A::SparseMatrixCSC, tol, trim::Bool = true) =
+    fkeep!(A, (i, j, x, tol) -> abs(x) > tol, tol, trim)
 
-immutable DropzerosFunc <: Base.Func{4} end
-(::DropzerosFunc){Tv,Ti}(i::Ti, j::Ti, x::Tv, other) = x != 0
-dropzeros!(A::SparseMatrixCSC, trim::Bool = true) = fkeep!(A, DropzerosFunc(), nothing, trim)
+dropzeros!(A::SparseMatrixCSC, trim::Bool = true) = fkeep!(A, (i, j, x, other) -> x != 0, nothing, trim)
 dropzeros(A::SparseMatrixCSC, trim::Bool = true) = dropzeros!(copy(A), trim)
 
 
