@@ -29,8 +29,8 @@ the results are what you expect. It can be helpful to ensure your code
 still works after you make changes, and can be used when developing as
 a way of specifying the behaviors your code should have when complete.
 
-Simple unit testing can be performed with the :func:`@test`, :func:`@test_fail_expected`
-and :func:`@test_throws` macros:
+Simple unit testing can be performed with the :func:`@test` and :func:`@test_throws`
+macros:
 
 .. function:: @test ex
 
@@ -249,6 +249,35 @@ writing new tests.
    .. Docstring generated from Julia source
 
    Test two floating point numbers ``a`` and ``b`` for equality taking in account a margin of tolerance given by ``tol``\ .
+
+Broken Tests
+------------
+
+If a test fails consistently it can be changed to use the :func:`@test_fail_expected`
+macro. This will denote the test as ``Broken`` if the test continues to fail
+and alerts the user via an ``Error`` if the test succeeds.
+
+.. function:: @test_fail_expected ex
+
+   .. Docstring generated from Julia source
+
+   For use to indicate a test that should pass but currently consistently
+   fails.
+   Tests that the expression ``ex`` evaluates to ``false``\ .
+   Returns a ``Broken`` ``Result`` if it does, an ``Error`` ``Result`` if it is
+   ``true``, and an ``Error`` ``Result`` if it could not be evaluated.
+
+:func:`@test_skipped` is also available for use to skip a test without
+evaluation in the case of intermittent failures. This test will not run but
+gives a `Broken` `Result`.
+
+.. function:: @test_skipped ex
+
+   .. Docstring generated from Julia source
+
+   For use to indicate a test that should pass but currently intermittently
+   fails.
+   Does not evaluate the expression.
 
 Creating Custom ``AbstractTestSet`` Types
 -----------------------------------------
