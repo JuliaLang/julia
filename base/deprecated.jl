@@ -1008,8 +1008,12 @@ export call
 @deprecate istext istextmime
 
 #15409
-function pmap(f, c...; err_retry=nothing, err_stop=nothing, pids=nothing)
+# Deprecated definition of pmap with keyword arguments.
+# When this is removed the following definition needs to be uncommented
+# and added to pmap.jl
+# pmap(f, c...) = pmap(default_worker_pool(), f, c...)
 
+function pmap(f, c...; err_retry=nothing, err_stop=nothing, pids=nothing)
     if err_retry != nothing
         depwarn("err_retry is deprecated, use pmap(retry(f), c...).", :pmap)
         if err_retry == true
@@ -1033,3 +1037,5 @@ function pmap(f, c...; err_retry=nothing, err_stop=nothing, pids=nothing)
 
     return pmap(p, f, c...)
 end
+
+
