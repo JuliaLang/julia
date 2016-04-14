@@ -414,24 +414,24 @@ test_parseerror("if false\nelseif\nend", "missing condition in \"elseif\" at non
 @test expand(parse("foo(y = (global x)) = y")) == Expr(:error, "misplaced \"global\" declaration")
 
 # issue #15844
-function glob_fn(x)
+function f15844(x)
     x
 end
 
+g15844 = let
+    local function f15844(x::Int32)
+        2x
+    end
+end
+
 function add_method_to_glob_fn!()
-    global function glob_fn(x::Int)
-        -x
+    global function f15844(x::Int64)
+        3x
     end
 end
 
-function add_method_to_local_fn!()
-    local function glob_fn(x::Int)
-        -x
-    end
-end
-
-@test glob_fn(1) == 1
-@test add_method_to_local_fn!() ≠ glob_fn
-@test glob_fn(1) == 1
-@test add_method_to_glob_fn!() == glob_fn
-@test glob_fn(1) == -1
+add_method_to_glob_fn!()
+@test g15844 !== f15844
+@test g15844(Int32(1)) == 2
+@test f15844(Int32(1)) == 1
+@test f15844(Int64(1)) == 3
