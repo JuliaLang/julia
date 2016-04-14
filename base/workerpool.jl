@@ -15,7 +15,6 @@ end
 Create a WorkerPool from a vector of worker ids.
 """
 function WorkerPool(workers::Vector{Int})
-
     pool = WorkerPool()
 
     # Add workers to the pool...
