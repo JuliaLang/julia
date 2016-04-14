@@ -48,13 +48,13 @@ void jl_critical_error(int sig, bt_context_t *context, uintptr_t *bt_data, size_
     // This function is not allowed to reference any TLS variables.
     // We need to explicitly pass in the TLS buffer pointer when
     // we make `jl_filename` and `jl_lineno` thread local.
-    size_t n = *bt_size;
+    size_t i, n = *bt_size;
     if (sig)
         jl_safe_printf("\nsignal (%d): %s\n", sig, strsignal(sig));
     jl_safe_printf("while loading %s, in expression starting on line %d\n", jl_filename, jl_lineno);
     if (context)
         *bt_size = n = rec_backtrace_ctx(bt_data, JL_MAX_BT_SIZE, context);
-    for(size_t i=0; i < n; i++)
+    for (i = 0; i < n; i++)
         jl_gdblookup(bt_data[i] - 1);
     gc_debug_print_status();
     gc_debug_critical_error();
