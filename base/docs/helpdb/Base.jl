@@ -8668,6 +8668,7 @@ readavailable
     remotecall(func, id, args...)
 
 Call a function asynchronously on the given arguments on the specified process. Returns a `Future`.
+If using keyword arguments for `func`, `remotecall` can be called with `remotecall(()->func(args...; kw...), id)`.
 """
 remotecall
 
