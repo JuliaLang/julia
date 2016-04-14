@@ -96,19 +96,12 @@ function afoldl(op,a,b,c,d,e,f,g,h,i,j,k,l,m,n,o,p,qs...)
     y
 end
 
-immutable ElementwiseMaxFun end
-(::ElementwiseMaxFun)(x, y) = max(x,y)
-
-immutable ElementwiseMinFun end
-(::ElementwiseMinFun)(x, y) = min(x, y)
-
-for (op,F) in ((:+,:+), (:*,:*), (:&,:&), (:|,:|),
-               (:$,:$), (:min,:(ElementwiseMinFun())), (:max,:(ElementwiseMaxFun())), (:kron,:kron))
+for op in (:+, :*, :&, :|, :$, :min, :max, :kron)
     @eval begin
         # note: these definitions must not cause a dispatch loop when +(a,b) is
         # not defined, and must only try to call 2-argument definitions, so
         # that defining +(a,b) is sufficient for full functionality.
-        ($op)(a, b, c, xs...) = afoldl($F, ($op)(($op)(a,b),c), xs...)
+        ($op)(a, b, c, xs...) = afoldl($op, ($op)(($op)(a,b),c), xs...)
         # a further concern is that it's easy for a type like (Int,Int...)
         # to match many definitions, so we need to keep the number of
         # definitions down to avoid losing type information.

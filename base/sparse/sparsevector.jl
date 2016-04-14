@@ -4,12 +4,6 @@
 
 import Base: Func, scalarmax, scalarmin, sort
 
-immutable ComplexFun <: Func{2} end
-(::ComplexFun)(x::Real, y::Real) = complex(x, y)
-
-immutable DotFun <: Func{2} end
-(::DotFun)(x::Number, y::Number) = conj(x) * y
-
 typealias UnaryOp Union{Function, Func{1}}
 typealias BinaryOp Union{Function, Func{2}}
 
@@ -1122,16 +1116,16 @@ end
 
 # definition of other binary functions
 
-for (op, fun, TF, mode) in [(:max, :(typeof(scalarmax)), :Real, 2),
-                            (:min, :(typeof(scalarmin)), :Real, 2),
-                            (:complex, :ComplexFun, :Real, 1)]
+for (op, TF, mode) in [(:max, :Real, 2),
+                       (:min, :Real, 2),
+                       (:complex, :Real, 1)]
     @eval begin
         $(op){Tx<:$(TF),Ty<:$(TF)}(x::AbstractSparseVector{Tx}, y::AbstractSparseVector{Ty}) =
-            _binarymap($(fun)(), x, y, $mode)
+            _binarymap($(op), x, y, $mode)
         $(op){Tx<:$(TF),Ty<:$(TF)}(x::StridedVector{Tx}, y::AbstractSparseVector{Ty}) =
-            _binarymap($(fun)(), x, y, $mode)
+            _binarymap($(op), x, y, $mode)
         $(op){Tx<:$(TF),Ty<:$(TF)}(x::AbstractSparseVector{Tx}, y::StridedVector{Ty}) =
-            _binarymap($(fun)(), x, y, $mode)
+            _binarymap($(op), x, y, $mode)
     end
 end
 
@@ -1284,7 +1278,7 @@ function dot{Tx<:Number,Ty<:Number}(x::AbstractSparseVector{Tx}, y::AbstractSpar
     xnzval = nonzeros(x)
     ynzval = nonzeros(y)
 
-    _spdot(DotFun(),
+    _spdot(dot,
            1, length(xnzind), xnzind, xnzval,
            1, length(ynzind), ynzind, ynzval)
 end
@@ -1441,7 +1435,7 @@ Ac_mul_B!{Tx,Ty}(y::StridedVector{Ty}, A::SparseMatrixCSC, x::AbstractSparseVect
     Ac_mul_B!(one(Tx), A, x, zero(Ty), y)
 
 Ac_mul_B!{Tx,Ty}(α::Number, A::SparseMatrixCSC, x::AbstractSparseVector{Tx}, β::Number, y::StridedVector{Ty}) =
-    _At_or_Ac_mul_B!(DotFun(), α, A, x, β, y)
+    _At_or_Ac_mul_B!(dot, α, A, x, β, y)
 
 function _At_or_Ac_mul_B!{Tx,Ty}(tfun::BinaryOp,
                                  α::Number, A::SparseMatrixCSC, x::AbstractSparseVector{Tx},
@@ -1483,7 +1477,7 @@ At_mul_B(A::SparseMatrixCSC, x::AbstractSparseVector) =
     _At_or_Ac_mul_B(*, A, x)
 
 Ac_mul_B(A::SparseMatrixCSC, x::AbstractSparseVector) =
-    _At_or_Ac_mul_B(DotFun(), A, x)
+    _At_or_Ac_mul_B(dot, A, x)
 
 function _At_or_Ac_mul_B{TvA,TiA,TvX,TiX}(tfun::BinaryOp, A::SparseMatrixCSC{TvA,TiA}, x::AbstractSparseVector{TvX,TiX})
     m, n = size(A)
@@ -1686,11 +1680,7 @@ function fkeep!(x::SparseVector, f, other, trim::Bool = true)
     x
 end
 
-immutable DroptolFuncVec <: Base.Func{3} end
-(::DroptolFuncVec){Tv,Ti}(i::Ti, x::Tv, tol::Real) = abs(x) > tol
-droptol!(x::SparseVector, tol, trim::Bool = true) = fkeep!(x, DroptolFuncVec(), tol, trim)
+droptol!(x::SparseVector, tol, trim::Bool = true) = fkeep!(x, (i, x, tol) -> abs(x) > tol, tol, trim)
 
-immutable DropzerosFuncVec <: Base.Func{3} end
-(::DropzerosFuncVec){Tv,Ti}(i::Ti, x::Tv, other) = x != 0
-dropzeros!(x::SparseVector, trim::Bool = true) = fkeep!(x, DropzerosFuncVec(), nothing, trim)
+dropzeros!(x::SparseVector, trim::Bool = true) = fkeep!(x, (i, x, other) -> x != 0, nothing, trim)
 dropzeros(x::SparseVector, trim::Bool = true) = dropzeros!(copy(x), trim)

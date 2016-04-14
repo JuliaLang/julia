@@ -95,14 +95,11 @@ end
 varzm{T}(A::AbstractArray{T}, region; corrected::Bool=true) =
     varzm!(reducedim_initarray(A, region, 0, real(momenttype(T))), A; corrected=corrected)
 
-immutable CentralizedAbs2Fun{T<:Number} <: Func{1}
-    m::T
-end
-(f::CentralizedAbs2Fun)(x) = abs2(x - f.m)
+centralizedabs2fun(m::Number) = x -> abs2(x - m)
 centralize_sumabs2(A::AbstractArray, m::Number) =
-    mapreduce(CentralizedAbs2Fun(m), +, A)
+    mapreduce(centralizedabs2fun(m), +, A)
 centralize_sumabs2(A::AbstractArray, m::Number, ifirst::Int, ilast::Int) =
-    mapreduce_impl(CentralizedAbs2Fun(m), +, A, ifirst, ilast)
+    mapreduce_impl(centralizedabs2fun(m), +, A, ifirst, ilast)
 
 @generated function centralize_sumabs2!{S,T,N}(R::AbstractArray{S}, A::AbstractArray{T,N}, means::AbstractArray)
     quote
