@@ -858,6 +858,8 @@ let
     @test a == [(2,10),(4,20),(6,30)]
 end
 
+@test istextmime("text/html") && !istextmime("image/png")
+
 module CallTest
 
 using Base.Test, Compat
