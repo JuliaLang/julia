@@ -1045,9 +1045,11 @@ export
 # errors
     assert,
     backtrace,
+    @catch,
     catch_backtrace,
     error,
     rethrow,
+    retry,
     systemerror,
 
 # stack traces
@@ -1211,7 +1213,9 @@ export
 
 # multiprocessing
     addprocs,
+    asyncmap,
     ClusterManager,
+    default_worker_pool,
     fetch,
     init_worker,
     interrupt,
@@ -1233,6 +1237,7 @@ export
     timedwait,
     wait,
     workers,
+    WorkerPool,
 
 # multimedia I/O
     Display,

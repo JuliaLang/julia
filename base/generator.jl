@@ -22,6 +22,16 @@ function next(g::Generator, s)
     g.f(v), s2
 end
 
+
+"""
+    generate(f, c...) -> iterator
+
+Return an iterator applying `f` to each element of `c`.
+For multiple collection arguments, apply f elementwise.
+"""
+generate(f, c...) = Generator(f, c...)
+
+
 ## iterator traits
 
 abstract IteratorSize

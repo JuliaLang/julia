@@ -63,8 +63,6 @@ function _ntuple{F,N,M}(out::NTuple{M}, f::F, ::Type{Val{N}})
     _ntuple((out..., f(M+1)), f, Val{N})
 end
 
-# 0 argument function
-map(f) = f()
 # 1 argument function
 map(f, t::Tuple{})              = ()
 map(f, t::Tuple{Any,})          = (f(t[1]),)
@@ -81,7 +79,7 @@ heads(t::Tuple, ts::Tuple...) = (t[1], heads(ts...)...)
 tails() = ()
 tails(t::Tuple, ts::Tuple...) = (tail(t), tails(ts...)...)
 map(f, ::Tuple{}, ts::Tuple...) = ()
-map(f, ts::Tuple...) = (f(heads(ts...)...), map(f, tails(ts...)...)...)
+map(f, t::Tuple, ts::Tuple...) = (f(heads(t, ts...)...), map(f, tails(t, ts...)...)...)
 
 # type-stable padding
 fill_to_length{N}(t::Tuple, val, ::Type{Val{N}}) = _ftl((), val, Val{N}, t...)

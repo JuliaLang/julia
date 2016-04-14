@@ -161,6 +161,25 @@ rest_iteratorsize(a) = SizeUnknown()
 rest_iteratorsize(::IsInfinite) = IsInfinite()
 iteratorsize{I,S}(::Type{Rest{I,S}}) = rest_iteratorsize(iteratorsize(I))
 
+
+"""
+    head_and_tail(c, n) -> head, tail
+
+Returns `head`: the first `n` elements of `c`;
+and `tail`: an iterator over the remaining elements.
+"""
+function head_and_tail(c, n)
+    head = Vector{eltype(c)}(n)
+    s = start(c)
+    i = 0
+    while i < n && !done(c, s)
+        i += 1
+        head[i], s = next(c, s)
+    end
+    return resize!(head, i), rest(c, s)
+end
+
+
 # Count -- infinite counting
 
 immutable Count{S<:Number}
@@ -446,4 +465,53 @@ end
 @inline function done(f::Flatten, state)
     s, inner, s2 = state
     return done(f.it, s) && done(inner, s2)
+end
+
+
+"""
+    partition(collection, n) -> iterator
+
+Iterate over a collection `n` elements at a time.
+
+```jldoctest
+julia> collect(partition([1,2,3,4,5], 2))
+3-element Array{Array{Int64,1},1}:
+ [1,2]
+ [3,4]
+ [5]
+```
+"""
+partition{T}(c::T, n::Int) = PartitionIterator{T}(c, n)
+
+
+type PartitionIterator{T}
+    c::T
+    n::Int
+end
+
+eltype{T}(::Type{PartitionIterator{T}}) = Vector{eltype(T)}
+
+function length(itr::PartitionIterator)
+    l = length(itr.c)
+    return div(l, itr.n) + ((mod(l, itr.n) > 0) ? 1 : 0)
+end
+
+start(itr::PartitionIterator) = start(itr.c)
+
+done(itr::PartitionIterator, state) = done(itr.c, state)
+
+function next{T<:Vector}(itr::PartitionIterator{T}, state)
+    l = state
+    r = min(state + itr.n-1, length(itr.c))
+    return sub(itr.c, l:r), r + 1
+end
+
+function next(itr::PartitionIterator, state)
+    v = Vector{eltype(itr.c)}(itr.n)
+    i = 0
+    while !done(itr.c, state) && i < itr.n
+        i += 1
+        v[i], state = next(itr.c, state)
+    end
+    return resize!(v, i), state
 end

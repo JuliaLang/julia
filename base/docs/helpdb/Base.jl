@@ -242,21 +242,6 @@ If `types` is specified, returns an array of methods whose types match.
 methods
 
 """
-    pmap(f, lsts...; err_retry=true, err_stop=false, pids=workers())
-
-Transform collections `lsts` by applying `f` to each element in parallel. (Note that
-`f` must be made available to all worker processes; see [Code Availability and Loading Packages](:ref:`Code Availability and Loading Packages <man-parallel-computing-code-availability>`)
-for details.) If `nprocs() > 1`, the calling process will be dedicated to assigning tasks.
-All other available processes will be used as parallel workers, or on the processes
-specified by `pids`.
-
-If `err_retry` is `true`, it retries a failed application of `f` on a different worker. If
-`err_stop` is `true`, it takes precedence over the value of `err_retry` and `pmap` stops
-execution on the first error.
-"""
-pmap
-
-"""
     workers()
 
 Returns a list of all worker process identifiers.

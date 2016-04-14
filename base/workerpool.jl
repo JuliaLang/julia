@@ -1,22 +1,21 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
-
 type WorkerPool
     channel::RemoteChannel{Channel{Int}}
+    count::Int
 
     # Create a shared queue of available workers...
-    WorkerPool() = new(RemoteChannel(()->Channel{Int}(typemax(Int))))
+    WorkerPool() = new(RemoteChannel(()->Channel{Int}(typemax(Int))), 0)
 end
 
 
 """
-    WorkerPool([workers])
+    WorkerPool(workers)
 
 Create a WorkerPool from a vector of worker ids.
 """
 function WorkerPool(workers::Vector{Int})
 
-    # Create a shared queue of available workers...
     pool = WorkerPool()
 
     # Add workers to the pool...
@@ -28,12 +27,12 @@ function WorkerPool(workers::Vector{Int})
 end
 
 
-put!(pool::WorkerPool, w::Int) = put!(pool.channel, w)
-put!(pool::WorkerPool, w::Worker) = put!(pool.channel, w.id)
+put!(pool::WorkerPool, w::Int) = (pool.count += 1; put!(pool.channel, w))
+put!(pool::WorkerPool, w::Worker) = put!(pool, w.id)
+
+length(pool::WorkerPool) = pool.count
 
 isready(pool::WorkerPool) = isready(pool.channel)
-
-take!(pool::WorkerPool) = take!(pool.channel)
 
 
 """
@@ -42,17 +41,17 @@ take!(pool::WorkerPool) = take!(pool.channel)
 Call `f(args...)` on one of the workers in `pool`.
 """
 function remotecall_fetch(f, pool::WorkerPool, args...)
-    worker = take!(pool)
+    worker = take!(pool.channel)
     try
         remotecall_fetch(f, worker, args...)
     finally
-        put!(pool, worker)
+        put!(pool.channel, worker)
     end
 end
 
 
 """
-    default_worker_pool
+    default_worker_pool()
 
 WorkerPool containing idle `workers()` (used by `remote(f)`).
 """
@@ -70,9 +69,10 @@ end
 
 
 """
-    remote(f)
+    remote([::WorkerPool], f) -> Function
 
 Returns a lambda that executes function `f` on an available worker
 using `remotecall_fetch`.
 """
 remote(f) = (args...)->remotecall_fetch(f, default_worker_pool(), args...)
+remote(p::WorkerPool, f) = (args...)->remotecall_fetch(f, p, args...)
