@@ -62,7 +62,6 @@ function done(itr::AsyncCollector, state::AsyncCollectorState)
 end
 
 function next(itr::AsyncCollector, state::AsyncCollectorState)
-
     # Wait if the maximum number of concurrent tasks are already running...
     while isbusy(itr, state)
         wait(state)
@@ -129,7 +128,6 @@ function pump_source(itr::AsyncGenerator, state::AsyncGeneratorState)
 end
 
 function next(itr::AsyncGenerator, state::AsyncGeneratorState)
-
     state.i += 1
 
     results = itr.collector.results

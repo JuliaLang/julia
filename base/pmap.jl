@@ -49,12 +49,6 @@ for details.
 """
 pmap(p::WorkerPool, f, c...) = collect(pgenerate(p, f, c...))
 
-# TODO: deprecated.jl defines pmap(f, c...; kw...) to support old kw args.
-#       When that is retierd it should be replaced by somthing like this:
-#
-#       pmap(f, c...) = pmap(default_worker_pool(), f, c...)
-
-
 
 """
     batchsplit(c; min_batch_count=1, max_batch_size=100) -> iterator
@@ -64,9 +58,13 @@ Split a collection into at least `min_batch_count` batches.
 Equivalent to `partition(c, max_batch_size)` when `length(c) >> max_batch_size`.
 """
 function batchsplit(c; min_batch_count=1, max_batch_size=100)
+    if min_batch_count < 1
+        throw(ArgumentError("min_batch_count must be > 0, got $min_batch_count"))
+    end
 
-    @assert min_batch_count > 0
-    @assert max_batch_size > 1
+    if max_batch_size < 1
+        throw(ArgumentError("max_batch_size must be > 0, got $max_batch_size"))
+    end
 
     # Split collection into batches, then peek at the first few batches...
     batches = partition(c, max_batch_size)
