@@ -2955,7 +2955,7 @@ function is_hermsym(A::SparseMatrixCSC, check::Func)
             row = rowval[p]
 
             # Ignore stored zeros
-            if val == 0;
+            if val == 0
                 continue
             end
 
@@ -3239,7 +3239,7 @@ function sortSparseMatrixCSC!{Tv,Ti}(A::SparseMatrixCSC{Tv,Ti}; sortindices::Sym
         sortperm!(pointer_to_array(pointer(index), numrows),
                   pointer_to_array(pointer(row), numrows))
 
-        jj = 1;
+        jj = 1
         @simd for j = col_start:col_end
             @inbounds rowval[j] = row[index[jj]]
             @inbounds nzval[j] = val[index[jj]]

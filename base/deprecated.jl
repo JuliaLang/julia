@@ -783,7 +783,7 @@ sizeof(s::RopeString) = sizeof(s.head) + sizeof(s.tail)
 export RopeString
 
 @noinline function complement!(s::IntSet)
-    depwarn("complement IntSets are deprecated", :complement!);
+    depwarn("complement IntSets are deprecated", :complement!)
     for n = 1:length(s.bits)
         s.bits[n] = ~s.bits[n]
     end
