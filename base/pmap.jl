@@ -58,11 +58,11 @@ Equivalent to `partition(c, max_batch_size)` when `length(c) >> max_batch_size`.
 """
 function batchsplit(c; min_batch_count=1, max_batch_size=100)
     if min_batch_count < 1
-        throw(ArgumentError("min_batch_count must be > 0, got $min_batch_count"))
+        throw(ArgumentError("min_batch_count must be ≥ 1, got $min_batch_count"))
     end
 
     if max_batch_size < 1
-        throw(ArgumentError("max_batch_size must be > 0, got $max_batch_size"))
+        throw(ArgumentError("max_batch_size must be ≥ 1, got $max_batch_size"))
     end
 
     # Split collection into batches, then peek at the first few batches
