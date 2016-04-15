@@ -12,22 +12,11 @@ string(s::AbstractString) = s
 
 bytestring() = ""
 bytestring(s::Vector{UInt8}) =
-    ccall(:jl_pchar_to_string, Ref{ByteString}, (Ptr{UInt8},Int), s, length(s))
-
-function bytestring(p::Union{Ptr{UInt8},Ptr{Int8}})
-    p == C_NULL && throw(ArgumentError("cannot convert NULL to string"))
-    ccall(:jl_cstr_to_string, Ref{ByteString}, (Cstring,), p)
-end
-bytestring(s::Cstring) = bytestring(convert(Ptr{UInt8}, s))
-
-function bytestring(p::Union{Ptr{UInt8},Ptr{Int8}},len::Integer)
-    p == C_NULL && throw(ArgumentError("cannot convert NULL to string"))
-    ccall(:jl_pchar_to_string, Ref{ByteString}, (Ptr{UInt8},Int), p, len)
-end
+    ccall(:jl_pchar_to_string, Ref{String}, (Ptr{UInt8},Int), s, length(s))
 
 convert(::Type{Vector{UInt8}}, s::AbstractString) = bytestring(s).data
 convert(::Type{Array{UInt8}}, s::AbstractString) = bytestring(s).data
-convert(::Type{ByteString}, s::AbstractString) = bytestring(s)
+convert(::Type{String}, s::AbstractString) = bytestring(s)
 convert(::Type{Vector{Char}}, s::AbstractString) = collect(s)
 convert(::Type{Symbol}, s::AbstractString) = symbol(s)
 
@@ -53,6 +42,7 @@ eltype{T<:AbstractString}(::Type{T}) = Char
 (.*){T<:AbstractString}(s::AbstractString,v::Vector{T}) = [s*i for i in v]
 
 length(s::DirectIndexString) = endof(s)
+
 function length(s::AbstractString)
     i = start(s)
     if done(s,i)
@@ -91,14 +81,6 @@ end
 ==(a::AbstractString, b::AbstractString) = cmp(a,b) == 0
 isless(a::AbstractString, b::AbstractString) = cmp(a,b) < 0
 
-# faster comparisons for byte strings and symbols
-
-cmp(a::ByteString, b::ByteString) = lexcmp(a.data, b.data)
-cmp(a::Symbol, b::Symbol) = Int(sign(ccall(:strcmp, Int32, (Cstring, Cstring), a, b)))
-
-==(a::ByteString, b::ByteString) = endof(a) == endof(b) && cmp(a,b) == 0
-isless(a::Symbol, b::Symbol) = cmp(a,b) < 0
-
 ## Generic validation functions ##
 
 isvalid(s::DirectIndexString, i::Integer) = (start(s) <= i <= endof(s))
@@ -116,9 +98,9 @@ end
 ## Generic indexing functions ##
 
 prevind(s::DirectIndexString, i::Integer) = i-1
-prevind(s::AbstractArray   , i::Integer) = i-1
+prevind(s::AbstractArray    , i::Integer) = i-1
 nextind(s::DirectIndexString, i::Integer) = i+1
-nextind(s::AbstractArray   , i::Integer) = i+1
+nextind(s::AbstractArray    , i::Integer) = i+1
 
 function prevind(s::AbstractString, i::Integer)
     e = endof(s)
@@ -207,29 +189,14 @@ typealias ByteArray Union{Vector{UInt8},Vector{Int8}}
 
 strwidth(s::AbstractString) = (w=0; for c in s; w += charwidth(c); end; w)
 
-isascii(c::Char) = c < Char(0x80)
 isascii(s::AbstractString) = all(isascii, s)
-isascii(s::ASCIIString) = true
 
 ## string promotion rules ##
 
-promote_rule{S<:AbstractString,T<:AbstractString}(::Type{S}, ::Type{T}) = UTF8String
+promote_rule{S<:AbstractString,T<:AbstractString}(::Type{S}, ::Type{T}) = String
 
-isxdigit(c::Char) = '0'<=c<='9' || 'a'<=c<='f' || 'A'<=c<='F'
 isxdigit(s::AbstractString) = all(isxdigit, s)
 need_full_hex(s::AbstractString, i::Int) = !done(s,i) && isxdigit(next(s,i)[1])
-
-## checking UTF-8 & ACSII validity ##
-
-byte_string_classify(data::Vector{UInt8}) =
-    ccall(:u8_isvalid, Int32, (Ptr{UInt8}, Int), data, length(data))
-byte_string_classify(s::ByteString) = byte_string_classify(s.data)
-    # 0: neither valid ASCII nor UTF-8
-    # 1: valid ASCII
-    # 2: valid UTF-8
-
-isvalid(::Type{ASCIIString}, s::Union{Vector{UInt8},ByteString}) = byte_string_classify(s) == 1
-isvalid(::Type{UTF8String}, s::Union{Vector{UInt8},ByteString}) = byte_string_classify(s) != 0
 
 ## uppercase and lowercase transformations ##
 uppercase(s::AbstractString) = map(uppercase, s)
@@ -244,9 +211,6 @@ end
 
 ## string map, filter, has ##
 
-map_result(s::AbstractString, a::Vector{UInt8}) = UTF8String(a)
-map_result(s::Union{ASCIIString,SubString{ASCIIString}}, a::Vector{UInt8}) = bytestring(a)
-
 function map(f, s::AbstractString)
     out = IOBuffer(Array(UInt8,endof(s)),true,true)
     truncate(out,0)
@@ -257,7 +221,7 @@ function map(f, s::AbstractString)
         end
         write(out, c2::Char)
     end
-    map_result(s, takebuf_array(out))
+    String(takebuf_array(out))
 end
 
 function filter(f, s::AbstractString)

@@ -183,7 +183,7 @@ function atomic_min! end
 unsafe_convert{T}(::Type{Ptr{T}}, x::Atomic{T}) = convert(Ptr{T}, pointer_from_objref(x))
 setindex!{T}(x::Atomic{T}, v) = setindex!(x, convert(T, v))
 
-const llvmtypes = Dict{Type, ASCIIString}(
+const llvmtypes = Dict(
     Bool => "i1",
     Int8 => "i8", UInt8 => "i8",
     Int16 => "i16", UInt16 => "i16",
@@ -192,7 +192,8 @@ const llvmtypes = Dict{Type, ASCIIString}(
     Int128 => "i128", UInt128 => "i128",
     Float16 => "i16", # half
     Float32 => "float",
-    Float64 => "double")
+    Float64 => "double",
+)
 inttype{T<:Integer}(::Type{T}) = T
 inttype(::Type{Float16}) = Int16
 inttype(::Type{Float32}) = Int32

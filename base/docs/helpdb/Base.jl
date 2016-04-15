@@ -96,32 +96,6 @@ Get the step size of a [`Range`](:obj:`Range`) object.
 step
 
 """
-    utf32(s)
-
-Create a UTF-32 string from a byte array, array of `Char` or `UInt32`, or any other string
-type. (Conversions of byte arrays check for a byte-order marker in the first four bytes, and
-do not include it in the resulting string.)
-
-Note that the resulting `UTF32String` data is terminated by the NUL codepoint (32-bit zero),
-which is not treated as a character in the string (so that it is mostly invisible in Julia);
-this allows the string to be passed directly to external functions requiring NUL-terminated
-data. This NUL is appended automatically by the `utf32(s)` conversion function. If you have
-a `Char` or `UInt32` array `A` that is already NUL-terminated UTF-32 data, then you can
-instead use `UTF32String(A)` to construct the string without making a copy of the data and
-treating the NUL as a terminator rather than as part of the string.
-"""
-utf32(s)
-
-"""
-    utf32(::Union{Ptr{Char},Ptr{UInt32},Ptr{Int32}} [, length])
-
-Create a string from the address of a NUL-terminated UTF-32 string. A copy is made; the
-pointer can be safely freed. If `length` is specified, the string does not have to be
-NUL-terminated.
-"""
-utf32(::Union{Ptr{Char},Ptr{UInt32},Ptr{Int32}}, length=?)
-
-"""
     takebuf_array(b::IOBuffer)
 
 Obtain the contents of an `IOBuffer` as an array, without copying. Afterwards, the
@@ -1855,23 +1829,23 @@ value for that key will be the value it has in the last collection listed.
 
 ```jldoctest
 julia> a = Dict("foo" => 0.0, "bar" => 42.0)
-Dict{ASCIIString,Float64} with 2 entries:
+Dict{String,Float64} with 2 entries:
   "bar" => 42.0
   "foo" => 0.0
 
 julia> b = Dict(utf8("baz") => 17, utf8("bar") => 4711)
-Dict{UTF8String,Int64} with 2 entries:
+Dict{String,Int64} with 2 entries:
   "bar" => 4711
   "baz" => 17
 
 julia> merge(a, b)
-Dict{UTF8String,Float64} with 3 entries:
+Dict{String,Float64} with 3 entries:
   "bar" => 4711.0
   "baz" => 17.0
   "foo" => 0.0
 
 julia> merge(b, a)
-Dict{UTF8String,Float64} with 3 entries:
+Dict{String,Float64} with 3 entries:
   "bar" => 42.0
   "baz" => 17.0
   "foo" => 0.0
@@ -2851,15 +2825,6 @@ Equivalent to `writedlm` with `delim` set to comma.
 writecsv
 
 """
-    wstring(s)
-
-This is a synonym for either `utf32(s)` or `utf16(s)`, depending on whether `Cwchar_t` is 32
-or 16 bits, respectively. The synonym `WString` for `UTF32String` or `UTF16String` is also
-provided.
-"""
-wstring
-
-"""
     withenv(f::Function, kv::Pair...)
 
 Execute `f()` in an environment that is temporarily modified (not replaced as in `setenv`)
@@ -3484,7 +3449,7 @@ digits
     bytes2hex(bin_arr::Array{UInt8, 1})
 
 Convert an array of bytes to its hexadecimal representation. All characters are in
-lower-case. Returns an `ASCIIString`.
+lower-case. Returns an `String`.
 """
 bytes2hex
 
@@ -3644,7 +3609,7 @@ multiple of four, this is equivalent to a `copy`.
 rotr90(A, k)
 
 """
-    readdir([dir]) -> Vector{ByteString}
+    readdir([dir]) -> Vector{String}
 
 Returns the files and directories in the directory `dir` (or the current working directory if not given).
 """
@@ -3734,7 +3699,7 @@ mapped segment as source.
 
 If `T` is a numeric type, the result is an array of that type, with any non-numeric elements
 as `NaN` for floating-point types, or zero. Other useful values of `T` include
-`ASCIIString`, `AbstractString`, and `Any`.
+`String`, `AbstractString`, and `Any`.
 
 If `header` is `true`, the first row of data will be read as header and the tuple
 `(data_cells, header_cells)` is returned instead of only `data_cells`.
@@ -3813,32 +3778,6 @@ filesize
 Compute ``\\sin(\\pi x) / (\\pi x)`` if ``x \\neq 0``, and ``1`` if ``x = 0``.
 """
 sinc
-
-"""
-    utf16(s)
-
-Create a UTF-16 string from a byte array, array of `UInt16`, or any other string type. (Data
-must be valid UTF-16. Conversions of byte arrays check for a byte-order marker in the first
-two bytes, and do not include it in the resulting string.)
-
-Note that the resulting `UTF16String` data is terminated by the NUL codepoint (16-bit zero),
-which is not treated as a character in the string (so that it is mostly invisible in Julia);
-this allows the string to be passed directly to external functions requiring NUL-terminated
-data. This NUL is appended automatically by the `utf16(s)` conversion function. If you have
-a `UInt16` array `A` that is already NUL-terminated valid UTF-16 data, then you can instead
-use `UTF16String(A)` to construct the string without making a copy of the data and treating
-the NUL as a terminator rather than as part of the string.
-"""
-utf16(s)
-
-"""
-    utf16(::Union{Ptr{UInt16},Ptr{Int16}} [, length])
-
-Create a string from the address of a NUL-terminated UTF-16 string. A copy is made; the
-pointer can be safely freed. If `length` is specified, the string does not have to be
-NUL-terminated.
-"""
-utf16(::Union{Ptr{UInt16},Ptr{Int16}}, length=?)
 
 """
     median(v[, region])
@@ -4572,7 +4511,7 @@ Determines whether a path is absolute (begins at the root directory).
 isabspath
 
 """
-    hex2bytes(s::ASCIIString)
+    hex2bytes(s::AbstractString)
 
 Convert an arbitrarily long hexadecimal string to its binary representation. Returns an
 `Array{UInt8,1}`, i.e. an array of bytes.
@@ -5287,7 +5226,7 @@ Compute sine of `x`, where `x` is in radians.
 sin
 
 """
-    Base.compilecache(module::ByteString)
+    Base.compilecache(module::String)
 
 Creates a precompiled cache file for module (see help for `require`) and all of its
 dependencies. This can be used to reduce package load times. Cache files are stored in
@@ -6110,7 +6049,7 @@ are taken from 2-tuples `(key,value)` generated by the argument.
 
 ```jldoctest
 julia> Dict([("A", 1), ("B", 2)])
-Dict{ASCIIString,Int64} with 2 entries:
+Dict{String,Int64} with 2 entries:
   "B" => 2
   "A" => 1
 ```
@@ -6119,7 +6058,7 @@ Alternatively, a sequence of pair arguments may be passed.
 
 ```jldoctest
 julia> Dict("A"=>1, "B"=>2)
-Dict{ASCIIString,Int64} with 2 entries:
+Dict{String,Int64} with 2 entries:
   "B" => 2
   "A" => 1
 ```

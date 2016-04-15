@@ -166,26 +166,15 @@ end
     end
 end
 
-
-function write(s::IO, ch::Char)
-    c = reinterpret(UInt32, ch)
-    if c < 0x80
-        return write(s, c%UInt8)
-    elseif c < 0x800
-        return (write(s, (( c >> 6          ) | 0xC0)%UInt8)) +
-               (write(s, (( c        & 0x3F ) | 0x80)%UInt8))
-    elseif c < 0x10000
-        return (write(s, (( c >> 12         ) | 0xE0)%UInt8)) +
-               (write(s, (((c >> 6)  & 0x3F ) | 0x80)%UInt8)) +
-               (write(s, (( c        & 0x3F ) | 0x80)%UInt8))
-    elseif c < 0x110000
-        return (write(s, (( c >> 18         ) | 0xF0)%UInt8)) +
-               (write(s, (((c >> 12) & 0x3F ) | 0x80)%UInt8)) +
-               (write(s, (((c >> 6)  & 0x3F ) | 0x80)%UInt8)) +
-               (write(s, (( c        & 0x3F ) | 0x80)%UInt8))
-    else
-        return write(s, '\ufffd')
+function write(io::IO, c::Char)
+    u = bswap(reinterpret(UInt32, c))
+    n = 24 & trailing_zeros(u)
+    u >>= n
+    while true
+        write(io, u % UInt8)
+        0 < (u >>= 8) || break
     end
+    4 - (n >> 3)
 end
 
 function write(io::IO, s::Symbol)
@@ -234,29 +223,27 @@ end
 end
 
 function read(s::IO, ::Type{Char})
-    ch = read(s, UInt8)
-    if ch < 0x80
-        return Char(ch)
+    b0 = read(s, UInt8)
+    n = leading_ones(b0)
+    c = UInt32(b0)
+    2 <= n <= 4 || return reinterpret(Char, c)
+    mark(s)
+    while n > 1
+        b = read(s, UInt8)
+        if b & 0xc0 != 0x80
+            reset(s)
+            return reinterpret(Char, UInt32(b0))
+        end
+        c <<= 8
+        c |= b
+        n -= 1
     end
-
-    # mimic utf8.next function
-    trailing = Base.utf8_trailing[ch+1]
-    c::UInt32 = 0
-    for j = 1:trailing
-        c += ch
-        c <<= 6
-        ch = read(s, UInt8)
-    end
-    c += ch
-    c -= Base.utf8_offset[trailing+1]
-    return Char(c)
+    return reinterpret(Char, c)
 end
 
 function readuntil(s::IO, delim::Char)
     if delim < Char(0x80)
-        data = readuntil(s, delim%UInt8)
-        enc = byte_string_classify(data)
-        return (enc==1) ? ASCIIString(data) : UTF8String(data)
+        return String(readuntil(s, delim % UInt8))
     end
     out = IOBuffer()
     while !eof(s)
@@ -346,10 +333,7 @@ function read(s::IO, nb=typemax(Int))
     return resize!(b, nr)
 end
 
-function readstring(s::IO)
-    b = read(s)
-    return isvalid(ASCIIString, b) ? ASCIIString(b) : UTF8String(b)
-end
+readstring(s::IO) = String(read(s))
 
 ## high-level iterator interfaces ##
 
@@ -374,7 +358,7 @@ function done(itr::EachLine, nada)
     true
 end
 next(itr::EachLine, nada) = (readline(itr.stream), nothing)
-eltype(::Type{EachLine}) = ByteString
+eltype(::Type{EachLine}) = String
 
 readlines(s=STDIN) = collect(eachline(s))
 

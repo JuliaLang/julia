@@ -6,13 +6,13 @@ immutable VersionNumber
     major::Int
     minor::Int
     patch::Int
-    prerelease::Tuple{Vararg{Union{Int,ASCIIString}}}
-    build::Tuple{Vararg{Union{Int,ASCIIString}}}
+    prerelease::Tuple{Vararg{Union{Int,String}}}
+    build::Tuple{Vararg{Union{Int,String}}}
 
     function VersionNumber(
         major::Int, minor::Int, patch::Int,
-        pre::Tuple{Vararg{Union{Int,ASCIIString}}},
-        bld::Tuple{Vararg{Union{Int,ASCIIString}}}
+        pre::Tuple{Vararg{Union{Int,String}}},
+        bld::Tuple{Vararg{Union{Int,String}}}
     )
         major >= 0 || throw(ArgumentError("invalid negative major version: $major"))
         minor >= 0 || throw(ArgumentError("invalid negative minor version: $minor"))
@@ -46,8 +46,8 @@ VersionNumber(
     bld::Tuple{Vararg{Union{Integer,AbstractString}}} = (),
 ) = VersionNumber(
     Int(major), Int(minor), Int(patch),
-    map(x->isa(x,Integer) ? Int(x) : ASCIIString(x), pre),
-    map(x->isa(x,Integer) ? Int(x) : ASCIIString(x), bld),
+    map(x->isa(x,Integer) ? Int(x) : String(x), pre),
+    map(x->isa(x,Integer) ? Int(x) : String(x), bld),
 )
 
 function print(io::IO, v::VersionNumber)
@@ -114,12 +114,12 @@ typemin(::Type{VersionNumber}) = v"0-"
 typemax(::Type{VersionNumber}) = VersionNumber(typemax(Int),typemax(Int),typemax(Int),(),("",))
 
 ident_cmp(a::Int, b::Int) = cmp(a,b)
-ident_cmp(a::Int, b::ASCIIString) = isempty(b) ? +1 : -1
-ident_cmp(a::ASCIIString, b::Int) = isempty(a) ? -1 : +1
-ident_cmp(a::ASCIIString, b::ASCIIString) = cmp(a,b)
+ident_cmp(a::Int, b::String) = isempty(b) ? +1 : -1
+ident_cmp(a::String, b::Int) = isempty(a) ? -1 : +1
+ident_cmp(a::String, b::String) = cmp(a,b)
 
-function ident_cmp(A::Tuple{Vararg{Union{Int,ASCIIString}}},
-                   B::Tuple{Vararg{Union{Int,ASCIIString}}})
+function ident_cmp(A::Tuple{Vararg{Union{Int,String}}},
+                   B::Tuple{Vararg{Union{Int,String}}})
     i = start(A)
     j = start(B)
     while !done(A,i) && !done(B,i)

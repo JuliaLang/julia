@@ -356,7 +356,7 @@ function hist_from_file(hp, file)
             error(munged_history_message, countlines)
         line[1] != '\t' &&
             error(invalid_history_message, repr(line[1]), " at line ", countlines)
-        lines = UTF8String[]
+        lines = String[]
         while !isempty(line)
             push!(lines, chomp(line[2:end]))
             eof(file) && break

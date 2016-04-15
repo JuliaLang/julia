@@ -109,8 +109,8 @@ typealias StridedMatrix{T,A<:DenseArray,I<:Tuple{Vararg{Union{RangeIndex, NoSlic
 typealias StridedVecOrMat{T} Union{StridedVector{T}, StridedMatrix{T}}
 
 # For OS specific stuff
-include(UTF8String(vcat(length(Core.ARGS)>=2?Core.ARGS[2].data:"".data, "build_h.jl".data))) # include($BUILDROOT/base/build_h.jl)
-include(UTF8String(vcat(length(Core.ARGS)>=2?Core.ARGS[2].data:"".data, "version_git.jl".data))) # include($BUILDROOT/base/version_git.jl)
+include(String(vcat(length(Core.ARGS)>=2?Core.ARGS[2].data:"".data, "build_h.jl".data))) # include($BUILDROOT/base/build_h.jl)
+include(String(vcat(length(Core.ARGS)>=2?Core.ARGS[2].data:"".data, "version_git.jl".data))) # include($BUILDROOT/base/version_git.jl)
 include("osutils.jl")
 include("c.jl")
 
@@ -120,10 +120,23 @@ include("iostream.jl")
 include("iobuffer.jl")
 
 # strings & printing
-include("char.jl")
-include("ascii.jl")
-include("string.jl")
-include("unicode.jl")
+include("strings/char.jl")
+include("strings/ascii.jl")
+include("strings/types.jl")
+include("strings/string.jl")
+include("strings/generic.jl")
+include("strings/symbol.jl")
+include("strings/search.jl")
+include("strings/util.jl")
+include("strings/io.jl")
+
+include("unicode/UnicodeError.jl")
+include("unicode/checkstring.jl")
+include("unicode/utf8.jl")
+include("unicode/utf32.jl")
+include("unicode/utf8proc.jl")
+importall .UTF8proc
+
 include("parse.jl")
 include("shell.jl")
 include("regex.jl")

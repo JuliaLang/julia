@@ -49,7 +49,7 @@ fdtimeout() = FDEvent(false, false, true)
 
 type FileMonitor
     handle::Ptr{Void}
-    file::ByteString
+    file::String
     notify::Condition
     active::Bool
     function FileMonitor(file::AbstractString)
@@ -68,7 +68,7 @@ end
 
 type PollingFileWatcher
     handle::Ptr{Void}
-    file::ByteString
+    file::String
     interval::UInt32
     notify::Condition
     active::Bool

@@ -68,14 +68,14 @@ const UTF8PROC_STRIPMARK = (1<<13)
 
 ############################################################################
 
-function utf8proc_map(s::ByteString, flags::Integer)
+function utf8proc_map(s::String, flags::Integer)
     p = Ref{Ptr{UInt8}}()
     result = ccall(:utf8proc_map, Cssize_t,
                    (Ptr{UInt8}, Cssize_t, Ref{Ptr{UInt8}}, Cint),
                    s, sizeof(s), p, flags)
     result < 0 && error(bytestring(ccall(:utf8proc_errmsg, Cstring,
                                          (Cssize_t,), result)))
-    pointer_to_string(p[], result, true)::ByteString
+    pointer_to_string(p[], result, true)::String
 end
 
 utf8proc_map(s::AbstractString, flags::Integer) = utf8proc_map(bytestring(s), flags)
@@ -156,8 +156,7 @@ iscntrl(c::Char) = (c <= Char(0x1f) || Char(0x7f) <= c <= Char(0x9f))
 ispunct(c::Char) = (UTF8PROC_CATEGORY_PC <= category_code(c) <= UTF8PROC_CATEGORY_PO)
 
 # \u85 is the Unicode Next Line (NEL) character
-# the check for \ufffd allows for branch removal on ASCIIStrings
-@inline isspace(c::Char) = c == ' ' || '\t' <= c <='\r' || c == '\u85' || '\ua0' <= c && c != '\ufffd' && category_code(c)==UTF8PROC_CATEGORY_ZS
+@inline isspace(c::Char) = c == ' ' || '\t' <= c <='\r' || c == '\u85' || '\ua0' <= c && category_code(c) == UTF8PROC_CATEGORY_ZS
 
 isprint(c::Char) = (UTF8PROC_CATEGORY_LU <= category_code(c) <= UTF8PROC_CATEGORY_ZS)
 

@@ -137,7 +137,7 @@ function _include_from_serialized(content::Vector{UInt8})
 end
 
 # returns an array of modules loaded, or nothing if failed
-function _require_from_serialized(node::Int, mod::Symbol, path_to_try::ByteString, toplevel_load::Bool)
+function _require_from_serialized(node::Int, mod::Symbol, path_to_try::String, toplevel_load::Bool)
     if JLOptions().use_compilecache == 0
         return nothing
     end
@@ -204,7 +204,7 @@ end
 const package_locks = Dict{Symbol,Condition}()
 
 # used to optionally track dependencies when requiring a module:
-const _require_dependencies = Tuple{ByteString,Float64}[]
+const _require_dependencies = Tuple{String,Float64}[]
 const _track_dependencies = [false]
 function _include_dependency(_path::AbstractString)
     prev = source_path(nothing)
@@ -368,7 +368,7 @@ end
 
 # remote/parallel load
 
-include_string(txt::ByteString, fname::ByteString) =
+include_string(txt::String, fname::String) =
     ccall(:jl_load_file_string, Any, (Ptr{UInt8},Csize_t,Ptr{UInt8},Csize_t),
           txt, sizeof(txt), fname, sizeof(fname))
 
@@ -429,7 +429,7 @@ function include_from_node1(_path::AbstractString)
     result
 end
 
-function evalfile(path::AbstractString, args::Vector{UTF8String}=UTF8String[])
+function evalfile(path::AbstractString, args::Vector{String}=String[])
     return eval(Module(:__anon__),
                 Expr(:toplevel,
                      :(const ARGS = $args),
@@ -437,7 +437,7 @@ function evalfile(path::AbstractString, args::Vector{UTF8String}=UTF8String[])
                      :(eval(m,x) = Main.Core.eval(m,x)),
                      :(Main.Base.include($path))))
 end
-evalfile(path::AbstractString, args::Vector) = evalfile(path, UTF8String[args...])
+evalfile(path::AbstractString, args::Vector) = evalfile(path, String[args...])
 
 function create_expr_cache(input::AbstractString, output::AbstractString)
     rm(output, force=true)   # Remove file if it exists
@@ -483,7 +483,7 @@ function create_expr_cache(input::AbstractString, output::AbstractString)
 end
 
 compilecache(mod::Symbol) = compilecache(string(mod))
-function compilecache(name::ByteString)
+function compilecache(name::String)
     myid() == 1 || error("can only precompile from node 1")
     path = find_in_path(name, nothing)
     path === nothing && throw(ArgumentError("$name not found in path"))
@@ -504,7 +504,7 @@ isvalid_cache_header(f::IOStream) = 0 != ccall(:jl_deserialize_verify_header, Ci
 
 function cache_dependencies(f::IO)
     modules = Tuple{Symbol,UInt64}[]
-    files = Tuple{ByteString,Float64}[]
+    files = Tuple{String,Float64}[]
     while true
         n = ntoh(read(f, Int32))
         n == 0 && break

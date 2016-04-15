@@ -133,7 +133,7 @@ export
     Signed, Int, Int8, Int16, Int32, Int64, Int128,
     Unsigned, UInt, UInt8, UInt16, UInt32, UInt64, UInt128,
     # string types
-    Char, ASCIIString, ByteString, DirectIndexString, AbstractString, UTF8String,
+    Char, AbstractString, DirectIndexString, String,
     # errors
     BoundsError, DivideError, DomainError, Exception, InexactError,
     InterruptException, OutOfMemoryError, ReadOnlyMemoryError, OverflowError,
@@ -185,6 +185,10 @@ else
 end
 
 abstract AbstractString
+abstract DirectIndexString <: AbstractString
+immutable String <: AbstractString
+    data::Array{UInt8,1}
+end
 
 function Typeof end
 (f::typeof(Typeof))(x::ANY) = isa(x,Type) ? Type{x} : typeof(x)
@@ -217,21 +221,7 @@ type TypeError <: Exception
     got
 end
 
-abstract DirectIndexString <: AbstractString
-
-immutable ASCIIString <: DirectIndexString
-    data::Array{UInt8,1}
-    ASCIIString(d::Array{UInt8,1}) = new(d)
-end
-
-immutable UTF8String <: AbstractString
-    data::Array{UInt8,1}
-    UTF8String(d::Array{UInt8,1}) = new(d)
-end
-
-typealias ByteString Union{ASCIIString,UTF8String}
-
-include(fname::ByteString) = ccall(:jl_load_, Any, (Any,), fname)
+include(fname::String) = ccall(:jl_load_, Any, (Any,), fname)
 
 eval(e::ANY) = eval(Main, e)
 eval(m::Module, e::ANY) = ccall(:jl_toplevel_eval_in, Any, (Any, Any), m, e)
