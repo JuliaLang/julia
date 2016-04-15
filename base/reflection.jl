@@ -254,7 +254,7 @@ uncompressed_ast(l::LambdaInfo) =
 # Printing code representations in IR and assembly
 function _dump_function(f, t::ANY, native, wrapper, strip_ir_metadata, dump_module)
     t = tt_cons(Core.Typeof(f), to_tuple_type(t))
-    llvmf = ccall(:jl_get_llvmf, Ptr{Void}, (Any, Any, Bool, Bool), f, t, wrapper, native)
+    llvmf = ccall(:jl_get_llvmf, Ptr{Void}, (Any, Bool, Bool), t, wrapper, native)
 
     if llvmf == C_NULL
         error("no method found for the specified argument types")
