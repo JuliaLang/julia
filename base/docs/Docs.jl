@@ -606,6 +606,9 @@ function docm(meta, ex, define = true)
     # Don't try to redefine expressions. This is only needed for `Base` img gen since
     # otherwise calling `loaddocs` would redefine all documented functions and types.
     def = define ? x : nothing
+    if isa(x, GlobalRef) && (x::GlobalRef).mod == current_module()
+        x = (x::GlobalRef).name
+    end
 
     # Keywords using the `@kw_str` macro in `base/docs/basedocs.jl`.
     #
