@@ -147,25 +147,13 @@ iteratorsize(::Type{AsyncGenerator}) = SizeUnknown()
 
 
 """
-    asyncgenerate(f, c...) -> iterator
-
-Apply `@async f` to each element of `c`.
-
-For multiple collection arguments, apply f elementwise.
-
-Results are returned in order as they become available.
-"""
-asyncgenerate(f, c...) = AsyncGenerator(f, c...)
-
-
-"""
     asyncmap(f, c...) -> collection
 
 Transform collection `c` by applying `@async f` to each element.
 
 For multiple collection arguments, apply f elementwise.
 """
-asyncmap(f, c...) = collect(asyncgenerate(f, c...))
+asyncmap(f, c...) = collect(AsyncGenerator(f, c...))
 
 
 """
