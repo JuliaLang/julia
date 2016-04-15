@@ -17,10 +17,10 @@ for details.
 """
 function pgenerate(p::WorkerPool, f, c)
     if length(p) == 0
-        return asyncgenerate(f, c)
+        return AsyncGenerator(f, c)
     end
     batches = batchsplit(c, min_batch_count = length(p) * 3)
-    return flatten(asyncgenerate(remote(p, b -> asyncmap(f, b)), batches))
+    return flatten(AsyncGenerator(remote(p, b -> asyncmap(f, b)), batches))
 end
 
 pgenerate(p::WorkerPool, f, c1, c...) = pgenerate(p, a->f(a...), zip(c1, c...))
