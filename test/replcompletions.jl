@@ -297,6 +297,12 @@ c, r, res = test_complete(s)
 @test length(c) == 1
 @test c[1] == string(methods(CompletionFoo.test4, Tuple{ASCIIString, ASCIIString})[1])
 
+# Test that string escaption is handled correct
+s = """CompletionFoo.test4("\\"","""
+c, r, res = test_complete(s)
+@test !res
+@test length(c) == 2
+
 ########## Test where the current inference logic fails ########
 # Fails due to inferrence fails to determine a concrete type for arg 1
 # But it returns AbstractArray{T,N} and hence is able to remove test5(x::Float64) from the suggestions
