@@ -132,30 +132,34 @@ static jl_value_t *eval(jl_value_t *e, interpreter_state *s)
     jl_lambda_info_t *lam = s==NULL ? NULL : s->lam;
     if (jl_is_gensym(e)) {
         ssize_t genid = ((jl_gensym_t*)e)->id;
+#ifdef DEBUG
         if (genid >= jl_linfo_ngensyms(lam) || genid < 0 || s->locals == NULL)
             jl_error("access to invalid GenSym location");
+#endif
         return s->locals[jl_linfo_nslots(lam) + genid];
     }
     if (jl_typeis(e, jl_slot_type)) {
         ssize_t n = jl_slot_number(e);
+#ifdef DEBUG
         if (n > jl_linfo_nslots(lam) || n < 1 || s->locals == NULL)
             jl_error("access to invalid slot number");
+#endif
         jl_value_t *v = s->locals[n-1];
         if (v == NULL)
             jl_undefined_var_error((jl_sym_t*)jl_cellref(lam->slotnames,n-1));
+        return v;
+    }
+    if (jl_is_globalref(e)) {
+        jl_sym_t *s = jl_globalref_name(e);
+        jl_value_t *v = jl_get_global(jl_globalref_mod(e), s);
+        if (v == NULL)
+            jl_undefined_var_error(s);
         return v;
     }
     jl_module_t *modu = lam == NULL ? jl_current_module : lam->module;
     if (jl_is_topnode(e)) {
         jl_sym_t *s = (jl_sym_t*)jl_fieldref(e,0);
         jl_value_t *v = jl_get_global(jl_base_relative_to(modu), s);
-        if (v == NULL)
-            jl_undefined_var_error(s);
-        return v;
-    }
-    if (jl_is_globalref(e)) {
-        jl_sym_t *s = jl_globalref_name(e);
-        jl_value_t *v = jl_get_global(jl_globalref_mod(e), s);
         if (v == NULL)
             jl_undefined_var_error(s);
         return v;
@@ -177,34 +181,6 @@ static jl_value_t *eval(jl_value_t *e, interpreter_state *s)
     size_t nargs = jl_array_len(ex->args);
     if (ex->head == call_sym) {
         return do_call(args, nargs, s);
-    }
-    else if (ex->head == assign_sym) {
-        jl_value_t *sym = args[0];
-        jl_value_t *rhs = eval(args[1], s);
-        if (jl_is_gensym(sym)) {
-            ssize_t genid = ((jl_gensym_t*)sym)->id;
-            if (genid >= jl_linfo_ngensyms(lam) || genid < 0)
-                jl_error("assignment to invalid GenSym location");
-            s->locals[jl_linfo_nslots(lam) + genid] = rhs;
-        }
-        else if (jl_typeis(sym,jl_slot_type)) {
-            ssize_t n = jl_slot_number(sym);
-            assert(n <= jl_linfo_nslots(lam) && n > 0);
-            s->locals[n-1] = rhs;
-        }
-        else {
-            jl_module_t *m = modu;
-            if (jl_is_globalref(sym)) {
-                m = jl_globalref_mod(sym);
-                sym = (jl_value_t*)jl_globalref_name(sym);
-            }
-            assert(jl_is_symbol(sym));
-            JL_GC_PUSH1(&rhs);
-            jl_binding_t *b = jl_get_binding_wr(m, (jl_sym_t*)sym);
-            jl_checked_assignment(b, rhs);
-            JL_GC_POP();
-        }
-        return rhs;
     }
     else if (ex->head == new_sym) {
         jl_value_t *thetype = eval(args[0], s);
@@ -445,7 +421,46 @@ static jl_value_t *eval_body(jl_array_t *stmts, interpreter_state *s, int start,
         }
         else if (jl_is_expr(stmt)) {
             jl_sym_t *head = ((jl_expr_t*)stmt)->head;
-            if (head == goto_ifnot_sym) {
+            if (head == return_sym) {
+                jl_value_t *ex = jl_exprarg(stmt,0);
+                if (toplevel && jl_is_toplevel_only_expr(ex))
+                    return jl_toplevel_eval(ex);
+                else
+                    return eval(ex, s);
+            }
+            else if (head == assign_sym) {
+                jl_value_t *sym = jl_exprarg(stmt, 0);
+                jl_value_t *rhs = eval(jl_exprarg(stmt,1), s);
+                if (jl_is_gensym(sym)) {
+                    ssize_t genid = ((jl_gensym_t*)sym)->id;
+#ifdef DEBUG
+                    if (genid >= jl_linfo_ngensyms(s->lam) || genid < 0)
+                        jl_error("assignment to invalid GenSym location");
+#endif
+                    s->locals[jl_linfo_nslots(s->lam) + genid] = rhs;
+                }
+                else if (jl_typeis(sym,jl_slot_type)) {
+                    ssize_t n = jl_slot_number(sym);
+                    assert(n <= jl_linfo_nslots(s->lam) && n > 0);
+                    s->locals[n-1] = rhs;
+                }
+                else {
+                    jl_module_t *m;
+                    if (jl_is_globalref(sym)) {
+                        m = jl_globalref_mod(sym);
+                        sym = (jl_value_t*)jl_globalref_name(sym);
+                    }
+                    else {
+                        m = (s == NULL || s->lam == NULL) ? jl_current_module : s->lam->module;
+                    }
+                    assert(jl_is_symbol(sym));
+                    JL_GC_PUSH1(&rhs);
+                    jl_binding_t *b = jl_get_binding_wr(m, (jl_sym_t*)sym);
+                    jl_checked_assignment(b, rhs);
+                    JL_GC_POP();
+                }
+            }
+            else if (head == goto_ifnot_sym) {
                 jl_value_t *cond = eval(jl_exprarg(stmt,0), s);
                 if (cond == jl_false) {
                     i = jl_unbox_long(jl_exprarg(stmt, 1))-1;
@@ -455,12 +470,10 @@ static jl_value_t *eval_body(jl_array_t *stmts, interpreter_state *s, int start,
                     jl_type_error_rt("toplevel", "if", (jl_value_t*)jl_bool_type, cond);
                 }
             }
-            else if (head == return_sym) {
-                jl_value_t *ex = jl_exprarg(stmt,0);
-                if (toplevel && jl_is_toplevel_only_expr(ex))
-                    return jl_toplevel_eval(ex);
-                else
-                    return eval(ex, s);
+            else if (head == line_sym) {
+                if (toplevel)
+                    jl_lineno = jl_unbox_long(jl_exprarg(stmt,0));
+                // TODO: interpreted function line numbers
             }
             else if (head == enter_sym) {
                 jl_enter_handler(&__eh);
@@ -480,11 +493,6 @@ static jl_value_t *eval_body(jl_array_t *stmts, interpreter_state *s, int start,
                 int hand_n_leave = jl_unbox_long(jl_exprarg(stmt,0));
                 jl_pop_handler(hand_n_leave);
             }
-            else if (head == line_sym) {
-                if (toplevel)
-                    jl_lineno = jl_unbox_long(jl_exprarg(stmt,0));
-                // TODO: interpreted function line numbers
-            }
             else if (toplevel && jl_is_toplevel_only_expr(stmt)) {
                 jl_toplevel_eval(stmt);
             }
@@ -503,6 +511,9 @@ static jl_value_t *eval_body(jl_array_t *stmts, interpreter_state *s, int start,
             ssize_t n = jl_slot_number(var);
             assert(n <= jl_linfo_nslots(s->lam) && n > 0);
             s->locals[n-1] = NULL;
+        }
+        else {
+            eval(stmt, s);
         }
         i++;
     }

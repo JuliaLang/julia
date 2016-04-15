@@ -839,8 +839,7 @@ static void jl_serialize_value_(ios_t *s, jl_value_t *v)
         // save functionObject pointers
         write_int32(s, li->functionID);
         write_int32(s, li->specFunctionID);
-        if (li->functionID)
-            write_int8(s, li->jlcall_api);
+        write_int8(s, li->jlcall_api);
         write_int8(s, li->needs_sparam_vals_ducttape);
     }
     else if (jl_typeis(v, jl_module_type)) {
@@ -1473,7 +1472,7 @@ static jl_value_t *jl_deserialize_value_(ios_t *s, jl_value_t *vtag, jl_value_t 
         func_llvm = read_int32(s);
         cfunc_llvm = read_int32(s);
         jl_delayed_fptrs(li, func_llvm, cfunc_llvm);
-        li->jlcall_api = func_llvm ? read_int8(s) : 0;
+        li->jlcall_api = read_int8(s);
         li->needs_sparam_vals_ducttape = read_int8(s);
         return (jl_value_t*)li;
     }
