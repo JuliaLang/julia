@@ -282,8 +282,8 @@
             (error "function static parameter names not unique"))
         (if (any (lambda (x) (and (not (eq? x UNUSED)) (memq x names))) anames)
             (error "function argument and static parameter names must be distinct")))
-      (if (and name (not (sym-ref? name)))
-          (error (string "invalid method name \"" (deparse name) "\"")))
+      (if (or (and name (not (sym-ref? name))) (eq? name 'true) (eq? name 'false))
+          (error (string "invalid function name \"" (deparse name) "\"")))
       (let* ((iscall (is-call-name? name))
              (name  (if iscall #f name))
              (types (llist-types argl))
@@ -417,9 +417,11 @@
                  (car not-optional))
             ,@(cdr not-optional) ,@vararg)
           `(block
-            ,@(if (null? lno) '()
-                  ;; TODO jb/functions get a better `name` for functions specified by type
-                  (list (append (car lno) (list (undot-name name)))))
+            ,@(cond ((null? lno) '())
+		    ((not name) lno)
+		    (else
+		     ;; TODO jb/functions get a better `name` for functions specified by type
+		     (list (append (car lno) (list (undot-name name))))))
             ,@stmts) isstaged)
 
         ;; call with unsorted keyword args. this sorts and re-dispatches.
@@ -622,7 +624,7 @@
                 ,@locs
                 (call (curly ,name ,@params) ,@field-names)))))
 
-(define (new-call Tname type-params params args field-names field-types mutabl)
+(define (new-call Tname type-params params args field-names field-types)
   (if (any vararg? args)
       (error "... is not supported inside \"new\""))
   (if (any kwarg? args)
@@ -702,19 +704,19 @@
 
 ;; rewrite calls to `new( ... )` to `new` expressions on the appropriate
 ;; type, determined by the containing constructor definition.
-(define (rewrite-ctor ctor Tname params bounds field-names field-types mutabl)
+(define (rewrite-ctor ctor Tname params bounds field-names field-types)
   (define (ctor-body body type-params)
     (pattern-replace (pattern-set
                       (pattern-lambda
                        (call (-/ new) . args)
                        (new-call Tname type-params params
                                  (map (lambda (a) (ctor-body a type-params)) args)
-                                 field-names field-types mutabl))
+                                 field-names field-types))
                       (pattern-lambda
                        (call (curly (-/ new) . p) . args)
                        (new-call Tname p params
                                  (map (lambda (a) (ctor-body a type-params)) args)
-                                 field-names field-types mutabl)))
+                                 field-names field-types)))
                      body))
   (pattern-replace
    (pattern-set
@@ -779,7 +781,7 @@
         (block
          (global ,name)
          ,@(map (lambda (c)
-                  (rewrite-ctor c name params bounds field-names field-types mut))
+                  (rewrite-ctor c name params bounds field-names field-types))
                 defs2)))
        ;; "outer" constructors
        ,@(if (and (null? defs)
@@ -860,7 +862,10 @@
 
 (define (expand-function-def e)   ;; handle function or stagedfunction
   (let ((name (cadr e)))
-    (cond ((and (length= e 2) (symbol? name))  `(method ,name))
+    (cond ((and (length= e 2) (symbol? name))
+	   (if (or (eq? name 'true) (eq? name 'false))
+	       (error (string "invalid function name \"" name "\"")))
+	   `(method ,name))
           ((not (pair? name))                  e)
           ((eq? (car name) 'tuple)
            (expand-forms `(-> ,name ,(caddr e))))
@@ -1087,7 +1092,7 @@
           (let ((err (gensy))
                 (ret (and hasret
                           (or (not (block-returns? tryb))
-                              (and catchb
+                              (and (not (eq? catchb 'false))
                                    (not (block-returns? catchb))))
                           (gensy)))
                 (retval (if hasret (gensy) #f))
@@ -1107,10 +1112,10 @@
                   (break-block
                    ,bb
                    (try (= ,val
-                           ,(if catchb
+                           ,(if (not (eq? catchb 'false))
                                 `(try ,tryb ,var ,catchb)
                                 tryb))
-                        #f
+                        false
                         (= ,err true)))
                   (= ,finally-exception (the_exception))
                   ,finalb
@@ -1125,7 +1130,7 @@
                 (var  (caddr e))
                 (catchb (cadddr e)))
             (expand-forms
-             (if (symbol-like? var)
+             (if (and (symbol-like? var) (not (eq? var 'false)))
                  `(trycatch (scope-block ,tryb)
                             (scope-block
                              (block (= ,var (the_exception))
@@ -2454,7 +2459,7 @@ f(x) = yt(x)
               (composite_type ,name (call (top svec) ,@P)
                               (call (top svec) ,@(map (lambda (v) `',v) fields))
                               ,super
-                              (call (top svec) ,@types) #f ,(length fields))
+                              (call (top svec) ,@types) false ,(length fields))
               (return (null)))))))
 
 ;; ... and without parameters
@@ -2466,7 +2471,7 @@ f(x) = yt(x)
                                   (call (top svec) ,@(map (lambda (v) `',v) fields))
                                   ,super
                                   (call (top svec) ,@(map (lambda (v) 'Any) fields))
-                                  #f ,(length fields))
+                                  false ,(length fields))
                   (return (null))))))
 
 (define (vinfo:not-capt vi)
@@ -3106,10 +3111,10 @@ f(x) = yt(x)
 
             ((method)
              (if (length> e 2)
-                 (begin (emit `(method ,(cadr e)
+                 (begin (emit `(method ,(or (cadr e) 'false)
                                        ,(compile (caddr e) break-labels #t #f)
                                        ,(linearize (cadddr e))
-                                       ,@(cddddr e)))
+                                       ,(if (car (cddddr e)) 'true 'false)))
                         (if value (compile '(null) break-labels value tail)))
                  (cond (tail  (emit-return e))
                        (value e)

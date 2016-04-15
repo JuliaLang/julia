@@ -428,10 +428,6 @@ static jl_value_t *scm_to_julia_(fl_context_t *fl_ctx, value_t e, int eo)
     }
     if (fl_isstring(fl_ctx, e))
         return jl_pchar_to_string((char*)cvalue_data(e), cvalue_len(e));
-    if (e == fl_ctx->F)
-        return jl_false;
-    if (e == fl_ctx->T)
-        return jl_true;
     if (iscons(e) || e == fl_ctx->NIL) {
         value_t hd;
         jl_sym_t *sym;
@@ -616,9 +612,9 @@ static value_t julia_to_scm_(fl_context_t *fl_ctx, jl_value_t *v)
     if (jl_is_symbol(v))
         return symbol(fl_ctx, jl_symbol_name((jl_sym_t*)v));
     if (v == jl_true)
-        return fl_ctx->T;
+        return jl_ast_ctx(fl_ctx)->true_sym;
     if (v == jl_false)
-        return fl_ctx->F;
+        return jl_ast_ctx(fl_ctx)->false_sym;
     if (v == jl_nothing)
         return fl_cons(fl_ctx, jl_ast_ctx(fl_ctx)->null_sym, fl_ctx->NIL);
     if (jl_is_expr(v)) {

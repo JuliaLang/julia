@@ -440,3 +440,7 @@ add_method_to_glob_fn!()
 @test_throws ParseError parse("function catch() end")
 @test_throws ParseError parse("function end() end")
 @test_throws ParseError parse("function finally() end")
+
+# PR #16170
+@test expand(parse("true(x) = x")) == Expr(:error, "invalid function name \"true\"")
+@test expand(parse("false(x) = x")) == Expr(:error, "invalid function name \"false\"")
