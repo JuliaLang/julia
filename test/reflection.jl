@@ -276,7 +276,7 @@ definitely_not_in_sysimg() = nothing
 for (f,t) in ((definitely_not_in_sysimg,Tuple{}),
         (Base.throw_boundserror,Tuple{UnitRange{Int64},Int64}))
     t = Base.tt_cons(Core.Typeof(f), Base.to_tuple_type(t))
-    llvmf = ccall(:jl_get_llvmf, Ptr{Void}, (Any, Any, Bool, Bool), f, t, false, true)
+    llvmf = ccall(:jl_get_llvmf, Ptr{Void}, (Any, Bool, Bool), t, false, true)
     @test llvmf != C_NULL
     @test ccall(:jl_get_llvm_fptr, Ptr{Void}, (Ptr{Void},), llvmf) != C_NULL
 end
@@ -374,3 +374,29 @@ test_typed_ast_printing(g15714, Tuple{Vector{Float32}},
                         [:array_var15714, :index_var15714])
 @test used_dup_var_tested15714
 @test used_unique_var_tested15714
+
+# Linfo Tracing test
+tracefoo(x, y) = x+y
+didtrace = false
+tracer(x::Ptr{Void}) = (@test isa(unsafe_pointer_to_objref(x), LambdaInfo); global didtrace = true; nothing)
+ccall(:jl_register_tracer, Void, (Ptr{Void},), cfunction(tracer, Void, (Ptr{Void},)))
+mlinfo = first(methods(tracefoo)).func
+ccall(:jl_trace_linfo, Void, (Any,), mlinfo)
+@test tracefoo(1, 2) == 3
+ccall(:jl_untrace_linfo, Void, (Any,), mlinfo)
+@test didtrace
+didtrace = false
+@test tracefoo(1.0, 2.0) == 3.0
+@test !didtrace
+ccall(:jl_register_tracer, Void, (Ptr{Void},), C_NULL)
+
+# Method Tracing test
+methtracer(x::Ptr{Void}) = (@test isa(unsafe_pointer_to_objref(x), Method); global didtrace = true; nothing)
+ccall(:jl_register_newmeth_tracer, Void, (Ptr{Void},), cfunction(methtracer, Void, (Ptr{Void},)))
+tracefoo2(x, y) = x*y
+@test didtrace
+didtrace = false
+tracefoo(x::Int64, y::Int64) = x*y
+@test didtrace
+didtrace = false
+ccall(:jl_register_newmeth_tracer, Void, (Ptr{Void},), C_NULL)

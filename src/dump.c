@@ -1475,6 +1475,7 @@ static jl_value_t *jl_deserialize_value_(ios_t *s, jl_value_t *vtag, jl_value_t 
         jl_delayed_fptrs(li, func_llvm, cfunc_llvm);
         li->jlcall_api = func_llvm ? read_int8(s) : 0;
         li->needs_sparam_vals_ducttape = read_int8(s);
+        li->traced = 0;
         return (jl_value_t*)li;
     }
     else if (vtag == (jl_value_t*)jl_module_type) {

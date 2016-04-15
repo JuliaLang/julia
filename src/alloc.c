@@ -373,6 +373,7 @@ jl_lambda_info_t *jl_new_lambda_info(jl_value_t *ast, jl_svec_t *tvars, jl_svec_
     li->pure = 0;
     li->called = 0xff;
     li->needs_sparam_vals_ducttape = 2;
+    li->traced = 0;
     if (ast != NULL) {
         JL_GC_PUSH1(&li);
         jl_lambda_info_set_ast(li, ast);
