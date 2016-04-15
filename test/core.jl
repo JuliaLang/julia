@@ -4203,3 +4203,11 @@ end
 g1090{T}(x::T)::T = x+1.0
 @test g1090(1) === 2
 @test g1090(Float32(3)) === Float32(4)
+
+module TestModuleAssignment
+using Base.Test
+@test_throws UndefVarError (TestModuleAssignment.x = 1)
+global x
+TestModuleAssignment.x = 1
+@test x == 1
+end

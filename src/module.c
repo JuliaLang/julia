@@ -83,6 +83,14 @@ static jl_binding_t *new_binding(jl_sym_t *name)
     return b;
 }
 
+jl_binding_t *jl_get_own_binding(jl_module_t *m, jl_sym_t *var)
+{
+    jl_binding_t **bp = (jl_binding_t**)ptrhash_bp(&m->bindings, var);
+    if (*bp != HT_NOTFOUND && (*bp)->owner == m)
+        return *bp;
+    return NULL;
+}
+
 // get binding for assignment
 JL_DLLEXPORT jl_binding_t *jl_get_binding_wr(jl_module_t *m, jl_sym_t *var)
 {

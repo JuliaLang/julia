@@ -676,8 +676,17 @@ JL_CALLABLE(jl_f_setfield)
     JL_NARGS(setfield!, 3, 3);
     jl_value_t *v = args[0];
     jl_value_t *vt = (jl_value_t*)jl_typeof(v);
-    if (vt == (jl_value_t*)jl_module_type)
-        jl_error("cannot assign variables in other modules");
+    if (vt == (jl_value_t*)jl_module_type) {
+        jl_module_t *m = (jl_module_t*)v;
+        jl_sym_t *sym = (jl_sym_t*)args[1];
+        if (!jl_is_symbol(sym))
+            jl_type_error("setfield!", (jl_value_t*)jl_symbol_type, args[1]);
+        jl_binding_t *b = jl_get_own_binding(m, sym);
+        if (b == NULL)
+            jl_undefined_var_error(sym);
+        jl_checked_assignment(b, args[2]);
+        return args[2];
+    }
     if (!jl_is_datatype(vt))
         jl_type_error("setfield!", (jl_value_t*)jl_datatype_type, v);
     jl_datatype_t *st = (jl_datatype_t*)vt;
@@ -706,7 +715,7 @@ JL_CALLABLE(jl_f_fieldtype)
     JL_NARGS(fieldtype, 2, 2);
     jl_datatype_t *st = (jl_datatype_t*)args[0];
     if (st == jl_module_type)
-        jl_error("cannot assign variables in other modules");
+        return (jl_value_t*)jl_any_type;
     if (!jl_is_datatype(st))
         jl_type_error("fieldtype", (jl_value_t*)jl_datatype_type, (jl_value_t*)st);
     int field_index;
