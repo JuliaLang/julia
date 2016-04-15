@@ -568,6 +568,8 @@ typedef struct {
     int nReqArgs;
     std::vector<bool> boundsCheck;
     std::vector<bool> inbounds;
+    bool allGeneric;
+    int nGenericCalls;
 
     CallInst *ptlsStates;
 #ifdef JULIA_ENABLE_THREADING
@@ -847,29 +849,38 @@ static void to_function(jl_lambda_info_t *li)
         JL_UNLOCK(codegen);
         jl_rethrow_with_add("error compiling %s", jl_symbol_name(li->name));
     }
-    // record that this function name came from this linfo,
-    // so we can build a reverse mapping for debug-info.
-    if (li->name != anonymous_sym) {
-        const DataLayout &DL =
-#ifdef LLVM35
-            m->getDataLayout();
-#else
-            *jl_data_layout;
-#endif
-        // but don't remember anonymous symbols because
-        // they may not be rooted in the gc for the life of the program,
-        // and the runtime doesn't notify us when the code becomes unreachable :(
-        jl_add_linfo_in_flight((specf ? specf : f)->getName(), li, DL);
-    }
 
-    // success. add the result to the execution engine now
-    jl_finalize_module(std::move(m));
-    li->functionID = jl_assign_functionID(f, 0);
-    if (specf)
-        li->specFunctionID = jl_assign_functionID(specf, 1);
-    if (f->getFunctionType() != jl_func_sig)
-        // mark the pointer as jl_fptr_sparam_t calling convention
-        li->jlcall_api = 1;
+    if (li->jlcall_api != 2) {
+        // record that this function name came from this linfo,
+        // so we can build a reverse mapping for debug-info.
+        if (li->name != anonymous_sym) {
+            const DataLayout &DL =
+#ifdef LLVM35
+                m->getDataLayout();
+#else
+                *jl_data_layout;
+#endif
+            // but don't remember anonymous symbols because
+            // they may not be rooted in the gc for the life of the program,
+            // and the runtime doesn't notify us when the code becomes unreachable :(
+            jl_add_linfo_in_flight((specf ? specf : f)->getName(), li, DL);
+        }
+
+        // success. add the result to the execution engine now
+        jl_finalize_module(std::move(m));
+
+        li->functionID = jl_assign_functionID(f, 0);
+        if (specf)
+            li->specFunctionID = jl_assign_functionID(specf, 1);
+        if (f->getFunctionType() != jl_func_sig)
+            // mark the pointer as jl_fptr_sparam_t calling convention
+            li->jlcall_api = 1;
+    }
+    else {
+        li->functionObjects.functionObject = NULL;
+        li->functionObjects.specFunctionObject = NULL;
+        li->functionObjects.cFunctionList = NULL;
+    }
 
     // done compiling: restore global state
     if (old != NULL) {
@@ -991,6 +1002,8 @@ uint64_t jl_get_llvm_fptr(llvm::Function *llvmf)
 // and forces compilation of the lambda info
 extern "C" void jl_generate_fptr(jl_lambda_info_t *li)
 {
+    if (li->jlcall_api == 2)
+        return;
     JL_LOCK(codegen);
     // objective: assign li->fptr
     assert(li->functionObjects.functionObject);
@@ -1009,6 +1022,8 @@ extern "C" void jl_generate_fptr(jl_lambda_info_t *li)
 // or generate object code for it
 extern "C" void jl_compile_linfo(jl_lambda_info_t *li)
 {
+    if (li->jlcall_api == 2)
+        return;
     if (li->functionObjects.functionObject == NULL) {
         // objective: assign li->functionObject
         to_function(li);
@@ -2783,6 +2798,7 @@ static jl_cgval_t emit_call(jl_value_t **args, size_t arglen, jl_codectx_t *ctx,
     if (f != NULL) {
         // function is a compile-time constant
         if (jl_typeis(f, jl_intrinsic_type)) {
+            ctx->allGeneric = false;
             result = emit_intrinsic((intrinsic)*(uint32_t*)jl_data_ptr(f), args, nargs, ctx);
             if (result.typ == (jl_value_t*)jl_any_type) // the select_value intrinsic may be missing type information
                 result = remark_julia_type(result, expr_type(expr, ctx));
@@ -2792,9 +2808,15 @@ static jl_cgval_t emit_call(jl_value_t **args, size_t arglen, jl_codectx_t *ctx,
         if (jl_subtype(f, (jl_value_t*)jl_builtin_type, 1)) {
             bool handled = emit_builtin_call(&result, (jl_value_t*)f, args, nargs, ctx, expr);
             if (handled) {
+                ctx->allGeneric = false;
                 JL_GC_POP();
                 return result;
             }
+        }
+        if (ctx->allGeneric && (jl_is_topnode(args[0]) || jl_is_globalref(args[0]))) {
+            // inline called constants for the benefit of the interpreter
+            // TODO: nicer way to do this
+            args[0] = jl_new_struct(jl_quotenode_type, (jl_value_t*)f); jl_gc_wb(((jl_expr_t*)expr)->args, args[0]);
         }
     }
 
@@ -2802,6 +2824,7 @@ static jl_cgval_t emit_call(jl_value_t **args, size_t arglen, jl_codectx_t *ctx,
     if (f && jl_subtype(f, (jl_value_t*)jl_builtin_type, 1)) {
         std::map<jl_fptr_t,Function*>::iterator it = builtin_func_map.find(jl_get_builtin_fptr(f));
         if (it != builtin_func_map.end()) {
+            ctx->nGenericCalls++;
             theFptr = (*it).second;
             result = mark_julia_type(emit_jlcall(theFptr, V_null, &args[1], nargs, ctx), true, expr_type(expr,ctx), ctx);
             JL_GC_POP();
@@ -2820,7 +2843,9 @@ static jl_cgval_t emit_call(jl_value_t **args, size_t arglen, jl_codectx_t *ctx,
                   jl_sprint((jl_value_t*)aty));
               }*/
             jl_lambda_info_t *li = jl_get_specialization1((jl_tupletype_t*)aty);
-            if (li != NULL) {
+            // TODO: if li->jlcall_api == 2 then directly call interpreter
+            if (li != NULL && li->jlcall_api != 2) {
+                ctx->allGeneric = false;
                 assert(li->functionObjects.functionObject != NULL);
                 theFptr = (Value*)li->functionObjects.functionObject;
                 jl_cgval_t fval;
@@ -2861,6 +2886,7 @@ static jl_cgval_t emit_call(jl_value_t **args, size_t arglen, jl_codectx_t *ctx,
                                   myargs, ConstantInt::get(T_int32, nargs));
 #endif
     result = mark_julia_type(callval, true, expr_type(expr, ctx), ctx);
+    ctx->nGenericCalls++;
 
     JL_GC_POP();
     return result;
@@ -3334,6 +3360,7 @@ static jl_cgval_t emit_expr(jl_value_t *expr, jl_codectx_t *ctx)
         return ghostValue(jl_void_type);
     }
     else if (head == static_typeof_sym) {
+        ctx->allGeneric = false;
         jl_value_t *extype = expr_type((jl_value_t*)ex, ctx);
         if (jl_is_type_type(extype)) {
             extype = jl_tparam0(extype);
@@ -3953,6 +3980,8 @@ static std::unique_ptr<Module> emit_function(jl_lambda_info_t *lam, jl_llvm_func
     ctx.inbounds.push_back(false);
     ctx.boundsCheck.push_back(false);
     ctx.spvals_ptr = NULL;
+    ctx.allGeneric = true;
+    ctx.nGenericCalls = 0;
 
     // step 2. process var-info lists to see what vars need boxing
     int n_gensyms = jl_is_long(lam->gensymtypes) ? jl_unbox_long(lam->gensymtypes) : jl_array_len(lam->gensymtypes);
@@ -4794,6 +4823,11 @@ static std::unique_ptr<Module> emit_function(jl_lambda_info_t *lam, jl_llvm_func
     }
 
     JL_GC_POP();
+
+    if (ctx.allGeneric && ctx.nGenericCalls > 0) {
+        lam->jlcall_api = 2;
+        lam->code = code; jl_gc_wb(lam, lam->code);
+    }
 
     return std::unique_ptr<Module>(M);
 }

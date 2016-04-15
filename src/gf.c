@@ -887,6 +887,8 @@ static jl_value_t *jl_call_unspecialized(jl_svec_t *sparam_vals, jl_lambda_info_
     assert(jl_svec_len(meth->sparam_syms) == jl_svec_len(sparam_vals));
     if (__likely(meth->jlcall_api == 0))
         return meth->fptr(args[0], &args[1], nargs-1);
+    else if (meth->jlcall_api == 2)
+        return jl_interpret_call(meth, args, nargs, sparam_vals);
     else
         return ((jl_fptr_sparam_t)meth->fptr)(sparam_vals, args[0], &args[1], nargs-1);
 }
