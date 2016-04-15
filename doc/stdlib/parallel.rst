@@ -287,7 +287,8 @@ General Parallel Computing Support
 
    .. Docstring generated from Julia source
 
-   Call a function asynchronously on the given arguments on the specified process. Returns a ``Future``\ .
+   Call a function asynchronously on the given arguments on the specified process. Returns a ``Future``\ . If using keyword arguments for `func`\ , ``remotecall`` can be called with
+   ``remotecall(()->func(args...;kw...), id)``.
 
 .. function:: Future()
 
