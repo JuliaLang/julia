@@ -435,3 +435,8 @@ add_method_to_glob_fn!()
 @test g15844(Int32(1)) == 2
 @test f15844(Int32(1)) == 1
 @test f15844(Int64(1)) == 3
+
+# issue #15661
+@test_throws ParseError parse("function catch() end")
+@test_throws ParseError parse("function end() end")
+@test_throws ParseError parse("function finally() end")

@@ -100,10 +100,14 @@
 (define (dot-opchar? c) (and (char? c) (string.find ".*^/\\+-'<>!=%≥≤≠÷" c)))
 (define operator? (Set operators))
 
-(define reserved-words '(begin while if for try return break continue
+(define initial-reserved-words '(begin while if for try return break continue
                          stagedfunction function macro quote let local global const
                          abstract typealias type bitstype immutable ccall do
                          module baremodule using import export importall))
+
+(define initial-reserved-word? (Set initial-reserved-words))
+
+(define reserved-words (append initial-reserved-words '(end else catch finally true false))) ;; todo: make this more complete
 
 (define reserved-word? (Set reserved-words))
 
@@ -829,7 +833,7 @@
                 (not (memv t '(#\( #\[ #\{))))
            )
        (not (operator? t))
-       (not (reserved-word? t))
+       (not (initial-reserved-word? t))
        (not (closing-token? t))
        (not (newline? t))
        (not (and (pair? expr) (syntactic-unary-op? (car expr))))))
@@ -932,9 +936,16 @@
 ;; also handles looking for syntactic reserved words
 (define (parse-call s)
   (let ((ex (parse-unary-prefix s)))
-    (if (reserved-word? ex)
+    (if (initial-reserved-word? ex)
         (parse-resword s ex)
         (parse-call-chain s ex #f))))
+
+(define (parse-def s strict)
+  (let ((ex (parse-unary-prefix s)))
+    (if (or (and strict (reserved-word? ex)) (initial-reserved-word? ex))
+        (error (string "invalid name \"" ex "\""))
+        (parse-call-chain s ex #f))))
+
 
 (define (deprecated-dict-replacement ex)
   (if (dict-literal? ex)
@@ -1142,7 +1153,7 @@
        ((stagedfunction function macro)
         (if (eq? word 'stagedfunction) (syntax-deprecation s "stagedfunction" "@generated function"))
         (let* ((paren (eqv? (require-token s) #\())
-               (sig   (parse-call s)))
+               (sig   (parse-def s (not (eq? word 'macro)))))
           (if (and (eq? word 'function) (not paren) (symbol-or-interpolate? sig))
               (begin (if (not (eq? (require-token s) 'end))
                          (error (string "expected \"end\" in definition of function \"" sig "\"")))
