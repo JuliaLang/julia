@@ -1700,8 +1700,8 @@ for (f, elty) in ((:dggsvd3_, :Float64),
                 throw(DimensionMismatch("B has second dimension $(size(B,2)) but needs $n"))
             end
             p = size(B, 1)
-            k = Ref{BlasInt}()
-            l = Ref{BlasInt}()
+            k = Array(BlasInt, 1)
+            l = Array(BlasInt, 1)
             lda = max(1, stride(A, 2))
             ldb = max(1, stride(B, 2))
             alpha = similar(A, $elty, n)
@@ -1715,7 +1715,7 @@ for (f, elty) in ((:dggsvd3_, :Float64),
             work = Array($elty, 1)
             lwork = BlasInt(-1)
             iwork = Array(BlasInt, n)
-            info = Ref{BlasInt}()
+            info = Array(BlasInt, 1)
             for i = 1:2
                 ccall(($(blasfunc(f)), liblapack), Void,
                     (Ptr{UInt8}, Ptr{UInt8}, Ptr{UInt8}, Ptr{BlasInt},
