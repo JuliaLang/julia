@@ -287,7 +287,7 @@ static jl_tupletype_t *join_tsig(jl_tupletype_t *tt, jl_tupletype_t *sig)
 static jl_value_t *ml_matches(union jl_typemap_t ml, int offs,
                               jl_tupletype_t *type, int lim);
 
-extern void (*jl_linfo_tracer)(jl_lambda_info_t *tracee);
+extern void (*jl_method_tracer)(jl_lambda_info_t *tracee);
 
 static jl_lambda_info_t *cache_method(jl_methtable_t *mt, union jl_typemap_t *cache, jl_value_t *parent,
                                       jl_tupletype_t *type, jl_tupletype_t *origtype,
@@ -588,8 +588,8 @@ static jl_lambda_info_t *cache_method(jl_methtable_t *mt, union jl_typemap_t *ca
     }
     JL_GC_POP();
     JL_UNLOCK(&codegen_lock);
-    if (definition->traced && jl_linfo_tracer)
-        jl_linfo_tracer(newmeth);
+    if (definition->traced && jl_method_tracer)
+        jl_method_tracer(newmeth);
     return newmeth;
 }
 
