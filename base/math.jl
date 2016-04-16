@@ -30,7 +30,7 @@ import Base: log, exp, sin, cos, tan, sinh, cosh, tanh, asin,
              significand_mask, significand_bits, exponent_bits, exponent_bias
 
 
-import Core.Intrinsics: nan_dom_err, sqrt_llvm, box, unbox, powi_llvm
+import Core.Intrinsics: sqrt_llvm, box, unbox, powi_llvm
 
 # non-type specific math functions
 
@@ -129,6 +129,9 @@ exp10(x::Float64) = 10.0^x
 exp10(x::Float32) = 10.0f0^x
 exp10(x::Integer) = exp10(float(x))
 @vectorize_1arg Number exp10
+
+# utility for converting NaN return to DomainError
+@inline nan_dom_err(f, x) = isnan(f) & !isnan(x) ? throw(DomainError()) : f
 
 # functions that return NaN on non-NaN argument for domain error
 for f in (:sin, :cos, :tan, :asin, :acos, :acosh, :atanh, :log, :log2, :log10,
