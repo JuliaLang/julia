@@ -294,7 +294,7 @@ Task(f::ANY) = ccall(:jl_new_task, Ref{Task}, (Any, Int), f, 0)
 # so the methods and ccall's in Core aren't permitted to use convert
 convert(::Type{Any}, x::ANY) = x
 convert{T}(::Type{T}, x::T) = x
-cconvert(T::Type, x) = convert(T, x)
+cconvert{T}(::Type{T}, x) = convert(T, x)
 unsafe_convert{T}(::Type{T}, x::T) = x
 
 # primitive array constructors
