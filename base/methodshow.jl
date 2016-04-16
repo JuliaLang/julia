@@ -2,6 +2,13 @@
 
 # Method and method-table pretty-printing
 
+function get_lambda(m::TypeMapEntry)
+    isdefined(m, :func) || return nothing
+    isa(m.func, Method) && return m.func.lambda_template
+    isa(m.func, LambdaInfo) && return m.func
+    return nothing
+end
+
 function argtype_decl(env, n, t) # -> (argname, argtype)
     if isa(n,Expr)
         n = n.args[1]  # handle n::T in arg list
@@ -26,36 +33,44 @@ function argtype_decl(env, n, t) # -> (argname, argtype)
     return s, string_with_env(env, t)
 end
 
-function arg_decl_parts(m::Method)
+function arg_decl_parts(m::TypeMapEntry)
     tv = m.tvars
     if !isa(tv,SimpleVector)
         tv = Any[tv]
     else
         tv = Any[tv...]
     end
-    li = m.func
-    argnames = li.slotnames[1:li.nargs]
-    s = symbol("?")
-    decls = [argtype_decl(:tvar_env => tv, get(argnames,i,s), m.sig.parameters[i])
-                for i = 1:length(m.sig.parameters)]
-    return tv, decls, li.file, li.line
+    li = get_lambda(m)
+    file, line = "", 0
+    if li !== nothing
+        argnames = li.slotnames[1:li.nargs]
+        s = symbol("?")
+        decls = Any[argtype_decl(:tvar_env => tv, get(argnames, i, s), m.sig.parameters[i])
+                    for i = 1:length(m.sig.parameters)]
+        if isdefined(li, :def)
+            file, line = li.def.file, li.def.line
+        end
+    else
+        decls = Any["" for i = 1:length(m.sig.parameters)]
+    end
+    return tv, decls, file, line
 end
 
-function kwarg_decl(m::Method, kwtype::DataType)
+function kwarg_decl(m::TypeMapEntry, kwtype::DataType)
     sig = Tuple{kwtype, Array, m.sig.parameters...}
-    mt = kwtype.name.mt
-    d = mt.defs
-    while d !== nothing
-        if typeseq(d.sig, sig)
-            li = d.func
-            return filter(x->!('#' in string(x)), li.slotnames[li.nargs+1:end])
-        end
-        d = d.next
+    kwli = ccall(:jl_methtable_lookup, Any, (Any, Any), kwtype.name.mt, sig)
+    if kwli !== nothing
+        kwli = kwli::Method
+        return filter(x->!('#' in string(x)), kwli.lambda_template.slotnames[kwli.lambda_template.nargs+1:end])
     end
     return ()
 end
 
-function show(io::IO, m::Method; kwtype::Nullable{DataType}=Nullable{DataType}())
+function show(io::IO, m::Method)
+    print(io, m.module, '.', m.name, m.isstaged ? " [@generated] at " : " at ", m.file, ":", m.line)
+end
+
+function show(io::IO, m::TypeMapEntry; kwtype::Nullable{DataType}=Nullable{DataType}())
     tv, decls, file, line = arg_decl_parts(m)
     ft = m.sig.parameters[1]
     d1 = decls[1]
@@ -103,22 +118,26 @@ function show_method_table(io::IO, mt::MethodTable, max::Int=-1, header::Bool=tr
         what = startswith(ns, '@') ? "macro" : "generic function"
         print(io, "# $n $m for ", what, " \"", ns, "\":")
     end
-    d = mt.defs
-    n = rest = 0
     kwtype = isdefined(mt, :kwsorter) ? Nullable{DataType}(typeof(mt.kwsorter)) : Nullable{DataType}()
-    while d !== nothing
-        if max==-1 || n<max || (rest==0 && n==max && d.next === nothing)
+    n = rest = 0
+    local last
+    visit(mt) do d
+        if max==-1 || n<max
             println(io)
             show(io, d; kwtype=kwtype)
             n += 1
         else
             rest += 1
+            last = d
         end
-        d = d.next
     end
     if rest > 0
         println(io)
-        print(io,"... $rest methods not shown (use methods($name) to see them all)")
+        if rest == 1
+            show(io, last; kwtype=kwtype)
+        else
+            print(io,"... $rest methods not shown (use methods($name) to see them all)")
+        end
     end
 end
 
@@ -134,11 +153,12 @@ function inbase(m::Module)
 end
 fileurl(file) = let f = find_source_file(file); f === nothing ? "" : "file://"*f; end
 
+url(m::TypeMapEntry) = url(m.func)
 function url(m::Method)
-    M = m.func.module
-    (m.func.file == :null || m.func.file == :string) && return ""
-    file = string(m.func.file)
-    line = m.func.line
+    M = m.module
+    (m.file == :null || m.file == :string) && return ""
+    file = string(m.file)
+    line = m.line
     line <= 0 || ismatch(r"In\[[0-9]+\]", file) && return ""
     if inbase(M)
         if isempty(Base.GIT_VERSION_INFO.commit)
@@ -169,7 +189,7 @@ function url(m::Method)
     end
 end
 
-function writemime(io::IO, ::MIME"text/html", m::Method; kwtype::Nullable{DataType}=Nullable{DataType}())
+function writemime(io::IO, ::MIME"text/html", m::TypeMapEntry; kwtype::Nullable{DataType}=Nullable{DataType}())
     tv, decls, file, line = arg_decl_parts(m)
     ft = m.sig.parameters[1]
     d1 = decls[1]
@@ -222,20 +242,18 @@ function writemime(io::IO, mime::MIME"text/html", mt::MethodTable)
     ns = string(name)
     what = startswith(ns, '@') ? "macro" : "generic function"
     print(io, "$n $meths for ", what, " <b>$ns</b>:<ul>")
-    d = mt.defs
     kwtype = isdefined(mt, :kwsorter) ? Nullable{DataType}(typeof(mt.kwsorter)) : Nullable{DataType}()
-    while d !== nothing
+    visit(mt) do d
         print(io, "<li> ")
         writemime(io, mime, d; kwtype=kwtype)
         print(io, "</li> ")
-        d = d.next
     end
     print(io, "</ul>")
 end
 
-# pretty-printing of Vector{Method} for output of methodswith:
+# pretty-printing of Vector{TypeMapEntry} for output of methodswith:
 
-function writemime(io::IO, mime::MIME"text/html", mt::AbstractVector{Method})
+function writemime(io::IO, mime::MIME"text/html", mt::AbstractVector{TypeMapEntry})
     print(io, summary(mt))
     if !isempty(mt)
         print(io, ":<ul>")
@@ -247,6 +265,6 @@ function writemime(io::IO, mime::MIME"text/html", mt::AbstractVector{Method})
     end
 end
 
-# override usual show method for Vector{Method}: don't abbreviate long lists
-writemime(io::IO, mime::MIME"text/plain", mt::AbstractVector{Method}) =
+# override usual show method for Vector{TypeMapEntry}: don't abbreviate long lists
+writemime(io::IO, mime::MIME"text/plain", mt::AbstractVector{TypeMapEntry}) =
     showarray(IOContext(io, :limit_output => false), mt)

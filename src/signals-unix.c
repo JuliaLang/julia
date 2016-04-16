@@ -55,14 +55,14 @@ void sigdie_handler(int sig, siginfo_t *info, void *context)
 {
     sigset_t sset;
     uv_tty_reset_mode();
-    sigfillset(&sset);
-    sigprocmask(SIG_UNBLOCK, &sset, NULL);
-    signal(sig, SIG_DFL);
 #ifdef __APPLE__
     jl_critical_error(sig, (bt_context_t*)&((ucontext64_t*)context)->uc_mcontext64->__ss, jl_bt_data, &jl_bt_size);
 #else
     jl_critical_error(sig, (bt_context_t*)context, jl_bt_data, &jl_bt_size);
 #endif
+    sigfillset(&sset);
+    sigprocmask(SIG_UNBLOCK, &sset, NULL);
+    signal(sig, SIG_DFL);
     if (sig != SIGSEGV &&
         sig != SIGBUS &&
         sig != SIGILL) {
@@ -462,6 +462,9 @@ void jl_install_default_signal_handlers(void)
     act_die.sa_sigaction = sigdie_handler;
     act_die.sa_flags = SA_SIGINFO;
     if (sigaction(SIGILL, &act_die, NULL) < 0) {
+        jl_errorf("fatal error: sigaction: %s", strerror(errno));
+    }
+    if (sigaction(SIGABRT, &act_die, NULL) < 0) {
         jl_errorf("fatal error: sigaction: %s", strerror(errno));
     }
     if (sigaction(SIGSYS, &act_die, NULL) < 0) {

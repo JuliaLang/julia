@@ -192,11 +192,6 @@ static void add_intrinsic(jl_module_t *inm, const char *name, enum intrinsic f)
 #ifdef __cplusplus
 extern "C"
 #endif
-jl_value_t *jl_mk_builtin_func(const char *name, jl_fptr_t fptr);
-
-#ifdef __cplusplus
-extern "C"
-#endif
 void jl_init_intrinsic_functions()
 {
     jl_module_t *inm = jl_new_module(jl_symbol("Intrinsics"));

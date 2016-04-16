@@ -64,7 +64,6 @@
 #    sparams::Tuple
 #    tfunc
 #    name::Symbol
-#    specializations
 #    inferred
 #    file::Symbol
 #    line::Int
@@ -125,7 +124,7 @@ export
     Tuple, Type, TypeConstructor, TypeName, TypeVar, Union, Void,
     SimpleVector, AbstractArray, DenseArray,
     # special objects
-    Function, LambdaInfo, Method, MethodTable,
+    Function, LambdaInfo, Method, MethodTable, TypeMapEntry, TypeMapLevel,
     Module, Symbol, Task, Array, WeakRef,
     # numeric types
     Number, Real, Integer, Bool, Ref, Ptr,

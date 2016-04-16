@@ -37,6 +37,7 @@ test_have_color(buf, "", "")
 method_c2(x::Int32, args...) = true
 method_c2(x::Int32, y::Float64, args...) = true
 method_c2(x::Int32, y::Float64) = true
+method_c2(x::Int32, y::Int32, z::Int32) = true
 method_c2{T<:Real}(x::T, y::T, z::T) = true
 
 Base.show_method_candidates(buf, Base.MethodError(method_c2,(1., 1., 2)))

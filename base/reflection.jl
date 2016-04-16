@@ -233,28 +233,51 @@ function methods(f::ANY)
     end
 end
 
-function length(mt::MethodTable)
-    n = 0
-    d = mt.defs
-    while !is(d,nothing)
-        n += 1
+function visit(f, mt::MethodTable)
+    mt.defs !== nothing && visit(f, mt.defs)
+    nothing
+end
+function visit(f, mc::TypeMapLevel)
+    if mc.targ !== nothing
+        e = mc.targ::Vector{Any}
+        for i in 1:length(e)
+            isdefined(e, i) && visit(f, e[i])
+        end
+    end
+    if mc.arg1 !== nothing
+        e = mc.arg1::Vector{Any}
+        for i in 1:length(e)
+            isdefined(e, i) && visit(f, e[i])
+        end
+    end
+    mc.list !== nothing && visit(f, mc.list)
+    nothing
+end
+function visit(f, d::TypeMapEntry)
+    while !is(d, nothing)
+        f(d)
         d = d.next
     end
-    n
+    nothing
 end
 
-start(mt::MethodTable) = mt.defs
-next(mt::MethodTable, m::Method) = (m,m.next)
-done(mt::MethodTable, m::Method) = false
-done(mt::MethodTable, i::Void) = true
+function length(mt::MethodTable)
+    n = 0
+    visit(mt) do m
+        n += 1
+    end
+    return n::Int
+end
+isempty(mt::MethodTable) = (mt.defs === nothing)
 
+uncompressed_ast(l::Method) = uncompressed_ast(l.lambda_template)
 uncompressed_ast(l::LambdaInfo) =
     isa(l.code,Array{Any,1}) ? l.code::Array{Any,1} : ccall(:jl_uncompress_ast, Array{Any,1}, (Any,Any), l, l.code)
 
 # Printing code representations in IR and assembly
 function _dump_function(f, t::ANY, native, wrapper, strip_ir_metadata, dump_module)
     t = tt_cons(Core.Typeof(f), to_tuple_type(t))
-    llvmf = ccall(:jl_get_llvmf, Ptr{Void}, (Any, Bool, Bool), t, wrapper, native)
+    llvmf = ccall(:jl_get_llvmf, Ptr{Void}, (Any, Any, Bool, Bool), f, t, wrapper, native)
 
     if llvmf == C_NULL
         error("no method found for the specified argument types")
@@ -267,6 +290,7 @@ function _dump_function(f, t::ANY, native, wrapper, strip_ir_metadata, dump_modu
                     (Ptr{Void}, Bool, Bool), llvmf, strip_ir_metadata, dump_module)
     end
 
+    isleaftype(t) || (str = "# WARNING: This code may not match what actually runs.\n" * str)
     return str
 end
 
@@ -280,20 +304,19 @@ code_native(io::IO, f::ANY, types::ANY=Tuple) =
 code_native(f::ANY, types::ANY=Tuple) = code_native(STDOUT, f, types)
 
 # give a decent error message if we try to instantiate a staged function on non-leaf types
-function func_for_method_checked(m, types)
-    linfo = Core.Inference.func_for_method(m[3],m[1],m[2])
-    if linfo === Core.Inference.NF
-        error("cannot call @generated function `", m[3], "` ",
+function func_for_method_checked(m::Method, types)
+    if m.isstaged && !isleaftype(types)
+        error("cannot call @generated function `", m, "` ",
               "with abstract argument types: ", types)
     end
-    linfo::LambdaInfo
+    return m
 end
 
 function code_typed(f::ANY, types::ANY=Tuple; optimize=true)
     types = to_tuple_type(types)
     asts = []
     for x in _methods(f,types,-1)
-        linfo = func_for_method_checked(x, types)
+        linfo = func_for_method_checked(x[3].func, types)
         if optimize
             (li, ty) = Core.Inference.typeinf(linfo, x[1], x[2], true)
         else
@@ -308,7 +331,7 @@ function return_types(f::ANY, types::ANY=Tuple)
     types = to_tuple_type(types)
     rt = []
     for x in _methods(f,types,-1)
-        linfo = func_for_method_checked(x,types)
+        linfo = func_for_method_checked(x[3].func,types)
         (_li, ty) = Core.Inference.typeinf(linfo, x[1], x[2])
         push!(rt, ty)
     end
@@ -331,7 +354,7 @@ function which(f::ANY, t::ANY)
         if m === nothing
             error("no method found for the specified argument types")
         end
-        m
+        return m::TypeMapEntry
     end
 end
 
@@ -344,29 +367,34 @@ function which_module(m::Module, s::Symbol)
     binding_module(m, s)
 end
 
+functionloc(m::TypeMapEntry) = functionloc(m.func)
 function functionloc(m::Method)
-    lsd = m.func::LambdaInfo
-    ln = lsd.line
+    ln = m.line
     if ln <= 0
         error("could not determine location of method definition")
     end
-    (find_source_file(string(lsd.file)), ln)
+    (find_source_file(string(m.file)), ln)
 end
 
 functionloc(f::ANY, types::ANY) = functionloc(which(f,types))
 
 function functionloc(f)
-    m = methods(f)
-    if length(m) > 1
-        error("function has multiple methods; please specify a type signature")
-    elseif isempty(m)
+    mt = methods(f)
+    local thef = nothing
+    visit(mt) do f
+        if thef !== nothing
+            error("function has multiple methods; please specify a type signature")
+        end
+        thef = f
+    end
+    if thef === nothing
         if isa(f,Function)
             error("function has no definitions")
         else
             error("object is not callable")
         end
     end
-    functionloc(first(m))
+    functionloc(thef)
 end
 
 function function_module(f, types::ANY)
