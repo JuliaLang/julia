@@ -383,7 +383,7 @@ test_typed_ast_printing(g15714, Tuple{Vector{Float32}},
 tracefoo(x, y) = x+y
 didtrace = false
 tracer(x::Ptr{Void}) = (@test isa(unsafe_pointer_to_objref(x), LambdaInfo); global didtrace = true; nothing)
-ccall(:jl_register_tracer, Void, (Ptr{Void},), cfunction(tracer, Void, (Ptr{Void},)))
+ccall(:jl_register_method_tracer, Void, (Ptr{Void},), cfunction(tracer, Void, (Ptr{Void},)))
 meth = which(tracefoo,Tuple{Any,Any}).func
 ccall(:jl_trace_method, Void, (Any,), meth)
 @test tracefoo(1, 2) == 3
@@ -392,7 +392,7 @@ ccall(:jl_untrace_method, Void, (Any,), meth)
 didtrace = false
 @test tracefoo(1.0, 2.0) == 3.0
 @test !didtrace
-ccall(:jl_register_tracer, Void, (Ptr{Void},), C_NULL)
+ccall(:jl_register_method_tracer, Void, (Ptr{Void},), C_NULL)
 
 # Method Tracing test
 methtracer(x::Ptr{Void}) = (@test isa(unsafe_pointer_to_objref(x), Method); global didtrace = true; nothing)

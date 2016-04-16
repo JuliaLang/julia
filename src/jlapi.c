@@ -320,10 +320,22 @@ JL_DLLEXPORT void jl_untrace_method(jl_method_t *m)
     m->traced = 0;
 }
 
-void (*jl_linfo_tracer)(jl_lambda_info_t *tracee) = 0;
-JL_DLLEXPORT void jl_register_tracer(void (*callback)(jl_lambda_info_t *tracee))
+JL_DLLEXPORT void jl_trace_linfo(jl_lambda_info_t *linfo)
 {
-    jl_linfo_tracer = callback;
+    assert(jl_is_lambda_info(linfo));
+    linfo->compile_traced = 1;
+}
+
+JL_DLLEXPORT void jl_untrace_linfo(jl_lambda_info_t *linfo)
+{
+    assert(jl_is_lambda_info(linfo));
+    linfo->compile_traced = 0;
+}
+
+void (*jl_method_tracer)(jl_lambda_info_t *tracee) = 0;
+JL_DLLEXPORT void jl_register_method_tracer(void (*callback)(jl_lambda_info_t *tracee))
+{
+    jl_method_tracer = callback;
 }
 
 void (*jl_newmeth_tracer)(jl_method_t *tracee) = 0;
@@ -331,6 +343,13 @@ JL_DLLEXPORT void jl_register_newmeth_tracer(void (*callback)(jl_method_t *trace
 {
     jl_newmeth_tracer = callback;
 }
+
+void (*jl_linfo_tracer)(jl_lambda_info_t *tracee) = 0;
+JL_DLLEXPORT void jl_register_linfo_tracer(void (*callback)(jl_lambda_info_t *tracee))
+{
+    jl_linfo_tracer = callback;
+}
+
 
 
 // Create function versions of some useful macros
