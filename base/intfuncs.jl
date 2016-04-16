@@ -112,7 +112,7 @@ end
 
 # b^p mod m
 function powermod{T<:Integer}(x::Integer, p::Integer, m::T)
-    p < 0 && throw(DomainError())
+    p < 0 && return powermod(invmod(x, m), -p, m)
     p == 0 && return mod(one(m),m)
     (m == 1 || m == -1) && return zero(m)
     b = oftype(m,mod(x,m))  # this also checks for divide by zero
