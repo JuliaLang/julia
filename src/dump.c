@@ -1539,6 +1539,7 @@ static jl_value_t *jl_deserialize_value_(ios_t *s, jl_value_t *vtag, jl_value_t 
         m->invokes.unknown = jl_deserialize_value(s, (jl_value_t**)&m->invokes);
         jl_gc_wb(m, m->invokes.unknown);
         m->needs_sparam_vals_ducttape = read_int8(s);
+        m->traced = 0;
         return (jl_value_t*)m;
     }
     else if (vtag == (jl_value_t*)jl_lambda_info_type) {

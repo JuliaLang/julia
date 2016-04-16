@@ -1250,6 +1250,8 @@ static jl_tupletype_t *join_tsig(jl_tupletype_t *tt, jl_tupletype_t *sig)
 static jl_value_t *ml_matches(union jl_typemap_t ml, int offs,
                               jl_tupletype_t *type, int lim);
 
+extern void (*jl_linfo_tracer)(jl_lambda_info_t *tracee);
+
 static jl_lambda_info_t *cache_method(jl_methtable_t *mt, union jl_typemap_t *cache, jl_value_t *parent,
                                       jl_tupletype_t *type, jl_tupletype_t *origtype,
                                       jl_typemap_entry_t *m, jl_svec_t *sparams)
@@ -1549,6 +1551,8 @@ static jl_lambda_info_t *cache_method(jl_methtable_t *mt, union jl_typemap_t *ca
     }
     JL_GC_POP();
     JL_UNLOCK(codegen);
+    if (definition->traced && jl_linfo_tracer)
+        jl_linfo_tracer(newmeth);
     return newmeth;
 }
 
@@ -1693,6 +1697,7 @@ static void update_max_args(jl_methtable_t *mt, jl_tupletype_t *type)
         mt->max_args = na;
 }
 
+extern void (*jl_newmeth_tracer)(jl_method_t *tracee);
 void jl_method_table_insert(jl_methtable_t *mt, jl_tupletype_t *type, jl_tupletype_t *simpletype,
                             jl_method_t *method, jl_svec_t *tvars)
 {
@@ -1711,6 +1716,8 @@ void jl_method_table_insert(jl_methtable_t *mt, jl_tupletype_t *type, jl_tuplety
         check_ambiguous_matches(mt->defs, newentry);
     invalidate_conflicting(&mt->cache, (jl_value_t*)type, (jl_value_t*)mt);
     update_max_args(mt, type);
+    if (jl_newmeth_tracer)
+        jl_newmeth_tracer(method);
     JL_SIGATOMIC_END();
 }
 

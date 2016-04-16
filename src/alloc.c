@@ -545,6 +545,7 @@ JL_DLLEXPORT jl_method_t *jl_new_method_uninit(void)
     m->invokes.unknown = NULL;
     m->isstaged = 0;
     m->needs_sparam_vals_ducttape = 2;
+    m->traced = 0;
     return m;
 }
 
