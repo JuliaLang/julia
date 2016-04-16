@@ -216,6 +216,7 @@ typedef struct _jl_method_t {
     // and so unspecialized will be created for each linfo instead of using linfo->def->template
     // 0 = no, 1 = yes, 2 = not yet known
     uint8_t needs_sparam_vals_ducttape;
+    uint8_t traced;
 } jl_method_t;
 
 // this holds the static data for a runnable thunk:
@@ -1296,6 +1297,12 @@ JL_DLLEXPORT jl_value_t *jl_load(const char *fname, size_t len);
 JL_DLLEXPORT jl_value_t *jl_interpret_toplevel_expr_in(jl_module_t *m, jl_value_t *e,
                                                        jl_lambda_info_t *lam);
 JL_DLLEXPORT jl_module_t *jl_base_relative_to(jl_module_t *m);
+
+// tracing
+JL_DLLEXPORT void jl_trace_method(jl_method_t *m);
+JL_DLLEXPORT void jl_untrace_method(jl_method_t *m);
+JL_DLLEXPORT void jl_register_tracer(void (*callback)(jl_lambda_info_t *tracee));
+JL_DLLEXPORT void jl_register_newmeth_tracer(void (*callback)(jl_method_t *tracee));
 
 // AST access
 JL_DLLEXPORT int jl_is_rest_arg(jl_value_t *ex);
