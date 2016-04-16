@@ -105,22 +105,23 @@ isvalid(s::UTF8String, i::Integer) =
     (1 <= i <= endof(s.data)) && !is_valid_continuation(s.data[i])
 
 const empty_utf8 = UTF8String(UInt8[])
-
 function getindex(s::UTF8String, r::UnitRange{Int})
     isempty(r) && return empty_utf8
     i, j = first(r), last(r)
     d = s.data
-    if i < 1 || i > length(s.data)
+    if i < 1 || i > length(d)
         throw(BoundsError(s, i))
+    end
+    if j > length(d)
+        throw(BoundsError(s, j))
     end
     if is_valid_continuation(d[i])
         throw(UnicodeError(UTF_ERR_INVALID_INDEX, i, d[i]))
     end
-    if j > length(d)
-        throw(BoundsError())
+    if is_valid_continuation(d[j])
+        throw(UnicodeError(UTF_ERR_INVALID_INDEX, j, d[j]))
     end
-    j = nextind(s,j)-1
-    UTF8String(d[i:j])
+    UTF8String(d[i:j + utf8_trailing[d[j]+1]]) # +1 since utf_trailing is 1-based
 end
 
 function search(s::UTF8String, c::Char, i::Integer)

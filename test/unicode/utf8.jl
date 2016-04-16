@@ -17,13 +17,37 @@ let str = UTF8String(b"this is a test\xed\x80")
     @test_throws BoundsError getindex(str, 0:3)
     @test_throws BoundsError getindex(str, 17:18)
     @test_throws BoundsError getindex(str, 2:17)
-    @test_throws UnicodeError getindex(str, 16:17)
+    @test_throws UnicodeError getindex(str, 16:16)
     @test string(Char(0x110000)) == "\ufffd"
     sa = SubString{ASCIIString}(ascii("This is a silly test"), 1, 14)
     s8 = convert(SubString{UTF8String}, sa)
     @test typeof(s8) == SubString{UTF8String}
     @test s8 == "This is a sill"
     @test convert(UTF8String, b"this is a test\xed\x80\x80") == "this is a test\ud000"
+end
+
+let s = UTF8String("🐨🐨")
+    #each koala is 4 bytes
+    @test s[1:1] == "🐨"
+    @test s[1] == '🐨'
+    @test s[5:5] == "🐨"
+    @test s[5] == '🐨'
+    @test s[1:5] == "🐨🐨"
+    @test_throws UnicodeError s[1:2]
+    @test_throws UnicodeError s[1:3]
+    @test_throws UnicodeError s[1:4]
+    @test_throws UnicodeError s[1:6]
+    @test_throws UnicodeError s[1:7]
+    @test_throws UnicodeError s[1:8]
+    @test_throws UnicodeError s[5:6]
+    @test_throws UnicodeError s[5:7]
+    @test_throws UnicodeError s[5:8]
+    @test_throws UnicodeError s[1:end-1]
+    @test_throws UnicodeError s[1:end-2]
+    @test_throws UnicodeError s[1:end-3]
+    @test_throws BoundsError s[-1:4]
+    @test_throws BoundsError s[3:10]
+    @test_throws BoundsError s[-4:40]
 end
 
 ## Reverse of UTF8String

@@ -251,6 +251,26 @@ function utf16(p::Union{Ptr{UInt16}, Ptr{Int16}})
     utf16(p, len)
 end
 
+function getindex(s::UTF16String, r::UnitRange{Int})
+    i, j = first(r), last(r)
+    isempty(r) && return SubString(s,i,j)
+    d = s.data
+    endidx = length(d) - 1 #UTF16 are null terminated
+    if i < 1 || i > endidx
+        throw(BoundsError(s, i))
+    end
+    if j > endidx
+        throw(BoundsError(s, j))
+    end
+    if is_surrogate_trail(d[i])
+        throw(UnicodeError(UTF_ERR_INVALID_INDEX, i, d[i]))
+    end
+    if is_surrogate_trail(d[j])
+        throw(UnicodeError(UTF_ERR_INVALID_INDEX, j, d[j]))
+    end
+    return SubString(s,i,j)
+end
+
 function map(fun, str::UTF16String)
     buf = UInt16[]
     sizehint!(buf, length(str.data))

@@ -21,3 +21,30 @@ u16 = utf16(u8)
 @test map(lowercase, utf16("TEST\U1f596")) == "test\U1f596"
 @test typeof(Base.unsafe_convert(Ptr{UInt16}, utf16("test"))) == Ptr{UInt16}
 
+let s = UTF16String("🐨🐨x")
+    #each koala is 2 code-units
+    @test s[1:1] == "🐨"
+    @test s[1] == '🐨'
+    @test s[3:3] == "🐨"
+    @test s[3] == '🐨'
+    @test s[1:nextind(s,1)] == "🐨🐨"
+    @test s[1:3] == "🐨🐨"
+    @test s[1:end] == s
+    @test s[nextind(s,1):end] == "🐨x"
+    @test s[3:end] == "🐨x"
+    @test s[3:5] == "🐨x"
+    @test_throws UnicodeError s[2]
+    @test_throws UnicodeError s[4]
+    @test_throws UnicodeError s[1:2]
+    @test_throws UnicodeError s[1:end-1]
+    @test_throws UnicodeError s[1:4]
+    @test_throws UnicodeError s[2:3]
+    @test_throws UnicodeError s[2:4]
+    @test_throws UnicodeError s[3:4]
+    @test_throws BoundsError s[0:3]
+    @test_throws BoundsError s[-1:3]
+    @test_throws BoundsError s[-2:3]
+    @test_throws BoundsError s[3:6]
+    @test_throws BoundsError s[3:7]
+    @test_throws BoundsError s[3:8]
+end
