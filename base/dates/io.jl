@@ -64,9 +64,9 @@ immutable SlotRule
 end
 const SLOT_RULE = SlotRule(Array{Type}(256))
 
-getindex(collection::SlotRule, key::Char) = collection.rules[Int(key)]
-setindex!(collection::SlotRule, value::Type, key::Char) = collection.rules[Int(key)] = value
-keys(c::SlotRule) = map(Char, filter(el -> isdefined(c.rules, el), eachindex(c.rules)))
+getindex(collection::SlotRule, key::Char) = collection.rules[Int(key)]::Type
+setindex!(collection::SlotRule, value::Type, key::Char) = setindex!(collection.rules, value, Int(key))::Vector{Type}
+keys(c::SlotRule) = map(Char, filter(el -> isdefined(c.rules, el), eachindex(c.rules)))::Vector{Char}
 
 SLOT_RULE['y'] = Year
 SLOT_RULE['Y'] = Year
@@ -94,7 +94,7 @@ function DateFormat(f::AbstractString, locale::AbstractString="english")
         letter = f[m.offset]
         typ = SLOT_RULE[letter]
 
-        width = length(m.match)
+        width::Int = length(m.match)
         tran = f[last_offset:m.offset-1]
 
         if isempty(params)
@@ -105,7 +105,7 @@ function DateFormat(f::AbstractString, locale::AbstractString="english")
         end
 
         params = (typ,letter,width)
-        last_offset = m.offset + width
+        last_offset::Int = m.offset + width
     end
 
     tran = last_offset > endof(f) ? r"(?=\s|$)" : f[last_offset:end]
@@ -153,7 +153,7 @@ function parse(x::AbstractString,df::DateFormat)
         throw(ArgumentError("Delimiter mismatch. Couldn't find first delimiter, \"$(df.slots[1].transition)\", in date string"))
     end
     periods = Period[]
-    extra = []
+    extra = Period[]
     cursor = 1
     for slot in df.slots
         cursor, pe = getslot(x,slot,df.locale,cursor)
