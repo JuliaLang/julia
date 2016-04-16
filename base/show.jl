@@ -229,11 +229,16 @@ function lambdainfo_slotnames(l::LambdaInfo)
 end
 
 function show(io::IO, l::LambdaInfo)
-    println(io, "LambdaInfo for ", l.name)
+    if isdefined(l, :def)
+        println(io, "LambdaInfo for ", l.def.name)
+    else
+        println(io, "Toplevel LambdaInfo thunk")
+    end
     # Fix slot names and types in function body
     lambda_io = IOContext(IOContext(io, :LAMBDAINFO => l),
                           :LAMBDA_SLOTNAMES => lambdainfo_slotnames(l))
-    body = Expr(:body); body.args = uncompressed_ast(l)
+    body = Expr(:body)
+    body.args = uncompressed_ast(l)
     body.typ = l.rettype
     show(lambda_io, body)
 end

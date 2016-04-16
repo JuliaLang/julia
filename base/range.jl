@@ -665,8 +665,8 @@ end
 
 promote_rule{T1,T2}(::Type{UnitRange{T1}},::Type{UnitRange{T2}}) =
     UnitRange{promote_type(T1,T2)}
-convert{T}(::Type{UnitRange{T}}, r::UnitRange{T}) = r
-convert{T}(::Type{UnitRange{T}}, r::UnitRange) = UnitRange{T}(r.start, r.stop)
+convert{T<:Real}(::Type{UnitRange{T}}, r::UnitRange{T}) = r
+convert{T<:Real}(::Type{UnitRange{T}}, r::UnitRange) = UnitRange{T}(r.start, r.stop)
 
 promote_rule{T1a,T1b,T2a,T2b}(::Type{StepRange{T1a,T1b}},::Type{StepRange{T2a,T2b}}) =
     StepRange{promote_type(T1a,T2a),promote_type(T1b,T2b)}
@@ -681,26 +681,26 @@ convert{T}(::Type{StepRange}, r::UnitRange{T}) =
 
 promote_rule{T1,T2}(::Type{FloatRange{T1}},::Type{FloatRange{T2}}) =
     FloatRange{promote_type(T1,T2)}
-convert{T}(::Type{FloatRange{T}}, r::FloatRange{T}) = r
-convert{T}(::Type{FloatRange{T}}, r::FloatRange) =
+convert{T<:AbstractFloat}(::Type{FloatRange{T}}, r::FloatRange{T}) = r
+convert{T<:AbstractFloat}(::Type{FloatRange{T}}, r::FloatRange) =
     FloatRange{T}(r.start,r.step,r.len,r.divisor)
 
 promote_rule{F,OR<:OrdinalRange}(::Type{FloatRange{F}}, ::Type{OR}) =
     FloatRange{promote_type(F,eltype(OR))}
-convert{T}(::Type{FloatRange{T}}, r::OrdinalRange) =
+convert{T<:AbstractFloat}(::Type{FloatRange{T}}, r::OrdinalRange) =
     FloatRange{T}(first(r), step(r), length(r), one(T))
 convert{T}(::Type{FloatRange}, r::OrdinalRange{T}) =
     FloatRange{typeof(float(first(r)))}(first(r), step(r), length(r), one(T))
 
 promote_rule{T1,T2}(::Type{LinSpace{T1}},::Type{LinSpace{T2}}) =
     LinSpace{promote_type(T1,T2)}
-convert{T}(::Type{LinSpace{T}}, r::LinSpace{T}) = r
-convert{T}(::Type{LinSpace{T}}, r::LinSpace) =
+convert{T<:AbstractFloat}(::Type{LinSpace{T}}, r::LinSpace{T}) = r
+convert{T<:AbstractFloat}(::Type{LinSpace{T}}, r::LinSpace) =
     LinSpace{T}(r.start, r.stop, r.len, r.divisor)
 
 promote_rule{F,OR<:OrdinalRange}(::Type{LinSpace{F}}, ::Type{OR}) =
     LinSpace{promote_type(F,eltype(OR))}
-convert{T}(::Type{LinSpace{T}}, r::OrdinalRange) =
+convert{T<:AbstractFloat}(::Type{LinSpace{T}}, r::OrdinalRange) =
     linspace(convert(T, first(r)), convert(T, last(r)), convert(T, length(r)))
 convert{T}(::Type{LinSpace}, r::OrdinalRange{T}) =
     convert(LinSpace{typeof(float(first(r)))}, r)
@@ -708,9 +708,9 @@ convert{T}(::Type{LinSpace}, r::OrdinalRange{T}) =
 # Promote FloatRange to LinSpace
 promote_rule{F,OR<:FloatRange}(::Type{LinSpace{F}}, ::Type{OR}) =
     LinSpace{promote_type(F,eltype(OR))}
-convert{T}(::Type{LinSpace{T}}, r::FloatRange) =
+convert{T<:AbstractFloat}(::Type{LinSpace{T}}, r::FloatRange) =
     linspace(convert(T, first(r)), convert(T, last(r)), convert(T, length(r)))
-convert{T}(::Type{LinSpace}, r::FloatRange{T}) =
+convert{T<:AbstractFloat}(::Type{LinSpace}, r::FloatRange{T}) =
     convert(LinSpace{T}, r)
 
 
