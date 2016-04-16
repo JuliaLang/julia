@@ -230,7 +230,6 @@ add_tfunc(lt_float, 2, 2, cmp_tfunc)
 add_tfunc(le_float, 2, 2, cmp_tfunc)
 add_tfunc(fpiseq, 2, 2, cmp_tfunc)
 add_tfunc(fpislt, 2, 2, cmp_tfunc)
-add_tfunc(nan_dom_err, 2, 2, (a, b)->a)
 add_tfunc(Core.Intrinsics.ccall, 3, IInf,
     function(fptr, rt, at, a...)
         if !isType(rt)
