@@ -73,15 +73,15 @@ JL_DLLEXPORT jl_value_t *jl_pointerset(jl_value_t *p, jl_value_t *x, jl_value_t 
 
 static inline unsigned int next_power_of_two(unsigned int val)
 {
-  /* this function taken from libuv src/unix/core.c */
-  val -= 1;
-  val |= val >> 1;
-  val |= val >> 2;
-  val |= val >> 4;
-  val |= val >> 8;
-  val |= val >> 16;
-  val += 1;
-  return val;
+    /* this function taken from libuv src/unix/core.c */
+    val -= 1;
+    val |= val >> 1;
+    val |= val >> 2;
+    val |= val >> 4;
+    val |= val >> 8;
+    val |= val >> 16;
+    val += 1;
+    return val;
 }
 
 static inline char signbitbyte(void *a, unsigned bytes)
