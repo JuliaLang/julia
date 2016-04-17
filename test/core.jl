@@ -1103,12 +1103,14 @@ type I2619{T}
 end
 bad2619 = false
 function i2619()
+    Base.enable_catch_fatal()
     global e2619 = try
         I2619{Float64}(0.0f)
         global bad2619 = true
     catch _e
         _e
     end
+    Base.disable_catch_fatal()
 end
 i2619()
 @test !bad2619
@@ -2274,11 +2276,13 @@ OLD_STDOUT = STDOUT
 file = open(tempname(), "w")
 redirect_stdout(file)
 versioninfo()
+Base.enable_catch_fatal()
 try
     type Foo{T}
         val::Bar{T}
     end
 end
+Base.disable_catch_fatal()
 gc()
 redirect_stdout(OLD_STDOUT)
 close(file)

@@ -1380,6 +1380,7 @@ typedef struct _jl_handler_t {
     jl_gcframe_t *gcstack;
     struct _jl_handler_t *prev;
     int8_t gc_state;
+    int8_t catch_fatal;
 #ifdef JULIA_ENABLE_THREADING
     size_t locks_len;
 #endif
@@ -1404,8 +1405,6 @@ typedef struct _jl_task_t {
 
     // current exception handler
     jl_handler_t *eh;
-    // fatal exception handler
-    jl_handler_t *fatal_eh;
     // saved gc stack top for context switches
     jl_gcframe_t *gcstack;
     // current module, or NULL if this task has not set one
@@ -1436,7 +1435,8 @@ JL_DLLEXPORT jl_value_t *jl_switchto(jl_task_t *t, jl_value_t *arg);
 JL_DLLEXPORT void JL_NORETURN jl_throw(jl_value_t *e);
 JL_DLLEXPORT void JL_NORETURN jl_rethrow(void);
 JL_DLLEXPORT void JL_NORETURN jl_rethrow_other(jl_value_t *e);
-JL_DLLEXPORT void jl_set_fatal_eh(void);
+JL_DLLEXPORT void jl_enable_catch_fatal(void);
+JL_DLLEXPORT void jl_disable_catch_fatal(void);
 JL_DLLEXPORT void jl_rethrow_fatal(void);
 
 #ifdef JULIA_ENABLE_THREADING

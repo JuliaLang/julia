@@ -197,6 +197,7 @@ JL_DLLEXPORT void jl_enter_handler(jl_handler_t *eh)
     JL_SIGATOMIC_BEGIN();
     eh->prev = jl_current_task->eh;
     eh->gcstack = jl_pgcstack;
+    eh->catch_fatal = 0;
 #ifdef JULIA_ENABLE_THREADING
     eh->gc_state = jl_gc_state();
     eh->locks_len = jl_current_task->locks.len;

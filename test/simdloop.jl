@@ -61,13 +61,7 @@ let j=4
 
     # Index that is local to loop
     @simd for simd_loop_local=1:0 end
-    simd_loop_local_present = true
-    try
-        simd_loop_local += 1
-    catch
-        simd_loop_local_present = false
-    end
-    @test !simd_loop_local_present
+    @test_throws UndefVarError simd_loop_local += 1
 end
 
 import Base.SimdLoop.SimdError

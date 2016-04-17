@@ -231,9 +231,14 @@ macro test_throws(extype, ex)
     orig_ex = Expr(:quote,ex)
     result = quote
         try
-            Returned($(esc(ex)))
-        catch _e
-            Threw(_e, nothing)
+            Base.enable_catch_fatal()
+            try
+                Returned($(esc(ex)))
+            catch _e
+                Threw(_e, nothing)
+            end
+        finally
+            Base.disable_catch_fatal()
         end
     end
     Base.remove_linenums!(result)

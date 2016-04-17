@@ -50,16 +50,20 @@ macro assert(ex, msgs...)
     :($(esc(ex)) ? $(nothing) : throw(Main.Base.AssertionError($msg)))
 end
 
+## fatal errors ##
 
 isfatal(error) = false
-if isdefined(Main, :Base)
 isfatal(::StackOverflowError) = true
 isfatal(::OutOfMemoryError) = true
 isfatal(::UndefVarError) = true
-end
 
-set_fatal_eh() = ccall(:jl_set_fatal_eh, Void, ())
-rethrow_fatal() = ccall(:jl_rethrow_fatal, Void, ())
+enable_catch_fatal() = ccall(:jl_enable_catch_fatal, Void, ())
+disable_catch_fatal() = ccall(:jl_disable_catch_fatal, Void, ())
+if isdefined(Main, :Base)
+rethrow_if_fatal(error) = isfatal(error) && ccall(:jl_rethrow_fatal, Void, ())
+else
+rethrow_if_fatal(error) = nothing
+end
 
 
 """

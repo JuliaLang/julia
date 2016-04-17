@@ -54,7 +54,7 @@ let ct = current_task()
     yieldto(@task yieldto(ct))
     @test catch_backtrace() == StackFrame[]
 
-    @noinline bad_function() = throw(UndefVarError(:nonexistent))
+    @noinline bad_function() = error("error")
     @noinline function try_stacktrace()
         try
             bad_function()

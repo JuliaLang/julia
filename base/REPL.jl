@@ -48,8 +48,8 @@ end
 
 function eval_user_input(ast::ANY, backend::REPLBackend)
     iserr, lasterr, bt = false, (), nothing
+    Base.enable_catch_fatal()
     while true
-        Base.set_fatal_eh()
         try
             if iserr
                 put!(backend.response_channel, (lasterr, bt))
