@@ -202,10 +202,8 @@ typedef struct _jl_method_t {
     // list of potentially-ambiguous methods (nothing = none, Vector{Any} of Methods otherwise)
     jl_value_t *ambig;
 
-    // array of all lambda infos with code generated from this one
-    jl_array_t *specializations;
-    // table of all argument types for which we've inferred this code
-    union jl_typemap_t tfunc;
+    // table of all argument types for which we've inferred or compiled this code
+    union jl_typemap_t specializations;
 
     // the AST template (or, for isstaged, code for the generator)
     struct _jl_lambda_info_t *lambda_template;
