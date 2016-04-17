@@ -82,7 +82,8 @@ colon(a::Real, b::Real) = colon(promote(a,b)...)
 
 colon{T<:Real}(start::T, stop::T) = UnitRange{T}(start, stop)
 
-range(a::Real, len::Integer) = UnitRange{typeof(a)}(a, oftype(a, a+len-1))
+range(a::Real, len::Integer) =
+    UnitRange{typeof(a)}(a, oftype(a, oftype(a, unitless(a)+len-1)))
 
 colon{T}(start::T, stop::T) = StepRange(start, one(stop-start), stop)
 
@@ -114,7 +115,7 @@ FloatRange(a::AbstractFloat, s::AbstractFloat, l::Real, d::AbstractFloat) =
 
 # float rationalization helper
 function rat(x)
-    y = x
+    y = unitless(x)
     a = d = 1
     b = c = 0
     m = maxintfloat(Float32)
@@ -124,16 +125,16 @@ function rat(x)
         a, c = f*a + c, a
         b, d = f*b + d, b
         max(abs(a),abs(b)) <= convert(Int,m) || return c, d
-        oftype(x,a)/oftype(x,b) == x && break
+        oftype(unitless(x),a)/oftype(unitless(x),b) == unitless(x) && break
         y = inv(y)
     end
-    return a, b
+    return a*unit(x), b
 end
 
 function colon{T<:AbstractFloat}(start::T, step::T, stop::T)
-    step == 0 && throw(ArgumentError("range step cannot be zero"))
+    step == zero(T) && throw(ArgumentError("range step cannot be zero"))
     start == stop && return FloatRange{T}(start,step,1,1)
-    (0 < step) != (start < stop) && return FloatRange{T}(start,step,0,1)
+    (zero(step) < step) != (start < stop) && return FloatRange{T}(start,step,0,1)
 
     # float range "lifting"
     r = (stop-start)/step
@@ -143,15 +144,15 @@ function colon{T<:AbstractFloat}(start::T, step::T, stop::T)
     if lo <= step <= hi
         a0, b = rat(start)
         a = convert(T,a0)
-        if a/convert(T,b) == start
+        if a/convert(T,b) == unitless(start)
             c0, d = rat(step)
             c = convert(T,c0)
-            if c/convert(T,d) == step
+            if c/convert(T,d) == unitless(step)
                 e = lcm(b,d)
                 a *= div(e,b)
                 c *= div(e,d)
                 eT = convert(T,e)
-                if (a+n*c)/eT == stop
+                if (a+n*c)/eT == unitless(stop)
                     return FloatRange{T}(a, c, n+1, eT)
                 end
             end
@@ -182,33 +183,33 @@ end
 
 function linspace{T<:AbstractFloat}(start::T, stop::T, len::T)
     len == round(len) || throw(InexactError())
-    0 <= len || error("linspace($start, $stop, $len): negative length")
-    if len == 0
-        n = convert(T, 2)
+    zero(len) <= len || error("linspace($start, $stop, $len): negative length")
+    if len == zero(len)
+        n = unitless(convert(T, 2))
         if isinf(n*start) || isinf(n*stop)
-            start /= n; stop /= n; n = one(T)
+            start /= n; stop /= n; n = T(1)
         end
-        return LinSpace(-start, -stop, -one(T), n)
+        return LinSpace(-start, -stop, -T(1), n)
     end
-    if len == 1
+    if unitless(len) == 1
         start == stop || error("linspace($start, $stop, $len): endpoints differ")
-        return LinSpace(-start, -start, zero(T), one(T))
+        return LinSpace(-start, -start, zero(T), T(1))
     end
-    n = convert(T, len - 1)
-    len - n == 1 || error("linspace($start, $stop, $len): too long for $T")
+    n = convert(T, unitless(len) - 1)
+    len - n == T(1) || error("linspace($start, $stop, $len): too long for $T")
     a0, b = rat(start)
     a = convert(T,a0)
-    if a/convert(T,b) == start
+    if a/convert(T,b) == unitless(start)
         c0, d = rat(stop)
         c = convert(T,c0)
-        if c/convert(T,d) == stop
+        if c/convert(T,d) == unitless(stop)
             e = lcm(b,d)
             a *= div(e,b)
             c *= div(e,d)
             s = convert(T,n*e)
             if isinf(a*n) || isinf(c*n)
                 s, p = frexp(s)
-                p2 = oftype(s,2)^p
+                p2 = oftype(unitless(s),2)^p
                 a /= p2; c /= p2
             end
             if a*n/s == start && c*n/s == stop
@@ -219,7 +220,7 @@ function linspace{T<:AbstractFloat}(start::T, stop::T, len::T)
     a, c, s = start, stop, n
     if isinf(a*n) || isinf(c*n)
         s, p = frexp(s)
-        p2 = oftype(s,2)^p
+        p2 = oftype(unitless(s),2)^p
         a /= p2; c /= p2
     end
     if a*n/s == start && c*n/s == stop
@@ -229,7 +230,7 @@ function linspace{T<:AbstractFloat}(start::T, stop::T, len::T)
 end
 function linspace{T<:AbstractFloat}(start::T, stop::T, len::Real)
     T_len = convert(T, len)
-    T_len == len || throw(InexactError())
+    unitless(T_len) == len || throw(InexactError())
     linspace(start, stop, T_len)
 end
 linspace(start::Real, stop::Real, len::Real=50) =
@@ -312,17 +313,19 @@ isempty(r::FloatRange) = length(r) == 0
 isempty(r::LinSpace) = length(r) == 0
 
 step(r::StepRange) = r.step
-step(r::UnitRange) = 1
-step(r::FloatRange) = r.step/r.divisor
-step{T}(r::LinSpace{T}) = ifelse(r.len <= 0, convert(T,NaN), (r.stop-r.start)/r.divisor)
+step(r::UnitRange) = one(r.start)
+step(r::FloatRange) = r.step / unitless(r.divisor)
+step{T}(r::LinSpace{T}) = ifelse(r.len <= zero(r.len), convert(T, NaN),
+    (r.stop-r.start) / unitless(r.divisor))
 
 function length(r::StepRange)
     n = Integer(div(r.stop+r.step - r.start, r.step))
     isempty(r) ? zero(n) : n
 end
-length(r::UnitRange) = Integer(r.stop - r.start + 1)
-length(r::FloatRange) = Integer(r.len)
-length(r::LinSpace) = Integer(r.len + signbit(r.len - 1))
+length(r::UnitRange) = Integer(unitless(r.stop - r.start) + 1)
+length(r::FloatRange) = Integer(unitless(r.len))
+length(r::LinSpace) = Integer(unitless(r.len) + signbit(unitless(r.len) - 1))
+
 
 function length{T<:Union{Int,UInt,Int64,UInt64}}(r::StepRange{T})
     isempty(r) && return zero(T)
@@ -357,12 +360,12 @@ end
 
 first{T}(r::OrdinalRange{T}) = convert(T, r.start)
 first{T}(r::FloatRange{T}) = convert(T, r.start/r.divisor)
-first{T}(r::LinSpace{T}) = convert(T, (r.len-1)*r.start/r.divisor)
+first{T}(r::LinSpace{T}) = convert(T, (unitless(r.len)-1)*r.start/r.divisor)
 
 last{T}(r::StepRange{T}) = r.stop
 last(r::UnitRange) = r.stop
-last{T}(r::FloatRange{T}) = convert(T, (r.start + (r.len-1)*r.step)/r.divisor)
-last{T}(r::LinSpace{T}) = convert(T, (r.len-1)*r.stop/r.divisor)
+last{T}(r::FloatRange{T}) = convert(T, (r.start + (unitless(r.len) - 1)*r.step)/r.divisor)
+last{T}(r::LinSpace{T}) = convert(T, (unitless(r.len)-1)*r.stop/r.divisor)
 
 minimum(r::UnitRange) = isempty(r) ? throw(ArgumentError("range must be non-empty")) : first(r)
 maximum(r::UnitRange) = isempty(r) ? throw(ArgumentError("range must be non-empty")) : last(r)
@@ -386,7 +389,7 @@ next{T}(r::FloatRange{T}, i::Int) =
 start(r::LinSpace) = 1
 done(r::LinSpace, i::Int) = length(r) < i
 next{T}(r::LinSpace{T}, i::Int) =
-    (convert(T, ((r.len-i)*r.start + (i-1)*r.stop)/r.divisor), i+1)
+    (convert(T, ((unitless(r.len)-i)*r.start + (i-1)*r.stop)/r.divisor), i+1)
 
 start(r::StepRange) = oftype(r.start + r.step, r.start)
 next{T}(r::StepRange{T}, i) = (convert(T,i), i+r.step)
@@ -433,7 +436,7 @@ end
 function getindex{T}(r::LinSpace{T}, i::Integer)
     @_inline_meta
     @boundscheck checkbounds(r, i);
-    convert(T, ((r.len-i)*r.start + (i-1)*r.stop)/r.divisor)
+    convert(T, ((unitless(r.len)-i)*r.start + (i-1)*r.stop)/r.divisor)
 end
 
 getindex(r::Range, ::Colon) = copy(r)
@@ -441,15 +444,15 @@ getindex(r::Range, ::Colon) = copy(r)
 function getindex{T<:Integer}(r::UnitRange, s::UnitRange{T})
     @_inline_meta
     @boundscheck checkbounds(r, s)
-    st = oftype(r.start, r.start + s.start-1)
+    st = oftype(r.start, r.start + oftype(r.start, s.start - oftype(s.start,1)))
     range(st, length(s))
 end
 
 function getindex{T<:Integer}(r::UnitRange, s::StepRange{T})
     @_inline_meta
     @boundscheck checkbounds(r, s)
-    st = oftype(r.start, r.start + s.start-1)
-    range(st, step(s), length(s))
+    st = oftype(r.start, r.start + oftype(r.start, s.start - oftype(s.start,1)))
+    range(st, oftype(r.start, step(s)), length(s))
 end
 
 function getindex{T<:Integer}(r::StepRange, s::Range{T})
@@ -471,8 +474,8 @@ function getindex{T}(r::LinSpace{T}, s::OrdinalRange)
     sl::T = length(s)
     ifirst = first(s)
     ilast = last(s)
-    vfirst::T = ((r.len - ifirst) * r.start + (ifirst - 1) * r.stop) / r.divisor
-    vlast::T = ((r.len - ilast) * r.start + (ilast - 1) * r.stop) / r.divisor
+    vfirst::T = ((unitless(r.len) - ifirst) * r.start + (ifirst - 1) * r.stop) / r.divisor
+    vlast::T = ((unitless(r.len) - ilast) * r.start + (ilast - 1) * r.stop) / r.divisor
     return linspace(vfirst, vlast, sl)
 end
 
