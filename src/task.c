@@ -526,6 +526,18 @@ JL_DLLEXPORT void jl_rethrow(void)
     throw_internal(jl_exception_in_transit);
 }
 
+JL_DLLEXPORT void jl_set_fatal_eh(void)
+{
+    jl_current_task->fatal_eh = jl_current_task->eh;
+}
+
+JL_DLLEXPORT void jl_rethrow_fatal(void)
+{
+    if (jl_current_task->eh != jl_current_task->fatal_eh) {
+        jl_rethrow();
+    }
+}
+
 JL_DLLEXPORT void jl_rethrow_other(jl_value_t *e)
 {
     throw_internal(e);
@@ -554,6 +566,7 @@ JL_DLLEXPORT jl_task_t *jl_new_task(jl_function_t *start, size_t ssize)
     t->backtrace = jl_nothing;
     // there is no active exception handler available on this stack yet
     t->eh = NULL;
+    t->fatal_eh = NULL;
     t->gcstack = NULL;
     t->stkbuf = NULL;
     t->tid = 0;
@@ -661,6 +674,7 @@ void jl_init_root_task(void *stack, size_t ssize)
     jl_current_task->exception = jl_nothing;
     jl_current_task->backtrace = jl_nothing;
     jl_current_task->eh = NULL;
+    jl_current_task->fatal_eh = NULL;
     jl_current_task->gcstack = NULL;
     jl_current_task->tid = ti_tid;
 #ifdef JULIA_ENABLE_THREADING

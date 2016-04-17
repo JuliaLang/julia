@@ -51,6 +51,17 @@ macro assert(ex, msgs...)
 end
 
 
+isfatal(error) = false
+if isdefined(Main, :Base)
+isfatal(::StackOverflowError) = true
+isfatal(::OutOfMemoryError) = true
+isfatal(::UndefVarError) = true
+end
+
+set_fatal_eh() = ccall(:jl_set_fatal_eh, Void, ())
+rethrow_fatal() = ccall(:jl_rethrow_fatal, Void, ())
+
+
 """
     retry(f, [condition]; n=3; max_delay=10) -> Function
 
