@@ -3541,3 +3541,9 @@ let
     arrayset_unknown_dim(Int, 2)
     arrayset_unknown_dim(Int, 3)
 end
+
+# issue #15848
+@test_throws UndefVarError let x
+    foo() = x
+    foo()
+end
