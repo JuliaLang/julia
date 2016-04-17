@@ -1088,7 +1088,6 @@ endif
 OPENBLAS_BUILD_OPTS += MAKE_NB_JOBS=0
 
 $(OPENBLAS_SRC_DIR)/config.status: $(OPENBLAS_SRC_DIR)/Makefile
-	cd $(dir $@) && patch -p1 < ../openblas-make.patch
 	perl -i -ple 's/^\s*(EXTRALIB\s*\+=\s*-lSystemStubs)\s*$$/# $$1/g' $(OPENBLAS_SRC_DIR)/Makefile.system
 	touch $@
 $(OPENBLAS_OBJ_SOURCE): $(OPENBLAS_SRC_DIR)/config.status
