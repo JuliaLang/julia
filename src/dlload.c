@@ -21,18 +21,33 @@
 extern "C" {
 #endif
 
+// The empty extension at the beginning and the end is a trick to change
+// the order of the loop.
 #if defined(__APPLE__)
-static char *extensions[] = { "", ".dylib" };
-#define N_EXTENSIONS 2
+static char const *const extensions[] = { "", ".dylib", "" };
 #elif defined(_OS_WINDOWS_)
-static char *extensions[] = { "", ".dll" };
-#define N_EXTENSIONS 2
+static char const *const extensions[] = { "", ".dll", "" };
 extern int needsSymRefreshModuleList;
 #else
-static char *extensions[] = { ".so", "" };
-#define N_EXTENSIONS 2
+static char const *const extensions[] = { "", ".so", "" };
 #endif
+#define N_EXTENSIONS (sizeof(extensions) / sizeof(char*) - 1)
 
+static int endswith_extension(const char *path)
+{
+    if (!path)
+        return 0;
+    size_t len = strlen(path);
+    // Skip the first one since it is empty
+    for (size_t i = 1;i < N_EXTENSIONS;i++) {
+        const char *ext = extensions[i];
+        size_t extlen = strlen(ext);
+        if (len >= extlen && memcmp(ext, path + len - extlen, extlen) == 0) {
+            return 1;
+        }
+    }
+    return 0;
+}
 
 #define PATHBUF 512
 
@@ -104,11 +119,15 @@ JL_DLLEXPORT int jl_dlclose(void *handle)
 
 static void *jl_load_dynamic_library_(const char *modname, unsigned flags, int throw_err)
 {
-    char *ext;
     char path[PATHBUF];
     int i;
     uv_stat_t stbuf;
     void *handle;
+    // This determines if we try the no-extension name first or last
+    // We want to make sure the last one we try has higher chance of being
+    // a real file since the error reported will otherwise be a unhelpful
+    // file not found error due to the extra or missing extension name.
+    int hasext = endswith_extension(modname);
 
 /*
     this branch returns handle of libjulia
@@ -153,8 +172,9 @@ static void *jl_load_dynamic_library_(const char *modname, unsigned flags, int t
                 size_t len = strlen(dl_path);
                 if (len == 0)
                     continue;
-                for(i=0; i < N_EXTENSIONS; i++) {
-                    ext = extensions[i];
+                for (i=0; i < N_EXTENSIONS; i++) {
+                    // Do the no-ext one last if hasext == 1
+                    const char *ext = extensions[i + hasext];
                     path[0] = '\0';
                     handle = NULL;
                     if (dl_path[len-1] == PATHSEPSTRING[0])
@@ -174,7 +194,8 @@ static void *jl_load_dynamic_library_(const char *modname, unsigned flags, int t
 
     // now fall back and look in default library paths, for all extensions
     for(i=0; i < N_EXTENSIONS; i++) {
-        ext = extensions[i];
+        // Do the no-ext one last if hasext == 1
+        const char *ext = extensions[i + hasext];
         path[0] = '\0';
         handle = NULL;
         snprintf(path, PATHBUF, "%s%s", modname, ext);
