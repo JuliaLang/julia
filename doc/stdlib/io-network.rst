@@ -729,7 +729,7 @@ Julia environments (such as the IPython-based IJulia notebook).
 
    .. Docstring generated from Julia source
 
-   Returns an ``AbstractString`` or ``Vector{UInt8}`` containing the representation of ``x`` in the requested ``mime`` type, as written by ``writemime`` (throwing a ``MethodError`` if no appropriate ``writemime`` is available). An ``AbstractString`` is returned for MIME types with textual representations (such as ``"text/html"`` or ``"application/postscript"``\ ), whereas binary data is returned as ``Vector{UInt8}``\ . (The function ``istext(mime)`` returns whether or not Julia treats a given ``mime`` type as text.)
+   Returns an ``AbstractString`` or ``Vector{UInt8}`` containing the representation of ``x`` in the requested ``mime`` type, as written by ``writemime`` (throwing a ``MethodError`` if no appropriate ``writemime`` is available). An ``AbstractString`` is returned for MIME types with textual representations (such as ``"text/html"`` or ``"application/postscript"``\ ), whereas binary data is returned as ``Vector{UInt8}``\ . (The function ``istextmime(mime)`` returns whether or not Julia treats a given ``mime`` type as text.)
 
    As a special case, if ``x`` is an ``AbstractString`` (for textual MIME types) or a ``Vector{UInt8}`` (for binary MIME types), the ``reprmime`` function assumes that ``x`` is already in the requested ``mime`` format and simply returns ``x``\ .
 
@@ -784,7 +784,7 @@ stack with:
 
    Returns a ``TextDisplay <: Display``\ , which can display any object as the text/plain MIME type (only), writing the text representation to the given I/O stream. (The text representation is the same as the way an object is printed in the Julia REPL.)
 
-.. function:: istext(m::MIME)
+.. function:: istextmime(m::MIME)
 
    .. Docstring generated from Julia source
 
