@@ -160,7 +160,7 @@ end
 
 alldistinct(::Set) = true
 
-alldistrict(r::Range) = (length(range) == 1) || (step(range) > 0)
+alldistinct(r::Range) = (length(r) == 1) || (step(r) > 0)
 
 function filter(f, s::Set)
     u = similar(s)
