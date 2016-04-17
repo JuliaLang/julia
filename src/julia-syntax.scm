@@ -997,7 +997,9 @@
   (cond ((and (pair? (cadr e))
               (eq? (car (cadr e)) 'call)
               (symbol? (cadr (cadr e))))
-         (let ((anames (cddr (cadr e))))
+         (let ((anames (remove-empty-parameters (cddr (cadr e)))))
+           (if (has-parameters? anames)
+               (error "macros cannot accept keyword arguments"))
            (expand-forms
             `(function (call ,(symbol (string #\@ (cadr (cadr e))))
                              ,@(map (lambda (v)
