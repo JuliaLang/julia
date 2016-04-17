@@ -812,9 +812,10 @@ static jl_typemap_level_t *jl_method_convert_list_to_cache(jl_typemap_entry_t *m
 {
     jl_typemap_level_t *cache = jl_new_typemap_level();
     cache->key = key;
-    JL_GC_PUSH1(&cache);
+    jl_typemap_entry_t *next = NULL;
+    JL_GC_PUSH3(&cache, &next, &ml);
     while (ml != (void*)jl_nothing) {
-        jl_typemap_entry_t *next = ml->next;
+        next = ml->next;
         ml->next = (jl_typemap_entry_t*)jl_nothing;
         jl_typemap_level_insert_(cache, ml, offs, 0);
         ml = next;
