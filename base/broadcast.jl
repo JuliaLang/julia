@@ -103,39 +103,8 @@ end
 const bitcache_chunks = 64 # this can be changed
 const bitcache_size = 64 * bitcache_chunks # do not change this
 
-function bpack(z::UInt64)
-    z |= z >>> 7
-    z |= z >>> 14
-    z |= z >>> 28
-    z &= 0xFF
-    return z
-end
-
-function dumpbitcache(Bc::Vector{UInt64}, bind::Int, C::Vector{Bool})
-    ind = 1
-    nc = min(bitcache_chunks, length(Bc)-bind+1)
-    C8 = reinterpret(UInt64, C)
-    nc8 = (nc >>> 3) << 3
-    @inbounds for i = 1:nc8
-        c = UInt64(0)
-        for j = 0:8:63
-            c |= (bpack(C8[ind]) << j)
-            ind += 1
-        end
-        Bc[bind] = c
-        bind += 1
-    end
-    ind = (ind-1) << 3 + 1
-    @inbounds for i = (nc8+1):nc
-        c = UInt64(0)
-        for j = 0:63
-            c |= (UInt64(C[ind]) << j)
-            ind += 1
-        end
-        Bc[bind] = c
-        bind += 1
-    end
-end
+dumpbitcache(Bc::Vector{UInt64}, bind::Int, C::Vector{Bool}) =
+    Base.copy_to_bitarray_chunks!(Bc, ((bind - 1) << 6) + 1, C, 1, min(bitcache_size, (length(Bc)-bind+1) << 6))
 
 # using cartesian indexing
 function gen_broadcast_body_cartesian_tobitarray(nd::Int, narrays::Int, f)
@@ -223,9 +192,9 @@ function gen_broadcast_function_tobitarray(genbody::Function, nd::Int, narrays::
 end
 
 for (Bsig, Asig, gbf, gbb) in
-    ((BitArray                          , Union{Array,BitArray,Number}                   ,
+    ((BitArray                          , Union{Array,BitArray,Number}            ,
       :gen_broadcast_function_tobitarray, :gen_broadcast_body_iter_tobitarray     ),
-     (Any                               , Union{Array,BitArray,Number}                   ,
+     (Any                               , Union{Array,BitArray,Number}            ,
       :gen_broadcast_function           , :gen_broadcast_body_iter                ),
      (BitArray                          , Any                                     ,
       :gen_broadcast_function_tobitarray, :gen_broadcast_body_cartesian_tobitarray),
