@@ -46,8 +46,10 @@ string:
 | `E`        | Monday    | Matches full name days of the week                           |
 | `yyyymmdd` | 19960101  | Matches fixed-width year, month, and day                     |
 
-All characters not listed above are treated as delimiters between date and time slots. So a
-`dt` string of "1996-01-15T00:00:00.0" would have a `format` string like "y-m-dTH:M:S.s".
+Characters not listed above are normally treated as delimiters between date and time slots.
+For example a `dt` string of "1996-01-15T00:00:00.0" would have a `format` string like
+"y-m-dTH:M:S.s". If you need to use a code character as a delimiter you can escape it using
+backslash. The date "1995y01m" would have the format "y\\ym\\m".
 """
 Dates.DateTime(dt::AbstractString, format::AbstractString)
 
@@ -81,6 +83,8 @@ except that it does not truncate values longer than the width.
 
 When creating a `format` you can use any non-code characters as a separator. For example to
 generate the string "1996-01-15T00:00:00" you could use `format`: "yyyy-mm-ddTHH:MM:SS".
+Note that if you need to use a code character as a literal you can use the escape character
+backslash. The string "1996y01m" can be produced with the format "yyyy\\ymm\\m".
 """
 Dates.format(dt::Dates.TimeType, format::AbstractString)
 
