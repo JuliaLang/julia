@@ -1,8 +1,8 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
-#Methods operating on different special matrix types
+# Methods operating on different special matrix types
 
-#Interconversion between special matrix types
+# Interconversion between special matrix types
 convert{T}(::Type{Bidiagonal}, A::Diagonal{T})=Bidiagonal(A.diag, zeros(T, size(A.diag,1)-1), true)
 convert{T}(::Type{SymTridiagonal}, A::Diagonal{T})=SymTridiagonal(A.diag, zeros(T, size(A.diag,1)-1))
 convert{T}(::Type{Tridiagonal}, A::Diagonal{T})=Tridiagonal(zeros(T, size(A.diag,1)-1), A.diag, zeros(T, size(A.diag,1)-1))
@@ -101,12 +101,12 @@ function convert(::Type{Tridiagonal}, A::AbstractTriangular)
     end
 end
 
-#Constructs two method definitions taking into account (assumed) commutativity
+# Constructs two method definitions taking into account (assumed) commutativity
 # e.g. @commutative f{S,T}(x::S, y::T) = x+y is the same is defining
 #     f{S,T}(x::S, y::T) = x+y
 #     f{S,T}(y::T, x::S) = f(x, y)
 macro commutative(myexpr)
-    @assert myexpr.head===:(=) || myexpr.head===:function #Make sure it is a function definition
+    @assert myexpr.head===:(=) || myexpr.head===:function # Make sure it is a function definition
     y = copy(myexpr.args[1].args[2:end])
     reverse!(y)
     reversed_call = Expr(:(=), Expr(:call,myexpr.args[1].args[1],y...), myexpr.args[1])
@@ -115,17 +115,17 @@ end
 
 for op in (:+, :-)
     SpecialMatrices = [:Diagonal, :Bidiagonal, :Tridiagonal, :Matrix]
-    for (idx, matrixtype1) in enumerate(SpecialMatrices) #matrixtype1 is the sparser matrix type
-        for matrixtype2 in SpecialMatrices[idx+1:end] #matrixtype2 is the denser matrix type
-            @eval begin #TODO quite a few of these conversions are NOT defined...
+    for (idx, matrixtype1) in enumerate(SpecialMatrices) # matrixtype1 is the sparser matrix type
+        for matrixtype2 in SpecialMatrices[idx+1:end] # matrixtype2 is the denser matrix type
+            @eval begin # TODO quite a few of these conversions are NOT defined
                 ($op)(A::($matrixtype1), B::($matrixtype2)) = ($op)(convert(($matrixtype2), A), B)
                 ($op)(A::($matrixtype2), B::($matrixtype1)) = ($op)(A, convert(($matrixtype2), B))
             end
         end
     end
 
-    for  matrixtype1 in (:SymTridiagonal,)                      #matrixtype1 is the sparser matrix type
-        for matrixtype2 in (:Tridiagonal, :Matrix) #matrixtype2 is the denser matrix type
+    for  matrixtype1 in (:SymTridiagonal,)                      # matrixtype1 is the sparser matrix type
+        for matrixtype2 in (:Tridiagonal, :Matrix) # matrixtype2 is the denser matrix type
             @eval begin
                 ($op)(A::($matrixtype1), B::($matrixtype2)) = ($op)(convert(($matrixtype2), A), B)
                 ($op)(A::($matrixtype2), B::($matrixtype1)) = ($op)(A, convert(($matrixtype2), B))
@@ -133,8 +133,8 @@ for op in (:+, :-)
         end
     end
 
-    for matrixtype1 in (:Diagonal, :Bidiagonal) #matrixtype1 is the sparser matrix type
-        for matrixtype2 in (:SymTridiagonal,)   #matrixtype2 is the denser matrix type
+    for matrixtype1 in (:Diagonal, :Bidiagonal) # matrixtype1 is the sparser matrix type
+        for matrixtype2 in (:SymTridiagonal,)   # matrixtype2 is the denser matrix type
             @eval begin
                 ($op)(A::($matrixtype1), B::($matrixtype2)) = ($op)(convert(($matrixtype2), A), B)
                 ($op)(A::($matrixtype2), B::($matrixtype1)) = ($op)(A, convert(($matrixtype2), B))

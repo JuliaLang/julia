@@ -250,7 +250,6 @@ end
 end
 
 
-
 function log(x::Float64)
     if x > 0.0
         x == Inf && return x

@@ -699,7 +699,6 @@ let x = complex(sprand(32, 0.6), sprand(32, 0.6)),
 end
 
 
-
 ### BLAS Level-2:
 
 ## dense A * sparse x -> dense y

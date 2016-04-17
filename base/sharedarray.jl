@@ -67,7 +67,7 @@ function SharedArray(T::Type, dims::NTuple; init=false, pids=Int[])
             shmmem_create_pid = myid()
             s = shm_mmap_array(T, dims, shm_seg_name, JL_O_CREAT | JL_O_RDWR)
         else
-            # The shared array is created on a remote machine....
+            # The shared array is created on a remote machine
             shmmem_create_pid = pids[1]
             remotecall_fetch(pids[1]) do
                 shm_mmap_array(T, dims, shm_seg_name, JL_O_CREAT | JL_O_RDWR)
@@ -493,7 +493,7 @@ function print_shmem_limits(slen)
             "\nIf not, increase system limits and try again."
         )
     catch e
-        nothing # Ignore any errors in this...
+        nothing # Ignore any errors in this
     end
 end
 

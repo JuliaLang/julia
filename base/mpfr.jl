@@ -368,7 +368,6 @@ function div(x::BigFloat, c::BigInt)
 end
 
 
-
 # More efficient commutative operations
 for (fJ, fC, fI) in ((:+, :add, 0), (:*, :mul, 1))
     @eval begin

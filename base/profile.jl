@@ -511,14 +511,14 @@ end
 
 # Utilities
 function rtruncto(str::ByteString, w::Int)
-    ret = str;
+    ret = str
     if length(str) > w
         ret = string("...", str[end-w+4:end])
     end
     ret
 end
 function ltruncto(str::ByteString, w::Int)
-    ret = str;
+    ret = str
     if length(str) > w
         ret = string(str[1:w-4], "...")
     end

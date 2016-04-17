@@ -561,7 +561,6 @@ end
 @test isequal(acosh(complex( NaN,-Inf)), complex( Inf, NaN))
 @test isequal(acosh(complex( NaN, NaN)), complex( NaN, NaN))
 
-#
 ## acos
 ##  acos(conj(z)) = conj(acos(z))
 
@@ -601,7 +600,6 @@ end
 @test isequal(acos(complex( NaN, Inf)),complex( NaN,-Inf))
 @test isequal(acos(complex( NaN,-Inf)),complex( NaN, Inf))
 @test isequal(acos(complex( NaN, NaN)),complex( NaN, NaN))
-
 
 
 ## asinh

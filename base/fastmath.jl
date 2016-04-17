@@ -127,7 +127,6 @@ macro fastmath(expr)
 end
 
 
-
 # Basic arithmetic
 
 FloatTypes = Union{Float32, Float64}
@@ -245,7 +244,6 @@ for op in (:+, :-, :*, :/, :(==), :!=, :<, :<=, :cmp, :mod, :rem)
         $op_fast{T<:Number}(x::T,ys::T...) = $op(x,ys...)
     end
 end
-
 
 
 # Math functions

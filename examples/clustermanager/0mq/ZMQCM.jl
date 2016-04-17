@@ -268,7 +268,6 @@ function kill(manager::ZMQCMan, pid::Int, config::WorkerConfig)
 end
 
 
-
 function print_worker_stdout(io, pid)
     @schedule while !eof(io)
         line = readline(io)

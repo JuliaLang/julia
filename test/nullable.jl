@@ -56,7 +56,6 @@ for T in types
 end
 
 
-
 # immutable NullException <: Exception
 @test isa(NullException(), NullException)
 @test_throws NullException throw(NullException())

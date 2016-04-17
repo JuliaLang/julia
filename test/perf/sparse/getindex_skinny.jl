@@ -2,7 +2,6 @@
 
 # Test getindex for skinny sparse matrix
 function sparse_getindex_skinny_perf()
-
     seed = 1
     srand(seed)
 
@@ -27,15 +26,12 @@ function sparse_getindex_skinny_perf()
             @timeit indexing(A,I,p) "sparse_getindex_skinny$c" ""
         end
     end
-
 end
 
 function indexing(A,I,p)
-
     J = [1]
     for k = 1:p
         A[I,J]
     end
     nothing
-
 end

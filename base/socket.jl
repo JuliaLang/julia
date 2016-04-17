@@ -742,7 +742,7 @@ function getsockname(sock::Union{TCPServer,TCPSocket})
                 (Ptr{Void}, Ref{Cushort}, Ptr{Void}, Ref{Cuint}),
                 sock.handle, rport, raddress, rfamily)
     end
-    uv_error("cannot obtain socket name", r);
+    uv_error("cannot obtain socket name", r)
     if r == 0
         port = ntoh(rport[])
         if rfamily[] == 2 # AF_INET

@@ -13,7 +13,6 @@ export resolve, sanity_check
 
 # Use the max-sum algorithm to resolve packages dependencies
 function resolve(reqs::Requires, deps::Dict{ByteString,Dict{VersionNumber,Available}})
-
     # init interface structures
     interface = Interface(reqs, deps)
 

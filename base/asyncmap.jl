@@ -62,27 +62,26 @@ function done(itr::AsyncCollector, state::AsyncCollectorState)
 end
 
 function next(itr::AsyncCollector, state::AsyncCollectorState)
-    # Wait if the maximum number of concurrent tasks are already running...
+    # Wait if the maximum number of concurrent tasks are already running
     while isbusy(itr, state)
         wait(state)
     end
 
-    # Get index and mapped function arguments from enumeration iterator...
+    # Get index and mapped function arguments from enumeration iterator
     (i, args), state.enum_state = next(itr.enumerator, state.enum_state)
 
-    # Execute function call and save result asynchronously...
+    # Execute function call and save result asynchronously
     @async begin
         itr.results[i] = itr.f(args...)
         state.active_count -= 1
         notify(state.task_done, nothing)
     end
 
-    # Count number of concurrent tasks...
+    # Count number of concurrent tasks
     state.active_count += 1
 
     return (nothing, state)
 end
-
 
 
 """
@@ -116,7 +115,7 @@ function done(itr::AsyncGenerator, state::AsyncGeneratorState)
     done(itr.collector, state.async_state) && isempty(itr.collector.results)
 end
 
-# Pump the source async collector if it is not already busy...
+# Pump the source async collector if it is not already busy
 function pump_source(itr::AsyncGenerator, state::AsyncGeneratorState)
     if !isbusy(itr.collector, state.async_state) &&
        !done(itr.collector, state.async_state)
@@ -133,7 +132,7 @@ function next(itr::AsyncGenerator, state::AsyncGeneratorState)
     results = itr.collector.results
     while !haskey(results, state.i)
 
-        # Wait for results to become available...
+        # Wait for results to become available
         if !pump_source(itr,state) && !haskey(results, state.i)
             wait(state.async_state)
         end
@@ -148,25 +147,13 @@ iteratorsize(::Type{AsyncGenerator}) = SizeUnknown()
 
 
 """
-    asyncgenerate(f, c...) -> iterator
-
-Apply `@async f` to each element of `c`.
-
-For multiple collection arguments, apply f elementwise.
-
-Results are returned in order as they become available.
-"""
-asyncgenerate(f, c...) = AsyncGenerator(f, c...)
-
-
-"""
     asyncmap(f, c...) -> collection
 
 Transform collection `c` by applying `@async f` to each element.
 
 For multiple collection arguments, apply f elementwise.
 """
-asyncmap(f, c...) = collect(asyncgenerate(f, c...))
+asyncmap(f, c...) = collect(AsyncGenerator(f, c...))
 
 
 """

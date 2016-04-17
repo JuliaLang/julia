@@ -68,13 +68,13 @@ x = speye(2) + im * speye(2)
 
 #15099
 for (Tin, Tout) in (
-	(Complex32, Complex128),
-	(Complex64, Complex128),
-	(Complex128, Complex128),
-	(Float16, Float64),
-	(Float32, Float64),
-	(Float64, Float64),
-	(Int, Float64),
+        (Complex32, Complex128),
+        (Complex64, Complex128),
+        (Complex128, Complex128),
+        (Float16, Float64),
+        (Float32, Float64),
+        (Float64, Float64),
+        (Int, Float64),
     )
 
     F = lufact(sparse(ones(Tin, 1, 1)))
