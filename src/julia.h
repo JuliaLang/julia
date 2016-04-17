@@ -62,16 +62,15 @@ extern "C" {
 
 // core data types ------------------------------------------------------------
 
-// the common fields are hidden before the pointer,
-// but the following macro is used to indicate
-// which types below are subtypes of jl_value_t
+// the common fields are hidden before the pointer, but the following macro is
+// used to indicate which types below are subtypes of jl_value_t
 #define JL_DATA_TYPE
 
 typedef struct _jl_value_t jl_value_t;
 
 typedef struct {
     union {
-        jl_value_t *type; // 16-bytes aligned
+        jl_value_t *type; // 16-byte aligned
         uintptr_t type_bits;
         uintptr_t gc_bits:2;
     };
@@ -91,10 +90,8 @@ static inline void jl_set_typeof(void *v, void *t)
 }
 #define jl_typeis(v,t) (jl_typeof(v)==(jl_value_t*)(t))
 
-// Symbols are interned strings (hash-consed)
-// stored as an invasive binary tree
-// the actual string is nul-terminated
-// and hangs off the end of the struct
+// Symbols are interned strings (hash-consed) stored as an invasive binary tree.
+// The string data is nul-terminated and hangs off the end of the struct.
 typedef struct _jl_sym_t {
     JL_DATA_TYPE
     struct _jl_sym_t *left;
@@ -111,7 +108,7 @@ typedef struct _jl_gensym_t {
 } jl_gensym_t;
 
 // A SimpleVector is an immutable pointer array
-// (with data allocated as part of the type to hang off then end of the struct)
+// Data is stored at the end of this variable-length struct.
 typedef struct {
     JL_DATA_TYPE
     size_t length;
@@ -175,7 +172,8 @@ union jl_typemap_t {
     struct _jl_value_t *unknown; // nothing
 };
 
-// These defined the Julia ABI calling convention
+// "jlcall" calling convention signatures.
+// This defines the default ABI used by compiled julia functions.
 typedef jl_value_t *(*jl_fptr_t)(jl_value_t*, jl_value_t**, uint32_t);
 typedef jl_value_t *(*jl_fptr_sparam_t)(jl_svec_t*, jl_value_t*, jl_value_t**, uint32_t);
 
@@ -187,9 +185,8 @@ typedef struct _jl_llvm_functions_t {
     void *specFunctionObject;
 } jl_llvm_functions_t;
 
-// a Method descriptor
-// this is the stuff that's shared among different instantiations
-// (different environments) of a closure.
+// This type describes a single method definition, and stores data
+// shared by the specializations of a function.
 typedef struct _jl_method_t {
     JL_DATA_TYPE
     jl_sym_t *name;  // for error reporting
@@ -199,9 +196,10 @@ typedef struct _jl_method_t {
 
     // array of all lambda infos with code generated from this one
     jl_array_t *specializations;
+    // table of all argument types for which we've inferred this code
     union jl_typemap_t tfunc;
 
-    // the AST template (or, for isstaged, the generator thunk)
+    // the AST template (or, for isstaged, code for the generator)
     struct _jl_lambda_info_t *lambda_template;
     jl_array_t *roots;  // pointers in generated code (shared to reduce memory)
 
@@ -219,8 +217,8 @@ typedef struct _jl_method_t {
     uint8_t traced;
 } jl_method_t;
 
-// this holds the static data for a runnable thunk:
-// a syntax tree, static parameters, and (if it has been compiled)
+// This holds data for a single executable function body:
+// code in Julia IR, static parameters, and (if it has been compiled)
 // a function pointer.
 typedef struct _jl_lambda_info_t {
     JL_DATA_TYPE
@@ -232,7 +230,7 @@ typedef struct _jl_lambda_info_t {
     jl_value_t *rettype;
     jl_svec_t *sparam_syms; // sparams is a vector of values indexed by symbols
     jl_svec_t *sparam_vals;
-    jl_tupletype_t *specTypes;  // argument types this will be compiled for
+    jl_tupletype_t *specTypes;  // argument types this was specialized for
     struct _jl_lambda_info_t *unspecialized_ducttape; // if template can't be compiled due to intrinsics, an un-inferred executable copy may get stored here
     jl_method_t *def; // method this is specialized from, (null if this is a toplevel thunk)
     int32_t nargs;
@@ -267,11 +265,9 @@ typedef struct {
     jl_value_t *body;
 } jl_typector_t;
 
-// represents the "name" part of a (Data)Type
-// describing the syntactic structure of a type
-// and providing a place for collecting and caching
-// the other miscellanea common to all specialized instances of a Type
-// (such as the cache for pointer-consing leaftypes)
+// represents the "name" part of a DataType, describing the syntactic structure
+// of a type and storing all data common to different instantiations of the type,
+// including a cache for hash-consed allocation of DataType objects.
 typedef struct {
     JL_DATA_TYPE
     jl_sym_t *name;
