@@ -39,7 +39,10 @@ macro nloops(N, itersym, rangeexpr, args...)
     _nloops(N, itersym, rangeexpr, args...)
 end
 
-_nloops(N::Int, itersym::Symbol, arraysym::Symbol, args::Expr...) = _nloops(N, itersym, :(d->1:size($arraysym,d)), args...)
+function _nloops(N::Int, itersym::Symbol, arraysym::Symbol, args::Expr...)
+    @gensym d
+    _nloops(N, itersym, :($d->1:size($arraysym, $d)), args...)
+end
 
 function _nloops(N::Int, itersym::Symbol, rangeexpr::Expr, args::Expr...)
     if rangeexpr.head != :->
