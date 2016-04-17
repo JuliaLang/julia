@@ -114,8 +114,6 @@ for jy in ("j","y"), nu in (0,1)
 end
 
 
-
-
 const cy = Array(Float64,2)
 const ae = Array(Int32,2)
 const wrk = Array(Float64,2)

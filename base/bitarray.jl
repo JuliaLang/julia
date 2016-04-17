@@ -40,7 +40,7 @@ length(B::BitArray) = B.len
 size(B::BitVector) = (B.len,)
 size(B::BitArray) = B.dims
 
-size(B::BitVector, d) = begin
+function size(B::BitVector, d)
     if d == 1
         return B.len
     elseif d > 1
@@ -601,7 +601,6 @@ function insert!(B::BitVector, i::Integer, item)
 end
 
 function _deleteat!(B::BitVector, i::Integer)
-
     k, j = get_chunks_id(i)
 
     msk_bef = _msk64 >>> (63 - j)

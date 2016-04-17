@@ -139,7 +139,6 @@ SuiteSparse. As this library only supports sparse matrices with `Float64` or
 `SparseMatrixCSC{Float64}` or `SparseMatrixCSC{Complex128}` as appropriate.
 """
 function lufact{Tv<:UMFVTypes,Ti<:UMFITypes}(S::SparseMatrixCSC{Tv,Ti})
-
     zerobased = S.colptr[1] == 0
     res = UmfpackLU(C_NULL, C_NULL, S.m, S.n,
                     zerobased ? copy(S.colptr) : decrement(S.colptr),

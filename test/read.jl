@@ -4,11 +4,11 @@ mktempdir() do dir
 
 tasks = []
 
-# Create test file...
+# Create test file
 filename = joinpath(dir, "file.txt")
 text = "C1,C2\n1,2\na,b\n"
 
-# List of IO producers...
+# List of IO producers
 l = Vector{Tuple{AbstractString,Function}}()
 
 

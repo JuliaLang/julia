@@ -88,7 +88,6 @@ rulekey(T,n) = (T,n)
 # with absolute tolerance abstol and relative tolerance reltol,
 # with maxevals an approximate maximum number of f evaluations.
 function do_quadgk{Tw}(f, s, n, ::Type{Tw}, abstol, reltol, maxevals, nrm)
-
     if eltype(s) <: Real # check for infinite or semi-infinite intervals
         s1 = s[1]; s2 = s[end]; inf1 = isinf(s1); inf2 = isinf(s2)
         if inf1 || inf2
@@ -199,16 +198,16 @@ end
 # derivative p'(z), returning (p,p').
 function eigpoly(b,z,m=length(b)+1)
     d1 = z
-    d1deriv = d2 = one(z);
-    d2deriv = zero(z);
+    d1deriv = d2 = one(z)
+    d2deriv = zero(z)
     for i = 2:m
         b2 = b[i-1]^2
-        d = z * d1 - b2 * d2;
-        dderiv = d1 + z * d1deriv - b2 * d2deriv;
-        d2 = d1;
-        d1 = d;
-        d2deriv = d1deriv;
-        d1deriv = dderiv;
+        d = z * d1 - b2 * d2
+        dderiv = d1 + z * d1deriv - b2 * d2deriv
+        d2 = d1
+        d1 = d
+        d2deriv = d1deriv
+        d1deriv = dderiv
     end
     return (d1, d1deriv)
 end

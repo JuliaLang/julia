@@ -44,8 +44,6 @@ end
 test_connect_disconnect(5)
 
 
-
-
 function test_send(exp)
     (port, server) = listenany(8000)
 
@@ -103,7 +101,6 @@ end
 
 # Run second test on a gigabyte of data
 test_send(9)
-
 
 
 # Utility function for test_bidirectional() that simultaneously transmits and
@@ -184,5 +181,5 @@ function test_bidirectional(exp)
     end
 end
 
-# Test 1GB of bidirectional data....
+# Test 1GB of bidirectional data
 test_bidirectional(9)

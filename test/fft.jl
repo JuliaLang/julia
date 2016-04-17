@@ -159,7 +159,7 @@ for (f,fi,pf,pfi) in ((fft,ifft,plan_fft,plan_ifft),
         @test_approx_eq pifft!d3_fftd3_m3d[i] m3d[i]
         end
 
-    end  # if fftw_vendor() != :mkl ...
+    end  # if fftw_vendor() != :mkl
 
     # rfft/rfftn
 

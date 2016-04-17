@@ -17,17 +17,16 @@ for details.
 """
 function pgenerate(p::WorkerPool, f, c)
     if length(p) == 0
-        return asyncgenerate(f, c)
+        return AsyncGenerator(f, c)
     end
     batches = batchsplit(c, min_batch_count = length(p) * 3)
-    return flatten(asyncgenerate(remote(p, b -> asyncmap(f, b)), batches))
+    return flatten(AsyncGenerator(remote(p, b -> asyncmap(f, b)), batches))
 end
 
 pgenerate(p::WorkerPool, f, c1, c...) = pgenerate(p, a->f(a...), zip(c1, c...))
 
 pgenerate(f, c) = pgenerate(default_worker_pool(), f, c...)
 pgenerate(f, c1, c...) = pgenerate(a->f(a...), zip(c1, c...))
-
 
 
 """
@@ -59,18 +58,18 @@ Equivalent to `partition(c, max_batch_size)` when `length(c) >> max_batch_size`.
 """
 function batchsplit(c; min_batch_count=1, max_batch_size=100)
     if min_batch_count < 1
-        throw(ArgumentError("min_batch_count must be > 0, got $min_batch_count"))
+        throw(ArgumentError("min_batch_count must be ≥ 1, got $min_batch_count"))
     end
 
     if max_batch_size < 1
-        throw(ArgumentError("max_batch_size must be > 0, got $max_batch_size"))
+        throw(ArgumentError("max_batch_size must be ≥ 1, got $max_batch_size"))
     end
 
-    # Split collection into batches, then peek at the first few batches...
+    # Split collection into batches, then peek at the first few batches
     batches = partition(c, max_batch_size)
     head, tail = head_and_tail(batches, min_batch_count)
 
-    # If there are not enough batches, use a smaller batch size...
+    # If there are not enough batches, use a smaller batch size
     if length(head) < min_batch_count
         batch_size = max(1, div(sum(length, head), min_batch_count))
         return partition(flatten(head), batch_size)

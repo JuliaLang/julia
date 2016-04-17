@@ -97,8 +97,8 @@ for eltya in (Float32, Float64, Complex64, Complex128, BigFloat, Int)
 
 debug && println("\ntype of a: ", eltya, " type of b: ", eltyb, "\n")
 
-        #Test error bound on linear solver: LAWNS 14, Theorem 2.1
-        #This is a surprisingly loose bound...
+        # Test error bound on linear solver: LAWNS 14, Theorem 2.1
+        # This is a surprisingly loose bound
         x = capd\b
         @test norm(x-apd\b,1)/norm(x,1) <= (3n^2 + n + n^3*ε)*ε/(1-(n+1)*ε)*κ
         @test norm(apd*x-b,1)/norm(b,1) <= (3n^2 + n + n^3*ε)*ε/(1-(n+1)*ε)*κ

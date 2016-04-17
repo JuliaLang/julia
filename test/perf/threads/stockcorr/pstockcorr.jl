@@ -8,7 +8,6 @@ using Base.Threads
 
 #STOCKCORR - The original, unoptimised code that simulates two correlated assets
 function stockcorr()
-
     ## Correlated asset information
     CurrentPrice = [78. 102.]     # Initial Prices of the two stocks
     Corr = [1. 0.4; 0.4 1.]       # Correlation Matrix
@@ -61,7 +60,6 @@ end
 
 # Threaded version
 function pstockcorr(n)
-
     ## Correlated asset information
     const CurrentPrice = [78. 102.]     # Initial Prices of the two stocks
     const Corr = [1. 0.4; 0.4 1.]       # Correlation Matrix

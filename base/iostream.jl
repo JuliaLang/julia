@@ -80,7 +80,7 @@ eof(s::IOStream) = ccall(:ios_eof_blocking, Cint, (Ptr{Void},), s.ios)!=0
 function fdio(name::AbstractString, fd::Integer, own::Bool=false)
     s = IOStream(name)
     ccall(:ios_fd, Ptr{Void}, (Ptr{Void}, Clong, Cint, Cint),
-          s.ios, fd, 0, own);
+          s.ios, fd, 0, own)
     return s
 end
 fdio(fd::Integer, own::Bool=false) = fdio(string("<fd ",fd,">"), fd, own)

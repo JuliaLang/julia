@@ -527,7 +527,7 @@ pipe_writer(p::Pipe) = p.in
 function link_pipe(pipe::Pipe;
                julia_only_read = false,
                julia_only_write = false)
-     link_pipe(pipe.out, julia_only_read, pipe.in, julia_only_write);
+     link_pipe(pipe.out, julia_only_read, pipe.in, julia_only_write)
 end
 
 show(io::IO, stream::Pipe) = print(io,

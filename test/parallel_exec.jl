@@ -698,16 +698,14 @@ if DoFullTest
 
 
     for mapf in [map, asyncmap, (f, c) -> pmap(pool, f, c)]
-
         @test ups == bytestring(UInt8[UInt8(c) for c in mapf(x->uppercase(x), s)])
         @test ups == bytestring(UInt8[UInt8(c) for c in mapf(x->uppercase(Char(x)), s.data)])
 
         # retry, on error exit
+        errifeqa = x->(x=='a') ?
+            error("EXPECTED TEST ERROR. TO BE IGNORED.") : uppercase(x)
         try
-            res = mapf(retry(
-                           x->(x=='a') ? error("EXPECTED TEST ERROR. TO BE IGNORED.")
-                                       : uppercase(x)),
-                       s);
+            res = mapf(retry(errifeqa), s)
             error("unexpected")
         catch e
             e = unmangle_exception(e)
@@ -717,9 +715,7 @@ if DoFullTest
 
         # no retry, on error exit
         try
-            res = mapf(x->(x=='a') ? error("EXPECTED TEST ERROR. TO BE IGNORED.")
-                                   : uppercase(x),
-                       s)
+            res = mapf(errifeqa, s)
             error("unexpected")
         catch e
             e = unmangle_exception(e)
@@ -728,31 +724,25 @@ if DoFullTest
         end
 
         # no retry, on error continue
-        res = mapf(@catch(
-                       x->(x=='a') ? error("EXPECTED TEST ERROR. TO BE IGNORED.")
-                                   : uppercase(x)),
-                   Any[s...])
+        res = mapf(@catch(errifeqa), Any[s...])
         @test length(res) == length(ups)
         res[1] = unmangle_exception(res[1])
         @test isa(res[1], ErrorException)
         @test res[1].msg == "EXPECTED TEST ERROR. TO BE IGNORED."
         @test ups[2:end] == string(res[2:end]...)
-
     end
 
     # retry, on error exit
     mapf = (f, c) -> asyncmap(retry(remote(pool, f), n=10, max_delay=0), c)
-    res = mapf(x->iseven(myid()) ? error("EXPECTED TEST ERROR. TO BE IGNORED.")
-                                 : uppercase(x),
-               s)
+    errifevenid = x->iseven(myid()) ?
+        error("EXPECTED TEST ERROR. TO BE IGNORED.") : uppercase(x)
+    res = mapf(errifevenid, s)
     @test length(res) == length(ups)
     @test ups == bytestring(UInt8[UInt8(c) for c in res])
 
     # retry, on error continue
     mapf = (f, c) -> asyncmap(@catch(retry(remote(pool, f), n=10, max_delay=0)), c)
-    res = mapf(x->iseven(myid()) ? error("EXPECTED TEST ERROR. TO BE IGNORED.")
-                                 : uppercase(x),
-               s)
+    res = mapf(errifevenid, s)
     @test length(res) == length(ups)
     @test ups == bytestring(UInt8[UInt8(c) for c in res])
 
@@ -842,8 +832,7 @@ if DoFullTest
     end)
     @test length(new_pids) == num_workers
     test_n_remove_pids(new_pids)
-
-end
+end # @unix_only
 end
 
 # issue #7727

@@ -9,11 +9,9 @@ immutable VersionNumber
     prerelease::Tuple{Vararg{Union{Int,ASCIIString}}}
     build::Tuple{Vararg{Union{Int,ASCIIString}}}
 
-    function VersionNumber(
-        major::Int, minor::Int, patch::Int,
-        pre::Tuple{Vararg{Union{Int,ASCIIString}}},
-        bld::Tuple{Vararg{Union{Int,ASCIIString}}}
-    )
+    function VersionNumber(major::Int, minor::Int, patch::Int,
+            pre::Tuple{Vararg{Union{Int,ASCIIString}}},
+            bld::Tuple{Vararg{Union{Int,ASCIIString}}})
         major >= 0 || throw(ArgumentError("invalid negative major version: $major"))
         minor >= 0 || throw(ArgumentError("invalid negative minor version: $minor"))
         patch >= 0 || throw(ArgumentError("invalid negative patch version: $patch"))
@@ -40,15 +38,12 @@ immutable VersionNumber
         new(major, minor, patch, pre, bld)
     end
 end
-VersionNumber(
-    major::Integer, minor::Integer = 0, patch::Integer = 0,
-    pre::Tuple{Vararg{Union{Integer,AbstractString}}} = (),
-    bld::Tuple{Vararg{Union{Integer,AbstractString}}} = (),
-) = VersionNumber(
-    Int(major), Int(minor), Int(patch),
-    map(x->isa(x,Integer) ? Int(x) : ASCIIString(x), pre),
-    map(x->isa(x,Integer) ? Int(x) : ASCIIString(x), bld),
-)
+VersionNumber(major::Integer, minor::Integer = 0, patch::Integer = 0,
+        pre::Tuple{Vararg{Union{Integer,AbstractString}}} = (),
+        bld::Tuple{Vararg{Union{Integer,AbstractString}}} = ()) =
+    VersionNumber(Int(major), Int(minor), Int(patch),
+        map(x->isa(x,Integer) ? Int(x) : ASCIIString(x), pre),
+        map(x->isa(x,Integer) ? Int(x) : ASCIIString(x), bld))
 
 function print(io::IO, v::VersionNumber)
     v == typemax(VersionNumber) && return print(io, "∞")
@@ -91,7 +86,7 @@ function split_idents(s::AbstractString)
     end
 end
 
-VersionNumber(v::AbstractString) = begin
+function VersionNumber(v::AbstractString)
     m = match(VERSION_REGEX, v)
     m === nothing && throw(ArgumentError("invalid version string: $v"))
     major, minor, patch, minus, prerl, plus, build = m.captures

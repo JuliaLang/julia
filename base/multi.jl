@@ -356,7 +356,7 @@ function rmprocs(args...; waitfor = 0.0)
         start = time()
         while (time() - start) < waitfor
             if all(w -> w.state == W_TERMINATED, rmprocset)
-                break;
+                break
             else
                 sleep(0.1)
             end
@@ -890,7 +890,7 @@ wait(r::Future) = (!isnull(r.v) && return r; call_on_owner(wait_ref, r, myid());
 wait(r::RemoteChannel, args...) = (call_on_owner(wait_ref, r, myid(), args...); r)
 
 function fetch_future(rid, callee)
-    rv = lookup_ref(rid);
+    rv = lookup_ref(rid)
     v = fetch(rv.c)
     del_client(rid, callee)
     v
@@ -1239,7 +1239,6 @@ function addprocs(manager::ClusterManager; kwargs...)
 end
 
 function addprocs_locked(manager::ClusterManager; kwargs...)
-
     params = merge(default_addprocs_params(), AnyDict(kwargs))
     topology(symbol(params[:topology]))
 

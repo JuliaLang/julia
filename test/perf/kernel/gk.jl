@@ -42,7 +42,6 @@ end
 ############ GK Algorithm starts ##################
 #@profile begin
 function gk(n, myeps)
-
     A = myunifskew(n)
 
     g = length(myeps)
@@ -182,6 +181,5 @@ function gk(n, myeps)
     #print("Epsilon-Time-Iteration tradeoff \n")
     #print(out)
     #print("\n \n")
-
 end
 #end # @profile begin
