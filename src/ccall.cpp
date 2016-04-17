@@ -1243,27 +1243,16 @@ static jl_cgval_t emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
         assert(!isVa);
         assert(nargt == 0);
         JL_GC_POP();
-#ifdef JULIA_ENABLE_THREADING
 #ifdef LLVM39
         builder.CreateFence(AtomicOrdering::SequentiallyConsistent, SingleThread);
 #else
         builder.CreateFence(SequentiallyConsistent, SingleThread);
 #endif
-        Value *addr;
-        if (imaging_mode) {
-            assert(ctx->signalPage);
-            addr = ctx->signalPage;
-        }
-        else {
-            addr = builder.CreateIntToPtr(
-                ConstantInt::get(T_size, (uintptr_t)jl_gc_signal_page), T_pint8);
-        }
-        builder.CreateLoad(addr, true);
+        builder.CreateLoad(ctx->signalPage, true);
 #ifdef LLVM39
         builder.CreateFence(AtomicOrdering::SequentiallyConsistent, SingleThread);
 #else
         builder.CreateFence(SequentiallyConsistent, SingleThread);
-#endif
 #endif
         return ghostValue(jl_void_type);
     }

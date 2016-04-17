@@ -358,9 +358,29 @@ NOINLINE static uintptr_t gc_get_stack_ptr(void)
 // `jl_running_gc` to one on entering the GC and set it back afterward.
 static volatile uint64_t jl_gc_running = 0;
 
-#ifdef JULIA_ENABLE_THREADING
 JL_DLLEXPORT volatile size_t *jl_gc_signal_page = NULL;
 
+void jl_gc_signal_init(void)
+{
+    // jl_page_size isn't available yet.
+#ifdef _OS_WINDOWS_
+    jl_gc_signal_page = (size_t*)VirtualAlloc(NULL, jl_getpagesize(),
+                                              MEM_COMMIT, PAGE_READONLY);
+#else
+    jl_gc_signal_page = (size_t*)mmap(0, jl_getpagesize(), PROT_READ,
+                                      MAP_NORESERVE | MAP_PRIVATE |
+                                      MAP_ANONYMOUS, -1, 0);
+    if (jl_gc_signal_page == MAP_FAILED)
+        jl_gc_signal_page = NULL;
+#endif
+    if (jl_gc_signal_page == NULL) {
+        jl_printf(JL_STDERR, "could not allocate GC synchronization page\n");
+        gc_debug_critical_error();
+        abort();
+    }
+}
+
+#ifdef JULIA_ENABLE_THREADING
 static void jl_wait_for_gc(void)
 {
     while (jl_gc_running) {
@@ -383,26 +403,6 @@ static void jl_gc_wait_for_the_world(void)
         while (!ptls->gc_state) {
             jl_cpu_pause(); // yield?
         }
-    }
-}
-
-void jl_gc_signal_init(void)
-{
-    // jl_page_size isn't available yet.
-#ifdef _OS_WINDOWS_
-    jl_gc_signal_page = (size_t*)VirtualAlloc(NULL, jl_getpagesize(),
-                                              MEM_COMMIT, PAGE_READONLY);
-#else
-    jl_gc_signal_page = (size_t*)mmap(0, jl_getpagesize(), PROT_READ,
-                                      MAP_NORESERVE | MAP_PRIVATE |
-                                      MAP_ANONYMOUS, -1, 0);
-    if (jl_gc_signal_page == MAP_FAILED)
-        jl_gc_signal_page = NULL;
-#endif
-    if (jl_gc_signal_page == NULL) {
-        jl_printf(JL_STDERR, "could not allocate GC synchronization page\n");
-        gc_debug_critical_error();
-        abort();
     }
 }
 
