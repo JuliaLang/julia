@@ -342,9 +342,10 @@ static GlobalVariable *jltls_states_var;
 // Imaging mode only
 static GlobalVariable *jltls_states_func_ptr = NULL;
 static size_t jltls_states_func_idx = 0;
+#endif
+// Imaging mode only (non-imaging mode use pointer directly)
 static GlobalVariable *jl_gc_signal_page_ptr = NULL;
 static size_t jl_gc_signal_page_idx = 0;
-#endif
 
 // important functions
 static Function *jlnew_func;
@@ -576,9 +577,7 @@ typedef struct {
     std::vector<bool> inbounds;
 
     CallInst *ptlsStates;
-#ifdef JULIA_ENABLE_THREADING
     Value *signalPage;
-#endif
 
     llvm::DIBuilder *dbuilder;
     bool debug_enabled;
@@ -3431,12 +3430,14 @@ static void allocate_gc_frame(BasicBlock *b0, jl_codectx_t *ctx)
 {
     // allocate a placeholder gc instruction
     ctx->ptlsStates = builder.CreateCall(prepare_call(jltls_states_func));
-#ifdef JULIA_ENABLE_THREADING
     if (imaging_mode) {
         ctx->signalPage =
             tbaa_decorate(tbaa_const, builder.CreateLoad(prepare_global(jl_gc_signal_page_ptr)));
     }
-#endif
+    else {
+        ctx->signalPage = builder.CreateIntToPtr(
+            ConstantInt::get(T_size, (uintptr_t)jl_gc_signal_page), T_pint8);
+    }
 }
 
 void jl_codegen_finalize_temp_arg(CallInst *ptlsStates, Type *T_pjlvalue,
@@ -5167,12 +5168,14 @@ static void init_julia_llvm_env(Module *m)
             jl_emit_sysimg_slot(m, pfunctype, "jl_get_ptls_states.ptr",
                                 (uintptr_t)jl_get_ptls_states_getter(),
                                 jltls_states_func_idx);
+    }
+#endif
+    if (imaging_mode) {
         jl_gc_signal_page_ptr =
             jl_emit_sysimg_slot(m, T_pint8, "jl_gc_signal_page.ptr",
                                 (uintptr_t)jl_gc_signal_page,
                                 jl_gc_signal_page_idx);
     }
-#endif
 
     std::vector<Type*> args1(0);
     args1.push_back(T_pint8);

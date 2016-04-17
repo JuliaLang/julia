@@ -266,9 +266,9 @@ void jl_set_base_ctx(char *__stk);
 void jl_init_threading(void);
 void jl_start_threads(void);
 void jl_shutdown_threading(void);
+void jl_gc_signal_init(void);
 #ifdef JULIA_ENABLE_THREADING
 jl_get_ptls_states_func jl_get_ptls_states_getter(void);
-void jl_gc_signal_init(void);
 void jl_gc_signal_wait(void);
 #endif
 

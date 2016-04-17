@@ -285,21 +285,6 @@ JL_DLLEXPORT void (jl_cpu_wake)(void);
 
 // Accessing the tls variables, gc safepoint and gc states
 JL_DLLEXPORT JL_CONST_FUNC jl_tls_states_t *(jl_get_ptls_states)(void);
-#ifndef JULIA_ENABLE_THREADING
-extern JL_DLLEXPORT jl_tls_states_t jl_tls_states;
-#define jl_get_ptls_states() (&jl_tls_states)
-#define jl_gc_state() ((int8_t)0)
-#define jl_gc_safepoint() do {} while (0)
-STATIC_INLINE int8_t jl_gc_state_set(int8_t state, int8_t old_state)
-{
-    (void)state;
-    return old_state;
-}
-#else // ifndef JULIA_ENABLE_THREADING
-typedef jl_tls_states_t *(*jl_get_ptls_states_func)(void);
-JL_DLLEXPORT void jl_set_ptls_states_getter(jl_get_ptls_states_func f);
-// Make sure jl_gc_state() is always a rvalue
-#define jl_gc_state() ((int8_t)(jl_get_ptls_states()->gc_state))
 JL_DLLEXPORT extern volatile size_t *jl_gc_signal_page;
 // This triggers a SegFault when we are in GC
 // Assign it to a variable to make sure the compiler emit the load
@@ -310,6 +295,20 @@ JL_DLLEXPORT extern volatile size_t *jl_gc_signal_page;
         jl_signal_fence();                              \
         (void)safepoint_load;                           \
     } while (0)
+#ifndef JULIA_ENABLE_THREADING
+extern JL_DLLEXPORT jl_tls_states_t jl_tls_states;
+#define jl_get_ptls_states() (&jl_tls_states)
+#define jl_gc_state() ((int8_t)0)
+STATIC_INLINE int8_t jl_gc_state_set(int8_t state, int8_t old_state)
+{
+    (void)state;
+    return old_state;
+}
+#else // ifndef JULIA_ENABLE_THREADING
+typedef jl_tls_states_t *(*jl_get_ptls_states_func)(void);
+JL_DLLEXPORT void jl_set_ptls_states_getter(jl_get_ptls_states_func f);
+// Make sure jl_gc_state() is always a rvalue
+#define jl_gc_state() ((int8_t)(jl_get_ptls_states()->gc_state))
 STATIC_INLINE int8_t jl_gc_state_set(int8_t state, int8_t old_state)
 {
     jl_get_ptls_states()->gc_state = state;
