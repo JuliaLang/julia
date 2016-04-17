@@ -207,6 +207,16 @@ u = unique([1,1,2])
 @test unique(iseven, [5,1,8,9,3,4,10,7,2,6]) == [5,8]
 @test unique(n->n % 3, [5,1,8,9,3,4,10,7,2,6]) == [5,1,9]
 
+# alldistinct
+@test alldistinct([1,2,3])
+@test alldistinct([:a,:b,:c])
+@test alldistinct(Set([1,2,3]))
+@test !alldistinct([1,1,2])
+@test !alldistinct([:a,:b,:c,:a])
+@test alldistinct(4:7)
+@test alldistinct(1:1)
+@test alldistinct(4.0:0.3:7.0)
+
 # filter
 s = Set([1,2,3,4])
 @test isequal(filter(isodd,s), Set([1,3]))
