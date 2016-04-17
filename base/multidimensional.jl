@@ -259,7 +259,7 @@ end
     dest
 end
 
-# Always index with the exactly indices provided.
+# Always index with exactly the indices provided.
 @generated function _unsafe_getindex!(dest::AbstractArray, src::AbstractArray, I::Union{Real, AbstractVector, Colon}...)
     N = length(I)
     quote
@@ -551,7 +551,7 @@ end
 
 # contiguous multidimensional indexing: if the first dimension is a range,
 # we can get some performance from using copy_chunks!
-@inline function _unsafe_getindex!(X::BitArray, B::BitArray, I0::Union{UnitRange{Int}, Colon})
+@inline function _unsafe_getindex!(X::BitArray, B::BitArray, I0::Union{UnitRange{Int},Colon})
     copy_chunks!(X.chunks, 1, B.chunks, first(I0), index_lengths(B, I0)[1])
     return X
 end
@@ -579,7 +579,7 @@ end
 
         storeind = 1
         Xc, Bc = X.chunks, B.chunks
-        idxlens = index_lengths(B, I0, I...) # TODO: unsplat?
+        idxlens = @ncall $N index_lengths B I0 d->I[d]
         @nloops($N, i, d->(1:idxlens[d+1]),
                 d->nothing, # PRE
                 d->(ind += stride_lst_d - gap_lst_d), # POST
@@ -603,7 +603,7 @@ end
         $(symbol(:offset_, N)) = 1
         ind = 0
         Xc, Bc = X.chunks, B.chunks
-        idxlens = index_lengths(B, I...) # TODO: unsplat?
+        idxlens = @ncall $N index_lengths B d->I[d]
         @nloops $N i d->(1:idxlens[d]) d->(@inbounds offset_{d-1} = offset_d + (I[d][i_d]-1)*stride_d) begin
             ind += 1
             unsafe_bitsetindex!(Xc, unsafe_bitgetindex(Bc, offset_0), ind)
@@ -617,39 +617,42 @@ end
 # contiguous multidimensional indexing: if the first dimension is a range,
 # we can get some performance from using copy_chunks!
 
-@inline function setindex!(B::BitArray, X::BitArray, I0::UnitRange{Int})
+@inline function setindex!(B::BitArray, X::Union{BitArray,Array}, I0::Union{Colon,UnitRange{Int}})
     @boundscheck checkbounds(B, I0)
-    l0 = length(I0)
+    l0 = index_lengths(B, I0)[1]
     setindex_shape_check(X, l0)
     l0 == 0 && return B
     f0 = first(I0)
-    copy_chunks!(B.chunks, f0, X.chunks, 1, l0)
+    copy_to_bitarray_chunks!(B.chunks, f0, X, 1, l0)
     return B
 end
 
-@inline function setindex!(B::BitArray, x::Bool, I0::UnitRange{Int})
+@inline function setindex!(B::BitArray, x, I0::Union{Colon,UnitRange{Int}})
     @boundscheck checkbounds(B, I0)
-    l0 = length(I0)
+    y = Bool(x)
+    l0 = index_lengths(B, I0)[1]
     l0 == 0 && return B
     f0 = first(I0)
-    fill_chunks!(B.chunks, x, f0, l0)
+    fill_chunks!(B.chunks, y, f0, l0)
     return B
 end
 
-@inline function setindex!(B::BitArray, X::BitArray, I0::UnitRange{Int}, I::Union{Int,UnitRange{Int}}...)
+@inline function setindex!(B::BitArray, X::Union{BitArray,Array}, I0::Union{Colon,UnitRange{Int}}, I::Union{Int,UnitRange{Int},Colon}...)
     @boundscheck checkbounds(B, I0, I...)
     _unsafe_setindex!(B, X, I0, I...)
 end
-@generated function _unsafe_setindex!(B::BitArray, X::BitArray, I0::UnitRange{Int}, I::Union{Int,UnitRange{Int}}...)
+@generated function _unsafe_setindex!(B::BitArray, X::Union{BitArray,Array}, I0::Union{Colon,UnitRange{Int}}, I::Union{Int,UnitRange{Int},Colon}...)
     N = length(I)
+    rangeexp = [I[d] == Colon ? :(1:size(B, $(d+1))) : :(I[$d]) for d = 1:N]
     quote
-        # TODO: need to setindex_shape_check
+        idxlens = @ncall $N index_lengths B I0 d->I[d]
+        @ncall $N setindex_shape_check X idxlens[1] d->idxlens[d+1]
         isempty(X) && return B
         f0 = first(I0)
-        l0 = length(I0)
+        l0 = idxlens[1]
 
         gap_lst_1 = 0
-        @nexprs $N d->(gap_lst_{d+1} = length(I[d]))
+        @nexprs $N d->(gap_lst_{d+1} = idxlens[d+1])
         stride = 1
         ind = f0
         @nexprs $N d->begin
@@ -660,11 +663,12 @@ end
         end
 
         refind = 1
-        @nloops($N, i, d->I[d],
+        Bc = B.chunks
+        @nloops($N, i, d->$rangeexp[d],
                 d->nothing, # PRE
                 d->(ind += stride_lst_d - gap_lst_d), # POST
                 begin # BODY
-                    copy_chunks!(B.chunks, ind, X.chunks, refind, l0)
+                    copy_to_bitarray_chunks!(Bc, ind, X, refind, l0)
                     refind += l0
                 end)
 
@@ -672,20 +676,24 @@ end
     end
 end
 
-@inline function setindex!(B::BitArray, x::Bool, I0::UnitRange{Int}, I::Union{Int,UnitRange{Int}}...)
+@inline function setindex!(B::BitArray, x, I0::Union{Colon,UnitRange{Int}}, I::Union{Int,UnitRange{Int},Colon}...)
     @boundscheck checkbounds(B, I0, I...)
     _unsafe_setindex!(B, x, I0, I...)
 end
-@generated function _unsafe_setindex!(B::BitArray, x::Bool, I0::UnitRange{Int}, I::Union{Int,UnitRange{Int}}...)
+@generated function _unsafe_setindex!(B::BitArray, x, I0::Union{Colon,UnitRange{Int}}, I::Union{Int,UnitRange{Int},Colon}...)
     N = length(I)
+    rangeexp = [I[d] == Colon ? :(1:size(B, $(d+1))) : :(I[$d]) for d = 1:N]
     quote
+        y = Bool(x)
+        idxlens = @ncall $N index_lengths B I0 d->I[d]
+
         f0 = first(I0)
-        l0 = length(I0)
+        l0 = idxlens[1]
         l0 == 0 && return B
         @nexprs $N d->(isempty(I[d]) && return B)
 
         gap_lst_1 = 0
-        @nexprs $N d->(gap_lst_{d+1} = length(I[d]))
+        @nexprs $N d->(gap_lst_{d+1} = idxlens[d+1])
         stride = 1
         ind = f0
         @nexprs $N d->begin
@@ -695,10 +703,10 @@ end
             gap_lst_{d+1} *= stride
         end
 
-        @nloops($N, i, d->I[d],
+        @nloops($N, i, d->$rangeexp[d],
                 d->nothing, # PRE
                 d->(ind += stride_lst_d - gap_lst_d), # POST
-                fill_chunks!(B.chunks, x, ind, l0) # BODY
+                fill_chunks!(B.chunks, y, ind, l0) # BODY
                 )
 
         return B
