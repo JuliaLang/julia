@@ -228,6 +228,8 @@ ndigits(x::Integer) = ndigits(unsigned(abs(x)))
 
 ## integer to string functions ##
 
+string(x::Union{Int8,Int16,Int32,Int64,Int128}) = dec(x)
+
 function bin(x::Unsigned, pad::Int, neg::Bool)
     i = neg + max(pad,sizeof(x)<<3-leading_zeros(x))
     a = Array(UInt8,i)
