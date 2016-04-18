@@ -23,6 +23,9 @@
 #if defined(_CPU_X86_64_) || defined(_CPU_X86_)
 #  include <immintrin.h>
 #endif
+#ifndef _OS_WINDOWS_
+#  include <pthread.h>
+#endif
 
 // This includes all the thread local states we care about for a thread.
 #define JL_MAX_BT_SIZE 80000
@@ -73,6 +76,17 @@ typedef struct _jl_tls_states_t {
 #  define jl_cpu_wake() ((void)0)
 #  define JL_CPU_WAKE_NOOP 1
 #endif
+
+// Copied from libuv. Add `JL_CONST_FUNC` so that the compiler
+// can optimize this better.
+static inline unsigned long JL_CONST_FUNC jl_thread_self(void)
+{
+#ifdef _OS_WINDOWS_
+    return (unsigned long)GetCurrentThreadId();
+#else
+    return (unsigned long)pthread_self();
+#endif
+}
 
 /**
  * Thread synchronization primitives:
@@ -302,14 +316,14 @@ JL_DLLEXPORT void (jl_gc_safepoint)(void);
     void jl_unlock_## m ## _func(void);
 
 #define JL_LOCK_WAIT(m, wait_ex) do {                                   \
-        if (m ## _mutex == uv_thread_self()) {                          \
+        if (m ## _mutex == jl_thread_self()) {                          \
             ++m ## _lock_count;                                         \
         }                                                               \
         else {                                                          \
             for (;;) {                                                  \
                 if (m ## _mutex == 0 &&                                 \
                     jl_atomic_compare_exchange(&m ## _mutex, 0,         \
-                                               uv_thread_self()) == 0) { \
+                                               jl_thread_self()) == 0) { \
                     m ## _lock_count = 1;                               \
                     break;                                              \
                 }                                                       \
@@ -320,10 +334,10 @@ JL_DLLEXPORT void (jl_gc_safepoint)(void);
     } while (0)
 
 #define JL_UNLOCK_RAW(m) do {                                           \
-        if (m ## _mutex == uv_thread_self()) {                          \
+        if (m ## _mutex == jl_thread_self()) {                          \
             --m ## _lock_count;                                         \
             if (m ## _lock_count == 0) {                                \
-                jl_atomic_compare_exchange(&m ## _mutex, uv_thread_self(), 0); \
+                jl_atomic_compare_exchange(&m ## _mutex, jl_thread_self(), 0); \
                 jl_cpu_wake();                                          \
             }                                                           \
         }                                                               \
