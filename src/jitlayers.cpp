@@ -918,8 +918,8 @@ static void jl_gen_llvm_globaldata(llvm::Module *mod, ValueToValueMapTy &VMap,
                                  T_size,
                                  true,
                                  GlobalVariable::ExternalLinkage,
-                                 ConstantInt::get(T_size, jl_gc_signal_page_idx),
-                                 "jl_gc_signal_page_idx"));
+                                 ConstantInt::get(T_size, jl_safepoint_page_idx),
+                                 "jl_safepoint_page_idx"));
 
     Constant *feature_string = ConstantDataArray::getString(jl_LLVMContext, jl_options.cpu_target);
     addComdat(new GlobalVariable(*mod,

@@ -266,10 +266,56 @@ void jl_set_base_ctx(char *__stk);
 void jl_init_threading(void);
 void jl_start_threads(void);
 void jl_shutdown_threading(void);
-void jl_gc_signal_init(void);
+
+// Whether the GC is running
+extern volatile uint32_t jl_gc_running;
+// All the functions are safe to be called from within a signal handler
+// provided that the thread will not be interrupted by another asynchronous
+// signal.
+// Initialize the safepoint
+void jl_safepoint_init(void);
+// Start the GC, return `1` if the thread should be running the GC.
+// Otherwise, the thread will wait in this function until the GC finishes on
+// another thread and return `0`.
+// The caller should have saved the `gc_state` and set it to `WAITING`
+// before calling this function. If the calling thread is to run the GC,
+// it should also wait for the mutator threads to hit a safepoint **AFTER**
+// this function returns
+int jl_safepoint_start_gc(void);
+// Can only be called by the thread that have got a `1` return value from
+// `jl_safepoint_start_gc()`. This disables the safepoint (for GC,
+// the `mprotect` may not be removed if there's pending SIGINT) and wake
+// up waiting threads if there's any.
+// The caller should restore `gc_state` **AFTER** calling this function.
+void jl_safepoint_end_gc(void);
+// Wait for the GC to finish
+// This function does **NOT** modify the `gc_state` to inform the GC thread
+// The caller should set it **BEFORE** calling this function.
+void jl_safepoint_wait_gc(void);
+
+// Set pending sigint and enable the mechanisms to deliver the sigint.
+void jl_safepoint_enable_sigint(void);
+// If the safepoint is enabled to deliver sigint, disable it
+// so that the thread won't repeatedly trigger it in a sigatomic region
+// while not being able to actually throw the exception.
+void jl_safepoint_defer_sigint(void);
+// Clear the sigint pending flag and disable the mechanism to deliver sigint.
+// Return `1` if the sigint should be delivered and `0` if there's no sigint
+// to be delivered.
+int jl_safepoint_consume_sigint(void);
+
 #ifdef JULIA_ENABLE_THREADING
 jl_get_ptls_states_func jl_get_ptls_states_getter(void);
-void jl_gc_signal_wait(void);
+static inline void jl_set_gc_and_wait(void)
+{
+    // reading own gc state doesn't need atomic ops since no one else
+    // should store to it.
+    int8_t state = jl_gc_state();
+    jl_atomic_store_release(&jl_get_ptls_states()->gc_state,
+                            JL_GC_STATE_WAITING);
+    jl_safepoint_wait_gc();
+    jl_atomic_store_release(&jl_get_ptls_states()->gc_state, state);
+}
 #endif
 
 void jl_dump_bitcode(char *fname, const char *sysimg_data, size_t sysimg_len);
@@ -481,11 +527,11 @@ JL_DLLEXPORT jl_value_t *(jl_array_data_owner)(jl_array_t *a);
 
 extern jl_mutex_t typecache_lock;
 extern jl_mutex_t codegen_lock;
+extern jl_mutex_t safepoint_lock;
 
 // -- gc.c -- //
 
 #if defined(__APPLE__) && defined(JULIA_ENABLE_THREADING)
-void jl_mach_gc_begin(void);
 void jl_mach_gc_end(void);
 #endif
 

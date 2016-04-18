@@ -285,13 +285,13 @@ JL_DLLEXPORT void (jl_cpu_wake)(void);
 
 // Accessing the tls variables, gc safepoint and gc states
 JL_DLLEXPORT JL_CONST_FUNC jl_tls_states_t *(jl_get_ptls_states)(void);
-JL_DLLEXPORT extern volatile size_t *jl_gc_signal_page;
+JL_DLLEXPORT extern volatile size_t *jl_safepoint_page;
 // This triggers a SegFault when we are in GC
 // Assign it to a variable to make sure the compiler emit the load
 // and to avoid Clang warning for -Wunused-volatile-lvalue
 #define jl_gc_safepoint() do {                          \
         jl_signal_fence();                              \
-        size_t safepoint_load = *jl_gc_signal_page;     \
+        size_t safepoint_load = *jl_safepoint_page;     \
         jl_signal_fence();                              \
         (void)safepoint_load;                           \
     } while (0)

@@ -45,7 +45,8 @@ static jl_mutex_t finalizers_lock;
  * threads that enters `jl_gc_collect()` at the same time (or later calling
  * from unmanaged code) will wait in `jl_gc_collect()` until the GC is finished.
  *
- * Before starting the mark phase the GC thread calls `jl_gc_signal_begin()`
+ * Before starting the mark phase the GC thread calls `jl_safepoint_gc_start()`
+ * and `jl_gc_wait_for_the_world()`
  * to make sure all the thread are in a safe state for the GC. The function
  * activates the safepoint and wait for all the threads to get ready for the
  * GC (`gc_state != 0`). It also acquires the `finalizers` lock so that no
@@ -354,95 +355,26 @@ NOINLINE static uintptr_t gc_get_stack_ptr(void)
 
 #include "gc-debug.c"
 
-// Only one thread can be doing the collection right now. That thread set
-// `jl_running_gc` to one on entering the GC and set it back afterward.
-static volatile uint64_t jl_gc_running = 0;
-
-JL_DLLEXPORT volatile size_t *jl_gc_signal_page = NULL;
-
-void jl_gc_signal_init(void)
-{
-    // jl_page_size isn't available yet.
-#ifdef _OS_WINDOWS_
-    jl_gc_signal_page = (size_t*)VirtualAlloc(NULL, jl_getpagesize(),
-                                              MEM_COMMIT, PAGE_READONLY);
-#else
-    jl_gc_signal_page = (size_t*)mmap(0, jl_getpagesize(), PROT_READ,
-                                      MAP_NORESERVE | MAP_PRIVATE |
-                                      MAP_ANONYMOUS, -1, 0);
-    if (jl_gc_signal_page == MAP_FAILED)
-        jl_gc_signal_page = NULL;
-#endif
-    if (jl_gc_signal_page == NULL) {
-        jl_printf(JL_STDERR, "could not allocate GC synchronization page\n");
-        gc_debug_critical_error();
-        abort();
-    }
-}
-
 #ifdef JULIA_ENABLE_THREADING
-static void jl_wait_for_gc(void)
-{
-    while (jl_gc_running) {
-        jl_cpu_pause(); // yield?
-    }
-}
-
-void jl_gc_signal_wait(void)
-{
-    int8_t state = jl_gc_state();
-    jl_get_ptls_states()->gc_state = JL_GC_STATE_WAITING;
-    jl_wait_for_gc();
-    jl_get_ptls_states()->gc_state = state;
-}
-
 static void jl_gc_wait_for_the_world(void)
 {
     for (int i = 0;i < jl_n_threads;i++) {
         jl_tls_states_t *ptls = jl_all_task_states[i].ptls;
-        while (!ptls->gc_state) {
+        // FIXME: The acquire load pairs with the release stores
+        // in the signal handler of safepoint so we are sure that
+        // all the stores on those threads are visible. However,
+        // we're currently not using atomic stores in mutator threads.
+        // We should either use atomic store release there too or use signals
+        // to flush the memory operations on those threads.
+        while (!ptls->gc_state || !jl_atomic_load_acquire(&ptls->gc_state)) {
             jl_cpu_pause(); // yield?
         }
     }
 }
-
-static void jl_gc_signal_begin(void)
+#else
+static inline void jl_gc_wait_for_the_world(void)
 {
-#ifdef __APPLE__
-    // This needs to be after setting `jl_gc_running` so that only one thread
-    // can talk to the signal handler
-    jl_mach_gc_begin();
-#endif
-#ifdef _OS_WINDOWS_
-    DWORD old_prot;
-    VirtualProtect((void*)jl_gc_signal_page, jl_page_size,
-                   PAGE_NOACCESS, &old_prot);
-#else
-    mprotect((void*)jl_gc_signal_page, jl_page_size, PROT_NONE);
-#endif
-    jl_gc_wait_for_the_world();
-    JL_LOCK_NOGC(&finalizers_lock);
 }
-
-static void jl_gc_signal_end(void)
-{
-    JL_UNLOCK_NOGC(&finalizers_lock);
-#ifdef _OS_WINDOWS_
-    DWORD old_prot;
-    VirtualProtect((void*)jl_gc_signal_page, jl_page_size,
-                   PAGE_READONLY, &old_prot);
-#else
-    mprotect((void*)jl_gc_signal_page, jl_page_size, PROT_READ);
-#endif
-#ifdef __APPLE__
-    jl_mach_gc_end();
-#endif
-}
-#else
-
-#define jl_gc_signal_begin()
-#define jl_gc_signal_end()
-
 #endif
 
 static int jl_gc_finalizers_inhibited; // don't run finalizers during codegen #11956
@@ -2326,37 +2258,27 @@ JL_DLLEXPORT void jl_gc_collect(int full)
         return;
     char *stack_hi = (char*)gc_get_stack_ptr();
     gc_debug_print();
-    JL_SIGATOMIC_BEGIN();
 
     int8_t old_state = jl_gc_state();
     jl_get_ptls_states()->gc_state = JL_GC_STATE_WAITING;
-    // In case multiple threads enter the GC at the same time, only allow
-    // one of them to actually run the collection. We can't just let the
-    // master thread do the GC since it might be running unmanaged code
-    // and can take arbitrarily long time before hitting a safe point.
-    if (jl_atomic_compare_exchange(&jl_gc_running, 0, 1) != 0) {
-#ifdef JULIA_ENABLE_THREADING
-        JL_SIGATOMIC_END();
-        jl_wait_for_gc();
+    // `jl_safepoint_start_gc()` makes sure only one thread can
+    // run the GC.
+    if (!jl_safepoint_start_gc()) {
+        // Multithread only. See assertion in `safepoint.c`
         jl_gc_state_set(old_state, JL_GC_STATE_WAITING);
-#else
-        // For single thread, GC should not call itself (in finalizers) before
-        // setting jl_gc_running to false so this should never happen.
-        assert(0 && "GC synchronization failure");
-#endif
         return;
     }
-    jl_gc_signal_begin();
+    // no-op for non-threading
+    jl_gc_wait_for_the_world();
 
-    if (!jl_gc_disable_counter)
+    if (!jl_gc_disable_counter) {
+        JL_LOCK_NOGC(&finalizers_lock);
         _jl_gc_collect(full, stack_hi);
+        JL_UNLOCK_NOGC(&finalizers_lock);
+    }
 
-    // Need to reset the page protection before resetting the flag since
-    // the thread will trigger a segfault immediately after returning from
-    // the signal handler.
-    jl_gc_signal_end();
-    jl_gc_running = 0;
-    JL_SIGATOMIC_END();
+    // no-op for non-threading
+    jl_safepoint_end_gc();
     jl_gc_state_set(old_state, JL_GC_STATE_WAITING);
 
     if (!jl_gc_finalizers_inhibited) {

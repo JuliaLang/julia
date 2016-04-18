@@ -1509,10 +1509,11 @@ static inline void jl_lock_frame_pop(void)
 
 STATIC_INLINE void jl_eh_restore_state(jl_handler_t *eh)
 {
+    // This function should **NOT** have any safepoint before restoring
+    // the GC state at the end.
     JL_SIGATOMIC_BEGIN();
     jl_current_task->eh = eh->prev;
     jl_pgcstack = eh->gcstack;
-    jl_gc_state_save_and_set(eh->gc_state);
 #ifdef JULIA_ENABLE_THREADING
     arraylist_t *locks = &jl_current_task->locks;
     if (locks->len > eh->locks_len) {
@@ -1521,6 +1522,9 @@ STATIC_INLINE void jl_eh_restore_state(jl_handler_t *eh)
         locks->len = eh->locks_len;
     }
 #endif
+    // This should be the last since this can trigger a safepoint
+    // that throws a SIGINT.
+    jl_gc_state_save_and_set(eh->gc_state);
     JL_SIGATOMIC_END();
 }
 
