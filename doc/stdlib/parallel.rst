@@ -285,11 +285,11 @@ General Parallel Computing Support
 
    Note that ``f`` must be made available to all worker processes; see :ref:`Code Availability and Loading Packages <man-parallel-computing-code-availability>` for details.
 
-.. function:: remotecall(func, id, args...)
+.. function:: remotecall(func, id, args...; kwargs...)
 
    .. Docstring generated from Julia source
 
-   Call a function asynchronously on the given arguments on the specified process. Returns a ``Future``\ . If using keyword arguments for ``func``\ , ``remotecall`` can be called with ``remotecall(()->func(args...; kw...), id)``\ .
+   Call a function asynchronously on the given arguments on the specified process. Returns a ``Future``\ . Keyword arguments, if any, are passed through to ``func``\ .
 
 .. function:: Future()
 
@@ -351,23 +351,23 @@ General Parallel Computing Support
    * ``RemoteChannel``\ : Wait for and get the value of a remote reference. Exceptions raised are   same as for a ``Future`` .
    * ``Channel`` : Wait for and get the first available item from the channel.
 
-.. function:: remotecall_wait(func, id, args...)
+.. function:: remotecall_wait(func, id, args...; kwargs...)
 
    .. Docstring generated from Julia source
 
-   Perform ``wait(remotecall(...))`` in one message.
+   Perform ``wait(remotecall(...))`` in one message. Keyword arguments, if any, are passed through to ``func``\ .
 
-.. function:: remotecall_fetch(func, id, args...)
-
-   .. Docstring generated from Julia source
-
-   Perform ``fetch(remotecall(...))`` in one message. Any remote exceptions are captured in a ``RemoteException`` and thrown.
-
-.. function:: remotecall_fetch(f, pool::WorkerPool, args...)
+.. function:: remotecall_fetch(func, id, args...; kwargs...)
 
    .. Docstring generated from Julia source
 
-   Call ``f(args...)`` on one of the workers in ``pool``\ .
+   Perform ``fetch(remotecall(...))`` in one message.  Keyword arguments, if any, are passed through to ``func``\ . Any remote exceptions are captured in a ``RemoteException`` and thrown.
+
+.. function:: remotecall_fetch(f, pool::WorkerPool, args...; kwargs...)
+
+   .. Docstring generated from Julia source
+
+   Call ``f(args...; kwargs...)`` on one of the workers in ``pool``\ . Waits for completion and returns the result.
 
 .. function:: remote([::WorkerPool], f) -> Function
 

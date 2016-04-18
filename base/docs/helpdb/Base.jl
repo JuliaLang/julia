@@ -2748,9 +2748,9 @@ mapping the SharedArray
 indexpids
 
 """
-    remotecall_wait(func, id, args...)
+    remotecall_wait(func, id, args...; kwargs...)
 
-Perform `wait(remotecall(...))` in one message.
+Perform `wait(remotecall(...))` in one message. Keyword arguments, if any, are passed through to `func`.
 """
 remotecall_wait
 
@@ -5396,10 +5396,10 @@ value is a range of indexes where the matching sequence is found, such that `s[s
 search
 
 """
-    remotecall_fetch(func, id, args...)
+    remotecall_fetch(func, id, args...; kwargs...)
 
-Perform `fetch(remotecall(...))` in one message. Any remote exceptions are captured in a
-`RemoteException` and thrown.
+Perform `fetch(remotecall(...))` in one message.  Keyword arguments, if any, are passed through to `func`.
+Any remote exceptions are captured in a `RemoteException` and thrown.
 """
 remotecall_fetch
 
@@ -8665,10 +8665,10 @@ result is a `Vector{UInt8,1}`.
 readavailable
 
 """
-    remotecall(func, id, args...)
+    remotecall(func, id, args...; kwargs...)
 
 Call a function asynchronously on the given arguments on the specified process. Returns a `Future`.
-If using keyword arguments for `func`, `remotecall` can be called with `remotecall(()->func(args...; kw...), id)`.
+Keyword arguments, if any, are passed through to `func`.
 """
 remotecall
 
