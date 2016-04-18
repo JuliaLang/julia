@@ -503,6 +503,7 @@ jl_value_t *jl_toplevel_eval_flex(jl_value_t *e, int fast)
     if (ex->head != body_sym && ex->head != thunk_sym && ex->head != return_sym &&
         ex->head != method_sym) {
         // not yet expanded
+        jl_(ex);
         ex = (jl_expr_t*)jl_expand(e);
     }
     jl_sym_t *head = jl_is_expr(ex) ? ex->head : NULL;
@@ -524,6 +525,7 @@ jl_value_t *jl_toplevel_eval_flex(jl_value_t *e, int fast)
     }
     else {
         if (head && jl_eval_expr_with_compiler_p((jl_value_t*)ex, fast, jl_current_module)) {
+            jl_(ex);
             thk = jl_wrap_expr((jl_value_t*)ex);
             ewc = 1;
         }

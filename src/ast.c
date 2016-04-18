@@ -132,7 +132,7 @@ value_t fl_current_module_counter(fl_context_t *fl_ctx, value_t *args, uint32_t 
     else
         return fixnum(jl_module_next_counter(jl_current_module));
 }
-
+jl_value_t* jl_get_backtrace();
 value_t fl_invoke_julia_macro(fl_context_t *fl_ctx, value_t *args, uint32_t nargs)
 {
     if (nargs < 1)
@@ -154,7 +154,9 @@ value_t fl_invoke_julia_macro(fl_context_t *fl_ctx, value_t *args, uint32_t narg
     JL_CATCH {
         JL_GC_POP();
         value_t opaque = cvalue(fl_ctx, jl_ast_ctx(fl_ctx)->jvtype, sizeof(void*));
-        *(jl_value_t**)cv_data((cvalue_t*)ptr(opaque)) = jl_exception_in_transit;
+        jl_value_t *exc_ctx = jl_svec(2, jl_exception_in_transit, jl_get_backtrace());
+        jl_ast_preserve(fl_ctx, exc_ctx);
+        *(jl_value_t**)cv_data((cvalue_t*)ptr(opaque)) = exc_ctx;
         return fl_list2(fl_ctx, jl_ast_ctx(fl_ctx)->error_sym, opaque);
     }
     // protect result from GC, otherwise it could be freed during future
@@ -907,6 +909,7 @@ jl_lambda_info_t *jl_wrap_expr(jl_value_t *expr)
         expr = (jl_value_t*)bo;
     }
     jl_cellset(le->args, 2, expr);
+    jl_(expr);
     jl_lambda_info_t *li = jl_new_lambda_info((jl_value_t*)le, jl_emptysvec, jl_emptysvec, jl_current_module);
     JL_GC_POP();
     return li;

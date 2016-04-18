@@ -131,14 +131,15 @@
                      ;; delay expansion so macros run in the Task executing
                      ;; the input, not the task parsing it (issue #2378)
                      ;; used to be (expand-toplevel-expr expr)
-                     (let ((expr (julia-parse inp)))
+                     (let ((lno (line-number-node inp))
+                           (expr (julia-parse inp)))
                        (if (eof-object? expr)
                            (cond ((null? exprs)     expr)
                                  ((length= exprs 1) (car exprs))
                                  (else (cons 'toplevel (reverse! exprs))))
                            (if (and (pair? expr) (eq? (car expr) 'toplevel))
-                               (loop (nreconc (cdr expr) exprs))
-                               (loop (cons expr exprs)))))))))))
+                               (loop (nreconc (cdr expr) (cons lno exprs)))
+                               (loop (cons `(block ,lno ,expr) exprs)))))))))))
 
 (define (jl-parse-all io filename)
   (unwind-protect
