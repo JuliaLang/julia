@@ -135,3 +135,6 @@ let ptr = Ptr{Void}(typemax(UInt))
         @test typeof(Ptr{Float64}(T(ptr))) == Ptr{Float64}
     end
 end
+
+# issue #15911
+@inferred string(1)
