@@ -1110,13 +1110,6 @@ results to `r`.
 any!
 
 """
-    falses(dims)
-
-Create a `BitArray` with all values set to `false`.
-"""
-falses
-
-"""
     filter!(function, collection)
 
 Update `collection`, removing elements for which `function` is `false`. For associative
@@ -7809,13 +7802,6 @@ x == fld(x,y)*y + mod(x,y)
 ```
 """
 mod
-
-"""
-    trues(dims)
-
-Create a `BitArray` with all values set to `true`.
-"""
-trues
 
 """
     qr(A [,pivot=Val{false}][;thin=true]) -> Q, R, [p]

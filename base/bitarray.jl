@@ -385,8 +385,33 @@ function fill!(B::BitArray, x)
     return B
 end
 
-falses(args...) = fill!(BitArray(args...), false)
-trues(args...) = fill!(BitArray(args...), true)
+"""
+    falses(dims)
+
+Create a `BitArray` with all values set to `false`.
+"""
+falses(dims::Dims) = fill!(BitArray(dims), false)
+falses(dims::Integer...) = falses(dims)
+"""
+    falses(A)
+
+Create a `BitArray` with all values set to `false` of the same shape as `A`.
+"""
+falses(A::AbstractArray) = falses(size(A))
+
+"""
+    trues(dims)
+
+Create a `BitArray` with all values set to `true`.
+"""
+trues(dims::Dims) = fill!(BitArray(dims), true)
+trues(dims::Integer...) = trues(dims)
+"""
+    trues(A)
+
+Create a `BitArray` with all values set to `true` of the same shape as `A`.
+"""
+trues(A::AbstractArray) = trues(size(A))
 
 function one(x::BitMatrix)
     m, n = size(x)
