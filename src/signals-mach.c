@@ -18,31 +18,20 @@
 static void attach_exception_port(thread_port_t thread);
 
 #ifdef JULIA_ENABLE_THREADING
-static jl_mutex_t gc_suspend_lock;
-// This is a copy of `jl_gc_safepoint_activated` to make it easier
-// to synchronic the GC and the signal handler
-static int jl_gc_safepoint_activated = 0;
 // low 16 bits are the thread id, the next 8 bits are the original gc_state
 static arraylist_t suspended_threads;
-void jl_mach_gc_begin(void)
-{
-    JL_LOCK_NOGC(&gc_suspend_lock);
-    jl_gc_safepoint_activated = 1;
-    JL_UNLOCK_NOGC(&gc_suspend_lock);
-}
 void jl_mach_gc_end(void)
 {
-    JL_LOCK_NOGC(&gc_suspend_lock);
-    jl_gc_safepoint_activated = 0;
+    // Requires the safepoint lock to be held
     for (size_t i = 0;i < suspended_threads.len;i++) {
         uintptr_t item = (uintptr_t)suspended_threads.items[i];
         int16_t tid = (int16_t)item;
         int8_t gc_state = (int8_t)(item >> 8);
-        jl_all_task_states[tid].ptls->gc_state = gc_state;
+        jl_atomic_store_release(&jl_all_task_states[tid].ptls->gc_state,
+                                gc_state);
         thread_resume(pthread_mach_thread_np(jl_all_task_states[tid].system_id));
     }
     suspended_threads.len = 0;
-    JL_UNLOCK_NOGC(&gc_suspend_lock);
 }
 #endif
 
@@ -177,20 +166,20 @@ kern_return_t catch_exception_raise(mach_port_t            exception_port,
     HANDLE_MACH_ERROR("thread_get_state", ret);
     uint64_t fault_addr = exc_state.__faultvaddr;
 #ifdef JULIA_ENABLE_THREADING
-    if (fault_addr == (uintptr_t)jl_gc_signal_page) {
-        JL_LOCK_NOGC(&gc_suspend_lock);
-        if (!jl_gc_safepoint_activated) {
+    if (fault_addr == (uintptr_t)jl_safepoint_page) {
+        jl_mutex_lock_nogc(&safepoint_lock);
+        if (!jl_gc_running) {
             // GC is done before we get the message, do nothing and return
-            JL_UNLOCK_NOGC(&gc_suspend_lock);
+            jl_mutex_unlock_nogc(&safepoint_lock);
             return KERN_SUCCESS;
         }
         // Otherwise, set the gc state of the thread, suspend and record it
         int8_t gc_state = ptls->gc_state;
-        ptls->gc_state = JL_GC_STATE_WAITING;
+        jl_atomic_store_release(ptls->gc_state, JL_GC_STATE_WAITING);
         uintptr_t item = tid | (((uintptr_t)gc_state) << 16);
         arraylist_push(&suspended_threads, (void*)item);
         thread_suspend(thread);
-        JL_UNLOCK_NOGC(&gc_suspend_lock);
+        jl_mutex_unlock_nogc(&safepoint_lock);
         return KERN_SUCCESS;
     }
 #endif

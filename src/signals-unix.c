@@ -90,9 +90,9 @@ static void segv_handler(int sig, siginfo_t *info, void *context)
     assert(sig == SIGSEGV || sig == SIGBUS);
 
 #ifdef JULIA_ENABLE_THREADING
-    if (info->si_addr == jl_gc_signal_page) {
+    if (info->si_addr == jl_safepoint_page) {
         jl_unblock_signal(sig);
-        jl_gc_signal_wait();
+        jl_set_gc_and_wait();
         return;
     }
 #endif

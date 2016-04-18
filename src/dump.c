@@ -232,9 +232,9 @@ static int jl_load_sysimg_so(void)
         *sysimg_gvars[tls_getter_idx - 1] =
             (jl_value_t*)jl_get_ptls_states_getter();
 #endif
-        size_t signal_page_idx = *(size_t*)jl_dlsym(jl_sysimg_handle,
-                                                    "jl_gc_signal_page_idx");
-        *sysimg_gvars[signal_page_idx - 1] = (jl_value_t*)jl_gc_signal_page;
+        size_t safepoint_idx = *(size_t*)jl_dlsym(jl_sysimg_handle,
+                                                  "jl_safepoint_page_idx");
+        *sysimg_gvars[safepoint_idx - 1] = (jl_value_t*)jl_safepoint_page;
         const char *cpu_target = (const char*)jl_dlsym(jl_sysimg_handle, "jl_sysimg_cpu_target");
         if (strcmp(cpu_target,jl_options.cpu_target) != 0)
             jl_error("Julia and the system image were compiled for different architectures.\n"
