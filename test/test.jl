@@ -12,13 +12,13 @@ using Base.Test
 @test strip("\t  this should fail   \n") != "hi"
 
 # Test @test_fail_expected
-@test_fail_expected false
-@test_fail_expected 1 == 2
-@test_fail_expected 1 != 1
-@test_fail_expected strip("\t  hi   \n") != "hi"
-@test_fail_expected strip("\t  this should fail   \n") == "hi"
+@test_try_broken false
+@test_try_broken 1 == 2
+@test_try_broken 1 != 1
+@test_try_broken strip("\t  hi   \n") != "hi"
+@test_try_broken strip("\t  this should fail   \n") == "hi"
 
-@test_skip error()
+@test_skip_broken error()
 
 a = Array(Float64, 2, 2, 2, 2, 2)
 a[1,1,1,1,1] = 10

@@ -13,7 +13,7 @@ and summarize them at the end of the test set with `@testset`.
 """
 module Test
 
-export @test, @test_throws, @test_fail_expected, @test_skip
+export @test, @test_throws, @test_try_broken, @test_skip_broken
 export @testset
 # Legacy approximate testing functions, yet to be included
 export @test_approx_eq, @test_approx_eq_eps, @inferred
@@ -94,7 +94,7 @@ end
 
 The test condition couldn't be evaluated due to an exception, or
 it evaluated to something other than a `Bool`.
-In the case of `@test_fail_expected` it is used to alert for an
+In the case of `@test_try_broken` it is used to alert for an
 unexpected `Pass` `Result`.
 """
 type Error <: Result
@@ -179,7 +179,7 @@ end
 
 # @test_fail_expected - check if the expression evaluates to false give an error otherwise
 """
-    @test_fail_expected ex
+    @test_try_broken ex
 
 For use to indicate a test that should pass but currently consistently
 fails.
@@ -187,7 +187,7 @@ Tests that the expression `ex` evaluates to `false`.
 Returns a `Broken` `Result` if it does, an `Error` `Result` if it is
 `true`, and an `Error` `Result` if it could not be evaluated.
 """
-macro test_fail_expected(ex)
+macro test_try_broken(ex)
     orig_ex = Expr(:quote,ex)
     result = get_test_result(ex)
     # code to call do_test with execution result and original expr
@@ -196,13 +196,13 @@ end
 
 # @test_skip - do not evaluate just show as broken
 """
-    @test_skip ex
+    @test_skip_broken ex
 
 For use to indicate a test that should pass but currently intermittently
 fails.
 Does not evaluate the expression.
 """
-macro test_skip(ex)
+macro test_skip_broken(ex)
     orig_ex = Expr(:quote,ex)
     testres = Broken(:skipped, orig_ex)
     record(get_testset(), testres)

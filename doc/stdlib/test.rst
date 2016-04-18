@@ -253,11 +253,11 @@ writing new tests.
 Broken Tests
 ------------
 
-If a test fails consistently it can be changed to use the :func:`@test_fail_expected`
+If a test fails consistently it can be changed to use the :func:`@test_try_broken`
 macro. This will denote the test as ``Broken`` if the test continues to fail
 and alerts the user via an ``Error`` if the test succeeds.
 
-.. function:: @test_fail_expected ex
+.. function:: @test_try_broken ex
 
    .. Docstring generated from Julia source
 
@@ -267,11 +267,11 @@ and alerts the user via an ``Error`` if the test succeeds.
    Returns a ``Broken`` ``Result`` if it does, an ``Error`` ``Result`` if it is
    ``true``, and an ``Error`` ``Result`` if it could not be evaluated.
 
-:func:`@test_skipped` is also available for use to skip a test without
+:func:`@test_skip_broken` is also available for use to skip a test without
 evaluation in the case of intermittent failures. This test will not run but
 gives a `Broken` `Result`.
 
-.. function:: @test_skipped ex
+.. function:: @test_skip_broken ex
 
    .. Docstring generated from Julia source
 
