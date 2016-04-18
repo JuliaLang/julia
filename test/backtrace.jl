@@ -76,8 +76,8 @@ loc = functionloc(f12977)
 code_loc(p, skipC=true) = ccall(:jl_lookup_code_address, Any, (Ptr{Void},Cint), p-1, skipC)
 
 @noinline function test_throw_commoning(x)
-    if x==1; throw(AssertionError()); end
-    if x==2; throw(AssertionError()); end
+    if x==1; error("foo"); end
+    if x==2; error("foo"); end
 end
 
 let
