@@ -1004,3 +1004,85 @@ if VERSION < v"0.4.0"
 else
     @compat rc = RemoteChannel{Channel{Any}}(1,2,3)
 end
+
+# @functorize
+function checkfunc(Fun, func)
+    if VERSION >= v"0.5.0-dev+3701"
+        @eval @test @functorize($(func)) === Base.$(func)
+    else
+        if isdefined(Base, Fun)
+            @eval @test isa(@functorize($(func)), Base.$(Fun))
+        else
+            @eval @test isa(@functorize($(func)), Function)
+            @eval @test @functorize($(func)) === Base.$(func)
+        end
+    end
+end
+
+for (Fun, func) in [(:IdFun,                   :identity),
+                    (:AbsFun,                  :abs),
+                    (:Abs2Fun,                 :abs2),
+                    (:ExpFun,                  :exp),
+                    (:LogFun,                  :log),
+                    (:ConjFun,                 :conj)]
+    begin
+        if isdefined(Base, func)
+            checkfunc(Fun, func)
+            a = rand(1:10, 10)
+            @eval @test mapreduce($(func), +, $(a)) == mapreduce(@functorize($(func)), +, $(a))
+        end
+    end
+end
+
+for (Fun, func) in [(:AndFun,              :&),
+                    (:OrFun,               :|),
+                    (:XorFun,              :$),
+                    (:AddFun,              :+),
+                    (:DotAddFun,           :.+),
+                    (:SubFun,              :-),
+                    (:DotSubFun,           :.-),
+                    (:MulFun,              :*),
+                    (:DotMulFun,           :.*),
+                    (:RDivFun,             :/),
+                    (:DotRDivFun,          :./),
+                    (:LDivFun,             :\),
+                    (:IDivFun,             :div),
+                    (:DotIDivFun,          symbol(".÷")),
+                    (:ModFun,              :mod),
+                    (:RemFun,              :rem),
+                    (:DotRemFun,           :.%),
+                    (:PowFun,              :^),
+                    (:MaxFun,              :scalarmax),
+                    (:MinFun,              :scalarmin),
+                    (:LessFun,             :<),
+                    (:MoreFun,             :>),
+                    (:DotLSFun,            :.<<),
+                    (:DotRSFun,            :.>>),
+                    (:ElementwiseMaxFun,   :max),
+                    (:ElementwiseMinFun,   :min)]
+    begin
+        if isdefined(Base, func) && (func !== :.>> || VERSION >= v"0.4.0-dev+553") && (func !== :.% || VERSION >= v"0.5.0-dev+1472")
+            checkfunc(Fun, func)
+            a = rand(1:10, 10)
+            @eval @test mapreduce(identity, Base.$(func), $(a)) == mapreduce(identity, @functorize($(func)), $(a))
+        end
+    end
+end
+
+if VERSION >= v"0.5.0-dev+3701"
+    @test @functorize(complex) === complex
+    @test @functorize(dot) === dot
+else
+    if isdefined(Base, :SparseArrays) && isdefined(Base.SparseArrays, :ComplexFun)
+        @test isa(@functorize(complex), Base.SparseArrays.ComplexFun)
+        @test isa(@functorize(dot), Base.SparseArrays.DotFun)
+    else
+        @test isa(@functorize(complex), Function)
+        @test isa(@functorize(dot), Function)
+        @test @functorize(complex) === complex
+        @test @functorize(dot) === dot
+    end
+end
+let a = rand(1:10, 10)
+    @test mapreduce(identity, dot, a) == mapreduce(identity, @functorize(dot), a)
+end
