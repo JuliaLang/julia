@@ -1495,7 +1495,8 @@ end
 function array_eltype_show_how(X)
     e = eltype(X)
     leaf = isleaftype(e)
-    plain = e<:Number || e<:AbstractString
+    plain = e<:Number || e<:AbstractString ||
+            (e<:Nullable && (eltype(e)<:Number || eltype(e)<:AbstractString))
     if isa(e,DataType) && e === e.name.primary
         str = string(e.name)
     else
