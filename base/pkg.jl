@@ -85,9 +85,8 @@ add(pkg::AbstractString, vers::VersionNumber...) = cd(Entry.add,pkg,vers...)
 """
     addrequire(requirefile)
 
-Loads a REQUIRE file and adds all packages listed. This first checks if there is a specified
-julia version, and if so, whether the currently installed version is compatible. Next, this
-adds a requirement entry for each package to `Pkg.dir("REQUIRE")` and calls `Pkg.resolve()`.
+Loads a REQUIRE file, adds a requirement entry for each package to `Pkg.dir("REQUIRE")`
+and calls `Pkg.resolve()`.
 """
 addrequire(requirefile::AbstractString) = Entry.addrequire(requirefile)
 

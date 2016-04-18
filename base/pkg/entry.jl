@@ -77,21 +77,27 @@ function add(pkg::AbstractString, vers::VersionSet)
 end
 add(pkg::AbstractString, vers::VersionNumber...) = add(pkg,VersionSet(vers...))
 
-function addrequire(requirefile::AbstractString)
-    isfile(requirefile) || error("File '$requirefile' not found")
-    requirements = Reqs.parse(Reqs.read(requirefile))
-    cd(Pkg.dir()) do
-        if haskey(requirements, "julia")
-            VERSION in requirements["julia"] || error("Installed julia $VERSION not in $(requirements["julia"])")
-            delete!(requirements, "julia")
-        end
-        skip = Entry.installed()
-        for (pkg,versions) in requirements
-            if !haskey(skip, pkg) || !(skip[pkg] in versions)
-                Entry.add(pkg, versions)
-            end
+function processrequire(requirements::Dict{ByteString,Base.Pkg.Types.VersionSet})
+    delete!(requirements, "julia")
+    skip = installed()
+    changed = false
+    for (pkg,versions) in requirements
+        if !haskey(skip, pkg) || !(skip[pkg] in versions)
+            add(pkg, versions)
+            changed = true
         end
     end
+    if !changed
+        info("Nothing to be done")
+    end
+end
+
+addrequire(reqs::Dict{ByteString,Base.Pkg.Types.VersionSet}) = Dir.cd(processrequire,reqs)
+
+function addrequire(requirefile::AbstractString)
+    isfile(requirefile) || error("File '$requirefile' not found")
+    requirements = Reqs.parse(requirefile)
+    addrequire(requirements)
 end
 
 function rm(pkg::AbstractString)
