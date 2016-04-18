@@ -575,7 +575,7 @@ jl_method_t *jl_new_method(jl_lambda_info_t *definition, jl_sym_t *name, jl_tupl
 
 // symbols --------------------------------------------------------------------
 
-JL_DEFINE_MUTEX(symbol_table)
+static jl_mutex_t symbol_table_lock;
 
 static jl_sym_t *volatile symtab = NULL;
 
@@ -655,15 +655,15 @@ static jl_sym_t *_jl_symbol(const char *str, size_t len)
     jl_sym_t *volatile *slot;
     jl_sym_t *node = symtab_lookup(&symtab, str, len, &slot);
     if (node == NULL) {
-        JL_LOCK(symbol_table); // Might GC
+        JL_LOCK(&symbol_table_lock); // Might GC
         // Someone might have updated it, check and look up again
         if (*slot != NULL && (node = symtab_lookup(slot, str, len, &slot))) {
-            JL_UNLOCK(symbol_table);
+            JL_UNLOCK(&symbol_table_lock);
             return node;
         }
         node = mk_symbol(str, len);
         jl_atomic_store_release(slot, node);
-        JL_UNLOCK(symbol_table);
+        JL_UNLOCK(&symbol_table_lock);
     }
     return node;
 }

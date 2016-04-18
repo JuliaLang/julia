@@ -1432,7 +1432,7 @@ JL_DLLEXPORT void JL_NORETURN jl_rethrow(void);
 JL_DLLEXPORT void JL_NORETURN jl_rethrow_other(jl_value_t *e);
 
 #ifdef JULIA_ENABLE_THREADING
-STATIC_INLINE void jl_lock_frame_push(void (*unlock_func)(void))
+static inline void jl_lock_frame_push(jl_mutex_t *lock)
 {
     // For early bootstrap
     if (__unlikely(!jl_current_task))
@@ -1445,7 +1445,21 @@ STATIC_INLINE void jl_lock_frame_push(void (*unlock_func)(void))
     else {
         locks->len = len + 1;
     }
-    locks->items[len] = (void*)unlock_func;
+    locks->items[len] = (void*)lock;
+}
+static inline void jl_lock_frame_pop(void)
+{
+    if (__likely(jl_current_task)) {
+        jl_current_task->locks.len--;
+    }
+}
+#else
+static inline void jl_lock_frame_push(jl_mutex_t *lock)
+{
+    (void)lock;
+}
+static inline void jl_lock_frame_pop(void)
+{
 }
 #endif // ifndef JULIA_ENABLE_THREADING
 
@@ -1459,7 +1473,7 @@ STATIC_INLINE void jl_eh_restore_state(jl_handler_t *eh)
     arraylist_t *locks = &jl_current_task->locks;
     if (locks->len > eh->locks_len) {
         for (size_t i = locks->len;i > eh->locks_len;i--)
-            ((void(*)(void))locks->items[i - 1])();
+            jl_mutex_unlock_nogc((jl_mutex_t*)locks->items[i - 1]);
         locks->len = eh->locks_len;
     }
 #endif

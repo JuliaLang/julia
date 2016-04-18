@@ -1160,7 +1160,7 @@ void jl_type_infer(jl_lambda_info_t *li)
 {
 #ifdef ENABLE_INFERENCE
     if (jl_typeinf_func != NULL && (li->def == NULL || li->def->module != jl_gf_mtable(jl_typeinf_func)->module)) {
-        JL_LOCK(codegen); // Might GC
+        JL_LOCK(&codegen_lock); // Might GC
         assert(li->inInference == 0);
         li->inInference = 1;
         jl_value_t *fargs[2];
@@ -1173,7 +1173,7 @@ void jl_type_infer(jl_lambda_info_t *li)
 #endif
         jl_value_t *info = jl_apply(fargs, 2); (void)info;
         assert(li->def || li->inInference == 0); // if this is toplevel expr, make sure inference finished
-        JL_UNLOCK(codegen);
+        JL_UNLOCK(&codegen_lock);
     }
 #endif
 }
@@ -1257,7 +1257,7 @@ static jl_lambda_info_t *cache_method(jl_methtable_t *mt, union jl_typemap_t *ca
                                       jl_tupletype_t *type, jl_tupletype_t *origtype,
                                       jl_typemap_entry_t *m, jl_svec_t *sparams)
 {
-    JL_LOCK(codegen); // Might GC
+    JL_LOCK(&codegen_lock); // Might GC
     size_t i;
     jl_tupletype_t *decl = m->sig;
     jl_method_t *definition = m->func.method;
@@ -1528,7 +1528,7 @@ static jl_lambda_info_t *cache_method(jl_methtable_t *mt, union jl_typemap_t *ca
         newmeth = li;
         jl_typemap_insert(cache, parent, type, jl_emptysvec, origtype, guardsigs, (jl_value_t*)newmeth, jl_cachearg_offset(mt), &lambda_cache, NULL);
         JL_GC_POP();
-        JL_UNLOCK(codegen);
+        JL_UNLOCK(&codegen_lock);
         return newmeth;
     }
 
@@ -1551,7 +1551,7 @@ static jl_lambda_info_t *cache_method(jl_methtable_t *mt, union jl_typemap_t *ca
                 jl_type_infer(newmeth);
     }
     JL_GC_POP();
-    JL_UNLOCK(codegen);
+    JL_UNLOCK(&codegen_lock);
     if (definition->traced && jl_linfo_tracer)
         jl_linfo_tracer(newmeth);
     return newmeth;
