@@ -1984,7 +1984,7 @@ function type_annotate!(linfo::LambdaInfo, states::Array{Any,1}, sv::ANY, rettyp
     for i = 1:nargs
         decls[i] = widenconst(states[1][i].typ)
     end
-    body = linfo.code
+    body = linfo.code::Array{Any,1}
     for i=1:length(body)
         st_i = states[i]
         if st_i !== ()
