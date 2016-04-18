@@ -20,7 +20,7 @@
 // ::ANY has no effect if the number of overlapping methods is greater than this
 #define MAX_UNSPECIALIZED_CONFLICTS 32
 #define MAX_METHLIST_COUNT 32 // this can strongly affect the sysimg size and speed!
-#define INIT_CACHE_SIZE 16
+#define INIT_CACHE_SIZE 16 // must be a power-of-two
 
 #ifdef __cplusplus
 extern "C" {
@@ -226,13 +226,25 @@ union jl_typemap_t mtcache_hash_lookup(jl_array_t *a, jl_value_t *ty, int8_t tpa
     return ml;
 }
 
+static inline unsigned int next_power_of_two(unsigned int val)
+{
+    /* this function taken from libuv src/unix/core.c */
+    val -= 1;
+    val |= val >> 1;
+    val |= val >> 2;
+    val |= val >> 4;
+    val |= val >> 8;
+    val |= val >> 16;
+    val += 1;
+    return val;
+}
+
 static void mtcache_rehash(jl_array_t **pa, jl_value_t *parent, int8_t tparam, int8_t offs)
 {
-    size_t len = (*pa)->nrows;
+    size_t i, len = (*pa)->nrows;
+    size_t newlen = next_power_of_two(len) * 2;
     jl_value_t **d = (jl_value_t**)(*pa)->data;
-    jl_array_t *n = jl_alloc_cell_1d(len*2);
-    jl_value_t **nd = (jl_value_t**)n->data;
-    size_t i;
+    jl_array_t *n = jl_alloc_cell_1d(newlen);
     for (i = 0; i < len; i++) {
         union jl_typemap_t ml;
         ml.unknown = d[i];
@@ -247,7 +259,16 @@ static void mtcache_rehash(jl_array_t **pa, jl_value_t *parent, int8_t tparam, i
                     t = jl_tparam0(t);
             }
             uintptr_t uid = ((jl_datatype_t*)t)->uid;
-            nd[uid & (len*2-1)] = ml.unknown;
+            size_t idx = uid & (newlen - 1);
+            if (((jl_value_t**)n->data)[idx] == NULL) {
+                ((jl_value_t**)n->data)[idx] = ml.unknown;
+            }
+            else {
+                // hash collision: start over after doubling the size again
+                i = 0;
+                newlen *= 2;
+                n = jl_alloc_cell_1d(newlen);
+            }
         }
     }
     jl_gc_wb(parent, n);
