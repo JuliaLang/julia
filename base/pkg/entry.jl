@@ -77,6 +77,23 @@ function add(pkg::AbstractString, vers::VersionSet)
 end
 add(pkg::AbstractString, vers::VersionNumber...) = add(pkg,VersionSet(vers...))
 
+function addrequire(requirefile::AbstractString)
+    isfile(requirefile) || error("File '$requirefile' not found")
+    requirements = Reqs.parse(Reqs.read(requirefile))
+    cd(Pkg.dir()) do
+        if haskey(requirements, "julia")
+            VERSION in requirements["julia"] || error("Installed julia $VERSION not in $(requirements["julia"])")
+            delete!(requirements, "julia")
+        end
+        skip = Entry.installed()
+        for (pkg,versions) in requirements
+            if !haskey(skip, pkg) || !(skip[pkg] in versions)
+                Entry.add(pkg, versions)
+            end
+        end
+    end
+end
+
 function rm(pkg::AbstractString)
     edit(Reqs.rm,pkg) && return
     ispath(pkg) || return info("Nothing to be done")
