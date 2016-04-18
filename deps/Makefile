@@ -1398,7 +1398,7 @@ endif
 
 # ARPACK-NG upstream keeps changing their download filenames
 $(SRCDIR)/srccache/arpack-ng-$(ARPACK_VER).tar.gz: | $(SRCDIR)/srccache
-	$(JLDOWNLOAD) $@ https://github.com/opencollab/arpack-ng/archive/$(ARPACK_VER).tar.gz
+	$(JLDOWNLOAD) $@ https://s3.amazonaws.com/julialang/src/arpack-ng-$(ARPACK_VER).tar.gz
 	touch -c $@
 $(SRCDIR)/srccache/arpack-ng-$(ARPACK_VER)-testA.mtx: | $(SRCDIR)/srccache
 	$(JLDOWNLOAD) $@ https://raw.githubusercontent.com/opencollab/arpack-ng/$(ARPACK_VER)/TESTS/testA.mtx
@@ -1423,9 +1423,7 @@ $(SRCDIR)/srccache/arpack-ng-$(ARPACK_VER)/arpack-tests-blasint.patch-applied: $
 	echo 1 > $@
 $(BUILDDIR)/arpack-ng-$(ARPACK_VER)/config.status: $(SRCDIR)/srccache/arpack-ng-$(ARPACK_VER)/configure $(SRCDIR)/srccache/arpack-ng-$(ARPACK_VER)/arpack-tests-blasint.patch-applied
 	mkdir -p $(dir $@)
-	cd $(SRCDIR)/srccache/arpack-ng-$(ARPACK_VER) && \
-	./bootstrap && \
-	cd ../../$(dir $@) && \
+	cd $(dir $@) && \
 	$< $(CONFIGURE_COMMON) $(ARPACK_FLAGS)
 	touch -c $@
 $(ARPACK_OBJ_SOURCE): $(BUILDDIR)/arpack-ng-$(ARPACK_VER)/config.status
@@ -1460,7 +1458,7 @@ clean-arpack:
 distclean-arpack:
 	-rm -rf $(SRCDIR)/srccache/arpack-ng-$(ARPACK_VER).tar.gz \
 		$(SRCDIR)/srccache/arpack-ng-$(ARPACK_VER) \
-		$(SRCDIR)/srccache/arpack-ng-3.2.0-testA.mtx \
+		$(SRCDIR)/srccache/arpack-ng-$(ARPACK_VER)-testA.mtx \
 		$(BUILDDIR)/arpack-ng-$(ARPACK_VER)
 
 get-arpack: $(SRCDIR)/srccache/arpack-ng-$(ARPACK_VER).tar.gz $(SRCDIR)/srccache/arpack-ng-$(ARPACK_VER)-testA.mtx
