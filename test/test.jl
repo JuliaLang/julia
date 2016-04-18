@@ -18,6 +18,8 @@ using Base.Test
 @test_fail_expected strip("\t  hi   \n") != "hi"
 @test_fail_expected strip("\t  this should fail   \n") == "hi"
 
+@test_skip error()
+
 a = Array(Float64, 2, 2, 2, 2, 2)
 a[1,1,1,1,1] = 10
 @test a[1,1,1,1,1] == 10
