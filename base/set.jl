@@ -160,7 +160,7 @@ end
 
 alldistinct(::Set) = true
 
-alldistinct(r::Range) = (length(r) == 1) || (step(r) > 0)
+alldistinct{T}(r::Range{T}) = (step(r) != zero(T)) || (length(r) <= one(T))
 
 function filter(f, s::Set)
     u = similar(s)
