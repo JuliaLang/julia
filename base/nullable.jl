@@ -22,11 +22,19 @@ convert{T}(::Type{Nullable{T}}, ::Void) = Nullable{T}()
 convert(   ::Type{Nullable   }, ::Void) = Nullable{Union{}}()
 
 function show{T}(io::IO, x::Nullable{T})
-    print(io, "Nullable{", T, "}(")
-    if !isnull(x)
-        show(io, x.value)
+    if limit_output(io)
+        if isnull(x)
+            print(io, "#NULL")
+        else
+            show(io, x.value)
+        end
+    else
+        print(io, "Nullable{", T, "}(")
+        if !isnull(x)
+            show(io, x.value)
+        end
+        print(io, ')')
     end
-    print(io, ')')
 end
 
 get(x::Nullable) = x.isnull ? throw(NullException()) : x.value
