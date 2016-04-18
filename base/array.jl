@@ -208,16 +208,25 @@ _similar_for(c::AbstractArray, T, itr, ::HasShape) = similar(c, T, convert(Dims,
 _similar_for(c, T, itr, isz) = similar(c, T)
 
 """
-    collect(element_type, collection)
+    collect(element_type, iterator)
 
-Return an array of type `Array{element_type,1}` of all items in a collection.
+Return an array of type `Array{element_type,1}` of all items from an iterator.
 """
 collect{T}(::Type{T}, itr) = collect(Generator(T, itr))
 
-"""
-    collect(collection)
+collect{T}(::Type{T}, itr::Dims) = collect(Generator(T, itr))
 
-Return an array of all items in a collection. For associative collections, returns Pair{KeyType, ValType}.
+"""
+    collect(iterator, dims)
+
+Return an array with the given dimensions of all elements from an iterator.
+"""
+collect(itr, dims::Dims) = collect(IteratorND(itr, dims))
+
+"""
+    collect(iterator)
+
+Return an array of all items from an iterator. For associative collections, returns Pair{KeyType, ValType}.
 """
 collect(itr) = _collect(1:1 #= Array =#, itr, iteratoreltype(itr), iteratorsize(itr))
 

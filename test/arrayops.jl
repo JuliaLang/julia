@@ -100,11 +100,11 @@ a = rand(1, 1, 8, 8, 1)
 @test_throws ArgumentError squeeze(a, 6)
 
 sz = (5,8,7)
-A = reshape(1:prod(sz),sz...)
+A = collect(1:prod(sz), sz)
 @test A[2:6] == [2:6;]
 @test A[1:3,2,2:4] == cat(2,46:48,86:88,126:128)
 @test A[:,7:-3:1,5] == [191 176 161; 192 177 162; 193 178 163; 194 179 164; 195 180 165]
-@test A[:,3:9] == reshape(11:45,5,7)
+@test A[:,3:9] == collect(11:45, (5,7))
 rng = (2,2:3,2:2:5)
 tmp = zeros(Int,map(maximum,rng)...)
 tmp[rng...] = A[rng...]
@@ -138,7 +138,7 @@ B[[3,1],[2,4]] = [21 22; 23 24]
 B[4,[2,3]] = 7
 @test B == [0 23 1 24 0; 11 12 13 14 15; 0 21 3 22 0; 0 7 7 0 0]
 
-@test isequal(reshape(1:27, 3, 3, 3)[1,:], [1,  4,  7,  10,  13,  16,  19,  22,  25])
+@test isequal(collect(1:27, (3, 3, 3))[1,:], [1,  4,  7,  10,  13,  16,  19,  22,  25])
 
 a = [3, 5, -7, 6]
 b = [4, 6, 2, -7, 1]
@@ -169,7 +169,7 @@ rt = Base.return_types(setindex!, Tuple{Array{Int32, 3}, UInt8, Vector{Int}, Int
 
 # get
 let
-    A = reshape(1:24, 3, 8)
+    A = collect(1:24, (3, 8))
     x = get(A, 32, -12)
     @test x == -12
     x = get(A, 14, -12)
@@ -368,7 +368,7 @@ p = permutedims(s, [2,1])
 @test p[2,1]==a[2,3] && p[2,2]==a[3,3]
 
 # of a non-strided subarray
-a = reshape(1:60, 3, 4, 5)
+a = collect(1:60, (3, 4, 5))
 s = sub(a,:,[1,2,4],[1,5])
 c = convert(Array, s)
 for p in ([1,2,3], [1,3,2], [2,1,3], [2,3,1], [3,1,2], [3,2,1])
@@ -553,7 +553,7 @@ let
                   3 3 4 4 3 3 4 4;
                   3 3 4 4 3 3 4 4]
 
-    A = reshape(1:8, 2, 2, 2)
+    A = collect(1:8, (2, 2, 2))
     R = repeat(A, inner = [1, 1, 2], outer = [1, 1, 1])
     T = reshape([1:4; 1:4; 5:8; 5:8], 2, 2, 4)
     @test R == T
@@ -623,7 +623,7 @@ a[[true,false,true,false,true]] = 6
 a[[true,false,true,false,true]] = [7,8,9]
 @test a == [7,2,8,4,9]
 @test_throws DimensionMismatch (a[[true,false,true,false,true]] = [7,8,9,10])
-A = reshape(1:15, 3, 5)
+A = collect(1:15, (3, 5))
 @test A[[true, false, true], [false, false, true, true, false]] == [7 10; 9 12]
 @test_throws BoundsError A[[true, false], [false, false, true, true, false]]
 @test_throws BoundsError A[[true, false, true], [false, true, true, false]]
@@ -1092,7 +1092,7 @@ a = ones(5,0)
 b = sub(a, :, :)
 @test mdsum(b) == 0
 
-a = reshape(1:60, 3, 4, 5)
+a = collect(1:60, (3, 4, 5))
 @test a[CartesianIndex{3}(2,3,4)] == 44
 a[CartesianIndex{3}(2,3,3)] = -1
 @test a[CartesianIndex{3}(2,3,3)] == -1
@@ -1353,7 +1353,6 @@ C = copy(B)
 @test A == C
 @test B == C
 
-@test vec(A) == vec(B) == vec(S)
 @test minimum(A) == minimum(B) == minimum(S)
 @test maximum(A) == maximum(B) == maximum(S)
 

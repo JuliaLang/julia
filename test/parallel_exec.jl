@@ -311,7 +311,7 @@ d = SharedArray(Float64, (2,3))
 fn = tempname()
 write(fn, 1:30)
 sz = (6,5)
-Atrue = reshape(1:30, sz)
+Atrue = collect(1:30, sz)
 
 S = SharedArray(fn, Int, sz)
 @test S == Atrue

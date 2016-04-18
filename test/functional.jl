@@ -220,7 +220,7 @@ end
 @test collect((i+10j for i=1:2,j=3:4,k=1:1)) == reshape([31 41; 32 42], (2,2,1))
 
 let I = Base.IteratorND(1:27,(3,3,3))
-    @test collect(I) == reshape(1:27,(3,3,3))
+    @test collect(I) == collect(1:27,(3,3,3))
     @test size(I) == (3,3,3)
     @test length(I) == 27
     @test eltype(I) === Int

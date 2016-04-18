@@ -22,10 +22,10 @@ y = inv(x)
 
 include(joinpath(dir, "ndgrid.jl"))
 r = repmat(1:10,1,10)
-r1, r2 = ndgrid(1:10, 1:10)
+r1, r2 = ndgrid(collect(1:10), collect(1:10))
 @test r1 == r
 @test r2 == r'
-r3, r4 = meshgrid(1:10,1:10)
+r3, r4 = meshgrid(collect(1:10),collect(1:10))
 @test r3 == r'
 @test r4 == r
 

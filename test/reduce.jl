@@ -45,7 +45,7 @@
 @test sum([3]) === 3
 @test sum([3.0]) === 3.0
 
-z = reshape(1:16, (2,2,2,2))
+z = collect(1:16, (2,2,2,2))
 fz = float(z)
 @test sum(z) === 136
 @test sum(fz) === 136.0
@@ -167,9 +167,9 @@ prod2(itr) = invoke(prod, Tuple{Any}, itr)
 @test maximum(collect(Int16(1):Int16(100))) === Int16(100)
 @test maximum(Int32[1,2]) === Int32(2)
 
-@test extrema(reshape(1:24,2,3,4),1) == reshape([(1,2),(3,4),(5,6),(7,8),(9,10),(11,12),(13,14),(15,16),(17,18),(19,20),(21,22),(23,24)],1,3,4)
-@test extrema(reshape(1:24,2,3,4),2) == reshape([(1,5),(2,6),(7,11),(8,12),(13,17),(14,18),(19,23),(20,24)],2,1,4)
-@test extrema(reshape(1:24,2,3,4),3) == reshape([(1,19),(2,20),(3,21),(4,22),(5,23),(6,24)],2,3,1)
+@test extrema(collect(1:24,(2,3,4)),1) == reshape([(1,2),(3,4),(5,6),(7,8),(9,10),(11,12),(13,14),(15,16),(17,18),(19,20),(21,22),(23,24)],1,3,4)
+@test extrema(collect(1:24,(2,3,4)),2) == reshape([(1,5),(2,6),(7,11),(8,12),(13,17),(14,18),(19,23),(20,24)],2,1,4)
+@test extrema(collect(1:24,(2,3,4)),3) == reshape([(1,19),(2,20),(3,21),(4,22),(5,23),(6,24)],2,3,1)
 
 # any & all
 
@@ -275,11 +275,11 @@ end
 @test sum(collect(map(UInt8,0:255))) == 32640
 @test sum(collect(map(UInt8,254:255))) == 509
 
-A = reshape(map(UInt8, 101:109), (3,3))
+A = collect(UInt8(101):UInt8(109), (3,3))
 @test @inferred(sum(A)) == 945
 @test @inferred(sum(sub(A, 1:3, 1:3))) == 945
 
-A = reshape(map(UInt8, 1:100), (10,10))
+A = collect(UInt8(1):UInt8(100), (10,10))
 @test @inferred(sum(A)) == 5050
 @test @inferred(sum(sub(A, 1:10, 1:10))) == 5050
 

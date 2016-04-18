@@ -63,7 +63,7 @@ for i = 1 : 10
 end
 
 # sparse ref
-a116 = reshape(1:16, 4, 4)
+a116 = collect(1:16, (4, 4))
 s116 = sparse(a116)
 p = [4, 1, 2, 3, 2]
 @test full(s116[p,:]) == a116[p,:]
@@ -77,8 +77,8 @@ s116[p, p] = -1
 @test a116 == s116
 
 p = [2, 1, 4]
-a116[p, p] = reshape(1:9, 3, 3)
-s116[p, p] = reshape(1:9, 3, 3)
+a116[p, p] = collect(1:9, (3, 3))
+s116[p, p] = collect(1:9, (3, 3))
 @test a116 == s116
 
 # matrix-vector multiplication (non-square)
@@ -433,7 +433,7 @@ end
 # getindex tests
 ni = 23
 nj = 32
-a116 = reshape(1:(ni*nj), ni, nj)
+a116 = collect(1:(ni*nj), (ni, nj))
 s116 = sparse(a116)
 
 ad116 = diagm(diag(a116))
