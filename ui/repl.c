@@ -38,7 +38,7 @@ extern "C" {
 static JL_CONST_FUNC jl_tls_states_t *jl_get_ptls_states_static(void)
 {
 #  if !defined(_COMPILER_MICROSOFT_)
-    static __thread jl_tls_states_t tls_states;
+    static __attribute__((tls_model("local-exec"))) __thread jl_tls_states_t tls_states;
 #  else
     static __declspec(thread) jl_tls_states_t tls_states;
 #  endif
