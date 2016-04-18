@@ -1879,8 +1879,6 @@ static int typekey_eq(jl_datatype_t *tt, jl_value_t **key, size_t n)
     return 1;
 }
 
-JL_DEFINE_MUTEX_EXT(typecache);
-
 // look up a type in a cache by binary or linear search.
 // if found, returns the index of the found item. if not found, returns
 // ~n, where n is the index where the type should be inserted.
@@ -1923,10 +1921,10 @@ static ssize_t lookup_type_idx(jl_typename_t *tn, jl_value_t **key, size_t n, in
 static jl_value_t *lookup_type(jl_typename_t *tn, jl_value_t **key, size_t n)
 {
     int ord = is_typekey_ordered(key, n);
-    JL_LOCK(typecache); // Might GC
+    JL_LOCK(&typecache_lock); // Might GC
     ssize_t idx = lookup_type_idx(tn, key, n, ord);
     jl_value_t *t = (idx < 0) ? NULL : jl_svecref(ord ? tn->cache : tn->linearcache, idx);
-    JL_UNLOCK(typecache);
+    JL_UNLOCK(&typecache_lock);
     return t;
 }
 
@@ -1994,14 +1992,14 @@ jl_value_t *jl_cache_type_(jl_datatype_t *type)
 {
     if (is_cacheable(type)) {
         int ord = is_typekey_ordered(jl_svec_data(type->parameters), jl_svec_len(type->parameters));
-        JL_LOCK(typecache); // Might GC
+        JL_LOCK(&typecache_lock); // Might GC
         ssize_t idx = lookup_type_idx(type->name, jl_svec_data(type->parameters),
                                       jl_svec_len(type->parameters), ord);
         if (idx >= 0)
             type = (jl_datatype_t*)jl_svecref(ord ? type->name->cache : type->name->linearcache, idx);
         else
             cache_insert_type((jl_value_t*)type, ~idx, ord);
-        JL_UNLOCK(typecache);
+        JL_UNLOCK(&typecache_lock);
     }
     return (jl_value_t*)type;
 }

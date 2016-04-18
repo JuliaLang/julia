@@ -470,7 +470,8 @@ int jl_array_store_unboxed(jl_value_t *el_type);
 int jl_array_isdefined(jl_value_t **args, int nargs);
 JL_DLLEXPORT jl_value_t *(jl_array_data_owner)(jl_array_t *a);
 
-JL_DEFINE_MUTEX_EXT(codegen)
+extern jl_mutex_t typecache_lock;
+extern jl_mutex_t codegen_lock;
 
 #if defined(__APPLE__) && defined(JULIA_ENABLE_THREADING)
 void jl_mach_gc_begin(void);

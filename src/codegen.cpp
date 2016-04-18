@@ -813,7 +813,7 @@ void jl_add_linfo_in_flight(StringRef name, jl_lambda_info_t *linfo, const DataL
 static void to_function(jl_lambda_info_t *li)
 {
     // setup global state
-    JL_LOCK(codegen);
+    JL_LOCK(&codegen_lock);
     JL_SIGATOMIC_BEGIN();
     assert(!li->inInference);
     li->inCompile = 1;
@@ -846,7 +846,7 @@ static void to_function(jl_lambda_info_t *li)
         }
         li->inCompile = 0;
         JL_SIGATOMIC_END();
-        JL_UNLOCK(codegen);
+        JL_UNLOCK(&codegen_lock);
         jl_rethrow_with_add("error compiling %s", jl_symbol_name(li->def ? li->def->name : anonymous_sym));
     }
     // record that this function name came from this linfo,
@@ -880,7 +880,7 @@ static void to_function(jl_lambda_info_t *li)
     li->inCompile = 0;
     nested_compile = last_n_c;
     jl_gc_inhibit_finalizers(nested_compile);
-    JL_UNLOCK(codegen);
+    JL_UNLOCK(&codegen_lock);
     JL_SIGATOMIC_END();
     if (dump_compiles_stream != NULL) {
         uint64_t this_time = jl_hrtime();
@@ -992,7 +992,7 @@ uint64_t jl_get_llvm_fptr(llvm::Function *llvmf)
 // and forces compilation of the lambda info
 extern "C" void jl_generate_fptr(jl_lambda_info_t *li)
 {
-    JL_LOCK(codegen);
+    JL_LOCK(&codegen_lock);
     // objective: assign li->fptr
     assert(li->functionObjectsDecls.functionObject);
     assert(!li->inCompile);
@@ -1002,7 +1002,7 @@ extern "C" void jl_generate_fptr(jl_lambda_info_t *li)
         assert(li->fptr != NULL);
         JL_SIGATOMIC_END();
     }
-    JL_UNLOCK(codegen);
+    JL_UNLOCK(&codegen_lock);
 }
 
 // this generates llvm code for the lambda info

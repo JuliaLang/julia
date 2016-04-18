@@ -18,7 +18,7 @@
 static void attach_exception_port(thread_port_t thread);
 
 #ifdef JULIA_ENABLE_THREADING
-JL_DEFINE_MUTEX(gc_suspend)
+static jl_mutex_t gc_suspend_lock;
 // This is a copy of `jl_gc_safepoint_activated` to make it easier
 // to synchronic the GC and the signal handler
 static int jl_gc_safepoint_activated = 0;
@@ -26,13 +26,13 @@ static int jl_gc_safepoint_activated = 0;
 static arraylist_t suspended_threads;
 void jl_mach_gc_begin(void)
 {
-    JL_LOCK_NOGC(gc_suspend);
+    JL_LOCK_NOGC(&gc_suspend_lock);
     jl_gc_safepoint_activated = 1;
-    JL_UNLOCK_NOGC(gc_suspend);
+    JL_UNLOCK_NOGC(&gc_suspend_lock);
 }
 void jl_mach_gc_end(void)
 {
-    JL_LOCK_NOGC(gc_suspend);
+    JL_LOCK_NOGC(&gc_suspend_lock);
     jl_gc_safepoint_activated = 0;
     for (size_t i = 0;i < suspended_threads.len;i++) {
         uintptr_t item = (uintptr_t)suspended_threads.items[i];
@@ -42,7 +42,7 @@ void jl_mach_gc_end(void)
         thread_resume(pthread_mach_thread_np(jl_all_task_states[tid].system_id));
     }
     suspended_threads.len = 0;
-    JL_UNLOCK_NOGC(gc_suspend);
+    JL_UNLOCK_NOGC(&gc_suspend_lock);
 }
 #endif
 
@@ -178,10 +178,10 @@ kern_return_t catch_exception_raise(mach_port_t            exception_port,
     uint64_t fault_addr = exc_state.__faultvaddr;
 #ifdef JULIA_ENABLE_THREADING
     if (fault_addr == (uintptr_t)jl_gc_signal_page) {
-        JL_LOCK_NOGC(gc_suspend);
+        JL_LOCK_NOGC(&gc_suspend_lock);
         if (!jl_gc_safepoint_activated) {
             // GC is done before we get the message, do nothing and return
-            JL_UNLOCK_NOGC(gc_suspend);
+            JL_UNLOCK_NOGC(&gc_suspend_lock);
             return KERN_SUCCESS;
         }
         // Otherwise, set the gc state of the thread, suspend and record it
@@ -190,7 +190,7 @@ kern_return_t catch_exception_raise(mach_port_t            exception_port,
         uintptr_t item = tid | (((uintptr_t)gc_state) << 16);
         arraylist_push(&suspended_threads, (void*)item);
         thread_suspend(thread);
-        JL_UNLOCK_NOGC(gc_suspend);
+        JL_UNLOCK_NOGC(&gc_suspend_lock);
         return KERN_SUCCESS;
     }
 #endif
