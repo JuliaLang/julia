@@ -13,7 +13,7 @@ and summarize them at the end of the test set with `@testset`.
 """
 module Test
 
-export @test, @test_throws, @test_fail_expected
+export @test, @test_throws, @test_fail_expected, @test_skip
 export @testset
 # Legacy approximate testing functions, yet to be included
 export @test_approx_eq, @test_approx_eq_eps, @inferred
