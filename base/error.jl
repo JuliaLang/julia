@@ -59,7 +59,7 @@ event of an exception. If `condition` is a `Type` then retry only
 for exceptions of that type. If `condition` is a function
 `cond(::Exception) -> Bool` then retry only if it is true.
 
-# Examples
+**Examples**
 ```julia
 retry(http_get, e -> e.status == "503")(url)
 retry(read, UVError)(io)
@@ -92,7 +92,7 @@ retry(f::Function, t::Type; kw...) = retry(f, e->isa(e, t); kw...)
 Returns a lambda that executes `f` and returns either the result of `f` or
 an `Exception` thrown by `f`.
 
-# Examples
+**Examples**
 ```julia
 julia> r = @catch(length)([1,2,3])
 3
