@@ -34,6 +34,7 @@ let res = assert(true)
     @test res === nothing
 end
 let
+    Base.enable_catch_fatal()
     try
         assert(false)
         error("unexpected")
@@ -41,6 +42,7 @@ let
         @test isa(ex, AssertionError)
         @test isempty(ex.msg)
     end
+    Base.disable_catch_fatal()
 end
 
 # test @assert macro

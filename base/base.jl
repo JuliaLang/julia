@@ -47,6 +47,7 @@ type AssertionError <: Exception
     AssertionError() = new("")
     AssertionError(msg) = new(msg)
 end
+isfatal(::AssertionError) = true
 
 #Generic wrapping of arbitrary exceptions
 #Subtypes should put the exception in an 'error' field
