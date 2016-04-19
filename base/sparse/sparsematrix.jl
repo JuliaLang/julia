@@ -172,22 +172,6 @@ function reinterpret{T,Tv,Ti,N}(::Type{T}, a::SparseMatrixCSC{Tv,Ti}, dims::NTup
     return SparseMatrixCSC(mS, nS, colptr, rowval, nzval)
 end
 
-function reshape{Tv,Ti}(a::SparseMatrixCSC{Tv,Ti}, dims::NTuple{2,Int})
-    if prod(dims) != length(a)
-        throw(DimensionMismatch("new dimensions $(dims) must be consistent with array size $(length(a))"))
-    end
-    mS,nS = dims
-    mA,nA = size(a)
-    numnz = nnz(a)
-    colptr = Array(Ti, nS+1)
-    rowval = similar(a.rowval)
-    nzval = copy(a.nzval)
-
-    sparse_compute_reshaped_colptr_and_rowval(colptr, rowval, mS, nS, a.colptr, a.rowval, mA, nA)
-
-    return SparseMatrixCSC(mS, nS, colptr, rowval, nzval)
-end
-
 ## Constructors
 
 copy(S::SparseMatrixCSC) =
@@ -2932,6 +2916,8 @@ function blkdiag(X::SparseMatrixCSC...)
 
     SparseMatrixCSC(m, n, colptr, rowval, nzval)
 end
+
+squeeze(S::SparseMatrixCSC, dims::Dims) = throw(ArgumentError("squeeze is not available for sparse matrices"))
 
 ## Structure query functions
 issymmetric(A::SparseMatrixCSC) = is_hermsym(A, IdFun())

@@ -31,7 +31,7 @@ b = rand(17,14)
 b[3:6,9:12] = m4
 sm4 = slice(b,3:6,9:12)
 
-m3d = map(Float32,reshape(1:5*3*2, 5, 3, 2))
+m3d = map(Float32,collect(1:5*3*2, (5, 3, 2)))
 true_fftd3_m3d = Array(Float32, 5, 3, 2)
 true_fftd3_m3d[:,:,1] = 17:2:45
 true_fftd3_m3d[:,:,2] = -15

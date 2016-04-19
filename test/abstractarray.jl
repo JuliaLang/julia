@@ -78,7 +78,7 @@ import Base: trailingsize
 const can_inline = Base.JLOptions().can_inline != 0
 function test_scalar_indexing{T}(::Type{T}, shape, ::Type{TestAbstractArray})
     N = prod(shape)
-    A = reshape(1:N, shape)
+    A = collect(1:N, shape)
     B = T(A)
     @test A == B
     # Test indexing up to 5 dimensions
@@ -186,15 +186,15 @@ end
 
 function test_vector_indexing{T}(::Type{T}, shape, ::Type{TestAbstractArray})
     N = prod(shape)
-    A = reshape(1:N, shape)
+    A = collect(1:N, shape)
     B = T(A)
     idxs = rand(1:N, 3, 3, 3)
     @test B[idxs] == A[idxs] == idxs
     @test B[vec(idxs)] == A[vec(idxs)] == vec(idxs)
     @test B[:] == A[:] == collect(1:N)
     @test B[1:end] == A[1:end] == collect(1:N)
-    @test B[:,:] == A[:,:] == reshape(1:N, shape[1], prod(shape[2:end]))
-    @test B[1:end,1:end] == A[1:end,1:end] == reshape(1:N, shape[1], prod(shape[2:end]))
+    @test B[:,:] == A[:,:] == collect(1:N, (shape[1], prod(shape[2:end])))
+    @test B[1:end,1:end] == A[1:end,1:end] == collect(1:N, (shape[1], prod(shape[2:end])))
     # Test with containers that aren't Int[]
     @test B[[]] == A[[]] == []
     @test B[convert(Array{Any}, idxs)] == A[convert(Array{Any}, idxs)] == idxs
@@ -202,7 +202,7 @@ end
 
 function test_primitives{T}(::Type{T}, shape, ::Type{TestAbstractArray})
     N = prod(shape)
-    A = reshape(1:N, shape)
+    A = collect(1:N, shape)
     B = T(A)
 
     # last(a)
@@ -220,9 +220,6 @@ function test_primitives{T}(::Type{T}, shape, ::Type{TestAbstractArray})
     if T == T24Linear
         @test isassigned(B, length(B) + 1) == false
     end
-
-    # reshape(a::AbstractArray, dims::Dims)
-    @test_throws ArgumentError reshape(B, (0, 1))
 
     # copy!(dest::AbstractArray, src::AbstractArray)
     @test_throws BoundsError copy!(Array(Int, 10), [1:11...])
@@ -252,7 +249,7 @@ type UnimplementedArray{T, N} <: AbstractArray{T, N} end
 
 function test_getindex_internals{T}(::Type{T}, shape, ::Type{TestAbstractArray})
     N = prod(shape)
-    A = reshape(1:N, shape)
+    A = collect(1:N, shape)
     B = T(A)
 
     @test getindex(A) == 1
@@ -272,7 +269,7 @@ end
 
 function test_setindex!_internals{T}(::Type{T}, shape, ::Type{TestAbstractArray})
     N = prod(shape)
-    A = reshape(1:N, shape)
+    A = collect(1:N, shape)
     B = T(A)
 
     Base.unsafe_setindex!(B, 1)
@@ -362,7 +359,7 @@ function test_ind2sub(::Type{TestAbstractArray})
     n = rand(2:5)
     dims = tuple(rand(1:5, n)...)
     len = prod(dims)
-    A = reshape(1:len, dims...)
+    A = collect(1:len, dims)
     I = ind2sub(dims, [1:len...])
     for i in 1:len
         idx = [ I[j][i] for j in 1:n ]

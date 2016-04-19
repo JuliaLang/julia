@@ -78,13 +78,13 @@ fill!(r, -1.1)
 @test_approx_eq sumabs2!(r, Breduc, init=false) safe_sumabs2(Breduc, 1)-1.1
 
 # Small arrays with init=false
-A = reshape(1:15, 3, 5)
+A = collect(1:15, (3, 5))
 R = ones(Int, 3)
 @test sum!(R, A, init=false) == [36,41,46]
 R = ones(Int, 1, 5)
 @test sum!(R, A, init=false) == [7 16 25 34 43]
 R = [2]
-A = reshape(1:6, 3, 2)
+A = collect(1:6, (3, 2))
 @test prod!(R, A, init=false) == [1440]
 
 # Small integers

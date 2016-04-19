@@ -1037,3 +1037,8 @@ function pmap(f, c...; err_retry=nothing, err_stop=nothing, pids=nothing)
 
     return pmap(p, f, c...)
 end
+
+# 4211
+@deprecate reshape(a::AbstractArray, dims::Dims)                          copy!(similar(a, dims), a)
+@deprecate reshape{Tv,Ti}(a::SparseMatrixCSC{Tv,Ti}, dims::NTuple{2,Int}) copy!(similar(a, dims), a)
+@deprecate reshape(r::Range, dims::Dims)                                  collect(r, dims)

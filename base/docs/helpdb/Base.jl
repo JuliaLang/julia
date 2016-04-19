@@ -1565,9 +1565,7 @@ ind2chr
 """
     reshape(A, dims)
 
-Create an array with the same data as the given array, but with different dimensions. An
-implementation for a particular type of array may choose whether the data is copied or
-shared.
+Create an array with the same data as the given array, but with different dimensions.
 """
 reshape
 

@@ -114,7 +114,7 @@ C = zeros(Float64,6,6)
 @test Base.LinAlg.Ac_mul_B!(C,A,B) == A.'*B
 
 # matrix algebra with subarrays of floats (stride != 1)
-A = reshape(map(Float64,1:20),5,4)
+A = collect(1.0:20.0, (5,4))
 Aref = A[1:2:end,1:2:end]
 Asub = sub(A, 1:2:5, 1:2:4)
 b = [1.2,-2.5]
@@ -127,23 +127,23 @@ Asub = sub(Ai, 1:2:5, 1:2:4)
 @test Ac_mul_B(Asub, Asub) == Ac_mul_B(Aref, Aref)
 @test A_mul_Bc(Asub, Asub) == A_mul_Bc(Aref, Aref)
 # issue #15286
-let C = zeros(8, 8), sC = sub(C, 1:2:8, 1:2:8), B = reshape(map(Float64,-9:10),5,4)
+let C = zeros(8, 8), sC = sub(C, 1:2:8, 1:2:8), B = collect(-9.0:10.0, (5,4))
     @test At_mul_B!(sC, A, A) == A'*A
     @test At_mul_B!(sC, A, B) == A'*B
 end
-let Aim = A .- im, C = zeros(Complex128,8,8), sC = sub(C, 1:2:8, 1:2:8), B = reshape(map(Float64,-9:10),5,4) .+ im
+let Aim = A .- im, C = zeros(Complex128,8,8), sC = sub(C, 1:2:8, 1:2:8), B = collect(-9.0:10.0, (5,4)) .+ im
     @test Ac_mul_B!(sC, Aim, Aim) == Aim'*Aim
     @test Ac_mul_B!(sC, Aim, B) == Aim'*B
 end
 
 
 # syrk & herk
-A = reshape(1:1503, 501, 3).-750.0
+A = collect(1:1503, (501, 3)).-750.0
 res = Float64[135228751 9979252 -115270247; 9979252 10481254 10983256; -115270247 10983256 137236759]
 @test At_mul_B(A, A) == res
 @test A_mul_Bt(A',A') == res
 cutoff = 501
-A = reshape(1:6*cutoff,2*cutoff,3).-(6*cutoff)/2
+A = collect(1:6*cutoff, (2*cutoff,3)).-(6*cutoff)/2
 Asub = sub(A, 1:2:2*cutoff, 1:3)
 Aref = A[1:2:2*cutoff, 1:3]
 @test At_mul_B(Asub, Asub) == At_mul_B(Aref, Aref)
