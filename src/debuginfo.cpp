@@ -921,6 +921,7 @@ bool jl_dylib_DI_for_fptr(size_t pointer, const llvm::object::ObjectFile **obj, 
                     // the file rather than reusing the one in memory. We may want to revisit
                     // that in the future (ideally, once we support fewer LLVM versions).
                     errorobj = llvm::object::ObjectFile::createObjectFile(fname);
+                    assert(errorobj);
 #ifdef LLVM36
                     auto binary = errorobj.get().takeBinary();
                     *obj = binary.first.release();
@@ -957,6 +958,14 @@ bool jl_dylib_DI_for_fptr(size_t pointer, const llvm::object::ObjectFile **obj, 
                 }
 #endif
             }
+#ifdef LLVM39
+            else {
+                // TODO: report the error instead of silently consuming it?
+                //       jl_error might run into the same error again...
+                consumeError(errorobj.takeError());
+            }
+#endif
+
             // update cache
             objfileentry_t entry = {*obj,*context,*slide,*section_slide};
             objfilemap[fbase] = entry;
