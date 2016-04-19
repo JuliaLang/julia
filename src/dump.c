@@ -1138,113 +1138,6 @@ static void jl_serialize_dependency_list(ios_t *s)
     JL_GC_POP();
 }
 
-static int is_module_replaced(jl_module_t *m)
-{
-    return (jl_value_t*)m != jl_get_global(m->parent, m->name);
-}
-
-static int type_has_replaced_module(jl_value_t *t)
-{
-    if (jl_is_datatype(t)) {
-        jl_datatype_t *dt = (jl_datatype_t*)t;
-        if (is_module_replaced(dt->name->module))
-            return 1;
-        int i;
-        for(i=0; i < jl_nparams(dt); i++)
-            if (type_has_replaced_module(jl_tparam(dt,i)))
-                return 1;
-    }
-    // TODO: might eventually need to handle more types here
-    return 0;
-}
-
-static int remove_specializations_from_replaced_modules_visitor(jl_typemap_entry_t *l, void *closure)
-{
-    jl_array_t *a = l->func.method->specializations;
-    if (a) {
-        size_t len = jl_array_len(a);
-        size_t i, insrt=0;
-        for(i=0; i < len; i++) {
-            jl_lambda_info_t *li = (jl_lambda_info_t*)jl_cellref(a, i);
-            if (!(li->rettype && type_has_replaced_module(li->rettype)) &&
-                !(li->specTypes && type_has_replaced_module((jl_value_t*)li->specTypes))) {
-                jl_cellset(a, insrt, li);
-                insrt++;
-            }
-        }
-        jl_array_del_end(a, len-insrt);
-    }
-    a = l->func.method->roots;
-    if (a) {
-        size_t len = jl_array_len(a);
-        size_t i;
-        for(i=0; i < len; i++) {
-            jl_value_t *ai = jl_cellref(a, i);
-            if (jl_is_type(ai) && type_has_replaced_module(ai))
-                jl_cellset(a, i, jl_nothing);
-        }
-    }
-    return 1;
-}
-
-static void remove_methods_from_replaced_modules_from_list(jl_typemap_entry_t **pl)
-{
-    jl_typemap_entry_t *l = *pl;
-    while (l != (void*)jl_nothing) {
-        jl_module_t *m = NULL;
-        if (l->func.value) {
-            if (jl_is_method(l->func.value))
-                m = l->func.method->module;
-            else if (jl_is_lambda_info(l->func.value))
-                m = l->func.linfo->def->module;
-        }
-        if ((m != NULL && is_module_replaced(m)) ||
-            type_has_replaced_module((jl_value_t*)l->sig))
-            *pl = l->next;
-        else
-            pl = &l->next;
-        l = l->next;
-    }
-}
-
-
-static void remove_methods_from_replaced_modules_in_map(union jl_typemap_t *tc);
-static void remove_methods_from_replaced_modules_from_array(jl_array_t *a)
-{
-    jl_value_t **data;
-    size_t i, l = jl_array_len(a); data = (jl_value_t**)jl_array_data(a);
-    for(i=0; i < l; i++) {
-        if (data[i] != NULL)
-            remove_methods_from_replaced_modules_in_map((union jl_typemap_t*)&data[i]);
-    }
-}
-
-static void remove_methods_from_replaced_modules_in_map(union jl_typemap_t *tc)
-{
-    jl_typemap_entry_t **pl;
-    if (jl_typeof(tc->unknown) == (jl_value_t*)jl_typemap_level_type) {
-        jl_typemap_level_t *cache = tc->node;
-        if ((jl_value_t*)cache->arg1 != jl_nothing)
-            remove_methods_from_replaced_modules_from_array(cache->arg1);
-        if ((jl_value_t*)cache->targ != jl_nothing)
-            remove_methods_from_replaced_modules_from_array(cache->targ);
-        pl = &cache->linear;
-    }
-    else {
-        pl = &tc->leaf;
-    }
-    remove_methods_from_replaced_modules_from_list(pl);
-}
-
-static void remove_methods_from_replaced_modules(jl_methtable_t *mt)
-{
-    remove_methods_from_replaced_modules_in_map(&mt->defs);
-    remove_methods_from_replaced_modules_in_map(&mt->cache);
-    jl_typemap_visitor(mt->defs, remove_specializations_from_replaced_modules_visitor, NULL);
-    if (mt->kwsorter)
-        remove_methods_from_replaced_modules(jl_gf_mtable(mt->kwsorter));
-}
-
 // --- deserialize ---
 
 static jl_fptr_t jl_deserialize_fptr(ios_t *s)
@@ -1973,10 +1866,6 @@ static void jl_save_system_image_to_stream(ios_t *f)
             jl_array_del_end(args, jl_array_len(args));
         }
     }
-
-    // remove constructors (which go in a single shared method table) from modules
-    // that were replaced during bootstrap.
-    remove_methods_from_replaced_modules(jl_datatype_type->name->mt);
 
     jl_idtable_type = jl_base_module ? jl_get_global(jl_base_module, jl_symbol("ObjectIdDict")) : NULL;
 

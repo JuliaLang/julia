@@ -777,13 +777,6 @@ static void julia_save(void)
     JL_GC_POP();
 }
 
-jl_function_t *jl_typeinf_func=NULL;
-
-JL_DLLEXPORT void jl_set_typeinf_func(jl_value_t *f)
-{
-    jl_typeinf_func = (jl_function_t*)f;
-}
-
 static jl_value_t *core(char *name)
 {
     return jl_get_global(jl_core_module, jl_symbol(name));
