@@ -55,7 +55,7 @@ function Base.show(io::IO, t::Pass)
         # evaluated version as well
         print(io, "\n   Evaluated: ", t.expr)
     end
-    if t.message != ""
+    if !isempty(t.message)
         print(io, "\n   Message: ", t.message)
     end
 end
@@ -93,7 +93,7 @@ function Base.show(io::IO, t::Fail)
         # evaluated version as well
         print(io, "\n   Evaluated: ", t.expr)
     end
-    if t.message != ""
+    if !isempty(t.message)
         print(io, "\n   Message: ", t.message)
     end
 end
@@ -133,7 +133,7 @@ function Base.show(io::IO, t::Error)
         print(io, join(map(line->string("  ",line),
                             split(errmsg, "\n")), "\n"))
     end
-    if t.message != ""
+    if !isempty(t.message)
         println(io, "  Message: ", t.message)
     end
 end
@@ -157,7 +157,7 @@ end
 # evaluate each term in the comparison individually so the results
 # can be displayed nicely.
 """
-    @test ex message=""
+    @test ex [message]
 
 Tests that the expression `ex` evaluates to `true`.
 Returns a `Pass` `Result` if it does, a `Fail` `Result` if it is
@@ -239,7 +239,7 @@ end
 #-----------------------------------------------------------------------
 
 """
-    @test_throws extype ex message=""
+    @test_throws extype ex [message]
 
 Tests that the expression `ex` throws an exception of type `extype`. An
 optional message can be included to give context.
