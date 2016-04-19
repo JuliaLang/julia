@@ -11,14 +11,21 @@ using Base.Test
 @test strip("\t  hi   \n") == "hi"
 @test strip("\t  this should fail   \n") != "hi"
 
-# Test @test_fail_expected
-@test_try_broken false
-@test_try_broken 1 == 2
-@test_try_broken 1 != 1
-@test_try_broken strip("\t  hi   \n") != "hi"
-@test_try_broken strip("\t  this should fail   \n") == "hi"
+# Test @test_broken with fail
+@test_broken false
+@test_broken 1 == 2
+@test_broken 1 != 1
+@test_broken strip("\t  hi   \n") != "hi"
+@test_broken strip("\t  this should fail   \n") == "hi"
+# Test @test_broken with errors
+@test_broken error()
+@test_broken absolute_nonsense
 
-@test_skip_broken error()
+#Test @test_skip
+@test_skip error()
+@test_skip true
+@test_skip false
+@test_skip gobbeldygook
 
 a = Array(Float64, 2, 2, 2, 2, 2)
 a[1,1,1,1,1] = 10
@@ -53,6 +60,8 @@ fails = @testset NoThrowTestSet begin
     @test false
     # Fail - comparison
     @test 1+1 == 2+2
+    # Error - unexpected pass
+    @test_broken true
 end
 for i in 1:4
     @test isa(fails[i], Base.Test.Fail)
@@ -61,6 +70,7 @@ end
 @test contains(sprint(show, fails[2]), "No exception thrown")
 @test contains(sprint(show, fails[3]), "Evaluated: false")
 @test contains(sprint(show, fails[4]), "Evaluated: 2 == 4")
+@test contains(sprint(show, fails[5]), "Unexpected Pass")
 
 # Test printing of a TestSetException
 tse_str = sprint(show, Test.TestSetException(1,2,3,4))
@@ -77,7 +87,6 @@ rd, wr = redirect_stdout()
 
 # Check that the fallback test set throws immediately
 @test_throws ErrorException (@test 1 == 2)
-#@test_throws ErrorException (@test_fail_expected 1 != 2)
 
 @testset "no errors" begin
     @test true
