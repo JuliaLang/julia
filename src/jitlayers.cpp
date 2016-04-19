@@ -582,24 +582,25 @@ static void jl_merge_module(Module *dest, std::unique_ptr<Module> src)
 // (which aliases the engine module), so this is unneeded
 #ifdef USE_MCJIT
 static StringMap<Module*> module_for_fname;
-static void jl_finalize_function(StringRef F, Module *collector = NULL)
+static void jl_finalize_function(const std::string &F, Module *collector = NULL)
 {
     std::unique_ptr<Module> m(module_for_fname.lookup(F));
     if (m) {
         // probably not many unresolved declarations, but be sure iterate over their Names,
-        // since the declarations may get destroyed by the jl_merge_module call
-        SmallVector<StringRef, 8> to_finalize;
+        // since the declarations may get destroyed by the jl_merge_module call.
+        // this is also why we copy the Name string, rather than save a StringRef
+        SmallVector<std::string, 8> to_finalize;
         for (Module::iterator I = m->begin(), E = m->end(); I != E; ++I) {
             Function *F = &*I;
             if (!F->isDeclaration()) {
                 module_for_fname.erase(F->getName());
             }
             else if (!F->isIntrinsic()) {
-                to_finalize.push_back(F->getName());
+                to_finalize.push_back(F->getName().str());
             }
         }
 
-        for (auto F : to_finalize) {
+        for (const auto F : to_finalize) {
             jl_finalize_function(F, collector ? collector : m.get());
         }
 
@@ -628,7 +629,7 @@ static void jl_finalize_function(StringRef F, Module *collector = NULL)
 }
 static void jl_finalize_function(Function *F, Module *collector = NULL)
 {
-    jl_finalize_function(F->getName(), collector);
+    jl_finalize_function(F->getName().str(), collector);
 }
 #endif
 
