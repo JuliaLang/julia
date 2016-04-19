@@ -22,17 +22,20 @@ abstract AbstractMsg
 type CallMsg{Mode} <: AbstractMsg
     f::Function
     args::Tuple
+    kwargs::Array
     response_oid::Tuple
 end
 type CallWaitMsg <: AbstractMsg
     f::Function
     args::Tuple
+    kwargs::Array
     response_oid::Tuple
     notify_oid::Tuple
 end
 type RemoteDoMsg <: AbstractMsg
     f::Function
     args::Tuple
+    kwargs::Array
 end
 type ResultMsg <: AbstractMsg
     response_oid::Tuple
@@ -762,108 +765,84 @@ function schedule_call(rid, thunk)
     rv
 end
 
-#function localize_ref(r::RemoteChannel)
-#    if r.where == myid()
-#        fetch(r)
-#    else
-#        r
-#    end
-#end
-
-#localize_ref(x) = x
-
 # make a thunk to call f on args in a way that simulates what would happen if
 # the function were sent elsewhere
-function local_remotecall_thunk(f, args)
-    if isempty(args)
+function local_remotecall_thunk(f, args, kwargs)
+    if isempty(args) && isempty(kwargs)
         return f
     end
-    return ()->f(args...)
-
-    # TODO: this seems to be capable of causing deadlocks by waiting on
-    # Refs buried inside the closure that we don't want to wait on yet.
-    # linfo = ccall(:jl_closure_linfo, Any, (Any,), f)
-    # if isa(linfo,LambdaInfo)
-    #     env = ccall(:jl_closure_env, Any, (Any,), f)
-    #     buf = memio()
-    #     serialize(buf, env)
-    #     seek(buf, 0)
-    #     env = deserialize(buf)
-    #     f = ccall(:jl_new_closure, Any, (Ptr{Void}, Any, Any),
-    #               C_NULL, env, linfo)::Function
-    # end
-    # f(map(localize_ref,args)...)
+    return ()->f(args...; kwargs...)
 end
 
-function remotecall(f, w::LocalProcess, args...)
+function remotecall(f, w::LocalProcess, args...; kwargs...)
     rr = Future(w)
-    schedule_call(remoteref_id(rr), local_remotecall_thunk(f,args))
+    schedule_call(remoteref_id(rr), local_remotecall_thunk(f, args, kwargs))
     rr
 end
 
-function remotecall(f, w::Worker, args...)
+function remotecall(f, w::Worker, args...; kwargs...)
     rr = Future(w)
     #println("$(myid()) asking for $rr")
-    send_msg(w, CallMsg{:call}(f, args, remoteref_id(rr)))
+    send_msg(w, CallMsg{:call}(f, args, kwargs, remoteref_id(rr)))
     rr
 end
 
-remotecall(f, id::Integer, args...) = remotecall(f, worker_from_id(id), args...)
+remotecall(f, id::Integer, args...; kwargs...) = remotecall(f, worker_from_id(id), args...; kwargs...)
 
 # faster version of fetch(remotecall(...))
-function remotecall_fetch(f, w::LocalProcess, args...)
-    v=run_work_thunk(local_remotecall_thunk(f,args), false)
+function remotecall_fetch(f, w::LocalProcess, args...; kwargs...)
+    v=run_work_thunk(local_remotecall_thunk(f,args, kwargs), false)
     isa(v, RemoteException) ? throw(v) : v
 end
 
-function remotecall_fetch(f, w::Worker, args...)
+function remotecall_fetch(f, w::Worker, args...; kwargs...)
     # can be weak, because the program will have no way to refer to the Ref
     # itself, it only gets the result.
     oid = next_rrid_tuple()
     rv = lookup_ref(oid)
     rv.waitingfor = w.id
-    send_msg(w, CallMsg{:call_fetch}(f, args, oid))
+    send_msg(w, CallMsg{:call_fetch}(f, args, kwargs, oid))
     v = take!(rv)
     delete!(PGRP.refs, oid)
     isa(v, RemoteException) ? throw(v) : v
 end
 
-remotecall_fetch(f, id::Integer, args...) =
-    remotecall_fetch(f, worker_from_id(id), args...)
+remotecall_fetch(f, id::Integer, args...; kwargs...) =
+    remotecall_fetch(f, worker_from_id(id), args...; kwargs...)
 
 # faster version of wait(remotecall(...))
-remotecall_wait(f, w::LocalProcess, args...) = wait(remotecall(f, w, args...))
+remotecall_wait(f, w::LocalProcess, args...; kwargs...) = wait(remotecall(f, w, args...; kwargs...))
 
-function remotecall_wait(f, w::Worker, args...)
+function remotecall_wait(f, w::Worker, args...; kwargs...)
     prid = next_rrid_tuple()
     rv = lookup_ref(prid)
     rv.waitingfor = w.id
     rr = Future(w)
-    send_msg(w, CallWaitMsg(f, args, remoteref_id(rr), prid))
+    send_msg(w, CallWaitMsg(f, args, kwargs, remoteref_id(rr), prid))
     v = fetch(rv.c)
     delete!(PGRP.refs, prid)
     isa(v, RemoteException) && throw(v)
     rr
 end
 
-remotecall_wait(f, id::Integer, args...) =
-    remotecall_wait(f, worker_from_id(id), args...)
+remotecall_wait(f, id::Integer, args...; kwargs...) =
+    remotecall_wait(f, worker_from_id(id), args...; kwargs...)
 
-function remote_do(f, w::LocalProcess, args...)
+function remote_do(f, w::LocalProcess, args...; kwargs...)
     # the LocalProcess version just performs in local memory what a worker
     # does when it gets a :do message.
     # same for other messages on LocalProcess.
-    thk = local_remotecall_thunk(f, args)
+    thk = local_remotecall_thunk(f, args, kwargs)
     schedule(Task(thk))
     nothing
 end
 
-function remote_do(f, w::Worker, args...)
-    send_msg(w, RemoteDoMsg(f, args))
+function remote_do(f, w::Worker, args...; kwargs...)
+    send_msg(w, RemoteDoMsg(f, args, kwargs))
     nothing
 end
 
-remote_do(f, id::Integer, args...) = remote_do(f, worker_from_id(id), args...)
+remote_do(f, id::Integer, args...; kwargs...) = remote_do(f, worker_from_id(id), args...; kwargs...)
 
 # have the owner of rr call f on it
 function call_on_owner(f, rr::AbstractRemoteRef, args...)
@@ -1032,22 +1011,22 @@ function message_handler_loop(r_stream::IO, w_stream::IO)
     end
 end
 
-handle_msg(msg::CallMsg{:call}, r_stream, w_stream) = schedule_call(msg.response_oid, ()->msg.f(msg.args...))
+handle_msg(msg::CallMsg{:call}, r_stream, w_stream) = schedule_call(msg.response_oid, ()->msg.f(msg.args...; msg.kwargs...))
 function handle_msg(msg::CallMsg{:call_fetch}, r_stream, w_stream)
     @schedule begin
-        v = run_work_thunk(()->msg.f(msg.args...), false)
+        v = run_work_thunk(()->msg.f(msg.args...; msg.kwargs...), false)
         deliver_result(w_stream, :call_fetch, msg.response_oid, v)
     end
 end
 
 function handle_msg(msg::CallWaitMsg, r_stream, w_stream)
     @schedule begin
-        rv = schedule_call(msg.response_oid, ()->msg.f(msg.args...))
+        rv = schedule_call(msg.response_oid, ()->msg.f(msg.args...; msg.kwargs...))
         deliver_result(w_stream, :call_wait, msg.notify_oid, fetch(rv.c))
     end
 end
 
-handle_msg(msg::RemoteDoMsg, r_stream, w_stream) = @schedule run_work_thunk(()->msg.f(msg.args...), true)
+handle_msg(msg::RemoteDoMsg, r_stream, w_stream) = @schedule run_work_thunk(()->msg.f(msg.args...; msg.kwargs...), true)
 
 handle_msg(msg::ResultMsg, r_stream, w_stream) = put!(lookup_ref(msg.response_oid), msg.value)
 
