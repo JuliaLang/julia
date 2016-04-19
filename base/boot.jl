@@ -216,7 +216,10 @@ type TypeError <: Exception
     expected::Type
     got
 end
-
+immutable ExceptionWithState <: Exception
+    exception
+    bt
+end
 abstract DirectIndexString <: AbstractString
 
 immutable ASCIIString <: DirectIndexString

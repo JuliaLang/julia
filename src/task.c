@@ -535,6 +535,19 @@ JL_DLLEXPORT void jl_rethrow_other(jl_value_t *e)
     throw_internal(e);
 }
 
+jl_value_t *jl_get_backtrace(void);
+JL_DLLEXPORT jl_value_t *jl_capture_exception_state(void)
+{
+    jl_value_t *tmp = NULL, *exc = NULL;
+    JL_GC_PUSH2(&tmp, &exc);
+    exc = jl_exception_in_transit;
+    tmp = jl_get_backtrace();
+    tmp = jl_new_struct(jl_exception_with_state_type, exc, tmp);
+    JL_GC_POP();
+    return tmp;
+}
+
+
 JL_DLLEXPORT jl_task_t *jl_new_task(jl_function_t *start, size_t ssize)
 {
     size_t pagesz = jl_page_size;
@@ -634,7 +647,7 @@ void jl_init_tasks(void)
                                             jl_any_type, jl_any_type,
                                             jl_any_type, jl_any_type,
                                            jl_any_type, jl_any_type,
-                                           jl_apply_type(jl_ntuple_type, jl_svec(2, jl_box_long(sizeof(jl_jmp_buf)), jl_uint8_type)), jl_long_type, jl_voidpointer_type, jl_long_type),
+                                           jl_apply_type((jl_value_t*)jl_ntuple_type, jl_svec(2, jl_box_long(sizeof(jl_jmp_buf)), jl_uint8_type)), jl_long_type, jl_voidpointer_type, jl_long_type),
                                    0, 1, 8);
     jl_svecset(jl_task_type->types, 0, (jl_value_t*)jl_task_type);
 

@@ -107,6 +107,15 @@ function showerror(io::IO, ex, bt; backtrace=true)
     end
 end
 
+function showerror(io::IO, ex::Core.ExceptionWithState, bt; backtrace=true)
+    showerror(io, ex.exception, ex.bt, backtrace = backtrace)
+    if backtrace
+        println(io)
+        print(io, "rethrown at :")
+        show_backtrace(io, bt)
+    end
+end
+
 function showerror(io::IO, ex::LoadError, bt; backtrace=true)
     print(io, "LoadError: ")
     showerror(io, ex.error, bt, backtrace=backtrace)

@@ -348,7 +348,7 @@ size_t rec_backtrace_ctx_dwarf(uintptr_t *data, size_t maxsize,
 JL_DLLEXPORT jl_value_t *jl_lookup_code_address(void *ip, int skipC)
 {
     jl_frame_t *frames = NULL;
-    int n = jl_getFunctionInfo(&frames, ip, skipC, 0);
+    int n = jl_getFunctionInfo(&frames, (uintptr_t)ip, skipC, 0);
     jl_value_t *rs = (jl_value_t*)jl_alloc_svec(n);
     JL_GC_PUSH1(&rs);
     for (int i = 0; i < n; i++) {
@@ -381,11 +381,9 @@ JL_DLLEXPORT void jl_gdblookup(uintptr_t ip)
 {
     // This function is not allowed to reference any TLS variables since
     // it can be called from an unmanaged thread on OSX.
-    // it means calling getFunctionInfo with noInline = 1
     jl_frame_t *frame;
     int n = jl_getFunctionInfo(&frame, ip, 0, 1);
-
-    if (!frame->func_name) {
+    if (n == 0 || !frame->func_name) {
         jl_safe_printf("unknown function (ip: %p)\n", (void*)ip);
     }
     else {

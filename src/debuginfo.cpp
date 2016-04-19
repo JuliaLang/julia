@@ -1145,7 +1145,6 @@ int jl_getFunctionInfo(jl_frame_t **frames_out, size_t pointer, int skipC, int n
     // since it can be called from an unmanaged thread on OSX.
 
     // initial guess
-    int n_frames = 1;
     jl_frame_t *frames = (jl_frame_t*)calloc(sizeof(jl_frame_t), 1);
     frames[0].line = -1;
     *frames_out = frames;

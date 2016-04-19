@@ -418,6 +418,7 @@ extern JL_DLLEXPORT jl_datatype_t *jl_initerror_type;
 extern JL_DLLEXPORT jl_datatype_t *jl_typeerror_type;
 extern JL_DLLEXPORT jl_datatype_t *jl_methoderror_type;
 extern JL_DLLEXPORT jl_datatype_t *jl_undefvarerror_type;
+extern JL_DLLEXPORT jl_datatype_t *jl_exception_with_state_type;
 extern JL_DLLEXPORT jl_value_t *jl_stackovf_exception;
 extern JL_DLLEXPORT jl_value_t *jl_memory_exception;
 extern JL_DLLEXPORT jl_value_t *jl_readonlymemory_exception;
@@ -1374,6 +1375,7 @@ JL_DLLEXPORT jl_value_t *jl_switchto(jl_task_t *t, jl_value_t *arg);
 JL_DLLEXPORT void JL_NORETURN jl_throw(jl_value_t *e);
 JL_DLLEXPORT void JL_NORETURN jl_rethrow(void);
 JL_DLLEXPORT void JL_NORETURN jl_rethrow_other(jl_value_t *e);
+JL_DLLEXPORT jl_value_t *jl_capture_exception_state(void);
 
 #ifdef JULIA_ENABLE_THREADING
 STATIC_INLINE void jl_lock_frame_push(void (*unlock_func)(void))
