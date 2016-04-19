@@ -152,8 +152,8 @@ static jl_value_t *ti_run_fun(jl_svec_t *args)
 
 
 // lock for code generation
-JL_DEFINE_MUTEX(codegen)
-JL_DEFINE_MUTEX(typecache)
+jl_mutex_t codegen_lock;
+jl_mutex_t typecache_lock;
 
 #ifdef JULIA_ENABLE_THREADING
 
