@@ -715,15 +715,15 @@ JL_DLLEXPORT int jl_generating_output(void)
     return jl_options.outputo || jl_options.outputbc || jl_options.outputji;
 }
 
-void jl_compile_all(void);
+void jl_precompile(int all);
 
 static void julia_save(void)
 {
     if (!jl_generating_output())
         return;
 
-    if (jl_options.compile_enabled == JL_OPTIONS_COMPILE_ALL)
-        jl_compile_all();
+    if (!jl_options.incremental)
+        jl_precompile(jl_options.compile_enabled == JL_OPTIONS_COMPILE_ALL);
 
     if (!jl_module_init_order) {
         jl_printf(JL_STDERR, "WARNING: --output requested, but no modules defined during run\n");

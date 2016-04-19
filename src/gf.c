@@ -1959,6 +1959,11 @@ jl_lambda_info_t *jl_get_specialization1(jl_tupletype_t *types)
     return NULL;
 }
 
+JL_DLLEXPORT void jl_compile_hint(jl_tupletype_t *types)
+{
+    (void)jl_get_specialization1(types);
+}
+
 // add type of `f` to front of argument tuple type
 jl_tupletype_t *jl_argtype_with_function(jl_function_t *f, jl_tupletype_t *types)
 {
@@ -2229,13 +2234,6 @@ static int _compile_all_enq(jl_typemap_entry_t *ml, void *env)
     return 1;
 }
 
-static void _compile_all_enq_mt(jl_methtable_t *mt, jl_array_t *found)
-{
-    if (mt == NULL || (jl_value_t*)mt == jl_nothing) return;
-    jl_typemap_visitor(mt->defs, _compile_all_enq, (void*)found);
-    jl_typemap_visitor(mt->cache, _compile_all_enq, (void*)found);
-}
-
 static void _compile_all_enq_module(jl_module_t *m, jl_array_t *found)
 {
     // scan through all types reachable from 'v' and
@@ -2249,7 +2247,11 @@ static void _compile_all_enq_module(jl_module_t *m, jl_array_t *found)
                 if (jl_is_datatype(v)) {
                     jl_typename_t *tn = ((jl_datatype_t*)v)->name;
                     if (tn->module == m && tn->name == b->name) {
-                        _compile_all_enq_mt(tn->mt, found);
+                        jl_methtable_t *mt = tn->mt;
+                        if (mt != NULL && (jl_value_t*)mt != jl_nothing) {
+                            jl_typemap_visitor(mt->defs, _compile_all_enq, (void*)found);
+                            jl_typemap_visitor(mt->cache, _compile_all_enq, (void*)found);
+                        }
                     }
                 }
                 else if (jl_is_module(v)) {
@@ -2264,11 +2266,10 @@ static void _compile_all_enq_module(jl_module_t *m, jl_array_t *found)
     }
 }
 
-void jl_compile_all(void)
+static void jl_compile_all(void)
 {
     // this "found" array will contain
-    // LambdaInfos that need to be compiled
-    // and (generic-function, method) pairs that may be optimized (and need to be compiled)
+    // TypeMapEntries for Methods and LambdaInfos that need to be compiled
     jl_array_t *m = jl_alloc_cell_1d(0);
     JL_GC_PUSH1(&m);
     while (1) {
@@ -2281,11 +2282,80 @@ void jl_compile_all(void)
     }
     JL_GC_POP();
 }
-//
-JL_DLLEXPORT void jl_compile_hint(jl_tupletype_t *types)
+
+static int _precompile_enq_tfunc(jl_typemap_entry_t *l, void *closure)
 {
-    (void)jl_get_specialization1(types);
+    if (jl_is_lambda_info(l->func.value) && !l->func.linfo->functionID)
+        jl_cell_1d_push(closure, (jl_value_t*)l->func.linfo->specTypes);
+    return 1;
 }
+
+static int _precompile_enq_spec(jl_typemap_entry_t *def, void *closure)
+{
+    jl_array_t *spec = def->func.method->specializations;
+    if (spec == NULL)
+        return 1;
+    size_t i, l;
+    for (i = 0, l = jl_array_len(spec); i < l; i++) {
+        jl_value_t *li = jl_cellref(spec, i);
+        if (jl_is_lambda_info(li) && !((jl_lambda_info_t*)li)->functionID)
+            jl_cell_1d_push(closure, (jl_value_t*)((jl_lambda_info_t*)li)->specTypes);
+    }
+    jl_typemap_visitor(def->func.method->tfunc, _precompile_enq_tfunc, closure);
+    return 1;
+}
+
+static void _precompile_enq_module(jl_module_t *m, jl_array_t *unspec)
+{
+    // removes all method caches
+    size_t i;
+    void **table = m->bindings.table;
+    for(i=1; i < m->bindings.size; i+=2) {
+        if (table[i] != HT_NOTFOUND) {
+            jl_binding_t *b = (jl_binding_t*)table[i];
+            if (b->owner == m && b->value && b->constp) {
+                if (jl_is_datatype(b->value)) {
+                    jl_typename_t *tn = ((jl_datatype_t*)b->value)->name;
+                    if (tn->module == m && tn->name == b->name) {
+                        jl_methtable_t *mt = tn->mt;
+                        if (mt != NULL && (jl_value_t*)mt != jl_nothing) {
+                            jl_typemap_visitor(mt->defs, _precompile_enq_spec, (void*)unspec);
+                        }
+                    }
+                }
+                else if (jl_is_module(b->value)) {
+                    jl_module_t *child = (jl_module_t*)b->value;
+                    if (child != m && child->parent == m && child->name == b->name) {
+                        // this is the original/primary binding for the submodule
+                        _precompile_enq_module((jl_module_t*)b->value, unspec);
+                    }
+                }
+            }
+        }
+    }
+}
+
+static void jl_compile_specializations(void)
+{
+    // this "found" array will contain function
+    // type signatures that were inferred but haven't been compiled
+    jl_array_t *m = jl_alloc_cell_1d(0);
+    JL_GC_PUSH1(&m);
+    _precompile_enq_module(jl_main_module, m);
+    size_t i, l;
+    for (i = 0, l = jl_array_len(m); i < l; i++) {
+        jl_compile_hint((jl_tupletype_t*)jl_cellref(m, i));
+    }
+    JL_GC_POP();
+}
+
+void jl_precompile(int all) {
+    jl_compile_specializations();
+    if (all)
+        jl_compile_all();
+}
+
+//
 
 #ifdef JL_TRACE
 static int trace_en = 0;
