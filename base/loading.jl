@@ -80,9 +80,19 @@ else
     end
 end
 
+function try_path(prefix::ByteString, base::ByteString, name::ByteString)
+    path = joinpath(prefix, name)
+    isfile_casesensitive(path) && return abspath(path)
+    path = joinpath(prefix, base, "src", name)
+    isfile_casesensitive(path) && return abspath(path)
+    path = joinpath(prefix, name, "src", name)
+    isfile_casesensitive(path) && return abspath(path)
+    return nothing
+end
+
 # `wd` is a working directory to search. defaults to current working directory.
 # if `wd === nothing`, no extra path is searched.
-function find_in_path(name::AbstractString, wd = pwd())
+function find_in_path(name::ByteString, wd = pwd())
     isabspath(name) && return name
     base = name
     if endswith(name,".jl")
@@ -93,18 +103,16 @@ function find_in_path(name::AbstractString, wd = pwd())
     if wd !== nothing
         isfile_casesensitive(joinpath(wd,name)) && return joinpath(wd,name)
     end
-    for prefix in [Pkg.dir(); LOAD_PATH]
-        path = joinpath(prefix, name)
-        isfile_casesensitive(path) && return abspath(path)
-        path = joinpath(prefix, base, "src", name)
-        isfile_casesensitive(path) && return abspath(path)
-        path = joinpath(prefix, name, "src", name)
-        isfile_casesensitive(path) && return abspath(path)
+    p = try_path(Pkg.dir(), base, name)
+    p !== nothing && return p
+    for prefix in LOAD_PATH
+        p = try_path(prefix, base, name)
+        p !== nothing && return p
     end
     return nothing
 end
 
-function find_in_node_path(name, srcpath, node::Int=1)
+function find_in_node_path(name::ByteString, srcpath, node::Int=1)
     if myid() == node
         find_in_path(name, srcpath)
     else
@@ -112,7 +120,7 @@ function find_in_node_path(name, srcpath, node::Int=1)
     end
 end
 
-function find_source_file(file)
+function find_source_file(file::ByteString)
     (isabspath(file) || isfile(file)) && return file
     file2 = find_in_path(file)
     file2 !== nothing && return file2
