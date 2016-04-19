@@ -473,23 +473,18 @@ function finish(ts::DefaultTestSet)
     # recursively walking the tree of test sets
     align = max(get_alignment(ts, 0), length("Test Summary:"))
     # Print the outer test set header once
-    print_with_color(:white, rpad("Test Summary:",align," "))
-    print(" | ")
+    print_with_color(:white, rpad("Test Summary:",align," ")" | ")
     if pass_width > 0
-        print_with_color(:green, lpad("Pass",pass_width," "))
-        print("  ")
+        print_with_color(:green, lpad("Pass",pass_width," "), "  ")
     end
     if fail_width > 0
-        print_with_color(:red, lpad("Fail",fail_width," "))
-        print("  ")
+        print_with_color(:red, lpad("Fail",fail_width," "), "  ")
     end
     if error_width > 0
-        print_with_color(:red, lpad("Error",error_width," "))
-        print("  ")
+        print_with_color(:red, lpad("Error",error_width," "), "  ")
     end
     if broken_width > 0
-        print_with_color(:yellow, lpad("Broken",broken_width," "))
-        print("  ")
+        print_with_color(:yellow, lpad("Broken",broken_width," "), "  ")
     end
     if total_width > 0
         print_with_color(:blue, lpad("Total",total_width," "))
