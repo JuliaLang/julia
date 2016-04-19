@@ -234,6 +234,7 @@ class JuliaOJIT {
                     // ownership of the original buffer
                     auto NewBuffer = MemoryBuffer::getMemBufferCopy(Object->getData(), Object->getFileName());
                     auto NewObj = ObjectFile::createObjectFile(NewBuffer->getMemBufferRef());
+                    assert(NewObj);
                     SavedObject = OwningBinary<object::ObjectFile>(std::move(*NewObj),std::move(NewBuffer));
                 }
                 else {
@@ -314,8 +315,17 @@ public:
 
                     if (!Obj) {
                         M.dump();
+#ifdef LLVM39
+                        std::string Buf;
+                        raw_string_ostream OS(Buf);
+                        logAllUnhandledErrors(Obj.takeError(), OS, "");
+                        OS.flush();
+                        llvm::report_fatal_error("FATAL: Unable to compile LLVM Module: '" + Buf + "'\n"
+                            "The module's content was printed above. Please file a bug report");
+#else
                         llvm::report_fatal_error("FATAL: Unable to compile LLVM Module.\n"
                             "The module's content was printed above. Please file a bug report");
+#endif
                     }
 
                     return OwningObj(std::move(*Obj), std::move(ObjBuffer));
