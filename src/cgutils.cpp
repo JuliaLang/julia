@@ -857,8 +857,14 @@ static jl_value_t *expr_type(jl_value_t *e, jl_codectx_t *ctx)
         jl_array_t *gensym_types = (jl_array_t*)ctx->linfo->gensymtypes;
         return jl_cellref(gensym_types, idx);
     }
-    if (jl_typeis(e, jl_slot_type)) {
-        jl_value_t *typ = jl_slot_get_type(e);
+    if (jl_typeis(e, jl_slotnumber_type)) {
+        jl_array_t *slot_types = (jl_array_t*)ctx->linfo->slottypes;
+        if (!jl_is_array(slot_types))
+            return (jl_value_t*)jl_any_type;
+        return jl_cellref(slot_types, jl_slot_number(e)-1);
+    }
+    if (jl_typeis(e, jl_typedslot_type)) {
+        jl_value_t *typ = jl_typedslot_get_type(e);
         if (jl_is_typevar(typ))
             typ = ((jl_tvar_t*)typ)->ub;
         return typ;
@@ -1558,7 +1564,7 @@ static void emit_setfield(jl_datatype_t *sty, const jl_cgval_t &strct, size_t id
 
 static bool might_need_root(jl_value_t *ex)
 {
-    return (!jl_is_symbol(ex) && !jl_typeis(ex, jl_slot_type) && !jl_is_gensym(ex) &&
+    return (!jl_is_symbol(ex) && !jl_is_slot(ex) && !jl_is_gensym(ex) &&
             !jl_is_bool(ex) && !jl_is_quotenode(ex) && !jl_is_byte_string(ex) &&
             !jl_is_globalref(ex));
 }

@@ -148,7 +148,7 @@ static jl_value_t *eval(jl_value_t *e, jl_value_t **locals, jl_lambda_info_t *la
         return v;
     }
     if (!jl_is_expr(e)) {
-        if (jl_typeis(e, jl_slot_type)) {
+        if (jl_is_slot(e)) {
             ssize_t n = jl_slot_number(e);
             if (n > jl_linfo_nslots(lam) || n < 1 || locals == NULL)
                 jl_error("access to invalid slot number");
@@ -166,7 +166,7 @@ static jl_value_t *eval(jl_value_t *e, jl_value_t **locals, jl_lambda_info_t *la
         }
         if (jl_is_newvarnode(e)) {
             jl_value_t *var = jl_fieldref(e,0);
-            assert(jl_typeis(var,jl_slot_type));
+            assert(jl_is_slot(var));
             ssize_t n = jl_slot_number(var);
             assert(n <= jl_linfo_nslots(lam) && n > 0);
             locals[n-1] = NULL;
@@ -189,7 +189,7 @@ static jl_value_t *eval(jl_value_t *e, jl_value_t **locals, jl_lambda_info_t *la
                 jl_error("assignment to invalid GenSym location");
             locals[jl_linfo_nslots(lam) + genid] = rhs;
         }
-        else if (jl_typeis(sym,jl_slot_type)) {
+        else if (jl_is_slot(sym)) {
             ssize_t n = jl_slot_number(sym);
             assert(n <= jl_linfo_nslots(lam) && n > 0);
             locals[n-1] = rhs;
