@@ -167,14 +167,6 @@ similar(   a::AbstractArray, T::Type, dims::Integer...)  = similar(a, T, dims)
 similar(   a::AbstractArray, T::Type, dims::DimsInteger) = Array(T, dims...)
 similar(   a::AbstractArray, T::Type, dims::Dims)        = Array(T, dims)
 
-function reshape(a::AbstractArray, dims::Dims)
-    if prod(dims) != length(a)
-        throw(ArgumentError("dimensions must be consistent with array size (expected $(length(a)), got $(prod(dims)))"))
-    end
-    copy!(similar(a, dims), a)
-end
-reshape(a::AbstractArray, dims::Int...) = reshape(a, dims)
-
 ## from general iterable to any array
 
 function copy!(dest::AbstractArray, src)

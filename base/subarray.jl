@@ -2,6 +2,7 @@
 
 typealias NonSliceIndex Union{Colon, AbstractVector}
 typealias ViewIndex Union{Real, NonSliceIndex}
+abstract AbstractCartesianIndex{N} # This is a hacky forward declaration for CartesianIndex
 
 # L is true if the view itself supports fast linear indexing
 immutable SubArray{T,N,P,I,L} <: AbstractArray{T,N}
@@ -46,8 +47,6 @@ function getindex(N::NoSlice, r::Range{Int})
     @boundscheck checkbounds(N, r)
     N
 end
-
-abstract AbstractCartesianIndex{N} # This is a hacky forward declaration for CartesianIndex
 
 # This computes the linear indexing compatability for a given tuple of indices
 viewindexing() = LinearFast()

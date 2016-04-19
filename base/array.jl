@@ -96,8 +96,11 @@ function reinterpret{T,S,N}(::Type{T}, a::Array{S}, dims::NTuple{N,Int})
     ccall(:jl_reshape_array, Array{T,N}, (Any, Any, Any), Array{T,N}, a, dims)
 end
 
+reshape(a::Vector, dims::Tuple{Int}) = reshape_a(a, dims)
+reshape{N}(a::Array, dims::NTuple{N,Int}) = reshape_a(a, dims)
+
 # reshaping to same # of dimensions
-function reshape{T,N}(a::Array{T,N}, dims::NTuple{N,Int})
+function reshape_a{T,N}(a::Array{T,N}, dims::NTuple{N,Int})
     if prod(dims) != length(a)
         throw(DimensionMismatch("new dimensions $(dims) must be consistent with array size $(length(a))"))
     end
@@ -108,7 +111,7 @@ function reshape{T,N}(a::Array{T,N}, dims::NTuple{N,Int})
 end
 
 # reshaping to different # of dimensions
-function reshape{T,N}(a::Array{T}, dims::NTuple{N,Int})
+function reshape_a{T,N}(a::Array{T}, dims::NTuple{N,Int})
     if prod(dims) != length(a)
         throw(DimensionMismatch("new dimensions $(dims) must be consistent with array size $(length(a))"))
     end

@@ -172,14 +172,12 @@ function reinterpret{T,Tv,Ti,N}(::Type{T}, a::SparseMatrixCSC{Tv,Ti}, dims::NTup
     return SparseMatrixCSC(mS, nS, colptr, rowval, nzval)
 end
 
-function reshape{Tv,Ti}(a::SparseMatrixCSC{Tv,Ti}, dims::NTuple{2,Int})
-    if prod(dims) != length(a)
-        throw(DimensionMismatch("new dimensions $(dims) must be consistent with array size $(length(a))"))
-    end
-    mS,nS = dims
+function copy{T,P<:SparseMatrixCSC}(ra::ReshapedArray{T,2,P})
+    mS,nS = size(ra)
+    a = parent(ra)
     mA,nA = size(a)
     numnz = nnz(a)
-    colptr = Array(Ti, nS+1)
+    colptr = similar(a.colptr, nS+1)
     rowval = similar(a.rowval)
     nzval = copy(a.nzval)
 
