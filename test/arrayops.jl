@@ -1090,7 +1090,7 @@ a = ones(5,0)
 b = sub(a, :, :)
 @test mdsum(b) == 0
 
-a = reshape(1:60, 3, 4, 5)
+a = copy(reshape(1:60, 3, 4, 5))
 @test a[CartesianIndex{3}(2,3,4)] == 44
 a[CartesianIndex{3}(2,3,3)] = -1
 @test a[CartesianIndex{3}(2,3,3)] == -1

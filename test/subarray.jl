@@ -284,7 +284,7 @@ index25 = (3, 8, :, 2:11, 12:3:22, [4,1,5,9], sub(1:25,[13,22,24]))
 index125 = (113, :, 85:121, 2:15:92, [99,14,103], sub(1:125,[66,18,59]))
 
 if testfull
-    let A = reshape(1:5*7*11, 11, 7, 5)
+    let A = copy(reshape(1:5*7*11, 11, 7, 5))
         runviews(A, index5, index25, index125)
     end
 end
@@ -296,7 +296,7 @@ end
 oindex = (:, 6, 3:7, 13:-2:1, [8,4,6,12,5,7])
 
 if testfull
-    let B = reshape(1:13^3, 13, 13, 13)
+    let B = copy(reshape(1:13^3, 13, 13, 13))
         for o3 in oindex, o2 in oindex, o1 in oindex
             sliceB = slice(B, o1, o2, o3)
             runviews(sliceB, index5, index25, index125)
@@ -307,7 +307,7 @@ if testfull
 end
 
 if !testfull
-    let B = reshape(1:13^3, 13, 13, 13)
+    let B = copy(reshape(1:13^3, 13, 13, 13))
         for oind in ((:,:,:),
                      (:,:,6),
                      (:,6,:),
@@ -340,7 +340,7 @@ x11289 = randn(5,5)
 ####### "Classical" tests #######
 
 # sub
-A = reshape(1:120, 3, 5, 8)
+A = copy(reshape(1:120, 3, 5, 8))
 sA = sub(A, 2, 1:5, :)
 @test strides(sA) == (1, 3, 15)
 @test parent(sA) == A
@@ -385,7 +385,7 @@ sB = sub(B, 2:3, 2:3)
 @test Base.unsafe_getindex(sB, sB.>8) == [10, 11]
 
 # slice
-A = reshape(1:120, 3, 5, 8)
+A = copy(reshape(1:120, 3, 5, 8))
 sA = slice(A, 2, :, 1:8)
 @test parent(sA) == A
 @test parentindexes(sA) == (2, :, 1:8)
