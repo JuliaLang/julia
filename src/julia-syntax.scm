@@ -2730,7 +2730,7 @@ f(x) = yt(x)
                        (else
                         (let* ((exprs     (lift-toplevel (convert-lambda lam2 '|#anon| #t '())))
                                (top-stmts (cdr exprs))
-                               (newlam    (renumber-things (renumber-jlgensym (linearize (car exprs)))))
+                               (newlam    (renumber-slots-and-labels (linearize (car exprs))))
                                (vi        (lam:vinfo newlam))
                                ;; insert `list` expression heads to make the lambda vinfo
                                ;; lists quotable
@@ -3202,33 +3202,7 @@ f(x) = yt(x)
                      (set! vars (table)))))
             (loop (cdr stmts)))))))
 
-;; pass 6: renumber jlgensyms to start at 0 in each function
-
-(define (make-gensym-generator)
-  (let ((jlgensym-counter 0))
-    (lambda ()
-      (begin0 `(jlgensym ,jlgensym-counter)
-              (set! jlgensym-counter (+ 1 jlgensym-counter))))))
-
-(define (renumber-jlgensym- e tbl next-jlgensym)
-  (cond
-   ((or (not (pair? e)) (quoted? e)) e)
-   ((eq? (car e) 'lambda)
-    (let* ((next  (make-gensym-generator))
-           (body  (renumber-jlgensym- (lam:body e) (table) next))
-           (count (cadr (next)))
-           (vi    (caddr e)))
-      `(lambda ,(cadr e)
-         (,(car vi) ,(cadr vi) ,count ,(last vi))
-         ,body)))
-   ((jlgensym? e)
-    (let ((n (get tbl (cadr e) #f)))
-      (if n n
-          (let ((n (next-jlgensym))) (put! tbl (cadr e) n) n))))
-   (else (map (lambda (x) (renumber-jlgensym- x tbl next-jlgensym)) e))))
-
-(define (renumber-jlgensym e)
-  (renumber-jlgensym- e #f error))
+;; pass 6: renumber slots and labels
 
 (define (label-to-idx-map body)
   (let ((tbl (table)))
@@ -3252,49 +3226,60 @@ f(x) = yt(x)
                 (else #f)))
           (loop (cdr stmts))))))
 
-(define (renumber-slots lam e)
-  (cond ((symbol? e)
-         (let loop ((vi (car (lam:vinfo lam)))
-                    (i 1))
-           (cond ((null? vi)
-                  (let nextsp ((sps (lam:sp lam))
-                               (j 1))
-                    (cond ((null? sps) e)
-                          ((eq? e (car sps)) `(static_parameter ,j))
-                          (else (nextsp (cdr sps) (+ j 1))))))
-                 ((eq? e (caar vi))
-                  `(slot ,i))
-                 (else (loop (cdr vi) (+ i 1))))))
-        ((or (atom? e) (quoted? e)) e)
-        ((eq? (car e) 'lambda)
-         (let ((body (renumber-slots e (lam:body e))))
-           `(lambda ,(cadr e) ,(caddr e) ,body)))
-        (else (cons (car e)
-                    (map (lambda (x) (renumber-slots lam x))
-                         (cdr e))))))
+(define (symbol-to-idx-map lst)
+  (let ((tbl (table)))
+    (let loop ((xs lst) (i 1))
+      (if (pair? xs)
+          (begin (put! tbl (car xs) i)
+                 (loop (cdr xs) (+ i 1)))))
+    tbl))
 
-(define (renumber-things ex)
-  (let do-labels ((ex ex))
-    (if (pair? ex)
-        (begin (if (eq? (car ex) 'lambda)
-                   (renumber-labels! ex (label-to-idx-map (lam:body ex))))
-               (for-each do-labels (cdr ex)))))
-  (let do-slots ((ex ex))
-    (if (atom? ex) ex
-        (if (eq? (car ex) 'lambda)
-            (renumber-slots #f ex)
-            (cons (car ex)
-                  (map do-slots (cdr ex)))))))
+(define (renumber-lambda lam)
+  (renumber-labels! lam (label-to-idx-map (lam:body lam)))
+  (define ngensyms 0)
+  (define gensym-table (table))
+  (define nslots (length (car (lam:vinfo lam))))
+  (define slot-table (symbol-to-idx-map (map car (car (lam:vinfo lam)))))
+  (define sp-table (symbol-to-idx-map (lam:sp lam)))
+  (define (renumber-slots e)
+    (cond ((symbol? e)
+           (let ((idx (get slot-table e #f)))
+             (or (and idx `(slot ,idx))
+                 (let ((idx (get sp-table e #f)))
+                   (or (and idx `(static_parameter ,idx))
+                       e)))))
+          ((or (atom? e) (quoted? e)) e)
+          ((jlgensym? e)
+           (let ((idx (or (get gensym-table (cadr e) #f)
+                          (begin0 ngensyms
+                                  (put! gensym-table (cadr e) ngensyms)
+                                  (set! ngensyms (+ ngensyms 1))))))
+             `(jlgensym ,idx)))
+          ((eq? (car e) 'lambda)
+           (renumber-lambda e))
+          (else (cons (car e)
+                      (map renumber-slots (cdr e))))))
+  (let ((body (renumber-slots (lam:body lam)))
+        (vi   (lam:vinfo lam)))
+    `(lambda ,(cadr lam)
+       (,(car vi) ,(cadr vi) ,ngensyms ,(last vi))
+       ,body)))
+
+(define (renumber-slots-and-labels ex)
+  (if (atom? ex) ex
+      (if (eq? (car ex) 'lambda)
+          (renumber-lambda ex)
+          (cons (car ex)
+                (map renumber-slots-and-labels (cdr ex))))))
 
 ;; expander entry point
 
 (define (julia-expand1 ex)
-  (renumber-things
-   (renumber-jlgensym
-    (linearize
-     (closure-convert
-      (analyze-variables!
-       (resolve-scopes ex)))))))
+  (renumber-slots-and-labels
+   (linearize
+    (closure-convert
+     (analyze-variables!
+      (resolve-scopes ex))))))
 
 (define julia-expand0 expand-forms)
 
