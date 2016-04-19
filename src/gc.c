@@ -32,10 +32,10 @@
 extern "C" {
 #endif
 
-JL_DEFINE_MUTEX(pagealloc)
+static jl_mutex_t pagealloc_lock;
 // Protect all access to `finalizer_list`, `finalizer_list_marked` and
 // `to_finalize`.
-JL_DEFINE_MUTEX(finalizers)
+static jl_mutex_t finalizers_lock;
 
 /**
  * Note about GC synchronization:
@@ -419,12 +419,12 @@ static void jl_gc_signal_begin(void)
     mprotect((void*)jl_gc_signal_page, jl_page_size, PROT_NONE);
 #endif
     jl_gc_wait_for_the_world();
-    JL_LOCK_NOGC(finalizers);
+    JL_LOCK_NOGC(&finalizers_lock);
 }
 
 static void jl_gc_signal_end(void)
 {
-    JL_UNLOCK_NOGC(finalizers);
+    JL_UNLOCK_NOGC(&finalizers_lock);
 #ifdef _OS_WINDOWS_
     DWORD old_prot;
     VirtualProtect((void*)jl_gc_signal_page, jl_page_size,
@@ -511,7 +511,7 @@ static void jl_gc_run_finalizers_in_list(arraylist_t *list)
     size_t len = list->len;
     jl_value_t **items = (jl_value_t**)list->items;
     jl_gc_push_arraylist(list);
-    JL_UNLOCK_NOGC(finalizers);
+    JL_UNLOCK_NOGC(&finalizers_lock);
     for (size_t i = 2;i < len;i += 2) {
         run_finalizer(items[i], items[i + 1]);
     }
@@ -520,9 +520,9 @@ static void jl_gc_run_finalizers_in_list(arraylist_t *list)
 
 static void run_finalizers(void)
 {
-    JL_LOCK_NOGC(finalizers);
+    JL_LOCK_NOGC(&finalizers_lock);
     if (to_finalize.len == 0) {
-        JL_UNLOCK_NOGC(finalizers);
+        JL_UNLOCK_NOGC(&finalizers_lock);
         return;
     }
     arraylist_t copied_list;
@@ -565,24 +565,24 @@ static void schedule_all_finalizers(arraylist_t *flist)
 
 void jl_gc_run_all_finalizers(void)
 {
-    JL_LOCK_NOGC(finalizers);
+    JL_LOCK_NOGC(&finalizers_lock);
     schedule_all_finalizers(&finalizer_list);
     schedule_all_finalizers(&finalizer_list_marked);
-    JL_UNLOCK_NOGC(finalizers);
+    JL_UNLOCK_NOGC(&finalizers_lock);
     run_finalizers();
 }
 
 JL_DLLEXPORT void jl_gc_add_finalizer(jl_value_t *v, jl_function_t *f)
 {
-    JL_LOCK_NOGC(finalizers);
+    JL_LOCK_NOGC(&finalizers_lock);
     arraylist_push(&finalizer_list, (void*)v);
     arraylist_push(&finalizer_list, (void*)f);
-    JL_UNLOCK_NOGC(finalizers);
+    JL_UNLOCK_NOGC(&finalizers_lock);
 }
 
 JL_DLLEXPORT void jl_finalize(jl_value_t *o)
 {
-    JL_LOCK_NOGC(finalizers);
+    JL_LOCK_NOGC(&finalizers_lock);
     // Copy the finalizers into a temporary list so that code in the finalizer
     // won't change the list as we loop through them.
     // This list is also used as the GC frame when we are running the finalizers
@@ -599,7 +599,7 @@ JL_DLLEXPORT void jl_finalize(jl_value_t *o)
         jl_gc_run_finalizers_in_list(&copied_list);
     }
     else {
-        JL_UNLOCK_NOGC(finalizers);
+        JL_UNLOCK_NOGC(&finalizers_lock);
     }
     arraylist_free(&copied_list);
 }
@@ -811,7 +811,7 @@ static NOINLINE void *malloc_page(void)
     int i;
     region_t *region;
     int region_i = 0;
-    JL_LOCK_NOGC(pagealloc);
+    JL_LOCK_NOGC(&pagealloc_lock);
     while(region_i < REGION_COUNT) {
         region = regions[region_i];
         if (region == NULL) {
@@ -881,7 +881,7 @@ static NOINLINE void *malloc_page(void)
 #endif
     current_pg_count++;
     max_pg_count = max_pg_count < current_pg_count ? current_pg_count : max_pg_count;
-    JL_UNLOCK_NOGC(pagealloc);
+    JL_UNLOCK_NOGC(&pagealloc_lock);
     return ptr;
 }
 
