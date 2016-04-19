@@ -64,11 +64,6 @@ function edit(path::AbstractString, line::Integer=0)
     nothing
 end
 
-function edit(m::TypeMapEntry)
-    tv, decls, file, line = arg_decl_parts(m)
-    edit(string(file), line)
-end
-
 edit(f)          = edit(functionloc(f)...)
 edit(f, t::ANY)  = edit(functionloc(f,t)...)
 edit(file, line::Integer) = error("could not find source file for function")
