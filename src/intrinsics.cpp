@@ -1365,15 +1365,6 @@ static Value *emit_untyped_intrinsic(intrinsic f, Value *x, Value *y, Value *z, 
 #endif
     }
 
-    case nan_dom_err: {
-        // nan_dom_err(f, x) throw DomainError if isnan(f)&&!isnan(x)
-        Value *f = FP(x); x = FP(y);
-        raise_exception_unless(builder.CreateOr(builder.CreateFCmpORD(f,f),
-                                                builder.CreateFCmpUNO(x,x)),
-                               prepare_global(jldomerr_var), ctx);
-        return f;
-    }
-
     case abs_float:
     {
         x = FP(x);
