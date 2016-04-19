@@ -1915,28 +1915,14 @@ function finish(me::InferenceState)
     nothing
 end
 
-function record_var_type(s::Slot, t::ANY, decls)
-    t = widenconst(t)
-    otherTy = decls[s.id]
-    # keep track of whether a variable is always the same type
-    if !is(otherTy,NF)
-        if !typeseq(otherTy, t)
-            decls[s.id] = Any
-        end
-    else
-        decls[s.id] = t
-    end
-end
-
-function eval_annotate(e::ANY, vtypes::ANY, sv::InferenceState, decls, undefs)
+function eval_annotate(e::ANY, vtypes::ANY, sv::InferenceState, undefs)
     if isa(e, Slot)
         t = abstract_eval(e, vtypes, sv)
         s = vtypes[e.id]
         if s.undef
             undefs[e.id] = true
         end
-        record_var_type(e, t, decls)
-        return t === e.typ ? e : Slot(e.id, t)
+        return t === sv.linfo.slottypes[e.id] ? e : TypedSlot(e.id, t)
     end
 
     if !isa(e,Expr)
@@ -1947,28 +1933,15 @@ function eval_annotate(e::ANY, vtypes::ANY, sv::InferenceState, decls, undefs)
     head = e.head
     if is(head,:static_typeof) || is(head,:line) || is(head,:const)
         return e
-    #elseif is(head,:gotoifnot) || is(head,:return)
-    #    e.typ = Any
     elseif is(head,:(=))
-    #    e.typ = Any
-        s = e.args[1]
-        # assignment LHS not subject to all-same-type variable checking,
-        # but the type of the RHS counts as one of its types.
-        e.args[2] = eval_annotate(e.args[2], vtypes, sv, decls, undefs)
-        if isa(s,Slot)
-            # TODO: if this def does not reach any uses, maybe don't do this
-            rhstype = exprtype(e.args[2], sv)
-            if !is(rhstype,Bottom)
-                record_var_type(s, rhstype, decls)
-            end
-        end
+        e.args[2] = eval_annotate(e.args[2], vtypes, sv, undefs)
         return e
     end
     i0 = is(head,:method) ? 2 : 1
     for i=i0:length(e.args)
         subex = e.args[i]
         if !(isa(subex,Number) || isa(subex,AbstractString))
-            e.args[i] = eval_annotate(subex, vtypes, sv, decls, undefs)
+            e.args[i] = eval_annotate(subex, vtypes, sv, undefs)
         end
     end
     return e
@@ -1989,21 +1962,36 @@ end
 # annotate types of all symbols in AST
 function type_annotate!(linfo::LambdaInfo, states::Array{Any,1}, sv::ANY, rettype::ANY, nargs)
     nslots = length(states[1])
-    decls = Any[ NF for i = 1:nslots ]
-    undefs = fill(false, nslots)
-    # initialize decls with argument types
-    for i = 1:nargs
-        decls[i] = widenconst(states[1][i].typ)
+    for i = 1:nslots
+        linfo.slottypes[i] = Bottom
     end
+    undefs = fill(false, nslots)
     body = linfo.code::Array{Any,1}
     nexpr = length(body)
+    for i=1:nexpr
+        # identify variables always used as the same type
+        st_i = states[i]
+        if st_i !== ()
+            for j = 1:nslots
+                vt = widenconst(st_i[j].typ)
+                if vt !== Bottom
+                    otherTy = linfo.slottypes[j]
+                    if otherTy === Bottom
+                        linfo.slottypes[j] = vt
+                    elseif otherTy !== Any && !typeseq(otherTy, vt)
+                        linfo.slottypes[j] = Any
+                    end
+                end
+            end
+        end
+    end
     i = 1
     optimize = sv.optimize::Bool
     while i <= nexpr
         st_i = states[i]
         if st_i !== ()
             # st_i === ()  =>  unreached statement  (see issue #7836)
-            body[i] = eval_annotate(body[i], st_i, sv, decls, undefs)
+            body[i] = eval_annotate(body[i], st_i, sv, undefs)
         elseif optimize
             expr = body[i]
             if isa(expr, Expr) && expr_cannot_delete(expr::Expr)
@@ -2020,11 +2008,8 @@ function type_annotate!(linfo::LambdaInfo, states::Array{Any,1}, sv::ANY, rettyp
         i += 1
     end
 
-    # add declarations for variables that are always the same type
+    # mark used-undef variables
     for i = 1:nslots
-        if decls[i] !== NF
-            linfo.slottypes[i] = decls[i]
-        end
         if undefs[i]
             linfo.slotflags[i] |= 32
         end
@@ -2034,7 +2019,7 @@ end
 
 # widen all Const elements in type annotations
 _widen_all_consts(x::ANY) = x
-_widen_all_consts(x::Slot) = Slot(x.id, widenconst(x.typ))
+_widen_all_consts(x::TypedSlot) = TypedSlot(x.id, widenconst(x.typ))
 function _widen_all_consts(x::Expr)
     x.typ = widenconst(x.typ)
     for i = 1:length(x.args)
@@ -2059,7 +2044,11 @@ function substitute!(e::ANY, na, argexprs, spvals, offset)
         if 1 <= e.id <= na
             return argexprs[e.id]
         end
-        return Slot(e.id+offset, e.typ)
+        if isa(e, SlotNumber)
+            return SlotNumber(e.id+offset)
+        else
+            return TypedSlot(e.id+offset, e.typ)
+        end
     end
     if isa(e,NewvarNode)
         return NewvarNode(substitute!(e.slot, na, argexprs, spvals, offset))
@@ -2100,7 +2089,9 @@ end
 function exprtype(x::ANY, sv::InferenceState)
     if isa(x,Expr)
         return (x::Expr).typ
-    elseif isa(x,Slot)
+    elseif isa(x,SlotNumber)
+        return sv.linfo.slottypes[x.id]
+    elseif isa(x,TypedSlot)
         return (x::Slot).typ
     elseif isa(x,GenSym)
         return abstract_eval_gensym(x::GenSym, sv)
@@ -2975,12 +2966,14 @@ function inlining_pass(e::Expr, sv, linfo)
     return (e,stmts)
 end
 
+const compiler_temp_sym = symbol("#temp#")
+
 function add_slot!(linfo::LambdaInfo, typ, is_sa)
     id = length(linfo.slotnames)+1
-    push!(linfo.slotnames, :__temp__)
+    push!(linfo.slotnames, compiler_temp_sym)
     push!(linfo.slottypes, typ)
     push!(linfo.slotflags, 2+16*is_sa)
-    Slot(id, typ)
+    SlotNumber(id)
 end
 
 function is_known_call(e::Expr, func, sv)
@@ -3049,7 +3042,8 @@ function remove_redundant_temp_vars(linfo, sa, T)
                 # (from inlining improved type inference information)
                 # and this transformation would worsen the type information
                 # everywhere later in the function
-                if init.typ ⊑ (T===GenSym ? gensym_types[v+1] : linfo.slottypes[v])
+                ityp = isa(init,TypedSlot) ? init.typ : linfo.slottypes[init.id]
+                if ityp ⊑ (T===GenSym ? gensym_types[v+1] : linfo.slottypes[v])
                     delete_var!(linfo, v, T)
                     slot_replace!(linfo, v, init, T)
                 end
@@ -3279,8 +3273,11 @@ function replace_getfield!(linfo::LambdaInfo, e::Expr, tupname, vals, field_name
             # the tuple element expression that's replacing it.
             if isa(val,Slot)
                 val = val::Slot
-                if a.typ ⊑ val.typ && !(val.typ ⊑ a.typ)
-                    val.typ = a.typ
+                valtyp = isa(val,TypedSlot) ? val.typ : linfo.slottypes[val.id]
+                if a.typ ⊑ valtyp && !(valtyp ⊑ a.typ)
+                    if isa(val,TypedSlot)
+                        val = TypedSlot(val.id, a.typ)
+                    end
                     linfo.slottypes[val.id] = widenconst(a.typ)
                 end
             elseif isa(val,GenSym)

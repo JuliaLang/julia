@@ -1521,7 +1521,7 @@ jl_value_t *jl_static_eval(jl_value_t *ex, void *ctx_, jl_module_t *mod,
             return jl_get_global(mod, sym);
         return NULL;
     }
-    if (jl_typeis(ex,jl_slot_type))
+    if (jl_is_slot(ex))
         return NULL;
     if (jl_is_gensym(ex)) {
         ssize_t idx = ((jl_gensym_t*)ex)->id;
@@ -2889,7 +2889,7 @@ static jl_cgval_t emit_local(jl_value_t *slotload, jl_codectx_t *ctx)
         jl_value_t *typ;
         if (ctx->linfo->inferred) {
             // use the better type from inference for this load
-            typ = jl_slot_get_type(slotload);
+            typ = expr_type(slotload, ctx);
             if (jl_is_typevar(typ))
                 typ = ((jl_tvar_t*)typ)->ub;
         }
