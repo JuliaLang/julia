@@ -31,7 +31,7 @@ b = rand(17,14)
 b[3:6,9:12] = m4
 sm4 = slice(b,3:6,9:12)
 
-m3d = map(Float32,reshape(1:5*3*2, 5, 3, 2))
+m3d = map(Float32,copy(reshape(1:5*3*2, 5, 3, 2)))
 true_fftd3_m3d = Array(Float32, 5, 3, 2)
 true_fftd3_m3d[:,:,1] = 17:2:45
 true_fftd3_m3d[:,:,2] = -15
@@ -277,7 +277,7 @@ end
 
 # test inversion, scaling, and pre-allocated variants
 for T in (Complex64, Complex128)
-    for x in (T[1:100;], reshape(T[1:200;], 20,10))
+    for x in (T[1:100;], copy(reshape(T[1:200;], 20,10)))
         y = similar(x)
         for planner in (plan_fft, plan_fft_, plan_ifft, plan_ifft_)
             p = planner(x)

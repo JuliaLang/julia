@@ -104,9 +104,10 @@ include("set.jl")
 include("iterator.jl")
 
 # Definition of StridedArray
-typealias StridedArray{T,N,A<:DenseArray,I<:Tuple{Vararg{Union{RangeIndex, NoSlice, AbstractCartesianIndex}}},MI} Union{DenseArray{T,N}, SubArray{T,N,A,I}, ReshapedArray{T,N,A,MI}}
-typealias StridedVector{T,A<:DenseArray,I<:Tuple{Vararg{Union{RangeIndex, NoSlice, AbstractCartesianIndex}}},MI}  Union{DenseArray{T,1}, SubArray{T,1,A,I}, ReshapedArray{T,1,A,MI}}
-typealias StridedMatrix{T,A<:DenseArray,I<:Tuple{Vararg{Union{RangeIndex, NoSlice, AbstractCartesianIndex}}},MI}  Union{DenseArray{T,2}, SubArray{T,2,A,I}, ReshapedArray{T,2,A,MI}}
+typealias StridedReshapedArray{T,N,A<:DenseArray} ReshapedArray{T,N,A}
+typealias StridedArray{T,N,A<:Union{DenseArray,StridedReshapedArray},I<:Tuple{Vararg{Union{RangeIndex, NoSlice, AbstractCartesianIndex}}}} Union{DenseArray{T,N}, SubArray{T,N,A,I}, StridedReshapedArray{T,N}}
+typealias StridedVector{T,A<:Union{DenseArray,StridedReshapedArray},I<:Tuple{Vararg{Union{RangeIndex, NoSlice, AbstractCartesianIndex}}}}  Union{DenseArray{T,1}, SubArray{T,1,A,I}, StridedReshapedArray{T,1}}
+typealias StridedMatrix{T,A<:Union{DenseArray,StridedReshapedArray},I<:Tuple{Vararg{Union{RangeIndex, NoSlice, AbstractCartesianIndex}}}}  Union{DenseArray{T,2}, SubArray{T,2,A,I}, StridedReshapedArray{T,2}}
 typealias StridedVecOrMat{T} Union{StridedVector{T}, StridedMatrix{T}}
 
 # For OS specific stuff

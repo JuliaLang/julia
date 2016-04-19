@@ -63,7 +63,7 @@ for i = 1 : 10
 end
 
 # sparse ref
-a116 = reshape(1:16, 4, 4)
+a116 = copy(reshape(1:16, 4, 4))
 s116 = sparse(a116)
 p = [4, 1, 2, 3, 2]
 @test full(s116[p,:]) == a116[p,:]
