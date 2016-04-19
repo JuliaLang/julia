@@ -96,16 +96,17 @@ importall .SimdLoop
 include("reduce.jl")
 
 ## core structures
+include("reshapedarray.jl")
 include("bitarray.jl")
 include("intset.jl")
 include("dict.jl")
 include("set.jl")
 include("iterator.jl")
 
-# StridedArrays
-typealias StridedArray{T,N,A<:DenseArray,I<:Tuple{Vararg{Union{RangeIndex, NoSlice, AbstractCartesianIndex}}}} Union{DenseArray{T,N}, SubArray{T,N,A,I}}
-typealias StridedVector{T,A<:DenseArray,I<:Tuple{Vararg{Union{RangeIndex, NoSlice, AbstractCartesianIndex}}}}  Union{DenseArray{T,1}, SubArray{T,1,A,I}}
-typealias StridedMatrix{T,A<:DenseArray,I<:Tuple{Vararg{Union{RangeIndex, NoSlice, AbstractCartesianIndex}}}}  Union{DenseArray{T,2}, SubArray{T,2,A,I}}
+# Definition of StridedArray
+typealias StridedArray{T,N,A<:DenseArray,I<:Tuple{Vararg{Union{RangeIndex, NoSlice, AbstractCartesianIndex}}},MI} Union{DenseArray{T,N}, SubArray{T,N,A,I}, ReshapedArray{T,N,A,MI}}
+typealias StridedVector{T,A<:DenseArray,I<:Tuple{Vararg{Union{RangeIndex, NoSlice, AbstractCartesianIndex}}},MI}  Union{DenseArray{T,1}, SubArray{T,1,A,I}, ReshapedArray{T,1,A,MI}}
+typealias StridedMatrix{T,A<:DenseArray,I<:Tuple{Vararg{Union{RangeIndex, NoSlice, AbstractCartesianIndex}}},MI}  Union{DenseArray{T,2}, SubArray{T,2,A,I}, ReshapedArray{T,2,A,MI}}
 typealias StridedVecOrMat{T} Union{StridedVector{T}, StridedMatrix{T}}
 
 # For OS specific stuff

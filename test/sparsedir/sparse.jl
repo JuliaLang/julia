@@ -650,7 +650,7 @@ let A = sprand(5,5,0.5,(n)->rand(Float64,n)), ACPY = copy(A)
     @test A == ACPY
     C = reinterpret(Int64, A, (25, 1))
     @test A == ACPY
-    D = reinterpret(Int64, B)
+    D = reinterpret(Int64, copy(B))
     @test C == D
 end
 
