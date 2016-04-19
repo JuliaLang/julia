@@ -38,12 +38,6 @@ macros:
 
    Tests that the expression ``ex`` evaluates to ``true``\ . Returns a ``Pass`` ``Result`` if it does, a ``Fail`` ``Result`` if it is ``false``\ , and an ``Error`` ``Result`` if it could not be evaluated.
 
-.. function:: @test_fail_expected ex
-
-   .. Docstring generated from Julia source
-
-   Tests that the expression ``ex`` evaluates to ``false``\ . Returns a ``Pass`` ``Result`` if it does, a ``Fail`` ``Result`` if it is ``true``\ , and an ``Error`` ``Result`` if it could not be evaluated.
-
 .. function:: @test_throws extype ex
 
    .. Docstring generated from Julia source
@@ -261,11 +255,7 @@ and alerts the user via an ``Error`` if the test succeeds.
 
    .. Docstring generated from Julia source
 
-   For use to indicate a test that should pass but currently consistently
-   fails.
-   Tests that the expression ``ex`` evaluates to ``false``\ or causes an exception.
-   Returns a ``Broken`` ``Result`` if it does, and an ``Error`` ``Result`` if it is
-   ``true``.
+   For use to indicate a test that should pass but currently consistently fails. Tests that the expression ``ex`` evaluates to ``false`` or causes an exception. Returns a ``Broken`` ``Result`` if it does, and an ``Error`` ``Result`` if it is ``true``\ .
 
 :func:`@test_skip` is also available for use to skip a test without
 evaluation in the case of intermittent failures. This test will not run but
@@ -275,9 +265,7 @@ gives a `Broken` `Result`.
 
    .. Docstring generated from Julia source
 
-   For use to indicate a test that should pass but currently intermittently
-   fails.
-   Does not evaluate the expression.
+   For use to indicate a test that should pass but currently intermittently fails. Does not evaluate the expression.
 
 Creating Custom ``AbstractTestSet`` Types
 -----------------------------------------
