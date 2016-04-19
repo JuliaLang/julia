@@ -19,31 +19,10 @@
 
 // ::ANY has no effect if the number of overlapping methods is greater than this
 #define MAX_UNSPECIALIZED_CONFLICTS 32
-#define MAX_METHLIST_COUNT 32 // this can strongly affect the sysimg size and speed!
-#define INIT_CACHE_SIZE 16 // must be a power-of-two
 
 #ifdef __cplusplus
 extern "C" {
 #endif
-
-
-// ----- Descriptive Helper Functions ----- //
-
-void print_func_loc(JL_STREAM *s, jl_method_t *m)
-{
-    long lno = m->line;
-    if (lno > 0) {
-        char *fname = jl_symbol_name((jl_sym_t*)m->file);
-        jl_printf(s, " at %s:%ld", fname, lno);
-    }
-}
-
-// a descriptor of a jl_typemap_t that gets
-// passed around as self-documentation of the parameters of the type
-struct jl_typemap_info {
-    int8_t unsorted; // whether this should be unsorted
-    jl_datatype_t **jl_contains; // the type that is being put in this
-};
 
 const struct jl_typemap_info method_defs = {
     0, &jl_method_type
@@ -55,728 +34,53 @@ const struct jl_typemap_info tfunc_cache = {
     1, &jl_any_type
 };
 
-
-// ----- Type Signature Subtype Testing ----- //
-
-static int is_kind(jl_value_t *v)
-{
-    return (v==(jl_value_t*)jl_uniontype_type ||
-            v==(jl_value_t*)jl_datatype_type ||
-            v==(jl_value_t*)jl_typector_type);
-}
-
-
-static int sig_match_by_type_leaf(jl_value_t **types, jl_tupletype_t *sig, size_t n)
-{
-    size_t i;
-    for(i=0; i < n; i++) {
-        jl_value_t *decl = jl_field_type(sig, i);
-        jl_value_t *a = types[i];
-        if (jl_is_type_type(a)) // decl is not Type, because it wouldn't be leafsig
-            a = jl_typeof(jl_tparam0(a));
-        if (!jl_types_equal(a, decl))
-            return 0;
-    }
-    return 1;
-}
-
-static int sig_match_by_type_simple(jl_value_t **types, size_t n, jl_tupletype_t *sig, size_t lensig, int va)
-{
-    size_t i;
-    for(i=0; i < n; i++) {
-        jl_value_t *decl = jl_field_type(sig, i);
-        if (i == lensig-1) {
-            if (va) {
-                jl_value_t *t = jl_tparam0(decl);
-                for(; i < n; i++) {
-                    if (!jl_subtype(types[i], t, 0))
-                        return 0;
-                }
-                return 1;
-            }
-        }
-        jl_value_t *a = types[i];
-        if (jl_is_type_type(decl)) {
-            jl_value_t *tp0 = jl_tparam0(decl);
-            if (jl_is_type_type(a)) {
-                if (tp0 == (jl_value_t*)jl_typetype_tvar) {
-                    // in the case of Type{T}, the types don't have
-                    // to match exactly either. this is cached as Type{T}.
-                    // analogous to the situation with tuples.
-                }
-                else if (jl_is_typevar(tp0)) {
-                    if (!jl_subtype(jl_tparam0(a), ((jl_tvar_t*)tp0)->ub, 0))
-                        return 0;
-                }
-                else {
-                    if (!jl_types_equal(jl_tparam0(a), tp0))
-                        return 0;
-                }
-            }
-            else if (!is_kind(a) || !jl_is_typevar(tp0) || ((jl_tvar_t*)tp0)->ub != (jl_value_t*)jl_any_type) {
-                // manually unroll jl_subtype(a, decl)
-                // where `a` can be a subtype like TypeConstructor
-                // and decl is Type{T}
-                return 0;
-            }
-        }
-        else if (decl == (jl_value_t*)jl_any_type) {
-        }
-        else {
-            if (jl_is_type_type(a)) // decl is not Type, because it would be caught above
-                a = jl_typeof(jl_tparam0(a));
-            if (!jl_types_equal(a, decl))
-                return 0;
-        }
-    }
-    return 1;
-}
-
-static inline int sig_match_leaf(jl_value_t **args, jl_value_t **sig, size_t n)
-{
-    // NOTE: This function is a huge performance hot spot!!
-    for(size_t i=0; i < n; i++) {
-        jl_value_t *decl = sig[i];
-        jl_value_t *a = args[i];
-        if ((jl_value_t*)jl_typeof(a) != decl) {
-            /*
-              we are only matching concrete types here, and those types are
-              hash-consed, so pointer comparison should work.
-            */
-            return 0;
-        }
-    }
-    return 1;
-}
-
-static inline int sig_match_simple(jl_value_t **args, size_t n, jl_value_t **sig,
-                                   int va, size_t lensig)
-{
-    // NOTE: This function is a performance hot spot!!
-    for(size_t i=0; i < n; i++) {
-        jl_value_t *decl = sig[i];
-        if (i == lensig-1) {
-            if (va) {
-                jl_value_t *t = jl_tparam0(decl);
-                for(; i < n; i++) {
-                    if (!jl_subtype(args[i], t, 1))
-                        return 0;
-                }
-                return 1;
-            }
-        }
-        jl_value_t *a = args[i];
-        if (decl == (jl_value_t*)jl_any_type) {
-        }
-        else if ((jl_value_t*)jl_typeof(a) == decl) {
-            /*
-              we are only matching concrete types here, and those types are
-              hash-consed, so pointer comparison should work.
-            */
-        }
-        else if (jl_is_type_type(decl) && jl_is_type(a)) {
-            jl_value_t *tp0 = jl_tparam0(decl);
-            if (tp0 == (jl_value_t*)jl_typetype_tvar) {
-                // in the case of Type{T}, the types don't have
-                // to match exactly either. this is cached as Type{T}.
-                // analogous to the situation with tuples.
-            }
-            else if (jl_is_typevar(tp0)) {
-                if (!jl_subtype(a, ((jl_tvar_t*)tp0)->ub, 0))
-                    return 0;
-            }
-            else {
-                if (a!=tp0 && !jl_types_equal(a,tp0))
-                    return 0;
-            }
-        }
-        else {
-            return 0;
-        }
-    }
-    return 1;
-}
-
-
-// ----- MethodCache helper functions ----- //
-
-static inline
-union jl_typemap_t mtcache_hash_lookup(jl_array_t *a, jl_value_t *ty, int8_t tparam, int8_t offs)
-{
-    uintptr_t uid = ((jl_datatype_t*)ty)->uid;
-    union jl_typemap_t ml;
-    ml.unknown = jl_nothing;
-    if (!uid)
-        return ml;
-    ml.unknown = jl_cellref(a, uid & (a->nrows-1));
-    if (ml.unknown != NULL && ml.unknown != jl_nothing) {
-        jl_value_t *t;
-        if (jl_typeof(ml.unknown) == (jl_value_t*)jl_typemap_level_type) {
-            t = ml.node->key;
-        }
-        else {
-            t = jl_field_type(ml.leaf->sig, offs);
-            if (tparam)
-                t = jl_tparam0(t);
-        }
-        if (t == ty)
-            return ml;
-    }
-    ml.unknown = jl_nothing;
-    return ml;
-}
-
-static inline unsigned int next_power_of_two(unsigned int val)
-{
-    /* this function taken from libuv src/unix/core.c */
-    val -= 1;
-    val |= val >> 1;
-    val |= val >> 2;
-    val |= val >> 4;
-    val |= val >> 8;
-    val |= val >> 16;
-    val += 1;
-    return val;
-}
-
-static void mtcache_rehash(jl_array_t **pa, jl_value_t *parent, int8_t tparam, int8_t offs)
-{
-    size_t i, len = (*pa)->nrows;
-    size_t newlen = next_power_of_two(len) * 2;
-    jl_value_t **d = (jl_value_t**)(*pa)->data;
-    jl_array_t *n = jl_alloc_cell_1d(newlen);
-    for (i = 0; i < len; i++) {
-        union jl_typemap_t ml;
-        ml.unknown = d[i];
-        if (ml.unknown != NULL && ml.unknown != jl_nothing) {
-            jl_value_t *t;
-            if (jl_typeof(ml.unknown) == (jl_value_t*)jl_typemap_level_type) {
-                t = ml.node->key;
-            }
-            else {
-                t = jl_field_type(ml.leaf->sig, offs);
-                if (tparam)
-                    t = jl_tparam0(t);
-            }
-            uintptr_t uid = ((jl_datatype_t*)t)->uid;
-            size_t idx = uid & (newlen - 1);
-            if (((jl_value_t**)n->data)[idx] == NULL) {
-                ((jl_value_t**)n->data)[idx] = ml.unknown;
-            }
-            else {
-                // hash collision: start over after doubling the size again
-                i = 0;
-                newlen *= 2;
-                n = jl_alloc_cell_1d(newlen);
-            }
-        }
-    }
-    jl_gc_wb(parent, n);
-    *pa = n;
-}
-
-// Recursively rehash a TypeMap (for example, after deserialization)
-void jl_typemap_rehash(union jl_typemap_t ml, int8_t offs);
-void jl_typemap_rehash_array(jl_array_t **pa, jl_value_t *parent, int8_t tparam, int8_t offs) {
-    size_t i, len = (*pa)->nrows;
-    for (i = 0; i < len; i++) {
-        union jl_typemap_t ml;
-        ml.unknown = jl_cellref(*pa, i);
-        assert(ml.unknown != NULL);
-        jl_typemap_rehash(ml, offs+1);
-    }
-    mtcache_rehash(pa, parent, tparam, offs);
-}
-void jl_typemap_rehash(union jl_typemap_t ml, int8_t offs) {
-    if (jl_typeof(ml.unknown) == (jl_value_t*)jl_typemap_level_type) {
-        if (ml.node->targ != (void*)jl_nothing)
-            jl_typemap_rehash_array(&ml.node->targ, ml.unknown, 1, offs);
-        if (ml.node->arg1 != (void*)jl_nothing)
-            jl_typemap_rehash_array(&ml.node->arg1, ml.unknown, 0, offs);
-    }
-}
-
-static union jl_typemap_t *mtcache_hash_bp(jl_array_t **pa, jl_value_t *ty,
-                                                 int8_t tparam, int8_t offs, jl_value_t *parent)
-{
-    if (jl_is_datatype(ty)) {
-        uintptr_t uid = ((jl_datatype_t*)ty)->uid;
-        if (!uid || is_kind(ty))
-            // be careful not to put non-leaf types or DataType/TypeConstructor in the cache here,
-            // since they should have a lower priority and need to go into the sorted list
-            return NULL;
-        if (*pa == (void*)jl_nothing) {
-            *pa = jl_alloc_cell_1d(INIT_CACHE_SIZE);
-            jl_gc_wb(parent, *pa);
-        }
-        while (1) {
-            union jl_typemap_t *pml = &((union jl_typemap_t*)jl_array_data(*pa))[uid & ((*pa)->nrows-1)];
-            union jl_typemap_t ml = *pml;
-            if (ml.unknown == NULL || ml.unknown == jl_nothing) {
-                pml->unknown = jl_nothing;
-                return pml;
-            }
-            jl_value_t *t;
-            if (jl_typeof(ml.unknown) == (jl_value_t*)jl_typemap_level_type) {
-                t = ml.node->key;
-            }
-            else {
-                t = jl_field_type(ml.leaf->sig, offs);
-                if (tparam)
-                    t = jl_tparam0(t);
-            }
-            if (t == ty)
-                return pml;
-            mtcache_rehash(pa, parent, tparam, offs);
-        }
-    }
-    return NULL;
-}
-
 static int8_t jl_cachearg_offset(jl_methtable_t *mt)
 {
     return (mt == jl_type_type->name->mt) ? 0 : 1;
 }
 
+/// ----- Insertion logic for special entries ----- ///
 
-// ----- Sorted Type Signature Lookup Matching ----- //
-
-static jl_value_t *lookup_match(jl_value_t *a, jl_value_t *b, jl_svec_t **penv,
-                                jl_svec_t *tvars)
+JL_DLLEXPORT jl_typemap_entry_t *jl_tfunc_cache_insert(jl_method_t *m, jl_tupletype_t *type,
+                                                        jl_value_t *value, int8_t offs)
 {
-    jl_value_t *ti = jl_type_intersection_matching(a, b, penv, tvars);
-    if (ti == (jl_value_t*)jl_bottom_type)
-        return ti;
-    JL_GC_PUSH1(&ti);
-    assert(jl_is_svec(*penv));
-    int l = jl_svec_len(*penv);
-    for(int i=0; i < l; i++) {
-        jl_value_t *val = jl_svecref(*penv,i);
-        /*
-          since "a" is a concrete type, we assume that
-          (a∩b != Union{}) => a<:b. However if a static parameter is
-          forced to equal Union{}, then part of "b" might become Union{},
-          and therefore a subtype of "a". For example
-          (Type{Union{}},Int) ∩ (Type{T},T)
-          issue #5254
-        */
-        if (val == (jl_value_t*)jl_bottom_type) {
-            if (!jl_subtype(a, ti, 0)) {
-                JL_GC_POP();
-                return (jl_value_t*)jl_bottom_type;
-            }
-        }
-    }
-    JL_GC_POP();
-    return ti;
+    return jl_typemap_insert(&m->tfunc, (jl_value_t*)m, type, jl_emptysvec, NULL, jl_emptysvec, value, offs, &tfunc_cache, NULL);
 }
 
-static int jl_typemap_array_visitor(jl_array_t *a, jl_typemap_visitor_fptr fptr, void *closure)
+JL_DLLEXPORT jl_value_t *jl_tfunc_cache_lookup(jl_method_t *m, jl_tupletype_t *type, int8_t offs)
 {
-    size_t i, l = jl_array_len(a);
-    jl_value_t **data = (jl_value_t**)jl_array_data(a);
-    for(i=0; i < l; i++) {
-        if (data[i] != NULL)
-            if (!jl_typemap_visitor(((union jl_typemap_t*)data)[i], fptr, closure))
-                return 0;
-    }
-    return 1;
+    jl_typemap_entry_t *sf = jl_typemap_assoc_by_type(m->tfunc, type, NULL, 1, 0, offs);
+    if (!sf)
+        return jl_nothing;
+    return sf->func.value;
 }
 
-// calls fptr on each jl_typemap_entry_t in cache in sort order, until fptr return false
-int jl_typemap_visitor(union jl_typemap_t cache, jl_typemap_visitor_fptr fptr, void *closure)
+JL_DLLEXPORT jl_value_t *jl_methtable_lookup(jl_methtable_t *mt, jl_tupletype_t *type)
 {
-    jl_typemap_entry_t *ml;
-    if (jl_typeof(cache.unknown) == (jl_value_t*)jl_typemap_level_type) {
-        if (cache.node->targ != (void*)jl_nothing)
-            if (!jl_typemap_array_visitor(cache.node->targ, fptr, closure)) return 0;
-        if (cache.node->arg1 != (void*)jl_nothing)
-            if (!jl_typemap_array_visitor(cache.node->arg1, fptr, closure)) return 0;
-        ml = cache.node->linear;
-    }
-    else {
-        ml = cache.leaf;
-    }
-    while (ml != (void*)jl_nothing) {
-        if (!fptr(ml, closure))
-            return 0;
-        ml = ml->next;
-    }
-    return 1;
+    jl_typemap_entry_t *sf = jl_typemap_assoc_by_type(mt->defs, type, NULL, 1, 0, 0);
+    if (!sf)
+        return jl_nothing;
+    return sf->func.value;
 }
-
-// predicate to fast-test if this type is a leaf type that can exist in the cache
-// and does not need a more expensive linear scan to find all intersections
-int is_cache_leaf(jl_value_t *ty)
-{
-    return (jl_is_datatype(ty) && ((jl_datatype_t*)ty)->uid != 0 && !is_kind(ty));
-}
-
-struct typemap_intersection_env;
-typedef int (*jl_typemap_intersection_visitor_fptr)(jl_typemap_entry_t *l, struct typemap_intersection_env *closure);
-struct typemap_intersection_env {
-    // input values
-    jl_typemap_intersection_visitor_fptr fptr; // fptr to call on a match
-    jl_value_t *type; // type to match
-    jl_value_t *va; // the tparam0 for the vararg in type, if applicable (or NULL)
-    // output values
-    jl_value_t *ti; // intersection type
-    jl_svec_t *env; // intersection env (initialize to null to perform intersection without an environment)
-};
-static int jl_typemap_intersection_visitor(union jl_typemap_t a, int offs, struct typemap_intersection_env *closure);
-
-static int jl_typemap_intersection_array_visitor(jl_array_t *a, jl_value_t *ty, int tparam,
-        int offs, struct typemap_intersection_env *closure)
-{
-    size_t i, l = jl_array_len(a);
-    jl_value_t **data = (jl_value_t**)jl_array_data(a);
-    for (i = 0; i < l; i++) {
-        union jl_typemap_t ml = ((union jl_typemap_t*)data)[i];
-        if (ml.unknown != NULL && ml.unknown != jl_nothing) {
-            jl_value_t *t;
-            if (jl_typeof(ml.unknown) == (jl_value_t*)jl_typemap_level_type) {
-                t = ml.node->key;
-            }
-            else {
-                t = jl_field_type(ml.leaf->sig, offs);
-                if (tparam)
-                    t = jl_tparam0(t);
-            }
-            // TODO: fast path: test key `t`
-            if (!jl_typemap_intersection_visitor(ml, offs+1, closure))
-                return 0;
-        }
-    }
-    return 1;
-}
-
-// calls fptr on each jl_typemap_entry_t in cache in sort order
-// for which type ∩ ml->type != Union{}, until fptr return false
-static int jl_typemap_intersection_visitor(union jl_typemap_t map, int offs,
-        struct typemap_intersection_env *closure)
-{
-    jl_typemap_entry_t *ml;
-    if (jl_typeof(map.unknown) == (jl_value_t*)jl_typemap_level_type) {
-        jl_typemap_level_t *cache = map.node;
-        jl_value_t *ty = NULL;
-        size_t l = jl_datatype_nfields(closure->type);
-        if (closure->va && l == offs - 1) {
-            ty = closure->va;
-        }
-        else if (l > offs) {
-            ty = jl_tparam(closure->type, offs);
-        }
-        if (ty) {
-            if (cache->targ != (void*)jl_nothing) {
-                if (jl_is_type_type(ty) && is_cache_leaf(jl_tparam0(ty))) {
-                    // direct lookup of leaf types
-                    union jl_typemap_t ml = mtcache_hash_lookup(cache->targ, jl_tparam0(ty), 1, offs);
-                    if (ml.unknown != jl_nothing) {
-                        if (!jl_typemap_intersection_visitor(ml, offs+1, closure)) return 0;
-                    }
-                }
-                else {
-                    // else an array scan is required to check subtypes
-                    // TODO: fast-path: optimized pre-intersection test
-                    if (!jl_typemap_intersection_array_visitor(cache->targ, ty, 1, offs, closure)) return 0;
-                }
-            }
-            if (cache->arg1 != (void*)jl_nothing) {
-                if (is_cache_leaf(ty)) {
-                    // direct lookup of leaf types
-                    union jl_typemap_t ml = mtcache_hash_lookup(cache->arg1, ty, 0, offs);
-                    if (ml.unknown != jl_nothing) {
-                        if (!jl_typemap_intersection_visitor(ml, offs+1, closure)) return 0;
-                    }
-                }
-                else {
-                    // else an array scan is required to check subtypes
-                    if (!jl_typemap_intersection_array_visitor(cache->arg1, ty, 0, offs, closure)) return 0;
-                }
-            }
-        }
-        ml = map.node->linear;
-    }
-    else {
-        ml = map.leaf;
-    }
-    // slow-path scan everything else
-    // mark this `register` because (for branch prediction)
-    // that can be absolutely critical for speed
-    register jl_typemap_intersection_visitor_fptr fptr = closure->fptr;
-    while (ml != (void*)jl_nothing) {
-        // TODO: optimize intersection test
-        if (closure->type == (jl_value_t*)ml->sig) {
-            // fast-path for the intersection of a type with itself
-            if (closure->env)
-                closure->env = ml->tvars;
-            closure->ti = closure->type;
-            if (!fptr(ml, closure))
-                return 0;
-        }
-        else {
-            jl_value_t *ti;
-            if (closure->env) {
-                closure->env = jl_emptysvec;
-                ti = lookup_match(closure->type, (jl_value_t*)ml->sig, &closure->env, ml->tvars);
-            }
-            else {
-                ti = jl_type_intersection(closure->type, (jl_value_t*)ml->sig);
-            }
-            if (ti != (jl_value_t*)jl_bottom_type) {
-                closure->ti = ti;
-                if (!fptr(ml, closure))
-                    return 0;
-            }
-        }
-        ml = ml->next;
-    }
-    return 1;
-}
-
-static int sigs_eq(jl_value_t *a, jl_value_t *b, int useenv)
-{
-    if (jl_has_typevars(a) || jl_has_typevars(b)) {
-        return jl_types_equal_generic(a,b,useenv);
-    }
-    return jl_subtype(a, b, 0) && jl_subtype(b, a, 0);
-}
-
-/*
-  Method caches are divided into three parts: one for signatures where
-  the first argument is a singleton kind (Type{Foo}), one indexed by the
-  UID of the first argument's type in normal cases, and a fallback
-  table of everything else.
-
-  Note that the "primary key" is the type of the first *argument*, since
-  there tends to be lots of variation there. The type of the 0th argument
-  (the function) is always the same for most functions.
-*/
-static jl_typemap_entry_t *jl_typemap_assoc_by_type_(jl_typemap_entry_t *ml, jl_tupletype_t *types, int8_t inexact, jl_svec_t **penv)
-{
-    size_t n = jl_datatype_nfields(types);
-    while (ml != (void*)jl_nothing) {
-        size_t lensig = jl_datatype_nfields(ml->sig);
-        if (lensig == n || (ml->va && lensig <= n+1)) {
-            int resetenv = 0, ismatch;
-            if (ml->simplesig != (void*)jl_nothing &&
-                    !sig_match_by_type_simple(jl_svec_data(types->parameters), n,
-                                              ml->simplesig, jl_datatype_nfields(ml->simplesig), 0))
-                ismatch = 0;
-            else if (ml->isleafsig)
-                ismatch = sig_match_by_type_leaf(jl_svec_data(types->parameters),
-                                                 ml->sig, lensig);
-            else if (ml->issimplesig)
-                ismatch = sig_match_by_type_simple(jl_svec_data(types->parameters), n,
-                                                   ml->sig, lensig, ml->va);
-            else if (ml->tvars == jl_emptysvec)
-                ismatch = jl_tuple_subtype(jl_svec_data(types->parameters), n, ml->sig, 0);
-            else if (penv == NULL) {
-                ismatch = jl_type_match((jl_value_t*)types, (jl_value_t*)ml->sig) != (jl_value_t*)jl_false;
-            }
-            else {
-                // TODO: this is missing the actual subtype test,
-                // which works currently because types is typically a leaf tt,
-                // or inexact is set (which then does the subtype test)
-                // but this isn't entirely general
-                jl_value_t *ti = lookup_match((jl_value_t*)types, (jl_value_t*)ml->sig, penv, ml->tvars);
-                resetenv = 1;
-                ismatch = (ti != (jl_value_t*)jl_bottom_type);
-                if (ismatch) {
-                    // parametric methods only match if all typevars are matched by
-                    // non-typevars.
-                    size_t i, l;
-                    for (i = 0, l = jl_svec_len(*penv); i < l; i++) {
-                        if (jl_is_typevar(jl_svecref(*penv, i))) {
-                            if (inexact) {
-                                // "inexact" means the given type is compile-time,
-                                // where a failure to determine the value of a
-                                // static parameter is inconclusive.
-                                // this is issue #3182, see test/core.jl
-                                return NULL;
-                            }
-                            ismatch = 0;
-                            break;
-                        }
-                    }
-                    if (inexact) {
-                        // the compiler might attempt jl_get_specialization on e.g.
-                        // convert(::Type{Type{Int}}, ::DataType), which is concrete but might not
-                        // equal the run time type. in this case ti would be {Type{Type{Int}}, Type{Int}}
-                        // but tt would be {Type{Type{Int}}, DataType}.
-                        JL_GC_PUSH1(&ti);
-                        ismatch = jl_types_equal(ti, (jl_value_t*)types);
-                        JL_GC_POP();
-                        if (!ismatch)
-                            return NULL;
-                    }
-                }
-            }
-
-            if (ismatch) {
-                size_t i, l;
-                for (i = 0, l = jl_svec_len(ml->guardsigs); i < l; i++) {
-                    // see corresponding code in jl_typemap_assoc_exact
-                    if (jl_subtype((jl_value_t*)types, jl_svecref(ml->guardsigs, i), 0)) {
-                        ismatch = 0;
-                        break;
-                    }
-                }
-                if (ismatch)
-                    return ml;
-            }
-            if (resetenv)
-                *penv = jl_emptysvec;
-        }
-        ml = ml->next;
-    }
-    return NULL;
-}
-
-static jl_typemap_entry_t *jl_typemap_lookup_by_type_(jl_typemap_entry_t *ml, jl_tupletype_t *types, int8_t useenv)
-{
-    while (ml != (void*)jl_nothing) {
-        // TODO: more efficient
-        if (sigs_eq((jl_value_t*)types, (jl_value_t*)ml->sig, useenv)) {
-            return ml;
-        }
-        ml = ml->next;
-    }
-    return NULL;
-}
-
-
-// this is the general entry point for looking up a type in the cache
-// (as a subtype, or with typeseq)
-static jl_typemap_entry_t *jl_typemap_assoc_by_type(union jl_typemap_t ml_or_cache, jl_tupletype_t *types, jl_svec_t **penv,
-        int8_t subtype_inexact__sigseq_useenv, int8_t subtype, int8_t offs)
-{
-    jl_typemap_entry_t *ml;
-    if (jl_typeof(ml_or_cache.unknown) == (jl_value_t*)jl_typemap_level_type) {
-        jl_typemap_level_t *cache = ml_or_cache.node;
-        // called object is the primary key for constructors, otherwise first argument
-        if (jl_datatype_nfields(types) > offs) {
-            jl_value_t *ty = jl_tparam(types, offs);
-            if (cache->targ != (void*)jl_nothing && jl_is_type_type(ty)) {
-                jl_value_t *a0 = jl_tparam0(ty);
-                if (jl_is_datatype(a0)) {
-                    union jl_typemap_t ml = mtcache_hash_lookup(cache->targ, a0, 1, offs);
-                    if (ml.unknown != jl_nothing) {
-                        jl_typemap_entry_t *li = jl_typemap_assoc_by_type(ml, types, penv,
-                                subtype_inexact__sigseq_useenv, subtype, offs+1);
-                        if (li)
-                            return li;
-                    }
-                }
-            }
-            if (cache->arg1 != (void*)jl_nothing && jl_is_datatype(ty)) {
-                union jl_typemap_t ml = mtcache_hash_lookup(cache->arg1, ty, 0, offs);
-                if (ml.unknown != jl_nothing) {
-                    jl_typemap_entry_t *li = jl_typemap_assoc_by_type(ml, types, penv,
-                            subtype_inexact__sigseq_useenv, subtype, offs+1);
-                    if (li)
-                        return li;
-                }
-            }
-        }
-        ml = cache->linear;
-    }
-    else {
-        ml = ml_or_cache.leaf;
-    }
-    return subtype ?
-        jl_typemap_assoc_by_type_(ml, types, subtype_inexact__sigseq_useenv, penv) :
-        jl_typemap_lookup_by_type_(ml, types, subtype_inexact__sigseq_useenv);
-}
-
-static jl_lambda_info_t *jl_typemap_assoc_exact(union jl_typemap_t ml_or_cache, jl_value_t **args, size_t n, int8_t offs)
-{
-    // NOTE: This function is a huge performance hot spot!!
-    jl_typemap_entry_t *ml;
-    if (jl_typeof(ml_or_cache.unknown) == (jl_value_t*)jl_typemap_level_type) {
-        jl_typemap_level_t *cache = ml_or_cache.node;
-        if (n > offs) {
-            jl_value_t *a1 = args[offs];
-            jl_value_t *ty = (jl_value_t*)jl_typeof(a1);
-            assert(jl_is_datatype(ty));
-            if (ty == (jl_value_t*)jl_datatype_type && cache->targ != (void*)jl_nothing) {
-                ml_or_cache = mtcache_hash_lookup(cache->targ, a1, 1, offs);
-                jl_lambda_info_t *li = jl_typemap_assoc_exact(ml_or_cache, args, n, offs+1);
-                if (li)
-                    return li;
-            }
-            if (cache->arg1 != (void*)jl_nothing) {
-                ml_or_cache = mtcache_hash_lookup(cache->arg1, ty, 0, offs);
-                if (jl_typeof(ml_or_cache.unknown) == (jl_value_t*)jl_typemap_entry_type &&
-                        ml_or_cache.leaf->simplesig == (void*)jl_nothing && offs < 2 && n > 1) {
-                    jl_value_t *a0 = args[1-offs];
-                    jl_value_t *t0 = (jl_value_t*)jl_typeof(a0);
-                    if (ml_or_cache.leaf->next==(void*)jl_nothing && n==2 && jl_datatype_nfields(ml_or_cache.leaf->sig)==2 &&
-                        jl_tparam(ml_or_cache.leaf->sig, 1 - offs) == t0)
-                        return ml_or_cache.leaf->func.linfo;
-                    if (n==3) {
-                        // some manually-unrolled common special cases
-                        jl_value_t *a2 = args[2];
-                        if (!jl_is_tuple(a2)) {  // issue #6426
-                            jl_typemap_entry_t *mn = ml_or_cache.leaf;
-                            if (jl_datatype_nfields(mn->sig)==3 &&
-                                jl_tparam(mn->sig,1-offs)==t0 &&
-                                jl_tparam(mn->sig,2)==(jl_value_t*)jl_typeof(a2))
-                                return mn->func.linfo;
-                            mn = mn->next;
-                            if (mn!=(void*)jl_nothing && jl_datatype_nfields(mn->sig)==3 &&
-                                jl_tparam(mn->sig,1-offs)==t0 &&
-                                jl_tparam(mn->sig,2)==(jl_value_t*)jl_typeof(a2))
-                                return mn->func.linfo;
-                        }
-                    }
-                }
-                jl_lambda_info_t *li = jl_typemap_assoc_exact(ml_or_cache, args, n, offs+1);
-                if (li)
-                    return li;
-            }
-        }
-        ml = cache->linear;
-    }
-    else {
-        ml = ml_or_cache.leaf;
-    }
-    while (ml != (void*)jl_nothing) {
-        size_t lensig = jl_datatype_nfields(ml->sig);
-        if (lensig == n || (ml->va && lensig <= n+1)) {
-            int ismatch;
-            if (ml->simplesig != (void*)jl_nothing &&
-                    !sig_match_simple(args, n, jl_svec_data(ml->simplesig->parameters), 0,
-                        jl_datatype_nfields(ml->simplesig)))
-                ismatch = 0;
-            else if (ml->isleafsig)
-                ismatch = sig_match_leaf(args, jl_svec_data(ml->sig->parameters), n);
-            else if (ml->issimplesig)
-                ismatch = sig_match_simple(args, n, jl_svec_data(ml->sig->parameters), ml->va, lensig);
-            else
-                ismatch = jl_tuple_subtype(args, n, ml->sig, 1);
-
-            if (ismatch) {
-                size_t i, l;
-                for (i = 0, l = jl_svec_len(ml->guardsigs); i < l; i++) {
-                    // checking guard entries require a more
-                    // expensive subtype check, since guard entries added for ANY might be
-                    // abstract. this fixed issue #12967.
-                    if (jl_tuple_subtype(args, n, (jl_tupletype_t*)jl_svecref(ml->guardsigs, i), 1)) {
-                        break;
-                    }
-                }
-                if (i == l)
-                    return ml->func.linfo;
-            }
-        }
-        ml = ml->next;
-    }
-    return NULL;
-}
-
 
 // ----- LambdaInfo specialization instantiation ----- //
+
+JL_DLLEXPORT jl_method_t *jl_new_method_uninit(void);
+jl_value_t *jl_mk_builtin_func(const char *name, jl_fptr_t fptr)
+{
+    jl_sym_t *sname = jl_symbol(name);
+    jl_value_t *f = jl_new_generic_function_with_supertype(sname, jl_core_module, jl_builtin_type, 0);
+    jl_lambda_info_t *li = jl_new_lambda_info_uninit(jl_emptysvec);
+    li->fptr = fptr;
+    // TODO jb/functions: what should li->ast be?
+    li->code = (jl_array_t*)jl_an_empty_cell; jl_gc_wb(li, li->code);
+    li->def = jl_new_method_uninit();
+    li->def->name = sname;
+    li->def->lambda_template = li;
+    jl_methtable_t *mt = jl_gf_mtable(f);
+    jl_typemap_insert(&mt->cache, (jl_value_t*)mt, jl_anytuple_type, jl_emptysvec, NULL, jl_emptysvec, (jl_value_t*)li, 0, &lambda_cache, NULL);
+    return f;
+}
 
 JL_DLLEXPORT jl_lambda_info_t *jl_get_specialized(jl_method_t *m, jl_tupletype_t *types, jl_svec_t *sp);
 
@@ -810,366 +114,6 @@ jl_lambda_info_t *jl_get_unspecialized(jl_lambda_info_t *method)
         }
     }
     return def->lambda_template;
-}
-
-
-// ----- Method List Insertion Management ----- //
-
-static unsigned jl_typemap_list_count(jl_typemap_entry_t *ml)
-{
-    unsigned count = 0;
-    while (ml != (void*)jl_nothing) {
-        count++;
-        ml = ml->next;
-    }
-    return count;
-}
-
-static void jl_typemap_level_insert_(jl_typemap_level_t *cache, jl_typemap_entry_t *newrec, int8_t offs, const struct jl_typemap_info *tparams);
-static void jl_typemap_list_insert_sorted(jl_typemap_entry_t **pml, jl_value_t *parent,
-                                          jl_typemap_entry_t *newrec, const struct jl_typemap_info *tparams);
-
-static jl_typemap_level_t *jl_method_convert_list_to_cache(jl_typemap_entry_t *ml, jl_value_t *key, int8_t offs)
-{
-    jl_typemap_level_t *cache = jl_new_typemap_level();
-    cache->key = key;
-    jl_typemap_entry_t *next = NULL;
-    JL_GC_PUSH3(&cache, &next, &ml);
-    while (ml != (void*)jl_nothing) {
-        next = ml->next;
-        ml->next = (jl_typemap_entry_t*)jl_nothing;
-        jl_typemap_level_insert_(cache, ml, offs, 0);
-        ml = next;
-    }
-    JL_GC_POP();
-    return cache;
-}
-
-static void jl_typemap_list_insert_(jl_typemap_entry_t **pml, jl_value_t *parent,
-                                    jl_typemap_entry_t *newrec, const struct jl_typemap_info *tparams)
-{
-    if (*pml == (void*)jl_nothing || newrec->isleafsig) {
-        // insert at head of pml list
-        newrec->next = *pml;
-        jl_gc_wb(newrec, newrec->next);
-        *pml = newrec;
-        jl_gc_wb(parent, newrec);
-    }
-    else {
-        jl_typemap_list_insert_sorted(pml, parent, newrec, tparams);
-    }
-}
-
-static void jl_typemap_insert_generic(union jl_typemap_t *pml, jl_value_t *parent,
-                                     jl_typemap_entry_t *newrec, jl_value_t *key, int8_t offs,
-                                     const struct jl_typemap_info *tparams)
-{
-    if (jl_typeof(pml->unknown) == (jl_value_t*)jl_typemap_level_type) {
-        jl_typemap_level_insert_(pml->node, newrec, offs, tparams);
-        return;
-    }
-
-    unsigned count = jl_typemap_list_count(pml->leaf);
-    if (count > MAX_METHLIST_COUNT) {
-        pml->node = jl_method_convert_list_to_cache(pml->leaf, key, offs);
-        jl_gc_wb(parent, pml->node);
-        jl_typemap_level_insert_(pml->node, newrec, offs, tparams);
-        return;
-    }
-
-    jl_typemap_list_insert_(&pml->leaf, parent, newrec, tparams);
-}
-
-static int jl_typemap_array_insert_(jl_array_t **cache, jl_value_t *key, jl_typemap_entry_t *newrec,
-                                          jl_value_t *parent, int8_t tparam, int8_t offs,
-                                          const struct jl_typemap_info *tparams)
-{
-    union jl_typemap_t *pml = mtcache_hash_bp(cache, key, tparam, offs, (jl_value_t*)parent);
-    if (pml)
-        jl_typemap_insert_generic(pml, (jl_value_t*)*cache, newrec, key, offs+1, tparams);
-    return pml != NULL;
-}
-
-static void jl_typemap_level_insert_(jl_typemap_level_t *cache, jl_typemap_entry_t *newrec, int8_t offs,
-        const struct jl_typemap_info *tparams)
-{
-    if (jl_datatype_nfields(newrec->sig) > offs) {
-        jl_value_t *t1 = jl_tparam(newrec->sig, offs);
-        // if t1 != jl_typetype_type and the argument is Type{...}, this
-        // method has specializations for singleton kinds and we use
-        // the table indexed for that purpose.
-        if (t1 != (jl_value_t*)jl_typetype_type && jl_is_type_type(t1)) {
-            jl_value_t *a0 = jl_tparam0(t1);
-            if (jl_typemap_array_insert_(&cache->targ, a0, newrec, (jl_value_t*)cache, 1, offs, tparams))
-                return;
-        }
-        if (jl_typemap_array_insert_(&cache->arg1, t1, newrec, (jl_value_t*)cache, 0, offs, tparams))
-            return;
-    }
-    jl_typemap_list_insert_(&cache->linear, (jl_value_t*)cache, newrec, tparams);
-}
-
-static jl_typemap_entry_t *jl_typemap_insert(union jl_typemap_t *cache, jl_value_t *parent,
-                                             jl_tupletype_t *type, jl_svec_t *tvars,
-                                             jl_tupletype_t *simpletype, jl_svec_t *guardsigs,
-                                             jl_value_t *newvalue, int8_t offs,
-                                             const struct jl_typemap_info *tparams,
-                                             jl_value_t **overwritten)
-{
-    assert(jl_is_tuple_type(type));
-    if (!simpletype)
-        simpletype = (jl_tupletype_t*)jl_nothing;
-
-    jl_typemap_entry_t *ml = jl_typemap_assoc_by_type(*cache, type, NULL, 1, 0, offs);
-    if (ml) {
-        if (overwritten != NULL)
-            *overwritten = ml->func.value;
-        if (newvalue == NULL)  // don't overwrite with guard entries
-            return ml;
-        JL_SIGATOMIC_BEGIN();
-        ml->sig = type;
-        jl_gc_wb(ml, ml->sig);
-        ml->simplesig = simpletype;
-        jl_gc_wb(ml, ml->simplesig);
-        ml->tvars = tvars;
-        jl_gc_wb(ml, ml->tvars);
-        ml->va = jl_is_va_tuple(type);
-        // TODO: `l->func` or `l->func->roots` might need to be rooted
-        ml->func.value = newvalue;
-        if (newvalue)
-            jl_gc_wb(ml, newvalue);
-        JL_SIGATOMIC_END();
-        return ml;
-    }
-    if (overwritten != NULL)
-        *overwritten = NULL;
-
-    jl_typemap_entry_t *newrec = (jl_typemap_entry_t*)jl_gc_allocobj(sizeof(jl_typemap_entry_t));
-    jl_set_typeof(newrec, jl_typemap_entry_type);
-    newrec->sig = type;
-    newrec->simplesig = simpletype;
-    newrec->tvars = tvars;
-    newrec->func.value = newvalue;
-    newrec->guardsigs = guardsigs;
-    newrec->next = (jl_typemap_entry_t*)jl_nothing;
-    // compute the complexity of this type signature
-    newrec->va = jl_is_va_tuple(type);
-    newrec->issimplesig = (tvars == jl_emptysvec); // a TypeVar environment needs an complex matching test
-    newrec->isleafsig = newrec->issimplesig && !newrec->va; // entirely leaf types don't need to be sorted
-    JL_GC_PUSH1(&newrec);
-    size_t i, l;
-    for (i = 0, l = jl_datatype_nfields(type); i < l && newrec->issimplesig; i++) {
-        jl_value_t *decl = jl_field_type(type, i);
-        if (decl == (jl_value_t*)jl_datatype_type)
-            newrec->isleafsig = 0; // Type{} may have a higher priority than DataType
-        else if (jl_is_type_type(decl))
-            newrec->isleafsig = 0; // Type{} may need special processing to compute the match
-        else if (jl_is_vararg_type(decl))
-            newrec->isleafsig = 0; // makes iteration easier when the endpoints are the same
-        else if (decl == (jl_value_t*)jl_any_type)
-            newrec->isleafsig = 0; // Any needs to go in the general cache
-        else if (!jl_is_leaf_type(decl)) // anything else can go through the general subtyping test
-            newrec->isleafsig = newrec->issimplesig = 0;
-    }
-    jl_typemap_insert_generic(cache, parent, newrec, NULL, offs, tparams);
-    JL_GC_POP();
-    return newrec;
-}
-
-JL_DLLEXPORT int jl_args_morespecific(jl_value_t *a, jl_value_t *b)
-{
-    int msp = jl_type_morespecific(a,b);
-    int btv = jl_has_typevars(b);
-    if (btv) {
-        if (jl_type_match_morespecific(a,b) == (jl_value_t*)jl_false) {
-            if (jl_has_typevars(a))
-                return 0;
-            return msp;
-        }
-        if (jl_has_typevars(a)) {
-            type_match_invariance_mask = 0;
-            //int result = jl_type_match_morespecific(b,a) == (jl_value_t*)jl_false);
-            // this rule seems to work better:
-            int result = jl_type_match(b,a) == (jl_value_t*)jl_false;
-            type_match_invariance_mask = 1;
-            if (result)
-                return 1;
-        }
-        int nmsp = jl_type_morespecific(b,a);
-        if (nmsp == msp)
-            return 0;
-    }
-    if (jl_has_typevars((jl_value_t*)a)) {
-        int nmsp = jl_type_morespecific(b,a);
-        if (nmsp && msp)
-            return 1;
-        if (!btv && jl_types_equal(a,b))
-            return 1;
-        if (jl_type_match_morespecific(b,a) != (jl_value_t*)jl_false)
-            return 0;
-    }
-    return msp;
-}
-
-static int has_unions(jl_tupletype_t *type)
-{
-    int i;
-    for (i = 0; i < jl_nparams(type); i++) {
-        jl_value_t *t = jl_tparam(type, i);
-        if (jl_is_uniontype(t) ||
-            (jl_is_vararg_type(t) && jl_is_uniontype(jl_tparam0(t))))
-            return 1;
-    }
-    return 0;
-}
-
-static void jl_typemap_list_insert_sorted(jl_typemap_entry_t **pml, jl_value_t *parent,
-                                          jl_typemap_entry_t *newrec,
-                                          const struct jl_typemap_info *tparams)
-{
-    jl_typemap_entry_t *l, **pl;
-    pl = pml;
-    l = *pml;
-    jl_value_t *pa = parent;
-    while (l != (void*)jl_nothing) {
-        if (!l->isleafsig) {
-            if (jl_args_morespecific((jl_value_t*)newrec->sig, (jl_value_t*)l->sig))
-                break;
-        }
-        pl = &l->next;
-        pa = (jl_value_t*)l;
-        l = l->next;
-    }
-
-    JL_SIGATOMIC_BEGIN();
-    newrec->next = l;
-    jl_gc_wb(newrec, l);
-    *pl = newrec;
-    jl_gc_wb(pa, newrec);
-    // if this contains Union types, methods after it might actually be
-    // more specific than it. we need to re-sort them.
-    if (has_unions(newrec->sig)) {
-        jl_value_t *item_parent = (jl_value_t*)newrec;
-        jl_value_t *next_parent = 0;
-        jl_typemap_entry_t *item = newrec->next, *next;
-        jl_typemap_entry_t **pitem = &newrec->next, **pnext;
-        while (item != (void*)jl_nothing) {
-            pl = pml;
-            l = *pml;
-            pa = parent;
-            next = item->next;
-            pnext = &item->next;
-            next_parent = (jl_value_t*)item;
-            while (l != newrec->next) {
-                if (jl_args_morespecific((jl_value_t*)item->sig,
-                                         (jl_value_t*)l->sig)) {
-                    // reinsert item earlier in the list
-                    *pitem = next;
-                    jl_gc_wb(item_parent, next);
-                    item->next = l;
-                    jl_gc_wb(item, item->next);
-                    *pl = item;
-                    jl_gc_wb(pa, item);
-                    pnext = pitem;
-                    next_parent = item_parent;
-                    break;
-                }
-                pl = &l->next;
-                pa = (jl_value_t*)l;
-                l = l->next;
-            }
-            item = next;
-            pitem = pnext;
-            item_parent = next_parent;
-        }
-    }
-    JL_SIGATOMIC_END();
-    return;
-}
-
-// invalidate cached methods that overlap this definition
-static void invalidate_conflicting(union jl_typemap_t *pml, jl_value_t *type, jl_value_t *parent)
-{
-    jl_typemap_entry_t **pl;
-    if (jl_typeof(pml->unknown) == (jl_value_t*)jl_typemap_level_type) {
-        jl_typemap_level_t *cache = pml->node;
-        if (cache->arg1 != (void*)jl_nothing) {
-            for(int i=0; i < jl_array_len(cache->arg1); i++) {
-                union jl_typemap_t *pl = &((union jl_typemap_t*)jl_array_data(cache->arg1))[i];
-                if (pl->unknown && pl->unknown != jl_nothing) {
-                    invalidate_conflicting(pl, type, (jl_value_t*)cache->arg1);
-                }
-            }
-        }
-        if (cache->targ != (void*)jl_nothing) {
-            for(int i=0; i < jl_array_len(cache->targ); i++) {
-                union jl_typemap_t *pl = &((union jl_typemap_t*)jl_array_data(cache->targ))[i];
-                if (pl->unknown && pl->unknown != jl_nothing) {
-                    invalidate_conflicting(pl, type, (jl_value_t*)cache->targ);
-                }
-            }
-        }
-        pl = &cache->linear;
-        parent = (jl_value_t*)cache;
-    }
-    else {
-        pl = &pml->leaf;
-    }
-    jl_typemap_entry_t *l = *pl;
-    while (l != (void*)jl_nothing) {
-        if (jl_type_intersection(type, (jl_value_t*)l->sig) !=
-            (jl_value_t*)jl_bottom_type) {
-            *pl = l->next;
-            jl_gc_wb(parent, *pl);
-        }
-        else {
-            pl = &l->next;
-            parent = (jl_value_t*)l;
-        }
-        l = l->next;
-    }
-}
-
-
-/// ----- Insertion logic for special entries ----- ///
-
-JL_DLLEXPORT jl_method_t *jl_new_method_uninit(void);
-jl_value_t *jl_mk_builtin_func(const char *name, jl_fptr_t fptr)
-{
-    jl_sym_t *sname = jl_symbol(name);
-    jl_value_t *f = jl_new_generic_function_with_supertype(sname, jl_core_module, jl_builtin_type, 0);
-    jl_lambda_info_t *li = jl_new_lambda_info_uninit(jl_emptysvec);
-    li->fptr = fptr;
-    // TODO jb/functions: what should li->ast be?
-    li->code = (jl_array_t*)jl_an_empty_cell; jl_gc_wb(li, li->code);
-    li->def = jl_new_method_uninit();
-    li->def->name = sname;
-    li->def->lambda_template = li;
-    jl_methtable_t *mt = jl_gf_mtable(f);
-    jl_typemap_insert(&mt->cache, (jl_value_t*)mt, jl_anytuple_type, jl_emptysvec, NULL, jl_emptysvec, (jl_value_t*)li, 0, &lambda_cache, NULL);
-    return f;
-}
-
-JL_DLLEXPORT jl_typemap_entry_t *jl_tfunc_cache_insert(jl_method_t *m, jl_tupletype_t *type,
-                                                        jl_value_t *value, int8_t offs)
-{
-    return jl_typemap_insert(&m->tfunc, (jl_value_t*)m, type, jl_emptysvec, NULL, jl_emptysvec, value, offs, &tfunc_cache, NULL);
-}
-
-JL_DLLEXPORT jl_value_t *jl_tfunc_cache_lookup(jl_method_t *m, jl_tupletype_t *type, int8_t offs)
-{
-    jl_typemap_entry_t *sf = jl_typemap_assoc_by_type(m->tfunc, type, NULL, 1, 0, offs);
-    if (!sf)
-        return jl_nothing;
-    return sf->func.value;
-}
-
-JL_DLLEXPORT jl_value_t *jl_methtable_lookup(jl_methtable_t *mt, jl_tupletype_t *type)
-{
-    jl_typemap_entry_t *sf = jl_typemap_assoc_by_type(mt->defs, type, NULL, 1, 0, 0);
-    if (!sf)
-        return jl_nothing;
-    return sf->func.value;
 }
 
 /*
@@ -1673,6 +617,15 @@ static jl_lambda_info_t *jl_mt_assoc_by_type(jl_methtable_t *mt, jl_datatype_t *
     return nf;
 }
 
+void print_func_loc(JL_STREAM *s, jl_method_t *m)
+{
+    long lno = m->line;
+    if (lno > 0) {
+        char *fname = jl_symbol_name((jl_sym_t*)m->file);
+        jl_printf(s, " at %s:%ld", fname, lno);
+    }
+}
+
 /*
   warn about ambiguous method priorities
 
@@ -1779,6 +732,49 @@ static void method_overwrite(jl_typemap_entry_t *newentry, jl_method_t *oldvalue
         jl_printf(s, " in module %s", jl_symbol_name(newmod->name));
     print_func_loc(s, method);
     jl_printf(s, ".\n");
+}
+
+// invalidate cached methods that overlap this definition
+static void invalidate_conflicting(union jl_typemap_t *pml, jl_value_t *type, jl_value_t *parent)
+{
+    jl_typemap_entry_t **pl;
+    if (jl_typeof(pml->unknown) == (jl_value_t*)jl_typemap_level_type) {
+        jl_typemap_level_t *cache = pml->node;
+        if (cache->arg1 != (void*)jl_nothing) {
+            for(int i=0; i < jl_array_len(cache->arg1); i++) {
+                union jl_typemap_t *pl = &((union jl_typemap_t*)jl_array_data(cache->arg1))[i];
+                if (pl->unknown && pl->unknown != jl_nothing) {
+                    invalidate_conflicting(pl, type, (jl_value_t*)cache->arg1);
+                }
+            }
+        }
+        if (cache->targ != (void*)jl_nothing) {
+            for(int i=0; i < jl_array_len(cache->targ); i++) {
+                union jl_typemap_t *pl = &((union jl_typemap_t*)jl_array_data(cache->targ))[i];
+                if (pl->unknown && pl->unknown != jl_nothing) {
+                    invalidate_conflicting(pl, type, (jl_value_t*)cache->targ);
+                }
+            }
+        }
+        pl = &cache->linear;
+        parent = (jl_value_t*)cache;
+    }
+    else {
+        pl = &pml->leaf;
+    }
+    jl_typemap_entry_t *l = *pl;
+    while (l != (void*)jl_nothing) {
+        if (jl_type_intersection(type, (jl_value_t*)l->sig) !=
+            (jl_value_t*)jl_bottom_type) {
+            *pl = l->next;
+            jl_gc_wb(parent, *pl);
+        }
+        else {
+            pl = &l->next;
+            parent = (jl_value_t*)l;
+        }
+        l = l->next;
+    }
 }
 
 static void update_max_args(jl_methtable_t *mt, jl_tupletype_t *type)
@@ -2486,7 +1482,7 @@ jl_value_t *jl_gf_invoke(jl_tupletype_t *types0, jl_value_t **args, size_t nargs
         tt = arg_type_tuple(args, nargs);
         if (m->tvars != jl_emptysvec) {
             jl_value_t *ti =
-                lookup_match((jl_value_t*)tt, (jl_value_t*)m->sig, &tpenv, m->tvars);
+                jl_lookup_match((jl_value_t*)tt, (jl_value_t*)m->sig, &tpenv, m->tvars);
             assert(ti != (jl_value_t*)jl_bottom_type);
             (void)ti;
         }
@@ -2557,7 +1553,7 @@ JL_DLLEXPORT jl_svec_t *jl_match_method(jl_value_t *type, jl_value_t *sig,
     jl_svec_t *env = jl_emptysvec;
     jl_value_t *ti=NULL;
     JL_GC_PUSH2(&env, &ti);
-    ti = lookup_match(type, (jl_value_t*)sig, &env, tvars);
+    ti = jl_lookup_match(type, (jl_value_t*)sig, &env, tvars);
     jl_svec_t *result = jl_svec2(ti, env);
     JL_GC_POP();
     return result;
