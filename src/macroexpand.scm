@@ -168,32 +168,40 @@
   (if (symbol? e) e
       (cadr e)))
 
-(define (new-expansion-env-for x env)
-  (let ((globals (find-declared-vars-in-expansion x 'global)))
-    (receive
-     (pairs vnames) (separate pair? (vars-introduced-by x))
-     (let ((v (diff (delete-duplicates
-                     (append! (find-declared-vars-in-expansion x 'local)
-                              (find-assigned-vars-in-expansion x)
-                              vnames))
-                    globals)))
-       (append!
-        pairs
-        (filter (lambda (v) (not (assq (car v) env)))
-                (append!
-                 (pair-with-gensyms v)
-                 (map (lambda (v) (cons v v))
-                      (diff (keywords-introduced-by x) globals))))
-        env)))))
+(define (new-expansion-env-for x env (outermost #f))
+  (let ((introduced (pattern-expand1 vars-introduced-by-patterns x)))
+    (if (or (atom? x)
+            (and (not outermost)
+                 (not (and (pair? introduced) (eq? (car introduced) 'varlist)))))
+        env
+        (let ((globals (find-declared-vars-in-expansion x 'global))
+              (vlist (if (and (pair? introduced) (eq? (car introduced) 'varlist))
+                         (cdr introduced)
+                         '())))
+          (receive
+           (pairs vnames) (separate pair? vlist)
+           (let ((v (diff (delete-duplicates
+                           (append! (find-declared-vars-in-expansion x 'local)
+                                    (find-assigned-vars-in-expansion x)
+                                    vnames))
+                          globals)))
+             (append!
+              pairs
+              (filter (lambda (v) (not (assq (car v) env)))
+                      (append!
+                       (pair-with-gensyms v)
+                       (map (lambda (v) (cons v v))
+                            (diff (keywords-introduced-by x) globals))))
+              env)))))))
 
-(define (resolve-expansion-vars-with-new-env x env m inarg)
+(define (resolve-expansion-vars-with-new-env x env m inarg (outermost #f))
   (resolve-expansion-vars-
    x
    (if (and (pair? x) (eq? (car x) 'let))
        ;; let is strange in that it needs both old and new envs within
        ;; the same expression
        env
-       (new-expansion-env-for x env))
+       (new-expansion-env-for x env outermost))
    m inarg))
 
 (define (resolve-expansion-vars- e env m inarg)
@@ -358,12 +366,6 @@
                                (find-assigned-vars-in-expansion x #f))
                              e)))))
 
-(define (vars-introduced-by e)
-  (let ((v (pattern-expand1 vars-introduced-by-patterns e)))
-    (if (and (pair? v) (eq? (car v) 'varlist))
-        (cdr v)
-        '())))
-
 (define (keywords-introduced-by e)
   (let ((v (pattern-expand1 keywords-introduced-by-patterns e)))
     (if (and (pair? v) (eq? (car v) 'varlist))
@@ -374,7 +376,7 @@
   ;; expand binding form patterns
   ;; keep track of environment, rename locals to gensyms
   ;; and wrap globals in (getfield module var) for macro's home module
-  (resolve-expansion-vars-with-new-env e '() m #f))
+  (resolve-expansion-vars-with-new-env e '() m #f #t))
 
 (define (find-symbolic-labels e)
   (let ((defs (table))
