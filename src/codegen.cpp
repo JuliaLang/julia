@@ -5698,11 +5698,7 @@ extern "C" void jl_init_codegen(void)
     cl::ParseEnvironmentOptions("Julia", "JULIA_LLVM_ARGS");
 #endif
 
-#if defined(_CPU_PPC_) || defined(_CPU_PPC64_)
-    imaging_mode = true; // LLVM seems to JIT bad TOC tables for the optimizations we attempt in non-imaging_mode
-#else
     imaging_mode = jl_generating_output();
-#endif
     jl_init_debuginfo();
     jl_init_runtime_ccall();
 
