@@ -377,7 +377,7 @@ static int jl_typemap_array_visitor(jl_array_t *a, jl_typemap_visitor_fptr fptr,
     jl_value_t **data = (jl_value_t**)jl_array_data(a);
     for(i=0; i < l; i++) {
         if (data[i] != NULL)
-            if (!jl_typemap_visitor((union jl_typemap_t)data[i], fptr, closure))
+            if (!jl_typemap_visitor(((union jl_typemap_t*)data)[i], fptr, closure))
                 return 0;
     }
     return 1;
@@ -431,7 +431,7 @@ static int jl_typemap_intersection_array_visitor(jl_array_t *a, jl_value_t *ty, 
     size_t i, l = jl_array_len(a);
     jl_value_t **data = (jl_value_t**)jl_array_data(a);
     for (i = 0; i < l; i++) {
-        union jl_typemap_t ml = (union jl_typemap_t)data[i];
+        union jl_typemap_t ml = ((union jl_typemap_t*)data)[i];
         if (ml.unknown != NULL && ml.unknown != jl_nothing) {
             jl_value_t *t;
             if (jl_typeof(ml.unknown) == (jl_value_t*)jl_typemap_level_type) {
