@@ -201,7 +201,7 @@ function repmat(a::AbstractVector, m::Int)
 end
 
 # Generalized repmat
-function repeat{T}(A::Array{T};
+function repeat{T}(A::AbstractArray{T};
                    inner::Array{Int} = ones(Int, ndims(A)),
                    outer::Array{Int} = ones(Int, ndims(A)))
     ndims_in = ndims(A)

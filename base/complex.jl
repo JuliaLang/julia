@@ -792,7 +792,7 @@ big{T<:AbstractFloat,N}(A::AbstractArray{Complex{T},N}) = convert(AbstractArray{
 
 promote_array_type{S<:Union{Complex, Real}, AT<:AbstractFloat}(F, ::Type{S}, ::Type{Complex{AT}}) = Complex{AT}
 
-function complex{S<:Real,T<:Real}(A::Array{S}, B::Array{T})
+function complex{S<:Real,T<:Real}(A::AbstractArray{S}, B::AbstractArray{T})
     if size(A) != size(B); throw(DimensionMismatch()); end
     F = similar(A, typeof(complex(zero(S),zero(T))))
     for (iF, iA, iB) in zip(eachindex(F), eachindex(A), eachindex(B))
@@ -801,7 +801,7 @@ function complex{S<:Real,T<:Real}(A::Array{S}, B::Array{T})
     return F
 end
 
-function complex{T<:Real}(A::Real, B::Array{T})
+function complex{T<:Real}(A::Real, B::AbstractArray{T})
     F = similar(B, typeof(complex(A,zero(T))))
     for (iF, iB) in zip(eachindex(F), eachindex(B))
         @inbounds F[iF] = complex(A, B[iB])
@@ -809,7 +809,7 @@ function complex{T<:Real}(A::Real, B::Array{T})
     return F
 end
 
-function complex{T<:Real}(A::Array{T}, B::Real)
+function complex{T<:Real}(A::AbstractArray{T}, B::Real)
     F = similar(A, typeof(complex(zero(T),B)))
     for (iF, iA) in zip(eachindex(F), eachindex(A))
         @inbounds F[iF] = complex(A[iA], B)
