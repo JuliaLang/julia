@@ -1177,10 +1177,18 @@ JL_DLLEXPORT jl_value_t *jl_methtable_lookup(jl_methtable_t *mt, jl_tupletype_t 
   "def" is the original method definition of which this is an instance;
   can be equal to "li->def" if not applicable.
 */
-void jl_type_infer(jl_lambda_info_t *li)
+void jl_type_infer(jl_lambda_info_t *li, int force)
 {
 #ifdef ENABLE_INFERENCE
-    if (jl_typeinf_func != NULL && (li->def == NULL || li->def->module != jl_gf_mtable(jl_typeinf_func)->module)) {
+    jl_module_t *mod = NULL;
+    if (li->def != NULL)
+        mod = li->def->module;
+    static int inInference = 0;
+    int lastIn = inInference;
+    inInference = 1;
+    if (jl_typeinf_func != NULL && (force ||
+        (mod != jl_gf_mtable(jl_typeinf_func)->module &&
+        (mod != jl_core_module || !lastIn)))) { // avoid any potential recursion in calling jl_typeinf_func on itself
         JL_LOCK(&codegen_lock); // Might GC
         assert(li->inInference == 0);
         li->inInference = 1;
@@ -1196,7 +1204,70 @@ void jl_type_infer(jl_lambda_info_t *li)
         assert(li->def || li->inInference == 0); // if this is toplevel expr, make sure inference finished
         JL_UNLOCK(&codegen_lock);
     }
+    inInference = lastIn;
 #endif
+}
+
+static int get_method_unspec_list(jl_typemap_entry_t *def, void *closure)
+{
+    jl_array_t *spec = def->func.method->specializations;
+    if (spec == NULL)
+        return 1;
+    size_t i, l;
+    for (i = 0, l = jl_array_len(spec); i < l; i++) {
+        jl_value_t *li = jl_cellref(spec, i);
+        if (jl_is_lambda_info(li) && !((jl_lambda_info_t*)li)->inferred)
+            jl_cell_1d_push(closure, li);
+    }
+    return 1;
+}
+
+static void jl_reset_mt_caches(jl_module_t *m, jl_array_t *unspec)
+{
+    // removes all method caches
+    size_t i;
+    void **table = m->bindings.table;
+    for(i=1; i < m->bindings.size; i+=2) {
+        if (table[i] != HT_NOTFOUND) {
+            jl_binding_t *b = (jl_binding_t*)table[i];
+            if (b->owner == m && b->value && b->constp) {
+                if (jl_is_datatype(b->value)) {
+                    jl_typename_t *tn = ((jl_datatype_t*)b->value)->name;
+                    if (tn->module == m && tn->name == b->name) {
+                        jl_methtable_t *mt = tn->mt;
+                        if (mt != NULL && (jl_value_t*)mt != jl_nothing) {
+                            if (mt->defs.unknown != jl_nothing) // make sure not to reset builtin functions
+                                mt->cache.unknown = jl_nothing;
+                            jl_typemap_visitor(mt->defs, get_method_unspec_list, (void*)unspec);
+                        }
+                    }
+                }
+                else if (jl_is_module(b->value)) {
+                    jl_module_t *child = (jl_module_t*)b->value;
+                    if (child != m && child->parent == m && child->name == b->name) {
+                        // this is the original/primary binding for the submodule
+                        jl_reset_mt_caches((jl_module_t*)b->value, unspec);
+                    }
+                }
+            }
+        }
+    }
+}
+
+jl_function_t *jl_typeinf_func=NULL;
+
+JL_DLLEXPORT void jl_set_typeinf_func(jl_value_t *f)
+{
+    jl_typeinf_func = (jl_function_t*)f;
+    // give type inference a chance to see all of these
+    jl_array_t *unspec = jl_alloc_cell_1d(0);
+    JL_GC_PUSH1(&unspec);
+    jl_reset_mt_caches(jl_main_module, unspec);
+    size_t i, l;
+    for (i = 0, l = jl_array_len(unspec); i < l; i++) {
+        jl_type_infer((jl_lambda_info_t*)jl_cellref(unspec, i), 1);
+    }
+    JL_GC_POP();
 }
 
 static int very_general_type(jl_value_t *t)
@@ -1569,7 +1640,7 @@ static jl_lambda_info_t *cache_method(jl_methtable_t *mt, union jl_typemap_t *ca
         jl_gc_wb(definition, definition->specializations);
         if (jl_options.compile_enabled != JL_OPTIONS_COMPILE_OFF) // don't bother with typeinf if compile is off
             if (jl_symbol_name(definition->name)[0] != '@')  // don't bother with typeinf on macros
-                jl_type_infer(newmeth);
+                jl_type_infer(newmeth, 0);
     }
     JL_GC_POP();
     JL_UNLOCK(&codegen_lock);
@@ -2096,7 +2167,7 @@ static void _compile_all_deq(jl_array_t *found)
 
         if (!linfo->inferred) {
             // force this function to be recompiled
-            jl_type_infer(linfo);
+            jl_type_infer(linfo, 1);
             linfo->functionObjectsDecls.functionObject = NULL;
             linfo->functionObjectsDecls.specFunctionObject = NULL;
             linfo->functionObjectsDecls.cFunctionList = NULL;
