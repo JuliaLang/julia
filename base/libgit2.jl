@@ -388,9 +388,13 @@ function merge!(repo::GitRepo;
             else # try to get tracking remote branch for the head
                 if !isattached(repo)
                     throw(GitError(Error.Merge, Error.ERROR,
-                                   "There is no tracking information for the current branch."))
+                                   "Repository HEAD is detached. Remote tracking branch cannot be used."))
                 end
                 with(upstream(head_ref)) do tr_brn_ref
+                    if tr_brn_ref === nothing
+                        throw(GitError(Error.Merge, Error.ERROR,
+                                   "There is no tracking information for the current branch."))
+                    end
                     [GitAnnotated(repo, tr_brn_ref)]
                 end
             end

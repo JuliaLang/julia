@@ -78,6 +78,7 @@ mktempdir() do dir
     commit_msg2 = randstring(10)
     commit_oid1 = LibGit2.Oid()
     commit_oid2 = LibGit2.Oid()
+    commit_oid3 = LibGit2.Oid()
     test_branch = "test_branch"
     tag1 = "tag1"
     tag2 = "tag2"
@@ -209,7 +210,7 @@ mktempdir() do dir
                 println(repo_file, randstring(10))
                 flush(repo_file)
                 LibGit2.add!(repo, test_file)
-                LibGit2.commit(repo, randstring(10); author=test_sig, committer=test_sig)
+                commit_oid3 = LibGit2.commit(repo, randstring(10); author=test_sig, committer=test_sig)
 
                 println(repo_file, commit_msg2)
                 flush(repo_file)
@@ -350,6 +351,18 @@ mktempdir() do dir
             head_oid = LibGit2.head_oid(repo)
             LibGit2.reset!(repo, head_oid, LibGit2.Consts.RESET_HARD)
             @test isfile(joinpath(test_repo, test_file))
+
+            # Detach HEAD - no merge
+            LibGit2.checkout!(repo, string(commit_oid3))
+            @test_throws LibGit2.Error.GitError LibGit2.merge!(repo, fastforward=true)
+
+            # Switch to a branch without remote - no merge
+            LibGit2.branch!(repo, test_branch)
+            @test_throws LibGit2.Error.GitError LibGit2.merge!(repo, fastforward=true)
+
+            # Switch to the master branch
+            LibGit2.branch!(repo, "master")
+
         finally
             finalize(repo)
         end

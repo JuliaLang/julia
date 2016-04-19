@@ -361,7 +361,11 @@ function update(branch::AbstractString)
         try
             Cache.prefetch(pkg, Read.url(pkg), [a.sha1 for (v,a)=avail[pkg]])
         catch err
-            warn("Package $pkg: unable to update cache\n$(err.msg)")
+            if isa(err, PkgError)
+                warn("Package $pkg: unable to update cache\n$(err.msg)")
+            else
+                rethrow(err)
+            end
         end
     end
     instd = Read.installed(avail)
@@ -370,6 +374,7 @@ function update(branch::AbstractString)
         Cache.prefetch(pkg, Read.url(pkg), [a.sha1 for (v,a) in avail[pkg]])
     end
     fixed = Read.fixed(avail,instd)
+    defered_errors = CapturedException[]
     for (pkg,ver) in fixed
         ispath(pkg,".git") || continue
         with(GitRepo, pkg) do repo
@@ -383,8 +388,12 @@ function update(branch::AbstractString)
                         LibGit2.fetch(repo)
                         LibGit2.merge!(repo, fastforward=true)
                     catch err
-                        show(err)
-                        print('\n')
+                        push!(defered_errors, CapturedException(err, catch_backtrace()))
+                        if isa(err, LibGit2.GitError)
+                            warn("Package $pkg cannot be updated. Error: $(err.msg) Class: $(err.class)")
+                        else
+                            print_with_color(:red, "Package $pkg cannot be updated. Error:$err")
+                        end
                         success = false
                     end
                     if success
@@ -400,7 +409,11 @@ function update(branch::AbstractString)
             try
                 Cache.prefetch(pkg, Read.url(pkg), [a.sha1 for (v,a)=avail[pkg]])
             catch err
-                warn("Package $pkg: unable to update cache\n$(err.msg)")
+                if isa(err, PkgError)
+                    warn("Package $pkg: unable to update cache\n$(err.msg)")
+                else
+                    rethrow(err)
+                end
             end
         end
     end
@@ -408,6 +421,15 @@ function update(branch::AbstractString)
     resolve(Reqs.parse("REQUIRE"), avail, instd, fixed, free)
     # Don't use instd here since it may have changed
     updatehook(sort!(collect(keys(installed()))))
+
+    # Print defered errors
+    if length(defered_errors) > 0
+        print_with_color(:red, STDERR, "Update finished with errors:\n")
+        for de in defered_errors
+            showerror(STDERR, de)
+            println(STDERR, "\n")
+        end
+    end
 end
 
 
