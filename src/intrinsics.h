@@ -84,7 +84,6 @@
     ADD_I(checked_udiv_int, 2) \
     ADD_I(checked_srem_int, 2) \
     ADD_I(checked_urem_int, 2) \
-    ADD_I(nan_dom_err, 2) \
     /*  functions */ \
     ADD_I(abs_float, 1) \
     ADD_I(copysign_float, 2) \
