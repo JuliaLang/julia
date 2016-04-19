@@ -463,24 +463,6 @@ function test_UInt_indexing(::Type{TestAbstractArray})
     end
 end
 
-function test_vcat_depwarn(::Type{TestAbstractArray})
-    if (Base.JLOptions()).depwarn > 1
-        @test_throws ErrorException [1:10]
-        @test_throws ErrorException [[1, 2], [3, 4]]
-        @test_throws ErrorException [[1, 2], [3, 4], [5, 6]]
-    else
-        olderr = STDERR
-        try
-            rd, wr = redirect_stderr()
-            @test [1:10] == [1:10...]
-            @test [[1, 2], [3, 4]] == [1, 2, 3, 4]
-            @test [[1, 2], [3, 4], [5, 6]] == [1, 2, 3, 4, 5, 6]
-        finally
-            redirect_stderr(olderr)
-        end
-    end
-end
-
 # Issue 13315
 function test_13315(::Type{TestAbstractArray})
     U = UInt(1):UInt(2)
@@ -511,7 +493,6 @@ test_cat(TestAbstractArray)
 test_ind2sub(TestAbstractArray)
 test_map(TestAbstractArray)
 test_UInt_indexing(TestAbstractArray)
-test_vcat_depwarn(TestAbstractArray)
 test_13315(TestAbstractArray)
 test_checksquare()
 
