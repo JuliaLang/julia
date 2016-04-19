@@ -94,7 +94,7 @@ end
 
 The test condition couldn't be evaluated due to an exception, or
 it evaluated to something other than a `Bool`.
-In the case of `@test_try_broken` it is used to alert for an
+In the case of `@test_broken` it is used to alert for an
 unexpected `Pass` `Result`.
 """
 type Error <: Result
@@ -178,13 +178,13 @@ macro test(ex)
 end
 
 """
-    @test_try_broken ex
+    @test_broken ex
 
 For use to indicate a test that should pass but currently consistently
 fails.
-Tests that the expression `ex` evaluates to `false`.
-Returns a `Broken` `Result` if it does, an `Error` `Result` if it is
-`true`, and an `Error` `Result` if it could not be evaluated.
+Tests that the expression `ex` evaluates to `false` or causes an exception.
+Returns a `Broken` `Result` if it does, and an `Error` `Result` if it is
+`true`.
 """
 macro test_broken(ex)
     orig_ex = Expr(:quote,ex)
@@ -194,7 +194,7 @@ macro test_broken(ex)
 end
 
 """
-    @test_skip_broken ex
+    @test_skip ex
 
 For use to indicate a test that should pass but currently intermittently
 fails.
