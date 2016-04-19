@@ -53,7 +53,8 @@ end
 function _reshape(p::Tuple{AbstractArray,LinearSlow}, dims::Dims)
     parent = p[1]
     strds = front(size_strides(parent))
-    mi = map(SignedMultiplicativeInverse, strds)
+    strds1 = map(s->max(1,s), strds)  # for resizing empty arrays
+    mi = map(SignedMultiplicativeInverse, strds1)
     ReshapedArray(parent, dims, reverse(mi))
 end
 
