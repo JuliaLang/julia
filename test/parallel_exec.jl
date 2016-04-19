@@ -888,3 +888,25 @@ end
 v15406 = remotecall_wait(() -> 1, id_other)
 fetch(v15406)
 remotecall_wait(t -> fetch(t), id_other, v15406)
+
+# Test various forms of remotecall* invocations
+
+@everywhere f_args(v1, v2=0; kw1=0, kw2=0) = v1+v2+kw1+kw2
+
+function test_f_args(result, args...; kwargs...)
+    @test fetch(remotecall(args...; kwargs...)) == result
+    @test fetch(remotecall_wait(args...; kwargs...)) == result
+    @test remotecall_fetch(args...; kwargs...) == result
+
+    # A visual test - remote_do should NOT print any errors
+    !isa(args[2], WorkerPool) && Base.remote_do(args...; kwargs...)
+end
+
+for tid in [id_other, id_me, Base.default_worker_pool()]
+    test_f_args(1, f_args, tid, 1)
+    test_f_args(3, f_args, tid, 1, 2)
+    test_f_args(5, f_args, tid, 1; kw1=4)
+    test_f_args(13, f_args, tid, 1; kw1=4, kw2=8)
+    test_f_args(15, f_args, tid, 1, 2; kw1=4, kw2=8)
+end
+
