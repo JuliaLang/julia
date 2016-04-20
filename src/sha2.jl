@@ -1,4 +1,4 @@
-function transform!{T<:SHA2_CTX_SMALL}(context::T)
+function transform!{T<:Union{SHA2_224_CTX,SHA2_256_CTX}}(context::T)
     buffer = reinterpret(eltype(context.state), context.buffer)
     # Initialize registers with the previous intermediate values (our state)
     a = context.state[1]
@@ -65,7 +65,7 @@ function transform!{T<:SHA2_CTX_SMALL}(context::T)
 end
 
 
-function transform!(context::SHA2_CTX_BIG)
+function transform!(context::Union{SHA2_384_CTX,SHA2_512_CTX})
     buffer = reinterpret(eltype(context.state), context.buffer)
     # Initialize registers with the prev. intermediate value
     a = context.state[1]

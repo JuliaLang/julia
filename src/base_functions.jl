@@ -17,6 +17,8 @@ R(b,x)          = (x >> b)
 S32(b,x)        = rrot(b,x,32)
 # 64-bit Rotate-right (used in SHA-384 and SHA-512):
 S64(b,x)        = rrot(b,x,64)
+# 64-bit Rotate-left (used in SHA3)
+L64(b,x)        = lrot(b,x,64)
 
 # Two of six logical functions used in SHA-256, SHA-384, and SHA-512:
 Ch(x,y,z)  = ((x & y) $ (~x & z))

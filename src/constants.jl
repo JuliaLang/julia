@@ -33,13 +33,13 @@ const K256 = UInt32[
 ]
 
 # Initial hash value H for SHA-224:
-const SHA224_initial_hash_value = UInt32[
+const SHA2_224_initial_hash_value = UInt32[
     0xc1059ed8, 0x367cd507, 0x3070dd17, 0xf70e5939,
     0xffc00b31, 0x68581511, 0x64f98fa7, 0xbefa4fa4
 ]
 
 
-const SHA256_initial_hash_value = UInt32[
+const SHA2_256_initial_hash_value = UInt32[
     0x6a09e667, 0xbb67ae85, 0x3c6ef372, 0xa54ff53a,
     0x510e527f, 0x9b05688c, 0x1f83d9ab, 0x5be0cd19
 ]
@@ -89,7 +89,7 @@ const K512 = UInt64[
 ]
 
 # Initial hash value H for SHA-384
-const SHA384_initial_hash_value = UInt64[
+const SHA2_384_initial_hash_value = UInt64[
     0xcbbb9d5dc1059ed8, 0x629a292a367cd507,
     0x9159015a3070dd17, 0x152fecd8f70e5939,
     0x67332667ffc00b31, 0x8eb44a8768581511,
@@ -97,9 +97,33 @@ const SHA384_initial_hash_value = UInt64[
 ]
 
 # Initial hash value H for SHA-512
-const SHA512_initial_hash_value = UInt64[
+const SHA2_512_initial_hash_value = UInt64[
     0x6a09e667f3bcc908, 0xbb67ae8584caa73b,
     0x3c6ef372fe94f82b, 0xa54ff53a5f1d36f1,
     0x510e527fade682d1, 0x9b05688c2b3e6c1f,
     0x1f83d9abfb41bd6b, 0x5be0cd19137e2179
+]
+
+# Round constants for SHA3 rounds
+const SHA3_ROUND_CONSTS = UInt64[
+    0x0000000000000001, 0x0000000000008082, 0x800000000000808a,
+    0x8000000080008000, 0x000000000000808b, 0x0000000080000001,
+    0x8000000080008081, 0x8000000000008009, 0x000000000000008a,
+    0x0000000000000088, 0x0000000080008009, 0x000000008000000a,
+    0x000000008000808b, 0x800000000000008b, 0x8000000000008089,
+    0x8000000000008003, 0x8000000000008002, 0x8000000000000080,
+    0x000000000000800a, 0x800000008000000a, 0x8000000080008081,
+    0x8000000000008080, 0x0000000080000001, 0x8000000080008008
+]
+
+# Rotation constants for SHA3 rounds
+const SHA3_ROTC = UInt64[
+    1,  3,  6,  10, 15, 21, 28, 36, 45, 55, 2,  14,
+    27, 41, 56, 8,  25, 43, 62, 18, 39, 61, 20, 44
+]
+
+# Permutation indices for SHA3 rounds (+1'ed so as to work with julia's 1-based indexing)
+const SHA3_PILN = UInt64[
+    11, 8,  12, 18, 19, 4, 6,  17, 9,  22, 25, 5,
+    16, 24, 20, 14, 13, 3, 21, 15, 23, 10,  7,  2
 ]

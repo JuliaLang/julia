@@ -21,15 +21,25 @@ function do_tests(filepath)
     gc()
     @time sha1(bytes)
 
-    print("SHA-256: ")
+    print("SHA2-256: ")
     sha256(bytes)
     gc()
     @time sha256(bytes)
 
-    print("SHA-512: ")
+    print("SHA2-512: ")
     sha512(bytes)
     gc()
     @time sha512(bytes)
+
+    print("SHA3-256: ")
+    sha3_256(bytes)
+    gc()
+    @time sha3_256(bytes)
+
+    print("SHA3-512: ")
+    sha3_512(bytes)
+    gc()
+    @time sha3_512(bytes)
 end
 
 do_tests(ARGS[1])
