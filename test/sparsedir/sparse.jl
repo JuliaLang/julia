@@ -63,7 +63,7 @@ for i = 1 : 10
 end
 
 # sparse ref
-a116 = reshape(1:16, 4, 4)
+a116 = copy(reshape(1:16, 4, 4))
 s116 = sparse(a116)
 p = [4, 1, 2, 3, 2]
 @test full(s116[p,:]) == a116[p,:]
@@ -650,7 +650,7 @@ let A = sprand(5,5,0.5,(n)->rand(Float64,n)), ACPY = copy(A)
     @test A == ACPY
     C = reinterpret(Int64, A, (25, 1))
     @test A == ACPY
-    D = reinterpret(Int64, B)
+    D = reinterpret(Int64, copy(B))
     @test C == D
 end
 

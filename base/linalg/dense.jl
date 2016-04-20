@@ -150,7 +150,7 @@ function trace{T}(A::Matrix{T})
     t
 end
 
-function kron{T,S}(a::Matrix{T}, b::Matrix{S})
+function kron{T,S}(a::AbstractMatrix{T}, b::AbstractMatrix{S})
     R = Array(promote_type(T,S), size(a,1)*size(b,1), size(a,2)*size(b,2))
     m = 1
     for j = 1:size(a,2), l = 1:size(b,2), i = 1:size(a,1)
@@ -163,11 +163,11 @@ function kron{T,S}(a::Matrix{T}, b::Matrix{S})
     R
 end
 
-kron(a::Number, b::Union{Number, Vector, Matrix}) = a * b
-kron(a::Union{Vector, Matrix}, b::Number) = a * b
-kron(a::Vector, b::Vector)=vec(kron(reshape(a,length(a),1),reshape(b,length(b),1)))
-kron(a::Matrix, b::Vector)=kron(a,reshape(b,length(b),1))
-kron(a::Vector, b::Matrix)=kron(reshape(a,length(a),1),b)
+kron(a::Number, b::Union{Number, AbstractVecOrMat}) = a * b
+kron(a::AbstractVecOrMat, b::Number) = a * b
+kron(a::AbstractVector, b::AbstractVector)=vec(kron(reshape(a,length(a),1),reshape(b,length(b),1)))
+kron(a::AbstractMatrix, b::AbstractVector)=kron(a,reshape(b,length(b),1))
+kron(a::AbstractVector, b::AbstractMatrix)=kron(reshape(a,length(a),1),b)
 
 ^(A::Matrix, p::Integer) = p < 0 ? inv(A^-p) : Base.power_by_squaring(A,p)
 

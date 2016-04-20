@@ -178,6 +178,40 @@ end  # IteratorsMD
 
 using .IteratorsMD
 
+# Bounds-checking specialization
+# Specializing for a fixed number of arguments provides a ~25%
+# improvement over the general definitions in abstractarray.jl
+for N = 1:5
+    args = [:($(symbol(:I, d))) for d = 1:N]
+    targs = [:($(symbol(:I, d))::Union{Colon,Number,AbstractVector}) for d = 1:N]  # prevent co-opting the CartesianIndex version
+    exs = [:(checkbounds(Bool, size(A, $d), $(args[d]))) for d = 1:N]
+    cbexpr = exs[1]
+    for d = 2:N
+        cbexpr = :($(exs[d]) & $cbexpr)
+    end
+    @eval begin
+        function checkbounds(A::AbstractArray, $(args...))
+            @_inline_meta
+            _internal_checkbounds(A, $(args...))
+        end
+        function _internal_checkbounds{T}(A::AbstractArray{T,$N}, $(targs...))
+            @_inline_meta
+            ($cbexpr) || throw_boundserror(A, ($(args...),))
+        end
+    end
+end
+
+# Bounds-checking with CartesianIndex
+@inline function checkbounds(::Type{Bool}, ::Tuple{}, I1::CartesianIndex)
+    checkbounds(Bool, (), I1.I...)
+end
+@inline function checkbounds(::Type{Bool}, sz::Tuple{}, I1::CartesianIndex, I...)
+    checkbounds(Bool, (), I1.I..., I...)
+end
+@inline function checkbounds(::Type{Bool}, sz::Dims, I1::CartesianIndex, I...)
+    checkbounds(Bool, sz, I1.I..., I...)
+end
+
 # Recursively compute the lengths of a list of indices, without dropping scalars
 # These need to be inlined for more than 3 indexes
 index_lengths(A::AbstractArray, I::Colon) = (length(A),)

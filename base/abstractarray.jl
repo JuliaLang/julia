@@ -96,12 +96,13 @@ linearindexing(::LinearIndexing, ::LinearIndexing) = LinearSlow()
     Expr(:block, Expr(:meta, :inline), ex)
 end
 
+# check along a single dimension
 checkbounds(::Type{Bool}, sz::Integer, i) = throw(ArgumentError("unable to check bounds for indices of type $(typeof(i))"))
 checkbounds(::Type{Bool}, sz::Integer, i::Real) = 1 <= i <= sz
 checkbounds(::Type{Bool}, sz::Integer, ::Colon) = true
 function checkbounds(::Type{Bool}, sz::Integer, r::Range)
     @_propagate_inbounds_meta
-    isempty(r) || (checkbounds(Bool, sz, minimum(r)) && checkbounds(Bool, sz, maximum(r)))
+    isempty(r) | (checkbounds(Bool, sz, first(r)) & checkbounds(Bool, sz, last(r)))
 end
 checkbounds(::Type{Bool}, sz::Integer, I::AbstractArray{Bool}) = length(I) == sz
 function checkbounds(::Type{Bool}, sz::Integer, I::AbstractArray)
@@ -112,6 +113,21 @@ function checkbounds(::Type{Bool}, sz::Integer, I::AbstractArray)
     end
     b
 end
+
+# check all dimensions
+function checkbounds{N,T}(::Type{Bool}, sz::NTuple{N,Integer}, I1::T, I...)
+    @_inline_meta
+    checkbounds(Bool, sz[1], I1) & checkbounds(Bool, tail(sz), I...)
+end
+checkbounds{T<:Integer}(::Type{Bool}, sz::Tuple{T}, I1) = (@_inline_meta; checkbounds(Bool, sz[1], I1))
+checkbounds{N}(::Type{Bool}, sz::NTuple{N,Integer}, I1) = (@_inline_meta; checkbounds(Bool, prod(sz), I1))
+checkbounds{N}(::Type{Bool}, sz::NTuple{N,Integer}) = (@_inline_meta; checkbounds(Bool, sz, 1))  # for a[]
+
+checkbounds(::Type{Bool}, sz::Tuple{}, i) = (@_inline_meta; checkbounds(Bool, 1, i))
+function checkbounds(::Type{Bool}, sz::Tuple{}, i, I...)
+    @_inline_meta
+    checkbounds(Bool, 1, i) & checkbounds(Bool, (), I...)
+end
 # Prevent allocation of a GC frame by hiding the BoundsError in a noinline function
 throw_boundserror(A, I) = (@_noinline_meta; throw(BoundsError(A, I)))
 
@@ -119,41 +135,16 @@ throw_boundserror(A, I) = (@_noinline_meta; throw(BoundsError(A, I)))
 checkbounds(A::AbstractArray, I...) = (@_inline_meta; _internal_checkbounds(A, I...))
 # The internal function is named _internal_checkbounds since there had been a
 # _checkbounds previously that meant something different.
+_internal_checkbounds(A::AbstractArray) = true
 _internal_checkbounds(A::AbstractArray, I::AbstractArray{Bool}) = size(A) == size(I) || throw_boundserror(A, I)
 _internal_checkbounds(A::AbstractArray, I::AbstractVector{Bool}) = length(A) == length(I) || throw_boundserror(A, I)
-_internal_checkbounds(A::AbstractArray, I) = (@_inline_meta; checkbounds(Bool, length(A), I) || throw_boundserror(A, I))
-function _internal_checkbounds(A::AbstractMatrix, I, J)
+function _internal_checkbounds(A::AbstractArray, I1, I...)
+    # having I1 seems important for good codegen
     @_inline_meta
-    (checkbounds(Bool, size(A,1), I) && checkbounds(Bool, size(A,2), J)) ||
-        throw_boundserror(A, (I, J))
-end
-function _internal_checkbounds(A::AbstractArray, I, J)
-    @_inline_meta
-    (checkbounds(Bool, size(A,1), I) && checkbounds(Bool, trailingsize(A,Val{2}), J)) ||
-        throw_boundserror(A, (I, J))
-end
-@generated function _internal_checkbounds(A::AbstractArray, I...)
-    meta = Expr(:meta, :inline)
-    N = length(I)
-    Isplat = [:(I[$d]) for d=1:N]
-    error = :(throw_boundserror(A, tuple($(Isplat...))))
-    args = Expr[:(checkbounds(Bool, size(A,$dim), I[$dim]) || $error) for dim in 1:N-1]
-    push!(args, :(checkbounds(Bool, trailingsize(A,Val{$N}), I[$N]) || $error))
-    Expr(:block, meta, args...)
+    checkbounds(Bool, size(A), I1, I...) || throw_boundserror(A, (I1, I...))
 end
 
-## Bounds-checking without errors ##
-function checkbounds(::Type{Bool}, sz::Dims, I...)
-    n = length(I)
-    for dim = 1:(n-1)
-        checkbounds(Bool, sz[dim], I[dim]) || return false
-    end
-    s = sz[n]
-    for i = n+1:length(sz)
-        s *= sz[i]
-    end
-    checkbounds(Bool, s, I[n])
-end
+# See also specializations in multidimensional
 
 ## Constructors ##
 
@@ -166,14 +157,6 @@ similar(   a::AbstractArray, T::Type, dims::Integer...)  = similar(a, T, dims)
 # similar creates an Array by default
 similar(   a::AbstractArray, T::Type, dims::DimsInteger) = Array(T, dims...)
 similar(   a::AbstractArray, T::Type, dims::Dims)        = Array(T, dims)
-
-function reshape(a::AbstractArray, dims::Dims)
-    if prod(dims) != length(a)
-        throw(ArgumentError("dimensions must be consistent with array size (expected $(length(a)), got $(prod(dims)))"))
-    end
-    copy!(similar(a, dims), a)
-end
-reshape(a::AbstractArray, dims::Int...) = reshape(a, dims)
 
 ## from general iterable to any array
 

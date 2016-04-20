@@ -236,7 +236,11 @@ length(S::SharedArray) = prod(S.dims)
 size(S::SharedArray) = S.dims
 linearindexing{S<:SharedArray}(::Type{S}) = LinearFast()
 
-function reshape{T,N}(a::SharedArray{T}, dims::NTuple{N,Int})
+reshape(a::SharedVector, dims::Tuple{Int}) = reshape_sa(a, dims)
+reshape(a::SharedArray,  dims::Tuple{Int}) = reshape_sa(a, dims)
+reshape{N}(a::SharedArray, dims::NTuple{N,Int}) = reshape_sa(a, dims)
+
+function reshape_sa{T,N}(a::SharedArray{T}, dims::NTuple{N,Int})
     (length(a) != prod(dims)) && throw(DimensionMismatch("dimensions must be consistent with array size"))
     refs = Array(Future, length(a.pids))
     for (i, p) in enumerate(a.pids)
