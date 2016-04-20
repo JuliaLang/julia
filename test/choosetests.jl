@@ -33,7 +33,7 @@ function choosetests(choices = [])
         "markdown", "base64", "serialize", "misc", "threads",
         "enums", "cmdlineargs", "i18n", "workspace", "libdl", "int",
         "checked", "intset", "floatfuncs", "compile", "parallel", "inline",
-        "boundscheck", "error"
+        "boundscheck", "error", "interactiveutil"
     ]
 
     if Base.USE_GPL_LIBS
@@ -79,7 +79,7 @@ function choosetests(choices = [])
         prepend!(tests, linalgtests)
     end
 
-    net_required_for = ["socket", "parallel"]
+    net_required_for = ["socket", "parallel", "interactiveutil"]
     net_on = true
     try
         getipaddr()

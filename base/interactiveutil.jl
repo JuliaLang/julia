@@ -428,21 +428,24 @@ end
 # file downloading
 
 downloadcmd = nothing
-@unix_only function download(url::AbstractString, filename::AbstractString)
+@unix_only function download(url::AbstractString, filename::AbstractString; silent::Bool=false)
     global downloadcmd
     if downloadcmd === nothing
         for checkcmd in (:curl, :wget, :fetch)
-            if success(pipeline(`which $checkcmd`, DevNull))
+            if success(`which $checkcmd`)
                 downloadcmd = checkcmd
                 break
             end
         end
     end
     if downloadcmd == :wget
-        run(`wget -O $filename $url`)
+        flags = silent ? `-q` : ``
+        run(`wget $flags -O $filename $url`)
     elseif downloadcmd == :curl
-        run(`curl -o $filename -L $url`)
+        flags = silent ? `--silent` : ``
+        run(`curl $flags -o $filename -L $url`)
     elseif downloadcmd == :fetch
+        # Fetch has no progress indicator
         run(`fetch -f $filename $url`)
     else
         error("no download agent available; install curl, wget, or fetch")
@@ -450,7 +453,7 @@ downloadcmd = nothing
     filename
 end
 
-@windows_only function download(url::AbstractString, filename::AbstractString)
+@windows_only function download(url::AbstractString, filename::AbstractString; silent::Bool=false)
     res = ccall((:URLDownloadToFileW,:urlmon),stdcall,Cuint,
                 (Ptr{Void},Cwstring,Cwstring,Cuint,Ptr{Void}),C_NULL,url,filename,0,C_NULL)
     if res != 0
@@ -459,11 +462,27 @@ end
     filename
 end
 
-function download(url::AbstractString)
-    filename = tempname()
-    download(url, filename)
+function download(url::AbstractString; silent::Bool=false)
+    localfile = tempname()
+    download(url, localfile, silent=silent)
 end
 
+@doc """
+    download(url, [localfile]; silent=false)
+
+Download a file from the given url and save it to localfile, or to a temporary file if
+localfile is ommited.
+Passing `silent=true` will suppress progress indicators.
+Note that this function relies on the availability of external tools such as `curl`, `wget`
+or `fetch` to download the file and is provided for convenience. For production use or
+situations in which more options are needed, please use a package that provides the desired
+functionality instead.
+
+# Platform-Specific details
+
+On windows, a full URL must be provided, including the protocol prefix (e.g "http://" for
+HTTP)
+""" download
 # workspace management
 
 function workspace()
