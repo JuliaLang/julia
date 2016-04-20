@@ -31,7 +31,6 @@ end
 type InferenceState
     atypes #::Type       # type sig
     sp::SimpleVector     # static parameters
-    gensym_types::Array{Any,1} # types of the GenSym's in this function
     label_counter::Int   # index of the current highest label for this function
     fedbackvars::Dict{GenSym, Bool}
     mod::Module
@@ -136,8 +135,7 @@ type InferenceState
         end
 
         gensym_uses = find_gensym_uses(linfo.code)
-        gensym_types = linfo.gensymtypes
-        gensym_init = copy(gensym_types)
+        gensym_init = copy(linfo.gensymtypes)
 
         # exception handlers
         cur_hand = ()
@@ -149,7 +147,7 @@ type InferenceState
 
         inmodule = isdefined(linfo, :def) ? linfo.def.module : current_module() # toplevel thunks are inferred in the current module
         frame = new(
-            atypes, sp, gensym_types, nl, Dict{GenSym, Bool}(), inmodule, 0, false,
+            atypes, sp, nl, Dict{GenSym, Bool}(), inmodule, 0, false,
             linfo, linfo, la, s, Union{}, W, n,
             cur_hand, handler_at, n_handlers,
             gensym_uses, gensym_init,
@@ -1165,7 +1163,7 @@ function abstract_eval_global(M::Module, s::Symbol)
 end
 
 function abstract_eval_gensym(s::GenSym, sv::InferenceState)
-    typ = sv.gensym_types[s.id+1]
+    typ = sv.linfo.gensymtypes[s.id+1]
     if typ === NF
         return Bottom
     end
@@ -1375,8 +1373,8 @@ function find_gensym_uses(e::ANY, uses, line)
 end
 
 function newvar!(sv::InferenceState, typ)
-    id = length(sv.gensym_types)
-    push!(sv.gensym_types, typ)
+    id = length(sv.linfo.gensymtypes)
+    push!(sv.linfo.gensymtypes, typ)
     return GenSym(id)
 end
 
@@ -1654,9 +1652,9 @@ function typeinf_frame(frame)
                 changes = changes::StateUpdate
                 id = (changes.var::GenSym).id + 1
                 new = changes.vtype.typ
-                old = frame.gensym_types[id]
+                old = frame.linfo.gensymtypes[id]
                 if old===NF || !(new ⊑ old)
-                    frame.gensym_types[id] = tmerge(old, new)
+                    frame.linfo.gensymtypes[id] = tmerge(old, new)
                     for r in frame.gensym_uses[id]
                         if !is(s[r], ()) # s[r] === () => unreached statement
                             push!(W, r)
@@ -1696,7 +1694,7 @@ function typeinf_frame(frame)
                         # See issue #3821 (using !typeseq instead of !subtype),
                         # and issue #7810.
                         id = var.id+1
-                        vt = frame.gensym_types[id]
+                        vt = frame.linfo.gensymtypes[id]
                         ot = frame.gensym_init[id]
                         if ot===NF || !(vt⊑ot && ot⊑vt)
                             frame.gensym_init[id] = vt
@@ -1786,7 +1784,7 @@ function typeinf_frame(frame)
             frame.cur_hand = ()
             frame.handler_at = Any[ () for i=1:n ]
             frame.n_handlers = 0
-            frame.gensym_types[:] = frame.gensym_init
+            frame.linfo.gensymtypes[:] = frame.gensym_init
             @goto restart_typeinf
         else
             # if a static_typeof was never reached,
@@ -1858,12 +1856,13 @@ function finish(me::InferenceState)
     @assert me.inworkq
 
     # annotate fulltree with type information
-    for i = 1:length(me.gensym_types)
-        if me.gensym_types[i] === NF
-            me.gensym_types[i] = Union{}
+    gt = me.linfo.gensymtypes
+    for i = 1:length(gt)
+        if gt[i] === NF
+            gt[i] = Union{}
         end
     end
-    type_annotate!(me.linfo, me.stmt_types, me, me.bestguess, me.nargs)
+    type_annotate!(me.linfo, me.stmt_types, me, me.nargs)
 
     # make sure (meta pure) is stripped from full tree
     ispure = popmeta!(me.linfo.code, :pure)[1]
@@ -1966,7 +1965,7 @@ function expr_cannot_delete(ex::Expr)
 end
 
 # annotate types of all symbols in AST
-function type_annotate!(linfo::LambdaInfo, states::Array{Any,1}, sv::ANY, rettype::ANY, nargs)
+function type_annotate!(linfo::LambdaInfo, states::Array{Any,1}, sv::ANY, nargs)
     nslots = length(states[1])
     for i = 1:nslots
         linfo.slottypes[i] = Bottom
@@ -2601,11 +2600,11 @@ function inlineable(f::ANY, ft::ANY, e::Expr, atypes::Vector{Any}, sv::Inference
     # re-number the GenSyms and copy their type-info to the new ast
     gensym_types = linfo.gensymtypes
     if !isempty(gensym_types)
-        incr = length(sv.gensym_types)
+        incr = length(sv.linfo.gensymtypes)
         if incr != 0
             body = gensym_increment(body, incr)
         end
-        append!(sv.gensym_types, gensym_types)
+        append!(sv.linfo.gensymtypes, gensym_types)
     end
 
     # ok, substitute argument expressions for argument names in the body
@@ -3350,7 +3349,7 @@ function replace_getfield!(linfo::LambdaInfo, e::Expr, tupname, vals, field_name
                 val = val::GenSym
                 typ = exprtype(val, sv)
                 if a.typ ⊑ typ && !(typ ⊑ a.typ)
-                    sv.gensym_types[val.id+1] = a.typ
+                    sv.linfo.gensymtypes[val.id+1] = a.typ
                 end
             end
             e.args[i] = val

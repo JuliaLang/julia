@@ -445,17 +445,7 @@ static jl_value_t *eval(jl_value_t *e, jl_value_t **locals, jl_lambda_info_t *la
 
 jl_value_t *jl_toplevel_eval_body(jl_array_t *stmts)
 {
-    ssize_t ngensym = 0;
-    size_t i, l = jl_array_len(stmts);
-    for (i = 0; i < l; i++) {
-        ssize_t maxid = jl_max_jlgensym_in(jl_cellref(stmts, i))+1;
-        if (maxid > ngensym)
-            ngensym = maxid;
-    }
-    jl_value_t **locals = NULL;
-    assert(ngensym == 0);
-    jl_value_t *ret = eval_body(stmts, locals, NULL, 0, 1);
-    return ret;
+    return eval_body(stmts, NULL, NULL, 0, 1);
 }
 
 static jl_value_t *eval_body(jl_array_t *stmts, jl_value_t **locals, jl_lambda_info_t *lam,

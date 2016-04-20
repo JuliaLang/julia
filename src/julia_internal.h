@@ -156,8 +156,6 @@ void *jl_install_thread_signal_handler(void);
 
 jl_fptr_t jl_get_builtin_fptr(jl_value_t *b);
 
-ssize_t jl_max_jlgensym_in(jl_value_t *v);
-
 extern uv_loop_t *jl_io_loop;
 
 JL_DLLEXPORT void jl_uv_associate_julia_struct(uv_handle_t *handle,
