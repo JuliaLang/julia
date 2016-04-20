@@ -426,11 +426,7 @@ for (t,v) in ((Complex{Int32},:ci32),(Complex{Int64},:ci64),
             s
         end
         function $fname1(s)
-            verbose && println("B(Any): ",s)
-            @test s == $v
-            @test s === a
-            global c = s
-            s
+            @assert false
         end
         function $fname(s::$t)
             verbose && println("B: ",s)
@@ -442,13 +438,7 @@ for (t,v) in ((Complex{Int32},:ci32),(Complex{Int64},:ci64),
             s
         end
         function $fname(s)
-            verbose && println("B(Any): ",s)
-            @test s == $v
-            if($(t).mutable)
-                @test !(s === a)
-            end
-            global c = s
-            s
+            @assert false
         end
         b = ccall(cfunction($fname1,Ref{$t},(Ref{$t},)),Ref{$t},(Ref{$t},),a)
         verbose && println("C: ",b)
@@ -483,7 +473,14 @@ for (t,v) in ((Complex{Int32},:ci32),(Complex{Int64},:ci64),
         if ($(t).mutable)
             @test !(b === a)
         end
-        #b = ccall(cfunction($fname,Any,(Ref{Any},)),Any,(Ref{Any},),$v) # unimplemented
+        b = ccall(cfunction($fname,Any,(Ref{Any},)),Any,(Ref{Any},),$v)
+        @test b == $v
+        @test b === c
+        if ($(t).mutable)
+            @test !(b === a)
+        end
+        @test_throws TypeError ccall(cfunction($fname,Ref{AbstractString},(Ref{Any},)),Any,(Ref{Any},),$v)
+        @test_throws TypeError ccall(cfunction($fname,AbstractString,(Ref{Any},)),Any,(Ref{Any},),$v)
     end
 end
 

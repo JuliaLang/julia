@@ -71,6 +71,7 @@ jl_value_t *jl_interrupt_exception;
 jl_datatype_t *jl_boundserror_type;
 jl_value_t *jl_memory_exception;
 jl_value_t *jl_readonlymemory_exception;
+union jl_typemap_t jl_cfunction_list;
 
 jl_sym_t *call_sym;    jl_sym_t *dots_sym;
 jl_sym_t *module_sym;  jl_sym_t *slot_sym;
@@ -376,7 +377,6 @@ JL_DLLEXPORT jl_lambda_info_t *jl_new_lambda_info_uninit(jl_svec_t *sparam_syms)
     li->jlcall_api = 0;
     li->functionObjectsDecls.functionObject = NULL;
     li->functionObjectsDecls.specFunctionObject = NULL;
-    li->functionObjectsDecls.cFunctionList = NULL;
     li->functionID = 0;
     li->specFunctionID = 0;
     li->specTypes = NULL;

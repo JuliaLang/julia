@@ -1464,7 +1464,6 @@ static jl_value_t *jl_deserialize_value_(ios_t *s, jl_value_t *vtag, jl_value_t 
         if (li->def) jl_gc_wb(li, li->def);
         li->fptr = NULL;
         li->functionObjectsDecls.functionObject = NULL;
-        li->functionObjectsDecls.cFunctionList = NULL;
         li->functionObjectsDecls.specFunctionObject = NULL;
         li->inInference = 0;
         li->inCompile = 0;
