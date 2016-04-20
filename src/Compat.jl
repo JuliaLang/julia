@@ -985,6 +985,7 @@ macro functorize(f)
     if VERSION >= v"0.5.0-dev+3701"
         f === :scalarmax       ? :(Base.scalarmax) :
         f === :scalarmin       ? :(Base.scalarmin) :
+        f === :centralizedabs2fun ? :(typeof(Base.centralizedabs2fun(0)).name.primary) :
         f
     else
         f = f === :identity        ? :(Base.IdFun()) :
@@ -998,6 +999,7 @@ macro functorize(f)
             f === :*               ? :(Base.MulFun()) :
             f === :scalarmax       ? :(Base.MaxFun()) :
             f === :scalarmin       ? :(Base.MinFun()) :
+            f === :centralizedabs2fun ? :(Base.CentralizedAbs2Fun) :
             f
         if VERSION >= v"0.4.0-dev+4902"
             f = f === :<           ? :(Base.LessFun()) :

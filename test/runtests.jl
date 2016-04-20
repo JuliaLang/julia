@@ -1086,3 +1086,8 @@ end
 let a = rand(1:10, 10)
     @test mapreduce(identity, dot, a) == mapreduce(identity, @functorize(dot), a)
 end
+@test isa(@functorize(centralizedabs2fun)(1), @functorize(centralizedabs2fun))
+@test isa(@functorize(centralizedabs2fun)(1.0), @functorize(centralizedabs2fun))
+let a = rand(1:10, 10)
+    @eval @test mapreduce(x -> abs2(x - 1), +, $(a)) == mapreduce(@functorize(centralizedabs2fun)(1), +, $(a))
+end
