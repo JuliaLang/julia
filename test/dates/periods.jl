@@ -92,6 +92,42 @@ y2 = Dates.Year(2)
 @test y2 > y
 @test y != y2
 
+# Period type comparison
+types = [Millisecond, Second, Minute, Hour, Day, Week, Month, Year]
+for i = eachindex(types)
+    # Test against Period to ensure it does not give a true/false result.
+    # Period should always throw an error for comparison against it's subtypes
+    # since it is neither greater nor less than any of it's leaf types.
+    @test_throws MethodError isless(types[i], Period)
+    @test_throws MethodError isless(Period, types[i])
+    for j = eachindex(types)
+        if i == j
+            @test !isless(types[j], types[i])
+            @test !isless(types[i], types[j])
+        elseif i > j
+            @test isless(types[j], types[i])
+            @test !isless(types[i], types[j])
+        else
+            @test isless(types[i], types[j])
+            @test !isless(types[j], types[i])
+        end
+    end
+end
+
+# Test periodisless with differing Types
+# Should work the same as above
+@test Dates.periodisless(Day(1), Year(1))
+@test Dates.periodisless(Second(1), Hour(1))
+# Should compare types regardless of values
+# Should not simplify periods
+@test Dates.periodisless(Millisecond(900000), Second(2))
+@test Dates.periodisless(Day(15), Week(1))
+@test !Dates.periodisless(Week(1), Day(15))
+# Compares values of periods of the same type
+@test Dates.periodisless(Minute(10), Minute(90))
+@test !Dates.periodisless(Month(12), Month(4))
+@test !Dates.periodisless(Month(4), Month(4))
+
 @test Dates.Year(Int8(1)) == y
 @test Dates.Year(UInt8(1)) == y
 @test Dates.Year(Int16(1)) == y

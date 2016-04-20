@@ -1,5 +1,5 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
-
+import Base: isless
 #Period types
 value(x::Period) = x.value
 
@@ -11,8 +11,6 @@ for period in (:Year, :Month, :Week, :Day, :Hour, :Minute, :Second, :Millisecond
     accessor_str = lowercase(period_str)
     # Convenience method for show()
     @eval _units(x::$period) = " " * $accessor_str * (abs(value(x)) == 1 ? "" : "s")
-    # periodisless
-    @eval periodisless(x::$period,y::$period) = value(x) < value(y)
     # AbstractString parsing (mainly for IO code)
     @eval $period(x::AbstractString) = $period(Base.parse(Int64,x))
     # Period accessors
@@ -105,27 +103,15 @@ Base.abs{T<:Period}(a::T) = T(abs(value(a)))
 
 # Like Base.steprem in range.jl, but returns the correct type for Periods
 Base.steprem(start::Period,stop::Period,step::Period) = (stop-start) % value(step)
+periodisless{P<:Period}(a::P, b::P) = isless(value(a), value(b))
+periodisless{A<:Period, B<:Period}(::A, ::B) = isless(A, B)
 
-periodisless(::Period,::Year)        = true
-periodisless(::Period,::Month)       = true
-periodisless(::Year,::Month)         = false
-periodisless(::Period,::Week)        = true
-periodisless(::Year,::Week)          = false
-periodisless(::Month,::Week)         = false
-periodisless(::Period,::Day)         = true
-periodisless(::Year,::Day)           = false
-periodisless(::Month,::Day)          = false
-periodisless(::Week,::Day)           = false
-periodisless(::Period,::Hour)        = false
-periodisless(::Minute,::Hour)        = true
-periodisless(::Second,::Hour)        = true
-periodisless(::Millisecond,::Hour)   = true
-periodisless(::Period,::Minute)      = false
-periodisless(::Second,::Minute)      = true
-periodisless(::Millisecond,::Minute) = true
-periodisless(::Period,::Second)      = false
-periodisless(::Millisecond,::Second) = true
-periodisless(::Period,::Millisecond) = false
+# Compare relative sizes of period types. Note that we only want to allow comparing
+# concrete types.
+periods = (Year, Month, Week, Day, Hour, Minute, Second, Millisecond)
+for (i, A) in enumerate(periods), (j, B) in enumerate(periods)
+    @eval isless(::Type{$A}, ::Type{$B}) = $(i > j)
+end
 
 # return (next coarser period, conversion factor):
 coarserperiod{P<:Period}(::Type{P}) = (P,1)
