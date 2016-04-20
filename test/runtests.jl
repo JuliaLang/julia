@@ -994,3 +994,13 @@ cd(dirwalk) do
 
 end
 rm(dirwalk, recursive=true)
+
+# RemoteChannel/Future
+r = remotecall(sin, 1, pi/3)
+@compat foo(r::Future) = 7
+@test foo(r) == 7
+if VERSION < v"0.4.0"
+    @compat rc = RemoteChannel(1,2,3)
+else
+    @compat rc = RemoteChannel{Channel{Any}}(1,2,3)
+end
