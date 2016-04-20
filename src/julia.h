@@ -161,10 +161,13 @@ STATIC_INLINE int jl_array_ndimwords(uint32_t ndims)
 
 typedef struct _jl_datatype_t jl_tupletype_t;
 
-// TupleMap is an implicitly defined type
+// TypeMap is an implicitly defined type
 // that can consist of any of the following nodes:
-//   typedef TupleMap Union{TupleMapLevel, TupleMapEntry, Void}
-// it consists of roughly tree-shaped nodes, when possible because `isleaftype(key)`
+//   typedef TypeMap Union{TypeMapLevel, TypeMapEntry, Void}
+// it forms a roughly tree-shaped structure, consisting of nodes of TypeMapLevels
+// which split the tree when possible, for example based on the key into the tuple type at `offs`
+// when key is a leaftype, (but only when the tree has enough entries for this to be
+// more efficient than storing them sorted linearly)
 // otherwise the leaf entries are stored sorted, linearly
 union jl_typemap_t {
     struct _jl_typemap_level_t *node;
@@ -373,7 +376,7 @@ typedef struct _jl_module_t {
     uint32_t counter;
 } jl_module_t;
 
-// one TupleType-to-Value entry
+// one Type-to-Value entry
 typedef struct _jl_typemap_entry_t {
     JL_DATA_TYPE
     struct _jl_typemap_entry_t *next; // invasive linked list
@@ -383,16 +386,16 @@ typedef struct _jl_typemap_entry_t {
     jl_svec_t *guardsigs;
     union {
         jl_value_t *value;
-        jl_lambda_info_t *linfo;
+        jl_lambda_info_t *linfo; // [nullable] for guard entries
         jl_method_t *method;
-    } func; // [nullable]
+    } func;
     // memoized properties of sig:
     int8_t isleafsig; // isleaftype(sig) & !any(isType, sig) : unsorted and very fast
     int8_t issimplesig; // all(isleaftype | isAny | isType | isVararg, sig) : sorted and fast
     int8_t va; // isVararg(sig)
 } jl_typemap_entry_t;
 
-// one level in a TupleMap tree
+// one level in a TypeMap tree
 // indexed by key if it is a sublevel in an array
 typedef struct _jl_typemap_level_t {
     JL_DATA_TYPE
@@ -402,7 +405,7 @@ typedef struct _jl_typemap_level_t {
     jl_value_t *key; // [nullable]
 } jl_typemap_level_t;
 
-// contains the TupleMap for one Type
+// contains the TypeMap for one Type
 typedef struct _jl_methtable_t {
     JL_DATA_TYPE
     jl_sym_t *name;

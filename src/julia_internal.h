@@ -271,15 +271,11 @@ int32_t jl_get_llvm_gv(jl_value_t *p);
 void jl_idtable_rehash(jl_array_t **pa, size_t newsz);
 
 JL_DLLEXPORT jl_methtable_t *jl_new_method_table(jl_sym_t *name, jl_module_t *module);
-jl_typemap_level_t *jl_new_typemap_level(void);
 jl_lambda_info_t *jl_get_specialization1(jl_tupletype_t *types);
 jl_function_t *jl_module_get_initializer(jl_module_t *m);
 uint32_t jl_module_next_counter(jl_module_t *m);
 void jl_fptr_to_llvm(jl_fptr_t fptr, jl_lambda_info_t *lam, int specsig);
 jl_tupletype_t *arg_type_tuple(jl_value_t **args, size_t nargs);
-
-typedef int (*jl_typemap_visitor_fptr)(jl_typemap_entry_t *l, void *closure);
-int jl_typemap_visitor(union jl_typemap_t a, jl_typemap_visitor_fptr fptr, void *closure);
 
 jl_value_t *skip_meta(jl_array_t *body);
 int has_meta(jl_array_t *body, jl_sym_t *sym);
@@ -372,7 +368,7 @@ JL_DLLEXPORT int jl_fs_rename(const char *src_path, const char *dst_path);
 extern JL_DLLEXPORT jl_value_t *jl_segv_exception;
 #endif
 
-// Runtime intrinsics //
+// -- Runtime intrinsics -- //
 const char *jl_intrinsic_name(int f);
 
 JL_DLLEXPORT jl_value_t *jl_reinterpret(jl_value_t *ty, jl_value_t *v);
@@ -469,8 +465,12 @@ int jl_array_store_unboxed(jl_value_t *el_type);
 int jl_array_isdefined(jl_value_t **args, int nargs);
 JL_DLLEXPORT jl_value_t *(jl_array_data_owner)(jl_array_t *a);
 
+// -- synchronization utilities -- //
+
 extern jl_mutex_t typecache_lock;
 extern jl_mutex_t codegen_lock;
+
+// -- gc.c -- //
 
 #if defined(__APPLE__) && defined(JULIA_ENABLE_THREADING)
 void jl_mach_gc_begin(void);
@@ -526,6 +526,55 @@ STATIC_INLINE void jl_free_aligned(void *p)
 
 #define JL_SMALL_BYTE_ALIGNMENT 16
 #define JL_CACHE_BYTE_ALIGNMENT 64
+
+
+// -- typemap.c -- //
+
+STATIC_INLINE int is_kind(jl_value_t *v)
+{
+    return (v==(jl_value_t*)jl_uniontype_type ||
+            v==(jl_value_t*)jl_datatype_type ||
+            v==(jl_value_t*)jl_typector_type);
+}
+
+// a descriptor of a jl_typemap_t that gets
+// passed around as self-documentation of the parameters of the type
+struct jl_typemap_info {
+    int8_t unsorted; // whether this should be unsorted
+    jl_datatype_t **jl_contains; // the type that is being put in this
+};
+
+jl_typemap_entry_t *jl_typemap_insert(union jl_typemap_t *cache, jl_value_t *parent,
+                                      jl_tupletype_t *type, jl_svec_t *tvars,
+                                      jl_tupletype_t *simpletype, jl_svec_t *guardsigs,
+                                      jl_value_t *newvalue, int8_t offs,
+                                      const struct jl_typemap_info *tparams,
+                                      jl_value_t **overwritten);
+
+jl_typemap_entry_t *jl_typemap_assoc_by_type(union jl_typemap_t ml_or_cache, jl_tupletype_t *types, jl_svec_t **penv,
+        int8_t subtype_inexact__sigseq_useenv, int8_t subtype, int8_t offs);
+jl_lambda_info_t *jl_typemap_assoc_exact(union jl_typemap_t ml_or_cache, jl_value_t **args, size_t n, int8_t offs);
+
+typedef int (*jl_typemap_visitor_fptr)(jl_typemap_entry_t *l, void *closure);
+int jl_typemap_visitor(union jl_typemap_t a, jl_typemap_visitor_fptr fptr, void *closure);
+
+struct typemap_intersection_env;
+typedef int (*jl_typemap_intersection_visitor_fptr)(jl_typemap_entry_t *l, struct typemap_intersection_env *closure);
+struct typemap_intersection_env {
+    // input values
+    jl_typemap_intersection_visitor_fptr fptr; // fptr to call on a match
+    jl_value_t *type; // type to match
+    jl_value_t *va; // the tparam0 for the vararg in type, if applicable (or NULL)
+    // output values
+    jl_value_t *ti; // intersection type
+    jl_svec_t *env; // intersection env (initialize to null to perform intersection without an environment)
+};
+int jl_typemap_intersection_visitor(union jl_typemap_t a, int offs, struct typemap_intersection_env *closure);
+
+int sigs_eq(jl_value_t *a, jl_value_t *b, int useenv);
+
+jl_value_t *jl_lookup_match(jl_value_t *a, jl_value_t *b, jl_svec_t **penv, jl_svec_t *tvars);
+
 
 #ifdef __cplusplus
 }

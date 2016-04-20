@@ -3385,7 +3385,7 @@ void jl_init_types(void)
                                    jl_symbol("isleafsig"),
                                    jl_symbol("issimplesig"),
                                    jl_symbol("va")),
-                        jl_svec(9, jl_any_type, // Union{TupleMapEntry, Void}
+                        jl_svec(9, jl_any_type, // Union{TypeMapEntry, Void}
                                    jl_type_type, // TupleType
                                    jl_any_type, // Union{SimpleVector{TypeVar}, TypeVar}
                                    jl_any_type, // TupleType
