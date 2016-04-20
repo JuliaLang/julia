@@ -1217,7 +1217,7 @@ static int get_method_unspec_list(jl_typemap_entry_t *def, void *closure)
     for (i = 0, l = jl_array_len(spec); i < l; i++) {
         jl_value_t *li = jl_cellref(spec, i);
         if (jl_is_lambda_info(li) && !((jl_lambda_info_t*)li)->inferred)
-            jl_cell_1d_push(closure, li);
+            jl_cell_1d_push((jl_array_t*)closure, li);
     }
     return 1;
 }
@@ -2286,7 +2286,7 @@ static void jl_compile_all(void)
 static int _precompile_enq_tfunc(jl_typemap_entry_t *l, void *closure)
 {
     if (jl_is_lambda_info(l->func.value) && !l->func.linfo->functionID)
-        jl_cell_1d_push(closure, (jl_value_t*)l->func.linfo->specTypes);
+        jl_cell_1d_push((jl_array_t*)closure, (jl_value_t*)l->func.linfo->specTypes);
     return 1;
 }
 
@@ -2299,7 +2299,7 @@ static int _precompile_enq_spec(jl_typemap_entry_t *def, void *closure)
     for (i = 0, l = jl_array_len(spec); i < l; i++) {
         jl_value_t *li = jl_cellref(spec, i);
         if (jl_is_lambda_info(li) && !((jl_lambda_info_t*)li)->functionID)
-            jl_cell_1d_push(closure, (jl_value_t*)((jl_lambda_info_t*)li)->specTypes);
+            jl_cell_1d_push((jl_array_t*)closure, (jl_value_t*)((jl_lambda_info_t*)li)->specTypes);
     }
     jl_typemap_visitor(def->func.method->tfunc, _precompile_enq_tfunc, closure);
     return 1;
