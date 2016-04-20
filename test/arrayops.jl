@@ -87,6 +87,14 @@ a = reshape(b, (2, 2, 2, 2, 2))
 @test a[2,1,2,2,1] == b[14]
 @test a[2,2,2,2,2] == b[end]
 
+# reshaping linearslow arrays
+a = zeros(1, 5)
+s = sub(a, :, [2,3,5])
+@test length(reshape(s, length(s))) == 3
+a = zeros(0, 5)  # an empty linearslow array
+s = sub(a, :, [2,3,5])
+@test length(reshape(s, length(s))) == 0
+
 a = rand(1, 1, 8, 8, 1)
 @test @inferred(squeeze(a, 1)) == @inferred(squeeze(a, (1,))) == reshape(a, (1, 8, 8, 1))
 @test @inferred(squeeze(a, (1, 5))) == squeeze(a, (5, 1)) == reshape(a, (1, 8, 8))
@@ -1090,7 +1098,7 @@ a = ones(5,0)
 b = sub(a, :, :)
 @test mdsum(b) == 0
 
-a = reshape(1:60, 3, 4, 5)
+a = copy(reshape(1:60, 3, 4, 5))
 @test a[CartesianIndex{3}(2,3,4)] == 44
 a[CartesianIndex{3}(2,3,3)] = -1
 @test a[CartesianIndex{3}(2,3,3)] == -1

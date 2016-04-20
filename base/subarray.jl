@@ -2,6 +2,7 @@
 
 typealias NonSliceIndex Union{Colon, AbstractVector}
 typealias ViewIndex Union{Real, NonSliceIndex}
+abstract AbstractCartesianIndex{N} # This is a hacky forward declaration for CartesianIndex
 
 # L is true if the view itself supports fast linear indexing
 immutable SubArray{T,N,P,I,L} <: AbstractArray{T,N}
@@ -46,8 +47,6 @@ function getindex(N::NoSlice, r::Range{Int})
     @boundscheck checkbounds(N, r)
     N
 end
-
-abstract AbstractCartesianIndex{N} # This is a hacky forward declaration for CartesianIndex
 
 # This computes the linear indexing compatability for a given tuple of indices
 viewindexing() = LinearFast()
@@ -264,10 +263,7 @@ compute_first_index(f, s, parent, dim, I::Tuple{}) = f
 
 
 unsafe_convert{T,N,P<:Array,I<:Tuple{Vararg{Union{RangeIndex, NoSlice}}}}(::Type{Ptr{T}}, V::SubArray{T,N,P,I}) =
-    pointer(V.parent) + (first_index(V)-1)*sizeof(T)
-
-unsafe_convert{T,N,P<:Array,I<:Tuple{Vararg{Union{RangeIndex, NoSlice}}}}(::Type{Ptr{Void}}, V::SubArray{T,N,P,I}) =
-    convert(Ptr{Void}, unsafe_convert(Ptr{T}, V))
+    unsafe_convert(Ptr{T}, V.parent) + (first_index(V)-1)*sizeof(T)
 
 pointer(V::FastSubArray, i::Int) = pointer(V.parent, V.first_index + V.stride1*(i-1))
 pointer(V::FastContiguousSubArray, i::Int) = pointer(V.parent, V.first_index + i-1)

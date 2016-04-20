@@ -390,8 +390,8 @@ A = reshape(1:16,4,4)
 @test replstr(Bidiagonal(A,false)) == "4×4 Bidiagonal{$Int}:\n 1  ⋅   ⋅   ⋅\n 2  6   ⋅   ⋅\n ⋅  7  11   ⋅\n ⋅  ⋅  12  16"
 @test replstr(SymTridiagonal(A+A')) == "4×4 SymTridiagonal{$Int}:\n 2   7   ⋅   ⋅\n 7  12  17   ⋅\n ⋅  17  22  27\n ⋅   ⋅  27  32"
 @test replstr(Tridiagonal(diag(A,-1),diag(A),diag(A,+1))) == "4×4 Tridiagonal{$Int}:\n 1  5   ⋅   ⋅\n 2  6  10   ⋅\n ⋅  7  11  15\n ⋅  ⋅  12  16"
-@test replstr(UpperTriangular(A)) == "4×4 UpperTriangular{$Int,Array{$Int,2}}:\n 1  5   9  13\n ⋅  6  10  14\n ⋅  ⋅  11  15\n ⋅  ⋅   ⋅  16"
-@test replstr(LowerTriangular(A)) == "4×4 LowerTriangular{$Int,Array{$Int,2}}:\n 1  ⋅   ⋅   ⋅\n 2  6   ⋅   ⋅\n 3  7  11   ⋅\n 4  8  12  16"
+@test replstr(UpperTriangular(copy(A))) == "4×4 UpperTriangular{$Int,Array{$Int,2}}:\n 1  5   9  13\n ⋅  6  10  14\n ⋅  ⋅  11  15\n ⋅  ⋅   ⋅  16"
+@test replstr(LowerTriangular(copy(A))) == "4×4 LowerTriangular{$Int,Array{$Int,2}}:\n 1  ⋅   ⋅   ⋅\n 2  6   ⋅   ⋅\n 3  7  11   ⋅\n 4  8  12  16"
 
 # Issue #15525, printing of vcat
 @test sprint(show, :([a;])) == ":([a;])"

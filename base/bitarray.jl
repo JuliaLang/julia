@@ -463,8 +463,11 @@ function copy!(dest::BitArray, src::Array)
     return unsafe_copy!(dest, 1, src, 1, length(src))
 end
 
+reshape(B::BitVector, dims::Tuple{Int}) = reshape_ba(B, dims)
+reshape(B::BitArray,  dims::Tuple{Int}) = reshape_ba(B, dims)
+reshape{N}(B::BitArray, dims::NTuple{N,Int}) = reshape_ba(B, dims)
 
-function reshape{N}(B::BitArray, dims::NTuple{N,Int})
+function reshape_ba{N}(B::BitArray, dims::NTuple{N,Int})
     prod(dims) == length(B) ||
         throw(DimensionMismatch("new dimensions $(dims) must be consistent with array size $(length(B))"))
     dims == size(B) && return B

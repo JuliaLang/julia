@@ -54,8 +54,8 @@ convert{T}(::Type{AbstractMatrix{T}}, A::Symmetric) = Symmetric(convert(Abstract
 convert{T,S<:AbstractMatrix}(::Type{Hermitian{T,S}},A::Hermitian{T,S}) = A
 convert{T,S<:AbstractMatrix}(::Type{Hermitian{T,S}},A::Hermitian) = Hermitian{T,S}(convert(S,A.data),A.uplo)
 convert{T}(::Type{AbstractMatrix{T}}, A::Hermitian) = Hermitian(convert(AbstractMatrix{T}, A.data), symbol(A.uplo))
-copy{T,S}(A::Symmetric{T,S}) = Symmetric{T,S}(copy(A.data),A.uplo)
-copy{T,S}(A::Hermitian{T,S}) = Hermitian{T,S}(copy(A.data),A.uplo)
+copy{T,S}(A::Symmetric{T,S}) = (B = copy(A.data); Symmetric{T,typeof(B)}(B,A.uplo))
+copy{T,S}(A::Hermitian{T,S}) = (B = copy(A.data); Hermitian{T,typeof(B)}(B,A.uplo))
 ishermitian(A::Hermitian) = true
 ishermitian{T<:Real,S}(A::Symmetric{T,S}) = true
 ishermitian{T<:Complex,S}(A::Symmetric{T,S}) = all(imag(A.data) .== 0)

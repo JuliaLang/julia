@@ -370,7 +370,7 @@ function extrema(A::AbstractArray, dims)
     extrema!(B, A)
 end
 
-@generated function extrema!{T,N}(B, A::Array{T,N})
+@generated function extrema!{T,N}(B, A::AbstractArray{T,N})
     quote
         sA = size(A)
         sB = size(B)
