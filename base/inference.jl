@@ -2387,9 +2387,6 @@ function inlineable(f::ANY, ft::ANY, e::Expr, atypes::Vector{Any}, sv::Inference
         =#
         return NF
     end
-    # remove empty meta
-    filter!(x->!(isa(x,Expr) && x.head === :meta && isempty(x.args)),
-            body.args)
 
     na = linfo.nargs
 
