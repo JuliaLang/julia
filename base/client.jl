@@ -311,6 +311,22 @@ function _atreplinit(repl)
     end
 end
 
+const pre_run_repl_hooks = []
+
+atreplrun(f::Function) = (unshift!(pre_run_repl_hooks, f); nothing)
+
+function _atreplrun(repl)
+    for f in pre_run_repl_hooks
+        try
+            f(repl)
+        catch err
+            show(STDERR, err)
+            println(STDERR)
+        end
+    end
+end
+
+
 function _start()
     empty!(ARGS)
     append!(ARGS, Core.ARGS)
