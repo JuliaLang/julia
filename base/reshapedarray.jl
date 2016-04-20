@@ -11,28 +11,28 @@ ReshapedArray{T,N}(parent::AbstractArray{T}, dims::NTuple{N,Int}, mi) = Reshaped
 typealias ReshapedArrayLF{T,N,P<:AbstractArray} ReshapedArray{T,N,P,Tuple{}}
 
 # Fast iteration on ReshapedArrays: use the parent iterator
-immutable ReshapedRange{I,M}
+immutable ReshapedArrayIterator{I,M}
     iter::I
     mi::NTuple{M,SignedMultiplicativeInverse{Int}}
 end
-ReshapedRange(A::ReshapedArray) = reshapedrange(parent(A), A.mi)
-function reshapedrange{M}(P, mi::NTuple{M})
+ReshapedArrayIterator(A::ReshapedArray) = _rs_iterator(parent(A), A.mi)
+function _rs_iterator{M}(P, mi::NTuple{M})
     iter = eachindex(P)
-    ReshapedRange{typeof(iter),M}(iter, mi)
+    ReshapedArrayIterator{typeof(iter),M}(iter, mi)
 end
 
 immutable ReshapedIndex{T}
     parentindex::T
 end
 
-# eachindex(A::ReshapedArray) = ReshapedRange(A)  # TODO: uncomment this line
-start(R::ReshapedRange) = start(R.iter)
-@inline done(R::ReshapedRange, i) = done(R.iter, i)
-@inline function next(R::ReshapedRange, i)
+# eachindex(A::ReshapedArray) = ReshapedArrayIterator(A)  # TODO: uncomment this line
+start(R::ReshapedArrayIterator) = start(R.iter)
+@inline done(R::ReshapedArrayIterator, i) = done(R.iter, i)
+@inline function next(R::ReshapedArrayIterator, i)
     item, inext = next(R.iter, i)
     ReshapedIndex(item), inext
 end
-length(R::ReshapedRange) = length(R.iter)
+length(R::ReshapedArrayIterator) = length(R.iter)
 
 function reshape(parent::AbstractArray, dims::Dims)
     prod(dims) == length(parent) || throw(DimensionMismatch("parent has $(length(parent)) elements, which is incompatible with size $dims"))
@@ -84,19 +84,61 @@ reinterpret{T}(::Type{T}, A::ReshapedArray, dims::Dims) = reinterpret(T, parent(
     ind2sub_rs((d+1, out...), tail(strds), r)
 end
 
-@inline getindex(A::ReshapedArrayLF, index::Int) = (@boundscheck checkbounds(A, index); @inbounds ret = parent(A)[index]; ret)
-@inline getindex(A::ReshapedArray, indexes::Int...) = (@boundscheck checkbounds(A, indexes...); _unsafe_getindex(A, indexes...))
-@inline getindex(A::ReshapedArray, index::ReshapedIndex) = (@boundscheck checkbounds(parent(A), index.parentindex); @inbounds ret = parent(A)[index.parentindex]; ret)
+@inline function getindex(A::ReshapedArrayLF, index::Int)
+    @boundscheck checkbounds(A, index)
+    @inbounds ret = parent(A)[index]
+    ret
+end
+@inline function getindex(A::ReshapedArray, indexes::Int...)
+    @boundscheck checkbounds(A, indexes...)
+    _unsafe_getindex(A, indexes...)
+end
+@inline function getindex(A::ReshapedArray, index::ReshapedIndex)
+    @boundscheck checkbounds(parent(A), index.parentindex)
+    @inbounds ret = parent(A)[index.parentindex]
+    ret
+end
 
-@inline _unsafe_getindex(A::ReshapedArray, indexes::Int...) = (@inbounds ret = parent(A)[ind2sub_rs(A.mi, sub2ind(size(A), indexes...))...]; ret)
-@inline _unsafe_getindex(A::ReshapedArrayLF, indexes::Int...) = (@inbounds ret = parent(A)[sub2ind(size(A), indexes...)]; ret)
+@inline function _unsafe_getindex(A::ReshapedArray, indexes::Int...)
+    @inbounds ret = parent(A)[ind2sub_rs(A.mi, sub2ind(size(A), indexes...))...]
+    ret
+end
+@inline function _unsafe_getindex(A::ReshapedArrayLF, indexes::Int...)
+    @inbounds ret = parent(A)[sub2ind(size(A), indexes...)]
+    ret
+end
 
-@inline setindex!(A::ReshapedArrayLF, val, index::Int) = (@boundscheck checkbounds(A, index); @inbounds parent(A)[index] = val; val)
-@inline setindex!(A::ReshapedArray, val, indexes::Int...) = (@boundscheck checkbounds(A, indexes...); _unsafe_setindex!(A, val, indexes...))
-@inline setindex!(A::ReshapedArray, val, index::ReshapedIndex) = (@boundscheck checkbounds(parent(A), index.parentindex); @inbounds parent(A)[index.parentindex] = val; val)
+@inline function setindex!(A::ReshapedArrayLF, val, index::Int)
+    @boundscheck checkbounds(A, index)
+    @inbounds parent(A)[index] = val
+    val
+end
+@inline function setindex!(A::ReshapedArray, val, indexes::Int...)
+    @boundscheck checkbounds(A, indexes...)
+    _unsafe_setindex!(A, val, indexes...)
+end
+@inline function setindex!(A::ReshapedArray, val, index::ReshapedIndex)
+    @boundscheck checkbounds(parent(A), index.parentindex)
+    @inbounds parent(A)[index.parentindex] = val
+    val
+end
 
-@inline _unsafe_setindex!(A::ReshapedArray, val, indexes::Int...) = (@inbounds parent(A)[ind2sub_rs(A.mi, sub2ind(size(A), indexes...))...] = val; val)
-@inline _unsafe_setindex!(A::ReshapedArrayLF, val, indexes::Int...) = (@inbounds parent(A)[sub2ind(size(A), indexes...)] = val; val)
+@inline function _unsafe_setindex!(A::ReshapedArray, val, indexes::Int...)
+    @inbounds parent(A)[ind2sub_rs(A.mi, sub2ind(size(A), indexes...))...] = val
+    val
+end
+@inline function _unsafe_setindex!(A::ReshapedArrayLF, val, indexes::Int...)
+    @inbounds parent(A)[sub2ind(size(A), indexes...)] = val
+    val
+end
+
+# helpful error message for a common failure case
+typealias ReshapedRange{T,N,A<:Range} ReshapedArray{T,N,A,Tuple{}}
+setindex!(A::ReshapedRange, val, index::Int) = _rs_setindex!_err()
+setindex!(A::ReshapedRange, val, indexes::Int...) = _rs_setindex!_err()
+setindex!(A::ReshapedRange, val, index::ReshapedIndex) = _rs_setindex!_err()
+
+_rs_setindex!_err() = error("indexed assignment fails for a reshaped range; consider calling collect")
 
 typealias ArrayT{N, T} Array{T,N}
 convert{T,S,N}(::Type{Array{T,N}}, V::ReshapedArray{S,N}) = copy!(Array(T, size(V)), V)
