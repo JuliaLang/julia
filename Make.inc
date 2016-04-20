@@ -267,7 +267,6 @@ fPIC := -fPIC
 EXE :=
 endif
 
-JULIAGC := MARKSWEEP
 JULIACODEGEN := LLVM
 
 # flag for disabling assertions
