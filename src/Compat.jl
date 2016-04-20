@@ -528,6 +528,9 @@ function _compat(ex::Symbol)
     if VERSION < v"0.4.0-dev+768" && ex === :Void
         return :Nothing
     end
+    if VERSION < v"0.5.0-dev+1343" && (ex == :Future || ex == :RemoteChannel)
+        return :RemoteRef
+    end
     return ex
 end
 _compat(ex) = ex
