@@ -506,19 +506,20 @@ threadcall_test_func(x) =
 let n=3
     tids=[]
     @sync for i in 1:10^n
-        @unix_only @async push!(tids, @threadcall(:pthread_self, Cuint, ()))
-        @windows_only @async push!(tids, @threadcall(:GetCurrentThreadId, Cuint, ()))
+        @async push!(tids, @threadcall(:uv_thread_self, Culong, ()))
     end
 
-    d=Dict()
+    # Count the original thread too instead of relying on libuv to have
+    # more than one active worker threads.
+    d = Dict(ccall(:uv_thread_self, Culong, ())=>1)
     for t in tids
         d[t] = get(d, t, 0) + 1
     end
 
-    @test sum(values(d)) == 10^n
+    @test sum(values(d)) == 10^n + 1
 
     for v in values(d)
-        @test v < 10^n
+        @test v <= 10^n
     end
 end
 
