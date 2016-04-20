@@ -330,7 +330,8 @@ void jl_lambda_info_set_ast(jl_lambda_info_t *li, jl_value_t *ast)
     jl_array_t *vis = jl_lam_vinfo((jl_expr_t*)ast);
     size_t nslots = jl_array_len(vis);
     jl_value_t *gensym_types = jl_lam_gensyms((jl_expr_t*)ast);
-    size_t ngensym = (jl_is_array(gensym_types) ? jl_array_len(gensym_types) : jl_unbox_long(gensym_types));
+    assert(jl_is_long(gensym_types));
+    size_t ngensym = jl_unbox_long(gensym_types);
     li->slotnames = jl_alloc_cell_1d(nslots);
     jl_gc_wb(li, li->slotnames);
     li->slottypes = jl_nothing;
@@ -1062,7 +1063,6 @@ UNBOX_FUNC(bool,   int8_t)
 UNBOX_FUNC(float32, float)
 UNBOX_FUNC(float64, double)
 UNBOX_FUNC(voidpointer, void*)
-UNBOX_FUNC(gensym, ssize_t)
 
 #define BOX_FUNC(typ,c_type,pfx,nw)                         \
     JL_DLLEXPORT jl_value_t *pfx##_##typ(c_type x)          \

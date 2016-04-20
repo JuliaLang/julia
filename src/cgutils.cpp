@@ -256,10 +256,6 @@ static Value *literal_pointer_val(jl_value_t *p)
         // Symbols are prefixed with jl_sym#
         return julia_gv("jl_sym#", addr, NULL, p);
     }
-    if (jl_is_gensym(p)) {
-        // GenSyms are prefixed with jl_gensym#
-        return julia_gv("jl_gensym#", p);
-    }
     // something else gets just a generic name
     return julia_gv("jl_global#", p);
 }

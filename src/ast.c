@@ -62,7 +62,6 @@ typedef struct _jl_ast_context_t {
     value_t null_sym;
     value_t jlgensym_sym;
     value_t slot_sym;
-    arraylist_t gensym_to_flisp;
     jl_ast_context_list_t list;
     int ref;
     jl_task_t *task;
@@ -579,11 +578,6 @@ static value_t julia_to_scm_(fl_context_t *fl_ctx, jl_value_t *v);
 static value_t julia_to_scm(fl_context_t *fl_ctx, jl_value_t *v)
 {
     value_t temp;
-    arraylist_t *jlgensym_to_flisp = &jl_ast_ctx(fl_ctx)->gensym_to_flisp;
-    if (jlgensym_to_flisp->len)
-        jlgensym_to_flisp->len = 0; // in case we didn't free it last time we got here (for example, if we threw an error)
-    else
-        arraylist_new(jlgensym_to_flisp, 0);
     // need try/catch to reset GC handle stack in case of error
     FL_TRY_EXTERN(fl_ctx) {
         temp = julia_to_scm_(fl_ctx, v);
@@ -591,7 +585,6 @@ static value_t julia_to_scm(fl_context_t *fl_ctx, jl_value_t *v)
     FL_CATCH_EXTERN(fl_ctx) {
         temp = fl_list2(fl_ctx, jl_ast_ctx(fl_ctx)->error_sym, cvalue_static_cstring(fl_ctx, "expression too large"));
     }
-    arraylist_free(jlgensym_to_flisp);
     return temp;
 }
 
@@ -622,20 +615,8 @@ static value_t julia_to_scm_(fl_context_t *fl_ctx, jl_value_t *v)
 {
     if (jl_is_symbol(v))
         return symbol(fl_ctx, jl_symbol_name((jl_sym_t*)v));
-    if (jl_is_gensym(v)) {
-        size_t idx = ((jl_gensym_t*)v)->id;
-        size_t i;
-        arraylist_t *jlgensym_to_flisp = &jl_ast_ctx(fl_ctx)->gensym_to_flisp;
-        for (i = 0; i < jlgensym_to_flisp->len; i+=2) {
-            if ((ssize_t)jlgensym_to_flisp->items[i] == idx)
-                return fl_list2(fl_ctx, jl_ast_ctx(fl_ctx)->jlgensym_sym, fixnum((size_t)jlgensym_to_flisp->items[i+1]));
-        }
-        arraylist_push(jlgensym_to_flisp, (void*)idx);
-        value_t flv = fl_applyn(fl_ctx, 0, symbol_value(symbol(fl_ctx, "make-jlgensym")));
-        assert(iscons(flv) && car_(flv) == jl_ast_ctx(fl_ctx)->jlgensym_sym);
-        arraylist_push(jlgensym_to_flisp, (void*)(size_t)numval(car_(cdr_(flv))));
-        return flv;
-    }
+    if (jl_is_gensym(v))
+        return fl_list2(fl_ctx, jl_ast_ctx(fl_ctx)->jlgensym_sym, fixnum((size_t)((jl_gensym_t*)v)->id));
     if (v == jl_true)
         return fl_ctx->T;
     if (v == jl_false)
@@ -865,24 +846,6 @@ JL_DLLEXPORT jl_value_t *jl_macroexpand(jl_value_t *expr)
     return jl_call_scm_on_ast("jl-macroexpand", expr);
 }
 
-ssize_t jl_max_jlgensym_in(jl_value_t *v)
-{
-    ssize_t genid = -1;
-    if (jl_is_gensym(v)) {
-        genid = ((jl_gensym_t*)v)->id;
-    }
-    else if (jl_is_expr(v)) {
-        jl_expr_t *e = (jl_expr_t*)v;
-        size_t i, l = jl_array_len(e->args);
-        for (i = 0; i < l; i++) {
-            ssize_t maxid = jl_max_jlgensym_in(jl_exprarg(e, i));
-            if (maxid > genid)
-                genid = maxid;
-        }
-    }
-    return genid;
-}
-
 // wrap expr in a thunk AST
 jl_lambda_info_t *jl_wrap_expr(jl_value_t *expr)
 {
@@ -896,7 +859,8 @@ jl_lambda_info_t *jl_wrap_expr(jl_value_t *expr)
     vi = (jl_value_t*)jl_alloc_cell_1d(3);
     jl_cellset(vi, 0, mt);
     jl_cellset(vi, 1, mt);
-    jl_cellset(vi, 2, jl_box_long(jl_max_jlgensym_in(expr)+1));
+    // front end always wraps toplevel exprs with gensyms in (thunk (lambda () ...))
+    jl_cellset(vi, 2, jl_box_long(0));
     jl_cellset(le->args, 1, vi);
     if (!jl_is_expr(expr) || ((jl_expr_t*)expr)->head != body_sym) {
         bo = jl_exprn(body_sym, 1);
