@@ -26,7 +26,7 @@ endif
 
 
 SRCS := \
-	jltypes gf ast builtins module interpreter \
+	jltypes gf typemap ast builtins module interpreter \
 	alloc dlload sys init task array dump toplevel jl_uv jlapi signal-handling \
 	simplevector APInt-C runtime_intrinsics runtime_ccall \
 	threadgroup threading stackwalk
