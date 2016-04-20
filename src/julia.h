@@ -240,6 +240,7 @@ typedef struct _jl_lambda_info_t {
     int8_t isva;
     int8_t inferred;
     int8_t pure;
+    int8_t inlineable;
     int8_t inInference; // flags to tell if inference is running on this function
     int8_t inCompile; // flag to tell if codegen is running on this function
     int8_t jlcall_api; // the c-abi for fptr; 0 = jl_fptr_t, 1 = jl_fptr_sparam_t

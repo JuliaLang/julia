@@ -853,6 +853,7 @@ static void jl_serialize_value_(ios_t *s, jl_value_t *v)
         jl_serialize_value(s, (jl_value_t*)li->unspecialized_ducttape);
         write_int8(s, li->inferred);
         write_int8(s, li->pure);
+        write_int8(s, li->inlineable);
         write_int8(s, li->isva);
         write_int32(s, li->nargs);
         jl_serialize_value(s, (jl_value_t*)li->def);
@@ -1458,6 +1459,7 @@ static jl_value_t *jl_deserialize_value_(ios_t *s, jl_value_t *vtag, jl_value_t 
         if (li->unspecialized_ducttape) jl_gc_wb(li, li->unspecialized_ducttape);
         li->inferred = read_int8(s);
         li->pure = read_int8(s);
+        li->inlineable = read_int8(s);
         li->isva = read_int8(s);
         li->nargs = read_int32(s);
         li->def = (jl_method_t*)jl_deserialize_value(s, (jl_value_t**)&li->def);
