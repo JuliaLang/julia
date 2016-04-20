@@ -1171,7 +1171,6 @@ static void _compile_all_deq(jl_array_t *found)
             jl_type_infer(linfo, 1);
             linfo->functionObjectsDecls.functionObject = NULL;
             linfo->functionObjectsDecls.specFunctionObject = NULL;
-            linfo->functionObjectsDecls.cFunctionList = NULL;
             linfo->functionID = 0;
             linfo->specFunctionID = 0;
             linfo->jlcall_api = 0;
@@ -1192,7 +1191,6 @@ static void _compile_all_deq(jl_array_t *found)
                 // copy the function pointer back to the template
                 templ->functionObjectsDecls.functionObject = linfo->functionObjectsDecls.functionObject;
                 templ->functionObjectsDecls.specFunctionObject = linfo->functionObjectsDecls.specFunctionObject;
-                templ->functionObjectsDecls.cFunctionList = NULL;
                 templ->functionID = linfo->functionID;
                 templ->specFunctionID = linfo->specFunctionID;
                 templ->jlcall_api = linfo->jlcall_api;
