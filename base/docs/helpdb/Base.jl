@@ -9580,14 +9580,6 @@ Riemann zeta function ``\\zeta(s)``.
 zeta(s)
 
 """
-    zeta(s, z)
-
-Hurwitz zeta function ``\\zeta(s, z)``.  (This is equivalent to the Riemann zeta function
-``\\zeta(s)`` for the case of `z=1`.)
-"""
-zeta(s,z)
-
-"""
     A_mul_Bt(A, B)
 
 For matrices or vectors ``A`` and ``B``, calculates ``A⋅Bᵀ``.
