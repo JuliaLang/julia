@@ -324,22 +324,21 @@ t1 = bitrand(n1, n2)
 b2 = bitrand(countnz(t1))
 @check_bit_operation setindex!(b1, b2, t1) BitMatrix
 
-m1 = rand(1:n1)
-m2 = rand(1:n2)
+let m1 = rand(1:n1), m2 = rand(1:n2)
+    t1 = bitrand(n1)
+    b2 = bitrand(countnz(t1), m2)
+    k2 = randperm(m2)
+    @check_bit_operation setindex!(b1, b2, t1, 1:m2)       BitMatrix
+    @check_bit_operation setindex!(b1, b2, t1, n2-m2+1:n2) BitMatrix
+    @check_bit_operation setindex!(b1, b2, t1, k2)         BitMatrix
 
-t1 = bitrand(n1)
-b2 = bitrand(countnz(t1), m2)
-k2 = randperm(m2)
-@check_bit_operation setindex!(b1, b2, t1, 1:m2)       BitMatrix
-@check_bit_operation setindex!(b1, b2, t1, n2-m2+1:n2) BitMatrix
-@check_bit_operation setindex!(b1, b2, t1, k2)         BitMatrix
-
-t2 = bitrand(n2)
-b2 = bitrand(m1, countnz(t2))
-k1 = randperm(m1)
-@check_bit_operation setindex!(b1, b2, 1:m1, t2)       BitMatrix
-@check_bit_operation setindex!(b1, b2, n1-m1+1:n1, t2) BitMatrix
-@check_bit_operation setindex!(b1, b2, k1, t2)         BitMatrix
+    t2 = bitrand(n2)
+    b2 = bitrand(m1, countnz(t2))
+    k1 = randperm(m1)
+    @check_bit_operation setindex!(b1, b2, 1:m1, t2)       BitMatrix
+    @check_bit_operation setindex!(b1, b2, n1-m1+1:n1, t2) BitMatrix
+    @check_bit_operation setindex!(b1, b2, k1, t2)         BitMatrix
+end
 
 timesofar("indexing")
 
@@ -1054,23 +1053,25 @@ end
 
 ## Reductions ##
 
-b1 = bitrand(s1, s2, s3, s4)
-m1 = 1
-m2 = 3
-@check_bit_operation maximum(b1, (m1, m2)) BitArray{4}
-@check_bit_operation minimum(b1, (m1, m2)) BitArray{4}
-@check_bit_operation sum(b1, (m1, m2)) Array{Int,4}
+let
+    b1 = bitrand(s1, s2, s3, s4)
+    m1 = 1
+    m2 = 3
+    @check_bit_operation maximum(b1, (m1, m2)) BitArray{4}
+    @check_bit_operation minimum(b1, (m1, m2)) BitArray{4}
+    @check_bit_operation sum(b1, (m1, m2)) Array{Int,4}
 
-@check_bit_operation maximum(b1) Bool
-@check_bit_operation minimum(b1) Bool
-@check_bit_operation any(b1) Bool
-@check_bit_operation all(b1) Bool
-@check_bit_operation sum(b1) Int
+    @check_bit_operation maximum(b1) Bool
+    @check_bit_operation minimum(b1) Bool
+    @check_bit_operation any(b1) Bool
+    @check_bit_operation all(b1) Bool
+    @check_bit_operation sum(b1) Int
 
-b0 = falses(0)
-@check_bit_operation any(b0) Bool
-@check_bit_operation all(b0) Bool
-@check_bit_operation sum(b0) Int
+    b0 = falses(0)
+    @check_bit_operation any(b0) Bool
+    @check_bit_operation all(b0) Bool
+    @check_bit_operation sum(b0) Int
+end
 
 timesofar("reductions")
 
@@ -1199,7 +1200,7 @@ b1 = bitrand(1, v1, 1)
 @check_bit_operation cat(2, false, b1, true, true, b1) BitArray{3}
 
 b1 = bitrand(n1, n2)
-for m1 = 1 : n1 - 1
+for m1 = 1 : n1 - 1r
     for m2 = 1 : n2 - 1
         @test isequal([b1[1:m1,1:m2] b1[1:m1,m2+1:end]; b1[m1+1:end,1:m2] b1[m1+1:end,m2+1:end]], b1)
     end
