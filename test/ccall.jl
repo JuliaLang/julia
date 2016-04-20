@@ -504,21 +504,16 @@ threadcall_test_func(x) =
 @test threadcall_test_func(259) == 1
 
 let n=3
-    tids=[]
+    tids = Culong[]
     @sync for i in 1:10^n
-        @unix_only @async push!(tids, @threadcall(:pthread_self, Cuint, ()))
-        @windows_only @async push!(tids, @threadcall(:GetCurrentThreadId, Cuint, ()))
+        @async push!(tids, @threadcall(:uv_thread_self, Culong, ()))
     end
 
-    d=Dict()
+    # The work should not be done on the master thread
+    t0 = ccall(:uv_thread_self, Culong, ())
+    @test length(tids) == 10^n
     for t in tids
-        d[t] = get(d, t, 0) + 1
-    end
-
-    @test sum(values(d)) == 10^n
-
-    for v in values(d)
-        @test v < 10^n
+        @test t != t0
     end
 end
 
