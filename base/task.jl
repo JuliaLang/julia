@@ -25,6 +25,7 @@ showerror(io::IO, ce::CapturedException) = showerror(io, ce.ex, ce.processed_bt,
 type CompositeException <: Exception
     exceptions::Vector{Any}
     CompositeException() = new(Any[])
+    CompositeException(exceptions) = new(exceptions)
 end
 length(c::CompositeException) = length(c.exceptions)
 push!(c::CompositeException, ex) = push!(c.exceptions, ex)
