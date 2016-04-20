@@ -121,9 +121,9 @@ function pushmeta!(ex::Expr, sym::Symbol, args::Any...)
     else
         tag = Expr(sym, args...)
     end
-    found, metaex = findmeta(ex)
-    if found
-        push!(metaex.args, tag)
+    idx, exargs = findmeta(ex)
+    if idx != 0
+        push!(exargs[idx].args, tag)
     else
         body::Expr = ex.args[2]
         unshift!(body.args, Expr(:meta, tag))
@@ -133,27 +133,29 @@ end
 
 function popmeta!(body::Expr, sym::Symbol)
     body.head == :block || return false, []
-    found, metaex = findmeta_block(body.args)
-    if !found
+    popmeta!(body.args, sym)
+end
+popmeta!(arg, sym) = (false, [])
+function popmeta!(body::Array{Any,1}, sym::Symbol)
+    idx, args = findmeta_block(body)
+    if idx == 0
         return false, []
     end
+    metaex = args[idx]
     metaargs = metaex.args
     for i = 1:length(metaargs)
         if isa(metaargs[i], Symbol) && (metaargs[i]::Symbol) == sym
             deleteat!(metaargs, i)
+            isempty(metaargs) && deleteat!(args, idx)
             return true, []
         elseif isa(metaargs[i], Expr) && (metaargs[i]::Expr).head == sym
             ret = (metaargs[i]::Expr).args
             deleteat!(metaargs, i)
+            isempty(metaargs) && deleteat!(args, idx)
             return true, ret
         end
     end
     false, []
-end
-popmeta!(arg, sym) = (false, [])
-function popmeta!(body::Array{Any,1}, sym::Symbol)
-    ex = Expr(:block); ex.args = body
-    popmeta!(ex, sym)
 end
 
 function findmeta(ex::Expr)
@@ -168,19 +170,20 @@ end
 findmeta(ex::Array{Any,1}) = findmeta_block(ex)
 
 function findmeta_block(exargs)
-    for a in exargs
+    for i = 1:length(exargs)
+        a = exargs[i]
         if isa(a, Expr)
             if (a::Expr).head == :meta
-                return true, a::Expr
+                return i, exargs
             elseif (a::Expr).head == :block
-                found, exb = findmeta_block(a.args)
-                if found
-                    return found, exb
+                idx, exa = findmeta_block(a.args)
+                if idx != 0
+                    return idx, exa
                 end
             end
         end
     end
-    return false, Expr(:block)
+    return 0, []
 end
 
 remove_linenums!(ex) = ex
