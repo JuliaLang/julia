@@ -50,19 +50,20 @@ function add(pkg::AbstractString, vers::VersionSet)
     outdated = :maybe
     @sync begin
         @async if !edit(Reqs.add,pkg,vers)
-            ispath(pkg) || throw(PkgError("unknown package $pkg"))
-            info("Nothing to be done")
+            if ispath(pkg)
+                info("Nothing to be done")
+            else
+                print_with_color(:red, "ERROR: Unknown package $pkg\n")
+            end
         end
         branch = Dir.getmetabranch()
         outdated = with(GitRepo, "METADATA") do repo
             if LibGit2.branch(repo) == branch
                 if LibGit2.isdiff(repo, "origin/$branch")
-                    outdated = :yes
+                    :yes
                 else
-                    try
-                        LibGit2.fetch(repo)
-                        outdated = LibGit2.isdiff(repo, "origin/$branch") ? (:yes) : (:no)
-                    end
+                    LibGit2.fetch(repo)
+                    LibGit2.isdiff(repo, "origin/$branch") ? (:yes) : (:no)
                 end
             else
                 :no # user is doing something funky with METADATA
