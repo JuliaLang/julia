@@ -147,7 +147,7 @@ static Constant *julia_const_to_llvm(jl_value_t *e, bool nested=false)
     jl_value_t *jt = jl_typeof(e);
     jl_datatype_t *bt = (jl_datatype_t*)jt;
 
-    if (!jl_is_datatype(bt) || bt == jl_gensym_type)
+    if (!jl_is_datatype(bt) || bt == jl_ssavalue_type)
         return NULL;
 
     if (e == jl_true)

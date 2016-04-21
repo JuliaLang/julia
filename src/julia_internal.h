@@ -220,7 +220,7 @@ jl_value_t *jl_gf_invoke(jl_tupletype_t *types, jl_value_t **args, size_t nargs)
 jl_array_t *jl_lam_args(jl_expr_t *l);
 jl_array_t *jl_lam_vinfo(jl_expr_t *l);
 jl_array_t *jl_lam_capt(jl_expr_t *l);
-jl_value_t *jl_lam_gensyms(jl_expr_t *l);
+jl_value_t *jl_lam_ssavalues(jl_expr_t *l);
 jl_array_t *jl_lam_staticparams(jl_expr_t *l);
 int jl_lam_vars_captured(jl_expr_t *ast);
 jl_expr_t *jl_lam_body(jl_expr_t *l);

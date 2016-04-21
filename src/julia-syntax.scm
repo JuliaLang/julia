@@ -22,7 +22,7 @@
 
 ;; identify some expressions that are safe to repeat
 (define (effect-free? e)
-  (or (not (pair? e)) (jlgensym? e) (sym-dot? e) (quoted? e) (equal? e '(null))))
+  (or (not (pair? e)) (ssavalue? e) (sym-dot? e) (quoted? e) (equal? e '(null))))
 
 ;; expanding comparison chains: (comparison a op b op c ...)
 
@@ -49,7 +49,7 @@
   (let* ((arg   (caddr e))
          (arg2  (if (and (pair? arg)
                          (pair? (cdddr e)))
-                    (make-jlgensym) arg)))
+                    (make-ssavalue) arg)))
     (if (and (not (dotop? (cadr e)))
              (length> e 5)
              (pair? (cadddr (cdr e)))
@@ -57,7 +57,7 @@
         ;; look ahead: if the 2nd argument of the next comparison is also
         ;; an argument to an eager (dot) op, make sure we don't skip the
         ;; initialization of its variable by short-circuiting
-        (let ((s (make-jlgensym)))
+        (let ((s (make-ssavalue)))
           (cons `(block
                   ,@(if (eq? arg arg2) '() `((= ,arg2 ,arg)))
                   (= ,s ,(cadddr (cdr e)))
@@ -143,7 +143,7 @@
                         (cons (cadr idx) tuples)
                         (cons `(... ,(replace-end (cadr idx) a n tuples last))
                               ret))
-                  (let ((g (make-jlgensym)))
+                  (let ((g (make-ssavalue)))
                     (loop (cdr lst) (+ n 1)
                           (cons `(= ,g ,(replace-end (cadr idx) a n tuples last))
                                 stmts)
@@ -288,9 +288,9 @@
              (name  (if iscall #f name))
              (types (llist-types argl))
              (body  (method-lambda-expr argl body))
-             ;; HACK: the typevars need to be bound to jlgensyms, since this code
+             ;; HACK: the typevars need to be bound to ssavalues, since this code
              ;; might be moved to a different scope by closure-convert.
-             (temps (map (lambda (x) (make-jlgensym)) names))
+             (temps (map (lambda (x) (make-ssavalue)) names))
              (renames (map cons names temps))
              (mdef
               (if (null? sparams)
@@ -640,7 +640,7 @@
                `(new ,Texpr ,@(map (lambda (fty val)
                                      `(call (top convert) ,fty ,val))
                                    (list-head field-types (length args)) args))
-               (let ((tn (make-jlgensym)))
+               (let ((tn (make-ssavalue)))
                  `(block
                    (= ,tn ,Texpr)
                    (new ,tn ,@(map (lambda (fld val)
@@ -850,7 +850,7 @@
                (ty    (if isseq (cadar F) (car F))))
           (if (eq? ty 'Any)
               (loop (if isseq F (cdr F)) (cdr A) stmts (list* 0 a C))
-              (let* ((g (make-jlgensym))
+              (let* ((g (make-ssavalue))
                      (isamp (and (pair? a) (eq? (car a) '&)))
                      (a (if isamp (cadr a) a))
                      (stmts (cons `(= ,g (call (top ,(if isamp 'ptr_arg_cconvert 'cconvert)) ,ty ,a)) stmts))
@@ -946,7 +946,7 @@
                   (loop (cdr binds)
                         (if (contains (lambda (x) (eq? x vname))
                                       (caddar binds))
-                            (let ((tmp (make-jlgensym)))
+                            (let ((tmp (make-ssavalue)))
                               `(scope-block
                                 (block (= ,tmp ,(caddar binds))
                                        (scope-block
@@ -1093,7 +1093,7 @@
                 (retval (if hasret (gensy) #f))
                 (bb  (gensy))
                 (finally-exception (gensy))
-                (val (gensy))) ;; this is jlgensym, but llvm has trouble determining that it dominates all uses
+                (val (gensy))) ;; this is an ssavalue, but llvm has trouble determining that it dominates all uses
             (let ((tryb   (replace-return tryb bb ret retval))
                   (catchb (replace-return catchb bb ret retval)))
               (expand-forms
@@ -1256,7 +1256,7 @@
                     (cons (make-assignment L R) stmts)
                     after
                     (cons R elts))
-              (let ((temp (make-jlgensym)))
+              (let ((temp (make-ssavalue)))
                 (loop (cdr lhss)
                       (cons L assigned)
                       (cdr rhss)
@@ -1266,7 +1266,7 @@
 
 ;; convert (lhss...) = x to tuple indexing
 (define (lower-tuple-assignment lhss x)
-  (let ((t (make-jlgensym)))
+  (let ((t (make-ssavalue)))
     `(block
       (= ,t ,x)
       ,@(let loop ((lhs lhss)
@@ -1296,7 +1296,7 @@
                      (set! a (cons x a))
                      (cadr x))
                     ((not (effect-free? x))
-                     (let ((g (make-jlgensym)))
+                     (let ((g (make-ssavalue)))
                        (if (or (eq? (car x) '...) (eq? (car x) '&))
                            (if (and (pair? (cadr x))
                                     (not (quoted? (cadr x))))
@@ -1328,12 +1328,12 @@
                               keys))))
      (if (null? restkeys)
          `(call (call (top kwfunc) ,f) (cell1d ,@keyargs) ,f ,@pa)
-         (let ((container (make-jlgensym)))
+         (let ((container (make-ssavalue)))
            `(block
              (= ,container (cell1d ,@keyargs))
              ,@(map (lambda (rk)
-                      (let* ((k (make-jlgensym))
-                             (v (make-jlgensym))
+                      (let* ((k (make-ssavalue))
+                             (v (make-ssavalue))
                              (push-expr `(ccall 'jl_cell_1d_push2 Void
                                                 (tuple Any Any Any)
                                                 ,container
@@ -1399,7 +1399,7 @@
                                        (and (pair? x)
                                             (eq? (car x) ':))))
                                  idxs)))
-           (arr   (if reuse (make-jlgensym) a))
+           (arr   (if reuse (make-ssavalue) a))
            (stmts (if reuse `((= ,arr ,a)) '())))
       (receive
        (new-idxs stuff) (process-indexes arr idxs)
@@ -1454,13 +1454,13 @@
               (if (symbol-like? (car tail))
                   `(if ,(car tail) ,(car tail)
                        ,(loop (cdr tail)))
-                  (let ((g (make-jlgensym)))
+                  (let ((g (make-ssavalue)))
                     `(block (= ,g ,(car tail))
                             (if ,g ,g
                                 ,(loop (cdr tail)))))))))))
 
 (define (expand-forms e)
-  (if (or (atom? e) (memq (car e) '(quote inert top line module toplevel jlgensym null meta)))
+  (if (or (atom? e) (memq (car e) '(quote inert top line module toplevel ssavalue null meta)))
       e
       (let ((ex (get expand-table (car e) #f)))
         (if ex
@@ -1470,7 +1470,7 @@
 
 (define (expand-for while lhs X body)
   ;; (for (= lhs X) body)
-  (let ((coll  (make-jlgensym))
+  (let ((coll  (make-ssavalue))
         (state (gensy)))
     `(scope-block
       (block (= ,coll ,(expand-forms X))
@@ -1552,7 +1552,7 @@
                   (rhs  (caddr e)))
          (if (assignment? rhs)
              (loop (cons (cadr rhs) lhss) (caddr rhs))
-             (let ((rr (if (symbol-like? rhs) rhs (make-jlgensym))))
+             (let ((rr (if (symbol-like? rhs) rhs (make-ssavalue))))
                (expand-forms
                 `(block ,.(if (eq? rr rhs) '() `((= ,rr ,rhs)))
                         ,@(map (lambda (l) `(= ,l ,rr))
@@ -1569,10 +1569,10 @@
           (let ((a   (cadr (cadr e)))
                 (b   (caddr (cadr e)))
                 (rhs (caddr e)))
-            (let ((aa (if (symbol-like? a) a (make-jlgensym)))
+            (let ((aa (if (symbol-like? a) a (make-ssavalue)))
                   (bb (if (or (atom? b) (symbol-like? b) (and (pair? b) (quoted? b)))
-                          b (make-jlgensym)))
-                  (rr (if (or (symbol-like? rhs) (atom? rhs)) rhs (make-jlgensym))))
+                          b (make-ssavalue)))
+                  (rr (if (or (symbol-like? rhs) (atom? rhs)) rhs (make-ssavalue))))
               `(block
                 ,.(if (eq? aa a)   '() `((= ,aa ,(expand-forms a))))
                 ,.(if (eq? bb b)   '() `((= ,bb ,(expand-forms b))))
@@ -1593,7 +1593,7 @@
                  (tuple-to-assignments lhss x))
                 ;; (a, b, ...) = other
                 (let* ((xx  (if (and (symbol? x) (not (memq x lhss)))
-                                x (make-jlgensym)))
+                                x (make-ssavalue)))
                        (ini (if (eq? x xx) '() `((= ,xx ,(expand-forms x)))))
                        (st  (gensy)))
                   `(block
@@ -1623,10 +1623,10 @@
                                                (and (pair? x)
                                                     (eq? (car x) ':))))
                                          idxs)))
-                   (arr   (if reuse (make-jlgensym) a))
+                   (arr   (if reuse (make-ssavalue) a))
                    (stmts (if reuse `((= ,arr ,(expand-forms a))) '()))
-                   (rrhs (and (pair? rhs) (not (jlgensym? rhs)) (not (quoted? rhs))))
-                   (r    (if rrhs (make-jlgensym) rhs))
+                   (rrhs (and (pair? rhs) (not (ssavalue? rhs)) (not (quoted? rhs))))
+                   (r    (if rrhs (make-ssavalue) rhs))
                    (rini (if rrhs `((= ,r ,(expand-forms rhs))) '())))
               (receive
                (new-idxs stuff) (process-indexes arr idxs)
@@ -1774,7 +1774,7 @@
               (expand-forms
                `(call (top cell_1d) ,@args)))
              (else
-              (let ((name (make-jlgensym)))
+              (let ((name (make-ssavalue)))
                 `(block (= ,name (call (top Array) (top Any)
                                        ,(length args)))
                         ,.(map (lambda (i elt)
@@ -1792,7 +1792,7 @@
        (if (any vararg? args)
            (expand-forms
             `(call (top cell_2d) ,nr ,nc ,@args))
-           (let ((name (make-jlgensym)))
+           (let ((name (make-ssavalue)))
              `(block (= ,name (call (top Array) (top Any)
                                     ,nr ,nc))
                      ,.(map (lambda (i elt)
@@ -1991,7 +1991,7 @@
      (expand-forms (lower-typed-dict-comprehension (cadr e) (caddr e) (cdddr e))))))
 
 (define (lower-nd-comprehension atype expr ranges)
-  (let ((result      (make-jlgensym))
+  (let ((result      (make-ssavalue))
         (ri          (gensy))
         (oneresult   (gensy)))
     ;; evaluate one expression to figure out type and size
@@ -2024,7 +2024,7 @@
               `(block (call (top setindex!) ,result (ref ,expr ,@(reverse iters)) ,ri)
                       (= ,ri (call (top +) ,ri 1))) )
           (if (eq? (car ranges) `:)
-              (let ((i (make-jlgensym)))
+              (let ((i (make-ssavalue)))
                 `(for (= ,i (: 1 (call (top size) ,oneresult ,oneresult-dim)))
                       ,(construct-loops (cdr ranges) (cons i iters) (+ oneresult-dim 1)) ))
               `(for ,(car ranges)
@@ -2044,14 +2044,14 @@
 (define (lower-comprehension atype expr ranges)
   (if (any (lambda (x) (eq? x ':)) ranges)
       (lower-nd-comprehension atype expr ranges)
-  (let ((result    (make-jlgensym))
+  (let ((result    (make-ssavalue))
         (ri        (gensy))
-        (initlabl  (if atype #f (make-jlgensym)))
-        (oneresult (make-jlgensym))
-        (lengths   (map (lambda (x) (make-jlgensym)) ranges))
+        (initlabl  (if atype #f (make-ssavalue)))
+        (oneresult (make-ssavalue))
+        (lengths   (map (lambda (x) (make-ssavalue)) ranges))
         (states    (map (lambda (x) (gensy)) ranges))
         (is        (map (lambda (x) (gensy)) ranges))
-        (rv        (map (lambda (x) (make-jlgensym)) ranges)))
+        (rv        (map (lambda (x) (make-ssavalue)) ranges)))
 
     ;; construct loops to cycle over all dimensions of an n-d comprehension
     (define (construct-loops ranges rv is states lengths)
@@ -2092,11 +2092,11 @@
         ,result))))))
 
 (define (lower-dict-comprehension expr ranges)
-  (let ((result   (make-jlgensym))
-        (initlabl (make-jlgensym))
-        (onekey   (make-jlgensym))
-        (oneval   (make-jlgensym))
-        (rv         (map (lambda (x) (make-jlgensym)) ranges)))
+  (let ((result   (make-ssavalue))
+        (initlabl (make-ssavalue))
+        (onekey   (make-ssavalue))
+        (oneval   (make-ssavalue))
+        (rv         (map (lambda (x) (make-ssavalue)) ranges)))
 
     ;; construct loops to cycle over all dimensions of an n-d comprehension
     (define (construct-loops ranges)
@@ -2132,8 +2132,8 @@
   (if (not (and (length= atypes 3)
                 (eq? (car atypes) '=>)))
       (error "invalid \"typed_dict_comprehension\" syntax")
-      (let ( (result (make-jlgensym))
-             (rs (map (lambda (x) (make-jlgensym)) ranges)) )
+      (let ( (result (make-ssavalue))
+             (rs (map (lambda (x) (make-ssavalue)) ranges)) )
 
         ;; construct loops to cycle over all dimensions of an n-d comprehension
         (define (construct-loops ranges rs)
@@ -2188,7 +2188,7 @@
         ((=)
          (let ((v (decl-var (cadr e)))
                (rest (find-assigned-vars (caddr e) env)))
-           (if (or (jlgensym? v) (memq v env))
+           (if (or (ssavalue? v) (memq v env))
                rest
                (cons v rest))))
         (else
@@ -2370,7 +2370,7 @@
 ;; type declarations.
 ;; this info is recorded by setting the second argument of `lambda` expressions
 ;; in-place to
-;;   (var-info-lst captured-var-infos gensyms static_params)
+;;   (var-info-lst captured-var-infos ssavalues static_params)
 ;; where var-info-lst is a list of var-info records
 (define (analyze-vars e env captvars sp)
   (if (or (atom? e) (quoted? e))
@@ -2507,10 +2507,10 @@ f(x) = yt(x)
          (capt   (and vi (vinfo:asgn vi) (vinfo:capt vi))))
     (if (and (not closed) (not capt) (eq? vt 'Any))
         `(= ,var ,rhs0)
-        (let* ((rhs1 (if (or (jlgensym? rhs0) (simple-atom? rhs0)
+        (let* ((rhs1 (if (or (ssavalue? rhs0) (simple-atom? rhs0)
                              (equal? rhs0 '(the_exception)))
                          rhs0
-                         (make-jlgensym)))
+                         (make-ssavalue)))
                (rhs  (if (eq? vt 'Any)
                          rhs1
                          (convert-for-type-decl rhs1 (cl-convert vt fname lam #f #f interp))))
@@ -2674,7 +2674,7 @@ f(x) = yt(x)
           ((=)
            (let ((var (cadr e))
                  (rhs (cl-convert (caddr e) fname lam namemap toplevel interp)))
-             (if (jlgensym? var)
+             (if (ssavalue? var)
                  `(= ,var ,rhs)
                  (convert-assignment var rhs fname lam interp))))
           ((newvar)
@@ -2777,7 +2777,7 @@ f(x) = yt(x)
                                             alldefs))))
                         (capt-sp (intersect cvs sps))
                         (capt-vars (diff cvs capt-sp))
-                        (method-sp (map (lambda (s) (make-jlgensym)) capt-sp))
+                        (method-sp (map (lambda (s) (make-ssavalue)) capt-sp))
                         (typedef  ;; expression to define the type
                          (let* ((fieldtypes (map (lambda (v)
                                                    (if (is-var-boxed? v lam)
@@ -2906,8 +2906,8 @@ f(x) = yt(x)
             l)))
     (define (emit-return x)
       (if (> handler-level 0)
-          (let ((tmp (if (or (simple-atom? x) (jlgensym? x) (equal? x '(null)))
-                         #f (make-jlgensym))))
+          (let ((tmp (if (or (simple-atom? x) (ssavalue? x) (equal? x '(null)))
+                         #f (make-ssavalue))))
             (if tmp (emit `(= ,tmp ,x)))
             (emit `(leave ,handler-level))
             (emit `(return ,(or tmp x))))
@@ -2923,7 +2923,7 @@ f(x) = yt(x)
                             (expr-contains-p (lambda (x) (and (assignment? x)
                                                               (symbol? (cadr x))))
                                              (cons 'block (cdr lst)))))
-                (simple? (every (lambda (x) (or (simple-atom? x) (symbol? x) (jlgensym? x)
+                (simple? (every (lambda (x) (or (simple-atom? x) (symbol? x) (ssavalue? x)
                                                 (and (pair? x)
                                                      (memq (car x) '(quote inert top copyast)))))
                                 lst)))
@@ -2935,14 +2935,14 @@ f(x) = yt(x)
                          (aval (compile arg break-labels #t #f)))
                     (loop (cdr lst)
                           (cons (if (and temps? (not simple?)
-                                         (not (simple-atom? arg))  (not (jlgensym? arg))
-                                         (not (simple-atom? aval)) (not (jlgensym? aval))
+                                         (not (simple-atom? arg))  (not (ssavalue? arg))
+                                         (not (simple-atom? aval)) (not (ssavalue? aval))
                                          (not (and (pair? arg)
                                                    (memq (car arg) '(& quote inert top copyast))))
                                          (not (and (symbol? arg)
                                                    (or (null? (cdr lst))
                                                        (null? vals)))))
-                                    (let ((tmp (make-jlgensym)))
+                                    (let ((tmp (make-ssavalue)))
                                       (emit `(= ,tmp ,aval))
                                       tmp)
                                     aval)
@@ -2950,8 +2950,8 @@ f(x) = yt(x)
     (define (compile-cond ex break-labels)
       (let ((cnd (compile ex break-labels #t #f)))
         (if (and *very-linear-mode*
-                 (not (or (simple-atom? cnd) (jlgensym? cnd) (symbol? cnd))))
-            (let ((tmp (make-jlgensym)))
+                 (not (or (simple-atom? cnd) (ssavalue? cnd) (symbol? cnd))))
+            (let ((tmp (make-ssavalue)))
               (emit `(= ,tmp ,cnd))
               tmp)
             cnd)))
@@ -2962,7 +2962,7 @@ f(x) = yt(x)
     ;; `tail` means we are in tail position, where a value needs to be `return`ed
     ;; from the current function.
     (define (compile e break-labels value tail)
-      (if (or (not (pair? e)) (memq (car e) '(null jlgensym quote inert top copyast the_exception $
+      (if (or (not (pair? e)) (memq (car e) '(null ssavalue quote inert top copyast the_exception $
                                                    cdecl stdcall fastcall thiscall)))
           (cond (tail  (emit-return e))
                 (value e)
@@ -2984,8 +2984,8 @@ f(x) = yt(x)
             ((=)
              (let ((rhs (compile (caddr e) break-labels #t #f)))
                (if value
-                   (let ((rr (if (or (atom? rhs) (jlgensym? rhs) (eq? (car rhs) 'null))
-                                 rhs (make-jlgensym))))
+                   (let ((rr (if (or (atom? rhs) (ssavalue? rhs) (eq? (car rhs) 'null))
+                                 rhs (make-ssavalue))))
                      (if (not (eq? rr rhs))
                          (emit `(= ,rr ,rhs)))
                      (emit `(= ,(cadr e) ,rr))
@@ -3236,8 +3236,8 @@ f(x) = yt(x)
 
 (define (renumber-lambda lam)
   (renumber-labels! lam (label-to-idx-map (lam:body lam)))
-  (define ngensyms 0)
-  (define gensym-table (table))
+  (define nssavalues 0)
+  (define ssavalue-table (table))
   (define nslots (length (car (lam:vinfo lam))))
   (define slot-table (symbol-to-idx-map (map car (car (lam:vinfo lam)))))
   (define sp-table (symbol-to-idx-map (lam:sp lam)))
@@ -3249,12 +3249,12 @@ f(x) = yt(x)
                    (or (and idx `(static_parameter ,idx))
                        e)))))
           ((or (atom? e) (quoted? e)) e)
-          ((jlgensym? e)
-           (let ((idx (or (get gensym-table (cadr e) #f)
-                          (begin0 ngensyms
-                                  (put! gensym-table (cadr e) ngensyms)
-                                  (set! ngensyms (+ ngensyms 1))))))
-             `(jlgensym ,idx)))
+          ((ssavalue? e)
+           (let ((idx (or (get ssavalue-table (cadr e) #f)
+                          (begin0 nssavalues
+                                  (put! ssavalue-table (cadr e) nssavalues)
+                                  (set! nssavalues (+ nssavalues 1))))))
+             `(ssavalue ,idx)))
           ((eq? (car e) 'lambda)
            (renumber-lambda e))
           (else (cons (car e)
@@ -3262,7 +3262,7 @@ f(x) = yt(x)
   (let ((body (renumber-slots (lam:body lam)))
         (vi   (lam:vinfo lam)))
     `(lambda ,(cadr lam)
-       (,(car vi) ,(cadr vi) ,ngensyms ,(last vi))
+       (,(car vi) ,(cadr vi) ,nssavalues ,(last vi))
        ,body)))
 
 (define (renumber-slots-and-labels ex)

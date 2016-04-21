@@ -625,7 +625,7 @@ static void jl_serialize_module(ios_t *s, jl_module_t *m)
 
 static int is_ast_node(jl_value_t *v)
 {
-    return jl_is_symbol(v) || jl_is_slot(v) || jl_is_gensym(v) ||
+    return jl_is_symbol(v) || jl_is_slot(v) || jl_is_ssavalue(v) ||
         jl_is_expr(v) || jl_is_newvarnode(v) || jl_is_svec(v) ||
         jl_typeis(v, jl_array_any_type) || jl_is_tuple(v) ||
         jl_is_uniontype(v) || jl_is_int32(v) || jl_is_int64(v) ||
@@ -757,9 +757,9 @@ static void jl_serialize_value_(ios_t *s, jl_value_t *v)
             jl_serialize_value(s, jl_globalref_name(v));
         }
     }
-    else if (jl_is_gensym(v) && ((jl_gensym_t*)v)->id < 65536) {
-        writetag(s, (jl_value_t*)jl_gensym_type);
-        write_uint16(s, ((jl_gensym_t*)v)->id);
+    else if (jl_is_ssavalue(v) && ((jl_ssavalue_t*)v)->id < 65536) {
+        writetag(s, (jl_value_t*)jl_ssavalue_type);
+        write_uint16(s, ((jl_ssavalue_t*)v)->id);
     }
     else if (jl_typeis(v,jl_slotnumber_type) && jl_slot_number(v) < 65536) {
         writetag(s, (jl_value_t*)jl_slotnumber_type);
@@ -853,7 +853,7 @@ static void jl_serialize_value_(ios_t *s, jl_value_t *v)
         jl_serialize_value(s, li->slotnames);
         jl_serialize_value(s, li->slottypes);
         jl_serialize_value(s, li->slotflags);
-        jl_serialize_value(s, li->gensymtypes);
+        jl_serialize_value(s, li->ssavaluetypes);
         jl_serialize_value(s, li->rettype);
         jl_serialize_value(s, (jl_value_t*)li->sparam_syms);
         jl_serialize_value(s, (jl_value_t*)li->sparam_vals);
@@ -1341,8 +1341,8 @@ static jl_value_t *jl_deserialize_value_(ios_t *s, jl_value_t *vtag, jl_value_t 
             arraylist_push(&backref_list, sym);
         return sym;
     }
-    else if (vtag == (jl_value_t*)jl_gensym_type) {
-        jl_value_t *v = jl_box_gensym(read_uint16(s));
+    else if (vtag == (jl_value_t*)jl_ssavalue_type) {
+        jl_value_t *v = jl_box_ssavalue(read_uint16(s));
         if (usetable) arraylist_push(&backref_list, v);
         return v;
     }
@@ -1463,7 +1463,7 @@ static jl_value_t *jl_deserialize_value_(ios_t *s, jl_value_t *vtag, jl_value_t 
         li->slotnames = (jl_array_t*)jl_deserialize_value(s, (jl_value_t**)&li->slotnames); jl_gc_wb(li, li->slotnames);
         li->slottypes = jl_deserialize_value(s, &li->slottypes); jl_gc_wb(li, li->slottypes);
         li->slotflags = (jl_array_t*)jl_deserialize_value(s, (jl_value_t**)&li->slotflags); jl_gc_wb(li, li->slotflags);
-        li->gensymtypes = jl_deserialize_value(s, &li->gensymtypes); jl_gc_wb(li, li->gensymtypes);
+        li->ssavaluetypes = jl_deserialize_value(s, &li->ssavaluetypes); jl_gc_wb(li, li->ssavaluetypes);
         li->rettype = jl_deserialize_value(s, &li->rettype);
         jl_gc_wb(li, li->rettype);
         li->sparam_syms = (jl_svec_t*)jl_deserialize_value(s, (jl_value_t**)&li->sparam_syms);
@@ -2385,7 +2385,7 @@ void jl_init_serializer(void)
     htable_new(&fptr_to_id, sizeof(id_to_fptrs)/sizeof(*id_to_fptrs));
     htable_new(&backref_table, 0);
 
-    void *tags[] = { jl_symbol_type, jl_gensym_type, jl_datatype_type, jl_slotnumber_type,
+    void *tags[] = { jl_symbol_type, jl_ssavalue_type, jl_datatype_type, jl_slotnumber_type,
                      jl_simplevector_type, jl_array_type, jl_typedslot_type,
                      jl_expr_type, (void*)LongSymbol_tag, (void*)LongSvec_tag,
                      (void*)LongExpr_tag, (void*)LiteralVal_tag,
@@ -2448,7 +2448,7 @@ void jl_init_serializer(void)
                      jl_voidpointer_type, jl_newvarnode_type,
                      jl_array_symbol_type, jl_anytuple_type, jl_tparam0(jl_anytuple_type),
                      jl_typeof(jl_emptytuple), jl_array_uint8_type,
-                     jl_symbol_type->name, jl_gensym_type->name, jl_tuple_typename,
+                     jl_symbol_type->name, jl_ssavalue_type->name, jl_tuple_typename,
                      jl_ref_type->name, jl_pointer_type->name, jl_simplevector_type->name,
                      jl_datatype_type->name, jl_uniontype_type->name, jl_array_type->name,
                      jl_expr_type->name, jl_typename_type->name, jl_type_type->name,

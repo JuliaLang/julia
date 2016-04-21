@@ -329,16 +329,16 @@ void jl_lambda_info_set_ast(jl_lambda_info_t *li, jl_value_t *ast)
         li->pure = 1;
     jl_array_t *vis = jl_lam_vinfo((jl_expr_t*)ast);
     size_t nslots = jl_array_len(vis);
-    jl_value_t *gensym_types = jl_lam_gensyms((jl_expr_t*)ast);
-    assert(jl_is_long(gensym_types));
-    size_t ngensym = jl_unbox_long(gensym_types);
+    jl_value_t *ssavalue_types = jl_lam_ssavalues((jl_expr_t*)ast);
+    assert(jl_is_long(ssavalue_types));
+    size_t nssavalue = jl_unbox_long(ssavalue_types);
     li->slotnames = jl_alloc_cell_1d(nslots);
     jl_gc_wb(li, li->slotnames);
     li->slottypes = jl_nothing;
     li->slotflags = jl_alloc_array_1d(jl_array_uint8_type, nslots);
     jl_gc_wb(li, li->slotflags);
-    li->gensymtypes = jl_box_long(ngensym);
-    jl_gc_wb(li, li->gensymtypes);
+    li->ssavaluetypes = jl_box_long(nssavalue);
+    jl_gc_wb(li, li->ssavaluetypes);
     int i;
     for(i=0; i < nslots; i++) {
         jl_value_t *vi = jl_cellref(vis, i);
@@ -371,7 +371,7 @@ JL_DLLEXPORT jl_lambda_info_t *jl_new_lambda_info_uninit(jl_svec_t *sparam_syms)
                                   NWORDS(sizeof(jl_lambda_info_t)));
     li->code = NULL;
     li->slotnames = li->slotflags = NULL;
-    li->slottypes = li->gensymtypes = NULL;
+    li->slottypes = li->ssavaluetypes = NULL;
     li->rettype = (jl_value_t*)jl_any_type;
     li->sparam_syms = sparam_syms;
     li->sparam_vals = jl_emptysvec;
@@ -471,7 +471,7 @@ static jl_lambda_info_t *jl_copy_lambda(jl_lambda_info_t *linfo)
     new_linfo->slotnames = linfo->slotnames;
     new_linfo->slottypes = linfo->slottypes;
     new_linfo->slotflags = linfo->slotflags;
-    new_linfo->gensymtypes = linfo->gensymtypes;
+    new_linfo->ssavaluetypes = linfo->ssavaluetypes;
     new_linfo->sparam_vals = linfo->sparam_vals;
     new_linfo->pure = linfo->pure;
     new_linfo->nargs = linfo->nargs;
@@ -1110,7 +1110,7 @@ SIBOX_FUNC(int32,  int32_t, 1)
 UIBOX_FUNC(uint16, uint16_t, 1)
 UIBOX_FUNC(uint32, uint32_t, 1)
 UIBOX_FUNC(char,   uint32_t, 1)
-UIBOX_FUNC(gensym, size_t, 1)
+UIBOX_FUNC(ssavalue, size_t, 1)
 UIBOX_FUNC(slotnumber, size_t, 1)
 #ifdef _P64
 SIBOX_FUNC(int64,  int64_t, 1)
@@ -1138,10 +1138,10 @@ void jl_init_int32_int64_cache(void)
         boxed_int32_cache[i]  = jl_box32(jl_int32_type, i-NBOX_C/2);
         boxed_int64_cache[i]  = jl_box64(jl_int64_type, i-NBOX_C/2);
 #ifdef _P64
-        boxed_gensym_cache[i] = jl_box64(jl_gensym_type, i);
+        boxed_ssavalue_cache[i] = jl_box64(jl_ssavalue_type, i);
         boxed_slotnumber_cache[i] = jl_box64(jl_slotnumber_type, i);
 #else
-        boxed_gensym_cache[i] = jl_box32(jl_gensym_type, i);
+        boxed_ssavalue_cache[i] = jl_box32(jl_ssavalue_type, i);
         boxed_slotnumber_cache[i] = jl_box32(jl_slotnumber_type, i);
 #endif
     }
@@ -1180,7 +1180,7 @@ void jl_mark_box_caches(void)
         jl_gc_setmark(boxed_uint32_cache[i]);
         jl_gc_setmark(boxed_char_cache[i]);
         jl_gc_setmark(boxed_uint64_cache[i]);
-        jl_gc_setmark(boxed_gensym_cache[i]);
+        jl_gc_setmark(boxed_ssavalue_cache[i]);
         jl_gc_setmark(boxed_slotnumber_cache[i]);
     }
 }

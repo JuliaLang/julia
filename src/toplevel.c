@@ -251,7 +251,7 @@ int jl_has_intrinsics(jl_lambda_info_t *li, jl_value_t *v, jl_module_t *m)
         if (sv && jl_typeis(sv, jl_intrinsic_type))
             return 1;
     }
-    if (0 && e->head == assign_sym && jl_is_gensym(e0)) { // code branch needed for *very-linear-mode*, but not desirable otherwise
+    if (0 && e->head == assign_sym && jl_is_ssavalue(e0)) { // code branch needed for *very-linear-mode*, but not desirable otherwise
         jl_value_t *e1 = jl_exprarg(e, 1);
         jl_value_t *sv = jl_static_eval(e1, NULL, m, li, li != NULL, 0);
         if (sv && jl_typeis(sv, jl_intrinsic_type))
