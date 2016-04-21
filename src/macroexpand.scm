@@ -23,7 +23,7 @@
 
 (define (julia-bq-expand x d)
   (cond ((or (eq? x 'true) (eq? x 'false))  x)
-        ((or (symbol? x) (jlgensym? x))     (list 'inert x))
+        ((or (symbol? x) (ssavalue? x))     (list 'inert x))
         ((atom? x)  x)
         ((eq? (car x) 'quote)
          `(call (top _expr) (inert quote) ,(julia-bq-expand (cadr x) (+ d 1))))
@@ -216,7 +216,7 @@
          e)
         (else
          (case (car e)
-           ((jlgensym) e)
+           ((ssavalue) e)
            ((escape) (cadr e))
            ((global) (let ((arg (cadr e)))
                        (cond ((symbol? arg) e)

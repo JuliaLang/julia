@@ -331,7 +331,7 @@ function serialize(s::SerializationState, linfo::LambdaInfo)
     serialize(s, linfo.slotnames)
     serialize(s, linfo.slottypes)
     serialize(s, linfo.slotflags)
-    serialize(s, linfo.gensymtypes)
+    serialize(s, linfo.ssavaluetypes)
     serialize(s, linfo.sparam_syms)
     serialize(s, linfo.sparam_vals)
     serialize(s, linfo.rettype)
@@ -614,7 +614,7 @@ function deserialize(s::SerializationState, ::Type{LambdaInfo})
     linfo.slotnames = deserialize(s)::Array{Any, 1}
     linfo.slottypes = deserialize(s)
     linfo.slotflags = deserialize(s)
-    linfo.gensymtypes = deserialize(s)
+    linfo.ssavaluetypes = deserialize(s)
     linfo.sparam_syms = deserialize(s)::SimpleVector
     linfo.sparam_vals = deserialize(s)::SimpleVector
     linfo.rettype = deserialize(s)

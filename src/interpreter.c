@@ -117,9 +117,9 @@ static int jl_linfo_nslots(jl_lambda_info_t *li)
     return jl_array_len(li->slotflags);
 }
 
-static int jl_linfo_ngensyms(jl_lambda_info_t *li)
+static int jl_linfo_nssavalues(jl_lambda_info_t *li)
 {
-    return jl_is_long(li->gensymtypes) ? jl_unbox_long(li->gensymtypes) : jl_array_len(li->gensymtypes);
+    return jl_is_long(li->ssavaluetypes) ? jl_unbox_long(li->ssavaluetypes) : jl_array_len(li->ssavaluetypes);
 }
 
 static jl_value_t *eval(jl_value_t *e, jl_value_t **locals, jl_lambda_info_t *lam)
@@ -130,12 +130,12 @@ static jl_value_t *eval(jl_value_t *e, jl_value_t **locals, jl_lambda_info_t *la
             jl_undefined_var_error((jl_sym_t*)e);
         return v;
     }
-    if (jl_is_gensym(e)) {
-        ssize_t genid = ((jl_gensym_t*)e)->id;
-        if (genid >= jl_linfo_ngensyms(lam) || genid < 0 || locals == NULL)
-            jl_error("access to invalid GenSym location");
+    if (jl_is_ssavalue(e)) {
+        ssize_t id = ((jl_ssavalue_t*)e)->id;
+        if (id >= jl_linfo_nssavalues(lam) || id < 0 || locals == NULL)
+            jl_error("access to invalid SSAValue");
         else
-            return locals[jl_linfo_nslots(lam) + genid];
+            return locals[jl_linfo_nslots(lam) + id];
     }
     if (jl_is_quotenode(e)) {
         return jl_fieldref(e,0);
@@ -183,11 +183,11 @@ static jl_value_t *eval(jl_value_t *e, jl_value_t **locals, jl_lambda_info_t *la
     else if (ex->head == assign_sym) {
         jl_value_t *sym = args[0];
         jl_value_t *rhs = eval(args[1], locals, lam);
-        if (jl_is_gensym(sym)) {
-            ssize_t genid = ((jl_gensym_t*)sym)->id;
-            if (genid >= jl_linfo_ngensyms(lam) || genid < 0)
-                jl_error("assignment to invalid GenSym location");
-            locals[jl_linfo_nslots(lam) + genid] = rhs;
+        if (jl_is_ssavalue(sym)) {
+            ssize_t id = ((jl_ssavalue_t*)sym)->id;
+            if (id >= jl_linfo_nssavalues(lam) || id < 0)
+                jl_error("assignment to invalid SSAValue");
+            locals[jl_linfo_nslots(lam) + id] = rhs;
         }
         else if (jl_is_slot(sym)) {
             ssize_t n = jl_slot_number(sym);
@@ -522,7 +522,7 @@ jl_value_t *jl_interpret_toplevel_thunk(jl_lambda_info_t *lam)
 {
     jl_array_t *stmts = lam->code;
     jl_value_t **locals;
-    JL_GC_PUSHARGS(locals, jl_linfo_nslots(lam) + jl_linfo_ngensyms(lam));
+    JL_GC_PUSHARGS(locals, jl_linfo_nslots(lam) + jl_linfo_nssavalues(lam));
     jl_value_t *r = eval_body(stmts, locals, lam, 0, 1);
     JL_GC_POP();
     return r;
