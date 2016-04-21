@@ -144,7 +144,19 @@ download
     @everywhere
 
 Execute an expression on all processes. Errors on any of the processes are collected into a
-`CompositeException` and thrown.
+`CompositeException` and thrown. For example :
+
+    @everywhere bar=1
+
+will define `bar` under module `Main` on all processes.
+
+Unlike `@spawn` and `@spawnat`, `@everywhere` does not capture any local variables. Prefixing
+`@everywhere` with `@eval` allows us to broadcast local variables using interpolation :
+
+    foo = 1
+    @eval @everywhere bar=\$foo
+
+
 """
 :@everywhere
 
