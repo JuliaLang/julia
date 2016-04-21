@@ -33,20 +33,24 @@ g = Float16(1.)
 @test_throws InexactError convert(UInt128, Float16(3.5))
 @test_throws InexactError convert(UInt128, Float16(-1))
 
-x = Float32(rand())
-y = Float32(rand())
-z = Float32(rand())
-@test_approx_eq Float16(x)^2 Float16(x^2)
-@test round(Int,Float16(x)) == round(Int,x)
-@test trunc(Int,Float16(x)) == trunc(Int,x)
-@test floor(Int,Float16(x)) == floor(Int,x)
-@test ceil(Int,Float16(x)) == ceil(Int,x)
-@test round(Float16(x)) == round(x)
-@test trunc(Float16(x)) == trunc(x)
-@test floor(Float16(x)) == floor(x)
-@test ceil(Float16(x)) == ceil(x)
-@test_approx_eq fma(Float16(x),Float16(y),Float16(z)) fma(x,y,z)
-@test_approx_eq muladd(Float16(x),Float16(y),Float16(z)) muladd(x,y,z)
+@test_approx_eq Float16(0.5f0)^2 Float16(0.5f0^2)
+@test round(Int,Float16(0.5f0)) == round(Int,0.5f0)
+@test trunc(Int,Float16(0.9f0)) === trunc(Int,0.9f0) === 0
+@test floor(Int,Float16(0.9f0)) === floor(Int,0.9f0) === 0
+@test trunc(Int,Float16(1)) === 1
+@test floor(Int,Float16(1)) === 1
+@test ceil(Int,Float16(0.1f0)) === ceil(Int,0.1f0) === 1
+@test ceil(Int,Float16(0)) === ceil(Int,0) === 0
+@test round(Float16(0.1f0)) == round(0.1f0) == 0
+@test round(Float16(0.9f0)) == round(0.9f0) == 1
+@test trunc(Float16(0.9f0)) == trunc(0.9f0) == 0
+@test floor(Float16(0.9f0)) == floor(0.9f0) == 0
+@test trunc(Float16(1)) === Float16(1)
+@test floor(Float16(1)) === Float16(1)
+@test ceil(Float16(0.1)) == ceil(0.1)
+@test ceil(Float16(0.9)) == ceil(0.9)
+@test_approx_eq fma(Float16(0.1),Float16(0.9),Float16(0.5)) fma(0.1,0.9,0.5)
+@test_approx_eq muladd(Float16(0.1),Float16(0.9),Float16(0.5)) muladd(0.1,0.9,0.5)
 @test convert(Int128,Float16(-1.0)) == Int128(-1)
 @test convert(UInt128,Float16(5.0)) == UInt128(5)
 
