@@ -193,13 +193,13 @@ static inline unsigned int next_power_of_two(unsigned int val)
 
 static void mtcache_rehash(jl_array_t **pa, jl_value_t *parent, int8_t tparam, int8_t offs)
 {
-    size_t i, len = (*pa)->nrows;
+    size_t i, len = jl_array_len(*pa);
     size_t newlen = next_power_of_two(len) * 2;
-    jl_value_t **d = (jl_value_t**)(*pa)->data;
+    jl_value_t **d = (jl_value_t**)jl_array_data(*pa);
     jl_array_t *n = jl_alloc_cell_1d(newlen);
-    for (i = 0; i < len; i++) {
+    for (i = 1; i <= len; i++) {
         union jl_typemap_t ml;
-        ml.unknown = d[i];
+        ml.unknown = d[i - 1];
         if (ml.unknown != NULL && ml.unknown != jl_nothing) {
             jl_value_t *t;
             if (jl_typeof(ml.unknown) == (jl_value_t*)jl_typemap_level_type) {
@@ -223,8 +223,8 @@ static void mtcache_rehash(jl_array_t **pa, jl_value_t *parent, int8_t tparam, i
             }
         }
     }
-    jl_gc_wb(parent, n);
     *pa = n;
+    jl_gc_wb(parent, n);
 }
 
 // Recursively rehash a TypeMap (for example, after deserialization)
