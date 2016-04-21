@@ -74,7 +74,7 @@ macro evalpoly(z, p...)
         ai = symbol("a", i)
         push!(as, :($ai = $a))
         a = :(muladd(r, $ai, $b))
-        b = :(muladd(-s, $ai, $(esc(p[i]))))
+        b = :($(esc(p[i])) - s * $ai) # see issue #15985 on fused mul-subtract
     end
     ai = :a0
     push!(as, :($ai = $a))
@@ -82,7 +82,7 @@ macro evalpoly(z, p...)
              :(x = real(tt)),
              :(y = imag(tt)),
              :(r = x + x),
-             :(s = x*x + y*y),
+             :(s = muladd(x, x, y*y)),
              as...,
              :(muladd($ai, tt, $b)))
     R = Expr(:macrocall, symbol("@horner"), :tt, map(esc, p)...)
