@@ -1200,7 +1200,7 @@ b1 = bitrand(1, v1, 1)
 @check_bit_operation cat(2, false, b1, true, true, b1) BitArray{3}
 
 b1 = bitrand(n1, n2)
-for m1 = 1 : n1 - 1r
+for m1 = 1 : n1 - 1
     for m2 = 1 : n2 - 1
         @test isequal([b1[1:m1,1:m2] b1[1:m1,m2+1:end]; b1[m1+1:end,1:m2] b1[m1+1:end,m2+1:end]], b1)
     end
