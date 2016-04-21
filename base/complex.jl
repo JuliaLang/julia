@@ -124,6 +124,10 @@ inv{T<:Integer}(z::Complex{T}) = inv(float(z))
 *(z::Complex, w::Complex) = Complex(real(z) * real(w) - imag(z) * imag(w),
                                     real(z) * imag(w) + imag(z) * real(w))
 
+muladd(z::Complex, w::Complex, x::Complex) =
+    Complex(muladd(real(z), real(w), real(x)) - imag(z)*imag(w), # TODO: use mulsub given #15985
+            muladd(real(z), imag(w), muladd(imag(z), real(w), imag(x))))
+
 # handle Bool and Complex{Bool}
 # avoid type signature ambiguity warnings
 +(x::Bool, z::Complex{Bool}) = Complex(x + real(z), imag(z))
@@ -162,6 +166,15 @@ end
 -(z::Complex, x::Real) = Complex(real(z) - x, imag(z))
 *(x::Real, z::Complex) = Complex(x * real(z), x * imag(z))
 *(z::Complex, x::Real) = Complex(x * real(z), x * imag(z))
+
+muladd(x::Real, z::Complex, y::Number) = muladd(z, x, y)
+muladd(z::Complex, x::Real, y::Real) = Complex(muladd(real(z),x,y), imag(z)*x)
+muladd(z::Complex, x::Real, w::Complex) =
+    Complex(muladd(real(z),x,real(w)), muladd(imag(z),x,imag(w)))
+muladd(x::Real, y::Real, z::Complex) = Complex(muladd(x,y,real(z)), imag(z))
+muladd(z::Complex, w::Complex, x::Real) =
+    Complex(muladd(real(z), real(w), x) - imag(z)*imag(w), # TODO: use mulsub given #15985
+            muladd(real(z), imag(w), imag(z) * real(w)))
 
 /(a::Real, z::Complex) = a*inv(z)
 /(z::Complex, x::Real) = Complex(real(z)/x, imag(z)/x)
