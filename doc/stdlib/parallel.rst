@@ -502,7 +502,20 @@ General Parallel Computing Support
 
    .. Docstring generated from Julia source
 
-   Execute an expression on all processes. Errors on any of the processes are collected into a ``CompositeException`` and thrown.
+   Execute an expression on all processes. Errors on any of the processes are collected into a ``CompositeException`` and thrown. For example :
+
+   .. code-block:: julia
+
+       @everywhere bar=1
+
+   will define ``bar`` under module ``Main`` on all processes.
+
+   Unlike ``@spawn`` and ``@spawnat``\ , ``@everywhere`` does not capture any local variables. Prefixing ``@everywhere`` with ``@eval`` allows us to broadcast local variables using interpolation :
+
+   .. code-block:: julia
+
+       foo = 1
+       @eval @everywhere bar=$foo
 
 .. function:: Base.remoteref_id(r::AbstractRemoteRef) -> (whence, id)
 
