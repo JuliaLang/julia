@@ -117,7 +117,8 @@ noteworthy differences:
 - In Julia, varargs are specified using the splat operator ``...``, which
   always follows the name of a specific variable, unlike R, for which ``...``
   can occur in isolation.
-- In Julia, modulus, is :obj:`%`, not ``%%``.
+- In Julia, modulus is ``mod(a, b)``, not ``a %% b``. ``%`` in Julia is the
+  remainder operator.
 - In Julia, not all data structures support logical indexing. Furthermore,
   logical indexing in Julia is supported only with vectors of length equal to
   the object being indexed. For example:
@@ -265,6 +266,7 @@ Noteworthy differences from Python
   returns a new random number every time it is invoked without argument. On the
   other hand, the function ``g(x=[1,2]) = push!(x,3)`` returns ``[1,2,3]`` every
   time it is called as ``g()``.
+- In Julia ``%`` is the remainder operator, whereas in Python it is the modulus.
 
 
 Noteworthy differences from C/C++
