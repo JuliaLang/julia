@@ -172,6 +172,18 @@ let i = 0
         i <= 10 || break
     end
 end
+let it = repeated(1, 10)
+    for i in 1:10
+        @test it[i] == 1
+    end
+    @test_throws BoundsError it[0]
+    @test_throws BoundsError it[11]
+end
+let it = repeated(1)
+    @test_throws BoundsError it[0]
+    @test it[1] == 1
+    @test it[100] == 1
+end
 
 
 # product

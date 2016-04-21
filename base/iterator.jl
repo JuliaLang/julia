@@ -226,6 +226,11 @@ function done(it::Take, state)
     return n <= 0 || done(it.xs, xs_state)
 end
 
+@inline function getindex(it::Take, i::Integer)
+    @boundscheck 1 <= i <= length(it) || throw(BoundsError(it, i))
+    it.xs[i]
+end
+
 # Drop -- iterator through all but the first n elements
 
 immutable Drop{I}
@@ -295,6 +300,11 @@ iteratorsize{O}(::Type{Repeated{O}}) = IsInfinite()
 start(it::Repeated) = nothing
 next(it::Repeated, state) = (it.x, nothing)
 done(it::Repeated, state) = false
+
+@inline function getindex(it::Repeated, i::Integer)
+    @boundscheck i >= 1 || throw(BoundsError(it, i))
+    it.x
+end
 
 repeated(x, n::Int) = take(repeated(x), n)
 
