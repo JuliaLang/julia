@@ -10,12 +10,6 @@ import Base.blasfunc
 import ..LinAlg: BlasFloat, Char, BlasInt, LAPACKException,
     DimensionMismatch, SingularException, PosDefException, chkstride1, chksquare
 
-const VERSION = Ref{VersionNumber}()
-
-function __init__()
-    VERSION[] = VersionNumber(laver()...)
-end
-
 #Generic LAPACK error handlers
 macro assertargsok() #Handle only negative info codes - use only if positive info code is useful!
     :(info[1]<0 && throw(ArgumentError("invalid argument #$(-info[1]) to LAPACK call")))
