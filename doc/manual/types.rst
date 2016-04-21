@@ -1253,7 +1253,7 @@ value at run-time:
 
     println(firstlast(true))
 
-You can instead cause the conditional to be evaluated during function
+You might be tempted to try to evaluate a conditional during function
 compilation by using the ``Val`` trick:
 
 .. doctest::
@@ -1262,6 +1262,27 @@ compilation by using the ``Val`` trick:
     firstlast(::Type{Val{false}}) = "Last"
 
     println(firstlast(Val{true}))
+
+However, *don't do this*.
+
+When integrated in an application,
+this will perform much worse than simply writing out the conditional,
+and code readability will suffer. Compare:
+
+.. doctest::
+
+    firstlast(isfirst::Bool) = isfirst ? "First" : "Last"
+    println(firstlast(true))
+
+Or we could note that this function name is a hodgepodge name,
+formed from trying to force two disparate concepts into one function.
+A clearer version would be to make two functions and let the caller pick:
+
+.. doctest::
+
+    first() = "First"
+    last() = "Last"
+    println(true ? first() : last())
 
 Any legal type parameter (Types, Symbols, Integers, floating-point
 numbers, tuples, etc.) can be passed via ``Val``.
