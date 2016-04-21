@@ -2496,7 +2496,7 @@ function inlineable(f::ANY, ft::ANY, e::Expr, atypes::Vector{Any}, sv::Inference
 
         islocal = false # if the argument name is also used as a local variable,
                         # we need to keep it as a variable name
-        if linfo.slotflags[i] != 0
+        if linfo.slotflags[i]&18 != 0
             islocal = true
             aeitype = tmerge(aeitype, linfo.slottypes[i])
         end
