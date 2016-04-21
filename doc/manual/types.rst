@@ -1237,38 +1237,57 @@ If you apply :func:`supertype` to other type objects (or non-type objects), a
     julia> supertype(Union{Float64,Int64})
     ERROR: `supertype` has no method matching supertype(::Type{Union{Float64,Int64}})
 
+.. _man-val-trick:
+
 "Value types"
 -------------
 
-As one application of these ideas, Julia includes a parametric type,
-``Val{T}``, designated for dispatching on bits-type *values*.  For
-example, if you pass a boolean to a function, you have to test the
-value at run-time:
+In Julia, you can't dispatch on a *value* such as ``true`` or
+``false``. However, you can dispatch on parametric types, and Julia
+allows you to include "plain bits" values (Types, Symbols,
+Integers, floating-point numbers, tuples, etc.) as type parameters.  A
+common example is the dimensionality parameter in ``Array{T,N}``,
+where ``T`` is a type (e.g., ``Float64``) but ``N`` is just an
+``Int``.
 
-.. doctest::
+You can create your own custom types that take values as parameters,
+and use them to control dispatch of custom types. By way of
+illustration of this idea, let's introduce a parametric type,
+``Val{T}``, which serves as a customary way to exploit this technique
+for cases where you don't need a more elaborate hierarchy.
 
-    function firstlast(b::Bool)
-        return b ? "First" : "Last"
+``Val`` is defined as::
+
+    immutable Val{T}
     end
 
-    println(firstlast(true))
-
-You can instead cause the conditional to be evaluated during function
-compilation by using the ``Val`` trick:
+There is no more to the implementation of ``Val`` than this.  Some
+functions in Julia's standard library accept ``Val`` types as
+arguments, and you can also use it to write your own functions.  For
+example:
 
 .. doctest::
 
     firstlast(::Type{Val{true}}) = "First"
     firstlast(::Type{Val{false}}) = "Last"
 
-    println(firstlast(Val{true}))
+    julia> println(firstlast(Val{true}))
+    First
 
-Any legal type parameter (Types, Symbols, Integers, floating-point
-numbers, tuples, etc.) can be passed via ``Val``.
+    julia> println(firstlast(Val{false}))
+    Last
 
 For consistency across Julia, the call site should always pass a
-``Val`` type rather than creating an instance, i.e., use
+``Val`` *type* rather than creating an *instance*, i.e., use
 ``foo(Val{:bar})`` rather than ``foo(Val{:bar}())``.
+
+It's worth noting that it's extremely easy to mis-use parametric
+"value" types, including ``Val``; in unfavorable cases, you can easily
+end up making the performance of your code much *worse*.  In
+particular, you would never want to write actual code as illustrated
+above.  For more information about the proper (and improper) uses of
+``Val``, please read the more extensive discussion in :ref:`the
+performance tips <man-performance-val>`.
 
 .. _man-nullable-types:
 
