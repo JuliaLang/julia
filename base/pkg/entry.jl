@@ -77,6 +77,29 @@ function add(pkg::AbstractString, vers::VersionSet)
 end
 add(pkg::AbstractString, vers::VersionNumber...) = add(pkg,VersionSet(vers...))
 
+function processrequire(requirements::Dict{ByteString,Base.Pkg.Types.VersionSet})
+    delete!(requirements, "julia")
+    skip = installed()
+    changed = false
+    for (pkg,versions) in requirements
+        if !haskey(skip, pkg) || !(skip[pkg] in versions)
+            add(pkg, versions)
+            changed = true
+        end
+    end
+    if !changed
+        info("Nothing to be done")
+    end
+end
+
+addrequire(reqs::Dict{ByteString,Base.Pkg.Types.VersionSet}) = Dir.cd(processrequire,reqs)
+
+function addrequire(requirefile::AbstractString)
+    isfile(requirefile) || error("File '$requirefile' not found")
+    requirements = Reqs.parse(requirefile)
+    addrequire(requirements)
+end
+
 function rm(pkg::AbstractString)
     edit(Reqs.rm,pkg) && return
     ispath(pkg) || return info("Nothing to be done")

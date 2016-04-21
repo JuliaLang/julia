@@ -4,7 +4,7 @@ module Pkg
 
 export Dir, Types, Reqs, Cache, Read, Query, Resolve, Write, Entry, Git
 export dir, init, rm, add, available, installed, status, clone, checkout,
-       update, resolve, test, build, free, pin, PkgError, setprotocol!
+       update, resolve, test, build, free, pin, PkgError, setprotocol!, addrequire
 
 const DEFAULT_META = "https://github.com/JuliaLang/METADATA.jl"
 const META_BRANCH = "metadata-v2"
@@ -81,6 +81,14 @@ Add a requirement entry for `pkg` to `Pkg.dir("REQUIRE")` and call `Pkg.resolve(
 intervals for `pkg`.
 """
 add(pkg::AbstractString, vers::VersionNumber...) = cd(Entry.add,pkg,vers...)
+
+"""
+    addrequire(requirefile)
+
+Loads a REQUIRE file, adds a requirement entry for each package to `Pkg.dir("REQUIRE")`
+and calls `Pkg.resolve()`.
+"""
+addrequire(requirefile::AbstractString) = Entry.addrequire(requirefile)
 
 """
     available() -> Vector{ASCIIString}
