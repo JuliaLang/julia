@@ -265,6 +265,8 @@ Noteworthy differences from Python
   returns a new random number every time it is invoked without argument. On the
   other hand, the function ``g(x=[1,2]) = push!(x,3)`` returns ``[1,2,3]`` every
   time it is called as ``g()``.
+  
+- In Julia % is the remainder operator, whereas in Python it is the modulus.
 
 
 Noteworthy differences from C/C++
