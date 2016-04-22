@@ -906,7 +906,7 @@ end
 
 # issue #15969: specialized muladd for complex types
 for x in (3, 3+13im), y in (2, 2+7im), z in (5, 5+11im)
-    @test muladd(x,y,z) == x*y + z
+    @test muladd(x,y,z) === x*y + z
 end
 
 # issue #11839: type stability for Complex{Int64}
