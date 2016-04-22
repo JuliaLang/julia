@@ -1974,6 +1974,18 @@ function eval_annotate(e::ANY, vtypes::ANY, sv::InferenceState, decls, undefs)
     return e
 end
 
+function expr_cannot_delete(ex::Expr)
+    # This alone should be enough for any sane use of
+    # `Expr(:inbounds)` and `Expr(:boundscheck)`. However, it is still possible
+    # to have these embeded in other expressions (e.g. `return @inbounds ...`)
+    # so we check recursively if there's a matching expression
+    (ex.head === :inbounds || ex.head === :boundscheck) && return true
+    for arg in ex.args
+        isa(arg, Expr) && expr_cannot_delete(arg::Expr) && return true
+    end
+    return false
+end
+
 # annotate types of all symbols in AST
 function type_annotate!(linfo::LambdaInfo, states::Array{Any,1}, sv::ANY, rettype::ANY, nargs)
     nslots = length(states[1])
@@ -1984,12 +1996,28 @@ function type_annotate!(linfo::LambdaInfo, states::Array{Any,1}, sv::ANY, rettyp
         decls[i] = widenconst(states[1][i].typ)
     end
     body = linfo.code::Array{Any,1}
-    for i=1:length(body)
+    nexpr = length(body)
+    i = 1
+    optimize = sv.optimize::Bool
+    while i <= nexpr
         st_i = states[i]
         if st_i !== ()
             # st_i === ()  =>  unreached statement  (see issue #7836)
             body[i] = eval_annotate(body[i], st_i, sv, decls, undefs)
+        elseif optimize
+            expr = body[i]
+            if isa(expr, Expr) && expr_cannot_delete(expr::Expr)
+                i += 1
+                continue
+            end
+            # This can create `Expr(:gotoifnot)` with dangling label, which we
+            # clean up in `reindex_labels!`
+            deleteat!(body, i)
+            deleteat!(states, i)
+            nexpr -= 1
+            continue
         end
+        i += 1
     end
 
     # add declarations for variables that are always the same type
@@ -2656,7 +2684,12 @@ function inlineable(f::ANY, ft::ANY, e::Expr, atypes::Vector{Any}, sv::Inference
         push!(stmts, retstmt)
         expr = retval
     else
-        expr = lastexpr.args[1]
+        # Dead code elimination can leave a non-return statement at the end
+        if lastexpr === nothing
+            expr = nothing
+        else
+            expr = lastexpr.args[1]
+        end
     end
 
     if length(stmts) == 1
@@ -2754,7 +2787,6 @@ const corenumtype = Union{Int32,Int64,Float32,Float64}
 
 function inlining_pass!(linfo::LambdaInfo, sv::InferenceState)
     eargs = linfo.code
-    stmts = []
     i = 1
     while i <= length(eargs)
         ei = eargs[i]
@@ -3278,13 +3310,29 @@ function reindex_labels!(linfo::LambdaInfo, sv::InferenceState)
     end
     for i = 1:length(body)
         el = body[i]
+        # For goto and enter, the statement and the target has to be
+        # both reachable or both not. For gotoifnot, the dead code
+        # elimination in type_annotate! can delete the target
+        # of a reachable (but never taken) node. In which case we can
+        # just replace the node with the branch condition.
         if isa(el,GotoNode)
-            body[i] = GotoNode(mapping[el.label])
+            labelnum = mapping[el.label]
+            @assert labelnum !== 0
+            body[i] = GotoNode(labelnum)
         elseif isa(el,Expr)
+            el = el::Expr
             if el.head === :gotoifnot
-                el.args[2] = mapping[el.args[2]]
+                labelnum = mapping[el.args[2]]
+                if labelnum !== 0
+                    el.args[2] = mapping[el.args[2]]
+                else
+                    # Might have side effects
+                    body[i] = el.args[1]
+                end
             elseif el.head === :enter
-                el.args[1] = mapping[el.args[1]]
+                labelnum = mapping[el.args[1]]
+                @assert labelnum !== 0
+                el.args[1] = labelnum
             end
         end
     end
