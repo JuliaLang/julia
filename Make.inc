@@ -869,7 +869,7 @@ UNTRUSTED_SYSTEM_LIBM := 1
 endif
 
 # Threads
-ifeq ($(JULIA_THREADS), 1)
+ifneq ($(JULIA_THREADS), 0)
 JCPPFLAGS += -DJULIA_ENABLE_THREADING
 endif
 
