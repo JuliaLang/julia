@@ -980,4 +980,81 @@ if !isdefined(Base, :istextmime)
     istextmime(m::@compat(Union{MIME,AbstractString})) = istext(m)
 end
 
+export @functorize
+macro functorize(f)
+    if VERSION >= v"0.5.0-dev+3701"
+        f === :scalarmax       ? :(Base.scalarmax) :
+        f === :scalarmin       ? :(Base.scalarmin) :
+        f === :centralizedabs2fun ? :(typeof(Base.centralizedabs2fun(0)).name.primary) :
+        f
+    else
+        f = f === :identity        ? :(Base.IdFun()) :
+            f === :abs             ? :(Base.AbsFun()) :
+            f === :abs2            ? :(Base.Abs2Fun()) :
+            f === :exp             ? :(Base.ExpFun()) :
+            f === :log             ? :(Base.LogFun()) :
+            f === :&               ? :(Base.AndFun()) :
+            f === :|               ? :(Base.OrFun()) :
+            f === :+               ? :(Base.AddFun()) :
+            f === :*               ? :(Base.MulFun()) :
+            f === :scalarmax       ? :(Base.MaxFun()) :
+            f === :scalarmin       ? :(Base.MinFun()) :
+            f === :centralizedabs2fun ? :(Base.CentralizedAbs2Fun) :
+            f
+        if VERSION >= v"0.4.0-dev+4902"
+            f = f === :<           ? :(Base.LessFun()) :
+                f === :>           ? :(Base.MoreFun()) :
+                f
+        end
+        if VERSION >= v"0.4.0-dev+4902"
+            f = f === :conj        ? :(Base.ConjFun()) :
+                f
+        end
+        if VERSION >= v"0.4.0-dev+6254"
+            f = f === :-           ? :(Base.SubFun()) :
+                f === :^           ? :(Base.PowFun()) :
+                f
+        end
+        if VERSION >= v"0.4.0-dev+6256"
+            f = f === :/           ? :(Base.RDivFun()) :
+                f === :\           ? :(Base.LDivFun()) :
+                f === :div         ? :(Base.IDivFun()) :
+                f
+        end
+        if VERSION >= v"0.4.0-dev+6353"
+            f = f === :$           ? :(Base.XorFun()) :
+                f === :.+          ? :(Base.DotAddFun()) :
+                f === :.-          ? :(Base.DotSubFun()) :
+                f === :.*          ? :(Base.DotMulFun()) :
+                f === :mod         ? :(Base.ModFun()) :
+                f === :rem         ? :(Base.RemFun()) :
+                # DotRemFun is defined, but ::call(::DotRemFun, ...) is not until later
+                #f === :.%          ? :(Base.DotRemFun()) :
+                f === :.<<         ? :(Base.DotLSFun()) :
+                f === :.>>         ? :(Base.DotRSFun()) :
+                f
+        end
+        if VERSION >= v"0.4.0-dev+6359"
+            f = f === :./          ? :(Base.DotRDivFun()) :
+                f
+        end
+        if VERSION >= v"0.4.0-rc1+59"
+            f = f === :max         ? :(Base.ElementwiseMaxFun()) :
+                f === :min         ? :(Base.ElementwiseMinFun()) :
+                f
+        end
+        if VERSION >= v"0.5.0-dev+741"
+            f = f === :complex     ? :(Base.SparseArrays.ComplexFun()) :
+                f === :dot         ? :(Base.SparseArrays.DotFun()) :
+                f
+        end
+        if VERSION >= v"0.5.0-dev+1472"
+            f = f === symbol(".÷") ? :(Base.DotIDivFun()) :
+                f === :.%          ? :(Base.DotRemFun()) :
+                f
+        end
+        f
+    end
+end
+
 end # module
