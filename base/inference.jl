@@ -2496,7 +2496,7 @@ function inlineable(f::ANY, ft::ANY, e::Expr, atypes::Vector{Any}, sv::Inference
 
         islocal = false # if the argument name is also used as a local variable,
                         # we need to keep it as a variable name
-        if linfo.slotflags[i] != 0
+        if linfo.slotflags[i]&18 != 0
             islocal = true
             aeitype = tmerge(aeitype, linfo.slottypes[i])
         end
@@ -2625,9 +2625,10 @@ function inlineable(f::ANY, ft::ANY, e::Expr, atypes::Vector{Any}, sv::Inference
         push!(body.args, lastexpr)
         push!(body.args, Expr(:call, TopNode(:error), "fatal error in type inference"))
         lastexpr = nothing
-    else
-        @assert isa(lastexpr,Expr) "inference.jl:1774"
-        @assert is(lastexpr.head,:return) "inference.jl:1775"
+    elseif !(isa(lastexpr,Expr) && lastexpr.head === :return)
+        # code sometimes ends with a meta node, e.g. inbounds pop
+        push!(body.args, lastexpr)
+        lastexpr = nothing
     end
     for a in body.args
         push!(stmts, a)
@@ -2667,9 +2668,20 @@ function inlineable(f::ANY, ft::ANY, e::Expr, atypes::Vector{Any}, sv::Inference
     end
 
     if !isempty(stmts) && !propagate_inbounds
-        # inlined statements are out-of-bounds by default
-        unshift!(stmts, Expr(:inbounds, false))
-        push!(stmts, Expr(:inbounds, :pop))
+        # avoid redundant inbounds annotations
+        s_1, s_end = stmts[1], stmts[end]
+        i = 2
+        while length(stmts) > i && ((isa(s_1,Expr)&&s_1.head===:line) || isa(s_1,LineNumberNode))
+            s_1 = stmts[i]
+            i += 1
+        end
+        if isa(s_1, Expr) && s_1.head === :inbounds && s_1.args[1] === false &&
+            isa(s_end, Expr) && s_end.head === :inbounds && s_end.args[1] === :pop
+        else
+            # inlined statements are out-of-bounds by default
+            unshift!(stmts, Expr(:inbounds, false))
+            push!(stmts, Expr(:inbounds, :pop))
+        end
     end
 
     if isa(expr,Expr)

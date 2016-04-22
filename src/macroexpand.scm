@@ -226,7 +226,7 @@
                                    ,(resolve-expansion-vars-with-new-env (caddr arg) env m inarg))))
                              (else
                               `(global ,(resolve-expansion-vars-with-new-env arg env m inarg))))))
-           ((using import importall export meta) (map unescape e))
+           ((using import importall export meta line inbounds boundscheck simdloop) (map unescape e))
            ((macrocall)
             (if (or (eq? (cadr e) '@label) (eq? (cadr e) '@goto)) e
                 `(macrocall ,.(map (lambda (x)
