@@ -117,7 +117,7 @@ noteworthy differences:
 - In Julia, varargs are specified using the splat operator ``...``, which
   always follows the name of a specific variable, unlike R, for which ``...``
   can occur in isolation.
-- In Julia, modulus, is ``mod(a,b)``, not ``a%%b``. ``%`` in Julia is the
+- In Julia, modulus, is ``mod(a, b)``, not ``a %% b``. ``%`` in Julia is the
   remainder operator.
 - In Julia, not all data structures support logical indexing. Furthermore,
   logical indexing in Julia is supported only with vectors of length equal to
