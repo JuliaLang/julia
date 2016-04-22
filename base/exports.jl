@@ -723,8 +723,6 @@ export
     full,
 
 # bitarrays
-    bitpack,
-    bitunpack,
     falses,
     flipbits!,
     rol,
