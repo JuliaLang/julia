@@ -112,15 +112,34 @@ variable assignments:
 
 Inspecting the lowered form for functions requires selection of the specific method to display,
 because generic functions may have many methods with different type signatures. For this purpose,
-method-specific code-lowering is available using :func:`code_lowered(f::Function, (Argtypes...)) <code_lowered>`,
-and the type-inferred form is available using :func:`code_typed(f::Function, (Argtypes...)) <code_typed>`.
-:func:`code_warntype(f::Function, (Argtypes...)) <code_warntype>` adds
+method-specific code-lowering is available using :func:`code_lowered(f, (Argtypes...)) <code_lowered>`,
+and the type-inferred form is available using :func:`code_typed(f, (Argtypes...)) <code_typed>`.
+:func:`code_warntype(f, (Argtypes...)) <code_warntype>` adds
 highlighting to the output of :func:`code_typed` (see :ref:`man-code-warntype`).
 
 Closer to the machine, the LLVM intermediate representation of a function may be printed using by
-:func:`code_llvm(f::Function, (Argtypes...)) <code_llvm>`, and finally the compiled machine code is
-available using :func:`code_native(f::Function, (Argtypes...) <code_native>` (this will trigger JIT
+:func:`code_llvm(f, (Argtypes...)) <code_llvm>`, and finally the compiled machine code is
+available using :func:`code_native(f, (Argtypes...) <code_native>` (this will trigger JIT
 compilation/code generation for any function which has not previously been called).
+
+In order to specify the function whose code you want to inspect, you can either pass a
+:obj:`Function` object (eg. by spelling out the function's name), or pass its type. The
+latter is especially handy for generated functions::
+
+.. doctest::
+
+   julia> foo() = println("hello")
+   foo (generic function with 1 method)
+
+   julia> @generated bar(ft) = code_lowered(ft, ())
+   bar (generic function with 1 method)
+
+   julia> bar(foo)
+   1-element Array{Any,1}:
+    LambdaInfo for foo
+   :(begin  # REPL[1], line 1:
+           return (Main.println)("hello")
+       end)
 
 For convenience, there are macro versions of the above functions which take standard function calls
 and expand argument types automatically::

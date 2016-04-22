@@ -180,7 +180,12 @@ function methods(f::ANY, t::ANY)
     return Any[m[3] for m in _methods(f,t,-1)]
 end
 function _methods(f::ANY,t::ANY,lim)
-    ft = isa(f,Type) ? Type{f} : typeof(f)
+    if isa(f,Type)
+        ft = (f <: Function) ? f : Type{f}
+    else
+        ft = typeof(f)
+    end
+
     if isa(t,Type)
         return _methods_by_ftype(Tuple{ft, t.parameters...}, lim)
     else
@@ -277,7 +282,8 @@ uncompressed_ast(l::LambdaInfo) =
 
 # Printing code representations in IR and assembly
 function _dump_function(f, t::ANY, native, wrapper, strip_ir_metadata, dump_module)
-    t = tt_cons(Core.Typeof(f), to_tuple_type(t))
+    ft = (isa(f,Type) && f <: Function) ? f : Core.Typeof(f)
+    t = tt_cons(ft, to_tuple_type(t))
     llvmf = ccall(:jl_get_llvmf, Ptr{Void}, (Any, Bool, Bool), t, wrapper, native)
 
     if llvmf == C_NULL

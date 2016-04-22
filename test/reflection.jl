@@ -21,6 +21,10 @@ end
 function test_code_reflection(freflect, f, types, tester)
     tester(freflect, f, types)
     tester(freflect, f, (types.parameters...))
+    if !isa(f, Type)
+        tester(freflect, typeof(f), types)
+        tester(freflect, typeof(f), (types.parameters...))
+    end
 end
 
 function test_code_reflections(tester, freflect)
