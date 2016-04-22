@@ -262,7 +262,7 @@ compute_first_index(f, s, parent, dim, I::Tuple{Any, Vararg{Any}}) =
 compute_first_index(f, s, parent, dim, I::Tuple{}) = f
 
 
-unsafe_convert{T,N,P<:Array,I<:Tuple{Vararg{Union{RangeIndex, NoSlice}}}}(::Type{Ptr{T}}, V::SubArray{T,N,P,I}) =
+unsafe_convert{T,N,P,I<:Tuple{Vararg{Union{RangeIndex, NoSlice}}}}(::Type{Ptr{T}}, V::SubArray{T,N,P,I}) =
     unsafe_convert(Ptr{T}, V.parent) + (first_index(V)-1)*sizeof(T)
 
 pointer(V::FastSubArray, i::Int) = pointer(V.parent, V.first_index + V.stride1*(i-1))
