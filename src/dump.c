@@ -474,7 +474,7 @@ static int jl_prune_tcache(jl_typemap_entry_t *ml, void *closure)
         jl_value_t *ret = ml->func.value;
         if (jl_is_lambda_info(ret)) {
             jl_array_t *code = ((jl_lambda_info_t*)ret)->code;
-            if (jl_is_array(code) && jl_array_len(code) > 500) {
+            if (code!=NULL && jl_is_array(code) && jl_array_len(code) > 500) {
                 ml->func.value = ((jl_lambda_info_t*)ret)->rettype;
                 jl_gc_wb(ml, ml->func.value);
             }
@@ -2052,6 +2052,7 @@ JL_DLLEXPORT jl_array_t *jl_compress_ast(jl_lambda_info_t *li, jl_array_t *ast)
     JL_SIGATOMIC_BEGIN();
     JL_LOCK(&dump_lock); // Might GC
     assert(jl_is_lambda_info(li));
+    assert(jl_is_array(ast));
     DUMP_MODES last_mode = mode;
     mode = MODE_AST;
     ios_t dest;

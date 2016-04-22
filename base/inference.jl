@@ -1426,7 +1426,11 @@ function typeinf_edge(method::Method, atypes::ANY, sparams::SimpleVector, needtr
             end
         elseif isa(code,LambdaInfo)
             @assert code.inferred
-            return (code, code.rettype, true)
+            if !isdefined(code, :code) && needtree
+                # has been inferred before but code was deleted. re-run.
+            else
+                return (code, code.rettype, true)
+            end
         else
             # otherwise this is an InferenceState from a different bootstrap stage's
             # copy of the inference code; ignore it.
@@ -1463,7 +1467,7 @@ function typeinf_edge(method::Method, atypes::ANY, sparams::SimpleVector, needtr
             end
         end
         # add lam to be inferred and record the edge
-        if isa(caller, LambdaInfo)
+        if isa(caller, LambdaInfo) && isdefined(caller, :code)
             linfo = caller
         elseif method.isstaged
             if !isleaftype(atypes)

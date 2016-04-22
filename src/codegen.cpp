@@ -872,6 +872,15 @@ static void to_function(jl_lambda_info_t *li)
     // mark the pointer calling convention
     li->jlcall_api = (f->getFunctionType() == jl_func_sig ? 0 : 1);
 
+    // if not inlineable, code won't be needed again
+    if (li->def && li->inferred && !li->inlineable && !jl_options.outputji) {
+        li->code = NULL;
+        li->slottypes = jl_nothing;
+        li->gensymtypes = jl_box_long(jl_array_len(li->gensymtypes)); jl_gc_wb(li, li->gensymtypes);
+        li->slotflags = NULL;
+        li->slotnames = NULL;
+    }
+
     // done compiling: restore global state
     if (old != NULL) {
         builder.SetInsertPoint(old);
@@ -1193,6 +1202,13 @@ void *jl_get_llvmf(jl_tupletype_t *tt, bool getwrapper, bool getdeclarations)
     if (linfo == NULL) {
         JL_GC_POP();
         return NULL;
+    }
+
+    if (linfo->code == NULL) {
+        // re-infer if we've deleted the code
+        jl_type_infer(linfo, 0);
+        if (linfo->code == NULL)
+            return NULL;
     }
 
     if (!getdeclarations) {
@@ -2842,8 +2858,10 @@ static jl_cgval_t emit_call(jl_expr_t *ex, jl_codectx_t *ctx)
                 else {
                     fval = emit_expr(args[0], ctx);
                 }
-                if (ctx->linfo->def) // root this li in case it gets deleted from the cache in `f`
-                    jl_add_linfo_root(ctx->linfo, (jl_value_t*)li);
+                // keep a reference to the called function's roots array in case
+                // the method is replaced (PR #14301)
+                if (ctx->linfo->def && li->def && li->def->roots)
+                    jl_add_linfo_root(ctx->linfo, (jl_value_t*)li->def->roots);
                 result = emit_call_function_object(li, fval, theFptr, args, nargs, expr, ctx);
                 JL_GC_POP();
                 return result;
