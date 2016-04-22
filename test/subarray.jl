@@ -87,10 +87,10 @@ function single_stride_dim(A::Array)
     end
     ld
 end
-single_stride_dim(A::AbstractArray) = single_stride_dim(copy_to_array(A))
+single_stride_dim(A::ANY) = single_stride_dim(copy_to_array(A))
 
 # Testing equality of AbstractArrays, using several different methods to access values
-function test_cartesian(A, B)
+function test_cartesian(A::ANY, B::ANY)
     isgood = true
     for (IA, IB) in zip(eachindex(A), eachindex(B))
         if A[IA] != B[IB]
@@ -106,7 +106,7 @@ function test_cartesian(A, B)
     end
 end
 
-function test_linear(A, B)
+function test_linear(A::ANY, B::ANY)
     length(A) == length(B) || error("length mismatch")
     isgood = true
     for (iA, iB) in zip(1:length(A), 1:length(B))
@@ -127,7 +127,7 @@ end
 test_mixed{T}(::AbstractArray{T,1}, ::Array) = nothing
 test_mixed{T}(::AbstractArray{T,2}, ::Array) = nothing
 test_mixed(A, B::Array) = _test_mixed(A, reshape(B, size(A)))
-function _test_mixed(A, B)
+function _test_mixed(A::ANY, B::ANY)
     L = length(A)
     m = size(A, 1)
     n = div(L, m)
@@ -146,7 +146,7 @@ function _test_mixed(A, B)
     nothing
 end
 
-function test_bounds(A)
+function test_bounds(A::ANY)
     @test_throws BoundsError A[0]
     @test_throws BoundsError A[end+1]
     @test_throws BoundsError A[1, 0]
@@ -190,7 +190,7 @@ function runtests(A::Array, I...)
     test_bounds(S)
 end
 
-function runtests(A::SubArray, I...)
+function runtests(A::ANY, I...)
     # When A was created with sub, we have to check bounds, since some
     # of the "residual" dimensions have size 1. It's possible that we
     # need dedicated tests for sub.
