@@ -42,8 +42,8 @@ astcopy(x::Union{Slot,Expr}) = copy(x)
 astcopy(x::Array{Any,1}) = Any[astcopy(a) for a in x]
 astcopy(x) = x
 
-==(x::Expr, y::Expr) = x.head === y.head && x.args == y.args
-==(x::QuoteNode, y::QuoteNode) = x.value == y.value
+==(x::Expr, y::Expr) = x.head === y.head && isequal(x.args, y.args)
+==(x::QuoteNode, y::QuoteNode) = isequal(x.value, y.value)
 ==(x::Slot, y::Slot) = x.id === y.id && x.typ === y.typ
 
 expand(x::ANY) = ccall(:jl_expand, Any, (Any,), x)

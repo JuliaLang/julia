@@ -3776,3 +3776,7 @@ end
 @m
 end
 @test Macro_Yielding_Global_Assignment.x == 2
+
+# issue #15718
+@test :(f($NaN)) == :(f($NaN))
+@test isequal(:(f($NaN)), :(f($NaN)))
