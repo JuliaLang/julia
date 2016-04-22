@@ -30,6 +30,8 @@ isnot(x,y) = !is(x,y)
 @test !(Type{Bottom} <: Type{Int32})
 @test !(Vector{Float64} <: Vector{Union{Float64,Float32}})
 testintersect(Vector{Float64}, Vector{Union{Float64,Float32}}, Bottom)
+@test TypeVar(:T,Int,true) <: Int
+@test TypeVar(:T,Union(Int,Float64),true) <: Union(Int,Float64)
 
 @test !isa(Array,Type{Any})
 @test Type{Complex} <: DataType
