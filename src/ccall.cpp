@@ -774,8 +774,6 @@ static jl_cgval_t emit_llvmcall(jl_value_t **args, size_t nargs, jl_codectx_t *c
             jl_error(stream.str().c_str());
         }
         f = m->getFunction(ir_name);
-
-        f->removeFromParent();
     }
     else {
         assert(isPtr);
