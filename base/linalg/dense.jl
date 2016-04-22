@@ -36,19 +36,19 @@ isposdef(x::Number) = imag(x)==0 && real(x) > 0
 stride1(x::Array) = 1
 stride1(x::StridedVector) = stride(x, 1)::Int
 
-import Base: mapreduce_seq_impl, AbsFun, Abs2Fun, AddFun
+import Base: mapreduce_seq_impl
 
-mapreduce_seq_impl{T<:BlasReal}(::AbsFun, ::AddFun, a::Union{Array{T},StridedVector{T}}, ifirst::Int, ilast::Int) =
+mapreduce_seq_impl{T<:BlasReal}(::typeof(abs), ::typeof(+), a::Union{Array{T},StridedVector{T}}, ifirst::Int, ilast::Int) =
     BLAS.asum(ilast-ifirst+1, pointer(a, ifirst), stride1(a))
 
-function mapreduce_seq_impl{T<:BlasReal}(::Abs2Fun, ::AddFun, a::Union{Array{T},StridedVector{T}}, ifirst::Int, ilast::Int)
+function mapreduce_seq_impl{T<:BlasReal}(::typeof(abs2), ::typeof(+), a::Union{Array{T},StridedVector{T}}, ifirst::Int, ilast::Int)
     n = ilast-ifirst+1
     px = pointer(a, ifirst)
     incx = stride1(a)
     BLAS.dot(n, px, incx, px, incx)
 end
 
-function mapreduce_seq_impl{T<:BlasComplex}(::Abs2Fun, ::AddFun, a::Union{Array{T},StridedVector{T}}, ifirst::Int, ilast::Int)
+function mapreduce_seq_impl{T<:BlasComplex}(::typeof(abs2), ::typeof(+), a::Union{Array{T},StridedVector{T}}, ifirst::Int, ilast::Int)
     n = ilast-ifirst+1
     px = pointer(a, ifirst)
     incx = stride1(a)
