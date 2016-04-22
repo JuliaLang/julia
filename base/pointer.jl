@@ -27,6 +27,7 @@ cconvert(::Type{Ptr{Int8}}, s::AbstractString) = bytestring(s)
 
 unsafe_convert{T}(::Type{Ptr{T}}, a::Array{T}) = ccall(:jl_array_ptr, Ptr{T}, (Any,), a)
 unsafe_convert{S,T}(::Type{Ptr{S}}, a::AbstractArray{T}) = convert(Ptr{S}, unsafe_convert(Ptr{T}, a))
+unsafe_convert{T}(::Type{Ptr{T}}, a::AbstractArray{T}) = error("conversion to pointer not defined for $(typeof(a))")
 
 # unsafe pointer to array conversions
 function pointer_to_array{T}(p::Ptr{T}, d::Integer, own::Bool=false)
