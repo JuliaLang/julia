@@ -337,7 +337,7 @@ public:
                 Addr = sym_iter.getAddress().get();
                 Section = sym_iter.getSection().get();
                 assert(Section != EndSection && Section->isText());
-                SectionAddr = Section->getAddress().get();
+                SectionAddr = Section->getAddress();
                 Section->getName(sName);
                 SectionLoadAddr = getLoadAddress(sName);
 #elif defined(LLVM37)
