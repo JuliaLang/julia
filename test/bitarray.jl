@@ -12,7 +12,7 @@ bitcheck(x) = true
 
 function check_bitop(ret_type, func, args...)
     r1 = func(args...)
-    r2 = func(map(x->(isa(x, BitArray) ? bitunpack(x) : x), args)...)
+    r2 = func(map(x->(isa(x, BitArray) ? Array(x) : x), args)...)
     @test isa(r1, ret_type)
     @test tc(r1, r2)
     @test isequal(r1, convert(ret_type, r2))
@@ -71,14 +71,14 @@ end
 
 for (sz,T) in allsizes
     b1 = rand!(falses(sz...))
-    @test isequal(bitpack(bitunpack(b1)), b1)
+    @test isequal(BitArray(Array(b1)), b1)
     @test isequal(convert(Array{Float64,ndims(b1)}, b1),
-                  convert(Array{Float64,ndims(b1)}, bitunpack(b1)))
+                  convert(Array{Float64,ndims(b1)}, Array(b1)))
     @test isequal(convert(AbstractArray{Float64,ndims(b1)}, b1),
-                  convert(AbstractArray{Float64,ndims(b1)}, bitunpack(b1)))
+                  convert(AbstractArray{Float64,ndims(b1)}, Array(b1)))
 
     i1 = rand!(zeros(Bool, sz...), false:true)
-    @test isequal(bitunpack(bitpack(i1)), i1)
+    @test isequal(Array(BitArray(i1)), i1)
 end
 
 timesofar("conversions")
@@ -90,8 +90,8 @@ b1 = bitrand(v1)
 @test isequal(fill!(b1, false), falses(size(b1)))
 
 for (sz,T) in allsizes
-    @test isequal(bitunpack(trues(sz...)), ones(Bool, sz...))
-    @test isequal(bitunpack(falses(sz...)), zeros(Bool, sz...))
+    @test isequal(Array(trues(sz...)), ones(Bool, sz...))
+    @test isequal(Array(falses(sz...)), zeros(Bool, sz...))
 
     b1 = rand!(falses(sz...))
     @test isa(b1, T)
@@ -101,7 +101,7 @@ for (sz,T) in allsizes
     @check_bit_operation size(b1)   Tuple{Vararg{Int}}
 
     b2 = similar(b1)
-    u1 = bitunpack(b1)
+    u1 = Array(b1)
     @check_bit_operation copy!(b2, b1) T
     @check_bit_operation copy!(b2, u1) T
 end
@@ -307,13 +307,13 @@ end
 # logical indexing
 b1 = bitrand(n1, n2)
 t1 = bitrand(n1, n2)
-@test isequal(bitunpack(b1[t1]), bitunpack(b1)[t1])
-@test isequal(bitunpack(b1[t1]), bitunpack(b1)[bitunpack(t1)])
+@test isequal(Array(b1[t1]), Array(b1)[t1])
+@test isequal(Array(b1[t1]), Array(b1)[Array(t1)])
 
 t1 = bitrand(n1)
 t2 = bitrand(n2)
-@test isequal(bitunpack(b1[t1, t2]), bitunpack(b1)[t1, t2])
-@test isequal(bitunpack(b1[t1, t2]), bitunpack(b1)[bitunpack(t1), bitunpack(t2)])
+@test isequal(Array(b1[t1, t2]), Array(b1)[t1, t2])
+@test isequal(Array(b1[t1, t2]), Array(b1)[Array(t1), Array(t2)])
 
 
 b1 = bitrand(n1, n2)
@@ -350,17 +350,17 @@ for m = 1 : v1
     x = rand(Bool)
     push!(b1, x)
     push!(i1, x)
-    @test isequal(bitunpack(b1), i1)
+    @test isequal(Array(b1), i1)
 end
 
 for m1 = 0 : v1
     for m2 = [0, 1, 63, 64, 65, 127, 128, 129]
         b1 = bitrand(m1)
         b2 = bitrand(m2)
-        i1 = bitunpack(b1)
-        i2 = bitunpack(b2)
-        @test isequal(bitunpack(append!(b1, b2)), append!(i1, i2))
-        @test isequal(bitunpack(append!(b1, i2)), append!(i1, b2))
+        i1 = Array(b1)
+        i2 = Array(b2)
+        @test isequal(Array(append!(b1, b2)), append!(i1, i2))
+        @test isequal(Array(append!(b1, i2)), append!(i1, b2))
     end
 end
 
@@ -368,20 +368,20 @@ for m1 = 0 : v1
     for m2 = [0, 1, 63, 64, 65, 127, 128, 129]
         b1 = bitrand(m1)
         b2 = bitrand(m2)
-        i1 = bitunpack(b1)
-        i2 = bitunpack(b2)
-        @test isequal(bitunpack(prepend!(b1, b2)), prepend!(i1, i2))
-        @test isequal(bitunpack(prepend!(b1, i2)), prepend!(i1, b2))
+        i1 = Array(b1)
+        i2 = Array(b2)
+        @test isequal(Array(prepend!(b1, b2)), prepend!(i1, i2))
+        @test isequal(Array(prepend!(b1, i2)), prepend!(i1, b2))
     end
 end
 
 b1 = bitrand(v1)
-i1 = bitunpack(b1)
+i1 = Array(b1)
 for m = 1 : v1
     jb = pop!(b1)
     ji = pop!(i1)
     @test jb == ji
-    @test isequal(bitunpack(b1), i1)
+    @test isequal(Array(b1), i1)
 end
 @test length(b1) == 0
 
@@ -392,59 +392,59 @@ for m = 1 : v1
     x = rand(Bool)
     unshift!(b1, x)
     unshift!(i1, x)
-    @test isequal(bitunpack(b1), i1)
+    @test isequal(Array(b1), i1)
 end
 
 
 b1 = bitrand(v1)
-i1 = bitunpack(b1)
+i1 = Array(b1)
 for m = 1 : v1
     jb = shift!(b1)
     ji = shift!(i1)
     @test jb == ji
-    @test isequal(bitunpack(b1), i1)
+    @test isequal(Array(b1), i1)
 end
 @test length(b1) == 0
 
 b1 = BitArray(0)
 @test_throws BoundsError insert!(b1, 2, false)
 @test_throws BoundsError insert!(b1, 0, false)
-i1 = bitunpack(b1)
+i1 = Array(b1)
 for m = 1 : v1
     j = rand(1:m)
     x = rand(Bool)
     @test insert!(b1, j, x) === b1
     insert!(i1, j, x)
-    @test isequal(bitunpack(b1), i1)
+    @test isequal(Array(b1), i1)
 end
 
 b1 = bitrand(v1)
-i1 = bitunpack(b1)
+i1 = Array(b1)
 for j in [63, 64, 65, 127, 128, 129, 191, 192, 193]
     x = rand(0:1)
     @test insert!(b1, j, x) === b1
     insert!(i1, j, x)
-    @test isequal(bitunpack(b1), i1)
+    @test isequal(Array(b1), i1)
 end
 
 b1 = bitrand(v1)
-i1 = bitunpack(b1)
+i1 = Array(b1)
 for m = v1 : -1 : 1
     j = rand(1:m)
     b = splice!(b1, j)
     i = splice!(i1, j)
-    @test isequal(bitunpack(b1), i1)
+    @test isequal(Array(b1), i1)
     @test b == i
 end
 @test length(b1) == 0
 
 b1 = bitrand(v1)
-i1 = bitunpack(b1)
+i1 = Array(b1)
 for m = v1 : -1 : 1
     j = rand(1:m)
     deleteat!(b1, j)
     deleteat!(i1, j)
-    @test isequal(bitunpack(b1), i1)
+    @test isequal(Array(b1), i1)
 end
 @test length(b1) == 0
 b1 = bitrand(v1)
@@ -452,109 +452,109 @@ b1 = bitrand(v1)
 @test_throws BoundsError deleteat!(b1,[1 length(b1)+1])
 
 b1 = bitrand(v1)
-i1 = bitunpack(b1)
+i1 = Array(b1)
 for j in [63, 64, 65, 127, 128, 129, 191, 192, 193]
     b = splice!(b1, j)
     i = splice!(i1, j)
-    @test isequal(bitunpack(b1), i1)
+    @test isequal(Array(b1), i1)
     @test b == i
 end
 
 b1 = bitrand(v1)
-i1 = bitunpack(b1)
+i1 = Array(b1)
 for j in [63, 64, 65, 127, 128, 129, 191, 192, 193]
     deleteat!(b1, j)
     deleteat!(i1, j)
-    @test isequal(bitunpack(b1), i1)
+    @test isequal(Array(b1), i1)
 end
 
 b1 = bitrand(v1)
-i1 = bitunpack(b1)
+i1 = Array(b1)
 for m1 = 1 : v1
     for m2 = m1 : v1
         b2 = copy(b1)
         i2 = copy(i1)
         b = splice!(b2, m1:m2)
         i = splice!(i2, m1:m2)
-        @test isequal(bitunpack(b2), i2)
+        @test isequal(Array(b2), i2)
         @test b == i
     end
 end
 
 b1 = bitrand(v1)
-i1 = bitunpack(b1)
+i1 = Array(b1)
 for m1 = 1 : v1
     for m2 = m1 : v1
         b2 = copy(b1)
         i2 = copy(i1)
         deleteat!(b2, m1:m2)
         deleteat!(i2, m1:m2)
-        @test isequal(bitunpack(b2), i2)
+        @test isequal(Array(b2), i2)
     end
 end
 
 b1 = bitrand(v1)
-i1 = bitunpack(b1)
+i1 = Array(b1)
 for m1 = 1 : v1 + 1
     for m2 = m1 - 1 : v1
         for v2::Int = [0, 1, 63, 64, 65, 127, 128, 129, 191, 192, 193, rand(1:v1)]
             b2 = copy(b1)
             i2 = copy(i1)
             b3 = bitrand(v2)
-            i3 = bitunpack(b3)
+            i3 = Array(b3)
             b = splice!(b2, m1:m2, b3)
             i = splice!(i2, m1:m2, i3)
-            @test isequal(bitunpack(b2), i2)
+            @test isequal(Array(b2), i2)
             @test b == i
             b2 = copy(b1)
             i2 = copy(i1)
             i3 = map(Int,bitrand(v2))
             b = splice!(b2, m1:m2, i3)
             i = splice!(i2, m1:m2, i3)
-            @test isequal(bitunpack(b2), i2)
+            @test isequal(Array(b2), i2)
             @test b == i
             b2 = copy(b1)
             i2 = copy(i1)
             i3 = [j => rand(0:1) for j = 1:v2]
             b = splice!(b2, m1:m2, values(i3))
             i = splice!(i2, m1:m2, values(i3))
-            @test isequal(bitunpack(b2), i2)
+            @test isequal(Array(b2), i2)
             @test b == i
         end
     end
 end
 
 b1 = bitrand(v1)
-i1 = bitunpack(b1)
+i1 = Array(b1)
 for m1 = 1 : v1
     for v2 = [0, 1, 63, 64, 65, 127, 128, 129, 191, 192, 193, rand(1:v1)]
         b2 = copy(b1)
         i2 = copy(i1)
         b3 = bitrand(v2)
-        i3 = bitunpack(b3)
+        i3 = Array(b3)
         b = splice!(b2, m1, b3)
         i = splice!(i2, m1, i3)
-        @test isequal(bitunpack(b2), i2)
+        @test isequal(Array(b2), i2)
         @test b == i
         b2 = copy(b1)
         i2 = copy(i1)
         i3 = map(Int,bitrand(v2))
         b = splice!(b2, m1:m2, i3)
         i = splice!(i2, m1:m2, i3)
-        @test isequal(bitunpack(b2), i2)
+        @test isequal(Array(b2), i2)
         @test b == i
         b2 = copy(b1)
         i2 = copy(i1)
         i3 = [j => rand(0:1) for j = 1:v2]
         b = splice!(b2, m1:m2, values(i3))
         i = splice!(i2, m1:m2, values(i3))
-        @test isequal(bitunpack(b2), i2)
+        @test isequal(Array(b2), i2)
         @test b == i
     end
 end
 
 b1 = bitrand(v1)
-i1 = bitunpack(b1)
+i1 = Array(b1)
 for m1 = 1 : v1 - 1
     for m2 = m1 + 1 : v1
         locs = bitrand(m2-m1+1)
@@ -563,15 +563,15 @@ for m1 = 1 : v1 - 1
         i2 = copy(i1)
         deleteat!(b2, m)
         deleteat!(i2, m)
-        @test isequal(bitunpack(b2), i2)
+        @test isequal(Array(b2), i2)
     end
 end
 
 b1 = bitrand(v1)
-i1 = bitunpack(b1)
+i1 = Array(b1)
 empty!(b1)
 empty!(i1)
-@test isequal(bitunpack(b1), i1)
+@test isequal(Array(b1), i1)
 
 timesofar("dequeue")
 
@@ -613,10 +613,10 @@ b2 = bitrand(n1, n2)
 b2 = trues(n1, n2)
 @check_bit_operation div(b1, b2) BitMatrix
 @check_bit_operation mod(b1, b2) BitMatrix
-@check_bit_operation div(b1,bitunpack(b2)) BitMatrix
-@check_bit_operation mod(b1,bitunpack(b2)) BitMatrix
-@check_bit_operation div(bitunpack(b1),b2) BitMatrix
-@check_bit_operation mod(bitunpack(b1),b2) BitMatrix
+@check_bit_operation div(b1,Array(b2)) BitMatrix
+@check_bit_operation mod(b1,Array(b2)) BitMatrix
+@check_bit_operation div(Array(b1),b2) BitMatrix
+@check_bit_operation mod(Array(b1),b2) BitMatrix
 
 while true
     global b1
@@ -742,7 +742,7 @@ f2 = Float64(i2)
 ci2 = complex(i2)
 cu2 = complex(u2)
 cf2 = complex(f2)
-b2 = bitunpack(bitrand(n1,n2))
+b2 = Array(bitrand(n1,n2))
 
 @check_bit_operation (&)(b1, true)   BitMatrix
 @check_bit_operation (&)(b1, false)  BitMatrix
@@ -1276,7 +1276,7 @@ timesofar("linalg")
 @test sizeof(BitArray(65)) == 16
 
 #one
-@test bitunpack(one(BitMatrix(2,2))) == eye(2,2)
+@test Array(one(BitMatrix(2,2))) == eye(2,2)
 @test_throws DimensionMismatch one(BitMatrix(2,3))
 
 #reshape
@@ -1309,35 +1309,35 @@ a = falses(6)
 @test findmax(a) == (false,1)
 a = trues(6)
 @test findmin(a) == (true,1)
-a = bitpack([1,0,1,1,0])
+a = BitArray([1,0,1,1,0])
 @test findmin(a) == (false,2)
 @test findmax(a) == (true,1)
-a = bitpack([0,0,1,1,0])
+a = BitArray([0,0,1,1,0])
 @test findmin(a) == (false,1)
 @test findmax(a) == (true,3)
 
 #qr and svd
 
 A = bitrand(10,10)
-uA = bitunpack(A)
+uA = Array(A)
 @test svd(A) == svd(uA)
 @test qr(A) == qr(uA)
 
 #gradient
 A = bitrand(10)
-fA = bitunpack(A)
+fA = Array(A)
 @test gradient(A) == gradient(fA)
 @test gradient(A,1.0) == gradient(fA,1.0)
 
 #diag and diagm
 
 v = bitrand(10)
-uv = bitunpack(v)
-@test bitunpack(diagm(v)) == diagm(uv)
+uv = Array(v)
+@test Array(diagm(v)) == diagm(uv)
 v = bitrand(10,2)
-uv = bitunpack(v)
+uv = Array(v)
 @test_throws DimensionMismatch diagm(v)
 
 B = bitrand(10,10)
-uB = bitunpack(B)
-@test diag(uB) == bitunpack(diag(B))
+uB = Array(B)
+@test diag(uB) == Array(diag(B))
