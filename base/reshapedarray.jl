@@ -140,10 +140,4 @@ setindex!(A::ReshapedRange, val, index::ReshapedIndex) = _rs_setindex!_err()
 
 _rs_setindex!_err() = error("indexed assignment fails for a reshaped range; consider calling collect")
 
-typealias ArrayT{N, T} Array{T,N}
-convert{T,S,N}(::Type{Array{T,N}}, V::ReshapedArray{S,N}) = copy!(Array(T, size(V)), V)
-convert{T,N}(::Type{ArrayT{N}}, V::ReshapedArray{T,N}) = copy!(Array(T, size(V)), V)
-
 unsafe_convert{T}(::Type{Ptr{T}}, a::ReshapedArray{T}) = unsafe_convert(Ptr{T}, parent(a))
-unsafe_convert{T,N,P<:ReshapedArray,I<:Tuple{Vararg{Union{RangeIndex, NoSlice}}}}(::Type{Ptr{T}}, V::SubArray{T,N,P,I}) =
-    unsafe_convert(Ptr{T}, V.parent) + (first_index(V)-1)*sizeof(T)
