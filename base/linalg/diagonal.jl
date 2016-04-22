@@ -107,9 +107,9 @@ end
 *(Da::Diagonal, Db::Diagonal) = Diagonal(Da.diag .* Db.diag)
 *(D::Diagonal, V::AbstractVector) = D.diag .* V
 *(A::AbstractMatrix, D::Diagonal) =
-    scale!(similar(A, promote_op(MulFun(), eltype(A), eltype(D.diag))), A, D.diag)
+    scale!(similar(A, promote_op(*, eltype(A), eltype(D.diag))), A, D.diag)
 *(D::Diagonal, A::AbstractMatrix) =
-    scale!(similar(A, promote_op(MulFun(), eltype(A), eltype(D.diag))), D.diag, A)
+    scale!(similar(A, promote_op(*, eltype(A), eltype(D.diag))), D.diag, A)
 
 A_mul_B!(A::Diagonal,B::AbstractMatrix) = scale!(A.diag,B)
 At_mul_B!(A::Diagonal,B::AbstractMatrix)= scale!(A.diag,B)

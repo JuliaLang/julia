@@ -1105,7 +1105,10 @@ q[[1,3]] = true
 # map!
 r = falses(4)
 @test map!(~, r, p) == map!(x->~x, r, p) == ~p == r
+@test map!(!, r, p) == map!(x->!x, r, p) == ~p == r
 @test map!(identity, r, p) == map!(x->x, r, p) == p == r
+@test map!(zero, r, p) == map!(x->false, r, p) == falses(4) == r
+@test map!(one, r, p) == map!(x->true, r, p) == trues(4) == r
 
 @test map!(&, r, p, q) == map!((x,y)->x&y, r, p, q) == p & q == r
 @test map!(|, r, p, q) == map!((x,y)->x|y, r, p, q) == p | q == r

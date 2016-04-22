@@ -3333,8 +3333,8 @@ end
 @noinline function foo13855(x)
     @m13855()
 end
-@test foo13855(Base.AddFun())() == Base.AddFun()
-@test foo13855(Base.MulFun())() == Base.MulFun()
+@test foo13855(+)() == +
+@test foo13855(*)() == *
 
 # issue #8487
 @test [x for x in 1:3] == [x for x ∈ 1:3] == [x for x = 1:3]

@@ -96,8 +96,8 @@ A = reshape(1:6, 3, 2)
 @test typeof(@inferred(Base.sumabs([1.0+1.0im], 1))) == Vector{Float64}
 @test typeof(@inferred(Base.sumabs2([1.0+1.0im], 1))) == Vector{Float64}
 @test typeof(@inferred(prod([1.0+1.0im], 1))) == Vector{Complex128}
-@test typeof(@inferred(Base.prod(Base.AbsFun(), [1.0+1.0im], 1))) == Vector{Float64}
-@test typeof(@inferred(Base.prod(Base.Abs2Fun(), [1.0+1.0im], 1))) == Vector{Float64}
+@test typeof(@inferred(Base.prod(abs, [1.0+1.0im], 1))) == Vector{Float64}
+@test typeof(@inferred(Base.prod(abs2, [1.0+1.0im], 1))) == Vector{Float64}
 
 # Heterogeneously typed arrays
 @test sum(Union{Float32, Float64}[1.0], 1) == [1.0]

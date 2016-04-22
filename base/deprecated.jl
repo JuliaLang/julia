@@ -1020,6 +1020,56 @@ function pmap(f, c...; err_retry=nothing, err_stop=nothing, pids=nothing)
     return pmap(p, f, c...)
 end
 
+# 15692
+typealias Func{N} Function
+deprecate(:Func)
+for (Fun, func) in [(:IdFun, :identity),
+                    (:AbsFun, :abs),
+                    (:Abs2Fun, :abs2),
+                    (:ExpFun, :exp),
+                    (:LogFun, :log),
+                    (:ConjFun, :conj),
+                    (:AndFun, :&),
+                    (:OrFun, :|),
+                    (:XorFun, :$),
+                    (:AddFun, :+),
+                    (:DotAddFun, :.+),
+                    (:SubFun, :-),
+                    (:DotSubFun, :.-),
+                    (:MulFun, :*),
+                    (:DotMulFun, :.*),
+                    (:RDivFun, :/),
+                    (:DotRDivFun, :./),
+                    (:LDivFun, :\),
+                    (:IDivFun, :div),
+                    (:DotIDivFun, :.÷),
+                    (:ModFun, :mod),
+                    (:RemFun, :rem),
+                    (:DotRemFun, :.%),
+                    (:PowFun, :^),
+                    (:MaxFun, :scalarmax),
+                    (:MinFun, :scalarmin),
+                    (:LessFun, :<),
+                    (:MoreFun, :>),
+                    (:DotLSFun, :.<<),
+                    (:DotRSFun, :.>>),
+                    (:ElementwiseMaxFun, :max),
+                    (:ElementwiseMinFun, :min),
+                    (:ComplexFun, :complex),
+                    (:DotFun, :dot),
+                    ]
+    @eval begin
+        @deprecate_binding $(Fun) typeof($(func))
+        (::Type{typeof($(func))})() = $(func)
+    end
+end
+@deprecate_binding CentralizedAbs2Fun typeof(centralizedabs2fun(0)).name.primary
+(::Type{typeof(centralizedabs2fun(0)).name.primary})(m::Number) = centralizedabs2fun(m)
+@deprecate specialized_unary(f::Function) f
+@deprecate specialized_binary(f::Function) f
+@deprecate specialized_bitwise_unary(f::Function) f
+@deprecate specialized_bitwise_binary(f::Function) f
+
 
 # During the 0.5 development cycle, do not add any deprecations below this line
 # To be deprecated in 0.6

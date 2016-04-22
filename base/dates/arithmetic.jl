@@ -97,26 +97,18 @@ end
 
 # promotion rules
 
-for (op,F) in ((:+,  Base.AddFun),
-               (:-,  Base.SubFun),
-               (:.+, Base.DotAddFun),
-               (:.-, Base.DotSubFun))
+for op in (:+, :-, :.+, :.-)
     @eval begin
-        Base.promote_op{P<:Period}(::$F, ::Type{P}, ::Type{P}) = P
-        Base.promote_op{P1<:Period,P2<:Period}(::$F, ::Type{P1}, ::Type{P2}) = CompoundPeriod
-        Base.promote_op{D<:Date}(::$F, ::Type{D}, ::Type{D}) = Day
-        Base.promote_op{D<:DateTime}(::$F, ::Type{D}, ::Type{D}) = Millisecond
+        Base.promote_op{P<:Period}(::typeof($op), ::Type{P}, ::Type{P}) = P
+        Base.promote_op{P1<:Period,P2<:Period}(::typeof($op), ::Type{P1}, ::Type{P2}) = CompoundPeriod
+        Base.promote_op{D<:Date}(::typeof($op), ::Type{D}, ::Type{D}) = Day
+        Base.promote_op{D<:DateTime}(::typeof($op), ::Type{D}, ::Type{D}) = Millisecond
     end
 end
 
-for (op,F) in ((:/,   Base.RDivFun),
-               (:%,   Base.RemFun),
-               (:div, Base.IDivFun),
-               (:mod, Base.ModFun),
-               (:./,  Base.DotRDivFun),
-               (:.%,  Base.DotRemFun))
+for op in (:/, :%, :div, :mod, :./, :.%)
     @eval begin
-        Base.promote_op{P<:Period}(::$F, ::Type{P}, ::Type{P}) = typeof($op(1,1))
-        Base.promote_op{P<:Period,R<:Real}(::$F, ::Type{P}, ::Type{R}) = P
+        Base.promote_op{P<:Period}(::typeof($op), ::Type{P}, ::Type{P}) = typeof($op(1,1))
+        Base.promote_op{P<:Period,R<:Real}(::typeof($op), ::Type{P}, ::Type{R}) = P
     end
 end
