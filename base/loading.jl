@@ -547,7 +547,7 @@ function stale_cachefile(modpath, cachefile)
             return true # invalid cache file
         end
         modules, files = cache_dependencies(io)
-        if files[1][1] != modpath
+        if realpath(files[1][1]) != realpath(modpath)
             return true # cache file was compiled from a different path
         end
         for (f,ftime) in files
