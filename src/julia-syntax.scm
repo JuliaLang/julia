@@ -3138,20 +3138,16 @@ f(x) = yt(x)
             ((implicit-global) #f)
             ((const) (emit e))
 
-            ;; metadata
-            ((inbounds)
-             ;; TODO: this should not be here but sometimes ends up in tail position, e.g.
-             ;; `f(x) = @inbounds return x`
-             (cond (tail  (emit-return e))
-                   (value e)
-                   (else  (emit e))))
             ;; top level expressions returning values
             ((abstract_type bits_type composite_type thunk toplevel module)
              (if tail (emit-return e) (emit e)))
             ;; other top level expressions and metadata
-            ((import importall using export line meta boundscheck simdloop)
-             (emit e)
-             (if tail (emit-return '(null)) '(null)))
+            ((import importall using export line meta inbounds boundscheck simdloop)
+             (let ((have-ret? (and (pair? code) (pair? (car code)) (eq? (caar code) 'return))))
+               (emit e)
+               (if (and tail (not have-ret?))
+                   (emit-return '(null)))
+               '(null)))
             ((...)
              (error "\"...\" expression outside call"))
             (else
