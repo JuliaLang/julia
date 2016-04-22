@@ -2,12 +2,12 @@
 
 ## symbols ##
 
-symbol(s::Symbol) = s
-symbol(s::ASCIIString) = symbol(s.data)
-symbol(s::UTF8String) = symbol(s.data)
-symbol(a::Array{UInt8,1}) =
+Symbol(s::Symbol) = s
+Symbol(s::ASCIIString) = Symbol(s.data)
+Symbol(s::UTF8String) = Symbol(s.data)
+Symbol(a::Array{UInt8,1}) =
     ccall(:jl_symbol_n, Ref{Symbol}, (Ptr{UInt8}, Int32), a, length(a))
-symbol(x...) = symbol(string(x...))
+Symbol(x...) = Symbol(string(x...))
 
 gensym() = ccall(:jl_gensym, Ref{Symbol}, ())
 
