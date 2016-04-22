@@ -1,14 +1,7 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
-## types ##
-
-const (<:) = issubtype
-
-supertype(T::DataType) = T.super
-
 ## generic comparison ##
 
-==(x, y) = x === y
 isequal(x, y) = x == y
 
 ## minimally-invasive changes to test == causing NotComparableError
@@ -45,10 +38,8 @@ end
 
 ## comparison fallbacks ##
 
-!=(x,y) = !(x==y)
 const ≠ = !=
 const ≡ = is
-!==(x,y) = !is(x,y)
 const ≢ = !==
 
 <(x,y) = isless(x,y)

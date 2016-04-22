@@ -190,6 +190,9 @@ trailing_ones(x::Integer) = trailing_zeros(~x)
 
 ## integer conversions ##
 
+# Int32 with Int64 promotion needed early
+promote_rule{T<:Union{Int8,Int16,Int32}}(::Type{Int64}, ::Type{T}) = Int64
+
 for to in BitInteger_types, from in (BitInteger_types...,Bool)
     if !(to === from)
         if to.size < from.size
@@ -290,7 +293,6 @@ promote_rule(::Type{Int8}, ::Type{Int16})   = Int16
 promote_rule(::Type{UInt8}, ::Type{UInt16}) = UInt16
 promote_rule{T<:Union{Int8,Int16}}(::Type{Int32}, ::Type{T})    = Int32
 promote_rule{T<:Union{UInt8,UInt16}}(::Type{UInt32}, ::Type{T}) = UInt32
-promote_rule{T<:Union{Int8,Int16,Int32}}(::Type{Int64}, ::Type{T})     = Int64
 promote_rule{T<:Union{UInt8,UInt16,UInt32}}(::Type{UInt64}, ::Type{T}) = UInt64
 promote_rule{T<:BitSigned64}(::Type{Int128}, ::Type{T})    = Int128
 promote_rule{T<:BitUnsigned64}(::Type{UInt128}, ::Type{T}) = UInt128

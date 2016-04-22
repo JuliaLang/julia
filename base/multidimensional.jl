@@ -10,9 +10,6 @@ using Base: LinearFast, LinearSlow, AbstractCartesianIndex, fill_to_length, tail
 
 export CartesianIndex, CartesianRange
 
-# Traits for linear indexing
-linearindexing{A<:BitArray}(::Type{A}) = LinearFast()
-
 # CartesianIndex
 immutable CartesianIndex{N} <: AbstractCartesianIndex{N}
     I::NTuple{N,Int}

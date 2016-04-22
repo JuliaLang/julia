@@ -7,6 +7,14 @@ const Bottom = Union{}
 abstract AbstractSet{T}
 abstract Associative{K,V}
 
+const (<:) = issubtype
+
+==(x,y) = x === y
+!=(x,y) = !(x==y)
+!==(x,y) = !(x===y)
+
+supertype(T::DataType) = T.super
+
 # The real @inline macro is not available until after array.jl, so this
 # internal macro splices the meta Expr directly into the function body.
 macro _inline_meta()
