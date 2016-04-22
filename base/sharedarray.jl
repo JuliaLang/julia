@@ -439,8 +439,6 @@ similar(S::SharedArray, T) = similar(S.s, T, size(S))
 similar(S::SharedArray, dims::Dims) = similar(S.s, eltype(S), dims)
 similar(S::SharedArray) = similar(S.s, eltype(S), size(S))
 
-map(f, S::SharedArray) = (S2 = similar(S); S2[:] = S[:]; map!(f, S2); S2)
-
 reduce(f, S::SharedArray) =
     mapreduce(fetch, f,
               Any[ @spawnat p reduce(f, S.loc_subarr_1d) for p in procs(S) ])
