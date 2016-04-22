@@ -163,8 +163,8 @@ end"""
 
 # issue #7188
 @test sprint(show, :foo) == ":foo"
-@test sprint(show, symbol("foo bar")) == "symbol(\"foo bar\")"
-@test sprint(show, symbol("foo \"bar")) == "symbol(\"foo \\\"bar\")"
+@test sprint(show,Symbol("foo bar")) == Symbol(\"foo bar\")"
+@test sprint(show,Symbol("foo \"bar")) == Symbol(\"foo \\\"bar\")"
 @test sprint(show, :+) == ":+"
 @test sprint(show, :end) == ":end"
 

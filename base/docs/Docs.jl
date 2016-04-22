@@ -391,7 +391,7 @@ const keywords = Dict{Symbol, DocStr}()
 isdoc(s::AbstractString) = true
 
 isdoc(x) = isexpr(x, :string) ||
-    (isexpr(x, :macrocall) && x.args[1] == symbol("@doc_str")) ||
+    (isexpr(x, :macrocall) && x.args[1] ==Symbol("@doc_str")) ||
     (isexpr(x, :call) && x.args[1] == Base.Markdown.doc_str)
 
 function unblock(ex)
@@ -417,7 +417,7 @@ nameof(q::QuoteNode, ismacro) = nameof(q.value, ismacro)
 nameof(s::Symbol, ismacro)    = ismacro ? macroname(s) : s
 nameof(other, ismacro)        = other
 
-macroname(s::Symbol) = symbol('@', s)
+macroname(s::Symbol) =Symbol('@', s)
 macroname(x::Expr)   = Expr(x.head, x.args[1], macroname(x.args[end].value))
 
 isfield(x) = isexpr(x, :.) &&
@@ -538,7 +538,7 @@ function __doc__!(meta, def, define)
         # the Base image). We just need to convert each `@__doc__` marker to an `@doc`.
         finddoc(def) do each
             each.head = :macrocall
-            each.args = [symbol("@doc"), meta, each.args[end], define]
+            each.args = Symbol("@doc"), meta, each.args[end], define]
         end
     else
         # `def` has already been defined during Base image gen so we just need to find and
