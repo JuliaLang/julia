@@ -25,3 +25,8 @@ let nfc_name = "\U00F4.jl"
     @test Base.isfile_casesensitive(nfc_name)
     rm(nfc_name)
 end
+
+let paddedname = "Ztest_sourcepath.jl"
+    filename = SubString(paddedname, 2, length(paddedname))
+    @test Base.find_in_path(filename) == abspath(paddedname[2:end])
+end
