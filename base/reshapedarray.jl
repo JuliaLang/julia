@@ -34,23 +34,25 @@ start(R::ReshapedArrayIterator) = start(R.iter)
 end
 length(R::ReshapedArrayIterator) = length(R.iter)
 
-function reshape(parent::AbstractArray, dims::Dims)
+reshape(parent::AbstractArray, dims::Dims) = _reshape(parent, dims)
+reshape(parent::AbstractArray, len::Integer) = reshape(parent, (Int(len),))
+reshape(parent::AbstractArray, dims::Int...) = reshape(parent, dims)
+
+function _reshape(parent::AbstractArray, dims::Dims)
     prod(dims) == length(parent) || throw(DimensionMismatch("parent has $(length(parent)) elements, which is incompatible with size $dims"))
-    _reshape((parent, linearindexing(parent)), dims)
+    __reshape((parent, linearindexing(parent)), dims)
 end
-reshape(R::ReshapedArray, dims::Dims) = reshape(R.parent, dims)
-reshape(a::AbstractArray, len::Int) = reshape(a, (len,))
-reshape(a::AbstractArray, dims::Int...) = reshape(a, dims)
+_reshape(R::ReshapedArray, dims::Dims) = _reshape(R.parent, dims)
 
 # When reshaping Vector->Vector, don't wrap with a ReshapedArray
-reshape{T}(v::ReshapedArray{T,1}, dims::Tuple{Int}) = reshape(v.parent, dims[1])
-reshape(v::AbstractVector, dims::Tuple{Int}) = reshape(v, dims[1])
-function reshape(v::AbstractVector, len::Int)
+_reshape{T}(v::ReshapedArray{T,1}, dims::Tuple{Int}) = _reshape(v.parent, dims)
+function _reshape(v::AbstractVector, dims::Tuple{Int})
+    len = dims[1]
     len == length(v) || throw(DimensionMismatch("parent has $(length(v)) elements, which is incompatible with length $len"))
     v
 end
 
-function _reshape(p::Tuple{AbstractArray,LinearSlow}, dims::Dims)
+function __reshape(p::Tuple{AbstractArray,LinearSlow}, dims::Dims)
     parent = p[1]
     strds = front(size_strides(parent))
     strds1 = map(s->max(1,s), strds)  # for resizing empty arrays
@@ -58,7 +60,7 @@ function _reshape(p::Tuple{AbstractArray,LinearSlow}, dims::Dims)
     ReshapedArray(parent, dims, reverse(mi))
 end
 
-function _reshape(p::Tuple{AbstractArray,LinearFast}, dims::Dims)
+function __reshape(p::Tuple{AbstractArray,LinearFast}, dims::Dims)
     parent = p[1]
     ReshapedArray(parent, dims, ())
 end
@@ -140,10 +142,4 @@ setindex!(A::ReshapedRange, val, index::ReshapedIndex) = _rs_setindex!_err()
 
 _rs_setindex!_err() = error("indexed assignment fails for a reshaped range; consider calling collect")
 
-typealias ArrayT{N, T} Array{T,N}
-convert{T,S,N}(::Type{Array{T,N}}, V::ReshapedArray{S,N}) = copy!(Array(T, size(V)), V)
-convert{T,N}(::Type{ArrayT{N}}, V::ReshapedArray{T,N}) = copy!(Array(T, size(V)), V)
-
 unsafe_convert{T}(::Type{Ptr{T}}, a::ReshapedArray{T}) = unsafe_convert(Ptr{T}, parent(a))
-unsafe_convert{T,N,P<:ReshapedArray,I<:Tuple{Vararg{Union{RangeIndex, NoSlice}}}}(::Type{Ptr{T}}, V::SubArray{T,N,P,I}) =
-    unsafe_convert(Ptr{T}, V.parent) + (first_index(V)-1)*sizeof(T)
