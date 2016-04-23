@@ -276,7 +276,7 @@ let out = Pipe(), echo = `$exename -f -e 'print(STDOUT, " 1\t", readstring(STDIN
     wait(ready) # wait for writer task to be ready before using `out`
     @test nb_available(out) == 0
     @test endswith(readuntil(out, '1'), '1')
-    @test read(out, UInt8) == '\t'
+    @test Char(read(out, UInt8)) == '\t'
     c = UInt8[0]
     @test c == read!(out, c)
     Base.wait_readnb(out, 1)
@@ -288,7 +288,7 @@ let out = Pipe(), echo = `$exename -f -e 'print(STDOUT, " 1\t", readstring(STDIN
     @test !iswritable(out)
     @test !isopen(out)
     @test nb_available(out) == 0
-    @test c == ['w']
+    @test c == UInt8['w']
     @test lstrip(ln2) == "1\thello\n"
     @test ln1 == "orld\n"
     @test isempty(read(out))

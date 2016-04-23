@@ -2,7 +2,7 @@
 
 #tests for /base/char.jl
 
-@test typemin(Char) == 0
+@test typemin(Char) == Char(0)
 @test ndims(Char) == 0
 @test getindex('a', 1) == 'a'
 @test_throws BoundsError getindex('a',2)
@@ -133,44 +133,44 @@ let
 
     #isless(x::Char, y::Integer) = isless(UInt32(x), y)
     for x in upperchars
-        @test isless(x, 91) == true
+        @test isless(x, Char(91)) == true
     end
 
     for x in lowerchars
-        @test isless(x, 123) == true
+        @test isless(x, Char(123)) == true
     end
 
     for x in numberchars
-        @test isless(x, 66) == true
+        @test isless(x, Char(66)) == true
     end
 
     for x in plane1_playingcards
-        @test isless(x, 127151) == true
+        @test isless(x, Char(127151)) == true
     end
 
     for x in plane2_cjkpart1
-        @test isless(x, 131088) == true
+        @test isless(x, Char(131088)) == true
     end
 
     #isless(x::Integer, y::Char) = isless(x, UInt32(y))
     for x in upperchars
-        @test isless(64, x) == true
+        @test isless(Char(64), x) == true
     end
 
     for x in lowerchars
-        @test isless(96, x) == true
+        @test isless(Char(96), x) == true
     end
 
     for x in numberchars
-        @test isless(47, x) == true
+        @test isless(Char(47), x) == true
     end
 
     for x in plane1_playingcards
-        @test isless(127135, x) == true
+        @test isless(Char(127135), x) == true
     end
 
     for x in plane2_cjkpart1
-        @test isless(131071, x) == true
+        @test isless(Char(131071), x) == true
     end
 end #end of let block
 
@@ -191,3 +191,5 @@ let
     @test array == ['a', 'a', 'a']
     @test eltype(array) == Char
 end
+
+@test !isequal('x', 120)

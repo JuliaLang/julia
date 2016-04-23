@@ -23,7 +23,7 @@ function countlines(io::IO, eol::Char='\n')
     while !eof(io)
         nb = readbytes!(io, a)
         @simd for i=1:nb
-            @inbounds nl += a[i] == eol
+            @inbounds nl += a[i] == UInt8(eol)
         end
     end
     nl
