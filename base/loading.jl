@@ -92,7 +92,7 @@ end
 
 # `wd` is a working directory to search. defaults to current working directory.
 # if `wd === nothing`, no extra path is searched.
-function find_in_path(name::ByteString, wd = pwd())
+function find_in_path(name::ByteString, wd)
     isabspath(name) && return name
     base = name
     if endswith(name,".jl")
@@ -111,6 +111,7 @@ function find_in_path(name::ByteString, wd = pwd())
     end
     return nothing
 end
+find_in_path(name::AbstractString, wd = pwd()) = find_in_path(bytestring(name), wd)
 
 function find_in_node_path(name::ByteString, srcpath, node::Int=1)
     if myid() == node
