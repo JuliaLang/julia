@@ -1057,7 +1057,7 @@ macro functorize(f)
     end
 end
 
-if !isdefined(Base, :threads)
+if !isdefined(Base, :Threads)
     @eval module Threads
         macro threads(expr)
             return esc(expr)

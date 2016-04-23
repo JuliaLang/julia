@@ -1093,11 +1093,7 @@ let a = rand(1:10, 10)
 end
 
 # Threads.@threads
-if isdefined(Base, :Threads)
-    using Base.Threads
-else
-    using Compat.Threads
-end
+using Compat.Threads
 @threads for i=1:10
     @test true
 end
