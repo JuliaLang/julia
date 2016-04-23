@@ -1219,7 +1219,7 @@ end
 
 function addprocs_locked(manager::ClusterManager; kwargs...)
     params = merge(default_addprocs_params(), AnyDict(kwargs))
-    topology(symbol(params[:topology]))
+    topology(Symbol(params[:topology]))
 
     # some libs by default start as many threads as cores which leads to
     # inefficient use of cores in a multi-process model.

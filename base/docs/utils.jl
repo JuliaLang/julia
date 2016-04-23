@@ -94,10 +94,10 @@ end
 function helpmode(line::AbstractString)
     line = strip(line)
     expr =
-        if haskey(keywords, symbol(line))
+        if haskey(keywords, Symbol(line))
             # Docs for keywords must be treated separately since trying to parse a single
             # keyword such as `function` would throw a parse error due to the missing `end`.
-            symbol(line)
+            Symbol(line)
         else
             x = Base.syntax_deprecation_warnings(false) do
                 parse(line, raise = false)
@@ -141,7 +141,7 @@ function repl(s::Symbol)
     end
 end
 
-isregex(x) = isexpr(x, :macrocall, 2) && x.args[1] == symbol("@r_str") && !isempty(x.args[2])
+isregex(x) = isexpr(x, :macrocall, 2) && x.args[1] == Symbol("@r_str") && !isempty(x.args[2])
 
 repl(ex::Expr) = isregex(ex) ? :(apropos($ex)) : _repl(ex)
 

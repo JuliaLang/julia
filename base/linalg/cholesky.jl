@@ -207,14 +207,14 @@ size(C::Union{Cholesky, CholeskyPivoted}) = size(C.factors)
 size(C::Union{Cholesky, CholeskyPivoted}, d::Integer) = size(C.factors, d)
 
 function getindex{T,S}(C::Cholesky{T,S}, d::Symbol)
-    d == :U && return UpperTriangular(symbol(C.uplo) == d ? C.factors : C.factors')
-    d == :L && return LowerTriangular(symbol(C.uplo) == d ? C.factors : C.factors')
-    d == :UL && return symbol(C.uplo) == :U ? UpperTriangular(C.factors) : LowerTriangular(C.factors)
+    d == :U && return UpperTriangular(Symbol(C.uplo) == d ? C.factors : C.factors')
+    d == :L && return LowerTriangular(Symbol(C.uplo) == d ? C.factors : C.factors')
+    d == :UL && return Symbol(C.uplo) == :U ? UpperTriangular(C.factors) : LowerTriangular(C.factors)
     throw(KeyError(d))
 end
 function getindex{T<:BlasFloat}(C::CholeskyPivoted{T}, d::Symbol)
-    d == :U && return UpperTriangular(symbol(C.uplo) == d ? C.factors : C.factors')
-    d == :L && return LowerTriangular(symbol(C.uplo) == d ? C.factors : C.factors')
+    d == :U && return UpperTriangular(Symbol(C.uplo) == d ? C.factors : C.factors')
+    d == :L && return LowerTriangular(Symbol(C.uplo) == d ? C.factors : C.factors')
     d == :p && return C.piv
     if d == :P
         n = size(C, 1)
