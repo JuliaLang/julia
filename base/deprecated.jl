@@ -1020,6 +1020,8 @@ function pmap(f, c...; err_retry=nothing, err_stop=nothing, pids=nothing)
     return pmap(p, f, c...)
 end
 
+#15995
+@deprecate symbol Symbol
 
 # During the 0.5 development cycle, do not add any deprecations below this line
 # To be deprecated in 0.6
