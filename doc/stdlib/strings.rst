@@ -471,7 +471,7 @@
 
    Tests whether a character is a valid hexadecimal digit, or whether this is true for all elements of a string.
 
-.. function::Symbol(x...) -> Symbol
+.. function:: symbol(x...) -> Symbol
 
    .. Docstring generated from Julia source
 

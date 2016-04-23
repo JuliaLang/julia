@@ -412,8 +412,8 @@ s1 = Struct1(352.39422f23, 19.287577)
 
 for (t,v) in ((Complex{Int32},:ci32),(Complex{Int64},:ci64),
               (Complex64,:cf32),(Complex128,:cf64),(Struct1,:s1))
-    fname =Symbol("foo"*string(v))
-    fname1 =Symbol("foo1"*string(v))
+    fname = symbol("foo"*string(v))
+    fname1 = symbol("foo1"*string(v))
     @eval begin
         verbose && println($t)
         a = copy($v)

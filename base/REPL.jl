@@ -345,7 +345,7 @@ function hist_from_file(hp, file)
             m = match(r"^#\s*(\w+)\s*:\s*(.*?)\s*$", line)
             m === nothing && break
             if m.captures[1] == "mode"
-                mode =Symbol(m.captures[2])
+                mode = symbol(m.captures[2])
             end
             line = hist_getline(file)
             countlines += 1
@@ -731,7 +731,7 @@ function setup_interface(repl::LineEditREPL; hascolor = repl.hascolor, extra_rep
         # and pass into Base.repl_cmd for processing (handles `ls` and `cd`
         # special)
         on_done = respond(repl, julia_prompt) do line
-            Expr(:call, :(Base.repl_cmd), macroexpand(Expr(:macrocall,Symbol("@cmd"),line)), outstream(repl))
+            Expr(:call, :(Base.repl_cmd), macroexpand(Expr(:macrocall, symbol("@cmd"),line)), outstream(repl))
         end)
 
 

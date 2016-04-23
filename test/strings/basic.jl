@@ -41,21 +41,21 @@ end
 # issue #6027
 let
     # make symbol with invalid char
-    sym =Symbol(Char(0xdcdb))
+    sym = symbol(Char(0xdcdb))
     @test string(sym) == string(Char(0xdcdb))
     @test expand(sym) === sym
     res = string(parse(string(Char(0xdcdb)," = 1"),1,raise=false)[1])
     @test res == """\$(Expr(:error, "invalid character \\\"\\udcdb\\\"\"))"""
 end
 
-@testSymbol("asdf") === :asdf
-@testSymbol(:abc,"def",'g',"hi",0) === :abcdefghi0
+@test symbol("asdf") === :asdf
+@test symbol(:abc,"def",'g',"hi",0) === :abcdefghi0
 @test :a < :b
 @test startswith(string(gensym("asdf")),"##asdf#")
 @test gensym("asdf") != gensym("asdf")
 @test gensym() != gensym()
 @test startswith(string(gensym()),"##")
-@test_throws ArgumentErrorSymbol("ab\0")
+@test_throws ArgumentError symbol("ab\0")
 @test_throws ArgumentError gensym("ab\0")
 
 # issue #6949
@@ -176,7 +176,7 @@ gstr = GenericString("12");
 
 @test convert(Array{UInt8}, gstr) ==[49;50]
 @test convert(Array{Char,1}, gstr) ==['1';'2']
-@test convert(Symbol, gstr)=Symbol("12")
+@test convert(Symbol, gstr)==symbol("12")
 
 @test getindex(gstr, Bool(1))=='1'
 @test getindex(gstr,Bool(1):Bool(1))=="1"
@@ -187,7 +187,7 @@ gstr = GenericString("12");
 @test map(uppercase, "foó") == "FOÓ"
 @test chr2ind("fóobar",3) == 4
 
-@testSymbol(gstr)=Symbol("12")
+@test symbol(gstr)==symbol("12")
 
 @test_throws ErrorException sizeof(gstr)
 
@@ -249,7 +249,7 @@ for T in [BigInt, Int8, UInt8, Int16, UInt16, Int32, UInt32, Int64, UInt64, Int1
 end
 let s = normalize_string("tést",:NFKC)
     @test bytestring(Base.unsafe_convert(Cstring, s)) == s
-    @test bytestring(convert(Cstring,Symbol(s))) == s
+    @test bytestring(convert(Cstring, symbol(s))) == s
     @test wstring(Base.unsafe_convert(Cwstring, wstring(s))) == s
 end
 let s = "ba\0d"

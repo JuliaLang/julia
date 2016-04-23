@@ -127,7 +127,7 @@ end
 
 for parts in (["year", "month"], ["month", "day"], ["year", "month", "day"])
     name = join(parts)
-    func =Symbol(name)
+    func = symbol(name)
     @eval begin
         @doc """
             $($name)(dt::TimeType) -> ($(join(repeated(Int64, length($parts)), ", ")))

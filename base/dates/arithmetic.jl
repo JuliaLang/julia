@@ -67,7 +67,7 @@ end
 (-)(y::Period,x::TimeType) = x - y
 
 for op in (:.+, :.-)
-    op_ =Symbol(string(op)[2:end])
+    op_ = symbol(string(op)[2:end])
     @eval begin
         # GeneralPeriod, AbstractArray{TimeType}
         ($op){T<:TimeType}(x::AbstractArray{T}, y::GeneralPeriod) =

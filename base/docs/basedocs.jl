@@ -5,7 +5,7 @@ module BaseDocs
 immutable Keyword
     name :: Symbol
 end
-macro kw_str(text) KeywordSymbol(text)) end
+macro kw_str(text) Keyword(symbol(text)) end
 
 "Hello, Human."
 kw"hello", kw"hi"

@@ -22,7 +22,7 @@ end
 
 function bestmime(val)
     for mime in ("text/html", "image/svg+xml", "image/png", "text/plain")
-        mimewritable(mime, val) && return MIMESymbol(mime))
+        mimewritable(mime, val) && return MIME(symbol(mime))
     end
     error("Cannot render $val to Markdown.")
 end

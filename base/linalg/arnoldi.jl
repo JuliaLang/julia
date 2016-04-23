@@ -180,7 +180,7 @@ function _eigs(A, B;
 
     if isa(which,AbstractString)
         warn("Use symbols instead of strings for specifying which eigenvalues to compute")
-        whichSymbol(which)
+        which=symbol(which)
     end
     if (which != :LM && which != :SM && which != :LR && which != :SR &&
         which != :LI && which != :SI && which != :BE)

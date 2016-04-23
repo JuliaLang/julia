@@ -55,7 +55,7 @@ open(fname) do f
         x = map(s -> rstrip(s, [' ','\t','\n']),
                 split(replace(L, r"[{}\"]+", "\t"), "\t"))
         c = Char(parse(Int, x[2], 16))
-        if (Base.is_id_char(c) || Base.isoperatorSymbol(c))) &&
+        if (Base.is_id_char(c) || Base.isoperator(symbol(c))) &&
            string(c) ∉ latex_strings && !isascii(c)
             tabcomname = escape_string(x[3])
             if startswith(tabcomname, "\\\\math")

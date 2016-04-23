@@ -25,7 +25,7 @@ end
 function check_body!(x::Expr)
     if x.head === :break || x.head == :continue
         throw(SimdError("$(x.head) is not allowed inside a @simd loop body"))
-    elseif x.head === :macrocall && x.args[1] ===Symbol("@goto")
+    elseif x.head === :macrocall && x.args[1] === symbol("@goto")
         throw(SimdError("$(x.args[1]) is not allowed inside a @simd loop body"))
     end
     for arg in x.args
