@@ -3194,9 +3194,9 @@ typealias PossiblyInvalidUnion{T} Union{T,Int}
 @test_throws TypeError PossiblyInvalidUnion{1}
 
 # issue #12569
-@test_throws ArgumentError symbol("x"^10_000_000)
+@test_throws ArgumentErrorSymbol("x"^10_000_000)
 @test_throws ArgumentError gensym("x"^10_000_000)
-@test symbol("x") === symbol("x")
+@testSymbol("x") ===Symbol("x")
 @test split(string(gensym("abc")),'#')[3] == "abc"
 
 # meta nodes for optional positional arguments

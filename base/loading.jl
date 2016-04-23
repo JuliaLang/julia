@@ -304,7 +304,7 @@ function reload(name::AbstractString)
         error("use `include` instead of `reload` to load source files")
     else
         # reload("Package") is ok
-        require(symbol(require_modname(name)))
+        requireSymbol(require_modname(name)))
     end
 end
 
@@ -517,7 +517,7 @@ function cache_dependencies(f::IO)
         n = ntoh(read(f, Int32))
         n == 0 && break
         push!(modules,
-              (symbol(read(f, n)), # module symbol
+              Symbol(read(f, n)), # module symbol
                ntoh(read(f, UInt64)))) # module UUID (timestamp)
     end
     read(f, Int64) # total bytes for file dependencies

@@ -425,7 +425,7 @@ function getindex(lu::UmfpackLU, d::Symbol)
 end
 
 for Tv in (:Float64, :Complex128), Ti in UmfpackIndexTypes
-    f = symbol(umf_nm("free_symbolic", Tv, Ti))
+    f =Symbol(umf_nm("free_symbolic", Tv, Ti))
     @eval begin
         function ($f)(symb::Ptr{Void})
             tmp = [symb]
@@ -441,7 +441,7 @@ for Tv in (:Float64, :Complex128), Ti in UmfpackIndexTypes
         end
     end
 
-    f = symbol(umf_nm("free_numeric", Tv, Ti))
+    f =Symbol(umf_nm("free_numeric", Tv, Ti))
     @eval begin
         function ($f)(num::Ptr{Void})
             tmp = [num]

@@ -251,7 +251,7 @@ for (fname, Op) in [(:sum, :AddFun), (:prod, :MulFun),
                     (:maximum, :MaxFun), (:minimum, :MinFun),
                     (:all, :AndFun), (:any, :OrFun)]
 
-    fname! = symbol(fname, '!')
+    fname! =Symbol(fname, '!')
     @eval begin
         $(fname!)(f::Union{Function,Func{1}}, r::AbstractArray, A::AbstractArray; init::Bool=true) =
             mapreducedim!(f, $(Op)(), initarray!(r, $(Op)(), init), A)
@@ -267,8 +267,8 @@ for (fname, fbase, Fun) in [(:sumabs, :sum, :AbsFun),
                             (:sumabs2, :sum, :Abs2Fun),
                             (:maxabs, :maximum, :AbsFun),
                             (:minabs, :minimum, :AbsFun)]
-    fname! = symbol(fname, '!')
-    fbase! = symbol(fbase, '!')
+    fname! =Symbol(fname, '!')
+    fbase! =Symbol(fbase, '!')
     @eval begin
         $(fname!)(r::AbstractArray, A::AbstractArray; init::Bool=true) =
             $(fbase!)($(Fun)(), r, A; init=init)

@@ -26,7 +26,7 @@ const TAGS = Any[
 
     (), Bool, Any, :Any, Bottom, :reserved21, :reserved22, Type,
     :Array, :TypeVar, :Box,
-    :lambda, :body, :return, :call, symbol("::"),
+    :lambda, :body, :return, :call,Symbol("::"),
     :(=), :null, :gotoifnot, :A, :B, :C, :M, :N, :T, :S, :X, :Y,
     :a, :b, :c, :d, :e, :f, :g, :h, :i, :j, :k, :l, :m, :n, :o,
     :p, :q, :r, :s, :t, :u, :v, :w, :x, :y, :z,
@@ -527,9 +527,9 @@ function handle_deserialize(s::SerializationState, b::Int32)
     elseif b == DATATYPE_TAG
         return deserialize_datatype(s)
     elseif b == SYMBOL_TAG
-        return symbol(read(s.io, UInt8, Int(read(s.io, UInt8)::UInt8)))
+        returnSymbol(read(s.io, UInt8, Int(read(s.io, UInt8)::UInt8)))
     elseif b == LONGSYMBOL_TAG
-        return symbol(read(s.io, UInt8, Int(read(s.io, Int32)::Int32)))
+        returnSymbol(read(s.io, UInt8, Int(read(s.io, Int32)::Int32)))
     elseif b == EXPR_TAG
         return deserialize_expr(s, Int(read(s.io, UInt8)::UInt8))
     elseif b == LONGEXPR_TAG
