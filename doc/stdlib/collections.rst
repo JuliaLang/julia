@@ -230,7 +230,7 @@ Iterable Collections
 
    .. Docstring generated from Julia source
 
-   Test if all values from ``itr`` are distinct, when compared with ``isequal``\ .
+   Return ``true`` if all values from ``itr`` are distinct when compared with ``isequal``\ .
 
 .. function:: reduce(op, v0, itr)
 

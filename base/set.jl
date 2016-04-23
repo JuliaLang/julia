@@ -144,7 +144,7 @@ end
 """
     alldistinct(itr)
 
-Test if all values from `itr` are distinct, when compared with `isequal`.
+Return `true` if all values from `itr` are distinct when compared with `isequal`.
 """
 function alldistinct(C)
     seen = Set{eltype(C)}()
