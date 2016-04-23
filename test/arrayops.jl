@@ -87,8 +87,23 @@ a = reshape(b, (2, 2, 2, 2, 2))
 @test a[2,1,2,2,1] == b[14]
 @test a[2,2,2,2,2] == b[end]
 
-# reshaping linearslow arrays
 a = collect(reshape(1:5, 1, 5))
+# reshaping linearfast SubArrays
+s = sub(a, :, 2:4)
+r = reshape(s, (length(s),))
+@test length(r) == 3
+@test r[1] == 2
+@test r[3,1] == 4
+@test r[Base.ReshapedIndex(CartesianIndex((1,2)))] == 3
+@test parent(reshape(r, (1,3))) === r.parent === s
+@test parentindexes(r) == (1:1, 1:3)
+@test reshape(r, (3,)) === r
+@test convert(Array{Int,1}, r) == [2,3,4]
+@test_throws MethodError convert(Array{Int,2}, r)
+@test convert(Array{Int}, r) == [2,3,4]
+@test Base.unsafe_convert(Ptr{Int}, r) == Base.unsafe_convert(Ptr{Int}, s)
+
+# reshaping linearslow SubArrays
 s = sub(a, :, [2,3,5])
 r = reshape(s, length(s))
 @test length(r) == 3
@@ -98,6 +113,10 @@ r = reshape(s, length(s))
 @test parent(reshape(r, (1,3))) === r.parent === s
 @test parentindexes(r) == (1:1, 1:3)
 @test reshape(r, (3,)) === r
+@test convert(Array{Int,1}, r) == [2,3,5]
+@test_throws MethodError convert(Array{Int,2}, r)
+@test convert(Array{Int}, r) == [2,3,5]
+@test_throws ErrorException Base.unsafe_convert(Ptr{Int}, r)
 r[2] = -1
 @test a[3] == -1
 a = zeros(0, 5)  # an empty linearslow array

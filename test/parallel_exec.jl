@@ -909,4 +909,3 @@ for tid in [id_other, id_me, Base.default_worker_pool()]
     test_f_args(13, f_args, tid, 1; kw1=4, kw2=8)
     test_f_args(15, f_args, tid, 1, 2; kw1=4, kw2=8)
 end
-
