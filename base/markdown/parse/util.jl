@@ -16,7 +16,7 @@ const whitespace = " \t\r"
 Skip any leading whitespace. Returns io.
 """
 function skipwhitespace(io::IO; newlines = true)
-    while !eof(io) && (peek(io) in whitespace || (newlines && peek(io) == '\n'))
+    while !eof(io) && (Char(peek(io)) in whitespace || (newlines && peek(io) == UInt8('\n')))
         read(io, Char)
     end
     return io
@@ -82,7 +82,7 @@ function startswith(stream::IO, s::AbstractString; eat = true, padding = false, 
 end
 
 function startswith(stream::IO, c::Char; eat = true)
-    if !eof(stream) && peek(stream) == c
+    if !eof(stream) && peek(stream) == UInt8(c)
         eat && read(stream, Char)
         return true
     else
@@ -181,7 +181,7 @@ function parse_inline_wrapper(stream::IO, delimiter::AbstractString; rep = false
         startswith(stream, delimiter^n) || return nothing
         while startswith(stream, delimiter); n += 1; end
         !rep && n > nmin && return nothing
-        !eof(stream) && peek(stream) in whitespace && return nothing
+        !eof(stream) && Char(peek(stream)) in whitespace && return nothing
 
         buffer = IOBuffer()
         while !eof(stream)

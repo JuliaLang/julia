@@ -477,7 +477,7 @@ str = "abcdef\uff\uffff\u10ffffABCDEF"
 @test typeof(lowercase(utf16(str))) == UTF16String
 @test typeof(lowercase(utf32(str))) == UTF32String
 
-foomap(ch) = (ch > 65)
+foomap(ch) = (ch > Char(65))
 foobar(ch) = Char(0xd800)
 foobaz(ch) = reinterpret(Char, typemax(UInt32))
 @test_throws UnicodeError map(foomap, utf16(str))

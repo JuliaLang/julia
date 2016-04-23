@@ -30,12 +30,7 @@ isempty(c::Char) = false
 in(x::Char, y::Char) = x == y
 
 ==(x::Char, y::Char) = UInt32(x) == UInt32(y)
-==(x::Char, y::Integer) = UInt32(x) == y
-==(x::Integer, y::Char) = x == UInt32(y)
-
-isless(x::Char, y::Char)    = isless(UInt32(x), UInt32(y))
-isless(x::Char, y::Integer) = isless(UInt32(x), y)
-isless(x::Integer, y::Char) = isless(x, UInt32(y))
+isless(x::Char, y::Char) = UInt32(x) < UInt32(y)
 
 -(x::Char, y::Char) = Int(x) - Int(y)
 -(x::Char, y::Integer) = Char(Int32(x) - Int32(y))
