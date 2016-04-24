@@ -2870,6 +2870,7 @@ static jl_cgval_t emit_call_function_object(jl_lambda_info_t *li, const jl_cgval
 
 static jl_cgval_t emit_call(jl_expr_t *ex, jl_codectx_t *ctx)
 {
+    flush_pending_store(ctx);
     jl_value_t *expr = (jl_value_t*)ex;
     jl_value_t **args = (jl_value_t**)jl_array_data(ex->args);
     size_t arglen = jl_array_dim0(ex->args);
@@ -2974,6 +2975,7 @@ static jl_cgval_t emit_call(jl_expr_t *ex, jl_codectx_t *ctx)
 
 static void undef_var_error_if_null(Value *v, jl_sym_t *name, jl_codectx_t *ctx)
 {
+    flush_pending_store(ctx);
     Value *ok = builder.CreateICmpNE(v, V_null);
     BasicBlock *err = BasicBlock::Create(getGlobalContext(), "err", ctx->f);
     BasicBlock *ifok = BasicBlock::Create(getGlobalContext(), "ok");
@@ -3327,7 +3329,6 @@ static jl_cgval_t emit_expr(jl_value_t *expr, jl_codectx_t *ctx)
         return emit_getfield((jl_value_t*)jl_globalref_mod(expr), jl_globalref_name(expr), ctx);
     }
     if (jl_is_topnode(expr)) {
-        flush_pending_store(ctx);
         jl_sym_t *var = (jl_sym_t*)jl_fieldref(expr,0);
         jl_module_t *mod = topmod(ctx);
         jl_binding_t *b = jl_get_binding(mod, var);
@@ -3339,7 +3340,6 @@ static jl_cgval_t emit_expr(jl_value_t *expr, jl_codectx_t *ctx)
         return emit_checked_var(julia_binding_gv(b), var, ctx);
     }
     if (!jl_is_expr(expr)) {
-        flush_pending_store(ctx);
         int needroot = true;
         if (jl_is_quotenode(expr)) {
             expr = jl_fieldref(expr,0);
@@ -3374,7 +3374,6 @@ static jl_cgval_t emit_expr(jl_value_t *expr, jl_codectx_t *ctx)
     // however, this is a good way to do it because it should *not* be easy
     // to add new node types.
     if (head == goto_ifnot_sym) {
-        flush_pending_store(ctx);
         jl_value_t *cond = args[0];
         int labelname = jl_unbox_long(args[1]);
         BasicBlock *ifso = BasicBlock::Create(getGlobalContext(), "if", ctx->f);
@@ -3386,9 +3385,11 @@ static jl_cgval_t emit_expr(jl_value_t *expr, jl_codectx_t *ctx)
         // SSA vars as not dominating all uses. see issue #6068
         // Work around this by generating unconditional branches.
         if (cond == jl_true) {
+            flush_pending_store_final(ctx);
             builder.CreateBr(ifso);
         }
         else if (cond == jl_false) {
+            flush_pending_store_final(ctx);
             builder.CreateBr(ifnot);
         }
         else {
@@ -3399,7 +3400,6 @@ static jl_cgval_t emit_expr(jl_value_t *expr, jl_codectx_t *ctx)
         builder.SetInsertPoint(ifso);
     }
     else if (head == call_sym) {
-        flush_pending_store(ctx);
         if (ctx->linfo->def) { // don't bother codegen constant-folding for toplevel
             jl_value_t *c = static_eval(expr, ctx, true, true);
             if (c) {
@@ -3414,11 +3414,9 @@ static jl_cgval_t emit_expr(jl_value_t *expr, jl_codectx_t *ctx)
         return ghostValue(jl_void_type);
     }
     else if (head == static_parameter_sym) {
-        flush_pending_store(ctx);
         return emit_sparam(jl_unbox_long(args[0])-1, ctx);
     }
     else if (head == method_sym) {
-        flush_pending_store(ctx);
         jl_value_t *mn = args[0];
         assert(jl_expr_nargs(ex) != 1 || jl_is_symbol(mn) || jl_is_slot(mn));
 
@@ -3439,6 +3437,7 @@ static jl_cgval_t emit_expr(jl_value_t *expr, jl_codectx_t *ctx)
             name = literal_pointer_val((jl_value_t*)slot_symbol(sl, ctx));
         }
         if (bp) {
+            flush_pending_store_final(ctx);
             Value *mdargs[4] = { name, bp, bp_owner, literal_pointer_val(bnd) };
             jl_cgval_t gf = mark_julia_type(
                     builder.CreateCall(prepare_call(jlgenericfunction_func), ArrayRef<Value*>(&mdargs[0], 4)),
@@ -3449,11 +3448,11 @@ static jl_cgval_t emit_expr(jl_value_t *expr, jl_codectx_t *ctx)
         Value *a1 = boxed(emit_expr(args[1], ctx), ctx);
         Value *a2 = boxed(emit_expr(args[2], ctx), ctx);
         Value *mdargs[3] = { a1, a2, literal_pointer_val(args[3]) };
+        flush_pending_store_final(ctx);
         builder.CreateCall(prepare_call(jlmethod_func), ArrayRef<Value*>(&mdargs[0], 3));
         return ghostValue(jl_void_type);
     }
     else if (head == const_sym) {
-        flush_pending_store(ctx);
         jl_sym_t *sym = (jl_sym_t*)args[0];
         if (jl_is_symbol(sym)) {
             jl_binding_t *bnd = NULL;
@@ -3467,7 +3466,6 @@ static jl_cgval_t emit_expr(jl_value_t *expr, jl_codectx_t *ctx)
         return ghostValue(jl_void_type);
     }
     else if (head == static_typeof_sym) {
-        flush_pending_store(ctx);
         jl_value_t *extype = expr_type((jl_value_t*)ex, ctx);
         if (jl_is_type_type(extype)) {
             extype = jl_tparam0(extype);
