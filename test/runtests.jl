@@ -1091,3 +1091,9 @@ end
 let a = rand(1:10, 10)
     @eval @test mapreduce(x -> abs2(x - 1), +, $(a)) == mapreduce(@functorize(centralizedabs2fun)(1), +, $(a))
 end
+
+# Threads.@threads
+using Compat.Threads
+@threads for i=1:10
+    @test true
+end
