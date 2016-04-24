@@ -2680,7 +2680,6 @@ static bool emit_builtin_call(jl_cgval_t *ret, jl_value_t *f, jl_value_t **args,
         }
         else if (jl_is_leaf_type(aty)) {
             jl_cgval_t arg1 = emit_expr(args[1], ctx);
-            flush_pending_store(ctx);
             Value *sz;
             if (arg1.constant) {
                 sz = ConstantInt::get(T_size, jl_datatype_nfields(arg1.typ));
@@ -2782,13 +2781,12 @@ static Value *emit_jlcall(Value *theFptr, Value *theF, jl_value_t **args,
             largs[i] = &anArg[i];
         }
         // put into argument space
-        flush_pending_store(ctx);
         myargs = make_jlcall(makeArrayRef(largs, nargs), ctx);
     }
     else {
         myargs = Constant::getNullValue(T_ppjlvalue);
-        flush_pending_store(ctx);
     }
+    flush_pending_store_final(ctx);
 #ifdef LLVM37
     Value *result = builder.CreateCall(prepare_call(theFptr), {theF, myargs,
                                        ConstantInt::get(T_int32,nargs)});
@@ -2827,7 +2825,6 @@ static jl_cgval_t emit_call_function_object(jl_lambda_info_t *li, const jl_cgval
             if (type_is_ghost(et)) {
                 // Still emit the expression in case it has side effects
                 if (i>0) emit_expr(args[i], ctx);
-                flush_pending_store(ctx);
                 continue;
             }
             if (isboxed) {
@@ -2838,16 +2835,13 @@ static jl_cgval_t emit_call_function_object(jl_lambda_info_t *li, const jl_cgval
             else if (et->isAggregateType()) {
                 assert(at == PointerType::get(et, 0));
                 jl_cgval_t arg = i==0 ? theF : emit_expr(args[i], ctx);
-                flush_pending_store(ctx);
                 if (arg.ispointer) {
                     // can lazy load on demand, no copy needed
                     argvals[idx] = data_pointer(arg, ctx, at);
-                    flush_pending_store(ctx);
                     mark_gc_use(ctx, arg); // TODO: must be after the jlcall
                 }
                 else {
                     Value *v = emit_unbox(et, arg, jt);
-                    flush_pending_store(ctx);
                     Value *p = emit_static_alloca(v->getType(), ctx);
                     builder.CreateStore(v, p);
                     argvals[idx] = p;
@@ -2859,11 +2853,11 @@ static jl_cgval_t emit_call_function_object(jl_lambda_info_t *li, const jl_cgval
                     argvals[idx] = emit_unbox(et, theF, jt);
                 else
                     argvals[idx] = emit_unbox(et, emit_expr(args[i], ctx), jt);
-                flush_pending_store(ctx);
             }
             idx++;
         }
         assert(idx == nfargs);
+        flush_pending_store_final(ctx);
         CallInst *call = builder.CreateCall(prepare_call(cf), ArrayRef<Value*>(&argvals[0], nfargs));
         call->setAttributes(cf->getAttributes());
         return sret ? mark_julia_slot(result, jlretty) : mark_julia_type(call, retboxed, jlretty, ctx);
@@ -2888,7 +2882,6 @@ static jl_cgval_t emit_call(jl_expr_t *ex, jl_codectx_t *ctx)
         // function is a compile-time constant
         if (jl_typeis(f, jl_intrinsic_type)) {
             result = emit_intrinsic((intrinsic)*(uint32_t*)jl_data_ptr(f), args, nargs, ctx);
-            flush_pending_store(ctx);
             if (result.typ == (jl_value_t*)jl_any_type) // the select_value intrinsic may be missing type information
                 result = remark_julia_type(result, expr_type(expr, ctx));
             JL_GC_POP();
@@ -2942,7 +2935,6 @@ static jl_cgval_t emit_call(jl_expr_t *ex, jl_codectx_t *ctx)
                 }
                 else {
                     fval = emit_expr(args[0], ctx);
-                    flush_pending_store(ctx);
                 }
                 if (ctx->linfo->def) // root this li in case it gets deleted from the cache in `f`
                     jl_add_linfo_root(ctx->linfo, (jl_value_t*)li);
@@ -2959,7 +2951,6 @@ static jl_cgval_t emit_call(jl_expr_t *ex, jl_codectx_t *ctx)
     const jl_cgval_t **largs = (const jl_cgval_t**)alloca(sizeof(jl_cgval_t*) * nargs);
     for(size_t i=0; i < nargs; i++) {
         anArg[i] = emit_expr(args[i], ctx);
-        flush_pending_store(ctx);
         largs[i] = &anArg[i];
     }
     // put into argument space
