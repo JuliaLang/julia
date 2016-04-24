@@ -5,20 +5,20 @@ abstract AbstractRotation{T}
 
 transpose(R::AbstractRotation) = error("transpose not implemented for $(typeof(R)). Consider using conjugate transpose (') instead of transpose (.').")
 
-function *{T,S}(R::AbstractRotation{T}, A::AbstractVecOrMat{S})
+function (*){T,S}(R::AbstractRotation{T}, A::AbstractVecOrMat{S})
     TS = typeof(zero(T)*zero(S) + zero(T)*zero(S))
-    A_mul_B!(convert(AbstractRotation{TS}, R), TS == S ? copy(A) : convert(AbstractArray{TS}, A))
+    mul!(convert(AbstractRotation{TS}, R), TS == S ? copy(A) : convert(AbstractArray{TS}, A))
 end
-function A_mul_Bc{T,S}(A::AbstractVecOrMat{T}, R::AbstractRotation{S})
+function (*){T,S}(A::AbstractVecOrMat{T}, R::AbstractRotation{S})
     TS = typeof(zero(T)*zero(S) + zero(T)*zero(S))
-    A_mul_Bc!(TS == T ? copy(A) : convert(AbstractArray{TS}, A), convert(AbstractRotation{TS}, R))
+    mul!(TS == T ? copy(A) : convert(AbstractArray{TS}, A), convert(AbstractRotation{TS}, R))
 end
 """
     LinAlg.Givens(i1,i2,c,s) -> G
 
 A Givens rotation linear operator. The fields `c` and `s` represent the cosine and sine of
-the rotation angle, respectively. The `Givens` type supports left multiplication `G*A` and
-conjugated transpose right multiplication `A*G'`. The type doesn't have a `size` and can
+the rotation angle, respectively. The `Givens` type supports left multiplication `G*A`,
+right multiplication `A*G`, and conjugated transposition `G'`. The type doesn't have a `size` and can
 therefore be multiplied with matrices of arbitrary size as long as `i2<=size(A,2)` for
 `G*A` or `i2<=size(A,1)` for `A*G'`.
 
@@ -317,9 +317,9 @@ function getindex(G::Givens, i::Integer, j::Integer)
 end
 
 
-A_mul_B!(G1::Givens, G2::Givens) = error("Operation not supported. Consider *")
+mul!(G1::Givens, G2::Givens) = error("Operation not supported. Consider *")
 
-function A_mul_B!(G::Givens, A::AbstractVecOrMat)
+function mul!(G::Givens, A::AbstractVecOrMat)
     m, n = size(A, 1), size(A, 2)
     if G.i2 > m
         throw(DimensionMismatch("column indices for rotation are outside the matrix"))
@@ -331,32 +331,32 @@ function A_mul_B!(G::Givens, A::AbstractVecOrMat)
     end
     return A
 end
-function A_mul_Bc!(A::AbstractMatrix, G::Givens)
+function mul!(A::AbstractMatrix, G::Givens)
     m, n = size(A, 1), size(A, 2)
     if G.i2 > n
         throw(DimensionMismatch("column indices for rotation are outside the matrix"))
     end
     @inbounds @simd for i = 1:m
         a1, a2 = A[i,G.i1], A[i,G.i2]
-        A[i,G.i1] =  a1*G.c + a2*conj(G.s)
-        A[i,G.i2] = -a1*G.s + a2*G.c
+        A[i,G.i1] = a1*G.c - a2*conj(G.s)
+        A[i,G.i2] = a1*G.s + a2*G.c
     end
     return A
 end
-function A_mul_B!(G::Givens, R::Rotation)
+function mul!(G::Givens, R::Rotation)
     push!(R.rotations, G)
     return R
 end
-function A_mul_B!(R::Rotation, A::AbstractMatrix)
+function mul!(R::Rotation, A::AbstractMatrix)
     @inbounds for i = 1:length(R.rotations)
-        A_mul_B!(R.rotations[i], A)
+        mul!(R.rotations[i], A)
     end
     return A
 end
-function A_mul_Bc!(A::AbstractMatrix, R::Rotation)
+function mul!(A::AbstractMatrix, R::Rotation)
     @inbounds for i = 1:length(R.rotations)
-        A_mul_Bc!(A, R.rotations[i])
+        mul!(A, R.rotations[i])
     end
     return A
 end
-*{T}(G1::Givens{T}, G2::Givens{T}) = Rotation(push!(push!(Givens{T}[], G2), G1))
+(*){T}(G1::Givens{T}, G2::Givens{T}) = Rotation(push!(push!(Givens{T}[], G2), G1))

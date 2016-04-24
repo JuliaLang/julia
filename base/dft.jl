@@ -6,7 +6,7 @@ module DFT
 abstract Plan{T}
 
 import Base: show, summary, size, ndims, length, eltype,
-             *, A_mul_B!, inv, \, A_ldiv_B!
+             *, mul!, inv, \, A_ldiv_B!
 
 eltype{T}(::Type{Plan{T}}) = T
 
@@ -80,7 +80,7 @@ contains all of the information needed to compute `fft(A, dims)` quickly.
 To apply `P` to an array `A`, use `P * A`; in general, the syntax for applying plans is much
 like that of matrices.  (A plan can only be applied to arrays of the same size as the `A`
 for which the plan was created.)  You can also apply a plan with a preallocated output array `Â`
-by calling `A_mul_B!(Â, plan, A)`.  (For `A_mul_B!`, however, the input array `A` must
+by calling `mul!(Â, plan, A)`.  (For `mul!`, however, the input array `A` must
 be a complex floating-point array like the output `Â`.) You can compute the inverse-transform plan by `inv(P)`
 and apply the inverse plan with `P \\ Â` (the inverse plan is cached and reused for
 subsequent calls to `inv` or `\\`), and apply the inverse plan to a pre-allocated output
@@ -193,8 +193,8 @@ plan_rfft{T<:Union{Integer,Rational}}(x::AbstractArray{T}, region; kws...) = pla
 # only require implementation to provide *(::Plan{T}, ::Array{T})
 *{T}(p::Plan{T}, x::AbstractArray) = p * copy!(Array(T, size(x)), x)
 
-# Implementations should also implement A_mul_B!(Y, plan, X) so as to support
-# pre-allocated output arrays.  We don't define * in terms of A_mul_B!
+# Implementations should also implement mul!(Y, plan, X) so as to support
+# pre-allocated output arrays.  We don't define * in terms of mul!
 # generically here, however, because of subtleties for in-place and rfft plans.
 
 ##############################################################################
@@ -211,7 +211,7 @@ pinv_type(p::Plan) = eltype(_pinv_type(p))
 inv(p::Plan) =
     isdefined(p, :pinv) ? p.pinv::pinv_type(p) : (p.pinv = plan_inv(p))
 \(p::Plan, x::AbstractArray) = inv(p) * x
-A_ldiv_B!(y::AbstractArray, p::Plan, x::AbstractArray) = A_mul_B!(y, inv(p), x)
+A_ldiv_B!(y::AbstractArray, p::Plan, x::AbstractArray) = mul!(y, inv(p), x)
 
 ##############################################################################
 # implementations only need to provide the unnormalized backwards FFT,
@@ -252,8 +252,8 @@ plan_ifft!(x::AbstractArray, region; kws...) =
 
 plan_inv(p::ScaledPlan) = ScaledPlan(plan_inv(p.p), inv(p.scale))
 
-A_mul_B!(y::AbstractArray, p::ScaledPlan, x::AbstractArray) =
-    scale!(p.scale, A_mul_B!(y, p.p, x))
+mul!(y::AbstractArray, p::ScaledPlan, x::AbstractArray) =
+    scale!(p.scale, mul!(y, p.p, x))
 
 ##############################################################################
 # Real-input DFTs are annoying because the output has a different size

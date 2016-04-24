@@ -422,7 +422,7 @@ d[5,1:2:4,8] = 19
 
 AA = rand(4,2)
 A = convert(SharedArray, AA)
-B = convert(SharedArray, AA')
+B = convert(SharedArray, Matrix(AA'))
 @test B*A == ctranspose(AA)*AA
 
 d=SharedArray(Int64, (10,10); init = D->fill!(D.loc_subarr_1d, myid()), pids=[id_me, id_other])

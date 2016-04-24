@@ -1283,20 +1283,20 @@ end
 
 ### BLAS-2 / dense A * sparse x -> dense y
 
-# A_mul_B
+# (*)
 
-function *{Ta,Tx}(A::StridedMatrix{Ta}, x::AbstractSparseVector{Tx})
+function (*){Ta,Tx}(A::StridedMatrix{Ta}, x::AbstractSparseVector{Tx})
     m, n = size(A)
     length(x) == n || throw(DimensionMismatch())
     Ty = promote_type(Ta, Tx)
     y = Array(Ty, m)
-    A_mul_B!(y, A, x)
+    mul!(y, A, x)
 end
 
-A_mul_B!{Tx,Ty}(y::StridedVector{Ty}, A::StridedMatrix, x::AbstractSparseVector{Tx}) =
-    A_mul_B!(one(Tx), A, x, zero(Ty), y)
+mul!{Tx,Ty}(y::StridedVector{Ty}, A::StridedMatrix, x::AbstractSparseVector{Tx}) =
+    mul!(one(Tx), A, x, zero(Ty), y)
 
-function A_mul_B!(α::Number, A::StridedMatrix, x::AbstractSparseVector, β::Number, y::StridedVector)
+function mul!(α::Number, A::StridedMatrix, x::AbstractSparseVector, β::Number, y::StridedVector)
     m, n = size(A)
     length(x) == n && length(y) == m || throw(DimensionMismatch())
     m == 0 && return y
@@ -1320,21 +1320,25 @@ function A_mul_B!(α::Number, A::StridedMatrix, x::AbstractSparseVector, β::Num
     return y
 end
 
-# At_mul_B
+# Transpose (*)
 
-function At_mul_B{Ta,Tx}(A::StridedMatrix{Ta}, x::AbstractSparseVector{Tx})
-    m, n = size(A)
+function (*){T,S<:StridedMatrix}(A::Transpose{T,S}, x::AbstractSparseVector)
+    n, m = size(A)
     length(x) == m || throw(DimensionMismatch())
-    Ty = promote_type(Ta, Tx)
+    Ty = promote_type(T, eltype(x))
     y = Array(Ty, n)
-    At_mul_B!(y, A, x)
+    mul!(y, A, x)
 end
 
-At_mul_B!{Tx,Ty}(y::StridedVector{Ty}, A::StridedMatrix, x::AbstractSparseVector{Tx}) =
-    At_mul_B!(one(Tx), A, x, zero(Ty), y)
+mul!{T}(y::StridedVector, A::Transpose{T,StridedMatrix{T}}, x::AbstractSparseVector) =
+    mul!(one(eltype(x)), A, x, zero(eltype(y)), y)
 
-function At_mul_B!(α::Number, A::StridedMatrix, x::AbstractSparseVector, β::Number, y::StridedVector)
-    m, n = size(A)
+function mul!{T,S<:StridedMatrix}(α::Number, A::Transpose{T,S}, x::AbstractSparseVector, β::Number, y::StridedVector)
+    if A.conjugated
+        throw(ArgumentError("conjugate transpose multiplication is not supported for StridedMatrix and SparseVector"))
+    end
+    AA = A.data
+    m, n = size(AA)
     length(x) == m && length(y) == n || throw(DimensionMismatch())
     n == 0 && return y
     if β != one(β)
@@ -1347,11 +1351,11 @@ function At_mul_B!(α::Number, A::StridedMatrix, x::AbstractSparseVector, β::Nu
     _nnz = length(xnzind)
     _nnz == 0 && return y
 
-    s0 = zero(eltype(A)) * zero(eltype(x))
+    s0 = zero(eltype(AA)) * zero(eltype(x))
     @inbounds for j = 1:n
         s = zero(s0)
         for i = 1:_nnz
-            s += A[xnzind[i], j] * xnzval[i]
+            s += AA[xnzind[i], j] * xnzval[i]
         end
         y[j] += s * α
     end
@@ -1376,23 +1380,23 @@ function densemv(A::SparseMatrixCSC, x::AbstractSparseVector; trans::Char='N')
     T = promote_type(eltype(A), eltype(x))
     y = Array(T, ylen)
     if trans == 'N' || trans == 'N'
-        A_mul_B!(y, A, x)
+        mul!(y, A, x)
     elseif trans == 'T' || trans == 't'
-        At_mul_B!(y, A, x)
+        mul!(y, A.', x)
     elseif trans == 'C' || trans == 'c'
-        Ac_mul_B!(y, A, x)
+        mul!(y, A', x)
     else
         throw(ArgumentError("Invalid trans character $trans"))
     end
     y
 end
 
-# A_mul_B
+# mul!
 
-A_mul_B!{Tx,Ty}(y::StridedVector{Ty}, A::SparseMatrixCSC, x::AbstractSparseVector{Tx}) =
-    A_mul_B!(one(Tx), A, x, zero(Ty), y)
+mul!{Tx,Ty}(y::StridedVector{Ty}, A::SparseMatrixCSC, x::AbstractSparseVector{Tx}) =
+    mul!(one(Tx), A, x, zero(Ty), y)
 
-function A_mul_B!(α::Number, A::SparseMatrixCSC, x::AbstractSparseVector, β::Number, y::StridedVector)
+function mul!(α::Number, A::SparseMatrixCSC, x::AbstractSparseVector, β::Number, y::StridedVector)
     m, n = size(A)
     length(x) == n && length(y) == m || throw(DimensionMismatch())
     m == 0 && return y
@@ -1420,23 +1424,22 @@ function A_mul_B!(α::Number, A::SparseMatrixCSC, x::AbstractSparseVector, β::N
     return y
 end
 
-# At_mul_B
+# Transpose (*)
 
-At_mul_B!{Tx,Ty}(y::StridedVector{Ty}, A::SparseMatrixCSC, x::AbstractSparseVector{Tx}) =
-    At_mul_B!(one(Tx), A, x, zero(Ty), y)
+mul!{T,Ti}(y::StridedVector, A::Transpose{T,SparseMatrixCSC{T,Ti}}, x::AbstractSparseVector) =
+    mul!(one(eltype(x)), A, x, zero(eltype(y)), y)
 
-At_mul_B!{Tx,Ty}(α::Number, A::SparseMatrixCSC, x::AbstractSparseVector{Tx}, β::Number, y::StridedVector{Ty}) =
-    _At_or_Ac_mul_B!(*, α, A, x, β, y)
+function mul!{T,Ti}(α::Number, A::Transpose{T,SparseMatrixCSC{T,Ti}}, x::AbstractSparseVector, β::Number, y::StridedVector)
+    if A.conjugated
+        return mul!(dot, α, A.data, x, β, y)
+    else
+        return mul!(*, α, A.data, x, β, y)
+    end
+end
 
-Ac_mul_B!{Tx,Ty}(y::StridedVector{Ty}, A::SparseMatrixCSC, x::AbstractSparseVector{Tx}) =
-    Ac_mul_B!(one(Tx), A, x, zero(Ty), y)
-
-Ac_mul_B!{Tx,Ty}(α::Number, A::SparseMatrixCSC, x::AbstractSparseVector{Tx}, β::Number, y::StridedVector{Ty}) =
-    _At_or_Ac_mul_B!(dot, α, A, x, β, y)
-
-function _At_or_Ac_mul_B!{Tx,Ty}(tfun::Function,
-                                 α::Number, A::SparseMatrixCSC, x::AbstractSparseVector{Tx},
-                                 β::Number, y::StridedVector{Ty})
+function mul!{Tx,Ty}(tfun::Function,
+                     α::Number, A::SparseMatrixCSC, x::AbstractSparseVector{Tx},
+                     β::Number, y::StridedVector{Ty})
     m, n = size(A)
     length(x) == m && length(y) == n || throw(DimensionMismatch())
     n == 0 && return y
@@ -1464,19 +1467,21 @@ end
 
 ### BLAS-2 / sparse A * sparse x -> dense y
 
-function *(A::SparseMatrixCSC, x::AbstractSparseVector)
+function (*)(A::SparseMatrixCSC, x::AbstractSparseVector)
     y = densemv(A, x)
     initcap = min(nnz(A), size(A,1))
     _dense2sparsevec(y, initcap)
 end
 
-At_mul_B(A::SparseMatrixCSC, x::AbstractSparseVector) =
-    _At_or_Ac_mul_B(*, A, x)
+function (*){T,Ti}(A::Transpose{T,SparseMatrixCSC{T,Ti}}, x::AbstractSparseVector)
+    if A.conjugated
+        return (*)(dot, A.data, x)
+    else
+        return (*)(*, A.data, x)
+    end
+end
 
-Ac_mul_B(A::SparseMatrixCSC, x::AbstractSparseVector) =
-    _At_or_Ac_mul_B(dot, A, x)
-
-function _At_or_Ac_mul_B{TvA,TiA,TvX,TiX}(tfun::Function, A::SparseMatrixCSC{TvA,TiA}, x::AbstractSparseVector{TvX,TiX})
+function (*){TvA,TiA,TvX,TiX}(tfun::Function, A::SparseMatrixCSC{TvA,TiA}, x::AbstractSparseVector{TvX,TiX})
     m, n = size(A)
     length(x) == m || throw(DimensionMismatch())
     Tv = promote_type(TvA, TvX)

@@ -287,7 +287,7 @@ for T in (Complex64, Complex128)
             @test eltype(p) == eltype(pi) == eltype(p3) == eltype(p3i) == T
             @test vecnorm(x - p3i * (p * 3x)) < eps(real(T)) * 10000
             @test vecnorm(3x - pi * (p3 * x)) < eps(real(T)) * 10000
-            A_mul_B!(y, p, x)
+            mul!(y, p, x)
             @test y == p * x
             A_ldiv_B!(y, p, x)
             @test y == p \ x

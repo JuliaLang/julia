@@ -1341,7 +1341,7 @@ a = rand(5,3)
 b = rand(6,7)
 @test_throws BoundsError copy!(a,b)
 @test_throws ArgumentError copy!(a,2:3,1:3,b,1:5,2:7)
-@test_throws ArgumentError Base.copy_transpose!(a,2:3,1:3,b,1:5,2:7)
+@test_throws ArgumentError LinAlg.copy_transpose!(a,2:3,1:3,b,1:5,2:7)
 
 # return type declarations (promote_op)
 module RetTypeDecl

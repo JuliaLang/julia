@@ -342,10 +342,10 @@ let n = 12 #Size of matrix problem to test
         @test_approx_eq full(A*α) full(A)*α
         @test_approx_eq full(A/α) full(A)/α
 
-        debug && println("A_mul_B!")
-        @test_throws DimensionMismatch A_mul_B!(zeros(elty,n,n),B,ones(elty,n+1,n))
-        @test_throws DimensionMismatch A_mul_B!(zeros(elty,n+1,n),B,ones(elty,n,n))
-        @test_throws DimensionMismatch A_mul_B!(zeros(elty,n,n+1),B,ones(elty,n,n))
+        debug && println("mul!")
+        @test_throws DimensionMismatch mul!(zeros(elty, n, n), B, ones(elty, n + 1, n))
+        @test_throws DimensionMismatch mul!(zeros(elty, n + 1, n), B, ones(elty, n, n))
+        @test_throws DimensionMismatch mul!(zeros(elty, n, n + 1), B, ones(elty, n, n))
 
     end
 
@@ -430,9 +430,9 @@ let n = 12 #Size of matrix problem to test
 
         @test_throws ArgumentError convert(SymTridiagonal{elty},A)
 
-        debug && println("A_mul_B!")
-        @test_throws DimensionMismatch Base.LinAlg.A_mul_B!(zeros(fA),A,ones(elty,n,n+1))
-        @test_throws DimensionMismatch Base.LinAlg.A_mul_B!(zeros(fA),A,ones(elty,n+1,n))
+        debug && println("mul!")
+        @test_throws DimensionMismatch mul!(zeros(fA), A, ones(elty, n, n + 1))
+        @test_throws DimensionMismatch mul!(zeros(fA), A, ones(elty, n + 1, n))
 
         debug && println("getindex")
         @test_throws BoundsError A[n+1,1]

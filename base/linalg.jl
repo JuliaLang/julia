@@ -3,13 +3,12 @@
 module LinAlg
 
 import Base: \, /, *, ^, +, -, ==, ./, .*
-import Base: A_mul_Bt, At_ldiv_Bt, A_rdiv_Bc, At_ldiv_B, Ac_mul_Bc, A_mul_Bc, Ac_mul_B,
-    Ac_ldiv_B, Ac_ldiv_Bc, At_mul_Bt, A_rdiv_Bt, At_mul_B
-import Base: USE_BLAS64, abs, big, ceil, conj, convert, copy, copy!, copy_transpose!,
-    ctranspose, ctranspose!, eltype, eye, findmax, findmin, fill!, floor, full, getindex,
+import Base: USE_BLAS64, abs, big, ceil, conj, convert, copy, copy!,
+    eltype, eye, findmax, findmin, fill!, floor, full, getindex,
     imag, inv, isapprox, kron, ndims, parent, power_by_squaring, print_matrix,
-    promote_rule, real, round, setindex!, show, similar, size, transpose, transpose!,
-    trunc
+    promote_rule, real, round, setindex!, show, similar, size,
+    trunc,
+    ctranspose, transpose
 using Base: promote_op
 
 export
@@ -56,6 +55,7 @@ export
     copy!,
     cross,
     ctranspose,
+    ctranspose!,
     det,
     diag,
     diagind,
@@ -125,6 +125,7 @@ export
     sylvester,
     trace,
     transpose,
+    transpose!,
     tril,
     triu,
     tril!,
@@ -135,30 +136,18 @@ export
 # Operators
     \,
     /,
+    mul!,
     A_ldiv_B!,
     A_ldiv_Bc,
     A_ldiv_Bt,
-    A_mul_B!,
-    A_mul_Bc,
-    A_mul_Bc!,
-    A_mul_Bt,
-    A_mul_Bt!,
     A_rdiv_Bc,
     A_rdiv_Bt,
     Ac_ldiv_B,
     Ac_ldiv_Bc,
-    Ac_mul_B,
-    Ac_mul_B!,
-    Ac_mul_Bc,
-    Ac_mul_Bc!,
     Ac_rdiv_B,
     Ac_rdiv_Bc,
     At_ldiv_B,
     At_ldiv_Bt,
-    At_mul_B,
-    At_mul_B!,
-    At_mul_Bt,
-    At_mul_Bt!,
     At_rdiv_B,
     At_rdiv_Bt,
 
@@ -216,6 +205,7 @@ copy_oftype{T,N}(A::AbstractArray{T,N}, ::Type{T}) = copy(A)
 copy_oftype{T,N,S}(A::AbstractArray{T,N}, ::Type{S}) = convert(AbstractArray{S,N}, A)
 
 include("linalg/exceptions.jl")
+include("linalg/transpose.jl")
 include("linalg/generic.jl")
 
 include("linalg/blas.jl")

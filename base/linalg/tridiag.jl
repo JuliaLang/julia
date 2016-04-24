@@ -92,7 +92,7 @@ end
 /(A::SymTridiagonal, B::Number) = SymTridiagonal(A.dv/B, A.ev/B)
 ==(A::SymTridiagonal, B::SymTridiagonal) = (A.dv==B.dv) && (A.ev==B.ev)
 
-function A_mul_B!(C::StridedVecOrMat, S::SymTridiagonal, B::StridedVecOrMat)
+function mul!(C::StridedVecOrMat, S::SymTridiagonal, B::StridedVecOrMat)
     m, n = size(B, 1), size(B, 2)
     if !(m == size(S, 1) == size(C, 1))
         throw(DimensionMismatch("A has first dimension $(size(S,1)), B has $(size(B,1)), C has $(size(C,1)) but all must match"))
@@ -498,11 +498,11 @@ function convert{T}(::Type{SymTridiagonal{T}}, M::Tridiagonal)
     end
 end
 
-A_mul_B!(C::AbstractVector, A::Tridiagonal, B::AbstractVector) = A_mul_B_td!(C, A, B)
-A_mul_B!(C::AbstractMatrix, A::Tridiagonal, B::AbstractVecOrMat) = A_mul_B_td!(C, A, B)
-A_mul_B!(C::AbstractVecOrMat, A::Tridiagonal, B::AbstractVecOrMat) = A_mul_B_td!(C, A, B)
+mul!(C::AbstractVector, A::Tridiagonal, B::AbstractVector) = mul_td!(C, A, B)
+mul!(C::AbstractMatrix, A::Tridiagonal, B::AbstractVecOrMat) = mul_td!(C, A, B)
+mul!(C::AbstractVecOrMat, A::Tridiagonal, B::AbstractVecOrMat) = mul_td!(C, A, B)
 
-function A_mul_B_td!(C::AbstractVecOrMat, A::Tridiagonal, B::AbstractVecOrMat)
+function mul_td!(C::AbstractVecOrMat, A::Tridiagonal, B::AbstractVecOrMat)
     nA = size(A,1)
     nB = size(B,2)
     if !(size(C,1) == size(B,1) == nA)

@@ -1805,7 +1805,7 @@ function put_8x8_chunk(Bc::Vector{UInt64}, i1::Int, i2::Int, x::UInt64, m::Int, 
     return
 end
 
-function transpose(B::BitMatrix)
+function _transpose(B::BitMatrix)
     l1 = size(B, 1)
     l2 = size(B, 2)
     Bt = falses(l2, l1)
@@ -1839,8 +1839,6 @@ function transpose(B::BitMatrix)
     end
     return Bt
 end
-
-ctranspose(B::BitArray) = transpose(B)
 
 ## Concatenation ##
 

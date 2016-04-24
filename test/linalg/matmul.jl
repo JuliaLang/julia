@@ -26,17 +26,17 @@ let
     for Atype = ["Array", "SubArray"], Btype = ["Array", "SubArray"]
         A = Atype == "Array" ? AA : sub(AA, 1:2, 1:2)
         B = Btype == "Array" ? BB : sub(BB, 1:2, 1:2)
-        @test A*B == [19 22; 43 50]
-        @test At_mul_B(A, B) == [26 30; 38 44]
-        @test A_mul_Bt(A, B) == [17 23; 39 53]
-        @test At_mul_Bt(A, B) == [23 31; 34 46]
+        @test A * B   == [19 22; 43 50]
+        @test A.'B    == [26 30; 38 44]
+        @test A * B.' == [17 23; 39 53]
+        @test A.'B.'  == [23 31; 34 46]
 
         Ai = Atype == "Array" ? AAi : sub(AAi, 1:2, 1:2)
         Bi = Btype == "Array" ? BBi : sub(BBi, 1:2, 1:2)
-        @test Ai*Bi == [-21+53.5im -4.25+51.5im; -12+95.5im 13.75+85.5im]
-        @test Ac_mul_B(Ai, Bi) == [68.5-12im 57.5-28im; 88-3im 76.5-25im]
-        @test A_mul_Bc(Ai, Bi) == [64.5+5.5im 43+31.5im; 104-18.5im 80.5+31.5im]
-        @test Ac_mul_Bc(Ai, Bi) == [-28.25-66im 9.75-58im; -26-89im 21-73im]
+        @test Ai * Bi  == [-21+53.5im -4.25+51.5im; -12+95.5im 13.75+85.5im]
+        @test Ai'Bi    == [68.5-12im 57.5-28im; 88-3im 76.5-25im]
+        @test Ai * Bi' == [64.5+5.5im 43+31.5im; 104-18.5im 80.5+31.5im]
+        @test Ai'Bi'   == [-28.25-66im 9.75-58im; -26-89im 21-73im]
         @test_throws DimensionMismatch [1 2; 0 0; 0 0] * [1 2]
     end
 end
@@ -49,17 +49,17 @@ let
     for Atype = ["Array", "SubArray"], Btype = ["Array", "SubArray"]
         A = Atype == "Array" ? AA : sub(AA, 1:3, 1:3)
         B = Btype == "Array" ? BB : sub(BB, 1:3, 1:3)
-        @test A*B == [-26 38 -27; 1 -4 -6; 28 -46 15]
-        @test Ac_mul_B(A, B) == [-6 2 -25; 3 -12 -18; 12 -26 -11]
-        @test A_mul_Bc(A, B) == [-14 0 6; 4 -3 -3; 22 -6 -12]
-        @test Ac_mul_Bc(A, B) == [6 -8 -6; 12 -9 -9; 18 -10 -12]
+        @test A * B  == [-26 38 -27; 1 -4 -6; 28 -46 15]
+        @test A'B    == [-6 2 -25; 3 -12 -18; 12 -26 -11]
+        @test A * B' == [-14 0 6; 4 -3 -3; 22 -6 -12]
+        @test A'B'   == [6 -8 -6; 12 -9 -9; 18 -10 -12]
 
         Ai = Atype == "Array" ? AAi : sub(AAi, 1:3, 1:3)
         Bi = Btype == "Array" ? BBi : sub(BBi, 1:3, 1:3)
-        @test Ai*Bi == [-44.75+13im 11.75-25im -38.25+30im; -47.75-16.5im -51.5+51.5im -56+6im; 16.75-4.5im -53.5+52im -15.5im]
-        @test Ac_mul_B(Ai, Bi) == [-21+2im -1.75+49im -51.25+19.5im; 25.5+56.5im -7-35.5im 22+35.5im; -3+12im -32.25+43im -34.75-2.5im]
-        @test A_mul_Bc(Ai, Bi) == [-20.25+15.5im -28.75-54.5im 22.25+68.5im; -12.25+13im -15.5+75im -23+27im; 18.25+im 1.5+94.5im -27-54.5im]
-        @test Ac_mul_Bc(Ai, Bi) == [1+2im 20.75+9im -44.75+42im; 19.5+17.5im -54-36.5im 51-14.5im; 13+7.5im 11.25+31.5im -43.25-14.5im]
+        @test Ai * Bi  == [-44.75+13im 11.75-25im -38.25+30im; -47.75-16.5im -51.5+51.5im -56+6im; 16.75-4.5im -53.5+52im -15.5im]
+        @test Ai'Bi    == [-21+2im -1.75+49im -51.25+19.5im; 25.5+56.5im -7-35.5im 22+35.5im; -3+12im -32.25+43im -34.75-2.5im]
+        @test Ai * Bi' == [-20.25+15.5im -28.75-54.5im 22.25+68.5im; -12.25+13im -15.5+75im -23+27im; 18.25+im 1.5+94.5im -27-54.5im]
+        @test Ai'Bi'   == [1+2im 20.75+9im -44.75+42im; 19.5+17.5im -54-36.5im 51-14.5im; 13+7.5im 11.25+31.5im -43.25-14.5im]
         @test_throws DimensionMismatch [1 2 3; 0 0 0; 0 0 0] * [1 2 3]
     end
 end
@@ -85,8 +85,8 @@ let
     for Atype = ["Array", "SubArray"], Btype = ["Array", "SubArray"]
         A = Atype == "Array" ? AA : sub(AA, 1:2, 1:3)
         B = Btype == "Array" ? BB : sub(BB, 1:3, 1:2)
-        @test A*B == [-7 9; -4 9]
-        @test At_mul_Bt(A, B) == [-6 -11 15; -6 -13 18; -6 -15 21]
+        @test A*B    == [-7 9; -4 9]
+        @test A.'B.' == [-6 -11 15; -6 -13 18; -6 -15 21]
     end
     AA = ones(Int, 2, 100)
     BB = ones(Int, 100, 3)
@@ -102,25 +102,18 @@ let
         A = Atype == "Array" ? AA : sub(AA, 1:5, 1:5)
         B = Btype == "Array" ? BB : sub(BB, 1:5, 1:5)
         C = Btype == "Array" ? CC : sub(CC, 1:5, 1:5)
-        @test At_mul_B(A, B) == A'*B
-        @test A_mul_Bt(A, B) == A*B'
+        @test A.'B    == A'B
+        @test A * B.' == A * B'
         # Preallocated
-        @test A_mul_B!(C, A, B) == A*B
-        @test At_mul_B!(C, A, B) == A'*B
-        @test A_mul_Bt!(C, A, B) == A*B'
-        @test At_mul_Bt!(C, A, B) == A'*B'
-        @test Base.LinAlg.Ac_mul_Bt!(C, A, B) == A'*B.'
-
-        #test DimensionMismatch for generic_matmatmul
-        @test_throws DimensionMismatch Base.LinAlg.Ac_mul_Bt!(C,A,ones(Int,4,4))
-        @test_throws DimensionMismatch Base.LinAlg.Ac_mul_Bt!(C,ones(Int,4,4),B)
+        @test mul!(C, A, B) == A*B
+        @test mul!(C, A.', B) == A'*B
+        @test mul!(C, A, B.') == A*B'
+        @test mul!(C, A.', B.') == A'*B'
     end
     vv = [1,2]
-    CC = Array(Int, 2, 2)
-    for vtype = ["Array", "SubArray"], Ctype = ["Array", "SubArray"]
+    for vtype = ["Array", "SubArray"]
         v = vtype == "Array" ? vv : sub(vv, 1:2)
-        C = Ctype == "Array" ? CC : sub(CC, 1:2, 1:2)
-        @test @inferred(A_mul_Bc!(C, v, v)) == [1 2; 2 4]
+        @test @inferred(v * v') == [1 2; 2 4]
     end
 end
 
@@ -135,19 +128,11 @@ let
         @test_throws DimensionMismatch Base.LinAlg.generic_matvecmul!(B,'N',A,zeros(6))
     end
     vv = [1,2,3]
-    CC = Array(Int, 3, 3)
-    for vtype = ["Array", "SubArray"], Ctype = ["Array", "SubArray"]
-        v = vtype == "Array" ? vv : sub(vv, 1:3)
-        C = Ctype == "Array" ? CC : sub(CC, 1:3, 1:3)
-        @test A_mul_Bt!(C, v, v) == v*v'
-    end
+    v = sub(vv, 1:3)
+    @test vv * vv' == v * v'
     vvf = map(Float64,vv)
-    CC = Array(Float64, 3, 3)
-    for vtype = ["Array", "SubArray"], Ctype = ["Array", "SubArray"]
-        vf = vtype == "Array" ? vvf : sub(vvf, 1:3)
-        C = Ctype == "Array" ? CC : sub(CC, 1:3, 1:3)
-        @test A_mul_Bt!(C, vf, vf) == vf*vf'
-    end
+    vf = sub(vvf, 1:3)
+    @test vvf * vvf' == vf * vf'
 end
 
 # fallbacks & such for BlasFloats
@@ -159,9 +144,9 @@ let
         A = Atype == "Array" ? AA : sub(AA, 1:6, 1:6)
         B = Btype == "Array" ? BB : sub(BB, 1:6, 1:6)
         C = Ctype == "Array" ? CC : sub(CC, 1:6, 1:6)
-        @test Base.LinAlg.At_mul_Bt!(C,A,B) == A.'*B.'
-        @test Base.LinAlg.A_mul_Bc!(C,A,B) == A*B.'
-        @test Base.LinAlg.Ac_mul_B!(C,A,B) == A.'*B
+        @test mul!(C, A.', B.') == A.'*B.'
+        @test mul!(C, A, B')    == A*B.'
+        @test mul!(C, A', B)    == A.'*B
     end
 end
 
@@ -172,26 +157,26 @@ let
     Asub = sub(A, 1:2:5, 1:2:4)
     b = [1.2,-2.5]
     @test (Aref*b) == (Asub*b)
-    @test At_mul_B(Asub, Asub) == At_mul_B(Aref, Aref)
-    @test A_mul_Bt(Asub, Asub) == A_mul_Bt(Aref, Aref)
+    @test Asub.'Asub == Aref.'Aref
+    @test Asub * Asub.' == Aref * Aref.'
     Ai = A .+ im
-    Aref = Ai[1:2:end,1:2:end]
+    Aref = Ai[1:2:end, 1:2:end]
     Asub = sub(Ai, 1:2:5, 1:2:4)
-    @test Ac_mul_B(Asub, Asub) == Ac_mul_B(Aref, Aref)
-    @test A_mul_Bc(Asub, Asub) == A_mul_Bc(Aref, Aref)
+    @test Asub'Asub == Aref'Aref
+    @test Asub * Asub' == Aref * Aref'
 end
 
 # issue #15286
 let A = reshape(map(Float64, 1:20), 5, 4), C = zeros(8, 8), sC = sub(C, 1:2:8, 1:2:8), B = reshape(map(Float64,-9:10),5,4)
-    @test At_mul_B!(sC, A, A) == A'*A
-    @test At_mul_B!(sC, A, B) == A'*B
+    @test mul!(sC, A.', A) == A'*A
+    @test mul!(sC, A.', B) == A'*B
 
     Aim = A .- im
     C = zeros(Complex128,8,8)
     sC = sub(C, 1:2:8, 1:2:8)
     B = reshape(map(Float64,-9:10),5,4) .+ im
-    @test Ac_mul_B!(sC, Aim, Aim) == Aim'*Aim
-    @test Ac_mul_B!(sC, Aim, B) == Aim'*B
+    @test mul!(sC, Aim', Aim) == Aim'*Aim
+    @test mul!(sC, Aim', B) == Aim'*B
 end
 
 # syrk & herk
@@ -200,18 +185,18 @@ let
     res = Float64[135228751 9979252 -115270247; 9979252 10481254 10983256; -115270247 10983256 137236759]
     for Atype = ["Array", "SubArray"]
         A = Atype == "Array" ? AA : sub(AA, 1:501, 1:3)
-        @test At_mul_B(A, A) == res
-        @test A_mul_Bt(A',A') == res
+        @test A.'A == res
+        @test A' * (A').' == res
     end
     cutoff = 501
     A = reshape(1:6*cutoff,2*cutoff,3).-(6*cutoff)/2
     Asub = sub(A, 1:2:2*cutoff, 1:3)
     Aref = A[1:2:2*cutoff, 1:3]
-    @test At_mul_B(Asub, Asub) == At_mul_B(Aref, Aref)
+    @test Asub.'Asub == Aref.'Aref
     Ai = A .- im
     Asub = sub(Ai, 1:2:2*cutoff, 1:3)
     Aref = Ai[1:2:2*cutoff, 1:3]
-    @test Ac_mul_B(Asub, Asub) == Ac_mul_B(Aref, Aref)
+    @test Asub'Asub == Aref'Aref
 
     @test_throws DimensionMismatch Base.LinAlg.syrk_wrapper!(zeros(5,5),'N',ones(6,5))
     @test_throws DimensionMismatch Base.LinAlg.herk_wrapper!(zeros(5,5),'N',ones(6,5))
@@ -310,9 +295,9 @@ let
     for atype = ["Array", "SubArray"],  btype = ["Array", "SubArray"]
         a = atype == "Array" ? aa : sub(aa, 1:3, 1:3)
         b = btype == "Array" ? bb : sub(bb, 1:3, 1:3)
-        @test_throws ArgumentError A_mul_B!(a, a, b)
-        @test_throws ArgumentError A_mul_B!(a, b, a)
-        @test_throws ArgumentError A_mul_B!(a, a, a)
+        @test_throws ArgumentError mul!(a, a, b)
+        @test_throws ArgumentError mul!(a, b, a)
+        @test_throws ArgumentError mul!(a, a, a)
     end
 end
 
@@ -323,12 +308,14 @@ end
 import Base: *, promote_op
 (*)(x::RootInt, y::RootInt) = x.i*y.i
 promote_op(::typeof(*), ::Type{RootInt}, ::Type{RootInt}) = Int
+Base.ctranspose(x::RootInt) = x
+Base.transpose(x::RootInt) = x
 
-a = [RootInt(3)]
-C = [0]
-A_mul_Bt!(C, a, a)
+a = fill(RootInt(3), 1, 1)
+C = fill(0, 1, 1)
+mul!(C, a, a.')
 @test C[1] == 9
-a = [RootInt(2),RootInt(10)]
+a = [RootInt(2), RootInt(10)]
 @test a*a' == [4 20; 20 100]
 A = [RootInt(3) RootInt(5)]
 @test A*a == [56]

@@ -111,9 +111,9 @@ for relty in (Float32, Float64, BigFloat), elty in (relty, Complex{relty})
             if relty <: BlasFloat
                 b = rand(elty,n,n)
                 b = sparse(b)
-                @test A_mul_B!(copy(D), copy(b)) ≈ full(D)*full(b)
-                @test At_mul_B!(copy(D), copy(b)) ≈ full(D).'*full(b)
-                @test Ac_mul_B!(copy(D), copy(b)) ≈ full(D)'*full(b)
+                @test mul!(D, copy(b))   ≈ full(D)  * full(b)
+                @test mul!(D.', copy(b)) ≈ full(D).'* full(b)
+                @test mul!(D', copy(b))  ≈ full(D)' * full(b)
             end
 
             #division of two Diagonals

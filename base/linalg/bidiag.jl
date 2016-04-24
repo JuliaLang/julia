@@ -228,7 +228,7 @@ SpecialMatrix = Union{Bidiagonal, SymTridiagonal, Tridiagonal, AbstractTriangula
 *(A::SpecialMatrix, B::SpecialMatrix)=full(A)*full(B)
 
 #Generic multiplication
-for func in (:*, :Ac_mul_B, :A_mul_Bc, :/, :A_rdiv_Bc)
+for func in (:*, :/, :A_rdiv_Bc)
     @eval ($func){T}(A::Bidiagonal{T}, B::AbstractVector{T}) = ($func)(full(A), B)
 end
 

@@ -814,14 +814,14 @@ end
 # Raises an error if any columnwise vector norm exceeds err. Otherwise, returns
 # nothing.
 function test_approx_eq_modphase{S<:Real,T<:Real}(
-        a::StridedVecOrMat{S}, b::StridedVecOrMat{T}, err=nothing)
+        a::AbstractVecOrMat{S}, b::AbstractVecOrMat{T}, err=nothing)
 
-    m, n = size(a)
-    @test n==size(b, 2) && m==size(b, 1)
-    err === nothing && (err=m^3*(eps(S)+eps(T)))
-    for i=1:n
+    m, n = size(a, 1), size(a, 2)
+    @test n == size(b, 2) && m == size(b, 1)
+    err === nothing && (err = m^3 * (eps(S) + eps(T)))
+    for i = 1:n
         v1, v2 = a[:, i], b[:, i]
-        @test_approx_eq_eps min(abs(norm(v1-v2)), abs(norm(v1+v2))) 0.0 err
+        @test_approx_eq_eps min(abs(norm(v1 - v2)), abs(norm(v1 + v2))) 0.0 err
     end
 end
 

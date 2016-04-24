@@ -161,6 +161,6 @@ for op in (:+, :-)
     end
 end
 
-A_mul_Bc!(A::AbstractTriangular, B::QRCompactWYQ) = A_mul_Bc!(full!(A),B)
-A_mul_Bc!(A::AbstractTriangular, B::QRPackedQ) = A_mul_Bc!(full!(A),B)
-A_mul_Bc(A::AbstractTriangular, B::Union{QRCompactWYQ,QRPackedQ}) = A_mul_Bc(full(A), B)
+mul!{T,S}(A::AbstractTriangular, B::Transpose{T,QRCompactWYQ{T,S}}) = mul!(full!(A), B)
+mul!{T,S}(A::AbstractTriangular, B::Transpose{T,QRPackedQ{T,S}}) = mul!(full!(A), B)
+(*){T,S}(A::AbstractTriangular, B::Union{Transpose{T,QRCompactWYQ{T,S}},Transpose{T,QRPackedQ{T,S}}}) = (*)(full(A), B)

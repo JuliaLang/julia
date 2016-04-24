@@ -238,13 +238,6 @@ Divide two integers or rational numbers, giving a `Rational` result.
 Base.(:(//))
 
 """
-    At_mul_B(A, B)
-
-For matrices or vectors ``A`` and ``B``, calculates ``Aᵀ⋅B``.
-"""
-At_mul_B
-
-"""
     methods(f, [types])
 
 Returns the method table for `f`.
@@ -505,13 +498,6 @@ foldl(op, itr)
 Airy function derivative ``\\operatorname{Bi}'(x)``.
 """
 airybiprime
-
-"""
-    Ac_rdiv_B(A, B)
-
-For matrices or vectors ``A`` and ``B``, calculates ``Aᴴ / B``.
-"""
-Ac_rdiv_B
 
 
 """
@@ -1616,13 +1602,6 @@ choose to defer the display until (for example) the next interactive prompt.
 redisplay
 
 """
-    A_mul_Bc(A, B)
-
-For matrices or vectors ``A`` and ``B``, calculates ``A⋅Bᴴ``.
-"""
-A_mul_Bc
-
-"""
     searchsorted(a, x, [by=<transform>,] [lt=<comparison>,] [rev=false])
 
 Returns the range of indices of `a` which compare as equal to `x` according to the order
@@ -1754,25 +1733,11 @@ This behavior of this function varies slightly across platforms. See
 watch_file
 
 """
-    At_rdiv_Bt(A, B)
-
-For matrices or vectors ``A`` and ``B``, calculates ``Aᵀ / Bᵀ``.
-"""
-At_rdiv_Bt
-
-"""
     isinteractive() -> Bool
 
 Determine whether Julia is running an interactive session.
 """
 isinteractive
-
-"""
-    At_mul_Bt(A, B)
-
-For matrices or vectors ``A`` and ``B``, calculates ``Aᵀ⋅Bᵀ``.
-"""
-At_mul_Bt
 
 """
     sum!(r, A)
@@ -1898,16 +1863,6 @@ function is still runnable, and will be restarted immediately if there are no ot
 tasks.
 """
 yield
-
-"""
-    transpose!(dest,src)
-
-Transpose array `src` and store the result in the preallocated array `dest`, which should
-have a size corresponding to `(size(src,2),size(src,1))`. No in-place transposition is
-supported and unexpected results will happen if `src` and `dest` have overlapping memory
-regions.
-"""
-transpose!
 
 """
     isconst([m::Module], s::Symbol) -> Bool
@@ -2390,13 +2345,6 @@ for use in `Mmap.mmap`. Used by `SharedArray` for creating shared memory arrays.
 Mmap.Anonymous
 
 """
-    A_rdiv_Bc(A, B)
-
-For matrices or vectors ``A`` and ``B``, calculates ``A / Bᴴ``.
-"""
-A_rdiv_Bc
-
-"""
     round([T,] x, [digits, [base]], [r::RoundingMode])
 
 `round(x)` rounds `x` to an integer value according to the default rounding mode (see
@@ -2802,13 +2750,6 @@ find(A)
 Return a vector of the linear indexes of `A` where `f` returns `true`.
 """
 find(f, A)
-
-"""
-    ctranspose(A)
-
-The conjugate transposition operator (`'`).
-"""
-ctranspose
 
 """
     skip(s, offset)
@@ -5094,13 +5035,6 @@ must be matched by an "unlock"
 lock
 
 """
-    transpose(A)
-
-The transposition operator (`.'`).
-"""
-transpose
-
-"""
     searchsortedfirst(a, x, [by=<transform>,] [lt=<comparison>,] [rev=false])
 
 Returns the index of the first value in `a` greater than or equal to `x`, according to the
@@ -5322,36 +5256,12 @@ Return an iterator over all values in a collection. `collect(values(d))` returns
 values
 
 """
-    A_mul_B!(Y, A, B) -> Y
 
-Calculates the matrix-matrix or matrix-vector product ``A⋅B`` and stores the result in `Y`,
-overwriting the existing value of `Y`. Note that `Y` must not be aliased with either `A` or
-`B`.
-
-```jldoctest
-julia> A=[1.0 2.0; 3.0 4.0]; B=[1.0 1.0; 1.0 1.0]; Y = similar(B); A_mul_B!(Y, A, B);
-
-julia> Y
-2×2 Array{Float64,2}:
- 3.0  3.0
- 7.0  7.0
-```
-"""
-A_mul_B!
-
-"""
     ntuple(f::Function, n)
 
 Create a tuple of length `n`, computing each element as `f(i)`, where `i` is the index of the element.
 """
 ntuple
-
-"""
-    Ac_rdiv_Bc(A, B)
-
-For matrices or vectors ``A`` and ``B``, calculates ``Aᴴ / Bᴴ``.
-"""
-Ac_rdiv_Bc
 
 """
     selectperm!(ix, v, k, [alg=<algorithm>,] [by=<transform>,] [lt=<comparison>,] [rev=false,] [initialized=false])
@@ -7255,16 +7165,6 @@ Like `redirect_stdout`, but for `STDERR`.
 redirect_stderr
 
 """
-    ctranspose!(dest,src)
-
-Conjugate transpose array `src` and store the result in the preallocated array `dest`, which
-should have a size corresponding to `(size(src,2),size(src,1))`. No in-place transposition
-is supported and unexpected results will happen if `src` and `dest` have overlapping memory
-regions.
-"""
-ctranspose!
-
-"""
     object_id(x)
 
 Get a unique integer id for `x`. `object_id(x)==object_id(y)` if and only if `is(x,y)`.
@@ -7562,13 +7462,6 @@ det
 A type assertion failure, or calling an intrinsic function with an incorrect argument type.
 """
 TypeError
-
-"""
-    A_rdiv_Bt(A, B)
-
-For matrices or vectors ``A`` and ``B``, calculates ``A / Bᵀ``.
-"""
-A_rdiv_Bt
 
 """
     pwd() -> AbstractString
@@ -8317,13 +8210,6 @@ Test whether a floating point number is subnormal.
 issubnormal
 
 """
-    Ac_ldiv_B(A, B)
-
-For matrices or vectors ``A`` and ``B``, calculates ``Aᴴ`` \\ ``B``.
-"""
-Ac_ldiv_B
-
-"""
     NullException()
 
 An attempted access to a `Nullable` with no defined value.
@@ -8572,26 +8458,12 @@ Get the number of available processes.
 nprocs
 
 """
-    Ac_mul_B(A, B)
-
-For matrices or vectors ``A`` and ``B``, calculates ``Aᴴ⋅B``.
-"""
-Ac_mul_B
-
-"""
     qrfact!(A [,pivot=Val{false}])
 
 `qrfact!` is the same as [`qrfact`](:func:`qrfact`) when `A` is a subtype of
 `StridedMatrix`, but saves space by overwriting the input `A`, instead of creating a copy.
 """
 qrfact!
-
-"""
-    At_rdiv_B(A, B)
-
-For matrices or vectors ``A`` and ``B``, calculates ``Aᵀ / B``.
-"""
-At_rdiv_B
 
 """
     coth(x)
@@ -8842,13 +8714,6 @@ julia> convert(Rational{Int64}, x)
 convert
 
 """
-    A_ldiv_Bt(A, B)
-
-For matrices or vectors ``A`` and ``B``, calculates ``A`` \\ ``Bᵀ``.
-"""
-A_ldiv_Bt
-
-"""
     applicable(f, args...) -> Bool
 
 Determine whether the given generic function has a method applicable to the given arguments.
@@ -8910,13 +8775,6 @@ elements to make rows and columns moreequal in norm. The default is `true` for b
 options.
 """
 eigvals
-
-"""
-    A_ldiv_Bc(A, B)
-
-For matrices or vectors ``A`` and ``B``, calculates ``A`` \\ ``Bᴴ``.
-"""
-A_ldiv_Bc
 
 """
     escape_string(str::AbstractString) -> AbstractString
@@ -9520,20 +9378,6 @@ Return the key matching argument `key` if one exists in `collection`, otherwise 
 getkey
 
 """
-    At_ldiv_Bt(A, B)
-
-For matrices or vectors ``A`` and ``B``, calculates ``Aᵀ`` \\ ``Bᵀ``.
-"""
-At_ldiv_Bt
-
-"""
-    Ac_mul_Bc(A, B)
-
-For matrices or vectors ``A`` and ``B``, calculates ``Aᴴ Bᴴ``.
-"""
-Ac_mul_Bc
-
-"""
     acotd(x)
 
 Compute the inverse cotangent of `x`, where the output is in degrees.
@@ -9567,13 +9411,6 @@ symbol
 Riemann zeta function ``\\zeta(s)``.
 """
 zeta(s)
-
-"""
-    A_mul_Bt(A, B)
-
-For matrices or vectors ``A`` and ``B``, calculates ``A⋅Bᵀ``.
-"""
-A_mul_Bt
 
 """
     vecnorm(A, [p])
@@ -10093,13 +9930,6 @@ Union each element of `iterable` into set `s` in-place.
 union!
 
 """
-    At_ldiv_B(A, B)
-
-For matrices or vectors ``A`` and ``B``, calculates ``Aᵀ`` \\ ``B``.
-"""
-At_ldiv_B
-
-"""
     dot(x, y)
     ⋅(x,y)
 
@@ -10354,13 +10184,6 @@ AssertionError
 Performs a right rotation operation.
 """
 ror
-
-"""
-    Ac_ldiv_Bc(A, B)
-
-For matrices or vectors ``A`` and ``B``, calculates ``Aᴴ`` \\ ``Bᴴ``.
-"""
-Ac_ldiv_Bc
 
 """
     @enum EnumName EnumValue1[=x] EnumValue2[=y]

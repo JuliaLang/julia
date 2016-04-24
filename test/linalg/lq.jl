@@ -61,15 +61,15 @@ debug && println("LQ decomposition")
                 @test full(copy(lqa)) ≈ a
                 @test_approx_eq_eps a*(lqa\b) b 3000ε
                 @test_approx_eq_eps lqa*b qra[:Q]*qra[:R]*b 3000ε
-                @test_approx_eq_eps A_mul_Bc(eye(eltyb,size(q.factors,2)),q)*full(q, thin=false) eye(n) 5000ε
+                @test_approx_eq_eps (eye(eltyb, size(q.factors,2)) * q') * full(q, thin=false) eye(n) 5000ε
                 if eltya != Int
                     @test eye(eltyb,n)*q ≈ convert(AbstractMatrix{tab},q)
                 end
                 @test_approx_eq_eps q*b full(q, thin=false)*b 100ε
                 @test_approx_eq_eps q'*b full(q, thin=false)'*b 100ε
-                @test_throws DimensionMismatch q*b[1:n1 + 1]
-                @test_throws DimensionMismatch Ac_mul_B(q,ones(eltya,n+2,n+2))
-                @test_throws DimensionMismatch ones(eltyb,n+2,n+2)*q
+                @test_throws DimensionMismatch q * b[1:n1 + 1]
+                @test_throws DimensionMismatch q'ones(eltya, n + 2, n + 2)
+                @test_throws DimensionMismatch ones(eltyb, n + 2, n + 2) * q
             end
         end
 
@@ -78,9 +78,9 @@ debug && println("Matmul with LQ factorizations")
         l,q = lqa[:L], lqa[:Q]
         @test full(q)*full(q)' ≈ eye(eltya,n1)
         @test (full(q,thin=false)'*full(q,thin=false))[1:n1,:] ≈ eye(eltya,n1,n)
-        @test_throws DimensionMismatch A_mul_B!(eye(eltya,n+1),q)
-        @test Ac_mul_B!(q,full(q)) ≈ eye(eltya,n1)
-        @test_throws DimensionMismatch A_mul_Bc!(eye(eltya,n+1),q)
-        @test_throws BoundsError size(q,-1)
+        @test_throws DimensionMismatch mul!(eye(eltya, n + 1), q)
+        @test mul!(q', full(q)) ≈ eye(eltya,n1)
+        @test_throws DimensionMismatch mul!(eye(eltya, n + 1), q')
+        @test_throws BoundsError size(q, -1)
     end
 end

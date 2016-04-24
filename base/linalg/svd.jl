@@ -53,7 +53,7 @@ If `thin=true` (default), a thin SVD is returned. For a ``M \\times N`` matrix
 of the `SVD` factorization to a tuple. Direct use of `svdfact` is therefore more
 efficient.
 """
-function svd(A::Union{Number, AbstractArray}; thin::Bool=true)
+function svd(A::Union{Number, AbstractMatrix}; thin::Bool=true)
     F = svdfact(A, thin=thin)
     F.U, F.S, F.Vt'
 end

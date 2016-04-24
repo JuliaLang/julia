@@ -154,19 +154,11 @@ let # Issue 9160
             B = convert(SparseMatrixCSC{elty,Ti},B)
             cmB = CHOLMOD.Sparse(B)
 
-            # Ac_mul_B
             @test_approx_eq sparse(cmA'*cmB) A'*B
-
-            # A_mul_Bc
             @test_approx_eq sparse(cmA*cmB') A*B'
-
-            # A_mul_Ac
             @test_approx_eq sparse(cmA*cmA') A*A'
-
-            # Ac_mul_A
             @test_approx_eq sparse(cmA'*cmA) A'*A
 
-            # A_mul_Ac for symmetric A
             A = 0.5*(A + A')
             cmA = CHOLMOD.Sparse(A)
             @test_approx_eq sparse(cmA*cmA') A*A'

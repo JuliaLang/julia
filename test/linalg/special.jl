@@ -122,9 +122,9 @@ for typ in [UpperTriangular,LowerTriangular,Base.LinAlg.UnitUpperTriangular,Base
     atri = typ(a)
     b = rand(n,n)
     qrb = qrfact(b,Val{true})
-    @test Base.LinAlg.A_mul_Bc(atri,qrb[:Q]) ≈ full(atri) * qrb[:Q]'
-    @test Base.LinAlg.A_mul_Bc!(copy(atri),qrb[:Q]) ≈ full(atri) * qrb[:Q]'
-    qrb = qrfact(b,Val{false})
-    @test Base.LinAlg.A_mul_Bc(atri,qrb[:Q]) ≈ full(atri) * qrb[:Q]'
-    @test Base.LinAlg.A_mul_Bc!(copy(atri),qrb[:Q]) ≈ full(atri) * qrb[:Q]'
+    @test atri * qrb[:Q]' ≈ full(atri) * qrb[:Q]'
+    @test mul!(copy(atri), qrb[:Q]') ≈ full(atri) * qrb[:Q]'
+    qrb = qrfact(b, Val{false})
+    @test atri * qrb[:Q]' ≈ full(atri) * qrb[:Q]'
+    @test mul!(copy(atri), qrb[:Q]') ≈ full(atri) * qrb[:Q]'
 end
