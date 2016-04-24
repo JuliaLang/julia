@@ -3134,7 +3134,6 @@ static void emit_assignment(jl_value_t *l, jl_value_t *r, jl_codectx_t *ctx)
         assert(idx >= 0);
         assert(!ctx->gensym_assigned.at(idx));
         jl_cgval_t slot = emit_expr(r, ctx); // slot could be a jl_value_t (unboxed) or jl_value_t* (ispointer)
-        flush_pending_store(ctx);
         if (!slot.isboxed && !slot.isimmutable) { // emit a copy of values stored in mutable slots
             Type *vtype = julia_type_to_llvm(slot.typ);
             assert(vtype != T_pjlvalue);
@@ -3189,7 +3188,6 @@ static void emit_assignment(jl_value_t *l, jl_value_t *r, jl_codectx_t *ctx)
     // it's a local variable
     jl_varinfo_t &vi = ctx->slots[sl];
     jl_cgval_t rval_info = emit_expr(r, ctx);
-    flush_pending_store(ctx);
     if (!vi.used)
         return;
 
@@ -3227,7 +3225,6 @@ static void emit_assignment(jl_value_t *l, jl_value_t *r, jl_codectx_t *ctx)
                 emit_unbox(julia_type_to_llvm(vi.value.typ), rval_info, vi.value.typ),
                 vi.value.V, vi.isVolatile);
     }
-    flush_pending_store(ctx);
 }
 
 // --- convert expression to code ---
@@ -3235,10 +3232,8 @@ static void emit_assignment(jl_value_t *l, jl_value_t *r, jl_codectx_t *ctx)
 static Value *emit_condition(jl_value_t *cond, const std::string &msg, jl_codectx_t *ctx)
 {
     jl_cgval_t condV = emit_expr(cond, ctx);
-    flush_pending_store(ctx);
     if (condV.typ == (jl_value_t*)jl_bool_type) {
         Value *cond = emit_unbox(T_int1, condV, (jl_value_t*)jl_bool_type);
-        flush_pending_store(ctx);
         assert(cond->getType() == T_int1);
         return builder.CreateXor(cond, ConstantInt::get(T_int1,1));
     }
@@ -3401,6 +3396,7 @@ static jl_cgval_t emit_expr(jl_value_t *expr, jl_codectx_t *ctx)
         }
         else {
             Value *isfalse = emit_condition(cond, "if", ctx);
+            flush_pending_store(ctx);
             builder.CreateCondBr(isfalse, ifnot, ifso);
         }
         builder.SetInsertPoint(ifso);
@@ -3417,6 +3413,7 @@ static jl_cgval_t emit_expr(jl_value_t *expr, jl_codectx_t *ctx)
     }
     else if (head == assign_sym) {
         emit_assignment(args[0], args[1], ctx);
+        flush_pending_store(ctx);
         return ghostValue(jl_void_type);
     }
     else if (head == static_parameter_sym) {

@@ -1019,8 +1019,8 @@ static jl_cgval_t emit_intrinsic(intrinsic f, jl_value_t **args, size_t nargs,
     }
 
     case select_value: {
-        Value *isfalse = emit_condition(args[1], "select_value", ctx); // emit the first argument
         // STORE FLUSHED
+        Value *isfalse = emit_condition(args[1], "select_value", ctx); // emit the first argument
         jl_value_t *t1 = expr_type(args[2], ctx);
         jl_value_t *t2 = expr_type(args[3], ctx);
         bool isboxed;
