@@ -650,10 +650,10 @@ static void emit_type_error(const jl_cgval_t &x, jl_value_t *type, const std::st
 static void emit_typecheck(const jl_cgval_t &x, jl_value_t *type, const std::string &msg,
                            jl_codectx_t *ctx)
 {
-    flush_pending_store(ctx);
     Value *istype;
     if (jl_is_type_type(type) || !jl_is_leaf_type(type)) {
         Value *vx = boxed(x, ctx);
+        flush_pending_store_final(ctx);
         istype = builder.
             CreateICmpNE(
 #ifdef LLVM37
@@ -668,12 +668,14 @@ static void emit_typecheck(const jl_cgval_t &x, jl_value_t *type, const std::str
     else {
         istype = builder.CreateICmpEQ(emit_typeof_boxed(x,ctx), literal_pointer_val(type));
     }
+    flush_pending_store(ctx);
     BasicBlock *failBB = BasicBlock::Create(getGlobalContext(),"fail",ctx->f);
     BasicBlock *passBB = BasicBlock::Create(getGlobalContext(),"pass");
     builder.CreateCondBr(istype, passBB, failBB);
     builder.SetInsertPoint(failBB);
 
     emit_type_error(x, type, msg, ctx);
+    clear_pending_store(ctx);
     builder.CreateUnreachable();
 
     ctx->f->getBasicBlockList().push_back(passBB);
@@ -697,8 +699,8 @@ static bool is_bounds_check_block(jl_codectx_t *ctx)
 #define CHECK_BOUNDS 1
 static Value *emit_bounds_check(const jl_cgval_t &ainfo, jl_value_t *ty, Value *i, Value *len, jl_codectx_t *ctx)
 {
-    flush_pending_store(ctx);
     Value *im1 = builder.CreateSub(i, ConstantInt::get(T_size, 1));
+    flush_pending_store(ctx);
 #if CHECK_BOUNDS==1
     if ((!is_inbounds(ctx) &&
          jl_options.check_bounds != JL_OPTIONS_CHECK_BOUNDS_OFF) ||
@@ -745,6 +747,7 @@ static Value *emit_bounds_check(const jl_cgval_t &ainfo, jl_value_t *ty, Value *
                                 i);
 #endif
         }
+        clear_pending_store(ctx);
         builder.CreateUnreachable();
         ctx->f->getBasicBlockList().push_back(passBB);
         builder.SetInsertPoint(passBB);
@@ -760,7 +763,6 @@ static Value *emit_unbox(Type *to, const jl_cgval_t &x, jl_value_t *jt);
 static jl_cgval_t typed_load(Value *ptr, Value *idx_0based, jl_value_t *jltype,
                              jl_codectx_t *ctx, MDNode *tbaa, size_t alignment = 0)
 {
-    flush_pending_store(ctx);
     bool isboxed;
     Type *elty = julia_type_to_llvm(jltype, &isboxed);
     assert(elty != NULL);
@@ -807,7 +809,6 @@ static void typed_store(Value *ptr, Value *idx_0based, const jl_cgval_t &rhs,
                         Value *parent,  // for the write barrier, NULL if no barrier needed
                         size_t alignment = 0, bool root_box = true) // if the value to store needs a box, should we root it ?
 {
-    flush_pending_store(ctx);
     Type *elty = julia_type_to_llvm(jltype);
     assert(elty != NULL);
     if (type_is_ghost(elty))
@@ -818,7 +819,6 @@ static void typed_store(Value *ptr, Value *idx_0based, const jl_cgval_t &rhs,
     Value *r;
     if (jl_isbits(jltype) && ((jl_datatype_t*)jltype)->size > 0) {
         r = emit_unbox(elty, rhs, jltype);
-        flush_pending_store(ctx);
     }
     else {
         r = boxed(rhs, ctx, root_box);
@@ -935,14 +935,12 @@ static Value *data_pointer(const jl_cgval_t &x, jl_codectx_t *ctx, Type *astype 
 
 static bool emit_getfield_unknownidx(jl_cgval_t *ret, const jl_cgval_t &strct, Value *idx, jl_datatype_t *stt, jl_codectx_t *ctx)
 {
-    flush_pending_store(ctx);
     size_t nfields = jl_datatype_nfields(stt);
     if (strct.ispointer) { // boxed or stack
         if (is_datatype_all_pointers(stt)) {
             idx = emit_bounds_check(strct, (jl_value_t*)stt, idx, ConstantInt::get(T_size, nfields), ctx);
             Value *fld = tbaa_decorate(tbaa_user, builder.CreateLoad(
                         builder.CreateGEP(data_pointer(strct, ctx), idx)));
-            flush_pending_store(ctx);
             if ((unsigned)stt->ninitialized != nfields)
                 null_pointer_check(fld, ctx);
             *ret = mark_julia_type(fld, true, jl_any_type, ctx, true);
@@ -953,7 +951,6 @@ static bool emit_getfield_unknownidx(jl_cgval_t *ret, const jl_cgval_t &strct, V
             jl_value_t *jt = jl_field_type(stt, 0);
             idx = emit_bounds_check(strct, (jl_value_t*)stt, idx, ConstantInt::get(T_size, nfields), ctx);
             Value *ptr = data_pointer(strct, ctx);
-            flush_pending_store(ctx);
             if (!stt->mutabl) {
                 // just compute the pointer and let user load it when necessary
                 Type *fty = julia_type_to_llvm(jt);
@@ -968,10 +965,12 @@ static bool emit_getfield_unknownidx(jl_cgval_t *ret, const jl_cgval_t &strct, V
         }
         else if (strct.isboxed) {
             idx = builder.CreateSub(idx, ConstantInt::get(T_size, 1));
+            Value *_strct = boxed(strct, ctx);
+            flush_pending_store_final(ctx);
 #ifdef LLVM37
-            Value *fld = builder.CreateCall(prepare_call(jlgetnthfieldchecked_func), { boxed(strct, ctx), idx });
+            Value *fld = builder.CreateCall(prepare_call(jlgetnthfieldchecked_func), { _strct, idx });
 #else
-            Value *fld = builder.CreateCall2(prepare_call(jlgetnthfieldchecked_func), boxed(strct, ctx), idx);
+            Value *fld = builder.CreateCall2(prepare_call(jlgetnthfieldchecked_func), _strct, idx);
 #endif
             *ret = mark_julia_type(fld, true, jl_any_type, ctx);
             return true;
@@ -1007,7 +1006,6 @@ static bool emit_getfield_unknownidx(jl_cgval_t *ret, const jl_cgval_t &strct, V
 
 static jl_cgval_t emit_getfield_knownidx(const jl_cgval_t &strct, unsigned idx, jl_datatype_t *jt, jl_codectx_t *ctx)
 {
-    flush_pending_store(ctx);
     jl_value_t *jfty = jl_field_type(jt,idx);
     Type *elty = julia_type_to_llvm(jfty);
     assert(elty != NULL);
@@ -1225,8 +1223,8 @@ static Value *emit_array_nd_index(const jl_cgval_t &ainfo, jl_value_t *ex, size_
     Value **idxs = (Value**)alloca(sizeof(Value*)*nidxs);
     for(size_t k=0; k < nidxs; k++) {
         idxs[k] = emit_unbox(T_size, emit_expr(args[k], ctx), NULL);
-        flush_pending_store(ctx);
     }
+    flush_pending_store(ctx);
     for(size_t k=0; k < nidxs; k++) {
         Value *ii = builder.CreateSub(idxs[k], ConstantInt::get(T_size, 1));
         i = builder.CreateAdd(i, builder.CreateMul(ii, stride));
@@ -1371,7 +1369,6 @@ static Value *boxed(const jl_cgval_t &vinfo, jl_codectx_t *ctx, bool gcrooted)
 {
     jl_value_t *jt = vinfo.typ;
     Value *v = vinfo.V;
-    flush_pending_store(ctx);
     if (jt == jl_bottom_type || jt == NULL)
         // We have an undef value on a (hopefully) dead branch
         return UndefValue::get(T_pjlvalue);
@@ -1402,6 +1399,8 @@ static Value *boxed(const jl_cgval_t &vinfo, jl_codectx_t *ctx, bool gcrooted)
     jl_datatype_t *jb = (jl_datatype_t*)jt;
     assert(jl_is_datatype(jb));
     Value *box = NULL;
+    if (!(jb == jl_int8_type || jb == jl_uint8_type))
+        flush_pending_store_final(ctx);
     if (jb == jl_int8_type)
         box = call_with_signed(box_int8_func, v);
     else if (jb == jl_int16_type)
@@ -1451,7 +1450,6 @@ static Value *boxed(const jl_cgval_t &vinfo, jl_codectx_t *ctx, bool gcrooted)
         add_pending_store(ctx, box, froot);
     }
 
-    flush_pending_store(ctx);
     return box;
 }
 
@@ -1469,6 +1467,7 @@ static void emit_cpointercheck(const jl_cgval_t &x, const std::string &msg, jl_c
     builder.SetInsertPoint(failBB);
 
     emit_type_error(x, (jl_value_t*)jl_pointer_type, msg, ctx);
+    clear_pending_store(ctx);
     builder.CreateUnreachable();
 
     ctx->f->getBasicBlockList().push_back(passBB);
@@ -1505,6 +1504,7 @@ static Value *emit_allocobj(size_t static_size, jl_codectx_t *ctx)
 // if ptr is NULL this emits a write barrier _back_
 static void emit_write_barrier(jl_codectx_t *ctx, Value *parent, Value *ptr)
 {
+    flush_pending_store(ctx);
     Value *parenttag = builder.CreateBitCast(emit_typeptr_addr(parent), T_psize);
     Value *parent_type = builder.CreateLoad(parenttag);
     Value *parent_mark_bits = builder.CreateAnd(parent_type, 1);
@@ -1531,6 +1531,7 @@ static void emit_write_barrier(jl_codectx_t *ctx, Value *parent, Value *ptr)
 
 static void emit_checked_write_barrier(jl_codectx_t *ctx, Value *parent, Value *ptr)
 {
+    flush_pending_store(ctx);
     BasicBlock *cont;
     Value *not_null = builder.CreateICmpNE(ptr, V_null);
     BasicBlock *if_not_null = BasicBlock::Create(getGlobalContext(), "wb_not_null", ctx->f);
@@ -1546,12 +1547,10 @@ static void emit_checked_write_barrier(jl_codectx_t *ctx, Value *parent, Value *
 static void emit_setfield(jl_datatype_t *sty, const jl_cgval_t &strct, size_t idx0,
                           const jl_cgval_t &rhs, jl_codectx_t *ctx, bool checked, bool wb)
 {
-    flush_pending_store(ctx);
     if (sty->mutabl || !checked) {
         assert(strct.ispointer);
         Value *addr = builder.CreateGEP(data_pointer(strct, ctx, T_pint8),
                 ConstantInt::get(T_size, jl_field_offset(sty, idx0)));
-        flush_pending_store(ctx);
         jl_value_t *jfty = jl_svecref(sty->types, idx0);
         if (jl_field_isptr(sty, idx0)) {
             Value *r = boxed(rhs, ctx, false); // don't need a temporary gcroot since it'll be rooted by strct (but should ensure strct is rooted via mark_gc_use)
@@ -1584,7 +1583,6 @@ static bool might_need_root(jl_value_t *ex)
 
 static jl_cgval_t emit_new_struct(jl_value_t *ty, size_t nargs, jl_value_t **args, jl_codectx_t *ctx)
 {
-    flush_pending_store(ctx);
     assert(jl_is_datatype(ty));
     assert(jl_is_leaf_type(ty));
     assert(nargs>0);
@@ -1600,12 +1598,10 @@ static jl_cgval_t emit_new_struct(jl_value_t *ty, size_t nargs, jl_value_t **arg
                 jl_value_t *jtype = jl_svecref(sty->types,i);
                 Type *fty = julia_type_to_llvm(jtype);
                 jl_cgval_t fval_info = emit_expr(args[i+1], ctx);
-                flush_pending_store(ctx);
                 if (!jl_subtype(fval_info.typ, jtype, 0))
                     emit_typecheck(fval_info, jtype, "new", ctx);
                 if (!type_is_ghost(fty)) {
                     Value *fval = emit_unbox(fty, fval_info, jtype);
-                    flush_pending_store(ctx);
                     if (fty == T_int1)
                         fval = builder.CreateZExt(fval, T_int8);
                     if (lt->isVectorTy())
@@ -1652,7 +1648,6 @@ static jl_cgval_t emit_new_struct(jl_value_t *ty, size_t nargs, jl_value_t **arg
         // TODO: verify that nargs <= nf (currently handled by front-end)
         for(size_t i=j+1; i < nargs; i++) {
             jl_cgval_t rhs = emit_expr(args[i], ctx);
-            flush_pending_store(ctx);
             if (jl_field_isptr(sty, i - 1) && !rhs.isboxed) {
                 need_wb = true;
             }
@@ -1670,11 +1665,8 @@ static jl_cgval_t emit_new_struct(jl_value_t *ty, size_t nargs, jl_value_t **arg
         // 0 fields, ghost or bitstype
         if (sty->size == 0)
             return ghostValue(sty);
-        if (nargs >= 2) {
-            auto res = emit_expr(args[1], ctx);  // do side effects
-            flush_pending_store(ctx);
-            return res;
-        }
+        if (nargs >= 2)
+            return emit_expr(args[1], ctx);  // do side effects
         Type *lt = julia_type_to_llvm(ty);
         assert(lt != T_pjlvalue);
         return mark_julia_type(UndefValue::get(lt), false, ty, ctx);

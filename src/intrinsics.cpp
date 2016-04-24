@@ -391,6 +391,7 @@ static jl_cgval_t generic_box(jl_value_t *targ, jl_value_t *x, jl_codectx_t *ctx
         Value *arg1 = boxed(bt_value, ctx);
         Value *arg2 = boxed(v, ctx);
         Value *func = prepare_call(runtime_func[reinterpret]);
+        flush_pending_store_final(ctx);
 #ifdef LLVM37
         Value *r = builder.CreateCall(func, {arg1, arg2});
 #else
@@ -683,10 +684,12 @@ static jl_cgval_t emit_runtime_pointerref(jl_value_t *e, jl_value_t *i, jl_codec
 {
     jl_cgval_t parg = emit_expr(e, ctx);
     Value *iarg = boxed(emit_expr(i, ctx), ctx);
+    Value *_parg = boxed(parg, ctx);
+    flush_pending_store_final(ctx);
 #ifdef LLVM37
-    Value *ret = builder.CreateCall(prepare_call(jlpref_func), { boxed(parg, ctx), iarg });
+    Value *ret = builder.CreateCall(prepare_call(jlpref_func), { _parg, iarg });
 #else
-    Value *ret = builder.CreateCall2(prepare_call(jlpref_func), boxed(parg, ctx), iarg);
+    Value *ret = builder.CreateCall2(prepare_call(jlpref_func), _parg, iarg);
 #endif
     jl_value_t *ety;
     if (jl_is_cpointer_type(parg.typ)) {

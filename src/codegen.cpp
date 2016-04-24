@@ -2184,6 +2184,7 @@ static Value *emit_f_is(const jl_cgval_t &arg1, const jl_cgval_t &arg2, jl_codec
 
     Value *varg1 = boxed(arg1, ctx);
     Value *varg2 = boxed(arg2, ctx, false); // potentially unrooted!
+    // Does not allocate
 #ifdef LLVM37
     return builder.CreateTrunc(builder.CreateCall(prepare_call(jlegal_func), {varg1, varg2}), T_int1);
 #else
@@ -2278,10 +2279,13 @@ static bool emit_builtin_call(jl_cgval_t *ret, jl_value_t *f, jl_value_t **args,
         }
         if (jl_subtype(ty, (jl_value_t*)jl_type_type, 0)) {
             *ret = emit_expr(args[1], ctx);
+            Value *val = boxed(*ret, ctx);
+            Value *ty = boxed(emit_expr(args[2], ctx), ctx);
+            flush_pending_store_final(ctx);
 #ifdef LLVM37
-            builder.CreateCall(prepare_call(jltypeassert_func), {boxed(*ret, ctx), boxed(emit_expr(args[2], ctx), ctx)});
+            builder.CreateCall(prepare_call(jltypeassert_func), {val, ty});
 #else
-            builder.CreateCall2(prepare_call(jltypeassert_func), boxed(*ret, ctx), boxed(emit_expr(args[2], ctx), ctx));
+            builder.CreateCall2(prepare_call(jltypeassert_func), val, ty);
 #endif
             JL_GC_POP();
             return true;
@@ -3563,7 +3567,10 @@ static jl_cgval_t emit_expr(jl_value_t *expr, jl_codectx_t *ctx)
             }
         }
         jl_cgval_t ast = emit_expr(arg, ctx);
-        return mark_julia_type(builder.CreateCall(prepare_call(jlcopyast_func), boxed(ast, ctx)), true, ast.typ, ctx);
+        Value *_ast = boxed(ast, ctx);
+        flush_pending_store_final(ctx);
+        return mark_julia_type(builder.CreateCall(prepare_call(jlcopyast_func),
+                                                  _ast), true, ast.typ, ctx);
     }
     else if (head == simdloop_sym) {
         if (!llvm::annotateSimdLoop(builder.GetInsertBlock()))
@@ -4022,8 +4029,8 @@ static Function *gen_jlcall_wrapper(jl_lambda_info_t *lam, Function *f, bool sre
     (void)julia_type_to_llvm(jlretty, &retboxed);
     if (sret) { assert(!retboxed); }
     jl_cgval_t retval = sret ? mark_julia_slot(result, jlretty) : mark_julia_type(call, retboxed, jlretty, &ctx);
-    clear_pending_store(&ctx);
     builder.CreateRet(boxed(retval, &ctx, false)); // no gcroot needed since this on the return path
+    clear_pending_store(&ctx);
 
     return w;
 }

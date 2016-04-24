@@ -287,6 +287,7 @@ static Value *julia_to_native(Type *to, bool toboxed, jl_value_t *jlto, const jl
         // emit maybe copy
         *needStackRestore = true;
         Value *jvt = emit_typeof_boxed(jvinfo, ctx);
+        flush_pending_store(ctx);
         BasicBlock *mutableBB = BasicBlock::Create(getGlobalContext(),"is-mutable",ctx->f);
         BasicBlock *immutableBB = BasicBlock::Create(getGlobalContext(),"is-immutable",ctx->f);
         BasicBlock *afterBB = BasicBlock::Create(getGlobalContext(),"after",ctx->f);
@@ -355,7 +356,6 @@ static native_sym_arg_t interpret_symbol_arg(jl_value_t *arg, jl_codectx_t *ctx,
     if (ptr == NULL) {
         jl_value_t *ptr_ty = expr_type(arg, ctx);
         jl_cgval_t arg1 = emit_expr(arg, ctx);
-        flush_pending_store(ctx);
         if (!jl_is_cpointer_type(ptr_ty)) {
             emit_cpointercheck(arg1,
                                !strcmp(fname,"ccall") ?
@@ -365,7 +365,6 @@ static native_sym_arg_t interpret_symbol_arg(jl_value_t *arg, jl_codectx_t *ctx,
         }
         arg1 = remark_julia_type(arg1, (jl_value_t*)jl_voidpointer_type);
         jl_ptr = emit_unbox(T_size, arg1, (jl_value_t*)jl_voidpointer_type);
-        flush_pending_store(ctx);
     }
 
     void (*fptr)(void) = NULL;
@@ -445,7 +444,6 @@ static jl_value_t* try_eval(jl_value_t *ex, jl_codectx_t *ctx, const char *failu
 
 static jl_cgval_t emit_cglobal(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
 {
-    flush_pending_store(ctx);
     JL_NARGS(cglobal, 1, 2);
     jl_value_t *rt=NULL;
     Value *res;
@@ -468,6 +466,7 @@ static jl_cgval_t emit_cglobal(jl_value_t **args, size_t nargs, jl_codectx_t *ct
     if (lrt == NULL) lrt = T_pint8;
 
     native_sym_arg_t sym = interpret_symbol_arg(args[1], ctx, "cglobal");
+    flush_pending_store(ctx);
 
     if (sym.jl_ptr != NULL) {
         res = builder.CreateIntToPtr(sym.jl_ptr, lrt);
@@ -716,6 +715,7 @@ static jl_cgval_t emit_llvmcall(jl_value_t **args, size_t nargs, jl_codectx_t *c
         flush_pending_store(ctx);
 
         Value *v = julia_to_native(t, toboxed, tti, arg, false, false, false, false, false, i, ctx, NULL);
+        flush_pending_store(ctx);
         // make sure args are rooted
         bool issigned = jl_signed_type && jl_subtype(tti, (jl_value_t*)jl_signed_type, 0);
         argvals[i] = llvm_type_rewrite(v, t, t, false, false, issigned, ctx);
@@ -1039,12 +1039,12 @@ static std::string generate_func_sig(
 // ccall(pointer, rettype, (argtypes...), args...)
 static jl_cgval_t emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
 {
-    flush_pending_store(ctx);
     JL_NARGSV(ccall, 3);
     jl_value_t *rt=NULL, *at=NULL;
     JL_GC_PUSH2(&rt, &at);
 
     native_sym_arg_t symarg = interpret_symbol_arg(args[1], ctx, "ccall");
+    flush_pending_store(ctx);
     Value *jl_ptr=NULL;
     void (*fptr)(void) = NULL;
     const char *f_name = NULL, *f_lib = NULL;
@@ -1241,8 +1241,8 @@ static jl_cgval_t emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
         else {
             assert(!addressOf);
             ary = emit_unbox(largty, emit_expr(argi, ctx), tti);
-            flush_pending_store(ctx);
         }
+        flush_pending_store(ctx);
         JL_GC_POP();
         return mark_or_box_ccall_result(builder.CreateBitCast(ary, lrt),
                                         retboxed, args[2], rt, static_rt, ctx);
@@ -1439,6 +1439,7 @@ static jl_cgval_t emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
 
         Value *v = julia_to_native(largty, toboxed, jargty, arg, addressOf, byRef, inReg,
                     need_private_copy(jargty, byRef), false, ai + 1, ctx, &needStackRestore);
+        flush_pending_store(ctx);
         bool issigned = jl_signed_type && jl_subtype(jargty, (jl_value_t*)jl_signed_type, 0);
         argvals[ai + sret] = llvm_type_rewrite(v, largty,
                 ai + sret < fargt_sig.size() ? fargt_sig.at(ai + sret) : fargt_vasig,
