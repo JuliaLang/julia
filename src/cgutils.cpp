@@ -1580,6 +1580,7 @@ static bool might_need_root(jl_value_t *ex)
 
 static jl_cgval_t emit_new_struct(jl_value_t *ty, size_t nargs, jl_value_t **args, jl_codectx_t *ctx)
 {
+    flush_pending_store(ctx);
     assert(jl_is_datatype(ty));
     assert(jl_is_leaf_type(ty));
     assert(nargs>0);

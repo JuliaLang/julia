@@ -2392,6 +2392,7 @@ static bool emit_builtin_call(jl_cgval_t *ret, jl_value_t *f, jl_value_t **args,
             rt1 = expr_type(expr, ctx);
             if (jl_is_tuple_type(rt1) && jl_is_leaf_type(rt1) && nargs == jl_datatype_nfields(rt1)) {
                 *ret = emit_new_struct(rt1, nargs+1, args, ctx);
+                flush_pending_store(ctx);
                 JL_GC_POP();
                 return true;
             }
@@ -3479,7 +3480,6 @@ static jl_cgval_t emit_expr(jl_value_t *expr, jl_codectx_t *ctx)
         return mark_julia_const(extype);
     }
     else if (head == new_sym) {
-        flush_pending_store(ctx);
         jl_value_t *ty = expr_type(args[0], ctx);
         size_t nargs = jl_array_len(ex->args);
         if (jl_is_type_type(ty) &&
@@ -3498,17 +3498,17 @@ static jl_cgval_t emit_expr(jl_value_t *expr, jl_codectx_t *ctx)
                                true, jl_any_type, ctx);
     }
     else if (head == leave_sym) {
-        flush_pending_store(ctx);
+        flush_pending_store_final(ctx);
         assert(jl_is_long(args[0]));
         builder.CreateCall(prepare_call(jlleave_func),
                            ConstantInt::get(T_int32, jl_unbox_long(args[0])));
     }
     else if (head == enter_sym) {
-        flush_pending_store(ctx);
         assert(jl_is_long(args[0]));
         int labl = jl_unbox_long(args[0]);
         Value *jbuf = builder.CreateGEP((*ctx->handlers)[labl],
                                         ConstantInt::get(T_size,0));
+        flush_pending_store_final(ctx);
         builder.CreateCall(prepare_call(jlenter_func), jbuf);
 #ifndef _OS_WINDOWS_
 #ifdef LLVM37
@@ -3548,7 +3548,6 @@ static jl_cgval_t emit_expr(jl_value_t *expr, jl_codectx_t *ctx)
         builder.SetInsertPoint(tryblk);
     }
     else if (head == inbounds_sym) {
-        flush_pending_store(ctx);
         // manipulate inbounds stack
         // note that when entering an inbounds context, we must also update
         // the boundsCheck context to be false
@@ -3572,7 +3571,6 @@ static jl_cgval_t emit_expr(jl_value_t *expr, jl_codectx_t *ctx)
         return ghostValue(jl_void_type);
     }
     else if (head == boundscheck_sym) {
-        flush_pending_store(ctx);
         if (jl_array_len(ex->args) > 0) {
             jl_value_t *arg = args[0];
             if (arg == jl_true) {
@@ -3589,7 +3587,6 @@ static jl_cgval_t emit_expr(jl_value_t *expr, jl_codectx_t *ctx)
         return ghostValue(jl_void_type);
     }
     else if (head == copyast_sym) {
-        flush_pending_store(ctx);
         jl_value_t *arg = args[0];
         if (jl_is_quotenode(arg)) {
             jl_value_t *arg1 = jl_fieldref(arg,0);
@@ -3603,19 +3600,18 @@ static jl_cgval_t emit_expr(jl_value_t *expr, jl_codectx_t *ctx)
         return mark_julia_type(builder.CreateCall(prepare_call(jlcopyast_func), boxed(ast, ctx)), true, ast.typ, ctx);
     }
     else if (head == simdloop_sym) {
-        flush_pending_store(ctx);
         if (!llvm::annotateSimdLoop(builder.GetInsertBlock()))
             jl_printf(JL_STDERR, "WARNING: could not attach metadata for @simd loop.\n");
         return jl_cgval_t();
     }
     else {
-        flush_pending_store(ctx);
         if (!strcmp(jl_symbol_name(head), "$"))
             jl_error("syntax: prefix \"$\" in non-quoted expression");
         if (jl_is_toplevel_only_expr(expr) &&
             ctx->linfo->def == NULL) {
             // call interpreter to run a toplevel expr from inside a
             // compiled toplevel thunk.
+            flush_pending_store_final(ctx);
             builder.CreateCall(prepare_call(jltopeval_func), literal_pointer_val(expr));
             return ghostValue(jl_void_type);
         }

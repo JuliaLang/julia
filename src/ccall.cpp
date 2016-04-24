@@ -1441,7 +1441,7 @@ static jl_cgval_t emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
                 ai + sret < fargt_sig.size() ? fargt_sig.at(ai + sret) : fargt_vasig,
                 false, byRef, issigned, ctx);
     }
-
+    flush_pending_store(ctx);
 
     // make LLVM function object for the target
     // keep this close to the function call, so that the compiler can
@@ -1557,6 +1557,7 @@ static jl_cgval_t emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
             assert(newst.isboxed);
             // copy the data from the return value to the new struct
             builder.CreateAlignedStore(result, builder.CreateBitCast(newst.V, prt->getPointerTo()), 16); // julia gc is aligned 16
+            flush_pending_store(ctx);
             return newst;
         }
         else if (jlrt != prt) {
