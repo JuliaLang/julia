@@ -580,6 +580,7 @@ static void emit_error(const std::string &txt, jl_codectx_t *ctx)
 
 static void error_unless(Value *cond, const std::string &msg, jl_codectx_t *ctx)
 {
+    flush_pending_store(ctx);
     BasicBlock *failBB = BasicBlock::Create(getGlobalContext(),"fail",ctx->f);
     BasicBlock *passBB = BasicBlock::Create(getGlobalContext(),"pass");
     builder.CreateCondBr(cond, passBB, failBB);
@@ -934,6 +935,7 @@ static Value *data_pointer(const jl_cgval_t &x, jl_codectx_t *ctx, Type *astype 
 
 static bool emit_getfield_unknownidx(jl_cgval_t *ret, const jl_cgval_t &strct, Value *idx, jl_datatype_t *stt, jl_codectx_t *ctx)
 {
+    flush_pending_store(ctx);
     size_t nfields = jl_datatype_nfields(stt);
     if (strct.ispointer) { // boxed or stack
         if (is_datatype_all_pointers(stt)) {
@@ -1543,6 +1545,7 @@ static void emit_checked_write_barrier(jl_codectx_t *ctx, Value *parent, Value *
 static void emit_setfield(jl_datatype_t *sty, const jl_cgval_t &strct, size_t idx0,
                           const jl_cgval_t &rhs, jl_codectx_t *ctx, bool checked, bool wb)
 {
+    flush_pending_store(ctx);
     if (sty->mutabl || !checked) {
         assert(strct.ispointer);
         Value *addr = builder.CreateGEP(data_pointer(strct, ctx, T_pint8),
