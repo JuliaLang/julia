@@ -2017,6 +2017,7 @@ static void jl_add_linfo_root(jl_lambda_info_t *li, jl_value_t *val)
 
 static jl_cgval_t emit_getfield(jl_value_t *expr, jl_sym_t *name, jl_codectx_t *ctx)
 {
+    flush_pending_store(ctx);
     if (jl_is_quotenode(expr) && jl_is_module(jl_fieldref(expr,0)))
         expr = jl_fieldref(expr,0);
 
@@ -3081,6 +3082,7 @@ static jl_cgval_t emit_global(jl_sym_t *sym, jl_codectx_t *ctx)
 
 static jl_cgval_t emit_local(jl_value_t *slotload, jl_codectx_t *ctx)
 {
+    flush_pending_store(ctx);
     size_t sl = jl_slot_number(slotload) - 1;
     jl_varinfo_t &vi = ctx->slots[sl];
     jl_sym_t *sym = slot_symbol(sl, ctx);
@@ -3279,11 +3281,9 @@ static jl_cgval_t emit_expr(jl_value_t *expr, jl_codectx_t *ctx)
 {
     if (jl_is_symbol(expr)) {
         jl_sym_t *sym = (jl_sym_t*)expr;
-        flush_pending_store(ctx);
         return emit_global(sym, ctx);
     }
     if (jl_is_slot(expr)) {
-        flush_pending_store(ctx);
         return emit_local(expr, ctx);
     }
     if (jl_is_gensym(expr)) {
@@ -3325,7 +3325,6 @@ static jl_cgval_t emit_expr(jl_value_t *expr, jl_codectx_t *ctx)
         return jl_cgval_t();
     }
     if (jl_is_globalref(expr)) {
-        flush_pending_store(ctx);
         return emit_getfield((jl_value_t*)jl_globalref_mod(expr), jl_globalref_name(expr), ctx);
     }
     if (jl_is_topnode(expr)) {
