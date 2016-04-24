@@ -873,9 +873,9 @@ static jl_cgval_t emit_intrinsic(intrinsic f, jl_value_t **args, size_t nargs,
     }
 
     switch (f) {
-    case ccall: return emit_ccall(args, nargs, ctx);
-    case cglobal: return emit_cglobal(args, nargs, ctx);
-    case llvmcall: return emit_llvmcall(args, nargs, ctx);
+    case ccall: flush_pending_store(ctx); return emit_ccall(args, nargs, ctx);
+    case cglobal: flush_pending_store(ctx); return emit_cglobal(args, nargs, ctx);
+    case llvmcall: flush_pending_store(ctx); return emit_llvmcall(args, nargs, ctx);
     case arraylen:
         return mark_julia_type(emit_arraylen(emit_expr(args[1], ctx), args[1], ctx), false,
                                jl_long_type, ctx);
@@ -885,6 +885,7 @@ static jl_cgval_t emit_intrinsic(intrinsic f, jl_value_t **args, size_t nargs,
         Value *func = prepare_call(runtime_func[f]);
         if (nargs == 1) {
             Value *x = boxed(emit_expr(args[1], ctx), ctx);
+            flush_pending_store_final(ctx);
 #ifdef LLVM37
             r = builder.CreateCall(func, {x});
 #else
@@ -894,6 +895,7 @@ static jl_cgval_t emit_intrinsic(intrinsic f, jl_value_t **args, size_t nargs,
         else if (nargs == 2) {
             Value *x = boxed(emit_expr(args[1], ctx), ctx);
             Value *y = boxed(emit_expr(args[2], ctx), ctx);
+            flush_pending_store_final(ctx);
 #ifdef LLVM37
             r = builder.CreateCall(func, {x, y});
 #else
@@ -904,6 +906,7 @@ static jl_cgval_t emit_intrinsic(intrinsic f, jl_value_t **args, size_t nargs,
             Value *x = boxed(emit_expr(args[1], ctx), ctx);
             Value *y = boxed(emit_expr(args[2], ctx), ctx);
             Value *z = boxed(emit_expr(args[3], ctx), ctx);
+            flush_pending_store_final(ctx);
 #ifdef LLVM37
             r = builder.CreateCall(func, {x, y, z});
 #else
@@ -1019,7 +1022,6 @@ static jl_cgval_t emit_intrinsic(intrinsic f, jl_value_t **args, size_t nargs,
     }
 
     case select_value: {
-        // STORE FLUSHED
         Value *isfalse = emit_condition(args[1], "select_value", ctx); // emit the first argument
         jl_value_t *t1 = expr_type(args[2], ctx);
         jl_value_t *t2 = expr_type(args[3], ctx);

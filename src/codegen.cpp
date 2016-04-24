@@ -2225,6 +2225,7 @@ static bool emit_builtin_call(jl_cgval_t *ret, jl_value_t *f, jl_value_t **args,
     jl_value_t *rt1=NULL, *rt2=NULL, *rt3=NULL;
     JL_GC_PUSH3(&rt1, &rt2, &rt3);
 
+    flush_pending_store(ctx);
     if (f==jl_builtin_is && nargs==2) {
         // handle simple static expressions with no side-effects
         rt1 = static_eval(args[1], ctx, true);
@@ -2871,7 +2872,6 @@ static jl_cgval_t emit_call_function_object(jl_lambda_info_t *li, const jl_cgval
 
 static jl_cgval_t emit_call(jl_expr_t *ex, jl_codectx_t *ctx)
 {
-    flush_pending_store(ctx);
     jl_value_t *expr = (jl_value_t*)ex;
     jl_value_t **args = (jl_value_t**)jl_array_data(ex->args);
     size_t arglen = jl_array_dim0(ex->args);
