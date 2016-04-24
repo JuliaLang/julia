@@ -711,7 +711,6 @@ static inline jl_cgval_t mark_julia_slot(Value *v, jl_value_t *typ)
 static inline jl_cgval_t mark_julia_type(Value *v, bool isboxed, jl_value_t *typ, jl_codectx_t *ctx, bool needsroot = true)
 {
     Type *T = julia_type_to_llvm(typ);
-    flush_pending_store(ctx);
     if (type_is_ghost(T)) {
         return ghostValue(typ);
     }
@@ -728,7 +727,6 @@ static inline jl_cgval_t mark_julia_type(Value *v, bool isboxed, jl_value_t *typ
         froot = emit_local_root(ctx);
         add_pending_store(ctx, v, froot);
     }
-    flush_pending_store(ctx);
     return jl_cgval_t(v, froot, isboxed, typ);
 }
 static inline jl_cgval_t mark_julia_type(Value *v, bool isboxed, jl_datatype_t *typ, jl_codectx_t *ctx, bool needsroot = true)
@@ -3928,6 +3926,7 @@ static Function *gen_cfun_wrapper(jl_lambda_info_t *lam, jl_function_t *ff, jl_v
         sret = true;
     }
 
+    clear_pending_store(&ctx);
     if (sret)
         builder.CreateRetVoid();
     else
@@ -4022,6 +4021,7 @@ static Function *gen_jlcall_wrapper(jl_lambda_info_t *lam, Function *f, bool sre
     (void)julia_type_to_llvm(jlretty, &retboxed);
     if (sret) { assert(!retboxed); }
     jl_cgval_t retval = sret ? mark_julia_slot(result, jlretty) : mark_julia_type(call, retboxed, jlretty, &ctx);
+    clear_pending_store(&ctx);
     builder.CreateRet(boxed(retval, &ctx, false)); // no gcroot needed since this on the return path
 
     return w;
