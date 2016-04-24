@@ -315,7 +315,6 @@ static Value *emit_unbox(Type *to, const jl_cgval_t &x, jl_value_t *jt)
 static Value *auto_unbox(const jl_cgval_t &v, jl_codectx_t *ctx)
 {
     jl_value_t *bt = v.typ;
-    flush_pending_store(ctx);
     if (!jl_is_bitstype(bt)) {
         // This can be reached with a direct invalid call to an Intrinsic, such as:
         //   Intrinsics.neg_int("")
@@ -333,9 +332,7 @@ static Value *auto_unbox(const jl_cgval_t &v, jl_codectx_t *ctx)
         return NULL;
     }
     assert(!to->isAggregateType()); // expecting some sort of jl_bitstype
-    auto res = emit_unbox(to, v, bt);
-    flush_pending_store(ctx);
-    return res;
+    return emit_unbox(to, v, bt);
 }
 static Value *auto_unbox(jl_value_t *x, jl_codectx_t *ctx)
 {
@@ -404,7 +401,6 @@ static jl_cgval_t generic_box(jl_value_t *targ, jl_value_t *x, jl_codectx_t *ctx
     }
 
     Type *llvmt = staticeval_bitstype(bt);
-    flush_pending_store(ctx);
     int nb = jl_datatype_size(bt);
 
     // Examine the second argument //
@@ -452,7 +448,6 @@ static jl_cgval_t generic_box(jl_value_t *targ, jl_value_t *x, jl_codectx_t *ctx
             vxt = llvmt;
         vx = builder.CreateLoad(data_pointer(v, ctx,
                     vxt == T_int1 ? T_pint8 : vxt->getPointerTo()));
-        flush_pending_store(ctx);
     }
 
     vxt = vx->getType();
@@ -483,7 +478,6 @@ static jl_cgval_t generic_unbox(jl_value_t *targ, jl_value_t *x, jl_codectx_t *c
 
     // Examine the second argument //
     jl_cgval_t v = emit_expr(x, ctx);
-    flush_pending_store(ctx);
 
     if (bt == NULL || !jl_is_leaf_type(bt)) {
         // dynamically-determined type; evaluate.
@@ -493,7 +487,6 @@ static jl_cgval_t generic_unbox(jl_value_t *targ, jl_value_t *x, jl_codectx_t *c
             // always fixed size
             nb = jl_datatype_size(bt);
             llvmt = staticeval_bitstype(bt);
-            flush_pending_store(ctx);
             alignment = ((jl_datatype_t*)bt)->alignment;
         }
         else {
@@ -506,7 +499,6 @@ static jl_cgval_t generic_unbox(jl_value_t *targ, jl_value_t *x, jl_codectx_t *c
             }
             nb = jl_datatype_size(bt);
             llvmt = staticeval_bitstype(bt);
-            flush_pending_store(ctx);
             alignment = ((jl_datatype_t*)bt)->alignment;
         }
         Value *runtime_bt = boxed(bt_value, ctx);
@@ -521,7 +513,6 @@ static jl_cgval_t generic_unbox(jl_value_t *targ, jl_value_t *x, jl_codectx_t *c
             prepare_call(builder.CreateMemCpy(newobj, data_pointer(v, ctx, T_pint8), nb, alignment)->getCalledValue());
             mark_gc_use(ctx, v);
         }
-        flush_pending_store(ctx);
         return mark_julia_type(newobj, true, bt ? bt : (jl_value_t*)jl_any_type, ctx);
     }
 
@@ -532,7 +523,6 @@ static jl_cgval_t generic_unbox(jl_value_t *targ, jl_value_t *x, jl_codectx_t *c
     }
 
     Type *llvmt = staticeval_bitstype(bt);
-    flush_pending_store(ctx);
     if (v.typ == bt)
         return v;
 
@@ -547,7 +537,6 @@ static jl_cgval_t generic_unbox(jl_value_t *targ, jl_value_t *x, jl_codectx_t *c
             return jl_cgval_t();
         }
     }
-    flush_pending_store(ctx);
 
     Type *vxt = vx->getType();
     if (llvmt == T_int1) {
@@ -580,11 +569,9 @@ static jl_cgval_t generic_unbox(jl_value_t *targ, jl_value_t *x, jl_codectx_t *c
 static jl_cgval_t generic_trunc(jl_value_t *targ, jl_value_t *x, jl_codectx_t *ctx, bool check, bool signd)
 {
     jl_value_t *jlto = staticeval_bitstype(targ, "trunc_int", ctx);
-    flush_pending_store(ctx);
     if (!jlto) return jl_cgval_t(); // jlto threw an error
     Type *to = staticeval_bitstype(jlto);
     Value *ix = JL_INT(auto_unbox(x, ctx));
-    flush_pending_store(ctx);
     if (ix->getType() == T_void) return jl_cgval_t(); // auto_unbox threw an error
     Value *ans = builder.CreateTrunc(ix, to);
     if (check) {
@@ -602,7 +589,6 @@ static jl_cgval_t generic_sext(jl_value_t *targ, jl_value_t *x, jl_codectx_t *ct
     if (!jlto) return jl_cgval_t(); // jlto threw an error
     Type *to = staticeval_bitstype(jlto);
     Value *ix = JL_INT(auto_unbox(x, ctx));
-    flush_pending_store(ctx);
     if (ix->getType() == T_void) return jl_cgval_t(); // auto_unbox threw an error
     Value *ans = builder.CreateSExt(ix, to);
     return mark_julia_type(ans, false, jlto, ctx);
@@ -611,11 +597,9 @@ static jl_cgval_t generic_sext(jl_value_t *targ, jl_value_t *x, jl_codectx_t *ct
 static jl_cgval_t generic_zext(jl_value_t *targ, jl_value_t *x, jl_codectx_t *ctx)
 {
     jl_value_t *jlto = staticeval_bitstype(targ, "zext_int", ctx);
-    flush_pending_store(ctx);
     if (!jlto) return jl_cgval_t(); // jlto threw an error
     Type *to = staticeval_bitstype(jlto);
     Value *ix = JL_INT(auto_unbox(x, ctx));
-    flush_pending_store(ctx);
     if (ix->getType() == T_void) return jl_cgval_t(); // auto_unbox threw an error
     Value *ans = builder.CreateZExt(ix, to);
     return mark_julia_type(ans, false, jlto, ctx);
@@ -658,11 +642,9 @@ static Value *emit_eqfui(Value *x, Value *y)
 static jl_cgval_t emit_checked_fptosi(jl_value_t *targ, jl_value_t *x, jl_codectx_t *ctx)
 {
     jl_value_t *jlto = staticeval_bitstype(targ, "checked_fptosi", ctx);
-    flush_pending_store(ctx);
     if (!jlto) return jl_cgval_t();
     Type *to = staticeval_bitstype(jlto);
     Value *fx = FP(auto_unbox(x, ctx));
-    flush_pending_store(ctx);
     if (fx->getType() == T_void) return jl_cgval_t(); // auto_unbox threw an error
     Value *ans = builder.CreateFPToSI(fx, to);
     if (fx->getType() == T_float32 && to == T_int32) {
@@ -680,11 +662,9 @@ static jl_cgval_t emit_checked_fptosi(jl_value_t *targ, jl_value_t *x, jl_codect
 static jl_cgval_t emit_checked_fptoui(jl_value_t *targ, jl_value_t *x, jl_codectx_t *ctx)
 {
     jl_value_t *jlto = staticeval_bitstype(targ, "checked_fptoui", ctx);
-    flush_pending_store(ctx);
     if (!jlto) return jl_cgval_t();
     Type *to = staticeval_bitstype(jlto);
     Value *fx = FP(auto_unbox(x, ctx));
-    flush_pending_store(ctx);
     if (fx->getType() == T_void) return jl_cgval_t(); // auto_unbox threw an error
     Value *ans = builder.CreateFPToUI(fx, to);
     if (fx->getType() == T_float32 && to == T_int32) {
