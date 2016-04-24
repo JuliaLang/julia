@@ -291,11 +291,9 @@ static Value *julia_to_native(Type *to, bool toboxed, jl_value_t *jlto, const jl
                             ConstantInt::get(T_size, offsetof(jl_datatype_t,mutabl))),
                         false)),
                 T_int1);
-        flush_pending_store(ctx);
+        Value *p1 = data_pointer(jvinfo, ctx, to);
         builder.CreateCondBr(ismutable, mutableBB, immutableBB);
         builder.SetInsertPoint(mutableBB);
-        Value *p1 = data_pointer(jvinfo, ctx, to);
-        flush_pending_store(ctx);
         builder.CreateBr(afterBB);
         builder.SetInsertPoint(immutableBB);
         Value *nbytes = tbaa_decorate(tbaa_datatype, builder.CreateLoad(
@@ -304,9 +302,9 @@ static Value *julia_to_native(Type *to, bool toboxed, jl_value_t *jlto, const jl
                     false));
         AllocaInst *ai = builder.CreateAlloca(T_int8, nbytes);
         ai->setAlignment(16);
-        prepare_call(builder.CreateMemCpy(ai, data_pointer(jvinfo, ctx, T_pint8), nbytes, sizeof(void*))->getCalledValue()); // minimum gc-alignment in julia is pointer size
+        prepare_call(builder.CreateMemCpy(ai, builder.CreateBitCast(p1, T_pint8),
+                                          nbytes, sizeof(void*))->getCalledValue()); // minimum gc-alignment in julia is pointer size
         Value *p2 = builder.CreateBitCast(ai, to);
-        flush_pending_store(ctx);
         builder.CreateBr(afterBB);
         builder.SetInsertPoint(afterBB);
         PHINode *p = builder.CreatePHI(to, 2);

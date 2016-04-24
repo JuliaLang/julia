@@ -580,7 +580,6 @@ static void emit_error(const std::string &txt, jl_codectx_t *ctx)
 
 static void error_unless(Value *cond, const std::string &msg, jl_codectx_t *ctx)
 {
-    flush_pending_store(ctx);
     BasicBlock *failBB = BasicBlock::Create(getGlobalContext(),"fail",ctx->f);
     BasicBlock *passBB = BasicBlock::Create(getGlobalContext(),"pass");
     builder.CreateCondBr(cond, passBB, failBB);
@@ -593,7 +592,6 @@ static void error_unless(Value *cond, const std::string &msg, jl_codectx_t *ctx)
 
 static void raise_exception_unless(Value *cond, Value *exc, jl_codectx_t *ctx)
 {
-    flush_pending_store(ctx);
     BasicBlock *failBB = BasicBlock::Create(getGlobalContext(),"fail",ctx->f);
     BasicBlock *passBB = BasicBlock::Create(getGlobalContext(),"pass");
     builder.CreateCondBr(cond, passBB, failBB);
@@ -668,7 +666,9 @@ static void emit_typecheck(const jl_cgval_t &x, jl_value_t *type, const std::str
     else {
         istype = builder.CreateICmpEQ(emit_typeof_boxed(x,ctx), literal_pointer_val(type));
     }
-    flush_pending_store(ctx);
+    std::map<std::pair<Value*, int>, Value*> pending_stores;
+    std::swap(pending_stores, ctx->pending_stores);
+    // The error branch doesn't need any roots
     BasicBlock *failBB = BasicBlock::Create(getGlobalContext(),"fail",ctx->f);
     BasicBlock *passBB = BasicBlock::Create(getGlobalContext(),"pass");
     builder.CreateCondBr(istype, passBB, failBB);
@@ -680,6 +680,7 @@ static void emit_typecheck(const jl_cgval_t &x, jl_value_t *type, const std::str
 
     ctx->f->getBasicBlockList().push_back(passBB);
     builder.SetInsertPoint(passBB);
+    std::swap(pending_stores, ctx->pending_stores);
 }
 
 static bool is_inbounds(jl_codectx_t *ctx)
@@ -700,7 +701,6 @@ static bool is_bounds_check_block(jl_codectx_t *ctx)
 static Value *emit_bounds_check(const jl_cgval_t &ainfo, jl_value_t *ty, Value *i, Value *len, jl_codectx_t *ctx)
 {
     Value *im1 = builder.CreateSub(i, ConstantInt::get(T_size, 1));
-    flush_pending_store(ctx);
 #if CHECK_BOUNDS==1
     if ((!is_inbounds(ctx) &&
          jl_options.check_bounds != JL_OPTIONS_CHECK_BOUNDS_OFF) ||
@@ -747,7 +747,6 @@ static Value *emit_bounds_check(const jl_cgval_t &ainfo, jl_value_t *ty, Value *
                                 i);
 #endif
         }
-        clear_pending_store(ctx);
         builder.CreateUnreachable();
         ctx->f->getBasicBlockList().push_back(passBB);
         builder.SetInsertPoint(passBB);
@@ -1224,7 +1223,6 @@ static Value *emit_array_nd_index(const jl_cgval_t &ainfo, jl_value_t *ex, size_
     for(size_t k=0; k < nidxs; k++) {
         idxs[k] = emit_unbox(T_size, emit_expr(args[k], ctx), NULL);
     }
-    flush_pending_store(ctx);
     for(size_t k=0; k < nidxs; k++) {
         Value *ii = builder.CreateSub(idxs[k], ConstantInt::get(T_size, 1));
         i = builder.CreateAdd(i, builder.CreateMul(ii, stride));
@@ -1461,6 +1459,9 @@ static void emit_cpointercheck(const jl_cgval_t &x, const std::string &msg, jl_c
     Value *istype =
         builder.CreateICmpEQ(emit_nthptr(t, (ssize_t)(offsetof(jl_datatype_t,name)/sizeof(char*)), tbaa_datatype),
                              literal_pointer_val((jl_value_t*)jl_pointer_type->name));
+    std::map<std::pair<Value*, int>, Value*> pending_stores;
+    std::swap(pending_stores, ctx->pending_stores);
+    // The error branch doesn't need any roots
     BasicBlock *failBB = BasicBlock::Create(getGlobalContext(),"fail",ctx->f);
     BasicBlock *passBB = BasicBlock::Create(getGlobalContext(),"pass");
     builder.CreateCondBr(istype, passBB, failBB);
@@ -1472,6 +1473,7 @@ static void emit_cpointercheck(const jl_cgval_t &x, const std::string &msg, jl_c
 
     ctx->f->getBasicBlockList().push_back(passBB);
     builder.SetInsertPoint(passBB);
+    std::swap(pending_stores, ctx->pending_stores);
 }
 
 // allocation for known size object
@@ -1504,7 +1506,6 @@ static Value *emit_allocobj(size_t static_size, jl_codectx_t *ctx)
 // if ptr is NULL this emits a write barrier _back_
 static void emit_write_barrier(jl_codectx_t *ctx, Value *parent, Value *ptr)
 {
-    flush_pending_store(ctx);
     Value *parenttag = builder.CreateBitCast(emit_typeptr_addr(parent), T_psize);
     Value *parent_type = builder.CreateLoad(parenttag);
     Value *parent_mark_bits = builder.CreateAnd(parent_type, 1);
@@ -1531,7 +1532,6 @@ static void emit_write_barrier(jl_codectx_t *ctx, Value *parent, Value *ptr)
 
 static void emit_checked_write_barrier(jl_codectx_t *ctx, Value *parent, Value *ptr)
 {
-    flush_pending_store(ctx);
     BasicBlock *cont;
     Value *not_null = builder.CreateICmpNE(ptr, V_null);
     BasicBlock *if_not_null = BasicBlock::Create(getGlobalContext(), "wb_not_null", ctx->f);

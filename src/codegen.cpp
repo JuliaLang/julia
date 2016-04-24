@@ -2952,7 +2952,6 @@ static jl_cgval_t emit_call(jl_expr_t *ex, jl_codectx_t *ctx)
 
 static void undef_var_error_if_null(Value *v, jl_sym_t *name, jl_codectx_t *ctx)
 {
-    flush_pending_store(ctx);
     Value *ok = builder.CreateICmpNE(v, V_null);
     BasicBlock *err = BasicBlock::Create(getGlobalContext(), "err", ctx->f);
     BasicBlock *ifok = BasicBlock::Create(getGlobalContext(), "ok");
