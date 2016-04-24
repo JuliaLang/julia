@@ -1983,7 +1983,6 @@ static Value *make_jlcall(ArrayRef<const jl_cgval_t*> args, jl_codectx_t *ctx)
         Value *arg = boxed(**I, ctx, false); // mark_gc_use isn't needed since jlcall_frame_func can take ownership of this root
         add_pending_store(ctx, arg, largs, slot);
     }
-    flush_pending_store(ctx);
     return largs;
 }
 
@@ -2059,6 +2058,7 @@ static jl_cgval_t emit_getfield(jl_value_t *expr, jl_sym_t *name, jl_codectx_t *
     jl_cgval_t arg2 = mark_julia_const((jl_value_t*)name);
     const jl_cgval_t* myargs_array[2] = {&arg1, &arg2};
     Value *myargs = make_jlcall(makeArrayRef(myargs_array), ctx);
+    flush_pending_store_final(ctx);
 #ifdef LLVM37
     Value *result = builder.CreateCall(prepare_call(jlgetfield_func), {V_null, myargs,
                                         ConstantInt::get(T_int32,2)});
@@ -2930,6 +2930,7 @@ static jl_cgval_t emit_call(jl_expr_t *ex, jl_codectx_t *ctx)
     }
     // put into argument space
     Value *myargs = make_jlcall(makeArrayRef(largs, nargs), ctx);
+    flush_pending_store_final(ctx);
 #ifdef LLVM37
     Value *callval = builder.CreateCall(prepare_call(jlapplygeneric_func),
                                  {myargs, ConstantInt::get(T_int32, nargs)});
