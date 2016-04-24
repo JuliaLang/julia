@@ -3825,7 +3825,6 @@ static Function *gen_cfun_wrapper(jl_lambda_info_t *lam, jl_function_t *ff, jl_v
     }
 
     for (size_t i = 0; i < nargs; i++) {
-        flush_pending_store(&ctx);
         Value *val = &*AI++;
         jl_value_t *jargty = jl_nth_slot_type(lam->specTypes, i+1);  // +1 because argt excludes function
         bool isboxed, argboxed;
@@ -3888,7 +3887,6 @@ static Function *gen_cfun_wrapper(jl_lambda_info_t *lam, jl_function_t *ff, jl_v
             }
             else {
                 arg = emit_unbox(t, inputarg, jargty);
-                flush_pending_store(&ctx);
                 assert(!isa<UndefValue>(arg));
                 if (t->isAggregateType()) {
 #ifndef NDEBUG
@@ -3907,7 +3905,7 @@ static Function *gen_cfun_wrapper(jl_lambda_info_t *lam, jl_function_t *ff, jl_v
         }
     }
 
-    flush_pending_store(&ctx);
+    flush_pending_store_final(&ctx);
     // Create the call
     jl_cgval_t retval;
     if (specsig) {
