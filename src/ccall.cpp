@@ -246,14 +246,19 @@ static Value *julia_to_native(Type *to, bool toboxed, jl_value_t *jlto, const jl
         }
     }
 
-    if (!addressOf && !byRef)
-        return emit_unbox(to, jvinfo, ety);
+    if (!addressOf && !byRef) {
+        auto v = emit_unbox(to, jvinfo, ety);
+        flush_pending_store(ctx);
+        return v;
+    }
 
     if (addressOf && jvinfo.isboxed) {
         if (!jl_is_abstracttype(ety)) {
             if (jl_is_mutable_datatype(ety)) {
                 // no copy, just reference the data field
-                return data_pointer(jvinfo, ctx, to);
+                auto res = data_pointer(jvinfo, ctx, to);
+                flush_pending_store(ctx);
+                return res;
             }
             else if (jl_is_immutable_datatype(ety) && jlto != (jl_value_t*)jl_voidpointer_type) {
                 // yes copy
@@ -275,6 +280,7 @@ static Value *julia_to_native(Type *to, bool toboxed, jl_value_t *jlto, const jl
                 ai->setAlignment(16);
                 prepare_call(
                     builder.CreateMemCpy(ai, data_pointer(jvinfo, ctx, T_pint8), nbytes, sizeof(void*))->getCalledValue()); // minimum gc-alignment in julia is pointer size
+                flush_pending_store(ctx);
                 return builder.CreateBitCast(ai, to);
             }
         }
@@ -293,6 +299,7 @@ static Value *julia_to_native(Type *to, bool toboxed, jl_value_t *jlto, const jl
         builder.CreateCondBr(ismutable, mutableBB, immutableBB);
         builder.SetInsertPoint(mutableBB);
         Value *p1 = data_pointer(jvinfo, ctx, to);
+        flush_pending_store(ctx);
         builder.CreateBr(afterBB);
         builder.SetInsertPoint(immutableBB);
         Value *nbytes = tbaa_decorate(tbaa_datatype, builder.CreateLoad(
@@ -302,6 +309,7 @@ static Value *julia_to_native(Type *to, bool toboxed, jl_value_t *jlto, const jl
         AllocaInst *ai = builder.CreateAlloca(T_int8, nbytes);
         ai->setAlignment(16);
         prepare_call(builder.CreateMemCpy(ai, data_pointer(jvinfo, ctx, T_pint8), nbytes, sizeof(void*))->getCalledValue()); // minimum gc-alignment in julia is pointer size
+        flush_pending_store(ctx);
         Value *p2 = builder.CreateBitCast(ai, to);
         builder.CreateBr(afterBB);
         builder.SetInsertPoint(afterBB);
@@ -318,12 +326,14 @@ static Value *julia_to_native(Type *to, bool toboxed, jl_value_t *jlto, const jl
     Value *slot = emit_static_alloca(to, ctx);
     if (!jvinfo.ispointer) {
         builder.CreateStore(emit_unbox(to, jvinfo, ety), slot);
+        flush_pending_store(ctx);
     }
     else {
         prepare_call(builder.CreateMemCpy(slot, data_pointer(jvinfo, ctx, slot->getType()),
                     (uint64_t)jl_datatype_size(ety),
                     (uint64_t)((jl_datatype_t*)ety)->alignment)->getCalledValue());
         mark_gc_use(ctx, jvinfo);
+        flush_pending_store(ctx);
     }
     return slot;
 }
@@ -345,6 +355,7 @@ static native_sym_arg_t interpret_symbol_arg(jl_value_t *arg, jl_codectx_t *ctx,
     if (ptr == NULL) {
         jl_value_t *ptr_ty = expr_type(arg, ctx);
         jl_cgval_t arg1 = emit_expr(arg, ctx);
+        flush_pending_store(ctx);
         if (!jl_is_cpointer_type(ptr_ty)) {
             emit_cpointercheck(arg1,
                                !strcmp(fname,"ccall") ?
@@ -354,6 +365,7 @@ static native_sym_arg_t interpret_symbol_arg(jl_value_t *arg, jl_codectx_t *ctx,
         }
         arg1 = remark_julia_type(arg1, (jl_value_t*)jl_voidpointer_type);
         jl_ptr = emit_unbox(T_size, arg1, (jl_value_t*)jl_voidpointer_type);
+        flush_pending_store(ctx);
     }
 
     void (*fptr)(void) = NULL;
@@ -699,6 +711,7 @@ static jl_cgval_t emit_llvmcall(jl_value_t **args, size_t nargs, jl_codectx_t *c
         jl_value_t *argi = args[4 + i];
         jl_cgval_t &arg = argv[i];
         arg = emit_expr(argi, ctx);
+        flush_pending_store(ctx);
 
         Value *v = julia_to_native(t, toboxed, tti, arg, false, false, false, false, false, i, ctx, NULL);
         // make sure args are rooted
@@ -1188,6 +1201,7 @@ static jl_cgval_t emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
         jl_value_t *argi = args[4];
         assert(!(jl_is_expr(argi) && ((jl_expr_t*)argi)->head == amp_sym));
         jl_cgval_t ary = emit_expr(argi, ctx);
+        flush_pending_store(ctx);
         JL_GC_POP();
         return mark_or_box_ccall_result(builder.CreateBitCast(emit_arrayptr(ary, ctx), lrt),
                                         retboxed, args[2], rt, static_rt, ctx);
@@ -1224,6 +1238,7 @@ static jl_cgval_t emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
         else {
             assert(!addressOf);
             ary = emit_unbox(largty, emit_expr(argi, ctx), tti);
+            flush_pending_store(ctx);
         }
         JL_GC_POP();
         return mark_or_box_ccall_result(builder.CreateBitCast(ary, lrt),
@@ -1301,6 +1316,7 @@ static jl_cgval_t emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
                     emit_expr(args[4], ctx);
                     emit_expr(args[6], ctx);
                     emit_expr(args[8], ctx);
+                    flush_pending_store(ctx);
                     JL_GC_POP();
                     return mark_or_box_ccall_result(builder.CreateBitCast(llvmf, lrt),
                                                     retboxed, args[2], rt, static_rt, ctx);
@@ -1403,6 +1419,7 @@ static jl_cgval_t emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
 
         jl_cgval_t &arg = argv[ai];
         arg = emit_expr((jl_value_t*)argi, ctx);
+        flush_pending_store(ctx);
         if (jl_is_abstract_ref_type(jargty)) {
             if (addressOf) {
                 JL_GC_POP();
@@ -1520,6 +1537,7 @@ static jl_cgval_t emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
         if (jl_is_long(argi)) continue;
         jl_cgval_t arg = emit_expr(argi, ctx);
         mark_gc_use(ctx, arg);
+        flush_pending_store(ctx);
     }
 
     JL_GC_POP();
