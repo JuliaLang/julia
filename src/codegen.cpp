@@ -3269,7 +3269,6 @@ static void emit_stmtpos(jl_value_t *expr, jl_codectx_t *ctx)
                 add_pending_store(ctx, V_null, lv);
             }
         }
-        flush_pending_store(ctx);
         return;
     }
     if (jl_is_expr(expr)) {
@@ -3280,7 +3279,6 @@ static void emit_stmtpos(jl_value_t *expr, jl_codectx_t *ctx)
         // fall-through
     }
     (void)emit_expr(expr, ctx);
-    flush_pending_store(ctx);
 }
 
 static jl_cgval_t emit_expr(jl_value_t *expr, jl_codectx_t *ctx)
@@ -3294,7 +3292,6 @@ static jl_cgval_t emit_expr(jl_value_t *expr, jl_codectx_t *ctx)
         flush_pending_store(ctx);
         return emit_local(expr, ctx);
     }
-    flush_pending_store(ctx);
     if (jl_is_gensym(expr)) {
         ssize_t idx = ((jl_gensym_t*)expr)->id;
         assert(idx >= 0);
@@ -3307,6 +3304,7 @@ static jl_cgval_t emit_expr(jl_value_t *expr, jl_codectx_t *ctx)
         }
     }
     if (jl_is_labelnode(expr)) {
+        flush_pending_store_final(ctx);
         int labelname = jl_labelnode_label(expr);
         BasicBlock *bb = (*ctx->labels)[labelname];
         assert(bb);
@@ -3320,6 +3318,7 @@ static jl_cgval_t emit_expr(jl_value_t *expr, jl_codectx_t *ctx)
         jl_error("Linenode in value position");
     }
     if (jl_is_gotonode(expr)) {
+        flush_pending_store_final(ctx);
         if (builder.GetInsertBlock()->getTerminator() == NULL) {
             int labelname = jl_gotonode_label(expr);
             BasicBlock *bb = (*ctx->labels)[labelname];
@@ -3332,9 +3331,11 @@ static jl_cgval_t emit_expr(jl_value_t *expr, jl_codectx_t *ctx)
         return jl_cgval_t();
     }
     if (jl_is_globalref(expr)) {
+        flush_pending_store(ctx);
         return emit_getfield((jl_value_t*)jl_globalref_mod(expr), jl_globalref_name(expr), ctx);
     }
     if (jl_is_topnode(expr)) {
+        flush_pending_store(ctx);
         jl_sym_t *var = (jl_sym_t*)jl_fieldref(expr,0);
         jl_module_t *mod = topmod(ctx);
         jl_binding_t *b = jl_get_binding(mod, var);
@@ -3346,6 +3347,7 @@ static jl_cgval_t emit_expr(jl_value_t *expr, jl_codectx_t *ctx)
         return emit_checked_var(julia_binding_gv(b), var, ctx);
     }
     if (!jl_is_expr(expr)) {
+        flush_pending_store(ctx);
         int needroot = true;
         if (jl_is_quotenode(expr)) {
             expr = jl_fieldref(expr,0);
@@ -3373,6 +3375,7 @@ static jl_cgval_t emit_expr(jl_value_t *expr, jl_codectx_t *ctx)
         return mark_julia_const(expr);
     }
 
+    flush_pending_store(ctx);
     jl_expr_t *ex = (jl_expr_t*)expr;
     jl_value_t **args = (jl_value_t**)jl_array_data(ex->args);
     jl_sym_t *head = ex->head;
@@ -3589,9 +3592,7 @@ static jl_cgval_t emit_expr(jl_value_t *expr, jl_codectx_t *ctx)
             if (!((jl_is_expr(arg1) && ((jl_expr_t*)arg1)->head!=null_sym) ||
                   jl_typeis(arg1,jl_array_any_type) || jl_is_quotenode(arg1))) {
                 // elide call to jl_copy_ast when possible
-                auto res = emit_expr(arg, ctx);
-                flush_pending_store(ctx);
-                return res;
+                return emit_expr(arg, ctx);
             }
         }
         jl_cgval_t ast = emit_expr(arg, ctx);
@@ -4657,7 +4658,6 @@ static std::unique_ptr<Module> emit_function(jl_lambda_info_t *lam, jl_llvm_func
                     builder.CreateStore(emit_unbox(vi.value.V->getType()->getContainedType(0),
                                                    theArg, vi.value.typ),
                                         vi.value.V);
-                    flush_pending_store(&ctx);
                 }
                 else {
                     // keep track of original (possibly boxed) value to avoid re-boxing or moving
@@ -4687,13 +4687,13 @@ static std::unique_ptr<Module> emit_function(jl_lambda_info_t *lam, jl_llvm_func
                 add_pending_store(&ctx, argp, vi.memloc);
                 if (!theArg.isboxed)
                     emit_local_root(&ctx, &vi); // create a root for vi
-                flush_pending_store(&ctx);
             }
             // get arrayvar data if applicable
             if (arrayvars.find(i) != arrayvars.end()) {
                 jl_arrayvar_t av = arrayvars[i];
                 assign_arrayvar(av, theArg, &ctx);
             }
+            flush_pending_store(&ctx);
         }
     }
 
@@ -4723,7 +4723,6 @@ static std::unique_ptr<Module> emit_function(jl_lambda_info_t *lam, jl_llvm_func
 #endif
                 add_pending_store(&ctx, restTuple, vi.memloc);
                 emit_local_root(&ctx, &vi); // create a root for vi
-                flush_pending_store(&ctx);
             }
             else {
                 // TODO: Perhaps allow this in the future, but for now since varargs
@@ -4734,6 +4733,7 @@ static std::unique_ptr<Module> emit_function(jl_lambda_info_t *lam, jl_llvm_func
         else {
             assert(vi.memloc == NULL);
         }
+        flush_pending_store(&ctx);
     }
 
     // step 12. associate labels with basic blocks to resolve forward jumps
@@ -4868,18 +4868,17 @@ static std::unique_ptr<Module> emit_function(jl_lambda_info_t *lam, jl_llvm_func
                 retboxed = true;
             }
             jl_cgval_t retvalinfo = emit_expr(jl_exprarg(ex,0), &ctx);
-            flush_pending_store(&ctx);
             if (retboxed)
                 retval = boxed(retvalinfo, &ctx, false); // skip the gcroot on the return path
             else if (!type_is_ghost(retty))
                 retval = emit_unbox(retty, retvalinfo, jlrettype);
             else // undef return type
                 retval = NULL;
-            flush_pending_store(&ctx);
             if (do_malloc_log && lno != -1)
                 mallocVisitLine(filename, lno);
             if (ctx.sret)
                 builder.CreateStore(retval, &*ctx.f->arg_begin());
+            clear_pending_store(&ctx);
             if (type_is_ghost(retty) || ctx.sret)
                 builder.CreateRetVoid();
             else
@@ -4900,6 +4899,7 @@ static std::unique_ptr<Module> emit_function(jl_lambda_info_t *lam, jl_llvm_func
         else {
             emit_stmtpos(stmt, &ctx);
         }
+        flush_pending_store(&ctx);
     }
 
     builder.SetCurrentDebugLocation(noDbg);
