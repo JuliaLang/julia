@@ -511,7 +511,7 @@ static jl_cgval_t generic_unbox(jl_value_t *targ, jl_value_t *x, jl_codectx_t *c
         }
         else {
             prepare_call(builder.CreateMemCpy(newobj, data_pointer(v, ctx, T_pint8), nb, alignment)->getCalledValue());
-            mark_gc_use(v);
+            mark_gc_use(ctx, v);
         }
         return mark_julia_type(newobj, true, bt ? bt : (jl_value_t*)jl_any_type, ctx);
     }
@@ -1050,8 +1050,8 @@ static jl_cgval_t emit_intrinsic(intrinsic f, jl_value_t **args, size_t nargs,
                     boxed(x, ctx));
         }
         jl_value_t *jt = (t1 == t2 ? t1 : (jl_value_t*)jl_any_type);
-        mark_gc_use(x);
-        mark_gc_use(y);
+        mark_gc_use(ctx, x);
+        mark_gc_use(ctx, y);
         return mark_julia_type(ifelse_result, isboxed, jt, ctx);
     }
 

@@ -556,6 +556,7 @@ typedef struct {
     std::map<int, jl_arrayvar_t> *arrayvars;
     std::map<int, BasicBlock*> *labels;
     std::map<int, Value*> *handlers;
+    std::map<std::pair<Value*, int>, Value*> pending_stores;
     jl_module_t *module;
     jl_lambda_info_t *linfo;
     const char *name;
@@ -598,7 +599,7 @@ typedef struct {
 static jl_cgval_t emit_expr(jl_value_t *expr, jl_codectx_t *ctx);
 
 static Value *emit_local_root(jl_codectx_t *ctx, jl_varinfo_t *vi = NULL);
-static void mark_gc_use(const jl_cgval_t &v);
+static void mark_gc_use(jl_codectx_t *ctx, const jl_cgval_t &v);
 static Value *make_jlcall(ArrayRef<const jl_cgval_t*> args, jl_codectx_t *ctx);
 static Value *global_binding_pointer(jl_module_t *m, jl_sym_t *s,
                                      jl_binding_t **pbnd, bool assign, jl_codectx_t *ctx);
@@ -608,6 +609,65 @@ static void allocate_gc_frame(BasicBlock *b0, jl_codectx_t *ctx);
 static void jl_finalize_module(std::unique_ptr<Module> m);
 static GlobalVariable *prepare_global(GlobalVariable *G, Module *M = jl_builderModule);
 
+static void add_pending_store(jl_codectx_t *ctx, Value *v, Value *slot,
+                              int idx=-1)
+{
+    std::pair<Value*, int> key(slot, idx);
+    ctx->pending_stores[key] = v;
+}
+
+static bool in_pending_store(jl_codectx_t *ctx, Value *slot)
+{
+    std::pair<Value*, int> key(slot, -1);
+    auto search = ctx->pending_stores.find(key);
+    return search != ctx->pending_stores.end();
+}
+
+static Value *load_pending_store(jl_codectx_t *ctx, Value *slot,
+                                 bool isvolatile)
+{
+    std::pair<Value*, int> key(slot, -1);
+    auto search = ctx->pending_stores.find(key);
+    if (search != ctx->pending_stores.end())
+        return search->second;
+    return builder.CreateLoad(slot, isvolatile);
+}
+
+static void replace_pending_store(jl_codectx_t *ctx, Value *slot, Value *newslot)
+{
+    std::pair<Value*, int> key(slot, -1);
+    auto search = ctx->pending_stores.find(key);
+    if (search == ctx->pending_stores.end())
+        return;
+    Value *v = search->second;
+    ctx->pending_stores.erase(search);
+    add_pending_store(ctx, v, newslot, -1);
+}
+
+static void clear_pending_store(jl_codectx_t *ctx)
+{
+    ctx->pending_stores.clear();
+}
+
+// Needs to be done before emitting operations that can allocate
+// or emitting a store that may alias gc roots
+static void flush_pending_store(jl_codectx_t *ctx)
+{
+    for (auto it: ctx->pending_stores) {
+        Value *slot = it.first.first;
+        int idx = it.first.second;
+        Value *v = it.second;
+        if (idx >= 0) {
+            Instruction *inst = GetElementPtrInst::Create(
+                LLVM37_param(NULL) slot,
+                ArrayRef<Value*>(ConstantInt::get(T_int32, idx)));
+            inst->insertAfter(ctx->ptlsStates);
+            slot = inst;
+        }
+        builder.CreateStore(v, slot);
+    }
+    clear_pending_store(ctx);
+}
 
 // --- convenience functions for tagging llvm values with julia types ---
 
@@ -663,7 +723,8 @@ static inline jl_cgval_t mark_julia_type(Value *v, bool isboxed, jl_value_t *typ
     Value *froot = NULL;
     if (needsroot && isboxed) {
         froot = emit_local_root(ctx);
-        builder.CreateStore(v, froot);
+        add_pending_store(ctx, v, froot);
+        flush_pending_store(ctx);
     }
     return jl_cgval_t(v, froot, isboxed, typ);
 }
@@ -1890,6 +1951,7 @@ static Value *emit_local_root(jl_codectx_t *ctx, jl_varinfo_t *vi)
 {
     CallInst *newroot = CallInst::Create(prepare_call(gcroot_func), "", /*InsertBefore*/ctx->ptlsStates);
     if (vi) {
+        replace_pending_store(ctx, vi->memloc, newroot);
         vi->memloc->replaceAllUsesWith(newroot);
         newroot->takeName(vi->memloc);
         vi->memloc = newroot;
@@ -1899,10 +1961,11 @@ static Value *emit_local_root(jl_codectx_t *ctx, jl_varinfo_t *vi)
 
 
 // Marks a use (and thus a potential kill) of a gcroot
-static void mark_gc_use(const jl_cgval_t &v)
+static void mark_gc_use(jl_codectx_t *ctx, const jl_cgval_t &v)
 {
-    if (v.gcroot)
+    if (v.gcroot && !in_pending_store(ctx, v.gcroot)) {
         builder.CreateCall(prepare_call(gckill_func), v.gcroot);
+    }
 }
 
 // turn an array of arguments into a single object suitable for passing to a jlcall
@@ -1917,10 +1980,8 @@ static Value *make_jlcall(ArrayRef<const jl_cgval_t*> args, jl_codectx_t *ctx)
     assert(args.size() > 0);
     for (ArrayRef<const jl_cgval_t*>::iterator I = args.begin(), E = args.end(); I < E; ++I, ++slot) {
         Value *arg = boxed(**I, ctx, false); // mark_gc_use isn't needed since jlcall_frame_func can take ownership of this root
-        GetElementPtrInst *newroot = GetElementPtrInst::Create(LLVM37_param(NULL) largs,
-                ArrayRef<Value*>(ConstantInt::get(T_int32, slot)));
-        newroot->insertAfter(ctx->ptlsStates);
-        builder.CreateStore(arg, newroot);
+        add_pending_store(ctx, arg, largs, slot);
+        flush_pending_store(ctx);
     }
     return largs;
 }
@@ -2174,8 +2235,8 @@ static bool emit_builtin_call(jl_cgval_t *ret, jl_value_t *f, jl_value_t **args,
             v2 = remark_julia_type(v2, expr_type(args[2], ctx)); // patch up typ if necessary
         // emit comparison test
         Value *ans = emit_f_is(v1, v2, ctx);
-        mark_gc_use(v1);
-        mark_gc_use(v2);
+        mark_gc_use(ctx, v1);
+        mark_gc_use(ctx, v2);
         *ret = mark_julia_type(ans, false, jl_bool_type, ctx);
         JL_GC_POP();
         return true;
@@ -2750,7 +2811,7 @@ static jl_cgval_t emit_call_function_object(jl_lambda_info_t *li, const jl_cgval
                 if (arg.ispointer) {
                     // can lazy load on demand, no copy needed
                     argvals[idx] = data_pointer(arg, ctx, at);
-                    mark_gc_use(arg); // TODO: must be after the jlcall
+                    mark_gc_use(ctx, arg); // TODO: must be after the jlcall
                 }
                 else {
                     Value *v = emit_unbox(et, arg, jt);
@@ -2949,7 +3010,7 @@ static Value *global_binding_pointer(jl_module_t *m, jl_sym_t *s,
 static jl_cgval_t emit_checked_var(Value *bp, jl_sym_t *name, jl_codectx_t *ctx, bool isvol)
 {
     assert(bp->getType() == T_ppjlvalue);
-    Value *v = builder.CreateLoad(bp, isvol);
+    Value *v = load_pending_store(ctx, bp, isvol);
     undef_var_error_if_null(v, name, ctx);
     return mark_julia_type(v, true, jl_any_type, ctx);
 }
@@ -3008,7 +3069,7 @@ static jl_cgval_t emit_local(jl_value_t *slotload, jl_codectx_t *ctx)
         }
 
         if (vi.isArgument || !vi.usedUndef) { // arguments are always defined
-            Instruction *v = builder.CreateLoad(bp, vi.isVolatile);
+            Value *v = load_pending_store(ctx, bp, vi.isVolatile);
             return mark_julia_type(v, true, typ, ctx,
                                    vi.isAssigned); // means it's an argument so don't need an additional root
         }
@@ -3110,7 +3171,13 @@ static void emit_assignment(jl_value_t *l, jl_value_t *r, jl_codectx_t *ctx)
             emit_local_root(ctx, &vi);
         }
         Value *rval = boxed(rval_info, ctx, false); // no root needed on the temporary since it is about to be assigned to the variable slot
-        builder.CreateStore(rval, vi.memloc, vi.isVolatile);
+        if (vi.isVolatile) {
+            builder.CreateStore(rval, vi.memloc, true);
+        }
+        else {
+            add_pending_store(ctx, rval, vi.memloc);
+            flush_pending_store(ctx);
+        }
     }
     else if (vi.value.constant) {
         // virtual store
@@ -3157,8 +3224,10 @@ static void emit_stmtpos(jl_value_t *expr, jl_codectx_t *ctx)
         Value *lv = vi.memloc;
         if (lv != NULL) {
             // create a new uninitialized variable
-            if (vi.usedUndef)
-                builder.CreateStore(V_null, lv);
+            if (vi.usedUndef) {
+                add_pending_store(ctx, V_null, lv);
+                flush_pending_store(ctx);
+            }
         }
         return;
     }
@@ -3685,7 +3754,10 @@ static Function *gen_cfun_wrapper(jl_lambda_info_t *lam, jl_function_t *ff, jl_v
         theFptr = (Function*)lam->functionObjectsDecls.functionObject;
         specsig = false;
         jlfunc_sret = false;
-        myargs = builder.CreateCall(prepare_call(jlcall_frame_func), ConstantInt::get(T_int32, nargs));
+        myargs = CallInst::Create(prepare_call(jlcall_frame_func),
+                                  ConstantInt::get(T_int32, nargs),
+                                  "",
+                                  /*InsertBefore*/ctx.ptlsStates);
     }
     assert(theFptr);
 
@@ -3761,8 +3833,8 @@ static Function *gen_cfun_wrapper(jl_lambda_info_t *lam, jl_function_t *ff, jl_v
         // figure out how to repack this type
         if (!specsig) {
             Value *arg = boxed(inputarg, &ctx, false); // don't want a gcroot, since it's about to be but into the jlcall frame anyways
-            Value *slot = builder.CreateGEP(myargs, ConstantInt::get(T_int32, FParamIndex++));
-            builder.CreateStore(arg, slot);
+            add_pending_store(&ctx, arg, myargs, FParamIndex++);
+            flush_pending_store(&ctx);
         }
         else {
             Value *arg;
@@ -4562,7 +4634,8 @@ static std::unique_ptr<Module> emit_function(jl_lambda_info_t *lam, jl_llvm_func
             }
             else {
                 Value *argp = boxed(theArg, &ctx, false); // skip the temporary gcroot since it would be folded to argp anyways
-                builder.CreateStore(argp, vi.memloc);
+                add_pending_store(&ctx, argp, vi.memloc);
+                flush_pending_store(&ctx);
                 if (!theArg.isboxed)
                     emit_local_root(&ctx, &vi); // create a root for vi
             }
@@ -4598,7 +4671,8 @@ static std::unique_ptr<Module> emit_function(jl_lambda_info_t *lam, jl_llvm_func
                                         builder.CreateSub(argCount,
                                                           ConstantInt::get(T_int32,nreq-1)));
 #endif
-                builder.CreateStore(restTuple, vi.memloc);
+                add_pending_store(&ctx, restTuple, vi.memloc);
+                flush_pending_store(&ctx);
                 emit_local_root(&ctx, &vi); // create a root for vi
             }
             else {

@@ -323,7 +323,7 @@ static Value *julia_to_native(Type *to, bool toboxed, jl_value_t *jlto, const jl
         prepare_call(builder.CreateMemCpy(slot, data_pointer(jvinfo, ctx, slot->getType()),
                     (uint64_t)jl_datatype_size(ety),
                     (uint64_t)((jl_datatype_t*)ety)->alignment)->getCalledValue());
-        mark_gc_use(jvinfo);
+        mark_gc_use(ctx, jvinfo);
     }
     return slot;
 }
@@ -836,7 +836,7 @@ static jl_cgval_t emit_llvmcall(jl_value_t **args, size_t nargs, jl_codectx_t *c
     // after the llvmcall mark fake uses of all of the arguments to ensure the were live
     for (size_t i = 0; i < nargt; ++i) {
         const jl_cgval_t &arg = argv[i];
-        mark_gc_use(arg);
+        mark_gc_use(ctx, arg);
     }
 
     JL_GC_POP();
@@ -1513,13 +1513,13 @@ static jl_cgval_t emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
     for(i = 4; i < nargs + 1; i += 2) {
         // Current C function parameter
         size_t ai = (i - 4) / 2;
-        mark_gc_use(argv[ai]);
+        mark_gc_use(ctx, argv[ai]);
 
         // Julia (expression) value of current parameter gcroot
         jl_value_t *argi = args[i + 1];
         if (jl_is_long(argi)) continue;
         jl_cgval_t arg = emit_expr(argi, ctx);
-        mark_gc_use(arg);
+        mark_gc_use(ctx, arg);
     }
 
     JL_GC_POP();

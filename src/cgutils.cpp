@@ -1433,7 +1433,8 @@ static Value *boxed(const jl_cgval_t &vinfo, jl_codectx_t *ctx, bool gcrooted)
         // make a gcroot for the new box
         // (unless the caller explicitly said this was unnecessary)
         Value *froot = emit_local_root(ctx);
-        builder.CreateStore(box, froot);
+        add_pending_store(ctx, box, froot);
+        flush_pending_store(ctx);
     }
 
     return box;
@@ -1538,7 +1539,7 @@ static void emit_setfield(jl_datatype_t *sty, const jl_cgval_t &strct, size_t id
             Value *r = boxed(rhs, ctx, false); // don't need a temporary gcroot since it'll be rooted by strct (but should ensure strct is rooted via mark_gc_use)
             builder.CreateStore(r, builder.CreateBitCast(addr, T_ppjlvalue));
             if (wb && strct.isboxed) emit_checked_write_barrier(ctx, boxed(strct, ctx), r);
-            mark_gc_use(strct);
+            mark_gc_use(ctx, strct);
         }
         else {
             int align = jl_field_offset(sty, idx0);
