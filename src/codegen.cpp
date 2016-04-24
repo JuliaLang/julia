@@ -3129,7 +3129,6 @@ static jl_cgval_t emit_local(jl_value_t *slotload, jl_codectx_t *ctx)
 static void emit_assignment(jl_value_t *l, jl_value_t *r, jl_codectx_t *ctx)
 {
     if (jl_is_gensym(l)) {
-        flush_pending_store(ctx);
         ssize_t idx = ((jl_gensym_t*)l)->id;
         assert(idx >= 0);
         assert(!ctx->gensym_assigned.at(idx));
@@ -3167,10 +3166,10 @@ static void emit_assignment(jl_value_t *l, jl_value_t *r, jl_codectx_t *ctx)
         assert(jl_is_slot(l));
     if (bp == NULL && s != NULL)
         bp = global_binding_pointer(ctx->module, s, &bnd, true, ctx);
-    flush_pending_store(ctx);
     if (bp != NULL) { // it's a global
         assert(bnd);
         Value *rval = boxed(emit_expr(r, ctx), ctx, false); // no root needed since this is about to be assigned to a global
+        // Does not allocate!
 #ifdef LLVM37
         builder.CreateCall(prepare_call(jlcheckassign_func),
                            {literal_pointer_val(bnd),
