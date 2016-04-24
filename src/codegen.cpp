@@ -2994,7 +2994,6 @@ static void undef_var_error_if_null(Value *v, jl_sym_t *name, jl_codectx_t *ctx)
 static Value *global_binding_pointer(jl_module_t *m, jl_sym_t *s,
                                      jl_binding_t **pbnd, bool assign, jl_codectx_t *ctx)
 {
-    flush_pending_store(ctx);
     jl_binding_t *b = NULL;
     if (assign) {
         b = jl_get_binding_wr(m, s);
@@ -3014,6 +3013,7 @@ static Value *global_binding_pointer(jl_module_t *m, jl_sym_t *s,
             BasicBlock *have_val = BasicBlock::Create(jl_LLVMContext, "found"),
                 *not_found = BasicBlock::Create(jl_LLVMContext, "notfound");
             BasicBlock *currentbb = builder.GetInsertBlock();
+            flush_pending_store_final(ctx);
             builder.CreateCondBr(builder.CreateICmpNE(cachedval, initnul), have_val, not_found);
             ctx->f->getBasicBlockList().push_back(not_found);
             builder.SetInsertPoint(not_found);
@@ -3067,7 +3067,6 @@ static jl_cgval_t emit_global(jl_sym_t *sym, jl_codectx_t *ctx)
 {
     jl_binding_t *jbp=NULL;
     Value *bp = global_binding_pointer(ctx->module, sym, &jbp, false, ctx);
-    flush_pending_store(ctx);
     assert(bp != NULL);
     if (jbp && jbp->value != NULL) {
         if (jbp->constp)
@@ -3082,7 +3081,6 @@ static jl_cgval_t emit_global(jl_sym_t *sym, jl_codectx_t *ctx)
 
 static jl_cgval_t emit_local(jl_value_t *slotload, jl_codectx_t *ctx)
 {
-    flush_pending_store(ctx);
     size_t sl = jl_slot_number(slotload) - 1;
     jl_varinfo_t &vi = ctx->slots[sl];
     jl_sym_t *sym = slot_symbol(sl, ctx);
