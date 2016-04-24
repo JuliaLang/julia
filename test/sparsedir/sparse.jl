@@ -1196,10 +1196,12 @@ Ac = sprandn(20,20,.5) + im* sprandn(20,20,.5)
 Ar = sprandn(20,20,.5)
 @test cond(A,1) == 1.0
 # For a discussion of the tolerance, see #14778
-@test 0.99 <= cond(Ar, 1) \ norm(Ar, 1) * norm(inv(full(Ar)), 1) < 3
-@test 0.99 <= cond(Ac, 1) \ norm(Ac, 1) * norm(inv(full(Ac)), 1) < 3
-@test 0.99 <= cond(Ar, Inf) \ norm(Ar, Inf) * norm(inv(full(Ar)), Inf) < 3
-@test 0.99 <= cond(Ac, Inf) \ norm(Ac, Inf) * norm(inv(full(Ac)), Inf) < 3
+if Base.USE_GPL_LIBS
+    @test 0.99 <= cond(Ar, 1) \ norm(Ar, 1) * norm(inv(full(Ar)), 1) < 3
+    @test 0.99 <= cond(Ac, 1) \ norm(Ac, 1) * norm(inv(full(Ac)), 1) < 3
+    @test 0.99 <= cond(Ar, Inf) \ norm(Ar, Inf) * norm(inv(full(Ar)), Inf) < 3
+    @test 0.99 <= cond(Ac, Inf) \ norm(Ac, Inf) * norm(inv(full(Ac)), Inf) < 3
+end
 @test_throws ArgumentError cond(A,2)
 @test_throws ArgumentError cond(A,3)
 let Arect = spzeros(10, 6)
@@ -1213,11 +1215,13 @@ Ac = sprandn(20,20,.5) + im* sprandn(20,20,.5)
 Aci = ceil(Int64,100*sprand(20,20,.5))+ im*ceil(Int64,sprand(20,20,.5))
 Ar = sprandn(20,20,.5)
 Ari = ceil(Int64,100*Ar)
-@test_approx_eq_eps Base.SparseArrays.normestinv(Ac,3) norm(inv(full(Ac)),1) 1e-4
-@test_approx_eq_eps Base.SparseArrays.normestinv(Aci,3) norm(inv(full(Aci)),1) 1e-4
-@test_approx_eq_eps Base.SparseArrays.normestinv(Ar) norm(inv(full(Ar)),1) 1e-4
-@test_throws ArgumentError Base.SparseArrays.normestinv(Ac,0)
-@test_throws ArgumentError Base.SparseArrays.normestinv(Ac,21)
+if Base.USE_GPL_LIBS
+    @test_approx_eq_eps Base.SparseArrays.normestinv(Ac,3) norm(inv(full(Ac)),1) 1e-4
+    @test_approx_eq_eps Base.SparseArrays.normestinv(Aci,3) norm(inv(full(Aci)),1) 1e-4
+    @test_approx_eq_eps Base.SparseArrays.normestinv(Ar) norm(inv(full(Ar)),1) 1e-4
+    @test_throws ArgumentError Base.SparseArrays.normestinv(Ac,0)
+    @test_throws ArgumentError Base.SparseArrays.normestinv(Ac,21)
+end
 @test_throws DimensionMismatch Base.SparseArrays.normestinv(sprand(3,5,.9))
 
 # csc_permute
@@ -1262,21 +1266,21 @@ end
 let
     A = spdiagm(rand(5)) + sprandn(5,5,0.2) + im*sprandn(5,5,0.2)
     A = A + A'
-    @test abs(det(factorize(Hermitian(A)))) ≈ abs(det(factorize(full(A))))
+    @test !Base.USE_GPL_LIBS || abs(det(factorize(Hermitian(A)))) ≈ abs(det(factorize(full(A))))
     A = spdiagm(rand(5)) + sprandn(5,5,0.2) + im*sprandn(5,5,0.2)
     A = A*A'
-    @test abs(det(factorize(Hermitian(A)))) ≈ abs(det(factorize(full(A))))
+    @test !Base.USE_GPL_LIBS || abs(det(factorize(Hermitian(A)))) ≈ abs(det(factorize(full(A))))
     A = spdiagm(rand(5)) + sprandn(5,5,0.2)
     A = A + A.'
-    @test abs(det(factorize(Symmetric(A)))) ≈ abs(det(factorize(full(A))))
+    @test !Base.USE_GPL_LIBS || abs(det(factorize(Symmetric(A)))) ≈ abs(det(factorize(full(A))))
     A = spdiagm(rand(5)) + sprandn(5,5,0.2)
     A = A*A.'
-    @test abs(det(factorize(Symmetric(A)))) ≈ abs(det(factorize(full(A))))
+    @test !Base.USE_GPL_LIBS || abs(det(factorize(Symmetric(A)))) ≈ abs(det(factorize(full(A))))
     @test factorize(triu(A)) == triu(A)
     @test isa(factorize(triu(A)), UpperTriangular{Float64, SparseMatrixCSC{Float64, Int}})
     @test factorize(tril(A)) == tril(A)
     @test isa(factorize(tril(A)), LowerTriangular{Float64, SparseMatrixCSC{Float64, Int}})
-    @test factorize(A[:,1:4])\ones(size(A,1)) ≈ full(A[:,1:4])\ones(size(A,1))
+    @test !Base.USE_GPL_LIBS || factorize(A[:,1:4])\ones(size(A,1)) ≈ full(A[:,1:4])\ones(size(A,1))
     @test_throws ErrorException chol(A)
     @test_throws ErrorException lu(A)
     @test_throws ErrorException eig(A)
