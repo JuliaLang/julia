@@ -4689,7 +4689,6 @@ static std::unique_ptr<Module> emit_function(jl_lambda_info_t *lam, jl_llvm_func
                 jl_arrayvar_t av = arrayvars[i];
                 assign_arrayvar(av, theArg, &ctx);
             }
-            flush_pending_store(&ctx);
         }
     }
 
@@ -4702,6 +4701,7 @@ static std::unique_ptr<Module> emit_function(jl_lambda_info_t *lam, jl_llvm_func
         else if (!vi.value.constant) {
             // restarg = jl_f_tuple(NULL, &args[nreq], nargs-nreq)
             if (vi.memloc != NULL) {
+                flush_pending_store_final(&ctx);
 #ifdef LLVM37
                 Value *restTuple =
                     builder.CreateCall(prepare_call(jltuple_func), {V_null,
@@ -4729,7 +4729,6 @@ static std::unique_ptr<Module> emit_function(jl_lambda_info_t *lam, jl_llvm_func
         else {
             assert(vi.memloc == NULL);
         }
-        flush_pending_store(&ctx);
     }
 
     // step 12. associate labels with basic blocks to resolve forward jumps
@@ -4895,9 +4894,9 @@ static std::unique_ptr<Module> emit_function(jl_lambda_info_t *lam, jl_llvm_func
         else {
             emit_stmtpos(stmt, &ctx);
         }
-        flush_pending_store(&ctx);
     }
 
+    clear_pending_store(&ctx);
     builder.SetCurrentDebugLocation(noDbg);
 
     // sometimes we have dangling labels after the end
