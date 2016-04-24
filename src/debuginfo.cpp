@@ -214,6 +214,22 @@ struct strrefcomp {
 };
 #endif
 
+extern "C" {
+    extern void (*jl_linfo_tracer)(jl_lambda_info_t *tracee);
+}
+
+std::vector<jl_lambda_info_t*> triggered_linfos;
+void callback_triggered_linfos()
+{
+    if (triggered_linfos.empty())
+        return;
+    if (jl_linfo_tracer) {
+        std::vector<jl_lambda_info_t*> to_process(std::move(triggered_linfos));
+        for (jl_lambda_info_t *linfo : to_process)
+            jl_linfo_tracer(linfo);
+    }
+}
+
 class JuliaJITEventListener: public JITEventListener
 {
 #ifndef USE_MCJIT
@@ -434,6 +450,8 @@ public:
             jl_lambda_info_t *linfo = NULL;
             if (linfo_it != linfo_in_flight.end()) {
                 linfo = linfo_it->second;
+                if (linfo->compile_traced)
+                    triggered_linfos.push_back(linfo);
                 linfo_in_flight.erase(linfo_it);
             }
             if (linfo)
