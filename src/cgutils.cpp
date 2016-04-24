@@ -649,6 +649,7 @@ static void emit_type_error(const jl_cgval_t &x, jl_value_t *type, const std::st
 static void emit_typecheck(const jl_cgval_t &x, jl_value_t *type, const std::string &msg,
                            jl_codectx_t *ctx)
 {
+    flush_pending_store(ctx);
     Value *istype;
     if (jl_is_type_type(type) || !jl_is_leaf_type(type)) {
         Value *vx = boxed(x, ctx);
@@ -757,6 +758,7 @@ static Value *emit_unbox(Type *to, const jl_cgval_t &x, jl_value_t *jt);
 static jl_cgval_t typed_load(Value *ptr, Value *idx_0based, jl_value_t *jltype,
                              jl_codectx_t *ctx, MDNode *tbaa, size_t alignment = 0)
 {
+    flush_pending_store(ctx);
     bool isboxed;
     Type *elty = julia_type_to_llvm(jltype, &isboxed);
     assert(elty != NULL);
@@ -1269,7 +1271,7 @@ static Value *emit_array_nd_index(const jl_cgval_t &ainfo, jl_value_t *ex, size_
 
 // --- boxing ---
 
-static Value *emit_allocobj(size_t static_size);
+static Value *emit_allocobj(size_t static_size, jl_codectx_t *ctx);
 static Value *init_bits_value(Value *newv, Value *jt, Value *v)
 {
     builder.CreateStore(jt, emit_typeptr_addr(newv));
@@ -1434,7 +1436,8 @@ static Value *boxed(const jl_cgval_t &vinfo, jl_codectx_t *ctx, bool gcrooted)
         return literal_pointer_val(jb->instance);
     }
     else {
-        box = init_bits_value(emit_allocobj(jl_datatype_size(jt)), literal_pointer_val(jt), v);
+        box = init_bits_value(emit_allocobj(jl_datatype_size(jt), ctx),
+                              literal_pointer_val(jt), v);
     }
 
     if (gcrooted) {
@@ -1469,8 +1472,9 @@ static void emit_cpointercheck(const jl_cgval_t &x, const std::string &msg, jl_c
 }
 
 // allocation for known size object
-static Value *emit_allocobj(size_t static_size)
+static Value *emit_allocobj(size_t static_size, jl_codectx_t *ctx)
 {
+    flush_pending_store_final(ctx);
     if (static_size == sizeof(void*)*1)
         return builder.CreateCall(prepare_call(jlalloc1w_func)
 #ifdef LLVM37
@@ -1618,7 +1622,7 @@ static jl_cgval_t emit_new_struct(jl_value_t *ty, size_t nargs, jl_value_t **arg
             f1 = boxed(fval_info, ctx);
             j++;
         }
-        Value *strct = emit_allocobj(sty->size);
+        Value *strct = emit_allocobj(sty->size, ctx);
         jl_cgval_t strctinfo = mark_julia_type(strct, true, ty, ctx);
         builder.CreateStore(literal_pointer_val((jl_value_t*)ty),
                             emit_typeptr_addr(strct));

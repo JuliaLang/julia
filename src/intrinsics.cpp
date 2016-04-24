@@ -512,7 +512,7 @@ static jl_cgval_t generic_unbox(jl_value_t *targ, jl_value_t *x, jl_codectx_t *c
         Value *runtime_bt = boxed(bt_value, ctx);
         // XXX: emit type validity check on runtime_bt (bitstype of size nb)
 
-        Value *newobj = emit_allocobj(nb);
+        Value *newobj = emit_allocobj(nb, ctx);
         builder.CreateStore(runtime_bt, emit_typeptr_addr(newobj));
         if (!v.ispointer) {
             builder.CreateAlignedStore(emit_unbox(llvmt, v, v.typ), builder.CreatePointerCast(newobj, llvmt->getPointerTo()), alignment);
@@ -734,7 +734,6 @@ static jl_cgval_t emit_pointerref(jl_value_t *e, jl_value_t *i, jl_codectx_t *ct
     Value *thePtr = auto_unbox(e,ctx);
     Value *idx = emit_unbox(T_size, emit_expr(i, ctx), (jl_value_t*)jl_long_type);
     Value *im1 = builder.CreateSub(idx, ConstantInt::get(T_size, 1));
-    flush_pending_store(ctx);
     if (!jl_isbits(ety)) {
         if (ety == (jl_value_t*)jl_any_type)
             return mark_julia_type(
@@ -749,7 +748,7 @@ static jl_cgval_t emit_pointerref(jl_value_t *e, jl_value_t *i, jl_codectx_t *ct
         }
         assert(jl_is_datatype(ety));
         uint64_t size = jl_datatype_size(ety);
-        Value *strct = emit_allocobj(size);
+        Value *strct = emit_allocobj(size, ctx);
         builder.CreateStore(literal_pointer_val((jl_value_t*)ety),
                             emit_typeptr_addr(strct));
         im1 = builder.CreateMul(im1, ConstantInt::get(T_size,
@@ -794,7 +793,6 @@ static jl_cgval_t emit_pointerset(jl_value_t *e, jl_value_t *x, jl_value_t *i, j
     if (!jl_subtype(xty, ety, 0)) {
         emitted = true;
         val = emit_expr(x, ctx);
-        flush_pending_store(ctx);
         emit_typecheck(val, ety, "pointerset: type mismatch in assign", ctx);
     }
     if (expr_type(i, ctx) != (jl_value_t*)jl_long_type)
@@ -817,7 +815,6 @@ static jl_cgval_t emit_pointerset(jl_value_t *e, jl_value_t *x, jl_value_t *i, j
                     LLT_ALIGN(size, ((jl_datatype_t*)ety)->alignment)));
         prepare_call(builder.CreateMemCpy(builder.CreateGEP(builder.CreateBitCast(thePtr, T_pint8), im1),
                              data_pointer(val, ctx, T_pint8), size, 1)->getCalledValue());
-        flush_pending_store(ctx);
     }
     else {
         if (!emitted)

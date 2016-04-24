@@ -871,7 +871,7 @@ static jl_cgval_t mark_or_box_ccall_result(Value *result, bool isboxed, jl_value
         Value *runtime_bt = boxed(emit_expr(rt_expr, ctx), ctx);
         int nb = sizeof(void*);
         return mark_julia_type(
-                init_bits_value(emit_allocobj(nb), runtime_bt, result),
+                init_bits_value(emit_allocobj(nb, ctx), runtime_bt, result),
                 true,
                 (jl_value_t*)jl_pointer_type, ctx);
     }

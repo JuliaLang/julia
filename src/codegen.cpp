@@ -3865,7 +3865,7 @@ static Function *gen_cfun_wrapper(jl_lambda_info_t *lam, jl_function_t *ff, jl_v
             bool issigned = jl_signed_type && jl_subtype(jargty, (jl_value_t*)jl_signed_type, 0);
             val = llvm_type_rewrite(val, val->getType(), fargt[i], true, byRefList[i], issigned, &ctx);
             if (isboxed) {
-                Value *mem = emit_allocobj(jl_datatype_size(jargty));
+                Value *mem = emit_allocobj(jl_datatype_size(jargty), &ctx);
                 builder.CreateStore(literal_pointer_val((jl_value_t*)jargty),
                                     emit_typeptr_addr(mem));
                 builder.CreateAlignedStore(val,
