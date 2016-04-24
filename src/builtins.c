@@ -217,6 +217,8 @@ JL_DLLEXPORT void jl_pop_handler(int n)
 
 // primitives -----------------------------------------------------------------
 
+// WARNING: there might be pending GC root when calling this function
+// This function must NOT allocate
 static int bits_equal(void *a, void *b, int sz)
 {
     switch (sz) {
@@ -248,6 +250,8 @@ static int bits_equal(void *a, void *b, int sz)
 // The solution is to keep the code in jl_egal simple and split out the
 // (more) complex cases into their own functions which are marked with
 // NOINLINE.
+// WARNING: there might be pending GC root when calling this function
+// This function must NOT allocate
 static int NOINLINE compare_svec(jl_svec_t *a, jl_svec_t *b)
 {
     size_t l = jl_svec_len(a);
@@ -261,6 +265,8 @@ static int NOINLINE compare_svec(jl_svec_t *a, jl_svec_t *b)
 }
 
 // See comment above for an explanation of NOINLINE.
+// WARNING: there might be pending GC root when calling this function
+// This function must NOT allocate
 static int NOINLINE compare_fields(jl_value_t *a, jl_value_t *b, jl_datatype_t *dt)
 {
     size_t nf = jl_datatype_nfields(dt);
@@ -291,6 +297,8 @@ static int NOINLINE compare_fields(jl_value_t *a, jl_value_t *b, jl_datatype_t *
     return 1;
 }
 
+// WARNING: there might be pending GC root when calling this function
+// This function must NOT allocate
 JL_DLLEXPORT int jl_egal(jl_value_t *a, jl_value_t *b)
 {
     // warning: a,b may NOT have been gc-rooted by the caller

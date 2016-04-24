@@ -103,6 +103,8 @@ void *allocb(size_t sz);
 void gc_queue_binding(jl_binding_t *bnd);
 void gc_setmark_buf(void *buf, int);
 
+// WARNING: there might be pending GC root when calling this function
+// This function must NOT allocate. This is NOT a gc safepoint
 STATIC_INLINE void jl_gc_wb_binding(jl_binding_t *bnd, void *val) // val isa jl_value_t*
 {
     if (__unlikely((jl_astaggedvalue(bnd)->gc_bits & 1) == 1 &&
