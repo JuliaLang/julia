@@ -185,7 +185,7 @@ void collapseRedundantRoots()
             // such that the first store can be trivially replaced with just "other" and delete the chain
             // or if is used for store, but the value is never needed
             StoreInst *theStore = NULL;
-            unsigned n_stores = 0;
+            int n_stores = 0;
             bool variable_slot = true; // whether this gc-root is only used as a variable-slot; e.g. whether theLoad is theValue
             LoadInst *theLoad = NULL;
             for (User::use_iterator use = callInst->use_begin(), usee = callInst->use_end(); use != usee; ) {
@@ -214,7 +214,7 @@ void collapseRedundantRoots()
                     else {
                         if (theLoad) {
                             // multiple live loads, this is hard to optimize, so skip it
-                            n_stores = 0;
+                            n_stores = -1;
                             break;
                         }
                         theLoad = loadInst;
@@ -222,12 +222,12 @@ void collapseRedundantRoots()
                 }
                 else {
                     // what is this? oh, well. skip trying to optimize this gc-root
-                    n_stores = 0;
+                    n_stores = -1;
                     break;
                 }
             }
 
-            if (n_stores == 0)
+            if (n_stores == -1)
                 continue;
 
             if (theLoad == NULL) {
