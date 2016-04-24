@@ -1007,6 +1007,7 @@ static bool emit_getfield_unknownidx(jl_cgval_t *ret, const jl_cgval_t &strct, V
 
 static jl_cgval_t emit_getfield_knownidx(const jl_cgval_t &strct, unsigned idx, jl_datatype_t *jt, jl_codectx_t *ctx)
 {
+    flush_pending_store(ctx);
     jl_value_t *jfty = jl_field_type(jt,idx);
     Type *elty = julia_type_to_llvm(jfty);
     assert(elty != NULL);

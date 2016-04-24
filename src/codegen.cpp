@@ -710,8 +710,8 @@ static inline jl_cgval_t mark_julia_slot(Value *v, jl_value_t *typ)
 
 static inline jl_cgval_t mark_julia_type(Value *v, bool isboxed, jl_value_t *typ, jl_codectx_t *ctx, bool needsroot = true)
 {
-    flush_pending_store(ctx);
     Type *T = julia_type_to_llvm(typ);
+    flush_pending_store(ctx);
     if (type_is_ghost(T)) {
         return ghostValue(typ);
     }
@@ -2017,7 +2017,6 @@ static void jl_add_linfo_root(jl_lambda_info_t *li, jl_value_t *val)
 
 static jl_cgval_t emit_getfield(jl_value_t *expr, jl_sym_t *name, jl_codectx_t *ctx)
 {
-    flush_pending_store(ctx);
     if (jl_is_quotenode(expr) && jl_is_module(jl_fieldref(expr,0)))
         expr = jl_fieldref(expr,0);
 
@@ -2028,7 +2027,6 @@ static jl_cgval_t emit_getfield(jl_value_t *expr, jl_sym_t *name, jl_codectx_t *
     if (jl_is_module(expr)) {
         jl_binding_t *bnd = NULL;
         Value *bp = global_binding_pointer((jl_module_t*)expr, name, &bnd, false, ctx);
-        flush_pending_store(ctx);
         // TODO: refactor. this partially duplicates code in emit_var
         if (bnd && bnd->value != NULL) {
             if (bnd->constp) {
@@ -2049,7 +2047,6 @@ static jl_cgval_t emit_getfield(jl_value_t *expr, jl_sym_t *name, jl_codectx_t *
         unsigned idx = jl_field_index(sty, name, 0);
         if (idx != (unsigned)-1) {
             jl_cgval_t strct = emit_expr(expr, ctx);
-            flush_pending_store(ctx);
             jl_cgval_t fld = emit_getfield_knownidx(strct, idx, sty, ctx);
             JL_GC_POP();
             return fld;
@@ -2061,7 +2058,6 @@ static jl_cgval_t emit_getfield(jl_value_t *expr, jl_sym_t *name, jl_codectx_t *
 
     // TODO: generic getfield func with more efficient calling convention
     jl_cgval_t arg1 = emit_expr(expr, ctx);
-    flush_pending_store(ctx);
     jl_cgval_t arg2 = mark_julia_const((jl_value_t*)name);
     const jl_cgval_t* myargs_array[2] = {&arg1, &arg2};
     Value *myargs = make_jlcall(makeArrayRef(myargs_array), ctx);
