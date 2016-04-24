@@ -696,6 +696,7 @@ static bool is_bounds_check_block(jl_codectx_t *ctx)
 #define CHECK_BOUNDS 1
 static Value *emit_bounds_check(const jl_cgval_t &ainfo, jl_value_t *ty, Value *i, Value *len, jl_codectx_t *ctx)
 {
+    flush_pending_store(ctx);
     Value *im1 = builder.CreateSub(i, ConstantInt::get(T_size, 1));
 #if CHECK_BOUNDS==1
     if ((!is_inbounds(ctx) &&
