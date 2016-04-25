@@ -48,7 +48,7 @@ function prefetch(pkg::AbstractString, url::AbstractString, sha1s::Vector)
             elseif isa(err, InterruptException)
                 "Package `$pkg` prefetching was interrupted."
             else
-                "Uknown error: $err"
+                "Unknown error: $err"
             end
             isdir(cache) && rm(cache, recursive=true)
             throw(PkgError(errmsg))
