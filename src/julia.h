@@ -181,11 +181,8 @@ typedef jl_value_t *(*jl_fptr_t)(jl_value_t*, jl_value_t**, uint32_t);
 typedef jl_value_t *(*jl_fptr_sparam_t)(jl_svec_t*, jl_value_t*, jl_value_t**, uint32_t);
 
 typedef struct _jl_llvm_functions_t {
-    void *functionObject;       // jlcall llvm Function
-    void *cFunctionList;        // c callable llvm Functions
-
-    // specialized llvm Function (common core for the other two)
-    void *specFunctionObject;
+    void *functionObject;     // jlcall llvm Function
+    void *specFunctionObject; // specialized llvm Function
 } jl_llvm_functions_t;
 
 // This type describes a single method definition, and stores data

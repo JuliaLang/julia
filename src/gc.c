@@ -1991,9 +1991,12 @@ static void pre_mark(void)
     }
 
     // invisible builtin values
-    if (jl_an_empty_cell) gc_push_root(jl_an_empty_cell, 0);
+    if (jl_an_empty_cell != NULL)
+        gc_push_root(jl_an_empty_cell, 0);
     if (jl_module_init_order != NULL)
         gc_push_root(jl_module_init_order, 0);
+    if (jl_cfunction_list.unknown != NULL)
+        gc_push_root(jl_cfunction_list.unknown, 0);
 
     // objects currently being finalized
     for(i=0; i < to_finalize.len; i++) {
