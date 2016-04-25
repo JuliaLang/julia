@@ -24,6 +24,76 @@
 extern "C" {
 #endif
 
+/// ----- Handling for Julia callbacks ----- ///
+
+int in_pure_callback;
+
+JL_DLLEXPORT int8_t jl_is_in_pure_context(void)
+{
+    return in_pure_callback;
+}
+
+JL_DLLEXPORT void jl_trace_method(jl_method_t *m)
+{
+    assert(jl_is_method(m));
+    m->traced = 1;
+}
+
+JL_DLLEXPORT void jl_untrace_method(jl_method_t *m)
+{
+    assert(jl_is_method(m));
+    m->traced = 0;
+}
+
+JL_DLLEXPORT void jl_trace_linfo(jl_lambda_info_t *linfo)
+{
+    assert(jl_is_lambda_info(linfo));
+    linfo->compile_traced = 1;
+}
+
+JL_DLLEXPORT void jl_untrace_linfo(jl_lambda_info_t *linfo)
+{
+    assert(jl_is_lambda_info(linfo));
+    linfo->compile_traced = 0;
+}
+
+static tracer_cb jl_method_tracer = NULL;
+JL_DLLEXPORT void jl_register_method_tracer(void (*callback)(jl_lambda_info_t *tracee))
+{
+    jl_method_tracer = (tracer_cb)callback;
+}
+
+static tracer_cb jl_newmeth_tracer = NULL;
+JL_DLLEXPORT void jl_register_newmeth_tracer(void (*callback)(jl_method_t *tracee))
+{
+    jl_newmeth_tracer = (tracer_cb)callback;
+}
+
+tracer_cb jl_linfo_tracer = NULL;
+JL_DLLEXPORT void jl_register_linfo_tracer(void (*callback)(jl_lambda_info_t *tracee))
+{
+    jl_linfo_tracer = (tracer_cb)callback;
+}
+
+void jl_call_tracer(tracer_cb callback, jl_value_t *tracee)
+{
+    int last_in = in_pure_callback;
+    JL_TRY {
+        in_pure_callback = 1;
+        callback(tracee);
+        in_pure_callback = last_in;
+    }
+    JL_CATCH {
+        in_pure_callback = last_in;
+        jl_printf(JL_STDERR, "WARNING: tracer callback function threw an error:\n");
+        jl_static_show(JL_STDERR, jl_exception_in_transit);
+        jl_printf(JL_STDERR, "\n");
+        jlbacktrace();
+    }
+}
+
+/// ----- Definitions for various internal TypeMaps ----- ///
+
 const struct jl_typemap_info method_defs = {
     0, &jl_method_type
 };
@@ -286,8 +356,6 @@ static jl_tupletype_t *join_tsig(jl_tupletype_t *tt, jl_tupletype_t *sig)
 
 static jl_value_t *ml_matches(union jl_typemap_t ml, int offs,
                               jl_tupletype_t *type, int lim);
-
-extern void (*jl_method_tracer)(jl_lambda_info_t *tracee);
 
 static jl_lambda_info_t *cache_method(jl_methtable_t *mt, union jl_typemap_t *cache, jl_value_t *parent,
                                       jl_tupletype_t *type, jl_tupletype_t *origtype,
@@ -589,7 +657,7 @@ static jl_lambda_info_t *cache_method(jl_methtable_t *mt, union jl_typemap_t *ca
     JL_GC_POP();
     JL_UNLOCK(&codegen_lock);
     if (definition->traced && jl_method_tracer)
-        jl_method_tracer(newmeth);
+        jl_call_tracer(jl_method_tracer, (jl_value_t*)newmeth);
     return newmeth;
 }
 
@@ -786,7 +854,6 @@ static void update_max_args(jl_methtable_t *mt, jl_tupletype_t *type)
         mt->max_args = na;
 }
 
-extern void (*jl_newmeth_tracer)(jl_method_t *tracee);
 void jl_method_table_insert(jl_methtable_t *mt, jl_tupletype_t *type, jl_tupletype_t *simpletype,
                             jl_method_t *method, jl_svec_t *tvars)
 {
@@ -806,7 +873,7 @@ void jl_method_table_insert(jl_methtable_t *mt, jl_tupletype_t *type, jl_tuplety
     invalidate_conflicting(&mt->cache, (jl_value_t*)type, (jl_value_t*)mt);
     update_max_args(mt, type);
     if (jl_newmeth_tracer)
-        jl_newmeth_tracer(method);
+        jl_call_tracer(jl_newmeth_tracer, (jl_value_t*)method);
     JL_SIGATOMIC_END();
 }
 

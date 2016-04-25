@@ -383,6 +383,8 @@ JL_DLLEXPORT jl_value_t *jl_switchto(jl_task_t *t, jl_value_t *arg)
     }
     if (jl_in_finalizer)
         jl_error("task switch not allowed from inside gc finalizer");
+    if (in_pure_callback)
+        jl_error("task switch not allowed from inside staged function");
     int8_t gc_state = jl_gc_unsafe_enter();
     jl_task_arg_in_transit = arg;
     ctx_switch(t, &t->ctx);
