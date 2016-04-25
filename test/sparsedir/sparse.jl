@@ -1367,3 +1367,16 @@ end
 @inferred sprand(1, 1, 1.0)
 @inferred sprand(1, 1, 1.0, rand, Float64)
 @inferred sprand(1, 1, 1.0, x->round(Int,rand(x)*100))
+
+# dense sparse concatenation -> sparse return type
+@test issparse([sprand(10,10,.1) rand(10,10)])
+@test issparse([sprand(10,10,.1); rand(10,10)])
+@test issparse([sprand(10,10,.1) rand(10,10); rand(10,10) rand(10,10)])
+#---
+# Matrix vector cat not supported for sparse #13130
+#@test issparse([sprand(10,10,.1) rand(10)])
+#@test issparse([sprand(10,10,.1) sprand(10,.1)])
+# ---
+@test !issparse([rand(10,10)  rand(10,10)])
+@test !issparse([rand(10,10); rand(10,10)])
+@test !issparse([rand(10,10)  rand(10,10); rand(10,10) rand(10,10)])

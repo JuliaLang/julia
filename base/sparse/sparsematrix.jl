@@ -275,7 +275,7 @@ function convert{Tv,Ti}(::Type{SparseMatrixCSC{Tv,Ti}}, M::AbstractMatrix)
 end
 convert{T}(::Type{AbstractMatrix{T}}, A::SparseMatrixCSC) = convert(SparseMatrixCSC{T}, A)
 convert(::Type{Matrix}, S::SparseMatrixCSC) = full(S)
-
+convert(::Type{SparseMatrixCSC}, M::Matrix) = sparse(M)
 
 """
     full(S)
@@ -2896,7 +2896,20 @@ function hcat(X::SparseMatrixCSC...)
     SparseMatrixCSC(m, n, colptr, rowval, nzval)
 end
 
-function hvcat(rows::Tuple{Vararg{Int}}, X::SparseMatrixCSC...)
+
+# Sparse/dense concatenation
+
+function hcat(Xin::Union{Matrix, SparseMatrixCSC}...)
+    X = SparseMatrixCSC[issparse(x) ? x : sparse(x) for x in Xin]
+    hcat(X...)
+end
+
+function vcat(Xin::Union{Matrix, SparseMatrixCSC}...)
+    X = SparseMatrixCSC[issparse(x) ? x : sparse(x) for x in Xin]
+    vcat(X...)
+end
+
+function hvcat(rows::Tuple{Vararg{Int}}, X::Union{Matrix, SparseMatrixCSC}...)
     nbr = length(rows)  # number of block rows
 
     tmp_rows = Array(SparseMatrixCSC, nbr)
