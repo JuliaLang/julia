@@ -25,6 +25,7 @@ end
 getindex(x::Number, I::Real...) = getindex(x, to_indexes(I...)...)
 first(x::Number) = x
 last(x::Number) = x
+copy(x::Number) = x  # some code treats numbers as collection-like
 
 divrem(x,y) = (div(x,y),rem(x,y))
 fldmod(x,y) = (fld(x,y),mod(x,y))
