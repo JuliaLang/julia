@@ -721,6 +721,7 @@ static jl_lambda_info_t *expr_to_lambda(jl_expr_t *f)
     return li;
 }
 
+extern tracer_cb jl_newmeth_tracer;
 JL_DLLEXPORT void jl_method_def(jl_svec_t *argdata, jl_lambda_info_t *f, jl_value_t *isstaged)
 {
     // argdata is svec({types...}, svec(typevars...))
@@ -786,6 +787,8 @@ JL_DLLEXPORT void jl_method_def(jl_svec_t *argdata, jl_lambda_info_t *f, jl_valu
     }
 
     jl_method_table_insert(mt, argtypes, NULL, m, tvars);
+    if (jl_newmeth_tracer)
+        jl_call_tracer(jl_newmeth_tracer, (jl_value_t*)m);
 
     if (jl_boot_file_loaded && f->code && jl_typeis(f->code, jl_array_any_type)) {
         f->code = jl_compress_ast(f, f->code);
