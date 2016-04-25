@@ -1579,6 +1579,8 @@ static void reset_remset(void)
     }
 }
 
+// WARNING, there might be pending GC root when calling this function
+// This is **NOT** a gc safepoint!
 JL_DLLEXPORT void jl_gc_queue_root(jl_value_t *ptr)
 {
     FOR_CURRENT_HEAP () {
@@ -1599,6 +1601,8 @@ JL_DLLEXPORT void jl_gc_queue_root(jl_value_t *ptr)
     }
 }
 
+// WARNING: there might be pending GC root when calling this function
+// This function must NOT allocate. This is NOT a gc safepoint
 void gc_queue_binding(jl_binding_t *bnd)
 {
     FOR_CURRENT_HEAP () {

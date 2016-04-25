@@ -391,6 +391,7 @@ static jl_cgval_t generic_box(jl_value_t *targ, jl_value_t *x, jl_codectx_t *ctx
         Value *arg1 = boxed(bt_value, ctx);
         Value *arg2 = boxed(v, ctx);
         Value *func = prepare_call(runtime_func[reinterpret]);
+        flush_pending_store_final(ctx);
 #ifdef LLVM37
         Value *r = builder.CreateCall(func, {arg1, arg2});
 #else
@@ -504,14 +505,14 @@ static jl_cgval_t generic_unbox(jl_value_t *targ, jl_value_t *x, jl_codectx_t *c
         Value *runtime_bt = boxed(bt_value, ctx);
         // XXX: emit type validity check on runtime_bt (bitstype of size nb)
 
-        Value *newobj = emit_allocobj(nb);
+        Value *newobj = emit_allocobj(nb, ctx);
         builder.CreateStore(runtime_bt, emit_typeptr_addr(newobj));
         if (!v.ispointer) {
             builder.CreateAlignedStore(emit_unbox(llvmt, v, v.typ), builder.CreatePointerCast(newobj, llvmt->getPointerTo()), alignment);
         }
         else {
             prepare_call(builder.CreateMemCpy(newobj, data_pointer(v, ctx, T_pint8), nb, alignment)->getCalledValue());
-            mark_gc_use(v);
+            mark_gc_use(ctx, v);
         }
         return mark_julia_type(newobj, true, bt ? bt : (jl_value_t*)jl_any_type, ctx);
     }
@@ -683,10 +684,12 @@ static jl_cgval_t emit_runtime_pointerref(jl_value_t *e, jl_value_t *i, jl_codec
 {
     jl_cgval_t parg = emit_expr(e, ctx);
     Value *iarg = boxed(emit_expr(i, ctx), ctx);
+    Value *_parg = boxed(parg, ctx);
+    flush_pending_store_final(ctx);
 #ifdef LLVM37
-    Value *ret = builder.CreateCall(prepare_call(jlpref_func), { boxed(parg, ctx), iarg });
+    Value *ret = builder.CreateCall(prepare_call(jlpref_func), { _parg, iarg });
 #else
-    Value *ret = builder.CreateCall2(prepare_call(jlpref_func), boxed(parg, ctx), iarg);
+    Value *ret = builder.CreateCall2(prepare_call(jlpref_func), _parg, iarg);
 #endif
     jl_value_t *ety;
     if (jl_is_cpointer_type(parg.typ)) {
@@ -728,7 +731,7 @@ static jl_cgval_t emit_pointerref(jl_value_t *e, jl_value_t *i, jl_codectx_t *ct
         }
         assert(jl_is_datatype(ety));
         uint64_t size = jl_datatype_size(ety);
-        Value *strct = emit_allocobj(size);
+        Value *strct = emit_allocobj(size, ctx);
         builder.CreateStore(literal_pointer_val((jl_value_t*)ety),
                             emit_typeptr_addr(strct));
         im1 = builder.CreateMul(im1, ConstantInt::get(T_size,
@@ -747,6 +750,7 @@ static jl_cgval_t emit_runtime_pointerset(jl_value_t *e, jl_value_t *x, jl_value
     jl_cgval_t parg = emit_expr(e, ctx);
     Value *iarg = boxed(emit_expr(i, ctx), ctx);
     Value *xarg = boxed(emit_expr(x, ctx), ctx);
+    // does not allocate
 #ifdef LLVM37
     builder.CreateCall(prepare_call(jlpset_func), { boxed(parg, ctx), xarg, iarg });
 #else
@@ -796,9 +800,8 @@ static jl_cgval_t emit_pointerset(jl_value_t *e, jl_value_t *x, jl_value_t *i, j
                              data_pointer(val, ctx, T_pint8), size, 1)->getCalledValue());
     }
     else {
-        if (!emitted) {
+        if (!emitted)
             val = emit_expr(x, ctx);
-        }
         // TODO: alignment?
         typed_store(thePtr, im1, val, ety, ctx, tbaa_user, NULL, 1);
     }
@@ -885,6 +888,7 @@ static jl_cgval_t emit_intrinsic(intrinsic f, jl_value_t **args, size_t nargs,
         Value *func = prepare_call(runtime_func[f]);
         if (nargs == 1) {
             Value *x = boxed(emit_expr(args[1], ctx), ctx);
+            flush_pending_store_final(ctx);
 #ifdef LLVM37
             r = builder.CreateCall(func, {x});
 #else
@@ -894,6 +898,7 @@ static jl_cgval_t emit_intrinsic(intrinsic f, jl_value_t **args, size_t nargs,
         else if (nargs == 2) {
             Value *x = boxed(emit_expr(args[1], ctx), ctx);
             Value *y = boxed(emit_expr(args[2], ctx), ctx);
+            flush_pending_store_final(ctx);
 #ifdef LLVM37
             r = builder.CreateCall(func, {x, y});
 #else
@@ -904,6 +909,7 @@ static jl_cgval_t emit_intrinsic(intrinsic f, jl_value_t **args, size_t nargs,
             Value *x = boxed(emit_expr(args[1], ctx), ctx);
             Value *y = boxed(emit_expr(args[2], ctx), ctx);
             Value *z = boxed(emit_expr(args[3], ctx), ctx);
+            flush_pending_store_final(ctx);
 #ifdef LLVM37
             r = builder.CreateCall(func, {x, y, z});
 #else
@@ -1050,8 +1056,8 @@ static jl_cgval_t emit_intrinsic(intrinsic f, jl_value_t **args, size_t nargs,
                     boxed(x, ctx));
         }
         jl_value_t *jt = (t1 == t2 ? t1 : (jl_value_t*)jl_any_type);
-        mark_gc_use(x);
-        mark_gc_use(y);
+        mark_gc_use(ctx, x);
+        mark_gc_use(ctx, y);
         return mark_julia_type(ifelse_result, isboxed, jt, ctx);
     }
 
@@ -1093,7 +1099,7 @@ static jl_cgval_t emit_intrinsic(intrinsic f, jl_value_t **args, size_t nargs,
 }
 
 static Value *emit_untyped_intrinsic(intrinsic f, Value *x, Value *y, Value *z, size_t nargs,
-                                       jl_codectx_t *ctx, jl_datatype_t **newtyp)
+                                     jl_codectx_t *ctx, jl_datatype_t **newtyp)
 {
     Type *t = x->getType();
     Value *fy;

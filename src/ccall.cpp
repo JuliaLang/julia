@@ -246,8 +246,9 @@ static Value *julia_to_native(Type *to, bool toboxed, jl_value_t *jlto, const jl
         }
     }
 
-    if (!addressOf && !byRef)
+    if (!addressOf && !byRef) {
         return emit_unbox(to, jvinfo, ety);
+    }
 
     if (addressOf && jvinfo.isboxed) {
         if (!jl_is_abstracttype(ety)) {
@@ -290,9 +291,9 @@ static Value *julia_to_native(Type *to, bool toboxed, jl_value_t *jlto, const jl
                             ConstantInt::get(T_size, offsetof(jl_datatype_t,mutabl))),
                         false)),
                 T_int1);
+        Value *p1 = data_pointer(jvinfo, ctx, to);
         builder.CreateCondBr(ismutable, mutableBB, immutableBB);
         builder.SetInsertPoint(mutableBB);
-        Value *p1 = data_pointer(jvinfo, ctx, to);
         builder.CreateBr(afterBB);
         builder.SetInsertPoint(immutableBB);
         Value *nbytes = tbaa_decorate(tbaa_datatype, builder.CreateLoad(
@@ -301,7 +302,8 @@ static Value *julia_to_native(Type *to, bool toboxed, jl_value_t *jlto, const jl
                     false));
         AllocaInst *ai = builder.CreateAlloca(T_int8, nbytes);
         ai->setAlignment(16);
-        prepare_call(builder.CreateMemCpy(ai, data_pointer(jvinfo, ctx, T_pint8), nbytes, sizeof(void*))->getCalledValue()); // minimum gc-alignment in julia is pointer size
+        prepare_call(builder.CreateMemCpy(ai, builder.CreateBitCast(p1, T_pint8),
+                                          nbytes, sizeof(void*))->getCalledValue()); // minimum gc-alignment in julia is pointer size
         Value *p2 = builder.CreateBitCast(ai, to);
         builder.CreateBr(afterBB);
         builder.SetInsertPoint(afterBB);
@@ -323,7 +325,7 @@ static Value *julia_to_native(Type *to, bool toboxed, jl_value_t *jlto, const jl
         prepare_call(builder.CreateMemCpy(slot, data_pointer(jvinfo, ctx, slot->getType()),
                     (uint64_t)jl_datatype_size(ety),
                     (uint64_t)((jl_datatype_t*)ety)->alignment)->getCalledValue());
-        mark_gc_use(jvinfo);
+        mark_gc_use(ctx, jvinfo);
     }
     return slot;
 }
@@ -828,6 +830,7 @@ static jl_cgval_t emit_llvmcall(jl_value_t **args, size_t nargs, jl_codectx_t *c
     else
         f->setLinkage(GlobalValue::LinkOnceODRLinkage);
 
+    flush_pending_store_final(ctx);
     // the actual call
     CallInst *inst = builder.CreateCall(f, ArrayRef<Value*>(&argvals[0], nargt));
     if (isString)
@@ -836,7 +839,7 @@ static jl_cgval_t emit_llvmcall(jl_value_t **args, size_t nargs, jl_codectx_t *c
     // after the llvmcall mark fake uses of all of the arguments to ensure the were live
     for (size_t i = 0; i < nargt; ++i) {
         const jl_cgval_t &arg = argv[i];
-        mark_gc_use(arg);
+        mark_gc_use(ctx, arg);
     }
 
     JL_GC_POP();
@@ -858,7 +861,7 @@ static jl_cgval_t mark_or_box_ccall_result(Value *result, bool isboxed, jl_value
         Value *runtime_bt = boxed(emit_expr(rt_expr, ctx), ctx);
         int nb = sizeof(void*);
         return mark_julia_type(
-                init_bits_value(emit_allocobj(nb), runtime_bt, result),
+                init_bits_value(emit_allocobj(nb, ctx), runtime_bt, result),
                 true,
                 (jl_value_t*)jl_pointer_type, ctx);
     }
@@ -1425,7 +1428,6 @@ static jl_cgval_t emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
                 false, byRef, issigned, ctx);
     }
 
-
     // make LLVM function object for the target
     // keep this close to the function call, so that the compiler can
     // optimize the global pointer load in the common case
@@ -1491,6 +1493,7 @@ static jl_cgval_t emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
     //for (int i = 0; i < (nargs - 3) / 2 + sret; ++i)
     //    argvals[i]->dump();
 
+    flush_pending_store_final(ctx);
     // the actual call
     Value *ret = builder.CreateCall(prepare_call(llvmf),
                                     ArrayRef<Value*>(&argvals[0], (nargs - 3) / 2 + sret));
@@ -1513,13 +1516,13 @@ static jl_cgval_t emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
     for(i = 4; i < nargs + 1; i += 2) {
         // Current C function parameter
         size_t ai = (i - 4) / 2;
-        mark_gc_use(argv[ai]);
+        mark_gc_use(ctx, argv[ai]);
 
         // Julia (expression) value of current parameter gcroot
         jl_value_t *argi = args[i + 1];
         if (jl_is_long(argi)) continue;
         jl_cgval_t arg = emit_expr(argi, ctx);
-        mark_gc_use(arg);
+        mark_gc_use(ctx, arg);
     }
 
     JL_GC_POP();

@@ -532,6 +532,8 @@ void jl_binding_deprecation_warning(jl_binding_t *b)
     }
 }
 
+// WARNING: there might be pending GC root when calling this function
+// This function must NOT allocate
 JL_DLLEXPORT void jl_checked_assignment(jl_binding_t *b, jl_value_t *rhs)
 {
     if (b->constp && b->value != NULL) {

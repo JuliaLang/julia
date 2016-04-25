@@ -572,6 +572,7 @@ static void just_emit_error(const std::string &txt, jl_codectx_t *ctx)
 static void emit_error(const std::string &txt, jl_codectx_t *ctx)
 {
     just_emit_error(txt, ctx);
+    clear_pending_store(ctx);
     builder.CreateUnreachable();
     BasicBlock *cont = BasicBlock::Create(getGlobalContext(),"after_error",ctx->f);
     builder.SetInsertPoint(cont);
@@ -650,6 +651,7 @@ static void emit_typecheck(const jl_cgval_t &x, jl_value_t *type, const std::str
     Value *istype;
     if (jl_is_type_type(type) || !jl_is_leaf_type(type)) {
         Value *vx = boxed(x, ctx);
+        flush_pending_store_final(ctx);
         istype = builder.
             CreateICmpNE(
 #ifdef LLVM37
@@ -664,16 +666,21 @@ static void emit_typecheck(const jl_cgval_t &x, jl_value_t *type, const std::str
     else {
         istype = builder.CreateICmpEQ(emit_typeof_boxed(x,ctx), literal_pointer_val(type));
     }
+    std::map<std::pair<Value*, int>, Value*> pending_stores;
+    std::swap(pending_stores, ctx->pending_stores);
+    // The error branch doesn't need any roots
     BasicBlock *failBB = BasicBlock::Create(getGlobalContext(),"fail",ctx->f);
     BasicBlock *passBB = BasicBlock::Create(getGlobalContext(),"pass");
     builder.CreateCondBr(istype, passBB, failBB);
     builder.SetInsertPoint(failBB);
 
     emit_type_error(x, type, msg, ctx);
+    clear_pending_store(ctx);
     builder.CreateUnreachable();
 
     ctx->f->getBasicBlockList().push_back(passBB);
     builder.SetInsertPoint(passBB);
+    std::swap(pending_stores, ctx->pending_stores);
 }
 
 static bool is_inbounds(jl_codectx_t *ctx)
@@ -957,10 +964,12 @@ static bool emit_getfield_unknownidx(jl_cgval_t *ret, const jl_cgval_t &strct, V
         }
         else if (strct.isboxed) {
             idx = builder.CreateSub(idx, ConstantInt::get(T_size, 1));
+            Value *_strct = boxed(strct, ctx);
+            flush_pending_store_final(ctx);
 #ifdef LLVM37
-            Value *fld = builder.CreateCall(prepare_call(jlgetnthfieldchecked_func), { boxed(strct, ctx), idx });
+            Value *fld = builder.CreateCall(prepare_call(jlgetnthfieldchecked_func), { _strct, idx });
 #else
-            Value *fld = builder.CreateCall2(prepare_call(jlgetnthfieldchecked_func), boxed(strct, ctx), idx);
+            Value *fld = builder.CreateCall2(prepare_call(jlgetnthfieldchecked_func), _strct, idx);
 #endif
             *ret = mark_julia_type(fld, true, jl_any_type, ctx);
             return true;
@@ -1262,7 +1271,7 @@ static Value *emit_array_nd_index(const jl_cgval_t &ainfo, jl_value_t *ex, size_
 
 // --- boxing ---
 
-static Value *emit_allocobj(size_t static_size);
+static Value *emit_allocobj(size_t static_size, jl_codectx_t *ctx);
 static Value *init_bits_value(Value *newv, Value *jt, Value *v)
 {
     builder.CreateStore(jt, emit_typeptr_addr(newv));
@@ -1388,6 +1397,8 @@ static Value *boxed(const jl_cgval_t &vinfo, jl_codectx_t *ctx, bool gcrooted)
     jl_datatype_t *jb = (jl_datatype_t*)jt;
     assert(jl_is_datatype(jb));
     Value *box = NULL;
+    if (!(jb == jl_int8_type || jb == jl_uint8_type))
+        flush_pending_store_final(ctx);
     if (jb == jl_int8_type)
         box = call_with_signed(box_int8_func, v);
     else if (jb == jl_int16_type)
@@ -1426,14 +1437,15 @@ static Value *boxed(const jl_cgval_t &vinfo, jl_codectx_t *ctx, bool gcrooted)
         return literal_pointer_val(jb->instance);
     }
     else {
-        box = init_bits_value(emit_allocobj(jl_datatype_size(jt)), literal_pointer_val(jt), v);
+        box = init_bits_value(emit_allocobj(jl_datatype_size(jt), ctx),
+                              literal_pointer_val(jt), v);
     }
 
     if (gcrooted) {
         // make a gcroot for the new box
         // (unless the caller explicitly said this was unnecessary)
         Value *froot = emit_local_root(ctx);
-        builder.CreateStore(box, froot);
+        add_pending_store(ctx, box, froot);
     }
 
     return box;
@@ -1447,21 +1459,27 @@ static void emit_cpointercheck(const jl_cgval_t &x, const std::string &msg, jl_c
     Value *istype =
         builder.CreateICmpEQ(emit_nthptr(t, (ssize_t)(offsetof(jl_datatype_t,name)/sizeof(char*)), tbaa_datatype),
                              literal_pointer_val((jl_value_t*)jl_pointer_type->name));
+    std::map<std::pair<Value*, int>, Value*> pending_stores;
+    std::swap(pending_stores, ctx->pending_stores);
+    // The error branch doesn't need any roots
     BasicBlock *failBB = BasicBlock::Create(getGlobalContext(),"fail",ctx->f);
     BasicBlock *passBB = BasicBlock::Create(getGlobalContext(),"pass");
     builder.CreateCondBr(istype, passBB, failBB);
     builder.SetInsertPoint(failBB);
 
     emit_type_error(x, (jl_value_t*)jl_pointer_type, msg, ctx);
+    clear_pending_store(ctx);
     builder.CreateUnreachable();
 
     ctx->f->getBasicBlockList().push_back(passBB);
     builder.SetInsertPoint(passBB);
+    std::swap(pending_stores, ctx->pending_stores);
 }
 
 // allocation for known size object
-static Value *emit_allocobj(size_t static_size)
+static Value *emit_allocobj(size_t static_size, jl_codectx_t *ctx)
 {
+    flush_pending_store_final(ctx);
     if (static_size == sizeof(void*)*1)
         return builder.CreateCall(prepare_call(jlalloc1w_func)
 #ifdef LLVM37
@@ -1538,7 +1556,7 @@ static void emit_setfield(jl_datatype_t *sty, const jl_cgval_t &strct, size_t id
             Value *r = boxed(rhs, ctx, false); // don't need a temporary gcroot since it'll be rooted by strct (but should ensure strct is rooted via mark_gc_use)
             builder.CreateStore(r, builder.CreateBitCast(addr, T_ppjlvalue));
             if (wb && strct.isboxed) emit_checked_write_barrier(ctx, boxed(strct, ctx), r);
-            mark_gc_use(strct);
+            mark_gc_use(ctx, strct);
         }
         else {
             int align = jl_field_offset(sty, idx0);
@@ -1606,7 +1624,7 @@ static jl_cgval_t emit_new_struct(jl_value_t *ty, size_t nargs, jl_value_t **arg
             f1 = boxed(fval_info, ctx);
             j++;
         }
-        Value *strct = emit_allocobj(sty->size);
+        Value *strct = emit_allocobj(sty->size, ctx);
         jl_cgval_t strctinfo = mark_julia_type(strct, true, ty, ctx);
         builder.CreateStore(literal_pointer_val((jl_value_t*)ty),
                             emit_typeptr_addr(strct));

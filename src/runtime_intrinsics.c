@@ -50,6 +50,8 @@ JL_DLLEXPORT jl_value_t *jl_pointerref(jl_value_t *p, jl_value_t *i)
 }
 
 // run time version of pointerset intrinsic (warning: x is not gc-rooted)
+// WARNING: there may be pending GC roots when calling this function
+// DO NOT allocate anything in this function!
 JL_DLLEXPORT jl_value_t *jl_pointerset(jl_value_t *p, jl_value_t *x, jl_value_t *i)
 {
     JL_TYPECHK(pointerset, pointer, p);
