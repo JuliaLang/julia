@@ -27,16 +27,16 @@ end
 
 # same-file inline
 eval(Expr(:function, Expr(:call, :test_inline_1),
-                     Expr(:block, LineNumberNode(symbol("backtrace.jl"), 42),
-                     LineNumberNode(symbol("backtrace.jl"), 37),
+                     Expr(:block, LineNumberNode(Symbol("backtrace.jl"), 42),
+                     LineNumberNode(Symbol("backtrace.jl"), 37),
                      Expr(:call, :throw, "foo"))))
 
 # different-file inline
 const absfilepath = OS_NAME == :Windows ? "C:\\foo\\bar\\baz.jl" : "/foo/bar/baz.jl"
 eval(Expr(:function, Expr(:call, :test_inline_2),
-                     Expr(:block, LineNumberNode(symbol("backtrace.jl"), 99),
-                     LineNumberNode(symbol("foobar.jl"), 666),
-                     LineNumberNode(symbol(absfilepath), 111),
+                     Expr(:block, LineNumberNode(Symbol("backtrace.jl"), 99),
+                     LineNumberNode(Symbol("foobar.jl"), 666),
+                     LineNumberNode(Symbol(absfilepath), 111),
                      Expr(:call, :throw, "foo"))))
 
 try

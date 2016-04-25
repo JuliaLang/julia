@@ -83,13 +83,13 @@ returned by :func:`backtrace`:
     :eval
 
     julia> top_frame.file
-    symbol("./boot.jl")
+    Symbol("./boot.jl")
 
     julia> top_frame.line
     265
 
     julia> top_frame.inlined_file
-    symbol("")
+    Symbol("")
 
     julia> top_frame.inlined_line
     -1

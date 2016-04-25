@@ -243,7 +243,7 @@ for (fname, op) in [(:sum, :+), (:prod, :*),
                     (:maximum, :scalarmax), (:minimum, :scalarmin),
                     (:all, :&), (:any, :|)]
 
-    fname! = symbol(fname, '!')
+    fname! = Symbol(fname, '!')
     @eval begin
         $(fname!)(f::Function, r::AbstractArray, A::AbstractArray; init::Bool=true) =
             mapreducedim!(f, $(op), initarray!(r, $(op), init), A)
@@ -259,8 +259,8 @@ for (fname, fbase, fun) in [(:sumabs, :sum, :abs),
                             (:sumabs2, :sum, :abs2),
                             (:maxabs, :maximum, :abs),
                             (:minabs, :minimum, :abs)]
-    fname! = symbol(fname, '!')
-    fbase! = symbol(fbase, '!')
+    fname! = Symbol(fname, '!')
+    fbase! = Symbol(fbase, '!')
     @eval begin
         $(fname!)(r::AbstractArray, A::AbstractArray; init::Bool=true) =
             $(fbase!)($(fun), r, A; init=init)
