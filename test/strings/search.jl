@@ -373,3 +373,7 @@ end
 # string searchindex with a two-char UTF-8 (4 byte) string literal
 @test rsearchindex("\U1f596\U1f596", "\U1f596\U1f596") == 1
 @test rsearchindex("\U1f596\U1f596", "\U1f596\U1f596", endof("\U1f596\U1f596\U1f596")) == 1
+
+# using findfirst (#15723)
+@test findfirst("⨳(",'(') == 4
+@test findfirst("⨳(",'x') == 0
