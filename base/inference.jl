@@ -2333,7 +2333,7 @@ function inlineable(f::ANY, ft::ANY, e::Expr, atypes::Vector{Any}, sv::Inference
         if (is(f,apply_type) || is(f,fieldtype) || is(f,typeof) ||
             istopfunction(topmod, f, :typejoin) ||
             istopfunction(topmod, f, :promote_type))
-            if effect_free(argexprs[2], sv, true)
+            if length(argexprs) < 2 || effect_free(argexprs[2], sv, true)
                 return (e.typ.parameters[1],())
             else
                 return (e.typ.parameters[1], Any[argexprs[2]])
