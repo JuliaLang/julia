@@ -116,3 +116,14 @@ rt = Base.return_types(broadcast, Tuple{Function, Array{Float64, 3}, Array{Int, 
 @test length(rt) == 1 && rt[1] == Array{Float64, 3}
 rt = Base.return_types(broadcast!, Tuple{Function, Array{Float64, 3}, Array{Float64, 3}, Array{Int, 1}})
 @test length(rt) == 1 && rt[1] == Array{Float64, 3}
+
+# issue 14725
+let a = Number[2, 2.0, 4//2, 2+0im] / 2
+    @test eltype(a) == Number
+end
+let a = Real[2, 2.0, 4//2] / 2
+    @test eltype(a) == Real
+end
+let a = Real[2, 2.0, 4//2] / 2.0
+    @test eltype(a) == Real
+end
