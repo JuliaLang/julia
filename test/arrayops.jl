@@ -1283,21 +1283,21 @@ let x = fill(0.9, 1000)
 end
 
 #binary ops on bool arrays
-A = bitunpack(trues(5))
+A = Array(trues(5))
 @test A + true == [2,2,2,2,2]
-A = bitunpack(trues(5))
+A = Array(trues(5))
 @test A + false == [1,1,1,1,1]
-A = bitunpack(trues(5))
+A = Array(trues(5))
 @test true + A == [2,2,2,2,2]
-A = bitunpack(trues(5))
+A = Array(trues(5))
 @test false + A == [1,1,1,1,1]
-A = bitunpack(trues(5))
+A = Array(trues(5))
 @test A - true == [0,0,0,0,0]
-A = bitunpack(trues(5))
+A = Array(trues(5))
 @test A - false == [1,1,1,1,1]
-A = bitunpack(trues(5))
+A = Array(trues(5))
 @test true - A == [0,0,0,0,0]
-A = bitunpack(trues(5))
+A = Array(trues(5))
 @test false - A == [-1,-1,-1,-1,-1]
 
 # simple transposes

@@ -4375,13 +4375,6 @@ Pick a random element or array of random elements from the set of values specifi
 rand
 
 """
-    bitpack(A::AbstractArray{T,N}) -> BitArray
-
-Converts a numeric array to a packed boolean array.
-"""
-bitpack
-
-"""
     base(base, n, [pad])
 
 Convert an integer to a string in the given base, optionally specifying a number of digits
@@ -8183,13 +8176,6 @@ character whose category code begins with 'P'. For strings, tests whether this i
 all elements of the string.
 """
 ispunct
-
-"""
-    bitunpack(B::BitArray{N}) -> Array{Bool,N}
-
-Converts a packed boolean array to an array of booleans.
-"""
-bitunpack
 
 """
     size(A, [dim...])

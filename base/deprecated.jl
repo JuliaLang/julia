@@ -1070,6 +1070,8 @@ end
 @deprecate specialized_bitwise_unary(f::Function) f
 @deprecate specialized_bitwise_binary(f::Function) f
 
+@deprecate bitunpack(B::BitArray) Array(B)
+@deprecate bitpack(A::AbstractArray) BitArray(A)
 
 # During the 0.5 development cycle, do not add any deprecations below this line
 # To be deprecated in 0.6

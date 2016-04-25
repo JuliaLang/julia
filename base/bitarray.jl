@@ -528,10 +528,6 @@ convert{T,N}(::Type{AbstractArray{T,N}}, B::BitArray{N}) = convert(Array{T,N}, B
 reinterpret{N}(::Type{Bool}, B::BitArray, dims::NTuple{N,Int}) = reinterpret(B, dims)
 reinterpret{N}(B::BitArray, dims::NTuple{N,Int}) = reshape(B, dims)
 
-# shorthand forms BitArray <-> Array
-bitunpack{N}(B::BitArray{N}) = convert(Array{Bool,N}, B)
-bitpack{T,N}(A::AbstractArray{T,N}) = convert(BitArray{N}, A)
-
 ## Indexing: getindex ##
 
 @inline function unsafe_bitgetindex(Bc::Vector{UInt64}, i::Int)
@@ -661,8 +657,8 @@ function append!(B::BitVector, items::BitVector)
     return B
 end
 
-append!(B::BitVector, items::AbstractVector{Bool}) = append!(B, bitpack(items))
-append!(A::Vector{Bool}, items::BitVector) = append!(A, bitunpack(items))
+append!(B::BitVector, items::AbstractVector{Bool}) = append!(B, BitArray(items))
+append!(A::Vector{Bool}, items::BitVector) = append!(A, Array(items))
 
 function prepend!(B::BitVector, items::BitVector)
     n0 = length(B)
@@ -683,8 +679,8 @@ function prepend!(B::BitVector, items::BitVector)
     return B
 end
 
-prepend!(B::BitVector, items::AbstractVector{Bool}) = prepend!(B, bitpack(items))
-prepend!(A::Vector{Bool}, items::BitVector) = prepend!(A, bitunpack(items))
+prepend!(B::BitVector, items::AbstractVector{Bool}) = prepend!(B, BitArray(items))
+prepend!(A::Vector{Bool}, items::BitVector) = prepend!(A, Array(items))
 
 function sizehint!(B::BitVector, sz::Integer)
     ccall(:jl_array_sizehint, Void, (Any, UInt), B.chunks, num_bit_chunks(sz))
@@ -1064,19 +1060,19 @@ end
 
 for f in (:/, :\)
     @eval begin
-        ($f)(A::BitArray, B::BitArray) = ($f)(bitunpack(A), bitunpack(B))
+        ($f)(A::BitArray, B::BitArray) = ($f)(Array(A), Array(B))
     end
 end
-(/)(B::BitArray, x::Number) = (/)(bitunpack(B), x)
-(/)(x::Number, B::BitArray) = (/)(x, bitunpack(B))
+(/)(B::BitArray, x::Number) = (/)(Array(B), x)
+(/)(x::Number, B::BitArray) = (/)(x, Array(B))
 
 function div(A::BitArray, B::BitArray)
     shp = promote_shape(size(A), size(B))
     all(B) || throw(DivideError())
     return reshape(copy(A), shp)
 end
-div(A::BitArray, B::Array{Bool}) = div(A, bitpack(B))
-div(A::Array{Bool}, B::BitArray) = div(bitpack(A), B)
+div(A::BitArray, B::Array{Bool}) = div(A, BitArray(B))
+div(A::Array{Bool}, B::BitArray) = div(BitArray(A), B)
 function div(B::BitArray, x::Bool)
     return x ? copy(B) : throw(DivideError())
 end
@@ -1096,8 +1092,8 @@ function mod(A::BitArray, B::BitArray)
     all(B) || throw(DivideError())
     return falses(shp)
 end
-mod(A::BitArray, B::Array{Bool}) = mod(A, bitpack(B))
-mod(A::Array{Bool}, B::BitArray) = mod(bitpack(A), B)
+mod(A::BitArray, B::Array{Bool}) = mod(A, BitArray(B))
+mod(A::Array{Bool}, B::BitArray) = mod(BitArray(A), B)
 function mod(B::BitArray, x::Bool)
     return x ? falses(size(B)) : throw(DivideError())
 end
@@ -1153,10 +1149,10 @@ for f in (:&, :|, :$)
             Fc[end] &= _msk_end(F)
             return F
         end
-        ($f)(A::DenseArray{Bool}, B::BitArray) = ($f)(bitpack(A), B)
-        ($f)(B::BitArray, A::DenseArray{Bool}) = ($f)(B, bitpack(A))
-        ($f)(x::Number, B::BitArray) = ($f)(x, bitunpack(B))
-        ($f)(B::BitArray, x::Number) = ($f)(bitunpack(B), x)
+        ($f)(A::DenseArray{Bool}, B::BitArray) = ($f)(BitArray(A), B)
+        ($f)(B::BitArray, A::DenseArray{Bool}) = ($f)(B, BitArray(A))
+        ($f)(x::Number, B::BitArray) = ($f)(x, Array(B))
+        ($f)(B::BitArray, x::Number) = ($f)(Array(B), x)
     end
 end
 
@@ -1229,8 +1225,8 @@ end
 
 (.*)(x::Bool, B::BitArray) = x & B
 (.*)(B::BitArray, x::Bool) = B & x
-(.*)(x::Number, B::BitArray) = x .* bitunpack(B)
-(.*)(B::BitArray, x::Number) = bitunpack(B) .* x
+(.*)(x::Number, B::BitArray) = x .* Array(B)
+(.*)(B::BitArray, x::Number) = Array(B) .* x
 
 ## promotion to complex ##
 

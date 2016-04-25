@@ -805,17 +805,10 @@ Combinatorics
 BitArrays
 ---------
 
-.. function:: bitpack(A::AbstractArray{T,N}) -> BitArray
-
-   .. Docstring generated from Julia source
-
-   Converts a numeric array to a packed boolean array.
-
-.. function:: bitunpack(B::BitArray{N}) -> Array{Bool,N}
-
-   .. Docstring generated from Julia source
-
-   Converts a packed boolean array to an array of booleans.
+BitArrays are space-efficient "packed" boolean arrays, which store
+one bit per boolean value.  They can be used similarly to ``Array{Bool}``
+arrays (which store one byte per boolean value), and can be converted
+to/from the latter via ``Array(bitarray)`` and ``BitArray(array)``, respectively.
 
 .. function:: flipbits!(B::BitArray{N}) -> BitArray{N}
 
@@ -1008,4 +1001,3 @@ dense counterparts. The following functions are specific to sparse arrays.
              # perform sparse wizardry...
           end
        end
-

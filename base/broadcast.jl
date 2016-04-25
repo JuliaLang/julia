@@ -328,8 +328,8 @@ for (f, scalarf, bitf, bitfbody) in ((:.==, :(==), :biteq , :(~a $ b)),
             end
             F = BitArray(shape)
             Fc = F.chunks
-            Ac = bitpack(A).chunks
-            Bc = bitpack(B).chunks
+            Ac = BitArray(A).chunks
+            Bc = BitArray(B).chunks
             if !isempty(Ac) && !isempty(Bc)
                 for i = 1:length(Fc) - 1
                     Fc[i] = ($bitf)(Ac[i], Bc[i])
@@ -430,7 +430,7 @@ for (sigA, sigB) in ((BitArray, BitArray),
                      (BitArray, AbstractArray{Bool}))
     @eval function (.*)(A::$sigA, B::$sigB)
         try
-            return bitpack(A) & bitpack(B)
+            return BitArray(A) & BitArray(B)
         catch
             return bitbroadcast(&, A, B)
         end
