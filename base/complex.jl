@@ -32,6 +32,10 @@ promote_op{T<:Real,S<:Real}(op, ::Type{Complex{T}}, ::Type{S}) =
     Complex{promote_op(op,T,S)}
 promote_op{T<:Real,S<:Real}(op, ::Type{T}, ::Type{Complex{S}}) =
     Complex{promote_op(op,T,S)}
+promote_op{T<:Integer,S<:Integer}(::typeof(^), ::Type{T}, ::Type{Complex{S}}) =
+    Complex{Float64}
+promote_op{T<:Integer,S<:Integer}(::typeof(.^), ::Type{T}, ::Type{Complex{S}}) =
+    Complex{Float64}
 
 widen{T}(::Type{Complex{T}}) = Complex{widen(T)}
 
@@ -803,7 +807,7 @@ big{T<:AbstractFloat,N}(A::AbstractArray{Complex{T},N}) = convert(AbstractArray{
 
 ## promotion to complex ##
 
-promote_array_type{S<:Union{Complex, Real}, AT<:AbstractFloat}(F, ::Type{S}, ::Type{Complex{AT}}) = Complex{AT}
+promote_array_type{S<:Union{Complex, Real}, AT<:AbstractFloat, P}(F, ::Type{S}, ::Type{Complex{AT}}, ::Type{P}) = Complex{AT}
 
 function complex{S<:Real,T<:Real}(A::AbstractArray{S}, B::AbstractArray{T})
     if size(A) != size(B); throw(DimensionMismatch()); end

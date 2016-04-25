@@ -35,26 +35,19 @@ function !(A::AbstractArray{Bool})
 end
 
 ## Binary arithmetic operators ##
+@pure promote_array_type{S<:Number, A<:AbstractArray}(F, ::Type{S}, ::Type{A}) =
+    promote_array_type(F, S, eltype(A), promote_op(F, S, eltype(A)))
+@pure promote_array_type{S<:Number, A<:AbstractArray}(F, ::Type{A}, ::Type{S}) =
+    promote_array_type(F, S, eltype(A), promote_op(F, eltype(A), S))
 
-promote_array_type{Scalar, Arry}(F, ::Type{Scalar}, ::Type{Arry}) = promote_op(F, Scalar, Arry)
-promote_array_type{S<:Real, A<:AbstractFloat}(F, ::Type{S}, ::Type{A}) = A
-promote_array_type{S<:Integer, A<:Integer}(F, ::Type{S}, ::Type{A}) = A
-promote_array_type{S<:Integer}(F, ::Type{S}, ::Type{Bool}) = S
-promote_array_type(F, ::Type{Bool}, ::Type{Bool}) = promote_op(F, Bool, Bool)
-
-# Handle operations that return different types
-./(x::Number, Y::AbstractArray) =
-    reshape([ x ./ y for y in Y ], size(Y))
-./(X::AbstractArray, y::Number) =
-    reshape([ x ./ y for x in X ], size(X))
-.\(x::Number, Y::AbstractArray) =
-    reshape([ x .\ y for y in Y ], size(Y))
-.\(X::AbstractArray, y::Number) =
-    reshape([ x .\ y for x in X ], size(X))
-.^(x::Number, Y::AbstractArray) =
-    reshape([ x ^ y for y in Y ], size(Y))
-.^(X::AbstractArray, y::Number      ) =
-    reshape([ x ^ y for x in X ], size(X))
+@pure promote_array_type{S, A, P}(F, ::Type{S}, ::Type{A}, ::Type{P}) = P
+@pure promote_array_type{S<:Real, A<:AbstractFloat, P}(F, ::Type{S}, ::Type{A}, ::Type{P}) = A
+@pure promote_array_type{S<:Integer, A<:Integer, P}(F::typeof(./), ::Type{S}, ::Type{A}, ::Type{P}) = P
+@pure promote_array_type{S<:Integer, A<:Integer, P}(F::typeof(.\), ::Type{S}, ::Type{A}, ::Type{P}) = P
+@pure promote_array_type{S<:Integer, A<:Integer, P}(F, ::Type{S}, ::Type{A}, ::Type{P}) = A
+@pure promote_array_type{S<:Integer, P}(F::typeof(./), ::Type{S}, ::Type{Bool}, ::Type{P}) = P
+@pure promote_array_type{S<:Integer, P}(F::typeof(.\), ::Type{S}, ::Type{Bool}, ::Type{P}) = P
+@pure promote_array_type{S<:Integer, P}(F, ::Type{S}, ::Type{Bool}, ::Type{P}) = P
 
 for f in (:+, :-, :div, :mod, :&, :|, :$)
     @eval begin
@@ -88,17 +81,17 @@ for f in (:+, :-, :div, :mod, :&, :|, :$)
         end
     end
 end
-for f in (:.+, :.-, :.*, :.÷, :.%, :.<<, :.>>, :div, :mod, :rem, :&, :|, :$)
+for f in (:.+, :.-, :.*, :./, :.\, :.^, :.÷, :.%, :.<<, :.>>, :div, :mod, :rem, :&, :|, :$)
     @eval begin
         function ($f){T}(A::Number, B::AbstractArray{T})
-            F = similar(B, promote_array_type($f,typeof(A),T))
+            F = similar(B, promote_array_type($f,typeof(A),typeof(B)))
             for (iF, iB) in zip(eachindex(F), eachindex(B))
                 @inbounds F[iF] = ($f)(A, B[iB])
             end
             return F
         end
         function ($f){T}(A::AbstractArray{T}, B::Number)
-            F = similar(A, promote_array_type($f,typeof(B),T))
+            F = similar(A, promote_array_type($f,typeof(A),typeof(B)))
             for (iF, iA) in zip(eachindex(F), eachindex(A))
                 @inbounds F[iF] = ($f)(A[iA], B)
             end
