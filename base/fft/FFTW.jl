@@ -267,7 +267,7 @@ function showfftdims(io, sz::Dims, istride::Dims, T)
     elseif length(sz) == 1
         print(io, sz[1], "-element")
     else
-        print(io, join(sz, "x"))
+        print(io, join(sz, "×"))
     end
     if istride == colmajorstrides(sz)
         print(io, " array of ", T)
@@ -310,7 +310,7 @@ function show{T,K,inplace}(io::IO, p::r2rFFTWPlan{T,K,inplace})
             print(io, "^", length(K))
         end
     else
-        print(io, join(map(kind2string, K), "x"))
+        print(io, join(map(kind2string, K), "×"))
     end
     print(io, " plan for ")
     showfftdims(io, p.sz, p.istride, T)

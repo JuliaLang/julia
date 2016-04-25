@@ -54,7 +54,7 @@ Basic functions
    .. doctest::
 
        julia> A = sparse([1, 1, 2], [1, 3, 1], [1, 2, -5])
-       2x3 sparse matrix with 3 Int64 entries:
+       2×3 sparse matrix with 3 Int64 nonzero entries:
                [1, 1]  =  1
                [2, 1]  =  -5
                [1, 3]  =  2
@@ -213,7 +213,7 @@ Constructors
 
    .. Docstring generated from Julia source
 
-   Create an array filled with the value ``x``\ . For example, ``fill(1.0, (10,10))`` returns a 10x10 array of floats, with each element initialized to ``1.0``\ .
+   Create an array filled with the value ``x``\ . For example, ``fill(1.0, (10,10))`` returns a 10×10 array of floats, with each element initialized to ``1.0``\ .
 
    If ``x`` is an object reference, all elements will refer to the same object. ``fill(Foo(), dims)`` will return an array filled with the result of evaluating ``Foo()`` once.
 
@@ -242,7 +242,7 @@ Constructors
    .. code-block:: julia
 
        julia> similar(1:10, 1, 4)
-       1x4 Array{Int64,2}:
+       1×4 Array{Int64,2}:
         4419743872  4374413872  4419743888  0
 
    Conversely, ``similar(trues(10,10), 2)`` returns an uninitialized ``BitVector`` with two elements since ``BitArray``\ s are both mutable and can support 1-dimensional arrays:
@@ -259,7 +259,7 @@ Constructors
    .. code-block:: julia
 
        julia> similar(falses(10), Float64, 2, 4)
-       2x4 Array{Float64,2}:
+       2×4 Array{Float64,2}:
         2.18425e-314  2.18425e-314  2.18425e-314  2.18425e-314
         2.18425e-314  2.18425e-314  2.18425e-314  2.18425e-314
 
@@ -421,23 +421,23 @@ Indexing, Assignment, and Concatenation
        (1,2,3,4,5,6)
 
        julia> [a b c; d e f]
-       2x3 Array{Int64,2}:
+       2×3 Array{Int64,2}:
         1  2  3
         4  5  6
 
        julia> hvcat((3,3), a,b,c,d,e,f)
-       2x3 Array{Int64,2}:
+       2×3 Array{Int64,2}:
         1  2  3
         4  5  6
 
        julia> [a b;c d; e f]
-       3x2 Array{Int64,2}:
+       3×2 Array{Int64,2}:
         1  2
         3  4
         5  6
 
        julia> hvcat((2,2,2), a,b,c,d,e,f)
-       3x2 Array{Int64,2}:
+       3×2 Array{Int64,2}:
         1  2
         3  4
         5  6

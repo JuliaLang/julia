@@ -80,7 +80,7 @@ function Base.showarray(io::IO, S::SparseMatrixCSC;
                    header::Bool=true, repr=false)
     # TODO: repr?
     if header
-        print(io, S.m, "x", S.n, " sparse matrix with ", nnz(S), " ", eltype(S), " entries:")
+        print(io, S.m, "×", S.n, " sparse matrix with ", nnz(S), " ", eltype(S), " nonzero entries:")
     end
 
     limit::Bool = Base.limit_output(io)
