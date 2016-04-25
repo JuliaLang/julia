@@ -214,19 +214,16 @@ struct strrefcomp {
 };
 #endif
 
-extern "C" {
-    extern void (*jl_linfo_tracer)(jl_lambda_info_t *tracee);
-}
-
-std::vector<jl_lambda_info_t*> triggered_linfos;
-void callback_triggered_linfos()
+extern "C" tracer_cb jl_linfo_tracer;
+static std::vector<jl_lambda_info_t*> triggered_linfos;
+void jl_callback_triggered_linfos(void)
 {
     if (triggered_linfos.empty())
         return;
     if (jl_linfo_tracer) {
         std::vector<jl_lambda_info_t*> to_process(std::move(triggered_linfos));
         for (jl_lambda_info_t *linfo : to_process)
-            jl_linfo_tracer(linfo);
+            jl_call_tracer(jl_linfo_tracer, (jl_value_t*)linfo);
     }
 }
 
