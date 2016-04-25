@@ -11,7 +11,9 @@ const META_BRANCH = "metadata-v2"
 
 type PkgError <: Exception
     msg::AbstractString
+    ex::Nullable{Exception}
 end
+PkgError(msg::AbstractString) = PkgError(msg, nothing)
 
 for file in split("dir types reqs cache read query resolve write entry git")
     include("pkg/$file.jl")

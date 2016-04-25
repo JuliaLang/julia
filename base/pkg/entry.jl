@@ -267,10 +267,10 @@ end
 function free(pkgs)
     try
         for pkg in pkgs
-            ispath(pkg,".git") || error("$pkg is not a git repo")
-            Read.isinstalled(pkg) || error("$pkg cannot be freed – not an installed package")
+            ispath(pkg,".git") || throw(PkgError("$pkg is not a git repo"))
+            Read.isinstalled(pkg) || throw(PkgError("$pkg cannot be freed – not an installed package"))
             avail = Read.available(pkg)
-            isempty(avail) && error("$pkg cannot be freed – not a registered package")
+            isempty(avail) && throw(PkgError("$pkg cannot be freed – not a registered package"))
             with(GitRepo, pkg) do repo
                 LibGit2.isdirty(repo) && throw(PkgError("$pkg cannot be freed – repo is dirty"))
                 info("Freeing $pkg")
@@ -283,7 +283,7 @@ function free(pkgs)
                 end
             end
             isempty(Cache.prefetch(pkg, Read.url(pkg), [a.sha1 for (v,a)=avail])) && continue
-            error("can't find any registered versions of $pkg to checkout")
+            throw(PkgError("Can't find any registered versions of $pkg to checkout"))
         end
     finally
         resolve()
@@ -328,45 +328,36 @@ end
 function update(branch::AbstractString)
     info("Updating METADATA...")
     with(GitRepo, "METADATA") do repo
-        with(LibGit2.head(repo)) do h
-            if LibGit2.branch(h) != branch
-                if LibGit2.isdirty(repo)
-                    throw(PkgError("METADATA is dirty and not on $branch, bailing"))
-                end
-                if !LibGit2.isattached(repo)
-                    throw(PkgError("METADATA is detached not on $branch, bailing"))
-                end
-                LibGit2.fetch(repo)
-                LibGit2.checkout_head(repo)
-                LibGit2.branch!(repo, branch, track="refs/remotes/origin/$branch")
-                LibGit2.merge!(repo)
-            end
-        end
         try
+            with(LibGit2.head(repo)) do h
+                if LibGit2.branch(h) != branch
+                    if LibGit2.isdirty(repo)
+                        throw(PkgError("METADATA is dirty and not on $branch, bailing"))
+                    end
+                    if !LibGit2.isattached(repo)
+                        throw(PkgError("METADATA is detached not on $branch, bailing"))
+                    end
+                    LibGit2.fetch(repo)
+                    LibGit2.checkout_head(repo)
+                    LibGit2.branch!(repo, branch, track="refs/remotes/origin/$branch")
+                    LibGit2.merge!(repo)
+                end
+            end
+
             LibGit2.fetch(repo)
             ff_succeeded = LibGit2.merge!(repo, fastforward=true)
             if !ff_succeeded
                 LibGit2.rebase!(repo, "origin/$branch")
             end
         catch err
-            if isa(err, LibGit2.Error.GitError)
-                print_with_color(:red, "METADATA cannot be updated. Error: $(err.msg).\nResolve problems manually in $(Pkg.dir("METADATA")).")
-            end
-            rethrow(err)
+            mex = CapturedException(err, catch_backtrace())
+            throw(PkgError("METADATA cannot be updated. Resolve problems manually in $(Pkg.dir("METADATA")).", mex))
         end
     end
     avail = Read.available()
     # this has to happen before computing free/fixed
     for pkg in filter(Read.isinstalled, collect(keys(avail)))
-        try
-            Cache.prefetch(pkg, Read.url(pkg), [a.sha1 for (v,a)=avail[pkg]])
-        catch err
-            if isa(err, PkgError)
-                warn("Package $pkg: unable to update cache\n$(err.msg)")
-            else
-                rethrow(err)
-            end
-        end
+        Cache.prefetch(pkg, Read.url(pkg), [a.sha1 for (v,a)=avail[pkg]])
     end
     instd = Read.installed(avail)
     free  = Read.free(instd)
@@ -374,7 +365,7 @@ function update(branch::AbstractString)
         Cache.prefetch(pkg, Read.url(pkg), [a.sha1 for (v,a) in avail[pkg]])
     end
     fixed = Read.fixed(avail,instd)
-    defered_errors = CapturedException[]
+    defered_errors = CompositeException()
     for (pkg,ver) in fixed
         ispath(pkg,".git") || continue
         with(GitRepo, pkg) do repo
@@ -388,12 +379,8 @@ function update(branch::AbstractString)
                         LibGit2.fetch(repo)
                         LibGit2.merge!(repo, fastforward=true)
                     catch err
-                        push!(defered_errors, CapturedException(err, catch_backtrace()))
-                        if isa(err, LibGit2.GitError)
-                            warn("Package $pkg cannot be updated. Error: $(err.msg) Class: $(err.class)")
-                        else
-                            print_with_color(:red, "Package $pkg cannot be updated. Error:$err")
-                        end
+                        mex = CapturedException(err, catch_backtrace())
+                        push!(defered_errors, PkgError("Package $pkg cannot be updated.", mex))
                         success = false
                     end
                     if success
@@ -406,15 +393,7 @@ function update(branch::AbstractString)
             end
         end
         if haskey(avail,pkg)
-            try
-                Cache.prefetch(pkg, Read.url(pkg), [a.sha1 for (v,a)=avail[pkg]])
-            catch err
-                if isa(err, PkgError)
-                    warn("Package $pkg: unable to update cache\n$(err.msg)")
-                else
-                    rethrow(err)
-                end
-            end
+            Cache.prefetch(pkg, Read.url(pkg), [a.sha1 for (v,a)=avail[pkg]])
         end
     end
     info("Computing changes...")
@@ -423,13 +402,7 @@ function update(branch::AbstractString)
     updatehook(sort!(collect(keys(installed()))))
 
     # Print defered errors
-    if length(defered_errors) > 0
-        print_with_color(:red, STDERR, "Update finished with errors:\n")
-        for de in defered_errors
-            showerror(STDERR, de)
-            println(STDERR, "\n")
-        end
-    end
+    length(defered_errors) > 0 && throw(PkgError("Update finished with errors.", defered_errors))
 end
 
 
