@@ -229,7 +229,7 @@ GeneralPeriod = Union{Period,CompoundPeriod}
 (+){P<:GeneralPeriod}(x::StridedArray{P}) = x
 
 for op in (:.+, :.-)
-    op_ = Symbol(string(op)[2:end])
+    op_ = Symbol(string(op)[2])
     @eval begin
         function ($op){P<:GeneralPeriod}(X::StridedArray{P},y::GeneralPeriod)
             Z = similar(X, CompoundPeriod)

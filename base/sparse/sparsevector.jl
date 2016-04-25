@@ -1517,7 +1517,7 @@ end
 for isunittri in (true, false), islowertri in (true, false)
     unitstr = isunittri ? "Unit" : ""
     halfstr = islowertri ? "Lower" : "Upper"
-    tritype = :(Base.LinAlg.$(Symbol(string(unitstr, halfstr, "Triangular"))))
+    tritype = :(Base.LinAlg.$(Symbol(unitstr, halfstr, "Triangular")))
 
     # build out-of-place left-division operations
     for (istrans, func, ipfunc) in (
