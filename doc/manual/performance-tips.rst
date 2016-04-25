@@ -795,7 +795,7 @@ that the array is ordered ``[1 3 2 4]``, not ``[1 2 3 4]``):
 .. doctest::
 
     julia> x = [1 2; 3 4]
-    2x2 Array{Int64,2}:
+    2×2 Array{Int64,2}:
      1  2
      3  4
 

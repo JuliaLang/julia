@@ -507,7 +507,7 @@ Mathematical Operators
        julia> A=[1.0 2.0; 3.0 4.0]; B=[1.0 1.0; 1.0 1.0]; Y = similar(B); A_mul_B!(Y, A, B);
 
        julia> Y
-       2x2 Array{Float64,2}:
+       2×2 Array{Float64,2}:
         3.0  3.0
         7.0  7.0
 

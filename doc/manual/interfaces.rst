@@ -83,7 +83,7 @@ Now, when we ask Julia to :func:`collect` all the elements into an array it can 
 .. doctest::
 
     julia> collect(Squares(100))' # transposed to save space
-    1x100 Array{Int64,2}:
+    1×100 Array{Int64,2}:
      1  4  9  16  25  36  49  64  81  100  …  9025  9216  9409  9604  9801  10000
 
 While we can rely upon generic implementations, we can also extend specific methods where we know there is a simpler algorithm.  For example, there's a formula to compute the sum of squares, so we can override the generic iterative version with a more performant solution:
@@ -209,7 +209,7 @@ Note that it's very important to specify the two parameters of the ``AbstractArr
      49
 
     julia> s \ rand(7,2)
-    1x2 Array{Float64,2}:
+    1×2 Array{Float64,2}:
      0.0151876  0.0179393
 
 As a more complicated example, let's define our own toy N-dimensional sparse-like array type built on top of ``Dict``:
@@ -239,19 +239,19 @@ Notice that this is a ``LinearSlow`` array, so we must manually define :func:`ge
 .. doctest::
 
     julia> A = SparseArray(Float64,3,3)
-    3x3 SparseArray{Float64,2}:
+    3×3 SparseArray{Float64,2}:
      0.0  0.0  0.0
      0.0  0.0  0.0
      0.0  0.0  0.0
 
     julia> rand!(A)
-    3x3 SparseArray{Float64,2}:
+    3×3 SparseArray{Float64,2}:
      0.28119   0.0203749  0.0769509
      0.209472  0.287702   0.640396
      0.251379  0.859512   0.873544
 
     julia> A[:] = 1:length(A); A
-    3x3 SparseArray{Float64,2}:
+    3×3 SparseArray{Float64,2}:
      1.0  4.0  7.0
      2.0  5.0  8.0
      3.0  6.0  9.0
@@ -261,7 +261,7 @@ The result of indexing an ``AbstractArray`` can itself be an array (for instance
 .. doctest::
 
     julia> A[1:2,:]
-    2x3 SparseArray{Float64,2}:
+    2×3 SparseArray{Float64,2}:
      1.0  4.0  7.0
      2.0  5.0  8.0
 
@@ -270,7 +270,7 @@ In this example it is accomplished by defining ``Base.similar{T}(A::SparseArray,
 .. doctest::
 
     julia> A + 4
-    3x3 SparseArray{Float64,2}:
+    3×3 SparseArray{Float64,2}:
      5.0   8.0  11.0
      6.0   9.0  12.0
      7.0  10.0  13.0

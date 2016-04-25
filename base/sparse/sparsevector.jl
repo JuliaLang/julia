@@ -636,7 +636,7 @@ function showarray(io::IO, x::AbstractSparseVector;
 end
 
 function summary(x::AbstractSparseVector)
-    string("Sparse vector of length ", length(x), ", with ", length(nonzeros(x)),
+    string("Sparse vector of length ", length(x), " with ", length(nonzeros(x)),
            " ",  eltype(x), " nonzero entries:")
 end
 

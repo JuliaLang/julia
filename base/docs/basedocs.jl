@@ -235,22 +235,22 @@ kw"quote"
 `'` is the conjugate transposition operator:
 
     julia> A = reshape(1:4, 2,2)
-    2x2 Array{Int64,2}:
+    2×2 Array{Int64,2}:
      1  3
      2  4
 
     julia> A'
-    2x2 Array{Int64,2}:
+    2×2 Array{Int64,2}:
      1  2
      3  4
 
     julia> B = A + im
-    2x2 Array{Complex{Int64},2}:
+    2×2 Array{Complex{Int64},2}:
      1+1im  3+1im
      2+1im  4+1im
 
     julia> B'
-    2x2 Array{Complex{Int64},2}:
+    2×2 Array{Complex{Int64},2}:
      1-1im  2-1im
      3-1im  4-1im
 
@@ -262,22 +262,22 @@ kw"'"
 `.'` is the transposition operator:
 
     julia> A = reshape(1:4, 2,2)
-    2x2 Array{Int64,2}:
+    2×2 Array{Int64,2}:
      1  3
      2  4
 
     julia> A.'
-    2x2 Array{Int64,2}:
+    2×2 Array{Int64,2}:
      1  2
      3  4
 
     julia> B = A + im
-    2x2 Array{Complex{Int64},2}:
+    2×2 Array{Complex{Int64},2}:
      1+1im  3+1im
      2+1im  4+1im
 
     julia> B.'
-    2x2 Array{Complex{Int64},2}:
+    2×2 Array{Complex{Int64},2}:
      1+1im  2+1im
      3+1im  4+1im
 
