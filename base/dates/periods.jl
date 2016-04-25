@@ -25,7 +25,7 @@ for period in (:Year, :Month, :Week, :Day, :Hour, :Minute, :Second, :Millisecond
 
         The $($accessor_str) part of a $($description) as a `$($period_str)`.$($reference)
         """ ->
-        $period(dt::$(symbol(typ_str))) = $period($(symbol(accessor_str))(dt))
+        $period(dt::$(Symbol(typ_str))) = $period($(Symbol(accessor_str))(dt))
 
         @doc """
             $($period_str)(v)
@@ -87,7 +87,7 @@ for (op,Ty,Tz) in ((:.*,Real,:P),
                    (:div,:P,Int64), (:div,Integer,:P),
                    (:mod,:P,Int64), (:mod,Integer,:P))
     sop = string(op)
-    op_ = sop[1] == '.' ? symbol(sop[2:end]) : op
+    op_ = sop[1] == '.' ? Symbol(sop[2:end]) : op
     @eval begin
         function ($op){P<:Period}(X::StridedArray{P},y::$Ty)
             Z = similar(X, $Tz)
@@ -229,7 +229,7 @@ GeneralPeriod = Union{Period,CompoundPeriod}
 (+){P<:GeneralPeriod}(x::StridedArray{P}) = x
 
 for op in (:.+, :.-)
-    op_ = symbol(string(op)[2:end])
+    op_ = Symbol(string(op)[2:end])
     @eval begin
         function ($op){P<:GeneralPeriod}(X::StridedArray{P},y::GeneralPeriod)
             Z = similar(X, CompoundPeriod)

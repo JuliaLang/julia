@@ -233,7 +233,7 @@ end
 
 if blas_vendor() == :openblas64
     macro blasfunc(x)
-        return Expr(:quote, symbol(x, "64_"))
+        return Expr(:quote, Symbol(x, "64_"))
     end
     openblas_get_config() = strip(bytestring( ccall((:openblas_get_config64_, Base.libblas_name), Ptr{UInt8}, () )))
 else
