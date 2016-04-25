@@ -454,8 +454,6 @@ let d = ImmutableDict{UTF8String, UTF8String}(),
     @test get(d, k1, :default) === :default
     @test d1["key1"] === v1
     @test d4["key1"] === v2
-    @test copy(d4) === d4
-    @test copy(d) === d
     @test similar(d3) === d
     @test similar(d) === d
 

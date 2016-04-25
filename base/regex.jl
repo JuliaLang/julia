@@ -82,8 +82,6 @@ RegexMatch("angry,\\nBad world")
 """
 macro r_str(pattern, flags...) Regex(pattern, flags...) end
 
-copy(r::Regex) = r
-
 function show(io::IO, re::Regex)
     imsx = PCRE.CASELESS|PCRE.MULTILINE|PCRE.DOTALL|PCRE.EXTENDED
     opts = re.compile_options
