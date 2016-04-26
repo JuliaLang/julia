@@ -733,6 +733,7 @@ Once one learns to appreciate multiple dispatch, there's an
 understandable tendency to go crazy and try to use it for everything.
 For example, you might imagine using it to store information, e.g.
 ::
+
     immutable Car{Make,Model}
         year::Int
         ...more fields...
