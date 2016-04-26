@@ -92,18 +92,23 @@ julia-src-release julia-src-debug : julia-src-% : julia-deps julia_flisp.boot.in
 julia-ui-release julia-ui-debug : julia-ui-% : julia-src-%
 	@$(MAKE) $(QUIET_MAKE) -C $(BUILDROOT)/ui julia-$*
 
-julia-inference : julia-base julia-ui-$(JULIA_BUILD_MODE) $(build_prefix)/.examples
-	@$(MAKE) $(QUIET_MAKE) -C $(BUILDROOT) $(build_private_libdir)/inference.ji JULIA_BUILD_MODE=$(JULIA_BUILD_MODE)
+julia-sysimg : julia-base julia-ui-$(JULIA_BUILD_MODE) $(build_prefix)/.examples
+	@$(MAKE) $(QUIET_MAKE) -C $(BUILDROOT) $(build_private_libdir)/sys.ji JULIA_BUILD_MODE=$(JULIA_BUILD_MODE)
+julia-sysimg-all : julia-sysimg
+	@$(MAKE) $(QUIET_MAKE) -C $(BUILDROOT) $(build_private_libdir)/sys-all.ji JULIA_BUILD_MODE=$(JULIA_BUILD_MODE)
 
-julia-sysimg-release : julia-inference julia-ui-release
+julia-sysimg-release : julia-sysimg julia-ui-release
 	@$(MAKE) $(QUIET_MAKE) -C $(BUILDROOT) $(build_private_libdir)/sys.$(SHLIB_EXT) JULIA_BUILD_MODE=release
-
-julia-sysimg-debug : julia-inference julia-ui-debug
+julia-sysimg-all-release : julia-sysimg-all julia-ui-release
+	@$(MAKE) $(QUIET_MAKE) -C $(BUILDROOT) $(build_private_libdir)/sys-all.$(SHLIB_EXT) JULIA_BUILD_MODE=release
+julia-sysimg-debug : julia-sysimg julia-ui-debug
 	@$(MAKE) $(QUIET_MAKE) -C $(BUILDROOT) $(build_private_libdir)/sys-debug.$(SHLIB_EXT) JULIA_BUILD_MODE=debug
+julia-sysimg-all-debug : julia-sysimg-all julia-ui-debug
+	@$(MAKE) $(QUIET_MAKE) -C $(BUILDROOT) $(build_private_libdir)/sys-all-debug.$(SHLIB_EXT) JULIA_BUILD_MODE=debug
 
 julia-debug julia-release : julia-% : julia-ui-% julia-sysimg-% julia-symlink julia-libccalltest
-
-debug release : % : julia-%
+julia-all-debug julia-all-release : julia-all-% : julia-ui-% julia-sysimg-all-% julia-symlink julia-libccalltest
+debug release all-debug all-release : % : julia-%
 
 julia-genstdlib: julia-sysimg-$(JULIA_BUILD_MODE)
 	@$(call PRINT_JULIA, $(JULIA_EXECUTABLE) $(call cygpath_w, $(JULIAHOME)/doc/genstdlib.jl))
@@ -212,21 +217,33 @@ BASE_SRCS := $(shell find $(JULIAHOME)/base -name \*.jl)
 
 $(build_private_libdir)/inference.ji: $(CORE_SRCS) | $(build_private_libdir)
 	@$(call PRINT_JULIA, cd $(JULIAHOME)/base && \
-	$(call spawn,$(JULIA_EXECUTABLE)) -C $(JULIA_CPU_TARGET) --output-ji $(call cygpath_w,$@) -f \
+	$(call spawn,$(JULIA_EXECUTABLE)) -O0 -C $(JULIA_CPU_TARGET) --output-ji $(call cygpath_w,$@) -f \
 		coreimg.jl)
+
+$(build_private_libdir)/sys.ji: $(build_private_libdir)/inference.ji $(JULIAHOME)/VERSION $(BASE_SRCS)
+	@$(call PRINT_JULIA, cd $(JULIAHOME)/base && \
+	$(call spawn,$(JULIA_EXECUTABLE)) -O0 -C $(JULIA_CPU_TARGET) --output-ji $(call cygpath_w,$@) $(JULIA_SYSIMG_BUILD_FLAGS) -f \
+		-J $(call cygpath_w,$<) sysimg.jl $(RELBUILDROOT) \
+		|| { echo '*** This error is usually fixed by running `make clean`. If the error persists$$(COMMA) try `make cleanall`. ***' && false; } )
+
+$(build_private_libdir)/sys-all.ji: $(build_private_libdir)/sys.ji
+	@$(call PRINT_JULIA, cd $(JULIAHOME)/base && \
+	$(call spawn,$(JULIA_EXECUTABLE)) -O0 -C $(JULIA_CPU_TARGET) --output-ji $(call cygpath_w,$@) --compile=all -f \
+		-J $(call cygpath_w,$<) -e nothing)
 
 RELBUILDROOT := $(shell $(JULIAHOME)/contrib/relative_path.sh "$(JULIAHOME)/base" "$(BUILDROOT)/base/")
 COMMA:=,
 define sysimg_builder
-$$(build_private_libdir)/sys$1.o: $$(build_private_libdir)/inference.ji $$(JULIAHOME)/VERSION $$(BASE_SRCS)
+$$(build_private_libdir)/sys$1$2.bc $$(build_private_libdir)/sys$1$2.o: $$(build_private_libdir)/sys$1$2.% : $$(build_private_libdir)/sys$1.ji
 	@$$(call PRINT_JULIA, cd $$(JULIAHOME)/base && \
-	$$(call spawn,$3) $2 -C $$(JULIA_CPU_TARGET) --output-o $$(call cygpath_w,$$@) $$(JULIA_SYSIMG_BUILD_FLAGS) -f \
-		-J $$(call cygpath_w,$$<) sysimg.jl $$(RELBUILDROOT) \
-		|| { echo '*** This error is usually fixed by running `make clean`. If the error persists$$(COMMA) try `make cleanall`. ***' && false; } )
-.SECONDARY: $(build_private_libdir)/sys$1.o
+	$$(call spawn,$4) $3 -C $$(JULIA_CPU_TARGET) --output-$$* $$(call cygpath_w,$$@) $$(JULIA_SYSIMG_BUILD_FLAGS) -f \
+		-J $$(call cygpath_w,$$<) -e nothing)
+.SECONDARY: $(build_private_libdir)/sys$1$2.o $(build_private_libdir)/sys$1$2.bc
 endef
-$(eval $(call sysimg_builder,,-O3,$(JULIA_EXECUTABLE_release)))
-$(eval $(call sysimg_builder,-debug,-O0,$(JULIA_EXECUTABLE_debug)))
+$(eval $(call sysimg_builder,,,-O3,$(JULIA_EXECUTABLE_release)))
+$(eval $(call sysimg_builder,,-debug,-O0,$(JULIA_EXECUTABLE_debug)))
+$(eval $(call sysimg_builder,-all,,--compile=all -O3,$(JULIA_EXECUTABLE_release)))
+$(eval $(call sysimg_builder,-all,-debug,--compile=all -O0,$(JULIA_EXECUTABLE_debug)))
 
 $(build_bindir)/stringreplace: $(JULIAHOME)/contrib/stringreplace.c | $(build_bindir)
 	@$(call PRINT_CC, $(HOSTCC) -o $(build_bindir)/stringreplace $(JULIAHOME)/contrib/stringreplace.c)
@@ -365,7 +382,8 @@ endif
 endif
 	$(INSTALL_F) $(addprefix $(JULIAHOME)/,src/julia.h src/julia_threads.h src/julia_version.h src/support/*.h) $(DESTDIR)$(includedir)/julia
 	# Copy system image
-	-$(INSTALL_F) $(build_private_libdir)/sys.ji $(DESTDIR)$(private_libdir)
+	-$(INSTALL_M) $(build_private_libdir)/sys-all.$(SHLIB_EXT) $(DESTDIR)$(private_libdir)
+	-$(INSTALL_M) $(build_private_libdir)/sys-all-debug.$(SHLIB_EXT) $(DESTDIR)$(private_libdir)
 	$(INSTALL_M) $(build_private_libdir)/sys.$(SHLIB_EXT) $(DESTDIR)$(private_libdir)
 	$(INSTALL_M) $(build_private_libdir)/sys-debug.$(SHLIB_EXT) $(DESTDIR)$(private_libdir)
 	# Copy in system image build script
@@ -640,7 +658,7 @@ LLVM_SIZE := $(build_bindir)/llvm-size$(EXE)
 endif
 build-stats:
 	@echo $(JULCOLOR)' ==> ./julia binary sizes'$(ENDCOLOR)
-	$(call spawn,$(LLVM_SIZE) -A $(build_private_libdir)/sys.$(SHLIB_EXT) $(build_shlibdir)/libjulia.$(SHLIB_EXT) $(build_bindir)/julia$(EXE))
+	$(call spawn,$(LLVM_SIZE) -A $(build_private_libdir)/sys*.$(SHLIB_EXT) $(build_shlibdir)/libjulia.$(SHLIB_EXT) $(build_bindir)/julia$(EXE))
 	@echo $(JULCOLOR)' ==> ./julia launch speedtest'$(ENDCOLOR)
 	@time $(call spawn,$(build_bindir)/julia$(EXE) -e '')
 	@time $(call spawn,$(build_bindir)/julia$(EXE) -e '')
