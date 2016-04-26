@@ -308,50 +308,6 @@ JL_DLLEXPORT const char *jl_git_commit(void)
     return commit;
 }
 
-JL_DLLEXPORT void jl_trace_method(jl_method_t *m)
-{
-    assert(jl_is_method(m));
-    m->traced = 1;
-}
-
-JL_DLLEXPORT void jl_untrace_method(jl_method_t *m)
-{
-    assert(jl_is_method(m));
-    m->traced = 0;
-}
-
-JL_DLLEXPORT void jl_trace_linfo(jl_lambda_info_t *linfo)
-{
-    assert(jl_is_lambda_info(linfo));
-    linfo->compile_traced = 1;
-}
-
-JL_DLLEXPORT void jl_untrace_linfo(jl_lambda_info_t *linfo)
-{
-    assert(jl_is_lambda_info(linfo));
-    linfo->compile_traced = 0;
-}
-
-void (*jl_method_tracer)(jl_lambda_info_t *tracee) = 0;
-JL_DLLEXPORT void jl_register_method_tracer(void (*callback)(jl_lambda_info_t *tracee))
-{
-    jl_method_tracer = callback;
-}
-
-void (*jl_newmeth_tracer)(jl_method_t *tracee) = 0;
-JL_DLLEXPORT void jl_register_newmeth_tracer(void (*callback)(jl_method_t *tracee))
-{
-    jl_newmeth_tracer = callback;
-}
-
-void (*jl_linfo_tracer)(jl_lambda_info_t *tracee) = 0;
-JL_DLLEXPORT void jl_register_linfo_tracer(void (*callback)(jl_lambda_info_t *tracee))
-{
-    jl_linfo_tracer = callback;
-}
-
-
-
 // Create function versions of some useful macros
 JL_DLLEXPORT jl_taggedvalue_t *(jl_astaggedvalue)(jl_value_t *v)
 {
