@@ -310,7 +310,7 @@ $5/$$($2_SRC_DIR)/$3: $$($2_SRC_FILE)
 endif # DEPS_GIT
 
 distclean-$1:
-	-rm -rf $5/$$($2_SRC_DIR) $$($2_SRC_FILE) $$(BUILDDIR)/$1
+	-rm -rf $5/$$($2_SRC_DIR) $$($2_SRC_FILE) $$(BUILDDIR)/$1 $$(BUILDDIR)/$1-$$($2_SHA1)
 endef
 
 
