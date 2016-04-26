@@ -295,7 +295,8 @@ for d in (Dict("\n" => "\n", "1" => "\n", "\n" => "2"),
 end
 
 # Issue #15739 - Compact REPL printouts of an `Associative` use brackets when appropriate
-let d = Dict((1=>2) => (3=>45), (3=>10) => (10=>11))
+#                and don't show verbose type information.
+let d  = Dict(1=>(3=>45), 0x03=>10, 25=>25.0, (3=>4)=>(5=>10))
     buf = IOBuffer()
     showcompact(buf, d)
 
@@ -303,8 +304,17 @@ let d = Dict((1=>2) => (3=>45), (3=>10) => (10=>11))
     # dictionary ordering.
     result = bytestring(buf)
     @test contains(result, "Dict")
-    @test contains(result, "(1=>2)=>(3=>45)")
-    @test contains(result, "(3=>10)=>(10=>11)")
+    @test contains(result, "1=>(3=>45)")
+    @test contains(result, "0x03=>10")
+    @test contains(result, "25=>25.0")
+    @test contains(result, "(3=>4)=>(5=>10)")
+
+    # Check explicitly for the **lack** of verbose type information.
+    # See showdict(IO, Pair).
+    @test !contains(result, "Pair{Int64,Pair{Int64,Int64}}")
+    @test !contains(result, "Pair{UInt8,Int64}")
+    @test !contains(result, "Pair{Int64,Float64}")
+    @test !contains(result, "Pair{Pair{Int64,Int64},Pair{Int64,Int64}}")
 end
 
 # issue #9463

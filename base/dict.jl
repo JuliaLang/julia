@@ -79,7 +79,7 @@ function showdict{K,V}(io::IO, t::Associative{K,V}; compact = false)
                 for pair in t
                     first || print(io, ',')
                     first = false
-                    show(recur_io, pair)
+                    show_with_brackets(recur_io, pair) # never show verbose pairs
                     n+=1
                     limit && n >= 10 && (print(io, "…"); break)
                 end

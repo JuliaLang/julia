@@ -195,19 +195,37 @@ print(io::IO, n::Unsigned) = print(io, dec(n))
 
 show{T}(io::IO, p::Ptr{T}) = print(io, typeof(p), " @0x$(hex(UInt(p), WORD_SIZE>>2))")
 
-function show(io::IO, p::Pair)
-    if typeof(p.first) != typeof(p).parameters[1] ||
-       typeof(p.second) != typeof(p).parameters[2]
-        return show_default(io, p)
-    end
+"""
+Displays a `Pair`, but surrounds the elements with brackets if they are also `Pair`s
 
+e.g: `1=>2=>3=>4` => "1=>(2=>(3=>4))"
+"""
+function show_with_brackets(io::IO, p::Pair)
     isa(p.first,Pair) && print(io, "(")
     show(io, p.first)
     isa(p.first,Pair) && print(io, ")")
+
     print(io, "=>")
+
     isa(p.second,Pair) && print(io, "(")
     show(io, p.second)
     isa(p.second,Pair) && print(io, ")")
+end
+
+function show(io::IO, p::Pair)
+    # Display Pairs so one can easily tell what type the Pair actually is
+    # if there could be confusion.
+
+    decl_T1, decl_T2 = typeof(p).parameters[1], typeof(p).parameters[2]
+    T1,      T2      = typeof(p.first),         typeof(p.second)
+
+    if decl_T1 != T1 || decl_T2 != T2
+        return show_default(io, p) # Pair{Any,Any}(1,Pair{Int64,Int64}(2,2))
+    end
+
+
+    # But otherwise, display it concisely.
+    show_with_brackets(io, p) # 1=>(2=>2)
 end
 
 function show(io::IO, m::Module)
