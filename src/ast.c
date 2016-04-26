@@ -615,8 +615,6 @@ static value_t julia_to_scm_(fl_context_t *fl_ctx, jl_value_t *v)
 {
     if (jl_is_symbol(v))
         return symbol(fl_ctx, jl_symbol_name((jl_sym_t*)v));
-    if (jl_is_ssavalue(v))
-        return fl_list2(fl_ctx, jl_ast_ctx(fl_ctx)->ssavalue_sym, fixnum((size_t)((jl_ssavalue_t*)v)->id));
     if (v == jl_true)
         return fl_ctx->T;
     if (v == jl_false)
@@ -653,8 +651,6 @@ static value_t julia_to_scm_(fl_context_t *fl_ctx, jl_value_t *v)
     // GC Note: jl_fieldref(v, 0) allocate for LabelNode, GotoNode
     //          but we don't need a GC root here because julia_to_list2
     //          shouldn't allocate in this case.
-    if (jl_is_slot(v))
-        return julia_to_list2(fl_ctx, (jl_value_t*)slot_sym, jl_fieldref(v,0));
     if (jl_typeis(v, jl_labelnode_type))
         return julia_to_list2(fl_ctx, (jl_value_t*)label_sym, jl_fieldref(v,0));
     if (jl_typeis(v, jl_gotonode_type))
@@ -667,6 +663,10 @@ static value_t julia_to_scm_(fl_context_t *fl_ctx, jl_value_t *v)
         return julia_to_list2(fl_ctx, (jl_value_t*)top_sym, jl_fieldref(v,0));
     if (jl_is_long(v) && fits_fixnum(jl_unbox_long(v)))
         return fixnum(jl_unbox_long(v));
+    if (jl_is_ssavalue(v))
+        jl_error("SSAValue objects should not occur in an AST");
+    if (jl_is_slot(v))
+        jl_error("Slot objects should not occur in an AST");
     value_t opaque = cvalue(fl_ctx, jl_ast_ctx(fl_ctx)->jvtype, sizeof(void*));
     *(jl_value_t**)cv_data((cvalue_t*)ptr(opaque)) = v;
     return opaque;
