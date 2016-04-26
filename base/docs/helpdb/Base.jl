@@ -1692,7 +1692,7 @@ split
 """
     dump(x)
 
-Show all user-visible structure of a value.
+Show every part of the representation of a value.
 """
 dump
 
@@ -8866,13 +8866,6 @@ true
 ```
 """
 applicable
-
-"""
-    xdump(x)
-
-Show all structure of a value, including all fields of objects.
-"""
-xdump
 
 """
     Base.process_messages(instrm::AsyncStream, outstrm::AsyncStream)
