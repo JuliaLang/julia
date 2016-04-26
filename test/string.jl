@@ -2,10 +2,17 @@
 
 ## generic string uses only endof and next; used for testing ##
 
+immutable CharString <: DirectIndexString
+    chars::Vector{Char}
+end
+Base.convert(::Type{CharString}, s::AbstractString) = CharString(collect(s))
+Base.endof(s::CharString) = length(s.chars)
+Base.next(s::CharString, i::Int) = next(s.chars, i)
+
 immutable GenericString <: AbstractString
     string::AbstractString
 end
-
+Base.convert(::Type{GenericString}, s::AbstractString) = GenericString(s)
 Base.endof(s::GenericString) = endof(s.string)
 Base.next(s::GenericString, i::Int) = next(s.string, i)
 

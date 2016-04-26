@@ -548,13 +548,13 @@ Text I/O
 
    Create an iterable object that will yield each line from an I/O stream or a file. The text is assumed to be encoded in UTF-8.
 
-.. function:: readdlm(source, delim::Char, T::Type, eol::Char; header=false, skipstart=0, skipblanks=true, use_mmap, ignore_invalid_chars=false, quotes=true, dims, comments=true, comment_char='#')
+.. function:: readdlm(source, delim::Char, T::Type, eol::Char; header=false, skipstart=0, skipblanks=true, use_mmap, quotes=true, dims, comments=true, comment_char='#')
 
    .. Docstring generated from Julia source
 
    Read a matrix from the source where each line (separated by ``eol``\ ) gives one row, with elements separated by the given delimiter. The source can be a text file, stream or byte array. Memory mapped files can be used by passing the byte array representation of the mapped segment as source.
 
-   If ``T`` is a numeric type, the result is an array of that type, with any non-numeric elements as ``NaN`` for floating-point types, or zero. Other useful values of ``T`` include ``ASCIIString``\ , ``AbstractString``\ , and ``Any``\ .
+   If ``T`` is a numeric type, the result is an array of that type, with any non-numeric elements as ``NaN`` for floating-point types, or zero. Other useful values of ``T`` include ``String``\ , ``AbstractString``\ , and ``Any``\ .
 
    If ``header`` is ``true``\ , the first row of data will be read as header and the tuple ``(data_cells, header_cells)`` is returned instead of only ``data_cells``\ .
 

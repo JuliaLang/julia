@@ -97,8 +97,8 @@ end
 # ––––
 
 type Code
-    language::UTF8String
-    code::UTF8String
+    language::String
+    code::String
 end
 
 Code(code) = Code("", code)

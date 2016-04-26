@@ -148,8 +148,6 @@ end
 @deprecate inf{T<:AbstractFloat}(::Type{T})  convert(T,Inf)
 @deprecate nan{T<:AbstractFloat}(::Type{T})  convert(T,NaN)
 
-@deprecate_binding String AbstractString
-
 # 13221 - when removing Uint deprecation, remove hack in jl_binding_deprecation_warning
 @deprecate_binding Uint    UInt
 @deprecate_binding Uint8   UInt8
@@ -488,13 +486,11 @@ export float32_isvalid, float64_isvalid
 
 # 11241
 @deprecate is_valid_char(ch::Char)          isvalid(ch)
-@deprecate is_valid_ascii(str::ASCIIString) isvalid(str)
-@deprecate is_valid_utf8(str::UTF8String)   isvalid(str)
+@deprecate is_valid_utf8(str::String)   isvalid(str)
 @deprecate is_valid_utf16(str::UTF16String) isvalid(str)
 @deprecate is_valid_utf32(str::UTF32String) isvalid(str)
 @deprecate is_valid_char(ch)   isvalid(Char, ch)
-@deprecate is_valid_ascii(str) isvalid(ASCIIString, str)
-@deprecate is_valid_utf8(str)  isvalid(UTF8String, str)
+@deprecate is_valid_utf8(str)  isvalid(String, str)
 @deprecate is_valid_utf16(str) isvalid(UTF16String, str)
 @deprecate is_valid_utf32(str) isvalid(UTF32String, str)
 
@@ -1110,6 +1106,10 @@ macro ccallable(def)
     end
     error("expected method definition in @ccallable")
 end
+
+@deprecate_binding ASCIIString String
+@deprecate_binding UTF8String String
+@deprecate_binding ByteString String
 
 # During the 0.5 development cycle, do not add any deprecations below this line
 # To be deprecated in 0.6

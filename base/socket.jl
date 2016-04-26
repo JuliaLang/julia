@@ -575,14 +575,15 @@ function uv_getaddrinfocb(req::Ptr{Void}, status::Cint, addrinfo::Ptr{Void})
     nothing
 end
 
-function getaddrinfo(cb::Function, host::ASCIIString)
+function getaddrinfo(cb::Function, host::String)
     callback_dict[cb] = cb
     uv_error("getaddrinfo",ccall(:jl_getaddrinfo, Int32, (Ptr{Void}, Cstring, Ptr{UInt8}, Any, Ptr{Void}),
                                  eventloop(), host, C_NULL, cb, uv_jl_getaddrinfocb::Ptr{Void}))
 end
 getaddrinfo(cb::Function, host::AbstractString) = getaddrinfo(cb,ascii(host))
 
-function getaddrinfo(host::ASCIIString)
+function getaddrinfo(host::String)
+    isascii(host) || error("non-ASCII hostname: $host")
     c = Condition()
     getaddrinfo(host) do IP
         notify(c,IP)
@@ -591,7 +592,7 @@ function getaddrinfo(host::ASCIIString)
     isa(ip,UVError) && throw(ip)
     return ip::IPAddr
 end
-getaddrinfo(host::AbstractString) = getaddrinfo(ascii(host))
+getaddrinfo(host::AbstractString) = getaddrinfo(String(host))
 
 const _sizeof_uv_interface_address = ccall(:jl_uv_sizeof_interface_address,Int32,())
 

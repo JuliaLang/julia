@@ -22,7 +22,7 @@
 
    Temporarily changes the current working directory and applies function ``f`` before returning.
 
-.. function:: readdir([dir]) -> Vector{ByteString}
+.. function:: readdir([dir]) -> Vector{String}
 
    .. Docstring generated from Julia source
 

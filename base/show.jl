@@ -149,8 +149,8 @@ end
 show(io::IO, x::TypeConstructor) = show(io, x.body)
 
 function show_type_parameter(io::IO, p::ANY)
-    if p === ByteString
-        print(io, "ByteString")
+    if p === String
+        print(io, "String")
     else
         show(io, p)
     end
@@ -220,9 +220,9 @@ end
 
 function lambdainfo_slotnames(l::LambdaInfo)
     slotnames = l.slotnames
-    isa(slotnames, Array) || return UTF8String[]
-    names = Dict{UTF8String,Int}()
-    printnames = Vector{UTF8String}(length(slotnames))
+    isa(slotnames, Array) || return String[]
+    names = Dict{String,Int}()
+    printnames = Vector{String}(length(slotnames))
     for i in eachindex(slotnames)
         name = string(slotnames[i])
         idx = get!(names, name, i)
@@ -546,9 +546,9 @@ function show_unquoted(io::IO, ex::Slot, ::Int, ::Int)
         end
     end
     slotnames = get(io, :LAMBDA_SLOTNAMES, false)
-    if (isa(slotnames, Vector{UTF8String}) &&
-        slotid <= length(slotnames::Vector{UTF8String}))
-        print(io, (slotnames::Vector{UTF8String})[slotid])
+    if (isa(slotnames, Vector{String}) &&
+        slotid <= length(slotnames::Vector{String}))
+        print(io, (slotnames::Vector{String})[slotid])
     else
         print(io, "_", slotid)
     end

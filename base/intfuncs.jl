@@ -239,7 +239,7 @@ function bin(x::Unsigned, pad::Int, neg::Bool)
         i -= 1
     end
     if neg; a[1]='-'; end
-    ASCIIString(a)
+    String(a)
 end
 
 function oct(x::Unsigned, pad::Int, neg::Bool)
@@ -251,7 +251,7 @@ function oct(x::Unsigned, pad::Int, neg::Bool)
         i -= 1
     end
     if neg; a[1]='-'; end
-    ASCIIString(a)
+    String(a)
 end
 
 function dec(x::Unsigned, pad::Int, neg::Bool)
@@ -263,7 +263,7 @@ function dec(x::Unsigned, pad::Int, neg::Bool)
         i -= 1
     end
     if neg; a[1]='-'; end
-    ASCIIString(a)
+    String(a)
 end
 
 function hex(x::Unsigned, pad::Int, neg::Bool)
@@ -276,7 +276,7 @@ function hex(x::Unsigned, pad::Int, neg::Bool)
         i -= 1
     end
     if neg; a[1]='-'; end
-    ASCIIString(a)
+    String(a)
 end
 
 num2hex(n::Integer) = hex(n, sizeof(n)*2)
@@ -295,7 +295,7 @@ function base(b::Int, x::Unsigned, pad::Int, neg::Bool)
         i -= 1
     end
     if neg; a[1]='-'; end
-    ASCIIString(a)
+    String(a)
 end
 base(b::Integer, n::Integer, pad::Integer=1) = base(Int(b), unsigned(abs(n)), pad, n<0)
 
