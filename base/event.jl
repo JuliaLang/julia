@@ -105,12 +105,39 @@ function wait()
             end
         else
             t = shift!(Workqueue)
-            t.state == :queued || throw(AssertionError("shift!(Workqueue).state == :queued"))
+            if t.state != :queued
+                # assume this somehow got queued twice,
+                # probably broken now, but try discarding this switch and keep going
+                # can't throw here, because it's probably not the fault of the caller to wait
+                # and don't want to use print() here, because that may try to incur a task switch
+                ccall(:jl_safe_printf, Void, (Ptr{UInt8}, Vararg{Int32}),
+                    "\nWARNING: Workqueue inconsistency detected: shift!(Workqueue).state != :queued\n")
+                continue
+            end
             arg = t.result
             t.result = nothing
             t.state = :runnable
-            result = yieldto(t, arg)
-            current_task().state == :runnable || throw(AssertionError("current_task().state == :runnable"))
+            local result
+            try
+                result = yieldto(t, arg)
+                current_task().state == :runnable || throw(AssertionError("current_task().state == :runnable"))
+            catch e
+                ct = current_task()
+                if ct.state == :queued
+                    if t.state == :runnable
+                        # assume we failed to queue t
+                        # return it to the queue to be scheduled later
+                        t.result = arg
+                        t.state = :queued
+                        push!(Workqueue, t)
+                    end
+                    # return ourself to the runnable state
+                    i = findfirst(Workqueue, ct)
+                    i == 0 || deleteat!(Workqueue, i)
+                    ct.state = :runnable
+                end
+                rethrow(e)
+            end
             process_events(false)
             # return when we come out of the queue
             return result

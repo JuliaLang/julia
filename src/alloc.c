@@ -399,59 +399,64 @@ static jl_lambda_info_t *jl_instantiate_staged(jl_method_t *generator, jl_tuplet
     jl_svec_t *sparam_vals = env;
     jl_lambda_info_t *func = generator->lambda_template;
     JL_GC_PUSH4(&ex, &linenum, &sparam_vals, &func);
-
+    int last_in = in_pure_callback;
     assert(jl_svec_len(func->sparam_syms) == jl_svec_len(sparam_vals));
-    //if (!generated->inferred)
-    //    jl_type_infer(func);  // this doesn't help all that much
+    JL_TRY {
+        in_pure_callback = 1;
+        ex = jl_exprn(lambda_sym, 2);
 
-    ex = jl_exprn(lambda_sym, 2);
+        int nargs = func->nargs;
+        jl_array_t *argnames = jl_alloc_cell_1d(nargs);
+        jl_cellset(ex->args, 0, argnames);
+        for (i = 0; i < nargs; i++)
+            jl_cellset(argnames, i, jl_cellref(func->slotnames, i));
 
-    int nargs = func->nargs;
-    jl_array_t *argnames = jl_alloc_cell_1d(nargs);
-    jl_cellset(ex->args, 0, argnames);
-    for (i = 0; i < nargs; i++)
-        jl_cellset(argnames, i, jl_cellref(func->slotnames, i));
+        jl_expr_t *scopeblock = jl_exprn(jl_symbol("scope-block"), 1);
+        jl_cellset(ex->args, 1, scopeblock);
+        jl_expr_t *body = jl_exprn(jl_symbol("block"), 2);
+        jl_cellset(((jl_expr_t*)jl_exprarg(ex,1))->args, 0, body);
+        linenum = jl_box_long(generator->line);
+        jl_value_t *linenode = jl_new_struct(jl_linenumbernode_type, generator->file, linenum);
+        jl_cellset(body->args, 0, linenode);
 
-    jl_expr_t *scopeblock = jl_exprn(jl_symbol("scope-block"), 1);
-    jl_cellset(ex->args, 1, scopeblock);
-    jl_expr_t *body = jl_exprn(jl_symbol("block"), 2);
-    jl_cellset(((jl_expr_t*)jl_exprarg(ex,1))->args, 0, body);
-    linenum = jl_box_long(generator->line);
-    jl_value_t *linenode = jl_new_struct(jl_linenumbernode_type, generator->file, linenum);
-    jl_cellset(body->args, 0, linenode);
+        // invoke code generator
+        assert(jl_nparams(tt) == jl_array_len(argnames) ||
+               (func->isva && (jl_nparams(tt) >= jl_array_len(argnames) - 1)));
+        jl_cellset(body->args, 1,
+                jl_call_unspecialized(sparam_vals, func, jl_svec_data(tt->parameters), jl_nparams(tt)));
 
-    // invoke code generator
-    assert(jl_nparams(tt) == jl_array_len(argnames) ||
-           (func->isva && (jl_nparams(tt) >= jl_array_len(argnames) - 1)));
-    jl_cellset(body->args, 1,
-            jl_call_unspecialized(sparam_vals, func, jl_svec_data(tt->parameters), jl_nparams(tt)));
+        if (func->sparam_syms != jl_emptysvec) {
+            // mark this function as having the same static parameters as the generator
+            size_t i, nsp = jl_svec_len(func->sparam_syms);
+            jl_expr_t *newast = jl_exprn(jl_symbol("with-static-parameters"), nsp + 1);
+            jl_exprarg(newast, 0) = (jl_value_t*)ex;
+            // (with-static-parameters func_expr sp_1 sp_2 ...)
+            for (i = 0; i < nsp; i++)
+                jl_exprarg(newast, i+1) = jl_svecref(func->sparam_syms, i);
+            ex = newast;
+        }
 
-    if (func->sparam_syms != jl_emptysvec) {
-        // mark this function as having the same static parameters as the generator
-        size_t i, nsp = jl_svec_len(func->sparam_syms);
-        jl_expr_t *newast = jl_exprn(jl_symbol("with-static-parameters"), nsp + 1);
-        jl_exprarg(newast, 0) = (jl_value_t*)ex;
-        // (with-static-parameters func_expr sp_1 sp_2 ...)
-        for (i = 0; i < nsp; i++)
-            jl_exprarg(newast, i+1) = jl_svecref(func->sparam_syms, i);
-        ex = newast;
+        // need to eval macros in the right module, but not give a warning for the `eval` call unless that results in a call to `eval`
+        func = (jl_lambda_info_t*)jl_toplevel_eval_in_warn(generator->module, (jl_value_t*)ex, 1);
+
+        // finish marking this as a specialization of the generator
+        func->isva = generator->lambda_template->isva;
+        func->def = generator;
+        jl_gc_wb(func, generator);
+        func->sparam_vals = env;
+        jl_gc_wb(func, env);
+        func->specTypes = tt;
+        jl_gc_wb(func, tt);
+
+        jl_array_t *stmts = func->code;
+        for(i = 0, l = jl_array_len(stmts); i < l; i++) {
+            jl_cellset(stmts, i, jl_resolve_globals(jl_cellref(stmts, i), func));
+        }
+        in_pure_callback = last_in;
     }
-
-    // need to eval macros in the right module, but not give a warning for the `eval` call unless that results in a call to `eval`
-    func = (jl_lambda_info_t*)jl_toplevel_eval_in_warn(generator->module, (jl_value_t*)ex, 1);
-
-    // finish marking this as a specialization of the generator
-    func->isva = generator->lambda_template->isva;
-    func->def = generator;
-    jl_gc_wb(func, generator);
-    func->sparam_vals = env;
-    jl_gc_wb(func, env);
-    func->specTypes = tt;
-    jl_gc_wb(func, tt);
-
-    jl_array_t *stmts = func->code;
-    for(i = 0, l = jl_array_len(stmts); i < l; i++) {
-        jl_cellset(stmts, i, jl_resolve_globals(jl_cellref(stmts, i), func));
+    JL_CATCH {
+        in_pure_callback = last_in;
+        jl_rethrow();
     }
     JL_GC_POP();
     return func;

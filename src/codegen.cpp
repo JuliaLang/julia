@@ -948,7 +948,7 @@ static void jl_finalize_module(std::unique_ptr<Module> uniquem)
 
 // this ensures that llvmf has been emitted to the execution engine,
 // returning the function pointer to it
-extern void callback_triggered_linfos();
+extern void jl_callback_triggered_linfos(void);
 static uint64_t getAddressForFunction(llvm::Function *llvmf)
 {
 #ifdef JL_DEBUG_BUILD
@@ -959,7 +959,7 @@ static uint64_t getAddressForFunction(llvm::Function *llvmf)
     uint64_t ret = jl_ExecutionEngine->getFunctionAddress(llvmf->getName());
     // delay executing trace callbacks until here to make sure there's no
     // recursive compilation.
-    callback_triggered_linfos();
+    jl_callback_triggered_linfos();
     return ret;
 #else
     return (uint64_t)jl_ExecutionEngine->getPointerToFunction(
