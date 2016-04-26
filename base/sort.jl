@@ -74,12 +74,12 @@ select(v::AbstractVector, k::Union{Int,OrdinalRange}; kws...) = select!(copy(v),
 
 # index of the first value of vector a that is greater than or equal to x;
 # returns length(v)+1 if x is greater than all values in v.
-function searchsortedfirst(v::AbstractVector, x, lo::Int, hi::Int, o::Ordering)
+function searchsortedfirst(v::AbstractVector, x, lo::Int, hi::Int, o::Ordering, by=identity)
     lo = lo-1
     hi = hi+1
     @inbounds while lo < hi-1
         m = (lo+hi)>>>1
-        if lt(o, v[m], x)
+        if lt(o, by(v[m]), x)
             lo = m
         else
             hi = m
@@ -90,12 +90,12 @@ end
 
 # index of the last value of vector a that is less than or equal to x;
 # returns 0 if x is less than all values of v.
-function searchsortedlast(v::AbstractVector, x, lo::Int, hi::Int, o::Ordering)
+function searchsortedlast(v::AbstractVector, x, lo::Int, hi::Int, o::Ordering, by=identity)
     lo = lo-1
     hi = hi+1
     @inbounds while lo < hi-1
         m = (lo+hi)>>>1
-        if lt(o, x, v[m])
+        if lt(o, x, by(v[m]))
             hi = m
         else
             lo = m
@@ -107,18 +107,18 @@ end
 # returns the range of indices of v equal to x
 # if v does not contain x, returns a 0-length range
 # indicating the insertion point of x
-function searchsorted(v::AbstractVector, x, ilo::Int, ihi::Int, o::Ordering)
+function searchsorted(v::AbstractVector, x, ilo::Int, ihi::Int, o::Ordering, by=identity)
     lo = ilo-1
     hi = ihi+1
     @inbounds while lo < hi-1
         m = (lo+hi)>>>1
-        if lt(o, v[m], x)
+        if lt(o, by(v[m]), x)
             lo = m
-        elseif lt(o, x, v[m])
+        elseif lt(o, x, by(v[m]))
             hi = m
         else
-            a = searchsortedfirst(v, x, max(lo,ilo), m, o)
-            b = searchsortedlast(v, x, m, min(hi,ihi), o)
+            a = searchsortedfirst(v, x, max(lo,ilo), m, o, by)
+            b = searchsortedlast(v, x, m, min(hi,ihi), o, by)
             return a : b
         end
     end
@@ -180,10 +180,10 @@ searchsorted{T<:Real}(a::Range{T}, x::Real, o::DirectOrdering) =
 
 for s in [:searchsortedfirst, :searchsortedlast, :searchsorted]
     @eval begin
-        $s(v::AbstractVector, x, o::Ordering) = $s(v,x,1,length(v),o)
+        $s(v::AbstractVector, x, o::Ordering, by) = $s(v,x,1,length(v),o,by)
         $s(v::AbstractVector, x;
            lt=isless, by=identity, rev::Bool=false, order::Ordering=Forward) =
-            $s(v,x,ord(lt,by,rev,order))
+            $s(v,x,ord(lt,identity,rev,order),by)
     end
 end
 
