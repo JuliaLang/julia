@@ -408,3 +408,9 @@ A = reshape(1:16,4,4)
 @test sprint(show, :(break)) == ":(break)"
 @test_repr "continue"
 @test_repr "break"
+
+let x = [], y = []
+    push!(x, y)
+    push!(y, x)
+    @test replstr(x) == "1-element Array{Any,1}:\n Any[Any[Any[#= circular reference @-2 =#]]]"
+end

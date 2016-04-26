@@ -69,6 +69,18 @@ _limit_output = false # delete with with_output_limit deprecation
 
 displaysize(io::IOContext) = haskey(io, :displaysize) ? io[:displaysize] : displaysize(io.io)
 
+show_circular(io::IO, x::ANY) = false
+function show_circular(io::IOContext, x::ANY)
+    d = 1
+    for (k, v) in io.dict
+        if k === :SHOWN_SET && v === x
+            print(io, "#= circular reference @-$d =#")
+            return true
+        end
+        d += 1
+    end
+    return false
+end
 
 show(io::IO, x::ANY) = show_default(io, x)
 function show_default(io::IO, x::ANY)
@@ -77,9 +89,7 @@ function show_default(io::IO, x::ANY)
     print(io, '(')
     nf = nfields(t)
     if nf != 0 || t.size==0
-        if (:SHOWN_SET => x) in io
-            print(io, "#= circular reference =#")
-        else
+        if !show_circular(io, x)
             recur_io = IOContext(io, :SHOWN_SET => x)
             for i=1:nf
                 f = fieldname(t, i)
@@ -246,36 +256,35 @@ end
 function show_delim_array(io::IO, itr::Union{AbstractArray,SimpleVector}, op, delim, cl, delim_one,
                           i1=1, l=length(itr))
     print(io, op)
-    newline = true
-    first = true
-    i = i1
-    if l > 0
-        while true
-            if !isassigned(itr, i)
-                print(io, undef_ref_str)
-                multiline = false
-            else
-                x = itr[i]
-                multiline = isa(x,AbstractArray) && ndims(x)>1 && !isempty(x)
-                newline && multiline && println(io)
-                if !isbits(x) && is(x, itr)
-                    print(io, "#= circular reference =#")
+    if !show_circular(io, itr)
+        recur_io = IOContext(io, :SHOWN_SET => itr)
+        newline = true
+        first = true
+        i = i1
+        if l > 0
+            while true
+                if !isassigned(itr, i)
+                    print(io, undef_ref_str)
+                    multiline = false
                 else
-                    showcompact_lim(io, x)
+                    x = itr[i]
+                    multiline = isa(x,AbstractArray) && ndims(x)>1 && !isempty(x)
+                    newline && multiline && println(io)
+                    showcompact_lim(recur_io, x)
                 end
-            end
-            i += 1
-            if i > i1+l-1
-                delim_one && first && print(io, delim)
-                break
-            end
-            first = false
-            print(io, delim)
-            if multiline
-                println(io); println(io)
-                newline = false
-            else
-                newline = true
+                i += 1
+                if i > i1+l-1
+                    delim_one && first && print(io, delim)
+                    break
+                end
+                first = false
+                print(io, delim)
+                if multiline
+                    println(io); println(io)
+                    newline = false
+                else
+                    newline = true
+                end
             end
         end
     end
@@ -284,35 +293,34 @@ end
 
 function show_delim_array(io::IO, itr, op, delim, cl, delim_one, i1=1, n=typemax(Int))
     print(io, op)
-    state = start(itr)
-    newline = true
-    first = true
-    while i1 > 1 && !done(itr,state)
-        _, state = next(itr, state)
-        i1 -= 1
-    end
-    if !done(itr,state)
-        while true
-            x, state = next(itr,state)
-            multiline = isa(x,AbstractArray) && ndims(x)>1 && !isempty(x)
-            newline && multiline && println(io)
-            if !isbits(x) && is(x, itr)
-                print(io, "#= circular reference =#")
-            else
-                show(io, x)
-            end
-            i1 += 1
-            if done(itr,state) || i1 > n
-                delim_one && first && print(io, delim)
-                break
-            end
-            first = false
-            print(io, delim)
-            if multiline
-                println(io); println(io)
-                newline = false
-            else
-                newline = true
+    if !show_circular(io, itr)
+        recur_io = IOContext(io, :SHOWN_SET => itr)
+        state = start(itr)
+        newline = true
+        first = true
+        while i1 > 1 && !done(itr,state)
+            _, state = next(itr, state)
+            i1 -= 1
+        end
+        if !done(itr,state)
+            while true
+                x, state = next(itr,state)
+                multiline = isa(x,AbstractArray) && ndims(x)>1 && !isempty(x)
+                newline && multiline && println(io)
+                show(recur_io, x)
+                i1 += 1
+                if done(itr,state) || i1 > n
+                    delim_one && first && print(io, delim)
+                    break
+                end
+                first = false
+                print(io, delim)
+                if multiline
+                    println(io); println(io)
+                    newline = false
+                else
+                    newline = true
+                end
             end
         end
     end
