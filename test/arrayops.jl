@@ -1197,6 +1197,11 @@ I2 = CartesianIndex((-1,5,2))
 
 @test length(I1) == 3
 
+@test isless(CartesianIndex((1,1)), CartesianIndex((2,1)))
+@test isless(CartesianIndex((1,1)), CartesianIndex((1,2)))
+@test isless(CartesianIndex((2,1)), CartesianIndex((1,2)))
+@test !isless(CartesianIndex((1,2)), CartesianIndex((2,1)))
+
 a = spzeros(2,3)
 @test CartesianRange(size(a)) == eachindex(a)
 a[CartesianIndex{2}(2,3)] = 5
