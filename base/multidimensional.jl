@@ -3,7 +3,7 @@
 ### Multidimensional iterators
 module IteratorsMD
 
-import Base: eltype, length, size, start, done, next, last, getindex, setindex!, linearindexing, min, max, eachindex, ndims, iteratorsize
+import Base: eltype, length, size, start, done, next, last, getindex, setindex!, linearindexing, min, max, isless, eachindex, ndims, iteratorsize
 importall ..Base.Operators
 import Base: simd_outer_range, simd_inner_length, simd_index, @generated
 import Base: @nref, @ncall, @nif, @nexprs, LinearFast, LinearSlow, to_index, AbstractCartesianIndex
@@ -72,6 +72,15 @@ end
     :($I($(args...)))
 end
 *(index::CartesianIndex,a::Integer)=*(a,index)
+
+# comparison
+@inline isless{N}(I1::CartesianIndex{N}, I2::CartesianIndex{N}) = _isless(0, I1.I, I2.I)
+@inline function _isless{N}(ret, I1::NTuple{N,Int}, I2::NTuple{N,Int})
+    newret = ifelse(ret==0, icmp(I1[N], I2[N]), ret)
+    _isless(newret, Base.front(I1), Base.front(I2))
+end
+_isless(ret, ::Tuple{}, ::Tuple{}) = ifelse(ret==1, true, false)
+icmp(a, b) = ifelse(isless(a,b), 1, ifelse(a==b, 0, -1))
 
 # Iteration
 immutable CartesianRange{I<:CartesianIndex}
