@@ -109,9 +109,6 @@ static void addOptimizationPasses(T *PM)
     PM->add(createDeadStoreEliminationPass());  // Delete dead stores
 #if !defined(INSTCOMBINE_BUG)
     if (jl_options.opt_level >= 3) {
-#ifdef LLVM39
-        initializeDemandedBitsPass(*PassRegistry::getPassRegistry());
-#endif
         PM->add(createSLPVectorizerPass());     // Vectorize straight-line code
     }
 #endif
@@ -256,7 +253,7 @@ class JuliaOJIT {
                         continue;
                     if (!(Flags & object::BasicSymbolRef::SF_Exported))
                         continue;
-                    ErrorOr<StringRef> Name = Symbol.getName();
+                    auto Name = Symbol.getName();
                     orc::JITSymbol Sym = JIT.CompileLayer.findSymbolIn(H, *Name, true);
                     assert(Sym);
                     // note: calling getAddress here eagerly finalizes H

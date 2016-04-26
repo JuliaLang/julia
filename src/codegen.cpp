@@ -186,8 +186,12 @@ extern void _chkstk(void);
 #define DISABLE_FLOAT16
 
 // llvm state
+#ifdef LLVM39
+JL_DLLEXPORT LLVMContext jl_LLVMContext;
+#else
 JL_DLLEXPORT LLVMContext &jl_LLVMContext = getGlobalContext();
-static IRBuilder<> builder(getGlobalContext());
+#endif
+static IRBuilder<> builder(jl_LLVMContext);
 static bool nested_compile = false;
 static TargetMachine *jl_TargetMachine;
 
@@ -2254,9 +2258,9 @@ static bool emit_builtin_call(jl_cgval_t *ret, jl_value_t *f, jl_value_t **args,
                     error_unless(builder.CreateICmpSGT(idx,
                                                       ConstantInt::get(T_size,0)),
                                  "arraysize: dimension out of range", ctx);
-                    BasicBlock *outBB = BasicBlock::Create(getGlobalContext(),"outofrange",ctx->f);
-                    BasicBlock *inBB = BasicBlock::Create(getGlobalContext(),"inrange");
-                    BasicBlock *ansBB = BasicBlock::Create(getGlobalContext(),"arraysize");
+                    BasicBlock *outBB = BasicBlock::Create(jl_LLVMContext,"outofrange",ctx->f);
+                    BasicBlock *inBB = BasicBlock::Create(jl_LLVMContext,"inrange");
+                    BasicBlock *ansBB = BasicBlock::Create(jl_LLVMContext,"arraysize");
                     builder.CreateCondBr(builder.CreateICmpSLE(idx,
                                                               ConstantInt::get(T_size, ndims)),
                                          inBB, outBB);
@@ -2350,8 +2354,8 @@ static bool emit_builtin_call(jl_cgval_t *ret, jl_value_t *f, jl_value_t **args,
                             flags = builder.CreateAnd(flags, 3);
                             Value *is_owned = builder.CreateICmpEQ(flags, ConstantInt::get(T_int16, 3));
                             BasicBlock *curBB = builder.GetInsertBlock();
-                            BasicBlock *ownedBB = BasicBlock::Create(getGlobalContext(), "array_owned", ctx->f);
-                            BasicBlock *mergeBB = BasicBlock::Create(getGlobalContext(), "merge_own", ctx->f);
+                            BasicBlock *ownedBB = BasicBlock::Create(jl_LLVMContext, "array_owned", ctx->f);
+                            BasicBlock *mergeBB = BasicBlock::Create(jl_LLVMContext, "merge_own", ctx->f);
                             builder.CreateCondBr(is_owned, ownedBB, mergeBB);
                             builder.SetInsertPoint(ownedBB);
                             // load owner pointer
@@ -2775,8 +2779,8 @@ static jl_cgval_t emit_call(jl_expr_t *ex, jl_codectx_t *ctx)
 static void undef_var_error_if_null(Value *v, jl_sym_t *name, jl_codectx_t *ctx)
 {
     Value *ok = builder.CreateICmpNE(v, V_null);
-    BasicBlock *err = BasicBlock::Create(getGlobalContext(), "err", ctx->f);
-    BasicBlock *ifok = BasicBlock::Create(getGlobalContext(), "ok");
+    BasicBlock *err = BasicBlock::Create(jl_LLVMContext, "err", ctx->f);
+    BasicBlock *ifok = BasicBlock::Create(jl_LLVMContext, "ok");
     builder.CreateCondBr(ok, ifok, err);
     builder.SetInsertPoint(err);
     builder.CreateCall(prepare_call(jlundefvarerror_func), literal_pointer_val((jl_value_t*)name));
@@ -3102,7 +3106,7 @@ static jl_cgval_t emit_expr(jl_value_t *expr, jl_codectx_t *ctx)
             BasicBlock *bb = (*ctx->labels)[labelname];
             assert(bb);
             builder.CreateBr(bb);
-            BasicBlock *after = BasicBlock::Create(getGlobalContext(),
+            BasicBlock *after = BasicBlock::Create(jl_LLVMContext,
                                                    "br", ctx->f);
             builder.SetInsertPoint(after);
         }
@@ -3159,7 +3163,7 @@ static jl_cgval_t emit_expr(jl_value_t *expr, jl_codectx_t *ctx)
     if (head == goto_ifnot_sym) {
         jl_value_t *cond = args[0];
         int labelname = jl_unbox_long(args[1]);
-        BasicBlock *ifso = BasicBlock::Create(getGlobalContext(), "if", ctx->f);
+        BasicBlock *ifso = BasicBlock::Create(jl_LLVMContext, "if", ctx->f);
         BasicBlock *ifnot = (*ctx->labels)[labelname];
         assert(ifnot);
         // NOTE: if type inference sees a constant condition it behaves as if
@@ -3295,13 +3299,13 @@ static jl_cgval_t emit_expr(jl_value_t *expr, jl_codectx_t *ctx)
         // We need to mark this on the call site as well. See issue #6757
         sj->setCanReturnTwice();
         Value *isz = builder.CreateICmpEQ(sj, ConstantInt::get(T_int32,0));
-        BasicBlock *tryblk = BasicBlock::Create(getGlobalContext(), "try",
+        BasicBlock *tryblk = BasicBlock::Create(jl_LLVMContext, "try",
                                                 ctx->f);
         BasicBlock *handlr = (*ctx->labels)[labl];
         assert(handlr);
 #ifdef _OS_WINDOWS_
-        BasicBlock *cond_resetstkoflw_blk = BasicBlock::Create(getGlobalContext(), "cond_resetstkoflw", ctx->f);
-        BasicBlock *resetstkoflw_blk = BasicBlock::Create(getGlobalContext(), "resetstkoflw", ctx->f);
+        BasicBlock *cond_resetstkoflw_blk = BasicBlock::Create(jl_LLVMContext, "cond_resetstkoflw", ctx->f);
+        BasicBlock *resetstkoflw_blk = BasicBlock::Create(jl_LLVMContext, "resetstkoflw", ctx->f);
         builder.CreateCondBr(isz, tryblk, cond_resetstkoflw_blk);
         builder.SetInsertPoint(cond_resetstkoflw_blk);
         builder.CreateCondBr(builder.CreateICmpEQ(
@@ -4434,7 +4438,7 @@ static std::unique_ptr<Module> emit_function(jl_lambda_info_t *lam, jl_llvm_func
                     Value *lv = alloc_local(i, &ctx); (void)lv;
 #ifdef LLVM36
                     if (ctx.debug_enabled) {
-                        assert(varinfo.dinfo->getType() != jl_pvalue_dillvmt);
+                        assert((Metadata*)varinfo.dinfo->getType() != jl_pvalue_dillvmt);
                         ctx.dbuilder->insertDeclare(lv, varinfo.dinfo, ctx.dbuilder->createExpression(),
 #ifdef LLVM37
                                 inlineLoc,
@@ -4455,7 +4459,7 @@ static std::unique_ptr<Module> emit_function(jl_lambda_info_t *lam, jl_llvm_func
 #ifdef LLVM36
             if (ctx.debug_enabled) {
                 DIExpression *expr;
-                if (varinfo.dinfo->getType() == jl_pvalue_dillvmt) {
+                if ((Metadata*)varinfo.dinfo->getType() == jl_pvalue_dillvmt) {
                     expr = ctx.dbuilder->createExpression();
                 }
                 else {
@@ -4520,7 +4524,7 @@ static std::unique_ptr<Module> emit_function(jl_lambda_info_t *lam, jl_llvm_func
                         addr.push_back(llvm::dwarf::DW_OP_deref);
                         addr.push_back(llvm::dwarf::DW_OP_plus);
                         addr.push_back((i - 1) * sizeof(void*));
-                        if (vi.dinfo->getType() != jl_pvalue_dillvmt)
+                        if ((Metadata*)vi.dinfo->getType() != jl_pvalue_dillvmt)
                             addr.push_back(llvm::dwarf::DW_OP_deref);
                         ctx.dbuilder->insertDeclare(pargArray, vi.dinfo, ctx.dbuilder->createExpression(addr),
 #ifdef LLVM37
@@ -4547,7 +4551,7 @@ static std::unique_ptr<Module> emit_function(jl_lambda_info_t *lam, jl_llvm_func
 #ifdef LLVM36
                     if (specsig && theArg.V && ctx.debug_enabled) {
                         SmallVector<uint64_t, 8> addr;
-                        if (vi.dinfo->getType() != jl_pvalue_dillvmt && theArg.ispointer)
+                        if ((Metadata*)vi.dinfo->getType() != jl_pvalue_dillvmt && theArg.ispointer)
                             addr.push_back(llvm::dwarf::DW_OP_deref);
                         AllocaInst *parg = dyn_cast<AllocaInst>(theArg.V);
                         if (!parg) {
@@ -4626,7 +4630,7 @@ static std::unique_ptr<Module> emit_function(jl_lambda_info_t *lam, jl_llvm_func
                 labels[lname] = prev;
             }
             else {
-                prev = BasicBlock::Create(getGlobalContext(), "L", f);
+                prev = BasicBlock::Create(jl_LLVMContext, "L", f);
                 labels[lname] = prev;
             }
         }
@@ -4763,7 +4767,7 @@ static std::unique_ptr<Module> emit_function(jl_lambda_info_t *lam, jl_llvm_func
                 builder.CreateRet(retval);
             if (i != stmtslen-1) {
                 BasicBlock *bb =
-                    BasicBlock::Create(getGlobalContext(), "ret", ctx.f);
+                    BasicBlock::Create(jl_LLVMContext, "ret", ctx.f);
                 builder.SetInsertPoint(bb);
             }
         }
@@ -4936,17 +4940,17 @@ static void init_julia_llvm_env(Module *m)
 
     // every variable or function mapped in this function must be
     // exported from libjulia, to support static compilation
-    T_int1  = Type::getInt1Ty(getGlobalContext());
-    T_int8  = Type::getInt8Ty(getGlobalContext());
+    T_int1  = Type::getInt1Ty(jl_LLVMContext);
+    T_int8  = Type::getInt8Ty(jl_LLVMContext);
     T_pint8 = PointerType::get(T_int8, 0);
     T_ppint8 = PointerType::get(T_pint8, 0);
     T_pppint8 = PointerType::get(T_ppint8, 0);
-    T_int16 = Type::getInt16Ty(getGlobalContext());
+    T_int16 = Type::getInt16Ty(jl_LLVMContext);
     T_pint16 = PointerType::get(T_int16, 0);
-    T_int32 = Type::getInt32Ty(getGlobalContext());
-    T_char = Type::getInt32Ty(getGlobalContext());
+    T_int32 = Type::getInt32Ty(jl_LLVMContext);
+    T_char = Type::getInt32Ty(jl_LLVMContext);
     T_pint32 = PointerType::get(T_int32, 0);
-    T_int64 = Type::getInt64Ty(getGlobalContext());
+    T_int64 = Type::getInt64Ty(jl_LLVMContext);
     T_pint64 = PointerType::get(T_int64, 0);
     T_uint8 = T_int8;   T_uint16 = T_int16;
     T_uint32 = T_int32; T_uint64 = T_int64;
@@ -4955,12 +4959,12 @@ static void init_julia_llvm_env(Module *m)
     else
         T_size = T_uint32;
     T_psize = PointerType::get(T_size, 0);
-    T_float16 = Type::getHalfTy(getGlobalContext());
-    T_float32 = Type::getFloatTy(getGlobalContext());
+    T_float16 = Type::getHalfTy(jl_LLVMContext);
+    T_float32 = Type::getFloatTy(jl_LLVMContext);
     T_pfloat32 = PointerType::get(T_float32, 0);
-    T_float64 = Type::getDoubleTy(getGlobalContext());
+    T_float64 = Type::getDoubleTy(jl_LLVMContext);
     T_pfloat64 = PointerType::get(T_float64, 0);
-    T_float128 = Type::getFP128Ty(getGlobalContext());
+    T_float128 = Type::getFP128Ty(jl_LLVMContext);
     T_void = Type::getVoidTy(jl_LLVMContext);
     T_pvoidfunc = FunctionType::get(T_void, /*isVarArg*/false)->getPointerTo();
 
@@ -4968,7 +4972,7 @@ static void init_julia_llvm_env(Module *m)
     NoopType = ArrayType::get(T_int1, 0);
 
     // add needed base definitions to our LLVM environment
-    StructType *valueSt = StructType::create(getGlobalContext(), "jl_value_t");
+    StructType *valueSt = StructType::create(jl_LLVMContext, "jl_value_t");
     Type *valueStructElts[1] = { PointerType::getUnqual(valueSt) };
     ArrayRef<Type*> vselts(valueStructElts);
     valueSt->setBody(vselts);
@@ -5787,7 +5791,7 @@ extern "C" void jl_init_codegen(void)
     jl_ExecutionEngine->DisableLazyCompilation();
 #endif
 
-    mbuilder = new MDBuilder(getGlobalContext());
+    mbuilder = new MDBuilder(jl_LLVMContext);
 
     // Now that the execution engine exists, initialize all modules
     jl_setup_module(engine_module);

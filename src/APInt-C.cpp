@@ -1,6 +1,7 @@
 // This file is a part of Julia. License is MIT: http://julialang.org/license
 
 #include "llvm-version.h"
+#include <llvm/ADT/ArrayRef.h>
 #include <llvm/ADT/APInt.h>
 #include <llvm/ADT/APFloat.h>
 #include <llvm/Support/MathExtras.h>
