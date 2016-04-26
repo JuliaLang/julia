@@ -354,18 +354,30 @@ function update(branch::AbstractString)
             throw(PkgError("METADATA cannot be updated. Resolve problems manually in $(Pkg.dir("METADATA")).", mex))
         end
     end
+    deferred_errors = CompositeException()
     avail = Read.available()
     # this has to happen before computing free/fixed
     for pkg in filter(Read.isinstalled, collect(keys(avail)))
-        Cache.prefetch(pkg, Read.url(pkg), [a.sha1 for (v,a)=avail[pkg]])
+        try
+            Cache.prefetch(pkg, Read.url(pkg), [a.sha1 for (v,a)=avail[pkg]])
+        catch err
+            push!(deferred_errors,
+                    PkgError("Package $pkg: unable to update cache.",
+                            CapturedException(err, catch_backtrace())))
+        end
     end
     instd = Read.installed(avail)
     free  = Read.free(instd)
     for (pkg,ver) in free
-        Cache.prefetch(pkg, Read.url(pkg), [a.sha1 for (v,a) in avail[pkg]])
+        try
+            Cache.prefetch(pkg, Read.url(pkg), [a.sha1 for (v,a)=avail[pkg]])
+        catch err
+            push!(deferred_errors,
+                    PkgError("Package $pkg: unable to update cache.",
+                            CapturedException(err, catch_backtrace())))
+        end
     end
     fixed = Read.fixed(avail,instd)
-    defered_errors = CompositeException()
     for (pkg,ver) in fixed
         ispath(pkg,".git") || continue
         with(GitRepo, pkg) do repo
@@ -379,8 +391,9 @@ function update(branch::AbstractString)
                         LibGit2.fetch(repo)
                         LibGit2.merge!(repo, fastforward=true)
                     catch err
-                        mex = CapturedException(err, catch_backtrace())
-                        push!(defered_errors, PkgError("Package $pkg cannot be updated.", mex))
+                        push!(deferred_errors,
+                                PkgError("Package $pkg cannot be updated.",
+                                        CapturedException(err, catch_backtrace())))
                         success = false
                     end
                     if success
@@ -393,7 +406,13 @@ function update(branch::AbstractString)
             end
         end
         if haskey(avail,pkg)
-            Cache.prefetch(pkg, Read.url(pkg), [a.sha1 for (v,a)=avail[pkg]])
+            try
+                Cache.prefetch(pkg, Read.url(pkg), [a.sha1 for (v,a)=avail[pkg]])
+            catch err
+                push!(deferred_errors,
+                        PkgError("Package $pkg: unable to update cache.",
+                                CapturedException(err, catch_backtrace())))
+            end
         end
     end
     info("Computing changes...")
@@ -401,8 +420,8 @@ function update(branch::AbstractString)
     # Don't use instd here since it may have changed
     updatehook(sort!(collect(keys(installed()))))
 
-    # Print defered errors
-    length(defered_errors) > 0 && throw(PkgError("Update finished with errors.", defered_errors))
+    # Print deferred errors
+    length(deferred_errors) > 0 && throw(PkgError("Update finished with errors.", deferred_errors))
 end
 
 

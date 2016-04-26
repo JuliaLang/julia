@@ -13,7 +13,7 @@ type PkgError <: Exception
     msg::AbstractString
     ex::Nullable{Exception}
 end
-PkgError(msg::AbstractString) = PkgError(msg, nothing)
+PkgError(msg::AbstractString) = PkgError(msg, Nullable{Exception}())
 
 for file in split("dir types reqs cache read query resolve write entry git")
     include("pkg/$file.jl")
