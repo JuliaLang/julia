@@ -39,7 +39,7 @@ true_fftd3_m3d[:,:,2] = -15
 # use invoke to force usage of CTPlan versions even if FFTW is present
 for A in (Array,SubArray)
     for f in (:fft,:ifft,:plan_fft,:plan_ifft)
-        f_ = symbol(string(f, "_"))
+        f_ = Symbol(f, "_")
         @eval begin
             $f_{T,N}(x::$A{T,N}) = invoke($f, Tuple{AbstractArray{T,N}}, x)
             $f_{T,N,R}(x::$A{T,N},r::R) = invoke($f,Tuple{AbstractArray{T,N},R},x,r)

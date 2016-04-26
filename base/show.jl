@@ -367,7 +367,7 @@ const quoted_syms = Set{Symbol}([:(:),:(::),:(:=),:(=),:(==),:(!=),:(===),:(!==)
 const uni_ops = Set{Symbol}([:(+), :(-), :(!), :(¬), :(~), :(<:), :(>:), :(√), :(∛), :(∜)])
 const expr_infix_wide = Set{Symbol}([:(=), :(+=), :(-=), :(*=), :(/=), :(\=), :(&=),
     :(|=), :($=), :(>>>=), :(>>=), :(<<=), :(&&), :(||), :(<:), :(=>), :(÷=)])
-const expr_infix = Set{Symbol}([:(:), :(->), symbol("::")])
+const expr_infix = Set{Symbol}([:(:), :(->), Symbol("::")])
 const expr_infix_any = union(expr_infix, expr_infix_wide)
 const all_ops = union(quoted_syms, uni_ops, expr_infix_any)
 const expr_calls  = Dict(:call =>('(',')'), :calldecl =>('(',')'), :ref =>('[',']'), :curly =>('{','}'))
@@ -567,7 +567,7 @@ function show_unquoted_quote_expr(io::IO, value, indent::Int, prec::Int)
             print(io, ":")
             print(io, value)
         else
-            print(io, "symbol(\"", escape_string(s), "\")")
+            print(io, "Symbol(\"", escape_string(s), "\")")
         end
     else
         if isa(value,Expr) && value.head === :block
@@ -765,7 +765,7 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int)
         print(io, head)
 
     # type annotation (i.e. "::Int")
-    elseif is(head, symbol("::")) && nargs == 1
+    elseif is(head, Symbol("::")) && nargs == 1
         print(io, "::")
         show_unquoted(io, args[1], indent)
 
@@ -863,7 +863,7 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int)
         parens && print(io, ")")
 
     # transpose
-    elseif (head === symbol('\'') || head === symbol(".'")) && length(args) == 1
+    elseif (head === Symbol('\'') || head === Symbol(".'")) && length(args) == 1
         if isa(args[1], Symbol)
             show_unquoted(io, args[1])
         else
@@ -956,7 +956,7 @@ function xdump(fn::Function, io::IO, x, n::Int, indent)
         println(io)
         if n > 0
             for field in fieldnames(T)
-                if field != symbol("")    # prevents segfault if symbol is blank
+                if field != Symbol("")    # prevents segfault if symbol is blank
                     print(io, indent, "  ", field, ": ")
                     if isdefined(x,field)
                         fn(io, getfield(x, field), n - 1, string(indent, "  "))
@@ -1007,7 +1007,7 @@ function xdump(fn::Function, io::IO, x::DataType, n::Int, indent)
     fields = fieldnames(x)
     if n > 0
         for idx in 1:min(10, length(fields))
-            if fields[idx] != symbol("")    # prevents segfault if symbol is blank
+            if fields[idx] != Symbol("")    # prevents segfault if symbol is blank
                 print(io, indent, "  ", fields[idx], "::")
                 if isa(x.types[idx], DataType)
                     xdump(fn, io, fieldtype(x,idx), n - 1, string(indent, "  "))

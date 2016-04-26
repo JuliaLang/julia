@@ -563,7 +563,7 @@ end
 @deprecate_binding MathConst Irrational
 
 macro math_const(sym, val, def)
-    depwarn("@math_const is deprecated and renamed to @irrational.", symbol("@math_const"))
+    depwarn("@math_const is deprecated and renamed to @irrational.", Symbol("@math_const"))
     :(@irrational $(esc(sym)) $(esc(val)) $(esc(def)))
 end
 export @math_const
@@ -692,7 +692,7 @@ include("require.jl")
         # require("Foo") --- ambiguous. might be file or package
         filename = maybe_require_file(f)
         if filename == f
-            mod = symbol(require_modname(f))
+            mod = Symbol(require_modname(f))
             M = current_module()
             if isdefined(M,mod) && isa(eval(M,mod),Module)
                 return
@@ -933,7 +933,7 @@ end
 
 #14474
 macro boundscheck(yesno,blk)
-    depwarn("The meaning of `@boundscheck` has changed. It now indicates that the provided code block performs bounds checking, and may be elided when inbounds.", symbol("@boundscheck"))
+    depwarn("The meaning of `@boundscheck` has changed. It now indicates that the provided code block performs bounds checking, and may be elided when inbounds.", Symbol("@boundscheck"))
     if yesno === true
         :(@inbounds $(esc(blk)))
     end
@@ -1072,6 +1072,9 @@ end
 
 @deprecate bitunpack(B::BitArray) Array(B)
 @deprecate bitpack(A::AbstractArray) BitArray(A)
+
+#16038
+@deprecate symbol Symbol
 
 # During the 0.5 development cycle, do not add any deprecations below this line
 # To be deprecated in 0.6

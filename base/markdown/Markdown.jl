@@ -33,7 +33,7 @@ license(pkg::AbstractString; flavor = github) = parse_file(Pkg.dir(pkg, "LICENSE
 license(pkg::Module; flavor = github) = license(string(pkg), flavor = flavor)
 
 function mdexpr(s, flavor = :julia)
-    md = parse(s, flavor = symbol(flavor))
+    md = parse(s, flavor = Symbol(flavor))
     esc(toexpr(md))
 end
 
