@@ -2716,6 +2716,8 @@ f(x) = yt(x)
                             (error (string "cannot add method to function argument " name)))
                         (if (eqv? (string.char (string name) 0) #\@)
                             (error "macro definition not allowed inside a local scope"))))
+             (if lam2
+                 (lambda-optimize-vars! lam2))
              (if (not local?) ;; not a local function; will not be closure converted to a new type
                  (cond (short e)
                        ((null? cvs)
