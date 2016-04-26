@@ -1057,6 +1057,7 @@ UIBOX_FUNC(uint16, uint16_t, 1)
 UIBOX_FUNC(uint32, uint32_t, 1)
 UIBOX_FUNC(char,   uint32_t, 1)
 UIBOX_FUNC(gensym, size_t, 1)
+UIBOX_FUNC(slotnumber, size_t, 1)
 #ifdef _P64
 SIBOX_FUNC(int64,  int64_t, 1)
 UIBOX_FUNC(uint64, uint64_t, 1)
@@ -1084,8 +1085,10 @@ void jl_init_int32_int64_cache(void)
         boxed_int64_cache[i]  = jl_box64(jl_int64_type, i-NBOX_C/2);
 #ifdef _P64
         boxed_gensym_cache[i] = jl_box64(jl_gensym_type, i);
+        boxed_slotnumber_cache[i] = jl_box64(jl_slotnumber_type, i);
 #else
         boxed_gensym_cache[i] = jl_box32(jl_gensym_type, i);
+        boxed_slotnumber_cache[i] = jl_box32(jl_slotnumber_type, i);
 #endif
     }
     for(i=0; i < 256; i++) {
@@ -1124,6 +1127,7 @@ void jl_mark_box_caches(void)
         jl_gc_setmark(boxed_char_cache[i]);
         jl_gc_setmark(boxed_uint64_cache[i]);
         jl_gc_setmark(boxed_gensym_cache[i]);
+        jl_gc_setmark(boxed_slotnumber_cache[i]);
     }
 }
 

@@ -526,7 +526,7 @@ show_unquoted(io::IO, ex::TopNode, ::Int, ::Int)        = print(io,"top(",ex.nam
 show_unquoted(io::IO, ex::GlobalRef, ::Int, ::Int)      = print(io, ex.mod, '.', ex.name)
 
 function show_unquoted(io::IO, ex::Slot, ::Int, ::Int)
-    typ = ex.typ
+    typ = isa(ex,TypedSlot) ? ex.typ : Any
     slotid = ex.id
     li = get(io, :LAMBDAINFO, false)
     if isa(li, LambdaInfo)
@@ -545,7 +545,7 @@ function show_unquoted(io::IO, ex::Slot, ::Int, ::Int)
         print(io, "_", slotid)
     end
     emphstate = typeemphasize(io)
-    if emphstate || typ !== Any
+    if emphstate || (typ !== Any && isa(ex,TypedSlot))
         show_expr_type(io, typ, emphstate)
     end
 end
