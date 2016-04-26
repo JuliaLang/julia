@@ -511,13 +511,7 @@ Text I/O
 
    .. Docstring generated from Julia source
 
-   Show all user-visible structure of a value.
-
-.. function:: xdump(x)
-
-   .. Docstring generated from Julia source
-
-   Show all structure of a value, including all fields of objects.
+   Show every part of the representation of a value.
 
 .. function:: readstring(stream::IO)
               readstring(filename::AbstractString)
