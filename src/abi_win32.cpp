@@ -69,7 +69,7 @@ Type *preferred_llvm_type(jl_value_t *ty, bool isret)
     // rewrite integer sized (non-sret) struct to the corresponding integer
     if (!dt->nfields || use_sret(NULL, ty))
         return NULL;
-    return Type::getIntNTy(getGlobalContext(), dt->size * 8);
+    return Type::getIntNTy(jl_LLVMContext, dt->size * 8);
 }
 
 bool need_private_copy(jl_value_t *ty, bool byRef)
