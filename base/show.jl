@@ -1036,11 +1036,7 @@ function dump(io::IO, x::DataType, n::Int, indent)
             for idx in 1:length(fields)
                 println(io)
                 print(io, indent, "  ", fields[idx], "::")
-                #if isa(x.types[idx], DataType)
-                #    xdump(fn, io, fieldtype(x,idx), n - 1, string(indent, "  "))
-                #else
-                    print(io, fieldtype(x,idx))
-                #end
+                print(io, fieldtype(x,idx))
             end
         end
     end
