@@ -26,7 +26,9 @@ jl_datatype_t *jl_typename_type;
 jl_datatype_t *jl_sym_type;
 jl_datatype_t *jl_symbol_type;
 jl_datatype_t *jl_gensym_type;
-jl_datatype_t *jl_slot_type;
+jl_datatype_t *jl_abstractslot_type;
+jl_datatype_t *jl_slotnumber_type;
+jl_datatype_t *jl_typedslot_type;
 jl_datatype_t *jl_simplevector_type;
 jl_typename_t *jl_tuple_typename;
 jl_tupletype_t *jl_anytuple_type;
@@ -3356,9 +3358,16 @@ void jl_init_types(void)
                                      jl_svec1(jl_symbol("id")),
                                      jl_svec1(jl_long_type), 0, 0, 1);
 
-    jl_slot_type = jl_new_datatype(jl_symbol("Slot"), jl_any_type, jl_emptysvec,
-                                   jl_svec(2, jl_symbol("id"), jl_symbol("typ")),
-                                   jl_svec(2, jl_long_type, jl_any_type), 0, 0, 2);
+    jl_abstractslot_type = jl_new_abstracttype((jl_value_t*)jl_symbol("Slot"), jl_any_type,
+                                               jl_emptysvec);
+
+    jl_slotnumber_type = jl_new_datatype(jl_symbol("SlotNumber"), jl_abstractslot_type, jl_emptysvec,
+                                         jl_svec1(jl_symbol("id")),
+                                         jl_svec1(jl_long_type), 0, 0, 1);
+
+    jl_typedslot_type = jl_new_datatype(jl_symbol("TypedSlot"), jl_abstractslot_type, jl_emptysvec,
+                                        jl_svec(2, jl_symbol("id"), jl_symbol("typ")),
+                                        jl_svec(2, jl_long_type, jl_any_type), 0, 0, 2);
 
     jl_init_int32_int64_cache();
 
@@ -3466,7 +3475,7 @@ void jl_init_types(void)
     jl_newvarnode_type =
         jl_new_datatype(jl_symbol("NewvarNode"), jl_any_type, jl_emptysvec,
                         jl_svec(1, jl_symbol("slot")),
-                        jl_svec(1, jl_slot_type), 0, 0, 1);
+                        jl_svec(1, jl_slotnumber_type), 0, 0, 1);
 
     jl_topnode_type =
         jl_new_datatype(jl_symbol("TopNode"), jl_any_type, jl_emptysvec,
