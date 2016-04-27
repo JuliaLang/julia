@@ -237,20 +237,24 @@ JL_LIBS := julia julia-debug
 
 # private libraries, that are installed in $(prefix)/lib/julia
 JL_PRIVATE_LIBS := ccalltest
+JL_PRIVATE_HEADERS := 
 ifeq ($(USE_GPL_LIBS), 1)
 JL_PRIVATE_LIBS += suitesparse_wrapper Rmath-julia
 endif
 ifeq ($(USE_SYSTEM_FFTW),0)
 ifeq ($(USE_GPL_LIBS), 1)
 JL_PRIVATE_LIBS += fftw3 fftw3f fftw3_threads fftw3f_threads
+JL_PRIVATE_HEADERS += fftw3.h
 endif
 endif
 ifeq ($(USE_SYSTEM_PCRE),0)
 JL_PRIVATE_LIBS += pcre
+JL_PRIVATE_HEADERS += pcre2.h
 endif
 ifeq ($(USE_SYSTEM_OPENLIBM),0)
 ifeq ($(USE_SYSTEM_LIBM),0)
 JL_PRIVATE_LIBS += openlibm
+JL_PRIVATE_HEADERS += openlibm.h
 endif
 endif
 ifeq ($(USE_SYSTEM_OPENSPECFUN),0)
@@ -258,20 +262,25 @@ JL_PRIVATE_LIBS += openspecfun
 endif
 ifeq ($(USE_SYSTEM_DSFMT),0)
 JL_PRIVATE_LIBS += dSFMT
+JL_PRIVATE_HEADERS += dSFMT.h
 endif
 ifeq ($(USE_SYSTEM_BLAS),0)
 JL_PRIVATE_LIBS += openblas
+# would need to copy deps/openblas/cblas.h etc.
 else ifeq ($(USE_SYSTEM_LAPACK),0)
 JL_PRIVATE_LIBS += lapack
 endif
 ifeq ($(USE_SYSTEM_GMP),0)
 JL_PRIVATE_LIBS += gmp
+JL_PRIVATE_HEADERS += gmp.h
 endif
 ifeq ($(USE_SYSTEM_MPFR),0)
 JL_PRIVATE_LIBS += mpfr
+JL_PRIVATE_HEADERS += mpf2mpfr.h mpfr.h
 endif
 ifeq ($(USE_SYSTEM_LIBGIT2),0)
 JL_PRIVATE_LIBS += git2
+# would need to copy deps/libgit2/include/git2.h etc.
 endif
 ifeq ($(USE_SYSTEM_ARPACK),0)
 JL_PRIVATE_LIBS += arpack
@@ -279,11 +288,13 @@ endif
 ifeq ($(USE_SYSTEM_SUITESPARSE),0)
 ifeq ($(USE_GPL_LIBS), 1)
 JL_PRIVATE_LIBS += amd camd ccolamd cholmod colamd umfpack spqr suitesparseconfig
+# would need to copy deps/SuiteSparse-4.4.2/COLAMD/Include/colamd.h etc.
 endif
 endif
 ifeq ($(USE_SYSTEM_LLVM),0)
 ifeq ($(USE_LLVM_SHLIB),1)
 JL_PRIVATE_LIBS += LLVM
+# would need to copy llvm/, llvm-c/ etc.
 endif
 endif
 ifeq ($(OS),Darwin)
@@ -349,6 +360,18 @@ endif
 			fi \
 		done \
 	done
+	for inc in $(JL_PRIVATE_HEADERS); do \
+		$(INSTALL_F) $(build_includedir)/$$inc $(DESTDIR)$(includedir) ; \
+	done
+	# special rule for openlibm, because it goes in a subdirectory
+ifeq ($(USE_SYSTEM_OPENLIBM),0)
+ifeq ($(USE_SYSTEM_LIBM),0)
+	mkdir -p $(DESTDIR)$(includedir)/openlibm
+	for inc in $(build_includedir)/openlibm/*; do \
+		$(INSTALL_F) $$inc $(DESTDIR)$(includedir)/openlibm/ ; \
+	done
+endif
+endif
 
 	# Copy in libssl and libcrypto if they exist
 ifeq ($(OS),Linux)
