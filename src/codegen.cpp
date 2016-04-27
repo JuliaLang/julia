@@ -3829,7 +3829,7 @@ static Function *jl_cfunction_object(jl_function_t *ff, jl_value_t *declrt, jl_t
     cfunc_sig = (jl_value_t*)jl_apply_tuple_type((jl_svec_t*)cfunc_sig);
 
     // check the cache
-    if (jl_cfunction_list.unknown != NULL) {
+    if (jl_cfunction_list.unknown != jl_nothing) {
         jl_typemap_entry_t *sf = jl_typemap_assoc_by_type(jl_cfunction_list, (jl_tupletype_t*)cfunc_sig, NULL, 1, 0, /*offs*/0);
         if (sf) {
             Function *f = (Function*)jl_unbox_voidpointer(sf->func.value);
@@ -3838,9 +3838,6 @@ static Function *jl_cfunction_object(jl_function_t *ff, jl_value_t *declrt, jl_t
                return f;
             }
         }
-    }
-    else {
-        jl_cfunction_list.unknown = jl_nothing;
     }
     jl_typemap_entry_t *sf = jl_typemap_insert(&jl_cfunction_list, (jl_value_t*)jl_cfunction_list.unknown, (jl_tupletype_t*)cfunc_sig,
             jl_emptysvec, NULL, jl_emptysvec, NULL, /*offs*/0, &cfunction_cache, NULL);
