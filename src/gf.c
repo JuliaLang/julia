@@ -368,13 +368,13 @@ static jl_lambda_info_t *cache_method(jl_methtable_t *mt, union jl_typemap_t *ca
     int8_t isstaged = definition->isstaged;
     int need_guard_entries = 0;
     int hasnewparams = 0;
+    int makesimplesig = 0;
     jl_value_t *temp=NULL;
     jl_value_t *temp2=NULL;
     jl_value_t *temp3=NULL;
     jl_lambda_info_t *newmeth=NULL;
     jl_svec_t *newparams=NULL;
     jl_svec_t *limited=NULL;
-    int cache_with_orig = 0;
     JL_GC_PUSH5(&temp, &temp2, &temp3, &newmeth, &newparams);
     size_t np = jl_nparams(type);
     newparams = jl_svec_copy(type->parameters);
@@ -399,8 +399,8 @@ static jl_lambda_info_t *cache_method(jl_methtable_t *mt, union jl_typemap_t *ca
         // avoid specializing on an argument of type Tuple
         // unless matching a declared type of `::Type`
         if (jl_is_type_type(elt) && jl_is_tuple_type(jl_tparam0(elt)) &&
-            (!jl_subtype(decl_i, (jl_value_t*)jl_type_type, 0) || is_kind(decl_i))) {
-            elt = jl_typeof(jl_tparam0(elt));
+            (!jl_subtype(decl_i, (jl_value_t*)jl_type_type, 0) || is_kind(decl_i))) { // Type{Tuple{...}}
+            elt = (jl_value_t*)jl_anytuple_type_type; // Type{T<:Tuple}
             jl_svecset(newparams, i, elt);
             hasnewparams = 1;
             need_guard_entries = 1;
@@ -408,16 +408,21 @@ static jl_lambda_info_t *cache_method(jl_methtable_t *mt, union jl_typemap_t *ca
 
         int notcalled_func = (i>0 && i<=8 && !(definition->called&(1<<(i-1))) &&
                               jl_subtype(elt,(jl_value_t*)jl_function_type,0));
-        if (decl_i == jl_ANY_flag ||
-            (notcalled_func && (decl_i == (jl_value_t*)jl_any_type ||
-                                decl_i == (jl_value_t*)jl_function_type ||
-                                (jl_is_uniontype(decl_i) && jl_svec_len(((jl_uniontype_t*)decl_i)->types)==2 &&
-                                 jl_subtype((jl_value_t*)jl_function_type, decl_i, 0) &&
-                                 jl_subtype((jl_value_t*)jl_datatype_type, decl_i, 0))))) {
+        if (decl_i == jl_ANY_flag) {
             // don't specialize on slots marked ANY
+            jl_svecset(newparams, i, (jl_value_t*)jl_any_type);
+            hasnewparams = 1;
+            need_guard_entries = 1;
+        }
+        else if (notcalled_func && (decl_i == (jl_value_t*)jl_any_type ||
+                                    decl_i == (jl_value_t*)jl_function_type ||
+                                    (jl_is_uniontype(decl_i) && jl_svec_len(((jl_uniontype_t*)decl_i)->types)==2 &&
+                                     jl_subtype((jl_value_t*)jl_function_type, decl_i, 0) &&
+                                     jl_subtype((jl_value_t*)jl_datatype_type, decl_i, 0)))) {
             // and attempt to despecialize types marked Function, Callable, or Any
             // when called with a subtype of Function but is not called
-            jl_svecset(newparams, i, (jl_value_t*)jl_any_type);
+            jl_svecset(newparams, i, (jl_value_t*)jl_function_type);
+            makesimplesig = 1;
             hasnewparams = 1;
             need_guard_entries = 1;
         }
@@ -545,6 +550,7 @@ static jl_lambda_info_t *cache_method(jl_methtable_t *mt, union jl_typemap_t *ca
         need_guard_entries = 1;
     }
 
+    int cache_with_orig = 0;
     jl_svec_t* guardsigs = jl_emptysvec;
     if (hasnewparams) {
         if (origtype == NULL)
@@ -608,6 +614,20 @@ static jl_lambda_info_t *cache_method(jl_methtable_t *mt, union jl_typemap_t *ca
         // but origtype is used as the simplesig
         // in the method cache to prevent anything else from matching this entry
         origtype = NULL;
+    }
+    if (makesimplesig && origtype == NULL) {
+        // reduce the complexity of rejecting this entry in the cache
+        // by replacing non-simple types with jl_any_type to build origtype
+        // (the only case this applies to currently due to the above logic is jl_function_type)
+        size_t np = jl_nparams(type);
+        newparams = jl_svec_copy(type->parameters);
+        for (i = 0; i < np; i++) {
+            jl_value_t *elt = jl_svecref(newparams, i);
+            if (elt == (jl_value_t*)jl_function_type)
+                jl_svecset(newparams, i, jl_any_type);
+        }
+        origtype = jl_apply_tuple_type(newparams);
+        temp = origtype;
     }
 
     // here we infer types and specialize the method
