@@ -388,6 +388,7 @@ JL_DLLEXPORT jl_lambda_info_t *jl_new_lambda_info_uninit(jl_svec_t *sparam_syms)
     li->inCompile = 0;
     li->def = NULL;
     li->pure = 0;
+    li->inlineable = 0;
     return li;
 }
 
@@ -473,6 +474,7 @@ static jl_lambda_info_t *jl_clone_thunk(jl_lambda_info_t *linfo, jl_tupletype_t 
     new_linfo->gensymtypes = linfo->gensymtypes;
     new_linfo->sparam_vals = linfo->sparam_vals;
     new_linfo->pure = linfo->pure;
+    new_linfo->inlineable = linfo->inlineable;
     new_linfo->nargs = linfo->nargs;
     new_linfo->isva = linfo->isva;
     new_linfo->rettype = linfo->rettype;

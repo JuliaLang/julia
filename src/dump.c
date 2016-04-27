@@ -474,7 +474,7 @@ static int jl_prune_tcache(jl_typemap_entry_t *ml, void *closure)
         jl_value_t *ret = ml->func.value;
         if (jl_is_lambda_info(ret)) {
             jl_array_t *code = ((jl_lambda_info_t*)ret)->code;
-            if (jl_is_array(code) && jl_array_len(code) > 500) {
+            if (code!=NULL && jl_is_array(code) && jl_array_len(code) > 500) {
                 ml->func.value = ((jl_lambda_info_t*)ret)->rettype;
                 jl_gc_wb(ml, ml->func.value);
             }
@@ -861,6 +861,7 @@ static void jl_serialize_value_(ios_t *s, jl_value_t *v)
         jl_serialize_value(s, (jl_value_t*)li->unspecialized_ducttape);
         write_int8(s, li->inferred);
         write_int8(s, li->pure);
+        write_int8(s, li->inlineable);
         write_int8(s, li->isva);
         write_int32(s, li->nargs);
         jl_serialize_value(s, (jl_value_t*)li->def);
@@ -1476,6 +1477,7 @@ static jl_value_t *jl_deserialize_value_(ios_t *s, jl_value_t *vtag, jl_value_t 
         if (li->unspecialized_ducttape) jl_gc_wb(li, li->unspecialized_ducttape);
         li->inferred = read_int8(s);
         li->pure = read_int8(s);
+        li->inlineable = read_int8(s);
         li->isva = read_int8(s);
         li->nargs = read_int32(s);
         li->def = (jl_method_t*)jl_deserialize_value(s, (jl_value_t**)&li->def);
@@ -2068,6 +2070,7 @@ JL_DLLEXPORT jl_array_t *jl_compress_ast(jl_lambda_info_t *li, jl_array_t *ast)
     JL_SIGATOMIC_BEGIN();
     JL_LOCK(&dump_lock); // Might GC
     assert(jl_is_lambda_info(li));
+    assert(jl_is_array(ast));
     DUMP_MODES last_mode = mode;
     mode = MODE_AST;
     ios_t dest;

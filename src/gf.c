@@ -1008,7 +1008,7 @@ jl_lambda_info_t *jl_get_specialization1(jl_tupletype_t *types)
     } JL_CATCH {
         goto not_found;
     }
-    if (sf == NULL || sf->code == NULL || sf->inInference)
+    if (sf == NULL || sf->inInference)
         goto not_found;
     if (sf->functionObjectsDecls.functionObject == NULL) {
         if (sf->fptr != NULL)
