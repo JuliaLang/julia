@@ -227,7 +227,7 @@ Constructors
 
    .. Docstring generated from Julia source
 
-   Create an array with the same data as the given array, but with different dimensions. An implementation for a particular type of array may choose whether the data is copied or shared.
+   Create an array with the same data as the given array, but with different dimensions.
 
 .. function:: similar(array, [element_type=eltype(array)], [dims=size(array)])
 
