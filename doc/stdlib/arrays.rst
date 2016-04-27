@@ -958,11 +958,15 @@ dense counterparts. The following functions are specific to sparse arrays.
 
    Compute the elimination tree of a symmetric sparse matrix ``A`` from ``triu(A)`` and, optionally, its post-ordering permutation.
 
+   Note: This function has been moved to the SuiteSparse.jl package.
+
 .. function:: symperm(A, p)
 
    .. Docstring generated from Julia source
 
    Return the symmetric permutation of ``A``\ , which is ``A[p,p]``\ . ``A`` should be symmetric, sparse, and only contain nonzeros in the upper triangular part of the matrix is stored. This algorithm ignores the lower triangular part of the matrix. Only the upper triangular part of the result is returned.
+
+   Note: This function has been moved to the SuiteSparse.jl package.
 
 .. function:: nonzeros(A)
 
