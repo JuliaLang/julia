@@ -157,8 +157,6 @@ function fetch{T<:AbstractString, P<:AbstractPayload}(repo::GitRepo;
     try
         fo = FetchOptions(callbacks=RemoteCallbacks(credentials_cb(), payload))
         fetch(rmt, refspecs, msg="from $(url(rmt))", options = fo)
-    catch err
-        warn("fetch: $err")
     finally
         finalize(rmt)
     end
