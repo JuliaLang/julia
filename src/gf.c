@@ -63,7 +63,7 @@ JL_DLLEXPORT void jl_register_method_tracer(void (*callback)(jl_lambda_info_t *t
     jl_method_tracer = (tracer_cb)callback;
 }
 
-static tracer_cb jl_newmeth_tracer = NULL;
+tracer_cb jl_newmeth_tracer = NULL;
 JL_DLLEXPORT void jl_register_newmeth_tracer(void (*callback)(jl_method_t *tracee))
 {
     jl_newmeth_tracer = (tracer_cb)callback;
@@ -872,8 +872,6 @@ void jl_method_table_insert(jl_methtable_t *mt, jl_tupletype_t *type, jl_tuplety
         check_ambiguous_matches(mt->defs, newentry);
     invalidate_conflicting(&mt->cache, (jl_value_t*)type, (jl_value_t*)mt);
     update_max_args(mt, type);
-    if (jl_newmeth_tracer)
-        jl_call_tracer(jl_newmeth_tracer, (jl_value_t*)method);
     JL_SIGATOMIC_END();
 }
 
