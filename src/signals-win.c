@@ -169,8 +169,7 @@ static LONG WINAPI _exception_handler(struct _EXCEPTION_POINTERS *ExceptionInfo,
                 return EXCEPTION_CONTINUE_EXECUTION;
             case EXCEPTION_ACCESS_VIOLATION:
 #ifdef JULIA_ENABLE_THREADING
-                if (ExceptionInfo->ExceptionRecord->ExceptionInformation[1] ==
-                    (intptr_t)jl_safepoint_page) {
+                if (jl_addr_is_safepoint(ExceptionInfo->ExceptionRecord->ExceptionInformation[1])) {
                     jl_set_gc_and_wait();
                     return EXCEPTION_CONTINUE_EXECUTION;
                 }

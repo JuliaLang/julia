@@ -166,7 +166,7 @@ kern_return_t catch_exception_raise(mach_port_t            exception_port,
     HANDLE_MACH_ERROR("thread_get_state", ret);
     uint64_t fault_addr = exc_state.__faultvaddr;
 #ifdef JULIA_ENABLE_THREADING
-    if (fault_addr == (uintptr_t)jl_safepoint_page) {
+    if (jl_addr_is_safepoint(fault_addr)) {
         jl_mutex_lock_nogc(&safepoint_lock);
         if (!jl_gc_running) {
             // GC is done before we get the message, do nothing and return

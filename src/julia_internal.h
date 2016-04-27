@@ -268,6 +268,12 @@ void jl_start_threads(void);
 void jl_shutdown_threading(void);
 
 // Whether the GC is running
+extern char *jl_safepoint_pages;
+STATIC_INLINE int jl_addr_is_safepoint(uintptr_t addr)
+{
+    uintptr_t safepoint_addr = (uintptr_t)jl_safepoint_pages;
+    return addr >= safepoint_addr && addr < safepoint_addr + jl_page_size * 3;
+}
 extern volatile uint32_t jl_gc_running;
 // All the functions are safe to be called from within a signal handler
 // provided that the thread will not be interrupted by another asynchronous

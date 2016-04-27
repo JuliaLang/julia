@@ -455,7 +455,7 @@ static bool deserves_sret(jl_value_t *dt, Type *T)
 static Value *emit_nthptr_addr(Value *v, ssize_t n)
 {
     return builder.CreateGEP(builder.CreateBitCast(v, T_ppjlvalue),
-                             ConstantInt::get(T_size, (ssize_t)n));
+                             ConstantInt::get(T_size, n));
 }
 
 static Value *emit_nthptr_addr(Value *v, Value *idx)
@@ -474,6 +474,13 @@ static Value *emit_nthptr_recast(Value *v, Value *idx, MDNode *tbaa, Type *ptype
 {
     // p = (jl_value_t**)v; *(ptype)&p[n]
     Value *vptr = emit_nthptr_addr(v, idx);
+    return tbaa_decorate(tbaa,builder.CreateLoad(builder.CreateBitCast(vptr,ptype), false));
+}
+
+static Value *emit_nthptr_recast(Value *v, ssize_t n, MDNode *tbaa, Type *ptype)
+{
+    // p = (jl_value_t**)v; *(ptype)&p[n]
+    Value *vptr = emit_nthptr_addr(v, n);
     return tbaa_decorate(tbaa,builder.CreateLoad(builder.CreateBitCast(vptr,ptype), false));
 }
 
