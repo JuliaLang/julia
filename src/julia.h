@@ -409,6 +409,7 @@ typedef struct _jl_typemap_level_t {
     jl_array_t *arg1; // Array{union jl_typemap_t}
     jl_array_t *targ; // Array{union jl_typemap_t}
     jl_typemap_entry_t *linear; // union jl_typemap_t (but no more levels)
+    union jl_typemap_t any; // type at offs is Any
     jl_value_t *key; // [nullable]
 } jl_typemap_level_t;
 

@@ -276,6 +276,7 @@ function visit(f, mc::TypeMapLevel)
         end
     end
     mc.list !== nothing && visit(f, mc.list)
+    mc.any !== nothing && visit(f, mc.any)
     nothing
 end
 function visit(f, d::TypeMapEntry)
