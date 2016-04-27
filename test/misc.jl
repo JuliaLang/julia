@@ -34,6 +34,7 @@ let res = assert(true)
     @test res === nothing
 end
 let
+    Base.enable_catch_fatal()
     try
         assert(false)
         error("unexpected")
@@ -41,6 +42,7 @@ let
         @test isa(ex, AssertionError)
         @test isempty(ex.msg)
     end
+    Base.disable_catch_fatal()
 end
 
 # test @assert macro
@@ -50,6 +52,7 @@ end
 @test_throws AssertionError (@assert false "this is a test" "another test")
 @test_throws AssertionError (@assert false :a)
 let
+    Base.enable_catch_fatal()
     try
         @assert 1 == 2
         error("unexpected")
@@ -57,9 +60,11 @@ let
         @test isa(ex, AssertionError)
         @test contains(ex.msg, "1 == 2")
     end
+    Base.disable_catch_fatal()
 end
 # test @assert message
 let
+    Base.enable_catch_fatal()
     try
         @assert 1 == 2 "this is a test"
         error("unexpected")
@@ -67,9 +72,11 @@ let
         @test isa(ex, AssertionError)
         @test ex.msg == "this is a test"
     end
+    Base.disable_catch_fatal()
 end
 # @assert only uses the first message string
 let
+    Base.enable_catch_fatal()
     try
         @assert 1 == 2 "this is a test" "this is another test"
         error("unexpected")
@@ -77,9 +84,11 @@ let
         @test isa(ex, AssertionError)
         @test ex.msg == "this is a test"
     end
+    Base.disable_catch_fatal()
 end
 # @assert calls string() on second argument
 let
+    Base.enable_catch_fatal()
     try
         @assert 1 == 2 :random_object
         error("unexpected")
@@ -88,9 +97,11 @@ let
         @test !contains(ex.msg,  "1 == 2")
         @test contains(ex.msg, "random_object")
     end
+    Base.disable_catch_fatal()
 end
 # if the second argument is an expression, c
 let deepthought(x, y) = 42
+    Base.enable_catch_fatal()
     try
         @assert 1 == 2 string("the answer to the ultimate question: ",
                               deepthought(6, 9))
@@ -99,6 +110,7 @@ let deepthought(x, y) = 42
         @test isa(ex, AssertionError)
         @test ex.msg == "the answer to the ultimate question: 42"
     end
+    Base.disable_catch_fatal()
 end
 
 let # test the process title functions, issue #9957

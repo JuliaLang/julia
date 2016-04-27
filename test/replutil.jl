@@ -74,10 +74,12 @@ macro except_str(expr, err_type)
     return quote
         let
             local err
+            Base.enable_catch_fatal()
             try
                 $(esc(expr))
             catch err
             end
+            Base.disable_catch_fatal()
             @test typeof(err) === $(esc(err_type))
             buff = IOBuffer()
             showerror(buff, err)

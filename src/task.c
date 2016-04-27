@@ -533,6 +533,28 @@ JL_DLLEXPORT void jl_rethrow_other(jl_value_t *e)
     throw_internal(e);
 }
 
+JL_DLLEXPORT void jl_enable_catch_fatal(void)
+{
+    assert(jl_current_task->eh);
+    jl_current_task->eh->catch_fatal = 1;
+}
+
+JL_DLLEXPORT void jl_disable_catch_fatal(void)
+{
+    assert(jl_current_task->eh);
+    jl_current_task->eh->catch_fatal = 0;
+}
+
+JL_DLLEXPORT void jl_rethrow_fatal(void)
+{
+    if (jl_current_task
+    &&  jl_current_task->eh
+    &&  jl_current_task->eh->catch_fatal) {
+        return;
+    }
+    jl_rethrow();
+}
+
 JL_DLLEXPORT jl_task_t *jl_new_task(jl_function_t *start, size_t ssize)
 {
     size_t pagesz = jl_page_size;

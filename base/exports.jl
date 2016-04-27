@@ -1045,6 +1045,7 @@ export
     @catch,
     catch_backtrace,
     error,
+    isfatal,
     rethrow,
     retry,
     systemerror,

@@ -18,8 +18,15 @@
 
 ## native julia error handling ##
 
-error(s::AbstractString) = throw(Main.Base.ErrorException(s))
-error(s...) = throw(Main.Base.ErrorException(Main.Base.string(s...)))
+if isdefined(Main, :Base)
+    error(s::AbstractString) = throw(ErrorException(s))
+    error(s...) = error(string(s...))
+else
+    type CoreErrorException <: Exception
+        msg
+    end
+    error(s...) = throw(CoreErrorException(s))
+end
 
 rethrow() = ccall(:jl_rethrow, Bottom, ())
 rethrow(e) = ccall(:jl_rethrow_other, Bottom, (Any,), e)
@@ -49,6 +56,18 @@ macro assert(ex, msgs...)
     end
     :($(esc(ex)) ? $(nothing) : throw(Main.Base.AssertionError($msg)))
 end
+
+## fatal errors ##
+
+isfatal(::Any) = false
+isfatal(::OutOfMemoryError) = true
+isfatal(::StackOverflowError) = true
+isfatal(::SegmentationFault) = true
+isfatal(::UndefVarError) = true
+
+enable_catch_fatal() = ccall(:jl_enable_catch_fatal, Void, ())
+disable_catch_fatal() = ccall(:jl_disable_catch_fatal, Void, ())
+rethrow_if_fatal(error) = isfatal(error) && ccall(:jl_rethrow_fatal, Void, ())
 
 
 """

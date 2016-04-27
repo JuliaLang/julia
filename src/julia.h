@@ -1381,6 +1381,7 @@ typedef struct _jl_handler_t {
     jl_gcframe_t *gcstack;
     struct _jl_handler_t *prev;
     int8_t gc_state;
+    int8_t catch_fatal;
 #ifdef JULIA_ENABLE_THREADING
     size_t locks_len;
 #endif
@@ -1435,6 +1436,9 @@ JL_DLLEXPORT jl_value_t *jl_switchto(jl_task_t *t, jl_value_t *arg);
 JL_DLLEXPORT void JL_NORETURN jl_throw(jl_value_t *e);
 JL_DLLEXPORT void JL_NORETURN jl_rethrow(void);
 JL_DLLEXPORT void JL_NORETURN jl_rethrow_other(jl_value_t *e);
+JL_DLLEXPORT void jl_enable_catch_fatal(void);
+JL_DLLEXPORT void jl_disable_catch_fatal(void);
+JL_DLLEXPORT void jl_rethrow_fatal(void);
 
 #ifdef JULIA_ENABLE_THREADING
 static inline void jl_lock_frame_push(jl_mutex_t *lock)
