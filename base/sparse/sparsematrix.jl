@@ -26,6 +26,71 @@ end
 
 size(S::SparseMatrixCSC) = (S.m, S.n)
 
+## generic iteration support
+
+typealias SubSparseMatrixCSC{I,T,N,P<:SparseMatrixCSC} SubArray{T,N,P,I,false}
+typealias ContiguousCSC{I<:Tuple{Union{Colon,UnitRange{Int}},Any},T,N,P<:SparseMatrixCSC} Union{P,SubSparseMatrixCSC{I,T,N,P}}
+
+# Indexing along a particular column
+immutable ColIndexCSC
+    cscindex::Int
+    rowval::Int
+end
+
+@inline getindex(A::SparseMatrixCSC, i::ColIndexCSC, j::Integer) = (@inbounds ret = A.nzval[i.cscindex]; ret)
+@inline getindex(A::SubSparseMatrixCSC, i::ColIndexCSC, j::Integer) = (@inbounds ret = A.parent.nzval[i.cscindex]; ret)
+@inline function getindex(a::AbstractVector, i::ColIndexCSC)
+    @boundscheck 1 <= i.rowval <= length(a)
+    @inbounds ret = a[i.rowval]
+    ret
+end
+
+@inline setindex!(A::SparseMatrixCSC, val, i::ColIndexCSC, j::Integer) = (@inbounds A.nzval[i.cscindex] = val; val)
+@inline setindex!(A::SubSparseMatrixCSC, val, i::ColIndexCSC, j::Integer) = (@inbounds A.parent.nzval[i.cscindex] = val; val)
+@inline function setindex!(a::AbstractVector, val, i::ColIndexCSC)
+    @boundscheck 1 <= i.rowval <= length(a) || throw(BoundsError(a, i.rowval))
+    @inbounds a[i.rowval] = val
+    val
+end
+
+immutable ColIteratorCSC{S<:ContiguousCSC}
+    A::S
+    col::Int
+    cscrange::UnitRange{Int}
+
+    function ColIteratorCSC(A::SparseMatrixCSC, col::Integer)
+        @boundscheck 1 <= col <= size(A, 2) || throw(BoundsError(A, (:,col)))
+        @inbounds r = A.colptr[col]:A.colptr[col+1]-1
+        new(A, col, r)
+    end
+    function ColIteratorCSC{I<:Tuple{Colon,Any}}(A::SubSparseMatrixCSC{I}, col::Integer)
+        @boundscheck 1 <= col <= size(A, 2) || throw(BoundsError(A, (:,col)))
+        @inbounds j = A.indexes[2][col]
+        @inbounds r = A.parent.colptr[j]:A.parent.colptr[j+1]-1
+        new(A, col, r)
+    end
+    function ColIteratorCSC{I<:Tuple{UnitRange{Int},Any}}(A::SubSparseMatrixCSC{I}, col::Integer)
+        @boundscheck 1 <= col <= size(A, 2) || throw(BoundsError(A, (:,col)))
+        @inbounds j = A.indexes[2][col]
+        @inbounds r1, r2 = Int(A.parent.colptr[j]), Int(A.parent.colptr[j+1]-1)
+        rowval = A.parent.rowval
+        i = A.indexes[1]
+        r1 = searchsortedfirst(rowval, first(i), r1, r2, Forward)
+        r1 <= r2 && (r2 = searchsortedlast(rowval, last(i), r1, r2, Forward))
+        new(A, col, r1:r2)
+    end
+end
+ColIteratorCSC(A::ContiguousCSC, col::Integer) = ColIteratorCSC{typeof(A)}(A, col)
+
+length(i::ColIteratorCSC) = length(i.cscrange)
+start(i::ColIteratorCSC) = start(i.cscrange)
+done(i::ColIteratorCSC, s) = done(i.cscrange, s)
+next{S<:SparseMatrixCSC}(i::ColIteratorCSC{S}, s) = (@inbounds idx = ColIndexCSC(s, i.A.rowval[s]); (idx, s+1))
+next{S<:SubSparseMatrixCSC}(i::ColIteratorCSC{S}, s) = (@inbounds idx = ColIndexCSC(s, i.A.parent.rowval[s]); (idx, s+1))
+
+Base._eachindex(::Tuple{}, ::Tuple{}, A::ContiguousCSC, ::Colon, col::Integer) = ColIteratorCSC(A, col)
+
+
 """
     nnz(A)
 

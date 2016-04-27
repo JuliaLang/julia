@@ -3,6 +3,33 @@
 import Base: *
 using Base.Test
 
+# Test generic iteration for dense and sparse matrices
+function matvecmul!(out::AbstractVector, A::AbstractMatrix, v::AbstractVector)
+    size(A, 1) == length(out) && size(A, 2) == length(v) || throw(DimensionMismatch("oops"))
+    fill!(out, 0)
+    nmult = 0
+    for j in eachindex(A, 2)
+        vj = v[j]
+        for i in eachindex(A, (:, j))
+            out[i] += A[i,j]*vj
+            nmult += 1
+        end
+    end
+    out, nmult
+end
+matvecmul(A::AbstractMatrix, v::AbstractVector) = matvecmul!(Array(typeof(first(A)*first(v)), size(A, 1)), A, v)
+
+AS = sprand(5, 8, 0.2)
+AF = full(AS)
+v = rand(8)
+outS, nmultS = matvecmul(AS, v)
+outF, nmultF = matvecmul(AF, v)
+
+@test nmultS == length(AS.nzval)
+@test nmultF == length(AF)
+@test_approx_eq outS outF
+
+
 # A custom Quaternion type with minimal defined interface and methods.
 # Used to test scale and scale! methods to show non-commutativity.
 immutable Quaternion{T<:Real} <: Number
