@@ -226,6 +226,12 @@ Iterable Collections
 
    Returns an array containing one value from ``itr`` for each unique value produced by ``f`` applied to elements of ``itr``\ .
 
+.. function:: allunique(itr)
+
+   .. Docstring generated from Julia source
+
+   Return ``true`` if all values from ``itr`` are distinct when compared with ``isequal``\ .
+
 .. function:: reduce(op, v0, itr)
 
    .. Docstring generated from Julia source
