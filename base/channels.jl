@@ -24,7 +24,7 @@ closed_exception() = InvalidStateException("Channel is closed.", :closed)
 function close(c::Channel)
     c.state = :closed
     notify_error(c::Channel, closed_exception())
-    c
+    nothing
 end
 isopen(c::Channel) = (c.state == :open)
 

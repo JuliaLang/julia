@@ -150,6 +150,7 @@ function close(b::Base64EncodePipe)
         end
         b.nb = 0
     end
+    nothing
 end
 
 # like sprint, but returns base64 string

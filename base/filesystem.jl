@@ -96,7 +96,7 @@ function close(f::File)
     uv_error("close", err)
     f.handle = RawFD(-1)
     f.open = false
-    return f
+    return nothing
 end
 
 # sendfile is the most efficient way to copy a file (or any file descriptor)
