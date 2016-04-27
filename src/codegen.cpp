@@ -343,9 +343,6 @@ static GlobalVariable *jltls_states_var;
 static GlobalVariable *jltls_states_func_ptr = NULL;
 static size_t jltls_states_func_idx = 0;
 #endif
-// Imaging mode only (non-imaging mode use pointer directly)
-static GlobalVariable *jl_safepoint_page_ptr = NULL;
-static size_t jl_safepoint_page_idx = 0;
 
 // important functions
 static Function *jlnew_func;
@@ -3430,14 +3427,9 @@ static void allocate_gc_frame(BasicBlock *b0, jl_codectx_t *ctx)
 {
     // allocate a placeholder gc instruction
     ctx->ptlsStates = builder.CreateCall(prepare_call(jltls_states_func));
-    if (imaging_mode) {
-        ctx->signalPage =
-            tbaa_decorate(tbaa_const, builder.CreateLoad(prepare_global(jl_safepoint_page_ptr)));
-    }
-    else {
-        ctx->signalPage = builder.CreateIntToPtr(
-            ConstantInt::get(T_size, (uintptr_t)jl_safepoint_page), T_pint8);
-    }
+    int nthfield = offsetof(jl_tls_states_t, safepoint) / sizeof(void*);
+    ctx->signalPage = emit_nthptr_recast(ctx->ptlsStates, nthfield, tbaa_const,
+                                         PointerType::get(T_psize, 0));
 }
 
 void jl_codegen_finalize_temp_arg(CallInst *ptlsStates, Type *T_pjlvalue,
@@ -5170,12 +5162,6 @@ static void init_julia_llvm_env(Module *m)
                                 jltls_states_func_idx);
     }
 #endif
-    if (imaging_mode) {
-        jl_safepoint_page_ptr =
-            jl_emit_sysimg_slot(m, T_pint8, "jl_safepoint_page.ptr",
-                                (uintptr_t)jl_safepoint_page,
-                                jl_safepoint_page_idx);
-    }
 
     std::vector<Type*> args1(0);
     args1.push_back(T_pint8);

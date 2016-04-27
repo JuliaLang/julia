@@ -16,10 +16,16 @@ extern "C" {
 
 /* static uint32_t jl_signal_pending = 0; */
 volatile uint32_t jl_gc_running = 0;
-JL_DLLEXPORT volatile size_t *jl_safepoint_page = NULL;
-// The number of safepoints enabled on the two pages.
-// The first page, the one before `jl_safepoint_page` is the SIGINT page.
-// The second page, the one pointed to by `jl_safepoint_page` is the GC page.
+char *jl_safepoint_pages = NULL;
+// The number of safepoints enabled on the three pages.
+// The first page, is the SIGINT page, only used by the master thread.
+// The second page, is the GC page for the master thread, this is where
+// the `safepoint` tls pointer points to for the master thread.
+// The third page is the GC page for the other threads. The thread's
+// `safepoint` tls pointer points the beginning of this page + `sizeof(size_t)`
+// so that both safepoint load and pending signal load falls in this page.
+// The initialization of the `safepoint` pointer is done `ti_initthread`
+// in `threading.c`.
 uint8_t jl_safepoint_enable_cnt[3] = {0, 0, 0};
 
 // This lock should be acquired before enabling/disabling the safepoint
@@ -48,7 +54,7 @@ static void jl_safepoint_enable(int idx)
         return;
     }
     // Now that we are requested to mprotect the page and it wasn't already.
-    char *pageaddr = (char*)jl_safepoint_page + jl_page_size * (idx - 1);
+    char *pageaddr = jl_safepoint_pages + jl_page_size * idx;
 #ifdef _OS_WINDOWS_
     DWORD old_prot;
     VirtualProtect(pageaddr, jl_page_size, PAGE_NOACCESS, &old_prot);
@@ -67,7 +73,7 @@ static void jl_safepoint_disable(int idx)
     }
     // Now that we are requested to un-mprotect the page and no one else
     // want it to be kept protected.
-    char *pageaddr = (char*)jl_safepoint_page + jl_page_size * (idx - 1);
+    char *pageaddr = jl_safepoint_pages + jl_page_size * idx;
 #ifdef _OS_WINDOWS_
     DWORD old_prot;
     VirtualProtect(pageaddr, jl_page_size, PAGE_READONLY, &old_prot);
@@ -95,7 +101,7 @@ void jl_safepoint_init(void)
     }
     // The signal page is for the gc safepoint.
     // The page before it is the sigint pending flag.
-    jl_safepoint_page = (size_t*)(addr + pgsz);
+    jl_safepoint_pages = addr;
 }
 
 int jl_safepoint_start_gc(void)

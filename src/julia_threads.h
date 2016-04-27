@@ -32,6 +32,7 @@
 typedef struct _jl_tls_states_t {
     struct _jl_gcframe_t *pgcstack;
     struct _jl_value_t *exception_in_transit;
+    volatile size_t *safepoint;
     // Whether it is safe to execute GC at the same time.
 #define JL_GC_STATE_WAITING 1
     // gc_state = 1 means the thread is doing GC or is waiting for the GC to
@@ -285,15 +286,14 @@ JL_DLLEXPORT void (jl_cpu_wake)(void);
 
 // Accessing the tls variables, gc safepoint and gc states
 JL_DLLEXPORT JL_CONST_FUNC jl_tls_states_t *(jl_get_ptls_states)(void);
-JL_DLLEXPORT extern volatile size_t *jl_safepoint_page;
 // This triggers a SegFault when we are in GC
 // Assign it to a variable to make sure the compiler emit the load
 // and to avoid Clang warning for -Wunused-volatile-lvalue
-#define jl_gc_safepoint() do {                          \
-        jl_signal_fence();                              \
-        size_t safepoint_load = *jl_safepoint_page;     \
-        jl_signal_fence();                              \
-        (void)safepoint_load;                           \
+#define jl_gc_safepoint() do {                                          \
+        jl_signal_fence();                                              \
+        size_t safepoint_load = *jl_get_ptls_states()->safepoint;       \
+        jl_signal_fence();                                              \
+        (void)safepoint_load;                                           \
     } while (0)
 #ifndef JULIA_ENABLE_THREADING
 extern JL_DLLEXPORT jl_tls_states_t jl_tls_states;
