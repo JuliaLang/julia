@@ -167,3 +167,16 @@ module ObjLoadTest
     do_the_call()
     @test didcall
 end
+
+# Test for proper parenting
+let
+    function foo()
+        # this IR snippet triggers an optimization relying
+        # on the llvmcall function having a parent module
+        Base.llvmcall(
+         """%1 = getelementptr i64, i64* null, i64 1
+            ret void""",
+        Void, Tuple{})
+    end
+    code_llvm(DevNull, foo, ())
+end
