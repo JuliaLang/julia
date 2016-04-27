@@ -1328,3 +1328,8 @@ let
     m = sprand(Int32, 10, 10, 0.1)
     @test eltype(m) == Int32
 end
+
+# 16073
+@inferred sprand(1, 1, 1.0)
+@inferred sprand(1, 1, 1.0, rand, Float64)
+@inferred sprand(1, 1, 1.0, x->round(Int,rand(x)*100))
