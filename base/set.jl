@@ -142,11 +142,11 @@ function unique(f::Callable, C)
 end
 
 """
-    alldistinct(itr)
+    allunique(itr)
 
 Return `true` if all values from `itr` are distinct when compared with `isequal`.
 """
-function alldistinct(C)
+function allunique(C)
     seen = Set{eltype(C)}()
     for x in C
         if in(x, seen)
@@ -158,9 +158,9 @@ function alldistinct(C)
     true
 end
 
-alldistinct(::Set) = true
+allunique(::Set) = true
 
-alldistinct{T}(r::Range{T}) = (step(r) != zero(T)) || (length(r) <= one(T))
+allunique{T}(r::Range{T}) = (step(r) != zero(T)) || (length(r) <= one(T))
 
 function filter(f, s::Set)
     u = similar(s)

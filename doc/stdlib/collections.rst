@@ -226,7 +226,7 @@ Iterable Collections
 
    Returns an array containing one value from ``itr`` for each unique value produced by ``f`` applied to elements of ``itr``\ .
 
-.. function:: alldistinct(itr)
+.. function:: allunique(itr)
 
    .. Docstring generated from Julia source
 

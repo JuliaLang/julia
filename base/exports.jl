@@ -746,7 +746,7 @@ export
 # collections
     all!,
     all,
-    alldistinct,
+    allunique,
     any!,
     any,
     collect,
