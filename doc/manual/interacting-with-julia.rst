@@ -213,7 +213,7 @@ and get a list of LaTeX matches as well::
 
     julia> e\^1[TAB] = [1 0]
     julia> e¹ = [1 0]
-    1x2 Array{Int64,2}:
+    1×2 Array{Int64,2}:
      1  0
 
     julia> \sqrt[TAB]2     # √ is equivalent to the sqrt() function

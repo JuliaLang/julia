@@ -405,7 +405,7 @@ It will be evaluated and returned depending on the preceding conditionals:
 .. doctest::
 
     julia> true && (x = rand(2,2))
-    2x2 Array{Float64,2}:
+    2×2 Array{Float64,2}:
      0.768448  0.673959
      0.940515  0.395453
 
