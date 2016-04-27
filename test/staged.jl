@@ -189,3 +189,19 @@ let gf_err2
     @test gf_err_ref[] == 6
     @test gf_err2(code_lowered) == nothing
 end
+
+# issue #15043
+decorated = Set{DataType}()
+let
+    @generated function decorate(t)
+        push!(decorated, t)
+    end
+
+    foo() = return nothing
+    decorate(foo)
+    @test in(typeof(foo), decorated)
+
+    bar() = return 1
+    decorate(bar)
+    @test in(typeof(bar), decorated)
+end
