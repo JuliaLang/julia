@@ -197,7 +197,7 @@ let bstream = BufferStream()
     a = rand(UInt8,10)
     write(bstream,a)
     @test !eof(bstream)
-    flush(bstream)
+    @test flush(bstream) === nothing
     b = read(bstream,UInt8)
     @test a[1] == b
     b = read(bstream,UInt8)
