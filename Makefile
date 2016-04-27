@@ -349,6 +349,11 @@ endif
 			fi \
 		done \
 	done
+	# this could be improved: for example, the libraries for suitesparse
+	# are not included, because they already don't appear in the build tree
+	for inc in $(build_includedir)/*.h; do \
+		$(INSTALL_F) $$inc $(DESTDIR)$(includedir) ; \
+	done
 
 	# Copy in libssl and libcrypto if they exist
 ifeq ($(OS),Linux)
