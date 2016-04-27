@@ -2421,7 +2421,7 @@ function inlineable(f::ANY, ft::ANY, e::Expr, atypes::Vector{Any}, sv::Inference
             # argument tuple is not used as a whole, so convert function body
             # to one accepting the exact number of arguments we have.
             newnames = unique_names(ast,valen)
-            replace_getfield!(ast, body, vaname, newnames, sv, 1)
+            replace_getfield!(ast, body, vaname, newnames, sv)
             na = na-1+valen
 
             # if the argument name is also used as a local variable,
@@ -3032,7 +3032,7 @@ function remove_redundant_temp_vars(linfo, sa, T)
     gensym_types = linfo.gensymtypes
     bexpr = Expr(:block); bexpr.args = linfo.code
     for (v,init) in sa
-        if (isa(init, Slot) && !is_var_assigned(linfo, init))
+        if (isa(init, Slot) && !is_var_assigned(linfo, init::Slot))
             # this transformation is not valid for vars used before def.
             # we need to preserve the point of assignment to know where to
             # throw errors (issue #4645).
@@ -3086,8 +3086,9 @@ symequal(x::GenSym, y::GenSym) = is(x.id,y.id)
 symequal(x::Slot  , y::Slot)   = is(x.id,y.id)
 symequal(x::ANY   , y::ANY)    = is(x,y)
 
-function occurs_outside_getfield(e::ANY, sym::ANY, sv::InferenceState, field_count, field_names)
-    if e===sym || (isa(e,Slot) && isa(sym,Slot) && e.id == sym.id)
+function occurs_outside_getfield(linfo::LambdaInfo, e::ANY, sym::ANY,
+                                 sv::InferenceState, field_count, field_names)
+    if e===sym || (isa(e,Slot) && isa(sym,Slot) && (e::Slot).id == (sym::Slot).id)
         return true
     end
     if isa(e,Expr)
@@ -3103,10 +3104,21 @@ function occurs_outside_getfield(e::ANY, sym::ANY, sv::InferenceState, field_cou
             return true
         end
         if is(e.head,:(=))
-            return occurs_outside_getfield(e.args[2], sym, sv, field_count, field_names)
+            return occurs_outside_getfield(linfo, e.args[2], sym, sv,
+                                           field_count, field_names)
         else
+            if (e.head === :block && isa(sym, Slot) &&
+                linfo.slotflags[(sym::Slot).id] & 32 == 0)
+                # This is the used-undef flag according to Jeff
+                ignore_void = true
+            else
+                ignore_void = false
+            end
             for a in e.args
-                if occurs_outside_getfield(a, sym, sv, field_count, field_names)
+                if ignore_void && isa(a, Slot) && (a::Slot).id == (sym::Slot).id
+                    continue
+                end
+                if occurs_outside_getfield(linfo, a, sym, sv, field_count, field_names)
                     return true
                 end
             end
@@ -3143,7 +3155,7 @@ function _getfield_elim_pass!(e::Expr, sv)
         e1 = e.args[2]
         j = e.args[3]
         if isa(e1,Expr)
-            alloc = is_immutable_allocation(e1, sv)
+            alloc = is_allocation(e1, sv)
             if !is(alloc, false)
                 flen, fnames = alloc
                 if isa(j,QuoteNode)
@@ -3178,16 +3190,16 @@ end
 
 _getfield_elim_pass!(e::ANY, sv) = e
 
-# check if e is a successful allocation of an immutable struct
+# check if e is a successful allocation of an struct
 # if it is, returns (n,f) such that it is always valid to call
 # getfield(..., 1 <= x <= n) or getfield(..., x in f) on the result
-function is_immutable_allocation(e :: ANY, sv::InferenceState)
+function is_allocation(e :: ANY, sv::InferenceState)
     isa(e, Expr) || return false
     if is_known_call(e, tuple, sv)
         return (length(e.args)-1,())
     elseif e.head === :new
         typ = widenconst(exprtype(e, sv))
-        if isleaftype(typ) && !typ.mutable
+        if isleaftype(typ)
             @assert(isa(typ,DataType))
             nf = length(e.args)-1
             names = fieldnames(typ)
@@ -3204,7 +3216,7 @@ function is_immutable_allocation(e :: ANY, sv::InferenceState)
     false
 end
 
-# eliminate allocation of unnecessary immutables
+# eliminate allocation of unnecessary objects
 # that are only used as arguments to safe getfield calls
 function alloc_elim_pass!(linfo::LambdaInfo, sv::InferenceState)
     body = linfo.code
@@ -3215,49 +3227,98 @@ function alloc_elim_pass!(linfo::LambdaInfo, sv::InferenceState)
     i = 1
     while i < length(body)
         e = body[i]
-        if !(isa(e,Expr) && is(e.head,:(=)) && (isa(e.args[1], GenSym) ||
-                                                (isa(e.args[1],Slot) && haskey(vs, e.args[1].id))))
+        if !isa(e, Expr)
             i += 1
             continue
         end
-        var = e.args[1]
-        rhs = e.args[2]
-        alloc = is_immutable_allocation(rhs, sv)
-        if !is(alloc,false)
+        e = e::Expr
+        if e.head === :(=) && (isa(e.args[1], GenSym) ||
+                               (isa(e.args[1],Slot) && haskey(vs, e.args[1].id)))
+            var = e.args[1]
+            rhs = e.args[2]
+        else
+            var = nothing
+            rhs = e
+        end
+        alloc = is_allocation(rhs, sv)
+        if alloc !== false
             nv, field_names = alloc
             tup = rhs.args
-            if occurs_outside_getfield(bexpr, var, sv, nv, field_names)
+            # This makes sure the value doesn't escape so we can elide
+            # allocation of mutable types too
+            if (var !== nothing &&
+                occurs_outside_getfield(linfo, bexpr, var, sv, nv, field_names))
                 i += 1
                 continue
             end
 
             deleteat!(body, i)  # remove tuple allocation
             # convert tuple allocation to a series of local var assignments
-            vals = cell(nv)
             n_ins = 0
-            for j=1:nv
-                tupelt = tup[j+1]
-                if isa(tupelt,Number) || isa(tupelt,AbstractString) || isa(tupelt,QuoteNode)
-                    vals[j] = tupelt
-                else
-                    elty = exprtype(tupelt,sv)
-                    tmpv = newvar!(sv, elty)
-                    tmp = Expr(:(=), tmpv, tupelt)
-                    insert!(body, i+n_ins, tmp)
-                    vals[j] = tmpv
-                    n_ins += 1
+            if var === nothing
+                for j=1:nv
+                    tupelt = tup[j+1]
+                    if !(isa(tupelt,Number) || isa(tupelt,AbstractString) ||
+                         isa(tupelt,QuoteNode) || isa(tupelt, GenSym))
+                        insert!(body, i+n_ins, tupelt)
+                        n_ins += 1
+                    end
+                end
+            else
+                vals = cell(nv)
+                for j=1:nv
+                    tupelt = tup[j+1]
+                    if (isa(tupelt,Number) || isa(tupelt,AbstractString) ||
+                        isa(tupelt,QuoteNode) || isa(tupelt, GenSym))
+                        vals[j] = tupelt
+                    else
+                        elty = exprtype(tupelt,sv)
+                        tmpv = newvar!(sv, elty)
+                        tmp = Expr(:(=), tmpv, tupelt)
+                        insert!(body, i+n_ins, tmp)
+                        vals[j] = tmpv
+                        n_ins += 1
+                    end
+                end
+                replace_getfield!(linfo, bexpr, var, vals, field_names, sv)
+                if isa(var, Slot) && linfo.slotflags[(var::Slot).id] & 32 == 0
+                    # occurs_outside_getfield might have allowed
+                    # void use of the slot, we need to delete them too
+                    i -= delete_void_use!(body, var::Slot, i)
                 end
             end
-            i += n_ins
-            replace_getfield!(linfo, bexpr, var, vals, field_names, sv, i)
+            # Do not increment counter and do the optimization recursively
+            # on the allocation of fields too.
+            # This line can probably be added back for linear IR
+            # i += n_ins
         else
             i += 1
         end
     end
 end
 
-function replace_getfield!(linfo::LambdaInfo, e::Expr, tupname, vals, field_names, sv, i0)
-    for i = i0:length(e.args)
+# Return the number of expressions deleted before `i0`
+function delete_void_use!(body, var::Slot, i0)
+    narg = length(body)
+    i = 1
+    ndel = 0
+    while i <= narg
+        a = body[i]
+        if isa(a, Slot) && (a::Slot).id == var.id
+            deleteat!(body, i)
+            if i + ndel < i0
+                ndel += 1
+            end
+            narg -= 1
+        else
+            i += 1
+        end
+    end
+    ndel
+end
+
+function replace_getfield!(linfo::LambdaInfo, e::Expr, tupname, vals, field_names, sv)
+    for i = 1:length(e.args)
         a = e.args[i]
         if isa(a,Expr) && is_known_call(a, getfield, sv) &&
             symequal(a.args[2],tupname)
@@ -3289,7 +3350,7 @@ function replace_getfield!(linfo::LambdaInfo, e::Expr, tupname, vals, field_name
             end
             e.args[i] = val
         elseif isa(a, Expr)
-            replace_getfield!(linfo, a::Expr, tupname, vals, field_names, sv, 1)
+            replace_getfield!(linfo, a::Expr, tupname, vals, field_names, sv)
         end
     end
 end
