@@ -1783,7 +1783,7 @@ static void jl_finalize_serializer(ios_t *f) {
 }
 
 void jl_typemap_rehash(union jl_typemap_t ml, int8_t offs);
-static void jl_reinit_item(ios_t *f, jl_value_t *v, int how) {
+static void jl_reinit_item(ios_t *f, jl_value_t *v, int how, arraylist_t *tracee_list) {
     JL_TRY {
         switch (how) {
             case 1: { // rehash ObjectIdDict
@@ -1816,6 +1816,8 @@ static void jl_reinit_item(ios_t *f, jl_value_t *v, int how) {
                 jl_methtable_t *mt = (jl_methtable_t*)v;
                 jl_typemap_rehash(mt->defs, 0);
                 jl_typemap_rehash(mt->cache, (mt == jl_type_type->name->mt) ? 0 : 1);
+                if (tracee_list)
+                    arraylist_push(tracee_list, mt);
                 break;
             }
             case 4: { // rehash tfunc
@@ -1835,7 +1837,7 @@ static void jl_reinit_item(ios_t *f, jl_value_t *v, int how) {
         jl_printf(JL_STDERR, "\n");
     }
 }
-static jl_array_t *jl_finalize_deserializer(ios_t *f) {
+static jl_array_t *jl_finalize_deserializer(ios_t *f, arraylist_t *tracee_list) {
     jl_array_t *init_order = NULL;
     if (mode != MODE_MODULE)
         init_order = (jl_array_t*)jl_deserialize_value(f, NULL);
@@ -1843,7 +1845,7 @@ static jl_array_t *jl_finalize_deserializer(ios_t *f) {
     // run reinitialization functions
     int pos = read_int32(f);
     while (pos != -1) {
-        jl_reinit_item(f, (jl_value_t*)backref_list.items[pos], read_int32(f));
+        jl_reinit_item(f, (jl_value_t*)backref_list.items[pos], read_int32(f), tracee_list);
         pos = read_int32(f);
     }
     return init_order;
@@ -1999,7 +2001,7 @@ static void jl_restore_system_image_from_stream(ios_t *f)
 
     int uid_ctr = read_int32(f);
     int gs_ctr = read_int32(f);
-    jl_module_init_order = jl_finalize_deserializer(f); // done with f
+    jl_module_init_order = jl_finalize_deserializer(f, NULL); // done with f
 
     jl_set_t_uid_ctr(uid_ctr);
     jl_set_gs_ctr(gs_ctr);
@@ -2284,6 +2286,13 @@ static void jl_recache_types(void)
     }
 }
 
+extern tracer_cb jl_newmeth_tracer;
+static int trace_method(jl_typemap_entry_t *entry, void *closure)
+{
+    jl_call_tracer(jl_newmeth_tracer, (jl_value_t*)entry->func.method);
+    return 1;
+}
+
 static jl_array_t *_jl_restore_incremental(ios_t *f)
 {
     if (ios_eof(f)) {
@@ -2310,14 +2319,18 @@ static jl_array_t *_jl_restore_incremental(ios_t *f)
     jl_array_t *init_order = NULL;
     restored = (jl_array_t*)jl_deserialize_value(f, (jl_value_t**)&restored);
 
+    arraylist_t *tracee_list = NULL;
+    if (jl_newmeth_tracer)
+        tracee_list = arraylist_new((arraylist_t*)malloc(sizeof(arraylist_t)), 0);
+
     jl_recache_types();
-    jl_finalize_deserializer(f); // done with MODE_MODULE
+    jl_finalize_deserializer(f, tracee_list); // done with MODE_MODULE
 
     // at this point, the AST is fully reconstructed, but still completely disconnected
     // in postwork mode, all of the interconnects will be created
     mode = MODE_MODULE_POSTWORK;
     jl_deserialize_lambdas_from_mod(f); // hook up methods of external generic functions
-    init_order = jl_finalize_deserializer(f); // done with f
+    init_order = jl_finalize_deserializer(f, tracee_list); // done with f
 
     mode = last_mode;
     jl_gc_enable(en);
@@ -2328,6 +2341,13 @@ static jl_array_t *_jl_restore_incremental(ios_t *f)
     JL_SIGATOMIC_END();
 
     JL_GC_PUSH2(&init_order,&restored);
+    if (tracee_list) {
+        jl_methtable_t *mt;
+        while ((mt = arraylist_pop(tracee_list)) != NULL)
+            jl_typemap_visitor(mt->defs, trace_method, NULL);
+        arraylist_free(tracee_list);
+        free(tracee_list);
+    }
     jl_init_restored_modules(init_order);
     JL_GC_POP();
 
