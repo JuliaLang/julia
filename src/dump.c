@@ -2343,7 +2343,7 @@ static jl_array_t *_jl_restore_incremental(ios_t *f)
     JL_GC_PUSH2(&init_order,&restored);
     if (tracee_list) {
         jl_methtable_t *mt;
-        while ((mt = arraylist_pop(tracee_list)) != NULL)
+        while ((mt = (jl_methtable_t*)arraylist_pop(tracee_list)) != NULL)
             jl_typemap_visitor(mt->defs, trace_method, NULL);
         arraylist_free(tracee_list);
         free(tracee_list);
