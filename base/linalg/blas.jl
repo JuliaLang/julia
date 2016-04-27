@@ -96,14 +96,14 @@ end
 """
     scal!(n, a, X, incx)
 
-Overwrite `X` with `a*X`. Returns `X`.
+Overwrite `X` with `a*X` for the first `n` elements of array `X` with stride `incx`. Returns `X`.
 """
 function scal! end
 
 """
     scal(n, a, X, incx)
 
-Returns `a*X`.
+Returns `X` scaled by `a` for the first `n` elements of array `X` with stride `incx`.
 """
 function scal end
 
