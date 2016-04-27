@@ -999,7 +999,12 @@ type BufferStream <: LibuvStream
 end
 
 isopen(s::BufferStream) = s.is_open
-close(s::BufferStream) = (s.is_open = false; notify(s.r_c; all=true); notify(s.close_c; all=true); nothing)
+function close(s::BufferStream)
+    s.is_open = false
+    notify(s.r_c; all=true)
+    notify(s.close_c; all=true)
+    nothing
+end
 read(s::BufferStream, ::Type{UInt8}) = (wait_readnb(s, 1); read(s.buffer, UInt8))
 unsafe_read(s::BufferStream, a::Ptr{UInt8}, nb::UInt) = (wait_readnb(s, Int(nb)); unsafe_read(s.buffer, a, nb))
 nb_available(s::BufferStream) = nb_available(s.buffer)

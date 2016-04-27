@@ -207,7 +207,7 @@ let bstream = BufferStream()
     @test !eof(bstream)
     read!(bstream,c)
     @test c == a[3:10]
-    close(bstream)
+    @test close(bstream) === nothing
     @test eof(bstream)
     @test nb_available(bstream) == 0
 end

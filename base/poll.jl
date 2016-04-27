@@ -149,7 +149,6 @@ type _FDWatcher
                         FDWatchers[fdnum] = nothing
                     end
                     notify(t.notify, FDEvent(true, true, false))
-                    nothing
                 end
             end
             nothing
