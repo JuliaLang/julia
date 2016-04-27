@@ -2379,11 +2379,10 @@
         ((=)
          (let ((vi (var-info-for (cadr e) env)))
            (if vi
-               (begin
-                 (if (vinfo:asgn vi)
-                     (vinfo:set-sa! vi #f)
-                     (vinfo:set-sa! vi #t))
-                 (vinfo:set-asgn! vi #t))))
+               (begin (if (vinfo:asgn vi)
+                          (vinfo:set-sa! vi #f)
+                          (vinfo:set-sa! vi #t))
+                      (vinfo:set-asgn! vi #t))))
          (analyze-vars (caddr e) env captvars sp))
         ((call)
          (let ((vi (var-info-for (cadr e) env)))
@@ -2411,13 +2410,14 @@
          (analyze-vars-lambda (cadr e) env captvars sp
                               (cddr e)))
         ((method)
-         (let ((vi (var-info-for (method-expr-name e) env)))
-           (if vi
-               (begin (vinfo:set-asgn! vi #t)
-                      ;; note: method defs require a memory loc. (issue #7658)
-                      (vinfo:set-sa! vi #f))))
          (if (length= e 2)
-             e
+             (let ((vi (var-info-for (method-expr-name e) env)))
+               (if vi
+                   (begin (if (vinfo:asgn vi)
+                              (vinfo:set-sa! vi #f)
+                              (vinfo:set-sa! vi #t))
+                          (vinfo:set-asgn! vi #t)))
+               e)
              (begin (analyze-vars (caddr e) env captvars sp)
                     (assert (eq? (car (cadddr e)) 'lambda))
                     (analyze-vars-lambda (cadddr e) env captvars sp
@@ -2586,6 +2586,8 @@ f(x) = yt(x)
 ;; clear capture bit for vars assigned once at the top, to avoid allocating
 ;; some unnecessary Boxes.
 (define (lambda-optimize-vars! lam)
+  ;; flattening blocks helps us find more dominating statements
+  (set-car! (cdddr lam) (flatten-blocks (lam:body lam)))
   (define (expr-uses-var ex v)
     (cond ((assignment? ex) (expr-contains-eq v (caddr ex)))
           ((eq? (car ex) 'method)
@@ -2835,8 +2837,6 @@ f(x) = yt(x)
                           '(null)
                           (convert-assignment name mk-closure fname lam interp)))))))
           ((lambda)  ;; should only happen inside (thunk ...)
-           ;; flattening blocks helps lambda-optimize-vars! work
-           (set-car! (cdddr e) (flatten-blocks (lam:body e)))
            `(lambda ,(cadr e)
               (,(clear-capture-bits (car (lam:vinfo e)))
                () ,@(cddr (lam:vinfo e)))
