@@ -907,7 +907,7 @@ function sprand{T}(r::AbstractRNG, m::Integer, n::Integer, density::AbstractFloa
                 rfn::Function, ::Type{T}=eltype(rfn(r,1)))
     N = m*n
     N == 0 && return spzeros(T,m,n)
-    N == 1 && return rand(r) <= density ? sparse(rfn(r,1)) : spzeros(T,1,1)
+    N == 1 && return rand(r) <= density ? sparse([1], [1], rfn(r,1)) : spzeros(T,1,1)
 
     I,J = sprand_IJ(r, m, n, density)
     sparse_IJ_sorted!(I, J, rfn(r,length(I)), m, n, +)  # it will never need to combine
@@ -917,7 +917,7 @@ function sprand{T}(m::Integer, n::Integer, density::AbstractFloat,
                 rfn::Function, ::Type{T}=eltype(rfn(1)))
     N = m*n
     N == 0 && return spzeros(T,m,n)
-    N == 1 && return rand() <= density ? sparse(rfn(1)) : spzeros(T,1,1)
+    N == 1 && return rand() <= density ? sparse([1], [1], rfn(1)) : spzeros(T,1,1)
 
     I,J = sprand_IJ(GLOBAL_RNG, m, n, density)
     sparse_IJ_sorted!(I, J, rfn(length(I)), m, n, +)  # it will never need to combine
