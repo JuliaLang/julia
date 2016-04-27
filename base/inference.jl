@@ -6,6 +6,12 @@ const MAX_TYPE_DEPTH = 7
 const MAX_TUPLETYPE_LEN  = 8
 const MAX_TUPLE_DEPTH = 4
 
+# slot property bit flags
+const Slot_Assigned     = 2
+const Slot_AssignedOnce = 16
+const Slot_UsedUndef    = 32
+const Slot_Called       = 64
+
 #### inference state types ####
 
 immutable NotFound end
@@ -2011,7 +2017,7 @@ function type_annotate!(linfo::LambdaInfo, states::Array{Any,1}, sv::ANY, rettyp
     # mark used-undef variables
     for i = 1:nslots
         if undefs[i]
-            linfo.slotflags[i] |= 32
+            linfo.slotflags[i] |= Slot_UsedUndef
         end
     end
     nothing
@@ -2515,7 +2521,7 @@ function inlineable(f::ANY, ft::ANY, e::Expr, atypes::Vector{Any}, sv::Inference
 
         islocal = false # if the argument name is also used as a local variable,
                         # we need to keep it as a variable name
-        if linfo.slotflags[i]&18 != 0
+        if linfo.slotflags[i] & (Slot_Assigned | Slot_AssignedOnce) != 0
             islocal = true
             aeitype = tmerge(aeitype, linfo.slottypes[i])
         end
@@ -2972,7 +2978,7 @@ function add_slot!(linfo::LambdaInfo, typ, is_sa)
     id = length(linfo.slotnames)+1
     push!(linfo.slotnames, compiler_temp_sym)
     push!(linfo.slottypes, typ)
-    push!(linfo.slotflags, 2+16*is_sa)
+    push!(linfo.slotflags, Slot_Assigned + is_sa * Slot_AssignedOnce)
     SlotNumber(id)
 end
 
@@ -2992,7 +2998,7 @@ function is_known_call_p(e::Expr, pred, sv)
     return isa(f,Const) && pred(f.val)
 end
 
-is_var_assigned(linfo, v) = isa(v,Slot) && linfo.slotflags[v.id]&2 != 0
+is_var_assigned(linfo, v) = isa(v,Slot) && linfo.slotflags[v.id]&Slot_Assigned != 0
 
 function delete_var!(linfo, id, T)
     filter!(x->!(isa(x,Expr) && (x.head === :(=) || x.head === :const) &&
@@ -3021,7 +3027,7 @@ function _slot_replace!(e, id, rhs, T)
 end
 
 occurs_undef(var::Int, expr, flags) =
-    flags[var]&32 != 0 && occurs_more(expr, e->(isa(e,Slot) && e.id==var), 0)>0
+    flags[var]&Slot_UsedUndef != 0 && occurs_more(expr, e->(isa(e,Slot) && e.id==var), 0)>0
 
 # remove all single-assigned vars v in "v = x" where x is an argument
 # and not assigned.
@@ -3108,8 +3114,7 @@ function occurs_outside_getfield(linfo::LambdaInfo, e::ANY, sym::ANY,
                                            field_count, field_names)
         else
             if (e.head === :block && isa(sym, Slot) &&
-                linfo.slotflags[(sym::Slot).id] & 32 == 0)
-                # This is the used-undef flag according to Jeff
+                linfo.slotflags[(sym::Slot).id] & Slot_UsedUndef == 0)
                 ignore_void = true
             else
                 ignore_void = false
@@ -3281,7 +3286,7 @@ function alloc_elim_pass!(linfo::LambdaInfo, sv::InferenceState)
                     end
                 end
                 replace_getfield!(linfo, bexpr, var, vals, field_names, sv)
-                if isa(var, Slot) && linfo.slotflags[(var::Slot).id] & 32 == 0
+                if isa(var, Slot) && linfo.slotflags[(var::Slot).id] & Slot_UsedUndef == 0
                     # occurs_outside_getfield might have allowed
                     # void use of the slot, we need to delete them too
                     i -= delete_void_use!(body, var::Slot, i)
