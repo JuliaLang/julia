@@ -45,6 +45,9 @@ r = 5:-1:1
 @test isempty((1:4)[5:4])
 @test_throws BoundsError (1:10)[8:-1:-2]
 
+r = typemax(Int)-5:typemax(Int)-1
+@test_throws BoundsError r[7]
+
 @test findin([5.2, 3.3], 3:20) == findin([5.2, 3.3], collect(3:20))
 
 let
