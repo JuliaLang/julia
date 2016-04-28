@@ -2200,6 +2200,16 @@ end
     end
     ccall(:jl_exit_on_sigint, Void, (Cint,), 1)
 end
+let
+    # Exception frame automatically restores sigatomic counter.
+    Base.sigatomic_begin()
+    @test_throws ErrorException begin
+        for i = 1:2
+            Base.sigatomic_end()
+        end
+    end
+    Base.sigatomic_end()
+end
 
 # pull request #9534
 @test try; a,b,c = 1,2; catch ex; (ex::BoundsError).a === (1,2) && ex.i == 3; end
