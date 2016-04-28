@@ -975,9 +975,8 @@ end
     Expr(:block,meta,exprs...,Expr(:tuple,[symbol(:s,i) for i=1:N]...))
 end
 
-# TODO in v0.5: either deprecate line 1 or add line 2
 ind2sub(a::AbstractArray, ind::Integer) = ind2sub(size(a), ind)
-# sub2ind(a::AbstractArray, I::Integer...) = sub2ind(size(a), I...)
+sub2ind(a::AbstractArray, I::Integer...) = sub2ind(size(a), I...)
 
 function sub2ind{T<:Integer}(dims::Tuple{Vararg{Integer}}, I::AbstractVector{T}...)
     N = length(dims)
