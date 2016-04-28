@@ -104,7 +104,7 @@ function checkbounds(::Type{Bool}, sz::Integer, r::Range)
     @_propagate_inbounds_meta
     isempty(r) | (checkbounds(Bool, sz, first(r)) & checkbounds(Bool, sz, last(r)))
 end
-checkbounds(::Type{Bool}, sz::Integer, I::AbstractArray{Bool}) = length(I) == sz
+checkbounds{N}(::Type{Bool}, sz::Integer, I::AbstractArray{Bool,N}) = N == 1 && length(I) == sz
 function checkbounds(::Type{Bool}, sz::Integer, I::AbstractArray)
     @_inline_meta
     b = true
