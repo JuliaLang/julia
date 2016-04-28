@@ -40,18 +40,15 @@ fails = @testset NoThrowTestSet begin
     @test_throws OverflowError error()
     # Fail - no exception
     @test_throws OverflowError 1 + 1
-    # Fail - const
-    @test false
     # Fail - comparison
     @test 1+1 == 2+2
 end
-for i in 1:4
+for i in 1:3
     @test isa(fails[i], Base.Test.Fail)
 end
 @test contains(sprint(show, fails[1]), "Thrown: ErrorException")
 @test contains(sprint(show, fails[2]), "No exception thrown")
-@test contains(sprint(show, fails[3]), "Evaluated: false")
-@test contains(sprint(show, fails[4]), "Evaluated: 2 == 4")
+@test contains(sprint(show, fails[3]), "Evaluated: 2 == 4")
 
 # Test printing of a TestSetException
 tse_str = sprint(show, Test.TestSetException(1,2,3))
