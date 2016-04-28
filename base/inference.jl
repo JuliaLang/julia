@@ -102,7 +102,7 @@ type InferenceState
                     end
                     s[1][la] = VarState(Tuple,false)
                 else
-                    s[1][la] = VarState(limit_tuple_depth(tupletype_tail(atypes,la)),false)
+                    s[1][la] = VarState(tuple_tfunc(limit_tuple_depth(tupletype_tail(atypes,la))),false)
                 end
                 la -= 1
             end
