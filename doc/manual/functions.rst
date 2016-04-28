@@ -591,12 +591,13 @@ This is accomplished by the following definition::
         end
     end
 
-In contrast to the :func:`map` example, here ``io`` is initialized by the
-*result* of ``open("outfile", "w")``.  The stream is then passed to
-your anonymous function, which performs the writing; finally, the
-:func:`open` function ensures that the stream is closed after your
-function exits.  The ``try/finally`` construct will be described in
-:ref:`man-control-flow`.
+Here, :func:`open` first opens the file for writing and then passes
+the resulting output stream to the anonymous function you defined
+in the ``do ... end`` block. After your function exits, :func:`open`
+will make sure that the stream is properly closed, regardless of
+whether your function exited normally or threw an exception.
+(The ``try/finally`` construct will be described in
+:ref:`man-control-flow`.)
 
 With the ``do`` block syntax, it helps to check the documentation or
 implementation to know how the arguments of the user function are
