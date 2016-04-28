@@ -389,11 +389,11 @@ A = speye(Bool, 5)
 @test sprand(4,5,0.5).^0 == sparse(ones(4,5))
 
 # issue #5985
-@test sprandbool(4, 5, 0.0) == sparse(zeros(Bool, 4, 5))
-@test sprandbool(4, 5, 1.00) == sparse(ones(Bool, 4, 5))
+@test sprand(Bool, 4, 5, 0.0) == sparse(zeros(Bool, 4, 5))
+@test sprand(Bool, 4, 5, 1.00) == sparse(ones(Bool, 4, 5))
 sprb45nnzs = zeros(5)
 for i=1:5
-    sprb45 = sprandbool(4, 5, 0.5)
+    sprb45 = sprand(Bool, 4, 5, 0.5)
     @test length(sprb45) == 20
     sprb45nnzs[i] = sum(sprb45)[1]
 end
@@ -589,7 +589,7 @@ let A = speye(Int, 5), I=1:10, X=reshape([trues(10); falses(15)],5,5)
     @test A[I] == A[X] == collect(1:10)
 end
 
-let S = sprand(50, 30, 0.5, x->round(Int,rand(x)*100)), I = sprandbool(50, 30, 0.2)
+let S = sprand(50, 30, 0.5, x->round(Int,rand(x)*100)), I = sprand(Bool, 50, 30, 0.2)
     FS = full(S)
     FI = full(I)
     @test sparse(FS[FI]) == S[I] == S[FI]
@@ -973,7 +973,7 @@ end
 @test spzeros(1,2) .* spzeros(0,1)  == zeros(0,2)
 
 # test throws
-A = sprandbool(5,5,0.2)
+A = sprand(Bool, 5,5,0.2)
 @test_throws ArgumentError reinterpret(Complex128,A)
 @test_throws ArgumentError reinterpret(Complex128,A,(5,5))
 @test_throws DimensionMismatch reinterpret(Int8,A,(20,))
@@ -990,9 +990,9 @@ A = speye(5)
 @test convert(Matrix,A) == full(A)
 
 # test float
-A = sprandbool(5,5,0.0)
+A = sprand(Bool, 5,5,0.0)
 @test eltype(float(A)) == Float64  # issue #11658
-A = sprandbool(5,5,0.2)
+A = sprand(Bool, 5,5,0.2)
 @test float(A) == float(full(A))
 
 # test sparsevec
@@ -1318,4 +1318,13 @@ let
     @test issparse(LinAlg.UnitLowerTriangular(full(m))) == false
     @test issparse(UpperTriangular(full(m))) == false
     @test issparse(LinAlg.UnitUpperTriangular(full(m))) == false
+end
+
+let
+    m = sprand(Float32, 10, 10, 0.1)
+    @test eltype(m) == Float32
+    m = sprand(Float64, 10, 10, 0.1)
+    @test eltype(m) == Float64
+    m = sprand(Int32, 10, 10, 0.1)
+    @test eltype(m) == Int32
 end

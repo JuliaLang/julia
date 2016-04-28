@@ -940,23 +940,25 @@ dense counterparts. The following functions are specific to sparse arrays.
 
    Construct a sparse diagonal matrix. ``B`` is a tuple of vectors containing the diagonals and ``d`` is a tuple containing the positions of the diagonals. In the case the input contains only one diagonal, ``B`` can be a vector (instead of a tuple) and ``d`` can be the diagonal position (instead of a tuple), defaulting to 0 (diagonal). Optionally, ``m`` and ``n`` specify the size of the resulting sparse matrix.
 
-.. function:: sprand([rng],m,[n],p::AbstractFloat,[rfn])
+.. function:: sprand([rng],[type],m,[n],p::AbstractFloat,[rfn])
 
    .. Docstring generated from Julia source
 
-   Create a random length ``m`` sparse vector or ``m`` by ``n`` sparse matrix, in which the probability of any element being nonzero is independently given by ``p`` (and hence the mean density of nonzeros is also exactly ``p``\ ). Nonzero values are sampled from the distribution specified by ``rfn``\ . The uniform distribution is used in case ``rfn`` is not specified. The optional ``rng`` argument specifies a random number generator, see :ref:`Random Numbers <random-numbers>`\ .
+   Create a random length ``m`` sparse vector or ``m`` by ``n`` sparse matrix, in which the probability of any element being nonzero is independently given by ``p`` (and hence the mean density of nonzeros is also exactly ``p``\ ). Nonzero values are sampled from the distribution specified by ``rfn`` and have the type ``type``\ . The uniform distribution is used in case ``rfn`` is not specified. The optional ``rng`` argument specifies a random number generator, see :ref:`Random Numbers <random-numbers>`\ .
 
-.. function:: sprandn(m[,n],p::AbstractFloat)
+.. function:: sprandn([rng], m[,n],p::AbstractFloat)
 
    .. Docstring generated from Julia source
 
-   Create a random sparse vector of length ``m`` or sparse matrix of size ``m`` by ``n`` with the specified (independent) probability ``p`` of any entry being nonzero, where nonzero values are sampled from the normal distribution.
+   Create a random sparse vector of length ``m`` or sparse matrix of size ``m`` by ``n`` with the specified (independent) probability ``p`` of any entry being nonzero, where nonzero values are sampled from the normal distribution. The optional ``rng`` argument specifies a random number generator, see :ref:`Random Numbers <random-numbers>`\ .
 
 .. function:: sprandbool(m[,n],p)
 
    .. Docstring generated from Julia source
 
    Create a random ``m`` by ``n`` sparse boolean matrix or length ``m`` sparse boolean vector with the specified (independent) probability ``p`` of any entry being ``true``\ .
+
+   This function is deprecated.
 
 .. function:: etree(A[, post])
 

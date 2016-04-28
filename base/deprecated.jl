@@ -1078,6 +1078,22 @@ end
 @deprecate copy(x::AbstractString)  identity(x)
 @deprecate copy(x::Tuple)  identity(x)
 
+"""
+    sprandbool(m[,n],p)
+Create a random `m` by `n` sparse boolean matrix or length `m` sparse boolean
+vector with the specified (independent) probability `p` of any entry being
+`true`.
+
+This function is deprecated.
+"""
+function sprandbool end
+@deprecate sprandbool(m::Integer, n::Integer, density::AbstractFloat) sprand(Bool, m, n, density)
+@deprecate sprandbool(r::AbstractRNG, m::Integer, n::Integer, density::AbstractFloat) sprand(r, Bool, m, n, density)
+@deprecate sprandbool(n::Integer, density::AbstractFloat) sprand(Bool, n, density)
+@deprecate sprandbool(r::AbstractRNG, n::Integer, density::AbstractFloat) sprand(r, Bool, n, density)
+@deprecate sprand{T}(n::Integer, density::AbstractFloat, ::Type{T}) sprand(T, n, density)
+@deprecate sprand{T}(r::AbstractRNG, n::Integer, density::AbstractFloat, ::Type{T}) sprand(r, T, n, density)
+
 # During the 0.5 development cycle, do not add any deprecations below this line
 # To be deprecated in 0.6
 
