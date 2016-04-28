@@ -462,7 +462,7 @@ static jl_lambda_info_t *jl_instantiate_staged(jl_method_t *generator, jl_tuplet
     return func;
 }
 
-static jl_lambda_info_t *jl_clone_thunk(jl_lambda_info_t *linfo, jl_tupletype_t *types)
+static jl_lambda_info_t *jl_copy_lambda(jl_lambda_info_t *linfo)
 {
     assert(linfo->sparam_vals == jl_emptysvec);
     jl_lambda_info_t *new_linfo = jl_new_lambda_info_uninit(linfo->sparam_syms);
@@ -476,8 +476,6 @@ static jl_lambda_info_t *jl_clone_thunk(jl_lambda_info_t *linfo, jl_tupletype_t 
     new_linfo->nargs = linfo->nargs;
     new_linfo->isva = linfo->isva;
     new_linfo->rettype = linfo->rettype;
-    new_linfo->def = NULL;
-    new_linfo->specTypes = types;
     return new_linfo;
 }
 
@@ -489,7 +487,8 @@ JL_DLLEXPORT jl_lambda_info_t *jl_get_specialized(jl_method_t *m, jl_tupletype_t
     assert(jl_svec_len(linfo->sparam_syms) == jl_svec_len(sp) || sp == jl_emptysvec);
 
     if (!m->isstaged) {
-        new_linfo = jl_clone_thunk(linfo, types);
+        new_linfo = jl_copy_lambda(linfo);
+        new_linfo->specTypes = types;
         new_linfo->def = m;
         new_linfo->sparam_vals = sp;
 
@@ -563,19 +562,31 @@ jl_method_t *jl_new_method(jl_lambda_info_t *definition, jl_sym_t *name, jl_tupl
     m->isstaged = isstaged;
     m->name = name;
     JL_GC_PUSH1(&m);
-    // the front end may add this thunk to multiple methods, so we make a copy
-    definition = jl_clone_thunk(definition, sig);
+    // the front end may add this lambda to multiple methods; make a copy if so
+    jl_method_t *oldm = definition->def;
+    int reused = oldm != NULL;
+    if (reused)
+        definition = jl_copy_lambda(definition);
+
+    definition->specTypes = sig;
     m->lambda_template = definition;
     jl_gc_wb(m, definition);
     definition->def = m;
     jl_gc_wb(definition, m);
 
-    jl_array_t *stmts = definition->code;
-    int i, l;
-    for(i = 0, l = jl_array_len(stmts); i < l; i++) {
-        jl_cellset(stmts, i, jl_resolve_globals(jl_cellref(stmts, i), definition));
+    if (reused) {
+        m->file = oldm->file;
+        m->line = oldm->line;
+        m->called = oldm->called;
     }
-    jl_method_init_properties(m);
+    else {
+        jl_array_t *stmts = definition->code;
+        int i, l;
+        for(i = 0, l = jl_array_len(stmts); i < l; i++) {
+            jl_cellset(stmts, i, jl_resolve_globals(jl_cellref(stmts, i), definition));
+        }
+        jl_method_init_properties(m);
+    }
     JL_GC_POP();
     return m;
 }
