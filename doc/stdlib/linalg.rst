@@ -1347,13 +1347,13 @@ Usually a function has 4 methods defined, one each for ``Float64``,
 
    .. Docstring generated from Julia source
 
-   Overwrite ``X`` with ``a*X``\ . Returns ``X``\ .
+   Overwrite ``X`` with ``a*X`` for the first ``n`` elements of array ``X`` with stride ``incx``\ . Returns ``X``\ .
 
 .. function:: scal(n, a, X, incx)
 
    .. Docstring generated from Julia source
 
-   Returns ``a*X``\ .
+   Returns ``X`` scaled by ``a`` for the first ``n`` elements of array ``X`` with stride ``incx``\ .
 
 .. function:: ger!(alpha, x, y, A)
 
