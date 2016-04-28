@@ -496,6 +496,7 @@ static void init_task(jl_task_t *t, char *stack)
 // yield to exception handler
 void JL_NORETURN throw_internal(jl_value_t *e)
 {
+    jl_get_ptls_states()->io_wait = 0;
     if (jl_safe_restore)
         jl_longjmp(*jl_safe_restore, 1);
     jl_gc_unsafe_enter();

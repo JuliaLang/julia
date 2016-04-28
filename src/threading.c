@@ -113,6 +113,7 @@ static void ti_initthread(int16_t tid)
         ptls->safepoint = (size_t*)(jl_safepoint_pages + jl_page_size * 2 +
                                     sizeof(size_t));
     }
+    ptls->defer_signal = 0;
     ptls->current_module = NULL;
     void *bt_data = malloc(sizeof(uintptr_t) * (JL_MAX_BT_SIZE + 1));
     if (bt_data == NULL) {
