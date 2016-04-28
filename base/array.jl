@@ -777,7 +777,7 @@ function findprev(testf::Function, A, start::Integer)
 end
 findlast(testf::Function, A) = findprev(testf, A, length(A))
 
-function find(testf::Function, A::AbstractArray)
+function find(testf::Function, A)
     # use a dynamic-length array to store the indexes, then copy to a non-padded
     # array for the return
     tmpI = Array(Int, 0)
@@ -791,9 +791,10 @@ function find(testf::Function, A::AbstractArray)
     I
 end
 
-function find(A::AbstractArray)
-    nnzA = countnz(A)
-    I = similar(A, Int, nnzA)
+function find(A)
+    cA = typeof(A) <: AbstractArray ? A : collect(A)
+    nnzA = countnz(cA)
+    I = similar(cA, Int, nnzA)
     count = 1
     for (i,a) in enumerate(A)
         if a != 0
