@@ -37,7 +37,7 @@ the correct exception was thrown.
 immutable Pass <: Result
     test_type::Symbol
     orig_expr
-    expr
+    data
     value
 end
 function Base.show(io::IO, t::Pass)
@@ -46,13 +46,10 @@ function Base.show(io::IO, t::Pass)
     if t.test_type == :test_throws
         # The correct type of exception was thrown
         print(io, "\n      Thrown: ", typeof(t.value))
-    elseif !isa(t.expr, Expr)
-        # Maybe just a constant, like true
-        print(io, "\n   Evaluated: ", t.expr)
-    elseif t.test_type == :test && t.expr.head == :comparison
+    elseif t.test_type == :test && isa(t.data,Expr) && t.data.head == :comparison
         # The test was an expression, so display the term-by-term
         # evaluated version as well
-        print(io, "\n   Evaluated: ", t.expr)
+        print(io, "\n   Evaluated: ", t.data)
     end
 end
 
@@ -65,7 +62,7 @@ the correct exception was not thrown.
 type Fail <: Result
     test_type::Symbol
     orig_expr
-    expr
+    data
     value
 end
 function Base.show(io::IO, t::Fail)
@@ -73,19 +70,16 @@ function Base.show(io::IO, t::Fail)
     print(io, "  Expression: ", t.orig_expr)
     if t.test_type == :test_throws_wrong
         # An exception was thrown, but it was of the wrong type
-        print(io, "\n    Expected: ", t.expr)
+        print(io, "\n    Expected: ", t.data)
         print(io, "\n      Thrown: ", typeof(t.value))
     elseif t.test_type == :test_throws_nothing
         # An exception was expected, but no exception was thrown
-        print(io, "\n    Expected: ", t.expr)
+        print(io, "\n    Expected: ", t.data)
         print(io, "\n  No exception thrown")
-    elseif !isa(t.expr, Expr)
-        # Maybe just a constant, like false
-        print(io, "\n   Evaluated: ", t.expr)
-    elseif t.test_type == :test && t.expr.head == :comparison
+    elseif t.test_type == :test && isa(t.data,Expr) && t.data.head == :comparison
         # The test was an expression, so display the term-by-term
         # evaluated version as well
-        print(io, "\n   Evaluated: ", t.expr)
+        print(io, "\n   Evaluated: ", t.data)
     end
 end
 
@@ -131,12 +125,30 @@ abstract ExecutionResult
 
 immutable Returned <: ExecutionResult
     value
+    data
 end
 
 immutable Threw <: ExecutionResult
     exception
     backtrace
 end
+
+function eval_comparison(ex::Expr)
+    res = true
+    i = 1
+    a = ex.args
+    n = length(a)
+    while i < n
+        res = a[i+1](a[i], a[i+2])
+        if !isa(res,Bool) || !res
+            break
+        end
+        i += 2
+    end
+    Returned(res, ex)
+end
+
+const comparison_prec = Base.operator_precedence(:(==))
 
 # @test - check if the expression evaluates to true
 # In the special case of a comparison, e.g. x == 5, generate code to
@@ -150,39 +162,25 @@ Returns a `Pass` `Result` if it does, a `Fail` `Result` if it is
 `false`, and an `Error` `Result` if it could not be evaluated.
 """
 macro test(ex)
-    orig_ex = Expr(:quote,ex)
+    orig_ex = Expr(:inert,ex)
     # Normalize comparison operator calls to :comparison expressions
     if isa(ex, Expr) && ex.head == :call && length(ex.args)==3 &&
-        Base.operator_precedence(ex.args[1]) == Base.operator_precedence(:(==))
-        ex = Expr(:comparison, ex.args[2], ex.args[1], ex.args[3])
-    end
-    # If the test is a comparison
-    if isa(ex, Expr) && ex.head == :comparison
-        # Generate a temporary for every term in the expression
-        n = length(ex.args)
-        terms = [GenSym(i) for i in 1:n]
-        # Create a new block that evaluates each term in the
-        # comparison indivudally
-        comp_block = Expr(:block)
-        comp_block.args = [:(
-                            $(t) = $(esc(x))
-                            ) for (t,x) in zip(terms, ex.args)]
-        # The block should then evaluate whether the comparison
-        # evaluates to true by splicing in the new terms into the
-        # original comparsion. The block returns
-        # - an expression with the values of terms spliced in
-        # - the result of the comparison itself
-        push!(comp_block.args,
-              :(  Expr(:comparison, $(terms...)),  # Terms spliced in
-                $(Expr(:comparison,   terms...))   # Comparison itself
-                  ))
-        testpair = comp_block
+        (ex.args[1] == :(==) || Base.operator_precedence(ex.args[1]) == comparison_prec)
+        testret = :(eval_comparison(Expr(:comparison,
+                                         $(esc(ex.args[2])), $(esc(ex.args[1])), $(esc(ex.args[3])))))
+    elseif isa(ex, Expr) && ex.head == :comparison
+        # pass all terms of the comparison to `eval_comparison`, as an Expr
+        terms = ex.args
+        for i = 1:length(terms)
+            terms[i] = esc(terms[i])
+        end
+        testret = :(eval_comparison(Expr(:comparison, $(terms...))))
     else
-        testpair = :(($orig_ex, $(esc(ex))))
+        testret = :(Returned($(esc(ex)), nothing))
     end
     result = quote
         try
-            Returned($testpair)
+            $testret
         catch _e
             Threw(_e, catch_backtrace())
         end
@@ -203,10 +201,10 @@ function do_test(result::ExecutionResult, orig_expr)
         # For anything else, just contains the test expression.
         # value is the evaluated value of the whole test expression.
         # Ideally it is true, but it may be false or non-Boolean.
-        expr, value = result.value
+        value = result.value
         testres = if isa(value, Bool)
-            value ? Pass(:test, orig_expr, expr, value) :
-                    Fail(:test, orig_expr, expr, value)
+            value ? Pass(:test, orig_expr, result.data, value) :
+                    Fail(:test, orig_expr, result.data, value)
         else
             # If the result is non-Boolean, this counts as an Error
             Error(:test_nonbool, orig_expr, value, nothing)
@@ -228,10 +226,10 @@ end
 Tests that the expression `ex` throws an exception of type `extype`.
 """
 macro test_throws(extype, ex)
-    orig_ex = Expr(:quote,ex)
+    orig_ex = Expr(:inert,ex)
     result = quote
         try
-            Returned($(esc(ex)))
+            Returned($(esc(ex)), nothing)
         catch _e
             Threw(_e, nothing)
         end
