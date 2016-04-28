@@ -32,17 +32,17 @@ a way of specifying the behaviors your code should have when complete.
 Simple unit testing can be performed with the :func:`@test` and
 :func:`@test_throws` macros:
 
-.. function:: @test ex
+.. function:: @test ex [message]
 
    .. Docstring generated from Julia source
 
-   Tests that the expression ``ex`` evaluates to ``true``\ . Returns a ``Pass`` ``Result`` if it does, a ``Fail`` ``Result`` if it is ``false``\ , and an ``Error`` ``Result`` if it could not be evaluated.
+   Tests that the expression ``ex`` evaluates to ``true``\ . Returns a ``Pass`` ``Result`` if it does, a ``Fail`` ``Result`` if it is ``false``\ , and an ``Error`` ``Result`` if it could not be evaluated. An optional message can be included to give context to the conditions being tested.
 
-.. function:: @test_throws extype ex
+.. function:: @test_throws extype ex [message]
 
    .. Docstring generated from Julia source
 
-   Tests that the expression ``ex`` throws an exception of type ``extype``\ .
+   Tests that the expression ``ex`` throws an exception of type ``extype``\ . An optional message can be included to give context.
 
 For example, suppose we want to check our new function ``foo(x)`` works
 as expected::

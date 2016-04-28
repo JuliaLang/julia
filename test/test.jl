@@ -11,13 +11,15 @@ using Base.Test
 @test strip("\t  hi   \n") == "hi"
 @test strip("\t  this should fail   \n") != "hi"
 
+@test true "hi"
+@test_throws ErrorException error() "hi"
+
 a = Array(Float64, 2, 2, 2, 2, 2)
 a[1,1,1,1,1] = 10
 @test a[1,1,1,1,1] == 10
 @test a[1,1,1,1,1] != 2
 
 @test rand() != rand()
-
 # Test printing of Pass results
 # Pass - constant
 @test contains(sprint(show, @test true), "Expression: true")
