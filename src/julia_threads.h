@@ -26,6 +26,7 @@
 #ifndef _OS_WINDOWS_
 #  include <pthread.h>
 #endif
+#include <signal.h>
 
 // This includes all the thread local states we care about for a thread.
 #define JL_MAX_BT_SIZE 80000
@@ -43,6 +44,7 @@ typedef struct _jl_tls_states_t {
     volatile int8_t gc_state;
     volatile int8_t in_finalizer;
     int8_t disable_gc;
+    volatile sig_atomic_t defer_signal;
     struct _jl_thread_heap_t *heap;
     struct _jl_module_t *current_module;
     struct _jl_task_t *volatile current_task;
@@ -58,6 +60,12 @@ typedef struct _jl_tls_states_t {
     size_t bt_size;
     // JL_MAX_BT_SIZE + 1 elements long
     uintptr_t *bt_data;
+    // Atomically set by the sender, reset by the handler.
+    volatile sig_atomic_t signal_request;
+    // Allow the sigint to be raised asynchronously
+    // this is limited to the few places we do synchronous IO
+    // we can make this more general (similar to defer_signal) if necessary
+    volatile sig_atomic_t io_wait;
 } jl_tls_states_t;
 
 #ifdef __MIC__
@@ -292,6 +300,12 @@ JL_DLLEXPORT JL_CONST_FUNC jl_tls_states_t *(jl_get_ptls_states)(void);
 #define jl_gc_safepoint() do {                                          \
         jl_signal_fence();                                              \
         size_t safepoint_load = *jl_get_ptls_states()->safepoint;       \
+        jl_signal_fence();                                              \
+        (void)safepoint_load;                                           \
+    } while (0)
+#define jl_sigint_safepoint() do {                                      \
+        jl_signal_fence();                                              \
+        size_t safepoint_load = jl_get_ptls_states()->safepoint[-1];    \
         jl_signal_fence();                                              \
         (void)safepoint_load;                                           \
     } while (0)

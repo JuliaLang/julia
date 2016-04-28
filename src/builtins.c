@@ -194,7 +194,7 @@ JL_CALLABLE(jl_f_throw)
 
 JL_DLLEXPORT void jl_enter_handler(jl_handler_t *eh)
 {
-    JL_SIGATOMIC_BEGIN();
+    // Must have no safepoint
     eh->prev = jl_current_task->eh;
     eh->gcstack = jl_pgcstack;
 #ifdef JULIA_ENABLE_THREADING
@@ -202,9 +202,6 @@ JL_DLLEXPORT void jl_enter_handler(jl_handler_t *eh)
     eh->locks_len = jl_current_task->locks.len;
 #endif
     jl_current_task->eh = eh;
-    // TODO: this should really go after setjmp(). see comment in
-    // ctx_switch in task.c.
-    JL_SIGATOMIC_END();
 }
 
 JL_DLLEXPORT void jl_pop_handler(int n)

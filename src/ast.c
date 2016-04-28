@@ -230,6 +230,7 @@ static jl_ast_context_list_t *jl_ast_ctx_freed = NULL;
 
 static jl_ast_context_t *jl_ast_ctx_enter(void)
 {
+    JL_SIGATOMIC_BEGIN();
     JL_LOCK_NOGC(&flisp_lock);
     jl_ast_context_list_t *node;
     jl_ast_context_t *ctx;
@@ -267,6 +268,7 @@ static jl_ast_context_t *jl_ast_ctx_enter(void)
 
 static void jl_ast_ctx_leave(jl_ast_context_t *ctx)
 {
+    JL_SIGATOMIC_END();
     if (--ctx->ref)
         return;
     JL_LOCK_NOGC(&flisp_lock);
@@ -285,6 +287,8 @@ void jl_init_frontend(void)
     jl_ast_main_ctx.task = jl_current_task;
     jl_ast_context_list_insert(&jl_ast_ctx_using, &jl_ast_main_ctx.list);
     jl_init_ast_ctx(&jl_ast_main_ctx);
+    // To match the one in jl_ast_ctx_leave
+    JL_SIGATOMIC_BEGIN();
     jl_ast_ctx_leave(&jl_ast_main_ctx);
 }
 
@@ -758,6 +762,7 @@ jl_value_t *jl_parse_eval_all(const char *fname, size_t len,
             form = scm_to_julia(fl_ctx, expansion, 0);
             jl_sym_t *head = NULL;
             if (jl_is_expr(form)) head = ((jl_expr_t*)form)->head;
+            JL_SIGATOMIC_END();
             if (head == jl_incomplete_sym)
                 jl_errorf("syntax: %s", jl_string_data(jl_exprarg(form,0)));
             else if (head == error_sym)
@@ -766,6 +771,7 @@ jl_value_t *jl_parse_eval_all(const char *fname, size_t len,
                 jl_lineno = jl_unbox_long(jl_exprarg(form,0));
             else
                 result = jl_toplevel_eval_flex(form, 1);
+            JL_SIGATOMIC_BEGIN();
             ast = cdr_(ast);
         }
     }

@@ -635,6 +635,7 @@ JL_DLLEXPORT void jl_clear_malloc_data(void);
 // GC write barriers
 JL_DLLEXPORT void jl_gc_queue_root(jl_value_t *root); // root isa jl_value_t*
 
+// Do NOT put a safepoint here
 STATIC_INLINE void jl_gc_wb(void *parent, void *ptr)
 {
     // parent and ptr isa jl_value_t*
@@ -1392,20 +1393,16 @@ JL_DLLEXPORT void jl_yield(void);
 
 // async signal handling ------------------------------------------------------
 
-#include <signal.h>
-
-JL_DLLEXPORT extern volatile sig_atomic_t jl_signal_pending;
-JL_DLLEXPORT extern volatile sig_atomic_t jl_defer_signal;
-
-#define JL_SIGATOMIC_BEGIN() jl_atomic_fetch_add(&jl_defer_signal, 1)
-#define JL_SIGATOMIC_END()                                      \
-    do {                                                        \
-        if (jl_atomic_fetch_add(&jl_defer_signal, -1) == 1      \
-            && jl_signal_pending != 0) {                        \
-            jl_signal_pending = 0;                              \
-            jl_sigint_action();                                 \
+#define JL_SIGATOMIC_BEGIN() do {               \
+        jl_get_ptls_states()->defer_signal++;   \
+        jl_signal_fence();                      \
+    } while (0)
+#define JL_SIGATOMIC_END() do {                                 \
+        jl_signal_fence();                                      \
+        if (--jl_get_ptls_states()->defer_signal == 0) {        \
+            jl_sigint_safepoint();                              \
         }                                                       \
-    } while(0)
+    } while (0)
 
 JL_DLLEXPORT void jl_sigint_action(void);
 JL_DLLEXPORT void jl_install_sigint_handler(void);
@@ -1511,7 +1508,6 @@ STATIC_INLINE void jl_eh_restore_state(jl_handler_t *eh)
 {
     // This function should **NOT** have any safepoint before restoring
     // the GC state at the end.
-    JL_SIGATOMIC_BEGIN();
     jl_current_task->eh = eh->prev;
     jl_pgcstack = eh->gcstack;
 #ifdef JULIA_ENABLE_THREADING
@@ -1525,7 +1521,6 @@ STATIC_INLINE void jl_eh_restore_state(jl_handler_t *eh)
     // This should be the last since this can trigger a safepoint
     // that throws a SIGINT.
     jl_gc_state_save_and_set(eh->gc_state);
-    JL_SIGATOMIC_END();
 }
 
 JL_DLLEXPORT void jl_enter_handler(jl_handler_t *eh);

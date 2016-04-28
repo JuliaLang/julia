@@ -14,7 +14,10 @@
 extern "C" {
 #endif
 
-/* static uint32_t jl_signal_pending = 0; */
+// 0: no sigint is pending
+// 1: at least one sigint is pending, only the sigint page is enabled.
+// 2: at least one sigint is pending, both safepoint pages are enabled.
+JL_DLLEXPORT sig_atomic_t jl_signal_pending = 0;
 volatile uint32_t jl_gc_running = 0;
 char *jl_safepoint_pages = NULL;
 // The number of safepoints enabled on the three pages.
@@ -168,9 +171,61 @@ void jl_safepoint_wait_gc(void)
 #endif
 }
 
-void jl_safepoint_enable_sigint(void);
-void jl_safepoint_defer_sigint(void);
-int jl_safepoint_consume_sigint(void);
+void jl_safepoint_enable_sigint(void)
+{
+    jl_mutex_lock_nogc(&safepoint_lock);
+    // Make sure both safepoints are enabled exactly once for SIGINT.
+    switch (jl_signal_pending) {
+    default:
+        assert(0 && "Shouldn't happen.");
+    case 0:
+        // Enable SIGINT page
+        jl_safepoint_enable(0);
+        // fall through
+    case 1:
+        // SIGINT page is enabled, enable GC page
+        jl_safepoint_enable(1);
+        // fall through
+    case 2:
+        jl_signal_pending = 2;
+    }
+    jl_mutex_unlock_nogc(&safepoint_lock);
+}
+
+void jl_safepoint_defer_sigint(void)
+{
+    jl_mutex_lock_nogc(&safepoint_lock);
+    // Make sure the GC safepoint is disabled for SIGINT.
+    if (jl_signal_pending == 2) {
+        jl_safepoint_disable(1);
+        jl_signal_pending = 1;
+    }
+    jl_mutex_unlock_nogc(&safepoint_lock);
+}
+
+int jl_safepoint_consume_sigint(void)
+{
+    int has_signal = 0;
+    jl_mutex_lock_nogc(&safepoint_lock);
+    // Make sure both safepoints are disabled for SIGINT.
+    switch (jl_signal_pending) {
+    default:
+        assert(0 && "Shouldn't happen.");
+    case 2:
+        // Disable gc page
+        jl_safepoint_disable(1);
+        // fall through
+    case 1:
+        // GC page is disabled, disable SIGINT page
+        jl_safepoint_disable(0);
+        has_signal = 1;
+        // fall through
+    case 0:
+        jl_signal_pending = 0;
+    }
+    jl_mutex_unlock_nogc(&safepoint_lock);
+    return has_signal;
+}
 
 #ifdef __cplusplus
 }
