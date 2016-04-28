@@ -362,6 +362,17 @@ a = [0,1,2,3,0,1,2,3]
 @test findprev(isodd, [2,4,5,3,9,2,0], 7) == 5
 @test findprev(isodd, [2,4,5,3,9,2,0], 2) == 0
 
+# find with general iterables
+s = "julia"
+@test find(s) == [1,2,3,4,5]
+@test find(c -> c == 'l', s) == [3]
+g = graphemes("日本語")
+@test find(g) == [1,2,3]
+@test find(isascii, g) == Int[]
+c = combinations(1:4, 3)
+@test find(c) == [1,2,3,4]
+@test find(a -> 2 in a, c) == [1,2,4]
+
 ## findn ##
 
 b = findn(ones(2,2,2,2))
