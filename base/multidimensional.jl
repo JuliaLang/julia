@@ -192,7 +192,7 @@ using .IteratorsMD
 # improvement over the general definitions in abstractarray.jl
 for N = 1:5
     args = [:($(symbol(:I, d))) for d = 1:N]
-    targs = [:($(symbol(:I, d))::Union{Colon,Number,AbstractVector}) for d = 1:N]  # prevent co-opting the CartesianIndex version
+    targs = [:($(symbol(:I, d))::Union{Colon,Number,AbstractArray}) for d = 1:N]  # prevent co-opting the CartesianIndex version
     exs = [:(checkbounds(Bool, size(A, $d), $(args[d]))) for d = 1:N]
     cbexpr = exs[1]
     for d = 2:N

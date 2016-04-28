@@ -264,7 +264,7 @@ where each ``I_k`` may be:
 2. A ``Range`` of the form ``a:b``, or ``a:b:c``
 3. A ``:`` or ``Colon()`` to select entire dimensions
 4. An arbitrary integer array, including the empty array ``[]``
-5. A boolean array to select elements at its ``true`` indices
+5. A boolean array to select a vector of elements at its ``true`` indices
 
 If all the indices are scalars, then the result ``X`` is a single element from
 the array ``A``. Otherwise, ``X`` is an array with the same number of
@@ -282,11 +282,14 @@ indexed with scalars are dropped. For example, the result of ``A[2, I, 3]`` is
 an array with size ``size(I)``. Its ``i``\ th element is populated by
 ``A[2, I[i], 3]``.
 
-Boolean arrays must be the same length as the dimension they are indexing into.
-Indexing by a boolean array ``B`` is the same as indexing by the vector that is
-returned by ``find(B)``; the size of a dimension indexed by a boolean array will
-be the number of true values in the vector. It is generally more efficient to
-use boolean arrays as indices directly instead of first calling ``find``.
+Indexing by a boolean array ``B`` is effectively the same as indexing by the
+vector that is returned by :func:`find(B) <find>`. Often referred to as logical
+indexing, this selects elements at the indices where the values are ``true``,
+akin to a mask. A logical index must be a vector of the same length as the
+dimension it indexes into, or it must be the only index provided and match the
+size and dimensionality of the array it indexes into. It is generally more
+efficient to use boolean arrays as indices directly instead of first calling
+:func:`find`.
 
 Additionally, single elements of a multidimensional array can be indexed as
 ``x = A[I]``, where ``I`` is a ``CartesianIndex``. It effectively behaves like
