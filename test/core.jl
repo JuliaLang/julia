@@ -3853,3 +3853,10 @@ end
 f16089(args...) = typeof(args)
 g16089() = f16089(UInt8)
 @test g16089() === Tuple{DataType}
+
+# don't remove global variable accesses even if we "know" their type
+# see #16090
+f16090() = typeof(undefined_x16090::Tuple{Type{Int}})
+@test_throws UndefVarError f16090()
+undefined_x16090 = (Int,)
+@test_throws TypeError f16090()
