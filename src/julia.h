@@ -1420,6 +1420,7 @@ typedef struct _jl_handler_t {
 #ifdef JULIA_ENABLE_THREADING
     size_t locks_len;
 #endif
+    sig_atomic_t defer_signal;
 } jl_handler_t;
 
 typedef struct _jl_task_t {
@@ -1506,8 +1507,11 @@ static inline void jl_lock_frame_pop(void)
 
 STATIC_INLINE void jl_eh_restore_state(jl_handler_t *eh)
 {
-    // This function should **NOT** have any safepoint before restoring
-    // the GC state at the end.
+    // `eh` may not be `jl_current_task->eh`. See `jl_pop_handler`
+    // This function should **NOT** have any safepoint before the ones at the
+    // end.
+    sig_atomic_t old_defer_signal = jl_get_ptls_states()->defer_signal;
+    int8_t old_gc_state = jl_get_ptls_states()->gc_state;
     jl_current_task->eh = eh->prev;
     jl_pgcstack = eh->gcstack;
 #ifdef JULIA_ENABLE_THREADING
@@ -1518,9 +1522,14 @@ STATIC_INLINE void jl_eh_restore_state(jl_handler_t *eh)
         locks->len = eh->locks_len;
     }
 #endif
-    // This should be the last since this can trigger a safepoint
-    // that throws a SIGINT.
-    jl_gc_state_save_and_set(eh->gc_state);
+    jl_get_ptls_states()->defer_signal = eh->defer_signal;
+    jl_get_ptls_states()->gc_state = eh->gc_state;
+    if (old_gc_state && !eh->gc_state) {
+        jl_gc_safepoint();
+    }
+    if (old_defer_signal && !eh->defer_signal) {
+        jl_sigint_safepoint();
+    }
 }
 
 JL_DLLEXPORT void jl_enter_handler(jl_handler_t *eh);
