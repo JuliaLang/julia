@@ -3848,3 +3848,8 @@ test_metadata_matches(f3, Tuple{})
 test_metadata_matches(f4, Tuple{})
 
 end
+
+# issue #16089
+f16089(args...) = typeof(args)
+g16089() = f16089(UInt8)
+@test g16089() === Tuple{DataType}
