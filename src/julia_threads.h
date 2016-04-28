@@ -120,6 +120,8 @@ static inline unsigned long JL_CONST_FUNC jl_thread_self(void)
 // the __atomic builtins or c11 atomics with GNU extension or c11 _Generic
 #  define jl_atomic_compare_exchange(obj, expected, desired)    \
     __sync_val_compare_and_swap(obj, expected, desired)
+#  define jl_atomic_exchange(obj, desired)              \
+    __atomic_exchange_n(obj, desired, __ATOMIC_SEQ_CST)
 // TODO: Maybe add jl_atomic_compare_exchange_weak for spin lock
 #  define jl_atomic_store(obj, val)                     \
     __atomic_store_n(obj, val, __ATOMIC_SEQ_CST)
@@ -195,6 +197,31 @@ jl_atomic_compare_exchange(volatile T *obj, T2 expected, T3 desired)
 {
     return (T)_InterlockedCompareExchange64((volatile __int64*)obj,
                                             (__int64)desired, (__int64)expected);
+}
+// atomic exchange
+template<typename T, typename T2>
+static inline typename std::enable_if<sizeof(T) == 1, T>::type
+jl_atomic_exchange(volatile T *obj, T2 val)
+{
+    return _InterlockedExchange8((volatile char*)obj, (char)val);
+}
+template<typename T, typename T2>
+static inline typename std::enable_if<sizeof(T) == 2, T>::type
+jl_atomic_exchange(volatile T *obj, T2 val)
+{
+    return _InterlockedExchange16((volatile short*)obj, (short)val);
+}
+template<typename T, typename T2>
+static inline typename std::enable_if<sizeof(T) == 4, T>::type
+jl_atomic_exchange(volatile T *obj, T2 val)
+{
+    return _InterlockedExchange((volatile LONG*)obj, (LONG)val);
+}
+template<typename T, typename T2>
+static inline typename std::enable_if<sizeof(T) == 8, T>::type
+jl_atomic_exchange(volatile T *obj, T2 val)
+{
+    return _InterlockedExchange64((volatile __int64*)obj, (__int64)val);
 }
 // atomic stores
 template<typename T, typename T2>
