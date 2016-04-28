@@ -1226,6 +1226,12 @@ static uint64_t compute_obj_symsize(const object::ObjectFile *obj, uint64_t offs
         object::SectionRef Section = *I;
 #endif
         uint64_t SAddr, SSize;
+#ifdef LLVM35
+        if (!Section.isText()) continue;
+#else
+        bool isText;
+        if (Section.isText(isText) || !isText) continue;
+#endif
 #ifdef LLVM36
         SAddr = Section.getAddress();
         SSize = Section.getSize();
