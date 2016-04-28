@@ -1243,17 +1243,54 @@ static jl_cgval_t emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
         assert(!isVa);
         assert(nargt == 0);
         JL_GC_POP();
-#ifdef LLVM39
-        builder.CreateFence(AtomicOrdering::SequentiallyConsistent, SingleThread);
-#else
-        builder.CreateFence(SequentiallyConsistent, SingleThread);
-#endif
+        emit_signal_fence();
         builder.CreateLoad(ctx->signalPage, true);
-#ifdef LLVM39
-        builder.CreateFence(AtomicOrdering::SequentiallyConsistent, SingleThread);
-#else
-        builder.CreateFence(SequentiallyConsistent, SingleThread);
-#endif
+        emit_signal_fence();
+        return ghostValue(jl_void_type);
+    }
+    if (fptr == &jl_sigatomic_begin ||
+        ((!f_lib || (intptr_t)f_lib == 2) && f_name &&
+         strcmp(f_name, "jl_sigatomic_begin") == 0)) {
+        assert(lrt == T_void);
+        assert(!isVa);
+        assert(nargt == 0);
+        JL_GC_POP();
+        Value *pdefer_sig = emit_defer_signal(ctx);
+        Value *defer_sig = builder.CreateLoad(pdefer_sig);
+        defer_sig = builder.CreateAdd(defer_sig,
+                                      ConstantInt::get(T_sigatomic, 1));
+        builder.CreateStore(defer_sig, pdefer_sig);
+        emit_signal_fence();
+        return ghostValue(jl_void_type);
+    }
+    if (fptr == &jl_sigatomic_end ||
+        ((!f_lib || (intptr_t)f_lib == 2) && f_name &&
+         strcmp(f_name, "jl_sigatomic_end") == 0)) {
+        assert(lrt == T_void);
+        assert(!isVa);
+        assert(nargt == 0);
+        JL_GC_POP();
+        Value *pdefer_sig = emit_defer_signal(ctx);
+        Value *defer_sig = builder.CreateLoad(pdefer_sig);
+        emit_signal_fence();
+        error_unless(builder.CreateICmpNE(defer_sig,
+                                          ConstantInt::get(T_sigatomic, 0)),
+                     "sigatomic_end called in non-sigatomic region", ctx);
+        defer_sig = builder.CreateSub(defer_sig,
+                                      ConstantInt::get(T_sigatomic, 1));
+        builder.CreateStore(defer_sig, pdefer_sig);
+        BasicBlock *checkBB = BasicBlock::Create(jl_LLVMContext, "check",
+                                                 ctx->f);
+        BasicBlock *contBB = BasicBlock::Create(jl_LLVMContext, "cont");
+        builder.CreateCondBr(
+            builder.CreateICmpEQ(defer_sig, ConstantInt::get(T_sigatomic, 0)),
+            checkBB, contBB);
+        builder.SetInsertPoint(checkBB);
+        builder.CreateLoad(builder.CreateConstGEP1_32(ctx->signalPage, -1),
+                           true);
+        builder.CreateBr(contBB);
+        ctx->f->getBasicBlockList().push_back(contBB);
+        builder.SetInsertPoint(contBB);
         return ghostValue(jl_void_type);
     }
     if (fptr == (void(*)(void))&jl_is_leaf_type ||

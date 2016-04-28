@@ -246,6 +246,7 @@ static IntegerType *T_uint64;
 
 static IntegerType *T_char;
 static IntegerType *T_size;
+static IntegerType *T_sigatomic;
 
 static Type *T_float16;
 static Type *T_float32;
@@ -4970,6 +4971,7 @@ static void init_julia_llvm_env(Module *m)
         T_size = T_uint64;
     else
         T_size = T_uint32;
+    T_sigatomic = Type::getIntNTy(jl_LLVMContext, sizeof(sig_atomic_t) * 8);
     T_psize = PointerType::get(T_size, 0);
     T_float16 = Type::getHalfTy(jl_LLVMContext);
     T_float32 = Type::getFloatTy(jl_LLVMContext);
