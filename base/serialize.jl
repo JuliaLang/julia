@@ -314,6 +314,8 @@ function serialize(s::SerializationState, meth::Method)
     serialize(s, meth.name)
     serialize(s, meth.file)
     serialize(s, meth.line)
+    serialize(s, meth.sig)
+    serialize(s, meth.tvars)
     serialize(s, meth.isstaged)
     serialize(s, meth.lambda_template)
     if isdefined(meth, :roots)
@@ -585,6 +587,8 @@ function deserialize(s::SerializationState, ::Type{Method})
     name = deserialize(s)::Symbol
     file = deserialize(s)::Symbol
     line = deserialize(s)
+    sig = deserialize(s)
+    tvars = deserialize(s)
     isstaged = deserialize(s)::Bool
     template = deserialize(s)::LambdaInfo
     tag = Int32(read(s.io, UInt8)::UInt8)
@@ -598,6 +602,8 @@ function deserialize(s::SerializationState, ::Type{Method})
         meth.name = name
         meth.file = file
         meth.line = line
+        meth.sig = sig
+        meth.tvars = tvars
         meth.isstaged = isstaged
         meth.lambda_template = template
         roots === nothing || (meth.roots = roots)

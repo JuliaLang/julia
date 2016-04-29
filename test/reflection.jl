@@ -190,7 +190,7 @@ let
     @test Base.function_name(foo7648)==:foo7648
     @test Base.function_module(foo7648, (Any,))==TestMod7648
     @test basename(functionloc(foo7648, (Any,))[1]) == "reflection.jl"
-    @test methods(TestMod7648.TestModSub9475.foo7648).defs==@which foo7648(5)
+    @test first(methods(TestMod7648.TestModSub9475.foo7648)) == @which foo7648(5)
     @test TestMod7648==@which foo7648
     @test TestMod7648.TestModSub9475==@which a9475
 end
@@ -213,7 +213,7 @@ const a_value = 1
 end
 
 # issue #13264
-@test isa((@which vcat(1...)), TypeMapEntry)
+@test isa((@which vcat(1...)), Method)
 
 # issue #13464
 let t13464 = "hey there sailor"
@@ -295,7 +295,7 @@ let
     @test which(m, Tuple{Int,Symbol})==@which @macrotest 1 a
     @test which(m, Tuple{Int,Int})==@which @macrotest 1 1
 
-    @test methods(m,Tuple{Int, Int})[1]==@which MacroTest.@macrotest 1 1
+    @test first(methods(m,Tuple{Int, Int}))==@which MacroTest.@macrotest 1 1
     @test functionloc(@which @macrotest 1 1) == @functionloc @macrotest 1 1
 end
 
@@ -384,7 +384,7 @@ tracefoo(x, y) = x+y
 didtrace = false
 tracer(x::Ptr{Void}) = (@test isa(unsafe_pointer_to_objref(x), LambdaInfo); global didtrace = true; nothing)
 ccall(:jl_register_method_tracer, Void, (Ptr{Void},), cfunction(tracer, Void, (Ptr{Void},)))
-meth = which(tracefoo,Tuple{Any,Any}).func
+meth = which(tracefoo,Tuple{Any,Any})
 ccall(:jl_trace_method, Void, (Any,), meth)
 @test tracefoo(1, 2) == 3
 ccall(:jl_untrace_method, Void, (Any,), meth)
