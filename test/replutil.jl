@@ -72,12 +72,12 @@ end
 
 macro except_str(expr, err_type)
     return quote
-        let
-            local err
+        let err = nothing
             try
                 $(esc(expr))
             catch err
             end
+            err === nothing && error("expected failure, but no exception thrown")
             @test typeof(err) === $(esc(err_type))
             buff = IOBuffer()
             showerror(buff, err)
@@ -88,12 +88,12 @@ end
 
 macro except_strbt(expr, err_type)
     return quote
-        let
-            local err
+        let err = nothing
             try
                 $(esc(expr))
             catch err
             end
+            err === nothing && error("expected failure, but no exception thrown")
             @test typeof(err) === $(esc(err_type))
             buff = IOBuffer()
             showerror(buff, err, catch_backtrace())
@@ -104,14 +104,15 @@ end
 
 macro except_stackframe(expr, err_type)
     return quote
-       let
+       let err = nothing
            local st
            try
                $(esc(expr))
            catch err
                st = catch_stacktrace()
-               @test typeof(err) === $(esc(err_type))
            end
+           err === nothing && error("expected failure, but no exception thrown")
+           @test typeof(err) === $(esc(err_type))
            sprint(show, st[1])
        end
     end
