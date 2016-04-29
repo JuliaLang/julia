@@ -202,7 +202,7 @@ s = "max("
 c, r, res = test_complete(s)
 @test !res
 @test let found = false
-    Base.visit(methods(max)) do m
+    for m in methods(max)
         if !found
             found = (c[1] == string(m))
         end
@@ -216,7 +216,7 @@ end
 s = "CompletionFoo.test(1,1, "
 c, r, res = test_complete(s)
 @test !res
-@test c[1] == string(methods(CompletionFoo.test, Tuple{Int, Int})[1])
+@test c[1] == string(first(methods(CompletionFoo.test, Tuple{Int, Int})))
 @test length(c) == 3
 @test r == 1:18
 @test s[r] == "CompletionFoo.test"
@@ -224,7 +224,7 @@ c, r, res = test_complete(s)
 s = "CompletionFoo.test(CompletionFoo.array,"
 c, r, res = test_complete(s)
 @test !res
-@test c[1] == string(methods(CompletionFoo.test, Tuple{Array{Int, 1}, Any})[1])
+@test c[1] == string(first(methods(CompletionFoo.test, Tuple{Array{Int, 1}, Any})))
 @test length(c) == 2
 @test r == 1:18
 @test s[r] == "CompletionFoo.test"
@@ -232,7 +232,7 @@ c, r, res = test_complete(s)
 s = "CompletionFoo.test(1,1,1,"
 c, r, res = test_complete(s)
 @test !res
-@test c[1] == string(methods(CompletionFoo.test, Tuple{Any, Any, Any})[1])
+@test c[1] == string(first(methods(CompletionFoo.test, Tuple{Any, Any, Any})))
 @test r == 1:18
 @test s[r] == "CompletionFoo.test"
 
@@ -252,7 +252,7 @@ c, r, res = test_complete(s)
 
 s = "prevind(\"θ\",1,"
 c, r, res = test_complete(s)
-@test c[1] == string(methods(prevind, Tuple{UTF8String, Int})[1])
+@test c[1] == string(first(methods(prevind, Tuple{UTF8String, Int})))
 @test r == 1:7
 @test s[r] == "prevind"
 
@@ -260,26 +260,26 @@ for (T, arg) in [(ASCIIString,"\")\""),(Char, "')'")]
     s = "(1, CompletionFoo.test2($arg,"
     c, r, res = test_complete(s)
     @test length(c) == 1
-    @test c[1] == string(methods(CompletionFoo.test2, Tuple{T,})[1])
+    @test c[1] == string(first(methods(CompletionFoo.test2, Tuple{T,})))
     @test r == 5:23
     @test s[r] == "CompletionFoo.test2"
 end
 
 s = "(1, CompletionFoo.test2(`)`,"
 c, r, res = test_complete(s)
-@test c[1] == string(methods(CompletionFoo.test2, Tuple{Cmd})[1])
+@test c[1] == string(first(methods(CompletionFoo.test2, Tuple{Cmd})))
 @test length(c) == 1
 
 s = "CompletionFoo.test3([1, 2] + CompletionFoo.varfloat,"
 c, r, res = test_complete(s)
 @test !res
-@test c[1] == string(methods(CompletionFoo.test3, Tuple{Array{Float64, 1}, Float64})[1])
+@test c[1] == string(first(methods(CompletionFoo.test3, Tuple{Array{Float64, 1}, Float64})))
 @test length(c) == 1
 
 s = "CompletionFoo.test3([1.,2.], 1.,"
 c, r, res = test_complete(s)
 @test !res
-@test c[1] == string(methods(CompletionFoo.test3, Tuple{Array{Float64, 1}, Float64})[1])
+@test c[1] == string(first(methods(CompletionFoo.test3, Tuple{Array{Float64, 1}, Float64})))
 @test r == 1:19
 @test length(c) == 1
 @test s[r] == "CompletionFoo.test3"
@@ -287,7 +287,7 @@ c, r, res = test_complete(s)
 s = "CompletionFoo.test4(\"e\",r\" \","
 c, r, res = test_complete(s)
 @test !res
-@test c[1] == string(methods(CompletionFoo.test4, Tuple{ASCIIString, Regex})[1])
+@test c[1] == string(first(methods(CompletionFoo.test4, Tuple{ASCIIString, Regex})))
 @test r == 1:19
 @test length(c) == 1
 @test s[r] == "CompletionFoo.test4"
@@ -296,13 +296,13 @@ s = "CompletionFoo.test5(push!(Base.split(\"\",' '),\"\",\"\").==\"\","
 c, r, res = test_complete(s)
 @test !res
 @test length(c) == 1
-@test c[1] == string(methods(CompletionFoo.test5, Tuple{BitArray{1}})[1])
+@test c[1] == string(first(methods(CompletionFoo.test5, Tuple{BitArray{1}})))
 
 s = "CompletionFoo.test4(CompletionFoo.test_y_array[1]()[1], CompletionFoo.test_y_array[1]()[2], "
 c, r, res = test_complete(s)
 @test !res
 @test length(c) == 1
-@test c[1] == string(methods(CompletionFoo.test4, Tuple{ASCIIString, ASCIIString})[1])
+@test c[1] == string(first(methods(CompletionFoo.test4, Tuple{ASCIIString, ASCIIString})))
 
 # Test that string escaption is handled correct
 s = """CompletionFoo.test4("\\"","""

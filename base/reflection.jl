@@ -172,13 +172,8 @@ tt_cons(t::ANY, tup::ANY) = (@_pure_meta; Tuple{t, (isa(tup, Type) ? tup.paramet
 
 code_lowered(f, t::ANY=Tuple) = map(m -> (m::Method).lambda_template, methods(f, t))
 
-function methods(f::ANY, t::ANY)
-    if isa(f,Builtin)
-        throw(ArgumentError("argument is not a generic function"))
-    end
-    t = to_tuple_type(t)
-    return Method[m[3] for m in _methods(f,t,-1)]
-end
+# low-level method lookup functions used by the compiler
+
 function _methods(f::ANY,t::ANY,lim)
     ft = isa(f,Type) ? Type{f} : typeof(f)
     if isa(t,Type)
@@ -223,6 +218,38 @@ function _methods(t::Array,i,lim::Integer,matching::Array{Any,1})
     end
     return matching
 end
+
+# high-level, more convenient method lookup functions
+
+# type for reflecting and pretty-printing a subset of methods
+type MethodList
+    ms::Array{Method,1}
+    mt::MethodTable
+end
+
+length(m::MethodList) = length(m.ms)
+isempty(m::MethodList) = isempty(m.ms)
+start(m::MethodList) = start(m.ms)
+done(m::MethodList, s) = done(m.ms, s)
+next(m::MethodList, s) = next(m.ms, s)
+
+function MethodList(mt::MethodTable)
+    ms = Method[]
+    visit(mt) do m
+        push!(ms, m)
+    end
+    MethodList(ms, mt)
+end
+
+function methods(f::ANY, t::ANY)
+    if isa(f,Builtin)
+        throw(ArgumentError("argument is not a generic function"))
+    end
+    t = to_tuple_type(t)
+    return MethodList(Method[m[3] for m in _methods(f,t,-1)], typeof(f).name.mt)
+end
+
+methods(f::Builtin) = MethodList(Method[], typeof(f).name.mt)
 
 function methods(f::ANY)
     # return all matches
@@ -348,7 +375,7 @@ function which(f::ANY, t::ANY)
         ms = methods(f, t)
         isempty(ms) && error("no method found for the specified argument types")
         length(ms)!=1 && error("no unique matching method for the specified argument types")
-        return ms[1]
+        return first(ms)
     else
         ft = isa(f,Type) ? Type{f} : typeof(f)
         m = ccall(:jl_gf_invoke_lookup, Any, (Any,), Tuple{ft, t.parameters...})
@@ -391,7 +418,7 @@ function functionloc(f)
     if length(mt) > 1
         error("function has multiple methods; please specify a type signature")
     end
-    functionloc(mt[1])
+    functionloc(first(mt))
 end
 
 function function_module(f, types::ANY)
@@ -399,7 +426,7 @@ function function_module(f, types::ANY)
     if isempty(m)
         error("no matching methods")
     end
-    m[1].module
+    first(m).module
 end
 
 function method_exists(f::ANY, t::ANY)

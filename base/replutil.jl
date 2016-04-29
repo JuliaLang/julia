@@ -272,22 +272,25 @@ function show_method_candidates(io::IO, ex::MethodError)
     lines = []
     # These functions are special cased to only show if first argument is matched.
     special = f in [convert, getindex, setindex!]
-    funcs = Any[(Core.Typeof(f),arg_types_param)]
+    funcs = Any[(f, arg_types_param)]
 
     # An incorrect call method produces a MethodError for convert.
     # It also happens that users type convert when they mean call. So
     # pool MethodErrors for these two functions.
     if f === convert && !isempty(arg_types_param)
-        push!(funcs, (arg_types_param[1],arg_types_param[2:end]))
+        at1 = arg_types_param[1]
+        if isa(at1,DataType) && (at1::DataType).name === Type.name && isleaftype(at1)
+            push!(funcs, (at1.parameters[1], arg_types_param[2:end]))
+        end
     end
 
     for (func,arg_types_param) in funcs
-        visit(func.name.mt) do method
+        for method in methods(func)
             buf = IOBuffer()
             s1 = method.sig.parameters[1]
             sig = method.sig.parameters[2:end]
             print(buf, "  ")
-            if !(func <: s1)
+            if !isa(func, s1)
                 # function itself doesn't match
                 print(buf, "(")
                 if Base.have_color
@@ -299,8 +302,8 @@ function show_method_candidates(io::IO, ex::MethodError)
                 end
                 print(buf, ")")
             else
-                use_constructor_syntax = func.name === Type.name && !isa(func.parameters[1],TypeVar)
-                print(buf, use_constructor_syntax ? func.parameters[1] : func.name.mt.name)
+                use_constructor_syntax = isa(func, Type)
+                print(buf, use_constructor_syntax ? func : typeof(func).name.mt.name)
             end
             right_matches = 0
             tv = method.tvars

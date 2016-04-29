@@ -59,10 +59,6 @@ function kwarg_decl(sig::ANY, kwtype::DataType)
     return ()
 end
 
-#function show(io::IO, m::Method)
-#    print(io, m.module, '.', m.name, m.isstaged ? " [@generated] at " : " at ", m.file, ":", m.line)
-#end
-
 function show(io::IO, m::Method; kwtype::Nullable{DataType}=Nullable{DataType}())
     tv, decls, file, line = arg_decl_parts(m)
     ft = m.sig.parameters[1]
@@ -100,11 +96,12 @@ function show(io::IO, m::Method; kwtype::Nullable{DataType}=Nullable{DataType}()
     end
 end
 
-function show_method_table(io::IO, mt::MethodTable, max::Int=-1, header::Bool=true)
+function show_method_table(io::IO, ms::MethodList, max::Int=-1, header::Bool=true)
+    mt = ms.mt
     name = mt.name
     isself = isdefined(mt.module, name) &&
              typeof(getfield(mt.module, name)) <: Function
-    n = length(mt)
+    n = length(ms)
     if header
         m = n==1 ? "method" : "methods"
         ns = isself ? string(name) : string("(::", name, ")")
@@ -114,14 +111,14 @@ function show_method_table(io::IO, mt::MethodTable, max::Int=-1, header::Bool=tr
     kwtype = isdefined(mt, :kwsorter) ? Nullable{DataType}(typeof(mt.kwsorter)) : Nullable{DataType}()
     n = rest = 0
     local last
-    visit(mt) do d
-        if max==-1 || n<max
+    for meth in ms
+       if max==-1 || n<max
             println(io)
-            show(io, d; kwtype=kwtype)
+            show(io, meth; kwtype=kwtype)
             n += 1
         else
             rest += 1
-            last = d
+            last = meth
         end
     end
     if rest > 0
@@ -134,7 +131,8 @@ function show_method_table(io::IO, mt::MethodTable, max::Int=-1, header::Bool=tr
     end
 end
 
-show(io::IO, mt::MethodTable) = show_method_table(io, mt)
+show(io::IO, ms::MethodList) = show_method_table(io, ms)
+show(io::IO, mt::MethodTable) = show_method_table(io, MethodList(mt))
 
 function inbase(m::Module)
     if m == Base
@@ -227,21 +225,24 @@ function writemime(io::IO, ::MIME"text/html", m::Method; kwtype::Nullable{DataTy
     end
 end
 
-function writemime(io::IO, mime::MIME"text/html", mt::MethodTable)
+function writemime(io::IO, mime::MIME"text/html", ms::MethodList)
+    mt = ms.mt
     name = mt.name
-    n = length(mt)
+    n = length(ms)
     meths = n==1 ? "method" : "methods"
     ns = string(name)
     what = startswith(ns, '@') ? "macro" : "generic function"
     print(io, "$n $meths for ", what, " <b>$ns</b>:<ul>")
     kwtype = isdefined(mt, :kwsorter) ? Nullable{DataType}(typeof(mt.kwsorter)) : Nullable{DataType}()
-    visit(mt) do d
+    for meth in ms
         print(io, "<li> ")
-        writemime(io, mime, d; kwtype=kwtype)
+        writemime(io, mime, meth; kwtype=kwtype)
         print(io, "</li> ")
     end
     print(io, "</ul>")
 end
+
+writemime(io::IO, mime::MIME"text/html", mt::MethodTable) = writemime(io, mime, MethodList(mt))
 
 # pretty-printing of Vector{Method} for output of methodswith:
 
