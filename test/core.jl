@@ -3849,6 +3849,10 @@ test_metadata_matches(f4, Tuple{})
 
 end
 
+# issue #8712
+type Issue8712; end
+@test isa(invoke(Issue8712, ()), Issue8712)
+
 # issue #16089
 f16089(args...) = typeof(args)
 g16089() = f16089(UInt8)
