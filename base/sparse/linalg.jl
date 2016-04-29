@@ -151,9 +151,9 @@ function spmatmul{Tv,Ti}(A::SparseMatrixCSC{Tv,Ti}, B::SparseMatrixCSC{Tv,Ti};
     colptrB = B.colptr; rowvalB = B.rowval; nzvalB = B.nzval
     # TODO: Need better estimation of result space
     nnzC = min(mA*nB, length(nzvalA) + length(nzvalB))
-    colptrC = Array(Ti, nB+1)
-    rowvalC = Array(Ti, nnzC)
-    nzvalC = Array(Tv, nnzC)
+    colptrC = Array{Ti}(nB+1)
+    rowvalC = Array{Ti}(nnzC)
+    nzvalC = Array{Tv}(nnzC)
 
     @inbounds begin
         ip = 1
@@ -302,7 +302,7 @@ function triu{Tv,Ti}(S::SparseMatrixCSC{Tv,Ti}, k::Integer=0)
     if (k > 0 && k > n) || (k < 0 && -k > m)
         throw(BoundsError())
     end
-    colptr = Array(Ti, n+1)
+    colptr = Array{Ti}(n+1)
     nnz = 0
     for col = 1 : min(max(k+1,1), n+1)
         colptr[col] = 1
@@ -314,8 +314,8 @@ function triu{Tv,Ti}(S::SparseMatrixCSC{Tv,Ti}, k::Integer=0)
         end
         colptr[col+1] = nnz+1
     end
-    rowval = Array(Ti, nnz)
-    nzval = Array(Tv, nnz)
+    rowval = Array{Ti}(nnz)
+    nzval = Array{Tv}(nnz)
     A = SparseMatrixCSC(m, n, colptr, rowval, nzval)
     for col = max(k+1,1) : n
         c1 = S.colptr[col]
@@ -333,7 +333,7 @@ function tril{Tv,Ti}(S::SparseMatrixCSC{Tv,Ti}, k::Integer=0)
     if (k > 0 && k > n) || (k < 0 && -k > m)
         throw(BoundsError())
     end
-    colptr = Array(Ti, n+1)
+    colptr = Array{Ti}(n+1)
     nnz = 0
     colptr[1] = 1
     for col = 1 : min(n, m+k)
@@ -347,8 +347,8 @@ function tril{Tv,Ti}(S::SparseMatrixCSC{Tv,Ti}, k::Integer=0)
     for col = max(min(n, m+k)+2,1) : n+1
         colptr[col] = nnz+1
     end
-    rowval = Array(Ti, nnz)
-    nzval = Array(Tv, nnz)
+    rowval = Array{Ti}(nnz)
+    nzval = Array{Tv}(nnz)
     A = SparseMatrixCSC(m, n, colptr, rowval, nzval)
     for col = 1 : min(n, m+k)
         c1 = S.colptr[col+1]-1
@@ -367,10 +367,10 @@ end
 function sparse_diff1{Tv,Ti}(S::SparseMatrixCSC{Tv,Ti})
     m,n = size(S)
     m > 1 || return SparseMatrixCSC(0, n, ones(Ti,n+1), Ti[], Tv[])
-    colptr = Array(Ti, n+1)
+    colptr = Array{Ti}(n+1)
     numnz = 2 * nnz(S) # upper bound; will shrink later
-    rowval = Array(Ti, numnz)
-    nzval = Array(Tv, numnz)
+    rowval = Array{Ti}(numnz)
+    nzval = Array{Tv}(numnz)
     numnz = 0
     colptr[1] = 1
     for col = 1 : n
@@ -406,10 +406,10 @@ end
 
 function sparse_diff2{Tv,Ti}(a::SparseMatrixCSC{Tv,Ti})
     m,n = size(a)
-    colptr = Array(Ti, max(n,1))
+    colptr = Array{Ti}(max(n,1))
     numnz = 2 * nnz(a) # upper bound; will shrink later
-    rowval = Array(Ti, numnz)
-    nzval = Array(Tv, numnz)
+    rowval = Array{Ti}(numnz)
+    nzval = Array{Tv}(numnz)
 
     z = zero(Tv)
 
@@ -561,8 +561,8 @@ function normestinv{T}(A::SparseMatrixCSC{T}, t::Integer = min(2,maximum(size(A)
     if t > n
         throw(ArgumentError("number of blocks must not be greater than $n"))
     end
-    ind = Array(Int64, n)
-    ind_hist = Array(Int64, maxiter * t)
+    ind = Array{Int64}(n)
+    ind_hist = Array{Int64}(maxiter * t)
 
     Ti = typeof(float(zero(T)))
 
@@ -584,7 +584,7 @@ function normestinv{T}(A::SparseMatrixCSC{T}, t::Integer = min(2,maximum(size(A)
     end
 
     # Generate the block matrix
-    X = Array(Ti, n, t)
+    X = Array{Ti}(n, t)
     X[1:n,1] = 1
     for j = 2:t
         while true
@@ -734,9 +734,9 @@ function kron{Tv,Ti}(a::SparseMatrixCSC{Tv,Ti}, b::SparseMatrixCSC{Tv,Ti})
 
     m,n = mA*mB, nA*nB
 
-    colptr = Array(Ti, n+1)
-    rowval = Array(Ti, numnz)
-    nzval = Array(Tv, numnz)
+    colptr = Array{Ti}(n+1)
+    rowval = Array{Ti}(numnz)
+    nzval = Array{Tv}(numnz)
 
     colptr[1] = 1
 
