@@ -792,9 +792,8 @@ function find(testf::Function, A)
 end
 
 function find(A)
-    cA = typeof(A) <: AbstractArray ? A : collect(A)
-    nnzA = countnz(cA)
-    I = similar(cA, Int, nnzA)
+    nnzA = countnz(A)
+    I = Vector{Int}(nnzA)
     count = 1
     for (i,a) in enumerate(A)
         if a != 0
