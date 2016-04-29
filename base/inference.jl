@@ -602,13 +602,14 @@ function invoke_tfunc(f::ANY, types::ANY, argtype::ANY, sv::InferenceState)
     ft = type_typeof(f)
     types = Tuple{ft, types.parameters...}
     argtype = Tuple{ft, argtype.parameters...}
-    meth = ccall(:jl_gf_invoke_lookup, Any, (Any,), types)
-    if is(meth, nothing)
+    entry = ccall(:jl_gf_invoke_lookup, Any, (Any,), types)
+    if is(entry, nothing)
         return Any
     end
+    meth = entry.func
     (ti, env) = ccall(:jl_match_method, Any, (Any, Any, Any),
                       argtype, meth.sig, meth.tvars)::SimpleVector
-    return typeinf_edge(meth.func::Method, ti, env, sv)[2]
+    return typeinf_edge(meth::Method, ti, env, sv)[2]
 end
 
 function tuple_tfunc(argtype::ANY)
@@ -751,7 +752,7 @@ function abstract_call_gf_by_type(f::ANY, argtype::ANY, sv)
     end
     for (m::SimpleVector) in x
         sig = m[1]
-        method = m[3].func::Method
+        method = m[3]::Method
 
         # limit argument type tuple growth
         lsig = length(m[3].sig.parameters)
@@ -923,7 +924,7 @@ function pure_eval_call(f::ANY, argtypes::ANY, atype, sv)
         return false
     end
     meth = meth[1]::SimpleVector
-    method = meth[3].func::Method
+    method = meth[3]::Method
     # TODO: check pure on the inferred thunk
     if method.isstaged || !method.lambda_template.pure
         return false
@@ -2268,7 +2269,6 @@ function inlineable(f::ANY, ft::ANY, e::Expr, atypes::Vector{Any}, sv::Inference
         return NF
     end
 
-    local methfunc
     atype = argtypes_to_type(atypes)
     if length(atype.parameters) - 1 > MAX_TUPLETYPE_LEN
         atype = limit_tuple_type(atype)
@@ -2280,7 +2280,7 @@ function inlineable(f::ANY, ft::ANY, e::Expr, atypes::Vector{Any}, sv::Inference
     meth = meth[1]::SimpleVector
     metharg = meth[1]::Type
     methsp = meth[2]
-    method = meth[3].func::Method
+    method = meth[3]::Method
     if isa(f, widenconst(ft)) && !method.isstaged && method.lambda_template.pure && (isType(e.typ) || isa(e.typ,Const))
         # check if any arguments aren't effect_free and need to be kept around
         stmts = Any[]
@@ -2301,8 +2301,7 @@ function inlineable(f::ANY, ft::ANY, e::Expr, atypes::Vector{Any}, sv::Inference
         end
     end
 
-    methfunc = meth[3].func
-    methsig = meth[3].sig
+    methsig = method.sig
     incompletematch = false
     if !(atype <: metharg)
         incompletematch = true
@@ -3409,13 +3408,13 @@ end
 # make sure that typeinf is executed before turning on typeinf_ext
 # this ensures that typeinf_ext doesn't recurse before it can add the item to the workq
 
-precompile(methods(typeinf_edge).defs.sig)
+precompile(typeof(typeinf_edge).name.mt.defs.sig)
 
 for m in _methods_by_ftype(Tuple{typeof(typeinf_loop), Vararg{Any}}, 10)
-    typeinf(m[3].func, m[1], m[2], true)
+    typeinf(m[3], m[1], m[2], true)
 end
 for m in _methods_by_ftype(Tuple{typeof(typeinf_edge), Vararg{Any}}, 10)
-    typeinf(m[3].func, m[1], m[2], true)
+    typeinf(m[3], m[1], m[2], true)
 end
 
 ccall(:jl_set_typeinf_func, Void, (Any,), typeinf_ext)

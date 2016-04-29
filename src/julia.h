@@ -194,6 +194,11 @@ typedef struct _jl_method_t {
     jl_sym_t *file;
     int32_t line;
 
+    // method's type signature. partly redundant with lambda_template->specTypes
+    jl_tupletype_t *sig;
+    // bound type variables (static parameters). redundant with TypeMapEntry->tvars
+    jl_svec_t *tvars;
+
     // array of all lambda infos with code generated from this one
     jl_array_t *specializations;
     // table of all argument types for which we've inferred this code
@@ -1003,7 +1008,7 @@ JL_DLLEXPORT jl_value_t *jl_new_structv(jl_datatype_t *type, jl_value_t **args,
                                         uint32_t na);
 JL_DLLEXPORT jl_value_t *jl_new_struct_uninit(jl_datatype_t *type);
 JL_DLLEXPORT jl_lambda_info_t *jl_new_lambda_info_uninit(jl_svec_t *sparams);
-JL_DLLEXPORT jl_method_t *jl_new_method(jl_lambda_info_t *definition, jl_sym_t *name, jl_tupletype_t *sig, int isstaged);
+JL_DLLEXPORT jl_method_t *jl_new_method(jl_lambda_info_t *definition, jl_sym_t *name, jl_tupletype_t *sig, jl_svec_t *tvars, int isstaged);
 JL_DLLEXPORT jl_svec_t *jl_svec(size_t n, ...);
 JL_DLLEXPORT jl_svec_t *jl_svec1(void *a);
 JL_DLLEXPORT jl_svec_t *jl_svec2(void *a, void *b);

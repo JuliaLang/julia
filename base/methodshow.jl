@@ -1,13 +1,6 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
-# Method and method-table pretty-printing
-
-function get_lambda(m::TypeMapEntry)
-    isdefined(m, :func) || return nothing
-    isa(m.func, Method) && return m.func.lambda_template
-    isa(m.func, LambdaInfo) && return m.func
-    return nothing
-end
+# Method and method table pretty-printing
 
 function argtype_decl(env, n, t) # -> (argname, argtype)
     if isa(n,Expr)
@@ -33,14 +26,14 @@ function argtype_decl(env, n, t) # -> (argname, argtype)
     return s, string_with_env(env, t)
 end
 
-function arg_decl_parts(m::TypeMapEntry)
+function arg_decl_parts(m::Method)
     tv = m.tvars
     if !isa(tv,SimpleVector)
         tv = Any[tv]
     else
         tv = Any[tv...]
     end
-    li = get_lambda(m)
+    li = m.lambda_template
     file, line = "", 0
     if li !== nothing
         argnames = li.slotnames[1:li.nargs]
@@ -56,8 +49,8 @@ function arg_decl_parts(m::TypeMapEntry)
     return tv, decls, file, line
 end
 
-function kwarg_decl(m::TypeMapEntry, kwtype::DataType)
-    sig = Tuple{kwtype, Array, m.sig.parameters...}
+function kwarg_decl(sig::ANY, kwtype::DataType)
+    sig = Tuple{kwtype, Array, sig.parameters...}
     kwli = ccall(:jl_methtable_lookup, Any, (Any, Any), kwtype.name.mt, sig)
     if kwli !== nothing
         kwli = kwli::Method
@@ -66,11 +59,11 @@ function kwarg_decl(m::TypeMapEntry, kwtype::DataType)
     return ()
 end
 
-function show(io::IO, m::Method)
-    print(io, m.module, '.', m.name, m.isstaged ? " [@generated] at " : " at ", m.file, ":", m.line)
-end
+#function show(io::IO, m::Method)
+#    print(io, m.module, '.', m.name, m.isstaged ? " [@generated] at " : " at ", m.file, ":", m.line)
+#end
 
-function show(io::IO, m::TypeMapEntry; kwtype::Nullable{DataType}=Nullable{DataType}())
+function show(io::IO, m::Method; kwtype::Nullable{DataType}=Nullable{DataType}())
     tv, decls, file, line = arg_decl_parts(m)
     ft = m.sig.parameters[1]
     d1 = decls[1]
@@ -95,7 +88,7 @@ function show(io::IO, m::TypeMapEntry; kwtype::Nullable{DataType}=Nullable{DataT
     print_joined(io, [isempty(d[2]) ? d[1] : d[1]*"::"*d[2] for d in decls[2:end]],
                  ", ", ", ")
     if !isnull(kwtype)
-        kwargs = kwarg_decl(m, get(kwtype))
+        kwargs = kwarg_decl(m.sig, get(kwtype))
         if !isempty(kwargs)
             print(io, "; ")
             print_joined(io, kwargs, ", ", ", ")
@@ -153,7 +146,6 @@ function inbase(m::Module)
 end
 fileurl(file) = let f = find_source_file(file); f === nothing ? "" : "file://"*f; end
 
-url(m::TypeMapEntry) = url(m.func)
 function url(m::Method)
     M = m.module
     (m.file == :null || m.file == :string) && return ""
@@ -189,7 +181,7 @@ function url(m::Method)
     end
 end
 
-function writemime(io::IO, ::MIME"text/html", m::TypeMapEntry; kwtype::Nullable{DataType}=Nullable{DataType}())
+function writemime(io::IO, ::MIME"text/html", m::Method; kwtype::Nullable{DataType}=Nullable{DataType}())
     tv, decls, file, line = arg_decl_parts(m)
     ft = m.sig.parameters[1]
     d1 = decls[1]
@@ -216,7 +208,7 @@ function writemime(io::IO, ::MIME"text/html", m::TypeMapEntry; kwtype::Nullable{
     print_joined(io, [isempty(d[2]) ? d[1] : d[1]*"::<b>"*d[2]*"</b>"
                       for d in decls[2:end]], ", ", ", ")
     if !isnull(kwtype)
-        kwargs = kwarg_decl(m, get(kwtype))
+        kwargs = kwarg_decl(m.sig, get(kwtype))
         if !isempty(kwargs)
             print(io, "; <i>")
             print_joined(io, kwargs, ", ", ", ")
@@ -251,9 +243,9 @@ function writemime(io::IO, mime::MIME"text/html", mt::MethodTable)
     print(io, "</ul>")
 end
 
-# pretty-printing of Vector{TypeMapEntry} for output of methodswith:
+# pretty-printing of Vector{Method} for output of methodswith:
 
-function writemime(io::IO, mime::MIME"text/html", mt::AbstractVector{TypeMapEntry})
+function writemime(io::IO, mime::MIME"text/html", mt::AbstractVector{Method})
     print(io, summary(mt))
     if !isempty(mt)
         print(io, ":<ul>")
@@ -265,6 +257,6 @@ function writemime(io::IO, mime::MIME"text/html", mt::AbstractVector{TypeMapEntr
     end
 end
 
-# override usual show method for Vector{TypeMapEntry}: don't abbreviate long lists
-writemime(io::IO, mime::MIME"text/plain", mt::AbstractVector{TypeMapEntry}) =
+# override usual show method for Vector{Method}: don't abbreviate long lists
+writemime(io::IO, mime::MIME"text/plain", mt::AbstractVector{Method}) =
     showarray(IOContext(io, :limit_output => false), mt)
