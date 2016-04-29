@@ -952,14 +952,6 @@ dense counterparts. The following functions are specific to sparse arrays.
 
    Create a random sparse vector of length ``m`` or sparse matrix of size ``m`` by ``n`` with the specified (independent) probability ``p`` of any entry being nonzero, where nonzero values are sampled from the normal distribution. The optional ``rng`` argument specifies a random number generator, see :ref:`Random Numbers <random-numbers>`\ .
 
-.. function:: sprandbool(m[,n],p)
-
-   .. Docstring generated from Julia source
-
-   Create a random ``m`` by ``n`` sparse boolean matrix or length ``m`` sparse boolean vector with the specified (independent) probability ``p`` of any entry being ``true``\ .
-
-   This function is deprecated.
-
 .. function:: etree(A[, post])
 
    .. Docstring generated from Julia source

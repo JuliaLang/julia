@@ -1078,15 +1078,6 @@ end
 @deprecate copy(x::AbstractString)  identity(x)
 @deprecate copy(x::Tuple)  identity(x)
 
-"""
-    sprandbool(m[,n],p)
-Create a random `m` by `n` sparse boolean matrix or length `m` sparse boolean
-vector with the specified (independent) probability `p` of any entry being
-`true`.
-
-This function is deprecated.
-"""
-function sprandbool end
 @deprecate sprandbool(m::Integer, n::Integer, density::AbstractFloat) sprand(Bool, m, n, density)
 @deprecate sprandbool(r::AbstractRNG, m::Integer, n::Integer, density::AbstractFloat) sprand(r, Bool, m, n, density)
 @deprecate sprandbool(n::Integer, density::AbstractFloat) sprand(Bool, n, density)
