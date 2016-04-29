@@ -595,7 +595,7 @@ static Value *global_binding_pointer(jl_module_t *m, jl_sym_t *s,
 static jl_cgval_t emit_checked_var(Value *bp, jl_sym_t *name, jl_codectx_t *ctx, bool isvol=false);
 static Value *emit_condition(jl_value_t *cond, const std::string &msg, jl_codectx_t *ctx);
 static void allocate_gc_frame(BasicBlock *b0, jl_codectx_t *ctx);
-static void jl_finalize_module(std::unique_ptr<Module> m);
+static void jl_finalize_module(std::unique_ptr<Module> m, bool shadow);
 static GlobalVariable *prepare_global(GlobalVariable *G, Module *M = jl_builderModule);
 
 
@@ -840,7 +840,8 @@ static void to_function(jl_lambda_info_t *li)
     }
     // record that this function name came from this linfo,
     // so we can build a reverse mapping for debug-info.
-    if (li->def != NULL) {
+    bool toplevel = li->def == NULL;
+    if (!toplevel) {
         const DataLayout &DL =
 #ifdef LLVM35
             m->getDataLayout();
@@ -854,10 +855,12 @@ static void to_function(jl_lambda_info_t *li)
     }
 
     // success. add the result to the execution engine now
-    jl_finalize_module(std::move(m));
-    li->functionID = jl_assign_functionID(f, 0);
-    if (specf)
-        li->specFunctionID = jl_assign_functionID(specf, 1);
+    jl_finalize_module(std::move(m), !toplevel);
+    if (!toplevel) {
+        li->functionID = jl_assign_functionID(f, 0);
+        if (specf)
+            li->specFunctionID = jl_assign_functionID(specf, 1);
+    }
     // mark the pointer calling convention
     li->jlcall_api = (f->getFunctionType() == jl_func_sig ? 0 : 1);
 
@@ -931,7 +934,7 @@ static void jl_setup_module(Module *m)
 // this takes ownership of a module after code emission is complete
 // and will add it to the execution engine when required (by jl_finalize_function)
 static void finalize_gc_frame(Module *m);
-static void jl_finalize_module(std::unique_ptr<Module> uniquem)
+static void jl_finalize_module(std::unique_ptr<Module> uniquem, bool shadow)
 {
     Module *m = uniquem.release(); // unique_ptr won't be able track what we do with this (the invariant is recovered by jl_finalize_function)
     finalize_gc_frame(m);
@@ -947,7 +950,11 @@ static void jl_finalize_module(std::unique_ptr<Module> uniquem)
             module_for_fname[F->getName()] = m;
     }
 #endif
-    jl_add_to_shadow(m);
+#if defined(USE_ORCJIT) || defined(USE_MCJIT)
+    // in the newer JITs, the shadow module is separate from the execution module
+    if (shadow)
+#endif
+        jl_add_to_shadow(m);
 }
 
 // this ensures that llvmf has been emitted to the execution engine,
@@ -3772,7 +3779,7 @@ static Function *gen_cfun_wrapper(jl_function_t *ff, jl_value_t *jlrettype, jl_t
     else
         builder.CreateRet(r);
 
-    jl_finalize_module(std::unique_ptr<Module>(M));
+    jl_finalize_module(std::unique_ptr<Module>(M), true);
 
     return cw_proto;
 }
