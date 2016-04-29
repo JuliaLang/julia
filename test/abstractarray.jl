@@ -198,6 +198,26 @@ function test_vector_indexing{T}(::Type{T}, shape, ::Type{TestAbstractArray})
     # Test with containers that aren't Int[]
     @test B[[]] == A[[]] == []
     @test B[convert(Array{Any}, idxs)] == A[convert(Array{Any}, idxs)] == idxs
+
+    # Test adding dimensions with matrices
+    idx1 = rand(1:size(A, 1), 3)
+    idx2 = rand(1:Base.trailingsize(A, 2), 4, 5)
+    @test B[idx1, idx2] == A[idx1, idx2] == reshape(A[idx1, vec(idx2)], 3, 4, 5) == reshape(B[idx1, vec(idx2)], 3, 4, 5)
+    @test B[1, idx2] == A[1, idx2] == reshape(A[1, vec(idx2)], 4, 5) == reshape(B[1, vec(idx2)], 4, 5)
+
+    # test removing dimensions with 0-d arrays
+    idx0 = reshape([rand(1:size(A, 1))])
+    @test B[idx0, idx2] == A[idx0, idx2] == reshape(A[idx0[], vec(idx2)], 4, 5) == reshape(B[idx0[], vec(idx2)], 4, 5)
+    @test B[reshape([end]), reshape([end])] == A[reshape([end]), reshape([end])] == reshape([A[end,end]]) == reshape([B[end,end]])
+
+    # test logical indexing
+    mask = bitrand(shape)
+    @test B[mask] == A[mask] == B[find(mask)] == A[find(mask)] == find(mask)
+    @test B[vec(mask)] == A[vec(mask)] == find(mask)
+    mask1 = bitrand(size(A, 1))
+    mask2 = bitrand(Base.trailingsize(A, 2))
+    @test B[mask1, mask2] == A[mask1, mask2] == B[find(mask1), find(mask2)]
+    @test B[mask1, 1] == A[mask1, 1] == find(mask1)
 end
 
 function test_primitives{T}(::Type{T}, shape, ::Type{TestAbstractArray})
