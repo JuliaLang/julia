@@ -11,7 +11,7 @@ end
 
 for f in (:-, :~, :conj, :sign)
     @eval begin
-        function ($f)(A::StridedArray)
+        function ($f)(A::AbstractArray)
             F = similar(A)
             for i in eachindex(A)
                 F[i] = ($f)(A[i])
