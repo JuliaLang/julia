@@ -3052,12 +3052,17 @@ static Value *emit_condition(jl_value_t *cond, const std::string &msg, jl_codect
 
 static void emit_stmtpos(jl_value_t *expr, jl_codectx_t *ctx)
 {
-    if (jl_is_symbol(expr) || jl_is_slot(expr))
-        return; // value not used, no point in attempting codegen for it
     if (jl_is_gensym(expr))
         return; // value not used, no point in attempting codegen for it
     if (jl_is_linenode(expr))
         return;
+    if (jl_is_slot(expr)) {
+        size_t sl = jl_slot_number(expr) - 1;
+        jl_varinfo_t &vi = ctx->slots[sl];
+        if (vi.usedUndef)
+            (void)emit_expr(expr, ctx);
+        return;
+    }
     if (jl_is_newvarnode(expr)) {
         jl_value_t *var = jl_fieldref(expr, 0);
         assert(jl_is_slot(var));
