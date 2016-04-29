@@ -80,6 +80,7 @@ end
 for op in (:rem,:mod)
     @eval begin
         ($op){P<:Period}(x::P,y::P) = P(($op)(value(x),value(y)))
+        ($op){P<:Period}(x::P,y::Real) = P(($op)(value(x),Int64(y)))
     end
 end
 

@@ -14,7 +14,19 @@
 @test lcm(Dates.Year(10), Dates.Year(4)) == Dates.Year(20)
 @test div(Dates.Year(10),Dates.Year(3)) == 3
 @test div(Dates.Year(10),Dates.Year(4)) == 2
+@test div(Dates.Year(10),4) == Dates.Year(2)
 @test Dates.Year(10) / Dates.Year(4) == 2.5
+
+@test mod(Dates.Year(10),Dates.Year(4)) == Dates.Year(2)
+@test mod(Dates.Year(-10),Dates.Year(4)) == Dates.Year(2)
+@test mod(Dates.Year(10),4) == Dates.Year(2)
+@test mod(Dates.Year(-10),4) == Dates.Year(2)
+
+@test rem(Dates.Year(10),Dates.Year(4)) == Dates.Year(2)
+@test rem(Dates.Year(-10),Dates.Year(4)) == Dates.Year(-2)
+@test rem(Dates.Year(10),4) == Dates.Year(2)
+@test rem(Dates.Year(-10),4) == Dates.Year(-2)
+
 t = Dates.Year(1)
 t2 = Dates.Year(2)
 @test ([t,t,t,t,t] + Dates.Year(1)) == ([t2,t2,t2,t2,t2])
