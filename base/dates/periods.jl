@@ -65,17 +65,25 @@ Base.isless{P<:Period}(x::P,y::P) = isless(value(x),value(y))
 =={P<:Period}(x::P,y::P) = value(x) == value(y)
 
 # Period Arithmetic, grouped by dimensionality:
-import Base: div, mod, rem, gcd, lcm, +, -, *, /, %, .+, .-, .*, .%
+import Base: div, fld, mod, rem, gcd, lcm, +, -, *, /, %, .+, .-, .*, .%
 for op in (:+,:-,:lcm,:gcd)
     @eval ($op){P<:Period}(x::P,y::P) = P(($op)(value(x),value(y)))
 end
 
-for op in (:/,:%,:div,:mod)
+for op in (:/,:div,:fld)
     @eval begin
         ($op){P<:Period}(x::P,y::P) = ($op)(value(x),value(y))
         ($op){P<:Period}(x::P,y::Real) = P(($op)(value(x),Int64(y)))
     end
 end
+
+for op in (:rem,:mod)
+    @eval begin
+        ($op){P<:Period}(x::P,y::P) = P(($op)(value(x),value(y)))
+        ($op){P<:Period}(x::P,y::Real) = P(($op)(value(x),Int64(y)))
+    end
+end
+
 /{P<:Period}(X::StridedArray{P}, y::P) = X ./ y
 %{P<:Period}(X::StridedArray{P}, y::P) = X .% y
 *{P<:Period}(x::P,y::Real) = P(value(x) * Int64(y))
@@ -83,9 +91,9 @@ end
 .*{P<:Period}(y::Real, X::StridedArray{P}) = X .* y
 for (op,Ty,Tz) in ((:.*,Real,:P),
                    (:./,:P,Float64), (:./,Real,:P),
-                   (:.%,:P,Int64), (:.%,Integer,:P),
                    (:div,:P,Int64), (:div,Integer,:P),
-                   (:mod,:P,Int64), (:mod,Integer,:P))
+                   (:.%,:P,:P),
+                   (:mod,:P,:P))
     sop = string(op)
     op_ = sop[1] == '.' ? symbol(sop[2:end]) : op
     @eval begin
@@ -102,9 +110,6 @@ end
 # intfuncs
 Base.gcdx{T<:Period}(a::T,b::T) = ((g,x,y)=gcdx(value(a),value(b)); return T(g),x,y)
 Base.abs{T<:Period}(a::T) = T(abs(value(a)))
-
-# Like Base.steprem in range.jl, but returns the correct type for Periods
-Base.steprem(start::Period,stop::Period,step::Period) = (stop-start) % value(step)
 
 periodisless(::Period,::Year)        = true
 periodisless(::Period,::Month)       = true
