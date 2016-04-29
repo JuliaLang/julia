@@ -369,9 +369,6 @@ s = "julia"
 g = graphemes("日本語")
 @test find(g) == [1,2,3]
 @test find(isascii, g) == Int[]
-c = combinations(1:4, 3)
-@test find(c) == [1,2,3,4]
-@test find(a -> 2 in a, c) == [1,2,4]
 
 ## findn ##
 
