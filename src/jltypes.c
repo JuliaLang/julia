@@ -32,6 +32,7 @@ jl_datatype_t *jl_typedslot_type;
 jl_datatype_t *jl_simplevector_type;
 jl_typename_t *jl_tuple_typename;
 jl_tupletype_t *jl_anytuple_type;
+jl_datatype_t *jl_anytuple_type_type;
 jl_datatype_t *jl_ntuple_type;
 jl_typename_t *jl_ntuple_typename;
 jl_datatype_t *jl_vararg_type;
@@ -3702,6 +3703,12 @@ void jl_init_types(void)
     slot_sym = jl_symbol("slot");
     static_parameter_sym = jl_symbol("static_parameter");
     compiler_temp_sym = jl_symbol("#temp#");
+
+    tttvar = jl_new_typevar(jl_symbol("T"),
+                                  (jl_value_t*)jl_bottom_type,
+                                  (jl_value_t*)jl_anytuple_type);
+    jl_anytuple_type_type = jl_wrap_Type((jl_value_t*)tttvar);
+    jl_cfunction_list.unknown = jl_nothing;
 }
 
 #ifdef __cplusplus
