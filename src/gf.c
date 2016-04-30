@@ -627,7 +627,7 @@ static jl_lambda_info_t *cache_method(jl_methtable_t *mt, union jl_typemap_t *ca
                 jl_svecset(newparams, i, jl_any_type);
         }
         origtype = jl_apply_tuple_type(newparams);
-        temp = origtype;
+        temp = (jl_value_t*)origtype;
     }
 
     // here we infer types and specialize the method
