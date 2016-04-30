@@ -585,6 +585,7 @@ int sigs_eq(jl_value_t *a, jl_value_t *b, int useenv);
 
 jl_value_t *jl_lookup_match(jl_value_t *a, jl_value_t *b, jl_svec_t **penv, jl_svec_t *tvars);
 
+unsigned jl_special_vector_alignment(size_t nfields, jl_value_t *field_type);
 
 #ifdef __cplusplus
 }

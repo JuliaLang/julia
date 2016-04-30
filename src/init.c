@@ -833,6 +833,7 @@ void jl_get_builtin_hooks(void)
     jl_ascii_string_type = (jl_datatype_t*)core("ASCIIString");
     jl_utf8_string_type = (jl_datatype_t*)core("UTF8String");
     jl_weakref_type = (jl_datatype_t*)core("WeakRef");
+    jl_vecelement_typename = ((jl_datatype_t*)core("VecElement"))->name;
 }
 
 JL_DLLEXPORT void jl_get_system_hooks(void)
