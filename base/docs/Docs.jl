@@ -216,6 +216,7 @@ end
 Adds a new docstring `str` to the docsystem for `binding` and signature `sig`.
 """
 function doc!(b::Binding, str::DocStr, sig::ANY = Union{})
+    initmeta()
     m = get!(meta(), b, MultiDoc())
     if haskey(m.docs, sig)
         # We allow for docstrings to be updated, but print a warning since it is possible
@@ -483,7 +484,9 @@ end
 
 function moduledoc(meta, def, def′)
     name  = namify(def′)
-    docex = :(@doc $meta $name)
+    docex = Expr(:call, doc!, bindingexpr(name),
+        docexpr(lazy_iterpolate(meta), metadata(name))
+    )
     if def == nothing
         esc(:(eval($name, $(quot(docex)))))
     else
@@ -592,9 +595,6 @@ function docm(meta, ex, define = true)
     # Don't try to redefine expressions. This is only needed for `Base` img gen since
     # otherwise calling `loaddocs` would redefine all documented functions and types.
     def = define ? x : nothing
-
-    # Initalise the module's docstring storage.
-    initmeta()
 
     # Keywords using the `@kw_str` macro in `base/docs/basedocs.jl`.
     #
