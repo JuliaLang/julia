@@ -44,7 +44,7 @@ default_color_info = :blue
 color_normal = text_colors[:normal]
 
 function repl_color(key, default)
-    c = symbol(get(ENV, key, ""))
+    c = Symbol(get(ENV, key, ""))
     haskey(text_colors, c) ? c : default
 end
 
@@ -284,7 +284,7 @@ function load_machine_file(path::AbstractString)
     for line in split(readstring(path),'\n'; keep=false)
         s = map!(strip, split(line,'*'; keep=false))
         if length(s) > 1
-            cnt = isnumber(s[1]) ? parse(Int,s[1]) : symbol(s[1])
+            cnt = isnumber(s[1]) ? parse(Int,s[1]) : Symbol(s[1])
             push!(machines,(s[2], cnt))
         else
             push!(machines,line)

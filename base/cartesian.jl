@@ -258,7 +258,7 @@ function inlineanonymous(ex::Expr, val)
 end
 
 # Given :i and 3, this generates :i_3
-inlineanonymous(base::Symbol, ext) = symbol(base,"_",string(ext))
+inlineanonymous(base::Symbol, ext) = Symbol(base,"_",string(ext))
 
 # Replace a symbol by a value or a "coded" symbol
 # E.g., for d = 3,
@@ -277,7 +277,7 @@ lreplace(ex, sym::Symbol, val) = lreplace!(copy(ex), LReplace(sym, val))
 
 function lreplace!(sym::Symbol, r::LReplace)
     sym == r.pat_sym && return r.val
-    symbol(lreplace!(string(sym), r))
+    Symbol(lreplace!(string(sym), r))
 end
 
 function lreplace!(str::AbstractString, r::LReplace)
@@ -323,7 +323,7 @@ function lreplace!(ex::Expr, r::LReplace)
     if ex.head == :curly && length(ex.args) == 2 && isa(ex.args[1], Symbol) && endswith(string(ex.args[1]), "_")
         excurly = Base.Cartesian.exprresolve(lreplace!(ex.args[2], r))
         if isa(excurly, Number)
-            return symbol(ex.args[1],excurly)
+            return Symbol(ex.args[1],excurly)
         else
             ex.args[2] = excurly
             return ex

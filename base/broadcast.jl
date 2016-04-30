@@ -167,7 +167,7 @@ function gen_broadcast_body_iter_tobitarray(nd::Int, narrays::Int, f)
 end
 
 function gen_broadcast_function(genbody::Function, nd::Int, narrays::Int, f)
-    As = [symbol("A_"*string(i)) for i = 1:narrays]
+    As = [Symbol("A_"*string(i)) for i = 1:narrays]
     body = genbody(nd, narrays, f)
     @eval let
         local _F_
@@ -179,7 +179,7 @@ function gen_broadcast_function(genbody::Function, nd::Int, narrays::Int, f)
 end
 
 function gen_broadcast_function_tobitarray(genbody::Function, nd::Int, narrays::Int, f)
-    As = [symbol("A_"*string(i)) for i = 1:narrays]
+    As = [Symbol("A_"*string(i)) for i = 1:narrays]
     body = genbody(nd, narrays, f)
     @eval let
         local _F_

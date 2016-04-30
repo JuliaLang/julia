@@ -64,7 +64,7 @@ macro test999_str(args...); args; end
 @test_throws ParseError parse("sqrt(16)2")
 @test_throws ParseError parse("x' y")
 @test_throws ParseError parse("x 'y")
-@test parse("x'y") == Expr(:call, :*, Expr(symbol("'"), :x), :y)
+@test parse("x'y") == Expr(:call, :*, Expr(Symbol("'"), :x), :y)
 
 # issue #8301
 @test_throws ParseError parse("&*s")
@@ -90,7 +90,7 @@ macro test999_str(args...); args; end
 # issue #10997
 @test parse(":(x.\$f[i])") == Expr(:quote,
                                    Expr(:ref,
-                                        Expr(symbol("."), :x,
+                                        Expr(Symbol("."), :x,
                                              Expr(:$, Expr(:call, TopNode(:Expr),
                                                            QuoteNode(:quote),
                                                            :f))),
@@ -123,7 +123,7 @@ macro test999_str(args...); args; end
                                                 Expr(:import, :A, :c, :d)))
 
 # issue #11332
-@test parse("export \$(symbol(\"A\"))") == :(export $(Expr(:$, :(symbol("A")))))
+@test parse("export \$(Symbol(\"A\"))") == :(export $(Expr(:$, :(Symbol("A")))))
 @test parse("export \$A") == :(export $(Expr(:$, :A)))
 @test parse("using \$a.\$b") == Expr(:using, Expr(:$, :a), Expr(:$, :b))
 @test parse("using \$a.\$b, \$c") == Expr(:toplevel, Expr(:using, Expr(:$, :a),
@@ -149,7 +149,7 @@ macro test999_str(args...); args; end
 macro f(args...) end; @f ""
 """) == Expr(:toplevel,
             Expr(:macro, Expr(:call, :f, Expr(:..., :args)), Expr(:block,)),
-            Expr(:macrocall, symbol("@f"), ""))
+            Expr(:macrocall, Symbol("@f"), ""))
 
 # blocks vs. tuples
 @test parse("()") == Expr(:tuple)
@@ -326,8 +326,8 @@ end
 # pr #13078
 @test parse("a in b in c") == Expr(:comparison, :a, :in, :b, :in, :c)
 @test parse("a||b→c&&d") == Expr(:call, :→,
-                                 Expr(symbol("||"), :a, :b),
-                                 Expr(symbol("&&"), :c, :d))
+                                 Expr(Symbol("||"), :a, :b),
+                                 Expr(Symbol("&&"), :c, :d))
 
 # issue #11988 -- normalize \r and \r\n in literal strings to \n
 @test "foo\nbar" == parse("\"\"\"\r\nfoo\r\nbar\"\"\"") == parse("\"\"\"\nfoo\nbar\"\"\"") == parse("\"\"\"\rfoo\rbar\"\"\"") == parse("\"foo\r\nbar\"") == parse("\"foo\rbar\"") == parse("\"foo\nbar\"")
