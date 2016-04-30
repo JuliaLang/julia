@@ -441,6 +441,7 @@ extern JL_DLLEXPORT jl_datatype_t *jl_slotnumber_type;
 extern JL_DLLEXPORT jl_datatype_t *jl_typedslot_type;
 extern JL_DLLEXPORT jl_datatype_t *jl_simplevector_type;
 extern JL_DLLEXPORT jl_typename_t *jl_tuple_typename;
+extern JL_DLLEXPORT jl_typename_t *jl_vecelement_typename;
 extern JL_DLLEXPORT jl_datatype_t *jl_anytuple_type;
 #define jl_tuple_type jl_anytuple_type
 extern JL_DLLEXPORT jl_datatype_t *jl_anytuple_type_type;
@@ -938,6 +939,12 @@ STATIC_INLINE int jl_is_tuple_type(void *t)
 {
     return (jl_is_datatype(t) &&
             ((jl_datatype_t*)(t))->name == jl_tuple_typename);
+}
+
+STATIC_INLINE int is_vecelement_type(jl_value_t* t)
+{
+    return (jl_is_datatype(t) &&
+            ((jl_datatype_t*)(t))->name == jl_vecelement_typename);
 }
 
 STATIC_INLINE int jl_is_vararg_type(jl_value_t *v)

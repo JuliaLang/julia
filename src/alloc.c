@@ -822,10 +822,44 @@ JL_DLLEXPORT jl_datatype_t *jl_new_uninitialized_datatype(size_t nfields, int8_t
     return t;
 }
 
+// Determine if homogeneous tuple with fields of type t will have
+// a special alignment beyond normal Julia rules.
+// Return special alignment if one exists, 0 if normal alignment rules hold.
+// A non-zero result *must* match the LLVM rules for a vector type <nfields x t>.
+// For sake of Ahead-Of-Time (AOT) compilation, this routine has to work
+// without LLVM being available.
+unsigned jl_special_vector_alignment(size_t nfields, jl_value_t *t) {
+    if (!is_vecelement_type(t))
+        return 0;
+    if (nfields>16 || (1<<nfields & 0x1157C) == 0)
+        // Number of fields is not 2, 3, 4, 5, 6, 8, 10, 12, or 16.
+        return 0;
+    assert(jl_datatype_nfields(t)==1);
+    jl_value_t *ty = jl_field_type(t, 0);
+    if( !jl_is_bitstype(ty) )
+        // LLVM requires that a vector element be a primitive type.
+        // LLVM allows pointer types as vector elements, but until a
+        // motivating use case comes up for Julia, we reject pointers.
+        return 0;
+    size_t elsz = jl_datatype_size(ty);
+    if (elsz>8 || (1<<elsz & 0x116) == 0)
+        // Element size is not 1, 2, 4, or 8.
+        return 0;
+    size_t size = nfields*elsz;
+    // LLVM's alignment rule for vectors seems to be to round up to
+    // a power of two, even if that's overkill for the target hardware.
+    size_t alignment=1;
+    for( ; size>alignment; alignment*=2 )
+        continue;
+    return alignment;
+}
+
 void jl_compute_field_offsets(jl_datatype_t *st)
 {
     size_t sz = 0, alignm = 1;
     int ptrfree = 1;
+    int homogeneous = 1;
+    jl_value_t *lastty = NULL;
 
     assert(0 <= st->fielddesc_type && st->fielddesc_type <= 2);
 
@@ -862,11 +896,20 @@ void jl_compute_field_offsets(jl_datatype_t *st)
             if (al > alignm)
                 alignm = al;
         }
+        homogeneous &= lastty==NULL || lastty==ty;
+        lastty = ty;
         jl_field_setoffset(st, i, sz);
         jl_field_setsize(st, i, fsz);
         if (__unlikely(max_offset - sz < fsz))
             jl_throw(jl_overflow_exception);
         sz += fsz;
+    }
+    if (homogeneous && lastty!=NULL && jl_is_tuple_type(st)) {
+        // Some tuples become LLVM vectors with stronger alignment than what was calculated above.
+        unsigned al = jl_special_vector_alignment(jl_datatype_nfields(st), lastty);
+        assert(al % alignm == 0);
+        if (al)
+            alignm = al;
     }
     st->alignment = alignm;
     st->size = LLT_ALIGN(sz, alignm);

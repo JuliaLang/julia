@@ -35,6 +35,7 @@ jl_tupletype_t *jl_anytuple_type;
 jl_datatype_t *jl_anytuple_type_type;
 jl_datatype_t *jl_ntuple_type;
 jl_typename_t *jl_ntuple_typename;
+jl_typename_t *jl_vecelement_typename;
 jl_datatype_t *jl_vararg_type;
 jl_datatype_t *jl_tvar_type;
 jl_datatype_t *jl_uniontype_type;
