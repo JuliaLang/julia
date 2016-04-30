@@ -29,7 +29,7 @@ convert(::Type{Vector{UInt8}}, s::AbstractString) = bytestring(s).data
 convert(::Type{Array{UInt8}}, s::AbstractString) = bytestring(s).data
 convert(::Type{ByteString}, s::AbstractString) = bytestring(s)
 convert(::Type{Vector{Char}}, s::AbstractString) = collect(s)
-convert(::Type{Symbol}, s::AbstractString) = symbol(s)
+convert(::Type{Symbol}, s::AbstractString) = Symbol(s)
 
 ## generic supplied functions ##
 
@@ -42,7 +42,7 @@ getindex{T<:Integer}(s::AbstractString, r::UnitRange{T}) = s[Int(first(r)):Int(l
 getindex(s::AbstractString, v::AbstractVector) =
     sprint(length(v), io->(for i in v; write(io,s[i]) end))
 
-symbol(s::AbstractString) = symbol(bytestring(s))
+Symbol(s::AbstractString) = Symbol(bytestring(s))
 
 sizeof(s::AbstractString) = error("type $(typeof(s)) has no canonical binary representation")
 

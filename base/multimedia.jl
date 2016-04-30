@@ -14,7 +14,7 @@ export Display, display, pushdisplay, popdisplay, displayable, redisplay,
 immutable MIME{mime} end
 
 import Base: show, print, string, convert
-MIME(s) = MIME{symbol(s)}()
+MIME(s) = MIME{Symbol(s)}()
 show{mime}(io::IO, ::MIME{mime}) = print(io, "MIME type ", string(mime))
 print{mime}(io::IO, ::MIME{mime}) = print(io, mime)
 
@@ -22,14 +22,14 @@ print{mime}(io::IO, ::MIME{mime}) = print(io, mime)
 macro MIME(s)
     Base.warn_once("@MIME(\"\") is deprecated, use MIME\"\" instead.")
     if isa(s,AbstractString)
-        :(MIME{$(Expr(:quote, symbol(s)))})
+        :(MIME{$(Expr(:quote, Symbol(s)))})
     else
-        :(MIME{symbol($s)})
+        :(MIME{Symbol($s)})
     end
 end
 
 macro MIME_str(s)
-    :(MIME{$(Expr(:quote, symbol(s)))})
+    :(MIME{$(Expr(:quote, Symbol(s)))})
 end
 
 ###########################################################################
@@ -59,7 +59,7 @@ mimewritable(m::AbstractString, x) = mimewritable(MIME(m), x)
 
 macro textmime(mime)
     quote
-        mimeT = MIME{symbol($mime)}
+        mimeT = MIME{Symbol($mime)}
         # avoid method ambiguities with the general definitions below:
         # (Q: should we treat Vector{UInt8} as a bytestring?)
         Base.Multimedia.reprmime(m::mimeT, x::Vector{UInt8}) = sprint(writemime, m, x)

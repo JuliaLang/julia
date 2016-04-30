@@ -191,8 +191,8 @@ using .IteratorsMD
 # Specializing for a fixed number of arguments provides a ~25%
 # improvement over the general definitions in abstractarray.jl
 for N = 1:5
-    args = [:($(symbol(:I, d))) for d = 1:N]
-    targs = [:($(symbol(:I, d))::Union{Colon,Number,AbstractArray}) for d = 1:N]  # prevent co-opting the CartesianIndex version
+    args = [:($(Symbol(:I, d))) for d = 1:N]
+    targs = [:($(Symbol(:I, d))::Union{Colon,Number,AbstractArray}) for d = 1:N]  # prevent co-opting the CartesianIndex version
     exs = [:(checkbounds(Bool, size(A, $d), $(args[d]))) for d = 1:N]
     cbexpr = exs[1]
     for d = 2:N
@@ -455,14 +455,14 @@ end
     for T in indexes.parameters
         T <: CartesianIndex ? (M += length(T)) : (M += 1)
     end
-    index_length_expr = index <: Colon ? symbol(string("Istride_", N+1)) : :(length(index))
+    index_length_expr = index <: Colon ? Symbol(string("Istride_", N+1)) : :(length(index))
     quote
         Cartesian.@nexprs $N d->(I_d = indexes[d])
         dimlengths = Cartesian.@ncall $N index_lengths_dim V.parent length(V.indexes)-N+1 I
         Istride_1 = 1   # strides of the indexes to merge
         Cartesian.@nexprs $N d->(Istride_{d+1} = Istride_d*dimlengths[d])
         idx_len = $(index_length_expr)
-        if idx_len < 0.1*$(symbol(string("Istride_", N+1)))   # this has not been carefully tuned
+        if idx_len < 0.1*$(Symbol(string("Istride_", N+1)))   # this has not been carefully tuned
             return merge_indexes_div(V, indexes, index, dimlengths)
         end
         Cartesian.@nexprs $N d->(counter_d = 1) # counter_0 is the linear index
@@ -639,7 +639,7 @@ end
         $(Expr(:meta, :inline))
         stride_1 = 1
         @nexprs $N d->(stride_{d+1} = stride_d*size(B, d))
-        $(symbol(:offset_, N)) = 1
+        $(Symbol(:offset_, N)) = 1
         ind = 0
         Xc, Bc = X.chunks, B.chunks
         idxlens = @ncall $N index_lengths B d->I[d]
