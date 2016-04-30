@@ -628,7 +628,7 @@ static jl_lambda_info_t *cache_method(jl_methtable_t *mt, union jl_typemap_t *ca
                 jl_svecset(newparams, i, jl_any_type);
         }
         origtype = jl_apply_tuple_type(newparams);
-        temp = origtype;
+        temp = (jl_value_t*)origtype;
     }
 
     // here we infer types and specialize the method
@@ -1676,7 +1676,7 @@ static int tvar_exists_at_top_level(jl_value_t *tv, jl_tupletype_t *sig, int att
 struct ml_matches_env {
     struct typemap_intersection_env match;
     jl_value_t *t;
-    jl_svec_t *matc;
+    jl_value_t *matc;
     int lim;
 };
 static int ml_matches_visitor(jl_typemap_entry_t *ml, struct typemap_intersection_env *closure0)
@@ -1689,7 +1689,7 @@ static int ml_matches_visitor(jl_typemap_entry_t *ml, struct typemap_intersectio
       more generally, we can stop when the type is a subtype of the
       union of all the signatures examined so far.
     */
-    assert(ml->func.linfo);
+    assert(ml->func.method);
     int skip = 0;
     size_t len = jl_array_len(closure->t);
     if (closure->lim >= 0) {
@@ -1725,7 +1725,8 @@ static int ml_matches_visitor(jl_typemap_entry_t *ml, struct typemap_intersectio
             closure->t = (jl_value_t*)jl_false;
             return 0; // terminate search
         }
-        closure->matc = jl_svec(3, closure->match.ti, closure->match.env, ml);
+        closure->matc = (jl_value_t*)join_tsig((jl_tupletype_t*)closure->match.ti, ml->sig);
+        closure->matc = (jl_value_t*)jl_svec(3, closure->matc, closure->match.env, ml);
         /*
           Check whether all static parameters matched. If not, then we
           have an argument type like Vector{T{Int,_}}, and a signature like
