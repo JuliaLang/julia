@@ -20,7 +20,7 @@ lazy_iterpolate(x) = isexpr(x, :string) ? Expr(:call, Core.svec, x.args...) : x
 
 function docm(str, x)
     out = esc(Expr(:call, doc!, lazy_iterpolate(str), Expr(:quote, x)))
-    isexpr(x, :module) ? Expr(:toplevel, esc(x), out) :
+    isexpr(x, :module) ? Expr(:toplevel, out, esc(x)) :
     isexpr(x, :call) ? out : Expr(:block, esc(x), out)
 end
 docm(x) = isexpr(x, :->) ? docm(x.args[1], x.args[2].args[2]) : error("invalid '@doc'.")
