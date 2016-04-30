@@ -292,7 +292,7 @@ for typ in atomictypes
     end
     for rmwop in [:xchg, :add, :sub, :and, :nand, :or, :xor, :max, :min]
         rmw = string(rmwop)
-        fn = symbol("atomic_", rmw, "!")
+        fn = Symbol("atomic_", rmw, "!")
         if (rmw == "max" || rmw == "min") && typ <: Unsigned
             # LLVM distinguishes signedness in the operation, not the integer type.
             rmw = "u" * rmw
@@ -321,7 +321,7 @@ end
 const opnames = Dict{Symbol, Symbol}(:+ => :add, :- => :sub)
 for op in [:+, :-, :max, :min]
     opname = get(opnames, op, op)
-    @eval function $(symbol("atomic_", opname, "!")){T<:FloatTypes}(var::Atomic{T}, val::T)
+    @eval function $(Symbol("atomic_", opname, "!")){T<:FloatTypes}(var::Atomic{T}, val::T)
         IT = inttype(T)
         old = var[]
         while true
