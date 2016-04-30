@@ -879,9 +879,11 @@ if VERSION >= v"0.4"
 
     @compat (a::A)() = a.a
     @compat (a::A)(b) = (a.a, b)
+    @compat (a::A)(b, c; d=2) = (a.a, b, c, d)
     @compat (b::B{T}){T}() = b.b, T
     @compat (b::B{T}){T}(c::T) = 1
     @compat (b::B{T}){T,T2}(c::T2) = 0
+    @compat (b::B{T}){T}(c::T, d; f=1) = (c, d, f)
 
     @test A() === A(1)
     @test B() === B(0)
@@ -889,8 +891,10 @@ if VERSION >= v"0.4"
 
     @test A(1)() === 1
     @test A(1)(2) === (1, 2)
+    @test A(1)(2, 3; d=10) === (1, 2, 3, 10)
     @test B(0)() === (0, Int)
     @test B(0)(1) === 1
+    @test B(0)(1, 2; f=100) === (1, 2, 100)
     @test B(0)(1.0) === 0
 end
 

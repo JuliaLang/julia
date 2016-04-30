@@ -508,18 +508,28 @@ function _compat(ex::Expr)
         # Passthrough
         return ex
     elseif new_style_call_overload(ex)
-        if ((ex.args[1]::Expr).args[1]::Expr).head === :(::)
+        callexpr = ex.args[1]::Expr
+        callee = callexpr.args[1]::Expr
+        is_kw = (length(callexpr.args) >= 2 &&
+                 isexpr(callexpr.args[2], :parameters))
+        if callee.head === :(::)
             # (:function, (:call, :(:(::), <1>), <2>), <body>) ->
             # (:function, (:call, :(Base.call), :(:(::), <1>), <2>), <body>)
-            unshift!((ex.args[1]::Expr).args, :(Base.call))
+            unshift!(callexpr.args, :(Base.call))
         else
             # (:function, (:call, :(curly, :(:(::), <1>), <3>), <2>), <body>) ->
             # (:function, (:call, :(curly, :(Base.call), <3>), :(:(::), <1>), <2>), <body>)
-            callexpr = ex.args[1]::Expr
-            callee = callexpr.args[1]::Expr
             obj = callee.args[1]::Expr
             callee.args[1] = :(Base.call)
             insert!(callexpr.args, 2, obj)
+        end
+        if is_kw
+            # Expr(:parameters) is moved to the 3rd argument
+            params = callexpr.args[3]
+            @assert isexpr(params, :parameters)
+            obj = callexpr.args[2]
+            callexpr.args[2] = params
+            callexpr.args[3] = obj
         end
     end
     return Expr(ex.head, map(_compat, ex.args)...)
