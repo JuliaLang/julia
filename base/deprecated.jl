@@ -68,7 +68,7 @@ end
 function depwarn(msg, funcsym)
     opts = JLOptions()
     if opts.depwarn > 0
-        ln = unsafe_load(cglobal(:jl_lineno, Int))
+        ln = Int(unsafe_load(cglobal(:jl_lineno, Cint)))
         fn = bytestring(unsafe_load(cglobal(:jl_filename, Ptr{Cchar})))
         bt = backtrace()
         caller = firstcaller(bt, funcsym)
