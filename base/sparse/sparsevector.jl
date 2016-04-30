@@ -356,16 +356,15 @@ function sprand(r::AbstractRNG, n::Integer, p::AbstractFloat, rfn::Function)
     SparseVector(n, I, V)
 end
 
-sprand{T}(n::Integer, p::AbstractFloat, ::Type{T}) = sprand(GLOBAL_RNG, n, p, rand, T)
 sprand(n::Integer, p::AbstractFloat) = sprand(GLOBAL_RNG, n, p, rand)
-sprand{T}(r::AbstractRNG, n::Integer, p::AbstractFloat, ::Type{T}) = sprand(r, n, p, rand, T)
+
 sprand(r::AbstractRNG, n::Integer, p::AbstractFloat) = sprand(r, n, p, rand)
+sprand{T}(r::AbstractRNG, ::Type{T}, n::Integer, p::AbstractFloat) = sprand(r, n, p, (r, i) -> rand(r, T, i))
+sprand(r::AbstractRNG, ::Type{Bool}, n::Integer, p::AbstractFloat) = sprand(r, n, p, truebools)
+sprand{T}(::Type{T}, n::Integer, p::AbstractFloat) = sprand(GLOBAL_RNG, T, n, p)
 
 sprandn(n::Integer, p::AbstractFloat) = sprand(GLOBAL_RNG, n, p, randn)
 sprandn(r::AbstractRNG, n::Integer, p::AbstractFloat) = sprand(r, n, p, randn)
-
-sprandbool(n::Integer, p::AbstractFloat) = sprand(GLOBAL_RNG, n, p, truebools)
-sprandbool(r::AbstractRNG, n::Integer, p::AbstractFloat) = sprand(r, n, p, truebools)
 
 ## Indexing into Matrices can return SparseVectors
 

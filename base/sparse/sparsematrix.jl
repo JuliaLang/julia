@@ -894,12 +894,12 @@ function sprand_IJ(r::AbstractRNG, m::Integer, n::Integer, density::AbstractFloa
 end
 
 """
-    sprand([rng],m,[n],p::AbstractFloat,[rfn])
+    sprand([rng],[type],m,[n],p::AbstractFloat,[rfn])
 
 Create a random length `m` sparse vector or `m` by `n` sparse matrix, in
 which the probability of any element being nonzero is independently given by
 `p` (and hence the mean density of nonzeros is also exactly `p`). Nonzero
-values are sampled from the distribution specified by `rfn`. The uniform
+values are sampled from the distribution specified by `rfn` and have the type `type`. The uniform
 distribution is used in case `rfn` is not specified. The optional `rng`
 argument specifies a random number generator, see [Random Numbers](:ref:`Random Numbers <random-numbers>`).
 """
@@ -923,30 +923,27 @@ function sprand{T}(m::Integer, n::Integer, density::AbstractFloat,
     sparse_IJ_sorted!(I, J, rfn(length(I)), m, n, +)  # it will never need to combine
 end
 
-sprand(r::AbstractRNG, m::Integer, n::Integer, density::AbstractFloat) = sprand(r,m,n,density,rand,Float64)
+truebools(r::AbstractRNG, n::Integer) = ones(Bool, n)
+
 sprand(m::Integer, n::Integer, density::AbstractFloat) = sprand(GLOBAL_RNG,m,n,density)
-sprandn(r::AbstractRNG, m::Integer, n::Integer, density::AbstractFloat) = sprand(r,m,n,density,randn,Float64)
+
+sprand(r::AbstractRNG, m::Integer, n::Integer, density::AbstractFloat) = sprand(r,m,n,density,rand,Float64)
+sprand{T}(r::AbstractRNG, ::Type{T}, m::Integer, n::Integer, density::AbstractFloat) = sprand(r,m,n,density,(r, i) -> rand(r, T, i), T)
+sprand(r::AbstractRNG, ::Type{Bool}, m::Integer, n::Integer, density::AbstractFloat) = sprand(r,m,n,density, truebools, Bool)
+sprand{T}(::Type{T}, m::Integer, n::Integer, density::AbstractFloat) = sprand(GLOBAL_RNG, T, m, n, density)
+
 
 """
-    sprandn(m[,n],p::AbstractFloat)
+    sprandn([rng], m[,n],p::AbstractFloat)
 
 Create a random sparse vector of length `m` or sparse matrix of size `m` by `n`
 with the specified (independent) probability `p` of any entry being nonzero,
-where nonzero values are sampled from the normal distribution.
+where nonzero values are sampled from the normal distribution. The optional `rng`
+argument specifies a random number generator, see [Random Numbers](:ref:`Random Numbers <random-numbers>`).
 """
-sprandn( m::Integer, n::Integer, density::AbstractFloat) = sprandn(GLOBAL_RNG,m,n,density)
+sprandn(r::AbstractRNG, m::Integer, n::Integer, density::AbstractFloat) = sprand(r,m,n,density,randn,Float64)
+sprandn(m::Integer, n::Integer, density::AbstractFloat) = sprandn(GLOBAL_RNG,m,n,density)
 
-truebools(r::AbstractRNG, n::Integer) = ones(Bool, n)
-sprandbool(r::AbstractRNG, m::Integer, n::Integer, density::AbstractFloat) = sprand(r,m,n,density,truebools,Bool)
-
-"""
-    sprandbool(m[,n],p)
-
-Create a random `m` by `n` sparse boolean matrix or length `m` sparse boolean
-vector with the specified (independent) probability `p` of any entry being
-`true`.
-"""
-sprandbool(m::Integer, n::Integer, density::AbstractFloat) = sprandbool(GLOBAL_RNG,m,n,density)
 
 """
     spones(S)
