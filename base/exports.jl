@@ -744,7 +744,6 @@ export
 # collections
     all!,
     all,
-    allunique,
     any!,
     any,
     collect,
@@ -764,6 +763,7 @@ export
     get!,
     getindex,
     getkey,
+    hasduplicates,
     haskey,
     in,
     intersect!,
