@@ -1459,7 +1459,6 @@ export
     speye,
     spones,
     sprand,
-    sprandbool,
     sprandn,
     spzeros,
     symperm,

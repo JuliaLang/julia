@@ -800,8 +800,3 @@ reference.
 |                                        |                                  | distribution. (Requires the                |
 |                                        |                                  | ``Distributions`` package.)                |
 +----------------------------------------+----------------------------------+--------------------------------------------+
-| :func:`sprandbool(m,n,d) <sprandbool>` | :func:`rand(Bool,m,n) <rand>`    | Creates a *m*-by-*n* random matrix (of     |
-|                                        |                                  | density *d*) with non-zero  ``Bool``       |
-|                                        |                                  | elements with probability *d* (*d* =0.5    |
-|                                        |                                  | for :func:`rand(Bool) <rand>`.)            |
-+----------------------------------------+----------------------------------+--------------------------------------------+
