@@ -169,7 +169,7 @@ function dim_break_linindex(I)
     i - 1
 end
 
-function runtests(A::Array, I...)
+function runsubarraytests(A::Array, I...)
     # Direct test of linear indexing inference
     C = Agen_nodrop(A, I...)
     ld = min(single_stride_dim(C), dim_break_linindex(I))
@@ -188,7 +188,7 @@ function runtests(A::Array, I...)
     test_mixed(S, C)
 end
 
-function runtests(A::ANY, I...)
+function runsubarraytests(A::ANY, I...)
     # When A was created with sub, we have to check bounds, since some
     # of the "residual" dimensions have size 1. It's possible that we
     # need dedicated tests for sub.
@@ -244,28 +244,28 @@ end
 function runviews(SB::AbstractArray, indexN, indexNN, indexNNN)
     @assert ndims(SB) > 2
     for i3 in indexN, i2 in indexN, i1 in indexN
-        runtests(SB, i1, i2, i3)
+        runsubarraytests(SB, i1, i2, i3)
     end
     for i2 in indexNN, i1 in indexN
-        runtests(SB, i1, i2)
+        runsubarraytests(SB, i1, i2)
     end
     for i1 in indexNNN
-        runtests(SB, i1)
+        runsubarraytests(SB, i1)
     end
 end
 
 function runviews{T}(SB::AbstractArray{T,2}, indexN, indexNN, indexNNN)
     for i2 in indexN, i1 in indexN
-        runtests(SB, i1, i2)
+        runsubarraytests(SB, i1, i2)
     end
     for i1 in indexNN
-        runtests(SB, i1)
+        runsubarraytests(SB, i1)
     end
 end
 
 function runviews{T}(SB::AbstractArray{T,1}, indexN, indexNN, indexNNN)
     for i1 in indexN
-        runtests(SB, i1)
+        runsubarraytests(SB, i1)
     end
 end
 
@@ -321,7 +321,7 @@ if !testfull
                      (sub(1:13,[9,12,4,13,1]),2:6,4),
                      ([1:5 2:6 3:7 4:8 5:9], :, 3),
                      (:, [46:-1:42 88:-1:84 22:-1:18 49:-1:45 8:-1:4]))
-            runtests(B, oind...)
+            runsubarraytests(B, oind...)
             sliceB = slice(B, oind...)
             runviews(sliceB, index5, index25, index125)
             subB = sub(B, oind...)
