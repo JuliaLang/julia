@@ -575,8 +575,8 @@ fftwfloat{T<:Real}(X::AbstractArray{T}) = copy!(Array(Float64, size(X)), X)
 fftwfloat{T<:Complex}(X::AbstractArray{T}) = fftwcomplex(X)
 
 for (f,direction) in ((:fft,FORWARD), (:bfft,BACKWARD))
-    plan_f = symbol("plan_",f)
-    plan_f! = symbol("plan_",f,"!")
+    plan_f = Symbol("plan_",f)
+    plan_f! = Symbol("plan_",f,"!")
     idirection = -direction
     @eval begin
         function $plan_f{T<:fftwComplex,N}(X::StridedArray{T,N}, region;
@@ -734,7 +734,7 @@ plan_brfft
 # FFTW r2r transforms (low-level interface)
 
 for f in (:r2r, :r2r!)
-    pf = symbol("plan_", f)
+    pf = Symbol("plan_", f)
     @eval begin
         $f{T<:fftwNumber}(x::AbstractArray{T}, kinds) = $pf(x, kinds) * x
         $f{T<:fftwNumber}(x::AbstractArray{T}, kinds, region) = $pf(x, kinds, region) * x

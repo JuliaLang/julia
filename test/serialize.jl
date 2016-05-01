@@ -74,7 +74,7 @@ end
 
 # Symbol
 create_serialization_stream() do s
-    gensym(len) = symbol(repeat("A", len))
+    gensym(len) = Symbol(repeat("A", len))
 
     smbl = gensym(1)
     serialize(s, smbl)

@@ -3,7 +3,7 @@
 # Various Unicode functionality from the utf8proc library
 module UTF8proc
 
-import Base: show, ==, hash, string, symbol, isless, length, eltype, start, next, done, convert, isvalid, lowercase, uppercase
+import Base: show, ==, hash, string, Symbol, isless, length, eltype, start, next, done, convert, isvalid, lowercase, uppercase
 
 export isgraphemebreak
 
@@ -166,7 +166,7 @@ isgraph(c::Char) = (UTF8PROC_CATEGORY_LU <= category_code(c) <= UTF8PROC_CATEGOR
 
 for name = ("alnum", "alpha", "cntrl", "digit", "number", "graph",
             "lower", "print", "punct", "space", "upper")
-    f = symbol("is",name)
+    f = Symbol("is",name)
     @eval begin
         function $f(s::AbstractString)
             for c in s
