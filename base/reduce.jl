@@ -28,6 +28,8 @@ r_promote(::typeof(scalarmax), x::WidenReduceResult) = x
 r_promote(::typeof(scalarmin), x::WidenReduceResult) = x
 r_promote(::typeof(scalarmax), x) = x
 r_promote(::typeof(scalarmin), x) = x
+r_promote(::typeof(max), x::WidenReduceResult) = r_promote(scalarmax, x)
+r_promote(::typeof(min), x::WidenReduceResult) = r_promote(scalarmin, x)
 r_promote(::typeof(max), x) = r_promote(scalarmax, x)
 r_promote(::typeof(min), x) = r_promote(scalarmin, x)
 
@@ -281,10 +283,11 @@ prod(a) = mapreduce(identity, *, a)
 
 ## maximum & minimum
 
-function mapreduce_impl(f, op::typeof(max), A::AbstractArray, first::Int, last::Int)
-    mapreduce_impl(f, scalarmax, A, first, last)
-end
-function mapreduce_impl(f, op::typeof(scalarmax), A::AbstractArray, first::Int, last::Int)
+function mapreduce_impl(f, op::Union{typeof(scalarmax),
+                                     typeof(scalarmin),
+                                     typeof(max),
+                                     typeof(min)},
+                        A::AbstractArray, first::Int, last::Int)
     # locate the first non NaN number
     v = f(A[first])
     i = first + 1
@@ -296,32 +299,7 @@ function mapreduce_impl(f, op::typeof(scalarmax), A::AbstractArray, first::Int, 
     while i <= last
         @inbounds Ai = A[i]
         x = f(Ai)
-        if x > v
-            v = x
-        end
-        i += 1
-    end
-    v
-end
-
-function mapreduce_impl(f, op::typeof(min), A::AbstractArray, first::Int, last::Int)
-    mapreduce_impl(f, scalarmin, A, first, last)
-end
-function mapreduce_impl(f, op::typeof(scalarmin), A::AbstractArray, first::Int, last::Int)
-    # locate the first non NaN number
-    v = f(A[first])
-    i = first + 1
-    while v != v && i <= last
-        @inbounds Ai = A[i]
-        v = f(Ai)
-        i += 1
-    end
-    while i <= last
-        @inbounds Ai = A[i]
-        x = f(Ai)
-        if x < v
-            v = x
-        end
+        v = op(v, x)
         i += 1
     end
     v
