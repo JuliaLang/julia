@@ -99,6 +99,10 @@ A = reshape(1:6, 3, 2)
 @test typeof(@inferred(Base.prod(abs, [1.0+1.0im], 1))) == Vector{Float64}
 @test typeof(@inferred(Base.prod(abs2, [1.0+1.0im], 1))) == Vector{Float64}
 
+# min/max
+@test reducedim(max, A, 1) == [3 6]
+@test reducedim(min, A, 2) == reshape([1,2,3], 3, 1)
+
 # Heterogeneously typed arrays
 @test sum(Union{Float32, Float64}[1.0], 1) == [1.0]
 @test prod(Union{Float32, Float64}[1.0], 1) == [1.0]
