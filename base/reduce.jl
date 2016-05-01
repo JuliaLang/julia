@@ -28,6 +28,8 @@ r_promote(::typeof(scalarmax), x::WidenReduceResult) = x
 r_promote(::typeof(scalarmin), x::WidenReduceResult) = x
 r_promote(::typeof(scalarmax), x) = x
 r_promote(::typeof(scalarmin), x) = x
+r_promote(::typeof(max), x) = r_promote(scalarmax, x)
+r_promote(::typeof(min), x) = r_promote(scalarmin, x)
 
 
 ## foldl && mapfoldl
@@ -126,6 +128,8 @@ mr_empty(::typeof(abs2), op::typeof(+), T) = r_promote(op, abs2(zero(T)::T))
 mr_empty(::typeof(identity), op::typeof(*), T) = r_promote(op, one(T)::T)
 mr_empty(::typeof(abs), op::typeof(scalarmax), T) = abs(zero(T)::T)
 mr_empty(::typeof(abs2), op::typeof(scalarmax), T) = abs2(zero(T)::T)
+mr_empty(::typeof(abs), op::typeof(max), T) = mr_empty(abs, scalarmax, T)
+mr_empty(::typeof(abs2), op::typeof(max), T) = mr_empty(abs2, scalarmax, T)
 mr_empty(f, op::typeof(&), T) = true
 mr_empty(f, op::typeof(|), T) = false
 
@@ -277,6 +281,9 @@ prod(a) = mapreduce(identity, *, a)
 
 ## maximum & minimum
 
+function mapreduce_impl(f, op::typeof(max), A::AbstractArray, first::Int, last::Int)
+    mapreduce_impl(f, scalarmax, A, first, last)
+end
 function mapreduce_impl(f, op::typeof(scalarmax), A::AbstractArray, first::Int, last::Int)
     # locate the first non NaN number
     v = f(A[first])
@@ -297,6 +304,9 @@ function mapreduce_impl(f, op::typeof(scalarmax), A::AbstractArray, first::Int, 
     v
 end
 
+function mapreduce_impl(f, op::typeof(min), A::AbstractArray, first::Int, last::Int)
+    mapreduce_impl(f, scalarmin, A, first, last)
+end
 function mapreduce_impl(f, op::typeof(scalarmin), A::AbstractArray, first::Int, last::Int)
     # locate the first non NaN number
     v = f(A[first])
