@@ -413,15 +413,21 @@ end
 
 ## indexing
 
+function getindex{T}(v::UnitRange{T}, i::Integer)
+    @_inline_meta
+    ret = convert(T, first(v) + i - 1)
+    @boundscheck ((i > 0) & (ret <= v.stop) & (ret >= v.start)) || throw_boundserror(v, i)
+    ret
+end
+
 function getindex{T}(v::Range{T}, i::Integer)
     @_inline_meta
-    @boundscheck checkbounds(v, i)
-    convert(T, first(v) + (i-1)*step(v))
-end
-function getindex{T<:Union{Int8,UInt8,Int16,UInt16,Int32,UInt32}}(v::Range{T},i::Integer)
-    @_inline_meta
-    @boundscheck checkbounds(v, i)
-    (first(v) + (i - 1) * step(v)) % T
+    ret = convert(T, first(v) + (i - 1)*step(v))
+    ok = ifelse(step(v) > zero(step(v)),
+                (ret <= v.stop) & (ret >= v.start),
+                (ret <= v.start) & (ret >= v.stop))
+    @boundscheck ((i > 0) & ok) || throw_boundserror(v, i)
+    ret
 end
 
 function getindex{T}(r::FloatRange{T}, i::Integer)
