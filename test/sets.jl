@@ -207,19 +207,19 @@ u = unique([1,1,2])
 @test unique(iseven, [5,1,8,9,3,4,10,7,2,6]) == [5,8]
 @test unique(n->n % 3, [5,1,8,9,3,4,10,7,2,6]) == [5,1,9]
 
-# hasduplicates
-@test !hasduplicates([])
-@test !hasduplicates(Set())
-@test !hasduplicates([1,2,3])
-@test !hasduplicates([:a,:b,:c])
-@test !hasduplicates(Set([1,2,3]))
-@test hasduplicates([1,1,2])
-@test hasduplicates([:a,:b,:c,:a])
-@test !hasduplicates(4:7)
-@test !hasduplicates(1:1)
-@test !hasduplicates(4.0:0.3:7.0)
-@test !hasduplicates(4:-1:5)       # empty range
-@test !hasduplicates(7:-1:1)       # negative step
+# anyduplicated
+@test !anyduplicated([])
+@test !anyduplicated(Set())
+@test !anyduplicated([1,2,3])
+@test !anyduplicated([:a,:b,:c])
+@test !anyduplicated(Set([1,2,3]))
+@test anyduplicated([1,1,2])
+@test anyduplicated([:a,:b,:c,:a])
+@test !anyduplicated(4:7)
+@test !anyduplicated(1:1)
+@test !anyduplicated(4.0:0.3:7.0)
+@test !anyduplicated(4:-1:5)       # empty range
+@test !anyduplicated(7:-1:1)       # negative step
 
 # filter
 s = Set([1,2,3,4])
