@@ -14,8 +14,10 @@ export
     atomic_fence
 
 # Disable 128-bit types on 32-bit Intel sytems due to LLVM problems;
-# see <https://github.com/JuliaLang/julia/issues/14818>
-if Base.ARCH === :i686
+# see <https://github.com/JuliaLang/julia/issues/14818> (fixed on LLVM 3.9)
+# 128-bit atomics do not exist on AArch32.
+if (VersionNumber(Base.libllvm_version) < v"3.9-" && Base.ARCH === :i686) ||
+        startswith(string(Base.ARCH), "arm")
     const inttypes = (Int8, Int16, Int32, Int64,
                       UInt8, UInt16, UInt32, UInt64)
 else
