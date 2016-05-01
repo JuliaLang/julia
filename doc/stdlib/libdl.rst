@@ -4,6 +4,10 @@
  Dynamic Linker
 ****************
 
+.. currentmodule:: Base.Libdl
+
+The names in :mod:`Base.Libdl` are not exported and need to be called e.g. as ``Libdl.dlopen()``.
+
 .. function:: dlopen(libfile::AbstractString [, flags::Integer])
 
    .. Docstring generated from Julia source

@@ -379,3 +379,11 @@ let b = IOBuffer()
     c = deserialize(b)
     @test isa(c,B15163) && c.x == [1]
 end
+
+# issue #15849
+let b = IOBuffer()
+    vt = Tuple[(1,)]
+    serialize(b, vt)
+    seekstart(b)
+    @test deserialize(b) == vt
+end

@@ -308,31 +308,6 @@ JL_DLLEXPORT const char *jl_git_commit(void)
     return commit;
 }
 
-JL_DLLEXPORT void jl_trace_method(jl_method_t *m)
-{
-    assert(jl_is_method(m));
-    m->traced = 1;
-}
-
-JL_DLLEXPORT void jl_untrace_method(jl_method_t *m)
-{
-    assert(jl_is_method(m));
-    m->traced = 0;
-}
-
-void (*jl_linfo_tracer)(jl_lambda_info_t *tracee) = 0;
-JL_DLLEXPORT void jl_register_tracer(void (*callback)(jl_lambda_info_t *tracee))
-{
-    jl_linfo_tracer = callback;
-}
-
-void (*jl_newmeth_tracer)(jl_method_t *tracee) = 0;
-JL_DLLEXPORT void jl_register_newmeth_tracer(void (*callback)(jl_method_t *tracee))
-{
-    jl_newmeth_tracer = callback;
-}
-
-
 // Create function versions of some useful macros
 JL_DLLEXPORT jl_taggedvalue_t *(jl_astaggedvalue)(jl_value_t *v)
 {
@@ -383,36 +358,6 @@ JL_DLLEXPORT void (jl_cpu_wake)(void)
 {
     jl_cpu_wake();
 }
-
-#ifndef _OS_WINDOWS_
-#  define UNW_LOCAL_ONLY
-#  include <libunwind.h>
-#define STRINGIFY1(x) #x
-#define STRINGIFY2(x) STRINGIFY1(x)
-#if defined(_OS_LINUX_)
-#if defined(_CPU_X86_64_)
-asm("_jl_unw_getcontext: movq " STRINGIFY2(unw_tdep_getcontext) "@GOTPCREL(%rip), %rax\n"
-    "jmpq *%rax");
-#elif defined(_CPU_X86_)
-asm("_jl_unw_getcontext: jmp " STRINGIFY2(unw_tdep_getcontext) "@PLT");
-#endif
-#endif
-
-JL_DLLEXPORT void jl_unw_init_local(void *cursor, void *context)
-{
-    unw_init_local((unw_cursor_t *)cursor, (unw_context_t *)context);
-}
-
-JL_DLLEXPORT int jl_unw_step(void *cursor)
-{
-    return unw_step((unw_cursor_t *)cursor);
-}
-
-JL_DLLEXPORT int jl_unw_get_reg(void *cursor, int reg, uintptr_t *retval)
-{
-    return unw_get_reg((unw_cursor_t *)cursor, reg, retval);
-}
-#endif
 
 #ifdef __cplusplus
 }

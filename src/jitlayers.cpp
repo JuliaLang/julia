@@ -109,9 +109,6 @@ static void addOptimizationPasses(T *PM)
     PM->add(createDeadStoreEliminationPass());  // Delete dead stores
 #if !defined(INSTCOMBINE_BUG)
     if (jl_options.opt_level >= 3) {
-#ifdef LLVM39
-        initializeDemandedBitsPass(*PassRegistry::getPassRegistry());
-#endif
         PM->add(createSLPVectorizerPass());     // Vectorize straight-line code
     }
 #endif
@@ -200,6 +197,22 @@ extern RTDyldMemoryManager *createRTDyldMemoryManagerUnix();
 #define CUSTOM_MEMORY_MANAGER() new SectionMemoryManager
 #endif
 
+#ifdef _OS_LINUX_
+// Resolve non-lock free atomic functions in the libatomic library.
+// This is the library that provides support for c11/c++11 atomic operations.
+static uint64_t resolve_atomic(const char *name)
+{
+    static void *atomic_hdl = jl_load_dynamic_library_e("libatomic.so",
+                                                        JL_RTLD_LOCAL);
+    static const char *const atomic_prefix = "__atomic_";
+    if (!atomic_hdl)
+        return 0;
+    if (strncmp(name, atomic_prefix, strlen(atomic_prefix)) != 0)
+        return 0;
+    return (uintptr_t)jl_dlsym_e(atomic_hdl, name);
+}
+#endif
+
 // A simplified model of the LLVM ExecutionEngine that implements only the methods that Julia needs
 // but tries to roughly match the API anyways so that compatibility is easier
 class JuliaOJIT {
@@ -234,6 +247,7 @@ class JuliaOJIT {
                     // ownership of the original buffer
                     auto NewBuffer = MemoryBuffer::getMemBufferCopy(Object->getData(), Object->getFileName());
                     auto NewObj = ObjectFile::createObjectFile(NewBuffer->getMemBufferRef());
+                    assert(NewObj);
                     SavedObject = OwningBinary<object::ObjectFile>(std::move(*NewObj),std::move(NewBuffer));
                 }
                 else {
@@ -255,7 +269,7 @@ class JuliaOJIT {
                         continue;
                     if (!(Flags & object::BasicSymbolRef::SF_Exported))
                         continue;
-                    ErrorOr<StringRef> Name = Symbol.getName();
+                    auto Name = Symbol.getName();
                     orc::JITSymbol Sym = JIT.CompileLayer.findSymbolIn(H, *Name, true);
                     assert(Sym);
                     // note: calling getAddress here eagerly finalizes H
@@ -314,8 +328,17 @@ public:
 
                     if (!Obj) {
                         M.dump();
+#ifdef LLVM39
+                        std::string Buf;
+                        raw_string_ostream OS(Buf);
+                        logAllUnhandledErrors(Obj.takeError(), OS, "");
+                        OS.flush();
+                        llvm::report_fatal_error("FATAL: Unable to compile LLVM Module: '" + Buf + "'\n"
+                            "The module's content was printed above. Please file a bug report");
+#else
                         llvm::report_fatal_error("FATAL: Unable to compile LLVM Module.\n"
                             "The module's content was printed above. Please file a bug report");
+#endif
                     }
 
                     return OwningObj(std::move(*Obj), std::move(ObjBuffer));
@@ -389,6 +412,10 @@ public:
                             // Step 2: Search the program symbols
                             if (uint64_t addr = SectionMemoryManager::getSymbolAddressInProcess(Name))
                                 return RuntimeDyld::SymbolInfo(addr, JITSymbolFlags::Exported);
+#ifdef _OS_LINUX_
+                            if (uint64_t addr = resolve_atomic(Name.c_str()))
+                                return RuntimeDyld::SymbolInfo(addr, JITSymbolFlags::Exported);
+#endif
                             // Return failure code
                             return RuntimeDyld::SymbolInfo(nullptr);
                           },
@@ -582,24 +609,25 @@ static void jl_merge_module(Module *dest, std::unique_ptr<Module> src)
 // (which aliases the engine module), so this is unneeded
 #ifdef USE_MCJIT
 static StringMap<Module*> module_for_fname;
-static void jl_finalize_function(StringRef F, Module *collector = NULL)
+static void jl_finalize_function(const std::string &F, Module *collector = NULL)
 {
     std::unique_ptr<Module> m(module_for_fname.lookup(F));
     if (m) {
         // probably not many unresolved declarations, but be sure iterate over their Names,
-        // since the declarations may get destroyed by the jl_merge_module call
-        SmallVector<StringRef, 8> to_finalize;
+        // since the declarations may get destroyed by the jl_merge_module call.
+        // this is also why we copy the Name string, rather than save a StringRef
+        SmallVector<std::string, 8> to_finalize;
         for (Module::iterator I = m->begin(), E = m->end(); I != E; ++I) {
             Function *F = &*I;
             if (!F->isDeclaration()) {
                 module_for_fname.erase(F->getName());
             }
             else if (!F->isIntrinsic()) {
-                to_finalize.push_back(F->getName());
+                to_finalize.push_back(F->getName().str());
             }
         }
 
-        for (auto F : to_finalize) {
+        for (const auto F : to_finalize) {
             jl_finalize_function(F, collector ? collector : m.get());
         }
 
@@ -628,7 +656,7 @@ static void jl_finalize_function(StringRef F, Module *collector = NULL)
 }
 static void jl_finalize_function(Function *F, Module *collector = NULL)
 {
-    jl_finalize_function(F->getName(), collector);
+    jl_finalize_function(F->getName().str(), collector);
 }
 #endif
 

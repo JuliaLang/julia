@@ -32,6 +32,10 @@ promote_op{T<:Real,S<:Real}(op, ::Type{Complex{T}}, ::Type{S}) =
     Complex{promote_op(op,T,S)}
 promote_op{T<:Real,S<:Real}(op, ::Type{T}, ::Type{Complex{S}}) =
     Complex{promote_op(op,T,S)}
+promote_op{T<:Integer,S<:Integer}(::typeof(^), ::Type{T}, ::Type{Complex{S}}) =
+    Complex{Float64}
+promote_op{T<:Integer,S<:Integer}(::typeof(.^), ::Type{T}, ::Type{Complex{S}}) =
+    Complex{Float64}
 
 widen{T}(::Type{Complex{T}}) = Complex{widen(T)}
 
@@ -124,6 +128,10 @@ inv{T<:Integer}(z::Complex{T}) = inv(float(z))
 *(z::Complex, w::Complex) = Complex(real(z) * real(w) - imag(z) * imag(w),
                                     real(z) * imag(w) + imag(z) * real(w))
 
+muladd(z::Complex, w::Complex, x::Complex) =
+    Complex(muladd(real(z), real(w), real(x)) - imag(z)*imag(w), # TODO: use mulsub given #15985
+            muladd(real(z), imag(w), muladd(imag(z), real(w), imag(x))))
+
 # handle Bool and Complex{Bool}
 # avoid type signature ambiguity warnings
 +(x::Bool, z::Complex{Bool}) = Complex(x + real(z), imag(z))
@@ -162,6 +170,15 @@ end
 -(z::Complex, x::Real) = Complex(real(z) - x, imag(z))
 *(x::Real, z::Complex) = Complex(x * real(z), x * imag(z))
 *(z::Complex, x::Real) = Complex(x * real(z), x * imag(z))
+
+muladd(x::Real, z::Complex, y::Number) = muladd(z, x, y)
+muladd(z::Complex, x::Real, y::Real) = Complex(muladd(real(z),x,y), imag(z)*x)
+muladd(z::Complex, x::Real, w::Complex) =
+    Complex(muladd(real(z),x,real(w)), muladd(imag(z),x,imag(w)))
+muladd(x::Real, y::Real, z::Complex) = Complex(muladd(x,y,real(z)), imag(z))
+muladd(z::Complex, w::Complex, x::Real) =
+    Complex(muladd(real(z), real(w), x) - imag(z)*imag(w), # TODO: use mulsub given #15985
+            muladd(real(z), imag(w), imag(z) * real(w)))
 
 /(a::Real, z::Complex) = a*inv(z)
 /(z::Complex, x::Real) = Complex(real(z)/x, imag(z)/x)
@@ -790,9 +807,9 @@ big{T<:AbstractFloat,N}(A::AbstractArray{Complex{T},N}) = convert(AbstractArray{
 
 ## promotion to complex ##
 
-promote_array_type{S<:Union{Complex, Real}, AT<:AbstractFloat}(F, ::Type{S}, ::Type{Complex{AT}}) = Complex{AT}
+promote_array_type{S<:Union{Complex, Real}, AT<:AbstractFloat, P}(F, ::Type{S}, ::Type{Complex{AT}}, ::Type{P}) = Complex{AT}
 
-function complex{S<:Real,T<:Real}(A::Array{S}, B::Array{T})
+function complex{S<:Real,T<:Real}(A::AbstractArray{S}, B::AbstractArray{T})
     if size(A) != size(B); throw(DimensionMismatch()); end
     F = similar(A, typeof(complex(zero(S),zero(T))))
     for (iF, iA, iB) in zip(eachindex(F), eachindex(A), eachindex(B))
@@ -801,7 +818,7 @@ function complex{S<:Real,T<:Real}(A::Array{S}, B::Array{T})
     return F
 end
 
-function complex{T<:Real}(A::Real, B::Array{T})
+function complex{T<:Real}(A::Real, B::AbstractArray{T})
     F = similar(B, typeof(complex(A,zero(T))))
     for (iF, iB) in zip(eachindex(F), eachindex(B))
         @inbounds F[iF] = complex(A, B[iB])
@@ -809,7 +826,7 @@ function complex{T<:Real}(A::Real, B::Array{T})
     return F
 end
 
-function complex{T<:Real}(A::Array{T}, B::Real)
+function complex{T<:Real}(A::AbstractArray{T}, B::Real)
     F = similar(A, typeof(complex(zero(T),B)))
     for (iF, iA) in zip(eachindex(F), eachindex(A))
         @inbounds F[iF] = complex(A[iA], B)

@@ -118,15 +118,12 @@ jl_value_t *jl_eval_module_expr(jl_expr_t *ex)
             jl_errorf("invalid redefinition of constant %s",
                       jl_symbol_name(name));
         }
-        if (jl_generating_output() && jl_options.incremental) {
-            jl_errorf("cannot replace module %s during incremental compile",
+        if (jl_generating_output()) {
+            jl_errorf("cannot replace module %s during compilation",
                       jl_symbol_name(name));
         }
-        if (!jl_generating_output()) {
-            // suppress warning "replacing module Core.Inference" during bootstrapping
-            jl_printf(JL_STDERR, "WARNING: replacing module %s\n",
-                      jl_symbol_name(name));
-        }
+        jl_printf(JL_STDERR, "WARNING: replacing module %s\n",
+                  jl_symbol_name(name));
     }
     jl_module_t *newm = jl_new_module(name);
     newm->parent = parent_module;
@@ -544,7 +541,7 @@ jl_value_t *jl_toplevel_eval_flex(jl_value_t *e, int fast)
 
     thk->specTypes = (jl_tupletype_t*)jl_typeof(jl_emptytuple); // no gc_wb needed
     if (ewc) {
-        jl_type_infer(thk);
+        jl_type_infer(thk, 0);
         jl_value_t *dummy_f_arg=NULL;
         result = jl_call_method_internal(thk, &dummy_f_arg, 1);
     }
@@ -724,6 +721,7 @@ static jl_lambda_info_t *expr_to_lambda(jl_expr_t *f)
     return li;
 }
 
+extern tracer_cb jl_newmeth_tracer;
 JL_DLLEXPORT void jl_method_def(jl_svec_t *argdata, jl_lambda_info_t *f, jl_value_t *isstaged)
 {
     // argdata is svec({types...}, svec(typevars...))
@@ -789,6 +787,8 @@ JL_DLLEXPORT void jl_method_def(jl_svec_t *argdata, jl_lambda_info_t *f, jl_valu
     }
 
     jl_method_table_insert(mt, argtypes, NULL, m, tvars);
+    if (jl_newmeth_tracer)
+        jl_call_tracer(jl_newmeth_tracer, (jl_value_t*)m);
 
     if (jl_boot_file_loaded && f->code && jl_typeis(f->code, jl_array_any_type)) {
         f->code = jl_compress_ast(f, f->code);

@@ -69,6 +69,18 @@ _limit_output = false # delete with with_output_limit deprecation
 
 displaysize(io::IOContext) = haskey(io, :displaysize) ? io[:displaysize] : displaysize(io.io)
 
+show_circular(io::IO, x::ANY) = false
+function show_circular(io::IOContext, x::ANY)
+    d = 1
+    for (k, v) in io.dict
+        if k === :SHOWN_SET && v === x
+            print(io, "#= circular reference @-$d =#")
+            return true
+        end
+        d += 1
+    end
+    return false
+end
 
 show(io::IO, x::ANY) = show_default(io, x)
 function show_default(io::IO, x::ANY)
@@ -77,9 +89,7 @@ function show_default(io::IO, x::ANY)
     print(io, '(')
     nf = nfields(t)
     if nf != 0 || t.size==0
-        if (:SHOWN_SET => x) in io
-            print(io, "#= circular reference =#")
-        else
+        if !show_circular(io, x)
             recur_io = IOContext(io, :SHOWN_SET => x)
             for i=1:nf
                 f = fieldname(t, i)
@@ -246,36 +256,35 @@ end
 function show_delim_array(io::IO, itr::Union{AbstractArray,SimpleVector}, op, delim, cl, delim_one,
                           i1=1, l=length(itr))
     print(io, op)
-    newline = true
-    first = true
-    i = i1
-    if l > 0
-        while true
-            if !isassigned(itr, i)
-                print(io, undef_ref_str)
-                multiline = false
-            else
-                x = itr[i]
-                multiline = isa(x,AbstractArray) && ndims(x)>1 && !isempty(x)
-                newline && multiline && println(io)
-                if !isbits(x) && is(x, itr)
-                    print(io, "#= circular reference =#")
+    if !show_circular(io, itr)
+        recur_io = IOContext(io, :SHOWN_SET => itr)
+        newline = true
+        first = true
+        i = i1
+        if l > 0
+            while true
+                if !isassigned(itr, i)
+                    print(io, undef_ref_str)
+                    multiline = false
                 else
-                    showcompact_lim(io, x)
+                    x = itr[i]
+                    multiline = isa(x,AbstractArray) && ndims(x)>1 && !isempty(x)
+                    newline && multiline && println(io)
+                    showcompact_lim(recur_io, x)
                 end
-            end
-            i += 1
-            if i > i1+l-1
-                delim_one && first && print(io, delim)
-                break
-            end
-            first = false
-            print(io, delim)
-            if multiline
-                println(io); println(io)
-                newline = false
-            else
-                newline = true
+                i += 1
+                if i > i1+l-1
+                    delim_one && first && print(io, delim)
+                    break
+                end
+                first = false
+                print(io, delim)
+                if multiline
+                    println(io); println(io)
+                    newline = false
+                else
+                    newline = true
+                end
             end
         end
     end
@@ -284,35 +293,34 @@ end
 
 function show_delim_array(io::IO, itr, op, delim, cl, delim_one, i1=1, n=typemax(Int))
     print(io, op)
-    state = start(itr)
-    newline = true
-    first = true
-    while i1 > 1 && !done(itr,state)
-        _, state = next(itr, state)
-        i1 -= 1
-    end
-    if !done(itr,state)
-        while true
-            x, state = next(itr,state)
-            multiline = isa(x,AbstractArray) && ndims(x)>1 && !isempty(x)
-            newline && multiline && println(io)
-            if !isbits(x) && is(x, itr)
-                print(io, "#= circular reference =#")
-            else
-                show(io, x)
-            end
-            i1 += 1
-            if done(itr,state) || i1 > n
-                delim_one && first && print(io, delim)
-                break
-            end
-            first = false
-            print(io, delim)
-            if multiline
-                println(io); println(io)
-                newline = false
-            else
-                newline = true
+    if !show_circular(io, itr)
+        recur_io = IOContext(io, :SHOWN_SET => itr)
+        state = start(itr)
+        newline = true
+        first = true
+        while i1 > 1 && !done(itr,state)
+            _, state = next(itr, state)
+            i1 -= 1
+        end
+        if !done(itr,state)
+            while true
+                x, state = next(itr,state)
+                multiline = isa(x,AbstractArray) && ndims(x)>1 && !isempty(x)
+                newline && multiline && println(io)
+                show(recur_io, x)
+                i1 += 1
+                if done(itr,state) || i1 > n
+                    delim_one && first && print(io, delim)
+                    break
+                end
+                first = false
+                print(io, delim)
+                if multiline
+                    println(io); println(io)
+                    newline = false
+                else
+                    newline = true
+                end
             end
         end
     end
@@ -526,7 +534,7 @@ show_unquoted(io::IO, ex::TopNode, ::Int, ::Int)        = print(io,"top(",ex.nam
 show_unquoted(io::IO, ex::GlobalRef, ::Int, ::Int)      = print(io, ex.mod, '.', ex.name)
 
 function show_unquoted(io::IO, ex::Slot, ::Int, ::Int)
-    typ = ex.typ
+    typ = isa(ex,TypedSlot) ? ex.typ : Any
     slotid = ex.id
     li = get(io, :LAMBDAINFO, false)
     if isa(li, LambdaInfo)
@@ -545,7 +553,7 @@ function show_unquoted(io::IO, ex::Slot, ::Int, ::Int)
         print(io, "_", slotid)
     end
     emphstate = typeemphasize(io)
-    if emphstate || typ !== Any
+    if emphstate || (typ !== Any && isa(ex,TypedSlot))
         show_expr_type(io, typ, emphstate)
     end
 end
@@ -933,91 +941,103 @@ function show(io::IO, tv::TypeVar)
     end
 end
 
-# dump & xdump - structured tree representation like R's str()
-# - dump is for the user-facing structure
-# - xdump is for the internal structure
-#
-# x is the object
-# n is the depth of traversal in nested types (5 is the default)
-# indent is a character string of spaces that is incremented at
-# each descent.
-#
-# Package writers may overload dump for other nested types like lists
-# or DataFrames. If overloaded, check the nesting level (n), and if
-# n > 0, dump each component. Limit to the first 10 entries. When
-# dumping components, decrement n, and add two spaces to indent.
-#
-# Package writers should not overload xdump.
+function dump(io::IO, x::SimpleVector, n::Int, indent)
+    if isempty(x)
+        print(io, "empty SimpleVector")
+        return
+    end
+    print(io, "SimpleVector")
+    if n > 0
+        for i = 1:length(x)
+            println(io)
+            print(io, indent, "  ", i, ": ")
+            if isassigned(x,i)
+                dump(io, x[i], n - 1, string(indent, "  "))
+            else
+                print(io, undef_ref_str)
+            end
+        end
+    end
+end
 
-function xdump(fn::Function, io::IO, x, n::Int, indent)
+function dump(io::IO, x::ANY, n::Int, indent)
     T = typeof(x)
-    print(io, T, " ")
-    if isa(T, DataType) && nfields(T) > 0
-        println(io)
+    if isa(x, Function)
+        print(io, x, " (function of type ", T, ")")
+    else
+        print(io, T)
+    end
+    if nfields(T) > 0
         if n > 0
-            for field in fieldnames(T)
-                if field != symbol("")    # prevents segfault if symbol is blank
-                    print(io, indent, "  ", field, ": ")
-                    if isdefined(x,field)
-                        fn(io, getfield(x, field), n - 1, string(indent, "  "))
-                    else
-                        println(io, undef_ref_str)
-                    end
+            for field in (isa(x,Tuple) ? (1:length(x)) : fieldnames(T))
+                println(io)
+                print(io, indent, "  ", field, ": ")
+                if isdefined(x,field)
+                    dump(io, getfield(x, field), n - 1, string(indent, "  "))
+                else
+                    print(io, undef_ref_str)
                 end
             end
         end
     else
-        println(io, x)
+        !isa(x,Function) && print(io, " ", x)
     end
+    nothing
 end
-function xdump(fn::Function, io::IO, x::Module, n::Int, indent)
-    print(io, Module, " ")
-    println(io, x)
-end
-function xdump_elts(fn::Function, io::IO, x::Array{Any}, n::Int, indent, i0, i1)
+
+dump(io::IO, x::Module, n::Int, indent) = print(io, "Module ", x)
+
+function dump_elts(io::IO, x::Array, n::Int, indent, i0, i1)
     for i in i0:i1
         print(io, indent, "  ", i, ": ")
         if !isdefined(x,i)
-            println(io, undef_ref_str)
+            print(io, undef_ref_str)
         else
-            fn(io, x[i], n - 1, string(indent, "  "))
+            dump(io, x[i], n - 1, string(indent, "  "))
         end
+        i < i1 && println(io)
     end
 end
-function xdump(fn::Function, io::IO, x::Array{Any}, n::Int, indent)
-    println(io, "Array($(eltype(x)),$(size(x)))")
-    if n > 0
-        xdump_elts(fn, io, x, n, indent, 1, (length(x) <= 10 ? length(x) : 5))
-        if length(x) > 10
-            println(io, indent, "  ...")
-            xdump_elts(fn, io, x, n, indent, length(x)-4, length(x))
-        end
-    end
-end
-xdump(fn::Function, io::IO, x::Symbol, n::Int, indent) = println(io, typeof(x), " ", x)
-xdump(fn::Function, io::IO, x::Function, n::Int, indent) = println(io, x)
-xdump(fn::Function, io::IO, x::Array, n::Int, indent) =
-               (print(io, "Array($(eltype(x)),$(size(x))) ");
-                show(io, x); println(io))
 
-# Types
-xdump(fn::Function, io::IO, x::Union, n::Int, indent) = println(io, x)
-function xdump(fn::Function, io::IO, x::DataType, n::Int, indent)
-    println(io, x, "::", typeof(x), " ", " <: ", supertype(x))
-    fields = fieldnames(x)
-    if n > 0
-        for idx in 1:min(10, length(fields))
-            if fields[idx] != symbol("")    # prevents segfault if symbol is blank
-                print(io, indent, "  ", fields[idx], "::")
-                if isa(x.types[idx], DataType)
-                    xdump(fn, io, fieldtype(x,idx), n - 1, string(indent, "  "))
-                else
-                    println(io, fieldtype(x,idx))
+function dump(io::IO, x::Array, n::Int, indent)
+    print(io, "Array($(eltype(x)),$(size(x)))")
+    if eltype(x) <: Number
+        print(io, " ")
+        show(io, x)
+    else
+        if n > 0 && !isempty(x)
+            println(io)
+            if limit_output(io)
+                dump_elts(io, x, n, indent, 1, (length(x) <= 10 ? length(x) : 5))
+                if length(x) > 10
+                    println(io)
+                    println(io, indent, "  ...")
+                    dump_elts(io, x, n, indent, length(x)-4, length(x))
                 end
+            else
+                dump_elts(io, x, n, indent, 1, length(x))
             end
         end
-        if length(fields) > 10
-            println(io, indent, "  ...")
+    end
+end
+dump(io::IO, x::Symbol, n::Int, indent) = print(io, typeof(x), " ", x)
+
+# Types
+dump(io::IO, x::Union, n::Int, indent) = print(io, x)
+
+function dump(io::IO, x::DataType, n::Int, indent)
+    print(io, x)
+    if x !== Any
+        print(io, " <: ", supertype(x))
+    end
+    if !(x <: Tuple)
+        fields = fieldnames(x)
+        if n > 0
+            for idx in 1:length(fields)
+                println(io)
+                print(io, indent, "  ", fields[idx], "::")
+                print(io, fieldtype(x,idx))
+            end
         end
     end
 end
@@ -1025,7 +1045,7 @@ end
 # dumptype is for displaying abstract type hierarchies like Jameson
 # Nash's wiki page: https://github.com/JuliaLang/julia/wiki/Types-Hierarchy
 
-function dumptype(io::IO, x, n::Int, indent)
+function dumptype(io::IO, x::ANY, n::Int, indent)
     # based on Jameson Nash's examples/typetree.jl
     println(io, x)
     if n == 0   # too deeply nested
@@ -1066,50 +1086,12 @@ end
 
 # For abstract types, use _dumptype only if it's a form that will be called
 # interactively.
-xdump(fn::Function, io::IO, x::DataType) = x.abstract ? dumptype(io, x, 5, "") : xdump(fn, io, x, 5, "")
-xdump(fn::Function, io::IO, x::DataType, n::Int) = x.abstract ? dumptype(io, x, n, "") : xdump(fn, io, x, n, "")
+dflt_io() = IOContext(STDOUT::IO, :limit_output => true)
+dump(io::IO, x::DataType; maxdepth=8) = (x.abstract ? dumptype : dump)(io, x, maxdepth, "")
+dump(x::DataType; maxdepth=8) = (x.abstract ? dumptype : dump)(dflt_io(), x, maxdepth, "")
 
-# defaults:
-xdump(fn::Function, io::IO, x) = xdump(xdump, io, x, 5, "")  # default is 5 levels
-xdump(fn::Function, io::IO, x, n::Int) = xdump(xdump, io, x, n, "")
-xdump(fn::Function, io::IO, args...) = throw(ArgumentError("invalid arguments to xdump"))
-xdump(fn::Function, args...) = xdump(fn, STDOUT::IO, args...)
-xdump(io::IO, args...) = xdump(xdump, io, args...)
-xdump(args...) = xdump(xdump, IOContext(STDOUT::IO, :limit_output => true), args...)
-xdump(arg::IO) = xdump(xdump, STDOUT::IO, arg)
-
-# Here are methods specifically for dump:
-dump(io::IO, x, n::Int) = dump(io, x, n, "")
-dump(io::IO, x) = dump(io, x, 5, "")  # default is 5 levels
-dump(io::IO, x::AbstractString, n::Int, indent) =
-               (print(io, typeof(x), " ");
-                show(io, x); println(io))
-dump(io::IO, x, n::Int, indent) = xdump(dump, io, x, n, indent)
-dump(io::IO, args...) = throw(ArgumentError("invalid arguments to dump"))
-dump(arg::IO) = xdump(dump, STDOUT::IO, arg)
-dump(args...) = dump(IOContext(STDOUT::IO, :limit_output => true), args...)
-
-function dump(io::IO, x::Dict, n::Int, indent)
-    println(io, typeof(x), " len ", length(x))
-    if n > 0
-        i = 1
-        for (k,v) in x
-            print(io, indent, "  ", k, ": ")
-            dump(io, v, n - 1, string(indent, "  "))
-            if i > 10
-                println(io, indent, "  ...")
-                break
-            end
-            i += 1
-        end
-    end
-end
-
-# More generic representation for common types:
-dump(io::IO, x::DataType, n::Int, indent) = println(io, x.name)
-dump(io::IO, x::DataType, n::Int) = dump(io, x, n, "")
-dump(io::IO, x::DataType) = dump(io, x, 5, "")
-dump(io::IO, x::TypeVar, n::Int, indent) = println(io, x.name)
+dump(io::IO, arg; maxdepth=8) = dump(io, arg, maxdepth, "")
+dump(arg; maxdepth=8) = dump(dflt_io(), arg, maxdepth, "")
 
 
 """
@@ -1357,7 +1339,7 @@ summary(x) = string(typeof(x)) # e.g. Int64
 # sizes such as 0-dimensional, 4-dimensional, 2x3
 dims2string(d) = isempty(d) ? "0-dimensional" :
                  length(d) == 1 ? "$(d[1])-element" :
-                 join(map(string,d), 'x')
+                 join(map(string,d), '×')
 
 # anything array-like gets summarized e.g. 10-element Array{Int64,1}
 summary(a::AbstractArray) =
@@ -1495,7 +1477,8 @@ end
 function array_eltype_show_how(X)
     e = eltype(X)
     leaf = isleaftype(e)
-    plain = e<:Number || e<:AbstractString
+    plain = e<:Number || e<:AbstractString ||
+            (e<:Nullable && (eltype(e)<:Number || eltype(e)<:AbstractString))
     if isa(e,DataType) && e === e.name.primary
         str = string(e.name)
     else

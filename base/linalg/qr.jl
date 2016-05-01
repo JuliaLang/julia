@@ -88,13 +88,15 @@ end
 qrfact!{T<:BlasFloat}(A::StridedMatrix{T}, ::Type{Val{false}}) = QRCompactWY(LAPACK.geqrt!(A, min(minimum(size(A)), 36))...)
 qrfact!{T<:BlasFloat}(A::StridedMatrix{T}, ::Type{Val{true}}) = QRPivoted(LAPACK.geqp3!(A)...)
 qrfact!{T<:BlasFloat}(A::StridedMatrix{T}) = qrfact!(A, Val{false})
-qrfact{T<:BlasFloat}(A::StridedMatrix{T}, args...) = qrfact!(copy(A), args...)
+qrfact{T<:BlasFloat}(A::StridedMatrix{T}, arg) = qrfact!(copy(A), arg)
+qrfact{T<:BlasFloat}(A::StridedMatrix{T}) = qrfact!(copy(A))
 
 # Generic fallbacks
 qrfact!(A::StridedMatrix, ::Type{Val{false}}) = qrfactUnblocked!(A)
 qrfact!(A::StridedMatrix, ::Type{Val{true}}) = qrfactPivotedUnblocked!(A)
 qrfact!(A::StridedMatrix) = qrfact!(A, Val{false})
-qrfact{T}(A::StridedMatrix{T}, args...) = qrfact!(copy_oftype(A, typeof(zero(T)/norm(one(T)))), args...)
+qrfact{T}(A::StridedMatrix{T}, arg) = qrfact!(copy_oftype(A, typeof(zero(T)/norm(one(T)))), arg)
+qrfact{T}(A::StridedMatrix{T}) = qrfact!(copy_oftype(A, typeof(zero(T)/norm(one(T)))))
 qrfact(x::Number) = qrfact(fill(x,1,1))
 
 qr(A::Union{Number, AbstractMatrix}, pivot::Union{Type{Val{false}}, Type{Val{true}}}=Val{false}; thin::Bool=true) =

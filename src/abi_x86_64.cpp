@@ -212,7 +212,7 @@ Type *preferred_llvm_type(jl_value_t *ty, bool isret)
             if (size >= 8)
                 types[0] = T_int64;
             else
-                types[0] = Type::getIntNTy(getGlobalContext(), size*8);
+                types[0] = Type::getIntNTy(jl_LLVMContext, size*8);
             break;
         case Sse:
             if (size <= 4)
@@ -228,7 +228,7 @@ Type *preferred_llvm_type(jl_value_t *ty, bool isret)
             return types[0];
         case Integer:
             assert(size > 8);
-            types[1] = Type::getIntNTy(getGlobalContext(), (size-8)*8);
+            types[1] = Type::getIntNTy(jl_LLVMContext, (size-8)*8);
             return StructType::get(jl_LLVMContext,ArrayRef<Type*>(&types[0],2));
         case Sse:
             if (size <= 12)

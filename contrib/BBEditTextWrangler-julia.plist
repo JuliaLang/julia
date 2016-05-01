@@ -1070,7 +1070,6 @@
             <string>splitext</string>
             <string>spones</string>
             <string>sprand</string>
-            <string>sprandbool</string>
             <string>sprandn</string>
             <string>sprint</string>
             <string>spzeros</string>
@@ -1216,7 +1215,6 @@
             <string>writesto</string>
             <string>wstring</string>
             <string>xcorr</string>
-            <string>xdump</string>
             <string>yield</string>
             <string>yieldto</string>
             <string>zero</string>

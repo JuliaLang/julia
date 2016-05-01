@@ -125,7 +125,7 @@ export
     SimpleVector, AbstractArray, DenseArray,
     # special objects
     Function, LambdaInfo, Method, MethodTable, TypeMapEntry, TypeMapLevel,
-    Module, Symbol, Task, Array, WeakRef,
+    Module, Symbol, Task, Array, WeakRef, VecElement,
     # numeric types
     Number, Real, Integer, Bool, Ref, Ptr,
     AbstractFloat, Float16, Float32, Float64,
@@ -139,7 +139,7 @@ export
     StackOverflowError, SegmentationFault, UndefRefError, UndefVarError, TypeError,
     # AST representation
     Expr, GotoNode, LabelNode, LineNumberNode, QuoteNode, TopNode,
-    GlobalRef, NewvarNode, GenSym, Slot,
+    GlobalRef, NewvarNode, GenSym, Slot, SlotNumber, TypedSlot,
     # object model functions
     fieldtype, getfield, setfield!, nfields, throw, tuple, is, ===, isdefined, eval,
     # sizeof    # not exported, to avoid conflicting with Base.sizeof
@@ -271,19 +271,23 @@ TypeConstructor(p::ANY, t::ANY) =
 
 Void() = nothing
 
+immutable VecElement{T}
+    value::T
+end
+
 Expr(args::ANY...) = _expr(args...)
 
 _new(typ::Symbol, argty::Symbol) = eval(:((::Type{$typ})(n::$argty) = $(Expr(:new, typ, :n))))
 _new(:LabelNode, :Int)
 _new(:GotoNode, :Int)
 _new(:TopNode, :Symbol)
-_new(:NewvarNode, :Slot)
+_new(:NewvarNode, :SlotNumber)
 _new(:QuoteNode, :ANY)
 _new(:GenSym, :Int)
 eval(:((::Type{LineNumberNode})(f::Symbol, l::Int) = $(Expr(:new, :LineNumberNode, :f, :l))))
 eval(:((::Type{GlobalRef})(m::Module, s::Symbol) = $(Expr(:new, :GlobalRef, :m, :s))))
-eval(:((::Type{Slot})(n::Int) = $(Expr(:new, :Slot, :n, Any))))
-eval(:((::Type{Slot})(n::Int, t::ANY) = $(Expr(:new, :Slot, :n, :t))))
+eval(:((::Type{SlotNumber})(n::Int) = $(Expr(:new, :SlotNumber, :n))))
+eval(:((::Type{TypedSlot})(n::Int, t::ANY) = $(Expr(:new, :TypedSlot, :n, :t))))
 
 Module(name::Symbol=:anonymous, std_imports::Bool=true) = ccall(:jl_f_new_module, Ref{Module}, (Any, Bool), name, std_imports)
 

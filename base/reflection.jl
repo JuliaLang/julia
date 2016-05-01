@@ -170,20 +170,21 @@ end
 
 tt_cons(t::ANY, tup::ANY) = (@_pure_meta; Tuple{t, (isa(tup, Type) ? tup.parameters : tup)...})
 
-code_lowered(f, t::ANY=Tuple) = map(m->m.func, methods(f, t))
-function methods(f::ANY,t::ANY)
+code_lowered(f, t::ANY=Tuple) = map(m -> (m.func::Method).lambda_template, methods(f, t))
+
+function methods(f::ANY, t::ANY)
     if isa(f,Builtin)
         throw(ArgumentError("argument is not a generic function"))
     end
     t = to_tuple_type(t)
-    Any[m[3] for m in _methods(f,t,-1)]
+    return Any[m[3] for m in _methods(f,t,-1)]
 end
 function _methods(f::ANY,t::ANY,lim)
     ft = isa(f,Type) ? Type{f} : typeof(f)
     if isa(t,Type)
-        _methods_by_ftype(Tuple{ft, t.parameters...}, lim)
+        return _methods_by_ftype(Tuple{ft, t.parameters...}, lim)
     else
-        _methods_by_ftype(Tuple{ft, t...}, lim)
+        return _methods_by_ftype(Tuple{ft, t...}, lim)
     end
 end
 function _methods_by_ftype(t::ANY, lim)
@@ -197,6 +198,7 @@ function _methods_by_ftype(t::ANY, lim)
     if 1 < nu <= 64
         return _methods(Any[tp...], length(tp), lim, [])
     end
+    # TODO: the following can return incorrect answers that the above branch would have corrected
     return ccall(:jl_matching_methods, Any, (Any,Int32), t, lim)
 end
 function _methods(t::Array,i,lim::Integer,matching::Array{Any,1})
@@ -219,7 +221,7 @@ function _methods(t::Array,i,lim::Integer,matching::Array{Any,1})
             return _methods(t,i-1,lim,matching)
         end
     end
-    matching
+    return matching
 end
 
 function methods(f::ANY)
@@ -227,9 +229,9 @@ function methods(f::ANY)
     if ft <: Type || !isempty(ft.parameters)
         # for these types of `f`, not every method in the table will necessarily
         # match, so we need to filter based on its type.
-        methods(f, Tuple{Vararg{Any}})
+        return methods(f, Tuple{Vararg{Any}})
     else
-        ft.name.mt
+        return ft.name.mt
     end
 end
 
@@ -276,6 +278,7 @@ uncompressed_ast(l::LambdaInfo) =
 
 # Printing code representations in IR and assembly
 function _dump_function(f, t::ANY, native, wrapper, strip_ir_metadata, dump_module)
+    ccall(:jl_is_in_pure_context, Bool, ()) && error("native reflection cannot be used from generated functions")
     t = tt_cons(Core.Typeof(f), to_tuple_type(t))
     llvmf = ccall(:jl_get_llvmf, Ptr{Void}, (Any, Bool, Bool), t, wrapper, native)
 
@@ -313,26 +316,30 @@ function func_for_method_checked(m::Method, types)
 end
 
 function code_typed(f::ANY, types::ANY=Tuple; optimize=true)
+    ccall(:jl_is_in_pure_context, Bool, ()) && error("code reflection cannot be used from generated functions")
     types = to_tuple_type(types)
     asts = []
     for x in _methods(f,types,-1)
         linfo = func_for_method_checked(x[3].func, types)
         if optimize
-            (li, ty) = Core.Inference.typeinf(linfo, x[1], x[2], true)
+            (li, ty, inf) = Core.Inference.typeinf(linfo, x[1], x[2], true)
         else
-            (li, ty) = Core.Inference.typeinf_uncached(linfo, x[1], x[2], optimize=false)
+            (li, ty, inf) = Core.Inference.typeinf_uncached(linfo, x[1], x[2], optimize=false)
         end
+        inf || error("inference not successful") # Inference disabled
         push!(asts, li)
     end
     asts
 end
 
 function return_types(f::ANY, types::ANY=Tuple)
+    ccall(:jl_is_in_pure_context, Bool, ()) && error("code reflection cannot be used from generated functions")
     types = to_tuple_type(types)
     rt = []
     for x in _methods(f,types,-1)
         linfo = func_for_method_checked(x[3].func,types)
-        (_li, ty) = Core.Inference.typeinf(linfo, x[1], x[2])
+        (_li, ty, inf) = Core.Inference.typeinf(linfo, x[1], x[2])
+        inf || error("inference not successful") # Inference disabled
         push!(rt, ty)
     end
     rt
@@ -368,6 +375,7 @@ function which_module(m::Module, s::Symbol)
 end
 
 functionloc(m::TypeMapEntry) = functionloc(m.func)
+functionloc(m::LambdaInfo) = functionloc(m.def)
 function functionloc(m::Method)
     ln = m.line
     if ln <= 0

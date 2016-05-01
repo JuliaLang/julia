@@ -26,12 +26,16 @@ jl_datatype_t *jl_typename_type;
 jl_datatype_t *jl_sym_type;
 jl_datatype_t *jl_symbol_type;
 jl_datatype_t *jl_gensym_type;
-jl_datatype_t *jl_slot_type;
+jl_datatype_t *jl_abstractslot_type;
+jl_datatype_t *jl_slotnumber_type;
+jl_datatype_t *jl_typedslot_type;
 jl_datatype_t *jl_simplevector_type;
 jl_typename_t *jl_tuple_typename;
 jl_tupletype_t *jl_anytuple_type;
+jl_datatype_t *jl_anytuple_type_type;
 jl_datatype_t *jl_ntuple_type;
 jl_typename_t *jl_ntuple_typename;
+jl_typename_t *jl_vecelement_typename;
 jl_datatype_t *jl_vararg_type;
 jl_datatype_t *jl_tvar_type;
 jl_datatype_t *jl_uniontype_type;
@@ -1879,8 +1883,6 @@ static int typekey_eq(jl_datatype_t *tt, jl_value_t **key, size_t n)
     return 1;
 }
 
-JL_DEFINE_MUTEX_EXT(typecache);
-
 // look up a type in a cache by binary or linear search.
 // if found, returns the index of the found item. if not found, returns
 // ~n, where n is the index where the type should be inserted.
@@ -1923,10 +1925,10 @@ static ssize_t lookup_type_idx(jl_typename_t *tn, jl_value_t **key, size_t n, in
 static jl_value_t *lookup_type(jl_typename_t *tn, jl_value_t **key, size_t n)
 {
     int ord = is_typekey_ordered(key, n);
-    JL_LOCK(typecache); // Might GC
+    JL_LOCK(&typecache_lock); // Might GC
     ssize_t idx = lookup_type_idx(tn, key, n, ord);
     jl_value_t *t = (idx < 0) ? NULL : jl_svecref(ord ? tn->cache : tn->linearcache, idx);
-    JL_UNLOCK(typecache);
+    JL_UNLOCK(&typecache_lock);
     return t;
 }
 
@@ -1994,14 +1996,14 @@ jl_value_t *jl_cache_type_(jl_datatype_t *type)
 {
     if (is_cacheable(type)) {
         int ord = is_typekey_ordered(jl_svec_data(type->parameters), jl_svec_len(type->parameters));
-        JL_LOCK(typecache); // Might GC
+        JL_LOCK(&typecache_lock); // Might GC
         ssize_t idx = lookup_type_idx(type->name, jl_svec_data(type->parameters),
                                       jl_svec_len(type->parameters), ord);
         if (idx >= 0)
             type = (jl_datatype_t*)jl_svecref(ord ? type->name->cache : type->name->linearcache, idx);
         else
             cache_insert_type((jl_value_t*)type, ~idx, ord);
-        JL_UNLOCK(typecache);
+        JL_UNLOCK(&typecache_lock);
     }
     return (jl_value_t*)type;
 }
@@ -3358,9 +3360,16 @@ void jl_init_types(void)
                                      jl_svec1(jl_symbol("id")),
                                      jl_svec1(jl_long_type), 0, 0, 1);
 
-    jl_slot_type = jl_new_datatype(jl_symbol("Slot"), jl_any_type, jl_emptysvec,
-                                   jl_svec(2, jl_symbol("id"), jl_symbol("typ")),
-                                   jl_svec(2, jl_long_type, jl_any_type), 0, 0, 2);
+    jl_abstractslot_type = jl_new_abstracttype((jl_value_t*)jl_symbol("Slot"), jl_any_type,
+                                               jl_emptysvec);
+
+    jl_slotnumber_type = jl_new_datatype(jl_symbol("SlotNumber"), jl_abstractslot_type, jl_emptysvec,
+                                         jl_svec1(jl_symbol("id")),
+                                         jl_svec1(jl_long_type), 0, 0, 1);
+
+    jl_typedslot_type = jl_new_datatype(jl_symbol("TypedSlot"), jl_abstractslot_type, jl_emptysvec,
+                                        jl_svec(2, jl_symbol("id"), jl_symbol("typ")),
+                                        jl_svec(2, jl_long_type, jl_any_type), 0, 0, 2);
 
     jl_init_int32_int64_cache();
 
@@ -3387,7 +3396,7 @@ void jl_init_types(void)
                                    jl_symbol("isleafsig"),
                                    jl_symbol("issimplesig"),
                                    jl_symbol("va")),
-                        jl_svec(9, jl_any_type, // Union{TupleMapEntry, Void}
+                        jl_svec(9, jl_any_type, // Union{TypeMapEntry, Void}
                                    jl_type_type, // TupleType
                                    jl_any_type, // Union{SimpleVector{TypeVar}, TypeVar}
                                    jl_any_type, // TupleType
@@ -3468,7 +3477,7 @@ void jl_init_types(void)
     jl_newvarnode_type =
         jl_new_datatype(jl_symbol("NewvarNode"), jl_any_type, jl_emptysvec,
                         jl_svec(1, jl_symbol("slot")),
-                        jl_svec(1, jl_slot_type), 0, 0, 1);
+                        jl_svec(1, jl_slotnumber_type), 0, 0, 1);
 
     jl_topnode_type =
         jl_new_datatype(jl_symbol("TopNode"), jl_any_type, jl_emptysvec,
@@ -3543,8 +3552,9 @@ void jl_init_types(void)
                                 jl_symbol("inInference"),
                                 jl_symbol("inCompile"),
                                 jl_symbol("jlcall_api"),
+                                jl_symbol(""),
                                 jl_symbol("fptr"),
-                                jl_symbol(""), jl_symbol(""), jl_symbol(""),
+                                jl_symbol(""), jl_symbol(""),
                                 jl_symbol(""), jl_symbol("")),
                         jl_svec(24,
                                 jl_any_type,
@@ -3565,8 +3575,9 @@ void jl_init_types(void)
                                 jl_bool_type,
                                 jl_bool_type,
                                 jl_bool_type,
+                                jl_bool_type,
                                 jl_any_type,
-                                jl_any_type, jl_any_type, jl_any_type,
+                                jl_any_type, jl_any_type,
                                 jl_int32_type, jl_int32_type),
                         0, 1, 10);
     jl_svecset(jl_lambda_info_type->types, 9, jl_lambda_info_type);
@@ -3619,7 +3630,6 @@ void jl_init_types(void)
     jl_svecset(jl_simplevector_type->types, 0, jl_long_type);
     jl_svecset(jl_typename_type->types, 6, jl_long_type);
     jl_svecset(jl_methtable_type->types, 3, jl_long_type);
-    jl_svecset(jl_lambda_info_type->types, 18, jl_voidpointer_type);
     jl_svecset(jl_lambda_info_type->types, 19, jl_voidpointer_type);
     jl_svecset(jl_lambda_info_type->types, 20, jl_voidpointer_type);
     jl_svecset(jl_lambda_info_type->types, 21, jl_voidpointer_type);
@@ -3694,6 +3704,12 @@ void jl_init_types(void)
     slot_sym = jl_symbol("slot");
     static_parameter_sym = jl_symbol("static_parameter");
     compiler_temp_sym = jl_symbol("#temp#");
+
+    tttvar = jl_new_typevar(jl_symbol("T"),
+                                  (jl_value_t*)jl_bottom_type,
+                                  (jl_value_t*)jl_anytuple_type);
+    jl_anytuple_type_type = jl_wrap_Type((jl_value_t*)tttvar);
+    jl_cfunction_list.unknown = jl_nothing;
 }
 
 #ifdef __cplusplus

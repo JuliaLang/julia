@@ -193,7 +193,6 @@ CORE_SRCS := $(addprefix $(JULIAHOME)/, \
 		base/essentials.jl \
 		base/generator.jl \
 		base/expr.jl \
-		base/functors.jl \
 		base/hashing.jl \
 		base/inference.jl \
 		base/int.jl \
@@ -211,15 +210,10 @@ CORE_SRCS := $(addprefix $(JULIAHOME)/, \
 		base/tuple.jl)
 BASE_SRCS := $(shell find $(JULIAHOME)/base -name \*.jl)
 
-$(build_private_libdir)/inference0.ji: $(CORE_SRCS) | $(build_private_libdir)
+$(build_private_libdir)/inference.ji: $(CORE_SRCS) | $(build_private_libdir)
 	@$(call PRINT_JULIA, cd $(JULIAHOME)/base && \
 	$(call spawn,$(JULIA_EXECUTABLE)) -C $(JULIA_CPU_TARGET) --output-ji $(call cygpath_w,$@) -f \
 		coreimg.jl)
-
-$(build_private_libdir)/inference.ji: $(build_private_libdir)/inference0.ji
-	@$(call PRINT_JULIA, cd $(JULIAHOME)/base && \
-	$(call spawn,$(JULIA_EXECUTABLE)) -C $(JULIA_CPU_TARGET) --output-ji $(call cygpath_w,$@) -f \
-		-J $(call cygpath_w,$<) coreimg.jl)
 
 RELBUILDROOT := $(shell $(JULIAHOME)/contrib/relative_path.sh "$(JULIAHOME)/base" "$(BUILDROOT)/base/")
 COMMA:=,

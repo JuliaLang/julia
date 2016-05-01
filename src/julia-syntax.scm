@@ -997,7 +997,9 @@
   (cond ((and (pair? (cadr e))
               (eq? (car (cadr e)) 'call)
               (symbol? (cadr (cadr e))))
-         (let ((anames (cddr (cadr e))))
+         (let ((anames (remove-empty-parameters (cddr (cadr e)))))
+           (if (has-parameters? anames)
+               (error "macros cannot accept keyword arguments"))
            (expand-forms
             `(function (call ,(symbol (string #\@ (cadr (cadr e))))
                              ,@(map (lambda (v)
@@ -2377,11 +2379,10 @@
         ((=)
          (let ((vi (var-info-for (cadr e) env)))
            (if vi
-               (begin
-                 (if (vinfo:asgn vi)
-                     (vinfo:set-sa! vi #f)
-                     (vinfo:set-sa! vi #t))
-                 (vinfo:set-asgn! vi #t))))
+               (begin (if (vinfo:asgn vi)
+                          (vinfo:set-sa! vi #f)
+                          (vinfo:set-sa! vi #t))
+                      (vinfo:set-asgn! vi #t))))
          (analyze-vars (caddr e) env captvars sp))
         ((call)
          (let ((vi (var-info-for (cadr e) env)))
@@ -2409,13 +2410,14 @@
          (analyze-vars-lambda (cadr e) env captvars sp
                               (cddr e)))
         ((method)
-         (let ((vi (var-info-for (method-expr-name e) env)))
-           (if vi
-               (begin (vinfo:set-asgn! vi #t)
-                      ;; note: method defs require a memory loc. (issue #7658)
-                      (vinfo:set-sa! vi #f))))
          (if (length= e 2)
-             e
+             (let ((vi (var-info-for (method-expr-name e) env)))
+               (if vi
+                   (begin (if (vinfo:asgn vi)
+                              (vinfo:set-sa! vi #f)
+                              (vinfo:set-sa! vi #t))
+                          (vinfo:set-asgn! vi #t)))
+               e)
              (begin (analyze-vars (caddr e) env captvars sp)
                     (assert (eq? (car (cadddr e)) 'lambda))
                     (analyze-vars-lambda (cadddr e) env captvars sp
@@ -2584,6 +2586,8 @@ f(x) = yt(x)
 ;; clear capture bit for vars assigned once at the top, to avoid allocating
 ;; some unnecessary Boxes.
 (define (lambda-optimize-vars! lam)
+  ;; flattening blocks helps us find more dominating statements
+  (set-car! (cdddr lam) (flatten-blocks (lam:body lam)))
   (define (expr-uses-var ex v)
     (cond ((assignment? ex) (expr-contains-eq v (caddr ex)))
           ((eq? (car ex) 'method)
@@ -2714,6 +2718,8 @@ f(x) = yt(x)
                             (error (string "cannot add method to function argument " name)))
                         (if (eqv? (string.char (string name) 0) #\@)
                             (error "macro definition not allowed inside a local scope"))))
+             (if lam2
+                 (lambda-optimize-vars! lam2))
              (if (not local?) ;; not a local function; will not be closure converted to a new type
                  (cond (short e)
                        ((null? cvs)
@@ -2730,7 +2736,7 @@ f(x) = yt(x)
                        (else
                         (let* ((exprs     (lift-toplevel (convert-lambda lam2 '|#anon| #t '())))
                                (top-stmts (cdr exprs))
-                               (newlam    (renumber-things (renumber-jlgensym (linearize (car exprs)))))
+                               (newlam    (renumber-slots-and-labels (linearize (car exprs))))
                                (vi        (lam:vinfo newlam))
                                ;; insert `list` expression heads to make the lambda vinfo
                                ;; lists quotable
@@ -2831,8 +2837,6 @@ f(x) = yt(x)
                           '(null)
                           (convert-assignment name mk-closure fname lam interp)))))))
           ((lambda)  ;; should only happen inside (thunk ...)
-           ;; flattening blocks helps lambda-optimize-vars! work
-           (set-car! (cdddr e) (flatten-blocks (lam:body e)))
            `(lambda ,(cadr e)
               (,(clear-capture-bits (car (lam:vinfo e)))
                () ,@(cddr (lam:vinfo e)))
@@ -3136,20 +3140,16 @@ f(x) = yt(x)
             ((implicit-global) #f)
             ((const) (emit e))
 
-            ;; metadata
-            ((inbounds)
-             ;; TODO: this should not be here but sometimes ends up in tail position, e.g.
-             ;; `f(x) = @inbounds return x`
-             (cond (tail  (emit-return e))
-                   (value e)
-                   (else  (emit e))))
             ;; top level expressions returning values
             ((abstract_type bits_type composite_type thunk toplevel module)
              (if tail (emit-return e) (emit e)))
             ;; other top level expressions and metadata
-            ((import importall using export line meta boundscheck simdloop)
-             (emit e)
-             (if tail (emit-return '(null)) '(null)))
+            ((import importall using export line meta inbounds boundscheck simdloop)
+             (let ((have-ret? (and (pair? code) (pair? (car code)) (eq? (caar code) 'return))))
+               (emit e)
+               (if (and tail (not have-ret?))
+                   (emit-return '(null)))
+               '(null)))
             ((...)
              (error "\"...\" expression outside call"))
             (else
@@ -3202,33 +3202,7 @@ f(x) = yt(x)
                      (set! vars (table)))))
             (loop (cdr stmts)))))))
 
-;; pass 6: renumber jlgensyms to start at 0 in each function
-
-(define (make-gensym-generator)
-  (let ((jlgensym-counter 0))
-    (lambda ()
-      (begin0 `(jlgensym ,jlgensym-counter)
-              (set! jlgensym-counter (+ 1 jlgensym-counter))))))
-
-(define (renumber-jlgensym- e tbl next-jlgensym)
-  (cond
-   ((or (not (pair? e)) (quoted? e)) e)
-   ((eq? (car e) 'lambda)
-    (let* ((next  (make-gensym-generator))
-           (body  (renumber-jlgensym- (lam:body e) (table) next))
-           (count (cadr (next)))
-           (vi    (caddr e)))
-      `(lambda ,(cadr e)
-         (,(car vi) ,(cadr vi) ,count ,(last vi))
-         ,body)))
-   ((jlgensym? e)
-    (let ((n (get tbl (cadr e) #f)))
-      (if n n
-          (let ((n (next-jlgensym))) (put! tbl (cadr e) n) n))))
-   (else (map (lambda (x) (renumber-jlgensym- x tbl next-jlgensym)) e))))
-
-(define (renumber-jlgensym e)
-  (renumber-jlgensym- e #f error))
+;; pass 6: renumber slots and labels
 
 (define (label-to-idx-map body)
   (let ((tbl (table)))
@@ -3252,49 +3226,60 @@ f(x) = yt(x)
                 (else #f)))
           (loop (cdr stmts))))))
 
-(define (renumber-slots lam e)
-  (cond ((symbol? e)
-         (let loop ((vi (car (lam:vinfo lam)))
-                    (i 1))
-           (cond ((null? vi)
-                  (let nextsp ((sps (lam:sp lam))
-                               (j 1))
-                    (cond ((null? sps) e)
-                          ((eq? e (car sps)) `(static_parameter ,j))
-                          (else (nextsp (cdr sps) (+ j 1))))))
-                 ((eq? e (caar vi))
-                  `(slot ,i))
-                 (else (loop (cdr vi) (+ i 1))))))
-        ((or (atom? e) (quoted? e)) e)
-        ((eq? (car e) 'lambda)
-         (let ((body (renumber-slots e (lam:body e))))
-           `(lambda ,(cadr e) ,(caddr e) ,body)))
-        (else (cons (car e)
-                    (map (lambda (x) (renumber-slots lam x))
-                         (cdr e))))))
+(define (symbol-to-idx-map lst)
+  (let ((tbl (table)))
+    (let loop ((xs lst) (i 1))
+      (if (pair? xs)
+          (begin (put! tbl (car xs) i)
+                 (loop (cdr xs) (+ i 1)))))
+    tbl))
 
-(define (renumber-things ex)
-  (let do-labels ((ex ex))
-    (if (pair? ex)
-        (begin (if (eq? (car ex) 'lambda)
-                   (renumber-labels! ex (label-to-idx-map (lam:body ex))))
-               (for-each do-labels (cdr ex)))))
-  (let do-slots ((ex ex))
-    (if (atom? ex) ex
-        (if (eq? (car ex) 'lambda)
-            (renumber-slots #f ex)
-            (cons (car ex)
-                  (map do-slots (cdr ex)))))))
+(define (renumber-lambda lam)
+  (renumber-labels! lam (label-to-idx-map (lam:body lam)))
+  (define ngensyms 0)
+  (define gensym-table (table))
+  (define nslots (length (car (lam:vinfo lam))))
+  (define slot-table (symbol-to-idx-map (map car (car (lam:vinfo lam)))))
+  (define sp-table (symbol-to-idx-map (lam:sp lam)))
+  (define (renumber-slots e)
+    (cond ((symbol? e)
+           (let ((idx (get slot-table e #f)))
+             (or (and idx `(slot ,idx))
+                 (let ((idx (get sp-table e #f)))
+                   (or (and idx `(static_parameter ,idx))
+                       e)))))
+          ((or (atom? e) (quoted? e)) e)
+          ((jlgensym? e)
+           (let ((idx (or (get gensym-table (cadr e) #f)
+                          (begin0 ngensyms
+                                  (put! gensym-table (cadr e) ngensyms)
+                                  (set! ngensyms (+ ngensyms 1))))))
+             `(jlgensym ,idx)))
+          ((eq? (car e) 'lambda)
+           (renumber-lambda e))
+          (else (cons (car e)
+                      (map renumber-slots (cdr e))))))
+  (let ((body (renumber-slots (lam:body lam)))
+        (vi   (lam:vinfo lam)))
+    `(lambda ,(cadr lam)
+       (,(car vi) ,(cadr vi) ,ngensyms ,(last vi))
+       ,body)))
+
+(define (renumber-slots-and-labels ex)
+  (if (atom? ex) ex
+      (if (eq? (car ex) 'lambda)
+          (renumber-lambda ex)
+          (cons (car ex)
+                (map renumber-slots-and-labels (cdr ex))))))
 
 ;; expander entry point
 
 (define (julia-expand1 ex)
-  (renumber-things
-   (renumber-jlgensym
-    (linearize
-     (closure-convert
-      (analyze-variables!
-       (resolve-scopes ex)))))))
+  (renumber-slots-and-labels
+   (linearize
+    (closure-convert
+     (analyze-variables!
+      (resolve-scopes ex))))))
 
 (define julia-expand0 expand-forms)
 

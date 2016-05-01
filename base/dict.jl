@@ -60,8 +60,6 @@ end
 
 showdict(t::Associative; kw...) = showdict(STDOUT, t; kw...)
 function showdict{K,V}(io::IO, t::Associative{K,V}; compact = false)
-    (:SHOWN_SET => t) in io && (print(io, "#= circular reference =#"); return)
-
     recur_io = IOContext(io, :SHOWN_SET => t)
     limit::Bool = limit_output(io)
     if compact
@@ -75,14 +73,16 @@ function showdict{K,V}(io::IO, t::Associative{K,V}; compact = false)
                 print(io, typeof(t))
             end
             print(io, '(')
-            first = true
-            n = 0
-            for pair in t
-                first || print(io, ',')
-                first = false
-                show(recur_io, pair)
-                n+=1
-                limit && n >= 10 && (print(io, "…"); break)
+            if !show_circular(io, t)
+                first = true
+                n = 0
+                for pair in t
+                    first || print(io, ',')
+                    first = false
+                    show(recur_io, pair)
+                    n+=1
+                    limit && n >= 10 && (print(io, "…"); break)
+                end
             end
             print(io, ')')
         end
@@ -92,7 +92,8 @@ function showdict{K,V}(io::IO, t::Associative{K,V}; compact = false)
     # Otherwise show more descriptively, with one line per key/value pair
     print(io, summary(t))
     isempty(t) && return
-    print(io, ":")
+    print(io, ":\n  ")
+    show_circular(io, t) && return
     if limit
         sz = displaysize(io)
         rows, cols = sz[1] - 3, sz[2]
@@ -113,8 +114,10 @@ function showdict{K,V}(io::IO, t::Associative{K,V}; compact = false)
         rows = cols = 0
     end
 
+    first = true
     for (i, (k, v)) in enumerate(t)
-        print(io, "\n  ")
+        first || print(io, "\n  ")
+        first = false
         limit && i > rows && (print(io, rpad("⋮", keylen), " => ⋮"); break)
 
         if limit
@@ -998,7 +1001,6 @@ next{K,V}(::ImmutableDict{K,V}, t) = (Pair{K,V}(t.key, t.value), t.parent)
 done(::ImmutableDict, t) = !isdefined(t, :parent)
 length(t::ImmutableDict) = count(x->1, t)
 isempty(t::ImmutableDict) = done(t, start(t))
-copy(t::ImmutableDict) = t
 function similar(t::ImmutableDict)
     while isdefined(t, :parent)
         t = t.parent

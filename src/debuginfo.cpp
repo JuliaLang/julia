@@ -214,6 +214,19 @@ struct strrefcomp {
 };
 #endif
 
+extern "C" tracer_cb jl_linfo_tracer;
+static std::vector<jl_lambda_info_t*> triggered_linfos;
+void jl_callback_triggered_linfos(void)
+{
+    if (triggered_linfos.empty())
+        return;
+    if (jl_linfo_tracer) {
+        std::vector<jl_lambda_info_t*> to_process(std::move(triggered_linfos));
+        for (jl_lambda_info_t *linfo : to_process)
+            jl_call_tracer(jl_linfo_tracer, (jl_value_t*)linfo);
+    }
+}
+
 class JuliaJITEventListener: public JITEventListener
 {
 #ifndef USE_MCJIT
@@ -234,11 +247,14 @@ public:
         int8_t gc_state = jl_gc_safe_enter();
         uv_rwlock_wrlock(&threadsafe);
         jl_gc_safe_leave(gc_state);
-        StringMap<jl_lambda_info_t*>::iterator linfo_it = linfo_in_flight.find(F.getName());
+        StringRef sName = F.getName();
+        StringMap<jl_lambda_info_t*>::iterator linfo_it = linfo_in_flight.find(sName);
         jl_lambda_info_t *linfo = NULL;
         if (linfo_it != linfo_in_flight.end()) {
             linfo = linfo_it->second;
             linfo_in_flight.erase(linfo_it);
+            if (((Function*)linfo->functionObjectsDecls.functionObject)->getName().equals(sName))
+                linfo->fptr = (jl_fptr_t)(uintptr_t)Code;
         }
 #if defined(_OS_WINDOWS_)
         create_PRUNTIME_FUNCTION((uint8_t*)Code, Size, F.getName(), (uint8_t*)Code, Size, NULL);
@@ -337,7 +353,7 @@ public:
                 Addr = sym_iter.getAddress().get();
                 Section = sym_iter.getSection().get();
                 assert(Section != EndSection && Section->isText());
-                SectionAddr = Section->getAddress().get();
+                SectionAddr = Section->getAddress();
                 Section->getName(sName);
                 SectionLoadAddr = getLoadAddress(sName);
 #elif defined(LLVM37)
@@ -434,7 +450,11 @@ public:
             jl_lambda_info_t *linfo = NULL;
             if (linfo_it != linfo_in_flight.end()) {
                 linfo = linfo_it->second;
+                if (linfo->compile_traced)
+                    triggered_linfos.push_back(linfo);
                 linfo_in_flight.erase(linfo_it);
+                if (((Function*)linfo->functionObjectsDecls.functionObject)->getName().equals(sName))
+                    linfo->fptr = (jl_fptr_t)(uintptr_t)Addr;
             }
             if (linfo)
                 linfomap[Addr] = std::make_pair(Size, linfo);
@@ -507,6 +527,8 @@ public:
             if (linfo_it != linfo_in_flight.end()) {
                 linfo = linfo_it->second;
                 linfo_in_flight.erase(linfo_it);
+                if (((Function*)linfo->functionObjectsDecls.functionObject)->getName().equals(sName))
+                    linfo->fptr = (jl_fptr_t)(uintptr_t)Addr;
             }
             if (linfo)
                 linfomap[Addr] = std::make_pair(Size, linfo);
@@ -921,6 +943,7 @@ bool jl_dylib_DI_for_fptr(size_t pointer, const llvm::object::ObjectFile **obj, 
                     // the file rather than reusing the one in memory. We may want to revisit
                     // that in the future (ideally, once we support fewer LLVM versions).
                     errorobj = llvm::object::ObjectFile::createObjectFile(fname);
+                    assert(errorobj);
 #ifdef LLVM36
                     auto binary = errorobj.get().takeBinary();
                     *obj = binary.first.release();
@@ -957,6 +980,14 @@ bool jl_dylib_DI_for_fptr(size_t pointer, const llvm::object::ObjectFile **obj, 
                 }
 #endif
             }
+#ifdef LLVM39
+            else {
+                // TODO: report the error instead of silently consuming it?
+                //       jl_error might run into the same error again...
+                consumeError(errorobj.takeError());
+            }
+#endif
+
             // update cache
             objfileentry_t entry = {*obj,*context,*slide,*section_slide};
             objfilemap[fbase] = entry;

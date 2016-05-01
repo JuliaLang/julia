@@ -56,7 +56,6 @@ include("nofloat_hashing.jl")
 macro simd(forloop)
     esc(forloop)
 end
-include("functors.jl")
 include("reduce.jl")
 
 ## core structures

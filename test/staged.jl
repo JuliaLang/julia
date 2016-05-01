@@ -157,3 +157,51 @@ end
     :(y->y)
 end
 @test (_g_f_with_inner(1))(8) == 8
+
+# @generated functions errors
+global gf_err_ref = Ref{Int}()
+
+gf_err_ref[] = 0
+let gf_err, tsk = @async nothing # create a Task for yield to try to run
+    @generated function gf_err()
+        gf_err_ref[] += 1
+        yield()
+        gf_err_ref[] += 1000
+    end
+    @test_throws ErrorException gf_err()
+    @test_throws ErrorException gf_err()
+    @test gf_err_ref[] == 2
+end
+
+gf_err_ref[] = 0
+let gf_err2
+    @generated function gf_err2{f}(::f)
+        gf_err_ref[] += 1
+        reflect = f.instance
+        gf_err_ref[] += 1
+        reflect(+, (Int,Int))
+        gf_err_ref[] += 1000
+        return nothing
+    end
+    @test_throws ErrorException gf_err2(code_typed)
+    @test_throws ErrorException gf_err2(code_llvm)
+    @test_throws ErrorException gf_err2(code_native)
+    @test gf_err_ref[] == 6
+    @test gf_err2(code_lowered) == nothing
+end
+
+# issue #15043
+decorated = Set{DataType}()
+let
+    @generated function decorate(t)
+        push!(decorated, t)
+    end
+
+    foo() = return nothing
+    decorate(foo)
+    @test in(typeof(foo), decorated)
+
+    bar() = return 1
+    decorate(bar)
+    @test in(typeof(bar), decorated)
+end

@@ -342,10 +342,17 @@ function update(branch::AbstractString)
                 LibGit2.merge!(repo)
             end
         end
-        LibGit2.fetch(repo)
-        ff_succeeded = LibGit2.merge!(repo, fastforward=true)
-        if !ff_succeeded
-            LibGit2.rebase!(repo, "origin/$branch")
+        try
+            LibGit2.fetch(repo)
+            ff_succeeded = LibGit2.merge!(repo, fastforward=true)
+            if !ff_succeeded
+                LibGit2.rebase!(repo, "origin/$branch")
+            end
+        catch err
+            if isa(err, LibGit2.Error.GitError)
+                print_with_color(:red, "METADATA cannot be updated. Error: $(err.msg).\nResolve problems manually in $(Pkg.dir("METADATA")).")
+            end
+            rethrow(err)
         end
     end
     avail = Read.available()

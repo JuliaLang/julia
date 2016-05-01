@@ -305,9 +305,13 @@ static Value *emit_unbox(Type *to, const jl_cgval_t &x, jl_value_t *jt)
     if (jt == (jl_value_t*)jl_bool_type)
         return builder.CreateZExt(builder.CreateTrunc(builder.CreateLoad(p), T_int1), to);
 
-    if (!x.isboxed) // stack has default alignment
+    if (x.isboxed)
+        return builder.CreateAlignedLoad(p, 16); // julia's gc gives 16-byte aligned addresses
+    else if (jt)
+        return build_load(p, jt);
+    else
+        // stack has default alignment
         return builder.CreateLoad(p);
-    return builder.CreateAlignedLoad(p, 16); // julia's gc gives 16-byte aligned addresses
 }
 
 // unbox, trying to determine correct bitstype automatically
@@ -810,9 +814,9 @@ static Value *emit_checked_srem_int(Value *x, Value *den, jl_codectx_t *ctx)
     Type *t = den->getType();
     raise_exception_unless(builder.CreateICmpNE(den, ConstantInt::get(t,0)),
                            prepare_global(jldiverr_var), ctx);
-    BasicBlock *m1BB = BasicBlock::Create(getGlobalContext(),"minus1",ctx->f);
-    BasicBlock *okBB = BasicBlock::Create(getGlobalContext(),"oksrem",ctx->f);
-    BasicBlock *cont = BasicBlock::Create(getGlobalContext(),"after_srem",ctx->f);
+    BasicBlock *m1BB = BasicBlock::Create(jl_LLVMContext,"minus1",ctx->f);
+    BasicBlock *okBB = BasicBlock::Create(jl_LLVMContext,"oksrem",ctx->f);
+    BasicBlock *cont = BasicBlock::Create(jl_LLVMContext,"after_srem",ctx->f);
     PHINode *ret = PHINode::Create(t, 2);
     builder.CreateCondBr(builder.CreateICmpEQ(den,ConstantInt::get(t,-1,true)),
                          m1BB, okBB);
@@ -1363,15 +1367,6 @@ static Value *emit_untyped_intrinsic(intrinsic f, Value *x, Value *y, Value *z, 
 #else
         return builder.CreateCall2(cttz, x, ConstantInt::get(T_int1, 0));
 #endif
-    }
-
-    case nan_dom_err: {
-        // nan_dom_err(f, x) throw DomainError if isnan(f)&&!isnan(x)
-        Value *f = FP(x); x = FP(y);
-        raise_exception_unless(builder.CreateOr(builder.CreateFCmpORD(f,f),
-                                                builder.CreateFCmpUNO(x,x)),
-                               prepare_global(jldomerr_var), ctx);
-        return f;
     }
 
     case abs_float:

@@ -72,12 +72,12 @@ end
 
 macro except_str(expr, err_type)
     return quote
-        let
-            local err
+        let err = nothing
             try
                 $(esc(expr))
             catch err
             end
+            err === nothing && error("expected failure, but no exception thrown")
             @test typeof(err) === $(esc(err_type))
             buff = IOBuffer()
             showerror(buff, err)
@@ -88,12 +88,12 @@ end
 
 macro except_strbt(expr, err_type)
     return quote
-        let
-            local err
+        let err = nothing
             try
                 $(esc(expr))
             catch err
             end
+            err === nothing && error("expected failure, but no exception thrown")
             @test typeof(err) === $(esc(err_type))
             buff = IOBuffer()
             showerror(buff, err, catch_backtrace())
@@ -104,14 +104,15 @@ end
 
 macro except_stackframe(expr, err_type)
     return quote
-       let
+       let err = nothing
            local st
            try
                $(esc(expr))
            catch err
                st = catch_stacktrace()
-               @test typeof(err) === $(esc(err_type))
            end
+           err === nothing && error("expected failure, but no exception thrown")
+           @test typeof(err) === $(esc(err_type))
            sprint(show, st[1])
        end
     end
@@ -336,4 +337,20 @@ withenv("JULIA_EDITOR" => nothing, "VISUAL" => nothing, "EDITOR" => nothing) do
 
     ENV["JULIA_EDITOR"] = "\"/Applications/Sublime Text.app/Contents/SharedSupport/bin/subl\" -w"
     @test Base.editor() == ["/Applications/Sublime Text.app/Contents/SharedSupport/bin/subl", "-w"]
+end
+
+# Issue #14684: `display` should prints associative types in full.
+let d = Dict(1 => 2, 3 => 45)
+    buf = IOBuffer()
+    td = TextDisplay(buf)
+    display(td, d)
+    result = bytestring(td.io)
+
+    @test contains(result, summary(d))
+
+    # Is every pair in the string?
+    # Compare by removing spaces
+    for el in d
+        @test contains(replace(result, " ", ""), string(el))
+    end
 end

@@ -2,7 +2,7 @@
 
 module SparseArrays
 
-using Base: Func, AddFun, OrFun, ConjFun, IdFun
+using Base: ReshapedArray
 using Base.Sort: Forward
 using Base.LinAlg: AbstractTriangular, PosDefException
 
@@ -31,7 +31,7 @@ import Base.Broadcast: eltype_plus, broadcast_shape
 export AbstractSparseArray, AbstractSparseMatrix, AbstractSparseVector,
     SparseMatrixCSC, SparseVector, blkdiag, dense, droptol!, dropzeros!, etree,
     issparse, nonzeros, nzrange, rowvals, sparse, sparsevec, spdiagm, speye, spones,
-    sprand, sprandbool, sprandn, spzeros, symperm, nnz
+    sprand, sprandn, spzeros, symperm, nnz
 
 include("sparse/abstractsparse.jl")
 include("sparse/sparsematrix.jl")

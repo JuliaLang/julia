@@ -54,7 +54,7 @@ Basic functions
    .. doctest::
 
        julia> A = sparse([1, 1, 2], [1, 3, 1], [1, 2, -5])
-       2x3 sparse matrix with 3 Int64 entries:
+       2×3 sparse matrix with 3 Int64 nonzero entries:
                [1, 1]  =  1
                [2, 1]  =  -5
                [1, 3]  =  2
@@ -191,17 +191,29 @@ Constructors
 
    Create a ``BitArray`` with all values set to ``true``\ .
 
+.. function:: trues(A)
+
+   .. Docstring generated from Julia source
+
+   Create a ``BitArray`` with all values set to ``true`` of the same shape as ``A``\ .
+
 .. function:: falses(dims)
 
    .. Docstring generated from Julia source
 
    Create a ``BitArray`` with all values set to ``false``\ .
 
+.. function:: falses(A)
+
+   .. Docstring generated from Julia source
+
+   Create a ``BitArray`` with all values set to ``false`` of the same shape as ``A``\ .
+
 .. function:: fill(x, dims)
 
    .. Docstring generated from Julia source
 
-   Create an array filled with the value ``x``\ . For example, ``fill(1.0, (10,10))`` returns a 10x10 array of floats, with each element initialized to ``1.0``\ .
+   Create an array filled with the value ``x``\ . For example, ``fill(1.0, (10,10))`` returns a 10×10 array of floats, with each element initialized to ``1.0``\ .
 
    If ``x`` is an object reference, all elements will refer to the same object. ``fill(Foo(), dims)`` will return an array filled with the result of evaluating ``Foo()`` once.
 
@@ -215,7 +227,7 @@ Constructors
 
    .. Docstring generated from Julia source
 
-   Create an array with the same data as the given array, but with different dimensions. An implementation for a particular type of array may choose whether the data is copied or shared.
+   Create an array with the same data as the given array, but with different dimensions.
 
 .. function:: similar(array, [element_type=eltype(array)], [dims=size(array)])
 
@@ -230,7 +242,7 @@ Constructors
    .. code-block:: julia
 
        julia> similar(1:10, 1, 4)
-       1x4 Array{Int64,2}:
+       1×4 Array{Int64,2}:
         4419743872  4374413872  4419743888  0
 
    Conversely, ``similar(trues(10,10), 2)`` returns an uninitialized ``BitVector`` with two elements since ``BitArray``\ s are both mutable and can support 1-dimensional arrays:
@@ -247,7 +259,7 @@ Constructors
    .. code-block:: julia
 
        julia> similar(falses(10), Float64, 2, 4)
-       2x4 Array{Float64,2}:
+       2×4 Array{Float64,2}:
         2.18425e-314  2.18425e-314  2.18425e-314  2.18425e-314
         2.18425e-314  2.18425e-314  2.18425e-314  2.18425e-314
 
@@ -409,23 +421,23 @@ Indexing, Assignment, and Concatenation
        (1,2,3,4,5,6)
 
        julia> [a b c; d e f]
-       2x3 Array{Int64,2}:
+       2×3 Array{Int64,2}:
         1  2  3
         4  5  6
 
        julia> hvcat((3,3), a,b,c,d,e,f)
-       2x3 Array{Int64,2}:
+       2×3 Array{Int64,2}:
         1  2  3
         4  5  6
 
        julia> [a b;c d; e f]
-       3x2 Array{Int64,2}:
+       3×2 Array{Int64,2}:
         1  2
         3  4
         5  6
 
        julia> hvcat((2,2,2), a,b,c,d,e,f)
-       3x2 Array{Int64,2}:
+       3×2 Array{Int64,2}:
         1  2
         3  4
         5  6
@@ -793,17 +805,10 @@ Combinatorics
 BitArrays
 ---------
 
-.. function:: bitpack(A::AbstractArray{T,N}) -> BitArray
-
-   .. Docstring generated from Julia source
-
-   Converts a numeric array to a packed boolean array.
-
-.. function:: bitunpack(B::BitArray{N}) -> Array{Bool,N}
-
-   .. Docstring generated from Julia source
-
-   Converts a packed boolean array to an array of booleans.
+BitArrays are space-efficient "packed" boolean arrays, which store
+one bit per boolean value.  They can be used similarly to ``Array{Bool}``
+arrays (which store one byte per boolean value), and can be converted
+to/from the latter via ``Array(bitarray)`` and ``BitArray(array)``, respectively.
 
 .. function:: flipbits!(B::BitArray{N}) -> BitArray{N}
 
@@ -935,23 +940,17 @@ dense counterparts. The following functions are specific to sparse arrays.
 
    Construct a sparse diagonal matrix. ``B`` is a tuple of vectors containing the diagonals and ``d`` is a tuple containing the positions of the diagonals. In the case the input contains only one diagonal, ``B`` can be a vector (instead of a tuple) and ``d`` can be the diagonal position (instead of a tuple), defaulting to 0 (diagonal). Optionally, ``m`` and ``n`` specify the size of the resulting sparse matrix.
 
-.. function:: sprand([rng],m,[n],p::AbstractFloat,[rfn])
+.. function:: sprand([rng],[type],m,[n],p::AbstractFloat,[rfn])
 
    .. Docstring generated from Julia source
 
-   Create a random length ``m`` sparse vector or ``m`` by ``n`` sparse matrix, in which the probability of any element being nonzero is independently given by ``p`` (and hence the mean density of nonzeros is also exactly ``p``\ ). Nonzero values are sampled from the distribution specified by ``rfn``\ . The uniform distribution is used in case ``rfn`` is not specified. The optional ``rng`` argument specifies a random number generator, see :ref:`Random Numbers <random-numbers>`\ .
+   Create a random length ``m`` sparse vector or ``m`` by ``n`` sparse matrix, in which the probability of any element being nonzero is independently given by ``p`` (and hence the mean density of nonzeros is also exactly ``p``\ ). Nonzero values are sampled from the distribution specified by ``rfn`` and have the type ``type``\ . The uniform distribution is used in case ``rfn`` is not specified. The optional ``rng`` argument specifies a random number generator, see :ref:`Random Numbers <random-numbers>`\ .
 
-.. function:: sprandn(m[,n],p::AbstractFloat)
-
-   .. Docstring generated from Julia source
-
-   Create a random sparse vector of length ``m`` or sparse matrix of size ``m`` by ``n`` with the specified (independent) probability ``p`` of any entry being nonzero, where nonzero values are sampled from the normal distribution.
-
-.. function:: sprandbool(m[,n],p)
+.. function:: sprandn([rng], m[,n],p::AbstractFloat)
 
    .. Docstring generated from Julia source
 
-   Create a random ``m`` by ``n`` sparse boolean matrix or length ``m`` sparse boolean vector with the specified (independent) probability ``p`` of any entry being ``true``\ .
+   Create a random sparse vector of length ``m`` or sparse matrix of size ``m`` by ``n`` with the specified (independent) probability ``p`` of any entry being nonzero, where nonzero values are sampled from the normal distribution. The optional ``rng`` argument specifies a random number generator, see :ref:`Random Numbers <random-numbers>`\ .
 
 .. function:: etree(A[, post])
 

@@ -62,7 +62,7 @@ equal the number of CPU cores on the machine.
     Future(2,1,6,Nullable{Any}())
 
     julia> fetch(s)
-    2x2 Float64 Array:
+    2×2 Array{Float64,2}:
      1.60401  1.50111
      1.17457  1.15741
 
@@ -137,7 +137,7 @@ type the following into the Julia prompt::
            end
 
     julia> rand2(2,2)
-    2x2 Float64 Array:
+    2×2 Array{Float64,2}:
      0.153756  0.368514
      1.15119   0.918912
 
@@ -405,8 +405,8 @@ different sizes::
     M = Matrix{Float64}[rand(800,800), rand(600,600), rand(800,800), rand(600,600)]
     pmap(svd, M)
 
-If one process handles both 800x800 matrices and another handles both
-600x600 matrices, we will not get as much scalability as we could. The
+If one process handles both 800×800 matrices and another handles both
+600×600 matrices, we will not get as much scalability as we could. The
 solution is to make a local task to "feed" work to each process when
 it completes its current task. For example, consider a simple :func:`pmap`
 implementation::
@@ -578,7 +578,7 @@ Here's a brief example:
    4
 
   julia> S = SharedArray(Int, (3,4), init = S -> S[Base.localindexes(S)] = myid())
-  3x4 SharedArray{Int64,2}:
+  3×4 SharedArray{Int64,2}:
    2  2  3  4
    2  3  3  4
    2  3  4  4
@@ -587,7 +587,7 @@ Here's a brief example:
   7
 
   julia> S
-  3x4 SharedArray{Int64,2}:
+  3×4 SharedArray{Int64,2}:
    2  2  3  4
    2  3  3  4
    2  7  4  4
@@ -599,7 +599,7 @@ You can, of course, divide the work any way you wish:
 .. doctest::
 
   julia> S = SharedArray(Int, (3,4), init = S -> S[indexpids(S):length(procs(S)):length(S)] = myid())
-  3x4 SharedArray{Int64,2}:
+  3×4 SharedArray{Int64,2}:
    2  2  2  2
    3  3  3  3
    4  4  4  4

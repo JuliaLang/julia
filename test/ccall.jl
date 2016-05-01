@@ -426,11 +426,7 @@ for (t,v) in ((Complex{Int32},:ci32),(Complex{Int64},:ci64),
             s
         end
         function $fname1(s)
-            verbose && println("B(Any): ",s)
-            @test s == $v
-            @test s === a
-            global c = s
-            s
+            @assert false
         end
         function $fname(s::$t)
             verbose && println("B: ",s)
@@ -442,13 +438,7 @@ for (t,v) in ((Complex{Int32},:ci32),(Complex{Int64},:ci64),
             s
         end
         function $fname(s)
-            verbose && println("B(Any): ",s)
-            @test s == $v
-            if($(t).mutable)
-                @test !(s === a)
-            end
-            global c = s
-            s
+            @assert false
         end
         b = ccall(cfunction($fname1,Ref{$t},(Ref{$t},)),Ref{$t},(Ref{$t},),a)
         verbose && println("C: ",b)
@@ -483,7 +473,14 @@ for (t,v) in ((Complex{Int32},:ci32),(Complex{Int64},:ci64),
         if ($(t).mutable)
             @test !(b === a)
         end
-        #b = ccall(cfunction($fname,Any,(Ref{Any},)),Any,(Ref{Any},),$v) # unimplemented
+        b = ccall(cfunction($fname,Any,(Ref{Any},)),Any,(Ref{Any},),$v)
+        @test b == $v
+        @test b === c
+        if ($(t).mutable)
+            @test !(b === a)
+        end
+        @test_throws TypeError ccall(cfunction($fname,Ref{AbstractString},(Ref{Any},)),Any,(Ref{Any},),$v)
+        @test_throws TypeError ccall(cfunction($fname,AbstractString,(Ref{Any},)),Any,(Ref{Any},),$v)
     end
 end
 
@@ -504,21 +501,16 @@ threadcall_test_func(x) =
 @test threadcall_test_func(259) == 1
 
 let n=3
-    tids=[]
+    tids = Culong[]
     @sync for i in 1:10^n
-        @unix_only @async push!(tids, @threadcall(:pthread_self, Cuint, ()))
-        @windows_only @async push!(tids, @threadcall(:GetCurrentThreadId, Cuint, ()))
+        @async push!(tids, @threadcall(:uv_thread_self, Culong, ()))
     end
 
-    d=Dict()
+    # The work should not be done on the master thread
+    t0 = ccall(:uv_thread_self, Culong, ())
+    @test length(tids) == 10^n
     for t in tids
-        d[t] = get(d, t, 0) + 1
-    end
-
-    @test sum(values(d)) == 10^n
-
-    for v in values(d)
-        @test v < 10^n
+        @test t != t0
     end
 end
 

@@ -126,7 +126,7 @@ let
     (Q,R)=qr(randn(100,50))
     Q=reshape(Q,(50,2,50))
     # Construct trace-preserving completely positive map from this
-    Phi=CPM(Q)
+    Phi=CPM(copy(Q))
     (d,v,nconv,numiter,numop,resid) = eigs(Phi,nev=1,which=:LM)
     # Properties: largest eigenvalue should be 1, largest eigenvector, when reshaped as matrix
     # should be a Hermitian positive definite matrix (up to an arbitrary phase)

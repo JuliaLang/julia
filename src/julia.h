@@ -161,10 +161,13 @@ STATIC_INLINE int jl_array_ndimwords(uint32_t ndims)
 
 typedef struct _jl_datatype_t jl_tupletype_t;
 
-// TupleMap is an implicitly defined type
+// TypeMap is an implicitly defined type
 // that can consist of any of the following nodes:
-//   typedef TupleMap Union{TupleMapLevel, TupleMapEntry, Void}
-// it consists of roughly tree-shaped nodes, when possible because `isleaftype(key)`
+//   typedef TypeMap Union{TypeMapLevel, TypeMapEntry, Void}
+// it forms a roughly tree-shaped structure, consisting of nodes of TypeMapLevels
+// which split the tree when possible, for example based on the key into the tuple type at `offs`
+// when key is a leaftype, (but only when the tree has enough entries for this to be
+// more efficient than storing them sorted linearly)
 // otherwise the leaf entries are stored sorted, linearly
 union jl_typemap_t {
     struct _jl_typemap_level_t *node;
@@ -178,11 +181,8 @@ typedef jl_value_t *(*jl_fptr_t)(jl_value_t*, jl_value_t**, uint32_t);
 typedef jl_value_t *(*jl_fptr_sparam_t)(jl_svec_t*, jl_value_t*, jl_value_t**, uint32_t);
 
 typedef struct _jl_llvm_functions_t {
-    void *functionObject;       // jlcall llvm Function
-    void *cFunctionList;        // c callable llvm Functions
-
-    // specialized llvm Function (common core for the other two)
-    void *specFunctionObject;
+    void *functionObject;     // jlcall llvm Function
+    void *specFunctionObject; // specialized llvm Function
 } jl_llvm_functions_t;
 
 // This type describes a single method definition, and stores data
@@ -240,6 +240,7 @@ typedef struct _jl_lambda_info_t {
     int8_t inInference; // flags to tell if inference is running on this function
     int8_t inCompile; // flag to tell if codegen is running on this function
     int8_t jlcall_api; // the c-abi for fptr; 0 = jl_fptr_t, 1 = jl_fptr_sparam_t
+    int8_t compile_traced; // if set will notify callback if this linfo is compiled
     jl_fptr_t fptr; // jlcall entry point
 
 // hidden fields:
@@ -373,7 +374,7 @@ typedef struct _jl_module_t {
     uint32_t counter;
 } jl_module_t;
 
-// one TupleType-to-Value entry
+// one Type-to-Value entry
 typedef struct _jl_typemap_entry_t {
     JL_DATA_TYPE
     struct _jl_typemap_entry_t *next; // invasive linked list
@@ -383,16 +384,16 @@ typedef struct _jl_typemap_entry_t {
     jl_svec_t *guardsigs;
     union {
         jl_value_t *value;
-        jl_lambda_info_t *linfo;
+        jl_lambda_info_t *linfo; // [nullable] for guard entries
         jl_method_t *method;
-    } func; // [nullable]
+    } func;
     // memoized properties of sig:
     int8_t isleafsig; // isleaftype(sig) & !any(isType, sig) : unsorted and very fast
     int8_t issimplesig; // all(isleaftype | isAny | isType | isVararg, sig) : sorted and fast
     int8_t va; // isVararg(sig)
 } jl_typemap_entry_t;
 
-// one level in a TupleMap tree
+// one level in a TypeMap tree
 // indexed by key if it is a sublevel in an array
 typedef struct _jl_typemap_level_t {
     JL_DATA_TYPE
@@ -402,7 +403,7 @@ typedef struct _jl_typemap_level_t {
     jl_value_t *key; // [nullable]
 } jl_typemap_level_t;
 
-// contains the TupleMap for one Type
+// contains the TypeMap for one Type
 typedef struct _jl_methtable_t {
     JL_DATA_TYPE
     jl_sym_t *name;
@@ -435,11 +436,15 @@ extern JL_DLLEXPORT jl_datatype_t *jl_typector_type;
 extern JL_DLLEXPORT jl_datatype_t *jl_sym_type;
 extern JL_DLLEXPORT jl_datatype_t *jl_symbol_type;
 extern JL_DLLEXPORT jl_datatype_t *jl_gensym_type;
-extern JL_DLLEXPORT jl_datatype_t *jl_slot_type;
+extern JL_DLLEXPORT jl_datatype_t *jl_abstractslot_type;
+extern JL_DLLEXPORT jl_datatype_t *jl_slotnumber_type;
+extern JL_DLLEXPORT jl_datatype_t *jl_typedslot_type;
 extern JL_DLLEXPORT jl_datatype_t *jl_simplevector_type;
 extern JL_DLLEXPORT jl_typename_t *jl_tuple_typename;
+extern JL_DLLEXPORT jl_typename_t *jl_vecelement_typename;
 extern JL_DLLEXPORT jl_datatype_t *jl_anytuple_type;
 #define jl_tuple_type jl_anytuple_type
+extern JL_DLLEXPORT jl_datatype_t *jl_anytuple_type_type;
 extern JL_DLLEXPORT jl_datatype_t *jl_ntuple_type;
 extern JL_DLLEXPORT jl_typename_t *jl_ntuple_typename;
 extern JL_DLLEXPORT jl_datatype_t *jl_vararg_type;
@@ -725,7 +730,7 @@ STATIC_INLINE void jl_array_uint8_set(void *a, size_t i, uint8_t x)
 #define jl_linenode_line(x) (((intptr_t*)x)[1])
 #define jl_labelnode_label(x) (((intptr_t*)x)[0])
 #define jl_slot_number(x) (((intptr_t*)x)[0])
-#define jl_slot_get_type(x) (((jl_value_t**)x)[1])
+#define jl_typedslot_get_type(x) (((jl_value_t**)x)[1])
 #define jl_gotonode_label(x) (((intptr_t*)x)[0])
 #define jl_globalref_mod(s) (*(jl_module_t**)s)
 #define jl_globalref_name(s) (((jl_sym_t**)s)[1])
@@ -840,7 +845,7 @@ static inline uint32_t jl_fielddesc_size(int8_t fielddesc_type)
 #define jl_is_bool(v)        jl_typeis(v,jl_bool_type)
 #define jl_is_symbol(v)      jl_typeis(v,jl_sym_type)
 #define jl_is_gensym(v)      jl_typeis(v,jl_gensym_type)
-#define jl_is_slot(v)        jl_typeis(v,jl_slot_type)
+#define jl_is_slot(v)        (jl_typeis(v,jl_slotnumber_type) || jl_typeis(v,jl_typedslot_type))
 #define jl_is_expr(v)        jl_typeis(v,jl_expr_type)
 #define jl_is_globalref(v)   jl_typeis(v,jl_globalref_type)
 #define jl_is_labelnode(v)   jl_typeis(v,jl_labelnode_type)
@@ -934,6 +939,12 @@ STATIC_INLINE int jl_is_tuple_type(void *t)
 {
     return (jl_is_datatype(t) &&
             ((jl_datatype_t*)(t))->name == jl_tuple_typename);
+}
+
+STATIC_INLINE int is_vecelement_type(jl_value_t* t)
+{
+    return (jl_is_datatype(t) &&
+            ((jl_datatype_t*)(t))->name == jl_vecelement_typename);
 }
 
 STATIC_INLINE int jl_is_vararg_type(jl_value_t *v)
@@ -1036,6 +1047,7 @@ JL_DLLEXPORT jl_value_t *jl_box_float32(float x);
 JL_DLLEXPORT jl_value_t *jl_box_float64(double x);
 JL_DLLEXPORT jl_value_t *jl_box_voidpointer(void *x);
 JL_DLLEXPORT jl_value_t *jl_box_gensym(size_t x);
+JL_DLLEXPORT jl_value_t *jl_box_slotnumber(size_t x);
 JL_DLLEXPORT jl_value_t *jl_box8 (jl_datatype_t *t, int8_t  x);
 JL_DLLEXPORT jl_value_t *jl_box16(jl_datatype_t *t, int16_t x);
 JL_DLLEXPORT jl_value_t *jl_box32(jl_datatype_t *t, int32_t x);
@@ -1287,8 +1299,6 @@ JL_DLLEXPORT const char *jl_lookup_soname(const char *pfx, size_t n);
 // compiler
 JL_DLLEXPORT jl_value_t *jl_toplevel_eval(jl_value_t *v);
 JL_DLLEXPORT jl_value_t *jl_toplevel_eval_in(jl_module_t *m, jl_value_t *ex);
-JL_DLLEXPORT jl_value_t *jl_toplevel_eval_in_warn(jl_module_t *m, jl_value_t *ex,
-                                                  int delay_warn);
 JL_DLLEXPORT jl_value_t *jl_load(const char *fname, size_t len);
 JL_DLLEXPORT jl_value_t *jl_interpret_toplevel_expr_in(jl_module_t *m, jl_value_t *e,
                                                        jl_lambda_info_t *lam);
@@ -1297,7 +1307,10 @@ JL_DLLEXPORT jl_module_t *jl_base_relative_to(jl_module_t *m);
 // tracing
 JL_DLLEXPORT void jl_trace_method(jl_method_t *m);
 JL_DLLEXPORT void jl_untrace_method(jl_method_t *m);
-JL_DLLEXPORT void jl_register_tracer(void (*callback)(jl_lambda_info_t *tracee));
+JL_DLLEXPORT void jl_trace_linfo(jl_lambda_info_t *linfo);
+JL_DLLEXPORT void jl_untrace_linfo(jl_lambda_info_t *linfo);
+JL_DLLEXPORT void jl_register_linfo_tracer(void (*callback)(jl_lambda_info_t *tracee));
+JL_DLLEXPORT void jl_register_method_tracer(void (*callback)(jl_lambda_info_t *tracee));
 JL_DLLEXPORT void jl_register_newmeth_tracer(void (*callback)(jl_method_t *tracee));
 
 // AST access
@@ -1432,7 +1445,7 @@ JL_DLLEXPORT void JL_NORETURN jl_rethrow(void);
 JL_DLLEXPORT void JL_NORETURN jl_rethrow_other(jl_value_t *e);
 
 #ifdef JULIA_ENABLE_THREADING
-STATIC_INLINE void jl_lock_frame_push(void (*unlock_func)(void))
+static inline void jl_lock_frame_push(jl_mutex_t *lock)
 {
     // For early bootstrap
     if (__unlikely(!jl_current_task))
@@ -1445,7 +1458,21 @@ STATIC_INLINE void jl_lock_frame_push(void (*unlock_func)(void))
     else {
         locks->len = len + 1;
     }
-    locks->items[len] = (void*)unlock_func;
+    locks->items[len] = (void*)lock;
+}
+static inline void jl_lock_frame_pop(void)
+{
+    if (__likely(jl_current_task)) {
+        jl_current_task->locks.len--;
+    }
+}
+#else
+static inline void jl_lock_frame_push(jl_mutex_t *lock)
+{
+    (void)lock;
+}
+static inline void jl_lock_frame_pop(void)
+{
 }
 #endif // ifndef JULIA_ENABLE_THREADING
 
@@ -1459,7 +1486,7 @@ STATIC_INLINE void jl_eh_restore_state(jl_handler_t *eh)
     arraylist_t *locks = &jl_current_task->locks;
     if (locks->len > eh->locks_len) {
         for (size_t i = locks->len;i > eh->locks_len;i--)
-            ((void(*)(void))locks->items[i - 1])();
+            jl_mutex_unlock_nogc((jl_mutex_t*)locks->items[i - 1]);
         locks->len = eh->locks_len;
     }
 #endif

@@ -514,7 +514,7 @@ JL_DLLEXPORT jl_value_t *jl_toplevel_eval_in(jl_module_t *m, jl_value_t *ex)
     return jl_toplevel_eval_in_warn(m, ex, 0);
 }
 
-JL_DLLEXPORT jl_value_t *jl_toplevel_eval_in_warn(jl_module_t *m, jl_value_t *ex, int delay_warn)
+jl_value_t *jl_toplevel_eval_in_warn(jl_module_t *m, jl_value_t *ex, int delay_warn)
 {
     static int jl_warn_on_eval = 0;
     int last_delay_warn = jl_warn_on_eval;
@@ -539,6 +539,8 @@ JL_DLLEXPORT jl_value_t *jl_toplevel_eval_in_warn(jl_module_t *m, jl_value_t *ex
             jl_printf(JL_STDERR, "\n  ** incremental compilation may be broken for these modules **\n\n");
         }
     }
+    if (in_pure_callback && !delay_warn)
+        jl_error("eval cannot be used in a generated function");
     JL_TRY {
         jl_warn_on_eval = delay_warn && (jl_warn_on_eval || m != last_m); // compute whether a warning was suppressed
         jl_current_task->current_module = jl_current_module = m;
@@ -1140,7 +1142,9 @@ void jl_init_primitives(void)
     add_builtin("TypeMapLevel", (jl_value_t*)jl_typemap_level_type);
     add_builtin("Symbol", (jl_value_t*)jl_sym_type);
     add_builtin("GenSym", (jl_value_t*)jl_gensym_type);
-    add_builtin("Slot", (jl_value_t*)jl_slot_type);
+    add_builtin("Slot", (jl_value_t*)jl_abstractslot_type);
+    add_builtin("SlotNumber", (jl_value_t*)jl_slotnumber_type);
+    add_builtin("TypedSlot", (jl_value_t*)jl_typedslot_type);
     add_builtin("IntrinsicFunction", (jl_value_t*)jl_intrinsic_type);
     add_builtin("Function", (jl_value_t*)jl_function_type);
     add_builtin("Builtin", (jl_value_t*)jl_builtin_type);
@@ -1188,23 +1192,22 @@ static size_t jl_show_svec(JL_STREAM *out, jl_svec_t *t, char *head, char *opn, 
     return n;
 }
 
-#define MAX_DEPTH 25
+struct recur_list {
+    struct recur_list *prev;
+    jl_value_t *v;
+};
 
-static size_t jl_static_show_x(JL_STREAM *out, jl_value_t *v, int depth);
+static size_t jl_static_show_x(JL_STREAM *out, jl_value_t *v, struct recur_list *depth);
 
 // `v` might be pointing to a field inlined in a structure therefore
 // `jl_typeof(v)` may not be the same with `vt` and only `vt` should be
 // used to determine the type of the value.
 // This is necessary to make sure that this function doesn't allocate any
 // memory through the Julia GC
-static size_t jl_static_show_x_(JL_STREAM *out, jl_value_t *v,
-                                jl_datatype_t *vt, int depth)
+static size_t jl_static_show_x_(JL_STREAM *out, jl_value_t *v, jl_datatype_t *vt,
+                                struct recur_list *depth)
 {
-    if (depth > MAX_DEPTH) { // cheap way of bailing out of cycles
-        return jl_printf(out, "•");
-    }
     size_t n = 0;
-    depth++;
     if ((uintptr_t)vt < 4096U) {
         n += jl_printf(out, "<?#%p::%p>", v, vt);
     }
@@ -1300,7 +1303,7 @@ static size_t jl_static_show_x_(JL_STREAM *out, jl_value_t *v,
 #endif
     }
     else if (vt == jl_float32_type) {
-        n += jl_printf(out, "%g", *(float*)v);
+        n += jl_printf(out, "%gf", *(float*)v);
     }
     else if (vt == jl_float64_type) {
         n += jl_printf(out, "%g", *(double*)v);
@@ -1405,6 +1408,24 @@ static size_t jl_static_show_x_(JL_STREAM *out, jl_value_t *v,
         size_t j, tlen = jl_array_len(v);
         jl_array_t *av = (jl_array_t*)v;
         jl_datatype_t *el_type = (jl_datatype_t*)jl_tparam0(vt);
+        int nlsep = 0;
+        if (av->flags.ptrarray) {
+            // print arrays with newlines, unless the elements are probably small
+            for (j = 0; j < tlen; j++) {
+                jl_value_t *p = jl_cellref(av, j);
+                if (p != NULL && (uintptr_t)p >= 4096U) {
+                    jl_value_t *p_ty = jl_typeof(p);
+                    if ((uintptr_t)p_ty >= 4096U) {
+                        if (!jl_isbits(p_ty)) {
+                            nlsep = 1;
+                            break;
+                        }
+                    }
+                }
+            }
+        }
+        if (nlsep && tlen > 1)
+            n += jl_printf(out, "\n  ");
         for (j = 0; j < tlen; j++) {
             if (av->flags.ptrarray) {
                 n += jl_static_show_x(out, jl_cellref(v, j), depth);
@@ -1413,10 +1434,9 @@ static size_t jl_static_show_x_(JL_STREAM *out, jl_value_t *v,
                 char *ptr = ((char*)av->data) + j * av->elsize;
                 n += jl_static_show_x_(out, (jl_value_t*)ptr, el_type, depth);
             }
-            if (j != tlen-1)
-                n += jl_printf(out, ", ");
+            if (j != tlen - 1)
+                n += jl_printf(out, nlsep ? ",\n  " : ", ");
         }
-        if (j < tlen) n += jl_printf(out, " ...");
         n += jl_printf(out, "]");
     }
     else if (vt == jl_loaderror_type) {
@@ -1479,17 +1499,25 @@ static size_t jl_static_show_x_(JL_STREAM *out, jl_value_t *v,
     return n;
 }
 
-static size_t jl_static_show_x(JL_STREAM *out, jl_value_t *v, int depth)
+static size_t jl_static_show_x(JL_STREAM *out, jl_value_t *v, struct recur_list *depth)
 {
     // mimic jl_show, but never calling a julia method and
-    // (hopefully) never allocate through julia gc
+    // never allocate through julia gc
     if (v == NULL) {
         return jl_printf(out, "#<null>");
     }
     else if ((uintptr_t)v < 4096U) {
         return jl_printf(out, "#<%d>", (int)(uintptr_t)v);
     }
-    return jl_static_show_x_(out, v, (jl_datatype_t*)jl_typeof(v), depth);
+    unsigned int dist = 1;
+    struct recur_list this_item = {depth, v}, *p = depth;
+    while (p) {
+        if (p->v == v)
+            return jl_printf(out, "<circular reference @-%u>", dist);
+        dist++;
+        p = p->prev;
+    }
+    return jl_static_show_x_(out, v, (jl_datatype_t*)jl_typeof(v), &this_item);
 }
 
 JL_DLLEXPORT size_t jl_static_show(JL_STREAM *out, jl_value_t *v)
@@ -1540,7 +1568,7 @@ JL_DLLEXPORT void jl_(void *jl_value)
     jl_jmp_buf buf;
     jl_safe_restore = &buf;
     if (!jl_setjmp(buf, 0)) {
-        (void)jl_static_show((JL_STREAM*)STDERR_FILENO, (jl_value_t*)jl_value);
+        jl_static_show((JL_STREAM*)STDERR_FILENO, (jl_value_t*)jl_value);
         jl_printf((JL_STREAM*)STDERR_FILENO,"\n");
     }
     else {

@@ -144,7 +144,19 @@ download
     @everywhere
 
 Execute an expression on all processes. Errors on any of the processes are collected into a
-`CompositeException` and thrown.
+`CompositeException` and thrown. For example :
+
+    @everywhere bar=1
+
+will define `bar` under module `Main` on all processes.
+
+Unlike `@spawn` and `@spawnat`, `@everywhere` does not capture any local variables. Prefixing
+`@everywhere` with `@eval` allows us to broadcast local variables using interpolation :
+
+    foo = 1
+    @eval @everywhere bar=\$foo
+
+
 """
 :@everywhere
 
@@ -1110,13 +1122,6 @@ results to `r`.
 any!
 
 """
-    falses(dims)
-
-Create a `BitArray` with all values set to `false`.
-"""
-falses
-
-"""
     filter!(function, collection)
 
 Update `collection`, removing elements for which `function` is `false`. For associative
@@ -1572,9 +1577,7 @@ ind2chr
 """
     reshape(A, dims)
 
-Create an array with the same data as the given array, but with different dimensions. An
-implementation for a particular type of array may choose whether the data is copied or
-shared.
+Create an array with the same data as the given array, but with different dimensions.
 """
 reshape
 
@@ -1689,7 +1692,7 @@ split
 """
     dump(x)
 
-Show all user-visible structure of a value.
+Show every part of the representation of a value.
 """
 dump
 
@@ -2654,7 +2657,7 @@ Example for a sparse 2-d array:
 
 ```jldoctest
 julia> A = sparse([1, 1, 2], [1, 3, 1], [1, 2, -5])
-2x3 sparse matrix with 3 Int64 entries:
+2×3 sparse matrix with 3 Int64 nonzero entries:
         [1, 1]  =  1
         [2, 1]  =  -5
         [1, 3]  =  2
@@ -2748,9 +2751,9 @@ mapping the SharedArray
 indexpids
 
 """
-    remotecall_wait(func, id, args...)
+    remotecall_wait(func, id, args...; kwargs...)
 
-Perform `wait(remotecall(...))` in one message.
+Perform `wait(remotecall(...))` in one message. Keyword arguments, if any, are passed through to `func`.
 """
 remotecall_wait
 
@@ -3009,23 +3012,23 @@ julia> a, b, c, d, e, f = 1, 2, 3, 4, 5, 6
 (1,2,3,4,5,6)
 
 julia> [a b c; d e f]
-2x3 Array{Int64,2}:
+2×3 Array{Int64,2}:
  1  2  3
  4  5  6
 
 julia> hvcat((3,3), a,b,c,d,e,f)
-2x3 Array{Int64,2}:
+2×3 Array{Int64,2}:
  1  2  3
  4  5  6
 
 julia> [a b;c d; e f]
-3x2 Array{Int64,2}:
+3×2 Array{Int64,2}:
  1  2
  3  4
  5  6
 
 julia> hvcat((2,2,2), a,b,c,d,e,f)
-3x2 Array{Int64,2}:
+3×2 Array{Int64,2}:
  1  2
  3  4
  5  6
@@ -4372,13 +4375,6 @@ Pick a random element or array of random elements from the set of values specifi
 rand
 
 """
-    bitpack(A::AbstractArray{T,N}) -> BitArray
-
-Converts a numeric array to a packed boolean array.
-"""
-bitpack
-
-"""
     base(base, n, [pad])
 
 Convert an integer to a string in the given base, optionally specifying a number of digits
@@ -5336,7 +5332,7 @@ overwriting the existing value of `Y`. Note that `Y` must not be aliased with ei
 julia> A=[1.0 2.0; 3.0 4.0]; B=[1.0 1.0; 1.0 1.0]; Y = similar(B); A_mul_B!(Y, A, B);
 
 julia> Y
-2x2 Array{Float64,2}:
+2×2 Array{Float64,2}:
  3.0  3.0
  7.0  7.0
 ```
@@ -5396,10 +5392,10 @@ value is a range of indexes where the matching sequence is found, such that `s[s
 search
 
 """
-    remotecall_fetch(func, id, args...)
+    remotecall_fetch(func, id, args...; kwargs...)
 
-Perform `fetch(remotecall(...))` in one message. Any remote exceptions are captured in a
-`RemoteException` and thrown.
+Perform `fetch(remotecall(...))` in one message.  Keyword arguments, if any, are passed through to `func`.
+Any remote exceptions are captured in a `RemoteException` and thrown.
 """
 remotecall_fetch
 
@@ -6040,7 +6036,7 @@ histrange
 """
     eta(x)
 
-Dirichlet eta function ``\\eta(s) = \\sum^\\infty_{n=1}(-)^{n-1}/n^{s}``.
+Dirichlet eta function ``\\eta(s) = \\sum^\\infty_{n=1}(-1)^{n-1}/n^{s}``.
 """
 eta
 
@@ -6292,7 +6288,7 @@ For example, `similar(1:10, 1, 4)` returns an uninitialized `Array{Int,2}` since
 neither mutable nor support 2 dimensions:
 
     julia> similar(1:10, 1, 4)
-    1x4 Array{Int64,2}:
+    1×4 Array{Int64,2}:
      4419743872  4374413872  4419743888  0
 
 Conversely, `similar(trues(10,10), 2)` returns an uninitialized `BitVector` with two
@@ -6307,7 +6303,7 @@ Since `BitArray`s can only store elements of type `Bool`, however, if you reques
 different element type it will create a regular `Array` instead:
 
     julia> similar(falses(10), Float64, 2, 4)
-    2x4 Array{Float64,2}:
+    2×4 Array{Float64,2}:
      2.18425e-314  2.18425e-314  2.18425e-314  2.18425e-314
      2.18425e-314  2.18425e-314  2.18425e-314  2.18425e-314
 """
@@ -7811,13 +7807,6 @@ x == fld(x,y)*y + mod(x,y)
 mod
 
 """
-    trues(dims)
-
-Create a `BitArray` with all values set to `true`.
-"""
-trues
-
-"""
     qr(A [,pivot=Val{false}][;thin=true]) -> Q, R, [p]
 
 Compute the (pivoted) QR factorization of `A` such that either `A = Q*R` or `A[:,p] = Q*R`.
@@ -8187,13 +8176,6 @@ character whose category code begins with 'P'. For strings, tests whether this i
 all elements of the string.
 """
 ispunct
-
-"""
-    bitunpack(B::BitArray{N}) -> Array{Bool,N}
-
-Converts a packed boolean array to an array of booleans.
-"""
-bitunpack
 
 """
     size(A, [dim...])
@@ -8665,10 +8647,10 @@ result is a `Vector{UInt8,1}`.
 readavailable
 
 """
-    remotecall(func, id, args...)
+    remotecall(func, id, args...; kwargs...)
 
 Call a function asynchronously on the given arguments on the specified process. Returns a `Future`.
-If using keyword arguments for `func`, `remotecall` can be called with `remotecall(()->func(args...; kw...), id)`.
+Keyword arguments, if any, are passed through to `func`.
 """
 remotecall
 
@@ -8884,13 +8866,6 @@ true
 ```
 """
 applicable
-
-"""
-    xdump(x)
-
-Show all structure of a value, including all fields of objects.
-"""
-xdump
 
 """
     Base.process_messages(instrm::AsyncStream, outstrm::AsyncStream)
@@ -9389,7 +9364,7 @@ isxdigit
 """
     fill(x, dims)
 
-Create an array filled with the value `x`. For example, `fill(1.0, (10,10))` returns a 10x10
+Create an array filled with the value `x`. For example, `fill(1.0, (10,10))` returns a 10×10
 array of floats, with each element initialized to `1.0`.
 
 If `x` is an object reference, all elements will refer to the same object. `fill(Foo(),
@@ -9592,14 +9567,6 @@ symbol
 Riemann zeta function ``\\zeta(s)``.
 """
 zeta(s)
-
-"""
-    zeta(s, z)
-
-Hurwitz zeta function ``\\zeta(s, z)``.  (This is equivalent to the Riemann zeta function
-``\\zeta(s)`` for the case of `z=1`.)
-"""
-zeta(s,z)
 
 """
     A_mul_Bt(A, B)
@@ -9986,7 +9953,7 @@ on the `permute` and `scale` keyword arguments. The eigenvectors are returned co
 ```jldoctest
 julia> eig([1.0 0.0 0.0; 0.0 3.0 0.0; 0.0 0.0 18.0])
 ([1.0,3.0,18.0],
-3x3 Array{Float64,2}:
+3×3 Array{Float64,2}:
  1.0  0.0  0.0
  0.0  1.0  0.0
  0.0  0.0  1.0)

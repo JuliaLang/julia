@@ -507,7 +507,7 @@ Mathematical Operators
        julia> A=[1.0 2.0; 3.0 4.0]; B=[1.0 1.0; 1.0 1.0]; Y = similar(B); A_mul_B!(Y, A, B);
 
        julia> Y
-       2x2 Array{Float64,2}:
+       2×2 Array{Float64,2}:
         3.0  3.0
         7.0  7.0
 
@@ -890,7 +890,7 @@ Mathematical Functions
 
    .. Docstring generated from Julia source
 
-   Compute the hypotenuse :math:`\sqrt{\sum x_i}` avoiding overflow and underflow.
+   Compute the hypotenuse :math:`\sqrt{\sum x_i^2}` avoiding overflow and underflow.
 
 .. function:: log(x)
 
@@ -1662,7 +1662,7 @@ Mathematical Functions
 
    .. Docstring generated from Julia source
 
-   Dirichlet eta function :math:`\eta(s) = \sum^\infty_{n=1}(-)^{n-1}/n^{s}`\ .
+   Dirichlet eta function :math:`\eta(s) = \sum^\infty_{n=1}(-1)^{n-1}/n^{s}`\ .
 
 .. function:: zeta(s)
 
@@ -1674,7 +1674,7 @@ Mathematical Functions
 
    .. Docstring generated from Julia source
 
-   Hurwitz zeta function :math:`\zeta(s, z)`\ .  (This is equivalent to the Riemann zeta function :math:`\zeta(s)` for the case of ``z=1``\ .)
+   Generalized zeta function :math:`\zeta(s, z)`\ , defined by the sum :math:`\sum_{k=0}^\infty ((k+z)^2)^{-s/2}`\ , where any term with :math:`k+z=0` is excluded.  For :math:`\Re z > 0`\ , this definition is equivalent to the Hurwitz zeta function :math:`\sum_{k=0}^\infty (k+z)^{-s}`\ .   For :math:`z=1`\ , it yields the Riemann zeta function :math:`\zeta(s)`\ .
 
 .. function:: ndigits(n, b)
 
@@ -1961,7 +1961,7 @@ multi-threading. Use ``FFTW.set_num_threads(np)`` to use ``np`` threads.
 
    Pre-plan an optimized FFT along given dimensions (``dims``\ ) of arrays matching the shape and type of ``A``\ .  (The first two arguments have the same meaning as for :func:`fft`\ .) Returns an object ``P`` which represents the linear operator computed by the FFT, and which contains all of the information needed to compute ``fft(A, dims)`` quickly.
 
-   To apply ``P`` to an array ``A``\ , use ``P * A``\ ; in general, the syntax for applying plans is much like that of matrices.  (A plan can only be applied to arrays of the same size as the ``A`` for which the plan was created.)  You can also apply a plan with a preallocated output array ``Â`` by calling ``A_mul_B!(Â, plan, A)``\ .  You can compute the inverse-transform plan by ``inv(P)`` and apply the inverse plan with ``P \ Â`` (the inverse plan is cached and reused for subsequent calls to ``inv`` or ``\``\ ), and apply the inverse plan to a pre-allocated output array ``A`` with ``A_ldiv_B!(A, P, Â)``\ .
+   To apply ``P`` to an array ``A``\ , use ``P * A``\ ; in general, the syntax for applying plans is much like that of matrices.  (A plan can only be applied to arrays of the same size as the ``A`` for which the plan was created.)  You can also apply a plan with a preallocated output array ``Â`` by calling ``A_mul_B!(Â, plan, A)``\ .  (For ``A_mul_B!``\ , however, the input array ``A`` must be a complex floating-point array like the output ``Â``\ .) You can compute the inverse-transform plan by ``inv(P)`` and apply the inverse plan with ``P \ Â`` (the inverse plan is cached and reused for subsequent calls to ``inv`` or ``\``\ ), and apply the inverse plan to a pre-allocated output array ``A`` with ``A_ldiv_B!(A, P, Â)``\ .
 
    The ``flags`` argument is a bitwise-or of FFTW planner flags, defaulting to ``FFTW.ESTIMATE``\ . e.g. passing ``FFTW.MEASURE`` or ``FFTW.PATIENT`` will instead spend several seconds (or more) benchmarking different possible FFT algorithms and picking the fastest one; see the FFTW manual for more information on planner flags.  The optional ``timelimit`` argument specifies a rough upper bound on the allowed planning time, in seconds. Passing ``FFTW.MEASURE`` or ``FFTW.PATIENT`` may cause the input array ``A`` to be overwritten with zeros during plan creation.
 

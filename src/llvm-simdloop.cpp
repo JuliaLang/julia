@@ -29,11 +29,11 @@ bool annotateSimdLoop(BasicBlock *incr)
     DEBUG(dbgs() << "LSL: annotating simd_loop\n");
     // Lazy initialization
     if (!simd_loop_mdkind) {
-        simd_loop_mdkind = getGlobalContext().getMDKindID("simd_loop");
+        simd_loop_mdkind = incr->getContext().getMDKindID("simd_loop");
 #ifdef LLVM36
-        simd_loop_md = MDNode::get(getGlobalContext(), ArrayRef<Metadata*>());
+        simd_loop_md = MDNode::get(incr->getContext(), ArrayRef<Metadata*>());
 #else
-        simd_loop_md = MDNode::get(getGlobalContext(), ArrayRef<Value*>());
+        simd_loop_md = MDNode::get(incr->getContext(), ArrayRef<Value*>());
 #endif
     }
     // Ideally, the decoration would go on the block itself, but LLVM 3.3 does not
@@ -149,26 +149,28 @@ bool LowerSIMDLoop::runOnLoop(Loop *L, LPPassManager &LPM)
         return false;
 
     DEBUG(dbgs() << "LSL: simd_loop found\n");
+    BasicBlock *Lh = L->getHeader();
+    DEBUG(dbgs() << "LSL: loop header: " << *Lh << "\n");
 #ifdef LLVM34
     MDNode *n = L->getLoopID();
     if (!n) {
         // Loop does not have a LoopID yet, so give it one.
 #ifdef LLVM36
-        n = MDNode::get(getGlobalContext(), ArrayRef<Metadata*>(NULL));
+        n = MDNode::get(Lh->getContext(), ArrayRef<Metadata*>(NULL));
 #else
-        n = MDNode::get(getGlobalContext(), ArrayRef<Value*>(NULL));
+        n = MDNode::get(Lh->getContext(), ArrayRef<Value*>(NULL));
 #endif
         n->replaceOperandWith(0,n);
         L->setLoopID(n);
     }
 #else
-    MDNode *n = MDNode::get(getGlobalContext(), ArrayRef<Value*>());
+    MDNode *n = MDNode::get(Lh->getContext(), ArrayRef<Value*>());
     L->getLoopLatch()->getTerminator()->setMetadata("llvm.loop.parallel", n);
 #endif
 #ifdef LLVM36
-    MDNode *m = MDNode::get(getGlobalContext(), ArrayRef<Metadata*>(n));
+    MDNode *m = MDNode::get(Lh->getContext(), ArrayRef<Metadata*>(n));
 #else
-    MDNode *m = MDNode::get(getGlobalContext(), ArrayRef<Value*>(n));
+    MDNode *m = MDNode::get(Lh->getContext(), ArrayRef<Value*>(n));
 #endif
 
     // Mark memory references so that Loop::isAnnotatedParallel will return true for this loop.
@@ -179,8 +181,6 @@ bool LowerSIMDLoop::runOnLoop(Loop *L, LPPassManager &LPM)
     assert(L->isAnnotatedParallel());
 
     // Mark floating-point reductions as okay to reassociate/commute.
-    BasicBlock *Lh = L->getHeader();
-    DEBUG(dbgs() << "LSL: loop header: " << *Lh << "\n");
     for (BasicBlock::iterator I = Lh->begin(), E = Lh->end(); I!=E; ++I)
         if (PHINode *Phi = dyn_cast<PHINode>(I))
             enableUnsafeAlgebraIfReduction(Phi,L);

@@ -1224,7 +1224,12 @@ Errors
 
    Returns a lambda that retries function ``f`` up to ``n`` times in the event of an exception. If ``condition`` is a ``Type`` then retry only for exceptions of that type. If ``condition`` is a function ``cond(::Exception) -> Bool`` then retry only if it is true.
 
-   e.g. ``retry(http_get, e->e.status == "503")(url)`` or ``retry(read, UVError)(io)``\ .
+   **Examples**
+
+   .. code-block:: julia
+
+       retry(http_get, e -> e.status == "503")(url)
+       retry(read, UVError)(io)
 
 .. function:: @catch(f) -> Function
 
@@ -1232,7 +1237,18 @@ Errors
 
    Returns a lambda that executes ``f`` and returns either the result of ``f`` or an ``Exception`` thrown by ``f``\ .
 
-   e.g. ``@catch(length)() == MethodError(length,())``      ``@catch(length)([1,2,3]) == 3``
+   **Examples**
+
+   .. code-block:: julia
+
+       julia> r = @catch(length)([1,2,3])
+       3
+
+       julia> r = @catch(length)()
+       MethodError(length,())
+
+       julia> typeof(r)
+       MethodError
 
 Events
 ------

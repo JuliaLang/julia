@@ -73,15 +73,15 @@ JL_DLLEXPORT jl_value_t *jl_pointerset(jl_value_t *p, jl_value_t *x, jl_value_t 
 
 static inline unsigned int next_power_of_two(unsigned int val)
 {
-  /* this function taken from libuv src/unix/core.c */
-  val -= 1;
-  val |= val >> 1;
-  val |= val >> 2;
-  val |= val >> 4;
-  val |= val >> 8;
-  val |= val >> 16;
-  val += 1;
-  return val;
+    /* this function taken from libuv src/unix/core.c */
+    val -= 1;
+    val |= val >> 1;
+    val |= val >> 2;
+    val |= val >> 4;
+    val |= val >> 8;
+    val |= val >> 16;
+    val += 1;
+    return val;
 }
 
 static inline char signbitbyte(void *a, unsigned bytes)
@@ -865,28 +865,6 @@ checked_iintrinsic_slow(LLVMDiv_sov, checked_sdiv_int,  )
 checked_iintrinsic_slow(LLVMDiv_uov, checked_udiv_int, u)
 checked_iintrinsic_slow(LLVMRem_sov, checked_srem_int,  )
 checked_iintrinsic_slow(LLVMRem_uov, checked_urem_int, u)
-
-JL_DLLEXPORT jl_value_t *jl_nan_dom_err(jl_value_t *a, jl_value_t *b)
-{
-    jl_value_t *ty = jl_typeof(a);
-    if (jl_typeof(b) != ty)
-        jl_error("nan_dom_err: types of a and b must match");
-    if (!jl_is_bitstype(ty))
-        jl_error("nan_dom_err: values are not bitstypes");
-    switch (jl_datatype_size(ty)) {
-        case 4:
-            if (isnan(*(float*)a) && !isnan(*(float*)b))
-                jl_throw(jl_domain_exception);
-            break;
-        case 8:
-            if (isnan(*(double*)a) && !isnan(*(double*)b))
-                jl_throw(jl_domain_exception);
-            break;
-        default:
-            jl_error("nan_dom_err: runtime floating point intrinsics are not implemented for bit sizes other than 32 and 64");
-    }
-    return a;
-}
 
 // functions
 #define flipsign(a, b) \

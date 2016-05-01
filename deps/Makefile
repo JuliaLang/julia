@@ -720,6 +720,14 @@ $(eval $(call LLVM_PATCH,llvm-3.7.1_2))
 $(eval $(call LLVM_PATCH,llvm-3.7.1_3))
 $(eval $(call LLVM_PATCH,llvm-D14260))
 $(LLVM_SRC_DIR)/llvm-3.7.1_2.patch-applied: $(LLVM_SRC_DIR)/llvm-3.7.1.patch-applied
+else ifeq ($(LLVM_VER),3.8.0)
+$(eval $(call LLVM_PATCH,llvm-3.7.1_3))
+$(eval $(call LLVM_PATCH,llvm-D14260))
+$(eval $(call LLVM_PATCH,llvm-3.8.0_winshlib))
+# Cygwin and openSUSE still use win32-threads mingw, https://llvm.org/bugs/show_bug.cgi?id=26365
+$(eval $(call LLVM_PATCH,llvm-3.8.0_threads))
+# fix replutil test on unix
+$(eval $(call LLVM_PATCH,llvm-D17165-D18583))
 endif # LLVM_VER
 
 ifeq ($(LLVM_VER),3.7.1)
@@ -1188,7 +1196,6 @@ endif
 OPENBLAS_BUILD_OPTS += MAKE_NB_JOBS=0
 
 $(BUILDDIR)/$(OPENBLAS_SRC_DIR)/config.status: $(BUILDDIR)/$(OPENBLAS_SRC_DIR)/Makefile
-	cd $(dir $@) && patch -p1 < $(SRCDIR)/openblas-make.patch
 	perl -i -ple 's/^\s*(EXTRALIB\s*\+=\s*-lSystemStubs)\s*$$/# $$1/g' $<.system
 	touch $@
 $(OPENBLAS_OBJ_SOURCE): $(BUILDDIR)/$(OPENBLAS_SRC_DIR)/config.status
@@ -1399,7 +1406,7 @@ endif
 
 # ARPACK-NG upstream keeps changing their download filenames
 $(SRCDIR)/srccache/arpack-ng-$(ARPACK_VER).tar.gz: | $(SRCDIR)/srccache
-	$(JLDOWNLOAD) $@ https://github.com/opencollab/arpack-ng/archive/$(ARPACK_VER).tar.gz
+	$(JLDOWNLOAD) $@ https://s3.amazonaws.com/julialang/src/arpack-ng-$(ARPACK_VER).tar.gz
 	touch -c $@
 $(SRCDIR)/srccache/arpack-ng-$(ARPACK_VER)-testA.mtx: | $(SRCDIR)/srccache
 	$(JLDOWNLOAD) $@ https://raw.githubusercontent.com/opencollab/arpack-ng/$(ARPACK_VER)/TESTS/testA.mtx
@@ -1459,7 +1466,7 @@ clean-arpack:
 distclean-arpack:
 	-rm -rf $(SRCDIR)/srccache/arpack-ng-$(ARPACK_VER).tar.gz \
 		$(SRCDIR)/srccache/arpack-ng-$(ARPACK_VER) \
-		$(SRCDIR)/srccache/arpack-ng-3.2.0-testA.mtx \
+		$(SRCDIR)/srccache/arpack-ng-$(ARPACK_VER)-testA.mtx \
 		$(BUILDDIR)/arpack-ng-$(ARPACK_VER)
 
 get-arpack: $(SRCDIR)/srccache/arpack-ng-$(ARPACK_VER).tar.gz $(SRCDIR)/srccache/arpack-ng-$(ARPACK_VER)-testA.mtx

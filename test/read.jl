@@ -296,7 +296,7 @@ for (name, f) in l
     @test readstring("$filename.to") == text
 
     verbose && println("$name write(::IOBuffer, ...)")
-    to = IOBuffer(Vector{UInt8}(copy(text)), false, true)
+    to = IOBuffer(copy(text.data), false, true)
     write(to, io())
     @test takebuf_string(to) == text
 
@@ -360,7 +360,6 @@ test_read_nbyte()
 @test_throws EOFError read(DevNull, UInt8)
 @test close(DevNull) === nothing
 @test flush(DevNull) === nothing
-@test copy(DevNull) === DevNull
 @test eof(DevNull)
 @test print(DevNull, "go to /dev/null") === nothing
 

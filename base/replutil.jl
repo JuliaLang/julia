@@ -3,6 +3,7 @@
 # fallback text/plain representation of any type:
 writemime(io::IO, ::MIME"text/plain", x) = showcompact(io, x)
 writemime(io::IO, ::MIME"text/plain", x::Number) = show(io, x)
+writemime(io::IO, ::MIME"text/plain", x::Associative) = showdict(io, x)
 
 function writemime(io::IO, ::MIME"text/plain", f::Function)
     ft = typeof(f)

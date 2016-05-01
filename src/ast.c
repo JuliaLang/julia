@@ -225,13 +225,13 @@ static void jl_init_ast_ctx(jl_ast_context_t *ast_ctx)
 }
 
 // There should be no GC allocation while holding this lock
-JL_DEFINE_MUTEX(flisp)
+static jl_mutex_t flisp_lock;
 static jl_ast_context_list_t *jl_ast_ctx_using = NULL;
 static jl_ast_context_list_t *jl_ast_ctx_freed = NULL;
 
 static jl_ast_context_t *jl_ast_ctx_enter(void)
 {
-    JL_LOCK_NOGC(flisp);
+    JL_LOCK_NOGC(&flisp_lock);
     jl_ast_context_list_t *node;
     jl_ast_context_t *ctx;
     // First check if the current task is using one of the contexts
@@ -239,7 +239,7 @@ static jl_ast_context_t *jl_ast_ctx_enter(void)
         ctx = jl_ast_context_list_item(node);
         if (ctx->task == jl_current_task) {
             ctx->ref++;
-            JL_UNLOCK_NOGC(flisp);
+            JL_UNLOCK_NOGC(&flisp_lock);
             return ctx;
         }
     }
@@ -251,7 +251,7 @@ static jl_ast_context_t *jl_ast_ctx_enter(void)
         ctx->ref = 1;
         ctx->task = jl_current_task;
         ctx->roots = NULL;
-        JL_UNLOCK_NOGC(flisp);
+        JL_UNLOCK_NOGC(&flisp_lock);
         return ctx;
     }
     // Construct a new one if we can't find any
@@ -261,7 +261,7 @@ static jl_ast_context_t *jl_ast_ctx_enter(void)
     ctx->task = jl_current_task;
     node = &ctx->list;
     jl_ast_context_list_insert(&jl_ast_ctx_using, node);
-    JL_UNLOCK_NOGC(flisp);
+    JL_UNLOCK_NOGC(&flisp_lock);
     jl_init_ast_ctx(ctx);
     return ctx;
 }
@@ -270,12 +270,12 @@ static void jl_ast_ctx_leave(jl_ast_context_t *ctx)
 {
     if (--ctx->ref)
         return;
-    JL_LOCK_NOGC(flisp);
+    JL_LOCK_NOGC(&flisp_lock);
     ctx->task = NULL;
     jl_ast_context_list_t *node = &ctx->list;
     jl_ast_context_list_delete(node);
     jl_ast_context_list_insert(&jl_ast_ctx_freed, node);
-    JL_UNLOCK_NOGC(flisp);
+    JL_UNLOCK_NOGC(&flisp_lock);
 }
 
 void jl_init_frontend(void)
@@ -443,13 +443,8 @@ static jl_value_t *scm_to_julia_(fl_context_t *fl_ctx, value_t e, int eo)
             hd = car_(e);
             if (hd == jl_ast_ctx(fl_ctx)->jlgensym_sym)
                 return jl_box_gensym(numval(car_(cdr_(e))));
-            else if (hd == jl_ast_ctx(fl_ctx)->slot_sym) {
-                jl_value_t *slotnum = jl_box_long(numval(car_(cdr_(e))));
-                JL_GC_PUSH1(&slotnum);
-                jl_value_t *res = jl_new_struct(jl_slot_type, slotnum, jl_any_type);
-                JL_GC_POP();
-                return res;
-            }
+            else if (hd == jl_ast_ctx(fl_ctx)->slot_sym)
+                return jl_box_slotnumber(numval(car_(cdr_(e))));
             else if (hd == jl_ast_ctx(fl_ctx)->null_sym && llength(e) == 1)
                 return jl_nothing;
         }
@@ -677,7 +672,7 @@ static value_t julia_to_scm_(fl_context_t *fl_ctx, jl_value_t *v)
     // GC Note: jl_fieldref(v, 0) allocate for LabelNode, GotoNode
     //          but we don't need a GC root here because julia_to_list2
     //          shouldn't allocate in this case.
-    if (jl_typeis(v, jl_slot_type))
+    if (jl_is_slot(v))
         return julia_to_list2(fl_ctx, (jl_value_t*)slot_sym, jl_fieldref(v,0));
     if (jl_typeis(v, jl_labelnode_type))
         return julia_to_list2(fl_ctx, (jl_value_t*)label_sym, jl_fieldref(v,0));
@@ -745,6 +740,8 @@ JL_DLLEXPORT jl_value_t *jl_parse_string(const char *str, size_t len,
 jl_value_t *jl_parse_eval_all(const char *fname, size_t len,
                               const char *content, size_t contentlen)
 {
+    if (in_pure_callback)
+        jl_error("cannot use include inside a generated function");
     jl_ast_context_t *ctx = jl_ast_ctx_enter();
     fl_context_t *fl_ctx = &ctx->fl;
     value_t f, ast;

@@ -39,6 +39,19 @@ indexed_next(I, i, state) = done(I,state) ? throw(BoundsError()) : next(I, state
 eltype(::Type{Tuple{}}) = Bottom
 eltype{T,_}(::Type{NTuple{_,T}}) = T
 
+# front (the converse of tail: it skips the last entry)
+
+function front(t::Tuple)
+    @_inline_meta
+    _front((), t...)
+end
+front(::Tuple{}) = error("Cannot call front on an empty tuple")
+_front(out, v) = out
+function _front(out, v, t...)
+    @_inline_meta
+    _front((out..., v), t...)
+end
+
 ## mapping ##
 
 ntuple(f::Function, n::Integer) =

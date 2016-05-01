@@ -135,6 +135,7 @@ function getindex(T::Type, vals...)
     end
     return a
 end
+getindex(T::Type) = Array{T}(0)
 
 function getindex(::Type{Any}, vals::ANY...)
     a = Array(Any,length(vals))
@@ -143,6 +144,7 @@ function getindex(::Type{Any}, vals::ANY...)
     end
     return a
 end
+getindex(::Type{Any}) = Array{Any}(0)
 
 function fill!(a::Union{Array{UInt8}, Array{Int8}}, x::Integer)
     ccall(:memset, Ptr{Void}, (Ptr{Void}, Cint, Csize_t), a, x, length(a))

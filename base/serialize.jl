@@ -437,6 +437,13 @@ end
 function serialize(s::SerializationState, t::DataType)
     tag = sertag(t)
     tag > 0 && return write_as_tag(s.io, tag)
+    if t === Tuple
+        # `sertag` is not able to find types === to `Tuple` because they
+        # will not have been hash-consed. Plus `serialize_type_data` does not
+        # handle this case correctly, since Tuple{} != Tuple. `Tuple` is the
+        # only type with this property. issue #15849
+        return write_as_tag(s.io, TUPLE_TAG)
+    end
     serialize_type_data(s, t, true)
 end
 

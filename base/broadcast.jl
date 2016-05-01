@@ -4,7 +4,6 @@ module Broadcast
 
 using ..Cartesian
 using Base: promote_op, promote_eltype, promote_eltype_op, @get!, _msk_end, unsafe_bitgetindex
-using Base: AddFun, SubFun, MulFun, LDivFun, RDivFun, PowFun
 import Base: .+, .-, .*, ./, .\, .//, .==, .<, .!=, .<=, .÷, .%, .<<, .>>, .^
 export broadcast, broadcast!, broadcast_function, broadcast!_function, bitbroadcast
 export broadcast_getindex, broadcast_setindex!
@@ -103,39 +102,8 @@ end
 const bitcache_chunks = 64 # this can be changed
 const bitcache_size = 64 * bitcache_chunks # do not change this
 
-function bpack(z::UInt64)
-    z |= z >>> 7
-    z |= z >>> 14
-    z |= z >>> 28
-    z &= 0xFF
-    return z
-end
-
-function dumpbitcache(Bc::Vector{UInt64}, bind::Int, C::Vector{Bool})
-    ind = 1
-    nc = min(bitcache_chunks, length(Bc)-bind+1)
-    C8 = reinterpret(UInt64, C)
-    nc8 = (nc >>> 3) << 3
-    @inbounds for i = 1:nc8
-        c = UInt64(0)
-        for j = 0:8:63
-            c |= (bpack(C8[ind]) << j)
-            ind += 1
-        end
-        Bc[bind] = c
-        bind += 1
-    end
-    ind = (ind-1) << 3 + 1
-    @inbounds for i = (nc8+1):nc
-        c = UInt64(0)
-        for j = 0:63
-            c |= (UInt64(C[ind]) << j)
-            ind += 1
-        end
-        Bc[bind] = c
-        bind += 1
-    end
-end
+dumpbitcache(Bc::Vector{UInt64}, bind::Int, C::Vector{Bool}) =
+    Base.copy_to_bitarray_chunks!(Bc, ((bind - 1) << 6) + 1, C, 1, min(bitcache_size, (length(Bc)-bind+1) << 6))
 
 # using cartesian indexing
 function gen_broadcast_body_cartesian_tobitarray(nd::Int, narrays::Int, f)
@@ -223,9 +191,9 @@ function gen_broadcast_function_tobitarray(genbody::Function, nd::Int, narrays::
 end
 
 for (Bsig, Asig, gbf, gbb) in
-    ((BitArray                          , Union{Array,BitArray,Number}                   ,
+    ((BitArray                          , Union{Array,BitArray,Number}            ,
       :gen_broadcast_function_tobitarray, :gen_broadcast_body_iter_tobitarray     ),
-     (Any                               , Union{Array,BitArray,Number}                   ,
+     (Any                               , Union{Array,BitArray,Number}            ,
       :gen_broadcast_function           , :gen_broadcast_body_iter                ),
      (BitArray                          , Any                                     ,
       :gen_broadcast_function_tobitarray, :gen_broadcast_body_cartesian_tobitarray),
@@ -308,24 +276,24 @@ end
 .<<(A::AbstractArray, B::AbstractArray) = broadcast(<<, A, B)
 .>>(A::AbstractArray, B::AbstractArray) = broadcast(>>, A, B)
 
-eltype_plus(As::AbstractArray...) = promote_eltype_op(AddFun(), As...)
+eltype_plus(As::AbstractArray...) = promote_eltype_op(+, As...)
 
 .+(As::AbstractArray...) = broadcast!(+, Array(eltype_plus(As...), broadcast_shape(As...)), As...)
 
 function .-(A::AbstractArray, B::AbstractArray)
-    broadcast!(-, Array(promote_op(SubFun(), eltype(A), eltype(B)), broadcast_shape(A,B)), A, B)
+    broadcast!(-, Array(promote_op(-, eltype(A), eltype(B)), broadcast_shape(A,B)), A, B)
 end
 
-eltype_mul(As::AbstractArray...) = promote_eltype_op(MulFun(), As...)
+eltype_mul(As::AbstractArray...) = promote_eltype_op(*, As...)
 
 .*(As::AbstractArray...) = broadcast!(*, Array(eltype_mul(As...), broadcast_shape(As...)), As...)
 
 function ./(A::AbstractArray, B::AbstractArray)
-    broadcast!(/, Array(promote_op(RDivFun(), eltype(A), eltype(B)), broadcast_shape(A, B)), A, B)
+    broadcast!(/, Array(promote_op(/, eltype(A), eltype(B)), broadcast_shape(A, B)), A, B)
 end
 
 function .\(A::AbstractArray, B::AbstractArray)
-    broadcast!(\, Array(promote_op(LDivFun(), eltype(A), eltype(B)), broadcast_shape(A, B)), A, B)
+    broadcast!(\, Array(promote_op(\, eltype(A), eltype(B)), broadcast_shape(A, B)), A, B)
 end
 
 typealias RatIntT{T<:Integer} Union{Type{Rational{T}},Type{T}}
@@ -339,7 +307,7 @@ function .//(A::AbstractArray, B::AbstractArray)
 end
 
 function .^(A::AbstractArray, B::AbstractArray)
-    broadcast!(^, Array(promote_op(PowFun(), eltype(A), eltype(B)), broadcast_shape(A, B)), A, B)
+    broadcast!(^, Array(promote_op(^, eltype(A), eltype(B)), broadcast_shape(A, B)), A, B)
 end
 
 ## element-wise comparison operators returning BitArray ##
@@ -360,8 +328,8 @@ for (f, scalarf, bitf, bitfbody) in ((:.==, :(==), :biteq , :(~a $ b)),
             end
             F = BitArray(shape)
             Fc = F.chunks
-            Ac = bitpack(A).chunks
-            Bc = bitpack(B).chunks
+            Ac = BitArray(A).chunks
+            Bc = BitArray(B).chunks
             if !isempty(Ac) && !isempty(Bc)
                 for i = 1:length(Fc) - 1
                     Fc[i] = ($bitf)(Ac[i], Bc[i])
@@ -462,7 +430,7 @@ for (sigA, sigB) in ((BitArray, BitArray),
                      (BitArray, AbstractArray{Bool}))
     @eval function (.*)(A::$sigA, B::$sigB)
         try
-            return bitpack(A) & bitpack(B)
+            return BitArray(A) & BitArray(B)
         catch
             return bitbroadcast(&, A, B)
         end

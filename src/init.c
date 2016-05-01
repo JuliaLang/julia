@@ -715,15 +715,15 @@ JL_DLLEXPORT int jl_generating_output(void)
     return jl_options.outputo || jl_options.outputbc || jl_options.outputji;
 }
 
-void jl_compile_all(void);
+void jl_precompile(int all);
 
 static void julia_save(void)
 {
     if (!jl_generating_output())
         return;
 
-    if (jl_options.compile_enabled == JL_OPTIONS_COMPILE_ALL)
-        jl_compile_all();
+    if (!jl_options.incremental)
+        jl_precompile(jl_options.compile_enabled == JL_OPTIONS_COMPILE_ALL);
 
     if (!jl_module_init_order) {
         jl_printf(JL_STDERR, "WARNING: --output requested, but no modules defined during run\n");
@@ -775,13 +775,6 @@ static void julia_save(void)
             jl_dump_objfile((char*)jl_options.outputo, 0, (const char*)s->buf, (size_t)s->size);
     }
     JL_GC_POP();
-}
-
-jl_function_t *jl_typeinf_func=NULL;
-
-JL_DLLEXPORT void jl_set_typeinf_func(jl_value_t *f)
-{
-    jl_typeinf_func = (jl_function_t*)f;
 }
 
 static jl_value_t *core(char *name)
@@ -840,6 +833,7 @@ void jl_get_builtin_hooks(void)
     jl_ascii_string_type = (jl_datatype_t*)core("ASCIIString");
     jl_utf8_string_type = (jl_datatype_t*)core("UTF8String");
     jl_weakref_type = (jl_datatype_t*)core("WeakRef");
+    jl_vecelement_typename = ((jl_datatype_t*)core("VecElement"))->name;
 }
 
 JL_DLLEXPORT void jl_get_system_hooks(void)

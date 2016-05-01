@@ -59,7 +59,7 @@ end
 # hashing collections (e.g. issue #6870)
 vals = Any[
     [1,2,3,4], [1 3;2 4], Any[1,2,3,4], [1,3,2,4],
-    [1,0], [true,false], bitpack([true,false]),
+    [1,0], [true,false], BitArray([true,false]),
     Set([1,2,3,4]),
     Set([1:10;]),                # these lead to different key orders
     Set([7,9,4,10,2,3,5,8,6,1]), #
@@ -95,9 +95,9 @@ let a = QuoteNode(1), b = QuoteNode(1.0)
     @test (hash(a)==hash(b)) == (a==b)
 end
 
-let a = Expr(:block, Slot(1, Any)),
-    b = Expr(:block, Slot(1, Any)),
-    c = Expr(:block, Slot(3, Any))
+let a = Expr(:block, TypedSlot(1, Any)),
+    b = Expr(:block, TypedSlot(1, Any)),
+    c = Expr(:block, TypedSlot(3, Any))
     @test a == b && hash(a) == hash(b)
     @test a != c && hash(a) != hash(c)
     @test b != c && hash(b) != hash(c)

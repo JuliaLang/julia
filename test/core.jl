@@ -178,21 +178,29 @@ end
 # issue #11840
 f11840(::Type) = "Type"
 f11840(::DataType) = "DataType"
+f11840{T<:Tuple}(::Type{T}) = "Tuple"
 @test f11840(Type) == "DataType"
 @test f11840(AbstractVector) == "Type"
+@test f11840(Tuple) == "Tuple"
 
 g11840(::DataType) = 1
 g11840(::Type) = 2
+g11840{T<:Tuple}(sig::Type{T}) = 3
 @test g11840(Vector.body) == 1
 @test g11840(Vector) == 2
 @test g11840(Vector.body) == 1
+@test g11840(Tuple) == 3
 
 h11840(::DataType) = '1'
 h11840(::Type) = '2'
 h11840(::TypeConstructor) = '3'
+h11840{T<:Tuple}(::Type{T}) = '4'
 @test h11840(Vector) == '3'
 @test h11840(Vector.body) == '1'
 @test h11840(Vector) == '3'
+@test h11840(Union{Vector, Matrix}) == '2'
+@test h11840(Union{Vector.body, Matrix.body}) == '2'
+@test h11840(Tuple) == '4'
 
 # join
 @test typejoin(Int8,Int16) === Signed
@@ -1671,9 +1679,9 @@ macro m6031(x); x; end
 @test (@m6031 [2,4,6])[2] == 4
 
 # issue #6050
-@test Core.Inference.getfield_tfunc([nothing, QuoteNode(:vals)],
+@test Core.Inference.getfield_tfunc(
           Dict{Int64,Tuple{UnitRange{Int64},UnitRange{Int64}}},
-          :vals) == (Array{Tuple{UnitRange{Int64},UnitRange{Int64}},1},true)
+          Core.Inference.Const(:vals)) == (Array{Tuple{UnitRange{Int64},UnitRange{Int64}},1},true)
 
 # issue #6068
 x6068 = 1
@@ -3325,8 +3333,8 @@ end
 @noinline function foo13855(x)
     @m13855()
 end
-@test foo13855(Base.AddFun())() == Base.AddFun()
-@test foo13855(Base.MulFun())() == Base.MulFun()
+@test foo13855(+)() == +
+@test foo13855(*)() == *
 
 # issue #8487
 @test [x for x in 1:3] == [x for x ∈ 1:3] == [x for x = 1:3]
@@ -3757,3 +3765,95 @@ function f15809()
 end
 f15809()
 @test g15809(2) === Int
+
+module Macro_Yielding_Global_Assignment
+macro m()
+    quote
+        global x
+        x = 2
+    end
+end
+@m
+end
+@test Macro_Yielding_Global_Assignment.x == 2
+
+# issue #15718
+@test :(f($NaN)) == :(f($NaN))
+@test isequal(:(f($NaN)), :(f($NaN)))
+
+# PR #16011 Make sure dead code elimination doesn't delete push and pop
+# of metadata
+module TestDeadElim16011
+using Base.Test
+
+function count_expr_push(ex::Expr, head::Symbol, counter)
+    if ex.head === head
+        if ex.args[1] === :pop
+            counter[] -= 1
+        else
+            counter[] += 1
+        end
+        return
+    end
+    for arg in ex.args
+        isa(arg, Expr) && count_expr_push(arg, head, counter)
+    end
+    return false
+end
+
+function metadata_matches(ast::LambdaInfo)
+    inbounds_cnt = Ref(0)
+    boundscheck_cnt = Ref(0)
+    for ex in Base.uncompressed_ast(ast)
+        if isa(ex, Expr)
+            ex = ex::Expr
+            count_expr_push(ex, :inbounds, inbounds_cnt)
+            count_expr_push(ex, :boundscheck, boundscheck_cnt)
+        end
+    end
+    @test inbounds_cnt[] == 0
+    @test boundscheck_cnt[] == 0
+end
+
+function test_metadata_matches(f::ANY, tt::ANY)
+    metadata_matches(code_typed(f, tt)[1])
+end
+
+function f1()
+    @inbounds return 1
+end
+function f2()
+    @boundscheck begin
+        error()
+    end
+end
+# No, don't write code this way...
+@eval function f3()
+    a = $(Expr(:boundscheck, true))
+    return 1
+    b = $(Expr(:boundscheck, :pop))
+end
+@noinline function g(a)
+end
+@eval function f4()
+    g($(Expr(:inbounds, true)))
+    @goto out
+    g($(Expr(:inbounds, :pop)))
+    @label out
+end
+
+test_metadata_matches(f1, Tuple{})
+test_metadata_matches(f2, Tuple{})
+test_metadata_matches(f3, Tuple{})
+test_metadata_matches(f4, Tuple{})
+
+end
+
+# issue #8712
+type Issue8712; end
+@test isa(invoke(Issue8712, ()), Issue8712)
+
+# issue #16089
+f16089(args...) = typeof(args)
+g16089() = f16089(UInt8)
+@test g16089() === Tuple{DataType}

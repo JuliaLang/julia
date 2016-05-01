@@ -90,7 +90,7 @@ Let's look at these types a little more closely:
    julia> Array
    Array{T,N}
 
-   julia> xdump(Array)
+   julia> dump(Array)
    Array{T,N}::DataType  <: DenseArray{T,N}
 
 This indicates that :obj:`Array` is a shorthand for ``Array{T,N}``.  If
@@ -104,7 +104,7 @@ parameters:
    julia> T,N = Array.parameters
    svec(T,N)
 
-   julia> xdump(T)
+   julia> dump(T)
    TypeVar
      name: Symbol T
      lb: Union{}
@@ -133,7 +133,7 @@ one can extract the underlying :obj:`TypeVar`:
    m = start(methods(g))
    p = m.sig.parameters
    tv = p[1]
-   xdump(tv)
+   dump(tv)
 
 .. testoutput:: s
 
@@ -169,14 +169,14 @@ parameters. For example:
    julia> p3 = start(methods(h3)).sig.parameters
    svec(Array{T<:Real,N},T<:Real)
 
-   julia> xdump(p1[1].parameters[1])
+   julia> dump(p1[1].parameters[1])
    TypeVar
      name: Symbol T
      lb: Union{}
      ub: Any::DataType  <: Any
      bound: Bool false
 
-   julia> xdump(p3[1].parameters[1])
+   julia> dump(p3[1].parameters[1])
    TypeVar
      name: Symbol T
      lb: Union{}
@@ -310,7 +310,7 @@ the type, which is an object of type :obj:`TypeName`:
 
 .. doctest::
 
-   julia> xdump(Array.name)
+   julia> dump(Array.name)
    TypeName
      name: Symbol Array
      module: Module Core

@@ -281,9 +281,9 @@ static Value *julia_to_native(Type *to, bool toboxed, jl_value_t *jlto, const jl
         // emit maybe copy
         *needStackRestore = true;
         Value *jvt = emit_typeof_boxed(jvinfo, ctx);
-        BasicBlock *mutableBB = BasicBlock::Create(getGlobalContext(),"is-mutable",ctx->f);
-        BasicBlock *immutableBB = BasicBlock::Create(getGlobalContext(),"is-immutable",ctx->f);
-        BasicBlock *afterBB = BasicBlock::Create(getGlobalContext(),"after",ctx->f);
+        BasicBlock *mutableBB = BasicBlock::Create(jl_LLVMContext,"is-mutable",ctx->f);
+        BasicBlock *immutableBB = BasicBlock::Create(jl_LLVMContext,"is-immutable",ctx->f);
+        BasicBlock *afterBB = BasicBlock::Create(jl_LLVMContext,"after",ctx->f);
         Value *ismutable = builder.CreateTrunc(
                 tbaa_decorate(tbaa_datatype, builder.CreateLoad(
                         builder.CreateGEP(builder.CreatePointerCast(jvt, T_pint8),
@@ -774,8 +774,6 @@ static jl_cgval_t emit_llvmcall(jl_value_t **args, size_t nargs, jl_codectx_t *c
             jl_error(stream.str().c_str());
         }
         f = m->getFunction(ir_name);
-
-        f->removeFromParent();
     }
     else {
         assert(isPtr);
@@ -1246,7 +1244,11 @@ static jl_cgval_t emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
         assert(nargt == 0);
         JL_GC_POP();
 #ifdef JULIA_ENABLE_THREADING
+#ifdef LLVM39
+        builder.CreateFence(AtomicOrdering::SequentiallyConsistent, SingleThread);
+#else
         builder.CreateFence(SequentiallyConsistent, SingleThread);
+#endif
         Value *addr;
         if (imaging_mode) {
             assert(ctx->signalPage);
@@ -1257,7 +1259,11 @@ static jl_cgval_t emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
                 ConstantInt::get(T_size, (uintptr_t)jl_gc_signal_page), T_pint8);
         }
         builder.CreateLoad(addr, true);
+#ifdef LLVM39
+        builder.CreateFence(AtomicOrdering::SequentiallyConsistent, SingleThread);
+#else
         builder.CreateFence(SequentiallyConsistent, SingleThread);
+#endif
 #endif
         return ghostValue(jl_void_type);
     }
