@@ -564,12 +564,6 @@ Use ``Ptr{T}`` if the memory is expected to be populated by ``C`` (without type-
 Use ``Ref{T}`` if you have an ``isbits`` type,
 but you want to turn it into a pointer to a struct in another struct definition.
 
-See issue #2818 for some work that needs to be done to simplify this so that Julia
-types can be used to recursively mirror c-style structs,
-without requiring as much manual management of the ``Ptr`` conversions.
-After #2818 is implemented, it will be true that an ``Vector{T}`` will be equivalent to
-an ``Ptr{Ptr{T}}``. That is currently not true, and the conversion must be explicitly.
-
 Mapping C Functions to Julia
 ----------------------------
 
