@@ -121,6 +121,11 @@ function dependents(packagename::AbstractString)
     pkgs
 end
 
+function dependencies(packagename::AbstractString)
+    cd(Pkg.dir()) do
+        Pkg.Read.latest()[packagename].requires
+    end
+end
 # add & rm – edit the content a requires file
 
 function add(lines::Vector{Line}, pkg::AbstractString, versions::VersionSet=VersionSet())

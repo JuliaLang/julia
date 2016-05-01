@@ -100,6 +100,8 @@ temp_pkg_dir() do
     str = chomp(takebuf_string(iob))
     @test endswith(str, string(Pkg.installed("Example")))
     @test isempty(Pkg.dependents("Example"))
+    # Checking to see dependency reading
+    @test Pkg.dependencies("Example") == Dict("julia" => Pkg.Types.VersionSet(v"0.3.0", typemax(VersionNumber)))
 
     # adding a package with unsatisfiable julia version requirements (REPL.jl) errors
     try
