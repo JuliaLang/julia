@@ -455,14 +455,14 @@ end
     for T in indexes.parameters
         T <: CartesianIndex ? (M += length(T)) : (M += 1)
     end
-    index_length_expr = index <: Colon ? Symbol(string("Istride_", N+1)) : :(length(index))
+    index_length_expr = index <: Colon ? Symbol("Istride_", N+1) : :(length(index))
     quote
         Cartesian.@nexprs $N d->(I_d = indexes[d])
         dimlengths = Cartesian.@ncall $N index_lengths_dim V.parent length(V.indexes)-N+1 I
         Istride_1 = 1   # strides of the indexes to merge
         Cartesian.@nexprs $N d->(Istride_{d+1} = Istride_d*dimlengths[d])
         idx_len = $(index_length_expr)
-        if idx_len < 0.1*$(Symbol(string("Istride_", N+1)))   # this has not been carefully tuned
+        if idx_len < 0.1*$(Symbol("Istride_", N+1))   # this has not been carefully tuned
             return merge_indexes_div(V, indexes, index, dimlengths)
         end
         Cartesian.@nexprs $N d->(counter_d = 1) # counter_0 is the linear index

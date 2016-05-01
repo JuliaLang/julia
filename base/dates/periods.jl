@@ -95,7 +95,7 @@ for (op,Ty,Tz) in ((:.*,Real,:P),
                    (:.%,:P,:P),
                    (:mod,:P,:P))
     sop = string(op)
-    op_ = sop[1] == '.' ? Symbol(sop[2:end]) : op
+    op_ = sop[1] == '.' ? Symbol(sop[2]) : op
     @eval begin
         function ($op){P<:Period}(X::StridedArray{P},y::$Ty)
             Z = similar(X, $Tz)
@@ -234,7 +234,7 @@ GeneralPeriod = Union{Period,CompoundPeriod}
 (+){P<:GeneralPeriod}(x::StridedArray{P}) = x
 
 for op in (:.+, :.-)
-    op_ = Symbol(string(op)[2:end])
+    op_ = Symbol(string(op)[2])
     @eval begin
         function ($op){P<:GeneralPeriod}(X::StridedArray{P},y::GeneralPeriod)
             Z = similar(X, CompoundPeriod)
