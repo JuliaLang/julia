@@ -42,9 +42,9 @@ for eltyA in (Float64, Complex{Float64})
             @test_throws ArgumentError size(F, 0)
 
             # low level wrappers
-            @test_throws DimensionMismatch SPQR.solve(SPQR.RX_EQUALS_B, F, CHOLMOD.Dense(B'))
+            @test_throws DimensionMismatch SPQR.solve(SPQR.RX_EQUALS_B, F, CHOLMOD.Dense(Matrix(B')))
             @test_throws DimensionMismatch SPQR.solve(SPQR.RTX_EQUALS_B, F, CHOLMOD.Dense(B))
-            @test_throws DimensionMismatch SPQR.qmult(SPQR.QX, F, CHOLMOD.Dense(B'))
+            @test_throws DimensionMismatch SPQR.qmult(SPQR.QX, F, CHOLMOD.Dense(Matrix(B')))
             @test_throws DimensionMismatch SPQR.qmult(SPQR.XQ, F, CHOLMOD.Dense(B))
             @test_approx_eq A\B SPQR.backslash(SPQR.ORDERING_DEFAULT, SPQR.DEFAULT_TOL, CHOLMOD.Sparse(A), CHOLMOD.Dense(B))
             @test_throws DimensionMismatch SPQR.backslash(SPQR.ORDERING_DEFAULT, SPQR.DEFAULT_TOL, CHOLMOD.Sparse(A), CHOLMOD.Dense(B[1:m-1,:]))

@@ -5,7 +5,7 @@ module CHOLMOD
 import Base: (*), convert, copy, eltype, get, getindex, show, showarray, size,
              linearindexing, LinearFast, LinearSlow, ctranspose
 
-import Base.LinAlg: (\), A_mul_Bc, A_mul_Bt, Ac_ldiv_B, Ac_mul_B, At_ldiv_B, At_mul_B,
+import Base.LinAlg: Transpose, (\), Ac_ldiv_B, At_ldiv_B,
                  cholfact, cholfact!, det, diag, ishermitian, isposdef,
                  issymmetric, ldltfact, ldltfact!, logdet
 
@@ -1173,11 +1173,15 @@ end
 (*)(A::Sparse, B::Dense) = sdmult!(A, false, 1., 0., B, zeros(size(A, 1), size(B, 2)))
 (*)(A::Sparse, B::VecOrMat) = (*)(A, Dense(B))
 
-function A_mul_Bc{Tv<:VRealTypes}(A::Sparse{Tv}, B::Sparse{Tv})
+function (*){Tv<:VRealTypes}(A::Sparse{Tv}, B::Transpose{Tv,Sparse{Tv}})
+    if !B.conjugated
+        throw(ArgumentError("only multiplication with the conjugate transpose is supported"))
+    end
+
     cm = common()
 
-    if !is(A,B)
-        aa1 = transpose_(B, 2)
+    if !is(A, B.data)
+        aa1 = transpose_(B.data, 2)
         ## result of ssmult will have stype==0, contain numerical values and be sorted
         return ssmult(A, aa1, 0, true, true)
     end
@@ -1194,17 +1198,28 @@ function A_mul_Bc{Tv<:VRealTypes}(A::Sparse{Tv}, B::Sparse{Tv})
     end
 end
 
-function Ac_mul_B(A::Sparse, B::Sparse)
-    aa1 = transpose_(A, 2)
-    if is(A,B)
-        return A_mul_Bc(aa1, aa1)
+function (*){T}(A::Transpose{T,Sparse{T}}, B::Sparse)
+    if !A.conjugated
+        throw(ArgumentError("only multiplication with the conjugate transpose is supported"))
     end
+
+    aa1 = transpose_(A.data, 2)
+
+    if is(A.data, B)
+        return aa1 * aa1'
+    end
+
     ## result of ssmult will have stype==0, contain numerical values and be sorted
     return ssmult(aa1, B, 0, true, true)
 end
 
-Ac_mul_B(A::Sparse, B::Dense) = sdmult!(A, true, 1., 0., B, zeros(size(A, 2), size(B, 2)))
-Ac_mul_B(A::Sparse, B::VecOrMat) =  Ac_mul_B(A, Dense(B))
+function (*){T}(A::Transpose{T,Sparse{T}}, B::Dense)
+    if !A.conjugated
+        throw(ArgumentError("only multiplication with the conjugate transpose is supported"))
+    end
+    return sdmult!(A.data, true, 1., 0., B, zeros(size(A, 1), size(B, 2)))
+end
+(*){T}(A::Transpose{T,Sparse{T}}, B::VecOrMat) =  A * Dense(B)
 
 
 ## Factorization methods

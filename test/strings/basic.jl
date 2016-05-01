@@ -498,7 +498,7 @@ foobaz(ch) = reinterpret(Char, typemax(UInt32))
 @test ["b","c"].*"a" == ["ba","ca"]
 @test utf8("a").*["b","c"] == ["ab","ac"]
 @test "a".*map(utf8,["b","c"]) == ["ab","ac"]
-@test ["a","b"].*["c","d"]' == ["ac" "ad"; "bc" "bd"]
+@test ["a","b"].*["c" "d"] == ["ac" "ad"; "bc" "bd"]
 
 # Make sure NULL pointer are handled consistently by
 # `bytestring`, `ascii` and `utf8`

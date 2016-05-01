@@ -78,25 +78,25 @@ trace(A::Hermitian) = real(trace(A.data))
 #tril/triu
 function tril(A::Hermitian, k::Integer=0)
     if A.uplo == 'U' && k <= 0
-        return tril!(A.data',k)
+        return tril!(ctranspose!(similar(A.data), A.data),k)
     elseif A.uplo == 'U' && k > 0
-        return tril!(A.data',-1) + tril!(triu(A.data),k)
+        return tril!(ctranspose!(similar(A.data), A.data),-1) + tril!(triu(A.data),k)
     elseif A.uplo == 'L' && k <= 0
         return tril(A.data,k)
     else
-        return tril(A.data,-1) + tril!(triu!(A.data'),k)
+        return tril(A.data,-1) + tril!(triu!(ctranspose!(similar(A.data), A.data)),k)
     end
 end
 
 function tril(A::Symmetric, k::Integer=0)
     if A.uplo == 'U' && k <= 0
-        return tril!(A.data.',k)
+        return tril!(transpose!(similar(A.data), A.data),k)
     elseif A.uplo == 'U' && k > 0
-        return tril!(A.data.',-1) + tril!(triu(A.data),k)
+        return tril!(transpose!(similar(A.data), A.data),-1) + tril!(triu(A.data),k)
     elseif A.uplo == 'L' && k <= 0
         return tril(A.data,k)
     else
-        return tril(A.data,-1) + tril!(triu!(A.data.'),k)
+        return tril(A.data,-1) + tril!(triu!(transpose!(similar(A.data), A.data)),k)
     end
 end
 
@@ -104,11 +104,11 @@ function triu(A::Hermitian, k::Integer=0)
     if A.uplo == 'U' && k >= 0
         return triu(A.data,k)
     elseif A.uplo == 'U' && k < 0
-        return triu(A.data,1) + triu!(tril!(A.data'),k)
+        return triu(A.data,1) + triu!(tril!(ctranspose!(similar(A.data), A.data)),k)
     elseif A.uplo == 'L' && k >= 0
-        return triu!(A.data',k)
+        return triu!(ctranspose!(similar(A.data), A.data),k)
     else
-        return triu!(A.data',1) + triu!(tril(A.data),k)
+        return triu!(ctranspose!(similar(A.data), A.data),1) + triu!(tril(A.data),k)
     end
 end
 
@@ -116,24 +116,30 @@ function triu(A::Symmetric, k::Integer=0)
     if A.uplo == 'U' && k >= 0
         return triu(A.data,k)
     elseif A.uplo == 'U' && k < 0
-        return triu(A.data,1) + triu!(tril!(A.data.'),k)
+        return triu(A.data,1) + triu!(tril!(transpose!(similar(A.data), A.data)),k)
     elseif A.uplo == 'L' && k >= 0
-        return triu!(A.data.',k)
+        return triu!(transpose!(similar(A.data), A.data),k)
     else
-        return triu!(A.data.',1) + triu!(tril(A.data),k)
+        return triu!(transpose!(similar(A.data), A.data),1) + triu!(tril(A.data),k)
     end
 end
 
 -{Tv,S<:AbstractMatrix}(A::Symmetric{Tv,S}) = Symmetric{Tv,S}(-A.data, A.uplo)
 
 ## Matvec
-A_mul_B!{T<:BlasFloat,S<:StridedMatrix}(y::StridedVector{T}, A::Symmetric{T,S}, x::StridedVector{T}) = BLAS.symv!(A.uplo, one(T), A.data, x, zero(T), y)
-A_mul_B!{T<:BlasComplex,S<:StridedMatrix}(y::StridedVector{T}, A::Hermitian{T,S}, x::StridedVector{T}) = BLAS.hemv!(A.uplo, one(T), A.data, x, zero(T), y)
+mul!{T<:BlasFloat,S<:StridedMatrix}(y::StridedVector{T}, A::Symmetric{T,S}, x::StridedVector{T}) =
+    BLAS.symv!(A.uplo, one(T), A.data, x, zero(T), y)
+mul!{T<:BlasComplex,S<:StridedMatrix}(y::StridedVector{T}, A::Hermitian{T,S}, x::StridedVector{T}) =
+    BLAS.hemv!(A.uplo, one(T), A.data, x, zero(T), y)
 ##Matmat
-A_mul_B!{T<:BlasFloat,S<:StridedMatrix}(C::StridedMatrix{T}, A::Symmetric{T,S}, B::StridedMatrix{T}) = BLAS.symm!('L', A.uplo, one(T), A.data, B, zero(T), C)
-A_mul_B!{T<:BlasFloat,S<:StridedMatrix}(C::StridedMatrix{T}, A::StridedMatrix{T}, B::Symmetric{T,S}) = BLAS.symm!('R', B.uplo, one(T), B.data, A, zero(T), C)
-A_mul_B!{T<:BlasComplex,S<:StridedMatrix}(C::StridedMatrix{T}, A::Hermitian{T,S}, B::StridedMatrix{T}) = BLAS.hemm!('L', A.uplo, one(T), A.data, B, zero(T), C)
-A_mul_B!{T<:BlasComplex,S<:StridedMatrix}(C::StridedMatrix{T}, A::StridedMatrix{T}, B::Hermitian{T,S}) = BLAS.hemm!('R', B.uplo, one(T), B.data, A, zero(T), C)
+mul!{T<:BlasFloat,S<:StridedMatrix}(C::StridedMatrix{T}, A::Symmetric{T,S}, B::StridedMatrix{T}) =
+    BLAS.symm!('L', A.uplo, one(T), A.data, B, zero(T), C)
+mul!{T<:BlasFloat,S<:StridedMatrix}(C::StridedMatrix{T}, A::StridedMatrix{T}, B::Symmetric{T,S}) =
+    BLAS.symm!('R', B.uplo, one(T), B.data, A, zero(T), C)
+mul!{T<:BlasComplex,S<:StridedMatrix}(C::StridedMatrix{T}, A::Hermitian{T,S}, B::StridedMatrix{T}) =
+    BLAS.hemm!('L', A.uplo, one(T), A.data, B, zero(T), C)
+mul!{T<:BlasComplex,S<:StridedMatrix}(C::StridedMatrix{T}, A::StridedMatrix{T}, B::Hermitian{T,S}) =
+    BLAS.hemm!('R', B.uplo, one(T), B.data, A, zero(T), C)
 
 *(A::HermOrSym, B::HermOrSym) = full(A)*full(B)
 *(A::StridedMatrix, B::HermOrSym) = A*full(B)

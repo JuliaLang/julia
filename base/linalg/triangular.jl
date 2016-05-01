@@ -262,15 +262,6 @@ function tril!(A::UnitLowerTriangular,k::Integer=0)
     return tril!(LowerTriangular(A.data),k)
 end
 
-transpose(A::LowerTriangular) = UpperTriangular(transpose(A.data))
-transpose(A::UnitLowerTriangular) = UnitUpperTriangular(transpose(A.data))
-transpose(A::UpperTriangular) = LowerTriangular(transpose(A.data))
-transpose(A::UnitUpperTriangular) = UnitLowerTriangular(transpose(A.data))
-ctranspose(A::LowerTriangular) = UpperTriangular(ctranspose(A.data))
-ctranspose(A::UnitLowerTriangular) = UnitUpperTriangular(ctranspose(A.data))
-ctranspose(A::UpperTriangular) = LowerTriangular(ctranspose(A.data))
-ctranspose(A::UnitUpperTriangular) = UnitLowerTriangular(ctranspose(A.data))
-
 transpose!(A::LowerTriangular) = UpperTriangular(copytri!(A.data, 'L'))
 transpose!(A::UnitLowerTriangular) = UnitUpperTriangular(copytri!(A.data, 'L'))
 transpose!(A::UpperTriangular) = LowerTriangular(copytri!(A.data, 'U'))
@@ -375,13 +366,17 @@ scale!(c::Number, A::Union{UpperTriangular,LowerTriangular}) = scale!(A,c)
 # BlasFloat routines #
 ######################
 
-A_mul_B!(A::Tridiagonal, B::AbstractTriangular) = A*full!(B)
-A_mul_B!(C::AbstractVector, A::AbstractTriangular, B::AbstractVector) = A_mul_B!(A, copy!(C, B))
-A_mul_B!(C::AbstractMatrix, A::AbstractTriangular, B::AbstractVecOrMat) = A_mul_B!(A, copy!(C, B))
-A_mul_B!(C::AbstractVecOrMat, A::AbstractTriangular, B::AbstractVecOrMat) = A_mul_B!(A, copy!(C, B))
-A_mul_Bt!(C::AbstractVecOrMat, A::AbstractTriangular, B::AbstractVecOrMat) = A_mul_B!(A, transpose!(C, B))
-A_mul_Bc!(C::AbstractMatrix, A::AbstractTriangular, B::AbstractVecOrMat) = A_mul_B!(A, ctranspose!(C, B))
-A_mul_Bc!(C::AbstractVecOrMat, A::AbstractTriangular, B::AbstractVecOrMat) = A_mul_B!(A, ctranspose!(C, B))
+mul!(A::Tridiagonal, B::AbstractTriangular) = A*full!(B)
+mul!(C::AbstractVector, A::AbstractTriangular, B::AbstractVector) = mul!(A, copy!(C, B))
+mul!(C::AbstractMatrix, A::AbstractTriangular, B::AbstractVecOrMat) = mul!(A, copy!(C, B))
+mul!(C::AbstractVecOrMat, A::AbstractTriangular, B::AbstractVecOrMat) = mul!(A, copy!(C, B))
+function mul!(C::AbstractVecOrMat, A::AbstractTriangular, B::Transpose)
+    if B.conjugated
+        return mul!(A, ctranspose!(C, B))
+    else
+        return mul!(A, transpose!(C, B))
+    end
+end
 
 for (t, uploc, isunitc) in ((:LowerTriangular, 'L', 'N'),
                             (:UnitLowerTriangular, 'L', 'U'),
@@ -389,22 +384,28 @@ for (t, uploc, isunitc) in ((:LowerTriangular, 'L', 'N'),
                             (:UnitUpperTriangular, 'U', 'U'))
     @eval begin
         # Vector multiplication
-        A_mul_B!{T<:BlasFloat,S<:StridedMatrix}(A::$t{T,S}, b::StridedVector{T}) = BLAS.trmv!($uploc, 'N', $isunitc, A.data, b)
-        At_mul_B!{T<:BlasFloat,S<:StridedMatrix}(A::$t{T,S}, b::StridedVector{T}) = BLAS.trmv!($uploc, 'T', $isunitc, A.data, b)
-        Ac_mul_B!{T<:BlasReal,S<:StridedMatrix}(A::$t{T,S}, b::StridedVector{T}) = BLAS.trmv!($uploc, 'T', $isunitc, A.data, b)
-        Ac_mul_B!{T<:BlasComplex,S<:StridedMatrix}(A::$t{T,S}, b::StridedVector{T}) = BLAS.trmv!($uploc, 'C', $isunitc, A.data, b)
+        mul!{T<:BlasFloat,S<:StridedMatrix}(A::$t{T,S}, b::StridedVector{T}) =
+            BLAS.trmv!($uploc, 'N', $isunitc, A.data, b)
+        mul!{T<:BlasReal,S<:StridedMatrix}(A::Transpose{T,$t{T,S}}, b::StridedVector{T}) =
+            BLAS.trmv!($uploc, 'T', $isunitc, A.data.data, b)
+        mul!{T<:BlasComplex,S<:StridedMatrix}(A::Transpose{T,$t{T,S}}, b::StridedVector{T}) =
+            return BLAS.trmv!($uploc, ifelse(A.conjugated, 'C', 'T'), $isunitc, A.data.data, b)
 
         # Matrix multiplication
-        A_mul_B!{T<:BlasFloat,S<:StridedMatrix}(A::$t{T,S}, B::StridedMatrix{T}) = BLAS.trmm!('L', $uploc, 'N', $isunitc, one(T), A.data, B)
-        A_mul_B!{T<:BlasFloat,S<:StridedMatrix}(A::StridedMatrix{T}, B::$t{T,S}) = BLAS.trmm!('R', $uploc, 'N', $isunitc, one(T), B.data, A)
+        mul!{T<:BlasFloat,S<:StridedMatrix}(A::$t{T,S}, B::StridedMatrix{T}) =
+            BLAS.trmm!('L', $uploc, 'N', $isunitc, one(T), A.data, B)
+        mul!{T<:BlasFloat,S<:StridedMatrix}(A::StridedMatrix{T}, B::$t{T,S}) =
+            BLAS.trmm!('R', $uploc, 'N', $isunitc, one(T), B.data, A)
 
-        At_mul_B!{T<:BlasFloat,S<:StridedMatrix}(A::$t{T,S}, B::StridedMatrix{T}) = BLAS.trmm!('L', $uploc, 'T', $isunitc, one(T), A.data, B)
-        Ac_mul_B!{T<:BlasComplex,S<:StridedMatrix}(A::$t{T,S}, B::StridedMatrix{T}) = BLAS.trmm!('L', $uploc, 'C', $isunitc, one(T), A.data, B)
-        Ac_mul_B!{T<:BlasReal,S<:StridedMatrix}(A::$t{T,S}, B::StridedMatrix{T}) = BLAS.trmm!('L', $uploc, 'T', $isunitc, one(T), A.data, B)
+        mul!{T<:BlasReal,S<:StridedMatrix}(A::Transpose{T,$t{T,S}}, B::StridedMatrix{T}) =
+            BLAS.trmm!('L', $uploc, 'T', $isunitc, one(T), A.data.data, B)
+        mul!{T<:BlasComplex,S<:StridedMatrix}(A::Transpose{T,$t{T,S}}, B::StridedMatrix{T}) =
+            BLAS.trmm!('L', $uploc, ifelse(A.conjugated, 'C', 'T'), $isunitc, one(T), A.data.data, B)
 
-        A_mul_Bt!{T<:BlasFloat,S<:StridedMatrix}(A::StridedMatrix{T}, B::$t{T,S}) = BLAS.trmm!('R', $uploc, 'T', $isunitc, one(T), B.data, A)
-        A_mul_Bc!{T<:BlasComplex,S<:StridedMatrix}(A::StridedMatrix{T}, B::$t{T,S}) = BLAS.trmm!('R', $uploc, 'C', $isunitc, one(T), B.data, A)
-        A_mul_Bc!{T<:BlasReal,S<:StridedMatrix}(A::StridedMatrix{T}, B::$t{T,S}) = BLAS.trmm!('R', $uploc, 'T', $isunitc, one(T), B.data, A)
+        mul!{T<:BlasReal,S<:StridedMatrix}(A::StridedMatrix{T}, B::Transpose{T,$t{T,S}}) =
+            BLAS.trmm!('R', $uploc, 'T', $isunitc, one(T), B.data.data, A)
+        mul!{T<:BlasComplex,S<:StridedMatrix}(A::StridedMatrix{T}, B::Transpose{T,$t{T,S}}) =
+            BLAS.trmm!('R', $uploc, ifelse(B.conjugated, 'C', 'T'), $isunitc, one(T), B.data.data, A)
 
         # Left division
         A_ldiv_B!{T<:BlasFloat,S<:StridedMatrix}(A::$t{T,S}, B::StridedVecOrMat{T}) = LAPACK.trtrs!($uploc, 'N', $isunitc, A.data, B)
@@ -457,10 +458,22 @@ end
 
 # Eigensystems
 ## Notice that trecv works for quasi-triangular matrices and therefore the lower sub diagonal must be zeroed before calling the subroutine
-eigvecs{T<:BlasFloat,S<:StridedMatrix}(A::UpperTriangular{T,S}) = LAPACK.trevc!('R', 'A', BlasInt[], triu!(A.data))
-eigvecs{T<:BlasFloat,S<:StridedMatrix}(A::UnitUpperTriangular{T,S}) = (for i = 1:size(A, 1); A.data[i,i] = 1;end;LAPACK.trevc!('R', 'A', BlasInt[], triu!(A.data)))
-eigvecs{T<:BlasFloat,S<:StridedMatrix}(A::LowerTriangular{T,S}) = LAPACK.trevc!('L', 'A', BlasInt[], tril!(A.data)')
-eigvecs{T<:BlasFloat,S<:StridedMatrix}(A::UnitLowerTriangular{T,S}) = (for i = 1:size(A, 1); A.data[i,i] = 1;end;LAPACK.trevc!('L', 'A', BlasInt[], tril!(A.data)'))
+eigvecs{T<:BlasFloat,S<:StridedMatrix}(A::UpperTriangular{T,S}) =
+    LAPACK.trevc!('R', 'A', BlasInt[], triu!(A.data))
+function eigvecs{T<:BlasFloat,S<:StridedMatrix}(A::UnitUpperTriangular{T,S})
+    for i = 1:size(A, 1)
+        A.data[i,i] = 1
+    end
+    return LAPACK.trevc!('R', 'A', BlasInt[], triu!(A.data))
+end
+eigvecs{T<:BlasFloat,S<:StridedMatrix}(A::LowerTriangular{T,S}) =
+    LAPACK.trevc!('L', 'A', BlasInt[], tril!(ctranspose!(similar(A.data), A.data)))
+function eigvecs{T<:BlasFloat,S<:StridedMatrix}(A::UnitLowerTriangular{T,S})
+    for i = 1:size(A, 1)
+        A.data[i,i] = 1
+    end
+    return LAPACK.trevc!('L', 'A', BlasInt[], tril!(ctranspose!(similar(A.data), A.data)))
+end
 
 ####################
 # Generic routines #
@@ -514,7 +527,12 @@ for (t, unitt) in ((UpperTriangular, UnitUpperTriangular),
 end
 
 ## Generic triangular multiplication
-function A_mul_B!(A::UpperTriangular, B::StridedVecOrMat)
+### Many of these methods are very similar and at some point we might want to combine some of them.
+### However, the methods for Transpose require type parameters in the signature whereas
+### the non-Transpose versions don't. Unions of the type Union{S,LowerTriangular{T,S}} where
+### e.g. S<:StridedMatrix can also cause issues as of April 2016 so for now these methods
+### are kept separate.
+function mul!(A::UpperTriangular, B::StridedVecOrMat)
     m, n = size(B, 1), size(B, 2)
     if m != size(A, 1)
         throw(DimensionMismatch("right hand side B needs first dimension of size $(size(A,1)), has size $m"))
@@ -530,7 +548,7 @@ function A_mul_B!(A::UpperTriangular, B::StridedVecOrMat)
     end
     B
 end
-function A_mul_B!(A::UnitUpperTriangular, B::StridedVecOrMat)
+function mul!(A::UnitUpperTriangular, B::StridedVecOrMat)
     m, n = size(B, 1), size(B, 2)
     if m != size(A, 1)
         throw(DimensionMismatch("right hand side B needs first dimension of size $(size(A,1)), has size $m"))
@@ -547,7 +565,7 @@ function A_mul_B!(A::UnitUpperTriangular, B::StridedVecOrMat)
     B
 end
 
-function A_mul_B!(A::LowerTriangular, B::StridedVecOrMat)
+function mul!(A::LowerTriangular, B::StridedVecOrMat)
     m, n = size(B, 1), size(B, 2)
     if m != size(A, 1)
         throw(DimensionMismatch("right hand side B needs first dimension of size $(size(A,1)), has size $m"))
@@ -563,7 +581,7 @@ function A_mul_B!(A::LowerTriangular, B::StridedVecOrMat)
     end
     B
 end
-function A_mul_B!(A::UnitLowerTriangular, B::StridedVecOrMat)
+function mul!(A::UnitLowerTriangular, B::StridedVecOrMat)
     m, n = size(B, 1), size(B, 2)
     if m != size(A, 1)
         throw(DimensionMismatch("right hand side B needs first dimension of size $(size(A,1)), has size $m"))
@@ -580,32 +598,38 @@ function A_mul_B!(A::UnitLowerTriangular, B::StridedVecOrMat)
     B
 end
 
-function Ac_mul_B!(A::UpperTriangular, B::StridedVecOrMat)
+function mul!{T,S}(A::Transpose{T,UpperTriangular{T,S}}, B::StridedVecOrMat)
     m, n = size(B, 1), size(B, 2)
     if m != size(A, 1)
         throw(DimensionMismatch("right hand side B needs first dimension of size $(size(A,1)), has size $m"))
     end
+    # Indexing into a Transpose should be fast because of inlining and no branches but indexing into
+    # indexing into a XTriangular is too slow in an inner loop.
+    AA = Transpose{T,S}(A.data.data, A.conjugated)
     for j = 1:n
         for i = m:-1:1
-            Bij = A.data[i,i]'B[i,j]
+            Bij = AA[i,i] * B[i,j]
             for k = 1:i - 1
-                Bij += A.data[k,i]'B[k,j]
+                Bij += AA[i,k] * B[k,j]
             end
             B[i,j] = Bij
         end
     end
     B
 end
-function Ac_mul_B!(A::UnitUpperTriangular, B::StridedVecOrMat)
+function mul!{T,S}(A::Transpose{T,UnitUpperTriangular{T,S}}, B::StridedVecOrMat)
     m, n = size(B, 1), size(B, 2)
     if m != size(A, 1)
         throw(DimensionMismatch("right hand side B needs first dimension of size $(size(A,1)), has size $m"))
     end
+    # Indexing into a Transpose should be fast because of inlining and no branches but indexing into
+    # indexing into a XTriangular is too slow in an inner loop.
+    AA = Transpose{T,S}(A.data.data, A.conjugated)
     for j = 1:n
         for i = m:-1:1
             Bij = B[i,j]
             for k = 1:i - 1
-                Bij += A.data[k,i]'B[k,j]
+                Bij += AA[i,k] * B[k,j]
             end
             B[i,j] = Bij
         end
@@ -613,32 +637,38 @@ function Ac_mul_B!(A::UnitUpperTriangular, B::StridedVecOrMat)
     B
 end
 
-function Ac_mul_B!(A::LowerTriangular, B::StridedVecOrMat)
+function mul!{T,S}(A::Transpose{T,LowerTriangular{T,S}}, B::StridedVecOrMat)
     m, n = size(B, 1), size(B, 2)
     if m != size(A, 1)
         throw(DimensionMismatch("right hand side B needs first dimension of size $(size(A,1)), has size $m"))
     end
+    # Indexing into a Transpose should be fast because of inlining and no branches but indexing into
+    # indexing into a XTriangular is too slow in an inner loop.
+    AA = Transpose{T,S}(A.data.data, A.conjugated)
     for j = 1:n
         for i = 1:m
-            Bij = A.data[i,i]'B[i,j]
+            Bij = AA[i,i] * B[i,j]
             for k = i + 1:m
-                Bij += A.data[k,i]'B[k,j]
+                Bij += AA[i,k] * B[k,j]
             end
             B[i,j] = Bij
         end
     end
     B
 end
-function Ac_mul_B!(A::UnitLowerTriangular, B::StridedVecOrMat)
+function mul!{T,S}(A::Transpose{T,UnitLowerTriangular{T,S}}, B::StridedVecOrMat)
     m, n = size(B, 1), size(B, 2)
     if m != size(A, 1)
         throw(DimensionMismatch("right hand side B needs first dimension of size $(size(A,1)), has size $m"))
     end
+    # Indexing into a Transpose should be fast because of inlining and no branches but indexing into
+    # indexing into a XTriangular is too slow in an inner loop.
+    AA = Transpose{T,S}(A.data.data, A.conjugated)
     for j = 1:n
         for i = 1:m
             Bij = B[i,j]
             for k = i + 1:m
-                Bij += A.data[k,i]'B[k,j]
+                Bij += AA[i,k] * B[k,j]
             end
             B[i,j] = Bij
         end
@@ -646,73 +676,7 @@ function Ac_mul_B!(A::UnitLowerTriangular, B::StridedVecOrMat)
     B
 end
 
-function At_mul_B!(A::UpperTriangular, B::StridedVecOrMat)
-    m, n = size(B, 1), size(B, 2)
-    if m != size(A, 1)
-        throw(DimensionMismatch("right hand side B needs first dimension of size $(size(A,1)), has size $m"))
-    end
-    for j = 1:n
-        for i = m:-1:1
-            Bij = A.data[i,i].'B[i,j]
-            for k = 1:i - 1
-                Bij += A.data[k,i].'B[k,j]
-            end
-            B[i,j] = Bij
-        end
-    end
-    B
-end
-function At_mul_B!(A::UnitUpperTriangular, B::StridedVecOrMat)
-    m, n = size(B, 1), size(B, 2)
-    if m != size(A, 1)
-        throw(DimensionMismatch("right hand side B needs first dimension of size $(size(A,1)), has size $m"))
-    end
-    for j = 1:n
-        for i = m:-1:1
-            Bij = B[i,j]
-            for k = 1:i - 1
-                Bij += A.data[k,i].'B[k,j]
-            end
-            B[i,j] = Bij
-        end
-    end
-    B
-end
-
-function At_mul_B!(A::LowerTriangular, B::StridedVecOrMat)
-    m, n = size(B, 1), size(B, 2)
-    if m != size(A, 1)
-        throw(DimensionMismatch("right hand side B needs first dimension of size $(size(A,1)), has size $m"))
-    end
-    for j = 1:n
-        for i = 1:m
-            Bij = A.data[i,i].'B[i,j]
-            for k = i + 1:m
-                Bij += A.data[k,i].'B[k,j]
-            end
-            B[i,j] = Bij
-        end
-    end
-    B
-end
-function At_mul_B!(A::UnitLowerTriangular, B::StridedVecOrMat)
-    m, n = size(B, 1), size(B, 2)
-    if m != size(A, 1)
-        throw(DimensionMismatch("right hand side B needs first dimension of size $(size(A,1)), has size $m"))
-    end
-    for j = 1:n
-        for i = 1:m
-            Bij = B[i,j]
-            for k = i + 1:m
-                Bij += A.data[k,i].'B[k,j]
-            end
-            B[i,j] = Bij
-        end
-    end
-    B
-end
-
-function A_mul_B!(A::StridedMatrix, B::UpperTriangular)
+function mul!(A::StridedMatrix, B::UpperTriangular)
     m, n = size(A)
     if size(B, 1) != n
         throw(DimensionMismatch("right hand side B needs first dimension of size $n, has size $(size(B,1))"))
@@ -728,7 +692,7 @@ function A_mul_B!(A::StridedMatrix, B::UpperTriangular)
     end
     A
 end
-function A_mul_B!(A::StridedMatrix, B::UnitUpperTriangular)
+function mul!(A::StridedMatrix, B::UnitUpperTriangular)
     m, n = size(A)
     if size(B, 1) != n
         throw(DimensionMismatch("right hand side B needs first dimension of size $n, has size $(size(B,1))"))
@@ -745,7 +709,7 @@ function A_mul_B!(A::StridedMatrix, B::UnitUpperTriangular)
     A
 end
 
-function A_mul_B!(A::StridedMatrix, B::LowerTriangular)
+function mul!(A::StridedMatrix, B::LowerTriangular)
     m, n = size(A)
     if size(B, 1) != n
         throw(DimensionMismatch("right hand side B needs first dimension of size $n, has size $(size(B,1))"))
@@ -761,7 +725,7 @@ function A_mul_B!(A::StridedMatrix, B::LowerTriangular)
     end
     A
 end
-function A_mul_B!(A::StridedMatrix, B::UnitLowerTriangular)
+function mul!(A::StridedMatrix, B::UnitLowerTriangular)
     m, n = size(A)
     if size(B, 1) != n
         throw(DimensionMismatch("right hand side B needs first dimension of size $n, has size $(size(B,1))"))
@@ -778,32 +742,38 @@ function A_mul_B!(A::StridedMatrix, B::UnitLowerTriangular)
     A
 end
 
-function A_mul_Bc!(A::StridedMatrix, B::UpperTriangular)
+function mul!{T,S}(A::StridedMatrix, B::Transpose{T,UpperTriangular{T,S}})
     m, n = size(A)
     if size(B, 1) != n
         throw(DimensionMismatch("right hand side B needs first dimension of size $n, has size $(size(B,1))"))
     end
+    # Indexing into a Transpose should be fast because of inlining and no branches but indexing into
+    # indexing into a XTriangular is too slow in an inner loop.
+    BB = Transpose{T,S}(B.data.data, B.conjugated)
     for i = 1:m
         for j = 1:n
-            Aij = A[i,j]*B.data[j,j]'
+            Aij = A[i,j]*BB[j,j]
             for k = j + 1:n
-                Aij += A[i,k]*B.data[j,k]'
+                Aij += A[i,k]*BB[k,j]
             end
             A[i,j] = Aij
         end
     end
     A
 end
-function A_mul_Bc!(A::StridedMatrix, B::UnitUpperTriangular)
+function mul!{T,S}(A::StridedMatrix, B::Transpose{T,UnitUpperTriangular{T,S}})
     m, n = size(A)
     if size(B, 1) != n
         throw(DimensionMismatch("right hand side B needs first dimension of size $n, has size $(size(B,1))"))
     end
+    # Indexing into a Transpose should be fast because of inlining and no branches but indexing into
+    # indexing into a XTriangular is too slow in an inner loop.
+    BB = Transpose{T,S}(B.data.data, B.conjugated)
     for i = 1:m
         for j = 1:n
             Aij = A[i,j]
             for k = j + 1:n
-                Aij += A[i,k]*B.data[j,k]'
+                Aij += A[i,k]*BB[k,j]
             end
             A[i,j] = Aij
         end
@@ -811,98 +781,38 @@ function A_mul_Bc!(A::StridedMatrix, B::UnitUpperTriangular)
     A
 end
 
-function A_mul_Bc!(A::StridedMatrix, B::LowerTriangular)
+function mul!{T,S}(A::StridedMatrix, B::Transpose{T,LowerTriangular{T,S}})
     m, n = size(A)
     if size(B, 1) != n
         throw(DimensionMismatch("right hand side B needs first dimension of size $n, has size $(size(B,1))"))
     end
+    # Indexing into a Transpose should be fast because of inlining and no branches but indexing into
+    # indexing into a XTriangular is too slow in an inner loop.
+    BB = Transpose{T,S}(B.data.data, B.conjugated)
     for i = 1:m
         for j = n:-1:1
-            Aij = A[i,j]*B.data[j,j]'
+            Aij = A[i,j]*BB[j,j]
             for k = 1:j - 1
-                Aij += A[i,k]*B.data[j,k]'
+                Aij += A[i,k]*BB[k,j]
             end
             A[i,j] = Aij
         end
     end
     A
 end
-function A_mul_Bc!(A::StridedMatrix, B::UnitLowerTriangular)
+function mul!{T,S}(A::StridedMatrix, B::Transpose{T,UnitLowerTriangular{T,S}})
     m, n = size(A)
     if size(B, 1) != n
         throw(DimensionMismatch("right hand side B needs first dimension of size $n, has size $(size(B,1))"))
     end
-    for i = 1:m
-        for j = n:-1:1
-            Aij = A[i,j]
-            for k = 1:j - 1
-                Aij += A[i,k]*B.data[j,k]'
-            end
-            A[i,j] = Aij
-        end
-    end
-    A
-end
-
-function A_mul_Bt!(A::StridedMatrix, B::UpperTriangular)
-    m, n = size(A)
-    if size(B, 1) != n
-        throw(DimensionMismatch("right hand side B needs first dimension of size $n, has size $(size(B,1))"))
-    end
-    for i = 1:m
-        for j = 1:n
-            Aij = A[i,j]*B.data[j,j].'
-            for k = j + 1:n
-                Aij += A[i,k]*B.data[j,k].'
-            end
-            A[i,j] = Aij
-        end
-    end
-    A
-end
-function A_mul_Bt!(A::StridedMatrix, B::UnitUpperTriangular)
-    m, n = size(A)
-    if size(B, 1) != n
-        throw(DimensionMismatch("right hand side B needs first dimension of size $n, has size $(size(B,1))"))
-    end
-    for i = 1:m
-        for j = 1:n
-            Aij = A[i,j]
-            for k = j + 1:n
-                Aij += A[i,k]*B.data[j,k].'
-            end
-            A[i,j] = Aij
-        end
-    end
-    A
-end
-
-function A_mul_Bt!(A::StridedMatrix, B::LowerTriangular)
-    m, n = size(A)
-    if size(B, 1) != n
-        throw(DimensionMismatch("right hand side B needs first dimension of size $n, has size $(size(B,1))"))
-    end
-    for i = 1:m
-        for j = n:-1:1
-            Aij = A[i,j]*B.data[j,j].'
-            for k = 1:j - 1
-                Aij += A[i,k]*B.data[j,k].'
-            end
-            A[i,j] = Aij
-        end
-    end
-    A
-end
-function A_mul_Bt!(A::StridedMatrix, B::UnitLowerTriangular)
-    m, n = size(A)
-    if size(B, 1) != n
-        throw(DimensionMismatch("right hand side B needs first dimension of size $n, has size $(size(B,1))"))
-    end
+    # Indexing into a Transpose should be fast because of inlining and no branches but indexing into
+    # indexing into a XTriangular is too slow in an inner loop.
+    BB = Transpose{T,S}(B.data.data, B.conjugated)
     for i = 1:m
         for j = n:-1:1
             Aij = A[i,j]
             for k = 1:j - 1
-                Aij += A[i,k]*B.data[j,k].'
+                Aij += A[i,k]*BB[k,j]
             end
             A[i,j] = Aij
         end
@@ -1293,31 +1203,36 @@ end
 ## Some Triangular-Triangular cases. We might want to write taylored methods for these cases, but I'm not sure it is worth it.
 for t in (UpperTriangular, UnitUpperTriangular, LowerTriangular, UnitLowerTriangular)
     @eval begin
-        *(A::Tridiagonal, B::$t) = A_mul_B!(full(A), B)
+        *(A::Tridiagonal, B::$t) = mul!(full(A), B)
     end
 end
 
-for f in (:*, :Ac_mul_B, :At_mul_B, :\, :Ac_ldiv_B, :At_ldiv_B)
+for f in (:*, :\, :Ac_ldiv_B, :At_ldiv_B)
     @eval begin
         ($f)(A::AbstractTriangular, B::AbstractTriangular) = ($f)(A, full(B))
     end
 end
-for f in (:A_mul_Bc, :A_mul_Bt, :Ac_mul_Bc, :At_mul_Bt, :/, :A_rdiv_Bc, :A_rdiv_Bt)
+(*){T,S<:AbstractTriangular}(A::Transpose{T,S}, B::AbstractTriangular) = A * full(B)
+
+for f in (:/, :A_rdiv_Bc, :A_rdiv_Bt)
     @eval begin
         ($f)(A::AbstractTriangular, B::AbstractTriangular) = ($f)(full(A), B)
     end
 end
+(*){T,S<:AbstractTriangular}(A::AbstractTriangular, B::Transpose{T,S}) = full(A) * B
 
 ## The general promotion methods
 ### Multiplication with triangle to the left and hence rhs cannot be transposed.
-for (f, g) in ((:*, :A_mul_B!), (:Ac_mul_B, :Ac_mul_B!), (:At_mul_B, :At_mul_B!))
-    @eval begin
-        function ($f){TA,TB}(A::AbstractTriangular{TA}, B::StridedVecOrMat{TB})
-            TAB = typeof(zero(TA)*zero(TB) + zero(TA)*zero(TB))
-            ($g)(convert(AbstractArray{TAB}, A), copy_oftype(B, TAB))
-        end
-    end
+function (*){TA,TB}(A::AbstractTriangular{TA}, B::StridedVecOrMat{TB})
+    TAB = typeof(zero(TA)*zero(TB) + zero(TA)*zero(TB))
+    mul!(convert(AbstractArray{TAB}, A), copy_oftype(B, TAB))
 end
+function (*){TA,S<:AbstractTriangular,TB}(A::Transpose{TA,S}, B::StridedVecOrMat{TB})
+    TAB = typeof(zero(TA)*zero(TB) + zero(TA)*zero(TB))
+    mul!(convert(AbstractArray{TAB}, A), copy_oftype(B, TAB))
+end
+
+
 ### Left division with triangle to the left hence rhs cannot be transposed. No quotients.
 for (f, g) in ((:\, :A_ldiv_B!), (:Ac_ldiv_B, :Ac_ldiv_B!), (:At_ldiv_B, :At_ldiv_B!))
     @eval begin
@@ -1337,14 +1252,15 @@ for (f, g) in ((:\, :A_ldiv_B!), (:Ac_ldiv_B, :Ac_ldiv_B!), (:At_ldiv_B, :At_ldi
     end
 end
 ### Multiplication with triangle to the rigth and hence lhs cannot be transposed.
-for (f, g) in ((:*, :A_mul_B!), (:A_mul_Bc, :A_mul_Bc!), (:A_mul_Bt, :A_mul_Bt!))
-    @eval begin
-        function ($f){TA,TB}(A::StridedVecOrMat{TA}, B::AbstractTriangular{TB})
-            TAB = typeof(zero(TA)*zero(TB) + zero(TA)*zero(TB))
-            ($g)(copy_oftype(A, TAB), convert(AbstractArray{TAB}, B))
-        end
-    end
+function (*){TA,TB}(A::StridedVecOrMat{TA}, B::AbstractTriangular{TB})
+    TAB = typeof(zero(TA)*zero(TB) + zero(TA)*zero(TB))
+    mul!(copy_oftype(A, TAB), convert(AbstractArray{TAB}, B))
 end
+function (*){TA,TB,S<:AbstractTriangular}(A::StridedVecOrMat{TA}, B::Transpose{TB,S})
+    TAB = typeof(zero(TA)*zero(TB) + zero(TA)*zero(TB))
+    mul!(copy_oftype(A, TAB), convert(AbstractArray{TAB}, B))
+end
+
 ### Right division with triangle to the right hence lhs cannot be transposed. No quotients.
 for (f, g) in ((:/, :A_rdiv_B!), (:A_rdiv_Bc, :A_rdiv_Bc!), (:A_rdiv_Bt, :A_rdiv_Bt!))
     @eval begin
@@ -1558,7 +1474,7 @@ function logm{T<:Union{Float64,Complex{Float64}}}(A0::UpperTriangular{T})
     return UpperTriangular(Y)
 
 end
-logm(A::LowerTriangular) = logm(A.').'
+logm(A::LowerTriangular) = logm(transpose!(copy(A))).'
 
 function sqrtm{T}(A::UpperTriangular{T})
     n = checksquare(A)
@@ -1606,8 +1522,8 @@ function sqrtm{T}(A::UnitUpperTriangular{T})
     end
     return UnitUpperTriangular(R)
 end
-sqrtm(A::LowerTriangular) = sqrtm(A.').'
-sqrtm(A::UnitLowerTriangular) = sqrtm(A.').'
+sqrtm(A::LowerTriangular) = sqrtm(transpose!(copy(A))).'
+sqrtm(A::UnitLowerTriangular) = sqrtm(transpose!(copy(A))).'
 
 #Generic eigensystems
 eigvals(A::AbstractTriangular) = diag(A)

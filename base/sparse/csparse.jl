@@ -123,7 +123,8 @@ function csc_permute{Tv,Ti}(A::SparseMatrixCSC{Tv,Ti}, pinv::Vector{Ti}, q::Vect
         end
     end
     Cp[n + 1] = nz
-    (C.').' # double transpose to order the columns
+    Ct = similar(C)
+    transpose!(C, transpose!(Ct, C)) # double transpose to order the columns
 end
 
 
@@ -174,5 +175,6 @@ function symperm{Tv,Ti}(A::SparseMatrixCSC{Tv,Ti}, pinv::Vector{Ti})
             Cx[q] = Ax[p]
         end
     end
-    (C.').' # double transpose to order the columns
+    Ct = similar(C)
+    transpose!(C, transpose!(Ct, C)) # double transpose to order the columns
 end

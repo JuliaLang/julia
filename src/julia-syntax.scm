@@ -1719,10 +1719,10 @@
                     (expand-forms
                      `(call (top _apply) ,f ,@(tuple-wrap argl '())))))
 
-                 ((and (eq? (cadr e) '*) (length= e 4))
-                  (expand-transposed-op
-                   e
-                   #(Ac_mul_Bc Ac_mul_B At_mul_Bt At_mul_B A_mul_Bc A_mul_Bt)))
+                 ; ((and (eq? (cadr e) '*) (length= e 4))
+                  ; (expand-transposed-op
+                   ; e
+                   ; #(Ac_mul_Bc Ac_mul_B At_mul_Bt At_mul_B A_mul_Bc A_mul_Bt)))
                  ((and (eq? (cadr e) '/) (length= e 4))
                   (expand-transposed-op
                    e

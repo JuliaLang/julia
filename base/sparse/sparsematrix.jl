@@ -716,8 +716,13 @@ function qftranspose{Tv,Ti}(A::SparseMatrixCSC{Tv,Ti}, q::AbstractVector, f)
     Cnzval = Array{Tv}(Cnnz)
     qftranspose!(SparseMatrixCSC(Cm, Cn, Ccolptr, Crowval, Cnzval), A, q, f)
 end
-transpose{Tv,Ti}(A::SparseMatrixCSC{Tv,Ti}) = qftranspose(A, 1:A.n, identity)
-ctranspose{Tv,Ti}(A::SparseMatrixCSC{Tv,Ti}) = qftranspose(A, 1:A.n, conj)
+function convert{T,Ti}(::Type{SparseMatrixCSC}, A::Transpose{T,SparseMatrixCSC{T,Ti}})
+    if A.conjugated
+        return qftranspose(A.data, 1:A.data.n, conj)
+    else
+        return qftranspose(A.data, 1:A.data.n, identity)
+    end
+end
 "See `qftranspose`" ftranspose{Tv,Ti}(A::SparseMatrixCSC{Tv,Ti}, f) = qftranspose(A, 1:A.n, f)
 
 

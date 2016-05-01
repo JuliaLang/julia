@@ -25,17 +25,18 @@ increment{T<:Integer}(A::AbstractArray{T}) = increment!(copy(A))
 
 ## sparse matrix multiplication
 
-function (*){TvA,TiA,TvB,TiB}(A::SparseMatrixCSC{TvA,TiA}, B::SparseMatrixCSC{TvB,TiB})
-    (*)(sppromote(A, B)...)
+(*)(A::SparseMatrixCSC, B::SparseMatrixCSC) = (*)(sppromote(A, B)...)
+function (*){T,Ti}(A::Transpose{T,SparseMatrixCSC{T,Ti}}, B::SparseMatrixCSC)
+    Ap, Bp = sppromote(A.data, B)
+    return Transpose{eltype(Ap),typeof(Ap)}(Ap) * Bp
 end
-for f in (:A_mul_Bt, :A_mul_Bc,
-          :At_mul_B, :Ac_mul_B,
-          :At_mul_Bt, :Ac_mul_Bc)
-    @eval begin
-        function ($f){TvA,TiA,TvB,TiB}(A::SparseMatrixCSC{TvA,TiA}, B::SparseMatrixCSC{TvB,TiB})
-            ($f)(sppromote(A, B)...)
-        end
-    end
+function (*){T,Ti}(A::SparseMatrixCSC, B::Transpose{T,SparseMatrixCSC{T,Ti}})
+    Ap, Bp = sppromote(A, B.data)
+    return Ap * Transpose{eltype(Bp),typeof(Bp)}(Bp)
+end
+function (*){TA,TAi,TB,TBi}(A::Transpose{TA,SparseMatrixCSC{TA,TAi}}, B::Transpose{TB,SparseMatrixCSC{TB,TBi}})
+    Ap, Bp = sppromote(A.data, B.data)
+    return Transpose{eltype(Ap),typeof(Ap)}(Ap) * Transpose{eltype(Bp),typeof(Bp)}(Bp)
 end
 
 function sppromote{TvA,TiA,TvB,TiB}(A::SparseMatrixCSC{TvA,TiA}, B::SparseMatrixCSC{TvB,TiB})
@@ -46,62 +47,76 @@ function sppromote{TvA,TiA,TvB,TiB}(A::SparseMatrixCSC{TvA,TiA}, B::SparseMatrix
     A, B
 end
 
-# In matrix-vector multiplication, the correct orientation of the vector is assumed.
-
-for (f, op, transp) in ((:A_mul_B, :identity, false),
-                        (:Ac_mul_B, :ctranspose, true),
-                        (:At_mul_B, :transpose, true))
-    @eval begin
-        function $(symbol(f,:!))(α::Number, A::SparseMatrixCSC, B::StridedVecOrMat, β::Number, C::StridedVecOrMat)
-            if $transp
-                A.n == size(C, 1) || throw(DimensionMismatch())
-                A.m == size(B, 1) || throw(DimensionMismatch())
-            else
-                A.n == size(B, 1) || throw(DimensionMismatch())
-                A.m == size(C, 1) || throw(DimensionMismatch())
+function mul!(α::Number, A::SparseMatrixCSC, B::StridedVecOrMat, β::Number, C::StridedVecOrMat)
+    A.n == size(B, 1) || throw(DimensionMismatch())
+    A.m == size(C, 1) || throw(DimensionMismatch())
+    size(B, 2) == size(C, 2) || throw(DimensionMismatch())
+    nzv = A.nzval
+    rv = A.rowval
+    if β != 1
+        β != 0 ? scale!(C, β) : fill!(C, zero(eltype(C)))
+    end
+    for col = 1:A.n
+        for k = 1:size(C, 2)
+            αxj = α*B[col,k]
+            @inbounds for j = A.colptr[col]:(A.colptr[col + 1] - 1)
+                C[rv[j], k] += nzv[j]*αxj
             end
-            size(B, 2) == size(C, 2) || throw(DimensionMismatch())
-            nzv = A.nzval
-            rv = A.rowval
-            if β != 1
-                β != 0 ? scale!(C, β) : fill!(C, zero(eltype(C)))
-            end
-            for col = 1:A.n
-                for k = 1:size(C, 2)
-                    if $transp
-                        tmp = zero(eltype(C))
-                        @inbounds for j = A.colptr[col]:(A.colptr[col + 1] - 1)
-                            tmp += $(op)(nzv[j])*B[rv[j],k]
-                        end
-                        C[col,k] += α*tmp
-                    else
-                        αxj = α*B[col,k]
-                        @inbounds for j = A.colptr[col]:(A.colptr[col + 1] - 1)
-                            C[rv[j], k] += nzv[j]*αxj
-                        end
-                    end
-                end
-            end
-            C
-        end
-
-        function $(f){TA,S,Tx}(A::SparseMatrixCSC{TA,S}, x::StridedVector{Tx})
-            T = promote_type(TA, Tx)
-            $(symbol(f,:!))(one(T), A, x, zero(T), similar(x, T, A.n))
-        end
-        function $(f){TA,S,Tx}(A::SparseMatrixCSC{TA,S}, B::StridedMatrix{Tx})
-            T = promote_type(TA, Tx)
-            $(symbol(f,:!))(one(T), A, B, zero(T), similar(B, T, (A.n, size(B, 2))))
         end
     end
+    C
+end
+function (*){TA,S,Tx}(A::SparseMatrixCSC{TA,S}, x::StridedVector{Tx})
+    T = promote_type(TA, Tx)
+    mul!(one(T), A, x, zero(T), similar(x, T, A.m))
+end
+function (*){TA,S,Tx}(A::SparseMatrixCSC{TA,S}, B::StridedMatrix{Tx})
+    T = promote_type(TA, Tx)
+    mul!(one(T), A, B, zero(T), similar(B, T, (A.m, size(B, 2))))
+end
+
+function mul!{T,Ti}(α::Number, A::Transpose{T,SparseMatrixCSC{T,Ti}}, B::StridedVecOrMat, β::Number, C::StridedVecOrMat)
+    AA = A.data
+    AA.n == size(C, 1) || throw(DimensionMismatch())
+    AA.m == size(B, 1) || throw(DimensionMismatch())
+    size(B, 2) == size(C, 2) || throw(DimensionMismatch())
+    nzv = AA.nzval
+    rv = AA.rowval
+    if β != 1
+        β != 0 ? scale!(C, β) : fill!(C, zero(eltype(C)))
+    end
+    for col = 1:AA.n
+        for k = 1:size(C, 2)
+            tmp = zero(eltype(C))
+            if A.conjugated # avoid branching in the inner loop
+                @inbounds for j = AA.colptr[col]:(AA.colptr[col + 1] - 1)
+                    tmp += nzv[j]' * B[rv[j],k]
+                end
+            else
+                @inbounds for j = AA.colptr[col]:(AA.colptr[col + 1] - 1)
+                    tmp += nzv[j].' * B[rv[j],k]
+                end
+            end
+            C[col,k] += α*tmp
+        end
+    end
+    C
+end
+function (*){TA,S,Tx}(A::Transpose{TA,SparseMatrixCSC{TA,S}}, x::StridedVector{Tx})
+    T = promote_type(TA, Tx)
+    mul!(one(T), A, x, zero(T), similar(x, T, A.data.n))
+end
+function (*){TA,S,Tx}(A::Transpose{TA,SparseMatrixCSC{TA,S}}, B::StridedMatrix{Tx})
+    T = promote_type(TA, Tx)
+    mul!(one(T), A, B, zero(T), similar(B, T, (A.data.n, size(B, 2))))
 end
 
 # For compatibility with dense multiplication API. Should be deleted when dense multiplication
 # API is updated to follow BLAS API.
-A_mul_B!(C::StridedVecOrMat, A::SparseMatrixCSC, B::StridedVecOrMat) = A_mul_B!(one(eltype(B)), A, B, zero(eltype(C)), C)
-Ac_mul_B!(C::StridedVecOrMat, A::SparseMatrixCSC, B::StridedVecOrMat) = Ac_mul_B!(one(eltype(B)), A, B, zero(eltype(C)), C)
-At_mul_B!(C::StridedVecOrMat, A::SparseMatrixCSC, B::StridedVecOrMat) = At_mul_B!(one(eltype(B)), A, B, zero(eltype(C)), C)
-
+mul!(C::StridedVecOrMat, A::SparseMatrixCSC, B::StridedVecOrMat) =
+    mul!(one(eltype(B)), A, B, zero(eltype(C)), C)
+mul!{T,S<:SparseMatrixCSC}(C::StridedVecOrMat, A::Transpose{T,S}, B::StridedVecOrMat) =
+    mul!(one(eltype(B)), A, B, zero(eltype(C)), C)
 
 function (*){TX,TvA,TiA}(X::StridedMatrix{TX}, A::SparseMatrixCSC{TvA,TiA})
     mX, nX = size(X)
@@ -126,20 +141,15 @@ end
 
 # Sparse matrix multiplication as described in [Gustavson, 1978]:
 # http://dl.acm.org/citation.cfm?id=355796
-
-(*){Tv,Ti}(A::SparseMatrixCSC{Tv,Ti}, B::SparseMatrixCSC{Tv,Ti}) = spmatmul(A,B)
-for (f, opA, opB) in ((:A_mul_Bt, :identity, :transpose),
-                      (:A_mul_Bc, :identity, :ctranspose),
-                      (:At_mul_B, :transpose, :identity),
-                      (:Ac_mul_B, :ctranspose, :identity),
-                      (:At_mul_Bt, :transpose, :transpose),
-                      (:Ac_mul_Bc, :ctranspose, :ctranspose))
-    @eval begin
-        function ($f){Tv,Ti}(A::SparseMatrixCSC{Tv,Ti}, B::SparseMatrixCSC{Tv,Ti})
-            spmatmul(($opA)(A), ($opB)(B))
-        end
-    end
-end
+(*){Tv,Ti<:Integer}(A::SparseMatrixCSC{Tv,Ti}, B::SparseMatrixCSC{Tv,Ti}) =
+    spmatmul(A, B)
+(*){T,Ti<:Integer}(A::SparseMatrixCSC, B::Transpose{T,SparseMatrixCSC{T,Ti}}) =
+    spmatmul(A, convert(SparseMatrixCSC, B))
+(*){T,Ti<:Integer}(A::Transpose{T,SparseMatrixCSC{T,Ti}}, B::SparseMatrixCSC) =
+    spmatmul(convert(SparseMatrixCSC, A), B)
+(*){TA,TAi<:Integer,TB,TBi<:Integer}(A::Transpose{TA,SparseMatrixCSC{TA,TAi}},
+                                     B::Transpose{TB,SparseMatrixCSC{TB,TBi}}) =
+    spmatmul(convert(SparseMatrixCSC, A), convert(SparseMatrixCSC, B))
 
 function spmatmul{Tv,Ti}(A::SparseMatrixCSC{Tv,Ti}, B::SparseMatrixCSC{Tv,Ti};
                          sortindices::Symbol = :sortcols)
@@ -540,7 +550,7 @@ function cond(A::SparseMatrixCSC, p::Real=2)
         normA = norm(A, 1)
         return normA * normAinv
     elseif p == Inf
-        normAinv = normestinv(A')
+        normAinv = normestinv(SparseMatrixCSC(A'))
         normA = norm(A, Inf)
         return normA * normAinv
     elseif p == 2

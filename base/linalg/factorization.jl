@@ -24,14 +24,18 @@ inv{T}(F::Factorization{T}) = A_ldiv_B!(F, eye(T, size(F,1)))
 # With a real lhs and complex rhs with the same precision, we can reinterpret
 # the complex rhs as a real rhs with twice the number of columns
 function (\){T<:BlasReal}(F::Factorization{T}, B::AbstractVector{Complex{T}})
-    c2r = reshape(transpose(reinterpret(T, parent(B), (2, length(B)))), size(B, 1), 2*size(B, 2))
+    realB = reinterpret(T, parent(B), (2, length(B)))
+    c2r = reshape(transpose!(similar(realB, (size(realB, 2), size(realB, 1))), realB), size(B, 1), 2*size(B, 2))
     x = A_ldiv_B!(F, c2r)
-    return reinterpret(Complex{T}, transpose(reshape(x, div(length(x), 2), 2)), (size(F,2),))
+    C = reshape(x, div(length(x), 2), 2)
+    return reinterpret(Complex{T}, transpose!(similar(C, size(C, 2), size(C, 1)), C), (size(F,2),))
 end
 function (\){T<:BlasReal}(F::Factorization{T}, B::AbstractMatrix{Complex{T}})
-    c2r = reshape(transpose(reinterpret(T, parent(B), (2, length(B)))), size(B, 1), 2*size(B, 2))
+    realB = reinterpret(T, parent(B), (2, length(B)))
+    c2r = reshape(transpose!(similar(realB, size(realB, 2), size(realB, 1)), realB), size(B, 1), 2*size(B, 2))
     x = A_ldiv_B!(F, c2r)
-    return reinterpret(Complex{T}, transpose(reshape(x, div(length(x), 2), 2)), (size(F,2), size(B,2)))
+    C = reshape(x, div(length(x), 2), 2)
+    return reinterpret(Complex{T}, transpose!(similar(C, size(C, 2), size(C, 1)), C), (size(F,2), size(B,2)))
 end
 
 function (\){TF<:Number,TB<:Number,N}(F::Factorization{TF}, B::AbstractArray{TB,N})

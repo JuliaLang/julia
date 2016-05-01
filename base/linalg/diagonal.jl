@@ -111,9 +111,8 @@ end
 *(D::Diagonal, A::AbstractMatrix) =
     scale!(similar(A, promote_op(*, eltype(A), eltype(D.diag))), D.diag, A)
 
-A_mul_B!(A::Diagonal,B::AbstractMatrix) = scale!(A.diag,B)
-At_mul_B!(A::Diagonal,B::AbstractMatrix)= scale!(A.diag,B)
-Ac_mul_B!(A::Diagonal,B::AbstractMatrix)= scale!(conj(A.diag),B)
+mul!(A::Diagonal, B::AbstractMatrix) = scale!(A.diag, B)
+mul!{T}(A::Transpose{T,Diagonal{T}}, B::AbstractMatrix) = scale!(A.conjugated ? conj(A.data.diag) : A.data, B)
 
 /(Da::Diagonal, Db::Diagonal) = Diagonal(Da.diag ./ Db.diag )
 function A_ldiv_B!{T}(D::Diagonal{T}, v::AbstractVector{T})

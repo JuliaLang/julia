@@ -4,11 +4,10 @@ module SparseArrays
 
 using Base: ReshapedArray
 using Base.Sort: Forward
-using Base.LinAlg: AbstractTriangular, PosDefException
+using Base.LinAlg: AbstractTriangular, PosDefException, Transpose
 
 import Base: +, -, *, \, &, |, $, .+, .-, .*, ./, .\, .^, .<, .!=, ==
-import Base: A_mul_B!, Ac_mul_B, Ac_mul_B!, At_mul_B, At_mul_B!
-import Base: A_mul_Bc, A_mul_Bt, Ac_mul_Bc, At_mul_Bt
+import Base: mul!
 import Base: At_ldiv_B, Ac_ldiv_B, A_ldiv_B!
 import Base.LinAlg: At_ldiv_B!, Ac_ldiv_B!
 

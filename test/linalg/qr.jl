@@ -51,7 +51,7 @@ debug && println("QR decomposition (without pivoting)")
                 @test_approx_eq q*r a
                 @test_approx_eq_eps a*(qra\b) b 3000ε
                 @test_approx_eq full(qra) a
-                @test_approx_eq_eps A_mul_Bc(eye(eltyb,size(q.factors,2)),q)*full(q, thin=false) eye(n) 5000ε
+                @test_approx_eq_eps (eye(eltyb,size(q.factors,2)) * q') * full(q, thin=false) eye(n) 5000ε
                 if eltya != Int
                     @test eye(eltyb,n)*q ≈ convert(AbstractMatrix{tab},q)
                     ac = copy(a)
@@ -70,7 +70,7 @@ debug && println("Thin QR decomposition (without pivoting)")
                 @test_approx_eq_eps q*b full(q, thin=false)*b 100ε
                 @test_throws DimensionMismatch q*b[1:n1 + 1]
                 @test_throws DimensionMismatch b[1:n1 + 1]*q'
-                @test_approx_eq_eps A_mul_Bc(UpperTriangular(eye(eltyb,size(q.factors,2))),q)*full(q, thin=false) eye(n1,n) 5000ε
+                @test_approx_eq_eps (UpperTriangular(eye(eltyb,size(q.factors,2))) * q') * full(q, thin=false) eye(n1,n) 5000ε
                 if eltya != Int
                     @test eye(eltyb,n)*q ≈ convert(AbstractMatrix{tab},q)
                 end
@@ -85,7 +85,7 @@ debug && println("(Automatic) Fat (pivoted) QR decomposition")
                 p = qrpa[:p]
                 @test_approx_eq q'*full(q, thin=false) eye(n1)
                 @test_approx_eq q*full(q, thin=false)' eye(n1)
-                @test_approx_eq (UpperTriangular(eye(eltya,size(q,2)))*q')*full(q, thin=false) eye(n1)
+                @test_approx_eq (UpperTriangular(eye(eltya, size(q,2))) * q') * full(q, thin=false) eye(n1)
                 @test_approx_eq q*r isa(qrpa,QRPivoted) ? a[1:n1,p] : a[1:n1,:]
                 @test_approx_eq q*r[:,invperm(p)] a[1:n1,:]
                 @test_approx_eq q*r*qrpa[:P].' a[1:n1,:]
@@ -109,7 +109,7 @@ debug && println("(Automatic) Thin (pivoted) QR decomposition")
                 @test_approx_eq full(qrpa) a[:,1:5]
                 @test_throws DimensionMismatch q*b[1:n1 + 1]
                 @test_throws DimensionMismatch b[1:n1 + 1]*q'
-                @test_approx_eq_eps A_mul_Bc(UpperTriangular(eye(eltyb,size(q.factors,2))),q)*full(q, thin=false) eye(n1,n) 5000ε
+                @test_approx_eq_eps (UpperTriangular(eye(eltyb,size(q.factors,2))) * q') * full(q, thin=false) eye(n1,n) 5000ε
                 if eltya != Int
                     @test eye(eltyb,n)*q ≈ convert(AbstractMatrix{tab},q)
                 end
@@ -120,20 +120,20 @@ debug && println("Matmul with QR factorizations")
         if eltya != Int
             qrpa = factorize(a[:,1:n1])
             q,r  = qrpa[:Q], qrpa[:R]
-            @test_approx_eq A_mul_B!(full(q,thin=false)',q) eye(n)
-            @test_throws DimensionMismatch A_mul_B!(eye(eltya,n+1),q)
-            @test_approx_eq A_mul_Bc!(full(q,thin=false),q) eye(n)
-            @test_throws DimensionMismatch A_mul_Bc!(eye(eltya,n+1),q)
+            @test_approx_eq full(q, thin = false)' * q eye(n)
+            @test_throws DimensionMismatch mul!(eye(eltya, n + 1), q)
+            @test_approx_eq mul!(full(q, thin = false), q') eye(n)
+            @test_throws DimensionMismatch mul!(eye(eltya, n + 1), q')
             @test_throws BoundsError size(q,-1)
-            @test_throws DimensionMismatch Base.LinAlg.A_mul_B!(q,zeros(eltya,n1+1))
-            @test_throws DimensionMismatch Base.LinAlg.Ac_mul_B!(q,zeros(eltya,n1+1))
+            @test_throws DimensionMismatch mul!(q, zeros(eltya, n1 + 1))
+            @test_throws DimensionMismatch mul!(q', zeros(eltya, n1 + 1))
 
             qra   = qrfact(a[:,1:n1], Val{false})
             q,r   = qra[:Q], qra[:R]
-            @test_approx_eq A_mul_B!(full(q,thin=false)',q) eye(n)
-            @test_throws DimensionMismatch A_mul_B!(eye(eltya,n+1),q)
-            @test_approx_eq A_mul_Bc!(full(q,thin=false),q) eye(n)
-            @test_throws DimensionMismatch A_mul_Bc!(eye(eltya,n+1),q)
+            @test_approx_eq full(q, thin=false)' * q eye(n)
+            @test_throws DimensionMismatch mul!(eye(eltya, n + 1), q)
+            @test_approx_eq mul!(full(q, thin=false), q') eye(n)
+            @test_throws DimensionMismatch mul!(eye(eltya, n + 1), q')
             @test_throws BoundsError size(q,-1)
             @test_throws DimensionMismatch q * eye(Int8,n+4)
         end
