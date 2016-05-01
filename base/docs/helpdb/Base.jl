@@ -6786,7 +6786,7 @@ to define a new `writemime` method for `T`, via: `writemime(stream, ::MIME"mime"
 where `mime` is a MIME-type string and the function body calls `write` (or similar) to write
 that representation of `x` to `stream`. (Note that the `MIME""` notation only supports
 literal strings; to construct `MIME` types in a more flexible manner use
-`MIME{symbol("")}`.)
+`MIME{Symbol("")}`.)
 
 For example, if you define a `MyImage` type and know how to write it to a PNG file, you
 could define a function `writemime(stream, ::MIME"image/png", x::MyImage) = ...` to allow
@@ -9555,7 +9555,7 @@ Create an array of all zeros with the same element type and shape as `A`.
 zeros(A)
 
 """
-    symbol(x...) -> Symbol
+    Symbol(x...) -> Symbol
 
 Create a `Symbol` by concatenating the string representations of the arguments together.
 """

@@ -1048,7 +1048,7 @@ function abstract_eval(e::ANY, vtypes::VarTable, sv::InferenceState)
     elseif isa(e,TopNode)
         return abstract_eval_global(_topmod(sv), (e::TopNode).name)
     elseif isa(e,Symbol)
-        return abstract_eval_symbol(e::Symbol, vtypes, sv)
+        return abstract_eval_Symbol(e::Symbol, vtypes, sv)
     elseif isa(e,GlobalRef)
         return abstract_eval_global(e.mod, e.name)
     end
@@ -1172,7 +1172,7 @@ function abstract_eval_gensym(s::GenSym, sv::InferenceState)
     return typ
 end
 
-function abstract_eval_symbol(s::Symbol, vtypes, sv::InferenceState)
+function abstract_eval_Symbol(s::Symbol, vtypes, sv::InferenceState)
     return abstract_eval_global(sv.mod, s)
 end
 
@@ -2972,7 +2972,7 @@ function inlining_pass(e::Expr, sv, linfo)
     return (e,stmts)
 end
 
-const compiler_temp_sym = symbol("#temp#")
+const compiler_temp_sym = Symbol("#temp#")
 
 function add_slot!(linfo::LambdaInfo, typ, is_sa)
     id = length(linfo.slotnames)+1

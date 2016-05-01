@@ -52,7 +52,7 @@ for (f, op, transp) in ((:A_mul_B, :identity, false),
                         (:Ac_mul_B, :ctranspose, true),
                         (:At_mul_B, :transpose, true))
     @eval begin
-        function $(symbol(f,:!))(α::Number, A::SparseMatrixCSC, B::StridedVecOrMat, β::Number, C::StridedVecOrMat)
+        function $(Symbol(f,:!))(α::Number, A::SparseMatrixCSC, B::StridedVecOrMat, β::Number, C::StridedVecOrMat)
             if $transp
                 A.n == size(C, 1) || throw(DimensionMismatch())
                 A.m == size(B, 1) || throw(DimensionMismatch())
@@ -87,11 +87,11 @@ for (f, op, transp) in ((:A_mul_B, :identity, false),
 
         function $(f){TA,S,Tx}(A::SparseMatrixCSC{TA,S}, x::StridedVector{Tx})
             T = promote_type(TA, Tx)
-            $(symbol(f,:!))(one(T), A, x, zero(T), similar(x, T, A.n))
+            $(Symbol(f,:!))(one(T), A, x, zero(T), similar(x, T, A.n))
         end
         function $(f){TA,S,Tx}(A::SparseMatrixCSC{TA,S}, B::StridedMatrix{Tx})
             T = promote_type(TA, Tx)
-            $(symbol(f,:!))(one(T), A, B, zero(T), similar(B, T, (A.n, size(B, 2))))
+            $(Symbol(f,:!))(one(T), A, B, zero(T), similar(B, T, (A.n, size(B, 2))))
         end
     end
 end
