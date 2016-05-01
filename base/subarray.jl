@@ -1,6 +1,6 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
-typealias NonSliceIndex Union{Colon, AbstractVector}
+typealias NonSliceIndex Union{Colon, AbstractArray}
 typealias ViewIndex Union{Real, NonSliceIndex}
 abstract AbstractCartesianIndex{N} # This is a hacky forward declaration for CartesianIndex
 
@@ -117,24 +117,61 @@ reindex(V, idxs::Tuple{}, subidxs::Tuple{DroppedScalar, Vararg{Any}}) =
 reindex(V, idxs::Tuple{}, subidxs::Tuple{Any, Vararg{Any}}) =
     (@_propagate_inbounds_meta; (subidxs[1], reindex(V, idxs, tail(subidxs))...))
 
-reindex(V, idxs::Tuple{Any}, subidxs::Tuple{Any}) =
-    (@_propagate_inbounds_meta; (idxs[1][subidxs[1]],))
-reindex(V, idxs::Tuple{Any}, subidxs::Tuple{Any, Any, Vararg{Any}}) =
-    (@_propagate_inbounds_meta; (idxs[1][subidxs[1]],))
-reindex(V, idxs::Tuple{Any, Any, Vararg{Any}}, subidxs::Tuple{Any}) =
+# Skip dropped scalars, so simply peel them off the parent indices and continue
+reindex(V, idxs::Tuple{DroppedScalar, Vararg{Any}}, subidxs::Tuple{Vararg{Any}}) =
+    (@_propagate_inbounds_meta; (idxs[1], reindex(V, tail(idxs), subidxs)...))
+
+# Colons simply pass their subindexes straight through
+reindex(V, idxs::Tuple{Colon}, subidxs::Tuple{Any}) =
+    (@_propagate_inbounds_meta; (subidxs[1],))
+reindex(V, idxs::Tuple{Colon, Vararg{Any}}, subidxs::Tuple{Any, Vararg{Any}}) =
+    (@_propagate_inbounds_meta; (subidxs[1], reindex(V, tail(idxs), tail(subidxs))...))
+reindex(V, idxs::Tuple{Colon, Vararg{Any}}, subidxs::Tuple{Any}) =
     (@_propagate_inbounds_meta; (merge_indexes(V, idxs, subidxs[1]),))
 # As an optimization, we don't need to merge indices if all trailing indices are dropped scalars
-reindex(V, idxs::Tuple{Any, DroppedScalar, Vararg{DroppedScalar}}, subidxs::Tuple{Any}) =
-    (@_propagate_inbounds_meta; (idxs[1][subidxs[1]], tail(idxs)...))
-reindex(V, idxs::Tuple{Any, Any, Vararg{Any}}, subidxs::Tuple{Any, Any, Vararg{Any}}) =
-    (@_propagate_inbounds_meta; (idxs[1][subidxs[1]], reindex(V, tail(idxs), tail(subidxs))...))
+reindex(V, idxs::Tuple{Colon, Vararg{DroppedScalar}}, subidxs::Tuple{Any}) =
+    (@_propagate_inbounds_meta; (subidxs[1], tail(idxs)...))
 
-reindex(V, idxs::Tuple{DroppedScalar}, subidxs::Tuple{Any}) = idxs
-reindex(V, idxs::Tuple{DroppedScalar}, subidxs::Tuple{Any, Any, Vararg{Any}}) = idxs
-reindex(V, idxs::Tuple{DroppedScalar, Any, Vararg{Any}}, subidxs::Tuple{Any}) =
-    (@_propagate_inbounds_meta; (idxs[1], reindex(V, tail(idxs), subidxs)...))
-reindex(V, idxs::Tuple{DroppedScalar, Any, Vararg{Any}}, subidxs::Tuple{Any, Any, Vararg{Any}}) =
-    (@_propagate_inbounds_meta; (idxs[1], reindex(V, tail(idxs), subidxs)...))
+# Re-index into parent vectors with one subindex
+reindex(V, idxs::Tuple{AbstractVector}, subidxs::Tuple{Any}) =
+    (@_propagate_inbounds_meta; (idxs[1][subidxs[1]],))
+reindex(V, idxs::Tuple{AbstractVector, Vararg{Any}}, subidxs::Tuple{Any, Vararg{Any}}) =
+    (@_propagate_inbounds_meta; (idxs[1][subidxs[1]], reindex(V, tail(idxs), tail(subidxs))...))
+reindex(V, idxs::Tuple{AbstractVector, Vararg{Any}}, subidxs::Tuple{Any}) =
+    (@_propagate_inbounds_meta; (merge_indexes(V, idxs, subidxs[1]),))
+reindex(V, idxs::Tuple{AbstractVector, Vararg{DroppedScalar}}, subidxs::Tuple{Any}) =
+    (@_propagate_inbounds_meta; (idxs[1][subidxs[1]], tail(idxs)...))
+
+# Parent matrices are re-indexed with two sub-indices
+reindex(V, idxs::Tuple{AbstractMatrix}, subidxs::Tuple{Any}) =
+    (@_propagate_inbounds_meta; (idxs[1][subidxs[1]],))
+reindex(V, idxs::Tuple{AbstractMatrix}, subidxs::Tuple{Any, Any}) =
+    (@_propagate_inbounds_meta; (idxs[1][subidxs[1], subidxs[2]],))
+reindex(V, idxs::Tuple{AbstractMatrix, Vararg{Any}}, subidxs::Tuple{Any, Any, Vararg{Any}}) =
+    (@_propagate_inbounds_meta; (idxs[1][subidxs[1], subidxs[2]], reindex(V, tail(idxs), tail(tail(subidxs)))...))
+reindex(V, idxs::Tuple{AbstractMatrix, Vararg{Any}}, subidxs::Tuple{Any}) =
+    (@_propagate_inbounds_meta; (merge_indexes(V, idxs, subidxs[1]),))
+reindex(V, idxs::Tuple{AbstractMatrix, Vararg{Any}}, subidxs::Tuple{Any, Any}) =
+    (@_propagate_inbounds_meta; (merge_indexes(V, idxs, subidxs),))
+reindex(V, idxs::Tuple{AbstractMatrix, Vararg{DroppedScalar}}, subidxs::Tuple{Any}) =
+    (@_propagate_inbounds_meta; (idxs[1][subidxs[1]], tail(idxs)...))
+reindex(V, idxs::Tuple{AbstractMatrix, Vararg{DroppedScalar}}, subidxs::Tuple{Any, Any}) =
+    (@_propagate_inbounds_meta; (idxs[1][subidxs[1], subidxs[2]], tail(idxs)...))
+
+# In general, we index N-dimensional parent arrays with N indices
+@generated function reindex{T,N}(V, idxs::Tuple{AbstractArray{T,N}, Vararg{Any}}, subidxs::Tuple{Vararg{Any}})
+    if length(subidxs.parameters) >= N
+        subs = [:(subidxs[$d]) for d in 1:N]
+        tail = [:(subidxs[$d]) for d in N+1:length(subidxs.parameters)]
+        :(@_propagate_inbounds_meta; (idxs[1][$(subs...)], reindex(V, tail(idxs), ($(tail...),))...))
+    elseif length(idxs.parameters) == 1
+        :(@_propagate_inbounds_meta; (idxs[1][subidxs...],))
+    elseif all(T->T<:DroppedScalar, idxs.parameters[2:end])
+        :(@_propagate_inbounds_meta; (idxs[1][subidxs...], tail(idxs)...))
+    else
+        :(@_propagate_inbounds_meta; (merge_indexes(V, idxs, subidxs),))
+    end
+end
 
 # In general, we simply re-index the parent indices by the provided ones
 getindex(V::SubArray) = (@_propagate_inbounds_meta; getindex(V, 1))
