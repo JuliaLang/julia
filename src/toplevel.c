@@ -755,8 +755,7 @@ JL_DLLEXPORT void jl_method_def(jl_svec_t *argdata, jl_lambda_info_t *f, jl_valu
     if (jl_subtype(ftype, (jl_value_t*)jl_builtin_type, 0))
         jl_error("cannot add methods to a builtin function");
 
-    jl_tupletype_t *sig = isstaged == jl_true ? jl_anytuple_type : argtypes;
-    m = jl_new_method(f, name, sig, isstaged == jl_true);
+    m = jl_new_method(f, name, argtypes, tvars, isstaged == jl_true);
     f = m->lambda_template; // because jl_new_method makes a copy
     jl_check_static_parameter_conflicts(m, tvars);
 
@@ -786,7 +785,7 @@ JL_DLLEXPORT void jl_method_def(jl_svec_t *argdata, jl_lambda_info_t *f, jl_valu
         }
     }
 
-    jl_method_table_insert(mt, argtypes, NULL, m, tvars);
+    jl_method_table_insert(mt, m, NULL);
     if (jl_newmeth_tracer)
         jl_call_tracer(jl_newmeth_tracer, (jl_value_t*)m);
 

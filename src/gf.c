@@ -585,7 +585,7 @@ static jl_lambda_info_t *cache_method(jl_methtable_t *mt, union jl_typemap_t *ca
                     cache_with_orig = 1;
                     break;
                 }
-                if (((jl_typemap_entry_t*)jl_svecref(m, 2))->func.method != definition) {
+                if (((jl_method_t*)jl_svecref(m, 2)) != definition) {
                     guards++;
                 }
             }
@@ -599,7 +599,7 @@ static jl_lambda_info_t *cache_method(jl_methtable_t *mt, union jl_typemap_t *ca
             guards = 0;
             for(i = 0, l = jl_array_len(temp); i < l; i++) {
                 jl_value_t *m = jl_cellref(temp, i);
-                if (((jl_typemap_entry_t*)jl_svecref(m,2))->func.method != definition) {
+                if (((jl_method_t*)jl_svecref(m,2)) != definition) {
                     jl_svecset(guardsigs, guards, (jl_tupletype_t*)jl_svecref(m, 0));
                     guards++;
                     //jl_typemap_insert(cache, parent, (jl_tupletype_t*)jl_svecref(m, 0),
@@ -874,14 +874,13 @@ static void update_max_args(jl_methtable_t *mt, jl_tupletype_t *type)
         mt->max_args = na;
 }
 
-void jl_method_table_insert(jl_methtable_t *mt, jl_tupletype_t *type, jl_tupletype_t *simpletype,
-                            jl_method_t *method, jl_svec_t *tvars)
+void jl_method_table_insert(jl_methtable_t *mt, jl_method_t *method, jl_tupletype_t *simpletype)
 {
-    assert(jl_is_tuple_type(type));
     assert(jl_is_method(method));
     assert(jl_is_mtable(mt));
-    if (jl_svec_len(tvars) == 1)
-        tvars = (jl_svec_t*)jl_svecref(tvars, 0);
+    jl_tupletype_t *type = method->sig;
+    jl_svec_t *tvars = method->tvars;
+    assert(jl_is_tuple_type(type));
     JL_SIGATOMIC_BEGIN();
     jl_value_t *oldvalue;
     jl_typemap_entry_t *newentry = jl_typemap_insert(&mt->defs, (jl_value_t*)mt,
@@ -1724,7 +1723,7 @@ static int ml_matches_visitor(jl_typemap_entry_t *ml, struct typemap_intersectio
             closure->t = (jl_value_t*)jl_false;
             return 0; // terminate search
         }
-        closure->matc = jl_svec(3, closure->match.ti, closure->match.env, ml);
+        closure->matc = jl_svec(3, closure->match.ti, closure->match.env, ml->func.method);
         /*
           Check whether all static parameters matched. If not, then we
           have an argument type like Vector{T{Int,_}}, and a signature like

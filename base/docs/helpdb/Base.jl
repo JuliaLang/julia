@@ -6916,7 +6916,7 @@ less(f::AbstractString, ?)
 Show the definition of a function using the default pager, optionally specifying a tuple of
 types to indicate which method to see.
 """
-less(m::TypeMapEntry, ?)
+less(func, ?)
 
 """
     sqrtm(A)

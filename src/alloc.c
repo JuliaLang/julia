@@ -540,6 +540,8 @@ JL_DLLEXPORT jl_method_t *jl_new_method_uninit(void)
         (jl_method_t*)newobj((jl_value_t*)jl_method_type,
                              NWORDS(sizeof(jl_method_t)));
     m->tfunc.unknown = jl_nothing;
+    m->sig = NULL;
+    m->tvars = NULL;
     m->roots = NULL;
     m->module = jl_current_module;
     m->lambda_template = NULL;
@@ -555,12 +557,16 @@ JL_DLLEXPORT jl_method_t *jl_new_method_uninit(void)
     return m;
 }
 
-jl_method_t *jl_new_method(jl_lambda_info_t *definition, jl_sym_t *name, jl_tupletype_t *sig, int isstaged)
+jl_method_t *jl_new_method(jl_lambda_info_t *definition, jl_sym_t *name, jl_tupletype_t *sig, jl_svec_t *tvars, int isstaged)
 {
     assert(definition->code);
     jl_method_t *m = jl_new_method_uninit();
     m->isstaged = isstaged;
     m->name = name;
+    m->sig = sig;
+    if (jl_svec_len(tvars) == 1)
+        tvars = (jl_svec_t*)jl_svecref(tvars, 0);
+    m->tvars = tvars;
     JL_GC_PUSH1(&m);
     // the front end may add this lambda to multiple methods; make a copy if so
     jl_method_t *oldm = definition->def;
@@ -568,7 +574,7 @@ jl_method_t *jl_new_method(jl_lambda_info_t *definition, jl_sym_t *name, jl_tupl
     if (reused)
         definition = jl_copy_lambda(definition);
 
-    definition->specTypes = sig;
+    definition->specTypes = isstaged ? jl_anytuple_type : sig;
     m->lambda_template = definition;
     jl_gc_wb(m, definition);
     definition->def = m;

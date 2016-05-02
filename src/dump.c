@@ -839,6 +839,8 @@ static void jl_serialize_value_(ios_t *s, jl_value_t *v)
         write_int8(s, m->isstaged);
         jl_serialize_value(s, (jl_value_t*)m->file);
         write_int32(s, m->line);
+        jl_serialize_value(s, (jl_value_t*)m->sig);
+        jl_serialize_value(s, (jl_value_t*)m->tvars);
         write_int8(s, m->called);
         jl_serialize_value(s, (jl_value_t*)m->module);
         jl_serialize_value(s, (jl_value_t*)m->roots);
@@ -1000,10 +1002,8 @@ static int jl_serialize_methcache_from_mod(jl_typemap_entry_t *ml, void *closure
         jl_serialize_value(env->s, env->mod);
         jl_serialize_value(env->s, env->name);
         write_int8(env->s, env->iskw);
-        jl_serialize_value(env->s, ml->sig);
         jl_serialize_value(env->s, ml->simplesig);
         jl_serialize_value(env->s, ml->func.method);
-        jl_serialize_value(env->s, ml->tvars);
     }
     return 1;
 }
@@ -1440,6 +1440,10 @@ static jl_value_t *jl_deserialize_value_(ios_t *s, jl_value_t *vtag, jl_value_t 
         m->isstaged = read_int8(s);
         m->file = (jl_sym_t*)jl_deserialize_value(s, NULL);
         m->line = read_int32(s);
+        m->sig = (jl_tupletype_t*)jl_deserialize_value(s, (jl_value_t**)&m->sig);
+        jl_gc_wb(m, m->sig);
+        m->tvars = (jl_svec_t*)jl_deserialize_value(s, (jl_value_t**)&m->tvars);
+        jl_gc_wb(m, m->tvars);
         m->called = read_int8(s);
         m->module = (jl_module_t*)jl_deserialize_value(s, (jl_value_t**)&m->module);
         jl_gc_wb(m, m->module);
@@ -1678,11 +1682,9 @@ static void jl_deserialize_lambdas_from_mod(ios_t *s)
         int8_t iskw = read_int8(s);
         if (iskw)
             gf = jl_get_kwsorter(((jl_datatype_t*)jl_typeof(gf))->name);
-        jl_tupletype_t *type = (jl_tupletype_t*)jl_deserialize_value(s, NULL);
         jl_tupletype_t *simpletype = (jl_tupletype_t*)jl_deserialize_value(s, NULL);
         jl_method_t *meth = (jl_method_t*)jl_deserialize_value(s, NULL);
-        jl_svec_t *tvars = (jl_svec_t*)jl_deserialize_value(s, NULL);
-        jl_method_table_insert(jl_gf_mtable(gf), type, simpletype, meth, tvars);
+        jl_method_table_insert(jl_gf_mtable(gf), meth, simpletype);
     }
 }
 
