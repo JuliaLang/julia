@@ -47,7 +47,7 @@ to specify additional information.
 
 To use the metadata, you have to parse these ``:meta`` expressions.
 If your implementation can be performed within Julia, ``Base.popmeta!`` is
-very handy: ``popmeta!(body, :symbol)`` will scan a function *body*
+very handy: ``Base.popmeta!(body, :symbol)`` will scan a function *body*
 expression (one without the function signature) for a ``:meta``
 expression, extract any arguments, and return a tuple ``(found::Bool,
 args::Array{Any})``. If the metadata did not have any arguments, or
