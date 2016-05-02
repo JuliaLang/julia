@@ -2599,8 +2599,10 @@ f(x) = yt(x)
     (if (and (any vinfo:capt vi)
              (any vinfo:sa vi))
         (let* ((leading
-                (filter (lambda (x) (and (pair? x) (or (eq? (car x) 'method)
-                                                       (eq? (car x) '=))))
+                (filter (lambda (x) (and (pair? x)
+                                         (or (and (eq? (car x) 'method)
+                                                  (length> (car x) 2))
+                                             (eq? (car x) '=))))
                         (take-while (lambda (e)
                                       (or (atom? e)
                                           (memq (car e) '(quote top line inert local

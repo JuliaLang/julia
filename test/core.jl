@@ -3880,3 +3880,10 @@ end
 let ex = expand(:(@M16096.iter))
     @test !(isa(ex,Expr) && ex.head === :error)
 end
+
+# issue #16158
+function f16158(x)
+    bar(x) = length(x)==1 ? x : string(x, bar(x[1:end-1]))
+    bar(x)
+end
+@test f16158("abc") == "abcaba"
