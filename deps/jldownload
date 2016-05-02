@@ -3,7 +3,7 @@
 # usage: jldownload [<output-filename>] <url>
 #
 
-CACHE_HOST=https://cache.e.ip.saba.us
+CACHE_HOST=https://cache.julialang.org
 
 WGET=$(which wget 2>/dev/null)
 CURL=$(which curl 2>/dev/null)
