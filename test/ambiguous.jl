@@ -22,3 +22,9 @@ for m in mt
         @test sort(aln) == atarget
     end
 end
+
+@test foo("hi", "there") == 1
+@test foo(3.1, 3.2) == 5
+@test foo(3, 4) == 4
+@test_throws ErrorException foo(0x03, 4)
+@test_throws ErrorException foo(0x03, 4)  # test that not inserted into cache
