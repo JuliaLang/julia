@@ -32,7 +32,7 @@
   (cond ((atom? e)   tab)
         ((quoted? e) tab)
         (else (case (car e)
-                ((=)            (if (not (jlgensym? (cadr e)))
+                ((=)            (if (not (ssavalue? (cadr e)))
                                     (put! tab (decl-var (cadr e)) #t))
                                 (find-possible-globals- (caddr e) tab))
                 ((method)       (let ((n (method-expr-name e)))

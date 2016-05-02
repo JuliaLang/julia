@@ -256,10 +256,6 @@ static Value *literal_pointer_val(jl_value_t *p)
         // Symbols are prefixed with jl_sym#
         return julia_gv("jl_sym#", addr, NULL, p);
     }
-    if (jl_is_gensym(p)) {
-        // GenSyms are prefixed with jl_gensym#
-        return julia_gv("jl_gensym#", p);
-    }
     // something else gets just a generic name
     return julia_gv("jl_global#", p);
 }
@@ -882,13 +878,13 @@ static inline jl_module_t *topmod(jl_codectx_t *ctx)
 
 static jl_value_t *expr_type(jl_value_t *e, jl_codectx_t *ctx)
 {
-    if (jl_is_gensym(e)) {
-        if (jl_is_long(ctx->linfo->gensymtypes))
+    if (jl_is_ssavalue(e)) {
+        if (jl_is_long(ctx->linfo->ssavaluetypes))
             return (jl_value_t*)jl_any_type;
-        int idx = ((jl_gensym_t*)e)->id;
-        assert(jl_is_array(ctx->linfo->gensymtypes));
-        jl_array_t *gensym_types = (jl_array_t*)ctx->linfo->gensymtypes;
-        return jl_cellref(gensym_types, idx);
+        int idx = ((jl_ssavalue_t*)e)->id;
+        assert(jl_is_array(ctx->linfo->ssavaluetypes));
+        jl_array_t *ssavalue_types = (jl_array_t*)ctx->linfo->ssavaluetypes;
+        return jl_cellref(ssavalue_types, idx);
     }
     if (jl_typeis(e, jl_slotnumber_type)) {
         jl_array_t *slot_types = (jl_array_t*)ctx->linfo->slottypes;
@@ -1132,7 +1128,7 @@ static jl_arrayvar_t *arrayvar_for(jl_value_t *ex, jl_codectx_t *ctx)
     int sl = jl_slot_number(ex)-1;
     if (ctx->arrayvars->find(sl) != ctx->arrayvars->end())
         return &(*ctx->arrayvars)[sl];
-    //TODO: gensym case
+    //TODO: ssavalue case
     return NULL;
 }
 
@@ -1457,11 +1453,11 @@ static Value *boxed(const jl_cgval_t &vinfo, jl_codectx_t *ctx, bool gcrooted)
         box = call_with_unsigned(box_uint64_func, v);
     else if (jb == jl_char_type)
         box = call_with_unsigned(box_char_func, v);
-    else if (jb == jl_gensym_type) {
+    else if (jb == jl_ssavalue_type) {
         unsigned zero = 0;
-        assert(v->getType() == jl_gensym_type->struct_decl);
+        assert(v->getType() == jl_ssavalue_type->struct_decl);
         v = builder.CreateExtractValue(v, makeArrayRef(&zero, 1));
-        box = call_with_unsigned(box_gensym_func, v);
+        box = call_with_unsigned(box_ssavalue_func, v);
     }
     else if (!jl_isbits(jt) || !jl_is_leaf_type(jt)) {
         assert("Don't know how to box this type" && false);
@@ -1601,7 +1597,7 @@ static void emit_setfield(jl_datatype_t *sty, const jl_cgval_t &strct, size_t id
 
 static bool might_need_root(jl_value_t *ex)
 {
-    return (!jl_is_symbol(ex) && !jl_is_slot(ex) && !jl_is_gensym(ex) &&
+    return (!jl_is_symbol(ex) && !jl_is_slot(ex) && !jl_is_ssavalue(ex) &&
             !jl_is_bool(ex) && !jl_is_quotenode(ex) && !jl_is_byte_string(ex) &&
             !jl_is_globalref(ex));
 }
