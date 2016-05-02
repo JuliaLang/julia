@@ -542,6 +542,7 @@ JL_DLLEXPORT jl_method_t *jl_new_method_uninit(void)
     m->tfunc.unknown = jl_nothing;
     m->sig = NULL;
     m->tvars = NULL;
+    m->ambig = NULL;
     m->roots = NULL;
     m->module = jl_current_module;
     m->lambda_template = NULL;
@@ -567,6 +568,7 @@ jl_method_t *jl_new_method(jl_lambda_info_t *definition, jl_sym_t *name, jl_tupl
     if (jl_svec_len(tvars) == 1)
         tvars = (jl_svec_t*)jl_svecref(tvars, 0);
     m->tvars = tvars;
+    m->ambig = jl_nothing;
     JL_GC_PUSH1(&m);
     // the front end may add this lambda to multiple methods; make a copy if so
     jl_method_t *oldm = definition->def;

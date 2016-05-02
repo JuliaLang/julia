@@ -765,16 +765,16 @@ static int check_ambiguous_visitor(jl_typemap_entry_t *oldentry, struct typemap_
             // ok, intersection is covered
             return 1;
         }
-        JL_STREAM *s = JL_STDERR;
-        jl_printf(s, "WARNING: New definition \n    ");
-        jl_static_show_func_sig(s, (jl_value_t*)type);
-        print_func_loc(s, m);
-        jl_printf(s, "\nis ambiguous with: \n    ");
-        jl_static_show_func_sig(s, (jl_value_t*)sig);
-        print_func_loc(s, oldentry->func.method);
-        jl_printf(s, ".\nTo fix, define \n    ");
-        jl_static_show_func_sig(s, isect);
-        jl_printf(s, "\nbefore the new definition.\n");
+        jl_method_t *mambig = oldentry->func.method;
+        if (m->ambig == jl_nothing) {
+            m->ambig = (jl_value_t*) jl_alloc_cell_1d(0);
+        }
+        if (mambig->ambig == jl_nothing) {
+            mambig->ambig = (jl_value_t*) jl_alloc_cell_1d(0);
+        }
+        jl_cell_1d_push((jl_array_t*) m->ambig, (jl_value_t*) mambig);
+        jl_cell_1d_push((jl_array_t*) mambig->ambig, (jl_value_t*) m);
+        return 1;  // there may be multiple ambiguities, keep going
     }
     return 1;
 }
