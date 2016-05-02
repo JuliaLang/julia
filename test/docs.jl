@@ -501,7 +501,7 @@ macro m1_11993()
 end
 
 macro m2_11993()
-    symbol("@m1_11993")
+    Symbol("@m1_11993")
 end
 
 @doc "This should document @m1... since its the result of expansion" @m2_11993
@@ -643,7 +643,7 @@ end
 )
 
 # Issue #13905.
-@test macroexpand(:(@doc "" f() = @x)) == Expr(:error, UndefVarError(symbol("@x")))
+@test macroexpand(:(@doc "" f() = @x)) == Expr(:error, UndefVarError(Symbol("@x")))
 
 # Undocumented DataType Summaries.
 
@@ -782,7 +782,7 @@ end
 
 import Base.Docs: @var, Binding, defined
 
-let x = Binding(Base, symbol("@time"))
+let x = Binding(Base, Symbol("@time"))
     @test defined(x) == true
     @test @var(@time) == x
     @test @var(Base.@time) == x

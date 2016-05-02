@@ -42,8 +42,8 @@ An alias for `Vector{StackFrame}` provided for convenience; returned by calls to
 """
 typealias StackTrace Vector{StackFrame}
 
-const empty_sym = symbol("")
-const unk_sym = symbol("???")
+const empty_sym = Symbol("")
+const unk_sym = Symbol("???")
 const UNKNOWN = StackFrame(unk_sym, Nullable{LambdaInfo}(), unk_sym, -1, empty_sym, -1, true, 0) # === lookup(C_NULL)
 
 

@@ -375,7 +375,7 @@ const quoted_syms = Set{Symbol}([:(:),:(::),:(:=),:(=),:(==),:(!=),:(===),:(!==)
 const uni_ops = Set{Symbol}([:(+), :(-), :(!), :(¬), :(~), :(<:), :(>:), :(√), :(∛), :(∜)])
 const expr_infix_wide = Set{Symbol}([:(=), :(+=), :(-=), :(*=), :(/=), :(\=), :(&=),
     :(|=), :($=), :(>>>=), :(>>=), :(<<=), :(&&), :(||), :(<:), :(=>), :(÷=)])
-const expr_infix = Set{Symbol}([:(:), :(->), symbol("::")])
+const expr_infix = Set{Symbol}([:(:), :(->), Symbol("::")])
 const expr_infix_any = union(expr_infix, expr_infix_wide)
 const all_ops = union(quoted_syms, uni_ops, expr_infix_any)
 const expr_calls  = Dict(:call =>('(',')'), :calldecl =>('(',')'), :ref =>('[',']'), :curly =>('{','}'))
@@ -575,7 +575,7 @@ function show_unquoted_quote_expr(io::IO, value, indent::Int, prec::Int)
             print(io, ":")
             print(io, value)
         else
-            print(io, "symbol(\"", escape_string(s), "\")")
+            print(io, "Symbol(\"", escape_string(s), "\")")
         end
     else
         if isa(value,Expr) && value.head === :block
@@ -773,7 +773,7 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int)
         print(io, head)
 
     # type annotation (i.e. "::Int")
-    elseif is(head, symbol("::")) && nargs == 1
+    elseif is(head, Symbol("::")) && nargs == 1
         print(io, "::")
         show_unquoted(io, args[1], indent)
 
@@ -871,7 +871,7 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int)
         parens && print(io, ")")
 
     # transpose
-    elseif (head === symbol('\'') || head === symbol(".'")) && length(args) == 1
+    elseif (head === Symbol('\'') || head === Symbol(".'")) && length(args) == 1
         if isa(args[1], Symbol)
             show_unquoted(io, args[1])
         else
