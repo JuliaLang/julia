@@ -1085,6 +1085,32 @@ end
 #15995
 @deprecate symbol Symbol
 
+macro ccallable(def)
+    depwarn("@ccallable requires a return type", Symbol("@ccallable"))
+    if isa(def,Expr) && (def.head === :(=) || def.head === :function)
+        sig = def.args[1]
+        if sig.head === :call
+            name = sig.args[1]
+            at = map(sig.args[2:end]) do a
+                if isa(a,Expr) && a.head === :(::)
+                    a.args[2]
+                else
+                    :Any
+                end
+            end
+            return quote
+                $(esc(def))
+                let name = $(esc(name)), tt = $(Expr(:curly, :Tuple, map(esc, at)...))
+                    rt = return_types(name, tt)
+                    length(rt) == 1 || error("function not ccallable")
+                    ccallable(name, rt[1], tt)
+                end
+            end
+        end
+    end
+    error("expected method definition in @ccallable")
+end
+
 # During the 0.5 development cycle, do not add any deprecations below this line
 # To be deprecated in 0.6
 
