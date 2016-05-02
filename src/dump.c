@@ -1446,7 +1446,7 @@ static jl_value_t *jl_deserialize_value_(ios_t *s, jl_value_t *vtag, jl_value_t 
         m->tvars = (jl_svec_t*)jl_deserialize_value(s, (jl_value_t**)&m->tvars);
         jl_gc_wb(m, m->tvars);
         m->ambig = jl_deserialize_value(s, (jl_value_t**)&m->ambig);
-        jl_gc_wb(m, m->tvars);
+        jl_gc_wb(m, m->ambig);
         m->called = read_int8(s);
         m->module = (jl_module_t*)jl_deserialize_value(s, (jl_value_t**)&m->module);
         jl_gc_wb(m, m->module);

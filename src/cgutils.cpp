@@ -1417,7 +1417,7 @@ static Value *boxed(const jl_cgval_t &vinfo, jl_codectx_t *ctx, bool gcrooted)
     if (t == T_int1)
         return julia_bool(v);
 
-    if (ctx->linfo->def) { // don't bother codegen pre-boxing for toplevel
+    if (ctx->linfo && ctx->linfo->def) { // don't bother codegen pre-boxing for toplevel
         if (Constant *c = dyn_cast<Constant>(v)) {
             jl_value_t *s = static_constant_instance(c, jt);
             if (s) {
