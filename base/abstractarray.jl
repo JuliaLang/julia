@@ -968,11 +968,11 @@ end
     exprs = Expr[:(ind = ind-1)]
     for i = 1:N-1
         push!(exprs,:(ind2 = div(ind,dims[$i])))
-        push!(exprs,Expr(:(=),symbol(:s,i),:(ind-dims[$i]*ind2+1)))
+        push!(exprs,Expr(:(=),Symbol(:s,i),:(ind-dims[$i]*ind2+1)))
         push!(exprs,:(ind=ind2))
     end
-    push!(exprs,Expr(:(=),symbol(:s,N),:(ind+1)))
-    Expr(:block,meta,exprs...,Expr(:tuple,[symbol(:s,i) for i=1:N]...))
+    push!(exprs,Expr(:(=),Symbol(:s,N),:(ind+1)))
+    Expr(:block,meta,exprs...,Expr(:tuple,[Symbol(:s,i) for i=1:N]...))
 end
 
 ind2sub(a::AbstractArray, ind::Integer) = ind2sub(size(a), ind)

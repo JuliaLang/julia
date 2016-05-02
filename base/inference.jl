@@ -2972,7 +2972,7 @@ function inlining_pass(e::Expr, sv, linfo)
     return (e,stmts)
 end
 
-const compiler_temp_sym = symbol("#temp#")
+const compiler_temp_sym = Symbol("#temp#")
 
 function add_slot!(linfo::LambdaInfo, typ, is_sa)
     id = length(linfo.slotnames)+1

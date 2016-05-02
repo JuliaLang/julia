@@ -44,7 +44,7 @@ function arg_decl_parts(m::TypeMapEntry)
     file, line = "", 0
     if li !== nothing
         argnames = li.slotnames[1:li.nargs]
-        s = symbol("?")
+        s = Symbol("?")
         decls = Any[argtype_decl(:tvar_env => tv, get(argnames, i, s), m.sig.parameters[i])
                     for i = 1:length(m.sig.parameters)]
         if isdefined(li, :def)

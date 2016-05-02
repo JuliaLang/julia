@@ -44,7 +44,7 @@ macro threadcall(f, rettype, argtypes, argvals...)
     body = wrapper.args[2].args
     args = Symbol[]
     for (i,T) in enumerate(argtypes)
-        arg = symbol("arg$i")
+        arg = Symbol("arg", i)
         push!(body, :($arg = unsafe_load(convert(Ptr{$T}, p))))
         push!(body, :(p += sizeof($T)))
         push!(args, arg)
