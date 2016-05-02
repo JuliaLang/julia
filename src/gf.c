@@ -305,18 +305,76 @@ jl_value_t *jl_nth_slot_type(jl_tupletype_t *sig, size_t i)
     return NULL;
 }
 
+// for varargs functions, the argument tuple type needs to be corrected to reflect the number of arguments
+static jl_tupletype_t *join_varargs(jl_tupletype_t *tt, jl_tupletype_t *sig)
+{
+    size_t np = jl_nparams(tt), nsig = jl_datatype_nfields(sig);
+    if (nsig == 0)
+        return tt;
+    jl_value_t *va = jl_tparam(sig, nsig - 1);
+    if (jl_is_vararg_type(va)) {
+        va = jl_tparam0(va);
+        size_t i, n = nsig - 1;
+        jl_svec_t *newparams = jl_alloc_svec(nsig);
+        JL_GC_PUSH1(&newparams);
+        for (i = 0; i < n; i++) {
+            jl_svecset(newparams, i, jl_svecref(tt->parameters, i));
+        }
+        jl_svec_t *p = jl_alloc_svec(np - n);
+        jl_svecset(newparams, n, p);
+        for (i = n; i < np; i++) {
+            jl_value_t *elt = jl_svecref(tt->parameters, i);
+            jl_value_t *va_N = NULL;
+            jl_svecset(p, i - n, elt);
+            if (jl_is_vararg_type(elt)) {
+                va_N = jl_tparam1(elt);
+                elt = jl_tparam0(elt);
+            }
+            if (jl_is_type_type(elt)) {
+                elt = jl_typeof(jl_tparam0(elt));
+                if (elt == (jl_value_t*)jl_tvar_type)
+                    elt = (jl_value_t*)jl_type_type;
+                if (va_N)
+                    elt = (jl_value_t*)jl_wrap_vararg(elt, va_N);
+                jl_svecset(p, i - n, elt);
+            }
+            assert(elt != (jl_value_t*)jl_tvar_type);
+        }
+        jl_svecset(newparams, n, jl_apply_tuple_type(p));
+        tt = jl_apply_tuple_type(newparams);
+        JL_GC_POP();
+    }
+    return tt;
+}
+
 // after intersection, the argument tuple type needs to be corrected to reflect the signature match
 // that occurred, if the arguments contained a Type but the signature matched on the kind
 static jl_tupletype_t *join_tsig(jl_tupletype_t *tt, jl_tupletype_t *sig)
 {
+    size_t i, n, np = jl_nparams(tt), nsig = jl_datatype_nfields(sig);
+    if (nsig == 0)
+        return tt;
     jl_svec_t *newparams = NULL;
     JL_GC_PUSH1(&newparams);
-    int changed = 0;
-    size_t i, np;
-    for (i = 0, np = jl_nparams(tt); i < np; i++) {
-        jl_value_t *elt = jl_tparam(tt, i);
+    jl_value_t *va = jl_tparam(sig, nsig - 1);
+    if (va && jl_is_vararg_type(va)) {
+        va = jl_tparam0(va);
+        n = nsig - 1;
+        assert(np >= n);
+    }
+    else {
+        va = NULL;
+        n = nsig;
+        assert(np == nsig);
+    }
+    for (i = 0; i < np; i++) {
         jl_value_t *newelt = NULL;
-        jl_value_t *decl_i = jl_nth_slot_type(sig, i);
+        jl_value_t *elt = jl_tparam(tt, i);
+        jl_value_t *decl_i;
+        if (va == NULL || i < n)
+            decl_i = jl_tparam(sig, i);
+        else
+            decl_i = va;
 
         if (jl_is_type_type(elt)) {
             // if the declared type was not Any or Union{Type, ...},
@@ -341,21 +399,19 @@ static jl_tupletype_t *join_tsig(jl_tupletype_t *tt, jl_tupletype_t *sig)
         }
         // prepare to build a new type with the replacement above
         if (newelt) {
-            if (!changed) {
+            if (newparams == NULL)
                 newparams = jl_svec_copy(tt->parameters);
-                changed = 1;
-            }
             jl_svecset(newparams, i, newelt);
         }
     }
-    if (changed)
+    if (newparams)
         tt = jl_apply_tuple_type(newparams);
     JL_GC_POP();
     return tt;
 }
 
 static jl_value_t *ml_matches(union jl_typemap_t ml, int offs,
-                              jl_tupletype_t *type, int lim);
+                              jl_tupletype_t *type, int vsig, int lim);
 
 static jl_lambda_info_t *cache_method(jl_methtable_t *mt, union jl_typemap_t *cache, jl_value_t *parent,
                                       jl_tupletype_t *type, jl_tupletype_t *origtype,
@@ -372,10 +428,10 @@ static jl_lambda_info_t *cache_method(jl_methtable_t *mt, union jl_typemap_t *ca
     jl_value_t *temp=NULL;
     jl_value_t *temp2=NULL;
     jl_value_t *temp3=NULL;
-    jl_lambda_info_t *newmeth=NULL;
+    jl_value_t *temp4=NULL;
     jl_svec_t *newparams=NULL;
     jl_svec_t *limited=NULL;
-    JL_GC_PUSH5(&temp, &temp2, &temp3, &newmeth, &newparams);
+    JL_GC_PUSH5(&temp, &temp2, &temp3, &temp4, &newparams);
     size_t np = jl_nparams(type);
     newparams = jl_svec_copy(type->parameters);
     if (type == origtype)
@@ -560,7 +616,7 @@ static jl_lambda_info_t *cache_method(jl_methtable_t *mt, union jl_typemap_t *ca
         temp2 = (jl_value_t*)type;
     }
     if (need_guard_entries) {
-        temp = ml_matches(mt->defs, 0, type, -1); // TODO: use MAX_UNSPECIALIZED_CONFLICTS?
+        temp = ml_matches(mt->defs, 0, type, 0, -1); // TODO: use MAX_UNSPECIALIZED_CONFLICTS?
         int guards = 0;
         if (temp == jl_false) {
             cache_with_orig = 1;
@@ -634,6 +690,7 @@ static jl_lambda_info_t *cache_method(jl_methtable_t *mt, union jl_typemap_t *ca
     // here we infer types and specialize the method
     jl_array_t *lilist=NULL;
     jl_lambda_info_t *li=NULL;
+    temp4 = (jl_value_t*)join_varargs(type, decl);
     if (definition->specializations != NULL) {
         // reuse code already generated for this combination of lambda and
         // arguments types. this happens for inner generic functions where
@@ -642,7 +699,7 @@ static jl_lambda_info_t *cache_method(jl_methtable_t *mt, union jl_typemap_t *ca
         int k;
         for(k=0; k < lilist->nrows; k++) {
             li = (jl_lambda_info_t*)jl_cellref(lilist, k);
-            if (jl_types_equal((jl_value_t*)li->specTypes, (jl_value_t*)type))
+            if (jl_types_equal((jl_value_t*)li->specTypes, temp4))
                 break;
         }
         if (k == lilist->nrows) lilist=NULL;
@@ -650,14 +707,15 @@ static jl_lambda_info_t *cache_method(jl_methtable_t *mt, union jl_typemap_t *ca
 
     if (lilist != NULL && !li->inInference) {
         assert(li);
-        newmeth = li;
-        jl_typemap_insert(cache, parent, type, jl_emptysvec, origtype, guardsigs, (jl_value_t*)newmeth, jl_cachearg_offset(mt), &lambda_cache, NULL);
+        temp4 = (jl_value_t*)li;
+        jl_typemap_insert(cache, parent, type, jl_emptysvec, origtype, guardsigs, (jl_value_t*)li, jl_cachearg_offset(mt), &lambda_cache, NULL);
         JL_GC_POP();
         JL_UNLOCK(&codegen_lock);
-        return newmeth;
+        return li;
     }
 
-    newmeth = jl_get_specialized(definition, type, sparams);
+    jl_lambda_info_t *newmeth = jl_get_specialized(definition, (jl_tupletype_t*)temp4, sparams);
+    temp4 = (jl_value_t*)newmeth;
     jl_typemap_insert(cache, parent, type, jl_emptysvec, origtype, guardsigs, (jl_value_t*)newmeth, jl_cachearg_offset(mt), &lambda_cache, NULL);
 
     if (newmeth->code != NULL) {
@@ -698,10 +756,13 @@ static jl_lambda_info_t *jl_mt_assoc_by_type(jl_methtable_t *mt, jl_datatype_t *
 
     sig = join_tsig(tt, m->sig);
     jl_lambda_info_t *nf;
-    if (!cache)
+    if (!cache) {
+        sig = join_varargs(sig, m->sig);
         nf = jl_get_specialized(m->func.method, sig, env);
-    else
+    }
+    else {
         nf = cache_method(mt, &mt->cache, (jl_value_t*)mt, sig, tt, m, env);
+    }
     JL_GC_POP();
     return nf;
 }
@@ -1678,6 +1739,7 @@ struct ml_matches_env {
     jl_value_t *t;
     jl_value_t *matc;
     int lim;
+    int vsig;
 };
 static int ml_matches_visitor(jl_typemap_entry_t *ml, struct typemap_intersection_env *closure0)
 {
@@ -1726,6 +1788,8 @@ static int ml_matches_visitor(jl_typemap_entry_t *ml, struct typemap_intersectio
             return 0; // terminate search
         }
         closure->matc = (jl_value_t*)join_tsig((jl_tupletype_t*)closure->match.ti, ml->sig);
+        if (closure->vsig)
+            closure->matc = (jl_value_t*)join_varargs((jl_tupletype_t*)closure->matc, ml->sig);
         closure->matc = (jl_value_t*)jl_svec(3, closure->matc, closure->match.env, ml);
         /*
           Check whether all static parameters matched. If not, then we
@@ -1773,7 +1837,7 @@ static int ml_matches_visitor(jl_typemap_entry_t *ml, struct typemap_intersectio
 //
 // returns a match as and array of svec(argtypes, static_params, Method)
 static jl_value_t *ml_matches(union jl_typemap_t defs, int offs,
-                              jl_tupletype_t *type, int lim)
+                              jl_tupletype_t *type, int vsig, int lim)
 {
     size_t l = jl_svec_len(type->parameters);
     jl_value_t *va = NULL;
@@ -1793,6 +1857,7 @@ static jl_value_t *ml_matches(union jl_typemap_t defs, int offs,
     env.t = jl_an_empty_cell;
     env.matc = NULL;
     env.lim = lim;
+    env.vsig = vsig;
     JL_GC_PUSH4(&env.t, &env.matc, &env.match.env, &env.match.ti);
     jl_typemap_intersection_visitor(defs, offs, &env.match);
     JL_GC_POP();
@@ -1815,7 +1880,7 @@ JL_DLLEXPORT jl_value_t *jl_matching_methods(jl_tupletype_t *types, int lim)
     jl_methtable_t *mt = ((jl_datatype_t*)jl_tparam0(types))->name->mt;
     if (mt == NULL)
         return (jl_value_t*)jl_alloc_cell_1d(0);
-    return ml_matches(mt->defs, 0, types, lim);
+    return ml_matches(mt->defs, 0, types, 1, lim);
 }
 
 #ifdef __cplusplus

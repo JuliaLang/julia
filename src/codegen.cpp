@@ -3990,17 +3990,19 @@ static std::unique_ptr<Module> emit_function(jl_lambda_info_t *lam, jl_llvm_func
     size_t vinfoslen = jl_array_dim0(lam->slotnames);
     ctx.slots.resize(vinfoslen);
     size_t nreq = largslen;
-    int va = 0;
 
     assert(lam->specTypes); // this could happen if the user tries to compile a generic-function
                             // without specializing (or unspecializing) it first
                             // compiling this would cause all specializations to inherit
                             // this code and could create an broken compile / function cache
 
-    if (nreq > 0 && lam->isva) {
+    int va = lam->isva;
+    if (lam->def && lam->def->isstaged && lam == lam->def->lambda_template)
+        va = 0; // TODO: this method shouldn't have been marked as va
+    if (va) {
+        assert(nreq > 0);
         nreq--;
-        va = 1;
-        jl_sym_t *vn = (jl_sym_t*)jl_cellref(lam->slotnames,largslen-1);
+        jl_sym_t *vn = (jl_sym_t*)jl_cellref(lam->slotnames, largslen - 1);
         if (vn != unused_sym)
             ctx.vaSlot = largslen-1;
     }
@@ -4012,18 +4014,13 @@ static std::unique_ptr<Module> emit_function(jl_lambda_info_t *lam, jl_llvm_func
 
     // step 3. some variable analysis
     size_t i;
-    for(i=0; i < nreq; i++) {
-        jl_sym_t *argname = (jl_sym_t*)jl_cellref(lam->slotnames,i);
+    for(i=0; i < largslen; i++) {
+        jl_sym_t *argname = (jl_sym_t*)jl_cellref(lam->slotnames, i);
         if (argname == unused_sym) continue;
         jl_varinfo_t &varinfo = ctx.slots[i];
         varinfo.isArgument = true;
         jl_value_t *ty = jl_nth_slot_type(lam->specTypes, i);
         varinfo.value = mark_julia_type((Value*)NULL, false, ty, &ctx);
-    }
-    if (va && ctx.vaSlot != -1) {
-        jl_varinfo_t &varinfo = ctx.slots[ctx.vaSlot];
-        varinfo.isArgument = true;
-        varinfo.value = mark_julia_type((Value*)NULL, false, jl_tuple_type, &ctx);
     }
 
     for(i=0; i < vinfoslen; i++) {

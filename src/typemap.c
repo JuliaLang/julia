@@ -394,7 +394,7 @@ int jl_typemap_intersection_visitor(union jl_typemap_t map, int offs,
         jl_typemap_level_t *cache = map.node;
         jl_value_t *ty = NULL;
         size_t l = jl_datatype_nfields(closure->type);
-        if (closure->va && l == offs - 1) {
+        if (closure->va && l == offs - 1) { // TODO: l >= offs - 1 ?
             ty = closure->va;
         }
         else if (l > offs) {
