@@ -230,11 +230,11 @@ end
 type LineEditREPL <: AbstractREPL
     t::TextTerminal
     hascolor::Bool
-    prompt_color::AbstractString
-    input_color::AbstractString
-    answer_color::AbstractString
-    shell_color::AbstractString
-    help_color::AbstractString
+    prompt_color::String
+    input_color::String
+    answer_color::String
+    shell_color::String
+    help_color::String
     history_file::Bool
     in_shell::Bool
     in_help::Bool
@@ -297,7 +297,7 @@ end
 
 
 type REPLHistoryProvider <: HistoryProvider
-    history::Array{AbstractString,1}
+    history::Array{String,1}
     history_file
     start_idx::Int
     cur_idx::Int
@@ -308,7 +308,7 @@ type REPLHistoryProvider <: HistoryProvider
     modes::Array{Symbol,1}
 end
 REPLHistoryProvider(mode_mapping) =
-    REPLHistoryProvider(AbstractString[], nothing, 0, 0, -1, IOBuffer(),
+    REPLHistoryProvider(String[], nothing, 0, 0, -1, IOBuffer(),
                         nothing, mode_mapping, UInt8[])
 
 const invalid_history_message = """
@@ -893,9 +893,9 @@ end
 
 type StreamREPL <: AbstractREPL
     stream::IO
-    prompt_color::AbstractString
-    input_color::AbstractString
-    answer_color::AbstractString
+    prompt_color::String
+    input_color::String
+    answer_color::String
     waserror::Bool
     StreamREPL(stream,pc,ic,ac) = new(stream,pc,ic,ac,false)
 end
