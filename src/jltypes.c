@@ -25,7 +25,7 @@ jl_datatype_t *jl_type_type;
 jl_datatype_t *jl_typename_type;
 jl_datatype_t *jl_sym_type;
 jl_datatype_t *jl_symbol_type;
-jl_datatype_t *jl_gensym_type;
+jl_datatype_t *jl_ssavalue_type;
 jl_datatype_t *jl_abstractslot_type;
 jl_datatype_t *jl_slotnumber_type;
 jl_datatype_t *jl_typedslot_type;
@@ -3356,9 +3356,9 @@ void jl_init_types(void)
     jl_uint8_type = jl_new_bitstype((jl_value_t*)jl_symbol("UInt8"),
                                     jl_any_type, jl_emptysvec, 8);
 
-    jl_gensym_type = jl_new_datatype(jl_symbol("GenSym"), jl_any_type, jl_emptysvec,
-                                     jl_svec1(jl_symbol("id")),
-                                     jl_svec1(jl_long_type), 0, 0, 1);
+    jl_ssavalue_type = jl_new_datatype(jl_symbol("SSAValue"), jl_any_type, jl_emptysvec,
+                                       jl_svec1(jl_symbol("id")),
+                                       jl_svec1(jl_long_type), 0, 0, 1);
 
     jl_abstractslot_type = jl_new_abstracttype((jl_value_t*)jl_symbol("Slot"), jl_any_type,
                                                jl_emptysvec);
@@ -3542,7 +3542,7 @@ void jl_init_types(void)
                                 jl_symbol("slotnames"),
                                 jl_symbol("slottypes"),
                                 jl_symbol("slotflags"),
-                                jl_symbol("gensymtypes"),
+                                jl_symbol("ssavaluetypes"),
                                 jl_symbol("rettype"),
                                 jl_symbol("sparam_syms"),
                                 jl_symbol("sparam_vals"),

@@ -62,7 +62,7 @@ The following data types exist in lowered form:
     forces a name to be resolved as a global in Base. This is now mostly
     redundant with ``GlobalRef(Base, :x)``.
 
-``GenSym``
+``SSAValue``
     refers to a consecutively-numbered (starting at 0) static single assignment
     (SSA) variable inserted by the compiler.
 
@@ -203,7 +203,7 @@ LambdaInfo
     - 16 - statically assigned once
     - 32 - might be used before assigned. This flag is only valid after type inference.
 
-``gensymtypes`` - Either an array or an Int giving the number of compiler-inserted
+``ssavaluetypes`` - Either an array or an Int giving the number of compiler-inserted
     temporary locations in the function. If an array, specifies a type for each location.
 
 ``nargs`` - The number of argument slots. The first ``nargs`` entries of the slots
