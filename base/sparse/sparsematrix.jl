@@ -724,19 +724,19 @@ ctranspose{Tv,Ti}(A::SparseMatrixCSC{Tv,Ti}) = qftranspose(A, 1:A.n, conj)
 ## fkeep! and children tril!, triu!, droptol!, dropzeros[!]
 
 """
-    fkeep!(A::AbstractSparseArray, f, other, trim::Bool = true)
+    fkeep!(A::AbstractSparseArray, f, trim::Bool = true)
 
 Keep elements of `A` for which test `f` returns `true`. `f`'s signature should be
 
-    f(i::Integer, [j::Integer,] x, other::Any) -> Bool
+    f(i::Integer, [j::Integer,] x) -> Bool
 
-where `i` and `j` are an element's row and column indices, `x` is the element's value,
-and `other` is passed in from the call to `fkeep!`. This method makes a single sweep
+where `i` and `j` are an element's row and column indices and `x` is the element's
+value. This method makes a single sweep
 through `A`, requiring `O(A.n, nnz(A))`-time for matrices and `O(nnz(A))`-time for vectors
 and no space beyond that passed in. If `trim` is `true`, this method trims `A.rowval` or `A.nzind` and
 `A.nzval` to length `nnz(A)` after dropping elements.
 """
-function fkeep!(A::SparseMatrixCSC, f, other, trim::Bool = true)
+function fkeep!(A::SparseMatrixCSC, f, trim::Bool = true)
     An = A.n
     Acolptr = A.colptr
     Arowval = A.rowval
@@ -751,7 +751,7 @@ function fkeep!(A::SparseMatrixCSC, f, other, trim::Bool = true)
             Ai = Arowval[Ak]
             Ax = Anzval[Ak]
             # If this element should be kept, rewrite in new position
-            if f(Ai, Aj, Ax, other)
+            if f(Ai, Aj, Ax)
                 if Awritepos != Ak
                     Arowval[Awritepos] = Ai
                     Anzval[Awritepos] = Ax
@@ -781,19 +781,19 @@ function tril!(A::SparseMatrixCSC, k::Integer = 0, trim::Bool = true)
     if k > A.n-1 || k < 1-A.m
         throw(ArgumentError("requested diagonal, $k, out of bounds in matrix of size ($(A.m),$(A.n))"))
     end
-    fkeep!(A, (i, j, x, k) -> i + k >= j, k, trim)
+    fkeep!(A, (i, j, x) -> i + k >= j, trim)
 end
 function triu!(A::SparseMatrixCSC, k::Integer = 0, trim::Bool = true)
     if k > A.n-1 || k < 1-A.m
         throw(ArgumentError("requested diagonal, $k, out of bounds in matrix of size ($(A.m),$(A.n))"))
     end
-    fkeep!(A, (i, j, x, k) -> j >= i + k, k, trim)
+    fkeep!(A, (i, j, x) -> j >= i + k, trim)
 end
 
 droptol!(A::SparseMatrixCSC, tol, trim::Bool = true) =
-    fkeep!(A, (i, j, x, tol) -> abs(x) > tol, tol, trim)
+    fkeep!(A, (i, j, x) -> abs(x) > tol, trim)
 
-dropzeros!(A::SparseMatrixCSC, trim::Bool = true) = fkeep!(A, (i, j, x, other) -> x != 0, nothing, trim)
+dropzeros!(A::SparseMatrixCSC, trim::Bool = true) = fkeep!(A, (i, j, x) -> x != 0, trim)
 dropzeros(A::SparseMatrixCSC, trim::Bool = true) = dropzeros!(copy(A), trim)
 
 

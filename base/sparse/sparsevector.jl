@@ -1645,7 +1645,7 @@ function sort{Tv,Ti}(x::SparseVector{Tv,Ti}; kws...)
     SparseVector(n,newnzind,newnzvals)
 end
 
-function fkeep!(x::SparseVector, f, other, trim::Bool = true)
+function fkeep!(x::SparseVector, f, trim::Bool = true)
     n = x.n
     nzind = x.nzind
     nzval = x.nzval
@@ -1655,7 +1655,7 @@ function fkeep!(x::SparseVector, f, other, trim::Bool = true)
         xi = nzind[xk]
         xv = nzval[xk]
         # If this element should be kept, rewrite in new position
-        if f(xi, xv, other)
+        if f(xi, xv)
             if x_writepos != xk
                 nzind[x_writepos] = xi
                 nzval[x_writepos] = xv
@@ -1676,7 +1676,7 @@ function fkeep!(x::SparseVector, f, other, trim::Bool = true)
     x
 end
 
-droptol!(x::SparseVector, tol, trim::Bool = true) = fkeep!(x, (i, x, tol) -> abs(x) > tol, tol, trim)
+droptol!(x::SparseVector, tol, trim::Bool = true) = fkeep!(x, (i, x) -> abs(x) > tol, trim)
 
-dropzeros!(x::SparseVector, trim::Bool = true) = fkeep!(x, (i, x, other) -> x != 0, nothing, trim)
+dropzeros!(x::SparseVector, trim::Bool = true) = fkeep!(x, (i, x) -> x != 0, trim)
 dropzeros(x::SparseVector, trim::Bool = true) = dropzeros!(copy(x), trim)

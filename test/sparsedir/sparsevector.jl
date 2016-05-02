@@ -890,8 +890,8 @@ let x = sparsevec(1:7, [3., 2., -1., 1., -2., -3., 3.], 7)
 
     xdrop = copy(x)
     # This will keep index 1, 3, 4, 7 in xdrop
-    f_drop(i, x, other) = (abs(x) == 1.) || (i in [1, 7])
-    Base.SparseArrays.fkeep!(xdrop, f_drop, Void)
+    f_drop(i, x) = (abs(x) == 1.) || (i in [1, 7])
+    Base.SparseArrays.fkeep!(xdrop, f_drop)
     @test exact_equal(xdrop, SparseVector(7, [1, 3, 4, 7], [3., -1., 1., 3.]))
 end
 
