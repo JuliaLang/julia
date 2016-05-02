@@ -198,6 +198,8 @@ typedef struct _jl_method_t {
     jl_tupletype_t *sig;
     // bound type variables (static parameters). redundant with TypeMapEntry->tvars
     jl_svec_t *tvars;
+    // list of potentially-ambiguous methods (nothing = none, Vector{Any} of Methods otherwise)
+    jl_value_t *ambig;
 
     // array of all lambda infos with code generated from this one
     jl_array_t *specializations;

@@ -998,4 +998,3 @@ static void jl_typemap_list_insert_sorted(jl_typemap_entry_t **pml, jl_value_t *
 #ifdef __cplusplus
 }
 #endif
-
