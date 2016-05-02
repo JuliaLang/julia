@@ -1099,11 +1099,10 @@ void *jl_get_llvmf(jl_tupletype_t *tt, bool getwrapper, bool getdeclarations)
             jl_typemap_entry_t *entry;
             linfo = jl_method_lookup_by_type(
                 ((jl_datatype_t*)jl_tparam0(tt))->name->mt, tt, 0, 0, &entry);
-            if (linfo == NULL) {
+            if (linfo == NULL || jl_has_call_ambiguities(tt, linfo->def)) {
                 JL_GC_POP();
                 return NULL;
             }
-            check_ambig_call(linfo->def, tt);
         }
     }
     if (linfo == NULL) {

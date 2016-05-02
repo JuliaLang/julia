@@ -166,9 +166,13 @@ function showerror(io::IO, ex::MethodError)
     # a tuple of the arguments otherwise.
     is_arg_types = isa(ex.args, DataType)
     arg_types = is_arg_types ? ex.args : typesof(ex.args...)
+    f = ex.f
+    meth = methods(f, arg_types)
+    if length(meth) > 1
+        return showerror_ambiguous(io, meth, f, arg_types)
+    end
     arg_types_param::SimpleVector = arg_types.parameters
     print(io, "MethodError: ")
-    f = ex.f
     ft = typeof(f)
     name = ft.name.mt.name
     f_is_function = false
@@ -246,6 +250,20 @@ end
 
 striptype{T}(::Type{T}) = T
 striptype(::Any) = nothing
+
+function showerror_ambiguous(io::IO, meth, f, args)
+    print(io, "MethodError: ", f, "(")
+    p = args.parameters
+    for (i,a) in enumerate(p)
+        print(io, "::", a)
+        i == length(p) ? print(io, ")") : print(io, ", ")
+    end
+    print(io, " is ambiguous. Candidates:")
+    for m in meth
+        print(io, "\n  ", m)
+    end
+    nothing
+end
 
 #Show an error by directly calling jl_printf.
 #Useful in Base submodule __init__ functions where STDERR isn't defined yet.

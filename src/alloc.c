@@ -476,6 +476,7 @@ static jl_lambda_info_t *jl_copy_lambda(jl_lambda_info_t *linfo)
     new_linfo->nargs = linfo->nargs;
     new_linfo->isva = linfo->isva;
     new_linfo->rettype = linfo->rettype;
+    new_linfo->def = linfo->def;
     return new_linfo;
 }
 

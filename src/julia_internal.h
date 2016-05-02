@@ -139,8 +139,9 @@ void jl_set_t_uid_ctr(int i);
 uint32_t jl_get_gs_ctr(void);
 void jl_set_gs_ctr(uint32_t ctr);
 
-void JL_NORETURN jl_no_method_error_bare(jl_function_t *f, jl_value_t *args);
-void JL_NORETURN jl_no_method_error(jl_function_t *f, jl_value_t **args, size_t na);
+void JL_NORETURN jl_method_error_bare(jl_function_t *f, jl_value_t *args);
+void JL_NORETURN jl_method_error(jl_function_t *f, jl_value_t **args, size_t na);
+
 JL_DLLEXPORT void jl_typeassert(jl_value_t *x, jl_value_t *t);
 
 #define JL_CALLABLE(name)                                               \
@@ -216,7 +217,6 @@ jl_lambda_info_t *jl_method_lookup_by_type(jl_methtable_t *mt, jl_tupletype_t *t
                                            jl_typemap_entry_t **entry);
 jl_lambda_info_t *jl_method_lookup(jl_methtable_t *mt, jl_value_t **args, size_t nargs, int cache, jl_typemap_entry_t **entry);
 jl_value_t *jl_gf_invoke(jl_tupletype_t *types, jl_value_t **args, size_t nargs);
-void check_ambig_call(jl_method_t *m, jl_tupletype_t *types);
 
 jl_array_t *jl_lam_args(jl_expr_t *l);
 jl_array_t *jl_lam_vinfo(jl_expr_t *l);
@@ -281,6 +281,8 @@ void jl_idtable_rehash(jl_array_t **pa, size_t newsz);
 
 JL_DLLEXPORT jl_methtable_t *jl_new_method_table(jl_sym_t *name, jl_module_t *module);
 jl_lambda_info_t *jl_get_specialization1(jl_tupletype_t *types);
+int jl_has_call_ambiguities(jl_tupletype_t *types, jl_method_t *m);
+
 jl_function_t *jl_module_get_initializer(jl_module_t *m);
 uint32_t jl_module_next_counter(jl_module_t *m);
 void jl_fptr_to_llvm(jl_fptr_t fptr, jl_lambda_info_t *lam, int specsig);

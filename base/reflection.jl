@@ -304,7 +304,7 @@ function _dump_function(f, t::ANY, native, wrapper, strip_ir_metadata, dump_modu
     llvmf = ccall(:jl_get_llvmf, Ptr{Void}, (Any, Bool, Bool), t, wrapper, native)
 
     if llvmf == C_NULL
-        error("no method found for the specified argument types")
+        error("did not find a unique method for the specified argument types")
     end
 
     if native
