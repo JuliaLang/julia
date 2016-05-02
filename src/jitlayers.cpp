@@ -202,7 +202,7 @@ extern RTDyldMemoryManager *createRTDyldMemoryManagerUnix();
 // This is the library that provides support for c11/c++11 atomic operations.
 static uint64_t resolve_atomic(const char *name)
 {
-    static void *atomic_hdl = jl_load_dynamic_library_e("libatomic.so",
+    static void *atomic_hdl = jl_load_dynamic_library_e("libatomic",
                                                         JL_RTLD_LOCAL);
     static const char *const atomic_prefix = "__atomic_";
     if (!atomic_hdl)

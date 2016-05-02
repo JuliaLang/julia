@@ -238,8 +238,9 @@ test_fence()
 let atomic_types = [Int8, Int16, Int32, Int64, Int128,
                     UInt8, UInt16, UInt32, UInt64, UInt128,
                     Float16, Float32, Float64]
-    # Temporarily omit 128-bit types
-    if Base.ARCH === :i686
+    # Temporarily omit 128-bit types on 32bit x86
+    # 128-bit atomics do not exist on AArch32.
+    if Base.ARCH === :i686 || startswith(string(Base.ARCH), "arm")
         filter!(T -> sizeof(T)<=8, atomic_types)
     end
     for T in atomic_types
