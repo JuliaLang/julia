@@ -4615,16 +4615,6 @@ Bessel function of the third kind of order `nu`, ``H^{(1)}_\\nu(x)``.
 hankelh1
 
 """
-    hessfact(A)
-
-Compute the Hessenberg decomposition of `A` and return a `Hessenberg` object. If `F` is the
-factorization object, the unitary matrix can be accessed with `F[:Q]` and the Hessenberg
-matrix with `F[:H]`. When `Q` is extracted, the resulting type is the `HessenbergQ` object,
-and may be converted to a regular matrix with [`full`](:func:`full`).
-"""
-hessfact
-
-"""
     gcdx(x,y)
 
 Computes the greatest common (positive) divisor of `x` and `y` and their Bézout
