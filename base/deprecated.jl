@@ -1082,7 +1082,7 @@ end
 @deprecate sprand{T}(n::Integer, density::AbstractFloat, ::Type{T}) sprand(T, n, density)
 @deprecate sprand{T}(r::AbstractRNG, n::Integer, density::AbstractFloat, ::Type{T}) sprand(r, T, n, density)
 
-#16130
+#15995
 @deprecate symbol Symbol
 
 # During the 0.5 development cycle, do not add any deprecations below this line
