@@ -230,7 +230,7 @@
            ((macrocall)
             (if (or (eq? (cadr e) '@label) (eq? (cadr e) '@goto)) e
                 `(macrocall ,.(map (lambda (x)
-                                     (resolve-expansion-vars- x env m inarg))
+                                     (resolve-expansion-vars-with-new-env x env m inarg))
                                    (cdr e)))))
            ((symboliclabel) e)
            ((symbolicgoto) e)
