@@ -5403,6 +5403,56 @@ Explicitly finds `Q`, the orthogonal/unitary matrix from `gehrd!`. `ilo`,
 """
 orghr!(ilo::Integer, ihi::Integer, A::StridedMatrix, tau::StridedVector)
 
+for (ormhr, elty) in
+    ((:dormhr_,:Float64),
+     (:sormhr_,:Float32),
+     (:zunmhr_,:Complex128),
+     (:cunmhr_,:Complex64))
+    @eval begin
+        # .. Scalar Arguments ..
+        # CHARACTER          side, trans
+        # INTEGER            ihi, ilo, info, lda, ldc, lwork, m, n
+        # ..
+        # .. Array Arguments ..
+        # DOUBLE PRECISION   a( lda, * ), c( ldc, * ), tau( * ), work( * )
+        function ormhr!(side::Char, trans::Char, ilo::Integer, ihi::Integer, A::StridedMatrix{$elty},
+            tau::StridedVector{$elty}, C::StridedVecOrMat{$elty})
+
+            chkstride1(A)
+            n = checksquare(A)
+            mC, nC = size(C, 1), size(C, 2)
+
+            if n - length(tau) != 1
+                throw(DimensionMismatch("tau has length $(length(tau)), needs $(n - 1)"))
+            end
+            if (side == 'L' && mC != n) || (side == 'R' && nC != n)
+                throw(DimensionMismatch("A and C matrices are not conformable"))
+            end
+
+            work = Array($elty, 1)
+            lwork = BlasInt(-1)
+            info = Ref{BlasInt}()
+            for i = 1:2
+                ccall((@blasfunc($ormhr), liblapack), Void,
+                    (Ptr{UInt8}, Ptr{UInt8}, Ptr{BlasInt}, Ptr{BlasInt},
+                     Ptr{BlasInt}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt},
+                     Ptr{$elty}, Ptr{$elty}, Ptr{BlasInt}, Ptr{$elty},
+                     Ptr{BlasInt}, Ptr{BlasInt}),
+                    &side, &trans, &mC, &nC,
+                    &ilo, &ihi, A, &max(1, stride(A, 2)),
+                    tau, C, &max(1, stride(C, 2)), work,
+                    &lwork, info)
+                chklapackerror(info[])
+                if i == 1
+                    lwork = BlasInt(real(work[1]))
+                    work = Array($elty, lwork)
+                end
+            end
+            C
+        end
+    end
+end
+
 for (gees, gges, elty) in
     ((:dgees_,:dgges_,:Float64),
      (:sgees_,:sgges_,:Float32))
