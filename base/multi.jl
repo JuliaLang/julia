@@ -19,18 +19,34 @@
 # Messages
 abstract AbstractMsg
 
+let REF_ID::Int = 1
+    global next_ref_id
+    next_ref_id() = (id = REF_ID; REF_ID += 1; id)
+end
+
+type RRID
+    whence
+    id
+
+    RRID() = RRID(myid(),next_ref_id())
+    RRID(whence, id) = new(whence,id)
+end
+hash(r::RRID, h::UInt) = hash(r.whence, hash(r.id, h))
+==(r::RRID, s::RRID) = (r.whence==s.whence && r.id==s.id)
+
+
 type CallMsg{Mode} <: AbstractMsg
     f::Function
     args::Tuple
     kwargs::Array
-    response_oid::Tuple
+    response_oid::RRID
 end
 type CallWaitMsg <: AbstractMsg
     f::Function
     args::Tuple
     kwargs::Array
-    response_oid::Tuple
-    notify_oid::Tuple
+    response_oid::RRID
+    notify_oid::RRID
 end
 type RemoteDoMsg <: AbstractMsg
     f::Function
@@ -38,7 +54,7 @@ type RemoteDoMsg <: AbstractMsg
     kwargs::Array
 end
 type ResultMsg <: AbstractMsg
-    response_oid::Tuple
+    response_oid::RRID
     value::Any
 end
 
@@ -50,12 +66,12 @@ type JoinPGRPMsg <: AbstractMsg
     self_pid::Int
     other_workers::Array
     self_is_local::Bool
-    notify_oid::Tuple
+    notify_oid::RRID
     topology::Symbol
     worker_pool
 end
 type JoinCompleteMsg <: AbstractMsg
-    notify_oid::Tuple
+    notify_oid::RRID
     cpu_cores::Int
     ospid::Int
 end
@@ -476,8 +492,8 @@ type Future <: AbstractRemoteRef
     id::Int
     v::Nullable{Any}
 
-    Future(w, wh, id) = Future(w, wh, id, Nullable{Any}())
-    Future(w, wh, id, v) = (r = new(w,wh,id,v); test_existing_ref(r))
+    Future(w::Int, rrid::RRID) = Future(w, rrid, Nullable{Any}())
+    Future(w::Int, rrid::RRID, v) = (r = new(w,rrid.whence,rrid.id,v); test_existing_ref(r))
 end
 
 function finalize_future(f::Future)
@@ -496,7 +512,7 @@ type RemoteChannel{T<:AbstractChannel} <: AbstractRemoteRef
     whence::Int
     id::Int
 
-    RemoteChannel(w, wh, id) = (r = new(w,wh,id); test_existing_ref(r))
+    RemoteChannel(w::Int, rrid::RRID) = (r = new(w, rrid.whence, rrid.id); test_existing_ref(r))
 end
 
 function test_existing_ref(r::Future)
@@ -532,37 +548,23 @@ function finalize_remote_channel(r::RemoteChannel)
     r
 end
 
-
-let REF_ID::Int = 1
-    global next_ref_id
-    next_ref_id() = (id = REF_ID; REF_ID += 1; id)
-
-    global next_rrid_tuple
-    next_rrid_tuple() = (myid(),next_ref_id())
-end
-
 Future(w::LocalProcess) = Future(w.id)
 Future(w::Worker) = Future(w.id)
-function Future(pid::Integer=myid())
-    rrid = next_rrid_tuple()
-    Future(pid, rrid[1], rrid[2])
-end
+Future(pid::Integer=myid()) = Future(pid, RRID())
 
-function RemoteChannel(pid::Integer=myid())
-    rrid = next_rrid_tuple()
-    RemoteChannel{Channel{Any}}(pid, rrid[1], rrid[2])
-end
+RemoteChannel(pid::Integer=myid()) = RemoteChannel{Channel{Any}}(pid, RRID())
+
 function RemoteChannel(f::Function, pid::Integer=myid())
-    remotecall_fetch(pid, f, next_rrid_tuple()) do f, rrid
+    remotecall_fetch(pid, f, RRID()) do f, rrid
         rv=lookup_ref(rrid, f)
-        RemoteChannel{typeof(rv.c)}(myid(), rrid[1], rrid[2])
+        RemoteChannel{typeof(rv.c)}(myid(), rrid)
     end
 end
 
 hash(r::AbstractRemoteRef, h::UInt) = hash(r.whence, hash(r.id, h))
 ==(r::AbstractRemoteRef, s::AbstractRemoteRef) = (r.whence==s.whence && r.id==s.id)
 
-remoteref_id(r::AbstractRemoteRef) = (r.whence, r.id)
+remoteref_id(r::AbstractRemoteRef) = RRID(r.whence, r.id)
 function channel_from_id(id)
     rv = get(PGRP.refs, id, false)
     if rv === false
@@ -571,14 +573,14 @@ function channel_from_id(id)
     rv.c
 end
 
-lookup_ref(id, f=def_rv_channel) = lookup_ref(PGRP, id, f)
-function lookup_ref(pg, id, f)
-    rv = get(pg.refs, id, false)
+lookup_ref(rrid::RRID, f=def_rv_channel) = lookup_ref(PGRP, rrid, f)
+function lookup_ref(pg, rrid, f)
+    rv = get(pg.refs, rrid, false)
     if rv === false
         # first we've heard of this ref
         rv = RemoteValue(f())
-        pg.refs[id] = rv
-        push!(rv.clientset, id[1])
+        pg.refs[rrid] = rv
+        push!(rv.clientset, rrid.whence)
     end
     rv
 end
@@ -694,13 +696,13 @@ end
 
 function deserialize{T<:Future}(s::SerializationState, t::Type{T})
     f = deserialize_rr(s,t)
-    Future(f.where, f.whence, f.id, f.v) # ctor adds to client_refs table
+    Future(f.where, RRID(f.whence, f.id), f.v) # ctor adds to client_refs table
 end
 
 function deserialize{T<:RemoteChannel}(s::SerializationState, t::Type{T})
     rr = deserialize_rr(s,t)
     # call ctor to make sure this rr gets added to the client_refs table
-    RemoteChannel{channel_type(rr)}(rr.where, rr.whence, rr.id)
+    RemoteChannel{channel_type(rr)}(rr.where, RRID(rr.whence, rr.id))
 end
 
 function deserialize_rr(s, t)
@@ -760,7 +762,7 @@ end
 function schedule_call(rid, thunk)
     rv = RemoteValue(def_rv_channel())
     (PGRP::ProcessGroup).refs[rid] = rv
-    push!(rv.clientset, rid[1])
+    push!(rv.clientset, rid.whence)
     schedule(@task(run_work_thunk(rv,thunk)))
     rv
 end
@@ -798,7 +800,7 @@ end
 function remotecall_fetch(f, w::Worker, args...; kwargs...)
     # can be weak, because the program will have no way to refer to the Ref
     # itself, it only gets the result.
-    oid = next_rrid_tuple()
+    oid = RRID()
     rv = lookup_ref(oid)
     rv.waitingfor = w.id
     send_msg(w, CallMsg{:call_fetch}(f, args, kwargs, oid))
@@ -814,7 +816,7 @@ remotecall_fetch(f, id::Integer, args...; kwargs...) =
 remotecall_wait(f, w::LocalProcess, args...; kwargs...) = wait(remotecall(f, w, args...; kwargs...))
 
 function remotecall_wait(f, w::Worker, args...; kwargs...)
-    prid = next_rrid_tuple()
+    prid = RRID()
     rv = lookup_ref(prid)
     rv.waitingfor = w.id
     rr = Future(w)
@@ -1345,7 +1347,7 @@ function create_worker(manager, wconfig)
     finalizer(w, (w)->if myid() == 1 manage(w.manager, w.id, w.config, :finalize) end)
 
     # set when the new worker has finshed connections with all other workers
-    ntfy_oid = next_rrid_tuple()
+    ntfy_oid = RRID()
     rr_ntfy_join = lookup_ref(ntfy_oid)
     rr_ntfy_join.waitingfor = myid()
 
