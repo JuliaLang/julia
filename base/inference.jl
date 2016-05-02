@@ -91,48 +91,33 @@ type InferenceState
         n = length(linfo.code)
         s = Any[ () for i=1:n ]
         # initial types
-        s[1] = Any[ VarState(Bottom,true) for i=1:nslots ]
+        s[1] = Any[ VarState(Bottom, true) for i=1:nslots ]
 
         la = linfo.nargs
-        if la > 0
-            if linfo.isva
-                if atypes === Tuple
-                    if la > 1
-                        atypes = Tuple{Any[Any for i=1:la-1]..., Tuple.parameters[1]}
-                    end
-                    s[1][la] = VarState(Tuple,false)
+        if atypes === Tuple
+            if la > 0
+                if linfo.isva
+                    atypes = Tuple{Any[Any for i = 1:la-1]..., Tuple{Vararg{Any}}}
                 else
-                    s[1][la] = VarState(tuple_tfunc(limit_tuple_depth(tupletype_tail(atypes,la))),false)
+                    atypes = Tuple{Any[Any for i = 1:la]...}
                 end
-                la -= 1
+            else
+                atypes = Tuple{}
             end
         end
-
         laty = length(atypes.parameters)
-        if laty > 0
-            lastatype = atypes.parameters[laty]
-            if isvarargtype(lastatype)
-                lastatype = lastatype.parameters[1]
-                laty -= 1
-            end
-            if isa(lastatype, TypeVar)
-                lastatype = lastatype.ub
-            end
-            if laty > la
-                laty = la
-            end
-            for i=1:laty
+        @assert la == laty # wrong number of arguments
+        if la > 0
+            for i = 1:la
                 atyp = atypes.parameters[i]
                 if isa(atyp, TypeVar)
                     atyp = atyp.ub
                 end
                 s[1][i] = VarState(atyp, false)
             end
-            for i=laty+1:la
-                s[1][i] = VarState(lastatype, false)
+            if linfo.isva
+                s[1][la] = VarState(limit_tuple_depth(s[1][la].typ), false)
             end
-        else
-            @assert la == 0 # wrong number of arguments
         end
 
         gensym_uses = find_gensym_uses(linfo.code)
@@ -755,14 +740,17 @@ function abstract_call_gf_by_type(f::ANY, argtype::ANY, sv)
 
         # limit argument type tuple growth
         lsig = length(m[3].sig.parameters)
-        ls = length(sig.parameters)
         # look at the existing edges to detect growing argument lists
         limitlength = false
-        for (callee, _) in sv.edges
-            callee = callee::InferenceState
-            if method === callee.linfo.def && ls > length(callee.atypes.parameters)
-                limitlength = true
-                break
+        isva = m[3].va #!isempty(m[3].sig) && isvarargtype(m[3].sig[end])
+        if isva
+            nva = length(sig.parameters[end].parameters)
+            for (callee, _) in sv.edges
+                callee = callee::InferenceState
+                if method === callee.linfo.def && nva > length(callee.atypes.parameters[end].parameters)
+                    limitlength = true
+                    break
+                end
             end
         end
 
@@ -773,7 +761,7 @@ function abstract_call_gf_by_type(f::ANY, argtype::ANY, sv)
             infstate = infstate::InferenceState
             if isdefined(infstate.linfo, :def) && method === infstate.linfo.def
                 td = type_depth(sig)
-                if ls > length(infstate.atypes.parameters)
+                if isva && nva > length(infstate.atypes.parameters[end].parameters)
                     limitlength = true
                 end
                 if td > type_depth(infstate.atypes)
@@ -783,25 +771,23 @@ function abstract_call_gf_by_type(f::ANY, argtype::ANY, sv)
                         break
                     else
                         p1, p2 = sig.parameters, infstate.atypes.parameters
-                        if length(p2) == ls
-                            limitdepth = false
-                            newsig = Array(Any, ls)
-                            for i = 1:ls
-                                if p1[i] <: Function && type_depth(p1[i]) > type_depth(p2[i]) &&
-                                    isa(p1[i],DataType)
-                                    # if a Function argument is growing (e.g. nested closures)
-                                    # then widen to the outermost function type. without this
-                                    # inference fails to terminate on do_quadgk.
-                                    newsig[i] = p1[i].name.primary
-                                    limitdepth  = true
-                                else
-                                    newsig[i] = limit_type_depth(p1[i], 1, true, [])
-                                end
+                        limitdepth = false
+                        newsig = Array(Any, lsig)
+                        for i = 1:lsig
+                            if p1[i] <: Function && type_depth(p1[i]) > type_depth(p2[i]) &&
+                                isa(p1[i],DataType)
+                                # if a Function argument is growing (e.g. nested closures)
+                                # then widen to the outermost function type. without this
+                                # inference fails to terminate on do_quadgk.
+                                newsig[i] = p1[i].name.primary
+                                limitdepth  = true
+                            else
+                                newsig[i] = limit_type_depth(p1[i], 1, true, [])
                             end
-                            if limitdepth
-                                sig = Tuple{newsig...}
-                                break
-                            end
+                        end
+                        if limitdepth
+                            sig = Tuple{newsig...}
+                            break
                         end
                     end
                 end
@@ -817,21 +803,23 @@ function abstract_call_gf_by_type(f::ANY, argtype::ANY, sv)
         # limit length based on size of definition signature.
         # for example, given function f(T, Any...), limit to 3 arguments
         # instead of the default (MAX_TUPLETYPE_LEN)
-        if limitlength && ls > lsig + 1
+        if limitlength && nva > 1
             if !istopfunction(tm, f, :promote_typeof)
-                fst = sig.parameters[lsig+1]
+                vaty = sig.parameters[end]
+                fst = vaty.parameters[1]
                 allsame = true
                 # allow specializing on longer arglists if all the trailing
                 # arguments are the same, since there is no exponential
                 # blowup in this case.
-                for i = lsig+2:ls
-                    if sig.parameters[i] != fst
+                for i = 2:length(vaty.parameters)
+                    if vaty.parameters[i] != fst
                         allsame = false
                         break
                     end
                 end
                 if !allsame
-                    sig = limit_tuple_type_n(sig, lsig+1)
+                    vaty = limit_tuple_type_n(vaty, 1)
+                    sig = Tuple{sig.parameters[1:end-1]..., vaty}
                 end
             end
         end
@@ -1409,9 +1397,6 @@ end
 
 function typeinf_edge(method::Method, atypes::ANY, sparams::SimpleVector, needtree::Bool, optimize::Bool, cached::Bool, caller)
     #println(method)
-    if method.module === Core && isempty(method.lambda_template.sparam_syms)
-        atypes = Tuple
-    end
     local frame = nothing
     offs = 0
     # check cached t-functions

@@ -2,6 +2,14 @@
 
 ## indexing ##
 
+length{T<:Tuple}(t::Type{T}) = length(t.parameters)
+endof{T<:Tuple}(t::Type{T}) = length(t)
+size{T<:Tuple}(t::Type{T}, d) = d==1 ? length(t) : throw(ArgumentError("invalid tuple dimension $d"))
+getindex{T<:Tuple}(t::Type{T}, i::Int) = t.parameters[i]
+getindex{T<:Tuple}(t::Type{T}, i::Real) = getindex(t, convert(Int, i))
+getindex{T<:Tuple}(t::Type{T}, r::AbstractArray) = Tuple{[t[ri] for ri in r]...}
+getindex{T<:Tuple}(t::Type{T}, b::AbstractArray{Bool}) = getindex(t, find(b))
+
 length(t::Tuple) = nfields(t)
 endof(t::Tuple) = length(t)
 size(t::Tuple, d) = d==1 ? length(t) : throw(ArgumentError("invalid tuple dimension $d"))
@@ -11,6 +19,12 @@ getindex(t::Tuple, r::AbstractArray) = tuple([t[ri] for ri in r]...)
 getindex(t::Tuple, b::AbstractArray{Bool}) = getindex(t,find(b))
 
 ## iterating ##
+
+start{T<:Tuple}(t::Type{T}) = 1
+done{T<:Tuple}(t::Type{T}, i::Int) = (length(t) < i)
+next{T<:Tuple}(t::Type{T}, i::Int) = (t.parameters[i], i + 1)
+
+eachindex{T<:Tuple}(t::Type{T}) = 1:length(t)
 
 start(t::Tuple) = 1
 done(t::Tuple, i::Int) = (length(t) < i)
@@ -30,8 +44,8 @@ end
 
 # this allows partial evaluation of bounded sequences of next() calls on tuples,
 # while reducing to plain next() for arbitrary iterables.
-indexed_next(t::Tuple, i::Int, state) = (t[i], i+1)
-indexed_next(a::Array, i::Int, state) = (a[i], i+1)
+indexed_next(t::Tuple, i::Int, state) = (t[i], i + 1)
+indexed_next(a::Array, i::Int, state) = (a[i], i + 1)
 indexed_next(I, i, state) = done(I,state) ? throw(BoundsError()) : next(I, state)
 
 # eltype

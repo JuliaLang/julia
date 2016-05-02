@@ -596,6 +596,10 @@ typedef struct _jl_gcframe_t {
   void *__gc_stkf[] = {(void*)11, jl_pgcstack, arg1, arg2, arg3, arg4, arg5};    \
   jl_pgcstack = (jl_gcframe_t*)__gc_stkf;
 
+#define JL_GC_PUSH6(arg1, arg2, arg3, arg4, arg5, arg6)                         \
+  void *__gc_stkf[] = {(void*)13, jl_pgcstack, arg1, arg2, arg3, arg4, arg5, arg6};  \
+  jl_pgcstack = (jl_gcframe_t*)__gc_stkf;
+
 #define JL_GC_PUSHARGS(rts_var,n)                               \
   rts_var = ((jl_value_t**)alloca(((n)+2)*sizeof(jl_value_t*)))+2;    \
   ((void**)rts_var)[-2] = (void*)(((size_t)(n))<<1);                  \
