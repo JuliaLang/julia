@@ -406,7 +406,13 @@ static Type *julia_struct_to_llvm(jl_value_t *jt, bool *isboxed)
             }
 #ifndef NDEBUG
             // If LLVM and Julia disagree about alignment, much trouble ensues, so check it!
-            unsigned llvm_alignment = jl_ExecutionEngine->getDataLayout().getABITypeAlignment((Type*)jst->struct_decl);
+            const DataLayout &DL =
+#ifdef LLVM36
+                jl_ExecutionEngine->getDataLayout();
+#else
+                *jl_ExecutionEngine->getDataLayout();
+#endif
+            unsigned llvm_alignment = DL.getABITypeAlignment((Type*)jst->struct_decl);
             unsigned julia_alignment = jst->alignment;
             assert(llvm_alignment==julia_alignment);
 #endif
