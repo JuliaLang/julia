@@ -3857,3 +3857,10 @@ type Issue8712; end
 f16089(args...) = typeof(args)
 g16089() = f16089(UInt8)
 @test g16089() === Tuple{DataType}
+
+# issue #16023
+function f16023()
+    x
+    x = 1
+end
+@test_throws UndefVarError f16023()
