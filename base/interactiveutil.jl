@@ -383,9 +383,8 @@ function type_close_enough(x::ANY, t::ANY)
 end
 
 # `methodswith` -- shows a list of methods using the type given
-function methodswith(t::Type, f::Function, showparents::Bool=false, meths = TypeMapEntry[])
-    mt = typeof(f).name.mt
-    visit(mt) do d
+function methodswith(t::Type, f::Function, showparents::Bool=false, meths = Method[])
+    for d in methods(f)
         if any(x -> (type_close_enough(x, t) ||
                      (showparents ? (t <: x && (!isa(x,TypeVar) || x.ub != Any)) :
                       (isa(x,TypeVar) && x.ub != Any && t == x.ub)) &&
@@ -398,7 +397,7 @@ function methodswith(t::Type, f::Function, showparents::Bool=false, meths = Type
 end
 
 function methodswith(t::Type, m::Module, showparents::Bool=false)
-    meths = TypeMapEntry[]
+    meths = Method[]
     for nm in names(m)
         if isdefined(m, nm)
             f = getfield(m, nm)
@@ -411,7 +410,7 @@ function methodswith(t::Type, m::Module, showparents::Bool=false)
 end
 
 function methodswith(t::Type, showparents::Bool=false)
-    meths = TypeMapEntry[]
+    meths = Method[]
     mainmod = current_module()
     # find modules in Main
     for nm in names(mainmod)

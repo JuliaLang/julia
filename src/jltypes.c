@@ -3500,11 +3500,13 @@ void jl_init_types(void)
     jl_method_type =
         jl_new_datatype(jl_symbol("Method"),
                         jl_any_type, jl_emptysvec,
-                        jl_svec(13,
+                        jl_svec(15,
                                 jl_symbol("name"),
                                 jl_symbol("module"),
                                 jl_symbol("file"),
                                 jl_symbol("line"),
+                                jl_symbol("sig"),
+                                jl_symbol("tvars"),
                                 jl_symbol("specializations"),
                                 jl_symbol("tfunc"),
                                 jl_symbol("lambda_template"),
@@ -3514,11 +3516,13 @@ void jl_init_types(void)
                                 jl_symbol("isstaged"),
                                 jl_symbol("needs_sparam_vals_ducttape"),
                                 jl_symbol("")),
-                        jl_svec(13,
+                        jl_svec(15,
                                 jl_sym_type,
                                 jl_module_type,
                                 jl_sym_type,
                                 jl_int32_type,
+                                jl_type_type,
+                                jl_any_type,
                                 jl_array_any_type,
                                 jl_any_type,
                                 jl_any_type,
@@ -3528,7 +3532,7 @@ void jl_init_types(void)
                                 jl_bool_type,
                                 jl_bool_type,
                                 jl_bool_type),
-                        0, 1, 7);
+                        0, 1, 9);
 
     jl_lambda_info_type =
         jl_new_datatype(jl_symbol("LambdaInfo"),
@@ -3581,7 +3585,7 @@ void jl_init_types(void)
                                 jl_int32_type, jl_int32_type),
                         0, 1, 10);
     jl_svecset(jl_lambda_info_type->types, 9, jl_lambda_info_type);
-    jl_svecset(jl_method_type->types, 6, jl_lambda_info_type);
+    jl_svecset(jl_method_type->types, 8, jl_lambda_info_type);
 
     jl_typector_type =
         jl_new_datatype(jl_symbol("TypeConstructor"),

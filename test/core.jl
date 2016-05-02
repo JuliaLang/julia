@@ -2302,10 +2302,12 @@ let f
         (::typeof(f))(x::newtype10373) = println("$f")
     end
 end
-@test methods(f10373).defs.func.name == :f10373
-@test methods(f10373).defs.next.func.name == :f10373
-@test methods(g10373).defs.func.name == :g10373
-@test methods(g10373).defs.next.func.name == :g10373
+for m in methods(f10373)
+    @test m.name == :f10373
+end
+for m in methods(g10373)
+    @test m.name == :g10373
+end
 
 # issue #7221
 f7221{T<:Number}(::T) = 1
