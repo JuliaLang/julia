@@ -1086,7 +1086,7 @@ if !isdefined(Base, :Threads)
 end
 
 if v"0.4.0-dev+3732" ≤ VERSION < v"0.5.0-dev+3831"
-    Symbol(args...) = symbol(args...)
+    Base.Symbol(args...) = symbol(args...)
 end
 
 end # module

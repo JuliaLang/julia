@@ -156,6 +156,8 @@ Currently, the `@compat` macro supports the following syntaxes:
 
 * `istext` is now `istextmime` [#15708](https://github.com/JuliaLang/julia/pull/15708)
 
+* `symbol` is now `Symbol` [#16154](https://github.com/JuliaLang/julia/pull/16154)
+
 ## New macros
 
 * `@inline` and `@noinline` have been added. On 0.3, these are "no-ops," meaning they don't actually do anything.
