@@ -198,15 +198,3 @@ function nextprod(a::Vector{Int}, x)
     # might overflow, but want predictable return type
     return mx[end] < best ? Int(mx[end]) : Int(best)
 end
-
-
-# Functions that have been moved out of base in Julia 0.5
-# Note: only the two-argument form of factorial has been moved
-for deprecatedfunc in [:combinations, :factorial, :prevprod, :levicivita,
-        :nthperm!, :nthperm, :parity, :partitions, :permutations]
-    @eval begin
-        $deprecatedfunc(args...) = error(string($deprecatedfunc, args,
-            " has been moved to the package Combinatorics.jl.\n",
-            "Run Pkg.add(\"Combinatorics\") to install Combinatorics on Julia v0.5-"))
-    end
-end

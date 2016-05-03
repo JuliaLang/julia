@@ -282,7 +282,6 @@
             <string>code_warntype</string>
             <string>collect</string>
             <string>colon</string>
-            <string>combinations</string>
             <string>complement!</string>
             <string>complement</string>
             <string>complex128</string>
@@ -690,7 +689,6 @@
             <string>length</string>
             <string>less</string>
             <string>let</string>
-            <string>levicivita</string>
             <string>lexcmp</string>
             <string>lexless</string>
             <string>lfact</string>
@@ -799,8 +797,6 @@
             <string>notify</string>
             <string>now</string>
             <string>nprocs</string>
-            <string>nthperm!</string>
-            <string>nthperm</string>
             <string>ntoh</string>
             <string>ntuple</string>
             <string>null</string>
@@ -820,13 +816,10 @@
             <string>ordschur</string>
             <string>parent</string>
             <string>parentindexes</string>
-            <string>parity</string>
             <string>parse</string>
             <string>parsefloat</string>
             <string>parseint</string>
-            <string>partitions</string>
             <string>peakflops</string>
-            <string>permutations</string>
             <string>permute!</string>
             <string>permutedims!</string>
             <string>permutedims</string>
@@ -866,7 +859,6 @@
             <string>prevind</string>
             <string>prevpow2</string>
             <string>prevpow</string>
-            <string>prevprod</string>
             <string>primes</string>
             <string>primesmask</string>
             <string>print</string>
