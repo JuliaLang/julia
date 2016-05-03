@@ -172,6 +172,7 @@ static void jl_try_deliver_sigint(void)
 {
     jl_tls_states_t *ptls = jl_all_task_states[0].ptls;
     jl_safepoint_enable_sigint();
+    jl_wake_libuv();
     jl_atomic_store_release(&ptls->signal_request, 2);
     // This also makes sure `sleep` is aborted.
     pthread_kill(jl_all_task_states[0].system_id, SIGUSR2);

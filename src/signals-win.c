@@ -45,6 +45,7 @@ static void jl_try_throw_sigint(void)
 {
     jl_tls_states_t *ptls = jl_get_ptls_states();
     jl_safepoint_enable_sigint();
+    jl_wake_libuv();
     int force = jl_check_force_sigint();
     if (force || (!ptls->defer_signal && ptls->io_wait)) {
         jl_safepoint_consume_sigint();
@@ -127,6 +128,7 @@ static void jl_try_deliver_sigint(void)
 {
     jl_tls_states_t *ptls = jl_all_task_states[0].ptls;
     jl_safepoint_enable_sigint();
+    jl_wake_libuv();
     if ((DWORD)-1 == SuspendThread(hMainThread)) {
         // error
         jl_safe_printf("error: SuspendThread failed\n");
