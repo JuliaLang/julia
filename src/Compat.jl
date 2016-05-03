@@ -1080,6 +1080,7 @@ if !isdefined(Base, :Threads)
         export @threads
     end
     export Threads
+end
 
 if VERSION < v"0.4.0-dev+2678"
     Symbol(args...) = symbol(string(args...))
