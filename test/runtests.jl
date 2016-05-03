@@ -1103,5 +1103,14 @@ using Compat.Threads
     @test true
 end
 
-@test Symbol("foo") === :foo
-@test Symbol("foo", "bar") === :foobar
+if VERSION < v"0.4.0-dev+3732"
+    @test @compat(Symbol("foo")) === :foo
+    @test @compat(Symbol("foo", "bar")) === :foobar
+    @test @compat(Symbol("a_", 2)) === :a_2
+    @test @compat(Symbol('c')) === :c
+else
+    @test Symbol("foo") === :foo
+    @test Symbol("foo", "bar") === :foobar
+    @test Symbol("a_", 2) === :a_2
+    @test Symbol('c') === :c
+end
