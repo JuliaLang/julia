@@ -1081,7 +1081,9 @@ if !isdefined(Base, :Threads)
     end
     export Threads
 
-if VERSION < v"0.5.0-dev+3831"
+if VERSION < v"0.4.0-dev+2678"
+    Symbol(args...) = symbol(string(args...))
+elseif VERSION < v"0.5.0-dev+3831"
     Symbol(args...) = symbol(args...)
 end
 
