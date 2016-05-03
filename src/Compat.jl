@@ -498,7 +498,7 @@ function _compat(ex::Expr)
         end
     elseif ex.head === :macrocall
         f = ex.args[1]
-        if f === symbol("@generated") && VERSION < v"0.4.0-dev+4387"
+        if f === Symbol("@generated") && VERSION < v"0.4.0-dev+4387"
             f = ex.args[2]
             if isexpr(f, :function)
                 ex = Expr(:stagedfunction, f.args...)
@@ -710,7 +710,7 @@ end
 
 if VERSION < v"0.4.0-dev+5688"
     typealias Irrational MathConst
-    @eval const $(symbol("@irrational")) = getfield(Base, symbol("@math_const"))
+    @eval const $(Symbol("@irrational")) = getfield(Base, Symbol("@math_const"))
     export Irrational
 else
     import Base.@irrational
@@ -1064,7 +1064,7 @@ macro functorize(f)
                 f
         end
         if VERSION >= v"0.5.0-dev+1472"
-            f = f === symbol(".÷") ? :(Base.DotIDivFun()) :
+            f = f === Symbol(".÷") ? :(Base.DotIDivFun()) :
                 f === :.%          ? :(Base.DotRemFun()) :
                 f
         end
@@ -1080,6 +1080,9 @@ if !isdefined(Base, :Threads)
         export @threads
     end
     export Threads
+
+if VERSION < v"0.5.0-dev+3831"
+    Symbol(args...) = symbol(args...)
 end
 
 end # module

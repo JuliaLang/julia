@@ -1102,3 +1102,6 @@ using Compat.Threads
 @threads for i=1:10
     @test true
 end
+
+@test Symbol("foo") === :foo
+@test Symbol("foo", "bar") === :foobar
