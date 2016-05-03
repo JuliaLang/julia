@@ -47,6 +47,26 @@
 extern "C" {
 #endif
 
+static uv_async_t signal_async;
+
+static void jl_signal_async_cb(uv_async_t *hdl)
+{
+    // This should abort the current loop and the julia code it returns to
+    // or the safepoint in the callers of `uv_run` should throw the exception.
+    (void)hdl;
+    uv_stop(jl_io_loop);
+}
+
+void jl_wake_libuv(void)
+{
+    uv_async_send(&signal_async);
+}
+
+void jl_init_signal_async(void)
+{
+    uv_async_init(jl_io_loop, &signal_async, jl_signal_async_cb);
+}
+
 extern jl_module_t *jl_old_base_module;
 static jl_value_t *close_cb = NULL;
 
@@ -80,6 +100,8 @@ JL_DLLEXPORT void jl_uv_closeHandle(uv_handle_t *handle)
     // also let the client app do its own cleanup
     if (handle->type != UV_FILE && handle->data)
         jl_uv_call_close_callback((jl_value_t*)handle->data);
+    if (handle == (uv_handle_t*)&signal_async)
+        return;
     free(handle);
 }
 
@@ -114,6 +136,7 @@ JL_DLLEXPORT int jl_run_once(uv_loop_t *loop)
 {
     if (loop) {
         loop->stop_flag = 0;
+        jl_gc_safepoint();
         return uv_run(loop,UV_RUN_ONCE);
     }
     else return 0;
@@ -123,6 +146,7 @@ JL_DLLEXPORT void jl_run_event_loop(uv_loop_t *loop)
 {
     if (loop) {
         loop->stop_flag = 0;
+        jl_gc_safepoint();
         uv_run(loop,UV_RUN_DEFAULT);
     }
 }
@@ -131,6 +155,7 @@ JL_DLLEXPORT int jl_process_events(uv_loop_t *loop)
 {
     if (loop) {
         loop->stop_flag = 0;
+        jl_gc_safepoint();
         return uv_run(loop,UV_RUN_NOWAIT);
     }
     else return 0;

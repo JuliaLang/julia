@@ -544,6 +544,7 @@ void _julia_init(JL_IMAGE_SEARCH rel)
     ios_set_io_wait_func = jl_set_io_wait;
     jl_io_loop = uv_default_loop(); // this loop will internal events (spawning process etc.),
                                     // best to call this first, since it also initializes libuv
+    jl_init_signal_async();
     restore_signals();
     jl_resolve_sysimg_location(rel);
     // loads sysimg if available, and conditionally sets jl_options.cpu_target

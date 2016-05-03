@@ -293,6 +293,9 @@ static void jl_try_deliver_sigint(void)
         jl_clear_force_sigint();
         jl_throw_in_thread(0, thread, jl_interrupt_exception);
     }
+    else {
+        jl_wake_libuv();
+    }
 
     ret = thread_resume(thread);
     HANDLE_MACH_ERROR("thread_resume", ret);

@@ -255,6 +255,7 @@ void jl_init_root_task(void *stack, size_t ssize);
 void jl_init_serializer(void);
 void jl_gc_init(void);
 void jl_init_restored_modules(jl_array_t *init_order);
+void jl_init_signal_async(void);
 
 void _julia_init(JL_IMAGE_SEARCH rel);
 #ifdef COPY_STACKS
@@ -309,6 +310,7 @@ void jl_safepoint_defer_sigint(void);
 // Return `1` if the sigint should be delivered and `0` if there's no sigint
 // to be delivered.
 int jl_safepoint_consume_sigint(void);
+void jl_wake_libuv(void);
 
 #ifdef JULIA_ENABLE_THREADING
 jl_get_ptls_states_func jl_get_ptls_states_getter(void);
