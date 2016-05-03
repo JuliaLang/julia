@@ -45,7 +45,6 @@ if !isdefined(Main, :Base)
 end
 
 # Symbol constructors
-Symbol(s::Symbol) = s
 Symbol(s::ASCIIString) = Symbol(s.data)
 Symbol(s::UTF8String) = Symbol(s.data)
 Symbol(a::Array{UInt8,1}) =
