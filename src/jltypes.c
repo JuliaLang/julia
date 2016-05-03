@@ -2737,8 +2737,6 @@ static int jl_type_morespecific_(jl_value_t *a, jl_value_t *b, int invariant)
         }
     }
 
-    if (a == jl_ANY_flag) return 0;
-
     if (jl_is_uniontype(b)) {
         if (invariant)
             return 0;
