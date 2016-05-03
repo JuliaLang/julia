@@ -20,7 +20,7 @@ the implementation of the ``@inline`` macro::
         esc(_inline(ex))
     end
 
-    _inline(ex::Expr) = pushmeta!(ex, :inline)
+    _inline(ex::Expr) = Base.pushmeta!(ex, :inline)
     _inline(arg) = arg
 
 Here, ``ex`` is expected to be an expression defining a function.
@@ -46,8 +46,8 @@ necessary. If ``args`` is specified, a nested expression containing
 to specify additional information.
 
 To use the metadata, you have to parse these ``:meta`` expressions.
-If your implementation can be performed within Julia, ``popmeta!`` is
-very handy: ``popmeta!(body, :symbol)`` will scan a function *body*
+If your implementation can be performed within Julia, ``Base.popmeta!`` is
+very handy: ``Base.popmeta!(body, :symbol)`` will scan a function *body*
 expression (one without the function signature) for a ``:meta``
 expression, extract any arguments, and return a tuple ``(found::Bool,
 args::Array{Any})``. If the metadata did not have any arguments, or
