@@ -127,3 +127,8 @@ end
 let a = Real[2, 2.0, 4//2] / 2.0
     @test eltype(a) == Real
 end
+
+# issue 16164
+let a = broadcast(Float32, [3, 4, 5])
+    @test eltype(a) == Float32
+end
