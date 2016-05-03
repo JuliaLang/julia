@@ -92,15 +92,43 @@ end
     return byte
 end
 
-function peek(from::AbstractIOBuffer)
-    from.readable || throw(ArgumentError("read failed, IOBuffer is not readable"))
+read{T}(from::AbstractIOBuffer, ::Type{Ptr{T}}) = convert(Ptr{T}, read(from, UInt))
+
+function peek(from::AbstractIOBuffer, ::Type{UInt8})
+    from.readable || throw(ArgumentError("peek failed, IOBuffer is not readable"))
     if from.ptr > from.size
         throw(EOFError())
     end
     return from.data[from.ptr]
 end
 
-read{T}(from::AbstractIOBuffer, ::Type{Ptr{T}}) = convert(Ptr{T}, read(from, UInt))
+function peek(from::AbstractIOBuffer, ::Type{Char})
+    from.readable || throw(ArgumentError("peek failed, IOBuffer is not readable"))
+    ptr = from.ptr
+    if ptr > from.size
+        throw(EOFError())
+    end
+    ch = from.data[ptr]
+    if ch < 0x80
+        # ASCII
+        return Char(ch)
+    else
+        # UTF8
+        trailing = utf8_trailing[ch+1]
+        if trailing > from.size - ptr
+            throw(EOFError())
+        end
+        c::UInt32 = 0
+        for _ in 1:trailing
+            c += ch
+            c <<= 6
+            ch = from.data[ptr+=1]
+        end
+        c += ch
+        c -= utf8_offset[trailing+1]
+        return Char(c)
+    end
+end
 
 isreadable(io::AbstractIOBuffer) = io.readable
 iswritable(io::AbstractIOBuffer) = io.writable

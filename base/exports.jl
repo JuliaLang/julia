@@ -1173,6 +1173,7 @@ export
     poll_file,
     position,
     RawFD,
+    peek,
     read,
     read!,
     readavailable,

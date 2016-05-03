@@ -9,7 +9,7 @@ end
 
 function interpinner(stream::IO, greedy = false)
     startswith(stream, '$') || return
-    (eof(stream) || peek(stream) in whitespace) && return
+    (eof(stream) || peek(stream, Char) in whitespace) && return
     try
         return Base.parse(stream::IOBuffer, greedy = greedy)
     catch e

@@ -360,7 +360,7 @@ function hist_from_file(hp, file)
         while !isempty(line)
             push!(lines, chomp(line[2:end]))
             eof(file) && break
-            ch = Base.peek(file)
+            ch = peek(file, Char)
             ch == ' '  && error(munged_history_message, countlines)
             ch != '\t' && break
             line = hist_getline(file)

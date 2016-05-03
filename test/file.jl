@@ -1095,3 +1095,17 @@ function test_13559()
     rm(fn)
 end
 @unix_only test_13559()
+
+# test peek (#16025)
+let n = tempname()
+    w = open(n, "a")
+    io = open(n)
+    write(w, "A"); flush(w)
+    @test peek(io, UInt8) === 0x41
+    @test peek(io, Char) === 'A'
+    read(io, UInt8)
+    @test_throws EOFError peek(io, UInt8)
+    @test_throws EOFError peek(io, Char)
+    close(io); close(w)
+    rm(n)
+end
