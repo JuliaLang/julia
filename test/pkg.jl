@@ -26,6 +26,9 @@ temp_pkg_dir() do
     @test sprint(io -> Pkg.status(io)) == "No packages installed\n"
     @test !isempty(Pkg.available())
 
+    @test_throws PkgError Pkg.installed("MyFakePackage")
+    @test Pkg.installed("Example") == nothing
+
     # check that versioninfo(io, true) doesn't error and produces some output
     # (done here since it calls Pkg.status which might error or clone metadata)
     buf = PipeBuffer()
@@ -49,10 +52,12 @@ temp_pkg_dir() do
                 end
             end
             @test isa(ex,Pkg.PkgError)
-            @test ex.msg == "Cannot clone Example from notarealprotocol://github.com/JuliaLang/Example.jl.git. Unsupported URL protocol"
+            @test contains(ex.msg, "Cannot clone Example from notarealprotocol://github.com/JuliaLang/Example.jl.git")
         end
     end
 
+    Pkg.setprotocol!("")
+    @test Pkg.Cache.rewrite_url_to == nothing
     Pkg.setprotocol!("https")
     Pkg.add("Example")
     @test [keys(Pkg.installed())...] == ["Example"]
@@ -71,6 +76,10 @@ temp_pkg_dir() do
     Pkg.status("Example", iob)
     str = chomp(takebuf_string(iob))
     @test endswith(str, string(Pkg.installed("Example")))
+    Pkg.rm("Example")
+    @test isempty(Pkg.installed())
+    @test !isempty(Pkg.available("Example"))
+    @test !in("Example", keys(Pkg.installed()))
     Pkg.rm("Example")
     @test isempty(Pkg.installed())
     @test !isempty(Pkg.available("Example"))
@@ -248,4 +257,28 @@ temp_pkg_dir() do
 
     # Test Pkg.Read.url works
     @test Pkg.Read.url("Example") == "git://github.com/JuliaLang/Example.jl.git"
+
+    # issue #15789, build failure warning are printed correctly.
+    # Also makes sure `Pkg.build()` works even for non-git repo
+    begin
+        pth = joinpath(Pkg.dir(), "BuildFail")
+        mkdir(pth)
+        depspath = joinpath(pth, "deps")
+        mkdir(depspath)
+        depsbuild = joinpath(depspath, "build.jl")
+        touch(depsbuild)
+        # Pkg.build works without the src directory now
+        # but it's probably fine to require it.
+        msg = readstring(`$(Base.julia_cmd()) -f -e 'redirect_stderr(STDOUT); Pkg.build("BuildFail")'`)
+        @test contains(msg, "Building BuildFail")
+        @test !contains(msg, "ERROR")
+        open(depsbuild, "w") do fd
+            println(fd, "error(\"Throw build error\")")
+        end
+        msg = readstring(`$(Base.julia_cmd()) -f -e 'redirect_stderr(STDOUT); Pkg.build("BuildFail")'`)
+        @test contains(msg, "Building BuildFail")
+        @test contains(msg, "ERROR")
+        @test contains(msg, "Pkg.build(\"BuildFail\")")
+        @test contains(msg, "Throw build error")
+    end
 end

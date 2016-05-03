@@ -112,7 +112,6 @@ Fully implemented by:
 
 - :obj:`Range`
 - :obj:`UnitRange`
-- :obj:`NDRange`
 - :obj:`Tuple`
 - :obj:`Number`
 - :obj:`AbstractArray`
@@ -215,11 +214,23 @@ Iterable Collections
 
    Returns an array containing only the unique elements of the iterable ``itr``\ , in the order that the first of each set of equivalent elements originally appears. If ``dim`` is specified, returns unique regions of the array ``itr`` along ``dim``\ .
 
+.. function:: unique(itr)
+
+   .. Docstring generated from Julia source
+
+   Returns an array containing one value from ``itr`` for each unique value, as determined by ``isequal``\ .
+
 .. function:: unique(f, itr)
 
    .. Docstring generated from Julia source
 
    Returns an array containing one value from ``itr`` for each unique value produced by ``f`` applied to elements of ``itr``\ .
+
+.. function:: allunique(itr)
+
+   .. Docstring generated from Julia source
+
+   Return ``true`` if all values from ``itr`` are distinct when compared with ``isequal``\ .
 
 .. function:: reduce(op, v0, itr)
 
@@ -299,11 +310,17 @@ Iterable Collections
 
    Compute the minimum value of ``A`` over the singleton dimensions of ``r``\ , and write results to ``r``\ .
 
-.. function:: extrema(itr)
+.. function:: extrema(itr) -> Tuple
 
    .. Docstring generated from Julia source
 
    Compute both the minimum and maximum element in a single pass, and return them as a 2-tuple.
+
+.. function:: extrema(A,dims) -> Array{Tuple}
+
+   .. Docstring generated from Julia source
+
+   Compute the minimum and maximum elements of an array over the given dimensions.
 
 .. function:: indmax(itr) -> Integer
 

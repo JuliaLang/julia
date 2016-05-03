@@ -32,7 +32,7 @@
   (cond ((atom? e)   tab)
         ((quoted? e) tab)
         (else (case (car e)
-                ((=)            (if (not (jlgensym? (cadr e)))
+                ((=)            (if (not (ssavalue? (cadr e)))
                                     (put! tab (decl-var (cadr e)) #t))
                                 (find-possible-globals- (caddr e) tab))
                 ((method)       (let ((n (method-expr-name e)))
@@ -96,7 +96,8 @@
 (define (expand-toplevel-expr e)
   (cond ((or (atom? e)
              (and (pair? e)
-                  (or (memq (car e) '(toplevel line module import importall using export))
+                  (or (memq (car e) '(toplevel line module import importall using export
+                                               error incomplete))
                       (and (eq? (car e) 'global) (every symbol? (cdr e))))))
          e)
         (else
@@ -121,8 +122,9 @@
                                    (julia-parse inp parse-atom))))))
       (cons expr (io.pos inp)))))
 
-(define (jl-parse-string s)
-  (parser-wrap (lambda ()
+(define (jl-parse-string s filename)
+  (with-bindings ((current-filename (symbol filename)))
+    (parser-wrap (lambda ()
                  (let ((inp  (make-token-stream (open-input-string s))))
                    ;; parse all exprs into a (toplevel ...) form
                    (let loop ((exprs '()))
@@ -136,7 +138,7 @@
                                  (else (cons 'toplevel (reverse! exprs))))
                            (if (and (pair? expr) (eq? (car expr) 'toplevel))
                                (loop (nreconc (cdr expr) exprs))
-                               (loop (cons expr exprs))))))))))
+                               (loop (cons expr exprs)))))))))))
 
 (define (jl-parse-all io filename)
   (unwind-protect

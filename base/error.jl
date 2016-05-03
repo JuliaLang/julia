@@ -21,8 +21,8 @@
 error(s::AbstractString) = throw(Main.Base.ErrorException(s))
 error(s...) = throw(Main.Base.ErrorException(Main.Base.string(s...)))
 
-rethrow() = ccall(:jl_rethrow, Void, ())::Bottom
-rethrow(e) = ccall(:jl_rethrow_other, Void, (Any,), e)::Bottom
+rethrow() = ccall(:jl_rethrow, Bottom, ())
+rethrow(e) = ccall(:jl_rethrow_other, Bottom, (Any,), e)
 backtrace() = ccall(:jl_backtrace_from_here, Array{Ptr{Void},1}, (Int32,), false)
 catch_backtrace() = ccall(:jl_get_backtrace, Array{Ptr{Void},1}, ())
 
@@ -48,4 +48,63 @@ macro assert(ex, msgs...)
         msg = :(Main.Base.string($(Expr(:quote,msg))))
     end
     :($(esc(ex)) ? $(nothing) : throw(Main.Base.AssertionError($msg)))
+end
+
+
+"""
+    retry(f, [condition]; n=3; max_delay=10) -> Function
+
+Returns a lambda that retries function `f` up to `n` times in the
+event of an exception. If `condition` is a `Type` then retry only
+for exceptions of that type. If `condition` is a function
+`cond(::Exception) -> Bool` then retry only if it is true.
+
+**Examples**
+```julia
+retry(http_get, e -> e.status == "503")(url)
+retry(read, UVError)(io)
+```
+"""
+function retry(f::Function, condition::Function=e->true;
+               n::Int=3, max_delay::Int=10)
+    (args...) -> begin
+        delay = 0.05
+        for i = 1:n
+            try
+                return f(args...)
+            catch e
+                if i == n || try condition(e) end != true
+                    rethrow(e)
+                end
+            end
+            sleep(delay * (0.8 + (rand() * 0.4)))
+            delay = min(max_delay, delay * 5)
+        end
+    end
+end
+
+retry(f::Function, t::Type; kw...) = retry(f, e->isa(e, t); kw...)
+
+
+"""
+    @catch(f) -> Function
+
+Returns a lambda that executes `f` and returns either the result of `f` or
+an `Exception` thrown by `f`.
+
+**Examples**
+```julia
+julia> r = @catch(length)([1,2,3])
+3
+
+julia> r = @catch(length)()
+MethodError(length,())
+
+julia> typeof(r)
+MethodError
+```
+"""
+catchf(f) = (args...) -> try f(args...) catch ex; ex end
+macro catch(f)
+    esc(:(Base.catchf($f)))
 end

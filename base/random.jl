@@ -28,7 +28,6 @@ type Close1Open2 <: FloatInterval end
 ## RandomDevice
 
 @unix_only begin
-
     immutable RandomDevice <: AbstractRNG
         file::IOStream
 
@@ -40,7 +39,6 @@ type Close1Open2 <: FloatInterval end
 end
 
 @windows_only begin
-
     immutable RandomDevice <: AbstractRNG
         buffer::Vector{UInt128}
 
@@ -492,7 +490,6 @@ else
 end
 
 
-
 function RangeGenerator(r::UnitRange{BigInt})
     m = last(r) - first(r)
     m < 0 && throw(ArgumentError("range must be non-empty"))
@@ -570,7 +567,7 @@ rand{T<:Union{Signed,Unsigned,BigInt,Bool}}(rng::AbstractRNG, r::UnitRange{T}) =
 rand(rng::AbstractRNG, r::AbstractArray) = @inbounds return r[rand(rng, 1:length(r))]
 
 function rand!(rng::AbstractRNG, A::AbstractArray, g::RangeGenerator)
-    for i = 1 : length(A)
+    for i in eachindex(A)
         @inbounds A[i] = rand(rng, g)
     end
     return A
@@ -580,7 +577,7 @@ rand!{T<:Union{Signed,Unsigned,BigInt,Bool,Char}}(rng::AbstractRNG, A::AbstractA
 
 function rand!(rng::AbstractRNG, A::AbstractArray, r::AbstractArray)
     g = RangeGenerator(1:(length(r)))
-    for i = 1 : length(A)
+    for i in eachindex(A)
         @inbounds A[i] = r[rand(rng, g)]
     end
     return A
@@ -1274,7 +1271,6 @@ let b = UInt8['0':'9';'A':'Z';'a':'z']
     randstring(n::Int) = randstring(GLOBAL_RNG, n)
     randstring() = randstring(GLOBAL_RNG)
 end
-
 
 
 # Fill S (resized as needed) with a random subsequence of A, where

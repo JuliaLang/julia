@@ -26,10 +26,14 @@ cconvert(::Type{Ptr{UInt8}}, s::AbstractString) = bytestring(s)
 cconvert(::Type{Ptr{Int8}}, s::AbstractString) = bytestring(s)
 
 unsafe_convert{T}(::Type{Ptr{T}}, a::Array{T}) = ccall(:jl_array_ptr, Ptr{T}, (Any,), a)
-unsafe_convert(::Type{Ptr{Void}}, a::Array) = ccall(:jl_array_ptr, Ptr{Void}, (Any,), a)
+unsafe_convert{S,T}(::Type{Ptr{S}}, a::AbstractArray{T}) = convert(Ptr{S}, unsafe_convert(Ptr{T}, a))
+unsafe_convert{T}(::Type{Ptr{T}}, a::AbstractArray{T}) = error("conversion to pointer not defined for $(typeof(a))")
 
 # unsafe pointer to array conversions
-pointer_to_array(p, d::Integer, own=false) = pointer_to_array(p, (d,), own)
+function pointer_to_array{T}(p::Ptr{T}, d::Integer, own::Bool=false)
+    ccall(:jl_ptr_to_array_1d, Vector{T},
+          (Any, Ptr{Void}, Csize_t, Cint), Array{T,1}, p, d, own)
+end
 function pointer_to_array{T,N}(p::Ptr{T}, dims::NTuple{N,Int}, own::Bool=false)
     ccall(:jl_ptr_to_array, Array{T,N}, (Any, Ptr{Void}, Any, Int32),
           Array{T,N}, p, dims, own)
@@ -54,7 +58,7 @@ unsafe_store!{T}(p::Ptr{T}, x) = pointerset(p, convert(T,x), 1)
 function pointer_to_string(p::Ptr{UInt8}, len::Integer, own::Bool=false)
     a = ccall(:jl_ptr_to_array_1d, Vector{UInt8},
               (Any, Ptr{UInt8}, Csize_t, Cint), Vector{UInt8}, p, len, own)
-    ccall(:jl_array_to_string, Any, (Any,), a)::ByteString
+    ccall(:jl_array_to_string, Ref{ByteString}, (Any,), a)
 end
 pointer_to_string(p::Ptr{UInt8}, own::Bool=false) =
     pointer_to_string(p, ccall(:strlen, Csize_t, (Cstring,), p), own)

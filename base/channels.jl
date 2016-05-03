@@ -95,3 +95,5 @@ function done(c::Channel, state::Ref)
     end
 end
 next{T}(c::Channel{T}, state) = (v=get(state[]); state[]=nothing; (v, state))
+
+iteratorsize{C<:Channel}(::Type{C}) = SizeUnknown()

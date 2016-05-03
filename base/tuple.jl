@@ -39,6 +39,19 @@ indexed_next(I, i, state) = done(I,state) ? throw(BoundsError()) : next(I, state
 eltype(::Type{Tuple{}}) = Bottom
 eltype{T,_}(::Type{NTuple{_,T}}) = T
 
+# front (the converse of tail: it skips the last entry)
+
+function front(t::Tuple)
+    @_inline_meta
+    _front((), t...)
+end
+front(::Tuple{}) = error("Cannot call front on an empty tuple")
+_front(out, v) = out
+function _front(out, v, t...)
+    @_inline_meta
+    _front((out..., v), t...)
+end
+
 ## mapping ##
 
 ntuple(f::Function, n::Integer) =
@@ -50,23 +63,19 @@ ntuple(f::Function, n::Integer) =
     n==5 ? (f(1),f(2),f(3),f(4),f(5),) :
     tuple(ntuple(f,n-5)..., f(n-4), f(n-3), f(n-2), f(n-1), f(n))
 
-ntuple(f, ::Type{Val{0}}) = ()
-ntuple(f, ::Type{Val{1}}) = (f(1),)
-ntuple(f, ::Type{Val{2}}) = (f(1),f(2))
-ntuple(f, ::Type{Val{3}}) = (f(1),f(2),f(3))
-ntuple(f, ::Type{Val{4}}) = (f(1),f(2),f(3),f(4))
-ntuple(f, ::Type{Val{5}}) = (f(1),f(2),f(3),f(4),f(5))
-@generated function ntuple{N}(f, ::Type{Val{N}})
-    if !isa(N,Int)
-        :(throw(TypeError(:ntuple, "", Int, $(QuoteNode(N)))))
-    else
-        M = N-5
-        :(tuple(ntuple(f, Val{$M})..., f($N-4), f($N-3), f($N-2), f($N-1), f($N)))
-    end
+# inferrable ntuple
+function ntuple{F,N}(f::F, ::Type{Val{N}})
+    Core.typeassert(N, Int)
+    _ntuple((), f, Val{N})
 end
 
-# 0 argument function
-map(f) = f()
+# Build up the output until it has length N
+_ntuple{F,N}(out::NTuple{N}, f::F, ::Type{Val{N}}) = out
+function _ntuple{F,N,M}(out::NTuple{M}, f::F, ::Type{Val{N}})
+    @_inline_meta
+    _ntuple((out..., f(M+1)), f, Val{N})
+end
+
 # 1 argument function
 map(f, t::Tuple{})              = ()
 map(f, t::Tuple{Any,})          = (f(t[1]),)
@@ -83,7 +92,7 @@ heads(t::Tuple, ts::Tuple...) = (t[1], heads(ts...)...)
 tails() = ()
 tails(t::Tuple, ts::Tuple...) = (tail(t), tails(ts...)...)
 map(f, ::Tuple{}, ts::Tuple...) = ()
-map(f, ts::Tuple...) = (f(heads(ts...)...), map(f, tails(ts...)...)...)
+map(f, t::Tuple, ts::Tuple...) = (f(heads(t, ts...)...), map(f, tails(t, ts...)...)...)
 
 # type-stable padding
 fill_to_length{N}(t::Tuple, val, ::Type{Val{N}}) = _ftl((), val, Val{N}, t...)

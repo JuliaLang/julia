@@ -76,7 +76,9 @@ Function                                            Description
                                                     ``type`` not specified
 :func:`ones(A) <ones>`                              an array of all ones of same element type and shape of ``A``
 :func:`trues(dims...) <trues>`                      a ``Bool`` array with all values ``true``
+:func:`trues(A) <trues>`                            a ``Bool`` array with all values ``true`` and the shape of ``A``
 :func:`falses(dims...) <falses>`                    a ``Bool`` array with all values ``false``
+:func:`falses(A) <falses>`                          a ``Bool`` array with all values ``false`` and the shape of ``A``
 :func:`reshape(A, dims...) <reshape>`               an array with the same data as the given array, but with
                                                     different dimensions.
 :func:`copy(A) <copy>`                              copy ``A``
@@ -146,11 +148,11 @@ the element type of the result.
 .. doctest::
 
     julia> [[1 2] [3 4]]
-    1x4 Array{Int64,2}:
+    1×4 Array{Int64,2}:
      1  2  3  4
 
     julia> Int8[[1 2] [3 4]]
-    1x4 Array{Int8,2}:
+    1×4 Array{Int8,2}:
      1  2  3  4
 
 .. _comprehensions:
@@ -222,7 +224,7 @@ Comprehensions can also be written without the enclosing square brackets, produc
 an object known as a generator. This object can be iterated to produce values on
 demand, instead of allocating an array and storing them in advance
 (see <man-interfaces-iteration>).
-For example, the following expression sums a series without allocating memory::
+For example, the following expression sums a series without allocating memory:
 
 .. doctest::
 
@@ -236,7 +238,7 @@ list, parentheses are needed to separate the generator from subsequent arguments
     ERROR: syntax: invalid iteration specification
 
 All comma-separated expressions after ``for`` are interpreted as ranges. Adding
-parentheses lets us add a third argument to ``map``::
+parentheses lets us add a third argument to ``map``:
 
 .. doctest::
 
@@ -261,29 +263,43 @@ where each ``I_k`` may be:
 1. A scalar integer
 2. A ``Range`` of the form ``a:b``, or ``a:b:c``
 3. A ``:`` or ``Colon()`` to select entire dimensions
-4. An arbitrary integer vector, including the empty vector ``[]``
-5. A boolean vector
+4. An arbitrary integer array, including the empty array ``[]``
+5. A boolean array to select a vector of elements at its ``true`` indices
 
-The result ``X`` generally has dimensions
+If all the indices are scalars, then the result ``X`` is a single element from
+the array ``A``. Otherwise, ``X`` is an array with the same number of
+dimensions as the sum of the dimensionalities of all the indices.
+
+If all indices are vectors, for example, then the shape of ``X`` would be
 ``(length(I_1), length(I_2), ..., length(I_n))``, with location
 ``(i_1, i_2, ..., i_n)`` of ``X`` containing the value
-``A[I_1[i_1], I_2[i_2], ..., I_n[i_n]]``. All dimensions indexed with scalars are
-dropped. For example, the result of ``A[2, I, 3]`` will be a vector with size
-``(length(I),)``. Boolean vectors are first transformed with ``find``; the size of
-a dimension indexed by a boolean vector will be the number of true values in the vector.
-As a special part of this syntax, the ``end`` keyword may be used to represent the last
-index of each dimension within the indexing brackets, as determined by the size of the
-innermost array being indexed.
+``A[I_1[i_1], I_2[i_2], ..., I_n[i_n]]``. If ``I_1`` is changed to a
+two-dimensional matrix, then ``X`` becomes an ``n+1``-dimensional array of
+shape ``(size(I_1, 1), size(I_1, 2), length(I_2), ..., length(I_n))``. The
+matrix adds a dimension. The location ``(i_1, i_2, i_3, ..., i_{n+1})`` contains
+the value at ``A[I_1[i_1, i_2], I_2[i_3], ..., I_n[i_{n+1}]]``. All dimensions
+indexed with scalars are dropped. For example, the result of ``A[2, I, 3]`` is
+an array with size ``size(I)``. Its ``i``\ th element is populated by
+``A[2, I[i], 3]``.
 
-Alternatively, single elements of a multidimensional array can be indexed as
-::
+Indexing by a boolean array ``B`` is effectively the same as indexing by the
+vector that is returned by :func:`find(B) <find>`. Often referred to as logical
+indexing, this selects elements at the indices where the values are ``true``,
+akin to a mask. A logical index must be a vector of the same length as the
+dimension it indexes into, or it must be the only index provided and match the
+size and dimensionality of the array it indexes into. It is generally more
+efficient to use boolean arrays as indices directly instead of first calling
+:func:`find`.
 
-    x = A[I]
+Additionally, single elements of a multidimensional array can be indexed as
+``x = A[I]``, where ``I`` is a ``CartesianIndex``. It effectively behaves like
+an ``n``-tuple of integers spanning multiple dimensions of ``A``. See
+:ref:`man-array-iteration` below.
 
-where ``I`` is a ``CartesianIndex``, effectively an ``n``-tuple of integers.
-See :ref:`man-array-iteration` below.
-
-Indexing syntax is equivalent to a call to ``getindex``::
+As a special part of this syntax, the ``end`` keyword may be used to represent
+the last index of each dimension within the indexing brackets, as determined by
+the size of the innermost array being indexed. Indexing syntax without the
+``end`` keyword is equivalent to a call to ``getindex``::
 
     X = getindex(A, I_1, I_2, ..., I_n)
 
@@ -292,16 +308,30 @@ Example:
 .. doctest::
 
     julia> x = reshape(1:16, 4, 4)
-    4x4 Array{Int64,2}:
+    4×4 Array{Int64,2}:
      1  5   9  13
      2  6  10  14
      3  7  11  15
      4  8  12  16
 
     julia> x[2:3, 2:end-1]
-    2x2 Array{Int64,2}:
+    2×2 Array{Int64,2}:
      6  10
      7  11
+
+    julia> x[map(isprime, x)]
+    6-element Array{Int64,1}:
+      2
+      3
+      5
+      7
+     11
+     13
+
+    julia> x[1, [2 3; 4 1]]
+    2x2 Array{Int64,2}:
+      5  9
+     13  1
 
 Empty ranges of the form ``n:n-1`` are sometimes used to indicate the inter-index
 location between ``n-1`` and ``n``.  For example, the :func:`searchsorted` function uses
@@ -327,16 +357,18 @@ where each ``I_k`` may be:
 1. A scalar integer
 2. A ``Range`` of the form ``a:b``, or ``a:b:c``
 3. A ``:`` or ``Colon()`` to select entire dimensions
-4. An arbitrary integer vector, including the empty vector ``[]``
-5. A boolean vector
+4. An arbitrary integer array, including the empty array ``[]``
+5. A boolean array to select elements at its ``true`` indices
 
-If ``X`` is an array, its size must be ``(length(I_1), length(I_2), ..., length(I_n))``,
-and the value in location ``i_1, i_2, ..., i_n`` of ``A`` is overwritten with
-the value ``X[I_1[i_1], I_2[i_2], ..., I_n[i_n]]``. If ``X`` is not an array, its
-value is written to all referenced locations of ``A``.
+If ``X`` is an array, it must have the same number of elements as the product
+of the lengths of the indices:
+``prod(length(I_1), length(I_2), ..., length(I_n))``. The value in location
+``i_1, i_2, ..., i_n`` of ``A`` is overwritten with the value
+``X[I_1[i_1], I_2[i_2], ..., I_n[i_n]]``. If ``X`` is not an array, its value
+is written to all referenced locations of ``A``.
 
-A boolean vector used as an index behaves as in :func:`getindex` (it is first transformed
-with :func:`find`).
+A boolean array used as an index behaves as in :func:`getindex`, behaving as
+though it is first transformed with :func:`find`.
 
 Index assignment syntax is equivalent to a call to :func:`setindex!`::
 
@@ -347,7 +379,7 @@ Example:
 .. doctest::
 
     julia> x = reshape(1:9, 3, 3)
-    3x3 Array{Int64,2}:
+    3×3 Array{Int64,2}:
      1  4  7
      2  5  8
      3  6  9
@@ -356,7 +388,7 @@ Example:
     -1
 
     julia> x
-    3x3 Array{Int64,2}:
+    3×3 Array{Int64,2}:
      1  -1  -1
      2  -1  -1
      3   6   9
@@ -473,7 +505,7 @@ the name of the function to vectorize. Here is a simple example:
     square(x) at none:1
 
     julia> square([1 2 4; 5 6 7])
-    2x3 Array{Int64,2}:
+    2×3 Array{Int64,2}:
       1   4  16
      25  36  49
 
@@ -490,7 +522,7 @@ vector to the size of the matrix:
     julia> a = rand(2,1); A = rand(2,3);
 
     julia> repmat(a,1,3)+A
-    2x3 Array{Float64,2}:
+    2×3 Array{Float64,2}:
      1.20813  1.82068  1.25387
      1.56851  1.86401  1.67846
 
@@ -503,16 +535,16 @@ function elementwise:
 .. doctest::
 
     julia> broadcast(+, a, A)
-    2x3 Array{Float64,2}:
+    2×3 Array{Float64,2}:
      1.20813  1.82068  1.25387
      1.56851  1.86401  1.67846
 
     julia> b = rand(1,2)
-    1x2 Array{Float64,2}:
+    1×2 Array{Float64,2}:
      0.867535  0.00457906
 
     julia> broadcast(+, a, b)
-    2x2 Array{Float64,2}:
+    2×2 Array{Float64,2}:
      1.71056  0.847604
      1.73659  0.873631
 
@@ -586,7 +618,7 @@ stride parameters.
 .. doctest::
 
     julia> a = rand(10,10)
-    10x10 Array{Float64,2}:
+    10×10 Array{Float64,2}:
      0.561255   0.226678   0.203391  0.308912   …  0.750307  0.235023   0.217964
      0.718915   0.537192   0.556946  0.996234      0.666232  0.509423   0.660788
      0.493501   0.0565622  0.118392  0.493498      0.262048  0.940693   0.252965
@@ -599,7 +631,7 @@ stride parameters.
      0.507762   0.573567   0.220124  0.165816      0.211049  0.433277   0.539476
 
     julia> b = sub(a, 2:2:8,2:2:4)
-    4x2 SubArray{Float64,2,Array{Float64,2},Tuple{StepRange{Int64,Int64},StepRange{Int64,Int64}},1}:
+    4×2 SubArray{Float64,2,Array{Float64,2},Tuple{StepRange{Int64,Int64},StepRange{Int64,Int64}},1}:
      0.537192  0.996234
      0.736979  0.228787
      0.991511  0.74485
@@ -608,14 +640,14 @@ stride parameters.
     julia> (q,r) = qr(b);
 
     julia> q
-    4x2 Array{Float64,2}:
+    4×2 Array{Float64,2}:
      -0.338809   0.78934
      -0.464815  -0.230274
      -0.625349   0.194538
      -0.527347  -0.534856
 
     julia> r
-    2x2 Array{Float64,2}:
+    2×2 Array{Float64,2}:
      -1.58553  -0.921517
       0.0       0.866567
 
@@ -684,10 +716,10 @@ you can use the same names with an ``sp`` prefix:
 .. doctest::
 
     julia> spzeros(3,5)
-    3x5 sparse matrix with 0 Float64 entries:
+    3×5 sparse matrix with 0 Float64 nonzero entries:
 
     julia> speye(3,5)
-    3x5 sparse matrix with 3 Float64 entries:
+    3×5 sparse matrix with 3 Float64 nonzero entries:
             [1, 1]  =  1.0
             [2, 2]  =  1.0
             [3, 3]  =  1.0
@@ -703,7 +735,7 @@ values. ``sparse(I,J,V)`` constructs a sparse matrix such that
     julia> I = [1, 4, 3, 5]; J = [4, 7, 18, 9]; V = [1, 2, -5, 3];
 
     julia> S = sparse(I,J,V)
-    5x18 sparse matrix with 4 Int64 entries:
+    5×18 sparse matrix with 4 Int64 nonzero entries:
             [1 ,  4]  =  1
             [4 ,  7]  =  2
             [5 ,  9]  =  3
@@ -726,7 +758,7 @@ into a sparse matrix using the :func:`sparse` function:
 .. doctest::
 
     julia> sparse(eye(5))
-    5x5 sparse matrix with 5 Float64 entries:
+    5×5 sparse matrix with 5 Float64 nonzero entries:
             [1, 1]  =  1.0
             [2, 2]  =  1.0
             [3, 3]  =  1.0
@@ -797,9 +829,4 @@ reference.
 |                                        |                                  | distributed according to the *X*           |
 |                                        |                                  | distribution. (Requires the                |
 |                                        |                                  | ``Distributions`` package.)                |
-+----------------------------------------+----------------------------------+--------------------------------------------+
-| :func:`sprandbool(m,n,d) <sprandbool>` | :func:`rand(Bool,m,n) <rand>`    | Creates a *m*-by-*n* random matrix (of     |
-|                                        |                                  | density *d*) with non-zero  ``Bool``       |
-|                                        |                                  | elements with probability *d* (*d* =0.5    |
-|                                        |                                  | for :func:`rand(Bool) <rand>`.)            |
 +----------------------------------------+----------------------------------+--------------------------------------------+

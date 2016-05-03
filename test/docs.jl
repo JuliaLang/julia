@@ -21,18 +21,6 @@ function docstring_startswith(d1, d2)
 end
 docstring_startswith(d1::DocStr, d2) = docstring_startswith(parsedoc(d1), d2)
 
-# Check that some very early docs have been found.
-let d1 = @doc(Base.DocBootstrap.__bootexpand),
-    d3 = @doc(Base.DocBootstrap.loaddocs),
-    d2 = @doc(Base.DocBootstrap)
-    @test length(d1.meta[:results]) === 1
-    @test contains(stringmime("text/markdown", d1), "Captures and stores")
-    @test length(d2.meta[:results]) === 1
-    @test contains(stringmime("text/markdown", d2), "DocBootstrap :: Module")
-    @test length(d3.meta[:results]) === 1
-    @test contains(stringmime("text/markdown", d2), "loaddocs()")
-end
-
 @doc "Doc abstract type" ->
 abstract C74685 <: AbstractArray
 @test stringmime("text/plain", Docs.doc(C74685))=="Doc abstract type\n"
@@ -57,10 +45,9 @@ end
 
 # General tests for docstrings.
 
-module DocsTest
-
+const LINE_NUMBER = @__LINE__
 "DocsTest"
-DocsTest
+module DocsTest
 
 "f-1"
 function f(x)
@@ -174,11 +161,13 @@ function multidoc! end
 
 end
 
-@test docstrings_equal(@doc(DocsTest), doc"DocsTest")
-
-# Check that plain docstrings store a module reference.
-# https://github.com/JuliaLang/julia/pull/13017#issuecomment-138618663
-@test meta(DocsTest)[@var(DocsTest)].docs[Union{}].data[:module] == DocsTest
+let md = meta(DocsTest)[@var(DocsTest)]
+    @test docstrings_equal(md.docs[Union{}], doc"DocsTest")
+    # Check that plain docstrings store a module reference.
+    # https://github.com/JuliaLang/julia/pull/13017#issuecomment-138618663
+    @test md.docs[Union{}].data[:module] == DocsTest
+    @test md.docs[Union{}].data[:linenumber] == LINE_NUMBER
+end
 
 let f = @var(DocsTest.f)
     md = meta(DocsTest)[f]
@@ -403,6 +392,67 @@ end
 
 @test isdefined(MacroGenerated, :_g)
 
+module DocVars
+
+immutable __FIELDS__ end
+
+function Docs.formatdoc(buffer, docstr, ::Type{__FIELDS__})
+    fields = get(docstr.data, :fields, Dict())
+    if !isempty(fields)
+        println(buffer, "# Fields")
+        for (k, v) in sort!(collect(fields))
+            println(buffer, "`", k, "` -- ", v, "\n")
+        end
+    end
+end
+
+"""
+    $T
+
+$__FIELDS__
+"""
+type T
+    "x"
+    x
+    "y"
+    y
+    z
+end
+
+"""
+    $S
+
+$__FIELDS__
+"""
+type S
+    x
+    y
+    z
+end
+
+end
+
+let T = meta(DocVars)[@var(DocVars.T)],
+    S = meta(DocVars)[@var(DocVars.S)]
+    @test docstrings_equal(T.docs[Union{}],
+        doc"""
+            DocVars.T
+
+        # Fields
+
+        `x` -- x
+
+        `y` -- y
+        """
+    )
+    @test docstrings_equal(S.docs[Union{}],
+        doc"""
+            DocVars.S
+
+        """
+    )
+end
+
 # Issues.
 # =======
 
@@ -451,7 +501,7 @@ macro m1_11993()
 end
 
 macro m2_11993()
-    symbol("@m1_11993")
+    Symbol("@m1_11993")
 end
 
 @doc "This should document @m1... since its the result of expansion" @m2_11993
@@ -593,7 +643,7 @@ end
 )
 
 # Issue #13905.
-@test macroexpand(:(@doc "" f() = @x)) == Expr(:error, UndefVarError(symbol("@x")))
+@test macroexpand(:(@doc "" f() = @x)) == Expr(:error, UndefVarError(Symbol("@x")))
 
 # Undocumented DataType Summaries.
 
@@ -732,7 +782,7 @@ end
 
 import Base.Docs: @var, Binding, defined
 
-let x = Binding(Base, symbol("@time"))
+let x = Binding(Base, Symbol("@time"))
     @test defined(x) == true
     @test @var(@time) == x
     @test @var(Base.@time) == x

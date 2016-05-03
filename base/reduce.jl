@@ -18,16 +18,20 @@ typealias WidenReduceResult Union{SmallSigned, SmallUnsigned, Float16}
 # r_promote: promote x to the type of reduce(op, [x])
 r_promote(op, x::WidenReduceResult) = widen(x)
 r_promote(op, x) = x
-r_promote(::AddFun, x::WidenReduceResult) = widen(x)
-r_promote(::MulFun, x::WidenReduceResult) = widen(x)
-r_promote(::AddFun, x::Number) = oftype(x + zero(x), x)
-r_promote(::MulFun, x::Number) = oftype(x * one(x), x)
-r_promote(::AddFun, x) = x
-r_promote(::MulFun, x) = x
-r_promote(::MaxFun, x::WidenReduceResult) = x
-r_promote(::MinFun, x::WidenReduceResult) = x
-r_promote(::MaxFun, x) = x
-r_promote(::MinFun, x) = x
+r_promote(::typeof(+), x::WidenReduceResult) = widen(x)
+r_promote(::typeof(*), x::WidenReduceResult) = widen(x)
+r_promote(::typeof(+), x::Number) = oftype(x + zero(x), x)
+r_promote(::typeof(*), x::Number) = oftype(x * one(x), x)
+r_promote(::typeof(+), x) = x
+r_promote(::typeof(*), x) = x
+r_promote(::typeof(scalarmax), x::WidenReduceResult) = x
+r_promote(::typeof(scalarmin), x::WidenReduceResult) = x
+r_promote(::typeof(scalarmax), x) = x
+r_promote(::typeof(scalarmin), x) = x
+r_promote(::typeof(max), x::WidenReduceResult) = r_promote(scalarmax, x)
+r_promote(::typeof(min), x::WidenReduceResult) = r_promote(scalarmin, x)
+r_promote(::typeof(max), x) = r_promote(scalarmax, x)
+r_promote(::typeof(min), x) = r_promote(scalarmin, x)
 
 
 ## foldl && mapfoldl
@@ -50,8 +54,6 @@ end
 
 mapfoldl(f, op, v0, itr) = mapfoldl_impl(f, op, v0, itr, start(itr))
 
-mapfoldl(f, op::Function, v0, itr) = mapfoldl_impl(f, specialized_binary(op), v0, itr, start(itr))
-
 function mapfoldl(f, op, itr)
     i = start(itr)
     if done(itr, i)
@@ -62,8 +64,8 @@ function mapfoldl(f, op, itr)
     mapfoldl_impl(f, op, v0, itr, i)
 end
 
-foldl(op, v0, itr) = mapfoldl(IdFun(), op, v0, itr)
-foldl(op, itr) = mapfoldl(IdFun(), op, itr)
+foldl(op, v0, itr) = mapfoldl(identity, op, v0, itr)
+foldl(op, itr) = mapfoldl(identity, op, itr)
 
 ## foldr & mapfoldr
 
@@ -86,8 +88,8 @@ end
 mapfoldr(f, op, v0, itr) = mapfoldr_impl(f, op, v0, itr, endof(itr))
 mapfoldr(f, op, itr) = (i = endof(itr); mapfoldr_impl(f, op, f(itr[i]), itr, i-1))
 
-foldr(op, v0, itr) = mapfoldr(IdFun(), op, v0, itr)
-foldr(op, itr) = mapfoldr(IdFun(), op, itr)
+foldr(op, v0, itr) = mapfoldr(identity, op, v0, itr)
+foldr(op, itr) = mapfoldr(identity, op, itr)
 
 ## reduce & mapreduce
 
@@ -122,14 +124,16 @@ mapreduce_impl(f, op, A::AbstractArray, ifirst::Int, ilast::Int) =
 # handling empty arrays
 mr_empty(f, op, T) = throw(ArgumentError("reducing over an empty collection is not allowed"))
 # use zero(T)::T to improve type information when zero(T) is not defined
-mr_empty(::IdFun, op::AddFun, T) = r_promote(op, zero(T)::T)
-mr_empty(::AbsFun, op::AddFun, T) = r_promote(op, abs(zero(T)::T))
-mr_empty(::Abs2Fun, op::AddFun, T) = r_promote(op, abs2(zero(T)::T))
-mr_empty(::IdFun, op::MulFun, T) = r_promote(op, one(T)::T)
-mr_empty(::AbsFun, op::MaxFun, T) = abs(zero(T)::T)
-mr_empty(::Abs2Fun, op::MaxFun, T) = abs2(zero(T)::T)
-mr_empty(f, op::AndFun, T) = true
-mr_empty(f, op::OrFun, T) = false
+mr_empty(::typeof(identity), op::typeof(+), T) = r_promote(op, zero(T)::T)
+mr_empty(::typeof(abs), op::typeof(+), T) = r_promote(op, abs(zero(T)::T))
+mr_empty(::typeof(abs2), op::typeof(+), T) = r_promote(op, abs2(zero(T)::T))
+mr_empty(::typeof(identity), op::typeof(*), T) = r_promote(op, one(T)::T)
+mr_empty(::typeof(abs), op::typeof(scalarmax), T) = abs(zero(T)::T)
+mr_empty(::typeof(abs2), op::typeof(scalarmax), T) = abs2(zero(T)::T)
+mr_empty(::typeof(abs), op::typeof(max), T) = mr_empty(abs, scalarmax, T)
+mr_empty(::typeof(abs2), op::typeof(max), T) = mr_empty(abs2, scalarmax, T)
+mr_empty(f, op::typeof(&), T) = true
+mr_empty(f, op::typeof(|), T) = false
 
 _mapreduce(f, op, A::AbstractArray) = _mapreduce(f, op, linearindexing(A), A)
 
@@ -159,27 +163,29 @@ _mapreduce{T}(f, op, ::LinearSlow, A::AbstractArray{T}) = mapfoldl(f, op, A)
 mapreduce(f, op, A::AbstractArray) = _mapreduce(f, op, linearindexing(A), A)
 mapreduce(f, op, a::Number) = f(a)
 
-mapreduce(f, op::Function, A::AbstractArray) = mapreduce(f, specialized_binary(op), A)
-
-reduce(op, v0, itr) = mapreduce(IdFun(), op, v0, itr)
-reduce(op, itr) = mapreduce(IdFun(), op, itr)
+reduce(op, v0, itr) = mapreduce(identity, op, v0, itr)
+reduce(op, itr) = mapreduce(identity, op, itr)
 reduce(op, a::Number) = a
 
 ### short-circuiting specializations of mapreduce
 
 ## conditions and results of short-circuiting
 
-const ShortCircuiting = Union{AndFun, OrFun}
-const ReturnsBool     = Union{EqX, Predicate}
+immutable Predicate{F}
+    f::F
+end
+(pred::Predicate)(x) = pred.f(x)::Bool
 
-shortcircuits(::AndFun, x::Bool) = !x
-shortcircuits(::OrFun,  x::Bool) =  x
+const ShortCircuiting = Union{typeof(&), typeof(|)}
 
-shorted(::AndFun) = false
-shorted(::OrFun)  = true
+shortcircuits(::typeof(&), x::Bool) = !x
+shortcircuits(::typeof(|),  x::Bool) =  x
 
-sc_finish(::AndFun) = true
-sc_finish(::OrFun)  = false
+shorted(::typeof(&)) = false
+shorted(::typeof(|))  = true
+
+sc_finish(::typeof(&)) = true
+sc_finish(::typeof(|))  = false
 
 ## short-circuiting (sc) mapreduce definitions
 
@@ -205,11 +211,10 @@ end
 mapreduce_no_sc(f, op, itr::Any)           =  mapfoldl(f, op, itr)
 mapreduce_no_sc(f, op, itr::AbstractArray) = _mapreduce(f, op, itr)
 
-mapreduce_sc(f::Function,    op, itr) = mapreduce_sc(specialized_unary(f), op, itr)
-mapreduce_sc(f::ReturnsBool, op, itr) = mapreduce_sc_impl(f, op, itr)
-mapreduce_sc(f::Func{1},     op, itr) = mapreduce_no_sc(f, op, itr)
+mapreduce_sc(f::Function,  op, itr) = mapreduce_no_sc(f, op, itr)
+mapreduce_sc(f::Predicate, op, itr) = mapreduce_sc_impl(f, op, itr)
 
-mapreduce_sc(f::IdFun, op, itr) =
+mapreduce_sc(f::typeof(identity), op, itr) =
     eltype(itr) <: Bool ?
         mapreduce_sc_impl(f, op, itr) :
         mapreduce_no_sc(f, op, itr)
@@ -223,7 +228,7 @@ mapreduce(f, op::ShortCircuiting, itr::Any)           = mapreduce_sc(f,op,itr)
 
 ## sum
 
-function mapreduce_seq_impl(f, op::AddFun, a::AbstractArray, ifirst::Int, ilast::Int)
+function mapreduce_seq_impl(f, op::typeof(+), a::AbstractArray, ifirst::Int, ilast::Int)
     s = r_promote(op, f(a[ifirst])) + f(a[ifirst+1])
     @simd for i = ifirst+2:ilast
         @inbounds ai = a[i]
@@ -237,22 +242,22 @@ end
 sum_pairwise_blocksize(f) = 1024
 
 # This appears to show a benefit from a larger block size
-sum_pairwise_blocksize(::Abs2Fun) = 4096
+sum_pairwise_blocksize(::typeof(abs2)) = 4096
 
-mapreduce_impl(f, op::AddFun, A::AbstractArray, ifirst::Int, ilast::Int) =
+mapreduce_impl(f, op::typeof(+), A::AbstractArray, ifirst::Int, ilast::Int) =
     mapreduce_pairwise_impl(f, op, A, ifirst, ilast, sum_pairwise_blocksize(f))
 
-sum(f::Union{Callable,Func{1}}, a) = mapreduce(f, AddFun(), a)
-sum(a) = mapreduce(IdFun(), AddFun(), a)
+sum(f::Callable, a) = mapreduce(f, +, a)
+sum(a) = mapreduce(identity, +, a)
 sum(a::AbstractArray{Bool}) = countnz(a)
-sumabs(a) = mapreduce(AbsFun(), AddFun(), a)
-sumabs2(a) = mapreduce(Abs2Fun(), AddFun(), a)
+sumabs(a) = mapreduce(abs, +, a)
+sumabs2(a) = mapreduce(abs2, +, a)
 
 # Kahan (compensated) summation: O(1) error growth, at the expense
 # of a considerable increase in computational expense.
 function sum_kbn{T<:AbstractFloat}(A::AbstractArray{T})
     n = length(A)
-    c = r_promote(AddFun(), zero(T)::T)
+    c = r_promote(+, zero(T)::T)
     if n == 0
         return c
     end
@@ -273,12 +278,16 @@ end
 
 ## prod
 
-prod(f::Union{Callable,Func{1}}, a) = mapreduce(f, MulFun(), a)
-prod(a) = mapreduce(IdFun(), MulFun(), a)
+prod(f::Callable, a) = mapreduce(f, *, a)
+prod(a) = mapreduce(identity, *, a)
 
 ## maximum & minimum
 
-function mapreduce_impl(f, op::MaxFun, A::AbstractArray, first::Int, last::Int)
+function mapreduce_impl(f, op::Union{typeof(scalarmax),
+                                     typeof(scalarmin),
+                                     typeof(max),
+                                     typeof(min)},
+                        A::AbstractArray, first::Int, last::Int)
     # locate the first non NaN number
     v = f(A[first])
     i = first + 1
@@ -290,48 +299,31 @@ function mapreduce_impl(f, op::MaxFun, A::AbstractArray, first::Int, last::Int)
     while i <= last
         @inbounds Ai = A[i]
         x = f(Ai)
-        if x > v
-            v = x
-        end
+        v = op(v, x)
         i += 1
     end
     v
 end
 
-function mapreduce_impl(f, op::MinFun, A::AbstractArray, first::Int, last::Int)
-    # locate the first non NaN number
-    v = f(A[first])
-    i = first + 1
-    while v != v && i <= last
-        @inbounds Ai = A[i]
-        v = f(Ai)
-        i += 1
-    end
-    while i <= last
-        @inbounds Ai = A[i]
-        x = f(Ai)
-        if x < v
-            v = x
-        end
-        i += 1
-    end
-    v
-end
+maximum(f::Callable, a) = mapreduce(f, scalarmax, a)
+minimum(f::Callable, a) = mapreduce(f, scalarmin, a)
 
-maximum(f::Union{Callable,Func{1}}, a) = mapreduce(f, MaxFun(), a)
-minimum(f::Union{Callable,Func{1}}, a) = mapreduce(f, MinFun(), a)
+maximum(a) = mapreduce(identity, scalarmax, a)
+minimum(a) = mapreduce(identity, scalarmin, a)
 
-maximum(a) = mapreduce(IdFun(), MaxFun(), a)
-minimum(a) = mapreduce(IdFun(), MinFun(), a)
-
-maxabs(a) = mapreduce(AbsFun(), MaxFun(), a)
-minabs(a) = mapreduce(AbsFun(), MinFun(), a)
+maxabs(a) = mapreduce(abs, scalarmax, a)
+minabs(a) = mapreduce(abs, scalarmin, a)
 
 ## extrema
 
 extrema(r::Range) = (minimum(r), maximum(r))
 extrema(x::Real) = (x, x)
 
+"""
+    extrema(itr) -> Tuple
+
+Compute both the minimum and maximum element in a single pass, and return them as a 2-tuple.
+"""
 function extrema(itr)
     s = start(itr)
     done(itr, s) && throw(ArgumentError("collection must be non-empty"))
@@ -353,28 +345,65 @@ function extrema(itr)
     return (vmin, vmax)
 end
 
+"""
+    extrema(A,dims) -> Array{Tuple}
+
+Compute the minimum and maximum elements of an array over the given dimensions.
+"""
+function extrema(A::AbstractArray, dims)
+    sz = [size(A)...]
+    sz[[dims...]] = 1
+    B = Array{Tuple{eltype(A),eltype(A)}}(sz...)
+    extrema!(B, A)
+end
+
+@generated function extrema!{T,N}(B, A::AbstractArray{T,N})
+    quote
+        sA = size(A)
+        sB = size(B)
+        @nloops $N i B begin
+            AI = @nref $N A i
+            (@nref $N B i) = (AI, AI)
+        end
+        Bmax = sB
+        Istart = ones(Int,ndims(A))
+        Istart[([sB...].==1) & ([sA...].!=1)] = 2
+        @inbounds @nloops $N i d->(Istart[d]:size(A,d)) begin
+            AI = @nref $N A i
+            @nexprs $N d->(j_d = min(Bmax[d], i_{d}))
+            BJ = @nref $N B j
+            if AI < BJ[1]
+                (@nref $N B j) = (AI, BJ[2])
+            elseif AI > BJ[2]
+                (@nref $N B j) = (BJ[1], AI)
+            end
+        end
+        B
+    end
+end
+
 ## all & any
 
-any(itr) = any(IdFun(), itr)
-all(itr) = all(IdFun(), itr)
+any(itr) = any(identity, itr)
+all(itr) = all(identity, itr)
 
 any(f::Any,       itr) = any(Predicate(f), itr)
-any(f::Predicate, itr) = mapreduce_sc_impl(f, OrFun(), itr)
-any(f::IdFun,     itr) =
+any(f::Predicate, itr) = mapreduce_sc_impl(f, |, itr)
+any(f::typeof(identity),     itr) =
     eltype(itr) <: Bool ?
-        mapreduce_sc_impl(f, OrFun(), itr) :
+        mapreduce_sc_impl(f, |, itr) :
         reduce(or_bool_only, itr)
 
 all(f::Any,       itr) = all(Predicate(f), itr)
-all(f::Predicate, itr) = mapreduce_sc_impl(f, AndFun(), itr)
-all(f::IdFun,     itr) =
+all(f::Predicate, itr) = mapreduce_sc_impl(f, &, itr)
+all(f::typeof(identity),     itr) =
     eltype(itr) <: Bool ?
-        mapreduce_sc_impl(f, AndFun(), itr) :
+        mapreduce_sc_impl(f, &, itr) :
         reduce(and_bool_only, itr)
 
 ## in & contains
 
-in(x, itr) = any(EqX(x), itr)
+in(x, itr) = any(Predicate(y -> y == x), itr)
 
 const ∈ = in
 ∉(x, itr)=!∈(x, itr)
@@ -399,13 +428,10 @@ function count(pred, itr)
     return n
 end
 
-immutable NotEqZero <: Func{1} end
-(::NotEqZero)(x) = x != 0
-
 """
     countnz(A)
 
 Counts the number of nonzero values in array `A` (dense or sparse). Note that this is not a constant-time operation.
 For sparse matrices, one should usually use `nnz`, which returns the number of stored values.
 """
-countnz(a) = count(NotEqZero(), a)
+countnz(a) = count(x -> x != 0, a)

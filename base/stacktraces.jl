@@ -42,8 +42,8 @@ An alias for `Vector{StackFrame}` provided for convenience; returned by calls to
 """
 typealias StackTrace Vector{StackFrame}
 
-const empty_sym = symbol("")
-const unk_sym = symbol("???")
+const empty_sym = Symbol("")
+const unk_sym = Symbol("???")
 const UNKNOWN = StackFrame(unk_sym, Nullable{LambdaInfo}(), unk_sym, -1, empty_sym, -1, true, 0) # === lookup(C_NULL)
 
 
@@ -165,8 +165,8 @@ function show_spec_linfo(io::IO, frame::StackFrame)
         print(io, frame.func !== empty_sym ? frame.func : "?")
     else
         linfo = get(frame.outer_linfo)
-        if isdefined(linfo, 8)
-            params = linfo.(#=specTypes=#8).parameters
+        if isdefined(linfo, :specTypes)
+            params = linfo.specTypes.parameters
             ft = params[1]
             if ft <: Function && isempty(ft.parameters) &&
                     isdefined(ft.name.module, ft.name.mt.name) &&
@@ -180,7 +180,7 @@ function show_spec_linfo(io::IO, frame::StackFrame)
             end
             first = true
             print(io, '(')
-            for i = 2:length(params)
+            for i = 2:length(params)  # fixme (iter): `eachindex` with offset?
                 first || print(io, ", ")
                 first = false
                 print(io, "::", params[i])

@@ -64,11 +64,6 @@ function edit(path::AbstractString, line::Integer=0)
     nothing
 end
 
-function edit(m::Method)
-    tv, decls, file, line = arg_decl_parts(m)
-    edit(string(file), line)
-end
-
 edit(f)          = edit(functionloc(f)...)
 edit(f, t::ANY)  = edit(functionloc(f,t)...)
 edit(file, line::Integer) = error("could not find source file for function")
@@ -109,7 +104,7 @@ end
     function clipboard(x)
         c = clipboardcmd()
         cmd = c == :xsel  ? `xsel --nodetach --input --clipboard` :
-              c == :xclip ? `xclip -quiet -in -selection clipboard` :
+              c == :xclip ? `xclip -silent -in -selection clipboard` :
             error("unexpected clipboard command: $c")
         open(pipeline(cmd, stderr=STDERR), "w") do io
             print(io, x)
@@ -225,17 +220,23 @@ versioninfo(verbose::Bool) = versioninfo(STDOUT,verbose)
 
 function code_warntype(io::IO, f, t::ANY)
     emph_io = IOContext(io, :TYPEEMPHASIZE => true)
-    ct = code_typed(f, t)
-    for ast in ct
+    for li in code_typed(f, t)
         println(emph_io, "Variables:")
-        vars = ast.args[2][1]
-        for v in vars
-            print(emph_io, "  ", v[1])
-            show_expr_type(emph_io, v[2], true)
+        slotnames = lambdainfo_slotnames(li)
+        for i = 1:length(slotnames)
+            print(emph_io, "  ", slotnames[i])
+            if isa(li.slottypes,Array)
+                show_expr_type(emph_io, li.slottypes[i], true)
+            end
             print(emph_io, '\n')
         end
         print(emph_io, "\nBody:\n  ")
-        show_unquoted(emph_io, ast.args[3], 2)
+        body = Expr(:body); body.args = uncompressed_ast(li)
+        body.typ = li.rettype
+        # Fix slot names and types in function body
+        show_unquoted(IOContext(IOContext(emph_io, :LAMBDAINFO => li),
+                                          :LAMBDA_SLOTNAMES => slotnames),
+                      body, 2)
         print(emph_io, '\n')
     end
     nothing
@@ -254,8 +255,12 @@ function gen_call_with_extracted_types(fcn, ex0)
                     Expr(:call, typesof, map(esc, args[2:end])...))
     end
     exret = Expr(:none)
+    is_macro = false
     ex = expand(ex0)
-    if !isa(ex, Expr)
+    if isa(ex0, Expr) && ex0.head == :macrocall # Make @edit @time 1+2 edit the macro
+        is_macro = true
+        exret = Expr(:call, fcn,  esc(ex0.args[1]), typesof(ex0.args[2:end]...))
+    elseif !isa(ex, Expr)
         exret = Expr(:call, :error, "expression is not a function call or symbol")
     elseif ex.head == :call
         if any(e->(isa(e, Expr) && e.head==:(...)), ex0.args) &&
@@ -278,7 +283,7 @@ function gen_call_with_extracted_types(fcn, ex0)
             end
         end
     end
-    if ex.head == :thunk || exret.head == :none
+    if (!is_macro && ex.head == :thunk) || exret.head == :none
         exret = Expr(:call, :error, "expression is not a function call, "
                                   * "or is too complex for @$fcn to analyze; "
                                   * "break it down to simpler parts if possible")
@@ -286,7 +291,7 @@ function gen_call_with_extracted_types(fcn, ex0)
     exret
 end
 
-for fname in [:which, :less, :edit, :code_typed, :code_warntype,
+for fname in [:which, :less, :edit, :functionloc, :code_typed, :code_warntype,
               :code_lowered, :code_llvm, :code_llvm_raw, :code_native]
     @eval begin
         macro ($fname)(ex0)
@@ -295,7 +300,80 @@ for fname in [:which, :less, :edit, :code_typed, :code_warntype,
     end
 end
 
-# `methodswith` -- shows a list of methods using the type given
+"""
+    @which
+
+Applied to a function or macro call, it evaluates the arguments to the specified call, and
+returns the `Method` object for the method that would be called for those arguments. Applied
+to a variable, it returns the module in which the variable was bound. It calls out to the
+`which` function.
+"""
+:@which
+
+"""
+    @less
+
+Evaluates the arguments to the function or macro call, determines their types, and calls the `less`
+function on the resulting expression.
+"""
+:@less
+
+"""
+    @edit
+
+Evaluates the arguments to the function or macro call, determines their types, and calls the `edit`
+function on the resulting expression.
+"""
+:@edit
+
+"""
+    @functionloc
+
+Applied to a function or macro call, it evaluates the arguments to the specified call, and
+returns a tuple `(filename,line)` giving the location for the method that would be called for those arguments.
+It calls out to the `functionloc` function.
+"""
+:@functionloc
+
+"""
+    @code_typed
+
+Evaluates the arguments to the function or macro call, determines their types, and calls
+[`code_typed`](:func:`code_typed`) on the resulting expression.
+"""
+:@code_typed
+
+"""
+    @code_warntype
+
+Evaluates the arguments to the function or macro call, determines their types, and calls
+[`code_warntype`](:func:`code_warntype`) on the resulting expression.
+"""
+:@code_warntype
+
+"""
+    @code_lowered
+
+Evaluates the arguments to the function or macro call, determines their types, and calls
+[`code_lowered`](:func:`code_lowered`) on the resulting expression.
+"""
+:@code_lowered
+
+"""
+    @code_llvm
+
+Evaluates the arguments to the function or macro call, determines their types, and calls
+[`code_llvm`](:func:`code_llvm`) on the resulting expression.
+"""
+:@code_llvm
+
+"""
+    @code_native
+
+Evaluates the arguments to the function or macro call, determines their types, and calls
+[`code_native`](:func:`code_native`) on the resulting expression.
+"""
+:@code_native
 
 function type_close_enough(x::ANY, t::ANY)
     x == t && return true
@@ -304,10 +382,9 @@ function type_close_enough(x::ANY, t::ANY)
            (isa(x,Union) && isa(t,DataType) && any(u -> is(u,t), x.types))
 end
 
+# `methodswith` -- shows a list of methods using the type given
 function methodswith(t::Type, f::Function, showparents::Bool=false, meths = Method[])
-    mt = typeof(f).name.mt
-    d = mt.defs
-    while d !== nothing
+    for d in methods(f)
         if any(x -> (type_close_enough(x, t) ||
                      (showparents ? (t <: x && (!isa(x,TypeVar) || x.ub != Any)) :
                       (isa(x,TypeVar) && x.ub != Any && t == x.ub)) &&
@@ -315,7 +392,6 @@ function methodswith(t::Type, f::Function, showparents::Bool=false, meths = Meth
                d.sig.parameters)
             push!(meths, d)
         end
-        d = d.next
     end
     return meths
 end
@@ -595,17 +671,15 @@ function summarysize(obj::MethodTable, seen, excl)
     size::Int = Core.sizeof(obj)
     size += summarysize(obj.defs, seen, excl)::Int
     size += summarysize(obj.cache, seen, excl)::Int
-    size += summarysize(obj.cache_arg1, seen, excl)::Int
-    size += summarysize(obj.cache_targ, seen, excl)::Int
     if isdefined(obj, :kwsorter)
         size += summarysize(obj.kwsorter, seen, excl)::Int
     end
     return size
 end
 
-function summarysize(m::Method, seen, excl)
+function summarysize(m::TypeMapEntry, seen, excl)
     size::Int = 0
-    while true
+    while true # specialized to prevent stack overflow while following this linked list
         haskey(seen, m) ? (return size) : (seen[m] = true)
         size += Core.sizeof(m)
         if isdefined(m, :func)
@@ -613,9 +687,8 @@ function summarysize(m::Method, seen, excl)
         end
         size += summarysize(m.sig, seen, excl)::Int
         size += summarysize(m.tvars, seen, excl)::Int
-        size += summarysize(m.invokes, seen, excl)::Int
         m.next === nothing && break
-        m = m.next::Method
+        m = m.next::TypeMapEntry
     end
     return size
 end

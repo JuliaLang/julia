@@ -84,7 +84,6 @@
     ADD_I(checked_udiv_int, 2) \
     ADD_I(checked_srem_int, 2) \
     ADD_I(checked_urem_int, 2) \
-    ADD_I(nan_dom_err, 2) \
     /*  functions */ \
     ADD_I(abs_float, 1) \
     ADD_I(copysign_float, 2) \
@@ -188,11 +187,6 @@ static void add_intrinsic(jl_module_t *inm, const char *name, enum intrinsic f)
     jl_set_const(inm, sym, i);
     jl_module_export(inm, sym);
 }
-
-#ifdef __cplusplus
-extern "C"
-#endif
-jl_value_t *jl_mk_builtin_func(const char *name, jl_fptr_t fptr);
 
 #ifdef __cplusplus
 extern "C"

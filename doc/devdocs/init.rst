@@ -112,12 +112,7 @@ translates these symbols into LLVM instructions during code generation.
 <https://github.com/JuliaLang/julia/blob/master/src/builtins.c>`_
 hooks C functions up to Julia function symbols. e.g. the symbol
 :func:`Base.is` is bound to C function pointer :c:func:`jl_f_is`
-by calling :code:`add_builtin_func("eval", jl_f_top_eval)`, which does::
-
-    jl_set_const(jl_core_module,
-                 jl_symbol("is"),
-                 jl_new_closure(jl_f_top_eval, jl_symbol("eval"), NULL));
-
+by calling :code:`add_builtin_func("eval", jl_f_top_eval)`.
 
 `jl_new_main_module()
 <https://github.com/JuliaLang/julia/blob/master/src/toplevel.c>`_

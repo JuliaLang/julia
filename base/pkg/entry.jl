@@ -342,10 +342,17 @@ function update(branch::AbstractString)
                 LibGit2.merge!(repo)
             end
         end
-        LibGit2.fetch(repo)
-        ff_succeeded = LibGit2.merge!(repo, fastforward=true)
-        if !ff_succeeded
-            LibGit2.rebase!(repo, "origin/$branch")
+        try
+            LibGit2.fetch(repo)
+            ff_succeeded = LibGit2.merge!(repo, fastforward=true)
+            if !ff_succeeded
+                LibGit2.rebase!(repo, "origin/$branch")
+            end
+        catch err
+            if isa(err, LibGit2.Error.GitError)
+                print_with_color(:red, "METADATA cannot be updated. Error: $(err.msg).\nResolve problems manually in $(Pkg.dir("METADATA")).")
+            end
+            rethrow(err)
         end
     end
     avail = Read.available()
@@ -574,10 +581,10 @@ function build(pkgs::Vector)
     isempty(errs) && return
     println(STDERR)
     warnbanner(label="[ BUILD ERRORS ]", """
-    WARNING: $(join(map(x->x[1],errs),", "," and ")) had build errors.
+    WARNING: $(join(keys(errs),", "," and ")) had build errors.
 
      - packages with build errors remain installed in $(pwd())
-     - build the package(s) and all dependencies with `Pkg.build("$(join(map(x->x[1],errs),"\", \""))")`
+     - build the package(s) and all dependencies with `Pkg.build("$(join(keys(errs),"\", \""))")`
      - build a single package by running its `deps/build.jl` script
     """)
 end
@@ -606,7 +613,7 @@ function updatehook(pkgs::Vector)
     isempty(errs) && return
     println(STDERR)
     warnbanner(label="[ UPDATE ERRORS ]", """
-    WARNING: $(join(map(x->x[1],errs),", "," and ")) had update errors.
+    WARNING: $(join(keys(errs),", "," and ")) had update errors.
 
      - Unrelated packages are unaffected
      - To retry, run Pkg.update() again

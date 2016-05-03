@@ -52,7 +52,9 @@ JL_DLLEXPORT jl_value_t *jl_eval_string(const char *str)
 {
     jl_value_t *r;
     JL_TRY {
-        jl_value_t *ast = jl_parse_input_line(str, strlen(str));
+        char *filename = "none";
+        jl_value_t *ast = jl_parse_input_line(str, strlen(str),
+                filename, strlen(filename));
         JL_GC_PUSH1(&ast);
         r = jl_toplevel_eval(ast);
         JL_GC_POP();
@@ -342,6 +344,11 @@ JL_DLLEXPORT void (jl_gc_safe_leave)(int8_t state)
     jl_gc_safe_leave(state);
 }
 
+JL_DLLEXPORT void (jl_gc_safepoint)(void)
+{
+    jl_gc_safepoint();
+}
+
 JL_DLLEXPORT void (jl_cpu_pause)(void)
 {
     jl_cpu_pause();
@@ -351,36 +358,6 @@ JL_DLLEXPORT void (jl_cpu_wake)(void)
 {
     jl_cpu_wake();
 }
-
-#ifndef _OS_WINDOWS_
-#  define UNW_LOCAL_ONLY
-#  include <libunwind.h>
-#define STRINGIFY1(x) #x
-#define STRINGIFY2(x) STRINGIFY1(x)
-#if defined(_OS_LINUX_)
-#if defined(_CPU_X86_64_)
-asm("_jl_unw_getcontext: movq " STRINGIFY2(unw_tdep_getcontext) "@GOTPCREL(%rip), %rax\n"
-    "jmpq *%rax");
-#elif defined(_CPU_X86_)
-asm("_jl_unw_getcontext: jmp " STRINGIFY2(unw_tdep_getcontext) "@PLT");
-#endif
-#endif
-
-JL_DLLEXPORT void jl_unw_init_local(void *cursor, void *context)
-{
-    unw_init_local((unw_cursor_t *)cursor, (unw_context_t *)context);
-}
-
-JL_DLLEXPORT int jl_unw_step(void *cursor)
-{
-    return unw_step((unw_cursor_t *)cursor);
-}
-
-JL_DLLEXPORT int jl_unw_get_reg(void *cursor, int reg, uintptr_t *retval)
-{
-    return unw_get_reg((unw_cursor_t *)cursor, reg, retval);
-}
-#endif
 
 #ifdef __cplusplus
 }

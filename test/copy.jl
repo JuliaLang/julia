@@ -50,7 +50,7 @@ end
 
 # test behavior of shallow and deep copying
 let a = Any[[1]], q = QuoteNode([1])
-    ca = copy(a); dca = deepcopy(a)
+    ca = copy(a); dca = @inferred(deepcopy(a))
     @test ca !== a
     @test ca[1] === a[1]
     @test dca !== a
@@ -67,3 +67,18 @@ end
 
 # issue #14027
 @test isnull(deepcopy(Nullable{Array}()))
+
+# issue #15250
+let a1 = Base.svec(1, 2, 3, []), a2 = Base.svec(1, 2, 3)
+    a3 = Base.svec(a1,a1)
+    b1 = deepcopy(a1)
+    @test a1 == b1
+    @test a1 !== b1
+    @test a1[4] !== b1[4]
+    b2 = deepcopy(a2)
+    @test a2 === b2
+    b3 = deepcopy(a3)
+    @test a3 == b3
+    @test a3 !== b3
+    @test a3[1] === a3[2]
+end

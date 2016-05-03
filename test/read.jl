@@ -4,11 +4,11 @@ mktempdir() do dir
 
 tasks = []
 
-# Create test file...
+# Create test file
 filename = joinpath(dir, "file.txt")
 text = "C1,C2\n1,2\na,b\n"
 
-# List of IO producers...
+# List of IO producers
 l = Vector{Tuple{AbstractString,Function}}()
 
 
@@ -138,7 +138,6 @@ verbose = false
 
 
 for (name, f) in l
-
     io = ()->(s=f(text); push!(open_streams, s); s)
 
     write(filename, text)
@@ -184,7 +183,6 @@ for (name, f) in l
         UTF8String(Char['A' + i % 52 for i in 1:(    Base.SZ_UNBUFFERED_IO   )]),
         UTF8String(Char['A' + i % 52 for i in 1:(    Base.SZ_UNBUFFERED_IO +1)])
     ]
-
         write(filename, text)
 
         verbose && println("$name readstring...")
@@ -268,7 +266,6 @@ for (name, f) in l
     write(filename, text)
 
     if !(typeof(io()) in [Base.PipeEndpoint, Pipe, TCPSocket])
-
         verbose && println("$name position...")
         @test (s = io(); read!(s, Vector{UInt8}(4)); position(s))  == 4
 
@@ -299,7 +296,7 @@ for (name, f) in l
     @test readstring("$filename.to") == text
 
     verbose && println("$name write(::IOBuffer, ...)")
-    to = IOBuffer(Vector{UInt8}(copy(text)), false, true)
+    to = IOBuffer(copy(text.data), false, true)
     write(to, io())
     @test takebuf_string(to) == text
 
@@ -363,7 +360,6 @@ test_read_nbyte()
 @test_throws EOFError read(DevNull, UInt8)
 @test close(DevNull) === nothing
 @test flush(DevNull) === nothing
-@test copy(DevNull) === DevNull
 @test eof(DevNull)
 @test print(DevNull, "go to /dev/null") === nothing
 
@@ -415,11 +411,13 @@ rm(f)
 io = Base.Filesystem.open(f, Base.Filesystem.JL_O_WRONLY | Base.Filesystem.JL_O_CREAT | Base.Filesystem.JL_O_EXCL, 0o000)
 @test write(io, "abc") == 3
 close(io)
-@unix_only begin
+@unix_only if get(ENV, "USER", "") != "root" && get(ENV, "HOME", "") != "/root"
     # msvcrt _wchmod documentation states that all files are readable,
     # so we don't test that it correctly set the umask on windows
     @test_throws SystemError open(f)
     @test_throws Base.UVError Base.Filesystem.open(f, Base.Filesystem.JL_O_RDONLY)
+else
+    warn("file permissions tests skipped due to running tests as root (not recommended)")
 end
 chmod(f, 0o400)
 f1 = open(f)
@@ -462,9 +460,12 @@ close(f1)
 close(f2)
 @test eof(f1)
 @test_throws Base.UVError eof(f2)
-
-@test_throws SystemError open(f, "r+")
-@test_throws Base.UVError Base.Filesystem.open(f, Base.Filesystem.JL_O_RDWR)
+if get(ENV, "USER", "") != "root" && get(ENV, "HOME", "") != "/root"
+    @test_throws SystemError open(f, "r+")
+    @test_throws Base.UVError Base.Filesystem.open(f, Base.Filesystem.JL_O_RDWR)
+else
+    warn("file permissions tests skipped due to running tests as root (not recommended)")
+end
 chmod(f, 0o600)
 f1 = open(f, "r+")
 f2 = Base.Filesystem.open(f, Base.Filesystem.JL_O_RDWR)
@@ -484,4 +485,4 @@ close(f1)
 close(f2)
 rm(f)
 
-end
+end # mktempdir() do dir

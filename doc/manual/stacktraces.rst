@@ -83,13 +83,13 @@ returned by :func:`backtrace`:
     :eval
 
     julia> top_frame.file
-    symbol("./boot.jl")
+    Symbol("./boot.jl")
 
     julia> top_frame.line
     265
 
     julia> top_frame.inlined_file
-    symbol("")
+    Symbol("")
 
     julia> top_frame.inlined_line
     -1
@@ -219,7 +219,7 @@ A call to :func:`backtrace` returns a vector of ``Ptr{Void}``, which may then be
      [inlined code from REPL.jl:3] eval_user_input at REPL.jl:62
      [inlined code from REPL.jl:92] anonymous at task.jl:63
 
-Notice that the vector returned by :func:`backtrace` had 15 pointers, while the vector returned by :func:`stacktrace` only has 3. This is because, by default, :func:`stacktrace` removes any lower-level C functions from the stack. If you want to include stack frames from C calls, you can do it like this::
+Notice that the vector returned by :func:`backtrace` had 15 pointers, while the vector returned by :func:`stacktrace` only has 4. This is because, by default, :func:`stacktrace` removes any lower-level C functions from the stack. If you want to include stack frames from C calls, you can do it like this::
 
     julia> stacktrace(stack, true)
     15-element Array{StackFrame,1}:

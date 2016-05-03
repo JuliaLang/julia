@@ -4,6 +4,10 @@ using Base.Test
 
 import Base.LinAlg.BlasInt
 
+@test_throws ArgumentError Base.LinAlg.LAPACK.chkside('Z')
+@test_throws ArgumentError Base.LinAlg.LAPACK.chkdiag('Z')
+@test_throws ArgumentError Base.LinAlg.LAPACK.chktrans('Z')
+
 let # syevr
     srand(123)
     Ainit = randn(5,5)
@@ -152,7 +156,7 @@ for elty in (Float32, Float64, Complex64, Complex128)
     @test_approx_eq V' lVt
     B = rand(elty,10,10)
     # xggsvd3 replaced xggsvd in LAPACK 3.6.0
-    if LAPACK.VERSION[] < v"3.6.0"
+    if LAPACK.laver() < (3, 6, 0)
         @test_throws DimensionMismatch LAPACK.ggsvd!('S','S','S',A,B)
     else
         @test_throws DimensionMismatch LAPACK.ggsvd3!('S','S','S',A,B)
@@ -346,6 +350,7 @@ for elty in (Complex64, Complex128)
     B = copy(A)
     B,ipiv = LAPACK.hetrf!('U',B)
     @test_throws DimensionMismatch LAPACK.hetrs!('U',B,ipiv,rand(elty,11,5))
+    @test_throws DimensionMismatch LAPACK.hetrs_rook!('U',B,ipiv,rand(elty,11,5))
 end
 
 # stev, stebz, stein, stegr

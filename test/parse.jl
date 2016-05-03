@@ -22,9 +22,9 @@ let
                        ("5.≥x", "5.>=x"),
                        ("5.≤x", "5.<=x")]
         ex1 = parse(ex1); ex2 = parse(ex2)
-        @test ex1.head === :comparison && (ex1.head === ex2.head)
-        @test ex1.args[1] === 5 && ex2.args[1] === 5
-        @test is(eval(Main, ex1.args[2]), eval(Main, ex2.args[2]))
+        @test ex1.head === :call && (ex1.head === ex2.head)
+        @test ex1.args[2] === 5 && ex2.args[2] === 5
+        @test is(eval(Main, ex1.args[1]), eval(Main, ex2.args[1]))
         @test ex1.args[3] === :x && (ex1.args[3] === ex2.args[3])
     end
 end
@@ -64,7 +64,7 @@ macro test999_str(args...); args; end
 @test_throws ParseError parse("sqrt(16)2")
 @test_throws ParseError parse("x' y")
 @test_throws ParseError parse("x 'y")
-@test parse("x'y") == Expr(:call, :*, Expr(symbol("'"), :x), :y)
+@test parse("x'y") == Expr(:call, :*, Expr(Symbol("'"), :x), :y)
 
 # issue #8301
 @test_throws ParseError parse("&*s")
@@ -90,7 +90,7 @@ macro test999_str(args...); args; end
 # issue #10997
 @test parse(":(x.\$f[i])") == Expr(:quote,
                                    Expr(:ref,
-                                        Expr(symbol("."), :x,
+                                        Expr(Symbol("."), :x,
                                              Expr(:$, Expr(:call, TopNode(:Expr),
                                                            QuoteNode(:quote),
                                                            :f))),
@@ -123,7 +123,7 @@ macro test999_str(args...); args; end
                                                 Expr(:import, :A, :c, :d)))
 
 # issue #11332
-@test parse("export \$(symbol(\"A\"))") == :(export $(Expr(:$, :(symbol("A")))))
+@test parse("export \$(Symbol(\"A\"))") == :(export $(Expr(:$, :(Symbol("A")))))
 @test parse("export \$A") == :(export $(Expr(:$, :A)))
 @test parse("using \$a.\$b") == Expr(:using, Expr(:$, :a), Expr(:$, :b))
 @test parse("using \$a.\$b, \$c") == Expr(:toplevel, Expr(:using, Expr(:$, :a),
@@ -149,7 +149,7 @@ macro test999_str(args...); args; end
 macro f(args...) end; @f ""
 """) == Expr(:toplevel,
             Expr(:macro, Expr(:call, :f, Expr(:..., :args)), Expr(:block,)),
-            Expr(:macrocall, symbol("@f"), ""))
+            Expr(:macrocall, Symbol("@f"), ""))
 
 # blocks vs. tuples
 @test parse("()") == Expr(:tuple)
@@ -291,7 +291,7 @@ for T in (UInt8,UInt16,UInt32,UInt64)
     @test_throws OverflowError parse(T,string(big(typemax(T))+1))
 end
 
-@test parse("1 == 2|>3") == Expr(:comparison, 1, :(==), Expr(:call, :(|>), 2, 3))
+@test parse("1 == 2|>3") == Expr(:call, :(==), 1, Expr(:call, :(|>), 2, 3))
 
 # issue #12501 and pr #12502
 parse("""
@@ -326,8 +326,8 @@ end
 # pr #13078
 @test parse("a in b in c") == Expr(:comparison, :a, :in, :b, :in, :c)
 @test parse("a||b→c&&d") == Expr(:call, :→,
-                                 Expr(symbol("||"), :a, :b),
-                                 Expr(symbol("&&"), :c, :d))
+                                 Expr(Symbol("||"), :a, :b),
+                                 Expr(Symbol("&&"), :c, :d))
 
 # issue #11988 -- normalize \r and \r\n in literal strings to \n
 @test "foo\nbar" == parse("\"\"\"\r\nfoo\r\nbar\"\"\"") == parse("\"\"\"\nfoo\nbar\"\"\"") == parse("\"\"\"\rfoo\rbar\"\"\"") == parse("\"foo\r\nbar\"") == parse("\"foo\rbar\"") == parse("\"foo\nbar\"")
@@ -365,3 +365,78 @@ let a⊂b = reduce(&, x ∈ b for x in a) && length(b)>length(a)
     @test !([1,2] ⊂ [1,3,4])
     @test !([1,2] ⊂ [1,2])
 end
+
+# issue #9503
+@test parse("x<:y") == Expr(:(<:), :x, :y)
+@test parse("x>:y") == Expr(:(>:), :x, :y)
+@test parse("x<:y<:z").head === :comparison
+@test parse("x>:y<:z").head === :comparison
+
+# issue #11169
+uncalled(x) = @test false
+fret() = uncalled(return true)
+@test fret()
+
+# issue #9617
+let p = 15
+    @test 2p+1 == 31  # not a hex float literal
+end
+
+# issue #15597
+function test_parseerror(str, msg)
+    try
+        parse(str)
+        @test false
+    catch e
+        @test isa(e,ParseError) && e.msg == msg
+    end
+end
+test_parseerror("0x", "invalid numeric constant \"0x\"")
+test_parseerror("0b", "invalid numeric constant \"0b\"")
+test_parseerror("0o", "invalid numeric constant \"0o\"")
+test_parseerror("0x0.1", "hex float literal must contain \"p\" or \"P\"")
+test_parseerror("0x1.0p", "invalid numeric constant \"0x1.0\"")
+
+# issue #15798
+@test expand(Base.parse_input_line("""
+              try = "No"
+           """)) == Expr(:error, "unexpected \"=\"")
+
+# issue #15763
+# TODO enable post-0.5
+#test_parseerror("if\nfalse\nend", "missing condition in \"if\" at none:1")
+test_parseerror("if false\nelseif\nend", "missing condition in \"elseif\" at none:2")
+
+# issue #15828
+@test expand(parse("x...")) == Expr(:error, "\"...\" expression outside call")
+
+# issue #15830
+@test expand(parse("foo(y = (global x)) = y")) == Expr(:error, "misplaced \"global\" declaration")
+
+# issue #15844
+function f15844(x)
+    x
+end
+
+g15844 = let
+    local function f15844(x::Int32)
+        2x
+    end
+end
+
+function add_method_to_glob_fn!()
+    global function f15844(x::Int64)
+        3x
+    end
+end
+
+add_method_to_glob_fn!()
+@test g15844 !== f15844
+@test g15844(Int32(1)) == 2
+@test f15844(Int32(1)) == 1
+@test f15844(Int64(1)) == 3
+
+# issue #15661
+@test_throws ParseError parse("function catch() end")
+@test_throws ParseError parse("function end() end")
+@test_throws ParseError parse("function finally() end")

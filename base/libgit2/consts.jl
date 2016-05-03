@@ -140,7 +140,10 @@ module Consts
     const INDEX_STAGE_ANY = Cint(-1)
 
     # merge
-    const MERGE_TREE_FIND_RENAMES = Cint(1 << 0)
+    @enum(GIT_MERGE, MERGE_FIND_RENAMES     = 1 << 0,
+                     MERGE_FAIL_ON_CONFLICT = 1 << 1,
+                     MERGE_SKIP_REUC        = 1 << 2,
+                     MERGE_NO_RECURSIVE     = 1 << 3)
 
     @enum(GIT_MERGE_FILE, MERGE_FILE_DEFAULT                  = 0,       # Defaults
                           MERGE_FILE_STYLE_MERGE              = 1 << 0,  # Create standard conflicted merge files
@@ -271,6 +274,30 @@ Option flags for `GitRepo`.
                         CREDTYPE_USERNAME           = Cuint(1 << 5),
                         CREDTYPE_SSH_MEMORY         = Cuint(1 << 6))
 
+if LibGit2.version() >= v"0.24.0"
+    """
+Priority level of a config file.
+
+These priority levels correspond to the natural escalation logic (from higher to lower) when searching for config entries in git.
+
+* `CONFIG_LEVEL_DEFAULT` - Open the global, XDG and system configuration files if any available.
+* `CONFIG_LEVEL_PROGRAMDATA` - System-wide on Windows, for compatibility with portable git
+* `CONFIG_LEVEL_SYSTEM` - System-wide configuration file; `/etc/gitconfig` on Linux systems
+* `CONFIG_LEVEL_XDG` - XDG compatible configuration file; typically `~/.config/git/config`
+* `CONFIG_LEVEL_GLOBAL` - User-specific configuration file (also called Global configuration file); typically `~/.gitconfig`
+* `CONFIG_LEVEL_LOCAL` - Repository specific configuration file; `\$WORK_DIR/.git/config` on non-bare repos
+* `CONFIG_LEVEL_APP` - Application specific configuration file; freely defined by applications
+* `CONFIG_HIGHEST_LEVEL` - Represents the highest level available config file (i.e. the most specific config file available that actually is loaded)
+    """
+    @enum(GIT_CONFIG, CONFIG_LEVEL_DEFAULT     = 0,
+                      CONFIG_LEVEL_PROGRAMDATA = 1,
+                      CONFIG_LEVEL_SYSTEM      = 2,
+                      CONFIG_LEVEL_XDG         = 3,
+                      CONFIG_LEVEL_GLOBAL      = 4,
+                      CONFIG_LEVEL_LOCAL       = 5,
+                      CONFIG_LEVEL_APP         = 6,
+                      CONFIG_HIGHEST_LEVEL     =-1)
+else
     """
 Priority level of a config file.
 
@@ -284,11 +311,32 @@ These priority levels correspond to the natural escalation logic (from higher to
 * `CONFIG_LEVEL_APP` - Application specific configuration file; freely defined by applications
 * `CONFIG_HIGHEST_LEVEL` - Represents the highest level available config file (i.e. the most specific config file available that actually is loaded)
     """
-    @enum(GIT_CONFIG, CONFIG_LEVEL_DEFAULT = 0,
-                      CONFIG_LEVEL_SYSTEM  = 1,
-                      CONFIG_LEVEL_XDG     = 2,
-                      CONFIG_LEVEL_GLOBAL  = 3,
-                      CONFIG_LEVEL_LOCAL   = 4,
-                      CONFIG_LEVEL_APP     = 5,
-                      CONFIG_HIGHEST_LEVEL =-1)
+    @enum(GIT_CONFIG, CONFIG_LEVEL_DEFAULT     = 0,
+                      CONFIG_LEVEL_SYSTEM      = 1,
+                      CONFIG_LEVEL_XDG         = 2,
+                      CONFIG_LEVEL_GLOBAL      = 3,
+                      CONFIG_LEVEL_LOCAL       = 4,
+                      CONFIG_LEVEL_APP         = 5,
+                      CONFIG_HIGHEST_LEVEL     =-1)
+end
+
+    """
+Global library options.
+
+These are used to select which global option to set or get and are used in `git_libgit2_opts()`.
+    """
+    @enum(GIT_OPT,  GET_MWINDOW_SIZE         = 0,
+                    SET_MWINDOW_SIZE         = 1,
+                    GET_MWINDOW_MAPPED_LIMIT = 2,
+                    SET_MWINDOW_MAPPED_LIMIT = 3,
+                    GET_SEARCH_PATH          = 4,
+                    SET_SEARCH_PATH          = 5,
+                    SET_CACHE_OBJECT_LIMIT   = 6,
+                    SET_CACHE_MAX_SIZE       = 7,
+                    ENABLE_CACHING           = 8,
+                    GET_CACHED_MEMORY        = 9,
+                    GET_TEMPLATE_PATH        = 10,
+                    SET_TEMPLATE_PATH        = 11,
+                    SET_SSL_CERT_LOCATIONS   = 12)
+
 end

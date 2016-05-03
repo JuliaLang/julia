@@ -23,6 +23,9 @@ JL_DLLEXPORT void *jl_function_ptr(jl_function_t *f, jl_value_t *rt, jl_value_t 
 JL_DLLEXPORT const jl_value_t *jl_dump_function_asm(void *f, int raw_mc) UNAVAILABLE
 JL_DLLEXPORT const jl_value_t *jl_dump_function_ir(void *f, uint8_t strip_ir_metadata, uint8_t dump_module) UNAVAILABLE
 
+JL_DLLEXPORT void *jl_LLVMCreateDisasm(const char *, void *, int, void*, void*) UNAVAILABLE
+JL_DLLEXPORT size_t jl_LLVMDisasmInstruction(void *DC, uint8_t *, uint64_t, uint64_t PC, char *, size_t) UNAVAILABLE
+
 void jl_init_codegen(void) { }
 void jl_fptr_to_llvm(jl_fptr_t fptr, jl_lambda_info_t *lam, int specsig)
 {

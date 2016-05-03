@@ -1,5 +1,6 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
+@test convert(Tuple, (1,2)) == (1,2)
 ## indexing ##
 @test length(()) === 0
 @test length((1,)) === 1
@@ -71,9 +72,6 @@ foo(x) = 2x
 foo(x, y) = x + y
 foo(x, y, z) = x + y + z
 
-# 0 argument
-@test map(foo) === 2
-
 # 1 argument
 @test map(foo, ()) === ()
 @test map(foo, (1,)) === (2,)
@@ -94,7 +92,6 @@ foo(x, y, z) = x + y + z
 @test map(foo, (1,2,3,4), (1,2,3,4), (1,2,3,4)) === (3,6,9,12)
 
 
-
 ## comparison ##
 @test isequal((), ())
 @test isequal((1,2,3), (1,2,3))
@@ -112,15 +109,12 @@ foo(x, y, z) = x + y + z
 @test !isless((2,1), (1,2))
 
 
-
 ## functions ##
 @test isempty(())
 @test !isempty((1,))
 
 @test reverse(()) === ()
 @test reverse((1,2,3)) === (3,2,1)
-
-
 
 
 ## specialized reduction ##
@@ -130,15 +124,15 @@ foo(x, y, z) = x + y + z
 @test prod((1,2,3)) === 6
 
 @test all(()) === true
-@test all((false)) === false
-@test all((true)) === true
+@test all((false,)) === false
+@test all((true,)) === true
 @test all((true, true)) === true
 @test all((true, false)) === false
 @test all((false, false)) === false
 
 @test any(()) === false
-@test any((true)) === true
-@test any((false)) === false
+@test any((true,)) === true
+@test any((false,)) === false
 @test any((true, true)) === true
 @test any((true, false)) === true
 @test any((false, false)) === false
@@ -151,12 +145,12 @@ foo(x, y, z) = x + y + z
 @test any((true,true,false)) === true
 @test any((true,true,true)) === true
 
-@test @inferred(ntuple(Base.Abs2Fun(), Val{0})) == ()
-@test @inferred(ntuple(Base.Abs2Fun(), Val{2})) == (1, 4)
-@test @inferred(ntuple(Base.Abs2Fun(), Val{3})) == (1, 4, 9)
-@test @inferred(ntuple(Base.Abs2Fun(), Val{4})) == (1, 4, 9, 16)
-@test @inferred(ntuple(Base.Abs2Fun(), Val{5})) == (1, 4, 9, 16, 25)
-@test @inferred(ntuple(Base.Abs2Fun(), Val{6})) == (1, 4, 9, 16, 25, 36)
+@test @inferred(ntuple(abs2, Val{0})) == ()
+@test @inferred(ntuple(abs2, Val{2})) == (1, 4)
+@test @inferred(ntuple(abs2, Val{3})) == (1, 4, 9)
+@test @inferred(ntuple(abs2, Val{4})) == (1, 4, 9, 16)
+@test @inferred(ntuple(abs2, Val{5})) == (1, 4, 9, 16, 25)
+@test @inferred(ntuple(abs2, Val{6})) == (1, 4, 9, 16, 25, 36)
 
 # issue #12854
 @test_throws TypeError ntuple(identity, Val{1:2})

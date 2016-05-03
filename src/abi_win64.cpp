@@ -69,7 +69,7 @@ Type *preferred_llvm_type(jl_value_t *ty, bool isret)
         return NULL;
     size_t size = jl_datatype_size(ty);
     if (size > 0 && size <= 8 && !jl_is_bitstype(ty))
-        return Type::getIntNTy(getGlobalContext(), size*8);
+        return Type::getIntNTy(jl_LLVMContext, size*8);
     return NULL;
 }
 

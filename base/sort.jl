@@ -460,7 +460,7 @@ function sortperm!{I<:Integer}(x::AbstractVector{I}, v::AbstractVector;
         throw(ArgumentError("index vector must be the same length as the source vector, $lx != $lv"))
     end
     if !initialized
-        @inbounds for i = 1:lv
+        @inbounds for i = 1:length(v)
             x[i] = i
         end
     end
@@ -500,14 +500,14 @@ end
 
 function sortrows(A::AbstractMatrix; kws...)
     c = 1:size(A,2)
-    rows = [ sub(A,i,c) for i=1:size(A,1) ]
+    rows = [ sub(A,i,c) for i=1:size(A,1) ]  # fixme (iter): update when #15459 is done
     p = sortperm(rows; kws..., order=Lexicographic)
     A[p,:]
 end
 
 function sortcols(A::AbstractMatrix; kws...)
     r = 1:size(A,1)
-    cols = [ sub(A,r,i) for i=1:size(A,2) ]
+    cols = [ sub(A,r,i) for i=1:size(A,2) ]  # fixme (iter): update when #15459 is done
     p = sortperm(cols; kws..., order=Lexicographic)
     A[:,p]
 end

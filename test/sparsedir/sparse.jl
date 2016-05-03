@@ -63,7 +63,7 @@ for i = 1 : 10
 end
 
 # sparse ref
-a116 = reshape(1:16, 4, 4)
+a116 = copy(reshape(1:16, 4, 4))
 s116 = sparse(a116)
 p = [4, 1, 2, 3, 2]
 @test full(s116[p,:]) == a116[p,:]
@@ -389,11 +389,11 @@ A = speye(Bool, 5)
 @test sprand(4,5,0.5).^0 == sparse(ones(4,5))
 
 # issue #5985
-@test sprandbool(4, 5, 0.0) == sparse(zeros(Bool, 4, 5))
-@test sprandbool(4, 5, 1.00) == sparse(ones(Bool, 4, 5))
+@test sprand(Bool, 4, 5, 0.0) == sparse(zeros(Bool, 4, 5))
+@test sprand(Bool, 4, 5, 1.00) == sparse(ones(Bool, 4, 5))
 sprb45nnzs = zeros(5)
 for i=1:5
-    sprb45 = sprandbool(4, 5, 0.5)
+    sprb45 = sprand(Bool, 4, 5, 0.5)
     @test length(sprb45) == 20
     sprb45nnzs[i] = sum(sprb45)[1]
 end
@@ -589,7 +589,7 @@ let A = speye(Int, 5), I=1:10, X=reshape([trues(10); falses(15)],5,5)
     @test A[I] == A[X] == collect(1:10)
 end
 
-let S = sprand(50, 30, 0.5, x->round(Int,rand(x)*100)), I = sprandbool(50, 30, 0.2)
+let S = sprand(50, 30, 0.5, x->round(Int,rand(x)*100)), I = sprand(Bool, 50, 30, 0.2)
     FS = full(S)
     FI = full(I)
     @test sparse(FS[FI]) == S[I] == S[FI]
@@ -650,7 +650,7 @@ let A = sprand(5,5,0.5,(n)->rand(Float64,n)), ACPY = copy(A)
     @test A == ACPY
     C = reinterpret(Int64, A, (25, 1))
     @test A == ACPY
-    D = reinterpret(Int64, B)
+    D = reinterpret(Int64, copy(B))
     @test C == D
 end
 
@@ -973,7 +973,7 @@ end
 @test spzeros(1,2) .* spzeros(0,1)  == zeros(0,2)
 
 # test throws
-A = sprandbool(5,5,0.2)
+A = sprand(Bool, 5,5,0.2)
 @test_throws ArgumentError reinterpret(Complex128,A)
 @test_throws ArgumentError reinterpret(Complex128,A,(5,5))
 @test_throws DimensionMismatch reinterpret(Int8,A,(20,))
@@ -990,9 +990,9 @@ A = speye(5)
 @test convert(Matrix,A) == full(A)
 
 # test float
-A = sprandbool(5,5,0.0)
+A = sprand(Bool, 5,5,0.0)
 @test eltype(float(A)) == Float64  # issue #11658
-A = sprandbool(5,5,0.2)
+A = sprand(Bool, 5,5,0.2)
 @test float(A) == float(full(A))
 
 # test sparsevec
@@ -1072,43 +1072,55 @@ A = sparse([1.0])
 @test_throws ArgumentError norm(sprand(5,5,0.2),3)
 @test_throws ArgumentError norm(sprand(5,5,0.2),2)
 
-# test ishermitian and issymmetric real matrices
-A = speye(5,5)
-@test ishermitian(A) == true
-@test issymmetric(A) == true
-A[1,3] = 1.0
-@test ishermitian(A) == false
-@test issymmetric(A) == false
-A[3,1] = 1.0
-@test ishermitian(A) == true
-@test issymmetric(A) == true
+# test ishermitian and issymmetric
+let
+    # real matrices
+    A = speye(5,5)
+    @test ishermitian(A) == true
+    @test issymmetric(A) == true
+    A[1,3] = 1.0
+    @test ishermitian(A) == false
+    @test issymmetric(A) == false
+    A[3,1] = 1.0
+    @test ishermitian(A) == true
+    @test issymmetric(A) == true
 
-# test ishermitian and issymmetric complex matrices
-A = speye(5,5) + im*speye(5,5)
-@test ishermitian(A) == false
-@test issymmetric(A) == true
-A[1,4] = 1.0 + im
-@test ishermitian(A) == false
-@test issymmetric(A) == false
+    # complex matrices
+    A = speye(5,5) + im*speye(5,5)
+    @test ishermitian(A) == false
+    @test issymmetric(A) == true
+    A[1,4] = 1.0 + im
+    @test ishermitian(A) == false
+    @test issymmetric(A) == false
 
-A = speye(Complex128, 5,5)
-A[3,2] = 1.0 + im
-@test ishermitian(A) == false
-@test issymmetric(A) == false
-A[2,3] = 1.0 - im
-@test ishermitian(A) == true
-@test issymmetric(A) == false
+    A = speye(Complex128, 5,5)
+    A[3,2] = 1.0 + im
+    @test ishermitian(A) == false
+    @test issymmetric(A) == false
+    A[2,3] = 1.0 - im
+    @test ishermitian(A) == true
+    @test issymmetric(A) == false
 
-A = sparse(zeros(5,5))
-@test ishermitian(A) == true
-@test issymmetric(A) == true
+    A = sparse(zeros(5,5))
+    @test ishermitian(A) == true
+    @test issymmetric(A) == true
 
-# Test with explicit zeros
-A = speye(Complex128, 5,5)
-A[3,1] = 2
-A.nzval[2] = 0.0
-@test ishermitian(A) == true
-@test issymmetric(A) == true
+    # explicit zeros
+    A = speye(Complex128, 5,5)
+    A[3,1] = 2
+    A.nzval[2] = 0.0
+    @test ishermitian(A) == true
+    @test issymmetric(A) == true
+
+    m = n = 5
+    colptr = [1, 5, 9, 13, 13, 17]
+    rowval = [1, 2, 3, 5, 1, 2, 3, 5, 1, 2, 3, 5, 1, 2, 3, 5]
+    nzval = [0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 1.0, 1.0, 0.0, 1.0, 1.0, 1.0, 0.0, 1.0, 1.0, 1.0]
+    A = SparseMatrixCSC(m, n, colptr, rowval, nzval)
+    @test issymmetric(A) == true
+    A.nzval[end - 3]  = 2.0
+    @test issymmetric(A) == false
+end
 
 # equality ==
 A1 = speye(10)
@@ -1184,10 +1196,12 @@ Ac = sprandn(20,20,.5) + im* sprandn(20,20,.5)
 Ar = sprandn(20,20,.5)
 @test cond(A,1) == 1.0
 # For a discussion of the tolerance, see #14778
-@test 0.99 <= cond(Ar, 1) \ norm(Ar, 1) * norm(inv(full(Ar)), 1) < 3
-@test 0.99 <= cond(Ac, 1) \ norm(Ac, 1) * norm(inv(full(Ac)), 1) < 3
-@test 0.99 <= cond(Ar, Inf) \ norm(Ar, Inf) * norm(inv(full(Ar)), Inf) < 3
-@test 0.99 <= cond(Ac, Inf) \ norm(Ac, Inf) * norm(inv(full(Ac)), Inf) < 3
+if Base.USE_GPL_LIBS
+    @test 0.99 <= cond(Ar, 1) \ norm(Ar, 1) * norm(inv(full(Ar)), 1) < 3
+    @test 0.99 <= cond(Ac, 1) \ norm(Ac, 1) * norm(inv(full(Ac)), 1) < 3
+    @test 0.99 <= cond(Ar, Inf) \ norm(Ar, Inf) * norm(inv(full(Ar)), Inf) < 3
+    @test 0.99 <= cond(Ac, Inf) \ norm(Ac, Inf) * norm(inv(full(Ac)), Inf) < 3
+end
 @test_throws ArgumentError cond(A,2)
 @test_throws ArgumentError cond(A,3)
 let Arect = spzeros(10, 6)
@@ -1201,11 +1215,13 @@ Ac = sprandn(20,20,.5) + im* sprandn(20,20,.5)
 Aci = ceil(Int64,100*sprand(20,20,.5))+ im*ceil(Int64,sprand(20,20,.5))
 Ar = sprandn(20,20,.5)
 Ari = ceil(Int64,100*Ar)
-@test_approx_eq_eps Base.SparseArrays.normestinv(Ac,3) norm(inv(full(Ac)),1) 1e-4
-@test_approx_eq_eps Base.SparseArrays.normestinv(Aci,3) norm(inv(full(Aci)),1) 1e-4
-@test_approx_eq_eps Base.SparseArrays.normestinv(Ar) norm(inv(full(Ar)),1) 1e-4
-@test_throws ArgumentError Base.SparseArrays.normestinv(Ac,0)
-@test_throws ArgumentError Base.SparseArrays.normestinv(Ac,21)
+if Base.USE_GPL_LIBS
+    @test_approx_eq_eps Base.SparseArrays.normestinv(Ac,3) norm(inv(full(Ac)),1) 1e-4
+    @test_approx_eq_eps Base.SparseArrays.normestinv(Aci,3) norm(inv(full(Aci)),1) 1e-4
+    @test_approx_eq_eps Base.SparseArrays.normestinv(Ar) norm(inv(full(Ar)),1) 1e-4
+    @test_throws ArgumentError Base.SparseArrays.normestinv(Ac,0)
+    @test_throws ArgumentError Base.SparseArrays.normestinv(Ac,21)
+end
 @test_throws DimensionMismatch Base.SparseArrays.normestinv(sprand(3,5,.9))
 
 # csc_permute
@@ -1250,21 +1266,21 @@ end
 let
     A = spdiagm(rand(5)) + sprandn(5,5,0.2) + im*sprandn(5,5,0.2)
     A = A + A'
-    @test abs(det(factorize(Hermitian(A)))) ≈ abs(det(factorize(full(A))))
+    @test !Base.USE_GPL_LIBS || abs(det(factorize(Hermitian(A)))) ≈ abs(det(factorize(full(A))))
     A = spdiagm(rand(5)) + sprandn(5,5,0.2) + im*sprandn(5,5,0.2)
     A = A*A'
-    @test abs(det(factorize(Hermitian(A)))) ≈ abs(det(factorize(full(A))))
+    @test !Base.USE_GPL_LIBS || abs(det(factorize(Hermitian(A)))) ≈ abs(det(factorize(full(A))))
     A = spdiagm(rand(5)) + sprandn(5,5,0.2)
     A = A + A.'
-    @test abs(det(factorize(Symmetric(A)))) ≈ abs(det(factorize(full(A))))
+    @test !Base.USE_GPL_LIBS || abs(det(factorize(Symmetric(A)))) ≈ abs(det(factorize(full(A))))
     A = spdiagm(rand(5)) + sprandn(5,5,0.2)
     A = A*A.'
-    @test abs(det(factorize(Symmetric(A)))) ≈ abs(det(factorize(full(A))))
+    @test !Base.USE_GPL_LIBS || abs(det(factorize(Symmetric(A)))) ≈ abs(det(factorize(full(A))))
     @test factorize(triu(A)) == triu(A)
     @test isa(factorize(triu(A)), UpperTriangular{Float64, SparseMatrixCSC{Float64, Int}})
     @test factorize(tril(A)) == tril(A)
     @test isa(factorize(tril(A)), LowerTriangular{Float64, SparseMatrixCSC{Float64, Int}})
-    @test factorize(A[:,1:4])\ones(size(A,1)) ≈ full(A[:,1:4])\ones(size(A,1))
+    @test !Base.USE_GPL_LIBS || factorize(A[:,1:4])\ones(size(A,1)) ≈ full(A[:,1:4])\ones(size(A,1))
     @test_throws ErrorException chol(A)
     @test_throws ErrorException lu(A)
     @test_throws ErrorException eig(A)
@@ -1303,3 +1319,17 @@ let
     @test issparse(UpperTriangular(full(m))) == false
     @test issparse(LinAlg.UnitUpperTriangular(full(m))) == false
 end
+
+let
+    m = sprand(Float32, 10, 10, 0.1)
+    @test eltype(m) == Float32
+    m = sprand(Float64, 10, 10, 0.1)
+    @test eltype(m) == Float64
+    m = sprand(Int32, 10, 10, 0.1)
+    @test eltype(m) == Int32
+end
+
+# 16073
+@inferred sprand(1, 1, 1.0)
+@inferred sprand(1, 1, 1.0, rand, Float64)
+@inferred sprand(1, 1, 1.0, x->round(Int,rand(x)*100))

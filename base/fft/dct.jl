@@ -82,7 +82,7 @@ function plan_inv{T,K,inplace}(p::DCTPlan{T,K,inplace})
 end
 
 for f in (:dct, :dct!, :idct, :idct!)
-    pf = symbol(string("plan_", f))
+    pf = Symbol("plan_", f)
     @eval begin
         $f{T<:fftwNumber}(x::AbstractArray{T}) = $pf(x) * x
         $f{T<:fftwNumber}(x::AbstractArray{T}, region) = $pf(x, region) * x

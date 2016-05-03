@@ -5,38 +5,140 @@
 ***************
 
 Julia enables package developers and users to document functions, types and
-other objects easily, either via the built-in documentation system in Julia 0.4
-or the `Docile.jl <https://github.com/MichaelHatherly/Docile.jl>`_ package in
-Julia 0.3.
+other objects easily via a built-in documentation system since Julia 0.4.
 
-In 0.4:
+.. tip::
+
+    This documentation system can also be used in Julia 0.3 via the
+    `Docile.jl <https://github.com/MichaelHatherly/Docile.jl>`_ package; see
+    the documentation for that package for more details.
+
+The basic syntax is very simple: any string appearing at the top-level right
+before an object (function, macro, type or instance) will be interpreted as
+documenting it (these are called *docstrings*). Here is a very simple example:
 
 .. doctest::
 
-    "Tells you if there are too foo items in the array."
+    "Tell whether there are too foo items in the array."
     foo(xs::Array) = ...
 
 Documentation is interpreted as `Markdown <https://en.wikipedia.org/wiki/Markdown>`_,
 so you can use indentation and code fences to delimit code examples from text.
+Technically, any object can be associated with any other as metadata;
+Markdown happens to be the default, but one can construct other string
+macros and pass them to the ``@doc`` macro just as well.
+
+Here is a more complex example, still using Markdown:
 
 .. doctest::
 
     """
-    The `@bar` macro will probably make your code 2x faster or something. Use
-    it like this:
+        bar(x[, y])
 
-        @bar buy_drink_for("Jiahao")
+    Compute the Bar index between `x` and `y`. If `y` is missing, compute
+    the Bar index between all pairs of columns of `x`.
+
+    # Examples
+    ```julia
+    julia> bar([1, 2], [1, 2])
+    1
+    ```
     """
-    macro bar(ex) ...
+    function bar(x, y) ...
 
-Documentation is very free-form; there are no set formatting
-restrictions or strict conventions. It's hoped that best practices will
-emerge fairly naturally as package developers learn to use the new
-system.
+As in the example above, we recommend following some simple conventions when writing
+documentation:
 
-Technically, any object can be associated with any other as metadata;
-Markdown happens to be the default, but one can construct other string
-macros and pass them to the ``@doc`` macro just as well.
+1. Always show the signature of a function at the top of the documentation,
+with a four-space indent so that it is printed as Julia code.
+
+  This can be identical to the signature present in the Julia code
+  (like ``mean(x::AbstractArray)``), or a simplified form.
+  Optional arguments should be represented with their default values (i.e. ``f(x, y=1)``)
+  when possible, following the actual Julia syntax. Optional arguments which
+  do not have a default value should be put in brackets (i.e. ``f(x[, y])`` and
+  ``f(x[, y[, z]])``). An alternative solution is to use several lines: one without
+  optional arguments, the other(s) with them. This solution can also be used to document
+  several related methods of a given function. When a function accepts many keyword
+  arguments, only include a ``<keyword arguments>`` placeholder in the signature (i.e.
+  ``f(x; <keyword arguments>)``), and give the complete list under an ``# Arguments``
+  section (see point 4 below).
+
+2. Include a single one-line sentence describing what the function does or what the
+object represents after the simplified signature block. If needed, provide more details
+in a second paragraph, after a blank line.
+
+  The one-line sentence should use the imperative form ("Do this", "Return that") instead
+  of the third person (do not write "Returns the length...") when documenting functions.
+  It should end with a period. If the meaning of a function cannot be summarized easily,
+  splitting it into separate composable parts could be beneficial (this should not be
+  taken as an absolute requirement for every single case though).
+
+3. Do not repeat yourself.
+
+  Since the function name is given by the signature, there is no need to
+  start the documentation with "The function ``bar``...": go straight to the point.
+  Similarly, if the signature specifies the types of the arguments, mentioning them
+  in the description is redundant.
+
+4. Only provide an argument list when really necessary.
+
+  For simple functions, it is often clearer to mention the role of the arguments directly
+  in the description of the function's purpose. An argument list would only repeat
+  information already provided elsewhere. However, providing an argument list can be a good
+  idea for complex functions with many arguments (in particular keyword arguments).
+  In that case, insert it after the general description of the function, under
+  an ``# Arguments`` header, with one ``*`` bullet for each argument. The list should
+  mention the types and default values (if any) of the arguments::
+
+    """
+    ...
+    # Arguments
+    * `n::Integer`: the number of elements to compute.
+    * `dim::Integer=1`: the dimensions along which to perform the computation.
+    ...
+    """
+
+5. Group examples under an ``# Examples`` section and use ````julia`` blocks instead of
+standard text.
+
+  Examples should consist of verbatim copies of the Julia REPL, including the ``julia>``
+  prompt (see example above). This will be used in the future to allow running examples
+  automatically and checking that their actual output is consistent with that presented
+  in the documentation (a feature called *doctests*). This way, the code will be tested and
+  examples won't get out of date without notice.
+
+6. Use backticks to identify code and equations.
+
+  Julia identifiers and code excerpts should always appear between backticks `````
+  to enable highlighting. Equations in the LaTeX syntax can be inserted between
+  double backticks ``````. Use Unicode characters rather than their LaTeX escape sequence,
+  i.e. ````α = 1```` rather than :samp:`\`\`\\\\alpha = 1\`\``.
+
+7. Place the starting and ending ``"""`` characters on lines by themselves.
+
+  That is, write::
+
+    """
+    ...
+
+    ...
+    """
+    f(x, y) = ...
+
+  rather than::
+
+    """...
+
+    ..."""
+    f(x, y) = ...
+
+  This makes it more clear where docstrings start and end.
+
+8. Respect the line length limit used in the surrounding code.
+
+  Docstrings are edited using the same tools as code. Therefore, the same conventions
+  should apply. It it advised to add line breaks after 92 characters.
 
 Accessing Documentation
 -----------------------
@@ -60,8 +162,12 @@ Functions & Methods
 
 Functions in Julia may have multiple implementations, known as methods.
 While it's good practice for generic functions to have a single purpose,
-Julia allows methods to be documented individually if necessary. For
-example:
+Julia allows methods to be documented individually if necessary.
+In general, only the most generic method should be documented, or even the
+function itself (i.e. the object created without any methods by
+``function bar end``). Specific methods should only be documented if their
+behaviour differs from the more generic ones. In any case, they should not
+repeat the information provided elsewhere. For example:
 
 .. doctest::
 
@@ -229,15 +335,19 @@ Types
 .. code-block:: julia
 
     "..."
-    abstract T
+    abstract T1
 
     "..."
-    type T end
+    type T2
+        ...
+    end
 
     "..."
-    immutable T end
+    immutable T3
+        ...
+    end
 
-Adds the docstring ``"..."`` to type ``T``.
+Adds the docstring ``"..."`` to types ``T1``, ``T2``, and ``T3``.
 
 .. code-block:: julia
 

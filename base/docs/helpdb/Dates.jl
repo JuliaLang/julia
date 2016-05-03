@@ -33,6 +33,7 @@ string:
 | Code       | Matches   | Comment                                                      |
 |:-----------|:----------|:-------------------------------------------------------------|
 | `y`        | 1996, 96  | Returns year of 1996, 0096                                   |
+| `Y`        | 1996, 96  | Returns year of 1996, 0096. Equivalent to `y`                |
 | `m`        | 1, 01     | Matches 1 or 2-digit months                                  |
 | `u`        | Jan       | Matches abbreviated months according to the `locale` keyword |
 | `U`        | January   | Matches full month names according to the `locale` keyword   |
@@ -45,8 +46,10 @@ string:
 | `E`        | Monday    | Matches full name days of the week                           |
 | `yyyymmdd` | 19960101  | Matches fixed-width year, month, and day                     |
 
-All characters not listed above are treated as delimiters between date and time slots. So a
-`dt` string of "1996-01-15T00:00:00.0" would have a `format` string like "y-m-dTH:M:S.s".
+Characters not listed above are normally treated as delimiters between date and time slots.
+For example a `dt` string of "1996-01-15T00:00:00.0" would have a `format` string like
+"y-m-dTH:M:S.s". If you need to use a code character as a delimiter you can escape it using
+backslash. The date "1995y01m" would have the format "y\\ym\\m".
 """
 Dates.DateTime(dt::AbstractString, format::AbstractString)
 
@@ -59,6 +62,7 @@ following character codes can be used to construct the `format` string:
 | Code       | Examples  | Comment                                                      |
 |:-----------|:----------|:-------------------------------------------------------------|
 | `y`        | 6         | Numeric year with a fixed width                              |
+| `Y`        | 1996      | Numeric year with a minimum width                            |
 | `m`        | 1, 12     | Numeric month with a minimum width                           |
 | `u`        | Jan       | Month name shortened to 3-chars according to the `locale`    |
 | `U`        | January   | Full month name according to the `locale` keyword            |
@@ -79,6 +83,8 @@ except that it does not truncate values longer than the width.
 
 When creating a `format` you can use any non-code characters as a separator. For example to
 generate the string "1996-01-15T00:00:00" you could use `format`: "yyyy-mm-ddTHH:MM:SS".
+Note that if you need to use a code character as a literal you can use the escape character
+backslash. The string "1996y01m" can be produced with the format "yyyy\\ymm\\m".
 """
 Dates.format(dt::Dates.TimeType, format::AbstractString)
 

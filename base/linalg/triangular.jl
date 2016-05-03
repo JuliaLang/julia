@@ -1449,8 +1449,8 @@ function logm{T<:Union{Float64,Complex{Float64}}}(A0::UpperTriangular{T})
 
         if ~more
             d5 = norm(AmI^5, 1)^(1/5)
-            alpha4 = max(d4, d5);
-            eta = min(alpha3, alpha4);
+            alpha4 = max(d4, d5)
+            eta = min(alpha3, alpha4)
             if eta <= theta[tmax]
                 j = 0
                 for j = 6:tmax
@@ -1489,7 +1489,7 @@ function logm{T<:Union{Float64,Complex{Float64}}}(A0::UpperTriangular{T})
             logAk = log(Ak)
             logAkp1 = log(Akp1)
             w = atanh((Akp1 - Ak)/(Akp1 + Ak)) + im*pi*ceil((imag(logAkp1-logAk)-pi)/(2*pi))
-            dd = 2 * exp(p*(logAk+logAkp1)/2) * sinh(p*w) / (Akp1 - Ak);
+            dd = 2 * exp(p*(logAk+logAkp1)/2) * sinh(p*w) / (Akp1 - Ak)
             A[k,k+1] = A0[k,k+1] * dd
         end
     end

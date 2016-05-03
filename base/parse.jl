@@ -145,10 +145,6 @@ function parse{T<:Integer}(::Type{T}, s::AbstractString, base::Integer)
 end
 parse{T<:Integer}(::Type{T}, s::AbstractString) = get(tryparse_internal(T, s, 0, true))
 
-## stringifying integers more efficiently ##
-
-string(x::Union{Int8,Int16,Int32,Int64,Int128}) = dec(x)
-
 ## string to float functions ##
 
 tryparse(::Type{Float64}, s::ByteString) = ccall(:jl_try_substrtod, Nullable{Float64}, (Ptr{UInt8},Csize_t,Csize_t), s, 0, sizeof(s))

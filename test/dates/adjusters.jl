@@ -449,7 +449,7 @@ end) == 251
 
 # From those goofy email forwards claiming a "special, lucky month"
 # that has 5 Fridays, 5 Saturdays, and 5 Sundays and that it only
-# occurs every 823 years.....
+# occurs every 823 years
 @test length(Dates.recur(Date(2000):Dates.Month(1):Date(2016)) do dt
     sum = 0
     for i = 1:7

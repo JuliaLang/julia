@@ -23,6 +23,7 @@ export
     Serializer,
     Docs,
     Markdown,
+    Threads,
 
 # Types
     AbstractChannel,
@@ -726,8 +727,6 @@ export
     full,
 
 # bitarrays
-    bitpack,
-    bitunpack,
     falses,
     flipbits!,
     rol,
@@ -749,6 +748,7 @@ export
 # collections
     all!,
     all,
+    allunique,
     any!,
     any,
     collect,
@@ -904,7 +904,6 @@ export
     utf32,
     warn,
     wstring,
-    xdump,
 
 # random numbers
     AbstractRNG,
@@ -1048,9 +1047,11 @@ export
 # errors
     assert,
     backtrace,
+    @catch,
     catch_backtrace,
     error,
     rethrow,
+    retry,
     systemerror,
 
 # stack traces
@@ -1214,7 +1215,9 @@ export
 
 # multiprocessing
     addprocs,
+    asyncmap,
     ClusterManager,
+    default_worker_pool,
     fetch,
     init_worker,
     interrupt,
@@ -1236,13 +1239,14 @@ export
     timedwait,
     wait,
     workers,
+    WorkerPool,
 
 # multimedia I/O
     Display,
     display,
     displayable,
     TextDisplay,
-    istext,
+    istextmime,
     MIME,
     @MIME,
     @MIME_str,
@@ -1390,6 +1394,7 @@ export
     # reflection
     @which,
     @edit,
+    @functionloc,
     @less,
     @code_typed,
     @code_warntype,
@@ -1458,7 +1463,6 @@ export
     speye,
     spones,
     sprand,
-    sprandbool,
     sprandn,
     spzeros,
     symperm,

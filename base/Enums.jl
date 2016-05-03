@@ -2,11 +2,12 @@
 
 module Enums
 
+import Core.Intrinsics.box
 export Enum, @enum
 
 abstract Enum
 
-Base.convert{T<:Integer}(::Type{T}, x::Enum) = convert(T, Intrinsics.box(Int32, x))
+Base.convert{T<:Integer}(::Type{T}, x::Enum) = convert(T, box(Int32, x))
 
 Base.write(io::IO, x::Enum) = write(io, Int32(x))
 Base.read{T<:Enum}(io::IO, ::Type{T}) = T(read(io, Int32))
@@ -14,8 +15,7 @@ Base.read{T<:Enum}(io::IO, ::Type{T}) = T(read(io, Int32))
 # generate code to test whether expr is in the given set of values
 function membershiptest(expr, values)
     lo, hi = extrema(values)
-    sv = sort(values)
-    if sv == [lo:hi;]
+    if length(values) == hi - lo + 1
         :($lo <= $expr <= $hi)
     elseif length(values) < 20
         foldl((x1,x2)->:($x1 || ($expr == $x2)), :($expr == $(values[1])), values[2:end])
@@ -77,7 +77,7 @@ macro enum(T,syms...)
         Base.@__doc__(bitstype 32 $(esc(T)) <: Enum)
         function Base.convert(::Type{$(esc(typename))}, x::Integer)
             $(membershiptest(:x, values)) || enum_argument_error($(Expr(:quote, typename)), x)
-            Intrinsics.box($(esc(typename)), convert(Int32, x))
+            box($(esc(typename)), convert(Int32, x))
         end
         Base.typemin(x::Type{$(esc(typename))}) = $(esc(typename))($lo)
         Base.typemax(x::Type{$(esc(typename))}) = $(esc(typename))($hi)

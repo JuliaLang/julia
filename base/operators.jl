@@ -19,8 +19,14 @@ isless(x::AbstractFloat, y::AbstractFloat) = (!isnan(x) & isnan(y)) | (signbit(x
 isless(x::Real,          y::AbstractFloat) = (!isnan(x) & isnan(y)) | (signbit(x) & !signbit(y)) | (x < y)
 isless(x::AbstractFloat, y::Real         ) = (!isnan(x) & isnan(y)) | (signbit(x) & !signbit(y)) | (x < y)
 
-=={T}(::Type{T}, ::Type{T}) = true  # encourage more specialization on types (see #11425)
-==(T::Type, S::Type)        = typeseq(T, S)
+function ==(T::Type, S::Type)
+    @_pure_meta
+    typeseq(T, S)
+end
+function !=(T::Type, S::Type)
+    @_pure_meta
+    !(T == S)
+end
 
 ## comparison fallbacks ##
 
@@ -45,7 +51,7 @@ const .≥ = .>=
 isless(x::Real, y::Real) = x<y
 lexcmp(x::Real, y::Real) = isless(x,y) ? -1 : ifelse(isless(y,x), 1, 0)
 
-ifelse(c::Bool, x, y) = Intrinsics.select_value(c, x, y)
+ifelse(c::Bool, x, y) = select_value(c, x, y)
 
 cmp(x,y) = isless(x,y) ? -1 : ifelse(isless(y,x), 1, 0)
 lexcmp(x,y) = cmp(x,y)
@@ -70,6 +76,8 @@ scalarmin(x::AbstractArray, y               ) = throw(ArgumentError("ordering is
 
 ## definitions providing basic traits of arithmetic operators ##
 
+identity(x) = x
+
 +(x::Number) = x
 *(x::Number) = x
 (&)(x::Integer) = x
@@ -88,19 +96,12 @@ function afoldl(op,a,b,c,d,e,f,g,h,i,j,k,l,m,n,o,p,qs...)
     y
 end
 
-immutable ElementwiseMaxFun end
-(::ElementwiseMaxFun)(x, y) = max(x,y)
-
-immutable ElementwiseMinFun end
-(::ElementwiseMinFun)(x, y) = min(x, y)
-
-for (op,F) in ((:+,:(AddFun())), (:*,:(MulFun())), (:&,:(AndFun())), (:|,:(OrFun())),
-               (:$,:(XorFun())), (:min,:(ElementwiseMinFun())), (:max,:(ElementwiseMaxFun())), (:kron,:kron))
+for op in (:+, :*, :&, :|, :$, :min, :max, :kron)
     @eval begin
         # note: these definitions must not cause a dispatch loop when +(a,b) is
         # not defined, and must only try to call 2-argument definitions, so
         # that defining +(a,b) is sufficient for full functionality.
-        ($op)(a, b, c, xs...) = afoldl($F, ($op)(($op)(a,b),c), xs...)
+        ($op)(a, b, c, xs...) = afoldl($op, ($op)(($op)(a,b),c), xs...)
         # a further concern is that it's easy for a type like (Int,Int...)
         # to match many definitions, so we need to keep the number of
         # definitions down to avoid losing type information.
@@ -286,10 +287,6 @@ eltype(::Type{Any}) = Any
 eltype(t::DataType) = eltype(supertype(t))
 eltype(x) = eltype(typeof(x))
 
-# copying immutable things
-copy(x::Union{Symbol,Number,AbstractString,Function,Tuple,LambdaInfo,
-              TopNode,QuoteNode,DataType,Union}) = x
-
 # function pipelining
 |>(x, f) = f(x)
 
@@ -473,7 +470,7 @@ end
 macro vectorize_1arg(S,f)
     S = esc(S); f = esc(f); T = esc(:T)
     quote
-        ($f){$T<:$S}(x::AbstractArray{$T,1}) = [ ($f)(x[i]) for i=1:length(x) ]
+        ($f){$T<:$S}(x::AbstractArray{$T,1}) = [ ($f)(elem) for elem in x ]
         ($f){$T<:$S}(x::AbstractArray{$T,2}) =
             [ ($f)(x[i,j]) for i=1:size(x,1), j=1:size(x,2) ]
         ($f){$T<:$S}(x::AbstractArray{$T}) =
@@ -504,17 +501,17 @@ end
 
 function ifelse(c::AbstractArray{Bool}, x::AbstractArray, y::AbstractArray)
     shp = promote_shape(size(c), promote_shape(size(x), size(y)))
-    reshape([ifelse(c[i], x[i], y[i]) for i = 1 : length(c)], shp)
+    reshape([ifelse(c_elem, x_elem, y_elem) for (c_elem, x_elem, y_elem) in zip(c, x, y)], shp)
 end
 
 function ifelse(c::AbstractArray{Bool}, x::AbstractArray, y)
     shp = promote_shape(size(c), size(c))
-    reshape([ifelse(c[i], x[i], y) for i = 1 : length(c)], shp)
+    reshape([ifelse(c_elem, x_elem, y) for (c_elem, x_elem) in zip(c, x)], shp)
 end
 
 function ifelse(c::AbstractArray{Bool}, x, y::AbstractArray)
     shp = promote_shape(size(c), size(y))
-    reshape([ifelse(c[i], x, y[i]) for i = 1 : length(c)], shp)
+    reshape([ifelse(c_elem, x, y_elem) for (c_elem, y_elem) in zip(c, y)], shp)
 end
 
 # Pair

@@ -135,6 +135,7 @@ function getindex(T::Type, vals...)
     end
     return a
 end
+getindex(T::Type) = Array{T}(0)
 
 function getindex(::Type{Any}, vals::ANY...)
     a = Array(Any,length(vals))
@@ -143,6 +144,7 @@ function getindex(::Type{Any}, vals::ANY...)
     end
     return a
 end
+getindex(::Type{Any}) = Array{Any}(0)
 
 function fill!(a::Union{Array{UInt8}, Array{Int8}}, x::Integer)
     ccall(:memset, Ptr{Void}, (Ptr{Void}, Cint, Csize_t), a, x, length(a))
@@ -199,35 +201,103 @@ convert{T,n,S}(::Type{Array{T,n}}, x::AbstractArray{S,n}) = copy!(Array(T, size(
 
 promote_rule{T,n,S}(::Type{Array{T,n}}, ::Type{Array{S,n}}) = Array{promote_type(T,S),n}
 
+## copying iterators to containers
+
+# make a collection similar to `c` and appropriate for collecting `itr`
+_similar_for(c::AbstractArray, T, itr, ::SizeUnknown) = similar(c, T, 0)
+_similar_for(c::AbstractArray, T, itr, ::HasLength) = similar(c, T, Int(length(itr)::Integer))
+_similar_for(c::AbstractArray, T, itr, ::HasShape) = similar(c, T, convert(Dims,size(itr)))
+_similar_for(c, T, itr, isz) = similar(c, T)
+
 """
     collect(element_type, collection)
 
 Return an array of type `Array{element_type,1}` of all items in a collection.
 """
-function collect{T}(::Type{T}, itr)
-    if applicable(length, itr)
-        # when length() isn't defined this branch might pollute the
-        # type of the other.
-        a = Array(T,length(itr)::Integer)
-        i = 0
-        for x in itr
-            a[i+=1] = x
-        end
-    else
-        a = Array(T,0)
-        for x in itr
-            push!(a,x)
-        end
-    end
-    return a
-end
+collect{T}(::Type{T}, itr) = collect(Generator(T, itr))
 
 """
     collect(collection)
 
 Return an array of all items in a collection. For associative collections, returns Pair{KeyType, ValType}.
 """
-collect(itr) = collect(eltype(itr), itr)
+collect(itr) = _collect(1:1 #= Array =#, itr, iteratoreltype(itr), iteratorsize(itr))
+
+collect_similar(cont, itr) = _collect(cont, itr, iteratoreltype(itr), iteratorsize(itr))
+
+_collect(cont, itr, ::HasEltype, isz::Union{HasLength,HasShape}) =
+    copy!(_similar_for(cont, eltype(itr), itr, isz), itr)
+
+function _collect(cont, itr, ::HasEltype, isz::SizeUnknown)
+    a = _similar_for(cont, eltype(itr), itr, isz)
+    for x in itr
+        push!(a,x)
+    end
+    return a
+end
+
+_default_eltype(itr::ANY) = Union{}
+_default_eltype{I,T}(::Generator{I,Type{T}}) = T
+
+_collect(c, itr, ::EltypeUnknown, isz::SizeUnknown) =
+    grow_to!(_similar_for(c, _default_eltype(itr), itr, isz), itr)
+
+function _collect(c, itr, ::EltypeUnknown, isz::Union{HasLength,HasShape})
+    st = start(itr)
+    if done(itr,st)
+        return _similar_for(c, _default_eltype(itr), itr, isz)
+    end
+    v1, st = next(itr, st)
+    collect_to_with_first!(_similar_for(c, typeof(v1), itr, isz), v1, itr, st)
+end
+
+function collect_to_with_first!(dest::AbstractArray, v1, itr, st)
+    dest[1] = v1
+    return collect_to!(dest, itr, 2, st)
+end
+
+function collect_to_with_first!(dest, v1, itr, st)
+    push!(dest, v1)
+    return grow_to!(dest, itr, st)
+end
+
+function collect_to!{T}(dest::AbstractArray{T}, itr, offs, st)
+    # collect to dest array, checking the type of each result. if a result does not
+    # match, widen the result type and re-dispatch.
+    i = offs
+    while !done(itr, st)
+        el, st = next(itr, st)
+        S = typeof(el)
+        if S === T || S <: T
+            @inbounds dest[i] = el::T
+            i += 1
+        else
+            R = typejoin(T, S)
+            new = similar(dest, R)
+            copy!(new,1, dest,1, i-1)
+            @inbounds new[i] = el
+            return collect_to!(new, itr, i+1, st)
+        end
+    end
+    return dest
+end
+
+function grow_to!(dest, itr, st = start(itr))
+    T = eltype(dest)
+    while !done(itr, st)
+        el, st = next(itr, st)
+        S = typeof(el)
+        if S === T || S <: T
+            push!(dest, el::T)
+        else
+            new = similar(dest, typejoin(T, S))
+            copy!(new, dest)
+            push!(new, el)
+            return grow_to!(new, itr, st)
+        end
+    end
+    return dest
+end
 
 ## Iteration ##
 start(A::Array) = 1
@@ -681,7 +751,7 @@ end
 findfirst(testf::Function, A) = findnext(testf, A, 1)
 
 # returns the index of the previous non-zero element, or 0 if all zeros
-function findprev(A, start)
+function findprev(A, start::Integer)
     for i = start:-1:1
         A[i] != 0 && return i
     end
@@ -690,7 +760,7 @@ end
 findlast(A) = findprev(A, length(A))
 
 # returns the index of the matching element, or 0 if no matching
-function findprev(A, v, start)
+function findprev(A, v, start::Integer)
     for i = start:-1:1
         A[i] == v && return i
     end
@@ -699,7 +769,7 @@ end
 findlast(A, v) = findprev(A, v, length(A))
 
 # returns the index of the previous element for which the function returns true, or zero if it never does
-function findprev(testf::Function, A, start)
+function findprev(testf::Function, A, start::Integer)
     for i = start:-1:1
         testf(A[i]) && return i
     end
@@ -711,8 +781,8 @@ function find(testf::Function, A::AbstractArray)
     # use a dynamic-length array to store the indexes, then copy to a non-padded
     # array for the return
     tmpI = Array(Int, 0)
-    for i = 1:length(A)
-        if testf(A[i])
+    for (i,a) = enumerate(A)
+        if testf(a)
             push!(tmpI, i)
         end
     end
@@ -725,8 +795,8 @@ function find(A::AbstractArray)
     nnzA = countnz(A)
     I = similar(A, Int, nnzA)
     count = 1
-    for i=1:length(A)
-        if A[i] != 0
+    for (i,a) in enumerate(A)
+        if a != 0
             I[count] = i
             count += 1
         end
@@ -823,8 +893,8 @@ end
 function findin(a, b)
     ind = Array(Int, 0)
     bset = Set(b)
-    @inbounds for i = 1:length(a)
-        a[i] in bset && push!(ind, i)
+    @inbounds for (i,ai) in enumerate(a)
+        ai in bset && push!(ind, i)
     end
     ind
 end
@@ -859,9 +929,9 @@ filter(f, As::AbstractArray) = As[map(f, As)::AbstractArray{Bool}]
 
 function filter!(f, a::Vector)
     insrt = 1
-    for curr = 1:length(a)
-        if f(a[curr])
-            a[insrt] = a[curr]
+    for acurr in a
+        if f(acurr)
+            a[insrt] = acurr
             insrt += 1
         end
     end
@@ -871,9 +941,9 @@ end
 
 function filter(f, a::Vector)
     r = Array(eltype(a), 0)
-    for i = 1:length(a)
-        if f(a[i])
-            push!(r, a[i])
+    for ai in a
+        if f(ai)
+            push!(r, ai)
         end
     end
     return r
@@ -886,8 +956,8 @@ function intersect(v1, vs...)
     ret = Array(eltype(v1),0)
     for v_elem in v1
         inall = true
-        for i = 1:length(vs)
-            if !in(v_elem, vs[i])
+        for vsi in vs
+            if !in(v_elem, vsi)
                 inall=false; break
             end
         end

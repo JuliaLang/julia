@@ -59,7 +59,7 @@ end
 function depwarn(msg, funcsym)
     opts = JLOptions()
     if opts.depwarn > 0
-        ln = unsafe_load(cglobal(:jl_lineno, Int))
+        ln = Int(unsafe_load(cglobal(:jl_lineno, Cint)))
         fn = bytestring(unsafe_load(cglobal(:jl_filename, Ptr{Cchar})))
         bt = backtrace()
         caller = firstcaller(bt, funcsym)
@@ -346,7 +346,7 @@ end
 
 @deprecate integer(x) Integer(x)
 
-for (f,t) in ((:uint8,:UInt8), (:uint16,:UInt16), (:uint32,:UInt32), (:uint64,:Uint64),
+for (f,t) in ((:uint8,:UInt8), (:uint16,:UInt16), (:uint32,:UInt32), (:uint64,:UInt64),
               (:int8,:Int8),   (:int16,:Int16),   (:int32,:Int32),   (:int64,:Int64),
               (:int128,:Int128), (:uint128,:UInt128), (:signed,:Int), (:unsigned,:UInt),
               (:integer,:Int), (:int,:Int), (:uint,:UInt))
@@ -367,9 +367,6 @@ end
 
 @deprecate flipud(A::AbstractArray) flipdim(A, 1)
 @deprecate fliplr(A::AbstractArray) flipdim(A, 2)
-
-@deprecate sub2ind{T<:Integer}(dims::Array{T}, sub::Array{T}) sub2ind(tuple(dims...), sub...)
-@deprecate ind2sub!{T<:Integer}(sub::Array{T}, dims::Array{T}, ind::T) ind2sub!(sub, tuple(dims...), ind)
 
 @deprecate strftime     Libc.strftime
 @deprecate strptime     Libc.strptime
@@ -403,7 +400,7 @@ end
 end
 
 @noinline function unsafe_convert{P}(::Type{P}, x)
-    P<:Ptr || throw(MethodError(unsafe_convert, (Type{P}, x)))
+    P<:Ptr || throw(MethodError(unsafe_convert, (P, x)))
     ret = convert(P, x) # attempt the call first, so we only print the depwarn if it can even succeed
     depwarn("convert(::Type{Ptr}, ::$(typeof(x))) methods should be converted to be methods of unsafe_convert", :unsafe_convert)
     return ret
@@ -563,7 +560,7 @@ end
 @deprecate_binding MathConst Irrational
 
 macro math_const(sym, val, def)
-    depwarn("@math_const is deprecated and renamed to @irrational.", symbol("@math_const"))
+    depwarn("@math_const is deprecated and renamed to @irrational.", Symbol("@math_const"))
     :(@irrational $(esc(sym)) $(esc(val)) $(esc(def)))
 end
 export @math_const
@@ -669,24 +666,6 @@ end
 @deprecate mmap_bitarray{N}(::Type{Bool}, dims::NTuple{N,Integer}, s::IOStream, offset::Int64=position(s)) mmap(s, BitArray, dims, offset)
 @deprecate mmap_bitarray{N}(dims::NTuple{N,Integer}, s::IOStream, offset=position(s)) mmap(s, BitArray, dims, offset)
 
-# T[a:b] and T[a:s:b]
-@noinline function getindex{T<:Union{Char,Number}}(::Type{T}, r::Range)
-    depwarn("T[a:b] concatenation is deprecated; use T[a:b;] instead", :getindex)
-    copy!(Array(T,length(r)), r)
-end
-
-@noinline function getindex{T<:Union{Char,Number}}(::Type{T}, r1::Range, rs::Range...)
-    depwarn("T[a:b,...] concatenation is deprecated; use T[a:b;...] instead", :getindex)
-    a = Array(T,length(r1)+sum(length,rs))
-    o = 1
-    copy!(a, o, r1)
-    o += length(r1)
-    for r in rs
-        copy!(a, o, r)
-        o += length(r)
-    end
-    return a
-end
 
 ## require ##
 
@@ -710,7 +689,7 @@ include("require.jl")
         # require("Foo") --- ambiguous. might be file or package
         filename = maybe_require_file(f)
         if filename == f
-            mod = symbol(require_modname(f))
+            mod = Symbol(require_modname(f))
             M = current_module()
             if isdefined(M,mod) && isa(eval(M,mod),Module)
                 return
@@ -783,7 +762,7 @@ sizeof(s::RopeString) = sizeof(s.head) + sizeof(s.tail)
 export RopeString
 
 @noinline function complement!(s::IntSet)
-    depwarn("complement IntSets are deprecated", :complement!);
+    depwarn("complement IntSets are deprecated", :complement!)
     for n = 1:length(s.bits)
         s.bits[n] = ~s.bits[n]
     end
@@ -864,15 +843,15 @@ end
 @deprecate get_rounding rounding
 
 #13465
-@deprecate cov(x::AbstractVector; corrected=true, mean=Base.mean(x)) covm(x, mean, corrected)
-@deprecate cov(X::AbstractMatrix; vardim=1, corrected=true, mean=Base.mean(X, vardim)) covm(X, mean, vardim, corrected)
-@deprecate cov(x::AbstractVector, y::AbstractVector; corrected=true, mean=(Base.mean(x), Base.mean(y))) covm(x, mean[1], y, mean[2], corrected)
-@deprecate cov(X::AbstractVecOrMat, Y::AbstractVecOrMat; vardim=1, corrected=true, mean=(Base.mean(X, vardim), Base.mean(Y, vardim))) covm(X, mean[1], Y, mean[2], vardim, corrected)
+@deprecate cov(x::AbstractVector; corrected=true, mean=Base.mean(x)) Base.covm(x, mean, corrected)
+@deprecate cov(X::AbstractMatrix; vardim=1, corrected=true, mean=Base.mean(X, vardim)) Base.covm(X, mean, vardim, corrected)
+@deprecate cov(x::AbstractVector, y::AbstractVector; corrected=true, mean=(Base.mean(x), Base.mean(y))) Base.covm(x, mean[1], y, mean[2], corrected)
+@deprecate cov(X::AbstractVecOrMat, Y::AbstractVecOrMat; vardim=1, corrected=true, mean=(Base.mean(X, vardim), Base.mean(Y, vardim))) Base.covm(X, mean[1], Y, mean[2], vardim, corrected)
 
-@deprecate cor(x::AbstractVector; mean=Base.mean(x)) corm(x, mean)
-@deprecate cor(X::AbstractMatrix; vardim=1, mean=Base.mean(X, vardim)) corm(X, mean, vardim)
-@deprecate cor(x::AbstractVector, y::AbstractVector; mean=(Base.mean(x), Base.mean(y))) corm(x, mean[1], y, mean[2])
-@deprecate cor(X::AbstractVecOrMat, Y::AbstractVecOrMat; vardim=1, mean=(Base.mean(X, vardim), Base.mean(Y, vardim))) corm(X, mean[1], Y, mean[2], vardim)
+@deprecate cor(x::AbstractVector; mean=Base.mean(x)) Base.corm(x, mean)
+@deprecate cor(X::AbstractMatrix; vardim=1, mean=Base.mean(X, vardim)) Base.corm(X, mean, vardim)
+@deprecate cor(x::AbstractVector, y::AbstractVector; mean=(Base.mean(x), Base.mean(y))) Base.corm(x, mean[1], y, mean[2])
+@deprecate cor(X::AbstractVecOrMat, Y::AbstractVecOrMat; vardim=1, mean=(Base.mean(X, vardim), Base.mean(Y, vardim))) Base.corm(X, mean[1], Y, mean[2], vardim)
 
 @deprecate_binding SparseMatrix SparseArrays
 
@@ -951,7 +930,7 @@ end
 
 #14474
 macro boundscheck(yesno,blk)
-    depwarn("The meaning of `@boundscheck` has changed. It now indicates that the provided code block performs bounds checking, and may be elided when inbounds.", symbol("@boundscheck"))
+    depwarn("The meaning of `@boundscheck` has changed. It now indicates that the provided code block performs bounds checking, and may be elided when inbounds.", Symbol("@boundscheck"))
     if yesno === true
         :(@inbounds $(esc(blk)))
     end
@@ -999,3 +978,142 @@ export call
 @deprecate scale(A::AbstractArray, α::Number) A*α
 @deprecate scale(A::AbstractMatrix, x::AbstractVector) A*Diagonal(x)
 @deprecate scale(x::AbstractVector, A::AbstractMatrix) Diagonal(x)*A
+
+# 1933
+@deprecate_binding SingleAsyncWork AsyncCondition
+
+# #12872
+@deprecate istext istextmime
+
+#15409
+# Deprecated definition of pmap with keyword arguments.
+# When this is removed the following definition needs to be uncommented
+# and added to pmap.jl
+# pmap(f, c...) = pmap(default_worker_pool(), f, c...)
+
+function pmap(f, c...; err_retry=nothing, err_stop=nothing, pids=nothing)
+    if err_retry != nothing
+        depwarn("err_retry is deprecated, use pmap(retry(f), c...).", :pmap)
+        if err_retry == true
+            f = retry(f)
+        end
+    end
+
+    if err_stop != nothing
+        depwarn("err_stop is deprecated, use pmap(@catch(f), c...).", :pmap)
+        if err_stop == false
+            f = @catch(f)
+        end
+    end
+
+    if pids == nothing
+        p = default_worker_pool()
+    else
+        depwarn("pids is deprecated, use pmap(::WorkerPool, f, c...).", :pmap)
+        p = WorkerPool(pids)
+    end
+
+    return pmap(p, f, c...)
+end
+
+# 15692
+typealias Func{N} Function
+deprecate(:Func)
+for (Fun, func) in [(:IdFun, :identity),
+                    (:AbsFun, :abs),
+                    (:Abs2Fun, :abs2),
+                    (:ExpFun, :exp),
+                    (:LogFun, :log),
+                    (:ConjFun, :conj),
+                    (:AndFun, :&),
+                    (:OrFun, :|),
+                    (:XorFun, :$),
+                    (:AddFun, :+),
+                    (:DotAddFun, :.+),
+                    (:SubFun, :-),
+                    (:DotSubFun, :.-),
+                    (:MulFun, :*),
+                    (:DotMulFun, :.*),
+                    (:RDivFun, :/),
+                    (:DotRDivFun, :./),
+                    (:LDivFun, :\),
+                    (:IDivFun, :div),
+                    (:DotIDivFun, :.÷),
+                    (:ModFun, :mod),
+                    (:RemFun, :rem),
+                    (:DotRemFun, :.%),
+                    (:PowFun, :^),
+                    (:MaxFun, :scalarmax),
+                    (:MinFun, :scalarmin),
+                    (:LessFun, :<),
+                    (:MoreFun, :>),
+                    (:DotLSFun, :.<<),
+                    (:DotRSFun, :.>>),
+                    (:ElementwiseMaxFun, :max),
+                    (:ElementwiseMinFun, :min),
+                    (:ComplexFun, :complex),
+                    (:DotFun, :dot),
+                    ]
+    @eval begin
+        @deprecate_binding $(Fun) typeof($(func))
+        (::Type{typeof($(func))})() = $(func)
+    end
+end
+@deprecate_binding CentralizedAbs2Fun typeof(centralizedabs2fun(0)).name.primary
+(::Type{typeof(centralizedabs2fun(0)).name.primary})(m::Number) = centralizedabs2fun(m)
+@deprecate specialized_unary(f::Function) f
+@deprecate specialized_binary(f::Function) f
+@deprecate specialized_bitwise_unary(f::Function) f
+@deprecate specialized_bitwise_binary(f::Function) f
+
+@deprecate bitunpack(B::BitArray) Array(B)
+@deprecate bitpack(A::AbstractArray) BitArray(A)
+
+# #4163
+@deprecate xdump dump
+
+@deprecate copy(x::AbstractString)  identity(x)
+@deprecate copy(x::Tuple)  identity(x)
+
+@deprecate sprandbool(m::Integer, n::Integer, density::AbstractFloat) sprand(Bool, m, n, density)
+@deprecate sprandbool(r::AbstractRNG, m::Integer, n::Integer, density::AbstractFloat) sprand(r, Bool, m, n, density)
+@deprecate sprandbool(n::Integer, density::AbstractFloat) sprand(Bool, n, density)
+@deprecate sprandbool(r::AbstractRNG, n::Integer, density::AbstractFloat) sprand(r, Bool, n, density)
+@deprecate sprand{T}(n::Integer, density::AbstractFloat, ::Type{T}) sprand(T, n, density)
+@deprecate sprand{T}(r::AbstractRNG, n::Integer, density::AbstractFloat, ::Type{T}) sprand(r, T, n, density)
+
+#15995
+@deprecate symbol Symbol
+
+macro ccallable(def)
+    depwarn("@ccallable requires a return type", Symbol("@ccallable"))
+    if isa(def,Expr) && (def.head === :(=) || def.head === :function)
+        sig = def.args[1]
+        if sig.head === :call
+            name = sig.args[1]
+            at = map(sig.args[2:end]) do a
+                if isa(a,Expr) && a.head === :(::)
+                    a.args[2]
+                else
+                    :Any
+                end
+            end
+            return quote
+                $(esc(def))
+                let name = $(esc(name)), tt = $(Expr(:curly, :Tuple, map(esc, at)...))
+                    rt = return_types(name, tt)
+                    length(rt) == 1 || error("function not ccallable")
+                    ccallable(name, rt[1], tt)
+                end
+            end
+        end
+    end
+    error("expected method definition in @ccallable")
+end
+
+# During the 0.5 development cycle, do not add any deprecations below this line
+# To be deprecated in 0.6
+
+const _oldstyle_array_vcat_ = false
+
+# End deprecations scheduled for 0.6

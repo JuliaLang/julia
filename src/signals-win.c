@@ -361,6 +361,9 @@ void jl_install_default_signal_handlers(void)
     if (signal(SIGTERM, (void (__cdecl *)(int))crt_sig_handler) == SIG_ERR) {
         jl_error("fatal error: Couldn't set SIGTERM");
     }
+    if (signal(SIGABRT, (void (__cdecl *)(int))crt_sig_handler) == SIG_ERR) {
+        jl_error("fatal error: Couldn't set SIGABRT");
+    }
     SetUnhandledExceptionFilter(exception_handler);
 }
 

@@ -88,8 +88,6 @@ function randn_float32(m::Integer, n::Integer)
 end
 
 
-
-
 function test_pinv(a,m,n,tol1,tol2,tol3)
     debug && println("=== julia/matlab pinv, default tol=eps(1.0)*max(size(a)) ===")
     apinv = @inferred pinv(a)

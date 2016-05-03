@@ -137,6 +137,16 @@ end
 @test_throws ArgumentError first(Dict())
 @test first(Dict(:f=>2)) == (:f=>2)
 
+# constructing Dicts from iterators
+let d = Dict(i=>i for i=1:3)
+    @test isa(d, Dict{Int,Int})
+    @test d == Dict(1=>1, 2=>2, 3=>3)
+end
+let d = Dict(i==1 ? (1=>2) : (2.0=>3.0) for i=1:2)
+    @test isa(d, Dict{Real,Real})
+    @test d == Dict{Real,Real}(2.0=>3.0, 1=>2)
+end
+
 # issue #1821
 let
     d = Dict{UTF8String, Vector{Int}}()
@@ -282,6 +292,19 @@ for d in (Dict("\n" => "\n", "1" => "\n", "\n" => "2"),
     @test !isempty(summary(d))
     @test !isempty(summary(keys(d)))
     @test !isempty(summary(values(d)))
+end
+
+# Issue #15739 - Compact REPL printouts of an `Associative` use brackets when appropriate
+let d = Dict((1=>2) => (3=>45), (3=>10) => (10=>11))
+    buf = IOBuffer()
+    showcompact(buf, d)
+
+    # Check explicitly for the expected strings, since the CPU bitness effects
+    # dictionary ordering.
+    result = bytestring(buf)
+    @test contains(result, "Dict")
+    @test contains(result, "(1=>2)=>(3=>45)")
+    @test contains(result, "(3=>10)=>(10=>11)")
 end
 
 # issue #9463
@@ -431,8 +454,6 @@ let d = ImmutableDict{UTF8String, UTF8String}(),
     @test get(d, k1, :default) === :default
     @test d1["key1"] === v1
     @test d4["key1"] === v2
-    @test copy(d4) === d4
-    @test copy(d) === d
     @test similar(d3) === d
     @test similar(d) === d
 

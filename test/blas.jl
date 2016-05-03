@@ -36,7 +36,6 @@ end
 
 ## BLAS tests - testing the interface code to BLAS routines
 for elty in [Float32, Float64, Complex64, Complex128]
-
     o4 = ones(elty, 4)
     z4 = zeros(elty, 4)
 
@@ -295,5 +294,4 @@ for elty in [Float32, Float64, Complex64, Complex128]
         @test all(Base.LinAlg.copytri!(ans, 'L') .== BLAS.gemm('T', 'N', L4, L4))
         @test_throws DimensionMismatch BLAS.syrk!('L','N',one(elty),eye(elty,5),one(elty),eye(elty,6))
     end
-
 end

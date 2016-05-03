@@ -95,7 +95,7 @@ function sparse_getindex_perf()
                     c = counters[sz]
                     if indstr=="logical array"
                         # make a logical array of the right size
-                        ind = sprandbool(size(m,1)..., 1e-5)
+                        ind = sprand(Bool, size(m,1)..., 1e-5)
                     end
                     if nargs==2
                         @timeit fun(m, ind)  "sparse_getindex_$s1$c" "Sparse matrix with $ms, $funstr with $indstr"
@@ -120,7 +120,7 @@ function sparse_getindex_perf()
                         continue # logical indexing with medium size sparse matrix takes too long
                     end
                     # make a logical array of the right size
-                    ind = sprandbool(size(m)..., 1e-5)
+                    ind = sprand(Bool, size(m)..., 1e-5)
                     c = counters[sz]
                     @timeit one_arg_indexing(m, ind) "sparse_getindex_$s1$c" "$s2 with $ms, linear indexing with $indstr"
                     counters[sz] += 1

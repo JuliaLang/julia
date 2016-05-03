@@ -220,15 +220,21 @@ macro pg_horner(x, m, p...)
     :(($me + 1) * ($(p[1]) + $xe * $ex))
 end
 
-# compute inv(oftype(x, y)) efficiently, choosing the correct branch cut
-inv_oftype(x::Complex, y::Complex) = oftype(x, inv(y))
-function inv_oftype(x::Complex, y::Real)
-    yi = inv(y) # using real arithmetic for efficiency
-    oftype(x, Complex(yi, -zero(yi))) # get correct sign of zero!
+# compute oftype(x, y)^p efficiently, choosing the correct branch cut
+pow_oftype(x, y, p) = oftype(x, y)^p
+pow_oftype(x::Complex, y::Real, p::Complex) = oftype(x, y^p)
+function pow_oftype(x::Complex, y::Real, p::Real)
+    if p >= 0
+        # note: this will never be called for y < 0,
+        # which would throw an error for non-integer p here
+        return oftype(x, y^p)
+    else
+        yp = y^-p # use real power for efficiency
+        return oftype(x, Complex(yp, -zero(yp))) # get correct sign of zero!
+    end
 end
-inv_oftype(x::Real, y::Real) = oftype(x, inv(y))
 
-# Hurwitz zeta function, which is related to polygamma
+# Generalized zeta function, which is related to polygamma
 # (at least for integer m > 0 and real(z) > 0) by:
 #    polygamma(m, z) = (-1)^(m+1) * gamma(m+1) * zeta(m+1, z).
 # Our algorithm for the polygamma is just the m-th derivative
@@ -238,15 +244,27 @@ inv_oftype(x::Real, y::Real) = oftype(x, inv(y))
 # So identifying the (something) with the -zeta function, we get
 # the zeta function for free and might as well export it, especially
 # since this is a common generalization of the Riemann zeta function
-# (which Julia already exports).
+# (which Julia already exports).   Note that this geneneralization
+# is equivalent to Mathematica's Zeta[s,z], and is equivalent to the
+# Hurwitz zeta function for real(z) > 0.
+
+"""
+    zeta(s, z)
+
+Generalized zeta function ``\\zeta(s, z)``, defined
+by the sum ``\\sum_{k=0}^\\infty ((k+z)^2)^{-s/2}``, where
+any term with ``k+z=0`` is excluded.  For ``\\Re z > 0``,
+this definition is equivalent to the Hurwitz zeta function
+``\\sum_{k=0}^\\infty (k+z)^{-s}``.   For ``z=1``, it yields
+the Riemann zeta function ``\\zeta(s)``.
+"""
+zeta(s,z)
+
 function zeta(s::Union{Int,Float64,Complex{Float64}},
               z::Union{Float64,Complex{Float64}})
     ζ = zero(promote_type(typeof(s), typeof(z)))
 
-    # like sqrt, require complex inputs to get complex outputs
-    !isa(s,Integer) && isa(ζ, Real) && z < 0 && throw(DomainError())
-
-    z == 1 && return oftype(ζ, zeta(s))
+    (z == 1 || z == 0) && return oftype(ζ, zeta(s))
     s == 2 && return oftype(ζ, trigamma(z))
 
     x = real(z)
@@ -263,9 +281,13 @@ function zeta(s::Union{Int,Float64,Complex{Float64}},
         end
         throw(DomainError()) # nothing clever to return
     end
-
-    # We need a different algorithm for the real(s) < 1 domain
-    real(s) < 1 && throw(ArgumentError("order $s < 1 is not implemented (issue #7228)"))
+    if isnan(x)
+        if imag(z)==0 && imag(s)==0
+            return oftype(ζ, x)
+        else
+            return oftype(ζ, Complex(x,x))
+        end
+    end
 
     m = s - 1
 
@@ -275,32 +297,55 @@ function zeta(s::Union{Int,Float64,Complex{Float64}},
     # Note: we multiply by -(-1)^m m! in polygamma below, so this factor is
     #       pulled out of all of our derivatives.
 
-    isnan(x) && return oftype(ζ, imag(z)==0 && isa(s,Int) ? x : Complex(x,x))
-
-    cutoff = 7 + real(m) + imag(m) # TODO: this cutoff is too conservative?
+    cutoff = 7 + real(m) + abs(imag(m)) # TODO: this cutoff is too conservative?
     if x < cutoff
         # shift using recurrence formula
         xf = floor(x)
-        if x <= 0 && xf == z
-            if isa(s, Int)
-                iseven(s) && return oftype(ζ, Inf)
-                x == 0 && return oftype(ζ, inv(x))
-            end
-            throw(DomainError()) # or return NaN?
-        end
         nx = Int(xf)
         n = ceil(Int,cutoff - nx)
-        ζ += inv_oftype(ζ, z)^s
-        for ν = -nx:-1:1
-            ζₒ= ζ
-            ζ += inv_oftype(ζ, z + ν)^s
-            ζ == ζₒ && break # prevent long loop for large -x > 0
-                             # FIXME: still slow for small m, large Im(z)
+        minus_s = -s
+        if nx < 0 # x < 0
+            # need to use (-z)^(-s) recurrence to be correct for real z < 0
+            # [the general form of the recurrence term is (z^2)^(-s/2)]
+            minus_z = -z
+            ζ += pow_oftype(ζ, minus_z, minus_s) # ν = 0 term
+            if xf != z
+                ζ += pow_oftype(ζ, z - nx, minus_s) # real(z - nx) > 0, so use correct branch cut
+                # otherwise, if xf==z, then the definition skips this term
+            end
+            # do loop in different order, depending on the sign of s,
+            # so that we are looping from largest to smallest summands and
+            # can halt the loop early if possible; see issue #15946
+            # FIXME: still slow for small m, large Im(z)
+            if real(s) > 0
+                for ν in -nx-1:-1:1
+                    ζₒ= ζ
+                    ζ += pow_oftype(ζ, minus_z - ν, minus_s)
+                    ζ == ζₒ && break # prevent long loop for large -x > 0
+                end
+            else
+                for ν in 1:-nx-1
+                    ζₒ= ζ
+                    ζ += pow_oftype(ζ, minus_z - ν, minus_s)
+                    ζ == ζₒ && break # prevent long loop for large -x > 0
+                end
+            end
+        else # x ≥ 0 && z != 0
+            ζ += pow_oftype(ζ, z, minus_s)
         end
-        for ν = max(1,1-nx):n-1
-            ζₒ= ζ
-            ζ += inv_oftype(ζ, z + ν)^s
-            ζ == ζₒ && break # prevent long loop for large m
+        # loop order depends on sign of s, as above
+        if real(s) > 0
+            for ν in max(1,1-nx):n-1
+                ζₒ= ζ
+                ζ += pow_oftype(ζ, z + ν, minus_s)
+                ζ == ζₒ && break # prevent long loop for large m
+            end
+        else
+            for ν in n-1:-1:max(1,1-nx)
+                ζₒ= ζ
+                ζ += pow_oftype(ζ, z + ν, minus_s)
+                ζ == ζₒ && break # prevent long loop for large m
+            end
         end
         z += n
     end
@@ -316,7 +361,6 @@ function zeta(s::Union{Int,Float64,Complex{Float64}},
 end
 
 function polygamma(m::Integer, z::Union{Float64,Complex{Float64}})
-
     m == 0 && return digamma(z)
     m == 1 && return trigamma(z)
 

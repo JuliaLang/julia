@@ -22,7 +22,7 @@ systemerror
     writedlm(f, A, delim='\\t')
 
 Write `A` (a vector, matrix or an iterable collection of iterable rows) as text to `f`
-(either a filename string or an `IO` stream) using the given delimeter `delim` (which
+(either a filename string or an `IO` stream) using the given delimiter `delim` (which
 defaults to tab, but can be any printable Julia object, typically a `Char` or
 `AbstractString`).
 
@@ -144,7 +144,19 @@ download
     @everywhere
 
 Execute an expression on all processes. Errors on any of the processes are collected into a
-`CompositeException` and thrown.
+`CompositeException` and thrown. For example :
+
+    @everywhere bar=1
+
+will define `bar` under module `Main` on all processes.
+
+Unlike `@spawn` and `@spawnat`, `@everywhere` does not capture any local variables. Prefixing
+`@everywhere` with `@eval` allows us to broadcast local variables using interpolation :
+
+    foo = 1
+    @eval @everywhere bar=\$foo
+
+
 """
 :@everywhere
 
@@ -219,14 +231,6 @@ Bessel function of the first kind of order `nu`, ``J_\\nu(x)``.
 besselj
 
 """
-    @code_lowered
-
-Evaluates the arguments to the function call, determines their types, and calls
-[`code_lowered`](:func:`code_lowered`) on the resulting expression.
-"""
-:@code_lowered
-
-"""
     //(num, den)
 
 Divide two integers or rational numbers, giving a `Rational` result.
@@ -248,21 +252,6 @@ Returns the method table for `f`.
 If `types` is specified, returns an array of methods whose types match.
 """
 methods
-
-"""
-    pmap(f, lsts...; err_retry=true, err_stop=false, pids=workers())
-
-Transform collections `lsts` by applying `f` to each element in parallel. (Note that
-`f` must be made available to all worker processes; see [Code Availability and Loading Packages](:ref:`Code Availability and Loading Packages <man-parallel-computing-code-availability>`)
-for details.) If `nprocs() > 1`, the calling process will be dedicated to assigning tasks.
-All other available processes will be used as parallel workers, or on the processes
-specified by `pids`.
-
-If `err_retry` is `true`, it retries a failed application of `f` on a different worker. If
-`err_stop` is `true`, it takes precedence over the value of `err_retry` and `pmap` stops
-execution on the first error.
-"""
-pmap
 
 """
     workers()
@@ -313,13 +302,6 @@ Compute a "2d histogram" with respect to the bins delimited by the edges given i
 `e2`. This function writes the results to a pre-allocated array `counts`.
 """
 hist2d!
-
-"""
-    hypot(x, y)
-
-Compute the ``\\sqrt{x^2+y^2}`` avoiding overflow and underflow.
-"""
-hypot
 
 """
     airybi(x)
@@ -722,14 +704,6 @@ once all workers, requested by `manager` have been launched. `params` is a dicti
 keyword arguments `addprocs` was called with.
 """
 launch
-
-"""
-    @code_typed
-
-Evaluates the arguments to the function call, determines their types, and calls
-[`code_typed`](:func:`code_typed`) on the resulting expression.
-"""
-:@code_typed
 
 """
     invdigamma(x)
@@ -1146,13 +1120,6 @@ Test whether any values in `A` along the singleton dimensions of `r` are `true`,
 results to `r`.
 """
 any!
-
-"""
-    falses(dims)
-
-Create a `BitArray` with all values set to `false`.
-"""
-falses
 
 """
     filter!(function, collection)
@@ -1610,9 +1577,7 @@ ind2chr
 """
     reshape(A, dims)
 
-Create an array with the same data as the given array, but with different dimensions. An
-implementation for a particular type of array may choose whether the data is copied or
-shared.
+Create an array with the same data as the given array, but with different dimensions.
 """
 reshape
 
@@ -1727,7 +1692,7 @@ split
 """
     dump(x)
 
-Show all user-visible structure of a value.
+Show every part of the representation of a value.
 """
 dump
 
@@ -2081,13 +2046,6 @@ log10
 appended to an internal buffer of backtraces.
 """
 :@profile
-
-"""
-    extrema(itr)
-
-Compute both the minimum and maximum element in a single pass, and return them as a 2-tuple.
-"""
-extrema
 
 """
     isdigit(c::Union{Char,AbstractString}) -> Bool
@@ -2699,7 +2657,7 @@ Example for a sparse 2-d array:
 
 ```jldoctest
 julia> A = sparse([1, 1, 2], [1, 3, 1], [1, 2, -5])
-2x3 sparse matrix with 3 Int64 entries:
+2×3 sparse matrix with 3 Int64 nonzero entries:
         [1, 1]  =  1
         [2, 1]  =  -5
         [1, 3]  =  2
@@ -2793,9 +2751,9 @@ mapping the SharedArray
 indexpids
 
 """
-    remotecall_wait(func, id, args...)
+    remotecall_wait(func, id, args...; kwargs...)
 
-Perform `wait(remotecall(...))` in one message.
+Perform `wait(remotecall(...))` in one message. Keyword arguments, if any, are passed through to `func`.
 """
 remotecall_wait
 
@@ -3054,23 +3012,23 @@ julia> a, b, c, d, e, f = 1, 2, 3, 4, 5, 6
 (1,2,3,4,5,6)
 
 julia> [a b c; d e f]
-2x3 Array{Int64,2}:
+2×3 Array{Int64,2}:
  1  2  3
  4  5  6
 
 julia> hvcat((3,3), a,b,c,d,e,f)
-2x3 Array{Int64,2}:
+2×3 Array{Int64,2}:
  1  2  3
  4  5  6
 
 julia> [a b;c d; e f]
-3x2 Array{Int64,2}:
+3×2 Array{Int64,2}:
  1  2
  3  4
  5  6
 
 julia> hvcat((2,2,2), a,b,c,d,e,f)
-3x2 Array{Int64,2}:
+3×2 Array{Int64,2}:
  1  2
  3  4
  5  6
@@ -3507,13 +3465,6 @@ Returns the lower triangle of `M` starting from the `k`th superdiagonal.
 """
 tril(M,k)
 
-"""
-    @edit
-
-Evaluates the arguments to the function call, determines their types, and calls the `edit`
-function on the resulting expression.
-"""
-:@edit
 
 """
     subtypes(T::DataType)
@@ -3627,14 +3578,6 @@ not representable.
 `digits` and `base` work as for [`round`](:func:`round`).
 """
 trunc
-
-"""
-    @less
-
-Evaluates the arguments to the function call, determines their types, and calls the `less`
-function on the resulting expression.
-"""
-:@less
 
 """
     broadcast_function(f)
@@ -3788,7 +3731,7 @@ popdisplay
     readdlm(source, delim::Char, T::Type, eol::Char; header=false, skipstart=0, skipblanks=true, use_mmap, ignore_invalid_chars=false, quotes=true, dims, comments=true, comment_char='#')
 
 Read a matrix from the source where each line (separated by `eol`) gives one row, with
-elements separated by the given delimeter. The source can be a text file, stream or byte
+elements separated by the given delimiter. The source can be a text file, stream or byte
 array. Memory mapped files can be used by passing the byte array representation of the
 mapped segment as source.
 
@@ -4432,13 +4375,6 @@ Pick a random element or array of random elements from the set of values specifi
 rand
 
 """
-    bitpack(A::AbstractArray{T,N}) -> BitArray
-
-Converts a numeric array to a packed boolean array.
-"""
-bitpack
-
-"""
     base(base, n, [pad])
 
 Convert an integer to a string in the given base, optionally specifying a number of digits
@@ -4446,26 +4382,6 @@ to pad to. The base can be specified as either an integer, or as a `UInt8` array
 character values to use as digit symbols.
 """
 base
-
-"""
-    Timer(callback::Function, delay, repeat=0)
-
-Create a timer to call the given `callback` function. The `callback` is passed one argument,
-the timer object itself. The callback will be invoked after the specified initial `delay`,
-and then repeating with the given `repeat` interval. If `repeat` is `0`, the timer is only
-triggered once. Times are in seconds. A timer is stopped and has its resources freed by
-calling `close` on it.
-"""
-Timer(::Function,delay,repeat=0)
-
-"""
-    Timer(delay, repeat=0)
-
-Create a timer that wakes up tasks waiting for it (by calling `wait` on the timer object) at
-a specified interval.  Times are in seconds.  Waiting tasks are woken with an error when the
-timer is closed (by `close`). Use `isopen` to check whether a timer is still active.
-"""
-Timer(delay, repeat=0)
 
 """
     BoundsError([a],[i])
@@ -5416,7 +5332,7 @@ overwriting the existing value of `Y`. Note that `Y` must not be aliased with ei
 julia> A=[1.0 2.0; 3.0 4.0]; B=[1.0 1.0; 1.0 1.0]; Y = similar(B); A_mul_B!(Y, A, B);
 
 julia> Y
-2x2 Array{Float64,2}:
+2×2 Array{Float64,2}:
  3.0  3.0
  7.0  7.0
 ```
@@ -5476,10 +5392,10 @@ value is a range of indexes where the matching sequence is found, such that `s[s
 search
 
 """
-    remotecall_fetch(func, id, args...)
+    remotecall_fetch(func, id, args...; kwargs...)
 
-Perform `fetch(remotecall(...))` in one message. Any remote exceptions are captured in a
-`RemoteException` and thrown.
+Perform `fetch(remotecall(...))` in one message.  Keyword arguments, if any, are passed through to `func`.
+Any remote exceptions are captured in a `RemoteException` and thrown.
 """
 remotecall_fetch
 
@@ -5584,14 +5500,6 @@ Returns `string` with the first character converted to lowercase.
 lcfirst
 
 """
-    @code_native
-
-Evaluates the arguments to the function call, determines their types, and calls
-[`code_native`](:func:`code_native`) on the resulting expression.
-"""
-:@code_native
-
-"""
     flipbits!(B::BitArray{N}) -> BitArray{N}
 
 Performs a bitwise not operation on `B`. See [`~`](:ref:`~ operator <~>`).
@@ -5604,14 +5512,6 @@ flipbits!
 Returns the value of a symbolic link `path`.
 """
 readlink
-
-"""
-    @code_warntype
-
-Evaluates the arguments to the function call, determines their types, and calls
-[`code_warntype`](:func:`code_warntype`) on the resulting expression.
-"""
-:@code_warntype
 
 """
     deg2rad(x)
@@ -5911,14 +5811,6 @@ See `rounding` for available rounding modes.
 setrounding(f::Function, T, mode)
 
 """
-    sleep(seconds)
-
-Block the current task for a specified number of seconds. The minimum sleep time is 1
-millisecond or input of `0.001`.
-"""
-sleep
-
-"""
     Mmap.sync!(array)
 
 Forces synchronization between the in-memory version of a memory-mapped `Array` or
@@ -6144,7 +6036,7 @@ histrange
 """
     eta(x)
 
-Dirichlet eta function ``\\eta(s) = \\sum^\\infty_{n=1}(-)^{n-1}/n^{s}``.
+Dirichlet eta function ``\\eta(s) = \\sum^\\infty_{n=1}(-1)^{n-1}/n^{s}``.
 """
 eta
 
@@ -6396,7 +6288,7 @@ For example, `similar(1:10, 1, 4)` returns an uninitialized `Array{Int,2}` since
 neither mutable nor support 2 dimensions:
 
     julia> similar(1:10, 1, 4)
-    1x4 Array{Int64,2}:
+    1×4 Array{Int64,2}:
      4419743872  4374413872  4419743888  0
 
 Conversely, `similar(trues(10,10), 2)` returns an uninitialized `BitVector` with two
@@ -6411,7 +6303,7 @@ Since `BitArray`s can only store elements of type `Bool`, however, if you reques
 different element type it will create a regular `Array` instead:
 
     julia> similar(falses(10), Float64, 2, 4)
-    2x4 Array{Float64,2}:
+    2×4 Array{Float64,2}:
      2.18425e-314  2.18425e-314  2.18425e-314  2.18425e-314
      2.18425e-314  2.18425e-314  2.18425e-314  2.18425e-314
 """
@@ -6894,7 +6786,7 @@ to define a new `writemime` method for `T`, via: `writemime(stream, ::MIME"mime"
 where `mime` is a MIME-type string and the function body calls `write` (or similar) to write
 that representation of `x` to `stream`. (Note that the `MIME""` notation only supports
 literal strings; to construct `MIME` types in a more flexible manner use
-`MIME{symbol("")}`.)
+`MIME{Symbol("")}`.)
 
 For example, if you define a `MyImage` type and know how to write it to a PNG file, you
 could define a function `writemime(stream, ::MIME"image/png", x::MyImage) = ...` to allow
@@ -7024,7 +6916,7 @@ less(f::AbstractString, ?)
 Show the definition of a function using the default pager, optionally specifying a tuple of
 types to indicate which method to see.
 """
-less(m::Method, ?)
+less(func, ?)
 
 """
     sqrtm(A)
@@ -7915,13 +7807,6 @@ x == fld(x,y)*y + mod(x,y)
 mod
 
 """
-    trues(dims)
-
-Create a `BitArray` with all values set to `true`.
-"""
-trues
-
-"""
     qr(A [,pivot=Val{false}][;thin=true]) -> Q, R, [p]
 
 Compute the (pivoted) QR factorization of `A` such that either `A = Q*R` or `A[:,p] = Q*R`.
@@ -8224,7 +8109,7 @@ Returns an `AbstractString` or `Vector{UInt8}` containing the representation of 
 requested `mime` type, as written by `writemime` (throwing a `MethodError` if no appropriate
 `writemime` is available). An `AbstractString` is returned for MIME types with textual
 representations (such as `"text/html"` or `"application/postscript"`), whereas binary data
-is returned as `Vector{UInt8}`. (The function `istext(mime)` returns whether or not Julia
+is returned as `Vector{UInt8}`. (The function `istextmime(mime)` returns whether or not Julia
 treats a given `mime` type as text.)
 
 As a special case, if `x` is an `AbstractString` (for textual MIME types) or a
@@ -8291,23 +8176,6 @@ character whose category code begins with 'P'. For strings, tests whether this i
 all elements of the string.
 """
 ispunct
-
-"""
-    bitunpack(B::BitArray{N}) -> Array{Bool,N}
-
-Converts a packed boolean array to an array of booleans.
-"""
-bitunpack
-
-"""
-    @which
-
-Applied to a function call, it evaluates the arguments to the specified function call, and
-returns the `Method` object for the method that would be called for those arguments. Applied
-to a variable, it returns the module in which the variable was bound. It calls out to the
-`which` function.
-"""
-:@which
 
 """
     size(A, [dim...])
@@ -8495,14 +8363,6 @@ Read a UDP packet from the specified socket, returning a tuple of (address, data
 address will be either IPv4 or IPv6 as appropriate.
 """
 recvfrom
-
-"""
-    @code_llvm
-
-Evaluates the arguments to the function call, determines their types, and calls
-[`code_llvm`](:func:`code_llvm`) on the resulting expression.
-"""
-:@code_llvm
 
 """
     nextfloat(f)
@@ -8787,9 +8647,10 @@ result is a `Vector{UInt8,1}`.
 readavailable
 
 """
-    remotecall(func, id, args...)
+    remotecall(func, id, args...; kwargs...)
 
 Call a function asynchronously on the given arguments on the specified process. Returns a `Future`.
+Keyword arguments, if any, are passed through to `func`.
 """
 remotecall
 
@@ -9005,13 +8866,6 @@ true
 ```
 """
 applicable
-
-"""
-    xdump(x)
-
-Show all structure of a value, including all fields of objects.
-"""
-xdump
 
 """
     Base.process_messages(instrm::AsyncStream, outstrm::AsyncStream)
@@ -9510,7 +9364,7 @@ isxdigit
 """
     fill(x, dims)
 
-Create an array filled with the value `x`. For example, `fill(1.0, (10,10))` returns a 10x10
+Create an array filled with the value `x`. For example, `fill(1.0, (10,10))` returns a 10×10
 array of floats, with each element initialized to `1.0`.
 
 If `x` is an object reference, all elements will refer to the same object. `fill(Foo(),
@@ -9701,11 +9555,11 @@ Create an array of all zeros with the same element type and shape as `A`.
 zeros(A)
 
 """
-    symbol(x...) -> Symbol
+    Symbol(x...) -> Symbol
 
 Create a `Symbol` by concatenating the string representations of the arguments together.
 """
-symbol
+Symbol
 
 """
     zeta(s)
@@ -9713,14 +9567,6 @@ symbol
 Riemann zeta function ``\\zeta(s)``.
 """
 zeta(s)
-
-"""
-    zeta(s, z)
-
-Hurwitz zeta function ``\\zeta(s, z)``.  (This is equivalent to the Riemann zeta function
-``\\zeta(s)`` for the case of `z=1`.)
-"""
-zeta(s,z)
 
 """
     A_mul_Bt(A, B)
@@ -10107,7 +9953,7 @@ on the `permute` and `scale` keyword arguments. The eigenvectors are returned co
 ```jldoctest
 julia> eig([1.0 0.0 0.0; 0.0 3.0 0.0; 0.0 0.0 18.0])
 ([1.0,3.0,18.0],
-3x3 Array{Float64,2}:
+3×3 Array{Float64,2}:
  1.0  0.0  0.0
  0.0  1.0  0.0
  0.0  0.0  1.0)
@@ -10202,11 +10048,11 @@ processes completed successfully.
 exit
 
 """
-    istext(m::MIME)
+    istextmime(m::MIME)
 
 Determine whether a MIME type is text data.
 """
-istext
+istextmime
 
 """
     merge!(collection, others...)

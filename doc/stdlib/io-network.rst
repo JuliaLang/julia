@@ -511,13 +511,7 @@ Text I/O
 
    .. Docstring generated from Julia source
 
-   Show all user-visible structure of a value.
-
-.. function:: xdump(x)
-
-   .. Docstring generated from Julia source
-
-   Show all structure of a value, including all fields of objects.
+   Show every part of the representation of a value.
 
 .. function:: readstring(stream::IO)
               readstring(filename::AbstractString)
@@ -558,7 +552,7 @@ Text I/O
 
    .. Docstring generated from Julia source
 
-   Read a matrix from the source where each line (separated by ``eol``\ ) gives one row, with elements separated by the given delimeter. The source can be a text file, stream or byte array. Memory mapped files can be used by passing the byte array representation of the mapped segment as source.
+   Read a matrix from the source where each line (separated by ``eol``\ ) gives one row, with elements separated by the given delimiter. The source can be a text file, stream or byte array. Memory mapped files can be used by passing the byte array representation of the mapped segment as source.
 
    If ``T`` is a numeric type, the result is an array of that type, with any non-numeric elements as ``NaN`` for floating-point types, or zero. Other useful values of ``T`` include ``ASCIIString``\ , ``AbstractString``\ , and ``Any``\ .
 
@@ -608,7 +602,7 @@ Text I/O
 
    .. Docstring generated from Julia source
 
-   Write ``A`` (a vector, matrix or an iterable collection of iterable rows) as text to ``f`` (either a filename string or an ``IO`` stream) using the given delimeter ``delim`` (which defaults to tab, but can be any printable Julia object, typically a ``Char`` or ``AbstractString``\ ).
+   Write ``A`` (a vector, matrix or an iterable collection of iterable rows) as text to ``f`` (either a filename string or an ``IO`` stream) using the given delimiter ``delim`` (which defaults to tab, but can be any printable Julia object, typically a ``Char`` or ``AbstractString``\ ).
 
    For example, two vectors ``x`` and ``y`` of the same length can be written as two columns of tab-delimited text to ``f`` by either ``writedlm(f, [x y])`` or by ``writedlm(f, zip(x, y))``\ .
 
@@ -713,7 +707,7 @@ Julia environments (such as the IPython-based IJulia notebook).
 
    .. Docstring generated from Julia source
 
-   The ``display`` functions ultimately call ``writemime`` in order to write an object ``x`` as a given ``mime`` type to a given I/O ``stream`` (usually a memory buffer), if possible. In order to provide a rich multimedia representation of a user-defined type ``T``\ , it is only necessary to define a new ``writemime`` method for ``T``\ , via: ``writemime(stream, ::MIME"mime", x::T) = ...``\ , where ``mime`` is a MIME-type string and the function body calls ``write`` (or similar) to write that representation of ``x`` to ``stream``\ . (Note that the ``MIME""`` notation only supports literal strings; to construct ``MIME`` types in a more flexible manner use ``MIME{symbol("")}``\ .)
+   The ``display`` functions ultimately call ``writemime`` in order to write an object ``x`` as a given ``mime`` type to a given I/O ``stream`` (usually a memory buffer), if possible. In order to provide a rich multimedia representation of a user-defined type ``T``\ , it is only necessary to define a new ``writemime`` method for ``T``\ , via: ``writemime(stream, ::MIME"mime", x::T) = ...``\ , where ``mime`` is a MIME-type string and the function body calls ``write`` (or similar) to write that representation of ``x`` to ``stream``\ . (Note that the ``MIME""`` notation only supports literal strings; to construct ``MIME`` types in a more flexible manner use ``MIME{Symbol("")}``\ .)
 
    For example, if you define a ``MyImage`` type and know how to write it to a PNG file, you could define a function ``writemime(stream, ::MIME"image/png", x::MyImage) = ...`` to allow your images to be displayed on any PNG-capable ``Display`` (such as IJulia). As usual, be sure to ``import Base.writemime`` in order to add new methods to the built-in Julia function ``writemime``\ .
 
@@ -729,7 +723,7 @@ Julia environments (such as the IPython-based IJulia notebook).
 
    .. Docstring generated from Julia source
 
-   Returns an ``AbstractString`` or ``Vector{UInt8}`` containing the representation of ``x`` in the requested ``mime`` type, as written by ``writemime`` (throwing a ``MethodError`` if no appropriate ``writemime`` is available). An ``AbstractString`` is returned for MIME types with textual representations (such as ``"text/html"`` or ``"application/postscript"``\ ), whereas binary data is returned as ``Vector{UInt8}``\ . (The function ``istext(mime)`` returns whether or not Julia treats a given ``mime`` type as text.)
+   Returns an ``AbstractString`` or ``Vector{UInt8}`` containing the representation of ``x`` in the requested ``mime`` type, as written by ``writemime`` (throwing a ``MethodError`` if no appropriate ``writemime`` is available). An ``AbstractString`` is returned for MIME types with textual representations (such as ``"text/html"`` or ``"application/postscript"``\ ), whereas binary data is returned as ``Vector{UInt8}``\ . (The function ``istextmime(mime)`` returns whether or not Julia treats a given ``mime`` type as text.)
 
    As a special case, if ``x`` is an ``AbstractString`` (for textual MIME types) or a ``Vector{UInt8}`` (for binary MIME types), the ``reprmime`` function assumes that ``x`` is already in the requested ``mime`` format and simply returns ``x``\ .
 
@@ -784,7 +778,7 @@ stack with:
 
    Returns a ``TextDisplay <: Display``\ , which can display any object as the text/plain MIME type (only), writing the text representation to the given I/O stream. (The text representation is the same as the way an object is printed in the Julia REPL.)
 
-.. function:: istext(m::MIME)
+.. function:: istextmime(m::MIME)
 
    .. Docstring generated from Julia source
 

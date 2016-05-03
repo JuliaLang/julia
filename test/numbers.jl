@@ -2358,9 +2358,24 @@ end
 # divide by zero error
 @test_throws DivideError powermod(1,0,0)
 @test_throws DivideError powermod(1,0,big(0))
-# negative power domain error
-@test_throws DomainError powermod(1,-2,1)
-@test_throws DomainError powermod(1,-2,big(1))
+# negative powers perform modular inversion before exponentiation
+@test powermod(1, -1, 1) == 0
+@test powermod(1, -1, big(1)) == 0
+# additional BigInt powermod tests
+@test powermod(0, 1, big(6)) == 0
+@test powermod(1, 0, big(6)) == 1
+@test powermod(big(6), big(6), big(6)) == 0
+@test powermod(10, 50, big(10)^50 - 1) == 1
+
+@test powermod(-1, 1, big(6)) == 5
+@test powermod(-1, 0, big(6)) == 1
+@test powermod(-1, -1, big(6)) == 5
+@test powermod(-1, 1, big(-6)) == -1
+@test powermod(-1, 0, big(-6)) == -5
+@test powermod(-1, -1, big(-6)) == -1
+
+@test_throws DivideError powermod(2, -1, big(6))
+@test_throws DivideError powermod(-2, -1, big(6))
 
 # other divide-by-zero errors
 @test_throws DivideError div(1,0)
@@ -2858,3 +2873,20 @@ for T in (Int8, Int16, Int32, Int64, Bool)
     @test round(T, true//true) === one(T)
     @test round(T, false//true) === zero(T)
 end
+
+# multiplicative inverses
+function testmi(numrange, denrange)
+    for d in denrange
+        d == 0 && continue
+        fastd = Base.multiplicativeinverse(d)
+        for n in numrange
+            @test div(n,d) == div(n,fastd)
+        end
+    end
+end
+testmi(-1000:1000, -100:100)
+testmi(typemax(Int)-1000:typemax(Int), -100:100)
+testmi(typemin(Int)+1:typemin(Int)+1000, -100:100)
+@test_throws ArgumentError Base.multiplicativeinverse(0)
+testmi(map(UInt32, 0:1000), map(UInt32, 1:100))
+testmi(typemax(UInt32)-UInt32(1000):typemax(UInt32), map(UInt32, 1:100))

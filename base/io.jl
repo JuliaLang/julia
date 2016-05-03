@@ -378,6 +378,8 @@ eltype(::Type{EachLine}) = ByteString
 
 readlines(s=STDIN) = collect(eachline(s))
 
+iteratorsize(::Type{EachLine}) = SizeUnknown()
+
 # IOStream Marking
 # Note that these functions expect that io.mark exists for
 # the concrete IO type. This may not be true for IO types

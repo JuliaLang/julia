@@ -104,17 +104,17 @@ end
 crng = CartesianRange(CartesianIndex{4}(2,0,1,3),
                       CartesianIndex{4}(4,1,1,5))
 indexes = simd_cartesian_range!(Array(eltype(crng), 0), crng)
-@test indexes == collect(crng)
+@test indexes == vec(collect(crng))
 
 crng = CartesianRange(CartesianIndex{2}(-1,1),
                       CartesianIndex{2}(1,3))
 indexes = simd_cartesian_range!(Array(eltype(crng), 0), crng)
-@test indexes == collect(crng)
+@test indexes == vec(collect(crng))
 
 crng = CartesianRange(CartesianIndex{2}(-1,1),
                       CartesianIndex{2}(-1,3))
 indexes = simd_cartesian_range!(Array(eltype(crng), 0), crng)
-@test indexes == collect(crng)
+@test indexes == vec(collect(crng))
 
 crng = CartesianRange(CartesianIndex{1}(2),
                       CartesianIndex{1}(4))
@@ -124,7 +124,7 @@ indexes = simd_cartesian_range!(Array(eltype(crng), 0), crng)
 crng = CartesianRange(CartesianIndex{0}(),
                       CartesianIndex{0}())
 indexes = simd_cartesian_range!(Array(eltype(crng), 0), crng)
-@test indexes == collect(crng)
+@test indexes == vec(collect(crng))
 
 # @simd with array as "range"
 # issue #13869

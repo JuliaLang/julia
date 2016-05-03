@@ -78,7 +78,7 @@ import Base: trailingsize
 const can_inline = Base.JLOptions().can_inline != 0
 function test_scalar_indexing{T}(::Type{T}, shape, ::Type{TestAbstractArray})
     N = prod(shape)
-    A = reshape(1:N, shape)
+    A = reshape(collect(1:N), shape)
     B = T(A)
     @test A == B
     # Test indexing up to 5 dimensions
@@ -186,7 +186,7 @@ end
 
 function test_vector_indexing{T}(::Type{T}, shape, ::Type{TestAbstractArray})
     N = prod(shape)
-    A = reshape(1:N, shape)
+    A = reshape(collect(1:N), shape)
     B = T(A)
     idxs = rand(1:N, 3, 3, 3)
     @test B[idxs] == A[idxs] == idxs
@@ -198,11 +198,31 @@ function test_vector_indexing{T}(::Type{T}, shape, ::Type{TestAbstractArray})
     # Test with containers that aren't Int[]
     @test B[[]] == A[[]] == []
     @test B[convert(Array{Any}, idxs)] == A[convert(Array{Any}, idxs)] == idxs
+
+    # Test adding dimensions with matrices
+    idx1 = rand(1:size(A, 1), 3)
+    idx2 = rand(1:Base.trailingsize(A, 2), 4, 5)
+    @test B[idx1, idx2] == A[idx1, idx2] == reshape(A[idx1, vec(idx2)], 3, 4, 5) == reshape(B[idx1, vec(idx2)], 3, 4, 5)
+    @test B[1, idx2] == A[1, idx2] == reshape(A[1, vec(idx2)], 4, 5) == reshape(B[1, vec(idx2)], 4, 5)
+
+    # test removing dimensions with 0-d arrays
+    idx0 = reshape([rand(1:size(A, 1))])
+    @test B[idx0, idx2] == A[idx0, idx2] == reshape(A[idx0[], vec(idx2)], 4, 5) == reshape(B[idx0[], vec(idx2)], 4, 5)
+    @test B[reshape([end]), reshape([end])] == A[reshape([end]), reshape([end])] == reshape([A[end,end]]) == reshape([B[end,end]])
+
+    # test logical indexing
+    mask = bitrand(shape)
+    @test B[mask] == A[mask] == B[find(mask)] == A[find(mask)] == find(mask)
+    @test B[vec(mask)] == A[vec(mask)] == find(mask)
+    mask1 = bitrand(size(A, 1))
+    mask2 = bitrand(Base.trailingsize(A, 2))
+    @test B[mask1, mask2] == A[mask1, mask2] == B[find(mask1), find(mask2)]
+    @test B[mask1, 1] == A[mask1, 1] == find(mask1)
 end
 
 function test_primitives{T}(::Type{T}, shape, ::Type{TestAbstractArray})
     N = prod(shape)
-    A = reshape(1:N, shape)
+    A = reshape(collect(1:N), shape)
     B = T(A)
 
     # last(a)
@@ -222,7 +242,7 @@ function test_primitives{T}(::Type{T}, shape, ::Type{TestAbstractArray})
     end
 
     # reshape(a::AbstractArray, dims::Dims)
-    @test_throws ArgumentError reshape(B, (0, 1))
+    @test_throws DimensionMismatch reshape(B, (0, 1))
 
     # copy!(dest::AbstractArray, src::AbstractArray)
     @test_throws BoundsError copy!(Array(Int, 10), [1:11...])
@@ -252,7 +272,7 @@ type UnimplementedArray{T, N} <: AbstractArray{T, N} end
 
 function test_getindex_internals{T}(::Type{T}, shape, ::Type{TestAbstractArray})
     N = prod(shape)
-    A = reshape(1:N, shape)
+    A = reshape(collect(1:N), shape)
     B = T(A)
 
     @test getindex(A) == 1
@@ -272,7 +292,7 @@ end
 
 function test_setindex!_internals{T}(::Type{T}, shape, ::Type{TestAbstractArray})
     N = prod(shape)
-    A = reshape(1:N, shape)
+    A = reshape(collect(1:N), shape)
     B = T(A)
 
     Base.unsafe_setindex!(B, 1)
@@ -362,7 +382,7 @@ function test_ind2sub(::Type{TestAbstractArray})
     n = rand(2:5)
     dims = tuple(rand(1:5, n)...)
     len = prod(dims)
-    A = reshape(1:len, dims...)
+    A = reshape(collect(1:len), dims...)
     I = ind2sub(dims, [1:len...])
     for i in 1:len
         idx = [ I[j][i] for j in 1:n ]
@@ -380,59 +400,73 @@ Base.getindex(A::TSlowNIndexes, index::Int...) = error("Must use $(ndims(A)) ind
 Base.getindex{T}(A::TSlowNIndexes{T,2}, i::Int, j::Int) = A.data[i,j]
 
 
-
 type GenericIterator{N} end
 Base.start{N}(::GenericIterator{N}) = 1
 Base.next{N}(::GenericIterator{N}, i) = (i, i + 1)
 Base.done{N}(::GenericIterator{N}, i) = i > N ? true : false
+Base.iteratorsize{N}(::Type{GenericIterator{N}}) = Base.SizeUnknown()
 
 function test_map(::Type{TestAbstractArray})
+    empty_pool = WorkerPool()
+    pmap_fallback = (f, c...) -> pmap(empty_pool, f, c...)
 
-    for typ in (Float16, Float32, Float64,
-                Int8, Int16, Int32, Int64, Int128,
-                UInt8, UInt16, UInt32, UInt64, UInt128
-    ),
-        arg_typ in (Integer,
-                    Signed,
-                    Unsigned
-    )
-        X = typ[1:10...]
-        _typ = typeof(arg_typ(one(typ)))
-        @test map(arg_typ, X) == _typ[1:10...]
+    for mapf in [map, asyncmap, pmap_fallback]
+        for typ in (Float16, Float32, Float64,
+                    Int8, Int16, Int32, Int64, Int128,
+                    UInt8, UInt16, UInt32, UInt64, UInt128),
+            arg_typ in (Integer,
+                        Signed,
+                        Unsigned)
+            X = typ[1:10...]
+            _typ = typeof(arg_typ(one(typ)))
+            @test mapf(arg_typ, X) == _typ[1:10...]
+        end
+
+        # generic map
+        f(x) = x + 1
+        I = GenericIterator{10}()
+        @test mapf(f, I) == Any[2:11...]
+
+        # AbstractArray map for 2 arg case
+        f(x, y) = x + y
+        B = Float64[1:10...]
+        C = Float64[1:10...]
+        @test mapf(f, convert(Vector{Int},B), C) == Float64[ 2 * i for i in 1:10 ]
+        @test mapf(f, Int[], Float64[]) == Union{}[]
+        # map with different result types
+        let m = mapf(x->x+1, Number[1, 2.0])
+            # FIXME why is this different for asyncmap?
+            @test mapf != map || isa(m, Vector{Real})
+            @test m == Real[2, 3.0]
+        end
+
+        # AbstractArray map for N-arg case
+        A = Array(Int, 10)
+        f(x, y, z) = x + y + z
+        D = Float64[1:10...]
+
+        @test map!(f, A, B, C, D) == Int[ 3 * i for i in 1:10 ]
+        @test mapf(f, B, C, D) == Float64[ 3 * i for i in 1:10 ]
+        @test mapf(f, Int[], Int[], Complex{Int}[]) == Union{}[]
     end
 
-    # generic map
-    f(x) = x + 1
-    I = GenericIterator{10}()
-    @test map(f, I) == Any[2:11...]
-    @test collect(Base.StreamMapIterator(f, I)) == Any[2:11...]
-
-    # AbstractArray map for 2 arg case
-    f(x, y) = x + y
-    A = Array(Int, 10)
+    # In-place map
+    A = Float64[1:10...]
+    map!(x->x*x, A)
+    @test A == map(x->x*x, Float64[1:10...])
     B = Float64[1:10...]
-    C = Float64[1:10...]
-    @test Base.map_to!(f, 1, A, B, C) == Real[ 2 * i for i in 1:10 ]
-    @test map(f, Int[], Float64[]) == Float64[]
-    @test collect(Base.StreamMapIterator(f, Int[], Float64[])) == Float64[]
+    Base.asyncmap!(x->x*x, B)
+    @test A == B
 
-    # AbstractArray map for N-arg case
-    f(x, y, z) = x + y + z
-    D = Float64[1:10...]
-
-    @test map!(f, A, B, C, D) == Int[ 3 * i for i in 1:10 ]
-    @test Base.map_to_n!(f, 1, A, (B, C, D)) == Real[ 3 * i for i in 1:10 ]
-    @test map(f, B, C, D) == Float64[ 3 * i for i in 1:10 ]
-    @test collect(Base.StreamMapIterator(f, B, C, D)) == Float64[ 3 * i for i in 1:10 ]
-    @test map(f, Int[], Int[], Complex{Int}[]) == Number[]
-    @test collect(Base.StreamMapIterator(f, Int[], Int[], Complex{Int}[])) == Number[]
+    # Map to destination collection
+    map!((x,y,z)->x*y*z, A, Float64[1:10...], Float64[1:10...], Float64[1:10...])
+    @test A == map(x->x*x*x, Float64[1:10...])
+    Base.asyncmap!((x,y,z)->x*y*z, B, Float64[1:10...], Float64[1:10...], Float64[1:10...])
+    @test A == B
 end
 
-function test_map_promote(::Type{TestAbstractArray})
-    A = [1:10...]
-    f(x) = iseven(x) ? 1.0 : 1
-    @test Base.map_promote(f, A) == fill(1.0, 10)
-end
+# issue #15689, mapping an abstract type
+@test isa(map(Set, Array[[1,2],[3,4]]), Vector{Set{Int}})
 
 function test_UInt_indexing(::Type{TestAbstractArray})
     A = [1:100...]
@@ -445,24 +479,6 @@ function test_UInt_indexing(::Type{TestAbstractArray})
             @eval begin
                 @test $_A[$_i] == $i
             end
-        end
-    end
-end
-
-function test_vcat_depwarn(::Type{TestAbstractArray})
-    if (Base.JLOptions()).depwarn > 1
-        @test_throws ErrorException [1:10]
-        @test_throws ErrorException [[1, 2], [3, 4]]
-        @test_throws ErrorException [[1, 2], [3, 4], [5, 6]]
-    else
-        olderr = STDERR
-        try
-            rd, wr = redirect_stderr()
-            @test [1:10] == [1:10...]
-            @test [[1, 2], [3, 4]] == [1, 2, 3, 4]
-            @test [[1, 2], [3, 4], [5, 6]] == [1, 2, 3, 4, 5, 6]
-        finally
-            redirect_stderr(olderr)
         end
     end
 end
@@ -496,9 +512,7 @@ test_get(TestAbstractArray)
 test_cat(TestAbstractArray)
 test_ind2sub(TestAbstractArray)
 test_map(TestAbstractArray)
-test_map_promote(TestAbstractArray)
 test_UInt_indexing(TestAbstractArray)
-test_vcat_depwarn(TestAbstractArray)
 test_13315(TestAbstractArray)
 test_checksquare()
 

@@ -823,8 +823,9 @@ end
 convert(::Type{Dense}, A::Sparse) = sparse_to_dense(A)
 
 # This constructior assumes zero based colptr and rowval
-function (::Type{Sparse}){Tv<:VTypes}(m::Integer, n::Integer, colptr::Vector{SuiteSparse_long}, rowval::Vector{SuiteSparse_long}, nzval::Vector{Tv}, stype)
-
+function (::Type{Sparse}){Tv<:VTypes}(m::Integer, n::Integer,
+        colptr::Vector{SuiteSparse_long}, rowval::Vector{SuiteSparse_long},
+        nzval::Vector{Tv}, stype)
     # check if columns are sorted
     iss = true
     for i = 2:length(colptr)
@@ -844,8 +845,8 @@ function (::Type{Sparse}){Tv<:VTypes}(m::Integer, n::Integer, colptr::Vector{Sui
     @isok check_sparse(o)
 
     return o
-
 end
+
 function (::Type{Sparse}){Tv<:VTypes}(m::Integer, n::Integer, colptr::Vector{SuiteSparse_long}, rowval::Vector{SuiteSparse_long}, nzval::Vector{Tv})
     o = Sparse(m, n, colptr, rowval, nzval, 0)
 
@@ -902,7 +903,6 @@ end
 
 # Useful when reading in files, but not type stable
 function convert(::Type{Sparse}, p::Ptr{C_SparseVoid})
-
     if p == C_NULL
         throw(ArgumentError("sparse matrix construction failed for unknown reasons. Please submit a bug report."))
     end
@@ -942,7 +942,6 @@ function convert(::Type{Sparse}, p::Ptr{C_SparseVoid})
     end
 
     return Sparse(convert(Ptr{C_Sparse{Tv}}, p))
-
 end
 
 convert(::Type{Sparse}, A::Dense) = dense_to_sparse(A, SuiteSparse_long)
@@ -957,23 +956,30 @@ end
 function convert{T}(::Type{Matrix{T}}, D::Dense{T})
     s = unsafe_load(D.p)
     a = Array(T, s.nrow, s.ncol)
-    if s.d == s.nrow
-        unsafe_copy!(pointer(a), s.x, s.d*s.ncol)
+    copy!(a, D)
+end
+function Base.copy!(dest::AbstractArray, D::Dense)
+    s = unsafe_load(D.p)
+    n = s.nrow*s.ncol
+    n <= length(dest) || throw(BoundsError(dest, n))
+    if s.d == s.nrow && isa(dest, Array)
+        unsafe_copy!(pointer(dest), s.x, s.d*s.ncol)
     else
+        k = 0
         for j = 1:s.ncol
             for i = 1:s.nrow
-                a[i,j] = unsafe_load(s.x, i + (j - 1)*s.d)
+                dest[k+=1] = unsafe_load(s.x, i + (j - 1)*s.d)
             end
         end
     end
-    a
+    dest
 end
 convert{T}(::Type{Matrix}, D::Dense{T}) = convert(Matrix{T}, D)
 function convert{T}(::Type{Vector{T}}, D::Dense{T})
     if size(D, 2) > 1
         throw(DimensionMismatch("input must be a vector but had $(size(D, 2)) columns"))
     end
-    reshape(convert(Matrix, D), size(D, 1))
+    copy!(Array(T, size(D, 1)), D)
 end
 convert{T}(::Type{Vector}, D::Dense{T}) = convert(Vector{T}, D)
 
@@ -1242,11 +1248,7 @@ function cholfact!{Tv}(F::Factor{Tv}, A::Sparse{Tv}; shift::Real=0.0)
 end
 
 """
-    cholfact!(F::Factor, A::Union{SparseMatrixCSC{<:Real},
-        SparseMatrixCSC{Complex{<:Real}},
-        Symmetric{<:Real,SparseMatrixCSC{<:Real,SuiteSparse_long}},
-        Hermitian{Complex{<:Real},SparseMatrixCSC{Complex{<:Real},SuiteSparse_long}}};
-        shift = 0.0) -> CHOLMOD.Factor
+    cholfact!(F::Factor, A::Union{SparseMatrixCSC{<:Real},SparseMatrixCSC{Complex{<:Real}},Symmetric{<:Real,SparseMatrixCSC{<:Real,SuiteSparse_long}},Hermitian{Complex{<:Real},SparseMatrixCSC{Complex{<:Real},SuiteSparse_long}}}; shift = 0.0) -> CHOLMOD.Factor
 
 Compute the Cholesky (``LL'``) factorization of `A`, reusing the symbolic factorization `F`.
 
@@ -1282,14 +1284,11 @@ function cholfact(A::Sparse; shift::Real=0.0,
 end
 
 """
-    cholfact(::Union{SparseMatrixCSC{<:Real},SparseMatrixCSC{Complex{<:Real}},
-        Symmetric{<:Real,SparseMatrixCSC{<:Real,
-        SuiteSparse_long}},Hermitian{Complex{<:Real},SparseMatrixCSC{Complex{<:Real},
-        SuiteSparse_long}}}; shift = 0.0, perm=Int[]) -> CHOLMOD.Factor
+    cholfact(::Union{SparseMatrixCSC{<:Real},SparseMatrixCSC{Complex{<:Real}},Symmetric{<:Real,SparseMatrixCSC{<:Real,SuiteSparse_long}},Hermitian{Complex{<:Real},SparseMatrixCSC{Complex{<:Real},SuiteSparse_long}}}; shift = 0.0, perm = Int[]) -> CHOLMOD.Factor
 
 Compute the Cholesky factorization of a sparse positive definite matrix `A`.
 A fill-reducing permutation is used.
-`F = cholfact(A)` is most frequently used to solve systems of equations with `F\b`,
+`F = cholfact(A)` is most frequently used to solve systems of equations with `F\\b`,
 but also the methods `diag`, `det`, `logdet` are defined for `F`.
 You can also extract individual factors from `F`, using `F[:L]`.
 However, since pivoting is on by default,
@@ -1337,11 +1336,7 @@ function ldltfact!{Tv}(F::Factor{Tv}, A::Sparse{Tv}; shift::Real=0.0)
 end
 
 """
-    ldltfact!(F::Factor, A::Union{SparseMatrixCSC{<:Real},
-        SparseMatrixCSC{Complex{<:Real}},
-        Symmetric{<:Real,SparseMatrixCSC{<:Real,SuiteSparse_long}},
-        Hermitian{Complex{<:Real},SparseMatrixCSC{Complex{<:Real},SuiteSparse_long}}};
-        shift = 0.0) -> CHOLMOD.Factor
+    ldltfact!(F::Factor, A::Union{SparseMatrixCSC{<:Real},SparseMatrixCSC{Complex{<:Real}},Symmetric{<:Real,SparseMatrixCSC{<:Real,SuiteSparse_long}},Hermitian{Complex{<:Real},SparseMatrixCSC{Complex{<:Real},SuiteSparse_long}}}; shift = 0.0) -> CHOLMOD.Factor
 
 Compute the ``LDL'`` factorization of `A`, reusing the symbolic factorization `F`.
 
@@ -1377,14 +1372,11 @@ function ldltfact(A::Sparse; shift::Real=0.0,
 end
 
 """
-    ldltfact(::Union{SparseMatrixCSC{<:Real},SparseMatrixCSC{Complex{<:Real}},
-        Symmetric{<:Real,SparseMatrixCSC{<:Real,SuiteSparse_long}},
-        Hermitian{Complex{<:Real},SparseMatrixCSC{Complex{<:Real},SuiteSparse_long}}};
-        shift = 0.0, perm=Int[]) -> CHOLMOD.Factor
+    ldltfact(::Union{SparseMatrixCSC{<:Real},SparseMatrixCSC{Complex{<:Real}},Symmetric{<:Real,SparseMatrixCSC{<:Real,SuiteSparse_long}},Hermitian{Complex{<:Real},SparseMatrixCSC{Complex{<:Real},SuiteSparse_long}}}; shift = 0.0, perm=Int[]) -> CHOLMOD.Factor
 
 Compute the ``LDL'`` factorization of a sparse symmetric or Hermitian matrix.
 A fill-reducing permutation is used.
-`F = ldltfact(A)` is most frequently used to solve systems of equations `A*x = b` with `F\b`.
+`F = ldltfact(A)` is most frequently used to solve systems of equations `A*x = b` with `F\\b`.
 The returned factorization object `F` also supports the methods `diag`,
 `det`, and `logdet`. You can extract individual factors from `F` using `F[:L]`.
 However, since pivoting is on by default,
@@ -1517,7 +1509,7 @@ end
 function logdet{Tv<:VTypes}(F::Factor{Tv})
     f = unsafe_load(get(F.p))
     res = zero(Tv)
-    for d in diag(F) res += log(abs(d)) end
+    for d in diag(F); res += log(abs(d)) end
     f.is_ll!=0 ? 2res : res
 end
 

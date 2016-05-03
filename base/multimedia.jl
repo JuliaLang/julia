@@ -3,7 +3,7 @@
 module Multimedia
 
 export Display, display, pushdisplay, popdisplay, displayable, redisplay,
-   MIME, @MIME, @MIME_str, writemime, reprmime, stringmime, istext,
+   MIME, @MIME, @MIME_str, writemime, reprmime, stringmime, istextmime,
    mimewritable, TextDisplay
 
 ###########################################################################
@@ -14,7 +14,7 @@ export Display, display, pushdisplay, popdisplay, displayable, redisplay,
 immutable MIME{mime} end
 
 import Base: show, print, string, convert
-MIME(s) = MIME{symbol(s)}()
+MIME(s) = MIME{Symbol(s)}()
 show{mime}(io::IO, ::MIME{mime}) = print(io, "MIME type ", string(mime))
 print{mime}(io::IO, ::MIME{mime}) = print(io, mime)
 
@@ -22,14 +22,14 @@ print{mime}(io::IO, ::MIME{mime}) = print(io, mime)
 macro MIME(s)
     Base.warn_once("@MIME(\"\") is deprecated, use MIME\"\" instead.")
     if isa(s,AbstractString)
-        :(MIME{$(Expr(:quote, symbol(s)))})
+        :(MIME{$(Expr(:quote, Symbol(s)))})
     else
-        :(MIME{symbol($s)})
+        :(MIME{Symbol($s)})
     end
 end
 
 macro MIME_str(s)
-    :(MIME{$(Expr(:quote, symbol(s)))})
+    :(MIME{$(Expr(:quote, Symbol(s)))})
 end
 
 ###########################################################################
@@ -45,7 +45,7 @@ mimewritable(m::AbstractString, x) = mimewritable(MIME(m), x)
 
 ###########################################################################
 # MIME types are assumed to be binary data except for a set of types known
-# to be text data (possibly Unicode).  istext(m) returns whether
+# to be text data (possibly Unicode).  istextmime(m) returns whether
 # m::MIME is text data, and reprmime(m, x) returns x written to either
 # a string (for text m::MIME) or a Vector{UInt8} (for binary m::MIME),
 # assuming the corresponding write_mime method exists.  stringmime
@@ -59,13 +59,13 @@ mimewritable(m::AbstractString, x) = mimewritable(MIME(m), x)
 
 macro textmime(mime)
     quote
-        mimeT = MIME{symbol($mime)}
+        mimeT = MIME{Symbol($mime)}
         # avoid method ambiguities with the general definitions below:
         # (Q: should we treat Vector{UInt8} as a bytestring?)
         Base.Multimedia.reprmime(m::mimeT, x::Vector{UInt8}) = sprint(writemime, m, x)
         Base.Multimedia.stringmime(m::mimeT, x::Vector{UInt8}) = reprmime(m, x)
 
-        Base.Multimedia.istext(::mimeT) = true
+        Base.Multimedia.istextmime(::mimeT) = true
         if $(mime != "text/plain") # strings are shown escaped for text/plain
             Base.Multimedia.reprmime(m::mimeT, x::AbstractString) = x
         end
@@ -74,7 +74,7 @@ macro textmime(mime)
     end
 end
 
-istext(::MIME) = false
+istextmime(::MIME) = false
 function reprmime(m::MIME, x)
     s = IOBuffer()
     writemime(s, m, x)
@@ -85,7 +85,7 @@ stringmime(m::MIME, x) = base64encode(writemime, m, x)
 stringmime(m::MIME, x::Vector{UInt8}) = base64encode(write, x)
 
 # it is convenient to accept strings instead of ::MIME
-istext(m::AbstractString) = istext(MIME(m))
+istextmime(m::AbstractString) = istextmime(MIME(m))
 reprmime(m::AbstractString, x) = reprmime(MIME(m), x)
 stringmime(m::AbstractString, x) = stringmime(MIME(m), x)
 

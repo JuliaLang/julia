@@ -21,6 +21,7 @@
    punctuation
    sort
    pkg
+   dates
    test
    c
    libc

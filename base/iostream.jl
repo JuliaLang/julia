@@ -80,7 +80,7 @@ eof(s::IOStream) = ccall(:ios_eof_blocking, Cint, (Ptr{Void},), s.ios)!=0
 function fdio(name::AbstractString, fd::Integer, own::Bool=false)
     s = IOStream(name)
     ccall(:ios_fd, Ptr{Void}, (Ptr{Void}, Clong, Cint, Cint),
-          s.ios, fd, 0, own);
+          s.ios, fd, 0, own)
     return s
 end
 fdio(fd::Integer, own::Bool=false) = fdio(string("<fd ",fd,">"), fd, own)
@@ -181,7 +181,7 @@ end
 read(s::IOStream, ::Type{Char}) = Char(ccall(:jl_getutf8, UInt32, (Ptr{Void},), s.ios))
 
 takebuf_string(s::IOStream) =
-    ccall(:jl_takebuf_string, Any, (Ptr{Void},), s.ios)::ByteString
+    ccall(:jl_takebuf_string, Ref{ByteString}, (Ptr{Void},), s.ios)
 
 takebuf_array(s::IOStream) =
     ccall(:jl_takebuf_array, Vector{UInt8}, (Ptr{Void},), s.ios)

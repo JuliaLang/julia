@@ -32,6 +32,7 @@ for relty in (Float32, Float64, BigFloat), elty in (relty, Complex{relty})
     @test full(imag(D)) == imag(DM)
 
     @test parent(D) == d
+    @test diag(D) == d
     @test D[1,1] == d[1]
     @test D[1,2] == 0
 

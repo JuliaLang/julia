@@ -80,7 +80,7 @@ Getting Around
 
    .. Docstring generated from Julia source
 
-   Evaluates the arguments to the function call, determines their types, and calls the ``edit`` function on the resulting expression.
+   Evaluates the arguments to the function or macro call, determines their types, and calls the ``edit`` function on the resulting expression.
 
 .. function:: less(file::AbstractString, [line])
 
@@ -98,7 +98,7 @@ Getting Around
 
    .. Docstring generated from Julia source
 
-   Evaluates the arguments to the function call, determines their types, and calls the ``less`` function on the resulting expression.
+   Evaluates the arguments to the function or macro call, determines their types, and calls the ``less`` function on the resulting expression.
 
 .. function:: clipboard(x)
 
@@ -188,7 +188,7 @@ Getting Around
 
    .. Docstring generated from Julia source
 
-   Applied to a function call, it evaluates the arguments to the specified function call, and returns the ``Method`` object for the method that would be called for those arguments. Applied to a variable, it returns the module in which the variable was bound. It calls out to the ``which`` function.
+   Applied to a function or macro call, it evaluates the arguments to the specified call, and returns the ``Method`` object for the method that would be called for those arguments. Applied to a variable, it returns the module in which the variable was bound. It calls out to the ``which`` function.
 
 .. function:: methods(f, [types])
 
@@ -1218,6 +1218,38 @@ Errors
 
    An error occurred when running a module's ``__init__`` function. The actual error thrown is available in the ``.error`` field.
 
+.. function:: retry(f, [condition]; n=3; max_delay=10) -> Function
+
+   .. Docstring generated from Julia source
+
+   Returns a lambda that retries function ``f`` up to ``n`` times in the event of an exception. If ``condition`` is a ``Type`` then retry only for exceptions of that type. If ``condition`` is a function ``cond(::Exception) -> Bool`` then retry only if it is true.
+
+   **Examples**
+
+   .. code-block:: julia
+
+       retry(http_get, e -> e.status == "503")(url)
+       retry(read, UVError)(io)
+
+.. function:: @catch(f) -> Function
+
+   .. Docstring generated from Julia source
+
+   Returns a lambda that executes ``f`` and returns either the result of ``f`` or an ``Exception`` thrown by ``f``\ .
+
+   **Examples**
+
+   .. code-block:: julia
+
+       julia> r = @catch(length)([1,2,3])
+       3
+
+       julia> r = @catch(length)()
+       MethodError(length,())
+
+       julia> typeof(r)
+       MethodError
+
 Events
 ------
 
@@ -1232,6 +1264,18 @@ Events
    .. Docstring generated from Julia source
 
    Create a timer that wakes up tasks waiting for it (by calling ``wait`` on the timer object) at a specified interval.  Times are in seconds.  Waiting tasks are woken with an error when the timer is closed (by ``close``\ ). Use ``isopen`` to check whether a timer is still active.
+
+.. function:: AsyncCondition()
+
+   .. Docstring generated from Julia source
+
+   Create a async condition that wakes up tasks waiting for it (by calling ``wait`` on the object) when notified from C by a call to uv_async_send. Waiting tasks are woken with an error when the object is closed (by ``close``\ ). Use ``isopen`` to check whether it is still active.
+
+.. function:: AsyncCondition(callback::Function)
+
+   .. Docstring generated from Julia source
+
+   Create a async condition that calls the given ``callback`` function. The ``callback`` is passed one argument, the async condition object itself.
 
 Reflection
 ----------
@@ -1314,6 +1358,12 @@ Reflection
 
    Returns a tuple ``(filename,line)`` giving the location of a ``Method`` definition.
 
+.. function:: @functionloc
+
+   .. Docstring generated from Julia source
+
+   Applied to a function or macro call, it evaluates the arguments to the specified call, and returns a tuple ``(filename,line)`` giving the location for the method that would be called for those arguments. It calls out to the ``functionloc`` function.
+
 Internals
 ---------
 
@@ -1351,7 +1401,7 @@ Internals
 
    .. Docstring generated from Julia source
 
-   Evaluates the arguments to the function call, determines their types, and calls :func:`code_lowered` on the resulting expression.
+   Evaluates the arguments to the function or macro call, determines their types, and calls :func:`code_lowered` on the resulting expression.
 
 .. function:: code_typed(f, types; optimize=true)
 
@@ -1363,7 +1413,7 @@ Internals
 
    .. Docstring generated from Julia source
 
-   Evaluates the arguments to the function call, determines their types, and calls :func:`code_typed` on the resulting expression.
+   Evaluates the arguments to the function or macro call, determines their types, and calls :func:`code_typed` on the resulting expression.
 
 .. function:: code_warntype(f, types)
 
@@ -1375,7 +1425,7 @@ Internals
 
    .. Docstring generated from Julia source
 
-   Evaluates the arguments to the function call, determines their types, and calls :func:`code_warntype` on the resulting expression.
+   Evaluates the arguments to the function or macro call, determines their types, and calls :func:`code_warntype` on the resulting expression.
 
 .. function:: code_llvm(f, types)
 
@@ -1389,7 +1439,7 @@ Internals
 
    .. Docstring generated from Julia source
 
-   Evaluates the arguments to the function call, determines their types, and calls :func:`code_llvm` on the resulting expression.
+   Evaluates the arguments to the function or macro call, determines their types, and calls :func:`code_llvm` on the resulting expression.
 
 .. function:: code_native(f, types)
 
@@ -1401,7 +1451,7 @@ Internals
 
    .. Docstring generated from Julia source
 
-   Evaluates the arguments to the function call, determines their types, and calls :func:`code_native` on the resulting expression.
+   Evaluates the arguments to the function or macro call, determines their types, and calls :func:`code_native` on the resulting expression.
 
 .. function:: precompile(f,args::Tuple{Vararg{Any}})
 

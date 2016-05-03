@@ -139,7 +139,7 @@ function getdoc(state::State, file::AbstractString, input::Vector)
     # Capture the lines containing the docstring signature.
     output = []
     while !isempty(input)
-        line = shift!(input)
+        line = rstrip(shift!(input))
         push!(output, line)
         ismatch(r"^$", line) && break
     end

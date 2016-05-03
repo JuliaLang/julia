@@ -64,7 +64,6 @@
 #    sparams::Tuple
 #    tfunc
 #    name::Symbol
-#    specializations
 #    inferred
 #    file::Symbol
 #    line::Int
@@ -125,8 +124,8 @@ export
     Tuple, Type, TypeConstructor, TypeName, TypeVar, Union, Void,
     SimpleVector, AbstractArray, DenseArray,
     # special objects
-    Box, Function, Builtin, IntrinsicFunction, LambdaInfo, Method, MethodTable,
-    Module, Symbol, Task, Array, WeakRef,
+    Function, LambdaInfo, Method, MethodTable, TypeMapEntry, TypeMapLevel,
+    Module, Symbol, Task, Array, WeakRef, VecElement,
     # numeric types
     Number, Real, Integer, Bool, Ref, Ptr,
     AbstractFloat, Float16, Float32, Float64,
@@ -139,41 +138,17 @@ export
     InterruptException, OutOfMemoryError, ReadOnlyMemoryError, OverflowError,
     StackOverflowError, SegmentationFault, UndefRefError, UndefVarError, TypeError,
     # AST representation
-    Expr, GotoNode, LabelNode, LineNumberNode, QuoteNode, SymbolNode, TopNode,
-    GlobalRef, NewvarNode, GenSym,
+    Expr, GotoNode, LabelNode, LineNumberNode, QuoteNode, TopNode,
+    GlobalRef, NewvarNode, SSAValue, Slot, SlotNumber, TypedSlot,
     # object model functions
     fieldtype, getfield, setfield!, nfields, throw, tuple, is, ===, isdefined, eval,
-    # arrayref, arrayset, arraysize,
-    # _apply,
-    kwfunc,
     # sizeof    # not exported, to avoid conflicting with Base.sizeof
     # type reflection
     issubtype, typeof, isa,
-    # typeassert, apply_type,
     # method reflection
     applicable, invoke,
     # constants
-    nothing, Main,
-    # intrinsics module
-    Intrinsics
-    #ccall, cglobal, llvmcall, abs_float, add_float, add_int, and_int, ashr_int,
-    #box, bswap_int, checked_fptosi, checked_fptoui,
-    #checked_sadd_int, checked_ssub_int, checked_smul_int, checked_sdiv_int,
-    #checked_srem_int, checked_uadd_int, checked_usub_int, checked_umul_int,
-    #checked_udiv_int, checked_urem_int,
-    #checked_trunc_sint, checked_trunc_uint, check_top_bit,
-    #nan_dom_err, copysign_float, ctlz_int, ctpop_int, cttz_int,
-    #div_float, eq_float, eq_int, eqfsi64, eqfui64, flipsign_int, select_value,
-    #sqrt_llvm, powi_llvm,
-    #sqrt_llvm_fast,
-    #fpext, fpiseq, fpislt, fpsiround, fpuiround, fptosi, fptoui,
-    #fptrunc, le_float, lefsi64, lefui64, lesif64,
-    #leuif64, lshr_int, lt_float, ltfsi64, ltfui64, ltsif64, ltuif64, mul_float,
-    #mul_int, ne_float, ne_int, neg_float, neg_int, not_int, or_int, rem_float,
-    #sdiv_int, shl_int, sitofp, sle_int, slt_int, smod_int,
-    #srem_int, sub_float, sub_int, trunc_int, udiv_int, uitofp,
-    #ule_int, ult_int, unbox, urem_int, xor_int, sext_int, zext_int, arraylen
-
+    nothing, Main
 
 const (===) = is
 
@@ -241,12 +216,6 @@ type TypeError <: Exception
     got
 end
 
-type SymbolNode
-    name::Symbol
-    typ
-    SymbolNode(name::Symbol, t::ANY) = new(name, t)
-end
-
 abstract DirectIndexString <: AbstractString
 
 immutable ASCIIString <: DirectIndexString
@@ -281,25 +250,30 @@ end
 type WeakRef
     value
     WeakRef() = WeakRef(nothing)
-    WeakRef(v::ANY) = ccall(:jl_gc_new_weakref, Any, (Any,), v)::WeakRef
+    WeakRef(v::ANY) = ccall(:jl_gc_new_weakref, Ref{WeakRef}, (Any,), v)
 end
 
 TypeVar(n::Symbol) =
-    ccall(:jl_new_typevar, Any, (Any, Any, Any), n, Union{}, Any)::TypeVar
+    ccall(:jl_new_typevar, Ref{TypeVar}, (Any, Any, Any), n, Union{}, Any)
 TypeVar(n::Symbol, ub::ANY) =
     (isa(ub,Bool) ?
-     ccall(:jl_new_typevar_, Any, (Any, Any, Any, Any), n, Union{}, Any, ub)::TypeVar :
-     ccall(:jl_new_typevar, Any, (Any, Any, Any), n, Union{}, ub::Type)::TypeVar)
+     ccall(:jl_new_typevar_, Ref{TypeVar}, (Any, Any, Any, Any), n, Union{}, Any, ub) :
+     ccall(:jl_new_typevar, Ref{TypeVar}, (Any, Any, Any), n, Union{}, ub::Type))
 TypeVar(n::Symbol, lb::ANY, ub::ANY) =
     (isa(ub,Bool) ?
-     ccall(:jl_new_typevar_, Any, (Any, Any, Any, Any), n, Union{}, lb::Type, ub)::TypeVar :
-     ccall(:jl_new_typevar, Any, (Any, Any, Any), n, lb::Type, ub::Type)::TypeVar)
+     ccall(:jl_new_typevar_, Ref{TypeVar}, (Any, Any, Any, Any), n, Union{}, lb::Type, ub) :
+     ccall(:jl_new_typevar, Ref{TypeVar}, (Any, Any, Any), n, lb::Type, ub::Type))
 TypeVar(n::Symbol, lb::ANY, ub::ANY, b::Bool) =
-    ccall(:jl_new_typevar_, Any, (Any, Any, Any, Any), n, lb::Type, ub::Type, b)::TypeVar
+    ccall(:jl_new_typevar_, Ref{TypeVar}, (Any, Any, Any, Any), n, lb::Type, ub::Type, b)
 
-TypeConstructor(p::ANY, t::ANY) = ccall(:jl_new_type_constructor, Any, (Any, Any), p::SimpleVector, t::Type)
+TypeConstructor(p::ANY, t::ANY) =
+    ccall(:jl_new_type_constructor, Ref{TypeConstructor}, (Any, Any), p::SimpleVector, t::Type)
 
 Void() = nothing
+
+immutable VecElement{T}
+    value::T
+end
 
 Expr(args::ANY...) = _expr(args...)
 
@@ -307,22 +281,24 @@ _new(typ::Symbol, argty::Symbol) = eval(:((::Type{$typ})(n::$argty) = $(Expr(:ne
 _new(:LabelNode, :Int)
 _new(:GotoNode, :Int)
 _new(:TopNode, :Symbol)
-_new(:NewvarNode, :Symbol)
+_new(:NewvarNode, :SlotNumber)
 _new(:QuoteNode, :ANY)
-_new(:GenSym, :Int)
+_new(:SSAValue, :Int)
 eval(:((::Type{LineNumberNode})(f::Symbol, l::Int) = $(Expr(:new, :LineNumberNode, :f, :l))))
 eval(:((::Type{GlobalRef})(m::Module, s::Symbol) = $(Expr(:new, :GlobalRef, :m, :s))))
+eval(:((::Type{SlotNumber})(n::Int) = $(Expr(:new, :SlotNumber, :n))))
+eval(:((::Type{TypedSlot})(n::Int, t::ANY) = $(Expr(:new, :TypedSlot, :n, :t))))
 
-Module(name::Symbol=:anonymous, std_imports::Bool=true) = ccall(:jl_f_new_module, Any, (Any, Bool), name, std_imports)::Module
+Module(name::Symbol=:anonymous, std_imports::Bool=true) = ccall(:jl_f_new_module, Ref{Module}, (Any, Bool), name, std_imports)
 
-Task(f::ANY) = ccall(:jl_new_task, Any, (Any, Int), f, 0)::Task
+Task(f::ANY) = ccall(:jl_new_task, Ref{Task}, (Any, Int), f, 0)
 
 # simple convert for use by constructors of types in Core
 # note that there is no actual conversion defined here,
 # so the methods and ccall's in Core aren't permitted to use convert
 convert(::Type{Any}, x::ANY) = x
 convert{T}(::Type{T}, x::T) = x
-cconvert(T::Type, x) = convert(T, x)
+cconvert{T}(::Type{T}, x) = convert(T, x)
 unsafe_convert{T}(::Type{T}, x::T) = x
 
 # primitive array constructors
@@ -350,4 +326,28 @@ Array{T}(::Type{T}, m::Int)               = Array{T,1}(m)
 Array{T}(::Type{T}, m::Int,n::Int)        = Array{T,2}(m,n)
 Array{T}(::Type{T}, m::Int,n::Int,o::Int) = Array{T,3}(m,n,o)
 
+# docsystem basics
+macro doc(x...)
+    atdoc(x...)
+end
+macro __doc__(x)
+    Expr(:escape, Expr(:block, Expr(:meta, :doc), x))
+end
+macro doc_str(s)
+    Expr(:escape, s)
+end
+atdoc     = (str, expr) -> Expr(:escape, expr)
+atdoc!(λ) = global atdoc = λ
+
+module TopModule
+    # this defines the types that lowering expects to be defined in a (top) module
+    # that are usually inherited from Core, but could be defined custom for a module
+    using Core: Box, IntrinsicFunction, Builtin,
+            arrayref, arrayset, arraysize,
+            _expr, _apply, typeassert, apply_type, svec, kwfunc
+    export Box, IntrinsicFunction, Builtin,
+            arrayref, arrayset, arraysize,
+            _expr, _apply, typeassert, apply_type, svec, kwfunc
+end
+using .TopModule
 ccall(:jl_set_istopmod, Void, (Bool,), true)

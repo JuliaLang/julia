@@ -2,22 +2,22 @@
 
 ## symbols ##
 
-symbol(s::Symbol) = s
-symbol(s::ASCIIString) = symbol(s.data)
-symbol(s::UTF8String) = symbol(s.data)
-symbol(a::Array{UInt8,1}) =
-    ccall(:jl_symbol_n, Any, (Ptr{UInt8}, Int32), a, length(a))::Symbol
-symbol(x...) = symbol(string(x...))
+Symbol(s::Symbol) = s
+Symbol(s::ASCIIString) = Symbol(s.data)
+Symbol(s::UTF8String) = Symbol(s.data)
+Symbol(a::Array{UInt8,1}) =
+    ccall(:jl_symbol_n, Ref{Symbol}, (Ptr{UInt8}, Int32), a, length(a))
+Symbol(x...) = Symbol(string(x...))
 
-gensym() = ccall(:jl_gensym, Any, ())::Symbol
+gensym() = ccall(:jl_gensym, Ref{Symbol}, ())
 
 gensym(s::ASCIIString) = gensym(s.data)
 gensym(s::UTF8String) = gensym(s.data)
 gensym(a::Array{UInt8,1}) =
-    ccall(:jl_tagged_gensym, Any, (Ptr{UInt8}, Int32), a, length(a))::Symbol
+    ccall(:jl_tagged_gensym, Ref{Symbol}, (Ptr{UInt8}, Int32), a, length(a))
 gensym(ss::Union{ASCIIString, UTF8String}...) = map(gensym, ss)
 gensym(s::Symbol) =
-    ccall(:jl_tagged_gensym, Any, (Ptr{UInt8}, Int32), s, ccall(:strlen, Csize_t, (Ptr{UInt8},), s))::Symbol
+    ccall(:jl_tagged_gensym, Ref{Symbol}, (Ptr{UInt8}, Int32), s, ccall(:strlen, Csize_t, (Ptr{UInt8},), s))
 
 macro gensym(names...)
     blk = Expr(:block)
@@ -35,19 +35,17 @@ copy(e::Expr) = (n = Expr(e.head);
                  n.args = astcopy(e.args);
                  n.typ = e.typ;
                  n)
-copy(s::SymbolNode) = SymbolNode(s.name, s.typ)
 
 # copy parts of an AST that the compiler mutates
-astcopy(x::Union{SymbolNode,Expr}) = copy(x)
+astcopy(x::Expr) = copy(x)
 astcopy(x::Array{Any,1}) = Any[astcopy(a) for a in x]
 astcopy(x) = x
 
-==(x::Expr, y::Expr) = x.head === y.head && x.args == y.args
-==(x::QuoteNode, y::QuoteNode) = x.value == y.value
-==(x::SymbolNode, y::SymbolNode) = x.name === y.name && x.typ === y.typ
+==(x::Expr, y::Expr) = x.head === y.head && isequal(x.args, y.args)
+==(x::QuoteNode, y::QuoteNode) = isequal(x.value, y.value)
 
-expand(x) = ccall(:jl_expand, Any, (Any,), x)
-macroexpand(x) = ccall(:jl_macroexpand, Any, (Any,), x)
+expand(x::ANY) = ccall(:jl_expand, Any, (Any,), x)
+macroexpand(x::ANY) = ccall(:jl_macroexpand, Any, (Any,), x)
 
 ## misc syntax ##
 
@@ -121,9 +119,9 @@ function pushmeta!(ex::Expr, sym::Symbol, args::Any...)
     else
         tag = Expr(sym, args...)
     end
-    found, metaex = findmeta(ex)
-    if found
-        push!(metaex.args, tag)
+    idx, exargs = findmeta(ex)
+    if idx != 0
+        push!(exargs[idx].args, tag)
     else
         body::Expr = ex.args[2]
         unshift!(body.args, Expr(:meta, tag))
@@ -133,48 +131,57 @@ end
 
 function popmeta!(body::Expr, sym::Symbol)
     body.head == :block || return false, []
-    found, metaex = findmeta_block(body)
-    if !found
+    popmeta!(body.args, sym)
+end
+popmeta!(arg, sym) = (false, [])
+function popmeta!(body::Array{Any,1}, sym::Symbol)
+    idx, args = findmeta_block(body)
+    if idx == 0
         return false, []
     end
+    metaex = args[idx]
     metaargs = metaex.args
     for i = 1:length(metaargs)
         if isa(metaargs[i], Symbol) && (metaargs[i]::Symbol) == sym
             deleteat!(metaargs, i)
+            isempty(metaargs) && deleteat!(args, idx)
             return true, []
         elseif isa(metaargs[i], Expr) && (metaargs[i]::Expr).head == sym
             ret = (metaargs[i]::Expr).args
             deleteat!(metaargs, i)
+            isempty(metaargs) && deleteat!(args, idx)
             return true, ret
         end
     end
     false, []
 end
-popmeta!(arg, sym) = (false, [])
 
 function findmeta(ex::Expr)
     if ex.head == :function || (ex.head == :(=) && typeof(ex.args[1]) == Expr && ex.args[1].head == :call)
         body::Expr = ex.args[2]
         body.head == :block || error(body, " is not a block expression")
-        return findmeta_block(ex)
+        return findmeta_block(ex.args)
     end
     error(ex, " is not a function expression")
 end
 
-function findmeta_block(ex::Expr)
-    for a in ex.args
+findmeta(ex::Array{Any,1}) = findmeta_block(ex)
+
+function findmeta_block(exargs)
+    for i = 1:length(exargs)
+        a = exargs[i]
         if isa(a, Expr)
             if (a::Expr).head == :meta
-                return true, a::Expr
+                return i, exargs
             elseif (a::Expr).head == :block
-                found, exb = findmeta_block(a)
-                if found
-                    return found, exb
+                idx, exa = findmeta_block(a.args)
+                if idx != 0
+                    return idx, exa
                 end
             end
         end
     end
-    return false, Expr(:block)
+    return 0, []
 end
 
 remove_linenums!(ex) = ex

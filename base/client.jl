@@ -44,7 +44,7 @@ default_color_info = :blue
 color_normal = text_colors[:normal]
 
 function repl_color(key, default)
-    c = symbol(get(ENV, key, ""))
+    c = Symbol(get(ENV, key, ""))
     haskey(text_colors, c) ? c : default
 end
 
@@ -153,7 +153,7 @@ function syntax_deprecation_warnings(f::Function, warn::Bool)
     end
 end
 
-function parse_input_line(s::ByteString)
+function parse_input_line(s::ByteString; filename::ByteString="none")
     # (expr, pos) = parse(s, 1)
     # (ex, pos) = ccall(:jl_parse_string, Any,
     #                   (Ptr{UInt8},Csize_t,Int32,Int32),
@@ -162,7 +162,8 @@ function parse_input_line(s::ByteString)
     #     throw(ParseError("extra input after end of expression"))
     # end
     # expr
-    ccall(:jl_parse_input_line, Any, (Ptr{UInt8}, Csize_t), s, sizeof(s))
+    ccall(:jl_parse_input_line, Any, (Ptr{UInt8}, Csize_t, Ptr{UInt8}, Csize_t),
+        s, sizeof(s), filename, sizeof(filename))
 end
 parse_input_line(s::AbstractString) = parse_input_line(bytestring(s))
 
@@ -283,7 +284,7 @@ function load_machine_file(path::AbstractString)
     for line in split(readstring(path),'\n'; keep=false)
         s = map!(strip, split(line,'*'; keep=false))
         if length(s) > 1
-            cnt = isnumber(s[1]) ? parse(Int,s[1]) : symbol(s[1])
+            cnt = isnumber(s[1]) ? parse(Int,s[1]) : Symbol(s[1])
             push!(machines,(s[2], cnt))
         else
             push!(machines,line)

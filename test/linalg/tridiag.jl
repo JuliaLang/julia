@@ -313,13 +313,13 @@ let n = 12 #Size of matrix problem to test
             debug && println("stegr! call with index range")
             F = eigfact(SymTridiagonal(a, b),1:2)
             fF = eigfact(Symmetric(full(SymTridiagonal(a, b))),1:2)
-            @test_approx_eq F[:vectors] fF[:vectors]
+            Test.test_approx_eq_modphase(F[:vectors], fF[:vectors])
             @test_approx_eq F[:values] fF[:values]
 
             debug && println("stegr! call with value range")
             F = eigfact(SymTridiagonal(a, b),0.0,1.0)
             fF = eigfact(Symmetric(full(SymTridiagonal(a, b))),0.0,1.0)
-            @test_approx_eq F[:vectors] fF[:vectors]
+            Test.test_approx_eq_modphase(F[:vectors], fF[:vectors])
             @test_approx_eq F[:values] fF[:values]
         end
 

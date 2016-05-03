@@ -6,7 +6,7 @@ import Core.Intrinsics: cglobal, box
 
 cfunction(f::Function, r, a) = ccall(:jl_function_ptr, Ptr{Void}, (Any, Any, Any), f, r, a)
 
-if ccall(:jl_is_char_signed, Any, ())
+if ccall(:jl_is_char_signed, Ref{Bool}, ())
     typealias Cchar Int8
 else
     typealias Cchar UInt8
@@ -209,11 +209,7 @@ function ccallable(f::Function, rt::Type, argt::Type, name::Union{AbstractString
     ccall(:jl_extern_c, Void, (Any, Any, Any, Cstring), f, rt, argt, name)
 end
 
-function ccallable(f::Function, argt::Type, name::Union{AbstractString,Symbol}=string(f))
-    ccall(:jl_extern_c, Void, (Any, Ptr{Void}, Any, Cstring), f, C_NULL, argt, name)
-end
-
-macro ccallable(def)
+macro ccallable(rt, def)
     if isa(def,Expr) && (def.head === :(=) || def.head === :function)
         sig = def.args[1]
         if sig.head === :call
@@ -227,7 +223,7 @@ macro ccallable(def)
             end
             return quote
                 $(esc(def))
-                ccallable($(esc(name)), $(Expr(:curly, :Tuple, map(esc, at)...)))
+                ccallable($(esc(name)), $(esc(rt)), $(Expr(:curly, :Tuple, map(esc, at)...)), $(string(name)))
             end
         end
     end

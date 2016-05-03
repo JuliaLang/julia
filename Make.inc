@@ -179,6 +179,7 @@ private_libdir_rel := $(shell $(JULIAHOME)/contrib/relative_path.sh $(bindir) $(
 datarootdir_rel := $(shell $(JULIAHOME)/contrib/relative_path.sh $(bindir) $(datarootdir))
 docdir_rel := $(shell $(JULIAHOME)/contrib/relative_path.sh $(bindir) $(docdir))
 sysconfdir_rel := $(shell $(JULIAHOME)/contrib/relative_path.sh $(bindir) $(sysconfdir))
+includedir_rel := $(shell $(JULIAHOME)/contrib/relative_path.sh $(bindir) $(includedir))
 
 INSTALL_F := $(JULIAHOME)/contrib/install.sh 644
 INSTALL_M := $(JULIAHOME)/contrib/install.sh 755
@@ -267,7 +268,6 @@ fPIC := -fPIC
 EXE :=
 endif
 
-JULIAGC := MARKSWEEP
 JULIACODEGEN := LLVM
 
 # flag for disabling assertions
@@ -781,7 +781,9 @@ ifeq ($(OS), Darwin)
   INSTALL_NAME_ID_DIR := @rpath/
   INSTALL_NAME_CMD := install_name_tool -id $(INSTALL_NAME_ID_DIR)
   INSTALL_NAME_CHANGE_CMD := install_name_tool -change
-ifeq ($(shell test `dsymutil -v | cut -d\- -f2 | cut -d. -f1` -gt 102 && echo yes), yes)
+ifneq (,$(findstring LLVM,$(shell dsymutil --version)))
+  DSYMUTIL := dsymutil
+else ifeq ($(shell test `dsymutil -v | cut -d\- -f2 | cut -d. -f1` -gt 102 && echo yes), yes)
   DSYMUTIL := dsymutil
 else
   DSYMUTIL := true -ignore
@@ -868,7 +870,7 @@ UNTRUSTED_SYSTEM_LIBM := 1
 endif
 
 # Threads
-ifeq ($(JULIA_THREADS), 1)
+ifneq ($(JULIA_THREADS), 0)
 JCPPFLAGS += -DJULIA_ENABLE_THREADING
 endif
 

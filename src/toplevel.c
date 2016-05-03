@@ -81,7 +81,7 @@ static void jl_module_load_time_initialize(jl_module_t *m)
             jl_value_t *tt = jl_is_type(f) ? (jl_value_t*)jl_wrap_Type(f) : jl_typeof(f);
             JL_GC_PUSH1(&tt);
             tt = (jl_value_t*)jl_apply_tuple_type_v(&tt, 1);
-            jl_get_specialization1((jl_tupletype_t*)tt, NULL);
+            jl_get_specialization1((jl_tupletype_t*)tt);
             JL_GC_POP();
         }
     }
@@ -118,15 +118,12 @@ jl_value_t *jl_eval_module_expr(jl_expr_t *ex)
             jl_errorf("invalid redefinition of constant %s",
                       jl_symbol_name(name));
         }
-        if (jl_generating_output() && jl_options.incremental) {
-            jl_errorf("cannot replace module %s during incremental compile",
+        if (jl_generating_output()) {
+            jl_errorf("cannot replace module %s during compilation",
                       jl_symbol_name(name));
         }
-        if (!jl_generating_output()) {
-            // suppress warning "replacing module Core.Inference" during bootstrapping
-            jl_printf(JL_STDERR, "WARNING: replacing module %s\n",
-                      jl_symbol_name(name));
-        }
+        jl_printf(JL_STDERR, "WARNING: replacing module %s\n",
+                  jl_symbol_name(name));
     }
     jl_module_t *newm = jl_new_module(name);
     newm->parent = parent_module;
@@ -240,8 +237,10 @@ JL_DLLEXPORT jl_module_t *jl_base_relative_to(jl_module_t *m)
     return jl_top_module;
 }
 
-int jl_has_intrinsics(jl_lambda_info_t *li, jl_expr_t *e, jl_module_t *m)
+int jl_has_intrinsics(jl_lambda_info_t *li, jl_value_t *v, jl_module_t *m)
 {
+    if (!jl_is_expr(v)) return 0;
+    jl_expr_t *e = (jl_expr_t*)v;
     if (jl_array_len(e->args) == 0)
         return 0;
     if (e->head == static_typeof_sym)
@@ -252,7 +251,7 @@ int jl_has_intrinsics(jl_lambda_info_t *li, jl_expr_t *e, jl_module_t *m)
         if (sv && jl_typeis(sv, jl_intrinsic_type))
             return 1;
     }
-    if (0 && e->head == assign_sym && jl_is_gensym(e0)) { // code branch needed for *very-linear-mode*, but not desirable otherwise
+    if (0 && e->head == assign_sym && jl_is_ssavalue(e0)) { // code branch needed for *very-linear-mode*, but not desirable otherwise
         jl_value_t *e1 = jl_exprarg(e, 1);
         jl_value_t *sv = jl_static_eval(e1, NULL, m, li, li != NULL, 0);
         if (sv && jl_typeis(sv, jl_intrinsic_type))
@@ -261,7 +260,7 @@ int jl_has_intrinsics(jl_lambda_info_t *li, jl_expr_t *e, jl_module_t *m)
     int i;
     for (i=0; i < jl_array_len(e->args); i++) {
         jl_value_t *a = jl_exprarg(e,i);
-        if (jl_is_expr(a) && jl_has_intrinsics(li, (jl_expr_t*)a, m))
+        if (jl_is_expr(a) && jl_has_intrinsics(li, a, m))
             return 1;
     }
     return 0;
@@ -269,51 +268,49 @@ int jl_has_intrinsics(jl_lambda_info_t *li, jl_expr_t *e, jl_module_t *m)
 
 // heuristic for whether a top-level input should be evaluated with
 // the compiler or the interpreter.
-static int jl_eval_with_compiler_p(jl_lambda_info_t *li, jl_expr_t *expr, int compileloops, jl_module_t *m)
+static int jl_eval_with_compiler_p(jl_lambda_info_t *li, jl_array_t *body, int compileloops, jl_module_t *m)
 {
-    assert(jl_is_expr(expr));
-    if (expr->head==body_sym && compileloops) {
-        jl_array_t *body = expr->args;
-        size_t i, maxlabl=0;
-        // compile if there are backwards branches
-        for(i=0; i < jl_array_len(body); i++) {
-            jl_value_t *stmt = jl_cellref(body,i);
-            if (jl_is_labelnode(stmt)) {
-                int l = jl_labelnode_label(stmt);
-                if (l > maxlabl) maxlabl = l;
+    size_t i, maxlabl=0;
+    // compile if there are backwards branches
+    for(i=0; i < jl_array_len(body); i++) {
+        jl_value_t *stmt = jl_cellref(body,i);
+        if (jl_is_labelnode(stmt)) {
+            int l = jl_labelnode_label(stmt);
+            if (l > maxlabl) maxlabl = l;
+        }
+    }
+    size_t sz = (maxlabl+1+7)/8;
+    char *labls = (char*)alloca(sz); memset(labls,0,sz);
+    for(i=0; i < jl_array_len(body); i++) {
+        jl_value_t *stmt = jl_cellref(body,i);
+        if (jl_is_labelnode(stmt)) {
+            int l = jl_labelnode_label(stmt);
+            labls[l/8] |= (1<<(l&7));
+        }
+        else if (compileloops && jl_is_gotonode(stmt)) {
+            int l = jl_gotonode_label(stmt);
+            if (labls[l/8]&(1<<(l&7))) {
+                return 1;
             }
         }
-        size_t sz = (maxlabl+1+7)/8;
-        char *labls = (char*)alloca(sz); memset(labls,0,sz);
-        for(i=0; i < jl_array_len(body); i++) {
-            jl_value_t *stmt = jl_cellref(body,i);
-            if (jl_is_labelnode(stmt)) {
-                int l = jl_labelnode_label(stmt);
-                labls[l/8] |= (1<<(l&7));
-            }
-            else if (compileloops && jl_is_gotonode(stmt)) {
-                int l = jl_gotonode_label(stmt);
+        else if (jl_is_expr(stmt)) {
+            if (compileloops && ((jl_expr_t*)stmt)->head==goto_ifnot_sym) {
+                int l = jl_unbox_long(jl_exprarg(stmt,1));
                 if (labls[l/8]&(1<<(l&7))) {
                     return 1;
                 }
             }
-            else if (jl_is_expr(stmt)) {
-                if (compileloops && ((jl_expr_t*)stmt)->head==goto_ifnot_sym) {
-                    int l = jl_unbox_long(jl_exprarg(stmt,1));
-                    if (labls[l/8]&(1<<(l&7))) {
-                        return 1;
-                    }
-                }
-                // to compile code that uses exceptions
-                /*
-                if (((jl_expr_t*)stmt)->head == enter_sym) {
-                    return 1;
-                }
-                */
-            }
         }
+        if (jl_has_intrinsics(li, stmt, m)) return 1;
     }
-    if (jl_has_intrinsics(li, expr, m)) return 1;
+    return 0;
+}
+
+static int jl_eval_expr_with_compiler_p(jl_value_t *e, int compileloops, jl_module_t *m)
+{
+    if (jl_is_expr(e) && ((jl_expr_t*)e)->head == body_sym)
+        return jl_eval_with_compiler_p(NULL, ((jl_expr_t*)e)->args, compileloops, m);
+    if (jl_has_intrinsics(NULL, e, m)) return 1;
     return 0;
 }
 
@@ -427,7 +424,7 @@ jl_value_t *jl_toplevel_eval_flex(jl_value_t *e, int fast)
         return jl_interpret_toplevel_expr(e);
 
     jl_expr_t *ex = (jl_expr_t*)e;
-    if (ex->head == null_sym || ex->head == error_sym) {
+    if (ex->head == null_sym || ex->head == error_sym || ex->head == jl_incomplete_sym) {
         // expression types simple enough not to need expansion
         return jl_interpret_toplevel_expr(e);
     }
@@ -519,14 +516,11 @@ jl_value_t *jl_toplevel_eval_flex(jl_value_t *e, int fast)
     if (head == thunk_sym) {
         thk = (jl_lambda_info_t*)jl_exprarg(ex,0);
         assert(jl_is_lambda_info(thk));
-        if (!jl_is_expr(thk->ast)) {
-            thk->ast = jl_uncompress_ast(thk, thk->ast);
-            jl_gc_wb(thk, thk->ast);
-        }
-        ewc = jl_eval_with_compiler_p(thk, jl_lam_body((jl_expr_t*)thk->ast), fast, jl_current_module);
+        assert(jl_typeis(thk->code, jl_array_any_type));
+        ewc = jl_eval_with_compiler_p(thk, thk->code, fast, jl_current_module);
     }
     else {
-        if (head && jl_eval_with_compiler_p(NULL, (jl_expr_t*)ex, fast, jl_current_module)) {
+        if (head && jl_eval_expr_with_compiler_p((jl_value_t*)ex, fast, jl_current_module)) {
             thk = jl_wrap_expr((jl_value_t*)ex);
             ewc = 1;
         }
@@ -547,7 +541,7 @@ jl_value_t *jl_toplevel_eval_flex(jl_value_t *e, int fast)
 
     thk->specTypes = (jl_tupletype_t*)jl_typeof(jl_emptytuple); // no gc_wb needed
     if (ewc) {
-        jl_type_infer(thk, jl_true);
+        jl_type_infer(thk, 0);
         jl_value_t *dummy_f_arg=NULL;
         result = jl_call_method_internal(thk, &dummy_f_arg, 1);
     }
@@ -612,29 +606,24 @@ static int type_contains(jl_value_t *ty, jl_value_t *x)
     return 0;
 }
 
-void print_func_loc(JL_STREAM *s, jl_lambda_info_t *li);
+void print_func_loc(JL_STREAM *s, jl_method_t *m);
 
-void jl_check_static_parameter_conflicts(jl_lambda_info_t *li, jl_svec_t *t, jl_sym_t *fname)
+void jl_check_static_parameter_conflicts(jl_method_t *m, jl_svec_t *t)
 {
-    jl_array_t *vinfo;
-    size_t nvars;
+    jl_lambda_info_t *li = m->lambda_template;
+    size_t nvars = jl_array_len(li->slotnames);
 
-    if (li->ast && jl_is_expr(li->ast)) {
-        vinfo = jl_lam_vinfo((jl_expr_t*)li->ast);
-        nvars = jl_array_len(vinfo);
-        for(size_t i=0; i < jl_svec_len(t); i++) {
-            for(size_t j=0; j < nvars; j++) {
-                jl_value_t *tv = jl_svecref(t,i);
-                if (jl_is_typevar(tv)) {
-                    if ((jl_sym_t*)jl_cellref((jl_array_t*)jl_cellref(vinfo,j),0) ==
-                        ((jl_tvar_t*)tv)->name) {
-                        jl_printf(JL_STDERR,
-                                  "WARNING: local variable %s conflicts with a static parameter in %s",
-                                  jl_symbol_name(((jl_tvar_t*)tv)->name),
-                                  jl_symbol_name(fname));
-                        print_func_loc(JL_STDERR, li);
-                        jl_printf(JL_STDERR, ".\n");
-                    }
+    for(size_t i=0; i < jl_svec_len(t); i++) {
+        for(size_t j=0; j < nvars; j++) {
+            jl_value_t *tv = jl_svecref(t,i);
+            if (jl_is_typevar(tv)) {
+                if ((jl_sym_t*)jl_cellref(li->slotnames, j) == ((jl_tvar_t*)tv)->name) {
+                    jl_printf(JL_STDERR,
+                              "WARNING: local variable %s conflicts with a static parameter in %s",
+                              jl_symbol_name(((jl_tvar_t*)tv)->name),
+                              jl_symbol_name(m->name));
+                    print_func_loc(JL_STDERR, m);
+                    jl_printf(JL_STDERR, ".\n");
                 }
             }
         }
@@ -712,7 +701,8 @@ static jl_lambda_info_t *expr_to_lambda(jl_expr_t *f)
     // the user should only do this at the toplevel
     // the result is that the closure variables get interpolated directly into the AST
     jl_svec_t *tvar_syms = NULL;
-    JL_GC_PUSH2(&f, &tvar_syms);
+    jl_lambda_info_t *li = NULL;
+    JL_GC_PUSH3(&f, &tvar_syms, &li);
     assert(jl_is_expr(f) && ((jl_expr_t*)f)->head == lambda_sym);
     // move tvar symbol array from args[1][4] to linfo
     jl_array_t *le = (jl_array_t*)jl_exprarg(f, 1);
@@ -725,12 +715,13 @@ static jl_lambda_info_t *expr_to_lambda(jl_expr_t *f)
         jl_svecset(tvar_syms, i, jl_arrayref(tvar_syms_arr, i));
     }
     // wrap in a LambdaInfo
-    jl_lambda_info_t *li = jl_new_lambda_info((jl_value_t*)f, tvar_syms, jl_emptysvec, jl_current_module);
-    jl_preresolve_globals(li->ast, li);
+    li = jl_new_lambda_info_uninit(tvar_syms);
+    jl_lambda_info_set_ast(li, (jl_value_t*)f);
     JL_GC_POP();
     return li;
 }
 
+extern tracer_cb jl_newmeth_tracer;
 JL_DLLEXPORT void jl_method_def(jl_svec_t *argdata, jl_lambda_info_t *f, jl_value_t *isstaged)
 {
     // argdata is svec({types...}, svec(typevars...))
@@ -738,7 +729,8 @@ JL_DLLEXPORT void jl_method_def(jl_svec_t *argdata, jl_lambda_info_t *f, jl_valu
     jl_svec_t *tvars = (jl_svec_t*)jl_svecref(argdata,1);
     jl_methtable_t *mt;
     jl_sym_t *name;
-    JL_GC_PUSH1(&f);
+    jl_method_t *m = NULL;
+    JL_GC_PUSH2(&f, &m);
 
     if (!jl_is_lambda_info(f))
         f = expr_to_lambda((jl_expr_t*)f);
@@ -763,7 +755,9 @@ JL_DLLEXPORT void jl_method_def(jl_svec_t *argdata, jl_lambda_info_t *f, jl_valu
     if (jl_subtype(ftype, (jl_value_t*)jl_builtin_type, 0))
         jl_error("cannot add methods to a builtin function");
 
-    jl_check_static_parameter_conflicts(f, tvars, name);
+    m = jl_new_method(f, name, argtypes, tvars, isstaged == jl_true);
+    f = m->lambda_template; // because jl_new_method makes a copy
+    jl_check_static_parameter_conflicts(m, tvars);
 
     // TODO
     size_t na = jl_nparams(argtypes);
@@ -771,14 +765,14 @@ JL_DLLEXPORT void jl_method_def(jl_svec_t *argdata, jl_lambda_info_t *f, jl_valu
         jl_value_t *elt = jl_tparam(argtypes,i);
         if (!jl_is_type(elt) && !jl_is_typevar(elt)) {
             jl_exceptionf(jl_argumenterror_type, "invalid type for argument %s in method definition for %s at %s:%d",
-                          jl_symbol_name(jl_lam_argname(f,i)),
-                          jl_symbol_name(name), jl_symbol_name(f->file),
-                          f->line);
+                          jl_symbol_name((jl_sym_t*)jl_cellref(f->slotnames,i)),
+                          jl_symbol_name(name), jl_symbol_name(m->file),
+                          m->line);
         }
     }
 
     int ishidden = !!strchr(jl_symbol_name(name), '#');
-    for(size_t i=0; i < jl_svec_len(tvars); i++) {
+    for (size_t i=0; i < jl_svec_len(tvars); i++) {
         jl_value_t *tv = jl_svecref(tvars,i);
         if (!jl_is_typevar(tv))
             jl_type_error_rt(jl_symbol_name(name), "method definition", (jl_value_t*)jl_tvar_type, tv);
@@ -786,15 +780,18 @@ JL_DLLEXPORT void jl_method_def(jl_svec_t *argdata, jl_lambda_info_t *f, jl_valu
             jl_printf(JL_STDERR, "WARNING: static parameter %s does not occur in signature for %s",
                       jl_symbol_name(((jl_tvar_t*)tv)->name),
                       jl_symbol_name(name));
-            print_func_loc(JL_STDERR, f);
+            print_func_loc(JL_STDERR, m);
             jl_printf(JL_STDERR, ".\nThe method will not be callable.\n");
         }
     }
 
-    jl_add_method_to_table(mt, argtypes, f, tvars, isstaged == jl_true);
-    if (jl_boot_file_loaded && f->ast && jl_is_expr(f->ast)) {
-        f->ast = jl_compress_ast(f, f->ast);
-        jl_gc_wb(f, f->ast);
+    jl_method_table_insert(mt, m, NULL);
+    if (jl_newmeth_tracer)
+        jl_call_tracer(jl_newmeth_tracer, (jl_value_t*)m);
+
+    if (jl_boot_file_loaded && f->code && jl_typeis(f->code, jl_array_any_type)) {
+        f->code = jl_compress_ast(f, f->code);
+        jl_gc_wb(f, f->code);
     }
     JL_GC_POP();
 }

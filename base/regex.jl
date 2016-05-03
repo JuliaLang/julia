@@ -82,8 +82,6 @@ RegexMatch("angry,\\nBad world")
 """
 macro r_str(pattern, flags...) Regex(pattern, flags...) end
 
-copy(r::Regex) = r
-
 function show(io::IO, re::Regex)
     imsx = PCRE.CASELESS|PCRE.MULTILINE|PCRE.DOTALL|PCRE.EXTENDED
     opts = re.compile_options
@@ -327,6 +325,7 @@ compile(itr::RegexMatchIterator) = (compile(itr.regex); itr)
 eltype(::Type{RegexMatchIterator}) = RegexMatch
 start(itr::RegexMatchIterator) = match(itr.regex, itr.string, 1, UInt32(0))
 done(itr::RegexMatchIterator, prev_match) = (prev_match === nothing)
+iteratorsize(::Type{RegexMatchIterator}) = SizeUnknown()
 
 # Assumes prev_match is not nothing
 function next(itr::RegexMatchIterator, prev_match)

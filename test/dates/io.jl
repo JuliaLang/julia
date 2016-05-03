@@ -18,6 +18,16 @@
 # DateTime parsing
 # Useful reference for different locales: http://library.princeton.edu/departments/tsd/katmandu/reference/months.html
 
+# Using parse directly allows for more flexibility.
+let str = "1996/02/15 24:00", format = "yyyy/mm/dd HH:MM"
+    expected = [Dates.Year(1996), Dates.Month(2), Dates.Day(15), Dates.Hour(24), Dates.Minute(0)]
+    @test Dates.parse(str, Dates.DateFormat(format)) == expected
+    @test_throws ArgumentError Dates.DateTime(str, Dates.DateFormat(format))
+end
+
+# Issue #13644: Ensure that Dates.parse returns a Period array when no custom slots are used.
+@test eltype(Dates.parse("1942-12-25T01:23:45", Dates.DateFormat("yyyy-mm-ddTHH:MM:SS", "english"))) == Dates.Period
+
 # Common Parsing Patterns
 #'1996-January-15'
 dt = Dates.DateTime(1996,1,15)
@@ -317,4 +327,33 @@ let f = "YY"
     @test Dates.format(Dates.Date(1999), f) == "1999"
     @test Dates.format(Dates.Date(9), f) == "09"
     @test Dates.format(typemax(Dates.Date), f) == "252522163911149"
+end
+
+# Issue: https://github.com/quinnj/TimeZones.jl/issues/19
+let
+    ds = "2015-07-24T05:38:19.591Z"
+    dt = Dates.DateTime(2015,7,24,5,38,19,591)
+
+    format = "yyyy-mm-ddTHH:MM:SS.sssZ"
+    escaped_format = "yyyy-mm-dd\\THH:MM:SS.sss\\Z"
+
+    # Typically 'Z' isn't treated as a slot so it doesn't have to be escaped
+    @test DateTime(ds, format) == dt
+    @test DateTime(ds, escaped_format) == dt
+
+    try
+        # Make 'Z' into a slot
+        Dates.SLOT_RULE['Z'] = Dates.TimeZone
+        slotparse(slot::Dates.Slot{Dates.TimeZone},x,locale) = throw(ArgumentError("Invalid slot"))
+
+        @test_throws ArgumentError DateTime(ds, format)
+        @test DateTime(ds, escaped_format) == dt
+    finally
+        # Ideally we would be able to set SLOT_RULE['Z'] back to being undefined
+        Dates.SLOT_RULE['Z'] = Void
+    end
+
+    # Ensure that the default behaviour has been restored
+    @test DateTime(ds, format) == dt
+    @test DateTime(ds, escaped_format) == dt
 end

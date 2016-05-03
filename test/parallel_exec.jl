@@ -401,6 +401,15 @@ pids_d = procs(d)
 remotecall_fetch(setindex!, pids_d[findfirst(id->(id != myid()), pids_d)], d, 1.0, 1:10)
 @test ds != d
 @test s != d
+copy!(d, s)
+@everywhere setid!(A) = A[localindexes(A)] = myid()
+@sync for p in procs(ds)
+    @async remotecall_wait(setid!, p, ds)
+end
+@test d == s
+@test ds != s
+@test first(ds) == first(procs(ds))
+@test last(ds)  ==  last(procs(ds))
 
 
 # SharedArray as an array
@@ -516,7 +525,7 @@ testcpt()
 @test_throws ArgumentError timedwait(()->false, 0.1, pollint=-0.5)
 
 # specify pids for pmap
-@test sort(workers()[1:2]) == sort(unique(pmap(x->(sleep(0.1);myid()), 1:10, pids = workers()[1:2])))
+@test sort(workers()[1:2]) == sort(unique(pmap(WorkerPool(workers()[1:2]), x->(sleep(0.1);myid()), 1:10)))
 
 # Testing buffered  and unbuffered reads
 # This large array should write directly to the socket
@@ -673,30 +682,69 @@ if DoFullTest
     # pmap tests
     # needs at least 4 processors dedicated to the below tests
     ppids = remotecall_fetch(()->addprocs(4), 1)
+    pool = WorkerPool(ppids)
     s = "abcdefghijklmnopqrstuvwxyz";
     ups = uppercase(s);
-    @test ups == bytestring(UInt8[UInt8(c) for c in pmap(x->uppercase(x), s)])
-    @test ups == bytestring(UInt8[UInt8(c) for c in pmap(x->uppercase(Char(x)), s.data)])
+
+    unmangle_exception = e -> begin
+        if isa(e, CompositeException)
+            e = e.exceptions[1].ex
+            if isa(e, RemoteException)
+                e = e.captured.ex.exceptions[1].ex
+            end
+        end
+        return e
+    end
+
+
+    for mapf in [map, asyncmap, (f, c) -> pmap(pool, f, c)]
+        @test ups == bytestring(UInt8[UInt8(c) for c in mapf(x->uppercase(x), s)])
+        @test ups == bytestring(UInt8[UInt8(c) for c in mapf(x->uppercase(Char(x)), s.data)])
+
+        # retry, on error exit
+        errifeqa = x->(x=='a') ?
+            error("EXPECTED TEST ERROR. TO BE IGNORED.") : uppercase(x)
+        try
+            res = mapf(retry(errifeqa), s)
+            error("unexpected")
+        catch e
+            e = unmangle_exception(e)
+            @test isa(e, ErrorException)
+            @test e.msg == "EXPECTED TEST ERROR. TO BE IGNORED."
+        end
+
+        # no retry, on error exit
+        try
+            res = mapf(errifeqa, s)
+            error("unexpected")
+        catch e
+            e = unmangle_exception(e)
+            @test isa(e, ErrorException)
+            @test e.msg == "EXPECTED TEST ERROR. TO BE IGNORED."
+        end
+
+        # no retry, on error continue
+        res = mapf(@catch(errifeqa), Any[s...])
+        @test length(res) == length(ups)
+        res[1] = unmangle_exception(res[1])
+        @test isa(res[1], ErrorException)
+        @test res[1].msg == "EXPECTED TEST ERROR. TO BE IGNORED."
+        @test ups[2:end] == string(res[2:end]...)
+    end
 
     # retry, on error exit
-    res = pmap(x->(x=='a') ? error("EXPECTED TEST ERROR. TO BE IGNORED.") : (sleep(0.1);uppercase(x)), s; err_retry=true, err_stop=true, pids=ppids);
-    @test (length(res) < length(ups))
-    @test isa(res[1], Exception)
-
-    # no retry, on error exit
-    res = pmap(x->(x=='a') ? error("EXPECTED TEST ERROR. TO BE IGNORED.") : (sleep(0.1);uppercase(x)), s; err_retry=false, err_stop=true, pids=ppids);
-    @test (length(res) < length(ups))
-    @test isa(res[1], Exception)
-
-    # retry, on error continue
-    res = pmap(x->iseven(myid()) ? error("EXPECTED TEST ERROR. TO BE IGNORED.") : (sleep(0.1);uppercase(x)), s; err_retry=true, err_stop=false, pids=ppids);
+    mapf = (f, c) -> asyncmap(retry(remote(pool, f), n=10, max_delay=0), c)
+    errifevenid = x->iseven(myid()) ?
+        error("EXPECTED TEST ERROR. TO BE IGNORED.") : uppercase(x)
+    res = mapf(errifevenid, s)
     @test length(res) == length(ups)
     @test ups == bytestring(UInt8[UInt8(c) for c in res])
 
-    # no retry, on error continue
-    res = pmap(x->(x=='a') ? error("EXPECTED TEST ERROR. TO BE IGNORED.") : (sleep(0.1);uppercase(x)), s; err_retry=false, err_stop=false, pids=ppids);
+    # retry, on error continue
+    mapf = (f, c) -> asyncmap(@catch(retry(remote(pool, f), n=10, max_delay=0)), c)
+    res = mapf(errifevenid, s)
     @test length(res) == length(ups)
-    @test isa(res[1], Exception)
+    @test ups == bytestring(UInt8[UInt8(c) for c in res])
 
     # Topology tests need to run externally since a given cluster at any
     # time can only support a single topology and the current session
@@ -784,8 +832,7 @@ if DoFullTest
     end)
     @test length(new_pids) == num_workers
     test_n_remove_pids(new_pids)
-
-end
+end # @unix_only
 end
 
 # issue #7727
@@ -842,3 +889,23 @@ v15406 = remotecall_wait(() -> 1, id_other)
 fetch(v15406)
 remotecall_wait(t -> fetch(t), id_other, v15406)
 
+# Test various forms of remotecall* invocations
+
+@everywhere f_args(v1, v2=0; kw1=0, kw2=0) = v1+v2+kw1+kw2
+
+function test_f_args(result, args...; kwargs...)
+    @test fetch(remotecall(args...; kwargs...)) == result
+    @test fetch(remotecall_wait(args...; kwargs...)) == result
+    @test remotecall_fetch(args...; kwargs...) == result
+
+    # A visual test - remote_do should NOT print any errors
+    !isa(args[2], WorkerPool) && Base.remote_do(args...; kwargs...)
+end
+
+for tid in [id_other, id_me, Base.default_worker_pool()]
+    test_f_args(1, f_args, tid, 1)
+    test_f_args(3, f_args, tid, 1, 2)
+    test_f_args(5, f_args, tid, 1; kw1=4)
+    test_f_args(13, f_args, tid, 1; kw1=4, kw2=8)
+    test_f_args(15, f_args, tid, 1, 2; kw1=4, kw2=8)
+end

@@ -29,13 +29,13 @@ introducing scope blocks are:
 +--------------------------------+----------------------------------------------------------------------------------+
 | Scope name                     | block/construct introducing this kind of scope                                   |
 +================================+==================================================================================+
-| :ref:`global <man-global>`     | | module, baremodule, at interactive prompt (REPL)                               |
+| :ref:`global <man-global>`     | module, baremodule, at interactive prompt (REPL)                                 |
 +--------------------------------+------------------------------+---------------------------------------------------+
-| :ref:`local <man-local-scope>` | :ref:`soft <man-soft-scope>` | | for, while, list-comprehensions,                |
-|                                |                              |   try-catch-finally, let                          |
+| :ref:`local <man-local-scope>` | :ref:`soft <man-soft-scope>` | for, while, list-comprehensions,                  |
+|                                |                              | try-catch-finally, let                            |
 |                                +------------------------------+---------------------------------------------------+
-|                                | :ref:`hard <man-hard-scope>` | | functions (either syntax, anonymous & do-blocks)|
-|                                |                              | | type, immutable, macro                          |
+|                                | :ref:`hard <man-hard-scope>` | functions (either syntax, anonymous & do-blocks), |
+|                                |                              | type, immutable, macro                            |
 +--------------------------------+------------------------------+---------------------------------------------------+
 
 Notably missing from this table are :ref:`begin blocks
@@ -48,7 +48,7 @@ certain blocks.
 Julia uses `lexical scoping <https://en.wikipedia.org/wiki/Scope_%28computer_science%29#Lexical_scoping_vs._dynamic_scoping>`_,
 meaning that a function's scope does not inherit from its caller's
 scope, but from the scope in which the function was defined.
-For example, in the following code the ``x`` inside ``foo`` is refers
+For example, in the following code the ``x`` inside ``foo`` refers
 to the ``x`` in the global scope of its module ``Bar``::
 
     module Bar
@@ -223,7 +223,7 @@ Hard Local Scope
 ^^^^^^^^^^^^^^^^
 
 Hard local scopes are introduced by function definitions (in all their
-forms), type & immutable-blocks and macro-definitions.
+forms), type & immutable-blocks, and macro-definitions.
 
    In a hard local scope, all variables are inherited from its parent
    scope unless:
@@ -349,7 +349,7 @@ Thus their default is to fully access all variables in their parent
 scope.
 
 Conversely, the code inside blocks which introduce a hard local scope
-(function, type and macro definitions) can be executed at any place in
+(function, type, and macro definitions) can be executed at any place in
 a program.  Remotely changing the state of global variables in other
 modules should be done with care and thus this is an opt-in feature
 requiring the ``global`` keyword.

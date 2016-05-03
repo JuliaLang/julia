@@ -153,7 +153,7 @@ and return a `Cholesky` factorization.
 The `uplo` argument may be `:L` for using the lower part or `:U` for the upper part of `A`.
 The default is to use `:U`.
 The triangular Cholesky factor can be obtained from the factorization `F` with: `F[:L]` and `F[:U]`.
-The following functions are available for `Cholesky` objects: `size`, `\`, `inv`, `det`.
+The following functions are available for `Cholesky` objects: `size`, `\\`, `inv`, `det`.
 A `PosDefException` exception is thrown in case the matrix is not positive definite.
 """
 cholfact{T}(A::StridedMatrix{T}, uplo::Symbol, ::Type{Val{false}}) =
@@ -167,7 +167,7 @@ and return a `CholeskyPivoted` factorization.
 The `uplo` argument may be `:L` for using the lower part or `:U` for the upper part of `A`.
 The default is to use `:U`.
 The triangular Cholesky factor can be obtained from the factorization `F` with: `F[:L]` and `F[:U]`.
-The following functions are available for `PivotedCholesky` objects: `size`, `\`, `inv`, `det`, and `rank`.
+The following functions are available for `PivotedCholesky` objects: `size`, `\\`, `inv`, `det`, and `rank`.
 The argument `tol` determines the tolerance for determining the rank.
 For negative values, the tolerance is the machine precision.
 """
@@ -207,14 +207,14 @@ size(C::Union{Cholesky, CholeskyPivoted}) = size(C.factors)
 size(C::Union{Cholesky, CholeskyPivoted}, d::Integer) = size(C.factors, d)
 
 function getindex{T,S}(C::Cholesky{T,S}, d::Symbol)
-    d == :U && return UpperTriangular(symbol(C.uplo) == d ? C.factors : C.factors')
-    d == :L && return LowerTriangular(symbol(C.uplo) == d ? C.factors : C.factors')
-    d == :UL && return symbol(C.uplo) == :U ? UpperTriangular(C.factors) : LowerTriangular(C.factors)
+    d == :U && return UpperTriangular(Symbol(C.uplo) == d ? C.factors : C.factors')
+    d == :L && return LowerTriangular(Symbol(C.uplo) == d ? C.factors : C.factors')
+    d == :UL && return Symbol(C.uplo) == :U ? UpperTriangular(C.factors) : LowerTriangular(C.factors)
     throw(KeyError(d))
 end
 function getindex{T<:BlasFloat}(C::CholeskyPivoted{T}, d::Symbol)
-    d == :U && return UpperTriangular(symbol(C.uplo) == d ? C.factors : C.factors')
-    d == :L && return LowerTriangular(symbol(C.uplo) == d ? C.factors : C.factors')
+    d == :U && return UpperTriangular(Symbol(C.uplo) == d ? C.factors : C.factors')
+    d == :L && return LowerTriangular(Symbol(C.uplo) == d ? C.factors : C.factors')
     d == :p && return C.piv
     if d == :P
         n = size(C, 1)
@@ -276,7 +276,7 @@ end
 
 function det(C::Cholesky)
     dd = one(eltype(C))
-    for i in 1:size(C.factors,1) dd *= abs2(C.factors[i,i]) end
+    for i in 1:size(C.factors,1); dd *= abs2(C.factors[i,i]) end
     dd
 end
 
@@ -284,7 +284,7 @@ det(C::CholeskyPivoted) = C.rank < size(C.factors, 1) ? real(zero(eltype(C))) : 
 
 function logdet(C::Cholesky)
     dd = zero(eltype(C))
-    for i in 1:size(C.factors,1) dd += log(C.factors[i,i]) end
+    for i in 1:size(C.factors,1); dd += log(C.factors[i,i]) end
     dd + dd # instead of 2.0dd which can change the type
 end
 

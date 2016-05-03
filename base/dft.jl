@@ -31,7 +31,7 @@ complexfloat{T<:Real}(x::AbstractArray{T}) = copy!(Array(typeof(complex(float(on
 # implementations only need to provide plan_X(x, region)
 # for X in (:fft, :bfft, ...):
 for f in (:fft, :bfft, :ifft, :fft!, :bfft!, :ifft!, :rfft)
-    pf = symbol(string("plan_", f))
+    pf = Symbol("plan_", f)
     @eval begin
         $f(x::AbstractArray) = $pf(x) * x
         $f(x::AbstractArray, region) = $pf(x, region) * x
@@ -80,7 +80,8 @@ contains all of the information needed to compute `fft(A, dims)` quickly.
 To apply `P` to an array `A`, use `P * A`; in general, the syntax for applying plans is much
 like that of matrices.  (A plan can only be applied to arrays of the same size as the `A`
 for which the plan was created.)  You can also apply a plan with a preallocated output array `Â`
-by calling `A_mul_B!(Â, plan, A)`.  You can compute the inverse-transform plan by `inv(P)`
+by calling `A_mul_B!(Â, plan, A)`.  (For `A_mul_B!`, however, the input array `A` must
+be a complex floating-point array like the output `Â`.) You can compute the inverse-transform plan by `inv(P)`
 and apply the inverse plan with `P \\ Â` (the inverse plan is cached and reused for
 subsequent calls to `inv` or `\\`), and apply the inverse plan to a pre-allocated output
 array `A` with `A_ldiv_B!(A, P, Â)`.
@@ -178,7 +179,7 @@ bfft!
 # promote to a complex floating-point type (out-of-place only),
 # so implementations only need Complex{Float} methods
 for f in (:fft, :bfft, :ifft)
-    pf = symbol(string("plan_", f))
+    pf = Symbol("plan_", f)
     @eval begin
         $f{T<:Real}(x::AbstractArray{T}, region=1:ndims(x)) = $f(complexfloat(x), region)
         $pf{T<:Real}(x::AbstractArray{T}, region; kws...) = $pf(complexfloat(x), region; kws...)
@@ -263,7 +264,7 @@ A_mul_B!(y::AbstractArray, p::ScaledPlan, x::AbstractArray) =
 # or odd).
 
 for f in (:brfft, :irfft)
-    pf = symbol(string("plan_", f))
+    pf = Symbol("plan_", f)
     @eval begin
         $f(x::AbstractArray, d::Integer) = $pf(x, d) * x
         $f(x::AbstractArray, d::Integer, region) = $pf(x, d, region) * x
@@ -374,7 +375,6 @@ end
 
 # FFTW module (may move to an external package at some point):
 if Base.USE_GPL_LIBS
-
     @doc """
         fft(A [, dims])
 

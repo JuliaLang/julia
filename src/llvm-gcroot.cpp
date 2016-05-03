@@ -15,6 +15,7 @@
 
 #include <vector>
 #include <queue>
+#include <set>
 
 #include "julia.h"
 
@@ -36,7 +37,7 @@ static struct {
 
 class JuliaGCAllocator {
 public:
-    JuliaGCAllocator(CallInst *ptlsStates, Type *T_pjlvalue) :
+    JuliaGCAllocator(CallInst *ptlsStates, Type *T_pjlvalue, MDNode *tbaa) :
         F(*ptlsStates->getParent()->getParent()),
         M(*F.getParent()),
         T_int32(Type::getInt32Ty(F.getContext())),
@@ -47,7 +48,8 @@ public:
         gcroot_func(M.getFunction("julia.gc_root_decl")),
         gckill_func(M.getFunction("julia.gc_root_kill")),
         gc_store_func(M.getFunction("julia.gc_store")),
-        jlcall_frame_func(M.getFunction("julia.jlcall_frame_decl"))
+        jlcall_frame_func(M.getFunction("julia.jlcall_frame_decl")),
+        tbaa_gcframe(tbaa)
     {
 /* Algorithm sketch:
  *  Compute liveness for each basic block
@@ -74,6 +76,7 @@ Function *const gcroot_func;
 Function *const gckill_func;
 Function *const gc_store_func;
 Function *const jlcall_frame_func;
+MDNode *tbaa_gcframe;
 
 typedef std::pair<CallInst*, unsigned> frame_register;
 class liveness {
@@ -89,6 +92,42 @@ public:
             // live | assign == impossible (this would be strange)
     };
 };
+
+    void tbaa_decorate_gcframe(Instruction *inst, std::set<Instruction*> &visited)
+    {
+        if (visited.find(inst) != visited.end())
+            return;
+        visited.insert(inst);
+#ifdef LLVM35
+        Value::user_iterator I = inst->user_begin(), E = inst->user_end();
+#else
+        Value::use_iterator I = inst->use_begin(), E = inst->use_end();
+#endif
+        for (;I != E;++I) {
+            Instruction *user = dyn_cast<Instruction>(*I);
+            if (!user) {
+                continue;
+            } else if (isa<GetElementPtrInst>(user)) {
+                if (__likely(user->getOperand(0) == inst)) {
+                    tbaa_decorate_gcframe(user, visited);
+                }
+            } else if (isa<StoreInst>(user)) {
+                if (user->getOperand(1) == inst) {
+                    user->setMetadata(llvm::LLVMContext::MD_tbaa, tbaa_gcframe);
+                }
+            } else if (isa<LoadInst>(user)) {
+                user->setMetadata(llvm::LLVMContext::MD_tbaa, tbaa_gcframe);
+            } else if (isa<BitCastInst>(user)) {
+                tbaa_decorate_gcframe(user, visited);
+            }
+        }
+    }
+
+    void tbaa_decorate_gcframe(Instruction *inst)
+    {
+        std::set<Instruction*> visited;
+        tbaa_decorate_gcframe(inst, visited);
+    }
 
 #ifndef NDEBUG // llvm assertions build
 // gdb debugging code for inspecting the bb_uses map
@@ -655,6 +694,7 @@ void allocate_frame()
         // finalize all of the jlcall frames by replacing all of the frames with the appropriate gep(tempslot)
         for (std::map<CallInst*, unsigned>::iterator frame = frame_offsets.begin(), framee = frame_offsets.end(); frame != framee; ++frame) {
             CallInst *gcroot = frame->first;
+            tbaa_decorate_gcframe(gcroot);
             Value* offset[1] = {ConstantInt::get(T_int32, frame->second)};
             GetElementPtrInst *gep = GetElementPtrInst::Create(LLVM37_param(NULL) tempSlot, makeArrayRef(offset));
             gep->insertAfter(last_gcframe_inst);
@@ -714,11 +754,13 @@ void allocate_frame()
                     }
                 }
 #endif
+                tbaa_decorate_gcframe(callInst);
                 callInst->replaceAllUsesWith(argTempi);
                 argTempi->takeName(callInst);
                 callInst->eraseFromParent();
                 // Initialize the slots for function variables to NULL
                 StoreInst *store = new StoreInst(V_null, argTempi);
+                store->setMetadata(llvm::LLVMContext::MD_tbaa, tbaa_gcframe);
                 store->insertAfter(argTempi);
                 last_gcframe_inst = store;
             }
@@ -744,6 +786,7 @@ void allocate_frame()
             Instruction *argTempi = GetElementPtrInst::Create(LLVM37_param(NULL) tempSlot, ArrayRef<Value*>(ConstantInt::get(T_int32, i)));
             argTempi->insertAfter(last_gcframe_inst);
             StoreInst *store = new StoreInst(V_null, argTempi);
+            store->setMetadata(llvm::LLVMContext::MD_tbaa, tbaa_gcframe);
             store->insertAfter(argTempi);
             last_gcframe_inst = store;
         }
@@ -763,10 +806,13 @@ void allocate_frame()
         DebugLoc noDbg;
         builder.SetCurrentDebugLocation(noDbg);
 
-        builder.CreateStore(ConstantInt::get(T_size, (argSpaceSize + maxDepth) << 1),
-                            builder.CreateBitCast(builder.CreateConstGEP1_32(gcframe, 0), T_size->getPointerTo()));
-        builder.CreateStore(builder.CreateLoad(builder.Insert(get_pgcstack(ptlsStates))),
-                            builder.CreatePointerCast(builder.CreateConstGEP1_32(gcframe, 1), PointerType::get(T_ppjlvalue,0)));
+        Instruction *inst =
+            builder.CreateStore(ConstantInt::get(T_size, (argSpaceSize + maxDepth) << 1),
+                                builder.CreateBitCast(builder.CreateConstGEP1_32(gcframe, 0), T_size->getPointerTo()));
+        inst->setMetadata(llvm::LLVMContext::MD_tbaa, tbaa_gcframe);
+        inst = builder.CreateStore(builder.CreateLoad(builder.Insert(get_pgcstack(ptlsStates))),
+                                   builder.CreatePointerCast(builder.CreateConstGEP1_32(gcframe, 1), PointerType::get(T_ppjlvalue,0)));
+        inst->setMetadata(llvm::LLVMContext::MD_tbaa, tbaa_gcframe);
         builder.CreateStore(gcframe, builder.Insert(get_pgcstack(ptlsStates)));
 
         // Finish by emitting the gc pops before any return
@@ -775,9 +821,11 @@ void allocate_frame()
                 builder.SetInsertPoint(I->getTerminator()); // set insert *before* Ret
                 Instruction *gcpop =
                     (Instruction*)builder.CreateConstGEP1_32(gcframe, 1);
-                builder.CreateStore(builder.CreatePointerCast(builder.CreateLoad(gcpop),
-                                                          T_ppjlvalue),
-                                    builder.Insert(get_pgcstack(ptlsStates)));
+                inst = builder.CreateLoad(gcpop);
+                inst->setMetadata(llvm::LLVMContext::MD_tbaa, tbaa_gcframe);
+                inst = builder.CreateStore(builder.CreatePointerCast(inst, T_ppjlvalue),
+                                           builder.Insert(get_pgcstack(ptlsStates)));
+                inst->setMetadata(llvm::LLVMContext::MD_tbaa, tbaa_gcframe);
             }
         }
     }
@@ -791,8 +839,9 @@ void allocate_frame()
 
 };
 
-void jl_codegen_finalize_temp_arg(CallInst *ptlsStates, Type *T_pjlvalue)
+void jl_codegen_finalize_temp_arg(CallInst *ptlsStates, Type *T_pjlvalue,
+                                  MDNode *tbaa)
 {
-    JuliaGCAllocator allocator(ptlsStates, T_pjlvalue);
+    JuliaGCAllocator allocator(ptlsStates, T_pjlvalue, tbaa);
     allocator.allocate_frame();
 }

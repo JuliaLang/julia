@@ -26,9 +26,9 @@ dup(src::RawFD,target::RawFD) = systemerror("dup",-1==
     ccall((@windows? :_dup2 : :dup2),Int32,
     (Int32,Int32),src.fd,target.fd))
 
-#Wrapper for an OS file descriptor (for Windows)
+# Wrapper for an OS file descriptor (for Windows)
 @windows_only immutable WindowsRawSocket
-    handle::Ptr{Void}   # On Windows file descriptors are HANDLE's and 64-bit on 64-bit Windows...
+    handle::Ptr{Void}   # On Windows file descriptors are HANDLE's and 64-bit on 64-bit Windows
 end
 @windows_only Base.cconvert(::Type{Ptr{Void}}, fd::WindowsRawSocket) = fd.handle
 
@@ -171,7 +171,7 @@ function strptime(fmt::AbstractString, timestr::AbstractString)
     # exposed in the API.
     # tm.isdst = -1
     if r == C_NULL
-        #TODO: better error message
+        # TODO: better error message
         throw(ArgumentError("invalid arguments"))
     end
     @osx_only begin

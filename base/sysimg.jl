@@ -1,11 +1,8 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
-import Core.Intrinsics.ccall
-
 baremodule Base
 
-using Core: Intrinsics, arrayref, arrayset, arraysize, _expr,
-            _apply, typeassert, apply_type, svec
+using Core.TopModule, Core.Intrinsics
 ccall(:jl_set_istopmod, Void, (Bool,), true)
 
 include = Core.include
@@ -13,22 +10,24 @@ include = Core.include
 eval(x) = Core.eval(Base,x)
 eval(m,x) = Core.eval(m,x)
 
+# init core docsystem
+import Core: @doc, @__doc__, @doc_str
+Core.atdoc!(Core.Inference.CoreDocs.docm)
+
 include("exports.jl")
 
 if false
     # simple print definitions for debugging. enable these if something
     # goes wrong during bootstrap before printing code is available.
     show(x::ANY) = ccall(:jl_static_show, Void, (Ptr{Void}, Any),
-                         Intrinsics.pointerref(Intrinsics.cglobal(:jl_uv_stdout,Ptr{Void}),1), x)
+                         pointerref(cglobal(:jl_uv_stdout,Ptr{Void}),1), x)
     print(x::ANY) = show(x)
     println(x::ANY) = ccall(:jl_, Void, (Any,), x)
     print(a::ANY...) = for x=a; print(x); end
 end
 
-
 ## Load essential files and libraries
 include("essentials.jl")
-include("docs/bootstrap.jl")
 include("base.jl")
 include("generator.jl")
 include("reflection.jl")
@@ -49,7 +48,6 @@ include("operators.jl")
 include("pointer.jl")
 include("refpointer.jl")
 (::Type{T}){T}(arg) = convert(T, arg)::T
-include("functors.jl")
 include("checked.jl")
 importall .Checked
 
@@ -84,6 +82,8 @@ importall .Rounding
 include("float.jl")
 include("complex.jl")
 include("rational.jl")
+include("multinverses.jl")
+using .MultiplicativeInverses
 include("abstractarraymath.jl")
 include("arraymath.jl")
 
@@ -95,16 +95,18 @@ importall .SimdLoop
 include("reduce.jl")
 
 ## core structures
+include("reshapedarray.jl")
 include("bitarray.jl")
 include("intset.jl")
 include("dict.jl")
 include("set.jl")
 include("iterator.jl")
 
-# StridedArrays
-typealias StridedArray{T,N,A<:DenseArray,I<:Tuple{Vararg{Union{RangeIndex, NoSlice, AbstractCartesianIndex}}}} Union{DenseArray{T,N}, SubArray{T,N,A,I}}
-typealias StridedVector{T,A<:DenseArray,I<:Tuple{Vararg{Union{RangeIndex, NoSlice, AbstractCartesianIndex}}}}  Union{DenseArray{T,1}, SubArray{T,1,A,I}}
-typealias StridedMatrix{T,A<:DenseArray,I<:Tuple{Vararg{Union{RangeIndex, NoSlice, AbstractCartesianIndex}}}}  Union{DenseArray{T,2}, SubArray{T,2,A,I}}
+# Definition of StridedArray
+typealias StridedReshapedArray{T,N,A<:DenseArray} ReshapedArray{T,N,A}
+typealias StridedArray{T,N,A<:Union{DenseArray,StridedReshapedArray},I<:Tuple{Vararg{Union{RangeIndex, NoSlice, AbstractCartesianIndex}}}} Union{DenseArray{T,N}, SubArray{T,N,A,I}, StridedReshapedArray{T,N}}
+typealias StridedVector{T,A<:Union{DenseArray,StridedReshapedArray},I<:Tuple{Vararg{Union{RangeIndex, NoSlice, AbstractCartesianIndex}}}}  Union{DenseArray{T,1}, SubArray{T,1,A,I}, StridedReshapedArray{T,1}}
+typealias StridedMatrix{T,A<:Union{DenseArray,StridedReshapedArray},I<:Tuple{Vararg{Union{RangeIndex, NoSlice, AbstractCartesianIndex}}}}  Union{DenseArray{T,2}, SubArray{T,2,A,I}, StridedReshapedArray{T,2}}
 typealias StridedVecOrMat{T} Union{StridedVector{T}, StridedMatrix{T}}
 
 # For OS specific stuff
@@ -126,6 +128,7 @@ include("unicode.jl")
 include("parse.jl")
 include("shell.jl")
 include("regex.jl")
+include("show.jl")
 include("base64.jl")
 importall .Base64
 
@@ -140,10 +143,13 @@ include("intfuncs.jl")
 # nullable types
 include("nullable.jl")
 
-# I/O
+# Scheduling
+include("libuv.jl")
+include("event.jl")
 include("task.jl")
 include("lock.jl")
-include("show.jl")
+
+# I/O
 include("stream.jl")
 include("socket.jl")
 include("filesystem.jl")
@@ -167,6 +173,8 @@ include("float16.jl")
 include("cartesian.jl")
 using .Cartesian
 include("multidimensional.jl")
+include("permuteddimsarray.jl")
+using .PermutedDimsArrays
 
 include("primes.jl")
 
@@ -231,8 +239,9 @@ importall .Serializer
 include("channels.jl")
 include("multi.jl")
 include("workerpool.jl")
+include("pmap.jl")
 include("managers.jl")
-include("mapiterator.jl")
+include("asyncmap.jl")
 
 # code loading
 include("loading.jl")
@@ -318,12 +327,9 @@ import .Dates: Date, DateTime, now
 include("sparse.jl")
 importall .SparseArrays
 
-# Documentation
-
-include("markdown/Markdown.jl")
-include("docs/Docs.jl")
-using .Docs
-using .Markdown
+# threads
+include("threads.jl")
+include("threadcall.jl")
 
 # deprecated functions
 include("deprecated.jl")
@@ -332,9 +338,11 @@ include("deprecated.jl")
 include("docs/helpdb.jl")
 include("docs/basedocs.jl")
 
-# threads
-include("threads.jl")
-include("threadcall.jl")
+# Documentation -- should always be included last in sysimg.
+include("markdown/Markdown.jl")
+include("docs/Docs.jl")
+using .Docs, .Markdown
+Docs.loaddocs(Core.Inference.CoreDocs.DOCS)
 
 function __init__()
     # Base library init

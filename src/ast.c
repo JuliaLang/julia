@@ -60,8 +60,8 @@ typedef struct _jl_ast_context_t {
     value_t false_sym;
     value_t error_sym;
     value_t null_sym;
-    value_t jlgensym_sym;
-    arraylist_t gensym_to_flisp;
+    value_t ssavalue_sym;
+    value_t slot_sym;
     jl_ast_context_list_t list;
     int ref;
     jl_task_t *task;
@@ -210,7 +210,8 @@ static void jl_init_ast_ctx(jl_ast_context_t *ast_ctx)
     jl_ast_ctx(fl_ctx)->false_sym = symbol(fl_ctx, "false");
     jl_ast_ctx(fl_ctx)->error_sym = symbol(fl_ctx, "error");
     jl_ast_ctx(fl_ctx)->null_sym = symbol(fl_ctx, "null");
-    jl_ast_ctx(fl_ctx)->jlgensym_sym = symbol(fl_ctx, "jlgensym");
+    jl_ast_ctx(fl_ctx)->ssavalue_sym = symbol(fl_ctx, "ssavalue");
+    jl_ast_ctx(fl_ctx)->slot_sym = symbol(fl_ctx, "slot");
 
     // Enable / disable syntax deprecation warnings
     // Disable in imaging mode to avoid i/o errors (#10727)
@@ -223,13 +224,13 @@ static void jl_init_ast_ctx(jl_ast_context_t *ast_ctx)
 }
 
 // There should be no GC allocation while holding this lock
-JL_DEFINE_MUTEX(flisp)
+static jl_mutex_t flisp_lock;
 static jl_ast_context_list_t *jl_ast_ctx_using = NULL;
 static jl_ast_context_list_t *jl_ast_ctx_freed = NULL;
 
 static jl_ast_context_t *jl_ast_ctx_enter(void)
 {
-    JL_LOCK_NOGC(flisp);
+    JL_LOCK_NOGC(&flisp_lock);
     jl_ast_context_list_t *node;
     jl_ast_context_t *ctx;
     // First check if the current task is using one of the contexts
@@ -237,7 +238,7 @@ static jl_ast_context_t *jl_ast_ctx_enter(void)
         ctx = jl_ast_context_list_item(node);
         if (ctx->task == jl_current_task) {
             ctx->ref++;
-            JL_UNLOCK_NOGC(flisp);
+            JL_UNLOCK_NOGC(&flisp_lock);
             return ctx;
         }
     }
@@ -249,7 +250,7 @@ static jl_ast_context_t *jl_ast_ctx_enter(void)
         ctx->ref = 1;
         ctx->task = jl_current_task;
         ctx->roots = NULL;
-        JL_UNLOCK_NOGC(flisp);
+        JL_UNLOCK_NOGC(&flisp_lock);
         return ctx;
     }
     // Construct a new one if we can't find any
@@ -259,7 +260,7 @@ static jl_ast_context_t *jl_ast_ctx_enter(void)
     ctx->task = jl_current_task;
     node = &ctx->list;
     jl_ast_context_list_insert(&jl_ast_ctx_using, node);
-    JL_UNLOCK_NOGC(flisp);
+    JL_UNLOCK_NOGC(&flisp_lock);
     jl_init_ast_ctx(ctx);
     return ctx;
 }
@@ -268,12 +269,12 @@ static void jl_ast_ctx_leave(jl_ast_context_t *ctx)
 {
     if (--ctx->ref)
         return;
-    JL_LOCK_NOGC(flisp);
+    JL_LOCK_NOGC(&flisp_lock);
     ctx->task = NULL;
     jl_ast_context_list_t *node = &ctx->list;
     jl_ast_context_list_delete(node);
     jl_ast_context_list_insert(&jl_ast_ctx_freed, node);
-    JL_UNLOCK_NOGC(flisp);
+    JL_UNLOCK_NOGC(&flisp_lock);
 }
 
 void jl_init_frontend(void)
@@ -439,11 +440,11 @@ static jl_value_t *scm_to_julia_(fl_context_t *fl_ctx, value_t e, int eo)
         }
         else {
             hd = car_(e);
-            if (hd == jl_ast_ctx(fl_ctx)->jlgensym_sym) {
-                size_t genid = numval(car_(cdr_(e)));
-                return jl_box_gensym(genid);
-            }
-            if (hd == jl_ast_ctx(fl_ctx)->null_sym && llength(e) == 1)
+            if (hd == jl_ast_ctx(fl_ctx)->ssavalue_sym)
+                return jl_box_ssavalue(numval(car_(cdr_(e))));
+            else if (hd == jl_ast_ctx(fl_ctx)->slot_sym)
+                return jl_box_slotnumber(numval(car_(cdr_(e))));
+            else if (hd == jl_ast_ctx(fl_ctx)->null_sym && llength(e) == 1)
                 return jl_nothing;
         }
         if (issymbol(hd))
@@ -483,8 +484,8 @@ static jl_value_t *scm_to_julia_(fl_context_t *fl_ctx, value_t e, int eo)
                 jl_cellset(ex->args, i, scm_to_julia_(fl_ctx, car_(e), eo));
                 e = cdr_(e);
             }
-            nli = jl_new_lambda_info((jl_value_t*)ex, tvars, jl_emptysvec, jl_current_module);
-            jl_preresolve_globals(nli->ast, nli);
+            nli = jl_new_lambda_info_uninit(tvars);
+            jl_lambda_info_set_ast(nli, (jl_value_t*)ex);
             JL_GC_POP();
             return (jl_value_t*)nli;
         }
@@ -577,11 +578,6 @@ static value_t julia_to_scm_(fl_context_t *fl_ctx, jl_value_t *v);
 static value_t julia_to_scm(fl_context_t *fl_ctx, jl_value_t *v)
 {
     value_t temp;
-    arraylist_t *jlgensym_to_flisp = &jl_ast_ctx(fl_ctx)->gensym_to_flisp;
-    if (jlgensym_to_flisp->len)
-        jlgensym_to_flisp->len = 0; // in case we didn't free it last time we got here (for example, if we threw an error)
-    else
-        arraylist_new(jlgensym_to_flisp, 0);
     // need try/catch to reset GC handle stack in case of error
     FL_TRY_EXTERN(fl_ctx) {
         temp = julia_to_scm_(fl_ctx, v);
@@ -589,7 +585,6 @@ static value_t julia_to_scm(fl_context_t *fl_ctx, jl_value_t *v)
     FL_CATCH_EXTERN(fl_ctx) {
         temp = fl_list2(fl_ctx, jl_ast_ctx(fl_ctx)->error_sym, cvalue_static_cstring(fl_ctx, "expression too large"));
     }
-    arraylist_free(jlgensym_to_flisp);
     return temp;
 }
 
@@ -620,20 +615,6 @@ static value_t julia_to_scm_(fl_context_t *fl_ctx, jl_value_t *v)
 {
     if (jl_is_symbol(v))
         return symbol(fl_ctx, jl_symbol_name((jl_sym_t*)v));
-    if (jl_is_gensym(v)) {
-        size_t idx = ((jl_gensym_t*)v)->id;
-        size_t i;
-        arraylist_t *jlgensym_to_flisp = &jl_ast_ctx(fl_ctx)->gensym_to_flisp;
-        for (i = 0; i < jlgensym_to_flisp->len; i+=2) {
-            if ((ssize_t)jlgensym_to_flisp->items[i] == idx)
-                return fl_list2(fl_ctx, jl_ast_ctx(fl_ctx)->jlgensym_sym, fixnum((size_t)jlgensym_to_flisp->items[i+1]));
-        }
-        arraylist_push(jlgensym_to_flisp, (void*)idx);
-        value_t flv = fl_applyn(fl_ctx, 0, symbol_value(symbol(fl_ctx, "make-jlgensym")));
-        assert(iscons(flv) && car_(flv) == jl_ast_ctx(fl_ctx)->jlgensym_sym);
-        arraylist_push(jlgensym_to_flisp, (void*)(size_t)numval(car_(cdr_(flv))));
-        return flv;
-    }
     if (v == jl_true)
         return fl_ctx->T;
     if (v == jl_false)
@@ -682,18 +663,23 @@ static value_t julia_to_scm_(fl_context_t *fl_ctx, jl_value_t *v)
         return julia_to_list2(fl_ctx, (jl_value_t*)top_sym, jl_fieldref(v,0));
     if (jl_is_long(v) && fits_fixnum(jl_unbox_long(v)))
         return fixnum(jl_unbox_long(v));
+    if (jl_is_ssavalue(v))
+        jl_error("SSAValue objects should not occur in an AST");
+    if (jl_is_slot(v))
+        jl_error("Slot objects should not occur in an AST");
     value_t opaque = cvalue(fl_ctx, jl_ast_ctx(fl_ctx)->jvtype, sizeof(void*));
     *(jl_value_t**)cv_data((cvalue_t*)ptr(opaque)) = v;
     return opaque;
 }
 
 // this is used to parse a line of repl input
-JL_DLLEXPORT jl_value_t *jl_parse_input_line(const char *str, size_t len)
+JL_DLLEXPORT jl_value_t *jl_parse_input_line(const char *str, size_t len, const char *filename, size_t filename_len)
 {
     jl_ast_context_t *ctx = jl_ast_ctx_enter();
     fl_context_t *fl_ctx = &ctx->fl;
     value_t s = cvalue_static_cstrn(fl_ctx, str, len);
-    value_t e = fl_applyn(fl_ctx, 1, symbol_value(symbol(fl_ctx, "jl-parse-string")), s);
+    value_t files = cvalue_static_cstrn(fl_ctx, filename, filename_len);
+    value_t e = fl_applyn(fl_ctx, 2, symbol_value(symbol(fl_ctx, "jl-parse-string")), s, files);
     jl_value_t *res = e == fl_ctx->FL_EOF ? jl_nothing : scm_to_julia(fl_ctx, e, 0);
     jl_ast_ctx_leave(ctx);
     return res;
@@ -735,6 +721,8 @@ JL_DLLEXPORT jl_value_t *jl_parse_string(const char *str, size_t len,
 jl_value_t *jl_parse_eval_all(const char *fname, size_t len,
                               const char *content, size_t contentlen)
 {
+    if (in_pure_callback)
+        jl_error("cannot use include inside a generated function");
     jl_ast_context_t *ctx = jl_ast_ctx_enter();
     fl_context_t *fl_ctx = &ctx->fl;
     value_t f, ast;
@@ -858,37 +846,21 @@ JL_DLLEXPORT jl_value_t *jl_macroexpand(jl_value_t *expr)
     return jl_call_scm_on_ast("jl-macroexpand", expr);
 }
 
-ssize_t jl_max_jlgensym_in(jl_value_t *v)
-{
-    ssize_t genid = -1;
-    if (jl_is_gensym(v)) {
-        genid = ((jl_gensym_t*)v)->id;
-    }
-    else if (jl_is_expr(v)) {
-        jl_expr_t *e = (jl_expr_t*)v;
-        size_t i, l = jl_array_len(e->args);
-        for (i = 0; i < l; i++) {
-            ssize_t maxid = jl_max_jlgensym_in(jl_exprarg(e, i));
-            if (maxid > genid)
-                genid = maxid;
-        }
-    }
-    return genid;
-}
-
 // wrap expr in a thunk AST
 jl_lambda_info_t *jl_wrap_expr(jl_value_t *expr)
 {
     // `(lambda () (() () () ()) ,expr)
     jl_expr_t *le=NULL, *bo=NULL; jl_value_t *vi=NULL;
     jl_value_t *mt = jl_an_empty_cell;
-    JL_GC_PUSH3(&le, &vi, &bo);
+    jl_lambda_info_t *li = NULL;
+    JL_GC_PUSH4(&le, &vi, &bo, &li);
     le = jl_exprn(lambda_sym, 3);
     jl_cellset(le->args, 0, mt);
     vi = (jl_value_t*)jl_alloc_cell_1d(3);
     jl_cellset(vi, 0, mt);
     jl_cellset(vi, 1, mt);
-    jl_cellset(vi, 2, jl_box_long(jl_max_jlgensym_in(expr)+1));
+    // front end always wraps toplevel exprs with ssavalues in (thunk (lambda () ...))
+    jl_cellset(vi, 2, jl_box_long(0));
     jl_cellset(le->args, 1, vi);
     if (!jl_is_expr(expr) || ((jl_expr_t*)expr)->head != body_sym) {
         bo = jl_exprn(body_sym, 1);
@@ -897,7 +869,8 @@ jl_lambda_info_t *jl_wrap_expr(jl_value_t *expr)
         expr = (jl_value_t*)bo;
     }
     jl_cellset(le->args, 2, expr);
-    jl_lambda_info_t *li = jl_new_lambda_info((jl_value_t*)le, jl_emptysvec, jl_emptysvec, jl_current_module);
+    li = jl_new_lambda_info_uninit(jl_emptysvec);
+    jl_lambda_info_set_ast(li, (jl_value_t*)le);
     JL_GC_POP();
     return li;
 }
@@ -914,18 +887,6 @@ jl_array_t *jl_lam_args(jl_expr_t *l)
     return (jl_array_t*)ae;
 }
 
-jl_sym_t *jl_lam_argname(jl_lambda_info_t *li, int i)
-{
-    jl_expr_t *ast;
-    if (jl_is_expr(li->ast))
-        ast = (jl_expr_t*)li->ast;
-    else
-        ast = (jl_expr_t*)jl_uncompress_ast(li, li->ast);
-    // NOTE (gc root): `ast` is not rooted here, but jl_lam_args and jl_cellref
-    // do not allocate.
-    return (jl_sym_t*)jl_cellref(jl_lam_args(ast),i);
-}
-
 // get array of var info records (for args and locals)
 jl_array_t *jl_lam_vinfo(jl_expr_t *l)
 {
@@ -937,8 +898,8 @@ jl_array_t *jl_lam_vinfo(jl_expr_t *l)
     return (jl_array_t*)ll;
 }
 
-// get array of types for GenSym vars, or its length (if not type-inferred)
-jl_value_t *jl_lam_gensyms(jl_expr_t *l)
+// get array of types for SSAValues, or its length (if not type-inferred)
+jl_value_t *jl_lam_ssavalues(jl_expr_t *l)
 {
     assert(jl_is_expr(l));
     jl_value_t *le = jl_exprarg(l, 1);
@@ -955,13 +916,6 @@ jl_expr_t *jl_lam_body(jl_expr_t *l)
     assert(jl_is_expr(be));
     assert(((jl_expr_t*)be)->head == body_sym);
     return (jl_expr_t*)be;
-}
-
-jl_sym_t *jl_decl_var(jl_value_t *ex)
-{
-    if (jl_is_symbol(ex)) return (jl_sym_t*)ex;
-    assert(jl_is_expr(ex));
-    return (jl_sym_t*)jl_exprarg(ex, 0);
 }
 
 JL_DLLEXPORT int jl_is_rest_arg(jl_value_t *ex)
@@ -1014,25 +968,6 @@ JL_DLLEXPORT jl_value_t *jl_copy_ast(jl_value_t *expr)
     return expr;
 }
 
-// given a new lambda_info with static parameter values, make a copy
-// of the tree with declared types evaluated and static parameters passed
-// on to all enclosed functions.
-// this tree can then be further mutated by optimization passes.
-JL_DLLEXPORT jl_value_t *jl_prepare_ast(jl_lambda_info_t *li)
-{
-    jl_value_t *ast = li->ast;
-    if (ast == NULL) return NULL;
-    JL_GC_PUSH1(&ast);
-    if (!jl_is_expr(ast)) {
-        ast = jl_uncompress_ast(li, ast);
-    }
-    else {
-        ast = jl_copy_ast(ast);
-    }
-    JL_GC_POP();
-    return ast;
-}
-
 JL_DLLEXPORT int jl_is_operator(char *sym)
 {
     jl_ast_context_t *ctx = jl_ast_ctx_enter();
@@ -1073,82 +1008,6 @@ int has_meta(jl_array_t *body, jl_sym_t *sym)
         }
     }
     return 0;
-}
-
-static int jl_in_vinfo_array(jl_array_t *a, jl_sym_t *v)
-{
-    size_t i, l=jl_array_len(a);
-    for(i=0; i<l; i++) {
-        if (jl_cellref(jl_cellref(a,i),0) == (jl_value_t*)v)
-            return 1;
-    }
-    return 0;
-}
-
-static int jl_in_sym_svec(jl_svec_t *a, jl_sym_t *v)
-{
-    size_t i, l = jl_svec_len(a);
-    for(i=0; i<l; i++) {
-        if (jl_svecref(a,i) == (jl_value_t*)v)
-            return 1;
-    }
-    return 0;
-}
-
-int jl_local_in_linfo(jl_lambda_info_t *linfo, jl_sym_t *sym)
-{
-    return jl_in_vinfo_array(jl_lam_vinfo((jl_expr_t*)linfo->ast), sym) ||
-        jl_in_sym_svec(linfo->sparam_syms, sym);
-}
-
-extern jl_value_t *jl_builtin_getfield;
-
-jl_value_t *jl_preresolve_globals(jl_value_t *expr, jl_lambda_info_t *lam)
-{
-    if (jl_is_symbol(expr)) {
-        if (lam->module == NULL)
-            return expr;
-        if (!jl_local_in_linfo(lam, (jl_sym_t*)expr))
-            return jl_module_globalref(lam->module, (jl_sym_t*)expr);
-    }
-    else if (jl_is_expr(expr)) {
-        jl_expr_t *e = (jl_expr_t*)expr;
-        if (e->head == lambda_sym) {
-            (void)jl_preresolve_globals(jl_exprarg(e,2), lam);
-        }
-        else if (jl_is_toplevel_only_expr(expr) || e->head == const_sym || e->head == copyast_sym ||
-                 e->head == global_sym || e->head == quote_sym || e->head == inert_sym ||
-                 e->head == line_sym || e->head == meta_sym) {
-        }
-        else {
-            if (e->head == call_sym && jl_expr_nargs(e) == 3 && jl_is_quotenode(jl_exprarg(e,2)) &&
-                lam->module != NULL) {
-                // replace getfield(module_expr, :sym) with GlobalRef
-                jl_value_t *s = jl_fieldref(jl_exprarg(e,2),0);
-                jl_value_t *fe = jl_exprarg(e,0);
-                if (jl_is_symbol(s) && jl_is_topnode(fe)) {
-                    jl_value_t *f = jl_static_eval(fe, NULL, lam->module, lam, 0, 0);
-                    if (f == jl_builtin_getfield) {
-                        jl_value_t *me = jl_exprarg(e,1);
-                        if (jl_is_topnode(me) ||
-                            (jl_is_symbol(me) && jl_binding_resolved_p(lam->module,(jl_sym_t*)me))) {
-                            jl_value_t *m = jl_static_eval(me, NULL, lam->module, lam, 0, 0);
-                            if (m && jl_is_module(m))
-                                return jl_module_globalref((jl_module_t*)m, (jl_sym_t*)s);
-                        }
-                    }
-                }
-            }
-            size_t i = 0;
-            if (e->head == method_sym || e->head == abstracttype_sym || e->head == compositetype_sym ||
-                e->head == bitstype_sym || e->head == module_sym)
-                i++;
-            for(; i < jl_array_len(e->args); i++) {
-                jl_exprargset(e, i, jl_preresolve_globals(jl_exprarg(e,i), lam));
-            }
-        }
-    }
-    return expr;
 }
 
 #ifdef __cplusplus

@@ -256,7 +256,7 @@ endef
 # also, in a file named dirname.version, define variables VARNAME_BRANCH and VARNAME_SHA1
 #
 # also, define a Makefile variable VARNAME_GIT_URL to use as the clone origin
-# and a Makefile variable VARNAME_TAR_URL to use as the clone origin when NO_GIT is set
+# and a Makefile variable VARNAME_TAR_URL to use as the clone origin when DEPS_GIT is set
 # this will pass along the VARNAME_SHA1 target in $1 for its use
 #
 # this defines rules for:
@@ -269,7 +269,7 @@ endef
 define git-external
 include $(SRCDIR)/$1.version
 
-ifneq ($(NO_GIT),1)
+ifeq ($(DEPS_GIT),1)
 $2_SRC_DIR := $1
 $2_SRC_FILE := $$(SRCDIR)/srccache/$1.git
 $$($2_SRC_FILE)/HEAD: | $$(SRCDIR)/srccache
@@ -296,7 +296,7 @@ $5/$1/$4: $5/$1/.git/HEAD
 $$($2_SRC_FILE): | $$($2_SRC_FILE)/HEAD
 	touch -c $$@
 
-else # NO_GIT
+else # DEPS_GIT
 
 $2_SRC_DIR := $1-$$($2_SHA1)
 $2_SRC_FILE := $$(SRCDIR)/srccache/$$($2_SRC_DIR).tar.gz
@@ -307,7 +307,7 @@ $5/$$($2_SRC_DIR)/$3: $$($2_SRC_FILE)
 	mkdir -p $$(dir $$@) && \
 	$(TAR) -C $$(dir $$@) --strip-components 1 -xf $$<
 	touch -c $$@
-endif # NO_GIT
+endif # DEPS_GIT
 
 distclean-$1:
 	-rm -rf $5/$$($2_SRC_DIR) $$($2_SRC_FILE) $$(BUILDDIR)/$1
@@ -720,6 +720,14 @@ $(eval $(call LLVM_PATCH,llvm-3.7.1_2))
 $(eval $(call LLVM_PATCH,llvm-3.7.1_3))
 $(eval $(call LLVM_PATCH,llvm-D14260))
 $(LLVM_SRC_DIR)/llvm-3.7.1_2.patch-applied: $(LLVM_SRC_DIR)/llvm-3.7.1.patch-applied
+else ifeq ($(LLVM_VER),3.8.0)
+$(eval $(call LLVM_PATCH,llvm-3.7.1_3))
+$(eval $(call LLVM_PATCH,llvm-D14260))
+$(eval $(call LLVM_PATCH,llvm-3.8.0_winshlib))
+# Cygwin and openSUSE still use win32-threads mingw, https://llvm.org/bugs/show_bug.cgi?id=26365
+$(eval $(call LLVM_PATCH,llvm-3.8.0_threads))
+# fix replutil test on unix
+$(eval $(call LLVM_PATCH,llvm-D17165-D18583))
 endif # LLVM_VER
 
 ifeq ($(LLVM_VER),3.7.1)
@@ -1184,10 +1192,10 @@ else ifeq ($(OPENBLAS_NO_AVX2), 1)
 OPENBLAS_BUILD_OPTS += NO_AVX2=1
 endif
 
+# Do not overwrite the "-j" flag
+OPENBLAS_BUILD_OPTS += MAKE_NB_JOBS=0
+
 $(BUILDDIR)/$(OPENBLAS_SRC_DIR)/config.status: $(BUILDDIR)/$(OPENBLAS_SRC_DIR)/Makefile
-ifeq ($(OS),WINNT)
-	cd $(dir $@) && patch -p1 < $(SRCDIR)/openblas-win64.patch
-endif
 	perl -i -ple 's/^\s*(EXTRALIB\s*\+=\s*-lSystemStubs)\s*$$/# $$1/g' $<.system
 	touch $@
 $(OPENBLAS_OBJ_SOURCE): $(BUILDDIR)/$(OPENBLAS_SRC_DIR)/config.status
@@ -1398,7 +1406,7 @@ endif
 
 # ARPACK-NG upstream keeps changing their download filenames
 $(SRCDIR)/srccache/arpack-ng-$(ARPACK_VER).tar.gz: | $(SRCDIR)/srccache
-	$(JLDOWNLOAD) $@ https://github.com/opencollab/arpack-ng/archive/$(ARPACK_VER).tar.gz
+	$(JLDOWNLOAD) $@ https://s3.amazonaws.com/julialang/src/arpack-ng-$(ARPACK_VER).tar.gz
 	touch -c $@
 $(SRCDIR)/srccache/arpack-ng-$(ARPACK_VER)-testA.mtx: | $(SRCDIR)/srccache
 	$(JLDOWNLOAD) $@ https://raw.githubusercontent.com/opencollab/arpack-ng/$(ARPACK_VER)/TESTS/testA.mtx
@@ -1458,7 +1466,7 @@ clean-arpack:
 distclean-arpack:
 	-rm -rf $(SRCDIR)/srccache/arpack-ng-$(ARPACK_VER).tar.gz \
 		$(SRCDIR)/srccache/arpack-ng-$(ARPACK_VER) \
-		$(SRCDIR)/srccache/arpack-ng-3.2.0-testA.mtx \
+		$(SRCDIR)/srccache/arpack-ng-$(ARPACK_VER)-testA.mtx \
 		$(BUILDDIR)/arpack-ng-$(ARPACK_VER)
 
 get-arpack: $(SRCDIR)/srccache/arpack-ng-$(ARPACK_VER).tar.gz $(SRCDIR)/srccache/arpack-ng-$(ARPACK_VER)-testA.mtx
@@ -1872,6 +1880,9 @@ ifeq ($(OS),$(BUILD_OS))
 endif
 	echo 1 > $@
 $(GMP_OBJ_TARGET): $(GMP_SRC_TARGET) | $(build_shlibdir) $(build_includedir)
+ifeq ($(BUILD_OS),WINNT)
+	-mv $(BUILDDIR)/gmp-$(GMP_VER)/.libs/gmp.dll $(BUILDDIR)/gmp-$(GMP_VER)/.libs/libgmp.dll
+endif
 	$(INSTALL_M) $(BUILDDIR)/gmp-$(GMP_VER)/.libs/libgmp.*$(SHLIB_EXT)* $(build_shlibdir)
 	$(INSTALL_F) $(BUILDDIR)/gmp-$(GMP_VER)/gmp.h $(build_includedir)
 	$(INSTALL_NAME_CMD)libgmp.$(SHLIB_EXT) $@

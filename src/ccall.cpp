@@ -4,26 +4,8 @@
 
 // --- the ccall, cglobal, and llvm intrinsics ---
 
-// keep track of llvmcall declarations
-#if defined(USE_MCJIT) || defined(USE_ORCJIT)
-static std::map<uint64_t,llvm::GlobalValue*> llvmcallDecls;
-#else
-static std::set<uint64_t> llvmcallDecls;
-#endif
-
-static std::map<std::string, GlobalVariable*> libMapGV;
-static std::map<std::string, GlobalVariable*> symMapGV;
-
-static Value *GetStringPtr(llvm::IRBuilder <> *builder, GlobalValue *GV, const Twine &Name)
-{
-    Value *zero = ConstantInt::get(Type::getInt32Ty(jl_LLVMContext), 0);
-    Value *Args[] = { zero, zero };
-#ifdef LLVM37
-    return builder->CreateInBoundsGEP(GV->getValueType(), GV, Args, Name);
-#else
-    return builder->CreateInBoundsGEP(GV, Args, Name);
-#endif
-}
+static StringMap<GlobalVariable*> libMapGV;
+static StringMap<GlobalVariable*> symMapGV;
 
 static Value *runtime_sym_lookup(PointerType *funcptype, const char *f_lib, const char *f_name, jl_codectx_t *ctx)
 {
@@ -53,52 +35,47 @@ static Value *runtime_sym_lookup(PointerType *funcptype, const char *f_lib, cons
         libsym = jl_RTLD_DEFAULT_handle;
     }
     else {
+        std::string name = "ccalllib_";
+        name += f_lib;
         runtime_lib = true;
         libptrgv = libMapGV[f_lib];
         if (libptrgv == NULL) {
-            libptrgv = new GlobalVariable(imaging_mode ? *shadow_module : *active_module, T_pint8,
-               false, GlobalVariable::PrivateLinkage,
-               ConstantPointerNull::get((PointerType*)T_pint8), f_lib);
-            libMapGV[f_lib] = libptrgv;
+            libptrgv = new GlobalVariable(*jl_Module, T_pint8,
+               false, GlobalVariable::ExternalLinkage,
+               NULL, name);
+            libMapGV[f_lib] = global_proto(libptrgv);
             libsym = jl_get_library(f_lib);
             assert(libsym != NULL);
-#ifdef USE_MCJIT
-            jl_llvm_to_jl_value[libptrgv] = libsym;
-#else
-            *((void**)jl_ExecutionEngine->getPointerToGlobal(libptrgv)) = libsym;
-#endif
+            *(void**)jl_emit_and_add_to_shadow(libptrgv) = libsym;
+        }
+        else {
+            libptrgv = prepare_global(libptrgv);
         }
     }
     if (libsym == NULL) {
-#ifdef USE_MCJIT
-        libsym = (void*)jl_llvm_to_jl_value[libptrgv];
-#else
-        libsym = *((void**)jl_ExecutionEngine->getPointerToGlobal(libptrgv));
-#endif
+        libsym = *(void**)jl_get_global(libptrgv);
     }
-
     assert(libsym != NULL);
 
     GlobalVariable *llvmgv = symMapGV[f_name];
-    Constant *initnul = ConstantPointerNull::get((PointerType*)T_pvoidfunc);
     if (llvmgv == NULL) {
         // MCJIT forces this to have external linkage eventually, so we would clobber
         // the symbol of the actual function.
-        std::string name = f_name;
-        name = "ccall_" + name;
-        llvmgv = new GlobalVariable(imaging_mode ? *shadow_module : *active_module, T_pvoidfunc,
-           false, GlobalVariable::PrivateLinkage,
-           initnul, name);
-        symMapGV[f_name] = llvmgv;
-#ifdef USE_MCJIT
-        jl_llvm_to_jl_value[llvmgv] = jl_dlsym_e(libsym, f_name);
-#else
-        *((void**)jl_ExecutionEngine->getPointerToGlobal(llvmgv)) = jl_dlsym_e(libsym, f_name);
-#endif
+        std::string name = "ccall_";
+        name += f_name;
+        llvmgv = new GlobalVariable(*jl_Module, T_pvoidfunc,
+           false, GlobalVariable::ExternalLinkage,
+           NULL, name);
+        symMapGV[f_name] = global_proto(llvmgv);
+        *(void**)jl_emit_and_add_to_shadow(llvmgv) = jl_dlsym_e(libsym, f_name);
+    }
+    else {
+        llvmgv = prepare_global(llvmgv);
     }
 
     BasicBlock *dlsym_lookup = BasicBlock::Create(jl_LLVMContext, "dlsym"),
                *ccall_bb = BasicBlock::Create(jl_LLVMContext, "ccall");
+    Constant *initnul = ConstantPointerNull::get((PointerType*)T_pvoidfunc);
     builder.CreateCondBr(builder.CreateICmpNE(builder.CreateLoad(llvmgv), initnul), ccall_bb, dlsym_lookup);
 
     assert(ctx->f->getParent() != NULL);
@@ -106,15 +83,15 @@ static Value *runtime_sym_lookup(PointerType *funcptype, const char *f_lib, cons
     builder.SetInsertPoint(dlsym_lookup);
     Value *libname;
     if (runtime_lib) {
-        libname = GetStringPtr(&builder, stringConst(f_lib), "f_lib");
+        libname = stringConstPtr(f_lib);
     }
     else {
         libname = literal_static_pointer_val(f_lib, T_pint8);
     }
 #ifdef LLVM37
-    Value *llvmf = builder.CreateCall(prepare_call(jldlsym_func), { libname, GetStringPtr(&builder, stringConst(f_name), "f_name"), libptrgv });
+    Value *llvmf = builder.CreateCall(prepare_call(jldlsym_func), { libname, stringConstPtr(f_name), libptrgv });
 #else
-    Value *llvmf = builder.CreateCall3(prepare_call(jldlsym_func), libname, GetStringPtr(&builder, stringConst(f_name), "f_name"), libptrgv);
+    Value *llvmf = builder.CreateCall3(prepare_call(jldlsym_func), libname, stringConstPtr(f_name), libptrgv);
 #endif
     builder.CreateStore(llvmf, llvmgv);
     builder.CreateBr(ccall_bb);
@@ -304,9 +281,9 @@ static Value *julia_to_native(Type *to, bool toboxed, jl_value_t *jlto, const jl
         // emit maybe copy
         *needStackRestore = true;
         Value *jvt = emit_typeof_boxed(jvinfo, ctx);
-        BasicBlock *mutableBB = BasicBlock::Create(getGlobalContext(),"is-mutable",ctx->f);
-        BasicBlock *immutableBB = BasicBlock::Create(getGlobalContext(),"is-immutable",ctx->f);
-        BasicBlock *afterBB = BasicBlock::Create(getGlobalContext(),"after",ctx->f);
+        BasicBlock *mutableBB = BasicBlock::Create(jl_LLVMContext,"is-mutable",ctx->f);
+        BasicBlock *immutableBB = BasicBlock::Create(jl_LLVMContext,"is-immutable",ctx->f);
+        BasicBlock *afterBB = BasicBlock::Create(jl_LLVMContext,"after",ctx->f);
         Value *ismutable = builder.CreateTrunc(
                 tbaa_decorate(tbaa_datatype, builder.CreateLoad(
                         builder.CreateGEP(builder.CreatePointerCast(jvt, T_pint8),
@@ -437,12 +414,10 @@ static jl_value_t* try_eval(jl_value_t *ex, jl_codectx_t *ctx, const char *failu
 {
     jl_value_t *constant = NULL;
     constant = static_eval(ex, ctx, true, true);
-    if (constant || jl_is_gensym(ex))
+    if (constant || jl_is_ssavalue(ex))
         return constant;
     JL_TRY {
-        constant = jl_interpret_toplevel_expr_in(ctx->module, ex,
-                                                 ctx->linfo->sparam_syms,
-                                                 ctx->linfo->sparam_vals);
+        constant = jl_interpret_toplevel_expr_in(ctx->module, ex, ctx->linfo);
     }
     JL_CATCH {
         if (compiletime)
@@ -517,6 +492,149 @@ static jl_cgval_t emit_cglobal(jl_value_t **args, size_t nargs, jl_codectx_t *ct
     JL_GC_POP();
     return mark_julia_type(res, false, rt, ctx);
 }
+
+#ifdef USE_MCJIT
+class FunctionMover : public ValueMaterializer
+{
+public:
+    FunctionMover(llvm::Module *dest,llvm::Module *src) :
+        ValueMaterializer(), VMap(), destModule(dest), srcModule(src),
+        LazyFunctions(0)
+    {
+    }
+    ValueToValueMapTy VMap;
+    llvm::Module *destModule;
+    llvm::Module *srcModule;
+    std::vector<Function *> LazyFunctions;
+
+    Function *CloneFunctionProto(Function *F)
+    {
+        assert(!F->isDeclaration());
+        Function *NewF = Function::Create(F->getFunctionType(),
+                                          Function::ExternalLinkage,
+                                          F->getName(),
+                                          destModule);
+        LazyFunctions.push_back(F);
+        VMap[F] = NewF;
+        return NewF;
+    }
+
+    void CloneFunctionBody(Function *F)
+    {
+        Function *NewF = (Function*)(Value*)VMap[F];
+        assert(NewF != NULL);
+
+        Function::arg_iterator DestI = NewF->arg_begin();
+        for (Function::const_arg_iterator I = F->arg_begin(), E = F->arg_end(); I != E; ++I) {
+            DestI->setName(I->getName());    // Copy the name over...
+            VMap[&*I] = &*(DestI++);        // Add mapping to VMap
+        }
+
+    #ifdef LLVM36
+        // Clone debug info - Not yet public API
+        // llvm::CloneDebugInfoMetadata(NewF,F,VMap);
+    #endif
+
+        SmallVector<ReturnInst*, 8> Returns;
+        llvm::CloneFunctionInto(NewF,F,VMap,true,Returns,"",NULL,NULL,this);
+    }
+
+    Function *CloneFunction(Function *F)
+    {
+        Function *NewF = (llvm::Function*)MapValue(F,VMap,RF_None,NULL,this);
+        ResolveLazyFunctions();
+        return NewF;
+    }
+
+    void ResolveLazyFunctions()
+    {
+        while (!LazyFunctions.empty()) {
+            Function *F = LazyFunctions.back();
+            LazyFunctions.pop_back();
+
+            CloneFunctionBody(F);
+        }
+    }
+
+    Value *InjectFunctionProto(Function *F)
+    {
+        Function *NewF = destModule->getFunction(F->getName());
+        if (!NewF) {
+            NewF = function_proto(F);
+            destModule->getFunctionList().push_back(NewF);
+        }
+        return NewF;
+    }
+
+#ifdef LLVM38
+    virtual Value *materializeDeclFor(Value *V)
+#else
+    virtual Value *materializeValueFor (Value *V)
+#endif
+    {
+        Function *F = dyn_cast<Function>(V);
+        if (F) {
+            if (F->isIntrinsic()) {
+                return destModule->getOrInsertFunction(F->getName(),F->getFunctionType());
+            }
+            if (F->isDeclaration() || F->getParent() != destModule) {
+                if (F->getName().empty())
+                    return CloneFunctionProto(F);
+                Function *shadow = srcModule->getFunction(F->getName());
+                if (shadow != NULL && !shadow->isDeclaration()) {
+                    Function *oldF = destModule->getFunction(F->getName());
+                    if (oldF)
+                        return oldF;
+
+                    #ifdef USE_ORCJIT
+                    if (jl_ExecutionEngine->findSymbol(F->getName(), false))
+                        return InjectFunctionProto(F);
+                    #endif
+
+                    return CloneFunctionProto(shadow);
+                }
+                else if (!F->isDeclaration()) {
+                    return CloneFunctionProto(F);
+                }
+            }
+            // Still a declaration and still in a different module
+            if (F->isDeclaration() && F->getParent() != destModule) {
+                // Create forward declaration in current module
+                return InjectFunctionProto(F);
+            }
+        }
+        else if (isa<GlobalVariable>(V)) {
+            GlobalVariable *GV = cast<GlobalVariable>(V);
+            assert(GV != NULL);
+            GlobalVariable *oldGV = destModule->getGlobalVariable(GV->getName());
+            if (oldGV != NULL)
+                return oldGV;
+            GlobalVariable *newGV = new GlobalVariable(*destModule,
+                GV->getType()->getElementType(),
+                GV->isConstant(),
+                GlobalVariable::ExternalLinkage,
+                NULL,
+                GV->getName());
+            newGV->copyAttributesFrom(GV);
+            if (GV->isDeclaration())
+                return newGV;
+            if (!GV->getName().empty()) {
+                uint64_t addr = jl_ExecutionEngine->getGlobalValueAddress(GV->getName());
+                if (addr != 0) {
+                    newGV->setExternallyInitialized(true);
+                    return newGV;
+                }
+            }
+            if (GV->hasInitializer()) {
+                Value *C = MapValue(GV->getInitializer(),VMap,RF_None,NULL,this);
+                newGV->setInitializer(cast<Constant>(C));
+            }
+            return newGV;
+        }
+        return NULL;
+    };
+};
+#endif
 
 // llvmcall(ir, (rettypes...), (argtypes...), args...)
 static jl_cgval_t emit_llvmcall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
@@ -598,7 +716,7 @@ static jl_cgval_t emit_llvmcall(jl_value_t **args, size_t nargs, jl_codectx_t *c
             std::stringstream name;
             name << (ctx->f->getName().str()) << "u" << i++;
             ir_name = name.str();
-            if (builtins_module->getFunction(ir_name) == NULL)
+            if (jl_Module->getFunction(ir_name) == NULL)
                 break;
         }
 
@@ -615,9 +733,7 @@ static jl_cgval_t emit_llvmcall(jl_value_t **args, size_t nargs, jl_codectx_t *c
         std::string rstring;
         llvm::raw_string_ostream rtypename(rstring);
         rettype->print(rtypename);
-#if defined(USE_MCJIT) || defined(USE_ORCJIT)
         std::map<uint64_t,std::string> localDecls;
-#endif
 
         if (decl != NULL) {
             std::stringstream declarations(jl_string_data(decl));
@@ -625,33 +741,16 @@ static jl_cgval_t emit_llvmcall(jl_value_t **args, size_t nargs, jl_codectx_t *c
             // parse string line by line
             std::string declstr;
             while (std::getline(declarations, declstr, '\n')) {
-                uint64_t declhash = memhash(declstr.c_str(), declstr.length());
-#if defined(USE_MCJIT) || defined(USE_ORCJIT)
-                auto it = llvmcallDecls.find(declhash);
-                if (it != llvmcallDecls.end()) {
-                    prepare_call(it->second);
-                }
-                else {
-#else
-                if (llvmcallDecls.count(declhash) == 0) {
-#endif
-                    // Find name of declaration by searching for '@'
-                    std::string::size_type atpos = declstr.find('@') + 1;
-                    // Find end of declaration by searching for '('
-                    std::string::size_type bracepos = declstr.find('(', atpos);
-                    // Declaration name is the string between @ and (
-                    std::string declname = declstr.substr(atpos, bracepos - atpos);
+                // Find name of declaration by searching for '@'
+                std::string::size_type atpos = declstr.find('@') + 1;
+                // Find end of declaration by searching for '('
+                std::string::size_type bracepos = declstr.find('(', atpos);
+                // Declaration name is the string between @ and (
+                std::string declname = declstr.substr(atpos, bracepos - atpos);
 
-                    // Check if declaration already present in module
-                    if(jl_Module->getNamedValue(declname) == NULL) {
-                        ir_stream << "; Declarations\n" << declstr << "\n";
-                    }
-
-#if defined(USE_MCJIT) || defined(USE_ORCJIT)
-                    localDecls[declhash] = declname;
-#else
-                    llvmcallDecls.insert(declhash);
-#endif
+                // Check if declaration already present in module
+                if(jl_Module->getNamedValue(declname) == NULL) {
+                    ir_stream << "; Declarations\n" << declstr << "\n";
                 }
             }
         }
@@ -662,9 +761,9 @@ static jl_cgval_t emit_llvmcall(jl_value_t **args, size_t nargs, jl_codectx_t *c
         std::string ir_string = ir_stream.str();
 #ifdef LLVM36
         Module *m = NULL;
-        bool failed = parseAssemblyInto(llvm::MemoryBufferRef(ir_string,"llvmcall"),*builtins_module,Err);
+        bool failed = parseAssemblyInto(llvm::MemoryBufferRef(ir_string,"llvmcall"),*jl_Module,Err);
         if (!failed)
-            m = builtins_module;
+            m = jl_Module;
 #else
         Module *m = ParseAssemblyString(ir_string.c_str(),jl_Module,Err,jl_LLVMContext);
 #endif
@@ -675,12 +774,6 @@ static jl_cgval_t emit_llvmcall(jl_value_t **args, size_t nargs, jl_codectx_t *c
             jl_error(stream.str().c_str());
         }
         f = m->getFunction(ir_name);
-        f->removeFromParent();
-#if defined(USE_MCJIT) || defined(USE_ORCJIT)
-        for (auto it : localDecls) {
-            llvmcallDecls[it.first] = cast<GlobalValue>(prepare_call(m->getNamedValue(it.second)));
-        }
-#endif
     }
     else {
         assert(isPtr);
@@ -693,8 +786,8 @@ static jl_cgval_t emit_llvmcall(jl_value_t **args, size_t nargs, jl_codectx_t *c
             assert(*it == f->getFunctionType()->getParamType(i));
 
 #ifdef USE_MCJIT
-        if (f->getParent() != active_module) {
-            FunctionMover mover(active_module,f->getParent());
+        if (f->getParent() != jl_Module) {
+            FunctionMover mover(jl_Module, f->getParent());
             f = mover.CloneFunction(f);
         }
 #endif
@@ -918,6 +1011,10 @@ static std::string generate_func_sig(
                                                   AttributeSet::get(jl_LLVMContext, i + 1, paramattrs[i]));
         }
     }
+    if (rt == jl_bottom_type)
+        attributes = attributes.addAttribute(jl_LLVMContext,
+                                             AttributeSet::FunctionIndex,
+                                             Attribute::NoReturn);
     return "";
 }
 
@@ -1139,6 +1236,37 @@ static jl_cgval_t emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
         JL_GC_POP();
         return ghostValue(jl_void_type);
     }
+    if (fptr == &jl_gc_safepoint ||
+        ((!f_lib || (intptr_t)f_lib == 2) && f_name &&
+         strcmp(f_name, "jl_gc_safepoint") == 0)) {
+        assert(lrt == T_void);
+        assert(!isVa);
+        assert(nargt == 0);
+        JL_GC_POP();
+#ifdef JULIA_ENABLE_THREADING
+#ifdef LLVM39
+        builder.CreateFence(AtomicOrdering::SequentiallyConsistent, SingleThread);
+#else
+        builder.CreateFence(SequentiallyConsistent, SingleThread);
+#endif
+        Value *addr;
+        if (imaging_mode) {
+            assert(ctx->signalPage);
+            addr = ctx->signalPage;
+        }
+        else {
+            addr = builder.CreateIntToPtr(
+                ConstantInt::get(T_size, (uintptr_t)jl_gc_signal_page), T_pint8);
+        }
+        builder.CreateLoad(addr, true);
+#ifdef LLVM39
+        builder.CreateFence(AtomicOrdering::SequentiallyConsistent, SingleThread);
+#else
+        builder.CreateFence(SequentiallyConsistent, SingleThread);
+#endif
+#endif
+        return ghostValue(jl_void_type);
+    }
     if (fptr == (void(*)(void))&jl_is_leaf_type ||
         ((f_lib==NULL || (intptr_t)f_lib==2)
          && f_name && !strcmp(f_name, "jl_is_leaf_type"))) {
@@ -1174,8 +1302,7 @@ static jl_cgval_t emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
             if (jl_is_tuple_type(fargt) && jl_is_leaf_type(fargt)) {
                 frt = jl_tparam0(frt);
                 JL_TRY {
-                    Value *llvmf = prepare_call(
-                            jl_cfunction_object((jl_function_t*)f, frt, (jl_tupletype_t*)fargt));
+                    Value *llvmf = prepare_call(jl_cfunction_object((jl_function_t*)f, frt, (jl_tupletype_t*)fargt));
                     // make sure to emit any side-effects that may have been part of the original expression
                     emit_expr(args[4], ctx);
                     emit_expr(args[6], ctx);
@@ -1353,8 +1480,8 @@ static jl_cgval_t emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
     }
 
     if (needStackRestore) {
-        stacksave = CallInst::Create(prepare_call(Intrinsic::getDeclaration(builtins_module,
-                                                               Intrinsic::stacksave)));
+        stacksave = CallInst::Create(Intrinsic::getDeclaration(jl_Module,
+                                                               Intrinsic::stacksave));
         if (savespot) {
 #ifdef LLVM38
                 instList.insertAfter(savespot->getIterator(), (Instruction*)stacksave);
@@ -1381,10 +1508,7 @@ static jl_cgval_t emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
         result = ret;
     if (needStackRestore) {
         assert(stacksave != NULL);
-        builder.CreateCall(prepare_call(
-            Intrinsic::getDeclaration(builtins_module,
-                                                     Intrinsic::stackrestore)),
-                           stacksave);
+        builder.CreateCall(Intrinsic::getDeclaration(jl_Module, Intrinsic::stackrestore), stacksave);
     }
     if (0) { // Enable this to turn on SSPREQ (-fstack-protector) on the function containing this ccall
         ctx->f->addFnAttr(Attribute::StackProtectReq);

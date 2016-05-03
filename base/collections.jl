@@ -17,7 +17,6 @@ export
     peek
 
 
-
 # Heap operations on flat arrays
 # ------------------------------
 

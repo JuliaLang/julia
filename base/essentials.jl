@@ -6,6 +6,9 @@ typealias Callable Union{Function,DataType}
 
 const Bottom = Union{}
 
+abstract AbstractSet{T}
+abstract Associative{K,V}
+
 # The real @inline macro is not available until after array.jl, so this
 # internal macro splices the meta Expr directly into the function body.
 macro _inline_meta()
@@ -41,7 +44,7 @@ macro generated(f)
 end
 
 
-tuple_type_head(::Type{Union{}}) = throw(MethodError(tuple_type_head, (Type{Union{}},)))
+tuple_type_head(::Type{Union{}}) = throw(MethodError(tuple_type_head, (Union{},)))
 function tuple_type_head{T<:Tuple}(::Type{T})
     @_pure_meta
     T.parameters[1]
@@ -123,6 +126,10 @@ map(f::Function, a::Array{Any,1}) = Any[ f(a[i]) for i=1:length(a) ]
 
 function precompile(f::ANY, args::Tuple)
     ccall(:jl_compile_hint, Void, (Any,), Tuple{Core.Typeof(f), args...})
+end
+
+function precompile(argt::Type)
+    ccall(:jl_compile_hint, Void, (Any,), argt)
 end
 
 esc(e::ANY) = Expr(:escape, e)

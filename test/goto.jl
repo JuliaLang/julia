@@ -101,3 +101,27 @@ end
 
 GotoMacroTest.@goto_test8_macro
 
+# issue #15600
+function t0_15600(flag)
+    flag && @goto return2
+    return 1
+    @label return2
+    return 2
+end
+@test t0_15600(true) == 2
+@test t0_15600(false) == 1
+function t1_15600(flag)
+    flag || @goto return2
+    return 1
+    @label return2
+    return 2
+end
+@test t1_15600(true) == 1
+@test t1_15600(false) == 2
+
+# issue #15561
+function f15561()
+    a = @goto crater
+    @label crater
+end
+@test f15561() === nothing

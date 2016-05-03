@@ -19,23 +19,42 @@
 # Messages
 abstract AbstractMsg
 
+let REF_ID::Int = 1
+    global next_ref_id
+    next_ref_id() = (id = REF_ID; REF_ID += 1; id)
+end
+
+type RRID
+    whence
+    id
+
+    RRID() = RRID(myid(),next_ref_id())
+    RRID(whence, id) = new(whence,id)
+end
+hash(r::RRID, h::UInt) = hash(r.whence, hash(r.id, h))
+==(r::RRID, s::RRID) = (r.whence==s.whence && r.id==s.id)
+
+
 type CallMsg{Mode} <: AbstractMsg
     f::Function
     args::Tuple
-    response_oid::Tuple
+    kwargs::Array
+    response_oid::RRID
 end
 type CallWaitMsg <: AbstractMsg
     f::Function
     args::Tuple
-    response_oid::Tuple
-    notify_oid::Tuple
+    kwargs::Array
+    response_oid::RRID
+    notify_oid::RRID
 end
 type RemoteDoMsg <: AbstractMsg
     f::Function
     args::Tuple
+    kwargs::Array
 end
 type ResultMsg <: AbstractMsg
-    response_oid::Tuple
+    response_oid::RRID
     value::Any
 end
 
@@ -47,12 +66,12 @@ type JoinPGRPMsg <: AbstractMsg
     self_pid::Int
     other_workers::Array
     self_is_local::Bool
-    notify_oid::Tuple
+    notify_oid::RRID
     topology::Symbol
     worker_pool
 end
 type JoinCompleteMsg <: AbstractMsg
-    notify_oid::Tuple
+    notify_oid::RRID
     cpu_cores::Int
     ospid::Int
 end
@@ -356,7 +375,7 @@ function rmprocs(args...; waitfor = 0.0)
         start = time()
         while (time() - start) < waitfor
             if all(w -> w.state == W_TERMINATED, rmprocset)
-                break;
+                break
             else
                 sleep(0.1)
             end
@@ -473,8 +492,8 @@ type Future <: AbstractRemoteRef
     id::Int
     v::Nullable{Any}
 
-    Future(w, wh, id) = Future(w, wh, id, Nullable{Any}())
-    Future(w, wh, id, v) = (r = new(w,wh,id,v); test_existing_ref(r))
+    Future(w::Int, rrid::RRID) = Future(w, rrid, Nullable{Any}())
+    Future(w::Int, rrid::RRID, v) = (r = new(w,rrid.whence,rrid.id,v); test_existing_ref(r))
 end
 
 function finalize_future(f::Future)
@@ -493,7 +512,7 @@ type RemoteChannel{T<:AbstractChannel} <: AbstractRemoteRef
     whence::Int
     id::Int
 
-    RemoteChannel(w, wh, id) = (r = new(w,wh,id); test_existing_ref(r))
+    RemoteChannel(w::Int, rrid::RRID) = (r = new(w, rrid.whence, rrid.id); test_existing_ref(r))
 end
 
 function test_existing_ref(r::Future)
@@ -529,37 +548,23 @@ function finalize_remote_channel(r::RemoteChannel)
     r
 end
 
-
-let REF_ID::Int = 1
-    global next_ref_id
-    next_ref_id() = (id = REF_ID; REF_ID += 1; id)
-
-    global next_rrid_tuple
-    next_rrid_tuple() = (myid(),next_ref_id())
-end
-
 Future(w::LocalProcess) = Future(w.id)
 Future(w::Worker) = Future(w.id)
-function Future(pid::Integer=myid())
-    rrid = next_rrid_tuple()
-    Future(pid, rrid[1], rrid[2])
-end
+Future(pid::Integer=myid()) = Future(pid, RRID())
 
-function RemoteChannel(pid::Integer=myid())
-    rrid = next_rrid_tuple()
-    RemoteChannel{Channel{Any}}(pid, rrid[1], rrid[2])
-end
+RemoteChannel(pid::Integer=myid()) = RemoteChannel{Channel{Any}}(pid, RRID())
+
 function RemoteChannel(f::Function, pid::Integer=myid())
-    remotecall_fetch(pid, f, next_rrid_tuple()) do f, rrid
+    remotecall_fetch(pid, f, RRID()) do f, rrid
         rv=lookup_ref(rrid, f)
-        RemoteChannel{typeof(rv.c)}(myid(), rrid[1], rrid[2])
+        RemoteChannel{typeof(rv.c)}(myid(), rrid)
     end
 end
 
 hash(r::AbstractRemoteRef, h::UInt) = hash(r.whence, hash(r.id, h))
 ==(r::AbstractRemoteRef, s::AbstractRemoteRef) = (r.whence==s.whence && r.id==s.id)
 
-remoteref_id(r::AbstractRemoteRef) = (r.whence, r.id)
+remoteref_id(r::AbstractRemoteRef) = RRID(r.whence, r.id)
 function channel_from_id(id)
     rv = get(PGRP.refs, id, false)
     if rv === false
@@ -568,14 +573,14 @@ function channel_from_id(id)
     rv.c
 end
 
-lookup_ref(id, f=def_rv_channel) = lookup_ref(PGRP, id, f)
-function lookup_ref(pg, id, f)
-    rv = get(pg.refs, id, false)
+lookup_ref(rrid::RRID, f=def_rv_channel) = lookup_ref(PGRP, rrid, f)
+function lookup_ref(pg, rrid, f)
+    rv = get(pg.refs, rrid, false)
     if rv === false
         # first we've heard of this ref
         rv = RemoteValue(f())
-        pg.refs[id] = rv
-        push!(rv.clientset, id[1])
+        pg.refs[rrid] = rv
+        push!(rv.clientset, rrid.whence)
     end
     rv
 end
@@ -691,13 +696,13 @@ end
 
 function deserialize{T<:Future}(s::SerializationState, t::Type{T})
     f = deserialize_rr(s,t)
-    Future(f.where, f.whence, f.id, f.v) # ctor adds to client_refs table
+    Future(f.where, RRID(f.whence, f.id), f.v) # ctor adds to client_refs table
 end
 
 function deserialize{T<:RemoteChannel}(s::SerializationState, t::Type{T})
     rr = deserialize_rr(s,t)
     # call ctor to make sure this rr gets added to the client_refs table
-    RemoteChannel{channel_type(rr)}(rr.where, rr.whence, rr.id)
+    RemoteChannel{channel_type(rr)}(rr.where, RRID(rr.whence, rr.id))
 end
 
 function deserialize_rr(s, t)
@@ -757,115 +762,89 @@ end
 function schedule_call(rid, thunk)
     rv = RemoteValue(def_rv_channel())
     (PGRP::ProcessGroup).refs[rid] = rv
-    push!(rv.clientset, rid[1])
+    push!(rv.clientset, rid.whence)
     schedule(@task(run_work_thunk(rv,thunk)))
     rv
 end
 
-#localize_ref(b::Box) = Box(localize_ref(b.contents))
-
-#function localize_ref(r::RemoteChannel)
-#    if r.where == myid()
-#        fetch(r)
-#    else
-#        r
-#    end
-#end
-
-#localize_ref(x) = x
-
 # make a thunk to call f on args in a way that simulates what would happen if
 # the function were sent elsewhere
-function local_remotecall_thunk(f, args)
-    if isempty(args)
+function local_remotecall_thunk(f, args, kwargs)
+    if isempty(args) && isempty(kwargs)
         return f
     end
-    return ()->f(args...)
-
-    # TODO: this seems to be capable of causing deadlocks by waiting on
-    # Refs buried inside the closure that we don't want to wait on yet.
-    # linfo = ccall(:jl_closure_linfo, Any, (Any,), f)
-    # if isa(linfo,LambdaInfo)
-    #     env = ccall(:jl_closure_env, Any, (Any,), f)
-    #     buf = memio()
-    #     serialize(buf, env)
-    #     seek(buf, 0)
-    #     env = deserialize(buf)
-    #     f = ccall(:jl_new_closure, Any, (Ptr{Void}, Any, Any),
-    #               C_NULL, env, linfo)::Function
-    # end
-    # f(map(localize_ref,args)...)
+    return ()->f(args...; kwargs...)
 end
 
-function remotecall(f, w::LocalProcess, args...)
+function remotecall(f, w::LocalProcess, args...; kwargs...)
     rr = Future(w)
-    schedule_call(remoteref_id(rr), local_remotecall_thunk(f,args))
+    schedule_call(remoteref_id(rr), local_remotecall_thunk(f, args, kwargs))
     rr
 end
 
-function remotecall(f, w::Worker, args...)
+function remotecall(f, w::Worker, args...; kwargs...)
     rr = Future(w)
     #println("$(myid()) asking for $rr")
-    send_msg(w, CallMsg{:call}(f, args, remoteref_id(rr)))
+    send_msg(w, CallMsg{:call}(f, args, kwargs, remoteref_id(rr)))
     rr
 end
 
-remotecall(f, id::Integer, args...) = remotecall(f, worker_from_id(id), args...)
+remotecall(f, id::Integer, args...; kwargs...) = remotecall(f, worker_from_id(id), args...; kwargs...)
 
 # faster version of fetch(remotecall(...))
-function remotecall_fetch(f, w::LocalProcess, args...)
-    v=run_work_thunk(local_remotecall_thunk(f,args), false)
+function remotecall_fetch(f, w::LocalProcess, args...; kwargs...)
+    v=run_work_thunk(local_remotecall_thunk(f,args, kwargs), false)
     isa(v, RemoteException) ? throw(v) : v
 end
 
-function remotecall_fetch(f, w::Worker, args...)
+function remotecall_fetch(f, w::Worker, args...; kwargs...)
     # can be weak, because the program will have no way to refer to the Ref
     # itself, it only gets the result.
-    oid = next_rrid_tuple()
+    oid = RRID()
     rv = lookup_ref(oid)
     rv.waitingfor = w.id
-    send_msg(w, CallMsg{:call_fetch}(f, args, oid))
+    send_msg(w, CallMsg{:call_fetch}(f, args, kwargs, oid))
     v = take!(rv)
     delete!(PGRP.refs, oid)
     isa(v, RemoteException) ? throw(v) : v
 end
 
-remotecall_fetch(f, id::Integer, args...) =
-    remotecall_fetch(f, worker_from_id(id), args...)
+remotecall_fetch(f, id::Integer, args...; kwargs...) =
+    remotecall_fetch(f, worker_from_id(id), args...; kwargs...)
 
 # faster version of wait(remotecall(...))
-remotecall_wait(f, w::LocalProcess, args...) = wait(remotecall(f, w, args...))
+remotecall_wait(f, w::LocalProcess, args...; kwargs...) = wait(remotecall(f, w, args...; kwargs...))
 
-function remotecall_wait(f, w::Worker, args...)
-    prid = next_rrid_tuple()
+function remotecall_wait(f, w::Worker, args...; kwargs...)
+    prid = RRID()
     rv = lookup_ref(prid)
     rv.waitingfor = w.id
     rr = Future(w)
-    send_msg(w, CallWaitMsg(f, args, remoteref_id(rr), prid))
+    send_msg(w, CallWaitMsg(f, args, kwargs, remoteref_id(rr), prid))
     v = fetch(rv.c)
     delete!(PGRP.refs, prid)
     isa(v, RemoteException) && throw(v)
     rr
 end
 
-remotecall_wait(f, id::Integer, args...) =
-    remotecall_wait(f, worker_from_id(id), args...)
+remotecall_wait(f, id::Integer, args...; kwargs...) =
+    remotecall_wait(f, worker_from_id(id), args...; kwargs...)
 
-function remote_do(f, w::LocalProcess, args...)
+function remote_do(f, w::LocalProcess, args...; kwargs...)
     # the LocalProcess version just performs in local memory what a worker
     # does when it gets a :do message.
     # same for other messages on LocalProcess.
-    thk = local_remotecall_thunk(f, args)
+    thk = local_remotecall_thunk(f, args, kwargs)
     schedule(Task(thk))
     nothing
 end
 
-function remote_do(f, w::Worker, args...)
-    send_msg(w, RemoteDoMsg(f, args))
+function remote_do(f, w::Worker, args...; kwargs...)
+    send_msg(w, RemoteDoMsg(f, args, kwargs))
     nothing
 end
 
-remote_do(f, id::Integer, args...) = remote_do(f, worker_from_id(id), args...)
+remote_do(f, id::Integer, args...; kwargs...) = remote_do(f, worker_from_id(id), args...; kwargs...)
 
 # have the owner of rr call f on it
 function call_on_owner(f, rr::AbstractRemoteRef, args...)
@@ -892,7 +871,7 @@ wait(r::Future) = (!isnull(r.v) && return r; call_on_owner(wait_ref, r, myid());
 wait(r::RemoteChannel, args...) = (call_on_owner(wait_ref, r, myid(), args...); r)
 
 function fetch_future(rid, callee)
-    rv = lookup_ref(rid);
+    rv = lookup_ref(rid)
     v = fetch(rv.c)
     del_client(rid, callee)
     v
@@ -1034,22 +1013,22 @@ function message_handler_loop(r_stream::IO, w_stream::IO)
     end
 end
 
-handle_msg(msg::CallMsg{:call}, r_stream, w_stream) = schedule_call(msg.response_oid, ()->msg.f(msg.args...))
+handle_msg(msg::CallMsg{:call}, r_stream, w_stream) = schedule_call(msg.response_oid, ()->msg.f(msg.args...; msg.kwargs...))
 function handle_msg(msg::CallMsg{:call_fetch}, r_stream, w_stream)
     @schedule begin
-        v = run_work_thunk(()->msg.f(msg.args...), false)
+        v = run_work_thunk(()->msg.f(msg.args...; msg.kwargs...), false)
         deliver_result(w_stream, :call_fetch, msg.response_oid, v)
     end
 end
 
 function handle_msg(msg::CallWaitMsg, r_stream, w_stream)
     @schedule begin
-        rv = schedule_call(msg.response_oid, ()->msg.f(msg.args...))
+        rv = schedule_call(msg.response_oid, ()->msg.f(msg.args...; msg.kwargs...))
         deliver_result(w_stream, :call_wait, msg.notify_oid, fetch(rv.c))
     end
 end
 
-handle_msg(msg::RemoteDoMsg, r_stream, w_stream) = @schedule run_work_thunk(()->msg.f(msg.args...), true)
+handle_msg(msg::RemoteDoMsg, r_stream, w_stream) = @schedule run_work_thunk(()->msg.f(msg.args...; msg.kwargs...), true)
 
 handle_msg(msg::ResultMsg, r_stream, w_stream) = put!(lookup_ref(msg.response_oid), msg.value)
 
@@ -1241,9 +1220,8 @@ function addprocs(manager::ClusterManager; kwargs...)
 end
 
 function addprocs_locked(manager::ClusterManager; kwargs...)
-
     params = merge(default_addprocs_params(), AnyDict(kwargs))
-    topology(symbol(params[:topology]))
+    topology(Symbol(params[:topology]))
 
     # some libs by default start as many threads as cores which leads to
     # inefficient use of cores in a multi-process model.
@@ -1369,7 +1347,7 @@ function create_worker(manager, wconfig)
     finalizer(w, (w)->if myid() == 1 manage(w.manager, w.id, w.config, :finalize) end)
 
     # set when the new worker has finshed connections with all other workers
-    ntfy_oid = next_rrid_tuple()
+    ntfy_oid = RRID()
     rr_ntfy_join = lookup_ref(ntfy_oid)
     rr_ntfy_join.waitingfor = myid()
 
@@ -1463,18 +1441,6 @@ let nextidx = 0
     global chooseproc
     function chooseproc(thunk::Function)
         p = -1
-        # TODO jb/functions
-        #env = thunk.env
-        #if isa(env,Tuple)
-        #    for v in env
-        #        if isa(v,Box)
-        #            v = v.contents
-        #        end
-        #        if isa(v,AbstractRemoteRef)
-        #            p = v.where; break
-        #        end
-        #    end
-        #end
         if p == -1
             p = workers()[(nextidx % nworkers()) + 1]
             nextidx += 1
@@ -1526,101 +1492,6 @@ macro everywhere(ex)
 
         sync_end()
     end
-end
-
-function pmap_static(f, lsts...)
-    np = nprocs()
-    n = length(lsts[1])
-    Any[ remotecall(f, PGRP.workers[(i-1)%np+1].id, map(L->L[i], lsts)...) for i = 1:n ]
-end
-
-pmap(f) = f()
-
-# dynamic scheduling by creating a local task to feed work to each processor
-# as it finishes.
-# example unbalanced workload:
-# rsym(n) = (a=rand(n,n);a*a')
-# L = {rsym(200),rsym(1000),rsym(200),rsym(1000),rsym(200),rsym(1000),rsym(200),rsym(1000)};
-# pmap(eig, L);
-function pmap(f, lsts...; err_retry=true, err_stop=false, pids = workers())
-    len = length(lsts)
-
-    results = Dict{Int,Any}()
-
-    busy_workers = fill(false, length(pids))
-    busy_workers_ntfy = Condition()
-
-    retryqueue = []
-    task_in_err = false
-    is_task_in_error() = task_in_err
-    set_task_in_error() = (task_in_err = true)
-
-    nextidx = 0
-    getnextidx() = (nextidx += 1)
-
-    states = [start(lsts[idx]) for idx in 1:len]
-    function getnext_tasklet()
-        if is_task_in_error() && err_stop
-            return nothing
-        elseif !any(idx->done(lsts[idx],states[idx]), 1:len)
-            nxts = [next(lsts[idx],states[idx]) for idx in 1:len]
-            for idx in 1:len; states[idx] = nxts[idx][2]; end
-            nxtvals = [x[1] for x in nxts]
-            return (getnextidx(), nxtvals)
-        elseif !isempty(retryqueue)
-            return shift!(retryqueue)
-        elseif err_retry
-            # Handles the condition where we have finished processing the requested lsts as well
-            # as any retryqueue entries, but there are still some jobs active that may result
-            # in an error and have to be retried.
-            while any(busy_workers)
-                wait(busy_workers_ntfy)
-                if !isempty(retryqueue)
-                    return shift!(retryqueue)
-                end
-            end
-            return nothing
-        else
-            return nothing
-        end
-    end
-
-    @sync begin
-        for (pididx, wpid) in enumerate(pids)
-            @async begin
-                tasklet = getnext_tasklet()
-                while (tasklet !== nothing)
-                    (idx, fvals) = tasklet
-                    busy_workers[pididx] = true
-                    try
-                        results[idx] = remotecall_fetch(f, wpid, fvals...)
-                    catch ex
-                        if err_retry
-                            push!(retryqueue, (idx,fvals, ex))
-                        else
-                            results[idx] = ex
-                        end
-                        set_task_in_error()
-
-                        busy_workers[pididx] = false
-                        notify(busy_workers_ntfy; all=true)
-
-                        break # remove this worker from accepting any more tasks
-                    end
-
-                    busy_workers[pididx] = false
-                    notify(busy_workers_ntfy; all=true)
-
-                    tasklet = getnext_tasklet()
-                end
-            end
-        end
-    end
-
-    for failure in retryqueue
-        results[failure[1]] = failure[3]
-    end
-    [results[x] for x in 1:nextidx]
 end
 
 # Statically split range [1,N] into equal sized chunks for np processors

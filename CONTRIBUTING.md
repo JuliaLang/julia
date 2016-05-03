@@ -75,7 +75,7 @@ There are never enough tests. Track [code coverage at Coveralls](https://coveral
 5. Submit the test as a pull request (PR).
 
 * Code for the buildbot configuration is maintained at: https://github.com/staticfloat/julia-buildbot
-* You can see the current buildbot setup at: http://buildbot.e.ip.saba.us:8010/builders
+* You can see the current buildbot setup at: https://build.julialang.org/builders
 * [Issue 9493](https://github.com/JuliaLang/julia/issues/9493) and [issue 11885](https://github.com/JuliaLang/julia/issues/11885) have more detailed discussion on code coverage.
 
 Coveralls shows functionality that still needs "proof of concept" tests. These are important, as are tests for tricky edge cases, such as converting between integer types when the number to convert is near the maximum of the range of one of the integer types. Even if a function already has some coverage on Coveralls, it may still benefit from tests for edge cases.
@@ -108,6 +108,15 @@ To add entirely new methods to the `stdlib` documentation, first add the signatu
 It is encouraged to write all new docstrings in Markdown markup.  If you need to write a more complicated docstring that contains cross-references or citations it can be written in a restructured text codeblock.
 Many of the existing docstrings are currently restructured text codeblocks and these will be transitioned to Markdown over time.  RST codeblocks are delineated with the triple-quote (\`\`\`rst  \`\`\`) Makdown codeblock syntax.
 The content of the codeblock is spliced directly into the final restructured text document unmodified.
+
+Examples written within docstrings can be used as testcases known as "doctests" by annotating code blocks with `jldoctest`.
+
+    ```jldoctest
+    julia> uppercase("Docstring test")
+    "DOCSTRING TEST"
+    ```
+
+A doctest needs to match an interactive REPL including the `julia>` prompt. To run doctests you first run `make julia-genstdlib` then `make -C doc doctest`.
 
 For new functionality and other substantial changes, add a brief summary to `NEWS.md`. The news item should cross reference the pull request (PR) parenthetically, in the form `([#pr])`; after adding this, run `./julia doc/NEWS-update.jl` from the `julia` directory to update the cross-reference links. To add the PR reference number, first create the PR, then push an additional commit updating `NEWS.md` with the PR reference number.
 

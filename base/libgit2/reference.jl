@@ -133,8 +133,16 @@ end
 function upstream(ref::GitReference)
     isempty(ref) && return nothing
     ref_ptr_ptr = Ref{Ptr{Void}}(C_NULL)
-    @check ccall((:git_branch_upstream, :libgit2), Cint,
+    err = ccall((:git_branch_upstream, :libgit2), Cint,
                   (Ref{Ptr{Void}}, Ptr{Void},), ref_ptr_ptr, ref.ptr)
+    if err == Int(Error.ENOTFOUND)
+        return nothing
+    elseif err != Int(Error.GIT_OK)
+        if repo_ptr_ptr[] != C_NULL
+            finalize(GitReference(ref_ptr_ptr[]))
+        end
+        throw(Error.GitError(err))
+    end
     return GitReference(ref_ptr_ptr[])
 end
 
@@ -180,6 +188,8 @@ function Base.next(bi::GitBranchIter, state)
     err != Int(Error.GIT_OK) && return (state[1:2], (nothing, -1, true))
     return (state[1:2], (GitReference(ref_ptr_ptr[]), btype[1], false))
 end
+
+Base.iteratorsize(::Type{GitBranchIter}) = Base.SizeUnknown()
 
 function Base.map(f::Function, bi::GitBranchIter)
     res = nothing

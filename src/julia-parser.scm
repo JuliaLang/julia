@@ -100,10 +100,14 @@
 (define (dot-opchar? c) (and (char? c) (string.find ".*^/\\+-'<>!=%≥≤≠÷" c)))
 (define operator? (Set operators))
 
-(define reserved-words '(begin while if for try return break continue
+(define initial-reserved-words '(begin while if for try return break continue
                          stagedfunction function macro quote let local global const
                          abstract typealias type bitstype immutable ccall do
                          module baremodule using import export importall))
+
+(define initial-reserved-word? (Set initial-reserved-words))
+
+(define reserved-words (append initial-reserved-words '(end else catch finally true false))) ;; todo: make this more complete
 
 (define reserved-word? (Set reserved-words))
 
@@ -227,6 +231,9 @@
              (error (string "overflow in numeric constant \"" s "\""))
              ans))))
 
+(define (numchk n s)
+  (or n (error (string "invalid numeric constant \"" s "\""))))
+
 (define (read-number port leadingdot neg)
   (let ((str  (open-output-string))
         (pred char-numeric?)
@@ -317,11 +324,11 @@
                    s)
                r is-float32-literal)))
       ;; n is #f for integers > typemax(UInt64)
-      (cond (is-hex-float-literal (double n))
+      (cond (is-hex-float-literal (numchk n s) (double n))
             ((eq? pred char-hex?) (fix-uint-neg neg (sized-uint-literal n s 4)))
             ((eq? pred char-oct?) (fix-uint-neg neg (sized-uint-oct-literal n s)))
             ((eq? pred char-bin?) (fix-uint-neg neg (sized-uint-literal n s 1)))
-            (is-float32-literal   (float n))
+            (is-float32-literal   (numchk n s) (float n))
             (n (if (and (integer? n) (> n 9223372036854775807))
                    `(macrocall @int128_str ,s)
                    n))
@@ -338,10 +345,10 @@
 (define (sized-uint-literal n s b)
   (let* ((i (if (eqv? (string.char s 0) #\-) 3 2))
          (l (* (- (length s) i) b)))
-    (cond ((<= l 8)   (uint8  n))
-          ((<= l 16)  (uint16 n))
-          ((<= l 32)  (uint32 n))
-          ((<= l 64)  (uint64 n))
+    (cond ((<= l 8)   (numchk n s) (uint8  n))
+          ((<= l 16)  (numchk n s) (uint16 n))
+          ((<= l 32)  (numchk n s) (uint32 n))
+          ((<= l 64)  (numchk n s) (uint64 n))
           ((<= l 128) `(macrocall @uint128_str ,s))
           (else       (error "Hex or binary literal too large for UInt128")))))
 
@@ -353,9 +360,10 @@
                 ((< n 65536)      (uint16 n))
                 ((< n 4294967296) (uint32 n))
                 (else             (uint64 n)))
-          (if (oct-within-uint128? s)
-              `(macrocall @uint128_str ,s)
-              (error "Octal literal too large for UInt128")))))
+          (begin (if (equal? s "0o") (numchk n s))
+                 (if (oct-within-uint128? s)
+                     `(macrocall @uint128_str ,s)
+                     (error "Octal literal too large for UInt128"))))))
 
 (define (strip-leading-0s s)
   (define (loop i)
@@ -780,12 +788,21 @@
   (let loop ((ex (parse-pipes s))
              (first #t))
     (let ((t (peek-token s)))
-      (if (not (is-prec-comparison? t))
-          ex
-          (begin (take-token s)
-                 (if first
-                     (loop (list 'comparison ex t (parse-pipes s)) #f)
-                     (loop (append ex (list t (parse-pipes s))) #f)))))))
+      (cond ((is-prec-comparison? t)
+             (begin (take-token s)
+                    (if first
+                        (loop (list 'comparison ex t (parse-pipes s)) #f)
+                        (loop (append ex (list t (parse-pipes s))) #f))))
+            (first ex)
+            ((length= ex 4)
+             ;; only a single comparison; special chained syntax not required
+             (let ((op   (caddr ex))
+                   (arg1 (cadr ex))
+                   (arg2 (cadddr ex)))
+               (if (or (eq? op '|<:|) (eq? op '|>:|))
+                   `(,op ,arg1 ,arg2)
+                   `(call ,op ,arg1 ,arg2))))
+            (else ex)))))
 
 (define closing-token?
   (let ((closer? (Set '(else elseif catch finally #\, #\) #\] #\} #\;))))
@@ -816,7 +833,7 @@
                 (not (memv t '(#\( #\[ #\{))))
            )
        (not (operator? t))
-       (not (reserved-word? t))
+       (not (initial-reserved-word? t))
        (not (closing-token? t))
        (not (newline? t))
        (not (and (pair? expr) (syntactic-unary-op? (car expr))))))
@@ -905,13 +922,6 @@
         (else
          ex)))))
 
-;; convert (comparison a <: b) to (<: a b)
-(define (subtype-syntax e)
-  (if (and (pair? e) (eq? (car e) 'comparison)
-           (length= e 4) (eq? (caddr e) '|<:|))
-      `(<: ,(cadr e) ,(cadddr e))
-      e))
-
 (define (parse-unary-prefix s)
   (let ((op (peek-token s)))
     (if (syntactic-unary-op? op)
@@ -926,14 +936,25 @@
 ;; also handles looking for syntactic reserved words
 (define (parse-call s)
   (let ((ex (parse-unary-prefix s)))
-    (if (reserved-word? ex)
+    (if (initial-reserved-word? ex)
         (parse-resword s ex)
         (parse-call-chain s ex #f))))
+
+(define (parse-def s strict)
+  (let ((ex (parse-unary-prefix s)))
+    (if (or (and strict (reserved-word? ex)) (initial-reserved-word? ex))
+        (error (string "invalid name \"" ex "\""))
+        (parse-call-chain s ex #f))))
+
 
 (define (deprecated-dict-replacement ex)
   (if (dict-literal? ex)
       (string "Dict{" (deparse (cadr ex)) #\, (deparse (caddr ex)) "}")
       "Dict"))
+
+(define (disallowed-space ex t)
+  (error (string "space before \"" t "\" not allowed in \""
+                 (deparse ex) " " (deparse t) "\"")))
 
 (define (parse-call-chain s ex one-call)
   (let loop ((ex ex))
@@ -946,10 +967,7 @@
           ex
           (case t
             ((#\( )
-             (if (ts:space? s)
-                 (syntax-deprecation s
-                                     (string (deparse ex) " " (deparse t))
-                                     (string (deparse ex) (deparse t))))
+             (if (ts:space? s) (disallowed-space ex t))
              (take-token s)
              (let ((c (let ((al (parse-arglist s #\) )))
                         (receive
@@ -966,10 +984,7 @@
                    c
                    (loop c))))
             ((#\[ )
-             (if (ts:space? s)
-                 (syntax-deprecation s
-                                     (string (deparse ex) " " (deparse t))
-                                     (string (deparse ex) (deparse t))))
+             (if (ts:space? s) (disallowed-space ex t))
              (take-token s)
              ;; ref is syntax, so we can distinguish
              ;; a[i] = x  from
@@ -1001,10 +1016,7 @@
                       (loop (list* 'typed_dict_comprehension ex (cdr al))))
                      (else (error "unknown parse-cat result (internal error)"))))))
             ((|.|)
-             (if (ts:space? s)
-                 (syntax-deprecation s
-                                     (string (deparse ex) " " (deparse t))
-                                     (string (deparse ex) (deparse t))))
+             (if (ts:space? s) (disallowed-space ex t))
              (take-token s)
              (loop
               (cond ((eqv? (peek-token s) #\()
@@ -1026,13 +1038,9 @@
              (take-token s)
              (loop (list t ex)))
             ((#\{ )
-             (if (ts:space? s)
-                 (syntax-deprecation s
-                                     (string (deparse ex) " " (deparse t))
-                                     (string (deparse ex) (deparse t))))
+             (if (ts:space? s) (disallowed-space ex t))
              (take-token s)
-             (loop (list* 'curly ex
-                          (map subtype-syntax (parse-arglist s #\} )))))
+             (loop (list* 'curly ex (parse-arglist s #\} ))))
             ((#\")
              (if (and (symbol? ex) (not (operator? ex))
                       (not (ts:space? s)))
@@ -1066,7 +1074,7 @@
                           " expected \"end\", got \"" t "\""))))))
 
 (define (parse-subtype-spec s)
-  (subtype-syntax (parse-comparison s)))
+  (parse-comparison s))
 
 ;; parse expressions or blocks introduced by syntactic reserved words
 (define (parse-resword s word)
@@ -1097,6 +1105,10 @@
                 ,body)))
 
        ((if)
+        (if (newline? (peek-token s))
+            (syntax-deprecation s "if with line break before condition" "")
+            #;(error (string "missing condition in \"if\" at " current-filename
+                           ":" (- (input-port-line (ts:port s)) 1))))
         (let* ((test (parse-cond s))
                (then (if (memq (require-token s) '(else elseif))
                          '(block)
@@ -1134,16 +1146,14 @@
                (const (and (eq? (peek-token s) 'const)
                            (take-token s)))
                (expr  (cons word
-                            (map (lambda (x)
-                                   (short-form-function-loc x lno))
-                                 (parse-comma-separated-assignments s)))))
+			    (parse-comma-separated-assignments s))))
           (if const
               `(const ,expr)
               expr)))
        ((stagedfunction function macro)
         (if (eq? word 'stagedfunction) (syntax-deprecation s "stagedfunction" "@generated function"))
         (let* ((paren (eqv? (require-token s) #\())
-               (sig   (parse-call s)))
+               (sig   (parse-def s (not (eq? word 'macro)))))
           (if (and (eq? word 'function) (not paren) (symbol-or-interpolate? sig))
               (begin (if (not (eq? (require-token s) 'end))
                          (error (string "expected \"end\" in definition of function \"" sig "\"")))
@@ -1177,7 +1187,9 @@
           (if (reserved-word? (peek-token s))
               (error (string "invalid type name \"" (take-token s) "\"")))
           (let ((sig (parse-subtype-spec s))
-                (loc (line-number-node s)))
+                (loc (begin (if (newline? (peek-token s))
+                                (skip-ws-and-comments (ts:port s)))
+                            (line-number-node s))))
             (begin0 (list 'type (if (eq? word 'type) #t #f)
                           sig (add-filename-to-block! (parse-block s) loc))
                     (expect-end s word)))))
@@ -1370,10 +1382,7 @@
     (let ((nxt (peek-token s)))
       (cond
        ((eq? nxt '|.|)
-        (if (ts:space? s)
-            (syntax-deprecation s
-                                (string (deparse word) " " (deparse nxt))
-                                (string (deparse word) (deparse nxt))))
+        (if (ts:space? s) (disallowed-space word nxt))
         (take-token s)
         (loop (cons (macrocall-to-atsym (parse-unary-prefix s)) path)))
        ((or (memv nxt '(#\newline #\; #\, :))
@@ -1399,14 +1408,20 @@
 
 ;; as above, but allows both "i=r" and "i in r"
 (define (parse-iteration-spec s)
-  (let ((r (parse-eq* s)))
-    (cond ((and (pair? r) (eq? (car r) '=))  r)
-          ((eq? r ':)  r)
-          ((and (length= r 4) (eq? (car r) 'comparison)
-                (or (eq? (caddr r) 'in) (eq? (caddr r) '∈)))
-           `(= ,(cadr r) ,(cadddr r)))
-          (else
-           (error "invalid iteration specification")))))
+  (let* ((lhs (parse-pipes s))
+         (t   (peek-token s)))
+    (cond ((memq t '(= in ∈))
+           (take-token s)
+           (let* ((rhs (parse-pipes s))
+                  (t   (peek-token s)))
+             #;(if (not (or (closing-token? t) (newline? t)))
+                 ;; should be: (error "invalid iteration specification")
+                 (syntax-deprecation s (string "for " (deparse `(= ,lhs ,rhs)) " " t)
+                                     (string "for " (deparse `(= ,lhs ,rhs)) "; " t)))
+             `(= ,lhs ,rhs)))
+          ((and (eq? lhs ':) (closing-token? t))
+           ':)
+          (else (error "invalid iteration specification")))))
 
 (define (parse-comma-separated-iters s)
   (let loop ((ranges '()))
@@ -2098,7 +2113,7 @@
                (cond ((closing-token? t) #f)
                      ((newline? t) (take-token s) (loop (peek-token s)))
                      (else #t))))
-        `(macrocall @doc ,ex ,(production s))
+        `(macrocall (|.| Core (quote @doc)) ,ex ,(production s))
         ex)))
 
 ;; --- main entry point ---

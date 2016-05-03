@@ -66,7 +66,7 @@ end
 
 @test exact_equal(
     sparsevec([3, 3], [5.0, -5.0], 8),
-    spzeros(Float64, 8))
+    SparseVector(8, [3], [0.0]))
 
 @test exact_equal(
     sparsevec([2, 3, 6], [12.0, 18.0, 25.0]),
@@ -81,14 +81,15 @@ let x0 = SparseVector(8, [2, 3, 6], [12.0, 18.0, 25.0])
 
     @test exact_equal(
         sparsevec([2, 3, 4, 4, 6], [12.0, 18.0, 5.0, -5.0, 25.0], 8),
-        x0)
+        SparseVector(8, [2, 3, 4, 6], [12.0, 18.0, 0.0, 25.0]))
 
     @test exact_equal(
         sparsevec([1, 1, 1, 2, 3, 3, 6], [2.0, 3.0, -5.0, 12.0, 10.0, 8.0, 25.0], 8),
-        x0)
+        SparseVector(8, [1, 2, 3, 6], [0.0, 12.0, 18.0, 25.0]))
 
     @test exact_equal(
-        sparsevec([2, 3, 6, 7, 7], [12.0, 18.0, 25.0, 5.0, -5.0], 8), x0)
+        sparsevec([2, 3, 6, 7, 7], [12.0, 18.0, 25.0, 5.0, -5.0], 8),
+        SparseVector(8, [2, 3, 6, 7], [12.0, 18.0, 25.0, 0.0]))
 end
 
 # from dictionary
@@ -108,6 +109,9 @@ let x = spv_x1
 
     xc = sparsevec(a)
     @test exact_equal(xc, SparseVector(6, [2, 5, 6], [1.25, -0.75, 3.5]))
+
+    d = Dict{Int, Float64}((1 => 0.0, 2 => 1.0, 3 => 2.0))
+    @test exact_equal(sparsevec(d), SparseVector(3, [1, 2, 3], [0.0, 1.0, 2.0]))
 end
 
 # spones - copies structure, but replaces nzvals with ones
@@ -125,7 +129,7 @@ let xr = sprand(1000, 0.9)
     @test all(nonzeros(xr) .>= 0.0)
 end
 
-let xr = sprand(1000, 0.9, Float32)
+let xr = sprand(Float32, 1000, 0.9)
     @test isa(xr, SparseVector{Float32,Int})
     @test length(xr) == 1000
     @test all(nonzeros(xr) .>= 0.0)
@@ -139,7 +143,7 @@ let xr = sprandn(1000, 0.9)
     end
 end
 
-let xr = sprandbool(1000, 0.9)
+let xr = sprand(Bool, 1000, 0.9)
     @test isa(xr, SparseVector{Bool,Int})
     @test length(xr) == 1000
     @test all(nonzeros(xr))
@@ -148,7 +152,7 @@ end
 let r1 = MersenneTwister(), r2 = MersenneTwister()
     @test sprand(r1, 100, .9) == sprand(r2, 100, .9)
     @test sprandn(r1, 100, .9) == sprandn(r2, 100, .9)
-    @test sprandbool(r1, 100, .9) == sprandbool(r2, 100, .9)
+    @test sprand(r1, Bool, 100, .9, ) == sprand(r2,  Bool, 100, .9)
 end
 
 ### Element access
@@ -672,6 +676,7 @@ let x = sprand(16, 0.5), x2 = sprand(16, 0.4)
         @test exact_equal(2.5 * x, sx)
         @test exact_equal(x .* 2.5, sx)
         @test exact_equal(2.5 .* x, sx)
+        @test exact_equal(x / 2.5, SparseVector(x.n, x.nzind, x.nzval / 2.5))
 
         xc = copy(x)
         @test is(scale!(xc, 2.5), xc)
@@ -696,7 +701,6 @@ let x = complex(sprand(32, 0.6), sprand(32, 0.6)),
     @test_approx_eq dot(x, x) dot(xf, xf)
     @test_approx_eq dot(x, y) dot(xf, yf)
 end
-
 
 
 ### BLAS Level-2:
@@ -867,6 +871,30 @@ let m = 10
         end
     end
 end
+
+# fkeep!
+let x = sparsevec(1:7, [3., 2., -1., 1., -2., -3., 3.], 7)
+    # droptol
+    xdrop = Base.droptol!(copy(x), 1.5)
+    @test exact_equal(xdrop, SparseVector(7, [1, 2, 5, 6, 7], [3., 2., -2., -3., 3.]))
+    Base.droptol!(xdrop, 2.5)
+    @test exact_equal(xdrop, SparseVector(7, [1, 6, 7], [3., -3., 3.]))
+    Base.droptol!(xdrop, 3.)
+    @test exact_equal(xdrop, SparseVector(7, Int[], Float64[]))
+
+    # dropzeros
+    xdrop = copy(x)
+    xdrop.nzval[[2, 4, 6]] = 0.0
+    Base.SparseArrays.dropzeros!(xdrop)
+    @test exact_equal(xdrop, SparseVector(7, [1, 3, 5, 7], [3, -1., -2., 3.]))
+
+    xdrop = copy(x)
+    # This will keep index 1, 3, 4, 7 in xdrop
+    f_drop(i, x, other) = (abs(x) == 1.) || (i in [1, 7])
+    Base.SparseArrays.fkeep!(xdrop, f_drop, Void)
+    @test exact_equal(xdrop, SparseVector(7, [1, 3, 4, 7], [3., -1., 1., 3.]))
+end
+
 
 # It's tempting to share data between a SparseVector and a SparseArrays,
 # but if that's done, then modifications to one or the other will cause

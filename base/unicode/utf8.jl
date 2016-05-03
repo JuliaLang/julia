@@ -355,5 +355,10 @@ function encode_to_utf8{T<:Union{UInt16, UInt32}}(::Type{T}, dat, len)
     UTF8String(buf)
 end
 
-utf8(p::Ptr{UInt8}) = UTF8String(bytestring(p))
-utf8(p::Ptr{UInt8}, len::Integer) = utf8(pointer_to_array(p, len))
+utf8(p::Ptr{UInt8}) =
+    utf8(p, p == C_NULL ? Csize_t(0) : ccall(:strlen, Csize_t, (Ptr{UInt8},), p))
+function utf8(p::Ptr{UInt8}, len::Integer)
+    p == C_NULL && throw(ArgumentError("cannot convert NULL to string"))
+    UTF8String(ccall(:jl_pchar_to_array, Vector{UInt8},
+                     (Ptr{UInt8}, Csize_t), p, len))
+end

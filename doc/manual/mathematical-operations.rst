@@ -57,8 +57,9 @@ Here are some simple examples using arithmetic operators:
     julia> 3*2/12
     0.5
 
-(By convention, we tend to space less tightly binding operators less
-tightly, but there are no syntactic constraints.)
+(By convention, we tend to space operators more tightly if they get applied before
+other nearby operators. For instance, we would generally write ``-x + 2`` to reflect
+that first ``x`` gets negated, and then ``2`` is added to that result.)
 
 Bitwise Operators
 -----------------
@@ -457,8 +458,8 @@ Function                     Description
 :func:`mod2pi(x) <mod2pi>`   modulus with respect to 2pi;  ``0 <= mod2pi(x)  < 2pi``
 :func:`divrem(x,y) <divrem>` returns ``(div(x,y),rem(x,y))``
 :func:`fldmod(x,y) <fldmod>` returns ``(fld(x,y),mod(x,y))``
-:func:`gcd(x,y...) <gcd>`    greatest common divisor of ``x``, ``y``,...; sign matches ``x``
-:func:`lcm(x,y...) <lcm>`    least common multiple of ``x``, ``y``,...; sign matches ``x``
+:func:`gcd(x,y...) <gcd>`    greatest positive common divisor of ``x``, ``y``,...
+:func:`lcm(x,y...) <lcm>`    least positive common multiple of ``x``, ``y``,...
 ============================ =======================================================================
 
 Sign and absolute value functions

@@ -3,6 +3,7 @@
 # fallback text/plain representation of any type:
 writemime(io::IO, ::MIME"text/plain", x) = showcompact(io, x)
 writemime(io::IO, ::MIME"text/plain", x::Number) = show(io, x)
+writemime(io::IO, ::MIME"text/plain", x::Associative) = showdict(io, x)
 
 function writemime(io::IO, ::MIME"text/plain", f::Function)
     ft = typeof(f)
@@ -21,17 +22,21 @@ function writemime(io::IO, ::MIME"text/plain", f::Builtin)
     print(io, typeof(f).name.mt.name, " (built-in function)")
 end
 
-# writemime for ranges, e.g.
-#  3-element UnitRange{Int64,Int}
-#   1,2,3
-# or for more elements than fit on screen:
-#   1.0,2.0,3.0,…,6.0,7.0,8.0
-function writemime(io::IO, ::MIME"text/plain", r::Range)
+# writemime for linspace, e.g.
+# linspace(1,3,7)
+# 7-element LinSpace{Float64}:
+#   1.0,1.33333,1.66667,2.0,2.33333,2.66667,3.0
+function writemime(io::IO, ::MIME"text/plain", r::LinSpace)
     print(io, summary(r))
     if !isempty(r)
         println(io, ":")
         print_range(IOContext(io, :limit_output => true), r)
     end
+end
+
+# writemime for ranges
+function writemime(io::IO, ::MIME"text/plain", r::Range)
+    show(io, r)
 end
 
 function writemime(io::IO, ::MIME"text/plain", v::AbstractVector)
@@ -124,11 +129,11 @@ function showerror(io::IO, ex::DomainError, bt; backtrace=true)
         if !code.from_c
             if code.func in (:log, :log2, :log10, :sqrt) # TODO add :besselj, :besseli, :bessely, :besselk
                 print(io,"\n$(code.func) will only return a complex result if called with a complex argument. Try $(string(code.func))(complex(x)).")
-            elseif (code.func == :^ && code.file == symbol("intfuncs.jl")) || code.func == :power_by_squaring #3024
+            elseif (code.func == :^ && code.file == Symbol("intfuncs.jl")) || code.func == :power_by_squaring #3024
                 print(io, "\nCannot raise an integer x to a negative power -n. \nMake x a float by adding a zero decimal (e.g. 2.0^-n instead of 2^-n), or write 1/x^n, float(x)^-n, or (x//1)^-n.")
             elseif code.func == :^ &&
-                    (code.file == symbol("promotion.jl") || code.file == symbol("math.jl") ||
-                    code.file == symbol(joinpath(".","promotion.jl")) || code.file == symbol(joinpath(".","math.jl")))
+                    (code.file == Symbol("promotion.jl") || code.file == Symbol("math.jl") ||
+                    code.file == Symbol(joinpath(".","promotion.jl")) || code.file == Symbol(joinpath(".","math.jl")))
                 print(io, "\nExponentiation yielding a complex result requires a complex argument.\nReplace x^y with (x+0im)^y, Complex(x)^y, or similar.")
             end
             break
@@ -267,22 +272,25 @@ function show_method_candidates(io::IO, ex::MethodError)
     lines = []
     # These functions are special cased to only show if first argument is matched.
     special = f in [convert, getindex, setindex!]
-    funcs = Any[(Core.Typeof(f),arg_types_param)]
+    funcs = Any[(f, arg_types_param)]
 
     # An incorrect call method produces a MethodError for convert.
     # It also happens that users type convert when they mean call. So
     # pool MethodErrors for these two functions.
     if f === convert && !isempty(arg_types_param)
-        push!(funcs, (arg_types_param[1],arg_types_param[2:end]))
+        at1 = arg_types_param[1]
+        if isa(at1,DataType) && (at1::DataType).name === Type.name && isleaftype(at1)
+            push!(funcs, (at1.parameters[1], arg_types_param[2:end]))
+        end
     end
 
     for (func,arg_types_param) in funcs
-        for method in func.name.mt
+        for method in methods(func)
             buf = IOBuffer()
             s1 = method.sig.parameters[1]
             sig = method.sig.parameters[2:end]
             print(buf, "  ")
-            if !(func <: s1)
+            if !isa(func, s1)
                 # function itself doesn't match
                 print(buf, "(")
                 if Base.have_color
@@ -294,8 +302,8 @@ function show_method_candidates(io::IO, ex::MethodError)
                 end
                 print(buf, ")")
             else
-                use_constructor_syntax = func.name === Type.name && !isa(func.parameters[1],TypeVar)
-                print(buf, use_constructor_syntax ? func.parameters[1] : func.name.mt.name)
+                use_constructor_syntax = isa(func, Type)
+                print(buf, use_constructor_syntax ? func : typeof(func).name.mt.name)
             end
             right_matches = 0
             tv = method.tvars
@@ -341,7 +349,7 @@ function show_method_candidates(io::IO, ex::MethodError)
                     print(buf, "::$sigstr")
                 end
             end
-            special && right_matches==0 && continue
+            special && right_matches==0 && return # continue the do-block
 
             if length(t_i) > length(sig) && !isempty(sig) && Base.isvarargtype(sig[end])
                 # It ensures that methods like f(a::AbstractString...) gets the correct

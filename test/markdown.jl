@@ -316,26 +316,96 @@ no|table
 no error
 """ == MD([Paragraph(Any["no|table no error"])])
 
-t = """a   |   b
-:-- | --:
-1   |   2
-"""
-@test plain(Markdown.parse(t)) == t
+let t = """a   |   b
+    :-- | --:
+    1   |   2
+    """
+    @test Markdown.parse(t) == MD(Table(Any[Any["a", "b"], Any["1", "2"]], [:l, :r]))
+end
 
+let text =
+    """
+    | a   |   b |
+    |:--- | ---:|
+    | 1   |   2 |
+    """,
+    table = Markdown.parse(text)
+    @test text == Markdown.plain(table)
+end
+let text =
+    """
+    | Markdown | Table |  Test |
+    |:-------- |:-----:| -----:|
+    | foo      | `bar` | *baz* |
+    | `bar`    |  baz  | *foo* |
+    """,
+    table = Markdown.parse(text)
+    @test text == Markdown.plain(table)
+end
 
 # LaTeX extension
-latex_doc = md"""
-We have $x^2 < x$ whenever:
 
-$|x| < 1$
+let in_dollars =
+    """
+    We have \$x^2 < x\$ whenever:
 
-etc."""
+    \$|x| < 1\$
 
-@test latex_doc == MD(Any[Paragraph(Any["We have ",
-                                        LaTeX("x^2 < x"),
-                                        " whenever:"]),
-                          LaTeX("|x| < 1"),
-                          Paragraph(Any["etc."])])
+    etc.
+    """,
+    in_backticks =
+    """
+    We have ``x^2 < x`` whenever:
 
-@test plain(latex_doc) == "We have \$x^2 < x\$ whenever:\n\n\$|x| < 1\$\n\netc.\n"
-@test latex(latex_doc) == "We have \$x^2 < x\$ whenever:\n\$\$|x| < 1\$\$\netc.\n"
+    ```math
+    |x| < 1
+    ```
+
+    etc.
+    """,
+    out_plain =
+    """
+    We have \$x^2 < x\$ whenever:
+
+    \$\$
+    |x| < 1
+    \$\$
+
+    etc.
+    """,
+    out_rst =
+    """
+    We have :math:`x^2 < x` whenever:
+
+    .. math::
+
+        |x| < 1
+
+    etc.
+    """,
+    out_latex =
+    """
+    We have \$x^2 < x\$ whenever:
+    \$\$|x| < 1\$\$
+    etc.
+    """,
+    dollars   = Markdown.parse(in_dollars),
+    backticks = Markdown.parse(in_backticks),
+    latex_doc = MD(
+        Any[Paragraph(Any["We have ", LaTeX("x^2 < x"), " whenever:"]),
+            LaTeX("|x| < 1"),
+            Paragraph(Any["etc."])
+    ])
+
+    @test out_plain == Markdown.plain(dollars)
+    @test out_plain == Markdown.plain(backticks)
+
+    @test out_rst   == Markdown.rst(dollars)
+    @test out_rst   == Markdown.rst(backticks)
+
+    @test out_latex == Markdown.latex(dollars)
+    @test out_latex == Markdown.latex(backticks)
+
+    @test latex_doc == dollars
+    @test latex_doc == backticks
+end

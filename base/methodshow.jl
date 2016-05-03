@@ -1,6 +1,6 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
-# Method and method-table pretty-printing
+# Method and method table pretty-printing
 
 function argtype_decl(env, n, t) # -> (argname, argtype)
     if isa(n,Expr)
@@ -33,16 +33,33 @@ function arg_decl_parts(m::Method)
     else
         tv = Any[tv...]
     end
-    li = m.func
-    e = uncompressed_ast(li)
-    argnames = e.args[1]
-    s = symbol("?")
-    decls = [argtype_decl(:tvar_env => tv, get(argnames,i,s), m.sig.parameters[i])
-                for i = 1:length(m.sig.parameters)]
-    return tv, decls, li.file, li.line
+    li = m.lambda_template
+    file, line = "", 0
+    if li !== nothing
+        argnames = li.slotnames[1:li.nargs]
+        s = Symbol("?")
+        decls = Any[argtype_decl(:tvar_env => tv, get(argnames, i, s), m.sig.parameters[i])
+                    for i = 1:length(m.sig.parameters)]
+        if isdefined(li, :def)
+            file, line = li.def.file, li.def.line
+        end
+    else
+        decls = Any["" for i = 1:length(m.sig.parameters)]
+    end
+    return tv, decls, file, line
 end
 
-function show(io::IO, m::Method)
+function kwarg_decl(sig::ANY, kwtype::DataType)
+    sig = Tuple{kwtype, Array, sig.parameters...}
+    kwli = ccall(:jl_methtable_lookup, Any, (Any, Any), kwtype.name.mt, sig)
+    if kwli !== nothing
+        kwli = kwli::Method
+        return filter(x->!('#' in string(x)), kwli.lambda_template.slotnames[kwli.lambda_template.nargs+1:end])
+    end
+    return ()
+end
+
+function show(io::IO, m::Method; kwtype::Nullable{DataType}=Nullable{DataType}())
     tv, decls, file, line = arg_decl_parts(m)
     ft = m.sig.parameters[1]
     d1 = decls[1]
@@ -66,42 +83,56 @@ function show(io::IO, m::Method)
     print(io, "(")
     print_joined(io, [isempty(d[2]) ? d[1] : d[1]*"::"*d[2] for d in decls[2:end]],
                  ", ", ", ")
+    if !isnull(kwtype)
+        kwargs = kwarg_decl(m.sig, get(kwtype))
+        if !isempty(kwargs)
+            print(io, "; ")
+            print_joined(io, kwargs, ", ", ", ")
+        end
+    end
     print(io, ")")
     if line > 0
         print(io, " at ", file, ":", line)
     end
 end
 
-function show_method_table(io::IO, mt::MethodTable, max::Int=-1, header::Bool=true)
+function show_method_table(io::IO, ms::MethodList, max::Int=-1, header::Bool=true)
+    mt = ms.mt
     name = mt.name
     isself = isdefined(mt.module, name) &&
              typeof(getfield(mt.module, name)) <: Function
-    n = length(mt)
+    n = length(ms)
     if header
         m = n==1 ? "method" : "methods"
         ns = isself ? string(name) : string("(::", name, ")")
         what = startswith(ns, '@') ? "macro" : "generic function"
         print(io, "# $n $m for ", what, " \"", ns, "\":")
     end
-    d = mt.defs
+    kwtype = isdefined(mt, :kwsorter) ? Nullable{DataType}(typeof(mt.kwsorter)) : Nullable{DataType}()
     n = rest = 0
-    while d !== nothing
-        if max==-1 || n<max || (rest==0 && n==max && d.next === nothing)
+    local last
+    for meth in ms
+       if max==-1 || n<max
             println(io)
-            show(io, d)
+            show(io, meth; kwtype=kwtype)
             n += 1
         else
             rest += 1
+            last = meth
         end
-        d = d.next
     end
     if rest > 0
         println(io)
-        print(io,"... $rest methods not shown (use methods($name) to see them all)")
+        if rest == 1
+            show(io, last; kwtype=kwtype)
+        else
+            print(io,"... $rest methods not shown (use methods($name) to see them all)")
+        end
     end
 end
 
-show(io::IO, mt::MethodTable) = show_method_table(io, mt)
+show(io::IO, ms::MethodList) = show_method_table(io, ms)
+show(io::IO, mt::MethodTable) = show_method_table(io, MethodList(mt))
 
 function inbase(m::Module)
     if m == Base
@@ -114,10 +145,10 @@ end
 fileurl(file) = let f = find_source_file(file); f === nothing ? "" : "file://"*f; end
 
 function url(m::Method)
-    M = m.func.module
-    (m.func.file == :null || m.func.file == :string) && return ""
-    file = string(m.func.file)
-    line = m.func.line
+    M = m.module
+    (m.file == :null || m.file == :string) && return ""
+    file = string(m.file)
+    line = m.line
     line <= 0 || ismatch(r"In\[[0-9]+\]", file) && return ""
     if inbase(M)
         if isempty(Base.GIT_VERSION_INFO.commit)
@@ -148,7 +179,7 @@ function url(m::Method)
     end
 end
 
-function writemime(io::IO, ::MIME"text/html", m::Method)
+function writemime(io::IO, ::MIME"text/html", m::Method; kwtype::Nullable{DataType}=Nullable{DataType}())
     tv, decls, file, line = arg_decl_parts(m)
     ft = m.sig.parameters[1]
     d1 = decls[1]
@@ -174,6 +205,14 @@ function writemime(io::IO, ::MIME"text/html", m::Method)
     print(io, "(")
     print_joined(io, [isempty(d[2]) ? d[1] : d[1]*"::<b>"*d[2]*"</b>"
                       for d in decls[2:end]], ", ", ", ")
+    if !isnull(kwtype)
+        kwargs = kwarg_decl(m.sig, get(kwtype))
+        if !isempty(kwargs)
+            print(io, "; <i>")
+            print_joined(io, kwargs, ", ", ", ")
+            print(io, "</i>")
+        end
+    end
     print(io, ")")
     if line > 0
         u = url(m)
@@ -186,21 +225,24 @@ function writemime(io::IO, ::MIME"text/html", m::Method)
     end
 end
 
-function writemime(io::IO, mime::MIME"text/html", mt::MethodTable)
+function writemime(io::IO, mime::MIME"text/html", ms::MethodList)
+    mt = ms.mt
     name = mt.name
-    n = length(mt)
+    n = length(ms)
     meths = n==1 ? "method" : "methods"
     ns = string(name)
     what = startswith(ns, '@') ? "macro" : "generic function"
     print(io, "$n $meths for ", what, " <b>$ns</b>:<ul>")
-    d = mt.defs
-    while d !== nothing
+    kwtype = isdefined(mt, :kwsorter) ? Nullable{DataType}(typeof(mt.kwsorter)) : Nullable{DataType}()
+    for meth in ms
         print(io, "<li> ")
-        writemime(io, mime, d)
-        d = d.next
+        writemime(io, mime, meth; kwtype=kwtype)
+        print(io, "</li> ")
     end
     print(io, "</ul>")
 end
+
+writemime(io::IO, mime::MIME"text/html", mt::MethodTable) = writemime(io, mime, MethodList(mt))
 
 # pretty-printing of Vector{Method} for output of methodswith:
 

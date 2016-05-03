@@ -18,15 +18,15 @@ const TAGS = Any[
     Tuple, Array, Expr,
     #LongSymbol, LongTuple, LongExpr,
     Symbol, Tuple, Expr,  # dummy entries, intentionally shadowed by earlier ones
-    LineNumberNode, SymbolNode, LabelNode, GotoNode,
-    QuoteNode, TopNode, TypeVar, Box, LambdaInfo,
+    LineNumberNode, Slot, LabelNode, GotoNode,
+    QuoteNode, TopNode, TypeVar, Core.Box, LambdaInfo,
     Module, #=UndefRefTag=#Symbol, Task, ASCIIString, UTF8String,
     UTF16String, UTF32String, Float16,
-    SimpleVector, #=BackrefTag=#Symbol, :reserved11, :reserved12,
+    SimpleVector, #=BackrefTag=#Symbol, Method, :reserved12,
 
     (), Bool, Any, :Any, Bottom, :reserved21, :reserved22, Type,
     :Array, :TypeVar, :Box,
-    :lambda, :body, :return, :call, symbol("::"),
+    :lambda, :body, :return, :call, Symbol("::"),
     :(=), :null, :gotoifnot, :A, :B, :C, :M, :N, :T, :S, :X, :Y,
     :a, :b, :c, :d, :e, :f, :g, :h, :i, :j, :k, :l, :m, :n, :o,
     :p, :q, :r, :s, :t, :u, :v, :w, :x, :y, :z,
@@ -43,10 +43,12 @@ const TAGS = Any[
 
 const ser_version = 3 # do not make changes without bumping the version #!
 
+const NTAGS = length(TAGS)
+
 function sertag(v::ANY)
     ptr = pointer_from_objref(v)
     ptags = convert(Ptr{Ptr{Void}}, pointer(TAGS))
-    @inbounds for i in eachindex(TAGS)
+    @inbounds for i in 1:NTAGS
         ptr == unsafe_load(ptags,i) && return (i+1)%Int32
     end
     return Int32(-1)
@@ -71,6 +73,7 @@ const EXPR_TAG = sertag(Expr)
 const LONGEXPR_TAG = Int32(sertag(Expr)+3)
 const MODULE_TAG = sertag(Module)
 const LAMBDASTATICDATA_TAG = sertag(LambdaInfo)
+const METHOD_TAG = sertag(Method)
 const TASK_TAG = sertag(Task)
 const DATATYPE_TAG = sertag(DataType)
 const TYPENAME_TAG = sertag(TypeName)
@@ -114,16 +117,16 @@ function serialize(s::SerializationState, t::Tuple)
         writetag(s.io, LONGTUPLE_TAG)
         write(s.io, Int32(l))
     end
-    for e in t
-        serialize(s, e)
+    for x in t
+        serialize(s, x)
     end
 end
 
 function serialize(s::SerializationState, v::SimpleVector)
     writetag(s.io, SIMPLEVECTOR_TAG)
     write(s.io, Int32(length(v)))
-    for e in v
-        serialize(s, e)
+    for x in v
+        serialize(s, x)
     end
 end
 
@@ -300,27 +303,50 @@ function object_number(l::ANY)
     ln = obj_number_salt+(UInt64(myid())<<44)
     obj_number_salt += 1
     object_numbers[l] = ln
-    return ln
+    return ln::UInt64
+end
+
+function serialize(s::SerializationState, meth::Method)
+    serialize_cycle(s, meth) && return
+    writetag(s.io, METHOD_TAG)
+    write(s.io, object_number(meth))
+    serialize(s, meth.module)
+    serialize(s, meth.name)
+    serialize(s, meth.file)
+    serialize(s, meth.line)
+    serialize(s, meth.sig)
+    serialize(s, meth.tvars)
+    serialize(s, meth.isstaged)
+    serialize(s, meth.lambda_template)
+    if isdefined(meth, :roots)
+        serialize(s, meth.roots)
+    else
+        writetag(s.io, UNDEFREF_TAG)
+    end
+    nothing
 end
 
 function serialize(s::SerializationState, linfo::LambdaInfo)
     serialize_cycle(s, linfo) && return
     writetag(s.io, LAMBDASTATICDATA_TAG)
-    serialize(s, object_number(linfo))
     serialize(s, uncompressed_ast(linfo))
-    if isdefined(linfo.def, :roots)
-        serialize(s, linfo.def.roots::Vector{Any})
-    else
-        serialize(s, Any[])
-    end
+    serialize(s, linfo.slotnames)
+    serialize(s, linfo.slottypes)
+    serialize(s, linfo.slotflags)
+    serialize(s, linfo.ssavaluetypes)
     serialize(s, linfo.sparam_syms)
     serialize(s, linfo.sparam_vals)
+    serialize(s, linfo.rettype)
+    serialize(s, linfo.specTypes)
     serialize(s, linfo.inferred)
-    serialize(s, linfo.module)
-    serialize(s, linfo.name)
-    serialize(s, linfo.file)
-    serialize(s, linfo.line)
+    if isdefined(linfo, :def)
+        serialize(s, linfo.def)
+    else
+        writetag(s.io, UNDEFREF_TAG)
+    end
     serialize(s, linfo.pure)
+    serialize(s, linfo.nargs)
+    serialize(s, linfo.isva)
 end
 
 function serialize(s::SerializationState, t::Task)
@@ -342,7 +368,7 @@ end
 function serialize(s::SerializationState, t::TypeName)
     serialize_cycle(s, t) && return
     writetag(s.io, TYPENAME_TAG)
-    serialize(s, object_number(t))
+    write(s.io, object_number(t))
     serialize(s, t.name)
     serialize(s, t.module)
     serialize(s, t.names)
@@ -413,6 +439,13 @@ end
 function serialize(s::SerializationState, t::DataType)
     tag = sertag(t)
     tag > 0 && return write_as_tag(s.io, tag)
+    if t === Tuple
+        # `sertag` is not able to find types === to `Tuple` because they
+        # will not have been hash-consed. Plus `serialize_type_data` does not
+        # handle this case correctly, since Tuple{} != Tuple. `Tuple` is the
+        # only type with this property. issue #15849
+        return write_as_tag(s.io, TUPLE_TAG)
+    end
     serialize_type_data(s, t, true)
 end
 
@@ -496,9 +529,9 @@ function handle_deserialize(s::SerializationState, b::Int32)
     elseif b == DATATYPE_TAG
         return deserialize_datatype(s)
     elseif b == SYMBOL_TAG
-        return symbol(read(s.io, UInt8, Int(read(s.io, UInt8)::UInt8)))
+        return Symbol(read(s.io, UInt8, Int(read(s.io, UInt8)::UInt8)))
     elseif b == LONGSYMBOL_TAG
-        return symbol(read(s.io, UInt8, Int(read(s.io, Int32)::Int32)))
+        return Symbol(read(s.io, UInt8, Int(read(s.io, Int32)::Int32)))
     elseif b == EXPR_TAG
         return deserialize_expr(s, Int(read(s.io, UInt8)::UInt8))
     elseif b == LONGEXPR_TAG
@@ -540,39 +573,66 @@ end
 
 const known_object_data = Dict()
 
-function deserialize(s::SerializationState, ::Type{LambdaInfo})
-    lnumber = deserialize(s)
+function deserialize(s::SerializationState, ::Type{Method})
+    lnumber = read(s.io, UInt64)
     if haskey(known_object_data, lnumber)
-        linfo = known_object_data[lnumber]::LambdaInfo
+        meth = known_object_data[lnumber]::Method
         makenew = false
     else
-        linfo = ccall(:jl_new_lambda_info, Any, (Ptr{Void}, Ptr{Void}, Ptr{Void}, Ptr{Void}), C_NULL, C_NULL, C_NULL, C_NULL)::LambdaInfo
+        meth = ccall(:jl_new_method_uninit, Ref{Method}, ())
         makenew = true
     end
-    deserialize_cycle(s, linfo)
-    ast = deserialize(s)::Expr
-    roots = deserialize(s)::Vector{Any}
-    sparam_syms = deserialize(s)::SimpleVector
-    sparam_vals = deserialize(s)::SimpleVector
-    infr = deserialize(s)::Bool
+    deserialize_cycle(s, meth)
     mod = deserialize(s)::Module
-    name = deserialize(s)
-    file = deserialize(s)
+    name = deserialize(s)::Symbol
+    file = deserialize(s)::Symbol
     line = deserialize(s)
-    pure = deserialize(s)
-    if makenew
-        linfo.ast = ast
-        linfo.sparam_syms = sparam_syms
-        linfo.sparam_vals = sparam_vals
-        linfo.inferred = infr
-        linfo.module = mod
-        linfo.roots = roots
-        linfo.name = name
-        linfo.file = file
-        linfo.line = line
-        linfo.pure = pure
-        known_object_data[lnumber] = linfo
+    sig = deserialize(s)
+    tvars = deserialize(s)
+    isstaged = deserialize(s)::Bool
+    template = deserialize(s)::LambdaInfo
+    tag = Int32(read(s.io, UInt8)::UInt8)
+    if tag != UNDEFREF_TAG
+        roots = handle_deserialize(s, tag)::Array{Any, 1}
+    else
+        roots = nothing
     end
+    if makenew
+        meth.module = mod
+        meth.name = name
+        meth.file = file
+        meth.line = line
+        meth.sig = sig
+        meth.tvars = tvars
+        meth.isstaged = isstaged
+        meth.lambda_template = template
+        roots === nothing || (meth.roots = roots)
+        ccall(:jl_method_init_properties, Void, (Any,), meth)
+        known_object_data[lnumber] = meth
+    end
+    return meth
+end
+
+function deserialize(s::SerializationState, ::Type{LambdaInfo})
+    linfo = ccall(:jl_new_lambda_info_uninit, Ref{LambdaInfo}, (Ptr{Void},), C_NULL)
+    deserialize_cycle(s, linfo)
+    linfo.code = deserialize(s)::Array{Any, 1}
+    linfo.slotnames = deserialize(s)::Array{Any, 1}
+    linfo.slottypes = deserialize(s)
+    linfo.slotflags = deserialize(s)
+    linfo.ssavaluetypes = deserialize(s)
+    linfo.sparam_syms = deserialize(s)::SimpleVector
+    linfo.sparam_vals = deserialize(s)::SimpleVector
+    linfo.rettype = deserialize(s)
+    linfo.specTypes = deserialize(s)
+    linfo.inferred = deserialize(s)::Bool
+    tag = Int32(read(s.io, UInt8)::UInt8)
+    if tag != UNDEFREF_TAG
+        linfo.def = handle_deserialize(s, tag)::Method
+    end
+    linfo.pure = deserialize(s)::Bool
+    linfo.nargs = deserialize(s)
+    linfo.isva = deserialize(s)::Bool
     return linfo
 end
 
@@ -641,7 +701,7 @@ module __deserialized_types__
 end
 
 function deserialize(s::SerializationState, ::Type{TypeName})
-    number = deserialize(s)
+    number = read(s.io, UInt64)
     name = deserialize(s)
     mod = deserialize(s)
     if haskey(known_object_data, number)
@@ -658,7 +718,7 @@ function deserialize(s::SerializationState, ::Type{TypeName})
     else
         name = gensym()
         mod = __deserialized_types__
-        tn = ccall(:jl_new_typename_in, Any, (Any, Any), name, mod)
+        tn = ccall(:jl_new_typename_in, Ref{TypeName}, (Any, Any), name, mod)
         makenew = true
     end
     deserialize_cycle(s, tn)

@@ -293,7 +293,7 @@ Type *preferred_llvm_type(jl_value_t *ty, bool isret)
     if (align > 8)
         align = 8;
 
-    Type *T = Type::getIntNTy(getGlobalContext(), align*8);
+    Type *T = Type::getIntNTy(jl_LLVMContext, align*8);
     return ArrayType::get(T, (dt->size + align - 1) / align);
 }
 

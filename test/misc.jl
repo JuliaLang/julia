@@ -383,3 +383,7 @@ end
     clipboard(str)
     @test clipboard() == str
 end
+
+optstring = sprint(show,Base.JLOptions())
+@test startswith(optstring,"JLOptions(")
+@test endswith(optstring,")")

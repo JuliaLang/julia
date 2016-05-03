@@ -235,6 +235,18 @@ General Parallel Computing Support
 
    Returns a list of all worker process identifiers.
 
+.. function:: default_worker_pool()
+
+   .. Docstring generated from Julia source
+
+   WorkerPool containing idle ``workers()`` (used by ``remote(f)``\ ).
+
+.. function:: WorkerPool(workers)
+
+   .. Docstring generated from Julia source
+
+   Create a WorkerPool from a vector of worker ids.
+
 .. function:: rmprocs(pids...)
 
    .. Docstring generated from Julia source
@@ -253,19 +265,31 @@ General Parallel Computing Support
 
    Get the id of the current process.
 
-.. function:: pmap(f, lsts...; err_retry=true, err_stop=false, pids=workers())
+.. function:: asyncmap(f, c...) -> collection
 
    .. Docstring generated from Julia source
 
-   Transform collections ``lsts`` by applying ``f`` to each element in parallel. (Note that ``f`` must be made available to all worker processes; see :ref:`Code Availability and Loading Packages <man-parallel-computing-code-availability>` for details.) If ``nprocs() > 1``\ , the calling process will be dedicated to assigning tasks. All other available processes will be used as parallel workers, or on the processes specified by ``pids``\ .
+   Transform collection ``c`` by applying ``@async f`` to each element.
 
-   If ``err_retry`` is ``true``\ , it retries a failed application of ``f`` on a different worker. If ``err_stop`` is ``true``\ , it takes precedence over the value of ``err_retry`` and ``pmap`` stops execution on the first error.
+   For multiple collection arguments, apply f elementwise.
 
-.. function:: remotecall(func, id, args...)
+.. function:: pmap([::WorkerPool], f, c...) -> collection
 
    .. Docstring generated from Julia source
 
-   Call a function asynchronously on the given arguments on the specified process. Returns a ``Future``\ .
+   Transform collection ``c`` by applying ``f`` to each element using available workers and tasks.
+
+   For multiple collection arguments, apply f elementwise.
+
+   Note that ``err_retry=true`` and ``err_stop=false`` are deprecated, use ``pmap(retry(f), c)`` or ``pmap(@catch(f), c)`` instead (or to retry on a different worker, use ``asyncmap(retry(remote(f)), c)``\ ).
+
+   Note that ``f`` must be made available to all worker processes; see :ref:`Code Availability and Loading Packages <man-parallel-computing-code-availability>` for details.
+
+.. function:: remotecall(func, id, args...; kwargs...)
+
+   .. Docstring generated from Julia source
+
+   Call a function asynchronously on the given arguments on the specified process. Returns a ``Future``\ . Keyword arguments, if any, are passed through to ``func``\ .
 
 .. function:: Future()
 
@@ -327,19 +351,25 @@ General Parallel Computing Support
    * ``RemoteChannel``\ : Wait for and get the value of a remote reference. Exceptions raised are   same as for a ``Future`` .
    * ``Channel`` : Wait for and get the first available item from the channel.
 
-.. function:: remotecall_wait(func, id, args...)
+.. function:: remotecall_wait(func, id, args...; kwargs...)
 
    .. Docstring generated from Julia source
 
-   Perform ``wait(remotecall(...))`` in one message.
+   Perform ``wait(remotecall(...))`` in one message. Keyword arguments, if any, are passed through to ``func``\ .
 
-.. function:: remotecall_fetch(func, id, args...)
+.. function:: remotecall_fetch(func, id, args...; kwargs...)
 
    .. Docstring generated from Julia source
 
-   Perform ``fetch(remotecall(...))`` in one message. Any remote exceptions are captured in a ``RemoteException`` and thrown.
+   Perform ``fetch(remotecall(...))`` in one message.  Keyword arguments, if any, are passed through to ``func``\ . Any remote exceptions are captured in a ``RemoteException`` and thrown.
 
-.. function:: remote(f)
+.. function:: remotecall_fetch(f, pool::WorkerPool, args...; kwargs...)
+
+   .. Docstring generated from Julia source
+
+   Call ``f(args...; kwargs...)`` on one of the workers in ``pool``\ . Waits for completion and returns the result.
+
+.. function:: remote([::WorkerPool], f) -> Function
 
    .. Docstring generated from Julia source
 
@@ -472,7 +502,20 @@ General Parallel Computing Support
 
    .. Docstring generated from Julia source
 
-   Execute an expression on all processes. Errors on any of the processes are collected into a ``CompositeException`` and thrown.
+   Execute an expression on all processes. Errors on any of the processes are collected into a ``CompositeException`` and thrown. For example :
+
+   .. code-block:: julia
+
+       @everywhere bar=1
+
+   will define ``bar`` under module ``Main`` on all processes.
+
+   Unlike ``@spawn`` and ``@spawnat``\ , ``@everywhere`` does not capture any local variables. Prefixing ``@everywhere`` with ``@eval`` allows us to broadcast local variables using interpolation :
+
+   .. code-block:: julia
+
+       foo = 1
+       @eval @everywhere bar=$foo
 
 .. function:: Base.remoteref_id(r::AbstractRemoteRef) -> (whence, id)
 
@@ -546,6 +589,147 @@ Shared Arrays
    Returns a range describing the "default" indexes to be handled by the current process.  This range should be interpreted in the sense of linear indexing, i.e., as a sub-range of ``1:length(S)``\ .  In multi-process contexts, returns an empty range in the parent process (or any process for which ``indexpids`` returns 0).
 
    It's worth emphasizing that ``localindexes`` exists purely as a convenience, and you can partition work on the array among workers any way you wish.  For a SharedArray, all indexes should be equally fast for each worker process.
+
+Multi-Threading
+---------------
+
+This experimental interface supports Julia's multi-threading
+capabilities. Types and function described here might (and likely
+will) change in the future.
+
+.. function:: Threads.Atomic{T}
+
+   .. Docstring generated from Julia source
+
+   Holds a reference to an object of type ``T``\ , ensuring that it is only accessed atomically, i.e. in a thread-safe manner.
+
+   Only certain "simple" types can be used atomically, namely the bitstypes integer and float-point types. These are ``Int8``\ ...``Int128``\ , ``UInt8``\ ...``UInt128``\ , and ``Float16``\ ...``Float64``\ .
+
+   New atomic objects can be created from a non-atomic values; if none is specified, the atomic object is initialized with zero.
+
+   Atomic objects can be accessed using the ``[]`` notation:
+
+   .. code-block:: julia
+
+       x::Atomic{Int}
+       x[] = 1
+       val = x[]
+
+   Atomic operations use an ``atomic_`` prefix, such as ``atomic_add!``\ , ``atomic_xchg!``\ , etc.
+
+.. function:: Threads.atomic_cas!{T}(x::Atomic{T}, cmp::T, newval::T)
+
+   .. Docstring generated from Julia source
+
+   Atomically compare-and-set ``x``
+
+   Atomically compares the value in ``x`` with ``cmp``\ . If equal, write ``newval`` to ``x``\ . Otherwise, leaves ``x`` unmodified. Returns the old value in ``x``\ . By comparing the returned value to ``cmp`` (via ``===``\ ) one knows whether ``x`` was modified and now holds the new value ``newval``\ .
+
+   For further details, see LLVM's ``cmpxchg`` instruction.
+
+   This function can be used to implement transactional semantics. Before the transaction, one records the value in ``x``\ . After the transaction, the new value is stored only if ``x`` has not been modified in the mean time.
+
+.. function:: Threads.atomic_xchg!{T}(x::Atomic{T}, newval::T)
+
+   .. Docstring generated from Julia source
+
+   Atomically exchange the value in ``x``
+
+   Atomically exchanges the value in ``x`` with ``newval``\ . Returns the old value.
+
+   For further details, see LLVM's ``atomicrmw xchg`` instruction.
+
+.. function:: Threads.atomic_add!{T}(x::Atomic{T}, val::T)
+
+   .. Docstring generated from Julia source
+
+   Atomically add ``val`` to ``x``
+
+   Performs ``x[] += val`` atomically. Returns the old (!) value.
+
+   For further details, see LLVM's ``atomicrmw add`` instruction.
+
+.. function:: Threads.atomic_sub!{T}(x::Atomic{T}, val::T)
+
+   .. Docstring generated from Julia source
+
+   Atomically subtract ``val`` from ``x``
+
+   Performs ``x[] -= val`` atomically. Returns the old (!) value.
+
+   For further details, see LLVM's ``atomicrmw sub`` instruction.
+
+.. function:: Threads.atomic_and!{T}(x::Atomic{T}, val::T)
+
+   .. Docstring generated from Julia source
+
+   Atomically bitwise-and ``x`` with ``val``
+
+   Performs ``x[] &= val`` atomically. Returns the old (!) value.
+
+   For further details, see LLVM's ``atomicrmw and`` instruction.
+
+.. function:: Threads.atomic_nand!{T}(x::Atomic{T}, val::T)
+
+   .. Docstring generated from Julia source
+
+   Atomically bitwise-nand (not-and) ``x`` with ``val``
+
+   Performs ``x[] = ~(x[] & val)`` atomically. Returns the old (!) value.
+
+   For further details, see LLVM's ``atomicrmw nand`` instruction.
+
+.. function:: Threads.atomic_or!{T}(x::Atomic{T}, val::T)
+
+   .. Docstring generated from Julia source
+
+   Atomically bitwise-or ``x`` with ``val``
+
+   Performs ``x[] |= val`` atomically. Returns the old (!) value.
+
+   For further details, see LLVM's ``atomicrmw or`` instruction.
+
+.. function:: Threads.atomic_xor!{T}(x::Atomic{T}, val::T)
+
+   .. Docstring generated from Julia source
+
+   Atomically bitwise-xor (exclusive-or) ``x`` with ``val``
+
+   Performs ``x[] $= val`` atomically. Returns the old (!) value.
+
+   For further details, see LLVM's ``atomicrmw xor`` instruction.
+
+.. function:: Threads.atomic_max!{T}(x::Atomic{T}, val::T)
+
+   .. Docstring generated from Julia source
+
+   Atomically store the maximum of ``x`` and ``val`` in ``x``
+
+   Performs ``x[] = max(x[], val)`` atomically. Returns the old (!) value.
+
+   For further details, see LLVM's ``atomicrmw min`` instruction.
+
+.. function:: Threads.atomic_min!{T}(x::Atomic{T}, val::T)
+
+   .. Docstring generated from Julia source
+
+   Atomically store the minimum of ``x`` and ``val`` in ``x``
+
+   Performs ``x[] = min(x[], val)`` atomically. Returns the old (!) value.
+
+   For further details, see LLVM's ``atomicrmw max`` instruction.
+
+.. function:: Threads.atomic_fence()
+
+   .. Docstring generated from Julia source
+
+   Insert a sequential-consistency memory fence
+
+   Inserts a memory fence with sequentially-consistent ordering semantics. There are algorithms where this is needed, i.e. where an acquire/release ordering is insufficient.
+
+   This is likely a very expensive operation. Given that all other atomic operations in Julia already have acquire/release semantics, explicit fences should not be necessary in most cases.
+
+   For further details, see LLVM's ``fence`` instruction.
 
 Cluster Manager Interface
 -------------------------

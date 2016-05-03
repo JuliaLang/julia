@@ -15,14 +15,14 @@ Upon return, `tests` is a vector of fully-expanded test names, and
 """ ->
 function choosetests(choices = [])
     testnames = [
-        "linalg", "core", "inference", "keywordargs", "numbers", "printf",
-        "char", "string", "triplequote", "unicode",
+        "linalg", "subarray", "core", "inference", "keywordargs", "numbers",
+        "printf", "char", "string", "triplequote", "unicode",
         "dates", "dict", "hashing", "remote", "iobuffer", "staged",
-        "arrayops", "tuple", "subarray", "reduce", "reducedim", "random",
-        "abstractarray", "intfuncs", "simdloop", "blas", "sparse",
+        "arrayops", "tuple", "reduce", "reducedim", "random", "abstractarray",
+        "intfuncs", "simdloop", "vecelement", "blas", "sparse",
         "bitarray", "copy", "math", "fastmath", "functional",
-        "operators", "path", "ccall", "parse", "loading",
-        "bigint", "sorting", "statistics", "spawn", "backtrace",
+        "operators", "path", "ccall", "parse", "loading", "bigint",
+        "bigfloat", "sorting", "statistics", "spawn", "backtrace",
         "priorityqueue", "file", "read", "mmap", "version", "resolve",
         "pollfd", "mpfr", "broadcast", "complex", "socket",
         "floatapprox", "datafmt", "reflection", "regex", "float16",
@@ -30,10 +30,10 @@ function choosetests(choices = [])
         "euler", "show", "lineedit", "replcompletions", "repl",
         "replutil", "sets", "test", "goto", "llvmcall", "grisu",
         "nullable", "meta", "stacktraces", "profile", "libgit2", "docs",
-        "markdown", "base64", "serialize", "functors", "misc", "threads",
+        "markdown", "base64", "serialize", "misc", "threads",
         "enums", "cmdlineargs", "i18n", "workspace", "libdl", "int",
         "checked", "intset", "floatfuncs", "compile", "parallel", "inline",
-        "boundscheck", "multidimensional"
+        "boundscheck", "error", "multidimensional"
     ]
 
     if Base.USE_GPL_LIBS

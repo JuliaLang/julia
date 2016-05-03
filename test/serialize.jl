@@ -74,7 +74,7 @@ end
 
 # Symbol
 create_serialization_stream() do s
-    gensym(len) = symbol(repeat("A", len))
+    gensym(len) = Symbol(repeat("A", len))
 
     smbl = gensym(1)
     serialize(s, smbl)
@@ -378,4 +378,12 @@ let b = IOBuffer()
     seekstart(b)
     c = deserialize(b)
     @test isa(c,B15163) && c.x == [1]
+end
+
+# issue #15849
+let b = IOBuffer()
+    vt = Tuple[(1,)]
+    serialize(b, vt)
+    seekstart(b)
+    @test deserialize(b) == vt
 end

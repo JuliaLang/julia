@@ -41,21 +41,21 @@ end
 # issue #6027
 let
     # make symbol with invalid char
-    sym = symbol(Char(0xdcdb))
+    sym = Symbol(Char(0xdcdb))
     @test string(sym) == string(Char(0xdcdb))
     @test expand(sym) === sym
     res = string(parse(string(Char(0xdcdb)," = 1"),1,raise=false)[1])
     @test res == """\$(Expr(:error, "invalid character \\\"\\udcdb\\\"\"))"""
 end
 
-@test symbol("asdf") === :asdf
-@test symbol(:abc,"def",'g',"hi",0) === :abcdefghi0
+@test Symbol("asdf") === :asdf
+@test Symbol(:abc,"def",'g',"hi",0) === :abcdefghi0
 @test :a < :b
 @test startswith(string(gensym("asdf")),"##asdf#")
 @test gensym("asdf") != gensym("asdf")
 @test gensym() != gensym()
 @test startswith(string(gensym()),"##")
-@test_throws ArgumentError symbol("ab\0")
+@test_throws ArgumentError Symbol("ab\0")
 @test_throws ArgumentError gensym("ab\0")
 
 # issue #6949
@@ -85,6 +85,19 @@ end
 @test checkbounds("hello", 2)
 @test checkbounds("hello", 1:5)
 @test checkbounds("hello", [1:5;])
+
+# issue #15624 (indexing with out of bounds empty range)
+@test "hello"[10:9] == ""
+@test "hellø"[10:9] == ""
+@test SubString("hello", 1, 6)[10:9] == ""
+@test SubString("hello", 1, 0)[10:9] == ""
+@test SubString("hellø", 1, 6)[10:9] == ""
+@test SubString("hellø", 1, 0)[10:9] == ""
+@test ASCIIString("")[10:9] == ""
+@test UTF8String("")[10:9] == ""
+@test SubString("", 1, 6)[10:9] == ""
+@test SubString("", 1, 0)[10:9] == ""
+
 
 #=
 # issue #7764
@@ -163,7 +176,7 @@ gstr = GenericString("12");
 
 @test convert(Array{UInt8}, gstr) ==[49;50]
 @test convert(Array{Char,1}, gstr) ==['1';'2']
-@test convert(Symbol, gstr)==symbol("12")
+@test convert(Symbol, gstr)==Symbol("12")
 
 @test getindex(gstr, Bool(1))=='1'
 @test getindex(gstr,Bool(1):Bool(1))=="1"
@@ -174,7 +187,7 @@ gstr = GenericString("12");
 @test map(uppercase, "foó") == "FOÓ"
 @test chr2ind("fóobar",3) == 4
 
-@test symbol(gstr)==symbol("12")
+@test Symbol(gstr)==Symbol("12")
 
 @test_throws ErrorException sizeof(gstr)
 
@@ -214,6 +227,9 @@ s = "abcde\uff\u2000\U1f596"
 sp = pointer(s)
 @test utf8(sp) == s
 @test utf8(sp,5) == "abcde"
+@test_throws ArgumentError ascii(sp)
+@test ascii(sp, 5) == "abcde"
+@test_throws ArgumentError ascii(sp, 6)
 @test typeof(utf8(sp)) == UTF8String
 
 @test get(tryparse(BigInt, "1234567890")) == BigInt(1234567890)
@@ -233,7 +249,7 @@ for T in [BigInt, Int8, UInt8, Int16, UInt16, Int32, UInt32, Int64, UInt64, Int1
 end
 let s = normalize_string("tést",:NFKC)
     @test bytestring(Base.unsafe_convert(Cstring, s)) == s
-    @test bytestring(convert(Cstring, symbol(s))) == s
+    @test bytestring(convert(Cstring, Symbol(s))) == s
     @test wstring(Base.unsafe_convert(Cwstring, wstring(s))) == s
 end
 let s = "ba\0d"
@@ -483,3 +499,12 @@ foobaz(ch) = reinterpret(Char, typemax(UInt32))
 @test utf8("a").*["b","c"] == ["ab","ac"]
 @test "a".*map(utf8,["b","c"]) == ["ab","ac"]
 @test ["a","b"].*["c","d"]' == ["ac" "ad"; "bc" "bd"]
+
+# Make sure NULL pointer are handled consistently by
+# `bytestring`, `ascii` and `utf8`
+@test_throws ArgumentError bytestring(Ptr{UInt8}(0))
+@test_throws ArgumentError bytestring(Ptr{UInt8}(0), 10)
+@test_throws ArgumentError ascii(Ptr{UInt8}(0))
+@test_throws ArgumentError ascii(Ptr{UInt8}(0), 10)
+@test_throws ArgumentError utf8(Ptr{UInt8}(0))
+@test_throws ArgumentError utf8(Ptr{UInt8}(0), 10)

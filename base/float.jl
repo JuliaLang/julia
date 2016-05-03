@@ -122,7 +122,6 @@ float(x) = convert(AbstractFloat, x)
 
 # for constructing arrays
 float{T<:Number}(::Type{T}) = typeof(float(zero(T)))
-float{T}(::Type{T}) = Any
 
 for Ti in (Int8, Int16, Int32, Int64)
     @eval begin
@@ -382,7 +381,6 @@ for Ti in (Int8, Int16, Int32, Int64, Int128, UInt8, UInt16, UInt32, UInt64, UIn
         end
     end
 end
-
 
 
 @eval begin

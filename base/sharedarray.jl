@@ -67,7 +67,7 @@ function SharedArray(T::Type, dims::NTuple; init=false, pids=Int[])
             shmmem_create_pid = myid()
             s = shm_mmap_array(T, dims, shm_seg_name, JL_O_CREAT | JL_O_RDWR)
         else
-            # The shared array is created on a remote machine....
+            # The shared array is created on a remote machine
             shmmem_create_pid = pids[1]
             remotecall_fetch(pids[1]) do
                 shm_mmap_array(T, dims, shm_seg_name, JL_O_CREAT | JL_O_RDWR)
@@ -281,8 +281,8 @@ convert{TS,TA,N}(::Type{SharedArray{TS,N}}, A::Array{TA,N}) = (S = SharedArray(T
 
 function deepcopy_internal(S::SharedArray, stackdict::ObjectIdDict)
     haskey(stackdict, S) && return stackdict[S]
-    # Note: copy can be used here because SharedArrays are restricted to isbits types
-    R = copy(S)
+    R = SharedArray(eltype(S), size(S); pids = S.pids)
+    copy!(sdata(R), sdata(S))
     stackdict[S] = R
     return R
 end
@@ -435,8 +435,6 @@ similar(S::SharedArray, T) = similar(S.s, T, size(S))
 similar(S::SharedArray, dims::Dims) = similar(S.s, eltype(S), dims)
 similar(S::SharedArray) = similar(S.s, eltype(S), size(S))
 
-map(f, S::SharedArray) = (S2 = similar(S); S2[:] = S[:]; map!(f, S2); S2)
-
 reduce(f, S::SharedArray) =
     mapreduce(fetch, f,
               Any[ @spawnat p reduce(f, S.loc_subarr_1d) for p in procs(S) ])
@@ -493,7 +491,7 @@ function print_shmem_limits(slen)
             "\nIf not, increase system limits and try again."
         )
     catch e
-        nothing # Ignore any errors in this...
+        nothing # Ignore any errors in this
     end
 end
 

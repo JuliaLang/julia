@@ -37,7 +37,7 @@ Input Arguments:
 
 Optional Input Arguments:
 
-* `pos`    start position (defaults to `start(dat)`)
+* `pos`    start position (defaults to 1)
 * `endpos` end position   (defaults to `endof(dat)`)
 
 Keyword Arguments:
@@ -56,8 +56,8 @@ Throws:
 """
 function unsafe_checkstring end
 
-function unsafe_checkstring(dat::Vector{UInt8},
-                      pos = start(dat),
+function unsafe_checkstring(dat::AbstractVector{UInt8},
+                      pos = 1,
                       endpos = endof(dat)
                       ;
                       accept_long_null  = true,
@@ -152,9 +152,11 @@ function unsafe_checkstring(dat::Vector{UInt8},
     return totalchar, flags, num4byte, num3byte, num2byte
 end
 
-function unsafe_checkstring{T <: Union{Vector{UInt16}, Vector{UInt32}, AbstractString}}(
-                      dat::T,
-                      pos = start(dat),
+typealias AbstractString1632{Tel<:Union{UInt16,UInt32}} Union{AbstractVector{Tel}, AbstractString}
+
+function unsafe_checkstring(
+                      dat::AbstractString1632,
+                      pos = 1,
                       endpos = endof(dat)
                       ;
                       accept_long_null  = true,
@@ -184,7 +186,7 @@ function unsafe_checkstring{T <: Union{Vector{UInt16}, Vector{UInt32}, AbstractS
                 ch, pos = next(dat, pos)
                 !is_surrogate_trail(ch) && throw(UnicodeError(UTF_ERR_NOT_TRAIL, pos, ch))
                 num4byte += 1
-                if T != Vector{UInt16}
+                if !(typeof(dat) <: AbstractVector{UInt16})
                     !accept_surrogates && throw(UnicodeError(UTF_ERR_SURROGATE, pos, ch))
                     flags |= UTF_SURROGATE
                 end
@@ -210,7 +212,7 @@ Input Arguments:
 
 Optional Input Arguments:
 
-* `startpos` start position (defaults to `start(dat)`)
+* `startpos` start position (defaults to 1)
 * `endpos`   end position   (defaults to `endof(dat)`)
 
 Keyword Arguments:
@@ -230,7 +232,7 @@ Throws:
 function checkstring end
 
 # No need to check bounds if using defaults
-checkstring(dat; kwargs...) = unsafe_checkstring(dat, start(dat), endof(dat); kwargs...)
+checkstring(dat; kwargs...) = unsafe_checkstring(dat, 1, endof(dat); kwargs...)
 
 # Make sure that beginning and end positions are bounds checked
 function checkstring(dat, startpos, endpos = endof(dat); kwargs...)
