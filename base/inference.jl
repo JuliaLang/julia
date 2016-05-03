@@ -2048,7 +2048,11 @@ end
 function substitute!(e::ANY, na, argexprs, spvals, offset)
     if isa(e, Slot)
         if 1 <= e.id <= na
-            return argexprs[e.id]
+            ae = argexprs[e.id]
+            if isa(e, TypedSlot) && isa(ae, Slot)
+                return TypedSlot(ae.id, e.typ)
+            end
+            return ae
         end
         if isa(e, SlotNumber)
             return SlotNumber(e.id+offset)
