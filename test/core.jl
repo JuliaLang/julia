@@ -3870,11 +3870,11 @@ end
 # issue #16096
 module M16096
 macro iter()
-  quote
-    @inline function foo(sub)
-      it = 1
+    quote
+        @inline function foo(sub)
+            it = 1
+        end
     end
-  end
 end
 end
 let ex = expand(:(@M16096.iter))
