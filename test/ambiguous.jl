@@ -59,4 +59,55 @@ cfunction(ambig, Int, (UInt8, Int))  # test for a crash (doesn't throw an error)
 ambig(x, y::Integer) = 3
 @test_throws MethodError ambig(2, 0x03)
 
+# Automatic detection of ambiguities
+module Ambig1
+
+ambig(x, y) = 1
+ambig(x::Integer, y) = 2
+ambig(x, y::Integer) = 3
+
+end
+
+ambs = detect_ambiguities(Ambig1)
+@test length(ambs) == 1
+
+module Ambig2
+
+ambig(x, y) = 1
+ambig(x::Integer, y) = 2
+ambig(x, y::Integer) = 3
+ambig(x::Number, y) = 4
+
+end
+
+ambs = detect_ambiguities(Ambig2)
+@test length(ambs) == 2
+
+module Ambig3
+
+ambig(x, y) = 1
+ambig(x::Integer, y) = 2
+ambig(x, y::Integer) = 3
+ambig(x::Int, y::Int) = 4
+
+end
+
+ambs = detect_ambiguities(Ambig3)
+@test length(ambs) == 1
+
+module Ambig4
+
+ambig(x, y) = 1
+ambig(x::Int, y) = 2
+ambig(x, y::Int) = 3
+ambig(x::Int, y::Int) = 4
+
+end
+
+ambs = detect_ambiguities(Ambig4)
+@test length(ambs) == 0
+
+# Test that Core and Base are free of ambiguities
+@test isempty(detect_ambiguities(Core, Base; imported=true))
+
 nothing

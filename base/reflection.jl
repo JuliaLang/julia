@@ -434,3 +434,11 @@ function method_exists(f::ANY, t::ANY)
     t = Tuple{isa(f,Type) ? Type{f} : typeof(f), t.parameters...}
     return ccall(:jl_method_exists, Cint, (Any, Any), typeof(f).name.mt, t) != 0
 end
+
+function isambiguous(m1::Method, m2::Method)
+    ti = typeintersect(m1.sig, m2.sig)
+    ml = _methods_by_ftype(ti, 1)
+    ml == false && return true
+    m = ml[1][3]
+    !(m.sig <: ti)
+end
