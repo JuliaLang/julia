@@ -292,6 +292,7 @@ jl_value_t *skip_meta(jl_array_t *body);
 int has_meta(jl_array_t *body, jl_sym_t *sym);
 
 // backtraces
+// Might be called from unmanaged thread
 uint64_t jl_getUnwindInfo(uint64_t dwBase);
 #ifdef _OS_WINDOWS_
 #include <dbghelp.h>
