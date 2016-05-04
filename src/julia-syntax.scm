@@ -222,6 +222,23 @@
            (pair? (caddr e)) (memq (car (caddr e)) '(quote inert))
            (symbol? (cadr (caddr e))))))
 
+;; e.g. Base.(:+) is deprecated in favor of Base.:+
+(define (deprecate-dotparen e)
+  (if (and (length= e 3) (eq? (car e) '|.|)
+           (or (atom? (cadr e)) (sym-ref? (cadr e)))
+           (length= (caddr e) 2) (eq? (caaddr e) 'tuple)
+           (pair? (cadr (caddr e))) (memq (caadr (caddr e)) '(quote inert)))
+      (let* ((s_ (cdadr (caddr e)))
+             (s (if (symbol? s_) s_
+                    (if (and (length= s_ 1) (symbol? (car s_))) (car s_) #f))))
+        (if s
+            (let ((newe (list (car e) (cadr e) (cadr (caddr e)))))
+              (syntax-deprecation #f (string (deparse (cadr e)) ".(:" s ")")
+                                  (string (deparse (cadr e)) ".:" s))
+              newe)
+            e))
+      e))
+
 ;; convert final (... x) to (curly Vararg x)
 (define (dots->vararg a)
   (if (null? a) a
@@ -873,7 +890,7 @@
            (let* ((head    (cadr name))
                   (argl    (cddr name))
                   (has-sp  (and (pair? head) (eq? (car head) 'curly)))
-                  (name    (if has-sp (cadr head) head))
+                  (name    (deprecate-dotparen (if has-sp (cadr head) head)))
                   (sparams (if has-sp (cddr head) '()))
                   (isstaged (eq? (car e) 'stagedfunction))
                   (adj-decl (lambda (n) (if (and (decl? n) (length= n 2))
