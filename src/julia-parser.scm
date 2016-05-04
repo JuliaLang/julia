@@ -1190,7 +1190,7 @@
                 (loc (begin (if (newline? (peek-token s))
                                 (skip-ws-and-comments (ts:port s)))
                             (line-number-node s))))
-            (begin0 (list 'type (if (eq? word 'type) #t #f)
+            (begin0 (list 'type (if (eq? word 'type) 'true 'false)
                           sig (add-filename-to-block! (parse-block s) loc))
                     (expect-end s word)))))
        ((bitstype)
@@ -1213,9 +1213,9 @@
             (take-token s)
             (cond
              ((eq? nxt 'end)
-              (list* 'try try-block catchv
+              (list* 'try try-block (or catchv 'false)
                      ;; default to empty catch block in `try ... end`
-                     (or catchb (if finalb #f '(block)))
+                     (or catchb (if finalb 'false '(block)))
                      (if finalb (list finalb) '())))
              ((and (eq? nxt 'catch)
                    (not catchb))
@@ -1236,7 +1236,7 @@
                             (if var?
                                 catch-block
                                 `(block ,var ,@(cdr catch-block)))
-                            (and var? var)
+                            (if var? var 'false)
                             finalb)))))
              ((and (eq? nxt 'finally)
                    (not finalb))
@@ -1273,7 +1273,7 @@
                (loc  (line-number-node s))
                (body (parse-block s (lambda (s) (parse-docstring s parse-eq)))))
           (expect-end s word)
-          (list 'module (eq? word 'module) name
+          (list 'module (if (eq? word 'module) 'true 'false) name
                 (if (eq? word 'module)
                     (list* 'block
                            ;; add definitions for module-local eval
