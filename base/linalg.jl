@@ -229,6 +229,7 @@ include("linalg/triangular.jl")
 
 include("linalg/factorization.jl")
 include("linalg/qr.jl")
+include("linalg/hessenberg.jl")
 include("linalg/lq.jl")
 include("linalg/eigen.jl")
 include("linalg/svd.jl")
