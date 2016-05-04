@@ -130,17 +130,6 @@ Obtain the contents of an `IOBuffer` as an array, without copying. Afterwards, t
 takebuf_array
 
 """
-    download(url,[localfile])
-
-Download a file from the given url, optionally renaming it to the given local file name.
-Note that this function relies on the availability of external tools such as `curl`, `wget`
-or `fetch` to download the file and is provided for convenience. For production use or
-situations in which more options are needed, please use a package that provides the desired
-functionality instead.
-"""
-download
-
-"""
     @everywhere
 
 Execute an expression on all processes. Errors on any of the processes are collected into a

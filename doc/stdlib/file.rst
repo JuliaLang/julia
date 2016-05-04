@@ -189,11 +189,17 @@
 
    If ``follow_symlinks=false``\ , and ``src`` is a symbolic link, ``dst`` will be created as a symbolic link. If ``follow_symlinks=true`` and ``src`` is a symbolic link, ``dst`` will be a copy of the file or directory ``src`` refers to.
 
-.. function:: download(url,[localfile])
+.. function:: download(url, [localfile]; silent=false)
 
    .. Docstring generated from Julia source
 
-   Download a file from the given url, optionally renaming it to the given local file name. Note that this function relies on the availability of external tools such as ``curl``\ , ``wget`` or ``fetch`` to download the file and is provided for convenience. For production use or situations in which more options are needed, please use a package that provides the desired functionality instead.
+   Download a file from the given url and save it to localfile, or to a temporary file if localfile is ommited. Passing ``silent=true`` will suppress progress indicators. Note that this function relies on the availability of external tools such as ``curl``\ , ``wget`` or ``fetch`` to download the file and is provided for convenience. For production use or situations in which more options are needed, please use a package that provides the desired functionality instead.
+
+   Platform-Specific details
+   *************************
+
+
+   On windows, a full URL must be provided, including the protocol prefix (e.g "http://" for HTTP)
 
 .. function:: mv(src::AbstractString,dst::AbstractString; remove_destination::Bool=false)
 
