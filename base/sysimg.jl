@@ -51,6 +51,9 @@ include("refpointer.jl")
 include("checked.jl")
 importall .Checked
 
+# vararg Symbol constructor
+Symbol(x...) = Symbol(string(x...))
+
 # array structures
 include("abstractarray.jl")
 include("subarray.jl")
