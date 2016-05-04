@@ -138,9 +138,8 @@ used as one building-block of expressions:
     julia> typeof(ans)
     Symbol
 
-:obj:`Symbol`\ s can also be created using :func:`symbol`, which takes any
-number of arguments and creates a new symbol by concatenating their string
-representations together:
+The :obj:`Symbol` constructor takes any number of arguments and creates a
+new symbol by concatenating their string representations together:
 
 .. doctest::
 

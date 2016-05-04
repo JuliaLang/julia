@@ -2,13 +2,6 @@
 
 ## symbols ##
 
-Symbol(s::Symbol) = s
-Symbol(s::ASCIIString) = Symbol(s.data)
-Symbol(s::UTF8String) = Symbol(s.data)
-Symbol(a::Array{UInt8,1}) =
-    ccall(:jl_symbol_n, Ref{Symbol}, (Ptr{UInt8}, Int32), a, length(a))
-Symbol(x...) = Symbol(string(x...))
-
 gensym() = ccall(:jl_gensym, Ref{Symbol}, ())
 
 gensym(s::ASCIIString) = gensym(s.data)

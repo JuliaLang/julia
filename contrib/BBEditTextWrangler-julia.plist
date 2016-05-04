@@ -1117,7 +1117,6 @@
             <string>svdvals!</string>
             <string>svdvals</string>
             <string>sylvester</string>
-            <string>symbol</string>
             <string>symdiff!</string>
             <string>symdiff</string>
             <string>symlink</string>
@@ -1495,6 +1494,7 @@
         <string>SubOrDArray</string>
         <string>SubString</string>
         <string>SVDDense</string>
+        <string>Symbol</string>
         <string>Symmetric</string>
         <string>SymTridiagonal</string>
         <string>Sys</string>

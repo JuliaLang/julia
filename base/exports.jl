@@ -1079,7 +1079,6 @@ export
     gensym,
     macroexpand,
     parse,
-    symbol,
 
 # help and reflection
     apropos,
