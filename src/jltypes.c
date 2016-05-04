@@ -2591,6 +2591,14 @@ int jl_subtype_invariant(jl_value_t *a, jl_value_t *b, int ta)
 
 // specificity comparison
 
+static int type_eqv_with_ANY(jl_value_t *a, jl_value_t *b)
+{
+    // equate ANY and Any for specificity purposes, #16153
+    return ((a == (jl_value_t*)jl_any_type && b == jl_ANY_flag) ||
+            (b == (jl_value_t*)jl_any_type && a == jl_ANY_flag) ||
+            type_eqv_(a, b));
+}
+
 static int jl_type_morespecific_(jl_value_t *a, jl_value_t *b, int invariant);
 
 static int jl_tuple_morespecific_(jl_datatype_t *cdt, jl_datatype_t *pdt, int invariant)
@@ -2614,7 +2622,7 @@ static int jl_tuple_morespecific_(jl_datatype_t *cdt, jl_datatype_t *pdt, int in
         if (pseq) pe = jl_tparam0(pe);
 
         if (!jl_type_morespecific_(ce, pe, invariant)) {
-            if (type_eqv_(ce,pe)) {
+            if (type_eqv_with_ANY(ce,pe)) {
                 if (ci==cl-1 && pi==pl-1) {
                     if (!cseq && pseq)
                         return 1;
@@ -2631,7 +2639,7 @@ static int jl_tuple_morespecific_(jl_datatype_t *cdt, jl_datatype_t *pdt, int in
             return 1;
 
         // at this point we know one element is strictly more specific
-        if (!(jl_types_equal(ce,pe) ||
+        if (!(type_eqv_with_ANY(ce,pe) ||
               (jl_is_typevar(pe) &&
                jl_types_equal(ce,((jl_tvar_t*)pe)->ub)))) {
             some_morespecific = 1;
