@@ -508,11 +508,15 @@ end
     end
     @inbounds begin
         for j = 1:n
+            # dot
             vAj = A[1, j]
             for i = 2:m
                 vAj += x[i]'*A[i, j]
             end
+
             vAj = τ'*vAj
+
+            # ger
             A[1, j] -= vAj
             for i = 2:m
                 A[i, j] -= x[i]*vAj
