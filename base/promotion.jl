@@ -206,6 +206,7 @@ minmax(x::Real, y::Real) = minmax(promote(x, y)...)
 #   promote_op{R<:MyType,S<:MyType}(::typeof(*), ::Type{R}, ::Type{S}) = MyType{multype(R,S)}
 promote_op(::Any)    = (@_pure_meta; Bottom)
 promote_op(::Any, T) = (@_pure_meta; T)
+promote_op{T}(::Type{T}, ::Any) = (@_pure_meta; T)
 promote_op{R,S}(::Any, ::Type{R}, ::Type{S}) = (@_pure_meta; promote_type(R, S))
 promote_op(op, T, S, U, V...) = (@_pure_meta; promote_op(op, T, promote_op(op, S, U, V...)))
 
