@@ -290,7 +290,7 @@ static const char *git_info_string(const char *fld)
     if (!GIT_VERSION_INFO)
         GIT_VERSION_INFO = jl_get_global(jl_base_module, jl_symbol("GIT_VERSION_INFO"));
     jl_value_t *f = jl_get_field(GIT_VERSION_INFO, fld);
-    assert(jl_is_byte_string(f));
+    assert(jl_is_string(f));
     return jl_string_data(f);
 }
 
