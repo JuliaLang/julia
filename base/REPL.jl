@@ -568,7 +568,7 @@ function history_search(hist::REPLHistoryProvider, query_buffer::IOBuffer, respo
         if match != 0:-1 && h != response_str && haskey(hist.mode_mapping, hist.modes[idx])
             truncate(response_buffer, 0)
             write(response_buffer, h)
-            seek(response_buffer, prevind(response_str, first(match)))
+            seek(response_buffer, prevind(h, first(match)))
             hist.cur_idx = idx
             return true
         end
