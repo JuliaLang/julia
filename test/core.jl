@@ -3887,3 +3887,17 @@ function f16158(x)
     bar(x)
 end
 @test f16158("abc") == "abcaba"
+
+# issue #16153
+f16153(x) = 1
+f16153(x::ANY, y...) = 2
+@test f16153("") == 1
+ff16153(x::ANY, y...) = 2
+ff16153(x) = 1
+@test ff16153("") == 1
+g16153(x::ANY, y...) = 1
+g16153(x::ANY, y::ANY) = 2
+@test g16153(1, 1) == 2
+gg16153(x::ANY, y::ANY) = 2
+gg16153(x::ANY, y...) = 1
+@test gg16153(1, 1) == 2
