@@ -1107,10 +1107,12 @@ end
 @test @compat(Symbol("foo", "bar")) === :foobar
 @test @compat(Symbol("a_", 2)) === :a_2
 @test @compat(Symbol('c')) === :c
+@test @compat(Symbol(1)) === @compat(Symbol("1"))
 
 if VERSION ≥ v"0.4.0-dev+3732"
     @test Symbol("foo") === :foo
     @test Symbol("foo", "bar") === :foobar
     @test Symbol("a_", 2) === :a_2
     @test Symbol('c') === :c
+    @test Symbol(1) === Symbol("1")
 end
