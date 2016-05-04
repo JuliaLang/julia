@@ -220,7 +220,6 @@ abstract DirectIndexString <: AbstractString
 
 immutable String <: AbstractString
     data::Array{UInt8,1}
-    String(d::Array{UInt8,1}) = new(d)
 end
 
 include(fname::String) = ccall(:jl_load_, Any, (Any,), fname)
