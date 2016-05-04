@@ -51,12 +51,10 @@ Compiler/Runtime improvements
 Breaking changes
 ----------------
 
-  * Local variables and arguments are represented in lowered code as numbered `Slot`
-    objects instead of as symbols ([#15609]).
-
-  * The information that used to be in the `ast` field of the `LambdaStaticData` type
-    is now divided among the fields `code`, `slotnames`, `slottypes`, `slotflags`,
-    `gensymtypes`, `rettype`, `nargs`, and `isva` in the `LambdaInfo` type ([#15609]).
+  * Method ambiguities no longer generate warnings when files are
+    loaded, nor do they dispatch to an arbitrarily-chosen method;
+    instead, a call that cannot be resolved to a single method results
+    in a `MethodError`. ([#6190])
 
   * `pmap` keyword arguments `err_retry=true` and `err_stop=false` are deprecated.
     `pmap` no longer retries or returns `Exception` objects in the result collection.
@@ -66,6 +64,13 @@ Breaking changes
   * `reshape` is now defined to always share data with the original array.
     If a reshaped copy is needed, use `copy(reshape(a))` or `copy!` to a new array of
     the desired shape ([#4211]).
+
+  * Local variables and arguments are represented in lowered code as numbered `Slot`
+    objects instead of as symbols ([#15609]).
+
+  * The information that used to be in the `ast` field of the `LambdaStaticData` type
+    is now divided among the fields `code`, `slotnames`, `slottypes`, `slotflags`,
+    `gensymtypes`, `rettype`, `nargs`, and `isva` in the `LambdaInfo` type ([#15609]).
 
 Library improvements
 --------------------
@@ -206,3 +211,4 @@ Deprecated or removed
 [#15550]: https://github.com/JuliaLang/julia/issues/15550
 [#15609]: https://github.com/JuliaLang/julia/issues/15609
 [#15763]: https://github.com/JuliaLang/julia/issues/15763
+[#6190]: https://github.com/JuliaLang/julia/issues/6190
