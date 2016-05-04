@@ -602,7 +602,8 @@ function copy{Tv<:VRealTypes}(A::Sparse{Tv}, stype::Integer, mode::Integer)
 end
 
 ### cholmod_check.h ###
-function print_sparse{Tv<:VTypes}(A::Sparse{Tv}, name::ASCIIString)
+function print_sparse{Tv<:VTypes}(A::Sparse{Tv}, name::String)
+    isascii(name) || error("non-ASCII name: $name")
     cm = common()
     set_print_level(cm, 3)
     @isok ccall((@cholmod_name("print_sparse", SuiteSparse_long),:libcholmod), Cint,
@@ -610,7 +611,7 @@ function print_sparse{Tv<:VTypes}(A::Sparse{Tv}, name::ASCIIString)
                  get(A.p), name, cm)
     nothing
 end
-function print_factor{Tv<:VTypes}(F::Factor{Tv}, name::ASCIIString)
+function print_factor{Tv<:VTypes}(F::Factor{Tv}, name::String)
     cm = common()
     set_print_level(cm, 3)
     @isok ccall((@cholmod_name("print_factor", SuiteSparse_long),:libcholmod), Cint,
@@ -946,7 +947,7 @@ end
 
 convert(::Type{Sparse}, A::Dense) = dense_to_sparse(A, SuiteSparse_long)
 convert(::Type{Sparse}, L::Factor) = factor_to_sparse!(copy(L))
-function (::Type{Sparse})(filename::ByteString)
+function (::Type{Sparse})(filename::String)
     open(filename) do f
         return read_sparse(f, SuiteSparse_long)
     end

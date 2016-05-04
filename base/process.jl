@@ -8,12 +8,12 @@ const UV_PROCESS_DETACHED = UInt8(1 << 3)
 const UV_PROCESS_WINDOWS_HIDE = UInt8(1 << 4)
 
 immutable Cmd <: AbstractCmd
-    exec::Vector{ByteString}
+    exec::Vector{String}
     ignorestatus::Bool
     flags::UInt32 # libuv process flags
-    env::Union{Array{ByteString},Void}
-    dir::UTF8String
-    Cmd(exec::Vector{ByteString}) =
+    env::Union{Array{String},Void}
+    dir::String
+    Cmd(exec::Vector{String}) =
         new(exec, false, 0x00, nothing, "")
     Cmd(cmd::Cmd, ignorestatus, flags, env, dir) =
         new(cmd.exec, ignorestatus, flags, env,
@@ -220,12 +220,12 @@ end
 
 # convert various env representations into an array of "key=val" strings
 byteenv{S<:AbstractString}(env::AbstractArray{S}) =
-    ByteString[cstr(x) for x in env]
+    String[cstr(x) for x in env]
 byteenv(env::Associative) =
-    ByteString[cstr(string(k)*"="*string(v)) for (k,v) in env]
+    String[cstr(string(k)*"="*string(v)) for (k,v) in env]
 byteenv(env::Void) = nothing
 byteenv{T<:AbstractString}(env::Union{AbstractVector{Pair{T}}, Tuple{Vararg{Pair{T}}}}) =
-    ByteString[cstr(k*"="*string(v)) for (k,v) in env]
+    String[cstr(k*"="*string(v)) for (k,v) in env]
 
 setenv(cmd::Cmd, env; dir="") = Cmd(cmd; env=byteenv(env), dir=dir)
 setenv{T<:AbstractString}(cmd::Cmd, env::Pair{T}...; dir="") =
@@ -510,7 +510,7 @@ end
 #   | - An IO to be passed to the child
 #   | - DevNull to pass /dev/null
 #   | - An Filesystem.File object to redirect the output to
-#   \ - An ASCIIString specifying a filename to be opened
+#   \ - A string specifying a filename to be opened
 
 spawn_opts_swallow(stdios::StdIOSet, exitcb::Callback=false, closecb::Callback=false) =
     (stdios,exitcb,closecb)
@@ -681,26 +681,26 @@ end
 
 ## implementation of `cmd` syntax ##
 
-arg_gen()          = ByteString[]
-arg_gen(x::AbstractString) = ByteString[cstr(x)]
+arg_gen()          = String[]
+arg_gen(x::AbstractString) = String[cstr(x)]
 arg_gen(cmd::Cmd)  = cmd.exec
 
 function arg_gen(head)
     if applicable(start, head)
-        vals = ByteString[]
+        vals = String[]
         for x in head
             push!(vals, cstr(string(x)))
         end
         return vals
     else
-        return ByteString[cstr(string(head))]
+        return String[cstr(string(head))]
     end
 end
 
 function arg_gen(head, tail...)
     head = arg_gen(head)
     tail = arg_gen(tail...)
-    vals = ByteString[]
+    vals = String[]
     for h = head, t = tail
         push!(vals, cstr(bytestring(h, t)))
     end
@@ -708,7 +708,7 @@ function arg_gen(head, tail...)
 end
 
 function cmd_gen(parsed)
-    args = ByteString[]
+    args = String[]
     for arg in parsed
         append!(args, arg_gen(arg...))
     end

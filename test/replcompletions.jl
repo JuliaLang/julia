@@ -252,11 +252,11 @@ c, r, res = test_complete(s)
 
 s = "prevind(\"θ\",1,"
 c, r, res = test_complete(s)
-@test c[1] == string(first(methods(prevind, Tuple{UTF8String, Int})))
+@test c[1] == string(first(methods(prevind, Tuple{String, Int})))
 @test r == 1:7
 @test s[r] == "prevind"
 
-for (T, arg) in [(ASCIIString,"\")\""),(Char, "')'")]
+for (T, arg) in [(String,"\")\""),(Char, "')'")]
     s = "(1, CompletionFoo.test2($arg,"
     c, r, res = test_complete(s)
     @test length(c) == 1
@@ -287,7 +287,7 @@ c, r, res = test_complete(s)
 s = "CompletionFoo.test4(\"e\",r\" \","
 c, r, res = test_complete(s)
 @test !res
-@test c[1] == string(first(methods(CompletionFoo.test4, Tuple{ASCIIString, Regex})))
+@test c[1] == string(first(methods(CompletionFoo.test4, Tuple{String, Regex})))
 @test r == 1:19
 @test length(c) == 1
 @test s[r] == "CompletionFoo.test4"
@@ -302,7 +302,7 @@ s = "CompletionFoo.test4(CompletionFoo.test_y_array[1]()[1], CompletionFoo.test_
 c, r, res = test_complete(s)
 @test !res
 @test length(c) == 1
-@test c[1] == string(first(methods(CompletionFoo.test4, Tuple{ASCIIString, ASCIIString})))
+@test c[1] == string(first(methods(CompletionFoo.test4, Tuple{String, String})))
 
 # Test that string escaption is handled correct
 s = """CompletionFoo.test4("\\"","""
@@ -436,7 +436,7 @@ c, r, res = test_scomplete(s)
 
 # The return type is of importance, before #8995 it would return nothing
 # which would raise an error in the repl code.
-@test (UTF8String[], 0:-1, false) == test_scomplete("\$a")
+@test (String[], 0:-1, false) == test_scomplete("\$a")
 
 @unix_only begin
     #Assume that we can rely on the existence and accessibility of /tmp

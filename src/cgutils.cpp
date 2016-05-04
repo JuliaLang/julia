@@ -1598,7 +1598,7 @@ static void emit_setfield(jl_datatype_t *sty, const jl_cgval_t &strct, size_t id
 static bool might_need_root(jl_value_t *ex)
 {
     return (!jl_is_symbol(ex) && !jl_is_slot(ex) && !jl_is_ssavalue(ex) &&
-            !jl_is_bool(ex) && !jl_is_quotenode(ex) && !jl_is_byte_string(ex) &&
+            !jl_is_bool(ex) && !jl_is_quotenode(ex) && !jl_is_string(ex) &&
             !jl_is_globalref(ex));
 }
 

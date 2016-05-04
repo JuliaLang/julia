@@ -45,8 +45,7 @@ if !isdefined(Main, :Base)
 end
 
 # Symbol constructors
-Symbol(s::ASCIIString) = Symbol(s.data)
-Symbol(s::UTF8String) = Symbol(s.data)
+Symbol(s::String) = Symbol(s.data)
 Symbol(a::Array{UInt8,1}) =
     ccall(:jl_symbol_n, Ref{Symbol}, (Ptr{UInt8}, Int32), a, length(a))
 

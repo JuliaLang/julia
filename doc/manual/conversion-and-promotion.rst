@@ -97,7 +97,7 @@ requested conversion:
 .. doctest::
 
     julia> convert(AbstractFloat, "foo")
-    ERROR: MethodError: Cannot `convert` an object of type ASCIIString to an object of type AbstractFloat
+    ERROR: MethodError: Cannot `convert` an object of type String to an object of type AbstractFloat
     This may have arisen from a call to the constructor AbstractFloat(...),
     since type constructors fall back to convert methods.
     Closest candidates are:

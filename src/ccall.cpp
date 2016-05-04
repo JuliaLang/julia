@@ -366,7 +366,7 @@ static native_sym_arg_t interpret_symbol_arg(jl_value_t *arg, jl_codectx_t *ctx,
         }
         if (jl_is_symbol(ptr))
             f_name = jl_symbol_name((jl_sym_t*)ptr);
-        else if (jl_is_byte_string(ptr))
+        else if (jl_is_string(ptr))
             f_name = jl_string_data(ptr);
         if (f_name != NULL) {
             // just symbol, default to JuliaDLHandle
@@ -383,13 +383,13 @@ static native_sym_arg_t interpret_symbol_arg(jl_value_t *arg, jl_codectx_t *ctx,
             jl_value_t *t1 = jl_fieldref(ptr,1);
             if (jl_is_symbol(t0))
                 f_name = jl_symbol_name((jl_sym_t*)t0);
-            else if (jl_is_byte_string(t0))
+            else if (jl_is_string(t0))
                 f_name = jl_string_data(t0);
             else
                 JL_TYPECHKS(fname, symbol, t0);
             if (jl_is_symbol(t1))
                 f_lib = jl_symbol_name((jl_sym_t*)t1);
-            else if (jl_is_byte_string(t1))
+            else if (jl_is_string(t1))
                 f_lib = jl_string_data(t1);
             else
                 JL_TYPECHKS(fname, symbol, t1);
@@ -653,10 +653,10 @@ static jl_cgval_t emit_llvmcall(jl_value_t **args, size_t nargs, jl_codectx_t *c
             jl_error("Tuple as first argument to llvmcall must have exactly two children");
         decl = jl_fieldref(ir,0);
         ir = jl_fieldref(ir,1);
-        if (!jl_is_byte_string(decl))
+        if (!jl_is_string(decl))
             jl_error("Declarations passed to llvmcall must be a string");
     }
-    bool isString = jl_is_byte_string(ir);
+    bool isString = jl_is_string(ir);
     bool isPtr = jl_is_cpointer(ir);
     if (!isString && !isPtr) {
         jl_error("IR passed to llvmcall must be a string or pointer to an LLVM Function");
