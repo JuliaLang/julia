@@ -422,6 +422,8 @@ if VERSION < v"0.4.0-dev+3732"
                    (:Symbol,:symbol)]
         calltypes[k] = v
     end
+elseif VERSION < v"0.5.0-dev+3831"
+    Base.Symbol(args...) = symbol(args...)
 end
 
 if VERSION < v"0.5.0-dev+2396"
@@ -1083,10 +1085,6 @@ if !isdefined(Base, :Threads)
         export @threads
     end
     export Threads
-end
-
-if v"0.4.0-dev+3732" ≤ VERSION < v"0.5.0-dev+3831"
-    Base.Symbol(args...) = symbol(args...)
 end
 
 end # module
