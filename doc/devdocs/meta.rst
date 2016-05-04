@@ -17,11 +17,8 @@ expression in the body of a function.
 the implementation of the ``@inline`` macro::
 
     macro inline(ex)
-        esc(_inline(ex))
+        esc(isa(ex, Expr) ? pushmeta!(ex, :inline) : ex)
     end
-
-    _inline(ex::Expr) = Base.pushmeta!(ex, :inline)
-    _inline(arg) = arg
 
 Here, ``ex`` is expected to be an expression defining a function.
 A statement like this::
@@ -39,7 +36,7 @@ gets turned into an expression like this::
         end
     end
 
-``pushmeta!(ex, :symbol, args...)`` appends ``:symbol`` to the end of
+``Base.pushmeta!(ex, :symbol, args...)`` appends ``:symbol`` to the end of
 the ``:meta`` expression, creating a new ``:meta`` expression if
 necessary. If ``args`` is specified, a nested expression containing
 ``:symbol`` and these arguments is appended instead, which can be used
