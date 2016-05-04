@@ -99,8 +99,8 @@ for (op,Ty,Tz) in ((:.*,Real,:P),
     @eval begin
         function ($op){P<:Period}(X::StridedArray{P},y::$Ty)
             Z = similar(X, $Tz)
-            for i = 1:length(X)
-                @inbounds Z[i] = ($op_)(X[i],y)
+            for (Idst, Isrc) in zip(eachindex(Z), eachindex(X))
+                @inbounds Z[Idst] = ($op_)(X[Isrc],y)
             end
             return Z
         end
@@ -238,8 +238,8 @@ for op in (:.+, :.-)
     @eval begin
         function ($op){P<:GeneralPeriod}(X::StridedArray{P},y::GeneralPeriod)
             Z = similar(X, CompoundPeriod)
-            for i = 1:length(X)
-                @inbounds Z[i] = ($op_)(X[i],y)
+            for (Idst, Isrc) in zip(eachindex(Z), eachindex(X))
+                @inbounds Z[Idst] = ($op_)(X[Isrc],y)
             end
             return Z
         end
