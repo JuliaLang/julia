@@ -19,7 +19,7 @@ function paragraph(stream::IO, md::MD)
     while !eof(stream)
         char = read(stream, Char)
         if char == '\n' || char == '\r'
-            char == '\r' && peek(stream) == '\n' && read(stream, Char)
+            char == '\r' && peek(stream, Char) == '\n' && read(stream, Char)
             if prev_char == '\\'
                 write(buffer, '\n')
             elseif blankline(stream) || parse(stream, md, breaking = true)
@@ -198,7 +198,7 @@ function list(stream::IO, block::MD)
                 c = read(stream, Char)
                 if c == '\n'
                     eof(stream) && break
-                    next = peek(stream)
+                    next = peek(stream, Char)
                     if next == '\n'
                         break
                     else

@@ -5,6 +5,7 @@ ioslength(io::IOBuffer) = (io.seekable ? io.size : nb_available(io))
 let io = IOBuffer()
 @test eof(io)
 @test_throws EOFError read(io,UInt8)
+@test_throws EOFError peek(io,UInt8)
 @test write(io,"abc") == 3
 @test isreadable(io)
 @test iswritable(io)
@@ -14,6 +15,7 @@ let io = IOBuffer()
 @test eof(io)
 seek(io, 0)
 @test read(io,UInt8) == convert(UInt8, 'a')
+@test peek(io,UInt8) == convert(UInt8, 'b')
 a = Array(UInt8, 2)
 @test read!(io, a) == a
 @test a == UInt8['b','c']
@@ -154,6 +156,7 @@ end
 
 # pr #11554
 let io=IOBuffer(SubString("***αhelloworldω***",4,16)), io2 = IOBuffer(b"goodnightmoon", true, true)
+    @test peek(io, Char) == 'α'
     @test read(io, Char) == 'α'
     @test_throws ArgumentError write(io,"!")
     @test_throws ArgumentError write(io,'β')

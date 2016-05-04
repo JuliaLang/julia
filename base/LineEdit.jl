@@ -7,7 +7,7 @@ using ..Terminals
 import ..Terminals: raw!, width, height, cmove, getX,
                        getY, clear_line, beep
 
-import Base: ensureroom, peek, show, AnyDict
+import Base: ensureroom, show, AnyDict
 
 abstract TextInterface
 abstract ModeState
@@ -290,7 +290,7 @@ char_move_left(s::PromptState) = char_move_left(s.input_buffer)
 function char_move_left(buf::IOBuffer)
     while position(buf) > 0
         seek(buf, position(buf)-1)
-        c = peek(buf)
+        c = peek(buf, UInt8)
         (((c & 0x80) == 0) || ((c & 0xc0) == 0xc0)) && break
     end
     pos = position(buf)

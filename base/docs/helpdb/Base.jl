@@ -5923,6 +5923,13 @@ Open a file and read its contents. `args` is passed to `read`: this is equivalen
 read(filename, args...)
 
 """
+    peek(stream::IO, T)
+
+Similar to `read`, but does not advance the reading position.
+"""
+peek(stream, t)
+
+"""
     @timev
 
 This is a verbose version of the `@time` macro. It first prints the same information as

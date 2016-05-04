@@ -254,27 +254,30 @@ function read(s::IOStream, nb::Integer; all::Bool=true)
 end
 
 ## Character streams ##
-const _chtmp = Array(Char, 1)
-function peekchar(s::IOStream)
+const _chtmp = Ref{Char}()
+function peek(s::IOStream, ::Type{Char})
     if ccall(:ios_peekutf8, Cint, (Ptr{Void}, Ptr{Char}), s, _chtmp) < 0
-        return Char(-1)
+        throw(EOFError())
     end
-    return _chtmp[1]
+    return _chtmp[]
 end
 
-function peek(s::IOStream)
-    ccall(:ios_peekc, Cint, (Ptr{Void},), s)
+function peek(s::IOStream, ::Type{UInt8})
+    if eof(s)
+        throw(EOFError())
+    end
+    return convert(UInt8, ccall(:ios_peekc, Cint, (Ptr{Void},), s))
 end
 
 function skipchars(s::IOStream, pred; linecomment::Char=Char(0xffffffff))
-    ch = peekchar(s); status = Int(ch)
+    ch = peek(s, Char); status = Int(ch)
     while status >= 0 && (pred(ch) || ch == linecomment)
         if ch == linecomment
             readline(s)
         else
             read(s, Char)  # advance one character
         end
-        ch = peekchar(s); status = Int(ch)
+        ch = peek(s, Char); status = Int(ch)
     end
     return s
 end
