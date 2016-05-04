@@ -1340,6 +1340,7 @@ const jl_value_t *jl_dump_function_asm(void *f, int raw_mc)
         return (jl_value_t*)jl_pchar_to_array((char*)fptr, symsize);
     }
 
+    int8_t gc_state = jl_gc_safe_enter();
     jl_dump_asm_internal(fptr, symsize, slide,
 #ifndef USE_MCJIT
             context,
@@ -1355,6 +1356,7 @@ const jl_value_t *jl_dump_function_asm(void *f, int raw_mc)
 #ifndef LLVM37
     fstream.flush();
 #endif
+    jl_gc_safe_leave(gc_state);
 
     return jl_cstr_to_string(const_cast<char*>(stream.str().c_str()));
 }

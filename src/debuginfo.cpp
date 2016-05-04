@@ -70,6 +70,11 @@ extern ExecutionEngine *jl_ExecutionEngine;
 typedef object::SymbolRef SymRef;
 #endif
 
+// Any function that acquires this lock must be either a unmanaged thread
+// or in the GC safe region and must NOT allocate anything through the GC
+// while holding this lock.
+// Certain functions in this file might be called from an unmanaged thread
+// and cannot have any interaction with the julia runtime
 static uv_rwlock_t threadsafe;
 
 extern "C" void jl_init_debuginfo()
@@ -128,6 +133,7 @@ extern "C" EXCEPTION_DISPOSITION _seh_exception_handler(PEXCEPTION_RECORD Except
 static void create_PRUNTIME_FUNCTION(uint8_t *Code, size_t Size, StringRef fnname,
         uint8_t *Section, size_t Allocated, uint8_t *UnwindData)
 {
+    // GC safe
     DWORD mod_size = 0;
 #if defined(_CPU_X86_64_)
 #if !defined(USE_MCJIT)
@@ -244,9 +250,10 @@ public:
     virtual void NotifyFunctionEmitted(const Function &F, void *Code,
                                        size_t Size, const EmittedFunctionDetails &Details)
     {
+        // This function modify linfo->fptr in GC safe region.
+        // This should be fine since the GC won't scan this field.
         int8_t gc_state = jl_gc_safe_enter();
         uv_rwlock_wrlock(&threadsafe);
-        jl_gc_safe_leave(gc_state);
         StringRef sName = F.getName();
         StringMap<jl_lambda_info_t*>::iterator linfo_it = linfo_in_flight.find(sName);
         jl_lambda_info_t *linfo = NULL;
@@ -266,13 +273,12 @@ public:
             const_cast<Function*>(&F)->deleteBody();
 #endif
         uv_rwlock_wrunlock(&threadsafe);
+        jl_gc_safe_leave(gc_state);
     }
 
     std::map<size_t, FuncInfo, revcomp>& getMap()
     {
-        int8_t gc_state = jl_gc_safe_enter();
         uv_rwlock_rdlock(&threadsafe);
-        jl_gc_safe_leave(gc_state);
         return info;
     }
 #endif // ifndef USE_MCJIT
@@ -301,9 +307,10 @@ public:
     virtual void NotifyObjectEmitted(const ObjectImage &obj)
 #endif
     {
+        // This function modify linfo->fptr in GC safe region.
+        // This should be fine since the GC won't scan this field.
         int8_t gc_state = jl_gc_safe_enter();
         uv_rwlock_wrlock(&threadsafe);
-        jl_gc_safe_leave(gc_state);
 #ifdef LLVM36
         object::section_iterator Section = debugObj.section_begin();
         object::section_iterator EndSection = debugObj.section_end();
@@ -563,6 +570,7 @@ public:
 #endif
 #endif
         uv_rwlock_wrunlock(&threadsafe);
+        jl_gc_safe_leave(gc_state);
     }
 
     // must implement if we ever start freeing code
@@ -571,9 +579,7 @@ public:
 
     std::map<size_t, ObjectInfo, revcomp>& getObjectMap()
     {
-        int8_t gc_state = jl_gc_safe_enter();
         uv_rwlock_rdlock(&threadsafe);
-        jl_gc_safe_leave(gc_state);
         return objectmap;
     }
 #endif // USE_MCJIT
@@ -1103,12 +1109,17 @@ int jl_DI_for_fptr(uint64_t fptr, uint64_t *symsize, int64_t *slide, int64_t *se
 extern "C"
 JL_DLLEXPORT jl_value_t *jl_get_dobj_data(uint64_t fptr)
 {
+    // Used by Gallium.jl
     const object::ObjectFile *object = NULL;
     DIContext *context;
     int64_t slide, section_slide;
+    int8_t gc_state = jl_gc_safe_enter();
     if (!jl_DI_for_fptr(fptr, NULL, &slide, NULL, &object, NULL))
-        if (!jl_dylib_DI_for_fptr(fptr, &object, &context, &slide, &section_slide, false, NULL, NULL, NULL, NULL))
+        if (!jl_dylib_DI_for_fptr(fptr, &object, &context, &slide, &section_slide, false, NULL, NULL, NULL, NULL)) {
+            jl_gc_safe_leave(gc_state);
             return jl_nothing;
+        }
+    jl_gc_safe_leave(gc_state);
     if (object == NULL)
         return jl_nothing;
     return (jl_value_t*)jl_ptr_to_array_1d((jl_value_t*)jl_array_uint8_type,
@@ -1119,6 +1130,8 @@ JL_DLLEXPORT jl_value_t *jl_get_dobj_data(uint64_t fptr)
 extern "C"
 JL_DLLEXPORT uint64_t jl_get_section_start(uint64_t fptr)
 {
+    // Used by Gallium.jl
+    int8_t gc_state = jl_gc_safe_enter();
     std::map<size_t, ObjectInfo, revcomp> &objmap = jl_jit_events->getObjectMap();
     std::map<size_t, ObjectInfo, revcomp>::iterator fit = objmap.lower_bound(fptr);
 
@@ -1134,6 +1147,7 @@ JL_DLLEXPORT uint64_t jl_get_section_start(uint64_t fptr)
        }
     }
     uv_rwlock_rdunlock(&threadsafe);
+    jl_gc_safe_leave(gc_state);
     return ret;
 }
 
@@ -1688,6 +1702,7 @@ RTDyldMemoryManager* createRTDyldMemoryManagerUnix()
 extern "C"
 uint64_t jl_getUnwindInfo(uint64_t dwAddr)
 {
+    // Might be called from unmanaged thread
     std::map<size_t, ObjectInfo, revcomp> &objmap = jl_jit_events->getObjectMap();
     std::map<size_t, ObjectInfo, revcomp>::iterator it = objmap.lower_bound(dwAddr);
     uint64_t ipstart = 0; // ip of the start of the section (if found)
@@ -1701,6 +1716,7 @@ uint64_t jl_getUnwindInfo(uint64_t dwAddr)
 extern "C"
 uint64_t jl_getUnwindInfo(uint64_t dwAddr)
 {
+    // Might be called from unmanaged thread
     std::map<size_t, FuncInfo, revcomp> &info = jl_jit_events->getMap();
     std::map<size_t, FuncInfo, revcomp>::iterator it = info.lower_bound(dwAddr);
     uint64_t ipstart = 0; // ip of the first instruction in the function (if found)
