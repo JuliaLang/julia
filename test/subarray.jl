@@ -471,3 +471,7 @@ let A = rand(10), sA = sub(copy(A), :)
     permute!(sA, collect(Int16, 1:10))
     @test A == sA
 end
+
+# the following segfaults with LLVM 3.8 on Windows, ref #15417
+@test collect(sub(sub(reshape(1:13^3, 13, 13, 13), 3:7, 6, :), 1:2:5, :, 1:2:5)) ==
+    cat(3,[68,70,72],[406,408,410],[744,746,748])
