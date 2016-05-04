@@ -42,7 +42,7 @@ function access_env(onError::Function, str::AbstractString)
         error(string("getenv: ", str, ' ', len, "-1 != ", ret, ": ", Libc.FormatMessage()))
     end
     pop!(val) # NUL
-    return UTF8String(utf16to8(val))
+    return String(utf16to8(val))
 end
 
 function _setenv(svar::AbstractString, sval::AbstractString, overwrite::Bool=true)
@@ -64,10 +64,10 @@ end # @windows_only
 
 ## ENV: hash interface ##
 
-type EnvHash <: Associative{ByteString,ByteString}; end
+type EnvHash <: Associative{String,String}; end
 const ENV = EnvHash()
 
-similar(::EnvHash) = Dict{ByteString,ByteString}()
+similar(::EnvHash) = Dict{String,String}()
 
 getindex(::EnvHash, k::AbstractString) = access_env(k->throw(KeyError(k)), k)
 get(::EnvHash, k::AbstractString, def) = access_env(k->def, k)
@@ -88,12 +88,12 @@ function next(::EnvHash, i)
     if env === nothing
         throw(BoundsError())
     end
-    env::ByteString
+    env::String
     m = match(r"^(.*?)=(.*)$"s, env)
     if m === nothing
         error("malformed environment entry: $env")
     end
-    (Pair{ByteString,ByteString}(m.captures[1], m.captures[2]), i+1)
+    (Pair{String,String}(m.captures[1], m.captures[2]), i+1)
 end
 end
 
@@ -112,12 +112,12 @@ function next(hash::EnvHash, block::Tuple{Ptr{UInt16},Ptr{UInt16}})
     len = ccall(:wcslen, UInt, (Ptr{UInt16},), pos)
     buf = Array(UInt16, len)
     unsafe_copy!(pointer(buf), pos, len)
-    env = UTF8String(utf16to8(buf))
+    env = String(utf16to8(buf))
     m = match(r"^(=?[^=]+)=(.*)$"s, env)
     if m === nothing
         error("malformed environment entry: $env")
     end
-    (Pair{ByteString,ByteString}(m.captures[1], m.captures[2]), (pos+len*2, blk))
+    (Pair{String,String}(m.captures[1], m.captures[2]), (pos+len*2, blk))
 end
 end
 

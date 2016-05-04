@@ -308,9 +308,9 @@ function _dump_function(f, t::ANY, native, wrapper, strip_ir_metadata, dump_modu
     end
 
     if native
-        str = ccall(:jl_dump_function_asm, Ref{ByteString}, (Ptr{Void},Cint), llvmf, 0)
+        str = ccall(:jl_dump_function_asm, Ref{String}, (Ptr{Void},Cint), llvmf, 0)
     else
-        str = ccall(:jl_dump_function_ir, Ref{ByteString},
+        str = ccall(:jl_dump_function_ir, Ref{String},
                     (Ptr{Void}, Bool, Bool), llvmf, strip_ir_metadata, dump_module)
     end
 

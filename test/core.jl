@@ -208,8 +208,8 @@ h11840{T<:Tuple}(::Type{T}) = '4'
 @test typejoin(Array{Float64},BitArray) <: AbstractArray
 @test typejoin(Array{Bool},BitArray) <: AbstractArray{Bool}
 @test typejoin(Tuple{Int,Int8},Tuple{Int8,Float64}) === Tuple{Signed,Real}
-@test Base.typeseq(typejoin(Tuple{ASCIIString,ASCIIString},Tuple{UTF8String,ASCIIString},
-                            Tuple{ASCIIString,UTF8String},Tuple{Int,ASCIIString,Int}),
+@test Base.typeseq(typejoin(Tuple{String,String},Tuple{DirectIndexString,String},
+                            Tuple{String,DirectIndexString},Tuple{Int,String,Int}),
                    Tuple{Any,AbstractString,Vararg{Int}})
 @test Base.typeseq(typejoin(Tuple{Int8,Vararg{Int}},Tuple{Int8,Int8}),
                    Tuple{Int8,Vararg{Signed}})
@@ -583,10 +583,10 @@ end
 let
     local mytype
     function mytype(vec)
-        convert(Vector{Tuple{ASCIIString, DataType}}, vec)
+        convert(Vector{Tuple{String, DataType}}, vec)
     end
     some_data = Any[("a", Int32), ("b", Int32)]
-    @test isa(mytype(some_data),Vector{Tuple{ASCIIString, DataType}})
+    @test isa(mytype(some_data),Vector{Tuple{String, DataType}})
 end
 
 type MyArray{N} <: AbstractArray{Int, N}
@@ -1349,7 +1349,7 @@ end
 
 # issue #4518
 f4518(x, y::Union{Int32,Int64}) = 0
-f4518(x::ByteString, y::Union{Int32,Int64}) = 1
+f4518(x::String, y::Union{Int32,Int64}) = 1
 @test f4518("",1) == 1
 
 # issue #4581
