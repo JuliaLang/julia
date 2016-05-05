@@ -235,9 +235,19 @@ installed for the duration of the test. A package is tested by running its
 """
 test(pkgs::AbstractString...; coverage::Bool=false) = cd(Entry.test,AbstractString[pkgs...]; coverage=coverage)
 
-dependents(packagename::AbstractString) = Reqs.dependents(packagename)
+"""
+    dependents(pkg)
 
-dependencies(packagename::AbstractString) = Reqs.dependencies(packagename)
+Returns an array of names of packages which have `pkg` in their `REQUIRE` file.
+"""
+dependents(pkg::AbstractString) = Reqs.dependents(pkg)
+
+"""
+    dependencies(pkg)
+
+Returns a Dict of requirement specifications for `pkg` from its `REQUIRE` file.
+"""
+dependencies(pkg::AbstractString) = Reqs.dependencies(pkg)
 
 """
     setprotocol!(proto)
