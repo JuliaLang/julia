@@ -37,7 +37,7 @@ if VERSION < v"0.4.0-dev+1419"
 end
 
 if VERSION < v"0.4.0-dev+1387"
-    typealias AbstractString String
+    typealias AbstractString Base.String
     export AbstractString
 end
 
