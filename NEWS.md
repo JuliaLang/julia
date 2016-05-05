@@ -66,10 +66,9 @@ Breaking changes
     instead, a call that cannot be resolved to a single method results
     in a `MethodError`. ([#6190])
 
-  * The syntax `x.(i::Integer)` for `getfield(x,i)` now means `broadcast(x,i)`,
-    and `x.(f) = v` for `setfield!(x, f, v)` no longer works.
-    (`x.(::Symbol)` still works for `getfield` but is deprecated.)
-    Use `getfield` or `setfield!` ([#15032]).
+  * The syntax `x.(i::Integer)` for `getfield(x,i)` now means `broadcast(x,i)`.
+    [`x.(s::Symbol)` still works for `getfield(x,s)`, and `x.(f) = v` works for `setfield!(x, f, v)`, but these are deprecated.]
+    Use `getfield` or `setfield!` instead ([#15032]).
 
   * `pmap` keyword arguments `err_retry=true` and `err_stop=false` are deprecated.
     `pmap` no longer retries or returns `Exception` objects in the result collection.
