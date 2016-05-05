@@ -1525,7 +1525,7 @@ for isunittri in (true, false), islowertri in (true, false)
         (true,  :(Ac_ldiv_B), :(Ac_ldiv_B!)) )
 
         # broad method where elements are Numbers
-        @eval function ($func){TA<:Number,Tb<:Number,S}(A::$tritype{TA,S}, b::SparseVector{Tb})
+        @eval function ($func){TA<:Number,Tb<:Number,S<:AbstractMatrix}(A::$tritype{TA,S}, b::SparseVector{Tb})
             TAb = $(isunittri ?
                 :(typeof(zero(TA)*zero(Tb) + zero(TA)*zero(Tb))) :
                 :(typeof((zero(TA)*zero(Tb) + zero(TA)*zero(Tb))/one(TA))) )
@@ -1551,7 +1551,7 @@ for isunittri in (true, false), islowertri in (true, false)
         end
 
         # fallback where elements are not Numbers
-        @eval ($func){TA,Tb,S}(A::$tritype{TA,S}, b::SparseVector{Tb}) = ($ipfunc)(A, copy(b))
+        @eval ($func)(A::$tritype, b::SparseVector) = ($ipfunc)(A, copy(b))
     end
 
     # build in-place left-division operations

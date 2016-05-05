@@ -489,3 +489,6 @@ end
 # Test that UpperTriangular(LowerTriangular) throws. See #16201
 @test_throws ArgumentError LowerTriangular(UpperTriangular(randn(3,3)))
 @test_throws ArgumentError UpperTriangular(LowerTriangular(randn(3,3)))
+
+# Issue 16196
+@test UpperTriangular(eye(3)) \ sub(ones(3), [1,2,3]) == ones(3)
