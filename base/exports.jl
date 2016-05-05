@@ -810,6 +810,7 @@ export
     isxdigit,
     join,
     lcfirst,
+    logging,
     lowercase,
     lpad,
     lstrip,

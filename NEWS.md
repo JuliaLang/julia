@@ -132,6 +132,9 @@ Library improvements
     implemented; the semantics are as if the `Nullable` were a container with
     zero or one elements ([#16961]).
 
+  * `logging` can be used to redirect `info`, `warn`, and `error` messages
+    either universally or on a per-module/function basis ([#16213]).
+
 Compiler/Runtime improvements
 -----------------------------
 
