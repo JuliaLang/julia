@@ -708,28 +708,14 @@ JL_DLLEXPORT void jl_raise_debugger(void)
 #endif // _OS_WINDOWS_
 }
 
-JL_DLLEXPORT jl_sym_t *jl_get_OS_NAME(void)
+JL_DLLEXPORT jl_sym_t *jl_get_UNAME(void)
 {
-#if defined(_OS_WINDOWS_)
-    return jl_symbol("Windows");
-#elif defined(_OS_LINUX_)
-    return jl_symbol("Linux");
-#elif defined(_OS_FREEBSD_)
-    return jl_symbol("FreeBSD");
-#elif defined(_OS_DARWIN_)
-    return jl_symbol("Darwin");
-#else
-#warning OS_NAME is Unknown
-    return jl_symbol("Unknown");
-#endif
+    return jl_symbol(JL_BUILD_UNAME);
 }
 
 JL_DLLEXPORT jl_sym_t *jl_get_ARCH(void)
 {
-    static jl_sym_t *ARCH = NULL;
-    if (!ARCH)
-        ARCH = (jl_sym_t*) jl_get_global(jl_base_module, jl_symbol("ARCH"));
-    return ARCH;
+    return jl_symbol(JL_BUILD_ARCH);
 }
 
 JL_DLLEXPORT size_t jl_maxrss(void)

@@ -9,12 +9,6 @@ Constants
 
    The singleton instance of type ``Void``\ , used by convention when there is no value to return (as in a C ``void`` function). Can be converted to an empty ``Nullable`` value.
 
-.. variable:: OS_NAME
-
-   .. Docstring generated from Julia source
-
-   A symbol representing the name of the operating system. Possible values are ``:Linux``\ , ``:Darwin`` (OS X), or ``:Windows``\ .
-
 .. variable:: PROGRAM_FILE
 
    .. Docstring generated from Julia source
@@ -32,18 +26,6 @@ Constants
    .. Docstring generated from Julia source
 
    The C null pointer constant, sometimes used when calling external code.
-
-.. variable:: CPU_CORES
-
-   .. Docstring generated from Julia source
-
-   The number of CPU cores in the system.
-
-.. variable:: WORD_SIZE
-
-   .. Docstring generated from Julia source
-
-   Standard word size on the current machine, in bits.
 
 .. variable:: VERSION
 
@@ -68,6 +50,36 @@ Constants
    .. Docstring generated from Julia source
 
    Equivalent to ``Any`` for dispatch purposes, but signals the compiler to skip code generation specialization for that field.
+
+.. variable:: Sys.CPU_CORES
+
+   .. Docstring generated from Julia source
+
+   The number of CPU cores in the system.
+
+.. variable:: Sys.WORD_SIZE
+
+   .. Docstring generated from Julia source
+
+   Standard word size on the current machine, in bits.
+
+.. variable:: Sys.KERNEL
+
+   .. Docstring generated from Julia source
+
+   A symbol representing the name of the operating system, as returned by ``uname`` of the build configuration.
+
+.. variable:: Sys.ARCH
+
+   .. Docstring generated from Julia source
+
+   A symbol representing the architecture of the build configuration.
+
+.. variable:: Sys.MACHINE
+
+   .. Docstring generated from Julia source
+
+   A string containing the build triple.
 
 See also:
 

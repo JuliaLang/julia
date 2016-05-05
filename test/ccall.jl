@@ -31,7 +31,7 @@ end
 @test ccall_echo_load(IntLike(993), Ptr{Int}, Ref{IntLike}) === 993
 @test ccall_echo_load(IntLike(881), Ptr{IntLike}, Ref{IntLike}).x === 881
 @test ccall_echo_func(532, Int, Int) === 532
-if WORD_SIZE == 64
+if Sys.WORD_SIZE == 64
     # this test is valid only for x86_64 and win64
     @test ccall_echo_func(164, IntLike, Int).x === 164
 end

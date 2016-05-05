@@ -5,7 +5,7 @@
 dlls = Libdl.dllist()
 @test !isempty(dlls)
 @test length(dlls) > 3 # at a bare minimum, probably have some version of libstdc, libgcc, libjulia, ...
-if @unix? true : (Base.windows_version() >= Base.WINDOWS_VISTA_VER)
+if !is_windows() || Sys.windows_version() >= Sys.WINDOWS_VISTA_VER
     for dl in dlls
         if isfile(dl) && (Libdl.dlopen_e(dl) != C_NULL)
             @test Base.samefile(Libdl.dlpath(dl), dl)
@@ -177,7 +177,7 @@ let dl = C_NULL
     end
 end
 
-if OS_NAME in (:Linux, :FreeBSD)
+if Sys.KERNEL in (:Linux, :FreeBSD)
     ccall(:jl_read_sonames, Void, ())
 end
 

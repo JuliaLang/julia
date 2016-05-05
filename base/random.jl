@@ -27,18 +27,7 @@ type Close1Open2 <: FloatInterval end
 
 ## RandomDevice
 
-@unix_only begin
-    immutable RandomDevice <: AbstractRNG
-        file::IOStream
-
-        RandomDevice(unlimited::Bool=true) = new(open(unlimited ? "/dev/urandom" : "/dev/random"))
-    end
-
-    rand{ T<:Union{Bool, Base.BitInteger}}(rd::RandomDevice,  ::Type{T})  = read( rd.file, T)
-    rand!{T<:Union{Bool, Base.BitInteger}}(rd::RandomDevice, A::Array{T}) = read!(rd.file, A)
-end
-
-@windows_only begin
+if is_windows()
     immutable RandomDevice <: AbstractRNG
         buffer::Vector{UInt128}
 
@@ -51,7 +40,16 @@ end
     end
 
     rand!{T<:Union{Bool, Base.BitInteger}}(rd::RandomDevice, A::Array{T}) = (win32_SystemFunction036!(A); A)
-end
+else # !windows
+    immutable RandomDevice <: AbstractRNG
+        file::IOStream
+
+        RandomDevice(unlimited::Bool=true) = new(open(unlimited ? "/dev/urandom" : "/dev/random"))
+    end
+
+    rand{ T<:Union{Bool, Base.BitInteger}}(rd::RandomDevice,  ::Type{T})  = read( rd.file, T)
+    rand!{T<:Union{Bool, Base.BitInteger}}(rd::RandomDevice, A::Array{T}) = read!(rd.file, A)
+end # os-test
 
 rand(rng::RandomDevice, ::Type{Close1Open2}) =
     reinterpret(Float64, 0x3ff0000000000000 | rand(rng, UInt64) & 0x000fffffffffffff)

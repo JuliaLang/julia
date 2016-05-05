@@ -2048,36 +2048,6 @@ of a string.
 isdigit
 
 """
-    @windows
-
-Given `@windows? a : b`, do `a` on Windows and `b` elsewhere. See documentation in [Handling Operating System Variation](:ref:`Handling Operating System Variation <man-handling-operating-system-variation>`).
-"""
-:@windows
-
-"""
-    @unix
-
-Given `@unix? a : b`, do `a` on Unix systems (including Linux and OS X) and `b` elsewhere.
-See documentation in [Handling Operating System Variation](:ref:`Handling Operating System Variation <man-handling-operating-system-variation>`).
-"""
-:@unix
-
-"""
-    @windows_only
-
-A macro that evaluates the given expression only on Windows systems. See documentation in [Handling Operating System Variation](:ref:`Handling Operating System Variation <man-handling-operating-system-variation>`).
-"""
-:@windows_only
-
-"""
-    @unix_only
-
-A macro that evaluates the given expression only on Unix systems (including Linux and OS X). See
-documentation in [Handling Operating System Variation](:ref:`Handling Operating System Variation <man-handling-operating-system-variation>`).
-"""
-:@unix_only
-
-"""
     num2hex(f)
 
 Get a hexadecimal string of the binary representation of a floating point number.
@@ -3145,7 +3115,7 @@ addprocs(n::Integer)
 """
     addprocs() -> List of process identifiers
 
-Equivalent to `addprocs(CPU_CORES)`
+Equivalent to `addprocs(Sys.CPU_CORES)`
 
 Note that workers do not run a `.juliarc.jl` startup script, nor do they synchronize their
 global state (such as global variables, new method definitions, and loaded modules) with any
@@ -6357,20 +6327,6 @@ Returns the number of dimensions of `A`.
 ndims
 
 """
-    @osx
-
-Given `@osx? a : b`, do `a` on OS X and `b` elsewhere. See documentation in [Handling Operating System Variation](:ref:`Handling Operating System Variation <man-handling-operating-system-variation>`).
-"""
-:@osx
-
-"""
-    @osx_only
-
-A macro that evaluates the given expression only on OS X systems. See documentation in [Handling Operating System Variation](:ref:`Handling Operating System Variation <man-handling-operating-system-variation>`).
-"""
-:@osx_only
-
-"""
     ishermitian(A) -> Bool
 
 Test whether a matrix is Hermitian.
@@ -8014,20 +7970,6 @@ Cumulative product of `A` along a dimension, storing the result in `B`. The dime
 cumprod!
 
 """
-    @linux
-
-Given `@linux? a : b`, do `a` on Linux and `b` elsewhere. See documentation [Handling Operating System Variation](:ref:`Handling Operating System Variation <man-handling-operating-system-variation>`).
-"""
-:@linux
-
-"""
-    @linux_only
-
-A macro that evaluates the given expression only on Linux systems. See documentation in [Handling Operating System Variation](:ref:`Handling Operating System Variation <man-handling-operating-system-variation>`).
-"""
-:@linux_only
-
-"""
     complement(s)
 
 Returns the set-complement of [`IntSet`](:obj:`IntSet`) `s`.
@@ -9598,7 +9540,7 @@ Matrix trace.
 trace
 
 """
-    runtests([tests=["all"] [, numcores=iceil(CPU_CORES/2) ]])
+    runtests([tests=["all"] [, numcores=iceil(Sys.CPU_CORES / 2) ]])
 
 Run the Julia unit tests listed in `tests`, which can be either a string or an array of
 strings, using `numcores` processors. (not exported)

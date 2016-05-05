@@ -696,7 +696,7 @@ function vcat{T}(arrays::Vector{T}...)
     if isbits(T)
         elsz = sizeof(T)
     else
-        elsz = div(WORD_SIZE,8)
+        elsz = Core.sizeof(Ptr{Void})
     end
     for a in arrays
         nba = length(a)*elsz

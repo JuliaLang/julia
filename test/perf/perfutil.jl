@@ -97,6 +97,7 @@ macro timeit_init(ex,init,name,desc,group...)
 end
 
 function maxrss(name)
+    # FIXME: call uv_getrusage instead here
     @linux_only begin
         rus = Array(Int64, div(144,8))
         fill!(rus, 0x0)

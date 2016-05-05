@@ -255,7 +255,9 @@ function blas_set_num_threads(n::Integer)
     end
 
     # OSX BLAS looks at an environment variable
-    @osx_only ENV["VECLIB_MAXIMUM_THREADS"] = n
+    @static if is_apple()
+        ENV["VECLIB_MAXIMUM_THREADS"] = n
+    end
 
     return nothing
 end
@@ -391,7 +393,8 @@ end
 
 julia_exename() = ccall(:jl_is_debugbuild,Cint,())==0 ? "julia" : "julia-debug"
 
-@windows_only function getpass(prompt::AbstractString)
+if is_windows()
+function getpass(prompt::AbstractString)
     print(prompt)
     flush(STDOUT)
     p = Array(UInt8, 128) # mimic Unix getpass in ignoring more than 128-char passwords
@@ -417,5 +420,6 @@ julia_exename() = ccall(:jl_is_debugbuild,Cint,())==0 ? "julia" : "julia-debug"
 
     return ""
 end
-
-@unix_only getpass(prompt::AbstractString) = String(ccall(:getpass, Cstring, (Cstring,), prompt))
+else
+getpass(prompt::AbstractString) = String(ccall(:getpass, Cstring, (Cstring,), prompt))
+end

@@ -45,7 +45,9 @@ import Base:
     skip, stat, unsafe_read, unsafe_write, utf16to8, utf8to16, uv_error,
     uvhandle, uvtype, write
 
-@windows_only import Base: cwstring
+if is_windows()
+    import Base: cwstring
+end
 
 include("path.jl")
 include("stat.jl")

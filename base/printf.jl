@@ -667,7 +667,7 @@ function gen_p(flags::String, width::Int, precision::Int, c::Char)
     #
     @gensym x
     blk = Expr(:block)
-    ptrwidth = WORD_SIZE>>2
+    ptrwidth = Sys.WORD_SIZE>>2
     width -= ptrwidth+2
     if width > 0 && !('-' in flags)
         push!(blk.args, pad(width, width, ' '))

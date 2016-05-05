@@ -54,7 +54,7 @@ end
 @test bswap(Int128(2)^(15*8)) == Int128(1)
 @test bswap(UInt128(2)^(15*8)) == UInt128(1)
 
-@test count_zeros(10) == WORD_SIZE - 2
+@test count_zeros(10) == Sys.WORD_SIZE - 2
 @test count_zeros(UInt8(10)) == 6
 
 @test convert(Signed, UInt128(3)) === Int128(3)

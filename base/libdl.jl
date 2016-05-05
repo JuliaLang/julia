@@ -13,8 +13,10 @@ When calling [`dlopen`](:func:`dlopen`), the paths in this list will be searched
 order, before searching the system locations for a valid library handle.
 """
 const DL_LOAD_PATH = String[]
-@osx_only push!(DL_LOAD_PATH, "@loader_path/julia")
-@osx_only push!(DL_LOAD_PATH, "@loader_path")
+if is_apple()
+    push!(DL_LOAD_PATH, "@loader_path/julia")
+    push!(DL_LOAD_PATH, "@loader_path")
+end
 
 # constants to match JL_RTLD_* in src/julia.h
 const RTLD_LOCAL     = 0x00000001
@@ -143,7 +145,7 @@ find_library(libname::Union{Symbol,AbstractString}, extrapaths=String[]) =
 function dlpath(handle::Ptr{Void})
     p = ccall(:jl_pathname_for_handle, Cstring, (Ptr{Void},), handle)
     s = String(p)
-    @windows_only Libc.free(p)
+    is_windows() && Libc.free(p)
     return s
 end
 
@@ -154,12 +156,12 @@ function dlpath(libname::Union{AbstractString, Symbol})
     return path
 end
 
-if OS_NAME === :Darwin
+if is_apple()
     const dlext = "dylib"
-elseif OS_NAME === :Windows
+elseif is_windows()
     const dlext = "dll"
 else
-    #assume OS_NAME === :Linux, or similar
+    #assume is_linux, or similar
     const dlext = "so"
 end
 
@@ -170,7 +172,7 @@ File extension for dynamic libraries (e.g. dll, dylib, so) on the current platfo
 """
 dlext
 
-@linux_only begin
+if is_linux()
     immutable dl_phdr_info
         # Base address of object
         addr::Cuint
@@ -194,18 +196,18 @@ dlext
         end
         return convert(Cint, 0)::Cint
     end
-end #@linux_only
+end # linux-only
 
 function dllist()
-    dynamic_libraries = Array(AbstractString,0)
+    dynamic_libraries = Array{AbstractString}(0)
 
-    @linux_only begin
+    @static if is_linux()
         const callback = cfunction(dl_phdr_info_callback, Cint,
                                    (Ref{dl_phdr_info}, Csize_t, Ref{Array{AbstractString,1}} ))
         ccall(:dl_iterate_phdr, Cint, (Ptr{Void}, Ref{Array{AbstractString,1}}), callback, dynamic_libraries)
     end
 
-    @osx_only begin
+    @static if is_apple()
         numImages = ccall(:_dyld_image_count, Cint, (), )
 
         # start at 1 instead of 0 to skip self
@@ -215,11 +217,11 @@ function dllist()
         end
     end
 
-    @windows_only begin
+    @static if is_windows()
         ccall(:jl_dllist, Cint, (Any,), dynamic_libraries)
     end
 
-    dynamic_libraries
+    return dynamic_libraries
 end
 
 end # module

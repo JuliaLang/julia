@@ -24,6 +24,13 @@ FLAGS += -Wall -Wno-strict-aliasing -fno-omit-frame-pointer -fvisibility=hidden 
 override CFLAGS += -Wold-style-definition -Wstrict-prototypes -Wc++-compat
 endif
 
+FLAGS += -DJL_BUILD_ARCH='"$(ARCH)"'
+ifeq ($(OS),WINNT)
+FLAGS += -DJL_BUILD_UNAME='"NT"'
+else
+FLAGS += -DJL_BUILD_UNAME='"$(OS)"'
+endif
+
 SRCS := \
 	jltypes gf typemap ast builtins module interpreter \
 	alloc dlload sys init task array dump toplevel jl_uv jlapi signal-handling \
