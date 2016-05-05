@@ -1840,6 +1840,29 @@ end
 
 #### finalize and record the result of running type inference ####
 
+function isinlineable(linfo::LambdaInfo)
+    inlineable = false
+    if isdefined(linfo, :def)
+        cost = 1000
+        if linfo.def.module === _topmod(linfo.def.module)
+            name = linfo.def.name
+            sig = linfo.def.sig
+            if ((name === :+ || name === :* || name === :min || name === :max) &&
+                sig == Tuple{sig.parameters[1],Any,Any,Any,Vararg{Any}})
+                inlineable = true
+            elseif (name === :next || name === :done || name === :unsafe_convert ||
+                    name === :cconvert)
+                cost ÷= 4
+            end
+        end
+        if !inlineable
+            body = Expr(:block); body.args = linfo.code
+            inlineable = inline_worthy(body, cost)
+        end
+    end
+    return inlineable
+end
+
 # inference completed on `me`
 # update the LambdaInfo and notify the edges
 function finish(me::InferenceState)
@@ -1883,6 +1906,9 @@ function finish(me::InferenceState)
     # finalize and record the linfo result
     me.inferred = true
 
+    # determine and cache inlineability
+    me.linfo.inlineable = isinlineable(me.linfo)
+
     me.linfo.inferred = true
     me.linfo.inInference = false
     me.linfo.pure = ispure
@@ -1904,6 +1930,7 @@ function finish(me::InferenceState)
         out.ssavaluetypes = me.linfo.ssavaluetypes
         out.rettype = me.linfo.rettype
         out.pure = me.linfo.pure
+        out.inlineable = me.linfo.inlineable
     end
     if me.tfunc_bp !== nothing
         me.tfunc_bp.func = me.linfo
@@ -2284,6 +2311,7 @@ function inlineable(f::ANY, ft::ANY, e::Expr, atypes::Vector{Any}, sv::Inference
     metharg = meth[1]::Type
     methsp = meth[2]
     method = meth[3]::Method
+    # check whether call can be inlined to just a quoted constant value
     if isa(f, widenconst(ft)) && !method.isstaged && method.lambda_template.pure && (isType(e.typ) || isa(e.typ,Const))
         # check if any arguments aren't effect_free and need to be kept around
         stmts = Any[]
@@ -2315,21 +2343,6 @@ function inlineable(f::ANY, ft::ANY, e::Expr, atypes::Vector{Any}, sv::Inference
         end
     end
 
-    spvals = Any[]
-    for i = 1:length(methsp)
-        si = methsp[i]
-        if isa(si, TypeVar)
-            return NF
-        end
-        push!(spvals, si)
-    end
-    for i=1:length(spvals)
-        si = spvals[i]
-        if isa(si,Symbol) || isa(si,SSAValue) || isa(si,Slot)
-            spvals[i] = QuoteNode(si)
-        end
-    end
-
     ## This code tries to limit the argument list length only when it is
     ## growing due to recursion.
     ## It might be helpful for some things, but turns out not to be
@@ -2356,37 +2369,11 @@ function inlineable(f::ANY, ft::ANY, e::Expr, atypes::Vector{Any}, sv::Inference
     #     end
     # end
 
-    methargs = metharg.parameters
-    nm = length(methargs)
-
     (linfo, ty, inferred) = typeinf(method, metharg, methsp, true)
     if is(linfo,nothing) || !inferred
         return NF
     end
-    ast = linfo.code
-
-    if !isa(ast,Array{Any,1})
-        ast = ccall(:jl_uncompress_ast, Any, (Any,Any), linfo, ast)
-    else
-        ast = astcopy(ast)
-    end
-    ast = ast::Array{Any,1}
-
-    body = Expr(:block)
-    body.args = ast
-    propagate_inbounds, _ = popmeta!(body, :propagate_inbounds)
-    cost::Int = 1000
-    if incompletematch
-        cost *= 4
-    end
-    if (istopfunction(topmod, f, :next) || istopfunction(topmod, f, :done) ||
-       istopfunction(topmod, f, :unsafe_convert) || istopfunction(topmod, f, :cconvert))
-        cost ÷= 4
-    end
-    inline_op = (istopfunction(topmod, f, :+) || istopfunction(topmod, f, :*) ||
-        istopfunction(topmod, f, :min) || istopfunction(topmod, f, :max)) &&
-        (4 <= length(argexprs) <= 10) && methsig == Tuple{widenconst(ft),Any,Any,Any,Vararg{Any}}
-    if !inline_op && !inline_worthy(body, cost)
+    if !linfo.inlineable
         # TODO
         #=
         if incompletematch
@@ -2416,38 +2403,10 @@ function inlineable(f::ANY, ft::ANY, e::Expr, atypes::Vector{Any}, sv::Inference
     end
 
     na = linfo.nargs
-
     # check for vararg function
     isva = false
     if na > 0 && linfo.isva
-        if length(argexprs) < na - 1
-            return (Expr(:call, TopNode(:error), "too few arguments"), [])
-        end
-        # This appears to be redundant with tuple_elim_pass
-#=
-        if false#=TODO=# && valen>0 && !occurs_outside_getfield(body, vaname, sv, valen)
-            # argument tuple is not used as a whole, so convert function body
-            # to one accepting the exact number of arguments we have.
-            newnames = unique_names(ast,valen)
-            replace_getfield!(ast, body, vaname, newnames, sv)
-            na = na-1+valen
-
-            # if the argument name is also used as a local variable,
-            # we need to keep it around as a variable name
-            for vi in vinflist
-                if vi[1] === vaname
-                    if vi[3] != 0
-                        vnew = unique_name(enclosing_ast, ast)
-                        push!(enc_vinflist, Any[vnew, vi[2], vi[3]])
-                        push!(spnames, vaname)
-                        push!(spvals, vnew)
-                        push!(enc_locllist, vnew)
-                    end
-                    break
-                end
-            end
-        else
-=#
+        @assert length(argexprs) >= na-1
         # construct tuple-forming expression for argument tail
         vararg = mk_tuplecall(argexprs[na:end], sv)
         argexprs = Any[argexprs[1:(na-1)]..., vararg]
@@ -2461,6 +2420,36 @@ function inlineable(f::ANY, ft::ANY, e::Expr, atypes::Vector{Any}, sv::Inference
     end
 
     @assert na == length(argexprs)
+
+    spvals = Any[]
+    for i = 1:length(methsp)
+        si = methsp[i]
+        if isa(si, TypeVar)
+            return NF
+        end
+        push!(spvals, si)
+    end
+    for i=1:length(spvals)
+        si = spvals[i]
+        if isa(si,Symbol) || isa(si,SSAValue) || isa(si,Slot)
+            spvals[i] = QuoteNode(si)
+        end
+    end
+
+    methargs = metharg.parameters
+    nm = length(methargs)
+
+    ast = linfo.code
+    if !isa(ast,Array{Any,1})
+        ast = ccall(:jl_uncompress_ast, Any, (Any,Any), linfo, ast)
+    else
+        ast = astcopy(ast)
+    end
+    ast = ast::Array{Any,1}
+
+    body = Expr(:block)
+    body.args = ast
+    propagate_inbounds, _ = popmeta!(body, :propagate_inbounds)
 
     # see if each argument occurs only once in the body expression
     stmts = Any[]
@@ -2728,7 +2717,7 @@ end
 # doesn't work on Tuples of TypeVars
 const inline_incompletematch_allowed = false
 
-inline_worthy(body, cost::Integer) = true
+inline_worthy(body::ANY, cost::Integer) = true
 function inline_worthy(body::Expr, cost::Integer=1000) # precondition: 0 < cost; nominal cost = 1000
     if popmeta!(body, :inline)[1]
         return true
