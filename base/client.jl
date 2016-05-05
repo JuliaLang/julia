@@ -20,9 +20,9 @@ const text_colors = AnyDict(
 # of colors.
 const possible_formatting_symbols = [:normal, :bold]
 available_text_colors = collect(keys(text_colors))
-available_text_colors =
-    cat(1, intersect(available_text_colors, possible_formatting_symbols),
-        sort(setdiff(  available_text_colors, possible_formatting_symbols)))
+available_text_colors = cat(1,
+    sort(intersect(available_text_colors, possible_formatting_symbols), rev=true),
+    sort(setdiff(  available_text_colors, possible_formatting_symbols)))
 
 const available_text_colors_docstring =
     string(join([string("`:", key,"`")
