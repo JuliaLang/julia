@@ -345,24 +345,55 @@ precision(::Type{Float16}) = 11
 precision(::Type{Float32}) = 24
 precision(::Type{Float64}) = 53
 precision{T<:AbstractFloat}(::T) = precision(T)
+"""
+    uabs(x::Integer)
 
-function float_lex_order(f::Integer, delta::Integer)
-    # convert from signed magnitude to 2's complement and back
-    neg = f < 0
-    if neg
-        f = oftype(f, -(f & typemax(f)))
+Returns the absolute value of `x`, possibly returning a different type should the
+operation be susceptible to overflow. This typically arises when `x` is a two's complement
+signed integer, so that `abs(typemin(x)) == typemin(x) < 0`, in which case the result of
+`uabs(x)` will be an unsigned integer of the same size.
+"""
+uabs(x::Integer) = abs(x)
+uabs(x::Signed) = unsigned(abs(x))
+
+function nextfloat(f::Union{Float16,Float32,Float64}, d::Integer)
+    F = typeof(f)
+    fumax = reinterpret(Unsigned, F(Inf))
+    U = typeof(fumax)
+
+    isnan(f) && return f
+    fi = reinterpret(Signed, f)
+    fneg = fi < 0
+    fu = unsigned(fi & typemax(fi))
+
+    dneg = d < 0
+    da = uabs(d)
+    if da > typemax(U)
+        fneg = dneg
+        fu = fumax
+    else
+        du = da % U
+        if fneg $ dneg
+            if du > fu
+                fu = min(fumax, du - fu)
+                fneg = !fneg
+            else
+                fu = fu - du
+            end
+        else
+            if fumax - fu < du
+                fu = fumax
+            else
+                fu = fu + du
+            end
+        end
     end
-    f = oftype(f, f + delta)
-    neg && f == 0 && return typemin(f)  # nextfloat(-5e-324) === -0.0
-    f < 0 ? oftype(f, -(f & typemax(f))) : f
+    if fneg
+        fu |= sign_mask(F)
+    end
+    reinterpret(F, fu)
 end
 
-nextfloat(x::Float16, i::Integer) =
-    (isinf(x)&&sign(x)==sign(i)) ? x : reinterpret(Float16,float_lex_order(reinterpret(Int16,x), i))
-nextfloat(x::Float32, i::Integer) =
-    (isinf(x)&&sign(x)==sign(i)) ? x : reinterpret(Float32,float_lex_order(reinterpret(Int32,x), i))
-nextfloat(x::Float64, i::Integer) =
-    (isinf(x)&&sign(x)==sign(i)) ? x : reinterpret(Float64,float_lex_order(reinterpret(Int64,x), i))
 nextfloat(x::AbstractFloat) = nextfloat(x,1)
 prevfloat(x::AbstractFloat) = nextfloat(x,-1)
 
@@ -421,6 +452,8 @@ bswap(x::Float64) = box(Float64,bswap_int(unbox(Float64,x)))
 # bit patterns
 reinterpret(::Type{Unsigned}, x::Float64) = reinterpret(UInt64,x)
 reinterpret(::Type{Unsigned}, x::Float32) = reinterpret(UInt32,x)
+reinterpret(::Type{Signed}, x::Float64) = reinterpret(Int64,x)
+reinterpret(::Type{Signed}, x::Float32) = reinterpret(Int32,x)
 
 sign_mask(::Type{Float64}) =        0x8000_0000_0000_0000
 exponent_mask(::Type{Float64}) =    0x7ff0_0000_0000_0000
