@@ -148,21 +148,29 @@ end
 
 show(io::IO, x::TypeConstructor) = show(io, x.body)
 
-function show_type_parameter(io::IO, p::ANY)
-    if p === String
-        print(io, "String")
-    else
+function show_type_parameter(io::IO, p::ANY, has_tvar_env::Bool)
+    if has_tvar_env
         show(io, p)
+    else
+        show(IOContext(io, :tvar_env, true), p)
     end
 end
 
 function show(io::IO, x::DataType)
     show(io, x.name)
-    if (!isempty(x.parameters) || x.name === Tuple.name) && x !== Tuple
+    # tvar_env is a `::Vector{Any}` when we are printing a method signature
+    # and `true` if we are printing type parameters outside a method signature.
+    has_tvar_env = get(io, :tvar_env, false) !== false
+    if ((!isempty(x.parameters) || x.name === Tuple.name) && x !== Tuple &&
+        !(has_tvar_env && x.name.primary === x))
+        # Do not print the type parameters for the primary type if we are
+        # printing a method signature or type parameter.
+        # Always print the type parameter if we are printing the type directly
+        # since this information is still useful.
         print(io, '{')
         n = length(x.parameters)
         for (i, p) in enumerate(x.parameters)
-            show_type_parameter(io, p)
+            show_type_parameter(io, p, has_tvar_env)
             i < n && print(io, ',')
         end
         print(io, '}')
@@ -922,13 +930,22 @@ function ismodulecall(ex::Expr)
 end
 
 function show(io::IO, tv::TypeVar)
+    # If `tvar_env` exist and we are in it, the type constraint are
+    # already printed and we don't need to print it again.
+    # Otherwise, the lower bound should be printed if it is not `Bottom`
+    # and the upper bound should be printed if it is not `Any`.
+    # The upper bound `Any` should also be printed if we are not in the
+    # existing `tvar_env` in order to resolve the ambiguity when printing a
+    # method signature.
+    # i.e. `foo{T,N}(::Array{T,N}, ::Vector)` should be printed as
+    # `foo{T,N}(::Array{T,N}, ::Array{T<:Any,1})`
     tvar_env = isa(io, IOContext) && get(io, :tvar_env, false)
     if isa(tvar_env, Vector{Any})
         have_env = true
         in_env = (tv in tvar_env::Vector{Any})
     else
         have_env = false
-        in_env = true
+        in_env = false
     end
     if !in_env && !is(tv.lb, Bottom)
         show(io, tv.lb)

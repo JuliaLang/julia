@@ -436,3 +436,11 @@ let x = [], y = []
     push!(y, x)
     @test replstr(x) == "1-element Array{Any,1}:\n Any[Any[Any[#= circular reference @-2 =#]]]"
 end
+
+# PR 16221
+# Printing of upper and lower bound of a TypeVar
+@test string(TypeVar(:V, Signed, Real, false)) == "Signed<:V<:Real"
+# Printing of primary type in type parameter place should not show the type
+# parameter names.
+@test string(Array) == "Array{T,N}"
+@test string(Tuple{Array}) == "Tuple{Array}"

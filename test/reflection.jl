@@ -225,11 +225,15 @@ let t13464 = "hey there sailor"
     end
 end
 
+# PR 13825
 let ex = :(a + b)
     @test string(ex) == "a + b"
     ex.typ = Integer
     @test string(ex) == "(a + b)::Integer"
 end
+foo13825{T,N}(::Array{T,N}, ::Array, ::Vector) = nothing
+@test startswith(string(first(methods(foo13825))),
+                 "foo13825{T,N}(::Array{T,N}, ::Array, ::Array{T<:Any,1})")
 
 type TLayout
     x::Int8
