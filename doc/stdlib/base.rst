@@ -514,13 +514,13 @@ Types
 
    .. Docstring generated from Julia source
 
-   Extract a named field from a ``value`` of composite type. The syntax ``a.b`` calls ``getfield(a, :b)``\ , and the syntax ``a.(b)`` calls ``getfield(a, b)``\ .
+   Extract a named field from a ``value`` of composite type. The syntax ``a.b`` calls ``getfield(a, :b)``\ .
 
 .. function:: setfield!(value, name::Symbol, x)
 
    .. Docstring generated from Julia source
 
-   Assign ``x`` to a named field in ``value`` of composite type. The syntax ``a.b = c`` calls ``setfield!(a, :b, c)``\ , and the syntax ``a.(b) = c`` calls ``setfield!(a, b, c)``\ .
+   Assign ``x`` to a named field in ``value`` of composite type. The syntax ``a.b = c`` calls ``setfield!(a, :b, c)``\ .
 
 .. function:: fieldoffset(type, i)
 
