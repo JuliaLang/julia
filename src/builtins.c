@@ -948,7 +948,8 @@ static void jl_check_type_tuple(jl_value_t *t, jl_sym_t *name, const char *ctx)
 JL_CALLABLE(jl_f_applicable)
 {
     JL_NARGSV(applicable, 1);
-    return jl_method_lookup(jl_gf_mtable(args[0]), args, nargs, 1) != NULL ?
+    jl_typemap_entry_t *entry;
+    return jl_method_lookup(jl_gf_mtable(args[0]), args, nargs, 1, &entry) != NULL ?
         jl_true : jl_false;
 }
 
