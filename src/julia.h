@@ -453,8 +453,6 @@ extern JL_DLLEXPORT jl_typename_t *jl_vecelement_typename;
 extern JL_DLLEXPORT jl_datatype_t *jl_anytuple_type;
 #define jl_tuple_type jl_anytuple_type
 extern JL_DLLEXPORT jl_datatype_t *jl_anytuple_type_type;
-extern JL_DLLEXPORT jl_datatype_t *jl_ntuple_type;
-extern JL_DLLEXPORT jl_typename_t *jl_ntuple_typename;
 extern JL_DLLEXPORT jl_datatype_t *jl_vararg_type;
 extern JL_DLLEXPORT jl_datatype_t *jl_tvar_type;
 extern JL_DLLEXPORT jl_datatype_t *jl_task_type;
@@ -952,24 +950,6 @@ STATIC_INLINE int is_vecelement_type(jl_value_t* t)
             ((jl_datatype_t*)(t))->name == jl_vecelement_typename);
 }
 
-STATIC_INLINE int jl_is_vararg_type(jl_value_t *v)
-{
-    return (jl_is_datatype(v) &&
-            ((jl_datatype_t*)(v))->name == jl_vararg_type->name);
-}
-
-STATIC_INLINE int jl_is_va_tuple(jl_datatype_t *t)
-{
-    size_t l = jl_svec_len(t->parameters);
-    return (l>0 && jl_is_vararg_type(jl_tparam(t,l-1)));
-}
-
-STATIC_INLINE int jl_is_ntuple_type(jl_value_t *v)
-{
-    return (jl_is_datatype(v) &&
-            ((jl_datatype_t*)v)->name == jl_ntuple_typename);
-}
-
 STATIC_INLINE int jl_is_type_type(jl_value_t *v)
 {
     return (jl_is_datatype(v) &&
@@ -1085,6 +1065,52 @@ JL_DLLEXPORT int jl_get_size(jl_value_t *val, size_t *pnt);
 #define jl_is_long(x)    jl_is_int32(x)
 #define jl_long_type     jl_int32_type
 #endif
+
+// Each tuple can exist in one of 4 Vararg states:
+//   NONE: no vararg                            Tuple{Int,Float32}
+//   INT: vararg with integer length            Tuple{Int,Vararg{Float32,2}}
+//   BOUND: vararg with bound TypeVar length    Tuple{Int,Vararg{Float32,N}}
+//   UNBOUND: vararg with unbound length        Tuple{Int,Vararg{Float32}}
+typedef enum {
+    JL_VARARG_NONE    = 0,
+    JL_VARARG_INT     = 1,
+    JL_VARARG_BOUND   = 2,
+    JL_VARARG_UNBOUND = 3
+} jl_vararg_kind_t;
+
+STATIC_INLINE int jl_is_vararg_type(jl_value_t *v)
+{
+    return (jl_is_datatype(v) &&
+            ((jl_datatype_t*)(v))->name == jl_vararg_type->name);
+}
+
+STATIC_INLINE jl_vararg_kind_t jl_vararg_kind(jl_value_t *v)
+{
+    if (!jl_is_vararg_type(v))
+        return JL_VARARG_NONE;
+    jl_value_t *lenv = jl_tparam1(v);
+    if (jl_is_long(lenv))
+        return JL_VARARG_INT;
+    if (jl_is_typevar(lenv))
+        return ((jl_tvar_t*)lenv)->bound ? JL_VARARG_BOUND : JL_VARARG_UNBOUND;
+    return JL_VARARG_UNBOUND;
+}
+
+STATIC_INLINE int jl_is_va_tuple(jl_datatype_t *t)
+{
+    assert(jl_is_tuple_type(t));
+    size_t l = jl_svec_len(t->parameters);
+    return (l>0 && jl_is_vararg_type(jl_tparam(t,l-1)));
+}
+
+STATIC_INLINE jl_vararg_kind_t jl_va_tuple_kind(jl_datatype_t *t)
+{
+    assert(jl_is_tuple_type(t));
+    size_t l = jl_svec_len(t->parameters);
+    if (l == 0)
+        return JL_VARARG_NONE;
+    return jl_vararg_kind(jl_tparam(t,l-1));
+}
 
 // structs
 JL_DLLEXPORT int         jl_field_index(jl_datatype_t *t, jl_sym_t *fld, int err);

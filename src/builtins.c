@@ -1129,7 +1129,6 @@ void jl_init_primitives(void)
     add_builtin("TypeName", (jl_value_t*)jl_typename_type);
     add_builtin("TypeConstructor", (jl_value_t*)jl_typector_type);
     add_builtin("Tuple", (jl_value_t*)jl_anytuple_type);
-    add_builtin("NTuple", (jl_value_t*)jl_ntuple_type);
     add_builtin("Vararg", (jl_value_t*)jl_vararg_type);
     add_builtin("Type", (jl_value_t*)jl_type_type);
     add_builtin("DataType", (jl_value_t*)jl_datatype_type);
@@ -1580,7 +1579,7 @@ JL_DLLEXPORT void jl_(void *jl_value)
 
 JL_DLLEXPORT void jl_breakpoint(jl_value_t *v)
 {
-    // put a breakpoint in you debugger here
+    // put a breakpoint in your debugger here
 }
 
 #ifdef __cplusplus
