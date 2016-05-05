@@ -30,9 +30,9 @@ export
 
 function pwd()
     b = Array(UInt8,1024)
-    len = Csize_t[length(b),]
+    len = Ref{Csize_t}(length(b))
     uv_error(:getcwd, ccall(:uv_cwd, Cint, (Ptr{UInt8}, Ptr{Csize_t}), b, len))
-    bytestring(b[1:len[1]-1])
+    bytestring(b[1:len[]])
 end
 
 function cd(dir::AbstractString)
@@ -275,32 +275,31 @@ function mktempdir(fn::Function, parent=tempdir())
     end
 end
 
+immutable uv_dirent_t
+    name::Ptr{UInt8}
+    typ::Cint
+end
 function readdir(path::AbstractString)
     # Allocate space for uv_fs_t struct
     uv_readdir_req = zeros(UInt8, ccall(:jl_sizeof_uv_fs_t, Int32, ()))
 
     # defined in sys.c, to call uv_fs_readdir, which sets errno on error.
-    file_count = ccall(:jl_readdir, Int32, (Cstring, Ptr{UInt8}),
-                        path, uv_readdir_req)
-    systemerror("unable to read directory $path", file_count < 0)
+    err = ccall(:uv_fs_scandir, Int32, (Ptr{Void}, Ptr{UInt8}, Cstring, Cint, Ptr{Void}),
+                eventloop(), uv_readdir_req, path, 0, C_NULL)
+    err < 0 && throw(SystemError("unable to read directory $path", -err))
+    #uv_error("unable to read directory $path", err)
 
-    # The list of dir entries is returned as a contiguous sequence of null-terminated
-    # strings, the first of which is pointed to by ptr in uv_readdir_req.
-    # The following lines extracts those strings into dirent
+    # iterate the listing into entries
     entries = String[]
-    offset = 0
-
-    for i = 1:file_count
-        entry = bytestring(ccall(:jl_uv_fs_t_ptr_offset, Cstring,
-                                 (Ptr{UInt8}, Int32), uv_readdir_req, offset))
-        push!(entries, entry)
-        offset += sizeof(entry) + 1   # offset to the next entry
+    ent = Ref{uv_dirent_t}()
+    while Base.UV_EOF != ccall(:uv_fs_scandir_next, Cint, (Ptr{Void}, Ptr{uv_dirent_t}), uv_readdir_req, ent)
+        push!(entries, bytestring(ent[].name))
     end
 
     # Clean up the request string
     ccall(:jl_uv_fs_req_cleanup, Void, (Ptr{UInt8},), uv_readdir_req)
 
-    entries
+    return entries
 end
 
 readdir() = readdir(".")
