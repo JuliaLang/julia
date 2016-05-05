@@ -86,6 +86,8 @@ case $(uname) in
 esac
 
 # Download most recent Julia binary for dependencies
+# Fix directory not found error during decompression on msys2
+mkdir -p usr/Git/usr
 if ! [ -e julia-installer.exe ]; then
   f=julia-latest-win$bits.exe
   echo "Downloading $f"
