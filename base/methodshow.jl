@@ -15,15 +15,39 @@ function argtype_decl(env, n, t) # -> (argname, argtype)
         return s, ""
     end
     if isvarargtype(t)
-        if t.parameters[1] === Any
-            return string(s, "..."), ""
-        else
-            return s, string_with_env(env, t.parameters[1]) * "..."
+        tt, tn = t.parameters[1], t.parameters[2]
+        if isa(tn, TypeVar) && !tn.bound
+            if tt === Any || (isa(tt, TypeVar) && !tt.bound)
+                return string(s, "..."), ""
+            else
+                return s, string_with_env(env, tt) * "..."
+            end
         end
+        return s, string_with_env(env, "Vararg{", tt, ",", tn, "}")
     elseif t == String
         return s, "String"
     end
     return s, string_with_env(env, t)
+end
+
+function argtype_decl_vararg(env, n, t)
+    if isa(n, Expr)
+        s = string(n.args[1])
+        if n.args[2].head == :...
+            # x... or x::T... declaration
+            if t.parameters[1] === Any
+                return string(s, "..."), ""
+            else
+                return s, string_with_env(env, t.parameters[1]) * "..."
+            end
+        elseif t == String
+            return s, "String"
+        end
+    end
+    # x::Vararg, x::Vararg{T}, or x::Vararg{T,N} declaration
+    s, length(n.args[2].args) < 4 ?
+       string_with_env(env, "Vararg{", t.parameters[1], "}") :
+       string_with_env(env, "Vararg{", t.parameters[1], ",", t.parameters[2], "}")
 end
 
 function arg_decl_parts(m::Method)
