@@ -3487,7 +3487,7 @@ digits
     bytes2hex(bin_arr::Array{UInt8, 1})
 
 Convert an array of bytes to its hexadecimal representation. All characters are in
-lower-case. Returns an `String`.
+lower-case. Returns a `String`.
 """
 bytes2hex
 
