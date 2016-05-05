@@ -1587,16 +1587,23 @@
                                lhss)
                         ,rr))))))
       ((symbol-like? lhs)
-       `(= ,(cadr e) ,(expand-forms (caddr e))))
+       `(= ,lhs ,(expand-forms (caddr e))))
       ((atom? lhs)
        (error (string "invalid assignment location \"" (deparse lhs) "\"")))
       (else
        (case (car lhs)
          ((|.|)
           ;; a.b =
-          (let ((a   (cadr (cadr e)))
-                (b   (caddr (cadr e)))
-                (rhs (caddr e)))
+          (let* ((a   (cadr lhs))
+                 (b_  (caddr lhs))
+                 (b   (if (and (length= b_ 2) (eq? (car b_) 'tuple))
+                          (begin
+                            (syntax-deprecation #f
+                             (string (deparse a) ".(" (deparse (cadr b_)) ") = ...")
+                             (string "setfield!(" (deparse a) ", " (deparse (cadr b_)) ", ...)"))
+                            (cadr b_))
+                          b_))
+                 (rhs (caddr e)))
             (let ((aa (if (symbol-like? a) a (make-ssavalue)))
                   (bb (if (or (atom? b) (symbol-like? b) (and (pair? b) (quoted? b)))
                           b (make-ssavalue)))
