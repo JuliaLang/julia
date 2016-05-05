@@ -2477,6 +2477,11 @@ end
 @test nextfloat(1.0,big(2)^67) == Inf
 @test nextfloat(1.0,-big(2)^67) == -Inf
 
+for F in (Float16,Float32,Float64)
+    @test reinterpret(Unsigned,one(F)) === Base.exponent_one(F)
+    @test reinterpret(Signed,one(F)) === signed(Base.exponent_one(F))
+end
+
 
 @test eps(realmax(Float64)) == 1.99584030953472e292
 @test eps(-realmax(Float64)) == 1.99584030953472e292
