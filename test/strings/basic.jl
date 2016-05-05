@@ -249,12 +249,12 @@ let s = "ba\0d"
     @test_throws ArgumentError Base.unsafe_convert(Cwstring, wstring(s))
 end
 
-cstrdup(s) = @windows? ccall(:_strdup, Cstring, (Cstring,), s) : ccall(:strdup, Cstring, (Cstring,), s)
+cstrdup(s) = @static is_windows() ? ccall(:_strdup, Cstring, (Cstring,), s) : ccall(:strdup, Cstring, (Cstring,), s)
 let p = cstrdup("hello")
     @test String(p) == "hello" == pointer_to_string(cstrdup(p), true)
     Libc.free(p)
 end
-let p = @windows? ccall(:_wcsdup, Cwstring, (Cwstring,), "tést") : ccall(:wcsdup, Cwstring, (Cwstring,), "tést")
+let p = @static is_windows() ? ccall(:_wcsdup, Cwstring, (Cwstring,), "tést") : ccall(:wcsdup, Cwstring, (Cwstring,), "tést")
     @test wstring(p) == "tést"
     Libc.free(p)
 end

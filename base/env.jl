@@ -1,29 +1,6 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
-@unix_only begin
-
-_getenv(var::AbstractString) = ccall(:getenv, Cstring, (Cstring,), var)
-_hasenv(s::AbstractString) = _getenv(s) != C_NULL
-
-function access_env(onError::Function, var::AbstractString)
-    val = _getenv(var)
-    val == C_NULL ? onError(var) : String(val)
-end
-
-function _setenv(var::AbstractString, val::AbstractString, overwrite::Bool=true)
-    ret = ccall(:setenv, Int32, (Cstring,Cstring,Int32), var, val, overwrite)
-    systemerror(:setenv, ret != 0)
-end
-
-function _unsetenv(var::AbstractString)
-    ret = ccall(:unsetenv, Int32, (Cstring,), var)
-    systemerror(:unsetenv, ret != 0)
-end
-
-end # @unix_only
-
-@windows_only begin
-
+if is_windows()
 const ERROR_ENVVAR_NOT_FOUND = UInt32(203)
 
 _getenvlen(var::Vector{UInt16}) = ccall(:GetEnvironmentVariableW,stdcall,UInt32,(Ptr{UInt16},Ptr{UInt16},UInt32),var,C_NULL,0)
@@ -60,7 +37,26 @@ function _unsetenv(svar::AbstractString)
     systemerror(:setenv, ret == 0)
 end
 
-end # @windows_only
+else # !windows
+_getenv(var::AbstractString) = ccall(:getenv, Cstring, (Cstring,), var)
+_hasenv(s::AbstractString) = _getenv(s) != C_NULL
+
+function access_env(onError::Function, var::AbstractString)
+    val = _getenv(var)
+    val == C_NULL ? onError(var) : String(val)
+end
+
+function _setenv(var::AbstractString, val::AbstractString, overwrite::Bool=true)
+    ret = ccall(:setenv, Int32, (Cstring,Cstring,Int32), var, val, overwrite)
+    systemerror(:setenv, ret != 0)
+end
+
+function _unsetenv(var::AbstractString)
+    ret = ccall(:unsetenv, Int32, (Cstring,), var)
+    systemerror(:unsetenv, ret != 0)
+end
+
+end # os test
 
 ## ENV: hash interface ##
 
@@ -86,25 +82,7 @@ delete!(::EnvHash, k::AbstractString, def) = haskey(ENV,k) ? delete!(ENV,k) : de
 setindex!(::EnvHash, v, k::AbstractString) = _setenv(k,string(v))
 push!(::EnvHash, k::AbstractString, v) = setindex!(ENV, v, k)
 
-@unix_only begin
-start(::EnvHash) = 0
-done(::EnvHash, i) = (ccall(:jl_environ, Any, (Int32,), i) === nothing)
-
-function next(::EnvHash, i)
-    env = ccall(:jl_environ, Any, (Int32,), i)
-    if env === nothing
-        throw(BoundsError())
-    end
-    env::String
-    m = match(r"^(.*?)=(.*)$"s, env)
-    if m === nothing
-        error("malformed environment entry: $env")
-    end
-    (Pair{String,String}(m.captures[1], m.captures[2]), i+1)
-end
-end
-
-@windows_only begin
+if is_windows()
 start(hash::EnvHash) = (pos = ccall(:GetEnvironmentStringsW,stdcall,Ptr{UInt16},()); (pos,pos))
 function done(hash::EnvHash, block::Tuple{Ptr{UInt16},Ptr{UInt16}})
     if unsafe_load(block[1]) == 0
@@ -126,7 +104,25 @@ function next(hash::EnvHash, block::Tuple{Ptr{UInt16},Ptr{UInt16}})
     end
     (Pair{String,String}(m.captures[1], m.captures[2]), (pos+len*2, blk))
 end
+
+else # !windows
+start(::EnvHash) = 0
+done(::EnvHash, i) = (ccall(:jl_environ, Any, (Int32,), i) === nothing)
+
+function next(::EnvHash, i)
+    env = ccall(:jl_environ, Any, (Int32,), i)
+    if env === nothing
+        throw(BoundsError())
+    end
+    env::String
+    m = match(r"^(.*?)=(.*)$"s, env)
+    if m === nothing
+        error("malformed environment entry: $env")
+    end
+    (Pair{String,String}(m.captures[1], m.captures[2]), i+1)
 end
+
+end # os-test
 
 #TODO: Make these more efficent
 function length(::EnvHash)

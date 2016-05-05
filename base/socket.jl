@@ -779,7 +779,7 @@ function getsockname(sock::Union{TCPServer,TCPSocket})
             addrv4 = raddress[1:4]
             naddr = ntoh(unsafe_load(Ptr{Cuint}(pointer(addrv4)), 1))
             addr = IPv4(naddr)
-        elseif rfamily[] == @windows? 23 : (@osx? 30 : 10) # AF_INET6
+        elseif rfamily[] == @static is_windows() ? 23 : (@static is_apple() ? 30 : 10) # AF_INET6
             naddr = ntoh(unsafe_load(Ptr{UInt128}(pointer(raddress)), 1))
             addr = IPv6(naddr)
         else

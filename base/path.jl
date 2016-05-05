@@ -16,7 +16,7 @@ export
     splitdrive,
     splitext
 
-@unix_only begin
+if is_unix()
     const path_separator    = "/"
     const path_separator_re = r"/+"
     const path_absolute_re  = r"^/"
@@ -26,8 +26,7 @@ export
 
     splitdrive(path::AbstractString) = ("",path)
     homedir() = ENV["HOME"]
-end
-@windows_only begin
+elseif is_windows()
     const path_separator    = "\\"
     const path_separator_re = r"[/\\]+"
     const path_absolute_re  = r"^(?:\w+:)?[/\\]"
@@ -40,6 +39,8 @@ end
         String(m.captures[1]), String(m.captures[2])
     end
     homedir() = get(ENV,"HOME",string(ENV["HOMEDRIVE"],ENV["HOMEPATH"]))
+else
+    error("path primitives for this OS need to be defined")
 end
 
 isabspath(path::AbstractString) = ismatch(path_absolute_re, path)
@@ -124,7 +125,8 @@ normpath(a::AbstractString, b::AbstractString...) = normpath(joinpath(a,b...))
 abspath(a::AbstractString) = normpath(isabspath(a) ? a : joinpath(pwd(),a))
 abspath(a::AbstractString, b::AbstractString...) = abspath(joinpath(a,b...))
 
-@windows_only function realpath(path::AbstractString)
+if is_windows()
+function realpath(path::AbstractString)
     path = cwstring(path)
     buf = zeros(UInt16, length(path))
     while true
@@ -138,7 +140,7 @@ abspath(a::AbstractString, b::AbstractString...) = abspath(joinpath(a,b...))
     end
 end
 
-@windows_only function longpath(path::AbstractString)
+function longpath(path::AbstractString)
     path = cwstring(path)
     buf = zeros(UInt16, length(path))
     while true
@@ -152,16 +154,20 @@ end
     end
 end
 
-@unix_only function realpath(path::AbstractString)
+else # !windows
+function realpath(path::AbstractString)
     p = ccall(:realpath, Ptr{UInt8}, (Cstring, Ptr{UInt8}), path, C_NULL)
     systemerror(:realpath, p == C_NULL)
     s = String(p)
     Libc.free(p)
     return s
 end
+end # os-test
 
-@windows_only expanduser(path::AbstractString) = path # on windows, ~ means "temporary file"
-@unix_only function expanduser(path::AbstractString)
+if is_windows()
+expanduser(path::AbstractString) = path # on windows, ~ means "temporary file"
+else
+function expanduser(path::AbstractString)
     i = start(path)
     c, i = next(path,i)
     if c != '~' return path end
@@ -169,6 +175,7 @@ end
     c, j = next(path,i)
     if c == '/' return homedir()*path[i:end] end
     throw(ArgumentError("~user tilde expansion not yet implemented"))
+end
 end
 
 function relpath(path::AbstractString, startpath::AbstractString = ".")

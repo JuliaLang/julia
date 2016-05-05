@@ -153,7 +153,7 @@ General Parallel Computing Support
 
    .. Docstring generated from Julia source
 
-   Equivalent to ``addprocs(CPU_CORES)``
+   Equivalent to ``addprocs(Sys.CPU_CORES)``
 
    Note that workers do not run a ``.juliarc.jl`` startup script, nor do they synchronize their global state (such as global variables, new method definitions, and loaded modules) with any of the other running processes.
 

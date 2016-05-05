@@ -3,10 +3,10 @@
 module Sys
 
 export  CPU_CORES,
-        OS_NAME,
         WORD_SIZE,
         ARCH,
         MACHINE,
+        KERNEL,
         JIT,
         cpu_info,
         cpu_name,
@@ -16,27 +16,54 @@ export  CPU_CORES,
         free_memory,
         total_memory
 
-import ..Base: WORD_SIZE, OS_NAME, ARCH, MACHINE
-import ..Base: show, uv_error
+import ..Base: show
 
 global CPU_CORES
-
-function __init__()
-    # set CPU core count
-    global const CPU_CORES =
-        haskey(ENV,"JULIA_CPU_CORES") ? parse(Int,ENV["JULIA_CPU_CORES"]) :
-                                        Int(ccall(:jl_cpu_cores, Int32, ()))
-    global const SC_CLK_TCK = ccall(:jl_SC_CLK_TCK, Clong, ())
-    global const cpu_name = ccall(:jl_get_cpu_name, Ref{String}, ())
-    global const JIT = ccall(:jl_get_JIT, Ref{String}, ())
-end
-
 """
-    CPU_CORES
+    Sys.CPU_CORES
 
 The number of CPU cores in the system.
 """
 :CPU_CORES
+
+"""
+    Sys.ARCH
+
+A symbol representing the architecture of the build configuration.
+"""
+const ARCH = ccall(:jl_get_ARCH, Any, ())
+
+
+"""
+    Sys.KERNEL
+
+A symbol representing the name of the operating system, as returned by `uname` of the build configuration.
+"""
+const KERNEL = ccall(:jl_get_UNAME, Any, ())
+
+"""
+    Sys.MACHINE
+
+A string containing the build triple.
+"""
+const MACHINE = Base.MACHINE
+
+"""
+    Sys.WORD_SIZE
+
+Standard word size on the current machine, in bits.
+"""
+const WORD_SIZE = Core.sizeof(Int) * 8
+
+function __init__()
+    # set CPU core count
+    global CPU_CORES =
+        haskey(ENV,"JULIA_CPU_CORES") ? parse(Int,ENV["JULIA_CPU_CORES"]) :
+                                        Int(ccall(:jl_cpu_cores, Int32, ()))
+    global SC_CLK_TCK = ccall(:jl_SC_CLK_TCK, Clong, ())
+    global cpu_name = ccall(:jl_get_cpu_name, Ref{String}, ())
+    global JIT = ccall(:jl_get_JIT, Ref{String}, ())
+end
 
 type UV_cpu_info_t
     model::Ptr{UInt8}
@@ -61,36 +88,17 @@ CPUinfo(info::UV_cpu_info_t) = CPUinfo(String(info.model), info.speed,
     info.cpu_times!user, info.cpu_times!nice, info.cpu_times!sys,
     info.cpu_times!idle, info.cpu_times!irq)
 
-function show(io::IO, info::CPUinfo, header::Bool=true, prefix::AbstractString="    ")
-    tck = SC_CLK_TCK
-    if header
-        println(io, info.model, ": ")
-        print(io, " "^length(prefix))
-        if tck > 0
-            @printf io "    %5s    %9s    %9s    %9s    %9s    %9s\n" "speed" "user" "nice" "sys" "idle" "irq"
-        else
-            @printf io "    %5s    %9s  %9s  %9s  %9s  %9s ticks\n" "speed" "user" "nice" "sys" "idle" "irq"
-        end
-    end
-    print(io, prefix)
-    if tck > 0
-        @printf io "%5d MHz  %9d s  %9d s  %9d s  %9d s  %9d s" info.speed info.cpu_times!user/tck info.cpu_times!nice/tck info.cpu_times!sys/tck info.cpu_times!idle/tck info.cpu_times!irq/tck
-    else
-        @printf io "%5d MHz  %9d  %9d  %9d  %9d  %9d ticks" info.speed info.cpu_times!user info.cpu_times!nice info.cpu_times!sys info.cpu_times!idle info.cpu_times!irq
-    end
-end
-
 function _cpu_summary(io::IO, cpu::Array{CPUinfo}, i, j)
     if j-i < 9
         header = true
         for x = i:j
-            if header == false println(io) end
-            show(io,cpu[x],header,"#$(x-i+1) ")
+            header || println(io)
+            show(io, cpu[x], header, "#$(x-i+1) ")
             header = false
         end
     else
         summary = CPUinfo(cpu[i].model,0,0,0,0,0,0)
-        count = j-i+1
+        count = j - i + 1
         for x = i:j
             summary.speed += cpu[i].speed
             summary.cpu_times!user += cpu[x].cpu_times!user
@@ -100,7 +108,7 @@ function _cpu_summary(io::IO, cpu::Array{CPUinfo}, i, j)
             summary.cpu_times!irq += cpu[x].cpu_times!irq
         end
         summary.speed = div(summary.speed,count)
-        show(io,summary,true,"#1-$(count) ")
+        show(io, summary, true, "#1-$(count) ")
     end
     println(io)
 end
@@ -110,17 +118,17 @@ function cpu_summary(io::IO=STDOUT, cpu::Array{CPUinfo}=cpu_info())
     first = 1
     for i = 2:length(cpu)
         if model != cpu[i].model
-            _cpu_summary(io,cpu,first,i-1)
+            _cpu_summary(io, cpu, first, i-1)
             first = i
         end
     end
-    _cpu_summary(io,cpu,first,length(cpu))
+    _cpu_summary(io, cpu, first, length(cpu))
 end
 
 function cpu_info()
     UVcpus = Array(Ptr{UV_cpu_info_t},1)
     count = Array(Int32,1)
-    uv_error("uv_cpu_info",ccall(:uv_cpu_info, Int32, (Ptr{Ptr{UV_cpu_info_t}}, Ptr{Int32}), UVcpus, count))
+    Base.uv_error("uv_cpu_info",ccall(:uv_cpu_info, Int32, (Ptr{Ptr{UV_cpu_info_t}}, Ptr{Int32}), UVcpus, count))
     cpus = Array(CPUinfo,count[1])
     for i = 1:length(cpus)
         cpus[i] = CPUinfo(unsafe_load(UVcpus[1],i))
@@ -131,7 +139,7 @@ end
 
 function uptime()
     uptime_ = Array(Float64,1)
-    uv_error("uv_uptime",ccall(:uv_uptime, Int32, (Ptr{Float64},), uptime_))
+    Base.uv_error("uv_uptime",ccall(:uv_uptime, Int32, (Ptr{Float64},), uptime_))
     return uptime_[1]
 end
 
@@ -147,14 +155,33 @@ total_memory() = ccall(:uv_get_total_memory, UInt64, ())
 function get_process_title()
     buf = zeros(UInt8, 512)
     err = ccall(:uv_get_process_title, Cint, (Ptr{UInt8}, Cint), buf, 512)
-    uv_error("get_process_title", err)
+    Base.uv_error("get_process_title", err)
     return String(pointer(buf))
 end
+
 function set_process_title(title::AbstractString)
     err = ccall(:uv_set_process_title, Cint, (Cstring,), title)
-    uv_error("set_process_title", err)
+    Base.uv_error("set_process_title", err)
 end
 
 maxrss() = ccall(:jl_maxrss, Csize_t, ())
+
+if is_windows()
+    function windows_version()
+        verinfo = ccall(:GetVersion, UInt32, ())
+        (Int(verinfo & 0xFF), Int((verinfo >> 8) & 0xFF))
+    end
+else
+    windows_version() = (0, 0)
+end
+"""
+    windows_version()
+
+Returns the version number for the Windows NT Kernel as a (major, minor) pair,
+or (0, 0) if this is not running on Windows.
+"""
+windows_version
+
+const WINDOWS_VISTA_VER = (6, 0)
 
 end # module Sys

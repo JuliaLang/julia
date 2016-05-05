@@ -226,7 +226,7 @@ test_indexing(RemoteChannel(id_other))
 
 dims = (20,20,20)
 
-@linux_only begin
+if is_linux()
     S = SharedArray(Int64, dims)
     @test startswith(S.segname, "/jl")
     @test !ispath("/dev/shm" * S.segname)
@@ -357,7 +357,8 @@ read!(fn3, filedata)
 @test all(filedata[1:4] .== 0x01)
 @test all(filedata[5:end] .== 0x02)
 
-@unix_only begin # these give unlink: operation not permitted (EPERM) on Windows
+if !is_windows()
+    # these give unlink: operation not permitted (EPERM) on Windows
     rm(fn); rm(fn2); rm(fn3)
 end
 
@@ -820,7 +821,7 @@ if DoFullTest
     end
     sleep(0.5)  # Give some time for the above error to be printed
 
-@unix_only begin
+if is_unix() # aka have ssh
     function test_n_remove_pids(new_pids)
         for p in new_pids
             w_in_remote = sort(remotecall_fetch(workers, p))
@@ -880,8 +881,8 @@ if DoFullTest
     end)
     @test length(new_pids) == num_workers
     test_n_remove_pids(new_pids)
-end # @unix_only
-end
+end # unix-only
+end # full-test
 
 # issue #7727
 let A = [], B = []

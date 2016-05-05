@@ -69,6 +69,6 @@ cd(dirname(@__FILE__)) do
         runtests("compile")
     end
 
-    @unix_only n > 1 && rmprocs(workers(), waitfor=5.0)
+    is_unix() && n > 1 && rmprocs(workers(), waitfor=5.0)
     println("    \033[32;1mSUCCESS\033[0m")
 end

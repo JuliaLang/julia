@@ -137,7 +137,7 @@ immutable FileRedirect
     filename::AbstractString
     append::Bool
     function FileRedirect(filename, append)
-        if lowercase(filename) == (@unix? "/dev/null" : "nul")
+        if lowercase(filename) == (@static is_windows() ? "nul" : "/dev/null")
             warn_once("for portability use DevNull instead of a file redirect")
         end
         new(filename, append)

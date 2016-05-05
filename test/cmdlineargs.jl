@@ -58,11 +58,11 @@ let exename = `$(Base.julia_cmd()) --precompiled=yes`
 
     # --cpu-target
     # NOTE: this test only holds true when there is a sys.{dll,dylib,so} shared library present.
-    # The tests are also limited to unix platforms at the moment because loading the system image
-    # not turned on for Window's binary builds at the moment.
-    @unix_only if Libdl.dlopen_e(splitext(String(Base.JLOptions().image_file))[1]) != C_NULL
-        @test !success(`$exename -C invalidtarget`)
-        @test !success(`$exename --cpu-target=invalidtarget`)
+    if Libdl.dlopen_e(splitext(String(Base.JLOptions().image_file))[1]) != C_NULL
+        @test !success(`$exename -C invalidtarget --precompiled=yes`)
+        @test !success(`$exename --cpu-target=invalidtarget --precompiled=yes`)
+    else
+        warn("--cpu-target test not runnable")
     end
 
     # --procs
@@ -165,23 +165,24 @@ let exename = `$(Base.julia_cmd()) --precompiled=yes`
 
         @test !success(`$exename -E "$code" --depwarn=error`)
 
-        # FIXME these should also be run on windows once the bug causing them to hang gets fixed
-        @unix_only let out  = Pipe(),
-                       proc = spawn(pipeline(`$exename -E "$code" --depwarn=yes`, stderr=out))
+        let out  = Pipe(),
+            proc = spawn(pipeline(`$exename -E "$code" --depwarn=yes`, stderr=out)),
+            output = @async readchomp(out)
 
-            wait(proc)
             close(out.in)
+            wait(proc)
             @test success(proc)
-            @test readchomp(out) == "WARNING: Foo.Deprecated is deprecated.\n  likely near no file:5"
+            @test wait(output) == "WARNING: Foo.Deprecated is deprecated.\n  likely near no file:5"
         end
 
-        @unix_only let out  = Pipe(),
-                       proc = spawn(pipeline(`$exename -E "$code" --depwarn=no`, stderr=out))
+        let out  = Pipe(),
+            proc = spawn(pipeline(`$exename -E "$code" --depwarn=no`, stderr=out))
+            output = @async readstring(out)
 
             wait(proc)
             close(out.in)
             @test success(proc)
-            @test isempty(readstring(out))
+            @test wait(output) == ""
         end
     end
 
@@ -252,7 +253,7 @@ let exename = `$(Base.julia_cmd()) --precompiled=yes`
     @test readchomp(`$exename -e 'println(ARGS);' ''`) == "String[\"\"]"
 
     # issue #12679
-    extrapath = @windows? joinpath(JULIA_HOME,"..","Git","usr","bin")*";" : ""
+    extrapath = is_windows() ? joinpath(JULIA_HOME, "..", "Git", "usr", "bin") * ";" : ""
     withenv("PATH" => extrapath * ENV["PATH"]) do
         @test readchomp(pipeline(ignorestatus(`$exename -f --compile=yes -foo`),stderr=`cat`)) == "ERROR: unknown option `-o`"
         @test readchomp(pipeline(ignorestatus(`$exename -f -p`),stderr=`cat`)) == "ERROR: option `-p/--procs` is missing an argument"
@@ -267,7 +268,9 @@ let exename = `$(Base.julia_cmd()) --precompiled=yes`
     @test !success(`$exename --compilecache=foo -e "exit(0)"`)
 
     # issue #12671, starting from a non-directory
-    @unix_only if VersionNumber(Base.libllvm_version) > v"3.3"
+    # rm(dir) fails on windows with Permission denied
+    # and was an upstream bug in llvm <= v3.3
+    if !is_windows() && VersionNumber(Base.libllvm_version) > v"3.3"
         testdir = mktempdir()
         cd(testdir) do
             rm(testdir)

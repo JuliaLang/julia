@@ -477,8 +477,13 @@ complex(S1::SharedArray,S2::SharedArray) = convert(SharedArray, complex(S1.s, S2
 
 function print_shmem_limits(slen)
     try
-        @linux_only pfx = "kernel"
-        @osx_only pfx = "kern.sysv"
+        if is_linux()
+            pfx = "kernel"
+        elseif is_apple()
+            pfx = "kern.sysv"
+        else
+            return
+        end
 
         shmmax_MB = div(parse(Int, split(readstring(`sysctl $(pfx).shmmax`))[end]), 1024*1024)
         page_size = parse(Int, split(readstring(`getconf PAGE_SIZE`))[end])
@@ -521,8 +526,18 @@ end
 
 # platform-specific code
 
-@unix_only begin
+if is_windows()
+function _shm_mmap_array(T, dims, shm_seg_name, mode)
+    readonly = !((mode & JL_O_RDWR) == JL_O_RDWR)
+    create = (mode & JL_O_CREAT) == JL_O_CREAT
+    s = Mmap.Anonymous(shm_seg_name, readonly, create)
+    Mmap.mmap(s, Array{T,length(dims)}, dims, zero(Int64))
+end
 
+# no-op in windows
+shm_unlink(shm_seg_name) = 0
+
+else # !windows
 function _shm_mmap_array(T, dims, shm_seg_name, mode)
     fd_mem = shm_open(shm_seg_name, mode, S_IRUSR | S_IWUSR)
     systemerror("shm_open() failed for " * shm_seg_name, fd_mem < 0)
@@ -542,18 +557,4 @@ end
 shm_unlink(shm_seg_name) = ccall(:shm_unlink, Cint, (Cstring,), shm_seg_name)
 shm_open(shm_seg_name, oflags, permissions) = ccall(:shm_open, Cint, (Cstring, Cint, Cmode_t), shm_seg_name, oflags, permissions)
 
-end # @unix_only
-
-@windows_only begin
-
-function _shm_mmap_array(T, dims, shm_seg_name, mode)
-    readonly = !((mode & JL_O_RDWR) == JL_O_RDWR)
-    create = (mode & JL_O_CREAT) == JL_O_CREAT
-    s = Mmap.Anonymous(shm_seg_name, readonly, create)
-    Mmap.mmap(s, Array{T,length(dims)}, dims, zero(Int64))
-end
-
-# no-op in windows
-shm_unlink(shm_seg_name) = 0
-
-end # @windows_only
+end # os-test

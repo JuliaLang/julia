@@ -42,7 +42,7 @@ readdlm(input, dlm::Char, T::Type, eol::Char; opts...) =
 
 function readdlm_auto(input, dlm::Char, T::Type, eol::Char, auto::Bool; opts...)
     optsd = val_opts(opts)
-    use_mmap = get(optsd, :use_mmap, @windows ? false : true)
+    use_mmap = get(optsd, :use_mmap, is_windows() ? false : true)
     if isa(input, AbstractString)
         fsz = filesize(input)
         if use_mmap && fsz > 0 && fsz < typemax(Int)

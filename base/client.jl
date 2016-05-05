@@ -37,10 +37,13 @@ text_colors
 have_color = false
 default_color_warn = :red
 default_color_info = :blue
-@unix_only default_color_input = :bold
-@unix_only default_color_answer = :bold
-@windows_only default_color_input = :normal
-@windows_only default_color_answer = :normal
+if is_windows()
+    default_color_input = :normal
+    default_color_answer = :normal
+else
+    default_color_input = :bold
+    default_color_answer = :bold
+end
 color_normal = text_colors[:normal]
 
 function repl_color(key, default)
@@ -77,7 +80,7 @@ function repl_cmd(cmd, out)
                 end
                 cd(ENV["OLDPWD"])
             else
-                cd(@windows? dir : readchomp(`$shell -c "echo $(shell_escape(dir))"`))
+                cd(@static is_windows() ? dir : readchomp(`$shell -c "echo $(shell_escape(dir))"`))
             end
         else
             cd()
@@ -85,7 +88,7 @@ function repl_cmd(cmd, out)
         ENV["OLDPWD"] = new_oldpwd
         println(out, pwd())
     else
-        run(ignorestatus(@windows? cmd : (isa(STDIN, TTY) ? `$shell -i -c "($(shell_escape(cmd))) && true"` : `$shell -c "($(shell_escape(cmd))) && true"`)))
+        run(ignorestatus(@static is_windows() ? cmd : (isa(STDIN, TTY) ? `$shell -i -c "($(shell_escape(cmd))) && true"` : `$shell -c "($(shell_escape(cmd))) && true"`)))
     end
     nothing
 end
@@ -323,10 +326,10 @@ function _start()
         global active_repl_backend
         if repl
             if !isa(STDIN,TTY)
-                global is_interactive |= !isa(STDIN,Union{File,IOStream})
+                global is_interactive |= !isa(STDIN, Union{File, IOStream})
                 color_set || (global have_color = false)
             else
-                term = Terminals.TTYTerminal(get(ENV,"TERM",@windows? "" : "dumb"),STDIN,STDOUT,STDERR)
+                term = Terminals.TTYTerminal(get(ENV, "TERM", @static is_windows() ? "" : "dumb"), STDIN, STDOUT, STDERR)
                 global is_interactive = true
                 color_set || (global have_color = Terminals.hascolor(term))
                 quiet || REPL.banner(term,term)

@@ -13,7 +13,9 @@ export
 import Base: @handle_as, wait, close, uvfinalize, eventloop, notify_error, stream_wait,
     _sizeof_uv_poll, _sizeof_uv_fs_poll, _sizeof_uv_fs_event, _uv_hook_close,
     associate_julia_struct, disassociate_julia_struct
-@windows_only import Base.WindowsRawSocket
+if is_windows()
+    import Base.WindowsRawSocket
+end
 
 # libuv file watching event flags
 const UV_RENAME = 1
@@ -106,8 +108,10 @@ type _FDWatcher
                 this.refcount = (this.refcount[1] + Int(readable), this.refcount[2] + Int(writable))
                 return this
             end
-            @unix_only if ccall(:jl_uv_unix_fd_is_watched, Int32, (Int32, Ptr{Void}, Ptr{Void}), fd.fd, C_NULL, eventloop()) == 1
-                throw(ArgumentError("file descriptor $(fd.fd) is already being watched by libuv"))
+            @static if is_unix()
+                if ccall(:jl_uv_unix_fd_is_watched, Int32, (Int32, Ptr{Void}, Ptr{Void}), fd.fd, C_NULL, eventloop()) == 1
+                    throw(ArgumentError("file descriptor $(fd.fd) is already being watched by libuv"))
+                end
             end
             handle = Libc.malloc(_sizeof_uv_poll)
             this = new(handle, (Int(readable), Int(writable)), Condition(), (false, false))
@@ -120,20 +124,22 @@ type _FDWatcher
             FDWatchers[fd.fd] = this
             return this
         end
-        @windows_only function _FDWatcher(fd::WindowsRawSocket, readable::Bool, writable::Bool)
-            if !readable && !writable
-                throw(ArgumentError("must specify at least one of readable or writable to create a FDWatcher"))
+        @static if is_windows()
+            function _FDWatcher(fd::WindowsRawSocket, readable::Bool, writable::Bool)
+                if !readable && !writable
+                    throw(ArgumentError("must specify at least one of readable or writable to create a FDWatcher"))
+                end
+                handle = Libc.malloc(_sizeof_uv_poll)
+                this = new(handle, (Int(readable), Int(writable)), Condition(), (false, false))
+                associate_julia_struct(handle, this)
+                err = ccall(:uv_poll_init_socket,Int32,(Ptr{Void},   Ptr{Void}, Ptr{Void}),
+                                                        eventloop(), handle,    fd.handle)
+                if err != 0
+                    Libc.free(handle)
+                    throw(UVError("FDWatcher",err))
+                end
+                return this
             end
-            handle = Libc.malloc(_sizeof_uv_poll)
-            this = new(handle, (Int(readable), Int(writable)), Condition(), (false, false))
-            associate_julia_struct(handle, this)
-            err = ccall(:uv_poll_init_socket,Int32,(Ptr{Void},   Ptr{Void}, Ptr{Void}),
-                                                    eventloop(), handle,    fd.handle)
-            if err != 0
-                Libc.free(handle)
-                throw(UVError("FDWatcher",err))
-            end
-            return this
         end
         global close
         function close(t::_FDWatcher, readable::Bool, writable::Bool)
@@ -170,10 +176,12 @@ type FDWatcher
         finalizer(this, close)
         return this
     end
-    @windows_only function FDWatcher(fd::WindowsRawSocket, readable::Bool, writable::Bool)
-        this = new(_FDWatcher(fd, readable, writable), readable, writable)
-        finalizer(this, close)
-        return this
+    @static if is_windows()
+        function FDWatcher(fd::WindowsRawSocket, readable::Bool, writable::Bool)
+            this = new(_FDWatcher(fd, readable, writable), readable, writable)
+            finalizer(this, close)
+            return this
+        end
     end
 end
 
@@ -332,7 +340,7 @@ function wait(fd::RawFD; readable=false, writable=false)
     end
 end
 
-@windows_only begin
+if is_windows()
     function wait(socket::WindowsRawSocket; readable=false, writable=false)
         fdw = _FDWatcher(socket, readable, writable)
         try
@@ -357,7 +365,7 @@ function wait(m::FileMonitor)
     return filename, events
 end
 
-function poll_fd(s::Union{RawFD, @windows ? WindowsRawSocket : Union{}}, timeout_s::Real=-1; readable=false, writable=false)
+function poll_fd(s::Union{RawFD, is_windows() ? WindowsRawSocket : Union{}}, timeout_s::Real=-1; readable=false, writable=false)
     wt = Condition()
     fdw = _FDWatcher(s, readable, writable)
     try
