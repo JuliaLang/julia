@@ -176,11 +176,13 @@ code_lowered(f, t::ANY=Tuple) = map(m -> (m::Method).lambda_template, methods(f,
 
 function _methods(f::ANY,t::ANY,lim)
     ft = isa(f,Type) ? Type{f} : typeof(f)
-    if isa(t,Type)
-        return _methods_by_ftype(Tuple{ft, t.parameters...}, lim)
-    else
-        return _methods_by_ftype(Tuple{ft, t...}, lim)
-    end
+    tt = isa(t,Type) ? Tuple{ft, t.parameters...} : Tuple{ft, t...}
+    return _methods_by_ftype(tt, lim)
+end
+function methods_including_ambiguous(f::ANY, t::ANY)
+    ft = isa(f,Type) ? Type{f} : typeof(f)
+    tt = isa(t,Type) ? Tuple{ft, t.parameters...} : Tuple{ft, t...}
+    return ccall(:jl_matching_methods, Any, (Any,Cint,Cint), tt, -1, 1)
 end
 function _methods_by_ftype(t::ANY, lim)
     tp = t.parameters
@@ -194,11 +196,11 @@ function _methods_by_ftype(t::ANY, lim)
         return _methods(Any[tp...], length(tp), lim, [])
     end
     # TODO: the following can return incorrect answers that the above branch would have corrected
-    return ccall(:jl_matching_methods, Any, (Any,Int32), t, lim)
+    return ccall(:jl_matching_methods, Any, (Any,Cint,Cint), t, lim, 0)
 end
 function _methods(t::Array,i,lim::Integer,matching::Array{Any,1})
     if i == 0
-        new = ccall(:jl_matching_methods, Any, (Any,Int32), Tuple{t...}, lim)
+        new = ccall(:jl_matching_methods, Any, (Any,Cint,Cint), Tuple{t...}, lim, 0)
         new === false && return false
         append!(matching, new::Array{Any,1})
     else
@@ -437,8 +439,13 @@ end
 
 function isambiguous(m1::Method, m2::Method)
     ti = typeintersect(m1.sig, m2.sig)
-    ml = _methods_by_ftype(ti, 1)
-    ml == false && return true
-    m = ml[1][3]
-    !(m.sig <: ti)
+    ti === Bottom && return false
+    ml = _methods_by_ftype(ti, -1)
+    isempty(ml) && return true
+    for m in ml
+        if ti <: m[3].sig
+            return false
+        end
+    end
+    return true
 end

@@ -356,7 +356,7 @@ static jl_tupletype_t *join_tsig(jl_tupletype_t *tt, jl_tupletype_t *sig)
 }
 
 static jl_value_t *ml_matches(union jl_typemap_t ml, int offs,
-                              jl_tupletype_t *type, int lim);
+                              jl_tupletype_t *type, int lim, int include_ambiguous);
 
 static jl_lambda_info_t *cache_method(jl_methtable_t *mt, union jl_typemap_t *cache, jl_value_t *parent,
                                       jl_tupletype_t *type, jl_tupletype_t *origtype,
@@ -560,7 +560,7 @@ static jl_lambda_info_t *cache_method(jl_methtable_t *mt, union jl_typemap_t *ca
         temp2 = (jl_value_t*)type;
     }
     if (need_guard_entries) {
-        temp = ml_matches(mt->defs, 0, type, -1); // TODO: use MAX_UNSPECIALIZED_CONFLICTS?
+        temp = ml_matches(mt->defs, 0, type, -1, 0); // TODO: use MAX_UNSPECIALIZED_CONFLICTS?
         int guards = 0;
         if (temp == jl_false) {
             cache_with_orig = 1;
@@ -749,6 +749,7 @@ static int check_ambiguous_visitor(jl_typemap_entry_t *oldentry, struct typemap_
     struct ambiguous_matches_env *closure = container_of(closure0, struct ambiguous_matches_env, match);
     if (oldentry == closure->newentry)
         return 0; // finished once it finds the method that was just inserted
+    // TODO: instead, maybe stop once we hit something newentry is definitely more specific than
 
     union jl_typemap_t map = closure->defs;
     jl_tupletype_t *type = (jl_tupletype_t*)closure->match.type;
@@ -1006,7 +1007,7 @@ jl_lambda_info_t *jl_method_lookup(jl_methtable_t *mt, jl_value_t **args, size_t
     return sf;
 }
 
-JL_DLLEXPORT jl_value_t *jl_matching_methods(jl_tupletype_t *types, int lim);
+JL_DLLEXPORT jl_value_t *jl_matching_methods(jl_tupletype_t *types, int lim, int include_ambiguous);
 
 // compile-time method lookup
 jl_lambda_info_t *jl_get_specialization1(jl_tupletype_t *types)
@@ -1025,7 +1026,7 @@ jl_lambda_info_t *jl_get_specialization1(jl_tupletype_t *types)
         // might match. also be conservative with tuples rather than trying
         // to analyze them in detail.
         if (ti == (jl_value_t*)jl_datatype_type || jl_is_tuple_type(ti)) {
-            jl_value_t *matches = jl_matching_methods(types, 1);
+            jl_value_t *matches = jl_matching_methods(types, 1, 0);
             if (matches == jl_false)
                 return NULL;
             break;
@@ -1717,6 +1718,7 @@ struct ml_matches_env {
     jl_value_t *t;     // results: array of svec(argtypes, params, Method)
     jl_svec_t *matc;   // current working svec
     int lim;
+    int include_ambiguous;  // whether ambiguous matches should be included
 };
 static int ml_matches_visitor(jl_typemap_entry_t *ml, struct typemap_intersection_env *closure0)
 {
@@ -1732,18 +1734,11 @@ static int ml_matches_visitor(jl_typemap_entry_t *ml, struct typemap_intersectio
     assert(meth);
     int skip = 0;
     size_t len = jl_array_len(closure->t);
-    // skip over any previously-added or less specific methods
-    // (this method might have been added previously through meth->ambig)
-    for (i = 0; i < len; i++) {
-        jl_method_t *priormeth = (jl_method_t*)jl_svecref(jl_cellref(closure->t, i), 2);
-        if (priormeth == meth) {
-            skip = 1;
-            break;
-        }
-        if (closure->lim >= 0) {
-            // we can skip this match if the types are already covered
-            // by a prior (more specific) match. but only do this in
-            // the "limited" mode used by type inference.
+    if (closure->lim >= 0) {
+        // we can skip this match if the types are already covered
+        // by a prior (more specific) match. but only do this in
+        // the "limited" mode used by type inference.
+        for (i = 0; i < len; i++) {
             jl_value_t *prior_ti = jl_svecref(jl_cellref(closure->t, i), 0);
             // in issue #13007 we incorrectly set skip=1 here, due to
             // Type{_<:T} ∩ (UnionAll S Type{T{S}}) = Type{T{S}}
@@ -1768,35 +1763,6 @@ static int ml_matches_visitor(jl_typemap_entry_t *ml, struct typemap_intersectio
         */
     }
     if (!skip) {
-        if (closure->lim >= 0 && len >= closure->lim) {
-            closure->t = (jl_value_t*)jl_false;
-            return 0; // terminate search
-        }
-        closure->matc = jl_svec(3, closure->match.ti, closure->match.env, meth);
-        if (len == 0) {
-            closure->t = (jl_value_t*)jl_alloc_cell_1d(1);
-            jl_cellset(closure->t, 0, (jl_value_t*)closure->matc);
-        }
-        else {
-            jl_cell_1d_push((jl_array_t*)closure->t, (jl_value_t*)closure->matc);
-        }
-        // Add ambiguous calls
-        if (meth->ambig != jl_nothing) {
-            jl_svec_t *env = NULL;
-            JL_GC_PUSH1(&env);
-            for (size_t j = 0; j < jl_array_len(meth->ambig); j++) {
-                jl_method_t *mambig = (jl_method_t*)jl_cellref(meth->ambig, j);
-                env = jl_emptysvec;
-                jl_value_t *mti = jl_type_intersection_matching((jl_value_t*)mambig->sig,
-                                                                (jl_value_t*)closure->match.type,
-                                                                &env, jl_emptysvec);
-                if (mti != (jl_value_t*)jl_bottom_type) {
-                    jl_cell_1d_push((jl_array_t*)closure->t,
-                                    (jl_value_t*)jl_svec(3, mti, env, mambig));
-                }
-            }
-            JL_GC_POP();
-        }
         /*
           Check whether all static parameters matched. If not, then we
           have an argument type like Vector{T{Int,_}}, and a signature like
@@ -1820,13 +1786,65 @@ static int ml_matches_visitor(jl_typemap_entry_t *ml, struct typemap_intersectio
                 break;
             }
         }
+        int done = 0, return_this_match = 1;
         // (type ∩ ml->sig == type) ⇒ (type ⊆ ml->sig)
         // NOTE: jl_subtype check added in case the intersection is
         // over-approximated.
         if (matched_all_typevars && jl_types_equal(closure->match.ti, closure->match.type) &&
             jl_subtype(closure->match.type, (jl_value_t*)ml->sig, 0)) {
-            return 0; // terminate visiting method list
+            done = 1; // terminate visiting method list
+            // here we have reached a definition that fully covers the arguments.
+            // however, if there are ambiguities this method might not actually
+            // match, so we shouldn't add it to the results.
+            if (meth->ambig != jl_nothing) {
+                jl_svec_t *env = NULL;
+                JL_GC_PUSH1(&env);
+                for (size_t j = 0; j < jl_array_len(meth->ambig); j++) {
+                    jl_method_t *mambig = (jl_method_t*)jl_cellref(meth->ambig, j);
+                    env = jl_emptysvec;
+                    jl_value_t *mti = jl_type_intersection_matching((jl_value_t*)closure->match.type,
+                                                                    (jl_value_t*)mambig->sig,
+                                                                    &env, mambig->tvars);
+                    if (mti != (jl_value_t*)jl_bottom_type) {
+                        if (closure->include_ambiguous) {
+                            int k;
+                            for(k=0; k < len; k++) {
+                                if ((jl_value_t*)mambig == jl_svecref(jl_cellref(closure->t, k), 2))
+                                    break;
+                            }
+                            if (k >= len) {
+                                if (len == 0) {
+                                    closure->t = (jl_value_t*)jl_alloc_cell_1d(0);
+                                }
+                                jl_cell_1d_push((jl_array_t*)closure->t,
+                                                (jl_value_t*)jl_svec(3, mti, env, mambig));
+                                len++;
+                            }
+                        }
+                        else {
+                            return_this_match = 0;
+                            break;
+                        }
+                    }
+                }
+                JL_GC_POP();
+            }
         }
+        if (return_this_match) {
+            if (closure->lim >= 0 && len >= closure->lim) {
+                closure->t = (jl_value_t*)jl_false;
+                return 0; // terminate search
+            }
+            closure->matc = jl_svec(3, closure->match.ti, closure->match.env, meth);
+            if (len == 0) {
+                closure->t = (jl_value_t*)jl_alloc_cell_1d(1);
+                jl_cellset(closure->t, 0, (jl_value_t*)closure->matc);
+            }
+            else {
+                jl_cell_1d_push((jl_array_t*)closure->t, (jl_value_t*)closure->matc);
+            }
+        }
+        if (done) return 0;
     }
     return 1;
 }
@@ -1837,7 +1855,7 @@ static int ml_matches_visitor(jl_typemap_entry_t *ml, struct typemap_intersectio
 // Returns a match as an array of svec(argtypes, static_params, Method).
 // See below for the meaning of lim.
 static jl_value_t *ml_matches(union jl_typemap_t defs, int offs,
-                              jl_tupletype_t *type, int lim)
+                              jl_tupletype_t *type, int lim, int include_ambiguous)
 {
     size_t l = jl_svec_len(type->parameters);
     jl_value_t *va = NULL;
@@ -1857,6 +1875,7 @@ static jl_value_t *ml_matches(union jl_typemap_t defs, int offs,
     env.t = jl_an_empty_cell;
     env.matc = NULL;
     env.lim = lim;
+    env.include_ambiguous = include_ambiguous;
     JL_GC_PUSH4(&env.t, &env.matc, &env.match.env, &env.match.ti);
     jl_typemap_intersection_visitor(defs, offs, &env.match);
     JL_GC_POP();
@@ -1870,7 +1889,7 @@ static jl_value_t *ml_matches(union jl_typemap_t defs, int offs,
 //
 // lim is the max # of methods to return. if there are more, returns jl_false.
 // -1 for no limit.
-JL_DLLEXPORT jl_value_t *jl_matching_methods(jl_tupletype_t *types, int lim)
+JL_DLLEXPORT jl_value_t *jl_matching_methods(jl_tupletype_t *types, int lim, int include_ambiguous)
 {
     assert(jl_nparams(types) > 0);
     if (jl_tparam0(types) == jl_bottom_type)
@@ -1879,7 +1898,7 @@ JL_DLLEXPORT jl_value_t *jl_matching_methods(jl_tupletype_t *types, int lim)
     jl_methtable_t *mt = ((jl_datatype_t*)jl_tparam0(types))->name->mt;
     if (mt == NULL)
         return (jl_value_t*)jl_alloc_cell_1d(0);
-    return ml_matches(mt->defs, 0, types, lim);
+    return ml_matches(mt->defs, 0, types, lim, include_ambiguous);
 }
 
 #ifdef __cplusplus

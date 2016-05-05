@@ -167,7 +167,7 @@ function showerror(io::IO, ex::MethodError)
     is_arg_types = isa(ex.args, DataType)
     arg_types = is_arg_types ? ex.args : typesof(ex.args...)
     f = ex.f
-    meth = methods(f, arg_types)
+    meth = methods_including_ambiguous(f, arg_types)
     if length(meth) > 1
         return showerror_ambiguous(io, meth, f, arg_types)
     end
