@@ -273,7 +273,9 @@ typedef struct {
 // Include before gc-debug for objprofile
 static const uintptr_t jl_buff_tag = 0x4eade800;
 static void *const jl_malloc_tag = (void*)0xdeadaa01;
+#ifdef OBJPROFILE
 static void *const jl_singleton_tag = (void*)0xdeadaa02;
+#endif
 
 #define current_heap __current_heap_idx.heap
 #define current_heap_index __current_heap_idx.index
