@@ -676,3 +676,17 @@ test_range_sum_diff(1.:5., linspace(0, 8, 5),
 let r = 0x02:0x05
     @test r[2:3] == 0x03:0x04
 end
+
+# sign, conj, ~ (issue #16067)
+let A = -1:1, B = -1.0:1.0
+    @test sign(A) == [-1,0,1]
+    @test sign(B) == [-1,0,1]
+    @test typeof(sign(A)) === Vector{Int}
+    @test typeof(sign(B)) === Vector{Float64}
+
+    @test conj(A) === A
+    @test conj(B) === B
+
+    @test ~A == [0,-1,-2]
+    @test typeof(~A) == Vector{Int}
+end
