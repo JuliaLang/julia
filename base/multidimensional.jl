@@ -51,12 +51,10 @@ length{N}(::Type{CartesianIndex{N}})=N
 getindex(index::CartesianIndex, i::Integer) = index.I[i]
 
 # zeros and ones
-for (felt, fname) in ((:zero, :zeros), (:one, :ones))
-    @eval begin
-        $felt{N}(ct::CartesianIndex{N}) = CartesianIndex(tuple($fname(eltype(ct.I), N)...))
-        $felt{N}(::Type{CartesianIndex{N}}) = CartesianIndex(tuple($fname(Integer, N)...))
-    end
-end
+zero{N}(::CartesianIndex{N}) = zero(CartesianIndex{N})
+zero{N}(::Type{CartesianIndex{N}}) = CartesianIndex(ntuple(x -> 0, Val{N}))
+one{N}(::CartesianIndex{N}) = one(CartesianIndex{N})
+one{N}(::Type{CartesianIndex{N}}) = CartesianIndex(ntuple(x -> 1, Val{N}))
 
 # arithmetic, min/max
 for op in (:+, :-, :min, :max)
