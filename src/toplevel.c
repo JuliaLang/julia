@@ -223,7 +223,7 @@ jl_value_t *jl_eval_module_expr(jl_expr_t *ex)
     return (jl_value_t*)newm;
 }
 
-// module referenced by TopNode from within m
+// module referenced by (top ...) from within m
 // this is only needed because of the bootstrapping process:
 // - initially Base doesn't exist and top === Core
 // - later, it refers to either old Base or new Base

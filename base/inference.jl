@@ -1064,10 +1064,8 @@ function abstract_eval(e::ANY, vtypes::VarTable, sv::InferenceState)
         return abstract_eval_ssavalue(e::SSAValue, sv)
     elseif isa(e,Slot)
         return vtypes[e.id].typ
-    elseif isa(e,TopNode)
-        return abstract_eval_global(_topmod(sv), (e::TopNode).name)
     elseif isa(e,Symbol)
-        return abstract_eval_symbol(e::Symbol, vtypes, sv)
+        return abstract_eval_global(sv.mod, e)
     elseif isa(e,GlobalRef)
         return abstract_eval_global(e.mod, e.name)
     end
@@ -1189,10 +1187,6 @@ function abstract_eval_ssavalue(s::SSAValue, sv::InferenceState)
         return Bottom
     end
     return typ
-end
-
-function abstract_eval_symbol(s::Symbol, vtypes, sv::InferenceState)
-    return abstract_eval_global(sv.mod, s)
 end
 
 
@@ -2155,8 +2149,6 @@ function exprtype(x::ANY, sv::InferenceState)
         return (x::Slot).typ
     elseif isa(x,SSAValue)
         return abstract_eval_ssavalue(x::SSAValue, sv)
-    elseif isa(x,TopNode)
-        return abstract_eval_global(_topmod(sv), (x::TopNode).name)
     elseif isa(x,Symbol)
         return abstract_eval_global(sv.mod, x::Symbol)
     elseif isa(x,QuoteNode)
@@ -2203,7 +2195,7 @@ function effect_free(e::ANY, sv, allow_volatile::Bool)
         return allow_volatile
     end
     if isa(e,Number) || isa(e,AbstractString) || isa(e,SSAValue) ||
-        isa(e,TopNode) || isa(e,QuoteNode) || isa(e,Type) || isa(e,Tuple)
+        isa(e,QuoteNode) || isa(e,Type) || isa(e,Tuple)
         return true
     end
     if isa(e,GlobalRef)
@@ -2662,7 +2654,7 @@ function inlineable(f::ANY, ft::ANY, e::Expr, atypes::Vector{Any}, sv::Inference
     lastexpr = pop!(body.args)
     if isa(lastexpr,LabelNode)
         push!(body.args, lastexpr)
-        push!(body.args, Expr(:call, TopNode(:error), "fatal error in type inference"))
+        push!(body.args, Expr(:call, GlobalRef(_topmod(sv.mod),:error), "fatal error in type inference"))
         lastexpr = nothing
     elseif !(isa(lastexpr,Expr) && lastexpr.head === :return)
         # code sometimes ends with a meta node, e.g. inbounds pop
@@ -2778,12 +2770,11 @@ function ssavalue_increment(body::Expr, incr)
     return body
 end
 
-const top_setfield = TopNode(:setfield)
-const top_getfield = TopNode(:getfield)
-const top_tuple = TopNode(:tuple)
+const top_getfield = GlobalRef(Core, :getfield)
+const top_tuple = GlobalRef(Core, :tuple)
 
 function mk_getfield(texpr, i, T)
-    e = :(($top_getfield)($texpr, $i))
+    e = Expr(:call, top_getfield, texpr, i)
     e.typ = T
     e
 end

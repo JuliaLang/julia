@@ -58,10 +58,6 @@ The following data types exist in lowered form:
 ``GlobalRef``
     refers to global variable ``name`` in module ``mod``
 
-``TopNode``
-    forces a name to be resolved as a global in Base. This is now mostly
-    redundant with ``GlobalRef(Base, :x)``.
-
 ``SSAValue``
     refers to a consecutively-numbered (starting at 0) static single assignment
     (SSA) variable inserted by the compiler.
