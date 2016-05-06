@@ -294,6 +294,9 @@ void jl_init_frontend(void)
 
 JL_DLLEXPORT void jl_lisp_prompt(void)
 {
+    // Make `--lisp` sigatomic in order to avoid triggering the sigint safepoint.
+    // We don't have our signal handler registered in that case anyway...
+    JL_SIGATOMIC_BEGIN();
     jl_init_frontend();
     jl_ast_context_t *ctx = jl_ast_ctx_enter();
     JL_AST_PRESERVE_PUSH(ctx, roots, old_roots);
