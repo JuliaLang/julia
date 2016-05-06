@@ -24,7 +24,8 @@ for m in mt
 end
 
 @test length(methods(ambig, (Int, Int))) == 1
-@test length(methods(ambig, (UInt8, Int))) == 2
+@test length(methods(ambig, (UInt8, Int))) == 0
+@test length(Base.methods_including_ambiguous(ambig, (UInt8, Int))) == 2
 
 @test ambig("hi", "there") == 1
 @test ambig(3.1, 3.2) == 5
@@ -49,8 +50,6 @@ code_native(io, ambig, (Int, Int))
 # Test that ambiguous cases fail appropriately
 @test precompile(ambig, (UInt8, Int)) == false
 cfunction(ambig, Int, (UInt8, Int))  # test for a crash (doesn't throw an error)
-@test length(code_lowered(ambig, (UInt8, Int))) == 2
-@test length(code_typed(ambig, (UInt8, Int))) == 2
 @test_throws ErrorException code_llvm(io, ambig, (UInt8, Int))
 @test_throws ErrorException code_native(io, ambig, (UInt8, Int))
 
@@ -109,5 +108,37 @@ ambs = detect_ambiguities(Ambig4)
 
 # Test that Core and Base are free of ambiguities
 @test isempty(detect_ambiguities(Core, Base; imported=true))
+
+amb_1(::Int8, ::Int) = 1
+amb_1(::Integer, x) = 2
+amb_1(x, ::Int) = 3
+# if there is an ambiguity with some methods and not others, `methods`
+# should return just the non-ambiguous ones, i.e. the ones that could actually
+# be called.
+@test length(methods(amb_1, Tuple{Integer, Int})) == 1
+
+amb_2(::Int, y) = 1
+amb_2(x, ::Int) = 2
+amb_2(::Int8, y) = 3
+@test length(methods(amb_2)) == 3  # make sure no duplicates
+
+amb_3(::Int8, ::Int8) = 1
+amb_3(::Int16, ::Int16) = 2
+amb_3(::Integer, ::Integer) = 3
+amb_3(::Integer, x) = 4
+amb_3(x, ::Integer) = 5
+# ambiguous definitions exist, but are covered by multiple more specific definitions
+let ms = methods(amb_3).ms
+    @test !Base.isambiguous(ms[4], ms[5])
+end
+
+amb_4(::Int8, ::Int8) = 1
+amb_4(::Int16, ::Int16) = 2
+amb_4(::Integer, x) = 4
+amb_4(x, ::Integer) = 5
+# as above, but without sufficient definition coverage
+let ms = methods(amb_4).ms
+    @test Base.isambiguous(ms[3], ms[4])
+end
 
 nothing
