@@ -307,7 +307,6 @@ function convert(::Type{String}, a::Vector{UInt8}, invalids_as::AbstractString)
     end
     String(a)
 end
-convert(::Type{String}, s::AbstractString) = utf8(bytestring(s))
 
 """
 Converts an already validated vector of `UInt16` or `UInt32` to a `String`
