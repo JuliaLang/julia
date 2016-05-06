@@ -647,7 +647,7 @@ void _julia_init(JL_IMAGE_SEARCH rel)
                 jl_current_module;
         }
 
-        jl_load("boot.jl", sizeof("boot.jl"));
+        jl_load("boot.jl", sizeof("boot.jl")-1);
         jl_get_builtin_hooks();
         jl_boot_file_loaded = 1;
         jl_init_box_caches();
