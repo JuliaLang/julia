@@ -105,7 +105,7 @@ mktempdir() do tmpdir
     wait(tsk)
 end
 
-@test_throws Base.UVError getaddrinfo(".invalid")
+@test_throws Base.DNSError getaddrinfo(".invalid")
 @test_throws ArgumentError getaddrinfo("localhost\0") # issue #10994
 @test_throws Base.UVError connect("localhost", 21452)
 
@@ -135,7 +135,7 @@ port2, server2 = listenany(port)
 close(server)
 close(server2)
 
-@test_throws Base.UVError connect(".invalid",80)
+@test_throws Base.DNSError connect(".invalid",80)
 
 begin
     a = UDPSocket()
