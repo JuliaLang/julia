@@ -1094,6 +1094,11 @@ worker_timeout() = parse(Float64, get(ENV, "JULIA_WORKER_TIMEOUT", "60.0"))
 
 ## worker creation and setup ##
 
+# newly initialized worker processes will attempt to listen
+# on the first free unbound port available, checking from
+# this port onwards
+const WORKER_LISTEN_PORT = 9009
+
 # The entry point for julia worker processes. does not return. Used for TCP transport.
 # Cluster managers implementing their own transport will provide their own.
 # Argument is descriptor to write listening port # to.
@@ -1109,7 +1114,7 @@ function start_worker(out::IO)
 
     init_worker()
     if LPROC.bind_port == 0
-        (actual_port,sock) = listenany(UInt16(9009))
+        (actual_port,sock) = listenany(UInt16(WORKER_LISTEN_PORT))
         LPROC.bind_port = actual_port
     else
         sock = listen(LPROC.bind_port)
@@ -1595,7 +1600,13 @@ function check_master_connect()
         end
 
         if !haskey(map_pid_wrkr, 1)
-            print(STDERR, "Master process (id 1) could not connect within $timeout seconds.\nexiting.\n")
+            print(STDERR, """
+                          Master process (id 1) could not connect within $timeout seconds.
+                          If connecting over SSH, please ensure the host has an unbound,
+                          accessible port above or including port $WORKER_LISTEN_PORT
+                          for the worker process to connect to.
+                          Exiting.
+                          """)
             exit(1)
         end
     end
@@ -1705,4 +1716,3 @@ function getindex(r::RemoteChannel, args...)
     end
     return remotecall_fetch(getindex, r.where, r, args...)
 end
-
