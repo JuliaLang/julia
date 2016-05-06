@@ -223,9 +223,6 @@ static jl_value_t *eval(jl_value_t *e, interpreter_state *s)
     else if (ex->head == copyast_sym) {
         return jl_copy_ast(eval(args[0], s));
     }
-    else if (ex->head == static_typeof_sym) {
-        return (jl_value_t*)jl_any_type;
-    }
     else if (ex->head == exc_sym) {
         return ptls->exception_in_transit;
     }
@@ -429,7 +426,7 @@ static jl_value_t *eval(jl_value_t *e, interpreter_state *s)
         jl_throw(args[0]);
     }
     else if (ex->head == boundscheck_sym || ex->head == inbounds_sym || ex->head == fastmath_sym ||
-             ex->head == simdloop_sym || ex->head == meta_sym || ex->head == type_goto_sym) {
+             ex->head == simdloop_sym || ex->head == meta_sym) {
         return jl_nothing;
     }
     jl_errorf("unsupported or misplaced expression %s", jl_symbol_name(ex->head));

@@ -1981,78 +1981,29 @@
 
    'comprehension
    (lambda (e)
-     (expand-forms (lower-comprehension #f       (cadr e) (cddr e))))
+     (if (any (lambda (x) (eq? x ':)) (cddr e))
+         (error "comprehension syntax with `:` ranges has been removed"))
+     (expand-forms `(call (top collect) (generator ,(cadr e) ,@(cddr e)))))
 
    'typed_comprehension
    (lambda (e)
+     (if (any (lambda (x) (eq? x ':)) (cdddr e))
+         (error "comprehension syntax with `:` ranges has been removed"))
      (expand-forms (lower-comprehension (cadr e) (caddr e) (cdddr e))))
 
    'dict_comprehension
    (lambda (e)
      (syntax-deprecation #f "[a=>b for (a,b) in c]" "Dict(a=>b for (a,b) in c)")
-     (expand-forms (lower-dict-comprehension (cadr e) (cddr e))))
+     (expand-forms `(call (top Dict) (generator ,(cadr e) ,@(cddr e)))))
 
    'typed_dict_comprehension
-   (lambda (e)
-     (expand-forms (lower-typed-dict-comprehension (cadr e) (caddr e) (cdddr e))))))
-
-(define (lower-nd-comprehension atype expr ranges)
-  (let ((result      (make-ssavalue))
-        (ri          (gensy))
-        (oneresult   (gensy)))
-    ;; evaluate one expression to figure out type and size
-    ;; compute just one value by inserting a break inside loops
-    (define (evaluate-one ranges)
-      (if (null? ranges)
-          `(= ,oneresult ,expr)
-          (if (eq? (car ranges) `:)
-              (evaluate-one (cdr ranges))
-              `(for ,(car ranges)
-                    (block ,(evaluate-one (cdr ranges))
-                           (break)) ))))
-
-    ;; compute the dimensions of the result
-    (define (compute-dims ranges oneresult-dim)
-      (if (null? ranges)
-          (list)
-          (if (eq? (car ranges) `:)
-              (cons `(call (top size) ,oneresult ,oneresult-dim)
-                    (compute-dims (cdr ranges) (+ oneresult-dim 1)))
-              (cons `(call (top length) ,(caddr (car ranges)))
-                    (compute-dims (cdr ranges) oneresult-dim)) )))
-
-    ;; construct loops to cycle over all dimensions of an n-d comprehension
-    (define (construct-loops ranges iters oneresult-dim)
-      (if (null? ranges)
-          (if (null? iters)
-              `(block (call (top setindex!) ,result ,expr ,ri)
-                      (= ,ri (call (top +) ,ri) 1))
-              `(block (call (top setindex!) ,result (ref ,expr ,@(reverse iters)) ,ri)
-                      (= ,ri (call (top +) ,ri 1))) )
-          (if (eq? (car ranges) `:)
-              (let ((i (make-ssavalue)))
-                `(for (= ,i (: 1 (call (top size) ,oneresult ,oneresult-dim)))
-                      ,(construct-loops (cdr ranges) (cons i iters) (+ oneresult-dim 1)) ))
-              `(for ,(car ranges)
-                    ,(construct-loops (cdr ranges) iters oneresult-dim) ))))
-
-    ;; Evaluate the comprehension
-    `(scope-block
-      (block
-       (local ,oneresult)
-       ,(evaluate-one ranges)
-       (= ,result (call (core Array) ,(if atype atype `(call (top eltype) ,oneresult))
-                        ,@(compute-dims ranges 1)))
-       (= ,ri 1)
-       ,(construct-loops (reverse ranges) (list) 1)
-       ,result ))))
+   (lambda (e) (expand-forms
+                `(call (call (core apply_type) (top Dict) ,@(cdr (cadr e)))
+                       (generator ,(caddr e) ,@(cdddr e)))))))
 
 (define (lower-comprehension atype expr ranges)
-  (if (any (lambda (x) (eq? x ':)) ranges)
-      (lower-nd-comprehension atype expr ranges)
   (let ((result    (make-ssavalue))
         (ri        (gensy))
-        (initlabl  (if atype #f (make-ssavalue)))
         (oneresult (make-ssavalue))
         (lengths   (map (lambda (x) (make-ssavalue)) ranges))
         (states    (map (lambda (x) (gensy)) ranges))
@@ -2063,7 +2014,6 @@
     (define (construct-loops ranges rv is states lengths)
       (if (null? ranges)
           `(block (= ,oneresult ,expr)
-                  ,@(if atype '() `((type_goto ,initlabl ,oneresult)))
                   (inbounds true)
                   (call (top setindex!) ,result ,oneresult ,ri)
                   (inbounds pop)
@@ -2089,79 +2039,10 @@
       ,.(map (lambda (v r) `(= ,v (call (top length) ,r))) lengths rv)
       (scope-block
        (block
-        ,@(if atype '() `((label ,initlabl)))
-        (= ,result (call (core Array)
-                         ,(if atype atype `(static_typeof ,oneresult))
-                         ,@lengths))
+        (= ,result (call (core Array) ,atype ,@lengths))
         (= ,ri 1)
         ,(construct-loops (reverse ranges) (reverse rv) is states (reverse lengths))
-        ,result))))))
-
-(define (lower-dict-comprehension expr ranges)
-  (let ((result   (make-ssavalue))
-        (initlabl (make-ssavalue))
-        (onekey   (make-ssavalue))
-        (oneval   (make-ssavalue))
-        (rv         (map (lambda (x) (make-ssavalue)) ranges)))
-
-    ;; construct loops to cycle over all dimensions of an n-d comprehension
-    (define (construct-loops ranges)
-      (if (null? ranges)
-          `(block (= ,onekey ,(cadr expr))
-                  (= ,oneval ,(caddr expr))
-                  (type_goto ,initlabl ,onekey ,oneval)
-                  (call (top setindex!) ,result ,oneval ,onekey))
-          `(for ,(car ranges)
-                (block
-                 ;; *** either this or force all for loop vars local
-                 ,.(map (lambda (r) `(local ,r))
-                        (lhs-vars (cadr (car ranges))))
-                 ,(construct-loops (cdr ranges))))))
-
-    ;; Evaluate the comprehension
-    (let ((loopranges
-           (map (lambda (r v) `(= ,(cadr r) ,v)) ranges rv)))
-      `(block
-        ,.(map (lambda (v r) `(= ,v ,(caddr r))) rv ranges)
-        (scope-block
-         (block
-          #;,@(map (lambda (r) `(local ,r))
-          (apply append (map (lambda (r) (lhs-vars (cadr r))) ranges)))
-          (label ,initlabl)
-          (= ,result (call (curly (top Dict)
-                                  (static_typeof ,onekey)
-                                  (static_typeof ,oneval))))
-          ,(construct-loops (reverse loopranges))
-          ,result))))))
-
-(define (lower-typed-dict-comprehension atypes expr ranges)
-  (if (not (and (length= atypes 3)
-                (eq? (car atypes) '=>)))
-      (error "invalid \"typed_dict_comprehension\" syntax")
-      (let ( (result (make-ssavalue))
-             (rs (map (lambda (x) (make-ssavalue)) ranges)) )
-
-        ;; construct loops to cycle over all dimensions of an n-d comprehension
-        (define (construct-loops ranges rs)
-          (if (null? ranges)
-              `(call (top setindex!) ,result ,(caddr expr) ,(cadr expr))
-              `(for (= ,(cadr (car ranges)) ,(car rs))
-                    (block
-                     ;; *** either this or force all for loop vars local
-                     ,.(map (lambda (r) `(local ,r))
-                            (lhs-vars (cadr (car ranges))))
-                     ,(construct-loops (cdr ranges) (cdr rs))))))
-
-        ;; Evaluate the comprehension
-        `(block
-          ,.(map make-assignment rs (map caddr ranges))
-          (= ,result (call (curly (top Dict) ,(cadr atypes) ,(caddr atypes))))
-          (scope-block
-           (block
-            #;,@(map (lambda (r) `(local ,r))
-            (apply append (map (lambda (r) (lhs-vars (cadr r))) ranges)))
-            ,(construct-loops (reverse ranges) (reverse rs))
-            ,result))))))
+        ,result)))))
 
 (define (lhs-vars e)
   (cond ((symbol? e) (list e))
@@ -3140,17 +3021,6 @@ f(x) = yt(x)
                (set! handler-goto-fixups
                      (cons (list code handler-level (cadr e)) handler-goto-fixups))
                '(null)))
-
-            ((type_goto)
-             (let ((m (get label-map (cadr e) #f)))
-               (if m
-                   (emit `(type_goto ,m ,@(cddr e)))
-                   (let ((l (make-label)))
-                     (put! label-map (cadr e) l)
-                     (emit `(type_goto ,l ,@(cddr e)))))))
-            ((static_typeof)
-             (assert (and value (not tail)))
-             e)
 
             ;; exception handlers are lowered using
             ;; (enter L) - push handler with catch block at label L
