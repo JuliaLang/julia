@@ -654,7 +654,7 @@ end
 
 # Method specificity
 begin
-    local f
+    local f, A
     f{T}(dims::Tuple{}, A::AbstractArray{T,0}) = 1
     f{T,N}(dims::NTuple{N,Int}, A::AbstractArray{T,N}) = 2
     f{T,M,N}(dims::NTuple{M,Int}, A::AbstractArray{T,N}) = 3
