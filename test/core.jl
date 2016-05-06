@@ -891,7 +891,7 @@ let
     @test_throws BoundsError getfield(z, 3)
 
     strct = LoadError("", 0, "")
-    setfield!(strct, 2, 8)
+    setfield!(strct, 2, 8.0)
     @test strct.line == 8
     setfield!(strct, 3, "hi")
     @test strct.error == "hi"

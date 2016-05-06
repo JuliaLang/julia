@@ -1040,6 +1040,7 @@ export
     promote,
     promote_rule,
     promote_type,
+    setfield!,
     subtypes,
     instances,
     supertype,
