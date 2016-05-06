@@ -18,31 +18,42 @@
 static void attach_exception_port(thread_port_t thread);
 
 #ifdef JULIA_ENABLE_THREADING
-static jl_mutex_t gc_suspend_lock;
-// This is a copy of `jl_gc_safepoint_activated` to make it easier
-// to synchronic the GC and the signal handler
-static int jl_gc_safepoint_activated = 0;
 // low 16 bits are the thread id, the next 8 bits are the original gc_state
 static arraylist_t suspended_threads;
-void jl_mach_gc_begin(void)
-{
-    JL_LOCK_NOGC(&gc_suspend_lock);
-    jl_gc_safepoint_activated = 1;
-    JL_UNLOCK_NOGC(&gc_suspend_lock);
-}
 void jl_mach_gc_end(void)
 {
-    JL_LOCK_NOGC(&gc_suspend_lock);
-    jl_gc_safepoint_activated = 0;
+    // Requires the safepoint lock to be held
     for (size_t i = 0;i < suspended_threads.len;i++) {
         uintptr_t item = (uintptr_t)suspended_threads.items[i];
         int16_t tid = (int16_t)item;
         int8_t gc_state = (int8_t)(item >> 8);
-        jl_all_task_states[tid].ptls->gc_state = gc_state;
+        jl_atomic_store_release(&jl_all_task_states[tid].ptls->gc_state,
+                                gc_state);
         thread_resume(pthread_mach_thread_np(jl_all_task_states[tid].system_id));
     }
     suspended_threads.len = 0;
-    JL_UNLOCK_NOGC(&gc_suspend_lock);
+}
+
+// Suspend the thread and return `1` if the GC is running.
+// Otherwise return `0`
+static int jl_mach_gc_wait(jl_tls_states_t *ptls,
+                           mach_port_t thread, int16_t tid)
+{
+    jl_mutex_lock_nogc(&safepoint_lock);
+    if (!jl_gc_running) {
+        // GC is done before we get the message or the safepoint is enabled
+        // for SIGINT.
+        jl_mutex_unlock_nogc(&safepoint_lock);
+        return 0;
+    }
+    // Otherwise, set the gc state of the thread, suspend and record it
+    int8_t gc_state = ptls->gc_state;
+    jl_atomic_store_release(&ptls->gc_state, JL_GC_STATE_WAITING);
+    uintptr_t item = tid | (((uintptr_t)gc_state) << 16);
+    arraylist_push(&suspended_threads, (void*)item);
+    thread_suspend(thread);
+    jl_mutex_unlock_nogc(&safepoint_lock);
+    return 1;
 }
 #endif
 
@@ -176,24 +187,22 @@ kern_return_t catch_exception_raise(mach_port_t            exception_port,
     kern_return_t ret = thread_get_state(thread, x86_EXCEPTION_STATE64, (thread_state_t)&exc_state, &exc_count);
     HANDLE_MACH_ERROR("thread_get_state", ret);
     uint64_t fault_addr = exc_state.__faultvaddr;
+    if (jl_addr_is_safepoint(fault_addr)) {
 #ifdef JULIA_ENABLE_THREADING
-    if (fault_addr == (uintptr_t)jl_gc_signal_page) {
-        JL_LOCK_NOGC(&gc_suspend_lock);
-        if (!jl_gc_safepoint_activated) {
-            // GC is done before we get the message, do nothing and return
-            JL_UNLOCK_NOGC(&gc_suspend_lock);
+        if (jl_mach_gc_wait(ptls, thread, tid))
             return KERN_SUCCESS;
+        if (ptls->tid != 0)
+            return KERN_SUCCESS;
+#endif
+        if (ptls->defer_signal) {
+            jl_safepoint_defer_sigint();
         }
-        // Otherwise, set the gc state of the thread, suspend and record it
-        int8_t gc_state = ptls->gc_state;
-        ptls->gc_state = JL_GC_STATE_WAITING;
-        uintptr_t item = tid | (((uintptr_t)gc_state) << 16);
-        arraylist_push(&suspended_threads, (void*)item);
-        thread_suspend(thread);
-        JL_UNLOCK_NOGC(&gc_suspend_lock);
+        else if (jl_safepoint_consume_sigint()) {
+            jl_clear_force_sigint();
+            jl_throw_in_thread(tid, thread, jl_interrupt_exception);
+        }
         return KERN_SUCCESS;
     }
-#endif
 #ifdef SEGV_EXCEPTION
     if (1) {
 #else
@@ -235,9 +244,8 @@ static void attach_exception_port(thread_port_t thread)
     HANDLE_MACH_ERROR("thread_set_exception_ports", ret);
 }
 
-static void jl_thread_suspend_and_get_state(int tid, unw_context_t **ctx, int sig)
+static void jl_thread_suspend_and_get_state(int tid, unw_context_t **ctx)
 {
-    (void)sig;
     mach_port_t tid_port = pthread_mach_thread_np(jl_all_task_states[tid].system_id);
 
     kern_return_t ret = thread_suspend(tid_port);
@@ -258,19 +266,39 @@ static void jl_thread_suspend_and_get_state(int tid, unw_context_t **ctx, int si
 static void jl_thread_resume(int tid, int sig)
 {
     mach_port_t thread = pthread_mach_thread_np(jl_all_task_states[tid].system_id);
+    kern_return_t ret = thread_resume(thread);
+    HANDLE_MACH_ERROR("thread_resume", ret);
+}
 
-    if (tid == 0 && sig == SIGINT) {
-        if (jl_defer_signal) {
-            jl_signal_pending = sig;
-        }
-        else {
-            jl_signal_pending = 0;
-            jl_throw_in_thread(tid, thread, jl_interrupt_exception);
-        }
+// Throw jl_interrupt_exception if the master thread is in a signal async region
+// or if SIGINT happens too often.
+static void jl_try_deliver_sigint(void)
+{
+    mach_port_t thread = pthread_mach_thread_np(jl_all_task_states[0].system_id);
+    jl_tls_states_t *ptls = jl_all_task_states[0].ptls;
+
+    kern_return_t ret = thread_suspend(thread);
+    HANDLE_MACH_ERROR("thread_suspend", ret);
+
+    // This abort `sleep` and other syscall.
+    ret = thread_abort(thread);
+    HANDLE_MACH_ERROR("thread_abort", ret);
+
+    jl_safepoint_enable_sigint();
+    int force = jl_check_force_sigint();
+    if (force || (!ptls->defer_signal && ptls->io_wait)) {
+        jl_safepoint_consume_sigint();
+        if (force)
+            jl_safe_printf("WARNING: Force throwing a SIGINT\n");
+        jl_clear_force_sigint();
+        jl_throw_in_thread(0, thread, jl_interrupt_exception);
+    }
+    else {
+        jl_wake_libuv();
     }
 
-    kern_return_t ret = thread_resume(thread);
-    HANDLE_MACH_ERROR("thread_resume", ret)
+    ret = thread_resume(thread);
+    HANDLE_MACH_ERROR("thread_resume", ret);
 }
 
 static int profile_started = 0;
@@ -350,7 +378,7 @@ void *mach_profile_listener(void *arg)
                 break;
 
             unw_context_t *uc;
-            jl_thread_suspend_and_get_state(i, &uc, -1);
+            jl_thread_suspend_and_get_state(i, &uc);
 
 #ifdef LIBOSXUNWIND
             /*

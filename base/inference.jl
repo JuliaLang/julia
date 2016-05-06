@@ -1572,6 +1572,7 @@ function typeinf_loop(frame)
         frame.inworkq || typeinf_frame(frame)
         return
     end
+    ccall(:jl_sigatomic_begin, Void, ())
     try
         in_typeinf_loop = true
         # the core type-inference algorithm
@@ -1618,6 +1619,7 @@ function typeinf_loop(frame)
         println(ex)
         ccall(:jlbacktrace, Void, ())
     end
+    ccall(:jl_sigatomic_end, Void, ())
     nothing
 end
 

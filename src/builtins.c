@@ -194,25 +194,25 @@ JL_CALLABLE(jl_f_throw)
 
 JL_DLLEXPORT void jl_enter_handler(jl_handler_t *eh)
 {
-    JL_SIGATOMIC_BEGIN();
+    // Must have no safepoint
     eh->prev = jl_current_task->eh;
     eh->gcstack = jl_pgcstack;
 #ifdef JULIA_ENABLE_THREADING
     eh->gc_state = jl_gc_state();
     eh->locks_len = jl_current_task->locks.len;
 #endif
+    eh->defer_signal = jl_get_ptls_states()->defer_signal;
     jl_current_task->eh = eh;
-    // TODO: this should really go after setjmp(). see comment in
-    // ctx_switch in task.c.
-    JL_SIGATOMIC_END();
 }
 
 JL_DLLEXPORT void jl_pop_handler(int n)
 {
-    while (n > 0) {
-        jl_eh_restore_state(jl_current_task->eh);
-        n--;
-    }
+    if (__unlikely(n <= 0))
+        return;
+    jl_handler_t *eh = jl_current_task->eh;
+    while (--n > 0)
+        eh = eh->prev;
+    jl_eh_restore_state(eh);
 }
 
 // primitives -----------------------------------------------------------------

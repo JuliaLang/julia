@@ -26,12 +26,14 @@
 #ifndef _OS_WINDOWS_
 #  include <pthread.h>
 #endif
+#include <signal.h>
 
 // This includes all the thread local states we care about for a thread.
 #define JL_MAX_BT_SIZE 80000
 typedef struct _jl_tls_states_t {
     struct _jl_gcframe_t *pgcstack;
     struct _jl_value_t *exception_in_transit;
+    volatile size_t *safepoint;
     // Whether it is safe to execute GC at the same time.
 #define JL_GC_STATE_WAITING 1
     // gc_state = 1 means the thread is doing GC or is waiting for the GC to
@@ -42,6 +44,7 @@ typedef struct _jl_tls_states_t {
     volatile int8_t gc_state;
     volatile int8_t in_finalizer;
     int8_t disable_gc;
+    volatile sig_atomic_t defer_signal;
     struct _jl_thread_heap_t *heap;
     struct _jl_module_t *current_module;
     struct _jl_task_t *volatile current_task;
@@ -57,6 +60,12 @@ typedef struct _jl_tls_states_t {
     size_t bt_size;
     // JL_MAX_BT_SIZE + 1 elements long
     uintptr_t *bt_data;
+    // Atomically set by the sender, reset by the handler.
+    volatile sig_atomic_t signal_request;
+    // Allow the sigint to be raised asynchronously
+    // this is limited to the few places we do synchronous IO
+    // we can make this more general (similar to defer_signal) if necessary
+    volatile sig_atomic_t io_wait;
 } jl_tls_states_t;
 
 #ifdef __MIC__
@@ -120,6 +129,8 @@ static inline unsigned long JL_CONST_FUNC jl_thread_self(void)
 // the __atomic builtins or c11 atomics with GNU extension or c11 _Generic
 #  define jl_atomic_compare_exchange(obj, expected, desired)    \
     __sync_val_compare_and_swap(obj, expected, desired)
+#  define jl_atomic_exchange(obj, desired)              \
+    __atomic_exchange_n(obj, desired, __ATOMIC_SEQ_CST)
 // TODO: Maybe add jl_atomic_compare_exchange_weak for spin lock
 #  define jl_atomic_store(obj, val)                     \
     __atomic_store_n(obj, val, __ATOMIC_SEQ_CST)
@@ -196,6 +207,31 @@ jl_atomic_compare_exchange(volatile T *obj, T2 expected, T3 desired)
     return (T)_InterlockedCompareExchange64((volatile __int64*)obj,
                                             (__int64)desired, (__int64)expected);
 }
+// atomic exchange
+template<typename T, typename T2>
+static inline typename std::enable_if<sizeof(T) == 1, T>::type
+jl_atomic_exchange(volatile T *obj, T2 val)
+{
+    return _InterlockedExchange8((volatile char*)obj, (char)val);
+}
+template<typename T, typename T2>
+static inline typename std::enable_if<sizeof(T) == 2, T>::type
+jl_atomic_exchange(volatile T *obj, T2 val)
+{
+    return _InterlockedExchange16((volatile short*)obj, (short)val);
+}
+template<typename T, typename T2>
+static inline typename std::enable_if<sizeof(T) == 4, T>::type
+jl_atomic_exchange(volatile T *obj, T2 val)
+{
+    return _InterlockedExchange((volatile LONG*)obj, (LONG)val);
+}
+template<typename T, typename T2>
+static inline typename std::enable_if<sizeof(T) == 8, T>::type
+jl_atomic_exchange(volatile T *obj, T2 val)
+{
+    return _InterlockedExchange64((volatile __int64*)obj, (__int64)val);
+}
 // atomic stores
 template<typename T, typename T2>
 static inline typename std::enable_if<sizeof(T) == 1>::type
@@ -258,11 +294,25 @@ JL_DLLEXPORT void (jl_cpu_wake)(void);
 
 // Accessing the tls variables, gc safepoint and gc states
 JL_DLLEXPORT JL_CONST_FUNC jl_tls_states_t *(jl_get_ptls_states)(void);
+// This triggers a SegFault when we are in GC
+// Assign it to a variable to make sure the compiler emit the load
+// and to avoid Clang warning for -Wunused-volatile-lvalue
+#define jl_gc_safepoint() do {                                          \
+        jl_signal_fence();                                              \
+        size_t safepoint_load = *jl_get_ptls_states()->safepoint;       \
+        jl_signal_fence();                                              \
+        (void)safepoint_load;                                           \
+    } while (0)
+#define jl_sigint_safepoint() do {                                      \
+        jl_signal_fence();                                              \
+        size_t safepoint_load = jl_get_ptls_states()->safepoint[-1];    \
+        jl_signal_fence();                                              \
+        (void)safepoint_load;                                           \
+    } while (0)
 #ifndef JULIA_ENABLE_THREADING
 extern JL_DLLEXPORT jl_tls_states_t jl_tls_states;
 #define jl_get_ptls_states() (&jl_tls_states)
 #define jl_gc_state() ((int8_t)0)
-#define jl_gc_safepoint() do {} while (0)
 STATIC_INLINE int8_t jl_gc_state_set(int8_t state, int8_t old_state)
 {
     (void)state;
@@ -273,16 +323,6 @@ typedef jl_tls_states_t *(*jl_get_ptls_states_func)(void);
 JL_DLLEXPORT void jl_set_ptls_states_getter(jl_get_ptls_states_func f);
 // Make sure jl_gc_state() is always a rvalue
 #define jl_gc_state() ((int8_t)(jl_get_ptls_states()->gc_state))
-JL_DLLEXPORT extern volatile size_t *jl_gc_signal_page;
-// This triggers a SegFault when we are in GC
-// Assign it to a variable to make sure the compiler emit the load
-// and to avoid Clang warning for -Wunused-volatile-lvalue
-#define jl_gc_safepoint() do {                          \
-        jl_signal_fence();                              \
-        size_t safepoint_load = *jl_gc_signal_page;     \
-        jl_signal_fence();                              \
-        (void)safepoint_load;                           \
-    } while (0)
 STATIC_INLINE int8_t jl_gc_state_set(int8_t state, int8_t old_state)
 {
     jl_get_ptls_states()->gc_state = state;

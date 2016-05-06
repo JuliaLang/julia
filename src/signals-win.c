@@ -41,6 +41,22 @@ static char *strsignal(int sig)
     return "?";
 }
 
+static void jl_try_throw_sigint(void)
+{
+    jl_tls_states_t *ptls = jl_get_ptls_states();
+    jl_safepoint_enable_sigint();
+    jl_wake_libuv();
+    int force = jl_check_force_sigint();
+    if (force || (!ptls->defer_signal && ptls->io_wait)) {
+        jl_safepoint_consume_sigint();
+        if (force)
+            jl_safe_printf("WARNING: Force throwing a SIGINT\n");
+        // Force a throw
+        jl_clear_force_sigint();
+        jl_throw(jl_interrupt_exception);
+    }
+}
+
 void __cdecl crt_sig_handler(int sig, int num)
 {
     CONTEXT Context;
@@ -62,13 +78,9 @@ void __cdecl crt_sig_handler(int sig, int num)
         break;
     case SIGINT:
         signal(SIGINT, (void (__cdecl *)(int))crt_sig_handler);
-        if (jl_defer_signal) {
-            jl_signal_pending = sig;
-        }
-        else {
-            jl_signal_pending = 0;
-            jl_sigint_action();
-        }
+        if (exit_on_sigint)
+            jl_exit(130); // 128 + SIGINT
+        jl_try_throw_sigint();
         break;
     default: // SIGSEGV, (SSIGTERM, IGILL)
         memset(&Context, 0, sizeof(Context));
@@ -111,6 +123,47 @@ void jl_throw_in_ctx(jl_value_t *excpt, CONTEXT *ctxThread, int bt)
 
 HANDLE hMainThread = INVALID_HANDLE_VALUE;
 
+// Try to throw the exception in the master thread.
+static void jl_try_deliver_sigint(void)
+{
+    jl_tls_states_t *ptls = jl_all_task_states[0].ptls;
+    jl_safepoint_enable_sigint();
+    jl_wake_libuv();
+    if ((DWORD)-1 == SuspendThread(hMainThread)) {
+        // error
+        jl_safe_printf("error: SuspendThread failed\n");
+        return;
+    }
+    int force = jl_check_force_sigint();
+    if (force || (!ptls->defer_signal && ptls->io_wait)) {
+        jl_safepoint_consume_sigint();
+        if (force)
+            jl_safe_printf("WARNING: Force throwing a SIGINT\n");
+        // Force a throw
+        jl_clear_force_sigint();
+        CONTEXT ctxThread;
+        memset(&ctxThread, 0, sizeof(CONTEXT));
+        ctxThread.ContextFlags = CONTEXT_CONTROL | CONTEXT_INTEGER;
+        if (!GetThreadContext(hMainThread, &ctxThread)) {
+            // error
+            jl_safe_printf("error: GetThreadContext failed\n");
+            return;
+        }
+        jl_throw_in_ctx(jl_interrupt_exception, &ctxThread, 1);
+        ctxThread.ContextFlags = CONTEXT_CONTROL | CONTEXT_INTEGER;
+        if (!SetThreadContext(hMainThread, &ctxThread)) {
+            jl_safe_printf("error: SetThreadContext failed\n");
+            // error
+            return;
+        }
+    }
+    if ((DWORD)-1 == ResumeThread(hMainThread)) {
+        jl_safe_printf("error: ResumeThread failed\n");
+        // error
+        return;
+    }
+}
+
 static BOOL WINAPI sigint_handler(DWORD wsig) //This needs winapi types to guarantee __stdcall
 {
     int sig;
@@ -121,38 +174,9 @@ static BOOL WINAPI sigint_handler(DWORD wsig) //This needs winapi types to guara
         // etc.
         default: sig = SIGTERM; break;
     }
-    if (jl_defer_signal) {
-        jl_signal_pending = sig;
-    }
-    else {
-        jl_signal_pending = 0;
-        if (exit_on_sigint) jl_exit(130);
-        if ((DWORD)-1 == SuspendThread(hMainThread)) {
-            //error
-            jl_safe_printf("error: SuspendThread failed\n");
-            return 0;
-        }
-        CONTEXT ctxThread;
-        memset(&ctxThread,0,sizeof(CONTEXT));
-        ctxThread.ContextFlags = CONTEXT_CONTROL | CONTEXT_INTEGER;
-        if (!GetThreadContext(hMainThread, &ctxThread)) {
-            //error
-            jl_safe_printf("error: GetThreadContext failed\n");
-            return 0;
-        }
-        jl_throw_in_ctx(jl_interrupt_exception, &ctxThread, 1);
-        ctxThread.ContextFlags = CONTEXT_CONTROL | CONTEXT_INTEGER;
-        if (!SetThreadContext(hMainThread,&ctxThread)) {
-            jl_safe_printf("error: SetThreadContext failed\n");
-            //error
-            return 0;
-        }
-        if ((DWORD)-1 == ResumeThread(hMainThread)) {
-            jl_safe_printf("error: ResumeThread failed\n");
-            //error
-            return 0;
-        }
-    }
+    if (exit_on_sigint)
+        jl_exit(128 + sig); // 128 + SIGINT
+    jl_try_deliver_sigint();
     return 1;
 }
 
@@ -168,13 +192,23 @@ static LONG WINAPI _exception_handler(struct _EXCEPTION_POINTERS *ExceptionInfo,
                 jl_throw_in_ctx(jl_stackovf_exception, ExceptionInfo->ContextRecord,in_ctx&&pSetThreadStackGuarantee);
                 return EXCEPTION_CONTINUE_EXECUTION;
             case EXCEPTION_ACCESS_VIOLATION:
+                if (jl_addr_is_safepoint(ExceptionInfo->ExceptionRecord->ExceptionInformation[1])) {
 #ifdef JULIA_ENABLE_THREADING
-                if (ExceptionInfo->ExceptionRecord->ExceptionInformation[1] ==
-                    (intptr_t)jl_gc_signal_page) {
-                    jl_gc_signal_wait();
+                    jl_set_gc_and_wait();
+                    // Do not raise sigint on worker thread
+                    if (ti_tid != 0)
+                        return EXCEPTION_CONTINUE_EXECUTION;
+#endif
+                    if (jl_get_ptls_states()->defer_signal) {
+                        jl_safepoint_defer_sigint();
+                    }
+                    else if (jl_safepoint_consume_sigint()) {
+                        jl_clear_force_sigint();
+                        jl_throw_in_ctx(jl_interrupt_exception,
+                                        ExceptionInfo->ContextRecord, in_ctx);
+                    }
                     return EXCEPTION_CONTINUE_EXECUTION;
                 }
-#endif
                 if (ExceptionInfo->ExceptionRecord->ExceptionInformation[0] == 1) { // writing to read-only memory (e.g. mmap)
                     jl_throw_in_ctx(jl_readonlymemory_exception, ExceptionInfo->ContextRecord,in_ctx);
                     return EXCEPTION_CONTINUE_EXECUTION;

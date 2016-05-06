@@ -528,16 +528,23 @@ static void jl_resolve_sysimg_location(JL_IMAGE_SEARCH rel)
         jl_options.load = abspath(jl_options.load);
 }
 
+static void jl_set_io_wait(int v)
+{
+    jl_get_ptls_states()->io_wait = v;
+}
+
 void _julia_init(JL_IMAGE_SEARCH rel)
 {
 #ifdef JULIA_ENABLE_THREADING
     // Make sure we finalize the tls callback before starting any threads.
     jl_get_ptls_states_getter();
-    jl_gc_signal_init();
 #endif
+    jl_safepoint_init();
     libsupport_init();
+    ios_set_io_wait_func = jl_set_io_wait;
     jl_io_loop = uv_default_loop(); // this loop will internal events (spawning process etc.),
                                     // best to call this first, since it also initializes libuv
+    jl_init_signal_async();
     restore_signals();
     jl_resolve_sysimg_location(rel);
     // loads sysimg if available, and conditionally sets jl_options.cpu_target

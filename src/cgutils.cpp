@@ -455,7 +455,7 @@ static bool deserves_sret(jl_value_t *dt, Type *T)
 static Value *emit_nthptr_addr(Value *v, ssize_t n)
 {
     return builder.CreateGEP(builder.CreateBitCast(v, T_ppjlvalue),
-                             ConstantInt::get(T_size, (ssize_t)n));
+                             ConstantInt::get(T_size, n));
 }
 
 static Value *emit_nthptr_addr(Value *v, Value *idx)
@@ -474,6 +474,13 @@ static Value *emit_nthptr_recast(Value *v, Value *idx, MDNode *tbaa, Type *ptype
 {
     // p = (jl_value_t**)v; *(ptype)&p[n]
     Value *vptr = emit_nthptr_addr(v, idx);
+    return tbaa_decorate(tbaa,builder.CreateLoad(builder.CreateBitCast(vptr,ptype), false));
+}
+
+static Value *emit_nthptr_recast(Value *v, ssize_t n, MDNode *tbaa, Type *ptype)
+{
+    // p = (jl_value_t**)v; *(ptype)&p[n]
+    Value *vptr = emit_nthptr_addr(v, n);
     return tbaa_decorate(tbaa,builder.CreateLoad(builder.CreateBitCast(vptr,ptype), false));
 }
 
@@ -1709,4 +1716,21 @@ static Value *emit_exc_in_transit(jl_codectx_t *ctx)
     Value *pexc_in_transit = builder.CreateBitCast(ctx->ptlsStates, T_ppjlvalue);
     Constant *offset = ConstantInt::getSigned(T_int32, offsetof(jl_tls_states_t, exception_in_transit) / sizeof(void*));
     return builder.CreateGEP(pexc_in_transit, ArrayRef<Value*>(offset), "jl_exception_in_transit");
+}
+
+static void emit_signal_fence(void)
+{
+#ifdef LLVM39
+    builder.CreateFence(AtomicOrdering::SequentiallyConsistent, SingleThread);
+#else
+    builder.CreateFence(SequentiallyConsistent, SingleThread);
+#endif
+}
+
+static Value *emit_defer_signal(jl_codectx_t *ctx)
+{
+    Value *ptls = builder.CreateBitCast(ctx->ptlsStates,
+                                        PointerType::get(T_sigatomic, 0));
+    Constant *offset = ConstantInt::getSigned(T_int32, offsetof(jl_tls_states_t, defer_signal) / sizeof(sig_atomic_t));
+    return builder.CreateGEP(ptls, ArrayRef<Value*>(offset), "jl_defer_signal");
 }
