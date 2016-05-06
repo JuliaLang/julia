@@ -140,13 +140,6 @@ static jl_value_t *eval(jl_value_t *e, jl_value_t **locals, jl_lambda_info_t *la
     if (jl_is_quotenode(e)) {
         return jl_fieldref(e,0);
     }
-    if (jl_is_topnode(e)) {
-        jl_sym_t *s = (jl_sym_t*)jl_fieldref(e,0);
-        jl_value_t *v = jl_get_global(jl_base_relative_to(jl_current_module),s);
-        if (v == NULL)
-            jl_undefined_var_error(s);
-        return v;
-    }
     if (!jl_is_expr(e)) {
         if (jl_is_slot(e)) {
             ssize_t n = jl_slot_number(e);

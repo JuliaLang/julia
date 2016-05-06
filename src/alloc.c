@@ -37,7 +37,6 @@ jl_datatype_t *jl_labelnode_type;
 jl_datatype_t *jl_gotonode_type;
 jl_datatype_t *jl_quotenode_type;
 jl_datatype_t *jl_newvarnode_type;
-jl_datatype_t *jl_topnode_type;
 jl_datatype_t *jl_intrinsic_type;
 jl_datatype_t *jl_method_type;
 jl_datatype_t *jl_methtable_type;
@@ -280,11 +279,11 @@ jl_value_t *jl_resolve_globals(jl_value_t *expr, jl_lambda_info_t *lam)
                 // replace getfield(module_expr, :sym) with GlobalRef
                 jl_value_t *s = jl_fieldref(jl_exprarg(e,2),0);
                 jl_value_t *fe = jl_exprarg(e,0);
-                if (jl_is_symbol(s) && jl_is_topnode(fe)) {
+                if (jl_is_symbol(s) && jl_is_globalref(fe)) {
                     jl_value_t *f = jl_static_eval(fe, NULL, lam->def->module, lam, 0, 0);
                     if (f == jl_builtin_getfield) {
                         jl_value_t *me = jl_exprarg(e,1);
-                        if (jl_is_topnode(me) ||
+                        if (jl_is_globalref(me) ||
                             (jl_is_symbol(me) && jl_binding_resolved_p(lam->def->module, (jl_sym_t*)me))) {
                             jl_value_t *m = jl_static_eval(me, NULL, lam->def->module, lam, 0, 0);
                             if (m && jl_is_module(m))

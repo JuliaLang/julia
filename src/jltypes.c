@@ -3484,11 +3484,6 @@ void jl_init_types(void)
                         jl_svec(1, jl_symbol("slot")),
                         jl_svec(1, jl_slotnumber_type), 0, 0, 1);
 
-    jl_topnode_type =
-        jl_new_datatype(jl_symbol("TopNode"), jl_any_type, jl_emptysvec,
-                        jl_svec(1, jl_symbol("name")),
-                        jl_svec(1, jl_sym_type), 0, 0, 1);
-
     jl_module_type =
         jl_new_datatype(jl_symbol("Module"), jl_any_type, jl_emptysvec,
                         jl_svec(2, jl_symbol("name"), jl_symbol("parent")),
@@ -3657,7 +3652,6 @@ void jl_init_types(void)
     jl_compute_field_offsets(jl_labelnode_type);
     jl_compute_field_offsets(jl_gotonode_type);
     jl_compute_field_offsets(jl_quotenode_type);
-    jl_compute_field_offsets(jl_topnode_type);
     jl_compute_field_offsets(jl_module_type);
     jl_compute_field_offsets(jl_lambda_info_type);
     jl_compute_field_offsets(jl_typector_type);

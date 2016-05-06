@@ -91,7 +91,7 @@ macro test999_str(args...); args; end
 @test parse(":(x.\$f[i])") == Expr(:quote,
                                    Expr(:ref,
                                         Expr(Symbol("."), :x,
-                                             Expr(:$, Expr(:call, TopNode(:Expr),
+                                             Expr(:$, Expr(:call, GlobalRef(Base,:Expr),
                                                            QuoteNode(:quote),
                                                            :f))),
                                         :i))

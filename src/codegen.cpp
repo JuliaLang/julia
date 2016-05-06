@@ -1562,14 +1562,6 @@ jl_value_t *jl_static_eval(jl_value_t *ex, void *ctx_, jl_module_t *mod,
         }
         return NULL;
     }
-    if (jl_is_topnode(ex)) {
-        jl_binding_t *b = jl_get_binding(jl_base_relative_to(mod),
-                                         (jl_sym_t*)jl_fieldref(ex,0));
-        if (b == NULL) return NULL;
-        if (b->constp)
-            return b->value;
-        return NULL;
-    }
     if (jl_is_quotenode(ex))
         return jl_fieldref(ex,0);
     if (jl_is_lambda_info(ex))
@@ -1735,7 +1727,7 @@ static void mark_volatile_vars(jl_array_t *stmts, std::vector<jl_varinfo_t> &slo
 
 static bool expr_is_symbol(jl_value_t *e)
 {
-    return (jl_is_symbol(e) || jl_is_topnode(e) || jl_is_globalref(e));
+    return (jl_is_symbol(e) || jl_is_globalref(e));
 }
 
 // a very simple, conservative escape analysis that is sufficient for
@@ -3149,18 +3141,6 @@ static jl_cgval_t emit_expr(jl_value_t *expr, jl_codectx_t *ctx)
     }
     if (jl_is_globalref(expr)) {
         return emit_getfield((jl_value_t*)jl_globalref_mod(expr), jl_globalref_name(expr), ctx);
-    }
-    if (jl_is_topnode(expr)) {
-        jl_sym_t *var = (jl_sym_t*)jl_fieldref(expr,0);
-        jl_module_t *mod = topmod(ctx);
-        jl_binding_t *b = jl_get_binding(mod, var);
-        if (b == NULL)
-            b = jl_get_binding_wr(mod, var);
-        if (b->constp && b->value != NULL) {
-            return mark_julia_const(b->value);
-        }
-        return emit_checked_var(julia_binding_gv(b), var, ctx,
-                                false, tbaa_binding);
     }
     if (!jl_is_expr(expr)) {
         int needroot = true;
