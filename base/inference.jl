@@ -1600,8 +1600,8 @@ function typeinf_loop(frame)
                         i.inworkq = true
                     end
                 end
-                for i in fplist
-                    finish(i) # this may add incomplete work to active
+                for i in length(fplist):-1:1
+                    finish(fplist[i]) # this may add incomplete work to active
                 end
             end
         end
