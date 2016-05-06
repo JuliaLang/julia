@@ -86,7 +86,7 @@ before_install:
         export LDFLAGS="-L$(brew --prefix openblas-julia)/lib -L$(brew --prefix suite-sparse-julia)/lib";
         export DYLD_FALLBACK_LIBRARY_PATH="/usr/local/lib:/lib:/usr/lib:$(brew --prefix openblas-julia)/lib:$(brew --prefix suite-sparse-julia)/lib:$(brew --prefix arpack-julia)/lib";
         make $BUILDOPTS -C contrib -f repackage_system_suitesparse4.make;
-        TESTSTORUN="all --skip subarray"; fi # TODO: re enable this if possible without timing out
+        TESTSTORUN="all --skip linalg/triangular subarray"; fi # TODO: re enable these if possible without timing out
     - git clone -q git://git.kitenet.net/moreutils
 script:
     - make -C moreutils mispipe
