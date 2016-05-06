@@ -5672,9 +5672,9 @@ Base.(:(.!=))
     lufact!(A) -> LU
 
 `lufact!` is the same as [`lufact`](:func:`lufact`), but saves space by overwriting the
-input `A`, instead of creating a copy.  For sparse `A` the `nzval` field is not overwritten
-but the index fields, `colptr` and `rowval` are decremented in place, converting from
-1-based indices to 0-based indices.
+input `A`, instead of creating a copy. An `InexactError` exception is thrown if the
+factorisation produces a number not representable by the element type of `A`, e.g. for
+integer types.
 """
 lufact!
 
@@ -6552,8 +6552,9 @@ Scale an array `A` by a scalar `b` overwriting `A` in-place.
 
 If `A` is a matrix and `b` is a vector, then `scale!(A,b)` scales each column `i` of `A` by
 `b[i]` (similar to `A*Diagonal(b)`), while `scale!(b,A)` scales each row `i` of `A` by `b[i]`
-(similar to `Diagonal(b)*A`), again operating in-place on `A`.
-
+(similar to `Diagonal(b)*A`), again operating in-place on `A`. An `InexactError` exception is
+thrown if the scaling produces a number not representable by the element type of `A`,
+e.g. for integer types.
 """
 scale!
 
@@ -8573,6 +8574,8 @@ Ac_mul_B
 
 `qrfact!` is the same as [`qrfact`](:func:`qrfact`) when `A` is a subtype of
 `StridedMatrix`, but saves space by overwriting the input `A`, instead of creating a copy.
+An `InexactError` exception is thrown if the factorisation produces a number not
+representable by the element type of `A`, e.g. for integer types.
 """
 qrfact!
 
