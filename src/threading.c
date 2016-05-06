@@ -104,6 +104,16 @@ static void ti_initthread(int16_t tid)
     ptls->tid = tid;
     ptls->pgcstack = NULL;
     ptls->gc_state = 0; // GC unsafe
+    // Conditionally initialize the safepoint address. See comment in
+    // `safepoint.c`
+    if (tid == 0) {
+        ptls->safepoint = (size_t*)(jl_safepoint_pages + jl_page_size);
+    }
+    else {
+        ptls->safepoint = (size_t*)(jl_safepoint_pages + jl_page_size * 2 +
+                                    sizeof(size_t));
+    }
+    ptls->defer_signal = 0;
     ptls->current_module = NULL;
     void *bt_data = malloc(sizeof(uintptr_t) * (JL_MAX_BT_SIZE + 1));
     if (bt_data == NULL) {

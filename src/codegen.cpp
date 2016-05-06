@@ -246,6 +246,7 @@ static IntegerType *T_uint64;
 
 static IntegerType *T_char;
 static IntegerType *T_size;
+static IntegerType *T_sigatomic;
 
 static Type *T_float16;
 static Type *T_float32;
@@ -342,8 +343,6 @@ static GlobalVariable *jltls_states_var;
 // Imaging mode only
 static GlobalVariable *jltls_states_func_ptr = NULL;
 static size_t jltls_states_func_idx = 0;
-static GlobalVariable *jl_gc_signal_page_ptr = NULL;
-static size_t jl_gc_signal_page_idx = 0;
 #endif
 
 // important functions
@@ -576,9 +575,7 @@ typedef struct {
     std::vector<bool> inbounds;
 
     CallInst *ptlsStates;
-#ifdef JULIA_ENABLE_THREADING
     Value *signalPage;
-#endif
 
     llvm::DIBuilder *dbuilder;
     bool debug_enabled;
@@ -1340,6 +1337,7 @@ const jl_value_t *jl_dump_function_asm(void *f, int raw_mc)
         return (jl_value_t*)jl_pchar_to_array((char*)fptr, symsize);
     }
 
+    int8_t gc_state = jl_gc_safe_enter();
     jl_dump_asm_internal(fptr, symsize, slide,
 #ifndef USE_MCJIT
             context,
@@ -1355,6 +1353,7 @@ const jl_value_t *jl_dump_function_asm(void *f, int raw_mc)
 #ifndef LLVM37
     fstream.flush();
 #endif
+    jl_gc_safe_leave(gc_state);
 
     return jl_cstr_to_string(const_cast<char*>(stream.str().c_str()));
 }
@@ -3429,12 +3428,9 @@ static void allocate_gc_frame(BasicBlock *b0, jl_codectx_t *ctx)
 {
     // allocate a placeholder gc instruction
     ctx->ptlsStates = builder.CreateCall(prepare_call(jltls_states_func));
-#ifdef JULIA_ENABLE_THREADING
-    if (imaging_mode) {
-        ctx->signalPage =
-            tbaa_decorate(tbaa_const, builder.CreateLoad(prepare_global(jl_gc_signal_page_ptr)));
-    }
-#endif
+    int nthfield = offsetof(jl_tls_states_t, safepoint) / sizeof(void*);
+    ctx->signalPage = emit_nthptr_recast(ctx->ptlsStates, nthfield, tbaa_const,
+                                         PointerType::get(T_psize, 0));
 }
 
 void jl_codegen_finalize_temp_arg(CallInst *ptlsStates, Type *T_pjlvalue,
@@ -4975,6 +4971,7 @@ static void init_julia_llvm_env(Module *m)
         T_size = T_uint64;
     else
         T_size = T_uint32;
+    T_sigatomic = Type::getIntNTy(jl_LLVMContext, sizeof(sig_atomic_t) * 8);
     T_psize = PointerType::get(T_size, 0);
     T_float16 = Type::getHalfTy(jl_LLVMContext);
     T_float32 = Type::getFloatTy(jl_LLVMContext);
@@ -5165,10 +5162,6 @@ static void init_julia_llvm_env(Module *m)
             jl_emit_sysimg_slot(m, pfunctype, "jl_get_ptls_states.ptr",
                                 (uintptr_t)jl_get_ptls_states_getter(),
                                 jltls_states_func_idx);
-        jl_gc_signal_page_ptr =
-            jl_emit_sysimg_slot(m, T_pint8, "jl_gc_signal_page.ptr",
-                                (uintptr_t)jl_gc_signal_page,
-                                jl_gc_signal_page_idx);
     }
 #endif
 

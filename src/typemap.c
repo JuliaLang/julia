@@ -834,7 +834,7 @@ jl_typemap_entry_t *jl_typemap_insert(union jl_typemap_t *cache, jl_value_t *par
             *overwritten = ml->func.value;
         if (newvalue == NULL)  // don't overwrite with guard entries
             return ml;
-        JL_SIGATOMIC_BEGIN();
+        // sigatomic begin
         ml->sig = type;
         jl_gc_wb(ml, ml->sig);
         ml->simplesig = simpletype;
@@ -846,7 +846,7 @@ jl_typemap_entry_t *jl_typemap_insert(union jl_typemap_t *cache, jl_value_t *par
         ml->func.value = newvalue;
         if (newvalue)
             jl_gc_wb(ml, newvalue);
-        JL_SIGATOMIC_END();
+        // sigatomic end
         return ml;
     }
     if (overwritten != NULL)

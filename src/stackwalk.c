@@ -197,6 +197,7 @@ int needsSymRefreshModuleList;
 BOOL (WINAPI *hSymRefreshModuleList)(HANDLE);
 static int jl_unw_init(bt_cursor_t *cursor, bt_context_t *Context)
 {
+    // Might be called from unmanaged thread.
     if (needsSymRefreshModuleList && hSymRefreshModuleList != 0 && !jl_in_stackwalk) {
         jl_in_stackwalk = 1;
         hSymRefreshModuleList(GetCurrentProcess());
@@ -228,6 +229,7 @@ static int jl_unw_init(bt_cursor_t *cursor, bt_context_t *Context)
 
 static int jl_unw_step(bt_cursor_t *cursor, uintptr_t *ip, uintptr_t *sp)
 {
+    // Might be called from unmanaged thread.
 #ifndef _CPU_X86_64_
     *ip = (uintptr_t)cursor->stackframe.AddrPC.Offset;
     *sp = (uintptr_t)cursor->stackframe.AddrStack.Offset;
@@ -354,9 +356,11 @@ JL_DLLEXPORT jl_value_t *jl_lookup_code_address(void *ip, int skipC)
     size_t inlinedat_line;
     char *inlinedat_file;
     jl_lambda_info_t *outer_linfo;
+    int8_t gc_state = jl_gc_safe_enter();
     int fromC = frame_info_from_ip(&func_name, &file_name, &line_num,
                                    &inlinedat_file, &inlinedat_line, &outer_linfo,
                                    (size_t)ip, skipC, 0);
+    jl_gc_safe_leave(gc_state);
     jl_value_t *r = (jl_value_t*)jl_alloc_svec(8);
     JL_GC_PUSH1(&r);
     jl_svecset(r, 0, jl_symbol(func_name));

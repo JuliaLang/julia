@@ -812,11 +812,11 @@ static void* jl_emit_and_add_to_shadow(GlobalVariable *gv, void *gvarinit = NULL
 #endif
 }
 
-#ifdef JULIA_ENABLE_THREADING // only used in the threading build
+#ifdef JULIA_ENABLE_THREADING
 // Emit a slot in the system image to be filled at sysimg init time.
 // Returns the global var. Fill `idx` with 1-base index in the sysimg gv.
 // Use as an optimization for runtime constant addresses to have one less
-// load.
+// load. (Used only by threading).
 static GlobalVariable *jl_emit_sysimg_slot(Module *m, Type *typ, const char *name,
                                            uintptr_t init, size_t &idx)
 {
@@ -915,12 +915,6 @@ static void jl_gen_llvm_globaldata(llvm::Module *mod, ValueToValueMapTy &VMap,
                                  GlobalVariable::ExternalLinkage,
                                  ConstantInt::get(T_size, jltls_states_func_idx),
                                  "jl_ptls_states_getter_idx"));
-    addComdat(new GlobalVariable(*mod,
-                                 T_size,
-                                 true,
-                                 GlobalVariable::ExternalLinkage,
-                                 ConstantInt::get(T_size, jl_gc_signal_page_idx),
-                                 "jl_gc_signal_page_idx"));
 #endif
 
     Constant *feature_string = ConstantDataArray::getString(jl_LLVMContext, jl_options.cpu_target);

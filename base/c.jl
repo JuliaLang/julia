@@ -202,8 +202,20 @@ end
 # within a long-running C routine.
 sigatomic_begin() = ccall(:jl_sigatomic_begin, Void, ())
 sigatomic_end() = ccall(:jl_sigatomic_end, Void, ())
-disable_sigint(f::Function) = try sigatomic_begin(); f(); finally sigatomic_end(); end
-reenable_sigint(f::Function) = try sigatomic_end(); f(); finally sigatomic_begin(); end
+function disable_sigint(f::Function)
+    sigatomic_begin()
+    res = f()
+    # Exception unwind sigatomic automatically
+    sigatomic_end()
+    res
+end
+function reenable_sigint(f::Function)
+    sigatomic_end()
+    res = f()
+    # Exception unwind sigatomic automatically
+    sigatomic_begin()
+    res
+end
 
 function ccallable(f::Function, rt::Type, argt::Type, name::Union{AbstractString,Symbol}=string(f))
     ccall(:jl_extern_c, Void, (Any, Any, Any, Cstring), f, rt, argt, name)
