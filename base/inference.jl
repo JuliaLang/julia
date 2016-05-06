@@ -275,7 +275,17 @@ add_tfunc(Core.Intrinsics.select_value, 3, 3,
         tmerge(x, y)
     end)
 add_tfunc(is, 2, 2,
-          (x::ANY, y::ANY)->(isa(x,Const) && isa(y,Const) ? Const(x.val===y.val) : Bool))
+    function (x::ANY, y::ANY)
+        if isa(x,Const) && isa(y,Const)
+            return Const(x.val===y.val)
+        elseif isType(x) && isType(y) && isleaftype(x) && isleaftype(y)
+            return Const(x.parameters[1]===y.parameters[1])
+        elseif typeintersect(widenconst(x), widenconst(y)) === Bottom
+            return Const(false)
+        else
+            return Bool
+        end
+    end)
 add_tfunc(isdefined, 1, IInf, (args...)->Bool)
 add_tfunc(Core.sizeof, 1, 1, x->Int)
 add_tfunc(nfields, 1, 1, x->(isa(x,Const) ? Const(nfields(x.val)) :
