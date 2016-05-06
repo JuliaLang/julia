@@ -266,8 +266,8 @@ function do_test(result::ExecutionResult, orig_expr)
         value = result.value
         testres = if isa(value, Bool)
             # a true value Passes
-            value ? Pass(:test, orig_expr, expr, value) :
-                    Fail(:test, orig_expr, expr, value)
+            value ? Pass(:test, orig_expr, result.data, value) :
+                    Fail(:test, orig_expr, result.data, value)
         else
             # If the result is non-Boolean, this counts as an Error
             Error(:test_nonbool, orig_expr, value, nothing)
@@ -285,7 +285,7 @@ function do_broken_test(result::ExecutionResult, orig_expr)
     testres = Broken(:test, orig_expr)
     # Assume the test is broken and only change if the result is true
     if isa(result, Returned)
-        expr, value = result.value
+        value = result.value
         if isa(value, Bool) && value
             testres = Error(:test_unbroken, orig_expr, value, nothing)
         end

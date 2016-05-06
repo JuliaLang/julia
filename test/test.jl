@@ -66,13 +66,8 @@ for i in 1:3
 end
 @test contains(sprint(show, fails[1]), "Thrown: ErrorException")
 @test contains(sprint(show, fails[2]), "No exception thrown")
-<<<<<<< 78670fef1881001c723e29f0acd7cbb81db84684
 @test contains(sprint(show, fails[3]), "Evaluated: 2 == 4")
-=======
-@test contains(sprint(show, fails[3]), "Evaluated: false")
-@test contains(sprint(show, fails[4]), "Evaluated: 2 == 4")
-@test contains(sprint(show, fails[5]), "Unexpected Pass")
->>>>>>> changed to @test_broken
+@test contains(sprint(show, fails[4]), "Unexpected Pass")
 
 # Test printing of a TestSetException
 tse_str = sprint(show, Test.TestSetException(1,2,3,4))
