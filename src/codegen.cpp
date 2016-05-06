@@ -3524,13 +3524,13 @@ static Function *gen_cfun_wrapper(jl_function_t *ff, jl_value_t *jlrettype, jl_t
     if (lam != NULL) {
         name = jl_symbol_name(lam->def->name);
         astrt = lam->rettype;
-        if (astrt == (jl_value_t*)jl_bottom_type) {
-            // a function that doesn't return must have throw an error
-            // across the c-frame, which is generally a bad idea
-            jl_printf(JL_STDERR, "WARNING: cfunction: %s does not return", name);
-        }
-        else if (jl_type_intersection(astrt, declrt) == jl_bottom_type) {
-            jl_errorf("WARNING: cfunction: return type of %s does not match", name);
+        if (astrt != (jl_value_t*)jl_bottom_type &&
+            jl_type_intersection(astrt, declrt) == jl_bottom_type) {
+            // Do not warn if the function does not return since it is
+            // occasionally required by the C API (typically error callbacks)
+            // and doesn't capture the majority of the case when a function
+            // may throw.
+            jl_printf(JL_STDERR, "WARNING: cfunction: return type of %s does not match", name);
         }
         if (!lam->functionObjectsDecls.functionObject) {
             jl_errorf("ERROR: cfunction: compiling %s failed", name);
