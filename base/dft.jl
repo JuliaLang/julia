@@ -345,7 +345,7 @@ fftshift(x)
 
 function fftshift(x,dim)
     s = zeros(Int,ndims(x))
-    map(i -> s[i] = div(size(x,i),2), dim)
+    for i in dim; s[i] = div(size(x,i),2); end
     circshift(x, s)
 end
 
@@ -367,7 +367,7 @@ ifftshift
 
 function ifftshift(x,dim)
     s = zeros(Int,ndims(x))
-    map(i -> s[i] = -div(size(x,i),2), dim)
+    for i in dim; s[i] = -div(size(x,i),2); end
     circshift(x, s)
 end
 
