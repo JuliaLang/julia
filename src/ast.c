@@ -722,7 +722,7 @@ jl_value_t *jl_parse_eval_all(const char *fname, size_t len,
     jl_ast_context_t *ctx = jl_ast_ctx_enter();
     fl_context_t *fl_ctx = &ctx->fl;
     value_t f, ast;
-    f = cvalue_static_cstring(fl_ctx, fname);
+    f = cvalue_static_cstrn(fl_ctx, fname, len);
     fl_gc_handle(fl_ctx, &f);
     if (content != NULL) {
         value_t t = cvalue_static_cstrn(fl_ctx, content, contentlen);
