@@ -18,6 +18,7 @@ for Tv in (Float64, Complex128)
         A = convert(SparseMatrixCSC{Tv,Ti}, A0)
         lua = lufact(A)
         @test nnz(lua) == 18
+        @test_throws KeyError lua[:Z]
         L,U,p,q,Rs = lua[:(:)]
         @test_approx_eq (Diagonal(Rs) * A)[p,q] L * U
 
