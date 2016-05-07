@@ -723,7 +723,7 @@ void print_func_loc(JL_STREAM *s, jl_method_t *m)
 }
 
 /*
-  warn about ambiguous method priorities
+  record ambiguous method priorities
 
   the relative priority of A and B is ambiguous if
   !subtype(A,B) && !subtype(B,A) && no corresponding tuple
@@ -777,9 +777,11 @@ static int check_ambiguous_visitor(jl_typemap_entry_t *oldentry, struct typemap_
         jl_method_t *mambig = oldentry->func.method;
         if (m->ambig == jl_nothing) {
             m->ambig = (jl_value_t*) jl_alloc_cell_1d(0);
+            jl_gc_wb(m, m->ambig);
         }
         if (mambig->ambig == jl_nothing) {
             mambig->ambig = (jl_value_t*) jl_alloc_cell_1d(0);
+            jl_gc_wb(mambig, mambig->ambig);
         }
         jl_cell_1d_push((jl_array_t*) m->ambig, (jl_value_t*) mambig);
         jl_cell_1d_push((jl_array_t*) mambig->ambig, (jl_value_t*) m);
