@@ -251,10 +251,25 @@ index_shape_dim(A, dim, ::Colon) = (trailingsize(A, dim),)
 # ambiguities for AbstractArray subtypes. See the note in abstractarray.jl
 
 # Note that it's most efficient to call checkbounds first, and then to_index
-@inline function _getindex(l::LinearIndexing, A::AbstractArray, I::Union{Real, AbstractArray, Colon}...)
+@inline function _getindex{T,N}(l::LinearIndexing, A::AbstractArray{T,N}, I::Vararg{Union{Real, AbstractArray, Colon},N})
     @boundscheck checkbounds(A, I...)
     _unsafe_getindex(l, A, I...)
 end
+# Explicitly allow linear indexing with one non-scalar index
+@inline function _getindex(l::LinearIndexing, A::AbstractArray, i::Union{Real, AbstractArray, Colon})
+    @boundscheck checkbounds(A, i)
+    _unsafe_getindex(l, _maybe_linearize(l, A), i)
+end
+# But we can speed up LinearSlow arrays by reshaping them to vectors:
+_maybe_linearize(::LinearFast, A::AbstractArray) = A
+_maybe_linearize(::LinearSlow, A::AbstractVector) = A
+_maybe_linearize(::LinearSlow, A::AbstractArray) = reshape(A, length(A))
+
+@inline function _getindex{N}(l::LinearIndexing, A::AbstractArray, I::Vararg{Union{Real, AbstractArray, Colon},N}) # TODO: DEPRECATE FOR #14770
+    @boundscheck checkbounds(A, I...)
+    _unsafe_getindex(l, reshape(A, Val{N}), I...)
+end
+
 @generated function _unsafe_getindex(::LinearIndexing, A::AbstractArray, I::Union{Real, AbstractArray, Colon}...)
     N = length(I)
     quote
@@ -268,8 +283,6 @@ end
 end
 
 # logical indexing optimization - don't use find (within to_index)
-# This is inherently a linear operation in the source, but we could potentially
-# use fast dividing integers to speed it up.
 function _unsafe_getindex(::LinearIndexing, src::AbstractArray, I::AbstractArray{Bool})
     shape = index_shape(src, I)
     dest = similar(src, shape)
@@ -294,7 +307,7 @@ end
         $(Expr(:meta, :inline))
         D = eachindex(dest)
         Ds = start(D)
-        idxlens = index_lengths(src, I...) # TODO: unsplat?
+        idxlens = index_lengths(src, I...)
         @nloops $N i d->(1:idxlens[d]) d->(@inbounds j_d = getindex(I[d], i_d)) begin
             d, Ds = next(D, Ds)
             @inbounds dest[d] = @ncall $N getindex src j
@@ -311,10 +324,21 @@ end
 # before redispatching to the _unsafe_batchsetindex!
 _iterable(v::AbstractArray) = v
 _iterable(v) = repeated(v)
-@inline function _setindex!(l::LinearIndexing, A::AbstractArray, x, J::Union{Real,AbstractArray,Colon}...)
+@inline function _setindex!{T,N}(l::LinearIndexing, A::AbstractArray{T,N}, x, J::Vararg{Union{Real,AbstractArray,Colon},N})
     @boundscheck checkbounds(A, J...)
     _unsafe_setindex!(l, A, x, J...)
 end
+@inline function _setindex!(l::LinearIndexing, A::AbstractArray, x, j::Union{Real,AbstractArray,Colon})
+    @boundscheck checkbounds(A, j)
+    _unsafe_setindex!(l, _maybe_linearize(l, A), x, j)
+    A
+end
+@inline function _setindex!{N}(l::LinearIndexing, A::AbstractArray, x, J::Vararg{Union{Real, AbstractArray, Colon},N}) # TODO: DEPRECATE FOR #14770
+    @boundscheck checkbounds(A, J...)
+    _unsafe_setindex!(l, reshape(A, Val{N}), x, J...)
+    A
+end
+
 @inline function _unsafe_setindex!(::LinearIndexing, A::AbstractArray, x, J::Union{Real,AbstractArray,Colon}...)
     _unsafe_batchsetindex!(A, _iterable(x), to_indexes(J...)...)
 end

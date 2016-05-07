@@ -38,6 +38,16 @@ reshape(parent::AbstractArray, dims::Dims) = _reshape(parent, dims)
 reshape(parent::AbstractArray, len::Integer) = reshape(parent, (Int(len),))
 reshape(parent::AbstractArray, dims::Int...) = reshape(parent, dims)
 
+@generated function reshape{T,AN,N}(parent::AbstractArray{T,AN}, ndims::Type{Val{N}})
+    if AN < N
+        # Add trailing singleton dimensions
+        :(reshape(parent, size(parent)..., $(ntuple(i->1, N - AN)...)))
+    else
+        sz = [:(size(parent, $d)) for d = 1:N-1]
+        :(reshape(parent, $(sz...), trailingsize(parent, Val{$N})))
+    end
+end
+
 function _reshape(parent::AbstractArray, dims::Dims)
     prod(dims) == length(parent) || throw(DimensionMismatch("parent has $(length(parent)) elements, which is incompatible with size $dims"))
     __reshape((parent, linearindexing(parent)), dims)
