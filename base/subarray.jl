@@ -77,9 +77,23 @@ parentindexes(a::AbstractArray) = ntuple(i->1:size(a,i), ndims(a))
 
 ## SubArray creation
 # Drops singleton dimensions (those indexed with a scalar)
-function slice(A::AbstractArray, I::ViewIndex...)
+function slice{T,N}(A::AbstractArray{T,N}, I::Vararg{ViewIndex,N})
     @_inline_meta
     @boundscheck checkbounds(A, I...)
+    unsafe_slice(A, I...)
+end
+function slice(A::AbstractArray, i::ViewIndex)
+    @_inline_meta
+    @boundscheck checkbounds(A, i)
+    unsafe_slice(reshape(A, Val{1}), i)
+end
+function slice{N}(A::AbstractArray, I::Vararg{ViewIndex,N}) # TODO: DEPRECATE FOR #14770
+    @_inline_meta
+    @boundscheck checkbounds(A, I...)
+    unsafe_slice(reshape(A, Val{N}), I...)
+end
+function unsafe_slice{T,N}(A::AbstractArray{T,N}, I::Vararg{ViewIndex,N})
+    @_inline_meta
     J = to_indexes(I...)
     SubArray(A, J, index_shape(A, J...))
 end
@@ -89,9 +103,23 @@ keep_leading_scalars(T::Tuple{Real, Vararg{Real}}) = T
 keep_leading_scalars(T::Tuple{Real, Vararg{Any}}) = (@_inline_meta; (NoSlice(T[1]), keep_leading_scalars(tail(T))...))
 keep_leading_scalars(T::Tuple{Any, Vararg{Any}}) = (@_inline_meta; (T[1], keep_leading_scalars(tail(T))...))
 
-function sub(A::AbstractArray, I::ViewIndex...)
+function sub{T,N}(A::AbstractArray{T,N}, I::Vararg{ViewIndex,N})
     @_inline_meta
     @boundscheck checkbounds(A, I...)
+    unsafe_sub(A, I...)
+end
+function sub(A::AbstractArray, i::ViewIndex)
+    @_inline_meta
+    @boundscheck checkbounds(A, i)
+    unsafe_sub(reshape(A, Val{1}), i)
+end
+function sub{N}(A::AbstractArray, I::Vararg{ViewIndex,N}) # TODO: DEPRECATE FOR #14770
+    @_inline_meta
+    @boundscheck checkbounds(A, I...)
+    unsafe_sub(reshape(A, Val{N}), I...)
+end
+function unsafe_sub{T,N}(A::AbstractArray{T,N}, I::Vararg{ViewIndex,N})
+    @_inline_meta
     J = keep_leading_scalars(to_indexes(I...))
     SubArray(A, J, index_shape(A, J...))
 end
@@ -100,63 +128,31 @@ end
 #
 # Recursively look through the heads of the parent- and sub-indexes, considering
 # the following cases:
-# * Parent index is empty  -> ignore trailing scalars, but preserve added dimensions
-# * Parent index is Any    -> re-index that with the sub-index
-# * Parent index is Scalar -> that dimension was dropped, so skip the sub-index and use the index as is
+# * Parent index is array  -> re-index that with one or more sub-indexes (one per dimension)
+# * Parent index is Colon  -> just use the sub-index as provided
+# * Parent index is scalar -> that dimension was dropped, so skip the sub-index and use the index as is
 #
-# Furthermore, we must specially consider the case with one final sub-index,
-# as it may be a linear index that spans multiple parent indexes.
 
+typealias AbstractZeroDimArray{T} AbstractArray{T, 0}
 typealias DroppedScalar Union{Real, AbstractCartesianIndex}
-# When indexing beyond the parent indices, drop all trailing scalars (they must be 1 to be inbounds)
-reindex(V, idxs::Tuple{}, subidxs::Tuple{Vararg{DroppedScalar}}) = ()
-# Drop any intervening scalars that are beyond the parent indices but before a nonscalar
-reindex(V, idxs::Tuple{}, subidxs::Tuple{DroppedScalar, Vararg{Any}}) =
-    (@_propagate_inbounds_meta; (reindex(V, idxs, tail(subidxs))...))
-# And keep the nonscalar index to add the dimension
-reindex(V, idxs::Tuple{}, subidxs::Tuple{Any, Vararg{Any}}) =
-    (@_propagate_inbounds_meta; (subidxs[1], reindex(V, idxs, tail(subidxs))...))
+
+reindex(V, ::Tuple{}, ::Tuple{}) = ()
 
 # Skip dropped scalars, so simply peel them off the parent indices and continue
 reindex(V, idxs::Tuple{DroppedScalar, Vararg{Any}}, subidxs::Tuple{Vararg{Any}}) =
     (@_propagate_inbounds_meta; (idxs[1], reindex(V, tail(idxs), subidxs)...))
 
 # Colons simply pass their subindexes straight through
-reindex(V, idxs::Tuple{Colon}, subidxs::Tuple{Any}) =
-    (@_propagate_inbounds_meta; (subidxs[1],))
 reindex(V, idxs::Tuple{Colon, Vararg{Any}}, subidxs::Tuple{Any, Vararg{Any}}) =
     (@_propagate_inbounds_meta; (subidxs[1], reindex(V, tail(idxs), tail(subidxs))...))
-reindex(V, idxs::Tuple{Colon, Vararg{Any}}, subidxs::Tuple{Any}) =
-    (@_propagate_inbounds_meta; (merge_indexes(V, idxs, subidxs[1]),))
-# As an optimization, we don't need to merge indices if all trailing indices are dropped scalars
-reindex(V, idxs::Tuple{Colon, Vararg{DroppedScalar}}, subidxs::Tuple{Any}) =
-    (@_propagate_inbounds_meta; (subidxs[1], tail(idxs)...))
 
 # Re-index into parent vectors with one subindex
-reindex(V, idxs::Tuple{AbstractVector}, subidxs::Tuple{Any}) =
-    (@_propagate_inbounds_meta; (idxs[1][subidxs[1]],))
 reindex(V, idxs::Tuple{AbstractVector, Vararg{Any}}, subidxs::Tuple{Any, Vararg{Any}}) =
     (@_propagate_inbounds_meta; (idxs[1][subidxs[1]], reindex(V, tail(idxs), tail(subidxs))...))
-reindex(V, idxs::Tuple{AbstractVector, Vararg{Any}}, subidxs::Tuple{Any}) =
-    (@_propagate_inbounds_meta; (merge_indexes(V, idxs, subidxs[1]),))
-reindex(V, idxs::Tuple{AbstractVector, Vararg{DroppedScalar}}, subidxs::Tuple{Any}) =
-    (@_propagate_inbounds_meta; (idxs[1][subidxs[1]], tail(idxs)...))
 
 # Parent matrices are re-indexed with two sub-indices
-reindex(V, idxs::Tuple{AbstractMatrix}, subidxs::Tuple{Any}) =
-    (@_propagate_inbounds_meta; (idxs[1][subidxs[1]],))
-reindex(V, idxs::Tuple{AbstractMatrix}, subidxs::Tuple{Any, Any}) =
-    (@_propagate_inbounds_meta; (idxs[1][subidxs[1], subidxs[2]],))
 reindex(V, idxs::Tuple{AbstractMatrix, Vararg{Any}}, subidxs::Tuple{Any, Any, Vararg{Any}}) =
     (@_propagate_inbounds_meta; (idxs[1][subidxs[1], subidxs[2]], reindex(V, tail(idxs), tail(tail(subidxs)))...))
-reindex(V, idxs::Tuple{AbstractMatrix, Vararg{Any}}, subidxs::Tuple{Any}) =
-    (@_propagate_inbounds_meta; (merge_indexes(V, idxs, subidxs[1]),))
-reindex(V, idxs::Tuple{AbstractMatrix, Vararg{Any}}, subidxs::Tuple{Any, Any}) =
-    (@_propagate_inbounds_meta; (merge_indexes(V, idxs, subidxs),))
-reindex(V, idxs::Tuple{AbstractMatrix, Vararg{DroppedScalar}}, subidxs::Tuple{Any}) =
-    (@_propagate_inbounds_meta; (idxs[1][subidxs[1]], tail(idxs)...))
-reindex(V, idxs::Tuple{AbstractMatrix, Vararg{DroppedScalar}}, subidxs::Tuple{Any, Any}) =
-    (@_propagate_inbounds_meta; (idxs[1][subidxs[1], subidxs[2]], tail(idxs)...))
 
 # In general, we index N-dimensional parent arrays with N indices
 @generated function reindex{T,N}(V, idxs::Tuple{AbstractArray{T,N}, Vararg{Any}}, subidxs::Tuple{Vararg{Any}})
@@ -164,26 +160,29 @@ reindex(V, idxs::Tuple{AbstractMatrix, Vararg{DroppedScalar}}, subidxs::Tuple{An
         subs = [:(subidxs[$d]) for d in 1:N]
         tail = [:(subidxs[$d]) for d in N+1:length(subidxs.parameters)]
         :(@_propagate_inbounds_meta; (idxs[1][$(subs...)], reindex(V, tail(idxs), ($(tail...),))...))
-    elseif length(idxs.parameters) == 1
-        :(@_propagate_inbounds_meta; (idxs[1][subidxs...],))
-    elseif all(T->T<:DroppedScalar, idxs.parameters[2:end])
-        :(@_propagate_inbounds_meta; (idxs[1][subidxs...], tail(idxs)...))
     else
-        :(@_propagate_inbounds_meta; (merge_indexes(V, idxs, subidxs),))
+        :(error("mismatched index dimensionalities"))
     end
 end
 
 # In general, we simply re-index the parent indices by the provided ones
-getindex(V::SubArray) = (@_propagate_inbounds_meta; getindex(V, 1))
-function getindex(V::SubArray, I::Real...)
+typealias SlowSubArray{T,N,P,I} SubArray{T,N,P,I,false}
+function getindex{T,N}(V::SlowSubArray{T,N}, I::Vararg{Real,N})
     @_inline_meta
     @boundscheck checkbounds(V, I...)
     @inbounds r = V.parent[reindex(V, V.indexes, to_indexes(I...))...]
     r
 end
+# Explicitly define scalar linear indexing -- this is needed so the nonscalar
+# indexing methods don't take precedence here
+function getindex(V::SlowSubArray, i::Real)
+    @_inline_meta
+    @boundscheck checkbounds(V, i)
+    @inbounds r = V.parent[reindex(V, V.indexes, ind2sub(size(V), to_index(i)))...]
+    r
+end
 
 typealias FastSubArray{T,N,P,I} SubArray{T,N,P,I,true}
-getindex(V::FastSubArray) = (@_propagate_inbounds_meta; getindex(V, 1))
 function getindex(V::FastSubArray, i::Real)
     @_inline_meta
     @boundscheck checkbounds(V, i)
@@ -198,40 +197,55 @@ function getindex(V::FastContiguousSubArray, i::Real)
     @inbounds r = V.parent[V.first_index + to_index(i)-1]
     r
 end
-# We need this because the ::ViewIndex... method would otherwise obscure the Base fallback
-function getindex(V::FastSubArray, I::Real...)
+# Just like the slow case, explicitly define scalar indexing at N dims, too
+function getindex{T,N}(V::FastSubArray{T,N}, I::Vararg{Real,N})
     @_inline_meta
     @boundscheck checkbounds(V, I...)
     @inbounds r = getindex(V, sub2ind(size(V), to_indexes(I...)...))
     r
 end
-getindex{T,N}(V::SubArray{T,N}, I::ViewIndex...) = (@_propagate_inbounds_meta; copy(slice(V, I...)))
 
-setindex!(V::SubArray, x) = (@_propagate_inbounds_meta; setindex!(V, x, 1))
-function setindex!{T,N}(V::SubArray{T,N}, x, I::Real...)
+# Nonscalar indexing just copies a view
+getindex{T,N}(V::SubArray{T,N}, i::ViewIndex) = (@_propagate_inbounds_meta; copy(slice(V, i)))
+getindex{T,N}(V::SubArray{T,N}, I::Vararg{ViewIndex,N}) = (@_propagate_inbounds_meta; copy(slice(V, I...)))
+
+# Setindex is similar, but since we don't specially define non-scalar methods
+# we only need to define the canonical methods. We don't need to worry about
+# e.g., linear indexing for SlowSubArray since the fallbacks can do their thing
+function setindex!{T,N}(V::SlowSubArray{T,N}, x, I::Vararg{Real,N})
     @_inline_meta
     @boundscheck checkbounds(V, I...)
     @inbounds V.parent[reindex(V, V.indexes, to_indexes(I...))...] = x
     V
 end
+function setindex!(V::FastSubArray, x, i::Real)
+    @_inline_meta
+    @boundscheck checkbounds(V, i)
+    @inbounds V.parent[V.first_index + V.stride1*(to_index(i)-1)] = x
+    V
+end
+function setindex!(V::FastContiguousSubArray, x, i::Real)
+    @_inline_meta
+    @boundscheck checkbounds(V, i)
+    @inbounds V.parent[V.first_index + to_index(i)-1] = x
+    V
+end
 # Nonscalar setindex! falls back to the defaults
 
-function slice{T,N}(V::SubArray{T,N}, I::ViewIndex...)
+function unsafe_slice{T,N}(V::SubArray{T,N}, I::Vararg{ViewIndex,N})
     @_inline_meta
-    @boundscheck checkbounds(V, I...)
     idxs = reindex(V, V.indexes, to_indexes(I...))
     SubArray(V.parent, idxs, index_shape(V.parent, idxs...))
 end
 
-function sub{T,N}(V::SubArray{T,N}, I::ViewIndex...)
+function unsafe_sub{T,N}(V::SubArray{T,N}, I::Vararg{ViewIndex,N})
     @_inline_meta
-    @boundscheck checkbounds(V, I...)
     idxs = reindex(V, V.indexes, keep_leading_scalars(to_indexes(I...)))
     SubArray(V.parent, idxs, index_shape(V.parent, idxs...))
 end
 
-linearindexing(A::FastSubArray) = LinearFast()
-linearindexing(A::SubArray) = LinearSlow()
+linearindexing{T<:FastSubArray}(::Type{T}) = LinearFast()
+linearindexing{T<:SubArray}(::Type{T}) = LinearSlow()
 
 getindex(::Colon, i) = to_index(i)
 unsafe_getindex(::Colon, i) = to_index(i)
