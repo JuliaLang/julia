@@ -562,6 +562,10 @@ arrays, a shared array is accessible only from those participating
 workers specified by the ``pids`` named argument (and the creating
 process too, if it is on the same host).
 
+Note: If you want to store a Type like object, it must be immutable to count
+as a [bitstype](http://docs.julialang.org/en/release-0.4/manual/types/). 
+Attempting to store a mutable type object will result in an error.
+
 If an ``init`` function, of signature ``initfn(S::SharedArray)``, is
 specified, it is called on all the participating workers.  You can
 arrange it so that each worker runs the ``init`` function on a
