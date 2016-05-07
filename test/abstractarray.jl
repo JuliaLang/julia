@@ -302,9 +302,10 @@ end
 function test_setindex!_internals(::Type{TestAbstractArray})
     U = UnimplementedFastArray{Int, 2}()
     V = UnimplementedSlowArray{Int, 2}()
-    @test_throws ErrorException setindex!(U, 1)
-    @test_throws ErrorException Base.unsafe_setindex!(U, 1)
-    @test_throws ErrorException Base.unsafe_setindex!(U, 1, 1)
+    @test_throws ErrorException setindex!(U, 0, 1)
+    @test_throws ErrorException Base.unsafe_setindex!(U, 0, 1)
+    @test_throws ErrorException setindex!(V, 0, 1, 1)
+    @test_throws ErrorException Base.unsafe_setindex!(V, 0, 1, 1)
 end
 
 function test_get(::Type{TestAbstractArray})
