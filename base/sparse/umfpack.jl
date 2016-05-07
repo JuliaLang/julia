@@ -394,8 +394,8 @@ end
 A_ldiv_B!{T<:UMFVTypes}(lu::UmfpackLU{T}, b::Vector{T}) = solve(lu, b, UMFPACK_A)
 A_ldiv_B!{T<:UMFVTypes}(lu::UmfpackLU{T}, b::Matrix{T}) = solve(lu, b, UMFPACK_A)
 function A_ldiv_B!{Tb<:Complex}(lu::UmfpackLU{Float64}, b::Vector{Tb})
-    r = solve(lu, [convert(Tlu,real(be)) for be in b], UMFPACK_A)
-    i = solve(lu, [convert(Tlu,imag(be)) for be in b], UMFPACK_A)
+    r = solve(lu, [convert(Float64,real(be)) for be in b], UMFPACK_A)
+    i = solve(lu, [convert(Float64,imag(be)) for be in b], UMFPACK_A)
     Tb[r[k]+im*i[k] for k = 1:length(r)]
 end
 
