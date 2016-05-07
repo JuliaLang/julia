@@ -3414,13 +3414,9 @@ end
 # make sure that typeinf is executed before turning on typeinf_ext
 # this ensures that typeinf_ext doesn't recurse before it can add the item to the workq
 
-precompile(typeof(typeinf_edge).name.mt.defs.sig)
-
 for m in _methods_by_ftype(Tuple{typeof(typeinf_loop), Vararg{Any}}, 10)
     typeinf(m[3], m[1], m[2], true)
 end
 for m in _methods_by_ftype(Tuple{typeof(typeinf_edge), Vararg{Any}}, 10)
     typeinf(m[3], m[1], m[2], true)
 end
-
-ccall(:jl_set_typeinf_func, Void, (Any,), typeinf_ext)
