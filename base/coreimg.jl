@@ -73,6 +73,7 @@ include("docs/core.jl")
 
 # compiler
 include("inference.jl")
+ccall(:jl_set_typeinf_func, Void, (Any,), typeinf_ext)
 
 end # baremodule Inference
 ))
