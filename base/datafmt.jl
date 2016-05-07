@@ -569,7 +569,7 @@ function writedlm(io::IO, a::AbstractMatrix, dlm; opts...)
     pb = PipeBuffer()
     nr = size(a, 1)
     nc = size(a, 2)
-    for i = 1:nr
+    for i = 1:nr  # fixme (iter): improve if timholy/ArrayIteration.jl is merged into Base
         for j = 1:nc
             writedlm_cell(pb, a[i, j], dlm, quotes)
             j == nc ? write(pb,'\n') : print(pb,dlm)
