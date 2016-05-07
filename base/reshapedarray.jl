@@ -38,6 +38,7 @@ reshape(parent::AbstractArray, dims::Dims) = _reshape(parent, dims)
 reshape(parent::AbstractArray, len::Integer) = reshape(parent, (Int(len),))
 reshape(parent::AbstractArray, dims::Int...) = reshape(parent, dims)
 
+reshape{T,N}(parent::AbstractArray{T,N}, ndims::Type{Val{N}}) = parent
 @generated function reshape{T,AN,N}(parent::AbstractArray{T,AN}, ndims::Type{Val{N}})
     if AN < N
         # Add trailing singleton dimensions
