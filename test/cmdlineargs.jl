@@ -275,3 +275,6 @@ let exename = `$(Base.julia_cmd()) --precompiled=yes`
         end
     end
 end
+
+# Make sure `julia --lisp` doesn't break
+run(pipeline(DevNull, `$(Base.julia_cmd()) --lisp`, DevNull))
