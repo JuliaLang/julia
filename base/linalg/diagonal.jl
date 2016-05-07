@@ -118,11 +118,12 @@ for uplo in (:LowerTriangular, :UpperTriangular)
         end
     end
 end
-# (*)(A::AbstractTriangular, D::Diagonal) =
-    # error("this method should never get called. Please make a bug report.")
-*(A::AbstractMatrix, D::Diagonal) =
+(*)(A::AbstractTriangular, D::Diagonal) = error("this method should never be reached")
+(*)(D::Diagonal, A::AbstractTriangular) = error("this method should never be reached")
+
+(*)(A::AbstractMatrix, D::Diagonal) =
     scale!(similar(A, promote_op(*, eltype(A), eltype(D.diag))), A, D.diag)
-*(D::Diagonal, A::AbstractMatrix) =
+(*)(D::Diagonal, A::AbstractMatrix) =
     scale!(similar(A, promote_op(*, eltype(A), eltype(D.diag))), D.diag, A)
 
 A_mul_B!(A::Diagonal,B::AbstractMatrix) = scale!(A.diag,B)
