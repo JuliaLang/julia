@@ -169,14 +169,6 @@ set of characters) is provided, instead remove characters contained in it.
 lstrip
 
 """
-    reenable_sigint(f::Function)
-
-Re-enable Ctrl-C handler during execution of a function. Temporarily reverses the effect of
-`disable_sigint`.
-"""
-reenable_sigint
-
-"""
     indmin(itr) -> Integer
 
 Returns the index of the minimum element in a collection.
@@ -4389,19 +4381,6 @@ base
 An indexing operation into an array, `a`, tried to access an out-of-bounds element, `i`.
 """
 BoundsError
-
-"""
-    disable_sigint(f::Function)
-
-Disable Ctrl-C handler during execution of a function, for calling external code that is not
-interrupt safe. Intended to be called using `do` block syntax as follows:
-
-    disable_sigint() do
-        # interrupt-unsafe code
-        ...
-    end
-"""
-disable_sigint
 
 """
     hist2d(M, e1, e2) -> (edge1, edge2, counts)
