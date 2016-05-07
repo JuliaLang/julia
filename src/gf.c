@@ -744,36 +744,40 @@ struct ambiguous_matches_env {
     struct typemap_intersection_env match;
     union jl_typemap_t defs;
     jl_typemap_entry_t *newentry;
+    jl_array_t *shadowed;
+    int after;
 };
+const int eager_ambiguity_printing = 0;
 static int check_ambiguous_visitor(jl_typemap_entry_t *oldentry, struct typemap_intersection_env *closure0)
 {
     struct ambiguous_matches_env *closure = container_of(closure0, struct ambiguous_matches_env, match);
-    if (oldentry == closure->newentry)
-        return 0; // finished once it finds the method that was just inserted
-    // TODO: instead, maybe stop once we hit something newentry is definitely more specific than
-
+    if (oldentry == closure->newentry) {
+        closure->after = 1;
+        return 1;
+    }
     union jl_typemap_t map = closure->defs;
     jl_tupletype_t *type = (jl_tupletype_t*)closure->match.type;
     jl_method_t *m = closure->newentry->func.method;
     jl_tupletype_t *sig = oldentry->sig;
     jl_value_t *isect = closure->match.ti;
+    if (sigs_eq(isect, (jl_value_t*)(closure->after ? sig : type), 1)) {
+        // we're ok if the new definition is actually the one we just
+        // inferred to be required (see issue #3609). ideally this would
+        // never happen, since if New ⊓ Old == New then we should have
+        // considered New more specific, but jl_args_morespecific is not
+        // perfect, so this is a useful fallback.
+        return 1;
+    }
+
     // we know type ∩ sig != Union{} and
-    // we know !jl_args_morespecific(type, sig)
+    // we know !jl_args_morespecific(type, sig) [before]
+    //      or !jl_args_morespecific(sig, type) [after]
     // now we are checking that the reverse is true
-    if (!jl_args_morespecific((jl_value_t*)sig, (jl_value_t*)type)) {
-        if (sigs_eq(isect, (jl_value_t*)type, 1)) {
-            // we're ok if the new definition is actually the one we just
-            // inferred to be required (see issue #3609). ideally this would
-            // never happen, since if New ⊓ Old == New then we should have
-            // considered New more specific, but jl_args_morespecific is not
-            // perfect, so this is a useful fallback.
-            return 1;
-        }
+    if (!jl_args_morespecific((jl_value_t*)(closure->after ? type : sig),
+                              (jl_value_t*)(closure->after ? sig : type))) {
         jl_typemap_entry_t *l = jl_typemap_assoc_by_type(map, (jl_tupletype_t*)isect, NULL, 0, 0, 0);
-        if (l) {
-            // ok, intersection is covered
+        if (l != NULL) // ok, intersection is covered
             return 1;
-        }
         jl_method_t *mambig = oldentry->func.method;
         if (m->ambig == jl_nothing) {
             m->ambig = (jl_value_t*) jl_alloc_cell_1d(0);
@@ -785,13 +789,32 @@ static int check_ambiguous_visitor(jl_typemap_entry_t *oldentry, struct typemap_
         }
         jl_cell_1d_push((jl_array_t*) m->ambig, (jl_value_t*) mambig);
         jl_cell_1d_push((jl_array_t*) mambig->ambig, (jl_value_t*) m);
+        if (eager_ambiguity_printing) {
+            JL_STREAM *s = JL_STDERR;
+            jl_printf(s, "WARNING: New definition \n    ");
+            jl_static_show_func_sig(s, (jl_value_t*)type);
+            print_func_loc(s, m);
+            jl_printf(s, "\nis ambiguous with: \n    ");
+            jl_static_show_func_sig(s, (jl_value_t*)sig);
+            print_func_loc(s, oldentry->func.method);
+            jl_printf(s, ".\nTo fix, define \n    ");
+            jl_static_show_func_sig(s, isect);
+            jl_printf(s, "\nbefore the new definition.\n");
+        }
         return 1;  // there may be multiple ambiguities, keep going
+    }
+    else if (closure->after) {
+        // record that this method definition is being partially replaced
+        if (closure->shadowed == NULL) {
+            closure->shadowed = jl_alloc_cell_1d(0);
+        }
+        jl_cell_1d_push(closure->shadowed, oldentry->func.value);
     }
     return 1;
 }
 
-static void check_ambiguous_matches(union jl_typemap_t defs,
-                                    jl_typemap_entry_t *newentry)
+static jl_array_t *check_ambiguous_matches(union jl_typemap_t defs,
+                                           jl_typemap_entry_t *newentry)
 {
     jl_tupletype_t *type = newentry->sig;
     size_t l = jl_svec_len(type->parameters);
@@ -811,9 +834,12 @@ static void check_ambiguous_matches(union jl_typemap_t defs,
     env.match.env = NULL;
     env.defs = defs;
     env.newentry = newentry;
-    JL_GC_PUSH2(&env.match.env, &env.match.ti);
+    env.shadowed = NULL;
+    env.after = 0;
+    JL_GC_PUSH3(&env.match.env, &env.match.ti, &env.shadowed);
     jl_typemap_intersection_visitor(defs, 0, &env.match);
     JL_GC_POP();
+    return env.shadowed;
 }
 
 static void method_overwrite(jl_typemap_entry_t *newentry, jl_method_t *oldvalue) {
@@ -834,7 +860,7 @@ static void method_overwrite(jl_typemap_entry_t *newentry, jl_method_t *oldvalue
 }
 
 // invalidate cached methods that overlap this definition
-static void invalidate_conflicting(union jl_typemap_t *pml, jl_value_t *type, jl_value_t *parent)
+static void invalidate_conflicting(union jl_typemap_t *pml, jl_value_t *type, jl_value_t *parent, jl_array_t *shadowed)
 {
     jl_typemap_entry_t **pl;
     if (jl_typeof(pml->unknown) == (jl_value_t*)jl_typemap_level_type) {
@@ -843,7 +869,7 @@ static void invalidate_conflicting(union jl_typemap_t *pml, jl_value_t *type, jl
             for(int i=0; i < jl_array_len(cache->arg1); i++) {
                 union jl_typemap_t *pl = &((union jl_typemap_t*)jl_array_data(cache->arg1))[i];
                 if (pl->unknown && pl->unknown != jl_nothing) {
-                    invalidate_conflicting(pl, type, (jl_value_t*)cache->arg1);
+                    invalidate_conflicting(pl, type, (jl_value_t*)cache->arg1, shadowed);
                 }
             }
         }
@@ -851,7 +877,7 @@ static void invalidate_conflicting(union jl_typemap_t *pml, jl_value_t *type, jl
             for(int i=0; i < jl_array_len(cache->targ); i++) {
                 union jl_typemap_t *pl = &((union jl_typemap_t*)jl_array_data(cache->targ))[i];
                 if (pl->unknown && pl->unknown != jl_nothing) {
-                    invalidate_conflicting(pl, type, (jl_value_t*)cache->targ);
+                    invalidate_conflicting(pl, type, (jl_value_t*)cache->targ, shadowed);
                 }
             }
         }
@@ -862,9 +888,17 @@ static void invalidate_conflicting(union jl_typemap_t *pml, jl_value_t *type, jl
         pl = &pml->leaf;
     }
     jl_typemap_entry_t *l = *pl;
+    size_t i, n = jl_array_len(shadowed);
+    jl_value_t **d = jl_cell_data(shadowed);
     while (l != (void*)jl_nothing) {
-        if (jl_type_intersection(type, (jl_value_t*)l->sig) !=
-            (jl_value_t*)jl_bottom_type) {
+        int replaced = 0;
+        for (i = 0; i < n; i++) {
+            if (d[i] == (jl_value_t*)l->func.linfo->def) {
+                replaced = jl_type_intersection(type, (jl_value_t*)l->sig) != (jl_value_t*)jl_bottom_type;
+                break;
+            }
+        }
+        if (replaced) {
             *pl = l->next;
             jl_gc_wb(parent, *pl);
         }
@@ -893,16 +927,23 @@ void jl_method_table_insert(jl_methtable_t *mt, jl_method_t *method, jl_tupletyp
     jl_svec_t *tvars = method->tvars;
     assert(jl_is_tuple_type(type));
     JL_SIGATOMIC_BEGIN();
-    jl_value_t *oldvalue;
+    jl_value_t *oldvalue = NULL;
+    JL_GC_PUSH1(&oldvalue);
     jl_typemap_entry_t *newentry = jl_typemap_insert(&mt->defs, (jl_value_t*)mt,
             type, tvars, simpletype, jl_emptysvec, (jl_value_t*)method, 0, &method_defs, &oldvalue);
     if (oldvalue) {
         method->ambig = ((jl_method_t*)oldvalue)->ambig;
         method_overwrite(newentry, (jl_method_t*)oldvalue);
+        jl_array_t *shadowed = jl_alloc_cell_1d(1);
+        jl_cellset(shadowed, 0, oldvalue);
+        oldvalue = (jl_value_t*)shadowed;
     }
-    else
-        check_ambiguous_matches(mt->defs, newentry);
-    invalidate_conflicting(&mt->cache, (jl_value_t*)type, (jl_value_t*)mt);
+    else {
+        oldvalue = (jl_value_t*)check_ambiguous_matches(mt->defs, newentry);
+    }
+    if (oldvalue)
+        invalidate_conflicting(&mt->cache, (jl_value_t*)type, (jl_value_t*)mt, (jl_array_t*)oldvalue);
+    JL_GC_POP();
     update_max_args(mt, type);
     JL_SIGATOMIC_END();
 }
