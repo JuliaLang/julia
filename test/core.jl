@@ -3962,3 +3962,10 @@ g16153(x::ANY, y::ANY) = 2
 gg16153(x::ANY, y::ANY) = 2
 gg16153(x::ANY, y...) = 1
 @test gg16153(1, 1) == 2
+
+# don't remove global variable accesses even if we "know" their type
+# see #16090
+f16090() = typeof(undefined_x16090::Tuple{Type{Int}})
+@test_throws UndefVarError f16090()
+undefined_x16090 = (Int,)
+@test_throws TypeError f16090()
