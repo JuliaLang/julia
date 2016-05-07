@@ -130,7 +130,7 @@ static Value *runtime_sym_lookup(PointerType *funcptype, const char *f_lib, cons
 
 Value *llvm_type_rewrite(Value *v, Type *from_type, Type *target_type,
         bool tojulia, /* only matters if byref is set (declares the direction of the byref attribute) */
-        bool byref, /* only applies to arguments, set false for return values -- effectively the same as jl_cgval_t.ispointer */
+        bool byref, /* only applies to arguments, set false for return values -- effectively the same as jl_cgval_t.ispointer() */
         bool issigned, /* determines whether an integer value should be zero or sign extended */
         jl_codectx_t *ctx)
 {
@@ -265,10 +265,7 @@ static Value *julia_to_native(Type *to, bool toboxed, jl_value_t *jlto, const jl
                     ai = emit_static_alloca(T_int8, nb, ctx);
                 }
                 else {
-                    nbytes = tbaa_decorate(tbaa_datatype, builder.CreateLoad(
-                                    builder.CreateGEP(builder.CreatePointerCast(emit_typeof_boxed(jvinfo,ctx), T_pint32),
-                                        ConstantInt::get(T_size, offsetof(jl_datatype_t,size)/sizeof(int32_t))),
-                                    false));
+                    nbytes = emit_datatype_size(emit_typeof_boxed(jvinfo,ctx));
                     ai = builder.CreateAlloca(T_int8, nbytes);
                     *needStackRestore = true;
                 }
@@ -284,21 +281,13 @@ static Value *julia_to_native(Type *to, bool toboxed, jl_value_t *jlto, const jl
         BasicBlock *mutableBB = BasicBlock::Create(jl_LLVMContext,"is-mutable",ctx->f);
         BasicBlock *immutableBB = BasicBlock::Create(jl_LLVMContext,"is-immutable",ctx->f);
         BasicBlock *afterBB = BasicBlock::Create(jl_LLVMContext,"after",ctx->f);
-        Value *ismutable = builder.CreateTrunc(
-                tbaa_decorate(tbaa_datatype, builder.CreateLoad(
-                        builder.CreateGEP(builder.CreatePointerCast(jvt, T_pint8),
-                            ConstantInt::get(T_size, offsetof(jl_datatype_t,mutabl))),
-                        false)),
-                T_int1);
+        Value *ismutable = emit_datatype_mutabl(jvt);
         builder.CreateCondBr(ismutable, mutableBB, immutableBB);
         builder.SetInsertPoint(mutableBB);
         Value *p1 = data_pointer(jvinfo, ctx, to);
         builder.CreateBr(afterBB);
         builder.SetInsertPoint(immutableBB);
-        Value *nbytes = tbaa_decorate(tbaa_datatype, builder.CreateLoad(
-                    builder.CreateGEP(builder.CreatePointerCast(jvt, T_pint32),
-                        ConstantInt::get(T_size, offsetof(jl_datatype_t,size)/sizeof(int32_t))),
-                    false));
+        Value *nbytes = emit_datatype_size(jvt);
         AllocaInst *ai = builder.CreateAlloca(T_int8, nbytes);
         ai->setAlignment(16);
         prepare_call(builder.CreateMemCpy(ai, data_pointer(jvinfo, ctx, T_pint8), nbytes, sizeof(void*))->getCalledValue()); // minimum gc-alignment in julia is pointer size
@@ -316,7 +305,7 @@ static Value *julia_to_native(Type *to, bool toboxed, jl_value_t *jlto, const jl
     if (addressOf)
         to = to->getContainedType(0);
     Value *slot = emit_static_alloca(to, ctx);
-    if (!jvinfo.ispointer) {
+    if (!jvinfo.ispointer()) {
         builder.CreateStore(emit_unbox(to, jvinfo, ety), slot);
     }
     else {
@@ -855,10 +844,10 @@ static jl_cgval_t mark_or_box_ccall_result(Value *result, bool isboxed, jl_value
         assert(rt == (jl_value_t*)jl_voidpointer_type);
         Value *runtime_bt = boxed(emit_expr(rt_expr, ctx), ctx);
         int nb = sizeof(void*);
+        // TODO: can this be tighter than tbaa_value?
         return mark_julia_type(
-                init_bits_value(emit_allocobj(nb), runtime_bt, result),
-                true,
-                (jl_value_t*)jl_pointer_type, ctx);
+            init_bits_value(emit_allocobj(nb), runtime_bt, result, tbaa_value),
+            true, (jl_value_t*)jl_pointer_type, ctx);
     }
     return mark_julia_type(result, isboxed, rt, ctx);
 }
@@ -1385,7 +1374,7 @@ static jl_cgval_t emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
     if (sret) {
         jl_cgval_t sret_val = emit_new_struct(rt,1,NULL,ctx); // TODO: is it valid to be creating an incomplete type this way?
         assert(sret_val.typ != NULL && "Type was not concrete");
-        if (!sret_val.ispointer) {
+        if (!sret_val.ispointer()) {
             Value *mem = emit_static_alloca(lrt, ctx);
             builder.CreateStore(sret_val.V, mem);
             result = mem;
@@ -1570,7 +1559,7 @@ static jl_cgval_t emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
             assert(newst.typ != NULL && "Type was not concrete");
             assert(newst.isboxed);
             // copy the data from the return value to the new struct
-            builder.CreateAlignedStore(result, builder.CreateBitCast(newst.V, prt->getPointerTo()), 16); // julia gc is aligned 16
+            tbaa_decorate(newst.tbaa, builder.CreateAlignedStore(result, builder.CreateBitCast(newst.V, prt->getPointerTo()), 16)); // julia gc is aligned 16
             return newst;
         }
         else if (jlrt != prt) {
