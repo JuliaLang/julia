@@ -360,7 +360,7 @@ function A_mul_B_td!(C::AbstractMatrix, A::AbstractMatrix, B::BiTriSym)
     C
 end
 
-SpecialMatrix = Union{Bidiagonal, SymTridiagonal, Tridiagonal, AbstractTriangular}
+SpecialMatrix = Union{Bidiagonal, SymTridiagonal, Tridiagonal}
 # to avoid ambiguity warning, but shouldn't be necessary
 *(A::AbstractTriangular, B::SpecialMatrix) = full(A) * full(B)
 *(A::SpecialMatrix, B::SpecialMatrix) = full(A) * full(B)
