@@ -271,7 +271,7 @@ static Value *emit_unbox(Type *to, const jl_cgval_t &x, jl_value_t *jt)
     }
 
     Constant *c = x.constant ? julia_const_to_llvm(x.constant) : NULL;
-    if (!x.ispointer || c) { // already unboxed, but sometimes need conversion
+    if (!x.ispointer() || c) { // already unboxed, but sometimes need conversion
         Value *unboxed = c ? c : x.V;
         Type *ty = unboxed->getType();
         // bools are stored internally as int8 (for now)
@@ -301,17 +301,22 @@ static Value *emit_unbox(Type *to, const jl_cgval_t &x, jl_value_t *jt)
     if (p->getType() != ptype)
         p = builder.CreateBitCast(p, ptype);
     if (to == T_int1)
-        return builder.CreateTrunc(builder.CreateLoad(p), T_int1);
+        return builder.CreateTrunc(tbaa_decorate(x.tbaa, builder.CreateLoad(p)), T_int1);
     if (jt == (jl_value_t*)jl_bool_type)
-        return builder.CreateZExt(builder.CreateTrunc(builder.CreateLoad(p), T_int1), to);
+        return builder.CreateZExt(builder.CreateTrunc(tbaa_decorate(x.tbaa, builder.CreateLoad(p)), T_int1), to);
 
-    if (x.isboxed)
-        return builder.CreateAlignedLoad(p, 16); // julia's gc gives 16-byte aligned addresses
-    else if (jt)
-        return build_load(p, jt);
-    else
+    Instruction *load;
+    if (x.isboxed) {
+        load = builder.CreateAlignedLoad(p, 16); // julia's gc gives 16-byte aligned addresses
+    }
+    else if (jt) {
+        load = build_load(p, jt);
+    }
+    else {
         // stack has default alignment
-        return builder.CreateLoad(p);
+        load = builder.CreateLoad(p);
+    }
+    return tbaa_decorate(x.tbaa, load);
 }
 
 // unbox, trying to determine correct bitstype automatically
@@ -440,18 +445,18 @@ static jl_cgval_t generic_box(jl_value_t *targ, jl_value_t *x, jl_codectx_t *ctx
 
     assert(!v.isghost);
     Value *vx = NULL;
-    if (!v.ispointer)
+    if (!v.ispointer())
         vx = v.V;
     else if (v.constant)
         vx = julia_const_to_llvm(v.constant);
 
-    if (v.ispointer && vx == NULL) {
+    if (v.ispointer() && vx == NULL) {
         // try to load as original Type, to preserve llvm optimizations
         // but if the v.typ is not well known, use llvmt
         if (isboxed)
             vxt = llvmt;
-        vx = builder.CreateLoad(data_pointer(v, ctx,
-                    vxt == T_int1 ? T_pint8 : vxt->getPointerTo()));
+        vx = tbaa_decorate(v.tbaa, builder.CreateLoad(data_pointer(v, ctx,
+                                                                   vxt == T_int1 ? T_pint8 : vxt->getPointerTo())));
     }
 
     vxt = vx->getType();
@@ -509,9 +514,9 @@ static jl_cgval_t generic_unbox(jl_value_t *targ, jl_value_t *x, jl_codectx_t *c
         // XXX: emit type validity check on runtime_bt (bitstype of size nb)
 
         Value *newobj = emit_allocobj(nb);
-        builder.CreateStore(runtime_bt, emit_typeptr_addr(newobj));
-        if (!v.ispointer) {
-            builder.CreateAlignedStore(emit_unbox(llvmt, v, v.typ), builder.CreatePointerCast(newobj, llvmt->getPointerTo()), alignment);
+        tbaa_decorate(tbaa_tag, builder.CreateStore(runtime_bt, emit_typeptr_addr(newobj)));
+        if (!v.ispointer()) {
+            tbaa_decorate(tbaa_value, builder.CreateAlignedStore(emit_unbox(llvmt, v, v.typ), builder.CreatePointerCast(newobj, llvmt->getPointerTo()), alignment));
         }
         else {
             prepare_call(builder.CreateMemCpy(newobj, data_pointer(v, ctx, T_pint8), nb, alignment)->getCalledValue());
@@ -531,8 +536,8 @@ static jl_cgval_t generic_unbox(jl_value_t *targ, jl_value_t *x, jl_codectx_t *c
         return v;
 
     Value *vx;
-    if (v.ispointer) {
-        vx = builder.CreateLoad(data_pointer(v, ctx, llvmt->getPointerTo()));
+    if (v.ispointer()) {
+        vx = tbaa_decorate(v.tbaa, builder.CreateLoad(data_pointer(v, ctx, llvmt->getPointerTo())));
     }
     else {
         vx = v.V;
@@ -733,8 +738,8 @@ static jl_cgval_t emit_pointerref(jl_value_t *e, jl_value_t *i, jl_codectx_t *ct
         assert(jl_is_datatype(ety));
         uint64_t size = jl_datatype_size(ety);
         Value *strct = emit_allocobj(size);
-        builder.CreateStore(literal_pointer_val((jl_value_t*)ety),
-                            emit_typeptr_addr(strct));
+        tbaa_decorate(tbaa_tag, builder.CreateStore(literal_pointer_val((jl_value_t*)ety),
+                                                    emit_typeptr_addr(strct)));
         im1 = builder.CreateMul(im1, ConstantInt::get(T_size,
                     LLT_ALIGN(size, ((jl_datatype_t*)ety)->alignment)));
         thePtr = builder.CreateGEP(builder.CreateBitCast(thePtr, T_pint8), im1);
@@ -743,7 +748,7 @@ static jl_cgval_t emit_pointerref(jl_value_t *e, jl_value_t *i, jl_codectx_t *ct
         return mark_julia_type(strct, true, ety, ctx);
     }
     // TODO: alignment?
-    return typed_load(thePtr, im1, ety, ctx, tbaa_user, 1);
+    return typed_load(thePtr, im1, ety, ctx, tbaa_data, 1);
 }
 
 static jl_cgval_t emit_runtime_pointerset(jl_value_t *e, jl_value_t *x, jl_value_t *i, jl_codectx_t *ctx)
@@ -804,7 +809,7 @@ static jl_cgval_t emit_pointerset(jl_value_t *e, jl_value_t *x, jl_value_t *i, j
             val = emit_expr(x, ctx);
         }
         // TODO: alignment?
-        typed_store(thePtr, im1, val, ety, ctx, tbaa_user, NULL, 1);
+        typed_store(thePtr, im1, val, ety, ctx, tbaa_data, NULL, 1);
     }
     return mark_julia_type(thePtr, false, aty, ctx);
 }
