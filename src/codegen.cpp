@@ -2249,8 +2249,7 @@ static bool emit_builtin_call(jl_cgval_t *ret, jl_value_t *f, jl_value_t **args,
 
     else if (f==jl_builtin_throw && nargs==1) {
         Value *arg1 = boxed(emit_expr(args[1], ctx), ctx, false); // rooted by throw
-        // emit a "conditional" throw so that codegen does't end up trying to emit code after an "unreachable" terminator
-        raise_exception_unless(ConstantInt::get(T_int1,0), arg1, ctx);
+        raise_exception(arg1, ctx);
         *ret = jl_cgval_t();
         JL_GC_POP();
         return true;
@@ -3044,9 +3043,9 @@ static void emit_assignment(jl_value_t *l, jl_value_t *r, jl_codectx_t *ctx)
 
 // --- convert expression to code ---
 
-static Value *emit_condition(jl_value_t *cond, const std::string &msg, jl_codectx_t *ctx)
+static Value *emit_condition(const jl_cgval_t &condV, const std::string &msg,
+                             jl_codectx_t *ctx)
 {
-    jl_cgval_t condV = emit_expr(cond, ctx);
     if (condV.typ == (jl_value_t*)jl_bool_type) {
         Value *cond = emit_unbox(T_int1, condV, (jl_value_t*)jl_bool_type);
         assert(cond->getType() == T_int1);
@@ -3058,6 +3057,11 @@ static Value *emit_condition(jl_value_t *cond, const std::string &msg, jl_codect
     }
     // not a boolean
     return ConstantInt::get(T_int1,0); // TODO: replace with Undef
+}
+
+static Value *emit_condition(jl_value_t *cond, const std::string &msg, jl_codectx_t *ctx)
+{
+    return emit_condition(emit_expr(cond, ctx), msg, ctx);
 }
 
 static void emit_stmtpos(jl_value_t *expr, jl_codectx_t *ctx)
@@ -3200,14 +3204,16 @@ static jl_cgval_t emit_expr(jl_value_t *expr, jl_codectx_t *ctx)
         // this way until a later optimization pass, so it might see one of our
         // SSA vars as not dominating all uses. see issue #6068
         // Work around this by generating unconditional branches.
-        if (cond == jl_true) {
+        jl_cgval_t condV = emit_expr(cond, ctx);
+        jl_value_t *static_cond = static_eval(cond, ctx, true, true);
+        if (static_cond == jl_true) {
             builder.CreateBr(ifso);
         }
-        else if (cond == jl_false) {
+        else if (static_cond == jl_false) {
             builder.CreateBr(ifnot);
         }
         else {
-            Value *isfalse = emit_condition(cond, "if", ctx);
+            Value *isfalse = emit_condition(condV, "if", ctx);
             builder.CreateCondBr(isfalse, ifnot, ifso);
         }
         builder.SetInsertPoint(ifso);
@@ -3220,7 +3226,25 @@ static jl_cgval_t emit_expr(jl_value_t *expr, jl_codectx_t *ctx)
                 return mark_julia_const(c);
             }
         }
-        return emit_call(ex, ctx);
+        jl_cgval_t res = emit_call(ex, ctx);
+        // some intrinsics (e.g. typeassert) can return a wider type
+        // than what's actually possible
+        jl_value_t *expr_t = expr_type((jl_value_t*)ex, ctx);
+        if (res.typ == (jl_value_t*)jl_any_type || expr_t == jl_bottom_type) {
+            res.typ = expr_t;
+        }
+        else if (res.typ != expr_t && expr_t != (jl_value_t*)jl_any_type &&
+                 res.typ != jl_bottom_type) {
+            // The check avoids the expensive type intersect calculation
+            // > 99% of the time...
+            res.typ = jl_type_intersection(res.typ, expr_t);
+        }
+        if (res.typ == jl_bottom_type) {
+            builder.CreateUnreachable();
+            BasicBlock *newBB = BasicBlock::Create(jl_LLVMContext, "after_noret", ctx->f);
+            builder.SetInsertPoint(newBB);
+        }
+        return res;
     }
     else if (head == assign_sym) {
         emit_assignment(args[0], args[1], ctx);
