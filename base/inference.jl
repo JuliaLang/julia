@@ -2160,7 +2160,7 @@ function exprtype(x::ANY, sv::InferenceState)
 end
 
 # known affect-free calls (also effect-free)
-const _pure_builtins = Any[tuple, svec, fieldtype, apply_type, is, isa, typeof, typeassert]
+const _pure_builtins = Any[tuple, svec, fieldtype, apply_type, is, isa, typeof]
 
 # known effect-free calls (might not be affect-free)
 const _pure_builtins_volatile = Any[getfield, arrayref]
@@ -2198,8 +2198,8 @@ function effect_free(e::ANY, sv, allow_volatile::Bool)
         return true
     end
     if isa(e,GlobalRef)
-        allow_volatile && return true
-        return isconst(e.mod, e.name)
+        return (isdefined(e.mod, e.name) &&
+                (allow_volatile || isconst(e.mod, e.name)))
     end
     if isa(e,Expr)
         e = e::Expr
