@@ -46,6 +46,10 @@ end
     cd(pwd_)
 end
 
+# which (TODO: tests for Windows)
+@unix_only @test !isnull(which("ls"))
+@unix_only @test isfile(get(which("ls")))
+@unix_only @test isnull(which("WhayXUbWtIo50h0"))
 
 #######################################################################
 # This section tests some of the features of the stat-based file info #
