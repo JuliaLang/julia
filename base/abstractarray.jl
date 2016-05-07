@@ -414,14 +414,11 @@ pointer{T}(x::AbstractArray{T}, i::Integer) = (@_inline_meta; unsafe_convert(Ptr
 # We only define one fallback method on getindex for all argument types.
 # That dispatches to an (inlined) internal _getindex function, where the goal is
 # to transform the indices such that we can call the only getindex method that
-# we require AbstractArray subtypes must define, either:
-#       getindex(::T, ::Int) # if linearindexing(T) == LinearFast()
-#       getindex(::T, ::Int, ::Int, #=...ndims(A) indices...=#) if LinearSlow()
-# Unfortunately, it is currently impossible to express the latter method for
-# arbitrary dimensionalities. We could get around that with ::CartesianIndex{N},
-# but that isn't as obvious and would require that the function be inlined to
-# avoid allocations.  If the subtype hasn't defined those methods, it goes back
-# to the _getindex function where an error is thrown to prevent stack overflows.
+# we require the type A{T,N} <: AbstractArray{T,N} to define; either:
+#       getindex(::A, ::Int) # if linearindexing(A) == LinearFast() OR
+#       getindex{T,N}(::A{T,N}, ::Vararg{Int, N}) # if LinearSlow()
+# If the subtype hasn't defined the required method, it falls back to the
+# _getindex function again where an error is thrown to prevent stack overflows.
 
 function getindex(A::AbstractArray, I...)
     @_propagate_inbounds_meta
@@ -432,42 +429,46 @@ function unsafe_getindex(A::AbstractArray, I...)
     @inbounds r = getindex(A, I...)
     r
 end
-## Internal defitions
-# 0-dimensional indexing is defined to prevent ambiguities. LinearFast is easy:
-_getindex(::LinearFast, A::AbstractArray) = (@_propagate_inbounds_meta; getindex(A, 1))
-# But LinearSlow must take into account the dimensionality of the array:
-_getindex{T}(::LinearSlow, A::AbstractArray{T,0}) = error("indexing not defined for ", typeof(A))
-_getindex(::LinearSlow, A::AbstractVector) = (@_propagate_inbounds_meta; getindex(A, 1))
-_getindex(l::LinearSlow, A::AbstractArray) = (@_propagate_inbounds_meta; _getindex(l, A, 1))
-
+## Internal definitions
 _getindex(::LinearIndexing, A::AbstractArray, I...) = error("indexing $(typeof(A)) with types $(typeof(I)) is not supported")
 
-## LinearFast Scalar indexing
-_getindex(::LinearFast, A::AbstractArray, I::Int) = error("indexing not defined for ", typeof(A))
-function _getindex(::LinearFast, A::AbstractArray, I::Real...)
-    @_inline_meta
+## LinearFast Scalar indexing: canonical method is one Int
+_getindex(::LinearFast, A::AbstractArray, ::Int) = error("indexing not defined for ", typeof(A))
+_getindex(::LinearFast, A::AbstractArray, i::Real) = (@_propagate_inbounds_meta; getindex(A, to_index(i)))
+function _getindex{T,N}(::LinearFast, A::AbstractArray{T,N}, I::Vararg{Real,N})
     # We must check bounds for sub2ind; so we can then use @inbounds
+    @_inline_meta
+    J = to_indexes(I...)
+    @boundscheck checkbounds(A, J...)
+    @inbounds r = getindex(A, sub2ind(size(A), J...))
+    r
+end
+function _getindex(::LinearFast, A::AbstractArray, I::Real...) # TODO: DEPRECATE FOR #14770
+    @_inline_meta
     J = to_indexes(I...)
     @boundscheck checkbounds(A, J...)
     @inbounds r = getindex(A, sub2ind(size(A), J...))
     r
 end
 
-# LinearSlow Scalar indexing
-@generated function _getindex{T,AN}(::LinearSlow, A::AbstractArray{T,AN}, I::Real...)
+
+## LinearSlow Scalar indexing: Canonical method is full dimensionality of Ints
+_getindex{T,N}(::LinearSlow, A::AbstractArray{T,N}, ::Vararg{Int, N}) = error("indexing not defined for ", typeof(A))
+_getindex{T,N}(::LinearSlow, A::AbstractArray{T,N}, I::Vararg{Real, N}) = (@_propagate_inbounds_meta; getindex(A, to_indexes(I...)...))
+function _getindex(::LinearSlow, A::AbstractArray, i::Real)
+    # ind2sub requires all dimensions to be > 0; may as well just check bounds
+    @_inline_meta
+    @boundscheck checkbounds(A, i)
+    @inbounds r = getindex(A, ind2sub(size(A), to_index(i))...)
+    r
+end
+@generated function _getindex{T,AN}(::LinearSlow, A::AbstractArray{T,AN}, I::Real...) # TODO: DEPRECATE FOR #14770
     N = length(I)
-    if N == AN
-        if all(x->x===Int, I)
-            :(error("indexing not defined for ", typeof(A)))
-        else
-            :(@_propagate_inbounds_meta; getindex(A, to_indexes(I...)...))
-        end
-    elseif N > AN
+    if N > AN
         # Drop trailing ones
         Isplat = Expr[:(I[$d]) for d = 1:AN]
         Osplat = Expr[:(to_index(I[$d]) == 1) for d = AN+1:N]
         quote
-            # We only check the trailing ones, so just propagate @inbounds state
             @_propagate_inbounds_meta
             @boundscheck (&)($(Osplat...)) || throw_boundserror(A, I)
             getindex(A, $(Isplat...))
@@ -475,19 +476,15 @@ end
     else
         # Expand the last index into the appropriate number of indices
         Isplat = Expr[:(I[$d]) for d = 1:N-1]
-        i = 0
-        for d=N:AN
-            push!(Isplat, :(s[$(i+=1)]))
-        end
         sz = Expr(:tuple)
-        sz.args = Expr[:(size(A, $d)) for d=N:AN]
-        szcheck = Expr[:(size(A, $d) > 0) for d=N:AN]
+        sz.args = Expr[:(size(A, $d)) for d=max(N,1):AN]
+        szcheck = Expr[:(size(A, $d) > 0) for d=max(N,1):AN]
+        last_idx = N > 0 ? :(to_index(I[$N])) : 1
         quote
             # ind2sub requires all dimensions to be > 0:
             @_propagate_inbounds_meta
             @boundscheck (&)($(szcheck...)) || throw_boundserror(A, I)
-            s = ind2sub($sz, to_index(I[$N]))
-            getindex(A, $(Isplat...))
+            getindex(A, $(Isplat...), ind2sub($sz, $last_idx)...)
         end
     end
 end
@@ -504,18 +501,21 @@ function unsafe_setindex!(A::AbstractArray, v, I...)
     r
 end
 ## Internal defitions
-_setindex!(::LinearFast, A::AbstractArray, v) = (@_propagate_inbounds_meta; setindex!(A, v, 1))
-_setindex!{T}(::LinearSlow, A::AbstractArray{T,0}, v) = error("indexing not defined for ", typeof(A))
-_setindex!(::LinearSlow, A::AbstractVector, v) = (@_propagate_inbounds_meta; setindex!(A, v, 1))
-_setindex!(l::LinearSlow, A::AbstractArray, v) = (@_propagate_inbounds_meta; _setindex!(l, A, v, 1))
-
 _setindex!(::LinearIndexing, A::AbstractArray, v, I...) = error("indexing $(typeof(A)) with types $(typeof(I)) is not supported")
 
 ## LinearFast Scalar indexing
-_setindex!(::LinearFast, A::AbstractArray, v, I::Int) = error("indexed assignment not defined for ", typeof(A))
-function _setindex!(::LinearFast, A::AbstractArray, v, I::Real...)
-    @_inline_meta
+_setindex!(::LinearFast, A::AbstractArray, v, ::Int) = error("indexed assignment not defined for ", typeof(A))
+_setindex!(::LinearFast, A::AbstractArray, v, i::Real) = (@_propagate_inbounds_meta; setindex!(A, v, to_index(i)))
+function _setindex!{T,N}(::LinearFast, A::AbstractArray{T,N}, v, I::Vararg{Real,N})
     # We must check bounds for sub2ind; so we can then use @inbounds
+    @_inline_meta
+    J = to_indexes(I...)
+    @boundscheck checkbounds(A, J...)
+    @inbounds r = setindex!(A, v, sub2ind(size(A), J...))
+    r
+end
+function _setindex!(::LinearFast, A::AbstractArray, v, I::Real...) # TODO: DEPRECATE FOR #14770
+    @_inline_meta
     J = to_indexes(I...)
     @boundscheck checkbounds(A, J...)
     @inbounds r = setindex!(A, v, sub2ind(size(A), J...))
@@ -523,15 +523,18 @@ function _setindex!(::LinearFast, A::AbstractArray, v, I::Real...)
 end
 
 # LinearSlow Scalar indexing
-@generated function _setindex!{T,AN}(::LinearSlow, A::AbstractArray{T,AN}, v, I::Real...)
+_setindex!{T,N}(::LinearSlow, A::AbstractArray{T,N}, v, ::Vararg{Int, N}) = error("indexed assignment not defined for ", typeof(A))
+_setindex!{T,N}(::LinearSlow, A::AbstractArray{T,N}, v, I::Vararg{Real, N}) = (@_propagate_inbounds_meta; setindex!(A, v, to_indexes(I...)...))
+function _setindex!(::LinearSlow, A::AbstractArray, v, i::Real)
+    # ind2sub requires all dimensions to be > 0; may as well just check bounds
+    @_inline_meta
+    @boundscheck checkbounds(A, i)
+    @inbounds r = setindex!(A, v, ind2sub(size(A), to_index(i))...)
+    r
+end
+@generated function _setindex!{T,AN}(::LinearSlow, A::AbstractArray{T,AN}, v, I::Real...) # TODO: DEPRECATE FOR #14770
     N = length(I)
-    if N == AN
-        if all(x->x===Int, I)
-            :(error("indexing not defined for ", typeof(A)))
-        else
-            :(@_propagate_inbounds_meta; setindex!(A, v, to_indexes(I...)...))
-        end
-    elseif N > AN
+    if N > AN
         # Drop trailing ones
         Isplat = Expr[:(I[$d]) for d = 1:AN]
         Osplat = Expr[:(to_index(I[$d]) == 1) for d = AN+1:N]
@@ -544,19 +547,15 @@ end
     else
         # Expand the last index into the appropriate number of indices
         Isplat = Expr[:(I[$d]) for d = 1:N-1]
-        i = 0
-        for d=N:AN
-            push!(Isplat, :(s[$(i+=1)]))
-        end
         sz = Expr(:tuple)
-        sz.args = Expr[:(size(A, $d)) for d=N:AN]
-        szcheck = Expr[:(size(A, $d) > 0) for d=N:AN]
+        sz.args = Expr[:(size(A, $d)) for d=max(N,1):AN]
+        szcheck = Expr[:(size(A, $d) > 0) for d=max(N,1):AN]
+        last_idx = N > 0 ? :(to_index(I[$N])) : 1
         quote
-            @_propagate_inbounds_meta
             # ind2sub requires all dimensions to be > 0:
+            @_propagate_inbounds_meta
             @boundscheck (&)($(szcheck...)) || throw_boundserror(A, I)
-            s = ind2sub($sz, to_index(I[$N]))
-            setindex!(A, v, $(Isplat...))
+            setindex!(A, v, $(Isplat...), ind2sub($sz, $last_idx)...)
         end
     end
 end
