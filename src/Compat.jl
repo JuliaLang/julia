@@ -418,9 +418,12 @@ if VERSION < v"0.4.0-dev+3732"
                    (:Complex64,:complex64),
                    (:Complex128,:complex128),
                    (:Char,:char),
-                   (:Bool,:bool)]
+                   (:Bool,:bool),
+                   (:Symbol,:symbol)]
         calltypes[k] = v
     end
+elseif VERSION < v"0.5.0-dev+3831"
+    Base.Symbol(args...) = symbol(args...)
 end
 
 if VERSION < v"0.5.0-dev+2396"
@@ -457,6 +460,8 @@ function _compat(ex::Expr)
             T = ex.args[1]
             if T in (:Complex32, :Complex64, :Complex128)
                 ex = Expr(:call, calltypes[T], ex.args[2:end]...)
+            elseif T == :Symbol
+                ex = Expr(:call, calltypes[T], Expr(:call, :string, ex.args[2:end]...))
             else
                 ex = Expr(:(::), Expr(:call, :convert, T, ex.args[2:end]...), T)
             end
@@ -498,7 +503,7 @@ function _compat(ex::Expr)
         end
     elseif ex.head === :macrocall
         f = ex.args[1]
-        if f === symbol("@generated") && VERSION < v"0.4.0-dev+4387"
+        if VERSION < v"0.4.0-dev+4387" && f === symbol("@generated")
             f = ex.args[2]
             if isexpr(f, :function)
                 ex = Expr(:stagedfunction, f.args...)
@@ -1064,7 +1069,7 @@ macro functorize(f)
                 f
         end
         if VERSION >= v"0.5.0-dev+1472"
-            f = f === symbol(".÷") ? :(Base.DotIDivFun()) :
+            f = f === Symbol(".÷") ? :(Base.DotIDivFun()) :
                 f === :.%          ? :(Base.DotRemFun()) :
                 f
         end

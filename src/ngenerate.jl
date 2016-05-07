@@ -3,7 +3,7 @@ module CompatCartesian
 export @ngenerate, @nsplat
 
 macro ngenerate(itersym, returntypeexpr, funcexpr)
-    if isa(funcexpr, Expr) && funcexpr.head == :macrocall && funcexpr.args[1] == symbol("@inline")
+    if isa(funcexpr, Expr) && funcexpr.head == :macrocall && funcexpr.args[1] == Symbol("@inline")
         funcexpr = Base._inline(funcexpr.args[2])
     end
     isfuncexpr(funcexpr) || error("Requires a function expression")
@@ -32,7 +32,7 @@ macro nsplat(itersym, args...)
     else
         error("Wrong number of arguments")
     end
-    if isa(funcexpr, Expr) && funcexpr.head == :macrocall && funcexpr.args[1] == symbol("@inline")
+    if isa(funcexpr, Expr) && funcexpr.head == :macrocall && funcexpr.args[1] == Symbol("@inline")
         funcexpr = Base._inline(funcexpr.args[2])
     end
     isfuncexpr(funcexpr) || error("Second argument must be a function expression")
@@ -45,14 +45,14 @@ macro nsplat(itersym, args...)
 end
 
 function _nsplat(prototype, body, varname, T, itersym)
-    varsym = symbol(varname)
+    varsym = Symbol(varname)
     prototype.args[end] = Expr(:..., Expr(:(::), varsym, T)) # :($varsym::$T...)
     varquot = Expr(:quote, varsym)
     bodyquot = Expr(:quote, body)
     newbody = quote
         $itersym = length($varsym)
         quote
-            Base.Cartesian.@nexprs $($itersym) (d->$($(Expr(:quote, symbol(varsym, "_d")))) = $($varquot)[d])
+            Base.Cartesian.@nexprs $($itersym) (d->$($(Expr(:quote, Symbol(varsym, "_d")))) = $($varquot)[d])
             $(Compat.CompatCartesian.resolvesplats!($bodyquot, $varquot, $itersym))
         end
     end
@@ -87,7 +87,7 @@ function resolvesplats!(ex::Expr, varname, N::Int)
             resolvesplats!(ex.args[i], varname, N)
         end
         a = ex.args[end]
-        if isa(a, Expr) && a.head == :... && a.args[1] == symbol(varname)
+        if isa(a, Expr) && a.head == :... && a.args[1] == Symbol(varname)
             ex.args[end] = :($varname[1]) # Expr(:ref, varname, 1)
             for i = 2:N
                 push!(ex.args, :($varname[$i])) # Expr(:ref, varname, i))
