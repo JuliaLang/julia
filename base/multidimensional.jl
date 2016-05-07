@@ -209,6 +209,9 @@ for N = 1:5
         end
     end
 end
+# This is annoying, but we must also define logical indexing to avoid ambiguities
+_internal_checkbounds(A::AbstractVector, I::AbstractArray{Bool}) = size(A) == size(I) || throw_boundserror(A, I)
+_internal_checkbounds(A::AbstractVector, I::AbstractVector{Bool}) = length(A) == length(I) || throw_boundserror(A, I)
 
 # Bounds-checking with CartesianIndex
 @inline function checkbounds(::Type{Bool}, ::Tuple{}, I1::CartesianIndex)
