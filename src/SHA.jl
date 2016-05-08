@@ -40,12 +40,12 @@ for (f, ctx) in [(:sha1, :SHA1_CTX),
         # Our basic function is to process arrays of bytes
         function $f(data::Array{UInt8,1})
             ctx = $ctx()
-            update!(ctx, data);
+            update!(ctx, data)
             return digest!(ctx)
         end
 
-        # ByteStrings are a pretty handy thing to be able to crunch through
-        $f(str::ByteString) = $f(str.data)
+        # AbstractStrings are a pretty handy thing to be able to crunch through
+        $f(str::AbstractString) = $f(convert(Array{UInt8,1}, str))
 
         # Convenience function for IO devices, allows for things like:
         # open("test.txt") do f
