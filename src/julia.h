@@ -85,6 +85,7 @@ typedef struct {
     ((jl_value_t*)(jl_astaggedvalue(v)->type_bits & ~(uintptr_t)15))
 static inline void jl_set_typeof(void *v, void *t)
 {
+    // Do not call this on a value that is already initialized.
     jl_taggedvalue_t *tag = jl_astaggedvalue(v);
     tag->type = (jl_value_t*)t;
 }
