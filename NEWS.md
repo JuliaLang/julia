@@ -58,6 +58,8 @@ Command-line option changes
 Compiler/Runtime improvements
 -----------------------------
 
+  * Machine SIMD types can be represented in Julia as a homogeneous tuple of `VecElement` ([#15244]).
+
 Breaking changes
 ----------------
 
