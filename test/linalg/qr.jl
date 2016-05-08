@@ -171,3 +171,6 @@ end
 
 @test qr(Int[]) == (Int[],1)
 @test Base.LinAlg.qr!(Int[1]) == (Int[1],1)
+
+B = rand(7,2)
+@test_approx_eq (1:7)\B collect(1:7)\B
