@@ -160,13 +160,13 @@ parameters. For example:
    julia> h3{T<:Real}(A::Array{T}, b::T) = 1
    h3 (generic function with 1 method)
 
-   julia> p1 = start(methods(h1)).sig.parameters
+   julia> p1 = first(methods(h1)).sig.parameters
    svec(#h1,Array{T,N},Real)
 
-   julia> p2 = start(methods(h2)).sig.parameters
+   julia> p2 = first(methods(h2)).sig.parameters
    svec(#h2,Array{T,N},T<:Real)
 
-   julia> p3 = start(methods(h3)).sig.parameters
+   julia> p3 = first(methods(h3)).sig.parameters
    svec(#h3,Array{T<:Real,N},T<:Real)
 
    julia> dump(p1[2].parameters[1])
@@ -245,10 +245,10 @@ bound :obj:`TypeVar` objects with a hash (``#T`` instead of ``T``):
 
 .. doctest::
 
-   julia> jl_(start(methods(candid)))
+   julia> jl_(first(methods(candid)))
    Method(sig=Tuple{Main.#candid, Array{#T<:Any, N<:Any}, #T<:Any}, va=false, isstaged=false, tvars=#T<:Any, func=Main.candid(?), invokes=nothing, next=nothing)
 
-   julia> jl_(start(methods(sneaky)))
+   julia> jl_(first(methods(sneaky)))
    Method(sig=Tuple{Main.#sneaky, Array{#T<:Any, N<:Any}, T<:Any}, va=false, isstaged=false, tvars=#T<:Any, func=Main.sneaky(?), invokes=nothing, next=nothing)
 
 Even though both print as ``T``, in ``sneaky`` the second ``T`` is
