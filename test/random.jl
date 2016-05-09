@@ -42,7 +42,7 @@ let mt = MersenneTwister()
     srand(mt)
     @test rand(mt, 0:3:1000) in 0:3:1000
     @test issubset(rand!(mt, Array(Int, 100), 0:3:1000), 0:3:1000)
-    coll = Any[2, UInt128(128), big(619), "string", 'c']
+    coll = Any[2, UInt128(128), big(619), "string"]
     @test rand(mt, coll) in coll
     @test issubset(rand(mt, coll, 2, 3), coll)
 
@@ -315,7 +315,7 @@ for rng in ([], [MersenneTwister()], [RandomDevice()])
     rand!(rng..., BitArray(5))     ::BitArray{1}
     rand!(rng..., BitArray(2, 3))  ::BitArray{2}
 
-    for T in [Base.BitInteger_types..., Bool, Char, Float16, Float32, Float64]
+    for T in [Base.BitInteger_types..., Bool, Float16, Float32, Float64]
         a0 = rand(rng..., T)       ::T
         a1 = rand(rng..., T, 5)    ::Vector{T}
         a2 = rand(rng..., T, 2, 3) ::Array{T, 2}

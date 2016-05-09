@@ -1325,11 +1325,11 @@ AnyDict(
         i = position(buf)
         if i != 0
             c = buf.data[i]
-            if c == '\n' || c == '\t' ||
+            if c == UInt8('\n') || c == UInt8('\t') ||
                # hack to allow path completion in cmds
                # after a space, e.g., `cd <tab>`, while still
                # allowing multiple indent levels
-               (c == ' ' && i > 3 && buf.data[i-1] == ' ')
+               (c == UInt8(' ') && i > 3 && buf.data[i-1] == UInt8(' '))
                 edit_insert(s, " "^4)
                 return
             end

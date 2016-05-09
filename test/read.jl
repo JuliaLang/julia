@@ -382,9 +382,9 @@ f = joinpath(dir, "test.txt")
 open(io->write(io, "123"), f, "w")
 f1 = open(f)
 f2 = Base.Filesystem.open(f, Base.Filesystem.JL_O_RDONLY)
-@test read(f1, UInt8) == read(f2, UInt8) == '1'
-@test read(f1, UInt8) == read(f2, UInt8) == '2'
-@test read(f1, UInt8) == read(f2, UInt8) == '3'
+@test read(f1, UInt8) == read(f2, UInt8) == UInt8('1')
+@test read(f1, UInt8) == read(f2, UInt8) == UInt8('2')
+@test read(f1, UInt8) == read(f2, UInt8) == UInt8('3')
 @test_throws EOFError read(f1, UInt8)
 @test_throws EOFError read(f2, UInt8)
 close(f1)

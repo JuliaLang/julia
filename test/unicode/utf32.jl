@@ -4,7 +4,7 @@
 u8 = "\U10ffff\U1d565\U1d7f6\U00066\U2008a"
 u32 = utf32(u8)
 @test sizeof(u32) == 20
-@test length(u32.data) == 6 && u32.data[end] == Char(0)
+@test length(u32.data) == 6 && u32.data[end] == 0
 @test length(u32) == 5
 @test utf8(u32) == u8
 @test collect(u8) == collect(u32)
@@ -181,13 +181,13 @@ for (fun, S, T) in ((utf16, UInt16, UTF16String), (utf32, UInt32, UTF32String))
     str = "abcd\0\uff\u7ff\u7fff\U7ffff"
     tst = SubString(convert(T,str),4)
     cmp = Char['d','\0','\uff','\u7ff','\u7fff','\U7ffff']
-    cmpch = Char['d','\0','\uff','\u7ff','\u7fff','\U7ffff','\0']
+    cmp32 = UInt32['d','\0','\uff','\u7ff','\u7fff','\U7ffff','\0']
     cmp16 = UInt16[0x0064,0x0000,0x00ff,0x07ff,0x7fff,0xd9bf,0xdfff,0x0000]
     x = fun(tst)
-    cmpx = (S == UInt16 ? cmp16 : cmpch)
+    cmpx = (S == UInt16 ? cmp16 : cmp32)
     @test typeof(tst) == SubString{T}
     @test convert(T, tst) == str[4:end]
-    S != UInt32 && @test convert(Vector{Char}, x) == cmp
+    @test convert(Vector{Char}, x) == cmp
     # Vector{T} / Array{T}
     @test convert(Vector{S}, x) == cmpx
     @test convert(Array{S}, x) == cmpx
@@ -223,9 +223,9 @@ let str = ascii("this ")
     @test typeof(p8) == Ptr{UInt8}
     @test unsafe_load(p8,1) == 0x74
     @test typeof(p16) == Ptr{UInt16}
-    @test unsafe_load(p16,1) == 0x0074
+    @test unsafe_load(p16,1) == 0x74
     @test typeof(p32) == Ptr{UInt32}
-    @test unsafe_load(p32,1) == 't'
+    @test unsafe_load(p32,1) == 0x74
     pa  = pointer(str, 2)
     p8  = pointer(u8,  2)
     p16 = pointer(u16, 2)
@@ -235,10 +235,10 @@ let str = ascii("this ")
     @test typeof(p8) == Ptr{UInt8}
     @test unsafe_load(p8,1) == 0x68
     @test typeof(p16) == Ptr{UInt16}
-    @test unsafe_load(p16,1) == 0x0068
+    @test unsafe_load(p16,1) == 0x68
     @test typeof(p32) == Ptr{UInt32}
-    @test unsafe_load(p32,1) == 'h'
-    s8  = SubString{String}(u8,   3, 5)
+    @test unsafe_load(p32,1) == 0x68
+    s8  = SubString{String}(u8, 3, 5)
     s16 = SubString{UTF16String}(u16, 3, 5)
     s32 = SubString{UTF32String}(u32, 3, 5)
     p8  = pointer(s8)
@@ -247,18 +247,18 @@ let str = ascii("this ")
     @test typeof(p8) == Ptr{UInt8}
     @test unsafe_load(p8,1) == 0x69
     @test typeof(p16) == Ptr{UInt16}
-    @test unsafe_load(p16,1) == 0x0069
+    @test unsafe_load(p16,1) == 0x69
     @test typeof(p32) == Ptr{UInt32}
-    @test unsafe_load(p32,1) == 'i'
+    @test unsafe_load(p32,1) == 0x69
     p8  = pointer(s8,  2)
     p16 = pointer(s16, 2)
     p32 = pointer(s32, 2)
     @test typeof(p8) == Ptr{UInt8}
     @test unsafe_load(p8,1) == 0x73
     @test typeof(p16) == Ptr{UInt16}
-    @test unsafe_load(p16,1) == 0x0073
+    @test unsafe_load(p16,1) == 0x73
     @test typeof(p32) == Ptr{UInt32}
-    @test unsafe_load(p32,1) == 's'
+    @test unsafe_load(p32,1) == 0x73
 end
 
 @test isvalid(Char['f','o','o','b','a','r'])

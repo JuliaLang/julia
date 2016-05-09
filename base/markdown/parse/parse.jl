@@ -51,7 +51,9 @@ function parseinline(stream::IO, md::MD, config::Config)
     content = []
     buffer = IOBuffer()
     while !eof(stream)
-        char = peek(stream)
+        # FIXME: this is broken if we're looking for non-ASCII
+        # characters because peek only returns a single byte.
+        char = Char(peek(stream))
         if haskey(config.inner, char) &&
                 (inner = parseinline(stream, md, config.inner[char])) !== nothing
             c = takebuf_string(buffer)
