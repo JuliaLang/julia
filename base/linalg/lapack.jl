@@ -3681,12 +3681,12 @@ for (stev, stebz, stegr, stein, elty) in
             w[1:m[1]], iblock[1:m[1]], isplit[1:nsplit[1]]
         end
 
-        function stegr!(jobz::Char, range::Char, dv::Vector{$elty}, ev::Vector{$elty}, vl::Real, vu::Real, il::Integer, iu::Integer)
+        function stegr_work(jobz::Char, range::Char, dv::Vector{$elty}, eev::Vector{$elty}, vl::Real, vu::Real, il::Integer, iu::Integer)
             n = length(dv)
-            if length(ev) != n - 1
-                throw(DimensionMismatch("ev has length $(length(ev)) but needs one less than dv's length, $n)"))
+            if length(eev) != n
+                throw(DimensionMismatch("eev must have the same length as dv, the last element does not have to initialized."))
             end
-            eev = [ev; zero($elty)]
+
             abstol = Array($elty, 1)
             m = Array(BlasInt, 1)
             w = similar(dv, $elty, n)
@@ -3697,27 +3697,68 @@ for (stev, stebz, stegr, stein, elty) in
             lwork = BlasInt(-1)
             iwork = Array(BlasInt, 1)
             liwork = BlasInt(-1)
+
             info = Ref{BlasInt}()
-            for i = 1:2
-                ccall((@blasfunc($stegr), liblapack), Void,
-                    (Ptr{UInt8}, Ptr{UInt8}, Ptr{BlasInt}, Ptr{$elty},
-                    Ptr{$elty}, Ptr{$elty}, Ptr{$elty}, Ptr{BlasInt},
-                    Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}, Ptr{$elty},
-                    Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt}, Ptr{$elty},
-                    Ptr{BlasInt}, Ptr{BlasInt}, Ptr{BlasInt}, Ptr{BlasInt}),
-                    &jobz, &range, &n, dv,
-                    eev, &vl, &vu, &il,
-                    &iu, abstol, m, w,
-                    Z, &ldz, isuppz, work,
-                    &lwork, iwork, &liwork, info)
-                chklapackerror(info[])
-                if i == 1
-                    lwork = BlasInt(work[1])
-                    work = Array($elty, lwork)
-                    liwork = iwork[1]
-                    iwork = Array(BlasInt, liwork)
-                end
+
+            ccall((@blasfunc($stegr), liblapack), Void,
+                  (Ptr{UInt8}, Ptr{UInt8}, Ptr{BlasInt}, Ptr{$elty},
+                   Ptr{$elty}, Ptr{$elty}, Ptr{$elty}, Ptr{BlasInt},
+                   Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}, Ptr{$elty},
+                   Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt}, Ptr{$elty},
+                   Ptr{BlasInt}, Ptr{BlasInt}, Ptr{BlasInt}, Ptr{BlasInt}),
+                  &jobz, &range, &n, dv,
+                  eev, &vl, &vu, &il,
+                  &iu, abstol, m, w,
+                  Z, &ldz, isuppz, work,
+                  &lwork, iwork, &liwork, info)
+            chklapackerror(info[])
+            lwork = BlasInt(work[1])
+            work = Array($elty, lwork)
+            liwork = iwork[1]
+            iwork = Array(BlasInt, liwork)
+
+            abstol, m, w, Z, isuppz, work, lwork, iwork, liwork, info
+        end
+
+        function stegr!(jobz::Char, range::Char,
+                        dv::AbstractVector{$elty}, eev::AbstractVector{$elty},
+                        vl::Real, vu::Real, il::Integer, iu::Integer,
+                        abstol::Array{$elty}, m::Array{BlasInt}, w::Vector{$elty}, Z::StridedMatrix{$elty},
+                        isuppz::Vector{BlasInt},
+                        work::Array{$elty}, lwork::BlasInt,
+                        iwork::Array{BlasInt}, liwork::BlasInt,
+                        info::Ref{BlasInt})
+            n = length(dv)
+
+            ldz = stride(Z, 2)
+
+            ccall((@blasfunc($stegr), liblapack), Void,
+                  (Ptr{UInt8}, Ptr{UInt8}, Ptr{BlasInt}, Ptr{$elty},
+                   Ptr{$elty}, Ptr{$elty}, Ptr{$elty}, Ptr{BlasInt},
+                   Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}, Ptr{$elty},
+                   Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt}, Ptr{$elty},
+                   Ptr{BlasInt}, Ptr{BlasInt}, Ptr{BlasInt}, Ptr{BlasInt}),
+                  &jobz, &range, &n, dv,
+                  eev, &vl, &vu, &il,
+                  &iu, abstol, m, w,
+                  Z, &ldz, isuppz, work,
+                  &lwork, iwork, &liwork, info)
+            chklapackerror(info[])
+        end
+
+        function stegr!(jobz::Char, range::Char, dv::Vector{$elty}, ev::Vector{$elty}, vl::Real, vu::Real, il::Integer, iu::Integer)
+            n = length(dv)
+            if length(ev) != n - 1
+                throw(DimensionMismatch("ev has length $(length(ev)) but needs one less than dv's length, $n)"))
             end
+            eev = [ev; zero($elty)]
+
+            abstol, m, w, Z, isuppz, work, lwork, iwork, liwork, info = stegr_work(jobz, range, dv, eev, vl, vu, il, iu)
+
+            info = Ref{BlasInt}()
+
+            stegr!(jobz, range, dv, eev, vl, vu, il, iu, abstol, m, w, Z, isuppz, work, lwork, iwork, liwork,info)
+
             w[1:m[1]], Z[:,1:m[1]]
         end
 
