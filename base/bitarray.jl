@@ -40,15 +40,10 @@ length(B::BitArray) = B.len
 size(B::BitVector) = (B.len,)
 size(B::BitArray) = B.dims
 
-function size(B::BitVector, d)
-    if d == 1
-        return B.len
-    elseif d > 1
-        return 1
-    end
-    throw(ArgumentError("dimension must be ≥ 1, got $d"))
+@inline function size(B::BitVector, d)
+    d < 1 && throw_boundserror(size(B), d)
+    ifelse(d == 1, B.len, 1)
 end
-size{N}(B::BitArray{N}, d) = (d>N ? 1 : B.dims[d])
 
 isassigned{N}(B::BitArray{N}, i::Int) = 1 <= i <= length(B)
 

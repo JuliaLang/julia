@@ -128,7 +128,7 @@ for n in [1; 1023:1025]
     end
 end
 
-@test_throws ArgumentError size(trues(5),0)
+@test_throws BoundsError size(trues(5),0)
 
 timesofar("utils")
 
