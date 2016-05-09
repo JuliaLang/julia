@@ -1244,7 +1244,7 @@ Linear algebra functions in Julia are largely implemented by calling functions f
    | real or complex | inverse with level shift ``sigma`` | :math:`(A - \sigma B )^{-1}B = v\nu` |
    +-----------------+------------------------------------+--------------------------------------+
 
-.. function:: svds(A; nsv=6, ritzvec=true, tol=0.0, maxiter=1000) -> ([left_sv,] s, [right_sv,] nconv, niter, nmult, resid)
+.. function:: svds(A; nsv=6, ritzvec=true, tol=0.0, maxiter=1000, ncv=2*nsv, u0=zeros((0,)), v0=zeros((0,))) -> (SVD([left_sv,] s, [right_sv,]), nconv, niter, nmult, resid)
 
    .. Docstring generated from Julia source
 
@@ -1253,16 +1253,17 @@ Linear algebra functions in Julia are largely implemented by calling functions f
    **Inputs**
 
    * ``A``\ : Linear operator whose singular values are desired. ``A`` may be represented   as a subtype of ``AbstractArray``\ , e.g., a sparse matrix, or any other type   supporting the four methods ``size(A)``\ , ``eltype(A)``\ , ``A * vector``\ , and   ``A' * vector``\ .
-   * ``nsv``\ : Number of singular values.
+   * ``nsv``\ : Number of singular values. Default: 6.
    * ``ritzvec``\ : If ``true``\ , return the left and right singular vectors ``left_sv`` and ``right_sv``\ .    If ``false``\ , omit the singular vectors. Default: ``true``\ .
    * ``tol``\ : tolerance, see :func:`eigs`\ .
-   * ``maxiter``\ : Maximum number of iterations, see :func:`eigs`\ .
+   * ``maxiter``\ : Maximum number of iterations, see :func:`eigs`\ . Default: 1000.
+   * ``ncv``\ : Maximum size of the Krylov subspace, see :func:`eigs` (there called ``nev``\ ). Default: ``2*nsv``\ .
+   * ``u0``\ : Initial guess for the first left Krylov vector. It may have length ``m`` (the first dimension of ``A``\ ), or 0.
+   * ``v0``\ : Initial guess for the first right Krylov vector. It may have length ``n`` (the second dimension of ``A``\ ), or 0.
 
    **Outputs**
 
-   * ``left_sv``\ : Left singular vectors (only if ``ritzvec = true``\ ).
-   * ``s``\ : A vector of length ``nsv`` containing the requested singular values.
-   * ``right_sv``\ : Right singular vectors (only if ``ritzvec = true``\ ).
+   * ``svd``\ : An ``SVD`` object containing the left singular vectors, the requested values, and the right singular vectors. If ``ritzvec = false``\ , the left and right singular vectors will be empty.
    * ``nconv``\ : Number of converged singular values.
    * ``niter``\ : Number of iterations.
    * ``nmult``\ : Number of matrix–vector products used.
