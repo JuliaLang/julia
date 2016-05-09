@@ -767,11 +767,6 @@ if DoFullTest
     end
     sleep(0.5)  # Give some time for the above error to be printed
 
-    # github PR #14456
-    for n = 1:10^6
-        fetch(@spawnat myid() myid())
-    end
-
 @unix_only begin
     function test_n_remove_pids(new_pids)
         for p in new_pids
@@ -909,3 +904,9 @@ for tid in [id_other, id_me, Base.default_worker_pool()]
     test_f_args(13, f_args, tid, 1; kw1=4, kw2=8)
     test_f_args(15, f_args, tid, 1, 2; kw1=4, kw2=8)
 end
+
+# github PR #14456
+for n = 1:10^5
+    fetch(@spawnat myid() myid())
+end
+
