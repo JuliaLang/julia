@@ -1273,14 +1273,18 @@ static uint64_t compute_obj_symsize(const object::ObjectFile *obj, uint64_t offs
             uint64_t Addr;
             object::section_iterator Sect = ESection;
 #ifdef LLVM38
-            Sect = Sym.getSection().get();
+            auto SectOrError = Sym.getSection();
+            assert(SectOrError);
+            Sect = SectOrError.get();
 #else
             if (Sym.getSection(Sect)) continue;
 #endif
             if (Sect == ESection) continue;
             if (Sect != Section) continue;
 #ifdef LLVM37
-            Addr = Sym.getAddress().get();
+            auto AddrOrError = Sym.getAddress();
+            assert(AddrOrError);
+            Addr = AddrOrError.get();
 #else
             if (Sym.getAddress(Addr)) continue;
 #endif
