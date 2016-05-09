@@ -313,6 +313,15 @@ emptyperiod = ((y + d) - d) - y
 @test h + 3mi == 63mi
 @test y - m == 11m
 
+# reduce compound periods into the most basic form
+@test (h - mi).periods == Dates.Period[59mi]
+@test (-h + mi).periods == Dates.Period[-59mi]
+@test (-y + d).periods == Dates.Period[-y, d]
+@test (-y + m - w + d).periods == Dates.Period[-11m, -6d]
+@test (-y + m - w + ms).periods == Dates.Period[-11m, -6d, -23h, -59mi, -59s, -999ms]
+@test (y - m + w - d + h - mi + s - ms).periods == Dates.Period[11m, 6d, 59mi, 999ms]
+@test (-y + m - w + d - h + mi - s + ms).periods == Dates.Period[-11m, -6d, -59mi, -999ms]
+
 @test Date(2009,2,1) - (Month(1) + Day(1)) == Date(2008,12,31)
 @test (Month(1) + Day(1)) - Date(2009,2,1) == Date(2008,12,31)
 
