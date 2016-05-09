@@ -3614,19 +3614,37 @@ for (stev, stebz, stegr, stein, elty) in
 #     , (:cstev_,:Complex64)
      )
     @eval begin
-        function stev!(job::Char, dv::Vector{$elty}, ev::Vector{$elty})
+        function stev_work(job::Char, dv::Vector{$elty}, ev::Vector{$elty})
             n = length(dv)
             if length(ev) != n - 1
                 throw(DimensionMismatch("ev has length $(length(ev)) but needs one less than dv's length, $n)"))
             end
+
             Zmat = similar(dv, $elty, (n, job != 'N' ? n : 0))
             work = Array($elty, max(1, 2n-2))
+
             info = Ref{BlasInt}()
+
+            Zmat, work, info
+        end
+
+        function stev!(job::Char, dv::AbstractVector{$elty}, ev::AbstractVector{$elty},
+                       Zmat::StridedMatrix{$elty}, work::Array{$elty}, info::Ref{BlasInt})
+            n = length(dv)
+
+            ldz = stride(Zmat, 2)
+
             ccall((@blasfunc($stev), liblapack), Void,
                   (Ptr{UInt8}, Ptr{BlasInt}, Ptr{$elty}, Ptr{$elty}, Ptr{$elty},
                    Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}),
-                  &job, &n, dv, ev, Zmat, &n, work, info)
+                  &job, &n, dv, ev, Zmat, &ldz, work, info)
             chklapackerror(info[])
+        end
+
+        function stev!(job::Char, dv::Vector{$elty}, ev::Vector{$elty})
+            Zmat, work, info = stev_work(job, dv, ev)
+
+            stev!(job, dv, ev, Zmat, work, info)
             dv, Zmat
         end
 
