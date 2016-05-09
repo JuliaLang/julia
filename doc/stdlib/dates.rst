@@ -535,6 +535,31 @@ Periods
 
    Construct a ``Period`` type with the given ``v`` value. Input must be losslessly convertible to an ``Int64``\ .
 
+.. function:: CompoundPeriod(periods) -> CompoundPeriod
+
+   .. Docstring generated from Julia source
+
+   Construct a ``CompoundPeriod`` from a ``Vector`` of ``Period``\ s. The provided ``Period``\ s will be simplified using the following rules:
+
+   * All ``Period``\ s of the same type will be added together
+   * Any ``Period`` large enough be partially representable by a coarser ``Period`` will be broken   into multiple ``Period``\ s (eg. ``Hour(30)`` becomes ``Day(1) + Hour(6)``\ )
+   * ``Period``\ s with opposite signs will be combined when possible   (eg. ``Day(1) - Hour(1)`` becomes ``Hour(23)``\ )
+
+   Examples
+   ********
+
+
+   .. code-block:: julia
+
+       julia> Dates.CompoundPeriod([Dates.Hour(12), Dates.Hour(13)])
+       1 day, 1 hour
+
+       julia> Dates.CompoundPeriod([Dates.Hour(-1), Dates.Minute(1)])
+       -59 minutes
+
+       julia> Dates.CompoundPeriod([Dates.Month(1), Dates.Week(-2)])
+       1 month, -2 weeks
+
 .. function:: default(p::Period) -> Period
 
    .. Docstring generated from Julia source
