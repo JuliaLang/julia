@@ -59,10 +59,10 @@ end
 
 # Run the remote on pid 1, since runtests may terminate workers
 # at any time depending on memory usage
-@test remotecall_fetch(1, dc_path) do f
+remotecall_fetch(1, dc_path) do f
     include(f)
-    return :infungible
-end === :infungible
+    nothing
+end
 
 defined_on_master = false
 if remotecall_fetch(isdefined, 1, :DictChannel) == false
