@@ -222,6 +222,23 @@
            (pair? (caddr e)) (memq (car (caddr e)) '(quote inert))
            (symbol? (cadr (caddr e))))))
 
+;; e.g. Base.(:+) is deprecated in favor of Base.:+
+(define (deprecate-dotparen e)
+  (if (and (length= e 3) (eq? (car e) '|.|)
+           (or (atom? (cadr e)) (sym-ref? (cadr e)))
+           (length= (caddr e) 2) (eq? (caaddr e) 'tuple)
+           (pair? (cadr (caddr e))) (memq (caadr (caddr e)) '(quote inert)))
+      (let* ((s_ (cdadr (caddr e)))
+             (s (if (symbol? s_) s_
+                    (if (and (length= s_ 1) (symbol? (car s_))) (car s_) #f))))
+        (if s
+            (let ((newe (list (car e) (cadr e) (cadr (caddr e)))))
+              (syntax-deprecation #f (string (deparse (cadr e)) ".(:" s ")")
+                                  (string (deparse (cadr e)) ".:" s))
+              newe)
+            e))
+      e))
+
 ;; convert final (... x) to (curly Vararg x)
 (define (dots->vararg a)
   (if (null? a) a
@@ -873,7 +890,7 @@
            (let* ((head    (cadr name))
                   (argl    (cddr name))
                   (has-sp  (and (pair? head) (eq? (car head) 'curly)))
-                  (name    (if has-sp (cadr head) head))
+                  (name    (deprecate-dotparen (if has-sp (cadr head) head)))
                   (sparams (if has-sp (cddr head) '()))
                   (isstaged (eq? (car e) 'stagedfunction))
                   (adj-decl (lambda (n) (if (and (decl? n) (length= n 2))
@@ -1528,8 +1545,14 @@
                 ,(expand-forms (last e)))))))
 
    '|.|
-   (lambda (e)
-     `(call (top getfield) ,(expand-forms (cadr e)) ,(expand-forms (caddr e))))
+   (lambda (e) ; e = (|.| f x)
+     (let ((f (expand-forms (cadr e)))
+           (x (expand-forms (caddr e))))
+       (if (or (eq? (car x) 'quote) (eq? (car x) 'inert) (eq? (car x) '$))
+         `(call (top getfield) ,f ,x)
+         ; otherwise, came from f.(args...) --> broadcast(f, args...),
+         ; where x = (call (top tuple) args...) at this point:
+         `(call broadcast ,f ,@(cddr x)))))
 
    '|<:| syntactic-op-to-call
    '|>:| syntactic-op-to-call
@@ -1564,16 +1587,23 @@
                                lhss)
                         ,rr))))))
       ((symbol-like? lhs)
-       `(= ,(cadr e) ,(expand-forms (caddr e))))
+       `(= ,lhs ,(expand-forms (caddr e))))
       ((atom? lhs)
        (error (string "invalid assignment location \"" (deparse lhs) "\"")))
       (else
        (case (car lhs)
          ((|.|)
           ;; a.b =
-          (let ((a   (cadr (cadr e)))
-                (b   (caddr (cadr e)))
-                (rhs (caddr e)))
+          (let* ((a   (cadr lhs))
+                 (b_  (caddr lhs))
+                 (b   (if (and (length= b_ 2) (eq? (car b_) 'tuple))
+                          (begin
+                            (syntax-deprecation #f
+                             (string (deparse a) ".(" (deparse (cadr b_)) ") = ...")
+                             (string "setfield!(" (deparse a) ", " (deparse (cadr b_)) ", ...)"))
+                            (cadr b_))
+                          b_))
+                 (rhs (caddr e)))
             (let ((aa (if (symbol-like? a) a (make-ssavalue)))
                   (bb (if (or (atom? b) (symbol-like? b) (and (pair? b) (quoted? b)))
                           b (make-ssavalue)))

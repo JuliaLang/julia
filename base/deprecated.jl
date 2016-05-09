@@ -1093,6 +1093,24 @@ end
 #15995
 @deprecate symbol Symbol
 
+#15032: Expressions like Base.(:+) now call broadcast.  Since calls
+#       to broadcast(x, ::Symbol) are unheard of, and broadcast(x, ::Integer)
+#       are unlikely, we can treat these as deprecated getfield calls.
+function broadcast(x::Any, i::Union{Integer,Symbol})
+    depwarn("x.(i) is deprecated; use getfield(x, i) instead.", :broadcast)
+    getfield(x, i)
+end
+# clearer to be more explicit in the warning for the Module case
+function broadcast(m::Module, s::Symbol)
+    depwarn("$m.(:$s) is deprecated; use $m.:$s or getfield($m, :$s) instead.", :broadcast)
+    getfield(m, s)
+end
+# expressions like f.(3) should still call broadcast for f::Function,
+# and in general broadcast should work for scalar arguments, while
+# getfield is certainly not intended for the case of f::Function.
+broadcast(f::Function, i::Integer) = invoke(broadcast, (Function, Number), f, i)
+
+#16167
 macro ccallable(def)
     depwarn("@ccallable requires a return type", Symbol("@ccallable"))
     if isa(def,Expr) && (def.head === :(=) || def.head === :function)

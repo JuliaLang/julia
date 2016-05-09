@@ -2893,8 +2893,8 @@ function inlining_pass(e::Expr, sv, linfo)
     end
 
     if isdefined(Main, :Base) &&
-        ((isdefined(Main.Base, :^) && is(f, Main.Base.(:^))) ||
-         (isdefined(Main.Base, :.^) && is(f, Main.Base.(:.^))))
+        ((isdefined(Main.Base, :^) && is(f, Main.Base.:^)) ||
+         (isdefined(Main.Base, :.^) && is(f, Main.Base.:.^)))
         if length(e.args) == 3 && isa(e.args[3],Union{Int32,Int64})
             a1 = e.args[2]
             basenumtype = Union{corenumtype, Main.Base.Complex64, Main.Base.Complex128, Main.Base.Rational}
@@ -2902,10 +2902,10 @@ function inlining_pass(e::Expr, sv, linfo)
                                        exprtype(a1,sv) ⊑ basenumtype)
                 if e.args[3]==2
                     e.args = Any[GlobalRef(Main.Base,:*), a1, a1]
-                    f = Main.Base.(:*); ft = abstract_eval_constant(f)
+                    f = Main.Base.:*; ft = abstract_eval_constant(f)
                 elseif e.args[3]==3
                     e.args = Any[GlobalRef(Main.Base,:*), a1, a1, a1]
-                    f = Main.Base.(:*); ft = abstract_eval_constant(f)
+                    f = Main.Base.:*; ft = abstract_eval_constant(f)
                 end
             end
         end

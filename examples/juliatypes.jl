@@ -242,7 +242,7 @@ function issub_union(t, u::UnionT, env, R, state::UnionState)
         return true
     end
     ui = state.stack[state.depth]; state.depth += 1
-    choice = u.(1+ui)
+    choice = getfield(u, 1+ui)
     return R ? issub(t, choice, env) : issub(choice, t, env)
 end
 

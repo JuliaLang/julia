@@ -426,6 +426,11 @@ class of numerical values as permit sensible definitions, including
 integers, floating-point numbers, rationals, and complexes, wherever
 such definitions make sense.
 
+Moreover, these functions (like any Julia function) can be applied
+in "vectorized" fashion to arrays and other collections with the
+syntax ``f.(A)``, e.g. ``sin.(A)`` will compute the elementwise
+sine of each element of an array ``A``.  See :ref:`man-dot-vectorizing`:.
+
 .. _man-rounding-functions:
 
 Rounding functions
@@ -579,5 +584,3 @@ Function                                            Description
 
 .. |airylist| replace:: :func:`airy(z) <airy>`, :func:`airyai(z) <airyai>`, ``airy(0,z)``
 .. |airyprimelist| replace:: :func:`airyprime(z) <airyprime>`, :func:`airyaiprime(z) <airyaiprime>`, ``airy(1,z)``
-
-
