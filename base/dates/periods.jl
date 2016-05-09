@@ -254,14 +254,14 @@ end
 """
     CompoundPeriod(periods) -> CompoundPeriod
 
-Construct a `CompoundPeriod` from a `Vector` of `Period`s. The provided `Period`s will be
+Construct a `CompoundPeriod` from a `Vector` of `Period`s. The `Period`s provided will be
 simplified using the following rules:
 
 * All `Period`s of the same type will be added together
 * Any `Period` large enough be partially representable by a coarser `Period` will be broken
   into multiple `Period`s (eg. `Hour(30)` becomes `Day(1) + Hour(6)`)
 * `Period`s with opposite signs will be combined when possible
-  (eg. `Day(1) - Hour(1)` becomes `Hour(23)`)
+  (eg. `Hour(1) - Day(1)` becomes `-Hour(23)`)
 
 # Examples
 ```julia
