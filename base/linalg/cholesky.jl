@@ -126,7 +126,10 @@ end
 """
     cholfact!(A::StridedMatrix, uplo::Symbol, Val{false}) -> Cholesky
 
-The same as `cholfact`, but saves space by overwriting the input `A`, instead of creating a copy.
+The same as `cholfact`, but saves space by overwriting the input `A`, instead
+of creating a copy. An `InexactError` exception is thrown if the factorisation
+produces a number not representable by the element type of `A`, e.g. for
+integer types.
 """
 function cholfact!(A::StridedMatrix, uplo::Symbol, ::Type{Val{false}})
     if uplo == :U
@@ -139,7 +142,10 @@ end
 """
     cholfact!(A::StridedMatrix, uplo::Symbol, Val{true}) -> PivotedCholesky
 
-The same as `cholfact`, but saves space by overwriting the input `A`, instead of creating a copy.
+The same as `cholfact`, but saves space by overwriting the input `A`, instead
+of creating a copy. An `InexactError` exception is thrown if the
+factorisation produces a number not representable by the element type of `A`,
+e.g. for integer types.
 """
 cholfact!(A::StridedMatrix, uplo::Symbol, ::Type{Val{true}}; tol = 0.0) =
     throw(ArgumentError("generic pivoted Cholesky fectorization is not implemented yet"))
