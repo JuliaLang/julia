@@ -198,7 +198,7 @@ function list(stream::IO, block::MD)
                 c = read(stream, Char)
                 if c == '\n'
                     eof(stream) && break
-                    next = peek(stream)
+                    next = Char(peek(stream)) # ok since we only compare with ASCII
                     if next == '\n'
                         break
                     else

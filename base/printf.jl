@@ -458,7 +458,7 @@ function gen_e(flags::String, width::Int, precision::Int, c::Char, inside_g::Boo
     # print sign
     '+' in flags ? push!(blk.args, :(write(out, neg?'-':'+'))) :
     ' ' in flags ? push!(blk.args, :(write(out, neg?'-':' '))) :
-                    push!(blk.args, :(neg && write(out, '-')))
+                   push!(blk.args, :(neg && write(out, '-')))
     # print zero padding
     if padding !== nothing && !('-' in flags) && '0' in flags
         push!(blk.args, pad(width, padding, '0'))
@@ -468,7 +468,7 @@ function gen_e(flags::String, width::Int, precision::Int, c::Char, inside_g::Boo
     if precision > 0
         if inside_g && !('#' in flags)
             push!(blk.args, :(endidx = $ndigits;
-                              while endidx > 1 && DIGITS[endidx] == '0'
+                              while endidx > 1 && DIGITS[endidx] == UInt8('0')
                                   endidx -= 1
                               end;
                               if endidx > 1
