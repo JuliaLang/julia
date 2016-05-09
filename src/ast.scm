@@ -102,7 +102,7 @@
 
 ;; predicates and accessors
 
-(define (quoted? e) (memq (car e) '(quote top line break inert)))
+(define (quoted? e) (memq (car e) '(quote top core line break inert)))
 
 (define (lam:args x) (cadr x))
 (define (lam:vars x) (llist-vars (lam:args x)))

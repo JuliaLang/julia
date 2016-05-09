@@ -124,11 +124,11 @@
             `(= (call eval ,x)
                 (block
                  ,loc
-                 (call (|.| (top Core) 'eval) ,name ,x))))
+                 (call (core eval) ,name ,x))))
          (= (call eval m x)
             (block
              ,loc
-             (call (|.| (top Core) 'eval) m x))))))))
+             (call (core eval) m x))))))))
 
 ;; parse only, returning end position, no expansion.
 (define (jl-parse-one-string s pos0 greedy)
