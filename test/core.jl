@@ -3954,6 +3954,143 @@ function f16158(x)
 end
 @test f16158("abc") == "abcaba"
 
+# LLVM verifier error for noreturn function
+# the `code_llvm(DevNull, ...)` tests are only meaningful on debug build
+# with verifier on (but should still pass on release build).
+module TestSSA16244
+
+using Base.Test
+@noinline k(a) = a
+
+# unreachable branch due to `ccall(:jl_throw)`
+function f1(a)
+    if a
+        b = (k(a) + 1, 3)
+    else
+        throw(DivideError())
+    end
+    b[1]
+end
+code_llvm(DevNull, f1, Tuple{Bool})
+@test f1(true) == 2
+@test_throws DivideError f1(false)
+
+# unreachable branch due to function that does not return
+@noinline g() = error()
+function f2(a)
+    if a
+        b = (k(a) + 1, 3)
+    else
+        # Make sure type inference can infer the type of `g`
+        g()
+    end
+    b[1]
+end
+code_llvm(DevNull, f2, Tuple{Bool})
+@test f2(true) == 2
+@test_throws ErrorException f2(false)
+
+# SA but not SSA
+function f3(a)
+    if a
+        b = (k(a) + 1, 3)
+    end
+    b[1]
+end
+code_llvm(DevNull, f3, Tuple{Bool})
+@test f3(true) == 2
+ex = try
+    f3(false)
+catch _ex
+    _ex
+end
+@test isa(ex, UndefVarError)
+@test ex.var === :b
+
+# unreachable branch due to ccall that does not return
+function f4(a, p)
+    if a
+        b = (k(a) + 1, 3)
+    else
+        ccall(p, Union{}, ())
+    end
+    b[1]
+end
+code_llvm(DevNull, f4, Tuple{Bool,Ptr{Void}})
+@test f4(true, C_NULL) == 2
+@test_throws UndefRefError f4(false, C_NULL)
+
+# SSA due to const prop of condition
+function f5(a)
+    c = true
+    if c
+        b = (k(a) + 1, 3)
+    end
+    b[1]
+end
+code_llvm(DevNull, f5, Tuple{Bool})
+@test f5(true) == 2
+@test f5(false) == 1
+
+# SSA due to const prop of condition
+function f6(a)
+    if 1 === 1
+        b = (k(a) + 1, 3)
+    end
+    b[1]
+end
+code_llvm(DevNull, f6, Tuple{Bool})
+@test f6(true) == 2
+@test f6(false) == 1
+
+# unreachable branch due to typeassert
+function f7(a)
+    if a
+        b = (k(a) + 1, 3)
+    else
+        a = a::Int
+    end
+    b[1]
+end
+code_llvm(DevNull, f7, Tuple{Bool})
+@test f7(true) == 2
+@test_throws TypeError f7(false)
+
+# unreachable branch due to non-Bool used in Bool context
+function f8(a, c)
+    if a
+        b = (k(a) + 1, 3)
+    else
+        c && a
+    end
+    b[1]
+end
+code_llvm(DevNull, f8, Tuple{Bool,Int})
+@test f8(true, 1) == 2
+@test_throws TypeError f8(false, 1)
+
+# unreachable branch due to undef local variable
+function f9(a)
+    if a
+        b = (k(a) + 1, 3)
+    else
+        d
+        d = 1
+    end
+    b[1]
+end
+code_llvm(DevNull, f9, Tuple{Bool})
+@test f9(true) == 2
+ex = try
+    f9(false)
+catch _ex
+    _ex
+end
+@test isa(ex, UndefVarError)
+@test ex.var === :d
+
+end
+
 # issue #16153
 f16153(x) = 1
 f16153(x::ANY, y...) = 2

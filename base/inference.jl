@@ -6,6 +6,14 @@ const MAX_TYPE_DEPTH = 7
 const MAX_TUPLETYPE_LEN  = 8
 const MAX_TUPLE_DEPTH = 4
 
+# alloc_elim_pass! relies on `Slot_AssignedOnce | Slot_UsedUndef` being
+# SSA. This should be true now but can break if we start to track conditional
+# constants. e.g.
+#
+#     cond && (a = 1)
+#     other_code()
+#     cond && use(a)
+
 # slot property bit flags
 const Slot_Assigned     = 2
 const Slot_AssignedOnce = 16
@@ -1907,6 +1915,7 @@ function finish(me::InferenceState)
 
     # run optimization passes on fulltree
     if me.optimize
+        gotoifnot_elim_pass!(me.linfo, me)
         if JLOptions().can_inline == 1
             inlining_pass!(me.linfo, me)
             inbounds_meta_elim_pass!(me.linfo.code)
@@ -2979,9 +2988,9 @@ end
 
 const compiler_temp_sym = Symbol("#temp#")
 
-function add_slot!(linfo::LambdaInfo, typ, is_sa)
+function add_slot!(linfo::LambdaInfo, typ, is_sa, name=compiler_temp_sym)
     id = length(linfo.slotnames)+1
-    push!(linfo.slotnames, compiler_temp_sym)
+    push!(linfo.slotnames, name)
     push!(linfo.slottypes, typ)
     push!(linfo.slotflags, Slot_Assigned + is_sa * Slot_AssignedOnce)
     SlotNumber(id)
@@ -3226,6 +3235,34 @@ function is_allocation(e :: ANY, sv::InferenceState)
     false
 end
 
+# Replace branches with constant conditions with unconditional branches
+function gotoifnot_elim_pass!(linfo::LambdaInfo, sv::InferenceState)
+    body = linfo.code
+    i = 1
+    while i < length(body)
+        expr = body[i]
+        i += 1
+        isa(expr, Expr) || continue
+        expr = expr::Expr
+        expr.head === :gotoifnot || continue
+        cond = expr.args[1]
+        condt = exprtype(cond, sv)
+        isa(condt, Const) || continue
+        val = (condt::Const).val
+        # Codegen should emit an unreachable if val is not a Bool so
+        # we don't need to do anything (also, type inference currently
+        # doesn't recognize the error for strictly non-Bool condition)
+        if isa(val, Bool)
+            # in case there's side effects... (like raising `UndefVarError`)
+            body[i - 1] = cond
+            if val === false
+                insert!(body, i, GotoNode(expr.args[2]))
+                i += 1
+            end
+        end
+    end
+end
+
 # eliminate allocation of unnecessary objects
 # that are only used as arguments to safe getfield calls
 function alloc_elim_pass!(linfo::LambdaInfo, sv::InferenceState)
@@ -3246,9 +3283,13 @@ function alloc_elim_pass!(linfo::LambdaInfo, sv::InferenceState)
                                (isa(e.args[1],Slot) && haskey(vs, e.args[1].id)))
             var = e.args[1]
             rhs = e.args[2]
+            # Need to make sure LLVM can recognize this as LLVM ssa value too
+            is_ssa = (isa(var, SSAValue) ||
+                      linfo.slotflags[(var::Slot).id] & Slot_UsedUndef == 0)
         else
             var = nothing
             rhs = e
+            is_ssa = false # doesn't matter as long as it's a Bool...
         end
         alloc = is_allocation(rhs, sv)
         if alloc !== false
@@ -3283,7 +3324,14 @@ function alloc_elim_pass!(linfo::LambdaInfo, sv::InferenceState)
                         vals[j] = tupelt
                     else
                         elty = exprtype(tupelt,sv)
-                        tmpv = newvar!(sv, elty)
+                        if is_ssa
+                            tmpv = newvar!(sv, elty)
+                        else
+                            var = var::Slot
+                            tmpv = add_slot!(linfo, elty, false,
+                                             linfo.slotnames[var.id])
+                            linfo.slotflags[tmpv.id] |= Slot_UsedUndef
+                        end
                         tmp = Expr(:(=), tmpv, tupelt)
                         insert!(body, i+n_ins, tmp)
                         vals[j] = tmpv
@@ -3291,7 +3339,7 @@ function alloc_elim_pass!(linfo::LambdaInfo, sv::InferenceState)
                     end
                 end
                 replace_getfield!(linfo, bexpr, var, vals, field_names, sv)
-                if isa(var, Slot) && linfo.slotflags[(var::Slot).id] & Slot_UsedUndef == 0
+                if isa(var, Slot) && is_ssa
                     # occurs_outside_getfield might have allowed
                     # void use of the slot, we need to delete them too
                     i -= delete_void_use!(body, var::Slot, i)

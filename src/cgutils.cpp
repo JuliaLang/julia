@@ -591,6 +591,9 @@ static Value *emit_datatype_name(Value *dt)
 }
 
 // --- generating various error checks ---
+// Do not use conditional throw for cases that type inference can know
+// the error is always thrown. This may cause non dominated use
+// of SSA value error in the verifier.
 
 static void just_emit_error(const std::string &txt, jl_codectx_t *ctx)
 {
@@ -605,6 +608,7 @@ static void emit_error(const std::string &txt, jl_codectx_t *ctx)
     builder.SetInsertPoint(cont);
 }
 
+// DO NOT PASS IN A CONST CONDITION!
 static void error_unless(Value *cond, const std::string &msg, jl_codectx_t *ctx)
 {
     BasicBlock *failBB = BasicBlock::Create(jl_LLVMContext,"fail",ctx->f);
@@ -617,34 +621,55 @@ static void error_unless(Value *cond, const std::string &msg, jl_codectx_t *ctx)
     builder.SetInsertPoint(passBB);
 }
 
-static void raise_exception_unless(Value *cond, Value *exc, jl_codectx_t *ctx)
+static void raise_exception(Value *exc, jl_codectx_t *ctx,
+                            BasicBlock *contBB=nullptr)
 {
-    BasicBlock *failBB = BasicBlock::Create(jl_LLVMContext,"fail",ctx->f);
-    BasicBlock *passBB = BasicBlock::Create(jl_LLVMContext,"pass");
-    builder.CreateCondBr(cond, passBB, failBB);
-    builder.SetInsertPoint(failBB);
 #ifdef LLVM37
     builder.CreateCall(prepare_call(jlthrow_func), { exc });
 #else
     builder.CreateCall(prepare_call(jlthrow_func), exc);
 #endif
     builder.CreateUnreachable();
-    ctx->f->getBasicBlockList().push_back(passBB);
-    builder.SetInsertPoint(passBB);
+    if (!contBB) {
+        contBB = BasicBlock::Create(jl_LLVMContext, "after_throw", ctx->f);
+    }
+    else {
+        ctx->f->getBasicBlockList().push_back(contBB);
+    }
+    builder.SetInsertPoint(contBB);
 }
 
+static void raise_exception(GlobalVariable *exc, jl_codectx_t *ctx)
+{
+    raise_exception((Value*)tbaa_decorate(tbaa_const,
+                                          builder.CreateLoad(exc)), ctx);
+}
+
+// DO NOT PASS IN A CONST CONDITION!
+static void raise_exception_unless(Value *cond, Value *exc, jl_codectx_t *ctx)
+{
+    BasicBlock *failBB = BasicBlock::Create(jl_LLVMContext,"fail",ctx->f);
+    BasicBlock *passBB = BasicBlock::Create(jl_LLVMContext,"pass");
+    builder.CreateCondBr(cond, passBB, failBB);
+    builder.SetInsertPoint(failBB);
+    raise_exception(exc, ctx, passBB);
+}
+
+// DO NOT PASS IN A CONST CONDITION!
 static void raise_exception_unless(Value *cond, GlobalVariable *exc,
                                    jl_codectx_t *ctx)
 {
     raise_exception_unless(cond, (Value*)tbaa_decorate(tbaa_const,builder.CreateLoad(exc, false)), ctx);
 }
 
+// DO NOT PASS IN A CONST CONDITION!
 static void raise_exception_if(Value *cond, Value *exc, jl_codectx_t *ctx)
 {
     raise_exception_unless(builder.CreateXor(cond, ConstantInt::get(T_int1,-1)),
                            exc, ctx);
 }
 
+// DO NOT PASS IN A CONST CONDITION!
 static void raise_exception_if(Value *cond, GlobalVariable *exc, jl_codectx_t *ctx)
 {
     raise_exception_if(cond, (Value*)tbaa_decorate(tbaa_const, builder.CreateLoad(exc, false)), ctx);
@@ -676,7 +701,18 @@ static void emit_typecheck(const jl_cgval_t &x, jl_value_t *type, const std::str
                            jl_codectx_t *ctx)
 {
     Value *istype;
-    if (jl_is_type_type(type) || !jl_is_leaf_type(type)) {
+    // if (jl_subtype(x.typ, type, 0)) {
+    //     // This case should already be handled by the caller
+    //     return;
+    // }
+    if (jl_type_intersection(x.typ, type) == (jl_value_t*)jl_bottom_type) {
+        emit_type_error(x, type, msg, ctx);
+        builder.CreateUnreachable();
+        BasicBlock *failBB = BasicBlock::Create(jl_LLVMContext, "fail", ctx->f);
+        builder.SetInsertPoint(failBB);
+        return;
+    }
+    else if (jl_is_type_type(type) || !jl_is_leaf_type(type)) {
         Value *vx = boxed(x, ctx);
         istype = builder.
             CreateICmpNE(
@@ -1048,7 +1084,7 @@ static jl_cgval_t emit_getfield_knownidx(const jl_cgval_t &strct, unsigned idx, 
     Type *elty = julia_type_to_llvm(jfty);
     assert(elty != NULL);
     if (jfty == jl_bottom_type) {
-        raise_exception_unless(ConstantInt::get(T_int1,0), prepare_global(jlundeferr_var), ctx);
+        raise_exception(prepare_global(jlundeferr_var), ctx);
         return jl_cgval_t(); // unreachable
     }
     if (type_is_ghost(elty))
