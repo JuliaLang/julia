@@ -154,13 +154,21 @@ jl_value_t *jl_eval_module_expr(jl_expr_t *ex)
         }
     }
 
-    JL_GC_PUSH1(&last_module);
+    jl_value_t *defaultdefs = NULL;
+    JL_GC_PUSH2(&last_module, &defaultdefs);
     jl_module_t *task_last_m = jl_current_task->current_module;
     jl_current_task->current_module = jl_current_module = newm;
     jl_module_t *prev_outermost = outermost;
     size_t stackidx = module_stack.len;
     if (outermost == NULL)
         outermost = newm;
+
+    if (std_imports) {
+        // add `eval` function
+        defaultdefs = jl_call_scm_on_ast("module-default-defs", (jl_value_t*)ex);
+        jl_toplevel_eval_flex(defaultdefs, 0);
+        defaultdefs = NULL;
+    }
 
     jl_array_t *exprs = ((jl_expr_t*)jl_exprarg(ex, 2))->args;
     JL_TRY {
