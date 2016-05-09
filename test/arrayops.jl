@@ -364,7 +364,8 @@ a = [0,1,2,3,0,1,2,3]
 
 # find with general iterables
 s = "julia"
-@test find(s) == [1,2,3,4,5]
+# FIXME once 16269 is resolved
+# @test find(s) == [1,2,3,4,5]
 @test find(c -> c == 'l', s) == [3]
 g = graphemes("日本語")
 @test find(g) == [1,2,3]
