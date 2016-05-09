@@ -345,6 +345,7 @@ precision(::Type{Float16}) = 11
 precision(::Type{Float32}) = 24
 precision(::Type{Float64}) = 53
 precision{T<:AbstractFloat}(::T) = precision(T)
+
 """
     uabs(x::Integer)
 
@@ -356,6 +357,13 @@ signed integer, so that `abs(typemin(x)) == typemin(x) < 0`, in which case the r
 uabs(x::Integer) = abs(x)
 uabs(x::Signed) = unsigned(abs(x))
 
+
+"""
+    nextfloat(x::AbstractFloat, n::Integer)
+
+The result of `n` iterative applications of `nextfloat` to `x` if `n >= 0`, or `-n`
+applications of `prevfloat` if `n < 0`.
+"""
 function nextfloat(f::Union{Float16,Float32,Float64}, d::Integer)
     F = typeof(f)
     fumax = reinterpret(Unsigned, F(Inf))
@@ -394,7 +402,20 @@ function nextfloat(f::Union{Float16,Float32,Float64}, d::Integer)
     reinterpret(F, fu)
 end
 
+"""
+    nextfloat(x::AbstractFloat)
+
+Returns the smallest floating point number `y` of the same type as `x` such `x < y`. If no
+such `y` exists (e.g. if `x` is `Inf` or `NaN`), then returns `x`.
+"""
 nextfloat(x::AbstractFloat) = nextfloat(x,1)
+
+"""
+    prevfloat(x::AbstractFloat)
+
+Returns the largest floating point number `y` of the same type as `x` such `y < x`. If no
+such `y` exists (e.g. if `x` is `-Inf` or `NaN`), then returns `x`.
+"""
 prevfloat(x::AbstractFloat) = nextfloat(x,-1)
 
 for Ti in (Int8, Int16, Int32, Int64, Int128, UInt8, UInt16, UInt32, UInt64, UInt128)
