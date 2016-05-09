@@ -350,8 +350,8 @@ function update(branch::AbstractString)
                 LibGit2.rebase!(repo, "origin/$branch")
             end
         catch err
-            mex = CapturedException(err, catch_backtrace())
-            throw(PkgError("METADATA cannot be updated. Resolve problems manually in $(Pkg.dir("METADATA")).", mex))
+            cex = CapturedException(err, catch_backtrace())
+            throw(PkgError("METADATA cannot be updated. Resolve problems manually in $(Pkg.dir("METADATA")).", cex))
         end
     end
     deferred_errors = CompositeException()
@@ -361,9 +361,8 @@ function update(branch::AbstractString)
         try
             Cache.prefetch(pkg, Read.url(pkg), [a.sha1 for (v,a)=avail[pkg]])
         catch err
-            push!(deferred_errors,
-                    PkgError("Package $pkg: unable to update cache.",
-                            CapturedException(err, catch_backtrace())))
+            cex = CapturedException(err, catch_backtrace())
+            push!(deferred_errors, PkgError("Package $pkg: unable to update cache.", cex))
         end
     end
     instd = Read.installed(avail)
@@ -372,9 +371,8 @@ function update(branch::AbstractString)
         try
             Cache.prefetch(pkg, Read.url(pkg), [a.sha1 for (v,a)=avail[pkg]])
         catch err
-            push!(deferred_errors,
-                    PkgError("Package $pkg: unable to update cache.",
-                            CapturedException(err, catch_backtrace())))
+            cex = CapturedException(err, catch_backtrace())
+            push!(deferred_errors, PkgError("Package $pkg: unable to update cache.", cex))
         end
     end
     fixed = Read.fixed(avail,instd)
@@ -391,16 +389,15 @@ function update(branch::AbstractString)
                         LibGit2.fetch(repo)
                         LibGit2.merge!(repo, fastforward=true)
                     catch err
-                        push!(deferred_errors,
-                                PkgError("Package $pkg cannot be updated.",
-                                        CapturedException(err, catch_backtrace())))
+                        cex = CapturedException(err, catch_backtrace())
+                        push!(deferred_errors, PkgError("Package $pkg cannot be updated.", cex))
                         success = false
                     end
                     if success
                         post_sha = string(LibGit2.head_oid(repo))
                         branch = LibGit2.branch(repo)
                         info("Updating $pkg $branch...",
-                              prev_sha != post_sha ? " $(prev_sha[1:8]) → $(post_sha[1:8])" : "")
+                            prev_sha != post_sha ? " $(prev_sha[1:8]) → $(post_sha[1:8])" : "")
                     end
                 end
             end
@@ -409,9 +406,8 @@ function update(branch::AbstractString)
             try
                 Cache.prefetch(pkg, Read.url(pkg), [a.sha1 for (v,a)=avail[pkg]])
             catch err
-                push!(deferred_errors,
-                        PkgError("Package $pkg: unable to update cache.",
-                                CapturedException(err, catch_backtrace())))
+                cex = CapturedException(err, catch_backtrace())
+                push!(deferred_errors, PkgError("Package $pkg: unable to update cache.", cex))
             end
         end
     end

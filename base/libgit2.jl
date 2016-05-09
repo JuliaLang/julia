@@ -391,7 +391,7 @@ function merge!(repo::GitRepo;
                 with(upstream(head_ref)) do tr_brn_ref
                     if tr_brn_ref === nothing
                         throw(GitError(Error.Merge, Error.ERROR,
-                                   "There is no tracking information for the current branch."))
+                                       "There is no tracking information for the current branch."))
                     end
                     [GitAnnotated(repo, tr_brn_ref)]
                 end
@@ -416,7 +416,7 @@ function rebase!(repo::GitRepo, upstream::AbstractString="", newbase::AbstractSt
             with(upstream(head_ref)) do brn_ref
                 if brn_ref === nothing
                     throw(GitError(Error.Rebase, Error.ERROR,
-                               "There is no tracking information for the current branch."))
+                                   "There is no tracking information for the current branch."))
                 end
                 GitAnnotated(repo, brn_ref)
             end
