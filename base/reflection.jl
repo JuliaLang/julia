@@ -7,7 +7,7 @@ current_module() = ccall(:jl_get_current_module, Ref{Module}, ())
 
 function fullname(m::Module)
     m === Main && return ()
-    m === Base && return (:Base,)  # issue #10653
+    isdefined(Main, :Base) && m === Base && return (:Base,)  # issue #10653
     mn = module_name(m)
     mp = module_parent(m)
     if mp === m

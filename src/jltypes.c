@@ -2986,18 +2986,30 @@ JL_DLLEXPORT int jl_args_morespecific(jl_value_t *a, jl_value_t *b)
     JL_GC_PUSH5(&atv, &btv, &penv, &tvars, &inst);
     if (jl_has_typevars(a) || jl_has_typevars(b)) {
         // Nail down any type parameters in terms of the intersection
-        // of the signatures
-        jl_type_intersection_matching_(a, b, &penv, &tvars, tvarsel_all);
+        // of the signatures.
+        jl_value_t *ti = jl_type_intersection_matching_(a, b, &penv, &tvars, tvarsel_all);
+        if (ti == jl_bottom_type) {
+            JL_GC_POP();
+            return 0;
+        }
         int n = jl_svec_len(tvars);
         inst = jl_alloc_svec_uninit(2*n);
         for (size_t i = 0; i < n; i++) {
             jl_svecset(inst, 2*i, jl_svecref(tvars, i));
             jl_svecset(inst, 2*i+1, jl_svecref(penv, i));
         }
+        /*
+        jl_(a);
+        jl_(b);
+        jl_(ti);
+        jl_(inst);
+        */
         atv = jl_instantiate_type_with(a, jl_svec_data(inst), n);
         btv = jl_instantiate_type_with(b, jl_svec_data(inst), n);
-        a = atv;
-        b = btv;
+        if (atv != btv) {
+            a = atv;
+            b = btv;
+        }
     }
     int ret = -1;
     if (jl_is_tuple_type(a) && jl_is_tuple_type(b)) {
