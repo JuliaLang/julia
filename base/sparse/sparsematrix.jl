@@ -2265,7 +2265,11 @@ function spset!{Tv,Ti<:Integer}(A::SparseMatrixCSC{Tv}, x::Tv, I::AbstractVector
 
     m, n = size(A)
     lenI = length(I)
-    ((I[end] > m) || (J[end] > n)) && throw(DimensionMismatch(""))
+
+    if (!isempty(I) && (I[1] < 1 || I[end] > m)) || (!isempty(J) && (J[1] < 1 || J[end] > n))
+        throw(BoundsError(A, (I, J)))
+    end
+
     nnzA = nnz(A) + lenI * length(J)
 
     colptr = A.colptr
@@ -2371,7 +2375,9 @@ function spdelete!{Tv,Ti<:Integer}(A::SparseMatrixCSC{Tv}, I::AbstractVector{Ti}
     !issorted(I) && (I = sort(I))
     !issorted(J) && (J = sort(J))
 
-    ((I[end] > m) || (J[end] > n)) && throw(DimensionMismatch(""))
+    if (!isempty(I) && (I[1] < 1 || I[end] > m)) || (!isempty(J) && (J[1] < 1 || J[end] > n))
+        throw(BoundsError(A, (I, J)))
+    end
 
     colptr = A.colptr
     rowval = rowvalA = A.rowval
@@ -2450,6 +2456,10 @@ function setindex!{Tv,Ti,T<:Integer}(A::SparseMatrixCSC{Tv,Ti}, B::SparseMatrixC
 
     m, n = size(A)
     mB, nB = size(B)
+
+    if (!isempty(I) && (I[1] < 1 || I[end] > m)) || (!isempty(J) && (J[1] < 1 || J[end] > n))
+        throw(BoundsError(A, (I, J)))
+    end
 
     nI = length(I)
     nJ = length(J)
@@ -2671,6 +2681,10 @@ function setindex!{Tv,Ti,T<:Real}(A::SparseMatrixCSC{Tv,Ti}, x, I::AbstractVecto
     S = issorted(I) ? (1:n) : sortperm(I)
     sxidx = r1 = r2 = 0
 
+    if (!isempty(I) && (I[S[1]] < 1 || I[S[end]] > length(A)))
+        throw(BoundsError(A, I))
+    end
+
     lastcol = 0
     (nrowA, ncolA) = szA
     @inbounds for xidx in 1:n
@@ -2678,7 +2692,6 @@ function setindex!{Tv,Ti,T<:Real}(A::SparseMatrixCSC{Tv,Ti}, x, I::AbstractVecto
         (sxidx < n) && (I[sxidx] == I[sxidx+1]) && continue
 
         row,col = ind2sub(szA, I[sxidx])
-        ((row > nrowA) || (col > ncolA)) && throw(BoundsError())
         v = isa(x, AbstractArray) ? x[sxidx] : x
 
         if col > lastcol
