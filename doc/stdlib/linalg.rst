@@ -155,7 +155,7 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
    .. Docstring generated from Julia source
 
-   ``lufact!`` is the same as :func:`lufact`\ , but saves space by overwriting the input ``A``\ , instead of creating a copy.  For sparse ``A`` the ``nzval`` field is not overwritten but the index fields, ``colptr`` and ``rowval`` are decremented in place, converting from 1-based indices to 0-based indices.
+   ``lufact!`` is the same as :func:`lufact`\ , but saves space by overwriting the input ``A``\ , instead of creating a copy. An ``InexactError`` exception is thrown if the factorisation produces a number not representable by the element type of ``A``\ , e.g. for integer types.
 
 .. function:: chol(A::AbstractMatrix) -> U
 
@@ -209,13 +209,13 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
    .. Docstring generated from Julia source
 
-   The same as ``cholfact``\ , but saves space by overwriting the input ``A``\ , instead of creating a copy.
+   The same as ``cholfact``\ , but saves space by overwriting the input ``A``\ , instead of creating a copy. An ``InexactError`` exception is thrown if the factorisation produces a number not representable by the element type of ``A``\ , e.g. for integer types.
 
 .. function:: cholfact!(A::StridedMatrix, uplo::Symbol, Val{true}) -> PivotedCholesky
 
    .. Docstring generated from Julia source
 
-   The same as ``cholfact``\ , but saves space by overwriting the input ``A``\ , instead of creating a copy.
+   The same as ``cholfact``\ , but saves space by overwriting the input ``A``\ , instead of creating a copy. An ``InexactError`` exception is thrown if the factorisation produces a number not representable by the element type of ``A``\ , e.g. for integer types.
 
 .. currentmodule:: Base.LinAlg
 
@@ -395,7 +395,7 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
    .. Docstring generated from Julia source
 
-   ``qrfact!`` is the same as :func:`qrfact` when ``A`` is a subtype of ``StridedMatrix``\ , but saves space by overwriting the input ``A``\ , instead of creating a copy.
+   ``qrfact!`` is the same as :func:`qrfact` when ``A`` is a subtype of ``StridedMatrix``\ , but saves space by overwriting the input ``A``\ , instead of creating a copy. An ``InexactError`` exception is thrown if the factorisation produces a number not representable by the element type of ``A``\ , e.g. for integer types.
 
 .. function:: full(QRCompactWYQ[, thin=true]) -> Matrix
 
@@ -816,7 +816,7 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
    Scale an array ``A`` by a scalar ``b`` overwriting ``A`` in-place.
 
-   If ``A`` is a matrix and ``b`` is a vector, then ``scale!(A,b)`` scales each column ``i`` of ``A`` by ``b[i]`` (similar to ``A*Diagonal(b)``\ ), while ``scale!(b,A)`` scales each row ``i`` of ``A`` by ``b[i]`` (similar to ``Diagonal(b)*A``\ ), again operating in-place on ``A``\ .
+   If ``A`` is a matrix and ``b`` is a vector, then ``scale!(A,b)`` scales each column ``i`` of ``A`` by ``b[i]`` (similar to ``A*Diagonal(b)``\ ), while ``scale!(b,A)`` scales each row ``i`` of ``A`` by ``b[i]`` (similar to ``Diagonal(b)*A``\ ), again operating in-place on ``A``\ . An ``InexactError`` exception is thrown if the scaling produces a number not representable by the element type of ``A``\ , e.g. for integer types.
 
 .. function:: Tridiagonal(dl, d, du)
 
