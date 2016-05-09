@@ -135,9 +135,9 @@ for (gbtrf, gbtrs, elty) in
         #       INTEGER            IPIV( * )
         #       DOUBLE PRECISION   AB( LDAB, * ), B( LDB, * )
         function gbtrs!(trans::Char, kl::Integer, ku::Integer, m::Integer,
-                        AB::StridedMatrix{$elty}, ipiv::Vector{BlasInt},
+                        AB::StridedMatrix{$elty}, ipiv::StridedVector{BlasInt},
                         B::StridedVecOrMat{$elty})
-            chkstride1(AB, B)
+            chkstride1(AB, B, ipiv)
             chktrans(trans)
             info = Ref{BlasInt}()
             n    = size(AB,2)
@@ -175,7 +175,7 @@ first subdiagonal containing a nonzero band, `ku` is the last superdiagonal
 containing one, and `m` is the first dimension of the matrix `AB`. `ipiv` is the vector
 of pivots returned from `gbtrf!`. Returns the vector or matrix `X`, overwriting `B` in-place.
 """
-gbtrs!(trans::Char, kl::Integer, ku::Integer, m::Integer, AB::StridedMatrix, ipiv::Vector{BlasInt}, B::StridedVecOrMat)
+gbtrs!(trans::Char, kl::Integer, ku::Integer, m::Integer, AB::StridedMatrix, ipiv::StridedVector{BlasInt}, B::StridedVecOrMat)
 
 ## (GE) general matrices: balancing and back-transforming
 for (gebal, gebak, elty, relty) in
@@ -213,9 +213,9 @@ for (gebal, gebak, elty, relty) in
         #     .. Array Arguments ..
         #      DOUBLE PRECISION   SCALE( * ), V( LDV, * )
         function gebak!(job::Char, side::Char,
-                        ilo::BlasInt, ihi::BlasInt, scale::Vector{$relty},
+                        ilo::BlasInt, ihi::BlasInt, scale::StridedVector{$relty},
                         V::StridedMatrix{$elty})
-            chkstride1(V)
+            chkstride1(scale, V)
             chkside(side)
             chkfinite(V) # balancing routines don't support NaNs and Infs
             n = checksquare(V)
@@ -250,7 +250,7 @@ the unscaled/unpermuted eigenvectors of the original matrix. Modifies `V`
 in-place. `side` can be `L` (left eigenvectors are transformed) or `R`
 (right eigenvectors are transformed).
 """
-gebak!(job::Char, side::Char, ilo::BlasInt, ihi::BlasInt, scale::Vector, V::StridedMatrix)
+gebak!(job::Char, side::Char, ilo::BlasInt, ihi::BlasInt, scale::StridedVector, V::StridedMatrix)
 
 # (GE) general matrices, direct decompositions
 #
@@ -305,8 +305,8 @@ for (gebrd, gelqf, geqlf, geqrf, geqp3, geqrt, geqrt3, gerqf, getrf, elty, relty
         #       INTEGER            INFO, LDA, LWORK, M, N
         # *     .. Array Arguments ..
         #       DOUBLE PRECISION   A( LDA, * ), TAU( * ), WORK( * )
-        function gelqf!(A::StridedMatrix{$elty}, tau::Vector{$elty})
-            chkstride1(A)
+        function gelqf!(A::StridedMatrix{$elty}, tau::StridedVector{$elty})
+            chkstride1(A,tau)
             m     = BlasInt(size(A, 1))
             n     = BlasInt(size(A, 2))
             lda   = BlasInt(max(1,stride(A, 2)))
@@ -335,8 +335,8 @@ for (gebrd, gelqf, geqlf, geqrf, geqp3, geqrt, geqrt3, gerqf, getrf, elty, relty
         #       INTEGER            INFO, LDA, LWORK, M, N
         # *     .. Array Arguments ..
         #       DOUBLE PRECISION   A( LDA, * ), TAU( * ), WORK( * )
-        function geqlf!(A::StridedMatrix{$elty}, tau::Vector{$elty})
-            chkstride1(A)
+        function geqlf!(A::StridedMatrix{$elty}, tau::StridedVector{$elty})
+            chkstride1(A,tau)
             m     = BlasInt(size(A, 1))
             n     = BlasInt(size(A, 2))
             lda   = BlasInt(max(1,stride(A, 2)))
@@ -366,8 +366,8 @@ for (gebrd, gelqf, geqlf, geqrf, geqp3, geqrt, geqrt3, gerqf, getrf, elty, relty
         # *     .. Array Arguments ..
         #       INTEGER            JPVT( * )
         #       DOUBLE PRECISION   A( LDA, * ), TAU( * ), WORK( * )
-        function geqp3!(A::StridedMatrix{$elty}, jpvt::Vector{BlasInt}, tau::Vector{$elty})
-            chkstride1(A)
+        function geqp3!(A::StridedMatrix{$elty}, jpvt::StridedVector{BlasInt}, tau::StridedVector{$elty})
+            chkstride1(A,jpvt,tau)
             m,n = size(A)
             if length(tau) != min(m,n)
                 throw(DimensionMismatch("tau has length $(length(tau)), but needs length $(min(m,n))"))
@@ -466,8 +466,8 @@ for (gebrd, gelqf, geqlf, geqrf, geqp3, geqrt, geqrt3, gerqf, getrf, elty, relty
         #       INTEGER            INFO, LDA, LWORK, M, N
         # *     .. Array Arguments ..
         #       DOUBLE PRECISION   A( LDA, * ), TAU( * ), WORK( * )
-        function geqrf!(A::StridedMatrix{$elty}, tau::Vector{$elty})
-            chkstride1(A)
+        function geqrf!(A::StridedMatrix{$elty}, tau::StridedVector{$elty})
+            chkstride1(A,tau)
             m, n  = size(A)
             if length(tau) != min(m,n)
                 throw(DimensionMismatch("tau has length $(length(tau)), but needs length $(min(m,n))"))
@@ -494,8 +494,8 @@ for (gebrd, gelqf, geqlf, geqrf, geqp3, geqrt, geqrt3, gerqf, getrf, elty, relty
         #       INTEGER            INFO, LDA, LWORK, M, N
         # *     .. Array Arguments ..
         #       DOUBLE PRECISION   A( LDA, * ), TAU( * ), WORK( * )
-        function gerqf!(A::StridedMatrix{$elty},tau::Vector{$elty})
-            chkstride1(A)
+        function gerqf!(A::StridedMatrix{$elty},tau::StridedVector{$elty})
+            chkstride1(A,tau)
             m, n  = size(A)
             if length(tau) != min(m,n)
                 throw(DimensionMismatch("tau has length $(length(tau)), but needs length $(min(m,n))"))
@@ -560,7 +560,7 @@ must have length greater than or equal to the smallest dimension of `A`.
 Returns
 `A` and `tau` modified in-place.
 """
-gelqf!(A::StridedMatrix, tau::Vector)
+gelqf!(A::StridedMatrix, tau::StridedVector)
 
 """
     geqlf!(A, tau)
@@ -571,7 +571,7 @@ must have length greater than or equal to the smallest dimension of `A`.
 
 Returns `A` and `tau` modified in-place.
 """
-geqlf!(A::StridedMatrix, tau::Vector)
+geqlf!(A::StridedMatrix, tau::StridedVector)
 
 """
     geqp3!(A, jpvt, tau)
@@ -584,7 +584,7 @@ smallest dimension of `A`.
 
 `A`, `jpvt`, and `tau` are modified in-place.
 """
-geqp3!(A::StridedMatrix, jpvt::Vector{BlasInt}, tau::Vector)
+geqp3!(A::StridedMatrix, jpvt::StridedVector{BlasInt}, tau::StridedVector)
 
 """
     geqrt!(A, T)
@@ -621,7 +621,7 @@ must have length greater than or equal to the smallest dimension of `A`.
 
 Returns `A` and `tau` modified in-place.
 """
-geqrf!(A::StridedMatrix, tau::Vector)
+geqrf!(A::StridedMatrix, tau::StridedVector)
 
 """
     gerqf!(A, tau)
@@ -632,7 +632,7 @@ must have length greater than or equal to the smallest dimension of `A`.
 
 Returns `A` and `tau` modified in-place.
 """
-gerqf!(A::StridedMatrix, tau::Vector)
+gerqf!(A::StridedMatrix, tau::StridedVector)
 
 """
     getrf!(A) -> (A, ipiv, info)
@@ -643,7 +643,7 @@ Returns `A`, modified in-place, `ipiv`, the pivoting information, and an `info`
 code which indicates success (`info = 0`), a singular value in `U`
 (`info = i`, in which case `U[i,i]` is singular), or an error code (`info < 0`).
 """
-getrf!(A::StridedMatrix, tau::Vector)
+getrf!(A::StridedMatrix, tau::StridedVector)
 
 """
     gelqf!(A) -> (A, tau)
@@ -717,7 +717,7 @@ greater than or equal to `n` if `A` is an `(m x n)` matrix.
 Returns `A` and `jpvt`, modified in-place, and `tau`, which stores the elementary
 reflectors.
 """
-function geqp3!{T<:BlasFloat}(A::StridedMatrix{T},jpvt::Vector{BlasInt})
+function geqp3!{T<:BlasFloat}(A::StridedMatrix{T},jpvt::StridedVector{BlasInt})
     m,n = size(A)
     geqp3!(A,jpvt,similar(A,T,min(m,n)))
 end
@@ -787,6 +787,7 @@ for (tzrzf, ormrz, elty) in
                         tau::StridedVector{$elty}, C::StridedMatrix{$elty})
             chktrans(trans)
             chkside(side)
+            chkstride1(tau)
             m, n = size(C)
             k = length(tau)
             l = size(A, 2) - size(A, 1)
@@ -915,9 +916,9 @@ for (gels, gesv, getrs, getri, elty) in
         #     .. Array Arguments ..
         #      INTEGER            IPIV( * )
         #      DOUBLE PRECISION   A( LDA, * ), B( LDB, * )
-        function getrs!(trans::Char, A::StridedMatrix{$elty}, ipiv::Vector{BlasInt}, B::StridedVecOrMat{$elty})
+        function getrs!(trans::Char, A::StridedMatrix{$elty}, ipiv::StridedVector{BlasInt}, B::StridedVecOrMat{$elty})
             chktrans(trans)
-            chkstride1(A, B)
+            chkstride1(A, B, ipiv)
             n = checksquare(A)
             if n != size(B, 1)
                 throw(DimensionMismatch("B has leading dimension $(size(B,1)), but needs $n"))
@@ -938,8 +939,8 @@ for (gels, gesv, getrs, getri, elty) in
         #*     .. Array Arguments ..
         #      INTEGER            IPIV( * )
         #      DOUBLE PRECISION   A( LDA, * ), WORK( * )
-        function getri!(A::StridedMatrix{$elty}, ipiv::Vector{BlasInt})
-            chkstride1(A)
+        function getri!(A::StridedMatrix{$elty}, ipiv::StridedVector{BlasInt})
+            chkstride1(A, ipiv)
             n = checksquare(A)
             if n != length(ipiv)
                 throw(DimensionMismatch("ipiv has length $(length(ipiv)), but needs $n"))
@@ -995,7 +996,7 @@ is the `LU` factorization from `getrf!`, with `ipiv` the pivoting
 information. `trans` may be one of `N` (no modification), `T` (transpose),
 or `C` (conjugate transpose).
 """
-getrs!(trans::Char, A::StridedMatrix, ipiv::Vector{BlasInt}, B::StridedVecOrMat)
+getrs!(trans::Char, A::StridedMatrix, ipiv::StridedVector{BlasInt}, B::StridedVecOrMat)
 
 """
     getri!(A, ipiv)
@@ -1005,7 +1006,7 @@ Computes the inverse of `A`, using its `LU` factorization found by
 contains the `LU` factorization of `getrf!`. `A` is overwritten with
 its inverse.
 """
-getri!(A::StridedMatrix, ipiv::Vector{BlasInt})
+getri!(A::StridedMatrix, ipiv::StridedVector{BlasInt})
 
 for (gesvx, elty) in
     ((:dgesvx_,:Float64),
@@ -1027,9 +1028,10 @@ for (gesvx, elty) in
         #    $                   WORK( * ), X( LDX, *
         #
         function gesvx!(fact::Char, trans::Char, A::StridedMatrix{$elty},
-                        AF::StridedMatrix{$elty}, ipiv::Vector{BlasInt}, equed::Char,
-                        R::Vector{$elty}, C::Vector{$elty}, B::StridedVecOrMat{$elty})
+                        AF::StridedMatrix{$elty}, ipiv::StridedVector{BlasInt}, equed::Char,
+                        R::StridedVector{$elty}, C::StridedVector{$elty}, B::StridedVecOrMat{$elty})
             chktrans(trans)
+            chkstride1(ipiv, R, C)
             n    = checksquare(A)
             lda  = stride(A,2)
             n    = checksquare(AF)
@@ -1095,9 +1097,10 @@ for (gesvx, elty, relty) in
         #     COMPLEX*16         A( LDA, * ), AF( LDAF, * ), B( LDB, * ),
         #    $                   WORK( * ), X( LDX, * )
         function gesvx!(fact::Char, trans::Char, A::StridedMatrix{$elty},
-                        AF::StridedMatrix{$elty}, ipiv::Vector{BlasInt}, equed::Char,
-                        R::Vector{$relty}, C::Vector{$relty}, B::StridedVecOrMat{$elty})
+                        AF::StridedMatrix{$elty}, ipiv::StridedVector{BlasInt}, equed::Char,
+                        R::StridedVector{$relty}, C::StridedVector{$relty}, B::StridedVecOrMat{$elty})
             chktrans(trans)
+            chkstride1(ipiv, R, C)
             n   = checksquare(A)
             lda = stride(A,2)
             n   = checksquare(AF)
@@ -1170,7 +1173,7 @@ each solution vector in `X`; `berr`, the forward error bound for each solution
 vector in `X`; and `work`, the reciprocal pivot growth factor.
 """
 gesvx!(fact::Char, trans::Char, A::StridedMatrix, AF::StridedMatrix,
-    ipiv::Vector{BlasInt}, equed::Char, R::Vector, C::Vector, B::StridedVecOrMat)
+    ipiv::StridedVector{BlasInt}, equed::Char, R::StridedVector, C::StridedVector, B::StridedVecOrMat)
 
 """
     gesvx!(A, B)
@@ -2320,9 +2323,9 @@ for (gtsv, gttrf, gttrs, elty) in
         #       INTEGER            INFO, LDB, N, NRHS
         #       .. Array Arguments ..
         #       DOUBLE PRECISION   B( LDB, * ), D( * ), DL( * ), DU( * )
-        function gtsv!(dl::Vector{$elty}, d::Vector{$elty}, du::Vector{$elty},
+        function gtsv!(dl::StridedVector{$elty}, d::StridedVector{$elty}, du::StridedVector{$elty},
                        B::StridedVecOrMat{$elty})
-            chkstride1(B)
+            chkstride1(B, dl, d, du)
             n = length(d)
             if !(n >= length(dl) >= n - 1)
                 throw(DimensionMismatch("Subdiagonal has length $(length(dl)), but should be $n or $(n - 1)"))
@@ -2351,7 +2354,8 @@ for (gtsv, gttrf, gttrs, elty) in
         #       .. Array Arguments ..
         #       INTEGER            IPIV( * )
         #       DOUBLE PRECISION   D( * ), DL( * ), DU( * ), DU2( * )
-        function gttrf!(dl::Vector{$elty}, d::Vector{$elty}, du::Vector{$elty})
+        function gttrf!(dl::StridedVector{$elty}, d::StridedVector{$elty}, du::StridedVector{$elty})
+            chkstride1(dl,d,du)
             n    = length(d)
             if length(dl) != n - 1
                 throw(DimensionMismatch("Subdiagonal has length $(length(dl)), but should be $(n - 1)"))
@@ -2377,11 +2381,11 @@ for (gtsv, gttrf, gttrs, elty) in
         #       .. Array Arguments ..
         #       INTEGER            IPIV( * )
         #       DOUBLE PRECISION   B( LDB, * ), D( * ), DL( * ), DU( * ), DU2( * )
-        function gttrs!(trans::Char, dl::Vector{$elty}, d::Vector{$elty},
-                        du::Vector{$elty}, du2::Vector{$elty}, ipiv::Vector{BlasInt},
+        function gttrs!(trans::Char, dl::StridedVector{$elty}, d::StridedVector{$elty},
+                        du::StridedVector{$elty}, du2::StridedVector{$elty}, ipiv::StridedVector{BlasInt},
                         B::StridedVecOrMat{$elty})
             chktrans(trans)
-            chkstride1(B)
+            chkstride1(B, ipiv, dl, d, du, du2)
             n = length(d)
             if length(dl) != n - 1
                 throw(DimensionMismatch("Subdiagonal has length $(length(dl)), but should be $(n - 1)"))
@@ -2413,7 +2417,7 @@ superdiagonal.
 
 Overwrites `B` with the solution `X` and returns it.
 """
-gtsv!(dl::Vector, d::Vector, du::Vector, B::StridedVecOrMat)
+gtsv!(dl::StridedVector, d::StridedVector, du::StridedVector, B::StridedVecOrMat)
 
 """
     gttrf!(dl, d, du) -> (dl, d, du, du2, ipiv)
@@ -2424,7 +2428,7 @@ subdiagonal, `d` on the diagonal, and `du` on the superdiagonal.
 Modifies `dl`, `d`, and `du` in-place and returns them and the second
 superdiagonal `du2` and the pivoting vector `ipiv`.
 """
-gttrf!(dl::Vector, d::Vector, du::Vector)
+gttrf!(dl::StridedVector, d::StridedVector, du::StridedVector)
 
 """
     gttrs!(trans, dl, d, du, du2, ipiv, B)
@@ -2433,8 +2437,8 @@ Solves the equation `A * X = B` (`trans = N`), `A.' * X = B` (`trans = T`),
 or `A' * X = B` (`trans = C`) using the `LU` factorization computed by
 `gttrf!`. `B` is overwritten with the solution `X`.
 """
-gttrs!(trans::Char, dl::Vector, d::Vector, du::Vector, du2::Vector,
-       ipiv::Vector{BlasInt}, B::StridedVecOrMat)
+gttrs!(trans::Char, dl::StridedVector, d::StridedVector, du::StridedVector, du2::StridedVector,
+       ipiv::StridedVector{BlasInt}, B::StridedVecOrMat)
 
 ## (OR) orthogonal (or UN, unitary) matrices, extractors and multiplication
 for (orglq, orgqr, orgql, orgrq, ormlq, ormqr, ormql, ormrq, gemqrt, elty) in
@@ -2448,8 +2452,8 @@ for (orglq, orgqr, orgql, orgrq, ormlq, ormqr, ormql, ormrq, gemqrt, elty) in
         #       INTEGER            INFO, K, LDA, LWORK, M, N
         # *     .. Array Arguments ..
         #       DOUBLE PRECISION   A( LDA, * ), TAU( * ), WORK( * )
-        function orglq!(A::StridedMatrix{$elty}, tau::Vector{$elty}, k::Integer = length(tau))
-            chkstride1(A)
+        function orglq!(A::StridedMatrix{$elty}, tau::StridedVector{$elty}, k::Integer = length(tau))
+            chkstride1(A,tau)
             n = size(A, 2)
             m = min(n, size(A, 1))
             if k > m
@@ -2481,8 +2485,8 @@ for (orglq, orgqr, orgql, orgrq, ormlq, ormqr, ormql, ormrq, gemqrt, elty) in
         #       INTEGER            INFO, K, LDA, LWORK, M, N
         # *     .. Array Arguments ..
         #       DOUBLE PRECISION   A( LDA, * ), TAU( * ), WORK( * )
-        function orgqr!(A::StridedMatrix{$elty}, tau::Vector{$elty}, k::Integer = length(tau))
-            chkstride1(A)
+        function orgqr!(A::StridedMatrix{$elty}, tau::StridedVector{$elty}, k::Integer = length(tau))
+            chkstride1(A,tau)
             m = size(A, 1)
             n = min(m, size(A, 2))
             if k > n
@@ -2516,8 +2520,8 @@ for (orglq, orgqr, orgql, orgrq, ormlq, ormqr, ormql, ormrq, gemqrt, elty) in
         #       INTEGER            INFO, K, LDA, LWORK, M, N
         # *     .. Array Arguments ..
         #       DOUBLE PRECISION   A( LDA, * ), TAU( * ), WORK( * )
-        function orgql!(A::StridedMatrix{$elty}, tau::Vector{$elty}, k::Integer = length(tau))
-            chkstride1(A)
+        function orgql!(A::StridedMatrix{$elty}, tau::StridedVector{$elty}, k::Integer = length(tau))
+            chkstride1(A,tau)
             m = size(A, 1)
             n = min(m, size(A, 2))
             if k > n
@@ -2551,8 +2555,8 @@ for (orglq, orgqr, orgql, orgrq, ormlq, ormqr, ormql, ormrq, gemqrt, elty) in
         #       INTEGER            INFO, K, LDA, LWORK, M, N
         # *     .. Array Arguments ..
         #       DOUBLE PRECISION   A( LDA, * ), TAU( * ), WORK( * )
-        function orgrq!(A::StridedMatrix{$elty}, tau::Vector{$elty}, k::Integer = length(tau))
-            chkstride1(A)
+        function orgrq!(A::StridedMatrix{$elty}, tau::StridedVector{$elty}, k::Integer = length(tau))
+            chkstride1(A,tau)
             m = size(A, 1)
             n = min(m, size(A, 2))
             if k > n
@@ -2589,10 +2593,10 @@ for (orglq, orgqr, orgql, orgrq, ormlq, ormqr, ormql, ormrq, gemqrt, elty) in
         #      .. Array Arguments ..
         #      DOUBLE PRECISION   A( LDA, * ), C( LDC, * ), TAU( * ), WORK( * )
         function ormlq!(side::Char, trans::Char, A::StridedMatrix{$elty},
-                        tau::Vector{$elty}, C::StridedVecOrMat{$elty})
+                        tau::StridedVector{$elty}, C::StridedVecOrMat{$elty})
             chktrans(trans)
             chkside(side)
-            chkstride1(A, C)
+            chkstride1(A, C, tau)
             m,n = ndims(C) == 2 ? size(C) : (size(C, 1), 1)
             mA, nA  = size(A)
             k   = length(tau)
@@ -2635,10 +2639,10 @@ for (orglq, orgqr, orgql, orgrq, ormlq, ormqr, ormql, ormrq, gemqrt, elty) in
         #      .. Array Arguments ..
         #      DOUBLE PRECISION   A( LDA, * ), C( LDC, * ), TAU( * ), WORK( * )
         function ormqr!(side::Char, trans::Char, A::StridedMatrix{$elty},
-                        tau::Vector{$elty}, C::StridedVecOrMat{$elty})
+                        tau::StridedVector{$elty}, C::StridedVecOrMat{$elty})
             chktrans(trans)
             chkside(side)
-            chkstride1(A, C)
+            chkstride1(A, C, tau)
             m,n = ndims(C) == 2 ? size(C) : (size(C, 1), 1)
             mA  = size(A, 1)
             k   = length(tau)
@@ -2684,10 +2688,10 @@ for (orglq, orgqr, orgql, orgrq, ormlq, ormqr, ormql, ormrq, gemqrt, elty) in
         #      .. Array Arguments ..
         #      DOUBLE PRECISION   A( LDA, * ), C( LDC, * ), TAU( * ), WORK( * )
         function ormql!(side::Char, trans::Char, A::StridedMatrix{$elty},
-                        tau::Vector{$elty}, C::StridedVecOrMat{$elty})
+                        tau::StridedVector{$elty}, C::StridedVecOrMat{$elty})
             chktrans(trans)
             chkside(side)
-            chkstride1(A, C)
+            chkstride1(A, C, tau)
             m,n = ndims(C) == 2 ? size(C) : (size(C, 1), 1)
             mA  = size(A, 1)
             k   = length(tau)
@@ -2733,10 +2737,10 @@ for (orglq, orgqr, orgql, orgrq, ormlq, ormqr, ormql, ormrq, gemqrt, elty) in
         #      .. Array Arguments ..
         #      DOUBLE PRECISION   A( LDA, * ), C( LDC, * ), TAU( * ), WORK( * )
         function ormrq!(side::Char, trans::Char, A::StridedMatrix{$elty},
-                        tau::Vector{$elty}, C::StridedVecOrMat{$elty})
+                        tau::StridedVector{$elty}, C::StridedVecOrMat{$elty})
             chktrans(trans)
             chkside(side)
-            chkstride1(A, C)
+            chkstride1(A, C, tau)
             m,n = ndims(C) == 2 ? size(C) : (size(C, 1), 1)
             nA  = size(A, 2)
             k   = length(tau)
@@ -2832,7 +2836,7 @@ end
 Explicitly finds the matrix `Q` of a `LQ` factorization after calling
 `gelqf!` on `A`. Uses the output of `gelqf!`. `A` is overwritten by `Q`.
 """
-orglq!(A::StridedMatrix, tau::Vector, k::Integer = length(tau))
+orglq!(A::StridedMatrix, tau::StridedVector, k::Integer = length(tau))
 
 """
     orgqr!(A, tau, k = length(tau))
@@ -2840,7 +2844,7 @@ orglq!(A::StridedMatrix, tau::Vector, k::Integer = length(tau))
 Explicitly finds the matrix `Q` of a `QR` factorization after calling
 `geqrf!` on `A`. Uses the output of `geqrf!`. `A` is overwritten by `Q`.
 """
-orgqr!(A::StridedMatrix, tau::Vector, k::Integer = length(tau))
+orgqr!(A::StridedMatrix, tau::StridedVector, k::Integer = length(tau))
 
 """
     orgql!(A, tau, k = length(tau))
@@ -2848,7 +2852,7 @@ orgqr!(A::StridedMatrix, tau::Vector, k::Integer = length(tau))
 Explicitly finds the matrix `Q` of a `QL` factorization after calling
 `geqlf!` on `A`. Uses the output of `geqlf!`. `A` is overwritten by `Q`.
 """
-orgql!(A::StridedMatrix, tau::Vector, k::Integer = length(tau))
+orgql!(A::StridedMatrix, tau::StridedVector, k::Integer = length(tau))
 
 """
     orgrq!(A, tau, k = length(tau))
@@ -2856,7 +2860,7 @@ orgql!(A::StridedMatrix, tau::Vector, k::Integer = length(tau))
 Explicitly finds the matrix `Q` of a `RQ` factorization after calling
 `gerqf!` on `A`. Uses the output of `gerqf!`. `A` is overwritten by `Q`.
 """
-orgrq!(A::StridedMatrix, tau::Vector, k::Integer = length(tau))
+orgrq!(A::StridedMatrix, tau::StridedVector, k::Integer = length(tau))
 
 """
     ormlq!(side, trans, A, tau, C)
@@ -2866,7 +2870,7 @@ Computes `Q * C` (`trans = N`), `Q.' * C` (`trans = T`), `Q' * C`
 for `side = R` using `Q` from a `LQ` factorization of `A` computed using
 `gelqf!`. `C` is overwritten.
 """
-ormlq!(side::Char, trans::Char, A::StridedMatrix, tau::Vector, C::StridedVecOrMat)
+ormlq!(side::Char, trans::Char, A::StridedMatrix, tau::StridedVector, C::StridedVecOrMat)
 
 """
     ormqr!(side, trans, A, tau, C)
@@ -2876,7 +2880,7 @@ Computes `Q * C` (`trans = N`), `Q.' * C` (`trans = T`), `Q' * C`
 for `side = R` using `Q` from a `QR` factorization of `A` computed using
 `geqrf!`. `C` is overwritten.
 """
-ormqr!(side::Char, trans::Char, A::StridedMatrix, tau::Vector, C::StridedVecOrMat)
+ormqr!(side::Char, trans::Char, A::StridedMatrix, tau::StridedVector, C::StridedVecOrMat)
 
 """
     ormql!(side, trans, A, tau, C)
@@ -2886,7 +2890,7 @@ Computes `Q * C` (`trans = N`), `Q.' * C` (`trans = T`), `Q' * C`
 for `side = R` using `Q` from a `QL` factorization of `A` computed using
 `geqlf!`. `C` is overwritten.
 """
-ormql!(side::Char, trans::Char, A::StridedMatrix, tau::Vector, C::StridedVecOrMat)
+ormql!(side::Char, trans::Char, A::StridedMatrix, tau::StridedVector, C::StridedVecOrMat)
 
 """
     ormrq!(side, trans, A, tau, C)
@@ -2896,7 +2900,7 @@ Computes `Q * C` (`trans = N`), `Q.' * C` (`trans = T`), `Q' * C`
 for `side = R` using `Q` from a `RQ` factorization of `A` computed using
 `gerqf!`. `C` is overwritten.
 """
-ormrq!(side::Char, trans::Char, A::StridedMatrix, tau::Vector, C::StridedVecOrMat)
+ormrq!(side::Char, trans::Char, A::StridedMatrix, tau::StridedVector, C::StridedVecOrMat)
 
 """
     gemqrt!(side, trans, V, T, C)
@@ -3104,8 +3108,8 @@ for (ptsv, pttrf, elty, relty) in
         #       INTEGER            INFO, LDB, N, NRHS
         #       .. Array Arguments ..
         #       DOUBLE PRECISION   B( LDB, * ), D( * ), E( * )
-        function ptsv!(D::Vector{$relty}, E::Vector{$elty}, B::StridedVecOrMat{$elty})
-            chkstride1(B)
+        function ptsv!(D::StridedVector{$relty}, E::StridedVector{$elty}, B::StridedVecOrMat{$elty})
+            chkstride1(B, D, E)
             n = length(D)
             if length(E) != n - 1
                 throw(DimensionMismatch("E has length $(length(E)), but needs $(n - 1)"))
@@ -3127,7 +3131,8 @@ for (ptsv, pttrf, elty, relty) in
         #       INTEGER            INFO, N
         #       .. Array Arguments ..
         #       DOUBLE PRECISION   D( * ), E( * )
-        function pttrf!(D::Vector{$relty}, E::Vector{$elty})
+        function pttrf!(D::StridedVector{$relty}, E::StridedVector{$elty})
+            chkstride1(D, E)
             n = length(D)
             if length(E) != n - 1
                 throw(DimensionMismatch("E has length $(length(E)), but needs $(n - 1)"))
@@ -3149,7 +3154,7 @@ Solves `A * X = B` for positive-definite tridiagonal `A`. `D` is the
 diagonal of `A` and `E` is the off-diagonal. `B` is overwritten with the
 solution `X` and returned.
 """
-ptsv!(D::Vector, E::Vector, B::StridedVecOrMat)
+ptsv!(D::StridedVector, E::StridedVector, B::StridedVecOrMat)
 
 """
     pttrf!(D, E)
@@ -3158,7 +3163,7 @@ Computes the LDLt factorization of a positive-definite tridiagonal matrix
 with `D` as diagonal and `E` as off-diagonal. `D` and `E` are overwritten
 and returned.
 """
-pttrf!(D::Vector, E::Vector)
+pttrf!(D::StridedVector, E::StridedVector)
 
 for (pttrs, elty, relty) in
     ((:dpttrs_,:Float64,:Float64),
@@ -3169,8 +3174,8 @@ for (pttrs, elty, relty) in
         #       INTEGER            INFO, LDB, N, NRHS
         #       .. Array Arguments ..
         #       DOUBLE PRECISION   B( LDB, * ), D( * ), E( * )
-        function pttrs!(D::Vector{$relty}, E::Vector{$elty}, B::StridedVecOrMat{$elty})
-            chkstride1(B)
+        function pttrs!(D::StridedVector{$relty}, E::StridedVector{$elty}, B::StridedVecOrMat{$elty})
+            chkstride1(B, D, E)
             n = length(D)
             if length(E) != n - 1
                 throw(DimensionMismatch("E has length $(length(E)), but needs $(n - 1)"))
@@ -3201,8 +3206,8 @@ for (pttrs, elty, relty) in
         # *     .. Array Arguments ..
         #       DOUBLE PRECISION   D( * )
         #       COMPLEX*16         B( LDB, * ), E( * )
-        function pttrs!(uplo::Char, D::Vector{$relty}, E::Vector{$elty}, B::StridedVecOrMat{$elty})
-            chkstride1(B)
+        function pttrs!(uplo::Char, D::StridedVector{$relty}, E::StridedVector{$elty}, B::StridedVecOrMat{$elty})
+            chkstride1(B, D, E)
             chkuplo(uplo)
             n = length(D)
             if length(E) != n - 1
@@ -3229,7 +3234,7 @@ Solves `A * X = B` for positive-definite tridiagonal `A` with diagonal
 `D` and off-diagonal `E` after computing `A`'s LDLt factorization using
 `pttrf!`. `B` is overwritten with the solution `X`.
 """
-pttrs!(D::Vector, E::Vector, B::StridedVecOrMat)
+pttrs!(D::StridedVector, E::StridedVector, B::StridedVecOrMat)
 
 ## (TR) triangular matrices: solver and inverse
 for (trtri, trtrs, elty) in
@@ -3351,7 +3356,7 @@ for (trcon, trevc, trrfs, elty) in
         # LOGICAL            SELECT( * )
         # DOUBLE PRECISION   T( LDT, * ), VL( LDVL, * ), VR( LDVR, * ),
         #$                   WORK( * )
-        function trevc!(side::Char, howmny::Char, select::Vector{BlasInt}, T::StridedMatrix{$elty},
+        function trevc!(side::Char, howmny::Char, select::StridedVector{BlasInt}, T::StridedMatrix{$elty},
                         VL::StridedMatrix{$elty} = similar(T),
                         VR::StridedMatrix{$elty} = similar(T))
             # Extract
@@ -3362,7 +3367,7 @@ for (trcon, trevc, trrfs, elty) in
             ldt, ldvl, ldvr = stride(T, 2), stride(VL, 2), stride(VR, 2)
 
             # Check
-            chkstride1(T)
+            chkstride1(T, select)
 
             # Allocate
             m = Array(BlasInt, 1)
@@ -3480,7 +3485,7 @@ for (trcon, trevc, trrfs, elty, relty) in
         # DOUBLE PRECISION   RWORK( * )
         # COMPLEX*16         T( LDT, * ), VL( LDVL, * ), VR( LDVR, * ),
         #$                   WORK( * )
-        function trevc!(side::Char, howmny::Char, select::Vector{BlasInt}, T::StridedMatrix{$elty},
+        function trevc!(side::Char, howmny::Char, select::StridedVector{BlasInt}, T::StridedMatrix{$elty},
                         VL::StridedMatrix{$elty} = similar(T),
                         VR::StridedMatrix{$elty} = similar(T))
             # Extract
@@ -3488,7 +3493,7 @@ for (trcon, trevc, trrfs, elty, relty) in
             ldt, ldvl, ldvr = stride(T, 2), stride(VL, 2), stride(VR, 2)
 
             # Check
-            chkstride1(T)
+            chkstride1(T, select)
             if side ∉ ['L','R','B']
                 throw(ArgumentError("side argument must be 'L' (left eigenvectors), 'R' (right eigenvectors), or 'B' (both), got $side"))
             end
@@ -3588,7 +3593,7 @@ eigenvectors are found and backtransformed using `VL` and `VR`. If
 `howmny = S`, only the eigenvectors corresponding to the values in
 `select` are computed.
 """
-trevc!(side::Char, howmny::Char, select::Vector{BlasInt}, T::StridedMatrix,
+trevc!(side::Char, howmny::Char, select::StridedVector{BlasInt}, T::StridedMatrix,
         VL::StridedMatrix = similar(T), VR::StridedMatrix = similar(T))
 
 """
@@ -3614,7 +3619,8 @@ for (stev, stebz, stegr, stein, elty) in
 #     , (:cstev_,:Complex64)
      )
     @eval begin
-        function stev!(job::Char, dv::Vector{$elty}, ev::Vector{$elty})
+        function stev!(job::Char, dv::StridedVector{$elty}, ev::StridedVector{$elty})
+            chkstride1(dv, ev)
             n = length(dv)
             if length(ev) != n - 1
                 throw(DimensionMismatch("ev has length $(length(ev)) but needs one less than dv's length, $n)"))
@@ -3634,7 +3640,8 @@ for (stev, stebz, stegr, stein, elty) in
         #*  matrix T.  The user may ask for all eigenvalues, all eigenvalues
         #*  in the half-open interval (VL, VU], or the IL-th through IU-th
         #*  eigenvalues.
-        function stebz!(range::Char, order::Char, vl::$elty, vu::$elty, il::Integer, iu::Integer, abstol::Real, dv::Vector{$elty}, ev::Vector{$elty})
+        function stebz!(range::Char, order::Char, vl::$elty, vu::$elty, il::Integer, iu::Integer, abstol::Real, dv::StridedVector{$elty}, ev::StridedVector{$elty})
+            chkstride1(dv, ev)
             n = length(dv)
             if length(ev) != n - 1
                 throw(DimensionMismatch("ev has length $(length(ev)) but needs one less than dv's length, $n)"))
@@ -3663,7 +3670,8 @@ for (stev, stebz, stegr, stein, elty) in
             w[1:m[1]], iblock[1:m[1]], isplit[1:nsplit[1]]
         end
 
-        function stegr!(jobz::Char, range::Char, dv::Vector{$elty}, ev::Vector{$elty}, vl::Real, vu::Real, il::Integer, iu::Integer)
+        function stegr!(jobz::Char, range::Char, dv::StridedVector{$elty}, ev::StridedVector{$elty}, vl::Real, vu::Real, il::Integer, iu::Integer)
+            chkstride1(dv, ev)
             n = length(dv)
             if length(ev) != n - 1
                 throw(DimensionMismatch("ev has length $(length(ev)) but needs one less than dv's length, $n)"))
@@ -3703,7 +3711,8 @@ for (stev, stebz, stegr, stein, elty) in
             w[1:m[1]], Z[:,1:m[1]]
         end
 
-        function stein!(dv::Vector{$elty}, ev_in::Vector{$elty}, w_in::Vector{$elty}, iblock_in::Vector{BlasInt}, isplit_in::Vector{BlasInt})
+        function stein!(dv::StridedVector{$elty}, ev_in::StridedVector{$elty}, w_in::StridedVector{$elty}, iblock_in::StridedVector{BlasInt}, isplit_in::StridedVector{BlasInt})
+            chkstride1(dv, ev_in, w_in, iblock_in, isplit_in)
             n = length(dv)
             if length(ev_in) != n - 1
                 throw(DimensionMismatch("ev_in has length $(length(ev_in)) but needs one less than dv's length, $n)"))
@@ -3752,12 +3761,12 @@ for (stev, stebz, stegr, stein, elty) in
         end
     end
 end
-stegr!(jobz::Char, dv::Vector, ev::Vector) = stegr!(jobz, 'A', dv, ev, 0.0, 0.0, 0, 0)
+stegr!(jobz::Char, dv::StridedVector, ev::StridedVector) = stegr!(jobz, 'A', dv, ev, 0.0, 0.0, 0, 0)
 
 # Allow user to skip specification of iblock and isplit
-stein!(dv::Vector, ev::Vector, w_in::Vector)=stein!(dv, ev, w_in, zeros(BlasInt,0), zeros(BlasInt,0))
+stein!(dv::StridedVector, ev::StridedVector, w_in::StridedVector)=stein!(dv, ev, w_in, zeros(BlasInt,0), zeros(BlasInt,0))
 # Allow user to specify just one eigenvector to get in stein!
-stein!(dv::Vector, ev::Vector, eval::Real)=stein!(dv, ev, [eval], zeros(BlasInt,0), zeros(BlasInt,0))
+stein!(dv::StridedVector, ev::StridedVector, eval::Real)=stein!(dv, ev, [eval], zeros(BlasInt,0), zeros(BlasInt,0))
 
 """
     stev!(job, dv, ev) -> (dv, Zmat)
@@ -3767,7 +3776,7 @@ diagonal and `ev` as off-diagonal. If `job = N` only the eigenvalues are
 found and returned in `dv`. If `job = V` then the eigenvectors are also found
 and returned in `Zmat`.
 """
-stev!(job::Char, dv::Vector, ev::Vector)
+stev!(job::Char, dv::StridedVector, ev::StridedVector)
 
 """
     stebz!(range, order, vl, vu, il, iu, abstol, dv, ev) -> (dv, iblock, isplit)
@@ -3780,7 +3789,7 @@ are found. If `range = V`, the eigenvalues in the half-open interval
 block. If `order = E`, they are ordered across all the blocks.
 `abstol` can be set as a tolerance for convergence.
 """
-stebz!(range::Char, order::Char, vl, vu, il::Integer, iu::Integer, abstol::Real, dv::Vector, ev::Vector)
+stebz!(range::Char, order::Char, vl, vu, il::Integer, iu::Integer, abstol::Real, dv::StridedVector, ev::StridedVector)
 
 """
     stegr!(jobz, range, dv, ev, vl, vu, il, iu) -> (w, Z)
@@ -3793,7 +3802,7 @@ are found. If `range = V`, the eigenvalues in the half-open interval
 `il` and `iu` are found. The eigenvalues are returned in `w` and the eigenvectors
 in `Z`.
 """
-stegr!(jobz::Char, range::Char, dv::Vector, ev::Vector, vl::Real, vu::Real, il::Integer, iu::Integer)
+stegr!(jobz::Char, range::Char, dv::StridedVector, ev::StridedVector, vl::Real, vu::Real, il::Integer, iu::Integer)
 
 """
     stein!(dv, ev_in, w_in, iblock_in, isplit_in)
@@ -3804,7 +3813,7 @@ eigenvalues for which to find corresponding eigenvectors. `iblock_in`
 specifies the submatrices corresponding to the eigenvalues in `w_in`.
 `isplit_in` specifies the splitting points between the submatrix blocks.
 """
-stein!(dv::Vector, ev_in::Vector, w_in::Vector, iblock_in::Vector{BlasInt}, isplit_in::Vector{BlasInt})
+stein!(dv::StridedVector, ev_in::StridedVector, w_in::StridedVector, iblock_in::StridedVector{BlasInt}, isplit_in::StridedVector{BlasInt})
 
 ## (SY) symmetric real matrices - Bunch-Kaufman decomposition,
 ## solvers (direct and factored) and inverse.
@@ -3819,8 +3828,8 @@ for (syconv, sysv, sytrf, sytri, sytrs, elty) in
         # *     .. Array Arguments ..
         #       INTEGER            IPIV( * )
         #       DOUBLE PRECISION   A( LDA, * ), WORK( * )
-        function syconv!(uplo::Char, A::StridedMatrix{$elty}, ipiv::Vector{BlasInt})
-            chkstride1(A)
+        function syconv!(uplo::Char, A::StridedMatrix{$elty}, ipiv::StridedVector{BlasInt})
+            chkstride1(A, ipiv)
             n = checksquare(A)
             chkuplo(uplo)
             work = Array($elty, n)
@@ -3936,8 +3945,8 @@ for (syconv, sysv, sytrf, sytri, sytrs, elty) in
         #     .. Array Arguments ..
         #      INTEGER            IPIV( * )
         #      DOUBLE PRECISION   A( LDA, * ), WORK( * )
-        function sytri!(uplo::Char, A::StridedMatrix{$elty}, ipiv::Vector{BlasInt})
-            chkstride1(A)
+        function sytri!(uplo::Char, A::StridedMatrix{$elty}, ipiv::StridedVector{BlasInt})
+            chkstride1(A, ipiv)
             n = checksquare(A)
             chkuplo(uplo)
             work = Array($elty, n)
@@ -3960,8 +3969,8 @@ for (syconv, sysv, sytrf, sytri, sytrs, elty) in
         #       INTEGER            IPIV( * )
         #       DOUBLE PRECISION   A( LDA, * ), B( LDB, * )
         function sytrs!(uplo::Char, A::StridedMatrix{$elty},
-                       ipiv::Vector{BlasInt}, B::StridedVecOrMat{$elty})
-            chkstride1(A,B)
+                       ipiv::StridedVector{BlasInt}, B::StridedVecOrMat{$elty})
+            chkstride1(A,B,ipiv)
             n = checksquare(A)
             chkuplo(uplo)
             if n != size(B,1)
@@ -4057,8 +4066,8 @@ for (sysv, sytrf, sytri, sytrs, elty) in
         #     .. Array Arguments ..
         #      INTEGER            IPIV( * )
         #      DOUBLE PRECISION   A( LDA, * ), WORK( * )
-        function sytri_rook!(uplo::Char, A::StridedMatrix{$elty}, ipiv::Vector{BlasInt})
-            chkstride1(A)
+        function sytri_rook!(uplo::Char, A::StridedMatrix{$elty}, ipiv::StridedVector{BlasInt})
+            chkstride1(A, ipiv)
             n = checksquare(A)
             chkuplo(uplo)
             work = Array($elty, n)
@@ -4081,8 +4090,8 @@ for (sysv, sytrf, sytri, sytrs, elty) in
         #       INTEGER            IPIV( * )
         #       DOUBLE PRECISION   A( LDA, * ), B( LDB, * )
         function sytrs_rook!(uplo::Char, A::StridedMatrix{$elty},
-                       ipiv::Vector{BlasInt}, B::StridedVecOrMat{$elty})
-            chkstride1(A,B)
+                       ipiv::StridedVector{BlasInt}, B::StridedVecOrMat{$elty})
+            chkstride1(A,B,ipiv)
             n = checksquare(A)
             chkuplo(uplo)
             if n != size(B,1)
@@ -4114,8 +4123,8 @@ for (syconv, hesv, hetrf, hetri, hetrs, elty, relty) in
        #        .. Array Arguments ..
        #        INTEGER            IPIV( * )
        #        COMPLEX*16         A( LDA, * ), WORK( * )
-        function syconv!(uplo::Char, A::StridedMatrix{$elty}, ipiv::Vector{BlasInt})
-            chkstride1(A)
+        function syconv!(uplo::Char, A::StridedMatrix{$elty}, ipiv::StridedVector{BlasInt})
+            chkstride1(A,ipiv)
             n = checksquare(A)
             chkuplo(uplo)
             work = Array($elty, n)
@@ -4230,8 +4239,8 @@ for (syconv, hesv, hetrf, hetri, hetrs, elty, relty) in
         # *     .. Array Arguments ..
         #       INTEGER            IPIV( * )
         #       COMPLEX*16         A( LDA, * ), WORK( * )
-        function hetri!(uplo::Char, A::StridedMatrix{$elty}, ipiv::Vector{BlasInt})
-            chkstride1(A)
+        function hetri!(uplo::Char, A::StridedMatrix{$elty}, ipiv::StridedVector{BlasInt})
+            chkstride1(A, ipiv)
             n = checksquare(A)
             chkuplo(uplo)
             work = Array($elty, n)
@@ -4253,8 +4262,8 @@ for (syconv, hesv, hetrf, hetri, hetrs, elty, relty) in
         #       INTEGER            IPIV( * )
         #       COMPLEX*16         A( LDA, * ), B( LDB, * )
         function hetrs!(uplo::Char, A::StridedMatrix{$elty},
-                       ipiv::Vector{BlasInt}, B::StridedVecOrMat{$elty})
-            chkstride1(A,B)
+                       ipiv::StridedVector{BlasInt}, B::StridedVecOrMat{$elty})
+            chkstride1(A,B,ipiv)
             n = checksquare(A)
             if n != size(B,1)
                 throw(DimensionMismatch("B has first dimension $(size(B,1)), but needs $n"))
@@ -4346,8 +4355,8 @@ for (hesv, hetrf, hetri, hetrs, elty, relty) in
         # *     .. Array Arguments ..
         #       INTEGER            IPIV( * )
         #       COMPLEX*16         A( LDA, * ), WORK( * )
-        function hetri_rook!(uplo::Char, A::StridedMatrix{$elty}, ipiv::Vector{BlasInt})
-            chkstride1(A)
+        function hetri_rook!(uplo::Char, A::StridedMatrix{$elty}, ipiv::StridedVector{BlasInt})
+            chkstride1(A,ipiv)
             n = checksquare(A)
             chkuplo(uplo)
             work = Array($elty, n)
@@ -4369,8 +4378,8 @@ for (hesv, hetrf, hetri, hetrs, elty, relty) in
         #       INTEGER            IPIV( * )
         #       COMPLEX*16         A( LDA, * ), B( LDB, * )
         function hetrs_rook!(uplo::Char, A::StridedMatrix{$elty},
-                             ipiv::Vector{BlasInt}, B::StridedVecOrMat{$elty})
-            chkstride1(A,B)
+                             ipiv::StridedVector{BlasInt}, B::StridedVecOrMat{$elty})
+            chkstride1(A,B,ipiv)
             n = checksquare(A)
             if n != size(B,1)
                 throw(DimensionMismatch("B has first dimension $(size(B,1)), but needs $n"))
@@ -4496,8 +4505,8 @@ for (sysv, sytrf, sytri, sytrs, elty, relty) in
         # *     .. Array Arguments ..
         #       INTEGER            IPIV( * )
         #       COMPLEX*16         A( LDA, * ), WORK( * )
-        function sytri!(uplo::Char, A::StridedMatrix{$elty}, ipiv::Vector{BlasInt})
-            chkstride1(A)
+        function sytri!(uplo::Char, A::StridedMatrix{$elty}, ipiv::StridedVector{BlasInt})
+            chkstride1(A, ipiv)
             n = checksquare(A)
             chkuplo(uplo)
             work = Array($elty, n)
@@ -4519,8 +4528,8 @@ for (sysv, sytrf, sytri, sytrs, elty, relty) in
         #       INTEGER            IPIV( * )
         #       COMPLEX*16         A( LDA, * ), B( LDB, * )
         function sytrs!(uplo::Char, A::StridedMatrix{$elty},
-                       ipiv::Vector{BlasInt}, B::StridedVecOrMat{$elty})
-            chkstride1(A,B)
+                       ipiv::StridedVector{BlasInt}, B::StridedVecOrMat{$elty})
+            chkstride1(A,B,ipiv)
             n = checksquare(A)
             chkuplo(uplo)
             if n != size(B,1)
@@ -4618,8 +4627,8 @@ for (sysv, sytrf, sytri, sytrs, elty, relty) in
         # *     .. Array Arguments ..
         #       INTEGER            IPIV( * )
         #       COMPLEX*16         A( LDA, * ), WORK( * )
-        function sytri_rook!(uplo::Char, A::StridedMatrix{$elty}, ipiv::Vector{BlasInt})
-            chkstride1(A)
+        function sytri_rook!(uplo::Char, A::StridedMatrix{$elty}, ipiv::StridedVector{BlasInt})
+            chkstride1(A, ipiv)
             n = checksquare(A)
             chkuplo(uplo)
             work = Array($elty, n)
@@ -4641,8 +4650,8 @@ for (sysv, sytrf, sytri, sytrs, elty, relty) in
         #       INTEGER            IPIV( * )
         #       COMPLEX*16         A( LDA, * ), B( LDB, * )
         function sytrs_rook!(uplo::Char, A::StridedMatrix{$elty},
-                             ipiv::Vector{BlasInt}, B::StridedVecOrMat{$elty})
-            chkstride1(A,B)
+                             ipiv::StridedVector{BlasInt}, B::StridedVecOrMat{$elty})
+            chkstride1(A,B,ipiv)
             n = checksquare(A)
             chkuplo(uplo)
             if n != size(B,1)
@@ -4668,7 +4677,7 @@ is upper triangular. If `uplo = L`, it is lower triangular. `ipiv` is
 the pivot vector from the triangular factorization. `A` is overwritten
 by `L` and `D`.
 """
-syconv!(uplo::Char, A::StridedMatrix, ipiv::Vector{BlasInt})
+syconv!(uplo::Char, A::StridedMatrix, ipiv::StridedVector{BlasInt})
 
 """
     sysv!(uplo, A, B) -> (B, A, ipiv)
@@ -4702,7 +4711,7 @@ Computes the inverse of a symmetric matrix `A` using the results of
 `sytrf!`. If `uplo = U`, the upper half of `A` is stored. If `uplo = L`,
 the lower half is stored. `A` is overwritten by its inverse.
 """
-sytri!(uplo::Char, A::StridedMatrix, ipiv::Vector{BlasInt})
+sytri!(uplo::Char, A::StridedMatrix, ipiv::StridedVector{BlasInt})
 
 """
     sytrs!(uplo, A, ipiv, B)
@@ -4712,7 +4721,7 @@ results of `sytrf!`. If `uplo = U`, the upper half of `A` is stored.
 If `uplo = L`, the lower half is stored. `B` is overwritten by the
 solution `X`.
 """
-sytrs!(uplo::Char, A::StridedMatrix, ipiv::Vector{BlasInt}, B::StridedVecOrMat)
+sytrs!(uplo::Char, A::StridedMatrix, ipiv::StridedVector{BlasInt}, B::StridedVecOrMat)
 
 
 """
@@ -4747,7 +4756,7 @@ Computes the inverse of a Hermitian matrix `A` using the results of
 `sytrf!`. If `uplo = U`, the upper half of `A` is stored. If `uplo = L`,
 the lower half is stored. `A` is overwritten by its inverse.
 """
-hetri!(uplo::Char, A::StridedMatrix, ipiv::Vector{BlasInt})
+hetri!(uplo::Char, A::StridedMatrix, ipiv::StridedVector{BlasInt})
 
 """
     hetrs!(uplo, A, ipiv, B)
@@ -4757,7 +4766,7 @@ results of `sytrf!`. If `uplo = U`, the upper half of `A` is stored.
 If `uplo = L`, the lower half is stored. `B` is overwritten by the
 solution `X`.
 """
-hetrs!(uplo::Char, A::StridedMatrix, ipiv::Vector{BlasInt}, B::StridedVecOrMat)
+hetrs!(uplo::Char, A::StridedMatrix, ipiv::StridedVector{BlasInt}, B::StridedVecOrMat)
 
 # Symmetric (real) eigensolvers
 for (syev, syevr, sygvd, elty) in
@@ -5104,9 +5113,9 @@ for (bdsqr, relty, elty) in
      (:zbdsqr_,:Float64,:Complex128),
      (:cbdsqr_,:Float32,:Complex64))
     @eval begin
-        function bdsqr!(uplo::Char, d::Vector{$relty}, e_::Vector{$relty},
+        function bdsqr!(uplo::Char, d::StridedVector{$relty}, e_::StridedVector{$relty},
                         Vt::StridedMatrix{$elty}, U::StridedMatrix{$elty}, C::StridedMatrix{$elty})
-
+            chkstride1(d, e_)
             # Extract number
             n = length(d)
             ncvt, nru, ncc = size(Vt, 2), size(U, 1), size(C, 2)
@@ -5156,7 +5165,7 @@ compute the product `Q' * C`.
 
 Returns the singular values in `d`, and the matrix `C` overwritten with `Q' * C`.
 """
-bdsqr!(uplo::Char, d::Vector, e_::Vector, Vt::StridedMatrix, U::StridedMatrix, C::StridedMatrix)
+bdsqr!(uplo::Char, d::StridedVector, e_::StridedVector, Vt::StridedMatrix, U::StridedMatrix, C::StridedMatrix)
 
 #Defined only for real types
 for (bdsdc, elty) in
@@ -5174,7 +5183,8 @@ for (bdsdc, elty) in
         #      INTEGER            IQ( * ), IWORK( * )
         #      DOUBLE PRECISION   D( * ), E( * ), Q( * ), U( LDU, * ),
         #     $                   VT( LDVT, * ), WORK( * )
-        function bdsdc!(uplo::Char, compq::Char, d::Vector{$elty}, e_::Vector{$elty})
+        function bdsdc!(uplo::Char, compq::Char, d::StridedVector{$elty}, e_::StridedVector{$elty})
+            chkstride1(d, e_)
             n, ldiq, ldq, ldu, ldvt = length(d), 1, 1, 1, 1
             chkuplo(uplo)
             if compq == 'N'
@@ -5226,7 +5236,7 @@ and vectors are found in compact form. Only works for real types.
 Returns the singular values in `d`, and if `compq = P`, the compact singular
 vectors in `iq`.
 """
-bdsdc!(uplo::Char, compq::Char, d::Vector, e_::Vector)
+bdsdc!(uplo::Char, compq::Char, d::StridedVector, e_::StridedVector)
 
 for (gecon, elty) in
     ((:dgecon_,:Float64),
@@ -5368,7 +5378,7 @@ for (orghr, elty) in
         # *     .. Array Arguments ..
         #       DOUBLE PRECISION   A( LDA, * ), TAU( * ), WORK( * )
         function orghr!(ilo::Integer, ihi::Integer, A::StridedMatrix{$elty}, tau::StridedVector{$elty})
-            chkstride1(A)
+            chkstride1(A, tau)
             n = checksquare(A)
             if n - length(tau) != 1
                 throw(DimensionMismatch("tau has length $(length(tau)), needs $(n - 1)"))
@@ -5418,7 +5428,7 @@ for (ormhr, elty) in
         function ormhr!(side::Char, trans::Char, ilo::Integer, ihi::Integer, A::StridedMatrix{$elty},
             tau::StridedVector{$elty}, C::StridedVecOrMat{$elty})
 
-            chkstride1(A)
+            chkstride1(A, tau)
             n = checksquare(A)
             mC, nC = size(C, 1), size(C, 2)
 
@@ -5708,7 +5718,7 @@ for (trexc, trsen, tgsen, elty) in
         #       DOUBLE PRECISION   Q( LDQ, * ), T( LDT, * ), WI( * ), WORK( * ), WR( * )
         function trsen!(compq::Char, job::Char, select::StridedVector{BlasInt},
                         T::StridedMatrix{$elty}, Q::StridedMatrix{$elty})
-            chkstride1(T, Q)
+            chkstride1(T, Q, select)
             n = checksquare(T)
             ldt = max(1, stride(T, 2))
             ldq = max(1, stride(Q, 2))
@@ -5761,7 +5771,7 @@ for (trexc, trsen, tgsen, elty) in
         #        ..
         function tgsen!(select::StridedVector{BlasInt}, S::StridedMatrix{$elty}, T::StridedMatrix{$elty},
                         Q::StridedMatrix{$elty}, Z::StridedMatrix{$elty})
-            chkstride1(S, T, Q, Z)
+            chkstride1(select, S, T, Q, Z)
             n, nt, nq, nz = checksquare(S, T, Q, Z)
             if n != nt
                 throw(DimensionMismatch("Dimensions of S, ($n,$n), and T, ($nt,$nt), must match"))
@@ -5856,7 +5866,7 @@ for (trexc, trsen, tgsen, elty) in
         #      COMPLEX            Q( LDQ, * ), T( LDT, * ), W( * ), WORK( * )
         function trsen!(compq::Char, job::Char, select::StridedVector{BlasInt},
                         T::StridedMatrix{$elty}, Q::StridedMatrix{$elty})
-            chkstride1(T, Q)
+            chkstride1(select, T, Q)
             n = checksquare(T)
             ldt = max(1, stride(T, 2))
             ldq = max(1, stride(Q, 2))
@@ -5904,7 +5914,7 @@ for (trexc, trsen, tgsen, elty) in
         #        ..
         function tgsen!(select::StridedVector{BlasInt}, S::StridedMatrix{$elty}, T::StridedMatrix{$elty},
                         Q::StridedMatrix{$elty}, Z::StridedMatrix{$elty})
-            chkstride1(S, T, Q, Z)
+            chkstride1(select, S, T, Q, Z)
             n, nt, nq, nz = checksquare(S, T, Q, Z)
             if n != nt
                 throw(DimensionMismatch("Dimensions of S, ($n,$n), and T, ($nt,$nt), must match"))
