@@ -19,7 +19,7 @@ Basic functions
 
    .. Docstring generated from Julia source
 
-   Returns a tuple containing the dimensions of ``A``\ . Optionally you can specify the dimension(s) you want the length of, and get the length of that dimension, or a tuple of the lengths of dimensions you asked for.:
+   Returns a tuple containing the dimensions of ``A``\ . Optionally you can specify the dimension(s) you want the length of, and get the length of that dimension, or a tuple of the lengths of dimensions you asked for.
 
    .. code-block:: julia
 

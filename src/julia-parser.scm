@@ -1020,7 +1020,13 @@
              (take-token s)
              (loop
               (cond ((eqv? (peek-token s) #\()
-                     `(|.| ,ex ,(parse-atom s)))
+                     (begin
+                       (take-token s)
+                       `(|.| ,ex (tuple ,@(parse-arglist s #\) )))))
+                    ((eqv? (peek-token s) ':)
+                     (begin
+                       (take-token s)
+                       `(|.| ,ex (quote ,(parse-atom s)))))
                     ((eq? (peek-token s) '$)
                      (take-token s)
                      (let ((dollarex (parse-atom s)))

@@ -251,8 +251,8 @@ function get_value(sym::Expr, fn)
     end
     fn, true
 end
-get_value(sym::Symbol, fn) = isdefined(fn, sym) ? (fn.(sym), true) : (nothing, false)
-get_value(sym::QuoteNode, fn) = isdefined(fn, sym.value) ? (fn.(sym.value), true) : (nothing, false)
+get_value(sym::Symbol, fn) = isdefined(fn, sym) ? (getfield(fn, sym), true) : (nothing, false)
+get_value(sym::QuoteNode, fn) = isdefined(fn, sym.value) ? (getfield(fn, sym.value), true) : (nothing, false)
 get_value(sym, fn) = sym, true
 
 # Return the value of a getfield call expression
@@ -269,7 +269,7 @@ function get_type_call(expr::Expr)
     f_name = expr.args[1]
     # The if statement should find the f function. How f is found depends on how f is referenced
     if isa(f_name, TopNode)
-        ft = typeof(Base.(f_name.name))
+        ft = typeof(getfield(Base, f_name.name))
         found = true
     else
         ft, found = get_type(f_name, Main)
@@ -458,7 +458,7 @@ function completions(string, pos)
                 end
             end
         end
-        ffunc = (mod,x)->(isdefined(mod, x) && isa(mod.(x), Module))
+        ffunc = (mod,x)->(isdefined(mod, x) && isa(getfield(mod, x), Module))
         comp_keywords = false
     end
     startpos == 0 && (pos = -1)

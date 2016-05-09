@@ -7,6 +7,8 @@ New language features
   * Generator expressions, e.g. `f(i) for i in 1:n` ([#4470]). This returns an iterator
     that computes the specified values on demand.
 
+  * Broadcasting syntax: ``f.(args...)`` is equivalent to ``broadcast(f, args...)`` ([#15032]).
+
   * Macro expander functions are now generic, so macros can have multiple definitions
     (e.g. for different numbers of arguments, or optional arguments) ([#8846], [#9627]).
     However note that the argument types refer to the syntax tree representation, and not
@@ -19,6 +21,8 @@ New language features
     as it already was in comparisons ([#13824]).
 
   * `PROGRAM_FILE` global is now available for determining the name of the running script ([#14114]).
+
+  * The syntax `x.:sym` (e.g. `Base.:+`) is now supported, and `x.(:sym)` is deprecated ([#15032]).
 
 Language changes
 ----------------
@@ -212,6 +216,7 @@ Deprecated or removed
 [#14469]: https://github.com/JuliaLang/julia/issues/14469
 [#14759]: https://github.com/JuliaLang/julia/issues/14759
 [#14798]: https://github.com/JuliaLang/julia/issues/14798
+[#15032]: https://github.com/JuliaLang/julia/issues/15032
 [#15192]: https://github.com/JuliaLang/julia/issues/15192
 [#15242]: https://github.com/JuliaLang/julia/issues/15242
 [#15258]: https://github.com/JuliaLang/julia/issues/15258
