@@ -2270,6 +2270,10 @@ function spset!{Tv,Ti<:Integer}(A::SparseMatrixCSC{Tv}, x::Tv, I::AbstractVector
         throw(BoundsError(A, (I, J)))
     end
 
+    if isempty(I) || isempty(J)
+        return A
+    end
+
     nnzA = nnz(A) + lenI * length(J)
 
     colptr = A.colptr
@@ -2379,6 +2383,10 @@ function spdelete!{Tv,Ti<:Integer}(A::SparseMatrixCSC{Tv}, I::AbstractVector{Ti}
         throw(BoundsError(A, (I, J)))
     end
 
+    if isempty(I) || isempty(J)
+        return A
+    end
+
     colptr = A.colptr
     rowval = rowvalA = A.rowval
     nzval = nzvalA = A.nzval
@@ -2459,6 +2467,10 @@ function setindex!{Tv,Ti,T<:Integer}(A::SparseMatrixCSC{Tv,Ti}, B::SparseMatrixC
 
     if (!isempty(I) && (I[1] < 1 || I[end] > m)) || (!isempty(J) && (J[1] < 1 || J[end] > n))
         throw(BoundsError(A, (I, J)))
+    end
+
+    if isempty(I) || isempty(J)
+        return A
     end
 
     nI = length(I)
