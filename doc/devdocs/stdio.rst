@@ -48,20 +48,20 @@ for :data:`Base.STDIN`, :data:`Base.STDOUT` and :data:`Base.STDERR`.
 
 :c:func:`reinit_stdio` uses :func:`ccall` to retrieve pointers to
 :code:`JL_STD*` and calls :c:func:`jl_uv_handle_type` to inspect
-the type of each stream.  It then creates a Julia :obj:`Base.File`,
-:obj:`Base.TTY` or :obj:`Base.Pipe` object to represent each
+the type of each stream.  It then creates a Julia :obj:`Base.IOStream`,
+:obj:`Base.TTY` or :obj:`Base.PipeEndpoint` object to represent each
 stream, e.g.:
 
 .. code-block:: sh
 
-    $ julia -e 'typeof((STDIN, STDOUT, STDERR))'
-    (TTY,TTY,TTY)
+    $ julia -e 'println(typeof((STDIN, STDOUT, STDERR)))'
+    Tuple{Base.TTY,Base.TTY,Base.TTY}
 
     $ julia -e 'println(typeof((STDIN, STDOUT, STDERR)))' < /dev/null 2>/dev/null
-    (Base.FS.File,TTY,Base.FS.File)
+    Tuple{IOStream,Base.TTY,IOStream}
 
     $ echo hello | julia -e 'println(typeof((STDIN, STDOUT, STDERR)))' | cat
-    (Pipe,Pipe,TTY)
+    Tuple{Base.PipeEndpoint,Base.PipeEndpoint,Base.TTY}
 
 The :func:`Base.read` and :func:`Base.write` methods for these
 streams use :func:`ccall` to call ``libuv`` wrappers in :code:`src/jl_uv.c`, e.g.::
