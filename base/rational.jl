@@ -15,8 +15,12 @@ Rational(n::Integer, d::Integer) = Rational(promote(n,d)...)
 Rational(n::Integer) = Rational(n,one(n))
 
 function divgcd(x::Integer,y::Integer)
-    g = gcd(x,y)
-    div(x,g), div(y,g)
+    if x == zero(x) && y == zero(y)
+        promote(x, y)
+    else
+        g = gcd(x,y)
+        div(x,g), div(y,g)
+    end
 end
 
 //(n::Integer,  d::Integer ) = Rational(n,d)
@@ -176,8 +180,12 @@ for (op,chop) in ((:+,:checked_add), (:-,:checked_sub),
                   (:rem,:rem), (:mod,:mod))
     @eval begin
         function ($op)(x::Rational, y::Rational)
-            xd, yd = divgcd(x.den, y.den)
-            Rational(($chop)(checked_mul(x.num,yd), checked_mul(y.num,xd)), checked_mul(x.den,yd))
+            if x.den == y.den
+                Rational(($chop)(x.num, y.num), x.den)
+            else
+                xd, yd = divgcd(x.den, y.den)
+                Rational(($chop)(checked_mul(x.num,yd), checked_mul(y.num,xd)), checked_mul(x.den,yd))
+            end
         end
     end
 end

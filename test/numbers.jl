@@ -1011,6 +1011,21 @@ f9085() = typemax(UInt64) != 2.0^64
 @test (1//typemax(Int)) / (1//typemax(Int)) == 1
 @test_throws OverflowError (1//2)^63
 
+for op in (+, -, *, /, ÷, %)
+    for (xfl, xra) in ((Inf, 1//0), (-Inf, -1//0)),
+        (yfl, yra) in ((Inf, 1//0), (-Inf, -1//0))
+        if isnan(op(xfl, yfl))
+            if isa(op(1//1, 1//1), Integer)
+                @test_throws DivideError op(xra, yra)
+            else
+                @test_throws ArgumentError op(xra, yra)
+            end
+        else
+            @test op(xra, yra) == op(xfl, yfl)
+        end
+    end
+end
+
 for a = -5:5, b = -5:5
     if a == b == 0; continue; end
     if ispow2(b)
