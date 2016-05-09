@@ -1448,14 +1448,15 @@ static int solve_tvar_constraints(cenv_t *env, cenv_t *soln, jl_value_t **tvs, i
     return 0;
 }
 
-jl_value_t *jl_type_intersection_matching(jl_value_t *a, jl_value_t *b,
-                                          jl_svec_t **penv, jl_svec_t *tvars)
+jl_value_t *jl_type_intersection_matching_(jl_value_t *a, jl_value_t *b,
+                                           jl_svec_t **penv, jl_svec_t **tvars,
+                                           jl_svec_t *(*tvarsel)(jl_svec_t*,cenv_t*,cenv_t*))
 {
     jl_value_t **rts;
     JL_GC_PUSHARGS(rts, 2 + 2*MAX_CENV_SIZE);
     cenv_t eqc; eqc.n = 0; eqc.data = &rts[2];
     cenv_t env; env.n = 0; env.data = &rts[2+MAX_CENV_SIZE];
-    eqc.tvars = tvars; env.tvars = tvars;
+    eqc.tvars = *tvars; env.tvars = *tvars;
     jl_value_t **pti = &rts[0];
     jl_value_t **extraroot = &rts[1];
 
@@ -1472,7 +1473,7 @@ jl_value_t *jl_type_intersection_matching(jl_value_t *a, jl_value_t *b,
         *pti = (jl_value_t*)jl_bottom_type;
     }
     if (*pti == (jl_value_t*)jl_bottom_type ||
-        !(env.n > 0 || eqc.n > 0 || tvars != jl_emptysvec)) {
+        !(env.n > 0 || eqc.n > 0 || *tvars != jl_emptysvec)) {
         JL_GC_POP();
         return *pti;
     }
@@ -1505,14 +1506,15 @@ jl_value_t *jl_type_intersection_matching(jl_value_t *a, jl_value_t *b,
 
     jl_value_t **tvs;
     int tvarslen;
-    if (jl_is_typevar(tvars)) {
-        tvs = (jl_value_t**)&tvars;
+    if (jl_is_typevar(*tvars)) {
+        tvs = (jl_value_t**)tvars;
         tvarslen = 1;
     }
     else {
-        assert(jl_is_svec(tvars));
-        tvs = jl_svec_data(tvars);
-        tvarslen = jl_svec_len(tvars);
+        assert(jl_is_svec(*tvars));
+        *tvars = tvarsel(*tvars, &env, &eqc);
+        tvs = jl_svec_data(*tvars);
+        tvarslen = jl_svec_len(*tvars);
     }
 
     if (!solve_tvar_constraints(&env, &eqc, tvs, tvarslen)) {
@@ -1611,6 +1613,57 @@ jl_value_t *jl_type_intersection_matching(jl_value_t *a, jl_value_t *b,
     if (jl_is_typevar(*pti) && !(jl_is_typevar(a) && jl_is_typevar(b)))
         return ((jl_tvar_t*)*pti)->ub;
     return *pti;
+}
+
+// Use the tvars specified by the caller
+jl_svec_t *tvarsel_caller(jl_svec_t *tvars, cenv_t *env, cenv_t *eqc)
+{
+    return tvars;
+}
+
+// append all unique bound tvars
+static void append_unique(jl_array_t *unique, cenv_t *env)
+{
+    for (size_t i = 0; i < env->n; i+=2) {
+        jl_value_t *tvar = env->data[i];
+        if (!jl_is_typevar(tvar)) continue;
+        jl_tvar_t *tv = (jl_tvar_t*) tvar;
+        if (!tv->bound) continue;
+        int isunique = 1;
+        for (size_t j = 0; j < jl_array_len(unique); j++) {
+            if (jl_cellref(unique, j) == tvar) {
+                isunique = 0;
+                break;
+            }
+        }
+        if (isunique) {
+            jl_cell_1d_push(unique, tvar);
+        }
+    }
+}
+
+// Extract all unique bound tvars from both env and eqc
+jl_svec_t *tvarsel_all(jl_svec_t *tvars, cenv_t *env, cenv_t *eqc)
+{
+    jl_array_t *unique = NULL;
+    jl_svec_t *ret = NULL;
+    JL_GC_PUSH2(&unique, &ret);
+    unique = jl_alloc_cell_1d(0);
+    append_unique(unique, env);
+    append_unique(unique, eqc);
+    int n = jl_array_len(unique);
+    ret = jl_alloc_svec_uninit(n);
+    for (size_t i = 0; i < n; i++) {
+        jl_svecset(ret, i, jl_cellref(unique, i));
+    }
+    JL_GC_POP();
+    return ret;
+}
+
+jl_value_t *jl_type_intersection_matching(jl_value_t *a, jl_value_t *b,
+                                          jl_svec_t **penv, jl_svec_t *tvars)
+{
+    return jl_type_intersection_matching_(a, b, penv, &tvars, tvarsel_caller);
 }
 
 // --- type instantiation and cache ---
@@ -2925,6 +2978,28 @@ int jl_args_morespecific_fix1(jl_value_t *a, jl_value_t *b, int nfix, int swap)
 
 JL_DLLEXPORT int jl_args_morespecific(jl_value_t *a, jl_value_t *b)
 {
+    jl_value_t *atv = NULL;
+    jl_value_t *btv = NULL;
+    jl_svec_t *penv = jl_emptysvec;
+    jl_svec_t *tvars = jl_emptysvec;
+    jl_svec_t *inst = NULL;
+    JL_GC_PUSH5(&atv, &btv, &penv, &tvars, &inst);
+    if (jl_has_typevars(a) || jl_has_typevars(b)) {
+        // Nail down any type parameters in terms of the intersection
+        // of the signatures
+        jl_type_intersection_matching_(a, b, &penv, &tvars, tvarsel_all);
+        int n = jl_svec_len(tvars);
+        inst = jl_alloc_svec_uninit(2*n);
+        for (size_t i = 0; i < n; i++) {
+            jl_svecset(inst, 2*i, jl_svecref(tvars, i));
+            jl_svecset(inst, 2*i+1, jl_svecref(penv, i));
+        }
+        atv = jl_instantiate_type_with(a, jl_svec_data(inst), n);
+        btv = jl_instantiate_type_with(b, jl_svec_data(inst), n);
+        a = atv;
+        b = btv;
+    }
+    int ret = -1;
     if (jl_is_tuple_type(a) && jl_is_tuple_type(b)) {
         jl_datatype_t *tta = (jl_datatype_t*)a;
         jl_datatype_t *ttb = (jl_datatype_t*)b;
@@ -2936,13 +3011,19 @@ JL_DLLEXPORT int jl_args_morespecific(jl_value_t *a, jl_value_t *b)
         // When one is JL_VARARG_BOUND and the other has fixed length,
         // allow the argument length to fix the tvar
         if (akind == JL_VARARG_BOUND && blenkind == JL_TUPLE_FIXED && blenf >= alenf) {
-            return jl_args_morespecific_fix1(a, b, blenf-alenf+1, 0);
+            ret = jl_args_morespecific_fix1(a, b, blenf-alenf+1, 0);
         }
-        if (bkind == JL_VARARG_BOUND && alenkind == JL_TUPLE_FIXED && alenf >= blenf) {
-            return jl_args_morespecific_fix1(b, a, alenf-blenf+1, 1);
+        else if (bkind == JL_VARARG_BOUND && alenkind == JL_TUPLE_FIXED && alenf >= blenf) {
+            ret = jl_args_morespecific_fix1(b, a, alenf-blenf+1, 1);
+         }
+        if (ret != -1) {
+            JL_GC_POP();
+            return ret;
         }
-    }
-    return jl_args_morespecific_(a, b);
+     }
+    ret = jl_args_morespecific_(a, b);
+    JL_GC_POP();
+    return ret;
 }
 
 // ----------------------------------------------------------------------------
