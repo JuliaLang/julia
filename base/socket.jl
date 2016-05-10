@@ -743,8 +743,8 @@ end
 
 ## Utility functions
 
-function listenany(default_port)
-    addr = InetAddr(IPv4(UInt32(0)),default_port)
+function listenany(host::IPAddr, default_port)
+    addr = InetAddr(host, default_port)
     while true
         sock = TCPServer()
         if bind(sock,addr) && _listen(sock) == 0
@@ -757,6 +757,7 @@ function listenany(default_port)
         end
     end
 end
+listenany(default_port) = listenany(IPv4(UInt32(0)),default_port)
 
 function getsockname(sock::Union{TCPServer,TCPSocket})
     rport = Ref{Cushort}(0)

@@ -535,6 +535,12 @@ General Parallel Computing Support
 
    A low-level API which given a ``IO`` connection, returns the pid of the worker it is connected to. This is useful when writing custom ``serialize`` methods for a type, which optimizes the data written out depending on the receiving process id.
 
+.. function:: Base.cluster_cookie([cookie]) -> cookie
+
+   .. Docstring generated from Julia source
+
+   Returns the cluster cookie. If a cookie is passed, also sets it as the cluster cookie.
+
 Shared Arrays
 -------------
 

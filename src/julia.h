@@ -1669,7 +1669,7 @@ typedef struct {
     int8_t depwarn;
     int8_t can_inline;
     int8_t fast_math;
-    int8_t worker;
+    const char *worker;
     int8_t handle_signals;
     int8_t use_precompiled;
     int8_t use_compilecache;
