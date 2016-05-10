@@ -210,7 +210,7 @@
         ((symbol? e)
          (let ((a (assq e env)))
            (if a (cdr a)
-               (if m `(|.| ,m (quote ,e))
+               (if m `(globalref ,m ,e)
                    e))))
         ((or (not (pair? e)) (quoted? e))
          e)

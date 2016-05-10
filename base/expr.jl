@@ -83,7 +83,7 @@ function find_vars(e, lst)
                 push!(lst, e)
             end
         end
-    elseif isa(e,Expr) && e.head !== :quote && e.head !== :top
+    elseif isa(e,Expr) && e.head !== :quote && e.head !== :top && e.head !== :core
         for x in e.args
             find_vars(x,lst)
         end

@@ -253,6 +253,8 @@ int jl_has_intrinsics(jl_lambda_info_t *li, jl_value_t *v, jl_module_t *m)
         return 0;
     if (e->head == static_typeof_sym)
         return 1;
+    if (e->head == toplevel_sym || e->head == copyast_sym)
+        return 0;
     jl_value_t *e0 = jl_exprarg(e, 0);
     if (e->head == call_sym) {
         jl_value_t *sv = jl_static_eval(e0, NULL, m, li, li != NULL, 0);
