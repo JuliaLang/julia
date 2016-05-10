@@ -2459,8 +2459,29 @@ end
 @test nextfloat(prevfloat(0.0), 2) ==  5.0e-324
 @test nextfloat(Inf) === Inf
 @test prevfloat(-Inf) === -Inf
+@test isequal(nextfloat(NaN), NaN)
 @test nextfloat(Inf32) === Inf32
 @test prevfloat(-Inf32) === -Inf32
+@test isequal(nextfloat(NaN32), NaN32)
+
+# issue #16206
+@test prevfloat(Inf) == 1.7976931348623157e308
+@test prevfloat(Inf32) == 3.4028235f38
+@test nextfloat(prevfloat(Inf)) == Inf
+@test nextfloat(prevfloat(Inf),2) == Inf
+@test nextfloat(1.0,typemax(Int64)) == Inf
+@test nextfloat(0.0,typemin(Int64)) == -Inf
+@test nextfloat(1f0,typemin(Int64)) == -Inf32
+@test nextfloat(1.0,typemax(UInt64)) == Inf
+@test nextfloat(1.0,typemax(UInt128)) == Inf
+@test nextfloat(1.0,big(2)^67) == Inf
+@test nextfloat(1.0,-big(2)^67) == -Inf
+
+for F in (Float16,Float32,Float64)
+    @test reinterpret(Unsigned,one(F)) === Base.exponent_one(F)
+    @test reinterpret(Signed,one(F)) === signed(Base.exponent_one(F))
+end
+
 
 @test eps(realmax(Float64)) == 1.99584030953472e292
 @test eps(-realmax(Float64)) == 1.99584030953472e292

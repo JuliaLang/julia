@@ -2948,13 +2948,6 @@ Compute the complementary error function of `x`, defined by ``1 - \\operatorname
 erfc
 
 """
-    prevfloat(f) -> AbstractFloat
-
-Get the previous floating point number in lexicographic order.
-"""
-prevfloat
-
-"""
     rest(iter, state)
 
 An iterator that yields the same elements as `iter`, but starting at the given `state`.
@@ -8333,13 +8326,6 @@ Read a UDP packet from the specified socket, returning a tuple of (address, data
 address will be either IPv4 or IPv6 as appropriate.
 """
 recvfrom
-
-"""
-    nextfloat(f)
-
-Get the next floating point number in lexicographic order.
-"""
-nextfloat
 
 """
     intersect(s1,s2...)
