@@ -35,7 +35,6 @@ function flush(s::IOStream)
     bad = ccall(:ios_flush, Cint, (Ptr{Void},), s.ios) != 0
     sigatomic_end()
     systemerror("flush", bad)
-    s
 end
 iswritable(s::IOStream) = ccall(:ios_get_writable, Cint, (Ptr{Void},), s.ios)!=0
 isreadable(s::IOStream) = ccall(:ios_get_readable, Cint, (Ptr{Void},), s.ios)!=0
