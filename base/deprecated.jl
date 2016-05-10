@@ -1096,13 +1096,15 @@ end
 #15032: Expressions like Base.(:+) now call broadcast.  Since calls
 #       to broadcast(x, ::Symbol) are unheard of, and broadcast(x, ::Integer)
 #       are unlikely, we can treat these as deprecated getfield calls.
+#       (See julia-syntax.scm for the Base.(:+)(...) = ... deprecation.)
 function broadcast(x::Any, i::Union{Integer,Symbol})
     depwarn("x.(i) is deprecated; use getfield(x, i) instead.", :broadcast)
     getfield(x, i)
 end
 # clearer to be more explicit in the warning for the Module case
 function broadcast(m::Module, s::Symbol)
-    depwarn("$m.(:$s) is deprecated; use $m.:$s or getfield($m, :$s) instead.", :broadcast)
+    S = repr(s) # 16295
+    depwarn("$m.($S) is deprecated; use $m.$S or getfield($m, $S) instead.", :broadcast)
     getfield(m, s)
 end
 # expressions like f.(3) should still call broadcast for f::Function,
