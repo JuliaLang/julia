@@ -831,14 +831,14 @@ end
 
 function flush(s::LibuvStream)
     if isnull(s.sendbuf)
-        return s
+        return
     end
     buf = get(s.sendbuf)
     if nb_available(buf) > 0
         arr = takebuf_array(buf)        # Array of UInt8s
         uv_write(s, arr)
     end
-    return s
+    return
 end
 
 buffer_writes(s::LibuvStream, bufsize) = (s.sendbuf=PipeBuffer(bufsize); s)
@@ -1043,4 +1043,4 @@ end
 
 # If buffer_writes is called, it will delay notifying waiters till a flush is called.
 buffer_writes(s::BufferStream, bufsize=0) = (s.buffer_writes=true; s)
-flush(s::BufferStream) = (notify(s.r_c; all=true); s)
+flush(s::BufferStream) = (notify(s.r_c; all=true); nothing)

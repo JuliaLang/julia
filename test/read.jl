@@ -473,7 +473,8 @@ f2 = Base.Filesystem.open(f, Base.Filesystem.JL_O_RDWR)
 @test skip(f2, 10) == f2
 @test eof(f1)
 @test eof(f2)
-@test write(f1, '*') == 1; @test flush(f1) == f1
+@test write(f1, '*') == 1
+@test flush(f1) === nothing
 @test !eof(f2)
 @test skip(f2, 1) == f2
 @test write(f2, '*') == 1
