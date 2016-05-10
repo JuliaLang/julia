@@ -3,7 +3,7 @@
 ## basic task functions and TLS
 
 # Container for a captured exception and its backtrace. Can be serialized.
-type CapturedException
+type CapturedException <: Exception
     ex::Any
     processed_bt::Vector{Any}
 

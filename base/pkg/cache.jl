@@ -43,8 +43,15 @@ function prefetch(pkg::AbstractString, url::AbstractString, sha1s::Vector)
             # clone repo, free it at the end
             LibGit2.clone(normalized_url, cache, isbare = true, remote_cb = LibGit2.mirror_cb())
         catch err
+            errmsg = if isa(err, LibGit2.Error.GitError)
+                "Cannot clone $pkg from $normalized_url. $(err.msg)"
+            elseif isa(err, InterruptException)
+                "Package `$pkg` prefetching was interrupted."
+            else
+                "Unknown error: $err"
+            end
             isdir(cache) && rm(cache, recursive=true)
-            throw(PkgError("Cannot clone $pkg from $normalized_url. $(err.msg)"))
+            throw(PkgError(errmsg))
         end
     end
     try

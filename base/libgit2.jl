@@ -157,8 +157,6 @@ function fetch{T<:AbstractString, P<:AbstractPayload}(repo::GitRepo;
     try
         fo = FetchOptions(callbacks=RemoteCallbacks(credentials_cb(), payload))
         fetch(rmt, refspecs, msg="from $(url(rmt))", options = fo)
-    catch err
-        warn("fetch: $err")
     finally
         finalize(rmt)
     end
@@ -299,11 +297,11 @@ function clone{P<:AbstractPayload}(repo_url::AbstractString, repo_path::Abstract
                remote_cb::Ptr{Void} = C_NULL,
                payload::Nullable{P}=Nullable{AbstractPayload}())
     # setup clone options
+    lbranch = Base.cconvert(Cstring, bytestring(branch))
     fetch_opts=FetchOptions(callbacks = RemoteCallbacks(credentials_cb(), payload))
     clone_opts = CloneOptions(
                 bare = Cint(isbare),
-                checkout_branch = isempty(branch) ? Cstring_NULL :
-                                  convert(Cstring, pointer(branch)),
+                checkout_branch = isempty(lbranch) ? Cstring(C_NULL) : Base.unsafe_convert(Cstring, lbranch),
                 fetch_opts=fetch_opts,
                 remote_cb = remote_cb
             )
@@ -388,9 +386,13 @@ function merge!(repo::GitRepo;
             else # try to get tracking remote branch for the head
                 if !isattached(repo)
                     throw(GitError(Error.Merge, Error.ERROR,
-                                   "There is no tracking information for the current branch."))
+                                   "Repository HEAD is detached. Remote tracking branch cannot be used."))
                 end
                 with(upstream(head_ref)) do tr_brn_ref
+                    if tr_brn_ref === nothing
+                        throw(GitError(Error.Merge, Error.ERROR,
+                                       "There is no tracking information for the current branch."))
+                    end
                     [GitAnnotated(repo, tr_brn_ref)]
                 end
             end
@@ -412,6 +414,10 @@ function rebase!(repo::GitRepo, upstream::AbstractString="", newbase::AbstractSt
         head_ann = GitAnnotated(repo, head_ref)
         upst_ann  = if isempty(upstream)
             with(upstream(head_ref)) do brn_ref
+                if brn_ref === nothing
+                    throw(GitError(Error.Rebase, Error.ERROR,
+                                   "There is no tracking information for the current branch."))
+                end
                 GitAnnotated(repo, brn_ref)
             end
         else
