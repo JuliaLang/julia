@@ -729,6 +729,7 @@ $(eval $(call LLVM_PATCH,llvm-3.8.0_threads))
 # fix replutil test on unix
 $(eval $(call LLVM_PATCH,llvm-D17165-D18583))
 $(eval $(call LLVM_PATCH,llvm-D17712))
+$(eval $(call LLVM_PATCH,llvm-PR26180))
 endif # LLVM_VER
 
 ifeq ($(LLVM_VER),3.7.1)
