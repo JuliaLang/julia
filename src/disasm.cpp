@@ -563,18 +563,7 @@ void jl_dump_asm_internal(uintptr_t Fptr, size_t Fsize, int64_t slide,
 
             MCInst Inst;
             MCDisassembler::DecodeStatus S;
-#if defined(_CPU_PPC64_) && BYTE_ORDER == LITTLE_ENDIAN
-            // llvm doesn't know that POWER8 can have little-endian instruction order
-            unsigned char byte_swap_buf[4];
-            assert(memoryObject.size() >= 4);
-            byte_swap_buf[3] = memoryObject[Index+0];
-            byte_swap_buf[2] = memoryObject[Index+1];
-            byte_swap_buf[1] = memoryObject[Index+2];
-            byte_swap_buf[0] = memoryObject[Index+3];
-            FuncMCView view = FuncMCView(byte_swap_buf, 4);
-#else
             FuncMCView view = memoryObject.slice(Index);
-#endif
             S = DisAsm->getInstruction(Inst, insSize, view, 0,
                                       /*REMOVE*/ nulls(), nulls());
             switch (S) {
