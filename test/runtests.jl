@@ -1109,6 +1109,12 @@ end
 @test @compat(Symbol('c')) === :c
 @test @compat(Symbol(1)) === @compat(Symbol("1"))
 
+@test @compat(Base.:+) == +
+let x = rand(3), y = rand(3)
+    @test @compat(sin.(cos.(x))) == map(x -> sin(cos(x)), x)
+    @test @compat(atan2.(sin.(y),x)) == broadcast(atan2,map(sin,y),x)
+end
+
 if VERSION ≥ v"0.4.0-dev+3732"
     @test Symbol("foo") === :foo
     @test Symbol("foo", "bar") === :foobar

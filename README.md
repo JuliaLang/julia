@@ -36,6 +36,10 @@ wherever you want to use syntax that differs in the latest Julia
 
 Currently, the `@compat` macro supports the following syntaxes:
 
+* `@compat foo.:bar` - `foo.(:bar)` in 0.4 ([#15032]).
+
+* `@compat f.(args...)` - `broadcast(f, args...)` in 0.4 ([#15032]).
+
 * `@compat (a::B{T}){T}(c) = d` - the Julia 0.5-style call overload.
 
 * `@compat Dict(foo => bar, baz => qux)` - type-inferred `Dict` construction. (Also works for `DataStructures.OrderedDict`)
@@ -204,3 +208,5 @@ bash $ /path/to/Compat/bin/version.sh a378b60fe483130d0d30206deb8ba662e93944da
 This prints a version number corresponding to the specified commit of the form
 `X.Y.Z-aaa+NNNN`, and you can then test whether Julia
 is at least this version by `VERSION >= v"X.Y.Z-aaa+NNNN"`.
+
+[#15032]: https://github.com/JuliaLang/julia/issues/15032
