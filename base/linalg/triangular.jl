@@ -39,6 +39,9 @@ for t in (:LowerTriangular, :UnitLowerTriangular, :UpperTriangular,
     end
 end
 
+LowerTriangular(U::UpperTriangular) = throw(ArgumentError("this shouldn't happen. Please submit a bug report"))
+UpperTriangular(U::LowerTriangular) = throw(ArgumentError("this shouldn't happen. Please submit a bug report"))
+
 imag(A::UpperTriangular) = UpperTriangular(imag(A.data))
 imag(A::LowerTriangular) = LowerTriangular(imag(A.data))
 imag(A::UnitLowerTriangular) = LowerTriangular(tril!(imag(A.data),-1))
