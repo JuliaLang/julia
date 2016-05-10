@@ -85,6 +85,7 @@ typedef struct {
     ((jl_value_t*)(jl_astaggedvalue(v)->type_bits & ~(uintptr_t)15))
 static inline void jl_set_typeof(void *v, void *t)
 {
+    // Do not call this on a value that is already initialized.
     jl_taggedvalue_t *tag = jl_astaggedvalue(v);
     tag->type = (jl_value_t*)t;
 }
@@ -198,6 +199,8 @@ typedef struct _jl_method_t {
     jl_tupletype_t *sig;
     // bound type variables (static parameters). redundant with TypeMapEntry->tvars
     jl_svec_t *tvars;
+    // list of potentially-ambiguous methods (nothing = none, Vector{Any} of Methods otherwise)
+    jl_value_t *ambig;
 
     // array of all lambda infos with code generated from this one
     jl_array_t *specializations;
@@ -242,6 +245,7 @@ typedef struct _jl_lambda_info_t {
     int8_t isva;
     int8_t inferred;
     int8_t pure;
+    int8_t inlineable;
     int8_t inInference; // flags to tell if inference is running on this function
     int8_t inCompile; // flag to tell if codegen is running on this function
     int8_t jlcall_api; // the c-abi for fptr; 0 = jl_fptr_t, 1 = jl_fptr_sparam_t
@@ -450,8 +454,6 @@ extern JL_DLLEXPORT jl_typename_t *jl_vecelement_typename;
 extern JL_DLLEXPORT jl_datatype_t *jl_anytuple_type;
 #define jl_tuple_type jl_anytuple_type
 extern JL_DLLEXPORT jl_datatype_t *jl_anytuple_type_type;
-extern JL_DLLEXPORT jl_datatype_t *jl_ntuple_type;
-extern JL_DLLEXPORT jl_typename_t *jl_ntuple_typename;
 extern JL_DLLEXPORT jl_datatype_t *jl_vararg_type;
 extern JL_DLLEXPORT jl_datatype_t *jl_tvar_type;
 extern JL_DLLEXPORT jl_datatype_t *jl_task_type;
@@ -470,8 +472,7 @@ extern JL_DLLEXPORT jl_datatype_t *jl_densearray_type;
 extern JL_DLLEXPORT jl_datatype_t *jl_array_type;
 extern JL_DLLEXPORT jl_typename_t *jl_array_typename;
 extern JL_DLLEXPORT jl_datatype_t *jl_weakref_type;
-extern JL_DLLEXPORT jl_datatype_t *jl_ascii_string_type;
-extern JL_DLLEXPORT jl_datatype_t *jl_utf8_string_type;
+extern JL_DLLEXPORT jl_datatype_t *jl_string_type;
 extern JL_DLLEXPORT jl_datatype_t *jl_errorexception_type;
 extern JL_DLLEXPORT jl_datatype_t *jl_argumenterror_type;
 extern JL_DLLEXPORT jl_datatype_t *jl_loaderror_type;
@@ -635,6 +636,7 @@ JL_DLLEXPORT void jl_clear_malloc_data(void);
 // GC write barriers
 JL_DLLEXPORT void jl_gc_queue_root(jl_value_t *root); // root isa jl_value_t*
 
+// Do NOT put a safepoint here
 STATIC_INLINE void jl_gc_wb(void *parent, void *ptr)
 {
     // parent and ptr isa jl_value_t*
@@ -864,9 +866,7 @@ static inline uint32_t jl_fielddesc_size(int8_t fielddesc_type)
 #define jl_is_module(v)      jl_typeis(v,jl_module_type)
 #define jl_is_mtable(v)      jl_typeis(v,jl_methtable_type)
 #define jl_is_task(v)        jl_typeis(v,jl_task_type)
-#define jl_is_ascii_string(v) jl_typeis(v,jl_ascii_string_type)
-#define jl_is_utf8_string(v) jl_typeis(v,jl_utf8_string_type)
-#define jl_is_byte_string(v) (jl_is_ascii_string(v) || jl_is_utf8_string(v))
+#define jl_is_string(v)      jl_typeis(v,jl_string_type)
 #define jl_is_cpointer(v)    jl_is_cpointer_type(jl_typeof(v))
 #define jl_is_pointer(v)     jl_is_cpointer_type(jl_typeof(v))
 
@@ -950,24 +950,6 @@ STATIC_INLINE int is_vecelement_type(jl_value_t* t)
 {
     return (jl_is_datatype(t) &&
             ((jl_datatype_t*)(t))->name == jl_vecelement_typename);
-}
-
-STATIC_INLINE int jl_is_vararg_type(jl_value_t *v)
-{
-    return (jl_is_datatype(v) &&
-            ((jl_datatype_t*)(v))->name == jl_vararg_type->name);
-}
-
-STATIC_INLINE int jl_is_va_tuple(jl_datatype_t *t)
-{
-    size_t l = jl_svec_len(t->parameters);
-    return (l>0 && jl_is_vararg_type(jl_tparam(t,l-1)));
-}
-
-STATIC_INLINE int jl_is_ntuple_type(jl_value_t *v)
-{
-    return (jl_is_datatype(v) &&
-            ((jl_datatype_t*)v)->name == jl_ntuple_typename);
 }
 
 STATIC_INLINE int jl_is_type_type(jl_value_t *v)
@@ -1086,6 +1068,52 @@ JL_DLLEXPORT int jl_get_size(jl_value_t *val, size_t *pnt);
 #define jl_long_type     jl_int32_type
 #endif
 
+// Each tuple can exist in one of 4 Vararg states:
+//   NONE: no vararg                            Tuple{Int,Float32}
+//   INT: vararg with integer length            Tuple{Int,Vararg{Float32,2}}
+//   BOUND: vararg with bound TypeVar length    Tuple{Int,Vararg{Float32,N}}
+//   UNBOUND: vararg with unbound length        Tuple{Int,Vararg{Float32}}
+typedef enum {
+    JL_VARARG_NONE    = 0,
+    JL_VARARG_INT     = 1,
+    JL_VARARG_BOUND   = 2,
+    JL_VARARG_UNBOUND = 3
+} jl_vararg_kind_t;
+
+STATIC_INLINE int jl_is_vararg_type(jl_value_t *v)
+{
+    return (jl_is_datatype(v) &&
+            ((jl_datatype_t*)(v))->name == jl_vararg_type->name);
+}
+
+STATIC_INLINE jl_vararg_kind_t jl_vararg_kind(jl_value_t *v)
+{
+    if (!jl_is_vararg_type(v))
+        return JL_VARARG_NONE;
+    jl_value_t *lenv = jl_tparam1(v);
+    if (jl_is_long(lenv))
+        return JL_VARARG_INT;
+    if (jl_is_typevar(lenv))
+        return ((jl_tvar_t*)lenv)->bound ? JL_VARARG_BOUND : JL_VARARG_UNBOUND;
+    return JL_VARARG_UNBOUND;
+}
+
+STATIC_INLINE int jl_is_va_tuple(jl_datatype_t *t)
+{
+    assert(jl_is_tuple_type(t));
+    size_t l = jl_svec_len(t->parameters);
+    return (l>0 && jl_is_vararg_type(jl_tparam(t,l-1)));
+}
+
+STATIC_INLINE jl_vararg_kind_t jl_va_tuple_kind(jl_datatype_t *t)
+{
+    assert(jl_is_tuple_type(t));
+    size_t l = jl_svec_len(t->parameters);
+    if (l == 0)
+        return JL_VARARG_NONE;
+    return jl_vararg_kind(jl_tparam(t,l-1));
+}
+
 // structs
 JL_DLLEXPORT int         jl_field_index(jl_datatype_t *t, jl_sym_t *fld, int err);
 JL_DLLEXPORT jl_value_t *jl_get_nth_field(jl_value_t *v, size_t i);
@@ -1125,6 +1153,7 @@ JL_DLLEXPORT void jl_array_grow_beg(jl_array_t *a, size_t inc);
 JL_DLLEXPORT void jl_array_del_beg(jl_array_t *a, size_t dec);
 JL_DLLEXPORT void jl_array_sizehint(jl_array_t *a, size_t sz);
 JL_DLLEXPORT void jl_cell_1d_push(jl_array_t *a, jl_value_t *item);
+JL_DLLEXPORT void jl_cell_1d_push2(jl_array_t *a, jl_value_t *b, jl_value_t *c);
 JL_DLLEXPORT jl_value_t *jl_apply_array_type(jl_datatype_t *type, size_t dim);
 // property access
 JL_DLLEXPORT void *jl_array_ptr(jl_array_t *a);
@@ -1365,20 +1394,16 @@ JL_DLLEXPORT void jl_yield(void);
 
 // async signal handling ------------------------------------------------------
 
-#include <signal.h>
-
-JL_DLLEXPORT extern volatile sig_atomic_t jl_signal_pending;
-JL_DLLEXPORT extern volatile sig_atomic_t jl_defer_signal;
-
-#define JL_SIGATOMIC_BEGIN() jl_atomic_fetch_add(&jl_defer_signal, 1)
-#define JL_SIGATOMIC_END()                                      \
-    do {                                                        \
-        if (jl_atomic_fetch_add(&jl_defer_signal, -1) == 1      \
-            && jl_signal_pending != 0) {                        \
-            jl_signal_pending = 0;                              \
-            jl_sigint_action();                                 \
+#define JL_SIGATOMIC_BEGIN() do {               \
+        jl_get_ptls_states()->defer_signal++;   \
+        jl_signal_fence();                      \
+    } while (0)
+#define JL_SIGATOMIC_END() do {                                 \
+        jl_signal_fence();                                      \
+        if (--jl_get_ptls_states()->defer_signal == 0) {        \
+            jl_sigint_safepoint();                              \
         }                                                       \
-    } while(0)
+    } while (0)
 
 JL_DLLEXPORT void jl_sigint_action(void);
 JL_DLLEXPORT void jl_install_sigint_handler(void);
@@ -1396,6 +1421,7 @@ typedef struct _jl_handler_t {
 #ifdef JULIA_ENABLE_THREADING
     size_t locks_len;
 #endif
+    sig_atomic_t defer_signal;
 } jl_handler_t;
 
 typedef struct _jl_task_t {
@@ -1482,10 +1508,13 @@ static inline void jl_lock_frame_pop(void)
 
 STATIC_INLINE void jl_eh_restore_state(jl_handler_t *eh)
 {
-    JL_SIGATOMIC_BEGIN();
+    // `eh` may not be `jl_current_task->eh`. See `jl_pop_handler`
+    // This function should **NOT** have any safepoint before the ones at the
+    // end.
+    sig_atomic_t old_defer_signal = jl_get_ptls_states()->defer_signal;
+    int8_t old_gc_state = jl_get_ptls_states()->gc_state;
     jl_current_task->eh = eh->prev;
     jl_pgcstack = eh->gcstack;
-    jl_gc_state_save_and_set(eh->gc_state);
 #ifdef JULIA_ENABLE_THREADING
     arraylist_t *locks = &jl_current_task->locks;
     if (locks->len > eh->locks_len) {
@@ -1494,7 +1523,14 @@ STATIC_INLINE void jl_eh_restore_state(jl_handler_t *eh)
         locks->len = eh->locks_len;
     }
 #endif
-    JL_SIGATOMIC_END();
+    jl_get_ptls_states()->defer_signal = eh->defer_signal;
+    jl_get_ptls_states()->gc_state = eh->gc_state;
+    if (old_gc_state && !eh->gc_state) {
+        jl_gc_safepoint();
+    }
+    if (old_defer_signal && !eh->defer_signal) {
+        jl_sigint_safepoint();
+    }
 }
 
 JL_DLLEXPORT void jl_enter_handler(jl_handler_t *eh);

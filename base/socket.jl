@@ -545,6 +545,16 @@ end
 
 ##
 
+type DNSError <: Exception
+    host::AbstractString
+    code::Int32
+end
+
+function show(io::IO, err::DNSError)
+    print(io, "DNSError: ", err.host, ", ", struverror(err.code),
+                                      " (", uverrorname(err.code), ")")
+end
+
 callback_dict = ObjectIdDict()
 
 function uv_getaddrinfocb(req::Ptr{Void}, status::Cint, addrinfo::Ptr{Void})
@@ -553,7 +563,7 @@ function uv_getaddrinfocb(req::Ptr{Void}, status::Cint, addrinfo::Ptr{Void})
     cb = unsafe_pointer_to_objref(data)::Function
     pop!(callback_dict,cb) # using pop forces an error if cb not in callback_dict
     if status != 0 || addrinfo == C_NULL
-        cb(UVError("getaddrinfo callback",status))
+        cb(UVError("uv_getaddrinfocb received an unexpected status code", status))
     else
         freeaddrinfo = addrinfo
         while addrinfo != C_NULL
@@ -575,23 +585,42 @@ function uv_getaddrinfocb(req::Ptr{Void}, status::Cint, addrinfo::Ptr{Void})
     nothing
 end
 
-function getaddrinfo(cb::Function, host::ASCIIString)
+function getaddrinfo(cb::Function, host::String)
     callback_dict[cb] = cb
-    uv_error("getaddrinfo",ccall(:jl_getaddrinfo, Int32, (Ptr{Void}, Cstring, Ptr{UInt8}, Any, Ptr{Void}),
-                                 eventloop(), host, C_NULL, cb, uv_jl_getaddrinfocb::Ptr{Void}))
+    status = ccall(:jl_getaddrinfo, Int32, (Ptr{Void}, Cstring, Ptr{UInt8}, Any, Ptr{Void}),
+                   eventloop(), host, C_NULL, cb, uv_jl_getaddrinfocb::Ptr{Void})
+    if status == UV_EINVAL
+        throw(ArgumentError("Invalid uv_getaddrinfo() agument"))
+    elseif status in [UV_ENOMEM, UV_ENOBUFS]
+        throw(OutOfMemoryError())
+    elseif status < 0
+        throw(UVError("uv_getaddrinfo returned an unexpected error code", status))
+    end
+    return nothing
 end
 getaddrinfo(cb::Function, host::AbstractString) = getaddrinfo(cb,ascii(host))
 
-function getaddrinfo(host::ASCIIString)
+function getaddrinfo(host::String)
+    isascii(host) || error("non-ASCII hostname: $host")
     c = Condition()
     getaddrinfo(host) do IP
         notify(c,IP)
     end
-    ip = wait(c)
-    isa(ip,UVError) && throw(ip)
-    return ip::IPAddr
+    r = wait(c)
+    if isa(r,UVError)
+        if r.code in [UV_EAI_NONAME, UV_EAI_AGAIN, UV_EAI_FAIL, UV_EAI_NODATA]
+            throw(DNSError(host,r.code))
+        elseif r.code == UV_EAI_SYSTEM
+            throw(SystemError("uv_getaddrinfocb"))
+        elseif r.code == UV_EAI_MEMORY
+            throw(OutOfMemoryError())
+        else
+            throw(r)
+        end
+    end
+    return r::IPAddr
 end
-getaddrinfo(host::AbstractString) = getaddrinfo(ascii(host))
+getaddrinfo(host::AbstractString) = getaddrinfo(String(host))
 
 const _sizeof_uv_interface_address = ccall(:jl_uv_sizeof_interface_address,Int32,())
 

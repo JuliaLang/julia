@@ -110,19 +110,8 @@ JL_DLLEXPORT int32_t jl_nb_available(ios_t *s)
 // --- dir/file stuff ---
 
 JL_DLLEXPORT int jl_sizeof_uv_fs_t(void) { return sizeof(uv_fs_t); }
-JL_DLLEXPORT void jl_uv_fs_req_cleanup(uv_fs_t *req)
-{
-    uv_fs_req_cleanup(req);
-}
-
-JL_DLLEXPORT int jl_readdir(const char *path, uv_fs_t *readdir_req)
-{
-    // Note that the flags field is mostly ignored by libuv
-    return uv_fs_readdir(uv_default_loop(), readdir_req, path, 0 /*flags*/, NULL);
-}
-
+JL_DLLEXPORT void jl_uv_fs_req_cleanup(uv_fs_t *req) { uv_fs_req_cleanup(req); }
 JL_DLLEXPORT char *jl_uv_fs_t_ptr(uv_fs_t *req) { return (char*)req->ptr; }
-JL_DLLEXPORT char *jl_uv_fs_t_ptr_offset(uv_fs_t *req, int offset) { return (char*)req->ptr + offset; }
 JL_DLLEXPORT int jl_uv_fs_result(uv_fs_t *f) { return f->result; }
 
 // --- stat ---
@@ -697,7 +686,7 @@ static BOOL CALLBACK jl_EnumerateLoadedModulesProc64(
 )
 {
     jl_array_grow_end((jl_array_t*)a, 1);
-    //XXX: change to jl_arrayset if array storage allocation for Array{ByteString,1} changes:
+    //XXX: change to jl_arrayset if array storage allocation for Array{String,1} changes:
     jl_value_t *v = jl_cstr_to_string(ModuleName);
     jl_cellset(a, jl_array_dim0(a)-1, v);
     return TRUE;

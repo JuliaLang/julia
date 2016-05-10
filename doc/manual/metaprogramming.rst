@@ -138,9 +138,8 @@ used as one building-block of expressions:
     julia> typeof(ans)
     Symbol
 
-:obj:`Symbol`\ s can also be created using :func:`symbol`, which takes any
-number of arguments and creates a new symbol by concatenating their string
-representations together:
+The :obj:`Symbol` constructor takes any number of arguments and creates a
+new symbol by concatenating their string representations together:
 
 .. doctest::
 
@@ -612,7 +611,7 @@ Compare:
 .. doctest::
 
     julia> typeof(:("a should equal b"))
-    ASCIIString
+    String
 
     julia> typeof(:("a ($a) should equal b ($b)!"))
     Expr
@@ -621,11 +620,11 @@ Compare:
     Expr
       head: Symbol string
       args: Array(Any,(5,))
-        1: ASCIIString "a ("
+        1: String "a ("
         2: Symbol a
-        3: ASCIIString ") should equal b ("
+        3: String ") should equal b ("
         4: Symbol b
-        5: ASCIIString ")!"
+        5: String ")!"
       typ: Any
 
 So now instead of getting a plain string in ``msg_body``, the macro is
@@ -932,7 +931,7 @@ Let's see how ``foo`` behaves:
     4
 
     julia> y = foo("bar");
-    ASCIIString
+    String
 
     julia> y
     "barbar"

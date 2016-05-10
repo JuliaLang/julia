@@ -86,6 +86,8 @@ case $(uname) in
 esac
 
 # Download most recent Julia binary for dependencies
+# Fix directory not found error during decompression on msys2
+mkdir -p usr/Git/usr
 if ! [ -e julia-installer.exe ]; then
   f=julia-latest-win$bits.exe
   echo "Downloading $f"
@@ -94,11 +96,11 @@ if ! [ -e julia-installer.exe ]; then
   $SEVENZIP x -y $f >> get-deps.log
 fi
 for i in bin/*.dll Git/usr/bin/*.dll Git/usr/bin/*.exe; do
-  $SEVENZIP e -y julia-installer.exe "\$_OUTDIR/$i" \
+  $SEVENZIP e -y julia-installer.exe "$i" \
     -ousr\\`dirname $i | sed -e 's|/julia||' -e 's|/|\\\\|g'` >> get-deps.log
 done
 for i in share/julia/base/pcre_h.jl; do
-  $SEVENZIP e -y julia-installer.exe "\$_OUTDIR/$i" -obase >> get-deps.log
+  $SEVENZIP e -y julia-installer.exe "$i" -obase >> get-deps.log
 done
 echo "override PCRE_INCL_PATH =" >> Make.user
 # suppress "bash.exe: warning: could not find /tmp, please create!"

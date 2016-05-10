@@ -231,9 +231,6 @@ static int jl_load_sysimg_so(void)
                                                    "jl_ptls_states_getter_idx");
         *sysimg_gvars[tls_getter_idx - 1] =
             (jl_value_t*)jl_get_ptls_states_getter();
-        size_t signal_page_idx = *(size_t*)jl_dlsym(jl_sysimg_handle,
-                                                    "jl_gc_signal_page_idx");
-        *sysimg_gvars[signal_page_idx - 1] = (jl_value_t*)jl_gc_signal_page;
 #endif
         const char *cpu_target = (const char*)jl_dlsym(jl_sysimg_handle, "jl_sysimg_cpu_target");
         if (strcmp(cpu_target,jl_options.cpu_target) != 0)
@@ -841,6 +838,7 @@ static void jl_serialize_value_(ios_t *s, jl_value_t *v)
         write_int32(s, m->line);
         jl_serialize_value(s, (jl_value_t*)m->sig);
         jl_serialize_value(s, (jl_value_t*)m->tvars);
+        jl_serialize_value(s, (jl_value_t*)m->ambig);
         write_int8(s, m->called);
         jl_serialize_value(s, (jl_value_t*)m->module);
         jl_serialize_value(s, (jl_value_t*)m->roots);
@@ -863,6 +861,7 @@ static void jl_serialize_value_(ios_t *s, jl_value_t *v)
         jl_serialize_value(s, (jl_value_t*)li->unspecialized_ducttape);
         write_int8(s, li->inferred);
         write_int8(s, li->pure);
+        write_int8(s, li->inlineable);
         write_int8(s, li->isva);
         write_int32(s, li->nargs);
         jl_serialize_value(s, (jl_value_t*)li->def);
@@ -1444,6 +1443,8 @@ static jl_value_t *jl_deserialize_value_(ios_t *s, jl_value_t *vtag, jl_value_t 
         jl_gc_wb(m, m->sig);
         m->tvars = (jl_svec_t*)jl_deserialize_value(s, (jl_value_t**)&m->tvars);
         jl_gc_wb(m, m->tvars);
+        m->ambig = jl_deserialize_value(s, (jl_value_t**)&m->ambig);
+        jl_gc_wb(m, m->ambig);
         m->called = read_int8(s);
         m->module = (jl_module_t*)jl_deserialize_value(s, (jl_value_t**)&m->module);
         jl_gc_wb(m, m->module);
@@ -1480,6 +1481,7 @@ static jl_value_t *jl_deserialize_value_(ios_t *s, jl_value_t *vtag, jl_value_t 
         if (li->unspecialized_ducttape) jl_gc_wb(li, li->unspecialized_ducttape);
         li->inferred = read_int8(s);
         li->pure = read_int8(s);
+        li->inlineable = read_int8(s);
         li->isva = read_int8(s);
         li->nargs = read_int32(s);
         li->def = (jl_method_t*)jl_deserialize_value(s, (jl_value_t**)&li->def);
@@ -2441,7 +2443,7 @@ void jl_init_serializer(void)
                      jl_labelnode_type, jl_linenumbernode_type,
                      jl_gotonode_type, jl_quotenode_type, jl_topnode_type,
                      jl_type_type, jl_bottom_type, jl_ref_type, jl_pointer_type,
-                     jl_vararg_type, jl_ntuple_type, jl_abstractarray_type,
+                     jl_vararg_type, jl_abstractarray_type,
                      jl_densearray_type, jl_void_type, jl_function_type,
                      jl_typector_type, jl_typename_type, jl_builtin_type,
                      jl_task_type, jl_uniontype_type, jl_typetype_type, jl_typetype_tvar,
@@ -2455,7 +2457,7 @@ void jl_init_serializer(void)
                      jl_datatype_type->name, jl_uniontype_type->name, jl_array_type->name,
                      jl_expr_type->name, jl_typename_type->name, jl_type_type->name,
                      jl_methtable_type->name, jl_typemap_level_type->name, jl_typemap_entry_type->name, jl_tvar_type->name,
-                     jl_ntuple_type->name, jl_abstractarray_type->name, jl_vararg_type->name,
+                     jl_abstractarray_type->name, jl_vararg_type->name,
                      jl_densearray_type->name, jl_void_type->name, jl_lambda_info_type->name, jl_method_type->name,
                      jl_module_type->name, jl_function_type->name, jl_typedslot_type->name,
                      jl_abstractslot_type->name, jl_slotnumber_type->name,

@@ -230,11 +230,11 @@ end
 type LineEditREPL <: AbstractREPL
     t::TextTerminal
     hascolor::Bool
-    prompt_color::AbstractString
-    input_color::AbstractString
-    answer_color::AbstractString
-    shell_color::AbstractString
-    help_color::AbstractString
+    prompt_color::String
+    input_color::String
+    answer_color::String
+    shell_color::String
+    help_color::String
     history_file::Bool
     in_shell::Bool
     in_help::Bool
@@ -297,7 +297,7 @@ end
 
 
 type REPLHistoryProvider <: HistoryProvider
-    history::Array{AbstractString,1}
+    history::Array{String,1}
     history_file
     start_idx::Int
     cur_idx::Int
@@ -308,7 +308,7 @@ type REPLHistoryProvider <: HistoryProvider
     modes::Array{Symbol,1}
 end
 REPLHistoryProvider(mode_mapping) =
-    REPLHistoryProvider(AbstractString[], nothing, 0, 0, -1, IOBuffer(),
+    REPLHistoryProvider(String[], nothing, 0, 0, -1, IOBuffer(),
                         nothing, mode_mapping, UInt8[])
 
 const invalid_history_message = """
@@ -356,11 +356,11 @@ function hist_from_file(hp, file)
             error(munged_history_message, countlines)
         line[1] != '\t' &&
             error(invalid_history_message, repr(line[1]), " at line ", countlines)
-        lines = UTF8String[]
+        lines = String[]
         while !isempty(line)
             push!(lines, chomp(line[2:end]))
             eof(file) && break
-            ch = Base.peek(file)
+            ch = Char(Base.peek(file))
             ch == ' '  && error(munged_history_message, countlines)
             ch != '\t' && break
             line = hist_getline(file)
@@ -568,7 +568,7 @@ function history_search(hist::REPLHistoryProvider, query_buffer::IOBuffer, respo
         if match != 0:-1 && h != response_str && haskey(hist.mode_mapping, hist.modes[idx])
             truncate(response_buffer, 0)
             write(response_buffer, h)
-            seek(response_buffer, prevind(response_str, first(match)))
+            seek(response_buffer, prevind(h, first(match)))
             hist.cur_idx = idx
             return true
         end
@@ -893,9 +893,9 @@ end
 
 type StreamREPL <: AbstractREPL
     stream::IO
-    prompt_color::AbstractString
-    input_color::AbstractString
-    answer_color::AbstractString
+    prompt_color::String
+    input_color::String
+    answer_color::String
     waserror::Bool
     StreamREPL(stream,pc,ic,ac) = new(stream,pc,ic,ac,false)
 end

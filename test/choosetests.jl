@@ -33,7 +33,7 @@ function choosetests(choices = [])
         "markdown", "base64", "serialize", "misc", "threads",
         "enums", "cmdlineargs", "i18n", "workspace", "libdl", "int",
         "checked", "intset", "floatfuncs", "compile", "parallel", "inline",
-        "boundscheck", "error", "multidimensional"
+        "boundscheck", "error", "ambiguous", "multidimensional"
     ]
 
     if Base.USE_GPL_LIBS
@@ -66,7 +66,8 @@ function choosetests(choices = [])
                    "linalg/lapack", "linalg/tridiag", "linalg/bidiag",
                    "linalg/diagonal", "linalg/pinv", "linalg/givens",
                    "linalg/cholesky", "linalg/lu", "linalg/symmetric",
-                   "linalg/generic", "linalg/uniformscaling", "linalg/lq"]
+                   "linalg/generic", "linalg/uniformscaling", "linalg/lq",
+                   "linalg/hessenberg"]
     if Base.USE_GPL_LIBS
         push!(linalgtests, "linalg/arnoldi")
     end

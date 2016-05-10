@@ -148,8 +148,6 @@ end
 @deprecate inf{T<:AbstractFloat}(::Type{T})  convert(T,Inf)
 @deprecate nan{T<:AbstractFloat}(::Type{T})  convert(T,NaN)
 
-@deprecate_binding String AbstractString
-
 # 13221 - when removing Uint deprecation, remove hack in jl_binding_deprecation_warning
 @deprecate_binding Uint    UInt
 @deprecate_binding Uint8   UInt8
@@ -488,13 +486,11 @@ export float32_isvalid, float64_isvalid
 
 # 11241
 @deprecate is_valid_char(ch::Char)          isvalid(ch)
-@deprecate is_valid_ascii(str::ASCIIString) isvalid(str)
-@deprecate is_valid_utf8(str::UTF8String)   isvalid(str)
+@deprecate is_valid_utf8(str::String)   isvalid(str)
 @deprecate is_valid_utf16(str::UTF16String) isvalid(str)
 @deprecate is_valid_utf32(str::UTF32String) isvalid(str)
 @deprecate is_valid_char(ch)   isvalid(Char, ch)
-@deprecate is_valid_ascii(str) isvalid(ASCIIString, str)
-@deprecate is_valid_utf8(str)  isvalid(UTF8String, str)
+@deprecate is_valid_utf8(str)  isvalid(String, str)
 @deprecate is_valid_utf16(str) isvalid(UTF16String, str)
 @deprecate is_valid_utf32(str) isvalid(UTF32String, str)
 
@@ -909,6 +905,18 @@ function tty_size()
     return displaysize()
 end
 
+# Combinatorics functions that have been moved out of base (#13897)
+# Note: only the two-argument form of factorial has been moved
+for deprecatedfunc in [:combinations, :factorial, :prevprod, :levicivita,
+        :nthperm!, :nthperm, :parity, :partitions, :permutations]
+    @eval begin
+        $deprecatedfunc(args...) = error(string($deprecatedfunc, args,
+            " has been moved to the package Combinatorics.jl.\n",
+            "Run Pkg.add(\"Combinatorics\") to install Combinatorics on Julia v0.5-"))
+        export $deprecatedfunc
+    end
+end
+
 #14335
 @deprecate super(T::DataType) supertype(T)
 
@@ -1085,6 +1093,24 @@ end
 #15995
 @deprecate symbol Symbol
 
+#15032: Expressions like Base.(:+) now call broadcast.  Since calls
+#       to broadcast(x, ::Symbol) are unheard of, and broadcast(x, ::Integer)
+#       are unlikely, we can treat these as deprecated getfield calls.
+function broadcast(x::Any, i::Union{Integer,Symbol})
+    depwarn("x.(i) is deprecated; use getfield(x, i) instead.", :broadcast)
+    getfield(x, i)
+end
+# clearer to be more explicit in the warning for the Module case
+function broadcast(m::Module, s::Symbol)
+    depwarn("$m.(:$s) is deprecated; use $m.:$s or getfield($m, :$s) instead.", :broadcast)
+    getfield(m, s)
+end
+# expressions like f.(3) should still call broadcast for f::Function,
+# and in general broadcast should work for scalar arguments, while
+# getfield is certainly not intended for the case of f::Function.
+broadcast(f::Function, i::Integer) = invoke(broadcast, (Function, Number), f, i)
+
+#16167
 macro ccallable(def)
     depwarn("@ccallable requires a return type", Symbol("@ccallable"))
     if isa(def,Expr) && (def.head === :(=) || def.head === :function)
@@ -1110,6 +1136,18 @@ macro ccallable(def)
     end
     error("expected method definition in @ccallable")
 end
+
+@deprecate_binding ASCIIString String
+@deprecate_binding UTF8String String
+@deprecate_binding ByteString String
+
+@deprecate ==(x::Char, y::Integer) UInt32(x) == y
+@deprecate ==(x::Integer, y::Char) x == UInt32(y)
+@deprecate isless(x::Char, y::Integer) UInt32(x) < y
+@deprecate isless(x::Integer, y::Char) x < UInt32(y)
+# delete these methods along with deprecations:
+isequal(x::Char, y::Integer) = false
+isequal(x::Integer, y::Char) = false
 
 # During the 0.5 development cycle, do not add any deprecations below this line
 # To be deprecated in 0.6

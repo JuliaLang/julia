@@ -202,7 +202,7 @@ variables::
     end
 
     julia> x
-    11
+    12
 
 Within soft scopes, the `global` keyword is never necessary, although
 allowed.  The only case when it would change the semantics is

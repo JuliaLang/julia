@@ -149,7 +149,7 @@ end
 
 # issue #1821
 let
-    d = Dict{UTF8String, Vector{Int}}()
+    d = Dict{String, Vector{Int}}()
     d["a"] = [1, 2]
     @test_throws MethodError d["b"] = 1
     @test isa(repr(d), AbstractString)  # check that printable without error
@@ -342,7 +342,7 @@ end
 let
     a = Dict("foo"  => 0.0, "bar" => 42.0)
     b = Dict("フー" => 17, "バー" => 4711)
-    @test is(typeof(merge(a, b)), Dict{UTF8String,Float64})
+    @test is(typeof(merge(a, b)), Dict{String,Float64})
 end
 
 # issue 9295
@@ -396,16 +396,16 @@ d = Dict('a'=>1, 'b'=>1, 'c'=> 3)
 
 # ImmutableDict
 import Base.ImmutableDict
-let d = ImmutableDict{UTF8String, UTF8String}(),
-    k1 = UTF8String("key1"),
-    k2 = UTF8String("key2"),
-    v1 = UTF8String("value1"),
-    v2 = UTF8String("value2"),
+let d = ImmutableDict{String, String}(),
+    k1 = "key1",
+    k2 = "key2",
+    v1 = "value1",
+    v2 = "value2",
     d1 = ImmutableDict(d, k1 => v1),
     d2 = ImmutableDict(d1, k2 => v2),
     d3 = ImmutableDict(d2, k1 => v2),
     d4 = ImmutableDict(d3, k2 => v1),
-    dnan = ImmutableDict{UTF8String, Float64}(k2, NaN),
+    dnan = ImmutableDict{String, Float64}(k2, NaN),
     dnum = ImmutableDict(dnan, k2 => 1)
 
     @test isempty(collect(d))
@@ -471,7 +471,7 @@ end
 # issue #15077
 
 immutable MyString <: AbstractString
-    str::ASCIIString
+    str::String
 end
 import Base.==
 
@@ -483,19 +483,21 @@ Base.next(s::MyString, v::Int) = next(s.str, v)
 Base.isequal(a::MyString, b::MyString) = isequal(a.str, b.str)
 ==(a::MyString, b::MyString) = (a.str == b.str)
 
-let badKeys = ASCIIString["FINO_emv5.0","FINO_ema0.1","RATE_ema1.0","NIBPM_ema1.0",
-                          "SAO2_emv5.0","O2FLOW_ema5.0","preop_Neuro/Psych_","gender_",
-                          "FIO2_ema0.1","PEAK_ema5.0","preop_Reproductive_denies","O2FLOW_ema0.1",
-                          "preop_Endocrine_denies","preop_Respiratory_",
-                          "NIBPM_ema0.1","PROPOFOL_MCG/KG/MIN_decay5.0","NIBPD_ema1.0","NIBPS_ema5.0",
-                          "anesthesiaStartTime","NIBPS_ema1.0","RESPRATE_ema1.0","PEAK_ema0.1",
-                          "preop_GU_denies","preop_Cardiovascular_","PIP_ema5.0","preop_ENT_denies",
-                          "preop_Skin_denies","preop_Renal_denies","asaCode_IIIE","N2OFLOW_emv5.0",
-                          "NIBPD_emv5.0", # <--- here is the key that we later can't find
-                          "NIBPM_ema5.0","preop_Respiratory_complete","ETCO2_ema5.0",
-                          "RESPRATE_ema0.1","preop_Functional Status_<2","preop_Renal_symptoms",
-                          "ECGRATE_ema5.0","FIO2_emv5.0","RESPRATE_emv5.0","7wu3ty0a4fs","BVO",
-                          "4UrCWXUsaT"]
+let badKeys = [
+    "FINO_emv5.0","FINO_ema0.1","RATE_ema1.0","NIBPM_ema1.0",
+    "SAO2_emv5.0","O2FLOW_ema5.0","preop_Neuro/Psych_","gender_",
+    "FIO2_ema0.1","PEAK_ema5.0","preop_Reproductive_denies","O2FLOW_ema0.1",
+    "preop_Endocrine_denies","preop_Respiratory_",
+    "NIBPM_ema0.1","PROPOFOL_MCG/KG/MIN_decay5.0","NIBPD_ema1.0","NIBPS_ema5.0",
+    "anesthesiaStartTime","NIBPS_ema1.0","RESPRATE_ema1.0","PEAK_ema0.1",
+    "preop_GU_denies","preop_Cardiovascular_","PIP_ema5.0","preop_ENT_denies",
+    "preop_Skin_denies","preop_Renal_denies","asaCode_IIIE","N2OFLOW_emv5.0",
+    "NIBPD_emv5.0", # <--- here is the key that we later can't find
+    "NIBPM_ema5.0","preop_Respiratory_complete","ETCO2_ema5.0",
+    "RESPRATE_ema0.1","preop_Functional Status_<2","preop_Renal_symptoms",
+    "ECGRATE_ema5.0","FIO2_emv5.0","RESPRATE_emv5.0","7wu3ty0a4fs","BVO",
+    "4UrCWXUsaT"
+]
     d = Dict{AbstractString,Int}()
     for i = 1:length(badKeys)
         d[badKeys[i]] = i

@@ -362,6 +362,15 @@ a = [0,1,2,3,0,1,2,3]
 @test findprev(isodd, [2,4,5,3,9,2,0], 7) == 5
 @test findprev(isodd, [2,4,5,3,9,2,0], 2) == 0
 
+# find with general iterables
+s = "julia"
+# FIXME once 16269 is resolved
+# @test find(s) == [1,2,3,4,5]
+@test find(c -> c == 'l', s) == [3]
+g = graphemes("日本語")
+@test find(g) == [1,2,3]
+@test find(isascii, g) == Int[]
+
 ## findn ##
 
 b = findn(ones(2,2,2,2))
@@ -1187,6 +1196,11 @@ I2 = CartesianIndex((-1,5,2))
 @test I2 - I1 == CartesianIndex((-3,2,2))
 @test I1 + 1 == CartesianIndex((3,4,1))
 @test I1 - 2 == CartesianIndex((0,1,-2))
+
+@test zero(CartesianIndex{2}) == CartesianIndex((0,0))
+@test zero(CartesianIndex((2,3))) == CartesianIndex((0,0))
+@test one(CartesianIndex{2}) == CartesianIndex((1,1))
+@test one(CartesianIndex((2,3))) == CartesianIndex((1,1))
 
 @test min(CartesianIndex((2,3)), CartesianIndex((5,2))) == CartesianIndex((2,2))
 @test max(CartesianIndex((2,3)), CartesianIndex((5,2))) == CartesianIndex((5,3))

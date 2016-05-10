@@ -137,16 +137,6 @@ debug && println("Matmul with QR factorizations")
             @test_throws BoundsError size(q,-1)
             @test_throws DimensionMismatch q * eye(Int8,n+4)
         end
-
-debug && println("Hessenberg")
-        if eltya != BigFloat
-            hA = hessfact(a)
-            @test size(hA[:Q],1) == size(a,1)
-            @test size(hA[:Q],2) == size(a,2)
-            @test_throws KeyError hA[:Z]
-            @test_approx_eq full(hA) a
-            @test_approx_eq full(Base.LinAlg.HessenbergQ(hA)) full(hA[:Q])
-        end
     end
 end
 
@@ -181,3 +171,6 @@ end
 
 @test qr(Int[]) == (Int[],1)
 @test Base.LinAlg.qr!(Int[1]) == (Int[1],1)
+
+B = rand(7,2)
+@test_approx_eq (1:7)\B collect(1:7)\B

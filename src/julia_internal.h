@@ -139,8 +139,9 @@ void jl_set_t_uid_ctr(int i);
 uint32_t jl_get_gs_ctr(void);
 void jl_set_gs_ctr(uint32_t ctr);
 
-void JL_NORETURN jl_no_method_error_bare(jl_function_t *f, jl_value_t *args);
-void JL_NORETURN jl_no_method_error(jl_function_t *f, jl_value_t **args, size_t na);
+void JL_NORETURN jl_method_error_bare(jl_function_t *f, jl_value_t *args);
+void JL_NORETURN jl_method_error(jl_function_t *f, jl_value_t **args, size_t na);
+
 JL_DLLEXPORT void jl_typeassert(jl_value_t *x, jl_value_t *t);
 
 #define JL_CALLABLE(name)                                               \
@@ -187,7 +188,7 @@ jl_value_t *jl_instantiate_type_with(jl_value_t *t, jl_value_t **env, size_t n);
 jl_datatype_t *jl_new_abstracttype(jl_value_t *name, jl_datatype_t *super,
                                    jl_svec_t *parameters);
 jl_datatype_t *jl_wrap_Type(jl_value_t *t);  // x -> Type{x}
-jl_datatype_t *jl_wrap_vararg(jl_value_t *t);
+jl_datatype_t *jl_wrap_vararg(jl_value_t *t, jl_value_t *n);
 void jl_assign_bits(void *dest, jl_value_t *bits);
 jl_expr_t *jl_exprn(jl_sym_t *head, size_t n);
 jl_function_t *jl_new_generic_function(jl_sym_t *name, jl_module_t *module);
@@ -212,8 +213,9 @@ void jl_lambda_info_set_ast(jl_lambda_info_t *li, jl_value_t *ast);
 
 jl_lambda_info_t *jl_get_unspecialized(jl_lambda_info_t *method);
 jl_lambda_info_t *jl_method_lookup_by_type(jl_methtable_t *mt, jl_tupletype_t *types,
-                                           int cache, int inexact);
-jl_lambda_info_t *jl_method_lookup(jl_methtable_t *mt, jl_value_t **args, size_t nargs, int cache);
+                                           int cache, int inexact,
+                                           jl_typemap_entry_t **entry);
+jl_lambda_info_t *jl_method_lookup(jl_methtable_t *mt, jl_value_t **args, size_t nargs, int cache, jl_typemap_entry_t **entry);
 jl_value_t *jl_gf_invoke(jl_tupletype_t *types, jl_value_t **args, size_t nargs);
 
 jl_array_t *jl_lam_args(jl_expr_t *l);
@@ -253,6 +255,7 @@ void jl_init_root_task(void *stack, size_t ssize);
 void jl_init_serializer(void);
 void jl_gc_init(void);
 void jl_init_restored_modules(jl_array_t *init_order);
+void jl_init_signal_async(void);
 
 void _julia_init(JL_IMAGE_SEARCH rel);
 #ifdef COPY_STACKS
@@ -264,10 +267,63 @@ void jl_set_base_ctx(char *__stk);
 void jl_init_threading(void);
 void jl_start_threads(void);
 void jl_shutdown_threading(void);
+
+// Whether the GC is running
+extern char *jl_safepoint_pages;
+STATIC_INLINE int jl_addr_is_safepoint(uintptr_t addr)
+{
+    uintptr_t safepoint_addr = (uintptr_t)jl_safepoint_pages;
+    return addr >= safepoint_addr && addr < safepoint_addr + jl_page_size * 3;
+}
+extern volatile uint32_t jl_gc_running;
+// All the functions are safe to be called from within a signal handler
+// provided that the thread will not be interrupted by another asynchronous
+// signal.
+// Initialize the safepoint
+void jl_safepoint_init(void);
+// Start the GC, return `1` if the thread should be running the GC.
+// Otherwise, the thread will wait in this function until the GC finishes on
+// another thread and return `0`.
+// The caller should have saved the `gc_state` and set it to `WAITING`
+// before calling this function. If the calling thread is to run the GC,
+// it should also wait for the mutator threads to hit a safepoint **AFTER**
+// this function returns
+int jl_safepoint_start_gc(void);
+// Can only be called by the thread that have got a `1` return value from
+// `jl_safepoint_start_gc()`. This disables the safepoint (for GC,
+// the `mprotect` may not be removed if there's pending SIGINT) and wake
+// up waiting threads if there's any.
+// The caller should restore `gc_state` **AFTER** calling this function.
+void jl_safepoint_end_gc(void);
+// Wait for the GC to finish
+// This function does **NOT** modify the `gc_state` to inform the GC thread
+// The caller should set it **BEFORE** calling this function.
+void jl_safepoint_wait_gc(void);
+
+// Set pending sigint and enable the mechanisms to deliver the sigint.
+void jl_safepoint_enable_sigint(void);
+// If the safepoint is enabled to deliver sigint, disable it
+// so that the thread won't repeatedly trigger it in a sigatomic region
+// while not being able to actually throw the exception.
+void jl_safepoint_defer_sigint(void);
+// Clear the sigint pending flag and disable the mechanism to deliver sigint.
+// Return `1` if the sigint should be delivered and `0` if there's no sigint
+// to be delivered.
+int jl_safepoint_consume_sigint(void);
+void jl_wake_libuv(void);
+
 #ifdef JULIA_ENABLE_THREADING
 jl_get_ptls_states_func jl_get_ptls_states_getter(void);
-void jl_gc_signal_init(void);
-void jl_gc_signal_wait(void);
+static inline void jl_set_gc_and_wait(void)
+{
+    // reading own gc state doesn't need atomic ops since no one else
+    // should store to it.
+    int8_t state = jl_gc_state();
+    jl_atomic_store_release(&jl_get_ptls_states()->gc_state,
+                            JL_GC_STATE_WAITING);
+    jl_safepoint_wait_gc();
+    jl_atomic_store_release(&jl_get_ptls_states()->gc_state, state);
+}
 #endif
 
 void jl_dump_bitcode(char *fname, const char *sysimg_data, size_t sysimg_len);
@@ -279,6 +335,8 @@ void jl_idtable_rehash(jl_array_t **pa, size_t newsz);
 
 JL_DLLEXPORT jl_methtable_t *jl_new_method_table(jl_sym_t *name, jl_module_t *module);
 jl_lambda_info_t *jl_get_specialization1(jl_tupletype_t *types);
+int jl_has_call_ambiguities(jl_tupletype_t *types, jl_method_t *m);
+
 jl_function_t *jl_module_get_initializer(jl_module_t *m);
 uint32_t jl_module_next_counter(jl_module_t *m);
 void jl_fptr_to_llvm(jl_fptr_t fptr, jl_lambda_info_t *lam, int specsig);
@@ -288,6 +346,7 @@ jl_value_t *skip_meta(jl_array_t *body);
 int has_meta(jl_array_t *body, jl_sym_t *sym);
 
 // backtraces
+// Might be called from unmanaged thread
 uint64_t jl_getUnwindInfo(uint64_t dwBase);
 #ifdef _OS_WINDOWS_
 #include <dbghelp.h>
@@ -476,11 +535,11 @@ JL_DLLEXPORT jl_value_t *(jl_array_data_owner)(jl_array_t *a);
 
 extern jl_mutex_t typecache_lock;
 extern jl_mutex_t codegen_lock;
+extern jl_mutex_t safepoint_lock;
 
 // -- gc.c -- //
 
 #if defined(__APPLE__) && defined(JULIA_ENABLE_THREADING)
-void jl_mach_gc_begin(void);
 void jl_mach_gc_end(void);
 #endif
 
@@ -560,7 +619,7 @@ jl_typemap_entry_t *jl_typemap_insert(union jl_typemap_t *cache, jl_value_t *par
 
 jl_typemap_entry_t *jl_typemap_assoc_by_type(union jl_typemap_t ml_or_cache, jl_tupletype_t *types, jl_svec_t **penv,
         int8_t subtype_inexact__sigseq_useenv, int8_t subtype, int8_t offs);
-jl_lambda_info_t *jl_typemap_assoc_exact(union jl_typemap_t ml_or_cache, jl_value_t **args, size_t n, int8_t offs);
+jl_typemap_entry_t *jl_typemap_assoc_exact(union jl_typemap_t ml_or_cache, jl_value_t **args, size_t n, int8_t offs);
 
 typedef int (*jl_typemap_visitor_fptr)(jl_typemap_entry_t *l, void *closure);
 int jl_typemap_visitor(union jl_typemap_t a, jl_typemap_visitor_fptr fptr, void *closure);

@@ -222,6 +222,23 @@
            (pair? (caddr e)) (memq (car (caddr e)) '(quote inert))
            (symbol? (cadr (caddr e))))))
 
+;; e.g. Base.(:+) is deprecated in favor of Base.:+
+(define (deprecate-dotparen e)
+  (if (and (length= e 3) (eq? (car e) '|.|)
+           (or (atom? (cadr e)) (sym-ref? (cadr e)))
+           (length= (caddr e) 2) (eq? (caaddr e) 'tuple)
+           (pair? (cadr (caddr e))) (memq (caadr (caddr e)) '(quote inert)))
+      (let* ((s_ (cdadr (caddr e)))
+             (s (if (symbol? s_) s_
+                    (if (and (length= s_ 1) (symbol? (car s_))) (car s_) #f))))
+        (if s
+            (let ((newe (list (car e) (cadr e) (cadr (caddr e)))))
+              (syntax-deprecation #f (string (deparse (cadr e)) ".(:" s ")")
+                                  (string (deparse (cadr e)) ".:" s))
+              newe)
+            e))
+      e))
+
 ;; convert final (... x) to (curly Vararg x)
 (define (dots->vararg a)
   (if (null? a) a
@@ -282,8 +299,8 @@
             (error "function static parameter names not unique"))
         (if (any (lambda (x) (and (not (eq? x UNUSED)) (memq x names))) anames)
             (error "function argument and static parameter names must be distinct")))
-      (if (and name (not (sym-ref? name)))
-          (error (string "invalid method name \"" (deparse name) "\"")))
+      (if (or (and name (not (sym-ref? name))) (eq? name 'true) (eq? name 'false))
+          (error (string "invalid function name \"" (deparse name) "\"")))
       (let* ((iscall (is-call-name? name))
              (name  (if iscall #f name))
              (types (llist-types argl))
@@ -417,9 +434,11 @@
                  (car not-optional))
             ,@(cdr not-optional) ,@vararg)
           `(block
-            ,@(if (null? lno) '()
-                  ;; TODO jb/functions get a better `name` for functions specified by type
-                  (list (append (car lno) (list (undot-name name)))))
+            ,@(cond ((null? lno) '())
+		    ((not name) lno)
+		    (else
+		     ;; TODO jb/functions get a better `name` for functions specified by type
+		     (list (append (car lno) (list (undot-name name))))))
             ,@stmts) isstaged)
 
         ;; call with unsorted keyword args. this sorts and re-dispatches.
@@ -622,7 +641,7 @@
                 ,@locs
                 (call (curly ,name ,@params) ,@field-names)))))
 
-(define (new-call Tname type-params params args field-names field-types mutabl)
+(define (new-call Tname type-params params args field-names field-types)
   (if (any vararg? args)
       (error "... is not supported inside \"new\""))
   (if (any kwarg? args)
@@ -702,19 +721,19 @@
 
 ;; rewrite calls to `new( ... )` to `new` expressions on the appropriate
 ;; type, determined by the containing constructor definition.
-(define (rewrite-ctor ctor Tname params bounds field-names field-types mutabl)
+(define (rewrite-ctor ctor Tname params bounds field-names field-types)
   (define (ctor-body body type-params)
     (pattern-replace (pattern-set
                       (pattern-lambda
                        (call (-/ new) . args)
                        (new-call Tname type-params params
                                  (map (lambda (a) (ctor-body a type-params)) args)
-                                 field-names field-types mutabl))
+                                 field-names field-types))
                       (pattern-lambda
                        (call (curly (-/ new) . p) . args)
                        (new-call Tname p params
                                  (map (lambda (a) (ctor-body a type-params)) args)
-                                 field-names field-types mutabl)))
+                                 field-names field-types)))
                      body))
   (pattern-replace
    (pattern-set
@@ -779,7 +798,7 @@
         (block
          (global ,name)
          ,@(map (lambda (c)
-                  (rewrite-ctor c name params bounds field-names field-types mut))
+                  (rewrite-ctor c name params bounds field-names field-types))
                 defs2)))
        ;; "outer" constructors
        ,@(if (and (null? defs)
@@ -860,7 +879,10 @@
 
 (define (expand-function-def e)   ;; handle function or stagedfunction
   (let ((name (cadr e)))
-    (cond ((and (length= e 2) (symbol? name))  `(method ,name))
+    (cond ((and (length= e 2) (symbol? name))
+	   (if (or (eq? name 'true) (eq? name 'false))
+	       (error (string "invalid function name \"" name "\"")))
+	   `(method ,name))
           ((not (pair? name))                  e)
           ((eq? (car name) 'tuple)
            (expand-forms `(-> ,name ,(caddr e))))
@@ -868,7 +890,7 @@
            (let* ((head    (cadr name))
                   (argl    (cddr name))
                   (has-sp  (and (pair? head) (eq? (car head) 'curly)))
-                  (name    (if has-sp (cadr head) head))
+                  (name    (deprecate-dotparen (if has-sp (cadr head) head)))
                   (sparams (if has-sp (cddr head) '()))
                   (isstaged (eq? (car e) 'stagedfunction))
                   (adj-decl (lambda (n) (if (and (decl? n) (length= n 2))
@@ -1087,7 +1109,7 @@
           (let ((err (gensy))
                 (ret (and hasret
                           (or (not (block-returns? tryb))
-                              (and catchb
+                              (and (not (eq? catchb 'false))
                                    (not (block-returns? catchb))))
                           (gensy)))
                 (retval (if hasret (gensy) #f))
@@ -1107,10 +1129,10 @@
                   (break-block
                    ,bb
                    (try (= ,val
-                           ,(if catchb
+                           ,(if (not (eq? catchb 'false))
                                 `(try ,tryb ,var ,catchb)
                                 tryb))
-                        #f
+                        false
                         (= ,err true)))
                   (= ,finally-exception (the_exception))
                   ,finalb
@@ -1125,7 +1147,7 @@
                 (var  (caddr e))
                 (catchb (cadddr e)))
             (expand-forms
-             (if (symbol-like? var)
+             (if (and (symbol-like? var) (not (eq? var 'false)))
                  `(trycatch (scope-block ,tryb)
                             (scope-block
                              (block (= ,var (the_exception))
@@ -1523,8 +1545,14 @@
                 ,(expand-forms (last e)))))))
 
    '|.|
-   (lambda (e)
-     `(call (top getfield) ,(expand-forms (cadr e)) ,(expand-forms (caddr e))))
+   (lambda (e) ; e = (|.| f x)
+     (let ((f (expand-forms (cadr e)))
+           (x (expand-forms (caddr e))))
+       (if (or (eq? (car x) 'quote) (eq? (car x) 'inert) (eq? (car x) '$))
+         `(call (top getfield) ,f ,x)
+         ; otherwise, came from f.(args...) --> broadcast(f, args...),
+         ; where x = (call (top tuple) args...) at this point:
+         `(call broadcast ,f ,@(cddr x)))))
 
    '|<:| syntactic-op-to-call
    '|>:| syntactic-op-to-call
@@ -1559,16 +1587,23 @@
                                lhss)
                         ,rr))))))
       ((symbol-like? lhs)
-       `(= ,(cadr e) ,(expand-forms (caddr e))))
+       `(= ,lhs ,(expand-forms (caddr e))))
       ((atom? lhs)
        (error (string "invalid assignment location \"" (deparse lhs) "\"")))
       (else
        (case (car lhs)
          ((|.|)
           ;; a.b =
-          (let ((a   (cadr (cadr e)))
-                (b   (caddr (cadr e)))
-                (rhs (caddr e)))
+          (let* ((a   (cadr lhs))
+                 (b_  (caddr lhs))
+                 (b   (if (and (length= b_ 2) (eq? (car b_) 'tuple))
+                          (begin
+                            (syntax-deprecation #f
+                             (string (deparse a) ".(" (deparse (cadr b_)) ") = ...")
+                             (string "setfield!(" (deparse a) ", " (deparse (cadr b_)) ", ...)"))
+                            (cadr b_))
+                          b_))
+                 (rhs (caddr e)))
             (let ((aa (if (symbol-like? a) a (make-ssavalue)))
                   (bb (if (or (atom? b) (symbol-like? b) (and (pair? b) (quoted? b)))
                           b (make-ssavalue)))
@@ -2454,7 +2489,7 @@ f(x) = yt(x)
               (composite_type ,name (call (top svec) ,@P)
                               (call (top svec) ,@(map (lambda (v) `',v) fields))
                               ,super
-                              (call (top svec) ,@types) #f ,(length fields))
+                              (call (top svec) ,@types) false ,(length fields))
               (return (null)))))))
 
 ;; ... and without parameters
@@ -2466,7 +2501,7 @@ f(x) = yt(x)
                                   (call (top svec) ,@(map (lambda (v) `',v) fields))
                                   ,super
                                   (call (top svec) ,@(map (lambda (v) 'Any) fields))
-                                  #f ,(length fields))
+                                  false ,(length fields))
                   (return (null))))))
 
 (define (vinfo:not-capt vi)
@@ -3108,10 +3143,10 @@ f(x) = yt(x)
 
             ((method)
              (if (length> e 2)
-                 (begin (emit `(method ,(cadr e)
+                 (begin (emit `(method ,(or (cadr e) 'false)
                                        ,(compile (caddr e) break-labels #t #f)
                                        ,(linearize (cadddr e))
-                                       ,@(cddddr e)))
+                                       ,(if (car (cddddr e)) 'true 'false)))
                         (if value (compile '(null) break-labels value tail)))
                  (cond (tail  (emit-return e))
                        (value e)

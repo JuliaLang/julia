@@ -178,10 +178,10 @@ for (name, f) in l
 
     for text in [
         old_text,
-        UTF8String(Char['A' + i % 52 for i in 1:(div(Base.SZ_UNBUFFERED_IO,2))]),
-        UTF8String(Char['A' + i % 52 for i in 1:(    Base.SZ_UNBUFFERED_IO -1)]),
-        UTF8String(Char['A' + i % 52 for i in 1:(    Base.SZ_UNBUFFERED_IO   )]),
-        UTF8String(Char['A' + i % 52 for i in 1:(    Base.SZ_UNBUFFERED_IO +1)])
+        String(Char['A' + i % 52 for i in 1:(div(Base.SZ_UNBUFFERED_IO,2))]),
+        String(Char['A' + i % 52 for i in 1:(    Base.SZ_UNBUFFERED_IO -1)]),
+        String(Char['A' + i % 52 for i in 1:(    Base.SZ_UNBUFFERED_IO   )]),
+        String(Char['A' + i % 52 for i in 1:(    Base.SZ_UNBUFFERED_IO +1)])
     ]
         write(filename, text)
 
@@ -382,9 +382,9 @@ f = joinpath(dir, "test.txt")
 open(io->write(io, "123"), f, "w")
 f1 = open(f)
 f2 = Base.Filesystem.open(f, Base.Filesystem.JL_O_RDONLY)
-@test read(f1, UInt8) == read(f2, UInt8) == '1'
-@test read(f1, UInt8) == read(f2, UInt8) == '2'
-@test read(f1, UInt8) == read(f2, UInt8) == '3'
+@test read(f1, UInt8) == read(f2, UInt8) == UInt8('1')
+@test read(f1, UInt8) == read(f2, UInt8) == UInt8('2')
+@test read(f1, UInt8) == read(f2, UInt8) == UInt8('3')
 @test_throws EOFError read(f1, UInt8)
 @test_throws EOFError read(f2, UInt8)
 close(f1)

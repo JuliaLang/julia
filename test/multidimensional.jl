@@ -28,3 +28,23 @@ ia2_test = lastinds(ib_test)
 @test isequal(ia, ia_test)
 @test isequal(ia1, ia1_test)
 @test isequal(ia2, ia2_test)
+
+E =  [1.0  1.0  2.0  2.0  1.0  1.0  1.0  2.0  2.0  2.0
+      1.0  1.0  2.0  2.0  2.0  1.0  2.0  2.0  2.0  1.0
+      1.0  1.0  1.0  1.0  1.0  1.0  1.0  1.0  1.0  2.0]
+
+ib = Vector{Int}[[1,2,6],[3,4,8,9],[5,7],[10]]
+ia = [1; 3; 5; 10]
+ic = [1; 1; 3; 3; 5; 1; 5; 3; 3; 10]
+
+ic_test = groupslices(E,2)
+ib_test = groupinds(ic_test)
+ia_test = firstinds(ic_test)
+ia1_test = firstinds(ib_test)
+ia2_test = lastinds(ib_test)
+
+@test isequal(ic, ic_test)
+@test isequal(ib, ib_test)
+@test isequal(ia, ia_test)
+@test isequal(ia1, ia1_test)
+@test isequal(ia2, ia2_test)

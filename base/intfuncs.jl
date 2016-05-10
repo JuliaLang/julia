@@ -239,7 +239,7 @@ function bin(x::Unsigned, pad::Int, neg::Bool)
         i -= 1
     end
     if neg; a[1]='-'; end
-    ASCIIString(a)
+    String(a)
 end
 
 function oct(x::Unsigned, pad::Int, neg::Bool)
@@ -251,7 +251,7 @@ function oct(x::Unsigned, pad::Int, neg::Bool)
         i -= 1
     end
     if neg; a[1]='-'; end
-    ASCIIString(a)
+    String(a)
 end
 
 function dec(x::Unsigned, pad::Int, neg::Bool)
@@ -263,7 +263,7 @@ function dec(x::Unsigned, pad::Int, neg::Bool)
         i -= 1
     end
     if neg; a[1]='-'; end
-    ASCIIString(a)
+    String(a)
 end
 
 function hex(x::Unsigned, pad::Int, neg::Bool)
@@ -276,7 +276,7 @@ function hex(x::Unsigned, pad::Int, neg::Bool)
         i -= 1
     end
     if neg; a[1]='-'; end
-    ASCIIString(a)
+    String(a)
 end
 
 num2hex(n::Integer) = hex(n, sizeof(n)*2)
@@ -295,7 +295,7 @@ function base(b::Int, x::Unsigned, pad::Int, neg::Bool)
         i -= 1
     end
     if neg; a[1]='-'; end
-    ASCIIString(a)
+    String(a)
 end
 base(b::Integer, n::Integer, pad::Integer=1) = base(Int(b), unsigned(abs(n)), pad, n<0)
 
@@ -326,7 +326,7 @@ end
 function digits!{T<:Integer}(a::AbstractArray{T,1}, n::Integer, base::Integer=10)
     2 <= base || throw(ArgumentError("base must be ≥ 2, got $base"))
     base - 1 <= typemax(T) || throw(ArgumentError("type $T too small for base $base"))
-    for i = 1:length(a)
+    for i in eachindex(a)
         a[i] = rem(n, base)
         n = div(n, base)
     end

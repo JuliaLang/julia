@@ -127,7 +127,9 @@ function showerror(io::IO, ex::DomainError, bt; backtrace=true)
     for b in bt
         code = StackTraces.lookup(b)
         if !code.from_c
-            if code.func in (:log, :log2, :log10, :sqrt) # TODO add :besselj, :besseli, :bessely, :besselk
+            if code.func == :nan_dom_err
+                continue
+            elseif code.func in (:log, :log2, :log10, :sqrt) # TODO add :besselj, :besseli, :bessely, :besselk
                 print(io,"\n$(code.func) will only return a complex result if called with a complex argument. Try $(string(code.func))(complex(x)).")
             elseif (code.func == :^ && code.file == Symbol("intfuncs.jl")) || code.func == :power_by_squaring #3024
                 print(io, "\nCannot raise an integer x to a negative power -n. \nMake x a float by adding a zero decimal (e.g. 2.0^-n instead of 2^-n), or write 1/x^n, float(x)^-n, or (x//1)^-n.")
@@ -166,9 +168,13 @@ function showerror(io::IO, ex::MethodError)
     # a tuple of the arguments otherwise.
     is_arg_types = isa(ex.args, DataType)
     arg_types = is_arg_types ? ex.args : typesof(ex.args...)
+    f = ex.f
+    meth = methods_including_ambiguous(f, arg_types)
+    if length(meth) > 1
+        return showerror_ambiguous(io, meth, f, arg_types)
+    end
     arg_types_param::SimpleVector = arg_types.parameters
     print(io, "MethodError: ")
-    f = ex.f
     ft = typeof(f)
     name = ft.name.mt.name
     f_is_function = false
@@ -246,6 +252,20 @@ end
 
 striptype{T}(::Type{T}) = T
 striptype(::Any) = nothing
+
+function showerror_ambiguous(io::IO, meth, f, args)
+    print(io, "MethodError: ", f, "(")
+    p = args.parameters
+    for (i,a) in enumerate(p)
+        print(io, "::", a)
+        i == length(p) ? print(io, ")") : print(io, ", ")
+    end
+    print(io, " is ambiguous. Candidates:")
+    for m in meth
+        print(io, "\n  ", m)
+    end
+    nothing
+end
 
 #Show an error by directly calling jl_printf.
 #Useful in Base submodule __init__ functions where STDERR isn't defined yet.

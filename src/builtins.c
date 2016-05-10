@@ -194,25 +194,25 @@ JL_CALLABLE(jl_f_throw)
 
 JL_DLLEXPORT void jl_enter_handler(jl_handler_t *eh)
 {
-    JL_SIGATOMIC_BEGIN();
+    // Must have no safepoint
     eh->prev = jl_current_task->eh;
     eh->gcstack = jl_pgcstack;
 #ifdef JULIA_ENABLE_THREADING
     eh->gc_state = jl_gc_state();
     eh->locks_len = jl_current_task->locks.len;
 #endif
+    eh->defer_signal = jl_get_ptls_states()->defer_signal;
     jl_current_task->eh = eh;
-    // TODO: this should really go after setjmp(). see comment in
-    // ctx_switch in task.c.
-    JL_SIGATOMIC_END();
 }
 
 JL_DLLEXPORT void jl_pop_handler(int n)
 {
-    while (n > 0) {
-        jl_eh_restore_state(jl_current_task->eh);
-        n--;
-    }
+    if (__unlikely(n <= 0))
+        return;
+    jl_handler_t *eh = jl_current_task->eh;
+    while (--n > 0)
+        eh = eh->prev;
+    jl_eh_restore_state(eh);
 }
 
 // primitives -----------------------------------------------------------------
@@ -948,7 +948,8 @@ static void jl_check_type_tuple(jl_value_t *t, jl_sym_t *name, const char *ctx)
 JL_CALLABLE(jl_f_applicable)
 {
     JL_NARGSV(applicable, 1);
-    return jl_method_lookup(jl_gf_mtable(args[0]), args, nargs, 1) != NULL ?
+    jl_typemap_entry_t *entry;
+    return jl_method_lookup(jl_gf_mtable(args[0]), args, nargs, 1, &entry) != NULL ?
         jl_true : jl_false;
 }
 
@@ -1128,7 +1129,6 @@ void jl_init_primitives(void)
     add_builtin("TypeName", (jl_value_t*)jl_typename_type);
     add_builtin("TypeConstructor", (jl_value_t*)jl_typector_type);
     add_builtin("Tuple", (jl_value_t*)jl_anytuple_type);
-    add_builtin("NTuple", (jl_value_t*)jl_ntuple_type);
     add_builtin("Vararg", (jl_value_t*)jl_vararg_type);
     add_builtin("Type", (jl_value_t*)jl_type_type);
     add_builtin("DataType", (jl_value_t*)jl_datatype_type);
@@ -1314,7 +1314,7 @@ static size_t jl_static_show_x_(JL_STREAM *out, jl_value_t *v, jl_datatype_t *vt
     else if ((jl_value_t*)vt == jl_typeof(jl_nothing)) {
         n += jl_printf(out, "nothing");
     }
-    else if (vt == jl_ascii_string_type || vt == jl_utf8_string_type) {
+    else if (vt == jl_string_type) {
         n += jl_printf(out, "\"%s\"", jl_iostr_data(v));
     }
     else if (vt == jl_uniontype_type) {
@@ -1579,7 +1579,7 @@ JL_DLLEXPORT void jl_(void *jl_value)
 
 JL_DLLEXPORT void jl_breakpoint(jl_value_t *v)
 {
-    // put a breakpoint in you debugger here
+    // put a breakpoint in your debugger here
 }
 
 #ifdef __cplusplus

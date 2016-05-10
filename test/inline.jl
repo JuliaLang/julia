@@ -67,3 +67,7 @@ function bar()
 end
 @test_throws UndefVarError bar()
 
+# issue #16165
+@inline f16165(x) = (x = UInt(x) + 1)
+g16165(x) = f16165(x)
+@test g16165(1) === (UInt(1) + 1)

@@ -29,8 +29,7 @@ jl_value_t *jl_array_uint8_type;
 jl_value_t *jl_array_any_type=NULL;
 jl_value_t *jl_array_symbol_type;
 jl_datatype_t *jl_weakref_type;
-jl_datatype_t *jl_ascii_string_type;
-jl_datatype_t *jl_utf8_string_type;
+jl_datatype_t *jl_string_type;
 jl_datatype_t *jl_expr_type;
 jl_datatype_t *jl_globalref_type;
 jl_datatype_t *jl_linenumbernode_type;
@@ -111,20 +110,6 @@ typedef struct {
 // Note that this function updates len
 static jl_value_t *jl_new_bits_internal(jl_value_t *dt, void *data, size_t *len)
 {
-    if (jl_is_ntuple_type(dt)) {
-        jl_value_t *lenvar = jl_tparam0(dt);
-        jl_value_t *elty = jl_tparam1(dt);
-        assert(jl_is_datatype(elty));
-        size_t alignment = ((jl_datatype_t*)elty)->alignment;
-        *len = LLT_ALIGN((*len), alignment);
-        assert(jl_is_long(lenvar));
-        size_t l = jl_unbox_long(lenvar);
-        size_t nb = l*LLT_ALIGN(jl_datatype_size(elty), alignment);
-        jl_value_t *v = (jl_value_t*)newobj(dt, NWORDS(nb));
-        memcpy(jl_data_ptr(v), data, nb);
-        return v;
-    }
-
     assert(jl_is_datatype(dt));
     jl_datatype_t *bt = (jl_datatype_t*)dt;
     size_t nb = jl_datatype_size(bt);
@@ -389,6 +374,7 @@ JL_DLLEXPORT jl_lambda_info_t *jl_new_lambda_info_uninit(jl_svec_t *sparam_syms)
     li->inCompile = 0;
     li->def = NULL;
     li->pure = 0;
+    li->inlineable = 0;
     return li;
 }
 
@@ -474,9 +460,11 @@ static jl_lambda_info_t *jl_copy_lambda(jl_lambda_info_t *linfo)
     new_linfo->ssavaluetypes = linfo->ssavaluetypes;
     new_linfo->sparam_vals = linfo->sparam_vals;
     new_linfo->pure = linfo->pure;
+    new_linfo->inlineable = linfo->inlineable;
     new_linfo->nargs = linfo->nargs;
     new_linfo->isva = linfo->isva;
     new_linfo->rettype = linfo->rettype;
+    new_linfo->def = linfo->def;
     return new_linfo;
 }
 
@@ -543,6 +531,7 @@ JL_DLLEXPORT jl_method_t *jl_new_method_uninit(void)
     m->tfunc.unknown = jl_nothing;
     m->sig = NULL;
     m->tvars = NULL;
+    m->ambig = NULL;
     m->roots = NULL;
     m->module = jl_current_module;
     m->lambda_template = NULL;
@@ -568,6 +557,7 @@ jl_method_t *jl_new_method(jl_lambda_info_t *definition, jl_sym_t *name, jl_tupl
     if (jl_svec_len(tvars) == 1)
         tvars = (jl_svec_t*)jl_svecref(tvars, 0);
     m->tvars = tvars;
+    m->ambig = jl_nothing;
     JL_GC_PUSH1(&m);
     // the front end may add this lambda to multiple methods; make a copy if so
     jl_method_t *oldm = definition->def;

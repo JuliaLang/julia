@@ -229,7 +229,7 @@ JL_DLLEXPORT void jl_sigatomic_begin(void)
 
 JL_DLLEXPORT void jl_sigatomic_end(void)
 {
-    if (jl_defer_signal == 0)
+    if (jl_get_ptls_states()->defer_signal == 0)
         jl_error("sigatomic_end called in non-sigatomic region");
     JL_SIGATOMIC_END();
 }
@@ -283,14 +283,14 @@ JL_DLLEXPORT const char *jl_ver_string(void)
    return JULIA_VERSION_STRING;
 }
 
-// return char* from ByteString field in Base.GIT_VERSION_INFO
+// return char* from String field in Base.GIT_VERSION_INFO
 static const char *git_info_string(const char *fld)
 {
     static jl_value_t *GIT_VERSION_INFO = NULL;
     if (!GIT_VERSION_INFO)
         GIT_VERSION_INFO = jl_get_global(jl_base_module, jl_symbol("GIT_VERSION_INFO"));
     jl_value_t *f = jl_get_field(GIT_VERSION_INFO, fld);
-    assert(jl_is_byte_string(f));
+    assert(jl_is_string(f));
     return jl_string_data(f);
 }
 

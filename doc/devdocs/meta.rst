@@ -17,11 +17,8 @@ expression in the body of a function.
 the implementation of the ``@inline`` macro::
 
     macro inline(ex)
-        esc(_inline(ex))
+        esc(isa(ex, Expr) ? pushmeta!(ex, :inline) : ex)
     end
-
-    _inline(ex::Expr) = pushmeta!(ex, :inline)
-    _inline(arg) = arg
 
 Here, ``ex`` is expected to be an expression defining a function.
 A statement like this::
@@ -39,15 +36,15 @@ gets turned into an expression like this::
         end
     end
 
-``pushmeta!(ex, :symbol, args...)`` appends ``:symbol`` to the end of
+``Base.pushmeta!(ex, :symbol, args...)`` appends ``:symbol`` to the end of
 the ``:meta`` expression, creating a new ``:meta`` expression if
 necessary. If ``args`` is specified, a nested expression containing
 ``:symbol`` and these arguments is appended instead, which can be used
 to specify additional information.
 
 To use the metadata, you have to parse these ``:meta`` expressions.
-If your implementation can be performed within Julia, ``popmeta!`` is
-very handy: ``popmeta!(body, :symbol)`` will scan a function *body*
+If your implementation can be performed within Julia, ``Base.popmeta!`` is
+very handy: ``Base.popmeta!(body, :symbol)`` will scan a function *body*
 expression (one without the function signature) for a ``:meta``
 expression, extract any arguments, and return a tuple ``(found::Bool,
 args::Array{Any})``. If the metadata did not have any arguments, or

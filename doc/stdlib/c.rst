@@ -134,7 +134,7 @@
 
    .. Docstring generated from Julia source
 
-   Disable Ctrl-C handler during execution of a function, for calling external code that is not interrupt safe. Intended to be called using ``do`` block syntax as follows:
+   Disable Ctrl-C handler during execution of a function on the current task, for calling external code that may call julia code that is not interrupt safe. Intended to be called using ``do`` block syntax as follows:
 
    .. code-block:: julia
 
@@ -142,6 +142,8 @@
            # interrupt-unsafe code
            ...
        end
+
+   This is not needed on worker threads (``Threads.threadid() != 1``\ ) since the ``InterruptException`` will only be delivered to the master thread. External functions that do not call julia code or julia runtime automatically disable sigint during their execution.
 
 .. function:: reenable_sigint(f::Function)
 

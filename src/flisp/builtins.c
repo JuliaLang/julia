@@ -317,7 +317,7 @@ static value_t fl_path_cwd(fl_context_t *fl_ctx, value_t *args, uint32_t nargs)
         err = uv_cwd(buf, &len);
         if (err != 0)
             lerrorf(fl_ctx, fl_ctx->IOError, "path.cwd: could not get cwd: %s", uv_strerror(err));
-        return string_from_cstr(fl_ctx, buf);
+        return string_from_cstrn(fl_ctx, buf, len);
     }
     char *ptr = tostring(fl_ctx, args[0], "path.cwd");
     err = uv_chdir(ptr);

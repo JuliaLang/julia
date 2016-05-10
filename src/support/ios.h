@@ -70,6 +70,7 @@ typedef struct {
     char local[IOS_INLSIZE];
 } ios_t;
 
+extern void (*ios_set_io_wait_func)(int);
 /* low-level interface functions */
 JL_DLLEXPORT size_t ios_read(ios_t *s, char *dest, size_t n);
 JL_DLLEXPORT size_t ios_readall(ios_t *s, char *dest, size_t n);

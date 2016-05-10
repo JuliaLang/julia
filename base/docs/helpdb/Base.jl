@@ -74,7 +74,7 @@ asin
 
 Subtype operator, equivalent to `issubtype(T1,T2)`.
 """
-Base.(:(<:))
+Base.:(<:)
 
 """
     schedule(t::Task, [val]; error=false)
@@ -169,14 +169,6 @@ set of characters) is provided, instead remove characters contained in it.
 lstrip
 
 """
-    reenable_sigint(f::Function)
-
-Re-enable Ctrl-C handler during execution of a function. Temporarily reverses the effect of
-`disable_sigint`.
-"""
-reenable_sigint
-
-"""
     indmin(itr) -> Integer
 
 Returns the index of the minimum element in a collection.
@@ -235,7 +227,7 @@ besselj
 
 Divide two integers or rational numbers, giving a `Rational` result.
 """
-Base.(:(//))
+Base.:(//)
 
 """
     At_mul_B(A, B)
@@ -279,7 +271,7 @@ sortrows
 
 Element-wise right division operator.
 """
-Base.(:(./))
+Base.:(./)
 
 """
     IPv6(host::Integer) -> IPv6
@@ -557,7 +549,7 @@ ind2sub(a, index)
 
 Element-wise multiplication operator.
 """
-Base.(:(.*))
+Base.:(.*)
 
 """
     ror!(dest::BitArray{1}, src::BitArray{1}, i::Integer) -> BitArray{1}
@@ -760,7 +752,7 @@ julia> [1:5;] |> x->x.^2 |> sum |> inv
 0.01818181818181818
 ```
 """
-Base.(:(|>))
+Base.:(|>)
 
 """
     assert(cond)
@@ -899,7 +891,7 @@ diag
 
 Element-wise exponentiation operator.
 """
-Base.(:(.^))
+Base.:(.^)
 
 """
     isspace(c::Union{Char,AbstractString}) -> Bool
@@ -1185,7 +1177,7 @@ sizeof(::AbstractString)
 
 See the [`is`](:func:`is`) operator.
 """
-Base.(:(===))
+Base.:(===)
 
 """
     ReadOnlyMemoryError()
@@ -1638,7 +1630,7 @@ searchsorted
 Right division operator: multiplication of `x` by the inverse of `y` on the right. Gives
 floating-point results for integer arguments.
 """
-Base.(:(/))
+Base.:(/)
 
 """
     connect([host],port) -> TCPSocket
@@ -1858,23 +1850,23 @@ value for that key will be the value it has in the last collection listed.
 
 ```jldoctest
 julia> a = Dict("foo" => 0.0, "bar" => 42.0)
-Dict{ASCIIString,Float64} with 2 entries:
+Dict{String,Float64} with 2 entries:
   "bar" => 42.0
   "foo" => 0.0
 
 julia> b = Dict(utf8("baz") => 17, utf8("bar") => 4711)
-Dict{UTF8String,Int64} with 2 entries:
+Dict{String,Int64} with 2 entries:
   "bar" => 4711
   "baz" => 17
 
 julia> merge(a, b)
-Dict{UTF8String,Float64} with 3 entries:
+Dict{String,Float64} with 3 entries:
   "bar" => 4711.0
   "baz" => 17.0
   "foo" => 0.0
 
 julia> merge(b, a)
-Dict{UTF8String,Float64} with 3 entries:
+Dict{String,Float64} with 3 entries:
   "bar" => 42.0
   "baz" => 17.0
   "foo" => 0.0
@@ -2540,7 +2532,7 @@ reduce(op, itr)
 
 Element-wise greater-than-or-equals comparison operator.
 """
-Base.(:(.>=))
+Base.:(.>=)
 
 """
     stdm(v, m)
@@ -2693,7 +2685,7 @@ eachindex
 
 Element-wise less-than comparison operator.
 """
-Base.(:(.<))
+Base.:(.<)
 
 """
     UndefRefError()
@@ -2973,7 +2965,7 @@ rest
     getfield(value, name::Symbol)
 
 Extract a named field from a `value` of composite type. The syntax `a.b` calls
-`getfield(a, :b)`, and the syntax `a.(b)` calls `getfield(a, b)`.
+`getfield(a, :b)`.
 """
 getfield
 
@@ -3487,7 +3479,7 @@ digits
     bytes2hex(bin_arr::Array{UInt8, 1})
 
 Convert an array of bytes to its hexadecimal representation. All characters are in
-lower-case. Returns an `ASCIIString`.
+lower-case. Returns a `String`.
 """
 bytes2hex
 
@@ -3647,7 +3639,7 @@ multiple of four, this is equivalent to a `copy`.
 rotr90(A, k)
 
 """
-    readdir([dir]) -> Vector{ByteString}
+    readdir([dir]) -> Vector{String}
 
 Returns the files and directories in the directory `dir` (or the current working directory if not given).
 """
@@ -3728,7 +3720,7 @@ second variant.
 popdisplay
 
 """
-    readdlm(source, delim::Char, T::Type, eol::Char; header=false, skipstart=0, skipblanks=true, use_mmap, ignore_invalid_chars=false, quotes=true, dims, comments=true, comment_char='#')
+    readdlm(source, delim::Char, T::Type, eol::Char; header=false, skipstart=0, skipblanks=true, use_mmap, quotes=true, dims, comments=true, comment_char='#')
 
 Read a matrix from the source where each line (separated by `eol`) gives one row, with
 elements separated by the given delimiter. The source can be a text file, stream or byte
@@ -3737,7 +3729,7 @@ mapped segment as source.
 
 If `T` is a numeric type, the result is an array of that type, with any non-numeric elements
 as `NaN` for floating-point types, or zero. Other useful values of `T` include
-`ASCIIString`, `AbstractString`, and `Any`.
+`String`, `AbstractString`, and `Any`.
 
 If `header` is `true`, the first row of data will be read as header and the tuple
 `(data_cells, header_cells)` is returned instead of only `data_cells`.
@@ -4175,7 +4167,7 @@ rot180(A, k)
 
 Element-wise less-than-or-equals comparison operator.
 """
-Base.(:(.<=))
+Base.:(.<=)
 
 """
     checkbounds(array, indexes...)
@@ -4391,19 +4383,6 @@ An indexing operation into an array, `a`, tried to access an out-of-bounds eleme
 BoundsError
 
 """
-    disable_sigint(f::Function)
-
-Disable Ctrl-C handler during execution of a function, for calling external code that is not
-interrupt safe. Intended to be called using `do` block syntax as follows:
-
-    disable_sigint() do
-        # interrupt-unsafe code
-        ...
-    end
-"""
-disable_sigint
-
-"""
     hist2d(M, e1, e2) -> (edge1, edge2, counts)
 
 Compute a "2d histogram" of a set of N points specified by N-by-2 matrix `M`. Arguments `e1`
@@ -4525,7 +4504,7 @@ bkfact!
 
 Exponentiation operator.
 """
-Base.(:(^))(x, y)
+Base.:(^)(x, y)
 
 """
     ^(s, n)
@@ -4537,7 +4516,7 @@ julia> "Test "^3
 "Test Test Test "
 ```
 """
-Base.(:(^))(s::AbstractString, n::Int)
+Base.:(^)(s::AbstractString, n::Int)
 
 """
     position(s)
@@ -4568,7 +4547,7 @@ Determines whether a path is absolute (begins at the root directory).
 isabspath
 
 """
-    hex2bytes(s::ASCIIString)
+    hex2bytes(s::AbstractString)
 
 Convert an arbitrarily long hexadecimal string to its binary representation. Returns an
 `Array{UInt8,1}`, i.e. an array of bytes.
@@ -4613,16 +4592,6 @@ Bitwise not.
 Bessel function of the third kind of order `nu`, ``H^{(1)}_\\nu(x)``.
 """
 hankelh1
-
-"""
-    hessfact(A)
-
-Compute the Hessenberg decomposition of `A` and return a `Hessenberg` object. If `F` is the
-factorization object, the unitary matrix can be accessed with `F[:Q]` and the Hessenberg
-matrix with `F[:H]`. When `Q` is extracted, the resulting type is the `HessenbergQ` object,
-and may be converted to a regular matrix with [`full`](:func:`full`).
-"""
-hessfact
 
 """
     gcdx(x,y)
@@ -5283,7 +5252,7 @@ Compute sine of `x`, where `x` is in radians.
 sin
 
 """
-    Base.compilecache(module::ByteString)
+    Base.compilecache(module::String)
 
 Creates a precompiled cache file for module (see help for `require`) and all of its
 dependencies. This can be used to reduce package load times. Cache files are stored in
@@ -5373,7 +5342,7 @@ istaskdone
 
 Element-wise greater-than comparison operator.
 """
-Base.(:(.>))
+Base.:(.>)
 
 """
     search(string, chars, [start])
@@ -5676,15 +5645,15 @@ get
 
 Element-wise not-equals comparison operator.
 """
-Base.(:(.!=))
+Base.:(.!=)
 
 """
     lufact!(A) -> LU
 
 `lufact!` is the same as [`lufact`](:func:`lufact`), but saves space by overwriting the
-input `A`, instead of creating a copy.  For sparse `A` the `nzval` field is not overwritten
-but the index fields, `colptr` and `rowval` are decremented in place, converting from
-1-based indices to 0-based indices.
+input `A`, instead of creating a copy. An `InexactError` exception is thrown if the
+factorisation produces a number not representable by the element type of `A`, e.g. for
+integer types.
 """
 lufact!
 
@@ -6106,7 +6075,7 @@ are taken from 2-tuples `(key,value)` generated by the argument.
 
 ```jldoctest
 julia> Dict([("A", 1), ("B", 2)])
-Dict{ASCIIString,Int64} with 2 entries:
+Dict{String,Int64} with 2 entries:
   "B" => 2
   "A" => 1
 ```
@@ -6115,7 +6084,7 @@ Alternatively, a sequence of pair arguments may be passed.
 
 ```jldoctest
 julia> Dict("A"=>1, "B"=>2)
-Dict{ASCIIString,Int64} with 2 entries:
+Dict{String,Int64} with 2 entries:
   "B" => 2
   "A" => 1
 ```
@@ -6241,7 +6210,7 @@ isdiag
 
 Equivalent to `!is(x, y)`.
 """
-Base.(:(!==))
+Base.:(!==)
 
 """
     trailing_ones(x::Integer) -> Integer
@@ -6562,8 +6531,9 @@ Scale an array `A` by a scalar `b` overwriting `A` in-place.
 
 If `A` is a matrix and `b` is a vector, then `scale!(A,b)` scales each column `i` of `A` by
 `b[i]` (similar to `A*Diagonal(b)`), while `scale!(b,A)` scales each row `i` of `A` by `b[i]`
-(similar to `Diagonal(b)*A`), again operating in-place on `A`.
-
+(similar to `Diagonal(b)*A`), again operating in-place on `A`. An `InexactError` exception is
+thrown if the scaling produces a number not representable by the element type of `A`,
+e.g. for integer types.
 """
 scale!
 
@@ -6745,7 +6715,7 @@ Collections should generally implement `==` by calling `==` recursively on all c
 New numeric types should implement this function for two arguments of the new type, and
 handle comparison to other types via promotion rules where possible.
 """
-Base.(:(==))
+Base.:(==)
 
 """
     mapreducedim(f, op, A, dims[, initial])
@@ -7058,7 +7028,7 @@ diagm
 
 Element-wise subtraction operator.
 """
-Base.(:(.-))
+Base.:(.-)
 
 """
     imag(z)
@@ -7092,7 +7062,7 @@ arguments of the new type. Because of the behavior of floating-point NaN values,
 implements a partial order. Types with a canonical partial order should implement `<`, and
 types with a canonical total order should implement `isless`.
 """
-Base.(:(<))
+Base.:(<)
 
 """
     EnvHash() -> EnvHash
@@ -7305,7 +7275,7 @@ digits!
 """
     MethodError(f, args)
 
-A method with the required type signature does not exist in the given generic function.
+A method with the required type signature does not exist in the given generic function. Alternatively, there is no unique most-specific method.
 """
 MethodError
 
@@ -7664,7 +7634,7 @@ rpad
     setfield!(value, name::Symbol, x)
 
 Assign `x` to a named field in `value` of composite type. The syntax `a.b = c` calls
-`setfield!(a, :b, c)`, and the syntax `a.(b) = c` calls `setfield!(a, b, c)`.
+`setfield!(a, :b, c)`.
 """
 setfield!
 
@@ -7700,7 +7670,7 @@ countlines
 
 Matrix multiplication.
 """
-Base.(:(*))(::AbstractMatrix, ::AbstractMatrix)
+Base.:(*)(::AbstractMatrix, ::AbstractMatrix)
 
 """
     \\(A, B)
@@ -7717,14 +7687,14 @@ When `A` is sparse, a similar polyalgorithm is used. For indefinite matrices, th
 factorization does not use pivoting during the numerical factorization and therefore the
 procedure can fail even for invertible matrices.
 """
-Base.(:(\))(A,B)
+Base.:(\)(A,B)
 
 """
     .\\(x, y)
 
 Element-wise left division operator.
 """
-Base.(:(.\))(x,y)
+Base.:(.\)(x,y)
 
 """
     \\(x, y)
@@ -7732,7 +7702,7 @@ Base.(:(.\))(x,y)
 Left division operator: multiplication of `y` by the inverse of `x` on the left. Gives
 floating-point results for integer arguments.
 """
-Base.(:(\))(x::Number,y::Number)
+Base.:(\)(x::Number,y::Number)
 
 
 """
@@ -7742,7 +7712,7 @@ Base.(:(\))(x::Number,y::Number)
 
 Multiplication operator. `x*y*z*...` calls this function with all arguments, i.e. `*(x, y, z, ...)`.
 """
-Base.(:(*))(x, y...)
+Base.:(*)(x, y...)
 
 """
 ```
@@ -7756,7 +7726,7 @@ julia> "Hello " * "world"
 "Hello world"
 ```
 """
-Base.(:(*))(s::AbstractString, t::AbstractString)
+Base.:(*)(s::AbstractString, t::AbstractString)
 
 """
     complement!(s)
@@ -8182,7 +8152,7 @@ ispunct
 
 Returns a tuple containing the dimensions of `A`. Optionally you can specify the
 dimension(s) you want the length of, and get the length of that dimension, or a tuple of the
-lengths of dimensions you asked for.:
+lengths of dimensions you asked for.
 
     julia> A = rand(2,3,4);
 
@@ -8242,7 +8212,7 @@ airy
 
 Boolean not.
 """
-Base.(:(!))
+Base.:(!)
 
 """
     length(A) -> Integer
@@ -8335,7 +8305,7 @@ NullException
 
 Element-wise equality comparison operator.
 """
-Base.(:(.==))
+Base.:(.==)
 
 """
     cfunction(function::Function, ReturnType::Type, (ArgumentTypes...))
@@ -8387,7 +8357,7 @@ intersect
 Not-equals comparison operator. Always gives the opposite answer as `==`. New types should
 generally not implement this, and rely on the fallback definition `!=(x,y) = !(x==y)` instead.
 """
-Base.(:(!=))
+Base.:(!=)
 
 """
     @spawn
@@ -8552,7 +8522,7 @@ isprime(::BigInt, ?)
 Greater-than comparison operator. Generally, new types should implement `<` instead of this
 function, and rely on the fallback definition `>(x,y) = y<x`.
 """
-Base.(:(>))
+Base.:(>)
 
 """
     match(r::Regex, s::AbstractString[, idx::Integer[, addopts]])
@@ -8583,6 +8553,8 @@ Ac_mul_B
 
 `qrfact!` is the same as [`qrfact`](:func:`qrfact`) when `A` is a subtype of
 `StridedMatrix`, but saves space by overwriting the input `A`, instead of creating a copy.
+An `InexactError` exception is thrown if the factorisation produces a number not
+representable by the element type of `A`, e.g. for integer types.
 """
 qrfact!
 
@@ -8675,7 +8647,7 @@ isa
 
 Less-than-or-equals comparison operator.
 """
-Base.(:(<=))
+Base.:(<=)
 
 """
     ProcessExitedException()
@@ -9792,7 +9764,7 @@ midpoints
 
 Element-wise addition operator.
 """
-Base.(:(.+))
+Base.:(.+)
 
 """
     reverseind(v, i)
@@ -10245,7 +10217,7 @@ iswritable
 
 Bitwise or.
 """
-Base.(:(|))
+Base.:(|)
 
 """
     yieldto(task, arg = nothing)
@@ -10438,7 +10410,7 @@ enumerate
 
 Greater-than-or-equals comparison operator.
 """
-Base.(:(>=))
+Base.:(>=)
 
 """
     dawson(x)
@@ -10482,7 +10454,7 @@ colon(start, step, stop)
 
 Bitwise exclusive or.
 """
-Base.(:$)(x, y)
+Base.:$(x, y)
 
 """
     getsockname(sock::Union{TCPServer, TCPSocket}) -> (IPAddr,UInt16)

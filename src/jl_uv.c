@@ -47,6 +47,37 @@
 extern "C" {
 #endif
 
+static uv_async_t signal_async;
+
+#ifdef _OS_WINDOWS_
+// uv_async_t is buggy on windows. Initializing one breaks the sysimg build.
+void jl_wake_libuv(void)
+{
+}
+
+void jl_init_signal_async(void)
+{
+}
+#else
+static void jl_signal_async_cb(uv_async_t *hdl)
+{
+    // This should abort the current loop and the julia code it returns to
+    // or the safepoint in the callers of `uv_run` should throw the exception.
+    (void)hdl;
+    uv_stop(jl_io_loop);
+}
+
+void jl_wake_libuv(void)
+{
+    uv_async_send(&signal_async);
+}
+
+void jl_init_signal_async(void)
+{
+    uv_async_init(jl_io_loop, &signal_async, jl_signal_async_cb);
+}
+#endif
+
 extern jl_module_t *jl_old_base_module;
 static jl_value_t *close_cb = NULL;
 
@@ -80,6 +111,8 @@ JL_DLLEXPORT void jl_uv_closeHandle(uv_handle_t *handle)
     // also let the client app do its own cleanup
     if (handle->type != UV_FILE && handle->data)
         jl_uv_call_close_callback((jl_value_t*)handle->data);
+    if (handle == (uv_handle_t*)&signal_async)
+        return;
     free(handle);
 }
 
@@ -114,6 +147,7 @@ JL_DLLEXPORT int jl_run_once(uv_loop_t *loop)
 {
     if (loop) {
         loop->stop_flag = 0;
+        jl_gc_safepoint();
         return uv_run(loop,UV_RUN_ONCE);
     }
     else return 0;
@@ -123,6 +157,7 @@ JL_DLLEXPORT void jl_run_event_loop(uv_loop_t *loop)
 {
     if (loop) {
         loop->stop_flag = 0;
+        jl_gc_safepoint();
         uv_run(loop,UV_RUN_DEFAULT);
     }
 }
@@ -131,6 +166,7 @@ JL_DLLEXPORT int jl_process_events(uv_loop_t *loop)
 {
     if (loop) {
         loop->stop_flag = 0;
+        jl_gc_safepoint();
         return uv_run(loop,UV_RUN_NOWAIT);
     }
     else return 0;
@@ -164,7 +200,11 @@ JL_DLLEXPORT void jl_close_uv(uv_handle_t *handle)
     }
 
     if (handle->type == UV_NAMED_PIPE || handle->type == UV_TCP) {
+#ifdef _OS_WINDOWS_
+        if (((uv_stream_t*)handle)->stream.conn.shutdown_req) {
+#else
         if (((uv_stream_t*)handle)->shutdown_req) {
+#endif
             // don't close the stream while attempting a graceful shutdown
             return;
         }
@@ -189,8 +229,8 @@ JL_DLLEXPORT void jl_close_uv(uv_handle_t *handle)
     if (!uv_is_closing((uv_handle_t*)handle)) {
         // avoid double-closing the stream
         if (handle->type == UV_TTY)
-            uv_tty_set_mode((uv_tty_t*)handle,0);
-        uv_close(handle,&jl_uv_closeHandle);
+            uv_tty_set_mode((uv_tty_t*)handle, UV_TTY_MODE_NORMAL);
+        uv_close(handle, &jl_uv_closeHandle);
     }
 }
 
@@ -808,9 +848,10 @@ JL_DLLEXPORT int jl_ispty(uv_pipe_t *pipe)
 {
     if (pipe->type != UV_NAMED_PIPE) return 0;
     size_t len = 0;
-    if (uv_pipe_getsockname(pipe, NULL, &len) != UV_ENOBUFS) return 0;
-    char *name = (char *) alloca(len);
-    if (uv_pipe_getsockname(pipe, name, &len)) return 0;
+    if (uv_pipe_getpeername(pipe, NULL, &len) != UV_ENOBUFS) return 0;
+    char *name = (char*)alloca(len + 1);
+    if (uv_pipe_getpeername(pipe, name, &len)) return 0;
+    name[len] = '\0';
     // return true if name matches regex:
     // ^\\\\?\\pipe\\(msys|cygwin)-[0-9a-z]{16}-[pt]ty[1-9][0-9]*-
     //jl_printf(JL_STDERR,"pipe_name: %s\n", name);
@@ -847,7 +888,10 @@ JL_DLLEXPORT uv_handle_type jl_uv_handle_type(uv_handle_t *handle)
 JL_DLLEXPORT int jl_tty_set_mode(uv_tty_t *handle, int mode)
 {
     if (handle->type != UV_TTY) return 0;
-    return uv_tty_set_mode(handle, mode);
+    uv_tty_mode_t mode_enum = UV_TTY_MODE_NORMAL;
+    if (mode)
+        mode_enum = UV_TTY_MODE_RAW;
+    return uv_tty_set_mode(handle, mode_enum);
 }
 
 typedef int (*work_cb_t)(void *, void *);

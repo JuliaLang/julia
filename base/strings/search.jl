@@ -123,7 +123,7 @@ searchindex(s::AbstractString, t::AbstractString) = searchindex(s,t,start(s))
 searchindex(s::AbstractString, c::Char, i::Integer) = _searchindex(s,c,i)
 searchindex(s::AbstractString, c::Char) = searchindex(s,c,start(s))
 
-function searchindex(s::ByteString, t::ByteString, i::Integer=1)
+function searchindex(s::String, t::String, i::Integer=1)
     # Check for fast case of a single byte
     # (for multi-byte UTF-8 sequences, use searchindex on byte arrays instead)
     if endof(t) == 1
@@ -263,7 +263,7 @@ rsearchindex(s::ByteArray,t::ByteArray,i) = _rsearchindex(s,t,i)
 rsearchindex(s::AbstractString, t::AbstractString, i::Integer) = _rsearchindex(s,t,i)
 rsearchindex(s::AbstractString, t::AbstractString) = (isempty(s) && isempty(t)) ? 1 : rsearchindex(s,t,endof(s))
 
-function rsearchindex(s::ByteString, t::ByteString)
+function rsearchindex(s::String, t::String)
     # Check for fast case of a single byte
     # (for multi-byte UTF-8 sequences, use rsearchindex instead)
     if endof(t) == 1
@@ -273,7 +273,7 @@ function rsearchindex(s::ByteString, t::ByteString)
     end
 end
 
-function rsearchindex(s::ByteString, t::ByteString, i::Integer)
+function rsearchindex(s::String, t::String, i::Integer)
     # Check for fast case of a single byte
     # (for multi-byte UTF-8 sequences, use rsearchindex instead)
     if endof(t) == 1

@@ -47,37 +47,13 @@ end
 dc_path = joinpath(dir, "dictchannel.jl")
 myid() == 1 || include(dc_path)
 
-# The checks to see if DictChannel is defined is to identify the root cause of
-# https://github.com/JuliaLang/julia/issues/16091 .
-# To be removed once fixed.
-defined_on_worker = false
-if (myid() != 1) && !isdefined(:DictChannel)
-    error("myid : $(myid()). DictChannel not defined.")
-else
-    defined_on_worker = true
-end
-
 # Run the remote on pid 1, since runtests may terminate workers
 # at any time depending on memory usage
-@test remotecall_fetch(1, dc_path) do f
+remotecall_fetch(1, dc_path) do f
     include(f)
-    return :infungible
-end === :infungible
-
-defined_on_master = false
-if remotecall_fetch(isdefined, 1, :DictChannel) == false
-    error("myid : $(myid()). DictChannel not defined on 1")
-else
-    defined_on_master = true
+    nothing
 end
-
-dc = nothing
-try
-    dc=RemoteChannel(()->DictChannel(), 1)
-catch e
-    println("myid : ", myid(), ", dc_path : ", dc_path, ", defined_on_worker:", defined_on_worker, ", defined_on_master: ", defined_on_master)
-    rethrow(e)
-end
+dc=RemoteChannel(()->DictChannel(), 1)
 @test typeof(dc) == RemoteChannel{DictChannel}
 
 @test isready(dc) == false

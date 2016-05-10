@@ -230,6 +230,7 @@ static jl_ast_context_list_t *jl_ast_ctx_freed = NULL;
 
 static jl_ast_context_t *jl_ast_ctx_enter(void)
 {
+    JL_SIGATOMIC_BEGIN();
     JL_LOCK_NOGC(&flisp_lock);
     jl_ast_context_list_t *node;
     jl_ast_context_t *ctx;
@@ -267,6 +268,7 @@ static jl_ast_context_t *jl_ast_ctx_enter(void)
 
 static void jl_ast_ctx_leave(jl_ast_context_t *ctx)
 {
+    JL_SIGATOMIC_END();
     if (--ctx->ref)
         return;
     JL_LOCK_NOGC(&flisp_lock);
@@ -285,11 +287,16 @@ void jl_init_frontend(void)
     jl_ast_main_ctx.task = jl_current_task;
     jl_ast_context_list_insert(&jl_ast_ctx_using, &jl_ast_main_ctx.list);
     jl_init_ast_ctx(&jl_ast_main_ctx);
+    // To match the one in jl_ast_ctx_leave
+    JL_SIGATOMIC_BEGIN();
     jl_ast_ctx_leave(&jl_ast_main_ctx);
 }
 
 JL_DLLEXPORT void jl_lisp_prompt(void)
 {
+    // Make `--lisp` sigatomic in order to avoid triggering the sigint safepoint.
+    // We don't have our signal handler registered in that case anyway...
+    JL_SIGATOMIC_BEGIN();
     jl_init_frontend();
     jl_ast_context_t *ctx = jl_ast_ctx_enter();
     JL_AST_PRESERVE_PUSH(ctx, roots, old_roots);
@@ -428,10 +435,6 @@ static jl_value_t *scm_to_julia_(fl_context_t *fl_ctx, value_t e, int eo)
     }
     if (fl_isstring(fl_ctx, e))
         return jl_pchar_to_string((char*)cvalue_data(e), cvalue_len(e));
-    if (e == fl_ctx->F)
-        return jl_false;
-    if (e == fl_ctx->T)
-        return jl_true;
     if (iscons(e) || e == fl_ctx->NIL) {
         value_t hd;
         jl_sym_t *sym;
@@ -616,9 +619,9 @@ static value_t julia_to_scm_(fl_context_t *fl_ctx, jl_value_t *v)
     if (jl_is_symbol(v))
         return symbol(fl_ctx, jl_symbol_name((jl_sym_t*)v));
     if (v == jl_true)
-        return fl_ctx->T;
+        return jl_ast_ctx(fl_ctx)->true_sym;
     if (v == jl_false)
-        return fl_ctx->F;
+        return jl_ast_ctx(fl_ctx)->false_sym;
     if (v == jl_nothing)
         return fl_cons(fl_ctx, jl_ast_ctx(fl_ctx)->null_sym, fl_ctx->NIL);
     if (jl_is_expr(v)) {
@@ -726,7 +729,7 @@ jl_value_t *jl_parse_eval_all(const char *fname, size_t len,
     jl_ast_context_t *ctx = jl_ast_ctx_enter();
     fl_context_t *fl_ctx = &ctx->fl;
     value_t f, ast;
-    f = cvalue_static_cstring(fl_ctx, fname);
+    f = cvalue_static_cstrn(fl_ctx, fname, len);
     fl_gc_handle(fl_ctx, &f);
     if (content != NULL) {
         value_t t = cvalue_static_cstrn(fl_ctx, content, contentlen);
@@ -762,6 +765,7 @@ jl_value_t *jl_parse_eval_all(const char *fname, size_t len,
             form = scm_to_julia(fl_ctx, expansion, 0);
             jl_sym_t *head = NULL;
             if (jl_is_expr(form)) head = ((jl_expr_t*)form)->head;
+            JL_SIGATOMIC_END();
             if (head == jl_incomplete_sym)
                 jl_errorf("syntax: %s", jl_string_data(jl_exprarg(form,0)));
             else if (head == error_sym)
@@ -770,6 +774,7 @@ jl_value_t *jl_parse_eval_all(const char *fname, size_t len,
                 jl_lineno = jl_unbox_long(jl_exprarg(form,0));
             else
                 result = jl_toplevel_eval_flex(form, 1);
+            JL_SIGATOMIC_BEGIN();
             ast = cdr_(ast);
         }
     }

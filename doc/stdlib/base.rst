@@ -128,7 +128,7 @@ Getting Around
 
    When searching for files, ``require`` first looks for package code under ``Pkg.dir()``\ , then tries paths in the global array ``LOAD_PATH``\ .
 
-.. function:: Base.compilecache(module::ByteString)
+.. function:: Base.compilecache(module::String)
 
    .. Docstring generated from Julia source
 
@@ -514,13 +514,13 @@ Types
 
    .. Docstring generated from Julia source
 
-   Extract a named field from a ``value`` of composite type. The syntax ``a.b`` calls ``getfield(a, :b)``\ , and the syntax ``a.(b)`` calls ``getfield(a, b)``\ .
+   Extract a named field from a ``value`` of composite type. The syntax ``a.b`` calls ``getfield(a, :b)``\ .
 
 .. function:: setfield!(value, name::Symbol, x)
 
    .. Docstring generated from Julia source
 
-   Assign ``x`` to a named field in ``value`` of composite type. The syntax ``a.b = c`` calls ``setfield!(a, :b, c)``\ , and the syntax ``a.(b) = c`` calls ``setfield!(a, b, c)``\ .
+   Assign ``x`` to a named field in ``value`` of composite type. The syntax ``a.b = c`` calls ``setfield!(a, :b, c)``\ .
 
 .. function:: fieldoffset(type, i)
 
@@ -1144,7 +1144,7 @@ Errors
 
    .. Docstring generated from Julia source
 
-   A method with the required type signature does not exist in the given generic function.
+   A method with the required type signature does not exist in the given generic function. Alternatively, there is no unique most-specific method.
 
 .. function:: NullException()
 

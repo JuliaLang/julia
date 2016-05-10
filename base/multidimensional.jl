@@ -3,7 +3,7 @@
 ### Multidimensional iterators
 module IteratorsMD
 
-import Base: eltype, length, size, start, done, next, last, getindex, setindex!, linearindexing, min, max, isless, eachindex, ndims, iteratorsize
+import Base: eltype, length, size, start, done, next, last, getindex, setindex!, linearindexing, min, max, zero, one, isless, eachindex, ndims, iteratorsize
 importall ..Base.Operators
 import Base: simd_outer_range, simd_inner_length, simd_index, @generated
 import Base: @nref, @ncall, @nif, @nexprs, LinearFast, LinearSlow, to_index, AbstractCartesianIndex
@@ -49,6 +49,12 @@ length{N}(::Type{CartesianIndex{N}})=N
 
 # indexing
 getindex(index::CartesianIndex, i::Integer) = index.I[i]
+
+# zeros and ones
+zero{N}(::CartesianIndex{N}) = zero(CartesianIndex{N})
+zero{N}(::Type{CartesianIndex{N}}) = CartesianIndex(ntuple(x -> 0, Val{N}))
+one{N}(::CartesianIndex{N}) = one(CartesianIndex{N})
+one{N}(::Type{CartesianIndex{N}}) = CartesianIndex(ntuple(x -> 1, Val{N}))
 
 # arithmetic, min/max
 for op in (:+, :-, :min, :max)
@@ -209,6 +215,9 @@ for N = 1:5
         end
     end
 end
+# This is annoying, but we must also define logical indexing to avoid ambiguities
+_internal_checkbounds(A::AbstractVector, I::AbstractArray{Bool}) = size(A) == size(I) || throw_boundserror(A, I)
+_internal_checkbounds(A::AbstractVector, I::AbstractVector{Bool}) = length(A) == length(I) || throw_boundserror(A, I)
 
 # Bounds-checking with CartesianIndex
 @inline function checkbounds(::Type{Bool}, ::Tuple{}, I1::CartesianIndex)
@@ -1037,13 +1046,20 @@ that are present in the array `C` as returned from `unique(A, dim)`.
 """
 
 function groupinds(ic::Vector{Int})
-    n = length(unique(ic))
+    d = Dict{Int, Int}()
+    ia = unique(ic)
+    n = length(ia)
+    for i = 1:n
+        d[ia[i]]= i
+    end
+
     ib = Array(Vector{Int},n)
     for k = 1:n
         ib[k] = Int[]
     end
+
     for h = 1:length(ic)
-        push!(ib[ic[h]], h)
+        push!(ib[d[ic[h]]], h)
     end
     return ib
 end

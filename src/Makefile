@@ -24,12 +24,11 @@ FLAGS += -Wall -Wno-strict-aliasing -fno-omit-frame-pointer -fvisibility=hidden 
 override CFLAGS += -Wold-style-definition -Wstrict-prototypes -Wc++-compat
 endif
 
-
 SRCS := \
 	jltypes gf typemap ast builtins module interpreter \
 	alloc dlload sys init task array dump toplevel jl_uv jlapi signal-handling \
 	simplevector APInt-C runtime_intrinsics runtime_ccall \
-	threadgroup threading stackwalk gc
+	threadgroup threading stackwalk gc safepoint
 
 ifeq ($(JULIACODEGEN),LLVM)
 SRCS += codegen disasm debuginfo llvm-simdloop llvm-gcroot

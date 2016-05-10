@@ -623,7 +623,7 @@ jl_typemap_entry_t *jl_typemap_assoc_by_type(union jl_typemap_t ml_or_cache, jl_
         jl_typemap_lookup_by_type_(ml, types, subtype_inexact__sigseq_useenv);
 }
 
-jl_lambda_info_t *jl_typemap_assoc_exact(union jl_typemap_t ml_or_cache, jl_value_t **args, size_t n, int8_t offs)
+jl_typemap_entry_t *jl_typemap_assoc_exact(union jl_typemap_t ml_or_cache, jl_value_t **args, size_t n, int8_t offs)
 {
     // NOTE: This function is a huge performance hot spot!!
     jl_typemap_entry_t *ml;
@@ -635,9 +635,9 @@ jl_lambda_info_t *jl_typemap_assoc_exact(union jl_typemap_t ml_or_cache, jl_valu
             assert(jl_is_datatype(ty));
             if (ty == (jl_value_t*)jl_datatype_type && cache->targ != (void*)jl_nothing) {
                 ml_or_cache = mtcache_hash_lookup(cache->targ, a1, 1, offs);
-                jl_lambda_info_t *li = jl_typemap_assoc_exact(ml_or_cache, args, n, offs+1);
-                if (li)
-                    return li;
+                ml = jl_typemap_assoc_exact(ml_or_cache, args, n, offs+1);
+                if (ml)
+                    return ml;
             }
             if (cache->arg1 != (void*)jl_nothing) {
                 ml_or_cache = mtcache_hash_lookup(cache->arg1, ty, 0, offs);
@@ -647,7 +647,7 @@ jl_lambda_info_t *jl_typemap_assoc_exact(union jl_typemap_t ml_or_cache, jl_valu
                     jl_value_t *t0 = (jl_value_t*)jl_typeof(a0);
                     if (ml_or_cache.leaf->next==(void*)jl_nothing && n==2 && jl_datatype_nfields(ml_or_cache.leaf->sig)==2 &&
                         jl_tparam(ml_or_cache.leaf->sig, 1 - offs) == t0)
-                        return ml_or_cache.leaf->func.linfo;
+                        return ml_or_cache.leaf;
                     if (n==3) {
                         // some manually-unrolled common special cases
                         jl_value_t *a2 = args[2];
@@ -656,18 +656,18 @@ jl_lambda_info_t *jl_typemap_assoc_exact(union jl_typemap_t ml_or_cache, jl_valu
                             if (jl_datatype_nfields(mn->sig)==3 &&
                                 jl_tparam(mn->sig,1-offs)==t0 &&
                                 jl_tparam(mn->sig,2)==(jl_value_t*)jl_typeof(a2))
-                                return mn->func.linfo;
+                                return mn;
                             mn = mn->next;
                             if (mn!=(void*)jl_nothing && jl_datatype_nfields(mn->sig)==3 &&
                                 jl_tparam(mn->sig,1-offs)==t0 &&
                                 jl_tparam(mn->sig,2)==(jl_value_t*)jl_typeof(a2))
-                                return mn->func.linfo;
+                                return mn;
                         }
                     }
                 }
-                jl_lambda_info_t *li = jl_typemap_assoc_exact(ml_or_cache, args, n, offs+1);
-                if (li)
-                    return li;
+                ml = jl_typemap_assoc_exact(ml_or_cache, args, n, offs+1);
+                if (ml)
+                    return ml;
             }
         }
         ml = cache->linear;
@@ -701,7 +701,7 @@ jl_lambda_info_t *jl_typemap_assoc_exact(union jl_typemap_t ml_or_cache, jl_valu
                     }
                 }
                 if (i == l)
-                    return ml->func.linfo;
+                    return ml;
             }
         }
         ml = ml->next;
@@ -834,7 +834,7 @@ jl_typemap_entry_t *jl_typemap_insert(union jl_typemap_t *cache, jl_value_t *par
             *overwritten = ml->func.value;
         if (newvalue == NULL)  // don't overwrite with guard entries
             return ml;
-        JL_SIGATOMIC_BEGIN();
+        // sigatomic begin
         ml->sig = type;
         jl_gc_wb(ml, ml->sig);
         ml->simplesig = simpletype;
@@ -846,7 +846,7 @@ jl_typemap_entry_t *jl_typemap_insert(union jl_typemap_t *cache, jl_value_t *par
         ml->func.value = newvalue;
         if (newvalue)
             jl_gc_wb(ml, newvalue);
-        JL_SIGATOMIC_END();
+        // sigatomic end
         return ml;
     }
     if (overwritten != NULL)
@@ -998,4 +998,3 @@ static void jl_typemap_list_insert_sorted(jl_typemap_entry_t **pml, jl_value_t *
 #ifdef __cplusplus
 }
 #endif
-

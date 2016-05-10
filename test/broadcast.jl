@@ -117,6 +117,17 @@ rt = Base.return_types(broadcast, Tuple{Function, Array{Float64, 3}, Array{Int, 
 rt = Base.return_types(broadcast!, Tuple{Function, Array{Float64, 3}, Array{Float64, 3}, Array{Int, 1}})
 @test length(rt) == 1 && rt[1] == Array{Float64, 3}
 
+# f.(args...) syntax (#15032)
+let x = [1,3.2,4.7], y = [3.5, pi, 1e-4], α = 0.2342
+    @test sin.(x) == broadcast(sin, x)
+    @test sin.(α) == broadcast(sin, α)
+    @test factorial.(3) == broadcast(factorial, 3)
+    @test atan2.(x, y) == broadcast(atan2, x, y)
+    @test atan2.(x, y') == broadcast(atan2, x, y')
+    @test atan2.(x, α) == broadcast(atan2, x, α)
+    @test atan2.(α, y') == broadcast(atan2, α, y')
+end
+
 # issue 14725
 let a = Number[2, 2.0, 4//2, 2+0im] / 2
     @test eltype(a) == Number
@@ -126,4 +137,9 @@ let a = Real[2, 2.0, 4//2] / 2
 end
 let a = Real[2, 2.0, 4//2] / 2.0
     @test eltype(a) == Real
+end
+
+# issue 16164
+let a = broadcast(Float32, [3, 4, 5])
+    @test eltype(a) == Float32
 end

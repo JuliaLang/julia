@@ -36,6 +36,14 @@
 extern "C" {
 #endif
 
+void (*ios_set_io_wait_func)(int) = NULL;
+static void set_io_wait_begin(int v)
+{
+    if (__likely(ios_set_io_wait_func)) {
+        ios_set_io_wait_func(v);
+    }
+}
+
 /* OS-level primitive wrappers */
 
 #if defined(__APPLE__) || defined(_OS_WINDOWS_)
@@ -92,7 +100,9 @@ static int _os_read(long fd, void *buf, size_t n, size_t *nread)
     ssize_t r;
 
     while (1) {
+        set_io_wait_begin(1);
         r = read((int)fd, buf, LIMIT_IO_SIZE(n));
+        set_io_wait_begin(0);
         if (r > -1) {
             *nread = (size_t)r;
             return 0;
@@ -113,7 +123,9 @@ static int _os_read_all(long fd, void *buf, size_t n, size_t *nread)
     *nread = 0;
 
     while (n>0) {
+        set_io_wait_begin(1);
         int err = _os_read(fd, buf, n, &got);
+        set_io_wait_begin(0);
         n -= got;
         *nread += got;
         buf = (char *)buf + got;
@@ -844,7 +856,9 @@ static int open_cloexec(const char *path, int flags, mode_t mode)
     static int no_cloexec=0;
 
     if (!no_cloexec) {
+        set_io_wait_begin(1);
         int fd = open(path, flags | O_CLOEXEC, mode);
+        set_io_wait_begin(0);
         if (fd != -1)
             return fd;
         if (errno != EINVAL)
@@ -852,7 +866,10 @@ static int open_cloexec(const char *path, int flags, mode_t mode)
         no_cloexec = 1;
     }
 #endif
-    return open(path, flags, mode);
+    set_io_wait_begin(1);
+    int fd = open(path, flags, mode);
+    set_io_wait_begin(0);
+    return fd;
 }
 #endif
 
@@ -871,7 +888,9 @@ ios_t *ios_file(ios_t *s, const char *fname, int rd, int wr, int create, int tru
     if (!wlen) goto open_file_err;
     wchar_t *fname_w = (wchar_t*)alloca(wlen*sizeof(wchar_t));
     if (!MultiByteToWideChar(CP_UTF8, 0, fname, -1, fname_w, wlen)) goto open_file_err;
+    set_io_wait_begin(1);
     fd = _wopen(fname_w, flags | O_BINARY | O_NOINHERIT, _S_IREAD | _S_IWRITE);
+    set_io_wait_begin(0);
 #else
     fd = open_cloexec(fname, flags, S_IRUSR | S_IWUSR /* 0600 */ | S_IRGRP | S_IROTH /* 0644 */);
 #endif

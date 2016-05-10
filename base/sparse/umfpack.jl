@@ -394,8 +394,8 @@ end
 A_ldiv_B!{T<:UMFVTypes}(lu::UmfpackLU{T}, b::Vector{T}) = solve(lu, b, UMFPACK_A)
 A_ldiv_B!{T<:UMFVTypes}(lu::UmfpackLU{T}, b::Matrix{T}) = solve(lu, b, UMFPACK_A)
 function A_ldiv_B!{Tb<:Complex}(lu::UmfpackLU{Float64}, b::Vector{Tb})
-    r = solve(lu, [convert(Tlu,real(be)) for be in b], UMFPACK_A)
-    i = solve(lu, [convert(Tlu,imag(be)) for be in b], UMFPACK_A)
+    r = solve(lu, [convert(Float64,real(be)) for be in b], UMFPACK_A)
+    i = solve(lu, [convert(Float64,imag(be)) for be in b], UMFPACK_A)
     Tb[r[k]+im*i[k] for k = 1:length(r)]
 end
 
@@ -415,13 +415,21 @@ end
 
 function getindex(lu::UmfpackLU, d::Symbol)
     L,U,p,q,Rs = umf_extract(lu)
-    d == :L ? L :
-    (d == :U ? U :
-     (d == :p ? p :
-      (d == :q ? q :
-       (d == :Rs ? Rs :
-        (d == :(:) ? (L,U,p,q,Rs) :
-         throw(KeyError(d)))))))
+    if d == :L
+        return L
+    elseif d == :U
+        return U
+    elseif d == :p
+        return p
+    elseif d == :q
+        return q
+    elseif d == :Rs
+        return Rs
+    elseif d == :(:)
+        return (L,U,p,q,Rs)
+    else
+        throw(KeyError(d))
+    end
 end
 
 for Tv in (:Float64, :Complex128), Ti in UmfpackIndexTypes

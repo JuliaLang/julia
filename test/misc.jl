@@ -130,12 +130,6 @@ func4union(::Union{Type4Union,Int}) = ()
 let
     redir_err = "redirect_stderr(STDOUT)"
     exename = Base.julia_cmd()
-    script = "$redir_err; f(a::Number, b...) = 1;f(a, b::Number) = 1"
-    warning_str = readstring(`$exename -f -e $script`)
-    @test contains(warning_str, "f(Any, Number)")
-    @test contains(warning_str, "f(Number, Any...)")
-    @test contains(warning_str, "f(Number, Number)")
-
     script = "$redir_err; module A; f() = 1; end; A.f() = 1"
     warning_str = readstring(`$exename -f -e $script`)
     @test contains(warning_str, "f()")

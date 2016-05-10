@@ -363,8 +363,8 @@ where each ``I_k`` may be:
 If ``X`` is an array, it must have the same number of elements as the product
 of the lengths of the indices:
 ``prod(length(I_1), length(I_2), ..., length(I_n))``. The value in location
-``i_1, i_2, ..., i_n`` of ``A`` is overwritten with the value
-``X[I_1[i_1], I_2[i_2], ..., I_n[i_n]]``. If ``X`` is not an array, its value
+``I_1[i_1], I_2[i_2], ..., I_n[i_n]`` of ``A`` is overwritten with the value
+``X[i_1, i_2, ..., i_n]``. If ``X`` is not an array, its value
 is written to all referenced locations of ``A``.
 
 A boolean array used as an index behaves as in :func:`getindex`, behaving as
@@ -509,6 +509,8 @@ the name of the function to vectorize. Here is a simple example:
       1   4  16
      25  36  49
 
+.. _man-broadcasting:
+
 Broadcasting
 ------------
 
@@ -548,7 +550,7 @@ function elementwise:
      1.71056  0.847604
      1.73659  0.873631
 
-Elementwise operators such as ``.+`` and ``.*`` perform broadcasting if necessary. There is also a :func:`broadcast!` function to specify an explicit destination, and :func:`broadcast_getindex` and :func:`broadcast_setindex!` that broadcast the indices before indexing.
+Elementwise operators such as ``.+`` and ``.*`` perform broadcasting if necessary. There is also a :func:`broadcast!` function to specify an explicit destination, and :func:`broadcast_getindex` and :func:`broadcast_setindex!` that broadcast the indices before indexing.   Moreover, ``f.(args...)`` is equivalent to ``broadcast(f, args...)``, providing a convenient syntax to broadcast any function (:ref:`man-dot-vectorizing`:.).
 
 Implementation
 --------------

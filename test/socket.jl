@@ -92,22 +92,20 @@ wait(tsk)
 mktempdir() do tmpdir
     socketname = @windows ? ("\\\\.\\pipe\\uv-test-" * randstring(6)) : joinpath(tmpdir, "socket")
     c = Base.Condition()
-    for T in (ASCIIString, UTF8String, UTF16String) # test for issue #9435
-        tsk = @async begin
-            s = listen(T(socketname))
-            Base.notify(c)
-            sock = accept(s)
-            write(sock,"Hello World\n")
-            close(s)
-            close(sock)
-        end
-        wait(c)
-        @test readstring(connect(socketname)) == "Hello World\n"
-        wait(tsk)
+    tsk = @async begin
+        s = listen(socketname)
+        Base.notify(c)
+        sock = accept(s)
+        write(sock,"Hello World\n")
+        close(s)
+        close(sock)
     end
+    wait(c)
+    @test readstring(connect(socketname)) == "Hello World\n"
+    wait(tsk)
 end
 
-@test_throws Base.UVError getaddrinfo(".invalid")
+@test_throws Base.DNSError getaddrinfo(".invalid")
 @test_throws ArgumentError getaddrinfo("localhost\0") # issue #10994
 @test_throws Base.UVError connect("localhost", 21452)
 
@@ -137,7 +135,7 @@ port2, server2 = listenany(port)
 close(server)
 close(server2)
 
-@test_throws Base.UVError connect(".invalid",80)
+@test_throws Base.DNSError connect(".invalid",80)
 
 begin
     a = UDPSocket()

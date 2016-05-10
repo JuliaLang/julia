@@ -294,6 +294,7 @@ void jl_dump_asm_internal(uintptr_t Fptr, size_t Fsize, int64_t slide,
 #endif
                           )
 {
+    // GC safe
     // Get the host information
     std::string TripleName;
     if (TripleName.empty())

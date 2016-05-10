@@ -24,14 +24,14 @@ end
 Base.show(io::IO,x::Date) = print(io,string(x))
 
 ### Parsing
-const english = Dict{UTF8String,Int}("january"=>1,"february"=>2,"march"=>3,"april"=>4,
+const english = Dict{String,Int}("january"=>1,"february"=>2,"march"=>3,"april"=>4,
                  "may"=>5,"june"=>6,"july"=>7,"august"=>8,"september"=>9,
                  "october"=>10,"november"=>11,"december"=>12)
-const abbrenglish = Dict{UTF8String,Int}("jan"=>1,"feb"=>2,"mar"=>3,"apr"=>4,
+const abbrenglish = Dict{String,Int}("jan"=>1,"feb"=>2,"mar"=>3,"apr"=>4,
                      "may"=>5,"jun"=>6,"jul"=>7,"aug"=>8,"sep"=>9,
                      "oct"=>10,"nov"=>11,"dec"=>12)
-const MONTHTOVALUE = Dict{UTF8String,Dict{UTF8String,Int}}("english"=>english)
-const MONTHTOVALUEABBR = Dict{UTF8String,Dict{UTF8String,Int}}("english"=>abbrenglish)
+const MONTHTOVALUE = Dict{String,Dict{String,Int}}("english"=>english)
+const MONTHTOVALUEABBR = Dict{String,Dict{String,Int}}("english"=>abbrenglish)
 
 # Date/DateTime Parsing
 abstract Slot{T<:Any}
@@ -220,19 +220,19 @@ Date(dt::AbstractString,df::DateFormat=ISODateFormat) = Date(parse(dt,df)...)
 format(dt::TimeType,f::AbstractString;locale::AbstractString="english") = format(dt,DateFormat(f,locale))
 
 # vectorized
-DateTime{T<:AbstractString}(y::AbstractArray{T},format::AbstractString;locale::AbstractString="english") = DateTime(y,DateFormat(format,locale))
-function DateTime{T<:AbstractString}(y::AbstractArray{T},df::DateFormat=ISODateTimeFormat)
-    return reshape(DateTime[DateTime(parse(y[i],df)...) for i in 1:length(y)], size(y))
+DateTime{T<:AbstractString}(Y::AbstractArray{T},format::AbstractString;locale::AbstractString="english") = DateTime(Y,DateFormat(format,locale))
+function DateTime{T<:AbstractString}(Y::AbstractArray{T},df::DateFormat=ISODateTimeFormat)
+    return reshape(DateTime[DateTime(parse(y,df)...) for y in Y], size(Y))
 end
-Date{T<:AbstractString}(y::AbstractArray{T},format::AbstractString;locale::AbstractString="english") = Date(y,DateFormat(format,locale))
-function Date{T<:AbstractString}(y::AbstractArray{T},df::DateFormat=ISODateFormat)
-    return reshape(Date[Date(parse(y[i],df)...) for i in 1:length(y)], size(y))
+Date{T<:AbstractString}(Y::AbstractArray{T},format::AbstractString;locale::AbstractString="english") = Date(Y,DateFormat(format,locale))
+function Date{T<:AbstractString}(Y::AbstractArray{T},df::DateFormat=ISODateFormat)
+    return reshape(Date[Date(parse(y,df)...) for y in Y], size(Y))
 end
 
-format{T<:TimeType}(y::AbstractArray{T},format::AbstractString;locale::AbstractString="english") = Dates.format(y,DateFormat(format,locale))
-function format(y::AbstractArray{Date},df::DateFormat=ISODateFormat)
-    return reshape([Dates.format(y[i],df) for i in 1:length(y)], size(y))
+format{T<:TimeType}(Y::AbstractArray{T},format::AbstractString;locale::AbstractString="english") = Dates.format(Y,DateFormat(format,locale))
+function format(Y::AbstractArray{Date},df::DateFormat=ISODateFormat)
+    return reshape([Dates.format(y,df) for y in Y], size(Y))
 end
-function format(y::AbstractArray{DateTime},df::DateFormat=ISODateTimeFormat)
-    return reshape([Dates.format(y[i],df) for i in 1:length(y)], size(y))
+function format(Y::AbstractArray{DateTime},df::DateFormat=ISODateTimeFormat)
+    return reshape([Dates.format(y,df) for y in Y], size(Y))
 end

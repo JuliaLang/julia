@@ -347,7 +347,7 @@ static void *init_stdio_handle(uv_file fd,int readable)
                 jl_errorf("error initializing stdio in uv_tty_init (%d, %d)", fd, type);
             }
             ((uv_tty_t*)handle)->data=0;
-            uv_tty_set_mode((uv_tty_t*)handle,0); //cooked stdio
+            uv_tty_set_mode((uv_tty_t*)handle, UV_TTY_MODE_NORMAL); //cooked stdio
             break;
         case UV_UNKNOWN_HANDLE:
             // dup the descriptor with a new one pointing at the bit bucket ...
@@ -446,11 +446,11 @@ static char *abspath(const char *in)
             if (uv_cwd(path, &path_size)) {
                 jl_error("fatal error: unexpected error while retrieving current working directory");
             }
-            if (path_size + len + 1 >= PATH_MAX) {
+            if (path_size + len + 2 >= PATH_MAX) {
                 jl_error("fatal error: current working directory path too long");
             }
-            path[path_size-1] = PATHSEPSTRING[0];
-            memcpy(path+path_size, in, len+1);
+            path[path_size] = PATHSEPSTRING[0];
+            memcpy(path + path_size + 1, in, len+1);
             out = strdup(path);
             free(path);
         }
@@ -485,7 +485,9 @@ static void jl_resolve_sysimg_location(JL_IMAGE_SEARCH rel)
     if (path_size >= PATH_MAX) {
         jl_error("fatal error: jl_options.julia_bin path too long");
     }
-    jl_options.julia_bin = strdup(free_path);
+    jl_options.julia_bin = (char*)malloc(path_size+1);
+    memcpy((char*)jl_options.julia_bin, free_path, path_size);
+    ((char*)jl_options.julia_bin)[path_size] = '\0';
     if (!jl_options.julia_home) {
         jl_options.julia_home = getenv("JULIA_HOME");
         if (!jl_options.julia_home) {
@@ -526,16 +528,23 @@ static void jl_resolve_sysimg_location(JL_IMAGE_SEARCH rel)
         jl_options.load = abspath(jl_options.load);
 }
 
+static void jl_set_io_wait(int v)
+{
+    jl_get_ptls_states()->io_wait = v;
+}
+
 void _julia_init(JL_IMAGE_SEARCH rel)
 {
 #ifdef JULIA_ENABLE_THREADING
     // Make sure we finalize the tls callback before starting any threads.
     jl_get_ptls_states_getter();
-    jl_gc_signal_init();
 #endif
+    jl_safepoint_init();
     libsupport_init();
+    ios_set_io_wait_func = jl_set_io_wait;
     jl_io_loop = uv_default_loop(); // this loop will internal events (spawning process etc.),
                                     // best to call this first, since it also initializes libuv
+    jl_init_signal_async();
     restore_signals();
     jl_resolve_sysimg_location(rel);
     // loads sysimg if available, and conditionally sets jl_options.cpu_target
@@ -645,7 +654,7 @@ void _julia_init(JL_IMAGE_SEARCH rel)
                 jl_current_module;
         }
 
-        jl_load("boot.jl", sizeof("boot.jl"));
+        jl_load("boot.jl", sizeof("boot.jl")-1);
         jl_get_builtin_hooks();
         jl_boot_file_loaded = 1;
         jl_init_box_caches();
@@ -830,8 +839,7 @@ void jl_get_builtin_hooks(void)
     jl_segv_exception      = jl_new_struct_uninit((jl_datatype_t*)core("SegmentationFault"));
 #endif
 
-    jl_ascii_string_type = (jl_datatype_t*)core("ASCIIString");
-    jl_utf8_string_type = (jl_datatype_t*)core("UTF8String");
+    jl_string_type = (jl_datatype_t*)core("String");
     jl_weakref_type = (jl_datatype_t*)core("WeakRef");
     jl_vecelement_typename = ((jl_datatype_t*)core("VecElement"))->name;
 }
