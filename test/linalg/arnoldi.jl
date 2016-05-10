@@ -110,15 +110,15 @@ end
 size(Phi::CPM)=(size(Phi.kraus,1)^2,size(Phi.kraus,3)^2)
 issymmetric(Phi::CPM)=false
 ishermitian(Phi::CPM)=false
-import Base: *
-function *{T<:Base.LinAlg.BlasFloat}(Phi::CPM{T},rho::Vector{T})
+import Base: A_mul_B!
+function A_mul_B!{T<:Base.LinAlg.BlasFloat}(rho2::StridedVector{T},Phi::CPM{T},rho::StridedVector{T})
     rho=reshape(rho,(size(Phi.kraus,3),size(Phi.kraus,3)))
-    rho2=zeros(T,(size(Phi.kraus,1),size(Phi.kraus,1)))
+    rho1=zeros(T,(size(Phi.kraus,1),size(Phi.kraus,1)))
     for s=1:size(Phi.kraus,2)
         As=slice(Phi.kraus,:,s,:)
-        rho2+=As*rho*As'
+        rho1+=As*rho*As'
     end
-    return reshape(rho2,(size(Phi.kraus,1)^2,))
+    return copy!(rho2,rho1)
 end
 
 let
