@@ -156,7 +156,7 @@ function getdoc(state::State, file::AbstractString, input::Vector)
         # Push the rst text for the docstring into the output.
         mod, (binding, typesig), docstr = state.validdocs[signature]
         md  = Markdown.MD(Base.Docs.parsedoc(docstr).content[2:end])
-        rst = Base.Markdown.rst(md)
+        rst = Base.Markdown.rst(dropheaders(md))
         push!(output, "   .. Docstring generated from Julia source", "")
         for line in split(rst, '\n')
             line = isempty(line) ? "" : string(" "^3, line)
@@ -176,6 +176,11 @@ function getdoc(state::State, file::AbstractString, input::Vector)
     end
     return output
 end
+
+# Replace headers in docs with bold since Sphinx does not allow headers inside docstrings.
+dropheaders(md) = Markdown.MD(map(bold, md.content))
+bold(x::Markdown.Header) = Markdown.Paragraph(Markdown.Bold(x.text))
+bold(other) = other
 
 # Utilities.
 

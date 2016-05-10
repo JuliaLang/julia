@@ -551,9 +551,7 @@ Periods
 
    Due to the canonicalization, ``CompoundPeriod`` is also useful for converting time periods into more human-comprehensible forms.
 
-   Examples
-   ********
-
+   **Examples**
 
    .. code-block:: julia
 
