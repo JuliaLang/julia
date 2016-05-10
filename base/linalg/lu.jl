@@ -109,16 +109,22 @@ The relationship between `F` and `A` is
 """
 function lufact{T}(A::AbstractMatrix{T}, pivot::Union{Type{Val{false}}, Type{Val{true}}})
     S = typeof(zero(T)/one(T))
-    lufact!(copy_oftype(A, S), pivot)
+    AA = similar(A, S, size(A))
+    copy!(AA, A)
+    lufact!(AA, pivot)
 end
 # We can't assume an ordered field so we first try without pivoting
 function lufact{T}(A::AbstractMatrix{T})
     S = typeof(zero(T)/one(T))
-    F = lufact!(copy_oftype(A, S), Val{false})
+    AA = similar(A, S, size(A))
+    copy!(AA, A)
+    F = lufact!(AA, Val{false})
     if F.info == 0
         return F
     else
-        return lufact!(copy_oftype(A, S), Val{true})
+        AA = similar(A, S, size(A))
+        copy!(AA, A)
+        return lufact!(AA, Val{true})
     end
 end
 

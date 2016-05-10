@@ -243,3 +243,6 @@ end
 for t in (Float32, Float64, Int, Complex{Float64}, Rational{Int})
     @test Diagonal(Matrix{t}[ones(t, 2, 2), ones(t, 3, 3)])[2,1] == zeros(t, 3, 2)
 end
+
+# Issue 15401
+@test eye(5) \ Diagonal(ones(5)) == eye(5)

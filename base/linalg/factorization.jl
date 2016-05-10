@@ -34,17 +34,15 @@ function (\){T<:BlasReal}(F::Factorization{T}, B::AbstractMatrix{Complex{T}})
     return reinterpret(Complex{T}, transpose(reshape(x, div(length(x), 2), 2)), (size(F,2), size(B,2)))
 end
 
-function (\){TF<:Number,TB<:Number,N}(F::Factorization{TF}, B::AbstractArray{TB,N})
-    TFB = typeof(one(TF)/one(TB))
-    A_ldiv_B!(convert(Factorization{TFB}, F), copy_oftype(B, TFB))
-end
-
-function Ac_ldiv_B{TF<:Number,TB<:Number,N}(F::Factorization{TF}, B::AbstractArray{TB,N})
-    TFB = typeof(one(TF)/one(TB))
-    Ac_ldiv_B!(convert(Factorization{TFB}, F), copy_oftype(B, TFB))
-end
-
-function At_ldiv_B{TF<:Number,TB<:Number,N}(F::Factorization{TF}, B::AbstractArray{TB,N})
-    TFB = typeof(one(TF)/one(TB))
-    At_ldiv_B!(convert(Factorization{TFB}, F), copy_oftype(B, TFB))
+for (f1, f2) in ((:\, :A_ldiv_B!),
+                 (:Ac_ldiv_B, :Ac_ldiv_B!),
+                 (:At_ldiv_B, :At_ldiv_B!))
+    @eval begin
+        function $f1{TF<:Number,TB<:Number,N}(F::Factorization{TF}, B::AbstractArray{TB,N})
+            TFB = typeof(one(TF)/one(TB))
+            BB = similar(B, TFB, size(B))
+            copy!(BB, B)
+            $f2(convert(Factorization{TFB}, F), BB)
+        end
+    end
 end
