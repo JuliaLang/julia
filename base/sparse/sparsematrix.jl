@@ -2697,6 +2697,8 @@ function setindex!{Tv,Ti,T<:Real}(A::SparseMatrixCSC{Tv,Ti}, x, I::AbstractVecto
         throw(BoundsError(A, I))
     end
 
+    isa(x, AbstractArray) && setindex_shape_check(x, length(I))
+
     lastcol = 0
     (nrowA, ncolA) = szA
     @inbounds for xidx in 1:n
