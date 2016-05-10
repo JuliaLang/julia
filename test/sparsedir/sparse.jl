@@ -576,6 +576,11 @@ let a = spzeros(Int, 10, 10)
     @test_throws BoundsError a[:,-1] = 1
     @test_throws BoundsError a[-1,:] = 1
     @test_throws BoundsError a[0:9] = 1
+
+    @test_throws DimensionMismatch a[1:2,1:2] = 1:3
+    @test_throws DimensionMismatch a[1:2,1] = 1:3
+    @test_throws DimensionMismatch a[1,1:2] = 1:3
+    @test_throws DimensionMismatch a[1:2] = 1:3
 end
 
 let A = spzeros(Int, 10, 20)
