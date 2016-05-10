@@ -11,6 +11,10 @@ immutable SubArray{T,N,P,I,L} <: AbstractArray{T,N}
     dims::NTuple{N,Int}
     first_index::Int   # for linear indexing and pointer, only valid when L==true
     stride1::Int       # used only for linear indexing
+    function SubArray(parent, indexes, dims, first_index, stride1)
+        check_parent_index_match(parent, indexes)
+        new(parent, indexes, dims, first_index, stride1)
+    end
 end
 # Compute the linear indexability of the indices, and combine it with the linear indexing of the parent
 function SubArray(parent::AbstractArray, indexes::Tuple, dims::Tuple)
@@ -23,6 +27,9 @@ function SubArray{P, I, N}(::LinearFast, parent::P, indexes::I, dims::NTuple{N, 
     # Compute the first index and stride
     SubArray{eltype(P), N, P, I, true}(parent, indexes, dims, compute_first_index(parent, indexes), compute_stride1(parent, indexes))
 end
+
+check_parent_index_match{T,N}(parent::AbstractArray{T,N}, indexes::NTuple{N}) = nothing
+check_parent_index_match(parent, indexes) = throw(ArgumentError("number of indices ($(length(indexes))) must match the parent dimensionality ($(ndims(parent)))"))
 
 # The NoSlice one-element vector type keeps dimensions without losing performance
 immutable NoSlice <: AbstractVector{Int}
@@ -131,7 +138,6 @@ end
 # * Parent index is array  -> re-index that with one or more sub-indexes (one per dimension)
 # * Parent index is Colon  -> just use the sub-index as provided
 # * Parent index is scalar -> that dimension was dropped, so skip the sub-index and use the index as is
-#
 
 typealias AbstractZeroDimArray{T} AbstractArray{T, 0}
 typealias DroppedScalar Union{Real, AbstractCartesianIndex}
@@ -161,7 +167,7 @@ reindex(V, idxs::Tuple{AbstractMatrix, Vararg{Any}}, subidxs::Tuple{Any, Any, Va
         tail = [:(subidxs[$d]) for d in N+1:length(subidxs.parameters)]
         :(@_propagate_inbounds_meta; (idxs[1][$(subs...)], reindex(V, tail(idxs), ($(tail...),))...))
     else
-        :(error("mismatched index dimensionalities"))
+        :(throw(ArgumentError("cannot re-index $(ndims(V)) dimensional SubArray with fewer than $(ndims(V)) indices\nThis should not occur; please submit a bug report.")))
     end
 end
 
