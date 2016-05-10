@@ -37,6 +37,27 @@ unsigned sig_stack_size = SIGSTKSZ;
 #define sig_stack_size SIGSTKSZ
 #endif
 
+static bt_context_t *jl_to_bt_context(void *sigctx)
+{
+#ifdef __APPLE__
+    return (bt_context_t*)&((ucontext64_t*)sigctx)->uc_mcontext64->__ss;
+#else
+    return (bt_context_t*)sigctx;
+#endif
+}
+
+static void JL_NORETURN jl_throw_in_ctx(jl_value_t *e, void *sigctx)
+{
+    if (!jl_safe_restore)
+        jl_bt_size = rec_backtrace_ctx(jl_bt_data, JL_MAX_BT_SIZE,
+                                       jl_to_bt_context(sigctx));
+    jl_exception_in_transit = e;
+    // TODO throw the error by modifying sigctx for supported platforms
+    // This will avoid running the atexit handler on the signal stack
+    // if no excepiton handler is registered.
+    jl_rethrow();
+}
+
 static pthread_t signals_thread;
 
 static int is_addr_on_stack(jl_tls_states_t *ptls, void *addr)
@@ -54,11 +75,7 @@ void sigdie_handler(int sig, siginfo_t *info, void *context)
 {
     sigset_t sset;
     uv_tty_reset_mode();
-#ifdef __APPLE__
-    jl_critical_error(sig, (bt_context_t*)&((ucontext64_t*)context)->uc_mcontext64->__ss, jl_bt_data, &jl_bt_size);
-#else
-    jl_critical_error(sig, (bt_context_t*)context, jl_bt_data, &jl_bt_size);
-#endif
+    jl_critical_error(sig, jl_to_bt_context(context), jl_bt_data, &jl_bt_size);
     sigfillset(&sset);
     sigprocmask(SIG_UNBLOCK, &sset, NULL);
     signal(sig, SIG_DFL);
@@ -101,22 +118,22 @@ static void segv_handler(int sig, siginfo_t *info, void *context)
         }
         else if (jl_safepoint_consume_sigint()) {
             jl_clear_force_sigint();
-            jl_throw(jl_interrupt_exception);
+            jl_throw_in_ctx(jl_interrupt_exception, context);
         }
         return;
     }
     if (jl_safe_restore || is_addr_on_stack(jl_get_ptls_states(), info->si_addr)) { // stack overflow, or restarting jl_
         jl_unblock_signal(sig);
-        jl_throw(jl_stackovf_exception);
+        jl_throw_in_ctx(jl_stackovf_exception, context);
     }
     else if (sig == SIGSEGV && info->si_code == SEGV_ACCERR) {  // writing to read-only memory (e.g., mmap)
         jl_unblock_signal(sig);
-        jl_throw(jl_readonlymemory_exception);
+        jl_throw_in_ctx(jl_readonlymemory_exception, context);
     }
     else {
 #ifdef SEGV_EXCEPTION
         jl_unblock_signal(sig);
-        jl_throw(jl_segv_exception);
+        jl_throw_in_ctx(jl_segv_exception, context);
 #else
         sigdie_handler(sig, info, context);
 #endif
@@ -185,15 +202,10 @@ static void jl_try_deliver_sigint(void)
 //    is reached
 void usr2_handler(int sig, siginfo_t *info, void *ctx)
 {
-    ucontext_t *context = (ucontext_t*)ctx;
     jl_tls_states_t *ptls = jl_get_ptls_states();
     sig_atomic_t request = jl_atomic_exchange(&ptls->signal_request, 0);
     if (request == 1) {
-#ifdef __APPLE__
-        signal_context = (unw_context_t*)&context->uc_mcontext->__ss;
-#else
-        signal_context = (unw_context_t*)context;
-#endif
+        signal_context = jl_to_bt_context(ctx);
 
         pthread_mutex_lock(&in_signal_lock);
         pthread_cond_broadcast(&signal_caught_cond);
@@ -213,8 +225,7 @@ void usr2_handler(int sig, siginfo_t *info, void *ctx)
                 jl_safe_printf("WARNING: Force throwing a SIGINT\n");
             // Force a throw
             jl_clear_force_sigint();
-            // TODO: implement `jl_throw_in_ctx` -- Jameson
-            jl_throw(jl_interrupt_exception);
+            jl_throw_in_ctx(jl_interrupt_exception, ctx);
         }
     }
 }
@@ -430,6 +441,10 @@ static void *signal_listener(void *arg)
         // and must be thread-safe, but not necessarily signal-handler safe
         if (critical) {
             jl_critical_error(sig, NULL, bt_data, &bt_size);
+            // FIXME
+            // It is unsafe to run the exit handler on this thread
+            // (this thread is not managed and has a rather limited stack space)
+            // try harder to run this on a managed thread.
 #ifdef SIGINFO
             if (sig != SIGINFO)
 #else
@@ -459,11 +474,11 @@ void restore_signals(void)
     }
 }
 
-void fpe_handler(int arg)
+void fpe_handler(int sig, siginfo_t *info, void *context)
 {
-    (void)arg;
-    jl_unblock_signal(SIGFPE);
-    jl_throw(jl_diverror_exception);
+    (void)info;
+    jl_unblock_signal(sig);
+    jl_throw_in_ctx(jl_diverror_exception, context);
 }
 
 void jl_install_default_signal_handlers(void)
@@ -471,8 +486,8 @@ void jl_install_default_signal_handlers(void)
     struct sigaction actf;
     memset(&actf, 0, sizeof(struct sigaction));
     sigemptyset(&actf.sa_mask);
-    actf.sa_handler = fpe_handler;
-    actf.sa_flags = 0;
+    actf.sa_sigaction = fpe_handler;
+    actf.sa_flags = SA_SIGINFO;
     if (sigaction(SIGFPE, &actf, NULL) < 0) {
         jl_errorf("fatal error: sigaction: %s", strerror(errno));
     }
