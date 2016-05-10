@@ -3663,6 +3663,7 @@ void jl_init_types(void)
     inert_sym = jl_symbol("inert");
     top_sym = jl_symbol("top");
     core_sym = jl_symbol("core");
+    globalref_sym = jl_symbol("globalref");
     line_sym = jl_symbol("line");
     jl_incomplete_sym = jl_symbol("incomplete");
     error_sym = jl_symbol("error");

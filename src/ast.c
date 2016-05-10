@@ -545,6 +545,15 @@ static jl_value_t *scm_to_julia_(fl_context_t *fl_ctx, value_t e, int eo)
                 JL_GC_POP();
                 return temp;
             }
+            if (sym == globalref_sym) {
+                scmv = scm_to_julia_(fl_ctx,car_(e),0);
+                temp = scm_to_julia_(fl_ctx,car_(cdr_(e)),0);
+                assert(jl_is_module(scmv));
+                assert(jl_is_symbol(temp));
+                temp = jl_module_globalref((jl_module_t*)scmv, (jl_sym_t*)temp);
+                JL_GC_POP();
+                return temp;
+            }
             if (sym == newvar_sym) {
                 scmv = scm_to_julia_(fl_ctx,car_(e),0);
                 temp = jl_new_struct(jl_newvarnode_type, scmv);

@@ -217,6 +217,7 @@
 ;; expressions of the form a.b.c... where everything is a symbol
 (define (sym-ref? e)
   (or (symbol? e)
+      (and (length= e 3) (eq? (car e) 'globalref))
       (and (length= e 3) (eq? (car e) '|.|)
            (or (atom? (cadr e)) (sym-ref? (cadr e)))
            (pair? (caddr e)) (memq (car (caddr e)) '(quote inert))
@@ -650,8 +651,8 @@
   (if (length> params (length type-params))
       (error "too few type parameters specified in \"new{...}\""))
   (let ((Texpr (if (null? type-params)
-                   `(|.| ,(current-julia-module) ',Tname)
-                   `(curly (|.| ,(current-julia-module) ',Tname)
+                   `(globalref ,(current-julia-module) ,Tname)
+                   `(curly (globalref ,(current-julia-module) ,Tname)
                            ,@type-params))))
     (cond ((length> args (length field-names))
            `(call (top error) "new: too many arguments"))
@@ -1483,7 +1484,7 @@
                                 ,(loop (cdr tail)))))))))))
 
 (define (expand-forms e)
-  (if (or (atom? e) (memq (car e) '(quote inert top core line module toplevel ssavalue null meta)))
+  (if (or (atom? e) (memq (car e) '(quote inert top core globalref line module toplevel ssavalue null meta)))
       e
       (let ((ex (get expand-table (car e) #f)))
         (if ex
@@ -2256,7 +2257,7 @@
   (cond ((eq? e sym) #t)
         ((not (pair? e)) #f)
         ((eq? e excl) #f)
-        ((memq (car e) '(lambda module toplevel quote top core line inert)) #f)
+        ((memq (car e) '(lambda module toplevel quote top globalref core line inert)) #f)
         (else (any (lambda (x) (occurs-outside? sym x excl))
                    (cdr e)))))
 
@@ -2569,7 +2570,7 @@ f(x) = yt(x)
   (let* ((typapp (caddr te))
          (types  (pattern-replace
                   (pattern-set
-                   (pattern-lambda (call (call (core (-/ getfield)) (-/ Core) (quote (-/ Typeof))) name)
+                   (pattern-lambda (call (core (-/ Typeof)) name)
                                    (get namemap name __)))
                   (cdddr typapp)))
          (closure-type (if (null? type-sp)
@@ -2643,7 +2644,7 @@ f(x) = yt(x)
                                       (or (atom? e)
                                           (memq (car e) '(quote top core line inert local
                                                           meta inbounds boundscheck simdloop
-                                                          implicit-global global
+                                                          implicit-global global globalref
                                                           const newvar = null method))))
                                     (lam:body lam))))
                (unused (map cadr leading))
@@ -2709,7 +2710,7 @@ f(x) = yt(x)
        ((atom? e) e)
        (else
         (case (car e)
-          ((quote top core line break inert module toplevel null meta) e)
+          ((quote top core globalref line break inert module toplevel null meta) e)
           ((=)
            (let ((var (cadr e))
                  (rhs (cl-convert (caddr e) fname lam namemap toplevel interp)))
@@ -2966,7 +2967,7 @@ f(x) = yt(x)
                                  (cdr lst))))
                 (simple? (every (lambda (x) (or (simple-atom? x) (symbol? x) (ssavalue? x)
                                                 (and (pair? x)
-                                                     (memq (car x) '(quote inert top core copyast)))))
+                                                     (memq (car x) '(quote inert top core globalref copyast)))))
                                 lst)))
             (let loop ((lst  lst)
                        (vals '()))
@@ -2979,7 +2980,7 @@ f(x) = yt(x)
                                          (not (simple-atom? arg))  (not (ssavalue? arg))
                                          (not (simple-atom? aval)) (not (ssavalue? aval))
                                          (not (and (pair? arg)
-                                                   (memq (car arg) '(& quote inert top core copyast))))
+                                                   (memq (car arg) '(& quote inert top core globalref copyast))))
                                          (not (and (symbol? arg)
                                                    (or (null? (cdr lst))
                                                        (null? vals)))))
@@ -3004,7 +3005,7 @@ f(x) = yt(x)
     ;; from the current function.
     (define (compile e break-labels value tail)
       (if (or (not (pair? e)) (memq (car e) '(null ssavalue quote inert top core copyast the_exception $
-                                                   cdecl stdcall fastcall thiscall)))
+                                                   globalref cdecl stdcall fastcall thiscall)))
           (cond (tail  (emit-return e))
                 (value e)
                 ((symbol? e) (emit e) #f)  ;; keep symbols for undefined-var checking
