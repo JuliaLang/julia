@@ -1613,3 +1613,10 @@ let A = [-10,0,3], B = [-10.0,0.0,3.0], C = [1,im,0]
     @test ~A == [9,-1,-4]
     @test typeof(~A) == Vector{Int}
 end
+
+# issue #16247
+let A = zeros(3,3)
+    @test size(A[:,0x1:0x2]) == (3, 2)
+    @test size(A[:,UInt(1):UInt(2)]) == (3,2)
+    @test size(similar(A, UInt(3), 0x3)) == size(similar(A, (UInt(3), 0x3))) == (3,3)
+end
