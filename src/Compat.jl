@@ -542,18 +542,18 @@ function _compat(ex::Expr)
             callexpr.args[3] = obj
         end
     elseif VERSION < v"0.5.0-dev+4002" && ex.head == :. && length(ex.args) == 2 # 15032
-        if isexpr(ex.args[2], :quote) && typeof(ex.args[2].args[1]) == QuoteNode
+        if isexpr(ex.args[2], :quote) && isa(ex.args[2].args[1], QuoteNode)
             # foo.:bar -> foo.(:bar) in older Julia
             return Expr(ex.head, _compat(ex.args[1]), ex.args[2].args[1])
         elseif isexpr(ex.args[2], :quote) && isexpr(ex.args[2].args[1], :quote) &&
-               typeof(ex.args[2].args[1].args[1]) == Symbol
+               isa(ex.args[2].args[1].args[1], Symbol)
             # foo.:bar -> foo.(:bar) in older Julia
             return Expr(ex.head, _compat(ex.args[1]), QuoteNode(ex.args[2].args[1].args[1]))
         elseif isexpr(ex.args[2], :tuple)
             # f.(arg1, arg2...) -> broadcast(f, arg1, arg2...)
             return Expr(:call, :broadcast, _compat(ex.args[1]), map(_compat, ex.args[2].args)...)
-        elseif typeof(ex.args[2]) != QuoteNode &&
-               !(isexpr(ex.args[2], :quote) && typeof(ex.args[2].args[1]) == Symbol)
+        elseif !isa(ex.args[2], QuoteNode) &&
+               !(isexpr(ex.args[2], :quote) && isa(ex.args[2].args[1], Symbol))
             # f.(arg) -> broadcast(f, arg)
             return Expr(:call, :broadcast, _compat(ex.args[1]), _compat(ex.args[2]))
         end
