@@ -312,15 +312,7 @@ function show_method_candidates(io::IO, ex::MethodError)
             print(buf, "  ")
             if !isa(func, s1)
                 # function itself doesn't match
-                print(buf, "(")
-                if Base.have_color
-                    Base.with_output_color(:red, buf) do buf
-                        print(buf, "::", s1)
-                    end
-                else
-                    print(buf, "!Matched::", s1)
-                end
-                print(buf, ")")
+                return
             else
                 use_constructor_syntax = isa(func, Type)
                 print(buf, use_constructor_syntax ? func : typeof(func).name.mt.name)
