@@ -897,11 +897,12 @@ STATIC_INLINE void jl_array_grow_at_end(jl_array_t *a, size_t idx,
     if (__unlikely(reqmaxsize > a->maxsize)) {
         size_t nb1 = idx * elsz;
         size_t nbinc = inc * elsz;
-        // if the requested size is more than 2x current maxsize, grow exactly
-        // otherwise double the maxsize
-        size_t newmaxsize = reqmaxsize >= a->maxsize * 2
+        // if the requested size is more than 1.5x current maxsize, grow exactly
+        // otherwise use 1.5x the maxsize
+        size_t growmaxsize = (a->maxsize*3)>>1;
+        size_t newmaxsize = reqmaxsize >= growmaxsize
                           ? (reqmaxsize < 4 ? 4 : reqmaxsize)
-                          : a->maxsize * 2;
+                          : growmaxsize;
         newmaxsize = limit_overallocation(a, n, newmaxsize, inc);
         size_t oldmaxsize = a->maxsize;
         int newbuf = array_resize_buffer(a, newmaxsize);
