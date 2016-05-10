@@ -232,9 +232,10 @@
              (s (if (symbol? s_) s_
                     (if (and (length= s_ 1) (symbol? (car s_))) (car s_) #f))))
         (if s
-            (let ((newe (list (car e) (cadr e) (cadr (caddr e)))))
-              (syntax-deprecation #f (string (deparse (cadr e)) ".(:" s ")")
-                                  (string (deparse (cadr e)) ".:" s))
+            (let ((newe (list (car e) (cadr e) (cadr (caddr e))))
+                  (S (deparse `(quote ,s)))) ; #16295
+              (syntax-deprecation #f (string (deparse (cadr e)) ".(" S ")")
+                                  (string (deparse (cadr e)) "." S))
               newe)
             e))
       e))
