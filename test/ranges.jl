@@ -711,3 +711,17 @@ for r in (big(1):big(2), UInt128(1):UInt128(2), 0x1:0x2)
     # these calls to similar must not throw:
     @test size(similar(r, size(r))) == size(similar(r, length(r)))
 end
+
+# sign, conj, ~ (Issue #16067)
+let A = -1:1, B = -1.0:1.0
+    @test sign(A) == [-1,0,1]
+    @test sign(B) == [-1,0,1]
+    @test typeof(sign(A)) === Vector{Int}
+    @test typeof(sign(B)) === Vector{Float64}
+
+    @test conj(A) === A
+    @test conj(B) === B
+
+    @test ~A == [0,-1,-2]
+    @test typeof(~A) == Vector{Int}
+end

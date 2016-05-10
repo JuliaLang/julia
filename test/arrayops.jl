@@ -7,9 +7,10 @@
 @test length([1, 2, 3]) == 3
 @test countnz([1, 2, 3]) == 3
 
-a = ones(4)
-b = a+a
-@test b[1]==2. && b[2]==2. && b[3]==2. && b[4]==2.
+let a = ones(4), b = a+a, c = a-a
+    @test b[1] === 2. && b[2] === 2. && b[3] === 2. && b[4] === 2.
+    @test c[1] === 0. && c[2] === 0. && c[3] === 0. && c[4] === 0.
+end
 
 @test length((1,)) == 1
 @test length((1,2)) == 2
@@ -1593,5 +1594,22 @@ function f15894(d)
     s
 end
 @test f15894(ones(Int, 100)) == 100
+end
 
+# sign, conj, ~
+let A = [-10,0,3], B = [-10.0,0.0,3.0], C = [1,im,0]
+    @test sign(A) == [-1,0,1]
+    @test sign(B) == [-1,0,1]
+    @test typeof(sign(A)) == Vector{Int}
+    @test typeof(sign(B)) == Vector{Float64}
+
+    @test conj(A) == A
+    @test conj(B) == A
+    @test conj(C) == [1,-im,0]
+    @test typeof(conj(A)) == Vector{Int}
+    @test typeof(conj(B)) == Vector{Float64}
+    @test typeof(conj(C)) == Vector{Complex{Int}}
+
+    @test ~A == [9,-1,-4]
+    @test typeof(~A) == Vector{Int}
 end
