@@ -13,13 +13,13 @@ fname = tempname()
 open(fname, "w") do f
     opipe = Base64EncodePipe(f)
     write(opipe,inputText)
-    close(opipe)
+    @test close(opipe) === nothing
 end
 
 open(fname, "r") do f
     ipipe = Base64DecodePipe(f)
     @test readstring(ipipe) == inputText
-    close(ipipe)
+    @test close(ipipe) === nothing
 end
 rm(fname)
 

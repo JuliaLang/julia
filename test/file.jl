@@ -7,7 +7,9 @@ starttime = time()
 pwd_ = pwd()
 dir = mktempdir()
 file = joinpath(dir, "afile.txt")
-close(open(file,"w")) # like touch, but lets the operating system update the timestamp for greater precision on some platforms (windows)
+# like touch, but lets the operating system update the timestamp
+# for greater precision on some platforms (windows)
+@test close(open(file,"w")) === nothing
 
 subdir = joinpath(dir, "adir")
 mkdir(subdir)
