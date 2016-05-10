@@ -430,8 +430,8 @@ function shmem_randn(dims; kwargs...)
 end
 shmem_randn(I::Int...; kwargs...) = shmem_randn(I; kwargs...)
 
-similar(S::SharedArray, T, dims::Dims) = similar(S.s, T, dims)
-similar(S::SharedArray, T) = similar(S.s, T, size(S))
+similar(S::SharedArray, T::Type, dims::Dims) = similar(S.s, T, dims)
+similar(S::SharedArray, T::Type) = similar(S.s, T, size(S))
 similar(S::SharedArray, dims::Dims) = similar(S.s, eltype(S), dims)
 similar(S::SharedArray) = similar(S.s, eltype(S), size(S))
 
