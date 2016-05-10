@@ -145,6 +145,8 @@ coarserperiod(::Type{Month}) = (Year,12)
 # canonicalized to eliminate zero periods, merge equal period types,
 # and convert more-precise periods to less-precise periods when possible
 """
+    CompoundPeriod
+
 A `CompoundPeriod` is useful for expressing time periods that are not a fixed multiple of
 smaller periods. For example, \"a year and a  day\" is not a fixed number of days, but can
 be expressed using a `CompoundPeriod`. In fact, a `CompoundPeriod` is automatically
