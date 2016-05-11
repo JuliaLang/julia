@@ -72,7 +72,7 @@ size_strides(out::Tuple) = out
 size(A::ReshapedArray) = A.dims
 size(A::ReshapedArray, d) = d <= ndims(A) ? A.dims[d] : 1
 similar(A::ReshapedArray, eltype::Type) = similar(parent(A), eltype, size(A))
-similar(A::ReshapedArray, eltype::Type, dims...) = similar(parent(A), eltype, dims...)
+similar(A::ReshapedArray, eltype::Type, dims::Dims) = similar(parent(A), eltype, dims...)
 linearindexing{R<:ReshapedArrayLF}(::Type{R}) = LinearFast()
 parent(A::ReshapedArray) = A.parent
 parentindexes(A::ReshapedArray) = map(s->1:s, size(parent(A)))

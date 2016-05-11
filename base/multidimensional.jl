@@ -196,6 +196,11 @@ using .IteratorsMD
 # Bounds-checking specialization
 # Specializing for a fixed number of arguments provides a ~25%
 # improvement over the general definitions in abstractarray.jl
+
+# This is annoying, but we must first define logical indexing to avoid ambiguities
+_internal_checkbounds(A::AbstractVector, I::AbstractVector{Bool}) = length(A) == length(I) || throw_boundserror(A, I)
+_internal_checkbounds(A::AbstractVector, I::AbstractArray{Bool}) = size(A) == size(I) || throw_boundserror(A, I)
+
 for N = 1:5
     args = [:($(Symbol(:I, d))) for d = 1:N]
     targs = [:($(Symbol(:I, d))::Union{Colon,Number,AbstractArray}) for d = 1:N]  # prevent co-opting the CartesianIndex version
@@ -215,9 +220,6 @@ for N = 1:5
         end
     end
 end
-# This is annoying, but we must also define logical indexing to avoid ambiguities
-_internal_checkbounds(A::AbstractVector, I::AbstractArray{Bool}) = size(A) == size(I) || throw_boundserror(A, I)
-_internal_checkbounds(A::AbstractVector, I::AbstractVector{Bool}) = length(A) == length(I) || throw_boundserror(A, I)
 
 # Bounds-checking with CartesianIndex
 @inline function checkbounds(::Type{Bool}, ::Tuple{}, I1::CartesianIndex)

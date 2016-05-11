@@ -67,7 +67,7 @@ viewindexing(I::Tuple{AbstractArray, Vararg{Any}}) = LinearSlow()
 size(V::SubArray) = V.dims
 length(V::SubArray) = prod(V.dims)
 
-similar(V::SubArray, T, dims::Dims) = similar(V.parent, T, dims)
+similar(V::SubArray, T::Type, dims::Dims) = similar(V.parent, T, dims)
 
 parent(V::SubArray) = V.parent
 parentindexes(V::SubArray) = V.indexes
