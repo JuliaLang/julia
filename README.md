@@ -23,7 +23,14 @@ it is important to maintain cross-version compatibility.
 
 To use Compat in your Julia package, add a line `Compat` to the
 `REQUIRE` file in your package directory.  Then, in your package,
-after a `using Compat` statement to load Compat, simply use:
+shortly after the `module` statement include lines like these:
+
+```
+using Compat
+import Compat.String
+```
+
+and then as needed add
 
 ```
 @compat ...Julia master syntax...
@@ -67,6 +74,8 @@ Currently, the `@compat` macro supports the following syntaxes:
 * `@compat withenv(f, "a" => a, "b" => b...)` on 0.3.
 
 ## Type Aliases
+
+* `String` has undergone multiple changes: in julia 0.3 it was an abstract type and then got renamed to `AbstractString`; later, `ASCIIString` and `UTF8String` got merged into a concrete type, `String`.
 
 * `typealias AbstractString String` - `String` has been renamed to `AbstractString` [#8872](https://github.com/JuliaLang/julia/pull/8872)
 

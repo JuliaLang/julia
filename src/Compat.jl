@@ -4,10 +4,12 @@ module Compat
 
 using Base.Meta
 
-if !isdefined(Core, :String) || !isdefined(Core, :AbstractString)
-    typealias String Base.UTF8String
-    export String
+if isdefined(Core, :String) && isdefined(Core, :AbstractString)
+    typealias String Core.String
+else
+    typealias String Base.ByteString
 end
+export String
 
 if VERSION < v"0.4.0-dev+2340"
     const base64encode = base64

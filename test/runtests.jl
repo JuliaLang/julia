@@ -1,4 +1,5 @@
 using Compat
+import Compat.String
 using Base.Test
 
 v = 1
@@ -1122,3 +1123,7 @@ if VERSION ≥ v"0.4.0-dev+3732"
     @test Symbol('c') === :c
     @test Symbol(1) === Symbol("1")
 end
+
+foostring(::String) = 1
+@test foostring("hello") == 1
+@test foostring("λ") == 1
