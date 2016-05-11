@@ -93,8 +93,16 @@ qrfact!{T<:BlasFloat}(A::StridedMatrix{T}) = qrfact!(A, Val{false})
 qrfact!(A::StridedMatrix, ::Type{Val{false}}) = qrfactUnblocked!(A)
 qrfact!(A::StridedMatrix, ::Type{Val{true}}) = qrfactPivotedUnblocked!(A)
 qrfact!(A::StridedMatrix) = qrfact!(A, Val{false})
-qrfact{T}(A::AbstractMatrix{T}, arg) = qrfact!(copy_oftype(A, typeof(zero(T)/norm(one(T)))), arg)
-qrfact{T}(A::AbstractMatrix{T}) = qrfact!(copy_oftype(A, typeof(zero(T)/norm(one(T)))))
+function qrfact{T}(A::AbstractMatrix{T}, arg)
+    AA = similar(A, typeof(zero(T)/norm(one(T))), size(A))
+    copy!(AA, A)
+    return qrfact!(AA, arg)
+end
+function qrfact{T}(A::AbstractMatrix{T})
+    AA = similar(A, typeof(zero(T)/norm(one(T))), size(A))
+    copy!(AA, A)
+    return qrfact!(AA)
+end
 qrfact(x::Number) = qrfact(fill(x,1,1))
 
 qr(A::Union{Number, AbstractMatrix}, pivot::Union{Type{Val{false}}, Type{Val{true}}}=Val{false}; thin::Bool=true) =
@@ -407,7 +415,9 @@ function A_mul_Bc{TA,TB}(A::AbstractMatrix{TA}, B::Union{QRCompactWYQ{TB},QRPack
     TAB = promote_type(TA,TB)
     BB = convert(AbstractMatrix{TAB}, B)
     if size(A,2) == size(B.factors, 1)
-        return A_mul_Bc!(copy_oftype(A, TAB), BB)
+        AA = similar(A, TAB, size(A))
+        copy!(AA, A)
+        return A_mul_Bc!(AA, BB)
     elseif size(A,2) == size(B.factors,2)
         return A_mul_Bc!([A zeros(TAB, size(A, 1), size(B.factors, 1) - size(B.factors, 2))], BB)
     else

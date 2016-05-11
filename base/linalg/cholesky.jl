@@ -86,7 +86,9 @@ and return the UpperTriangular matrix `U` such that `A = U'U`.
 """
 function chol{T}(A::AbstractMatrix{T})
     S = promote_type(typeof(chol(one(T))), Float32)
-    chol!(copy_oftype(A, S))
+    AA = similar(A, S, size(A))
+    copy!(AA, A)
+    chol!(AA)
 end
 function chol!(x::Number, uplo)
     rx = real(x)
