@@ -1762,10 +1762,19 @@ static Value *emit_exc_in_transit(jl_codectx_t *ctx)
 
 static void emit_signal_fence(void)
 {
-#ifdef LLVM39
-    builder.CreateFence(AtomicOrdering::SequentiallyConsistent, SingleThread);
+#if defined(_CPU_ARM_) || defined(_CPU_AARCH64_)
+    // LLVM generates very inefficient code (and might include function call)
+    // for signal fence. Fallback to the poor man signal fence with
+    // inline asm instead.
+    // https://llvm.org/bugs/show_bug.cgi?id=27545
+    builder.CreateCall(InlineAsm::get(FunctionType::get(T_void, false), "",
+                                      "~{memory}", true));
 #else
+#  ifdef LLVM39
+    builder.CreateFence(AtomicOrdering::SequentiallyConsistent, SingleThread);
+#  else
     builder.CreateFence(SequentiallyConsistent, SingleThread);
+#  endif
 #endif
 }
 
