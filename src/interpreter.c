@@ -345,6 +345,9 @@ static jl_value_t *eval(jl_value_t *e, jl_value_t **locals, jl_lambda_info_t *la
         jl_datatype_t *dt = NULL;
         JL_GC_PUSH4(&para, &super, &temp, &dt);
         temp = eval(args[2], locals, lam);  // field names
+        for(size_t i=0; i < jl_svec_len(para); i++) {
+            ((jl_tvar_t*)jl_svecref(para,i))->bound = 0;
+        }
         dt = jl_new_datatype((jl_sym_t*)name, jl_any_type, (jl_svec_t*)para,
                              (jl_svec_t*)temp, NULL,
                              0, args[5]==jl_true ? 1 : 0, jl_unbox_long(args[6]));
@@ -376,9 +379,6 @@ static jl_value_t *eval(jl_value_t *e, jl_value_t **locals, jl_lambda_info_t *la
         JL_CATCH {
             b->value = temp;
             jl_rethrow();
-        }
-        for(size_t i=0; i < jl_svec_len(para); i++) {
-            ((jl_tvar_t*)jl_svecref(para,i))->bound = 0;
         }
         jl_compute_field_offsets(dt);
         if (para == (jl_value_t*)jl_emptysvec && jl_is_datatype_singleton(dt)) {

@@ -4112,6 +4112,14 @@ f16090() = typeof(undefined_x16090::Tuple{Type{Int}})
 undefined_x16090 = (Int,)
 @test_throws TypeError f16090()
 
+# issue #12238
+type A12238{T} end
+type B12238{T,S}
+    a::A12238{B12238{Int,S}}
+end
+@test B12238.types[1] === A12238{B12238{Int}}
+@test A12238{B12238{Int}}.instance === B12238.types[1].instance
+
 # issue #16315
 let a = Any[]
     @noinline f() = a[end]
