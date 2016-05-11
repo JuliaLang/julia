@@ -8561,6 +8561,14 @@ true
 isprime(::BigInt, ?)
 
 """
+    nextprime(x::BigInt) -> BigInt
+
+
+Find the next prime number greater than `x`. Uses a probabilistic algorithm to identify primes.
+"""
+nextprime(::BigInt)
+
+"""
     >(x, y)
 
 Greater-than comparison operator. Generally, new types should implement `<` instead of this

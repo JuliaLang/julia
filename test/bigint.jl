@@ -223,6 +223,7 @@ g = parse(BigInt,"-1")
 @test isprime(parse(BigInt,"359334085968622831041960188598043661065388726959079837"))
 @test !isprime(BigInt(1))
 @test !isprime(BigInt(10000000020))
+@test nextprime(big(1000000007)) == 1000000009
 
 @test trailing_ones(a) == 8
 @test trailing_zeros(b) == 2
