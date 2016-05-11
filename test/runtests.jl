@@ -393,8 +393,8 @@ let s = "abcdef", u8 = "abcdef\uff", u16 = utf16(u8), u32 = utf32(u8),
     @test isvalid(u8)
     @test isvalid(u16)
     @test isvalid(u32)
-    @test isvalid(ASCIIString, s)
-    @test isvalid(UTF8String,  u8)
+    @test isvalid(Compat.ASCIIString, s)
+    @test isvalid(Compat.UTF8String,  u8)
     @test isvalid(UTF16String, u16)
     @test isvalid(UTF32String, u32)
 end
@@ -668,10 +668,10 @@ mktempdir() do dir
 
         for text in [
             old_text,
-            convert(UTF8String, Char['A' + i % 52 for i in 1:(div(SZ_UNBUFFERED_IO,2))]),
-            convert(UTF8String, Char['A' + i % 52 for i in 1:(    SZ_UNBUFFERED_IO -1)]),
-            convert(UTF8String, Char['A' + i % 52 for i in 1:(    SZ_UNBUFFERED_IO   )]),
-            convert(UTF8String, Char['A' + i % 52 for i in 1:(    SZ_UNBUFFERED_IO +1)])
+            convert(Compat.UTF8String, Char['A' + i % 52 for i in 1:(div(SZ_UNBUFFERED_IO,2))]),
+            convert(Compat.UTF8String, Char['A' + i % 52 for i in 1:(    SZ_UNBUFFERED_IO -1)]),
+            convert(Compat.UTF8String, Char['A' + i % 52 for i in 1:(    SZ_UNBUFFERED_IO   )]),
+            convert(Compat.UTF8String, Char['A' + i % 52 for i in 1:(    SZ_UNBUFFERED_IO +1)])
         ]
 
             write(filename, text)
@@ -1053,7 +1053,7 @@ for (Fun, func) in [(:AndFun,              :&),
                     (:DotRDivFun,          :./),
                     (:LDivFun,             :\),
                     (:IDivFun,             :div),
-                    (:DotIDivFun,          symbol(".÷")),
+                    (:DotIDivFun,          @compat(Symbol(".÷"))),
                     (:ModFun,              :mod),
                     (:RemFun,              :rem),
                     (:DotRemFun,           :.%),
@@ -1127,3 +1127,5 @@ end
 foostring(::String) = 1
 @test foostring("hello") == 1
 @test foostring("λ") == 1
+@test isa("hello", Compat.ASCIIString)
+@test isa("λ", Compat.UTF8String)
