@@ -290,6 +290,52 @@ function free(pkgs)
     end
 end
 
+function freeable(io::IO = STDOUT)
+    freelist = Any[]
+    cd(Dir.path()) do
+        instd = Read.installed()
+        first = true
+        k, v = collect(keys(instd)), collect(values(instd))
+        p = sortperm(k)
+        k = k[p]
+        v = v[p]
+        for (pkg,status) in zip(k,v)
+            ver, fix = status
+            if fix
+                repo = GitRepo(pkg)
+                head = LibGit2.head(pkg)
+                sha = latest_sha(pkg)
+                sha == nothing && continue
+                tagged = sha.sha1
+                if head != tagged
+                    if first
+                        println(io, "Packages with a gap between HEAD and the most recent tag:")
+                        first = false
+                    end
+                    n = -1
+                    try
+                        vrs = LibGit2.revcount(GitRepo(pkg), tagged, "HEAD")
+                        n = vrs[2] - vrs[1]
+                    catch
+                    end
+                    n > -1 && println(io, pkg, ": ", n)
+                else
+                    push!(freelist, pkg)
+                end
+            end
+        end
+    end
+    freelist
+end
+
+function latest_sha(pkgname)
+    cd(Dir.path()) do
+        avail = Read.available(pkgname)
+        k = sort(collect(keys(avail)))
+        isempty(k) ? nothing : avail[k[end]]
+    end
+end
+
 function pin(pkg::AbstractString, head::AbstractString)
     ispath(pkg,".git") || throw(PkgError("$pkg is not a git repo"))
     should_resolve = true
