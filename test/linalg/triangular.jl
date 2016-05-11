@@ -485,3 +485,7 @@ let
     @test_throws DimensionMismatch A_rdiv_Bt!(A, UnitLowerTriangular(B))
     @test_throws DimensionMismatch A_rdiv_Bt!(A, UnitUpperTriangular(B))
 end
+
+# Test that UpperTriangular(LowerTriangular) throws. See #16201
+@test_throws ArgumentError LowerTriangular(UpperTriangular(randn(3,3)))
+@test_throws ArgumentError UpperTriangular(LowerTriangular(randn(3,3)))
