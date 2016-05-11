@@ -340,6 +340,9 @@ function round{T}(::Type{T}, x::Rational{Bool})
     convert(T, x)
 end
 
+round{T}(::Type{T}, x::Rational{Bool}, ::RoundingMode{:Nearest}) = round(T, x)
+round{T}(::Type{T}, x::Rational{Bool}, ::RoundingMode{:NearestTiesAway}) = round(T, x)
+round{T}(::Type{T}, x::Rational{Bool}, ::RoundingMode{:NearestTiesUp}) = round(T, x)
 round{T}(::Type{T}, x::Rational{Bool}, ::RoundingMode) = round(T, x)
 
 trunc{T}(x::Rational{T}) = Rational(trunc(T,x))

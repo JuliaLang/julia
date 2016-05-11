@@ -127,7 +127,7 @@ for T in (Range, BitArray, StridedArray, AbstractArray)
 end
 
 log(::Irrational{:e}) = 1 # use 1 to correctly promote expressions like log(x)/log(e)
-log(::Irrational{:e}, x) = log(x)
+log(::Irrational{:e}, x::Number) = log(x)
 
 # align along = for nice Array printing
 function alignment(io::IO, x::Irrational)

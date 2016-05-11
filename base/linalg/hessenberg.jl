@@ -33,7 +33,8 @@ immutable HessenbergQ{T,S<:AbstractMatrix} <: AbstractMatrix{T}
 end
 HessenbergQ{T}(factors::AbstractMatrix{T}, τ::Vector{T}) = HessenbergQ{T,typeof(factors)}(factors, τ)
 HessenbergQ(A::Hessenberg) = HessenbergQ(A.factors, A.τ)
-size(A::HessenbergQ, args...) = size(A.factors, args...)
+size(A::HessenbergQ, d) = size(A.factors, d)
+size(A::HessenbergQ) = size(A.factors)
 
 function getindex(A::Hessenberg, d::Symbol)
     d == :Q && return HessenbergQ(A)

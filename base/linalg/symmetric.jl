@@ -22,7 +22,8 @@ end
 typealias HermOrSym{T,S} Union{Hermitian{T,S}, Symmetric{T,S}}
 typealias RealHermSymComplexHerm{T<:Real,S} Union{Hermitian{T,S}, Symmetric{T,S}, Hermitian{Complex{T},S}}
 
-size(A::HermOrSym, args...) = size(A.data, args...)
+size(A::HermOrSym, d) = size(A.data, d)
+size(A::HermOrSym) = size(A.data)
 @inline function getindex(A::Symmetric, i::Integer, j::Integer)
     @boundscheck checkbounds(A, i, j)
     @inbounds r = (A.uplo == 'U') == (i < j) ? A.data[i, j] : A.data[j, i]
