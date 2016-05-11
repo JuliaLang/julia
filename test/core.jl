@@ -4111,3 +4111,10 @@ f16090() = typeof(undefined_x16090::Tuple{Type{Int}})
 @test_throws UndefVarError f16090()
 undefined_x16090 = (Int,)
 @test_throws TypeError f16090()
+
+# issue #16315
+let a = Any[]
+    @noinline f() = a[end]
+    @test (push!(a,10); f()) - (push!(a,2); f()) == 8
+    @test a == [10, 2]
+end
