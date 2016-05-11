@@ -102,6 +102,9 @@
 #include <llvm/ExecutionEngine/JITMemoryManager.h>
 #include <llvm/ExecutionEngine/Interpreter.h>
 #endif
+#if defined(_CPU_ARM_) || defined(_CPU_AARCH64_)
+#  include <llvm/IR/InlineAsm.h>
+#endif
 
 using namespace llvm;
 
