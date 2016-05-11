@@ -39,6 +39,9 @@ for t in (:LowerTriangular, :UnitLowerTriangular, :UpperTriangular,
     end
 end
 
+LowerTriangular(U::UpperTriangular) = throw(ArgumentError("cannot create a LowerTriangular matrix from an UpperTriangular input"))
+UpperTriangular(U::LowerTriangular) = throw(ArgumentError("cannot create an UpperTriangular matrix from a LowerTriangular input"))
+
 imag(A::UpperTriangular) = UpperTriangular(imag(A.data))
 imag(A::LowerTriangular) = LowerTriangular(imag(A.data))
 imag(A::UnitLowerTriangular) = LowerTriangular(tril!(imag(A.data),-1))
