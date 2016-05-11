@@ -730,6 +730,7 @@ $(eval $(call LLVM_PATCH,llvm-3.8.0_threads))
 $(eval $(call LLVM_PATCH,llvm-D17165-D18583))
 $(eval $(call LLVM_PATCH,llvm-D17712))
 $(eval $(call LLVM_PATCH,llvm-PR26180))
+$(eval $(call LLVM_PATCH,llvm-PR27046))
 endif # LLVM_VER
 
 ifeq ($(LLVM_VER),3.7.1)
