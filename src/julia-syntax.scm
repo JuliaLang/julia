@@ -2642,8 +2642,9 @@ f(x) = yt(x)
                         (take-while (lambda (e)
                                       (or (atom? e)
                                           (memq (car e) '(quote top line inert local
-                                                                implicit-global global
-                                                                const newvar = null method))))
+                                                          meta inbounds boundscheck simdloop
+                                                          implicit-global global
+                                                          const newvar = null method))))
                                     (lam:body lam))))
                (unused (map cadr leading))
                (def (table)))
