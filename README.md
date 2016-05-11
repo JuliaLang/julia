@@ -77,6 +77,12 @@ Currently, the `@compat` macro supports the following syntaxes:
 
 * `String` has undergone multiple changes: in julia 0.3 it was an abstract type and then got renamed to `AbstractString`; later, `ASCIIString` and `UTF8String` got merged into a concrete type, `String`.
 
+    For packages that still need `ASCIIString` or `UTF8String` on julia 0.4 and
+    want to avoid the deprecation warning on julia 0.5,
+    use `Compat.ASCIIString` and `Compat.UTF8String` instead.
+    Note that `Compat.ASCIIString` does **not** guarantee `isascii` on julia 0.5.
+    Use `isascii` to check if the string is pure ASCII if needed.
+
 * `typealias AbstractString String` - `String` has been renamed to `AbstractString` [#8872](https://github.com/JuliaLang/julia/pull/8872)
 
 * `typealias AbstractFloat FloatingPoint` - `FloatingPoint` has been renamed to `AbstractFloat` [#12162](https://github.com/JuliaLang/julia/pull/12162)
