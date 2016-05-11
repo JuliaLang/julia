@@ -129,7 +129,7 @@ module M14726_2
 using Base.Test
 using Base.Threads
 @threads for i in 1:100
-    # Make sure current module is the same with the one on the thread that
+    # Make sure current module is the same as the one on the thread that
     # pushes the work onto the threads.
     # The @test might not be particularly meaningful currently since the
     # thread infrastructures swallows the error. (See also above)
