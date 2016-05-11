@@ -3594,7 +3594,7 @@ void jl_init_types(void)
                                 jl_int32_type, jl_int32_type),
                         0, 1, 10);
     jl_svecset(jl_lambda_info_type->types, 9, jl_lambda_info_type);
-    jl_svecset(jl_method_type->types, 8, jl_lambda_info_type);
+    jl_svecset(jl_method_type->types, 9, jl_lambda_info_type);
 
     jl_typector_type =
         jl_new_datatype(jl_symbol("TypeConstructor"),
