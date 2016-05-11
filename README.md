@@ -196,7 +196,7 @@ Currently, the `@compat` macro supports the following syntaxes:
 * `remotecall`, `remotecall_fetch`, `remotecall_wait`, and `remote_do` have the function to be executed remotely as the first argument in Julia 0.5. Loading `Compat` defines the same methods in older versions of Julia. [#13338](https://github.com/JuliaLang/julia/pull/13338)
 
 * `Base.FS` is now `Base.Filesystem` [#12819](https://github.com/JuliaLang/julia/pull/12819).
-  Compat provides an unexported `Compat.Filesystem` method that is aliased to
+  Compat provides an unexported `Compat.Filesystem` module that is aliased to
   `Base.FS` on Julia 0.3 and 0.4 and `Base.Filesystem` on Julia 0.5.
 
 * `mktemp` and `mktempdir` now have variants which take a function as their first argument for automated cleanup. [#9017](https://github.com/JuliaLang/julia/pull/9017)
@@ -204,6 +204,10 @@ Currently, the `@compat` macro supports the following syntaxes:
 * `cov` and `cor` don't allow keyword arguments anymore. Loading Compat defines compatibility methods for the new API. [#13465](https://github.com/JuliaLang/julia/pull/13465)
 
 * On versions of Julia that do not contain a Base.Threads module, Compat defines a Threads module containing a no-op `@threads` macro.
+
+* `Base.SingleAsyncWork` is now `Base.AsyncCondition`
+  Compat provides an unexported `Compat.AsyncCondition` type that is aliased to
+  `Base.SingleAsyncWork` on Julia 0.3 and 0.4 and `Base.AsyncCondition` on Julia 0.5.
 
 ## New types
 

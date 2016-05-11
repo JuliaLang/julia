@@ -1129,3 +1129,10 @@ foostring(::String) = 1
 @test foostring("λ") == 1
 @test isa("hello", Compat.ASCIIString)
 @test isa("λ", Compat.UTF8String)
+
+let async, c = false
+    async = Compat.AsyncCondition(x->(c = true))
+    ccall(:uv_async_send, Void, (Ptr{Void},), async.handle)
+    sleep(0.1)
+    @test c
+end

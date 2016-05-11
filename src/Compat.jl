@@ -1106,4 +1106,10 @@ if !isdefined(Base, :Threads)
     export Threads
 end
 
+if !isdefined(Base, :AsyncCondition)
+    const AsyncCondition = Base.SingleAsyncWork
+else
+    import Base.AsyncCondition
+end
+
 end # module
