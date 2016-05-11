@@ -546,7 +546,9 @@ static void jl_serialize_datatype(ios_t *s, jl_datatype_t *dt)
     write_uint16(s, nf);
     write_int32(s, dt->size);
     int has_instance = !!(dt->instance != NULL);
-    write_uint8(s, dt->abstract | (dt->mutabl<<1) | (dt->pointerfree<<2) | (has_instance<<3));
+    write_uint8(s, dt->abstract | (dt->mutabl<<1) | (dt->pointerfree<<2) | (has_instance<<3) |
+            (dt->hastypevars<<4) | (dt->haswildcard<<5) | (dt->isleaftype<<6));
+    write_int32(s, dt->depth);
     write_int8(s, dt->fielddesc_type);
     if (!dt->abstract) {
         write_uint16(s, dt->ninitialized);
@@ -1173,6 +1175,7 @@ static jl_value_t *jl_deserialize_datatype(ios_t *s, int pos, jl_value_t **loc)
     uint16_t nf = read_uint16(s);
     size_t size = read_int32(s);
     uint8_t flags = read_uint8(s);
+    uint8_t depth = read_int32(s);
     uint8_t fielddesc_type = read_int8(s);
     jl_datatype_t *dt;
     if (tag == 2)
@@ -1194,6 +1197,10 @@ static jl_value_t *jl_deserialize_datatype(ios_t *s, int pos, jl_value_t **loc)
     dt->abstract = flags&1;
     dt->mutabl = (flags>>1)&1;
     dt->pointerfree = (flags>>2)&1;
+    dt->hastypevars = (flags>>4)&1;
+    dt->haswildcard = (flags>>5)&1;
+    dt->isleaftype = (flags>>6)&1;
+    dt->depth = depth;
     if (!dt->abstract) {
         dt->ninitialized = read_uint16(s);
         dt->uid = mode != MODE_MODULE && mode != MODE_MODULE_POSTWORK ? read_int32(s) : 0;

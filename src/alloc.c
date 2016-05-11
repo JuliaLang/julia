@@ -816,6 +816,9 @@ JL_DLLEXPORT jl_datatype_t *jl_new_uninitialized_datatype(size_t nfields, int8_t
     t->haspadding = 0;
     t->pointerfree = 0;
     t->depth = 0;
+    t->hastypevars = 0;
+    t->haswildcard = 0;
+    t->isleaftype = 1;
     return t;
 }
 
@@ -983,6 +986,7 @@ JL_DLLEXPORT jl_datatype_t *jl_new_datatype(jl_sym_t *name, jl_datatype_t *super
         t->name->primary = (jl_value_t*)t;
         jl_gc_wb(t->name, t);
     }
+    jl_precompute_memoized_dt(t);
 
     if (abstract || jl_svec_len(parameters) > 0) {
         t->uid = 0;
@@ -1011,13 +1015,31 @@ JL_DLLEXPORT jl_datatype_t *jl_new_bitstype(jl_value_t *name, jl_datatype_t *sup
 
 // type constructor -----------------------------------------------------------
 
-jl_typector_t *jl_new_type_ctor(jl_svec_t *params, jl_value_t *body)
+JL_DLLEXPORT jl_value_t *jl_new_type_constructor(jl_svec_t *p, jl_value_t *body)
 {
-    jl_typector_t *tc = (jl_typector_t*)newobj((jl_value_t*)jl_typector_type,NWORDS(sizeof(jl_typector_t)));
+    size_t i, np = jl_svec_len(p);
+    jl_value_t **env;
+    JL_GC_PUSHARGS(env, np * 2 + 2);
+    jl_svec_t *params = jl_alloc_svec(np);
+    env[np * 2] = (jl_value_t*)params;
+    for (i = 0; i < np; i++) {
+        // recreate body with the TypeVar unbound
+        jl_tvar_t *tv = (jl_tvar_t*)jl_svecref(p, i);
+        assert(jl_is_typevar(tv));
+        env[2 * i] = (jl_value_t*)tv;
+        tv = jl_new_typevar(tv->name, tv->lb, tv->ub);
+        env[2 * i + 1] = (jl_value_t*)tv;
+        jl_svecset(params, i, tv);
+    }
+    body = jl_instantiate_type_with(body, env, np);
+    env[np * 2 + 1] = body;
+
+    jl_typector_t *tc = (jl_typector_t*)newobj((jl_value_t*)jl_typector_type, NWORDS(sizeof(jl_typector_t)));
     tc->parameters = params;
     tc->body = body;
-    return (jl_typector_t*)tc;
+    return (jl_value_t*)tc;
 }
+
 
 // bits constructors ----------------------------------------------------------
 

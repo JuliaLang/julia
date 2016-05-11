@@ -374,13 +374,7 @@ function type_depth(t::ANY)
         t === Bottom && return 0
         return maximum(type_depth, t.types) + 1
     elseif isa(t, DataType)
-        t = t::DataType
-        P = t.parameters
-        isempty(P) && return 0
-        if t.depth == 0
-            t.depth = maximum(type_depth, P) + 1
-        end
-        return t.depth
+        return (t::DataType).depth
     end
     return 0
 end
