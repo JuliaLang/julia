@@ -1017,25 +1017,15 @@ JL_DLLEXPORT jl_datatype_t *jl_new_bitstype(jl_value_t *name, jl_datatype_t *sup
 
 JL_DLLEXPORT jl_value_t *jl_new_type_constructor(jl_svec_t *p, jl_value_t *body)
 {
+#ifndef NDEBUG
     size_t i, np = jl_svec_len(p);
-    jl_value_t **env;
-    JL_GC_PUSHARGS(env, np * 2 + 2);
-    jl_svec_t *params = jl_alloc_svec(np);
-    env[np * 2] = (jl_value_t*)params;
     for (i = 0; i < np; i++) {
-        // recreate body with the TypeVar unbound
         jl_tvar_t *tv = (jl_tvar_t*)jl_svecref(p, i);
-        assert(jl_is_typevar(tv));
-        env[2 * i] = (jl_value_t*)tv;
-        tv = jl_new_typevar(tv->name, tv->lb, tv->ub);
-        env[2 * i + 1] = (jl_value_t*)tv;
-        jl_svecset(params, i, tv);
+        assert(jl_is_typevar(tv) && !tv->bound);
     }
-    body = jl_instantiate_type_with(body, env, np);
-    env[np * 2 + 1] = body;
-
+#endif
     jl_typector_t *tc = (jl_typector_t*)newobj((jl_value_t*)jl_typector_type, NWORDS(sizeof(jl_typector_t)));
-    tc->parameters = params;
+    tc->parameters = p;
     tc->body = body;
     return (jl_value_t*)tc;
 }

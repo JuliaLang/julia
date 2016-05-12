@@ -1174,7 +1174,7 @@
                 ,@(map (lambda (v) `(local ,v)) params)
                 ,@(map (lambda (l r) (make-assignment l (expand-forms r)))
                        params
-                       (symbols->typevars params bounds #t))
+                       (symbols->typevars params bounds #f))
                 (call (core TypeConstructor)
                       (call (core svec) ,@params)
                       ,(expand-forms type-ex))))))))
