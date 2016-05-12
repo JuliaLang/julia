@@ -262,7 +262,7 @@ static union jl_typemap_t *mtcache_hash_bp(jl_array_t **pa, jl_value_t *ty,
 {
     if (jl_is_datatype(ty)) {
         uintptr_t uid = ((jl_datatype_t*)ty)->uid;
-        if (!uid || is_kind(ty))
+        if (!uid || is_kind(ty) || jl_has_typevars(ty))
             // be careful not to put non-leaf types or DataType/TypeConstructor in the cache here,
             // since they should have a lower priority and need to go into the sorted list
             return NULL;
@@ -392,9 +392,16 @@ static int jl_typemap_intersection_array_visitor(jl_array_t *a, jl_value_t *ty, 
                 if (tparam)
                     t = jl_tparam0(t);
             }
-            // TODO: fast path: test key `t`
-            if (!jl_typemap_intersection_visitor(ml, offs+1, closure))
-                return 0;
+            if (ty == (jl_value_t*)jl_any_type || // easy case: Any always matches
+                (tparam ?  // need to compute `ty <: Type{t}`
+                 (jl_is_uniontype(ty) || // punt on Union{...} right now
+                  jl_typeof(t) == ty || // deal with kinds (e.g. ty == DataType && t == Type{t})
+                  (jl_is_type_type(ty) && (jl_is_typevar(jl_tparam0(ty)) ?
+                                           jl_subtype(t, ((jl_tvar_t*)jl_tparam0(ty))->ub, 0) : // deal with ty == Type{<:T}
+                                           jl_subtype(t, jl_tparam0(ty), 0)))) // deal with ty == Type{T{#<:T}}
+                        : jl_subtype(t, ty, 0))) // `t` is a leaftype, so intersection test becomes subtype
+                if (!jl_typemap_intersection_visitor(ml, offs+1, closure))
+                    return 0;
         }
     }
     return 1;
@@ -409,7 +416,6 @@ static int jl_typemap_intersection_node_visitor(jl_typemap_entry_t *ml, struct t
     // that can be absolutely critical for speed
     register jl_typemap_intersection_visitor_fptr fptr = closure->fptr;
     while (ml != (void*)jl_nothing) {
-        // TODO: optimize intersection test
         if (closure->type == (jl_value_t*)ml->sig) {
             // fast-path for the intersection of a type with itself
             if (closure->env)
@@ -453,17 +459,21 @@ int jl_typemap_intersection_visitor(union jl_typemap_t map, int offs,
         }
         if (ty) {
             if (cache->targ != (void*)jl_nothing) {
-                if (jl_is_type_type(ty) && is_cache_leaf(jl_tparam0(ty))) {
-                    // direct lookup of leaf types
-                    union jl_typemap_t ml = mtcache_hash_lookup(cache->targ, jl_tparam0(ty), 1, offs);
-                    if (ml.unknown != jl_nothing) {
-                        if (!jl_typemap_intersection_visitor(ml, offs+1, closure)) return 0;
+                jl_value_t *typetype = jl_is_type_type(ty) ? jl_tparam0(ty) : NULL;
+                if (typetype && !jl_has_typevars(typetype)) {
+                    if (is_cache_leaf(typetype)) {
+                        // direct lookup of leaf types
+                        union jl_typemap_t ml = mtcache_hash_lookup(cache->targ, typetype, 1, offs);
+                        if (ml.unknown != jl_nothing) {
+                            if (!jl_typemap_intersection_visitor(ml, offs+1, closure)) return 0;
+                        }
                     }
                 }
                 else {
                     // else an array scan is required to check subtypes
-                    // TODO: fast-path: optimized pre-intersection test
-                    if (!jl_typemap_intersection_array_visitor(cache->targ, ty, 1, offs, closure)) return 0;
+                    // first, fast-path: optimized pre-intersection test to see if `ty` could intersect with any Type
+                    if (typetype || jl_type_intersection((jl_value_t*)jl_type_type, ty) != jl_bottom_type)
+                        if (!jl_typemap_intersection_array_visitor(cache->targ, ty, 1, offs, closure)) return 0;
                 }
             }
             if (cache->arg1 != (void*)jl_nothing) {
@@ -479,10 +489,11 @@ int jl_typemap_intersection_visitor(union jl_typemap_t map, int offs,
                     if (!jl_typemap_intersection_array_visitor(cache->arg1, ty, 0, offs, closure)) return 0;
                 }
             }
+            if (!jl_typemap_intersection_node_visitor(map.node->linear, closure))
+                return 0;
+            return jl_typemap_intersection_visitor(map.node->any, offs+1, closure);
         }
-        if (!jl_typemap_intersection_node_visitor(map.node->linear, closure))
-            return 0;
-        return jl_typemap_intersection_visitor(map.node->any, offs+1, closure);
+        return 1;
     }
     else {
         return jl_typemap_intersection_node_visitor(map.leaf, closure);
@@ -548,7 +559,7 @@ static jl_typemap_entry_t *jl_typemap_assoc_by_type_(jl_typemap_entry_t *ml, jl_
                                 // where a failure to determine the value of a
                                 // static parameter is inconclusive.
                                 // this is issue #3182, see test/core.jl
-                                return NULL;
+                                return NULL; // XXX: need a way to signal to the caller that this is an inconclusive error so it stops searching
                             }
                             ismatch = 0;
                             break;
@@ -563,7 +574,7 @@ static jl_typemap_entry_t *jl_typemap_assoc_by_type_(jl_typemap_entry_t *ml, jl_
                         ismatch = jl_types_equal(ti, (jl_value_t*)types);
                         JL_GC_POP();
                         if (!ismatch)
-                            return NULL;
+                            return NULL; // XXX: need a way to signal to the caller that this is an inconclusive error so it stops searching
                     }
                 }
             }
