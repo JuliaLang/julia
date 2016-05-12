@@ -82,6 +82,9 @@ Breaking changes
     is now divided among the fields `code`, `slotnames`, `slottypes`, `slotflags`,
     `gensymtypes`, `rettype`, `nargs`, and `isva` in the `LambdaInfo` type ([#15609]).
 
+  * Juxtaposition of numeric literals ending in `.` (e.g. `1.x`) is no longer
+    allowed ([#15731]).
+
 Library improvements
 --------------------
 
