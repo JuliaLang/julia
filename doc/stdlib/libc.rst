@@ -4,6 +4,8 @@
  C Standard Library
 ********************
 
+.. currentmodule:: Base.Libc
+
 .. function:: malloc(size::Integer) -> Ptr{Void}
 
    .. Docstring generated from Julia source
