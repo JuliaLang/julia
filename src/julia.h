@@ -524,7 +524,6 @@ extern JL_DLLEXPORT jl_datatype_t *jl_labelnode_type;
 extern JL_DLLEXPORT jl_datatype_t *jl_gotonode_type;
 extern JL_DLLEXPORT jl_datatype_t *jl_quotenode_type;
 extern JL_DLLEXPORT jl_datatype_t *jl_newvarnode_type;
-extern JL_DLLEXPORT jl_datatype_t *jl_topnode_type;
 extern JL_DLLEXPORT jl_datatype_t *jl_intrinsic_type;
 extern JL_DLLEXPORT jl_datatype_t *jl_methtable_type;
 extern JL_DLLEXPORT jl_datatype_t *jl_typemap_level_type;
@@ -542,6 +541,7 @@ extern jl_sym_t *dots_sym;    extern jl_sym_t *vararg_sym;
 extern jl_sym_t *quote_sym;   extern jl_sym_t *newvar_sym;
 extern jl_sym_t *top_sym;     extern jl_sym_t *dot_sym;
 extern jl_sym_t *line_sym;    extern jl_sym_t *toplevel_sym;
+extern jl_sym_t *core_sym;    extern jl_sym_t *globalref_sym;
 extern JL_DLLEXPORT jl_sym_t *jl_incomplete_sym;
 extern jl_sym_t *error_sym;   extern jl_sym_t *amp_sym;
 extern jl_sym_t *module_sym;  extern jl_sym_t *colons_sym;
@@ -859,7 +859,6 @@ static inline uint32_t jl_fielddesc_size(int8_t fielddesc_type)
 #define jl_is_gotonode(v)    jl_typeis(v,jl_gotonode_type)
 #define jl_is_quotenode(v)   jl_typeis(v,jl_quotenode_type)
 #define jl_is_newvarnode(v)  jl_typeis(v,jl_newvarnode_type)
-#define jl_is_topnode(v)     jl_typeis(v,jl_topnode_type)
 #define jl_is_linenode(v)    jl_typeis(v,jl_linenumbernode_type)
 #define jl_is_lambda_info(v) jl_typeis(v,jl_lambda_info_type)
 #define jl_is_method(v)      jl_typeis(v,jl_method_type)

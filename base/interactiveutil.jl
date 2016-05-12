@@ -264,7 +264,8 @@ function gen_call_with_extracted_types(fcn, ex0)
         exret = Expr(:call, :error, "expression is not a function call or symbol")
     elseif ex.head == :call
         if any(e->(isa(e, Expr) && e.head==:(...)), ex0.args) &&
-            isa(ex.args[1], TopNode) && ex.args[1].name == :_apply
+            (ex.args[1] === GlobalRef(Core,:_apply) ||
+             ex.args[1] === GlobalRef(Base,:_apply))
             # check for splatting
             exret = Expr(:call, ex.args[1], fcn,
                         Expr(:tuple, esc(ex.args[2]),

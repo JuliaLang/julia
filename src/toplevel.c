@@ -154,13 +154,21 @@ jl_value_t *jl_eval_module_expr(jl_expr_t *ex)
         }
     }
 
-    JL_GC_PUSH1(&last_module);
+    jl_value_t *defaultdefs = NULL;
+    JL_GC_PUSH2(&last_module, &defaultdefs);
     jl_module_t *task_last_m = jl_current_task->current_module;
     jl_current_task->current_module = jl_current_module = newm;
     jl_module_t *prev_outermost = outermost;
     size_t stackidx = module_stack.len;
     if (outermost == NULL)
         outermost = newm;
+
+    if (std_imports) {
+        // add `eval` function
+        defaultdefs = jl_call_scm_on_ast("module-default-defs", (jl_value_t*)ex);
+        jl_toplevel_eval_flex(defaultdefs, 0);
+        defaultdefs = NULL;
+    }
 
     jl_array_t *exprs = ((jl_expr_t*)jl_exprarg(ex, 2))->args;
     JL_TRY {
@@ -223,7 +231,7 @@ jl_value_t *jl_eval_module_expr(jl_expr_t *ex)
     return (jl_value_t*)newm;
 }
 
-// module referenced by TopNode from within m
+// module referenced by (top ...) from within m
 // this is only needed because of the bootstrapping process:
 // - initially Base doesn't exist and top === Core
 // - later, it refers to either old Base or new Base
@@ -245,6 +253,8 @@ int jl_has_intrinsics(jl_lambda_info_t *li, jl_value_t *v, jl_module_t *m)
         return 0;
     if (e->head == static_typeof_sym)
         return 1;
+    if (e->head == toplevel_sym || e->head == copyast_sym)
+        return 0;
     jl_value_t *e0 = jl_exprarg(e, 0);
     if (e->head == call_sym) {
         jl_value_t *sv = jl_static_eval(e0, NULL, m, li, li != NULL, 0);
