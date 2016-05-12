@@ -4190,6 +4190,8 @@ static std::unique_ptr<Module> emit_function(jl_lambda_info_t *lam, jl_llvm_func
         if (jl_is_long(a1))
             lno = jl_unbox_long(a1);
     }
+    if (lno == -1 && lam->def)
+        lno = lam->def->line;
     if (lam->def && lam->def->file != empty_sym)
         filename = jl_symbol_name(lam->def->file);
     ctx.file = filename;
@@ -4202,7 +4204,6 @@ static std::unique_ptr<Module> emit_function(jl_lambda_info_t *lam, jl_llvm_func
     DISubprogram *SP = NULL;
     std::vector<DILocation *> DI_loc_stack;
     std::vector<DISubprogram *> DI_sp_stack;
-    DICompileUnit *CU;
 #else
     DIFile topfile;
     DISubprogram SP;
@@ -4661,13 +4662,11 @@ static std::unique_ptr<Module> emit_function(jl_lambda_info_t *lam, jl_llvm_func
     bool prevlabel = false;
     lno = -1;
     int prevlno = -1;
-    size_t inlined_lam_num = 0;
     for(i=0; i < stmtslen; i++) {
         jl_value_t *stmt = jl_cellref(stmts,i);
         if (jl_is_linenode(stmt) ||
             (jl_is_expr(stmt) && ((jl_expr_t*)stmt)->head == line_sym)) {
 
-            //jl_sym_t *file = NULL;
             if (jl_is_linenode(stmt)) {
                 lno = jl_linenode_line(stmt);
             }
@@ -4687,20 +4686,22 @@ static std::unique_ptr<Module> emit_function(jl_lambda_info_t *lam, jl_llvm_func
             jl_expr_t *stmt_e = (jl_expr_t*)stmt;
             jl_value_t *meta_arg = jl_exprarg(stmt_e, 0);
             if (meta_arg == (jl_value_t*)jl_symbol("push_loc")) {
-                std::string inlined_filename = "<missing>";
-                std::string inl_name = ctx.name;
+                std::string new_filename = "<missing>";
                 assert(jl_array_len(stmt_e->args) > 1);
                 jl_sym_t *filesym = (jl_sym_t*)jl_exprarg(stmt_e, 1);
-                inlined_filename = jl_symbol_name(filesym);
-                if (jl_array_len(stmt_e->args) > 2)
-                    inl_name = jl_symbol_name((jl_sym_t*)jl_exprarg(stmt_e, 2));
+                new_filename = jl_symbol_name(filesym);
+                DIFile *new_file = dbuilder.createFile(new_filename, ".");
                 DI_sp_stack.push_back(SP);
                 DI_loc_stack.push_back(builder.getCurrentDebugLocation());
-                DIFile *inlined_file = dbuilder.createFile(inlined_filename, ".");
-                SP = dbuilder.createFunction(inlined_file,
+                std::string inl_name;
+                if (jl_array_len(stmt_e->args) > 2)
+                    inl_name = jl_symbol_name((jl_sym_t*)jl_exprarg(stmt_e, 2));
+                else
+                    inl_name = "macro expansion";
+                SP = dbuilder.createFunction(new_file,
                                              inl_name + ";",
                                              inl_name,
-                                             inlined_file,
+                                             new_file,
                                              0,
                                              jl_di_func_sig,
                                              false,
