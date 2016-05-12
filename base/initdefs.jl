@@ -72,11 +72,6 @@ function init_bind_addr()
 end
 
 function early_init()
-    @doc """
-        JULIA_HOME
-
-    A string containing the full path to the directory containing the `julia` executable.
-    """ ->
     global const JULIA_HOME = ccall(:jl_get_julia_home, Any, ())
     # make sure OpenBLAS does not set CPU affinity (#1070, #9639)
     ENV["OPENBLAS_MAIN_FREE"] = get(ENV, "OPENBLAS_MAIN_FREE",
@@ -86,6 +81,13 @@ function early_init()
         ENV["OPENBLAS_NUM_THREADS"] = 8
     end
 end
+
+"""
+    JULIA_HOME
+
+A string containing the full path to the directory containing the `julia` executable.
+"""
+:JULIA_HOME
 
 function init_parallel()
     start_gc_msgs_task()

@@ -9,13 +9,19 @@ General I/O
 
 .. variable:: STDOUT
 
+   .. Docstring generated from Julia source
+
    Global variable referring to the standard out stream.
 
 .. variable:: STDERR
 
+   .. Docstring generated from Julia source
+
    Global variable referring to the standard error stream.
 
 .. variable:: STDIN
+
+   .. Docstring generated from Julia source
 
    Global variable referring to the standard input stream.
 

@@ -23,11 +23,6 @@ global CPU_CORES
 
 function __init__()
     # set CPU core count
-    @doc """
-        CPU_CORES
-
-    The number of CPU cores in the system.
-    """ ->
     global const CPU_CORES =
         haskey(ENV,"JULIA_CPU_CORES") ? parse(Int,ENV["JULIA_CPU_CORES"]) :
                                         Int(ccall(:jl_cpu_cores, Int32, ()))
@@ -35,6 +30,13 @@ function __init__()
     global const cpu_name = ccall(:jl_get_cpu_name, Ref{String}, ())
     global const JIT = ccall(:jl_get_JIT, Ref{String}, ())
 end
+
+"""
+    CPU_CORES
+
+The number of CPU cores in the system.
+"""
+:CPU_CORES
 
 type UV_cpu_info_t
     model::Ptr{UInt8}
