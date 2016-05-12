@@ -25,7 +25,7 @@ immutable JLOptions
     depwarn::Int8
     can_inline::Int8
     fast_math::Int8
-    worker::Int8
+    worker::Ptr{UInt8}
     handle_signals::Int8
     use_precompiled::Int8
     use_compilecache::Int8

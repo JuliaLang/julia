@@ -61,19 +61,24 @@ end
 # Worker initialization messages
 type IdentifySocketMsg <: AbstractMsg
     from_pid::Int
+    cookie::AbstractString
+end
+type IdentifySocketAckMsg <: AbstractMsg
+    cookie::AbstractString
 end
 type JoinPGRPMsg <: AbstractMsg
     self_pid::Int
     other_workers::Array
-    self_is_local::Bool
     notify_oid::RRID
     topology::Symbol
     worker_pool
+    cookie::AbstractString
 end
 type JoinCompleteMsg <: AbstractMsg
     notify_oid::RRID
     cpu_cores::Int
     ospid::Int
+    cookie::AbstractString
 end
 
 
@@ -270,10 +275,14 @@ type LocalProcess
     id::Int
     bind_addr::AbstractString
     bind_port::UInt16
+    cookie::AbstractString
     LocalProcess() = new(1)
 end
 
 const LPROC = LocalProcess()
+
+cluster_cookie() = LPROC.cookie
+cluster_cookie(cookie) = (LPROC.cookie = cookie; cookie)
 
 const map_pid_wrkr = Dict{Int, Union{Worker, LocalProcess}}()
 const map_sock_wrkr = ObjectIdDict()
@@ -962,19 +971,25 @@ end
 process_messages(r_stream::IO, w_stream::IO) = @schedule message_handler_loop(r_stream, w_stream)
 
 function message_handler_loop(r_stream::IO, w_stream::IO)
-    global PGRP
-    global cluster_manager
-
     try
+        # Check for a valid first message with a cookie.
+        msg = deserialize(r_stream)
+        if !any(x->isa(msg, x), [JoinPGRPMsg, JoinCompleteMsg, IdentifySocketMsg, IdentifySocketAckMsg]) ||
+                (msg.cookie != cluster_cookie())
+
+            println(STDERR, "Unknown first message $(typeof(msg)) or cookie mismatch.")
+            error("Invalid connection credentials.")
+        end
+
         while true
+            handle_msg(msg, r_stream, w_stream)
             msg = deserialize(r_stream)
             # println("got msg: ", msg)
-            handle_msg(msg, r_stream, w_stream)
         end
     catch e
         iderr = worker_id_from_socket(r_stream)
         if (iderr < 1)
-            print(STDERR, "Socket from unknown remote worker in worker ", myid())
+            println(STDERR, "Socket from unknown remote worker in worker $(myid())")
         else
             werr = worker_from_id(iderr)
             oldstate = werr.state
@@ -995,8 +1010,8 @@ function message_handler_loop(r_stream::IO, w_stream::IO)
             deregister_worker(iderr)
         end
 
-        if isopen(r_stream) close(r_stream) end
-        if isopen(w_stream) close(w_stream) end
+        isopen(r_stream) && close(r_stream)
+        isopen(w_stream) && close(w_stream)
 
         if (myid() == 1) && (iderr > 1)
             if oldstate != W_TERMINATING
@@ -1028,7 +1043,12 @@ handle_msg(msg::RemoteDoMsg, r_stream, w_stream) = @schedule run_work_thunk(()->
 
 handle_msg(msg::ResultMsg, r_stream, w_stream) = put!(lookup_ref(msg.response_oid), msg.value)
 
-handle_msg(msg::IdentifySocketMsg, r_stream, w_stream) = Worker(msg.from_pid, r_stream, w_stream, cluster_manager)
+function handle_msg(msg::IdentifySocketMsg, r_stream, w_stream)
+    # register a new peer worker connection
+    w=Worker(msg.from_pid, r_stream, w_stream, cluster_manager)
+    send_msg_now(w, IdentifySocketAckMsg(cluster_cookie()))
+end
+handle_msg(msg::IdentifySocketAckMsg, r_stream, w_stream) = nothing
 
 function handle_msg(msg::JoinPGRPMsg, r_stream, w_stream)
     LPROC.id = msg.self_pid
@@ -1037,10 +1057,9 @@ function handle_msg(msg::JoinPGRPMsg, r_stream, w_stream)
     topology(msg.topology)
 
     wait_tasks = Task[]
-    for (connect_at, rpid, r_is_local) in msg.other_workers
+    for (connect_at, rpid) in msg.other_workers
         wconfig = WorkerConfig()
         wconfig.connect_at = connect_at
-        wconfig.environ = AnyDict(:self_is_local=>msg.self_is_local, :r_is_local=>r_is_local)
 
         let rpid=rpid, wconfig=wconfig
             t = @async connect_to_peer(cluster_manager, rpid, wconfig)
@@ -1052,7 +1071,7 @@ function handle_msg(msg::JoinPGRPMsg, r_stream, w_stream)
 
     set_default_worker_pool(msg.worker_pool)
 
-    send_msg_now(controller, JoinCompleteMsg(msg.notify_oid, Sys.CPU_CORES, getpid()))
+    send_msg_now(controller, JoinCompleteMsg(msg.notify_oid, Sys.CPU_CORES, getpid(), cluster_cookie()))
 end
 
 function connect_to_peer(manager::ClusterManager, rpid::Int, wconfig::WorkerConfig)
@@ -1060,8 +1079,9 @@ function connect_to_peer(manager::ClusterManager, rpid::Int, wconfig::WorkerConf
         (r_s, w_s) = connect(manager, rpid, wconfig)
         w = Worker(rpid, r_s, w_s, manager, wconfig)
         process_messages(w.r_stream, w.w_stream)
-        send_msg_now(w, IdentifySocketMsg(myid()))
+        send_msg_now(w, IdentifySocketMsg(myid(), cluster_cookie()))
     catch e
+        display_error(e, catch_backtrace())
         println(STDERR, "Error [$e] on $(myid()) while connecting to peer $rpid. Exiting.")
         exit(1)
     end
@@ -1069,7 +1089,6 @@ end
 
 function handle_msg(msg::JoinCompleteMsg, r_stream, w_stream)
     w = map_sock_wrkr[r_stream]
-
     environ = get(w.config.environ, Dict())
     environ[:cpu_cores] = msg.cpu_cores
     w.config.environ = environ
@@ -1093,8 +1112,8 @@ worker_timeout() = parse(Float64, get(ENV, "JULIA_WORKER_TIMEOUT", "60.0"))
 # The entry point for julia worker processes. does not return. Used for TCP transport.
 # Cluster managers implementing their own transport will provide their own.
 # Argument is descriptor to write listening port # to.
-start_worker() = start_worker(STDOUT)
-function start_worker(out::IO)
+start_worker(cookie::AbstractString) = start_worker(STDOUT, cookie)
+function start_worker(out::IO, cookie::AbstractString)
     # we only explicitly monitor worker STDOUT on the console, so redirect
     # stderr to stdout so we can see the output.
     # at some point we might want some or all worker output to go to log
@@ -1103,12 +1122,13 @@ function start_worker(out::IO)
     # exit when process 1 shut down. Don't yet know why.
     #redirect_stderr(STDOUT)
 
-    init_worker()
+    init_worker(cookie)
+    interface = IPv4(LPROC.bind_addr)
     if LPROC.bind_port == 0
-        (actual_port,sock) = listenany(UInt16(9009))
+        (actual_port,sock) = listenany(interface, UInt16(9009))
         LPROC.bind_port = actual_port
     else
-        sock = listen(LPROC.bind_port)
+        sock = listen(interface, LPROC.bind_port)
     end
     @schedule while isopen(sock)
         client = accept(sock)
@@ -1180,7 +1200,7 @@ function parse_connection_info(str)
     end
 end
 
-function init_worker(manager::ClusterManager=DefaultClusterManager())
+function init_worker(cookie::AbstractString, manager::ClusterManager=DefaultClusterManager())
     # On workers, the default cluster manager connects via TCP sockets. Custom
     # transports will need to call this function with their own manager.
     global cluster_manager
@@ -1195,6 +1215,9 @@ function init_worker(manager::ClusterManager=DefaultClusterManager())
     # System is started in head node mode, cleanup entries related to the same
     empty!(PGRP.workers)
     empty!(map_pid_wrkr)
+
+    cluster_cookie(cookie)
+    nothing
 end
 
 
@@ -1391,8 +1414,8 @@ function create_worker(manager, wconfig)
         end
     end
 
-    all_locs = map(x -> isa(x, Worker) ? (get(x.config.connect_at, ()), x.id, isa(x.manager, LocalManager)) : ((), x.id, true), join_list)
-    send_msg_now(w, JoinPGRPMsg(w.id, all_locs, isa(w.manager, LocalManager), ntfy_oid, PGRP.topology, default_worker_pool()))
+    all_locs = map(x -> isa(x, Worker) ? (get(x.config.connect_at, ()), x.id) : ((), x.id, true), join_list)
+    send_msg_now(w, JoinPGRPMsg(w.id, all_locs, ntfy_oid, PGRP.topology, default_worker_pool(), cluster_cookie()))
 
     @schedule manage(w.manager, w.id, w.config, :register)
     wait(rr_ntfy_join)

@@ -197,7 +197,7 @@ end
 function launch(manager::ZMQCMan, params::Dict, launched::Array, c::Condition)
     #println("launch $(params[:np])")
     for i in 1:params[:np]
-        io, pobj = open(`julia worker.jl $i`, "r")
+        io, pobj = open(`julia worker.jl $i $(Base.cluster_cookie())`, "r")
 
         wconfig = WorkerConfig()
         wconfig.userdata = Dict(:zid=>i, :io=>io)
@@ -228,9 +228,9 @@ function connect(manager::ZMQCMan, pid::Int, config::WorkerConfig)
 end
 
 # WORKER
-function start_worker(zid)
+function start_worker(zid, cookie)
     #println("start_worker")
-    Base.init_worker(ZMQCMan())
+    Base.init_worker(cookie, ZMQCMan())
     init_node(zid)
 
     while true

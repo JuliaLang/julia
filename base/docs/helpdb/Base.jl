@@ -10474,3 +10474,10 @@ to. This is useful when writing custom `serialize` methods for a type, which opt
 data written out depending on the receiving process id.
 """
 Base.worker_id_from_socket
+
+"""
+    Base.cluster_cookie([cookie]) -> cookie
+
+Returns the cluster cookie. If a cookie is passed, also sets it as the cluster cookie.
+"""
+Base.cluster_cookie

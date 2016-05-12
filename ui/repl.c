@@ -169,7 +169,7 @@ void parse_opts(int *argcp, char ***argvp)
         { "math-mode",       required_argument, 0, opt_math_mode },
         { "handle-signals",  required_argument, 0, opt_handle_signals },
         // hidden command line options
-        { "worker",          no_argument,       0, opt_worker },
+        { "worker",          required_argument, 0, opt_worker },
         { "bind-to",         required_argument, 0, opt_bind_to },
         { "lisp",            no_argument,       &lisp_prompt, 1 },
         { 0, 0, 0, 0 }
@@ -435,7 +435,7 @@ restart_switch:
                 jl_errorf("julia: invalid argument to --math-mode (%s)", optarg);
             break;
         case opt_worker:
-            jl_options.worker = 1;
+            jl_options.worker = strdup(optarg);
             break;
         case opt_bind_to:
             jl_options.bindto = strdup(optarg);
