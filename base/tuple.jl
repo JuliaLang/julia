@@ -34,6 +34,10 @@ indexed_next(t::Tuple, i::Int, state) = (t[i], i+1)
 indexed_next(a::Array, i::Int, state) = (a[i], i+1)
 indexed_next(I, i, state) = done(I,state) ? throw(BoundsError()) : next(I, state)
 
+# Use dispatch to avoid a branch in first
+first(::Tuple{}) = throw(ArgumentError("tuple must be non-empty"))
+first(t::Tuple) = t[1]
+
 # eltype
 
 eltype(::Type{Tuple{}}) = Bottom
