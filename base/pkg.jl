@@ -4,7 +4,7 @@ module Pkg
 
 export Dir, Types, Reqs, Cache, Read, Query, Resolve, Write, Entry, Git
 export dir, init, rm, add, available, installed, status, clone, checkout,
-       update, resolve, test, build, free, pin, PkgError, setprotocol!
+       update, resolve, test, build, free, freeable, pin, PkgError, setprotocol!
 
 const DEFAULT_META = "https://github.com/JuliaLang/METADATA.jl"
 const META_BRANCH = "metadata-v2"
@@ -175,6 +175,22 @@ You can also supply an iterable collection of package names, e.g., `Pkg.free(("P
 "Pkg2"))` to free multiple packages at once.
 """
 free(pkg) = cd(Entry.free,pkg)
+
+"""
+    freeable([io::IO=STDOUT])
+
+Returns a list of packages which are good candidates for `free`. These
+are packages for which you are not tracking the tagged release, but
+for which a tagged release is equivalent to the current version. You
+can use `Pkg.free(Pkg.freeable())` to automatically free such
+packages.
+
+This also prints (to `io`, defaulting to standard output) a list of
+packages that are ahead of a tagged release, and prints the number of
+commits that separate them. It can help discover packages that may be
+due for tagging.
+"""
+freeable(args...) = cd(Entry.freeable, args...)
 
 """
     pin(pkg)
