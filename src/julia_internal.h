@@ -210,6 +210,7 @@ jl_value_t *jl_static_eval(jl_value_t *ex, void *ctx_, jl_module_t *mod,
 int jl_is_toplevel_only_expr(jl_value_t *e);
 void jl_type_infer(jl_lambda_info_t *li, int force);
 void jl_lambda_info_set_ast(jl_lambda_info_t *li, jl_value_t *ast);
+jl_value_t *jl_call_scm_on_ast(char *funcname, jl_value_t *expr);
 
 jl_lambda_info_t *jl_get_unspecialized(jl_lambda_info_t *method);
 jl_lambda_info_t *jl_method_lookup_by_type(jl_methtable_t *mt, jl_tupletype_t *types,

@@ -98,10 +98,6 @@
 #    value
 #end
 
-#immutable TopNode
-#    name::Symbol
-#end
-
 #immutable GlobalRef
 #    mod::Module
 #    name::Symbol
@@ -138,7 +134,7 @@ export
     InterruptException, OutOfMemoryError, ReadOnlyMemoryError, OverflowError,
     StackOverflowError, SegmentationFault, UndefRefError, UndefVarError, TypeError,
     # AST representation
-    Expr, GotoNode, LabelNode, LineNumberNode, QuoteNode, TopNode,
+    Expr, GotoNode, LabelNode, LineNumberNode, QuoteNode,
     GlobalRef, NewvarNode, SSAValue, Slot, SlotNumber, TypedSlot,
     # object model functions
     fieldtype, getfield, setfield!, nfields, throw, tuple, is, ===, isdefined, eval,
@@ -271,10 +267,12 @@ end
 
 Expr(args::ANY...) = _expr(args...)
 
+# used by lowering of splicing unquote
+splicedexpr(hd::Symbol, args::Array{Any,1}) = (e=Expr(hd); e.args=args; e)
+
 _new(typ::Symbol, argty::Symbol) = eval(:((::Type{$typ})(n::$argty) = $(Expr(:new, typ, :n))))
 _new(:LabelNode, :Int)
 _new(:GotoNode, :Int)
-_new(:TopNode, :Symbol)
 _new(:NewvarNode, :SlotNumber)
 _new(:QuoteNode, :ANY)
 _new(:SSAValue, :Int)

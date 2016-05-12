@@ -112,6 +112,24 @@
                  (cadadr ex)
                  ex))))))
 
+;; construct default definitions of `eval` for non-bare modules
+;; called by jl_eval_module_expr
+(define (module-default-defs e)
+  (jl-expand-to-thunk
+   (let ((name (caddr e))
+         (body (cadddr e)))
+     (let ((loc (cadr body)))
+       `(block
+         ,(let ((x (if (eq? name 'x) 'y 'x)))
+            `(= (call eval ,x)
+                (block
+                 ,loc
+                 (call (core eval) ,name ,x))))
+         (= (call eval m x)
+            (block
+             ,loc
+             (call (core eval) m x))))))))
+
 ;; parse only, returning end position, no expansion.
 (define (jl-parse-one-string s pos0 greedy)
   (let ((inp (open-input-string s)))

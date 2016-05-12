@@ -366,7 +366,7 @@ show(io::IO, s::Symbol) = show_unquoted_quote_expr(io, s, 0, 0)
 # While this isn’t true of ALL show methods, it is of all ASTs.
 
 typealias ExprNode Union{Expr, QuoteNode, Slot, LineNumberNode,
-                         LabelNode, GotoNode, TopNode, GlobalRef}
+                         LabelNode, GotoNode, GlobalRef}
 # Operators have precedence levels from 1-N, and show_unquoted defaults to a
 # precedence level of 0 (the fourth argument). The top-level print and show
 # methods use a precedence of -1 to specially allow space-separated macro syntax
@@ -433,10 +433,6 @@ function is_intrinsic_expr(x::ANY)
         x = x::GlobalRef
         return (isdefined(x.mod, x.name) &&
                 isa(getfield(x.mod, x.name), IntrinsicFunction))
-    elseif isa(x, TopNode)
-        x = x::TopNode
-        return (isdefined(Base, x.name) &&
-                isa(getfield(Base, x.name), IntrinsicFunction))
     elseif isa(x, Expr)
         return (x::Expr).typ === IntrinsicFunction
     end
@@ -538,7 +534,6 @@ show_unquoted(io::IO, sym::Symbol, ::Int, ::Int)        = print(io, sym)
 show_unquoted(io::IO, ex::LineNumberNode, ::Int, ::Int) = show_linenumber(io, ex.line, ex.file)
 show_unquoted(io::IO, ex::LabelNode, ::Int, ::Int)      = print(io, ex.label, ": ")
 show_unquoted(io::IO, ex::GotoNode, ::Int, ::Int)       = print(io, "goto ", ex.label)
-show_unquoted(io::IO, ex::TopNode, ::Int, ::Int)        = print(io,"top(",ex.name,')')
 show_unquoted(io::IO, ex::GlobalRef, ::Int, ::Int)      = print(io, ex.mod, '.', ex.name)
 
 function show_unquoted(io::IO, ex::Slot, ::Int, ::Int)
@@ -660,7 +655,7 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int)
         end
         func_args = args[2:end]
 
-        if (in(ex.args[1], (GlobalRef(Base, :box), TopNode(:box), :throw)) ||
+        if (in(ex.args[1], (GlobalRef(Base, :box), :throw)) ||
             ismodulecall(ex) ||
             (ex.typ === Any && is_intrinsic_expr(ex.args[1])))
             show_type = false
@@ -923,7 +918,8 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int)
 end
 
 function ismodulecall(ex::Expr)
-    ex.head == :call && ex.args[1] == TopNode(:getfield) &&
+    ex.head == :call && (ex.args[1] == GlobalRef(Base,:getfield) ||
+                         ex.args[1] == GlobalRef(Core,:getfield)) &&
         isa(ex.args[2], Symbol) &&
         isdefined(current_module(), ex.args[2]) &&
         isa(getfield(current_module(), ex.args[2]), Module)

@@ -563,13 +563,6 @@
                     (if (not (eq? (take-token s) ':))
                         (error "colon expected in \"?\" expression")
                         (list 'if ex then (parse-eq* s))))))
-          #;((string? ex)
-           (let loop ((args (list ex)))
-             (let ((next (peek-token s)))
-               (if (or (eof-object? next) (closing-token? next)
-                       (newline? next))
-                   `(call (top string) ,@(reverse args))
-                   (loop (cons (parse-arrow s) args))))))
           (else ex))))
 
 (define (invalid-initial-token? tok)
@@ -1030,8 +1023,7 @@
                     ((eq? (peek-token s) '$)
                      (take-token s)
                      (let ((dollarex (parse-atom s)))
-                       `(|.| ,ex ($ (call (top Expr) (quote quote)
-                                          ,dollarex)))))
+                       `(|.| ,ex (inert ($ ,dollarex)))))
                     (else
                      (let ((name (parse-atom s)))
                        (if (and (pair? name) (eq? (car name) 'macrocall))
@@ -1280,20 +1272,7 @@
                (body (parse-block s (lambda (s) (parse-docstring s parse-eq)))))
           (expect-end s word)
           (list 'module (if (eq? word 'module) 'true 'false) name
-                (if (eq? word 'module)
-                    (list* 'block
-                           ;; add definitions for module-local eval
-                           (let ((x (if (eq? name 'x) 'y 'x)))
-                             `(= (call eval ,x)
-                                 (block
-                                  ,loc
-                                  (call (|.| (top Core) 'eval) ,name ,x))))
-                           `(= (call eval m x)
-                               (block
-                                ,loc
-                                (call (|.| (top Core) 'eval) m x)))
-                           (cdr body))
-                    body))))
+                `(block ,loc ,@(cdr body)))))
        ((export)
         (let ((es (map macrocall-to-atsym
                        (parse-comma-separated s parse-unary-prefix))))
@@ -2119,7 +2098,7 @@
                (cond ((closing-token? t) #f)
                      ((newline? t) (take-token s) (loop (peek-token s)))
                      (else #t))))
-        `(macrocall (|.| Core (quote @doc)) ,ex ,(production s))
+        `(macrocall (core @doc) ,ex ,(production s))
         ex)))
 
 ;; --- main entry point ---

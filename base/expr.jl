@@ -22,7 +22,6 @@ end
 
 ## expressions ##
 
-splicedexpr(hd::Symbol, args::Array{Any,1}) = (e=Expr(hd); e.args=args; e)
 copy(e::Expr) = (n = Expr(e.head);
                  n.args = astcopy(e.args);
                  n.typ = e.typ;
@@ -84,7 +83,7 @@ function find_vars(e, lst)
                 push!(lst, e)
             end
         end
-    elseif isa(e,Expr) && e.head !== :quote && e.head !== :top
+    elseif isa(e,Expr) && e.head !== :quote && e.head !== :top && e.head !== :core
         for x in e.args
             find_vars(x,lst)
         end

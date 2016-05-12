@@ -533,7 +533,24 @@ static jl_value_t *scm_to_julia_(fl_context_t *fl_ctx, value_t e, int eo)
             }
             if (sym == top_sym) {
                 scmv = scm_to_julia_(fl_ctx,car_(e),0);
-                temp = jl_new_struct(jl_topnode_type, scmv);
+                assert(jl_is_symbol(scmv));
+                temp = jl_module_globalref(jl_base_relative_to(jl_current_module), (jl_sym_t*)scmv);
+                JL_GC_POP();
+                return temp;
+            }
+            if (sym == core_sym) {
+                scmv = scm_to_julia_(fl_ctx,car_(e),0);
+                assert(jl_is_symbol(scmv));
+                temp = jl_module_globalref(jl_core_module, (jl_sym_t*)scmv);
+                JL_GC_POP();
+                return temp;
+            }
+            if (sym == globalref_sym) {
+                scmv = scm_to_julia_(fl_ctx,car_(e),0);
+                temp = scm_to_julia_(fl_ctx,car_(cdr_(e)),0);
+                assert(jl_is_module(scmv));
+                assert(jl_is_symbol(temp));
+                temp = jl_module_globalref((jl_module_t*)scmv, (jl_sym_t*)temp);
                 JL_GC_POP();
                 return temp;
             }
@@ -662,8 +679,6 @@ static value_t julia_to_scm_(fl_context_t *fl_ctx, jl_value_t *v)
         return julia_to_list2(fl_ctx, (jl_value_t*)inert_sym, jl_fieldref(v,0));
     if (jl_typeis(v, jl_newvarnode_type))
         return julia_to_list2(fl_ctx, (jl_value_t*)newvar_sym, jl_fieldref(v,0));
-    if (jl_typeis(v, jl_topnode_type))
-        return julia_to_list2(fl_ctx, (jl_value_t*)top_sym, jl_fieldref(v,0));
     if (jl_is_long(v) && fits_fixnum(jl_unbox_long(v)))
         return fixnum(jl_unbox_long(v));
     if (jl_is_ssavalue(v))
