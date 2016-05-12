@@ -3,13 +3,6 @@
 # Base
 
 """
-    CPU_CORES
-
-The number of CPU cores in the system.
-"""
-:CPU_CORES
-
-"""
     @time
 
 A macro to execute an expression, printing the time it took to execute, the number of
