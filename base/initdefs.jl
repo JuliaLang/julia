@@ -2,7 +2,20 @@
 
 ## initdefs.jl - initialization and runtime management definitions
 
+"""
+    PROGRAM_FILE
+
+A string containing the script name passed to Julia from the command line. Note that the
+script name remains unchanged from within included files. Alternatively see
+[`@__FILE__`](:data:`@__FILE__`).
+"""
 PROGRAM_FILE = ""
+
+"""
+    ARGS
+
+An array of the command line arguments passed to Julia, as strings.
+"""
 const ARGS = String[]
 
 exit(n) = ccall(:jl_exit, Void, (Int32,), n)
@@ -14,7 +27,13 @@ const roottask = current_task()
 is_interactive = false
 isinteractive() = (is_interactive::Bool)
 
+"""
+    LOAD_PATH
+
+An array of paths (as strings) where the `require` function looks for code.
+"""
 const LOAD_PATH = String[]
+
 const LOAD_CACHE_PATH = String[]
 function init_load_path()
     vers = "v$(VERSION.major).$(VERSION.minor)"

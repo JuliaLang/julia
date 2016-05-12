@@ -3,53 +3,71 @@
 Constants
 =========
 
-.. data:: nothing
+.. variable:: nothing
 
-   The singleton instance of type ``Void``, used by convention when there is no value to
-   return (as in a C ``void`` function).
-   Can be converted to an empty ``Nullable`` value.
+   .. Docstring generated from Julia source
 
-.. data:: OS_NAME
+   The singleton instance of type ``Void``\ , used by convention when there is no value to return (as in a C ``void`` function). Can be converted to an empty ``Nullable`` value.
 
-   A symbol representing the name of the operating system. Possible values
-   are ``:Linux``, ``:Darwin`` (OS X), or ``:Windows``.
+.. variable:: OS_NAME
 
-.. data:: PROGRAM_FILE
+   .. Docstring generated from Julia source
 
-   A string containing the script name passed to Julia from the command line. Note that the
-   script name remains unchanged from within included files. Alternatively see :data:`@__FILE__`.
+   A symbol representing the name of the operating system. Possible values are ``:Linux``\ , ``:Darwin`` (OS X), or ``:Windows``\ .
 
-.. data:: ARGS
+.. variable:: PROGRAM_FILE
+
+   .. Docstring generated from Julia source
+
+   A string containing the script name passed to Julia from the command line. Note that the script name remains unchanged from within included files. Alternatively see :data:`@__FILE__`\ .
+
+.. variable:: ARGS
+
+   .. Docstring generated from Julia source
 
    An array of the command line arguments passed to Julia, as strings.
 
-.. data:: C_NULL
+.. variable:: C_NULL
+
+   .. Docstring generated from Julia source
 
    The C null pointer constant, sometimes used when calling external code.
 
-.. data:: CPU_CORES
+.. variable:: CPU_CORES
+
+   .. Docstring generated from Julia source
 
    The number of CPU cores in the system.
 
-.. data:: WORD_SIZE
+.. variable:: WORD_SIZE
+
+   .. Docstring generated from Julia source
 
    Standard word size on the current machine, in bits.
 
-.. data:: VERSION
+.. variable:: VERSION
+
+   .. Docstring generated from Julia source
 
    An object describing which version of Julia is in use.
 
-.. data:: LOAD_PATH
+.. variable:: LOAD_PATH
+
+   .. Docstring generated from Julia source
 
    An array of paths (as strings) where the ``require`` function looks for code.
 
-.. data:: JULIA_HOME
+.. variable:: JULIA_HOME
+
+   .. Docstring generated from Julia source
 
    A string containing the full path to the directory containing the ``julia`` executable.
 
-.. data:: ANY
+.. variable:: ANY
 
-   Equivalent to ``Any`` for dispatch purposes, but signals the compiler to skip code generation specialization for that field
+   .. Docstring generated from Julia source
+
+   Equivalent to ``Any`` for dispatch purposes, but signals the compiler to skip code generation specialization for that field.
 
 See also:
 

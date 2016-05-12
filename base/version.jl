@@ -208,6 +208,13 @@ catch e
     global const VERSION = VersionNumber(0)
 end
 
+"""
+    VERSION
+
+An object describing which version of Julia is in use.
+"""
+:VERSION
+
 function banner(io::IO = STDOUT)
     if GIT_VERSION_INFO.tagged_commit
         commit_string = TAGGED_RELEASE_BANNER
