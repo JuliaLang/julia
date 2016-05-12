@@ -9,8 +9,8 @@
 #include <unistd.h>
 #endif
 
-#define MAX_METHLIST_COUNT 32 // this can strongly affect the sysimg size and speed!
-#define INIT_CACHE_SIZE 16 // must be a power-of-two
+#define MAX_METHLIST_COUNT 12 // this can strongly affect the sysimg size and speed!
+#define INIT_CACHE_SIZE 8 // must be a power-of-two
 
 #ifdef __cplusplus
 extern "C" {
