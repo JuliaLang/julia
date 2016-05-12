@@ -404,7 +404,7 @@ static jl_lambda_info_t *jl_instantiate_staged(jl_method_t *generator, jl_tuplet
         jl_expr_t *body = jl_exprn(jl_symbol("block"), 2);
         jl_cellset(((jl_expr_t*)jl_exprarg(ex,1))->args, 0, body);
         linenum = jl_box_long(generator->line);
-        jl_value_t *linenode = jl_new_struct(jl_linenumbernode_type, generator->file, linenum);
+        jl_value_t *linenode = jl_new_struct(jl_linenumbernode_type, linenum);
         jl_cellset(body->args, 0, linenode);
 
         // invoke code generator
@@ -505,7 +505,6 @@ JL_DLLEXPORT void jl_method_init_properties(jl_method_t *m)
     jl_lambda_info_t *li = m->lambda_template;
     jl_value_t *body1 = skip_meta(li->code);
     if (jl_is_linenode(body1)) {
-        m->file = jl_linenode_file(body1);
         m->line = jl_linenode_line(body1);
     }
     else if (jl_is_expr(body1) && ((jl_expr_t*)body1)->head == line_sym) {
