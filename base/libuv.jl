@@ -99,8 +99,26 @@ function reinit_stdio()
     global uv_jl_timercb       = cfunction(uv_timercb, Void, (Ptr{Void},))
 
     global uv_eventloop = ccall(:jl_global_event_loop, Ptr{Void}, ())
+
+    @doc """
+        STDIN
+
+    Global variable referring to the standard input stream.
+    """ ->
     global STDIN = init_stdio(ccall(:jl_stdin_stream ,Ptr{Void},()))
+
+    @doc """
+        STDOUT
+
+    Global variable referring to the standard out stream.
+    """ ->
     global STDOUT = init_stdio(ccall(:jl_stdout_stream,Ptr{Void},()))
+
+    @doc """
+        STDERR
+
+    Global variable referring to the standard error stream.
+    """ ->
     global STDERR = init_stdio(ccall(:jl_stderr_stream,Ptr{Void},()))
 end
 

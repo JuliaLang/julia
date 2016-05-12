@@ -102,6 +102,13 @@ readlines(filename::AbstractString) = open(readlines, filename)
 
 ## byte-order mark, ntoh & hton ##
 
+"""
+    ENDIAN_BOM
+
+The 32-bit byte-order-mark indicates the native byte order of the host machine.
+Little-endian machines will contain the value `0x04030201`. Big-endian machines will contain
+the value `0x01020304`.
+"""
 const ENDIAN_BOM = reinterpret(UInt32,UInt8[1:4;])[1]
 
 if ENDIAN_BOM == 0x01020304

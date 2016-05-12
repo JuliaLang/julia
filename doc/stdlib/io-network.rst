@@ -7,15 +7,15 @@
 General I/O
 -----------
 
-.. data:: STDOUT
+.. variable:: STDOUT
 
    Global variable referring to the standard out stream.
 
-.. data:: STDERR
+.. variable:: STDERR
 
    Global variable referring to the standard error stream.
 
-.. data:: STDIN
+.. variable:: STDIN
 
    Global variable referring to the standard input stream.
 
@@ -1008,6 +1008,9 @@ Network I/O
 
    Converts the endianness of a value from that used by the Host to Little-endian.
 
-.. data:: ENDIAN_BOM
+.. variable:: ENDIAN_BOM
 
-   The 32-bit byte-order-mark indicates the native byte order of the host machine. Little-endian machines will contain the value 0x04030201. Big-endian machines will contain the value 0x01020304.
+   .. Docstring generated from Julia source
+
+   The 32-bit byte-order-mark indicates the native byte order of the host machine. Little-endian machines will contain the value ``0x04030201``\ . Big-endian machines will contain the value ``0x01020304``\ .
+

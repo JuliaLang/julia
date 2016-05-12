@@ -10,13 +10,6 @@ The number of CPU cores in the system.
 :CPU_CORES
 
 """
-    JULIA_HOME
-
-A string containing the full path to the directory containing the `julia` executable.
-"""
-:JULIA_HOME
-
-"""
     @time
 
 A macro to execute an expression, printing the time it took to execute, the number of

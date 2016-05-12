@@ -971,9 +971,11 @@ System
 
    A singleton of this type provides a hash table interface to environment variables.
 
-.. data:: ENV
+.. variable:: ENV
 
-   Reference to the singleton ``EnvHash``, providing a dictionary interface to system environment variables.
+   .. Docstring generated from Julia source
+
+   Reference to the singleton ``EnvHash``\ , providing a dictionary interface to system environment variables.
 
 .. function:: @unix
 
