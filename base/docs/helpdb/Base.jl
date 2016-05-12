@@ -3,14 +3,6 @@
 # Base
 
 """
-    nothing
-
-The singleton instance of type `Void`, used by convention when there is no value to return
-(as in a C `void` function). Can be converted to an empty `Nullable` value.
-"""
-:nothing
-
-"""
     CPU_CORES
 
 The number of CPU cores in the system.
@@ -23,14 +15,6 @@ The number of CPU cores in the system.
 A string containing the full path to the directory containing the `julia` executable.
 """
 :JULIA_HOME
-
-"""
-    ANY
-
-Equivalent to `Any` for dispatch purposes, but signals the compiler to skip code
-generation specialization for that field.
-"""
-:ANY
 
 """
     @time
