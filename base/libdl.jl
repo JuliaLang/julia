@@ -20,6 +20,19 @@ const RTLD_NOLOAD    = 0x00000020
 const RTLD_DEEPBIND  = 0x00000040
 const RTLD_FIRST     = 0x00000080
 
+for constant in (:RTLD_LOCAL, :RTLD_GLOBAL, :RTLD_LAZY, :RTLD_NOW, :RTLD_NODELETE, :RTLD_NOLOAD, :RTLD_DEEPBIND, :RTLD_FIRST)
+    constant_str = string(constant)
+    @eval begin
+        @doc """
+            $($constant_str)
+
+        Enum constant for [`dlopen`](:func:`dlopen`). See your platform man page for
+        details, if applicable.
+        """ ->
+        $constant
+    end
+end
+
 """
     dlsym(handle, sym)
 

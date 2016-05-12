@@ -22,37 +22,53 @@ The names in :mod:`Base.Libdl` are not exported and need to be called e.g. as ``
 
    Similar to :func:`dlopen`\ , except returns a ``NULL`` pointer instead of raising errors.
 
-.. data:: RTLD_DEEPBIND
+.. variable:: RTLD_DEEPBIND
 
-   Enum constant for :func:`dlopen`. See your platform man page for details, if applicable.
+   .. Docstring generated from Julia source
 
-.. data:: RTLD_FIRST
+   Enum constant for :func:`dlopen`\ . See your platform man page for details, if applicable.
 
-   Enum constant for :func:`dlopen`. See your platform man page for details, if applicable.
+.. variable:: RTLD_FIRST
 
-.. data:: RTLD_GLOBAL
+   .. Docstring generated from Julia source
 
-   Enum constant for :func:`dlopen`. See your platform man page for details, if applicable.
+   Enum constant for :func:`dlopen`\ . See your platform man page for details, if applicable.
 
-.. data:: RTLD_LAZY
+.. variable:: RTLD_GLOBAL
 
-   Enum constant for :func:`dlopen`. See your platform man page for details, if applicable.
+   .. Docstring generated from Julia source
 
-.. data:: RTLD_LOCAL
+   Enum constant for :func:`dlopen`\ . See your platform man page for details, if applicable.
 
-   Enum constant for :func:`dlopen`. See your platform man page for details, if applicable.
+.. variable:: RTLD_LAZY
 
-.. data:: RTLD_NODELETE
+   .. Docstring generated from Julia source
 
-   Enum constant for :func:`dlopen`. See your platform man page for details, if applicable.
+   Enum constant for :func:`dlopen`\ . See your platform man page for details, if applicable.
 
-.. data:: RTLD_NOLOAD
+.. variable:: RTLD_LOCAL
 
-   Enum constant for :func:`dlopen`. See your platform man page for details, if applicable.
+   .. Docstring generated from Julia source
 
-.. data:: RTLD_NOW
+   Enum constant for :func:`dlopen`\ . See your platform man page for details, if applicable.
 
-   Enum constant for :func:`dlopen`. See your platform man page for details, if applicable.
+.. variable:: RTLD_NODELETE
+
+   .. Docstring generated from Julia source
+
+   Enum constant for :func:`dlopen`\ . See your platform man page for details, if applicable.
+
+.. variable:: RTLD_NOLOAD
+
+   .. Docstring generated from Julia source
+
+   Enum constant for :func:`dlopen`\ . See your platform man page for details, if applicable.
+
+.. variable:: RTLD_NOW
+
+   .. Docstring generated from Julia source
+
+   Enum constant for :func:`dlopen`\ . See your platform man page for details, if applicable.
 
 .. function:: dlsym(handle, sym)
 
