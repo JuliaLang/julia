@@ -211,7 +211,8 @@ end
 """
     VERSION
 
-A `VersionNumber` object describing which version of Julia is in use.
+A `VersionNumber` object describing which version of Julia is in use. For details see
+[Version Number Literals](:ref:`man-version-number-literals`).
 """
 :VERSION
 
