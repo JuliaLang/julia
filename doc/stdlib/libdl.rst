@@ -23,48 +23,13 @@ The names in :mod:`Base.Libdl` are not exported and need to be called e.g. as ``
    Similar to :func:`dlopen`\ , except returns a ``NULL`` pointer instead of raising errors.
 
 .. variable:: RTLD_DEEPBIND
-
-   .. Docstring generated from Julia source
-
-   Enum constant for :func:`dlopen`\ . See your platform man page for details, if applicable.
-
-.. variable:: RTLD_FIRST
-
-   .. Docstring generated from Julia source
-
-   Enum constant for :func:`dlopen`\ . See your platform man page for details, if applicable.
-
-.. variable:: RTLD_GLOBAL
-
-   .. Docstring generated from Julia source
-
-   Enum constant for :func:`dlopen`\ . See your platform man page for details, if applicable.
-
-.. variable:: RTLD_LAZY
-
-   .. Docstring generated from Julia source
-
-   Enum constant for :func:`dlopen`\ . See your platform man page for details, if applicable.
-
-.. variable:: RTLD_LOCAL
-
-   .. Docstring generated from Julia source
-
-   Enum constant for :func:`dlopen`\ . See your platform man page for details, if applicable.
-
-.. variable:: RTLD_NODELETE
-
-   .. Docstring generated from Julia source
-
-   Enum constant for :func:`dlopen`\ . See your platform man page for details, if applicable.
-
-.. variable:: RTLD_NOLOAD
-
-   .. Docstring generated from Julia source
-
-   Enum constant for :func:`dlopen`\ . See your platform man page for details, if applicable.
-
-.. variable:: RTLD_NOW
+              RTLD_FIRST
+              RTLD_GLOBAL
+              RTLD_LAZY
+              RTLD_LOCAL
+              RTLD_NODELETE
+              RTLD_NOLOAD
+              RTLD_NOW
 
    .. Docstring generated from Julia source
 

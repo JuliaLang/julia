@@ -613,18 +613,15 @@ const MS_ASYNC = 1
 const MS_INVALIDATE = 2
 const MS_SYNC = 4
 
-for constant in (:MS_ASYNC, :MS_INVALIDATE, :MS_SYNC)
-    constant_str = string(constant)
-    @eval begin
-        @doc """
-            $($constant_str)
+@doc """
+    MS_ASYNC
+    MS_SYNC
+    MS_INVALIDATE
 
-        Enum constant for [`msync`](:func:`msync`). See your platform man page for details.
-        (not available on Windows).
-        """ ->
-        $constant
-    end
-end
+Enum constants for [`msync`](:func:`msync`). See your platform man page for details.
+(not available on Windows).
+""" ->
+(MS_ASYNC, MS_SYNC, MS_INVALIDATE)
 
 
 @noinline function msync(p::Ptr, len::Integer, flags::Integer=MS_SYNC)

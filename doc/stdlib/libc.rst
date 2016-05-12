@@ -97,20 +97,10 @@
    You may not need to call ``msync``\ , because synchronization is performed at intervals automatically by the operating system. However, you can call this directly if, for example, you are concerned about losing the result of a long-running calculation.
 
 .. variable:: MS_ASYNC
+              MS_SYNC
+              MS_INVALIDATE
 
    .. Docstring generated from Julia source
 
-   Enum constant for :func:`msync`\ . See your platform man page for details. (not available on Windows).
-
-.. variable:: MS_SYNC
-
-   .. Docstring generated from Julia source
-
-   Enum constant for :func:`msync`\ . See your platform man page for details. (not available on Windows).
-
-.. variable:: MS_INVALIDATE
-
-   .. Docstring generated from Julia source
-
-   Enum constant for :func:`msync`\ . See your platform man page for details. (not available on Windows).
+   Enum constants for :func:`msync`\ . See your platform man page for details. (not available on Windows).
 

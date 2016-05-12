@@ -111,7 +111,7 @@ function loaddocs!(state::State, mod, binding::Binding, typesig, docstr)
     markdown = Base.Docs.parsedoc(docstr)
     if validdocstr(markdown)
         code = rstrip(markdown.content[1].code)
-        if haskey(state.validdocs, code)
+        if haskey(state.validdocs, code) && state.validdocs[code][3] !== docstr
             code = indent(code)
             warn("duplicate signature found for '$binding' in module '$mod':\n\n$code\n")
             state.errorlevel = 2
