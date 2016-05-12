@@ -6,6 +6,12 @@ export DL_LOAD_PATH, RTLD_DEEPBIND, RTLD_FIRST, RTLD_GLOBAL, RTLD_LAZY, RTLD_LOC
     RTLD_NODELETE, RTLD_NOLOAD, RTLD_NOW, dlclose, dlopen, dlopen_e, dlsym, dlsym_e,
     dlpath, find_library, dlext, dllist
 
+"""
+    DL_LOAD_PATH
+
+When calling [`dlopen`](:func:`dlopen`), the paths in this list will be searched first, in
+order, before searching the system locations for a valid library handle.
+"""
 const DL_LOAD_PATH = String[]
 @osx_only push!(DL_LOAD_PATH, "@loader_path/julia")
 @osx_only push!(DL_LOAD_PATH, "@loader_path")
