@@ -49,7 +49,7 @@ Constants
 
    .. Docstring generated from Julia source
 
-   An object describing which version of Julia is in use.
+   A ``VersionNumber`` object describing which version of Julia is in use.
 
 .. variable:: LOAD_PATH
 
