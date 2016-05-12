@@ -1909,6 +1909,11 @@ function finish(me::InferenceState)
 
     # run optimization passes on fulltree
     if me.optimize
+        # This pass is required for the AST to be valid in codegen
+        # if any `SSAValue` is created by type inference. Ref issue #6068
+        # This (and `reindex_labels!`) needs to be run for `!me.optimize`
+        # if we start to create `SSAValue` in type inference when not
+        # optimizing and use unoptimized IR in codegen.
         gotoifnot_elim_pass!(me.linfo, me)
         if JLOptions().can_inline == 1
             inlining_pass!(me.linfo, me)

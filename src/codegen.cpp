@@ -3182,23 +3182,10 @@ static jl_cgval_t emit_expr(jl_value_t *expr, jl_codectx_t *ctx)
         BasicBlock *ifso = BasicBlock::Create(jl_LLVMContext, "if", ctx->f);
         BasicBlock *ifnot = (*ctx->labels)[labelname];
         assert(ifnot);
-        // NOTE: if type inference sees a constant condition it behaves as if
-        // the branch weren't there. But LLVM will not see constant conditions
-        // this way until a later optimization pass, so it might see one of our
-        // SSA vars as not dominating all uses. see issue #6068
-        // Work around this by generating unconditional branches.
-        jl_cgval_t condV = emit_expr(cond, ctx);
-        jl_value_t *static_cond = static_eval(cond, ctx, true, true);
-        if (static_cond == jl_true) {
-            builder.CreateBr(ifso);
-        }
-        else if (static_cond == jl_false) {
-            builder.CreateBr(ifnot);
-        }
-        else {
-            Value *isfalse = emit_condition(condV, "if", ctx);
-            builder.CreateCondBr(isfalse, ifnot, ifso);
-        }
+        // Any branches treated as constant in type inference should be
+        // eliminated before running
+        Value *isfalse = emit_condition(cond, "if", ctx);
+        builder.CreateCondBr(isfalse, ifnot, ifso);
         builder.SetInsertPoint(ifso);
     }
     else if (head == call_sym) {
