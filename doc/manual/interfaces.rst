@@ -153,9 +153,9 @@ Methods to implement                                                            
 :func:`size(A) <size>`                                                                                  Returns a tuple containing the dimensions of A
 :func:`Base.linearindexing(Type) <Base.linearindexing>`                                                 Returns either ``Base.LinearFast()`` or ``Base.LinearSlow()``. See the description below.
 :func:`getindex(A, i::Int) <getindex>`                                                                  (if ``LinearFast``) Linear scalar indexing
-:func:`getindex(A, i1::Int, ..., iN::Int) <getindex>`                                                   (if ``LinearSlow``, where ``N = ndims(A)``) N-dimensional scalar indexing
+:func:`getindex(A, I::Vararg{Int, N}) <getindex>`                                                       (if ``LinearSlow``, where ``N = ndims(A)``) N-dimensional scalar indexing
 :func:`setindex!(A, v, i::Int) <getindex>`                                                              (if ``LinearFast``) Scalar indexed assignment
-:func:`setindex!(A, v, i1::Int, ..., iN::Int) <getindex>`                                               (if ``LinearSlow``, where ``N = ndims(A)``) N-dimensional scalar indexed assignment
+:func:`setindex!(A, v, I::Vararg{Int, N}) <getindex>`                                                   (if ``LinearSlow``, where ``N = ndims(A)``) N-dimensional scalar indexed assignment
 **Optional methods**                                       **Default definition**                       **Brief description**
 :func:`getindex(A, I...) <getindex>`                       defined in terms of scalar :func:`getindex`  :ref:`Multidimensional and nonscalar indexing <man-array-indexing>`
 :func:`setindex!(A, I...) <setindex!>`                     defined in terms of scalar :func:`setindex!` :ref:`Multidimensional and nonscalar indexed assignment <man-array-indexing>`
@@ -226,15 +226,11 @@ As a more complicated example, let's define our own toy N-dimensional sparse-lik
 
     julia> Base.size(A::SparseArray) = A.dims
            Base.similar{T}(A::SparseArray, ::Type{T}, dims::Dims) = SparseArray(T, dims)
-           # Define scalar indexing and indexed assignment for up to 3 dimensions
-           Base.getindex{T}(A::SparseArray{T,1}, i1::Int)                   = get(A.data, (i1,), zero(T))
-           Base.getindex{T}(A::SparseArray{T,2}, i1::Int, i2::Int)          = get(A.data, (i1,i2), zero(T))
-           Base.getindex{T}(A::SparseArray{T,3}, i1::Int, i2::Int, i3::Int) = get(A.data, (i1,i2,i3), zero(T))
-           Base.setindex!{T}(A::SparseArray{T,1}, v, i1::Int)                   = (A.data[(i1,)] = v)
-           Base.setindex!{T}(A::SparseArray{T,2}, v, i1::Int, i2::Int)          = (A.data[(i1,i2)] = v)
-           Base.setindex!{T}(A::SparseArray{T,3}, v, i1::Int, i2::Int, i3::Int) = (A.data[(i1,i2,i3)] = v);
+           # Define scalar indexing and indexed assignment
+           Base.getindex{T,N}(A::SparseArray{T,N}, I::Vararg{Int,N})     = get(A.data, I, zero(T))
+           Base.setindex!{T,N}(A::SparseArray{T,N}, v, I::Vararg{Int,N}) = (A.data[I] = v)
 
-Notice that this is a ``LinearSlow`` array, so we must manually define :func:`getindex` and :func:`setindex!` for each dimensionality we'd like to support.  Unlike the ``SquaresVector``, we are able to define :func:`setindex!`, and so we can mutate the array:
+Notice that this is a ``LinearSlow`` array, so we must manually define :func:`getindex` and :func:`setindex!` at the dimensionality of the array.  Unlike the ``SquaresVector``, we are able to define :func:`setindex!`, and so we can mutate the array:
 
 .. doctest::
 

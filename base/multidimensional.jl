@@ -262,10 +262,25 @@ index_shape_dim(A, dim, ::Colon) = (trailingsize(A, dim),)
 # ambiguities for AbstractArray subtypes. See the note in abstractarray.jl
 
 # Note that it's most efficient to call checkbounds first, and then to_index
-@inline function _getindex(l::LinearIndexing, A::AbstractArray, I::Union{Real, AbstractArray, Colon}...)
+@inline function _getindex{T,N}(l::LinearIndexing, A::AbstractArray{T,N}, I::Vararg{Union{Real, AbstractArray, Colon},N})
     @boundscheck checkbounds(A, I...)
     _unsafe_getindex(l, A, I...)
 end
+# Explicitly allow linear indexing with one non-scalar index
+@inline function _getindex(l::LinearIndexing, A::AbstractArray, i::Union{Real, AbstractArray, Colon})
+    @boundscheck checkbounds(A, i)
+    _unsafe_getindex(l, _maybe_linearize(l, A), i)
+end
+# But we can speed up LinearSlow arrays by reshaping them to vectors:
+_maybe_linearize(::LinearFast, A::AbstractArray) = A
+_maybe_linearize(::LinearSlow, A::AbstractVector) = A
+_maybe_linearize(::LinearSlow, A::AbstractArray) = reshape(A, length(A))
+
+@inline function _getindex{N}(l::LinearIndexing, A::AbstractArray, I::Vararg{Union{Real, AbstractArray, Colon},N}) # TODO: DEPRECATE FOR #14770
+    @boundscheck checkbounds(A, I...)
+    _unsafe_getindex(l, reshape(A, Val{N}), I...)
+end
+
 @generated function _unsafe_getindex(::LinearIndexing, A::AbstractArray, I::Union{Real, AbstractArray, Colon}...)
     N = length(I)
     quote
@@ -279,8 +294,6 @@ end
 end
 
 # logical indexing optimization - don't use find (within to_index)
-# This is inherently a linear operation in the source, but we could potentially
-# use fast dividing integers to speed it up.
 function _unsafe_getindex(::LinearIndexing, src::AbstractArray, I::AbstractArray{Bool})
     shape = index_shape(src, I)
     dest = similar(src, shape)
@@ -305,7 +318,7 @@ end
         $(Expr(:meta, :inline))
         D = eachindex(dest)
         Ds = start(D)
-        idxlens = index_lengths(src, I...) # TODO: unsplat?
+        idxlens = index_lengths(src, I...)
         @nloops $N i d->(1:idxlens[d]) d->(@inbounds j_d = getindex(I[d], i_d)) begin
             d, Ds = next(D, Ds)
             @inbounds dest[d] = @ncall $N getindex src j
@@ -322,10 +335,21 @@ end
 # before redispatching to the _unsafe_batchsetindex!
 _iterable(v::AbstractArray) = v
 _iterable(v) = repeated(v)
-@inline function _setindex!(l::LinearIndexing, A::AbstractArray, x, J::Union{Real,AbstractArray,Colon}...)
+@inline function _setindex!{T,N}(l::LinearIndexing, A::AbstractArray{T,N}, x, J::Vararg{Union{Real,AbstractArray,Colon},N})
     @boundscheck checkbounds(A, J...)
     _unsafe_setindex!(l, A, x, J...)
 end
+@inline function _setindex!(l::LinearIndexing, A::AbstractArray, x, j::Union{Real,AbstractArray,Colon})
+    @boundscheck checkbounds(A, j)
+    _unsafe_setindex!(l, _maybe_linearize(l, A), x, j)
+    A
+end
+@inline function _setindex!{N}(l::LinearIndexing, A::AbstractArray, x, J::Vararg{Union{Real, AbstractArray, Colon},N}) # TODO: DEPRECATE FOR #14770
+    @boundscheck checkbounds(A, J...)
+    _unsafe_setindex!(l, reshape(A, Val{N}), x, J...)
+    A
+end
+
 @inline function _unsafe_setindex!(::LinearIndexing, A::AbstractArray, x, J::Union{Real,AbstractArray,Colon}...)
     _unsafe_batchsetindex!(A, _iterable(x), to_indexes(J...)...)
 end
@@ -444,95 +468,6 @@ for (f, fmod, op) = ((:cummin, :_cummin!, :min), (:cummax, :_cummax!, :max))
 
     @eval ($f)(A::AbstractArray) = ($f)(A, 1)
 end
-
-## SubArray index merging
-# A view created like V = A[2:3:8, 5:2:17] can later be indexed as V[2:7],
-# creating a new 1d view.
-# In such cases we have to collapse the 2d space spanned by the ranges.
-#
-# API:
-#    merge_indexes(V, indexes::NTuple, index)
-# indexes encodes the view's trailing indexes into the parent array,
-# and index encodes the subset of these elements that we'll select.
-#
-# It returns a CartesianIndex or array of CartesianIndexes.
-
-# Checking 'in' a range is fast -- so check all possibilities and keep the good ones
-@generated function merge_indexes{N}(V, indexes::NTuple{N}, index::Union{Colon, Range})
-    # There may be a vector of cartesian indices in the passed indexes... which
-    # makes the number of indices more than N. Since we pre-allocate the array
-    # of CartesianIndexes, we need to figure out how big to make it
-    M = 0
-    for T in indexes.parameters
-        T <: CartesianIndex ? (M += length(T)) : (M += 1)
-    end
-    index_length_expr = index <: Colon ? Symbol("Istride_", N+1) : :(length(index))
-    quote
-        Cartesian.@nexprs $N d->(I_d = indexes[d])
-        dimlengths = Cartesian.@ncall $N index_lengths_dim V.parent length(V.indexes)-N+1 I
-        Istride_1 = 1   # strides of the indexes to merge
-        Cartesian.@nexprs $N d->(Istride_{d+1} = Istride_d*dimlengths[d])
-        idx_len = $(index_length_expr)
-        if idx_len < 0.1*$(Symbol("Istride_", N+1))   # this has not been carefully tuned
-            return merge_indexes_div(V, indexes, index, dimlengths)
-        end
-        Cartesian.@nexprs $N d->(counter_d = 1) # counter_0 is the linear index
-        k = 0
-        merged = Array(CartesianIndex{$M}, idx_len)
-        Cartesian.@nloops $N i d->(1:dimlengths[d]) d->(counter_{d-1} = counter_d + (i_d-1)*Istride_d; @inbounds idx_d = I_d[i_d]) begin
-            if counter_0 in index # this branch is elided for ::Colon
-                @inbounds merged[k+=1] = Cartesian.@ncall $N CartesianIndex{$M} idx
-            end
-        end
-        merged
-    end
-end
-
-# mapping getindex across the parent and subindices rapidly gets too big to
-# automatically inline, but it is crucial that it does so to avoid allocations
-# Unlike SubArray's reindex, merge_indexes doesn't drop any indices.
-@inline inlinemap(f, t::Tuple, s::Tuple) = (f(t[1], s[1]), inlinemap(f, tail(t), tail(s))...)
-inlinemap(f, t::Tuple{}, s::Tuple{}) = ()
-inlinemap(f, t::Tuple{}, s::Tuple) = ()
-inlinemap(f, t::Tuple, s::Tuple{}) = ()
-
-# Otherwise, we fall back to the slow div/rem method, using ind2sub.
-@inline merge_indexes{N}(V, indexes::NTuple{N}, index) =
-    merge_indexes_div(V, indexes, index, index_lengths_dim(V.parent, length(V.indexes)-N+1, indexes...))
-
-@inline merge_indexes_div{N}(V, indexes::NTuple{N}, index::Real, dimlengths) =
-    CartesianIndex(inlinemap(getindex, indexes, ind2sub(dimlengths, index)))
-merge_indexes_div{N}(V, indexes::NTuple{N}, index::AbstractArray, dimlengths) =
-    reshape([CartesianIndex(inlinemap(getindex, indexes, ind2sub(dimlengths, i))) for i in index], size(index))
-merge_indexes_div{N}(V, indexes::NTuple{N}, index::Colon, dimlengths) =
-    [CartesianIndex(inlinemap(getindex, indexes, ind2sub(dimlengths, i))) for i in 1:prod(dimlengths)]
-
-# Merging indices is particularly difficult in the case where we partially linearly
-# index through a multidimensional array. It's easiest if we can simply reduce the
-# partial indices to a single linear index into the parent index array.
-function merge_indexes{N}(V, indexes::NTuple{N}, index::Tuple{Colon, Vararg{Colon}})
-    shape = index_shape(indexes[1], index...)
-    reshape(merge_indexes(V, indexes, :), (shape[1:end-1]..., shape[end]*prod(index_lengths_dim(V.parent, length(V.indexes)-length(indexes)+2, tail(indexes)...))))
-end
-@inline merge_indexes{N}(V, indexes::NTuple{N}, index::Tuple{Real, Vararg{Real}}) = merge_indexes(V, indexes, sub2ind(size(indexes[1]), index...))
-# In general, it's a little trickier, but we can use the product iterator
-# if we replace colons with ranges. This can be optimized further.
-function merge_indexes{N}(V, indexes::NTuple{N}, index::Tuple)
-    I = replace_colons(V, indexes, index)
-    shp = index_shape(indexes[1], I...) # index_shape does no bounds checking
-    dimlengths = index_lengths_dim(V.parent, length(V.indexes)-N+1, indexes...)
-    sz = size(indexes[1])
-    reshape([CartesianIndex(inlinemap(getindex, indexes, ind2sub(dimlengths, sub2ind(sz, i...)))) for i in product(I...)], shp)
-end
-@inline replace_colons(V, indexes, I) = replace_colons_dim(V, indexes, 1, I)
-@inline replace_colons_dim(V, indexes, dim, I::Tuple{}) = ()
-@inline replace_colons_dim(V, indexes, dim, I::Tuple{Colon}) =
-    (1:trailingsize(indexes[1], dim)*prod(index_lengths_dim(V.parent, length(V.indexes)-length(indexes)+2, tail(indexes)...)),)
-@inline replace_colons_dim(V, indexes, dim, I::Tuple{Colon, Vararg{Any}}) =
-    (1:size(indexes[1], dim), replace_colons_dim(V, indexes, dim+1, tail(I))...)
-@inline replace_colons_dim(V, indexes, dim, I::Tuple{Any, Vararg{Any}}) =
-    (I[1], replace_colons_dim(V, indexes, dim+1, tail(I))...)
-
 
  cumsum(A::AbstractArray, axis::Integer=1) =  cumsum!(similar(A, Base._cumsum_type(A)), A, axis)
 cumsum!(B, A::AbstractArray) = cumsum!(B, A, 1)

@@ -38,6 +38,17 @@ reshape(parent::AbstractArray, dims::Dims) = _reshape(parent, dims)
 reshape(parent::AbstractArray, len::Integer) = reshape(parent, (Int(len),))
 reshape(parent::AbstractArray, dims::Int...) = reshape(parent, dims)
 
+reshape{T,N}(parent::AbstractArray{T,N}, ndims::Type{Val{N}}) = parent
+function reshape{T,AN,N}(parent::AbstractArray{T,AN}, ndims::Type{Val{N}})
+    reshape(parent, rdims((), size(parent), Val{N}))
+end
+# Move elements from sz to out until out reaches the desired dimensionality N,
+# either filling with 1 or collapsing the product of trailing dims into the last element
+@pure rdims{N}(out::NTuple{N}, sz::Tuple{}, ::Type{Val{N}}) = out
+@pure rdims{N}(out::NTuple{N}, sz::Tuple{Any, Vararg{Any}}, ::Type{Val{N}}) = (front(out)..., last(out) * prod(sz))
+@pure rdims{N}(out::Tuple, sz::Tuple{}, ::Type{Val{N}}) = rdims((out..., 1), (), Val{N})
+@pure rdims{N}(out::Tuple, sz::Tuple{Any, Vararg{Any}}, ::Type{Val{N}}) = rdims((out..., first(sz)), tail(sz), Val{N})
+
 function _reshape(parent::AbstractArray, dims::Dims)
     prod(dims) == length(parent) || throw(DimensionMismatch("parent has $(length(parent)) elements, which is incompatible with size $dims"))
     __reshape((parent, linearindexing(parent)), dims)
