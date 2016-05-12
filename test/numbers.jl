@@ -2253,6 +2253,9 @@ for T in [Int,BigInt], n = [1:1000;1000000]
         @test s[k] == primesmask(k, k)[1]
     end
 end
+let i = rand(1:2^(3*min(WORD_SIZE,64)÷4))
+    @test primes(i,i+1476) == filter(isprime, i:i + 1476) == filter(isprime, big(i:i + 1476))
+end
 
 @test !isprime(1000000003)
 @test !isprime(1000000005)

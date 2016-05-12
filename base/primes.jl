@@ -78,12 +78,13 @@ primesmask(n::Integer) = n <= typemax(Int) ? primesmask(Int(n)) :
 
 function primes(lo::Int, hi::Int)
     lo ≤ hi || throw(ArgumentError("the condition lo ≤ hi must be met"))
+    lo = max(2, lo) # note: if now lo > hi, then hi < 7
     list = Int[]
     lo ≤ 2 ≤ hi && push!(list, 2)
     lo ≤ 3 ≤ hi && push!(list, 3)
     lo ≤ 5 ≤ hi && push!(list, 5)
     hi < 7 && return list
-    sizehint!(list, floor(Int, hi / log(hi)))
+    sizehint!(list, floor(Int, hi / log(hi) - lo / log(lo)))
     sieve = _primesmask(max(7, lo), hi)
     lwi = wheel_index(lo - 1)
     @inbounds for i = 1:length(sieve)   # don't use eachindex here
