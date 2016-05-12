@@ -50,8 +50,6 @@ JL_DLLEXPORT jl_taggedvalue_t *jl_gc_find_taggedvalue_pool(char *p, size_t *osiz
 #include <stdio.h>
 #endif
 
-void jl_(void *jl_value);
-
 // mark verification
 #ifdef GC_VERIFY
 static jl_value_t *lostval = 0;
