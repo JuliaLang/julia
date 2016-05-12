@@ -808,14 +808,14 @@ signals that all requested workers have been launched. Hence the :func:`launch` 
 as all the requested workers have been launched.
 
 Newly launched workers are connected to each other, and the master process, in a all-to-all manner.
-Specifying command argument, ``--worker`` results in the launched processes initializing themselves
+Specifying command argument, ``--worker <cookie>`` results in the launched processes initializing themselves
 as workers and connections being setup via TCP/IP sockets. Optionally ``--bind-to bind_addr[:port]``
 may also be specified to enable other workers to connect to it at the specified ``bind_addr`` and ``port``.
 This is useful for multi-homed hosts.
 
 For non-TCP/IP transports, for example, an implementation may choose to use MPI as the transport,
-``--worker`` must NOT be specified. Instead newly launched workers should call ``init_worker()``
-before using any of the parallel constructs
+``--worker`` must NOT be specified. Instead newly launched workers should call ``init_worker(cookie)``
+before using any of the parallel constructs.
 
 For every worker launched, the :func:`launch` method must add a :class:`WorkerConfig`
 object (with appropriate fields initialized) to ``launched`` ::
@@ -918,7 +918,7 @@ When using custom transports:
   workers defaulting to the TCP/IP socket transport implementation
 - For every incoming logical connection with a worker, ``Base.process_messages(rd::AsyncStream, wr::AsyncStream)`` must be called.
   This launches a new task that handles reading and writing of messages from/to the worker represented by the ``AsyncStream`` objects
-- ``init_worker(manager::FooManager)`` MUST be called as part of worker process initializaton
+- ``init_worker(cookie, manager::FooManager)`` MUST be called as part of worker process initializaton
 - Field ``connect_at::Any`` in :class:`WorkerConfig` can be set by the cluster manager when ``launch`` is called. The value of
   this field is passed in in all ``connect`` callbacks. Typically, it carries information on *how to connect* to a worker. For example,
   the TCP/IP socket transport uses this field to specify the ``(host, port)`` tuple at which to connect to a worker
@@ -928,6 +928,56 @@ On the master process, the corresponding ``AsyncStream`` objects must be closed 
 implementation simply executes an ``exit()`` call on the specified remote worker.
 
 ``examples/clustermanager/simple`` is an example that shows a simple implementation using unix domain sockets for cluster setup
+
+Network requirements for LocalManager and SSHManager
+----------------------------------------------------
+Julia clusters are designed to be executed on already secured environments on infrastructure ranging from local laptops,
+to departmental clusters or even on the cloud. This section covers network security requirements for the inbuilt ``LocalManager``
+and ``SSHManager``:
+
+- The master process does not listen on any port. It only connects out to the workers.
+
+- Each worker binds to only one of the local interfaces and listens on the first free port starting from 9009.
+
+- ``LocalManager``, i.e. ``addprocs(N)``, by default binds only to the loopback interface.
+  This means that workers consequently started on remote hosts, or anyone with malicious intentions
+  is unable to connect to the cluster. A ``addprocs(4)`` followed by a ``addprocs(["remote_host"])``
+  will fail. Some users may need to create a cluster comprised of their local system and a few remote systems. This can be done by
+  explicitly requesting ``LocalManager`` to bind to an external network interface via the ``restrict`` keyword
+  argument -  ``addprocs(4; restrict=false)``.
+
+- ``SSHManager``, i.e. ``addprocs(list_of_remote_hosts)`` launches workers on remote hosts via SSH.
+   It is to be noted that by default SSH is only used to launch Julia workers.
+   Subsequent master-worker and worker-worker connections use plain, unencrypted TCP/IP sockets. The remote hosts
+   must have passwordless login enabled. Additional SSH flags or credentials may be specified via keyword
+   argument ``sshflags``.
+
+- ``addprocs(list_of_remote_hosts; tunnel=true, sshflags=<ssh keys and other flags>)`` is useful when we wish to use
+  SSH connections for master-worker too. A typical scenario for this is a local laptop running the Julia REPL (i.e., the master)
+  with the rest of the cluster on the cloud, say on Amazon EC2. In this case only port 22 needs to be
+  opened at the remote cluster coupled with SSH client authenticated via PKI.
+  Authentication credentials can be supplied via ``sshflags``, for example ``sshflags=`-e <keyfile>` ``.
+
+  Note that worker-worker connections are still plain TCP and the local security policy on the remote cluster
+  must allow for free connections between worker nodes, at least for ports 9009 and above.
+
+  Securing and encrypting all worker-worker traffic (via SSH), or encrypting individual messages can be done via
+  a custom ClusterManager.
+
+Cluster cookie
+--------------
+All processes in a cluster share the same cookie which, by default, is a randomly generated string on the master process:
+
+- ``Base.cluster_cookie()`` returns the cookie, ``Base.cluster_cookie(cookie)`` sets it.
+- All connections are authenticated on both sides to ensure that only workers started by the master are allowed
+  to connect to each other.
+- The cookie must be passed to the workers at startup via argument ``--worker <cookie>``.
+  Custom ClusterManagers can retrieve the cookie on the master by calling
+  ``Base.cluster_cookie()``. Cluster managers not using the default TCP/IP transport (and hence not specifying ``--worker``)
+  must call ``init_worker(cookie, manager)`` with the same cookie as on the master.
+
+It is to be noted that environments requiring higher levels of security (for example, cookies can be pre-shared and hence not
+specified as a startup arg) can implement this via a custom ClusterManager.
 
 
 Specifying network topology (Experimental)

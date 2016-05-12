@@ -217,8 +217,8 @@ function process_options(opts::JLOptions)
         startup && load_juliarc()
 
         # startup worker
-        if opts.worker != 0
-            start_worker() # does not return
+        if opts.worker != C_NULL
+            start_worker(bytestring(opts.worker)) # does not return
         end
         # add processors
         if opts.nprocs > 0
