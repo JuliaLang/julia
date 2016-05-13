@@ -1,67 +1,7 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
 # fallback text/plain representation of any type:
-writemime(io::IO, ::MIME"text/plain", x) = showcompact(io, x)
-writemime(io::IO, ::MIME"text/plain", x::Number) = show(io, x)
-writemime(io::IO, ::MIME"text/plain", x::Associative) = showdict(io, x)
-
-function writemime(io::IO, ::MIME"text/plain", f::Function)
-    ft = typeof(f)
-    mt = ft.name.mt
-    name = mt.name
-    isself = isdefined(ft.name.module, name) &&
-             ft == typeof(getfield(ft.name.module, name))
-    n = length(mt)
-    m = n==1 ? "method" : "methods"
-    ns = isself ? string(name) : string("(::", name, ")")
-    what = startswith(ns, '@') ? "macro" : "generic function"
-    print(io, ns, " (", what, " with $n $m)")
-end
-
-function writemime(io::IO, ::MIME"text/plain", f::Builtin)
-    print(io, typeof(f).name.mt.name, " (built-in function)")
-end
-
-# writemime for linspace, e.g.
-# linspace(1,3,7)
-# 7-element LinSpace{Float64}:
-#   1.0,1.33333,1.66667,2.0,2.33333,2.66667,3.0
-function writemime(io::IO, ::MIME"text/plain", r::LinSpace)
-    print(io, summary(r))
-    if !isempty(r)
-        println(io, ":")
-        print_range(IOContext(io, :limit_output => true), r)
-    end
-end
-
-# writemime for ranges
-function writemime(io::IO, ::MIME"text/plain", r::Range)
-    show(io, r)
-end
-
-function writemime(io::IO, ::MIME"text/plain", v::AbstractVector)
-    print(io, summary(v))
-    if !isempty(v)
-        println(io, ":")
-        print_matrix(IOContext(io, :limit_output => true), v)
-    end
-end
-
-writemime(io::IO, ::MIME"text/plain", v::AbstractArray) =
-    showarray(IOContext(io, :limit_output => true), v, header=true, repr=false)
-
-function writemime(io::IO, ::MIME"text/plain", v::DataType)
-    show(io, v)
-    # TODO: maybe show constructor info?
-end
-
-function writemime(io::IO, ::MIME"text/plain", t::Task)
-    show(io, t)
-    if t.state == :failed
-        println(io)
-        showerror(io, CapturedException(t.result, t.backtrace))
-    end
-end
+writemime(io::IO, ::MIME"text/plain", x) = show(io, x)
 
 
 # showing exception objects as descriptive error messages
