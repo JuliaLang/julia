@@ -383,6 +383,9 @@ function setindex!{T}(A::Array{T}, X::Array{T}, c::Colon)
     return A
 end
 
+setindex!(A::Array, x::Number, ::Colon) = fill!(A, x)
+setindex!{T, N}(A::Array{T, N}, x::Number, ::Vararg{Colon, N}) = fill!(A, x)
+
 # efficiently grow an array
 
 function _growat!(a::Vector, i::Integer, delta::Integer)
