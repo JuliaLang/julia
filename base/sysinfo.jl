@@ -31,6 +31,13 @@ function __init__()
     global const JIT = ccall(:jl_get_JIT, Ref{String}, ())
 end
 
+"""
+    CPU_CORES
+
+The number of CPU cores in the system.
+"""
+:CPU_CORES
+
 type UV_cpu_info_t
     model::Ptr{UInt8}
     speed::Int32

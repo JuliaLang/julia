@@ -1,5 +1,11 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
+"""
+    OS_NAME
+
+A symbol representing the name of the operating system. Possible values are
+`:Linux`, `:Darwin` (OS X), or `:Windows`.
+"""
 const OS_NAME = ccall(:jl_get_OS_NAME, Any, ())
 
 function is_unix(os::Symbol)

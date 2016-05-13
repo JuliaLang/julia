@@ -22,37 +22,18 @@ The names in :mod:`Base.Libdl` are not exported and need to be called e.g. as ``
 
    Similar to :func:`dlopen`\ , except returns a ``NULL`` pointer instead of raising errors.
 
-.. data:: RTLD_DEEPBIND
+.. variable:: RTLD_DEEPBIND
+              RTLD_FIRST
+              RTLD_GLOBAL
+              RTLD_LAZY
+              RTLD_LOCAL
+              RTLD_NODELETE
+              RTLD_NOLOAD
+              RTLD_NOW
 
-   Enum constant for :func:`dlopen`. See your platform man page for details, if applicable.
+   .. Docstring generated from Julia source
 
-.. data:: RTLD_FIRST
-
-   Enum constant for :func:`dlopen`. See your platform man page for details, if applicable.
-
-.. data:: RTLD_GLOBAL
-
-   Enum constant for :func:`dlopen`. See your platform man page for details, if applicable.
-
-.. data:: RTLD_LAZY
-
-   Enum constant for :func:`dlopen`. See your platform man page for details, if applicable.
-
-.. data:: RTLD_LOCAL
-
-   Enum constant for :func:`dlopen`. See your platform man page for details, if applicable.
-
-.. data:: RTLD_NODELETE
-
-   Enum constant for :func:`dlopen`. See your platform man page for details, if applicable.
-
-.. data:: RTLD_NOLOAD
-
-   Enum constant for :func:`dlopen`. See your platform man page for details, if applicable.
-
-.. data:: RTLD_NOW
-
-   Enum constant for :func:`dlopen`. See your platform man page for details, if applicable.
+   Enum constant for :func:`dlopen`\ . See your platform man page for details, if applicable.
 
 .. function:: dlsym(handle, sym)
 
@@ -82,7 +63,9 @@ The names in :mod:`Base.Libdl` are not exported and need to be called e.g. as ``
 
    Searches for the first library in ``names`` in the paths in the ``locations`` list, ``DL_LOAD_PATH``\ , or system library paths (in that order) which can successfully be dlopen'd. On success, the return value will be one of the names (potentially prefixed by one of the paths in locations). This string can be assigned to a ``global const`` and used as the library name in future ``ccall``\ 's. On failure, it returns the empty string.
 
-.. data:: DL_LOAD_PATH
+.. variable:: DL_LOAD_PATH
 
-   When calling ``dlopen``, the paths in this list will be searched first, in order, before searching the
-   system locations for a valid library handle.
+   .. Docstring generated from Julia source
+
+   When calling :func:`dlopen`\ , the paths in this list will be searched first, in order, before searching the system locations for a valid library handle.
+

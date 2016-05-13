@@ -612,6 +612,18 @@ end
 const MS_ASYNC = 1
 const MS_INVALIDATE = 2
 const MS_SYNC = 4
+
+@doc """
+    MS_ASYNC
+    MS_SYNC
+    MS_INVALIDATE
+
+Enum constants for [`msync`](:func:`msync`). See your platform man page for details.
+(not available on Windows).
+""" ->
+(MS_ASYNC, MS_SYNC, MS_INVALIDATE)
+
+
 @noinline function msync(p::Ptr, len::Integer, flags::Integer=MS_SYNC)
     depwarn("`msync` is deprecated, use `Mmap.sync!(array)` instead", :msync)
     systemerror("msync", ccall(:msync, Cint, (Ptr{Void}, Csize_t, Cint), p, len, flags) != 0)
