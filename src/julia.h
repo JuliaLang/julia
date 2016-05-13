@@ -1641,6 +1641,8 @@ JL_DLLEXPORT jl_value_t *jl_stderr_obj(void);
 JL_DLLEXPORT size_t jl_static_show(JL_STREAM *out, jl_value_t *v);
 JL_DLLEXPORT size_t jl_static_show_func_sig(JL_STREAM *s, jl_value_t *type);
 JL_DLLEXPORT void jlbacktrace(void);
+// Mainly for debugging, use `void*` so that no type cast is needed in C++.
+JL_DLLEXPORT void jl_(void *jl_value);
 
 // julia options -----------------------------------------------------------
 // NOTE: This struct needs to be kept in sync with JLOptions type in base/options.jl
