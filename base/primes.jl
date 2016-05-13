@@ -84,7 +84,7 @@ function primes(lo::Int, hi::Int)
     lo ≤ 3 ≤ hi && push!(list, 3)
     lo ≤ 5 ≤ hi && push!(list, 5)
     hi < 7 && return list
-    sizehint!(list, floor(Int, hi / log(hi) - lo / log(lo)))
+    sizehint!(list,  5 + floor(Int, hi / (log(hi) - 1.12) -  lo / (log(lo) - 1.12*(lo > 7))) ) # http://projecteuclid.org/euclid.rmjm/1181070157
     sieve = _primesmask(max(7, lo), hi)
     lwi = wheel_index(lo - 1)
     @inbounds for i = 1:length(sieve)   # don't use eachindex here
