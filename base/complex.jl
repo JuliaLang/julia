@@ -67,15 +67,15 @@ flipsign(x::Complex, y::Real) = ifelse(signbit(y), -x, x)
 
 function show(io::IO, z::Complex)
     r, i = reim(z)
-    compact = limit_output(io)
-    showcompact_lim(io, r)
+    compact = get(io, :compact, false)
+    show(io, r)
     if signbit(i) && !isnan(i)
         i = -i
         print(io, compact ? "-" : " - ")
     else
         print(io, compact ? "+" : " + ")
     end
-    showcompact_lim(io, i)
+    show(io, i)
     if !(isa(i,Integer) && !isa(i,Bool) || isa(i,AbstractFloat) && isfinite(i))
         print(io, "*")
     end

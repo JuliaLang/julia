@@ -27,7 +27,7 @@ promote_rule{S,T}(::Type{Nullable{S}}, ::Type{T}) = Nullable{promote_type(S, T)}
 promote_rule{S,T}(::Type{Nullable{S}}, ::Type{Nullable{T}}) = Nullable{promote_type(S, T)}
 
 function show{T}(io::IO, x::Nullable{T})
-    if limit_output(io)
+    if get(io, :compact, false)
         if isnull(x)
             print(io, "#NULL")
         else

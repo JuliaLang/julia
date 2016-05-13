@@ -88,12 +88,14 @@ CPUinfo(info::UV_cpu_info_t) = CPUinfo(String(info.model), info.speed,
     info.cpu_times!user, info.cpu_times!nice, info.cpu_times!sys,
     info.cpu_times!idle, info.cpu_times!irq)
 
+show(io::IO, info::CPUinfo) = Base._show_cpuinfo(io, info, true, "    ")
+
 function _cpu_summary(io::IO, cpu::Array{CPUinfo}, i, j)
     if j-i < 9
         header = true
         for x = i:j
             header || println(io)
-            show(io, cpu[x], header, "#$(x-i+1) ")
+            Base._show_cpuinfo(io, cpu[x], header, "#$(x-i+1) ")
             header = false
         end
     else
@@ -108,7 +110,7 @@ function _cpu_summary(io::IO, cpu::Array{CPUinfo}, i, j)
             summary.cpu_times!irq += cpu[x].cpu_times!irq
         end
         summary.speed = div(summary.speed,count)
-        show(io, summary, true, "#1-$(count) ")
+        Base._show_cpuinfo(io, summary, true, "#1-$(count) ")
     end
     println(io)
 end

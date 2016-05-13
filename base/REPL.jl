@@ -111,7 +111,7 @@ end
 function display(d::REPLDisplay, ::MIME"text/plain", x)
     io = outstream(d.repl)
     Base.have_color && write(io, answer_color(d.repl))
-    writemime(io, MIME("text/plain"), x)
+    writemime(IOContext(io, multiline=true, limit_output=true), MIME("text/plain"), x)
     println(io)
 end
 display(d::REPLDisplay, x) = display(d, MIME("text/plain"), x)

@@ -33,8 +33,6 @@ function summary(t::Associative)
     string(typeof(t), " with ", n, (n==1 ? " entry" : " entries"))
 end
 
-show{K,V}(io::IO, t::Associative{K,V}) = showdict(io, t; compact = true)
-
 function _truncate_at_width_or_chars(str, width, chars="", truncmark="…")
     truncwidth = strwidth(truncmark)
     (width <= 0 || width < truncwidth) && return ""
@@ -58,10 +56,13 @@ function _truncate_at_width_or_chars(str, width, chars="", truncmark="…")
     end
 end
 
-showdict(t::Associative; kw...) = showdict(STDOUT, t; kw...)
-function showdict{K,V}(io::IO, t::Associative{K,V}; compact = false)
-    recur_io = IOContext(io, :SHOWN_SET => t)
+function show{K,V}(io::IO, t::Associative{K,V})
+    recur_io = IOContext(io, SHOWN_SET=t, multiline=false)
     limit::Bool = limit_output(io)
+    compact = !get(io, :multiline, false)
+    if !haskey(io, :compact)
+        recur_io = IOContext(recur_io, compact=true)
+    end
     if compact
         # show in a Julia-syntax-like form: Dict(k=>v, ...)
         if isempty(t)
@@ -148,13 +149,13 @@ end
 summary{T<:Union{KeyIterator,ValueIterator}}(iter::T) =
     string(T.name, " for a ", summary(iter.dict))
 
-show(io::IO, iter::Union{KeyIterator,ValueIterator}) = show(io, collect(iter))
-
-showkv(iter::Union{KeyIterator,ValueIterator}) = showkv(STDOUT, iter)
-function showkv{T<:Union{KeyIterator,ValueIterator}}(io::IO, iter::T)
+function show(io::IO, iter::Union{KeyIterator,ValueIterator})
+    if !get(io, :multiline, false)
+        return show(io, collect(iter))
+    end
     print(io, summary(iter))
     isempty(iter) && return
-    print(io, ". ", T<:KeyIterator ? "Keys" : "Values", ":")
+    print(io, ". ", isa(iter,KeyIterator) ? "Keys" : "Values", ":")
     limit::Bool = limit_output(io)
     if limit
         sz = displaysize(io)
