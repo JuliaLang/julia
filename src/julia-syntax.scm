@@ -1977,7 +1977,7 @@
           `(call (top Generator) (-> ,argname (block ,@splat ,expr))
                  ,(if (length= ranges 1)
                       (car ranges)
-                      `(call (top IteratorND) (call (top product) ,@ranges))))))))
+                      `(call (top product) ,@ranges)))))))
 
    'comprehension
    (lambda (e)

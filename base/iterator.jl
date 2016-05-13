@@ -421,40 +421,6 @@ prod_iteratorsize(::IsInfinite, b) = IsInfinite()
 prod_iteratorsize(a, b) = SizeUnknown()
 
 
-"""
-    IteratorND(iter, dims)
-
-Given an iterator `iter` and dimensions tuple `dims`, return an iterator that
-yields the same values as `iter`, but with the specified multi-dimensional shape.
-For example, this determines the shape of the array returned when `collect` is
-applied to this iterator.
-"""
-immutable IteratorND{I,N}
-    iter::I
-    dims::NTuple{N,Int}
-
-    function (::Type{IteratorND}){I,N}(iter::I, shape::NTuple{N,Integer})
-        li = length(iter)
-        if li != prod(shape)
-            throw(DimensionMismatch("dimensions $shape must be consistent with iterator length $li"))
-        end
-        new{I,N}(iter, shape)
-    end
-    (::Type{IteratorND}){I<:AbstractProdIterator}(p::I) = IteratorND(p, size(p))
-end
-
-start(i::IteratorND) = start(i.iter)
-done(i::IteratorND, s) = done(i.iter, s)
-next(i::IteratorND, s) = next(i.iter, s)
-
-size(i::IteratorND) = i.dims
-length(i::IteratorND) = prod(size(i))
-ndims{I,N}(::IteratorND{I,N}) = N
-iteratorsize{T<:IteratorND}(::Type{T}) = HasShape()
-
-eltype{I}(::IteratorND{I}) = eltype(I)
-iteratoreltype{I}(::Type{IteratorND{I}}) = iteratoreltype(I)
-
 # flatten an iterator of iterators
 
 immutable Flatten{I}
