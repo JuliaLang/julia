@@ -587,7 +587,7 @@ functions for further details). In most cases, this simply results in a call to
 
 See `test/llvmcall.jl` for usage examples.
 """
-kw"llvmcall"
+Core.Intrinsics.llvmcall
 
 """
 `begin...end` denotes a block of code.
