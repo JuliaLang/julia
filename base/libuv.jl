@@ -104,3 +104,23 @@ function reinit_stdio()
     global STDERR = init_stdio(ccall(:jl_stderr_stream,Ptr{Void},()))
 end
 
+"""
+    STDIN
+
+Global variable referring to the standard input stream.
+"""
+:STDIN
+
+"""
+    STDOUT
+
+Global variable referring to the standard out stream.
+"""
+:STDOUT
+
+"""
+    STDERR
+
+Global variable referring to the standard error stream.
+"""
+:STDERR

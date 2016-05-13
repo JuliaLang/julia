@@ -657,4 +657,20 @@ kw"immutable"
 """
 kw"@__LINE__"
 
+"""
+    nothing
+
+The singleton instance of type `Void`, used by convention when there is no value to return
+(as in a C `void` function). Can be converted to an empty `Nullable` value.
+"""
+nothing
+
+"""
+    ANY
+
+Equivalent to `Any` for dispatch purposes, but signals the compiler to skip code
+generation specialization for that field.
+"""
+ANY
+
 end

@@ -2,6 +2,11 @@
 
 ## converting pointers to an appropriate unsigned ##
 
+"""
+    C_NULL
+
+The C null pointer constant, sometimes used when calling external code.
+"""
 const C_NULL = box(Ptr{Void}, 0)
 
 # pointer to integer

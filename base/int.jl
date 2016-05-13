@@ -276,6 +276,11 @@ end
 
 ## system word size ##
 
+"""
+    WORD_SIZE
+
+Standard word size on the current machine, in bits.
+"""
 const WORD_SIZE = convert(Int, Int.size)*8
 
 ## integer promotions ##

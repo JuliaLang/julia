@@ -65,6 +65,13 @@ end # @windows_only
 ## ENV: hash interface ##
 
 type EnvHash <: Associative{String,String}; end
+
+"""
+    ENV
+
+Reference to the singleton `EnvHash`, providing a dictionary interface to system environment
+variables.
+"""
 const ENV = EnvHash()
 
 similar(::EnvHash) = Dict{String,String}()

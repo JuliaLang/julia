@@ -4,6 +4,8 @@
  C Standard Library
 ********************
 
+.. currentmodule:: Base.Libc
+
 .. function:: malloc(size::Integer) -> Ptr{Void}
 
    .. Docstring generated from Julia source
@@ -94,14 +96,11 @@
 
    You may not need to call ``msync``\ , because synchronization is performed at intervals automatically by the operating system. However, you can call this directly if, for example, you are concerned about losing the result of a long-running calculation.
 
-.. data:: MS_ASYNC
+.. variable:: MS_ASYNC
+              MS_SYNC
+              MS_INVALIDATE
 
-   Enum constant for :func:`msync`. See your platform man page for details. (not available on Windows).
+   .. Docstring generated from Julia source
 
-.. data:: MS_SYNC
+   Enum constants for :func:`msync`\ . See your platform man page for details. (not available on Windows).
 
-   Enum constant for :func:`msync`. See your platform man page for details. (not available on Windows).
-
-.. data:: MS_INVALIDATE
-
-   Enum constant for :func:`msync`. See your platform man page for details. (not available on Windows).
