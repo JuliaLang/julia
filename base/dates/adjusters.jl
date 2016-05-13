@@ -158,9 +158,32 @@ function adjust(func::Function,start;step::Period=Day(1),negate::Bool=false,limi
 end
 
 # Constructors using DateFunctions
+
+"""
+    Date(f::Function, y[, m]; step=Day(1), negate=false, limit=10000) -> Date
+
+Create a `Date` through the adjuster API. The starting point will be constructed from the
+provided `y, m` arguments, and will be adjusted until `f::Function` returns `true`. The step
+size in adjusting can be provided manually through the `step` keyword. If `negate=true`,
+then the adjusting will stop when `f::Function` returns `false` instead of `true`. `limit`
+provides a limit to the max number of iterations the adjustment API will pursue before
+throwing an error (given that `f::Function` is never satisfied).
+"""
 function Date(func::Function,y,m=1,d=1;step::Period=Day(1),negate::Bool=false,limit::Int=10000)
     return adjust(DateFunction(func,negate,Date(y,m,d)),Date(y,m,d),step,limit)
 end
+
+"""
+    DateTime(f::Function, y[, m, d, h, mi, s]; step=Day(1), negate=false, limit=10000) -> DateTime
+
+Create a `DateTime` through the adjuster API. The starting point will be constructed from
+the provided `y, m, d...` arguments, and will be adjusted until `f::Function` returns
+`true`. The step size in adjusting can be provided manually through the `step` keyword. If
+`negate=true`, then the adjusting will stop when `f::Function` returns `false` instead of
+`true`. `limit` provides a limit to the max number of iterations the adjustment API will
+pursue before throwing an error (in the case that `f::Function` is never satisfied).
+"""
+DateTime(::Function, args...)
 
 function DateTime(func::Function,y,m=1;step::Period=Day(1),negate::Bool=false,limit::Int=10000)
     return adjust(DateFunction(func,negate,DateTime(y,m)),DateTime(y,m),step,limit)
