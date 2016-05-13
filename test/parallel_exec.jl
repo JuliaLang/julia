@@ -9,10 +9,13 @@ if Base.JLOptions().code_coverage == 1
 elseif Base.JLOptions().code_coverage == 2
     cov_flag = `--code-coverage=all`
 end
+
+# Test a `remote` invocation when no workers are present
+@test remote(myid)() == 1
+
 addprocs(3; exeflags=`$cov_flag $inline_flag --check-bounds=yes --depwarn=error`)
 
 # Test remote()
-
 let
     pool = Base.default_worker_pool()
 
