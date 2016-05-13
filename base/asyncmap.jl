@@ -2,12 +2,13 @@
 
 
 """
-    AsyncCollector(f, results, c...; ntasks=100) -> iterator
+    AsyncCollector(f, results, c...; ntasks=0) -> iterator
 
-Apply f to each element of c using at most `max(100, nworkers())` asynchronous
+Apply `f` to each element of `c` using at most `ntasks` asynchronous
 tasks.
-For multiple collection arguments, apply f elementwise.
-Output is collected into "results".
+If `ntasks` is unspecified, uses `max(100, nworkers())` tasks.
+For multiple collection arguments, apply `f` elementwise.
+Output is collected into `results`.
 
 Note: `next(::AsyncCollector, state) -> (nothing, state)`
 
@@ -106,9 +107,10 @@ end
 
 
 """
-    AsyncGenerator(f, c...; ntasks=100) -> iterator
+    AsyncGenerator(f, c...; ntasks=0) -> iterator
 
-Apply f to each element of c using at most 100 asynchronous tasks.
+Apply `f` to each element of `c` using at most `ntasks` asynchronous tasks.
+If `ntasks` is unspecified, uses `max(100, nworkers())` tasks.
 For multiple collection arguments, apply f elementwise.
 Results are returned by the iterator as they become available.
 Note: `collect(AsyncGenerator(f, c...; ntasks=1))` is equivalent to
