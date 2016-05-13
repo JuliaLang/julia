@@ -442,3 +442,6 @@ add_method_to_glob_fn!()
 # PR #16170
 @test expand(parse("true(x) = x")) == Expr(:error, "invalid function name \"true\"")
 @test expand(parse("false(x) = x")) == Expr(:error, "invalid function name \"false\"")
+
+# issue #16355
+@test expand(:(f(d:Int...)=nothing)) == Expr(:error, "\"d:Int\" is not a valid function argument name")
