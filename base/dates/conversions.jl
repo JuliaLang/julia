@@ -1,8 +1,24 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
 # Conversion/Promotion
+
+"""
+    Date(dt::DateTime) -> Date
+
+Converts a `DateTime` to a `Date`. The hour, minute, second, and millisecond parts of
+the `DateTime` are truncated, so only the year, month and day parts are used in
+construction.
+"""
 Date(dt::TimeType) = convert(Date,dt)
+
+"""
+    DateTime(dt::Date) -> DateTime
+
+Converts a `Date` to a `DateTime`. The hour, minute, second, and millisecond parts of
+the new `DateTime` are assumed to be zero.
+"""
 DateTime(dt::TimeType) = convert(DateTime,dt)
+
 Base.convert(::Type{DateTime},dt::Date) = DateTime(UTM(value(dt)*86400000))
 Base.convert(::Type{Date},dt::DateTime) = Date(UTD(days(dt)))
 """
