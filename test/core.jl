@@ -1773,6 +1773,7 @@ type A6142 <: AbstractMatrix{Float64}; end
 +{TJ}(x::A6142, y::UniformScaling{TJ}) = "UniformScaling method called"
 +(x::A6142, y::AbstractArray) = "AbstractArray method called"
 @test A6142() + I == "UniformScaling method called"
++(x::A6142, y::Range) = "Range method called" #16324 ambiguity
 
 # issue #6175
 function g6175(); print(""); (); end
