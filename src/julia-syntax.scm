@@ -791,7 +791,7 @@
         (block
          (global ,name) (const ,name)
          ,@(map (lambda (v) `(local ,v)) params)
-         ,@(map make-assignment params (symbols->typevars params bounds #t))
+         ,@(map make-assignment params (symbols->typevars params bounds #f))
          (composite_type ,name (call (core svec) ,@params)
                          (call (core svec) ,@(map (lambda (x) `',x) field-names))
                          ,super (call (core svec) ,@field-types) ,mut ,min-initialized)))
@@ -1174,7 +1174,7 @@
                 ,@(map (lambda (v) `(local ,v)) params)
                 ,@(map (lambda (l r) (make-assignment l (expand-forms r)))
                        params
-                       (symbols->typevars params bounds #t))
+                       (symbols->typevars params bounds #f))
                 (call (core TypeConstructor)
                       (call (core svec) ,@params)
                       ,(expand-forms type-ex))))))))
@@ -2487,7 +2487,7 @@ f(x) = yt(x)
         ((,@(map (lambda (p) `(,p Any 18)) P))
          () 0 ())
         (body (global ,name) (const ,name)
-              ,@(map (lambda (p) `(= ,p (call (core TypeVar) ',p (core Any) true))) P)
+              ,@(map (lambda (p) `(= ,p (call (core TypeVar) ',p (core Any) false))) P)
               (composite_type ,name (call (core svec) ,@P)
                               (call (core svec) ,@(map (lambda (v) `',v) fields))
                               ,super

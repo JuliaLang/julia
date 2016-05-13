@@ -928,15 +928,6 @@ JL_CALLABLE(jl_f_apply_type)
     return jl_apply_type_(args[0], &args[1], nargs-1);
 }
 
-JL_DLLEXPORT jl_value_t *jl_new_type_constructor(jl_svec_t *p, jl_value_t *t)
-{
-    jl_value_t *tc = (jl_value_t*)jl_new_type_ctor(p, t);
-    int i;
-    for(i=0; i < jl_svec_len(p); i++)
-        ((jl_tvar_t*)jl_svecref(p,i))->bound = 0;
-    return tc;
-}
-
 // generic function reflection ------------------------------------------------
 
 static void jl_check_type_tuple(jl_value_t *t, jl_sym_t *name, const char *ctx)
