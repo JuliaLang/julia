@@ -329,7 +329,11 @@ typedef struct _jl_datatype_t {
     uint8_t mutabl;
     uint8_t pointerfree;
     int32_t ninitialized;
+    // memoized properties
     int32_t depth;
+    int8_t hastypevars; // bound
+    int8_t haswildcard; // unbound
+    int8_t isleaftype;
     // hidden fields:
     uint32_t nfields;
     uint32_t alignment : 29;  // strictest alignment over all fields
