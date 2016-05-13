@@ -248,15 +248,20 @@ mktempdir() do dir
             try
                 brnch = LibGit2.branch(repo)
                 brref = LibGit2.head(repo)
-                @test LibGit2.isbranch(brref)
-                @test LibGit2.name(brref) == "refs/heads/master"
-                @test LibGit2.shortname(brref) == "master"
-                @test LibGit2.ishead(brref)
-                @test LibGit2.upstream(brref) == nothing
-                @test repo.ptr == LibGit2.owner(brref).ptr
-                @test brnch == "master"
-                @test LibGit2.headname(repo) == "master"
-                LibGit2.branch!(repo, test_branch, string(commit_oid1), set_head=false)
+                try
+                    @test LibGit2.isbranch(brref)
+                    @test LibGit2.name(brref) == "refs/heads/master"
+                    @test LibGit2.shortname(brref) == "master"
+                    @test LibGit2.ishead(brref)
+                    @test LibGit2.upstream(brref) == nothing
+                    @test repo.ptr == LibGit2.owner(brref).ptr
+                    @test brnch == "master"
+                    @test LibGit2.headname(repo) == "master"
+                    LibGit2.branch!(repo, test_branch, string(commit_oid1), set_head=false)
+                    @test LibGit2.lookup_branch(repo, test_branch, true) == nothing
+                finally
+                    finalize(brref)
+                end
 
                 branches = map(b->LibGit2.shortname(b[1]), LibGit2.GitBranchIter(repo))
                 @test "master" in branches
