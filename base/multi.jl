@@ -1212,7 +1212,7 @@ function init_worker(cookie::AbstractString, manager::ClusterManager=DefaultClus
     assert(isempty(PGRP.refs))
     assert(isempty(client_refs))
 
-    # System is started in head node mode, cleanup entries related to the same
+    # System is started in head node mode, cleanup related entries
     empty!(PGRP.workers)
     empty!(map_pid_wrkr)
 
