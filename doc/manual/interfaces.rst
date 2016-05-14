@@ -151,7 +151,7 @@ Abstract Arrays
 Methods to implement                                                                                    Brief description
 ========================================================== ============================================ =======================================================================================
 :func:`size(A) <size>`                                                                                  Returns a tuple containing the dimensions of A
-:func:`Base.linearindexing(Type) <Base.linearindexing>`                                                 Returns either ``Base.LinearFast()`` or ``Base.LinearSlow()``. See the description below.
+:func:`Base.linearindexing{T<:YourType}(::Type{T}) <Base.linearindexing>`                               Returns either ``Base.LinearFast()`` or ``Base.LinearSlow()``. See the description below.
 :func:`getindex(A, i::Int) <getindex>`                                                                  (if ``LinearFast``) Linear scalar indexing
 :func:`getindex(A, I::Vararg{Int, N}) <getindex>`                                                       (if ``LinearSlow``, where ``N = ndims(A)``) N-dimensional scalar indexing
 :func:`setindex!(A, v, i::Int) <getindex>`                                                              (if ``LinearFast``) Scalar indexed assignment
@@ -181,7 +181,7 @@ Returning to the sequence of squares from above, we could instead define it as a
                count::Int
            end
            Base.size(S::SquaresVector) = (S.count,)
-           Base.linearindexing(::Type{SquaresVector}) = Base.LinearFast()
+           Base.linearindexing{T<:SquaresVector}(::Type{T}) = Base.LinearFast()
            Base.getindex(S::SquaresVector, i::Int) = i*i;
 
 Note that it's very important to specify the two parameters of the ``AbstractArray``; the first defines the :func:`eltype`, and the second defines the :func:`ndims`.  That supertype and those three methods are all it takes for ``SquaresVector`` to be an iterable, indexable, and completely functional array:
