@@ -459,7 +459,7 @@ if LibGit2.version() >= v"0.24.0"
                     rewrite_notes_ref::Cstring = Cstring_NULL,
                     merge_opts::MergeOptions = MergeOptions(),
                     checkout_opts::CheckoutOptions = CheckoutOptions()) =
-        RebaseOptions(one(Cuint), quiet, rewrite_notes_ref, merge_opts, checkout_opts)
+        RebaseOptions(one(Cuint), quiet, Cint(0), rewrite_notes_ref, merge_opts, checkout_opts)
 else
     immutable RebaseOptions
         version::Cuint
