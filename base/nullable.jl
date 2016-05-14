@@ -9,12 +9,14 @@ Nullable() = Nullable{Union{}}()
 eltype{T}(::Type{Nullable{T}}) = T
 
 convert{T}(::Type{Nullable{T}}, x::Nullable{T}) = x
+convert(   ::Type{Nullable   }, x::Nullable   ) = x
 
 function convert{T}(::Type{Nullable{T}}, x::Nullable)
     return isnull(x) ? Nullable{T}() : Nullable{T}(convert(T, get(x)))
 end
 
 convert{T}(::Type{Nullable{T}}, x::T) = Nullable{T}(x)
+convert{T}(::Type{Nullable   }, x::T) = Nullable{T}(x)
 
 convert{T}(::Type{Nullable{T}}, ::Void) = Nullable{T}()
 convert(   ::Type{Nullable   }, ::Void) = Nullable{Union{}}()
