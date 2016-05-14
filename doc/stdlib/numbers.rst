@@ -255,17 +255,23 @@ General Number Functions and Constants
 
    Returns NaN (not-a-number) of the floating point type ``f`` or of the same floating point type as ``f``
 
-.. function:: nextfloat(f)
+.. function:: nextfloat(x::AbstractFloat)
 
    .. Docstring generated from Julia source
 
-   Get the next floating point number in lexicographic order.
+   Returns the smallest floating point number ``y`` of the same type as ``x`` such ``x < y``\ . If no such ``y`` exists (e.g. if ``x`` is ``Inf`` or ``NaN``\ ), then returns ``x``\ .
 
-.. function:: prevfloat(f) -> AbstractFloat
+.. function:: prevfloat(x::AbstractFloat)
 
    .. Docstring generated from Julia source
 
-   Get the previous floating point number in lexicographic order.
+   Returns the largest floating point number ``y`` of the same type as ``x`` such ``y < x``\ . If no such ``y`` exists (e.g. if ``x`` is ``-Inf`` or ``NaN``\ ), then returns ``x``\ .
+
+.. function:: nextfloat(x::AbstractFloat, n::Integer)
+
+   .. Docstring generated from Julia source
+
+   The result of ``n`` iterative applications of ``nextfloat`` to ``x`` if ``n >= 0``\ , or ``-n`` applications of ``prevfloat`` if ``n < 0``\ .
 
 .. function:: isinteger(x) -> Bool
 
