@@ -153,14 +153,15 @@ release-candidate: release testall
 	@echo 1. Remove deprecations in base/deprecated.jl
 	@echo 2. Update references to the julia version in the source directories, such as in README.md
 	@echo 3. Bump VERSION
-	@echo 4. Create tag, push to github "\(git tag v\`cat VERSION\` && git push --tags\)"		#"` # These comments deal with incompetent syntax highlighting rules
-	@echo 5. Clean out old .tar.gz files living in deps/, "\`git clean -fdx\`" seems to work	#"`
-	@echo 6. Replace github release tarball with tarballs created from make light-source-dist and make full-source-dist
-	@echo 7. Follow packaging instructions in DISTRIBUTING.md to create binary packages for all platforms
-	@echo 8. Upload to AWS, update http://julialang.org/downloads and http://status.julialang.org/stable links
-	@echo 9. Update checksums on AWS for tarball and packaged binaries
-	@echo 10. Announce on mailing lists
-	@echo 11. Change master to release-0.X in base/version.jl and base/version_git.sh as in 4cb1e20
+	@echo 4. Increase SOMAJOR and SOMINOR if needed.
+	@echo 5. Create tag, push to github "\(git tag v\`cat VERSION\` && git push --tags\)"		#"` # These comments deal with incompetent syntax highlighting rules
+	@echo 6. Clean out old .tar.gz files living in deps/, "\`git clean -fdx\`" seems to work	#"`
+	@echo 7. Replace github release tarball with tarballs created from make light-source-dist and make full-source-dist
+	@echo 8. Follow packaging instructions in DISTRIBUTING.md to create binary packages for all platforms
+	@echo 9. Upload to AWS, update http://julialang.org/downloads and http://status.julialang.org/stable links
+	@echo 10. Update checksums on AWS for tarball and packaged binaries
+	@echo 11. Announce on mailing lists
+	@echo 12. Change master to release-0.X in base/version.jl and base/version_git.sh as in 4cb1e20
 	@echo
 
 $(build_man1dir)/julia.1: $(JULIAHOME)/doc/man/julia.1 | $(build_man1dir)

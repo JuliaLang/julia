@@ -132,6 +132,10 @@ else
 JULIA_COMMIT := $(JULIA_VERSION)
 endif
 
+# Increase these every release when breaking ABI in a backward-incompatible way
+SOMAJOR := 1
+SOMINOR := 0
+
 # Whether to use GPL libraries or not.
 USE_GPL_LIBS ?= 1
 
