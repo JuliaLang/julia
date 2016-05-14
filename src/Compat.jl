@@ -1112,4 +1112,10 @@ else
     import Base.AsyncCondition
 end
 
+# 0.5.0-dev+2301, JuliaLang/julia#14766
+if !isdefined(Base, :unsafe_write)
+    const unsafe_write = write
+    export unsafe_write
+end
+
 end # module

@@ -1136,3 +1136,8 @@ let async, c = false
     sleep(0.1)
     @test c
 end
+
+let io = IOBuffer(), s = "hello"
+    unsafe_write(io, pointer(s), length(s))
+    @test takebuf_string(io) == s
+end

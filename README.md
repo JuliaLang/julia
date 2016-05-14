@@ -177,6 +177,8 @@ Currently, the `@compat` macro supports the following syntaxes:
 
 * `symbol` is now `Symbol` [#16154](https://github.com/JuliaLang/julia/pull/16154); use `@compat Symbol(...)` if you need Julia 0.3 compatibility.
 
+* `write(::IO, ::Ptr, len)` is now `unsafe_write` [#14766](https://github.com/JuliaLang/julia/pull/14766).
+
 ## New macros
 
 * `@inline` and `@noinline` have been added. On 0.3, these are "no-ops," meaning they don't actually do anything.
