@@ -171,4 +171,8 @@ let dl = C_NULL
     end
 end
 
+if OS_NAME in (:Linux, :FreeBSD)
+    ccall(:jl_read_sonames, Void, ())
+end
+
 end

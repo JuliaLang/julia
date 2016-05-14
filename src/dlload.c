@@ -176,7 +176,6 @@ static void *jl_load_dynamic_library_(const char *modname, unsigned flags, int t
                     // Do the no-ext one last if hasext == 1
                     const char *ext = extensions[i + hasext];
                     path[0] = '\0';
-                    handle = NULL;
                     if (dl_path[len-1] == PATHSEPSTRING[0])
                         snprintf(path, PATHBUF, "%s%s%s", dl_path, modname, ext);
                     else
@@ -197,7 +196,6 @@ static void *jl_load_dynamic_library_(const char *modname, unsigned flags, int t
         // Do the no-ext one last if hasext == 1
         const char *ext = extensions[i + hasext];
         path[0] = '\0';
-        handle = NULL;
         snprintf(path, PATHBUF, "%s%s", modname, ext);
         handle = jl_dlopen(path, flags);
         if (handle)
@@ -205,15 +203,10 @@ static void *jl_load_dynamic_library_(const char *modname, unsigned flags, int t
     }
 
 #if defined(__linux__) || defined(__FreeBSD__)
-// check map of versioned libs from "libX" to full soname "libX.so.ver"
-    {
-        const char *soname = jl_lookup_soname(modname, strlen(modname));
-        if (soname) {
-            handle = jl_dlopen(soname, flags);
-            if (handle)
-                goto done;
-        }
-    }
+    // check map of versioned libs from "libX" to full soname "libX.so.ver"
+    handle = jl_dlopen_soname(modname, strlen(modname), flags);
+    if (handle)
+        goto done;
 #endif
 
 notfound:
