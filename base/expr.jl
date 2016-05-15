@@ -29,7 +29,13 @@ copy(e::Expr) = (n = Expr(e.head);
 
 # copy parts of an AST that the compiler mutates
 astcopy(x::Expr) = copy(x)
-astcopy(x::Array{Any,1}) = Any[astcopy(a) for a in x]
+function astcopy(x::Array{Any,1})
+    r = Array(Any,length(x))
+    for i in eachindex(x)
+        @inbounds isdefined(x, i) && (r[i] = astcopy(x[i]))
+    end
+    r
+end
 astcopy(x) = x
 
 ==(x::Expr, y::Expr) = x.head === y.head && isequal(x.args, y.args)

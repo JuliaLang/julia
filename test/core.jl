@@ -4127,3 +4127,10 @@ let a = Any[]
     @test (push!(a,10); f()) - (push!(a,2); f()) == 8
     @test a == [10, 2]
 end
+
+# Copying Exprs that contain arrays with undefiend elements
+# should not error
+let a = Array(Any,1)
+    expr = :(f($a))
+    @test expr !== copy(expr)
+end
