@@ -1,7 +1,7 @@
 // This file is a part of Julia. License is MIT: http://julialang.org/license
 
 // Useful function in debugger to find page/region metadata
-gcpage_t *jl_gc_page_metadata(void *data)
+jl_gc_pagemeta_t *jl_gc_page_metadata(void *data)
 {
     return page_metadata(data);
 }
@@ -27,11 +27,11 @@ JL_DLLEXPORT jl_taggedvalue_t *jl_gc_find_taggedvalue_pool(char *p, size_t *osiz
     if (p < page_begin)
         return NULL;
     size_t ofs = p - page_begin;
-    int pg_idx = PAGE_INDEX(r, p);
+    int pg_idx = page_index(r, page_begin);
     // Check if this is a free page
     if (r->freemap[pg_idx / 32] & (uint32_t)(1 << (pg_idx % 32)))
         return NULL;
-    gcpage_t *pagemeta = &r->meta[pg_idx];
+    jl_gc_pagemeta_t *pagemeta = &r->meta[pg_idx];
     int osize = pagemeta->osize;
     // Shouldn't be needed, just in case
     if (osize == 0)
@@ -163,7 +163,7 @@ static void clear_mark(int bits)
             if (!!~line) {
                 for (int j = 0; j < 32; j++) {
                     if (!((line >> j) & 1)) {
-                        gcpage_t *pg = page_metadata(&region->pages[pg_i*32 + j][0] + GC_PAGE_OFFSET);
+                        jl_gc_pagemeta_t *pg = page_metadata(region->pages[pg_i*32 + j].data + GC_PAGE_OFFSET);
                         pool_t *pool;
                         FOR_HEAP (pg->thread_n)
                             pool = &pools[pg->pool_n];
@@ -410,7 +410,7 @@ static void gc_scrub_range(char *stack_lo, char *stack_hi)
         jl_taggedvalue_t *tag = jl_gc_find_taggedvalue_pool(p, &osize);
         if (osize <= sizeof_jl_taggedvalue_t || !tag || gc_marked(tag))
             continue;
-        gcpage_t *pg = page_metadata(tag);
+        jl_gc_pagemeta_t *pg = page_metadata(tag);
         // Make sure the sweep rebuild the freelist
         pg->allocd = 1;
         pg->gc_bits = 0x3;
