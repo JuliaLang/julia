@@ -22,7 +22,7 @@ JL_DLLEXPORT jl_taggedvalue_t *jl_gc_find_taggedvalue_pool(char *p, size_t *osiz
     // Not in the pool
     if (!r)
         return NULL;
-    char *page_begin = GC_PAGE_DATA(p) + GC_PAGE_OFFSET;
+    char *page_begin = gc_page_data(p) + GC_PAGE_OFFSET;
     // In the page header
     if (p < page_begin)
         return NULL;
@@ -38,7 +38,7 @@ JL_DLLEXPORT jl_taggedvalue_t *jl_gc_find_taggedvalue_pool(char *p, size_t *osiz
         return NULL;
     char *tag = (char*)p - ofs % osize;
     // Points to an "object" that gets into the next page
-    if (tag + osize > GC_PAGE_DATA(p) + GC_PAGE_SZ)
+    if (tag + osize > gc_page_data(p) + GC_PAGE_SZ)
         return NULL;
     if (osize_p)
         *osize_p = osize;
@@ -138,7 +138,7 @@ static void clear_mark(int bits)
     }
     bigval_t *v;
     FOR_EACH_HEAP () {
-        v = big_objects;
+        v = current_heap->big_objects;
         while (v != NULL) {
             void *gcv = &v->header;
             if (!verifying) arraylist_push(&bits_save[gc_bits(gcv)], gcv);
@@ -166,7 +166,7 @@ static void clear_mark(int bits)
                         jl_gc_pagemeta_t *pg = page_metadata(region->pages[pg_i*32 + j].data + GC_PAGE_OFFSET);
                         pool_t *pool;
                         FOR_HEAP (pg->thread_n)
-                            pool = &pools[pg->pool_n];
+                            pool = &current_heap->norm_pools[pg->pool_n];
                         pv = (gcval_t*)(pg->data + GC_PAGE_OFFSET);
                         char *lim = (char*)pv + GC_PAGE_SZ - GC_PAGE_OFFSET - pool->osize;
                         while ((char*)pv <= lim) {
@@ -379,7 +379,7 @@ void gc_debug_print_status(void)
     uint64_t other_count = jl_gc_debug_env.other.num;
     jl_safe_printf("Allocations: %" PRIu64 " "
                    "(Pool: %" PRIu64 "; Other: %" PRIu64 "); GC: %d\n",
-                   pool_count + other_count, pool_count, other_count, n_pause);
+                   pool_count + other_count, pool_count, other_count, gc_num.pause);
 }
 
 void gc_debug_critical_error(void)
@@ -415,7 +415,7 @@ static void gc_scrub_range(char *stack_lo, char *stack_hi)
         pg->allocd = 1;
         pg->gc_bits = 0x3;
         // Find the age bit
-        char *page_begin = GC_PAGE_DATA(tag) + GC_PAGE_OFFSET;
+        char *page_begin = gc_page_data(tag) + GC_PAGE_OFFSET;
         int obj_id = (((char*)tag) - page_begin) / osize;
         uint8_t *ages = pg->ages + obj_id / 8;
         // Force this to be a young object to save some memory
@@ -450,7 +450,7 @@ void gc_debug_print_status(void)
     uint64_t big_count = gc_num.bigalloc;
     jl_safe_printf("Allocations: %" PRIu64 " "
                    "(Pool: %" PRIu64 "; Big: %" PRIu64 "); GC: %d\n",
-                   pool_count + big_count, pool_count, big_count, n_pause);
+                   pool_count + big_count, pool_count, big_count, gc_num.pause);
 }
 
 void gc_debug_critical_error(void)
