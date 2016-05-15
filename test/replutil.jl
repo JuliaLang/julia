@@ -213,7 +213,7 @@ let undefvar
     err_str = @except_str read(IOBuffer(), UInt8) EOFError
     @test err_str == "EOFError: read end of file"
     err_str = @except_str Dict()[:doesnotexist] KeyError
-    @test err_str == "KeyError: doesnotexist not found"
+    @test err_str == "KeyError: key :doesnotexist not found"
     err_str = @except_str throw(InterruptException()) InterruptException
     @test err_str == "InterruptException:"
     err_str = @except_str throw(ArgumentError("not an error")) ArgumentError
