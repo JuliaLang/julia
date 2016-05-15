@@ -73,6 +73,13 @@ function isbranch(ref::GitReference)
     return err == 1
 end
 
+function isremote(ref::GitReference)
+    isempty(ref) && return false
+    err = ccall((:git_reference_is_remote, :libgit2), Cint,
+                  (Ptr{Void},), ref.ptr)
+    return err == 1
+end
+
 function peel{T <: GitObject}(::Type{T}, ref::GitReference)
     git_otype = getobjecttype(T)
     obj_ptr_ptr = Ref{Ptr{Void}}(C_NULL)
