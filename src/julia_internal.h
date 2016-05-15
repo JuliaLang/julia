@@ -257,6 +257,8 @@ void jl_init_serializer(void);
 void jl_gc_init(void);
 void jl_init_restored_modules(jl_array_t *init_order);
 void jl_init_signal_async(void);
+void jl_init_debuginfo(void);
+void jl_init_runtime_ccall(void);
 
 void _julia_init(JL_IMAGE_SEARCH rel);
 #ifdef COPY_STACKS
@@ -423,6 +425,7 @@ void *jl_get_library(const char *f_lib);
 JL_DLLEXPORT void *jl_load_and_lookup(const char *f_lib, const char *f_name,
                                       void **hnd);
 const char *jl_dlfind_win32(const char *name);
+void *jl_dlopen_soname(const char *pfx, size_t n, unsigned flags);
 
 // libuv wrappers:
 JL_DLLEXPORT int jl_fs_rename(const char *src_path, const char *dst_path);
