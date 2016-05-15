@@ -239,7 +239,7 @@ end
 
 Returns all documentation that matches both `binding` and `sig`.
 """
-function doc(binding::Binding, sig::Type = Union)
+function doc(binding::Binding, sig::Type = Union{})
     results, groups = DocStr[], MultiDoc[]
     # Lookup `binding` and `sig` for matches in all modules of the docsystem.
     for mod in modules
@@ -280,8 +280,8 @@ function doc(binding::Binding, sig::Type = Union)
 end
 
 # Some additional convenience `doc` methods that take objects rather than `Binding`s.
-doc(object, sig::Type = Union) = doc(aliasof(object, typeof(object)), sig)
-doc(object, sig...)            = doc(object, Tuple{sig...})
+doc(object, sig::Type = Union{}) = doc(aliasof(object, typeof(object)), sig)
+doc(object, sig...)              = doc(object, Tuple{sig...})
 
 """
     Docs.fielddoc(binding, field)
