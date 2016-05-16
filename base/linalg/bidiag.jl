@@ -224,8 +224,142 @@ end
 /(A::Bidiagonal, B::Number) = Bidiagonal(A.dv/B, A.ev/B, A.isupper)
 ==(A::Bidiagonal, B::Bidiagonal) = (A.dv==B.dv) && (A.ev==B.ev) && (A.isupper==B.isupper)
 
-SpecialMatrix = Union{Bidiagonal, SymTridiagonal, Tridiagonal, AbstractTriangular}
-*(A::SpecialMatrix, B::SpecialMatrix)=full(A)*full(B)
+
+BiTriSym = Union{Bidiagonal, Tridiagonal, SymTridiagonal}
+BiTri = Union{Bidiagonal, Tridiagonal}
+A_mul_B!(C::AbstractMatrix, A::SymTridiagonal, B::BiTriSym) = A_mul_B_td!(C, A, B)
+A_mul_B!(C::AbstractMatrix, A::BiTri, B::BiTriSym) = A_mul_B_td!(C, A, B)
+A_mul_B!(C::AbstractMatrix, A::BiTriSym, B::BiTriSym) = A_mul_B_td!(C, A, B)
+A_mul_B!(C::AbstractMatrix, A::AbstractTriangular, B::BiTriSym) = A_mul_B_td!(C, A, B)
+A_mul_B!(C::AbstractMatrix, A::AbstractMatrix, B::BiTriSym) = A_mul_B_td!(C, A, B)
+A_mul_B!(C::AbstractVector, A::BiTri, B::AbstractVector) = A_mul_B_td!(C, A, B)
+A_mul_B!(C::AbstractMatrix, A::BiTri, B::AbstractVecOrMat) = A_mul_B_td!(C, A, B)
+A_mul_B!(C::AbstractVecOrMat, A::BiTri, B::AbstractVecOrMat) = A_mul_B_td!(C, A, B)
+
+
+function check_A_mul_B!_sizes(C, A, B)
+    nA, mA = size(A)
+    nB, mB = size(B)
+    nC, mC = size(C)
+    if !(nA == nC)
+        throw(DimensionMismatch("Sizes size(A)=$(size(A)) and size(C) = $(size(C)) must match at first entry."))
+    elseif !(mA == nB)
+        throw(DimensionMismatch("Second entry of size(A)=$(size(A)) and first entry of size(B) = $(size(B)) must match."))
+    elseif !(mB == mC)
+        throw(DimensionMismatch("Sizes size(B)=$(size(B)) and size(C) = $(size(C)) must match at first second entry."))
+    end
+end
+
+function A_mul_B_td!(C::AbstractMatrix, A::BiTriSym, B::BiTriSym)
+    check_A_mul_B!_sizes(C, A, B)
+    n = size(A,1)
+    n <= 3 && return A_mul_B!(C, full(A), full(B))
+    fill!(C, zero(eltype(C)))
+    Al = diag(A, -1)
+    Ad = diag(A, 0)
+    Au = diag(A, 1)
+    Bl = diag(B, -1)
+    Bd = diag(B, 0)
+    Bu = diag(B, 1)
+    @inbounds begin
+        # first row of C
+        C[1,1] = A[1,1]*B[1,1] + A[1, 2]*B[2, 1]
+        C[1,2] = A[1,1]*B[1,2] + A[1,2]*B[2,2]
+        C[1,3] = A[1,2]*B[2,3]
+        # second row of C
+        C[2,1] = A[2,1]*B[1,1] + A[2,2]*B[2,1]
+        C[2,2] = A[2,1]*B[1,2] + A[2,2]*B[2,2] + A[2,3]*B[3,2]
+        C[2,3] = A[2,2]*B[2,3] + A[2,3]*B[3,3]
+        C[2,4] = A[2,3]*B[3,4]
+        for j in 3:n-2
+            Ajj₋1   = Al[j-1]
+            Ajj     = Ad[j]
+            Ajj₊1   = Au[j]
+            Bj₋1j₋2 = Bl[j-2]
+            Bj₋1j₋1 = Bd[j-1]
+            Bj₋1j   = Bu[j-1]
+            Bjj₋1   = Bl[j-1]
+            Bjj     = Bd[j]
+            Bjj₊1   = Bu[j]
+            Bj₊1j   = Bl[j]
+            Bj₊1j₊1 = Bd[j+1]
+            Bj₊1j₊2 = Bu[j+1]
+            C[j,j-2]  = Ajj₋1*Bj₋1j₋2
+            C[j, j-1] = Ajj₋1*Bj₋1j₋1 + Ajj*Bjj₋1
+            C[j, j  ] = Ajj₋1*Bj₋1j   + Ajj*Bjj       + Ajj₊1*Bj₊1j
+            C[j, j+1] = Ajj  *Bjj₊1   + Ajj₊1*Bj₊1j₊1
+            C[j, j+2] = Ajj₊1*Bj₊1j₊2
+        end
+        # row before last of C
+        C[n-1,n-3] = A[n-1,n-2]*B[n-2,n-3]
+        C[n-1,n-2] = A[n-1,n-1]*B[n-1,n-2] + A[n-1,n-2]*B[n-2,n-2]
+        C[n-1,n-1] = A[n-1,n-2]*B[n-2,n-1] + A[n-1,n-1]*B[n-1,n-1] + A[n-1,n]*B[n,n-1]
+        C[n-1,n  ] = A[n-1,n-1]*B[n-1,n  ] + A[n-1,  n]*B[n  ,n  ]
+        # last row of C
+        C[n,n-2] = A[n,n-1]*B[n-1,n-2]
+        C[n,n-1] = A[n,n-1]*B[n-1,n-1] + A[n,n]*B[n,n-1]
+        C[n,n  ] = A[n,n-1]*B[n-1,n  ] + A[n,n]*B[n,n  ]
+    end # inbounds
+    C
+end
+
+function A_mul_B_td!(C::AbstractVecOrMat, A::BiTriSym, B::AbstractVecOrMat)
+    nA = size(A,1)
+    nB = size(B,2)
+    if !(size(C,1) == size(B,1) == nA)
+        throw(DimensionMismatch("A has first dimension $nA, B has $(size(B,1)), C has $(size(C,1)) but all must match"))
+    end
+    if size(C,2) != nB
+        throw(DimensionMismatch("A has second dimension $nA, B has $(size(B,2)), C has $(size(C,2)) but all must match"))
+    end
+    nA <= 3 && return A_mul_B!(C, full(A), full(B))
+    l = diag(A, -1)
+    d = diag(A, 0)
+    u = diag(A, 1)
+    @inbounds begin
+        for j = 1:nB
+            b₀, b₊ = B[1, j], B[2, j]
+            C[1, j] = d[1]*b₀ + u[1]*b₊
+            for i = 2:nA - 1
+                b₋, b₀, b₊ = b₀, b₊, B[i + 1, j]
+                C[i, j] = l[i - 1]*b₋ + d[i]*b₀ + u[i]*b₊
+            end
+            C[nA, j] = l[nA - 1]*b₀ + d[nA]*b₊
+        end
+    end
+    C
+end
+
+function A_mul_B_td!(C::AbstractMatrix, A::AbstractMatrix, B::BiTriSym)
+    check_A_mul_B!_sizes(C, A, B)
+    n = size(A,1)
+    n <= 3 && return A_mul_B!(C, full(A), full(B))
+    m = size(B,2)
+    Bl = diag(B, -1)
+    Bd = diag(B, 0)
+    Bu = diag(B, 1)
+    @inbounds begin
+        # first and last column of C
+        B11 = Bd[1]
+        B21 = Bl[1]
+        Bmm = Bd[m]
+        Bm₋1m = Bu[m-1]
+        for i in 1:n
+            C[i, 1] = A[i,1] * B11 + A[i, 2] * B21
+            C[i, m] = A[i, m-1] * Bm₋1m + A[i, m] * Bmm
+        end
+        # middle columns of C
+        for j = 2:m-1
+            Bj₋1j = Bu[j-1]
+            Bjj = Bd[j]
+            Bj₊1j = Bl[j]
+            for i = 1:n
+                C[i, j] = A[i, j-1] * Bj₋1j + A[i, j]*Bjj + A[i, j+1] * Bj₊1j
+            end
+        end
+    end # inbounds
+    C
+end
 
 #Generic multiplication
 for func in (:*, :Ac_mul_B, :A_mul_Bc, :/, :A_rdiv_Bc)
@@ -329,3 +463,39 @@ function eigvecs{T}(M::Bidiagonal{T})
     Q #Actually Triangular
 end
 eigfact(M::Bidiagonal) = Eigen(eigvals(M), eigvecs(M))
+
+# fill! methods
+_valuefields{T <: Diagonal}(S::Type{T}) = [:diag]
+_valuefields{T <: Bidiagonal}(S::Type{T}) = [:dv, :ev]
+_valuefields{T <: Tridiagonal}(S::Type{T}) = [:dl, :d, :du]
+_valuefields{T <: SymTridiagonal}(S::Type{T}) = [:dv, :ev]
+_valuefields{T <: AbstractTriangular}(S::Type{T}) = [:data]
+
+SpecialArrays = Union{Diagonal,
+    Bidiagonal,
+    Tridiagonal,
+    SymTridiagonal,
+    AbstractTriangular}
+
+@generated function fillslots!(A::SpecialArrays, x)
+    ex = :(xT = convert(eltype(A), x))
+    for field in _valuefields(A)
+        ex = :($ex; fill!(A.$field, xT))
+    end
+    :($ex;return A)
+end
+
+# for historical reasons:
+fill!(a::AbstractTriangular, x) = fillslots!(a, x);
+fill!(D::Diagonal, x) = fillslots!(D, x);
+
+_small_enough(A::Bidiagonal) = size(A, 1) <= 1
+_small_enough(A::Tridiagonal) = size(A, 1) <= 2
+_small_enough(A::SymTridiagonal) = size(A, 1) <= 2
+
+function fill!(A::Union{Bidiagonal, Tridiagonal, SymTridiagonal} ,x)
+    xT = convert(eltype(A), x)
+    (xT == zero(eltype(A)) || _small_enough(A)) && return fillslots!(A, xT)
+    throw(ArgumentError("Array A of type $(typeof(A)) and size $(size(A)) can
+    not be filled with x=$x, since some of its entries are constrained."))
+end

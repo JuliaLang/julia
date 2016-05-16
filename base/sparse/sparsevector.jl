@@ -1680,3 +1680,43 @@ droptol!(x::SparseVector, tol, trim::Bool = true) = fkeep!(x, (i, x) -> abs(x) >
 
 dropzeros!(x::SparseVector, trim::Bool = true) = fkeep!(x, (i, x) -> x != 0, trim)
 dropzeros(x::SparseVector, trim::Bool = true) = dropzeros!(copy(x), trim)
+
+function _fillnonzero!{Tv,Ti}(arr::SparseMatrixCSC{Tv, Ti}, val)
+    m, n = size(arr)
+    resize!(arr.colptr, n+1)
+    resize!(arr.rowval, m*n)
+    resize!(arr.nzval, m*n)
+    copy!(arr.colptr, 1:m:n*m+1)
+    fill!(arr.nzval, val)
+    index = 1
+    @inbounds for _ in 1:n
+        for i in 1:m
+            arr.rowval[index] = Ti(i)
+            index += 1
+        end
+    end
+    arr
+end
+
+function _fillnonzero!{Tv,Ti}(arr::SparseVector{Tv,Ti}, val)
+    n = arr.n
+    resize!(arr.nzind, n)
+    resize!(arr.nzval, n)
+    @inbounds for i in 1:n
+        arr.nzind[i] = Ti(i)
+    end
+    fill!(arr.nzval, val)
+    arr
+end
+
+import Base.fill!
+function fill!(A::Union{SparseVector, SparseMatrixCSC}, x)
+    T = eltype(A)
+    xT = convert(T, x)
+    if xT == zero(T)
+        fill!(A.nzval, xT)
+    else
+        _fillnonzero!(A, xT)
+    end
+    return A
+end
