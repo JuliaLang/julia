@@ -2183,7 +2183,7 @@ static jl_value_t *inst_datatype(jl_datatype_t *dt, jl_svec_t *p, jl_value_t **i
     jl_precompute_memoized_dt(ndt);
 
     // assign uid as early as possible
-    if (cacheable && !ndt->abstract && ndt->uid==0)
+    if (cacheable && !ndt->abstract)
         ndt->uid = jl_assign_type_uid();
 
     if (istuple)
@@ -2207,7 +2207,7 @@ static jl_value_t *inst_datatype(jl_datatype_t *dt, jl_svec_t *p, jl_value_t **i
             else {
                 jl_compute_field_offsets(ndt);
             }
-            if (jl_is_datatype_singleton(ndt)) {
+            if (jl_is_datatype_make_singleton(ndt)) {
                 ndt->instance = newstruct(ndt);
                 jl_gc_wb(ndt, ndt->instance);
             }
@@ -3416,7 +3416,8 @@ void jl_init_types(void)
 
     jl_tupletype_t *empty_tuple_type = jl_apply_tuple_type(jl_emptysvec);
     empty_tuple_type->uid = jl_assign_type_uid();
-    jl_emptytuple = ((jl_datatype_t*)empty_tuple_type)->instance;
+    jl_emptytuple = newstruct(empty_tuple_type);
+    empty_tuple_type->instance = jl_emptytuple;
 
     // non-primitive definitions follow
     jl_int32_type = NULL;
