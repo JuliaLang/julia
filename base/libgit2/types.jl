@@ -357,28 +357,60 @@ immutable DiffDelta
 end
 DiffDelta() = DiffDelta(Cint(0), UInt32(0), UInt16(0), UInt16(0), DiffFile(), DiffFile())
 
-immutable MergeOptions
-    version::Cuint
-    flags::Cint
-    rename_threshold::Cuint
-    target_limit::Cuint
-    metric::Ptr{Void}
-    file_favor::Cint
-    file_flags::Cuint
+if LibGit2.version() >= v"0.24.0"
+    immutable MergeOptions
+        version::Cuint
+        flags::Cint
+        rename_threshold::Cuint
+        target_limit::Cuint
+        metric::Ptr{Void}
+        recursion_limit::Cuint
+        # default_driver::Cstring  # TODO: to be added in v"0.25.0" (?)
+        file_favor::Cint
+        file_flags::Cuint
+    end
+    MergeOptions(; flags::Cint = Cint(0),
+                   rename_threshold::Cuint = Cuint(50),
+                   target_limit::Cuint = Cuint(200),
+                   metric::Ptr{Void} = C_NULL,
+                   recursion_limit::Cuint = Cuint(0),
+                   # default_driver::Cstring = Cstring_NULL,
+                   file_favor::Cint = Cint(Consts.MERGE_FILE_FAVOR_NORMAL),
+                   file_flags::Cuint = Cuint(Consts.MERGE_FILE_DEFAULT)) =
+        MergeOptions(one(Cuint),
+                     flags,
+                     rename_threshold,
+                     target_limit,
+                     metric,
+                     recursion_limit,
+                     # default_driver,
+                     file_favor,
+                     file_flags)
+else
+    immutable MergeOptions
+        version::Cuint
+        flags::Cint
+        rename_threshold::Cuint
+        target_limit::Cuint
+        metric::Ptr{Void}
+        file_favor::Cint
+        file_flags::Cuint
+    end
+    MergeOptions(; flags::Cint = Cint(0),
+                   rename_threshold::Cuint = Cuint(50),
+                   target_limit::Cuint = Cuint(200),
+                   metric::Ptr{Void} = C_NULL,
+                   file_favor::Cint = Cint(Consts.MERGE_FILE_FAVOR_NORMAL),
+                   file_flags::Cuint = Cuint(Consts.MERGE_FILE_DEFAULT)) =
+        MergeOptions(one(Cuint),
+                     flags,
+                     rename_threshold,
+                     target_limit,
+                     metric,
+                     file_favor,
+                     file_flags)
 end
-MergeOptions(; flags::Cint = Cint(0),
-               rename_threshold::Cuint = Cuint(50),
-               target_limit::Cuint = Cuint(200),
-               metric::Ptr{Void} = C_NULL,
-               file_favor::Cint = Cint(Consts.MERGE_FILE_FAVOR_NORMAL),
-               file_flags::Cuint = Cuint(Consts.MERGE_FILE_DEFAULT)) =
-    MergeOptions(one(Cuint),
-                 flags,
-                 rename_threshold,
-                 target_limit,
-                 metric,
-                 file_favor,
-                 file_flags)
+
 
 if LibGit2.version() >= v"0.24.0"
     immutable PushOptions
