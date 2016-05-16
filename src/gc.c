@@ -2041,6 +2041,7 @@ jl_thread_heap_t *jl_mk_thread_heap(void)
 // System-wide initializations
 void jl_gc_init(void)
 {
+    jl_gc_init_page();
     gc_debug_init();
 
     arraylist_new(&finalizer_list, 0);
