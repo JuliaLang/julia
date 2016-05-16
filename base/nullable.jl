@@ -23,6 +23,9 @@ convert{T}(::Type{Nullable   }, x::T) = Nullable{T}(x)
 convert{T}(::Type{Nullable{T}}, ::Void) = Nullable{T}()
 convert(   ::Type{Nullable   }, ::Void) = Nullable{Union{}}()
 
+promote_rule{S,T}(::Type{Nullable{S}}, ::Type{T}) = Nullable{promote_type(S, T)}
+promote_rule{S,T}(::Type{Nullable{S}}, ::Type{Nullable{T}}) = Nullable{promote_type(S, T)}
+
 function show{T}(io::IO, x::Nullable{T})
     if limit_output(io)
         if isnull(x)
