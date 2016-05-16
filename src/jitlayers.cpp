@@ -269,13 +269,15 @@ class JuliaOJIT {
                         continue;
                     if (!(Flags & object::BasicSymbolRef::SF_Exported))
                         continue;
-                    auto Name = Symbol.getName();
-                    orc::JITSymbol Sym = JIT.CompileLayer.findSymbolIn(H, *Name, true);
+                    auto NameOrError = Symbol.getName();
+                    assert(NameOrError);
+                    auto Name = NameOrError.get();
+                    orc::JITSymbol Sym = JIT.CompileLayer.findSymbolIn(H, Name, true);
                     assert(Sym);
                     // note: calling getAddress here eagerly finalizes H
                     // as an alternative, we could store the JITSymbol instead
                     // (which would present a lazy-initializer functor interface instead)
-                    JIT.LocalSymbolTable[*Name] = (void*)(uintptr_t)Sym.getAddress();
+                    JIT.LocalSymbolTable[Name] = (void*)(uintptr_t)Sym.getAddress();
                 }
             }
         }
