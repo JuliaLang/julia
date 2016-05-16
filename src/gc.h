@@ -211,11 +211,6 @@ STATIC_INLINE int page_index(region_t *region, void *data)
     return (gc_page_data(data) - region->pages->data) / GC_PAGE_SZ;
 }
 
-STATIC_INLINE uint8_t *page_age(jl_gc_pagemeta_t *pg)
-{
-    return pg->ages;
-}
-
 #define gc_bits(o) (((gcval_t*)(o))->gc_bits)
 #define gc_marked(o)  (((gcval_t*)(o))->gc_bits & GC_MARKED)
 #define _gc_setmark(o, mark_mode) (((gcval_t*)(o))->gc_bits = mark_mode)

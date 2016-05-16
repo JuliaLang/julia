@@ -643,7 +643,7 @@ static inline gcval_t *reset_page(jl_gc_pool_t *p, jl_gc_pagemeta_t *pg, gcval_t
     pg->nfree = (GC_PAGE_SZ - GC_PAGE_OFFSET) / p->osize;
     jl_tls_states_t *ptls = jl_all_task_states[pg->thread_n].ptls;
     pg->pool_n = p - ptls->heap.norm_pools;
-    memset(page_age(pg), 0, LLT_ALIGN(GC_PAGE_SZ / p->osize, 8));
+    memset(pg->ages, 0, GC_PAGE_SZ / 8 / p->osize + 1);
     gcval_t *beg = (gcval_t*)(pg->data + GC_PAGE_OFFSET);
     gcval_t *end = (gcval_t*)((char*)beg + (pg->nfree - 1)*p->osize);
     end->next = fl;
@@ -661,7 +661,7 @@ static NOINLINE void add_page(jl_gc_pool_t *p)
     jl_gc_pagemeta_t *pg = page_metadata(data + GC_PAGE_OFFSET);
     pg->data = data;
     pg->osize = p->osize;
-    pg->ages = (uint8_t*)malloc(LLT_ALIGN(GC_PAGE_SZ / p->osize, 8));
+    pg->ages = (uint8_t*)malloc(GC_PAGE_SZ / 8 / p->osize + 1);
     pg->thread_n = ti_tid;
     gcval_t *fl = reset_page(p, pg, p->newpages);
     p->newpages = fl;
@@ -839,7 +839,7 @@ static gcval_t **sweep_page(jl_gc_pool_t *p, jl_gc_pagemeta_t *pg, gcval_t **pfl
     int pg_freedall = 0, pg_total = 0, pg_skpd = 0;
     int obj_per_page = (GC_PAGE_SZ - GC_PAGE_OFFSET)/osize;
     char *data = pg->data;
-    uint8_t *ages = page_age(pg);
+    uint8_t *ages = pg->ages;
     v = (gcval_t*)(data + GC_PAGE_OFFSET);
     char *lim = (char*)v + GC_PAGE_SZ - GC_PAGE_OFFSET - osize;
     freedall = 1;
