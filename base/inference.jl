@@ -1397,7 +1397,7 @@ function unshare_linfo!(li::LambdaInfo)
     if !isa(li.code, Array{Any,1})
         li.code = ccall(:jl_uncompress_ast, Any, (Any,Any), li, li.code)
     else
-        li.code = astcopy(li.code)
+        li.code = copy_exprargs(li.code)
     end
     li.slotnames = copy(li.slotnames)
     li.slotflags = copy(li.slotflags)
@@ -2457,7 +2457,7 @@ function inlineable(f::ANY, ft::ANY, e::Expr, atypes::Vector{Any}, sv::Inference
     if !isa(ast,Array{Any,1})
         ast = ccall(:jl_uncompress_ast, Any, (Any,Any), linfo, ast)
     else
-        ast = astcopy(ast)
+        ast = copy_exprargs(ast)
     end
     ast = ast::Array{Any,1}
 

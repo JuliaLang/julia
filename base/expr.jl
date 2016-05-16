@@ -23,14 +23,14 @@ end
 ## expressions ##
 
 copy(e::Expr) = (n = Expr(e.head);
-                 n.args = astcopy(e.args);
+                 n.args = copy_exprargs(e.args);
                  n.typ = e.typ;
                  n)
 
 # copy parts of an AST that the compiler mutates
-astcopy(x::Expr) = copy(x)
-astcopy(x::Array{Any,1}) = Any[astcopy(a) for a in x]
-astcopy(x) = x
+copy_exprs(x::Expr) = copy(x)
+copy_exprs(x::ANY) = x
+copy_exprargs(x::Array{Any,1}) = Any[copy_exprs(a) for a in x]
 
 ==(x::Expr, y::Expr) = x.head === y.head && isequal(x.args, y.args)
 ==(x::QuoteNode, y::QuoteNode) = isequal(x.value, y.value)
