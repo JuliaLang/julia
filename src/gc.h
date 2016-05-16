@@ -41,13 +41,6 @@ extern "C" {
 #define GC_PAGE_SZ (1 << GC_PAGE_LG2) // 16k
 #define GC_PAGE_OFFSET (JL_SMALL_BYTE_ALIGNMENT - (sizeof_jl_taggedvalue_t % JL_SMALL_BYTE_ALIGNMENT))
 
-// A region is contiguous storage for up to REGION_PG_COUNT naturally aligned GC_PAGE_SZ pages
-// It uses a very naive allocator (see malloc_page & free_page)
-#if defined(_P64)
-#define REGION_PG_COUNT 16*8*4096 // 8G because virtual memory is cheap
-#else
-#define REGION_PG_COUNT 8*4096 // 512M
-#endif
 // 8G * 32768 = 2^48
 // It's really unlikely that we'll actually allocate that much though...
 #define REGION_COUNT 32768
@@ -231,14 +224,16 @@ typedef struct {
     jl_thread_heap_t *heap;
 } jl_single_heap_index_t;
 
-extern jl_mutex_t pagealloc_lock;
-extern jl_mutex_t finalizers_lock;
 extern jl_gc_num_t gc_num;
 extern region_t regions[REGION_COUNT];
 extern bigval_t *big_objects_marked;
 extern arraylist_t finalizer_list;
 extern arraylist_t finalizer_list_marked;
 extern arraylist_t to_finalize;
+
+// Counters
+// GC_FINAL_STATS only
+extern size_t max_pg_count;
 
 #define bigval_header(data) container_of((data), bigval_t, header)
 
@@ -332,6 +327,13 @@ extern jl_thread_heap_t *const jl_thread_heap;
          --current_heap_index >= 0;)
 #define FOR_HEAP(t_n) _FOR_SINGLE_HEAP(jl_thread_heap)
 #endif
+
+// GC pages
+
+NOINLINE void *jl_gc_alloc_page(void);
+void jl_gc_free_page(void *p);
+
+// GC debug
 
 #ifdef GC_VERIFY
 extern jl_value_t *lostval;
