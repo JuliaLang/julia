@@ -95,9 +95,6 @@ jl_thread_task_state_t *jl_all_task_states;
 // type of the thread id.
 JL_DLLEXPORT int16_t jl_threadid(void) { return ti_tid; }
 
-struct _jl_thread_heap_t *jl_mk_thread_heap(void);
-// must be called by each thread at startup
-
 static void ti_initthread(int16_t tid)
 {
     jl_tls_states_t *ptls = jl_get_ptls_states();
@@ -122,11 +119,7 @@ static void ti_initthread(int16_t tid)
         abort();
     }
     ptls->bt_data = (uintptr_t*)bt_data;
-#ifdef JULIA_ENABLE_THREADING
-    jl_all_heaps[tid] = jl_mk_thread_heap();
-#else
-    jl_mk_thread_heap();
-#endif
+    jl_mk_thread_heap(&ptls->heap);
 
     jl_all_task_states[tid].ptls = ptls;
     jl_all_task_states[tid].signal_stack = jl_install_thread_signal_handler();
@@ -166,9 +159,6 @@ jl_mutex_t codegen_lock;
 jl_mutex_t typecache_lock;
 
 #ifdef JULIA_ENABLE_THREADING
-
-// thread heap
-struct _jl_thread_heap_t **jl_all_heaps;
 
 // only one thread group for now
 ti_threadgroup_t *tgworld;
@@ -290,8 +280,6 @@ void jl_init_threading(void)
     if (jl_n_threads > max_threads)
         jl_n_threads = max_threads;
 
-    // set up space for per-thread heaps
-    jl_all_heaps = (struct _jl_thread_heap_t **)malloc(jl_n_threads * sizeof(void*));
     jl_all_task_states = (jl_thread_task_state_t *)malloc(jl_n_threads * sizeof(jl_thread_task_state_t));
 
 #if PROFILE_JL_THREADING

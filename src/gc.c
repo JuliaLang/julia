@@ -47,11 +47,6 @@ static size_t last_long_collect_interval;
 
 region_t regions[REGION_COUNT];
 
-#ifndef JULIA_ENABLE_THREADING
-static jl_thread_heap_t _jl_thread_heap;
-jl_thread_heap_t *const jl_thread_heap = &_jl_thread_heap;
-#endif
-
 // List of marked big objects.  Not per-thread.  Accessed only by master thread.
 bigval_t *big_objects_marked = NULL;
 
@@ -440,17 +435,19 @@ JL_DLLEXPORT jl_weakref_t *jl_gc_new_weakref(jl_value_t *value)
     jl_weakref_t *wr = (jl_weakref_t*)jl_gc_alloc_1w();
     jl_set_typeof(wr, jl_weakref_type);
     wr->value = value;  // NOTE: wb not needed here
-    FOR_CURRENT_HEAP ()
-        arraylist_push(&current_heap->weak_refs, wr);
+    arraylist_push(&jl_thread_heap->weak_refs, wr);
     return wr;
 }
 
 static void sweep_weak_refs(void)
 {
-    FOR_EACH_HEAP () {
-        size_t n=0, ndel=0, l=current_heap->weak_refs.len;
+    for (int i = 0;i < jl_n_threads;i++) {
+        jl_tls_states_t *ptls = jl_all_task_states[i].ptls;
+        size_t n = 0;
+        size_t ndel = 0;
+        size_t l = ptls->heap.weak_refs.len;
         jl_weakref_t *wr;
-        void **lst = current_heap->weak_refs.items;
+        void **lst = ptls->heap.weak_refs.items;
         void *tmp;
 #define SWAP_wr(a,b) (tmp=a,a=b,b=tmp,1)
         if (l == 0)
@@ -468,7 +465,7 @@ static void sweep_weak_refs(void)
             }
         } while ((n < l-ndel) && SWAP_wr(lst[n],lst[n+ndel]));
 
-        current_heap->weak_refs.len -= ndel;
+        ptls->heap.weak_refs.len -= ndel;
     }
 }
 
@@ -492,13 +489,11 @@ static NOINLINE void *alloc_big(size_t sz)
     v->sz = allocsz;
     v->flags = 0;
     v->age = 0;
-    FOR_CURRENT_HEAP () {
-        v->next = current_heap->big_objects;
-        v->prev = &current_heap->big_objects;
-        if (v->next)
-            v->next->prev = &v->next;
-        current_heap->big_objects = v;
-    }
+    v->next = jl_thread_heap->big_objects;
+    v->prev = &jl_thread_heap->big_objects;
+    if (v->next)
+        v->next->prev = &v->next;
+    jl_thread_heap->big_objects = v;
     return (void*)&v->header;
 }
 
@@ -552,19 +547,18 @@ static bigval_t **sweep_big_list(int sweep_mask, bigval_t **pv)
 
 static void sweep_big(int sweep_mask)
 {
-    FOR_EACH_HEAP ()
-        sweep_big_list(sweep_mask, &current_heap->big_objects);
+    for (int i = 0;i < jl_n_threads;i++)
+        sweep_big_list(sweep_mask,
+                       &jl_all_task_states[i].ptls->heap.big_objects);
     if (sweep_mask == GC_MARKED) {
         bigval_t **last_next = sweep_big_list(sweep_mask, &big_objects_marked);
         // Move all survivors from big_objects_marked list to big_objects list.
-        FOR_CURRENT_HEAP () {
-            if (current_heap->big_objects)
-                current_heap->big_objects->prev = last_next;
-            *last_next = current_heap->big_objects;
-            current_heap->big_objects = big_objects_marked;
-            if (current_heap->big_objects)
-                current_heap->big_objects->prev = &current_heap->big_objects;
-        }
+        if (jl_thread_heap->big_objects)
+            jl_thread_heap->big_objects->prev = last_next;
+        *last_next = jl_thread_heap->big_objects;
+        jl_thread_heap->big_objects = big_objects_marked;
+        if (jl_thread_heap->big_objects)
+            jl_thread_heap->big_objects->prev = &jl_thread_heap->big_objects;
         big_objects_marked = NULL;
     }
 }
@@ -573,19 +567,17 @@ static void sweep_big(int sweep_mask)
 
 void jl_gc_track_malloced_array(jl_array_t *a)
 {
-    FOR_CURRENT_HEAP () {
-        mallocarray_t *ma;
-        if (current_heap->mafreelist == NULL) {
-            ma = (mallocarray_t*)malloc(sizeof(mallocarray_t));
-        }
-        else {
-            ma = current_heap->mafreelist;
-            current_heap->mafreelist = ma->next;
-        }
-        ma->a = a;
-        ma->next = current_heap->mallocarrays;
-        current_heap->mallocarrays = ma;
+    mallocarray_t *ma;
+    if (jl_thread_heap->mafreelist == NULL) {
+        ma = (mallocarray_t*)malloc(sizeof(mallocarray_t));
     }
+    else {
+        ma = jl_thread_heap->mafreelist;
+        jl_thread_heap->mafreelist = ma->next;
+    }
+    ma->a = a;
+    ma->next = jl_thread_heap->mallocarrays;
+    jl_thread_heap->mallocarrays = ma;
 }
 
 void jl_gc_count_allocd(size_t sz)
@@ -621,9 +613,10 @@ static int mallocd_array_freed;
 
 static void sweep_malloced_arrays(void)
 {
-    FOR_EACH_HEAP () {
-        mallocarray_t *ma = current_heap->mallocarrays;
-        mallocarray_t **pma = &current_heap->mallocarrays;
+    for (int t_i = 0;t_i < jl_n_threads;t_i++) {
+        jl_tls_states_t *ptls = jl_all_task_states[t_i].ptls;
+        mallocarray_t *ma = ptls->heap.mallocarrays;
+        mallocarray_t **pma = &ptls->heap.mallocarrays;
         while (ma != NULL) {
             mallocarray_t *nxt = ma->next;
             if (gc_marked(jl_astaggedvalue(ma->a))) {
@@ -633,8 +626,8 @@ static void sweep_malloced_arrays(void)
                 *pma = nxt;
                 assert(ma->a->flags.how == 2);
                 jl_gc_free_array(ma->a);
-                ma->next = current_heap->mafreelist;
-                current_heap->mafreelist = ma;
+                ma->next = ptls->heap.mafreelist;
+                ptls->heap.mafreelist = ma;
                 mallocd_array_freed++;
             }
             mallocd_array_total++;
@@ -644,12 +637,12 @@ static void sweep_malloced_arrays(void)
 }
 
 // pool allocation
-static inline gcval_t *reset_page(pool_t *p, jl_gc_pagemeta_t *pg, gcval_t *fl)
+static inline gcval_t *reset_page(jl_gc_pool_t *p, jl_gc_pagemeta_t *pg, gcval_t *fl)
 {
     pg->gc_bits = 0;
     pg->nfree = (GC_PAGE_SZ - GC_PAGE_OFFSET) / p->osize;
-    FOR_HEAP (pg->thread_n)
-        pg->pool_n = p - current_heap->norm_pools;
+    jl_tls_states_t *ptls = jl_all_task_states[pg->thread_n].ptls;
+    pg->pool_n = p - ptls->heap.norm_pools;
     memset(page_age(pg), 0, LLT_ALIGN(GC_PAGE_SZ / p->osize, 8));
     gcval_t *beg = (gcval_t*)(pg->data + GC_PAGE_OFFSET);
     gcval_t *end = (gcval_t*)((char*)beg + (pg->nfree - 1)*p->osize);
@@ -660,7 +653,7 @@ static inline gcval_t *reset_page(pool_t *p, jl_gc_pagemeta_t *pg, gcval_t *fl)
     return beg;
 }
 
-static NOINLINE void add_page(pool_t *p)
+static NOINLINE void add_page(jl_gc_pool_t *p)
 {
     char *data = (char*)jl_gc_alloc_page();
     if (data == NULL)
@@ -674,7 +667,7 @@ static NOINLINE void add_page(pool_t *p)
     p->newpages = fl;
 }
 
-static inline void *__pool_alloc(pool_t *p, int osize, int end_offset)
+static inline void *__pool_alloc(jl_gc_pool_t *p, int osize, int end_offset)
 {
 #ifdef MEMDEBUG
     assert(0 && "Should not be using pools in MEMDEBUG mode");
@@ -734,18 +727,18 @@ static inline void *__pool_alloc(pool_t *p, int osize, int end_offset)
 // use this variant when osize is statically known
 // and is definitely in sizeclasses
 // GC_POOL_END_OFS uses an integer division
-static inline void *_pool_alloc(pool_t *p, int osize)
+static inline void *_pool_alloc(jl_gc_pool_t *p, int osize)
 {
     return __pool_alloc(p, osize, GC_POOL_END_OFS(osize));
 }
 
-static inline void *pool_alloc(pool_t *p)
+static inline void *pool_alloc(jl_gc_pool_t *p)
 {
     return __pool_alloc(p, p->osize, p->end_offset);
 }
 
 // pools are 16376 bytes large (GC_POOL_SZ - GC_PAGE_OFFSET)
-static const int sizeclasses[N_POOLS] = {
+static const int sizeclasses[JL_GC_N_POOLS] = {
 #ifdef _P64
     8,
 #else
@@ -793,7 +786,7 @@ static inline int szclass(size_t sz)
         return 16 - 16376 / 4 / LLT_ALIGN(sz, 16 * 4) + 16 + N;
     if (sz <= 1008)
         return 16 - 16376 / 2 / LLT_ALIGN(sz, 16 * 2) + 24 + N;
-    assert(sz <= GC_MAX_SZCLASS + sizeof(buff_t) && sizeclasses[N_POOLS-1] == GC_MAX_SZCLASS + sizeof(buff_t));
+    assert(sz <= GC_MAX_SZCLASS + sizeof(buff_t) && sizeclasses[JL_GC_N_POOLS-1] == GC_MAX_SZCLASS + sizeof(buff_t));
     return     16 - 16376 / 1 / LLT_ALIGN(sz, 16 * 1) + 32 + N;
 }
 
@@ -804,7 +797,7 @@ static int total_pages = 0;
 static int freed_pages = 0;
 static int lazy_freed_pages = 0;
 static int page_done = 0;
-static gcval_t **sweep_page(pool_t *p, jl_gc_pagemeta_t *pg, gcval_t **pfl,int,int);
+static gcval_t **sweep_page(jl_gc_pool_t *p, jl_gc_pagemeta_t *pg, gcval_t **pfl,int,int);
 static void sweep_pool_region(gcval_t ***pfl, int region_i, int sweep_mask)
 {
     region_t *region = &regions[region_i];
@@ -821,11 +814,10 @@ static void sweep_pool_region(gcval_t ***pfl, int region_i, int sweep_mask)
                     jl_gc_pagemeta_t *pg = &region->meta[pg_i*32 + j];
                     int p_n = pg->pool_n;
                     int t_n = pg->thread_n;
-                    pool_t *p = NULL;
-                    FOR_HEAP (t_n)
-                        p = &current_heap->norm_pools[p_n];
+                    jl_tls_states_t *ptls = jl_all_task_states[t_n].ptls;
+                    jl_gc_pool_t *p = &ptls->heap.norm_pools[p_n];
                     int osize = pg->osize;
-                    pfl[t_n * N_POOLS + p_n] = sweep_page(p, pg, pfl[t_n * N_POOLS + p_n], sweep_mask, osize);
+                    pfl[t_n * JL_GC_N_POOLS + p_n] = sweep_page(p, pg, pfl[t_n * JL_GC_N_POOLS + p_n], sweep_mask, osize);
                 }
             }
         }
@@ -838,7 +830,7 @@ static void sweep_pool_region(gcval_t ***pfl, int region_i, int sweep_mask)
 }
 
 // Returns pointer to terminal pointer of list rooted at *pfl.
-static gcval_t **sweep_page(pool_t *p, jl_gc_pagemeta_t *pg, gcval_t **pfl, int sweep_mask, int osize)
+static gcval_t **sweep_page(jl_gc_pool_t *p, jl_gc_pagemeta_t *pg, gcval_t **pfl, int sweep_mask, int osize)
 {
     int freedall;
     gcval_t **prev_pfl = pfl;
@@ -993,13 +985,14 @@ static int gc_sweep_inc(int sweep_mask)
     page_done = 0;
     int finished = 1;
 
-    gcval_t ***pfl = (gcval_t ***) alloca(jl_n_threads * N_POOLS * sizeof(gcval_t**));
+    gcval_t ***pfl = (gcval_t ***) alloca(jl_n_threads * JL_GC_N_POOLS * sizeof(gcval_t**));
 
     // update metadata of pages that were pointed to by freelist or newpages from a pool
     // i.e. pages being the current allocation target
-    FOR_EACH_HEAP () {
-        for (int i = 0; i < N_POOLS; i++) {
-            pool_t *p = &current_heap->norm_pools[i];
+    for (int t_i = 0;t_i < jl_n_threads;t_i++) {
+        jl_tls_states_t *ptls = jl_all_task_states[t_i].ptls;
+        for (int i = 0; i < JL_GC_N_POOLS; i++) {
+            jl_gc_pool_t *p = &ptls->heap.norm_pools[i];
             gcval_t *last = p->freelist;
             if (last) {
                 jl_gc_pagemeta_t *pg = page_metadata(last);
@@ -1007,7 +1000,7 @@ static int gc_sweep_inc(int sweep_mask)
                 pg->nfree = p->nfree;
             }
             p->freelist =  NULL;
-            pfl[current_heap_index * N_POOLS + i] = &p->freelist;
+            pfl[t_i * JL_GC_N_POOLS + i] = &p->freelist;
 
             last = p->newpages;
             if (last) {
@@ -1025,11 +1018,12 @@ static int gc_sweep_inc(int sweep_mask)
     }
 
 
-    // null out terminal pointers of free lists and cache back pg->nfree in the pool_t
-    FOR_EACH_HEAP () {
-        for (int i = 0; i < N_POOLS; i++) {
-            pool_t *p = &current_heap->norm_pools[i];
-            *pfl[current_heap_index * N_POOLS + i] = NULL;
+    // null out terminal pointers of free lists and cache back pg->nfree in the jl_gc_pool_t
+    for (int t_i = 0;t_i < jl_n_threads;t_i++) {
+        jl_tls_states_t *ptls = jl_all_task_states[t_i].ptls;
+        for (int i = 0; i < JL_GC_N_POOLS; i++) {
+            jl_gc_pool_t *p = &ptls->heap.norm_pools[i];
+            *pfl[t_i * JL_GC_N_POOLS + i] = NULL;
             if (p->freelist) {
                 p->nfree = page_metadata(p->freelist)->nfree;
             }
@@ -1068,46 +1062,43 @@ static void grow_mark_stack(void)
 
 static void reset_remset(void)
 {
-    FOR_EACH_HEAP () {
-        arraylist_t *tmp = current_heap->remset;
-        current_heap->remset = current_heap->last_remset;
-        current_heap->last_remset = tmp;
-        current_heap->remset->len = 0;
-        current_heap->remset_nptr = 0;
+    for (int t_i = 0;t_i < jl_n_threads;t_i++) {
+        jl_tls_states_t *ptls = jl_all_task_states[t_i].ptls;
+        arraylist_t *tmp = ptls->heap.remset;
+        ptls->heap.remset = ptls->heap.last_remset;
+        ptls->heap.last_remset = tmp;
+        ptls->heap.remset->len = 0;
+        ptls->heap.remset_nptr = 0;
     }
 }
 
 JL_DLLEXPORT void jl_gc_queue_root(jl_value_t *ptr)
 {
-    FOR_CURRENT_HEAP () {
-        jl_taggedvalue_t *o = jl_astaggedvalue(ptr);
+    jl_taggedvalue_t *o = jl_astaggedvalue(ptr);
 #ifndef JULIA_ENABLE_THREADING
-        // Disable this assert since it can happen with multithreading (same
-        // with the ones in gc_queue_binding) when two threads are writing
-        // to the same object.
-        assert(gc_bits(o) != GC_QUEUED);
+    // Disable this assert since it can happen with multithreading (same
+    // with the ones in gc_queue_binding) when two threads are writing
+    // to the same object.
+    assert(gc_bits(o) != GC_QUEUED);
 #endif
-        // The modification of the `gc_bits` is not atomic but it
-        // should be safe here since GC is not allowed to run here and we only
-        // write GC_QUEUED to the GC bits outside GC. This could cause
-        // duplicated objects in the remset but that shouldn't be a problem.
-        gc_bits(o) = GC_QUEUED;
-        arraylist_push(current_heap->remset, ptr);
-        current_heap->remset_nptr++; // conservative
-    }
+    // The modification of the `gc_bits` is not atomic but it
+    // should be safe here since GC is not allowed to run here and we only
+    // write GC_QUEUED to the GC bits outside GC. This could cause
+    // duplicated objects in the remset but that shouldn't be a problem.
+    gc_bits(o) = GC_QUEUED;
+    arraylist_push(jl_thread_heap->remset, ptr);
+    jl_thread_heap->remset_nptr++; // conservative
 }
 
 void gc_queue_binding(jl_binding_t *bnd)
 {
-    FOR_CURRENT_HEAP () {
-        buff_t *buf = gc_val_buf(bnd);
+    buff_t *buf = gc_val_buf(bnd);
 #ifndef JULIA_ENABLE_THREADING
-        // Will fail for multithreading. See `jl_gc_queue_root`
-        assert(gc_bits(buf) != GC_QUEUED);
+    // Will fail for multithreading. See `jl_gc_queue_root`
+    assert(gc_bits(buf) != GC_QUEUED);
 #endif
-        gc_bits(buf) = GC_QUEUED;
-        arraylist_push(&current_heap->rem_bindings, bnd);
-    }
+    gc_bits(buf) = GC_QUEUED;
+    arraylist_push(&jl_thread_heap->rem_bindings, bnd);
 }
 
 static int push_root(jl_value_t *v, int d, int);
@@ -1420,11 +1411,9 @@ static int push_root(jl_value_t *v, int d, int bits)
     if (gc_verifying)
         return bits;
     if ((bits == GC_MARKED) && (refyoung == GC_MARKED_NOESC)) {
-        FOR_CURRENT_HEAP () {
-            current_heap->remset_nptr += nptr;
-            // v is an old object referencing young objects
-            arraylist_push(current_heap->remset, v);
-        }
+        jl_thread_heap->remset_nptr += nptr;
+        // v is an old object referencing young objects
+        arraylist_push(jl_thread_heap->remset, v);
     }
     return bits;
 
@@ -1624,38 +1613,40 @@ static void _jl_gc_collect(int full, char *stack_hi)
 
         // 1. mark every object in the remset
         reset_remset();
-        FOR_EACH_HEAP () {
+        for (int t_i = 0;t_i < jl_n_threads;t_i++) {
+            jl_tls_states_t *ptls = jl_all_task_states[t_i].ptls;
             // avoid counting remembered objects & bindings twice in perm_scanned_bytes
-            for(int i = 0; i < current_heap->last_remset->len; i++) {
-                jl_value_t *item = (jl_value_t*)current_heap->last_remset->items[i];
+            for(int i = 0; i < ptls->heap.last_remset->len; i++) {
+                jl_value_t *item = (jl_value_t*)ptls->heap.last_remset->items[i];
                 objprofile_count(jl_typeof(item), 2, 0);
                 gc_bits(jl_astaggedvalue(item)) = GC_MARKED;
             }
-            for (int i = 0; i < current_heap->rem_bindings.len; i++) {
-                void *ptr = current_heap->rem_bindings.items[i];
+            for (int i = 0; i < ptls->heap.rem_bindings.len; i++) {
+                void *ptr = ptls->heap.rem_bindings.items[i];
                 gc_bits(gc_val_buf(ptr)) = GC_MARKED;
             }
 
-            for (int i = 0; i < current_heap->last_remset->len; i++) {
-                jl_value_t *item = (jl_value_t*)current_heap->last_remset->items[i];
+            for (int i = 0; i < ptls->heap.last_remset->len; i++) {
+                jl_value_t *item = (jl_value_t*)ptls->heap.last_remset->items[i];
                 push_root(item, 0, GC_MARKED);
             }
         }
 
         // 2. mark every object in a remembered binding
-        FOR_EACH_HEAP () {
+        for (int t_i = 0;t_i < jl_n_threads;t_i++) {
+            jl_tls_states_t *ptls = jl_all_task_states[t_i].ptls;
             int n_bnd_refyoung = 0;
-            for (int i = 0; i < current_heap->rem_bindings.len; i++) {
-                jl_binding_t *ptr = (jl_binding_t*)current_heap->rem_bindings.items[i];
+            for (int i = 0; i < ptls->heap.rem_bindings.len; i++) {
+                jl_binding_t *ptr = (jl_binding_t*)ptls->heap.rem_bindings.items[i];
                 // A null pointer can happen here when the binding is cleaned up
                 // as an exception is thrown after it was already queued (#10221)
                 if (!ptr->value) continue;
                 if (gc_push_root(ptr->value, 0) == GC_MARKED_NOESC) {
-                    current_heap->rem_bindings.items[n_bnd_refyoung] = ptr;
+                    ptls->heap.rem_bindings.items[n_bnd_refyoung] = ptr;
                     n_bnd_refyoung++;
                 }
             }
-            current_heap->rem_bindings.len = n_bnd_refyoung;
+            ptls->heap.rem_bindings.len = n_bnd_refyoung;
         }
 
         // 3. walk roots
@@ -1668,8 +1659,9 @@ static void _jl_gc_collect(int full, char *stack_hi)
         uint64_t mark_pause = jl_hrtime() - t0;
 #endif
 #ifdef GC_TIME
-        FOR_EACH_HEAP () {
-            jl_printf(JL_STDOUT, "GC mark pause %.2f ms | scanned %ld kB = %ld + %ld | stack %d -> %d (wb %d) | remset %d %d\n", NS2MS(mark_pause), (scanned_bytes + perm_scanned_bytes)/1024, scanned_bytes/1024, perm_scanned_bytes/1024, saved_mark_sp, mark_sp, wb_activations, current_heap->last_remset->len, current_heap->remset_nptr);
+        for (int t_i = 0;t_i < jl_n_threads;t_i++) {
+            jl_tls_states_t *ptls = jl_all_task_states[t_i].ptls;
+            jl_printf(JL_STDOUT, "GC mark pause %.2f ms | scanned %ld kB = %ld + %ld | stack %d -> %d (wb %d) | remset %d %d\n", NS2MS(mark_pause), (scanned_bytes + perm_scanned_bytes)/1024, scanned_bytes/1024, perm_scanned_bytes/1024, saved_mark_sp, mark_sp, wb_activations, ptls->heap.last_remset->len, ptls->heap.remset_nptr);
         }
         saved_mark_sp = mark_sp;
 #endif
@@ -1719,8 +1711,8 @@ static void _jl_gc_collect(int full, char *stack_hi)
             // 5. next collection decision
             int not_freed_enough = estimate_freed < (7*(actual_allocd/10));
             int nptr = 0;
-            FOR_EACH_HEAP ()
-                nptr += current_heap->remset_nptr;
+            for (int i = 0;i < jl_n_threads;i++)
+                nptr += jl_all_task_states[i].ptls->heap.remset_nptr;
             int large_frontier = nptr*sizeof(void*) >= default_collect_interval; // many pointers in the intergen frontier => "quick" mark is not quick
             if ((full || large_frontier || ((not_freed_enough || promoted_bytes >= gc_num.interval) && (promoted_bytes >= default_collect_interval || prev_sweep_mask == GC_MARKED))) && gc_num.pause > 1) {
                 if (prev_sweep_mask != GC_MARKED || full) {
@@ -1756,22 +1748,23 @@ static void _jl_gc_collect(int full, char *stack_hi)
             // sweeping is over
             // 6. if it is a quick sweep, put back the remembered objects in queued state
             // so that we don't trigger the barrier again on them.
-            FOR_EACH_HEAP () {
+            for (int t_i = 0;t_i < jl_n_threads;t_i++) {
+                jl_tls_states_t *ptls = jl_all_task_states[t_i].ptls;
                 if (sweep_mask == GC_MARKED_NOESC) {
-                    for (int i = 0; i < current_heap->remset->len; i++) {
-                        gc_bits(jl_astaggedvalue(current_heap->remset->items[i])) = GC_QUEUED;
+                    for (int i = 0; i < ptls->heap.remset->len; i++) {
+                        gc_bits(jl_astaggedvalue(ptls->heap.remset->items[i])) = GC_QUEUED;
                     }
-                    for (int i = 0; i < current_heap->rem_bindings.len; i++) {
-                        void *ptr = current_heap->rem_bindings.items[i];
+                    for (int i = 0; i < ptls->heap.rem_bindings.len; i++) {
+                        void *ptr = ptls->heap.rem_bindings.items[i];
                         gc_bits(gc_val_buf(ptr)) = GC_QUEUED;
                     }
                 }
                 else {
-                    current_heap->remset->len = 0;
-                    current_heap->rem_bindings.len = 0;
-                    gc_num.full_sweep++;
+                    ptls->heap.remset->len = 0;
+                    ptls->heap.rem_bindings.len = 0;
                 }
             }
+            gc_num.full_sweep += sweep_mask != GC_MARKED_NOESC;
 
             sweeping = 0;
 #ifdef GC_TIME
@@ -1875,8 +1868,7 @@ void *allocb(size_t sz)
         b->pooled = 0;
     }
     else {
-        FOR_CURRENT_HEAP ()
-            b = (buff_t*)pool_alloc(&current_heap->norm_pools[szclass(allocsz)]);
+        b = (buff_t*)pool_alloc(&jl_thread_heap->norm_pools[szclass(allocsz)]);
         b->header = jl_buff_tag;
         b->pooled = 1;
     }
@@ -1916,9 +1908,7 @@ JL_DLLEXPORT jl_value_t *jl_gc_allocobj(size_t sz)
     return jl_valueof(alloc_big(allocsz));
 #endif
     if (allocsz <= GC_MAX_SZCLASS + sizeof(buff_t)) {
-        FOR_CURRENT_HEAP () {
-            return jl_valueof(pool_alloc(&current_heap->norm_pools[szclass(allocsz)]));
-        }
+        return jl_valueof(pool_alloc(&jl_thread_heap->norm_pools[szclass(allocsz)]));
     }
     return jl_valueof(alloc_big(allocsz));
 }
@@ -1930,8 +1920,7 @@ JL_DLLEXPORT jl_value_t *jl_gc_alloc_0w(void)
 #ifdef MEMDEBUG
     tag = alloc_big(sz);
 #else
-    FOR_CURRENT_HEAP ()
-        tag = _pool_alloc(&current_heap->norm_pools[szclass(sz)], sz);
+    tag = _pool_alloc(&jl_thread_heap->norm_pools[szclass(sz)], sz);
 #endif
     return jl_valueof(tag);
 }
@@ -1943,8 +1932,7 @@ JL_DLLEXPORT jl_value_t *jl_gc_alloc_1w(void)
 #ifdef MEMDEBUG
     tag = alloc_big(sz);
 #else
-    FOR_CURRENT_HEAP ()
-        tag = _pool_alloc(&current_heap->norm_pools[szclass(sz)], sz);
+    tag = _pool_alloc(&jl_thread_heap->norm_pools[szclass(sz)], sz);
 #endif
     return jl_valueof(tag);
 }
@@ -1956,8 +1944,7 @@ JL_DLLEXPORT jl_value_t *jl_gc_alloc_2w(void)
 #ifdef MEMDEBUG
     tag = alloc_big(sz);
 #else
-    FOR_CURRENT_HEAP ()
-        tag = _pool_alloc(&current_heap->norm_pools[szclass(sz)], sz);
+    tag = _pool_alloc(&jl_thread_heap->norm_pools[szclass(sz)], sz);
 #endif
     return jl_valueof(tag);
 }
@@ -1969,8 +1956,7 @@ JL_DLLEXPORT jl_value_t *jl_gc_alloc_3w(void)
 #ifdef MEMDEBUG
     tag = alloc_big(sz);
 #else
-    FOR_CURRENT_HEAP ()
-        tag = _pool_alloc(&current_heap->norm_pools[szclass(sz)], sz);
+    tag = _pool_alloc(&jl_thread_heap->norm_pools[szclass(sz)], sz);
 #endif
     return jl_valueof(tag);
 }
@@ -2007,35 +1993,27 @@ void jl_print_gc_stats(JL_STREAM *s)
 #endif
 
 // Per-thread initialization (when threading is fully implemented)
-jl_thread_heap_t *jl_mk_thread_heap(void)
+void jl_mk_thread_heap(jl_thread_heap_t *heap)
 {
-#ifdef JULIA_ENABLE_THREADING
-    // Cache-aligned malloc
-    jl_thread_heap =
-        (jl_thread_heap_t*)jl_malloc_aligned(sizeof(jl_thread_heap_t), JL_CACHE_BYTE_ALIGNMENT);
-#endif
-    FOR_CURRENT_HEAP () {
-        const int *szc = sizeclasses;
-        pool_t *p = current_heap->norm_pools;
-        for(int i=0; i < N_POOLS; i++) {
-            assert((szc[i] < 16 && szc[i] % sizeof(void*) == 0) ||
-                   (szc[i] % 16 == 0));
-            p[i].osize = szc[i];
-            p[i].freelist = NULL;
-            p[i].newpages = NULL;
-            p[i].end_offset = GC_POOL_END_OFS(szc[i]);
-        }
-        arraylist_new(&current_heap->weak_refs, 0);
-        current_heap->mallocarrays = NULL;
-        current_heap->mafreelist = NULL;
-        current_heap->big_objects = NULL;
-        arraylist_new(&current_heap->rem_bindings, 0);
-        current_heap->remset = &current_heap->_remset[0];
-        current_heap->last_remset = &current_heap->_remset[1];
-        arraylist_new(current_heap->remset, 0);
-        arraylist_new(current_heap->last_remset, 0);
+    const int *szc = sizeclasses;
+    jl_gc_pool_t *p = heap->norm_pools;
+    for(int i=0; i < JL_GC_N_POOLS; i++) {
+        assert((szc[i] < 16 && szc[i] % sizeof(void*) == 0) ||
+               (szc[i] % 16 == 0));
+        p[i].osize = szc[i];
+        p[i].freelist = NULL;
+        p[i].newpages = NULL;
+        p[i].end_offset = GC_POOL_END_OFS(szc[i]);
     }
-    return jl_thread_heap;
+    arraylist_new(&heap->weak_refs, 0);
+    heap->mallocarrays = NULL;
+    heap->mafreelist = NULL;
+    heap->big_objects = NULL;
+    arraylist_new(&heap->rem_bindings, 0);
+    heap->remset = &heap->_remset[0];
+    heap->last_remset = &heap->_remset[1];
+    arraylist_new(heap->remset, 0);
+    arraylist_new(heap->last_remset, 0);
 }
 
 // System-wide initializations
@@ -2068,7 +2046,7 @@ void jl_gc_init(void)
 
 #if defined(MEMPROFILE)
 // TODO repair this
-static size_t pool_stats(pool_t *p, size_t *pwaste, size_t *np, size_t *pnold)
+static size_t pool_stats(jl_gc_pool_t *p, size_t *pwaste, size_t *np, size_t *pnold)
 {
     gcval_t *v;
     jl_gc_pagemeta_t *pg = p->pages;
@@ -2115,17 +2093,17 @@ static size_t pool_stats(pool_t *p, size_t *pwaste, size_t *np, size_t *pnold)
 
 static void all_pool_stats(void)
 {
-    int i;
-    size_t nb=0, w, tw=0, no=0,tp=0, nold=0,noldbytes=0, b, np, nol;
-    for(i=0; i < N_POOLS; i++) {
-        FOR_EACH_HEAP () {
-            b = pool_stats(&current_heap->norm_pools[i], &w, &np, &nol);
+    size_t nb=0, w, tw=0, no=0,tp=0, nold=0,noldbytes=0, np, nol;
+    for (int i = 0; i < JL_GC_N_POOLS; i++) {
+        for (int t_i = 0;t_i < jl_n_threads;t_i++) {
+            jl_tls_states_t *ptls = jl_all_task_states[t_i].ptls;
+            size_t b = pool_stats(&ptls->heap.norm_pools[i], &w, &np, &nol);
             nb += b;
-            no += (b/current_heap->norm_pools[i].osize);
+            no += (b / ptls->heap.norm_pools[i].osize);
             tw += w;
             tp += np;
             nold += nol;
-            noldbytes += nol*current_heap->norm_pools[i].osize;
+            noldbytes += nol * ptls->heap.norm_pools[i].osize;
         }
     }
     jl_printf(JL_STDOUT,

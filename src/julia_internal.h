@@ -259,6 +259,7 @@ void jl_init_restored_modules(jl_array_t *init_order);
 void jl_init_signal_async(void);
 void jl_init_debuginfo(void);
 void jl_init_runtime_ccall(void);
+void jl_mk_thread_heap(jl_thread_heap_t *heap);
 
 void _julia_init(JL_IMAGE_SEARCH rel);
 #ifdef COPY_STACKS

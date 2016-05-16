@@ -111,8 +111,8 @@ static void clear_mark(int bits)
         }
     }
     bigval_t *v;
-    FOR_EACH_HEAP () {
-        v = current_heap->big_objects;
+    for (int i = 0;i < jl_n_threads;i++) {
+        v = jl_all_task_states[i].ptls->heap.big_objects;
         while (v != NULL) {
             void *gcv = &v->header;
             if (!gc_verifying) arraylist_push(&bits_save[gc_bits(gcv)], gcv);
@@ -139,9 +139,9 @@ static void clear_mark(int bits)
                 for (int j = 0; j < 32; j++) {
                     if (!((line >> j) & 1)) {
                         jl_gc_pagemeta_t *pg = page_metadata(region->pages[pg_i*32 + j].data + GC_PAGE_OFFSET);
-                        pool_t *pool;
-                        FOR_HEAP (pg->thread_n)
-                            pool = &current_heap->norm_pools[pg->pool_n];
+                        jl_tls_states_t *ptls =
+                            jl_all_task_states[pg->thread_n].ptls;
+                        jl_gc_pool_t *pool = &ptls->heap.norm_pools[pg->pool_n];
                         pv = (gcval_t*)(pg->data + GC_PAGE_OFFSET);
                         char *lim = (char*)pv + GC_PAGE_SZ - GC_PAGE_OFFSET - pool->osize;
                         while ((char*)pv <= lim) {

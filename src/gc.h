@@ -135,14 +135,6 @@ typedef struct _mallocarray_t {
     struct _mallocarray_t *next;
 } mallocarray_t;
 
-typedef struct _pool_t {
-    gcval_t *freelist;   // root of list of free objects
-    gcval_t *newpages;   // root of list of chunks of free objects
-    uint16_t end_offset; // stored to avoid computing it at each allocation
-    uint16_t osize;      // size of objects in this pool
-    uint16_t nfree;      // number of free objects in page pointed into by free_list
-} pool_t;
-
 // pool page metadata
 typedef struct {
     struct {
@@ -184,45 +176,6 @@ typedef struct {
     int ub;
 } region_t
 ;
-
-// Variables that become fields of a thread-local struct in the thread-safe version.
-typedef struct _jl_thread_heap_t {
-    // variable for tracking weak references
-    arraylist_t weak_refs;
-
-    // variables for tracking malloc'd arrays
-    mallocarray_t *mallocarrays;
-    mallocarray_t *mafreelist;
-
-    // variables for tracking big objects
-    bigval_t *big_objects;
-
-    // variables for tracking "remembered set"
-    arraylist_t rem_bindings;
-    arraylist_t _remset[2]; // contains jl_value_t*
-    // lower bound of the number of pointers inside remembered values
-    int remset_nptr;
-    arraylist_t *remset;
-    arraylist_t *last_remset;
-
-    // variables for allocating objects from pools
-#ifdef _P64
-#define N_POOLS 41
-#else
-#define N_POOLS 43
-#endif
-    pool_t norm_pools[N_POOLS];
-} jl_thread_heap_t;
-
-typedef struct {
-    int index;
-    jl_thread_heap_t *heap;
-} jl_each_heap_index_t;
-
-typedef struct {
-    int i;
-    jl_thread_heap_t *heap;
-} jl_single_heap_index_t;
 
 extern jl_gc_num_t gc_num;
 extern region_t regions[REGION_COUNT];
@@ -296,37 +249,7 @@ void pre_mark(void);
 void post_mark(arraylist_t *list, int dryrun);
 void gc_debug_init(void);
 
-#define current_heap __current_heap_idx.heap
-#define current_heap_index __current_heap_idx.index
-// This chould trigger a false positive warning with both gcc and clang
-// since the compiler couldn't figure out that the loop is executed at least
-// once.
-// gcc bug: https://gcc.gnu.org/bugzilla/show_bug.cgi?id=68336
-// clang bug: https://llvm.org/bugs/show_bug.cgi?id=25521
-#define _FOR_SINGLE_HEAP(heap)                                          \
-    for (jl_single_heap_index_t __current_heap_idx = {1, heap};         \
-         --__current_heap_idx.i >= 0;)
-#define FOR_CURRENT_HEAP() _FOR_SINGLE_HEAP(jl_thread_heap)
-
-// The following macros are used for accessing these variables.
-// In the multi-threaded version, they establish the desired thread context.
-// In the single-threaded version, they are essentially noops, but nonetheless
-// serve to check that the thread context macros are being used.
-#ifdef JULIA_ENABLE_THREADING
-#define jl_thread_heap (jl_get_ptls_states()->heap)
-#define FOR_EACH_HEAP()                                                 \
-    for (jl_each_heap_index_t __current_heap_idx = {jl_n_threads, NULL}; \
-         --current_heap_index >= 0 &&                                   \
-             ((current_heap = jl_all_heaps[current_heap_index]), 1);)
-#define FOR_HEAP(t_n) _FOR_SINGLE_HEAP(jl_all_heaps[t_n])
-/*}}*/
-#else
-extern jl_thread_heap_t *const jl_thread_heap;
-#define FOR_EACH_HEAP()                                                 \
-    for (jl_each_heap_index_t __current_heap_idx = {1, jl_thread_heap}; \
-         --current_heap_index >= 0;)
-#define FOR_HEAP(t_n) _FOR_SINGLE_HEAP(jl_thread_heap)
-#endif
+#define jl_thread_heap (&jl_get_ptls_states()->heap)
 
 // GC pages
 
