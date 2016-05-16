@@ -1,70 +1,123 @@
 // This file is a part of Julia. License is MIT: http://julialang.org/license
 
 #include "gc.h"
+#ifndef _OS_WINDOWS_
+#  include <sys/resource.h>
+#endif
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
-// A region is contiguous storage for up to REGION_PG_COUNT naturally aligned GC_PAGE_SZ pages
+// A region is contiguous storage for up to DEFAULT_REGION_PG_COUNT naturally aligned GC_PAGE_SZ pages
 // It uses a very naive allocator (see jl_gc_alloc_page & jl_gc_free_page)
 #if defined(_P64)
-#define REGION_PG_COUNT 16*8*4096 // 8G because virtual memory is cheap
+#define DEFAULT_REGION_PG_COUNT (16 * 8 * 4096) // 8 GB
 #else
-#define REGION_PG_COUNT 8*4096 // 512M
+#define DEFAULT_REGION_PG_COUNT (8 * 4096) // 512 MB
 #endif
+#define MIN_REGION_PG_COUNT 64 // 1 MB
 
+static int region_pg_cnt = DEFAULT_REGION_PG_COUNT;
 static jl_mutex_t pagealloc_lock;
 static size_t current_pg_count = 0;
 
+void jl_gc_init_page(void)
+{
+#ifndef _OS_WINDOWS_
+    struct rlimit rl;
+    if (getrlimit(RLIMIT_AS, &rl) == 0) {
+        // This is not 100% precise and not the most efficient implementation
+        // but should be close enough and fast enough for the normal case.
+        while (rl.rlim_cur < region_pg_cnt * sizeof(jl_gc_page_t) * 2 &&
+               region_pg_cnt >= MIN_REGION_PG_COUNT) {
+            region_pg_cnt /= 2;
+        }
+    }
+#endif
+}
+
+// Try to allocate a memory block for a region with `pg_cnt` pages.
+// Return `NULL` if allocation failed. Result is aligned to `GC_PAGE_SZ`.
+static char *jl_gc_try_alloc_region(int pg_cnt)
+{
+    const size_t pages_sz = sizeof(jl_gc_page_t) * pg_cnt;
+    const size_t freemap_sz = sizeof(uint32_t) * pg_cnt / 32;
+    const size_t meta_sz = sizeof(jl_gc_pagemeta_t) * pg_cnt;
+    size_t alloc_size = pages_sz + freemap_sz + meta_sz;
+#ifdef _OS_WINDOWS_
+    char *mem = (char*)VirtualAlloc(NULL, alloc_size + GC_PAGE_SZ,
+                                    MEM_RESERVE, PAGE_READWRITE);
+    if (mem == NULL)
+        return NULL;
+#else
+    if (GC_PAGE_SZ > jl_page_size)
+        alloc_size += GC_PAGE_SZ;
+    char *mem = (char*)mmap(0, alloc_size, PROT_READ | PROT_WRITE,
+                            MAP_NORESERVE | MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+    if (mem == MAP_FAILED)
+        return NULL;
+#endif
+    if (GC_PAGE_SZ > jl_page_size) {
+        // round data pointer up to the nearest gc_page_data-aligned
+        // boundary if mmap didn't already do so.
+        mem = (char*)gc_page_data(mem + GC_PAGE_SZ - 1);
+    }
+    return mem;
+}
+
+// Allocate the memory for a `region_t`. Starts with `region_pg_cnt` number
+// of pages. Decrease 4x every time so that there are enough space for a few.
+// more regions (or other allocations). The final page count is recorded
+// and will be used as the starting count next time. If the page count is
+// smaller `MIN_REGION_PG_COUNT` a `jl_memory_exception` is thrown.
+// Assume `pagealloc_lock` is acquired, the lock is released before the
+// exception is thrown.
+static void jl_gc_alloc_region(region_t *region)
+{
+    int pg_cnt = region_pg_cnt;
+    const size_t pages_sz = sizeof(jl_gc_page_t) * pg_cnt;
+    const size_t freemap_sz = sizeof(uint32_t) * pg_cnt / 32;
+    char *mem = NULL;
+    while (1) {
+        if (__likely((mem = jl_gc_try_alloc_region(pg_cnt))))
+            break;
+        if (pg_cnt >= MIN_REGION_PG_COUNT * 4) {
+            pg_cnt /= 4;
+            region_pg_cnt = pg_cnt;
+        }
+        else if (pg_cnt > MIN_REGION_PG_COUNT) {
+            region_pg_cnt = pg_cnt = MIN_REGION_PG_COUNT;
+        }
+        else {
+            JL_UNLOCK_NOGC(&pagealloc_lock);
+            jl_throw(jl_memory_exception);
+        }
+    }
+    region->pages = (jl_gc_page_t*)mem;
+    region->freemap = (uint32_t*)(mem + pages_sz);
+    region->meta = (jl_gc_pagemeta_t*)(mem + pages_sz +freemap_sz);
+    region->lb = 0;
+    region->ub = 0;
+    region->pg_cnt = pg_cnt;
+#ifdef _OS_WINDOWS_
+    VirtualAlloc(region->freemap, pg_cnt / 8, MEM_COMMIT, PAGE_READWRITE);
+    VirtualAlloc(region->meta, pg_cnt * sizeof(jl_gc_pagemeta_t),
+                 MEM_COMMIT, PAGE_READWRITE);
+#endif
+    memset(region->freemap, 0xff, pg_cnt / 8);
+}
+
 NOINLINE void *jl_gc_alloc_page(void)
 {
-    void *ptr = NULL;
     int i;
     region_t *region;
     int region_i = 0;
     JL_LOCK_NOGC(&pagealloc_lock);
-    while(region_i < REGION_COUNT) {
+    while (region_i < REGION_COUNT) {
         region = &regions[region_i];
-        if (region->pages == NULL) {
-            int pg_cnt = REGION_PG_COUNT;
-            const size_t pages_sz = sizeof(jl_gc_page_t) * pg_cnt;
-            const size_t freemap_sz = sizeof(uint32_t) * pg_cnt / 32;
-            const size_t meta_sz = sizeof(jl_gc_pagemeta_t) * pg_cnt;
-            size_t alloc_size = pages_sz + freemap_sz + meta_sz;
-#ifdef _OS_WINDOWS_
-            char *mem = (char*)VirtualAlloc(NULL, alloc_size + GC_PAGE_SZ,
-                                            MEM_RESERVE, PAGE_READWRITE);
-#else
-            if (GC_PAGE_SZ > jl_page_size)
-                alloc_size += GC_PAGE_SZ;
-            char *mem = (char*)mmap(0, alloc_size, PROT_READ | PROT_WRITE, MAP_NORESERVE | MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
-            mem = mem == MAP_FAILED ? NULL : mem;
-#endif
-            if (mem == NULL) {
-                jl_printf(JL_STDERR, "could not allocate pools\n");
-                gc_debug_critical_error();
-                abort();
-            }
-            if (GC_PAGE_SZ > jl_page_size) {
-                // round data pointer up to the nearest gc_page_data-aligned
-                // boundary if mmap didn't already do so.
-                mem = (char*)gc_page_data(mem + GC_PAGE_SZ - 1);
-            }
-            region->pages = (jl_gc_page_t*)mem;
-            region->freemap = (uint32_t*)(mem + pages_sz);
-            region->meta = (jl_gc_pagemeta_t*)(mem + pages_sz +freemap_sz);
-            region->lb = 0;
-            region->ub = 0;
-            region->pg_cnt = pg_cnt;
-#ifdef _OS_WINDOWS_
-            VirtualAlloc(region->freemap, region->pg_cnt / 8,
-                         MEM_COMMIT, PAGE_READWRITE);
-            VirtualAlloc(region->meta, region->pg_cnt * sizeof(jl_gc_pagemeta_t),
-                         MEM_COMMIT, PAGE_READWRITE);
-#endif
-            memset(region->freemap, 0xff, region->pg_cnt / 8);
-        }
+        if (region->pages == NULL)
+            jl_gc_alloc_region(region);
         for (i = region->lb; i < region->pg_cnt / 32; i++) {
             if (region->freemap[i])
                 break;
@@ -76,10 +129,9 @@ NOINLINE void *jl_gc_alloc_page(void)
         }
         break;
     }
-    if (region_i >= REGION_COUNT) {
-        jl_printf(JL_STDERR, "increase REGION_COUNT or allocate less memory\n");
-        gc_debug_critical_error();
-        abort();
+    if (__unlikely(region_i >= REGION_COUNT)) {
+        JL_UNLOCK_NOGC(&pagealloc_lock);
+        jl_throw(jl_memory_exception);
     }
     if (region->lb < i)
         region->lb = i;
@@ -96,7 +148,7 @@ NOINLINE void *jl_gc_alloc_page(void)
 #endif
 
     region->freemap[i] &= ~(uint32_t)(1 << j);
-    ptr = region->pages[i*32 + j].data;
+    void *ptr = region->pages[i * 32 + j].data;
 #ifdef _OS_WINDOWS_
     VirtualAlloc(ptr, GC_PAGE_SZ, MEM_COMMIT, PAGE_READWRITE);
 #endif

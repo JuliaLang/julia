@@ -330,6 +330,7 @@ extern jl_thread_heap_t *const jl_thread_heap;
 
 // GC pages
 
+void jl_gc_init_page(void);
 NOINLINE void *jl_gc_alloc_page(void);
 void jl_gc_free_page(void *p);
 
