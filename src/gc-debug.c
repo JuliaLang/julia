@@ -37,7 +37,7 @@ JL_DLLEXPORT jl_taggedvalue_t *jl_gc_find_taggedvalue_pool(char *p, size_t *osiz
     size_t ofs = p - page_begin;
     int pg_idx = page_index(r, page_begin);
     // Check if this is a free page
-    if (r->freemap[pg_idx / 32] & (uint32_t)(1 << (pg_idx % 32)))
+    if (!(r->allocmap[pg_idx / 32] & (uint32_t)(1 << (pg_idx % 32))))
         return NULL;
     jl_gc_pagemeta_t *pagemeta = &r->meta[pg_idx];
     int osize = pagemeta->osize;
@@ -134,10 +134,10 @@ static void clear_mark(int bits)
         if (!region->pages)
             break;
         for (int pg_i = 0; pg_i < region->pg_cnt / 32; pg_i++) {
-            uint32_t line = region->freemap[pg_i];
-            if (!!~line) {
+            uint32_t line = region->allocmap[pg_i];
+            if (line) {
                 for (int j = 0; j < 32; j++) {
-                    if (!((line >> j) & 1)) {
+                    if ((line >> j) & 1) {
                         jl_gc_pagemeta_t *pg = page_metadata(region->pages[pg_i*32 + j].data + GC_PAGE_OFFSET);
                         jl_tls_states_t *ptls =
                             jl_all_task_states[pg->thread_n].ptls;

@@ -167,7 +167,7 @@ typedef struct {
     //    Tag: sizeof_jl_taggedvalue_t
     //    Data: <= osize - sizeof_jl_taggedvalue_t
     jl_gc_page_t *pages; // [pg_cnt]; must be first, to preserve page alignment
-    uint32_t *freemap; // [pg_cnt / 32]
+    uint32_t *allocmap; // [pg_cnt / 32]
     jl_gc_pagemeta_t *meta; // [pg_cnt]
     int pg_cnt;
     // store a lower bound of the first free page in each region
