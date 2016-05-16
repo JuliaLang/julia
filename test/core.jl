@@ -437,6 +437,13 @@ Yc(f) = (h->f(x->h(h)(x)))(h->f(x->h(h)(x)))
 yfib = Yc(fib->(n->(n < 2 ? n : fib(n-1) + fib(n-2))))
 @test yfib(20) == 6765
 
+function capt_before_def()
+    f() = y
+    y = 2
+    f
+end
+@test capt_before_def()() == 2
+
 # variable scope, globals
 glob_x = 23
 function glotest()
