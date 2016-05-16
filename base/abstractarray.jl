@@ -135,7 +135,7 @@ throw_boundserror(A, I) = (@_noinline_meta; throw(BoundsError(A, I)))
 checkbounds(A::AbstractArray, I...) = (@_inline_meta; _internal_checkbounds(A, I...))
 # The internal function is named _internal_checkbounds since there had been a
 # _checkbounds previously that meant something different.
-_internal_checkbounds(A::AbstractArray) = true
+_internal_checkbounds(A::AbstractArray) = _internal_checkbounds(A,1)
 _internal_checkbounds(A::AbstractArray, I::AbstractArray{Bool}) = size(A) == size(I) || throw_boundserror(A, I)
 _internal_checkbounds(A::AbstractArray, I::AbstractVector{Bool}) = length(A) == length(I) || throw_boundserror(A, I)
 function _internal_checkbounds(A::AbstractArray, I1, I...)
