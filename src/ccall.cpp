@@ -1546,9 +1546,7 @@ static jl_cgval_t emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
     JL_GC_POP();
     if (rt == jl_bottom_type) {
         // Do this after we marked all the GC uses.
-        builder.CreateUnreachable();
-        BasicBlock *newBB = BasicBlock::Create(jl_LLVMContext, "after_noret", ctx->f);
-        builder.SetInsertPoint(newBB);
+        CreateTrap(builder);
     }
     // Finally we need to box the result into julia type
     // However, if we have already created a box for the return
