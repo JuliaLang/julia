@@ -1249,7 +1249,6 @@
         <string>ARGS</string>
         <string>ArgumentError</string>
         <string>Array</string>
-        <string>ASCIIString</string>
         <string>AssertionError</string>
         <string>Associative</string>
         <string>AsyncStream</string>
@@ -1519,7 +1518,6 @@
         <string>UpperTriangular</string>
         <string>UTF16String</string>
         <string>UTF32String</string>
-        <string>UTF8String</string>
         <string>UV_READABLE</string>
         <string>UV_WRITEABLE</string>
         <string>UVError</string>
