@@ -4127,3 +4127,12 @@ let a = Any[]
     @test (push!(a,10); f()) - (push!(a,2); f()) == 8
     @test a == [10, 2]
 end
+
+# issue #12096
+let a = Val{Val{TypeVar(:_, Int, true)}},
+    b = Val{Val{TypeVar(:_, Int)}}
+
+    @test !isdefined(a, :instance)
+    @test  isdefined(b, :instance)
+    @test isleaftype(b)
+end
