@@ -133,7 +133,7 @@ static void clear_mark(int bits)
         region_t *region = &regions[h];
         if (!region->pages)
             break;
-        for (int pg_i = 0; pg_i < REGION_PG_COUNT/32; pg_i++) {
+        for (int pg_i = 0; pg_i < region->pg_cnt / 32; pg_i++) {
             uint32_t line = region->freemap[pg_i];
             if (!!~line) {
                 for (int j = 0; j < 32; j++) {

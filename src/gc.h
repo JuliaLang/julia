@@ -181,9 +181,10 @@ typedef struct {
     //  Blocks: osize * n
     //    Tag: sizeof_jl_taggedvalue_t
     //    Data: <= osize - sizeof_jl_taggedvalue_t
-    jl_gc_page_t *pages; // [REGION_PG_COUNT] // must be first, to preserve page alignment
-    uint32_t *freemap; // [REGION_PG_COUNT/32]
-    jl_gc_pagemeta_t *meta; // [REGION_PG_COUNT]
+    jl_gc_page_t *pages; // [pg_cnt]; must be first, to preserve page alignment
+    uint32_t *freemap; // [pg_cnt / 32]
+    jl_gc_pagemeta_t *meta; // [pg_cnt]
+    int pg_cnt;
     // store a lower bound of the first free page in each region
     int lb;
     // an upper bound of the last non-free page
@@ -277,10 +278,12 @@ STATIC_INLINE region_t *find_region(void *ptr, int maybe)
 {
     // on 64bit systems we could probably use a single region and remove this loop
     for (int i = 0; i < REGION_COUNT && regions[i].pages; i++) {
-        char *begin = regions[i].pages->data;
-        char *end = begin + sizeof(jl_gc_page_t) * REGION_PG_COUNT;
-        if ((char*)ptr >= begin && (char*)ptr <= end)
-            return &regions[i];
+        region_t *region = &regions[i];
+        char *begin = region->pages->data;
+        char *end = begin + region->pg_cnt * sizeof(jl_gc_page_t);
+        if ((char*)ptr >= begin && (char*)ptr <= end) {
+            return region;
+        }
     }
     (void)maybe;
     assert(maybe && "find_region failed");

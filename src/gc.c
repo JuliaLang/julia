@@ -462,20 +462,20 @@ static NOINLINE void *malloc_page(void)
             region->meta = (jl_gc_pagemeta_t*)(mem + pages_sz +freemap_sz);
             region->lb = 0;
             region->ub = 0;
+            region->pg_cnt = REGION_PG_COUNT;
 #ifdef _OS_WINDOWS_
-            VirtualAlloc(region->freemap, REGION_PG_COUNT / 8,
+            VirtualAlloc(region->freemap, region->pg_cnt / 8,
                          MEM_COMMIT, PAGE_READWRITE);
-            VirtualAlloc(region->meta,
-                         REGION_PG_COUNT * sizeof(jl_gc_pagemeta_t),
+            VirtualAlloc(region->meta, region->pg_cnt * sizeof(jl_gc_pagemeta_t),
                          MEM_COMMIT, PAGE_READWRITE);
 #endif
-            memset(region->freemap, 0xff, REGION_PG_COUNT/8);
+            memset(region->freemap, 0xff, region->pg_cnt / 8);
         }
-        for (i = region->lb; i < REGION_PG_COUNT/32; i++) {
+        for (i = region->lb; i < region->pg_cnt / 32; i++) {
             if (region->freemap[i])
                 break;
         }
-        if (i == REGION_PG_COUNT/32) {
+        if (i == region->pg_cnt / 32) {
             // region full
             region_i++;
             continue;
@@ -516,12 +516,15 @@ static void free_page(void *p)
 {
     int pg_idx = -1;
     int i;
-    for(i = 0; i < REGION_COUNT && regions[i].pages != NULL; i++) {
-        pg_idx = page_index(&regions[i], p);
-        if (pg_idx >= 0 && pg_idx < REGION_PG_COUNT) break;
+    region_t *region = regions;
+    for (i = 0; i < REGION_COUNT && regions[i].pages != NULL; i++) {
+        region = &regions[i];
+        pg_idx = page_index(region, p);
+        if (pg_idx >= 0 && pg_idx < region->pg_cnt) {
+            break;
+        }
     }
-    assert(i < REGION_COUNT && regions[i].pages != NULL);
-    region_t *region = &regions[i];
+    assert(i < REGION_COUNT && region->pages != NULL);
     uint32_t msk = (uint32_t)(1 << (pg_idx % 32));
     assert(!(region->freemap[pg_idx/32] & msk));
     region->freemap[pg_idx/32] ^= msk;
@@ -534,7 +537,7 @@ static void free_page(void *p)
         decommit_size = jl_page_size;
         p = (void*)((uintptr_t)region->pages[pg_idx].data & ~(jl_page_size - 1)); // round down to the nearest page
         pg_idx = page_index(region, p);
-        if (pg_idx + n_pages > REGION_PG_COUNT) goto no_decommit;
+        if (pg_idx + n_pages > region->pg_cnt) goto no_decommit;
         for (; n_pages--; pg_idx++) {
             msk = (uint32_t)(1 << ((pg_idx % 32)));
             if (!(region->freemap[pg_idx/32] & msk)) goto no_decommit;
