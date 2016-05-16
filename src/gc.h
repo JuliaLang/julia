@@ -43,12 +43,14 @@ extern "C" {
 
 // A region is contiguous storage for up to REGION_PG_COUNT naturally aligned GC_PAGE_SZ pages
 // It uses a very naive allocator (see malloc_page & free_page)
-#if defined(_P64) && !defined(_COMPILER_MICROSOFT_)
+#if defined(_P64)
 #define REGION_PG_COUNT 16*8*4096 // 8G because virtual memory is cheap
 #else
 #define REGION_PG_COUNT 8*4096 // 512M
 #endif
-#define REGION_COUNT 8
+// 8G * 32768 = 2^48
+// It's really unlikely that we'll actually allocate that much though...
+#define REGION_COUNT 32768
 
 #define jl_buff_tag ((uintptr_t)0x4eade800)
 #define jl_malloc_tag ((void*)0xdeadaa01)
@@ -179,9 +181,13 @@ typedef struct {
     //  Blocks: osize * n
     //    Tag: sizeof_jl_taggedvalue_t
     //    Data: <= osize - sizeof_jl_taggedvalue_t
-    jl_gc_page_t pages[REGION_PG_COUNT]; // must be first, to preserve page alignment
-    uint32_t freemap[REGION_PG_COUNT/32];
-    jl_gc_pagemeta_t meta[REGION_PG_COUNT];
+    jl_gc_page_t *pages; // [REGION_PG_COUNT] // must be first, to preserve page alignment
+    uint32_t *freemap; // [REGION_PG_COUNT/32]
+    jl_gc_pagemeta_t *meta; // [REGION_PG_COUNT]
+    // store a lower bound of the first free page in each region
+    int lb;
+    // an upper bound of the last non-free page
+    int ub;
 } region_t
 ;
 
@@ -227,9 +233,7 @@ typedef struct {
 extern jl_mutex_t pagealloc_lock;
 extern jl_mutex_t finalizers_lock;
 extern jl_gc_num_t gc_num;
-extern region_t *regions[REGION_COUNT];
-extern int regions_lb[REGION_COUNT];
-extern int regions_ub[REGION_COUNT];
+extern region_t regions[REGION_COUNT];
 extern bigval_t *big_objects_marked;
 extern arraylist_t finalizer_list;
 extern arraylist_t finalizer_list_marked;
@@ -272,11 +276,11 @@ NOINLINE uintptr_t gc_get_stack_ptr(void);
 STATIC_INLINE region_t *find_region(void *ptr, int maybe)
 {
     // on 64bit systems we could probably use a single region and remove this loop
-    for (int i = 0; i < REGION_COUNT && regions[i]; i++) {
-        char *begin = regions[i]->pages->data;
-        char *end = begin + sizeof(regions[i]->pages);
+    for (int i = 0; i < REGION_COUNT && regions[i].pages; i++) {
+        char *begin = regions[i].pages->data;
+        char *end = begin + sizeof(jl_gc_page_t) * REGION_PG_COUNT;
         if ((char*)ptr >= begin && (char*)ptr <= end)
-            return regions[i];
+            return &regions[i];
     }
     (void)maybe;
     assert(maybe && "find_region failed");
