@@ -236,3 +236,49 @@ C = Tridiagonal(rand(Float64,9),rand(Float64,10),rand(Float64,9))
 @test promote_rule(Matrix{Float64}, Bidiagonal{Float64}) == Matrix{Float64}
 @test promote(B,A) == (B,convert(Matrix{Float64},full(A)))
 @test promote(C,A) == (C,Tridiagonal(zeros(Float64,9),convert(Vector{Float64},A.dv),convert(Vector{Float64},A.ev)))
+
+import Base.LinAlg: fillslots!, UnitLowerTriangular
+let #fill!
+    let # fillslots!
+        A = Tridiagonal(randn(2), randn(3), randn(2))
+        @test fillslots!(A, 3) == Tridiagonal([3, 3.], [3, 3, 3.], [3, 3.])
+        B = Bidiagonal(randn(3), randn(2), true)
+        @test fillslots!(B, 2) == Bidiagonal([2.,2,2], [2,2.], true)
+        S = SymTridiagonal(randn(3), randn(2))
+        @test fillslots!(S, 1) == SymTridiagonal([1,1,1.], [1,1.])
+        Ult = UnitLowerTriangular(randn(3,3))
+        @test fillslots!(Ult, 3) == UnitLowerTriangular([1 0 0; 3 1 0; 3 3 1])
+    end
+    let # fill!(exotic, 0)
+        exotic_arrays = Any[Tridiagonal(randn(3), randn(4), randn(3)),
+        Bidiagonal(randn(3), randn(2), rand(Bool)),
+        SymTridiagonal(randn(3), randn(2)),
+        sparse(randn(3,4)),
+        Diagonal(randn(5)),
+        sparse(rand(3)),
+        LowerTriangular(randn(3,3)),
+        UpperTriangular(randn(3,3))
+        ]
+        for A in exotic_arrays
+            fill!(A, 0)
+            for a in A
+                @test a == 0
+            end
+        end
+    end
+    let # fill!(small, x)
+        val = randn()
+        b = Bidiagonal(randn(1,1), true)
+        st = SymTridiagonal(randn(1,1))
+        for x in (b, st)
+            @test full(fill!(x, val)) == fill!(full(x), val)
+        end
+        b = Bidiagonal(randn(2,2), true)
+        st = SymTridiagonal(randn(3), randn(2))
+        t = Tridiagonal(randn(3,3))
+        for x in (b, t, st)
+            @test_throws ArgumentError fill!(x, val)
+            @test full(fill!(x, 0)) == fill!(full(x), 0)
+        end
+    end
+end

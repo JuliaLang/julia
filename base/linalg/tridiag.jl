@@ -497,33 +497,3 @@ function convert{T}(::Type{SymTridiagonal{T}}, M::Tridiagonal)
         throw(ArgumentError("Tridiagonal is not symmetric, cannot convert to SymTridiagonal"))
     end
 end
-
-A_mul_B!(C::AbstractVector, A::Tridiagonal, B::AbstractVector) = A_mul_B_td!(C, A, B)
-A_mul_B!(C::AbstractMatrix, A::Tridiagonal, B::AbstractVecOrMat) = A_mul_B_td!(C, A, B)
-A_mul_B!(C::AbstractVecOrMat, A::Tridiagonal, B::AbstractVecOrMat) = A_mul_B_td!(C, A, B)
-
-function A_mul_B_td!(C::AbstractVecOrMat, A::Tridiagonal, B::AbstractVecOrMat)
-    nA = size(A,1)
-    nB = size(B,2)
-    if !(size(C,1) == size(B,1) == nA)
-        throw(DimensionMismatch("A has first dimension $nA, B has $(size(B,1)), C has $(size(C,1)) but all must match"))
-    end
-    if size(C,2) != nB
-        throw(DimensionMismatch("A has second dimension $nA, B has $(size(B,2)), C has $(size(C,2)) but all must match"))
-    end
-    l = A.dl
-    d = A.d
-    u = A.du
-    @inbounds begin
-        for j = 1:nB
-            b₀, b₊ = B[1, j], B[2, j]
-            C[1, j] = d[1]*b₀ + u[1]*b₊
-            for i = 2:nA - 1
-                b₋, b₀, b₊ = b₀, b₊, B[i + 1, j]
-                C[i, j] = l[i - 1]*b₋ + d[i]*b₀ + u[i]*b₊
-            end
-            C[nA, j] = l[nA - 1]*b₀ + d[nA]*b₊
-        end
-    end
-    C
-end
