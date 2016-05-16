@@ -6,6 +6,9 @@
   . pool-allocates small objects, keeps big objects on a simple list
 */
 
+#ifndef JULIA_GC_H
+#define JULIA_GC_H
+
 #include <stdlib.h>
 #include <string.h>
 #ifndef _MSC_VER
@@ -21,6 +24,10 @@
 #if defined(_OS_DARWIN_) && !defined(MAP_ANONYMOUS)
 #define MAP_ANONYMOUS MAP_ANON
 #endif
+#endif
+
+#ifdef __cplusplus
+extern "C" {
 #endif
 
 // manipulating mark bits
@@ -42,6 +49,29 @@
 #define REGION_PG_COUNT 8*4096 // 512M
 #endif
 #define REGION_COUNT 8
+
+#define jl_buff_tag ((uintptr_t)0x4eade800)
+#define jl_malloc_tag ((void*)0xdeadaa01)
+#define jl_singleton_tag ((void*)0xdeadaa02)
+
+// Used by GC_DEBUG_ENV
+typedef struct {
+    uint64_t num;
+    uint64_t next;
+
+    uint64_t min;
+    uint64_t interv;
+    uint64_t max;
+    unsigned short random[3];
+} jl_alloc_num_t;
+
+typedef struct {
+    int sweep_mask;
+    int wait_for_debugger;
+    jl_alloc_num_t pool;
+    jl_alloc_num_t other;
+    jl_alloc_num_t print;
+} jl_gc_debug_env_t;
 
 // This struct must be kept in sync with the Julia type of the same name in base/util.jl
 typedef struct {
@@ -194,6 +224,17 @@ typedef struct {
     jl_thread_heap_t *heap;
 } jl_single_heap_index_t;
 
+extern jl_mutex_t pagealloc_lock;
+extern jl_mutex_t finalizers_lock;
+extern jl_gc_num_t gc_num;
+extern region_t *regions[REGION_COUNT];
+extern int regions_lb[REGION_COUNT];
+extern int regions_ub[REGION_COUNT];
+extern bigval_t *big_objects_marked;
+extern arraylist_t finalizer_list;
+extern arraylist_t finalizer_list_marked;
+extern arraylist_t to_finalize;
+
 #define bigval_header(data) container_of((data), bigval_t, header)
 
 // round an address inside a gcpage's data to its beginning
@@ -217,8 +258,160 @@ STATIC_INLINE int page_index(region_t *region, void *data)
     return (gc_page_data(data) - region->pages->data) / GC_PAGE_SZ;
 }
 
+STATIC_INLINE uint8_t *page_age(jl_gc_pagemeta_t *pg)
+{
+    return pg->ages;
+}
+
 #define gc_bits(o) (((gcval_t*)(o))->gc_bits)
 #define gc_marked(o)  (((gcval_t*)(o))->gc_bits & GC_MARKED)
 #define _gc_setmark(o, mark_mode) (((gcval_t*)(o))->gc_bits = mark_mode)
 
-extern jl_gc_num_t gc_num;
+NOINLINE uintptr_t gc_get_stack_ptr(void);
+
+STATIC_INLINE region_t *find_region(void *ptr, int maybe)
+{
+    // on 64bit systems we could probably use a single region and remove this loop
+    for (int i = 0; i < REGION_COUNT && regions[i]; i++) {
+        char *begin = regions[i]->pages->data;
+        char *end = begin + sizeof(regions[i]->pages);
+        if ((char*)ptr >= begin && (char*)ptr <= end)
+            return regions[i];
+    }
+    (void)maybe;
+    assert(maybe && "find_region failed");
+    return NULL;
+}
+
+STATIC_INLINE jl_gc_pagemeta_t *page_metadata(void *data)
+{
+    region_t *r = find_region(data, 0);
+    int pg_idx = page_index(r, (char*)data - GC_PAGE_OFFSET);
+    return &r->meta[pg_idx];
+}
+
+void pre_mark(void);
+void post_mark(arraylist_t *list, int dryrun);
+void gc_debug_init(void);
+
+#define current_heap __current_heap_idx.heap
+#define current_heap_index __current_heap_idx.index
+// This chould trigger a false positive warning with both gcc and clang
+// since the compiler couldn't figure out that the loop is executed at least
+// once.
+// gcc bug: https://gcc.gnu.org/bugzilla/show_bug.cgi?id=68336
+// clang bug: https://llvm.org/bugs/show_bug.cgi?id=25521
+#define _FOR_SINGLE_HEAP(heap)                                          \
+    for (jl_single_heap_index_t __current_heap_idx = {1, heap};         \
+         --__current_heap_idx.i >= 0;)
+#define FOR_CURRENT_HEAP() _FOR_SINGLE_HEAP(jl_thread_heap)
+
+// The following macros are used for accessing these variables.
+// In the multi-threaded version, they establish the desired thread context.
+// In the single-threaded version, they are essentially noops, but nonetheless
+// serve to check that the thread context macros are being used.
+#ifdef JULIA_ENABLE_THREADING
+#define jl_thread_heap (jl_get_ptls_states()->heap)
+#define FOR_EACH_HEAP()                                                 \
+    for (jl_each_heap_index_t __current_heap_idx = {jl_n_threads, NULL}; \
+         --current_heap_index >= 0 &&                                   \
+             ((current_heap = jl_all_heaps[current_heap_index]), 1);)
+#define FOR_HEAP(t_n) _FOR_SINGLE_HEAP(jl_all_heaps[t_n])
+/*}}*/
+#else
+extern jl_thread_heap_t *const jl_thread_heap;
+#define FOR_EACH_HEAP()                                                 \
+    for (jl_each_heap_index_t __current_heap_idx = {1, jl_thread_heap}; \
+         --current_heap_index >= 0;)
+#define FOR_HEAP(t_n) _FOR_SINGLE_HEAP(jl_thread_heap)
+#endif
+
+#ifdef GC_VERIFY
+extern jl_value_t *lostval;
+void gc_verify(void);
+void add_lostval_parent(jl_value_t *parent);
+#define verify_val(v) do {                                              \
+        if (lostval == (jl_value_t*)(v) && (v) != 0) {                  \
+            jl_printf(JL_STDOUT,                                        \
+                      "Found lostval %p at %s:%d oftype: ",             \
+                      (void*)(lostval), __FILE__, __LINE__);            \
+            jl_static_show(JL_STDOUT, jl_typeof(v));                    \
+            jl_printf(JL_STDOUT, "\n");                                 \
+        }                                                               \
+    } while(0);
+
+#define verify_parent(ty, obj, slot, args...) do {                      \
+        if (*(jl_value_t**)(slot) == lostval &&                         \
+            (jl_value_t*)(obj) != lostval) {                            \
+            jl_printf(JL_STDOUT, "Found parent %p %p at %s:%d\n",       \
+                      (void*)(ty), (void*)(obj), __FILE__, __LINE__);   \
+            jl_printf(JL_STDOUT, "\tloc %p : ", (void*)(slot));         \
+            jl_printf(JL_STDOUT, args);                                 \
+            jl_printf(JL_STDOUT, "\n");                                 \
+            jl_printf(JL_STDOUT, "\ttype: ");                           \
+            jl_static_show(JL_STDOUT, jl_typeof(obj));                  \
+            jl_printf(JL_STDOUT, "\n");                                 \
+            add_lostval_parent((jl_value_t*)(obj));                     \
+        }                                                               \
+    } while(0);
+
+#define verify_parent1(ty,obj,slot,arg1) verify_parent(ty,obj,slot,arg1)
+#define verify_parent2(ty,obj,slot,arg1,arg2) verify_parent(ty,obj,slot,arg1,arg2)
+extern int gc_verifying;
+#else
+#define gc_verify()
+#define verify_val(v)
+#define verify_parent1(ty,obj,slot,arg1)
+#define verify_parent2(ty,obj,slot,arg1,arg2)
+#define gc_verifying (0)
+#endif
+
+#ifdef GC_DEBUG_ENV
+JL_DLLEXPORT extern jl_gc_debug_env_t jl_gc_debug_env;
+#define gc_quick_sweep_mask jl_gc_debug_env.sweep_mask
+int gc_debug_check_other(void);
+int gc_debug_check_pool(void);
+void gc_debug_print(void);
+void gc_scrub(char *stack_hi);
+#else
+#define gc_quick_sweep_mask GC_MARKED_NOESC
+static inline int gc_debug_check_other(void)
+{
+    return 0;
+}
+static inline int gc_debug_check_pool(void)
+{
+    return 0;
+}
+static inline void gc_debug_print(void)
+{
+}
+static inline void gc_scrub(char *stack_hi)
+{
+    (void)stack_hi;
+}
+#endif
+
+#ifdef OBJPROFILE
+void objprofile_count(void *ty, int old, int sz);
+void objprofile_printall(void);
+void objprofile_reset(void);
+#else
+static inline void objprofile_count(void *ty, int old, int sz)
+{
+}
+
+static inline void objprofile_printall(void)
+{
+}
+
+static inline void objprofile_reset(void)
+{
+}
+#endif
+
+#ifdef __cplusplus
+}
+#endif
+
+#endif

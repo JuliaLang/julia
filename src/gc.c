@@ -6,10 +6,10 @@
 extern "C" {
 #endif
 
-static jl_mutex_t pagealloc_lock;
+jl_mutex_t pagealloc_lock;
 // Protect all access to `finalizer_list`, `finalizer_list_marked` and
 // `to_finalize`.
-static jl_mutex_t finalizers_lock;
+jl_mutex_t finalizers_lock;
 
 /**
  * Note about GC synchronization:
@@ -46,68 +46,26 @@ static jl_mutex_t finalizers_lock;
 jl_gc_num_t gc_num = {0,0,0,0,0,0,0,0,0,0,0,0,0};
 static size_t last_long_collect_interval;
 
-static region_t *regions[REGION_COUNT] = {NULL};
+region_t *regions[REGION_COUNT] = {NULL};
 // store a lower bound of the first free page in each region
-static int regions_lb[REGION_COUNT] = {0};
+int regions_lb[REGION_COUNT] = {0};
 // an upper bound of the last non-free page
-static int regions_ub[REGION_COUNT] = {REGION_PG_COUNT/32-1};
+int regions_ub[REGION_COUNT] = {REGION_PG_COUNT/32-1};
 
-// Include before gc-debug for objprofile
-static const uintptr_t jl_buff_tag = 0x4eade800;
-static void *const jl_malloc_tag = (void*)0xdeadaa01;
-#ifdef OBJPROFILE
-static void *const jl_singleton_tag = (void*)0xdeadaa02;
-#endif
-
-#define current_heap __current_heap_idx.heap
-#define current_heap_index __current_heap_idx.index
-// This chould trigger a false positive warning with both gcc and clang
-// since the compiler couldn't figure out that the loop is executed at least
-// once.
-// gcc bug: https://gcc.gnu.org/bugzilla/show_bug.cgi?id=68336
-// clang bug: https://llvm.org/bugs/show_bug.cgi?id=25521
-#define _FOR_SINGLE_HEAP(heap)                                          \
-    for (jl_single_heap_index_t __current_heap_idx = {1, heap};         \
-         --__current_heap_idx.i >= 0;)
-#define FOR_CURRENT_HEAP() _FOR_SINGLE_HEAP(jl_thread_heap)
-
-// The following macros are used for accessing these variables.
-// In the multi-threaded version, they establish the desired thread context.
-// In the single-threaded version, they are essentially noops, but nonetheless
-// serve to check that the thread context macros are being used.
-#ifdef JULIA_ENABLE_THREADING
-#define jl_thread_heap (jl_get_ptls_states()->heap)
-#define FOR_EACH_HEAP()                                                 \
-    for (jl_each_heap_index_t __current_heap_idx = {jl_n_threads, NULL}; \
-         --current_heap_index >= 0 &&                                   \
-             ((current_heap = jl_all_heaps[current_heap_index]), 1);)
-#define FOR_HEAP(t_n) _FOR_SINGLE_HEAP(jl_all_heaps[t_n])
-/*}}*/
-#else
+#ifndef JULIA_ENABLE_THREADING
 static jl_thread_heap_t _jl_thread_heap;
-static jl_thread_heap_t *const jl_thread_heap = &_jl_thread_heap;
-#define FOR_EACH_HEAP()                                                 \
-    for (jl_each_heap_index_t __current_heap_idx = {1, jl_thread_heap}; \
-         --current_heap_index >= 0;)
-#define FOR_HEAP(t_n) _FOR_SINGLE_HEAP(jl_thread_heap)
+jl_thread_heap_t *const jl_thread_heap = &_jl_thread_heap;
 #endif
 
 // List of marked big objects.  Not per-thread.  Accessed only by master thread.
-static bigval_t *big_objects_marked = NULL;
+bigval_t *big_objects_marked = NULL;
 
 // finalization
-static arraylist_t finalizer_list;
-static arraylist_t finalizer_list_marked;
-static arraylist_t to_finalize;
+arraylist_t finalizer_list;
+arraylist_t finalizer_list_marked;
+arraylist_t to_finalize;
 
-#define should_timeout() 0
-
-static jl_gc_pagemeta_t *page_metadata(void *data);
-static void pre_mark(void);
-static void post_mark(arraylist_t *list, int dryrun);
-static region_t *find_region(void *ptr, int maybe);
-
-NOINLINE static uintptr_t gc_get_stack_ptr(void)
+NOINLINE uintptr_t gc_get_stack_ptr(void)
 {
     void *dummy = NULL;
     // The mask is to suppress the compiler warning about returning
@@ -115,7 +73,7 @@ NOINLINE static uintptr_t gc_get_stack_ptr(void)
     return (uintptr_t)&dummy & ~(uintptr_t)15;
 }
 
-#include "gc-debug.c"
+#define should_timeout() 0
 
 #ifdef JULIA_ENABLE_THREADING
 static void jl_gc_wait_for_the_world(void)
@@ -300,34 +258,7 @@ JL_DLLEXPORT void jl_finalize(jl_value_t *o)
     arraylist_free(&copied_list);
 }
 
-static region_t *find_region(void *ptr, int maybe)
-{
-    // on 64bit systems we could probably use a single region and remove this loop
-    for (int i = 0; i < REGION_COUNT && regions[i]; i++) {
-        char *begin = regions[i]->pages->data;
-        char *end = begin + sizeof(regions[i]->pages);
-        if ((char*)ptr >= begin && (char*)ptr <= end)
-            return regions[i];
-    }
-    (void)maybe;
-    assert(maybe && "find_region failed");
-    return NULL;
-}
-
-static jl_gc_pagemeta_t *page_metadata(void *data)
-{
-    region_t *r = find_region(data, 0);
-    int pg_idx = page_index(r, (char*)data - GC_PAGE_OFFSET);
-    return &r->meta[pg_idx];
-}
-
-static uint8_t *page_age(jl_gc_pagemeta_t *pg)
-{
-    return pg->ages;
-}
-
 #define GC_POOL_END_OFS(osize) ((((GC_PAGE_SZ - GC_PAGE_OFFSET)/(osize)) - 1)*(osize) + GC_PAGE_OFFSET)
-
 
 // GC knobs and self-measurement variables
 static int64_t last_gc_total_bytes = 0;
@@ -409,12 +340,10 @@ static size_t array_nbytes(jl_array_t*);
 
 static inline int gc_setmark_big(void *o, int mark_mode)
 {
-#ifdef GC_VERIFY
-    if (verifying) {
+    if (gc_verifying) {
         _gc_setmark(o, mark_mode);
         return 0;
     }
-#endif
     assert(find_region(o,1) == NULL);
     bigval_t *hdr = bigval_header(o);
     int bits = gc_bits(o);
@@ -446,12 +375,10 @@ static inline int gc_setmark_big(void *o, int mark_mode)
 
 static inline int gc_setmark_pool(void *o, int mark_mode)
 {
-#ifdef GC_VERIFY
-    if (verifying) {
+    if (gc_verifying) {
         _gc_setmark(o, mark_mode);
         return mark_mode;
     }
-#endif
     jl_gc_pagemeta_t *page = page_metadata(o);
     int bits = gc_bits(o);
     if (bits == GC_QUEUED || bits == GC_MARKED) {
@@ -1351,10 +1278,9 @@ NOINLINE static int gc_mark_module(jl_module_t *m, int d)
         if (table[i] != HT_NOTFOUND) {
             jl_binding_t *b = (jl_binding_t*)table[i];
             gc_setmark_buf(b, gc_bits(jl_astaggedvalue(m)));
-#ifdef GC_VERIFY
             void *vb = gc_val_buf(b);
             verify_parent1("module", m, &vb, "binding_buff");
-#endif
+            (void)vb;
             if (b->value != NULL) {
                 verify_parent2("module", m, &b->value, "binding(%s)",
                                jl_symbol_name(b->name));
@@ -1528,10 +1454,9 @@ static int push_root(jl_value_t *v, int d, int bits)
             goto ret;
         }
         else if (a->flags.how == 1) {
-#ifdef GC_VERIFY
             void *val_buf = gc_val_buf((char*)a->data - a->offset*a->elsize);
             verify_parent1("array", v, &val_buf, "buffer ('loc' addr is meaningless)");
-#endif
+            (void)val_buf;
             gc_setmark_buf((char*)a->data - a->offset*a->elsize, gc_bits(o));
         }
         if (a->flags.ptrarray && a->data!=NULL) {
@@ -1617,9 +1542,8 @@ static int push_root(jl_value_t *v, int d, int bits)
     }
 
  ret:
-#ifdef GC_VERIFY
-    if (verifying) return bits;
-#endif
+    if (gc_verifying)
+        return bits;
     if ((bits == GC_MARKED) && (refyoung == GC_MARKED_NOESC)) {
         FOR_CURRENT_HEAP () {
             current_heap->remset_nptr += nptr;
@@ -1666,7 +1590,7 @@ extern jl_array_t *jl_module_init_order;
 static int inc_count = 0;
 
 // mark the initial root set
-static void pre_mark(void)
+void pre_mark(void)
 {
     // modules
     gc_push_root(jl_main_module, 0);
@@ -1715,7 +1639,7 @@ static void pre_mark(void)
 // find unmarked objects that need to be finalized from the finalizer list "list".
 // this must happen last in the mark phase.
 // if dryrun == 1, it does not schedule any actual finalization and only marks finalizers
-static void post_mark(arraylist_t *list, int dryrun)
+void post_mark(arraylist_t *list, int dryrun)
 {
     for(size_t i=0; i < list->len; i+=2) {
         jl_value_t *v = (jl_value_t*)list->items[i];
@@ -1942,11 +1866,7 @@ static void _jl_gc_collect(int full, char *stack_hi)
             }
             else {
                 gc_num.interval = default_collect_interval/2;
-#ifdef GC_DEBUG_ENV
-                sweep_mask = jl_gc_debug_env.sweep_mask;
-#else
-                sweep_mask = GC_MARKED_NOESC;
-#endif
+                sweep_mask = gc_quick_sweep_mask;
             }
             if (sweep_mask == GC_MARKED)
                 perm_scanned_bytes = 0;
@@ -2255,14 +2175,6 @@ void jl_gc_init(void)
     last_long_collect_interval = default_collect_interval;
     gc_num.allocd = -default_collect_interval;
 
-#ifdef GC_VERIFY
-    for(int i = 0; i < 4; i++)
-        arraylist_new(&bits_save[i], 0);
-    arraylist_new(&lostval_parents, 0);
-    arraylist_new(&lostval_parents_done, 0);
-#endif
-
-    objprofile_init();
 #ifdef GC_FINAL_STATS
     process_t0 = jl_clock_now();
 #endif
