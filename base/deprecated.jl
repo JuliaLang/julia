@@ -1155,6 +1155,10 @@ end
 @deprecate_binding UTF8String String
 @deprecate_binding ByteString String
 
+@deprecate ascii(p::Ptr{UInt8}, len::Integer) ascii(bytestring(p, len))
+@deprecate ascii(p::Ptr{UInt8}) ascii(bytestring(p))
+@deprecate ascii(x) ascii(string(x))
+
 @deprecate ==(x::Char, y::Integer) UInt32(x) == y
 @deprecate ==(x::Integer, y::Char) x == UInt32(y)
 @deprecate isless(x::Char, y::Integer) UInt32(x) < y
