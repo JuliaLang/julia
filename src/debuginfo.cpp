@@ -343,7 +343,9 @@ public:
         for (const object::SymbolRef &sym_iter : debugObj.symbols()) {
             StringRef sName;
 #ifdef LLVM37
-            sName = sym_iter.getName().get();
+            auto sNameOrError = sym_iter.getName();
+            assert(sNameOrError);
+            sName = sNameOrError.get();
 #else
             sym_iter.getName(sName);
 #endif
@@ -357,14 +359,20 @@ public:
             if (pAddr) {
                 uint64_t Addr, SectionAddr, SectionLoadAddr;
 #if defined(LLVM38)
-                Addr = sym_iter.getAddress().get();
-                Section = sym_iter.getSection().get();
+                auto AddrOrError = sym_iter.getAddress();
+                assert(AddrOrError);
+                Addr = AddrOrError.get();
+                auto SectionOrError = sym_iter.getSection();
+                assert(SectionOrError);
+                Section = SectionOrError.get();
                 assert(Section != EndSection && Section->isText());
                 SectionAddr = Section->getAddress();
                 Section->getName(sName);
                 SectionLoadAddr = getLoadAddress(sName);
 #elif defined(LLVM37)
-                Addr = sym_iter.getAddress().get();
+                auto AddrOrError = sym_iter.getAddress();
+                assert(AddrOrError);
+                Addr = AddrOrError.get();
                 sym_iter.getSection(Section);
                 assert(Section != EndSection && Section->isText());
                 Section->getName(sName);
@@ -419,14 +427,20 @@ public:
         for(const auto &sym_size : symbols) {
             const object::SymbolRef &sym_iter = sym_size.first;
 #ifdef LLVM39
-            object::SymbolRef::Type SymbolType = sym_iter.getType().get();
+            auto SymbolTypeOrError = sym_iter.getType();
+            assert(SymbolTypeOrError);
+            object::SymbolRef::Type SymbolType = SymbolTypeOrError.get();
 #else
             object::SymbolRef::Type SymbolType = sym_iter.getType();
 #endif
             if (SymbolType != object::SymbolRef::ST_Function) continue;
-            uint64_t Addr = sym_iter.getAddress().get();
+            auto AddrOrError = sym_iter.getAddress();
+            assert(AddrOrError);
+            uint64_t Addr = AddrOrError.get();
 #ifdef LLVM38
-            Section = sym_iter.getSection().get();
+            auto SectionOrError = sym_iter.getSection();
+            assert(SectionOrError);
+            Section = SectionOrError.get();
 #else
             sym_iter.getSection(Section);
 #endif
@@ -441,7 +455,9 @@ public:
             uint64_t SectionLoadAddr = L.getSectionLoadAddress(secName);
 #endif
             Addr -= SectionAddr - SectionLoadAddr;
-            StringRef sName = sym_iter.getName().get();
+            auto sNameOrError = sym_iter.getName();
+            assert(sNameOrError);
+            StringRef sName = sNameOrError.get();
             uint64_t SectionSize = Section->getSize();
             size_t Size = sym_size.second;
 #if defined(_OS_WINDOWS_)
