@@ -806,11 +806,11 @@ static void sweep_pool_region(gcval_t ***pfl, int region_i, int sweep_mask)
     int ub = 0;
     int lb = region->lb;
     for (int pg_i = 0; pg_i <= region->ub; pg_i++) {
-        uint32_t line = region->freemap[pg_i];
-        if (!!~line) {
+        uint32_t line = region->allocmap[pg_i];
+        if (line) {
             ub = pg_i;
             for (int j = 0; j < 32; j++) {
-                if (!((line >> j) & 1)) {
+                if ((line >> j) & 1) {
                     jl_gc_pagemeta_t *pg = &region->meta[pg_i*32 + j];
                     int p_n = pg->pool_n;
                     int t_n = pg->thread_n;
