@@ -720,6 +720,18 @@ static void jl_rethrow_with_add(const char *fmt, ...)
     jl_rethrow();
 }
 
+static void CreateTrap(IRBuilder<> &builder)
+{
+    Function *f = builder.GetInsertBlock()->getParent();
+    Function *trap_func = Intrinsic::getDeclaration(
+            f->getParent(),
+            Intrinsic::trap);
+    builder.CreateCall(trap_func);
+    builder.CreateUnreachable();
+    BasicBlock *newBB = BasicBlock::Create(builder.getContext(), "after_noret", f);
+    builder.SetInsertPoint(newBB);
+}
+
 // --- allocating local variables ---
 
 static bool isbits_spec(jl_value_t *jt, bool allow_unsized = true)
@@ -3214,9 +3226,7 @@ static jl_cgval_t emit_expr(jl_value_t *expr, jl_codectx_t *ctx)
             res.typ = jl_type_intersection(res.typ, expr_t);
         }
         if (res.typ == jl_bottom_type) {
-            builder.CreateUnreachable();
-            BasicBlock *newBB = BasicBlock::Create(jl_LLVMContext, "after_noret", ctx->f);
-            builder.SetInsertPoint(newBB);
+            CreateTrap(builder);
         }
         return res;
     }
