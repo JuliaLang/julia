@@ -663,9 +663,9 @@ end
 
 function docerror(ex)
     txt = """
-    invalid doc expression:
+    cannot document the following expression:
 
-    @doc "..." $(isa(ex, AbstractString) ? repr(ex) : ex)"""
+    $(isa(ex, AbstractString) ? repr(ex) : ex)"""
     if isexpr(ex, :macrocall)
         txt *= "\n\n'$(ex.args[1])' not documentable. See 'Base.@__doc__' docs for details."
     end
