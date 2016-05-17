@@ -178,6 +178,14 @@ let # svds test
     S4 = svds(B, nsv=2)
     @test_approx_eq S4[1][:S] [34.0, 6.0]
 
+    ## test passing guess for Krylov vectors
+    S1 = svds(A, nsv = 2, u0=rand(eltype(A),size(A,1)))
+    @test_approx_eq S1[1][:S] S2[2][1:2]
+    S1 = svds(A, nsv = 2, v0=rand(eltype(A),size(A,2)))
+    @test_approx_eq S1[1][:S] S2[2][1:2]
+    S1 = svds(A, nsv = 2, u0=rand(eltype(A),size(A,1)), v0=rand(eltype(A),size(A,2)))
+    @test_approx_eq S1[1][:S] S2[2][1:2]
+
     @test_throws ArgumentError svds(A,nsv=0)
     @test_throws ArgumentError svds(A,nsv=20)
     @test_throws DimensionMismatch svds(A,nsv=2,u0=rand(size(A,1)+1))
@@ -202,6 +210,14 @@ let # complex svds test
     s1_right = abs(S1[1][:Vt][:,1:2])
     s2_right = abs(S2[3][:,1:2])
     @test_approx_eq s1_right s2_right
+
+    ## test passing guess for Krylov vectors
+    S1 = svds(A, nsv = 2, u0=rand(eltype(A),size(A,1)))
+    @test_approx_eq S1[1][:S] S2[2][1:2]
+    S1 = svds(A, nsv = 2, v0=rand(eltype(A),size(A,2)))
+    @test_approx_eq S1[1][:S] S2[2][1:2]
+    S1 = svds(A, nsv = 2, u0=rand(eltype(A),size(A,1)), v0=rand(eltype(A),size(A,2)))
+    @test_approx_eq S1[1][:S] S2[2][1:2]
 
     @test_throws ArgumentError svds(A,nsv=0)
     @test_throws ArgumentError svds(A,nsv=20)
