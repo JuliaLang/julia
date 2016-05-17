@@ -125,15 +125,32 @@ else
 NO_GIT := 1
 endif
 
+# Julia's Semantic Versioning system labels the three decimal places in a version number as
+# the major, minor and patch versions.  Typically the major version would be incremented
+# whenever a backwards-incompatible change is made, the minor version would be incremented
+# whenever major backwards-compatible changes are made, and the patch version would be
+# incremented whenever smaller changes are made.  However, before v1.0.0, the major
+# version number is always zero and the meanings shift down a place; the minor version
+# number becomes the major version number, the patch version number becomes the minor
+# version number, and there is no patch version number to speak of.  In this case, the
+# version v0.4.1 has major backwards-compatible changes as compared to v0.4.0, and the
+# version v0.5.0 has major backwards-incompatible changes as compared to v0.4.X.
 JULIA_VERSION := $(shell cat $(JULIAHOME)/VERSION)
+JULIA_MAJOR_VERSION := $(shell echo $(JULIA_VERSION) | cut -d'-' -f 1 | cut -d'.' -f 1)
+JULIA_MINOR_VERSION := $(shell echo $(JULIA_VERSION) | cut -d'-' -f 1 | cut -d'.' -f 2)
+JULIA_PATCH_VERSION := $(shell echo $(JULIA_VERSION) | cut -d'-' -f 1 | cut -d'.' -f 3)
 
-# Although in general we like to keep SOMAJOR and SOMINOR unlinked from the
-# "software version" of a release (as in the case of openlibm and openspecfun),
-# we strictly do not make API changes to libjulia without increasing the major
-# or minor version numbers, and so can directly use them as our major/minor
-# SONAME version numbers.
-SOMAJOR := $(shell echo $(JULIA_VERSION) | cut -d'-' -f 1 | cut -d'.' -f 2)
-SOMINOR := $(shell echo $(JULIA_VERSION) | cut -d'-' -f 1 | cut -d'.' -f 3)
+# libjulia's SONAME will follow the format libjulia.so.$(SOMAJOR). Before v1.0.0,
+# SOMAJOR will be a two-decimal value, e.g. libjulia.so.0.5, whereas at and beyond
+# v1.0.0, SOMAJOR will be simply the major version number, e.g. libjulia.so.1
+# The file itself will ultimately symlink to libjulia.so.$(SOMAJOR).$(SOMINOR)
+ifeq ($(JULIA_MAJOR_VERSION),0)
+SOMAJOR := $(JULIA_MAJOR_VERSION).$(JULIA_MINOR_VERSION)
+SOMINOR := $(JULIA_PATCH_VERSION)
+else
+SOMAJOR := $(JULIA_MAJOR_VERSION)
+SOMINOR := $(JULIA_MINOR_VERSION)
+endif
 
 ifneq ($(NO_GIT), 1)
 JULIA_COMMIT := $(shell git rev-parse --short=10 HEAD)
