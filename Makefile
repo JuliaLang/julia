@@ -54,6 +54,9 @@ $(foreach link,base test,$(eval $(call symlink_target,$(link),$(build_datarootdi
 julia_flisp.boot.inc.phony: julia-deps
 	@$(MAKE) $(QUIET_MAKE) -C $(BUILDROOT)/src julia_flisp.boot.inc.phony
 
+julia_version.c.phony: julia-deps
+	@$(MAKE) $(QUIET_MAKE) -C $(BUILDROOT)/src julia_version.c.phony
+
 # Build the HTML docs (skipped if already exists, notably in tarballs)
 $(BUILDROOT)/doc/_build/html:
 	@$(MAKE) -C $(BUILDROOT)/doc html
@@ -86,7 +89,7 @@ julia-base: julia-deps $(build_sysconfdir)/julia/juliarc.jl $(build_man1dir)/jul
 julia-libccalltest: julia-deps
 	@$(MAKE) $(QUIET_MAKE) -C $(BUILDROOT)/src libccalltest
 
-julia-src-release julia-src-debug : julia-src-% : julia-deps julia_flisp.boot.inc.phony
+julia-src-release julia-src-debug : julia-src-% : julia-deps julia_flisp.boot.inc.phony julia_version.c.phony
 	@$(MAKE) $(QUIET_MAKE) -C $(BUILDROOT)/src libjulia-$*
 
 julia-ui-release julia-ui-debug : julia-ui-% : julia-src-%
@@ -160,7 +163,7 @@ release-candidate: release testall
 	@echo 8. Upload to AWS, update http://julialang.org/downloads and http://status.julialang.org/stable links
 	@echo 9. Update checksums on AWS for tarball and packaged binaries
 	@echo 10. Announce on mailing lists
-	@echo 11. Change master to release-0.X in base/version.jl and base/version_git.sh as in 4cb1e20
+	@echo 11. Change master to release-0.X in base/version.jl and src/version_git.sh as in 4cb1e20
 	@echo
 
 $(build_man1dir)/julia.1: $(JULIAHOME)/doc/man/julia.1 | $(build_man1dir)

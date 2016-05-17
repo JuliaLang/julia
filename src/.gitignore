@@ -18,3 +18,6 @@
 /libjulia-release.so
 /libjulia-release.dylib
 /julia_version.h
+
+/julia_version.h
+/julia_version.c

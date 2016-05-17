@@ -2,6 +2,46 @@
 
 ## semantic version numbers (http://semver.org)
 
+# Load GIT_VERSION_INFO in from libjulia
+immutable GitVersionInfo_C
+    commit::Ptr{UInt8}
+    commit_short::Ptr{UInt8}
+    branch::Ptr{UInt8}
+    build_number::Cint
+    date_string::Ptr{UInt8}
+    tagged_commit::Cint
+    fork_master_distance::Cint
+    fork_master_timestamp::Cdouble
+end
+
+immutable GitVersionInfo
+    commit::String
+    commit_short::String
+    branch::String
+    build_number::Int
+    date_string::String
+    tagged_commit::Bool
+    fork_master_distance::Int
+    fork_master_timestamp::Float64
+
+    function GitVersionInfo()
+        gvi = unsafe_load(ccall(:jl_git_version,Ptr{GitVersionInfo_C},()))
+        return new(
+            bytestring(gvi.commit),
+            bytestring(gvi.commit_short),
+            bytestring(gvi.branch),
+            gvi.build_number,
+            bytestring(gvi.date_string),
+            gvi.tagged_commit,
+            gvi.fork_master_distance,
+            gvi.fork_master_timestamp
+        )
+    end
+end
+
+const GIT_VERSION_INFO = GitVersionInfo()
+
+
 immutable VersionNumber
     major::Int
     minor::Int

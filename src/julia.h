@@ -1746,6 +1746,7 @@ JL_DLLEXPORT extern int jl_ver_is_release(void);
 JL_DLLEXPORT extern const char *jl_ver_string(void);
 JL_DLLEXPORT const char *jl_git_branch(void);
 JL_DLLEXPORT const char *jl_git_commit(void);
+JL_DLLEXPORT const jl_git_version_t *jl_git_version(void);
 
 // nullable struct representations
 typedef struct {

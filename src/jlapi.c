@@ -283,30 +283,21 @@ JL_DLLEXPORT const char *jl_ver_string(void)
    return JULIA_VERSION_STRING;
 }
 
-// return char* from String field in Base.GIT_VERSION_INFO
-static const char *git_info_string(const char *fld)
-{
-    static jl_value_t *GIT_VERSION_INFO = NULL;
-    if (!GIT_VERSION_INFO)
-        GIT_VERSION_INFO = jl_get_global(jl_base_module, jl_symbol("GIT_VERSION_INFO"));
-    jl_value_t *f = jl_get_field(GIT_VERSION_INFO, fld);
-    assert(jl_is_string(f));
-    return jl_string_data(f);
-}
-
 JL_DLLEXPORT const char *jl_git_branch(void)
 {
-    static const char *branch = NULL;
-    if (!branch) branch = git_info_string("branch");
-    return branch;
+    return JL_GIT_VERSION.branch;
 }
 
 JL_DLLEXPORT const char *jl_git_commit(void)
 {
-    static const char *commit = NULL;
-    if (!commit) commit = git_info_string("commit");
-    return commit;
+    return JL_GIT_VERSION.commit;
 }
+
+JL_DLLEXPORT const jl_git_version_t *jl_git_version(void)
+{
+    return &JL_GIT_VERSION;
+}
+
 
 // Create function versions of some useful macros
 JL_DLLEXPORT jl_taggedvalue_t *(jl_astaggedvalue)(jl_value_t *v)
