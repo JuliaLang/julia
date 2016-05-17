@@ -1058,7 +1058,7 @@ jl_lambda_info_t *jl_get_specialization1(jl_tupletype_t *types)
 {
     jl_typemap_entry_t *entry = NULL;
     assert(jl_nparams(types) > 0);
-    if (!jl_is_leaf_type((jl_value_t*)types))
+    if (!jl_is_leaf_type((jl_value_t*)types) || jl_has_typevars((jl_value_t*)types))
         return NULL;
     assert(jl_is_datatype(jl_tparam0(types)));
 
