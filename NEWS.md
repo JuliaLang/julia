@@ -155,6 +155,8 @@ Library improvements
 
   * The new `Base.StackTraces` module makes stack traces easier to use programmatically. ([#14469])
 
+  * There is now a default no-op `flush(io)` function for all `IO` types ([#16403]).
+
 Deprecated or removed
 ---------------------
 
@@ -225,3 +227,4 @@ Deprecated or removed
 [#15550]: https://github.com/JuliaLang/julia/issues/15550
 [#15609]: https://github.com/JuliaLang/julia/issues/15609
 [#15763]: https://github.com/JuliaLang/julia/issues/15763
+[#16403]: https://github.com/JuliaLang/julia/issues/16403
