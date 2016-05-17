@@ -153,7 +153,7 @@ Library improvements
 
     * `extrema` can now operate over a region ([#15550]).
 
-  * The new `Base.StackTraces` module makes stack traces easier to use programmatically. ([#14469])
+  * The new `Base.StackTraces` module makes stack traces easier to use programmatically ([#14469]).
 
   * There is now a default no-op `flush(io)` function for all `IO` types ([#16403]).
 
