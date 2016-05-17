@@ -4143,3 +4143,9 @@ let a = Val{Val{TypeVar(:_, Int, true)}},
     @test  isdefined(b, :instance)
     @test isleaftype(b)
 end
+
+# A return type widened to Type{Union{T,Void}} should not confuse
+# codegen
+@noinline MaybeFunc(T) = Union{T, Void}
+fMaybeFunc() = MaybeFunc(Int64)
+@test fMaybeFunc() == Union{Int64, Void}

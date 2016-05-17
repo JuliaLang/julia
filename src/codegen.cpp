@@ -3216,16 +3216,10 @@ static jl_cgval_t emit_expr(jl_value_t *expr, jl_codectx_t *ctx)
         // some intrinsics (e.g. typeassert) can return a wider type
         // than what's actually possible
         jl_value_t *expr_t = expr_type((jl_value_t*)ex, ctx);
-        if (res.typ == (jl_value_t*)jl_any_type || expr_t == jl_bottom_type) {
-            res.typ = expr_t;
+        if (res.typ != expr_t && res.isboxed && !jl_is_leaf_type(res.typ)) {
+            res = remark_julia_type(res, expr_t);
         }
-        else if (res.typ != expr_t && expr_t != (jl_value_t*)jl_any_type &&
-                 res.typ != jl_bottom_type) {
-            // The check avoids the expensive type intersect calculation
-            // > 99% of the time...
-            res.typ = jl_type_intersection(res.typ, expr_t);
-        }
-        if (res.typ == jl_bottom_type) {
+        if (res.typ == jl_bottom_type || expr_t == jl_bottom_type) {
             CreateTrap(builder);
         }
         return res;
