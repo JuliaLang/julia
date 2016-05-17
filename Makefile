@@ -332,14 +332,14 @@ else
 
 	# Copy over .dSYM directories directly
 ifeq ($(OS),Darwin)
-	-cp -a $(build_libdir)/*.dSYM $(DESTDIR)$(private_libdir)
+	-cp -a $(build_libdir)/*.dSYM $(DESTDIR)$(libdir)
 	-cp -a $(build_private_libdir)/*.dSYM $(DESTDIR)$(private_libdir)
 endif
 
 	for suffix in $(JL_LIBS) ; do \
 		for lib in $(build_libdir)/lib$${suffix}*.$(SHLIB_EXT)*; do \
 			if [ "$${lib##*.}" != "dSYM" ]; then \
-				$(INSTALL_M) $$lib $(DESTDIR)$(private_libdir) ; \
+				$(INSTALL_M) $$lib $(DESTDIR)$(libdir) ; \
 			fi \
 		done \
 	done
@@ -411,8 +411,8 @@ else ifeq ($(OS), Linux)
 endif
 
 	# Overwrite JL_SYSTEM_IMAGE_PATH in julia library
-	$(call stringreplace,$(DESTDIR)$(private_libdir)/libjulia.$(SHLIB_EXT),sys.$(SHLIB_EXT)$$,$(private_libdir_rel)/sys.$(SHLIB_EXT))
-	$(call stringreplace,$(DESTDIR)$(private_libdir)/libjulia-debug.$(SHLIB_EXT),sys-debug.$(SHLIB_EXT)$$,$(private_libdir_rel)/sys-debug.$(SHLIB_EXT))
+	$(call stringreplace,$(DESTDIR)$(libdir)/libjulia.$(SHLIB_EXT),sys.$(SHLIB_EXT)$$,$(private_libdir_rel)/sys.$(SHLIB_EXT))
+	$(call stringreplace,$(DESTDIR)$(libdir)/libjulia-debug.$(SHLIB_EXT),sys-debug.$(SHLIB_EXT)$$,$(private_libdir_rel)/sys-debug.$(SHLIB_EXT))
 endif
 
 	mkdir -p $(DESTDIR)$(sysconfdir)
