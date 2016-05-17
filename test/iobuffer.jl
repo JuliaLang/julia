@@ -212,4 +212,4 @@ let bstream = BufferStream()
     @test nb_available(bstream) == 0
 end
 
-@test isa(flush(IOBuffer()), IOBuffer) # should be a no-op
+@test flush(IOBuffer()) === nothing # should be a no-op
