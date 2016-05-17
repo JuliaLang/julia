@@ -547,6 +547,40 @@ let a = spzeros(Int, 10, 10)
     @test a[1,:] == sparse([1:10;])
     a[:,2] = 1:10
     @test a[:,2] == sparse([1:10;])
+
+    a[1,1:0] = []
+    @test a[1,:] == sparse([1; 1; 3:10])
+    a[1:0,2] = []
+    @test a[:,2] == sparse([1:10;])
+    a[1,1:0] = 0
+    @test a[1,:] == sparse([1; 1; 3:10])
+    a[1:0,2] = 0
+    @test a[:,2] == sparse([1:10;])
+    a[1,1:0] = 1
+    @test a[1,:] == sparse([1; 1; 3:10])
+    a[1:0,2] = 1
+    @test a[:,2] == sparse([1:10;])
+
+    @test_throws BoundsError a[:,11] = spzeros(10,1)
+    @test_throws BoundsError a[11,:] = spzeros(1,10)
+    @test_throws BoundsError a[:,-1] = spzeros(10,1)
+    @test_throws BoundsError a[-1,:] = spzeros(1,10)
+    @test_throws BoundsError a[0:9] = spzeros(1,10)
+    @test_throws BoundsError a[:,11] = 0
+    @test_throws BoundsError a[11,:] = 0
+    @test_throws BoundsError a[:,-1] = 0
+    @test_throws BoundsError a[-1,:] = 0
+    @test_throws BoundsError a[0:9] = 0
+    @test_throws BoundsError a[:,11] = 1
+    @test_throws BoundsError a[11,:] = 1
+    @test_throws BoundsError a[:,-1] = 1
+    @test_throws BoundsError a[-1,:] = 1
+    @test_throws BoundsError a[0:9] = 1
+
+    @test_throws DimensionMismatch a[1:2,1:2] = 1:3
+    @test_throws DimensionMismatch a[1:2,1] = 1:3
+    @test_throws DimensionMismatch a[1,1:2] = 1:3
+    @test_throws DimensionMismatch a[1:2] = 1:3
 end
 
 let A = spzeros(Int, 10, 20)
