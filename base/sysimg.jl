@@ -78,6 +78,9 @@ Array{T}(::Type{T}, m::Integer)                       = Array{T,1}(Int(m))
 Array{T}(::Type{T}, m::Integer,n::Integer)            = Array{T,2}(Int(m),Int(n))
 Array{T}(::Type{T}, m::Integer,n::Integer,o::Integer) = Array{T,3}(Int(m),Int(n),Int(o))
 
+include("excluded.jl")
+using .Excluded
+
 # numeric operations
 include("hashing.jl")
 include("rounding.jl")
@@ -323,8 +326,10 @@ include("profile.jl")
 importall .Profile
 
 # dates
-include("Dates.jl")
-import .Dates: Date, DateTime, now
+if !NODATES
+    include("Dates.jl")
+    import .Dates: Date, DateTime, now
+end
 
 # sparse matrices, vectors, and sparse linear algebra
 include("sparse.jl")
