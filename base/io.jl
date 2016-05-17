@@ -406,3 +406,7 @@ function reset{T<:IO}(io::T)
 end
 
 ismarked(io::IO) = io.mark >= 0
+
+# Make sure all IO streams support flush, even if only as a no-op,
+# to make it easier to write generic I/O code.
+flush(io::IO) = io
