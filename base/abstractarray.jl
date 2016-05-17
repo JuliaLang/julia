@@ -1547,9 +1547,6 @@ function isequal(A::AbstractArray, B::AbstractArray)
     if axes(A) != axes(B)
         return false
     end
-    if isa(A,AbstractRange) != isa(B,AbstractRange)
-        return false
-    end
     for (a, b) in zip(A, B)
         if !isequal(a, b)
             return false
@@ -1568,9 +1565,6 @@ end
 
 function (==)(A::AbstractArray, B::AbstractArray)
     if axes(A) != axes(B)
-        return false
-    end
-    if isa(A,AbstractRange) != isa(B,AbstractRange)
         return false
     end
     anymissing = false
@@ -1944,33 +1938,64 @@ unshift!(A, a, b, c...) = unshift!(unshift!(A, c...), a, b)
 
 const hashaa_seed = UInt === UInt64 ? 0x7f53e68ceb575e76 : 0xeb575e76
 const hashrle_seed = UInt === UInt64 ? 0x2aab8909bfea414c : 0xbfea414c
-function hash(a::AbstractArray, h::UInt)
+
+function hash(a::AbstractArray{T}, h::UInt) where T
+    # O(1) hashing for types with regular step
+    if isa(a, Range) && isa(TypeRangeStep(a), RangeStepRegular)
+        return hash_range(a, h)
+    end
+
+    if isleaftype(T)
+        if method_exists(-, Tuple{T, T})
+            hashdiff = (x1, x2) -> x2 - x1
+        else
+            hashdiff = (x1, x2) -> x2
+        end
+    else
+        hashdiff = (x1, x2) -> applicable(-, x2, x1) ? x2 - x1 : x2
+    end
+
+    _hash(a, h, hashdiff)
+end
+
+function _hash(a::AbstractArray, h::UInt, hashdiff::Function)
     h += hashaa_seed
     h += hash(size(a))
 
     state = start(a)
     done(a, state) && return h
-    x2, state = next(a, state)
-    done(a, state) && return hash(x2, h)
+    x1, state = next(a, state)
+    # Always hash the first element
+    h = hash(x1, h)
+    done(a, state) && return h
 
-    x1 = x2
+    # Then hash the difference between two subsequent elements when - is supported,
+    # or the elements themselves when not
+    x2, state = next(a, state)
+    v1 = v2 = hashdiff(x1, x2)
+    done(a, state) && return hash(v2, h)
+
     while !done(a, state)
         x1 = x2
         x2, state = next(a, state)
-        if isequal(x2, x1)
-            # For repeated elements, use run length encoding
-            # This allows efficient hashing of sparse arrays
+        v1 = v2
+        v2 = hashdiff(x1, x2)
+        if isequal(v1, v2)
+            # For repeated differences, use run length encoding
+            # This allows efficient hashing of sparse arrays and ranges
             runlength = 2
             while !done(a, state)
+                x1 = x2
                 x2, state = next(a, state)
-                isequal(x1, x2) || break
+                v2 = hashdiff(x1, x2)
+                isequal(v1, v2) || break
                 runlength += 1
             end
             h += hashrle_seed
             h = hash(runlength, h)
         end
-        h = hash(x1, h)
+        h = hash(v1, h)
     end
-    !isequal(x2, x1) && (h = hash(x2, h))
+    !isequal(v1, v2) && (h = hash(v2, h))
     return h
 end
