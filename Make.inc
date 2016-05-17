@@ -126,15 +126,20 @@ NO_GIT := 1
 endif
 
 JULIA_VERSION := $(shell cat $(JULIAHOME)/VERSION)
+
+# Although in general we like to keep SOMAJOR and SOMINOR unlinked from the
+# "software version" of a release (as in the case of openlibm and openspecfun),
+# we strictly do not make API changes to libjulia without increasing the major
+# or minor version numbers, and so can directly use them as our major/minor
+# SONAME version numbers.
+SOMAJOR := $(shell echo $(JULIA_VERSION) | cut -d'-' -f 1 | cut -d'.' -f 2)
+SOMINOR := $(shell echo $(JULIA_VERSION) | cut -d'-' -f 1 | cut -d'.' -f 3)
+
 ifneq ($(NO_GIT), 1)
 JULIA_COMMIT := $(shell git rev-parse --short=10 HEAD)
 else
 JULIA_COMMIT := $(JULIA_VERSION)
 endif
-
-# Increase these every release when breaking ABI in a backward-incompatible way
-SOMAJOR := 1
-SOMINOR := 0
 
 # Whether to use GPL libraries or not.
 USE_GPL_LIBS ?= 1
