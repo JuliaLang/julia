@@ -282,13 +282,15 @@ void jl_init_threading(void)
 
     // how many threads available, usable
     int max_threads = jl_cpu_cores();
-    jl_n_threads = DEFAULT_NUM_THREADS;
+    jl_n_threads = JULIA_NUM_THREADS;
     cp = getenv(NUM_THREADS_NAME);
     if (cp) {
         jl_n_threads = (uint64_t)strtol(cp, NULL, 10);
     }
     if (jl_n_threads > max_threads)
         jl_n_threads = max_threads;
+    if (jl_n_threads <= 0)
+        jl_n_threads = 1;
 
     // set up space for per-thread heaps
     jl_all_heaps = (struct _jl_thread_heap_t **)malloc(jl_n_threads * sizeof(void*));
