@@ -24,6 +24,9 @@ New language features
 
   * The syntax `x.:sym` (e.g. `Base.:+`) is now supported, and `x.(:sym)` is deprecated ([#15032]).
 
+  * Function return type syntax `function f()::T` has been added ([#1090]). Values returned
+    from a function with such a declaration will be converted to the specified type `T`.
+
 Language changes
 ----------------
 
