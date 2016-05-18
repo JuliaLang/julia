@@ -177,14 +177,124 @@ end
 # product
 # -------
 
-@test isempty(Base.product(1:2,1:0))
-@test isempty(Base.product(1:2,1:0,1:10))
-@test isempty(Base.product(1:2,1:10,1:0))
-@test isempty(Base.product(1:0,1:2,1:10))
-@test collect(Base.product(1:2,3:4)) == [(1,3),(2,3),(1,4),(2,4)]
-@test isempty(collect(Base.product(1:0,1:2)))
-@test length(Base.product(1:2,1:10,4:6)) == 60
-@test Base.iteratorsize(Base.product(1:2, countfrom(1))) == Base.IsInfinite()
+# empty?
+for itr in [Base.product(1:0),
+            Base.product(1:2, 1:0),
+            Base.product(1:0, 1:2),
+            Base.product(1:0, 1:1, 1:2),
+            Base.product(1:1, 1:0, 1:2),
+            Base.product(1:1, 1:2 ,1:0)]
+    @test isempty(itr)
+    @test isempty(collect(itr))
+end
+
+# collect a product - first iterators runs faster
+@test collect(Base.product(1:2))           == [(i,)      for i=1:2]
+@test collect(Base.product(1:2, 3:4))      == [(i, j)    for i=1:2, j=3:4]
+@test collect(Base.product(1:2, 3:4, 5:6)) == [(i, j, k) for i=1:2, j=3:4, k=5:6]
+
+# iteration order
+let expected = [(1,3,5), (2,3,5), (1,4,5), (2,4,5), (1,3,6), (2,3,6), (1,4,6), (2,4,6)]
+    i = 1
+    for el in Base.product(1:2, 3:4, 5:6)
+        @test el == expected[i]
+        i+=1
+    end
+end
+
+# is this the correct behaviour?
+@test collect(Base.product([1 2; 3 4], [5 6; 7 8])) == [(1,5)  (1,7)  (1,6)  (1,8);
+                                                        (3,5)  (3,7)  (3,6)  (3,8);
+                                                        (2,5)  (2,7)  (2,6)  (2,8);
+                                                        (4,5)  (4,7)  (4,6)  (4,8)]
+
+let
+    a, b, c, d, e = 1:2, 1.0:10.0, 4f0:6f0, 0x01:0x08, Int8(1):Int8(0)
+
+    # length
+    @test length(Base.product(a))             == 2
+    @test length(Base.product(a, b))          == 20
+    @test length(Base.product(a, b, c))       == 60
+    @test length(Base.product(a, b, c, d))    == 480
+    @test length(Base.product(a, b, c, d, e)) == 0
+
+    # size
+    @test size(Base.product(a))             == (2, )
+    @test size(Base.product(a, b))          == (2, 10)
+    @test size(Base.product(a, b, c))       == (2, 10, 3)
+    @test size(Base.product(a, b, c, d))    == (2, 10, 3, 8)
+    @test size(Base.product(a, b, c, d, e)) == (2, 10, 3, 8, 0)
+
+    # eltype
+    @test eltype(Base.product(a))             == Tuple{Int}
+    @test eltype(Base.product(a, b))          == Tuple{Int, Float64}
+    @test eltype(Base.product(a, b, c))       == Tuple{Int, Float64, Float32}
+    @test eltype(Base.product(a, b, c, d))    == Tuple{Int, Float64, Float32, UInt8}
+    @test eltype(Base.product(a, b, c, d, e)) == Tuple{Int, Float64, Float32, UInt8, Int8}
+
+    # ndims
+    @test ndims(Base.product(a))             == 1
+    @test ndims(Base.product(a, b))          == 2
+    @test ndims(Base.product(a, b, c))       == 3
+    @test ndims(Base.product(a, b, c, d))    == 4
+    @test ndims(Base.product(a, b, c, d, e)) == 5
+
+    f, g, h = randn(1, 1), randn(1, 1, 1), randn(1, 1, 1, 1)
+    @test ndims(Base.product(f))          == ndims(collect(Base.product(f)))          == 2
+    @test ndims(Base.product(g))          == ndims(collect(Base.product(g)))          == 3
+    @test ndims(Base.product(h))          == ndims(collect(Base.product(h)))          == 4
+    @test ndims(Base.product(f, f))       == ndims(collect(Base.product(f, f)))       == 2
+    @test ndims(Base.product(f, g))       == ndims(collect(Base.product(f, g)))       == 2
+    @test ndims(Base.product(g, g))       == ndims(collect(Base.product(g, g)))       == 2
+    @test ndims(Base.product(g, h))       == ndims(collect(Base.product(g, h)))       == 2
+    @test ndims(Base.product(h, h))       == ndims(collect(Base.product(h, h)))       == 2
+    @test ndims(Base.product(f, f, f))    == ndims(collect(Base.product(f, f, f)))    == 3
+    @test ndims(Base.product(f, f, g))    == ndims(collect(Base.product(f, f, g)))    == 3
+    @test ndims(Base.product(f, g, g))    == ndims(collect(Base.product(f, g, g)))    == 3
+    @test ndims(Base.product(g, g, g))    == ndims(collect(Base.product(g, g, g)))    == 3
+    @test ndims(Base.product(g, g, h))    == ndims(collect(Base.product(g, g, h)))    == 3
+    @test ndims(Base.product(g, h, h))    == ndims(collect(Base.product(g, h, h)))    == 3
+    @test ndims(Base.product(h, h, h))    == ndims(collect(Base.product(h, h, h)))    == 3
+    @test ndims(Base.product(f, f, f))    == ndims(collect(Base.product(f, f, f)))    == 3
+    @test ndims(Base.product(g, g, g, g)) == ndims(collect(Base.product(g, g, g, g))) == 4
+    @test ndims(Base.product(h, h, h, h)) == ndims(collect(Base.product(h, h, h, h))) == 4
+end
+
+# iteratorsize trait business
+let f1 = Filter(i->i>0, 1:10)
+    @test Base.iteratorsize(Base.product(f1))               == Base.SizeUnknown()
+    @test Base.iteratorsize(Base.product(1:2, f1))          == Base.SizeUnknown()
+    @test Base.iteratorsize(Base.product(f1, 1:2))          == Base.SizeUnknown()
+    @test Base.iteratorsize(Base.product(f1, f1))           == Base.SizeUnknown()
+    @test Base.iteratorsize(Base.product(f1, countfrom(1))) == Base.IsInfinite()
+    @test Base.iteratorsize(Base.product(countfrom(1), f1)) == Base.IsInfinite()
+end
+@test Base.iteratorsize(Base.product(1:2, countfrom(1)))          == Base.IsInfinite()
+@test Base.iteratorsize(Base.product(countfrom(1), 1:2))          == Base.IsInfinite()
+@test Base.iteratorsize(Base.product(1:2))                        == Base.HasShape()
+@test Base.iteratorsize(Base.product(1:2, 1:2))                   == Base.HasShape()
+@test Base.iteratorsize(Base.product(take(1:2, 1), take(1:2, 1))) == Base.HasShape()
+@test Base.iteratorsize(Base.product(take(1:2, 2)))               == Base.HasLength()
+@test Base.iteratorsize(Base.product([1 2; 3 4]))                 == Base.HasShape()
+
+# iteratoreltype trait business
+let f1 = Filter(i->i>0, 1:10)
+    @test Base.iteratoreltype(Base.product(f1))               == Base.HasEltype() # FIXME? eltype(f1) is Any
+    @test Base.iteratoreltype(Base.product(1:2, f1))          == Base.HasEltype() # FIXME? eltype(f1) is Any
+    @test Base.iteratoreltype(Base.product(f1, 1:2))          == Base.HasEltype() # FIXME? eltype(f1) is Any
+    @test Base.iteratoreltype(Base.product(f1, f1))           == Base.HasEltype() # FIXME? eltype(f1) is Any
+    @test Base.iteratoreltype(Base.product(f1, countfrom(1))) == Base.HasEltype() # FIXME? eltype(f1) is Any
+    @test Base.iteratoreltype(Base.product(countfrom(1), f1)) == Base.HasEltype() # FIXME? eltype(f1) is Any
+end
+@test Base.iteratoreltype(Base.product(1:2, countfrom(1)))          == Base.HasEltype()
+@test Base.iteratoreltype(Base.product(countfrom(1), 1:2))          == Base.HasEltype()
+@test Base.iteratoreltype(Base.product(1:2))                        == Base.HasEltype()
+@test Base.iteratoreltype(Base.product(1:2, 1:2))                   == Base.HasEltype()
+@test Base.iteratoreltype(Base.product(take(1:2, 1), take(1:2, 1))) == Base.HasEltype()
+@test Base.iteratoreltype(Base.product(take(1:2, 2)))               == Base.HasEltype()
+@test Base.iteratoreltype(Base.product([1 2; 3 4]))                 == Base.HasEltype()
+
+
 
 # flatten
 # -------
