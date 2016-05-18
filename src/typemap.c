@@ -570,7 +570,7 @@ static jl_typemap_entry_t *jl_typemap_assoc_by_type_(jl_typemap_entry_t *ml, jl_
                                 // where a failure to determine the value of a
                                 // static parameter is inconclusive.
                                 // this is issue #3182, see test/core.jl
-                                return NULL; // XXX: need a way to signal to the caller that this is an inconclusive error so it stops searching
+                                return INEXACT_ENTRY;
                             }
                             ismatch = 0;
                             break;
@@ -585,7 +585,7 @@ static jl_typemap_entry_t *jl_typemap_assoc_by_type_(jl_typemap_entry_t *ml, jl_
                         ismatch = jl_types_equal(ti, (jl_value_t*)types);
                         JL_GC_POP();
                         if (!ismatch)
-                            return NULL; // XXX: need a way to signal to the caller that this is an inconclusive error so it stops searching
+                            return INEXACT_ENTRY;
                     }
                 }
             }
