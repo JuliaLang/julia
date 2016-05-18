@@ -344,7 +344,6 @@ end
 @windows_only ENV["PATH"] = oldpath
 
 # equality tests for Cmd
-
 @test Base.Cmd(``) == Base.Cmd(``)
 @test Base.Cmd(`lsof -i :9090`) == Base.Cmd(`lsof -i :9090`)
 @test Base.Cmd(`echo test`) == Base.Cmd(`echo test`)
@@ -354,3 +353,12 @@ end
 @test Base.Set([``, ``]) == Base.Set([``])
 @test Set([``, `echo`]) != Set([``, ``])
 @test Set([`echo`, ``, ``, `echo`]) == Set([`echo`, ``])
+
+# equality tests for AndCmds
+@test Base.AndCmds(`echo abc`, `echo def`) == Base.AndCmds(`echo abc`, `echo def`)
+@test Base.AndCmds(`echo abc`, `echo def`) != Base.AndCmds(`echo abc`, `echo xyz`)
+
+# tests for reducing over collection of Cmd
+@test_throws ArgumentError reduce(&, Base.AbstractCmd[])
+@test_throws ArgumentError reduce(&, Base.Cmd[])
+@test reduce(&, [`echo abc`, `echo def`, `echo hij`]) == `echo abc` & `echo def` & `echo hij`
