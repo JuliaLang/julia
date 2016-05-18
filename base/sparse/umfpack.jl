@@ -266,27 +266,15 @@ for itype in UmfpackIndexTypes
             umfpack_numeric!(lu)
             (size(b,1) == lu.m) && (size(b) == size(x)) || throw(DimensionMismatch())
             n = size(b,1)
-            br = Array{Float64}(n)
-            bi = Array{Float64}(n)
-            xr = Array{Float64}(n)
-            xi = Array{Float64}(n)
-            joff = 0
+            joff = 1
             for k = 1:size(b,2)
-                for j = 1:n
-                    bj = b[joff+j]
-                    br[j] = real(bj)
-                    bi[j] = imag(bj)
-                end
                 @isok ccall(($sol_c, :libumfpack), $itype,
                             ($itype, Ptr{$itype}, Ptr{$itype}, Ptr{Float64}, Ptr{Float64},
                              Ptr{Float64}, Ptr{Float64}, Ptr{Float64}, Ptr{Float64},
                              Ptr{Void}, Ptr{Float64}, Ptr{Float64}),
-                            typ, lu.colptr, lu.rowval, real(lu.nzval), imag(lu.nzval),
-                            xr, xi, br, bi,
+                            typ, lu.colptr, lu.rowval, lu.nzval, C_NULL,
+                            pointer(x, joff), C_NULL, pointer(b, joff), C_NULL,
                             lu.numeric, umf_ctrl, umf_info)
-                for j = 1:n
-                    x[joff+j] = complex(xr[j],xi[j])
-                end
                 joff += n
             end
             x
