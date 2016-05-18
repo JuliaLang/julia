@@ -301,6 +301,19 @@ function visit(f, mc::TypeMapLevel)
             isdefined(e, i) && visit(f, e[i])
         end
     end
+    mc.linear_leaf !== nothing && visit(f, mc.linear_leaf)
+    if mc.tname !== nothing
+        e = mc.tname::Vector{Any}
+        for i in 1:length(e)
+            isdefined(e, i) && visit(f, e[i])
+        end
+    end
+    if mc.name1 !== nothing
+        e = mc.name1::Vector{Any}
+        for i in 1:length(e)
+            isdefined(e, i) && visit(f, e[i])
+        end
+    end
     mc.list !== nothing && visit(f, mc.list)
     mc.any !== nothing && visit(f, mc.any)
     nothing
