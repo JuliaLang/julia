@@ -1291,87 +1291,262 @@ function A_rdiv_Bt!(A::StridedMatrix, B::UnitLowerTriangular)
     A
 end
 
+for f in (:A_mul_B!, :A_ldiv_B!)
+    @eval begin
+        $f(A::UpperTriangular, B::UpperTriangular) =
+            UpperTriangular($f(A, triu!(B.data)))
+        $f(A::UnitUpperTriangular, B::UpperTriangular) =
+            UpperTriangular($f(A, triu!(B.data)))
+        $f(A::UpperTriangular, B::UnitUpperTriangular) =
+            UpperTriangular($f(A, triu!(B.data)))
+        $f(A::UnitUpperTriangular, B::UnitUpperTriangular) =
+            UnitUpperTriangular($f(A, triu!(B.data)))
+        $f(A::LowerTriangular, B::LowerTriangular) =
+            LowerTriangular($f(A, tril!(B.data)))
+        $f(A::UnitLowerTriangular, B::LowerTriangular) =
+            LowerTriangular($f(A, tril!(B.data)))
+        $f(A::LowerTriangular, B::UnitLowerTriangular) =
+            LowerTriangular($f(A, tril!(B.data)))
+        $f(A::UnitLowerTriangular, B::UnitLowerTriangular) =
+            LowerTriangular($f(A, tril!(B.data)))
+    end
+end
+
+for f in (:Ac_mul_B!, :At_mul_B!, :Ac_ldiv_B!, :At_ldiv_B!)
+    @eval begin
+        $f(A::Union{LowerTriangular,UnitLowerTriangular}, B::UpperTriangular) =
+            UpperTriangular($f(A, triu!(B.data)))
+        $f(A::Union{UpperTriangular,UnitUpperTriangular}, B::LowerTriangular) =
+            LowerTriangular($f(A, tril!(B.data)))
+    end
+end
+
+A_rdiv_B!(A::UpperTriangular, B::Union{UpperTriangular,UnitUpperTriangular}) =
+    UpperTriangular(A_rdiv_B!(triu!(A.data), B))
+A_rdiv_B!(A::LowerTriangular, B::Union{LowerTriangular,UnitLowerTriangular}) =
+    LowerTriangular(A_rdiv_B!(tril!(A.data), B))
+
+for f in (:A_mul_Bc!, :A_mul_Bt!, :A_rdiv_Bc!, :A_rdiv_Bt!)
+    @eval begin
+        $f(A::UpperTriangular, B::Union{LowerTriangular,UnitLowerTriangular}) =
+            UpperTriangular($f(triu!(A.data), B))
+        $f(A::LowerTriangular, B::Union{UpperTriangular,UnitUpperTriangular}) =
+            LowerTriangular($f(tril!(A.data), B))
+    end
+end
+
 # Promotion
 ## Promotion methods in matmul don't apply to triangular multiplication since it is inplace. Hence we have to make very similar definitions, but without allocation of a result array. For multiplication and unit diagonal division the element type doesn't have to be stable under division whereas that is necessary in the general triangular solve problem.
 
 ## Some Triangular-Triangular cases. We might want to write taylored methods for these cases, but I'm not sure it is worth it.
 for t in (UpperTriangular, UnitUpperTriangular, LowerTriangular, UnitLowerTriangular)
     @eval begin
-        *(A::Tridiagonal, B::$t) = A_mul_B!(full(A), B)
+        (*)(A::Tridiagonal, B::$t) = A_mul_B!(full(A), B)
     end
 end
 
-for f in (:*, :Ac_mul_B, :At_mul_B, :\, :Ac_ldiv_B, :At_ldiv_B)
+for (f1, f2) in ((:*, :A_mul_B!), (:\, :A_ldiv_B))
     @eval begin
-        ($f)(A::AbstractTriangular, B::AbstractTriangular) = ($f)(A, full(B))
+        function $f1(A::LowerTriangular, B::LowerTriangular)
+            TAB = typeof(zero(eltype(A))*zero(eltype(B)) + zero(eltype(A))*zero(eltype(B)))
+            return LowerTriangular($f2(convert(AbstractMatrix{TAB}, A), copy_oftype(B, TAB)))
+        end
+
+        function $f1(A::UnitLowerTriangular, B::LowerTriangular)
+            TAB = typeof(zero(eltype(A))*zero(eltype(B)) + zero(eltype(A))*zero(eltype(B)))
+            return LowerTriangular($f2(convert(AbstractMatrix{TAB}, A), copy_oftype(B, TAB)))
+        end
+
+        function $f1(A::UpperTriangular, B::UpperTriangular)
+            TAB = typeof(zero(eltype(A))*zero(eltype(B)) + zero(eltype(A))*zero(eltype(B)))
+            return UpperTriangular($f2(convert(AbstractMatrix{TAB}, A), copy_oftype(B, TAB)))
+        end
+
+        function $f1(A::UnitUpperTriangular, B::UpperTriangular)
+            TAB = typeof(zero(eltype(A))*zero(eltype(B)) + zero(eltype(A))*zero(eltype(B)))
+            return UpperTriangular($f2(convert(AbstractMatrix{TAB}, A), copy_oftype(B, TAB)))
+        end
     end
 end
-for f in (:A_mul_Bc, :A_mul_Bt, :Ac_mul_Bc, :At_mul_Bt, :/, :A_rdiv_Bc, :A_rdiv_Bt)
+
+for (f1, f2) in ((:Ac_mul_B, :Ac_mul_B!), (:At_mul_B, :At_mul_B!),
+                 (:Ac_ldiv_B, Ac_ldiv_B!), (:At_ldiv_B, :At_ldiv_B!))
     @eval begin
-        ($f)(A::AbstractTriangular, B::AbstractTriangular) = ($f)(full(A), B)
+        function $f1(A::UpperTriangular, B::LowerTriangular)
+            TAB = typeof(zero(eltype(A))*zero(eltype(B)) + zero(eltype(A))*zero(eltype(B)))
+            return LowerTriangular($f2(convert(AbstractMatrix{TAB}, A), copy_oftype(B, TAB)))
+        end
+
+        function $f1(A::UnitUpperTriangular, B::LowerTriangular)
+            TAB = typeof(zero(eltype(A))*zero(eltype(B)) + zero(eltype(A))*zero(eltype(B)))
+            return LowerTriangular($f2(convert(AbstractMatrix{TAB}, A), copy_oftype(B, TAB)))
+        end
+
+        function $f1(A::LowerTriangular, B::UpperTriangular)
+            TAB = typeof(zero(eltype(A))*zero(eltype(B)) + zero(eltype(A))*zero(eltype(B)))
+            return UpperTriangular($f2(convert(AbstractMatrix{TAB}, A), copy_oftype(B, TAB)))
+        end
+
+        function $f1(A::UnitLowerTriangular, B::UpperTriangular)
+            TAB = typeof(zero(eltype(A))*zero(eltype(B)) + zero(eltype(A))*zero(eltype(B)))
+            return UpperTriangular($f2(convert(AbstractMatrix{TAB}, A), copy_oftype(B, TAB)))
+        end
+    end
+end
+
+function (/)(A::LowerTriangular, B::LowerTriangular)
+    TAB = typeof(zero(eltype(A))*zero(eltype(B)) + zero(eltype(A))*zero(eltype(B))/
+        one(eltype(A)))
+    return LowerTriangular(A_rdiv_B!(copy_oftype(A, TAB), convert(AbstractMatrix{TAB}, B)))
+end
+function (/)(A::LowerTriangular, B::UnitLowerTriangular)
+    TAB = typeof(zero(eltype(A))*zero(eltype(B)) + zero(eltype(A))*zero(eltype(B)))
+    return LowerTriangular(A_rdiv_B!(copy_oftype(A, TAB), convert(AbstractMatrix{TAB}, B)))
+end
+function (/)(A::UpperTriangular, B::UpperTriangular)
+    TAB = typeof(zero(eltype(A))*zero(eltype(B)) + zero(eltype(A))*zero(eltype(B))/
+        one(eltype(A)))
+    return UpperTriangular(A_rdiv_B!(copy_oftype(A, TAB), convert(AbstractMatrix{TAB}, B)))
+end
+function (/)(A::UpperTriangular, B::UnitUpperTriangular)
+    TAB = typeof(zero(eltype(A))*zero(eltype(B)) + zero(eltype(A))*zero(eltype(B)))
+    return UpperTriangular(A_rdiv_B!(copy_oftype(A, TAB), convert(AbstractMatrix{TAB}, B)))
+end
+
+for (f1, f2) in ((:A_mul_Bc, :A_mul_Bc!), (:A_mul_Bt, :A_mul_Bt!),
+                 (:A_rdiv_Bc, :A_rdiv_Bc!), (:A_rdiv_Bt, :A_rdiv_Bt!))
+    @eval begin
+        function $f1(A::LowerTriangular, B::UpperTriangular)
+            TAB = typeof(zero(eltype(A))*zero(eltype(B)) + zero(eltype(A))*zero(eltype(B)))
+            return LowerTriangular($f2(copy_oftype(A, TAB), convert(AbstractMatrix{TAB}, B)))
+        end
+
+        function $f1(A::LowerTriangular, B::UnitUpperTriangular)
+            TAB = typeof(zero(eltype(A))*zero(eltype(B)) + zero(eltype(A))*zero(eltype(B)))
+            return LowerTriangular($f2(copy_oftype(A, TAB), convert(AbstractMatrix{TAB}, B)))
+        end
+
+        function $f1(A::UpperTriangular, B::LowerTriangular)
+            TAB = typeof(zero(eltype(A))*zero(eltype(B)) + zero(eltype(A))*zero(eltype(B)))
+            return UpperTriangular($f2(copy_oftype(A, TAB), convert(AbstractMatrix{TAB}, B)))
+        end
+
+        function $f1(A::UpperTriangular, B::UnitLowerTriangular)
+            TAB = typeof(zero(eltype(A))*zero(eltype(B)) + zero(eltype(A))*zero(eltype(B)))
+            return UpperTriangular($f2(copy_oftype(A, TAB), convert(AbstractMatrix{TAB}, B)))
+        end
     end
 end
 
 ## The general promotion methods
+
+for (f, g) in ((:*, :A_mul_B!), (:Ac_mul_B, :Ac_mul_B!), (:At_mul_B, :At_mul_B!))
+    @eval begin
+        function ($f)(A::AbstractTriangular, B::AbstractTriangular)
+            TAB = typeof(zero(eltype(A))*zero(eltype(B)) + zero(eltype(A))*zero(eltype(B)))
+            BB = similar(B, TAB, size(B))
+            copy!(BB, B)
+            ($g)(convert(AbstractArray{TAB}, A), BB)
+        end
+    end
+end
+for (f, g) in ((:A_mul_Bc, :A_mul_Bc!), (:A_mul_Bt, :A_mul_Bt!))
+    @eval begin
+        function ($f)(A::AbstractTriangular, B::AbstractTriangular)
+            TAB = typeof(zero(eltype(A))*zero(eltype(B)) + zero(eltype(A))*zero(eltype(B)))
+            AA = similar(A, TAB, size(A))
+            copy!(AA, A)
+            ($g)(AA, convert(AbstractArray{TAB}, B))
+        end
+    end
+end
+
+for mat in (:AbstractVector, :AbstractMatrix)
+
 ### Multiplication with triangle to the left and hence rhs cannot be transposed.
 for (f, g) in ((:*, :A_mul_B!), (:Ac_mul_B, :Ac_mul_B!), (:At_mul_B, :At_mul_B!))
     @eval begin
-        function ($f){TA,TB}(A::AbstractTriangular{TA}, B::StridedVecOrMat{TB})
-            TAB = typeof(zero(TA)*zero(TB) + zero(TA)*zero(TB))
-            ($g)(convert(AbstractArray{TAB}, A), copy_oftype(B, TAB))
+        function ($f)(A::AbstractTriangular, B::$mat)
+            TAB = typeof(zero(eltype(A))*zero(eltype(B)) + zero(eltype(A))*zero(eltype(B)))
+            BB = similar(B, TAB, size(B))
+            copy!(BB, B)
+            ($g)(convert(AbstractArray{TAB}, A), BB)
         end
     end
 end
 ### Left division with triangle to the left hence rhs cannot be transposed. No quotients.
 for (f, g) in ((:\, :A_ldiv_B!), (:Ac_ldiv_B, :Ac_ldiv_B!), (:At_ldiv_B, :At_ldiv_B!))
     @eval begin
-        function ($f){TA,TB,S}(A::Union{UnitUpperTriangular{TA,S},UnitLowerTriangular{TA,S}}, B::StridedVecOrMat{TB})
-            TAB = typeof(zero(TA)*zero(TB) + zero(TA)*zero(TB))
-            ($g)(convert(AbstractArray{TAB}, A), copy_oftype(B, TAB))
+        function ($f)(A::Union{UnitUpperTriangular,UnitLowerTriangular}, B::$mat)
+            TAB = typeof(zero(eltype(A))*zero(eltype(B)) + zero(eltype(A))*zero(eltype(B)))
+            BB = similar(B, TAB, size(B))
+            copy!(BB, B)
+            ($g)(convert(AbstractArray{TAB}, A), BB)
         end
     end
 end
 ### Left division with triangle to the left hence rhs cannot be transposed. Quotients.
 for (f, g) in ((:\, :A_ldiv_B!), (:Ac_ldiv_B, :Ac_ldiv_B!), (:At_ldiv_B, :At_ldiv_B!))
     @eval begin
-        function ($f){TA,TB,S}(A::Union{UpperTriangular{TA,S},LowerTriangular{TA,S}}, B::StridedVecOrMat{TB})
-            TAB = typeof((zero(TA)*zero(TB) + zero(TA)*zero(TB))/one(TA))
-            ($g)(convert(AbstractArray{TAB}, A), copy_oftype(B, TAB))
+        function ($f)(A::Union{UpperTriangular,LowerTriangular}, B::$mat)
+            TAB = typeof((zero(eltype(A))*zero(eltype(B)) + zero(eltype(A))*zero(eltype(B)))/one(eltype(A)))
+            BB = similar(B, TAB, size(B))
+            copy!(BB, B)
+            ($g)(convert(AbstractArray{TAB}, A), BB)
         end
     end
 end
 ### Multiplication with triangle to the rigth and hence lhs cannot be transposed.
 for (f, g) in ((:*, :A_mul_B!), (:A_mul_Bc, :A_mul_Bc!), (:A_mul_Bt, :A_mul_Bt!))
     @eval begin
-        function ($f){TA,TB}(A::StridedVecOrMat{TA}, B::AbstractTriangular{TB})
-            TAB = typeof(zero(TA)*zero(TB) + zero(TA)*zero(TB))
-            ($g)(copy_oftype(A, TAB), convert(AbstractArray{TAB}, B))
+        function ($f)(A::$mat, B::AbstractTriangular)
+            TAB = typeof(zero(eltype(A))*zero(eltype(B)) + zero(eltype(A))*zero(eltype(B)))
+            AA = similar(A, TAB, size(A))
+            copy!(AA, A)
+            ($g)(AA, convert(AbstractArray{TAB}, B))
         end
     end
 end
 ### Right division with triangle to the right hence lhs cannot be transposed. No quotients.
 for (f, g) in ((:/, :A_rdiv_B!), (:A_rdiv_Bc, :A_rdiv_Bc!), (:A_rdiv_Bt, :A_rdiv_Bt!))
     @eval begin
-        function ($f){TA,TB,S}(A::StridedVecOrMat{TA}, B::Union{UnitUpperTriangular{TB,S},UnitLowerTriangular{TB,S}})
-            TAB = typeof(zero(TA)*zero(TB) + zero(TA)*zero(TB))
-            ($g)(copy_oftype(A, TAB), convert(AbstractArray{TAB}, B))
+        function ($f)(A::$mat, B::Tuple{UnitUpperTriangular, UnitLowerTriangular})
+            TAB = typeof(zero(eltype(A))*zero(eltype(B)) + zero(eltype(A))*zero(eltype(B)))
+            AA = similar(A, TAB, size(A))
+            copy!(AA, A)
+            ($g)(AA, convert(AbstractArray{TAB}, B))
         end
     end
 end
+
 ### Right division with triangle to the right hence lhs cannot be transposed. Quotients.
 for (f, g) in ((:/, :A_rdiv_B!), (:A_rdiv_Bc, :A_rdiv_Bc!), (:A_rdiv_Bt, :A_rdiv_Bt!))
     @eval begin
-        function ($f){TA,TB,S}(A::StridedVecOrMat{TA}, B::Union{UpperTriangular{TB,S},LowerTriangular{TB,S}})
-            TAB = typeof((zero(TA)*zero(TB) + zero(TA)*zero(TB))/one(TA))
-            ($g)(copy_oftype(A, TAB), convert(AbstractArray{TAB}, B))
+        function ($f)(A::$mat, B::Union{UpperTriangular,LowerTriangular})
+            TAB = typeof((zero(eltype(A))*zero(eltype(B)) + zero(eltype(A))*zero(eltype(B)))/one(eltype(A)))
+            AA = similar(A, TAB, size(A))
+            copy!(AA, A)
+            ($g)(AA, convert(AbstractArray{TAB}, B))
         end
     end
 end
-### Fallbacks brought in from linalg/bidiag.jl while fixing #14506.
-# Eventually the above promotion methods should be generalized as
-# was done for bidiagonal matrices in #14506.
-At_ldiv_B(A::AbstractTriangular, B::AbstractVecOrMat) = At_ldiv_B!(A, copy(B))
-Ac_ldiv_B(A::AbstractTriangular, B::AbstractVecOrMat) = Ac_ldiv_B!(A, copy(B))
+end
+
+# If these are not defined, the they will fallback to the versions in matmul.jl
+# and dispatch to generic_matmatmul! which is very costly to compile. The methods
+# below might compute an unnecessary copy. Eliminating the copy requires adding
+# all the promotion logic here once again. Since these methods are probably relatively
+# rare, we chose not to bother for now.
+Ac_mul_B(A::AbstractMatrix, B::AbstractTriangular) = (*)(ctranspose(A), B)
+At_mul_B(A::AbstractMatrix, B::AbstractTriangular) = (*)(transpose(A), B)
+A_mul_Bc(A::AbstractTriangular, B::AbstractMatrix) = (*)(A, ctranspose(B))
+A_mul_Bt(A::AbstractTriangular, B::AbstractMatrix) = (*)(A, transpose(B))
+Ac_mul_Bc(A::AbstractTriangular, B::AbstractTriangular) = Ac_mul_B(A, B')
+Ac_mul_Bc(A::AbstractTriangular, B::AbstractMatrix) = Ac_mul_B(A, B')
+Ac_mul_Bc(A::AbstractMatrix, B::AbstractTriangular) = A_mul_Bc(A', B)
+At_mul_Bt(A::AbstractTriangular, B::AbstractTriangular) = At_mul_B(A, B.')
+At_mul_Bt(A::AbstractTriangular, B::AbstractMatrix) = At_mul_B(A, B.')
+At_mul_Bt(A::AbstractMatrix, B::AbstractTriangular) = A_mul_Bt(A.', B)
 
 # Complex matrix logarithm for the upper triangular factor, see:
 #   Al-Mohy and Higham, "Improved inverse  scaling and squaring algorithms for

@@ -24,6 +24,7 @@ for elty1 in (Float32, Float64, BigFloat, Complex64, Complex128, Complex{BigFloa
         # Construct test matrix
         A1 = t1(elty1 == Int ? rand(1:7, n, n) : convert(Matrix{elty1}, (elty1 <: Complex ? complex(randn(n, n), randn(n, n)) : randn(n, n)) |> t -> chol(t't) |> t -> uplo1 == :U ? t : ctranspose(t)))
 
+
         debug && println("elty1: $elty1, A1: $t1")
 
         # Convert
@@ -489,3 +490,6 @@ end
 # Test that UpperTriangular(LowerTriangular) throws. See #16201
 @test_throws ArgumentError LowerTriangular(UpperTriangular(randn(3,3)))
 @test_throws ArgumentError UpperTriangular(LowerTriangular(randn(3,3)))
+
+# Issue 16196
+@test UpperTriangular(eye(3)) \ sub(ones(3), [1,2,3]) == ones(3)
