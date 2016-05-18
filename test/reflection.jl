@@ -408,3 +408,16 @@ tracefoo(x::Int64, y::Int64) = x*y
 @test didtrace
 didtrace = false
 ccall(:jl_register_newmeth_tracer, Void, (Ptr{Void},), C_NULL)
+
+# test for reflection over large method tables
+for i = 1:100; @eval fLargeTable(::Val{$i}, ::Any) = 1; end
+for i = 1:100; @eval fLargeTable(::Any, ::Val{$i}) = 2; end
+fLargeTable(::Any...) = 3
+fLargeTable(::Complex, ::Complex) = 4
+fLargeTable(::Union{Complex64, Complex128}...) = 5
+@test length(methods(fLargeTable)) == 203
+@test fLargeTable(1im, 2im) == 4
+@test fLargeTable(1.0im, 2.0im) == 5
+@test_throws MethodError fLargeTable(Val{1}(), Val{1}())
+@test fLargeTable(Val{1}(), 1) == 1
+@test fLargeTable(1, Val{1}()) == 2
