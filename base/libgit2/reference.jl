@@ -73,6 +73,13 @@ function isbranch(ref::GitReference)
     return err == 1
 end
 
+function isremote(ref::GitReference)
+    isempty(ref) && return false
+    err = ccall((:git_reference_is_remote, :libgit2), Cint,
+                  (Ptr{Void},), ref.ptr)
+    return err == 1
+end
+
 function peel{T <: GitObject}(::Type{T}, ref::GitReference)
     git_otype = getobjecttype(T)
     obj_ptr_ptr = Ref{Ptr{Void}}(C_NULL)
@@ -122,7 +129,7 @@ function lookup_branch(repo::GitRepo,
     if err == Int(Error.ENOTFOUND)
         return nothing
     elseif err != Int(Error.GIT_OK)
-        if repo_ptr_ptr[] != C_NULL
+        if ref_ptr_ptr[] != C_NULL
             finalize(GitReference(ref_ptr_ptr[]))
         end
         throw(Error.GitError(err))
@@ -138,7 +145,7 @@ function upstream(ref::GitReference)
     if err == Int(Error.ENOTFOUND)
         return nothing
     elseif err != Int(Error.GIT_OK)
-        if repo_ptr_ptr[] != C_NULL
+        if ref_ptr_ptr[] != C_NULL
             finalize(GitReference(ref_ptr_ptr[]))
         end
         throw(Error.GitError(err))
