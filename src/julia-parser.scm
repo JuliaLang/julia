@@ -323,6 +323,11 @@
                    (string.sub s 1)
                    s)
                r is-float32-literal)))
+      (if (and (eqv? #\. (string.char s (string.dec s (length s))))
+               (let ((nxt (peek-char port)))
+                 (or (identifier-start-char? nxt)
+                     (memv nxt '(#\( #\[ #\{ #\@ #\` #\~ #\")))))
+          (error (string "invalid numeric constant \"" s (peek-char port) "\"")))
       ;; n is #f for integers > typemax(UInt64)
       (cond (is-hex-float-literal (numchk n s) (double n))
             ((eq? pred char-hex?) (fix-uint-neg neg (sized-uint-literal n s 4)))
@@ -815,9 +820,9 @@
               (- num)))
       num))
 
-; given an expression and the next token, is there a juxtaposition
-; operator between them?
-(define (juxtapose? expr t)
+;; given an expression and the next token, is there a juxtaposition
+;; operator between them?
+(define (juxtapose? s expr t)
   (and (or (number? expr)
            (large-number? expr)
            (not (number? t))    ;; disallow "x.3" and "sqrt(2)2"
@@ -825,17 +830,23 @@
            #;(and (pair? expr) (memq (car expr) '(|'| |.'|))
                 (not (memv t '(#\( #\[ #\{))))
            )
+       (not (ts:space? s))
        (not (operator? t))
        (not (initial-reserved-word? t))
        (not (closing-token? t))
        (not (newline? t))
-       (not (and (pair? expr) (syntactic-unary-op? (car expr))))))
+       (not (and (pair? expr) (syntactic-unary-op? (car expr))))
+       ;; TODO: this would disallow juxtaposition with 0, which is ambiguous
+       ;; with e.g. hex literals `0x...`. however this is used for `0im`, which
+       ;; we might not want to break.
+       #;(or (not (and (eq? expr 0)
+                     (symbol? t)))
+           (error (string "invalid numeric constant \"" expr t "\"")))))
 
 (define (parse-juxtapose ex s)
   (let ((next (peek-token s)))
     ;; numeric literal juxtaposition is a unary operator
-    (cond ((and (juxtapose? ex next)
-                (not (ts:space? s)))
+    (cond ((juxtapose? s ex next)
            (begin
              #;(if (and (number? ex) (= ex 0))
                  (error "juxtaposition with literal \"0\""))
