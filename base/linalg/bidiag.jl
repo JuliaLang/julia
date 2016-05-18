@@ -224,7 +224,6 @@ end
 /(A::Bidiagonal, B::Number) = Bidiagonal(A.dv/B, A.ev/B, A.isupper)
 ==(A::Bidiagonal, B::Bidiagonal) = (A.dv==B.dv) && (A.ev==B.ev) && (A.isupper==B.isupper)
 
-
 BiTriSym = Union{Bidiagonal, Tridiagonal, SymTridiagonal}
 BiTri = Union{Bidiagonal, Tridiagonal}
 A_mul_B!(C::AbstractMatrix, A::SymTridiagonal, B::BiTriSym) = A_mul_B_td!(C, A, B)
@@ -360,6 +359,11 @@ function A_mul_B_td!(C::AbstractMatrix, A::AbstractMatrix, B::BiTriSym)
     end # inbounds
     C
 end
+
+SpecialMatrix = Union{Bidiagonal, SymTridiagonal, Tridiagonal}
+# to avoid ambiguity warning, but shouldn't be necessary
+*(A::AbstractTriangular, B::SpecialMatrix) = full(A) * full(B)
+*(A::SpecialMatrix, B::SpecialMatrix) = full(A) * full(B)
 
 #Generic multiplication
 for func in (:*, :Ac_mul_B, :A_mul_Bc, :/, :A_rdiv_Bc)

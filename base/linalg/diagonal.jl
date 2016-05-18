@@ -104,9 +104,26 @@ end
 /{T<:Number}(D::Diagonal, x::T) = Diagonal(D.diag / x)
 *(Da::Diagonal, Db::Diagonal) = Diagonal(Da.diag .* Db.diag)
 *(D::Diagonal, V::AbstractVector) = D.diag .* V
-*(A::AbstractMatrix, D::Diagonal) =
+# To avoid ambiguity in the definitions below
+for uplo in (:LowerTriangular, :UpperTriangular)
+    @eval begin
+        (*)(A::$uplo, D::Diagonal) = $uplo(A.data * D)
+
+        function (*)(A::$(Symbol(:Unit, uplo)), D::Diagonal)
+            B = A.data * D
+            for i = 1:size(A, 1)
+                B[i,i] = D.diag[i]
+            end
+            return $uplo(B)
+        end
+    end
+end
+(*)(A::AbstractTriangular, D::Diagonal) = error("this method should never be reached")
+(*)(D::Diagonal, A::AbstractTriangular) = error("this method should never be reached")
+
+(*)(A::AbstractMatrix, D::Diagonal) =
     scale!(similar(A, promote_op(*, eltype(A), eltype(D.diag))), A, D.diag)
-*(D::Diagonal, A::AbstractMatrix) =
+(*)(D::Diagonal, A::AbstractMatrix) =
     scale!(similar(A, promote_op(*, eltype(A), eltype(D.diag))), D.diag, A)
 
 A_mul_B!(A::Diagonal,B::AbstractMatrix) = scale!(A.diag,B)
