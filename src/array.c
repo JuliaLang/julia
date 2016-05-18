@@ -147,6 +147,7 @@ jl_array_t *jl_new_array_for_deserialization(jl_value_t *atype, uint32_t ndims, 
     return _new_array_(atype, ndims, dims, isunboxed, elsz);
 }
 
+#ifndef NDEBUG
 static inline int is_ntuple_long(jl_value_t *v)
 {
     if (!jl_is_tuple(v))
@@ -159,6 +160,7 @@ static inline int is_ntuple_long(jl_value_t *v)
     }
     return 1;
 }
+#endif
 
 JL_DLLEXPORT jl_array_t *jl_reshape_array(jl_value_t *atype, jl_array_t *data,
                                           jl_value_t *_dims)
