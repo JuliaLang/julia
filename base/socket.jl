@@ -586,6 +586,7 @@ function uv_getaddrinfocb(req::Ptr{Void}, status::Cint, addrinfo::Ptr{Void})
 end
 
 function getaddrinfo(cb::Function, host::String)
+    isascii(host) || error("non-ASCII hostname: $host")
     callback_dict[cb] = cb
     status = ccall(:jl_getaddrinfo, Int32, (Ptr{Void}, Cstring, Ptr{UInt8}, Any, Ptr{Void}),
                    eventloop(), host, C_NULL, cb, uv_jl_getaddrinfocb::Ptr{Void})
@@ -598,10 +599,9 @@ function getaddrinfo(cb::Function, host::String)
     end
     return nothing
 end
-getaddrinfo(cb::Function, host::AbstractString) = getaddrinfo(cb,ascii(host))
+getaddrinfo(cb::Function, host::AbstractString) = getaddrinfo(cb, String(host))
 
 function getaddrinfo(host::String)
-    isascii(host) || error("non-ASCII hostname: $host")
     c = Condition()
     getaddrinfo(host) do IP
         notify(c,IP)

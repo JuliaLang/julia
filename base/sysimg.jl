@@ -125,7 +125,6 @@ include("iobuffer.jl")
 
 # strings & printing
 include("char.jl")
-include("ascii.jl")
 include("string.jl")
 include("unicode.jl")
 include("parse.jl")

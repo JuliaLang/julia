@@ -243,3 +243,13 @@ function bytes2hex(a::AbstractArray{UInt8})
     end
     return String(b)
 end
+
+# check for pure ASCII-ness
+
+function ascii(s::String)
+    for (i, b) in enumerate(s.data)
+        b < 0x80 || throw(ArgumentError("invalid ASCII at index $i in $(repr(s))"))
+    end
+    return s
+end
+ascii(x::AbstractString) = ascii(convert(String, x))
