@@ -145,10 +145,20 @@ The "declaration" behavior only occurs in specific contexts::
 
 and applies to the whole current scope, even before the declaration.
 Currently, type declarations cannot be used in global scope, e.g. in
-the REPL, since Julia does not yet have constant-type globals.  Note
-that in a function return statement, the first two of the above
-expressions compute a value and then ``::`` is a type assertion and
-not a declaration.
+the REPL, since Julia does not yet have constant-type globals.
+
+Declarations can also be attached to function definitions::
+
+    function sinc(x)::Float64
+        if x == 0
+            return 1
+        end
+        return sin(pi*x)/(pi*x)
+    end
+
+Returning from this function behaves just like an assignment to
+a variable with a declared type: the value is always converted to
+``Float64``.
 
 
 .. _man-abstract-types:
