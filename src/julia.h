@@ -416,6 +416,7 @@ typedef struct _jl_typemap_entry_t {
     int8_t isleafsig; // isleaftype(sig) & !any(isType, sig) : unsorted and very fast
     int8_t issimplesig; // all(isleaftype | isAny | isType | isVararg, sig) : sorted and fast
     int8_t va; // isVararg(sig)
+    int8_t weak; // will never overwrite a signature
 } jl_typemap_entry_t;
 
 // one level in a TypeMap tree
@@ -426,11 +427,12 @@ struct jl_ordereddict_t {
 };
 typedef struct _jl_typemap_level_t {
     JL_DATA_TYPE
+    jl_typemap_entry_t *bottom; // union jl_typemap_t (but no more levels) for entries which have no type at offs
     struct jl_ordereddict_t targ; // contains Type{LeafType}
     struct jl_ordereddict_t arg1; // contains LeafType
     struct jl_ordereddict_t tname; // contains non-abstract Type{TypeName}
     struct jl_ordereddict_t name1; // contains non-abstract TypeName
-    jl_typemap_entry_t *linear; // union jl_typemap_t (but no more levels)
+    jl_typemap_entry_t *linear; // union jl_typemap_t (but no more levels) - most entries usually end up here
     union jl_typemap_t any; // type at offs is Any
     jl_value_t *key; // [nullable]
 } jl_typemap_level_t;
@@ -999,7 +1001,9 @@ STATIC_INLINE int jl_is_leaf_type_(jl_value_t *v)
 
 // type constructors
 JL_DLLEXPORT jl_typename_t *jl_new_typename(jl_sym_t *name);
-JL_DLLEXPORT jl_tvar_t *jl_new_typevar(jl_sym_t *name,jl_value_t *lb,jl_value_t *ub);
+JL_DLLEXPORT jl_tvar_t *jl_new_typevar(jl_sym_t *name, jl_value_t *lb, jl_value_t *ub);
+JL_DLLEXPORT jl_tvar_t *jl_new_typevar_(jl_sym_t *name, jl_value_t *lb,
+                                        jl_value_t *ub, jl_value_t *b);
 JL_DLLEXPORT jl_value_t *jl_apply_type(jl_value_t *tc, jl_svec_t *params);
 JL_DLLEXPORT jl_tupletype_t *jl_apply_tuple_type(jl_svec_t *params);
 JL_DLLEXPORT jl_tupletype_t *jl_apply_tuple_type_v(jl_value_t **p, size_t np);

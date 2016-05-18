@@ -939,14 +939,16 @@ static void jl_serialize_value_(ios_t *s, jl_value_t *v)
                     // (which will need to be rehashed during deserialization anyhow)
                     jl_typemap_level_t *node = (jl_typemap_level_t*)v;
                     assert( // make sure this type has the expected ordering
-                        offsetof(jl_typemap_level_t, targ) == 0 * sizeof(jl_value_t*) &&
-                        offsetof(jl_typemap_level_t, arg1) == 2 * sizeof(jl_value_t*) &&
-                        offsetof(jl_typemap_level_t, tname) == 4 * sizeof(jl_value_t*) &&
-                        offsetof(jl_typemap_level_t, name1) == 6 * sizeof(jl_value_t*) &&
-                        offsetof(jl_typemap_level_t, linear) == 8 * sizeof(jl_value_t*) &&
-                        offsetof(jl_typemap_level_t, any) == 9 * sizeof(jl_value_t*) &&
-                        offsetof(jl_typemap_level_t, key) == 10 * sizeof(jl_value_t*) &&
-                        sizeof(jl_typemap_level_t) == 11 * sizeof(jl_value_t*));
+                        offsetof(jl_typemap_level_t, bottom) == 0 * sizeof(jl_value_t*) &&
+                        offsetof(jl_typemap_level_t, targ) == 1 * sizeof(jl_value_t*) &&
+                        offsetof(jl_typemap_level_t, arg1) == 3 * sizeof(jl_value_t*) &&
+                        offsetof(jl_typemap_level_t, tname) == 5 * sizeof(jl_value_t*) &&
+                        offsetof(jl_typemap_level_t, name1) == 7 * sizeof(jl_value_t*) &&
+                        offsetof(jl_typemap_level_t, linear) == 9 * sizeof(jl_value_t*) &&
+                        offsetof(jl_typemap_level_t, any) == 10 * sizeof(jl_value_t*) &&
+                        offsetof(jl_typemap_level_t, key) == 11 * sizeof(jl_value_t*) &&
+                        sizeof(jl_typemap_level_t) == 12 * sizeof(jl_value_t*));
+                    jl_serialize_value(s, node->bottom);
                     jl_serialize_value(s, jl_nothing);
                     jl_serialize_value(s, node->targ.values);
                     jl_serialize_value(s, jl_nothing);
@@ -993,7 +995,7 @@ struct jl_serialize_methcache_from_mod_env {
 static int jl_serialize_methcache_from_mod(jl_typemap_entry_t *ml, void *closure)
 {
     struct jl_serialize_methcache_from_mod_env *env = (struct jl_serialize_methcache_from_mod_env*)closure;
-    if (module_in_worklist(ml->func.method->module)) {
+    if (module_in_worklist(ml->func.method->module) && !ml->weak) {
         jl_serialize_value(env->s, ml->func.method);
         jl_serialize_value(env->s, ml->simplesig);
     }

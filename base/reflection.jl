@@ -289,6 +289,7 @@ function visit(f, mt::MethodTable)
     nothing
 end
 function visit(f, mc::TypeMapLevel)
+    mc.bottom !== nothing && visit(f, mc.bottom)
     if mc.targ !== nothing
         e = mc.targ::Vector{Any}
         for i in 1:length(e)
@@ -301,7 +302,6 @@ function visit(f, mc::TypeMapLevel)
             isdefined(e, i) && visit(f, e[i])
         end
     end
-    mc.linear_leaf !== nothing && visit(f, mc.linear_leaf)
     if mc.tname !== nothing
         e = mc.tname::Vector{Any}
         for i in 1:length(e)
