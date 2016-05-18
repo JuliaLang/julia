@@ -821,6 +821,19 @@ if DoFullTest
     end
     sleep(0.5)  # Give some time for the above error to be printed
 
+    println("\n\nThe following 'invalid connection credentials' error messages are to be ignored.")
+    all_w = workers()
+    # Test sending fake data to workers. The worker processes will print an
+    # error message but should not terminate.
+    for w in Base.PGRP.workers
+        if isa(w, Base.Worker)
+            s = connect(get(w.config.host), get(w.config.port))
+            write(s, randstring(32))
+        end
+    end
+    @test workers() == all_w
+    @test all([p == remotecall_fetch(myid, p) for p in all_w])
+
 if is_unix() # aka have ssh
     function test_n_remove_pids(new_pids)
         for p in new_pids
