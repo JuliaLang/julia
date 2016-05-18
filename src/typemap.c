@@ -16,6 +16,7 @@
 extern "C" {
 #endif
 
+// compute whether the specificity of this type is equivalent to Any in the sort order
 static int jl_is_any(jl_value_t *t1)
 {
     return (t1 == (jl_value_t*)jl_any_type ||
@@ -43,18 +44,9 @@ static int sig_match_by_type_leaf(jl_value_t **types, jl_tupletype_t *sig, size_
 static int sig_match_by_type_simple(jl_value_t **types, size_t n, jl_tupletype_t *sig, size_t lensig, int va)
 {
     size_t i;
-    for(i=0; i < n; i++) {
+    if (va) lensig -= 1;
+    for (i = 0; i < lensig; i++) {
         jl_value_t *decl = jl_field_type(sig, i);
-        if (i == lensig-1) {
-            if (va) {
-                jl_value_t *t = jl_tparam0(decl);
-                for(; i < n; i++) {
-                    if (!jl_subtype(types[i], t, 0))
-                        return 0;
-                }
-                return 1;
-            }
-        }
         jl_value_t *a = types[i];
         if (jl_is_type_type(decl)) {
             jl_value_t *tp0 = jl_tparam0(decl);
@@ -89,13 +81,23 @@ static int sig_match_by_type_simple(jl_value_t **types, size_t n, jl_tupletype_t
                 return 0;
         }
     }
+    if (va) {
+        jl_value_t *decl = jl_field_type(sig, i);
+        jl_value_t *t = jl_tparam0(decl);
+        for(; i < n; i++) {
+            if (!jl_subtype(types[i], t, 0))
+                return 0;
+        }
+        return 1;
+    }
     return 1;
 }
 
 static inline int sig_match_leaf(jl_value_t **args, jl_value_t **sig, size_t n)
 {
     // NOTE: This function is a huge performance hot spot!!
-    for(size_t i=0; i < n; i++) {
+    size_t i;
+    for (i = 0; i < n; i++) {
         jl_value_t *decl = sig[i];
         jl_value_t *a = args[i];
         if ((jl_value_t*)jl_typeof(a) != decl) {
@@ -113,18 +115,10 @@ static inline int sig_match_simple(jl_value_t **args, size_t n, jl_value_t **sig
                                    int va, size_t lensig)
 {
     // NOTE: This function is a performance hot spot!!
-    for(size_t i=0; i < n; i++) {
+    size_t i;
+    if (va) lensig -= 1;
+    for (i = 0; i < lensig; i++) {
         jl_value_t *decl = sig[i];
-        if (i == lensig-1) {
-            if (va) {
-                jl_value_t *t = jl_tparam0(decl);
-                for(; i < n; i++) {
-                    if (!jl_subtype(args[i], t, 1))
-                        return 0;
-                }
-                return 1;
-            }
-        }
         jl_value_t *a = args[i];
         if (decl == (jl_value_t*)jl_any_type) {
         }
@@ -153,6 +147,15 @@ static inline int sig_match_simple(jl_value_t **args, size_t n, jl_value_t **sig
         else {
             return 0;
         }
+    }
+    if (va) {
+        jl_value_t *decl = sig[i];
+        jl_value_t *t = jl_tparam0(decl);
+        for(; i < n; i++) {
+            if (!jl_subtype(args[i], t, 1))
+                return 0;
+        }
+        return 1;
     }
     return 1;
 }
@@ -451,7 +454,7 @@ int jl_typemap_intersection_visitor(union jl_typemap_t map, int offs,
         jl_typemap_level_t *cache = map.node;
         jl_value_t *ty = NULL;
         size_t l = jl_datatype_nfields(closure->type);
-        if (closure->va && l == offs - 1) {
+        if (closure->va && l <= offs + 1) {
             ty = closure->va;
         }
         else if (l > offs) {
@@ -524,11 +527,19 @@ static jl_typemap_entry_t *jl_typemap_assoc_by_type_(jl_typemap_entry_t *ml, jl_
     while (ml != (void*)jl_nothing) {
         size_t lensig = jl_datatype_nfields(ml->sig);
         if (lensig == n || (ml->va && lensig <= n+1)) {
-            int resetenv = 0, ismatch;
-            if (ml->simplesig != (void*)jl_nothing &&
-                    !sig_match_by_type_simple(jl_svec_data(types->parameters), n,
-                                              ml->simplesig, jl_datatype_nfields(ml->simplesig), 0))
-                ismatch = 0;
+            int resetenv = 0, ismatch = 1;
+            if (ml->simplesig != (void*)jl_nothing) {
+                size_t lensimplesig = jl_datatype_nfields(ml->simplesig);
+                int isva = lensimplesig > 0 && jl_is_vararg_type(jl_tparam(ml->simplesig, lensimplesig - 1));
+                if (lensig == n || (isva && lensimplesig <= n + 1))
+                    ismatch = sig_match_by_type_simple(jl_svec_data(types->parameters), n,
+                                                       ml->simplesig, lensimplesig, isva);
+                else
+                    ismatch = 0;
+            }
+
+            if (ismatch == 0)
+                ; // nothing
             else if (ml->isleafsig)
                 ismatch = sig_match_by_type_leaf(jl_svec_data(types->parameters),
                                                  ml->sig, lensig);
@@ -559,7 +570,7 @@ static jl_typemap_entry_t *jl_typemap_assoc_by_type_(jl_typemap_entry_t *ml, jl_
                                 // where a failure to determine the value of a
                                 // static parameter is inconclusive.
                                 // this is issue #3182, see test/core.jl
-                                return NULL; // XXX: need a way to signal to the caller that this is an inconclusive error so it stops searching
+                                return INEXACT_ENTRY;
                             }
                             ismatch = 0;
                             break;
@@ -574,7 +585,7 @@ static jl_typemap_entry_t *jl_typemap_assoc_by_type_(jl_typemap_entry_t *ml, jl_
                         ismatch = jl_types_equal(ti, (jl_value_t*)types);
                         JL_GC_POP();
                         if (!ismatch)
-                            return NULL; // XXX: need a way to signal to the caller that this is an inconclusive error so it stops searching
+                            return INEXACT_ENTRY;
                     }
                 }
             }
@@ -621,8 +632,22 @@ jl_typemap_entry_t *jl_typemap_assoc_by_type(union jl_typemap_t ml_or_cache, jl_
         jl_typemap_level_t *cache = ml_or_cache.node;
         // called object is the primary key for constructors, otherwise first argument
         jl_value_t *ty = NULL;
-        if (jl_datatype_nfields(types) > offs) {
+        size_t l = jl_datatype_nfields(types);
+        // compute the type at offset `offs` into `types`, which may be a Vararg
+        if (l <= offs + 1) {
+            ty = jl_tparam(types, l - 1);
+            if (jl_is_vararg_type(ty))
+                ty = jl_tparam0(ty);
+            else if (l <= offs)
+                ty = NULL;
+        }
+        else if (l > offs) {
             ty = jl_tparam(types, offs);
+        }
+        // If there is a type at offs, look in the optimized caches
+        if (ty) {
+            if (!subtype && jl_is_any(ty))
+                return jl_typemap_assoc_by_type(cache->any, types, penv, subtype_inexact__sigseq_useenv, subtype, offs+1);
             if (cache->targ != (void*)jl_nothing && jl_is_type_type(ty)) {
                 jl_value_t *a0 = jl_tparam0(ty);
                 if (jl_is_datatype(a0)) {
@@ -643,16 +668,14 @@ jl_typemap_entry_t *jl_typemap_assoc_by_type(union jl_typemap_t ml_or_cache, jl_
                 }
             }
         }
+        // Always check the list (since offs doesn't always start at 0)
         if (subtype) {
             jl_typemap_entry_t *li = jl_typemap_assoc_by_type_(cache->linear, types, subtype_inexact__sigseq_useenv, penv);
             if (li) return li;
             return jl_typemap_assoc_by_type(cache->any, types, penv, subtype_inexact__sigseq_useenv, subtype, offs+1);
         }
         else {
-            if (ty && jl_is_any(ty))
-                return jl_typemap_assoc_by_type(cache->any, types, penv, subtype_inexact__sigseq_useenv, subtype, offs+1);
-            else
-                return jl_typemap_lookup_by_type_(cache->linear, types, subtype_inexact__sigseq_useenv);
+            return jl_typemap_lookup_by_type_(cache->linear, types, subtype_inexact__sigseq_useenv);
         }
     }
     else {
@@ -667,11 +690,18 @@ static jl_typemap_entry_t *jl_typemap_node_assoc_exact(jl_typemap_entry_t *ml, j
     while (ml != (void*)jl_nothing) {
         size_t lensig = jl_datatype_nfields(ml->sig);
         if (lensig == n || (ml->va && lensig <= n+1)) {
-            int ismatch;
-            if (ml->simplesig != (void*)jl_nothing &&
-                    !sig_match_simple(args, n, jl_svec_data(ml->simplesig->parameters), 0,
-                        jl_datatype_nfields(ml->simplesig)))
-                ismatch = 0;
+            int ismatch = 1;
+            if (ml->simplesig != (void*)jl_nothing) {
+                size_t lensimplesig = jl_datatype_nfields(ml->simplesig);
+                int isva = lensimplesig > 0 && jl_is_vararg_type(jl_tparam(ml->simplesig, lensimplesig - 1));
+                if (lensig == n || (isva && lensimplesig <= n + 1))
+                    ismatch = sig_match_simple(args, n, jl_svec_data(ml->simplesig->parameters), isva, lensimplesig);
+                else
+                    ismatch = 0;
+            }
+
+            if (ismatch == 0)
+                ; // nothing
             else if (ml->isleafsig)
                 ismatch = sig_match_leaf(args, jl_svec_data(ml->sig->parameters), n);
             else if (ml->issimplesig)
@@ -845,8 +875,28 @@ static int jl_typemap_array_insert_(jl_array_t **cache, jl_value_t *key, jl_type
 static void jl_typemap_level_insert_(jl_typemap_level_t *cache, jl_typemap_entry_t *newrec, int8_t offs,
         const struct jl_typemap_info *tparams)
 {
-    if (jl_datatype_nfields(newrec->sig) > offs) {
-        jl_value_t *t1 = jl_tparam(newrec->sig, offs);
+    size_t l = jl_datatype_nfields(newrec->sig);
+    // compute the type at offset `offs` into `sig`, which may be a Vararg
+    jl_value_t *t1 = NULL;
+    int isva = 0;
+    if (l <= offs + 1) {
+        t1 = jl_tparam(newrec->sig, l - 1);
+        if (jl_is_vararg_type(t1)) {
+            isva = 1;
+            t1 = jl_tparam0(t1);
+        }
+        else if (l <= offs) {
+            t1 = NULL;
+        }
+    }
+    else if (l > offs) {
+        t1 = jl_tparam(newrec->sig, offs);
+    }
+    // If the type at `offs` is Any, put it in the Any list
+    if (t1 && jl_is_any(t1))
+        return jl_typemap_insert_generic(&cache->any, (jl_value_t*)cache, newrec, (jl_value_t*)jl_any_type, offs+1, tparams);
+    // Don't put Varargs in the optimized caches (too hard to handle in lookup and bp)
+    if (t1 && !isva) {
         // if t1 != jl_typetype_type and the argument is Type{...}, this
         // method has specializations for singleton kinds and we use
         // the table indexed for that purpose.
@@ -857,8 +907,6 @@ static void jl_typemap_level_insert_(jl_typemap_level_t *cache, jl_typemap_entry
         }
         if (jl_typemap_array_insert_(&cache->arg1, t1, newrec, (jl_value_t*)cache, 0, offs, tparams))
             return;
-        if (jl_is_any(t1))
-            return jl_typemap_insert_generic(&cache->any, (jl_value_t*)cache, newrec, (jl_value_t*)jl_any_type, offs+1, tparams);
     }
     jl_typemap_list_insert_(&cache->linear, (jl_value_t*)cache, newrec, tparams);
 }
@@ -871,8 +919,9 @@ jl_typemap_entry_t *jl_typemap_insert(union jl_typemap_t *cache, jl_value_t *par
                                       jl_value_t **overwritten)
 {
     assert(jl_is_tuple_type(type));
-    if (!simpletype)
+    if (!simpletype) {
         simpletype = (jl_tupletype_t*)jl_nothing;
+    }
 
     jl_typemap_entry_t *ml = jl_typemap_assoc_by_type(*cache, type, NULL, 1, 0, offs);
     if (ml) {
