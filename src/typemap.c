@@ -492,10 +492,11 @@ int jl_typemap_intersection_visitor(union jl_typemap_t map, int offs,
                     if (!jl_typemap_intersection_array_visitor(cache->arg1, ty, 0, offs, closure)) return 0;
                 }
             }
-            if (!jl_typemap_intersection_node_visitor(map.node->linear, closure))
-                return 0;
-            return jl_typemap_intersection_visitor(map.node->any, offs+1, closure);
         }
+        if (!jl_typemap_intersection_node_visitor(map.node->linear, closure))
+            return 0;
+        if (ty)
+            return jl_typemap_intersection_visitor(map.node->any, offs+1, closure);
         return 1;
     }
     else {
