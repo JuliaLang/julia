@@ -1119,9 +1119,8 @@ void *jl_get_llvmf(jl_tupletype_t *tt, bool getwrapper, bool getdeclarations)
     if (tt != NULL) {
         linfo = jl_get_specialization1(tt);
         if (linfo == NULL) {
-            jl_typemap_entry_t *entry;
             linfo = jl_method_lookup_by_type(
-                ((jl_datatype_t*)jl_tparam0(tt))->name->mt, tt, 0, 0, &entry);
+                ((jl_datatype_t*)jl_tparam0(tt))->name->mt, tt, 0, 0);
             if (linfo == NULL || jl_has_call_ambiguities(tt, linfo->def)) {
                 JL_GC_POP();
                 return NULL;
