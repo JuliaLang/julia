@@ -62,23 +62,11 @@
 
    Convert a string to a contiguous byte array representation appropriate for passing it to C functions. The string will be encoded as either ASCII or UTF-8.
 
-.. function:: ascii(::Array{UInt8,1})
-
-   .. Docstring generated from Julia source
-
-   Create an ASCII string from a byte array.
-
-.. function:: ascii(s)
+.. function:: ascii(s::AbstractString)
 
    .. Docstring generated from Julia source
 
    Convert a string to a contiguous ASCII string (all characters must be valid ASCII characters).
-
-.. function:: ascii(::Ptr{UInt8}, [length])
-
-   .. Docstring generated from Julia source
-
-   Create an ASCII string from the address of a C (0-terminated) string encoded in ASCII. A copy is made; the ptr can be safely freed. If ``length`` is specified, the string does not have to be 0-terminated.
 
 .. function:: utf8(::Array{UInt8,1})
 
