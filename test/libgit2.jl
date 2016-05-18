@@ -79,6 +79,7 @@ mktempdir() do dir
     commit_oid1 = LibGit2.Oid()
     commit_oid2 = LibGit2.Oid()
     commit_oid3 = LibGit2.Oid()
+    master_branch = "master"
     test_branch = "test_branch"
     tag1 = "tag1"
     tag2 = "tag2"
@@ -248,18 +249,32 @@ mktempdir() do dir
             try
                 brnch = LibGit2.branch(repo)
                 brref = LibGit2.head(repo)
-                @test LibGit2.isbranch(brref)
-                @test LibGit2.name(brref) == "refs/heads/master"
-                @test LibGit2.shortname(brref) == "master"
-                @test LibGit2.ishead(brref)
-                @test LibGit2.upstream(brref) == nothing
-                @test repo.ptr == LibGit2.owner(brref).ptr
-                @test brnch == "master"
-                @test LibGit2.headname(repo) == "master"
-                LibGit2.branch!(repo, test_branch, string(commit_oid1), set_head=false)
+                try
+                    @test LibGit2.isbranch(brref)
+                    @test !LibGit2.isremote(brref)
+                    @test LibGit2.name(brref) == "refs/heads/master"
+                    @test LibGit2.shortname(brref) == master_branch
+                    @test LibGit2.ishead(brref)
+                    @test LibGit2.upstream(brref) === nothing
+                    @test repo.ptr == LibGit2.owner(brref).ptr
+                    @test brnch == master_branch
+                    @test LibGit2.headname(repo) == master_branch
+                    LibGit2.branch!(repo, test_branch, string(commit_oid1), set_head=false)
+
+                    @test LibGit2.lookup_branch(repo, test_branch, true) === nothing
+                    tbref = LibGit2.lookup_branch(repo, test_branch, false)
+                    try
+                        @test LibGit2.shortname(tbref) == test_branch
+                        @test LibGit2.upstream(tbref) === nothing
+                    finally
+                        finalize(tbref)
+                    end
+                finally
+                    finalize(brref)
+                end
 
                 branches = map(b->LibGit2.shortname(b[1]), LibGit2.GitBranchIter(repo))
-                @test "master" in branches
+                @test master_branch in branches
                 @test test_branch in branches
             finally
                 finalize(repo)
@@ -361,7 +376,7 @@ mktempdir() do dir
             @test_throws LibGit2.Error.GitError LibGit2.merge!(repo, fastforward=true)
 
             # Switch to the master branch
-            LibGit2.branch!(repo, "master")
+            LibGit2.branch!(repo, master_branch)
 
         finally
             finalize(repo)
@@ -383,8 +398,17 @@ mktempdir() do dir
 
                 # all tag in place
                 branches = map(b->LibGit2.shortname(b[1]), LibGit2.GitBranchIter(repo))
-                @test "master" in branches
+                @test master_branch in branches
                 @test test_branch in branches
+
+                # issue #16337
+                tag2ref = LibGit2.GitReference(repo, "refs/tags/$tag2")
+                try
+                    @test_throws LibGit2.Error.GitError LibGit2.upstream(tag2ref)
+                finally
+                    finalize(tag2ref)
+                end
+
             finally
                 finalize(repo)
             end
