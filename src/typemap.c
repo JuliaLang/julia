@@ -758,25 +758,33 @@ jl_typemap_entry_t *jl_typemap_assoc_exact(union jl_typemap_t ml_or_cache, jl_va
             if (cache->arg1 != (void*)jl_nothing) {
                 ml_or_cache = mtcache_hash_lookup(cache->arg1, ty, 0, offs);
                 if (jl_typeof(ml_or_cache.unknown) == (jl_value_t*)jl_typemap_entry_type) {
-                    if (ml_or_cache.leaf->simplesig == (void*)jl_nothing && offs < 2 && n > 1) {
-                        jl_value_t *a0 = args[1-offs];
+                    if (offs < 2 && n > 1) {
+                        // some manually-unrolled common special cases
+                        jl_value_t *a0 = args[1 - offs];
                         jl_value_t *t0 = (jl_value_t*)jl_typeof(a0);
-                        if (n==2 && jl_datatype_nfields(ml_or_cache.leaf->sig)==2 &&
-                                jl_tparam(ml_or_cache.leaf->sig, 1 - offs) == t0)
-                            return ml_or_cache.leaf;
-                        if (n==3) {
-                            // some manually-unrolled common special cases
-                            jl_value_t *a2 = args[2];
-                            if (!jl_is_tuple(a2)) {  // issue #6426
-                                jl_typemap_entry_t *mn = ml_or_cache.leaf;
-                                if (jl_datatype_nfields(mn->sig)==3 &&
-                                    jl_tparam(mn->sig,1-offs)==t0 &&
-                                    jl_tparam(mn->sig,2)==(jl_value_t*)jl_typeof(a2))
+                        jl_typemap_entry_t *mn = ml_or_cache.leaf;
+                        if (mn->simplesig == (void*)jl_nothing && mn->guardsigs == jl_emptysvec &&
+                                    n == jl_datatype_nfields(mn->sig) && mn->isleafsig) {
+                            if (n == 2) {
+                                if (jl_tparam(ml_or_cache.leaf->sig, 1 - offs) == t0)
+                                    return ml_or_cache.leaf;
+                            }
+                            else if (n == 3) {
+                                jl_value_t *a2 = args[2];
+                                if (jl_tparam(mn->sig, 1 - offs) == t0 &&
+                                    jl_tparam(mn->sig, 2) == (jl_value_t*)jl_typeof(a2))
                                     return mn;
-                                mn = mn->next;
-                                if (mn!=(void*)jl_nothing && jl_datatype_nfields(mn->sig)==3 &&
-                                    jl_tparam(mn->sig,1-offs)==t0 &&
-                                    jl_tparam(mn->sig,2)==(jl_value_t*)jl_typeof(a2))
+                            }
+                            else {
+                                if (sig_match_leaf(args, jl_svec_data(mn->sig->parameters), n))
+                                    return mn;
+                            }
+                            mn = mn->next;
+                            if (n == 3 && mn != (void*)jl_nothing &&
+                                    mn->simplesig == (void*)jl_nothing && mn->guardsigs == jl_emptysvec &&
+                                    n == jl_datatype_nfields(mn->sig) && mn->isleafsig) {
+                                if (jl_tparam(mn->sig, 1 - offs) == t0 &&
+                                    jl_tparam(mn->sig, 2) == (jl_value_t*)jl_typeof(args[2]))
                                     return mn;
                             }
                         }
