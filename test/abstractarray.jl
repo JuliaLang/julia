@@ -521,3 +521,7 @@ A = TSlowNIndexes(rand(2,2))
 @test_throws ErrorException A[1]
 @test A[1,1] == A.data[1]
 @test first(A) == A.data[1]
+
+#16381
+@inferred size(rand(3,2,1), 2, 1)
+@inferred size(rand(3,2,1), 2, 1, 3)
