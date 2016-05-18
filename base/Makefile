@@ -12,7 +12,7 @@ else
 CPP_STDOUT := $(CPP) -E
 endif
 
-all: $(addprefix $(BUILDDIR)/,pcre_h.jl errno_h.jl build_h.jl.phony fenv_constants.jl file_constants.jl uv_constants.jl version_git.jl.phony)
+all: $(addprefix $(BUILDDIR)/,pcre_h.jl errno_h.jl build_h.jl.phony fenv_constants.jl file_constants.jl uv_constants.jl)
 
 PCRE_CONST := 0x[0-9a-fA-F]+|[0-9]+
 ifeq ($(USE_SYSTEM_PCRE), 1)
@@ -68,39 +68,10 @@ endif
 	@echo "const LIBDIR = \"$(libdir_rel)\"" >> $@
 	@echo "const INCLUDEDIR = \"$(includedir_rel)\"" >> $@
 
-	@# This to ensure that we always rebuild this file, but only when it is modified do we touch build_h.jl,
-	@# ensuring we rebuild the system image as infrequently as possible
-	@if ! cmp -s $@ build_h.jl; then \
-		$(call PRINT_PERL,) \
-		mv $@ build_h.jl; \
-	else \
-		rm -f $@; \
-	fi
+	# Move this temporary file to build_h.jl if it has changed
+	$(call move_if_modified,$@,build_h.jl,PRINT_SH)
 
-$(BUILDDIR)/version_git.jl.phony: $(SRCDIR)/version_git.sh
-ifneq ($(NO_GIT), 1)
-	sh $< $(SRCDIR) > $@
-	@# This to avoid touching git_version.jl when it is not modified,
-	@# so that the system image does not need to be rebuilt.
-	@if ! cmp -s $@ version_git.jl; then \
-	    $(call PRINT_PERL,) \
-	    mv $@ version_git.jl; \
-	else \
-	    rm -f $@; \
-	fi
-else
-ifeq ($(shell [ -f $(BUILDDIR)/version_git.jl ] && echo "true"), true)
-	@# Give warning if boilerplate git is used
-	@if grep -q "Default output if git is not available" $(BUILDDIR)/version_git.jl; then \
-	    echo "WARNING: Using boilerplate git version info" >&2; \
-	fi
-else
-	$(warning "WARNING: Generating boilerplate git version info")
-	@sh $(SRCDIR)/version_git.sh $(SRCDIR) NO_GIT > $(BUILDDIR)/version_git.jl
-endif
-endif
-
-.PHONY: $(BUILDDIR)/build_h.jl.phony $(BUILDDIR)/version_git.jl.phony clean all
+.PHONY: $(BUILDDIR)/build_h.jl.phony clean all
 
 clean:
 	rm -f $(BUILDDIR)/pcre_h.jl
@@ -110,5 +81,3 @@ clean:
 	rm -f $(BUILDDIR)/fenv_constants.jl
 	rm -f $(BUILDDIR)/uv_constants.jl
 	rm -f $(BUILDDIR)/file_constants.jl
-	rm -f $(BUILDDIR)/version_git.jl
-	rm -f $(BUILDDIR)/version_git.jl.phony

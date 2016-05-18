@@ -1006,6 +1006,18 @@ else
 endif
 endef
 
+# Use this to autogenerate files in a phony makefile target writing out to a
+# temporary file, then $(call move_if_modified,temppath,destpath,PRINT_SH) to
+# copy it over only if the file doesn't match what's already at the destination
+define move_if_modified
+@if ! cmp -s $(1) $(2); then \
+	$(call $(3),) \
+	mv $(1) $(2); \
+else \
+	rm -f $(1); \
+fi
+endef
+
 # many of the following targets must be = not := because the expansion of the makefile functions (and $1) shouldn't happen until later
 ifeq ($(BUILD_OS), WINNT) # MSYS
 spawn = $(1)
@@ -1055,6 +1067,7 @@ QUIET_MAKE = -s
 CCCOLOR:="\033[34m"
 LINKCOLOR:="\033[34;1m"
 PERLCOLOR:="\033[35m"
+SHCOLOR:="\033[91m"
 FLISPCOLOR:="\033[32m"
 JULIACOLOR:="\033[32;1m"
 
@@ -1064,17 +1077,19 @@ JULCOLOR:="\033[34;1m"
 
 GOAL=$(subst ','\'',$(subst $(abspath $(JULIAHOME))/,,$(abspath $@)))
 
-PRINT_CC = printf '    %b %b\n' $(CCCOLOR)CC$(ENDCOLOR) $(SRCCOLOR)$(GOAL)$(ENDCOLOR); $(1)
-PRINT_LINK = printf '    %b %b\n' $(LINKCOLOR)LINK$(ENDCOLOR) $(BINCOLOR)$(GOAL)$(ENDCOLOR); $(1)
-PRINT_PERL = printf '    %b %b\n' $(PERLCOLOR)PERL$(ENDCOLOR) $(BINCOLOR)$(GOAL)$(ENDCOLOR); $(1)
+PRINT_CC    = printf '    %b %b\n' $(CCCOLOR)CC$(ENDCOLOR) $(SRCCOLOR)$(GOAL)$(ENDCOLOR); $(1)
+PRINT_LINK  = printf '    %b %b\n' $(LINKCOLOR)LINK$(ENDCOLOR) $(BINCOLOR)$(GOAL)$(ENDCOLOR); $(1)
+PRINT_PERL  = printf '    %b %b\n' $(PERLCOLOR)PERL$(ENDCOLOR) $(SRCCOLOR)$(GOAL)$(ENDCOLOR); $(1)
+PRINT_SH    = printf '    %b %b\n' $(SHCOLOR)SH$(ENDCOLOR) $(SRCCOLOR)$(GOAL:.phony=)$(ENDCOLOR); $(1)
 PRINT_FLISP = printf '    %b %b\n' $(FLISPCOLOR)FLISP$(ENDCOLOR) $(BINCOLOR)$(GOAL)$(ENDCOLOR); $(1)
 PRINT_JULIA = printf '    %b %b\n' $(JULIACOLOR)JULIA$(ENDCOLOR) $(BINCOLOR)$(GOAL)$(ENDCOLOR); $(1)
 
 else
-QUIET_MAKE =
-PRINT_CC = echo '$(subst ','\'',$(1))'; $(1)
-PRINT_LINK = echo '$(subst ','\'',$(1))'; $(1)
-PRINT_PERL = echo '$(subst ','\'',$(1))'; $(1)
+QUIET_MAKE  =
+PRINT_CC    = echo '$(subst ','\'',$(1))'; $(1)
+PRINT_LINK  = echo '$(subst ','\'',$(1))'; $(1)
+PRINT_PERL  = echo '$(subst ','\'',$(1))'; $(1)
+PRINT_SH    = echo '$(subst ','\'',$(1))'; $(1)
 PRINT_FLISP = echo '$(subst ','\'',$(1))'; $(1)
 PRINT_JULIA = echo '$(subst ','\'',$(1))'; $(1)
 
