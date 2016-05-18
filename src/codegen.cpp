@@ -1603,13 +1603,19 @@ jl_value_t *jl_static_eval(jl_value_t *ex, void *ctx_, jl_module_t *mod,
             jl_value_t *f = jl_static_eval(jl_exprarg(e,0),ctx,mod,linfo,sparams,allow_alloc);
             if (f) {
                 if (jl_array_dim0(e->args) == 3 && f==jl_builtin_getfield) {
-                    m = (jl_module_t*)jl_static_eval(jl_exprarg(e,1),ctx,mod,linfo,sparams,allow_alloc);
+                    jl_value_t* e1 = jl_static_eval(jl_exprarg(e,1),ctx,mod,linfo,sparams,allow_alloc);
                     s = (jl_sym_t*)jl_static_eval(jl_exprarg(e,2),ctx,mod,linfo,sparams,allow_alloc);
-                    if (m && jl_is_module(m) && s && jl_is_symbol(s)) {
-                        jl_binding_t *b = jl_get_binding(m, s);
-                        if (b && b->constp) {
-                            if (b->deprecated) cg_bdw(b, ctx);
-                            return b->value;
+                    if (s && jl_is_symbol(s)) {
+                        if (e1 && jl_is_module(e1)) {
+                            m = (jl_module_t*)e1;
+                            jl_binding_t *b = jl_get_binding(m, s);
+                            if (b && b->constp) {
+                                if (b->deprecated) cg_bdw(b, ctx);
+                                return b->value;
+                            }
+                        }
+                        else if (e1 && (jl_is_datatype(e1) || jl_is_typename(e1))) {
+                            return jl_get_field(e1, jl_symbol_name(s));
                         }
                     }
                 }

@@ -1295,6 +1295,21 @@ static jl_cgval_t emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
                     false, args[2], rt, static_rt, ctx);
         }
     }
+    if (fptr == (void(*)(void))&jl_method_exists ||
+        ((f_lib==NULL || (intptr_t)f_lib==2)
+         && f_name && !strcmp(f_name, "jl_method_exists"))) {
+        assert(nargt == 2);
+        jl_value_t *mt = static_eval(args[4], ctx, false, false);
+        jl_value_t *usertypes = args[6];
+        if (mt != NULL && jl_is_mtable(mt) && jl_is_tuple_type(usertypes)) {
+            int exists = jl_method_exists((jl_methtable_t*)mt, (jl_tupletype_t*)usertypes);
+            if (exists) {
+                JL_GC_POP();
+                return mark_or_box_ccall_result(ConstantInt::get(T_int32, exists),
+                                                false, args[2], rt, static_rt, ctx);
+            }
+        }
+    }
     if (fptr == (void(*)(void))&jl_function_ptr ||
         ((f_lib==NULL || (intptr_t)f_lib==2)
          && f_name && !strcmp(f_name, "jl_function_ptr"))) {
