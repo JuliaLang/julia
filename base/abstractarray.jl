@@ -19,13 +19,13 @@ function vect(X...)
     copy!(Array(T,length(X)), X)
 end
 
-size{T,n}(t::AbstractArray{T,n}, d) = d <= n ? size(t)[d] : 1
-size(x, d1::Integer, d2::Integer, dx::Integer...) = tuple(size(x, d1), size(x, d2, dx...)...)
+size{T,N}(t::AbstractArray{T,N}, d) = d <= N ? size(t)[d] : 1
+size{N}(x, d1::Integer, d2::Integer, dx::Vararg{Integer, N}) = (size(x, d1), size(x, d2), ntuple(k->size(x, dx[k]), Val{N})...)
 eltype{T}(::Type{AbstractArray{T}}) = T
-eltype{T,n}(::Type{AbstractArray{T,n}}) = T
+eltype{T,N}(::Type{AbstractArray{T,N}}) = T
 elsize{T}(::AbstractArray{T}) = sizeof(T)
-ndims{T,n}(::AbstractArray{T,n}) = n
-ndims{T,n}(::Type{AbstractArray{T,n}}) = n
+ndims{T,N}(::AbstractArray{T,N}) = N
+ndims{T,N}(::Type{AbstractArray{T,N}}) = N
 ndims{T<:AbstractArray}(::Type{T}) = ndims(supertype(T))
 length(t::AbstractArray) = prod(size(t))::Int
 endof(a::AbstractArray) = length(a)
