@@ -1109,3 +1109,4 @@ function test_13559()
 end
 test_13559()
 end
+@test_throws ArgumentError mkpath("fakepath",-1)
