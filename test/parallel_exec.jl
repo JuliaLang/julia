@@ -13,7 +13,7 @@ end
 # Test a `remote` invocation when no workers are present
 @test remote(myid)() == 1
 
-addprocs(3; exeflags=`$cov_flag $inline_flag --check-bounds=yes --depwarn=error`)
+addprocs(4; exeflags=`$cov_flag $inline_flag --check-bounds=yes --depwarn=error`)
 
 # Test remote()
 let
@@ -673,6 +673,123 @@ let ex
     @test repeated == 1
 end
 
+# pmap tests. Needs at least 4 processors dedicated to the below tests. Which we currently have
+# since the parallel tests are now spawned as a separate set.
+function unmangle_exception(e)
+    while any(x->isa(e, x), [CompositeException, RemoteException, CapturedException])
+        if isa(e, CompositeException)
+            e = e.exceptions[1].ex
+        end
+        if isa(e, RemoteException)
+            e = e.captured.ex
+        end
+        if isa(e, CapturedException)
+            e = e.ex
+        end
+    end
+    return e
+end
+
+# Test all combinations of pmap keyword args.
+pmap_args = [
+                (:distributed, [:default, false]),
+                (:batch_size, [:default,2]),
+                (:on_error, [:default, e -> unmangle_exception(e).msg == "foobar"]),
+                (:retry_on, [:default, e -> unmangle_exception(e).msg == "foobar"]),
+                (:retry_n, [:default, typemax(Int)-1]),
+                (:retry_max_delay, [0, 0.001])
+            ]
+
+kwdict = Dict()
+function walk_args(i)
+    if i > length(pmap_args)
+        kwargs = []
+        for (k,v) in kwdict
+            if v != :default
+                push!(kwargs, (k,v))
+            end
+        end
+
+        data = [1:100...]
+
+        testw = kwdict[:distributed] == false ? [1] : workers()
+
+        if (kwdict[:on_error] == :default) && (kwdict[:retry_n] == :default)
+            mapf = x -> (x*2, myid())
+            results_test = pmap_res -> begin
+                results = [x[1] for x in pmap_res]
+                pids = [x[2] for x in pmap_res]
+                @test results == [2:2:200...]
+                for p in testw
+                    @test p in pids
+                end
+            end
+        elseif kwdict[:retry_n] != :default
+            mapf = x -> iseven(myid()) ? error("foobar") : (x*2, myid())
+            results_test = pmap_res -> begin
+                results = [x[1] for x in pmap_res]
+                pids = [x[2] for x in pmap_res]
+                @test results == [2:2:200...]
+                for p in testw
+                    if isodd(p)
+                        @test p in pids
+                    else
+                        @test !(p in pids)
+                    end
+                end
+            end
+        else (kwdict[:on_error] != :default) && (kwdict[:retry_n] == :default)
+            mapf = x -> iseven(x) ? error("foobar") : (x*2, myid())
+            results_test = pmap_res -> begin
+                w = testw
+                for (idx,x) in enumerate(data)
+                    if iseven(x)
+                        @test pmap_res[idx] == true
+                    else
+                        @test pmap_res[idx][1] == x*2
+                        @test pmap_res[idx][2] in w
+                    end
+                end
+            end
+        end
+
+        try
+            results_test(pmap(mapf, data; kwargs...))
+        catch e
+            println("pmap executing with args : ", kwargs)
+            rethrow(e)
+        end
+
+        return
+    end
+
+    kwdict[pmap_args[i][1]] = pmap_args[i][2][1]
+    walk_args(i+1)
+
+    kwdict[pmap_args[i][1]] = pmap_args[i][2][2]
+    walk_args(i+1)
+end
+
+# Start test for various kw arg combinations
+walk_args(1)
+
+# Simple test for pmap throws error
+error_thrown = false
+try
+    pmap(x -> x==50 ? error("foobar") : x, 1:100)
+catch e
+    @test unmangle_exception(e).msg == "foobar"
+    error_thrown = true
+end
+@test error_thrown
+
+# Test pmap with a generator type iterator
+@test [1:100...] == pmap(x->x, Base.Generator(x->(sleep(0.0001); x), 1:100))
+
+# Test asyncmap
+@test allunique(asyncmap(x->object_id(current_task()), 1:100))
+
+
 # The below block of tests are usually run only on local development systems, since:
 # - tests which print errors
 # - addprocs tests are memory intensive
@@ -682,73 +799,6 @@ end
 DoFullTest = Bool(parse(Int,(get(ENV, "JULIA_TESTFULL", "0"))))
 
 if DoFullTest
-    # pmap tests
-    # needs at least 4 processors dedicated to the below tests
-    ppids = remotecall_fetch(()->addprocs(4), 1)
-    pool = WorkerPool(ppids)
-    s = "abcdefghijklmnopqrstuvwxyz";
-    ups = uppercase(s);
-
-    unmangle_exception = e -> begin
-        if isa(e, CompositeException)
-            e = e.exceptions[1].ex
-            if isa(e, RemoteException)
-                e = e.captured.ex.exceptions[1].ex
-            end
-        end
-        return e
-    end
-
-
-    for mapf in [map, asyncmap, (f, c) -> pmap(pool, f, c)]
-        @test ups == bytestring(UInt8[UInt8(c) for c in mapf(x->uppercase(x), s)])
-        @test ups == bytestring(UInt8[UInt8(c) for c in mapf(x->uppercase(Char(x)), s.data)])
-
-        # retry, on error exit
-        errifeqa = x->(x=='a') ?
-            error("EXPECTED TEST ERROR. TO BE IGNORED.") : uppercase(x)
-        try
-            res = mapf(retry(errifeqa), s)
-            error("unexpected")
-        catch e
-            e = unmangle_exception(e)
-            @test isa(e, ErrorException)
-            @test e.msg == "EXPECTED TEST ERROR. TO BE IGNORED."
-        end
-
-        # no retry, on error exit
-        try
-            res = mapf(errifeqa, s)
-            error("unexpected")
-        catch e
-            e = unmangle_exception(e)
-            @test isa(e, ErrorException)
-            @test e.msg == "EXPECTED TEST ERROR. TO BE IGNORED."
-        end
-
-        # no retry, on error continue
-        res = mapf(@catch(errifeqa), Any[s...])
-        @test length(res) == length(ups)
-        res[1] = unmangle_exception(res[1])
-        @test isa(res[1], ErrorException)
-        @test res[1].msg == "EXPECTED TEST ERROR. TO BE IGNORED."
-        @test ups[2:end] == string(res[2:end]...)
-    end
-
-    # retry, on error exit
-    mapf = (f, c) -> asyncmap(retry(remote(pool, f), n=10, max_delay=0), c)
-    errifevenid = x->iseven(myid()) ?
-        error("EXPECTED TEST ERROR. TO BE IGNORED.") : uppercase(x)
-    res = mapf(errifevenid, s)
-    @test length(res) == length(ups)
-    @test ups == bytestring(UInt8[UInt8(c) for c in res])
-
-    # retry, on error continue
-    mapf = (f, c) -> asyncmap(@catch(retry(remote(pool, f), n=10, max_delay=0)), c)
-    res = mapf(errifevenid, s)
-    @test length(res) == length(ups)
-    @test ups == bytestring(UInt8[UInt8(c) for c in res])
-
     # Topology tests need to run externally since a given cluster at any
     # time can only support a single topology and the current session
     # is already running in parallel under the default topology.
