@@ -102,6 +102,11 @@ typedef struct _jl_tls_states_t {
     // we can make this more general (similar to defer_signal) if necessary
     volatile sig_atomic_t io_wait;
     jl_thread_heap_t heap;
+#ifndef _OS_WINDOWS_
+    // These are only used on unix now
+    pthread_t system_id;
+    void *signal_stack;
+#endif
 } jl_tls_states_t;
 
 #ifdef __MIC__

@@ -244,7 +244,7 @@ void pre_mark(void);
 void post_mark(arraylist_t *list, int dryrun);
 void gc_debug_init(void);
 
-#define jl_thread_heap (&jl_get_ptls_states()->heap)
+#define jl_thread_heap (jl_get_ptls_states()->heap)
 
 // GC pages
 

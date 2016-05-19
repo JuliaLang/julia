@@ -88,7 +88,7 @@ JL_DLLEXPORT JL_CONST_FUNC jl_tls_states_t *(jl_get_ptls_states)(void)
 
 // thread ID
 JL_DLLEXPORT int jl_n_threads;     // # threads we're actually using
-jl_thread_task_state_t *jl_all_task_states;
+jl_tls_states_t **jl_all_tls_states;
 
 // return calling thread's ID
 // Also update the suspended_threads list in signals-mach when changing the
@@ -98,6 +98,9 @@ JL_DLLEXPORT int16_t jl_threadid(void) { return ti_tid; }
 static void ti_initthread(int16_t tid)
 {
     jl_tls_states_t *ptls = jl_get_ptls_states();
+#ifndef _OS_WINDOWS_
+    ptls->system_id = pthread_self();
+#endif
     ptls->tid = tid;
     ptls->pgcstack = NULL;
     ptls->gc_state = 0; // GC unsafe
@@ -120,9 +123,9 @@ static void ti_initthread(int16_t tid)
     }
     ptls->bt_data = (uintptr_t*)bt_data;
     jl_mk_thread_heap(&ptls->heap);
+    jl_install_thread_signal_handler();
 
-    jl_all_task_states[tid].ptls = ptls;
-    jl_all_task_states[tid].signal_stack = jl_install_thread_signal_handler();
+    jl_all_tls_states[tid] = ptls;
 }
 
 static void ti_init_master_thread(void)
@@ -134,9 +137,6 @@ static void ti_init_master_thread(void)
         jl_printf(JL_STDERR, "WARNING: failed to access handle to main thread\n");
         hMainThread = INVALID_HANDLE_VALUE;
     }
-    jl_all_task_states[0].system_id = hMainThread;
-#else
-    jl_all_task_states[0].system_id = pthread_self();
 #endif
     ti_initthread(0);
 }
@@ -282,7 +282,7 @@ void jl_init_threading(void)
     if (jl_n_threads <= 0)
         jl_n_threads = 1;
 
-    jl_all_task_states = (jl_thread_task_state_t *)malloc(jl_n_threads * sizeof(jl_thread_task_state_t));
+    jl_all_tls_states = (jl_tls_states_t**)malloc(jl_n_threads * sizeof(void*));
 
 #if PROFILE_JL_THREADING
     // set up space for profiling information
@@ -335,7 +335,6 @@ void jl_start_threads(void)
             uv_thread_setaffinity(&uvtid, mask, NULL, UV_CPU_SETSIZE);
         }
         uv_thread_detach(&uvtid);
-        jl_all_task_states[i + 1].system_id = uvtid;
     }
 
     // set up the world thread group
@@ -369,8 +368,6 @@ void jl_shutdown_threading(void)
 
     // destroy the world thread group
     ti_threadgroup_destroy(tgworld);
-
-    // TODO: clean up and free the per-thread heaps
 
 #if PROFILE_JL_THREADING
     jl_free_aligned(join_ns);
@@ -510,8 +507,8 @@ JL_DLLEXPORT jl_value_t *jl_threading_run(jl_svec_t *args)
 
 void jl_init_threading(void)
 {
-    static jl_thread_task_state_t _jl_all_task_states;
-    jl_all_task_states = &_jl_all_task_states;
+    static jl_tls_states_t *_jl_all_tls_states;
+    jl_all_tls_states = &_jl_all_tls_states;
     jl_n_threads = 1;
 
 #if defined(__linux__) && defined(JL_USE_INTEL_JITEVENTS)
