@@ -36,13 +36,64 @@ export AbstractSparseArray, AbstractSparseMatrix, AbstractSparseVector,
 include("sparse/abstractsparse.jl")
 include("sparse/sparsematrix.jl")
 include("sparse/sparsevector.jl")
-include("sparse/csparse.jl")
 
 include("sparse/linalg.jl")
 if Base.USE_GPL_LIBS
     include("sparse/umfpack.jl")
     include("sparse/cholmod.jl")
     include("sparse/spqr.jl")
+end
+
+# point users to SuiteSparse
+const SUITESPARSE_END_STRING = string(" has been moved to the package SuiteSparse.jl.\n",
+          "Run Pkg.add(\"SuiteSparse\") to install SuiteSparse on Julia v0.5-")
+
+"""
+    etree(A[, post])
+Compute the elimination tree of a symmetric sparse matrix `A` from `triu(A)`
+and, optionally, its post-ordering permutation.
+Note: This function has been moved to the SuiteSparse.jl package.
+"""
+function etree{Tv,Ti}(A::SparseMatrixCSC{Tv,Ti}, postorder::Bool)
+    if isdefined(Main, :SuiteSparse)
+        Main.SuiteSparse.etree(A, postorder)
+    else
+        error("etree(A[, post])", SUITESPARSE_END_STRING)
+    end
+end
+
+etree(A::SparseMatrixCSC) = etree(A, false)
+
+function ereach{Tv,Ti}(A::SparseMatrixCSC{Tv,Ti}, k::Integer, parent::Vector{Ti})
+    if isdefined(Main, :SuiteSparse)
+        Main.SuiteSparse.ereach(A, k, parent)
+    else
+        error("ereach(A, k, parent)", SUITESPARSE_END_STRING)
+    end
+end
+
+function csc_permute{Tv,Ti}(A::SparseMatrixCSC{Tv,Ti}, pinv::Vector{Ti}, q::Vector{Ti})
+    if isdefined(Main, :SuiteSparse)
+        Main.SuiteSparse.csc_permute(A, pinv, q)
+    else
+        error("csc_permute(A, pinv, q)", SUITESPARSE_END_STRING)
+    end
+end
+
+"""
+    symperm(A, p)
+Return the symmetric permutation of `A`, which is `A[p,p]`. `A` should be
+symmetric, sparse, and only contain nonzeros in the upper triangular part of the
+matrix is stored. This algorithm ignores the lower triangular part of the
+matrix. Only the upper triangular part of the result is returned.
+Note: This function has been moved to the SuiteSparse.jl package.
+"""
+function symperm{Tv,Ti}(A::SparseMatrixCSC{Tv,Ti}, pinv::Vector{Ti})
+    if isdefined(Main, :SuiteSparse)
+        Main.SuiteSparse.symperm(A, pinv)
+    else
+        error("symperm(A, pinv)", SUITESPARSE_END_STRING)
+    end
 end
 
 end
