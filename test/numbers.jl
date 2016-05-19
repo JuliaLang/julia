@@ -2131,6 +2131,10 @@ for f in (trunc, round, floor, ceil)
          103993//33102
          312689//99532 ]
 
+# issue 16311
+rationalize(nextfloat(0.0)) == 0//1
+
+
 # primes
 
 @test primes(10000) == primes(2, 10000) == [
