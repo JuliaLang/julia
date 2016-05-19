@@ -77,7 +77,7 @@ pointer(p::Cwstring) = convert(Ptr{Cwchar_t}, p)
 pointer_to_string(p::Cstring, own::Bool=false) = pointer_to_string(convert(Ptr{UInt8}, p), own)
 
 # convert strings to String etc. to pass as pointers
-cconvert(::Type{Cstring}, s::AbstractString) = bytestring(s)
+cconvert(::Type{Cstring}, s::AbstractString) = String(s)
 cconvert(::Type{Cwstring}, s::AbstractString) = wstring(s)
 
 containsnul(p::Ptr, len) = C_NULL != ccall(:memchr, Ptr{Cchar}, (Ptr{Cchar}, Cint, Csize_t), p, 0, len)
@@ -96,7 +96,7 @@ convert(::Type{Cstring}, s::Symbol) = Cstring(unsafe_convert(Ptr{Cchar}, s))
 
 # FIXME: this should be handled by implicit conversion to Cwstring, but good luck with that
 @windows_only function cwstring(s::AbstractString)
-    bytes = bytestring(s).data
+    bytes = String(s).data
     0 in bytes && throw(ArgumentError("embedded NULs are not allowed in C strings: $(repr(s))"))
     return push!(utf8to16(bytes), 0)
 end

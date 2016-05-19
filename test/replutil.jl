@@ -357,7 +357,7 @@ let d = Dict(1 => 2, 3 => 45)
     buf = IOBuffer()
     td = TextDisplay(buf)
     display(td, d)
-    result = bytestring(td.io)
+    result = String(td.io)
 
     @test contains(result, summary(d))
 

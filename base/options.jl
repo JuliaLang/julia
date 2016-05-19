@@ -45,7 +45,7 @@ function show(io::IO, opt::JLOptions)
     for (i,f) in enumerate(fieldnames(opt))
         v = getfield(opt,f)
         if isa(v, Ptr{UInt8})
-            v = v != C_NULL ? bytestring(v) : ""
+            v = v != C_NULL ? String(v) : ""
         end
         println(io, "  ", f, " = ", repr(v), i < nfields ? "," : "")
     end

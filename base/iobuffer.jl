@@ -216,9 +216,9 @@ end
 
 isopen(io::AbstractIOBuffer) = io.readable || io.writable || io.seekable || nb_available(io) > 0
 
-function bytestring(io::AbstractIOBuffer)
-    io.readable || throw(ArgumentError("bytestring read failed, IOBuffer is not readable"))
-    io.seekable || throw(ArgumentError("bytestring read failed, IOBuffer is not seekable"))
+function String(io::AbstractIOBuffer)
+    io.readable || throw(ArgumentError("IOBuffer is not readable"))
+    io.seekable || throw(ArgumentError("IOBuffer is not seekable"))
     return String(copy!(Array(UInt8, io.size), 1, io.data, 1, io.size))
 end
 

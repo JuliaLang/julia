@@ -7,7 +7,7 @@ function message(c::GitCommit, raw::Bool=false)
     if msg_ptr == Cstring_NULL
         return nothing
     end
-    return bytestring(msg_ptr)
+    return String(msg_ptr)
 end
 
 function author(c::GitCommit)

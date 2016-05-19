@@ -60,7 +60,7 @@ function depwarn(msg, funcsym)
     opts = JLOptions()
     if opts.depwarn > 0
         ln = Int(unsafe_load(cglobal(:jl_lineno, Cint)))
-        fn = bytestring(unsafe_load(cglobal(:jl_filename, Ptr{Cchar})))
+        fn = String(unsafe_load(cglobal(:jl_filename, Ptr{Cchar})))
         bt = backtrace()
         caller = firstcaller(bt, funcsym)
         if opts.depwarn == 1 # raise a warning
@@ -1160,9 +1160,16 @@ end
 @deprecate_binding UTF8String String
 @deprecate_binding ByteString String
 
-@deprecate ascii(p::Ptr{UInt8}, len::Integer) ascii(bytestring(p, len))
-@deprecate ascii(p::Ptr{UInt8}) ascii(bytestring(p))
+@deprecate ascii(p::Ptr{UInt8}, len::Integer) ascii(String(p, len))
+@deprecate ascii(p::Ptr{UInt8}) ascii(String(p))
 @deprecate ascii(x) ascii(string(x))
+
+@deprecate bytestring(s::Cstring) String(s)
+@deprecate bytestring(v::Vector{UInt8}) String(v)
+@deprecate bytestring(io::Base.AbstractIOBuffer) String(io)
+@deprecate bytestring(p::Union{Ptr{Int8},Ptr{UInt8}}) String(p)
+@deprecate bytestring(p::Union{Ptr{Int8},Ptr{UInt8}}, len::Integer) String(p,len)
+@deprecate bytestring(s::AbstractString...) string(s...)
 
 @deprecate ==(x::Char, y::Integer) UInt32(x) == y
 @deprecate ==(x::Integer, y::Char) x == UInt32(y)

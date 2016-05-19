@@ -35,7 +35,7 @@ package_locks = Dict{String,Any}()
 # only broadcast top-level (not nested) requires and reloads
 toplevel_load = true
 
-require(fname::AbstractString) = require(bytestring(fname))
+require(fname::AbstractString) = require(String(fname))
 require(f::AbstractString, fs::AbstractString...) = (require(f); for x in fs require(x); end)
 
 function require(name::String)

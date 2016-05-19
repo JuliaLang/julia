@@ -9705,22 +9705,6 @@ modified by the current file creation mask.
 """
 mkdir
 
-"""
-    bytestring(::Ptr{UInt8}, [length])
-
-Create a string from the address of a C (0-terminated) string encoded in ASCII or UTF-8. A
-copy is made; the ptr can be safely freed. If `length` is specified, the string does not
-have to be 0-terminated.
-"""
-bytestring(::Ptr{UInt8},?)
-
-"""
-    bytestring(s)
-
-Convert a string to a contiguous byte array representation appropriate for passing it to C
-functions. The string will be encoded as either ASCII or UTF-8.
-"""
-bytestring(s)
 
 """
     midpoints(e)

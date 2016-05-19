@@ -64,7 +64,7 @@ type PromptState <: ModeState
     indent::Int
 end
 
-input_string(s::PromptState) = bytestring(s.input_buffer)
+input_string(s::PromptState) = String(s.input_buffer)
 
 input_string_newlines(s::PromptState) = count(c->(c == '\n'), input_string(s))
 function input_string_newlines_aftercursor(s::PromptState)
@@ -386,7 +386,7 @@ function edit_move_up(buf::IOBuffer)
     npos = rsearch(buf.data, '\n', position(buf))
     npos == 0 && return false # we're in the first line
     # We're interested in character count, not byte count
-    offset = length(bytestring(buf.data[(npos+1):(position(buf))]))
+    offset = length(String(buf.data[(npos+1):(position(buf))]))
     npos2 = rsearch(buf.data, '\n', npos-1)
     seek(buf, npos2)
     for _ = 1:offset
@@ -407,7 +407,7 @@ end
 function edit_move_down(buf::IOBuffer)
     npos = rsearch(buf.data[1:buf.size], '\n', position(buf))
     # We're interested in character count, not byte count
-    offset = length(bytestring(buf.data[(npos+1):(position(buf))]))
+    offset = length(String(buf.data[(npos+1):(position(buf))]))
     npos2 = search(buf.data[1:buf.size], '\n', position(buf)+1)
     if npos2 == 0 #we're in the last line
         return false
@@ -986,7 +986,7 @@ function history_set_backward(s::SearchState, backward)
     s.backward = backward
 end
 
-input_string(s::SearchState) = bytestring(s.query_buffer)
+input_string(s::SearchState) = String(s.query_buffer)
 
 function reset_state(s::SearchState)
     if s.query_buffer.size != 0
@@ -1035,7 +1035,7 @@ refresh_multi_line(termbuf::TerminalBuffer, terminal::UnixTerminal,
     s::Union{PromptState,PrefixSearchState}) = s.ias =
     refresh_multi_line(termbuf, terminal, buffer(s), s.ias, s, indent = s.indent)
 
-input_string(s::PrefixSearchState) = bytestring(s.response_buffer)
+input_string(s::PrefixSearchState) = String(s.response_buffer)
 
 # a meta-prompt that presents itself as parent_prompt, but which has an independent keymap
 # for prefix searching
@@ -1153,7 +1153,7 @@ function enter_prefix_search(s::MIState, p::PrefixHistoryPrompt, backward::Bool)
         pss = state(s, p)
         pss.parent = parent
         pss.histprompt.parent_prompt = parent
-        pss.prefix = bytestring(pointer(buf.data), position(buf))
+        pss.prefix = String(pointer(buf.data), position(buf))
         copybuf!(pss.response_buffer, buf)
         pss.indent = state(s, parent).indent
         pss.mi = s

@@ -209,13 +209,13 @@ Mark a command object so that it will be run in a new process group, allowing it
 """
 detach(cmd::Cmd) = Cmd(cmd; detach=true)
 
-# like bytestring(s), but throw an error if s contains NUL, since
+# like String(s), but throw an error if s contains NUL, since
 # libuv requires NUL-terminated strings
 function cstr(s)
     if Base.containsnul(s)
         throw(ArgumentError("strings containing NUL cannot be passed to spawned processes"))
     end
-    return bytestring(s)
+    return String(s)
 end
 
 # convert various env representations into an array of "key=val" strings
@@ -584,7 +584,7 @@ function read(cmd::AbstractCmd, stdin::Redirectable=DevNull)
 end
 
 function readstring(cmd::AbstractCmd, stdin::Redirectable=DevNull)
-    return bytestring(read(cmd, stdin))
+    return String(read(cmd, stdin))
 end
 
 function writeall(cmd::AbstractCmd, stdin::AbstractString, stdout::Redirectable=DevNull)
@@ -702,7 +702,7 @@ function arg_gen(head, tail...)
     tail = arg_gen(tail...)
     vals = String[]
     for h = head, t = tail
-        push!(vals, cstr(bytestring(h, t)))
+        push!(vals, cstr(string(h,t)))
     end
     vals
 end

@@ -60,7 +60,7 @@ let exename = `$(Base.julia_cmd()) --precompiled=yes`
     # NOTE: this test only holds true when there is a sys.{dll,dylib,so} shared library present.
     # The tests are also limited to unix platforms at the moment because loading the system image
     # not turned on for Window's binary builds at the moment.
-    @unix_only if Libdl.dlopen_e(splitext(bytestring(Base.JLOptions().image_file))[1]) != C_NULL
+    @unix_only if Libdl.dlopen_e(splitext(String(Base.JLOptions().image_file))[1]) != C_NULL
         @test !success(`$exename -C invalidtarget`)
         @test !success(`$exename --cpu-target=invalidtarget`)
     end
@@ -77,7 +77,7 @@ let exename = `$(Base.julia_cmd()) --precompiled=yes`
         touch(fname)
         fname = realpath(fname)
         try
-            @test readchomp(`$exename --machinefile $fname -e "println(bytestring(Base.JLOptions().machinefile))"`) == fname
+            @test readchomp(`$exename --machinefile $fname -e "println(String(Base.JLOptions().machinefile))"`) == fname
         finally
             rm(fname)
         end

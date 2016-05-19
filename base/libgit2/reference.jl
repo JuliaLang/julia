@@ -29,7 +29,7 @@ function shortname(ref::GitReference)
     isempty(ref) && return ""
     name_ptr = ccall((:git_reference_shorthand, :libgit2), Cstring, (Ptr{Void},), ref.ptr)
     name_ptr == C_NULL && return ""
-    return bytestring(name_ptr)
+    return String(name_ptr)
 end
 
 function reftype(ref::GitReference)
@@ -41,14 +41,14 @@ function fullname(ref::GitReference)
     reftype(ref) == Consts.REF_OID && return ""
     rname = ccall((:git_reference_symbolic_target, :libgit2), Cstring, (Ptr{Void},), ref.ptr)
     rname == C_NULL && return ""
-    return bytestring(rname)
+    return String(rname)
 end
 
 function name(ref::GitReference)
     isempty(ref) && return ""
     name_ptr = ccall((:git_reference_name, :libgit2), Cstring, (Ptr{Void},), ref.ptr)
     name_ptr == C_NULL && return ""
-    return bytestring(name_ptr)
+    return String(name_ptr)
 end
 
 function branch(ref::GitReference)
@@ -56,7 +56,7 @@ function branch(ref::GitReference)
     str_ptr_ptr = Ref(LibGit2.Cstring_NULL)
     @check ccall((:git_branch_name, :libgit2), Cint,
                   (Ptr{Cstring}, Ptr{Void},), str_ptr_ptr, ref.ptr)
-    return bytestring(str_ptr_ptr[])
+    return String(str_ptr_ptr[])
 end
 
 function ishead(ref::GitReference)

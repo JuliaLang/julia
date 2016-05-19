@@ -31,7 +31,7 @@ function tag_create(repo::GitRepo, tag::AbstractString, commit::Union{AbstractSt
 end
 
 function name(tag::GitTag)
-    return bytestring(ccall((:git_tag_name, :libgit2), Cstring, (Ptr{Void}, ), tag.ptr))
+    return String(ccall((:git_tag_name, :libgit2), Cstring, (Ptr{Void}, ), tag.ptr))
 end
 
 function target(tag::GitTag)

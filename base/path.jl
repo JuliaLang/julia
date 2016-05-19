@@ -37,7 +37,7 @@ end
 
     function splitdrive(path::AbstractString)
         m = match(r"^(\w+:|\\\\\w+\\\w+|\\\\\?\\UNC\\\w+\\\w+|\\\\\?\\\w+:|)(.*)$", path)
-        bytestring(m.captures[1]), bytestring(m.captures[2])
+        String(m.captures[1]), String(m.captures[2])
     end
     homedir() = get(ENV,"HOME",string(ENV["HOMEDRIVE"],ENV["HOMEPATH"]))
 end
@@ -50,9 +50,9 @@ function splitdir(path::String)
     m = match(path_dir_splitter,b)
     m === nothing && return (a,b)
     a = string(a, isempty(m.captures[1]) ? m.captures[2][1] : m.captures[1])
-    a, bytestring(m.captures[3])
+    a, String(m.captures[3])
 end
-splitdir(path::AbstractString) = splitdir(bytestring(path))
+splitdir(path::AbstractString) = splitdir(String(path))
 
  dirname(path::AbstractString) = splitdir(path)[1]
 basename(path::AbstractString) = splitdir(path)[2]
@@ -61,7 +61,7 @@ function splitext(path::AbstractString)
     a, b = splitdrive(path)
     m = match(path_ext_splitter, b)
     m === nothing && return (path,"")
-    a*m.captures[1], bytestring(m.captures[2])
+    a*m.captures[1], String(m.captures[2])
 end
 
 function pathsep(paths::AbstractString...)
@@ -155,7 +155,7 @@ end
 @unix_only function realpath(path::AbstractString)
     p = ccall(:realpath, Ptr{UInt8}, (Cstring, Ptr{UInt8}), path, C_NULL)
     systemerror(:realpath, p == C_NULL)
-    s = bytestring(p)
+    s = String(p)
     Libc.free(p)
     return s
 end

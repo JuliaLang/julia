@@ -20,7 +20,7 @@ function Oid(id::Array{UInt8,1})
 end
 
 function Oid(id::AbstractString)
-    bstr = bytestring(id)
+    bstr = String(id)
     len = sizeof(bstr)
     oid_ptr  = Ref(Oid())
     err = if len < OID_HEXSZ
