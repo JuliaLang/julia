@@ -634,6 +634,16 @@ else
 ISX86:=0
 endif
 
+# If we are running on powerpc64, set certain options automatically
+ifneq (,$(findstring powerpc64,$(ARCH)))
+JCFLAGS += -fsigned-char
+
+override LLVM_VER:=3.8.0
+override OPENBLAS_DYNAMIC_ARCH:=0
+override OPENBLAS_TARGET_ARCH:=POWER8
+
+endif
+
 # If we are running on ARM, set certain options automatically
 ifneq (,$(findstring arm,$(ARCH)))
 JCFLAGS += -fsigned-char
