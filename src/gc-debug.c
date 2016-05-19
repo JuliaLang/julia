@@ -1,7 +1,15 @@
 // This file is a part of Julia. License is MIT: http://julialang.org/license
 
+#include "gc.h"
+#include <inttypes.h>
+#include <stdio.h>
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 // Useful function in debugger to find page/region metadata
-gcpage_t *jl_gc_page_metadata(void *data)
+jl_gc_pagemeta_t *jl_gc_page_metadata(void *data)
 {
     return page_metadata(data);
 }
@@ -22,42 +30,37 @@ JL_DLLEXPORT jl_taggedvalue_t *jl_gc_find_taggedvalue_pool(char *p, size_t *osiz
     // Not in the pool
     if (!r)
         return NULL;
-    char *page_begin = GC_PAGE_DATA(p) + GC_PAGE_OFFSET;
+    char *page_begin = gc_page_data(p) + GC_PAGE_OFFSET;
     // In the page header
     if (p < page_begin)
         return NULL;
     size_t ofs = p - page_begin;
-    int pg_idx = PAGE_INDEX(r, p);
+    int pg_idx = page_index(r, page_begin);
     // Check if this is a free page
-    if (r->freemap[pg_idx / 32] & (uint32_t)(1 << (pg_idx % 32)))
+    if (!(r->allocmap[pg_idx / 32] & (uint32_t)(1 << (pg_idx % 32))))
         return NULL;
-    gcpage_t *pagemeta = &r->meta[pg_idx];
+    jl_gc_pagemeta_t *pagemeta = &r->meta[pg_idx];
     int osize = pagemeta->osize;
     // Shouldn't be needed, just in case
     if (osize == 0)
         return NULL;
     char *tag = (char*)p - ofs % osize;
     // Points to an "object" that gets into the next page
-    if (tag + osize > GC_PAGE_DATA(p) + GC_PAGE_SZ)
+    if (tag + osize > gc_page_data(p) + GC_PAGE_SZ)
         return NULL;
     if (osize_p)
         *osize_p = osize;
     return (jl_taggedvalue_t*)tag;
 }
 
-#ifdef GC_DEBUG_ENV
-#include <inttypes.h>
-#include <stdio.h>
-#endif
-
 // mark verification
 #ifdef GC_VERIFY
-static jl_value_t *lostval = 0;
+jl_value_t *lostval = NULL;
 static arraylist_t lostval_parents;
 static arraylist_t lostval_parents_done;
-static int verifying;
+int gc_verifying;
 
-static void add_lostval_parent(jl_value_t *parent)
+void add_lostval_parent(jl_value_t *parent)
 {
     for(int i = 0; i < lostval_parents_done.len; i++) {
         if ((jl_value_t*)lostval_parents_done.items[i] == parent)
@@ -69,35 +72,6 @@ static void add_lostval_parent(jl_value_t *parent)
     }
     arraylist_push(&lostval_parents, parent);
 }
-
-#define verify_val(v) do {                                              \
-        if (lostval == (jl_value_t*)(v) && (v) != 0) {                  \
-            jl_printf(JL_STDOUT,                                        \
-                      "Found lostval %p at %s:%d oftype: ",             \
-                      (void*)(lostval), __FILE__, __LINE__);            \
-            jl_static_show(JL_STDOUT, jl_typeof(v));                    \
-            jl_printf(JL_STDOUT, "\n");                                 \
-        }                                                               \
-    } while(0);
-
-
-#define verify_parent(ty, obj, slot, args...) do {                      \
-        if (*(jl_value_t**)(slot) == lostval &&                         \
-            (jl_value_t*)(obj) != lostval) {                            \
-            jl_printf(JL_STDOUT, "Found parent %p %p at %s:%d\n",       \
-                      (void*)(ty), (void*)(obj), __FILE__, __LINE__);   \
-            jl_printf(JL_STDOUT, "\tloc %p : ", (void*)(slot));         \
-            jl_printf(JL_STDOUT, args);                                 \
-            jl_printf(JL_STDOUT, "\n");                                 \
-            jl_printf(JL_STDOUT, "\ttype: ");                           \
-            jl_static_show(JL_STDOUT, jl_typeof(obj));                  \
-            jl_printf(JL_STDOUT, "\n");                                 \
-            add_lostval_parent((jl_value_t*)(obj));                     \
-        }                                                               \
-    } while(0);
-
-#define verify_parent1(ty,obj,slot,arg1) verify_parent(ty,obj,slot,arg1)
-#define verify_parent2(ty,obj,slot,arg1,arg2) verify_parent(ty,obj,slot,arg1,arg2)
 
 /*
  How to debug a missing write barrier :
@@ -131,17 +105,17 @@ static arraylist_t bits_save[4];
 static void clear_mark(int bits)
 {
     gcval_t *pv;
-    if (!verifying) {
+    if (!gc_verifying) {
         for (int i = 0; i < 4; i++) {
             bits_save[i].len = 0;
         }
     }
     bigval_t *v;
-    FOR_EACH_HEAP () {
-        v = big_objects;
+    for (int i = 0;i < jl_n_threads;i++) {
+        v = jl_all_task_states[i].ptls->heap.big_objects;
         while (v != NULL) {
             void *gcv = &v->header;
-            if (!verifying) arraylist_push(&bits_save[gc_bits(gcv)], gcv);
+            if (!gc_verifying) arraylist_push(&bits_save[gc_bits(gcv)], gcv);
             gc_bits(gcv) = bits;
             v = v->next;
         }
@@ -150,27 +124,28 @@ static void clear_mark(int bits)
     v = big_objects_marked;
     while (v != NULL) {
         void *gcv = &v->header;
-        if (!verifying) arraylist_push(&bits_save[gc_bits(gcv)], gcv);
+        if (!gc_verifying) arraylist_push(&bits_save[gc_bits(gcv)], gcv);
         gc_bits(gcv) = bits;
         v = v->next;
     }
 
     for (int h = 0; h < REGION_COUNT; h++) {
-        region_t *region = regions[h];
-        if (!region) break;
-        for (int pg_i = 0; pg_i < REGION_PG_COUNT/32; pg_i++) {
-            uint32_t line = region->freemap[pg_i];
-            if (!!~line) {
+        region_t *region = &regions[h];
+        if (!region->pages)
+            break;
+        for (int pg_i = 0; pg_i < region->pg_cnt / 32; pg_i++) {
+            uint32_t line = region->allocmap[pg_i];
+            if (line) {
                 for (int j = 0; j < 32; j++) {
-                    if (!((line >> j) & 1)) {
-                        gcpage_t *pg = page_metadata(&region->pages[pg_i*32 + j][0] + GC_PAGE_OFFSET);
-                        pool_t *pool;
-                        FOR_HEAP (pg->thread_n)
-                            pool = &pools[pg->pool_n];
+                    if ((line >> j) & 1) {
+                        jl_gc_pagemeta_t *pg = page_metadata(region->pages[pg_i*32 + j].data + GC_PAGE_OFFSET);
+                        jl_tls_states_t *ptls =
+                            jl_all_task_states[pg->thread_n].ptls;
+                        jl_gc_pool_t *pool = &ptls->heap.norm_pools[pg->pool_n];
                         pv = (gcval_t*)(pg->data + GC_PAGE_OFFSET);
                         char *lim = (char*)pv + GC_PAGE_SZ - GC_PAGE_OFFSET - pool->osize;
                         while ((char*)pv <= lim) {
-                            if (!verifying) arraylist_push(&bits_save[gc_bits(pv)], pv);
+                            if (!gc_verifying) arraylist_push(&bits_save[gc_bits(pv)], pv);
                             gc_bits(pv) = bits;
                             pv = (gcval_t*)((char*)pv + pool->osize);
                         }
@@ -230,13 +205,13 @@ static void gc_verify_track(void)
     } while(lostval != NULL);
 }
 
-static void gc_verify(void)
+void gc_verify(void)
 {
     lostval = NULL;
     lostval_parents.len = 0;
     lostval_parents_done.len = 0;
     clear_mark(GC_CLEAN);
-    verifying = 1;
+    gc_verifying = 1;
     pre_mark();
     post_mark(&finalizer_list, 1);
     post_mark(&finalizer_list_marked, 1);
@@ -254,7 +229,7 @@ static void gc_verify(void)
         }
     }
     if (lostval == NULL) {
-        verifying = 0;
+        gc_verifying = 0;
         restore();  // we did not miss anything
         return;
     }
@@ -264,34 +239,9 @@ static void gc_verify(void)
     gc_debug_critical_error();
     abort();
 }
-
-#else
-#define gc_verify()
-#define verify_val(v)
-#define verify_parent1(ty,obj,slot,arg1)
-#define verify_parent2(ty,obj,slot,arg1,arg2)
 #endif
 
 #ifdef GC_DEBUG_ENV
-
-typedef struct {
-    uint64_t num;
-    uint64_t next;
-
-    uint64_t min;
-    uint64_t interv;
-    uint64_t max;
-    unsigned short random[3];
-} jl_alloc_num_t;
-
-typedef struct {
-    int sweep_mask;
-    int wait_for_debugger;
-    jl_alloc_num_t pool;
-    jl_alloc_num_t other;
-    jl_alloc_num_t print;
-} jl_gc_debug_env_t;
-
 JL_DLLEXPORT jl_gc_debug_env_t jl_gc_debug_env = {
     GC_MARKED_NOESC,
     0,
@@ -299,6 +249,7 @@ JL_DLLEXPORT jl_gc_debug_env_t jl_gc_debug_env = {
     {0, UINT64_MAX, 0, 0, 0, {0, 0, 0}},
     {0, UINT64_MAX, 0, 0, 0, {0, 0, 0}}
 };
+static char *gc_stack_lo;
 
 static void gc_debug_alloc_setnext(jl_alloc_num_t *num)
 {
@@ -349,26 +300,12 @@ static int gc_debug_alloc_check(jl_alloc_num_t *num)
     return 1;
 }
 
-static char *gc_stack_lo;
-static void gc_debug_init(void)
-{
-    gc_stack_lo = (char*)gc_get_stack_ptr();
-    char *env = getenv("JULIA_GC_NO_GENERATIONAL");
-    if (env && strcmp(env, "0") != 0)
-        jl_gc_debug_env.sweep_mask = GC_MARKED;
-    env = getenv("JULIA_GC_WAIT_FOR_DEBUGGER");
-    jl_gc_debug_env.wait_for_debugger = env && strcmp(env, "0") != 0;
-    gc_debug_alloc_init(&jl_gc_debug_env.pool, "POOL");
-    gc_debug_alloc_init(&jl_gc_debug_env.other, "OTHER");
-    gc_debug_alloc_init(&jl_gc_debug_env.print, "PRINT");
-}
-
-static inline int gc_debug_check_pool(void)
+int gc_debug_check_pool(void)
 {
     return gc_debug_alloc_check(&jl_gc_debug_env.pool);
 }
 
-static inline int gc_debug_check_other(void)
+int gc_debug_check_other(void)
 {
     return gc_debug_alloc_check(&jl_gc_debug_env.other);
 }
@@ -379,7 +316,7 @@ void gc_debug_print_status(void)
     uint64_t other_count = jl_gc_debug_env.other.num;
     jl_safe_printf("Allocations: %" PRIu64 " "
                    "(Pool: %" PRIu64 "; Other: %" PRIu64 "); GC: %d\n",
-                   pool_count + other_count, pool_count, other_count, n_pause);
+                   pool_count + other_count, pool_count, other_count, gc_num.pause);
 }
 
 void gc_debug_critical_error(void)
@@ -393,7 +330,7 @@ void gc_debug_critical_error(void)
     }
 }
 
-static inline void gc_debug_print(void)
+void gc_debug_print(void)
 {
     if (!gc_debug_alloc_check(&jl_gc_debug_env.print))
         return;
@@ -410,12 +347,12 @@ static void gc_scrub_range(char *stack_lo, char *stack_hi)
         jl_taggedvalue_t *tag = jl_gc_find_taggedvalue_pool(p, &osize);
         if (osize <= sizeof_jl_taggedvalue_t || !tag || gc_marked(tag))
             continue;
-        gcpage_t *pg = page_metadata(tag);
+        jl_gc_pagemeta_t *pg = page_metadata(tag);
         // Make sure the sweep rebuild the freelist
         pg->allocd = 1;
         pg->gc_bits = 0x3;
         // Find the age bit
-        char *page_begin = GC_PAGE_DATA(tag) + GC_PAGE_OFFSET;
+        char *page_begin = gc_page_data(tag) + GC_PAGE_OFFSET;
         int obj_id = (((char*)tag) - page_begin) / osize;
         uint8_t *ages = pg->ages + obj_id / 8;
         // Force this to be a young object to save some memory
@@ -426,21 +363,13 @@ static void gc_scrub_range(char *stack_lo, char *stack_hi)
     }
 }
 
-static void gc_scrub(char *stack_hi)
+void gc_scrub(char *stack_hi)
 {
     gc_scrub_range(gc_stack_lo, stack_hi);
 }
-
 #else
-
-static inline int gc_debug_check_other(void)
+void gc_debug_critical_error(void)
 {
-    return 0;
-}
-
-static inline int gc_debug_check_pool(void)
-{
-    return 0;
 }
 
 void gc_debug_print_status(void)
@@ -450,36 +379,16 @@ void gc_debug_print_status(void)
     uint64_t big_count = gc_num.bigalloc;
     jl_safe_printf("Allocations: %" PRIu64 " "
                    "(Pool: %" PRIu64 "; Big: %" PRIu64 "); GC: %d\n",
-                   pool_count + big_count, pool_count, big_count, n_pause);
+                   pool_count + big_count, pool_count, big_count, gc_num.pause);
 }
-
-void gc_debug_critical_error(void)
-{
-}
-
-static inline void gc_debug_print(void)
-{
-}
-
-static inline void gc_debug_init(void)
-{
-}
-
-static void gc_scrub(char *stack_hi)
-{
-    (void)stack_hi;
-}
-
 #endif
 
 #ifdef OBJPROFILE
 static htable_t obj_counts[3];
 static htable_t obj_sizes[3];
-static inline void objprofile_count(void *ty, int old, int sz)
+void objprofile_count(void *ty, int old, int sz)
 {
-#ifdef GC_VERIFY
-    if (verifying) return;
-#endif
+    if (gc_verifying) return;
     if ((intptr_t)ty <= 0x10) {
         ty = (void*)jl_buff_tag;
     }
@@ -500,7 +409,7 @@ static inline void objprofile_count(void *ty, int old, int sz)
         *((intptr_t*)bp) += sz;
 }
 
-static void objprofile_reset(void)
+void objprofile_reset(void)
 {
     for(int g=0; g < 3; g++) {
         htable_reset(&obj_counts[g], 0);
@@ -548,7 +457,7 @@ static void objprofile_print(htable_t nums, htable_t sizes)
     }
 }
 
-static void objprofile_printall(void)
+void objprofile_printall(void)
 {
     jl_printf(JL_STDERR, "Transient mark :\n");
     objprofile_print(obj_counts[0], obj_sizes[0]);
@@ -557,28 +466,37 @@ static void objprofile_printall(void)
     jl_printf(JL_STDERR, "Remset :\n");
     objprofile_print(obj_counts[2], obj_sizes[2]);
 }
+#endif
 
-static void objprofile_init(void)
+void gc_debug_init(void)
 {
+#ifdef GC_DEBUG_ENV
+    gc_stack_lo = (char*)gc_get_stack_ptr();
+    char *env = getenv("JULIA_GC_NO_GENERATIONAL");
+    if (env && strcmp(env, "0") != 0)
+        jl_gc_debug_env.sweep_mask = GC_MARKED;
+    env = getenv("JULIA_GC_WAIT_FOR_DEBUGGER");
+    jl_gc_debug_env.wait_for_debugger = env && strcmp(env, "0") != 0;
+    gc_debug_alloc_init(&jl_gc_debug_env.pool, "POOL");
+    gc_debug_alloc_init(&jl_gc_debug_env.other, "OTHER");
+    gc_debug_alloc_init(&jl_gc_debug_env.print, "PRINT");
+#endif
+
+#ifdef GC_VERIFY
+    for (int i = 0; i < 4; i++)
+        arraylist_new(&bits_save[i], 0);
+    arraylist_new(&lostval_parents, 0);
+    arraylist_new(&lostval_parents_done, 0);
+#endif
+
+#ifdef OBJPROFILE
     for (int g = 0;g < 3;g++) {
         htable_new(&obj_counts[g], 0);
         htable_new(&obj_sizes[g], 0);
     }
-}
-#else
-static inline void objprofile_count(void *ty, int old, int sz)
-{
+#endif
 }
 
-static inline void objprofile_printall(void)
-{
-}
-
-static inline void objprofile_reset(void)
-{
-}
-
-static void objprofile_init(void)
-{
+#ifdef __cplusplus
 }
 #endif

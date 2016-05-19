@@ -18,11 +18,6 @@ extern "C" {
 extern jl_thread_task_state_t *jl_all_task_states;
 extern JL_DLLEXPORT int jl_n_threads;  // # threads we're actually using
 
-#ifdef JULIA_ENABLE_THREADING
-// GC
-extern struct _jl_thread_heap_t **jl_all_heaps;
-#endif
-
 // thread state
 enum {
     TI_THREAD_INIT,
