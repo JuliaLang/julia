@@ -629,9 +629,11 @@ surrounded by curly braces::
     end
 
 This declaration defines a new parametric type, ``Point{T}``, holding
-two "coordinates" of type ``T``. What, one may ask, is ``T``? Well,
-that's precisely the point of parametric types: it can be any type at
-all (or a value of any bits type, actually, although here it's clearly
+two "coordinates" of type ``T``.
+
+One may ask: what is ``T``?
+Well, that's precisely the point of parametric types: it can be any type at
+all, a value of any bits type (which includes tuples), or a symbol, (although here it's clearly
 used as a type). ``Point{Float64}`` is a concrete type equivalent to the
 type defined by replacing ``T`` in the definition of ``Point`` with
 :class:`Float64`. Thus, this single declaration actually declares an
