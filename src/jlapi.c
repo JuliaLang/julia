@@ -107,7 +107,7 @@ JL_DLLEXPORT size_t jl_array_size(jl_value_t *a, int d)
     return jl_array_dim(a, d);
 }
 
-JL_DLLEXPORT const char *jl_bytestring_ptr(jl_value_t *s)
+JL_DLLEXPORT const char *jl_string_ptr(jl_value_t *s)
 {
     return jl_string_data(s);
 }

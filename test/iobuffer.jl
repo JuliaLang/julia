@@ -17,7 +17,7 @@ seek(io, 0)
 a = Array(UInt8, 2)
 @test read!(io, a) == a
 @test a == UInt8['b','c']
-@test bytestring(io) == "abc"
+@test String(io) == "abc"
 seek(io, 1)
 truncate(io, 2)
 @test position(io) == 1
@@ -159,12 +159,12 @@ let io=IOBuffer(SubString("***αhelloworldω***",4,16)), io2 = IOBuffer(b"goodni
     @test_throws ArgumentError write(io,'β')
     a = Array{UInt8}(10)
     @test read!(io, a) === a
-    @test bytestring(a) == "helloworld"
+    @test String(a) == "helloworld"
     @test read(io, Char) == 'ω'
     @test_throws EOFError read(io,UInt8)
     skip(io, -3)
     @test readstring(io) == "dω"
-    @test bytestring(io) == "αhelloworldω"
+    @test String(io) == "αhelloworldω"
     @test_throws ArgumentError write(io,"!")
     @test takebuf_array(io) == b"αhelloworldω"
     seek(io, 2)
@@ -179,7 +179,7 @@ let io=IOBuffer(SubString("***αhelloworldω***",4,16)), io2 = IOBuffer(b"goodni
     seek(io2, 0)
     write(io2, io2)
     @test readstring(io2) == ""
-    @test bytestring(io2) == "goodnightmoonhelloworld"
+    @test String(io2) == "goodnightmoonhelloworld"
 end
 
 # issue #11917

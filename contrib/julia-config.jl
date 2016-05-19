@@ -10,7 +10,7 @@ const options =
 
 function imagePath()
     opts = Base.JLOptions();
-    bytestring(opts.image_file);
+    String(opts.image_file);
 end
 
 function libDir()

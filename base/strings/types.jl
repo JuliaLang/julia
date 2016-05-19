@@ -75,7 +75,8 @@ prevind(s::SubString, i::Integer) = prevind(s.string, i+s.offset)-s.offset
 
 convert{T<:AbstractString}(::Type{SubString{T}}, s::T) = SubString(s, 1, endof(s))
 
-bytestring(p::SubString{String}) = bytestring(p.string.data[1+p.offset:p.offset+nextind(p, p.endof)-1])
+String(p::SubString{String}) =
+    String(p.string.data[1+p.offset:p.offset+nextind(p, p.endof)-1])
 
 function getindex(s::AbstractString, r::UnitRange{Int})
     checkbounds(s, r) || throw(BoundsError(s, r))

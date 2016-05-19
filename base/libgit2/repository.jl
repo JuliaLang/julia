@@ -116,8 +116,8 @@ function get{T <: GitObject}(::Type{T}, r::GitRepo, oid::AbstractString)
 end
 
 function gitdir(repo::GitRepo)
-    return bytestring(ccall((:git_repository_path, :libgit2), Cstring,
-                            (Ptr{Void},), repo.ptr))
+    return String(ccall((:git_repository_path, :libgit2), Cstring,
+                        (Ptr{Void},), repo.ptr))
 end
 
 function path(repo::GitRepo)

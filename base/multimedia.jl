@@ -61,7 +61,7 @@ macro textmime(mime)
     quote
         mimeT = MIME{Symbol($mime)}
         # avoid method ambiguities with the general definitions below:
-        # (Q: should we treat Vector{UInt8} as a bytestring?)
+        # (Q: should we treat Vector{UInt8} as a String?)
         Base.Multimedia.reprmime(m::mimeT, x::Vector{UInt8}) = sprint(writemime, m, x)
         Base.Multimedia.stringmime(m::mimeT, x::Vector{UInt8}) = reprmime(m, x)
 

@@ -811,7 +811,6 @@ export
     bin,
     bits,
     bytes2hex,
-    bytestring,
     charwidth,
     chomp,
     chop,

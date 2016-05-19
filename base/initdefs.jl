@@ -49,7 +49,7 @@ end
 function init_bind_addr()
     opts = JLOptions()
     if opts.bindto != C_NULL
-        bind_to = split(bytestring(opts.bindto), ":")
+        bind_to = split(String(opts.bindto), ":")
         bind_addr = string(parse(IPAddr, bind_to[1]))
         if length(bind_to) > 1
             bind_port = parse(Int,bind_to[2])

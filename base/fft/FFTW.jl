@@ -20,7 +20,7 @@ export export_wisdom, import_wisdom, import_system_wisdom, forget_wisdom,
 const libfftw = Base.libfftw_name
 const libfftwf = Base.libfftwf_name
 
-const version = convert(VersionNumber, split(bytestring(cglobal((:fftw_version,Base.DFT.FFTW.libfftw), UInt8)), ['-', ' '])[2])
+const version = convert(VersionNumber, split(String(cglobal((:fftw_version,Base.DFT.FFTW.libfftw), UInt8)), ['-', ' '])[2])
 
 ## Direction of FFT
 

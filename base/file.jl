@@ -32,7 +32,7 @@ function pwd()
     b = Array(UInt8,1024)
     len = Ref{Csize_t}(length(b))
     uv_error(:getcwd, ccall(:uv_cwd, Cint, (Ptr{UInt8}, Ptr{Csize_t}), b, len))
-    bytestring(b[1:len[]])
+    String(b[1:len[]])
 end
 
 function cd(dir::AbstractString)
@@ -187,7 +187,7 @@ function tempname()
     d = get(ENV, "TMPDIR", C_NULL) # tempnam ignores TMPDIR on darwin
     p = ccall(:tempnam, Cstring, (Cstring,Cstring), d, :julia)
     systemerror(:tempnam, p == C_NULL)
-    s = bytestring(p)
+    s = String(p)
     Libc.free(p)
     return s
 end
@@ -208,7 +208,7 @@ function mktempdir(parent=tempdir())
     b = joinpath(parent, "tmpXXXXXX")
     p = ccall(:mkdtemp, Cstring, (Cstring,), b)
     systemerror(:mktempdir, p == C_NULL)
-    return bytestring(p)
+    return String(p)
 end
 end
 
@@ -293,7 +293,7 @@ function readdir(path::AbstractString)
     entries = String[]
     ent = Ref{uv_dirent_t}()
     while Base.UV_EOF != ccall(:uv_fs_scandir_next, Cint, (Ptr{Void}, Ptr{uv_dirent_t}), uv_readdir_req, ent)
-        push!(entries, bytestring(ent[].name))
+        push!(entries, String(ent[].name))
     end
 
     # Clean up the request string
@@ -430,7 +430,7 @@ function readlink(path::AbstractString)
             uv_error("readlink", ret)
             assert(false)
         end
-        tgt = bytestring(ccall(:jl_uv_fs_t_ptr, Ptr{Cchar}, (Ptr{Void}, ), req))
+        tgt = String(ccall(:jl_uv_fs_t_ptr, Ptr{Cchar}, (Ptr{Void}, ), req))
         ccall(:uv_fs_req_cleanup, Void, (Ptr{Void}, ), req)
         return tgt
     finally

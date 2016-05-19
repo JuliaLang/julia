@@ -238,7 +238,6 @@
             <string>broadcast_setindex!</string>
             <string>bswap</string>
             <string>bytes2hex</string>
-            <string>bytestring</string>
             <string>c_calloc</string>
             <string>c_free</string>
             <string>c_malloc</string>

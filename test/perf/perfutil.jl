@@ -44,7 +44,7 @@ function submit_to_codespeed(vals,name,desc,unit,test_group,lessisbetter=true)
     ret = post( "http://$codespeed_host/result/add/json/", Dict("json" => json([csdata])) )
     println( json([csdata]) )
     if ret.http_code != 200 && ret.http_code != 202
-        error("Error submitting $name [HTTP code $(ret.http_code)], dumping headers and text: $(ret.headers)\n$(bytestring(ret.body))\n\n")
+        error("Error submitting $name [HTTP code $(ret.http_code)], dumping headers and text: $(ret.headers)\n$(String(ret.body))\n\n")
         return false
     end
     return true
