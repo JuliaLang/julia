@@ -632,3 +632,10 @@ Fnew = deserialize(b)
 @test_throws MethodError cholfact(speye(BigFloat, 5))
 @test_throws MethodError cholfact(Symmetric(speye(BigFloat, 5)))
 @test_throws MethodError cholfact(Hermitian(speye(Complex{BigFloat}, 5)))
+
+# test \ for Factor and StridedVecOrMat
+let x = rand(5)
+    A = cholfact(sparse(diagm(x.\1)))
+    @test_approx_eq A\sub(ones(10),1:2:10) x
+    @test_approx_eq A\slice(eye(5,5),:,:) diagm(x)
+end
