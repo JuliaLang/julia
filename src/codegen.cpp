@@ -4754,16 +4754,18 @@ static std::unique_ptr<Module> emit_function(jl_lambda_info_t *lam, jl_llvm_func
                 retboxed = true;
             }
             jl_cgval_t retvalinfo = emit_expr(jl_exprarg(ex,0), &ctx);
-            if (retboxed)
+            if (retboxed) {
                 retval = boxed(retvalinfo, &ctx, false); // skip the gcroot on the return path
-            else if (!type_is_ghost(retty))
-                retval = emit_unbox(retty, retvalinfo, jlrettype);
+                assert(!ctx.sret);
+            }
+            else if (!type_is_ghost(retty)) {
+                retval = emit_unbox(retty, retvalinfo, jlrettype,
+                                    ctx.sret ? &*ctx.f->arg_begin() : NULL);
+            }
             else // undef return type
                 retval = NULL;
             if (do_malloc_log && lno != -1)
                 mallocVisitLine(filename, lno);
-            if (ctx.sret)
-                builder.CreateStore(retval, &*ctx.f->arg_begin());
             if (type_is_ghost(retty) || ctx.sret)
                 builder.CreateRetVoid();
             else
