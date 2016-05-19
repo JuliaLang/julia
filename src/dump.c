@@ -938,38 +938,17 @@ static void jl_serialize_value_(ios_t *s, jl_value_t *v)
                     // perform some compression on the typemap levels
                     // (which will need to be rehashed during deserialization anyhow)
                     jl_typemap_level_t *node = (jl_typemap_level_t*)v;
-                    size_t i, l;
                     assert( // make sure this type has the expected ordering
                         offsetof(jl_typemap_level_t, arg1) == 0 * sizeof(jl_value_t*) &&
-                        offsetof(jl_typemap_level_t, targ) == 1 * sizeof(jl_value_t*) &&
-                        offsetof(jl_typemap_level_t, linear) == 2 * sizeof(jl_value_t*) &&
-                        offsetof(jl_typemap_level_t, any) == 3 * sizeof(jl_value_t*) &&
-                        offsetof(jl_typemap_level_t, key) == 4 * sizeof(jl_value_t*) &&
-                        sizeof(jl_typemap_level_t) == 5 * sizeof(jl_value_t*));
-                    if (node->arg1 != (void*)jl_nothing) {
-                        jl_array_t *a = jl_alloc_vec_any(0);
-                        for (i = 0, l = jl_array_len(node->arg1); i < l; i++) {
-                            jl_value_t *d = jl_array_ptr_ref(node->arg1, i);
-                            if (d != NULL && d != jl_nothing)
-                                jl_array_ptr_1d_push(a, d);
-                        }
-                        jl_serialize_value(s, a);
-                    }
-                    else {
-                        jl_serialize_value(s, jl_nothing);
-                    }
-                    if (node->targ != (void*)jl_nothing) {
-                        jl_array_t *a = jl_alloc_vec_any(0);
-                        for (i = 0, l = jl_array_len(node->targ); i < l; i++) {
-                            jl_value_t *d = jl_array_ptr_ref(node->targ, i);
-                            if (d != NULL && d != jl_nothing)
-                                jl_array_ptr_1d_push(a, d);
-                        }
-                        jl_serialize_value(s, a);
-                    }
-                    else {
-                        jl_serialize_value(s, jl_nothing);
-                    }
+                        offsetof(jl_typemap_level_t, targ) == 2 * sizeof(jl_value_t*) &&
+                        offsetof(jl_typemap_level_t, linear) == 4 * sizeof(jl_value_t*) &&
+                        offsetof(jl_typemap_level_t, any) == 5 * sizeof(jl_value_t*) &&
+                        offsetof(jl_typemap_level_t, key) == 6 * sizeof(jl_value_t*) &&
+                        sizeof(jl_typemap_level_t) == 7 * sizeof(jl_value_t*));
+                    jl_serialize_value(s, jl_nothing);
+                    jl_serialize_value(s, node->arg1.values);
+                    jl_serialize_value(s, jl_nothing);
+                    jl_serialize_value(s, node->targ.values);
                     jl_serialize_value(s, node->linear);
                     jl_serialize_value(s, node->any.unknown);
                     jl_serialize_value(s, node->key);

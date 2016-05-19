@@ -3678,9 +3678,23 @@ void jl_init_types(void)
 
     jl_typemap_level_type =
         jl_new_datatype(jl_symbol("TypeMapLevel"), jl_any_type, jl_emptysvec,
-                        jl_svec(5, jl_symbol("arg1"), jl_symbol("targ"), jl_symbol("list"), jl_symbol("any"), jl_symbol("key")),
-                        jl_svec(5, jl_any_type,       jl_any_type,       jl_any_type,       jl_any_type,      jl_any_type),
-                        0, 1, 4);
+                        jl_svec(7,
+                            jl_symbol("index_arg1"),
+                            jl_symbol("arg1"),
+                            jl_symbol("index_targ"),
+                            jl_symbol("targ"),
+                            jl_symbol("list"),
+                            jl_symbol("any"),
+                            jl_symbol("key")),
+                        jl_svec(7,
+                            jl_any_type,
+                            jl_any_type,
+                            jl_any_type,
+                            jl_any_type,
+                            jl_any_type,
+                            jl_any_type,
+                            jl_any_type),
+                        0, 1, 6);
 
     jl_typemap_entry_type =
         jl_new_datatype(jl_symbol("TypeMapEntry"), jl_any_type, jl_emptysvec,

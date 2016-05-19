@@ -420,10 +420,14 @@ typedef struct _jl_typemap_entry_t {
 
 // one level in a TypeMap tree
 // indexed by key if it is a sublevel in an array
+struct jl_ordereddict_t {
+    jl_array_t *indexes; // Array{Int{8,16,32}}
+    jl_array_t *values; // Array{union jl_typemap_t}
+};
 typedef struct _jl_typemap_level_t {
     JL_DATA_TYPE
-    jl_array_t *arg1; // Array{union jl_typemap_t}
-    jl_array_t *targ; // Array{union jl_typemap_t}
+    struct jl_ordereddict_t arg1;
+    struct jl_ordereddict_t targ;
     jl_typemap_entry_t *linear; // union jl_typemap_t (but no more levels)
     union jl_typemap_t any; // type at offs is Any
     jl_value_t *key; // [nullable]

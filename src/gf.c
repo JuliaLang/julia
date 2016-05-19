@@ -981,19 +981,23 @@ static void invalidate_conflicting(union jl_typemap_t *pml, jl_value_t *type, jl
     jl_typemap_entry_t **pl;
     if (jl_typeof(pml->unknown) == (jl_value_t*)jl_typemap_level_type) {
         jl_typemap_level_t *cache = pml->node;
-        if (cache->arg1 != (void*)jl_nothing) {
-            for(int i=0; i < jl_array_len(cache->arg1); i++) {
-                union jl_typemap_t *pl = &((union jl_typemap_t*)jl_array_data(cache->arg1))[i];
-                if (pl->unknown && pl->unknown != jl_nothing) {
-                    invalidate_conflicting(pl, type, (jl_value_t*)cache->arg1, shadowed);
+        if (cache->arg1.values != (void*)jl_nothing) {
+            size_t i, l = jl_array_len(cache->arg1.values);
+            union jl_typemap_t *d = (union jl_typemap_t*)jl_array_data(cache->arg1.values);
+            for (i = 0; i < l; i++) {
+                union jl_typemap_t *pl = &d[i];
+                if (pl->unknown != jl_nothing) {
+                    invalidate_conflicting(pl, type, (jl_value_t*)cache->arg1.values, shadowed);
                 }
             }
         }
-        if (cache->targ != (void*)jl_nothing) {
-            for(int i=0; i < jl_array_len(cache->targ); i++) {
-                union jl_typemap_t *pl = &((union jl_typemap_t*)jl_array_data(cache->targ))[i];
-                if (pl->unknown && pl->unknown != jl_nothing) {
-                    invalidate_conflicting(pl, type, (jl_value_t*)cache->targ, shadowed);
+        if (cache->targ.values != (void*)jl_nothing) {
+            size_t i, l = jl_array_len(cache->targ.values);
+            union jl_typemap_t *d = (union jl_typemap_t*)jl_array_data(cache->targ.values);
+            for (i = 0; i < l; i++) {
+                union jl_typemap_t *pl = &d[i];
+                if (pl->unknown != jl_nothing) {
+                    invalidate_conflicting(pl, type, (jl_value_t*)cache->targ.values, shadowed);
                 }
             }
         }
