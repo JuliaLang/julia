@@ -406,9 +406,7 @@
         ,(method-def-expr-
           name positional-sparams (append pargl vararg)
           `(block
-            ,(if (null? lno)
-                 `(line 0 || ||)
-                 (append (car lno) '(||)))
+            ,@lno
             ,@(if (not ordered-defaults)
                   '()
                   (map make-assignment keynames vals))
@@ -436,11 +434,7 @@
                  (car not-optional))
             ,@(cdr not-optional) ,@vararg)
           `(block
-            ,@(cond ((null? lno) '())
-		    ((not name) lno)
-		    (else
-		     ;; TODO jb/functions get a better `name` for functions specified by type
-		     (list (append (car lno) (list (undot-name name))))))
+            ,@lno
             ,@stmts) isstaged)
 
         ;; call with unsorted keyword args. this sorts and re-dispatches.
@@ -455,7 +449,6 @@
              ,(if (any kwarg? pargl) (gensy) UNUSED)
              (call (core kwftype) ,ftype)) (:: ,kw (core Array)) ,@pargl ,@vararg)
           `(block
-            (line 0 || ||)
             ;; initialize keyword args to their defaults, or set a flag telling
             ;; whether this keyword needs to be set.
             ,@(map (lambda (name dflt flag)
@@ -1534,17 +1527,19 @@
 
    'block
    (lambda (e)
-     (let ((e (flatten-blocks e)))
-       (cond ((null? (cdr e)) '(null))
-             ((null? (cddr e)) (expand-forms (cadr e)))
-             (else
-              `(block
-                ,.(map (lambda (x)
-                         (if (decl? x)
-                             `(decl ,@(map expand-forms (cdr x)))
-                             (expand-forms x)))
-                       (butlast (cdr e)))
-                ,(expand-forms (last e)))))))
+     (cond ((null? (cdr e)) '(null))
+           ((and (null? (cddr e))
+                 (not (and (pair? (cadr e))
+                           (eq? (car (cadr e)) 'line))))
+            (expand-forms (cadr e)))
+           (else
+            `(block
+              ,.(map (lambda (x)
+                       (if (decl? x)
+                           `(decl ,@(map expand-forms (cdr x)))
+                           (expand-forms x)))
+                     (butlast (cdr e)))
+              ,(expand-forms (last (cdr e)))))))
 
    '|.|
    (lambda (e) ; e = (|.| f x)
@@ -2596,6 +2591,15 @@ f(x) = yt(x)
             (cons (last e2) (append tl (butlast (cdr e2))))
             (cons e2 tl)))))
 
+(define (first-non-meta blk)
+  (let loop ((xs (cdr blk)))
+    (if (null? xs)
+        #f
+        (let ((elt (car xs)))
+          (if (and (pair? elt) (eq? (car elt) 'meta))
+              (loop (cdr xs))
+              elt)))))
+
 ;; return `body` with `stmts` inserted after any meta nodes
 (define (insert-after-meta body stmts)
   (let ((meta (take-while (lambda (x) (and (pair? x)
@@ -2947,6 +2951,8 @@ f(x) = yt(x)
 ;; only possible returned values.
 (define (compile-body e vi lam)
   (let ((code '())
+        (filename #f)
+        (first-line #t)
         (label-counter 0)     ;; counter for generating label addresses
         (label-map (table))   ;; maps label names to generated addresses
         (label-level (table)) ;; exception handler level of each label
@@ -3056,11 +3062,25 @@ f(x) = yt(x)
                      rr)
                    (emit `(= ,(cadr e) ,rhs)))))
             ((block body)
-             (let loop ((xs (cdr e)))
-               (if (null? (cdr xs))
-                   (compile (car xs) break-labels value tail)
-                   (begin (compile (car xs) break-labels #f #f)
-                          (loop (cdr xs))))))
+             (let* ((last-fname filename)
+                    (fnm        (first-non-meta e))
+                    (fname      (if (and (length> e 1) (pair? fnm) (eq? (car fnm) 'line)
+                                         (length> fnm 2))
+                                    (caddr fnm)
+                                    filename)))
+               (if (not (eq? fname last-fname))
+                   (begin (set! filename fname)
+                          ;; don't need a filename node for start of function
+                          (if (not (eq? e (lam:body lam))) (emit `(meta push_loc ,fname)))))
+               (begin0
+                (let loop ((xs (cdr e)))
+                  (if (null? (cdr xs))
+                      (compile (car xs) break-labels value tail)
+                      (begin (compile (car xs) break-labels #f #f)
+                             (loop (cdr xs)))))
+                (if (not (eq? fname last-fname))
+                    (begin (if (not tail) (emit `(meta pop_loc)))
+                           (set! filename last-fname))))))
             ((return)
              (compile (cadr e) break-labels #t #t)
              '(null))
@@ -3209,7 +3229,13 @@ f(x) = yt(x)
             ;; other top level expressions and metadata
             ((import importall using export line meta inbounds boundscheck simdloop)
              (let ((have-ret? (and (pair? code) (pair? (car code)) (eq? (caar code) 'return))))
-               (emit e)
+               (if (eq? (car e) 'line)
+                   (if first-line
+                       (begin (set! first-line #f)
+                              (emit e))
+                       ;; strip filenames out of non-initial line nodes
+                       (emit `(line ,(cadr e))))
+                   (emit e))
                (if (and tail (not have-ret?))
                    (emit-return '(null)))
                '(null)))

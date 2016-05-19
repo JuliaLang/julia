@@ -82,7 +82,6 @@
 #end
 
 #immutable LineNumberNode
-#    file::Symbol
 #    line::Int
 #end
 
@@ -276,7 +275,7 @@ _new(:GotoNode, :Int)
 _new(:NewvarNode, :SlotNumber)
 _new(:QuoteNode, :ANY)
 _new(:SSAValue, :Int)
-eval(:((::Type{LineNumberNode})(f::Symbol, l::Int) = $(Expr(:new, :LineNumberNode, :f, :l))))
+eval(:((::Type{LineNumberNode})(l::Int) = $(Expr(:new, :LineNumberNode, :l))))
 eval(:((::Type{GlobalRef})(m::Module, s::Symbol) = $(Expr(:new, :GlobalRef, :m, :s))))
 eval(:((::Type{SlotNumber})(n::Int) = $(Expr(:new, :SlotNumber, :n))))
 eval(:((::Type{TypedSlot})(n::Int, t::ANY) = $(Expr(:new, :TypedSlot, :n, :t))))

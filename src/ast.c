@@ -498,16 +498,10 @@ static jl_value_t *scm_to_julia_(fl_context_t *fl_ctx, value_t e, int eo)
         else
             n++;
         if (!eo) {
-            if (sym == line_sym && n==2) {
-                // NOTE: n==3 case exists: '(line, linenum, filename, funcname) passes
-                //       the original name through to keyword-arg specializations.
-                //       See 'line handling in julia-syntax.scm:keywords-method-def-expr
-                jl_value_t *filename = NULL, *linenum = NULL;
-                JL_GC_PUSH2(&filename, &linenum);
-                filename = scm_to_julia_(fl_ctx, car_(cdr_(e)), 0);
-                linenum  = scm_to_julia_(fl_ctx, car_(e), 0);
-                jl_value_t *temp = jl_new_struct(jl_linenumbernode_type,
-                                                 filename, linenum);
+            if (sym == line_sym && n==1) {
+                jl_value_t *linenum = scm_to_julia_(fl_ctx, car_(e), 0);
+                JL_GC_PUSH1(&linenum);
+                jl_value_t *temp = jl_new_struct(jl_linenumbernode_type, linenum);
                 JL_GC_POP();
                 return temp;
             }
@@ -658,21 +652,13 @@ static value_t julia_to_scm_(fl_context_t *fl_ctx, jl_value_t *v)
         fl_free_gc_handles(fl_ctx, 1);
         return scmv;
     }
-    if (jl_typeis(v, jl_linenumbernode_type)) {
-        // GC Note: jl_fieldref(v, 1) allocates but neither jl_fieldref(v, 0)
-        //          or julia_to_list2 should allocate here
-        value_t args = julia_to_list2(fl_ctx, jl_fieldref(v,1), jl_fieldref(v,0));
-        fl_gc_handle(fl_ctx, &args);
-        value_t hd = julia_to_scm_(fl_ctx, (jl_value_t*)line_sym);
-        value_t scmv = fl_cons(fl_ctx, hd, args);
-        fl_free_gc_handles(fl_ctx, 1);
-        return scmv;
-    }
     // GC Note: jl_fieldref(v, 0) allocate for LabelNode, GotoNode
     //          but we don't need a GC root here because julia_to_list2
     //          shouldn't allocate in this case.
     if (jl_typeis(v, jl_labelnode_type))
         return julia_to_list2(fl_ctx, (jl_value_t*)label_sym, jl_fieldref(v,0));
+    if (jl_typeis(v, jl_linenumbernode_type))
+        return julia_to_list2(fl_ctx, (jl_value_t*)line_sym, jl_fieldref(v,0));
     if (jl_typeis(v, jl_gotonode_type))
         return julia_to_list2(fl_ctx, (jl_value_t*)goto_sym, jl_fieldref(v,0));
     if (jl_typeis(v, jl_quotenode_type))

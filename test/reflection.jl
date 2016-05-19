@@ -421,3 +421,7 @@ fLargeTable(::Union{Complex64, Complex128}...) = 5
 @test_throws MethodError fLargeTable(Val{1}(), Val{1}())
 @test fLargeTable(Val{1}(), 1) == 1
 @test fLargeTable(1, Val{1}()) == 2
+
+# issue #15280
+function f15280(x) end
+@test functionloc(f15280)[2] > 0

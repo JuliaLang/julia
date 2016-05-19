@@ -531,7 +531,7 @@ end
 ## AST printing ##
 
 show_unquoted(io::IO, sym::Symbol, ::Int, ::Int)        = print(io, sym)
-show_unquoted(io::IO, ex::LineNumberNode, ::Int, ::Int) = show_linenumber(io, ex.line, ex.file)
+show_unquoted(io::IO, ex::LineNumberNode, ::Int, ::Int) = show_linenumber(io, ex.line)
 show_unquoted(io::IO, ex::LabelNode, ::Int, ::Int)      = print(io, ex.label, ": ")
 show_unquoted(io::IO, ex::GotoNode, ::Int, ::Int)       = print(io, "goto ", ex.label)
 show_unquoted(io::IO, ex::GlobalRef, ::Int, ::Int)      = print(io, ex.mod, '.', ex.name)
@@ -597,7 +597,7 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int)
     head, args, nargs = ex.head, ex.args, length(ex.args)
     emphstate = typeemphasize(io)
     show_type = true
-    if (ex.head == :(=) ||
+    if (ex.head == :(=) || ex.head == :line ||
         ex.head == :boundscheck ||
         ex.head == :gotoifnot ||
         ex.head == :return)
@@ -898,7 +898,12 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int)
                 print(io, a)
             end
         end
-
+    elseif is(head, :meta) && length(args) >= 2 && args[1] === :push_loc
+        print(io, "# meta: location ", join(args[2:end], " "))
+        show_type = false
+    elseif is(head, :meta) && length(args) == 1 && args[1] === :pop_loc
+        print(io, "# meta: pop location")
+        show_type = false
     # print anything else as "Expr(head, args...)"
     else
         show_type = false

@@ -2467,6 +2467,7 @@ function inlineable(f::ANY, ft::ANY, e::Expr, atypes::Vector{Any}, sv::Inference
 
     # see if each argument occurs only once in the body expression
     stmts = Any[]
+    prelude_stmts = Any[]
     stmts_free = true # true = all entries of stmts are effect_free
 
     # when 1 method matches the inferred types, there is still a chance
@@ -2585,10 +2586,10 @@ function inlineable(f::ANY, ft::ANY, e::Expr, atypes::Vector{Any}, sv::Inference
                     vnew = add_slot!(enclosing, aeitype, #=SSA=#false)
                     argexprs[i] = vnew
                 end
-                unshift!(stmts, Expr(:(=), vnew, aei))
+                unshift!(prelude_stmts, Expr(:(=), vnew, aei))
                 stmts_free &= free
             elseif !free && !isType(aeitype)
-                unshift!(stmts, aei)
+                unshift!(prelude_stmts, aei)
                 stmts_free = false
             end
         end
@@ -2620,6 +2621,7 @@ function inlineable(f::ANY, ft::ANY, e::Expr, atypes::Vector{Any}, sv::Inference
     append!(enclosing.slotflags, linfo.slotflags[na+1:end])
 
     # make labels / goto statements unique
+    # relocate inlining information
     newlabels = zeros(Int,label_counter(body.args)+1)
     for i = 1:length(body.args)
         a = body.args[i]
@@ -2694,14 +2696,14 @@ function inlineable(f::ANY, ft::ANY, e::Expr, atypes::Vector{Any}, sv::Inference
         end
     end
 
-    if length(stmts) == 1
-        # remove line number when inlining a single expression. see issue #13725
-        s = stmts[1]
-        if isa(s,Expr)&&is(s.head,:line) || isa(s,LineNumberNode)
-            pop!(stmts)
-        end
+   if !isempty(stmts)
+       if all(stmt -> isa(stmt,Expr) && stmt.head === :line || isa(stmt, LineNumberNode), stmts)
+           empty!(stmts)
+       else
+           unshift!(stmts, Expr(:meta, :push_loc, linfo.def.file, linfo.def.name))
+           push!(stmts, Expr(:meta, :pop_loc))
+       end
     end
-
     if !isempty(stmts) && !propagate_inbounds
         # avoid redundant inbounds annotations
         s_1, s_end = stmts[1], stmts[end]
@@ -2725,6 +2727,9 @@ function inlineable(f::ANY, ft::ANY, e::Expr, atypes::Vector{Any}, sv::Inference
             expr.typ = old_t
         end
     end
+    if !isempty(prelude_stmts)
+        stmts = append!(prelude_stmts, stmts)
+    end
     return (expr, stmts)
 end
 # The inlining incomplete matches optimization currently
@@ -2732,6 +2737,14 @@ end
 const inline_incompletematch_allowed = false
 
 inline_worthy(body::ANY, cost::Integer) = true
+
+# should the expression be part of the inline cost model
+function inline_ignore(ex)
+    isa(ex, LineNumberNode) ||
+    isa(ex, Expr) && ((ex::Expr).head === :line ||
+                      (ex::Expr).head === :meta)
+end
+
 function inline_worthy(body::Expr, cost::Integer=1000) # precondition: 0 < cost; nominal cost = 1000
     if popmeta!(body, :inline)[1]
         return true
@@ -2740,17 +2753,16 @@ function inline_worthy(body::Expr, cost::Integer=1000) # precondition: 0 < cost;
         return false
     end
     symlim = 1000 + 5_000_000 ÷ cost
-    nargs = 0
-    for arg in body.args
-        if (!isa(arg, LineNumberNode) &&
-            !(isa(arg, Expr) && (arg::Expr).head === :line))
-            nargs += 1
+    nstmt = 0
+    for stmt in body.args
+        if !inline_ignore(stmt)
+            nstmt += 1
         end
     end
-    if nargs < (symlim + 500) ÷ 1000
+    if nstmt < (symlim + 500) ÷ 1000
         symlim *= 16
         symlim ÷= 1000
-        if occurs_more(body, e->(!isa(e, LineNumberNode)), symlim) < symlim
+        if occurs_more(body, e->!inline_ignore(e), symlim) < symlim
             return true
         end
     end

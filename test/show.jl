@@ -11,8 +11,8 @@ immutable T5589
 end
 @test replstr(T5589(Array(String,100))) == "T5589(String[#undef,#undef,#undef,#undef,#undef,#undef,#undef,#undef,#undef,#undef  …  #undef,#undef,#undef,#undef,#undef,#undef,#undef,#undef,#undef,#undef])"
 
-@test replstr(parse("type X end")) == ":(type X\n    end)"
-@test replstr(parse("immutable X end")) == ":(immutable X\n    end)"
+@test replstr(parse("type X end")) == ":(type X # none, line 1:\n    end)"
+@test replstr(parse("immutable X end")) == ":(immutable X # none, line 1:\n    end)"
 s = "ccall(:f,Int,(Ptr{Void},),&x)"
 @test replstr(parse(s)) == ":($s)"
 
@@ -361,15 +361,15 @@ end
 
 
 # issue #15309
-l1, l2, l2n = Expr(:line,42), Expr(:line,42,:myfile), LineNumberNode(:myfile,42)
-@test string(l2n) == " # myfile, line 42:"
-@test string(l2)  == string(l2n)
-@test string(l1)  == replace(string(l2n),"myfile, ","",1)
+l1, l2, l2n = Expr(:line,42), Expr(:line,42,:myfile), LineNumberNode(42)
+@test string(l2n) == " # line 42:"
+@test string(l2)  == " # myfile, line 42:"
+@test string(l1)  == string(l2n)
 ex = Expr(:block, l1, :x, l2, :y, l2n, :z)
 @test replace(string(ex)," ","") == replace("""
 begin  # line 42:
     x # myfile, line 42:
-    y # myfile, line 42:
+    y # line 42:
     z
 end""", " ", "")
 # Test the printing of whatever form of line number representation

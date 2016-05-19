@@ -325,7 +325,7 @@ size_t rec_backtrace_ctx_dwarf(uintptr_t *data, size_t maxsize,
 #endif
 
 // Always Set *func_name and *file_name to malloc'd pointers (non-NULL)
-static int frame_info_from_ip(char **func_name,
+/*static int frame_info_from_ip(char **func_name,
                               char **file_name, size_t *line_num,
                               char **inlinedat_file, size_t *inlinedat_line,
                               jl_lambda_info_t **outer_linfo,
@@ -346,36 +346,39 @@ static int frame_info_from_ip(char **func_name,
         *file_name = strdup(name_unknown);
     }
     return fromC;
-}
+    }*/
 
 JL_DLLEXPORT jl_value_t *jl_lookup_code_address(void *ip, int skipC)
 {
-    char *func_name;
-    size_t line_num;
-    char *file_name;
-    size_t inlinedat_line;
-    char *inlinedat_file;
-    jl_lambda_info_t *outer_linfo;
+    jl_frame_t *frames = NULL;
     int8_t gc_state = jl_gc_safe_enter();
-    int fromC = frame_info_from_ip(&func_name, &file_name, &line_num,
-                                   &inlinedat_file, &inlinedat_line, &outer_linfo,
-                                   (size_t)ip, skipC, 0);
+    int n = jl_getFunctionInfo(&frames, (uintptr_t)ip, skipC, 0);
     jl_gc_safe_leave(gc_state);
-    jl_value_t *r = (jl_value_t*)jl_alloc_svec(8);
-    JL_GC_PUSH1(&r);
-    jl_svecset(r, 0, jl_symbol(func_name));
-    jl_svecset(r, 1, jl_symbol(file_name));
-    jl_svecset(r, 2, jl_box_long(line_num));
-    jl_svecset(r, 3, jl_symbol(inlinedat_file ? inlinedat_file : ""));
-    jl_svecset(r, 4, jl_box_long(inlinedat_file ? inlinedat_line : -1));
-    jl_svecset(r, 5, outer_linfo != NULL ? (jl_value_t*)outer_linfo : jl_nothing);
-    jl_svecset(r, 6, jl_box_bool(fromC));
-    jl_svecset(r, 7, jl_box_long((intptr_t)ip));
-    free(func_name);
-    free(file_name);
-    free(inlinedat_file);
+    jl_value_t *rs = (jl_value_t*)jl_alloc_svec(n);
+    JL_GC_PUSH1(&rs);
+    for (int i = 0; i < n; i++) {
+        jl_frame_t frame = frames[i];
+        jl_value_t *r = (jl_value_t*)jl_alloc_svec(7);
+        jl_svecset(rs, i, r);
+        if (frame.func_name)
+            jl_svecset(r, 0, jl_symbol(frame.func_name));
+        else
+            jl_svecset(r, 0, empty_sym);
+        free(frame.func_name);
+        if (frame.file_name)
+            jl_svecset(r, 1, jl_symbol(frame.file_name));
+        else
+            jl_svecset(r, 1, empty_sym);
+        free(frame.file_name);
+        jl_svecset(r, 2, jl_box_long(frame.line));
+        jl_svecset(r, 3, frame.linfo != NULL ? (jl_value_t*)frame.linfo : jl_nothing);
+        jl_svecset(r, 4, jl_box_bool(frame.fromC));
+        jl_svecset(r, 5, jl_box_bool(frame.inlined));
+        jl_svecset(r, 6, jl_box_long((intptr_t)ip));
+    }
+    free(frames);
     JL_GC_POP();
-    return r;
+    return rs;
 }
 
 //for looking up functions from gdb:
@@ -383,39 +386,28 @@ JL_DLLEXPORT void jl_gdblookup(uintptr_t ip)
 {
     // This function is not allowed to reference any TLS variables since
     // it can be called from an unmanaged thread on OSX.
-    char *func_name;
-    size_t line_num;
-    char *file_name;
-    size_t inlinedat_line;
-    char *inlinedat_file;
-    jl_lambda_info_t *outer_linfo;
-    frame_info_from_ip(&func_name, &file_name, &line_num,
-            &inlinedat_file, &inlinedat_line, &outer_linfo, ip,
-            /* skipC */ 0, /* skipInline */ 0);
-    if (line_num == ip) {
-        jl_safe_printf("unknown function (ip: %p)\n", (void*)ip);
-    }
-    else {
-        if (line_num != -1) {
-            jl_safe_printf("%s at %s:%" PRIuPTR "\n", inlinedat_file ? "[inline]" : func_name, file_name,
-                           (uintptr_t)line_num);
+    // it means calling getFunctionInfo with noInline = 1
+    jl_frame_t *frames;
+    int n = jl_getFunctionInfo(&frames, ip, 0, 1);
+    int i;
+
+    for(i=0; i < n; i++) {
+        jl_frame_t frame = frames[i];
+        if (!frame.func_name) {
+            jl_safe_printf("unknown function (ip: %p)\n", (void*)ip);
         }
         else {
-            jl_safe_printf("%s at %s (unknown line)\n", inlinedat_file ? "[inline]" : func_name, file_name);
-        }
-        if (inlinedat_file) {
-            if (inlinedat_line != -1) {
-                jl_safe_printf("%s at %s:%" PRIuPTR "\n", func_name, inlinedat_file,
-                               (uintptr_t)inlinedat_line);
+            if (frame.line != -1) {
+                jl_safe_printf("%s at %s:%" PRIuPTR "\n", frame.func_name, frame.file_name, (uintptr_t)frame.line);
             }
             else {
-                jl_safe_printf("%s at %s (unknown line)\n", func_name, inlinedat_file);
+                jl_safe_printf("%s at %s (unknown line)\n", frame.func_name, frame.file_name);
             }
+            free(frame.func_name);
+            free(frame.file_name);
         }
     }
-    free(func_name);
-    free(file_name);
-    free(inlinedat_file);
+    free(frames);
 }
 
 JL_DLLEXPORT void jlbacktrace(void)
