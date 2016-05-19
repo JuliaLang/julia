@@ -4149,3 +4149,11 @@ end
 @noinline MaybeFunc(T) = Union{T, Void}
 fMaybeFunc() = MaybeFunc(Int64)
 @test fMaybeFunc() == Union{Int64, Void}
+
+# issue #16431
+function f16431(x)
+    z::Int = x * 2
+    g(y) = begin z = z + y; y + x end
+    z * g(x)
+end
+@test @inferred(f16431(1)) == 4
