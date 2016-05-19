@@ -1353,7 +1353,9 @@ function randperm(r::AbstractRNG, n::Integer)
     mask = 3
     @inbounds for i = 2:Int(n)
         j = 1 + rand_lt(r, i, mask)
-        a[i] = a[j]
+        if i != j # a[i] is uninitialized (and could be #undef)
+            a[i] = a[j]
+        end
         a[j] = i
         i == 1+mask && (mask = 2mask + 1)
     end
