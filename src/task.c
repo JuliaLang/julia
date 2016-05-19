@@ -134,25 +134,18 @@ static jl_sym_t *runnable_sym;
 
 extern size_t jl_page_size;
 jl_datatype_t *jl_task_type;
-#define jl_root_task (jl_get_ptls_states()->root_task)
 
 #ifdef COPY_STACKS
-#define jl_jmp_target (jl_get_ptls_states()->jmp_target)
-
 #if (defined(_CPU_X86_64_) || defined(_CPU_X86_)) && !defined(_COMPILER_MICROSOFT_)
 #define ASM_COPY_STACKS
 #endif
 
-#ifndef ASM_COPY_STACKS
-#define jl_base_ctx (jl_get_ptls_states()->base_ctx)
-#endif
-
-static void NOINLINE save_stack(jl_task_t *t)
+static void NOINLINE save_stack(jl_tls_states_t *ptls, jl_task_t *t)
 {
     if (t->state == done_sym || t->state == failed_sym)
         return;
     volatile char *_x;
-    size_t nb = (char*)jl_stackbase - (char*)&_x;
+    size_t nb = (char*)ptls->stackbase - (char*)&_x;
     char *buf;
     if (t->stkbuf == NULL || t->bufsz < nb) {
         buf = (char*)allocb(nb);
@@ -170,25 +163,21 @@ static void NOINLINE save_stack(jl_task_t *t)
     jl_gc_wb_back(t);
 }
 
-char *jl_task_stackbase(jl_task_t *task)
+static void NOINLINE restore_stack(jl_tls_states_t *ptls, jl_task_t *t,
+                                   jl_jmp_buf *where, char *p)
 {
-    return (char*)jl_all_task_states[task->tid].ptls->stackbase;
-}
-
-static void NOINLINE restore_stack(jl_task_t *t, jl_jmp_buf *where, char *p)
-{
-    char *_x = (char*)jl_stackbase - t->ssize;
+    char *_x = (char*)ptls->stackbase - t->ssize;
     if (!p) {
         p = _x;
         if ((char*)&_x > _x) {
             p = (char*)alloca((char*)&_x - _x);
         }
-        restore_stack(t, where, p);
+        restore_stack(ptls, t, where, p);
     }
-    jl_jmp_target = where;
+    ptls->jmp_target = where;
     assert(t->stkbuf != NULL);
     memcpy(_x, t->stkbuf, t->ssize);
-    jl_longjmp(*jl_jmp_target, 1);
+    jl_longjmp(*ptls->jmp_target, 1);
 }
 #endif
 
@@ -271,9 +260,10 @@ static void NOINLINE JL_NORETURN start_task(void)
 #ifdef COPY_STACKS
 void NOINLINE jl_set_base_ctx(char *__stk)
 {
-    jl_stackbase = (char*)(((uintptr_t)__stk + sizeof(*__stk))&-16); // also ensures stackbase is 16-byte aligned
+    jl_tls_states_t *ptls = jl_get_ptls_states();
+    ptls->stackbase = (char*)(((uintptr_t)__stk + sizeof(*__stk))&-16); // also ensures stackbase is 16-byte aligned
 #ifndef ASM_COPY_STACKS
-    if (jl_setjmp(jl_base_ctx, 1)) {
+    if (jl_setjmp(ptls->base_ctx, 1)) {
         start_task();
     }
 #endif
@@ -291,24 +281,25 @@ JL_DLLEXPORT void julia_init(JL_IMAGE_SEARCH rel)
 #endif
 }
 
-static void ctx_switch(jl_task_t *t, jl_jmp_buf *where)
+static void ctx_switch(jl_tls_states_t *ptls, jl_task_t *t, jl_jmp_buf *where)
 {
-    if (t == jl_current_task)
+    if (t == ptls->current_task)
         return;
-    if (!jl_setjmp(jl_current_task->ctx, 0)) {
-        jl_bt_size = 0;  // backtraces don't survive task switches, see e.g. issue #12485
+    if (!jl_setjmp(ptls->current_task->ctx, 0)) {
+        // backtraces don't survive task switches, see e.g. issue #12485
+        ptls->bt_size = 0;
 #ifdef COPY_STACKS
-        jl_task_t *lastt = jl_current_task;
-        save_stack(lastt);
+        jl_task_t *lastt = ptls->current_task;
+        save_stack(ptls, lastt);
 #endif
 
         // set up global state for new task
-        jl_current_task->gcstack = jl_pgcstack;
-        jl_pgcstack = t->gcstack;
+        ptls->current_task->gcstack = ptls->pgcstack;
+        ptls->pgcstack = t->gcstack;
 #ifdef JULIA_ENABLE_THREADING
         // If the current task is not holding any locks, free the locks list
         // so that it can be GC'd without leaking memory
-        arraylist_t *locks = &jl_current_task->locks;
+        arraylist_t *locks = &ptls->current_task->locks;
         if (locks->len == 0 && locks->items != locks->_space) {
             arraylist_free(locks);
             arraylist_new(locks, 0);
@@ -318,22 +309,22 @@ static void ctx_switch(jl_task_t *t, jl_jmp_buf *where)
         // restore task's current module, looking at parent tasks
         // if it hasn't set one.
         jl_task_t *last = t;
-        while (last->current_module == NULL && last != jl_root_task) {
+        while (last->current_module == NULL && last != ptls->root_task) {
             last = last->parent;
         }
         if (last->current_module != NULL) {
-            jl_current_module = last->current_module;
+            ptls->current_module = last->current_module;
         }
 
-        jl_current_task = t;
+        ptls->current_task = t;
 
 #ifdef COPY_STACKS
         if (t->stkbuf) {
-            restore_stack(t, where, NULL);
+            restore_stack(ptls, t, where, NULL);
         }
         else {
 #ifdef ASM_COPY_STACKS
-            void *stackbase = jl_stackbase;
+            void *stackbase = ptls->stackbase;
 #ifdef _CPU_X86_64_
 #ifdef _OS_WINDOWS_
             stackbase = (char*)stackbase - 0x20;
@@ -355,7 +346,7 @@ static void ctx_switch(jl_task_t *t, jl_jmp_buf *where)
 #error ASM_COPY_STACKS not supported on this cpu architecture
 #endif
 #else // ASM_COPY_STACKS
-            jl_longjmp(jl_base_ctx, 1);
+            jl_longjmp(ptls->base_ctx, 1);
 #endif
         }
 #else
@@ -366,7 +357,8 @@ static void ctx_switch(jl_task_t *t, jl_jmp_buf *where)
 
 JL_DLLEXPORT jl_value_t *jl_switchto(jl_task_t *t, jl_value_t *arg)
 {
-    if (t == jl_current_task) {
+    jl_tls_states_t *ptls = jl_get_ptls_states();
+    if (t == ptls->current_task) {
         throw_if_exception_set(t);
         return arg;
     }
@@ -376,20 +368,20 @@ JL_DLLEXPORT jl_value_t *jl_switchto(jl_task_t *t, jl_value_t *arg)
             jl_throw(t->exception);
         return t->result;
     }
-    if (jl_in_finalizer)
+    if (ptls->in_finalizer)
         jl_error("task switch not allowed from inside gc finalizer");
     if (in_pure_callback)
         jl_error("task switch not allowed from inside staged function");
-    sig_atomic_t defer_signal = jl_get_ptls_states()->defer_signal;
+    sig_atomic_t defer_signal = ptls->defer_signal;
     int8_t gc_state = jl_gc_unsafe_enter();
-    jl_task_arg_in_transit = arg;
-    ctx_switch(t, &t->ctx);
-    jl_value_t *val = jl_task_arg_in_transit;
-    jl_task_arg_in_transit = jl_nothing;
-    throw_if_exception_set(jl_current_task);
+    ptls->task_arg_in_transit = arg;
+    ctx_switch(ptls, t, &t->ctx);
+    jl_value_t *val = ptls->task_arg_in_transit;
+    ptls->task_arg_in_transit = jl_nothing;
+    throw_if_exception_set(ptls->current_task);
     jl_gc_unsafe_leave(gc_state);
-    sig_atomic_t other_defer_signal = jl_get_ptls_states()->defer_signal;
-    jl_get_ptls_states()->defer_signal = defer_signal;
+    sig_atomic_t other_defer_signal = ptls->defer_signal;
+    ptls->defer_signal = defer_signal;
     if (other_defer_signal && !defer_signal)
         jl_sigint_safepoint();
     return val;
