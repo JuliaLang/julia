@@ -250,6 +250,9 @@ for itype in UmfpackIndexTypes
             return U
         end
         function solve!(x::VecOrMat{Float64}, lu::UmfpackLU{Float64,$itype}, b::VecOrMat{Float64}, typ::Integer)
+            if x === b
+                 throw(ArgumentError("output array must not be aliased with input array"))
+            end
             umfpack_numeric!(lu)
             (size(b,1) == lu.m) && (size(b) == size(x)) || throw(DimensionMismatch())
             joff = 1
@@ -263,6 +266,9 @@ for itype in UmfpackIndexTypes
             x
         end
         function solve!(x::VecOrMat{Complex128}, lu::UmfpackLU{Complex128,$itype}, b::VecOrMat{Complex128}, typ::Integer)
+            if x === b
+                 throw(ArgumentError("output array must not be aliased with input array"))
+            end
             umfpack_numeric!(lu)
             (size(b,1) == lu.m) && (size(b) == size(x)) || throw(DimensionMismatch())
             n = size(b,1)
@@ -382,8 +388,8 @@ for (f!, umfpack) in ((:A_ldiv_B!, :UMFPACK_A),
                       (:At_ldiv_B!, :UMFPACK_Aat))
     @eval begin
         $f!{T<:UMFVTypes}(x::VecOrMat{T}, lu::UmfpackLU{T}, b::VecOrMat{T}) = solve!(x, lu, b, $umfpack)
-        $f!{T<:UMFVTypes}(lu::UmfpackLU{T}, b::Vector{T}) = $f!(similar(b), lu, b)
-        $f!{T<:UMFVTypes}(lu::UmfpackLU{T}, b::Matrix{T}) = $f!(similar(b), lu, b)
+        $f!{T<:UMFVTypes}(lu::UmfpackLU{T}, b::Vector{T}) = $f!(b, lu, copy(b))
+        $f!{T<:UMFVTypes}(lu::UmfpackLU{T}, b::Matrix{T}) = $f!(b, lu, copy(b))
 
         function $f!{Tb<:Complex}(x::Vector{Tb}, lu::UmfpackLU{Float64}, b::Vector{Tb})
             n = size(b, 1)
@@ -398,7 +404,7 @@ for (f!, umfpack) in ((:A_ldiv_B!, :UMFPACK_A),
             end
             return x
         end
-        $f!{Tb<:Complex}(lu::UmfpackLU{Float64}, b::Vector{Tb}) = $f!(similar(b), lu, b)
+        $f!{Tb<:Complex}(lu::UmfpackLU{Float64}, b::Vector{Tb}) = $f!(b, lu, copy(b))
     end
 end
 

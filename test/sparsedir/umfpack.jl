@@ -32,8 +32,9 @@ for Tv in (Float64, Complex128)
         z = complex(b,zeros(b))
         x = Base.SparseArrays.A_ldiv_B!(lua, z)
         @test x ≈ float([1:5;])
+        @test z === x
         y = similar(z)
-        A_ldiv_B!(y, lua,z)
+        A_ldiv_B!(y, lua, complex(b,zeros(b)))
         @test y ≈ x
 
         @test norm(A*x-b,1) < eps(1e4)
@@ -43,10 +44,12 @@ for Tv in (Float64, Complex128)
         @test x ≈ float([1:5;])
 
         @test norm(A'*x-b,1) < eps(1e4)
-        x = Base.SparseArrays.Ac_ldiv_B!(lua,complex(b,zeros(b)))
+        z = complex(b,zeros(b))
+        x = Base.SparseArrays.Ac_ldiv_B!(lua, z)
         @test x ≈ float([1:5;])
+        @test x === z
         y = similar(x)
-        Base.SparseArrays.Ac_ldiv_B!(y, lua,complex(b,zeros(b)))
+        Base.SparseArrays.Ac_ldiv_B!(y, lua, complex(b,zeros(b)))
         @test y ≈ x
 
         @test norm(A'*x-b,1) < eps(1e4)
@@ -125,4 +128,11 @@ let
     @test size(F, 2) == n
     @test size(F, 3) == 1
     @test_throws ArgumentError size(F,-1)
+end
+
+let
+    a = rand(5)
+    @test_throws ArgumentError Base.SparseArrays.UMFPACK.solve!(a, lufact(speye(5,5)), a, Base.SparseArrays.UMFPACK.UMFPACK_A)
+    aa = complex(a)
+    @test_throws ArgumentError Base.SparseArrays.UMFPACK.solve!(aa, lufact(complex(speye(5,5))), aa, Base.SparseArrays.UMFPACK.UMFPACK_A)
 end
