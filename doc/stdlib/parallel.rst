@@ -285,7 +285,7 @@ General Parallel Computing Support
 
    If a worker pool is not specified, all available workers, i.e., the default worker pool is used.
 
-   By default, ``pmap`` distributes the computation over all specified workers. To use only the local process and distribute over tasks, specifiy ``distributed=false``\ . This is equivalent to ``asyncmap``\ .
+   By default, ``pmap`` distributes the computation over all specified workers. To use only the local process and distribute over tasks, specify ``distributed=false``\ . This is equivalent to ``asyncmap``\ .
 
    ``pmap`` can also use a mix of processes and tasks via the ``batch_size`` argument. For batch sizes greater than 1, the collection is split into multiple batches, which are distributed across workers. Each such batch is processed in parallel via tasks in each worker. The specified ``batch_size`` is an upper limit, the actual size of batches may be smaller and is calculated depending on the number of workers available and length of the collection.
 
