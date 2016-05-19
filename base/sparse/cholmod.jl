@@ -809,7 +809,7 @@ get_perm(FC::FactorComponent) = get_perm(Factor(FC))
 #########################
 
 # Convertion/construction
-function convert{T<:VTypes}(::Type{Dense{T}}, A::VecOrMat)
+function convert{T<:VTypes}(::Type{Dense{T}}, A::StridedVecOrMat)
     d = allocate_dense(size(A, 1), size(A, 2), stride(A, 2), T)
     s = unsafe_load(d.p)
     for i in eachindex(A)
@@ -817,7 +817,7 @@ function convert{T<:VTypes}(::Type{Dense{T}}, A::VecOrMat)
     end
     d
 end
-function convert(::Type{Dense}, A::VecOrMat)
+function convert(::Type{Dense}, A::StridedVecOrMat)
     T = promote_type(eltype(A), Float64)
     return convert(Dense{T}, A)
 end
@@ -1464,8 +1464,8 @@ Ac_ldiv_B(L::FactorComponent, B) = ctranspose(L)\B
 
 (\){T}(L::Factor{T}, B::Dense{T}) = solve(CHOLMOD_A, L, B)
 (\)(L::Factor{Float64}, B::VecOrMat{Complex{Float64}}) = L\real(B) + L\imag(B)
-(\)(L::Factor, b::Vector) = Vector(L\convert(Dense{eltype(L)}, b))
-(\)(L::Factor, B::Matrix) = Matrix(L\convert(Dense{eltype(L)}, B))
+(\)(L::Factor, b::StridedVector) = Vector(L\convert(Dense{eltype(L)}, b))
+(\)(L::Factor, B::StridedMatrix) = Matrix(L\convert(Dense{eltype(L)}, B))
 (\)(L::Factor, B::Sparse) = spsolve(CHOLMOD_A, L, B)
 # When right hand side is sparse, we have to ensure that the rhs is not marked as symmetric.
 (\)(L::Factor, B::SparseVecOrMat) = sparse(spsolve(CHOLMOD_A, L, Sparse(B, 0)))
