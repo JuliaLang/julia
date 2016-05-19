@@ -28,6 +28,42 @@
 #endif
 #include <signal.h>
 
+typedef struct {
+    struct _buff_t *freelist;   // root of list of free objects
+    struct _buff_t *newpages;   // root of list of chunks of free objects
+    uint16_t end_offset; // stored to avoid computing it at each allocation
+    uint16_t osize;      // size of objects in this pool
+    uint16_t nfree;      // number of free objects in page pointed into by free_list
+} jl_gc_pool_t;
+
+typedef struct {
+    // variable for tracking weak references
+    arraylist_t weak_refs;
+
+    // variables for tracking malloc'd arrays
+    struct _mallocarray_t *mallocarrays;
+    struct _mallocarray_t *mafreelist;
+
+    // variables for tracking big objects
+    struct _bigval_t *big_objects;
+
+    // variables for tracking "remembered set"
+    arraylist_t rem_bindings;
+    arraylist_t _remset[2]; // contains jl_value_t*
+    // lower bound of the number of pointers inside remembered values
+    int remset_nptr;
+    arraylist_t *remset;
+    arraylist_t *last_remset;
+
+    // variables for allocating objects from pools
+#ifdef _P64
+#define JL_GC_N_POOLS 41
+#else
+#define JL_GC_N_POOLS 43
+#endif
+    jl_gc_pool_t norm_pools[JL_GC_N_POOLS];
+} jl_thread_heap_t;
+
 // This includes all the thread local states we care about for a thread.
 #define JL_MAX_BT_SIZE 80000
 typedef struct _jl_tls_states_t {
@@ -45,7 +81,6 @@ typedef struct _jl_tls_states_t {
     volatile int8_t in_finalizer;
     int8_t disable_gc;
     volatile sig_atomic_t defer_signal;
-    struct _jl_thread_heap_t *heap;
     struct _jl_module_t *current_module;
     struct _jl_task_t *volatile current_task;
     struct _jl_task_t *root_task;
@@ -66,6 +101,7 @@ typedef struct _jl_tls_states_t {
     // this is limited to the few places we do synchronous IO
     // we can make this more general (similar to defer_signal) if necessary
     volatile sig_atomic_t io_wait;
+    jl_thread_heap_t heap;
 } jl_tls_states_t;
 
 #ifdef __MIC__
