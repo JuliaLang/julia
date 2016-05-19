@@ -7,7 +7,7 @@ sprint(Base.Sys.cpu_summary)
 @test Base.Sys.uptime() > 0
 Base.Sys.loadavg()
 
-@test !("fakename" ∈ keys(ENV))
+@test !("f=a=k=e=n=a=m=e" ∈ keys(ENV))
 
 # issue #10994
 @test_throws ArgumentError ENV["bad\0name"] = "ok"
