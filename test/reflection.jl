@@ -439,3 +439,44 @@ fLargeTable() = 4
 # issue #15280
 function f15280(x) end
 @test functionloc(f15280)[2] > 0
+
+# Static evaluation of method_exists (#16422)
+meth16422(x::Int, y::Int) = 0
+function static_meth_exists_tt()
+    # As a tuple-type
+    if @method_exists(meth16422, Tuple{Int,Int})
+        return true
+    end
+    false
+end
+@test static_meth_exists_tt()
+io = IOBuffer()
+code_llvm(io, static_meth_exists_tt, ())
+str = takebuf_string(io)
+@test contains(str, "top:\n  ret i1 true\n}")
+
+function static_meth_exists_t()
+    # As a tuple
+    if @method_exists(meth16422, (Int,Int))
+        return true
+    end
+    false
+end
+@test static_meth_exists_t()
+io = IOBuffer()
+code_llvm(io, static_meth_exists_t, ())
+str = takebuf_string(io)
+@test contains(str, "top:\n  ret i1 true\n}")
+
+function static_meth_not_exists()
+    if @method_exists(meth16422, Tuple{Int,String})
+        return true
+    end
+    false
+end
+@test !static_meth_not_exists()
+code_llvm(io, static_meth_not_exists, ())
+str = takebuf_string(io)
+@test !contains(str, "ret i1 true") && !contains(str, "ret i1 false")
+meth16422(x::Int, y::String) = 1
+@test static_meth_not_exists()  # define it later, should be true

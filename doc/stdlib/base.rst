@@ -626,11 +626,22 @@ Generic Functions
 
    .. Docstring generated from Julia source
 
-   Determine whether the given generic function has a method matching the given :obj:`Tuple` of argument types.
+   Determine whether the given generic function has a method matching the given :obj:`Tuple` of argument types. See also ``@method_exists``\ .
 
    .. doctest::
 
        julia> method_exists(length, Tuple{Array})
+       true
+
+.. function:: @method_exists(f, tt)
+
+   .. Docstring generated from Julia source
+
+   Determine whether the given generic function ``f`` has a method matching the given tuple ``tt`` of argument types. When used in a function, if the method exists at the time the function is compiled, this statement simple gets replaced by ``true`` (and hence has no runtime overhead). If the function does not exist, then it is equivalent to the function form, ``method_exists``\ .
+
+   .. doctest::
+
+       julia> @method_exists(length, Tuple{Array})
        true
 
 .. function:: applicable(f, args...) -> Bool
