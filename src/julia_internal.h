@@ -16,6 +16,9 @@
 extern "C" {
 #endif
 
+// useful constants
+extern jl_methtable_t *jl_type_type_mt;
+
 // execution of certain certain unpure
 // statements is prohibited from certain
 // callbacks (such as generated functions)
@@ -623,7 +626,19 @@ jl_typemap_entry_t *jl_typemap_insert(union jl_typemap_t *cache, jl_value_t *par
 jl_typemap_entry_t *jl_typemap_assoc_by_type(union jl_typemap_t ml_or_cache, jl_tupletype_t *types, jl_svec_t **penv,
         int8_t subtype_inexact__sigseq_useenv, int8_t subtype, int8_t offs);
 static jl_typemap_entry_t *const INEXACT_ENTRY = (jl_typemap_entry_t*)(uintptr_t)-1;
-jl_typemap_entry_t *jl_typemap_assoc_exact(union jl_typemap_t ml_or_cache, jl_value_t **args, size_t n, int8_t offs);
+jl_typemap_entry_t *jl_typemap_level_assoc_exact(jl_typemap_level_t *cache, jl_value_t **args, size_t n, int8_t offs);
+jl_typemap_entry_t *jl_typemap_entry_assoc_exact(jl_typemap_entry_t *mn, jl_value_t **args, size_t n);
+STATIC_INLINE jl_typemap_entry_t *jl_typemap_assoc_exact(union jl_typemap_t ml_or_cache, jl_value_t **args, size_t n, int8_t offs)
+{
+    // NOTE: This function is a huge performance hot spot!!
+    if (jl_typeof(ml_or_cache.unknown) == (jl_value_t*)jl_typemap_entry_type) {
+        return jl_typemap_entry_assoc_exact(ml_or_cache.leaf, args, n);
+    }
+    else if (jl_typeof(ml_or_cache.unknown) == (jl_value_t*)jl_typemap_level_type) {
+        return jl_typemap_level_assoc_exact(ml_or_cache.node, args, n, offs);
+    }
+    return NULL;
+}
 
 typedef int (*jl_typemap_visitor_fptr)(jl_typemap_entry_t *l, void *closure);
 int jl_typemap_visitor(union jl_typemap_t a, jl_typemap_visitor_fptr fptr, void *closure);

@@ -1993,9 +1993,9 @@ static void jl_restore_system_image_from_stream(ios_t *f)
     jl_top_module = (jl_module_t*)jl_deserialize_value(f, NULL);
     jl_internal_main_module = jl_main_module;
     jl_typeinf_func = (jl_function_t*)jl_deserialize_value(f, NULL);
-    jl_type_type->name->mt = (jl_methtable_t*)jl_deserialize_value(f, NULL);
-    jl_typector_type->name->mt = jl_uniontype_type->name->mt = jl_datatype_type->name->mt =
-        jl_type_type->name->mt;
+    jl_type_type_mt = (jl_methtable_t*)jl_deserialize_value(f, NULL);
+    jl_type_type->name->mt = jl_typector_type->name->mt = jl_uniontype_type->name->mt = jl_datatype_type->name->mt =
+        jl_type_type_mt;
 
     jl_core_module = (jl_module_t*)jl_get_global(jl_main_module,
                                                  jl_symbol("Core"));
