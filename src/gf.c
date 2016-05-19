@@ -106,7 +106,7 @@ const struct jl_typemap_info tfunc_cache = {
 
 static int8_t jl_cachearg_offset(jl_methtable_t *mt)
 {
-    return (mt == jl_type_type->name->mt) ? 0 : 1;
+    return (mt == jl_type_type_mt) ? 0 : 1;
 }
 
 /// ----- Insertion logic for special entries ----- ///
@@ -1581,10 +1581,20 @@ JL_DLLEXPORT jl_value_t *jl_apply_generic(jl_value_t **args, uint32_t nargs)
             jl_method_error((jl_function_t*)F, args, nargs);
             // unreachable
         }
+        jl_value_t *res;
+        if (mfunc->inInference || mfunc->inCompile) {
+            // if inference is running on this function, return a copy
+            // of the function to be compiled without inference and run.
+            res = jl_call_unspecialized(mfunc->sparam_vals, jl_get_unspecialized(mfunc), args, nargs);
+        }
+        else {
+            res = jl_call_method_internal(mfunc, args, nargs);
+        }
+        JL_GC_POP();
+        return verify_type(res);
     }
-    else {
-        mfunc = entry->func.linfo;
-    }
+
+    mfunc = entry->func.linfo;
 #ifdef JL_TRACE
     if (traceen)
         jl_printf(JL_STDOUT, " at %s:%d\n", jl_symbol_name(mfunc->file), mfunc->line);
@@ -1598,7 +1608,6 @@ JL_DLLEXPORT jl_value_t *jl_apply_generic(jl_value_t **args, uint32_t nargs)
     else {
         res = jl_call_method_internal(mfunc, args, nargs);
     }
-    if (tt) JL_GC_POP();
     return verify_type(res);
 }
 
