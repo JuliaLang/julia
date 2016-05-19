@@ -1822,7 +1822,7 @@ $(SRCDIR)/srccache/libosxunwind-$(OSXUNWIND_VER).tar.gz: | $(SRCDIR)/srccache
 
 $(BUILDDIR)/libosxunwind-$(OSXUNWIND_VER)/Makefile: $(SRCDIR)/srccache/libosxunwind-$(OSXUNWIND_VER).tar.gz
 	$(JLCHECKSUM) $<
-	cd $(BUILDDIR) && $(TAR) xfz $<
+	mkdir -p $(BUILDDIR) && cd $(BUILDDIR) && $(TAR) xfz $<
 	touch -c $@
 
 $(OSXUNWIND_OBJ_SOURCE): $(BUILDDIR)/libosxunwind-$(OSXUNWIND_VER)/Makefile
