@@ -690,3 +690,12 @@ let A = -1:1, B = -1.0:1.0
     @test ~A == [0,-1,-2]
     @test typeof(~A) == Vector{Int}
 end
+
+# conversion to Array
+let r = 1:3, a = [1,2,3]
+    @test convert(Array, r) == a
+    @test convert(Array{Int}, r) == a
+    @test convert(Array{Float64}, r) == a
+    @test convert(Array{Int,1}, r) == a
+    @test convert(Array{Float64,1}, r) == a
+end
