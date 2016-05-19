@@ -541,7 +541,7 @@ extern JL_DLLEXPORT jl_value_t *jl_false;
 extern JL_DLLEXPORT jl_value_t *jl_nothing;
 
 // some important symbols
-extern jl_sym_t *call_sym;
+extern jl_sym_t *call_sym;    extern jl_sym_t *empty_sym;
 extern jl_sym_t *dots_sym;    extern jl_sym_t *vararg_sym;
 extern jl_sym_t *quote_sym;   extern jl_sym_t *newvar_sym;
 extern jl_sym_t *top_sym;     extern jl_sym_t *dot_sym;
@@ -738,8 +738,7 @@ STATIC_INLINE void jl_array_uint8_set(void *a, size_t i, uint8_t x)
 #define jl_nfields(v)    jl_datatype_nfields(jl_typeof(v))
 
 // Not using jl_fieldref to avoid allocations
-#define jl_linenode_file(x) (*(jl_sym_t**)x)
-#define jl_linenode_line(x) (((intptr_t*)x)[1])
+#define jl_linenode_line(x) (((intptr_t*)x)[0])
 #define jl_labelnode_label(x) (((intptr_t*)x)[0])
 #define jl_slot_number(x) (((intptr_t*)x)[0])
 #define jl_typedslot_get_type(x) (((jl_value_t**)x)[1])
@@ -1446,7 +1445,8 @@ typedef struct _jl_task_t {
     jl_jmp_buf ctx;
     size_t bufsz;
     void *stkbuf;
-    size_t ssize:31;
+
+    size_t ssize;
     size_t started:1;
 
     // current exception handler

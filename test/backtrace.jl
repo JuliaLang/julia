@@ -4,8 +4,8 @@ bt = backtrace()
 have_backtrace = false
 for l in bt
     lkup = ccall(:jl_lookup_code_address, Any, (Ptr{Void},), l)
-    if lkup[1] == :backtrace
-        @test lkup[7] == false # fromC
+    if lkup[1][1] == :backtrace
+        @test lkup[1][5] == false # fromC
         have_backtrace = true
         break
     end
@@ -17,51 +17,53 @@ end
 module test_inline_bt
 using Base.Test
 
-function get_bt_frame(functionname, bt)
+function get_bt_frames(functionname, bt)
     for i = 1:length(bt)
-        lkup = ccall(:jl_lookup_code_address, Any, (Ptr{Void}, Cint), bt[i]-1, true)
-        # find the function frame
-        lkup[1] == functionname && (return lkup)
+        lkup = Base.StackTraces.lookup(bt[i])
+        lkup[end].func == functionname && (return lkup)
     end
 end
 
 # same-file inline
 eval(Expr(:function, Expr(:call, :test_inline_1),
-                     Expr(:block, LineNumberNode(Symbol("backtrace.jl"), 42),
-                     LineNumberNode(Symbol("backtrace.jl"), 37),
-                     Expr(:call, :throw, "foo"))))
+          Expr(:block, Expr(:line, 42, Symbol("backtrace.jl")),
+                       Expr(:block, Expr(:meta, :push_loc, Symbol("backtrace.jl"), :inlfunc),
+                                    Expr(:line, 37),
+                                    Expr(:call, :throw, "foo"),
+                                    Expr(:meta, :pop_loc)))))
+
+try
+    test_inline_1()
+    error("unexpected")
+catch err
+    lkup = get_bt_frames(:test_inline_1, catch_backtrace())
+    @test length(lkup) == 2
+    @test endswith(string(lkup[2].file), "backtrace.jl")
+    @test lkup[2].line == 42
+    @test lkup[1].func == :inlfunc
+    @test endswith(string(lkup[1].file), "backtrace.jl")
+    @test lkup[1].line == 37
+end
 
 # different-file inline
 const absfilepath = OS_NAME == :Windows ? "C:\\foo\\bar\\baz.jl" : "/foo/bar/baz.jl"
 eval(Expr(:function, Expr(:call, :test_inline_2),
-                     Expr(:block, LineNumberNode(Symbol("backtrace.jl"), 99),
-                     LineNumberNode(Symbol("foobar.jl"), 666),
-                     LineNumberNode(Symbol(absfilepath), 111),
-                     Expr(:call, :throw, "foo"))))
+          Expr(:block, Expr(:line, 99, Symbol("backtrace.jl")),
+                       Expr(:block, Expr(:meta, :push_loc, Symbol(absfilepath)),
+                                    Expr(:line, 111),
+                                    Expr(:call, :throw, "foo"),
+                                    Expr(:meta, :pop_loc)))))
 
 try
-    eval(:(test_inline_1()))
+    test_inline_2()
     error("unexpected")
 catch err
-    lkup = get_bt_frame(:test_inline_1, catch_backtrace())
-    @test lkup !== nothing || "Missing backtrace in inlining test"
-
-    fname, file, line, inlinedfile, inlinedline, linfo, fromC = lkup
-    @test endswith(string(inlinedfile), "backtrace.jl")
-    @test inlinedline == 42
-end
-try
-    eval(:(test_inline_2()))
-    error("unexpected")
-catch err
-    lkup = get_bt_frame(:test_inline_2, catch_backtrace())
-    @test lkup !== nothing || "Missing backtrace in inlining test"
-
-    fname, file, line, inlinedfile, inlinedline, linfo, fromC = lkup
-    @test string(file) == absfilepath
-    @test line == 111
-    @test endswith(string(inlinedfile), "backtrace.jl")
-    @test inlinedline == 99
+    lkup = get_bt_frames(:test_inline_2, catch_backtrace())
+    @test length(lkup) == 2
+    @test endswith(string(lkup[2].file), "backtrace.jl")
+    @test lkup[2].line == 99
+    @test string(lkup[1].file) == absfilepath
+    @test lkup[1].line == 111
 end
 
 end # module
@@ -85,17 +87,15 @@ let
     try
         test_throw_commoning(1)
     catch
-        b1 = catch_backtrace()
+        b1 = stacktrace(catch_backtrace())
     end
     try
         test_throw_commoning(2)
     catch
-        b2 = catch_backtrace()
+        b2 = stacktrace(catch_backtrace())
     end
-    ind1 = find(:test_throw_commoning .== map(b->code_loc(b)[1], b1))
-    ind2 = find(:test_throw_commoning .== map(b->code_loc(b)[1], b2))
-    @test !isempty(ind1)
-    @test !isempty(ind2)
-    @test (code_loc(b1[ind1[1]])[3]::Int == code_loc(b2[ind2[1]])[3]::Int) != # source line, for example: essentials.jl:58
-          (code_loc(b1[ind1[1]])[5]::Int == code_loc(b2[ind2[1]])[5]::Int)    # inlined line, for example: backtrace.jl:82
+    i1 = findfirst(frame -> frame.func === :test_throw_commoning, b1)
+    i2 = findfirst(frame -> frame.func === :test_throw_commoning, b2)
+    @test i1 > 0 && i2 > 0
+    @test b1[i1].line != b2[i2].line
 end

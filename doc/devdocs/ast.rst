@@ -42,7 +42,8 @@ The following data types exist in lowered form:
     wraps the IR of each method.
 
 ``LineNumberNode``
-    line number metadata
+    contains a single number, specifying the line number the next statement
+    came from.
 
 ``LabelNode``
     branch target, a consecutively-numbered integer starting at 0
@@ -174,9 +175,15 @@ These symbols appear in the ``head`` field of ``Expr``\s in lowered form.
     AST that is simply copied recursively and returned at run time.
 
 ``meta``
-    metadata. Currently used for inlining hints, represented by the symbols
-    ``:inline`` and ``:noinline``.
-
+    metadata. ``args[1]`` is typically a symbol specifying the kind of metadata,
+    and the rest of the arguments are free-form. The following kinds of metadata
+    are commonly used:
+    - ``:inline`` and ``:noinline``: Inlining hints.
+    - ``:push_loc``: enters a sequence of statements from a specified source location.
+        ``args[2]`` specifies a filename, as a symbol.
+        ``args[3]`` optionally specifies the name of an (inlined) function that originally
+                    contained the code.
+    - ``:pop_loc``: returns to the source location before the matching ``:push_loc``.
 
 LambdaInfo
 ~~~~~~~~~~

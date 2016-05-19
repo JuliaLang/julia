@@ -185,11 +185,11 @@ function methods_including_ambiguous(f::ANY, t::ANY)
     return ccall(:jl_matching_methods, Any, (Any,Cint,Cint), tt, -1, 1)
 end
 function _methods_by_ftype(t::ANY, lim)
-    tp = t.parameters
+    tp = t.parameters::SimpleVector
     nu = 1
     for ti in tp
         if isa(ti, Union)
-            nu *= length(ti.types)
+            nu *= length((ti::Union).types)
         end
     end
     if 1 < nu <= 64
