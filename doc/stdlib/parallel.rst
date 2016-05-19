@@ -25,13 +25,13 @@ Tasks
 
    Get the currently running ``Task``\ .
 
-.. function:: istaskdone(task) -> Bool
+.. function:: istaskdone(task) [::] Bool
 
    .. Docstring generated from Julia source
 
    Tell whether a task has exited.
 
-.. function:: istaskstarted(task) -> Bool
+.. function:: istaskstarted(task) [::] Bool
 
    .. Docstring generated from Julia source
 
@@ -143,13 +143,13 @@ Tasks
 General Parallel Computing Support
 ----------------------------------
 
-.. function:: addprocs(np::Integer; restrict=true, kwargs...) -> List of process identifiers
+.. function:: addprocs(np::Integer; restrict=true, kwargs...) --> List of process identifiers
 
    .. Docstring generated from Julia source
 
    Launches workers using the in-built ``LocalManager`` which only launches workers on the local host. This can be used to take advantage of multiple cores. ``addprocs(4)`` will add 4 processes on the local machine. If ``restrict`` is ``true``\ , binding is restricted to ``127.0.0.1``\ .
 
-.. function:: addprocs(; kwargs...) -> List of process identifiers
+.. function:: addprocs(; kwargs...) --> List of process identifiers
 
    .. Docstring generated from Julia source
 
@@ -157,7 +157,7 @@ General Parallel Computing Support
 
    Note that workers do not run a ``.juliarc.jl`` startup script, nor do they synchronize their global state (such as global variables, new method definitions, and loaded modules) with any of the other running processes.
 
-.. function:: addprocs(machines; tunnel=false, sshflags=\`\`, max_parallel=10, kwargs...) -> List of process identifiers
+.. function:: addprocs(machines; tunnel=false, sshflags=\`\`, max_parallel=10, kwargs...) --> List of process identifiers
 
    .. Docstring generated from Julia source
 
@@ -189,7 +189,7 @@ General Parallel Computing Support
 
    If the master process fails to establish a connection with a newly launched worker within 60.0 seconds, the worker treats it as a fatal situation and terminates. This timeout can be controlled via environment variable ``JULIA_WORKER_TIMEOUT``\ . The value of JULIA_WORKER_TIMEOUT` on the master process specifies the number of seconds a newly launched worker waits for connection establishment.
 
-.. function:: addprocs(manager::ClusterManager; kwargs...) -> List of process identifiers
+.. function:: addprocs(manager::ClusterManager; kwargs...) [::] List of process identifiers
 
    .. Docstring generated from Julia source
 
@@ -241,7 +241,7 @@ General Parallel Computing Support
 
    Get the id of the current process.
 
-.. function:: asyncmap(f, c...) -> collection
+.. function:: asyncmap(f, c...) --> collection
 
    .. Docstring generated from Julia source
 
@@ -249,7 +249,7 @@ General Parallel Computing Support
 
    For multiple collection arguments, apply f elementwise.
 
-.. function:: pmap([::AbstractWorkerPool], f, c...; distributed=true, batch_size=1, on_error=nothing, retry_n=0, retry_max_delay=DEFAULT_RETRY_MAX_DELAY, retry_on=DEFAULT_RETRY_ON) -> collection
+.. function:: pmap([::AbstractWorkerPool], f, c...; distributed=true, batch_size=1, on_error=nothing, retry_n=0, retry_max_delay=DEFAULT_RETRY_MAX_DELAY, retry_on=DEFAULT_RETRY_ON) --> collection
 
    .. Docstring generated from Julia source
 
@@ -559,31 +559,31 @@ General Parallel Computing Support
        foo = 1
        @eval @everywhere bar=$foo
 
-.. function:: clear!(pool::CachingPool) -> pool
+.. function:: clear!(pool::CachingPool) --> pool
 
    .. Docstring generated from Julia source
 
    Removes all cached functions from all participating workers.
 
-.. function:: Base.remoteref_id(r::AbstractRemoteRef) -> (whence, id)
+.. function:: Base.remoteref_id(r::AbstractRemoteRef) --> (whence, id)
 
    .. Docstring generated from Julia source
 
    A low-level API which returns the unique identifying tuple for a remote reference. A reference id is a tuple of two elements - pid where the reference was created from and a one-up number from that node.
 
-.. function:: Base.channel_from_id(refid) -> c
+.. function:: Base.channel_from_id(refid) --> c
 
    .. Docstring generated from Julia source
 
    A low-level API which returns the backing AbstractChannel for an id returned by ``remoteref_id``\ . The call is valid only on the node where the backing channel exists.
 
-.. function:: Base.worker_id_from_socket(s::IO) -> pid
+.. function:: Base.worker_id_from_socket(s::IO) --> pid
 
    .. Docstring generated from Julia source
 
    A low-level API which given a ``IO`` connection, returns the pid of the worker it is connected to. This is useful when writing custom ``serialize`` methods for a type, which optimizes the data written out depending on the receiving process id.
 
-.. function:: Base.cluster_cookie([cookie]) -> cookie
+.. function:: Base.cluster_cookie([cookie]) --> cookie
 
    .. Docstring generated from Julia source
 

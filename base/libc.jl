@@ -294,14 +294,14 @@ multiple `libc` libraries exist on the system.
 free(p::Ptr) = ccall(:free, Void, (Ptr{Void},), p)
 
 """
-    malloc(size::Integer) -> Ptr{Void}
+    malloc(size::Integer) [::] Ptr{Void}
 
 Call `malloc` from the C standard library.
 """
 malloc(size::Integer) = ccall(:malloc, Ptr{Void}, (Csize_t,), size)
 
 """
-    realloc(addr::Ptr, size::Integer) -> Ptr{Void}
+    realloc(addr::Ptr, size::Integer) [::] Ptr{Void}
 
 Call `realloc` from the C standard library.
 
@@ -311,7 +311,7 @@ obtained from `malloc`.
 realloc(p::Ptr, size::Integer) = ccall(:realloc, Ptr{Void}, (Ptr{Void}, Csize_t), p, size)
 
 """
-    calloc(num::Integer, size::Integer) -> Ptr{Void}
+    calloc(num::Integer, size::Integer) [::] Ptr{Void}
 
 Call `calloc` from the C standard library.
 """

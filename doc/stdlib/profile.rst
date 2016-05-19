@@ -44,19 +44,19 @@ The methods in :mod:`Base.Profile` are not exported and need to be called e.g. a
 
    Configure the ``delay`` between backtraces (measured in seconds), and the number ``n`` of instruction pointers that may be stored. Each instruction pointer corresponds to a single line of code; backtraces generally consist of a long list of instruction pointers. Default settings can be obtained by calling this function with no arguments, and each can be set independently using keywords or in the order ``(n, delay)``\ .
 
-.. function:: fetch() -> data
+.. function:: fetch() --> data
 
    .. Docstring generated from Julia source
 
    Returns a reference to the internal buffer of backtraces. Note that subsequent operations, like :func:`clear`\ , can affect ``data`` unless you first make a copy. Note that the values in ``data`` have meaning only on this machine in the current session, because it depends on the exact memory addresses used in JIT-compiling. This function is primarily for internal use; :func:`retrieve` may be a better choice for most users.
 
-.. function:: retrieve() -> data, lidict
+.. function:: retrieve() --> (data, lidict)
 
    .. Docstring generated from Julia source
 
    "Exports" profiling results in a portable format, returning the set of all backtraces (``data``\ ) and a dictionary that maps the (session-specific) instruction pointers in ``data`` to ``LineInfo`` values that store the file name, function name, and line number. This function allows you to save profiling results for future analysis.
 
-.. function:: callers(funcname, [data, lidict], [filename=<filename>], [linerange=<start:stop>]) -> Vector{Tuple{count, lineinfo}}
+.. function:: callers(funcname, [data, lidict], [filename=<filename>], [linerange=<start:stop>]) [::] Vector{Tuple{count, lineinfo}}
 
    .. Docstring generated from Julia source
 

@@ -84,7 +84,7 @@ SLOT_RULE['s'] = Millisecond
 duplicates(slots) = any(map(x->count(y->x.parser==y.parser,slots),slots) .> 1)
 
 """
-    DateFormat(format::AbstractString, locale::AbstractString="english") -> DateFormat
+    DateFormat(format::AbstractString, locale::AbstractString="english") [::] DateFormat
 
 Construct a date formatting object that can be used for parsing date strings or
 formatting a date object as a string. For details on the syntax for `format` see
@@ -228,7 +228,7 @@ const ISODateFormat = DateFormat("yyyy-mm-dd")
 const RFC1123Format = DateFormat("e, dd u yyyy HH:MM:SS")
 
 """
-    DateTime(dt::AbstractString, format::AbstractString; locale="english") -> DateTime
+    DateTime(dt::AbstractString, format::AbstractString; locale="english") [::] DateTime
 
 Construct a `DateTime` by parsing the `dt` date string following the pattern given in
 the `format` string. The following character codes can be used to construct the `format`
@@ -258,7 +258,7 @@ backslash. The date "1995y01m" would have the format "y\\ym\\m".
 DateTime(dt::AbstractString,format::AbstractString;locale::AbstractString="english") = DateTime(dt,DateFormat(format,locale))
 
 """
-    DateTime(dt::AbstractString, df::DateFormat) -> DateTime
+    DateTime(dt::AbstractString, df::DateFormat) [::] DateTime
 
 Construct a `DateTime` by parsing the `dt` date string following the pattern given in
 the [`DateFormat`](:func:`Dates.DateFormat`) object. Similar to
@@ -268,7 +268,7 @@ similarly formatted date strings with a pre-created `DateFormat` object.
 DateTime(dt::AbstractString,df::DateFormat=ISODateTimeFormat) = DateTime(parse(dt,df)...)
 
 """
-    Date(dt::AbstractString, format::AbstractString; locale="english") -> Date
+    Date(dt::AbstractString, format::AbstractString; locale="english") [::] Date
 
 Construct a `Date` object by parsing a `dt` date string following the pattern given in the
 `format` string. Follows the same conventions as
@@ -277,7 +277,7 @@ Construct a `Date` object by parsing a `dt` date string following the pattern gi
 Date(dt::AbstractString,format::AbstractString;locale::AbstractString="english") = Date(dt,DateFormat(format,locale))
 
 """
-    Date(dt::AbstractString, df::DateFormat) -> Date
+    Date(dt::AbstractString, df::DateFormat) [::] Date
 
 Parse a date from a date string `dt` using a `DateFormat` object `df`.
 """
@@ -285,7 +285,7 @@ Date(dt::AbstractString,df::DateFormat=ISODateFormat) = Date(parse(dt,df)...)
 
 
 """
-    format(dt::TimeType, format::AbstractString; locale="english") -> AbstractString
+    format(dt::TimeType, format::AbstractString; locale="english") [::] AbstractString
 
 Construct a string by using a `TimeType` object and applying the provided `format`. The
 following character codes can be used to construct the `format` string:

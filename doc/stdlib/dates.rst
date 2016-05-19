@@ -65,25 +65,25 @@ to use all other ``Dates`` functions, you'll need to prefix each function call w
 Alternatively, you can write ``using Base.Dates`` to bring all exported functions into ``Main`` to be used without the ``Dates.`` prefix.
 
 
-.. function:: DateTime(y, [m, d, h, mi, s, ms]) -> DateTime
+.. function:: DateTime(y, [m, d, h, mi, s, ms]) [::] DateTime
 
    .. Docstring generated from Julia source
 
    Construct a ``DateTime`` type by parts. Arguments must be convertible to ``Int64``\ .
 
-.. function:: DateTime(periods::Period...) -> DateTime
+.. function:: DateTime(periods::Period...) [::] DateTime
 
    .. Docstring generated from Julia source
 
    Construct a ``DateTime`` type by ``Period`` type parts. Arguments may be in any order. DateTime parts not provided will default to the value of ``Dates.default(period)``\ .
 
-.. function:: DateTime(f::Function, y[, m, d, h, mi, s]; step=Day(1), negate=false, limit=10000) -> DateTime
+.. function:: DateTime(f::Function, y[, m, d, h, mi, s]; step=Day(1), negate=false, limit=10000) [::] DateTime
 
    .. Docstring generated from Julia source
 
    Create a ``DateTime`` through the adjuster API. The starting point will be constructed from the provided ``y, m, d...`` arguments, and will be adjusted until ``f::Function`` returns ``true``\ . The step size in adjusting can be provided manually through the ``step`` keyword. If ``negate=true``\ , then the adjusting will stop when ``f::Function`` returns ``false`` instead of ``true``\ . ``limit`` provides a limit to the max number of iterations the adjustment API will pursue before throwing an error (in the case that ``f::Function`` is never satisfied).
 
-.. function:: DateTime(dt::Date) -> DateTime
+.. function:: DateTime(dt::Date) [::] DateTime
 
    .. Docstring generated from Julia source
 
@@ -91,7 +91,7 @@ Alternatively, you can write ``using Base.Dates`` to bring all exported function
 
 .. _man-date-parsing:
 
-.. function:: DateTime(dt::AbstractString, format::AbstractString; locale="english") -> DateTime
+.. function:: DateTime(dt::AbstractString, format::AbstractString; locale="english") [::] DateTime
 
    .. Docstring generated from Julia source
 
@@ -131,7 +131,7 @@ Alternatively, you can write ``using Base.Dates`` to bring all exported function
 
 .. _man-date-formatting:
 
-.. function:: format(dt::TimeType, format::AbstractString; locale="english") -> AbstractString
+.. function:: format(dt::TimeType, format::AbstractString; locale="english") [::] AbstractString
 
    .. Docstring generated from Julia source
 
@@ -169,68 +169,68 @@ Alternatively, you can write ``using Base.Dates`` to bring all exported function
 
    When creating a ``format`` you can use any non-code characters as a separator. For example to generate the string "1996-01-15T00:00:00" you could use ``format``\ : "yyyy-mm-ddTHH:MM:SS". Note that if you need to use a code character as a literal you can use the escape character backslash. The string "1996y01m" can be produced with the format "yyyy\\ymm\\m".
 
-.. function:: DateFormat(format::AbstractString, locale::AbstractString="english") -> DateFormat
+.. function:: DateFormat(format::AbstractString, locale::AbstractString="english") [::] DateFormat
 
    .. Docstring generated from Julia source
 
    Construct a date formatting object that can be used for parsing date strings or formatting a date object as a string. For details on the syntax for ``format`` see :ref:`parsing <man-date-parsing>` and :ref:`formatting <man-date-formatting>`\ .
 
-.. function:: DateTime(dt::AbstractString, df::DateFormat) -> DateTime
+.. function:: DateTime(dt::AbstractString, df::DateFormat) [::] DateTime
 
    .. Docstring generated from Julia source
 
    Construct a ``DateTime`` by parsing the ``dt`` date string following the pattern given in the :func:`Dates.DateFormat` object. Similar to ``DateTime(::AbstractString, ::AbstractString)`` but more efficient when repeatedly parsing similarly formatted date strings with a pre-created ``DateFormat`` object.
 
-.. function:: Date(y, [m, d]) -> Date
+.. function:: Date(y, [m, d]) [::] Date
 
    .. Docstring generated from Julia source
 
    Construct a ``Date`` type by parts. Arguments must be convertible to ``Int64``\ .
 
-.. function:: Date(period::Period...) -> Date
+.. function:: Date(period::Period...) [::] Date
 
    .. Docstring generated from Julia source
 
    Construct a ``Date`` type by ``Period`` type parts. Arguments may be in any order. ``Date`` parts not provided will default to the value of ``Dates.default(period)``\ .
 
-.. function:: Date(f::Function, y[, m, d]; step=Day(1), negate=false, limit=10000) -> Date
+.. function:: Date(f::Function, y[, m, d]; step=Day(1), negate=false, limit=10000) [::] Date
 
    .. Docstring generated from Julia source
 
    Create a ``Date`` through the adjuster API. The starting point will be constructed from the provided ``y, m, d`` arguments, and will be adjusted until ``f::Function`` returns ``true``\ . The step size in adjusting can be provided manually through the ``step`` keyword. If ``negate=true``\ , then the adjusting will stop when ``f::Function`` returns ``false`` instead of ``true``\ . ``limit`` provides a limit to the max number of iterations the adjustment API will pursue before throwing an error (given that ``f::Function`` is never satisfied).
 
-.. function:: Date(dt::DateTime) -> Date
+.. function:: Date(dt::DateTime) [::] Date
 
    .. Docstring generated from Julia source
 
    Converts a ``DateTime`` to a ``Date``\ . The hour, minute, second, and millisecond parts of the ``DateTime`` are truncated, so only the year, month and day parts are used in construction.
 
-.. function:: Date(dt::AbstractString, format::AbstractString; locale="english") -> Date
+.. function:: Date(dt::AbstractString, format::AbstractString; locale="english") [::] Date
 
    .. Docstring generated from Julia source
 
    Construct a ``Date`` object by parsing a ``dt`` date string following the pattern given in the ``format`` string. Follows the same conventions as ``DateTime(::AbstractString, ::AbstractString)``\ .
 
-.. function:: Date(dt::AbstractString, df::DateFormat) -> Date
+.. function:: Date(dt::AbstractString, df::DateFormat) [::] Date
 
    .. Docstring generated from Julia source
 
    Parse a date from a date string ``dt`` using a ``DateFormat`` object ``df``\ .
 
-.. function:: now() -> DateTime
+.. function:: now() [::] DateTime
 
    .. Docstring generated from Julia source
 
    Returns a ``DateTime`` corresponding to the user's system time including the system timezone locale.
 
-.. function:: now(::Type{UTC}) -> DateTime
+.. function:: now(::Type{UTC}) [::] DateTime
 
    .. Docstring generated from Julia source
 
    Returns a ``DateTime`` corresponding to the user's system time as UTC/GMT.
 
-.. function:: eps(::DateTime) -> Millisecond
-              eps(::Date) -> Day
+.. function:: eps(::DateTime) [::] Millisecond
+              eps(::Date) [::] Day
 
    .. Docstring generated from Julia source
 
@@ -239,115 +239,115 @@ Alternatively, you can write ``using Base.Dates`` to bring all exported function
 Accessor Functions
 ~~~~~~~~~~~~~~~~~~
 
-.. function:: year(dt::TimeType) -> Int64
+.. function:: year(dt::TimeType) [::] Int64
 
    .. Docstring generated from Julia source
 
    The year of a ``Date`` or ``DateTime`` as an ``Int64``\ .
 
-.. function:: month(dt::TimeType) -> Int64
+.. function:: month(dt::TimeType) [::] Int64
 
    .. Docstring generated from Julia source
 
    The month of a ``Date`` or ``DateTime`` as an ``Int64``\ .
 
-.. function:: week(dt::TimeType) -> Int64
+.. function:: week(dt::TimeType) [::] Int64
 
    .. Docstring generated from Julia source
 
    Return the `ISO week date <https://en.wikipedia.org/wiki/ISO_week_date>`_ of a ``Date`` or ``DateTime`` as an ``Int64``\ . Note that the first week of a year is the week that contains the first Thursday of the year which can result in dates prior to January 4th being in the last week of the previous year. For example ``week(Date(2005,1,1))`` is the 53rd week of 2004.
 
-.. function:: day(dt::TimeType) -> Int64
+.. function:: day(dt::TimeType) [::] Int64
 
    .. Docstring generated from Julia source
 
    The day of month of a ``Date`` or ``DateTime`` as an ``Int64``\ .
 
-.. function:: hour(dt::DateTime) -> Int64
+.. function:: hour(dt::DateTime) [::] Int64
 
    .. Docstring generated from Julia source
 
    The hour of day of a ``DateTime`` as an ``Int64``\ .
 
-.. function:: minute(dt::DateTime) -> Int64
+.. function:: minute(dt::DateTime) [::] Int64
 
    .. Docstring generated from Julia source
 
    The minute of a ``DateTime`` as an ``Int64``\ .
 
-.. function:: second(dt::DateTime) -> Int64
+.. function:: second(dt::DateTime) [::] Int64
 
    .. Docstring generated from Julia source
 
    The second of a ``DateTime`` as an ``Int64``\ .
 
-.. function:: millisecond(dt::DateTime) -> Int64
+.. function:: millisecond(dt::DateTime) [::] Int64
 
    .. Docstring generated from Julia source
 
    The millisecond of a ``DateTime`` as an ``Int64``\ .
 
-.. function:: Year(dt::TimeType) -> Year
+.. function:: Year(dt::TimeType) [::] Year
 
    .. Docstring generated from Julia source
 
    The year part of a ``Date`` or ``DateTime`` as a ``Year``\ .
 
-.. function:: Month(dt::TimeType) -> Month
+.. function:: Month(dt::TimeType) [::] Month
 
    .. Docstring generated from Julia source
 
    The month part of a ``Date`` or ``DateTime`` as a ``Month``\ .
 
-.. function:: Week(dt::TimeType) -> Week
+.. function:: Week(dt::TimeType) [::] Week
 
    .. Docstring generated from Julia source
 
    The week part of a ``Date`` or ``DateTime`` as a ``Week``\ . For details see :func:`week`\ .
 
-.. function:: Day(dt::TimeType) -> Day
+.. function:: Day(dt::TimeType) [::] Day
 
    .. Docstring generated from Julia source
 
    The day part of a ``Date`` or ``DateTime`` as a ``Day``\ .
 
-.. function:: Hour(dt::DateTime) -> Hour
+.. function:: Hour(dt::DateTime) [::] Hour
 
    .. Docstring generated from Julia source
 
    The hour part of a ``DateTime`` as a ``Hour``\ .
 
-.. function:: Minute(dt::DateTime) -> Minute
+.. function:: Minute(dt::DateTime) [::] Minute
 
    .. Docstring generated from Julia source
 
    The minute part of a ``DateTime`` as a ``Minute``\ .
 
-.. function:: Second(dt::DateTime) -> Second
+.. function:: Second(dt::DateTime) [::] Second
 
    .. Docstring generated from Julia source
 
    The second part of a ``DateTime`` as a ``Second``\ .
 
-.. function:: Millisecond(dt::DateTime) -> Millisecond
+.. function:: Millisecond(dt::DateTime) [::] Millisecond
 
    .. Docstring generated from Julia source
 
    The millisecond part of a ``DateTime`` as a ``Millisecond``\ .
 
-.. function:: yearmonth(dt::TimeType) -> (Int64, Int64)
+.. function:: yearmonth(dt::TimeType) [::] {Int64, Int64}
 
    .. Docstring generated from Julia source
 
    Simultaneously return the year and month parts of a ``Date`` or ``DateTime``\ .
 
-.. function:: monthday(dt::TimeType) -> (Int64, Int64)
+.. function:: monthday(dt::TimeType) [::] {Int64, Int64}
 
    .. Docstring generated from Julia source
 
    Simultaneously return the month and day parts of a ``Date`` or ``DateTime``\ .
 
-.. function:: yearmonthday(dt::TimeType) -> (Int64, Int64, Int64)
+.. function:: yearmonthday(dt::TimeType) [::] {Int64, Int64, Int64}
 
    .. Docstring generated from Julia source
 
@@ -356,85 +356,85 @@ Accessor Functions
 Query Functions
 ~~~~~~~~~~~~~~~
 
-.. function:: dayname(dt::TimeType; locale="english") -> AbstractString
+.. function:: dayname(dt::TimeType; locale="english") [::] AbstractString
 
    .. Docstring generated from Julia source
 
    Return the full day name corresponding to the day of the week of the ``Date`` or ``DateTime`` in the given ``locale``\ .
 
-.. function:: dayabbr(dt::TimeType; locale="english") -> AbstractString
+.. function:: dayabbr(dt::TimeType; locale="english") [::] AbstractString
 
    .. Docstring generated from Julia source
 
    Return the abbreviated name corresponding to the day of the week of the ``Date`` or ``DateTime`` in the given ``locale``\ .
 
-.. function:: dayofweek(dt::TimeType) -> Int64
+.. function:: dayofweek(dt::TimeType) [::] Int64
 
    .. Docstring generated from Julia source
 
    Returns the day of the week as an ``Int64`` with ``1 = Monday, 2 = Tuesday, etc.``\ .
 
-.. function:: dayofmonth(dt::TimeType) -> Int64
+.. function:: dayofmonth(dt::TimeType) [::] Int64
 
    .. Docstring generated from Julia source
 
    The day of month of a ``Date`` or ``DateTime`` as an ``Int64``\ .
 
-.. function:: dayofweekofmonth(dt::TimeType) -> Int
+.. function:: dayofweekofmonth(dt::TimeType) [::] Int
 
    .. Docstring generated from Julia source
 
    For the day of week of ``dt``\ , returns which number it is in ``dt``\ 's month. So if the day of the week of ``dt`` is Monday, then ``1 = First Monday of the month, 2 = Second Monday of the month, etc.`` In the range 1:5.
 
-.. function:: daysofweekinmonth(dt::TimeType) -> Int
+.. function:: daysofweekinmonth(dt::TimeType) [::] Int
 
    .. Docstring generated from Julia source
 
    For the day of week of ``dt``\ , returns the total number of that day of the week in ``dt``\ 's month. Returns 4 or 5. Useful in temporal expressions for specifying the last day of a week in a month by including ``dayofweekofmonth(dt) == daysofweekinmonth(dt)`` in the adjuster function.
 
-.. function:: monthname(dt::TimeType; locale="english") -> AbstractString
+.. function:: monthname(dt::TimeType; locale="english") [::] AbstractString
 
    .. Docstring generated from Julia source
 
    Return the full name of the month of the ``Date`` or ``DateTime`` in the given ``locale``\ .
 
-.. function:: monthabbr(dt::TimeType; locale="english") -> AbstractString
+.. function:: monthabbr(dt::TimeType; locale="english") [::] AbstractString
 
    .. Docstring generated from Julia source
 
    Return the abbreviated month name of the ``Date`` or ``DateTime`` in the given ``locale``\ .
 
-.. function:: daysinmonth(dt::TimeType) -> Int
+.. function:: daysinmonth(dt::TimeType) [::] Int
 
    .. Docstring generated from Julia source
 
    Returns the number of days in the month of ``dt``\ . Value will be 28, 29, 30, or 31.
 
-.. function:: isleapyear(dt::TimeType) -> Bool
+.. function:: isleapyear(dt::TimeType) [::] Bool
 
    .. Docstring generated from Julia source
 
    Returns ``true`` if the year of ``dt`` is a leap year.
 
-.. function:: dayofyear(dt::TimeType) -> Int
+.. function:: dayofyear(dt::TimeType) [::] Int
 
    .. Docstring generated from Julia source
 
    Returns the day of the year for ``dt`` with January 1st being day 1.
 
-.. function:: daysinyear(dt::TimeType) -> Int
+.. function:: daysinyear(dt::TimeType) [::] Int
 
    .. Docstring generated from Julia source
 
    Returns 366 if the year of ``dt`` is a leap year, otherwise returns 365.
 
-.. function:: quarterofyear(dt::TimeType) -> Int
+.. function:: quarterofyear(dt::TimeType) [::] Int
 
    .. Docstring generated from Julia source
 
    Returns the quarter that ``dt`` resides in. Range of value is 1:4.
 
-.. function:: dayofquarter(dt::TimeType) -> Int
+.. function:: dayofquarter(dt::TimeType) [::] Int
 
    .. Docstring generated from Julia source
 
@@ -443,97 +443,97 @@ Query Functions
 Adjuster Functions
 ~~~~~~~~~~~~~~~~~~
 
-.. function:: trunc(dt::TimeType, ::Type{Period}) -> TimeType
+.. function:: trunc(dt::TimeType, ::Type{Period}) [::] TimeType
 
    .. Docstring generated from Julia source
 
    Truncates the value of ``dt`` according to the provided ``Period`` type. E.g. if ``dt`` is ``1996-01-01T12:30:00``\ , then ``trunc(dt,Day) == 1996-01-01T00:00:00``\ .
 
-.. function:: firstdayofweek(dt::TimeType) -> TimeType
+.. function:: firstdayofweek(dt::TimeType) [::] TimeType
 
    .. Docstring generated from Julia source
 
    Adjusts ``dt`` to the Monday of its week.
 
-.. function:: lastdayofweek(dt::TimeType) -> TimeType
+.. function:: lastdayofweek(dt::TimeType) [::] TimeType
 
    .. Docstring generated from Julia source
 
    Adjusts ``dt`` to the Sunday of its week.
 
-.. function:: firstdayofmonth(dt::TimeType) -> TimeType
+.. function:: firstdayofmonth(dt::TimeType) [::] TimeType
 
    .. Docstring generated from Julia source
 
    Adjusts ``dt`` to the first day of its month.
 
-.. function:: lastdayofmonth(dt::TimeType) -> TimeType
+.. function:: lastdayofmonth(dt::TimeType) [::] TimeType
 
    .. Docstring generated from Julia source
 
    Adjusts ``dt`` to the last day of its month.
 
-.. function:: firstdayofyear(dt::TimeType) -> TimeType
+.. function:: firstdayofyear(dt::TimeType) [::] TimeType
 
    .. Docstring generated from Julia source
 
    Adjusts ``dt`` to the first day of its year.
 
-.. function:: lastdayofyear(dt::TimeType) -> TimeType
+.. function:: lastdayofyear(dt::TimeType) [::] TimeType
 
    .. Docstring generated from Julia source
 
    Adjusts ``dt`` to the last day of its year.
 
-.. function:: firstdayofquarter(dt::TimeType) -> TimeType
+.. function:: firstdayofquarter(dt::TimeType) [::] TimeType
 
    .. Docstring generated from Julia source
 
    Adjusts ``dt`` to the first day of its quarter.
 
-.. function:: lastdayofquarter(dt::TimeType) -> TimeType
+.. function:: lastdayofquarter(dt::TimeType) [::] TimeType
 
    .. Docstring generated from Julia source
 
    Adjusts ``dt`` to the last day of its quarter.
 
-.. function:: tonext(dt::TimeType,dow::Int;same::Bool=false) -> TimeType
+.. function:: tonext(dt::TimeType,dow::Int;same::Bool=false) [::] TimeType
 
    .. Docstring generated from Julia source
 
    Adjusts ``dt`` to the next day of week corresponding to ``dow`` with ``1 = Monday, 2 = Tuesday, etc``\ . Setting ``same=true`` allows the current ``dt`` to be considered as the next ``dow``\ , allowing for no adjustment to occur.
 
-.. function:: toprev(dt::TimeType,dow::Int;same::Bool=false) -> TimeType
+.. function:: toprev(dt::TimeType,dow::Int;same::Bool=false) [::] TimeType
 
    .. Docstring generated from Julia source
 
    Adjusts ``dt`` to the previous day of week corresponding to ``dow`` with ``1 = Monday, 2 = Tuesday, etc``\ . Setting ``same=true`` allows the current ``dt`` to be considered as the previous ``dow``\ , allowing for no adjustment to occur.
 
-.. function:: tofirst(dt::TimeType,dow::Int;of=Month) -> TimeType
+.. function:: tofirst(dt::TimeType,dow::Int;of=Month) [::] TimeType
 
    .. Docstring generated from Julia source
 
    Adjusts ``dt`` to the first ``dow`` of its month. Alternatively, ``of=Year`` will adjust to the first ``dow`` of the year.
 
-.. function:: tolast(dt::TimeType,dow::Int;of=Month) -> TimeType
+.. function:: tolast(dt::TimeType,dow::Int;of=Month) [::] TimeType
 
    .. Docstring generated from Julia source
 
    Adjusts ``dt`` to the last ``dow`` of its month. Alternatively, ``of=Year`` will adjust to the last ``dow`` of the year.
 
-.. function:: tonext(func::Function,dt::TimeType;step=Day(1),negate=false,limit=10000,same=false) -> TimeType
+.. function:: tonext(func::Function,dt::TimeType;step=Day(1),negate=false,limit=10000,same=false) [::] TimeType
 
    .. Docstring generated from Julia source
 
    Adjusts ``dt`` by iterating at most ``limit`` iterations by ``step`` increments until ``func`` returns ``true``\ . ``func`` must take a single ``TimeType`` argument and return a ``Bool``\ . ``same`` allows ``dt`` to be considered in satisfying ``func``\ . ``negate`` will make the adjustment process terminate when ``func`` returns ``false`` instead of ``true``\ .
 
-.. function:: toprev(func::Function,dt::TimeType;step=Day(-1),negate=false,limit=10000,same=false) -> TimeType
+.. function:: toprev(func::Function,dt::TimeType;step=Day(-1),negate=false,limit=10000,same=false) [::] TimeType
 
    .. Docstring generated from Julia source
 
    Adjusts ``dt`` by iterating at most ``limit`` iterations by ``step`` increments until ``func`` returns ``true``\ . ``func`` must take a single ``TimeType`` argument and return a ``Bool``\ . ``same`` allows ``dt`` to be considered in satisfying ``func``\ . ``negate`` will make the adjustment process terminate when ``func`` returns ``false`` instead of ``true``\ .
 
-.. function:: recur{T<:TimeType}(func::Function,dr::StepRange{T};negate=false,limit=10000) -> Vector{T}
+.. function:: recur{T<:TimeType}(func::Function,dr::StepRange{T};negate=false,limit=10000) [::] Vector{T}
 
    .. Docstring generated from Julia source
 
@@ -555,7 +555,7 @@ Periods
 
    Construct a ``Period`` type with the given ``v`` value. Input must be losslessly convertible to an ``Int64``\ .
 
-.. function:: CompoundPeriod(periods) -> CompoundPeriod
+.. function:: CompoundPeriod(periods) [::] CompoundPeriod
 
    .. Docstring generated from Julia source
 
@@ -583,7 +583,7 @@ Periods
        julia> Dates.CompoundPeriod(Dates.Minute(50000)))
        4 weeks, 6 days, 17 hours, 20 minutes
 
-.. function:: default(p::Period) -> Period
+.. function:: default(p::Period) [::] Period
 
    .. Docstring generated from Julia source
 
@@ -689,43 +689,43 @@ The following functions are not exported:
 Conversion Functions
 ~~~~~~~~~~~~~~~~~~~~
 
-.. function:: today() -> Date
+.. function:: today() [::] Date
 
    .. Docstring generated from Julia source
 
    Returns the date portion of ``now()``\ .
 
-.. function:: unix2datetime(x) -> DateTime
+.. function:: unix2datetime(x) [::] DateTime
 
    .. Docstring generated from Julia source
 
    Takes the number of seconds since unix epoch ``1970-01-01T00:00:00`` and converts to the corresponding ``DateTime``\ .
 
-.. function:: datetime2unix(dt::DateTime) -> Float64
+.. function:: datetime2unix(dt::DateTime) [::] Float64
 
    .. Docstring generated from Julia source
 
    Takes the given ``DateTime`` and returns the number of seconds since the unix epoch ``1970-01-01T00:00:00`` as a ``Float64``\ .
 
-.. function:: julian2datetime(julian_days) -> DateTime
+.. function:: julian2datetime(julian_days) [::] DateTime
 
    .. Docstring generated from Julia source
 
    Takes the number of Julian calendar days since epoch ``-4713-11-24T12:00:00`` and returns the corresponding ``DateTime``\ .
 
-.. function:: datetime2julian(dt::DateTime) -> Float64
+.. function:: datetime2julian(dt::DateTime) [::] Float64
 
    .. Docstring generated from Julia source
 
    Takes the given ``DateTime`` and returns the number of Julian calendar days since the julian epoch ``-4713-11-24T12:00:00`` as a ``Float64``\ .
 
-.. function:: rata2datetime(days) -> DateTime
+.. function:: rata2datetime(days) [::] DateTime
 
    .. Docstring generated from Julia source
 
    Takes the number of Rata Die days since epoch ``0000-12-31T00:00:00`` and returns the corresponding ``DateTime``\ .
 
-.. function:: datetime2rata(dt::TimeType) -> Int64
+.. function:: datetime2rata(dt::TimeType) [::] Int64
 
    .. Docstring generated from Julia source
 

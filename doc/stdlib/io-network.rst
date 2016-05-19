@@ -25,13 +25,13 @@ General I/O
 
    Global variable referring to the standard input stream.
 
-.. function:: open(filename, [read, write, create, truncate, append]) -> IOStream
+.. function:: open(filename, [read, write, create, truncate, append]) [::] IOStream
 
    .. Docstring generated from Julia source
 
    Open a file in a mode specified by five boolean arguments. The default is to open files for reading only. Returns a stream for accessing the file.
 
-.. function:: open(filename, [mode]) -> IOStream
+.. function:: open(filename, [mode]) [::] IOStream
 
    .. Docstring generated from Julia source
 
@@ -73,7 +73,7 @@ General I/O
 
    **Example**: ``open(readstring, "file.txt")``
 
-.. function:: IOBuffer() -> IOBuffer
+.. function:: IOBuffer() [::] IOBuffer
 
    .. Docstring generated from Julia source
 
@@ -109,7 +109,7 @@ General I/O
 
    Obtain the contents of an ``IOBuffer`` as a string, without copying. Afterwards, the IOBuffer is reset to its initial state.
 
-.. function:: fdio([name::AbstractString, ]fd::Integer[, own::Bool]) -> IOStream
+.. function:: fdio([name::AbstractString, ]fd::Integer[, own::Bool]) [::] IOStream
 
    .. Docstring generated from Julia source
 
@@ -260,31 +260,31 @@ General I/O
 
    See also :func:`mark`\ , :func:`unmark`\ , :func:`reset`\ .
 
-.. function:: eof(stream) -> Bool
+.. function:: eof(stream) [::] Bool
 
    .. Docstring generated from Julia source
 
    Tests whether an I/O stream is at end-of-file. If the stream is not yet exhausted, this function will block to wait for more data if necessary, and then return ``false``\ . Therefore it is always safe to read one byte after seeing ``eof`` return ``false``\ . ``eof`` will return ``false`` as long as buffered data is still available, even if the remote end of a connection is closed.
 
-.. function:: isreadonly(stream) -> Bool
+.. function:: isreadonly(stream) [::] Bool
 
    .. Docstring generated from Julia source
 
    Determine whether a stream is read-only.
 
-.. function:: iswritable(io) -> Bool
+.. function:: iswritable(io) [::] Bool
 
    .. Docstring generated from Julia source
 
    Returns ``true`` if the specified IO object is writable (if that can be determined).
 
-.. function:: isreadable(io) -> Bool
+.. function:: isreadable(io) [::] Bool
 
    .. Docstring generated from Julia source
 
    Returns ``true`` if the specified IO object is readable (if that can be determined).
 
-.. function:: isopen(object) -> Bool
+.. function:: isopen(object) [::] Bool
 
    .. Docstring generated from Julia source
 
@@ -663,11 +663,11 @@ Text I/O
 
    Decodes the base64-encoded ``string`` and returns a ``Vector{UInt8}`` of the decoded bytes.
 
-.. function:: displaysize(io) -> (lines, columns)
+.. function:: displaysize(io) --> (lines, columns)
 
    .. Docstring generated from Julia source
 
-   Return the nominal size of the screen that may be used for rendering output to this io object
+   Return the nominal size of the screen that may be used for rendering output to this ``io`` object.
 
 Multimedia I/O
 --------------
@@ -710,8 +710,8 @@ Julia environments (such as the IPython-based IJulia notebook).
 
    By default, the ``redisplay`` functions simply call ``display``\ . However, some display backends may override ``redisplay`` to modify an existing display of ``x`` (if any). Using ``redisplay`` is also a hint to the backend that ``x`` may be redisplayed several times, and the backend may choose to defer the display until (for example) the next interactive prompt.
 
-.. function:: displayable(mime) -> Bool
-              displayable(d::Display, mime) -> Bool
+.. function:: displayable(mime) [::] Bool
+              displayable(d::Display, mime) [::] Bool
 
    .. Docstring generated from Julia source
 
@@ -876,25 +876,25 @@ Memory-mapped I/O
 Network I/O
 -----------
 
-.. function:: connect([host],port) -> TCPSocket
+.. function:: connect([host],port) [::] TCPSocket
 
    .. Docstring generated from Julia source
 
    Connect to the host ``host`` on port ``port``\ .
 
-.. function:: connect(path) -> PipeEndpoint
+.. function:: connect(path) [::] PipeEndpoint
 
    .. Docstring generated from Julia source
 
    Connect to the named pipe / UNIX domain socket at ``path``\ .
 
-.. function:: listen([addr,]port) -> TCPServer
+.. function:: listen([addr,]port) [::] TCPServer
 
    .. Docstring generated from Julia source
 
    Listen on port on the address specified by ``addr``\ . By default this listens on localhost only. To listen on all interfaces pass ``IPv4(0)`` or ``IPv6(0)`` as appropriate.
 
-.. function:: listen(path) -> PipeServer
+.. function:: listen(path) [::] PipeServer
 
    .. Docstring generated from Julia source
 
@@ -906,19 +906,19 @@ Network I/O
 
    Gets the IP address of the ``host`` (may have to do a DNS lookup)
 
-.. function:: getsockname(sock::Union{TCPServer, TCPSocket}) -> (IPAddr,UInt16)
+.. function:: getsockname(sock::Union{TCPServer, TCPSocket}) [::] {IPAddr, UInt16}
 
    .. Docstring generated from Julia source
 
    Get the IP address and the port that the given TCP socket is connected to (or bound to, in the case of TCPServer).
 
-.. function:: IPv4(host::Integer) -> IPv4
+.. function:: IPv4(host::Integer) [::] IPv4
 
    .. Docstring generated from Julia source
 
    Returns IPv4 object from ip address formatted as Integer.
 
-.. function:: IPv6(host::Integer) -> IPv6
+.. function:: IPv6(host::Integer) [::] IPv6
 
    .. Docstring generated from Julia source
 
@@ -936,7 +936,7 @@ Network I/O
 
    Accepts a connection on the given server and returns a connection to the client. An uninitialized client stream may be provided, in which case it will be used instead of creating a new stream.
 
-.. function:: listenany(port_hint) -> (UInt16,TCPServer)
+.. function:: listenany(port_hint) [::] {UInt16, TCPServer}
 
    .. Docstring generated from Julia source
 
@@ -952,7 +952,7 @@ Network I/O
 
    The returned value is an object with boolean fields ``readable``\ , ``writable``\ , and ``timedout``\ , giving the result of the polling.
 
-.. function:: poll_file(path, interval_s::Real, timeout_s::Real) -> (previous::StatStruct, current::StatStruct)
+.. function:: poll_file(path, interval_s::Real, timeout_s::Real) [::] {StatStruct, StatStruct} --> (previous, current)
 
    .. Docstring generated from Julia source
 
@@ -990,7 +990,7 @@ Network I/O
 
    Read a UDP packet from the specified socket, and return the bytes received. This call blocks.
 
-.. function:: recvfrom(socket::UDPSocket) -> (address, data)
+.. function:: recvfrom(socket::UDPSocket) --> (address, data)
 
    .. Docstring generated from Julia source
 

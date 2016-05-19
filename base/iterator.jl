@@ -163,7 +163,7 @@ iteratorsize{I,S}(::Type{Rest{I,S}}) = rest_iteratorsize(iteratorsize(I))
 
 
 """
-    head_and_tail(c, n) -> head, tail
+    head_and_tail(c, n) --> (head, tail)
 
 Returns `head`: the first `n` elements of `c`;
 and `tail`: an iterator over the remaining elements.
@@ -481,7 +481,7 @@ end
 
 
 """
-    partition(collection, n) -> iterator
+    partition(collection, n) --> iterator
 
 Iterate over a collection `n` elements at a time.
 

@@ -10,14 +10,14 @@ end
 Schur{Ty}(T::AbstractMatrix{Ty}, Z::AbstractMatrix{Ty}, values::Vector) = Schur{Ty, typeof(T)}(T, Z, values)
 
 """
-    schurfact!(A::StridedMatrix) -> F::Schur
+    schurfact!(A::StridedMatrix) [::] Schur --> F
 
 Same as `schurfact` but uses the input argument as workspace.
 """
 schurfact!{T<:BlasFloat}(A::StridedMatrix{T}) = Schur(LinAlg.LAPACK.gees!('V', A)...)
 
 """
-    schurfact(A::StridedMatrix) -> F::Schur
+    schurfact(A::StridedMatrix) [::] Schur --> F
 
 Computes the Schur factorization of the matrix `A`. The (quasi) triangular Schur factor can
 be obtained from the `Schur` object `F` with either `F[:Schur]` or `F[:T]` and the
@@ -43,7 +43,7 @@ function getindex(F::Schur, d::Symbol)
 end
 
 """
-    schur(A::StridedMatrix) -> T::Matrix, Z::Matrix, λ::Vector
+    schur(A::StridedMatrix) [::] {Matrix, Matrix, Vector} --> (T, Z, λ)
 
 Computes the Schur factorization of the matrix `A`. The methods return the (quasi)
 triangular Schur factor `T` and the orthogonal/unitary Schur vectors `Z` such that
@@ -57,7 +57,7 @@ function schur(A::StridedMatrix)
 end
 
 """
-    ordschur!(F::Schur, select::Union{Vector{Bool},BitVector}) -> F::Schur
+    ordschur!(F::Schur, select::Union{Vector{Bool},BitVector}) [::] Schur --> F
 
 Same as `ordschur` but overwrites the factorization `F`.
 """
@@ -68,7 +68,7 @@ function ordschur!{Ty<:BlasFloat}(schur::Schur{Ty}, select::Union{Vector{Bool},B
 end
 
 """
-    ordschur(F::Schur, select::Union{Vector{Bool},BitVector}) -> F::Schur
+    ordschur(F::Schur, select::Union{Vector{Bool},BitVector}) [::] Schur --> F
 
 Reorders the Schur factorization `F` of a matrix `A = Z*T*Z'` according to the logical array
 `select` returning the reordered factorization `F` object. The selected eigenvalues appear
@@ -80,14 +80,14 @@ included or both excluded via `select`.
 ordschur{Ty<:BlasFloat}(schur::Schur{Ty}, select::Union{Vector{Bool},BitVector}) = Schur(ordschur(schur.T, schur.Z, select)...)
 
 """
-    ordschur!(T::StridedMatrix, Z::StridedMatrix, select::Union{Vector{Bool},BitVector}) -> T::StridedMatrix, Z::StridedMatrix, λ::Vector
+    ordschur!(T::StridedMatrix, Z::StridedMatrix, select::Union{Vector{Bool},BitVector}) [::] {StridedMatrix, StridedMatrix, Vector} --> (T, Z, λ)
 
 Same as `ordschur` but overwrites the input arguments.
 """
 ordschur!{Ty<:BlasFloat}(T::StridedMatrix{Ty}, Z::StridedMatrix{Ty}, select::Union{Vector{Bool},BitVector}) = LinAlg.LAPACK.trsen!(convert(Vector{BlasInt}, select), T, Z)
 
 """
-    ordschur(T::StridedMatrix, Z::StridedMatrix, select::Union{Vector{Bool},BitVector}) -> T::StridedMatrix, Z::StridedMatrix, λ::Vector
+    ordschur(T::StridedMatrix, Z::StridedMatrix, select::Union{Vector{Bool},BitVector}) [::] {StridedMatrix, StridedMatrix, Vector} --> (T, Z, λ)
 
 Reorders the Schur factorization of a real matrix `A = Z*T*Z'` according to the logical
 array `select` returning the reordered matrices `T` and `Z` as well as the vector of
@@ -110,14 +110,14 @@ end
 GeneralizedSchur{Ty}(S::AbstractMatrix{Ty}, T::AbstractMatrix{Ty}, alpha::Vector, beta::Vector{Ty}, Q::AbstractMatrix{Ty}, Z::AbstractMatrix{Ty}) = GeneralizedSchur{Ty, typeof(S)}(S, T, alpha, beta, Q, Z)
 
 """
-    schurfact!(A::StridedMatrix, B::StridedMatrix) -> F::GeneralizedSchur
+    schurfact!(A::StridedMatrix, B::StridedMatrix) [::] GeneralizedSchur --> F
 
 Same as `schurfact` but uses the input matrices `A` and `B` as workspace.
 """
 schurfact!{T<:BlasFloat}(A::StridedMatrix{T}, B::StridedMatrix{T}) = GeneralizedSchur(LinAlg.LAPACK.gges!('V', 'V', A, B)...)
 
 """
-    schurfact(A::StridedMatrix, B::StridedMatrix) -> F::GeneralizedSchur
+    schurfact(A::StridedMatrix, B::StridedMatrix) [::] GeneralizedSchur --> F
 
 Computes the Generalized Schur (or QZ) factorization of the matrices `A` and `B`. The
 (quasi) triangular Schur factors can be obtained from the `Schur` object `F` with `F[:S]`
@@ -133,7 +133,7 @@ function schurfact{TA,TB}(A::StridedMatrix{TA}, B::StridedMatrix{TB})
 end
 
 """
-    ordschur!(F::GeneralizedSchur, select::Union{Vector{Bool},BitVector}) -> F::GeneralizedSchur
+    ordschur!(F::GeneralizedSchur, select::Union{Vector{Bool},BitVector}) [::] GeneralizedSchur --> F
 
 Same as `ordschur` but overwrites the factorization `F`.
 """
@@ -145,7 +145,7 @@ function ordschur!{Ty<:BlasFloat}(gschur::GeneralizedSchur{Ty}, select::Union{Ve
 end
 
 """
-    ordschur(F::GeneralizedSchur, select::Union{Vector{Bool},BitVector}) -> F::GeneralizedSchur
+    ordschur(F::GeneralizedSchur, select::Union{Vector{Bool},BitVector}) [::] GeneralizedSchur --> F
 
 Reorders the Generalized Schur factorization `F` of a matrix pair `(A, B) = (Q*S*Z', Q*T*Z')`
 according to the logical array `select` and returns a GeneralizedSchur object `F`. The
@@ -157,14 +157,14 @@ and `B` can still be obtained with `F[:alpha]./F[:beta]`.
 ordschur{Ty<:BlasFloat}(gschur::GeneralizedSchur{Ty}, select::Union{Vector{Bool},BitVector}) = GeneralizedSchur(ordschur(gschur.S, gschur.T, gschur.Q, gschur.Z, select)...)
 
 """
-    ordschur!(S::StridedMatrix, T::StridedMatrix, Q::StridedMatrix, Z::StridedMatrix, select) -> S::StridedMatrix, T::StridedMatrix, Q::StridedMatrix, Z::StridedMatrix, α::Vector, β::Vector
+    ordschur!(S::StridedMatrix, T::StridedMatrix, Q::StridedMatrix, Z::StridedMatrix, select) [::] {StridedMatrix, StridedMatrix, StridedMatrix, StridedMatrix, Vector, Vector} --> (S, T, Q, Z, α, β)
 
 Same as `ordschur` but overwrites the factorization the input arguments.
 """
 ordschur!{Ty<:BlasFloat}(S::StridedMatrix{Ty}, T::StridedMatrix{Ty}, Q::StridedMatrix{Ty}, Z::StridedMatrix{Ty}, select::Union{Vector{Bool},BitVector}) = LinAlg.LAPACK.tgsen!(convert(Vector{BlasInt}, select), S, T, Q, Z)
 
 """
-    ordschur(S::StridedMatrix, T::StridedMatrix, Q::StridedMatrix, Z::StridedMatrix, select) -> S::StridedMatrix, T::StridedMatrix, Q::StridedMatrix, Z::StridedMatrix, α::Vector, β::Vector
+    ordschur(S::StridedMatrix, T::StridedMatrix, Q::StridedMatrix, Z::StridedMatrix, select) [::] {StridedMatrix, StridedMatrix, StridedMatrix, StridedMatrix, Vector, Vector} --> (S, T, Q, Z, α, β)
 
 Reorders the Generalized Schur factorization of a matrix pair `(A, B) = (Q*S*Z', Q*T*Z')`
 according to the logical array `select` and returns the matrices `S`, `T`, `Q`, `Z` and
@@ -197,7 +197,7 @@ function getindex(F::GeneralizedSchur, d::Symbol)
 end
 
 """
-    schur(A::StridedMatrix, B::StridedMatrix) -> S::StridedMatrix, T::StridedMatrix, Q::StridedMatrix, Z::StridedMatrix, α::Vector, β::Vector
+    schur(A::StridedMatrix, B::StridedMatrix) [::] {StridedMatrix, StridedMatrix, StridedMatrix, StridedMatrix, Vector, Vector} --> (S, T, Q, Z, α, β)
 
 See `schurfact`.
 """

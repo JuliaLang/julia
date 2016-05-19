@@ -92,7 +92,7 @@
 
    Convert a string to ``String`` type and check that it contains only ASCII data, otherwise throwing an ``ArgumentError`` indicating the position of the first non-ASCII byte.
 
-.. function:: @r_str -> Regex
+.. function:: @r_str [::] Regex
 
    .. Docstring generated from Julia source
 
@@ -110,13 +110,13 @@
        julia> match(r"a+.*b+.*?d$"ism, "Goodbye,\nOh, angry,\nBad world\n")
        RegexMatch("angry,\nBad world")
 
-.. function:: @html_str -> Docs.HTML
+.. function:: @html_str [::] Docs.HTML
 
    .. Docstring generated from Julia source
 
    Create an ``HTML`` object from a literal string.
 
-.. function:: @text_str -> Docs.Text
+.. function:: @text_str [::] Docs.Text
 
    .. Docstring generated from Julia source
 
@@ -143,19 +143,19 @@
 
    For example, NFKC corresponds to the options ``compose=true, compat=true, stable=true``\ .
 
-.. function:: graphemes(s) -> iterator over substrings of s
+.. function:: graphemes(s) --> iterator over substrings of s
 
    .. Docstring generated from Julia source
 
    Returns an iterator over substrings of ``s`` that correspond to the extended graphemes in the string, as defined by Unicode UAX #29. (Roughly, these are what users would perceive as single characters, even though they may contain more than one codepoint; for example a letter combined with an accent mark is a single grapheme.)
 
-.. function:: isvalid(value) -> Bool
+.. function:: isvalid(value) [::] Bool
 
    .. Docstring generated from Julia source
 
    Returns ``true`` if the given value is valid for its type, which currently can be either ``Char`` or ``String``\ .
 
-.. function:: isvalid(T, value) -> Bool
+.. function:: isvalid(T, value) [::] Bool
 
    .. Docstring generated from Julia source
 
@@ -167,13 +167,13 @@
 
    Tells whether index ``i`` is valid for the given string.
 
-.. function:: is_assigned_char(c) -> Bool
+.. function:: is_assigned_char(c) [::] Bool
 
    .. Docstring generated from Julia source
 
    Returns ``true`` if the given char or integer is an assigned Unicode code point.
 
-.. function:: ismatch(r::Regex, s::AbstractString) -> Bool
+.. function:: ismatch(r::Regex, s::AbstractString) [::] Bool
 
    .. Docstring generated from Julia source
 
@@ -191,7 +191,7 @@
 
    Search for all matches of a the regular expression ``r`` in ``s`` and return a iterator over the matches. If overlap is ``true``\ , the matching sequences are allowed to overlap indices in the original string, otherwise they must be from distinct character ranges.
 
-.. function:: matchall(r::Regex, s::AbstractString[, overlap::Bool=false]) -> Vector{AbstractString}
+.. function:: matchall(r::Regex, s::AbstractString[, overlap::Bool=false]) [::] Vector{AbstractString}
 
    .. Docstring generated from Julia source
 
@@ -243,7 +243,7 @@
 
    Determine whether the second argument is a substring of the first.
 
-.. function:: reverse(s::AbstractString) -> AbstractString
+.. function:: reverse(s::AbstractString) [::] AbstractString
 
    .. Docstring generated from Julia source
 
@@ -387,97 +387,97 @@
 
    Gives the number of columns needed to print a string.
 
-.. function:: isalnum(c::Union{Char,AbstractString}) -> Bool
+.. function:: isalnum(c::Union{Char,AbstractString}) [::] Bool
 
    .. Docstring generated from Julia source
 
    Tests whether a character is alphanumeric, or whether this is true for all elements of a string. A character is classified as alphabetic if it belongs to the Unicode general category Letter or Number, i.e. a character whose category code begins with 'L' or 'N'.
 
-.. function:: isalpha(c::Union{Char,AbstractString}) -> Bool
+.. function:: isalpha(c::Union{Char,AbstractString}) [::] Bool
 
    .. Docstring generated from Julia source
 
    Tests whether a character is alphabetic, or whether this is true for all elements of a string. A character is classified as alphabetic if it belongs to the Unicode general category Letter, i.e. a character whose category code begins with 'L'.
 
-.. function:: isascii(c::Union{Char,AbstractString}) -> Bool
+.. function:: isascii(c::Union{Char,AbstractString}) [::] Bool
 
    .. Docstring generated from Julia source
 
    Tests whether a character belongs to the ASCII character set, or whether this is true for all elements of a string.
 
-.. function:: iscntrl(c::Union{Char,AbstractString}) -> Bool
+.. function:: iscntrl(c::Union{Char,AbstractString}) [::] Bool
 
    .. Docstring generated from Julia source
 
    Tests whether a character is a control character, or whether this is true for all elements of a string. Control characters are the non-printing characters of the Latin-1 subset of Unicode.
 
-.. function:: isdigit(c::Union{Char,AbstractString}) -> Bool
+.. function:: isdigit(c::Union{Char,AbstractString}) [::] Bool
 
    .. Docstring generated from Julia source
 
    Tests whether a character is a numeric digit (0-9), or whether this is true for all elements of a string.
 
-.. function:: isgraph(c::Union{Char,AbstractString}) -> Bool
+.. function:: isgraph(c::Union{Char,AbstractString}) [::] Bool
 
    .. Docstring generated from Julia source
 
    Tests whether a character is printable, and not a space, or whether this is true for all elements of a string. Any character that would cause a printer to use ink should be classified with ``isgraph(c)==true``\ .
 
-.. function:: islower(c::Union{Char,AbstractString}) -> Bool
+.. function:: islower(c::Union{Char,AbstractString}) [::] Bool
 
    .. Docstring generated from Julia source
 
    Tests whether a character is a lowercase letter, or whether this is true for all elements of a string. A character is classified as lowercase if it belongs to Unicode category Ll, Letter: Lowercase.
 
-.. function:: isnumber(c::Union{Char,AbstractString}) -> Bool
+.. function:: isnumber(c::Union{Char,AbstractString}) [::] Bool
 
    .. Docstring generated from Julia source
 
    Tests whether a character is numeric, or whether this is true for all elements of a string. A character is classified as numeric if it belongs to the Unicode general category Number, i.e. a character whose category code begins with 'N'.
 
-.. function:: isprint(c::Union{Char,AbstractString}) -> Bool
+.. function:: isprint(c::Union{Char,AbstractString}) [::] Bool
 
    .. Docstring generated from Julia source
 
    Tests whether a character is printable, including spaces, but not a control character. For strings, tests whether this is true for all elements of the string.
 
-.. function:: ispunct(c::Union{Char,AbstractString}) -> Bool
+.. function:: ispunct(c::Union{Char,AbstractString}) [::] Bool
 
    .. Docstring generated from Julia source
 
    Tests whether a character belongs to the Unicode general category Punctuation, i.e. a character whose category code begins with 'P'. For strings, tests whether this is true for all elements of the string.
 
-.. function:: isspace(c::Union{Char,AbstractString}) -> Bool
+.. function:: isspace(c::Union{Char,AbstractString}) [::] Bool
 
    .. Docstring generated from Julia source
 
    Tests whether a character is any whitespace character. Includes ASCII characters '\\t', '\\n', '\\v', '\\f', '\\r', and ' ', Latin-1 character U+0085, and characters in Unicode category Zs. For strings, tests whether this is true for all elements of the string.
 
-.. function:: isupper(c::Union{Char,AbstractString}) -> Bool
+.. function:: isupper(c::Union{Char,AbstractString}) [::] Bool
 
    .. Docstring generated from Julia source
 
    Tests whether a character is an uppercase letter, or whether this is true for all elements of a string. A character is classified as uppercase if it belongs to Unicode category Lu, Letter: Uppercase, or Lt, Letter: Titlecase.
 
-.. function:: isxdigit(c::Union{Char,AbstractString}) -> Bool
+.. function:: isxdigit(c::Union{Char,AbstractString}) [::] Bool
 
    .. Docstring generated from Julia source
 
    Tests whether a character is a valid hexadecimal digit, or whether this is true for all elements of a string.
 
-.. function:: Symbol(x...) -> Symbol
+.. function:: Symbol(x...) [::] Symbol
 
    .. Docstring generated from Julia source
 
    Create a ``Symbol`` by concatenating the string representations of the arguments together.
 
-.. function:: escape_string(str::AbstractString) -> AbstractString
+.. function:: escape_string(str::AbstractString) [::] AbstractString
 
    .. Docstring generated from Julia source
 
    General escaping of traditional C and Unicode escape sequences.
 
-.. function:: unescape_string(s::AbstractString) -> AbstractString
+.. function:: unescape_string(s::AbstractString) [::] AbstractString
 
    .. Docstring generated from Julia source
 

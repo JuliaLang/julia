@@ -334,8 +334,11 @@ if is_windows()
     ispty(s::IO) = false
 end
 
-"    displaysize(io) -> (lines, columns)
-Return the nominal size of the screen that may be used for rendering output to this io object"
+"""
+    displaysize(io) --> (lines, columns)
+
+Return the nominal size of the screen that may be used for rendering output to this `io` object.
+"""
 displaysize(io::IO) = displaysize()
 displaysize() = (parse(Int, get(ENV, "LINES",   "24")),
                  parse(Int, get(ENV, "COLUMNS", "80")))::Tuple{Int, Int}

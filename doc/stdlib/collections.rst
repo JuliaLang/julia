@@ -29,19 +29,19 @@ each iterable type. See the :ref:`manual section on the iteration interface
 <man-interfaces-iteration>` for more details about defining a custom iterable
 type.
 
-.. function:: start(iter) -> state
+.. function:: start(iter) --> state
 
    .. Docstring generated from Julia source
 
    Get initial iteration state for an iterable object.
 
-.. function:: done(iter, state) -> Bool
+.. function:: done(iter, state) [::] Bool
 
    .. Docstring generated from Julia source
 
    Test whether we are done iterating.
 
-.. function:: next(iter, state) -> item, state
+.. function:: next(iter, state) --> (item, state)
 
    .. Docstring generated from Julia source
 
@@ -155,7 +155,7 @@ Fully implemented by:
 General Collections
 -------------------
 
-.. function:: isempty(collection) -> Bool
+.. function:: isempty(collection) [::] Bool
 
    .. Docstring generated from Julia source
 
@@ -169,19 +169,19 @@ General Collections
        julia> isempty([1 2 3])
        false
 
-.. function:: empty!(collection) -> collection
+.. function:: empty!(collection) --> collection
 
    .. Docstring generated from Julia source
 
    Remove all elements from a ``collection``\ .
 
-.. function:: length(collection) -> Integer
+.. function:: length(collection) [::] Integer
 
    .. Docstring generated from Julia source
 
    For ordered, indexable collections, the maximum index ``i`` for which ``getindex(collection, i)`` is valid. For unordered collections, the number of elements.
 
-.. function:: endof(collection) -> Integer
+.. function:: endof(collection) [::] Integer
 
    .. Docstring generated from Julia source
 
@@ -208,11 +208,11 @@ Fully implemented by:
 Iterable Collections
 --------------------
 
-.. function:: in(item, collection) -> Bool
-              ∈(item,collection) -> Bool
-              ∋(collection,item) -> Bool
-              ∉(item,collection) -> Bool
-              ∌(collection,item) -> Bool
+.. function:: in(item, collection) [::] Bool
+              ∈(item,collection) [::] Bool
+              ∋(collection,item) [::] Bool
+              ∉(item,collection) [::] Bool
+              ∌(collection,item) [::] Bool
 
    .. Docstring generated from Julia source
 
@@ -338,61 +338,61 @@ Iterable Collections
 
    Compute the minimum value of ``A`` over the singleton dimensions of ``r``\ , and write results to ``r``\ .
 
-.. function:: extrema(itr) -> Tuple
+.. function:: extrema(itr) [::] Tuple
 
    .. Docstring generated from Julia source
 
    Compute both the minimum and maximum element in a single pass, and return them as a 2-tuple.
 
-.. function:: extrema(A,dims) -> Array{Tuple}
+.. function:: extrema(A,dims) [::] Array{Tuple}
 
    .. Docstring generated from Julia source
 
    Compute the minimum and maximum elements of an array over the given dimensions.
 
-.. function:: indmax(itr) -> Integer
+.. function:: indmax(itr) [::] Integer
 
    .. Docstring generated from Julia source
 
    Returns the index of the maximum element in a collection.
 
-.. function:: indmin(itr) -> Integer
+.. function:: indmin(itr) [::] Integer
 
    .. Docstring generated from Julia source
 
    Returns the index of the minimum element in a collection.
 
-.. function:: findmax(itr) -> (x, index)
+.. function:: findmax(itr) --> (x, index)
 
    .. Docstring generated from Julia source
 
    Returns the maximum element and its index.
 
-.. function:: findmax(A, dims) -> (maxval, index)
+.. function:: findmax(A, dims) --> (maxval, index)
 
    .. Docstring generated from Julia source
 
    For an array input, returns the value and index of the maximum over the given dimensions.
 
-.. function:: findmin(itr) -> (x, index)
+.. function:: findmin(itr) --> (x, index)
 
    .. Docstring generated from Julia source
 
    Returns the minimum element and its index.
 
-.. function:: findmin(A, dims) -> (minval, index)
+.. function:: findmin(A, dims) --> (minval, index)
 
    .. Docstring generated from Julia source
 
    For an array input, returns the value and index of the minimum over the given dimensions.
 
-.. function:: findmax!(rval, rind, A, [init=true]) -> (maxval, index)
+.. function:: findmax!(rval, rind, A, [init=true]) --> (maxval, index)
 
    .. Docstring generated from Julia source
 
    Find the maximum of ``A`` and the corresponding linear index along singleton dimensions of ``rval`` and ``rind``\ , and store the results in ``rval`` and ``rind``\ .
 
-.. function:: findmin!(rval, rind, A, [init=true]) -> (minval, index)
+.. function:: findmin!(rval, rind, A, [init=true]) --> (minval, index)
 
    .. Docstring generated from Julia source
 
@@ -512,7 +512,7 @@ Iterable Collections
 
    Multiply elements of ``A`` over the singleton dimensions of ``r``\ , and write results to ``r``\ .
 
-.. function:: any(itr) -> Bool
+.. function:: any(itr) [::] Bool
 
    .. Docstring generated from Julia source
 
@@ -530,7 +530,7 @@ Iterable Collections
 
    Test whether any values in ``A`` along the singleton dimensions of ``r`` are ``true``\ , and write results to ``r``\ .
 
-.. function:: all(itr) -> Bool
+.. function:: all(itr) [::] Bool
 
    .. Docstring generated from Julia source
 
@@ -548,19 +548,19 @@ Iterable Collections
 
    Test whether all values in ``A`` along the singleton dimensions of ``r`` are ``true``\ , and write results to ``r``\ .
 
-.. function:: count(p, itr) -> Integer
+.. function:: count(p, itr) [::] Integer
 
    .. Docstring generated from Julia source
 
    Count the number of elements in ``itr`` for which predicate ``p`` returns ``true``\ .
 
-.. function:: any(p, itr) -> Bool
+.. function:: any(p, itr) [::] Bool
 
    .. Docstring generated from Julia source
 
    Determine whether predicate ``p`` returns ``true`` for any elements of ``itr``\ .
 
-.. function:: all(p, itr) -> Bool
+.. function:: all(p, itr) [::] Bool
 
    .. Docstring generated from Julia source
 
@@ -571,13 +571,13 @@ Iterable Collections
        julia> all(i->(4<=i<=6), [4,5,6])
        true
 
-.. function:: foreach(f, c...) -> Void
+.. function:: foreach(f, c...) [::] Void
 
    .. Docstring generated from Julia source
 
    Call function ``f`` on each element of iterable ``c``\ . For multiple iterable arguments, ``f`` is called elementwise. ``foreach`` should be used instead of ``map`` when the results of ``f`` are not needed, for example in ``foreach(println, array)``\ .
 
-.. function:: map(f, c...) -> collection
+.. function:: map(f, c...) --> collection
 
    .. Docstring generated from Julia source
 
@@ -685,9 +685,9 @@ Iterable Collections
    Return an ``Array`` with the given element type of all items in a collection or iterable. The result has the same shape and number of dimensions as ``collection``\ .
 
 .. function:: issubset(a, b)
-              ⊆(a,b) -> Bool
-              ⊈(a,b) -> Bool
-              ⊊(a,b) -> Bool
+              ⊆(a,b) [::] Bool
+              ⊈(a,b) [::] Bool
+              ⊊(a,b) [::] Bool
 
    .. Docstring generated from Julia source
 
@@ -779,7 +779,7 @@ Given a dictionary ``D``, the syntax ``D[x]`` returns the value of key ``x`` (if
          "B" => 2
          "A" => 1
 
-.. function:: haskey(collection, key) -> Bool
+.. function:: haskey(collection, key) [::] Bool
 
    .. Docstring generated from Julia source
 
@@ -1002,8 +1002,8 @@ Set-Like Collections
 
    Intersects sets ``s1`` and ``s2`` and overwrites the set ``s1`` with the result. If needed, ``s1`` will be expanded to the size of ``s2``\ .
 
-.. function:: issubset(A, S) -> Bool
-              ⊆(A,S) -> Bool
+.. function:: issubset(A, S) [::] Bool
+              ⊆(A,S) [::] Bool
 
    .. Docstring generated from Julia source
 
@@ -1021,7 +1021,7 @@ Partially implemented by:
 Dequeues
 --------
 
-.. function:: push!(collection, items...) -> collection
+.. function:: push!(collection, items...) --> collection
 
    .. Docstring generated from Julia source
 
@@ -1040,7 +1040,7 @@ Dequeues
 
    Use :func:`append!` to add all the elements of another collection to ``collection``\ . The result of the preceding example is equivalent to ``append!([1, 2, 3], [4, 5, 6])``\ .
 
-.. function:: pop!(collection) -> item
+.. function:: pop!(collection) --> item
 
    .. Docstring generated from Julia source
 
@@ -1068,7 +1068,7 @@ Dequeues
         4
         5
 
-.. function:: unshift!(collection, items...) -> collection
+.. function:: unshift!(collection, items...) --> collection
 
    .. Docstring generated from Julia source
 
@@ -1085,7 +1085,7 @@ Dequeues
           3
           4
 
-.. function:: shift!(collection) -> item
+.. function:: shift!(collection) --> item
 
    .. Docstring generated from Julia source
 
@@ -1165,7 +1165,7 @@ Dequeues
         in deleteat!(::Array{Int64,1}, ::Tuple{Int64,Int64}) at ./array.jl:537
         ...
 
-.. function:: splice!(collection, index, [replacement]) -> item
+.. function:: splice!(collection, index, [replacement]) --> item
 
    .. Docstring generated from Julia source
 
@@ -1210,7 +1210,7 @@ Dequeues
 
    To insert ``replacement`` before an index ``n`` without removing any items, use ``splice!(collection, n:n-1, replacement)``\ .
 
-.. function:: splice!(collection, range, [replacement]) -> items
+.. function:: splice!(collection, range, [replacement]) --> items
 
    .. Docstring generated from Julia source
 
@@ -1234,7 +1234,7 @@ Dequeues
          3
         -1
 
-.. function:: resize!(collection, n) -> collection
+.. function:: resize!(collection, n) --> collection
 
    .. Docstring generated from Julia source
 
@@ -1261,7 +1261,7 @@ Dequeues
         0
         0
 
-.. function:: append!(collection, collection2) -> collection.
+.. function:: append!(collection, collection2) --> collection.
 
    .. Docstring generated from Julia source
 
@@ -1288,7 +1288,7 @@ Dequeues
 
    Use :func:`push!` to add individual items to ``collection`` which are not already themselves in another collection. The result is of the preceding example is equivalent to ``push!([1, 2, 3], 4, 5, 6)``\ .
 
-.. function:: prepend!(collection, items) -> collection
+.. function:: prepend!(collection, items) --> collection
 
    .. Docstring generated from Julia source
 

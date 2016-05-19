@@ -138,7 +138,7 @@ daysinmonth(y,m) = DAYSINMONTH[m] + (m == 2 && isleapyear(y))
 ### CONSTRUCTORS ###
 # Core constructors
 """
-    DateTime(y, [m, d, h, mi, s, ms]) -> DateTime
+    DateTime(y, [m, d, h, mi, s, ms]) [::] DateTime
 
 Construct a `DateTime` type by parts. Arguments must be convertible to `Int64`.
 """
@@ -155,7 +155,7 @@ function DateTime(y::Int64,m::Int64=1,d::Int64=1,
 end
 
 """
-    Date(y, [m, d]) -> Date
+    Date(y, [m, d]) [::] Date
 
 Construct a `Date` type by parts. Arguments must be convertible to `Int64`.
 """
@@ -178,7 +178,7 @@ Date(y::Year,m::Month=Month(1),d::Day=Day(1)) = Date(value(y),value(m),value(d))
 # To allow any order/combination of Periods
 
 """
-    DateTime(periods::Period...) -> DateTime
+    DateTime(periods::Period...) [::] DateTime
 
 Construct a `DateTime` type by `Period` type parts. Arguments may be in any order. DateTime
 parts not provided will default to the value of `Dates.default(period)`.
@@ -199,7 +199,7 @@ function DateTime(periods::Period...)
 end
 
 """
-    Date(period::Period...) -> Date
+    Date(period::Period...) [::] Date
 
 Construct a `Date` type by `Period` type parts. Arguments may be in any order. `Date` parts
 not provided will default to the value of `Dates.default(period)`.
@@ -220,8 +220,8 @@ calendar(dt::DateTime) = ISOCalendar
 calendar(dt::Date) = ISOCalendar
 
 """
-    eps(::DateTime) -> Millisecond
-    eps(::Date) -> Day
+    eps(::DateTime) [::] Millisecond
+    eps(::Date) [::] Day
 
 Returns `Millisecond(1)` for `DateTime` values and `Day(1)` for `Date` values.
 """

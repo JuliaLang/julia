@@ -1257,7 +1257,7 @@ function cholfact!{Tv}(F::Factor{Tv}, A::Sparse{Tv}; shift::Real=0.0)
 end
 
 """
-    cholfact!(F::Factor, A; shift = 0.0) -> CHOLMOD.Factor
+    cholfact!(F::Factor, A; shift = 0.0) [::] CHOLMOD.Factor
 
 Compute the Cholesky (``LL'``) factorization of `A`, reusing the symbolic
 factorization `F`. `A` must be a `SparseMatrixCSC`, `Symmetric{SparseMatrixCSC}`,
@@ -1296,7 +1296,7 @@ function cholfact(A::Sparse; shift::Real=0.0,
 end
 
 """
-    cholfact(A; shift = 0.0, perm = Int[]) -> CHOLMOD.Factor
+    cholfact(A; shift = 0.0, perm = Int[]) [::] CHOLMOD.Factor
 
 Compute the Cholesky factorization of a sparse positive definite matrix `A`.
 `A` must be a `SparseMatrixCSC`, `Symmetric{SparseMatrixCSC}`, or
@@ -1352,7 +1352,7 @@ function ldltfact!{Tv}(F::Factor{Tv}, A::Sparse{Tv}; shift::Real=0.0)
 end
 
 """
-    ldltfact!(F::Factor, A; shift = 0.0) -> CHOLMOD.Factor
+    ldltfact!(F::Factor, A; shift = 0.0) [::] CHOLMOD.Factor
 
 Compute the ``LDL'`` factorization of `A`, reusing the symbolic factorization `F`.
 `A` must be a `SparseMatrixCSC`, `Symmetric{SparseMatrixCSC}`, or
@@ -1391,7 +1391,7 @@ function ldltfact(A::Sparse; shift::Real=0.0,
 end
 
 """
-    ldltfact(A; shift = 0.0, perm=Int[]) -> CHOLMOD.Factor
+    ldltfact(A; shift = 0.0, perm=Int[]) [::] CHOLMOD.Factor
 
 Compute the ``LDL'`` factorization of a sparse matrix `A`.
 `A` must be a `SparseMatrixCSC`, `Symmetric{SparseMatrixCSC}`, or

@@ -142,7 +142,7 @@ end
 
 
 """
-    remote([::AbstractWorkerPool], f) -> Function
+    remote([::AbstractWorkerPool], f) [::] Function
 
 Returns a lambda that executes function `f` on an available worker
 using `remotecall_fetch`.
@@ -200,7 +200,7 @@ end
 CachingPool(wp::WorkerPool) = CachingPool(workers(wp))
 
 """
-    clear!(pool::CachingPool) -> pool
+    clear!(pool::CachingPool) --> pool
 
 Removes all cached functions from all participating workers.
 """

@@ -14,7 +14,7 @@ Base.trunc(dt::DateTime, p::Type{Second}) = dt - Millisecond(dt)
 Base.trunc(dt::DateTime, p::Type{Millisecond}) = dt
 
 """
-    trunc(dt::TimeType, ::Type{Period}) -> TimeType
+    trunc(dt::TimeType, ::Type{Period}) [::] TimeType
 
 Truncates the value of `dt` according to the provided `Period` type. E.g. if `dt` is
 `1996-01-01T12:30:00`, then `trunc(dt,Day) == 1996-01-01T00:00:00`.
@@ -23,7 +23,7 @@ Dates.trunc(::Dates.TimeType, ::Type{Dates.Period})
 
 # Adjusters
 """
-    firstdayofweek(dt::TimeType) -> TimeType
+    firstdayofweek(dt::TimeType) [::] TimeType
 
 Adjusts `dt` to the Monday of its week.
 """
@@ -33,7 +33,7 @@ firstdayofweek(dt::Date) = Date(UTD(value(dt) - dayofweek(dt) + 1))
 firstdayofweek(dt::DateTime) = DateTime(firstdayofweek(Date(dt)))
 
 """
-    lastdayofweek(dt::TimeType) -> TimeType
+    lastdayofweek(dt::TimeType) [::] TimeType
 
 Adjusts `dt` to the Sunday of its week.
 """
@@ -46,7 +46,7 @@ lastdayofweek(dt::DateTime) = DateTime(lastdayofweek(Date(dt)))
 @vectorize_1arg TimeType lastdayofweek
 
 """
-    firstdayofmonth(dt::TimeType) -> TimeType
+    firstdayofmonth(dt::TimeType) [::] TimeType
 
 Adjusts `dt` to the first day of its month.
 """
@@ -56,7 +56,7 @@ firstdayofmonth(dt::Date) = Date(UTD(value(dt) - day(dt) + 1))
 firstdayofmonth(dt::DateTime) = DateTime(firstdayofmonth(Date(dt)))
 
 """
-    lastdayofmonth(dt::TimeType) -> TimeType
+    lastdayofmonth(dt::TimeType) [::] TimeType
 
 Adjusts `dt` to the last day of its month.
 """
@@ -72,7 +72,7 @@ lastdayofmonth(dt::DateTime) = DateTime(lastdayofmonth(Date(dt)))
 @vectorize_1arg TimeType lastdayofmonth
 
 """
-    firstdayofyear(dt::TimeType) -> TimeType
+    firstdayofyear(dt::TimeType) [::] TimeType
 
 Adjusts `dt` to the first day of its year.
 """
@@ -82,7 +82,7 @@ firstdayofyear(dt::Date) = Date(UTD(value(dt) - dayofyear(dt) + 1))
 firstdayofyear(dt::DateTime) = DateTime(firstdayofyear(Date(dt)))
 
 """
-    lastdayofyear(dt::TimeType) -> TimeType
+    lastdayofyear(dt::TimeType) [::] TimeType
 
 Adjusts `dt` to the last day of its year.
 """
@@ -98,7 +98,7 @@ lastdayofyear(dt::DateTime) = DateTime(lastdayofyear(Date(dt)))
 @vectorize_1arg TimeType lastdayofyear
 
 """
-    firstdayofquarter(dt::TimeType) -> TimeType
+    firstdayofquarter(dt::TimeType) [::] TimeType
 
 Adjusts `dt` to the first day of its quarter.
 """
@@ -112,7 +112,7 @@ end
 firstdayofquarter(dt::DateTime) = DateTime(firstdayofquarter(Date(dt)))
 
 """
-    lastdayofquarter(dt::TimeType) -> TimeType
+    lastdayofquarter(dt::TimeType) [::] TimeType
 
 Adjusts `dt` to the last day of its quarter.
 """
@@ -155,7 +155,7 @@ end
 # Constructors using DateFunctions
 
 """
-    Date(f::Function, y[, m, d]; step=Day(1), negate=false, limit=10000) -> Date
+    Date(f::Function, y[, m, d]; step=Day(1), negate=false, limit=10000) [::] Date
 
 Create a `Date` through the adjuster API. The starting point will be constructed from the
 provided `y, m, d` arguments, and will be adjusted until `f::Function` returns `true`. The
@@ -169,7 +169,7 @@ function Date(func::Function, y, m=1, d=1;step::Period=Day(1), negate::Bool=fals
 end
 
 """
-    DateTime(f::Function, y[, m, d, h, mi, s]; step=Day(1), negate=false, limit=10000) -> DateTime
+    DateTime(f::Function, y[, m, d, h, mi, s]; step=Day(1), negate=false, limit=10000) [::] DateTime
 
 Create a `DateTime` through the adjuster API. The starting point will be constructed from
 the provided `y, m, d...` arguments, and will be adjusted until `f::Function` returns
@@ -207,7 +207,7 @@ ISDAYOFWEEK = Dict(Mon => DateFunction(ismonday, false, Date(0)),
 
 # "same" indicates whether the current date can be considered or not
 """
-    tonext(dt::TimeType,dow::Int;same::Bool=false) -> TimeType
+    tonext(dt::TimeType,dow::Int;same::Bool=false) [::] TimeType
 
 Adjusts `dt` to the next day of week corresponding to `dow` with `1 = Monday, 2 = Tuesday,
 etc`. Setting `same=true` allows the current `dt` to be considered as the next `dow`,
@@ -217,7 +217,7 @@ tonext(dt::TimeType, dow::Int; same::Bool=false) = adjust(ISDAYOFWEEK[dow], same
 
 # Return the next TimeType where func evals true using step in incrementing
 """
-    tonext(func::Function,dt::TimeType;step=Day(1),negate=false,limit=10000,same=false) -> TimeType
+    tonext(func::Function,dt::TimeType;step=Day(1),negate=false,limit=10000,same=false) [::] TimeType
 
 Adjusts `dt` by iterating at most `limit` iterations by `step` increments until `func`
 returns `true`. `func` must take a single `TimeType` argument and return a `Bool`. `same`
@@ -229,7 +229,7 @@ function tonext(func::Function, dt::TimeType;step::Period=Day(1), negate::Bool=f
 end
 
 """
-    toprev(dt::TimeType,dow::Int;same::Bool=false) -> TimeType
+    toprev(dt::TimeType,dow::Int;same::Bool=false) [::] TimeType
 
 Adjusts `dt` to the previous day of week corresponding to `dow` with `1 = Monday, 2 =
 Tuesday, etc`. Setting `same=true` allows the current `dt` to be considered as the previous
@@ -238,7 +238,7 @@ Tuesday, etc`. Setting `same=true` allows the current `dt` to be considered as t
 toprev(dt::TimeType, dow::Int; same::Bool=false) = adjust(ISDAYOFWEEK[dow], same ? dt : dt+Day(-1), Day(-1), 7)
 
 """
-    toprev(func::Function,dt::TimeType;step=Day(-1),negate=false,limit=10000,same=false) -> TimeType
+    toprev(func::Function,dt::TimeType;step=Day(-1),negate=false,limit=10000,same=false) [::] TimeType
 
 Adjusts `dt` by iterating at most `limit` iterations by `step` increments until `func`
 returns `true`. `func` must take a single `TimeType` argument and return a `Bool`. `same`
@@ -251,7 +251,7 @@ end
 
 # Return the first TimeType that falls on dow in the Month or Year
 """
-    tofirst(dt::TimeType,dow::Int;of=Month) -> TimeType
+    tofirst(dt::TimeType,dow::Int;of=Month) [::] TimeType
 
 Adjusts `dt` to the first `dow` of its month. Alternatively, `of=Year` will adjust to the
 first `dow` of the year.
@@ -263,7 +263,7 @@ end
 
 # Return the last TimeType that falls on dow in the Month or Year
 """
-    tolast(dt::TimeType,dow::Int;of=Month) -> TimeType
+    tolast(dt::TimeType,dow::Int;of=Month) [::] TimeType
 
 Adjusts `dt` to the last `dow` of its month. Alternatively, `of=Year` will adjust to the
 last `dow` of the year.
@@ -288,7 +288,7 @@ function recur{T<:TimeType}(fun::Function, start::T, stop::T; step::Period=Day(1
 end
 
 """
-    recur{T<:TimeType}(func::Function,dr::StepRange{T};negate=false,limit=10000) -> Vector{T}
+    recur{T<:TimeType}(func::Function,dr::StepRange{T};negate=false,limit=10000) [::] Vector{T}
 
 `func` takes a single TimeType argument and returns a `Bool` indicating whether the input
 should be "included" in the final set. `recur` applies `func` over each element in the range

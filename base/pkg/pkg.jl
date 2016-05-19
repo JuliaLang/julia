@@ -38,7 +38,7 @@ const cd = Dir.cd
 dir(path...) = Dir.path(path...)
 
 """
-    dir() -> AbstractString
+    dir() [::] AbstractString
 
 Returns the absolute path of the package directory. This defaults to
 `joinpath(homedir(),".julia","v\$(VERSION.major).\$(VERSION.minor)")` on all platforms (i.e.
@@ -50,7 +50,7 @@ a relative path, it is interpreted relative to whatever the current working dire
 dir()
 
 """
-    dir(names...) -> AbstractString
+    dir(names...) [::] AbstractString
 
 Equivalent to `normpath(Pkg.dir(),names...)` – i.e. it appends path components to the
 package directory and normalizes the resulting path. In particular, `Pkg.dir(pkg)` returns
@@ -100,21 +100,21 @@ intervals for `pkg`.
 add(pkg::AbstractString, vers::VersionNumber...) = cd(Entry.add,pkg,vers...)
 
 """
-    available() -> Vector{String}
+    available() [::] Vector{String}
 
 Returns the names of available packages.
 """
 available() = cd(Entry.available)
 
 """
-    available(pkg) -> Vector{VersionNumber}
+    available(pkg) [::] Vector{VersionNumber}
 
 Returns the version numbers available for package `pkg`.
 """
 available(pkg::AbstractString) = cd(Entry.available,pkg)
 
 """
-    installed() -> Dict{String,VersionNumber}
+    installed() [::] Dict{String,VersionNumber}
 
 Returns a dictionary mapping installed package names to the installed version number of each
 package.
@@ -122,7 +122,7 @@ package.
 installed() = cd(Entry.installed)
 
 """
-    installed(pkg) -> Void | VersionNumber
+    installed(pkg) [::] Void | VersionNumber
 
 If `pkg` is installed, return the installed version number, otherwise return `nothing`.
 """

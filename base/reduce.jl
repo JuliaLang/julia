@@ -298,7 +298,7 @@ extrema(r::Range) = (minimum(r), maximum(r))
 extrema(x::Real) = (x, x)
 
 """
-    extrema(itr) -> Tuple
+    extrema(itr) [::] Tuple
 
 Compute both the minimum and maximum element in a single pass, and return them as a 2-tuple.
 """
@@ -324,7 +324,7 @@ function extrema(itr)
 end
 
 """
-    extrema(A,dims) -> Array{Tuple}
+    extrema(A,dims) [::] Array{Tuple}
 
 Compute the minimum and maximum elements of an array over the given dimensions.
 """

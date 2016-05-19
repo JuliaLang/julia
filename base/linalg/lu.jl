@@ -73,7 +73,7 @@ lufact{T<:AbstractFloat}(A::Union{AbstractMatrix{T},AbstractMatrix{Complex{T}}},
 
 # for all other types we must promote to a type which is stable under division
 """
-    lufact(A [,pivot=Val{true}]) -> F::LU
+    lufact(A [,pivot=Val{true}]) [::] LU --> F
 
 Compute the LU factorization of `A`.
 

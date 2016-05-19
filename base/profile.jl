@@ -107,7 +107,7 @@ See `Profile.print([io], data)` for an explanation of the valid keyword argument
 print{T<:Unsigned}(data::Vector{T} = fetch(), lidict::Dict = getdict(data); kwargs...) = print(STDOUT, data, lidict; kwargs...)
 
 """
-    retrieve() -> data, lidict
+    retrieve() --> (data, lidict)
 
 "Exports" profiling results in a portable format, returning the set of all backtraces
 (`data`) and a dictionary that maps the (session-specific) instruction pointers in `data` to
@@ -168,7 +168,7 @@ function flatten(data::Vector{UInt}, lidict::Dict{UInt,Vector{StackFrame}})
 end
 
 """
-    callers(funcname, [data, lidict], [filename=<filename>], [linerange=<start:stop>]) -> Vector{Tuple{count, lineinfo}}
+    callers(funcname, [data, lidict], [filename=<filename>], [linerange=<start:stop>]) [::] Vector{Tuple{count, lineinfo}}
 
 Given a previous profiling run, determine who called a particular function. Supplying the
 filename (and optionally, range of line numbers over which the function is defined) allows
@@ -232,7 +232,7 @@ error_codes = Dict(
 
 
 """
-    fetch() -> data
+    fetch() --> data
 
 Returns a reference to the internal buffer of backtraces. Note that subsequent operations,
 like [`clear`](:func:`clear`), can affect `data` unless you first make a copy. Note that the

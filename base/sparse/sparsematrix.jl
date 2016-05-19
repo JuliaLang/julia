@@ -973,7 +973,7 @@ end
 
 Keep elements of `A` for which test `f` returns `true`. `f`'s signature should be
 
-    f(i::Integer, [j::Integer,] x) -> Bool
+    f(i::Integer, [j::Integer,] x) [::] Bool
 
 where `i` and `j` are an element's row and column indices and `x` is the element's
 value. This method makes a single sweep

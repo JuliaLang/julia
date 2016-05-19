@@ -157,7 +157,7 @@ for (gbtrf, gbtrs, elty) in
 end
 
 """
-    gbtrf!(kl, ku, m, AB) -> (AB, ipiv)
+    gbtrf!(kl, ku, m, AB) --> (AB, ipiv)
 
 Compute the LU factorization of a banded matrix `AB`. `kl` is the first
 subdiagonal containing a nonzero band, `ku` is the last superdiagonal
@@ -231,7 +231,7 @@ for (gebal, gebak, elty, relty) in
 end
 
 """
-    gebal!(job, A) -> (ilo, ihi, scale)
+    gebal!(job, A) --> (ilo, ihi, scale)
 
 Balance the matrix `A` before computing its eigensystem or Schur factorization.
 `job` can be one of `N` (`A` will not be permuted or scaled), `P` (`A` will only
@@ -540,7 +540,7 @@ for (gebrd, gelqf, geqlf, geqrf, geqp3, geqrt, geqrt3, gerqf, getrf, elty, relty
 end
 
 """
-    gebrd!(A) -> (A, d, e, tauq, taup)
+    gebrd!(A) --> (A, d, e, tauq, taup)
 
 Reduce `A` in-place to bidiagonal form `A = QBP'`. Returns `A`, containing the
 bidiagonal matrix `B`; `d`, containing the diagonal elements of `B`; `e`,
@@ -635,7 +635,7 @@ Returns `A` and `tau` modified in-place.
 gerqf!(A::StridedMatrix, tau::StridedVector)
 
 """
-    getrf!(A) -> (A, ipiv, info)
+    getrf!(A) --> (A, ipiv, info)
 
 Compute the pivoted `LU` factorization of `A`, `A = LU`.
 
@@ -646,7 +646,7 @@ code which indicates success (`info = 0`), a singular value in `U`
 getrf!(A::StridedMatrix, tau::StridedVector)
 
 """
-    gelqf!(A) -> (A, tau)
+    gelqf!(A) --> (A, tau)
 
 Compute the `LQ` factorization of `A`, `A = LQ`.
 
@@ -656,7 +656,7 @@ which parameterize the elementary reflectors of the factorization.
 gelqf!{T<:BlasFloat}(A::StridedMatrix{T}) = ((m,n)=size(A); gelqf!(A,similar(A,T,min(m,n))))
 
 """
-    geqlf!(A) -> (A, tau)
+    geqlf!(A) --> (A, tau)
 
 Compute the `QL` factorization of `A`, `A = QL`.
 
@@ -666,7 +666,7 @@ which parameterize the elementary reflectors of the factorization.
 geqlf!{T<:BlasFloat}(A::StridedMatrix{T}) = ((m,n)=size(A); geqlf!(A,similar(A,T,min(m,n))))
 
 """
-    geqrt!(A, nb) -> (A, T)
+    geqrt!(A, nb) --> (A, T)
 
 Compute the blocked `QR` factorization of `A`, `A = QR`. `nb` sets the block size
 and it must be between 1 and `n`, the second dimension of `A`.
@@ -678,7 +678,7 @@ the factorization.
 geqrt!{T<:BlasFloat}(A::StridedMatrix{T}, nb::Integer) = geqrt!(A,similar(A,T,nb,minimum(size(A))))
 
 """
-    geqrt3!(A) -> (A, T)
+    geqrt3!(A) --> (A, T)
 
 Recursively computes the blocked `QR` factorization of `A`, `A = QR`.
 
@@ -688,7 +688,7 @@ reflectors which parameterize the elementary reflectors of the factorization.
 geqrt3!{T<:BlasFloat}(A::StridedMatrix{T}) = (n=size(A,2); geqrt3!(A,similar(A,T,n,n)))
 
 """
-    geqrf!(A) -> (A, tau)
+    geqrf!(A) --> (A, tau)
 
 Compute the `QR` factorization of `A`, `A = QR`.
 
@@ -698,7 +698,7 @@ which parameterize the elementary reflectors of the factorization.
 geqrf!{T<:BlasFloat}(A::StridedMatrix{T}) = ((m,n)=size(A); geqrf!(A,similar(A,T,min(m,n))))
 
 """
-    gerqf!(A) -> (A, tau)
+    gerqf!(A) --> (A, tau)
 
 Compute the `RQ` factorization of `A`, `A = RQ`.
 
@@ -708,7 +708,7 @@ which parameterize the elementary reflectors of the factorization.
 gerqf!{T<:BlasFloat}(A::StridedMatrix{T}) = ((m,n)=size(A); gerqf!(A,similar(A,T,min(m,n))))
 
 """
-    geqp3!(A, jpvt) -> (A, jpvt, tau)
+    geqp3!(A, jpvt) --> (A, jpvt, tau)
 
 Compute the pivoted `QR` factorization of `A`, `AP = QR` using BLAS level 3.
 `P` is a pivoting matrix, represented by `jpvt`. `jpvt` must have length
@@ -723,7 +723,7 @@ function geqp3!{T<:BlasFloat}(A::StridedMatrix{T},jpvt::StridedVector{BlasInt})
 end
 
 """
-    geqp3!(A) -> (A, jpvt, tau)
+    geqp3!(A) --> (A, jpvt, tau)
 
 Compute the pivoted `QR` factorization of `A`, `AP = QR` using BLAS level 3.
 
@@ -830,7 +830,7 @@ with the result of the multiplication.
 ormrz!(side::Char, trans::Char, A::StridedMatrix, tau::StridedVector, C::StridedMatrix)
 
 """
-    tzrzf!(A) -> (A, tau)
+    tzrzf!(A) --> (A, tau)
 
 Transforms the upper trapezoidal matrix `A` to upper triangular form in-place.
 Returns `A` and `tau`, the scalar parameters for the elementary reflectors
@@ -966,7 +966,7 @@ for (gels, gesv, getrs, getri, elty) in
 end
 
 """
-    gels!(trans, A, B) -> (F, B, ssr)
+    gels!(trans, A, B) --> (F, B, ssr)
 
 Solves the linear equation `A * X = B`, `A.' * X =B`, or `A' * X = B` using
 a QR or LQ factorization. Modifies the matrix/vector `B` in place with the
@@ -978,7 +978,7 @@ transpose). `gels!` searches for the minimum norm/least squares solution.
 gels!(trans::Char, A::StridedMatrix, B::StridedVecOrMat)
 
 """
-    gesv!(A, B) -> (B, A, ipiv)
+    gesv!(A, B) --> (B, A, ipiv)
 
 Solves the linear equation `A * X = B` where `A` is a square matrix using
 the `LU` factorization of `A`. `A` is overwritten with its `LU`
@@ -1149,7 +1149,7 @@ for (gesvx, elty, relty) in
 end
 
 """
-    gesvx!(fact, trans, A, AF, ipiv, equed, R, C, B) -> (X, equed, R, C, B, rcond, ferr, berr, work)
+    gesvx!(fact, trans, A, AF, ipiv, equed, R, C, B) --> (X, equed, R, C, B, rcond, ferr, berr, work)
 
 Solves the linear equation `A * X = B` (`trans = N`), `A.' * X =B`
 (`trans = T`), or `A' * X = B` (`trans = C`) using the `LU` factorization
@@ -1371,7 +1371,7 @@ for (gelsd, gelsy, elty, relty) in
 end
 
 """
-    gelsd!(A, B, rcond) -> (B, rnk)
+    gelsd!(A, B, rcond) --> (B, rnk)
 
 Computes the least norm solution of `A * X = B` by finding the `SVD`
 factorization of `A`, then dividing-and-conquering the problem. `B`
@@ -1382,7 +1382,7 @@ of `A` in `rnk`.
 gelsd!(A::StridedMatrix, B::StridedVecOrMat, rcond::Real)
 
 """
-    gelsy!(A, B, rcond) -> (B, rnk)
+    gelsy!(A, B, rcond) --> (B, rnk)
 
 Computes the least norm solution of `A * X = B` by finding the full `QR`
 factorization of `A`, then dividing-and-conquering the problem. `B`
@@ -1443,7 +1443,7 @@ for (gglse, elty) in ((:dgglse_, :Float64),
 end
 
 """
-    gglse!(A, c, B, d) -> (X,res)
+    gglse!(A, c, B, d) --> (X,res)
 
 Solves the equation `A * x = c` where `x` is subject to the equality
 constraint `B * x = d`. Uses the formula `||c - A*x||^2 = 0` to solve.
@@ -1738,7 +1738,7 @@ for (geev, gesvd, gesdd, ggsvd, elty, relty) in
 end
 
 """
-    geev!(jobvl, jobvr, A) -> (W, VL, VR)
+    geev!(jobvl, jobvr, A) --> (W, VL, VR)
 
 Finds the eigensystem of `A`. If `jobvl = N`, the left eigenvectors of
 `A` aren't computed. If `jobvr = N`, the right eigenvectors of `A`
@@ -1749,7 +1749,7 @@ eigenvectors in `VR`, and the left eigenvectors in `VL`.
 geev!(jobvl::Char, jobvr::Char, A::StridedMatrix)
 
 """
-    gesdd!(job, A) -> (U, S, VT)
+    gesdd!(job, A) --> (U, S, VT)
 
 Finds the singular value decomposition of `A`, `A = U * S * V'`,
 using a divide and conquer approach. If `job = A`, all the columns of `U` and
@@ -1761,7 +1761,7 @@ rows of (thin) `V'` are computed and returned separately.
 gesdd!(job::Char, A::StridedMatrix)
 
 """
-    gesvd!(jobu, jobvt, A) -> (U, S, VT)
+    gesvd!(jobu, jobvt, A) --> (U, S, VT)
 
 Finds the singular value decomposition of `A`, `A = U * S * V'`.
 If `jobu = A`, all the columns of `U` are computed. If `jobvt = A` all the rows
@@ -1777,7 +1777,7 @@ Returns `U`, `S`, and `Vt`, where `S` are the singular values of `A`.
 gesvd!(jobu::Char, jobvt::Char, A::StridedMatrix)
 
 """
-    ggsvd!(jobu, jobv, jobq, A, B) -> (U, V, Q, alpha, beta, k, l, R)
+    ggsvd!(jobu, jobv, jobq, A, B) --> (U, V, Q, alpha, beta, k, l, R)
 
 Finds the generalized singular value decomposition of `A` and `B`, `U'*A*Q = D1*R`
 and `V'*B*Q = D2*R`. `D1` has `alpha` on its diagonal and `D2` has `beta` on its
@@ -1906,7 +1906,7 @@ for (f, elty, relty) in ((:zggsvd3_, :Complex128, :Float64),
 end
 
 """
-    ggsvd3!(jobu, jobv, jobq, A, B) -> (U, V, Q, alpha, beta, k, l, R)
+    ggsvd3!(jobu, jobv, jobq, A, B) --> (U, V, Q, alpha, beta, k, l, R)
 
 Finds the generalized singular value decomposition of `A` and `B`, `U'*A*Q = D1*R`
 and `V'*B*Q = D2*R`. `D1` has `alpha` on its diagonal and `D2` has `beta` on its
@@ -2216,7 +2216,7 @@ for (geevx, ggev, elty, relty) in
 end
 
 """
-    geevx!(balanc, jobvl, jobvr, sense, A) -> (A, w, VL, VR, ilo, ihi, scale, abnrm, rconde, rcondv)
+    geevx!(balanc, jobvl, jobvr, sense, A) --> (A, w, VL, VR, ilo, ihi, scale, abnrm, rconde, rcondv)
 
 Finds the eigensystem of `A` with matrix balancing. If `jobvl = N`, the
 left eigenvectors of `A` aren't computed. If `jobvr = N`, the right
@@ -2235,7 +2235,7 @@ computed.
 geevx!(balanc::Char, jobvl::Char, jobvr::Char, sense::Char, A::StridedMatrix)
 
 """
-    ggev!(jobvl, jobvr, A, B) -> (alpha, beta, vl, vr)
+    ggev!(jobvl, jobvr, A, B) --> (alpha, beta, vl, vr)
 
 Finds the generalized eigendecomposition of `A` and `B`. If `jobvl = N`,
 the left eigenvectors aren't computed. If `jobvr = N`, the right
@@ -2420,7 +2420,7 @@ Overwrites `B` with the solution `X` and returns it.
 gtsv!(dl::StridedVector, d::StridedVector, du::StridedVector, B::StridedVecOrMat)
 
 """
-    gttrf!(dl, d, du) -> (dl, d, du, du2, ipiv)
+    gttrf!(dl, d, du) --> (dl, d, du, du2, ipiv)
 
 Finds the `LU` factorization of a tridiagonal matrix with `dl` on the
 subdiagonal, `d` on the diagonal, and `du` on the superdiagonal.
@@ -3041,7 +3041,7 @@ for (posv, potrf, potri, potrs, pstrf, elty, rtyp) in
 end
 
 """
-    posv!(uplo, A, B) -> (A, B)
+    posv!(uplo, A, B) --> (A, B)
 
 Finds the solution to `A * X = B` where `A` is a symmetric or Hermitian
 positive definite matrix. If `uplo = U` the upper Cholesky decomposition
@@ -3083,7 +3083,7 @@ computed. `B` is overwritten with the solution `X`.
 potrs!(uplo::Char, A::StridedMatrix, B::StridedVecOrMat)
 
 """
-    pstrf!(uplo, A, tol) -> (A, piv, rank, info)
+    pstrf!(uplo, A, tol) --> (A, piv, rank, info)
 
 Computes the (upper if `uplo = U`, lower if `uplo = L`) pivoted Cholesky
 decomposition of positive-definite matrix `A` with a user-set tolerance
@@ -3597,7 +3597,7 @@ trevc!(side::Char, howmny::Char, select::StridedVector{BlasInt}, T::StridedMatri
         VL::StridedMatrix = similar(T), VR::StridedMatrix = similar(T))
 
 """
-    trrfs!(uplo, trans, diag, A, B, X, Ferr, Berr) -> (Ferr, Berr)
+    trrfs!(uplo, trans, diag, A, B, X, Ferr, Berr) --> (Ferr, Berr)
 
 Estimates the error in the solution to `A * X = B` (`trans = N`),
 `A.' * X = B` (`trans = T`), `A' * X = B` (`trans = C`) for `side = L`,
@@ -3769,7 +3769,7 @@ stein!(dv::StridedVector, ev::StridedVector, w_in::StridedVector)=stein!(dv, ev,
 stein!(dv::StridedVector, ev::StridedVector, eval::Real)=stein!(dv, ev, [eval], zeros(BlasInt,0), zeros(BlasInt,0))
 
 """
-    stev!(job, dv, ev) -> (dv, Zmat)
+    stev!(job, dv, ev) --> (dv, Zmat)
 
 Computes the eigensystem for a symmetric tridiagonal matrix with `dv` as
 diagonal and `ev` as off-diagonal. If `job = N` only the eigenvalues are
@@ -3779,7 +3779,7 @@ and returned in `Zmat`.
 stev!(job::Char, dv::StridedVector, ev::StridedVector)
 
 """
-    stebz!(range, order, vl, vu, il, iu, abstol, dv, ev) -> (dv, iblock, isplit)
+    stebz!(range, order, vl, vu, il, iu, abstol, dv, ev) --> (dv, iblock, isplit)
 
 Computes the eigenvalues for a symmetric tridiagonal matrix with `dv` as
 diagonal and `ev` as off-diagonal. If `range = A`, all the eigenvalues
@@ -3792,7 +3792,7 @@ block. If `order = E`, they are ordered across all the blocks.
 stebz!(range::Char, order::Char, vl, vu, il::Integer, iu::Integer, abstol::Real, dv::StridedVector, ev::StridedVector)
 
 """
-    stegr!(jobz, range, dv, ev, vl, vu, il, iu) -> (w, Z)
+    stegr!(jobz, range, dv, ev, vl, vu, il, iu) --> (w, Z)
 
 Computes the eigenvalues (`jobz = N`) or eigenvalues and eigenvectors
 (`jobz = V`) for a symmetric tridiagonal matrix with `dv` as diagonal
@@ -4669,7 +4669,7 @@ for (sysv, sytrf, sytri, sytrs, elty, relty) in
 end
 
 """
-    syconv!(uplo, A, ipiv) -> (A, work)
+    syconv!(uplo, A, ipiv) --> (A, work)
 
 Converts a symmetric matrix `A` (which has been factorized into a
 triangular matrix) into two matrices `L` and `D`. If `uplo = U`, `A`
@@ -4680,7 +4680,7 @@ by `L` and `D`.
 syconv!(uplo::Char, A::StridedMatrix, ipiv::StridedVector{BlasInt})
 
 """
-    sysv!(uplo, A, B) -> (B, A, ipiv)
+    sysv!(uplo, A, B) --> (B, A, ipiv)
 
 Finds the solution to `A * X = B` for symmetric matrix `A`. If `uplo = U`,
 the upper half of `A` is stored. If `uplo = L`, the lower half is stored.
@@ -4691,7 +4691,7 @@ factorization.
 sysv!(uplo::Char, A::StridedMatrix, B::StridedVecOrMat)
 
 """
-    sytrf!(uplo, A) -> (A, ipiv, info)
+    sytrf!(uplo, A) --> (A, ipiv, info)
 
 Computes the Bunch-Kaufman factorization of a symmetric matrix `A`. If
 `uplo = U`, the upper half of `A` is stored. If `uplo = L`, the lower
@@ -4725,7 +4725,7 @@ sytrs!(uplo::Char, A::StridedMatrix, ipiv::StridedVector{BlasInt}, B::StridedVec
 
 
 """
-    hesv!(uplo, A, B) -> (B, A, ipiv)
+    hesv!(uplo, A, B) --> (B, A, ipiv)
 
 Finds the solution to `A * X = B` for Hermitian matrix `A`. If `uplo = U`,
 the upper half of `A` is stored. If `uplo = L`, the lower half is stored.
@@ -4736,7 +4736,7 @@ factorization.
 hesv!(uplo::Char, A::StridedMatrix, B::StridedVecOrMat)
 
 """
-    hetrf!(uplo, A) -> (A, ipiv, info)
+    hetrf!(uplo, A) --> (A, ipiv, info)
 
 Computes the Bunch-Kaufman factorization of a Hermitian matrix `A`. If
 `uplo = U`, the upper half of `A` is stored. If `uplo = L`, the lower
@@ -5077,7 +5077,7 @@ of `A` is used. If `uplo = L`, the lower triangle of `A` is used.
 syev!(jobz::Char, uplo::Char, A::StridedMatrix)
 
 """
-    syevr!(jobz, range, uplo, A, vl, vu, il, iu, abstol) -> (W, Z)
+    syevr!(jobz, range, uplo, A, vl, vu, il, iu, abstol) --> (W, Z)
 
 Finds the eigenvalues (`jobz = N`) or eigenvalues and eigenvectors
 (`jobz = V`) of a symmetric matrix `A`. If `uplo = U`, the upper triangle
@@ -5093,7 +5093,7 @@ syevr!(jobz::Char, range::Char, uplo::Char, A::StridedMatrix,
        vl::AbstractFloat, vu::AbstractFloat, il::Integer, iu::Integer, abstol::AbstractFloat)
 
 """
-    sygvd!(jobz, range, uplo, A, vl, vu, il, iu, abstol) -> (w, A, B)
+    sygvd!(jobz, range, uplo, A, vl, vu, il, iu, abstol) --> (w, A, B)
 
 Finds the generalized eigenvalues (`jobz = N`) or eigenvalues and
 eigenvectors (`jobz = V`) of a symmetric matrix `A` and symmetric
@@ -5156,7 +5156,7 @@ for (bdsqr, relty, elty) in
 end
 
 """
-    bdsqr!(uplo, d, e_, Vt, U, C) -> (d, Vt, U, C)
+    bdsqr!(uplo, d, e_, Vt, U, C) --> (d, Vt, U, C)
 
 Computes the singular value decomposition of a bidiagonal matrix with
 `d` on the diagonal and `e_` on the off-diagonal. If `uplo = U`, `e_` is
@@ -5224,7 +5224,7 @@ for (bdsdc, elty) in
 end
 
 """
-    bdsdc!(uplo, compq, d, e_) -> (d, e, u, vt, q, iq)
+    bdsdc!(uplo, compq, d, e_) --> (d, e, u, vt, q, iq)
 
 Computes the singular value decomposition of a bidiagonal matrix with `d` on the
 diagonal and `e_` on the off-diagonal using a divide and conqueq method.
@@ -5357,7 +5357,7 @@ end
 gehrd!(A::StridedMatrix) = gehrd!(1, size(A, 1), A)
 
 """
-    gehrd!(ilo, ihi, A) -> (A, tau)
+    gehrd!(ilo, ihi, A) --> (A, tau)
 
 Converts a matrix `A` to Hessenberg form. If `A` is balanced with `gebal!`
 then `ilo` and `ihi` are the outputs of `gebal!`. Otherwise they should be
@@ -5652,7 +5652,7 @@ for (gees, gges, elty, relty) in
 end
 
 """
-    gees!(jobvs, A) -> (A, vs, w)
+    gees!(jobvs, A) --> (A, vs, w)
 
 Computes the eigenvalues (`jobvs = N`) or the eigenvalues and Schur
 vectors (`jobvs = V`) of matrix `A`. `A` is overwritten by its Schur form.
@@ -5664,7 +5664,7 @@ gees!(jobvs::Char, A::StridedMatrix)
 
 
 """
-    gges!(jobvsl, jobvsr, A, B) -> (A, B, alpha, beta, vsl, vsr)
+    gges!(jobvsl, jobvsr, A, B) --> (A, B, alpha, beta, vsl, vsr)
 
 Computes the generalized eigenvalues, generalized Schur form, left Schur
 vectors (`jobsvl = V`), or right Schur vectors (`jobvsr = V`) of `A` and
@@ -5968,7 +5968,7 @@ for (trexc, trsen, tgsen, elty) in
 end
 
 """
-    trexc!(compq, ifst, ilst, T, Q) -> (T, Q)
+    trexc!(compq, ifst, ilst, T, Q) --> (T, Q)
 
 Reorder the Schur factorization of a matrix. If `compq = V`, the Schur
 vectors `Q` are reordered. If `compq = N` they are not modified. `ifst`
@@ -5977,7 +5977,7 @@ and `ilst` specify the reordering of the vectors.
 trexc!(compq::Char, ifst::BlasInt, ilst::BlasInt, T::StridedMatrix, Q::StridedMatrix)
 
 """
-    trsen!(compq, job, select, T, Q) -> (T, Q, w)
+    trsen!(compq, job, select, T, Q) --> (T, Q, w)
 
 Reorder the Schur factorization of a matrix and optionally finds reciprocal
 condition numbers. If `job = N`, no condition numbers are found. If `job = E`,
@@ -5993,7 +5993,7 @@ Returns `T`, `Q`, and reordered eigenvalues in `w`.
 trsen!(compq::Char, job::Char, select::StridedVector{BlasInt}, T::StridedMatrix, Q::StridedMatrix)
 
 """
-    tgsen!(select, S, T, Q, Z) -> (S, T, alpha, beta, Q, Z)
+    tgsen!(select, S, T, Q, Z) --> (S, T, alpha, beta, Q, Z)
 
 Reorders the vectors of a generalized Schur decomposition. `select` specifices
 the eigenvalues in each cluster.
@@ -6032,7 +6032,7 @@ for (fn, elty, relty) in ((:dtrsyl_, :Float64, :Float64),
 end
 
 """
-    trsyl!(transa, transb, A, B, C, isgn=1) -> (C, scale)
+    trsyl!(transa, transb, A, B, C, isgn=1) --> (C, scale)
 
 Solves the Sylvester matrix equation `A * X +/- X * B = scale*C` where `A` and
 `B` are both quasi-upper triangular. If `transa = N`, `A` is not modified.

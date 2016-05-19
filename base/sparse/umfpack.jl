@@ -102,7 +102,7 @@ type UmfpackLU{Tv<:UMFVTypes,Ti<:UMFITypes} <: Factorization{Tv}
 end
 
 """
-    lufact(A::SparseMatrixCSC) -> F::UmfpackLU
+    lufact(A::SparseMatrixCSC) [::] UmfpackLU --> F
 
 Compute the LU factorization of a sparse matrix `A`.
 

@@ -5,7 +5,7 @@ Traverse the entries in a tree and its subtrees in post or pre order.
 
 Function parameter should have following signature:
 
-    (Cstring, Ptr{Void}, Ptr{Void}) -> Cint
+    (Cstring, Ptr{Void}, Ptr{Void}) [::] Cint
 """
 function treewalk(f::Function, tree::GitTree, payload=Any[], post::Bool = false)
     cbf = cfunction(f, Cint, (Cstring, Ptr{Void}, Ptr{Void}))

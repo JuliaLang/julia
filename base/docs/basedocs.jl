@@ -651,7 +651,7 @@ not be set after construction. See `type` and the manual for more information.
 kw"immutable"
 
 """
-    @__LINE__ -> Int
+    @__LINE__ [::] Int
 
 `@__LINE__` expands to the line number of the call-site.
 """

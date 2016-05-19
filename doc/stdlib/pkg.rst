@@ -9,13 +9,13 @@ to use them, you'll need to prefix each function call with an explicit ``Pkg.``,
 
 Functions for package development (e.g. ``tag``, ``publish``, etc.) have been moved to the `PkgDev <https://github.com/JuliaLang/PkgDev.jl>`_ package. See `PkgDev README <https://github.com/JuliaLang/PkgDev.jl/blob/master/README.md#usage>`_ for the documentation of those functions.
 
-.. function:: dir() -> AbstractString
+.. function:: dir() [::] AbstractString
 
    .. Docstring generated from Julia source
 
    Returns the absolute path of the package directory. This defaults to ``joinpath(homedir(),".julia","v$(VERSION.major).$(VERSION.minor)")`` on all platforms (i.e. ``~/.julia/v0.5`` in UNIX shell syntax). If the ``JULIA_PKGDIR`` environment variable is set, then that path is used in the returned value as ``joinpath(ENV["JULIA_PKGDIR"],"v$(VERSION.major).$(VERSION.minor)")``\ . If ``JULIA_PKGDIR`` is a relative path, it is interpreted relative to whatever the current working directory is.
 
-.. function:: dir(names...) -> AbstractString
+.. function:: dir(names...) [::] AbstractString
 
    .. Docstring generated from Julia source
 
@@ -69,25 +69,25 @@ Functions for package development (e.g. ``tag``, ``publish``, etc.) have been mo
 
    Set the protocol used to access GitHub-hosted packages. Defaults to 'https', with a blank ``proto`` delegating the choice to the package developer.
 
-.. function:: available() -> Vector{String}
+.. function:: available() [::] Vector{String}
 
    .. Docstring generated from Julia source
 
    Returns the names of available packages.
 
-.. function:: available(pkg) -> Vector{VersionNumber}
+.. function:: available(pkg) [::] Vector{VersionNumber}
 
    .. Docstring generated from Julia source
 
    Returns the version numbers available for package ``pkg``\ .
 
-.. function:: installed() -> Dict{String,VersionNumber}
+.. function:: installed() [::] Dict{String,VersionNumber}
 
    .. Docstring generated from Julia source
 
    Returns a dictionary mapping installed package names to the installed version number of each package.
 
-.. function:: installed(pkg) -> Void | VersionNumber
+.. function:: installed(pkg) [::] Void | VersionNumber
 
    .. Docstring generated from Julia source
 

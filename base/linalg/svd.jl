@@ -20,7 +20,7 @@ function svdfact!{T<:BlasFloat}(A::StridedMatrix{T}; thin::Bool=true)
 end
 
 """
-    svdfact(A, [thin=true]) -> SVD
+    svdfact(A, [thin=true]) [::] SVD
 
 Compute the singular value decomposition (SVD) of `A` and return an `SVD` object.
 
@@ -40,7 +40,7 @@ svdfact(x::Number; thin::Bool=true) = SVD(x == 0 ? fill(one(x), 1, 1) : fill(x/a
 svdfact(x::Integer; thin::Bool=true) = svdfact(float(x), thin=thin)
 
 """
-    svd(A, [thin=true]) -> U, S, V
+    svd(A, [thin=true]) --> (U, S, V)
 
 Computes the SVD of `A`, returning `U`, vector `S`, and `V` such that
 `A == U*diagm(S)*V'`.
@@ -113,7 +113,7 @@ end
 GeneralizedSVD{T}(U::AbstractMatrix{T}, V::AbstractMatrix{T}, Q::AbstractMatrix{T}, a::Vector, b::Vector, k::Int, l::Int, R::AbstractMatrix{T}) = GeneralizedSVD{T,typeof(U)}(U, V, Q, a, b, k, l, R)
 
 """
-    svdfact!(A, [thin=true]) -> SVD
+    svdfact!(A, [thin=true]) [::] SVD
 
 `svdfact!` is the same as [`svdfact`](:func:`svdfact`), but saves space by
 overwriting the input `A`, instead of creating a copy.
@@ -134,7 +134,7 @@ end
 svdfact{T<:BlasFloat}(A::StridedMatrix{T}, B::StridedMatrix{T}) = svdfact!(copy(A),copy(B))
 
 """
-    svdfact(A, B) -> GeneralizedSVD
+    svdfact(A, B) [::] GeneralizedSVD
 
 Compute the generalized SVD of `A` and `B`, returning a `GeneralizedSVD` factorization
 object `F`, such that `A = F[:U]*F[:D1]*F[:R0]*F[:Q]'` and `B = F[:V]*F[:D2]*F[:R0]*F[:Q]'`.
@@ -163,7 +163,7 @@ function svdfact{TA,TB}(A::StridedMatrix{TA}, B::StridedMatrix{TB})
 end
 
 """
-    svd(A, B) -> U, V, Q, D1, D2, R0
+    svd(A, B) --> (U, V, Q, D1, D2, R0)
 
 Wrapper around [`svdfact`](:func:`svdfact(A, B)`) extracting all parts of the
 factorization to a tuple. Direct use of

@@ -78,7 +78,7 @@ eigvals{T,V,S,U}(F::Union{Eigen{T,V,S,U}, GeneralizedEigen{T,V,S,U}}) = F[:value
 
 """
 
-    eigvals!(A,[irange,][vl,][vu]) -> values
+    eigvals!(A,[irange,][vl,][vu]) --> values
 
 Same as `eigvals`, but saves space by overwriting the input `A` (and `B`), instead of creating a copy.
 """

@@ -247,7 +247,7 @@ end
 
 
 """
-    ssh_tunnel(user, host, bind_addr, port, sshflags) -> localport
+    ssh_tunnel(user, host, bind_addr, port, sshflags) --> localport
 
 Establish an SSH tunnel to a remote worker.
 Returns a port number `localport` such that `localhost:localport` connects to `host:port`.
@@ -283,7 +283,7 @@ immutable LocalManager <: ClusterManager
 end
 
 """
-    addprocs(; kwargs...) -> List of process identifiers
+    addprocs(; kwargs...) --> List of process identifiers
 
 Equivalent to `addprocs(Sys.CPU_CORES; kwargs...)`
 
@@ -294,7 +294,7 @@ of the other running processes.
 addprocs(; kwargs...) = addprocs(Sys.CPU_CORES; kwargs...)
 
 """
-    addprocs(np::Integer; restrict=true, kwargs...) -> List of process identifiers
+    addprocs(np::Integer; restrict=true, kwargs...) --> List of process identifiers
 
 Launches workers using the in-built `LocalManager` which only launches workers on the
 local host. This can be used to take advantage of multiple cores. `addprocs(4)` will add 4

@@ -57,7 +57,7 @@ end
 # Basic functions for working with permutations
 
 """
-    isperm(v) -> Bool
+    isperm(v) [::] Bool
 
 Returns `true` if `v` is a valid permutation.
 """

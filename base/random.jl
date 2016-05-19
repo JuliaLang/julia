@@ -1235,7 +1235,7 @@ immutable UUID
 end
 
 """
-    uuid1([rng::AbstractRNG]) -> UUID
+    uuid1([rng::AbstractRNG]) [::] UUID
 
 Generates a version 1 (time-based) universally unique identifier (UUID), as specified
 by RFC 4122. Note that the Node ID is randomly generated (does not identify the host)
@@ -1265,7 +1265,7 @@ function uuid1(rng::AbstractRNG=GLOBAL_RNG)
 end
 
 """
-    uuid4([rng::AbstractRNG]) -> UUID
+    uuid4([rng::AbstractRNG]) [::] UUID
 
 Generates a version 4 (random or pseudo-random) universally unique identifier (UUID),
 as specified by RFC 4122.
@@ -1278,7 +1278,7 @@ function uuid4(rng::AbstractRNG=GLOBAL_RNG)
 end
 
 """
-    uuid_version(u::UUID) -> Integer
+    uuid_version(u::UUID) [::] Integer
 
 Inspects the given UUID and returns its version (see RFC 4122).
 """

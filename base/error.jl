@@ -56,12 +56,12 @@ const DEFAULT_RETRY_ON = e->true
 const DEFAULT_RETRY_MAX_DELAY = 10.0
 
 """
-    retry(f, [retry_on]; n=1, max_delay=10.0) -> Function
+    retry(f, [retry_on]; n=1, max_delay=10.0) [::] Function
 
 Returns a lambda that retries function `f` up to `n` times in the
 event of an exception. If `retry_on` is a `Type` then retry only
 for exceptions of that type. If `retry_on` is a function
-`test_error(::Exception) -> Bool` then retry only if it is true.
+`test_error(::Exception) [::] Bool` then retry only if it is true.
 
 The first retry happens after a gap of 50 milliseconds or `max_delay`,
 whichever is lower. Subsequently, the delays between retries are

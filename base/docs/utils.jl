@@ -35,7 +35,7 @@ show(io::IO, ::MIME"text/html", h::HTML) = print(io, h.content)
 show{F <: Function}(io::IO, ::MIME"text/html", h::HTML{F}) = h.content(io)
 
 """
-    @html_str -> Docs.HTML
+    @html_str [::] Docs.HTML
 
 Create an `HTML` object from a literal string.
 """
@@ -73,7 +73,7 @@ print{F <: Function}(io::IO, t::Text{F}) = t.content(io)
 show(io::IO, t::Text) = print(io, t)
 
 """
-    @text_str -> Docs.Text
+    @text_str [::] Docs.Text
 
 Create a `Text` object from a literal string.
 """

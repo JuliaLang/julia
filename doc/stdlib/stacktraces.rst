@@ -42,13 +42,13 @@
 
    An alias for ``Vector{StackFrame}`` provided for convenience; returned by calls to ``stacktrace`` and ``catch_stacktrace``\ .
 
-.. function:: stacktrace([trace::Vector{Ptr{Void}},] [c_funcs::Bool=false]) -> StackTrace
+.. function:: stacktrace([trace::Vector{Ptr{Void}},] [c_funcs::Bool=false]) [::] StackTrace
 
    .. Docstring generated from Julia source
 
    Returns a stack trace in the form of a vector of ``StackFrame``\ s. (By default stacktrace doesn't return C functions, but this can be enabled.) When called without specifying a trace, ``stacktrace`` first calls ``backtrace``\ .
 
-.. function:: catch_stacktrace([c_funcs::Bool=false]) -> StackTrace
+.. function:: catch_stacktrace([c_funcs::Bool=false]) [::] StackTrace
 
    .. Docstring generated from Julia source
 
@@ -58,7 +58,7 @@
 
 The following methods and types in :mod:`Base.StackTraces` are not exported and need to be called e.g. as ``StackTraces.lookup(ptr)``.
 
-.. function:: lookup(pointer::Union{Ptr{Void}, UInt}) -> Vector{StackFrame}
+.. function:: lookup(pointer::Union{Ptr{Void}, UInt}) [::] Vector{StackFrame}
 
    .. Docstring generated from Julia source
 

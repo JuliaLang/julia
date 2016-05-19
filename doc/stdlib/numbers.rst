@@ -84,7 +84,7 @@ Data Formats
 
    Convert a number to a signed integer. If the argument is unsigned, it is reinterpreted as signed without checking for overflow.
 
-.. function:: unsigned(x) -> Unsigned
+.. function:: unsigned(x) [::] Unsigned
 
    .. Docstring generated from Julia source
 
@@ -110,7 +110,7 @@ Data Formats
        julia> significand(15.2)*8
        15.2
 
-.. function:: exponent(x) -> Int
+.. function:: exponent(x) [::] Int
 
    .. Docstring generated from Julia source
 
@@ -243,25 +243,25 @@ General Number Functions and Constants
 
    A not-a-number value of type ``Float16``\ .
 
-.. function:: issubnormal(f) -> Bool
+.. function:: issubnormal(f) [::] Bool
 
    .. Docstring generated from Julia source
 
    Test whether a floating point number is subnormal.
 
-.. function:: isfinite(f) -> Bool
+.. function:: isfinite(f) [::] Bool
 
    .. Docstring generated from Julia source
 
    Test whether a number is finite
 
-.. function:: isinf(f) -> Bool
+.. function:: isinf(f) [::] Bool
 
    .. Docstring generated from Julia source
 
    Test whether a number is infinite.
 
-.. function:: isnan(f) -> Bool
+.. function:: isnan(f) [::] Bool
 
    .. Docstring generated from Julia source
 
@@ -285,13 +285,13 @@ General Number Functions and Constants
 
    The result of ``n`` iterative applications of ``nextfloat`` to ``x`` if ``n >= 0``\ , or ``-n`` applications of ``prevfloat`` if ``n < 0``\ .
 
-.. function:: isinteger(x) -> Bool
+.. function:: isinteger(x) [::] Bool
 
    .. Docstring generated from Julia source
 
    Test whether ``x`` or all its elements are numerically equal to some integer
 
-.. function:: isreal(x) -> Bool
+.. function:: isreal(x) [::] Bool
 
    .. Docstring generated from Julia source
 
@@ -390,13 +390,13 @@ General Number Functions and Constants
 
    See :obj:`RoundingMode` for available rounding modes.
 
-.. function:: get_zero_subnormals() -> Bool
+.. function:: get_zero_subnormals() [::] Bool
 
    .. Docstring generated from Julia source
 
    Returns ``false`` if operations on subnormal floating-point values ("denormals") obey rules for IEEE arithmetic, and ``true`` if they might be converted to zeros.
 
-.. function:: set_zero_subnormals(yes::Bool) -> Bool
+.. function:: set_zero_subnormals(yes::Bool) [::] Bool
 
    .. Docstring generated from Julia source
 
@@ -407,7 +407,7 @@ General Number Functions and Constants
 Integers
 ~~~~~~~~
 
-.. function:: count_ones(x::Integer) -> Integer
+.. function:: count_ones(x::Integer) [::] Integer
 
    .. Docstring generated from Julia source
 
@@ -418,7 +418,7 @@ Integers
        julia> count_ones(7)
        3
 
-.. function:: count_zeros(x::Integer) -> Integer
+.. function:: count_zeros(x::Integer) [::] Integer
 
    .. Docstring generated from Julia source
 
@@ -429,7 +429,7 @@ Integers
        julia> count_zeros(Int32(2 ^ 16 - 1))
        16
 
-.. function:: leading_zeros(x::Integer) -> Integer
+.. function:: leading_zeros(x::Integer) [::] Integer
 
    .. Docstring generated from Julia source
 
@@ -440,7 +440,7 @@ Integers
        julia> leading_zeros(Int32(1))
        31
 
-.. function:: leading_ones(x::Integer) -> Integer
+.. function:: leading_ones(x::Integer) [::] Integer
 
    .. Docstring generated from Julia source
 
@@ -451,7 +451,7 @@ Integers
        julia> leading_ones(UInt32(2 ^ 32 - 2))
        31
 
-.. function:: trailing_zeros(x::Integer) -> Integer
+.. function:: trailing_zeros(x::Integer) [::] Integer
 
    .. Docstring generated from Julia source
 
@@ -462,7 +462,7 @@ Integers
        julia> trailing_zeros(2)
        1
 
-.. function:: trailing_ones(x::Integer) -> Integer
+.. function:: trailing_ones(x::Integer) [::] Integer
 
    .. Docstring generated from Julia source
 
@@ -473,7 +473,7 @@ Integers
        julia> trailing_ones(3)
        2
 
-.. function:: isodd(x::Integer) -> Bool
+.. function:: isodd(x::Integer) [::] Bool
 
    .. Docstring generated from Julia source
 
@@ -487,7 +487,7 @@ Integers
        julia> isodd(10)
        false
 
-.. function:: iseven(x::Integer) -> Bool
+.. function:: iseven(x::Integer) [::] Bool
 
    .. Docstring generated from Julia source
 
@@ -622,7 +622,7 @@ As ``BigInt`` represents unbounded integers, the interval must be specified (e.g
 
    Fill the array ``A`` with random numbers following the exponential distribution (with scale 1).
 
-.. function:: randjump(r::MersenneTwister, jumps, [jumppoly]) -> Vector{MersenneTwister}
+.. function:: randjump(r::MersenneTwister, jumps, [jumppoly]) [::] Vector{MersenneTwister}
 
    .. Docstring generated from Julia source
 

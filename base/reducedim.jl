@@ -314,7 +314,7 @@ end
 
 
 """
-    findmin!(rval, rind, A, [init=true]) -> (minval, index)
+    findmin!(rval, rind, A, [init=true]) --> (minval, index)
 
 Find the minimum of `A` and the corresponding linear index along singleton
 dimensions of `rval` and `rind`, and store the results in `rval` and `rind`.
@@ -336,7 +336,7 @@ function findmin{T}(A::AbstractArray{T}, region)
 end
 
 """
-    findmax!(rval, rind, A, [init=true]) -> (maxval, index)
+    findmax!(rval, rind, A, [init=true]) --> (maxval, index)
 
 Find the maximum of `A` and the corresponding linear index along singleton
 dimensions of `rval` and `rind`, and store the results in `rval` and `rind`.

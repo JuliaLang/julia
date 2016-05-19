@@ -1282,7 +1282,7 @@ Mathematical Functions
       Bézout coefficients are *not* uniquely defined. ``gcdx`` returns the minimal Bézout coefficients that are computed by the extended Euclidean algorithm. (Ref: D. Knuth, TAoCP, 2/e, p. 325, Algorithm X.) For signed integers, these coefficients ``u`` and ``v`` are minimal in the sense that :math:`|u| < |y/d|` and :math:`|v| < |x/d|`\ . Furthermore, the signs of ``u`` and ``v`` are chosen so that ``d`` is positive. For unsigned integers, the coefficients ``u`` and ``v`` might be near their ``typemax``\ , and the identity then holds only via the unsigned integers' modulo arithmetic.
 
 
-.. function:: ispow2(n) -> Bool
+.. function:: ispow2(n) [::] Bool
 
    .. Docstring generated from Julia source
 

@@ -58,7 +58,7 @@ current_task() = ccall(:jl_get_current_task, Ref{Task}, ())
 istaskdone(t::Task) = ((t.state == :done) | (t.state == :failed))
 
 """
-    istaskstarted(task) -> Bool
+    istaskstarted(task) [::] Bool
 
 Tell whether a task has started executing.
 """

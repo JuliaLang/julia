@@ -47,7 +47,7 @@ Read binary data from an I/O stream or file, filling in `array`.
 read!
 
 """
-    empty!(collection) -> collection
+    empty!(collection) --> collection
 
 Remove all elements from a `collection`.
 """
@@ -134,7 +134,7 @@ set of characters) is provided, instead remove characters contained in it.
 lstrip
 
 """
-    indmin(itr) -> Integer
+    indmin(itr) [::] Integer
 
 Returns the index of the minimum element in a collection.
 """
@@ -167,7 +167,7 @@ Calling `Ref(array[, index])` is generally preferable to this function.
 pointer
 
 """
-    isnan(f) -> Bool
+    isnan(f) [::] Bool
 
 Test whether a floating point number is not a number (NaN).
 """
@@ -218,7 +218,7 @@ Returns a list of all worker process identifiers.
 workers
 
 """
-    isinteger(x) -> Bool
+    isinteger(x) [::] Bool
 
 Test whether `x` or all its elements are numerically equal to some integer
 """
@@ -239,7 +239,7 @@ Element-wise right division operator.
 Base.:(./)
 
 """
-    IPv6(host::Integer) -> IPv6
+    IPv6(host::Integer) [::] IPv6
 
 Returns IPv6 object from ip address formatted as Integer
 """
@@ -313,14 +313,14 @@ Like [`permutedims`](:func:`permutedims`), except the inverse of the given permu
 ipermutedims
 
 """
-    dirname(path::AbstractString) -> AbstractString
+    dirname(path::AbstractString) [::] AbstractString
 
 Get the directory part of a path.
 """
 dirname
 
 """
-    isfile(path) -> Bool
+    isfile(path) [::] Bool
 
 Returns `true` if `path` is a regular file, `false` otherwise.
 """
@@ -470,7 +470,7 @@ losslessly, some loss is tolerated; for example, `promote_type(Int64,Float64)` r
 promote_type
 
 """
-    ind2sub(dims, index) -> subscripts
+    ind2sub(dims, index) --> subscripts
 
 Returns a tuple of subscripts into an array with dimensions `dims`,
 corresponding to the linear index `index`.
@@ -486,7 +486,7 @@ provides the indices of the maximum element.
 ind2sub(dims::Tuple, index::Int)
 
 """
-    ind2sub(a, index) -> subscripts
+    ind2sub(a, index) --> subscripts
 
 Returns a tuple of subscripts into array `a` corresponding to the linear index `index`.
 """
@@ -502,14 +502,14 @@ Element-wise multiplication operator.
 Base.:(.*)
 
 """
-    ror!(dest::BitArray{1}, src::BitArray{1}, i::Integer) -> BitArray{1}
+    ror!(dest::BitArray{1}, src::BitArray{1}, i::Integer) [::] BitArray{1}
 
 Performs a right rotation operation on `src` and put the result into `dest`.
 """
 ror!(dest::BitArray{1}, src::BitArray{1}, i::Integer)
 
 """
-    ror!(B::BitArray{1}, i::Integer) -> BitArray{1}
+    ror!(B::BitArray{1}, i::Integer) [::] BitArray{1}
 
 Performs a right rotation operation on `B`.
 """
@@ -780,14 +780,14 @@ Compute the inverse cosine of `x`, where the output is in radians
 acos
 
 """
-    ispath(path) -> Bool
+    ispath(path) [::] Bool
 
 Returns `true` if `path` is a valid filesystem path, `false` otherwise.
 """
 ispath
 
 """
-    fdio([name::AbstractString, ]fd::Integer[, own::Bool]) -> IOStream
+    fdio([name::AbstractString, ]fd::Integer[, own::Bool]) [::] IOStream
 
 Create an `IOStream` object from an integer file descriptor. If `own` is `true`, closing
 this object will close the underlying descriptor. By default, an `IOStream` is closed when
@@ -834,7 +834,7 @@ Element-wise exponentiation operator.
 Base.:(.^)
 
 """
-    isspace(c::Union{Char,AbstractString}) -> Bool
+    isspace(c::Union{Char,AbstractString}) [::] Bool
 
 Tests whether a character is any whitespace character. Includes ASCII characters '\\t',
 '\\n', '\\v', '\\f', '\\r', and ' ', Latin-1 character U+0085, and characters in Unicode
@@ -843,7 +843,7 @@ category Zs. For strings, tests whether this is true for all elements of the str
 isspace
 
 """
-    splitext(path::AbstractString) -> (AbstractString,AbstractString)
+    splitext(path::AbstractString) [::] {AbstractString, AbstractString}
 
 If the last component of a path contains a dot, split the path into everything before the
 dot and everything including and after the dot. Otherwise, return a tuple of the argument
@@ -852,7 +852,7 @@ unmodified and the empty string.
 splitext
 
 """
-    gethostname() -> AbstractString
+    gethostname() [::] AbstractString
 
 Get the local machine's host name.
 """
@@ -928,14 +928,14 @@ Takes the expression `x` and returns an equivalent expression with all macros re
 macroexpand
 
 """
-    issticky(path) -> Bool
+    issticky(path) [::] Bool
 
 Returns `true` if `path` has the sticky bit set, `false` otherwise.
 """
 issticky
 
 """
-    rol(B::BitArray{1}, i::Integer) -> BitArray{1}
+    rol(B::BitArray{1}, i::Integer) [::] BitArray{1}
 
 Performs a left rotation operation.
 """
@@ -1152,14 +1152,14 @@ point of a [`Range`](:obj:`Range`) even if it is empty.
 last
 
 """
-    islink(path) -> Bool
+    islink(path) [::] Bool
 
 Returns `true` if `path` is a symbolic link, `false` otherwise.
 """
 islink
 
 """
-    istril(A) -> Bool
+    istril(A) [::] Bool
 
 Test whether a matrix is lower triangular.
 """
@@ -1220,7 +1220,7 @@ for all `i` and `j`.
 mapslices
 
 """
-    issocket(path) -> Bool
+    issocket(path) [::] Bool
 
 Returns `true` if `path` is a socket, `false` otherwise.
 """
@@ -1266,14 +1266,14 @@ Basis for nullspace of `M`.
 nullspace
 
 """
-    isfinite(f) -> Bool
+    isfinite(f) [::] Bool
 
 Test whether a number is finite
 """
 isfinite
 
 """
-    push!(collection, items...) -> collection
+    push!(collection, items...) --> collection
 
 Insert one or more `items` at the end of `collection`.
 
@@ -1518,14 +1518,14 @@ floating-point results for integer arguments.
 Base.:(/)
 
 """
-    connect([host],port) -> TCPSocket
+    connect([host],port) [::] TCPSocket
 
 Connect to the host `host` on port `port`.
 """
 connect(host=?, port)
 
 """
-    connect(path) -> PipeEndpoint
+    connect(path) [::] PipeEndpoint
 
 Connect to the named pipe / UNIX domain socket at `path`.
 """
@@ -1625,7 +1625,7 @@ For matrices or vectors ``A`` and ``B``, calculates ``Aᵀ / Bᵀ``.
 At_rdiv_Bt
 
 """
-    isinteractive() -> Bool
+    isinteractive() [::] Bool
 
 Determine whether Julia is running an interactive session.
 """
@@ -1774,7 +1774,7 @@ regions.
 transpose!
 
 """
-    isconst([m::Module], s::Symbol) -> Bool
+    isconst([m::Module], s::Symbol) [::] Bool
 
 Determine whether a global is declared `const` in a given `Module`. The default `Module`
 argument is `current_module()`.
@@ -1802,7 +1802,7 @@ value returned by `f`.
 open(f::Function, command::Cmd, mod::AbstractString="r", stdio=DevNull)
 
 """
-    open(filename, [read, write, create, truncate, append]) -> IOStream
+    open(filename, [read, write, create, truncate, append]) [::] IOStream
 
 Open a file in a mode specified by five boolean arguments. The default is to open files for
 reading only. Returns a stream for accessing the file.
@@ -1810,7 +1810,7 @@ reading only. Returns a stream for accessing the file.
 open(filename, ::Bool, ::Bool, ::Bool, ::Bool, ::Bool)
 
 """
-    open(filename, [mode]) -> IOStream
+    open(filename, [mode]) [::] IOStream
 
 Alternate syntax for open, where a string-based mode specifier is used instead of the five
 booleans. The values of `mode` correspond to those from `fopen(3)` or Perl `open`, and are
@@ -1904,7 +1904,7 @@ appended to an internal buffer of backtraces.
 :@profile
 
 """
-    isdigit(c::Union{Char,AbstractString}) -> Bool
+    isdigit(c::Union{Char,AbstractString}) [::] Bool
 
 Tests whether a character is a numeric digit (0-9), or whether this is true for all elements
 of a string.
@@ -1919,7 +1919,7 @@ Get a hexadecimal string of the binary representation of a floating point number
 num2hex
 
 """
-    count_ones(x::Integer) -> Integer
+    count_ones(x::Integer) [::] Integer
 
 Number of ones in the binary representation of `x`.
 
@@ -1938,8 +1938,8 @@ Return both the real and imaginary parts of the complex number `z`.
 reim
 
 """
-    displayable(mime) -> Bool
-    displayable(d::Display, mime) -> Bool
+    displayable(mime) [::] Bool
+    displayable(d::Display, mime) [::] Bool
 
 Returns a boolean value indicating whether the given `mime` type (string) is displayable by
 any of the displays in the current display stack, or specifically by the display `d` in the
@@ -2149,7 +2149,7 @@ The text is assumed to be encoded in UTF-8.
 readstring
 
 """
-    poll_file(path, interval_s::Real, timeout_s::Real) -> (previous::StatStruct, current::StatStruct)
+    poll_file(path, interval_s::Real, timeout_s::Real) [::] {StatStruct, StatStruct} --> (previous, current)
 
 Monitor a file for changes by polling every `interval_s` seconds until a change occurs or
 `timeout_s` seconds have elapsed. The `interval_s` should be a long period; the default is
@@ -2173,7 +2173,7 @@ The text is assumed to be encoded in UTF-8.
 eachline
 
 """
-    isposdef!(A) -> Bool
+    isposdef!(A) [::] Bool
 
 Test whether a matrix is positive definite, overwriting `A` in the processes.
 """
@@ -2356,14 +2356,14 @@ Return a copy of `v` reversed from start to stop.
 reverse
 
 """
-    reverse(s::AbstractString) -> AbstractString
+    reverse(s::AbstractString) [::] AbstractString
 
 Reverses a string.
 """
 reverse(s::AbstractString)
 
 """
-    reverse!(v [, start=1 [, stop=length(v) ]]) -> v
+    reverse!(v [, start=1 [, stop=length(v) ]]) --> v
 
 In-place version of [`reverse`](:func:`reverse`).
 """
@@ -2498,7 +2498,7 @@ Perform `wait(remotecall(...))` in one message. Keyword arguments, if any, are p
 remotecall_wait
 
 """
-    append!(collection, collection2) -> collection.
+    append!(collection, collection2) --> collection.
 
 Add the elements of `collection2` to the end of `collection`.
 
@@ -2558,7 +2558,7 @@ Seek a stream relative to the current position.
 skip
 
 """
-    lu(A) -> L, U, p
+    lu(A) --> (L, U, p)
 
 Compute the LU factorization of `A`, such that `A[p,:] = L*U`.
 """
@@ -2580,7 +2580,7 @@ Largest integer less than or equal to `x/y`.
 fld
 
 """
-    indmax(itr) -> Integer
+    indmax(itr) [::] Integer
 
 Returns the index of the maximum element in a collection.
 """
@@ -2619,7 +2619,7 @@ No more data was available to read from a file or stream.
 EOFError
 
 """
-    isascii(c::Union{Char,AbstractString}) -> Bool
+    isascii(c::Union{Char,AbstractString}) [::] Bool
 
 Tests whether a character belongs to the ASCII character set, or whether this is true for
 all elements of a string.
@@ -3015,7 +3015,7 @@ An iterator that counts forever, starting at `start` and incrementing by `step`.
 countfrom
 
 """
-    eof(stream) -> Bool
+    eof(stream) [::] Bool
 
 Tests whether an I/O stream is at end-of-file. If the stream is not yet exhausted, this
 function will block to wait for more data if necessary, and then return `false`. Therefore
@@ -3227,7 +3227,7 @@ multiple of four, this is equivalent to a `copy`.
 rotr90(A, k)
 
 """
-    readdir([dir]) -> Vector{String}
+    readdir([dir]) [::] Vector{String}
 
 Returns the files and directories in the directory `dir` (or the current working directory if not given).
 """
@@ -3433,7 +3433,7 @@ integer type. The result will differ from `x` by no more than `tol`.
 rationalize
 
 """
-    splice!(collection, index, [replacement]) -> item
+    splice!(collection, index, [replacement]) --> item
 
 Remove the item at the given index, and return the removed item. Subsequent items are
 shifted down to fill the resulting gap. If specified, replacement values from an ordered
@@ -3482,7 +3482,7 @@ To insert `replacement` before an index `n` without removing any items, use
 splice!(collection, index, replacement = ?)
 
 """
-    splice!(collection, range, [replacement]) -> items
+    splice!(collection, range, [replacement]) --> items
 
 Remove items in the specified index range, and return a collection containing the removed
 items. Subsequent items are shifted down to fill the resulting gap. If specified,
@@ -3510,7 +3510,7 @@ julia> A
 splice!(collection, range::Range, replacement)
 
 """
-    endof(collection) -> Integer
+    endof(collection) [::] Integer
 
 Returns the last index of the collection.
 
@@ -3522,7 +3522,7 @@ julia> endof([1,2,4])
 endof
 
 """
-    isfifo(path) -> Bool
+    isfifo(path) [::] Bool
 
 Returns `true` if `path` is a FIFO, `false` otherwise.
 """
@@ -3542,14 +3542,14 @@ Other constructors:
 Channel
 
 """
-    next(iter, state) -> item, state
+    next(iter, state) --> (item, state)
 
 For a given iterable object and iteration state, return the current item and the next iteration state.
 """
 next
 
 """
-    unshift!(collection, items...) -> collection
+    unshift!(collection, items...) --> collection
 
 Insert one or more `items` at the beginning of `collection`.
 
@@ -3590,7 +3590,7 @@ is necessary to complete the encoding (but does not close `ostream`).
 Base64EncodePipe
 
 """
-    issetgid(path) -> Bool
+    issetgid(path) [::] Bool
 
 Returns `true` if `path` has the setgid flag set, `false` otherwise.
 """
@@ -3643,7 +3643,7 @@ provide higher performance in tight loops.
 ifelse
 
 """
-    ispow2(n) -> Bool
+    ispow2(n) [::] Bool
 
 Test whether `n` is a power of two.
 """
@@ -3657,7 +3657,7 @@ Concatenate along dimension 1.
 vcat
 
 """
-    isgraph(c::Union{Char,AbstractString}) -> Bool
+    isgraph(c::Union{Char,AbstractString}) [::] Bool
 
 Tests whether a character is printable, and not a space, or whether this is true for all
 elements of a string. Any character that would cause a printer to use ink should be
@@ -3985,7 +3985,7 @@ Update the last-modified timestamp on a file to the current time.
 touch
 
 """
-    bkfact!(A) -> BunchKaufman
+    bkfact!(A) [::] BunchKaufman
 
 `bkfact!` is the same as [`bkfact`](:func:`bkfact`), but saves space by overwriting the
 input `A`, instead of creating a copy.
@@ -4033,7 +4033,7 @@ element. Also note that this is equivalent to, but more efficient than, calling
 selectperm
 
 """
-    isabspath(path::AbstractString) -> Bool
+    isabspath(path::AbstractString) [::] Bool
 
 Determines whether a path is absolute (begins at the root directory).
 """
@@ -4048,7 +4048,7 @@ Convert an arbitrarily long hexadecimal string to its binary representation. Ret
 hex2bytes
 
 """
-    isdir(path) -> Bool
+    isdir(path) [::] Bool
 
 Returns `true` if `path` is a directory, `false` otherwise.
 """
@@ -4168,7 +4168,7 @@ See also [`sortperm`](:func:`sortperm`).
 sortperm!
 
 """
-    isodd(x::Integer) -> Bool
+    isodd(x::Integer) [::] Bool
 
 Returns `true` if `x` is odd (that is, not divisible by 2), and `false` otherwise.
 
@@ -4240,9 +4240,9 @@ Converts the endianness of a value from that used by the Host to Network byte or
 hton
 
 """
-    is(x, y) -> Bool
-    ===(x,y) -> Bool
-    ≡(x,y) -> Bool
+    is(x, y) [::] Bool
+    ===(x,y) [::] Bool
+    ≡(x,y) [::] Bool
 
 Determine whether `x` and `y` are identical, in the sense that no program could distinguish
 them. Compares mutable objects by address in memory, and compares immutable objects (such as
@@ -4279,7 +4279,7 @@ Byte-swap an integer.
 bswap
 
 """
-    resize!(collection, n) -> collection
+    resize!(collection, n) --> collection
 
 Resize `collection` to contain `n` elements. If `n` is smaller than the current collection
 length, the first `n` elements will be retained. If `n` is larger, the new elements are not
@@ -4317,14 +4317,14 @@ write results to `r`.
 sumabs2!
 
 """
-    IPv4(host::Integer) -> IPv4
+    IPv4(host::Integer) [::] IPv4
 
 Returns IPv4 object from ip address formatted as Integer.
 """
 IPv4
 
 """
-    trailing_zeros(x::Integer) -> Integer
+    trailing_zeros(x::Integer) [::] Integer
 
 Number of zeros trailing the binary representation of `x`.
 
@@ -4336,7 +4336,7 @@ julia> trailing_zeros(2)
 trailing_zeros
 
 """
-    isalnum(c::Union{Char,AbstractString}) -> Bool
+    isalnum(c::Union{Char,AbstractString}) [::] Bool
 
 Tests whether a character is alphanumeric, or whether this is true for all elements of a
 string. A character is classified as alphabetic if it belongs to the Unicode general
@@ -4451,7 +4451,7 @@ Get the fully-qualified name of a module as a tuple of symbols. For example,
 fullname
 
 """
-    isreadable(io) -> Bool
+    isreadable(io) [::] Bool
 
 Returns `true` if the specified IO object is readable (if that can be determined).
 """
@@ -4481,7 +4481,7 @@ The distance between `x` and the next larger representable floating-point value 
 eps(::AbstractFloat)
 
 """
-    isalpha(c::Union{Char,AbstractString}) -> Bool
+    isalpha(c::Union{Char,AbstractString}) [::] Bool
 
 Tests whether a character is alphabetic, or whether this is true for all elements of a
 string. A character is classified as alphabetic if it belongs to the Unicode general
@@ -4560,7 +4560,7 @@ Returns a new read-only I/O stream, which decodes base64-encoded data read from 
 Base64DecodePipe
 
 """
-    module_parent(m::Module) -> Module
+    module_parent(m::Module) [::] Module
 
 Get a module's enclosing `Module`. `Main` is its own parent, as is `LastMain` after `workspace()`.
 """
@@ -4574,7 +4574,7 @@ Airy function derivative ``\\operatorname{Ai}'(x)``.
 airyaiprime
 
 """
-    prepend!(collection, items) -> collection
+    prepend!(collection, items) --> collection
 
 Insert the elements of `items` to the beginning of `collection`.
 
@@ -4682,7 +4682,7 @@ for important notes.
 compilecache
 
 """
-    clipboard() -> AbstractString
+    clipboard() [::] AbstractString
 
 Return a string with the contents of the operating system clipboard ("paste").
 """
@@ -4703,7 +4703,7 @@ Return an iterator over all values in a collection. `collect(values(d))` returns
 values
 
 """
-    A_mul_B!(Y, A, B) -> Y
+    A_mul_B!(Y, A, B) --> Y
 
 Calculates the matrix-matrix or matrix-vector product ``A⋅B`` and stores the result in `Y`,
 overwriting the existing value of `Y`. Note that `Y` must not be aliased with either `A` or
@@ -4743,7 +4743,7 @@ Like `selectperm`, but accepts a preallocated index vector `ix`. If `initialized
 selectperm!
 
 """
-    istaskdone(task) -> Bool
+    istaskdone(task) [::] Bool
 
 Tell whether a task has exited.
 """
@@ -4809,7 +4809,7 @@ Compute the inverse hyperbolic sine of `x`.
 asinh
 
 """
-    count(p, itr) -> Integer
+    count(p, itr) [::] Integer
 
 Count the number of elements in `itr` for which predicate `p` returns `true`.
 """
@@ -4874,14 +4874,14 @@ Returns `string` with the first character converted to lowercase.
 lcfirst
 
 """
-    flipbits!(B::BitArray{N}) -> BitArray{N}
+    flipbits!(B::BitArray{N}) [::] BitArray{N}
 
 Performs a bitwise not operation on `B`. See [`~`](:ref:`~ operator <~>`).
 """
 flipbits!
 
 """
-    readlink(path) -> AbstractString
+    readlink(path) [::] AbstractString
 
 Returns the value of a symbolic link `path`.
 """
@@ -4925,7 +4925,7 @@ Apply the function `f` to the result of `mktemp(parent)` and remove the temporar
 mktemp(::Function, ?)
 
 """
-    isreadonly(stream) -> Bool
+    isreadonly(stream) [::] Bool
 
 Determine whether a stream is read-only.
 """
@@ -4951,14 +4951,14 @@ indices to the parent array on the fly without checking bounds.
 view
 
 """
-    expanduser(path::AbstractString) -> AbstractString
+    expanduser(path::AbstractString) [::] AbstractString
 
 On Unix systems, replace a tilde character at the start of a path with the current user's home directory.
 """
 expanduser
 
 """
-    haskey(collection, key) -> Bool
+    haskey(collection, key) [::] Bool
 
 Determine whether a collection has a mapping for a given key.
 """
@@ -5005,7 +5005,7 @@ Element-wise not-equals comparison operator.
 Base.:(.!=)
 
 """
-    lufact!(A) -> LU
+    lufact!(A) [::] LU
 
 `lufact!` is the same as [`lufact`](:func:`lufact`), but saves space by overwriting the
 input `A`, instead of creating a copy. An `InexactError` exception is thrown if the
@@ -5015,7 +5015,7 @@ integer types.
 lufact!
 
 """
-    IOBuffer() -> IOBuffer
+    IOBuffer() [::] IOBuffer
 
 Create an in-memory I/O stream.
 """
@@ -5046,14 +5046,14 @@ last argument optionally specifies a size beyond which the buffer may not be gro
 IOBuffer(data=?)
 
 """
-    findmax(itr) -> (x, index)
+    findmax(itr) --> (x, index)
 
 Returns the maximum element and its index.
 """
 findmax(itr)
 
 """
-    findmax(A, dims) -> (maxval, index)
+    findmax(A, dims) --> (maxval, index)
 
 For an array input, returns the value and index of the maximum over the given dimensions.
 """
@@ -5202,7 +5202,7 @@ Open a file and read its contents. `args` is passed to `read`: this is equivalen
 read(filename, args...)
 
 """
-    isopen(object) -> Bool
+    isopen(object) [::] Bool
 
 Determine whether an object - such as a stream, timer, or mmap -- is not yet closed. Once an
 object is closed, it will never produce a new event. However, a closed stream may still have
@@ -5212,7 +5212,7 @@ to be notified when a stream might be writable or readable.
 isopen
 
 """
-    shift!(collection) -> item
+    shift!(collection) --> item
 
 Remove the first `item` from `collection`.
 
@@ -5255,7 +5255,7 @@ Run a command object asynchronously, returning the resulting `Process` object.
 spawn
 
 """
-    isposdef(A) -> Bool
+    isposdef(A) [::] Bool
 
 Test whether a matrix is positive definite.
 """
@@ -5445,7 +5445,7 @@ See `read` for a description of the `all` option.
 readbytes!
 
 """
-    basename(path::AbstractString) -> AbstractString
+    basename(path::AbstractString) [::] AbstractString
 
 Get the file name part of a path.
 """
@@ -5475,7 +5475,7 @@ delete a non-existent element.
 KeyError
 
 """
-    isdiag(A) -> Bool
+    isdiag(A) [::] Bool
 
 Test whether a matrix is diagonal.
 """
@@ -5490,7 +5490,7 @@ Equivalent to `!is(x, y)`.
 Base.:(!==)
 
 """
-    trailing_ones(x::Integer) -> Integer
+    trailing_ones(x::Integer) [::] Integer
 
 Number of ones trailing the binary representation of `x`.
 
@@ -5510,7 +5510,7 @@ many times (equivalent to `take(repeated(x), n)`).
 repeated
 
 """
-    isnumber(c::Union{Char,AbstractString}) -> Bool
+    isnumber(c::Union{Char,AbstractString}) [::] Bool
 
 Tests whether a character is numeric, or whether this is true for all elements of a string.
 A character is classified as numeric if it belongs to the Unicode general category Number,
@@ -5528,7 +5528,7 @@ original.
 copy
 
 """
-    isempty(collection) -> Bool
+    isempty(collection) [::] Bool
 
 Determine whether a collection is empty (has no elements).
 
@@ -5572,7 +5572,7 @@ Equivalent to `stat(file).ctime`
 ctime
 
 """
-    normpath(path::AbstractString) -> AbstractString
+    normpath(path::AbstractString) [::] AbstractString
 
 Normalize a path, removing "." and ".." entries.
 """
@@ -5588,7 +5588,7 @@ See also [`mark`](:func:`mark`), [`reset`](:func:`reset`), [`ismarked`](:func:`i
 unmark
 
 """
-    module_name(m::Module) -> Symbol
+    module_name(m::Module) [::] Symbol
 
 Get the name of a `Module` as a `Symbol`.
 """
@@ -5620,14 +5620,14 @@ Convert a hexadecimal string to the floating point number it represents.
 hex2num
 
 """
-    ndims(A) -> Integer
+    ndims(A) [::] Integer
 
 Returns the number of dimensions of `A`.
 """
 ndims
 
 """
-    ishermitian(A) -> Bool
+    ishermitian(A) [::] Bool
 
 Test whether a matrix is Hermitian.
 """
@@ -5695,7 +5695,7 @@ The highest value representable by the given (real) numeric `DataType`.
 typemax
 
 """
-    all(itr) -> Bool
+    all(itr) [::] Bool
 
 Test whether all elements of a boolean collection are `true`.
 """
@@ -5709,7 +5709,7 @@ Test whether all values along the given dimensions of an array are `true`.
 all(A::AbstractArray, dims)
 
 """
-    all(p, itr) -> Bool
+    all(p, itr) [::] Bool
 
 Determine whether predicate `p` returns `true` for all elements of `itr`.
 
@@ -5736,7 +5736,7 @@ Smallest integer larger than or equal to `x/y`.
 cld
 
 """
-    issetuid(path) -> Bool
+    issetuid(path) [::] Bool
 
 Returns `true` if `path` has the setuid flag set, `false` otherwise.
 """
@@ -5764,7 +5764,7 @@ The arguments to a function or constructor are outside the valid domain.
 DomainError
 
 """
-    issymmetric(A) -> Bool
+    issymmetric(A) [::] Bool
 
 Test whether a matrix is symmetric.
 """
@@ -5883,18 +5883,18 @@ given string, searching in reverse from `start`.
 rsearch
 
 """
-    isdirpath(path::AbstractString) -> Bool
+    isdirpath(path::AbstractString) [::] Bool
 
 Determines whether a path refers to a directory (for example, ends with a path separator).
 """
 isdirpath
 
 """
-    in(item, collection) -> Bool
-    ∈(item,collection) -> Bool
-    ∋(collection,item) -> Bool
-    ∉(item,collection) -> Bool
-    ∌(collection,item) -> Bool
+    in(item, collection) [::] Bool
+    ∈(item,collection) [::] Bool
+    ∋(collection,item) [::] Bool
+    ∉(item,collection) [::] Bool
+    ∌(collection,item) [::] Bool
 
 Determine whether an item is in the given collection, in the sense that it is `==` to one of
 the values generated by iterating over the collection. Some collections need a slightly
@@ -5906,7 +5906,7 @@ the presence of a key in a dictionary, use [`haskey`](:func:`haskey`) or `k in k
 Base.in
 
 """
-    isblockdev(path) -> Bool
+    isblockdev(path) [::] Bool
 
 Returns `true` if `path` is a block device, `false` otherwise.
 """
@@ -5945,7 +5945,7 @@ Seek a stream to its beginning.
 seekstart
 
 """
-    nfields(x::DataType) -> Int
+    nfields(x::DataType) [::] Int
 
 Get the number of fields of a `DataType`.
 """
@@ -6151,7 +6151,7 @@ Equivalent to `readdlm` with `delim` set to comma.
 readcsv
 
 """
-    current_module() -> Module
+    current_module() [::] Module
 
 Get the *dynamically* current `Module`, which is the `Module` code is currently being read
 from. In general, this is not the same as the module containing the call to this function.
@@ -6181,7 +6181,7 @@ Perform garbage collection. This should not generally be used.
 gc
 
 """
-    iscntrl(c::Union{Char,AbstractString}) -> Bool
+    iscntrl(c::Union{Char,AbstractString}) [::] Bool
 
 Tests whether a character is a control character, or whether this is true for all elements
 of a string. Control characters are the non-printing characters of the Latin-1 subset of Unicode.
@@ -6244,14 +6244,14 @@ types with a canonical total order should implement `isless`.
 Base.:(<)
 
 """
-    EnvHash() -> EnvHash
+    EnvHash() [::] EnvHash
 
 A singleton of this type provides a hash table interface to environment variables.
 """
 EnvHash
 
 """
-    method_exists(f, Tuple type) -> Bool
+    method_exists(f, Tuple type) [::] Bool
 
 Determine whether the given generic function has a method matching the given
 [`Tuple`](:obj:`Tuple`) of argument types.
@@ -6288,7 +6288,7 @@ used only with extreme caution, as it can cause memory use to grow without bound
 gc_enable
 
 """
-    sub2ind(dims, i, j, k...) -> index
+    sub2ind(dims, i, j, k...) --> index
 
 The inverse of `ind2sub`, returns the linear index corresponding to the provided subscripts.
 """
@@ -6327,7 +6327,7 @@ but may provide increased accuracy and/or speed.
 logabsdet
 
 """
-    joinpath(parts...) -> AbstractString
+    joinpath(parts...) [::] AbstractString
 
 Join path components into a full path. If some argument is an absolute path, then prior
 components are dropped.
@@ -6342,14 +6342,14 @@ Get the precision (in bits) currently used for `BigFloat` arithmetic.
 precision(::Type{BigFloat})
 
 """
-    homedir() -> AbstractString
+    homedir() [::] AbstractString
 
 Return the current user's home directory.
 """
 homedir
 
 """
-    count_zeros(x::Integer) -> Integer
+    count_zeros(x::Integer) [::] Integer
 
 Number of zeros in the binary representation of `x`.
 
@@ -6361,7 +6361,7 @@ julia> count_zeros(Int32(2 ^ 16 - 1))
 count_zeros
 
 """
-    isinf(f) -> Bool
+    isinf(f) [::] Bool
 
 Test whether a number is infinite.
 """
@@ -6501,7 +6501,7 @@ argument specifies a random number generator, see [Random Numbers](:ref:`Random 
 randcycle
 
 """
-    leading_zeros(x::Integer) -> Integer
+    leading_zeros(x::Integer) [::] Integer
 
 Number of zeros leading the binary representation of `x`.
 
@@ -6529,7 +6529,7 @@ lexicographically comparable types, and `lexless` will call `lexcmp` by default.
 lexcmp
 
 """
-    isupper(c::Union{Char,AbstractString}) -> Bool
+    isupper(c::Union{Char,AbstractString}) [::] Bool
 
 Tests whether a character is an uppercase letter, or whether this is true for all elements
 of a string. A character is classified as uppercase if it belongs to Unicode category Lu,
@@ -6557,14 +6557,14 @@ but deprecated.
 Array
 
 """
-    isreal(x) -> Bool
+    isreal(x) [::] Bool
 
 Test whether `x` or all its elements are numerically equal to some real number.
 """
 isreal
 
 """
-    randsubseq(A, p) -> Vector
+    randsubseq(A, p) [::] Vector
 
 Return a vector consisting of a random subsequence of the given array `A`, where each
 element of `A` is included (in order) with independent probability `p`. (Complexity is
@@ -6686,14 +6686,14 @@ For matrices or vectors ``A`` and ``B``, calculates ``A / Bᵀ``.
 A_rdiv_Bt
 
 """
-    pwd() -> AbstractString
+    pwd() [::] AbstractString
 
 Get the current working directory.
 """
 pwd
 
 """
-    getipaddr() -> IPAddr
+    getipaddr() [::] IPAddr
 
 Get the IP address of the local machine.
 """
@@ -6878,7 +6878,7 @@ Get the vector of processes that have mapped the shared array.
 procs(::SharedArray)
 
 """
-    qr(A [,pivot=Val{false}][;thin=true]) -> Q, R, [p]
+    qr(A [,pivot=Val{false}][;thin=true]) --> (Q, R, [p])
 
 Compute the (pivoted) QR factorization of `A` such that either `A = Q*R` or `A[:,p] = Q*R`.
 Also see `qrfact`. The default is to compute a thin factorization. Note that `R` is not
@@ -6905,7 +6905,7 @@ the same as the way an object is printed in the Julia REPL.)
 TextDisplay
 
 """
-    ismatch(r::Regex, s::AbstractString) -> Bool
+    ismatch(r::Regex, s::AbstractString) [::] Bool
 
 Test whether a string contains a match of the given regular expression.
 """
@@ -6926,7 +6926,7 @@ Similar to `search`, but return only the start index at which the substring is f
 searchindex
 
 """
-    listenany(port_hint) -> (UInt16,TCPServer)
+    listenany(port_hint) [::] {UInt16, TCPServer}
 
 Create a `TCPServer` on any port, using hint as a starting point. Returns a tuple of the
 actual port that the server was created on and the server itself.
@@ -6934,7 +6934,7 @@ actual port that the server was created on and the server itself.
 listenany
 
 """
-    getpid() -> Int32
+    getpid() [::] Int32
 
 Get Julia's process ID.
 """
@@ -6970,7 +6970,7 @@ Find the previous index <= `i` of an element of `A` equal to `v` (using `==`), o
 findprev(A,v,i)
 
 """
-    matchall(r::Regex, s::AbstractString[, overlap::Bool=false]) -> Vector{AbstractString}
+    matchall(r::Regex, s::AbstractString[, overlap::Bool=false]) [::] Vector{AbstractString}
 
 Return a vector of the matching substrings from eachmatch.
 """
@@ -7023,7 +7023,7 @@ will be expanded to the size of `s2`.
 intersect!
 
 """
-    listen([addr,]port) -> TCPServer
+    listen([addr,]port) [::] TCPServer
 
 Listen on port on the address specified by `addr`. By default this listens on localhost
 only. To listen on all interfaces pass `IPv4(0)` or `IPv6(0)` as appropriate.
@@ -7031,14 +7031,14 @@ only. To listen on all interfaces pass `IPv4(0)` or `IPv6(0)` as appropriate.
 listen(addr,port)
 
 """
-    listen(path) -> PipeServer
+    listen(path) [::] PipeServer
 
 Create and listen on a named pipe / UNIX domain socket.
 """
 listen(path)
 
 """
-    leading_ones(x::Integer) -> Integer
+    leading_ones(x::Integer) [::] Integer
 
 Number of ones leading the binary representation of `x`.
 
@@ -7140,7 +7140,7 @@ may be useful for generating different streams of random numbers.
 MersenneTwister
 
 """
-    graphemes(s) -> iterator over substrings of s
+    graphemes(s) --> iterator over substrings of s
 
 Returns an iterator over substrings of `s` that correspond to the extended graphemes in the
 string, as defined by Unicode UAX #29. (Roughly, these are what users would perceive as
@@ -7150,7 +7150,7 @@ letter combined with an accent mark is a single grapheme.)
 graphemes
 
 """
-    @__FILE__ -> AbstractString
+    @__FILE__ [::] AbstractString
 
 `@__FILE__` expands to a string with the absolute file path of the file containing the
 macro. Returns `nothing` if run from a REPL or an empty string if evaluated by
@@ -7166,14 +7166,14 @@ Gives the number of columns needed to print a character.
 charwidth
 
 """
-    abspath(path::AbstractString) -> AbstractString
+    abspath(path::AbstractString) [::] AbstractString
 
 Convert a path to an absolute path by adding the current directory if necessary.
 """
 abspath
 
 """
-    ispunct(c::Union{Char,AbstractString}) -> Bool
+    ispunct(c::Union{Char,AbstractString}) [::] Bool
 
 Tests whether a character belongs to the Unicode general category Punctuation, i.e. a
 character whose category code begins with 'P'. For strings, tests whether this is true for
@@ -7206,21 +7206,21 @@ Compute the trigamma function of `x` (the logarithmic second derivative of `gamm
 trigamma
 
 """
-    findmin(itr) -> (x, index)
+    findmin(itr) --> (x, index)
 
 Returns the minimum element and its index.
 """
 findmin(itr)
 
 """
-    findmin(A, dims) -> (minval, index)
+    findmin(A, dims) --> (minval, index)
 
 For an array input, returns the value and index of the minimum over the given dimensions.
 """
 findmin(A,dims)
 
 """
-    ismount(path) -> Bool
+    ismount(path) [::] Bool
 
 Returns `true` if `path` is a mount point, `false` otherwise.
 """
@@ -7249,14 +7249,14 @@ Boolean not.
 Base.:(!)
 
 """
-    length(A) -> Integer
+    length(A) [::] Integer
 
 Returns the number of elements in `A`.
 """
 length(::AbstractArray)
 
 """
-    length(collection) -> Integer
+    length(collection) [::] Integer
 
 For ordered, indexable collections, the maximum index `i` for which `getindex(collection, i)`
 is valid. For unordered collections, the number of elements.
@@ -7280,7 +7280,7 @@ or `copy!(A, rand(rng, eltype(A), size(A)))` but without allocating a new array.
 rand!
 
 """
-    bkfact(A) -> BunchKaufman
+    bkfact(A) [::] BunchKaufman
 
 Compute the Bunch-Kaufman [^Bunch1977] factorization of a real symmetric or complex Hermitian
 matrix `A` and return a `BunchKaufman` object. The following functions are available for
@@ -7314,7 +7314,7 @@ Denominator of the rational representation of `x`.
 den
 
 """
-    issubnormal(f) -> Bool
+    issubnormal(f) [::] Bool
 
 Test whether a floating point number is subnormal.
 """
@@ -7361,7 +7361,7 @@ For example:
 cfunction
 
 """
-    recvfrom(socket::UDPSocket) -> (address, data)
+    recvfrom(socket::UDPSocket) --> (address, data)
 
 Read a UDP packet from the specified socket, returning a tuple of (address, data), where
 address will be either IPv4 or IPv6 as appropriate.
@@ -7579,7 +7579,7 @@ Convert an array to its complex conjugate in-place.
 conj!
 
 """
-    start(iter) -> state
+    start(iter) --> state
 
 Get initial iteration state for an iterable object.
 """
@@ -7594,7 +7594,7 @@ The quotient from Euclidean division. Computes `x/y`, truncated to an integer.
 div
 
 """
-    relpath(path::AbstractString, startpath::AbstractString = ".") -> AbstractString
+    relpath(path::AbstractString, startpath::AbstractString = ".") [::] AbstractString
 
 Return a relative filepath to path either from the current directory or from an optional
 start directory. This is a path computation: the filesystem is not accessed to confirm the
@@ -7627,7 +7627,7 @@ Return all the data of `A` where the index for dimension `d` equals `i`. Equival
 slicedim
 
 """
-    isa(x, type) -> Bool
+    isa(x, type) [::] Bool
 
 Determine whether `x` is of the given `type`.
 """
@@ -7678,7 +7678,7 @@ for `k == 2 || k == 3`.
 airyx
 
 """
-    get_zero_subnormals() -> Bool
+    get_zero_subnormals() [::] Bool
 
 Returns `false` if operations on subnormal floating-point values ("denormals") obey rules
 for IEEE arithmetic, and `true` if they might be converted to zeros.
@@ -7747,7 +7747,7 @@ Compute the maximum absolute values over given dimensions.
 maxabs(A,dims)
 
 """
-    done(iter, state) -> Bool
+    done(iter, state) [::] Bool
 
 Test whether we are done iterating.
 """
@@ -7831,7 +7831,7 @@ For matrices or vectors ``A`` and ``B``, calculates ``A`` \\ ``Bᵀ``.
 A_ldiv_Bt
 
 """
-    applicable(f, args...) -> Bool
+    applicable(f, args...) [::] Bool
 
 Determine whether the given generic function has a method applicable to the given arguments.
 
@@ -7867,7 +7867,7 @@ fma
 
 """
 
-    eigvals(A,[irange,][vl,][vu]) -> values
+    eigvals(A,[irange,][vl,][vu]) --> values
 
 Returns the eigenvalues of `A`. If `A` is `Symmetric`, `Hermitian` or `SymTridiagonal`,
 it is possible to calculate only a subset of the eigenvalues by specifying either a
@@ -7890,7 +7890,7 @@ For matrices or vectors ``A`` and ``B``, calculates ``A`` \\ ``Bᴴ``.
 A_ldiv_Bc
 
 """
-    escape_string(str::AbstractString) -> AbstractString
+    escape_string(str::AbstractString) [::] AbstractString
 
 General escaping of traditional C and Unicode escape sequences.
 """
@@ -8051,7 +8051,7 @@ available in the `.error` field.
 InitError
 
 """
-    vec(Array) -> Vector
+    vec(Array) [::] Vector
 
 Vectorize an array using column-major convention.
 """
@@ -8081,7 +8081,7 @@ an array of the results `f(as...)` for each position.
 broadcast
 
 """
-    eigvecs(A, [eigvals,][permute=true,][scale=true]) -> Matrix
+    eigvecs(A, [eigvals,][permute=true,][scale=true]) [::] Matrix
 
 Returns a matrix `M` whose columns are the eigenvectors of `A`. (The `k`th eigenvector can
 be obtained from the slice `M[:, k]`.) The `permute` and `scale` keywords are the same as
@@ -8100,7 +8100,7 @@ Converts the endianness of a value from Network byte order (big-endian) to that 
 ntoh
 
 """
-    qrfact(A) -> SPQR.Factorization
+    qrfact(A) [::] SPQR.Factorization
 
 Compute the QR factorization of a sparse matrix `A`. A fill-reducing permutation is used.
 The main application of this type is to solve least squares problems with `\\`. The function
@@ -8124,7 +8124,7 @@ The identity function. Returns its argument.
 identity
 
 """
-    iseven(x::Integer) -> Bool
+    iseven(x::Integer) [::] Bool
 
 Returns `true` is `x` is even (that is, divisible by 2), and `false` otherwise.
 
@@ -8178,7 +8178,7 @@ Reconstruct the matrix `A` from the factorization `F=factorize(A)`.
 full(F)
 
 """
-    full(QRCompactWYQ[, thin=true]) -> Matrix
+    full(QRCompactWYQ[, thin=true]) [::] Matrix
 
 Converts an orthogonal or unitary matrix stored as a `QRCompactWYQ` object, i.e. in the
 compact WY format [^Bischof1987], to a dense matrix.
@@ -8191,7 +8191,7 @@ that spans all rows of `R` in its corresponding QR factorization.
 full(::LinAlg.QRCompactWYQ, ?)
 
 """
-    map(f, c...) -> collection
+    map(f, c...) --> collection
 
 Transform collection `c` by applying `f` to each element. For multiple collection arguments,
 apply `f` elementwise.
@@ -8243,7 +8243,7 @@ Throw an object as an exception.
 throw
 
 """
-    isxdigit(c::Union{Char,AbstractString}) -> Bool
+    isxdigit(c::Union{Char,AbstractString}) [::] Bool
 
 Tests whether a character is a valid hexadecimal digit, or whether this is true for all elements of a string.
 """
@@ -8261,14 +8261,14 @@ dims)` will return an array filled with the result of evaluating `Foo()` once.
 fill
 
 """
-    rol!(dest::BitArray{1}, src::BitArray{1}, i::Integer) -> BitArray{1}
+    rol!(dest::BitArray{1}, src::BitArray{1}, i::Integer) [::] BitArray{1}
 
 Performs a left rotation operation on `src` and put the result into `dest`.
 """
 rol!(::BitArray,::BitArray,::Integer)
 
 """
-    rol!(B::BitArray{1}, i::Integer) -> BitArray{1}
+    rol!(B::BitArray{1}, i::Integer) [::] BitArray{1}
 
 Performs a left rotation operation on `B`.
 """
@@ -8276,24 +8276,24 @@ rol!(::BitArray,::Integer)
 
 """
     issubset(a, b)
-    ⊆(a,b) -> Bool
-    ⊈(a,b) -> Bool
-    ⊊(a,b) -> Bool
+    ⊆(a,b) [::] Bool
+    ⊈(a,b) [::] Bool
+    ⊊(a,b) [::] Bool
 
 Determine whether every element of `a` is also in `b`, using [`in`](:func:`in`).
 """
 issubset(a,b)
 
 """
-    issubset(A, S) -> Bool
-    ⊆(A,S) -> Bool
+    issubset(A, S) [::] Bool
+    ⊆(A,S) [::] Bool
 
 Return `true` if `A` is a subset of or equal to `S`.
 """
 issubset
 
 """
-    istriu(A) -> Bool
+    istriu(A) [::] Bool
 
 Test whether a matrix is upper triangular.
 """
@@ -8315,7 +8315,7 @@ collection. `destination` must be at least as large as the first collection.
 map!(f,destination,collection...)
 
 """
-    unescape_string(s::AbstractString) -> AbstractString
+    unescape_string(s::AbstractString) [::] AbstractString
 
 General unescaping of traditional C and Unicode escape sequences. Reverse of
 [`escape_string`](:func:`escape_string`). See also [`unescape_string`](:func:`unescape_string`).
@@ -8358,7 +8358,7 @@ type. This is similar to `reprmime` except that binary data is base64-encoded as
 stringmime
 
 """
-    ischardev(path) -> Bool
+    ischardev(path) [::] Bool
 
 Returns `true` if `path` is a character device, `false` otherwise.
 """
@@ -8372,7 +8372,7 @@ Get the additive identity element for the type of `x` (`x` can also specify the 
 zero
 
 """
-    any(itr) -> Bool
+    any(itr) [::] Bool
 
 Test whether any elements of a boolean collection are `true`.
 """
@@ -8386,7 +8386,7 @@ Test whether any values along the given dimensions of an array are `true`.
 any(::AbstractArray,dims)
 
 """
-    any(p, itr) -> Bool
+    any(p, itr) [::] Bool
 
 Determine whether predicate `p` returns `true` for any elements of `itr`.
 """
@@ -8443,7 +8443,7 @@ Create an array of all zeros with the same element type and shape as `A`.
 zeros(A)
 
 """
-    Symbol(x...) -> Symbol
+    Symbol(x...) [::] Symbol
 
 Create a `Symbol` by concatenating the string representations of the arguments together.
 """
@@ -8475,7 +8475,7 @@ For example, if `A` is a matrix and `p=2`, then this is equivalent to the Froben
 vecnorm
 
 """
-    isvalid(value) -> Bool
+    isvalid(value) [::] Bool
 
 Returns `true` if the given value is valid for its type, which currently can be either
 `Char` or `String`.
@@ -8483,7 +8483,7 @@ Returns `true` if the given value is valid for its type, which currently can be 
 isvalid(value)
 
 """
-    isvalid(T, value) -> Bool
+    isvalid(T, value) [::] Bool
 
 Returns `true` if the given value is valid for that type. Types currently can
 be either `Char` or `String`. Values for `Char` can be of type `Char` or `UInt32`.
@@ -8515,7 +8515,7 @@ Like `broadcast`, but allocates a `BitArray` to store the result, rather then an
 bitbroadcast
 
 """
-    set_zero_subnormals(yes::Bool) -> Bool
+    set_zero_subnormals(yes::Bool) [::] Bool
 
 If `yes` is `false`, subsequent floating-point operations follow rules for IEEE arithmetic
 on subnormal values ("denormals"). Otherwise, floating-point operations are permitted (but
@@ -8579,7 +8579,7 @@ Get the time in nanoseconds. The time corresponding to 0 is undefined, and wraps
 time_ns
 
 """
-    exponent(x) -> Int
+    exponent(x) [::] Int
 
 Get the exponent of a normalized floating-point number.
 """
@@ -8601,7 +8601,7 @@ equivalent to `x*y+z`, or to `fma(x,y,z)`. `muladd` is used to improve performan
 muladd
 
 """
-    unsigned(x) -> Unsigned
+    unsigned(x) [::] Unsigned
 
 Convert a number to an unsigned integer. If the argument is signed, it is reinterpreted as
 unsigned without checking for negative values.
@@ -8609,7 +8609,7 @@ unsigned without checking for negative values.
 unsigned
 
 """
-    eigfact(A,[irange,][vl,][vu,][permute=true,][scale=true]) -> Eigen
+    eigfact(A,[irange,][vl,][vu,][permute=true,][scale=true]) [::] Eigen
 
 Computes the eigenvalue decomposition of `A`, returning an `Eigen` factorization object `F`
 which contains the eigenvalues in `F[:values]` and the eigenvectors in the columns of the
@@ -8631,7 +8631,7 @@ make rows and columns more equal in norm. The default is `true` for both options
 eigfact(A,?,?,?,?)
 
 """
-    eigfact(A, B) -> GeneralizedEigen
+    eigfact(A, B) [::] GeneralizedEigen
 
 Computes the generalized eigenvalue decomposition of `A` and `B`, returning a
 `GeneralizedEigen` factorization object `F` which contains the generalized eigenvalues in
@@ -8753,7 +8753,7 @@ transformation is performed internally to map the infinite interval to a finite 
 quadgk
 
 """
-    islower(c::Union{Char,AbstractString}) -> Bool
+    islower(c::Union{Char,AbstractString}) [::] Bool
 
 Tests whether a character is a lowercase letter, or whether this is true for all elements of
 a string. A character is classified as lowercase if it belongs to Unicode category Ll,
@@ -8774,7 +8774,7 @@ all stream types support the `all` option.
 read
 
 """
-    eig(A,[irange,][vl,][vu,][permute=true,][scale=true]) -> D, V
+    eig(A,[irange,][vl,][vu,][permute=true,][scale=true]) --> (D, V)
 
 Computes eigenvalues and eigenvectors of `A`. See [`eigfact`](:func:`eigfact`) for details
 on the `permute` and `scale` keyword arguments. The eigenvectors are returned columnwise.
@@ -8791,7 +8791,7 @@ factorization to a tuple; where possible, using [`eigfact`](:func:`eigfact`) is 
 eig(A,?,?,?)
 
 """
-    eig(A, B) -> D, V
+    eig(A, B) --> (D, V)
 
 Computes generalized eigenvalues and vectors of `A` with respect to `B`.
 
@@ -8859,7 +8859,7 @@ Test whether all values in `A` along the singleton dimensions of `r` are `true`,
 all!
 
 """
-    is_assigned_char(c) -> Bool
+    is_assigned_char(c) [::] Bool
 
 Returns `true` if the given char or integer is an assigned Unicode code point.
 """
@@ -8888,7 +8888,7 @@ Update collection with pairs from the other collections.
 merge!
 
 """
-    realpath(path::AbstractString) -> AbstractString
+    realpath(path::AbstractString) [::] AbstractString
 
 Canonicalize a path by expanding symbolic links and removing "." and ".." entries.
 """
@@ -9020,7 +9020,7 @@ Least common (non-negative) multiple.
 lcm
 
 """
-    isprint(c::Union{Char,AbstractString}) -> Bool
+    isprint(c::Union{Char,AbstractString}) [::] Bool
 
 Tests whether a character is printable, including spaces, but not a control character. For
 strings, tests whether this is true for all elements of the string.
@@ -9028,7 +9028,7 @@ strings, tests whether this is true for all elements of the string.
 isprint
 
 """
-    splitdir(path::AbstractString) -> (AbstractString,AbstractString)
+    splitdir(path::AbstractString) [::] {AbstractString, AbstractString}
 
 Split a path into a tuple of the directory name and file name.
 """
@@ -9060,7 +9060,7 @@ having to test the boolean value at runtime.
 Val
 
 """
-    iswritable(io) -> Bool
+    iswritable(io) [::] Bool
 
 Returns `true` if the specified IO object is writable (if that can be determined).
 """
@@ -9092,7 +9092,7 @@ output stream and input stream of the process, and the process object itself.
 readandwrite
 
 """
-    splitdrive(path::AbstractString) -> (AbstractString,AbstractString)
+    splitdrive(path::AbstractString) [::] {AbstractString, AbstractString}
 
 On Windows, split a path into the drive letter part and the path part. On Unix systems, the
 first component is always the empty string.
@@ -9108,7 +9108,7 @@ Delete and return the mapping for `key` if it exists in `collection`, otherwise 
 pop!(collection,key,?)
 
 """
-    pop!(collection) -> item
+    pop!(collection) --> item
 
 Remove the last item in `collection` and return it.
 
@@ -9177,7 +9177,7 @@ Optional argument `msg` is a descriptive error string.
 AssertionError
 
 """
-    ror(B::BitArray{1}, i::Integer) -> BitArray{1}
+    ror(B::BitArray{1}, i::Integer) [::] BitArray{1}
 
 Performs a right rotation operation.
 """
@@ -9284,7 +9284,7 @@ Get the currently running `Task`.
 current_task
 
 """
-    randjump(r::MersenneTwister, jumps, [jumppoly]) -> Vector{MersenneTwister}
+    randjump(r::MersenneTwister, jumps, [jumppoly]) [::] Vector{MersenneTwister}
 
 Create an array of the size `jumps` of initialized `MersenneTwister` RNG objects where the
 first RNG object given as a parameter and following `MersenneTwister` RNGs in the array
@@ -9313,14 +9313,14 @@ Bitwise exclusive or.
 Base.:$(x, y)
 
 """
-    getsockname(sock::Union{TCPServer, TCPSocket}) -> (IPAddr,UInt16)
+    getsockname(sock::Union{TCPServer, TCPSocket}) [::] {IPAddr, UInt16}
 
 Get the IP address and the port that the given TCP socket is connected to (or bound to, in the case of TCPServer).
 """
 getsockname
 
 """
-    Base.remoteref_id(r::AbstractRemoteRef) -> (whence, id)
+    Base.remoteref_id(r::AbstractRemoteRef) --> (whence, id)
 
 A low-level API which returns the unique identifying tuple for a remote reference. A
 reference id is a tuple of two elements - pid where the reference was created from and a
@@ -9329,7 +9329,7 @@ one-up number from that node.
 Base.remoteref_id
 
 """
-    Base.channel_from_id(refid) -> c
+    Base.channel_from_id(refid) --> c
 
 A low-level API which returns the backing AbstractChannel for an id returned by
 `remoteref_id`. The call is valid only on the node where the backing channel exists.
@@ -9337,7 +9337,7 @@ A low-level API which returns the backing AbstractChannel for an id returned by
 Base.channel_from_id
 
 """
-    Base.worker_id_from_socket(s::IO) -> pid
+    Base.worker_id_from_socket(s::IO) --> pid
 
 A low-level API which given a `IO` connection, returns the pid of the worker it is connected
 to. This is useful when writing custom `serialize` methods for a type, which optimizes the
@@ -9346,7 +9346,7 @@ data written out depending on the receiving process id.
 Base.worker_id_from_socket
 
 """
-    Base.cluster_cookie([cookie]) -> cookie
+    Base.cluster_cookie([cookie]) --> cookie
 
 Returns the cluster cookie. If a cookie is passed, also sets it as the cluster cookie.
 """

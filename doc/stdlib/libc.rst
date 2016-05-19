@@ -6,19 +6,19 @@
 
 .. currentmodule:: Base.Libc
 
-.. function:: malloc(size::Integer) -> Ptr{Void}
+.. function:: malloc(size::Integer) [::] Ptr{Void}
 
    .. Docstring generated from Julia source
 
    Call ``malloc`` from the C standard library.
 
-.. function:: calloc(num::Integer, size::Integer) -> Ptr{Void}
+.. function:: calloc(num::Integer, size::Integer) [::] Ptr{Void}
 
    .. Docstring generated from Julia source
 
    Call ``calloc`` from the C standard library.
 
-.. function:: realloc(addr::Ptr, size::Integer) -> Ptr{Void}
+.. function:: realloc(addr::Ptr, size::Integer) [::] Ptr{Void}
 
    .. Docstring generated from Julia source
 

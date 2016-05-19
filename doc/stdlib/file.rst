@@ -4,7 +4,7 @@
  Filesystem
 ************
 
-.. function:: pwd() -> AbstractString
+.. function:: pwd() [::] AbstractString
 
    .. Docstring generated from Julia source
 
@@ -22,7 +22,7 @@
 
    Temporarily changes the current working directory and applies function ``f`` before returning.
 
-.. function:: readdir([dir]) -> Vector{String}
+.. function:: readdir([dir]) [::] Vector{String}
 
    .. Docstring generated from Julia source
 
@@ -69,7 +69,7 @@
       This function raises an error under operating systems that do not support soft symbolic links, such as Windows XP.
 
 
-.. function:: readlink(path) -> AbstractString
+.. function:: readlink(path) [::] AbstractString
 
    .. Docstring generated from Julia source
 
@@ -249,169 +249,169 @@
 
    Apply the function ``f`` to the result of ``mktempdir(parent)`` and remove the temporary directory upon completion.
 
-.. function:: isblockdev(path) -> Bool
+.. function:: isblockdev(path) [::] Bool
 
    .. Docstring generated from Julia source
 
    Returns ``true`` if ``path`` is a block device, ``false`` otherwise.
 
-.. function:: ischardev(path) -> Bool
+.. function:: ischardev(path) [::] Bool
 
    .. Docstring generated from Julia source
 
    Returns ``true`` if ``path`` is a character device, ``false`` otherwise.
 
-.. function:: isdir(path) -> Bool
+.. function:: isdir(path) [::] Bool
 
    .. Docstring generated from Julia source
 
    Returns ``true`` if ``path`` is a directory, ``false`` otherwise.
 
-.. function:: isfifo(path) -> Bool
+.. function:: isfifo(path) [::] Bool
 
    .. Docstring generated from Julia source
 
    Returns ``true`` if ``path`` is a FIFO, ``false`` otherwise.
 
-.. function:: isfile(path) -> Bool
+.. function:: isfile(path) [::] Bool
 
    .. Docstring generated from Julia source
 
    Returns ``true`` if ``path`` is a regular file, ``false`` otherwise.
 
-.. function:: islink(path) -> Bool
+.. function:: islink(path) [::] Bool
 
    .. Docstring generated from Julia source
 
    Returns ``true`` if ``path`` is a symbolic link, ``false`` otherwise.
 
-.. function:: ismount(path) -> Bool
+.. function:: ismount(path) [::] Bool
 
    .. Docstring generated from Julia source
 
    Returns ``true`` if ``path`` is a mount point, ``false`` otherwise.
 
-.. function:: ispath(path) -> Bool
+.. function:: ispath(path) [::] Bool
 
    .. Docstring generated from Julia source
 
    Returns ``true`` if ``path`` is a valid filesystem path, ``false`` otherwise.
 
-.. function:: issetgid(path) -> Bool
+.. function:: issetgid(path) [::] Bool
 
    .. Docstring generated from Julia source
 
    Returns ``true`` if ``path`` has the setgid flag set, ``false`` otherwise.
 
-.. function:: issetuid(path) -> Bool
+.. function:: issetuid(path) [::] Bool
 
    .. Docstring generated from Julia source
 
    Returns ``true`` if ``path`` has the setuid flag set, ``false`` otherwise.
 
-.. function:: issocket(path) -> Bool
+.. function:: issocket(path) [::] Bool
 
    .. Docstring generated from Julia source
 
    Returns ``true`` if ``path`` is a socket, ``false`` otherwise.
 
-.. function:: issticky(path) -> Bool
+.. function:: issticky(path) [::] Bool
 
    .. Docstring generated from Julia source
 
    Returns ``true`` if ``path`` has the sticky bit set, ``false`` otherwise.
 
-.. function:: homedir() -> AbstractString
+.. function:: homedir() [::] AbstractString
 
    .. Docstring generated from Julia source
 
    Return the current user's home directory.
 
-.. function:: dirname(path::AbstractString) -> AbstractString
+.. function:: dirname(path::AbstractString) [::] AbstractString
 
    .. Docstring generated from Julia source
 
    Get the directory part of a path.
 
-.. function:: basename(path::AbstractString) -> AbstractString
+.. function:: basename(path::AbstractString) [::] AbstractString
 
    .. Docstring generated from Julia source
 
    Get the file name part of a path.
 
-.. function:: @__FILE__ -> AbstractString
+.. function:: @__FILE__ [::] AbstractString
 
    .. Docstring generated from Julia source
 
    ``@__FILE__`` expands to a string with the absolute file path of the file containing the macro. Returns ``nothing`` if run from a REPL or an empty string if evaluated by ``julia -e <expr>``\ . Alternatively see :data:`PROGRAM_FILE`\ .
 
-.. function:: @__LINE__ -> Int
+.. function:: @__LINE__ [::] Int
 
    .. Docstring generated from Julia source
 
    ``@__LINE__`` expands to the line number of the call-site.
 
-.. function:: isabspath(path::AbstractString) -> Bool
+.. function:: isabspath(path::AbstractString) [::] Bool
 
    .. Docstring generated from Julia source
 
    Determines whether a path is absolute (begins at the root directory).
 
-.. function:: isdirpath(path::AbstractString) -> Bool
+.. function:: isdirpath(path::AbstractString) [::] Bool
 
    .. Docstring generated from Julia source
 
    Determines whether a path refers to a directory (for example, ends with a path separator).
 
-.. function:: joinpath(parts...) -> AbstractString
+.. function:: joinpath(parts...) [::] AbstractString
 
    .. Docstring generated from Julia source
 
    Join path components into a full path. If some argument is an absolute path, then prior components are dropped.
 
-.. function:: abspath(path::AbstractString) -> AbstractString
+.. function:: abspath(path::AbstractString) [::] AbstractString
 
    .. Docstring generated from Julia source
 
    Convert a path to an absolute path by adding the current directory if necessary.
 
-.. function:: normpath(path::AbstractString) -> AbstractString
+.. function:: normpath(path::AbstractString) [::] AbstractString
 
    .. Docstring generated from Julia source
 
    Normalize a path, removing "." and ".." entries.
 
-.. function:: realpath(path::AbstractString) -> AbstractString
+.. function:: realpath(path::AbstractString) [::] AbstractString
 
    .. Docstring generated from Julia source
 
    Canonicalize a path by expanding symbolic links and removing "." and ".." entries.
 
-.. function:: relpath(path::AbstractString, startpath::AbstractString = ".") -> AbstractString
+.. function:: relpath(path::AbstractString, startpath::AbstractString = ".") [::] AbstractString
 
    .. Docstring generated from Julia source
 
    Return a relative filepath to path either from the current directory or from an optional start directory. This is a path computation: the filesystem is not accessed to confirm the existence or nature of path or startpath.
 
-.. function:: expanduser(path::AbstractString) -> AbstractString
+.. function:: expanduser(path::AbstractString) [::] AbstractString
 
    .. Docstring generated from Julia source
 
    On Unix systems, replace a tilde character at the start of a path with the current user's home directory.
 
-.. function:: splitdir(path::AbstractString) -> (AbstractString,AbstractString)
+.. function:: splitdir(path::AbstractString) [::] {AbstractString, AbstractString}
 
    .. Docstring generated from Julia source
 
    Split a path into a tuple of the directory name and file name.
 
-.. function:: splitdrive(path::AbstractString) -> (AbstractString,AbstractString)
+.. function:: splitdrive(path::AbstractString) [::] {AbstractString, AbstractString}
 
    .. Docstring generated from Julia source
 
    On Windows, split a path into the drive letter part and the path part. On Unix systems, the first component is always the empty string.
 
-.. function:: splitext(path::AbstractString) -> (AbstractString,AbstractString)
+.. function:: splitext(path::AbstractString) [::] {AbstractString, AbstractString}
 
    .. Docstring generated from Julia source
 

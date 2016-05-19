@@ -9,7 +9,7 @@
 Basic functions
 ---------------
 
-.. function:: ndims(A) -> Integer
+.. function:: ndims(A) [::] Integer
 
    .. Docstring generated from Julia source
 
@@ -43,7 +43,7 @@ Basic functions
 
    Returns the valid range of indices for array ``A`` along dimension ``d``\ .
 
-.. function:: length(A) -> Integer
+.. function:: length(A) [::] Integer
 
    .. Docstring generated from Julia source
 
@@ -128,7 +128,7 @@ Basic functions
 
    Returns a tuple of the memory strides in each dimension.
 
-.. function:: ind2sub(dims, index) -> subscripts
+.. function:: ind2sub(dims, index) --> subscripts
 
    .. Docstring generated from Julia source
 
@@ -142,13 +142,13 @@ Basic functions
 
    provides the indices of the maximum element.
 
-.. function:: ind2sub(a, index) -> subscripts
+.. function:: ind2sub(a, index) --> subscripts
 
    .. Docstring generated from Julia source
 
    Returns a tuple of subscripts into array ``a`` corresponding to the linear index ``index``\ .
 
-.. function:: sub2ind(dims, i, j, k...) -> index
+.. function:: sub2ind(dims, i, j, k...) --> index
 
    .. Docstring generated from Julia source
 
@@ -610,7 +610,7 @@ Indexing, Assignment, and Concatenation
 
    Remove the dimensions specified by ``dims`` from array ``A``\ . Elements of ``dims`` must be unique and within the range ``1:ndims(A)``\ .
 
-.. function:: vec(Array) -> Vector
+.. function:: vec(Array) [::] Vector
 
    .. Docstring generated from Julia source
 
@@ -642,7 +642,7 @@ Indexing, Assignment, and Concatenation
 
    Return ``true`` if the given ``index`` is within the bounds of ``inds``\ . Custom types that would like to behave as indices for all arrays can extend this method in order to provide a specialized bounds checking implementation.
 
-.. function:: randsubseq(A, p) -> Vector
+.. function:: randsubseq(A, p) [::] Vector
 
    .. Docstring generated from Julia source
 
@@ -788,7 +788,7 @@ Combinatorics
 
    Return the inverse permutation of ``v``
 
-.. function:: isperm(v) -> Bool
+.. function:: isperm(v) [::] Bool
 
    .. Docstring generated from Julia source
 
@@ -838,7 +838,7 @@ Combinatorics
 
    Given an index ``i`` in ``reverse(v)``\ , return the corresponding index in ``v`` so that ``v[reverseind(v,i)] == reverse(v)[i]``\ . (This can be nontrivial in the case where ``v`` is a Unicode string.)
 
-.. function:: reverse!(v [, start=1 [, stop=length(v) ]]) -> v
+.. function:: reverse!(v [, start=1 [, stop=length(v) ]]) --> v
 
    .. Docstring generated from Julia source
 
@@ -852,43 +852,43 @@ one bit per boolean value.  They can be used similarly to ``Array{Bool}``
 arrays (which store one byte per boolean value), and can be converted
 to/from the latter via ``Array(bitarray)`` and ``BitArray(array)``, respectively.
 
-.. function:: flipbits!(B::BitArray{N}) -> BitArray{N}
+.. function:: flipbits!(B::BitArray{N}) [::] BitArray{N}
 
    .. Docstring generated from Julia source
 
    Performs a bitwise not operation on ``B``\ . See :ref:`~ operator <~>`\ .
 
-.. function:: rol!(dest::BitArray{1}, src::BitArray{1}, i::Integer) -> BitArray{1}
+.. function:: rol!(dest::BitArray{1}, src::BitArray{1}, i::Integer) [::] BitArray{1}
 
    .. Docstring generated from Julia source
 
    Performs a left rotation operation on ``src`` and put the result into ``dest``\ .
 
-.. function:: rol!(B::BitArray{1}, i::Integer) -> BitArray{1}
+.. function:: rol!(B::BitArray{1}, i::Integer) [::] BitArray{1}
 
    .. Docstring generated from Julia source
 
    Performs a left rotation operation on ``B``\ .
 
-.. function:: rol(B::BitArray{1}, i::Integer) -> BitArray{1}
+.. function:: rol(B::BitArray{1}, i::Integer) [::] BitArray{1}
 
    .. Docstring generated from Julia source
 
    Performs a left rotation operation.
 
-.. function:: ror!(dest::BitArray{1}, src::BitArray{1}, i::Integer) -> BitArray{1}
+.. function:: ror!(dest::BitArray{1}, src::BitArray{1}, i::Integer) [::] BitArray{1}
 
    .. Docstring generated from Julia source
 
    Performs a right rotation operation on ``src`` and put the result into ``dest``\ .
 
-.. function:: ror!(B::BitArray{1}, i::Integer) -> BitArray{1}
+.. function:: ror!(B::BitArray{1}, i::Integer) [::] BitArray{1}
 
    .. Docstring generated from Julia source
 
    Performs a right rotation operation on ``B``\ .
 
-.. function:: ror(B::BitArray{1}, i::Integer) -> BitArray{1}
+.. function:: ror(B::BitArray{1}, i::Integer) [::] BitArray{1}
 
    .. Docstring generated from Julia source
 

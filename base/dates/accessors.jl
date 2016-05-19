@@ -79,7 +79,7 @@ for func in (:year, :month)
     name = string(func)
     @eval begin
         @doc """
-            $($name)(dt::TimeType) -> Int64
+            $($name)(dt::TimeType) [::] Int64
 
         The $($name) of a `Date` or `DateTime` as an `Int64`.
         """ $func(dt::TimeType)
@@ -87,7 +87,7 @@ for func in (:year, :month)
 end
 
 """
-    week(dt::TimeType) -> Int64
+    week(dt::TimeType) [::] Int64
 
 Return the [ISO week date](https://en.wikipedia.org/wiki/ISO_week_date) of a `Date` or
 `DateTime` as an `Int64`. Note that the first week of a year is the week that contains the
@@ -100,7 +100,7 @@ for func in (:day, :dayofmonth)
     name = string(func)
     @eval begin
         @doc """
-            $($name)(dt::TimeType) -> Int64
+            $($name)(dt::TimeType) [::] Int64
 
         The day of month of a `Date` or `DateTime` as an `Int64`.
         """ $func(dt::TimeType)
@@ -108,7 +108,7 @@ for func in (:day, :dayofmonth)
 end
 
 """
-    hour(dt::DateTime) -> Int64
+    hour(dt::DateTime) [::] Int64
 
 The hour of day of a `DateTime` as an `Int64`.
 """
@@ -118,7 +118,7 @@ for func in (:minute, :second, :millisecond)
     name = string(func)
     @eval begin
         @doc """
-            $($name)(dt::DateTime) -> Int64
+            $($name)(dt::DateTime) [::] Int64
 
         The $($name) of a `DateTime` as an `Int64`.
         """ $func(dt::DateTime)
@@ -130,7 +130,7 @@ for parts in (["year", "month"], ["month", "day"], ["year", "month", "day"])
     func = Symbol(name)
     @eval begin
         @doc """
-            $($name)(dt::TimeType) -> ($(join(repeated(Int64, length($parts)), ", ")))
+            $($name)(dt::TimeType) [::] {$(join(repeated(Int64, length($parts)), ", "))}
 
         Simultaneously return the $(join($parts, ", ", " and ")) parts of a `Date` or
         `DateTime`.

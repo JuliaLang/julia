@@ -14,7 +14,7 @@ function A_mul_Bc{T,S}(A::AbstractVecOrMat{T}, R::AbstractRotation{S})
     A_mul_Bc!(TS == T ? copy(A) : convert(AbstractArray{TS}, A), convert(AbstractRotation{TS}, R))
 end
 """
-    LinAlg.Givens(i1,i2,c,s) -> G
+    LinAlg.Givens(i1,i2,c,s) --> G
 
 A Givens rotation linear operator. The fields `c` and `s` represent the cosine and sine of
 the rotation angle, respectively. The `Givens` type supports left multiplication `G*A` and
@@ -232,7 +232,7 @@ end
 
 """
 
-    givens{T}(f::T, g::T, i1::Integer, i2::Integer) -> (G::Givens, r::T)
+    givens{T}(f::T, g::T, i1::Integer, i2::Integer) [::] {Givens, T} --> (G, r)
 
 Computes the Givens rotation `G` and scalar `r` such that for any vector `x` where
 ```
@@ -263,7 +263,7 @@ function givens{T}(f::T, g::T, i1::Integer, i2::Integer)
     Givens(i1, i2, convert(T, c), convert(T, s)), r
 end
 """
-    givens(A::AbstractArray, i1::Integer, i2::Integer, j::Integer) -> (G::Givens, r)
+    givens(A::AbstractArray, i1::Integer, i2::Integer, j::Integer) [::] {Givens, Any} --> (G, r)
 
 Computes the Givens rotation `G` and scalar `r` such that the result of the multiplication
 ```
@@ -278,11 +278,11 @@ B[i2,j] = 0
 See also: [`LinAlg.Givens`](:class:`LinAlg.Givens`)
 """
 givens(A::AbstractMatrix, i1::Integer, i2::Integer, j::Integer) =
-    givens(A[i1,j], A[i2,j],i1,i2)
+    givens(A[i1,j], A[i2,j], i1, i2)
 
 
 """
-    givens(x::AbstractVector, i1::Integer, i2::Integer) -> (G::Givens, r)
+    givens(x::AbstractVector, i1::Integer, i2::Integer) [::] {Givens, Any} --> (G, r)
 
 Computes the Givens rotation `G` and scalar `r` such that the result of the multiplication
 ```

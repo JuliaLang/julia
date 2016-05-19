@@ -625,7 +625,7 @@ whos(pat::Regex) = whos(STDOUT, current_module(), pat)
 #################################################################################
 
 """
-    Base.summarysize(obj; exclude=Union{Module,Function,DataType,TypeName}) -> Int
+    Base.summarysize(obj; exclude=Union{Module,Function,DataType,TypeName}) [::] Int
 
 Compute the amount of memory used by all unique objects reachable from the argument.
 Keyword argument `exclude` specifies a type of objects to exclude from the traversal.

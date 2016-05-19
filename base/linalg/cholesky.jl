@@ -159,7 +159,7 @@ end
 
 ## Numbers
 """
-    chol(x::Number) -> y
+    chol(x::Number) --> y
 
 Compute the square root of a non-negative number `x`.
 """
@@ -187,7 +187,7 @@ end
 
 ### for StridedMatrices, check that matrix is symmetric/Hermitian
 """
-    cholfact!(A, uplo::Symbol, Val{false}) -> Cholesky
+    cholfact!(A, uplo::Symbol, Val{false}) [::] Cholesky
 
 The same as `cholfact`, but saves space by overwriting the input `A`, instead
 of creating a copy. An `InexactError` exception is thrown if the factorisation
@@ -226,7 +226,7 @@ cholfact!{T<:Real,S}(A::RealHermSymComplexHerm{T,S}, uplo::Symbol, ::Type{Val{tr
 
 ### for StridedMatrices, check that matrix is symmetric/Hermitian
 """
-    cholfact!(A, uplo::Symbol, Val{true}; tol = 0.0) -> CholeskyPivoted
+    cholfact!(A, uplo::Symbol, Val{true}; tol = 0.0) [::] CholeskyPivoted
 
 The same as `cholfact`, but saves space by overwriting the input `A`, instead
 of creating a copy. An `InexactError` exception is thrown if the
@@ -250,7 +250,7 @@ cholfact{T<:Real,S<:StridedMatrix}(A::Symmetric{T,S}, uplo::Symbol, ::Type{Val{f
 
 ### for StridedMatrices, check that matrix is symmetric/Hermitian
 """
-    cholfact(A, uplo::Symbol, Val{false}) -> Cholesky
+    cholfact(A, uplo::Symbol, Val{false}) [::] Cholesky
 
 Compute the Cholesky factorization of a dense symmetric positive definite matrix `A`
 and return a `Cholesky` factorization.
@@ -287,7 +287,7 @@ cholfact{T<:Real,S<:StridedMatrix}(A::RealHermSymComplexHerm{T,S}, uplo::Symbol,
 
 ### for StridedMatrices, check that matrix is symmetric/Hermitian
 """
-    cholfact(A, uplo::Symbol, Val{true}; tol = 0.0) -> CholeskyPivoted
+    cholfact(A, uplo::Symbol, Val{true}; tol = 0.0) [::] CholeskyPivoted
 
 Compute the pivoted Cholesky factorization of a dense symmetric positive semi-definite matrix `A`
 and return a `CholeskyPivoted` factorization.
@@ -308,8 +308,6 @@ function cholfact(x::Number, uplo::Symbol=:U)
     xf = fill(chol(x), 1, 1)
     Cholesky(xf, uplo)
 end
-
-
 
 function convert{Tnew,Told,S}(::Type{Cholesky{Tnew}}, C::Cholesky{Told,S})
     Cnew = convert(AbstractMatrix{Tnew}, C.factors)
@@ -444,7 +442,7 @@ chkfullrank(C::CholeskyPivoted) = C.rank < size(C.factors, 1) && throw(RankDefic
 rank(C::CholeskyPivoted) = C.rank
 
 """
-    lowrankupdate!(C::Cholesky, v::StridedVector) -> CC::Cholesky
+    lowrankupdate!(C::Cholesky, v::StridedVector) [::] Cholesky --> CC
 
 Update a Cholesky factorization `C` with the vector `v`. If `A = C[:U]'C[:U]` then `CC = cholfact(C[:U]'C[:U] + v*v')` but the computation of `CC` only uses `O(n^2)` operations. The input factorization `C` is updated in place such that on exit `C == CC`. The vector `v` is destroyed during the computation.
 """
@@ -487,7 +485,7 @@ function lowrankupdate!(C::Cholesky, v::StridedVector)
 end
 
 """
-    lowrankdowndate!(C::Cholesky, v::StridedVector) -> CC::Cholesky
+    lowrankdowndate!(C::Cholesky, v::StridedVector) [::] Cholesky --> CC
 
 Downdate a Cholesky factorization `C` with the vector `v`. If `A = C[:U]'C[:U]` then `CC = cholfact(C[:U]'C[:U] - v*v')` but the computation of `CC` only uses `O(n^2)` operations. The input factorization `C` is updated in place such that on exit `C == CC`. The vector `v` is destroyed during the computation.
 """
@@ -537,14 +535,14 @@ function lowrankdowndate!(C::Cholesky, v::StridedVector)
 end
 
 """
-    lowrankupdate(C::Cholesky, v::StridedVector) -> CC::Cholesky
+    lowrankupdate(C::Cholesky, v::StridedVector) [::] Cholesky --> CC
 
 Update a Cholesky factorization `C` with the vector `v`. If `A = C[:U]'C[:U]` then `CC = cholfact(C[:U]'C[:U] + v*v')` but the computation of `CC` only uses `O(n^2)` operations.
 """
 lowrankupdate(C::Cholesky, v::StridedVector) = lowrankupdate!(copy(C), copy(v))
 
 """
-    lowrankdowndate(C::Cholesky, v::StridedVector) -> CC::Cholesky
+    lowrankdowndate(C::Cholesky, v::StridedVector) [::] Cholesky --> CC
 
 Downdate a Cholesky factorization `C` with the vector `v`. If `A = C[:U]'C[:U]` then `CC = cholfact(C[:U]'C[:U] - v*v')` but the computation of `CC` only uses `O(n^2)` operations.
 """

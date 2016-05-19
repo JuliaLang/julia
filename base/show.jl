@@ -1530,7 +1530,9 @@ function show_nd(io::IO, a::AbstractArray, print_matrix, label_slices)
 end
 
 """
-`print_matrix_repr(io, X)` prints matrix X with opening and closing square brackets.
+    print_matrix_repr(io, X)
+
+Prints matrix `X` with opening and closing square brackets.
 """
 function print_matrix_repr(io, X::AbstractArray)
     limit = get(io, :limit, false)::Bool

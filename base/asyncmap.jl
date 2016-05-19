@@ -2,7 +2,7 @@
 
 
 """
-    AsyncCollector(f, results, c...; ntasks=0) -> iterator
+    AsyncCollector(f, results, c...; ntasks=0) --> iterator
 
 Apply `f` to each element of `c` using at most `ntasks` asynchronous
 tasks.
@@ -10,7 +10,7 @@ If `ntasks` is unspecified, uses `max(100, nworkers())` tasks.
 For multiple collection arguments, apply `f` elementwise.
 Output is collected into `results`.
 
-Note: `next(::AsyncCollector, state) -> (nothing, state)`
+Note: `next(::AsyncCollector, state) --> (nothing, state)`
 
 Note: `for task in AsyncCollector(f, results, c...) end` is equivalent to
 `map!(f, results, c...)`.
@@ -149,7 +149,7 @@ function next(itr::AsyncCollector, state::AsyncCollectorState)
 end
 
 """
-    AsyncGenerator(f, c...; ntasks=0) -> iterator
+    AsyncGenerator(f, c...; ntasks=0) --> iterator
 
 Apply `f` to each element of `c` using at most `ntasks` asynchronous tasks.
 If `ntasks` is unspecified, uses `max(100, nworkers())` tasks.
@@ -212,7 +212,7 @@ iteratorsize(::Type{AsyncGenerator}) = SizeUnknown()
 
 
 """
-    asyncmap(f, c...) -> collection
+    asyncmap(f, c...) --> collection
 
 Transform collection `c` by applying `@async f` to each element.
 

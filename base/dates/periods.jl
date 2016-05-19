@@ -21,7 +21,7 @@ for period in (:Year, :Month, :Week, :Day, :Hour, :Minute, :Second, :Millisecond
     reference = period == :Week ? " For details see [`$accessor_str(::$typ_str)`](:func:`$accessor_str`)." : ""
     @eval begin
         @doc """
-            $($period_str)(dt::$($typ_str)) -> $($period_str)
+            $($period_str)(dt::$($typ_str)) [::] $($period_str)
 
         The $($accessor_str) part of a $($description) as a `$($period_str)`.$($reference)
         """ ->
@@ -50,7 +50,7 @@ Base.typemax{P<:Period}(::Type{P}) = P(typemax(Int64))
 
 # Default values (as used by TimeTypes)
 """
-    default(p::Period) -> Period
+    default(p::Period) [::] Period
 
 Returns a sensible "default" value for the input Period by returning `one(p)` for Year,
 Month, and Day, and `zero(p)` for Hour, Minute, Second, and Millisecond.
@@ -261,7 +261,7 @@ type CompoundPeriod <: AbstractTime
 end
 
 """
-    CompoundPeriod(periods) -> CompoundPeriod
+    CompoundPeriod(periods) [::] CompoundPeriod
 
 Construct a `CompoundPeriod` from a `Vector` of `Period`s. The constructor will
 automatically simplify the periods into a canonical form according to the following rules:

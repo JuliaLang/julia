@@ -44,7 +44,7 @@ Getting Around
 
    Register a one-argument function to be called before the REPL interface is initialized in interactive sessions; this is useful to customize the interface. The argument of ``f`` is the REPL object. This function should be called from within the ``.juliarc.jl`` initialization file.
 
-.. function:: isinteractive() -> Bool
+.. function:: isinteractive() [::] Bool
 
    .. Docstring generated from Julia source
 
@@ -58,7 +58,7 @@ Getting Around
 
    The memory consumption estimate is an approximate lower bound on the size of the internal structure of the object.
 
-.. function:: Base.summarysize(obj; exclude=Union{Module,Function,DataType,TypeName}) -> Int
+.. function:: Base.summarysize(obj; exclude=Union{Module,Function,DataType,TypeName}) [::] Int
 
    .. Docstring generated from Julia source
 
@@ -106,7 +106,7 @@ Getting Around
 
    Send a printed form of ``x`` to the operating system clipboard ("copy").
 
-.. function:: clipboard() -> AbstractString
+.. function:: clipboard() [::] AbstractString
 
    .. Docstring generated from Julia source
 
@@ -237,15 +237,15 @@ Getting Around
 All Objects
 -----------
 
-.. function:: is(x, y) -> Bool
-              ===(x,y) -> Bool
-              ≡(x,y) -> Bool
+.. function:: is(x, y) [::] Bool
+              ===(x,y) [::] Bool
+              ≡(x,y) [::] Bool
 
    .. Docstring generated from Julia source
 
    Determine whether ``x`` and ``y`` are identical, in the sense that no program could distinguish them. Compares mutable objects by address in memory, and compares immutable objects (such as numbers) by contents at the bit level. This function is sometimes called ``egal``\ .
 
-.. function:: isa(x, type) -> Bool
+.. function:: isa(x, type) [::] Bool
 
    .. Docstring generated from Julia source
 
@@ -659,7 +659,7 @@ Types
 Generic Functions
 -----------------
 
-.. function:: method_exists(f, Tuple type) -> Bool
+.. function:: method_exists(f, Tuple type) [::] Bool
 
    .. Docstring generated from Julia source
 
@@ -670,7 +670,7 @@ Generic Functions
        julia> method_exists(length, Tuple{Array})
        true
 
-.. function:: applicable(f, args...) -> Bool
+.. function:: applicable(f, args...) [::] Bool
 
    .. Docstring generated from Julia source
 
@@ -917,19 +917,19 @@ System
        run(pipeline(`dothings`, stdout="out.txt", stderr="errs.txt"))
        run(pipeline(`update`, stdout="log.txt", append=true))
 
-.. function:: gethostname() -> AbstractString
+.. function:: gethostname() [::] AbstractString
 
    .. Docstring generated from Julia source
 
    Get the local machine's host name.
 
-.. function:: getipaddr() -> IPAddr
+.. function:: getipaddr() [::] IPAddr
 
    .. Docstring generated from Julia source
 
    Get the IP address of the local machine.
 
-.. function:: getpid() -> Int32
+.. function:: getpid() [::] Int32
 
    .. Docstring generated from Julia source
 
@@ -1005,7 +1005,7 @@ System
 
    See also ```@time`` <:ref:@time>`_\ , ```@timev`` <:ref:@timev>`_\ , ```@timed`` <:ref:@timed>`_\ , and ```@elapsed`` <:ref:@elapsed>`_\ .
 
-.. function:: EnvHash() -> EnvHash
+.. function:: EnvHash() [::] EnvHash
 
    .. Docstring generated from Julia source
 
@@ -1256,11 +1256,11 @@ Errors
 
    An error occurred when running a module's ``__init__`` function. The actual error thrown is available in the ``.error`` field.
 
-.. function:: retry(f, [retry_on]; n=1, max_delay=10.0) -> Function
+.. function:: retry(f, [retry_on]; n=1, max_delay=10.0) [::] Function
 
    .. Docstring generated from Julia source
 
-   Returns a lambda that retries function ``f`` up to ``n`` times in the event of an exception. If ``retry_on`` is a ``Type`` then retry only for exceptions of that type. If ``retry_on`` is a function ``test_error(::Exception) -> Bool`` then retry only if it is true.
+   Returns a lambda that retries function ``f`` up to ``n`` times in the event of an exception. If ``retry_on`` is a ``Type`` then retry only for exceptions of that type. If ``retry_on`` is a function ``test_error(::Exception) [::] Bool`` then retry only if it is true.
 
    The first retry happens after a gap of 50 milliseconds or ``max_delay``\ , whichever is lower. Subsequently, the delays between retries are exponentially increased with a random factor up to ``max_delay``\ .
 
@@ -1301,19 +1301,19 @@ Events
 Reflection
 ----------
 
-.. function:: module_name(m::Module) -> Symbol
+.. function:: module_name(m::Module) [::] Symbol
 
    .. Docstring generated from Julia source
 
    Get the name of a ``Module`` as a ``Symbol``\ .
 
-.. function:: module_parent(m::Module) -> Module
+.. function:: module_parent(m::Module) [::] Module
 
    .. Docstring generated from Julia source
 
    Get a module's enclosing ``Module``\ . ``Main`` is its own parent, as is ``LastMain`` after ``workspace()``\ .
 
-.. function:: current_module() -> Module
+.. function:: current_module() [::] Module
 
    .. Docstring generated from Julia source
 
@@ -1331,7 +1331,7 @@ Reflection
 
    Get an array of the names exported by a ``Module``\ , with optionally more ``Module`` globals according to the additional parameters.
 
-.. function:: nfields(x::DataType) -> Int
+.. function:: nfields(x::DataType) [::] Int
 
    .. Docstring generated from Julia source
 
@@ -1349,31 +1349,31 @@ Reflection
 
    Get the name of field ``i`` of a ``DataType``\ .
 
-.. function:: Base.datatype_module(t::DataType) -> Module
+.. function:: Base.datatype_module(t::DataType) [::] Module
 
    .. Docstring generated from Julia source
 
    Determine the module containing the definition of a ``DataType``\ .
 
-.. function:: isconst([m::Module], s::Symbol) -> Bool
+.. function:: isconst([m::Module], s::Symbol) [::] Bool
 
    .. Docstring generated from Julia source
 
    Determine whether a global is declared ``const`` in a given ``Module``\ . The default ``Module`` argument is ``current_module()``\ .
 
-.. function:: Base.function_name(f::Function) -> Symbol
+.. function:: Base.function_name(f::Function) [::] Symbol
 
    .. Docstring generated from Julia source
 
    Get the name of a generic ``Function`` as a symbol, or ``:anonymous``\ .
 
-.. function:: Base.function_module(f::Function) -> Module
+.. function:: Base.function_module(f::Function) [::] Module
 
    .. Docstring generated from Julia source
 
    Determine the module containing the (first) definition of a generic function.
 
-.. function:: Base.function_module(f::Function, types) -> Module
+.. function:: Base.function_module(f::Function, types) [::] Module
 
    .. Docstring generated from Julia source
 
