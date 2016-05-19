@@ -377,6 +377,7 @@ function update(branch::AbstractString)
     end
     creds = LibGit2.CachedCredentials()
     fixed = Read.fixed(avail,instd)
+    stopupdate = false
     for (pkg,ver) in fixed
         ispath(pkg,".git") || continue
         with(GitRepo, pkg) do repo
@@ -394,6 +395,7 @@ function update(branch::AbstractString)
                         cex = CapturedException(err, catch_backtrace())
                         push!(deferred_errors, PkgError("Package $pkg cannot be updated.", cex))
                         success = false
+                        stopupdate = isa(err, InterruptException)
                     end
                     if success
                         post_sha = string(LibGit2.head_oid(repo))
@@ -404,6 +406,7 @@ function update(branch::AbstractString)
                 end
             end
         end
+        stopupdate && break
         if haskey(avail,pkg)
             try
                 Cache.prefetch(pkg, Read.url(pkg), [a.sha1 for (v,a)=avail[pkg]])
