@@ -273,7 +273,7 @@ General Parallel Computing Support
 
    For multiple collection arguments, apply f elementwise.
 
-.. function:: pmap([::WorkerPool], f, c...) -> collection
+.. function:: pmap([::WorkerPool], f, c...; distributed=true, batch_size=1, on_error=nothing, retry_n=0, retry_max_delay=DEFAULT_RETRY_MAX_DELAY, retry_on=DEFAULT_RETRY_ON) -> collection
 
    .. Docstring generated from Julia source
 
@@ -281,9 +281,23 @@ General Parallel Computing Support
 
    For multiple collection arguments, apply f elementwise.
 
-   Note that ``err_retry=true`` and ``err_stop=false`` are deprecated, use ``pmap(retry(f), c)`` or ``pmap(@catch(f), c)`` instead (or to retry on a different worker, use ``asyncmap(retry(remote(f)), c)``\ ).
-
    Note that ``f`` must be made available to all worker processes; see :ref:`Code Availability and Loading Packages <man-parallel-computing-code-availability>` for details.
+
+   If a worker pool is not specified, all available workers, i.e., the default worker pool is used.
+
+   By default, ``pmap`` distributes the computation over all specified workers. To use only the local process and distribute over tasks, specify ``distributed=false``\ . This is equivalent to ``asyncmap``\ .
+
+   ``pmap`` can also use a mix of processes and tasks via the ``batch_size`` argument. For batch sizes greater than 1, the collection is split into multiple batches, which are distributed across workers. Each such batch is processed in parallel via tasks in each worker. The specified ``batch_size`` is an upper limit, the actual size of batches may be smaller and is calculated depending on the number of workers available and length of the collection.
+
+   Any error stops pmap from processing the remainder of the collection. To override this behavior you can specify an error handling function via argument ``on_error`` which takes in a single argument, i.e., the exception. The function can stop the processing by rethrowing the error, or, to continue, return any value which is then returned inline with the results to the caller.
+
+   Failed computation can also be retried via ``retry_on``\ , ``retry_n``\ , ``retry_max_delay``\ , which are passed through to ``retry`` as arguments ``retry_on``\ , ``n`` and ``max_delay`` respectively. If batching is specified, and an entire batch fails, all items in the batch are retried.
+
+   The following are equivalent:
+
+   * ``pmap(f, c; distributed=false)`` and ``asyncmap(f,c)``
+   * ``pmap(f, c; retry_n=1)`` and ``asyncmap(retry(remote(f)),c)``
+   * ``pmap(f, c; retry_n=1, on_error=e->e)`` and ``asyncmap(x->try retry(remote(f))(x) catch e; e end, c)``
 
 .. function:: remotecall(func, id, args...; kwargs...)
 

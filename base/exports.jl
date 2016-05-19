@@ -1036,7 +1036,6 @@ export
 # errors
     assert,
     backtrace,
-    @catch,
     catch_backtrace,
     error,
     rethrow,

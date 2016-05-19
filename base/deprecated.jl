@@ -1011,18 +1011,13 @@ export call
 # and added to pmap.jl
 # pmap(f, c...) = pmap(default_worker_pool(), f, c...)
 
-function pmap(f, c...; err_retry=nothing, err_stop=nothing, pids=nothing)
+function pmap(f, c...; err_retry=nothing, err_stop=nothing, pids=nothing, kwargs...)
+    kwargs = Dict{Symbol, Any}(kwargs)
+
     if err_retry != nothing
         depwarn("err_retry is deprecated, use pmap(retry(f), c...).", :pmap)
         if err_retry == true
             f = retry(f)
-        end
-    end
-
-    if err_stop != nothing
-        depwarn("err_stop is deprecated, use pmap(@catch(f), c...).", :pmap)
-        if err_stop == false
-            f = @catch(f)
         end
     end
 
@@ -1033,7 +1028,14 @@ function pmap(f, c...; err_retry=nothing, err_stop=nothing, pids=nothing)
         p = WorkerPool(pids)
     end
 
-    return pmap(p, f, c...)
+    if err_stop != nothing
+        depwarn("err_stop is deprecated, use pmap(f, c...; on_error = error_handling_func).", :pmap)
+        if err_stop == false
+            kwargs[:on_error] = e->e
+        end
+    end
+
+    pmap(p, f, c...; kwargs...)
 end
 
 # 15692
