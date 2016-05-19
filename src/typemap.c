@@ -692,49 +692,54 @@ static jl_typemap_entry_t *jl_typemap_node_assoc_exact(jl_typemap_entry_t *ml, j
     while (ml != (void*)jl_nothing) {
         size_t lensig = jl_datatype_nfields(ml->sig);
         if (lensig == n || (ml->va && lensig <= n+1)) {
-            int ismatch = 1;
             if (ml->simplesig != (void*)jl_nothing) {
                 size_t lensimplesig = jl_datatype_nfields(ml->simplesig);
                 int isva = lensimplesig > 0 && jl_is_vararg_type(jl_tparam(ml->simplesig, lensimplesig - 1));
-                if (lensig == n || (isva && lensimplesig <= n + 1))
-                    ismatch = sig_match_simple(args, n, jl_svec_data(ml->simplesig->parameters), isva, lensimplesig);
-                else
-                    ismatch = 0;
+                if (lensig == n || (isva && lensimplesig <= n + 1)) {
+                    if (!sig_match_simple(args, n, jl_svec_data(ml->simplesig->parameters), isva, lensimplesig))
+                        goto nomatch;
+                }
+                else {
+                    goto nomatch;
+                }
             }
 
-            if (ismatch == 0)
-                ; // nothing
-            else if (ml->isleafsig)
-                ismatch = sig_match_leaf(args, jl_svec_data(ml->sig->parameters), n);
-            else if (ml->issimplesig)
-                ismatch = sig_match_simple(args, n, jl_svec_data(ml->sig->parameters), ml->va, lensig);
-            else
-                ismatch = jl_tuple_subtype(args, n, ml->sig, 1);
+            if (ml->isleafsig) {
+                if (!sig_match_leaf(args, jl_svec_data(ml->sig->parameters), n))
+                    goto nomatch;
+            }
+            else if (ml->issimplesig) {
+                if (!sig_match_simple(args, n, jl_svec_data(ml->sig->parameters), ml->va, lensig))
+                    goto nomatch;
+            }
+            else {
+                if (!jl_tuple_subtype(args, n, ml->sig, 1))
+                    goto nomatch;
+            }
 
-            if (ismatch) {
-                size_t i, l;
+            size_t i, l;
+            if (ml->guardsigs != jl_emptysvec) {
                 for (i = 0, l = jl_svec_len(ml->guardsigs); i < l; i++) {
                     // checking guard entries require a more
                     // expensive subtype check, since guard entries added for ANY might be
                     // abstract. this fixed issue #12967.
                     if (jl_tuple_subtype(args, n, (jl_tupletype_t*)jl_svecref(ml->guardsigs, i), 1)) {
-                        break;
+                        goto nomatch;
                     }
-                }
-                if (i == l) {
-                    if (prev != NULL && ml->isleafsig && first->next != ml) {
-                        // LRU queue: move ml from prev->next to first->next
-                        prev->next = ml->next;
-                        jl_gc_wb(prev, prev->next);
-                        ml->next = first->next;
-                        jl_gc_wb(ml, ml->next);
-                        first->next = ml;
-                        jl_gc_wb(first, first->next);
-                    }
-                    return ml;
                 }
             }
+            if (prev != NULL && ml->isleafsig && first->next != ml) {
+                // LRU queue: move ml from prev->next to first->next
+                prev->next = ml->next;
+                jl_gc_wb(prev, prev->next);
+                ml->next = first->next;
+                jl_gc_wb(ml, ml->next);
+                first->next = ml;
+                jl_gc_wb(first, first->next);
+            }
+            return ml;
         }
+nomatch:
         prev = ml;
         ml = ml->next;
     }
