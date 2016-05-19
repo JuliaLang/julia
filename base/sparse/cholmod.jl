@@ -1465,7 +1465,7 @@ Ac_ldiv_B(L::FactorComponent, B) = ctranspose(L)\B
 (\){T}(L::Factor{T}, B::Dense{T}) = solve(CHOLMOD_A, L, B)
 (\)(L::Factor{Float64}, B::VecOrMat{Complex{Float64}}) = L\real(B) + L\imag(B)
 (\)(L::Factor, b::StridedVector) = Vector(L\convert(Dense{eltype(L)}, b))
-(\)(L::Factor, B::Matrix) = Matrix(L\convert(Dense{eltype(L)}, B))
+(\)(L::Factor, B::StridedMatrix) = Matrix(L\convert(Dense{eltype(L)}, B))
 (\)(L::Factor, B::Sparse) = spsolve(CHOLMOD_A, L, B)
 # When right hand side is sparse, we have to ensure that the rhs is not marked as symmetric.
 (\)(L::Factor, B::SparseVecOrMat) = sparse(spsolve(CHOLMOD_A, L, Sparse(B, 0)))
