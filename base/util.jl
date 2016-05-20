@@ -235,12 +235,12 @@ if blas_vendor() == :openblas64
     macro blasfunc(x)
         return Expr(:quote, Symbol(x, "64_"))
     end
-    openblas_get_config() = strip(bytestring( ccall((:openblas_get_config64_, Base.libblas_name), Ptr{UInt8}, () )))
+    openblas_get_config() = strip(String( ccall((:openblas_get_config64_, Base.libblas_name), Ptr{UInt8}, () )))
 else
     macro blasfunc(x)
         return Expr(:quote, x)
     end
-    openblas_get_config() = strip(bytestring( ccall((:openblas_get_config, Base.libblas_name), Ptr{UInt8}, () )))
+    openblas_get_config() = strip(String( ccall((:openblas_get_config, Base.libblas_name), Ptr{UInt8}, () )))
 end
 
 function blas_set_num_threads(n::Integer)
@@ -375,8 +375,8 @@ warn(err::Exception; prefix="ERROR: ", kw...) =
 
 function julia_cmd(julia=joinpath(JULIA_HOME, julia_exename()))
     opts = JLOptions()
-    cpu_target = bytestring(opts.cpu_target)
-    image_file = bytestring(opts.image_file)
+    cpu_target = String(opts.cpu_target)
+    image_file = String(opts.image_file)
     compile = if opts.compile_enabled == 0
                   "no"
               elseif opts.compile_enabled == 2

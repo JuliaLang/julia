@@ -1169,7 +1169,7 @@ JL_DLLEXPORT int jl_array_rank(jl_value_t *a);
 JL_DLLEXPORT size_t jl_array_size(jl_value_t *a, int d);
 
 // strings
-JL_DLLEXPORT const char *jl_bytestring_ptr(jl_value_t *s);
+JL_DLLEXPORT const char *jl_string_ptr(jl_value_t *s);
 
 // modules and global variables
 extern JL_DLLEXPORT jl_module_t *jl_main_module;

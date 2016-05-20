@@ -10,24 +10,44 @@ next(s::AbstractString, i::Integer) = next(s,Int(i))
 string() = ""
 string(s::AbstractString) = s
 
-bytestring() = ""
-bytestring(s::Vector{UInt8}) =
+"""
+    String(s::AbstractString)
+
+Convert a string to a contiguous byte array representation encoded as UTF-8 bytes.
+This representation is often appropriate for passing strings to C.
+"""
+String(s::AbstractString) = print_to_string(s)
+String(s::String) = s
+
+"""
+    String(v::Vector{UInt8})
+
+Wrap a vector of bytes encoding string data as UTF-8 in a `String` object.
+The resulting `String` object takes ownership of the array.
+"""
+String(s::Vector{UInt8}) =
     ccall(:jl_pchar_to_string, Ref{String}, (Ptr{UInt8},Int), s, length(s))
 
-function bytestring(p::Union{Ptr{UInt8},Ptr{Int8}})
-    p == C_NULL && throw(ArgumentError("cannot convert NULL to string"))
-    ccall(:jl_cstr_to_string, Ref{String}, (Cstring,), p)
-end
-bytestring(s::Cstring) = bytestring(convert(Ptr{UInt8}, s))
+"""
+    String(p::Ptr{UInt8}, [length::Integer])
 
-function bytestring(p::Union{Ptr{UInt8},Ptr{Int8}},len::Integer)
+Create a string from the address of a C (0-terminated) string encoded as UTF-8.
+A copy is made so the ptr can be safely freed. If `length` is specified, the string
+does not have to be 0-terminated.
+"""
+function String(p::Union{Ptr{UInt8},Ptr{Int8}}, len::Integer)
     p == C_NULL && throw(ArgumentError("cannot convert NULL to string"))
     ccall(:jl_pchar_to_string, Ref{String}, (Ptr{UInt8},Int), p, len)
 end
+function String(p::Union{Ptr{UInt8},Ptr{Int8}})
+    p == C_NULL && throw(ArgumentError("cannot convert NULL to string"))
+    ccall(:jl_cstr_to_string, Ref{String}, (Cstring,), p)
+end
+String(s::Cstring) = String(convert(Ptr{UInt8}, s))
 
-convert(::Type{Vector{UInt8}}, s::AbstractString) = bytestring(s).data
-convert(::Type{Array{UInt8}}, s::AbstractString) = bytestring(s).data
-convert(::Type{String}, s::AbstractString) = bytestring(s)
+convert(::Type{Vector{UInt8}}, s::AbstractString) = String(s).data
+convert(::Type{Array{UInt8}}, s::AbstractString) = String(s).data
+convert(::Type{String}, s::AbstractString) = String(s)
 convert(::Type{Vector{Char}}, s::AbstractString) = collect(s)
 convert(::Type{Symbol}, s::AbstractString) = Symbol(s)
 
@@ -42,7 +62,7 @@ getindex{T<:Integer}(s::AbstractString, r::UnitRange{T}) = s[Int(first(r)):Int(l
 getindex(s::AbstractString, v::AbstractVector) =
     sprint(length(v), io->(for i in v; write(io,s[i]) end))
 
-Symbol(s::AbstractString) = Symbol(bytestring(s))
+Symbol(s::AbstractString) = Symbol(String(s))
 
 sizeof(s::AbstractString) = error("type $(typeof(s)) has no canonical binary representation")
 

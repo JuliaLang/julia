@@ -216,7 +216,7 @@ end
 
 function uv_fseventscb(handle::Ptr{Void}, filename::Ptr, events::Int32, status::Int32)
     t = @handle_as handle FileMonitor
-    fname = filename == C_NULL ? "" : bytestring(convert(Ptr{UInt8}, filename))
+    fname = filename == C_NULL ? "" : String(convert(Ptr{UInt8}, filename))
     if status != 0
         notify_error(t.notify, UVError("FileMonitor", status))
     else

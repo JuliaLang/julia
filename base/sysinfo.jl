@@ -57,7 +57,7 @@ type CPUinfo
     cpu_times!irq::UInt64
     CPUinfo(model,speed,u,n,s,id,ir)=new(model,speed,u,n,s,id,ir)
 end
-CPUinfo(info::UV_cpu_info_t) = CPUinfo(bytestring(info.model), info.speed,
+CPUinfo(info::UV_cpu_info_t) = CPUinfo(String(info.model), info.speed,
     info.cpu_times!user, info.cpu_times!nice, info.cpu_times!sys,
     info.cpu_times!idle, info.cpu_times!irq)
 
@@ -148,7 +148,7 @@ function get_process_title()
     buf = zeros(UInt8, 512)
     err = ccall(:uv_get_process_title, Cint, (Ptr{UInt8}, Cint), buf, 512)
     uv_error("get_process_title", err)
-    return bytestring(pointer(buf))
+    return String(pointer(buf))
 end
 function set_process_title(title::AbstractString)
     err = ccall(:uv_set_process_title, Cint, (Cstring,), title)

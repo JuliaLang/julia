@@ -37,7 +37,7 @@ function sprint(size::Integer, f::Function, args...; env=nothing)
     else
         f(s, args...)
     end
-    bytestring(resize!(s.data, s.size))
+    String(resize!(s.data, s.size))
 end
 sprint(f::Function, args...) = sprint(0, f, args...)
 
@@ -67,7 +67,6 @@ end
 
 string_with_env(env, xs...) = print_to_string(xs...; env=env)
 string(xs...) = print_to_string(xs...)
-bytestring(s::AbstractString...) = print_to_string(s...)
 
 print(io::IO, s::AbstractString) = (write(io, s); nothing)
 write(io::IO, s::AbstractString) = (len = 0; for c in s; len += write(io, c); end; len)

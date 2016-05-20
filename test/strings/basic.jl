@@ -169,7 +169,6 @@ tstr = tstStringType("12");
 
 gstr = GenericString("12");
 @test typeof(string(gstr))==GenericString
-@test bytestring()==""
 
 @test convert(Array{UInt8}, gstr) ==[49;50]
 @test convert(Array{Char,1}, gstr) ==['1';'2']
@@ -241,8 +240,8 @@ for T in [BigInt, Int8, UInt8, Int16, UInt16, Int32, UInt32, Int64, UInt64, Int1
     @test isnull(tryparse(T, "1\0"))
 end
 let s = normalize_string("tést",:NFKC)
-    @test bytestring(Base.unsafe_convert(Cstring, s)) == s
-    @test bytestring(convert(Cstring, Symbol(s))) == s
+    @test String(Base.unsafe_convert(Cstring, s)) == s
+    @test String(convert(Cstring, Symbol(s))) == s
     @test wstring(Base.unsafe_convert(Cwstring, wstring(s))) == s
 end
 let s = "ba\0d"
@@ -252,7 +251,7 @@ end
 
 cstrdup(s) = @windows? ccall(:_strdup, Cstring, (Cstring,), s) : ccall(:strdup, Cstring, (Cstring,), s)
 let p = cstrdup("hello")
-    @test bytestring(p) == "hello" == pointer_to_string(cstrdup(p), true)
+    @test String(p) == "hello" == pointer_to_string(cstrdup(p), true)
     Libc.free(p)
 end
 let p = @windows? ccall(:_wcsdup, Cwstring, (Cwstring,), "tést") : ccall(:wcsdup, Cwstring, (Cwstring,), "tést")
@@ -487,9 +486,9 @@ foobaz(ch) = reinterpret(Char, typemax(UInt32))
 @test ["a","b"].*["c","d"]' == ["ac" "ad"; "bc" "bd"]
 
 # Make sure NULL pointer are handled consistently by
-# `bytestring`, `ascii` and `utf8`
-@test_throws ArgumentError bytestring(Ptr{UInt8}(0))
-@test_throws ArgumentError bytestring(Ptr{UInt8}(0), 10)
+# `String`, `ascii` and `utf8`
+@test_throws ArgumentError String(Ptr{UInt8}(0))
+@test_throws ArgumentError String(Ptr{UInt8}(0), 10)
 @test_throws ArgumentError utf8(Ptr{UInt8}(0))
 @test_throws ArgumentError utf8(Ptr{UInt8}(0), 10)
 

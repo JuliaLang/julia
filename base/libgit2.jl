@@ -107,7 +107,7 @@ function diff_files(repo::GitRepo, branch1::AbstractString, branch2::AbstractStr
             delta = diff[i]
             delta === nothing && break
             if delta.status in filter
-                push!(files, bytestring(delta.new_file.path))
+                push!(files, String(delta.new_file.path))
             end
         end
         finalize(diff)
@@ -297,7 +297,7 @@ function clone{P<:AbstractPayload}(repo_url::AbstractString, repo_path::Abstract
                remote_cb::Ptr{Void} = C_NULL,
                payload::Nullable{P}=Nullable{AbstractPayload}())
     # setup clone options
-    lbranch = Base.cconvert(Cstring, bytestring(branch))
+    lbranch = Base.cconvert(Cstring, String(branch))
     fetch_opts=FetchOptions(callbacks = RemoteCallbacks(credentials_cb(), payload))
     clone_opts = CloneOptions(
                 bare = Cint(isbare),
@@ -337,7 +337,7 @@ function cat{T<:GitObject}(repo::GitRepo, ::Type{T}, object::AbstractString)
 
     obj = get(T, repo, obj_id)
     if isa(obj, GitBlob)
-        return bytestring(convert(Ptr{UInt8}, content(obj)))
+        return String(convert(Ptr{UInt8}, content(obj)))
     else
         return nothing
     end

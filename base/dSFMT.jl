@@ -29,7 +29,7 @@ function dsfmt_get_idstring()
     idstring = ccall((:dsfmt_get_idstring,:libdSFMT),
                      Ptr{UInt8},
                      ())
-    return bytestring(idstring)
+    return String(idstring)
 end
 
 function dsfmt_get_min_array_size()

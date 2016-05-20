@@ -7,7 +7,7 @@ _hasenv(s::AbstractString) = _getenv(s) != C_NULL
 
 function access_env(onError::Function, var::AbstractString)
     val = _getenv(var)
-    val == C_NULL ? onError(var) : bytestring(val)
+    val == C_NULL ? onError(var) : String(val)
 end
 
 function _setenv(var::AbstractString, val::AbstractString, overwrite::Bool=true)

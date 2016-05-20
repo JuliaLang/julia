@@ -178,4 +178,4 @@ function hash(s::Union{String,SubString{String}}, h::UInt)
     # note: use pointer(s) here (see #6058).
     ccall(memhash, UInt, (Ptr{UInt8}, Csize_t, UInt32), pointer(s), sizeof(s), h % UInt32) + h
 end
-hash(s::AbstractString, h::UInt) = hash(bytestring(s), h)
+hash(s::AbstractString, h::UInt) = hash(String(s), h)

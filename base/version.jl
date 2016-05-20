@@ -82,7 +82,7 @@ function split_idents(s::AbstractString)
     idents = split(s, '.')
     ntuple(length(idents)) do i
         ident = idents[i]
-        ismatch(r"^\d+$", ident) ? parse(Int, ident) : bytestring(ident)
+        ismatch(r"^\d+$", ident) ? parse(Int, ident) : String(ident)
     end
 end
 
