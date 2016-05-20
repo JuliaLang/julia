@@ -410,7 +410,7 @@ julia_exename() = ccall(:jl_is_debugbuild,Cint,())==0 ? "julia" : "julia-debug"
                 p[plen += 1] = c
             end
         end
-        return bytestring(pointer(p), plen)
+        return String(pointer(p), plen)
     finally
         fill!(p, 0) # don't leave password in memory
     end
@@ -418,4 +418,4 @@ julia_exename() = ccall(:jl_is_debugbuild,Cint,())==0 ? "julia" : "julia-debug"
     return ""
 end
 
-@unix_only getpass(prompt::AbstractString) = bytestring(ccall(:getpass, Cstring, (Cstring,), prompt))
+@unix_only getpass(prompt::AbstractString) = String(ccall(:getpass, Cstring, (Cstring,), prompt))
