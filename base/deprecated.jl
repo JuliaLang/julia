@@ -1163,7 +1163,7 @@ end
 @deprecate utf8(p::Ptr{UInt8}, len::Integer) String(p, len)
 @deprecate utf8(p::Ptr{UInt8}) String(p)
 @deprecate utf8(v::Vector{UInt8}) String(v)
-@deprecate utf8(s::AbstractString) String(p)
+@deprecate utf8(s::AbstractString) String(s)
 @deprecate utf8(x) convert(String, x)
 
 @deprecate ascii(p::Ptr{UInt8}, len::Integer) ascii(String(p, len))
