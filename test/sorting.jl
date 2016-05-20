@@ -225,7 +225,7 @@ srand(0xdeadbeef)
 for n in [0:10; 100; 101; 1000; 1001]
     r = -5:5
     v = rand(r,n)
-    h = hist(v,r)
+    h = [sum(v .== x) for x in r]
 
     for rev in [false,true]
         # insertion sort (stable) as reference
@@ -233,7 +233,7 @@ for n in [0:10; 100; 101; 1000; 1001]
         @test pi == sortperm(float(v), alg=InsertionSort, rev=rev)
         @test isperm(pi)
         si = v[pi]
-        @test hist(si,r) == h
+        @test [sum(si .== x) for x in r] == h
         @test issorted(si, rev=rev)
         @test all(issorted,[pi[si.==x] for x in r])
         c = copy(v)
