@@ -50,17 +50,17 @@
 
    Create a string from any value using the ``showall`` function.
 
-.. function:: String(::Ptr{UInt8}, [length])
+.. function:: String(p::Ptr{UInt8}, [length::Integer])
 
    .. Docstring generated from Julia source
 
-   Create a string from the address of a C (0-terminated) string encoded in ASCII or UTF-8. A copy is made; the ptr can be safely freed. If ``length`` is specified, the string does not have to be 0-terminated.
+   Create a string from the address of a C (0-terminated) string encoded as UTF-8. A copy is made so the ptr can be safely freed. If ``length`` is specified, the string does not have to be 0-terminated.
 
 .. function:: String(s::AbstractString)
 
    .. Docstring generated from Julia source
 
-   Convert a string to a contiguous byte array representation appropriate for passing it to C functions. The string will be encoded as either ASCII or UTF-8.
+   Convert a string to a contiguous byte array representation encoded as UTF-8 bytes. This representation is often appropriate for passing strings to C.
 
 .. function:: ascii(s::AbstractString)
 
