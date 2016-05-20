@@ -1276,6 +1276,7 @@ end
 ##### histogram #####
 
 ## nice-valued ranges for histograms
+export hist, hist!, hist2d, hist2d!, histrange
 
 function histrange{T<:AbstractFloat,N}(v::AbstractArray{T,N}, n::Integer)
     depwarn("histrange(...) is deprecated, use StatsBase.histrange(...) instead",:histrange)
