@@ -37,7 +37,6 @@ extern unsigned sig_stack_size;
 
 JL_DLLEXPORT extern int jl_lineno;
 JL_DLLEXPORT extern const char *jl_filename;
-#define jl_in_finalizer (jl_get_ptls_states()->in_finalizer)
 
 STATIC_INLINE jl_value_t *newobj(jl_value_t *type, size_t nfields)
 {
@@ -156,7 +155,7 @@ JL_CALLABLE(jl_f_intrinsic_call);
 extern jl_function_t *jl_unprotect_stack_func;
 void jl_install_default_signal_handlers(void);
 void restore_signals(void);
-void *jl_install_thread_signal_handler(void);
+void jl_install_thread_signal_handler(void);
 
 jl_fptr_t jl_get_builtin_fptr(jl_value_t *b);
 
@@ -264,9 +263,6 @@ void jl_init_runtime_ccall(void);
 void jl_mk_thread_heap(jl_thread_heap_t *heap);
 
 void _julia_init(JL_IMAGE_SEARCH rel);
-#ifdef COPY_STACKS
-#define jl_stackbase (jl_get_ptls_states()->stackbase)
-#endif
 
 void jl_set_base_ctx(char *__stk);
 
@@ -401,11 +397,6 @@ JL_DLLEXPORT void jl_raise_debugger(void);
 int jl_getFunctionInfo(jl_frame_t **frames, uintptr_t pointer, int skipC, int noInline);
 JL_DLLEXPORT void jl_gdblookup(uintptr_t ip);
 jl_value_t *jl_uncompress_ast_(jl_lambda_info_t*, jl_value_t*, int);
-#ifdef COPY_STACKS
-// the base of the stack we will copy this task's stack to
-// when switchting to it
-JL_DLLEXPORT char *jl_task_stackbase(jl_task_t *task);
-#endif
 // *to is NULL or malloc'd pointer, from is allowed to be NULL
 STATIC_INLINE char *jl_copy_str(char **to, const char *from)
 {

@@ -164,9 +164,9 @@ static pthread_cond_t signal_caught_cond;
 static void jl_thread_suspend_and_get_state(int tid, unw_context_t **ctx)
 {
     pthread_mutex_lock(&in_signal_lock);
-    jl_tls_states_t *ptls = jl_all_task_states[tid].ptls;
+    jl_tls_states_t *ptls = jl_all_tls_states[tid];
     jl_atomic_store_release(&ptls->signal_request, 1);
-    pthread_kill(jl_all_task_states[tid].system_id, SIGUSR2);
+    pthread_kill(ptls->system_id, SIGUSR2);
     pthread_cond_wait(&signal_caught_cond, &in_signal_lock);  // wait for thread to acknowledge
     assert(jl_atomic_load_acquire(&ptls->signal_request) == 0);
     *ctx = signal_context;
@@ -175,7 +175,7 @@ static void jl_thread_suspend_and_get_state(int tid, unw_context_t **ctx)
 static void jl_thread_resume(int tid, int sig)
 {
     (void)sig;
-    jl_tls_states_t *ptls = jl_all_task_states[tid].ptls;
+    jl_tls_states_t *ptls = jl_all_tls_states[tid];
     jl_atomic_store_release(&ptls->signal_request, 1);
     pthread_cond_broadcast(&exit_signal_cond);
     pthread_cond_wait(&signal_caught_cond, &in_signal_lock); // wait for thread to acknowledge
@@ -187,12 +187,12 @@ static void jl_thread_resume(int tid, int sig)
 // or if SIGINT happens too often.
 static void jl_try_deliver_sigint(void)
 {
-    jl_tls_states_t *ptls = jl_all_task_states[0].ptls;
+    jl_tls_states_t *ptls = jl_all_tls_states[0];
     jl_safepoint_enable_sigint();
     jl_wake_libuv();
     jl_atomic_store_release(&ptls->signal_request, 2);
     // This also makes sure `sleep` is aborted.
-    pthread_kill(jl_all_task_states[0].system_id, SIGUSR2);
+    pthread_kill(ptls->system_id, SIGUSR2);
 }
 
 // request:
@@ -319,7 +319,7 @@ static void *alloc_sigstack(size_t size)
     return (void*)((char*)stackbuff + pagesz);
 }
 
-void *jl_install_thread_signal_handler(void)
+void jl_install_thread_signal_handler(void)
 {
     void *signal_stack = alloc_sigstack(sig_stack_size);
     stack_t ss;
@@ -341,7 +341,7 @@ void *jl_install_thread_signal_handler(void)
     }
 #endif
 
-    return signal_stack;
+    jl_get_ptls_states()->signal_stack = signal_stack;
 }
 
 void jl_sigsetset(sigset_t *sset)

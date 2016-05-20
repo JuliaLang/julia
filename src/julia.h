@@ -1465,12 +1465,6 @@ typedef struct _jl_task_t {
 #endif
 } jl_task_t;
 
-typedef struct {
-    jl_tls_states_t *ptls;
-    uv_thread_t system_id;
-    void *signal_stack;
-} jl_thread_task_state_t;
-
 #define jl_current_task (jl_get_ptls_states()->current_task)
 #define jl_root_task (jl_get_ptls_states()->root_task)
 #define jl_exception_in_transit (jl_get_ptls_states()->exception_in_transit)

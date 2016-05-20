@@ -126,7 +126,7 @@ HANDLE hMainThread = INVALID_HANDLE_VALUE;
 // Try to throw the exception in the master thread.
 static void jl_try_deliver_sigint(void)
 {
-    jl_tls_states_t *ptls = jl_all_task_states[0].ptls;
+    jl_tls_states_t *ptls = jl_all_tls_states[0];
     jl_safepoint_enable_sigint();
     jl_wake_libuv();
     if ((DWORD)-1 == SuspendThread(hMainThread)) {
@@ -401,7 +401,7 @@ void jl_install_default_signal_handlers(void)
     SetUnhandledExceptionFilter(exception_handler);
 }
 
-void *jl_install_thread_signal_handler(void)
+void jl_install_thread_signal_handler(void)
 {
     // Ensure the stack overflow handler has enough space to collect the backtrace
     ULONG StackSizeInBytes = sig_stack_size;
@@ -410,5 +410,4 @@ void *jl_install_thread_signal_handler(void)
             pSetThreadStackGuarantee = NULL;
         }
     }
-    return NULL;
 }
