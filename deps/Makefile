@@ -813,7 +813,11 @@ get-llvm: $(LLVM_TAR) $(LLVM_CLANG_TAR) $(LLVM_COMPILER_RT_TAR) $(LLVM_LIBCXX_TA
 else
 get-llvm: $(LLVM_SRC_DIR)/configure
 endif
+ifeq ($(LLVM_USE_CMAKE),1)
+configure-llvm: $(LLVM_BUILDDIR_withtype)/CMakeCache.txt
+else
 configure-llvm: $(LLVM_BUILDDIR_withtype)/config.status
+endif
 compile-llvm: $(LLVM_OBJ_SOURCE)
 check-llvm: $(LLVM_BUILDDIR_withtype)/checked
 install-llvm: $(LLVM_OBJ_TARGET)
