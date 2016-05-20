@@ -58,7 +58,7 @@ end
 
 function show{K,V}(io::IO, t::Associative{K,V})
     recur_io = IOContext(io, SHOWN_SET=t, multiline=false)
-    limit::Bool = limit_output(io)
+    limit::Bool = get(io, :limit, false)
     compact = !get(io, :multiline, false)
     if !haskey(io, :compact)
         recur_io = IOContext(recur_io, compact=true)
@@ -156,7 +156,7 @@ function show(io::IO, iter::Union{KeyIterator,ValueIterator})
     print(io, summary(iter))
     isempty(iter) && return
     print(io, ". ", isa(iter,KeyIterator) ? "Keys" : "Values", ":")
-    limit::Bool = limit_output(io)
+    limit::Bool = get(io, :limit, false)
     if limit
         sz = displaysize(io)
         rows, cols = sz[1] - 3, sz[2]

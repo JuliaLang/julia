@@ -63,14 +63,19 @@ haskey(io::IOContext, key) = haskey(io.dict, key)
 haskey(io::IO, key) = false
 getindex(io::IOContext, key) = getindex(io.dict, key)
 getindex(io::IO, key) = throw(KeyError(key))
-get(io::IOContext, key, default) = get(io.dict, key, default)
-get(io::IO, key, default) = default
-
-"    limit_output(io) -> Bool
-Output hinting for identifying contexts where the user requested a compact output"
-limit_output(::ANY) = _limit_output::Bool
-limit_output(io::IOContext) = get(io, :limit_output, _limit_output::Bool) === true
-_limit_output = false # delete with with_output_limit deprecation
+_limit_output = nothing # TODO: delete with with_output_limit deprecation
+function get(io::IOContext, key, default)
+    if key === :limit && _limit_output !== nothing
+        default = _limit_output::Bool
+    end
+    get(io.dict, key, default)
+end
+function get(io::IO, key, default)
+    if key === :limit && _limit_output !== nothing
+        return _limit_output::Bool
+    end
+    default
+end
 
 displaysize(io::IOContext) = haskey(io, :displaysize) ? io[:displaysize] : displaysize(io.io)
 
@@ -1051,7 +1056,7 @@ function dump(io::IO, x::Array, n::Int, indent)
     else
         if n > 0 && !isempty(x)
             println(io)
-            if limit_output(io)
+            if get(io, :limit, false)
                 dump_elts(io, x, n, indent, 1, (length(x) <= 10 ? length(x) : 5))
                 if length(x) > 10
                     println(io)
@@ -1130,7 +1135,7 @@ end
 
 # For abstract types, use _dumptype only if it's a form that will be called
 # interactively.
-dflt_io() = IOContext(STDOUT::IO, :limit_output => true)
+dflt_io() = IOContext(STDOUT::IO, :limit => true)
 dump(io::IO, x::DataType; maxdepth=8) = (x.abstract ? dumptype : dump)(io, x, maxdepth, "")
 dump(x::DataType; maxdepth=8) = (x.abstract ? dumptype : dump)(dflt_io(), x, maxdepth, "")
 
@@ -1285,7 +1290,7 @@ function print_matrix(io::IO, X::AbstractVecOrMat,
                       vdots::AbstractString = "\u22ee",
                       ddots::AbstractString = "  \u22f1  ",
                       hmod::Integer = 5, vmod::Integer = 5)
-    if !limit_output(io)
+    if !get(io, :limit, false)
         screenheight = screenwidth = typemax(Int)
     else
         sz = displaysize(io)
@@ -1391,7 +1396,7 @@ summary(a::AbstractArray) =
 
 # n-dimensional arrays
 function show_nd(io::IO, a::AbstractArray, print_matrix, label_slices)
-    limit::Bool = limit_output(io)
+    limit::Bool = get(io, :limit, false)
     if isempty(a)
         return
     end
@@ -1471,9 +1476,9 @@ function show(io::IO, X::AbstractArray)
     if !haskey(io, :compact)
         io = IOContext(io, compact=true)
     end
-    if !repr && limit_output(io) && eltype(X) === Method
+    if !repr && get(io, :limit, false) && eltype(X) === Method
         # override usual show method for Vector{Method}: don't abbreviate long lists
-        io = IOContext(io, :limit_output => false)
+        io = IOContext(io, :limit => false)
     end
     !repr && print(io, summary(X))
     if !isempty(X)
@@ -1506,10 +1511,10 @@ end
 
 showall(x) = showall(STDOUT, x)
 function showall(io::IO, x)
-    if !limit_output(io)
+    if !get(io, :limit, false)
         show(io, x)
     else
-        show(IOContext(io, :limit_output => false), x)
+        show(IOContext(io, :limit => false), x)
     end
 end
 
@@ -1538,7 +1543,7 @@ end
 
 function show_vector(io::IO, v, opn, cls)
     compact, prefix = array_eltype_show_how(v)
-    limited = limit_output(io)
+    limited = get(io, :limit, false)
     if compact && !haskey(io, :compact)
         io = IOContext(io, :compact => compact)
     end
