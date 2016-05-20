@@ -1160,9 +1160,17 @@ end
 @deprecate_binding UTF8String String
 @deprecate_binding ByteString String
 
+@deprecate utf8(p::Ptr{UInt8}, len::Integer) String(p, len)
+@deprecate utf8(p::Ptr{UInt8}) String(p)
+@deprecate utf8(v::Vector{UInt8}) String(v)
+@deprecate utf8(s::AbstractString) String(p)
+@deprecate utf8(x) convert(String, x)
+
 @deprecate ascii(p::Ptr{UInt8}, len::Integer) ascii(String(p, len))
 @deprecate ascii(p::Ptr{UInt8}) ascii(String(p))
-@deprecate ascii(x) ascii(string(x))
+@deprecate ascii(v::Vector{UInt8}) ascii(String(v))
+@deprecate ascii(s::AbstractString) ascii(String(p))
+@deprecate ascii(x) ascii(convert(String, x))
 
 @deprecate bytestring(s::Cstring) String(s)
 @deprecate bytestring(v::Vector{UInt8}) String(v)
