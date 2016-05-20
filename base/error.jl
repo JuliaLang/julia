@@ -80,7 +80,7 @@ function retry(f::Function, retry_on::Function=DEFAULT_RETRY_ON; n=DEFAULT_RETRY
             try
                 return f(args...)
             catch e
-                if i > n || try retry_on(e) end != true
+                if i > n || try retry_on(e) end !== true
                     rethrow(e)
                 end
             end

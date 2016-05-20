@@ -9,15 +9,7 @@ haskey(d::Associative, k) = in(k,keys(d))
 function in(p::Pair, a::Associative, valcmp=(==))
     v = get(a,p[1],secret_table_token)
     if !is(v, secret_table_token)
-        if valcmp === is
-            is(v, p[2]) && return true
-        elseif valcmp === (==)
-            ==(v, p[2]) && return true
-        elseif valcmp === isequal
-            isequal(v, p[2]) && return true
-        else
-            valcmp(v, p[2]) && return true
-        end
+        valcmp(v, p[2]) && return true
     end
     return false
 end
@@ -30,7 +22,7 @@ end
 
 function summary(t::Associative)
     n = length(t)
-    string(typeof(t), " with ", n, (n==1 ? " entry" : " entries"))
+    return string(typeof(t), " with ", n, (n==1 ? " entry" : " entries"))
 end
 
 function _truncate_at_width_or_chars(str, width, chars="", truncmark="…")
@@ -964,15 +956,7 @@ function in(key_value::Pair, dict::ImmutableDict, valcmp=(==))
     key, value = key_value
     while isdefined(dict, :parent)
         if dict.key == key
-            if valcmp === is
-                is(value, dict.value) && return true
-            elseif valcmp === (==)
-                ==(value, dict.value) && return true
-            elseif valcmp === isequal
-                isequal(value, dict.value) && return true
-            else
-                valcmp(value, dict.value) && return true
-            end
+            valcmp(value, dict.value) && return true
         end
         dict = dict.parent
     end

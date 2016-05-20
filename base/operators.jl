@@ -8,9 +8,22 @@ supertype(T::DataType) = T.super
 
 ## generic comparison ##
 
-==(x,y) = x === y
-
+==(x, y) = x === y
 isequal(x, y) = x == y
+
+## minimally-invasive changes to test == causing NotComparableError
+# export NotComparableError
+# =={T}(x::T, y::T) = x === y
+# immutable NotComparableError <: Exception end
+# const NotComparable = NotComparableError()
+# ==(x::ANY, y::ANY) = NotComparable
+# !(e::NotComparableError) = throw(e)
+# isequal(x, y) = (x == y) === true
+
+## alternative NotComparableError which captures context
+# immutable NotComparableError; a; b; end
+# ==(x::ANY, y::ANY) = NotComparableError(x, y)
+
 isequal(x::AbstractFloat, y::AbstractFloat) = (isnan(x) & isnan(y)) | (signbit(x) == signbit(y)) & (x == y)
 isequal(x::Real,          y::AbstractFloat) = (isnan(x) & isnan(y)) | (signbit(x) == signbit(y)) & (x == y)
 isequal(x::AbstractFloat, y::Real         ) = (isnan(x) & isnan(y)) | (signbit(x) == signbit(y)) & (x == y)
@@ -27,6 +40,8 @@ function !=(T::Type, S::Type)
     @_pure_meta
     !(T == S)
 end
+==(T::TypeVar, S::Type) = false
+==(T::Type, S::TypeVar) = false
 
 ## comparison fallbacks ##
 

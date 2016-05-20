@@ -94,7 +94,7 @@ function pmap(p::WorkerPool, f, c;  distributed=true, batch_size=1, on_error=not
         if retry_n > 0
             f = wrap_retry(f, retry_on, retry_n, retry_max_delay)
         end
-        if on_error != nothing
+        if on_error !== nothing
             f = wrap_on_error(f, on_error)
         end
         return collect(AsyncGenerator(f, c))
@@ -108,12 +108,12 @@ function pmap(p::WorkerPool, f, c;  distributed=true, batch_size=1, on_error=not
         # to ensure that we do not call mapped function on the same element more than retry_n.
         # This guarantee is not possible in case of worker death / network errors, wherein
         # we will retry the entire batch on a new worker.
-        if (on_error != nothing) || (retry_n > 0)
+        if (on_error !== nothing) || (retry_n > 0)
             f = wrap_on_error(f, (x,e)->BatchProcessingError(x,e); capture_data=true)
         end
         f = wrap_batch(f, p, on_error)
         results = collect(flatten(AsyncGenerator(f, batches)))
-        if (on_error != nothing) || (retry_n > 0)
+        if (on_error !== nothing) || (retry_n > 0)
             process_batch_errors!(p, f_orig, results, on_error, retry_on, retry_n, retry_max_delay)
         end
         return results
@@ -146,7 +146,7 @@ function wrap_batch(f, p, on_error)
         try
             remotecall_fetch(f, p, batch)
         catch e
-            if on_error != nothing
+            if on_error !== nothing
                 return Any[BatchProcessingError(batch[i], e) for i in 1:length(batch)]
             else
                 rethrow(e)
@@ -159,7 +159,7 @@ asyncmap_batch(f) = batch -> asyncmap(f, batch)
 
 function process_batch_errors!(p, f, results, on_error, retry_on, retry_n, retry_max_delay)
     # Handle all the ones in error in another pmap, with batch size set to 1
-    if (on_error != nothing) || (retry_n > 0)
+    if (on_error !== nothing) || (retry_n > 0)
         reprocess = []
         for (idx, v) in enumerate(results)
             if isa(v, BatchProcessingError)
@@ -177,7 +177,7 @@ function process_batch_errors!(p, f, results, on_error, retry_on, retry_n, retry
                                                     retry_on=retry_on,
                                                     retry_n=retry_n,
                                                     retry_max_delay=retry_max_delay)
-            elseif on_error != nothing
+            elseif on_error !== nothing
                 error_processed = map(on_error, exceptions)
             else
                 throw(CompositeException(exceptions))

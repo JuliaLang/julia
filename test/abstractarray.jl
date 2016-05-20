@@ -437,7 +437,7 @@ function test_map(::Type{TestAbstractArray})
         # map with different result types
         let m = mapf(x->x+1, Number[1, 2.0])
             # FIXME why is this different for asyncmap?
-            @test mapf != map || isa(m, Vector{Real})
+            @test mapf !== map || isa(m, Vector{Real})
             @test m == Real[2, 3.0]
         end
 

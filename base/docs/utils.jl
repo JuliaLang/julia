@@ -141,7 +141,7 @@ function repl(s::Symbol)
     end
 end
 
-isregex(x) = isexpr(x, :macrocall, 2) && x.args[1] == Symbol("@r_str") && !isempty(x.args[2])
+isregex(x) = isexpr(x, :macrocall, 2) && x.args[1] === Symbol("@r_str") && !isempty(x.args[2])
 
 repl(ex::Expr) = isregex(ex) ? :(apropos($ex)) : _repl(ex)
 
@@ -154,7 +154,7 @@ function _repl(x)
     if isexpr(x, :call)
         # Handles function call syntax where each argument is an atom (symbol, number, etc.)
         t = Base.gen_call_with_extracted_types(doc, x)
-        (isexpr(t, :call, 3) && t.args[1] == doc) && (docs = t)
+        (isexpr(t, :call, 3) && t.args[1] === doc) && (docs = t)
     end
     if isfield(x)
         quote
