@@ -329,7 +329,9 @@ static Value *emit_unbox(Type *to, const jl_cgval_t &x, jl_value_t *jt, Value *d
         alignment = 0;
     }
     if (dest) {
-        builder.CreateMemCpy(dest, p, jl_datatype_size(jt), alignment);
+        // callers using the dest argument only use it for a stack slot for now
+        alignment = 0;
+        builder.CreateMemCpy(dest, p, jl_datatype_size(jt), alignment, false, x.tbaa);
         return NULL;
     }
     else {

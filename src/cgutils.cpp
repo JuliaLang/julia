@@ -1354,16 +1354,16 @@ static Value *init_bits_value(Value *newv, Value *jt, Value *v, MDNode *tbaa)
     return newv;
 }
 static Value *as_value(Type *t, const jl_cgval_t&);
-static Value *init_bits_cgval(Value *newv, const jl_cgval_t& v, MDNode *tbaa, Type *t)
+static Value *init_bits_cgval(Value *newv, const jl_cgval_t& v, MDNode *tbaa, Type *t, jl_codectx_t *ctx)
 {
     Value *jt = literal_pointer_val(v.typ);
     if (v.ispointer()) {
         init_tag(newv, jt);
-        builder.CreateMemCpy(newv, v.V, jl_datatype_size(v.typ), sizeof(void*));
+        builder.CreateMemCpy(newv, data_pointer(v,ctx,PointerType::get(t,0)), jl_datatype_size(v.typ), sizeof(void*));
         return newv;
     }
     else {
-        return init_bits_value(newv, jt, as_value(t,v), tbaa);
+        return init_bits_value(newv, jt, v.V, tbaa);
     }
 }
 
@@ -1530,7 +1530,7 @@ static Value *boxed(const jl_cgval_t &vinfo, jl_codectx_t *ctx, bool gcrooted)
         return literal_pointer_val(jb->instance);
     }
     else {
-        box = init_bits_cgval(emit_allocobj(jl_datatype_size(jt)), vinfo, jb->mutabl ? tbaa_mutab : tbaa_immut, t);
+        box = init_bits_cgval(emit_allocobj(jl_datatype_size(jt)), vinfo, jb->mutabl ? tbaa_mutab : tbaa_immut, t, ctx);
     }
 
     if (gcrooted) {
