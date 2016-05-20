@@ -4157,3 +4157,18 @@ function f16431(x)
     z * g(x)
 end
 @test @inferred(f16431(1)) == 4
+
+# issue #14878
+type A14878
+    ext
+end
+A14878() = A14878(Dict())
+type B14878
+end
+B14878(ng) = B14878()
+function trigger14878()
+    w = A14878()
+    w.ext[:14878] = B14878(junk)  # junk not defined!
+    return w
+end
+@test_throws UndefVarError trigger14878()
