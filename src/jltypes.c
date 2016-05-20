@@ -169,7 +169,7 @@ JL_DLLEXPORT int jl_is_leaf_type(jl_value_t *v)
         if (((jl_datatype_t*)v)->abstract) {
             int x = 0;
             if (jl_is_type_type(v)) {
-                x = !jl_is_typevar(jl_tparam0(v));
+                x = !jl_has_typevars(jl_tparam0(v));
             }
             assert(x == isleaf);
             return x;
@@ -186,7 +186,8 @@ JL_DLLEXPORT int jl_is_leaf_type(jl_value_t *v)
         }
         else {
             for(int i=0; i < l; i++) {
-                if (jl_is_typevar(jl_svecref(t,i))) {
+                jl_value_t *p = jl_svecref(t, i);
+                if (jl_has_typevars(p)) {
                     assert(!isleaf);
                     return 0;
                 }
@@ -1975,12 +1976,14 @@ int jl_assign_type_uid(void)
 
 static int is_cacheable(jl_datatype_t *type)
 {
+    // only cache types whose behavior will not depend on the identities
+    // of contained TypeVars
     assert(jl_is_datatype(type));
     jl_svec_t *t = type->parameters;
     if (jl_svec_len(t) == 0) return 0;
     // cache abstract types with no type vars
     if (jl_is_abstracttype(type))
-        return !jl_has_typevars_((jl_value_t*)type,1);
+        return !jl_has_typevars_((jl_value_t*)type, 1);
     // ... or concrete types
     return jl_is_leaf_type((jl_value_t*)type);
 }
@@ -2101,7 +2104,7 @@ void jl_precompute_memoized_dt(jl_datatype_t *dt)
         if (!dt->haswildcard)
             dt->haswildcard = jl_has_typevars__(p, 1, NULL, 0);
         if (dt->isleaftype)
-            dt->isleaftype = (istuple ? jl_is_leaf_type(p) : !jl_is_typevar(p));
+            dt->isleaftype = (istuple ? jl_is_leaf_type(p) : !jl_has_typevars(p));
     }
 }
 
@@ -2249,10 +2252,8 @@ static jl_tupletype_t *jl_apply_tuple_type_v_(jl_value_t **p, size_t np, jl_svec
         check_tuple_parameter(pi, i, np);
         if (!jl_is_leaf_type(pi))
             isabstract = 1;
-        if (jl_has_typevars_(pi,0))
-            cacheable = 0;
     }
-    cacheable &= (!isabstract);
+    cacheable = !isabstract;
     jl_datatype_t *ndt = (jl_datatype_t*)inst_datatype(jl_anytuple_type, params, p, np,
                                                        cacheable, isabstract, NULL, NULL, 0);
     return ndt;
@@ -2348,8 +2349,6 @@ static jl_value_t *inst_tuple_w_(jl_value_t *t, jl_value_t **env, size_t n,
         if (!isabstract && !jl_is_leaf_type(pi)) {
             cacheable = 0; isabstract = 1;
         }
-        if (cacheable && jl_has_typevars_(pi,0))
-            cacheable = 0;
     }
     jl_value_t *result = inst_datatype((jl_datatype_t*)tt, ip_heap, iparams, ntp, cacheable, isabstract,
                                        stack, env, n);
@@ -2424,11 +2423,10 @@ static jl_value_t *inst_type_w_(jl_value_t *t, jl_value_t **env, size_t n,
                     }
                 }
             }
-            if (jl_is_typevar(iparams[i]))
+            if (jl_has_typevars(iparams[i]))
                 isabstract = 1;
         }
-        if (jl_has_typevars_(iparams[i],0))
-            cacheable = 0;
+        cacheable = !isabstract;
     }
     // if t's parameters are not bound in the environment, return it uncopied (#9378)
     if (!bound && t == tc) { JL_GC_POP(); return (jl_value_t*)t; }
