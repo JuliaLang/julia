@@ -146,7 +146,7 @@ function write(s::IO, x::Union{Int16,UInt16,Int32,UInt32,Int64,UInt64,Int128,UIn
     return write(s, Ref(x))
 end
 
-write(s::IO, x::Bool)    = write(s, UInt8(x))
+write(s::IO, x::Bool) = write(s, UInt8(x))
 write(to::IO, p::Ptr) = write(to, convert(UInt, p))
 
 function write(s::IO, A::AbstractArray)
