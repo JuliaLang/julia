@@ -13,7 +13,7 @@ slen_u8str2 = length(u8str2)
 @test len_u8str2 == 2 * len_u8str
 @test slen_u8str2 == 2 * slen_u8str
 
-u8str2plain = utf8(u8str2)
+u8str2plain = String(u8str2)
 
 for i1 = 1:length(u8str2)
     if !isvalid(u8str2, i1); continue; end
@@ -93,8 +93,7 @@ u = SubString(str, 1, 5)
 @test prevind(SubString("{var}",2,4),4) == 3
 
 # issue #4183
-@test split(SubString(ascii("x"), 2, 0), "y") == AbstractString[""]
-@test split(SubString(utf8("x"), 2, 0), "y") == AbstractString[""]
+@test split(SubString("x", 2, 0), "y") == AbstractString[""]
 
 # issue #6772
 @test float(SubString("10",1,1)) === 1.0
@@ -132,7 +131,7 @@ let s="lorem ipsum",
 end #let
 
 #for isvalid(SubString{String})
-let s = utf8("Σx + βz - 2")
+let s = "Σx + βz - 2"
   for i in -1:length(s)+2
       ss=SubString(s,1,i)
       @test isvalid(ss,i)==isvalid(s,i)

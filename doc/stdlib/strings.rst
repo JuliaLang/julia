@@ -68,24 +68,6 @@
 
    Convert a string to ``String`` type and check that it contains only ASCII data, otherwise throwing an ``ArugmentError`` indicating the position of the first non-ASCII byte.
 
-.. function:: utf8(::Array{UInt8,1})
-
-   .. Docstring generated from Julia source
-
-   Create a UTF-8 string from a byte array.
-
-.. function:: utf8(::Ptr{UInt8}, [length])
-
-   .. Docstring generated from Julia source
-
-   Create a UTF-8 string from the address of a C (0-terminated) string encoded in UTF-8. A copy is made; the ptr can be safely freed. If ``length`` is specified, the string does not have to be 0-terminated.
-
-.. function:: utf8(s)
-
-   .. Docstring generated from Julia source
-
-   Convert a string to a contiguous UTF-8 string (all characters must be valid UTF-8 characters).
-
 .. function:: @r_str -> Regex
 
    .. Docstring generated from Julia source

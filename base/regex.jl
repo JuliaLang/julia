@@ -209,8 +209,8 @@ function matchall(re::Regex, str::String, overlap::Bool=false)
     matches
 end
 
-matchall(re::Regex, str::Union{String,SubString}, overlap::Bool=false) =
-    matchall(re, utf8(str), overlap)
+matchall(re::Regex, str::SubString, overlap::Bool=false) =
+    matchall(re, String(str), overlap)
 
 function search(str::Union{String,SubString}, re::Regex, idx::Integer)
     if idx > nextind(str,endof(str))
