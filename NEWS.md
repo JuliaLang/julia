@@ -160,6 +160,8 @@ Library improvements
 
   * There is now a default no-op `flush(io)` function for all `IO` types ([#16403]).
 
+  * Concatenating dense and sparse matrices now returns a sparse matrix ([#15172]).
+
 Deprecated or removed
 ---------------------
 
@@ -231,3 +233,4 @@ Deprecated or removed
 [#15609]: https://github.com/JuliaLang/julia/issues/15609
 [#15763]: https://github.com/JuliaLang/julia/issues/15763
 [#16403]: https://github.com/JuliaLang/julia/issues/16403
+[#15172]: https://github.com/JuliaLang/julia/issues/15172
