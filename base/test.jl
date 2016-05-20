@@ -18,6 +18,7 @@ export @testset
 # Legacy approximate testing functions, yet to be included
 export @test_approx_eq, @test_approx_eq_eps, @inferred
 export detect_ambiguities
+export GenericString
 
 #-----------------------------------------------------------------------
 
@@ -907,5 +908,17 @@ function detect_ambiguities(mods...; imported::Bool=false)
     end
     collect(ambs)
 end
+
+"""
+The `GenericString` can be used to test generic string APIs that program to
+the `AbstractString` interface. In order to ensure that functions can work
+with string types besides the standard `String` type.
+"""
+immutable GenericString <: AbstractString
+    string::AbstractString
+end
+Base.convert(::Type{GenericString}, s::AbstractString) = GenericString(s)
+Base.endof(s::GenericString) = endof(s.string)
+Base.next(s::GenericString, i::Int) = next(s.string, i)
 
 end # module
