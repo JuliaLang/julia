@@ -1,5 +1,13 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
+export isprime, primes, primesmask, factor
+
+
+function isprime(x::BigInt, reps=25)
+    depwarn("isprime(...) has been deprecated, use isprime(...) in Primes.jl instead", :isprime)
+    ccall((:__gmpz_probab_prime_p,:libgmp), Cint, (Ptr{BigInt}, Cint), &x, reps) > 0
+end
+
 # Primes generating functions
 #     https://en.wikipedia.org/wiki/Sieve_of_Eratosthenes
 #     https://en.wikipedia.org/wiki/Wheel_factorization
@@ -55,6 +63,8 @@ end
 
 # Sieve of the primes from lo up to hi represented as an array of booleans
 function primesmask(lo::Int, hi::Int)
+    depwarn("primesmask(...) has been deprecated, use primesmask(...) in Primes.jl instead", :primesmask)
+
     0 < lo ≤ hi || throw(ArgumentError("the condition 0 < lo ≤ hi must be met"))
     sieve = falses(hi - lo + 1)
     lo ≤ 2 ≤ hi && (sieve[3-lo] = true)
@@ -77,6 +87,12 @@ primesmask(n::Integer) = n <= typemax(Int) ? primesmask(Int(n)) :
     throw(ArgumentError("requested number of primes must be ≤ $(typemax(Int)), got $n"))
 
 function primes(lo::Int, hi::Int)
+    depwarn("primes(...) has been deprecated, use primes(...) in Primes.jl instead", :primes)
+    primes_nowarn(lo,hi)
+end
+
+
+function primes_nowarn(lo::Int, hi::Int)
     lo ≤ hi || throw(ArgumentError("the condition lo ≤ hi must be met"))
     list = Int[]
     lo ≤ 2 ≤ hi && push!(list, 2)
@@ -93,12 +109,14 @@ function primes(lo::Int, hi::Int)
 end
 primes(n::Int) = primes(1, n)
 
-const PRIMES = primes(2^16)
+const PRIMES = primes_nowarn(1, 2^16)
 
 # Small precomputed primes + Miller-Rabin for primality testing:
 #     https://en.wikipedia.org/wiki/Miller–Rabin_primality_test
 #
 function isprime(n::Integer)
+    depwarn("isprime(...) has been deprecated, use isprime(...) in Primes.jl instead", :isprime)
+
     (n < 3 || iseven(n)) && return n == 2
     n <= 2^16 && return PRIMES[searchsortedlast(PRIMES,n)] == n
     s = trailing_zeros(n-1)
@@ -130,10 +148,14 @@ witnesses(n::Union{UInt64,Int64}) =
         n < 3474749660383   ? (2,3,5,7,11,13) :
                               (2,325,9375,28178,450775,9780504,1795265022)
 
-isprime(n::UInt128) =
+function isprime(n::UInt128)
+    depwarn("isprime(...) has been deprecated, use isprime(...) in Primes.jl instead", :isprime)
     n <= typemax(UInt64) ? isprime(UInt64(n)) : isprime(BigInt(n))
-isprime(n::Int128) = n < 2 ? false :
-    n <= typemax(Int64)  ? isprime(Int64(n))  : isprime(BigInt(n))
+end
+function isprime(n::Int128)
+    depwarn("isprime(...) has been deprecated, use isprime(...) in Primes.jl instead", :isprime)
+    n < 2 ? false : n <= typemax(Int64)  ? isprime(Int64(n))  : isprime(BigInt(n))
+end
 
 
 # Trial division of small (< 2^16) precomputed primes +
@@ -143,6 +165,8 @@ isprime(n::Int128) = n < 2 ? false :
 #     http://maths-people.anu.edu.au/~brent/pub/pub051.html
 #
 function factor{T<:Integer}(n::T)
+    depwarn("factor(...) has been deprecated, use factor(...) in Primes.jl instead", :factor)
+
     0 < n || throw(ArgumentError("number to be factored must be ≥ 0, got $n"))
     h = Dict{T,Int}()
     n == 1 && return h
@@ -204,3 +228,64 @@ function pollardfactors!{T<:Integer,K<:Integer}(n::T, h::Dict{K,Int})
         end
     end
 end
+
+
+"""
+    primes([lo,] hi)
+
+Returns a collection of the prime numbers (from `lo`, if specified) up to `hi`.
+"""
+primes
+
+"""
+    primesmask([lo,] hi)
+
+Returns a prime sieve, as a `BitArray`, of the positive integers (from `lo`, if specified)
+up to `hi`. Useful when working with either primes or composite numbers.
+"""
+primesmask
+
+
+"""
+    factor(n) -> Dict
+
+Compute the prime factorization of an integer `n`. Returns a dictionary. The keys of the
+dictionary correspond to the factors, and hence are of the same type as `n`. The value
+associated with each key indicates the number of times the factor appears in the
+factorization.
+
+```jldoctest
+julia> factor(100) # == 2*2*5*5
+Dict{Int64,Int64} with 2 entries:
+  2 => 2
+  5 => 2
+```
+"""
+factor
+
+
+"""
+    isprime(x::Integer) -> Bool
+
+Returns `true` if `x` is prime, and `false` otherwise.
+
+```jldoctest
+julia> isprime(3)
+true
+```
+"""
+isprime(::Integer)
+
+"""
+    isprime(x::BigInt, [reps = 25]) -> Bool
+
+Probabilistic primality test. Returns `true` if `x` is prime; and `false` if `x` is not
+prime with high probability. The false positive rate is about `0.25^reps`. `reps = 25` is
+considered safe for cryptographic applications (Knuth, Seminumerical Algorithms).
+
+```jldoctest
+julia> isprime(big(3))
+true
+```
+"""
+isprime(::BigInt, ?)

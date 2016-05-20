@@ -1292,21 +1292,6 @@ is equivalent to `!isapprox(x,y)`.
 isapprox
 
 """
-    primes([lo,] hi)
-
-Returns a collection of the prime numbers (from `lo`, if specified) up to `hi`.
-"""
-primes
-
-"""
-    primesmask([lo,] hi)
-
-Returns a prime sieve, as a `BitArray`, of the positive integers (from `lo`, if specified)
-up to `hi`. Useful when working with either primes or composite numbers.
-"""
-primesmask
-
-"""
     sinh(x)
 
 Compute hyperbolic sine of `x`.
@@ -7720,23 +7705,6 @@ the same as the way an object is printed in the Julia REPL.)
 TextDisplay
 
 """
-    factor(n) -> Dict
-
-Compute the prime factorization of an integer `n`. Returns a dictionary. The keys of the
-dictionary correspond to the factors, and hence are of the same type as `n`. The value
-associated with each key indicates the number of times the factor appears in the
-factorization.
-
-```jldoctest
-julia> factor(100) # == 2*2*5*5
-Dict{Int64,Int64} with 2 entries:
-  2 => 2
-  5 => 2
-```
-"""
-factor
-
-"""
     ismatch(r::Regex, s::AbstractString) -> Bool
 
 Test whether a string contains a match of the given regular expression.
@@ -8390,32 +8358,6 @@ any element type for which `dot` is defined), compute the Euclidean dot product 
 `dot(x[i],y[i])`) as if they were vectors.
 """
 vecdot
-
-"""
-    isprime(x::Integer) -> Bool
-
-Returns `true` if `x` is prime, and `false` otherwise.
-
-```jldoctest
-julia> isprime(3)
-true
-```
-"""
-isprime(::Integer)
-
-"""
-    isprime(x::BigInt, [reps = 25]) -> Bool
-
-Probabilistic primality test. Returns `true` if `x` is prime; and `false` if `x` is not
-prime with high probability. The false positive rate is about `0.25^reps`. `reps = 25` is
-considered safe for cryptographic applications (Knuth, Seminumerical Algorithms).
-
-```jldoctest
-julia> isprime(big(3))
-true
-```
-"""
-isprime(::BigInt, ?)
 
 """
     >(x, y)

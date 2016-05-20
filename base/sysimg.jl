@@ -179,8 +179,6 @@ include("multidimensional.jl")
 include("permuteddimsarray.jl")
 using .PermutedDimsArrays
 
-include("primes.jl")
-
 let SOURCE_PATH = ""
     global include = function(path)
         prev = SOURCE_PATH
