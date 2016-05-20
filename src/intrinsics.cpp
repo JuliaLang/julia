@@ -331,7 +331,14 @@ static Value *emit_unbox(Type *to, const jl_cgval_t &x, jl_value_t *jt, Value *d
     if (dest) {
         // callers using the dest argument only use it for a stack slot for now
         alignment = 0;
-        builder.CreateMemCpy(dest, p, jl_datatype_size(jt), alignment, volatile_store, x.tbaa);
+        MDNode *tbaa = x.tbaa;
+        // the memcpy intrinsic does not allow to specify different alias tags
+        // for the load part (x.tbaa) and the store part (tbaa_stack).
+        // since the tbaa lattice has to be a tree we have unfortunately
+        // x.tbaa ∪ tbaa_stack = tbaa_root if x.tbaa != tbaa_stack
+        if (tbaa != tbaa_stack)
+            tbaa = NULL;
+        builder.CreateMemCpy(dest, p, jl_datatype_size(jt), alignment, volatile_store, tbaa);
         return NULL;
     }
     else {
