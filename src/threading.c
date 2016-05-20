@@ -161,10 +161,10 @@ jl_mutex_t typecache_lock;
 #ifdef JULIA_ENABLE_THREADING
 
 // only one thread group for now
-ti_threadgroup_t *tgworld;
+static ti_threadgroup_t *tgworld;
 
 // for broadcasting work to threads
-ti_threadwork_t threadwork;
+static ti_threadwork_t threadwork;
 
 #if PROFILE_JL_THREADING
 uint64_t prep_ns;

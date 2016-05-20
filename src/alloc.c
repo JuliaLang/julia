@@ -711,7 +711,7 @@ void jl_set_gs_ctr(uint32_t ctr) { gs_ctr = ctr; }
 
 JL_DLLEXPORT jl_sym_t *jl_gensym(void)
 {
-    static char name[16];
+    char name[16];
     char *n;
     n = uint2str(&name[2], sizeof(name)-2, gs_ctr, 10);
     *(--n) = '#'; *(--n) = '#';
@@ -721,7 +721,7 @@ JL_DLLEXPORT jl_sym_t *jl_gensym(void)
 
 JL_DLLEXPORT jl_sym_t *jl_tagged_gensym(const char *str, int32_t len)
 {
-    static char gs_name[14];
+    char gs_name[14];
     if (symbol_nbytes(len) >= SYM_POOL_SIZE)
         jl_exceptionf(jl_argumenterror_type, "Symbol length exceeds maximum");
     if (memchr(str, 0, len))
