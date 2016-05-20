@@ -68,6 +68,7 @@ tstcvt(str4_UTF8,str4_UTF16,str4_UTF32)
 @test utf16(strS_UTF32) == strC_UTF8
 
 # Test converting overlong \0
+@test convert(String, strZ) == strz_UTF8
 @test utf16(String(strZ)) == strz_UTF8
 @test utf32(String(strZ)) == strz_UTF8
 
