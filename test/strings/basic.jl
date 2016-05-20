@@ -481,7 +481,7 @@ foobaz(ch) = reinterpret(Char, typemax(UInt32))
 @test ["b","c"].*"a" == ["ba","ca"]
 @test ["a","b"].*["c","d"]' == ["ac" "ad"; "bc" "bd"]
 
-# Make sure NULL pointer are handled consistently by String
+# Make sure NULL pointers are handled consistently by String
 @test_throws ArgumentError String(Ptr{UInt8}(0))
 @test_throws ArgumentError String(Ptr{UInt8}(0), 10)
 
