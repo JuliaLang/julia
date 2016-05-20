@@ -697,7 +697,7 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int)
         end
 
         # scalar multiplication (i.e. "100x")
-        if (func == :(*) &&
+        if (func === :* &&
             length(func_args)==2 && isa(func_args[1], Real) && isa(func_args[2], Symbol))
             if func_prec <= prec
                 show_enclosed_list(io, '(', func_args, "", ')', indent, func_prec)
@@ -955,8 +955,8 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int)
 end
 
 function ismodulecall(ex::Expr)
-    ex.head == :call && (ex.args[1] == GlobalRef(Base,:getfield) ||
-                         ex.args[1] == GlobalRef(Core,:getfield)) &&
+    return ex.head == :call && (ex.args[1] === GlobalRef(Base,:getfield) ||
+                                ex.args[1] === GlobalRef(Core,:getfield)) &&
         isa(ex.args[2], Symbol) &&
         isdefined(current_module(), ex.args[2]) &&
         isa(getfield(current_module(), ex.args[2]), Module)

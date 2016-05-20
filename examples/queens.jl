@@ -13,7 +13,7 @@ function solve(x, y, n, d=Array{Vector{Int}}(0))
     for py = 1:y
       if !hitsany([px, py], d)
         s = solve(x, y, n-1, addqueen(d, [px, py]))
-        s != nothing && return s
+        s !== nothing && return s
       end
     end
   end

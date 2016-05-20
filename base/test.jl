@@ -166,7 +166,7 @@ macro test(ex)
     orig_ex = Expr(:inert,ex)
     # Normalize comparison operator calls to :comparison expressions
     if isa(ex, Expr) && ex.head == :call && length(ex.args)==3 &&
-        (ex.args[1] == :(==) || Base.operator_precedence(ex.args[1]) == comparison_prec)
+        (ex.args[1] === :(==) || Base.operator_precedence(ex.args[1]) == comparison_prec)
         testret = :(eval_comparison(Expr(:comparison,
                                          $(esc(ex.args[2])), $(esc(ex.args[1])), $(esc(ex.args[3])))))
     elseif isa(ex, Expr) && ex.head == :comparison
@@ -563,12 +563,12 @@ Generate the code for a `@testset` with a `begin`/`end` argument
 """
 function testset_beginend(args, tests)
     desc, testsettype, options = parse_testset_args(args[1:end-1])
-    if desc == nothing
+    if desc === nothing
         desc = "test set"
     end
     # if we're at the top level we'll default to DefaultTestSet. Otherwise
     # default to the type of the parent testset
-    if testsettype == nothing
+    if testsettype === nothing
         testsettype = :(get_testset_depth() == 0 ? DefaultTestSet : typeof(get_testset()))
     end
 
@@ -612,7 +612,7 @@ function testset_forloop(args, testloop)
 
     desc, testsettype, options = parse_testset_args(args[1:end-1])
 
-    if desc == nothing
+    if desc === nothing
         # No description provided. Generate from the loop variable names
         v = loopvars[1].args[1]
         desc = Expr(:string,"$v = ", esc(v)) # first variable
@@ -623,7 +623,7 @@ function testset_forloop(args, testloop)
         end
     end
 
-    if testsettype == nothing
+    if testsettype === nothing
         testsettype = :(get_testset_depth() == 0 ? DefaultTestSet : typeof(get_testset()))
     end
 
@@ -886,22 +886,22 @@ function detect_ambiguities(mods...; imported::Bool=false)
     ambs = Set{Tuple{Method,Method}}()
     for mod in mods
         for n in names(mod, true, imported)
-            try
-                f = getfield(mod, n)
-                if isa(f, Function)
-                    mt = methods(f)
-                    for m in mt
-                        if m.ambig != nothing
-                            for m2 in m.ambig
-                                if Base.isambiguous(m, m2)
-                                    push!(ambs, sortdefs(m, m2))
-                                end
+            if !isdefined(mod, n)
+                println("Skipping ", mod, '.', n)  # typically stale exports
+                continue
+            end
+            f = getfield(mod, n)
+            if isa(f, Function)
+                mt = methods(f)
+                for m in mt
+                    if m.ambig !== nothing
+                        for m2 in m.ambig
+                            if Base.isambiguous(m, m2)
+                                push!(ambs, sortdefs(m, m2))
                             end
                         end
                     end
                 end
-            catch
-                println("Skipping ", mod, '.', n)  # typically stale exports
             end
         end
     end

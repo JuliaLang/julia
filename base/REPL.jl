@@ -377,7 +377,7 @@ end
 function mode_idx(hist::REPLHistoryProvider, mode)
     c = :julia
     for (k,v) in hist.mode_mapping
-        v == mode && (c = k)
+        isequal(v, mode) && (c = k)
     end
     return c
 end
@@ -387,7 +387,7 @@ function add_history(hist::REPLHistoryProvider, s)
     isempty(strip(str)) && return
     mode = mode_idx(hist, LineEdit.mode(s))
     !isempty(hist.history) &&
-        mode == hist.modes[end] && str == hist.history[end] && return
+        isequal(mode, hist.modes[end]) && str == hist.history[end] && return
     push!(hist.modes, mode)
     push!(hist.history, str)
     hist.history_file === nothing && return
@@ -457,13 +457,13 @@ function history_prev(s::LineEdit.MIState, hist::REPLHistoryProvider,
         save_idx::Int = hist.cur_idx)
     hist.last_idx = -1
     m = history_move(s, hist, hist.cur_idx-1, save_idx)
-    if m == :ok
+    if m === :ok
         LineEdit.move_input_start(s)
         LineEdit.reset_key_repeats(s) do
             LineEdit.move_line_end(s)
         end
         LineEdit.refresh_line(s)
-    elseif m == :skip
+    elseif m === :skip
         hist.cur_idx -= 1
         history_prev(s, hist, save_idx)
     else
@@ -481,10 +481,10 @@ function history_next(s::LineEdit.MIState, hist::REPLHistoryProvider,
         hist.last_idx = -1
     end
     m = history_move(s, hist, cur_idx+1, save_idx)
-    if m == :ok
+    if m === :ok
         LineEdit.move_input_end(s)
         LineEdit.refresh_line(s)
-    elseif m == :skip
+    elseif m === :skip
         hist.cur_idx += 1
         history_next(s, hist, save_idx)
     else
@@ -508,7 +508,7 @@ function history_move_prefix(s::LineEdit.PrefixSearchState,
     for idx in idxs
         if (idx == max_idx) || (startswith(hist.history[idx], prefix) && (hist.history[idx] != cur_response || hist.modes[idx] != LineEdit.mode(s)))
             m = history_move(s, hist, idx)
-            if m == :ok
+            if m === :ok
                 if idx == max_idx
                     # on resuming the in-progress edit, leave the cursor where the user last had it
                 elseif isempty(prefix)
@@ -520,7 +520,7 @@ function history_move_prefix(s::LineEdit.PrefixSearchState,
                 end
                 LineEdit.refresh_line(s)
                 return :ok
-            elseif m == :skip
+            elseif m === :skip
                 return history_move_prefix(s,hist,prefix,backwards,idx)
             end
         end

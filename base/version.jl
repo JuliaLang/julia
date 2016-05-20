@@ -96,8 +96,8 @@ function VersionNumber(v::AbstractString)
     if prerl !== nothing && !isempty(prerl) && prerl[1] == '-'
         prerl = prerl[2:end] # strip leading '-'
     end
-    prerl = prerl !== nothing ? split_idents(prerl) : minus == "-" ? ("",) : ()
-    build = build !== nothing ? split_idents(build) : plus  == "+" ? ("",) : ()
+    prerl = prerl !== nothing ? split_idents(prerl) : minus !== nothing ? ("",) : ()
+    build = build !== nothing ? split_idents(build) : plus  !== nothing ? ("",) : ()
     VersionNumber(major, minor, patch, prerl, build)
 end
 

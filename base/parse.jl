@@ -176,11 +176,11 @@ function parse(str::AbstractString, pos::Int; greedy::Bool=true, raise::Bool=tru
     if raise && isa(ex,Expr) && is(ex.head,:error)
         throw(ParseError(ex.args[1]))
     end
-    if ex == ()
+    if ex === ()
         raise && throw(ParseError("end of input"))
         ex = Expr(:error, "end of input")
     end
-    ex, pos+1 # C is zero-based, Julia is 1-based
+    return ex, pos+1 # C is zero-based, Julia is 1-based
 end
 
 function parse(str::AbstractString; raise::Bool=true)
