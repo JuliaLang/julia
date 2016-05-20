@@ -212,7 +212,6 @@ static Module *shadow_output;
 #define jl_Module ctx->f->getParent()
 #define jl_builderModule builder.GetInsertBlock()->getParent()->getParent()
 static MDBuilder *mbuilder;
-static std::map<int, std::string> argNumberStrings;
 #ifdef LLVM38
 static legacy::PassManager *PM;
 #else
