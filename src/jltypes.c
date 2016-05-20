@@ -22,6 +22,7 @@ extern "C" {
 
 jl_datatype_t *jl_any_type;
 jl_datatype_t *jl_type_type;
+jl_methtable_t *jl_type_type_mt;
 jl_datatype_t *jl_typename_type;
 jl_datatype_t *jl_sym_type;
 jl_datatype_t *jl_symbol_type;
@@ -3263,7 +3264,8 @@ void jl_init_types(void)
     jl_any_type = jl_new_abstracttype((jl_value_t*)jl_symbol("Any"), NULL, jl_emptysvec);
     jl_any_type->super = jl_any_type;
     jl_type_type = jl_new_abstracttype((jl_value_t*)jl_symbol("Type"), jl_any_type, jl_emptysvec);
-    jl_type_type->name->mt = jl_new_method_table(jl_type_type->name->name, jl_current_module);
+    jl_type_type_mt = jl_new_method_table(jl_type_type->name->name, jl_current_module);
+    jl_type_type->name->mt = jl_type_type_mt;
 
     // initialize them. lots of cycles.
     jl_datatype_type->name = jl_new_typename(jl_symbol("DataType"));
