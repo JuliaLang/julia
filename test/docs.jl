@@ -456,6 +456,28 @@ end
 # Issues.
 # =======
 
+# Issue #16359. Error message for invalid doc syntax.
+
+for each in [ # valid syntax
+        :(f()),
+        :(f(x)),
+        :(f(x::Int)),
+        :(f(x...)),
+        :(f(x = 1)),
+        :(f(; x = 1))
+    ]
+    @test Meta.isexpr(Docs.docm("...", each), :block)
+end
+for each in [ # invalid syntax
+        :(f("...")),
+        :(f(1, 2)),
+        :(f(() -> ()))
+    ]
+    result = Docs.docm("...", each)
+    @test Meta.isexpr(result, :call)
+    @test result.args[1] === error
+end
+
 # Issue #15424. Non-markdown docstrings.
 
 module I15424
