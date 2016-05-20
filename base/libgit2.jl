@@ -465,7 +465,7 @@ function snapshot(repo::GitRepo)
     work = try
         with(GitIndex, repo) do idx
             if length(readdir(path(repo))) > 1
-                add!(idx, utf8("."))
+                add!(idx, ".")
                 write!(idx)
             end
             write_tree!(idx)
