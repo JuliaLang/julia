@@ -617,7 +617,7 @@ function show(io::IO, x::AbstractSparseVector)
         println(io, summary(x))
     end
 
-    limit::Bool = Base.limit_output(io)
+    limit::Bool = get(io, :limit, false)
     half_screen_rows = limit ? div(displaysize(io)[1] - 8, 2) : typemax(Int)
     pad = ndigits(n)
     sep = "\n\t"

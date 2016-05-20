@@ -81,7 +81,7 @@ function Base.show(io::IO, S::SparseMatrixCSC)
         print(io, S.m, "×", S.n, " sparse matrix with ", nnz(S), " ", eltype(S), " nonzero entries:")
     end
 
-    limit::Bool = Base.limit_output(io)
+    limit::Bool = get(io, :limit, false)
     if limit
         rows = displaysize(io)[1]
         half_screen_rows = div(rows - 8, 2)

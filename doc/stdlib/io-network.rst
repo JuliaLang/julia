@@ -655,12 +655,6 @@ Text I/O
 
    Return the nominal size of the screen that may be used for rendering output to this io object
 
-.. function:: limit_output(io) -> Bool
-
-   .. Docstring generated from Julia source
-
-   Output hinting for identifying contexts where the user requested a compact output
-
 Multimedia I/O
 --------------
 

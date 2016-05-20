@@ -277,7 +277,7 @@ function print_range(io::IO, r::Range,
                      hdots::AbstractString = ",\u2026,") # horiz ellipsis
     # This function borrows from print_matrix() in show.jl
     # and should be called by writemime (replutil.jl) and by display()
-    limit = limit_output(io)
+    limit = get(io, :limit, false)
     sz = displaysize(io)
     if !haskey(io, :compact)
         io = IOContext(io, compact=true)
