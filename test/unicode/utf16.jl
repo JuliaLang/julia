@@ -6,7 +6,7 @@ u16 = utf16(u8)
 @test sizeof(u16) == 18
 @test length(u16.data) == 10 && u16.data[end] == 0
 @test length(u16) == 5
-@test utf8(u16) == u8
+@test String(u16) == u8
 @test collect(u8) == collect(u16)
 @test u8 == utf16(u16.data[1:end-1]) == utf16(copy!(Array(UInt8, 18), 1, reinterpret(UInt8, u16.data), 1, 18))
 @test u8 == utf16(pointer(u16)) == utf16(convert(Ptr{Int16}, pointer(u16)))

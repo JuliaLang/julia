@@ -842,7 +842,7 @@ Given a dictionary ``D``, the syntax ``D[x]`` returns the value of key ``x`` (if
          "bar" => 42.0
          "foo" => 0.0
 
-       julia> b = Dict(utf8("baz") => 17, utf8("bar") => 4711)
+       julia> b = Dict("baz" => 17, "bar" => 4711)
        Dict{String,Int64} with 2 entries:
          "bar" => 4711
          "baz" => 17

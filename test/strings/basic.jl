@@ -215,14 +215,14 @@ end
 # issue #11142
 s = "abcdefghij"
 sp = pointer(s)
-@test utf8(sp) == s
-@test utf8(sp,5) == "abcde"
-@test typeof(utf8(sp)) == String
+@test String(sp) == s
+@test String(sp,5) == "abcde"
+@test typeof(String(sp)) == String
 s = "abcde\uff\u2000\U1f596"
 sp = pointer(s)
-@test utf8(sp) == s
-@test utf8(sp,5) == "abcde"
-@test typeof(utf8(sp)) == String
+@test String(sp) == s
+@test String(sp,5) == "abcde"
+@test typeof(String(sp)) == String
 
 @test get(tryparse(BigInt, "1234567890")) == BigInt(1234567890)
 @test isnull(tryparse(BigInt, "1234567890-"))
@@ -434,7 +434,7 @@ let s = "abcdef", u8 = "abcdef\uff", u16 = utf16(u8), u32 = utf32(u8),
     @test isvalid(u8)
     @test isvalid(u16)
     @test isvalid(u32)
-    @test isvalid(String,  u8)
+    @test isvalid(String, u8)
     @test isvalid(UTF16String, u16)
     @test isvalid(UTF32String, u32)
 end
@@ -464,11 +464,9 @@ end
 # issue # 11464: uppercase/lowercase of UTF16String becomes a String
 str = "abcdef\uff\uffff\u10ffffABCDEF"
 @test typeof(uppercase("abcdef")) == String
-@test typeof(uppercase(utf8(str))) == String
 @test typeof(uppercase(utf16(str))) == UTF16String
 @test typeof(uppercase(utf32(str))) == UTF32String
 @test typeof(lowercase("ABCDEF")) == String
-@test typeof(lowercase(utf8(str))) == String
 @test typeof(lowercase(utf16(str))) == UTF16String
 @test typeof(lowercase(utf32(str))) == UTF32String
 
@@ -481,16 +479,11 @@ foobaz(ch) = reinterpret(Char, typemax(UInt32))
 
 @test "a".*["b","c"] == ["ab","ac"]
 @test ["b","c"].*"a" == ["ba","ca"]
-@test utf8("a").*["b","c"] == ["ab","ac"]
-@test "a".*map(utf8,["b","c"]) == ["ab","ac"]
 @test ["a","b"].*["c","d"]' == ["ac" "ad"; "bc" "bd"]
 
-# Make sure NULL pointer are handled consistently by
-# `String`, `ascii` and `utf8`
+# Make sure NULL pointer are handled consistently by String
 @test_throws ArgumentError String(Ptr{UInt8}(0))
 @test_throws ArgumentError String(Ptr{UInt8}(0), 10)
-@test_throws ArgumentError utf8(Ptr{UInt8}(0))
-@test_throws ArgumentError utf8(Ptr{UInt8}(0), 10)
 
 # ascii works on ASCII strings and fails on non-ASCII strings
 @test ascii("Hello, world") == "Hello, world"
