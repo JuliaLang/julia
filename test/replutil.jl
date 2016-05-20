@@ -262,9 +262,8 @@ let err_str,
     err_str = @except_str randn(1)() MethodError
     @test contains(err_str, "MethodError: objects of type Array{Float64,1} are not callable")
 end
-strmime(x) = sprint((io,x)->writemime(IOContext(io,multiline=true), MIME("text/plain"), x), x)
-@test strmime(FunctionLike()) == "(::FunctionLike) (generic function with 0 methods)"
-@test ismatch(r"^@doc \(macro with \d+ method[s]?\)$", strmime(getfield(Base, Symbol("@doc"))))
+@test stringmime("text/plain", FunctionLike()) == "(::FunctionLike) (generic function with 0 methods)"
+@test ismatch(r"^@doc \(macro with \d+ method[s]?\)$", stringmime("text/plain", getfield(Base, Symbol("@doc"))))
 
 method_defs_lineno = @__LINE__
 Base.Symbol() = throw(ErrorException("1"))
@@ -292,8 +291,8 @@ let err_str,
     @test sprint(show, which(reinterpret(EightBitTypeT{Int32}, 0x54), Tuple{})) == "(::EightBitTypeT)() at $sp:$(method_defs_lineno + 6)"
     @test startswith(sprint(show, which(getfield(Base, Symbol("@doc")), Tuple{Vararg{Any}})), "@doc(x...) at boot.jl:")
     @test startswith(sprint(show, which(FunctionLike(), Tuple{})), "(::FunctionLike)() at $sp:$(method_defs_lineno + 7)")
-    @test strmime(FunctionLike()) == "(::FunctionLike) (generic function with 1 method)"
-    @test strmime(Core.arraysize) == "arraysize (built-in function)"
+    @test stringmime("text/plain", FunctionLike()) == "(::FunctionLike) (generic function with 1 method)"
+    @test stringmime("text/plain", Core.arraysize) == "arraysize (built-in function)"
 
     err_str = @except_stackframe Symbol() ErrorException
     @test err_str == " in Symbol() at $sn:$(method_defs_lineno + 0)"

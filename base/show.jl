@@ -1445,11 +1445,8 @@ function print_matrix_repr(io, X::AbstractArray)
     if compact && !haskey(io, :compact)
         io = IOContext(io, :compact => compact)
     end
-    prefix *= "["
-    ind = " "^length(prefix)
-    print(io, prefix)
+    print(io, prefix, "[")
     for i=1:size(X,1)
-        i > 1 && print(io, ind)
         for j=1:size(X,2)
             j > 1 && print(io, " ")
             if !isassigned(X,i,j)
@@ -1460,14 +1457,15 @@ function print_matrix_repr(io, X::AbstractArray)
             end
         end
         if i < size(X,1)
-            print(io, ";")
-        else
-            print(io, "]")
+            print(io, "; ")
         end
     end
+    print(io, "]")
 end
 
-function show(io::IO, X::AbstractArray)
+show(io::IO, X::AbstractArray) = showarray(io, X)
+
+function showarray(io::IO, X::AbstractArray)
     repr = !get(io, :multiline, false)
     if repr && ndims(X) == 1
         return show_vector(io, X, "[", "]")
@@ -1502,8 +1500,8 @@ function show(io::IO, X::AbstractArray)
                 print_matrix(io, X, punct...)
             else
                 show_nd(io, X,
-                (io, slice) -> print_matrix(io, slice, punct...),
-                !repr)
+                        (io, slice) -> print_matrix(io, slice, punct...),
+                        !repr)
             end
         end
     end

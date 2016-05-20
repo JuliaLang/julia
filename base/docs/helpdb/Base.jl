@@ -2888,9 +2888,9 @@ Show an expression and result, returning the result.
 """
     showcompact(x)
 
-Show a more compact representation of a value. This is used for printing array elements. If
-a new type has a different compact representation,
-it should test `get(io, :limit, false)` in its normal `show` method.
+Show a more compact representation of a value. This is used for printing array elements.
+If a new type has a different compact representation,
+it should test `get(io, :compact, false)` in its normal `show` method.
 """
 showcompact
 
