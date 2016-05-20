@@ -54,7 +54,7 @@
 
    .. Docstring generated from Julia source
 
-   Create a string from the address of a C (0-terminated) string encoded as UTF-8. A copy is made so the ptr can be safely freed. If ``length`` is specified, the string does not have to be 0-terminated.
+   Create a string from the address of a C (0-terminated) string encoded as UTF-8. A copy is made so the pointer can be safely freed. If ``length`` is specified, the string does not have to be 0-terminated.
 
 .. function:: String(s::AbstractString)
 

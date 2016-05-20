@@ -1169,7 +1169,6 @@ end
 @deprecate ascii(p::Ptr{UInt8}, len::Integer) ascii(String(p, len))
 @deprecate ascii(p::Ptr{UInt8}) ascii(String(p))
 @deprecate ascii(v::Vector{UInt8}) ascii(String(v))
-@deprecate ascii(s::AbstractString) ascii(String(p))
 @deprecate ascii(x) ascii(convert(String, x))
 
 @deprecate bytestring(s::Cstring) String(s)
