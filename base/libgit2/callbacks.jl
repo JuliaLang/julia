@@ -15,7 +15,7 @@ function mirror_callback(remote::Ptr{Ptr{Void}}, repo_ptr::Ptr{Void},
 
     # And set the configuration option to true for the push command
     config = GitConfig(GitRepo(repo_ptr))
-    name_str = bytestring(name)
+    name_str = String(name)
     err= try set!(config, "remote.$name_str.mirror", true)
          catch -1
          finally finalize(config)
@@ -36,7 +36,7 @@ function credentials_callback(cred::Ptr{Ptr{Void}}, url_ptr::Cstring,
                               username_ptr::Cstring,
                               allowed_types::Cuint, payload_ptr::Ptr{Void})
     err = 1
-    url = bytestring(url_ptr)
+    url = String(url_ptr)
 
     if isset(allowed_types, Cuint(Consts.CREDTYPE_USERPASS_PLAINTEXT))
         username = userpass = ""
@@ -74,7 +74,7 @@ function credentials_callback(cred::Ptr{Ptr{Void}}, url_ptr::Cstring,
         username = if username_ptr == Cstring_NULL
             prompt("Username for '$url'")
         else
-            bytestring(username_ptr)
+            String(username_ptr)
         end
 
         publickey = if "SSH_PUB_KEY" in keys(ENV)
@@ -105,7 +105,7 @@ end
 function fetchhead_foreach_callback(ref_name::Cstring, remote_url::Cstring,
                         oid::Ptr{Oid}, is_merge::Cuint, payload::Ptr{Void})
     fhead_vec = unsafe_pointer_to_objref(payload)::Vector{FetchHead}
-    push!(fhead_vec, FetchHead(bytestring(ref_name), bytestring(remote_url), Oid(oid), is_merge == 1))
+    push!(fhead_vec, FetchHead(String(ref_name), String(remote_url), Oid(oid), is_merge == 1))
     return Cint(0)
 end
 

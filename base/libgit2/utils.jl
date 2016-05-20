@@ -14,7 +14,7 @@ isset(val::Integer, flag::Integer) = (val & flag == flag)
 function prompt(msg::AbstractString; default::AbstractString="", password::Bool=false)
     msg = !isempty(default) ? msg*" [$default]:" : msg*":"
     uinput = if password
-        bytestring(ccall(:getpass, Cstring, (Cstring,), msg))
+        String(ccall(:getpass, Cstring, (Cstring,), msg))
     else
         print(msg)
         chomp(readline(STDIN))

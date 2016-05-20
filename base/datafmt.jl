@@ -51,7 +51,7 @@ function readdlm_auto(input, dlm::Char, T::Type, eol::Char, auto::Bool; opts...)
             input = readstring(input)
         end
     end
-    sinp = isa(input, Vector{UInt8}) ? bytestring(input) :
+    sinp = isa(input, Vector{UInt8}) ? String(input) :
            isa(input, IO) ? readstring(input) :
            input
     readdlm_string(sinp, dlm, T, eol, auto, optsd)

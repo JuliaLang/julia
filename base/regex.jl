@@ -18,7 +18,7 @@ type Regex
 
     function Regex(pattern::AbstractString, compile_options::Integer,
                    match_options::Integer)
-        pattern = bytestring(pattern)
+        pattern = String(pattern)
         compile_options = UInt32(compile_options)
         match_options = UInt32(match_options)
         if (compile_options & ~PCRE.COMPILE_MASK) != 0
@@ -143,7 +143,7 @@ getindex(m::RegexMatch, name::AbstractString) = m[Symbol(name)]
 
 function ismatch(r::Regex, s::AbstractString, offset::Integer=0)
     compile(r)
-    return PCRE.exec(r.regex, bytestring(s), offset, r.match_options,
+    return PCRE.exec(r.regex, String(s), offset, r.match_options,
                      r.match_data)
 end
 
@@ -171,8 +171,9 @@ function match(re::Regex, str::Union{SubString{String}, String}, idx::Integer, a
 end
 
 match(r::Regex, s::AbstractString) = match(r, s, start(s))
-match(r::Regex, s::AbstractString, i::Integer) =
-    throw(ArgumentError("regex matching is only available for bytestrings; use bytestring(s) to convert"))
+match(r::Regex, s::AbstractString, i::Integer) = throw(ArgumentError(
+    "regex matching is only available for the String type; use String(s) to convert"
+))
 
 function matchall(re::Regex, str::String, overlap::Bool=false)
     regex = compile(re).regex
@@ -220,8 +221,9 @@ function search(str::Union{String,SubString}, re::Regex, idx::Integer)
     PCRE.exec(re.regex, str, idx-1, opts, re.match_data) ?
         ((Int(re.ovec[1])+1):prevind(str,Int(re.ovec[2])+1)) : (0:-1)
 end
-search(s::AbstractString, r::Regex, idx::Integer) =
-    throw(ArgumentError("regex search is only available for bytestrings; use bytestring(s) to convert"))
+search(s::AbstractString, r::Regex, idx::Integer) = throw(ArgumentError(
+    "regex search is only available for the String type; use String(s) to convert"
+))
 search(s::AbstractString, r::Regex) = search(s,r,start(s))
 
 immutable SubstitutionString{T<:AbstractString} <: AbstractString

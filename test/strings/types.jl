@@ -218,7 +218,7 @@ end
 
 # issue #13974: comparison against pointers
 
-str = bytestring("foobar")
+str = String("foobar")
 ptr = pointer(str)
 cstring = Cstring(ptr)
 @test ptr == cstring

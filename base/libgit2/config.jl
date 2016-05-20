@@ -56,7 +56,7 @@ function get{T<:AbstractString}(::Type{T}, c::GitConfig, name::AbstractString)
     @check ccall((:git_config_get_string_buf, :libgit2), Cint,
                 (Ptr{Buffer}, Ptr{Void}, Cstring), buf_ptr, c.ptr, name)
     return with(buf_ptr[]) do buf
-        bytestring(buf.ptr, buf.size)
+        String(buf.ptr, buf.size)
     end
 end
 

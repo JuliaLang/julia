@@ -85,7 +85,7 @@ of an environment variable, one makes a call like this::
     julia> path = ccall((:getenv, "libc"), Cstring, (Cstring,), "SHELL")
     Cstring(@0x00007fff5fbffc45)
 
-    julia> bytestring(path)
+    julia> String(path)
     "/bin/bash"
 
 Note that the argument type tuple must be written as ``(Cstring,)``,
@@ -117,7 +117,7 @@ which is a simplified version of the actual definition from
       if val == C_NULL
         error("getenv: undefined variable: ", var)
       end
-      bytestring(val)
+      String(val)
     end
 
 The C ``getenv`` function indicates an error by returning ``NULL``, but
@@ -141,7 +141,7 @@ machine's hostname::
             (Ptr{UInt8}, Csize_t),
             hostname, sizeof(hostname))
       hostname[end] = 0; # ensure null-termination
-      return bytestring(pointer(hostname))
+      return String(pointer(hostname))
     end
 
 This example first allocates an array of bytes, then calls the C library
@@ -885,7 +885,7 @@ it is finished with them.
 
 Whenever you have created a pointer to Julia data, you must ensure the original data
 exists until you are done with using the pointer. Many methods in Julia such as
-:func:`unsafe_load` and :func:`bytestring` make copies of data instead of taking ownership
+:func:`unsafe_load` and :func:`String` make copies of data instead of taking ownership
 of the buffer, so that it is safe to free (or alter) the original data without
 affecting Julia. A notable exception is :func:`pointer_to_array` which, for performance
 reasons, shares (or can be told to take ownership of) the underlying buffer.

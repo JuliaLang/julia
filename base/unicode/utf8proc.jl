@@ -73,12 +73,12 @@ function utf8proc_map(s::String, flags::Integer)
     result = ccall(:utf8proc_map, Cssize_t,
                    (Ptr{UInt8}, Cssize_t, Ref{Ptr{UInt8}}, Cint),
                    s, sizeof(s), p, flags)
-    result < 0 && error(bytestring(ccall(:utf8proc_errmsg, Cstring,
+    result < 0 && error(String(ccall(:utf8proc_errmsg, Cstring,
                                          (Cssize_t,), result)))
     pointer_to_string(p[], result, true)::String
 end
 
-utf8proc_map(s::AbstractString, flags::Integer) = utf8proc_map(bytestring(s), flags)
+utf8proc_map(s::AbstractString, flags::Integer) = utf8proc_map(String(s), flags)
 
 function normalize_string(s::AbstractString; stable::Bool=false, compat::Bool=false, compose::Bool=true, decompose::Bool=false, stripignore::Bool=false, rejectna::Bool=false, newline2ls::Bool=false, newline2ps::Bool=false, newline2lf::Bool=false, stripcc::Bool=false, casefold::Bool=false, lump::Bool=false, stripmark::Bool=false)
     flags = 0

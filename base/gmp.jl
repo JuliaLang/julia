@@ -19,7 +19,7 @@ else
 end
 typealias CdoubleMax Union{Float16, Float32, Float64}
 
-gmp_version() = VersionNumber(bytestring(unsafe_load(cglobal((:__gmp_version, :libgmp), Ptr{Cchar}))))
+gmp_version() = VersionNumber(String(unsafe_load(cglobal((:__gmp_version, :libgmp), Ptr{Cchar}))))
 gmp_bits_per_limb() = Int(unsafe_load(cglobal((:__gmp_bits_per_limb, :libgmp), Cint)))
 
 const GMP_VERSION = gmp_version()
@@ -84,8 +84,8 @@ convert(::Type{BigInt}, x::BigInt) = x
 function tryparse_internal(::Type{BigInt}, s::AbstractString, startpos::Int, endpos::Int, base::Int, raise::Bool)
     _n = Nullable{BigInt}()
 
-    # don't make a copy in the common case where we are parsing a whole bytestring
-    bstr = startpos == start(s) && endpos == endof(s) ? bytestring(s) : bytestring(SubString(s,startpos,endpos))
+    # don't make a copy in the common case where we are parsing a whole String
+    bstr = startpos == start(s) && endpos == endof(s) ? String(s) : String(SubString(s,startpos,endpos))
 
     sgn, base, i = Base.parseint_preamble(true,base,bstr,start(bstr),endof(bstr))
     if i == 0

@@ -205,7 +205,7 @@ function versioninfo(io::IO=STDOUT, verbose::Bool=false)
     if verbose
         println(io,         "Environment:")
         for (k,v) in ENV
-            if !is(match(r"JULIA|PATH|FLAG|^TERM$|HOME", bytestring(k)), nothing)
+            if !is(match(r"JULIA|PATH|FLAG|^TERM$|HOME", String(k)), nothing)
                 println(io, "  $(k) = $(v)")
             end
         end

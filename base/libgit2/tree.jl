@@ -18,7 +18,7 @@ end
 
 function filename(te::GitTreeEntry)
     str = ccall((:git_tree_entry_name, :libgit2), Cstring, (Ptr{Void},), te.ptr)
-    str != C_NULL && return bytestring(str)
+    str != C_NULL && return String(str)
     return nothing
 end
 
