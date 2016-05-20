@@ -121,7 +121,7 @@ svdfact(M::Bidiagonal; thin::Bool=true) = svdfact!(copy(M),thin=thin)
 
 function show(io::IO, M::Bidiagonal)
     if get(io, :multiline, false)
-        invoke(show, (IO, AbstractArray), io, M)
+        Base.showarray(io, M)
     else
         println(io, summary(M), ":")
         print(io, " diag:")
