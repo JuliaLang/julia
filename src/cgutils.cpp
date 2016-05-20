@@ -834,7 +834,7 @@ static LoadInst *build_load (Value *ptr, jl_value_t *jltype) {
     return builder.CreateAlignedLoad(ptr, julia_alignment(ptr, jltype, 0));
 }
 
-static Value *emit_unbox(Type *to, const jl_cgval_t &x, jl_value_t *jt, Value* dest = NULL);
+static Value *emit_unbox(Type *to, const jl_cgval_t &x, jl_value_t *jt, Value* dest = NULL, bool volatile_store = false);
 
 static jl_cgval_t typed_load(Value *ptr, Value *idx_0based, jl_value_t *jltype,
                              jl_codectx_t *ctx, MDNode *tbaa, unsigned alignment = 0)

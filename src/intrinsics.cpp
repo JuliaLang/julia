@@ -258,7 +258,7 @@ static Constant *julia_const_to_llvm(jl_value_t *e, bool nested=false)
 static jl_cgval_t ghostValue(jl_value_t *ty);
 
 // emit code to unpack a raw value from a box into registers or a stack slot
-static Value *emit_unbox(Type *to, const jl_cgval_t &x, jl_value_t *jt, Value *dest)
+static Value *emit_unbox(Type *to, const jl_cgval_t &x, jl_value_t *jt, Value *dest, bool volatile_store)
 {
     assert(to != T_pjlvalue);
     // TODO: fully validate that x.typ == jt?
@@ -294,7 +294,7 @@ static Value *emit_unbox(Type *to, const jl_cgval_t &x, jl_value_t *jt, Value *d
         }
         if (!dest)
             return unboxed;
-        builder.CreateStore(unboxed, dest);
+        builder.CreateStore(unboxed, dest, volatile_store);
         return NULL;
     }
 
@@ -331,7 +331,7 @@ static Value *emit_unbox(Type *to, const jl_cgval_t &x, jl_value_t *jt, Value *d
     if (dest) {
         // callers using the dest argument only use it for a stack slot for now
         alignment = 0;
-        builder.CreateMemCpy(dest, p, jl_datatype_size(jt), alignment, false, x.tbaa);
+        builder.CreateMemCpy(dest, p, jl_datatype_size(jt), alignment, volatile_store, x.tbaa);
         return NULL;
     }
     else {
