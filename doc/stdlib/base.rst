@@ -981,31 +981,31 @@ System
 
    .. Docstring generated from Julia source
 
-   Predicate for testing if the OS provides a Unix-like interface. See documentation :ref:`Handling Operating System Variation <man-handling-operating-system-variation>`\ .
+   Predicate for testing if the OS provides a Unix-like interface. See documentation in :ref:`Handling Operating System Variation <man-handling-operating-system-variation>`\ .
 
 .. function:: is_apple([os])
 
    .. Docstring generated from Julia source
 
-   Predicate for testing if the OS is a derivative of Apple Macintosh OS X or Darwin. See documentation :ref:`Handling Operating System Variation <man-handling-operating-system-variation>`\ .
+   Predicate for testing if the OS is a derivative of Apple Macintosh OS X or Darwin. See documentation in :ref:`Handling Operating System Variation <man-handling-operating-system-variation>`\ .
 
 .. function:: is_linux([os])
 
    .. Docstring generated from Julia source
 
-   Predicate for testing if the OS is a derivative of Linux. See documentation :ref:`Handling Operating System Variation <man-handling-operating-system-variation>`\ .
+   Predicate for testing if the OS is a derivative of Linux. See documentation in :ref:`Handling Operating System Variation <man-handling-operating-system-variation>`\ .
 
 .. function:: is_bsd([os])
 
    .. Docstring generated from Julia source
 
-   Predicate for testing if the OS is a derivative of BSD. See documentation :ref:`Handling Operating System Variation <man-handling-operating-system-variation>`\ .
+   Predicate for testing if the OS is a derivative of BSD. See documentation in :ref:`Handling Operating System Variation <man-handling-operating-system-variation>`\ .
 
 .. function:: is_windows([os])
 
    .. Docstring generated from Julia source
 
-   Predicate for testing if the OS is a derivative of Microsoft Windows NT. See documentation :ref:`Handling Operating System Variation <man-handling-operating-system-variation>`\ .
+   Predicate for testing if the OS is a derivative of Microsoft Windows NT. See documentation in :ref:`Handling Operating System Variation <man-handling-operating-system-variation>`\ .
 
 .. function:: windows_version()
 

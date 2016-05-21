@@ -13,7 +13,7 @@ end
 cd(dirname(@__FILE__)) do
     n = 1
     if net_on
-        n = min(8, CPU_CORES, length(tests))
+        n = min(8, Sys.CPU_CORES, length(tests))
         n > 1 && addprocs(n; exeflags=`--check-bounds=yes --depwarn=error`)
         blas_set_num_threads(1)
     end
