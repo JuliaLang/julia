@@ -24,9 +24,9 @@ complexfloat{T<:AbstractFloat}(x::AbstractArray{Complex{T}}) = x
 
 # return an Array, rather than similar(x), to avoid an extra copy for FFTW
 # (which only works on StridedArray types).
-complexfloat{T<:Complex}(x::AbstractArray{T}) = copy!(Array(typeof(float(one(T))), size(x)), x)
-complexfloat{T<:AbstractFloat}(x::AbstractArray{T}) = copy!(Array(typeof(complex(one(T))), size(x)), x)
-complexfloat{T<:Real}(x::AbstractArray{T}) = copy!(Array(typeof(complex(float(one(T)))), size(x)), x)
+complexfloat{T<:Complex}(x::AbstractArray{T}) = copy!(Array{typeof(float(one(T)))}(size(x)), x)
+complexfloat{T<:AbstractFloat}(x::AbstractArray{T}) = copy!(Array{typeof(complex(one(T)))}(size(x)), x)
+complexfloat{T<:Real}(x::AbstractArray{T}) = copy!(Array{typeof(complex(float(one(T))))}(size(x)), x)
 
 # implementations only need to provide plan_X(x, region)
 # for X in (:fft, :bfft, ...):
@@ -191,7 +191,7 @@ rfft{T<:Union{Integer,Rational}}(x::AbstractArray{T}, region=1:ndims(x)) = rfft(
 plan_rfft{T<:Union{Integer,Rational}}(x::AbstractArray{T}, region; kws...) = plan_rfft(float(x), region; kws...)
 
 # only require implementation to provide *(::Plan{T}, ::Array{T})
-*{T}(p::Plan{T}, x::AbstractArray) = p * copy!(Array(T, size(x)), x)
+*{T}(p::Plan{T}, x::AbstractArray) = p * copy!(Array{T}(size(x)), x)
 
 # Implementations should also implement A_mul_B!(Y, plan, X) so as to support
 # pre-allocated output arrays.  We don't define * in terms of A_mul_B!

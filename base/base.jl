@@ -85,7 +85,7 @@ gc_enable(on::Bool) = ccall(:jl_gc_enable, Cint, (Cint,), on)!=0
 # used by { } syntax
 function cell_1d(xs::ANY...)
     n = length(xs)
-    a = Array(Any,n)
+    a = Array{Any}(n)
     for i=1:n
         arrayset(a,xs[i],i)
     end
@@ -93,7 +93,7 @@ function cell_1d(xs::ANY...)
 end
 
 function cell_2d(nr, nc, xs::ANY...)
-    a = Array(Any,nr,nc)
+    a = Array{Any}(nr,nc)
     for i=1:(nr*nc)
         arrayset(a,xs[i],i)
     end
