@@ -194,70 +194,123 @@ end
 @test collect(Base.product(1:2, 3:4, 5:6)) == [(i, j, k) for i=1:2, j=3:4, k=5:6]
 
 # iteration order
-let expected = [(1,3,5), (2,3,5), (1,4,5), (2,4,5), (1,3,6), (2,3,6), (1,4,6), (2,4,6)]
-    i = 1
-    for el in Base.product(1:2, 3:4, 5:6)
-        @test el == expected[i]
-        i+=1
+let 
+    expected = [(1,3,5), (2,3,5), (1,4,5), (2,4,5), (1,3,6), (2,3,6), (1,4,6), (2,4,6)]
+    actual = Base.product(1:2, 3:4, 5:6)
+    for (exp, act) in zip(expected, actual)
+        @test exp == act
     end
 end
 
-# is this the correct behaviour?
-@test collect(Base.product([1 2; 3 4], [5 6; 7 8])) == [(1,5)  (1,7)  (1,6)  (1,8);
-                                                        (3,5)  (3,7)  (3,6)  (3,8);
-                                                        (2,5)  (2,7)  (2,6)  (2,8);
-                                                        (4,5)  (4,7)  (4,6)  (4,8)]
+# collect multidimensional array
+let 
+    a, b = 1:3, [4 6; 
+                 5 7]
+    p = Base.product(a, b)                 
+    @test size(p)    == (3, 2, 2)
+    @test length(p)  == 12
+    @test ndims(p)   == 3
+    @test eltype(p)  == NTuple{2, Int}
+    cp = collect(p)
+    for i = 1:3
+        @test cp[i, :, :] == [(i, 4) (i, 6);
+                              (i, 5) (i, 7)]
+    end
+end
 
-let
-    a, b, c, d, e = 1:2, 1.0:10.0, 4f0:6f0, 0x01:0x08, Int8(1):Int8(0)
+# with 1D inputs
+let  
+    a, b, c = 1:2, 1.0:10.0, Int32(1):Int32(0)
 
     # length
-    @test length(Base.product(a))             == 2
-    @test length(Base.product(a, b))          == 20
-    @test length(Base.product(a, b, c))       == 60
-    @test length(Base.product(a, b, c, d))    == 480
-    @test length(Base.product(a, b, c, d, e)) == 0
+    @test length(Base.product(a))       == 2
+    @test length(Base.product(a, b))    == 20
+    @test length(Base.product(a, b, c)) == 0
 
     # size
-    @test size(Base.product(a))             == (2, )
-    @test size(Base.product(a, b))          == (2, 10)
-    @test size(Base.product(a, b, c))       == (2, 10, 3)
-    @test size(Base.product(a, b, c, d))    == (2, 10, 3, 8)
-    @test size(Base.product(a, b, c, d, e)) == (2, 10, 3, 8, 0)
+    @test size(Base.product(a))         == (2, )
+    @test size(Base.product(a, b))      == (2, 10)
+    @test size(Base.product(a, b, c))   == (2, 10, 0)
 
     # eltype
-    @test eltype(Base.product(a))             == Tuple{Int}
-    @test eltype(Base.product(a, b))          == Tuple{Int, Float64}
-    @test eltype(Base.product(a, b, c))       == Tuple{Int, Float64, Float32}
-    @test eltype(Base.product(a, b, c, d))    == Tuple{Int, Float64, Float32, UInt8}
-    @test eltype(Base.product(a, b, c, d, e)) == Tuple{Int, Float64, Float32, UInt8, Int8}
+    @test eltype(Base.product(a))       == Tuple{Int}
+    @test eltype(Base.product(a, b))    == Tuple{Int, Float64}
+    @test eltype(Base.product(a, b, c)) == Tuple{Int, Float64, Int32}
 
     # ndims
-    @test ndims(Base.product(a))             == 1
-    @test ndims(Base.product(a, b))          == 2
-    @test ndims(Base.product(a, b, c))       == 3
-    @test ndims(Base.product(a, b, c, d))    == 4
-    @test ndims(Base.product(a, b, c, d, e)) == 5
+    @test ndims(Base.product(a))        == 1
+    @test ndims(Base.product(a, b))     == 2
+    @test ndims(Base.product(a, b, c))  == 3
+end
 
-    f, g, h = randn(1, 1), randn(1, 1, 1), randn(1, 1, 1, 1)
-    @test ndims(Base.product(f))          == ndims(collect(Base.product(f)))          == 2
-    @test ndims(Base.product(g))          == ndims(collect(Base.product(g)))          == 3
-    @test ndims(Base.product(h))          == ndims(collect(Base.product(h)))          == 4
-    @test ndims(Base.product(f, f))       == ndims(collect(Base.product(f, f)))       == 2
-    @test ndims(Base.product(f, g))       == ndims(collect(Base.product(f, g)))       == 2
-    @test ndims(Base.product(g, g))       == ndims(collect(Base.product(g, g)))       == 2
-    @test ndims(Base.product(g, h))       == ndims(collect(Base.product(g, h)))       == 2
-    @test ndims(Base.product(h, h))       == ndims(collect(Base.product(h, h)))       == 2
-    @test ndims(Base.product(f, f, f))    == ndims(collect(Base.product(f, f, f)))    == 3
-    @test ndims(Base.product(f, f, g))    == ndims(collect(Base.product(f, f, g)))    == 3
-    @test ndims(Base.product(f, g, g))    == ndims(collect(Base.product(f, g, g)))    == 3
-    @test ndims(Base.product(g, g, g))    == ndims(collect(Base.product(g, g, g)))    == 3
-    @test ndims(Base.product(g, g, h))    == ndims(collect(Base.product(g, g, h)))    == 3
-    @test ndims(Base.product(g, h, h))    == ndims(collect(Base.product(g, h, h)))    == 3
-    @test ndims(Base.product(h, h, h))    == ndims(collect(Base.product(h, h, h)))    == 3
-    @test ndims(Base.product(f, f, f))    == ndims(collect(Base.product(f, f, f)))    == 3
-    @test ndims(Base.product(g, g, g, g)) == ndims(collect(Base.product(g, g, g, g))) == 4
-    @test ndims(Base.product(h, h, h, h)) == ndims(collect(Base.product(h, h, h, h))) == 4
+# with multidimensional inputs
+let
+    a, b, c = randn(4, 4), randn(3, 3, 3), randn(2, 2, 2, 2)
+    args = Any[(a,), 
+               (a, a), 
+               (a, b), 
+               (a, a, a), 
+               (a, b, c)]
+    sizes = Any[(4, 4),
+                (4, 4, 4, 4),
+                (4, 4, 3, 3, 3),
+                (4, 4, 4, 4, 4, 4),
+                (4, 4, 3, 3, 3, 2, 2, 2, 2)]
+    for (method, fun) in zip([size, ndims, length], [x->x, length, prod])
+        for i in 1:length(args)
+            @test method(Base.product(args[i]...)) == method(collect(Base.product(args[i]...))) == fun(sizes[i])
+        end
+    end
+end
+
+# more tests on product with iterators of various type
+let
+    iters = (1:2,
+             rand(2, 2, 2), 
+             take(1:4, 2),   
+             Base.product(1:2, 1:3), 
+             Base.product(rand(2, 2), rand(1, 1, 1))
+             )
+    for method in [size, length, ndims, eltype]
+        for i = 1:length(iters)
+            args = iters[i]
+            @test method(Base.product(args...)) == method(collect(Base.product(args...)))
+            for j = 1:length(iters)
+                args = iters[i], iters[j]
+                @test method(Base.product(args...)) == method(collect(Base.product(args...)))
+                for k = 1:length(iters)
+                    args = iters[i], iters[j], iters[k]
+                    @test method(Base.product(args...)) == method(collect(Base.product(args...)))
+                end
+            end
+        end
+    end
+end
+
+# product of finite length and infinite length iterators
+let 
+    a = 1:2
+    b = countfrom(1)
+    ab = Base.product(a, b)
+    ba = Base.product(b, a)
+    abexp = [(1, 1), (2, 1), (1, 2), (2, 2), (1, 3), (2, 3)]
+    baexp = [(1, 1), (2, 1), (3, 1), (4, 1), (5, 1), (6, 1)]
+    for (expected, actual) in zip([abexp, baexp], [ab, ba])
+        for (i, el) in enumerate(actual)
+            @test el == expected[i]
+            i == length(expected) && break
+        end
+        @test_throws ArgumentError length(actual)
+        @test_throws ArgumentError size(actual)
+        @test_throws ArgumentError ndims(actual)
+    end
+
+    # size infinite or unknown raises an error
+    for itr in Any[countfrom(1), Filter(i->0, 1:10)]
+        @test_throws ArgumentError length(Base.product(itr))
+        @test_throws ArgumentError   size(Base.product(itr))
+        @test_throws ArgumentError  ndims(Base.product(itr))
+    end
 end
 
 # iteratorsize trait business

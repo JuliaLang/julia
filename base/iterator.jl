@@ -302,7 +302,24 @@ repeated(x, n::Int) = take(repeated(x), n)
 # Product -- cartesian product of iterators
 
 abstract AbstractProdIterator
+
 length(p::AbstractProdIterator) = prod(size(p))
+size(p::AbstractProdIterator) = _prod_size(p.a, p.b, iteratorsize(p.a), iteratorsize(p.b))
+ndims(p::AbstractProdIterator) = length(size(p))
+
+# generic methods to handle size of Prod* types
+_prod_size(a, ::HasShape)  = size(a)
+_prod_size(a, ::HasLength) = (length(a), )
+_prod_size(a, A) = 
+    throw(ArgumentError("Cannot compute size for object of type $(typeof(a))"))
+_prod_size(a, b, ::HasLength, ::HasLength)  = (length(a),  length(b))
+_prod_size(a, b, ::HasLength, ::HasShape)   = (length(a),  size(b)...)
+_prod_size(a, b, ::HasShape,  ::HasLength)  = (size(a)..., length(b))
+_prod_size(a, b, ::HasShape,  ::HasShape)   = (size(a)..., size(b)...)
+_prod_size(a, b, A, ::Union{HasShape, HasLength}) = 
+    throw(ArgumentError("Cannot compute size for object of type $(typeof(a))"))
+_prod_size(a, b, ::Union{HasShape, HasLength}, B) = 
+    throw(ArgumentError("Cannot compute size for object of type $(typeof(b))"))
 
 # one iterator
 immutable Prod1{I} <: AbstractProdIterator
@@ -311,13 +328,12 @@ end
 product(a) = Prod1(a)
 
 eltype{I}(::Type{Prod1{I}}) = Tuple{eltype(I)}
-size(p::Prod1) = size(p.a)
-ndims(p::Prod1) = ndims(p.a)
+size(p::Prod1) = _prod_size(p.a, iteratorsize(p.a))
 
 @inline start(p::Prod1) = start(p.a)
 @inline function next(p::Prod1, st)
     n, st = next(p.a, st)
-    return (n, ), st
+    (n, ), st
 end
 @inline done(p::Prod1, st) = done(p.a, st)
 
@@ -349,8 +365,6 @@ changes the fastest. Example:
 product(a, b) = Prod2(a, b)
 
 eltype{I1,I2}(::Type{Prod2{I1,I2}}) = Tuple{eltype(I1), eltype(I2)}
-size(p::Prod2) = (length(p.a), length(p.b))
-ndims(p::Prod2) = 2
 
 iteratoreltype{I1,I2}(::Type{Prod2{I1,I2}}) = and_iteratoreltype(iteratoreltype(I1),iteratoreltype(I2))
 iteratorsize{I1,I2}(::Type{Prod2{I1,I2}}) = prod_iteratorsize(iteratorsize(I1),iteratorsize(I2))
@@ -388,8 +402,6 @@ end
 product(a, b, c...) = Prod(a, product(b, c...))
 
 eltype{I1,I2}(::Type{Prod{I1,I2}}) = tuple_type_cons(eltype(I1), eltype(I2))
-size(p::Prod) = (length(p.a), size(p.b)...)
-ndims(p::Prod) = length(size(p))
 
 iteratoreltype{I1,I2}(::Type{Prod{I1,I2}}) = and_iteratoreltype(iteratoreltype(I1),iteratoreltype(I2))
 iteratorsize{I1,I2}(::Type{Prod{I1,I2}}) = prod_iteratorsize(iteratorsize(I1),iteratorsize(I2))
@@ -400,7 +412,8 @@ iteratorsize{I1,I2}(::Type{Prod{I1,I2}}) = prod_iteratorsize(iteratorsize(I1),it
 end
 
 prod_iteratorsize(::Union{HasLength,HasShape}, ::Union{HasLength,HasShape}) = HasShape()
-prod_iteratorsize(a, ::IsInfinite) = IsInfinite() # products can have an infinite last iterator (which moves slowest)
+# products can have an infinite iterator
+prod_iteratorsize(a, ::IsInfinite) = IsInfinite() 
 prod_iteratorsize(::IsInfinite, b) = IsInfinite()
 prod_iteratorsize(a, b) = SizeUnknown()
 
