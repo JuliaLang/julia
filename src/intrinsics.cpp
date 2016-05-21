@@ -257,8 +257,8 @@ static Constant *julia_const_to_llvm(jl_value_t *e, bool nested=false)
 
 static jl_cgval_t ghostValue(jl_value_t *ty);
 
-// emit code to unpack a raw value from a box into registers
-static Value *emit_unbox(Type *to, const jl_cgval_t &x, jl_value_t *jt)
+// emit code to unpack a raw value from a box into registers or a stack slot
+static Value *emit_unbox(Type *to, const jl_cgval_t &x, jl_value_t *jt, Value *dest, bool volatile_store)
 {
     assert(to != T_pjlvalue);
     // TODO: fully validate that x.typ == jt?
@@ -276,23 +276,26 @@ static Value *emit_unbox(Type *to, const jl_cgval_t &x, jl_value_t *jt)
         Type *ty = unboxed->getType();
         // bools are stored internally as int8 (for now)
         if (ty == T_int1 && to == T_int8)
-            return builder.CreateZExt(unboxed, T_int8);
-        if (ty->isPointerTy() && !to->isPointerTy())
-            return builder.CreatePtrToInt(unboxed, to);
-        if (!ty->isPointerTy() && to->isPointerTy())
-            return builder.CreateIntToPtr(unboxed, to);
-        if (ty->isPointerTy() && to->isPointerTy())
+            unboxed = builder.CreateZExt(unboxed, T_int8);
+        else if (ty->isPointerTy() && !to->isPointerTy())
+            unboxed = builder.CreatePtrToInt(unboxed, to);
+        else if (!ty->isPointerTy() && to->isPointerTy())
+            unboxed = builder.CreateIntToPtr(unboxed, to);
+        else if (ty->isPointerTy() && to->isPointerTy())
             // pointer types are going away anyways, and this can come up in ccall argument conversion
-            return builder.CreatePointerCast(unboxed, to);
-        if (ty != to) {
+            unboxed = builder.CreatePointerCast(unboxed, to);
+        else if (ty != to) {
             // this can happen when a branch yielding a different type ends
             // up being dead code, and type inference knows that the other
             // branch's type is the only one that matters.
             // assert(ty == T_void);
             //emit_error("emit_unbox: a type mismatch error in occurred during codegen", ctx);
-            return UndefValue::get(to); // type mismatch error
+            unboxed = UndefValue::get(to); // type mismatch error
         }
-        return unboxed;
+        if (!dest)
+            return unboxed;
+        builder.CreateStore(unboxed, dest, volatile_store);
+        return NULL;
     }
 
     // bools stored as int8, so an extra Trunc is needed to get an int1
@@ -300,23 +303,52 @@ static Value *emit_unbox(Type *to, const jl_cgval_t &x, jl_value_t *jt)
     Type *ptype = (to == T_int1 ? T_pint8 : to->getPointerTo());
     if (p->getType() != ptype)
         p = builder.CreateBitCast(p, ptype);
-    if (to == T_int1)
-        return builder.CreateTrunc(tbaa_decorate(x.tbaa, builder.CreateLoad(p)), T_int1);
-    if (jt == (jl_value_t*)jl_bool_type)
-        return builder.CreateZExt(builder.CreateTrunc(tbaa_decorate(x.tbaa, builder.CreateLoad(p)), T_int1), to);
 
-    Instruction *load;
+    Value *unboxed = NULL;
+    if (to == T_int1)
+        unboxed = builder.CreateTrunc(tbaa_decorate(x.tbaa, builder.CreateLoad(p)), T_int1);
+    else if (jt == (jl_value_t*)jl_bool_type)
+        unboxed = builder.CreateZExt(builder.CreateTrunc(tbaa_decorate(x.tbaa, builder.CreateLoad(p)), T_int1), to);
+    if (unboxed) {
+        if (!dest)
+            return unboxed;
+        builder.CreateStore(unboxed, dest);
+        return NULL;
+    }
+
+    int alignment;
     if (x.isboxed) {
-        load = builder.CreateAlignedLoad(p, 16); // julia's gc gives 16-byte aligned addresses
+         // julia's gc gives 16-byte aligned addresses
+        alignment = 16;
     }
     else if (jt) {
-        load = build_load(p, jt);
+        alignment = julia_alignment(p, jt, 0);
     }
     else {
         // stack has default alignment
-        load = builder.CreateLoad(p);
+        alignment = 0;
     }
-    return tbaa_decorate(x.tbaa, load);
+    if (dest) {
+        // callers using the dest argument only use it for a stack slot for now
+        alignment = 0;
+        MDNode *tbaa = x.tbaa;
+        // the memcpy intrinsic does not allow to specify different alias tags
+        // for the load part (x.tbaa) and the store part (tbaa_stack).
+        // since the tbaa lattice has to be a tree we have unfortunately
+        // x.tbaa ∪ tbaa_stack = tbaa_root if x.tbaa != tbaa_stack
+        if (tbaa != tbaa_stack)
+            tbaa = NULL;
+        builder.CreateMemCpy(dest, p, jl_datatype_size(jt), alignment, volatile_store, tbaa);
+        return NULL;
+    }
+    else {
+        Instruction *load;
+        if (alignment)
+            load = builder.CreateAlignedLoad(p, alignment);
+        else
+            load = builder.CreateLoad(p);
+        return tbaa_decorate(x.tbaa, load);
+    }
 }
 
 // unbox, trying to determine correct bitstype automatically
