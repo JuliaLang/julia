@@ -176,6 +176,7 @@ type Worker
     end
 
     function Worker(id)
+        @assert id > 0
         if haskey(map_pid_wrkr, id)
             return map_pid_wrkr[id]
         end
@@ -505,15 +506,6 @@ type Future <: AbstractRemoteRef
     Future(w::Int, rrid::RRID, v) = (r = new(w,rrid.whence,rrid.id,v); return test_existing_ref(r))
 end
 
-function finalize_future(f::Future)
-    if f.where > 0
-        isnull(f.v) && send_del_client(f)
-        f.where = 0
-        f.v = Nullable{Any}()
-    end
-    f
-end
-
 type RemoteChannel{T<:AbstractChannel} <: AbstractRemoteRef
     where::Int
     whence::Int
@@ -522,32 +514,42 @@ type RemoteChannel{T<:AbstractChannel} <: AbstractRemoteRef
     RemoteChannel(w::Int, rrid::RRID) = (r = new(w, rrid.whence, rrid.id); return test_existing_ref(r))
 end
 
-function test_existing_ref(r::Future)
+function test_existing_ref(r::AbstractRemoteRef)
     found = getkey(client_refs, r, false)
-    if !is(found,false) && (client_refs[r] == true)
-        if isnull(found.v) && !isnull(r.v)
-            # we have recd the value from another source, probably a deserialized ref, send a del_client message
-            send_del_client(r)
-            found.v = r.v
-        end
-        return found
+    if !is(found,false)
+        if client_refs[r] == true
+            @assert r.where > 0
+            if isa(r, Future) && isnull(found.v) && !isnull(r.v)
+                # we have recd the value from another source, probably a deserialized ref, send a del_client message
+                send_del_client(r)
+                found.v = r.v
+            end
+            return found
+         else
+            # just delete the entry.
+            delete!(client_refs, found)
+         end
     end
+
     client_refs[r] = true
-    finalizer(r, finalize_future)
+    finalizer(r, finalize_ref)
     return r
 end
 
-function test_existing_ref(r::RemoteChannel)
-    found = getkey(client_refs, r, false)
-    !is(found,false) && (client_refs[r] == true) && return found
-    client_refs[r] = true
-    finalizer(r, finalize_remote_channel)
-    return r
-end
-
-function finalize_remote_channel(r::RemoteChannel)
-    if r.where > 0
-        send_del_client(r)
+function finalize_ref(r::AbstractRemoteRef)
+    if r.where > 0      # Handle the case of the finalizer having being called manually
+        if haskey(client_refs, r)
+            # NOTE: Change below line to deleting the entry once issue https://github.com/JuliaLang/julia/issues/14445
+            # is fixed.
+            client_refs[r] = false
+        end
+        if isa(r, RemoteChannel)
+            send_del_client(r)
+        else
+            # send_del_client only if the reference has not been set
+            isnull(r.v) && send_del_client(r)
+            r.v = Nullable{Any}()
+        end
         r.where = 0
     end
     return r
@@ -609,13 +611,7 @@ function isready(rr::RemoteChannel, args...)
     end
 end
 
-function del_client(rr::AbstractRemoteRef)
-    del_client(remoteref_id(rr), myid())
-    if haskey(client_refs, rr)
-        client_refs[rr] = false
-    end
-    nothing
-end
+del_client(rr::AbstractRemoteRef) = del_client(remoteref_id(rr), myid())
 
 del_client(id, client) = del_client(PGRP, id, client)
 function del_client(pg, id, client)
