@@ -6183,7 +6183,7 @@ argument or as a series of integer arguments.
 
 Custom AbstractArray subtypes may choose which specific array type is best-suited to return
 for the given element type and dimensionality. If they do not specialize this method, the
-default is an `Array(element_type, dims...)`.
+default is an `Array{element_type}(dims...)`.
 
 For example, `similar(1:10, 1, 4)` returns an uninitialized `Array{Int,2}` since ranges are
 neither mutable nor support 2 dimensions:
