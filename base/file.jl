@@ -40,31 +40,37 @@ function cd(dir::AbstractString)
 end
 cd() = cd(homedir())
 
-@unix_only function cd(f::Function, dir::AbstractString)
-    fd = ccall(:open,Int32,(Cstring,Int32),:.,0)
-    systemerror(:open, fd == -1)
-    try
-        cd(dir)
-        f()
-    finally
-        systemerror(:fchdir, ccall(:fchdir,Int32,(Int32,),fd) != 0)
-        systemerror(:close, ccall(:close,Int32,(Int32,),fd) != 0)
+if is_windows()
+    function cd(f::Function, dir::AbstractString)
+        old = pwd()
+        try
+            cd(dir)
+            f()
+       finally
+            cd(old)
+        end
     end
-end
-@windows_only function cd(f::Function, dir::AbstractString)
-    old = pwd()
-    try
-        cd(dir)
-        f()
-   finally
-        cd(old)
+else
+    function cd(f::Function, dir::AbstractString)
+        fd = ccall(:open, Int32, (Cstring, Int32), :., 0)
+        systemerror(:open, fd == -1)
+        try
+            cd(dir)
+            f()
+        finally
+            systemerror(:fchdir, ccall(:fchdir, Int32, (Int32,), fd) != 0)
+            systemerror(:close, ccall(:close, Int32, (Int32,), fd) != 0)
+        end
     end
 end
 cd(f::Function) = cd(f, homedir())
 
 function mkdir(path::AbstractString, mode::Unsigned=0o777)
-    @unix_only ret = ccall(:mkdir, Int32, (Cstring,UInt32), path, mode)
-    @windows_only ret = ccall(:_wmkdir, Int32, (Cwstring,), path)
+    @static if is_windows()
+        ret = ccall(:_wmkdir, Int32, (Cwstring,), path)
+    else
+        ret = ccall(:mkdir, Int32, (Cstring, UInt32), path, mode)
+    end
     systemerror(:mkdir, ret != 0; extrainfo=path)
 end
 
@@ -92,7 +98,12 @@ mkpath(path::AbstractString, mode::Signed) = throw(ArgumentError("mode must be a
 function rm(path::AbstractString; force::Bool=false, recursive::Bool=false)
     if islink(path) || !isdir(path)
         try
-            @windows_only if (filemode(path) & 0o222) == 0; chmod(path, 0o777); end # is writable on windows actually means "is deletable"
+            @static if is_windows()
+                # is writable on windows actually means "is deletable"
+                if (filemode(path) & 0o222) == 0
+                    chmod(path, 0o777)
+                end
+            end
             unlink(path)
         catch err
             if force && isa(err, UVError) && err.code==Base.UV_ENOENT
@@ -106,8 +117,11 @@ function rm(path::AbstractString; force::Bool=false, recursive::Bool=false)
                 rm(joinpath(path, p), force=force, recursive=true)
             end
         end
-        @unix_only ret = ccall(:rmdir, Int32, (Cstring,), path)
-        @windows_only ret = ccall(:_wrmdir, Int32, (Cwstring,), path)
+        @static if is_windows()
+            ret = ccall(:_wrmdir, Int32, (Cwstring,), path)
+        else
+            ret = ccall(:rmdir, Int32, (Cstring,), path)
+        end
         systemerror(:rmdir, ret != 0, extrainfo=path)
     end
 end
@@ -181,38 +195,7 @@ function touch(path::AbstractString)
     end
 end
 
-@unix_only begin
-# Obtain a temporary filename.
-function tempname()
-    d = get(ENV, "TMPDIR", C_NULL) # tempnam ignores TMPDIR on darwin
-    p = ccall(:tempnam, Cstring, (Cstring,Cstring), d, :julia)
-    systemerror(:tempnam, p == C_NULL)
-    s = String(p)
-    Libc.free(p)
-    return s
-end
-
-# Obtain a temporary directory's path.
-tempdir() = dirname(tempname())
-
-# Create and return the name of a temporary file along with an IOStream
-function mktemp(parent=tempdir())
-    b = joinpath(parent, "tmpXXXXXX")
-    p = ccall(:mkstemp, Int32, (Cstring,), b) # modifies b
-    systemerror(:mktemp, p == -1)
-    return (b, fdio(p, true))
-end
-
-# Create and return the name of a temporary directory
-function mktempdir(parent=tempdir())
-    b = joinpath(parent, "tmpXXXXXX")
-    p = ccall(:mkdtemp, Cstring, (Cstring,), b)
-    systemerror(:mktempdir, p == C_NULL)
-    return String(p)
-end
-end
-
-@windows_only begin
+if is_windows()
 function tempdir()
     temppath = Array(UInt16,32767)
     lentemppath = ccall(:GetTempPathW,stdcall,UInt32,(UInt32,Ptr{UInt16}),length(temppath),temppath)
@@ -254,7 +237,38 @@ function mktempdir(parent=tempdir())
         seed += 1
     end
 end
+
+else # !windows
+# Obtain a temporary filename.
+function tempname()
+    d = get(ENV, "TMPDIR", C_NULL) # tempnam ignores TMPDIR on darwin
+    p = ccall(:tempnam, Cstring, (Cstring,Cstring), d, :julia)
+    systemerror(:tempnam, p == C_NULL)
+    s = String(p)
+    Libc.free(p)
+    return s
 end
+
+# Obtain a temporary directory's path.
+tempdir() = dirname(tempname())
+
+# Create and return the name of a temporary file along with an IOStream
+function mktemp(parent=tempdir())
+    b = joinpath(parent, "tmpXXXXXX")
+    p = ccall(:mkstemp, Int32, (Cstring,), b) # modifies b
+    systemerror(:mktemp, p == -1)
+    return (b, fdio(p, true))
+end
+
+# Create and return the name of a temporary directory
+function mktempdir(parent=tempdir())
+    b = joinpath(parent, "tmpXXXXXX")
+    p = ccall(:mkdtemp, Cstring, (Cstring,), b)
+    systemerror(:mktempdir, p == C_NULL)
+    return String(p)
+end
+
+end # os-test
 
 function mktemp(fn::Function, parent=tempdir())
     (tmp_path, tmp_io) = mktemp(parent)
@@ -405,16 +419,27 @@ function sendfile(src::AbstractString, dst::AbstractString)
     end
 end
 
-@windows_only const UV_FS_SYMLINK_JUNCTION = 0x0002
+if is_windows()
+    const UV_FS_SYMLINK_JUNCTION = 0x0002
+end
 function symlink(p::AbstractString, np::AbstractString)
-    @windows_only if Base.windows_version() < Base.WINDOWS_VISTA_VER
-        error("Windows XP does not support soft symlinks")
+    @static if is_windows()
+        if Sys.windows_version() < Sys.WINDOWS_VISTA_VER
+            error("Windows XP does not support soft symlinks")
+        end
     end
     flags = 0
-    @windows_only if isdir(p); flags |= UV_FS_SYMLINK_JUNCTION; p = abspath(p); end
+    @static if is_windows()
+        if isdir(p)
+            flags |= UV_FS_SYMLINK_JUNCTION
+            p = abspath(p)
+        end
+    end
     err = ccall(:jl_fs_symlink, Int32, (Cstring, Cstring, Cint), p, np, flags)
-    @windows_only if err < 0 && !isdir(p)
-        Base.warn_once("Note: on Windows, creating file symlinks requires Administrator privileges.")
+    @static if is_windows()
+        if err < 0 && !isdir(p)
+            Base.warn_once("Note: on Windows, creating file symlinks requires Administrator privileges.")
+        end
     end
     uv_error("symlink",err)
 end

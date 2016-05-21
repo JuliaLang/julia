@@ -36,7 +36,7 @@ include(joinpath(dir, "queens.jl"))
 # Different cluster managers do not play well together. Since
 # the test infrastructure already uses LocalManager, we will test the simple
 # cluster manager example through a new Julia session.
-@unix_only begin
+if is_unix()
     script = joinpath(dir, "clustermanager/simple/test_simple.jl")
     cmd = `$(Base.julia_cmd()) $script`
     if !success(pipeline(cmd; stdout=STDOUT, stderr=STDERR)) && ccall(:jl_running_on_valgrind,Cint,()) == 0

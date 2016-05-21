@@ -91,14 +91,16 @@ function parse(lines::Vector{Line})
         if isa(line,Requirement)
             if !isempty(line.system)
                 applies = false
-                @windows_only applies |=  ("windows"  in line.system)
-                @unix_only    applies |=  ("unix"     in line.system)
-                @osx_only     applies |=  ("osx"      in line.system)
-                @linux_only   applies |=  ("linux"    in line.system)
-                @windows_only applies &= !("!windows" in line.system)
-                @unix_only    applies &= !("!unix"    in line.system)
-                @osx_only     applies &= !("!osx"     in line.system)
-                @linux_only   applies &= !("!linux"   in line.system)
+                if is_windows(); applies |=  ("windows"  in line.system); end
+                if is_unix();    applies |=  ("unix"     in line.system); end
+                if is_apple();   applies |=  ("osx"      in line.system); end
+                if is_linux();   applies |=  ("linux"    in line.system); end
+                if is_bsd();     applies |=  ("bsd"      in line.system); end
+                if is_windows(); applies &= !("!windows" in line.system); end
+                if is_unix();    applies &= !("!unix"    in line.system); end
+                if is_apple();   applies &= !("!osx"     in line.system); end
+                if is_linux();   applies &= !("!linux"   in line.system); end
+                if is_bsd();     applies &= !("!bsd"     in line.system); end
                 applies || continue
             end
             reqs[line.package] = haskey(reqs, line.package) ?

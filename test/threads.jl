@@ -240,7 +240,7 @@ let atomic_types = [Int8, Int16, Int32, Int64, Int128,
                     Float16, Float32, Float64]
     # Temporarily omit 128-bit types on 32bit x86
     # 128-bit atomics do not exist on AArch32.
-    if Base.ARCH === :i686 || startswith(string(Base.ARCH), "arm")
+    if Sys.ARCH === :i686 || startswith(string(Sys.ARCH), "arm")
         filter!(T -> sizeof(T)<=8, atomic_types)
     end
     for T in atomic_types

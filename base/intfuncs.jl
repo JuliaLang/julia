@@ -184,7 +184,7 @@ function ndigits0z(x::UInt128)
 end
 ndigits0z(x::Integer) = ndigits0z(unsigned(abs(x)))
 
-const ndigits_max_mul = WORD_SIZE==32 ? 69000000 : 290000000000000000
+const ndigits_max_mul = Core.sizeof(Int32) == 4 ? 69000000 : 290000000000000000
 
 function ndigits0znb(n::Int, b::Int)
     d = 0

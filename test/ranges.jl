@@ -234,7 +234,7 @@ end
 @test sum(0:2:100) == 2550
 
 # overflowing sums (see #5798)
-if WORD_SIZE == 64
+if Sys.WORD_SIZE == 64
     @test sum(Int128(1):10^18) == div(10^18 * (Int128(10^18)+1), 2)
     @test sum(Int128(1):10^18-1) == div(10^18 * (Int128(10^18)-1), 2)
 else

@@ -151,9 +151,9 @@ end
 
 ## Windows entropy
 
-@windows_only begin
+if is_windows()
     function win32_SystemFunction036!{T}(a::Array{T})
-        ccall((:SystemFunction036,:Advapi32),stdcall,UInt8,(Ptr{Void},UInt32),a,sizeof(a))
+        ccall((:SystemFunction036, :Advapi32), stdcall, UInt8, (Ptr{Void}, UInt32), a, sizeof(a))
     end
 end
 

@@ -117,6 +117,7 @@ include(String(vcat(length(Core.ARGS)>=2?Core.ARGS[2].data:"".data, "build_h.jl"
 include(String(vcat(length(Core.ARGS)>=2?Core.ARGS[2].data:"".data, "version_git.jl".data))) # include($BUILDROOT/base/version_git.jl)
 include("osutils.jl")
 include("c.jl")
+include("sysinfo.jl")
 
 # Core I/O
 include("io.jl")
@@ -293,10 +294,6 @@ include("dft.jl")
 importall .DFT
 include("dsp.jl")
 importall .DSP
-
-# system information
-include("sysinfo.jl")
-import .Sys.CPU_CORES
 
 # Numerical integration
 include("quadgk.jl")

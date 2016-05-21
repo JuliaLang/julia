@@ -136,11 +136,11 @@ end
 @test "\x0f" == unescape_string("\\x0f")
 @test "\x0F" == unescape_string("\\x0F")
 
-extrapath = @windows? joinpath(JULIA_HOME,"..","Git","usr","bin")*";" : ""
+extrapath = is_windows() ? joinpath(JULIA_HOME,"..","Git","usr","bin")*";" : ""
 withenv("PATH" => extrapath * ENV["PATH"]) do
 if !success(`iconv --version`)
     warn("iconv not found, skipping unicode tests!")
-    @windows_only warn("Use WinRPM.install(\"win_iconv\") to run these tests")
+    is_windows() && warn("Use WinRPM.install(\"win_iconv\") to run these tests")
 else
     # Create unicode test data directory
     unicodedir = mktempdir()

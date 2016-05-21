@@ -10,7 +10,7 @@ for use within backticks. You can change the editor by setting JULIA_EDITOR, VIS
 EDITOR as an environmental variable.
 """
 function editor()
-    if OS_NAME == :Windows || OS_NAME == :Darwin
+    if is_windows() || is_apple()
         default_editor = "open"
     elseif isfile("/etc/alternatives/editor")
         default_editor = "/etc/alternatives/editor"
@@ -42,10 +42,10 @@ function edit(path::AbstractString, line::Integer=0)
         cmd = line != 0 ? `$command $path -l $line` : `$command $path`
     elseif startswith(name, "subl") || name == "atom"
         cmd = line != 0 ? `$command $path:$line` : `$command $path`
-    elseif OS_NAME == :Windows && (name == "start" || name == "open")
+    elseif is_windows() && (name == "start" || name == "open")
         cmd = `cmd /c start /b $path`
         line_unsupported = true
-    elseif OS_NAME == :Darwin && (name == "start" || name == "open")
+    elseif is_apple() && (name == "start" || name == "open")
         cmd = `open -t $path`
         line_unsupported = true
     else
@@ -82,16 +82,15 @@ less(file, line::Integer) = error("could not find source file for function")
 
 # clipboard copy and paste
 
-@osx_only begin
+if is_apple()
     function clipboard(x)
         open(pipeline(`pbcopy`, stderr=STDERR), "w") do io
             print(io, x)
         end
     end
     clipboard() = readstring(`pbpaste`)
-end
 
-@linux_only begin
+elseif is_linux()
     _clipboardcmd = nothing
     function clipboardcmd()
         global _clipboardcmd
@@ -117,9 +116,9 @@ end
             error("unexpected clipboard command: $c")
         readstring(pipeline(cmd, stderr=STDERR))
     end
-end
 
-@windows_only begin # TODO: these functions leak memory and memory locks if they throw an error
+elseif is_windows()
+    # TODO: these functions leak memory and memory locks if they throw an error
     function clipboard(x::AbstractString)
         if containsnul(x)
             throw(ArgumentError("Windows clipboard strings cannot contain NUL character"))
@@ -155,13 +154,37 @@ end
         systemerror(:GlobalUnlock, 0==ccall((:GlobalUnlock, "kernel32"), stdcall, Cint, (Ptr{UInt16},), plock))
         return s
     end
-end
 
-if !isdefined(:clipboard)
-    clipboard(x="") = error("clipboard functionality not implemented for $OS_NAME")
+else
+    clipboard(x="") = error("`clipboard` function not implemented for $(Sys.KERNEL)")
 end
 
 # system information
+
+function show(io::IO, info::Sys.CPUinfo, header::Bool=true, prefix::AbstractString="    ")
+    tck = Sys.SC_CLK_TCK
+    if header
+        println(io, info.model, ": ")
+        print(io, " "^length(prefix))
+        if tck > 0
+            @printf(io, "    %5s    %9s    %9s    %9s    %9s    %9s\n",
+                    "speed", "user", "nice", "sys", "idle", "irq")
+        else
+            @printf(io, "    %5s    %9s  %9s  %9s  %9s  %9s ticks\n",
+                    "speed", "user", "nice", "sys", "idle", "irq")
+        end
+    end
+    print(io, prefix)
+    if tck > 0
+        @printf(io, "%5d MHz  %9d s  %9d s  %9d s  %9d s  %9d s",
+                info.speed, info.cpu_times!user / tck, info.cpu_times!nice / tck,
+                info.cpu_times!sys / tck, info.cpu_times!idle / tck, info.cpu_times!irq / tck)
+    else
+        @printf(io, "%5d MHz  %9d  %9d  %9d  %9d  %9d ticks",
+                info.speed, info.cpu_times!user, info.cpu_times!nice,
+                info.cpu_times!sys, info.cpu_times!idle, info.cpu_times!irq)
+    end
+end
 
 function versioninfo(io::IO=STDOUT, verbose::Bool=false)
     println(io,             "Julia Version $VERSION")
@@ -172,19 +195,25 @@ function versioninfo(io::IO=STDOUT, verbose::Bool=false)
         println(io, "DEBUG build")
     end
     println(io,             "Platform Info:")
-    println(io,             "  System: ", Sys.OS_NAME, " (", Sys.MACHINE, ")")
+    println(io,             "  System: ", Sys.KERNEL, " (", Sys.MACHINE, ")")
 
     cpu = Sys.cpu_info()
     println(io,         "  CPU: ", cpu[1].model)
     println(io,             "  WORD_SIZE: ", Sys.WORD_SIZE)
     if verbose
         lsb = ""
-        @linux_only try lsb = readchomp(pipeline(`lsb_release -ds`, stderr=DevNull)) end
-        @windows_only try lsb = strip(readstring(`$(ENV["COMSPEC"]) /c ver`)) end
+        if is_linux()
+            try lsb = readchomp(pipeline(`lsb_release -ds`, stderr=DevNull)) end
+        end
+        if is_windows()
+            try lsb = strip(readstring(`$(ENV["COMSPEC"]) /c ver`)) end
+        end
         if lsb != ""
             println(io,     "           ", lsb)
         end
-        @unix_only println(io,         "  uname: ",readchomp(`uname -mprsv`))
+        if is_unix()
+            println(io,         "  uname: ", readchomp(`uname -mprsv`))
+        end
         println(io,         "Memory: $(Sys.total_memory()/2^30) GB ($(Sys.free_memory()/2^20) MB free)")
         try println(io,     "Uptime: $(Sys.uptime()) sec") end
         print(io,           "Load Avg: ")
@@ -428,37 +457,38 @@ end
 # file downloading
 
 downloadcmd = nothing
-@unix_only function download(url::AbstractString, filename::AbstractString)
-    global downloadcmd
-    if downloadcmd === nothing
-        for checkcmd in (:curl, :wget, :fetch)
-            if success(pipeline(`which $checkcmd`, DevNull))
-                downloadcmd = checkcmd
-                break
+if is_windows()
+    function download(url::AbstractString, filename::AbstractString)
+        res = ccall((:URLDownloadToFileW,:urlmon),stdcall,Cuint,
+                    (Ptr{Void},Cwstring,Cwstring,Cuint,Ptr{Void}),C_NULL,url,filename,0,C_NULL)
+        if res != 0
+            error("automatic download failed (error: $res): $url")
+        end
+        filename
+    end
+else
+    function download(url::AbstractString, filename::AbstractString)
+        global downloadcmd
+        if downloadcmd === nothing
+            for checkcmd in (:curl, :wget, :fetch)
+                if success(pipeline(`which $checkcmd`, DevNull))
+                    downloadcmd = checkcmd
+                    break
+                end
             end
         end
+        if downloadcmd == :wget
+            run(`wget -O $filename $url`)
+        elseif downloadcmd == :curl
+            run(`curl -o $filename -L $url`)
+        elseif downloadcmd == :fetch
+            run(`fetch -f $filename $url`)
+        else
+            error("no download agent available; install curl, wget, or fetch")
+        end
+        filename
     end
-    if downloadcmd == :wget
-        run(`wget -O $filename $url`)
-    elseif downloadcmd == :curl
-        run(`curl -o $filename -L $url`)
-    elseif downloadcmd == :fetch
-        run(`fetch -f $filename $url`)
-    else
-        error("no download agent available; install curl, wget, or fetch")
-    end
-    filename
 end
-
-@windows_only function download(url::AbstractString, filename::AbstractString)
-    res = ccall((:URLDownloadToFileW,:urlmon),stdcall,Cuint,
-                (Ptr{Void},Cwstring,Cwstring,Cuint,Ptr{Void}),C_NULL,url,filename,0,C_NULL)
-    if res != 0
-        error("automatic download failed (error: $res): $url")
-    end
-    filename
-end
-
 function download(url::AbstractString)
     filename = tempname()
     download(url, filename)
@@ -482,7 +512,7 @@ end
 
 # testing
 
-function runtests(tests = ["all"], numcores = ceil(Int,CPU_CORES/2))
+function runtests(tests = ["all"], numcores = ceil(Int, Sys.CPU_CORES / 2))
     if isa(tests,AbstractString)
         tests = split(tests)
     end
@@ -568,7 +598,7 @@ summarysize(obj::Symbol, seen, excl) = 0
 function summarysize(obj::DataType, seen, excl)
     key = pointer_from_objref(obj)
     haskey(seen, key) ? (return 0) : (seen[key] = true)
-    size = 7*sizeof(Int) + 6*sizeof(Int32) + 4*nfields(obj) + ifelse(WORD_SIZE==64,4,0)
+    size = 7*sizeof(Int) + 6*sizeof(Int32) + 4*nfields(obj) + ifelse(Sys.WORD_SIZE == 64, 4, 0)
     size += summarysize(obj.parameters, seen, excl)::Int
     size += summarysize(obj.types, seen, excl)::Int
     return size

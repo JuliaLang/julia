@@ -116,7 +116,7 @@ cmove_line_up(t::UnixTerminal, n) = (cmove_up(t, n); cmove_col(t, 0))
 cmove_line_down(t::UnixTerminal, n) = (cmove_down(t, n); cmove_col(t, 0))
 cmove_col(t::UnixTerminal, n) = write(t.out_stream, "$(CSI)$(n)G")
 
-@windows ? begin
+if is_windows()
     function raw!(t::TTYTerminal,raw::Bool)
         check_open(t.in_stream)
         if Base.ispty(t.in_stream)
@@ -132,7 +132,7 @@ cmove_col(t::UnixTerminal, n) = write(t.out_stream, "$(CSI)$(n)G")
                  t.in_stream.handle, raw) != -1
         end
     end
-end : begin
+else
     function raw!(t::TTYTerminal, raw::Bool)
         check_open(t.in_stream)
         ccall(:jl_tty_set_mode, Int32, (Ptr{Void},Int32), t.in_stream.handle, raw) != -1
@@ -151,14 +151,17 @@ clear(t::UnixTerminal) = write(t.out_stream, "\x1b[H\x1b[2J")
 clear_line(t::UnixTerminal) = write(t.out_stream, "\x1b[0G\x1b[0K")
 #beep(t::UnixTerminal) = write(t.err_stream,"\x7")
 
-@unix_only function hascolor(t::TTYTerminal)
-    startswith(t.term_type, "xterm") && return true
-    try
-        return success(`tput setaf 0`)
-    catch
-        return false
+if is_windows()
+    hascolor(t::TTYTerminal) = true
+else
+    function hascolor(t::TTYTerminal)
+        startswith(t.term_type, "xterm") && return true
+        try
+            return success(`tput setaf 0`)
+        catch
+            return false
+        end
     end
 end
-@windows_only hascolor(t::TTYTerminal) = true
 
 end # module
