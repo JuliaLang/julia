@@ -977,53 +977,49 @@ System
 
    Reference to the singleton ``EnvHash``\ , providing a dictionary interface to system environment variables.
 
-.. function:: @unix
+.. function:: is_unix([os])
 
    .. Docstring generated from Julia source
 
-   Given ``@unix? a : b``\ , do ``a`` on Unix systems (including Linux and OS X) and ``b`` elsewhere. See documentation in :ref:`Handling Operating System Variation <man-handling-operating-system-variation>`\ .
+   Predicate for testing if the OS provides a Unix-like interface. See documentation in :ref:`Handling Operating System Variation <man-handling-operating-system-variation>`\ .
 
-.. function:: @unix_only
-
-   .. Docstring generated from Julia source
-
-   A macro that evaluates the given expression only on Unix systems (including Linux and OS X). See documentation in :ref:`Handling Operating System Variation <man-handling-operating-system-variation>`\ .
-
-.. function:: @osx
+.. function:: is_apple([os])
 
    .. Docstring generated from Julia source
 
-   Given ``@osx? a : b``\ , do ``a`` on OS X and ``b`` elsewhere. See documentation in :ref:`Handling Operating System Variation <man-handling-operating-system-variation>`\ .
+   Predicate for testing if the OS is a derivative of Apple Macintosh OS X or Darwin. See documentation in :ref:`Handling Operating System Variation <man-handling-operating-system-variation>`\ .
 
-.. function:: @osx_only
-
-   .. Docstring generated from Julia source
-
-   A macro that evaluates the given expression only on OS X systems. See documentation in :ref:`Handling Operating System Variation <man-handling-operating-system-variation>`\ .
-
-.. function:: @linux
+.. function:: is_linux([os])
 
    .. Docstring generated from Julia source
 
-   Given ``@linux? a : b``\ , do ``a`` on Linux and ``b`` elsewhere. See documentation :ref:`Handling Operating System Variation <man-handling-operating-system-variation>`\ .
+   Predicate for testing if the OS is a derivative of Linux. See documentation in :ref:`Handling Operating System Variation <man-handling-operating-system-variation>`\ .
 
-.. function:: @linux_only
-
-   .. Docstring generated from Julia source
-
-   A macro that evaluates the given expression only on Linux systems. See documentation in :ref:`Handling Operating System Variation <man-handling-operating-system-variation>`\ .
-
-.. function:: @windows
+.. function:: is_bsd([os])
 
    .. Docstring generated from Julia source
 
-   Given ``@windows? a : b``\ , do ``a`` on Windows and ``b`` elsewhere. See documentation in :ref:`Handling Operating System Variation <man-handling-operating-system-variation>`\ .
+   Predicate for testing if the OS is a derivative of BSD. See documentation in :ref:`Handling Operating System Variation <man-handling-operating-system-variation>`\ .
 
-.. function:: @windows_only
+.. function:: is_windows([os])
 
    .. Docstring generated from Julia source
 
-   A macro that evaluates the given expression only on Windows systems. See documentation in :ref:`Handling Operating System Variation <man-handling-operating-system-variation>`\ .
+   Predicate for testing if the OS is a derivative of Microsoft Windows NT. See documentation in :ref:`Handling Operating System Variation <man-handling-operating-system-variation>`\ .
+
+.. function:: windows_version()
+
+   .. Docstring generated from Julia source
+
+   Returns the version number for the Windows NT Kernel as a (major, minor) pair, or (0, 0) if this is not running on Windows.
+
+.. function:: @static
+
+   .. Docstring generated from Julia source
+
+   Partially evaluates an expression at parse time.
+
+   For example, ``@static is_windows() ? foo : bar`` will evaluate ``is_windows()`` and insert either ``foo`` or ``bar`` into the expression. This is useful in cases where a construct would be invalid on other platforms, such as a ``ccall`` to a non-existent function.
 
 Errors
 ------

@@ -146,9 +146,10 @@ function wait()
     assert(false)
 end
 
-function pause()
-    @unix_only    ccall(:pause, Void, ())
-    @windows_only ccall(:Sleep,stdcall, Void, (UInt32,), 0xffffffff)
+if is_windows()
+    pause() = ccall(:Sleep, stdcall, Void, (UInt32,), 0xffffffff)
+else
+    pause() = ccall(:pause, Void, ())
 end
 
 

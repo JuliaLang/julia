@@ -1225,7 +1225,7 @@ JL_DLLEXPORT int jl_cpu_cores(void);
 JL_DLLEXPORT long jl_getpagesize(void);
 JL_DLLEXPORT long jl_getallocationgranularity(void);
 JL_DLLEXPORT int jl_is_debugbuild(void);
-JL_DLLEXPORT jl_sym_t *jl_get_OS_NAME(void);
+JL_DLLEXPORT jl_sym_t *jl_get_UNAME(void);
 JL_DLLEXPORT jl_sym_t *jl_get_ARCH(void);
 
 // environment entries

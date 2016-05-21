@@ -18,13 +18,15 @@ function mkcachedir()
         return
     end
 
-    @unix_only if Dir.isversioned(pwd())
-        rootcache = joinpath(realpath(".."), ".cache")
-        if !isdir(rootcache)
-            mkdir(rootcache)
+    @static if is_unix()
+        if Dir.isversioned(pwd())
+            rootcache = joinpath(realpath(".."), ".cache")
+            if !isdir(rootcache)
+                mkdir(rootcache)
+            end
+            symlink(rootcache, cache)
+            return
         end
-        symlink(rootcache, cache)
-        return
     end
     mkdir(cache)
 end

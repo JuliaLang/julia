@@ -53,7 +53,11 @@ end
 
 # init with default values
 # Use a max size of 1M profile samples, and fire timer every 1ms
-@windows? (__init__() = init(1_000_000, 0.01)) : (__init__() = init(1_000_000, 0.001))
+if is_windows()
+    __init__() = init(1_000_000, 0.01)
+else
+    __init__() = init(1_000_000, 0.001)
+end
 
 """
     clear()
@@ -208,9 +212,7 @@ end
 
 
 # Number of backtrace "steps" that are triggered by taking the backtrace, e.g., inside profile_bt
-# May be platform-specific?
-#@unix_only const btskip = 2
-#@windows_only const btskip = 0
+# TODO: may be platform-specific?
 const btskip = 0
 
 ## Print as a flat list

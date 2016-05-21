@@ -14,7 +14,7 @@ function GitRepo(path::AbstractString)
 end
 
 function GitRepoExt(path::AbstractString, flags::Cuint = Cuint(Consts.REPOSITORY_OPEN_DEFAULT))
-    separator = @unix? ":" : ";"
+    separator = @static is_windows() ? ";" : ":"
     repo_ptr_ptr = Ref{Ptr{Void}}(C_NULL)
     err = ccall((:git_repository_open_ext, :libgit2), Cint,
                 (Ptr{Ptr{Void}}, Cstring, Cuint, Cstring),

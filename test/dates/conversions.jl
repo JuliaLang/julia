@@ -47,8 +47,10 @@
 @test typeof(Dates.today()) <: Dates.Date
 @test typeof(Dates.now(Dates.UTC)) <: Dates.DateTime
 
-@osx_only withenv("TZ" => "UTC") do
-    @test abs(Dates.now() - now(Dates.UTC)) < Dates.Second(1)
+if is_apple()
+    withenv("TZ" => "UTC") do
+        @test abs(Dates.now() - now(Dates.UTC)) < Dates.Second(1)
+    end
 end
 @test abs(Dates.now() - now(Dates.UTC)) < Dates.Hour(16)
 

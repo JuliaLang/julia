@@ -585,7 +585,7 @@ function msync end
 msync{T}(A::Array{T}) = msync(pointer(A), length(A)*sizeof(T))
 msync(B::BitArray) = msync(pointer(B.chunks), length(B.chunks)*sizeof(UInt64))
 
-@unix_only begin
+if is_unix()
 export mmap
 @noinline function mmap(len::Integer, prot::Integer, flags::Integer, fd, offset::Integer)
     depwarn("`mmap` is deprecated, use `Mmap.mmap(io, Array{T,N}, dims, offset)` instead to return an mmapped-array", :mmap)
@@ -634,7 +634,7 @@ end
 end
 
 
-@windows_only begin
+if is_windows()
 @noinline function munmap(viewhandle::Ptr, mmaphandle::Ptr)
     depwarn("`munmap` is deprecated, `mmap` Arrays are automatically munmapped when finalized", :munmap)
     status = ccall(:UnmapViewOfFile, stdcall, Cint, (Ptr{Void},), viewhandle)!=0
@@ -654,9 +654,11 @@ end
 
 end
 
-@unix_only @deprecate mmap_array{T,N}(::Type{T}, dims::NTuple{N,Integer}, s::IO, offset=position(s)) Mmap.mmap(s, Array{T,N}, dims, offset)
+if is_unix()
+    @deprecate mmap_array{T,N}(::Type{T}, dims::NTuple{N,Integer}, s::IO, offset=position(s)) Mmap.mmap(s, Array{T,N}, dims, offset)
+end
 
-@windows_only begin
+if is_windows()
 type SharedMemSpec
     name :: AbstractString
     readonly :: Bool
@@ -1185,6 +1187,71 @@ end
 # delete these methods along with deprecations:
 isequal(x::Char, y::Integer) = false
 isequal(x::Integer, y::Char) = false
+
+#6674 and #4233
+macro windows(qm,ex)
+    depwarn("`@windows` is deprecated, use `@static is_windows()` instead", Symbol("@windows"))
+    return @static is_windows() ? esc(ex.args[1]) : esc(ex.args[2])
+end
+macro unix(qm,ex)
+    depwarn("`@unix` is deprecated, use `@static is_unix()` instead", Symbol("@unix"))
+    return @static is_unix() ? esc(ex.args[1]) : esc(ex.args[2])
+end
+macro osx(qm,ex)
+    depwarn("`@osx` is deprecated, use `@static is_apple()` instead", Symbol("@osx"))
+    return @static is_apple() ? esc(ex.args[1]) : esc(ex.args[2])
+end
+macro linux(qm,ex)
+    depwarn("`@linux` is deprecated, use `@static is_linux()` instead", Symbol("@linux"))
+    return @static is_linux() ? esc(ex.args[1]) : esc(ex.args[2])
+end
+macro windows_only(ex)
+    depwarn("`@windows_only` is deprecated, use `@static if is_windows()` instead", Symbol("@windows_only"))
+    return @static if is_windows() esc(ex) end
+end
+macro unix_only(ex)
+    depwarn("`@unix_only` is deprecated, use `@static if is_unix()` instead", Symbol("@unix_only"))
+    return @static if is_unix() esc(ex) end
+end
+macro osx_only(ex)
+    depwarn("`@osx_only` is deprecated, use `@static if is_apple()` instead", Symbol("@osx_only"))
+    return @static if is_apple() esc(ex) end
+end
+macro linux_only(ex)
+    depwarn("`@linux_only` is deprecated, use `@static if is_linux()` instead", Symbol("@linux_only"))
+    return @static if is_linux() esc(ex) end
+end
+export
+    @windows,
+    @unix,
+    @osx,
+    @linux,
+    @windows_only,
+    @unix_only,
+    @osx_only,
+    @linux_only
+
+const OS_NAME =
+    if Sys.KERNEL === :Darwin
+        :OSX
+    elseif Sys.KERNEL === :NT
+        :Windows
+    else
+        Sys.KERNEL
+    end
+deprecate(:OS_NAME) # use Sys.KERNEL now
+
+export CPU_CORES
+function _set_CPU_CORES()
+    global const CPU_CORES = Sys.CPU_CORES
+    deprecate(Base, :CPU_CORES)
+end
+module Init_CPU_CORES
+    const __init__ = Base._set_CPU_CORES
+end
+
+@deprecate_binding WORD_SIZE Sys.WORD_SIZE
+
 
 # During the 0.5 development cycle, do not add any deprecations below this line
 # To be deprecated in 0.6

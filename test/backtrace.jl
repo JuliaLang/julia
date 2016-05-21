@@ -46,7 +46,7 @@ catch err
 end
 
 # different-file inline
-const absfilepath = OS_NAME == :Windows ? "C:\\foo\\bar\\baz.jl" : "/foo/bar/baz.jl"
+const absfilepath = is_windows() ? "C:\\foo\\bar\\baz.jl" : "/foo/bar/baz.jl"
 eval(Expr(:function, Expr(:call, :test_inline_2),
           Expr(:block, Expr(:line, 99, Symbol("backtrace.jl")),
                        Expr(:block, Expr(:meta, :push_loc, Symbol(absfilepath)),

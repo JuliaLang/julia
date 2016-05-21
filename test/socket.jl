@@ -90,7 +90,7 @@ wait(port)
 wait(tsk)
 
 mktempdir() do tmpdir
-    socketname = @windows ? ("\\\\.\\pipe\\uv-test-" * randstring(6)) : joinpath(tmpdir, "socket")
+    socketname = is_windows() ? ("\\\\.\\pipe\\uv-test-" * randstring(6)) : joinpath(tmpdir, "socket")
     c = Base.Condition()
     tsk = @async begin
         s = listen(socketname)
@@ -171,7 +171,7 @@ begin
     close(a)
     close(b)
 end
-if @unix? true : (Base.windows_version() >= Base.WINDOWS_VISTA_VER)
+if !is_windows() || Sys.windows_version() >= Sys.WINDOWS_VISTA_VER
     a = UDPSocket()
     b = UDPSocket()
     bind(a, ip"::1", UInt16(port))
@@ -243,7 +243,7 @@ end
 # Local-machine broadcast
 let
     # (Mac OS X's loopback interface doesn't support broadcasts)
-    bcastdst = @osx ? ip"255.255.255.255" : ip"127.255.255.255"
+    bcastdst = is_apple() ? ip"255.255.255.255" : ip"127.255.255.255"
 
     function create_socket()
         s = UDPSocket()

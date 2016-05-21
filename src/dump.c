@@ -1093,10 +1093,8 @@ static void jl_serialize_header(ios_t *s)
     write_uint16(s, JI_FORMAT_VERSION);
     ios_write(s, (char *) &BOM, 2);
     write_uint8(s, sizeof(void*));
-    const char *OS_NAME = jl_symbol_name(jl_get_OS_NAME());
-    const char *ARCH = jl_symbol_name(jl_get_ARCH());
-    ios_write(s, OS_NAME, strlen(OS_NAME)+1);
-    ios_write(s, ARCH, strlen(ARCH)+1);
+    ios_write(s, JL_BUILD_UNAME, strlen(JL_BUILD_UNAME)+1);
+    ios_write(s, JL_BUILD_ARCH, strlen(JL_BUILD_ARCH)+1);
     ios_write(s, JULIA_VERSION_STRING, strlen(JULIA_VERSION_STRING)+1);
     const char *branch = jl_git_branch(), *commit = jl_git_commit();
     ios_write(s, branch, strlen(branch)+1);
@@ -1763,8 +1761,8 @@ JL_DLLEXPORT int jl_deserialize_verify_header(ios_t *s)
             read_uint16(s) == JI_FORMAT_VERSION &&
             ios_read(s, (char *) &bom, 2) == 2 && bom == BOM &&
             read_uint8(s) == sizeof(void*) &&
-            readstr_verify(s, jl_symbol_name(jl_get_OS_NAME())) && !read_uint8(s) &&
-            readstr_verify(s, jl_symbol_name(jl_get_ARCH())) && !read_uint8(s) &&
+            readstr_verify(s, JL_BUILD_UNAME) && !read_uint8(s) &&
+            readstr_verify(s, JL_BUILD_ARCH) && !read_uint8(s) &&
             readstr_verify(s, JULIA_VERSION_STRING) && !read_uint8(s) &&
             readstr_verify(s, jl_git_branch()) && !read_uint8(s) &&
             readstr_verify(s, jl_git_commit()) && !read_uint8(s));

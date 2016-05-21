@@ -4,12 +4,12 @@
 # Build a system image binary at sysimg_path.dlext. Allow insertion of a userimg via
 # userimg_path.  If sysimg_path.dlext is currently loaded into memory, don't continue
 # unless force is set to true.  Allow targeting of a CPU architecture via cpu_target
-@unix_only function default_sysimg_path(debug=false)
-    splitext(Libdl.dlpath(debug ? "sys-debug" : "sys"))[1]
-end
-
-@windows_only function default_sysimg_path(debug=false)
-    joinpath(JULIA_HOME, "..", "lib", "julia", debug ? "sys-debug" : "sys")
+function default_sysimg_path(debug=false)
+    if is_unix()
+        splitext(Libdl.dlpath(debug ? "sys-debug" : "sys"))[1]
+    else
+        joinpath(JULIA_HOME, "..", "lib", "julia", debug ? "sys-debug" : "sys")
+    end
 end
 
 function build_sysimg(sysimg_path=nothing, cpu_target="native", userimg_path=nothing; force=false, debug=false)
@@ -108,17 +108,19 @@ function find_system_compiler()
     end
 
     # On Windows, check to see if WinRPM is installed, and if so, see if gcc is installed
-    @windows_only try
-        eval(Main, :(using WinRPM))
-        winrpmgcc = joinpath(WinRPM.installdir,"usr","$(Sys.ARCH)-w64-mingw32",
-            "sys-root","mingw","bin","gcc.exe")
-        if success(`$winrpmgcc --version`)
-            return winrpmgcc
-        else
-            throw()
+    if is_windows()
+        try
+            eval(Main, :(using WinRPM))
+            winrpmgcc = joinpath(WinRPM.installdir,"usr","$(Sys.ARCH)-w64-mingw32",
+                "sys-root","mingw","bin","gcc.exe")
+            if success(`$winrpmgcc --version`)
+                return winrpmgcc
+            else
+                throw()
+            end
+        catch
+            warn("Install GCC via `Pkg.add(\"WinRPM\"); WinRPM.install(\"gcc\")` to generate sys.dll for faster startup times")
         end
-    catch
-        warn("Install GCC via `Pkg.add(\"WinRPM\"); WinRPM.install(\"gcc\")` to generate sys.dll for faster startup times")
     end
 
 
@@ -143,7 +145,9 @@ function link_sysimg(sysimg_path=nothing, cc=find_system_compiler(), debug=false
 
     push!(FLAGS, "-shared")
     push!(FLAGS, debug ? "-ljulia-debug" : "-ljulia")
-    @windows_only push!(FLAGS, "-lssp")
+    if is_windows()
+        push!(FLAGS, "-lssp")
+    end
 
     info("Linking sys.$(Libdl.dlext)")
     run(`$cc $FLAGS -o $sysimg_path.$(Libdl.dlext) $sysimg_path.o`)

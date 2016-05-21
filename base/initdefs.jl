@@ -37,12 +37,12 @@ const LOAD_PATH = String[]
 const LOAD_CACHE_PATH = String[]
 function init_load_path()
     vers = "v$(VERSION.major).$(VERSION.minor)"
-    if haskey(ENV,"JULIA_LOAD_PATH")
-        prepend!(LOAD_PATH, split(ENV["JULIA_LOAD_PATH"], @windows? ';' : ':'))
+    if haskey(ENV, "JULIA_LOAD_PATH")
+        prepend!(LOAD_PATH, split(ENV["JULIA_LOAD_PATH"], @static is_windows() ? ';' : ':'))
     end
-    push!(LOAD_PATH,abspath(JULIA_HOME,"..","local","share","julia","site",vers))
-    push!(LOAD_PATH,abspath(JULIA_HOME,"..","share","julia","site",vers))
-    push!(LOAD_CACHE_PATH,abspath(JULIA_HOME,"..","usr","lib","julia")) #TODO: fixme
+    push!(LOAD_PATH, abspath(JULIA_HOME, "..", "local", "share", "julia", "site", vers))
+    push!(LOAD_PATH, abspath(JULIA_HOME, "..", "share", "julia", "site", vers))
+    #push!(LOAD_CACHE_PATH, abspath(JULIA_HOME, "..", "lib", "julia")) #TODO: add a builtin location?
 end
 
 # initialize the local proc network address / port
@@ -76,7 +76,7 @@ function early_init()
     # make sure OpenBLAS does not set CPU affinity (#1070, #9639)
     ENV["OPENBLAS_MAIN_FREE"] = get(ENV, "OPENBLAS_MAIN_FREE",
                                     get(ENV, "GOTOBLAS_MAIN_FREE", "1"))
-    if CPU_CORES > 8 && !("OPENBLAS_NUM_THREADS" in keys(ENV)) && !("OMP_NUM_THREADS" in keys(ENV))
+    if Sys.CPU_CORES > 8 && !("OPENBLAS_NUM_THREADS" in keys(ENV)) && !("OMP_NUM_THREADS" in keys(ENV))
         # Prevent openblas from starting too many threads, unless/until specifically requested
         ENV["OPENBLAS_NUM_THREADS"] = 8
     end

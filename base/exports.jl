@@ -176,18 +176,15 @@ export
 # Global constants and variables
     ARGS,
     C_NULL,
-    CPU_CORES,
     ENDIAN_BOM,
     ENV,
     JULIA_HOME,
     LOAD_PATH,
-    OS_NAME,
     PROGRAM_FILE,
     STDERR,
     STDIN,
     STDOUT,
     VERSION,
-    WORD_SIZE,
 
 # Mathematical constants
     Inf,
@@ -1388,14 +1385,12 @@ export
     @code_native,
 
     # platform-conditional code
-    @windows,
-    @unix,
-    @osx,
-    @linux,
-    @windows_only,
-    @unix_only,
-    @osx_only,
-    @linux_only,
+    @static,
+    is_windows,
+    is_linux,
+    is_apple,
+    is_bsd,
+    is_unix,
 
     # tasks
     @schedule,

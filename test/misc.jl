@@ -194,7 +194,11 @@ end
 @test Base.is_unix(:Darwin)
 @test Base.is_unix(:FreeBSD)
 @test_throws ArgumentError Base.is_unix(:BeOS)
-@unix_only @test Base.windows_version() == (0,0)
+if !is_windows()
+    @test Sys.windows_version() === (0, 0)
+else
+    @test (Sys.windows_version()::Tuple{Int,Int})[1] > 0
+end
 
 # Issue 14173
 module Tmp14173
@@ -373,11 +377,13 @@ for (X,Y,Z) in ((V16,V16,V16), (I16,V16,I16), (V16,I16,V16), (V16,V16,I16), (I16
 end
 
 # clipboard functionality
-@windows_only for str in ("Hello, world.","∀ x ∃ y","")
-    clipboard(str)
-    @test clipboard() == str
+if is_windows()
+    for str in ("Hello, world.", "∀ x ∃ y", "")
+        clipboard(str)
+        @test clipboard() == str
+    end
 end
 
-optstring = sprint(show,Base.JLOptions())
-@test startswith(optstring,"JLOptions(")
-@test endswith(optstring,")")
+optstring = sprint(show, Base.JLOptions())
+@test startswith(optstring, "JLOptions(")
+@test endswith(optstring, ")")
