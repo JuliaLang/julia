@@ -162,6 +162,9 @@ Library improvements
 
   * Concatenating dense and sparse matrices now returns a sparse matrix ([#15172]).
 
+  * The `libjulia` library is now properly versioned and installed to the public `<prefix>/lib`
+    directory, instead of the private `<prefix>/lib/julia` directory.
+
 Deprecated or removed
 ---------------------
 
