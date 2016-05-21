@@ -788,9 +788,9 @@ end
 Tests that the call expression `f(x)` returns a value of the same type
 inferred by the compiler. It's useful to check for type stability.
 
-`f(x)` can be any call expression, except a call for a generated function.
-Returns the result of `f(x)` if the types match, and an `Error` `Result` if
-it finds different types.
+`f(x)` can be any call expression.
+Returns the result of `f(x)` if the types match,
+and an `Error` `Result` if it finds different types.
 
 ```jldoctest
 julia> using Base.Test
