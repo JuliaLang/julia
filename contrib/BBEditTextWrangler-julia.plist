@@ -75,15 +75,10 @@
             <string>@ip_str</string>
             <string>@label</string>
             <string>@less</string>
-            <string>@linux</string>
-            <string>@linux_only</string>
             <string>@math_const</string>
             <string>@MIME</string>
             <string>@MIME_str</string>
             <string>@noinline</string>
-            <string>@non_windowsxp_only</string>
-            <string>@osx</string>
-            <string>@osx_only</string>
             <string>@parallel</string>
             <string>@printf</string>
             <string>@profile</string>
@@ -95,6 +90,7 @@
             <string>@spawn</string>
             <string>@spawnat</string>
             <string>@sprintf</string>
+            <string>@static</string>
             <string>@sync</string>
             <string>@task</string>
             <string>@text_str</string>
@@ -104,15 +100,10 @@
             <string>@timev</string>
             <string>@uint128_str</string>
             <string>@unexpected</string>
-            <string>@unix</string>
-            <string>@unix_only</string>
             <string>@v_str</string>
             <string>@vectorize_1arg</string>
             <string>@vectorize_2arg</string>
             <string>@which</string>
-            <string>@windows</string>
-            <string>@windows_only</string>
-            <string>@windowsxp_only</string>
             <string>\</string>
             <string>^</string>
             <string>__precompile__</string>
@@ -588,12 +579,12 @@
             <string>ipermutedims</string>
             <string>irfft</string>
             <string>iround</string>
+            <string>is_apple</string>
             <string>is_assigned_char</string>
-            <string>is_valid_ascii</string>
-            <string>is_valid_char</string>
-            <string>is_valid_utf16</string>
-            <string>is_valid_utf32</string>
-            <string>is_valid_utf8</string>
+            <string>is_bsd</string>
+            <string>is_linux</string>
+            <string>is_unix</string>
+            <string>is_windows</string>
             <string>isabspath</string>
             <string>isalnum</string>
             <string>isalpha</string>
