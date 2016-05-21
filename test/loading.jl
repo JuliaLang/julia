@@ -4,7 +4,7 @@ using Base.Test
 
 @test @__LINE__ == 5
 
-@test_throws ArgumentError include("test_sourcepath.jl\0")
+@test_throws ArgumentError Core.include("test_sourcepath.jl\0")
 
 include("test_sourcepath.jl")
 thefname = "the fname!//\\&\0\1*"
