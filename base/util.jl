@@ -390,3 +390,32 @@ function julia_cmd(julia=joinpath(JULIA_HOME, julia_exename()))
 end
 
 julia_exename() = ccall(:jl_is_debugbuild,Cint,())==0 ? "julia" : "julia-debug"
+
+@windows_only function getpass(prompt::AbstractString)
+    print(prompt)
+    flush(STDOUT)
+    p = Array(UInt8, 128) # mimic Unix getpass in ignoring more than 128-char passwords
+                          # (also avoids any potential memory copies arising from push!)
+    try
+        plen = 0
+        while true
+            c = ccall(:_getch, UInt8, ())
+            if c == 0xff || c == UInt8('\n') || c == UInt8('\r')
+                break # EOF or return
+            elseif c == 0x00 || c == 0xe0
+                ccall(:_getch, UInt8, ()) # ignore function/arrow keys
+            elseif c == UInt8('\b') && plen > 0
+                plen -= 1 # delete last character on backspace
+            elseif !iscntrl(Char(c)) && plen < 128
+                p[plen += 1] = c
+            end
+        end
+        return String(pointer(p), plen)
+    finally
+        fill!(p, 0) # don't leave password in memory
+    end
+
+    return ""
+end
+
+@unix_only getpass(prompt::AbstractString) = String(ccall(:getpass, Cstring, (Cstring,), prompt))
