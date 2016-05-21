@@ -375,6 +375,14 @@ mktempdir() do dir
             LibGit2.branch!(repo, test_branch)
             @test_throws LibGit2.Error.GitError LibGit2.merge!(repo, fastforward=true)
 
+            # Set the username and email for the test_repo (needed for rebase)
+            cfg = LibGit2.GitConfig(repo)
+            LibGit2.set!(cfg, "user.name", "AAAA")
+            LibGit2.set!(cfg, "user.email", "BBBB@BBBB.COM")
+
+            # Try rebasing on master instead
+            LibGit2.rebase!(repo, master_branch)
+
             # Switch to the master branch
             LibGit2.branch!(repo, master_branch)
 
