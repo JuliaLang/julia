@@ -798,7 +798,7 @@ function abstract_call_gf_by_type(f::ANY, argtype::ANY, sv)
                         p1, p2 = sig.parameters, infstate.atypes.parameters
                         if length(p2) == ls
                             limitdepth = false
-                            newsig = Array(Any, ls)
+                            newsig = Array{Any}(ls)
                             for i = 1:ls
                                 if p1[i] <: Function && type_depth(p1[i]) > type_depth(p2[i]) &&
                                     isa(p1[i],DataType)

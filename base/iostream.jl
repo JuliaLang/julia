@@ -241,13 +241,13 @@ function read(s::IOStream)
             sz -= pos
         end
     end
-    b = Array(UInt8, sz<=0 ? 1024 : sz)
+    b = Array{UInt8}(sz<=0 ? 1024 : sz)
     nr = readbytes_all!(s, b, typemax(Int))
     resize!(b, nr)
 end
 
 function read(s::IOStream, nb::Integer; all::Bool=true)
-    b = Array(UInt8, nb)
+    b = Array{UInt8}(nb)
     nr = readbytes!(s, b, nb, all=all)
     resize!(b, nr)
 end
