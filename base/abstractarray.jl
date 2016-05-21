@@ -9,14 +9,14 @@ typealias RangeIndex Union{Int, Range{Int}, UnitRange{Int}, Colon}
 
 ## Basic functions ##
 
-vect() = Array(Any, 0)
+vect() = Array{Any}(0)
 vect{T}(X::T...) = T[ X[i] for i=1:length(X) ]
 
 function vect(X...)
     T = promote_typeof(X...)
     #T[ X[i] for i=1:length(X) ]
     # TODO: this is currently much faster. should figure out why. not clear.
-    copy!(Array(T,length(X)), X)
+    copy!(Array{T}(length(X)), X)
 end
 
 size{T,N}(t::AbstractArray{T,N}, d) = d <= N ? size(t)[d] : 1
@@ -156,7 +156,7 @@ similar{T}(a::AbstractArray{T}, dims::Integer...)        = similar(a, T, dims)
 similar(   a::AbstractArray, T::Type, dims::Integer...)  = similar(a, T, dims)
 # similar creates an Array by default
 similar(   a::AbstractArray, T::Type, dims::DimsInteger) = similar(a, T, convert(Dims, dims))
-similar(   a::AbstractArray, T::Type, dims::Dims)        = Array(T, dims)
+similar(   a::AbstractArray, T::Type, dims::Dims)        = Array{T}(dims)
 
 ## from general iterable to any array
 
@@ -597,12 +597,12 @@ promote_eltype() = Bottom
 promote_eltype(v1, vs...) = promote_type(eltype(v1), promote_eltype(vs...))
 
 #TODO: ERROR CHECK
-cat(catdim::Integer) = Array(Any, 0)
+cat(catdim::Integer) = Array{Any}(0)
 
-vcat() = Array(Any, 0)
-hcat() = Array(Any, 0)
-typed_vcat(T::Type) = Array(T, 0)
-typed_hcat(T::Type) = Array(T, 0)
+vcat() = Array{Any}(0)
+hcat() = Array{Any}(0)
+typed_vcat(T::Type) = Array{T}(0)
+typed_hcat(T::Type) = Array{T}(0)
 
 ## cat: special cases
 vcat{T}(X::T...)         = T[ X[i] for i=1:length(X) ]
@@ -610,10 +610,10 @@ vcat{T<:Number}(X::T...) = T[ X[i] for i=1:length(X) ]
 hcat{T}(X::T...)         = T[ X[j] for i=1, j=1:length(X) ]
 hcat{T<:Number}(X::T...) = T[ X[j] for i=1, j=1:length(X) ]
 
-vcat(X::Number...) = hvcat_fill(Array(promote_typeof(X...),length(X)), X)
-hcat(X::Number...) = hvcat_fill(Array(promote_typeof(X...),1,length(X)), X)
-typed_vcat(T::Type, X::Number...) = hvcat_fill(Array(T,length(X)), X)
-typed_hcat(T::Type, X::Number...) = hvcat_fill(Array(T,1,length(X)), X)
+vcat(X::Number...) = hvcat_fill(Array{promote_typeof(X...)}(length(X)), X)
+hcat(X::Number...) = hvcat_fill(Array{promote_typeof(X...)}(1,length(X)), X)
+typed_vcat(T::Type, X::Number...) = hvcat_fill(Array{T}(length(X)), X)
+typed_hcat(T::Type, X::Number...) = hvcat_fill(Array{T}(1,length(X)), X)
 
 vcat(V::AbstractVector...) = typed_vcat(promote_eltype(V...), V...)
 vcat{T}(V::AbstractVector{T}...) = typed_vcat(T, V...)
@@ -833,7 +833,7 @@ function hvcat{T<:Number}(rows::Tuple{Vararg{Int}}, xs::T...)
     nr = length(rows)
     nc = rows[1]
 
-    a = Array(T, nr, nc)
+    a = Array{T}(nr, nc)
     if length(a) != length(xs)
         throw(ArgumentError("argument count does not match specified shape (expected $(length(a)), got $(length(xs)))"))
     end
@@ -874,7 +874,7 @@ function typed_hvcat(T::Type, rows::Tuple{Vararg{Int}}, xs::Number...)
     if nr*nc != len
         throw(ArgumentError("argument count $(len) does not match specified shape $((nr,nc))"))
     end
-    hvcat_fill(Array(T, nr, nc), xs)
+    hvcat_fill(Array{T}(nr, nc), xs)
 end
 
 function hvcat(rows::Tuple{Vararg{Int}}, xs::Number...)

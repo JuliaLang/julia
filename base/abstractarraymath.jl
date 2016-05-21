@@ -167,7 +167,7 @@ end
 ## ipermutedims in terms of permutedims ##
 
 function ipermutedims(A::AbstractArray,perm)
-    iperm = Array(Int,length(perm))
+    iperm = Array{Int}(length(perm))
     for (i,p) = enumerate(perm)
         iperm[p] = i
     end
