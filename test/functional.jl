@@ -194,7 +194,7 @@ end
 @test collect(Base.product(1:2, 3:4, 5:6)) == [(i, j, k) for i=1:2, j=3:4, k=5:6]
 
 # iteration order
-let 
+let
     expected = [(1,3,5), (2,3,5), (1,4,5), (2,4,5), (1,3,6), (2,3,6), (1,4,6), (2,4,6)]
     actual = Base.product(1:2, 3:4, 5:6)
     for (exp, act) in zip(expected, actual)
@@ -203,10 +203,10 @@ let
 end
 
 # collect multidimensional array
-let 
-    a, b = 1:3, [4 6; 
+let
+    a, b = 1:3, [4 6;
                  5 7]
-    p = Base.product(a, b)                 
+    p = Base.product(a, b)
     @test size(p)    == (3, 2, 2)
     @test length(p)  == 12
     @test ndims(p)   == 3
@@ -219,7 +219,7 @@ let
 end
 
 # with 1D inputs
-let  
+let
     a, b, c = 1:2, 1.0:10.0, Int32(1):Int32(0)
 
     # length
@@ -246,10 +246,10 @@ end
 # with multidimensional inputs
 let
     a, b, c = randn(4, 4), randn(3, 3, 3), randn(2, 2, 2, 2)
-    args = Any[(a,), 
-               (a, a), 
-               (a, b), 
-               (a, a, a), 
+    args = Any[(a,),
+               (a, a),
+               (a, b),
+               (a, a, a),
                (a, b, c)]
     sizes = Any[(4, 4),
                 (4, 4, 4, 4),
@@ -266,9 +266,9 @@ end
 # more tests on product with iterators of various type
 let
     iters = (1:2,
-             rand(2, 2, 2), 
-             take(1:4, 2),   
-             Base.product(1:2, 1:3), 
+             rand(2, 2, 2),
+             take(1:4, 2),
+             Base.product(1:2, 1:3),
              Base.product(rand(2, 2), rand(1, 1, 1))
              )
     for method in [size, length, ndims, eltype]
@@ -288,7 +288,7 @@ let
 end
 
 # product of finite length and infinite length iterators
-let 
+let
     a = 1:2
     b = countfrom(1)
     ab = Base.product(a, b)

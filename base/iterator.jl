@@ -310,15 +310,15 @@ ndims(p::AbstractProdIterator) = length(size(p))
 # generic methods to handle size of Prod* types
 _prod_size(a, ::HasShape)  = size(a)
 _prod_size(a, ::HasLength) = (length(a), )
-_prod_size(a, A) = 
+_prod_size(a, A) =
     throw(ArgumentError("Cannot compute size for object of type $(typeof(a))"))
 _prod_size(a, b, ::HasLength, ::HasLength)  = (length(a),  length(b))
 _prod_size(a, b, ::HasLength, ::HasShape)   = (length(a),  size(b)...)
 _prod_size(a, b, ::HasShape,  ::HasLength)  = (size(a)..., length(b))
 _prod_size(a, b, ::HasShape,  ::HasShape)   = (size(a)..., size(b)...)
-_prod_size(a, b, A, ::Union{HasShape, HasLength}) = 
+_prod_size(a, b, A, ::Union{HasShape, HasLength}) =
     throw(ArgumentError("Cannot compute size for object of type $(typeof(a))"))
-_prod_size(a, b, ::Union{HasShape, HasLength}, B) = 
+_prod_size(a, b, ::Union{HasShape, HasLength}, B) =
     throw(ArgumentError("Cannot compute size for object of type $(typeof(b))"))
 
 # one iterator
@@ -413,7 +413,7 @@ end
 
 prod_iteratorsize(::Union{HasLength,HasShape}, ::Union{HasLength,HasShape}) = HasShape()
 # products can have an infinite iterator
-prod_iteratorsize(a, ::IsInfinite) = IsInfinite() 
+prod_iteratorsize(a, ::IsInfinite) = IsInfinite()
 prod_iteratorsize(::IsInfinite, b) = IsInfinite()
 prod_iteratorsize(a, b) = SizeUnknown()
 
