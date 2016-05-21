@@ -163,13 +163,13 @@ Library improvements
   * Concatenating dense and sparse matrices now returns a sparse matrix ([#15172]).
 
   * The `libjulia` library is now properly versioned and installed to the public `<prefix>/lib`
-    directory, instead of the private `<prefix>/lib/julia` directory.
+    directory, instead of the private `<prefix>/lib/julia` directory ([#16362]).
 
   * System reflection is now more consistently exposed from Sys and not Base.
     `OS_NAME` has been replaced by `Sys.KERNEL` and always reports the name of the kernel (as reported by `uname`).
     The `@windows_only` and `@osx` family of macros have been replaced with functions such as `is_windows()` and
     or `is_apple()`. There's now also an `@static` macro that will evaluate the condition of an if-statement at
-    compile time, for when a static branch is required.
+    compile time, for when a static branch is required ([#16219]).
 
 Deprecated or removed
 ---------------------
@@ -233,6 +233,7 @@ Deprecated or removed
 [#14759]: https://github.com/JuliaLang/julia/issues/14759
 [#14798]: https://github.com/JuliaLang/julia/issues/14798
 [#15032]: https://github.com/JuliaLang/julia/issues/15032
+[#15172]: https://github.com/JuliaLang/julia/issues/15172
 [#15192]: https://github.com/JuliaLang/julia/issues/15192
 [#15242]: https://github.com/JuliaLang/julia/issues/15242
 [#15258]: https://github.com/JuliaLang/julia/issues/15258
@@ -240,6 +241,8 @@ Deprecated or removed
 [#15431]: https://github.com/JuliaLang/julia/issues/15431
 [#15550]: https://github.com/JuliaLang/julia/issues/15550
 [#15609]: https://github.com/JuliaLang/julia/issues/15609
+[#15731]: https://github.com/JuliaLang/julia/issues/15731
 [#15763]: https://github.com/JuliaLang/julia/issues/15763
+[#16219]: https://github.com/JuliaLang/julia/issues/16219
+[#16362]: https://github.com/JuliaLang/julia/issues/16362
 [#16403]: https://github.com/JuliaLang/julia/issues/16403
-[#15172]: https://github.com/JuliaLang/julia/issues/15172
