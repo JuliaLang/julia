@@ -451,7 +451,7 @@ ifneq ($(OS), WINNT)
 	-$(JULIAHOME)/contrib/fixup-libgfortran.sh $(DESTDIR)$(private_libdir)
 endif
 ifeq ($(OS), Linux)
-	-$(JULIAHOME)/contrib/fixup-libstdc++.sh $(DESTDIR)$(libdir)
+	-$(JULIAHOME)/contrib/fixup-libstdc++.sh $(DESTDIR)$(libdir) $(DESTDIR)$(private_libdir)
 	# We need to bundle ca certs on linux now that we're using libgit2 with ssl
 ifeq ($(shell [ -e $(shell openssl version -d | cut -d '"' -f 2)/cert.pem ] && echo exists),exists)
 	-cp $(shell openssl version -d | cut -d '"' -f 2)/cert.pem $(DESTDIR)$(datarootdir)/julia/
