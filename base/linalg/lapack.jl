@@ -3646,14 +3646,14 @@ for (stev, stebz, stegr, stein, elty) in
             if length(ev) != n - 1
                 throw(DimensionMismatch("ev has length $(length(ev)) but needs one less than dv's length, $n)"))
             end
-            m = Array(BlasInt,1)
-            nsplit = Array(BlasInt,1)
+            m = Array{BlasInt}(1)
+            nsplit = Array{BlasInt}(1)
             w = similar(dv, $elty, n)
             tmp = 0.0
             iblock = similar(dv, BlasInt,n)
             isplit = similar(dv, BlasInt,n)
             work = Array{$elty}(4*n)
-            iwork = Array(BlasInt,3*n)
+            iwork = Array{BlasInt}(3*n)
             info = Ref{BlasInt}()
             ccall((@blasfunc($stebz), liblapack), Void,
                 (Ptr{UInt8}, Ptr{UInt8}, Ptr{BlasInt}, Ptr{$elty},
@@ -3743,8 +3743,8 @@ for (stev, stebz, stegr, stein, elty) in
             end
             z = similar(dv, $elty,(n,m))
             work  = Array{$elty}(5*n)
-            iwork = Array(BlasInt,n)
-            ifail = Array(BlasInt,m)
+            iwork = Array{BlasInt}(n)
+            ifail = Array{BlasInt}(m)
             info  = Ref{BlasInt}()
             ccall((@blasfunc($stein), liblapack), Void,
                 (Ptr{BlasInt}, Ptr{$elty}, Ptr{$elty}, Ptr{BlasInt},
@@ -5038,7 +5038,7 @@ for (syev, syevr, sygvd, elty, relty) in
             lwork = BlasInt(-1)
             iwork = Array{BlasInt}(1)
             liwork = BlasInt(-1)
-            rwork = Array($relty)
+            rwork = Array{$relty}()
             lrwork = BlasInt(-1)
             info = Ref{BlasInt}()
             for i = 1:2

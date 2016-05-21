@@ -139,7 +139,7 @@ function diagm{T}(v::AbstractVector{T}, k::Integer=0)
     A
 end
 
-diagm(x::Number) = (X = Array(typeof(x),1,1); X[1,1] = x; X)
+diagm(x::Number) = (X = Array{typeof(x)}(1,1); X[1,1] = x; X)
 
 function trace{T}(A::Matrix{T})
     n = checksquare(A)
@@ -151,7 +151,7 @@ function trace{T}(A::Matrix{T})
 end
 
 function kron{T,S}(a::AbstractMatrix{T}, b::AbstractMatrix{S})
-    R = Array(promote_type(T,S), size(a,1)*size(b,1), size(a,2)*size(b,2))
+    R = Array{promote_type(T,S)}(size(a,1)*size(b,1), size(a,2)*size(b,2))
     m = 1
     for j = 1:size(a,2), l = 1:size(b,2), i = 1:size(a,1)
         aij = a[i,j]

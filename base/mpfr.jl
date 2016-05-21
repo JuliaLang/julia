@@ -621,7 +621,7 @@ for f in (:sin,:cos,:tan,:sec,:csc,
 end
 
 # log of absolute value of gamma function
-const lgamma_signp = Array(Cint, 1)
+const lgamma_signp = Array{Cint}(1)
 function lgamma(x::BigFloat)
     z = BigFloat()
     ccall((:mpfr_lgamma,:libmpfr), Cint, (Ptr{BigFloat}, Ptr{Cint}, Ptr{BigFloat}, Int32), &z, lgamma_signp, &x, ROUNDING_MODE[end])
