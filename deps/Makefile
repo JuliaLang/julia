@@ -728,6 +728,9 @@ $(eval $(call LLVM_PATCH,llvm-3.8.0_winshlib))
 $(eval $(call LLVM_PATCH,llvm-3.8.0_threads))
 # fix replutil test on unix
 $(eval $(call LLVM_PATCH,llvm-D17165-D18583))
+# Segfault for aggregate load
+$(eval $(call LLVM_PATCH,llvm-D17326_unpack_load))
+$(LLVM_SRC_DIR)/llvm-D17326_unpack_load.patch-applied: $(LLVM_SRC_DIR)/llvm-D14260.patch-applied
 $(eval $(call LLVM_PATCH,llvm-D17712))
 $(eval $(call LLVM_PATCH,llvm-PR26180))
 $(eval $(call LLVM_PATCH,llvm-PR27046))
