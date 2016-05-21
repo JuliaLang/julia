@@ -5729,7 +5729,7 @@ extern "C" void jl_init_codegen(void)
         .setTargetOptions(options)
 #if (defined(_OS_LINUX_) && defined(_CPU_X86_64_)) || defined(CODEGEN_TLS)
         .setRelocationModel(Reloc::PIC_)
-#else
+#elif !defined(LLVM39)
         .setRelocationModel(Reloc::Default)
 #endif
 #ifdef CODEGEN_TLS

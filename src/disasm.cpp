@@ -343,7 +343,10 @@ void jl_dump_asm_internal(uintptr_t Fptr, size_t Fsize, int64_t slide,
 #else
     MCContext Ctx(*MAI, *MRI, MOFI.get(), &SrcMgr);
 #endif
-#ifdef LLVM37
+#ifdef LLVM39
+    MOFI->InitMCObjectFileInfo(TheTriple, /* PIC */ false,
+                               CodeModel::Default, Ctx);
+#elif LLVM37
     MOFI->InitMCObjectFileInfo(TheTriple, Reloc::Default, CodeModel::Default, Ctx);
 #else
     MOFI->InitMCObjectFileInfo(TripleName, Reloc::Default, CodeModel::Default, Ctx);
