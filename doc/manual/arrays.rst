@@ -475,13 +475,12 @@ the same as the result of ``getindex``, except the data is left in place.
 ``sub`` stores the input index vectors in a ``SubArray`` object, which
 can later be used to index the original array indirectly.
 
-The ``sub`` function creates a small data item on the heap to keep track of the
-subarray.  When the subarray itself is small, the
-cost of the heap allocation may overwhelm the benefit of avoidance of the copying.
-In a code involving small subarrays, higher performance may be
-achieved by explicitly
-copying subarrays into and out of temporary storage with for-loops rather than
-invoking ``sub``.
+The ``sub`` function returns a small data item created on the heap to keep 
+track of the subarray.  When the subarray itself is small, the cost of 
+the heap allocation may outweigh the benefit of omitting a copy operation. 
+In a code involving small subarrays, higher performance may be attained
+by explicitly copying subarrays into and out of temporary storage with 
+for-loops rather than invoking ``sub``.
 
 ``StridedVector`` and ``StridedMatrix`` are convenient aliases defined
 to make it possible for Julia to call a wider range of BLAS and LAPACK
