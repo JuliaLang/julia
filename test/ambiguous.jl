@@ -144,11 +144,11 @@ let ms = methods(amb_4).ms
     @test Base.isambiguous(ms[3], ms[4])
 end
 
-g{T<:Number}(x::T, y::Integer) = 0
-g{T}(x::Complex{T}, y) = 1
-let ms = methods(g, (Complex, Any))
+g16493{T<:Number}(x::T, y::Integer) = 0
+g16493{T}(x::Complex{T}, y) = 1
+let ms = methods(g16493, (Complex, Any))
     @test length(ms) == 1
-    @test first(ms).sig == Tuple{typeof(g),Complex{TypeVar(:T,Any,true)},Any}
+    @test first(ms).sig == Tuple{typeof(g16493), Complex{TypeVar(:T, Any, true)}, Any}
 end
 
 nothing
