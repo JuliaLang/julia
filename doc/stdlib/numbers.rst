@@ -455,40 +455,6 @@ Integers
        julia> trailing_ones(3)
        2
 
-.. function:: isprime(x::Integer) -> Bool
-
-   .. Docstring generated from Julia source
-
-   Returns ``true`` if ``x`` is prime, and ``false`` otherwise.
-
-   .. doctest::
-
-       julia> isprime(3)
-       true
-
-.. function:: isprime(x::BigInt, [reps = 25]) -> Bool
-
-   .. Docstring generated from Julia source
-
-   Probabilistic primality test. Returns ``true`` if ``x`` is prime; and ``false`` if ``x`` is not prime with high probability. The false positive rate is about ``0.25^reps``\ . ``reps = 25`` is considered safe for cryptographic applications (Knuth, Seminumerical Algorithms).
-
-   .. doctest::
-
-       julia> isprime(big(3))
-       true
-
-.. function:: primes([lo,] hi)
-
-   .. Docstring generated from Julia source
-
-   Returns a collection of the prime numbers (from ``lo``\ , if specified) up to ``hi``\ .
-
-.. function:: primesmask([lo,] hi)
-
-   .. Docstring generated from Julia source
-
-   Returns a prime sieve, as a ``BitArray``\ , of the positive integers (from ``lo``\ , if specified) up to ``hi``\ . Useful when working with either primes or composite numbers.
-
 .. function:: isodd(x::Integer) -> Bool
 
    .. Docstring generated from Julia source
