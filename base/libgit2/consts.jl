@@ -274,6 +274,11 @@ Option flags for `GitRepo`.
                         CREDTYPE_USERNAME           = Cuint(1 << 5),
                         CREDTYPE_SSH_MEMORY         = Cuint(1 << 6))
 
+    @enum(GIT_FEATURE, FEATURE_THREADS = Cuint(1 << 0),
+                       FEATURE_HTTPS   = Cuint(1 << 1),
+                       FEATURE_SSH     = Cuint(1 << 2),
+                       FEATURE_NSEC    = Cuint(1 << 3))
+
 if LibGit2.version() >= v"0.24.0"
     """
 Priority level of a config file.
