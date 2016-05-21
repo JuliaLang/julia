@@ -281,7 +281,7 @@ function herk_wrapper!{T<:BlasReal}(C::Union{StridedMatrix{T}, StridedMatrix{Com
     end
 
     # Result array does not need to be initialized as long as beta==0
-    #    C = Array(T, mA, mA)
+    #    C = Array{T}(mA, mA)
 
     if stride(A, 1) == stride(C, 1) == 1 && stride(A, 2) >= size(A, 1) && stride(C, 2) >= size(C, 1)
         return copytri!(BLAS.herk!('U', tA, one(T), A, zero(T), C), 'U', true)
@@ -428,9 +428,9 @@ function generic_matmatmul{T,S}(tA, tB, A::AbstractVecOrMat{T}, B::AbstractMatri
 end
 
 const tilebufsize = 10800  # Approximately 32k/3
-const Abuf = Array(UInt8, tilebufsize)
-const Bbuf = Array(UInt8, tilebufsize)
-const Cbuf = Array(UInt8, tilebufsize)
+const Abuf = Array{UInt8}(tilebufsize)
+const Bbuf = Array{UInt8}(tilebufsize)
+const Cbuf = Array{UInt8}(tilebufsize)
 
 function generic_matmatmul!{T,S,R}(C::AbstractMatrix{R}, tA, tB, A::AbstractMatrix{T}, B::AbstractMatrix{S})
     mA, nA = lapack_size(tA, A)

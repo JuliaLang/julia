@@ -54,13 +54,13 @@ parent(A::AbstractTriangular) = A.data
 # then handle all methods that requires specific handling of upper/lower and unit diagonal
 
 function convert{Tret,T,S}(::Type{Matrix{Tret}}, A::LowerTriangular{T,S})
-    B = Array(Tret, size(A, 1), size(A, 1))
+    B = Array{Tret}(size(A, 1), size(A, 1))
     copy!(B, A.data)
     tril!(B)
     B
 end
 function convert{Tret,T,S}(::Type{Matrix{Tret}}, A::UnitLowerTriangular{T,S})
-    B = Array(Tret, size(A, 1), size(A, 1))
+    B = Array{Tret}(size(A, 1), size(A, 1))
     copy!(B, A.data)
     tril!(B)
     for i = 1:size(B,1)
@@ -69,13 +69,13 @@ function convert{Tret,T,S}(::Type{Matrix{Tret}}, A::UnitLowerTriangular{T,S})
     B
 end
 function convert{Tret,T,S}(::Type{Matrix{Tret}}, A::UpperTriangular{T,S})
-    B = Array(Tret, size(A, 1), size(A, 1))
+    B = Array{Tret}(size(A, 1), size(A, 1))
     copy!(B, A.data)
     triu!(B)
     B
 end
 function convert{Tret,T,S}(::Type{Matrix{Tret}}, A::UnitUpperTriangular{T,S})
-    B = Array(Tret, size(A, 1), size(A, 1))
+    B = Array{Tret}(size(A, 1), size(A, 1))
     copy!(B, A.data)
     triu!(B)
     for i = 1:size(B,1)
@@ -1602,7 +1602,7 @@ function logm{T<:Union{Float64,Complex{Float64}}}(A0::UpperTriangular{T})
 
     # Compute repeated roots
     d = diag(A)
-    dm1 = Array(T, n)
+    dm1 = Array{T}(n)
     s = 0
     for i = 1:n
         dm1[i] = d[i] - 1.
@@ -1728,7 +1728,7 @@ function logm{T<:Union{Float64,Complex{Float64}}}(A0::UpperTriangular{T})
         R[i+1,i] = R[i,i+1]
     end
     x,V = eig(R)
-    w = Array(Float64, m)
+    w = Array{Float64}(m)
     for i = 1:m
         x[i] = (x[i] + 1) / 2
         w[i] = V[1,i]^2

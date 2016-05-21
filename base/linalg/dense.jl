@@ -107,7 +107,7 @@ tril(M::Matrix, k::Integer) = tril!(copy(M), k)
 function gradient(F::Vector, h::Vector)
     n = length(F)
     T = typeof(one(eltype(F))/one(eltype(h)))
-    g = Array(T,n)
+    g = Array{T}(n)
     if n == 1
         g[1] = zero(T)
     elseif n > 1
@@ -460,7 +460,7 @@ function pinv{T}(A::StridedMatrix{T}, tol::Real)
     m, n = size(A)
     Tout = typeof(zero(T)/sqrt(one(T) + one(T)))
     if m == 0 || n == 0
-        return Array(Tout, n, m)
+        return Array{Tout}(n, m)
     end
     if istril(A)
         if istriu(A)
