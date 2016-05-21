@@ -169,7 +169,7 @@ convert(::Type{RepString}, s::AbstractString) = RepString(s,1)
 function repeat(s::String, r::Integer)
     r < 0 && throw(ArgumentError("can't repeat a string $r times"))
     d = s.data; n = length(d)
-    out = Array(UInt8, n*r)
+    out = Array{UInt8}(n*r)
     for i=1:r
         copy!(out, 1+(i-1)*n, d, 1, n)
     end
