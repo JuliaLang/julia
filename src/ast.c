@@ -739,6 +739,7 @@ jl_value_t *jl_parse_eval_all(const char *fname, size_t len,
         fl_free_gc_handles(fl_ctx, 1);
     }
     else {
+        assert(memchr(fname, 0, len) == NULL); // was checked already in jl_load
         ast = fl_applyn(fl_ctx, 1, symbol_value(symbol(fl_ctx, "jl-parse-file")), f);
     }
     fl_free_gc_handles(fl_ctx, 1);
