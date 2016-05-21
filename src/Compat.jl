@@ -4,12 +4,38 @@ module Compat
 
 using Base.Meta
 
+if VERSION < v"0.4.0-dev+1419"
+    export UInt, UInt8, UInt16, UInt32, UInt64, UInt128
+    const UInt = Uint
+    const UInt8 = Uint8
+    const UInt16 = Uint16
+    const UInt32 = Uint32
+    const UInt64 = Uint64
+    const UInt128 = Uint128
+end
+
+if VERSION < v"0.4.0-dev+4603"
+    # used for C string arguments to ccall
+    # (in Julia 0.4, these types also check for embedded NUL chars)
+    const Cstring = Ptr{UInt8}
+    const Cwstring = Ptr{Cwchar_t}
+    export Cstring, Cwstring
+end
+
 if isdefined(Core, :String) && isdefined(Core, :AbstractString)
     # Not exported in order to not break code on 0.5
     typealias UTF8String Core.String
     typealias ASCIIString Core.String
 else
     typealias String Base.ByteString
+    if VERSION >= v"0.4.0-dev+1246"
+        call(::Type{Base.ByteString},s::Cstring) = bytestring(s::Cstring)
+        call(::Type{Base.ByteString},v::Vector{UInt8}) = bytestring(v::Vector{UInt8})
+        call(::Type{Base.ByteString},io::Base.AbstractIOBuffer) = bytestring(io::Base.AbstractIOBuffer)
+        call(::Type{Base.ByteString},p::Union{Ptr{Int8},Ptr{UInt8}}) = bytestring(p::Union{Ptr{Int8},Ptr{UInt8}})
+        call(::Type{Base.ByteString},p::Union{Ptr{Int8},Ptr{UInt8}}, len::Integer) = bytestring(p::Union{Ptr{Int8},Ptr{UInt8}}, len::Integer)
+        call(::Type{Base.ByteString},s...) = bytestring(s::AbstractString...)
+    end
 end
 
 if VERSION < v"0.4.0-dev+2340"
@@ -27,16 +53,6 @@ if VERSION < v"0.4.0-dev+1624"
     eachindex(A::AbstractArray) = 1:length(A)
     eachindex(a::Associative) = Base.KeyIterator(a)
     export eachindex
-end
-
-if VERSION < v"0.4.0-dev+1419"
-    export UInt, UInt8, UInt16, UInt32, UInt64, UInt128
-    const UInt = Uint
-    const UInt8 = Uint8
-    const UInt16 = Uint16
-    const UInt32 = Uint32
-    const UInt64 = Uint64
-    const UInt128 = Uint128
 end
 
 if VERSION < v"0.4.0-dev+1387"
@@ -485,6 +501,8 @@ function _compat(ex::Expr)
             end
         elseif VERSION < v"0.4.0-dev+4389" && f === :withenv
             rewrite_pairs_to_tuples!(ex)
+        elseif VERSION < v"0.4.0" && f == :String
+            ex = Expr(:call, :bytestring, ex.args[2:end]...)
         end
     elseif ex.head === :curly
         f = ex.args[1]
@@ -682,14 +700,6 @@ if VERSION < v"0.4.0-dev+2840"
     Base.qrfact(A, ::Type{Val{false}}) = Base.qrfact(A, pivot=false)
     Base.qrfact!(A, ::Type{Val{true}}) = Base.qrfact!(A, pivot=true)
     Base.qrfact!(A, ::Type{Val{false}}) = Base.qrfact!(A, pivot=false)
-end
-
-if VERSION < v"0.4.0-dev+4603"
-    # used for C string arguments to ccall
-    # (in Julia 0.4, these types also check for embedded NUL chars)
-    const Cstring = Ptr{UInt8}
-    const Cwstring = Ptr{Cwchar_t}
-    export Cstring, Cwstring
 end
 
 if VERSION < v"0.4.0-dev+2823"
