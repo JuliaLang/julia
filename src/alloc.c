@@ -55,7 +55,7 @@ jl_datatype_t *jl_ref_type;
 jl_datatype_t *jl_pointer_type;
 jl_datatype_t *jl_void_type;
 jl_datatype_t *jl_voidpointer_type;
-jl_value_t *jl_an_empty_cell=NULL;
+jl_value_t *jl_an_empty_array_ptr=NULL;
 jl_value_t *jl_stackovf_exception;
 #ifdef SEGV_EXCEPTION
 jl_value_t *jl_segv_exception;
@@ -319,7 +319,7 @@ void jl_lambda_info_set_ast(jl_lambda_info_t *li, jl_value_t *ast)
     jl_value_t *ssavalue_types = jl_lam_ssavalues((jl_expr_t*)ast);
     assert(jl_is_long(ssavalue_types));
     size_t nssavalue = jl_unbox_long(ssavalue_types);
-    li->slotnames = jl_alloc_cell_1d(nslots);
+    li->slotnames = jl_alloc_array_ptr_1d(nslots);
     jl_gc_wb(li, li->slotnames);
     li->slottypes = jl_nothing;
     li->slotflags = jl_alloc_array_1d(jl_array_uint8_type, nslots);
@@ -328,8 +328,8 @@ void jl_lambda_info_set_ast(jl_lambda_info_t *li, jl_value_t *ast)
     jl_gc_wb(li, li->ssavaluetypes);
     int i;
     for(i=0; i < nslots; i++) {
-        jl_value_t *vi = jl_cellref(vis, i);
-        jl_sym_t *name = (jl_sym_t*)jl_cellref(vi, 0);
+        jl_value_t *vi = jl_array_ptr_ref(vis, i);
+        jl_sym_t *name = (jl_sym_t*)jl_array_ptr_ref(vi, 0);
         assert(jl_is_symbol(name));
         char *str = jl_symbol_name(name);
         if (i > 0 && name != unused_sym) {
@@ -342,13 +342,13 @@ void jl_lambda_info_set_ast(jl_lambda_info_t *li, jl_value_t *ast)
                     name = compiler_temp_sym;
             }
         }
-        jl_cellset(li->slotnames, i, name);
-        jl_array_uint8_set(li->slotflags, i, jl_unbox_long(jl_cellref(vi, 2)));
+        jl_array_ptr_set(li->slotnames, i, name);
+        jl_array_uint8_set(li->slotflags, i, jl_unbox_long(jl_array_ptr_ref(vi, 2)));
     }
     jl_array_t *args = jl_lam_args((jl_expr_t*)ast);
     size_t narg = jl_array_len(args);
     li->nargs = narg;
-    li->isva = narg > 0 && jl_is_rest_arg(jl_cellref(args, narg - 1));
+    li->isva = narg > 0 && jl_is_rest_arg(jl_array_ptr_ref(args, narg - 1));
 }
 
 JL_DLLEXPORT jl_lambda_info_t *jl_new_lambda_info_uninit(jl_svec_t *sparam_syms)
@@ -410,23 +410,23 @@ static jl_lambda_info_t *jl_instantiate_staged(jl_method_t *generator, jl_tuplet
         ex = jl_exprn(lambda_sym, 2);
 
         int nargs = func->nargs;
-        jl_array_t *argnames = jl_alloc_cell_1d(nargs);
-        jl_cellset(ex->args, 0, argnames);
+        jl_array_t *argnames = jl_alloc_array_ptr_1d(nargs);
+        jl_array_ptr_set(ex->args, 0, argnames);
         for (i = 0; i < nargs; i++)
-            jl_cellset(argnames, i, jl_cellref(func->slotnames, i));
+            jl_array_ptr_set(argnames, i, jl_array_ptr_ref(func->slotnames, i));
 
         jl_expr_t *scopeblock = jl_exprn(jl_symbol("scope-block"), 1);
-        jl_cellset(ex->args, 1, scopeblock);
+        jl_array_ptr_set(ex->args, 1, scopeblock);
         jl_expr_t *body = jl_exprn(jl_symbol("block"), 2);
-        jl_cellset(((jl_expr_t*)jl_exprarg(ex,1))->args, 0, body);
+        jl_array_ptr_set(((jl_expr_t*)jl_exprarg(ex,1))->args, 0, body);
         linenum = jl_box_long(generator->line);
         jl_value_t *linenode = jl_new_struct(jl_linenumbernode_type, linenum);
-        jl_cellset(body->args, 0, linenode);
+        jl_array_ptr_set(body->args, 0, linenode);
 
         // invoke code generator
         assert(jl_nparams(tt) == jl_array_len(argnames) ||
                (func->isva && (jl_nparams(tt) >= jl_array_len(argnames) - 1)));
-        jl_cellset(body->args, 1,
+        jl_array_ptr_set(body->args, 1,
                 jl_call_staged(sparam_vals, func, jl_svec_data(tt->parameters), jl_nparams(tt)));
 
         if (func->sparam_syms != jl_emptysvec) {
@@ -454,7 +454,7 @@ static jl_lambda_info_t *jl_instantiate_staged(jl_method_t *generator, jl_tuplet
 
         jl_array_t *stmts = func->code;
         for(i = 0, l = jl_array_len(stmts); i < l; i++) {
-            jl_cellset(stmts, i, jl_resolve_globals(jl_cellref(stmts, i), func));
+            jl_array_ptr_set(stmts, i, jl_resolve_globals(jl_array_ptr_ref(stmts, i), func));
         }
         in_pure_callback = last_in;
     }
@@ -531,7 +531,7 @@ JL_DLLEXPORT void jl_method_init_properties(jl_method_t *m)
     int i;
     uint8_t called=0;
     for(i=1; i < li->nargs && i <= 8; i++) {
-        jl_value_t *ai = jl_cellref(li->slotnames,i);
+        jl_value_t *ai = jl_array_ptr_ref(li->slotnames,i);
         if (ai == (jl_value_t*)unused_sym) continue;
         if (jl_array_uint8_ref(li->slotflags,i)&64)
             called |= (1<<(i-1));
@@ -596,7 +596,7 @@ jl_method_t *jl_new_method(jl_lambda_info_t *definition, jl_sym_t *name, jl_tupl
         jl_array_t *stmts = definition->code;
         int i, l;
         for(i = 0, l = jl_array_len(stmts); i < l; i++) {
-            jl_cellset(stmts, i, jl_resolve_globals(jl_cellref(stmts, i), definition));
+            jl_array_ptr_set(stmts, i, jl_resolve_globals(jl_array_ptr_ref(stmts, i), definition));
         }
         jl_method_init_properties(m);
     }
@@ -1227,7 +1227,7 @@ JL_DLLEXPORT jl_value_t *jl_box_bool(int8_t x)
 
 jl_expr_t *jl_exprn(jl_sym_t *head, size_t n)
 {
-    jl_array_t *ar = n==0 ? (jl_array_t*)jl_an_empty_cell : jl_alloc_cell_1d(n);
+    jl_array_t *ar = n==0 ? (jl_array_t*)jl_an_empty_array_ptr : jl_alloc_array_ptr_1d(n);
     JL_GC_PUSH1(&ar);
     jl_expr_t *ex = (jl_expr_t*)jl_gc_alloc_3w(); assert(NWORDS(sizeof(jl_expr_t))==3);
     jl_set_typeof(ex, jl_expr_type);
@@ -1242,10 +1242,10 @@ JL_CALLABLE(jl_f__expr)
 {
     JL_NARGSV(Expr, 1);
     JL_TYPECHK(Expr, symbol, args[0]);
-    jl_array_t *ar = jl_alloc_cell_1d(nargs-1);
+    jl_array_t *ar = jl_alloc_array_ptr_1d(nargs-1);
     JL_GC_PUSH1(&ar);
     for(size_t i=0; i < nargs-1; i++)
-        jl_cellset(ar, i, args[i+1]);
+        jl_array_ptr_set(ar, i, args[i+1]);
     jl_expr_t *ex = (jl_expr_t*)jl_gc_alloc_3w(); assert(NWORDS(sizeof(jl_expr_t))==3);
     jl_set_typeof(ex, jl_expr_type);
     ex->head = (jl_sym_t*)args[0];

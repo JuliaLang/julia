@@ -485,8 +485,7 @@ Annotate values taken from untyped locations
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 It is often convenient to work with data structures that may contain
-values of any type, such as cell
-arrays (arrays of type ``Array{Any}``). But, if you're using one of
+values of any type (arrays of type ``Array{Any}``). But, if you're using one of
 these structures and happen to know the type of an element, it helps to
 share this knowledge with the compiler::
 
@@ -977,7 +976,7 @@ Optimize network I/O during parallel execution
 
 When executing a remote function in parallel::
 
-    responses = cell(nworkers())
+    responses = Vector{Any}(nworkers())
     @sync begin
         for (idx, pid) in enumerate(workers())
             @async responses[idx] = remotecall_fetch(pid, foo, args...)
@@ -986,7 +985,7 @@ When executing a remote function in parallel::
 
 is faster than::
 
-    refs = cell(nworkers())
+    refs = Vector{Any}(nworkers())
     for (idx, pid) in enumerate(workers())
         refs[idx] = @spawnat pid foo(args...)
     end

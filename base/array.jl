@@ -163,9 +163,6 @@ end
 fill(v, dims::Dims)       = fill!(Array{typeof(v)}(dims), v)
 fill(v, dims::Integer...) = fill!(Array{typeof(v)}(dims...), v)
 
-cell(dims::Integer...)   = Array{Any}(dims...)
-cell(dims::Tuple{Vararg{Integer}}) = Array{Any}(convert(Tuple{Vararg{Int}}, dims))
-
 for (fname, felt) in ((:zeros,:zero), (:ones,:one))
     @eval begin
         ($fname)(T::Type, dims...)       = fill!(Array{T}(dims...), ($felt)(T))

@@ -419,7 +419,7 @@ const expr_infix = Set{Symbol}([:(:), :(->), Symbol("::")])
 const expr_infix_any = union(expr_infix, expr_infix_wide)
 const all_ops = union(quoted_syms, uni_ops, expr_infix_any)
 const expr_calls  = Dict(:call =>('(',')'), :calldecl =>('(',')'), :ref =>('[',']'), :curly =>('{','}'))
-const expr_parens = Dict(:tuple=>('(',')'), :vcat=>('[',']'), :cell1d=>("Any[","]"),
+const expr_parens = Dict(:tuple=>('(',')'), :vcat=>('[',']'), :vectany=>("Any[","]"),
                          :hcat =>('[',']'), :row =>('[',']'), :vect=>('[',']'))
 
 ## AST decoding helpers ##
@@ -661,7 +661,7 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int)
         end
 
     # list (i.e. "(1,2,3)" or "[1,2,3]")
-    elseif haskey(expr_parens, head)               # :tuple/:vcat/:cell1d
+    elseif haskey(expr_parens, head)               # :tuple/:vcat/:vectany
         op, cl = expr_parens[head]
         if head === :vcat
             sep = ";"

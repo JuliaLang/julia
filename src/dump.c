@@ -458,7 +458,7 @@ static int module_in_worklist(jl_module_t *mod)
 {
     int i, l = jl_array_len(serializer_worklist);
     for (i = 0; i < l; i++) {
-        jl_module_t *workmod = (jl_module_t*)jl_cellref(serializer_worklist, i);
+        jl_module_t *workmod = (jl_module_t*)jl_array_ptr_ref(serializer_worklist, i);
         if (jl_is_module(workmod) && jl_is_submodule(mod, workmod))
             return 1;
     }
@@ -496,7 +496,7 @@ static void jl_serialize_datatype(ios_t *s, jl_datatype_t *dt)
         int internal = module_in_worklist(dt->name->module);
         int i, l = jl_array_len(serializer_worklist);
         for (i = 0; i < l; i++) {
-            jl_module_t *mod = (jl_module_t*)jl_cellref(serializer_worklist, i);
+            jl_module_t *mod = (jl_module_t*)jl_array_ptr_ref(serializer_worklist, i);
             if (jl_is_module(mod) && jl_is_submodule(dt->name->module, mod)) {
                 internal = 1;
                 break;
@@ -635,10 +635,10 @@ static int is_ast_node(jl_value_t *v)
 static int literal_val_id(jl_value_t *v)
 {
     for(int i=0; i < jl_array_len(tree_literal_values); i++) {
-        if (jl_egal(jl_cellref(tree_literal_values,i), v))
+        if (jl_egal(jl_array_ptr_ref(tree_literal_values,i), v))
             return i;
     }
-    jl_cell_1d_push(tree_literal_values, v);
+    jl_array_ptr_1d_push(tree_literal_values, v);
     return jl_array_len(tree_literal_values)-1;
 }
 
@@ -783,7 +783,7 @@ static void jl_serialize_value_(ios_t *s, jl_value_t *v)
         }
         else {
             for(i=0; i < jl_array_len(ar); i++) {
-                jl_serialize_value(s, jl_cellref(v, i));
+                jl_serialize_value(s, jl_array_ptr_ref(v, i));
             }
         }
     }
@@ -938,11 +938,11 @@ static void jl_serialize_value_(ios_t *s, jl_value_t *v)
                         offsetof(jl_typemap_level_t, key) == 4 * sizeof(jl_value_t*) &&
                         sizeof(jl_typemap_level_t) == 5 * sizeof(jl_value_t*));
                     if (node->arg1 != (void*)jl_nothing) {
-                        jl_array_t *a = jl_alloc_cell_1d(0);
+                        jl_array_t *a = jl_alloc_array_ptr_1d(0);
                         for (i = 0, l = jl_array_len(node->arg1); i < l; i++) {
-                            jl_value_t *d = jl_cellref(node->arg1, i);
+                            jl_value_t *d = jl_array_ptr_ref(node->arg1, i);
                             if (d != NULL && d != jl_nothing)
-                                jl_cell_1d_push(a, d);
+                                jl_array_ptr_1d_push(a, d);
                         }
                         jl_serialize_value(s, a);
                     }
@@ -950,11 +950,11 @@ static void jl_serialize_value_(ios_t *s, jl_value_t *v)
                         jl_serialize_value(s, jl_nothing);
                     }
                     if (node->targ != (void*)jl_nothing) {
-                        jl_array_t *a = jl_alloc_cell_1d(0);
+                        jl_array_t *a = jl_alloc_array_ptr_1d(0);
                         for (i = 0, l = jl_array_len(node->targ); i < l; i++) {
-                            jl_value_t *d = jl_cellref(node->targ, i);
+                            jl_value_t *d = jl_array_ptr_ref(node->targ, i);
                             if (d != NULL && d != jl_nothing)
-                                jl_cell_1d_push(a, d);
+                                jl_array_ptr_1d_push(a, d);
                         }
                         jl_serialize_value(s, a);
                     }
@@ -1122,7 +1122,7 @@ static void jl_serialize_dependency_list(ios_t *s)
     if (udeps) {
         size_t l = jl_array_len(udeps);
         for (size_t i=0; i < l; i++) {
-            jl_value_t *dep = jl_fieldref(jl_cellref(udeps, i), 0);
+            jl_value_t *dep = jl_fieldref(jl_array_ptr_ref(udeps, i), 0);
             size_t slen = jl_string_len(dep);
             total_size += 4 + slen + 8;
         }
@@ -1134,7 +1134,7 @@ static void jl_serialize_dependency_list(ios_t *s)
     if (udeps) {
         size_t l = jl_array_len(udeps);
         for (size_t i=0; i < l; i++) {
-            jl_value_t *deptuple = jl_cellref(udeps, i);
+            jl_value_t *deptuple = jl_array_ptr_ref(udeps, i);
             jl_value_t *dep = jl_fieldref(deptuple, 0);
             size_t slen = jl_string_len(dep);
             write_int32(s, slen);
@@ -1253,7 +1253,7 @@ static jl_value_t *jl_deserialize_datatype(ios_t *s, int pos, jl_value_t **loc)
             // builtin types are not serialized, so their caches aren't
             // explicitly saved. so we reconstruct the caches of builtin
             // parametric types here.
-            jl_cell_1d_push(datatype_list, (jl_value_t*)dt);
+            jl_array_ptr_1d_push(datatype_list, (jl_value_t*)dt);
         }
     }
     return (jl_value_t*)dt;
@@ -1299,7 +1299,7 @@ static jl_value_t *jl_deserialize_value(ios_t *s, jl_value_t **loc)
         return vtag;
     }
     else if (vtag == (jl_value_t*)LiteralVal_tag) {
-        return jl_cellref(tree_literal_values, read_uint16(s));
+        return jl_array_ptr_ref(tree_literal_values, read_uint16(s));
     }
     jl_value_t *v = jl_deserialize_value_(s, vtag, loc);
     return v;
@@ -1777,7 +1777,7 @@ static void jl_finalize_serializer(ios_t *f) {
         l = jl_array_len(jl_module_init_order);
         for(i=0; i < l; i++) {
             // verify that all these modules were saved
-            assert(ptrhash_get(&backref_table, jl_cellref(jl_module_init_order, i)) != HT_NOTFOUND);
+            assert(ptrhash_get(&backref_table, jl_array_ptr_ref(jl_module_init_order, i)) != HT_NOTFOUND);
         }
     }
     if (mode != MODE_MODULE)
@@ -1867,7 +1867,7 @@ void jl_init_restored_modules(jl_array_t *init_order)
         return;
     int i;
     for(i=0; i < jl_array_len(init_order); i++) {
-        jl_value_t *mod = jl_cellref(init_order, i);
+        jl_value_t *mod = jl_array_ptr_ref(init_order, i);
         jl_module_run_initializer((jl_module_t*)mod);
     }
 }
@@ -1985,7 +1985,7 @@ static void jl_restore_system_image_from_stream(ios_t *f)
     mode = MODE_SYSTEM_IMAGE;
     arraylist_new(&backref_list, 250000);
 
-    datatype_list = jl_alloc_cell_1d(0);
+    datatype_list = jl_alloc_array_ptr_1d(0);
 
     jl_main_module = (jl_module_t*)jl_deserialize_value(f, NULL);
     jl_top_module = (jl_module_t*)jl_deserialize_value(f, NULL);
@@ -2018,7 +2018,7 @@ static void jl_restore_system_image_from_stream(ios_t *f)
 
     // cache builtin parametric types
     for(int i=0; i < jl_array_len(datatype_list); i++) {
-        jl_value_t *v = jl_cellref(datatype_list, i);
+        jl_value_t *v = jl_array_ptr_ref(datatype_list, i);
         jl_cache_type_((jl_datatype_t*)v);
     }
     datatype_list = NULL;
@@ -2089,7 +2089,7 @@ JL_DLLEXPORT jl_array_t *jl_compress_ast(jl_lambda_info_t *li, jl_array_t *ast)
     int en = jl_gc_enable(0); // Might GC
 
     if (li->def->roots == NULL) {
-        li->def->roots = jl_alloc_cell_1d(0);
+        li->def->roots = jl_alloc_array_ptr_1d(0);
         jl_gc_wb(li->def, li->def->roots);
     }
     tree_literal_values = li->def->roots;

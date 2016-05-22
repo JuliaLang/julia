@@ -414,7 +414,7 @@ implementation::
     function pmap(f, lst)
         np = nprocs()  # determine the number of processes available
         n = length(lst)
-        results = cell(n)
+        results = Vector{Any}(n)
         i = 1
         # function to produce the next work item from the queue.
         # in this case it's just an index.

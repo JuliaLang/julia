@@ -413,7 +413,7 @@
             ;; call mangled(vals..., [rest_kw ,]pargs..., [vararg]...)
             (return (call ,mangled
                           ,@(if ordered-defaults keynames vals)
-                          ,@(if (null? restkw) '() '((cell1d)))
+                          ,@(if (null? restkw) '() '((vectany)))
                           ,@(map arg-name pargl)
                           ,@(if (null? vararg) '()
                                 (list `(... ,(arg-name (car vararg))))))))
@@ -457,7 +457,7 @@
                          `(= ,flag true)))
                    keynames vals flags)
             ,@(if (null? restkw) '()
-                  `((= ,rkw (cell1d))))
+                  `((= ,rkw (vectany))))
             ;; for i = 1:(length(kw)>>1)
             (for (= ,i (: 1 (call (top >>) (call (top length) ,kw) 1)))
                  (block
@@ -494,7 +494,7 @@
                               ;; if no rest kw, give error for unrecognized
                               `(call (top kwerr) ,elt)
                               ;; otherwise add to rest keywords
-                              `(ccall 'jl_cell_1d_push Void (tuple Any Any)
+                              `(ccall 'jl_array_ptr_1d_push Void (tuple Any Any)
                                       ,rkw (tuple ,elt
                                                   (call (core arrayref) ,kw
                                                         (call (top +) ,ii 1)))))
@@ -1344,14 +1344,14 @@
                                 `((quote ,(cadr a)) ,(caddr a)))
                               keys))))
      (if (null? restkeys)
-         `(call (call (core kwfunc) ,f) (cell1d ,@keyargs) ,f ,@pa)
+         `(call (call (core kwfunc) ,f) (vectany ,@keyargs) ,f ,@pa)
          (let ((container (make-ssavalue)))
            `(block
-             (= ,container (cell1d ,@keyargs))
+             (= ,container (vectany ,@keyargs))
              ,@(map (lambda (rk)
                       (let* ((k (make-ssavalue))
                              (v (make-ssavalue))
-                             (push-expr `(ccall 'jl_cell_1d_push2 Void
+                             (push-expr `(ccall 'jl_array_ptr_1d_push2 Void
                                                 (tuple Any Any Any)
                                                 ,container
                                                 (|::| ,k (core Symbol))
@@ -1797,14 +1797,14 @@
    '=>
    (lambda (e) `(call => ,(expand-forms (cadr e)) ,(expand-forms (caddr e))))
 
-   'cell1d
+   'vectany
    (lambda (e)
      (let ((args (cdr e)))
        (cond ((has-parameters? args)
               (error "unexpected semicolon in array expression"))
              ((any vararg? args)
               (expand-forms
-               `(call (top cell_1d) ,@args)))
+               `(call (top vector_any) ,@args)))
              (else
               (let ((name (make-ssavalue)))
                 `(block (= ,name (call (core Array) (core Any)
@@ -1816,14 +1816,14 @@
                                args)
                         ,name))))))
 
-   'cell2d
+   'matrany
    (lambda (e)
      (let ((nr (cadr e))
            (nc (caddr e))
            (args (cdddr e)))
        (if (any vararg? args)
            (expand-forms
-            `(call (top cell_2d) ,nr ,nc ,@args))
+            `(call (top matrix_any) ,nr ,nc ,@args))
            (let ((name (make-ssavalue)))
              `(block (= ,name (call (core Array) (core Any)
                                     ,nr ,nc))

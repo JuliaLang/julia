@@ -40,26 +40,26 @@ function typejoin(a::ANY, b::ANY)
         end
         if laf < lbf
             if isvarargtype(ap[lar]) && !afixed
-                c = cell(laf)
+                c = Vector{Any}(laf)
                 c[laf] = Vararg{typejoin(ap[lar].parameters[1], tailjoin(bp,laf))}
                 n = laf-1
             else
-                c = cell(laf+1)
+                c = Vector{Any}(laf+1)
                 c[laf+1] = Vararg{tailjoin(bp,laf+1)}
                 n = laf
             end
         elseif lbf < laf
             if isvarargtype(bp[lbr]) && !bfixed
-                c = cell(lbf)
+                c = Vector{Any}(lbf)
                 c[lbf] = Vararg{typejoin(bp[lbr].parameters[1], tailjoin(ap,lbf))}
                 n = lbf-1
             else
-                c = cell(lbf+1)
+                c = Vector{Any}(lbf+1)
                 c[lbf+1] = Vararg{tailjoin(ap,lbf+1)}
                 n = lbf
             end
         else
-            c = cell(laf)
+            c = Vector{Any}(laf)
             n = laf
         end
         for i = 1:n
@@ -78,7 +78,7 @@ function typejoin(a::ANY, b::ANY)
             end
             # join on parameters
             n = length(a.parameters)
-            p = cell(n)
+            p = Vector{Any}(n)
             for i = 1:n
                 ai, bi = a.parameters[i], b.parameters[i]
                 if ai === bi || (isa(ai,Type) && isa(bi,Type) && typeseq(ai,bi))
