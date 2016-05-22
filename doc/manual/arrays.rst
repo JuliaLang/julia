@@ -67,7 +67,7 @@ dimension sizes passed as a variable number of arguments.
 =================================================== =====================================================================
 Function                                            Description
 =================================================== =====================================================================
-:func:`Array(type, dims...) <Array>`                an uninitialized dense array
+:func:`Array{type}(dims...) <Array>`                an uninitialized dense array
 :func:`cell(dims...) <cell>`                        an uninitialized cell array (heterogeneous array)
 :func:`zeros(type, dims...) <zeros>`                an array of all zeros of specified type, defaults to ``Float64`` if
                                                     ``type`` not specified

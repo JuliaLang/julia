@@ -827,7 +827,7 @@ adapted accordingly). We could conceivably do this in at least four ways
 
     function copy_cols{T}(x::Vector{T})
         n = size(x, 1)
-        out = Array(eltype(x), n, n)
+        out = Array{eltype(x)}(n, n)
         for i=1:n
             out[:, i] = x
         end
@@ -836,7 +836,7 @@ adapted accordingly). We could conceivably do this in at least four ways
 
     function copy_rows{T}(x::Vector{T})
         n = size(x, 1)
-        out = Array(eltype(x), n, n)
+        out = Array{eltype(x)}(n, n)
         for i=1:n
             out[i, :] = x
         end
@@ -845,7 +845,7 @@ adapted accordingly). We could conceivably do this in at least four ways
 
     function copy_col_row{T}(x::Vector{T})
         n = size(x, 1)
-        out = Array(T, n, n)
+        out = Array{T}(n, n)
         for col=1:n, row=1:n
             out[row, col] = x[row]
         end
@@ -854,7 +854,7 @@ adapted accordingly). We could conceivably do this in at least four ways
 
     function copy_row_col{T}(x::Vector{T})
         n = size(x, 1)
-        out = Array(T, n, n)
+        out = Array{T}(n, n)
         for row=1:n, col=1:n
             out[row, col] = x[col]
         end
@@ -920,7 +920,7 @@ with
     end
 
     function loopinc_prealloc()
-        ret = Array(Int, 3)
+        ret = Array{Int}(3)
         y = 0
         for i = 1:10^7
             xinc!(ret, i)
@@ -1146,7 +1146,7 @@ evaluates the L2-norm of the result::
 
     function main()
         n = 2000
-        u = Array(Float64, n)
+        u = Array{Float64}(n)
         init!(u)
         du = similar(u)
 

@@ -102,7 +102,7 @@ objects:
     julia> dump(ex2)
     Expr
       head: Symbol call
-      args: Array(Any,(3,))
+      args: Array{Any}((3,))
         1: Symbol +
         2: Int64 1
         3: Int64 1
@@ -619,7 +619,7 @@ Compare:
     julia> dump(:("a ($a) should equal b ($b)!"))
     Expr
       head: Symbol string
-      args: Array(Any,(5,))
+      args: Array{Any}((5,))
         1: String "a ("
         2: Symbol a
         3: String ") should equal b ("

@@ -46,7 +46,7 @@ function relax!(F, UX, UY, UZ, nx, ny, nz, deltaU, t1D, t2D, t3D, sSQU, chunkid,
                 for l = 1:size(F,4)
                     density = density + F[i,j,k,l]
                 end
-                fs = Array(Float64, 6)
+                fs = Array{Float64}(6)
                 for l = 1:6
                     fs[l] = 0.0
                     for m = 1:5
@@ -139,7 +139,7 @@ function lbm3d(n)
 
     CI = [0:matsize:matsize*19;]'
 
-    BOUND = Array(Float64,nx,ny,nz)
+    BOUND = Array{Float64}(nx,ny,nz)
 
     for i=1:nx, j=1:ny, k=1:nz
         BOUND[i,j,k] = ((i-5)^2 + (j-6)^2 + (k-7)^2) < 6
@@ -153,14 +153,14 @@ function lbm3d(n)
     TO_REFLECT = [ON+CI[2] ON+CI[3] ON+CI[4] ON+CI[5] ON+CI[6] ON+CI[7] ON+CI[8] ON+CI[9] ON+CI[10] ON+CI[11] ON+CI[12] ON+CI[13] ON+CI[14] ON+CI[15] ON+CI[16] ON+CI[17] ON+CI[18] ON+CI[19]]
     REFLECTED = [ON+CI[3] ON+CI[2] ON+CI[5] ON+CI[4] ON+CI[7] ON+CI[6] ON+CI[11] ON+CI[10] ON+CI[9] ON+CI[8] ON+CI[15] ON+CI[14] ON+CI[13] ON+CI[12] ON+CI[19] ON+CI[18] ON+CI[17] ON+CI[16]]
 
-    UX = Array(Float64,nx,ny,nz)
-    UY = Array(Float64,nx,ny,nz)
-    UZ = Array(Float64,nx,ny,nz)
-    U  = Array(Float64,12,nchunk)
-    t1D = Array(Float64,nx,ny,nz)
-    t2D = Array(Float64,nx,ny,nz)
-    t3D = Array(Float64,nx,ny,nz)
-    sSQU = Array(Float64,nx,ny,nz)
+    UX = Array{Float64}(nx,ny,nz)
+    UY = Array{Float64}(nx,ny,nz)
+    UZ = Array{Float64}(nx,ny,nz)
+    U  = Array{Float64}(12,nchunk)
+    t1D = Array{Float64}(nx,ny,nz)
+    t2D = Array{Float64}(nx,ny,nz)
+    t3D = Array{Float64}(nx,ny,nz)
+    sSQU = Array{Float64}(nx,ny,nz)
 
     avu = 1
     prevavu = 1
@@ -220,4 +220,3 @@ end
 
 @time lbm3d(36)
 #ccall(:jl_threading_profile, Void, ())
-

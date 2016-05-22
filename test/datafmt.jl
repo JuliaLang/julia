@@ -233,7 +233,7 @@ end
 for data in ["A B C", "A B C\n"]
     data,hdr = readdlm(IOBuffer(data), header=true)
     @test hdr == AbstractString["A" "B" "C"]
-    @test data == Array(Float64, 0, 3)
+    @test data == Array{Float64}(0, 3)
 end
 
 # fix #13179 parsing unicode lines with default delmiters
@@ -262,4 +262,3 @@ for writefunc in ((io,x) -> writemime(io, "text/csv", x),
         @test vec(readcsv(io)) == x
     end
 end
-

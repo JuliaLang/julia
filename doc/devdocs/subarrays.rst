@@ -126,7 +126,7 @@ parent array, whereas for ``S2`` one needs to apply them to the
 second and third.  The simplest approach to indexing would be to do
 the type-analysis at runtime::
 
-    parentindexes = Array(Any, 0)
+    parentindexes = Array{Any}(0)
     for i = 1:ndims(S.parent)
         ...
         if isa(thisindex, Int)

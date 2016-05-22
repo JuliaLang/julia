@@ -333,10 +333,10 @@ end
 @test var(sparse(Int[])) === NaN
 
 for f in (sum, prod, minimum, maximum, var)
-    @test isequal(f(spzeros(0, 1), 1), f(Array(Int, 0, 1), 1))
-    @test isequal(f(spzeros(0, 1), 2), f(Array(Int, 0, 1), 2))
-    @test isequal(f(spzeros(0, 1), (1, 2)), f(Array(Int, 0, 1), (1, 2)))
-    @test isequal(f(spzeros(0, 1), 3), f(Array(Int, 0, 1), 3))
+    @test isequal(f(spzeros(0, 1), 1), f(Array{Int}(0, 1), 1))
+    @test isequal(f(spzeros(0, 1), 2), f(Array{Int}(0, 1), 2))
+    @test isequal(f(spzeros(0, 1), (1, 2)), f(Array{Int}(0, 1), (1, 2)))
+    @test isequal(f(spzeros(0, 1), 3), f(Array{Int}(0, 1), 3))
 end
 
 # spdiagm
@@ -704,7 +704,7 @@ let S = spzeros(10,8), A = full(S)
     @test indmin(S) == indmin(A) == 1
 end
 
-let A = Array(Int,0,0), S = sparse(A)
+let A = Array{Int}(0,0), S = sparse(A)
     iA = try indmax(A) end
     iS = try indmax(S) end
     @test iA === iS === nothing

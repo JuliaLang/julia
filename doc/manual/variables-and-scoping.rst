@@ -397,7 +397,7 @@ has been introduced. Therefore it makes sense to write something like
 ``let x = x`` since the two ``x`` variables are distinct and have separate
 storage. Here is an example where the behavior of ``let`` is needed::
 
-    Fs = Array(Any,2)
+    Fs = Array{Any}(2)
     i = 1
     while i <= 2
       Fs[i] = ()->i
@@ -415,7 +415,7 @@ However, it is always the same variable ``i``, so the two closures
 behave identically. We can use ``let`` to create a new binding for
 ``i``::
 
-    Fs = Array(Any,2)
+    Fs = Array{Any}(2)
     i = 1
     while i <= 2
       let i = i
@@ -462,7 +462,7 @@ are freshly allocated for each loop iteration.  This is in contrast to
 iterations. Therefore these constructs are similar to ``while`` loops
 with ``let`` blocks inside::
 
-    Fs = Array(Any,2)
+    Fs = Array{Any}(2)
     for i = 1:2
         Fs[i] = ()->i
     end

@@ -962,7 +962,7 @@ elts = (1:64:64*64+1) .+ (0:64)
 B1 = falses(maximum(elts))
 B1[elts] = true
 B1′ = ~B1
-B2 = fill!(Array(Bool, maximum(elts)), false)
+B2 = fill!(Array{Bool}(maximum(elts)), false)
 B2[elts] = true
 @test B1 == B2
 @test all(B1 .== B2)

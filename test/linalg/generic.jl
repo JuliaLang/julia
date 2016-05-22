@@ -131,7 +131,7 @@ let aa = reshape([1.:6;], (2,3))
         @test scale!(similar(a), [1.; 2.], a) == a.*[1; 2]
         @test scale!(similar(a), [1; 2], a) == a.*[1; 2]
         @test_throws DimensionMismatch scale!(similar(a), ones(3), a)
-        @test_throws DimensionMismatch scale!(Array(Float64, 3, 2), a, ones(3))
+        @test_throws DimensionMismatch scale!(Array{Float64}(3, 2), a, ones(3))
 
         if atype == "Array"
             @test scale!(similar(a), a, [1.; 2.; 3.]) == a.*[1 2 3]
