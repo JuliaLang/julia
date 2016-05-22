@@ -495,7 +495,7 @@ extern JL_DLLEXPORT jl_value_t *jl_inexact_exception;
 extern JL_DLLEXPORT jl_value_t *jl_undefref_exception;
 extern JL_DLLEXPORT jl_value_t *jl_interrupt_exception;
 extern JL_DLLEXPORT jl_datatype_t *jl_boundserror_type;
-extern JL_DLLEXPORT jl_value_t *jl_an_empty_cell;
+extern JL_DLLEXPORT jl_value_t *jl_an_empty_array_ptr;
 
 extern JL_DLLEXPORT jl_datatype_t *jl_bool_type;
 extern JL_DLLEXPORT jl_datatype_t *jl_char_type;
@@ -698,12 +698,12 @@ JL_DLLEXPORT size_t jl_array_len_(jl_array_t *a);
 #define jl_array_data_owner_offset(ndims) (offsetof(jl_array_t,ncols) + sizeof(size_t)*(1+jl_array_ndimwords(ndims))) // in bytes
 #define jl_array_data_owner(a) (*((jl_value_t**)((char*)a + jl_array_data_owner_offset(jl_array_ndims(a)))))
 
-STATIC_INLINE jl_value_t *jl_cellref(void *a, size_t i)
+STATIC_INLINE jl_value_t *jl_array_ptr_ref(void *a, size_t i)
 {
     assert(i < jl_array_len(a));
     return ((jl_value_t**)(jl_array_data(a)))[i];
 }
-STATIC_INLINE jl_value_t *jl_cellset(void *a, size_t i, void *x)
+STATIC_INLINE jl_value_t *jl_array_ptr_set(void *a, size_t i, void *x)
 {
     assert(i < jl_array_len(a));
     ((jl_value_t**)(jl_array_data(a)))[i] = (jl_value_t*)x;
@@ -730,7 +730,7 @@ STATIC_INLINE void jl_array_uint8_set(void *a, size_t i, uint8_t x)
 }
 
 #define jl_exprarg(e,n) (((jl_value_t**)jl_array_data(((jl_expr_t*)(e))->args))[n])
-#define jl_exprargset(e, n, v) jl_cellset(((jl_expr_t*)(e))->args, n, v)
+#define jl_exprargset(e, n, v) jl_array_ptr_set(((jl_expr_t*)(e))->args, n, v)
 #define jl_expr_nargs(e) jl_array_len(((jl_expr_t*)(e))->args)
 
 #define jl_fieldref(s,i) jl_get_nth_field(((jl_value_t*)s),i)
@@ -753,7 +753,7 @@ STATIC_INLINE void jl_array_uint8_set(void *a, size_t i, uint8_t x)
 // get a pointer to the data in a datatype
 #define jl_data_ptr(v)  ((jl_value_t**)v)
 
-#define jl_cell_data(a)   ((jl_value_t**)((jl_array_t*)a)->data)
+#define jl_array_ptr_data(a)   ((jl_value_t**)((jl_array_t*)a)->data)
 #define jl_string_data(s) ((char*)((jl_array_t*)jl_data_ptr(s)[0])->data)
 #define jl_string_len(s)  (jl_array_len((jl_array_t*)(jl_data_ptr(s)[0])))
 #define jl_iostr_data(s)  ((char*)((jl_array_t*)jl_data_ptr(s)[0])->data)
@@ -1147,7 +1147,7 @@ JL_DLLEXPORT jl_array_t *jl_pchar_to_array(const char *str, size_t len);
 JL_DLLEXPORT jl_value_t *jl_pchar_to_string(const char *str, size_t len);
 JL_DLLEXPORT jl_value_t *jl_cstr_to_string(const char *str);
 JL_DLLEXPORT jl_value_t *jl_array_to_string(jl_array_t *a);
-JL_DLLEXPORT jl_array_t *jl_alloc_cell_1d(size_t n);
+JL_DLLEXPORT jl_array_t *jl_alloc_array_ptr_1d(size_t n);
 JL_DLLEXPORT jl_value_t *jl_arrayref(jl_array_t *a, size_t i);  // 0-indexed
 JL_DLLEXPORT void jl_arrayset(jl_array_t *a, jl_value_t *v, size_t i);  // 0-indexed
 JL_DLLEXPORT void jl_arrayunset(jl_array_t *a, size_t i);  // 0-indexed
@@ -1156,8 +1156,8 @@ JL_DLLEXPORT void jl_array_del_end(jl_array_t *a, size_t dec);
 JL_DLLEXPORT void jl_array_grow_beg(jl_array_t *a, size_t inc);
 JL_DLLEXPORT void jl_array_del_beg(jl_array_t *a, size_t dec);
 JL_DLLEXPORT void jl_array_sizehint(jl_array_t *a, size_t sz);
-JL_DLLEXPORT void jl_cell_1d_push(jl_array_t *a, jl_value_t *item);
-JL_DLLEXPORT void jl_cell_1d_push2(jl_array_t *a, jl_value_t *b, jl_value_t *c);
+JL_DLLEXPORT void jl_array_ptr_1d_push(jl_array_t *a, jl_value_t *item);
+JL_DLLEXPORT void jl_array_ptr_1d_push2(jl_array_t *a, jl_value_t *b, jl_value_t *c);
 JL_DLLEXPORT jl_value_t *jl_apply_array_type(jl_datatype_t *type, size_t dim);
 // property access
 JL_DLLEXPORT void *jl_array_ptr(jl_array_t *a);

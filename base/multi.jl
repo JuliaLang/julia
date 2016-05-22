@@ -1476,8 +1476,8 @@ end
 
 additional_io_objs=Dict()
 function launch_additional(np::Integer, cmd::Cmd)
-    io_objs = cell(np)
-    addresses = cell(np)
+    io_objs = Vector{Any}(np)
+    addresses = Vector{Any}(np)
 
     for i in 1:np
         io, pobj = open(pipeline(detach(cmd), stderr=STDERR), "r")

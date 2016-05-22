@@ -151,7 +151,7 @@ It is usually not much help to construct arrays like the following::
 
     a = Array{Union{Int,AbstractString,Tuple,Array}}(n)
 
-In this case :func:`cell(n) <cell>` is better. It is also more helpful to the compiler
+In this case ``Array{Any}(n)`` is better. It is also more helpful to the compiler
 to annotate specific uses (e.g. ``a[i]::Int``) than to try to pack many
 alternatives into one type.
 

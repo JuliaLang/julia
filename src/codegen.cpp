@@ -764,7 +764,7 @@ static bool store_unboxed_p(int s, jl_codectx_t *ctx)
 
 static jl_sym_t *slot_symbol(int s, jl_codectx_t *ctx)
 {
-    return (jl_sym_t*)jl_cellref(ctx->linfo->slotnames, s);
+    return (jl_sym_t*)jl_array_ptr_ref(ctx->linfo->slotnames, s);
 }
 
 static Value *alloc_local(int s, jl_codectx_t *ctx)
@@ -1694,7 +1694,7 @@ static std::set<int> assigned_in_try(jl_array_t *stmts, int s, long l, int *pend
     std::set<int> av;
     size_t slength = jl_array_dim0(stmts);
     for(int i=s; i < (int)slength; i++) {
-        jl_value_t *st = jl_cellref(stmts,i);
+        jl_value_t *st = jl_array_ptr_ref(stmts,i);
         if (jl_is_expr(st)) {
             if (((jl_expr_t*)st)->head == assign_sym) {
                 jl_value_t *ar = jl_exprarg(st, 0);
@@ -1717,7 +1717,7 @@ static void mark_volatile_vars(jl_array_t *stmts, std::vector<jl_varinfo_t> &slo
 {
     size_t slength = jl_array_dim0(stmts);
     for(int i=0; i < (int)slength; i++) {
-        jl_value_t *st = jl_cellref(stmts,i);
+        jl_value_t *st = jl_array_ptr_ref(stmts,i);
         if (jl_is_expr(st)) {
             if (((jl_expr_t*)st)->head == enter_sym) {
                 int last = (int)slength-1;
@@ -1728,7 +1728,7 @@ static void mark_volatile_vars(jl_array_t *stmts, std::vector<jl_varinfo_t> &slo
                     if (j < i || j > last) {
                         std::set<int>::iterator it = as.begin();
                         for(; it != as.end(); it++) {
-                            if (local_var_occurs(jl_cellref(stmts,j), *it)) {
+                            if (local_var_occurs(jl_array_ptr_ref(stmts,j), *it)) {
                                 jl_varinfo_t &vi = slots[*it];
                                 if (!vi.value.constant)
                                     vi.isVolatile = true;
@@ -1871,19 +1871,19 @@ static void jl_add_linfo_root(jl_lambda_info_t *li, jl_value_t *val)
     JL_GC_PUSH1(&val);
     jl_method_t *m = li->def;
     if (m->roots == NULL) {
-        m->roots = jl_alloc_cell_1d(1);
+        m->roots = jl_alloc_array_ptr_1d(1);
         jl_gc_wb(m, m->roots);
-        jl_cellset(m->roots, 0, val);
+        jl_array_ptr_set(m->roots, 0, val);
     }
     else {
         size_t rlen = jl_array_dim0(m->roots);
         for(size_t i=0; i < rlen; i++) {
-            if (jl_cellref(m->roots,i) == val) {
+            if (jl_array_ptr_ref(m->roots,i) == val) {
                 JL_GC_POP();
                 return;
             }
         }
-        jl_cell_1d_push(m->roots, val);
+        jl_array_ptr_1d_push(m->roots, val);
     }
     JL_GC_POP();
 }
@@ -2768,7 +2768,7 @@ static jl_cgval_t emit_call(jl_expr_t *ex, jl_codectx_t *ctx)
                         if (ctx->linfo->def)
                             jl_add_linfo_root(ctx->linfo, f);
                         else // for toplevel thunks, just write the value back to the AST to root it
-                            jl_cellset(ex->args, 0, f);
+                            jl_array_ptr_set(ex->args, 0, f);
                     }
                     fval = mark_julia_const((jl_value_t*)f);
                 }
@@ -2977,7 +2977,7 @@ static void emit_assignment(jl_value_t *l, jl_value_t *r, jl_codectx_t *ctx)
             // see if inference had a better type for the ssavalue than the expression (after inlining getfield on a Tuple)
             jl_value_t *ssavalue_types = (jl_value_t*)ctx->linfo->ssavaluetypes;
             if (jl_is_array(ssavalue_types)) {
-                jl_value_t *declType = jl_cellref(ssavalue_types, idx);
+                jl_value_t *declType = jl_array_ptr_ref(ssavalue_types, idx);
                 if (declType != slot.typ) {
                     slot = remark_julia_type(slot, declType);
                 }
@@ -4016,7 +4016,7 @@ static std::unique_ptr<Module> emit_function(jl_lambda_info_t *lam, jl_llvm_func
     if (nreq > 0 && lam->isva) {
         nreq--;
         va = 1;
-        jl_sym_t *vn = (jl_sym_t*)jl_cellref(lam->slotnames,largslen-1);
+        jl_sym_t *vn = (jl_sym_t*)jl_array_ptr_ref(lam->slotnames,largslen-1);
         if (vn != unused_sym)
             ctx.vaSlot = largslen-1;
     }
@@ -4029,7 +4029,7 @@ static std::unique_ptr<Module> emit_function(jl_lambda_info_t *lam, jl_llvm_func
     // step 3. some variable analysis
     size_t i;
     for(i=0; i < nreq; i++) {
-        jl_sym_t *argname = (jl_sym_t*)jl_cellref(lam->slotnames,i);
+        jl_sym_t *argname = (jl_sym_t*)jl_array_ptr_ref(lam->slotnames,i);
         if (argname == unused_sym) continue;
         jl_varinfo_t &varinfo = ctx.slots[i];
         varinfo.isArgument = true;
@@ -4050,7 +4050,7 @@ static std::unique_ptr<Module> emit_function(jl_lambda_info_t *lam, jl_llvm_func
         varinfo.isSA = (jl_vinfo_sa(flags)!=0);
         varinfo.usedUndef = (jl_vinfo_usedundef(flags)!=0) || (!varinfo.isArgument && !lam->inferred);
         if (!varinfo.isArgument || varinfo.isAssigned) {
-            jl_value_t *typ = jl_is_array(lam->slottypes) ? jl_cellref(lam->slottypes,i) : (jl_value_t*)jl_any_type;
+            jl_value_t *typ = jl_is_array(lam->slottypes) ? jl_array_ptr_ref(lam->slottypes,i) : (jl_value_t*)jl_any_type;
             if (!jl_is_type(typ))
                 typ = (jl_value_t*)jl_any_type;
             varinfo.value = mark_julia_type((Value*)NULL, false, typ, &ctx);
@@ -4062,7 +4062,7 @@ static std::unique_ptr<Module> emit_function(jl_lambda_info_t *lam, jl_llvm_func
 
     // finish recording escape info
     for(i=0; i < stmtslen; i++)
-        simple_escape_analysis(jl_cellref(stmts,i), true, &ctx);
+        simple_escape_analysis(jl_array_ptr_ref(stmts,i), true, &ctx);
 
     // determine which vars need to be volatile
     mark_volatile_vars(stmts, ctx.slots);
@@ -4312,7 +4312,7 @@ static std::unique_ptr<Module> emit_function(jl_lambda_info_t *lam, jl_llvm_func
         const bool AlwaysPreserve = true;
         // Go over all arguments and local variables and initialize their debug information
         for(i=0; i < nreq; i++) {
-            jl_sym_t *argname = (jl_sym_t*)jl_cellref(lam->slotnames,i);
+            jl_sym_t *argname = (jl_sym_t*)jl_array_ptr_ref(lam->slotnames,i);
             if (argname == unused_sym) continue;
             jl_varinfo_t &varinfo = ctx.slots[i];
 #ifdef LLVM38
@@ -4364,7 +4364,7 @@ static std::unique_ptr<Module> emit_function(jl_lambda_info_t *lam, jl_llvm_func
 #endif
         }
         for(i=0; i < vinfoslen; i++) {
-            jl_sym_t *s = (jl_sym_t*)jl_cellref(lam->slotnames,i);
+            jl_sym_t *s = (jl_sym_t*)jl_array_ptr_ref(lam->slotnames,i);
             jl_varinfo_t &varinfo = ctx.slots[i];
             if (varinfo.isArgument)
                 continue;
@@ -4427,7 +4427,7 @@ static std::unique_ptr<Module> emit_function(jl_lambda_info_t *lam, jl_llvm_func
 
     // step 8. allocate space for exception handler contexts
     for(i=0; i < stmtslen; i++) {
-        jl_value_t *stmt = jl_cellref(stmts,i);
+        jl_value_t *stmt = jl_array_ptr_ref(stmts,i);
         if (jl_is_expr(stmt) && ((jl_expr_t*)stmt)->head == enter_sym) {
             int labl = jl_unbox_long(jl_exprarg(stmt,0));
             AllocaInst *handlr =
@@ -4508,7 +4508,7 @@ static std::unique_ptr<Module> emit_function(jl_lambda_info_t *lam, jl_llvm_func
     if (ctx.sret)
         AI++; // skip sret slot
     for(i=0; i < nreq; i++) {
-        jl_sym_t *s = (jl_sym_t*)jl_cellref(lam->slotnames,i);
+        jl_sym_t *s = (jl_sym_t*)jl_array_ptr_ref(lam->slotnames,i);
         jl_value_t *argType = jl_nth_slot_type(lam->specTypes, i);
         bool isboxed;
         Type *llvmArgType = julia_type_to_llvm(argType, &isboxed);
@@ -4648,7 +4648,7 @@ static std::unique_ptr<Module> emit_function(jl_lambda_info_t *lam, jl_llvm_func
     // step 12. associate labels with basic blocks to resolve forward jumps
     BasicBlock *prev=NULL;
     for(i=0; i < stmtslen; i++) {
-        jl_value_t *ex = jl_cellref(stmts,i);
+        jl_value_t *ex = jl_array_ptr_ref(stmts,i);
         if (jl_is_labelnode(ex)) {
             int lname = jl_labelnode_label(ex);
             if (prev != NULL) {
@@ -4670,7 +4670,7 @@ static std::unique_ptr<Module> emit_function(jl_lambda_info_t *lam, jl_llvm_func
     lno = -1;
     int prevlno = -1;
     for(i=0; i < stmtslen; i++) {
-        jl_value_t *stmt = jl_cellref(stmts,i);
+        jl_value_t *stmt = jl_array_ptr_ref(stmts,i);
         if (jl_is_linenode(stmt) ||
             (jl_is_expr(stmt) && ((jl_expr_t*)stmt)->head == line_sym)) {
 
