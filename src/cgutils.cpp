@@ -830,7 +830,8 @@ static unsigned julia_alignment(Value* /*ptr*/, jl_value_t *jltype, unsigned ali
     return alignment;
 }
 
-static LoadInst *build_load (Value *ptr, jl_value_t *jltype) {
+static LoadInst *build_load(Value *ptr, jl_value_t *jltype)
+{
     return builder.CreateAlignedLoad(ptr, julia_alignment(ptr, jltype, 0));
 }
 

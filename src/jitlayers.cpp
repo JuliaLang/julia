@@ -1005,6 +1005,8 @@ static void jl_dump_shadow(char *fname, int jit_model, const char *sysimg_data, 
         jl_TargetMachine->Options,
 #if defined(_OS_LINUX_) || defined(_OS_FREEBSD_)
         Reloc::PIC_,
+#elif defined(LLVM39)
+        jit_model ? Reloc::PIC_ : Optional<Reloc::Model>(),
 #else
         jit_model ? Reloc::PIC_ : Reloc::Default,
 #endif
