@@ -300,7 +300,7 @@ end
 
 # test all rand APIs
 for rng in ([], [MersenneTwister()], [RandomDevice()])
-    types = [Base.BitInteger_types..., Bool, Float16, Float32, Float64]
+    types = [Base.BitInteger_types..., Bool, Float16, Float32, Float64, Char]
     ftypes = [Float16, Float32, Float64]
     b2 = big(2)
     u3 = UInt(3)
@@ -327,11 +327,13 @@ for rng in ([], [MersenneTwister()], [RandomDevice()])
         for T in (f! === rand! ? types : ftypes)
             X = T == Bool ? T[0,1] : T[0,1,2]
             for A in (Array{T}(5), Array{T}(2, 3))
-                f!(rng..., A)                ::typeof(A)
+                f!(rng..., A)                    ::typeof(A)
                 if f! === rand!
-                    f!(rng..., A, X)         ::typeof(A)
-                    f!(rng..., sparse(A))    ::typeof(sparse(A))
-                    f!(rng..., sparse(A), X) ::typeof(sparse(A))
+                    f!(rng..., A, X)             ::typeof(A)
+                    if T !== Char # Char/Integer comparison
+                        f!(rng..., sparse(A))    ::typeof(sparse(A))
+                        f!(rng..., sparse(A), X) ::typeof(sparse(A))
+                    end
                 end
             end
         end
