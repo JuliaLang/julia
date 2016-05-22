@@ -179,13 +179,11 @@
             <string>atreplinit</string>
             <string>backtrace</string>
             <string>baremodule</string>
-            <string>base64</string>
             <string>base64decode</string>
             <string>base64encode</string>
             <string>base</string>
             <string>basename</string>
             <string>begin</string>
-            <string>beginswith</string>
             <string>besselh</string>
             <string>besselhx</string>
             <string>besseli</string>
@@ -272,8 +270,6 @@
             <string>code_warntype</string>
             <string>collect</string>
             <string>colon</string>
-            <string>complement!</string>
-            <string>complement</string>
             <string>complex128</string>
             <string>complex32</string>
             <string>complex64</string>
@@ -482,7 +478,6 @@
             <string>fullname</string>
             <string>function</string>
             <string>functionloc</string>
-            <string>functionlocs</string>
             <string>gamma</string>
             <string>gc</string>
             <string>gc_disable</string>
@@ -528,7 +523,6 @@
             <string>hton</string>
             <string>hvcat</string>
             <string>hypot</string>
-            <string>iceil</string>
             <string>idct!</string>
             <string>idct</string>
             <string>identity</string>
@@ -537,7 +531,6 @@
             <string>ifft!</string>
             <string>ifft</string>
             <string>ifftshift</string>
-            <string>ifloor</string>
             <string>ignorestatus</string>
             <string>im</string>
             <string>imag</string>
@@ -578,7 +571,6 @@
             <string>ipermute!</string>
             <string>ipermutedims</string>
             <string>irfft</string>
-            <string>iround</string>
             <string>is_apple</string>
             <string>is_assigned_char</string>
             <string>is_bsd</string>
@@ -592,7 +584,6 @@
             <string>isascii</string>
             <string>isassigned</string>
             <string>isbits</string>
-            <string>isblank</string>
             <string>isblockdev</string>
             <string>ischardev</string>
             <string>iscntrl</string>
@@ -601,7 +592,6 @@
             <string>isdigit</string>
             <string>isdir</string>
             <string>isdirpath</string>
-            <string>iseltype</string>
             <string>isempty</string>
             <string>isequal</string>
             <string>iseven</string>
@@ -660,7 +650,6 @@
             <string>isvalid</string>
             <string>iswritable</string>
             <string>isxdigit</string>
-            <string>itrunc</string>
             <string>join</string>
             <string>joinpath</string>
             <string>keys</string>
@@ -759,7 +748,6 @@
             <string>module</string>
             <string>module_name</string>
             <string>module_parent</string>
-            <string>msync</string>
             <string>mtime</string>
             <string>muladd</string>
             <string>mv</string>
@@ -885,8 +873,6 @@
             <string>radians2degrees</string>
             <string>rand!</string>
             <string>rand</string>
-            <string>randbool!</string>
-            <string>randbool</string>
             <string>randcycle</string>
             <string>randexp!</string>
             <string>randexp</string>
@@ -1027,7 +1013,6 @@
             <string>sinpi</string>
             <string>size</string>
             <string>sizehint!</string>
-            <string>sizehint</string>
             <string>sizeof</string>
             <string>skip</string>
             <string>skipchars</string>
@@ -1144,12 +1129,6 @@
             <string>typemin</string>
             <string>typeof</string>
             <string>ucfirst</string>
-            <string>uint128</string>
-            <string>uint16</string>
-            <string>uint32</string>
-            <string>uint64</string>
-            <string>uint8</string>
-            <string>uint</string>
             <string>unescape_string</string>
             <string>union!</string>
             <string>union</string>
@@ -1251,7 +1230,6 @@
         <string>At_rdiv_Bt</string>
         <string>Base64DecodePipe</string>
         <string>Base64EncodePipe</string>
-        <string>Base64Pipe</string>
         <string>Base</string>
         <string>Bidiagonal</string>
         <string>BigFloat</string>
@@ -1392,8 +1370,6 @@
         <string>NaN32</string>
         <string>NaN64</string>
         <string>NaN</string>
-        <string>None</string>
-        <string>Nothing</string>
         <string>Nullable</string>
         <string>NullException</string>
         <string>Number</string>
@@ -1478,8 +1454,8 @@
         <string>SymTridiagonal</string>
         <string>Sys</string>
         <string>SystemError</string>
+        <string>TCPSocket</string>
         <string>Task</string>
-        <string>TcpSocket</string>
         <string>Test</string>
         <string>Text</string>
         <string>TextDisplay</string>
@@ -1492,13 +1468,13 @@
         <string>Tuple</string>
         <string>Type</string>
         <string>TypeError</string>
-        <string>UdpSocket</string>
-        <string>Uint128</string>
-        <string>Uint16</string>
-        <string>Uint32</string>
-        <string>Uint64</string>
-        <string>Uint8</string>
-        <string>Uint</string>
+        <string>UDPSocket</string>
+        <string>UInt128</string>
+        <string>UInt16</string>
+        <string>UInt32</string>
+        <string>UInt64</string>
+        <string>UInt8</string>
+        <string>UInt</string>
         <string>UnicodeError</string>
         <string>UniformScaling</string>
         <string>UnionType</string>

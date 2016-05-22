@@ -2901,7 +2901,7 @@ showcompact
     isleaftype(T)
 
 Determine whether `T` is a concrete type that can have instances, meaning its only subtypes
-are itself and `None` (but `T` itself is not `None`).
+are itself and `Union{}` (but `T` itself is not `Union{}`).
 """
 isleaftype
 
@@ -3967,7 +3967,7 @@ colon
     Base64EncodePipe(ostream)
 
 Returns a new write-only I/O stream, which converts any bytes written to it into
-base64-encoded ASCII bytes written to `ostream`. Calling `close` on the `Base64Pipe` stream
+base64-encoded ASCII bytes written to `ostream`. Calling `close` on the `Base64EncodePipe` stream
 is necessary to complete the encoding (but does not close `ostream`).
 """
 Base64EncodePipe
@@ -6325,13 +6325,6 @@ Compute sine of `x`, where `x` is in degrees.
 sind
 
 """
-    iseltype(A,T)
-
-Tests whether `A` or its elements are of type `T`.
-"""
-iseltype
-
-"""
     min(x, y, ...)
 
 Return the minimum of the arguments. Operates elementwise over arrays.
@@ -7267,13 +7260,6 @@ lexicographically comparable types, and `lexless` will call `lexcmp` by default.
 lexcmp
 
 """
-    inf(f)
-
-Returns positive infinity of the floating point type `f` or of the same floating point type as `f`.
-"""
-inf
-
-"""
     isupper(c::Union{Char,AbstractString}) -> Bool
 
 Tests whether a character is an uppercase letter, or whether this is true for all elements
@@ -7639,13 +7625,6 @@ julia> "Hello " * "world"
 Base.:(*)(s::AbstractString, t::AbstractString)
 
 """
-    complement!(s)
-
-Mutates [`IntSet`](:obj:`IntSet`) `s` into its set-complement.
-"""
-complement!
-
-"""
     slice(A, inds...)
 
 Returns a view of array `A` with the given indices like [`sub`](:func:`sub`), but drops all
@@ -7956,13 +7935,6 @@ median!
 Cumulative product of `A` along a dimension, storing the result in `B`. The dimension defaults to 1.
 """
 cumprod!
-
-"""
-    complement(s)
-
-Returns the set-complement of [`IntSet`](:obj:`IntSet`) `s`.
-"""
-complement
 
 """
     rethrow([e])
@@ -8598,8 +8570,8 @@ cos
     base64encode(args...)
 
 Given a `write`-like function `writefunc`, which takes an I/O stream as its first argument,
-`base64(writefunc, args...)` calls `writefunc` to write `args...` to a base64-encoded
-string, and returns the string. `base64(args...)` is equivalent to `base64(write, args...)`:
+`base64encode(writefunc, args...)` calls `writefunc` to write `args...` to a base64-encoded
+string, and returns the string. `base64encode(args...)` is equivalent to `base64encode(write, args...)`:
 it converts its arguments into bytes using the standard `write` functions and returns the
 base64-encoded string.
 """
@@ -9528,7 +9500,7 @@ Matrix trace.
 trace
 
 """
-    runtests([tests=["all"] [, numcores=iceil(Sys.CPU_CORES / 2) ]])
+    runtests([tests=["all"] [, numcores=ceil(Integer, Sys.CPU_CORES / 2) ]])
 
 Run the Julia unit tests listed in `tests`, which can be either a string or an array of
 strings, using `numcores` processors. (not exported)
@@ -9636,13 +9608,6 @@ Given an index `i` in `reverse(v)`, return the corresponding index in `v` so tha
 Unicode string.)
 """
 reverseind
-
-"""
-    nan(f)
-
-Returns NaN (not-a-number) of the floating point type `f` or of the same floating point type as `f`
-"""
-nan
 
 """
     float(x)

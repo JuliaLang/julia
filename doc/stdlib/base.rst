@@ -577,7 +577,7 @@ Types
 
    .. Docstring generated from Julia source
 
-   Determine whether ``T`` is a concrete type that can have instances, meaning its only subtypes are itself and ``None`` (but ``T`` itself is not ``None``\ ).
+   Determine whether ``T`` is a concrete type that can have instances, meaning its only subtypes are itself and ``Union{}`` (but ``T`` itself is not ``Union{}``\ ).
 
 .. function:: typejoin(T, S)
 

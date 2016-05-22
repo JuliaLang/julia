@@ -180,8 +180,8 @@
       <item> Symbol </item>
       <item> Symmetric </item>
       <item> SymTridiagonal </item>
+      <item> TCPSocket </item>
       <item> Task </item>
-      <item> TcpSocket </item>
       <item> TimeoutAsyncWork </item>
       <item> TmStruct </item>
       <item> Triangular </item>
