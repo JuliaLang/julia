@@ -323,10 +323,15 @@ function complete_methods(ex_org::Expr)
     out = String[]
     t_in = Tuple{Core.Typeof(func), args_ex...} # Input types
     na = length(args_ex)+1
-    for method in methods(func)
+    ml = methods(func)
+    kwtype = isdefined(ml.mt, :kwsorter) ? Nullable{DataType}(typeof(ml.mt.kwsorter)) : Nullable{DataType}()
+    io = IOBuffer()
+    for method in ml
         # Check if the method's type signature intersects the input types
-        typeintersect(Tuple{method.sig.parameters[1 : min(na, end)]...}, t_in) != Union{} &&
-            push!(out,string(method))
+        if typeintersect(Tuple{method.sig.parameters[1 : min(na, end)]...}, t_in) != Union{}
+            show(io, method, kwtype=kwtype)
+            push!(out, takebuf_string(io))
+        end
     end
     return out
 end
