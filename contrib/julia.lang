@@ -108,7 +108,6 @@
       <keyword>ARGS</keyword>
       <keyword>LOAD_PATH</keyword>
       <keyword>CPU_CORES</keyword>
-      <keyword>OS_NAME</keyword>
       <keyword>C_NULL</keyword>
       <keyword>WORD_SIZE</keyword>
       <keyword>VERSION</keyword>
