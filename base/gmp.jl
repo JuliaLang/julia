@@ -2,7 +2,7 @@
 
 module GMP
 
-export BigInt
+export BigInt, nextprime
 
 import Base: *, +, -, /, <, <<, >>, >>>, <=, ==, >, >=, ^, (~), (&), (|), ($),
              binomial, cmp, convert, div, divrem, factorial, fld, gcd, gcdx, lcm, mod,
@@ -542,6 +542,12 @@ end
 ndigits(x::BigInt, b::Integer=10) = x.size == 0 ? 1 : ndigits0z(x,b)
 
 isprime(x::BigInt, reps=25) = ccall((:__gmpz_probab_prime_p,:libgmp), Cint, (Ptr{BigInt}, Cint), &x, reps) > 0
+
+function nextprime(y::BigInt)
+    x = BigInt()
+    ccall((:__gmpz_nextprime,:libgmp), Void, (Ptr{BigInt},Ptr{BigInt}), &x, &y)
+    x
+end
 
 prevpow2(x::BigInt) = x.size < 0 ? -prevpow2(-x) : (x <= 2 ? x : one(BigInt) << (ndigits(x, 2)-1))
 nextpow2(x::BigInt) = x.size < 0 ? -nextpow2(-x) : (x <= 2 ? x : one(BigInt) << ndigits(x-1, 2))

@@ -404,6 +404,7 @@ export
     nextfloat,
     nextpow,
     nextpow2,
+    nextprime,
     nextprod,
     num,
     num2hex,
