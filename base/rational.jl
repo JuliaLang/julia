@@ -142,7 +142,7 @@ function rationalize{T<:Integer}(::Type{T}, x::AbstractFloat; tol::Real=eps(x))
 
     # find optimal semiconvergent
     # smallest a such that x-a*y < a*t+tt
-    a = max(cld(x-tt,y+t),0.0)
+    a = cld(x-tt,y+t)
     try
         ia = convert(T,a)
         np = checked_add(checked_mul(ia,p),pp)
