@@ -94,6 +94,9 @@ immutable AndCmds <: AbstractCmd
     AndCmds(a::AbstractCmd, b::AbstractCmd) = new(a, b)
 end
 
+hash(x::AndCmds, h::UInt) = hash(x.a, hash(x.b, h))
+==(x::AndCmds, y::AndCmds) = x.a == y.a && x.b == y.b
+
 shell_escape(cmd::Cmd) = shell_escape(cmd.exec...)
 
 function show(io::IO, cmd::Cmd)
@@ -235,6 +238,8 @@ setenv(cmd::Cmd; dir="") = Cmd(cmd; dir=dir)
 (&)(left::AbstractCmd, right::AbstractCmd) = AndCmds(left, right)
 redir_out(src::AbstractCmd, dest::AbstractCmd) = OrCmds(src, dest)
 redir_err(src::AbstractCmd, dest::AbstractCmd) = ErrOrCmds(src, dest)
+Base.mr_empty{T2<:Base.AbstractCmd}(f, op::typeof(&), T1::Type{T2}) =
+    throw(ArgumentError("reducing over an empty collection of type $T1 with operator & is not allowed"))
 
 # Stream Redirects
 redir_out(dest::Redirectable, src::AbstractCmd) = CmdRedirect(src, dest, STDIN_NO)
