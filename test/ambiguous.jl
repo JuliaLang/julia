@@ -23,6 +23,9 @@ for m in mt
     end
 end
 
+@test length(methods(ambig)) == 5
+@test length(Base.methods_including_ambiguous(ambig, Tuple)) == 5
+
 @test length(methods(ambig, (Int, Int))) == 1
 @test length(methods(ambig, (UInt8, Int))) == 0
 @test length(Base.methods_including_ambiguous(ambig, (UInt8, Int))) == 2
@@ -139,6 +142,13 @@ amb_4(x, ::Integer) = 5
 # as above, but without sufficient definition coverage
 let ms = methods(amb_4).ms
     @test Base.isambiguous(ms[3], ms[4])
+end
+
+g16493{T<:Number}(x::T, y::Integer) = 0
+g16493{T}(x::Complex{T}, y) = 1
+let ms = methods(g16493, (Complex, Any))
+    @test length(ms) == 1
+    @test first(ms).sig == Tuple{typeof(g16493), Complex{TypeVar(:T, Any, true)}, Any}
 end
 
 nothing
