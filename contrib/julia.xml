@@ -281,7 +281,6 @@
       <item> C_NULL </item>
       <item> CPU_CORES </item>
       <item> DL_LOAD_PATH </item>
-      <item> OS_NAME </item>
       <item> ENDIAN_BOM </item>
       <item> ENV </item>
       <item> Inf </item>

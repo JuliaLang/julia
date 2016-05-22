@@ -1231,6 +1231,7 @@ export
     @osx_only,
     @linux_only
 
+export OS_NAME
 const OS_NAME =
     if Sys.KERNEL === :Darwin
         :OSX

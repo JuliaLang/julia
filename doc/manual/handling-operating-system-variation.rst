@@ -5,7 +5,7 @@
 *************************************
 
 When dealing with platform libraries, it is often necessary to provide special cases
-for various platforms. The variable ``OS_NAME`` can be used to write these special
+for various platforms. The variable ``Sys.KERNEL`` can be used to write these special
 cases. There are several functions intended to make this easier:
 ``is_unix``, ``is_linux``, ``is_apple``, ``is_bsd``, and ``is_windows``. These may be used as follows::
 
