@@ -78,7 +78,13 @@ function kwarg_decl(sig::ANY, kwtype::DataType)
     kwli = ccall(:jl_methtable_lookup, Any, (Any, Any), kwtype.name.mt, sig)
     if kwli !== nothing
         kwli = kwli::Method
-        return filter(x->!('#' in string(x)), kwli.lambda_template.slotnames[kwli.lambda_template.nargs+1:end])
+        kws = filter(x->!('#' in string(x)), kwli.lambda_template.slotnames[kwli.lambda_template.nargs+1:end])
+        # ensure the kwarg... is always printed last. The order of the arguments are not
+        # necessarily the same as defined in the function
+        i = findfirst(x -> endswith(string(x), "..."), kws)
+        i==0 && return kws
+        push!(kws, kws[i])
+        return deleteat!(kws,i)
     end
     return ()
 end

@@ -411,7 +411,8 @@
                   sparams))
          (keyword-sparam-names
           (map (lambda (s) (if (symbol? s) s (cadr s))) keyword-sparams)))
-    (let ((kw (gensy)) (i (gensy)) (ii (gensy)) (elt (gensy)) (rkw (gensy))
+    (let ((kw (gensy)) (i (gensy)) (ii (gensy)) (elt (gensy))
+          (rkw (if (null? restkw) '() (symbol (string (car restkw) "..."))))
           (mangled (symbol (string "#" (if name (undot-name name) 'call) "#"
                                    (string (current-julia-module-counter)))))
           (flags (map (lambda (x) (gensy)) vals)))

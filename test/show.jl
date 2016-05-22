@@ -358,10 +358,14 @@ end
 
 f5971(x, y...; z=1, w...) = nothing
 let repr = sprint(io -> show(io,"text/plain", methods(f5971)))
-    @test contains(repr, "f5971(x, y...; z)")
+    @test contains(repr, "f5971(x, y...; z, w...)")
 end
 let repr = sprint(io -> show(io,"text/html", methods(f5971)))
-    @test contains(repr, "f5971(x, y...; <i>z</i>)")
+    @test contains(repr, "f5971(x, y...; <i>z, w...</i>)")
+end
+f16580(x, y...; z=1, w=y+x, q...) = nothing
+let repr = sprint(io -> show(io,"text/html", methods(f16580)))
+    @test contains(repr, "f16580(x, y...; <i>z, w, q...</i>)")
 end
 
 if isempty(Base.GIT_VERSION_INFO.commit)
