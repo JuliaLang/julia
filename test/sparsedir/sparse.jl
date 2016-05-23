@@ -1146,6 +1146,7 @@ let
     @test ishermitian(A) == true
     @test issymmetric(A) == true
 
+    # 15504
     m = n = 5
     colptr = [1, 5, 9, 13, 13, 17]
     rowval = [1, 2, 3, 5, 1, 2, 3, 5, 1, 2, 3, 5, 1, 2, 3, 5]
@@ -1154,6 +1155,14 @@ let
     @test issymmetric(A) == true
     A.nzval[end - 3]  = 2.0
     @test issymmetric(A) == false
+
+    # 16521
+    @test issymmetric(sparse([0 0; 1 0])) == false
+    @test issymmetric(sparse([0 1; 0 0])) == false
+    @test issymmetric(sparse([0 0; 1 1])) == false
+    @test issymmetric(sparse([1 0; 1 0])) == false
+    @test issymmetric(sparse([0 1; 1 0])) == true
+    @test issymmetric(sparse([1 1; 1 0])) == true
 end
 
 # equality ==
