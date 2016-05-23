@@ -1702,7 +1702,7 @@ static jl_cgval_t emit_new_struct(jl_value_t *ty, size_t nargs, jl_value_t **arg
                     if (!init_as_value) {
                         // avoid unboxing the argument explicitely
                         // and use memcpy instead
-                        dest = builder.CreateConstInBoundsGEP2_32(lt, strct, 0, i);
+                        dest = builder.CreateConstInBoundsGEP2_32(LLVM37_param(lt) strct, 0, i);
                     }
                     if (fty == T_int1)
                         fty = T_int8;

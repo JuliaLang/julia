@@ -68,31 +68,26 @@ void jl_generate_fptr(jl_lambda_info_t *li);
 void jl_compile_linfo(jl_lambda_info_t *li);
 
 // invoke (compiling if necessary) the jlcall function pointer for a method
+jl_lambda_info_t *jl_get_unspecialized(jl_lambda_info_t *method);
 STATIC_INLINE jl_value_t *jl_call_method_internal(jl_lambda_info_t *meth, jl_value_t **args, uint32_t nargs)
 {
+    jl_lambda_info_t *mfptr = meth;
     if (__unlikely(meth->fptr == NULL)) {
-        jl_compile_linfo(meth);
-        jl_generate_fptr(meth);
+        if (meth->inInference || meth->inCompile) {
+            // if inference is running on this function, get a copy
+            // of the function to be compiled without inference and run.
+            assert(meth->def != NULL);
+            mfptr = jl_get_unspecialized(meth);
+        }
+        if (mfptr->fptr == NULL) {
+            jl_compile_linfo(mfptr);
+            jl_generate_fptr(mfptr);
+        }
     }
-    if (meth->jlcall_api == 0)
-        return meth->fptr(args[0], &args[1], nargs-1);
+    if (mfptr->jlcall_api == 0)
+        return mfptr->fptr(args[0], &args[1], nargs-1);
     else
-        return ((jl_fptr_sparam_t)meth->fptr)(meth->sparam_vals, args[0], &args[1], nargs-1);
-}
-
-// invoke (compiling if necessary) the jlcall function pointer for a method template
-STATIC_INLINE jl_value_t *jl_call_unspecialized(jl_svec_t *sparam_vals, jl_lambda_info_t *meth,
-                                         jl_value_t **args, uint32_t nargs)
-{
-    if (__unlikely(meth->fptr == NULL)) {
-        jl_compile_linfo(meth);
-        jl_generate_fptr(meth);
-    }
-    assert(jl_svec_len(meth->sparam_syms) == jl_svec_len(sparam_vals));
-    if (__likely(meth->jlcall_api == 0))
-        return meth->fptr(args[0], &args[1], nargs-1);
-    else
-        return ((jl_fptr_sparam_t)meth->fptr)(sparam_vals, args[0], &args[1], nargs-1);
+        return ((jl_fptr_sparam_t)mfptr->fptr)(meth->sparam_vals, args[0], &args[1], nargs-1);
 }
 
 jl_tupletype_t *jl_argtype_with_function(jl_function_t *f, jl_tupletype_t *types);
@@ -214,7 +209,6 @@ void jl_type_infer(jl_lambda_info_t *li, int force);
 void jl_lambda_info_set_ast(jl_lambda_info_t *li, jl_value_t *ast);
 jl_value_t *jl_call_scm_on_ast(char *funcname, jl_value_t *expr);
 
-jl_lambda_info_t *jl_get_unspecialized(jl_lambda_info_t *method);
 jl_lambda_info_t *jl_method_lookup_by_type(jl_methtable_t *mt, jl_tupletype_t *types,
                                            int cache, int inexact);
 jl_lambda_info_t *jl_method_lookup(jl_methtable_t *mt, jl_value_t **args, size_t nargs, int cache);
