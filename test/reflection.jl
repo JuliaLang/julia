@@ -274,6 +274,14 @@ end
 end
 @test functionloc(f15447)[2] > 0
 
+# issue #14346
+@noinline function f14346(id, mask, limit)
+    if id <= limit && mask[id]
+        return true
+    end
+end
+@test functionloc(f14346)[2] == @__LINE__-4
+
 # test jl_get_llvm_fptr. We test functions both in and definitely not in the system image
 definitely_not_in_sysimg() = nothing
 for (f,t) in ((definitely_not_in_sysimg,Tuple{}),
