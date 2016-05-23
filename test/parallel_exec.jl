@@ -960,7 +960,8 @@ for tid in [id_other, id_me, Base.default_worker_pool()]
 end
 
 # github PR #14456
-for n = 1:10^5
+n = DoFullTest ? 6 : 5
+for i = 1:10^n
     fetch(@spawnat myid() myid())
 end
 
