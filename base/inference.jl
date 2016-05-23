@@ -1023,7 +1023,7 @@ function abstract_call(f::ANY, fargs, argtypes::Vector{Any}, vtypes::VarTable, s
     return abstract_call_gf_by_type(f, atype, sv)
 end
 
-function abstract_eval_call(e, vtypes::VarTable, sv::InferenceState)
+function abstract_eval_call(e::Expr, vtypes::VarTable, sv::InferenceState)
     argtypes = Any[abstract_eval(a, vtypes, sv) for a in e.args]
     #print("call ", e.args[1], argtypes, "\n\n")
     for x in argtypes
@@ -1072,7 +1072,7 @@ function abstract_eval(e::ANY, vtypes::VarTable, sv::InferenceState)
     e = e::Expr
     # handle:
     # call  null  new  &  static_typeof
-    if is(e.head,:call)
+    if is(e.head,:call) || is(e.head,:kwcall)
         t = abstract_eval_call(e, vtypes, sv)
     elseif is(e.head,:null)
         t = Void
@@ -1205,7 +1205,7 @@ function abstract_interpret(e::ANY, vtypes::VarTable, sv::InferenceState)
             # don't bother for GlobalRef
             return StateUpdate(lhs, VarState(t,false), vtypes)
         end
-    elseif is(e.head,:call)
+    elseif is(e.head,:call) || is(e.head,:kwcall)
         t = abstract_eval(e, vtypes, sv)
         t === Bottom && return ()
     elseif is(e.head,:gotoifnot)

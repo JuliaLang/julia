@@ -933,7 +933,9 @@ JL_DLLEXPORT int jl_is_rest_arg(jl_value_t *ex)
     if (!jl_is_expr(atype)) return 0;
     if (((jl_expr_t*)atype)->head == dots_sym)
         return 1;
-    if (atype->head != call_sym || jl_array_len(atype->args) < 3 || jl_array_len(atype->args) > 4)
+    if (atype->head != call_sym && atype->head != kwcall_sym)
+        return 0;
+    if (jl_array_len(atype->args) < 3 || jl_array_len(atype->args) > 4)
         return 0;
     return ((jl_sym_t*)jl_exprarg(atype,1)) == vararg_sym;
 }
