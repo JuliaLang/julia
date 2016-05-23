@@ -16,21 +16,74 @@ function treewalk(f::Function, tree::GitTree, payload=Any[], post::Bool = false)
     return cbf_payload
 end
 
+"Get the filename of a tree entry."
 function filename(te::GitTreeEntry)
     str = ccall((:git_tree_entry_name, :libgit2), Cstring, (Ptr{Void},), te.ptr)
     str != C_NULL && return unsafe_string(str)
     return nothing
 end
 
+"Get the UNIX file attributes of a tree entry."
 function filemode(te::GitTreeEntry)
     return ccall((:git_tree_entry_filemode, :libgit2), Cint, (Ptr{Void},), te.ptr)
 end
 
-
+"Convert a tree entry to the `GitAnyObject` it points to."
 function object(repo::GitRepo, te::GitTreeEntry)
     obj_ptr_ptr = Ref{Ptr{Void}}(C_NULL)
     @check ccall((:git_tree_entry_to_object, :libgit2), Cint,
                   (Ptr{Ptr{Void}}, Ptr{Void}, Ref{Void}),
                    obj_ptr_ptr, repo.ptr, te.ptr)
     return GitAnyObject(obj_ptr_ptr[])
+end
+
+"Get the id of the object pointed by the entry."
+function oid(te::GitTreeEntry)
+    return Oid(ccall((:git_tree_entry_id, :libgit2), Ptr{Oid}, (Ptr{Void},), te.ptr))
+end
+
+"""Retrieve a tree entry contained in a tree or in any of its subtrees, given its relative path.
+
+The returned tree entry is owned by the user and must be freed explicitly.
+"""
+function GitTreeEntry(tree::GitTree, tepath::AbstractString)
+    te_ptr_ptr = Ref{Ptr{Void}}(C_NULL)
+    err = ccall((:git_tree_entry_bypath, :libgit2), Cint,
+                  (Ptr{Ptr{Void}}, Ref{Void}, Cstring),
+                   te_ptr_ptr, tree.ptr, tepath)
+    if err == Int(Error.ENOTFOUND)
+        return nothing
+    elseif err != Int(Error.GIT_OK)
+        if te_ptr_ptr[] != C_NULL
+            finalize(GitTreeEntry(te_ptr_ptr[]))
+        end
+        throw(Error.GitError(err))
+    end
+    return GitTreeEntry(te_ptr_ptr[])
+end
+
+"""Lookup a tree entry by SHA value.
+
+This returns a `GitTreeEntry` that is owned by the `GitTree`.
+You don't have to free it, but you must not use it after the `GitTree` is released.
+"""
+function GitTreeEntry(tree::GitTree, teoid::Oid)
+    res = ccall((:git_tree_entry_byid, :libgit2), Ptr{Void},
+                (Ref{Void}, Ref{Oid}),
+                tree.ptr, Ref(teoid))
+    res == C_NULL && return nothing
+    return GitTreeEntry(res)
+end
+
+"""Lookup a tree entry by its filename.
+
+This returns a `GitTreeEntry` that is owned by the `GitTree`.
+You don't have to free it, but you must not use it after the `GitTree` is released.
+"""
+function lookup(tree::GitTree, fname::AbstractString)
+    te_ptr_ptr = Ref{Ptr{Void}}(C_NULL)
+    res = ccall((:git_tree_entry_byname, :libgit2), Ptr{Void},
+                (Ref{Void}, Cstring), tree.ptr, fname)
+    res == C_NULL && return nothing
+    return GitTreeEntry(res)
 end
