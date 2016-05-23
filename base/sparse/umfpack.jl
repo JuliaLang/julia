@@ -251,7 +251,7 @@ for itype in UmfpackIndexTypes
         end
         function solve!(x::VecOrMat{Float64}, lu::UmfpackLU{Float64,$itype}, b::VecOrMat{Float64}, typ::Integer)
             if x === b
-                 throw(ArgumentError("output array must not be aliased with input array"))
+                throw(ArgumentError("output array must not be aliased with input array"))
             end
             umfpack_numeric!(lu)
             (size(b,1) == lu.m) && (size(b) == size(x)) || throw(DimensionMismatch())
@@ -267,7 +267,7 @@ for itype in UmfpackIndexTypes
         end
         function solve!(x::VecOrMat{Complex128}, lu::UmfpackLU{Complex128,$itype}, b::VecOrMat{Complex128}, typ::Integer)
             if x === b
-                 throw(ArgumentError("output array must not be aliased with input array"))
+                throw(ArgumentError("output array must not be aliased with input array"))
             end
             umfpack_numeric!(lu)
             (size(b,1) == lu.m) && (size(b) == size(x)) || throw(DimensionMismatch())
