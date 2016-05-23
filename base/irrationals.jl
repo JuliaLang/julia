@@ -13,11 +13,27 @@ promote_rule{s,T<:Number}(::Type{Irrational{s}}, ::Type{T}) = promote_type(Float
 convert(::Type{AbstractFloat}, x::Irrational) = Float64(x)
 convert(::Type{Float16}, x::Irrational) = Float16(Float32(x))
 convert{T<:Real}(::Type{Complex{T}}, x::Irrational) = convert(Complex{T}, convert(T,x))
-convert{T<:Integer}(::Type{Rational{T}}, x::Irrational) = convert(Rational{T}, Float64(x))
 
-@generated function (t::Type{T}){T<:Union{Float32,Float64},s}(c::Irrational{s},r::RoundingMode)
-    f = T(big(c()),r())
-    :($f)
+@pure function convert{T<:Integer}(::Type{Rational{T}}, x::Irrational)
+    o = precision(BigFloat)
+    p = 256
+    while true
+        setprecision(BigFloat, p)
+        bx = BigFloat(x)
+        r = rationalize(T, bx, tol=0)
+        if abs(BigFloat(r) - bx) > eps(bx)
+            setprecision(BigFloat, o)
+            return r
+        end
+        p += 32
+    end
+end
+convert(::Type{Rational{BigInt}}, x::Irrational) = throw(ArgumentError("Cannot convert an Irrational to a Rational{BigInt}: use rationalize(Rational{BigInt}, x) instead"))
+
+@pure function (t::Type{T}){T<:Union{Float32,Float64}}(x::Irrational, r::RoundingMode)
+    setprecision(BigFloat, 256) do
+        T(BigFloat(x), r)
+    end
 end
 
 =={s}(::Irrational{s}, ::Irrational{s}) = true
