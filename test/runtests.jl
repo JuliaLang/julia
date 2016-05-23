@@ -1141,3 +1141,9 @@ let io = IOBuffer(), s = "hello"
     unsafe_write(io, pointer(s), length(s))
     @test takebuf_string(io) == s
 end
+
+@static if VERSION ≥ v"0.4"
+    @test VERSION ≥ v"0.4"
+else
+    @test VERSION < v"0.4"
+end

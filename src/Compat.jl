@@ -1118,4 +1118,24 @@ if !isdefined(Base, :unsafe_write)
     export unsafe_write
 end
 
+# JuliaLang/julia#16219
+if !isdefined(Base, @compat Symbol("@static"))
+     macro static(ex)
+        if isa(ex, Expr)
+            if ex.head === :if
+                cond = eval(current_module(), ex.args[1])
+                if cond
+                    return esc(ex.args[2])
+                elseif length(ex.args) == 3
+                    return esc(ex.args[3])
+                else
+                    return nothing
+                end
+            end
+        end
+        throw(ArgumentError("invalid @static macro"))
+    end
+    export @static
+end
+
 end # module
