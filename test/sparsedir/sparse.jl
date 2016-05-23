@@ -1026,6 +1026,7 @@ let
     @test ishermitian(A) == true
     @test issym(A) == true
 
+    # 15504
     m = n = 5
     colptr = [1, 5, 9, 13, 13, 17]
     rowval = [1, 2, 3, 5, 1, 2, 3, 5, 1, 2, 3, 5, 1, 2, 3, 5]
@@ -1034,6 +1035,14 @@ let
     @test issym(A) == true
     A.nzval[end - 3]  = 2.0
     @test issym(A) == false
+
+    # 16521
+    @test issym(sparse([0 0; 1 0])) == false
+    @test issym(sparse([0 1; 0 0])) == false
+    @test issym(sparse([0 0; 1 1])) == false
+    @test issym(sparse([1 0; 1 0])) == false
+    @test issym(sparse([0 1; 1 0])) == true
+    @test issym(sparse([1 1; 1 0])) == true
 end
 
 # equality ==
