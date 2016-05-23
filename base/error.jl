@@ -50,12 +50,13 @@ macro assert(ex, msgs...)
     :($(esc(ex)) ? $(nothing) : throw(Main.Base.AssertionError($msg)))
 end
 
+# NOTE: Please keep the constant values specified below in sync with the doc string
 const DEFAULT_RETRY_N = 1
 const DEFAULT_RETRY_ON = e->true
 const DEFAULT_RETRY_MAX_DELAY = 10.0
 
 """
-    retry(f, [retry_on]; n=DEFAULT_RETRY_N, max_delay=DEFAULT_RETRY_MAX_DELAY) -> Function
+    retry(f, [retry_on]; n=1, max_delay=10.0) -> Function
 
 Returns a lambda that retries function `f` up to `n` times in the
 event of an exception. If `retry_on` is a `Type` then retry only
@@ -83,8 +84,9 @@ function retry(f::Function, retry_on::Function=DEFAULT_RETRY_ON; n=DEFAULT_RETRY
                     rethrow(e)
                 end
             end
-            sleep(delay)
-            delay = min(max_delay, delay * (0.8 + (rand() * 0.4)) * 5)
+            delay = min(max_delay, delay)
+            sleep(delay * (0.8 + (rand() * 0.2)))
+            delay = delay * 5
         end
     end
 end
