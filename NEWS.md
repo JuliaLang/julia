@@ -69,9 +69,8 @@ Breaking changes
     in a `MethodError`. ([#6190])
 
   * `pmap` keyword arguments `err_retry=true` and `err_stop=false` are deprecated.
-    `pmap` no longer retries or returns `Exception` objects in the result collection.
-    `pmap(retry(f), c)` or `pmap(@catch(f), c)` can be used instead.
-    ([#15409](https://github.com/JuliaLang/julia/pull/15409#discussion_r57494701)).
+    Action to be taken on errors can be specified via the `on_error` keyword argument.
+    Retry is specified via `retry_n`, `retry_on` and `retry_max_delay`.
 
   * `reshape` is now defined to always share data with the original array.
     If a reshaped copy is needed, use `copy(reshape(a))` or `copy!` to a new array of
