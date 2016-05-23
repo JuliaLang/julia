@@ -501,7 +501,7 @@ function _compat(ex::Expr)
             end
         elseif VERSION < v"0.4.0-dev+4389" && f === :withenv
             rewrite_pairs_to_tuples!(ex)
-        elseif VERSION < v"0.4.0" && f == :String
+        elseif VERSION < v"0.4.0-dev+1246" && f == :String
             ex = Expr(:call, :bytestring, ex.args[2:end]...)
         end
     elseif ex.head === :curly
