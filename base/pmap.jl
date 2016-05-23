@@ -65,7 +65,7 @@ end
 
 pgenerate(p::WorkerPool, f, c1, c...; kwargs...) = pgenerate(p, a->f(a...), zip(c1, c...); kwargs...)
 
-pgenerate(f, c; kwargs...) = pgenerate(default_worker_pool(), f, c...; kwargs...)
+pgenerate(f, c; kwargs...) = pgenerate(default_worker_pool(), f, c; kwargs...)
 pgenerate(f, c1, c...; kwargs...) = pgenerate(a->f(a...), zip(c1, c...); kwargs...)
 
 function wrap_on_error(f, on_error; capture_data=false)
