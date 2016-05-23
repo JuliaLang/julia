@@ -22,7 +22,7 @@ const TAGS = Any[
     QuoteNode, :reserved23 #=was TopNode=#, TypeVar, Core.Box, LambdaInfo,
     Module, #=UndefRefTag=#Symbol, Task, String,
     UTF16String, UTF32String, Float16,
-    SimpleVector, #=BackrefTag=#Symbol, Method, :reserved12,
+    SimpleVector, #=BackrefTag=#Symbol, Method, GlobalRef,
 
     (), Bool, Any, :Any, Bottom, :reserved21, :reserved22, Type,
     :Array, :TypeVar, :Box,
@@ -72,12 +72,13 @@ const BACKREF_TAG = Int32(sertag(SimpleVector)+1)
 const EXPR_TAG = sertag(Expr)
 const LONGEXPR_TAG = Int32(sertag(Expr)+3)
 const MODULE_TAG = sertag(Module)
-const LAMBDASTATICDATA_TAG = sertag(LambdaInfo)
+const LAMBDAINFO_TAG = sertag(LambdaInfo)
 const METHOD_TAG = sertag(Method)
 const TASK_TAG = sertag(Task)
 const DATATYPE_TAG = sertag(DataType)
 const TYPENAME_TAG = sertag(TypeName)
 const INT_TAG = sertag(Int)
+const GLOBALREF_TAG = sertag(GlobalRef)
 
 writetag(s::IO, tag) = write(s, UInt8(tag))
 
@@ -329,7 +330,7 @@ end
 
 function serialize(s::SerializationState, linfo::LambdaInfo)
     serialize_cycle(s, linfo) && return
-    writetag(s.io, LAMBDASTATICDATA_TAG)
+    writetag(s.io, LAMBDAINFO_TAG)
     serialize(s, uncompressed_ast(linfo))
     serialize(s, linfo.slotnames)
     serialize(s, linfo.slottypes)
@@ -364,6 +365,23 @@ function serialize(s::SerializationState, t::Task)
     for fld in state
         serialize(s, fld)
     end
+end
+
+function serialize(s::SerializationState, g::GlobalRef)
+    writetag(s.io, GLOBALREF_TAG)
+    if g.mod === Main && isdefined(g.mod, g.name) && isconst(g.mod, g.name)
+        v = eval(g)
+        if isa(v, DataType) && v === v.name.primary && should_send_whole_type(s, v)
+            # handle references to types in Main by sending the whole type.
+            # needed to be able to send nested functions (#15451).
+            write(s.io, UInt8(1))
+            serialize(s, v)
+            return
+        end
+    end
+    write(s.io, UInt8(0))
+    serialize(s, g.mod)
+    serialize(s, g.name)
 end
 
 function serialize(s::SerializationState, t::TypeName)
@@ -693,6 +711,16 @@ function deserialize_expr(s::SerializationState, len)
     e.args = Any[ deserialize(s) for i=1:len ]
     e.typ = ty
     e
+end
+
+function deserialize(s::SerializationState, ::Type{GlobalRef})
+    kind = read(s.io, UInt8)
+    if kind == 0
+        return GlobalRef(deserialize(s)::Module, deserialize(s)::Symbol)
+    else
+        ty = deserialize(s)
+        return GlobalRef(ty.name.module, ty.name.name)
+    end
 end
 
 function deserialize(s::SerializationState, ::Type{Union})
