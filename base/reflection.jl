@@ -57,6 +57,7 @@ end
 Get the name of field `i` of a `DataType`.
 """
 fieldname(t::DataType, i::Integer) = t.name.names[i]::Symbol
+fieldname{T<:Tuple}(t::Type{T}, i::Integer) = i < 1 || i > nfields(t) ? throw(BoundsError(t, i)) : Int(i)
 
 """
     fieldnames(x::DataType)
@@ -71,6 +72,7 @@ function fieldnames(v)
     return fieldnames(t)
 end
 fieldnames(t::DataType) = Symbol[fieldname(t, n) for n in 1:nfields(t)]
+fieldnames{T<:Tuple}(t::Type{T}) = Int[n for n in 1:nfields(t)]
 
 isconst(s::Symbol) = ccall(:jl_is_const, Int32, (Ptr{Void}, Any), C_NULL, s) != 0
 
