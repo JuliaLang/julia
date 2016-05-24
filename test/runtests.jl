@@ -1168,3 +1168,17 @@ end
 @test Compat.repeat(1:2, inner=2) == [1, 1, 2, 2]
 @test Compat.repeat(1:2, outer=[2]) == [1, 2, 1, 2]
 @test Compat.repeat([1,2], inner=(2,)) == [1, 1, 2, 2]
+
+if VERSION < v"0.5.0-dev+4267"
+    if OS_NAME == :Windows
+        @test is_windows()
+    elseif OS_NAME == :Darwin
+        @test is_apple() && is_bsd() && is_unix()
+    elseif OS_NAME == :FreeBSD
+        @test is_bsd() && is_unix()
+    elseif OS_NAME == :Linux
+        @test is_linux() && is_unix()
+    end
+else
+    @test Compat.KERNEL == Sys.KERNEL
+end
