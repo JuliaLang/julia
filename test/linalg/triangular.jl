@@ -286,6 +286,7 @@ for elty1 in (Float32, Float64, BigFloat, Complex64, Complex128, Complex{BigFloa
                 @test_approx_eq full(A1.'A2.') full(A1).'full(A2).'
                 @test_approx_eq full(A1'A2') full(A1)'full(A2)'
                 @test_approx_eq full(A1/A2) full(A1)/full(A2)
+                @test_approx_eq full(A1\A2) full(A1)\full(A2)
                 @test_throws DimensionMismatch eye(n+1)/A2
                 @test_throws DimensionMismatch eye(n+1)/A2.'
                 @test_throws DimensionMismatch eye(n+1)/A2'
