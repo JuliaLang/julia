@@ -15,7 +15,7 @@ export
 import Base:
     Display,
     display,
-    writemime,
+    show,
     AnyDict,
     ==
 
@@ -111,7 +111,7 @@ end
 function display(d::REPLDisplay, ::MIME"text/plain", x)
     io = outstream(d.repl)
     Base.have_color && write(io, answer_color(d.repl))
-    writemime(IOContext(io, multiline=true, limit=true), MIME("text/plain"), x)
+    show(IOContext(io, multiline=true, limit=true), MIME("text/plain"), x)
     println(io)
 end
 display(d::REPLDisplay, x) = display(d, MIME("text/plain"), x)

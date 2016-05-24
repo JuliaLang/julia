@@ -6,8 +6,8 @@ import Base.Docs: meta, @var, DocStr, parsedoc
 function docstrings_equal(d1, d2)
     io1 = IOBuffer()
     io2 = IOBuffer()
-    writemime(io1, MIME"text/markdown"(), d1)
-    writemime(io2, MIME"text/markdown"(), d2)
+    show(io1, MIME"text/markdown"(), d1)
+    show(io2, MIME"text/markdown"(), d2)
     takebuf_string(io1) == takebuf_string(io2)
 end
 docstrings_equal(d1::DocStr, d2) = docstrings_equal(parsedoc(d1), d2)
@@ -15,8 +15,8 @@ docstrings_equal(d1::DocStr, d2) = docstrings_equal(parsedoc(d1), d2)
 function docstring_startswith(d1, d2)
     io1 = IOBuffer()
     io2 = IOBuffer()
-    writemime(io1, MIME"text/markdown"(), d1)
-    writemime(io2, MIME"text/markdown"(), d2)
+    show(io1, MIME"text/markdown"(), d1)
+    show(io2, MIME"text/markdown"(), d2)
     startswith(takebuf_string(io1), takebuf_string(io2))
 end
 docstring_startswith(d1::DocStr, d2) = docstring_startswith(parsedoc(d1), d2)
@@ -486,16 +486,16 @@ immutable LazyHelp
     text
 end
 
-function Base.writemime(io::IO, ::MIME"text/plain", h::LazyHelp)
+function Base.show(io::IO, ::MIME"text/plain", h::LazyHelp)
     print(io, h.text)
 end
 
-Base.show(io::IO, h::LazyHelp) = writemime(io, "text/plain", h)
+Base.show(io::IO, h::LazyHelp) = show(io, "text/plain", h)
 
 function Base.Docs.catdoc(hs::LazyHelp...)
     Base.Docs.Text() do io
         for h in hs
-            writemime(io, MIME"text/plain"(), h)
+            show(io, MIME"text/plain"(), h)
         end
     end
 end
@@ -752,7 +752,7 @@ three :: Float64
 
 let d = @doc Undocumented.f
     io = IOBuffer()
-    writemime(io, MIME"text/markdown"(), d)
+    show(io, MIME"text/markdown"(), d)
     @test startswith(takebuf_string(io),"""
     No documentation found.
 
@@ -762,7 +762,7 @@ end
 
 let d = @doc Undocumented.undocumented
     io = IOBuffer()
-    writemime(io, MIME"text/markdown"(), d)
+    show(io, MIME"text/markdown"(), d)
     @test startswith(takebuf_string(io), """
     No documentation found.
 

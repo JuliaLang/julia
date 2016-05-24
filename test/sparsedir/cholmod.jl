@@ -591,7 +591,7 @@ Dp = spdiagm(dp)
 sparse(cholfact(sparse(Float64[ 10 1 1 1; 1 10 0 0; 1 0 10 0; 1 0 0 10]))); gc()
 
 # Issue 11747 - Wrong show method defined for FactorComponent
-Base.writemime(IOBuffer(), MIME"text/plain"(), cholfact(sparse(Float64[ 10 1 1 1; 1 10 0 0; 1 0 10 0; 1 0 0 10]))[:L])
+Base.show(IOBuffer(), MIME"text/plain"(), cholfact(sparse(Float64[ 10 1 1 1; 1 10 0 0; 1 0 10 0; 1 0 0 10]))[:L])
 
 # Element promotion and type inference
 @inferred cholfact(As)\ones(Int, size(As, 1))

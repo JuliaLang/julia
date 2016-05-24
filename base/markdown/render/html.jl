@@ -158,7 +158,7 @@ export html
 
 html(md) = sprint(html, md)
 
-function writemime(io::IO, ::MIME"text/html", md::MD)
+function show(io::IO, ::MIME"text/html", md::MD)
     withtag(io, :div, :class=>"markdown") do
         html(io, md)
     end

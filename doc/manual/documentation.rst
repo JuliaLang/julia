@@ -505,7 +505,7 @@ like tables is in the works.
 Markdown.jl supports interpolation in a very similar way to basic string
 literals, with the difference that it will store the object itself in
 the Markdown tree (as opposed to converting it to a string). When the
-Markdown content is rendered the usual ``writemime`` methods will be
+Markdown content is rendered the usual ``show`` methods will be
 called, and these can be overridden as usual. This design allows the
 Markdown to be extended with arbitrarily complex features (such as
 references) without cluttering the basic syntax.

@@ -4,7 +4,7 @@
 
 module DataFmt
 
-import Base: _default_delims, tryparse_internal, writemime
+import Base: _default_delims, tryparse_internal, show
 
 export countlines, readdlm, readcsv, writedlm, writecsv
 
@@ -623,7 +623,7 @@ end
 writedlm(io, a; opts...) = writedlm(io, a, '\t'; opts...)
 writecsv(io, a; opts...) = writedlm(io, a, ','; opts...)
 
-writemime(io::IO, ::MIME"text/csv", a) = writedlm(io, a, ',')
-writemime(io::IO, ::MIME"text/tab-separated-values", a) = writedlm(io, a, '\t')
+show(io::IO, ::MIME"text/csv", a) = writedlm(io, a, ',')
+show(io::IO, ::MIME"text/tab-separated-values", a) = writedlm(io, a, '\t')
 
 end # module DataFmt

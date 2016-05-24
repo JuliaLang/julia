@@ -6665,28 +6665,32 @@ Return, but do not print, the time elapsed since the last [`tic`](:func:`tic`).
 toq
 
 """
-    writemime(stream, mime, x)
+    show(stream, mime, x)
 
-The `display` functions ultimately call `writemime` in order to write an object `x` as a
+The `display` functions ultimately call `show` in order to write an object `x` as a
 given `mime` type to a given I/O `stream` (usually a memory buffer), if possible. In order
 to provide a rich multimedia representation of a user-defined type `T`, it is only necessary
-to define a new `writemime` method for `T`, via: `writemime(stream, ::MIME"mime", x::T) = ...`,
+to define a new `show` method for `T`, via: `show(stream, ::MIME"mime", x::T) = ...`,
 where `mime` is a MIME-type string and the function body calls `write` (or similar) to write
 that representation of `x` to `stream`. (Note that the `MIME""` notation only supports
 literal strings; to construct `MIME` types in a more flexible manner use
 `MIME{Symbol("")}`.)
 
 For example, if you define a `MyImage` type and know how to write it to a PNG file, you
-could define a function `writemime(stream, ::MIME"image/png", x::MyImage) = ...` to allow
+could define a function `show(stream, ::MIME"image/png", x::MyImage) = ...` to allow
 your images to be displayed on any PNG-capable `Display` (such as IJulia). As usual, be sure
-to `import Base.writemime` in order to add new methods to the built-in Julia function
-`writemime`.
+to `import Base.show` in order to add new methods to the built-in Julia function
+`show`.
+
+The default MIME type is `MIME"text/plain"`. There is a fallback definition for `text/plain`
+output that calls `show` with 2 arguments. Therefore, this case should be handled by
+defining a 2-argument `show(stream::IO, x::MyType)` method.
 
 Technically, the `MIME"mime"` macro defines a singleton type for the given `mime` string,
 which allows us to exploit Julia's dispatch mechanisms in determining how to display objects
 of any given type.
 """
-writemime
+show(stream, mime, x)
 
 """
     mean!(r, v)
@@ -7306,7 +7310,7 @@ Write an informative text representation of a value to the current output stream
 should overload `show(io, x)` where the first argument is a stream. The representation used
 by `show` generally includes Julia-specific formatting and type information.
 """
-show
+show(x)
 
 """
     @allocated
@@ -7984,8 +7988,8 @@ rethrow
     reprmime(mime, x)
 
 Returns an `AbstractString` or `Vector{UInt8}` containing the representation of `x` in the
-requested `mime` type, as written by `writemime` (throwing a `MethodError` if no appropriate
-`writemime` is available). An `AbstractString` is returned for MIME types with textual
+requested `mime` type, as written by `show` (throwing a `MethodError` if no appropriate
+`show` is available). An `AbstractString` is returned for MIME types with textual
 representations (such as `"text/html"` or `"application/postscript"`), whereas binary data
 is returned as `Vector{UInt8}`. (The function `istextmime(mime)` returns whether or not Julia
 treats a given `mime` type as text.)
@@ -8378,7 +8382,7 @@ showall
 
 Returns a boolean value indicating whether or not the object `x` can be written as the given
 `mime` type. (By default, this is determined automatically by the existence of the
-corresponding `writemime` function for `typeof(x)`.)
+corresponding `show` function for `typeof(x)`.)
 """
 mimewritable
 
