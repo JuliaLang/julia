@@ -331,12 +331,13 @@ check_pids_all(S)
 filedata = similar(Atrue)
 read!(fn, filedata)
 @test filedata == sdata(S)
+finalize(S)
 
 # Error for write-only files
 @test_throws ArgumentError SharedArray(fn, Int, sz, mode="w")
 
 # Error for file doesn't exist, but not allowed to create
-@test_throws ArgumentError SharedArray(tempname(), Int, sz, mode="r")
+@test_throws ArgumentError SharedArray(joinpath(tempdir(),randstring()), Int, sz, mode="r")
 
 # Creating a new file
 fn2 = tempname()
@@ -345,6 +346,7 @@ S = SharedArray(fn2, Int, sz, init=D->D[localindexes(D)] = myid())
 filedata2 = similar(Atrue)
 read!(fn2, filedata2)
 @test filedata == filedata2
+finalize(S)
 
 # Appending to a file
 fn3 = tempname()
@@ -356,11 +358,14 @@ filedata = Array(UInt8, len)
 read!(fn3, filedata)
 @test all(filedata[1:4] .== 0x01)
 @test all(filedata[5:end] .== 0x02)
+finalize(S)
 
-if !is_windows()
-    # these give unlink: operation not permitted (EPERM) on Windows
-    rm(fn); rm(fn2); rm(fn3)
-end
+# call gc 3 times to avoid unlink: operation not permitted (EPERM) on Windows
+S = nothing
+@everywhere gc()
+@everywhere gc()
+@everywhere gc()
+rm(fn); rm(fn2); rm(fn3)
 
 ### Utility functions
 

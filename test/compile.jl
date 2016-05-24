@@ -127,7 +127,6 @@ finally
 end
 
 # test --compilecache=no command line option
-dir = mktempdir()
 let dir = mktempdir(),
     Time_module = :Time4b3a94a1a081a8cb
 
