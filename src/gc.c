@@ -7,8 +7,8 @@ extern "C" {
 #endif
 
 // Protect all access to `finalizer_list_marked` and `to_finalize`.
-// For accessing `ptls->finalizers`, the lock is needed if a thread is
-// is going to realloc the buffer (of it's own list) or accessing the
+// For accessing `ptls->finalizers`, the lock is needed if a thread
+// is going to realloc the buffer (of its own list) or accessing the
 // list of another thread
 static jl_mutex_t finalizers_lock;
 
@@ -115,7 +115,7 @@ static void run_finalizer(jl_value_t *o, jl_value_t *ff)
 }
 
 // if `need_sync` is true, the `list` is the `finalizers` list of another
-// thead and we need additional synchronizations
+// thread and we need additional synchronizations
 static void finalize_object(arraylist_t *list, jl_value_t *o,
                             arraylist_t *copied_list, int need_sync)
 {
