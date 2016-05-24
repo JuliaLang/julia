@@ -38,6 +38,7 @@ const skipfiles = [
     "../base/linalg/givens.jl",
     #
     "../src/abi_llvm.cpp",
+    "../src/abi_ppc64le.cpp",
     "../src/abi_win32.cpp",
     "../src/abi_win64.cpp",
     "../src/abi_x86.cpp",

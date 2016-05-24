@@ -122,7 +122,9 @@ static Value *runtime_sym_lookup(PointerType *funcptype, const char *f_lib, cons
 #elif defined _CPU_ARM_
 #  include "abi_arm.cpp"
 #elif defined _CPU_AARCH64_
-#    include "abi_aarch64.cpp"
+#  include "abi_aarch64.cpp"
+#elif defined _CPU_PPC64_
+#  include "abi_ppc64le.cpp"
 #else
 #  warning "ccall is defaulting to llvm ABI, since no platform ABI has been defined for this CPU/OS combination"
 #  include "abi_llvm.cpp"
