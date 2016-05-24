@@ -41,9 +41,9 @@ include("expr.jl")
 include("error.jl")
 
 # core numeric operations & types
-include("bool.jl")
-include("number.jl")
-include("int.jl")
+include("numbers/bool.jl")
+include("numbers/number.jl")
+include("numbers/int.jl")
 include("operators.jl")
 include("pointer.jl")
 include("refpointer.jl")
@@ -79,13 +79,13 @@ Array{T}(::Type{T}, m::Integer,n::Integer)            = Array{T,2}(Int(m),Int(n)
 Array{T}(::Type{T}, m::Integer,n::Integer,o::Integer) = Array{T,3}(Int(m),Int(n),Int(o))
 
 # numeric operations
-include("hashing.jl")
-include("rounding.jl")
+include("numbers/hashing.jl")
+include("numbers/rounding.jl")
 importall .Rounding
-include("float.jl")
-include("complex.jl")
-include("rational.jl")
-include("multinverses.jl")
+include("numbers/float.jl")
+include("numbers/complex.jl")
+include("numbers/rational.jl")
+include("numbers/multinverses.jl")
 using .MultiplicativeInverses
 include("abstractarraymath.jl")
 include("arraymath.jl")
@@ -141,7 +141,7 @@ using .Libc: getpid, gethostname, time
 include("libdl.jl")
 using .Libdl: DL_LOAD_PATH
 include("env.jl")
-include("intfuncs.jl")
+include("numbers/intfuncs.jl")
 
 # nullable types
 include("nullable.jl")
@@ -165,12 +165,12 @@ import .Grisu.print_shortest
 include("methodshow.jl")
 
 # core math functions
-include("floatfuncs.jl")
-include("math.jl")
+include("numbers/floatfuncs.jl")
+include("numbers/math.jl")
 importall .Math
 const (√)=sqrt
 const (∛)=cbrt
-include("float16.jl")
+include("numbers/float16.jl")
 
 # multidimensional arrays
 include("cartesian.jl")
@@ -207,9 +207,9 @@ importall .Sort
 include("version.jl")
 
 # BigInts and BigFloats
-include("gmp.jl")
+include("numbers/gmp.jl")
 importall .GMP
-include("mpfr.jl")
+include("numbers/mpfr.jl")
 importall .MPFR
 big(n::Integer) = convert(BigInt,n)
 big(x::AbstractFloat) = convert(BigFloat,x)
@@ -218,11 +218,11 @@ big(q::Rational) = big(num(q))//big(den(q))
 include("combinatorics.jl")
 
 # more hashing definitions
-include("hashing2.jl")
+include("numbers/hashing2.jl")
 
 # random number generation
-include("dSFMT.jl")
-include("random.jl")
+include("numbers/dSFMT.jl")
+include("numbers/random.jl")
 importall .Random
 
 # (s)printf macros
@@ -287,7 +287,7 @@ importall .Broadcast
 include("statistics.jl")
 
 # irrational mathematical constants
-include("irrationals.jl")
+include("numbers/irrationals.jl")
 
 # signal processing
 include("dft.jl")
@@ -300,7 +300,7 @@ include("quadgk.jl")
 importall .QuadGK
 
 # Fast math
-include("fastmath.jl")
+include("numbers/fastmath.jl")
 importall .FastMath
 
 # libgit2 support

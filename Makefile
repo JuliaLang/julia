@@ -188,19 +188,19 @@ CORE_SRCS := $(addprefix $(JULIAHOME)/, \
 		base/boot.jl base/coreimg.jl \
 		base/abstractarray.jl \
 		base/array.jl \
-		base/bool.jl \
+		base/numbers/bool.jl \
 		base/dict.jl \
 		base/error.jl \
 		base/essentials.jl \
 		base/generator.jl \
 		base/expr.jl \
-		base/hashing.jl \
+		base/numbers/hashing.jl \
 		base/inference.jl \
-		base/int.jl \
+		base/numbers/int.jl \
 		base/intset.jl \
 		base/iterator.jl \
-		base/nofloat_hashing.jl \
-		base/number.jl \
+		base/numbers/nofloat_hashing.jl \
+		base/numbers/number.jl \
 		base/operators.jl \
 		base/options.jl \
 		base/pointer.jl \

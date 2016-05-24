@@ -32,9 +32,9 @@ include("expr.jl")
 include("error.jl")
 
 # core numeric operations & types
-include("bool.jl")
-include("number.jl")
-include("int.jl")
+include("numbers/bool.jl")
+include("numbers/number.jl")
+include("numbers/int.jl")
 include("operators.jl")
 include("pointer.jl")
 const checked_add = +
@@ -54,8 +54,8 @@ include("abstractarray.jl")
 include("array.jl")
 
 #TODO: eliminate Dict from inference
-include("hashing.jl")
-include("nofloat_hashing.jl")
+include("numbers/hashing.jl")
+include("numbers/nofloat_hashing.jl")
 
 # map-reduce operators
 macro simd(forloop)
