@@ -230,12 +230,10 @@ a normal value:
 Using an index less than 1 or greater than ``end`` raises an error::
 
     julia> str[0]
-    ERROR: BoundsError()
-     in getindex at /Users/sabae/src/julia/usr/lib/julia/sys.dylib (repeats 2 times)
+    ERROR: BoundsError: attempt to access 14-element Array{UInt8,1} at index [0]
 
     julia> str[end+1]
-    ERROR: BoundsError()
-     in getindex at /Users/sabae/src/julia/usr/lib/julia/sys.dylib (repeats 2 times)
+    ERROR: BoundsError: attempt to access 14-element Array{UInt8,1} at index [15]
 
 You can also extract a substring using range indexing:
 

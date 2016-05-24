@@ -303,8 +303,8 @@ Trying to construct a :const:`NaN` rational value, however, is not:
 
     julia> 0//0
     ERROR: ArgumentError: invalid rational: zero(Int64)//zero(Int64)
-     in call at rational.jl:8
-     in // at rational.jl:22
+     in Rational{Int64}(::Int64, ::Int64) at ./rational.jl:8
+     in //(::Int64, ::Int64) at ./rational.jl:22
 
 As usual, the promotion system makes interactions with other numeric
 types effortless:

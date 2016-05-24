@@ -306,7 +306,10 @@ the array.
 
 Note the evaluation behavior of chained comparisons::
 
-    v(x) = (println(x); x)
+.. doctest::
+
+    julia> v(x) = (println(x); x)
+    v (generic function with 1 method)
 
     julia> v(1) < v(2) <= v(3)
     2
