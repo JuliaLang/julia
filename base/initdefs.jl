@@ -99,7 +99,7 @@ function init_parallel()
     global PGRP
     global LPROC
     LPROC.id = 1
-    cluster_cookie(randstring())
+    cluster_cookie(randstring(HDR_COOKIE_LEN))
     assert(isempty(PGRP.workers))
     register_worker(LPROC)
 end

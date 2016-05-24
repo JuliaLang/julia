@@ -181,7 +181,7 @@ function start_master(np)
                 #println("master recv data from $from_zid")
 
                 (r_s, w_s, t_r) = manager.map_zmq_julia[from_zid]
-                write(r_s, convert(Ptr{Uint8}, data), length(data))
+                unsafe_write(r_s, pointer(data), length(data))
             end
         catch e
             Base.show_backtrace(STDOUT,catch_backtrace())
@@ -197,7 +197,7 @@ end
 function launch(manager::ZMQCMan, params::Dict, launched::Array, c::Condition)
     #println("launch $(params[:np])")
     for i in 1:params[:np]
-        io, pobj = open(`julia worker.jl $i $(Base.cluster_cookie())`, "r")
+        io, pobj = open(`$(params[:exename]) worker.jl $i $(Base.cluster_cookie())`, "r")
 
         wconfig = WorkerConfig()
         wconfig.userdata = Dict(:zid=>i, :io=>io)
@@ -247,7 +247,7 @@ function start_worker(zid, cookie)
             (r_s, w_s, t_r) = streams
         end
 
-        write(r_s, convert(Ptr{Uint8}, data), length(data))
+        unsafe_write(r_s, pointer(data), length(data))
     end
 end
 
