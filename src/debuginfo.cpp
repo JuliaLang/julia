@@ -1515,8 +1515,10 @@ static DW_EH_PE parseCIE(const uint8_t *Addr, const uint8_t *End)
     // Assume there's no EH Data field, which exist when the augmentation
     // string has "eh" in it.
     p += augmentation_len + 1;
-    // Code Alignment Factor (1 byte) should always be 1
-    assert(*p == 1);
+    // Code Alignment Factor (1 byte)
+    // should always be 1 on x86, 4 on PPC, etc.
+    // (used for DW_CFA_advance_loc / not used here)
+    //assert(*p == 1);
     p++;
     // Data Alignment Factor (LEB128)
     assert(cie_end >= p);
