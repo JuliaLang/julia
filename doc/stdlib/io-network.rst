@@ -300,7 +300,7 @@ General I/O
 
    .. Docstring generated from Julia source
 
-   Read a value written by ``serialize``\ .
+   Read a value written by ``serialize``\ . ``deserialize`` assumes the binary data read from ``stream`` is correct and has been serialized by a compatible implementation of ``serialize``\ . It has been designed with simplicity and performance as a goal and does not validate the data read. Malformed data can result in process termination. The caller has to ensure the integrity and correctness of data read from ``stream``\ .
 
 .. function:: print_escaped(io, str::AbstractString, esc::AbstractString)
 
