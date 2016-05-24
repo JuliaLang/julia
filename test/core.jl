@@ -2345,7 +2345,8 @@ end === nothing
 # issue #10221
 module GCbrokentype
 OLD_STDOUT = STDOUT
-file = open(tempname(), "w")
+fname = tempname()
+file = open(fname, "w")
 redirect_stdout(file)
 versioninfo()
 try
@@ -2356,6 +2357,7 @@ end
 gc()
 redirect_stdout(OLD_STDOUT)
 close(file)
+rm(fname)
 end
 
 # issue #10373

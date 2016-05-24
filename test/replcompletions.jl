@@ -636,7 +636,7 @@ if is_windows()
         s = "cd(\"$(file[1:2])"
         c,r = test_complete(s)
         @test r == length(s) - 1:length(s)
-        @test file  in c
+        @test (length(c) > 1 && file in c) || (["$file\""] == c)
     end
     rm(tmp)
 end
