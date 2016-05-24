@@ -15,10 +15,11 @@ typealias DenseVecOrMat{T} Union{DenseVector{T}, DenseMatrix{T}}
 size(a::Array, d) = arraysize(a, d)
 size(a::Vector) = (arraysize(a,1),)
 size(a::Matrix) = (arraysize(a,1), arraysize(a,2))
-size{_}(a::Array{_,3}) = (arraysize(a,1), arraysize(a,2), arraysize(a,3))
-size{_}(a::Array{_,4}) = (arraysize(a,1), arraysize(a,2), arraysize(a,3), arraysize(a,4))
+size(a::Array) = _size((), a)
+_size{_,N}(out::NTuple{N}, A::Array{_,N}) = out
+_size{_,M,N}(out::NTuple{M}, A::Array{_,N}) = _size((out..., size(A,M+1)), A)
+
 asize_from(a::Array, n) = n > ndims(a) ? () : (arraysize(a,n), asize_from(a, n+1)...)
-size{_,N}(a::Array{_,N}) = asize_from(a, 1)::NTuple{N,Int}
 
 length(a::Array) = arraylen(a)
 elsize{T}(a::Array{T}) = isbits(T) ? sizeof(T) : sizeof(Ptr)
