@@ -11,6 +11,8 @@ ndims(x::Number) = 0
 ndims{T<:Number}(::Type{T}) = 0
 length(x::Number) = 1
 endof(x::Number) = 1
+iteratorsize{T<:Number}(::Type{T}) = HasShape()
+
 getindex(x::Number) = x
 function getindex(x::Number, i::Integer)
     @_inline_meta

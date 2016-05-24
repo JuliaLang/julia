@@ -38,6 +38,9 @@ end
 @test isequal(filter(x->(x>10), [0 1 2 3 2 1 0]), [])
 @test isequal(filter((ss)->length(ss)==3, ["abcd", "efg", "hij", "klmn", "opq"]), ["efg", "hij", "opq"])
 
+# numbers
+@test size(collect(1)) == size(1)
+
 # zip and filter iterators
 # issue #4718
 @test collect(filter(x->x[1], zip([true, false, true, false],"abcd"))) == [(true,'a'),(true,'c')]
