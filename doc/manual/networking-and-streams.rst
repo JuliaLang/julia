@@ -173,7 +173,7 @@ Let's jump right in with a simple example involving TCP sockets. Let's first cre
                println("Hello World\n")
              end
            end
-    Task
+    Task (runnable) @0x00007fd31dc11ae0
 
     julia>
 
@@ -230,7 +230,7 @@ A great strength of Julia is that since the API is exposed synchronously even th
                end
              end
            end
-    Task
+    Task (runnable) @0x00007fd31dc12e60
 
     julia> clientside=connect(2001)
     TCPSocket(open, 0 bytes waiting)
@@ -238,10 +238,11 @@ A great strength of Julia is that since the API is exposed synchronously even th
     julia> @async while true
               write(STDOUT,readline(clientside))
            end
+    Task (runnable) @0x00007fd31dc11870
 
     julia> println(clientside,"Hello World from the Echo Server")
+    Hello World from the Echo Server
 
-    julia> Hello World from the Echo Server
 
 As with other streams, use :func:`close` to disconnect the socket::
 
