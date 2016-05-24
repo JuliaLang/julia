@@ -502,53 +502,86 @@ let
     @test isequal(cumsum(A,2),A2)
     @test isequal(cumsum(A,3),A3)
 
-    R = repeat([1, 2], inner = [1], outer = [1])
+    R = repeat([1, 2])
     @test R == [1, 2]
-    R = repeat([1, 2], inner = [2], outer = [1])
+    R = repeat([1, 2], inner=1)
+    @test R == [1, 2]
+    R = repeat([1, 2], outer=1)
+    @test R == [1, 2]
+    R = repeat([1, 2], inner=(1,))
+    @test R == [1, 2]
+    R = repeat([1, 2], outer=(1,))
+    @test R == [1, 2]
+    R = repeat([1, 2], inner=[1])
+    @test R == [1, 2]
+    R = repeat([1, 2], outer=[1])
+    @test R == [1, 2]
+    R = repeat([1, 2], inner=1, outer=1)
+    @test R == [1, 2]
+    R = repeat([1, 2], inner=(1,), outer=(1,))
+    @test R == [1, 2]
+    R = repeat([1, 2], inner=[1], outer=[1])
+    @test R == [1, 2]
+
+    R = repeat([1, 2], inner=2)
     @test R == [1, 1, 2, 2]
-    R = repeat([1, 2], inner = [1], outer = [2])
+    R = repeat([1, 2], outer=2)
     @test R == [1, 2, 1, 2]
-    R = repeat([1, 2], inner = [2], outer = [2])
+    R = repeat([1, 2], inner=(2,))
+    @test R == [1, 1, 2, 2]
+    R = repeat([1, 2], outer=(2,))
+    @test R == [1, 2, 1, 2]
+    R = repeat([1, 2], inner=[2])
+    @test R == [1, 1, 2, 2]
+    R = repeat([1, 2], outer=[2])
+    @test R == [1, 2, 1, 2]
+
+    R = repeat([1, 2], inner=2, outer=2)
     @test R == [1, 1, 2, 2, 1, 1, 2, 2]
-    R = repeat([1, 2], inner = [1, 1], outer = [1, 1])
+    R = repeat([1, 2], inner=(2,), outer=(2,))
+    @test R == [1, 1, 2, 2, 1, 1, 2, 2]
+    R = repeat([1, 2], inner=[2], outer=[2])
+    @test R == [1, 1, 2, 2, 1, 1, 2, 2]
+
+    R = repeat([1, 2], inner = (1, 1), outer = (1, 1))
     @test R == [1, 2]''
-    R = repeat([1, 2], inner = [2, 1], outer = [1, 1])
+    R = repeat([1, 2], inner = (2, 1), outer = (1, 1))
     @test R == [1, 1, 2, 2]''
-    R = repeat([1, 2], inner = [1, 2], outer = [1, 1])
+    R = repeat([1, 2], inner = (1, 2), outer = (1, 1))
     @test R == [1 1; 2 2]
-    R = repeat([1, 2], inner = [1, 1], outer = [2, 1])
+    R = repeat([1, 2], inner = (1, 1), outer = (2, 1))
     @test R == [1, 2, 1, 2]''
-    R = repeat([1, 2], inner = [1, 1], outer = [1, 2])
+    R = repeat([1, 2], inner = (1, 1), outer = (1, 2))
     @test R == [1 1; 2 2]
 
     R = repeat([1 2;
-                3 4], inner = [1, 1], outer = [1, 1])
+                3 4], inner = (1, 1), outer = (1, 1))
     @test R == [1 2;
                   3 4]
     R = repeat([1 2;
-                3 4], inner = [1, 1], outer = [2, 1])
+                3 4], inner = (1, 1), outer = (2, 1))
     @test R == [1 2;
                   3 4;
                   1 2;
                   3 4]
     R = repeat([1 2;
-                3 4], inner = [1, 1], outer = [1, 2])
+                3 4], inner = (1, 1), outer = (1, 2))
     @test R == [1 2 1 2;
                   3 4 3 4]
     R = repeat([1 2;
-                3 4], inner = [1, 1], outer = [2, 2])
+                3 4], inner = (1, 1), outer = (2, 2))
     @test R == [1 2 1 2;
                   3 4 3 4;
                   1 2 1 2;
                   3 4 3 4]
     R = repeat([1 2;
-                3 4], inner = [2, 1], outer = [1, 1])
+                3 4], inner = (2, 1), outer = (1, 1))
     @test R == [1 2;
                   1 2;
                   3 4;
                   3 4]
     R = repeat([1 2;
-                3 4], inner = [2, 1], outer = [2, 1])
+                3 4], inner = (2, 1), outer = (2, 1))
     @test R == [1 2;
                   1 2;
                   3 4;
@@ -558,13 +591,13 @@ let
                   3 4;
                   3 4]
     R = repeat([1 2;
-                3 4], inner = [2, 1], outer = [1, 2])
+                3 4], inner = (2, 1), outer = (1, 2))
     @test R == [1 2 1 2;
                   1 2 1 2;
                   3 4 3 4;
                   3 4 3 4;]
     R = repeat([1 2;
-                3 4], inner = [2, 1], outer = [2, 2])
+                3 4], inner = (2, 1), outer = (2, 2))
     @test R == [1 2 1 2;
                   1 2 1 2;
                   3 4 3 4;
@@ -574,49 +607,49 @@ let
                   3 4 3 4;
                   3 4 3 4]
     R = repeat([1 2;
-                3 4], inner = [1, 2], outer = [1, 1])
+                3 4], inner = (1, 2), outer = (1, 1))
     @test R == [1 1 2 2;
                   3 3 4 4]
     R = repeat([1 2;
-                3 4], inner = [1, 2], outer = [2, 1])
+                3 4], inner = (1, 2), outer = (2, 1))
     @test R == [1 1 2 2;
                   3 3 4 4;
                   1 1 2 2;
                   3 3 4 4]
     R = repeat([1 2;
-                3 4], inner = [1, 2], outer = [1, 2])
+                3 4], inner = (1, 2), outer = (1, 2))
     @test R == [1 1 2 2 1 1 2 2;
                   3 3 4 4 3 3 4 4]
     R = repeat([1 2;
-                3 4], inner = [1, 2], outer = [2, 2])
+                3 4], inner = (1, 2), outer = (2, 2))
     @test R == [1 1 2 2 1 1 2 2;
                   3 3 4 4 3 3 4 4;
                   1 1 2 2 1 1 2 2;
                   3 3 4 4 3 3 4 4]
     R = repeat([1 2;
-                3 4], inner = [2, 2], outer = [1, 1])
+                3 4], inner = (2, 2), outer = [1, 1])
     @test R == [1 1 2 2;
-                  1 1 2 2;
-                  3 3 4 4;
-                  3 3 4 4]
-    R = repeat([1 2;
-                3 4], inner = [2, 2], outer = [2, 1])
-    @test R == [1 1 2 2;
-                  1 1 2 2;
-                  3 3 4 4;
-                  3 3 4 4;
-                  1 1 2 2;
                   1 1 2 2;
                   3 3 4 4;
                   3 3 4 4]
     R = repeat([1 2;
-                3 4], inner = [2, 2], outer = [1, 2])
+                3 4], inner = (2, 2), outer = (2, 1))
+    @test R == [1 1 2 2;
+                  1 1 2 2;
+                  3 3 4 4;
+                  3 3 4 4;
+                  1 1 2 2;
+                  1 1 2 2;
+                  3 3 4 4;
+                  3 3 4 4]
+    R = repeat([1 2;
+                3 4], inner = (2, 2), outer = (1, 2))
     @test R == [1 1 2 2 1 1 2 2;
                   1 1 2 2 1 1 2 2;
                   3 3 4 4 3 3 4 4;
                   3 3 4 4 3 3 4 4]
     R = repeat([1 2;
-                3 4], inner = [2, 2], outer = [2, 2])
+                3 4], inner = (2, 2), outer = (2, 2))
     @test R == [1 1 2 2 1 1 2 2;
                   1 1 2 2 1 1 2 2;
                   3 3 4 4 3 3 4 4;
@@ -625,9 +658,17 @@ let
                   1 1 2 2 1 1 2 2;
                   3 3 4 4 3 3 4 4;
                   3 3 4 4 3 3 4 4]
+    @test_throws ArgumentError repeat([1 2;
+                                       3 4], inner=2, outer=(2, 2))
+    @test_throws ArgumentError repeat([1 2;
+                                       3 4], inner=(2, 2), outer=2)
+    @test_throws ArgumentError repeat([1 2;
+                                       3 4], inner=(2,), outer=(2, 2))
+    @test_throws ArgumentError repeat([1 2;
+                                       3 4], inner=(2, 2), outer=(2,))
 
     A = reshape(1:8, 2, 2, 2)
-    R = repeat(A, inner = [1, 1, 2], outer = [1, 1, 1])
+    R = repeat(A, inner = (1, 1, 2), outer = (1, 1, 1))
     T = reshape([1:4; 1:4; 5:8; 5:8], 2, 2, 4)
     @test R == T
     A = Array(Int, 2, 2, 2)
@@ -635,7 +676,7 @@ let
                   3 4]
     A[:, :, 2] = [5 6;
                   7 8]
-    R = repeat(A, inner = [2, 2, 2], outer = [2, 2, 2])
+    R = repeat(A, inner = (2, 2, 2), outer = (2, 2, 2))
     @test R[1, 1, 1] == 1
     @test R[2, 2, 2] == 1
     @test R[3, 3, 3] == 8
@@ -644,6 +685,19 @@ let
     @test R[6, 6, 6] == 1
     @test R[7, 7, 7] == 8
     @test R[8, 8, 8] == 8
+
+    R = repeat(1:2)
+    @test R == [1, 2]
+    R = repeat(1:2, inner=1)
+    @test R == [1, 2]
+    R = repeat(1:2, inner=2)
+    @test R == [1, 1, 2, 2]
+    R = repeat(1:2, outer=1)
+    @test R == [1, 2]
+    R = repeat(1:2, outer=2)
+    @test R == [1, 2, 1, 2]
+    R = repeat(1:2, inner=(3,), outer=(2,))
+    @test R == [1, 1, 1, 2, 2, 2, 1, 1, 1, 2, 2, 2]
 
     A = rand(4,4)
     for s in Any[A[1:2:4, 1:2:4], sub(A, 1:2:4, 1:2:4)]
