@@ -16,6 +16,7 @@ MBEDTLS_OPTS += -DCMAKE_BUILD_TYPE=Release
 endif
 
 $(BUILDDIR)/$(MBEDTLS_SRC_DIR)/Makefile: $(SRCDIR)/srccache/$(MBEDTLS_SRC_DIR)/CMakeLists.txt
+	-cd $(SRCDIR)/srccache/$(MBEDTLS_SRC_DIR) && patch -p0 -f < $(SRCDIR)/mbedtls.patch
 	mkdir -p $(dir $@)
 	cd $(dir $@) && \
 	$(CMAKE) $(dir $<) $(MBEDTLS_OPTS)
@@ -38,10 +39,6 @@ $(MBEDTLS_OBJ_TARGET): $(MBEDTLS_OBJ_SOURCE) | $(build_shlibdir)
 clean-mbedtls:
 	-rm -rf $(BUILDDIR)/$(MBEDTLS_SRC_DIR)
 	-rm -f $(MBEDTLS_OBJ_TARGET)
-distclean-mbedtls:
-	-rm -rf $(SRCDIR)/srccache/mbedtls-$(MBEDTLS_SHA1).tar.gz \
-		$(SRCDIR)/srccache/mbedtls-$(MBEDTLS_SHA1) \
-		$(BUILDDIR)/mbedtls-$(MBEDTLS_SHA1)
 
 get-mbedtls: $(MBEDTLS_SRC_FILE)
 configure-mbedtls: $(BUILDDIR)/$(MBEDTLS_SRC_DIR)/Makefile
