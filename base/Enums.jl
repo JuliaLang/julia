@@ -93,7 +93,7 @@ macro enum(T,syms...)
             end
         end
         function Base.show(io::IO,x::$(esc(typename)))
-            if Base.limit_output(io)
+            if get(io, :compact, false)
                 print(io, x)
             else
                 print(io, x, "::", $(esc(typename)), " = ", Int(x))

@@ -1144,7 +1144,6 @@ export
     ismarked,
     isopen,
     isreadonly,
-    limit_output,
     listen,
     listenany,
     ltoh,

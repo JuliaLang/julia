@@ -92,8 +92,13 @@ for (i, T) in enumerate(types)
     @test takebuf_string(io1) == @sprintf("Nullable{%s}(%s)", T, takebuf_string(io2))
 
     a1 = [x2]
+    show(IOContext(io1, compact=false), a1)
+    show(IOContext(io2, compact=false), x2)
+    @test takebuf_string(io1) ==
+        @sprintf("Nullable{%s}[%s]", string(T), takebuf_string(io2))
+
     show(io1, a1)
-    show(io2, x2)
+    show(IOContext(io2, compact=true), x2)
     @test takebuf_string(io1) ==
         @sprintf("Nullable{%s}[%s]", string(T), takebuf_string(io2))
 end

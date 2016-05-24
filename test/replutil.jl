@@ -354,10 +354,10 @@ end
 
 # Issue #14684: `display` should prints associative types in full.
 let d = Dict(1 => 2, 3 => 45)
-    buf = IOBuffer()
+    buf = IOContext(IOBuffer(), multiline=true)
     td = TextDisplay(buf)
     display(td, d)
-    result = String(td.io)
+    result = String(td.io.io)
 
     @test contains(result, summary(d))
 
