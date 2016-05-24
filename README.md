@@ -217,6 +217,8 @@ Currently, the `@compat` macro supports the following syntaxes:
   Compat provides an unexported `Compat.AsyncCondition` type that is aliased to
   `Base.SingleAsyncWork` on Julia 0.3 and 0.4 and `Base.AsyncCondition` on Julia 0.5.
 
+* `repeat` now accepts any `AbstractArray` [#14082](https://github.com/JuliaLang/julia/pull/14082): `Compat.repeat` supports this new API on Julia 0.3 and 0.4, and calls `Base.repeat` on 0.5.
+
 ## New types
 
 * [`Nullable` types](http://julia.readthedocs.org/en/latest/manual/types/?highlight=nullable#nullable-types-representing-missing-values) and their associated operations.

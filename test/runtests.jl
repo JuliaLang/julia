@@ -1164,3 +1164,7 @@ let io = IOBuffer(), s = "hello"
     @test string(s, s, s) == "hellohellohello"
     @test String == @compat(Union{Compat.UTF8String,Compat.ASCIIString})
 end
+
+@test Compat.repeat(1:2, inner=2) == [1, 1, 2, 2]
+@test Compat.repeat(1:2, outer=[2]) == [1, 2, 1, 2]
+@test Compat.repeat([1,2], inner=(2,)) == [1, 1, 2, 2]
