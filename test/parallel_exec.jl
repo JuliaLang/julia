@@ -978,3 +978,5 @@ for i = 1:10^n
     fetch(@spawnat myid() myid())
 end
 
+# issue #15451
+@test remotecall_fetch(x->(y->2y)(x)+1, workers()[1], 3) == 7
