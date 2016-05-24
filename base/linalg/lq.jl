@@ -162,6 +162,15 @@ function \{TA,TB}(A::LQ{TA},B::StridedMatrix{TB})
     X = A_ldiv_B!(AA, copy_oftype(B, S))
     return X
 end
+# With a real lhs and complex rhs with the same precision, we can reinterpret
+# the complex rhs as a real rhs with twice the number of columns
+function (\){T<:BlasReal}(F::LQ{T}, B::VecOrMat{Complex{T}})
+    c2r = reshape(transpose(reinterpret(T, B, (2, length(B)))), size(B, 1), 2*size(B, 2))
+    x = A_ldiv_B!(F, c2r)
+    return reinterpret(Complex{T}, transpose(reshape(x, div(length(x), 2), 2)),
+        isa(B, AbstractVector) ? (size(F,2),) : (size(F,2), size(B,2)))
+end
+
 
 function A_ldiv_B!{T}(A::LQ{T}, B::StridedVecOrMat{T})
     Ac_mul_B!(A[:Q], A_ldiv_B!(LowerTriangular(A[:L]),B))
