@@ -490,6 +490,7 @@ type PartitionIterator{T}
 end
 
 eltype{T}(::Type{PartitionIterator{T}}) = Vector{eltype(T)}
+iteratorsize{T}(::Type{PartitionIterator{T}}) = iteratorsize(T)
 
 function length(itr::PartitionIterator)
     l = length(itr.c)
