@@ -1019,6 +1019,9 @@
                      ((comprehension)
                       (loop (list* 'typed_comprehension ex (cdr al))))
                      ((dict_comprehension)
+		      (syntax-deprecation
+		       s (string #\( (deparse ex) #\) "[a=>b for (a,b) in c]")
+		       (string (deprecated-dict-replacement ex) "(a=>b for (a,b) in c)"))
                       (loop (list* 'typed_dict_comprehension ex (cdr al))))
                      (else (error "unknown parse-cat result (internal error)"))))))
             ((|.|)
@@ -1995,7 +1998,7 @@
                         (syntax-deprecation s "{a for a in b}" "Any[a for a in b]")
                         `(typed_comprehension (top Any) ,@(cdr vex)))
                        ((dict_comprehension)
-                        (syntax-deprecation s "{a=>b for (a,b) in c}" "Dict{Any,Any}([a=>b for (a,b) in c])")
+                        (syntax-deprecation s "{a=>b for (a,b) in c}" "Dict{Any,Any}(a=>b for (a,b) in c)")
                         `(typed_dict_comprehension (=> (top Any) (top Any)) ,@(cdr vex)))
                        ((dict)
                         (syntax-deprecation s "{a=>b, ...}" "Dict{Any,Any}(a=>b, ...)")
