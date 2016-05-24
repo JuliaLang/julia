@@ -289,6 +289,7 @@ my_tempdir = tempdir()
 path = tempname()
 # Issue #9053.
 @test ispath(path) == is_windows()
+ispath(path) && rm(path)
 
 (p, f) = mktemp()
 print(f, "Here is some text")
