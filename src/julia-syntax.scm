@@ -1344,7 +1344,7 @@
                                 `((quote ,(cadr a)) ,(caddr a)))
                               keys))))
      (if (null? restkeys)
-         `(call (call (core kwfunc) ,f) (cell1d ,@keyargs) ,f ,@pa)
+         `(kwcall (call (core kwfunc) ,f) (cell1d ,@keyargs) ,f ,@pa)
          (let ((container (make-ssavalue)))
            `(block
              (= ,container (cell1d ,@keyargs))
@@ -1363,7 +1363,7 @@
                                     ,push-expr))))
                     restkeys)
              ,(if (not (null? keys))
-                  `(call (call (core kwfunc) ,f) ,container ,f ,@pa)
+                  `(call (kwcall (core kwfunc) ,f) ,container ,f ,@pa)
                   (let* ((expr_stmts (remove-argument-side-effects `(call ,f ,@pa)))
                          (pa         (cddr (car expr_stmts)))
                          (stmts      (cdr expr_stmts)))
@@ -1371,7 +1371,7 @@
                       ,@stmts
                       (if (call (top isempty) ,container)
                           (call ,f ,@pa)
-                          (call (call (core kwfunc) ,f) ,container ,f ,@pa)))))))))))
+                          (kwcall (call (core kwfunc) ,f) ,container ,f ,@pa)))))))))))
 
 ;; convert e.g. A'*B to Ac_mul_B(A,B)
 (define (expand-transposed-op e ops)
@@ -1712,6 +1712,40 @@
 
    'curly
    (lambda (e) (expand-forms `(call (core apply_type) ,@(cdr e))))
+
+   'kwcall
+   (lambda (e)
+         (let ((f (cadr e)))
+          (cond
+                 ((and (pair? (caddr e))
+                       (eq? (car (caddr e)) 'parameters))
+                  (error "lowering"))
+                 ((any kwarg? (cddr e))
+                  (error "lowering"))
+
+                 ((any vararg? (cddr e))
+                  ;; call with splat
+                  (let ((argl (cddr e)))
+                    ;; wrap sequences of non-... arguments in tuple()
+                    (define (tuple-wrap a run)
+                      (if (null? a)
+                          (if (null? run) '()
+                              (list `(call (core tuple) ,.(reverse run))))
+                          (let ((x (car a)))
+                            (if (and (length= x 2)
+                                     (eq? (car x) '...))
+                                (if (null? run)
+                                    (list* (cadr x)
+                                           (tuple-wrap (cdr a) '()))
+                                    (list* `(call (core tuple) ,.(reverse run))
+                                           (cadr x)
+                                           (tuple-wrap (cdr a) '())))
+                                (tuple-wrap (cdr a) (cons x run))))))
+                    (expand-forms
+                     `(call (core _apply) ,f ,@(tuple-wrap argl '())))))
+
+                 (else
+                  (map expand-forms e)))))
 
    'call
    (lambda (e)
@@ -2416,7 +2450,7 @@
                           (vinfo:set-sa! vi #t))
                       (vinfo:set-asgn! vi #t))))
          (analyze-vars (caddr e) env captvars sp))
-        ((call)
+        ((call kwcall)
          (let ((vi (var-info-for (cadr e) env)))
            (if vi
                (vinfo:set-called! vi #t))
@@ -3038,7 +3072,7 @@ f(x) = yt(x)
                 ((symbol? e) (emit e) #f)  ;; keep symbols for undefined-var checking
                 (else #f))
           (case (car e)
-            ((call new)
+            ((call kwcall new)
              (let* ((ccall? (and (eq? (car e) 'call) (equal? (cadr e) '(core ccall))))
                     (args (if ccall?
                               ;; NOTE: first 3 arguments of ccall must be left in place

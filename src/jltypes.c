@@ -3732,6 +3732,7 @@ void jl_init_types(void)
 
     empty_sym = jl_symbol("");
     call_sym = jl_symbol("call");
+    kwcall_sym = jl_symbol("kwcall");
     quote_sym = jl_symbol("quote");
     inert_sym = jl_symbol("inert");
     top_sym = jl_symbol("top");
