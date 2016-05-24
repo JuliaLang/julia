@@ -390,7 +390,7 @@ withenv("JULIA_EDITOR" => nothing, "VISUAL" => nothing, "EDITOR" => nothing) do
     @test Base.editor() == ["/Applications/Sublime Text.app/Contents/SharedSupport/bin/subl", "-w"]
 end
 
-# Issue #14684: `display` should prints associative types in full.
+# Issue #14684: `display` should print associative types in full.
 let d = Dict(1 => 2, 3 => 45)
     buf = IOBuffer()
     td = TextDisplay(buf)

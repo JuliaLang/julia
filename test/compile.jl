@@ -35,7 +35,7 @@ try
               # issue 16529 (adding a method to a type with no instances)
               (::Task)(::UInt8, ::UInt16, ::UInt32) = 2
 
-              # issue 16471 (capturing references to an kwfunc)
+              # issue 16471 (capturing references to a kwfunc)
               Base.Test.@test_throws ErrorException Core.kwfunc(Base.nothing)
               Base.nothing(::UInt8, ::UInt16, ::UInt32; x = 52) = x
               const nothingkw = Core.kwfunc(Base.nothing)
