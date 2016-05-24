@@ -7,9 +7,9 @@ $(eval $(call git-external,libgit2,LIBGIT2,CMakeLists.txt,build/libgit2.$(SHLIB_
 LIBGIT2_OBJ_SOURCE := $(BUILDDIR)/$(LIBGIT2_SRC_DIR)/libgit2.$(SHLIB_EXT)
 LIBGIT2_OBJ_TARGET := $(build_shlibdir)/libgit2.$(SHLIB_EXT)
 
-LIBGIT2_OPTS := $(CMAKE_COMMON) -DTHREADSAFE=ON
+LIBGIT2_OPTS := $(CMAKE_COMMON) -DTHREADSAFE=ON -DCMAKE_PREFIX_PATH=$(build_prefix)
 ifeq ($(OS),WINNT)
-LIBGIT2_OPTS += -DWIN32=ON -DMINGW=ON -DUSE_SSH=OFF -DCMAKE_BUILD_TYPE=RelWithDebInfo
+LIBGIT2_OPTS += -DWIN32=ON -DMINGW=ON -DCMAKE_BUILD_TYPE=RelWithDebInfo
 ifneq ($(ARCH),x86_64)
 LIBGIT2_OPTS += -DCMAKE_C_FLAGS="-mincoming-stack-boundary=2"
 endif
