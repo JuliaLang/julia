@@ -113,9 +113,9 @@
 #  define MEMDEBUG
 #  define KEEP_BODIES
 #  endif
-// Memory sanitizer also needs thread-local storage
+// Memory sanitizer needs TLS, which llvm only supports for the small memory model
 #  if __has_feature(memory_sanitizer)
-#  define CODEGEN_TLS
+   // todo: fix the llvm MemoryManager to work with small memory model
 #  endif
 #endif
 
