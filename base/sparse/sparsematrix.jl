@@ -2997,6 +2997,13 @@ function is_hermsym(A::SparseMatrixCSC, check::Function)
                 end
             else
                 offset = tracker[row]
+
+                # If the matrix is unsymmetric, there might not exist
+                # a rowval[offset]
+                if offset > length(rowval)
+                    return false
+                end
+
                 row2 = rowval[offset]
 
                 # row2 can be less than col if the tracker didn't
