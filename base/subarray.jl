@@ -318,3 +318,76 @@ function parentdims(s::SubArray)
     end
     dimindex
 end
+
+"""
+    replace_ref_end!(ex)
+
+Recursively replace occurences of the symbol :end in a "ref" expression (i.e. A[...]) `ex`
+with the appropriate function calls (`endof`, `size` or `trailingsize`). Replacement uses
+the closest enclosing ref, so
+
+    A[B[end]]
+
+should transform to
+
+    A[B[endof(B)]]
+
+"""
+function replace_ref_end!(ex,withex=nothing)
+    if isa(ex,Symbol) && ex == :end
+        withex == nothing && error("Invalid use of end")
+        return withex
+    elseif isa(ex,Expr)
+        if ex.head == :ref
+            S = ex.args[1] = replace_ref_end!(ex.args[1],withex)
+            # new :ref, so redefine withex
+            nargs = length(ex.args)-1
+            if nargs == 0
+                return ex
+            elseif nargs == 1
+                # replace with endof(S)
+                ex.args[2] = replace_ref_end!(ex.args[2],:(Base.endof($S)))
+            else
+                n = 1
+                J = endof(ex.args)
+                for j = 2:J-1
+                    exj = ex.args[j] = replace_ref_end!(ex.args[j],:(Base.size($S,$n)))
+                    if isa(exj,Expr) && exj.head == :...
+                        # splatted object
+                        exjs = exj.args[1]
+                        n = :($n + length($exjs))
+                    elseif isa(n, Expr)
+                        # previous expression splatted
+                        n = :($n + 1)
+                    else
+                        # an integer
+                        n += 1
+                    end
+                end
+                ex.args[J] = replace_ref_end!(ex.args[J],:(Base.trailingsize($S,$n)))
+            end
+        else
+            # recursive search
+            for i = eachindex(ex.args)
+                ex.args[i] = replace_ref_end!(ex.args[i],withex)
+            end
+        end
+    end
+    ex
+end
+
+"""
+    @view A[inds...]
+
+Creates a `SubArray` from an indexing expression. This can only be applied directly to a
+reference expression (e.g. `@view A[1,2:end]`), and should *not* be used as the target of
+an assignment (e.g. `@view(A[1,2:end]) = ...`).
+"""
+macro view(ex)
+    if isa(ex, Expr) && ex.head == :ref
+        ex = replace_ref_end!(ex)
+        Expr(:&&, true, esc(Expr(:call,:(Base.view),ex.args...)))
+    else
+        throw(ArgumentError("Invalid use of @view macro: argument must be a reference expression A[...]."))
+    end
+end
