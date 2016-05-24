@@ -23,6 +23,7 @@ type BitArray{N} <: DenseArray{Bool, N}
         N != 1 && (b.dims = dims)
         return b
     end
+    BitArray(dims::Dims{N}) = BitArray{N}(dims...)
 end
 
 # note: the docs for the two signatures are unified, but only

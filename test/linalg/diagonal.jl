@@ -6,8 +6,29 @@ import Base.LinAlg: BlasFloat, BlasComplex, SingularException
 n=12 #Size of matrix problem to test
 srand(1)
 
+@testset "Constructors" begin
+    D = Diagonal((n, n))
+    @test size(D) == (n, n)
+    @test isa(D, Diagonal{Float64})
+    D = Diagonal(n, n)
+    @test size(D) == (n, n)
+    @test isa(D, Diagonal{Float64})
+    @test_throws DimensionMismatch Diagonal((n, n+1))
+    @test_throws DimensionMismatch Diagonal(n, n+1)
+end
+
 @testset for relty in (Float32, Float64, BigFloat), elty in (relty, Complex{relty})
 
+  @testset "Constructors" begin
+      D = Diagonal{elty}((n, n))
+      @test size(D) == (n, n)
+      @test isa(D, Diagonal{elty})
+      D = Diagonal{elty}(n, n)
+      @test size(D) == (n, n)
+      @test isa(D, Diagonal{elty})
+      @test_throws DimensionMismatch Diagonal{elty}((n, n+1))
+      @test_throws DimensionMismatch Diagonal{elty}(n, n+1)
+  end
     d=convert(Vector{elty}, randn(n))
     v=convert(Vector{elty}, randn(n))
     U=convert(Matrix{elty}, randn(n,n))

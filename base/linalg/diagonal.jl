@@ -4,6 +4,13 @@
 
 immutable Diagonal{T} <: AbstractMatrix{T}
     diag::Vector{T}
+    Diagonal(v::Vector{T}) = new(v)
+    function Diagonal(m::Integer, n::Integer)
+        check_array_size(m, n)
+        checksquaredims(m, n, Diagonal{T})
+        return Diagonal{T}(Vector{T}(n))
+    end
+    Diagonal(dims::Dims{2}) = Diagonal{T}(dims...)
 end
 """
     Diagonal(A::AbstractMatrix)
@@ -46,7 +53,16 @@ julia> Diagonal(V)
  ⋅  2
 ```
 """
-Diagonal(V::AbstractVector) = Diagonal(collect(V))
+Diagonal{T}(V::AbstractVector{T}) = Diagonal{T}(collect(V))
+"""
+    Diagonal{T}(dims)
+
+Constructs a diagonal matrix with uninitialized diagonal elements of type `T`. If `T` is
+omitted, it defaults to `Float64`. The `dims` may be given as two integer arguments or as
+tuple of two `Int`s, both of which have to be equal as `Diagonal` matrices are always
+square.
+"""
+Diagonal(dims...) = Diagonal{Float64}(dims...)
 
 convert{T}(::Type{Diagonal{T}}, D::Diagonal{T}) = D
 convert{T}(::Type{Diagonal{T}}, D::Diagonal) = Diagonal{T}(convert(Vector{T}, D.diag))
