@@ -5743,13 +5743,13 @@ extern "C" void jl_init_codegen(void)
         .setMCJITMemoryManager(std::unique_ptr<RTDyldMemoryManager>{new SectionMemoryManager()})
 #endif
         .setTargetOptions(options)
-#if (defined(_OS_LINUX_) && defined(_CPU_X86_64_)) || defined(CODEGEN_TLS)
+#if (defined(_OS_LINUX_) && defined(_CPU_X86_64_))
         .setRelocationModel(Reloc::PIC_)
 #elif !defined(LLVM39)
         .setRelocationModel(Reloc::Default)
 #endif
-#ifdef CODEGEN_TLS
-        .setCodeModel(CodeModel::Small)
+#ifdef _P64
+        .setCodeModel(CodeModel::Large)
 #else
         .setCodeModel(CodeModel::JITDefault)
 #endif
