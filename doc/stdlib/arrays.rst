@@ -383,6 +383,12 @@ Indexing, Assignment, and Concatenation
 
    Like :func:`getindex`\ , but returns a view into the parent array ``A`` with the given indices instead of making a copy.  Calling :func:`getindex` or :func:`setindex!` on the returned :obj:`SubArray` computes the indices to the parent array on the fly without checking bounds.
 
+.. function:: @view A[inds...]
+
+   .. Docstring generated from Julia source
+
+   Creates a ``SubArray`` from an indexing expression. This can only be applied directly to a reference expression (e.g. ``@view A[1,2:end]``\ ), and should *not* be used as the target of an assignment (e.g. ``@view(A[1,2:end]) = ...``\ ).
+
 .. function:: parent(A)
 
    .. Docstring generated from Julia source
