@@ -17,10 +17,6 @@ $(HTTPPARSER_OBJ_TARGET): $(HTTPPARSER_OBJ_SOURCE)
 clean-http_parser:
 	-rm -rf $(BUILDDIR)/$(HTTPPARSER_SRC_DIR)
 	-rm -f $(HTTPPARSER_OBJ_TARGET)
-distclean-http_parser:
-    -rm -rf $(SRCDIR)/srccache/http_parser-$(HTTPPARSER_SHA1).tar.gz \
-        $(SRCDIR)/srccache/http_parser-$(HTTPPARSER_SHA1) \
-        $(BUILDDIR)/http_parser-$(HTTPPARSER_SHA1)
 
 get-http_parser: $(HTTPPARSER_SRC_FILE)
 configure-http_parser: $(BUILDDIR)/$(HTTPPARSER_SRC_DIR)/Makefile
