@@ -245,6 +245,13 @@ end
 @test get(tryparse(Int64, "1")) == 1
 @test isa(tryparse(Int64, "a"), Nullable{Int64})
 
+@test_throws ArgumentError tryparse(Int32, "0", 1)
+@test tryparse(Int32, "12345", 16) === Nullable{Int32}(@compat Int32(74565))
+@test tryparse(Int64, "12345", 10) === Nullable{Int64}(@compat Int64(12345))
+@test tryparse(Int64, "12345", 6) === Nullable{Int64}(@compat Int64(1865))
+@test isnull(tryparse(Int64, "nonsense", 10))
+@test tryparse(Int64, "nonsense", 36) === Nullable{Int64}(@compat Int64(1856056985582))
+
 # Make sure exports from Libc and Libdl are defined
 for x in [:strftime,:systemsleep,:getpid,:FILE,:malloc,:flush_cstdio,:realloc,:strptime,:Libc,:errno,:msync,:TmStruct,:calloc,:time,:strerror,:gethostname,:free]
     getfield(Libc, x)

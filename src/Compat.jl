@@ -391,6 +391,17 @@ if VERSION < v"0.4.0-dev+4539"
     Base.parse(::Type{BigFloat}, s::AbstractString) = BigFloat(s)
 end
 
+# JuliaLang/julia#10543
+if !isdefined(Base, :tryparse)
+    function tryparse{T}(::Type{T}, args...)
+        try
+            Nullable(Base.parse(T, args...))
+        catch
+            Nullable{T}()
+        end
+    end
+end
+
 if VERSION < v"0.4.0-dev+3710"
     const unsafe_convert = Base.convert
 else
@@ -595,15 +606,13 @@ if VERSION < v"0.4.0-dev+3864"
         float64_isvalid(s, r) ? Nullable(r[1]) : Nullable{Float64}()
     end
 
-    function tryparse{T<:Integer}(::Type{T}, s)
-        local ret
+    function tryparse{T<:Integer}(::Type{T}, s, base=10)
+        (2 <= base <= 62) || throw(ArgumentError("invalid base: base must be 2 ≤ base ≤ 62, got $base"))
         try
-            val = parse(T, s)
-            ret = Nullable{T}(val)
+            Nullable(parse(T, s, base))
         catch
-            ret = Nullable{T}()
+            Nullable{T}()
         end
-        return ret
     end
     export tryparse
 end
