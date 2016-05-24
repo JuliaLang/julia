@@ -805,7 +805,7 @@ end
 function remotecall(f, w::Worker, args...; kwargs...)
     rr = Future(w)
     #println("$(myid()) asking for $rr")
-    send_msg(w, CallMsg{:call}(f, args, kwargs, remoteref_id(rr)))
+    send_msg(w, CallMsg{:call}(f, args, [kwargs...], remoteref_id(rr)))
     rr
 end
 
@@ -823,7 +823,7 @@ function remotecall_fetch(f, w::Worker, args...; kwargs...)
     oid = RRID()
     rv = lookup_ref(oid)
     rv.waitingfor = w.id
-    send_msg(w, CallMsg{:call_fetch}(f, args, kwargs, oid))
+    send_msg(w, CallMsg{:call_fetch}(f, args, [kwargs...], oid))
     v = take!(rv)
     delete!(PGRP.refs, oid)
     isa(v, RemoteException) ? throw(v) : v
@@ -840,7 +840,7 @@ function remotecall_wait(f, w::Worker, args...; kwargs...)
     rv = lookup_ref(prid)
     rv.waitingfor = w.id
     rr = Future(w)
-    send_msg(w, CallWaitMsg(f, args, kwargs, remoteref_id(rr), prid))
+    send_msg(w, CallWaitMsg(f, args, [kwargs...], remoteref_id(rr), prid))
     v = fetch(rv.c)
     delete!(PGRP.refs, prid)
     isa(v, RemoteException) && throw(v)
@@ -860,7 +860,7 @@ function remote_do(f, w::LocalProcess, args...; kwargs...)
 end
 
 function remote_do(f, w::Worker, args...; kwargs...)
-    send_msg(w, RemoteDoMsg(f, args, kwargs))
+    send_msg(w, RemoteDoMsg(f, args, [kwargs...]))
     nothing
 end
 

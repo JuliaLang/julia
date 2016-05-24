@@ -117,7 +117,7 @@ export
     # key types
     Any, DataType, Vararg, ANY, NTuple,
     Tuple, Type, TypeConstructor, TypeName, TypeVar, Union, Void,
-    SimpleVector, AbstractArray, DenseArray,
+    SimpleVector, AbstractArray, DenseArray, Struct,
     # special objects
     Function, LambdaInfo, Method, MethodTable, TypeMapEntry, TypeMapLevel,
     Module, Symbol, Task, Array, WeakRef, VecElement,
@@ -332,15 +332,28 @@ end
 atdoc     = (str, expr) -> Expr(:escape, expr)
 atdoc!(λ) = global atdoc = λ
 
+immutable KwKeys{names}
+end
+function structdiff
+end
+function structmerge
+end
+function fieldname
+end
+function structadd
+end
+Struct(;args...) = args
 module TopModule
     # this defines the types that lowering expects to be defined in a (top) module
     # that are usually inherited from Core, but could be defined custom for a module
-    using Core: Box, IntrinsicFunction, Builtin,
+    using Core: Box, IntrinsicFunction, Builtin, Struct, KwKeys,
             arrayref, arrayset, arraysize,
-            _expr, _apply, typeassert, apply_type, svec, kwfunc
-    export Box, IntrinsicFunction, Builtin,
+            _expr, _apply, typeassert, apply_type, svec, kwfunc, fieldname,
+            struct, structdiff, structmerge, structadd
+    export Box, IntrinsicFunction, Builtin, Struct, KwKeys,
             arrayref, arrayset, arraysize,
-            _expr, _apply, typeassert, apply_type, svec, kwfunc
+            _expr, _apply, typeassert, apply_type, svec, kwfunc, fieldname,
+            struct, structdiff, structmerge, structadd
 end
 using .TopModule
 ccall(:jl_set_istopmod, Void, (Bool,), true)

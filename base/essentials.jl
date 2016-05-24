@@ -199,3 +199,97 @@ const (:) = Colon()
 # For passing constants through type inference
 immutable Val{T}
 end
+
+function sortedmerge(x,y)
+    ix,nx = 0, length(x)
+    iy,ny = 0, length(y)
+    z = Array(Symbol, nx+ny)
+    iz = 1
+    while ix+iy < nx+ny
+        c = if ix < nx && (iy < ny && x[ix+1] <= y[iy+1] || iy == ny)
+            ix += 1
+            x[ix]
+        else
+            iy += 1
+            y[iy]
+        end
+        if iz == 1 || z[iz-1] != c
+            z[iz] = c
+            iz += 1
+        end
+    end
+    resize!(z, iz-1)
+    (z...,)
+end
+
+@generated function Core.structmerge{xn,xT,yn,yT}(x::Core.Struct{xn,xT},y::Core.Struct{yn,yT})
+    names = sortedmerge(xn,yn)
+    fields = map(names) do name
+        if findfirst(xn, name) > 0
+            :(getfield(x, $(Expr(:quote, name))))
+        else
+            :(getfield(y, $(Expr(:quote, name))))
+        end
+    end
+    quote
+        Core.struct($names, $(fields...))
+    end
+end
+
+function Core.structmerge{xn,xT}(x::Core.Struct{xn,xT}, y)
+    kvs = collect(y)
+    sort!(kvs, 1, length(kvs), Base.Sort.InsertionSort, Base.Order.By(x -> x[1]))
+    names = sortedmerge(xn,map(first,kvs))
+    n = length(names)
+    values = Array(Any, n)
+    for (name,val) in y
+        idx = findfirst(names, name)
+        if idx > 0
+            values[idx] = val
+        end
+    end
+    for i = 1:n
+        if isdefined(x,names[i])
+            values[i] = getfield(x,names[i])
+        end
+    end
+    Core.struct(names, values...)
+end
+function Core.structadd{n,T}(x::Core.Struct{n,T}, y)
+    Core.structmerge(x, (y,))
+end
+function sorteddiff(x,y)
+    ix,xn = 1,length(x)
+    iy,yn = 1,length(y)
+    z = Array(Symbol, xn)
+    iz = 1
+    while ix <= xn
+        v = x[ix]
+        if iy > yn || v < y[iy]
+            z[iz] = v
+            iz += 1
+            ix += 1
+        elseif v === y[iy]
+            ix += 1
+            iy += 1
+        else
+            iy += 1
+        end
+    end
+    resize!(z, iz-1)
+    (z...,)
+end
+
+@generated function Core.structdiff{xn,xT,yn}(x::Core.Struct{xn,xT},::Core.KwKeys{yn})
+    names = sorteddiff(xn,yn)
+    fields = map(names) do name
+        :(getfield(x, $(Expr(:quote, name))))
+    end
+    quote
+        Core.struct($names, $(fields...))
+    end
+end
+
+start(s::Core.Struct) = 1
+done(s::Core.Struct, i) = i > nfields(s)
+next(s::Core.Struct, i) = ((fieldname(typeof(s),i) => getfield(s,i)), i+1)

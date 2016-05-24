@@ -2113,6 +2113,7 @@ static jl_value_t *inst_datatype(jl_datatype_t *dt, jl_svec_t *p, jl_value_t **i
     jl_typename_t *tn = dt->name;
     jl_value_t *tc = tn->primary;
     int istuple = (tn == jl_tuple_typename);
+    int isstruct = (tn == jl_struct_typename);
     // check type cache
     if (cacheable) {
         jl_value_t *lkup = (jl_value_t*)lookup_type(tn, iparams, ntp);
@@ -2160,8 +2161,18 @@ static jl_value_t *inst_datatype(jl_datatype_t *dt, jl_svec_t *p, jl_value_t **i
             jl_svecset(p, i, iparams[i]);
     }
 
+    size_t nf = dt->nfields;
+    if (istuple)
+        nf = ntp;
+    else if (isstruct && jl_svec_len(p) == 2) {
+        if (!jl_is_tuple(jl_svecref(p,0)) ||
+            !jl_is_tuple_type(jl_svecref(p,1)))
+            isstruct = 0;
+        else
+            nf = jl_datatype_nfields(jl_svecref(p, 1));
+    }
     // create and initialize new type
-    ndt = jl_new_uninitialized_datatype(istuple ? ntp : dt->nfields, 2); // TODO
+    ndt = jl_new_uninitialized_datatype(nf, 2); // TODO
     // associate these parameters with the new type on
     // the stack, in case one of its field types references it.
     top.tt = (jl_datatype_t*)ndt;
@@ -2172,7 +2183,21 @@ static jl_value_t *inst_datatype(jl_datatype_t *dt, jl_svec_t *p, jl_value_t **i
     ndt->super = jl_any_type;
     ndt->parameters = p;
     jl_gc_wb(ndt, ndt->parameters);
-    ndt->types = istuple ? p : jl_emptysvec; // to be filled in below
+    ndt->types = jl_emptysvec; // to be filled in below
+    if (istuple) {
+        ndt->types = p;
+    } else if (isstruct && jl_svec_len(p) == 2) {
+        jl_value_t *names_tup = jl_svecref(p, 0);
+        jl_value_t *values_tt = jl_svecref(p, 1);
+        if (jl_is_tuple_type(values_tt) && jl_is_tuple(names_tup)) {
+            jl_svec_t *names = jl_alloc_svec_uninit(jl_nfields(names_tup));
+            memcpy(jl_svec_data(names), (jl_value_t**)names_tup, jl_nfields(names_tup)*sizeof(jl_value_t*));
+            ndt->names = names;
+            jl_gc_wb(ndt,ndt->names);
+            ndt->types = ((jl_datatype_t*)values_tt)->parameters;
+            jl_gc_wb(ndt, ndt->types);
+        }
+    }
     ndt->mutabl = dt->mutabl;
     ndt->abstract = dt->abstract;
     ndt->instance = NULL;
@@ -2187,14 +2212,14 @@ static jl_value_t *inst_datatype(jl_datatype_t *dt, jl_svec_t *p, jl_value_t **i
     if (cacheable && !ndt->abstract)
         ndt->uid = jl_assign_type_uid();
 
-    if (istuple)
+    if (istuple || isstruct)
         ndt->super = jl_any_type;
     else
         ndt->super = (jl_datatype_t*)inst_type_w_((jl_value_t*)dt->super, env,n,stack, 1);
     jl_gc_wb(ndt, ndt->super);
     ftypes = dt->types;
     if (ftypes != NULL) {
-        if (!istuple) {
+        if (!istuple && !isstruct) {
             // recursively instantiate the types of the fields
             ndt->types = inst_all(ftypes, env, n, stack, 1);
             jl_gc_wb(ndt, ndt->types);
@@ -2220,8 +2245,8 @@ static jl_value_t *inst_datatype(jl_datatype_t *dt, jl_svec_t *p, jl_value_t **i
         if (tn == jl_array_typename)
             ndt->pointerfree = 0;
     }
-    if (istuple)
-        ndt->ninitialized = ntp;
+    if (istuple || isstruct)
+        ndt->ninitialized = nf;
     else
         ndt->ninitialized = dt->ninitialized;
 
@@ -3249,7 +3274,7 @@ extern void jl_init_int32_int64_cache(void);
 void jl_init_types(void)
 {
     // create base objects
-    jl_datatype_type = jl_new_uninitialized_datatype(11, 1);
+    jl_datatype_type = jl_new_uninitialized_datatype(12, 1);
     jl_set_typeof(jl_datatype_type, jl_datatype_type);
     jl_typename_type = jl_new_uninitialized_datatype(8, 1);
     jl_sym_type = jl_new_uninitialized_datatype(0, 1);
@@ -3272,7 +3297,7 @@ void jl_init_types(void)
     jl_datatype_type->name->primary = (jl_value_t*)jl_datatype_type;
     jl_datatype_type->super = jl_type_type;
     jl_datatype_type->parameters = jl_emptysvec;
-    jl_datatype_type->name->names = jl_svec(11, jl_symbol("name"),
+    jl_datatype_type->name->names = jl_svec(12, jl_symbol("name"),
                                             jl_symbol("super"),
                                             jl_symbol("parameters"),
                                             jl_symbol("types"),
@@ -3282,12 +3307,13 @@ void jl_init_types(void)
                                             jl_symbol("mutable"),
                                             jl_symbol("pointerfree"),
                                             jl_symbol("ninitialized"),
-                                            jl_symbol("depth"));
-    jl_datatype_type->types = jl_svec(11, jl_typename_type, jl_type_type,
+                                            jl_symbol("depth"),
+                                            jl_symbol("names"));
+    jl_datatype_type->types = jl_svec(12, jl_typename_type, jl_type_type,
                                       jl_simplevector_type, jl_simplevector_type,
                                       jl_any_type,
                                       jl_any_type, // size
-                                      jl_any_type, jl_any_type, jl_any_type, jl_any_type, jl_any_type);
+                                      jl_any_type, jl_any_type, jl_any_type, jl_any_type, jl_any_type, jl_any_type);
     jl_datatype_type->instance = NULL;
     jl_datatype_type->uid = jl_assign_type_uid();
     jl_datatype_type->struct_decl = NULL;
@@ -3696,6 +3722,17 @@ void jl_init_types(void)
 
     jl_ANY_flag = (jl_value_t*)tvar("ANY");
 
+    // Struct{names,T}
+    tv = jl_svec2(tvar("names"), tvar("T"));
+    jl_struct_type = jl_new_datatype(jl_symbol("Struct"), jl_any_type, tv,
+                                     jl_emptysvec, jl_svec(1, jl_wrap_vararg((jl_value_t*)jl_any_type, (jl_value_t*)NULL)),
+                                     0, 0, 0);
+    jl_struct_type->nfields = 1;
+    jl_struct_type->hastypevars = 1;
+    jl_struct_type->haswildcard = 1;
+    jl_struct_type->isleaftype = 0;
+
+    jl_struct_typename = jl_struct_type->name;
     // complete builtin type metadata
     jl_value_t *pointer_void = jl_apply_type((jl_value_t*)jl_pointer_type,
                                              jl_svec1(jl_void_type));

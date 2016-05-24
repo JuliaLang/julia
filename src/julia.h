@@ -331,10 +331,11 @@ typedef struct _jl_datatype_t {
     int32_t ninitialized;
     // memoized properties
     int32_t depth;
+    jl_svec_t *names;
+    // hidden fields:
     int8_t hastypevars; // bound
     int8_t haswildcard; // unbound
     int8_t isleaftype;
-    // hidden fields:
     uint32_t nfields;
     uint32_t alignment : 29;  // strictest alignment over all fields
     uint32_t haspadding : 1;  // has internal undefined bytes
@@ -478,6 +479,8 @@ extern JL_DLLEXPORT jl_datatype_t *jl_array_type;
 extern JL_DLLEXPORT jl_typename_t *jl_array_typename;
 extern JL_DLLEXPORT jl_datatype_t *jl_weakref_type;
 extern JL_DLLEXPORT jl_datatype_t *jl_string_type;
+extern JL_DLLEXPORT jl_datatype_t *jl_struct_type;
+extern JL_DLLEXPORT jl_typename_t *jl_struct_typename;
 extern JL_DLLEXPORT jl_datatype_t *jl_errorexception_type;
 extern JL_DLLEXPORT jl_datatype_t *jl_argumenterror_type;
 extern JL_DLLEXPORT jl_datatype_t *jl_loaderror_type;
@@ -764,7 +767,17 @@ STATIC_INLINE void jl_array_uint8_set(void *a, size_t i, uint8_t x)
 #define jl_gf_name(f)   (jl_gf_mtable(f)->name)
 
 // struct type info
-#define jl_field_name(st,i)    (jl_sym_t*)jl_svecref(((jl_datatype_t*)st)->name->names, (i))
+STATIC_INLINE jl_svec_t *jl_field_names(jl_datatype_t *st)
+{
+    jl_svec_t *names = st->names;
+    if (!names)
+        names = st->name->names;
+    return names;
+}
+STATIC_INLINE jl_sym_t *jl_field_name(jl_datatype_t *st, size_t i)
+{
+    return (jl_sym_t*)jl_svecref(jl_field_names(st), i);
+}
 #define jl_field_type(st,i)    jl_svecref(((jl_datatype_t*)st)->types, (i))
 #define jl_datatype_size(t)    (((jl_datatype_t*)t)->size)
 #define jl_datatype_nfields(t) (((jl_datatype_t*)(t))->nfields)

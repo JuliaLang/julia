@@ -175,7 +175,7 @@ function test4974(;kwargs...)
     end
 end
 
-@test test4974(a=1) == (2, [(:a, 1)])
+@test test4974(a=1) == (2, Struct(a=1))
 
 # issue #7704, computed keywords
 @test kwf1(1; (:tens, 2)) == 21

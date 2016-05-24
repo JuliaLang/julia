@@ -338,7 +338,7 @@ JL_CALLABLE(jl_f_sizeof)
         jl_datatype_t *dx = (jl_datatype_t*)x;
         if (dx->name == jl_array_typename || dx == jl_symbol_type || dx == jl_simplevector_type)
             jl_error("type does not have a canonical binary representation");
-        if (!(dx->name->names == jl_emptysvec && dx->size > 0)) {
+        if (!(jl_field_names(dx) == jl_emptysvec && dx->size > 0)) {
             // names===() and size > 0  =>  bitstype, size always known
             if (dx->abstract || !jl_is_leaf_type(x))
                 jl_error("argument is an abstract type; size is indeterminate");
@@ -607,10 +607,9 @@ JL_CALLABLE(jl_f_isdefined)
 
 // tuples ---------------------------------------------------------------------
 
-JL_CALLABLE(jl_f_tuple)
+static jl_datatype_t *tupletype_from_args(jl_value_t **args, size_t nargs)
 {
     size_t i;
-    if (nargs == 0) return (jl_value_t*)jl_emptytuple;
     jl_datatype_t *tt;
     if (nargs < jl_page_size/sizeof(jl_value_t*)) {
         jl_value_t **types = (jl_value_t**)alloca(nargs*sizeof(jl_value_t*));
@@ -626,8 +625,40 @@ JL_CALLABLE(jl_f_tuple)
         tt = jl_inst_concrete_tupletype(types);
         JL_GC_POP();
     }
-    return jl_new_structv(tt, args, nargs);
+    return tt;
 }
+
+JL_CALLABLE(jl_f_tuple)
+{
+    if (nargs == 0) return (jl_value_t*)jl_emptytuple;
+    return jl_new_structv(tupletype_from_args(args,nargs), args, nargs);
+}
+
+
+JL_CALLABLE(jl_f_struct)
+{
+    JL_NARGSV(struct, 1);
+    jl_value_t *names = args[0];
+    JL_TYPECHK(struct, tuple, args[0]);
+    size_t n = jl_nfields(args[0]);
+    JL_NARGS(struct, n+1, n+1);
+    for(size_t i=0; i < n; i++) {
+        jl_value_t *name = jl_get_nth_field(args[0], i);
+        for (size_t j = 0; j < i; j++) {
+            if (name == jl_get_nth_field(names, j)) {
+                jl_errorf("struct field names must be unique (%s)", jl_symbol_name(name));
+            }
+        }
+    }
+    jl_value_t *t=NULL;
+    JL_GC_PUSH1(&t);
+    t = tupletype_from_args(args+1,n);
+    t = jl_svec(2, names, t);
+    t = jl_apply_type(jl_struct_type, t);
+    JL_GC_POP();
+    return jl_new_structv(t, args+1, n);
+}
+
 
 JL_CALLABLE(jl_f_svec)
 {
@@ -1088,6 +1119,7 @@ void jl_init_primitives(void)
     add_builtin_func("typeassert", jl_f_typeassert);
     add_builtin_func("throw", jl_f_throw);
     add_builtin_func("tuple", jl_f_tuple);
+    add_builtin_func("struct", jl_f_struct);
 
     // field access
     add_builtin_func("getfield",  jl_f_getfield);
@@ -1154,6 +1186,7 @@ void jl_init_primitives(void)
     add_builtin("QuoteNode", (jl_value_t*)jl_quotenode_type);
     add_builtin("NewvarNode", (jl_value_t*)jl_newvarnode_type);
     add_builtin("GlobalRef", (jl_value_t*)jl_globalref_type);
+    add_builtin("Struct", (jl_value_t*)jl_struct_type);
 
 #ifdef _P64
     add_builtin("Int", (jl_value_t*)jl_int64_type);
@@ -1452,7 +1485,7 @@ static size_t jl_static_show_x_(JL_STREAM *out, jl_value_t *v, jl_datatype_t *vt
         else {
             for (size_t i = 0; i < tlen; i++) {
                 if (!istuple) {
-                    n += jl_printf(out, "%s", jl_symbol_name((jl_sym_t*)jl_svecref(vt->name->names, i)));
+                    n += jl_printf(out, "%s", jl_symbol_name((jl_sym_t*)jl_svecref(jl_field_names(vt), i)));
                     //jl_fielddesc_t f = t->fields[i];
                     n += jl_printf(out, "=");
                 }
