@@ -6,10 +6,19 @@ LLVM_GIT_URL_COMPILER_RT ?= $(LLVM_GIT_URL_BASE)/compiler-rt.git
 LLVM_GIT_URL_LLDB ?= $(LLVM_GIT_URL_BASE)/lldb.git
 LLVM_GIT_URL_LIBCXX ?= $(LLVM_GIT_URL_BASE)/libcxx.git
 LLVM_GIT_URL_LIBCXXABI ?= $(LLVM_GIT_URL_BASE)/libcxxabi.git
+LLVM_GIT_URL_POLLY ?= $(LLVM_GIT_URL_BASE)/polly.git
 
 ifeq ($(BUILD_LLDB), 1)
 BUILD_LLVM_CLANG := 1
 # because it's a build requirement
+endif
+
+ifeq ($(USE_POLLY),1)
+ifeq ($(USE_SYSTEM_LLVM),0)
+ifneq ($(LLVM_VER),svn)
+$(error USE_POLLY=1 requires LLVM_VER=svn)
+endif
+endif
 endif
 
 ifeq ($(LLVM_DEBUG),1)
@@ -379,6 +388,16 @@ ifneq ($(LLVM_GIT_VER_LLDB),)
 		git checkout $(LLVM_GIT_VER_LLDB))
 endif # LLVM_GIT_VER_CLANG
 endif # BUILD_LLDB
+ifeq ($(USE_POLLY),1)
+	([ ! -d $(LLVM_SRC_DIR)/tools/polly ] && \
+		git clone $(LLVM_GIT_URL_POLLY) $(LLVM_SRC_DIR)/tools/polly  ) || \
+		(cd $(LLVM_SRC_DIR)/tools/polly  && \
+		git pull --ff-only)
+ifneq ($(LLVM_GIT_VER_POLLY),)
+	(cd $(LLVM_SRC_DIR)/tools/polly && \
+		git checkout $(LLVM_GIT_VER_POLLY))
+endif # LLVM_GIT_VER_POLLY
+endif # USE_POLLY
 endif # LLVM_VER
 	touch -c $@
 
@@ -521,4 +540,7 @@ update-llvm:
 	([ -d "$(LLVM_SRC_DIR)/tools/clang"  ] || exit 0;          cd $(LLVM_SRC_DIR)/tools/clang; git pull --ff-only)
 	([ -d "$(LLVM_SRC_DIR)/projects/compiler-rt" ] || exit 0;  cd $(LLVM_SRC_DIR)/projects/compiler-rt; git pull --ff-only)
 	([ -d "$(LLVM_SRC_DIR)/tools/lldb" ] || exit 0;            cd $(LLVM_SRC_DIR)/tools/lldb; git pull --ff-only)
+ifeq ($(USE_POLLY),1)
+	([ -d "$(LLVM_SRC_DIR)/tools/polly" ] || exit 0;           cd $(LLVM_SRC_DIR)/tools/polly; git pull --ff-only)
+endif
 endif
