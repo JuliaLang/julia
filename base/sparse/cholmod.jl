@@ -1263,7 +1263,8 @@ appropriate.
 cholfact!{T<:Real}(F::Factor, A::Union{SparseMatrixCSC{T},
         SparseMatrixCSC{Complex{T}},
         Symmetric{T,SparseMatrixCSC{T,SuiteSparse_long}},
-        Hermitian{Complex{T},SparseMatrixCSC{Complex{T},SuiteSparse_long}}};
+        Hermitian{Complex{T},SparseMatrixCSC{Complex{T},SuiteSparse_long}},
+        Hermitian{T,SparseMatrixCSC{T,SuiteSparse_long}}};
     shift = 0.0) =
     cholfact!(F, Sparse(A); shift = shift)
 
@@ -1315,7 +1316,8 @@ Many other functions from CHOLMOD are wrapped but not exported from the
 """
 cholfact{T<:Real}(A::Union{SparseMatrixCSC{T}, SparseMatrixCSC{Complex{T}},
     Symmetric{T,SparseMatrixCSC{T,SuiteSparse_long}},
-    Hermitian{Complex{T},SparseMatrixCSC{Complex{T},SuiteSparse_long}}};
+    Hermitian{Complex{T},SparseMatrixCSC{Complex{T},SuiteSparse_long}},
+    Hermitian{T,SparseMatrixCSC{T,SuiteSparse_long}}};
     kws...) = cholfact(Sparse(A); kws...)
 
 
@@ -1351,7 +1353,8 @@ appropriate.
 ldltfact!{T<:Real}(F::Factor, A::Union{SparseMatrixCSC{T},
     SparseMatrixCSC{Complex{T}},
     Symmetric{T,SparseMatrixCSC{T,SuiteSparse_long}},
-    Hermitian{Complex{T},SparseMatrixCSC{Complex{T},SuiteSparse_long}}};
+    Hermitian{Complex{T},SparseMatrixCSC{Complex{T},SuiteSparse_long}},
+    Hermitian{T,SparseMatrixCSC{T,SuiteSparse_long}}};
     shift = 0.0) =
     ldltfact!(F, Sparse(A), shift = shift)
 
@@ -1404,7 +1407,8 @@ Many other functions from CHOLMOD are wrapped but not exported from the
 """
 ldltfact{T<:Real}(A::Union{SparseMatrixCSC{T},SparseMatrixCSC{Complex{T}},
     Symmetric{T,SparseMatrixCSC{T,SuiteSparse_long}},
-    Hermitian{Complex{T},SparseMatrixCSC{Complex{T},SuiteSparse_long}}};
+    Hermitian{Complex{T},SparseMatrixCSC{Complex{T},SuiteSparse_long}},
+    Hermitian{T,SparseMatrixCSC{T,SuiteSparse_long}}};
     kws...) = ldltfact(Sparse(A); kws...)
 
 ## Solvers
@@ -1559,5 +1563,6 @@ end
 
 (*){Ti}(A::Symmetric{Float64,SparseMatrixCSC{Float64,Ti}}, B::SparseVecOrMat{Float64,Ti}) = sparse(Sparse(A)*Sparse(B))
 (*){Ti}(A::Hermitian{Complex{Float64},SparseMatrixCSC{Complex{Float64},Ti}}, B::SparseVecOrMat{Complex{Float64},Ti}) = sparse(Sparse(A)*Sparse(B))
+(*){Ti}(A::Hermitian{Float64,SparseMatrixCSC{Float64,Ti}}, B::SparseVecOrMat{Float64,Ti}) = sparse(Sparse(A)*Sparse(B))
 
 end #module
