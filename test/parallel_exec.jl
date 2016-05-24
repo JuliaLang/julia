@@ -973,7 +973,25 @@ for tid in [id_other, id_me, Base.default_worker_pool()]
 end
 
 # github PR #14456
-for n = 1:10^5
+n = DoFullTest ? 6 : 5
+for i = 1:10^n
     fetch(@spawnat myid() myid())
 end
 
+# check integrity of `client_refs` on each worker - test for github PR #16472
+@everywhere begin
+    function check_client_refs()
+        for (k,v) in Base.client_refs
+            @assert k.whence > 0
+            @assert k.id > 0
+            if k.where == 0
+                @assert v==false
+            else
+                @assert v==true
+            end
+        end
+        return true
+    end
+end
+
+@test all(asyncmap(p->remotecall_fetch(check_client_refs, p), procs()))
