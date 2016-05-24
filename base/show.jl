@@ -184,7 +184,8 @@ function show_type_parameter(io::IO, p::ANY, has_tvar_env::Bool)
     end
 end
 
-function show(io::IO, x::DataType)
+show(io::IO, x::DataType) = show_datatype(io, x)
+function show_datatype(io::IO, x::DataType)
     show(io, x.name)
     # tvar_env is a `::Vector{Any}` when we are printing a method signature
     # and `true` if we are printing type parameters outside a method signature.

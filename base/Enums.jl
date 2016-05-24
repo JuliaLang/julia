@@ -99,10 +99,16 @@ macro enum(T,syms...)
                 print(io, x, "::", $(esc(typename)), " = ", Int(x))
             end
         end
-        function Base.writemime(io::IO,::MIME"text/plain",::Type{$(esc(typename))})
-            print(io, "Enum ", $(esc(typename)), ":")
-            for (sym, i) in $vals
-                print(io, "\n", sym, " = ", i)
+        function Base.show(io::IO,t::Type{$(esc(typename))})
+            if get(io, :multiline, false)
+                print(io, "Enum ")
+                Base.show_datatype(io, t)
+                print(io, ":")
+                for (sym, i) in $vals
+                    print(io, "\n", sym, " = ", i)
+                end
+            else
+                Base.show_datatype(io, t)
             end
         end
     end

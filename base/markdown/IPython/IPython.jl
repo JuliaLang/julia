@@ -22,7 +22,7 @@ function blocktex(stream::IO, md::MD)
     end
 end
 
-writemime(io::IO, ::MIME"text/plain", tex::LaTeX) =
+show(io::IO, tex::LaTeX) =
     print(io, '$', tex.formula, '$')
 
 latex(io::IO, tex::LaTeX) =
