@@ -161,7 +161,8 @@ end
 
 # system information
 
-function show(io::IO, info::Sys.CPUinfo, header::Bool=true, prefix::AbstractString="    ")
+# used by sysinfo.jl
+function _show_cpuinfo(io::IO, info::Sys.CPUinfo, header::Bool=true, prefix::AbstractString="    ")
     tck = Sys.SC_CLK_TCK
     if header
         println(io, info.model, ": ")

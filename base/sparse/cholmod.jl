@@ -2,7 +2,7 @@
 
 module CHOLMOD
 
-import Base: (*), convert, copy, eltype, get, getindex, show, showarray, size,
+import Base: (*), convert, copy, eltype, get, getindex, show, size,
              linearindexing, LinearFast, LinearSlow, ctranspose
 
 import Base.LinAlg: (\), A_mul_Bc, A_mul_Bt, Ac_ldiv_B, Ac_mul_B, At_ldiv_B, At_mul_B,
@@ -1076,8 +1076,7 @@ function show(io::IO, F::Factor)
     showfactor(io, F)
 end
 
-# FactorComponent is a subtype of AbstractArray and we therefore define showarray instead of show
-function showarray(io::IO, FC::FactorComponent; kargs...)
+function show(io::IO, FC::FactorComponent)
     println(io, typeof(FC))
     showfactor(io, Factor(FC))
 end

@@ -607,26 +607,28 @@ getindex(x::AbstractSparseVector, ::Colon) = copy(x)
 
 ### show and friends
 
-function showarray(io::IO, x::AbstractSparseVector;
-                   header::Bool=true, repr=false)
-
+function show(io::IO, x::AbstractSparseVector)
     n = length(x)
     nzind = nonzeroinds(x)
     nzval = nonzeros(x)
     xnnz = length(nzind)
 
-    if header
+    if get(io, :multiline, false)
         println(io, summary(x))
     end
 
-    limit::Bool = Base.limit_output(io)
+    limit::Bool = get(io, :limit, false)
     half_screen_rows = limit ? div(displaysize(io)[1] - 8, 2) : typemax(Int)
     pad = ndigits(n)
     sep = "\n\t"
+    io = IOContext(io, multiline=false)
+    if !haskey(io, :compact)
+        io = IOContext(io, compact=true)
+    end
     for k = 1:length(nzind)
         if k < half_screen_rows || k > xnnz - half_screen_rows
             print(io, "  ", '[', rpad(nzind[k], pad), "]  =  ")
-            Base.showcompact_lim(io, nzval[k])
+            Base.show(io, nzval[k])
             println(io)
         elseif k == half_screen_rows
             println(io, "   ", " "^pad, "   \u22ee")
@@ -638,9 +640,6 @@ function summary(x::AbstractSparseVector)
     string("Sparse vector of length ", length(x), " with ", length(nonzeros(x)),
            " ",  eltype(x), " nonzero entries:")
 end
-
-show(io::IO, x::AbstractSparseVector) = showarray(io, x)
-writemime(io::IO, ::MIME"text/plain", x::AbstractSparseVector) = show(IOContext(io, :limit_output => true), x)
 
 ### Conversion to matrix
 

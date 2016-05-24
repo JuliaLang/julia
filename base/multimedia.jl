@@ -57,19 +57,21 @@ mimewritable(m::AbstractString, x) = mimewritable(MIME(m), x)
 # format and is returned unmodified.  This is useful so that raw data can be
 # passed to display(m::MIME, x).
 
+verbose_writemime(io, m, x) = writemime(IOContext(io,multiline=true,limit=false), m, x)
+
 macro textmime(mime)
     quote
         mimeT = MIME{Symbol($mime)}
         # avoid method ambiguities with the general definitions below:
         # (Q: should we treat Vector{UInt8} as a String?)
-        Base.Multimedia.reprmime(m::mimeT, x::Vector{UInt8}) = sprint(writemime, m, x)
+        Base.Multimedia.reprmime(m::mimeT, x::Vector{UInt8}) = sprint(verbose_writemime, m, x)
         Base.Multimedia.stringmime(m::mimeT, x::Vector{UInt8}) = reprmime(m, x)
 
         Base.Multimedia.istextmime(::mimeT) = true
         if $(mime != "text/plain") # strings are shown escaped for text/plain
             Base.Multimedia.reprmime(m::mimeT, x::AbstractString) = x
         end
-        Base.Multimedia.reprmime(m::mimeT, x) = sprint(writemime, m, x)
+        Base.Multimedia.reprmime(m::mimeT, x) = sprint(verbose_writemime, m, x)
         Base.Multimedia.stringmime(m::mimeT, x) = reprmime(m, x)
     end
 end
@@ -77,11 +79,11 @@ end
 istextmime(::MIME) = false
 function reprmime(m::MIME, x)
     s = IOBuffer()
-    writemime(s, m, x)
+    verbose_writemime(s, m, x)
     takebuf_array(s)
 end
 reprmime(m::MIME, x::Vector{UInt8}) = x
-stringmime(m::MIME, x) = base64encode(writemime, m, x)
+stringmime(m::MIME, x) = base64encode(verbose_writemime, m, x)
 stringmime(m::MIME, x::Vector{UInt8}) = base64encode(write, x)
 
 # it is convenient to accept strings instead of ::MIME

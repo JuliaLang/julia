@@ -32,8 +32,13 @@ Create a IOContext that wraps an alternate IO but inherits the keyword arguments
 """
 IOContext
 
-IOContext(io::IOContext) = io
-IOContext(io::IO) = IOContext(io, ImmutableDict{Symbol,Any}())
+IOContext(io::IO; kws...) = IOContext(IOContext(io, ImmutableDict{Symbol,Any}()); kws...)
+function IOContext(io::IOContext; kws...)
+    for (k, v) in kws
+        io = IOContext(io, k, v)
+    end
+    io
+end
 
 IOContext(io::IOContext, dict::ImmutableDict) = typeof(io)(io.io, dict)
 IOContext(io::IO, dict::ImmutableDict) = IOContext{typeof(io)}(io, dict)
@@ -58,14 +63,19 @@ haskey(io::IOContext, key) = haskey(io.dict, key)
 haskey(io::IO, key) = false
 getindex(io::IOContext, key) = getindex(io.dict, key)
 getindex(io::IO, key) = throw(KeyError(key))
-get(io::IOContext, key, default) = get(io.dict, key, default)
-get(io::IO, key, default) = default
-
-"    limit_output(io) -> Bool
-Output hinting for identifying contexts where the user requested a compact output"
-limit_output(::ANY) = _limit_output::Bool
-limit_output(io::IOContext) = get(io, :limit_output, _limit_output::Bool) === true
-_limit_output = false # delete with with_output_limit deprecation
+_limit_output = nothing # TODO: delete with with_output_limit deprecation
+function get(io::IOContext, key, default)
+    if key === :limit && _limit_output !== nothing
+        default = _limit_output::Bool
+    end
+    get(io.dict, key, default)
+end
+function get(io::IO, key, default)
+    if key === :limit && _limit_output !== nothing
+        return _limit_output::Bool
+    end
+    default
+end
 
 displaysize(io::IOContext) = haskey(io, :displaysize) ? io[:displaysize] : displaysize(io.io)
 
@@ -73,11 +83,13 @@ show_circular(io::IO, x::ANY) = false
 function show_circular(io::IOContext, x::ANY)
     d = 1
     for (k, v) in io.dict
-        if k === :SHOWN_SET && v === x
-            print(io, "#= circular reference @-$d =#")
-            return true
+        if k === :SHOWN_SET
+            if v === x
+                print(io, "#= circular reference @-$d =#")
+                return true
+            end
+            d += 1
         end
-        d += 1
     end
     return false
 end
@@ -90,7 +102,7 @@ function show_default(io::IO, x::ANY)
     nf = nfields(t)
     if nf != 0 || t.size==0
         if !show_circular(io, x)
-            recur_io = IOContext(io, :SHOWN_SET => x)
+            recur_io = IOContext(IOContext(io, :SHOWN_SET=>x), :multiline=>false)
             for i=1:nf
                 f = fieldname(t, i)
                 if !isdefined(x, f)
@@ -128,11 +140,27 @@ function is_exported_from_stdlib(name::Symbol, mod::Module)
 end
 
 function show(io::IO, f::Function)
-    mt = typeof(f).name.mt
-    if !isdefined(mt, :module) || is_exported_from_stdlib(mt.name, mt.module) || mt.module === Main
-        print(io, mt.name)
+    ft = typeof(f)
+    mt = ft.name.mt
+    if get(io, :multiline, false)
+        if isa(f, Builtin)
+            print(io, mt.name, " (built-in function)")
+        else
+            name = mt.name
+            isself = isdefined(ft.name.module, name) &&
+                     ft == typeof(getfield(ft.name.module, name))
+            n = length(mt)
+            m = n==1 ? "method" : "methods"
+            ns = isself ? string(name) : string("(::", name, ")")
+            what = startswith(ns, '@') ? "macro" : "generic function"
+            print(io, ns, " (", what, " with $n $m)")
+        end
     else
-        print(io, mt.module, ".", mt.name)
+        if !isdefined(mt, :module) || is_exported_from_stdlib(mt.name, mt.module) || mt.module === Main
+            print(io, mt.name)
+        else
+            print(io, mt.module, ".", mt.name)
+        end
     end
 end
 
@@ -265,7 +293,10 @@ function show_delim_array(io::IO, itr::Union{AbstractArray,SimpleVector}, op, de
                           i1=1, l=length(itr))
     print(io, op)
     if !show_circular(io, itr)
-        recur_io = IOContext(io, :SHOWN_SET => itr)
+        recur_io = IOContext(io, SHOWN_SET=itr, multiline=false)
+        if !haskey(io, :compact)
+            recur_io = IOContext(recur_io, compact=true)
+        end
         newline = true
         first = true
         i = i1
@@ -278,7 +309,7 @@ function show_delim_array(io::IO, itr::Union{AbstractArray,SimpleVector}, op, de
                     x = itr[i]
                     multiline = isa(x,AbstractArray) && ndims(x)>1 && !isempty(x)
                     newline && multiline && println(io)
-                    showcompact_lim(recur_io, x)
+                    show(recur_io, x)
                 end
                 i += 1
                 if i > i1+l-1
@@ -1025,7 +1056,7 @@ function dump(io::IO, x::Array, n::Int, indent)
     else
         if n > 0 && !isempty(x)
             println(io)
-            if limit_output(io)
+            if get(io, :limit, false)
                 dump_elts(io, x, n, indent, 1, (length(x) <= 10 ? length(x) : 5))
                 if length(x) > 10
                     println(io)
@@ -1104,7 +1135,7 @@ end
 
 # For abstract types, use _dumptype only if it's a form that will be called
 # interactively.
-dflt_io() = IOContext(STDOUT::IO, :limit_output => true)
+dflt_io() = IOContext(STDOUT::IO, :limit => true)
 dump(io::IO, x::DataType; maxdepth=8) = (x.abstract ? dumptype : dump)(io, x, maxdepth, "")
 dump(x::DataType; maxdepth=8) = (x.abstract ? dumptype : dump)(dflt_io(), x, maxdepth, "")
 
@@ -1116,25 +1147,25 @@ dump(arg; maxdepth=8) = dump(dflt_io(), arg, maxdepth, "")
 `alignment(X)` returns a tuple (left,right) showing how many characters are
 needed on either side of an alignment feature such as a decimal point.
 """
-alignment(io::IO, x::Any) = (0, length(sprint(0, showcompact_lim, x, env=io)))
-alignment(io::IO, x::Number) = (length(sprint(0, showcompact_lim, x, env=io)), 0)
+alignment(io::IO, x::Any) = (0, length(sprint(0, show, x, env=io)))
+alignment(io::IO, x::Number) = (length(sprint(0, show, x, env=io)), 0)
 "`alignment(42)` yields (2,0)"
-alignment(io::IO, x::Integer) = (length(sprint(0, showcompact_lim, x, env=io)), 0)
+alignment(io::IO, x::Integer) = (length(sprint(0, show, x, env=io)), 0)
 "`alignment(4.23)` yields (1,3) for `4` and `.23`"
 function alignment(io::IO, x::Real)
-    m = match(r"^(.*?)((?:[\.eE].*)?)$", sprint(0, showcompact_lim, x, env=io))
-    m === nothing ? (length(sprint(0, showcompact_lim, x, env=io)), 0) :
+    m = match(r"^(.*?)((?:[\.eE].*)?)$", sprint(0, show, x, env=io))
+    m === nothing ? (length(sprint(0, show, x, env=io)), 0) :
                    (length(m.captures[1]), length(m.captures[2]))
 end
 "`alignment(1 + 10im)` yields (3,5) for `1 +` and `_10im` (plus sign on left, space on right)"
 function alignment(io::IO, x::Complex)
-    m = match(r"^(.*[\+\-])(.*)$", sprint(0, showcompact_lim, x, env=io))
-    m === nothing ? (length(sprint(0, showcompact_lim, x, env=io)), 0) :
+    m = match(r"^(.*[\+\-])(.*)$", sprint(0, show, x, env=io))
+    m === nothing ? (length(sprint(0, show, x, env=io)), 0) :
                    (length(m.captures[1]), length(m.captures[2]))
 end
 function alignment(io::IO, x::Rational)
-    m = match(r"^(.*?/)(/.*)$", sprint(0, showcompact_lim, x, env=io))
-    m === nothing ? (length(sprint(0, showcompact_lim, x, env=io)), 0) :
+    m = match(r"^(.*?/)(/.*)$", sprint(0, show, x, env=io))
+    m === nothing ? (length(sprint(0, show, x, env=io)), 0) :
                    (length(m.captures[1]), length(m.captures[2]))
 end
 
@@ -1207,7 +1238,7 @@ function print_matrix_row(io::IO,
         if isassigned(X,Int(i),Int(j)) # isassigned accepts only `Int` indices
             x = X[i,j]
             a = alignment(io, x)
-            sx = sprint(0, showcompact_lim, x, env=io)
+            sx = sprint(0, show, x, env=io)
         else
             a = undef_ref_alignment
             sx = undef_ref_str
@@ -1259,7 +1290,7 @@ function print_matrix(io::IO, X::AbstractVecOrMat,
                       vdots::AbstractString = "\u22ee",
                       ddots::AbstractString = "  \u22f1  ",
                       hmod::Integer = 5, vmod::Integer = 5)
-    if !limit_output(io)
+    if !get(io, :limit, false)
         screenheight = screenwidth = typemax(Int)
     else
         sz = displaysize(io)
@@ -1365,7 +1396,7 @@ summary(a::AbstractArray) =
 
 # n-dimensional arrays
 function show_nd(io::IO, a::AbstractArray, print_matrix, label_slices)
-    limit::Bool = limit_output(io)
+    limit::Bool = get(io, :limit, false)
     if isempty(a)
         return
     end
@@ -1411,39 +1442,48 @@ end
 """
 function print_matrix_repr(io, X::AbstractArray)
     compact, prefix = array_eltype_show_how(X)
-    prefix *= "["
-    ind = " "^length(prefix)
-    print(io, prefix)
+    if compact && !haskey(io, :compact)
+        io = IOContext(io, :compact => compact)
+    end
+    print(io, prefix, "[")
     for i=1:size(X,1)
-        i > 1 && print(io, ind)
         for j=1:size(X,2)
             j > 1 && print(io, " ")
             if !isassigned(X,i,j)
                 print(io, undef_ref_str)
             else
                 el = X[i,j]
-                compact ? showcompact_lim(io, el) : show(io, el)
+                show(io, el)
             end
         end
         if i < size(X,1)
-            println(io)
-        else
-            print(io, "]")
+            print(io, "; ")
         end
     end
+    print(io, "]")
 end
 
-# NOTE: this is a possible, so-far-unexported function, providing control of
-# array output. Not sure I want to do it this way.
-showarray(X::AbstractArray; kw...) = showarray(STDOUT, X; kw...)
-function showarray(io::IO, X::AbstractArray;
-                   header::Bool=true, repr=false)
-    header && print(io, summary(X))
+show(io::IO, X::AbstractArray) = showarray(io, X)
+
+function showarray(io::IO, X::AbstractArray)
+    repr = !get(io, :multiline, false)
+    if repr && ndims(X) == 1
+        return show_vector(io, X, "[", "]")
+    end
+    io = IOContext(io, multiline=false)
+    if !haskey(io, :compact)
+        io = IOContext(io, compact=true)
+    end
+    if !repr && get(io, :limit, false) && eltype(X) === Method
+        # override usual show method for Vector{Method}: don't abbreviate long lists
+        io = IOContext(io, :limit => false)
+    end
+    !repr && print(io, summary(X))
     if !isempty(X)
-        header && println(io, ":")
+        !repr && println(io, ":")
         if ndims(X) == 0
             if isassigned(X)
-                return showcompact_lim(io, X[])
+                return show(io, X[])
             else
                 return print(io, undef_ref_str)
             end
@@ -1467,27 +1507,21 @@ function showarray(io::IO, X::AbstractArray;
     end
 end
 
-show(io::IO, X::AbstractArray) = showarray(io, X, header=limit_output(io), repr=!limit_output(io))
-
 showall(x) = showall(STDOUT, x)
 function showall(io::IO, x)
-    if !limit_output(io)
+    if !get(io, :limit, false)
         show(io, x)
     else
-        show(IOContext(io, :limit_output => false), x)
+        show(IOContext(io, :limit => false), x)
     end
 end
 
-# TODO: deprecated. remove this once methods for showcompact are gone
-showcompact_lim(io, x) = limit_output(io) ? showcompact(io, x) : show(io, x)
-showcompact_lim(io, x::Number) = limit_output(io) ? showcompact(io, x) : print(io, x)
-
 showcompact(x) = showcompact(STDOUT, x)
 function showcompact(io::IO, x)
-    if limit_output(io)
+    if get(io, :compact, false)
         show(io, x)
     else
-        show(IOContext(io, :limit_output => true), x)
+        show(IOContext(io, :compact => true), x)
     end
 end
 
@@ -1507,9 +1541,9 @@ end
 
 function show_vector(io::IO, v, opn, cls)
     compact, prefix = array_eltype_show_how(v)
-    limited = limit_output(io)
-    if limited && !compact
-        io = IOContext(io, :limit_output => false)
+    limited = get(io, :limit, false)
+    if compact && !haskey(io, :compact)
+        io = IOContext(io, :compact => compact)
     end
     print(io, prefix)
     if limited && length(v) > 20
@@ -1521,8 +1555,6 @@ function show_vector(io::IO, v, opn, cls)
         show_delim_array(io, v, opn, ",", cls, false)
     end
 end
-
-show(io::IO, v::AbstractVector) = show_vector(io, v, "[", "]")
 
 # printing BitArrays
 

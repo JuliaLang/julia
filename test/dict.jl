@@ -268,8 +268,8 @@ for d in (Dict("\n" => "\n", "1" => "\n", "\n" => "2"),
     for cols in (12, 40, 80), rows in (2, 10, 24)
         # Ensure output is limited as requested
         s = IOBuffer()
-        io = Base.IOContext(Base.IOContext(s, :limit_output => true), :displaysize => (rows, cols))
-        Base.showdict(io, d)
+        io = Base.IOContext(s, limit=true, displaysize=(rows, cols), multiline=true)
+        Base.show(io, d)
         out = split(takebuf_string(s),'\n')
         for line in out[2:end]
             @test strwidth(line) <= cols
@@ -278,8 +278,8 @@ for d in (Dict("\n" => "\n", "1" => "\n", "\n" => "2"),
 
         for f in (keys, values)
             s = IOBuffer()
-            io = Base.IOContext(Base.IOContext(s, :limit_output => true), :displaysize => (rows, cols))
-            Base.showkv(io, f(d))
+            io = Base.IOContext(s, limit=true, displaysize=(rows, cols), multiline=true)
+            Base.show(io, f(d))
             out = split(takebuf_string(s),'\n')
             for line in out[2:end]
                 @test strwidth(line) <= cols
@@ -288,7 +288,7 @@ for d in (Dict("\n" => "\n", "1" => "\n", "\n" => "2"),
         end
     end
     # Simply ensure these do not throw errors
-    Base.showdict(IOBuffer(), d)
+    Base.show(IOBuffer(), d)
     @test !isempty(summary(d))
     @test !isempty(summary(keys(d)))
     @test !isempty(summary(values(d)))
@@ -311,9 +311,9 @@ end
 type Alpha end
 Base.show(io::IO, ::Alpha) = print(io,"α")
 let sbuff = IOBuffer(),
-    io = Base.IOContext(Base.IOContext(sbuff, :limit_output => true), :displaysize => (10, 20))
+    io = Base.IOContext(sbuff, limit=true, displaysize=(10, 20), multiline=true)
 
-    Base.showdict(io, Dict(Alpha()=>1))
+    Base.show(io, Dict(Alpha()=>1))
     @test !contains(String(sbuff), "…")
     @test endswith(String(sbuff), "α => 1")
 end
@@ -369,9 +369,9 @@ let
     a[3] = T10647(a)
     @test a == a
     show(IOBuffer(), a)
-    Base.show(Base.IOContext(IOBuffer(), :limit_output => true), a)
-    Base.showdict(IOBuffer(), a)
-    Base.showdict(Base.IOContext(IOBuffer(), :limit_output => true), a)
+    Base.show(Base.IOContext(IOBuffer(), :limit => true), a)
+    Base.show(IOBuffer(), a)
+    Base.show(Base.IOContext(IOBuffer(), :limit => true), a)
 end
 
 

@@ -937,11 +937,11 @@ end
 #14335
 @deprecate super(T::DataType) supertype(T)
 
-function with_output_limit(thk, lim=true) # thk is usually show()
-    depwarn("with_output_limit is deprecated. use `io = IOContext(io, :limit_output => lim)` as a replacement", :with_output_limit)
+function with_output_limit(thk, lim::Bool=true) # thk is usually show()
+    depwarn("with_output_limit is deprecated. use `io = IOContext(io, :limit => lim)` as a replacement", :with_output_limit)
     global _limit_output
     last = _limit_output
-    _limit_output::Bool = lim
+    _limit_output = lim
     try
         thk()
     finally
