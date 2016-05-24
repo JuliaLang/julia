@@ -97,10 +97,14 @@ const PRIMES = primes(2^16)
 
 # Small precomputed primes + Miller-Rabin for primality testing:
 #     https://en.wikipedia.org/wiki/Miller–Rabin_primality_test
-#
+#     https://github.com/JuliaLang/julia/issues/11594
 function isprime(n::Integer)
-    (n < 3 || iseven(n)) && return n == 2
-    n <= 2^16 && return PRIMES[searchsortedlast(PRIMES,n)] == n
+    iseven(n) && return n == 2
+    n in (3,5,7,11,13,17,19,23) && return true
+    for m in (3,5,7,11,13,17,19,23)
+        n % m == 0 && return false
+    end
+    n < 841 && return n > 1
     s = trailing_zeros(n-1)
     d = (n-1) >>> s
     for a in witnesses(n)
@@ -120,11 +124,14 @@ end
 #     http://mathoverflow.net/questions/101922/smallest-collection-of-bases-for-prime-testing-of-64-bit-numbers
 #     http://primes.utm.edu/prove/merged.html
 #     http://miller-rabin.appspot.com
-#
-witnesses(n::Union{UInt8,Int8,UInt16,Int16}) = (2,3)
-witnesses(n::Union{UInt32,Int32}) = n < 1373653 ? (2,3) : (2,7,61)
+#     https://github.com/JuliaLang/julia/issues/11594
+function witnesses(n::Union{UInt8,Int8,UInt16,Int16,UInt32,Int32})
+    i = (((n >> 16) $ n) * 0x45d9f3b) & 0xffffffff
+    i = ((i >> 16) $ i) & 15 + 1
+    (2,(2249,483,194,199,15,369,499,945,419,735,33,471,946,615,497,702)[i])
+end
 witnesses(n::Union{UInt64,Int64}) =
-        n < 1373653         ? (2,3) :
+        n < 4294967296      ? witnesses(UInt32(n)) :
         n < 4759123141      ? (2,7,61) :
         n < 2152302898747   ? (2,3,5,7,11) :
         n < 3474749660383   ? (2,3,5,7,11,13) :
