@@ -1010,22 +1010,22 @@ static int jl_serialize_methcache_from_mod(jl_typemap_entry_t *ml, void *closure
     return 1;
 }
 
-static void jl_serialize_methtable_from_mod(ios_t *s, jl_methtable_t *mt, int8_t iskw)
+static void jl_serialize_methtable_from_mod(ios_t *s, jl_typename_t *tn, int8_t iskw)
 {
     struct jl_serialize_methcache_from_mod_env env;
     env.s = s;
-    env.mod = mt->module;
-    env.name = mt->name;
+    env.mod = tn->module;
+    env.name = tn->name;
     env.iskw = iskw;
-    assert(mt->module);
+    assert(tn->module);
     if (iskw) {
-        if (!mt->kwsorter)
+        if (!tn->mt->kwsorter)
             return;
-        assert(mt->module == jl_gf_mtable(mt->kwsorter)->module);
-        mt = jl_gf_mtable(mt->kwsorter);
-        assert(!mt->kwsorter);
+        assert(tn->mt->module == jl_gf_mtable(tn->mt->kwsorter)->module);
+        tn = ((jl_datatype_t*)jl_typeof(tn->mt->kwsorter))->name;
+        assert(tn->mt->kwsorter == NULL);
     }
-    jl_typemap_visitor(mt->defs, jl_serialize_methcache_from_mod, &env);
+    jl_typemap_visitor(tn->mt->defs, jl_serialize_methcache_from_mod, &env);
 }
 
 static void jl_serialize_lambdas_from_mod(ios_t *s, jl_module_t *m)
@@ -1037,18 +1037,22 @@ static void jl_serialize_lambdas_from_mod(ios_t *s, jl_module_t *m)
         if (table[i] != HT_NOTFOUND) {
             jl_binding_t *b = (jl_binding_t*)table[i];
             if (b->owner == m && b->value && b->constp) {
-                if (jl_is_module(b->value)) {
+                if (jl_is_datatype(b->value) &&
+                        (strlen(jl_symbol_name(b->name)) <= 4 || strncmp(jl_symbol_name(b->name), "#kw#", 4))) { /* XXX: yuck, but the auto-generated kw types from the serializer isn't a real type, so we *must* reject it */
+                    jl_typename_t *tn = ((jl_datatype_t*)b->value)->name;
+                    if (tn->module == m && tn->name == b->name) {
+                        jl_methtable_t *mt = tn->mt;
+                        if (mt != NULL && (jl_value_t*)mt != jl_nothing && (mt != jl_type_type_mt || tn == jl_type_type->name)) {
+                            jl_serialize_methtable_from_mod(s, tn, 0);
+                            jl_serialize_methtable_from_mod(s, tn, 1);
+                        }
+                    }
+                }
+                else if (jl_is_module(b->value)) {
                     jl_module_t *child = (jl_module_t*)b->value;
                     if (child != m && child->parent == m && child->name == b->name) {
                         // this is the original/primary binding for the submodule
                         jl_serialize_lambdas_from_mod(s, (jl_module_t*)b->value);
-                    }
-                }
-                else {
-                    jl_methtable_t *mt = jl_gf_mtable(b->value);
-                    if (mt && mt->name == b->name && mt->module == m) {
-                        jl_serialize_methtable_from_mod(s, mt, 0);
-                        jl_serialize_methtable_from_mod(s, mt, 1);
                     }
                 }
             }
@@ -1686,13 +1690,16 @@ static void jl_deserialize_lambdas_from_mod(ios_t *s)
         if (mod == NULL)
             return;
         jl_sym_t *name = (jl_sym_t*)jl_deserialize_value(s, NULL);
-        jl_function_t *gf = (jl_function_t*)jl_get_global(mod, name);
+        jl_datatype_t *gf = (jl_datatype_t*)jl_get_global(mod, name);
+        assert(jl_is_datatype(gf));
         int8_t iskw = read_int8(s);
-        if (iskw)
-            gf = jl_get_kwsorter(((jl_datatype_t*)jl_typeof(gf))->name);
+        if (iskw) {
+            gf = (jl_datatype_t*)jl_typeof(jl_get_kwsorter(gf->name));
+            assert(jl_is_datatype(gf));
+        }
         jl_tupletype_t *simpletype = (jl_tupletype_t*)jl_deserialize_value(s, NULL);
         jl_method_t *meth = (jl_method_t*)jl_deserialize_value(s, NULL);
-        jl_method_table_insert(jl_gf_mtable(gf), meth, simpletype);
+        jl_method_table_insert(gf->name->mt, meth, simpletype);
     }
 }
 
