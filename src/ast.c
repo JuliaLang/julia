@@ -136,7 +136,7 @@ value_t fl_invoke_julia_macro(fl_context_t *fl_ctx, value_t *args, uint32_t narg
 {
     if (nargs < 1)
         argcount(fl_ctx, "invoke-julia-macro", nargs, 1);
-    jl_value_t *f = NULL;
+    jl_lambda_info_t *mfunc = NULL;
     jl_value_t **margs;
     // Reserve one more slot for the result
     JL_GC_PUSHARGS(margs, nargs + 1);
@@ -147,8 +147,13 @@ value_t fl_invoke_julia_macro(fl_context_t *fl_ctx, value_t *args, uint32_t narg
     JL_TRY {
         margs[0] = scm_to_julia(fl_ctx, args[0], 1);
         margs[0] = jl_toplevel_eval(margs[0]);
-        f = margs[0];
-        margs[nargs] = result = jl_apply_generic(margs, nargs);
+        mfunc = jl_method_lookup(jl_gf_mtable(margs[0]), margs, nargs, 1);
+        if (mfunc == NULL) {
+            JL_GC_POP();
+            jl_method_error((jl_function_t*)margs[0], margs, nargs);
+            // unreachable
+        }
+        margs[nargs] = result = jl_call_method_internal(mfunc, margs, nargs);
     }
     JL_CATCH {
         JL_GC_POP();
@@ -166,7 +171,7 @@ value_t fl_invoke_julia_macro(fl_context_t *fl_ctx, value_t *args, uint32_t narg
     value_t scm = julia_to_scm(fl_ctx, result);
     fl_gc_handle(fl_ctx, &scm);
     value_t scmresult;
-    jl_module_t *defmod = jl_gf_mtable(f)->module;
+    jl_module_t *defmod = mfunc->def->module;
     if (defmod == NULL || defmod == jl_current_module) {
         scmresult = fl_cons(fl_ctx, scm, fl_ctx->F);
     }
