@@ -36,6 +36,9 @@ USE_SYSTEM_ARPACK:=0
 USE_SYSTEM_SUITESPARSE:=0
 USE_SYSTEM_LIBUV:=0
 USE_SYSTEM_UTF8PROC:=0
+USE_SYSTEM_HTTPPARSER:=0
+USE_SYSTEM_MBEDTLS:=0
+USE_SYSTEM_LIBSSH2:=0
 USE_SYSTEM_LIBGIT2:=0
 USE_SYSTEM_PATCHELF:=0
 
@@ -234,7 +237,7 @@ CMAKE ?= cmake
 CMAKE_GENERATOR ?= make
 
 # Point pkg-config to only look at our libraries
-export PKG_CONFIG_LIBDIR = $(JULIAHOME)/usr/lib/pkgconfig
+export PKG_CONFIG_PATH = $(JULIAHOME)/usr/lib/pkgconfig
 
 # Figure out OS and architecture
 BUILD_OS := $(shell uname)
