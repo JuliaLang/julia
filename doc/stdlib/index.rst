@@ -27,3 +27,4 @@
    libc
    libdl
    profile
+   simd-types

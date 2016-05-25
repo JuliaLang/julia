@@ -86,6 +86,7 @@
    stdlib/libdl
    stdlib/profile
    stdlib/stacktraces
+   stdlib/simd-types
 
 .. _devdocs:
 
