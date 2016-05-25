@@ -6,6 +6,8 @@ typealias AbstractVector{T} AbstractArray{T,1}
 typealias AbstractMatrix{T} AbstractArray{T,2}
 typealias AbstractVecOrMat{T} Union{AbstractVector{T}, AbstractMatrix{T}}
 typealias RangeIndex Union{Int, Range{Int}, UnitRange{Int}, Colon}
+typealias UnitRangeInteger{T<:Integer} UnitRange{T}
+typealias Indices{N} NTuple{N,UnitRangeInteger}
 
 ## Basic functions ##
 
