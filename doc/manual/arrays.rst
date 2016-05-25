@@ -50,7 +50,9 @@ Function                          Description
 :func:`length(A) <length>`        the number of elements in ``A``
 :func:`ndims(A) <ndims>`          the number of dimensions of ``A``
 :func:`size(A) <size>`            a tuple containing the dimensions of ``A``
-:func:`size(A,n) <size>`          the size of ``A`` in a particular dimension
+:func:`size(A,n) <size>`          the size of ``A`` along a particular dimension
+:func:`indices(A) <indices>`      a tuple containing the valid indices of ``A``
+:func:`indices(A,n) <indices>`    a range expressing the valid indices along dimension ``n``
 :func:`eachindex(A) <eachindex>`  an efficient iterator for visiting each position in ``A``
 :func:`stride(A,k) <stride>`      the stride (linear index distance between adjacent elements) along dimension ``k``
 :func:`strides(A) <strides>`      a tuple of the strides in each dimension

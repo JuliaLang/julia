@@ -526,6 +526,7 @@ export
     hvcat,
     ind2sub,
     indexin,
+    indices,
     indmax,
     indmin,
     invperm,

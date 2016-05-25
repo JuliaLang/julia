@@ -31,6 +31,18 @@ Basic functions
        julia> size(A,3,2)
        (4,3)
 
+.. function:: indices(A)
+
+   .. Docstring generated from Julia source
+
+   Returns the tuple of valid indices for array ``A``\ .
+
+.. function:: indices(A, d)
+
+   .. Docstring generated from Julia source
+
+   Returns the valid range of indices for array ``A`` along dimension ``d``\ .
+
 .. function:: length(A) -> Integer
 
    .. Docstring generated from Julia source
@@ -971,4 +983,3 @@ dense counterparts. The following functions are specific to sparse arrays.
              # perform sparse wizardry...
           end
        end
-
