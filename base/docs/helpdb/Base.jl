@@ -3294,7 +3294,7 @@ Redirect I/O to or from the given `command`. Keyword arguments specify which of 
 command's streams should be redirected. `append` controls whether file output appends to the
 file. This is a more general version of the 2-argument `pipeline` function.
 `pipeline(from, to)` is equivalent to `pipeline(from, stdout=to)` when `from` is a command,
-and to `pipe(to, stdin=from)` when `from` is another kind of data source.
+and to `pipeline(to, stdin=from)` when `from` is another kind of data source.
 
 **Examples**:
 
@@ -4960,13 +4960,6 @@ The distance between `x` and the next larger representable floating-point value 
 `DataType` as `x`.
 """
 eps(::AbstractFloat)
-
-"""
-    rem1(x, y)
-
-(Deprecated.) Remainder after division, returning in the range `(0, y]`.
-"""
-rem1
 
 """
     isalpha(c::Union{Char,AbstractString}) -> Bool

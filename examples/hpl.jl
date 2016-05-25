@@ -233,7 +233,7 @@ function hpl_par2(A::Matrix, b::Vector)
         return x
     end
 
-    depend = Array(RemoteRef, nB, nB)
+    depend = Array(RemoteChannel, nB, nB)
 
     #pmap[i] is where block i's stuff is
     #block i is dist[i] to dist[i+1]-1
@@ -315,7 +315,7 @@ function permute(C, i, j, panel_p, n, flag)
 end ##permute()
 
 function trailing_update_par2(C, L_II, C_KI, i, j, n, flag, dep)
-    if isa(dep, RemoteRef); wait(dep); end
+    if isa(dep, RemoteChannel); wait(dep); end
     if flag
         #(C.dist[i+1] == n+2) ? (I = (C.dist[i]):n) :
         #                       (I = (C.dist[i]):(C.dist[i+1]-1))

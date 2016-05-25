@@ -817,8 +817,8 @@ Here is a simple example of a C wrapper that returns a ``Ptr`` type::
             (Csize_t,),                        #tuple of input types
             n                                  #name of Julia variable to pass in
         )
-        if output_ptr==C_NULL #Could not allocate memory
-            throw(MemoryError())
+        if output_ptr==C_NULL # Could not allocate memory
+            throw(OutOfMemoryError())
         end
         return output_ptr
     end
