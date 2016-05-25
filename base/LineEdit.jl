@@ -909,7 +909,7 @@ function keymap{D<:Dict}(keymaps::Array{D})
 end
 
 const escape_defaults = merge!(
-    AnyDict([Char(i) => nothing for i=vcat(1:26, 28:31)]), # Ignore control characters by default
+    AnyDict(Char(i) => nothing for i=vcat(1:26, 28:31)), # Ignore control characters by default
     AnyDict( # And ignore other escape sequences by default
         "\e*" => nothing,
         "\e[*" => nothing,
@@ -941,9 +941,9 @@ const escape_defaults = merge!(
         "\eOF"  => KeyAlias("\e[F"),
     ),
     # set mode commands
-    AnyDict(["\e[$(c)h" => nothing for c in 1:20]),
+    AnyDict("\e[$(c)h" => nothing for c in 1:20),
     # reset mode commands
-    AnyDict(["\e[$(c)l" => nothing for c in 1:20])
+    AnyDict("\e[$(c)l" => nothing for c in 1:20)
     )
 
 function write_response_buffer(s::PromptState, data)
@@ -1456,11 +1456,11 @@ const prefix_history_keymap = merge!(
         "\e[200~" => "*"
     ),
     # VT220 editing commands
-    AnyDict(["\e[$(n)~" => "*" for n in 1:8]),
+    AnyDict("\e[$(n)~" => "*" for n in 1:8),
     # set mode commands
-    AnyDict(["\e[$(c)h" => "*" for c in 1:20]),
+    AnyDict("\e[$(c)h" => "*" for c in 1:20),
     # reset mode commands
-    AnyDict(["\e[$(c)l" => "*" for c in 1:20])
+    AnyDict("\e[$(c)l" => "*" for c in 1:20)
 )
 
 function setup_prefix_keymap(hp, parent_prompt)
