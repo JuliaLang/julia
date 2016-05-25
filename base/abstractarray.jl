@@ -529,14 +529,14 @@ function _getindex{T,N}(::LinearFast, A::AbstractArray{T,N}, I::Vararg{Real,N})
     @_inline_meta
     J = to_indexes(I...)
     @boundscheck checkbounds(A, J...)
-    @inbounds r = getindex(A, sub2ind(size(A), J...))
+    @inbounds r = getindex(A, sub2ind(A, J...))
     r
 end
 function _getindex(::LinearFast, A::AbstractArray, I::Real...) # TODO: DEPRECATE FOR #14770
     @_inline_meta
     J = to_indexes(I...)
     @boundscheck checkbounds(A, J...)
-    @inbounds r = getindex(A, sub2ind(size(A), J...))
+    @inbounds r = getindex(A, sub2ind(A, J...))
     r
 end
 
@@ -548,7 +548,7 @@ function _getindex(::LinearSlow, A::AbstractArray, i::Real)
     # ind2sub requires all dimensions to be > 0; may as well just check bounds
     @_inline_meta
     @boundscheck checkbounds(A, i)
-    @inbounds r = getindex(A, ind2sub(size(A), to_index(i))...)
+    @inbounds r = getindex(A, ind2sub(A, to_index(i))...)
     r
 end
 @generated function _getindex{T,AN}(::LinearSlow, A::AbstractArray{T,AN}, I::Real...) # TODO: DEPRECATE FOR #14770
@@ -573,7 +573,7 @@ end
             # ind2sub requires all dimensions to be > 0:
             @_propagate_inbounds_meta
             @boundscheck (&)($(szcheck...)) || throw_boundserror(A, I)
-            getindex(A, $(Isplat...), ind2sub($sz, $last_idx)...)
+            getindex(A, $(Isplat...), ind2sub($sz, $last_idx)...)  # FIXME
         end
     end
 end
@@ -600,14 +600,14 @@ function _setindex!{T,N}(::LinearFast, A::AbstractArray{T,N}, v, I::Vararg{Real,
     @_inline_meta
     J = to_indexes(I...)
     @boundscheck checkbounds(A, J...)
-    @inbounds r = setindex!(A, v, sub2ind(size(A), J...))
+    @inbounds r = setindex!(A, v, sub2ind(A, J...))
     r
 end
 function _setindex!(::LinearFast, A::AbstractArray, v, I::Real...) # TODO: DEPRECATE FOR #14770
     @_inline_meta
     J = to_indexes(I...)
     @boundscheck checkbounds(A, J...)
-    @inbounds r = setindex!(A, v, sub2ind(size(A), J...))
+    @inbounds r = setindex!(A, v, sub2ind(A, J...))
     r
 end
 
@@ -618,7 +618,7 @@ function _setindex!(::LinearSlow, A::AbstractArray, v, i::Real)
     # ind2sub requires all dimensions to be > 0; may as well just check bounds
     @_inline_meta
     @boundscheck checkbounds(A, i)
-    @inbounds r = setindex!(A, v, ind2sub(size(A), to_index(i))...)
+    @inbounds r = setindex!(A, v, ind2sub(A, to_index(i))...)
     r
 end
 @generated function _setindex!{T,AN}(::LinearSlow, A::AbstractArray{T,AN}, v, I::Real...) # TODO: DEPRECATE FOR #14770
