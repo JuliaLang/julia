@@ -4170,3 +4170,23 @@ function trigger14878()
     return w
 end
 @test_throws UndefVarError trigger14878()
+
+# issue #15838
+module A15838
+    macro f() end
+    const x = :a
+end
+module B15838
+    import A15838.@f
+    macro f(x); return :x; end
+    const x = :b
+end
+@test A15838.@f() === nothing
+@test A15838.@f(1) === :b
+let nometh = expand(:(A15838.@f(1, 2)))
+    @test (nometh::Expr).head === :error
+    @test length(nometh.args) == 1
+    e = nometh.args[1]::MethodError
+    @test e.f === getfield(A15838, Symbol("@f"))
+    @test e.args === (1,2)
+end

@@ -380,6 +380,21 @@ JL_DLLEXPORT jl_lambda_info_t *jl_new_lambda_info_uninit(jl_svec_t *sparam_syms)
     return li;
 }
 
+// invoke (compiling if necessary) the jlcall function pointer for a method template
+STATIC_INLINE jl_value_t *jl_call_staged(jl_svec_t *sparam_vals, jl_lambda_info_t *meth,
+                                         jl_value_t **args, uint32_t nargs)
+{
+    if (__unlikely(meth->fptr == NULL)) {
+        jl_compile_linfo(meth);
+        jl_generate_fptr(meth);
+    }
+    assert(jl_svec_len(meth->sparam_syms) == jl_svec_len(sparam_vals));
+    if (__likely(meth->jlcall_api == 0))
+        return meth->fptr(args[0], &args[1], nargs-1);
+    else
+        return ((jl_fptr_sparam_t)meth->fptr)(sparam_vals, args[0], &args[1], nargs-1);
+}
+
 static jl_lambda_info_t *jl_instantiate_staged(jl_method_t *generator, jl_tupletype_t *tt, jl_svec_t *env)
 {
     size_t i, l;
@@ -412,7 +427,7 @@ static jl_lambda_info_t *jl_instantiate_staged(jl_method_t *generator, jl_tuplet
         assert(jl_nparams(tt) == jl_array_len(argnames) ||
                (func->isva && (jl_nparams(tt) >= jl_array_len(argnames) - 1)));
         jl_cellset(body->args, 1,
-                jl_call_unspecialized(sparam_vals, func, jl_svec_data(tt->parameters), jl_nparams(tt)));
+                jl_call_staged(sparam_vals, func, jl_svec_data(tt->parameters), jl_nparams(tt)));
 
         if (func->sparam_syms != jl_emptysvec) {
             // mark this function as having the same static parameters as the generator
