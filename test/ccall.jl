@@ -397,6 +397,83 @@ let
     @test x.z == a.z - Int('A')
 end
 
+const Struct_huge1a = NTuple{8, Int64}
+const Struct_huge1b = NTuple{9, Int64}
+const Struct_huge2a = NTuple{8, Cdouble}
+const Struct_huge2b = NTuple{9, Cdouble}
+type Struct_huge3a
+    cf::NTuple{3, Complex{Cfloat}}
+    f7::Cfloat
+    f8::Cfloat
+end
+type Struct_huge3b
+    cf::NTuple{7, Complex{Cfloat}}
+    r8a::Cfloat
+    r8b::Cfloat
+end
+type Struct_huge3c
+    cf::NTuple{7, Complex{Cfloat}}
+    r8a::Cfloat
+    r8b::Cfloat
+    r9::Cfloat
+end
+type Struct_huge4a
+    r12::Complex{Cdouble}
+    r34::Complex{Cdouble}
+    r5::Complex{Cfloat}
+    r67::Complex{Cdouble}
+    r8::Cdouble
+end
+type Struct_huge4b
+    r12::Complex{Cdouble}
+    r34::Complex{Cdouble}
+    r5::Complex{Cfloat}
+    r67::Complex{Cdouble}
+    r89::Complex{Cdouble}
+end
+const Struct_huge5a = NTuple{8, Complex{Cint}}
+const Struct_huge5b = NTuple{9, Complex{Cint}}
+
+function verify_huge(init, a, b)
+    @test typeof(init) === typeof(a) === typeof(b)
+    verbose && @show (a, b)
+    # make sure a was unmodified
+    for i = 1:nfields(a)
+        @test getfield(init, i) === getfield(a, i)
+    end
+    # make sure b was modifed as expected
+    a1, b1 = getfield(a, 1), getfield(b, 1)
+    if isa(a1, Tuple)
+        @test oftype(a1[1], a1[1] * 39) === b1[1]
+        @test a1[2:end] === b1[2:end]
+    else
+        @test oftype(a1, a1 * 39) === b1
+    end
+    for i = 2:nfields(a)
+        @test getfield(a, i) === getfield(b, i)
+    end
+end
+macro test_huge(i, b, init)
+    f = QuoteNode(Symbol("test_huge", i, b))
+    ty = Symbol("Struct_huge", i, b)
+    return quote
+        let a = $ty($(esc(init))...), f
+            f(b) = ccall(($f, libccalltest), $ty, (Cchar, $ty, Cchar), '0' + $i, a, $b)
+            verify_huge($ty($(esc(init))...), a, f(a))
+        end
+    end
+end
+@test_huge 1 'a' ((1, 2, 3, 4, 5, 6, 7, 8),)
+@test_huge 1 'b' ((1, 2, 3, 4, 5, 6, 7, 8, 9),)
+@test_huge 2 'a' ((1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0),)
+@test_huge 2 'b' ((1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0),)
+@test_huge 3 'a' ((1.0 + 2.0im, 3.0 + 4.0im, 5.0 + 6.0im), 7.0, 8.0)
+@test_huge 3 'b' ((1.0 + 2.0im, 3.0 + 4.0im, 5.0 + 6.0im, 7.0 + 8.0im, 9.0 + 10.0im, 11.0 + 12.0im, 13.0 + 14.0im), 7.0, 8.0)
+@test_huge 3 'c' ((1.0 + 2.0im, 3.0 + 4.0im, 5.0 + 6.0im, 7.0 + 8.0im, 9.0 + 10.0im, 11.0 + 12.0im, 13.0 + 14.0im), 7.0, 8.0, 9.0)
+@test_huge 4 'a' (1.0 + 2.0im, 3.0 + 4.0im, 5.0f0 + 6.0f0im, 7.0 + 8.0im, 9.0)
+@test_huge 4 'b' (1.0 + 2.0im, 3.0 + 4.0im, 5.0f0 + 6.0f0im, 7.0 + 8.0im, 9.0 + 10.0im)
+@test_huge 5 'a' ((1 + 2im, 3 + 4im, 5 + 6im, 7 + 8im, 9 + 10im, 11 + 12im, 13 + 14im, 15 + 16im),)
+@test_huge 5 'b' ((1 + 2im, 3 + 4im, 5 + 6im, 7 + 8im, 9 + 10im, 11 + 12im, 13 + 14im, 15 + 16im, 17 + 17im),)
 
 ## cfunction roundtrip
 

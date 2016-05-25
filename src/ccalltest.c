@@ -196,6 +196,125 @@ typedef struct {
     char z;
 } struct_big;
 
+typedef struct {
+    int64_t r1;
+    int64_t r2;
+    int64_t r3;
+    int64_t r4;
+    int64_t r5;
+    int64_t r6;
+    int64_t r7;
+    int64_t r8;
+} struct_huge1a;
+
+typedef struct {
+    int64_t r1;
+    int64_t r2;
+    int64_t r3;
+    int64_t r4;
+    int64_t r5;
+    int64_t r6;
+    int64_t r7;
+    int64_t r8;
+    int64_t r9;
+} struct_huge1b;
+
+typedef struct {
+    double f1;
+    double f2;
+    double f3;
+    double f4;
+    double f5;
+    double f6;
+    double f7;
+    double f8;
+} struct_huge2a;
+
+typedef struct {
+    double f1;
+    double f2;
+    double f3;
+    double f4;
+    double f5;
+    double f6;
+    double f7;
+    double f8;
+    double f9;
+} struct_huge2b;
+
+typedef struct {
+    complex float f12;
+    complex float f34;
+    complex float f56;
+    float f7;
+    float f8;
+} struct_huge3a;
+
+typedef struct {
+    complex float r1;
+    complex float r2;
+    complex float r3;
+    complex float r4;
+    complex float r5;
+    complex float r6;
+    complex float r7;
+    float r8a;
+    float r8b;
+} struct_huge3b;
+
+typedef struct {
+    complex float r1;
+    complex float r2;
+    complex float r3;
+    complex float r4;
+    complex float r5;
+    complex float r6;
+    complex float r7;
+    float r8a;
+    float r8b;
+    float r9;
+} struct_huge3c;
+
+typedef struct {
+    complex double r12;
+    complex double r34;
+    complex float r5;
+    complex double r67;
+    double r8;
+} struct_huge4a;
+
+typedef struct {
+    complex double r12;
+    complex double r34;
+    complex float r5;
+    complex double r67;
+    complex double r89;
+} struct_huge4b;
+
+typedef struct {
+    complex int r1;
+    complex int r2;
+    complex int r3;
+    complex int r4;
+    complex int r5;
+    complex int r6;
+    complex int r7;
+    complex int r8;
+} struct_huge5a;
+
+typedef struct {
+    complex int r1;
+    complex int r2;
+    complex int r3;
+    complex int r4;
+    complex int r5;
+    complex int r6;
+    complex int r7;
+    complex int r8;
+    complex int r9;
+} struct_huge5b;
+
+
 JL_DLLEXPORT struct1 test_1(struct1 a, float b) {
     //Unpack a "small" struct { float, double }
     if (verbose) fprintf(stderr,"%g + %g i & %g\n", a.x, a.y, b);
@@ -366,6 +485,25 @@ JL_DLLEXPORT struct_big test_big(struct_big a) {
     a.z -= 'A';
     return a;
 }
+
+#define test_huge(suffix, reg) \
+JL_DLLEXPORT struct_huge##suffix test_huge##suffix(char a, struct_huge##suffix b, char c) { \
+    if (verbose) fprintf(stderr,"%c-%c\n", a, c); \
+    b.reg *= 39; \
+    return b; \
+}
+
+test_huge(1a, r1);
+test_huge(1b, r1);
+test_huge(2a, f1);
+test_huge(2b, f1);
+test_huge(3a, f12);
+test_huge(3b, r1);
+test_huge(3c, r1);
+test_huge(4a, r12);
+test_huge(4b, r12);
+test_huge(5a, r1);
+test_huge(5b, r1);
 
 JL_DLLEXPORT int get_c_int(void)
 {
