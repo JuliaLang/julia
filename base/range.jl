@@ -2,8 +2,8 @@
 
 ## 1-dimensional ranges ##
 
-typealias Dims Tuple{Vararg{Int}}
-typealias DimsInteger Tuple{Vararg{Integer}}
+typealias Dims{N} NTuple{N,Int}
+typealias DimsInteger{N} NTuple{N,Integer}
 
 abstract Range{T} <: AbstractArray{T,1}
 
