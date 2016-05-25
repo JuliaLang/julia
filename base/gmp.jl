@@ -520,12 +520,12 @@ end
 
 function ndigits0z(x::BigInt, b::Integer=10)
     b < 2 && throw(DomainError())
-    if ispow2(b)
-        Int(ccall((:__gmpz_sizeinbase,:libgmp), Culong, (Ptr{BigInt}, Int32), &x, b))
+    if ispow2(b) && 2 <= b <= 62 # GMP assumes b is in this range
+        Int(ccall((:__gmpz_sizeinbase,:libgmp), Csize_t, (Ptr{BigInt}, Cint), &x, b))
     else
         # non-base 2 mpz_sizeinbase might return an answer 1 too big
         # use property that log(b, x) < ndigits(x, b) <= log(b, x) + 1
-        n = Int(ccall((:__gmpz_sizeinbase,:libgmp), Culong, (Ptr{BigInt}, Int32), &x, 2))
+        n = Int(ccall((:__gmpz_sizeinbase,:libgmp), Csize_t, (Ptr{BigInt}, Cint), &x, 2))
         lb = log2(b) # assumed accurate to <1ulp (true for openlibm)
         q,r = divrem(n,lb)
         iq = Int(q)
