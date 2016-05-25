@@ -4126,8 +4126,10 @@ static std::unique_ptr<Module> emit_function(jl_lambda_info_t *lam, jl_llvm_func
         f = Function::Create(FunctionType::get(rt, fsig, false),
                              GlobalVariable::ExternalLinkage,
                              funcName.str(), M);
-        if (ctx.sret)
+        if (ctx.sret) {
             f->addAttribute(1, Attribute::StructRet);
+            f->addAttribute(1, Attribute::NoAlias);
+        }
         addComdat(f);
 #ifdef LLVM37
         f->addFnAttr("no-frame-pointer-elim", "true");
