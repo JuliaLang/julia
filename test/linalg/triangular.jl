@@ -286,6 +286,14 @@ for elty1 in (Float32, Float64, BigFloat, Complex64, Complex128, Complex{BigFloa
                 @test_approx_eq full(A1.'A2.') full(A1).'full(A2).'
                 @test_approx_eq full(A1'A2') full(A1)'full(A2)'
                 @test_approx_eq full(A1/A2) full(A1)/full(A2)
+                if uplo2 == uplo1 && elty2 == elty1
+                    C = LinAlg.A_mul_B!(A1, copy(A2))
+                    @test_approx_eq C full(A1)*full(A2)
+                    if elty1 <: BlasFloat
+                        C = LinAlg.A_ldiv_B!(A1, copy(A2))
+                        @test_approx_eq C full(A1)\full(A2)
+                    end
+                end
                 @test_throws DimensionMismatch eye(n+1)/A2
                 @test_throws DimensionMismatch eye(n+1)/A2.'
                 @test_throws DimensionMismatch eye(n+1)/A2'

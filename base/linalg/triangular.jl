@@ -1297,18 +1297,30 @@ for f in (:A_mul_B!, :A_ldiv_B!)
             UpperTriangular($f(A, triu!(B.data)))
         $f(A::UnitUpperTriangular, B::UpperTriangular) =
             UpperTriangular($f(A, triu!(B.data)))
-        $f(A::UpperTriangular, B::UnitUpperTriangular) =
-            UpperTriangular($f(A, triu!(B.data)))
-        $f(A::UnitUpperTriangular, B::UnitUpperTriangular) =
-            UnitUpperTriangular($f(A, triu!(B.data)))
+        function $f(A::UpperTriangular, B::UnitUpperTriangular)
+            Bd = triu!(B.data)
+            Bd[diagind(B.data)] = ones(eltype(Bd),size(Bd,1))
+            return UpperTriangular($f(A, Bd))
+        end
+        function $f(A::UnitUpperTriangular, B::UnitUpperTriangular)
+            Bd = triu!(B.data)
+            Bd[diagind(Bd)] = ones(eltype(Bd),size(Bd,1))
+            return UnitUpperTriangular($f(A, Bd))
+        end
         $f(A::LowerTriangular, B::LowerTriangular) =
             LowerTriangular($f(A, tril!(B.data)))
         $f(A::UnitLowerTriangular, B::LowerTriangular) =
             LowerTriangular($f(A, tril!(B.data)))
-        $f(A::LowerTriangular, B::UnitLowerTriangular) =
-            LowerTriangular($f(A, tril!(B.data)))
-        $f(A::UnitLowerTriangular, B::UnitLowerTriangular) =
-            LowerTriangular($f(A, tril!(B.data)))
+        function $f(A::LowerTriangular, B::UnitLowerTriangular)
+            Bd = tril!(B.data)
+            Bd[diagind(Bd)] = ones(eltype(Bd),size(Bd,1))
+            return LowerTriangular($f(A, Bd))
+        end
+        function $f(A::UnitLowerTriangular, B::UnitLowerTriangular)
+            Bd = tril!(B.data)
+            Bd[diagind(Bd)] = ones(eltype(Bd),size(Bd,1))
+            return UnitLowerTriangular($f(A, Bd))
+        end
     end
 end
 
