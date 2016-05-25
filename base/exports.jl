@@ -119,8 +119,6 @@ export
     Tridiagonal,
     UnitRange,
     UpperTriangular,
-    UTF16String,
-    UTF32String,
     Val,
     VecOrMat,
     Vector,
@@ -878,8 +876,6 @@ export
     ucfirst,
     unescape_string,
     uppercase,
-    utf16,
-    utf32,
     warn,
 
 # random numbers
