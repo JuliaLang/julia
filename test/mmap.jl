@@ -283,10 +283,10 @@ finalize(m); m = nothing; gc()
 file = tempname()
 touch(file)
 open(file, "r+") do s
-    A = Mmap.mmap(s, Vector{UInt8}, (10,), 0);
+    A = Mmap.mmap(s, Vector{UInt8}, (10,), 0)
     Mmap.sync!(A)
     finalize(A); A = nothing; gc()
-    A = Mmap.mmap(s, Vector{UInt8}, (10,), 1);
+    A = Mmap.mmap(s, Vector{UInt8}, (10,), 1)
     Mmap.sync!(A)
     finalize(A); A = nothing; gc()
 end
