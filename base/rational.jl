@@ -160,7 +160,7 @@ den(x::Integer) = one(x)
 num(x::Rational) = x.num
 den(x::Rational) = x.den
 
-sign(x::Rational) = sign(x.num)
+sign(x::Rational) = oftype(x, sign(x.num))
 signbit(x::Rational) = signbit(x.num)
 copysign(x::Rational, y::Real) = copysign(x.num,y) // x.den
 copysign(x::Rational, y::Rational) = copysign(x.num,y.num) // x.den
