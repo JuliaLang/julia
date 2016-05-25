@@ -269,7 +269,7 @@ end
 
 function frexp{T<:AbstractFloat}(A::Array{T})
     F = similar(A)
-    E = Array(Int, size(A))
+    E = Array{Int}(size(A))
     for (iF, iE, iA) in zip(eachindex(F), eachindex(E), eachindex(A))
         F[iF], E[iE] = frexp(A[iA])
     end

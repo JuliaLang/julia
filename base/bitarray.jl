@@ -18,7 +18,7 @@ type BitArray{N} <: DenseArray{Bool, N}
             i += 1
         end
         nc = num_bit_chunks(n)
-        chunks = Array(UInt64, nc)
+        chunks = Array{UInt64}(nc)
         nc > 0 && (chunks[end] = UInt64(0))
         b = new(chunks, n)
         N != 1 && (b.dims = dims)
@@ -365,7 +365,7 @@ similar(B::BitArray, dims::Dims) = BitArray(dims...)
 similar(B::BitArray, T::Type{Bool}, dims::Dims) = BitArray(dims)
 # changing type to a non-Bool returns an Array
 # (this triggers conversions like float(bitvector) etc.)
-similar(B::BitArray, T::Type, dims::Dims) = Array(T, dims)
+similar(B::BitArray, T::Type, dims::Dims) = Array{T}(dims)
 
 function fill!(B::BitArray, x)
     y = convert(Bool, x)
@@ -474,7 +474,7 @@ end
 convert{T,N}(::Type{Array{T}}, B::BitArray{N}) = convert(Array{T,N}, B)
 convert{T,N}(::Type{Array{T,N}}, B::BitArray{N}) = _convert(Array{T,N}, B) # see #15801
 function _convert{T,N}(::Type{Array{T,N}}, B::BitArray{N})
-    A = Array(T, size(B))
+    A = Array{T}(size(B))
     Bc = B.chunks
     @inbounds for i = 1:length(A)
         A[i] = unsafe_bitgetindex(Bc, i)
@@ -1021,7 +1021,7 @@ end
 
 for f in (:+, :-)
     @eval function ($f)(A::BitArray, B::BitArray)
-        r = Array(Int, promote_shape(size(A), size(B)))
+        r = Array{Int}(promote_shape(size(A), size(B)))
         ai = start(A)
         bi = start(B)
         ri = 1
@@ -1040,7 +1040,7 @@ for (f) in (:.+, :.-)
                                    (:(x::Bool)    , :(B::BitArray), Int                                   , :(x, b)),
                                    (:(x::Number)  , :(B::BitArray), :(promote_array_type($f, typeof(x), BitArray)), :(x, b)))
         @eval function ($f)($arg1, $arg2)
-            r = Array($T, size(B))
+            r = Array{$T}(size(B))
             bi = start(B)
             ri = 1
             while !done(B, bi)
@@ -1106,7 +1106,7 @@ end
 for f in (:div, :mod)
     @eval begin
         function ($f)(B::BitArray, x::Number)
-            F = Array(promote_array_type($f, BitArray, typeof(x)), size(B))
+            F = Array{promote_array_type($f, BitArray, typeof(x))}(size(B))
             for i = 1:length(F)
                 F[i] = ($f)(B[i], x)
             end
@@ -1198,7 +1198,7 @@ function (.^){T<:Number}(B::BitArray, x::T)
         else
             t = typeof(u)
         end
-        F = Array(t, size(B))
+        F = Array{t}(size(B))
         for i = 1:length(B)
             if B[i]
                 if uerr === nothing
@@ -1607,7 +1607,7 @@ end
 function find(B::BitArray)
     l = length(B)
     nnzB = countnz(B)
-    I = Array(Int, nnzB)
+    I = Array{Int}(nnzB)
     nnzB == 0 && return I
     Bc = B.chunks
     Bcount = 1
@@ -1641,8 +1641,8 @@ findn(B::BitVector) = find(B)
 
 function findn(B::BitMatrix)
     nnzB = countnz(B)
-    I = Array(Int, nnzB)
-    J = Array(Int, nnzB)
+    I = Array{Int}(nnzB)
+    J = Array{Int}(nnzB)
     count = 1
     for j = 1:size(B,2), i = 1:size(B,1)
         if B[i,j]
@@ -1969,7 +1969,7 @@ function cat(catdim::Integer, X::Union{BitArray, Integer}...)
     if !has_integer || typeC == Bool
         C = BitArray(dimsC)
     else
-        C = Array(typeC, dimsC)
+        C = Array{typeC}(dimsC)
     end
 
     range = 1

@@ -120,7 +120,7 @@ free_match_context(context) =
     ccall((:pcre2_match_context_free_8, PCRE_LIB), Void, (Ptr{Void},), context)
 
 function err_message(errno)
-    buffer = Array(UInt8, 256)
+    buffer = Array{UInt8}(256)
     ccall((:pcre2_get_error_message_8, PCRE_LIB), Void,
           (Int32, Ptr{UInt8}, Csize_t), errno, buffer, sizeof(buffer))
     String(pointer(buffer))

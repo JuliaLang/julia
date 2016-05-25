@@ -213,7 +213,7 @@ function serialize{T,N,A<:Array}(s::SerializationState, a::SubArray{T,N,A})
 end
 
 function trimmedsubarray{T,N,A<:Array}(V::SubArray{T,N,A})
-    dest = Array(eltype(V), trimmedsize(V))
+    dest = Array{eltype(V)}(trimmedsize(V))
     copy!(dest, V)
     _trimmedsubarray(dest, V, (), V.indexes...)
 end
@@ -667,7 +667,7 @@ function deserialize_array(s::SerializationState)
     end
     if isa(d1,Integer)
         if elty !== Bool && isbits(elty)
-            return read!(s.io, Array(elty, d1))
+            return read!(s.io, Array{elty}(d1))
         end
         dims = (Int(d1),)
     else
@@ -676,7 +676,7 @@ function deserialize_array(s::SerializationState)
     if isbits(elty)
         n = prod(dims)::Int
         if elty === Bool && n>0
-            A = Array(Bool, dims)
+            A = Array{Bool}(dims)
             i = 1
             while i <= n
                 b = read(s.io, UInt8)::UInt8
@@ -692,7 +692,7 @@ function deserialize_array(s::SerializationState)
         end
         return A
     end
-    A = Array(elty, dims)
+    A = Array{elty}(dims)
     deserialize_cycle(s, A)
     for i = eachindex(A)
         tag = Int32(read(s.io, UInt8)::UInt8)

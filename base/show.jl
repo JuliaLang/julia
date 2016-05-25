@@ -1049,7 +1049,7 @@ function dump_elts(io::IO, x::Array, n::Int, indent, i0, i1)
 end
 
 function dump(io::IO, x::Array, n::Int, indent)
-    print(io, "Array($(eltype(x)),$(size(x)))")
+    print(io, "Array{$(eltype(x))}($(size(x)))")
     if eltype(x) <: Number
         print(io, " ")
         show(io, x)

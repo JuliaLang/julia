@@ -155,7 +155,7 @@ function string(a::String...)
         return a[1]::String
     end
     # ^^ at least one must be UTF-8 or the ASCII-only method would get called
-    data = Array(UInt8,0)
+    data = Array{UInt8}(0)
     for d in a
         append!(data,d.data)
     end
@@ -163,7 +163,7 @@ function string(a::String...)
 end
 
 function string(a::Union{String,Char}...)
-    s = Array(UInt8,0)
+    s = Array{UInt8}(0)
     for d in a
         if isa(d,Char)
             c = UInt32(d::Char)

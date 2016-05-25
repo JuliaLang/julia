@@ -572,7 +572,7 @@ function uv_getaddrinfocb(req::Ptr{Void}, status::Cint, addrinfo::Ptr{Void})
                 cb(IPv4(ntoh(ccall(:jl_sockaddr_host4,UInt32,(Ptr{Void},),sockaddr))))
                 break
             #elseif ccall(:jl_sockaddr_is_ip6,Int32,(Ptr{Void},),sockaddr) == 1
-            #    host = Array(UInt128,1)
+            #    host = Array{UInt128}(1)
             #    scope_id = ccall(:jl_sockaddr_host6,UInt32,(Ptr{Void},Ptr{UInt128}),sockaddr,host)
             #    cb(IPv6(ntoh(host[1])))
             #    break
@@ -625,7 +625,7 @@ getaddrinfo(host::AbstractString) = getaddrinfo(String(host))
 const _sizeof_uv_interface_address = ccall(:jl_uv_sizeof_interface_address,Int32,())
 
 function getipaddr()
-    addr = Array(Ptr{UInt8},1)
+    addr = Array{Ptr{UInt8}}(1)
     addr[1] = C_NULL
     count = zeros(Int32,1)
     lo_present = false
@@ -648,7 +648,7 @@ function getipaddr()
             return rv
         # Uncomment to enbable IPv6
         #elseif ccall(:jl_sockaddr_in_is_ip6,Int32,(Ptr{Void},),sockaddr) == 1
-        #   host = Array(UInt128,1)
+        #   host = Array{UInt128}(1)
         #   ccall(:jl_sockaddr_host6,UInt32,(Ptr{Void},Ptr{UInt128}),sockaddrr,host)
         #   return IPv6(ntoh(host[1]))
         end

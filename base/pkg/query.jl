@@ -69,8 +69,8 @@ end
 typealias PackageState Union{Void,VersionNumber}
 
 function diff(have::Dict, want::Dict, avail::Dict, fixed::Dict)
-    change = Array(Tuple{String,Tuple{PackageState,PackageState}},0)
-    remove = Array(Tuple{String,Tuple{PackageState,PackageState}},0)
+    change = Array{Tuple{String,Tuple{PackageState,PackageState}}}(0)
+    remove = Array{Tuple{String,Tuple{PackageState,PackageState}}}(0)
 
     for pkg in collect(union(keys(have),keys(want)))
         h, w = haskey(have,pkg), haskey(want,pkg)

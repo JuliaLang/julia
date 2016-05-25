@@ -22,7 +22,7 @@ immutable RUsage
 end
 
 function get_vmsize()
-    ru = Array(RUsage, 1)
+    ru = Array{RUsage}(1)
     ccall(:getrusage, Cint, (Cint, Ptr{Void}), 0, ru)
     return ru[1].ru_maxrss
 end

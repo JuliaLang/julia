@@ -34,7 +34,7 @@ macro enum(T,syms...)
         throw(ArgumentError("invalid type expression for enum $T"))
     end
     typename = T
-    vals = Array(Tuple{Symbol,Integer},0)
+    vals = Array{Tuple{Symbol,Integer}}(0)
     lo = hi = 0
     i = Int32(-1)
     hasexpr = false

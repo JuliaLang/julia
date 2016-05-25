@@ -222,7 +222,7 @@ read{T}(s::IO, t::Type{T}, d1::Int, dims::Int...) = read(s, t, tuple(d1,dims...)
 read{T}(s::IO, t::Type{T}, d1::Integer, dims::Integer...) =
     read(s, t, convert(Tuple{Vararg{Int}},tuple(d1,dims...)))
 
-read{T}(s::IO, ::Type{T}, dims::Dims) = read!(s, Array(T, dims))
+read{T}(s::IO, ::Type{T}, dims::Dims) = read!(s, Array{T}(dims))
 
 @noinline function read!(s::IO, a::Array{UInt8}) # mark noinline to ensure the array is gc-rooted somewhere (by the caller)
     unsafe_read(s, pointer(a), sizeof(a))
@@ -296,7 +296,7 @@ function readuntil(s::IO, t::AbstractString)
         warn("readuntil(IO,AbstractString) will perform poorly with a long string")
     end
     out = IOBuffer()
-    m = Array(Char, l)  # last part of stream to match
+    m = Array{Char}(l)  # last part of stream to match
     t = collect(t)
     i = 0
     while !eof(s)
@@ -346,7 +346,7 @@ end
 function read(s::IO, nb=typemax(Int))
     # Let readbytes! grow the array progressively by default
     # instead of taking of risk of over-allocating
-    b = Array(UInt8, nb == typemax(Int) ? 1024 : nb)
+    b = Array{UInt8}(nb == typemax(Int) ? 1024 : nb)
     nr = readbytes!(s, b, nb)
     return resize!(b, nr)
 end

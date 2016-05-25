@@ -14,10 +14,10 @@ intvls = [2, .2, .1, .005]
 pipe_fds = cell(n)
 for i in 1:n
     @static if is_windows()
-        pipe_fds[i] = Array(Libc.WindowsRawSocket, 2)
+        pipe_fds[i] = Array{Libc.WindowsRawSocket}(2)
         0 == ccall(:wsasocketpair, Cint, (Cint, Cuint, Cint, Ptr{Libc.WindowsRawSocket}), 1, 1, 6, pipe_fds[i]) || error(Libc.FormatMessage())
     else
-        pipe_fds[i] = Array(RawFD, 2)
+        pipe_fds[i] = Array{RawFD}(2)
         @test 0 == ccall(:pipe, Cint, (Ptr{RawFD},), pipe_fds[i])
     end
 end
@@ -36,7 +36,7 @@ function pfd_tst_reads(idx, intvl)
     # Disabled since this assertion fails randomly, notably on build VMs (issue #12824)
     # @test t_elapsed <= (intvl + 1)
 
-    dout = Array(UInt8, 1)
+    dout = Array{UInt8}(1)
     @static if is_windows()
         1 == ccall(:recv, stdcall, Cint, (Ptr{Void}, Ptr{UInt8}, Cint, Cint), pipe_fds[idx][1], dout, 1, 0) || error(Libc.FormatMessage())
     else

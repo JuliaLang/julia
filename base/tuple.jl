@@ -90,7 +90,7 @@ map(f, t::Tuple)                = (f(t[1]), map(f,tail(t))...)
 function map(f, t::Tuple{Any,Any,Any,Any,Any,Any,Any,Any,
                          Any,Any,Any,Any,Any,Any,Any,Any,Vararg{Any}})
     n = length(t)
-    A = Array(Any,n)
+    A = Array{Any}(n)
     for i=1:n
         A[i] = f(t[i])
     end

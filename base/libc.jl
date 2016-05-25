@@ -153,7 +153,7 @@ library.
 strftime(t) = strftime("%c", t)
 strftime(fmt::AbstractString, t::Real) = strftime(fmt, TmStruct(t))
 function strftime(fmt::AbstractString, tm::TmStruct)
-    timestr = Array(UInt8, 128)
+    timestr = Array{UInt8}(128)
     n = ccall(:strftime, Int, (Ptr{UInt8}, Int, Cstring, Ptr{TmStruct}),
               timestr, length(timestr), fmt, &tm)
     if n == 0
@@ -212,7 +212,7 @@ getpid() = ccall(:jl_getpid, Int32, ())
 ## network functions ##
 
 function gethostname()
-    hn = Array(UInt8, 256)
+    hn = Array{UInt8}(256)
     err = @static if is_windows()
         ccall(:gethostname, stdcall, Int32, (Ptr{UInt8}, UInt32), hn, length(hn))
     else
@@ -274,7 +274,7 @@ if is_windows()
                     C_NULL, e, 0, lpMsgBuf, 0, C_NULL)
         p = lpMsgBuf[1]
         len == 0 && return ""
-        buf = Array(UInt16, len)
+        buf = Array{UInt16}(len)
         unsafe_copy!(pointer(buf), p, len)
         ccall(:LocalFree,stdcall,Ptr{Void},(Ptr{Void},),p)
         return String(utf16to8(buf))

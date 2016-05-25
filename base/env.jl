@@ -95,7 +95,7 @@ function next(hash::EnvHash, block::Tuple{Ptr{UInt16},Ptr{UInt16}})
     pos = block[1]
     blk = block[2]
     len = ccall(:wcslen, UInt, (Ptr{UInt16},), pos)
-    buf = Array(UInt16, len)
+    buf = Array{UInt16}(len)
     unsafe_copy!(pointer(buf), pos, len)
     env = String(utf16to8(buf))
     m = match(r"^(=?[^=]+)=(.*)$"s, env)

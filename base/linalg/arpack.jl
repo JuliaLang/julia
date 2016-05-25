@@ -13,16 +13,16 @@ function aupd_wrapper(T, matvecA::Function, matvecB::Function, solveSI::Function
 
     lworkl = cmplx ? ncv * (3*ncv + 5) : (sym ? ncv * (ncv + 8) :  ncv * (3*ncv + 6) )
     TR = cmplx ? T.types[1] : T
-    TOL = Array(TR, 1)
+    TOL = Array{TR}(1)
     TOL[1] = tol
 
-    v      = Array(T, n, ncv)
-    workd  = Array(T, 3*n)
-    workl  = Array(T, lworkl)
-    rwork  = cmplx ? Array(TR, ncv) : Array(TR, 0)
+    v      = Array{T}(n, ncv)
+    workd  = Array{T}(3*n)
+    workl  = Array{T}(lworkl)
+    rwork  = cmplx ? Array{TR}(ncv) : Array{TR}(0)
 
     if isempty(v0)
-        resid  = Array(T, n)
+        resid  = Array{T}(n)
         info   = zeros(BlasInt, 1)
     else
         resid  = deepcopy(v0)
@@ -112,7 +112,7 @@ function eupd_wrapper(T, n::Integer, sym::Bool, cmplx::Bool, bmat::String,
                       workd, workl, lworkl, rwork)
 
     howmny = "A"
-    select = Array(BlasInt, ncv)
+    select = Array{BlasInt}(ncv)
     info   = zeros(BlasInt, 1)
 
     dmap = x->abs(x)
@@ -130,9 +130,9 @@ function eupd_wrapper(T, n::Integer, sym::Bool, cmplx::Bool, bmat::String,
 
     if cmplx
 
-        d = Array(T, nev+1)
+        d = Array{T}(nev+1)
         sigmar = ones(T, 1)*sigma
-        workev = Array(T, 2ncv)
+        workev = Array{T}(2ncv)
         neupd(ritzvec, howmny, select, d, v, ldv, sigmar, workev,
               bmat, n, which, nev, TOL, resid, ncv, v, ldv,
               iparam, ipntr, workd, workl, lworkl, rwork, info)
@@ -145,7 +145,7 @@ function eupd_wrapper(T, n::Integer, sym::Bool, cmplx::Bool, bmat::String,
 
     elseif sym
 
-        d = Array(T, nev)
+        d = Array{T}(nev)
         sigmar = ones(T, 1)*sigma
         seupd(ritzvec, howmny, select, d, v, ldv, sigmar,
               bmat, n, which, nev, TOL, resid, ncv, v, ldv,
@@ -159,20 +159,20 @@ function eupd_wrapper(T, n::Integer, sym::Bool, cmplx::Bool, bmat::String,
 
     else
 
-        dr     = Array(T, nev+1)
-        di     = Array(T, nev+1)
+        dr     = Array{T}(nev+1)
+        di     = Array{T}(nev+1)
         fill!(dr,NaN)
         fill!(di,NaN)
         sigmar = ones(T, 1)*real(sigma)
         sigmai = ones(T, 1)*imag(sigma)
-        workev = Array(T, 3*ncv)
+        workev = Array{T}(3*ncv)
         neupd(ritzvec, howmny, select, dr, di, v, ldv, sigmar, sigmai,
               workev, bmat, n, which, nev, TOL, resid, ncv, v, ldv,
               iparam, ipntr, workd, workl, lworkl, info)
         if info[1] != 0
             throw(ARPACKException(info[1]))
         end
-        evec = complex(Array(T, n, nev+1), Array(T, n, nev+1))
+        evec = complex(Array{T}(n, nev+1), Array{T}(n, nev+1))
 
         j = 1
         while j <= nev
