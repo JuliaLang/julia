@@ -263,7 +263,7 @@ end
 # Test unsafe_convert
 type A; end
 x = "abc"
-@test bytestring(Compat.unsafe_convert(Ptr{UInt8}, x)) == x
+@test @compat String(Compat.unsafe_convert(Ptr{UInt8}, x)) == x
 Compat.unsafe_convert(::Ptr{A}, x) = x
 @test Compat.unsafe_convert(pointer([A()]), 1) == 1
 
@@ -472,7 +472,7 @@ Compat.@irrational mathconst_one 1.0 big(1.)
 @test @compat typeof(Array{Rational{Int}}(2,2,2,2,2)) == Array{Rational{Int},5}
 @test @compat size(Array{Rational{Int}}(2,2,2,2,2)) == (2,2,2,2,2)
 
-@compat utf8(Mmap.mmap(@__FILE__(),Vector{UInt8},11,1)) == "sing Compat"
+@compat String(Mmap.mmap(@__FILE__(),Vector{UInt8},11,1)) == "sing Compat"
 
 @test base64encode("hello world") == "aGVsbG8gd29ybGQ="
 
@@ -1153,4 +1153,14 @@ end
     @test VERSION ≥ v"0.4"
 else
     @test VERSION < v"0.4"
+end
+
+let io = IOBuffer(), s = "hello"
+    @test @compat String(s.data) == s
+    write(io, s)
+    @test @compat String(io) == s
+    @test @compat String(pointer(s.data)) == s
+    @test @compat String(pointer(s.data),length(s.data)) == s
+    @test string(s, s, s) == "hellohellohello"
+    @test String == @compat(Union{Compat.UTF8String,Compat.ASCIIString})
 end

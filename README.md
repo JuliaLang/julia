@@ -83,6 +83,8 @@ Currently, the `@compat` macro supports the following syntaxes:
     Note that `Compat.ASCIIString` does **not** guarantee `isascii` on julia 0.5.
     Use `isascii` to check if the string is pure ASCII if needed.
 
+* `bytestring` has been replaced in all cases with additional `String` construction methods; for 0.3 compatibility, the usage involves replacing `bytestring(args...)` with `@compat String(args...)`
+
 * `typealias AbstractString String` - `String` has been renamed to `AbstractString` [#8872](https://github.com/JuliaLang/julia/pull/8872)
 
 * `typealias AbstractFloat FloatingPoint` - `FloatingPoint` has been renamed to `AbstractFloat` [#12162](https://github.com/JuliaLang/julia/pull/12162)
