@@ -577,19 +577,21 @@ end
 @inline function _quantile(v::AbstractVector, p::Real)
     T = float(eltype(v))
     isnan(p) && return T(NaN)
+    0 <= p <= 1 || throw(ArgumentError("input probability out of [0,1] range"))
 
     lv = length(v)
-    index = 1 + (lv-1)*p
-    1 <= index <= lv || error("input probability out of [0,1] range")
+    f0 = (lv-1)*p # 0-based interpolated index
+    t0 = trunc(f0)
+    h = f0 - t0
 
-    indlo = floor(index)
-    i = trunc(Int,indlo)
+    i = trunc(Int,t0) + 1
 
-    if index == indlo
+    if h == 0
         return T(v[i])
     else
-        h = T(index - indlo)
-        return (1-h)*T(v[i]) + h*T(v[i+1])
+        a = T(v[i])
+        b = T(v[i+1])
+        return a + h*(b-a)
     end
 end
 
