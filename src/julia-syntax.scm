@@ -2016,6 +2016,7 @@
 
    'dict_comprehension
    (lambda (e)
+     (syntax-deprecation #f "[a=>b for (a,b) in c]" "Dict(a=>b for (a,b) in c)")
      (expand-forms (lower-dict-comprehension (cadr e) (cddr e))))
 
    'typed_dict_comprehension

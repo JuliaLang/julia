@@ -261,9 +261,9 @@ end
 
 # show
 for d in (Dict("\n" => "\n", "1" => "\n", "\n" => "2"),
-          [string(i) => i for i = 1:30],
-          [reshape(1:i^2,i,i) => reshape(1:i^2,i,i) for i = 1:24],
-          [String(Char['α':'α'+i;]) => String(Char['α':'α'+i;]) for i = (1:10)*10],
+          Dict(string(i) => i for i = 1:30),
+          Dict(reshape(1:i^2,i,i) => reshape(1:i^2,i,i) for i = 1:24),
+          Dict(String(Char['α':'α'+i;]) => String(Char['α':'α'+i;]) for i = (1:10)*10),
           Dict("key" => zeros(0, 0)))
     for cols in (12, 40, 80), rows in (2, 10, 24)
         # Ensure output is limited as requested
@@ -319,12 +319,12 @@ let sbuff = IOBuffer(),
 end
 
 # issue #2540
-let d = Dict{Any,Any}([x => 1 for x in ['a', 'b', 'c']])
+let d = Dict{Any,Any}(Dict(x => 1 for x in ['a', 'b', 'c']))
     @test d == Dict('a'=>1, 'b'=>1, 'c'=> 1)
 end
 
 # issue #2629
-let d = Dict{AbstractString,AbstractString}([ a => "foo" for a in ["a","b","c"]])
+let d = Dict{AbstractString,AbstractString}(Dict( a => "foo" for a in ["a","b","c"]))
     @test d == Dict("a"=>"foo","b"=>"foo","c"=>"foo")
 end
 
