@@ -523,9 +523,9 @@ end
 function build!(pkgs::Vector, buildstream::IO, seen::Set)
     for pkg in pkgs
         pkg == "julia" && continue
-        pkg in seen && continue
-        build!(Read.requires_list(pkg),buildstream,push!(seen,pkg))
+        pkg in seen ? continue : push!(seen,pkg)
         Read.isinstalled(pkg) || throw(PkgError("$pkg is not an installed package"))
+        build!(Read.requires_list(pkg),buildstream,seen)
         path = abspath(pkg,"deps","build.jl")
         isfile(path) || continue
         println(buildstream, path) # send to build process for evalfile
