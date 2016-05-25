@@ -1104,18 +1104,6 @@ function i7197()
     ind2sub(size(S), 5)
 end
 @test i7197() == (2,2)
-A = reshape(collect(1:9), (3,3))
-@test ind2sub(size(A), 6) == (3,2)
-@test sub2ind(size(A), 3, 2) == 6
-@test ind2sub(A, 6) == (3,2)
-@test sub2ind(A, 3, 2) == 6
-
-# PR #9256
-function pr9256()
-    m = [1 2 3; 4 5 6; 7 8 9]
-    ind2sub(m, 6)
-end
-@test pr9256() == (3,2)
 
 # PR #8622 and general indexin test
 function pr8622()

@@ -1036,69 +1036,97 @@ function (==)(A::AbstractArray, B::AbstractArray)
     return true
 end
 
-sub2ind(dims::Tuple{Vararg{Integer}}) = 1
-sub2ind(dims::Tuple{Vararg{Integer}}, I::Integer...) = _sub2ind(dims,I)
-@generated function _sub2ind{N,M}(dims::NTuple{N,Integer}, I::NTuple{M,Integer})
-    meta = Expr(:meta,:inline)
-    ex = :(I[$M] - 1)
-    for i = M-1:-1:1
-        if i > N
-            ex = :(I[$i] - 1 + $ex)
-        else
-            ex = :(I[$i] - 1 + dims[$i]*$ex)
-        end
-    end
-    Expr(:block, meta,:($ex + 1))
+# sub2ind and ind2sub
+# fallbacks
+function sub2ind(A::AbstractArray, I...)
+    @_inline_meta
+    sub2ind(size(A), I...)  # faster than sub2ind(indices(A), I....); specialize if this is not OK
+end
+ind2sub(A::AbstractArray, ind) = (@_inline_meta; ind2sub(size(A), ind))
+
+sub2ind(::Tuple{}) = 1
+sub2ind(::DimsInteger) = 1
+sub2ind(::Indices) = 1
+sub2ind(::Tuple{}, I::Integer...) = (@_inline_meta; _sub2ind((), 1, 1, I...))
+sub2ind(dims::DimsInteger, I::Integer...) = (@_inline_meta; _sub2ind(dims, 1, 1, I...))
+sub2ind(inds::Indices, I::Integer...) = (@_inline_meta; _sub2ind(inds, 1, 1, I...))
+# In 1d, there's a question of whether we're doing cartesian indexing or linear indexing. Support only the former.
+sub2ind(inds::Indices{1}, I::Integer...) = throw(ArgumentError("Linear indexing is not defined for one-dimensional arrays"))
+
+_sub2ind(::Any, L, ind) = ind
+function _sub2ind(::Tuple{}, L, ind, i::Integer, I::Integer...)
+    @_inline_meta
+    _sub2ind((), L, ind+(i-1)*L, I...)
+end
+function _sub2ind(inds, L, ind, i::Integer, I::Integer...)
+    @_inline_meta
+    r1 = inds[1]
+    _sub2ind(tail(inds), nextL(L, r1), ind+offsetin(i, r1)*L, I...)
 end
 
-@generated function ind2sub{N}(dims::NTuple{N,Integer}, ind::Integer)
-    meta = Expr(:meta,:inline)
-    N==0 && return :($meta; ind==1 ? () : throw(BoundsError()))
-    exprs = Expr[:(ind = ind-1)]
-    for i = 1:N-1
-        push!(exprs,:(ind2 = div(ind,dims[$i])))
-        push!(exprs,Expr(:(=),Symbol(:s,i),:(ind-dims[$i]*ind2+1)))
-        push!(exprs,:(ind=ind2))
-    end
-    push!(exprs,Expr(:(=),Symbol(:s,N),:(ind+1)))
-    Expr(:block,meta,exprs...,Expr(:tuple,[Symbol(:s,i) for i=1:N]...))
+nextL(L, l::Integer) = L*l
+nextL(L, r::UnitRange) = L*unsafe_length(r)
+offsetin(i, l::Integer) = i-1
+offsetin(i, r::UnitRange) = i-first(r)
+unsafe_length(r::UnitRange) = r.stop-r.start+1
+
+ind2sub(::Tuple{}, ind::Integer) = (@_inline_meta; ind == 1 ? () : throw(BoundsError()))
+ind2sub(dims::DimsInteger, ind::Integer) = (@_inline_meta; _ind2sub((), dims, ind-1))
+ind2sub(inds::Indices, ind::Integer) = (@_inline_meta; _ind2sub((), inds, ind-1))
+ind2sub(inds::Indices{1}, ind::Integer) = throw(ArgumentError("Linear indexing is not defined for one-dimensional arrays"))
+
+_ind2sub(::Tuple{}, ::Tuple{}, ind) = (ind+1,)
+function _ind2sub(out, indslast::NTuple{1}, ind)
+    @_inline_meta
+    (out..., _lookup(ind, indslast[1]))
+end
+function _ind2sub(out, inds, ind)
+    @_inline_meta
+    r1 = inds[1]
+    indnext, f, l = _div(ind, r1)
+    _ind2sub((out..., ind-l*indnext+f), tail(inds), indnext)
 end
 
-ind2sub(a::AbstractArray, ind::Integer) = ind2sub(size(a), ind)
-sub2ind(a::AbstractArray, I::Integer...) = sub2ind(size(a), I...)
+_lookup(ind, d::Integer) = ind+1
+_lookup(ind, r::UnitRange) = ind+first(r)
+_div(ind, d::Integer) = div(ind, d), 1, d
+_div(ind, r::UnitRange) = (d = unsafe_length(r); (div(ind, d), first(r), d))
 
-function sub2ind{T<:Integer}(dims::Tuple{Vararg{Integer}}, I::AbstractVector{T}...)
-    N = length(dims)
-    M = length(I[1])
-    indices = Array{T}(length(I[1]))
-    copy!(indices,I[1])
-
-    s = dims[1]
-    for j=2:length(I)
-        Ij = I[j]
-        for (i, k) in zip(eachindex(indices), eachindex(Ij))
-            indices[i] += s*(Ij[k]-1)
-        end
-        s *= (j <= N ? dims[j] : 1)
+# Vectorized forms
+function sub2ind{N,T<:Integer}(inds::Union{Dims{N},Indices{N}}, I::AbstractVector{T}...)
+    I1 = I[1]
+    Iinds = indices1(I1)
+    for j = 2:length(I)
+        indices1(I[j]) == Iinds || throw(DimensionMismatch("indices of I[1] ($(Iinds)) does not match indices of I[$j] ($(indices1(I[j])))"))
     end
-    return indices
+    Iout = similar(I1)
+    _sub2ind!(Iout, inds, Iinds, I)
+    Iout
 end
 
-function ind2sub{N,T<:Integer}(dims::NTuple{N,Integer}, ind::AbstractVector{T})
+function _sub2ind!(Iout, inds, Iinds, I)
+    @_noinline_meta
+    for i in Iinds
+        # Iout[i] = sub2ind(inds, map(Ij->Ij[i], I)...)
+        Iout[i] = sub2ind_vec(inds, i, I)
+    end
+    Iout
+end
+
+sub2ind_vec(inds, i, I) = (@_inline_meta; _sub2ind_vec(inds, (), i, I...))
+_sub2ind_vec(inds, out, i, I1, I...) = (@_inline_meta; _sub2ind_vec(inds, (out..., I1[i]), i, I...))
+_sub2ind_vec(inds, out, i) = (@_inline_meta; sub2ind(inds, out...))
+
+function ind2sub{N,T<:Integer}(inds::Union{Dims{N},Indices{N}}, ind::AbstractVector{T})
     M = length(ind)
-    t = NTuple{N,Vector{T}}(ntuple(n->Array{T}(M),N))
-    copy!(t[1],ind)
-    for j = 1:N-1
-        d = dims[j]
-        tj = t[j]
-        tj2 = t[j+1]
-        for i = 1:M
-            ind2 = div(tj[i]-1, d)
-            tj[i] -= d*ind2
-            tj2[i] = ind2+1
+    t = ntuple(n->similar(ind),Val{N})
+    for (i,idx) in enumerate(ind)  # FIXME: change to eachindexvalue
+        sub = ind2sub(inds, idx)
+        for j = 1:N
+            t[j][i] = sub[j]
         end
     end
-    return t
+    t
 end
 
 function ind2sub!{T<:Integer}(sub::Array{T}, dims::Tuple{Vararg{T}}, ind::T)
