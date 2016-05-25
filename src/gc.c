@@ -364,6 +364,9 @@ static inline int gc_setmark_big(void *o, int mark_mode)
 
 static inline int gc_setmark_pool(void *o, int mark_mode)
 {
+#ifdef MEMDEBUG
+    return gc_setmark_big(o, mark_mode);
+#endif
     if (gc_verifying) {
         _gc_setmark(o, mark_mode);
         return mark_mode;
@@ -392,9 +395,6 @@ static inline int gc_setmark(jl_value_t *v, int sz, int mark_mode)
 {
     jl_taggedvalue_t *o = jl_astaggedvalue(v);
     sz += sizeof_jl_taggedvalue_t;
-#ifdef MEMDEBUG
-    return gc_setmark_big(o, mark_mode);
-#endif
     if (sz <= GC_MAX_SZCLASS + sizeof(buff_t))
         return gc_setmark_pool(o, mark_mode);
     else
@@ -407,10 +407,6 @@ static inline int gc_setmark(jl_value_t *v, int sz, int mark_mode)
 inline void gc_setmark_buf(void *o, int mark_mode)
 {
     buff_t *buf = gc_val_buf(o);
-#ifdef MEMDEBUG
-    gc_setmark_big(buf, mark_mode);
-    return;
-#endif
     if (buf->pooled)
         gc_setmark_pool(buf, mark_mode);
     else
@@ -671,7 +667,7 @@ static NOINLINE void add_page(jl_gc_pool_t *p)
 static inline void *__pool_alloc(jl_gc_pool_t *p, int osize, int end_offset)
 {
 #ifdef MEMDEBUG
-    assert(0 && "Should not be using pools in MEMDEBUG mode");
+    return alloc_big(osize);
 #endif
     gcval_t *v, *end;
     // FIXME - need JL_ATOMIC_FETCH_AND_ADD here
@@ -1127,11 +1123,7 @@ void jl_gc_setmark(jl_value_t *v) // TODO rename this as it is misleading now
     //    int64_t s = perm_scanned_bytes;
     jl_taggedvalue_t *o = jl_astaggedvalue(v);
     if (!gc_marked(o)) {
-#ifdef MEMDEBUG
-        gc_setmark_big(o, GC_MARKED_NOESC);
-#else
         gc_setmark_pool(o, GC_MARKED_NOESC);
-#endif
     }
     //    perm_scanned_bytes = s;
 }
@@ -1291,13 +1283,8 @@ static int push_root(jl_value_t *v, int d, int bits)
         jl_taggedvalue_t *o = jl_astaggedvalue(v);
         int todo = !(bits & GC_MARKED);
         if (a->flags.pooled)
-#ifdef MEMDEBUG
-#define _gc_setmark_pool gc_setmark_big
-#else
-#define _gc_setmark_pool gc_setmark_pool
-#endif
             MARK(a,
-                 bits = _gc_setmark_pool(o, GC_MARKED_NOESC);
+                 bits = gc_setmark_pool(o, GC_MARKED_NOESC);
                  if (a->flags.how == 2 && todo) {
                      objprofile_count(jl_malloc_tag, gc_bits(o) == GC_MARKED, array_nbytes(a));
                      if (gc_bits(o) == GC_MARKED)
@@ -1859,11 +1846,6 @@ void *allocb(size_t sz)
     size_t allocsz = sz + sizeof(buff_t);
     if (allocsz < sz)  // overflow in adding offs, size was "negative"
         jl_throw(jl_memory_exception);
-#ifdef MEMDEBUG
-    b = (buff_t*)alloc_big(allocsz);
-    b->header = jl_buff_tag;
-    b->pooled = 0;
-#else
     if (allocsz > GC_MAX_SZCLASS + sizeof(buff_t)) {
         b = (buff_t*)alloc_big(allocsz);
         b->header = jl_buff_tag;
@@ -1872,9 +1854,9 @@ void *allocb(size_t sz)
     else {
         b = (buff_t*)pool_alloc(&jl_thread_heap.norm_pools[szclass(allocsz)]);
         b->header = jl_buff_tag;
+        // This is ignored for `MEMDEBUG` build
         b->pooled = 1;
     }
-#endif
     return &b->data[0];
 }
 
@@ -1906,9 +1888,6 @@ JL_DLLEXPORT jl_value_t *jl_gc_allocobj(size_t sz)
     size_t allocsz = sz + sizeof_jl_taggedvalue_t;
     if (allocsz < sz) // overflow in adding offs, size was "negative"
         jl_throw(jl_memory_exception);
-#ifdef MEMDEBUG
-    return jl_valueof(alloc_big(allocsz));
-#endif
     if (allocsz <= GC_MAX_SZCLASS + sizeof(buff_t)) {
         return jl_valueof(pool_alloc(&jl_thread_heap.norm_pools[szclass(allocsz)]));
     }
@@ -1918,48 +1897,28 @@ JL_DLLEXPORT jl_value_t *jl_gc_allocobj(size_t sz)
 JL_DLLEXPORT jl_value_t *jl_gc_alloc_0w(void)
 {
     const int sz = sizeof_jl_taggedvalue_t;
-    void *tag = NULL;
-#ifdef MEMDEBUG
-    tag = alloc_big(sz);
-#else
-    tag = _pool_alloc(&jl_thread_heap.norm_pools[szclass(sz)], sz);
-#endif
+    void *tag = _pool_alloc(&jl_thread_heap.norm_pools[szclass(sz)], sz);
     return jl_valueof(tag);
 }
 
 JL_DLLEXPORT jl_value_t *jl_gc_alloc_1w(void)
 {
     const int sz = LLT_ALIGN(sizeof_jl_taggedvalue_t + sizeof(void*), JL_SMALL_BYTE_ALIGNMENT);
-    void *tag = NULL;
-#ifdef MEMDEBUG
-    tag = alloc_big(sz);
-#else
-    tag = _pool_alloc(&jl_thread_heap.norm_pools[szclass(sz)], sz);
-#endif
+    void *tag = _pool_alloc(&jl_thread_heap.norm_pools[szclass(sz)], sz);
     return jl_valueof(tag);
 }
 
 JL_DLLEXPORT jl_value_t *jl_gc_alloc_2w(void)
 {
     const int sz = LLT_ALIGN(sizeof_jl_taggedvalue_t + sizeof(void*) * 2, JL_SMALL_BYTE_ALIGNMENT);
-    void *tag = NULL;
-#ifdef MEMDEBUG
-    tag = alloc_big(sz);
-#else
-    tag = _pool_alloc(&jl_thread_heap.norm_pools[szclass(sz)], sz);
-#endif
+    void *tag = _pool_alloc(&jl_thread_heap.norm_pools[szclass(sz)], sz);
     return jl_valueof(tag);
 }
 
 JL_DLLEXPORT jl_value_t *jl_gc_alloc_3w(void)
 {
     const int sz = LLT_ALIGN(sizeof_jl_taggedvalue_t + sizeof(void*) * 3, JL_SMALL_BYTE_ALIGNMENT);
-    void *tag = NULL;
-#ifdef MEMDEBUG
-    tag = alloc_big(sz);
-#else
-    tag = _pool_alloc(&jl_thread_heap.norm_pools[szclass(sz)], sz);
-#endif
+    void *tag = _pool_alloc(&jl_thread_heap.norm_pools[szclass(sz)], sz);
     return jl_valueof(tag);
 }
 
