@@ -624,10 +624,6 @@ static size_t symbol_nbytes(size_t len)
 
 static jl_sym_t *mk_symbol(const char *str, size_t len)
 {
-#ifndef MEMDEBUG
-    static char *sym_pool = NULL;
-    static char *pool_ptr = NULL;
-#endif
     jl_sym_t *sym;
     size_t nb = symbol_nbytes(len);
 
@@ -638,6 +634,8 @@ static jl_sym_t *mk_symbol(const char *str, size_t len)
 #ifdef MEMDEBUG
     sym = (jl_sym_t*)jl_valueof(malloc(nb));
 #else
+    static char *sym_pool = NULL;
+    static char *pool_ptr = NULL;
     if (sym_pool == NULL || pool_ptr+nb > sym_pool+SYM_POOL_SIZE) {
         sym_pool = (char*)malloc(SYM_POOL_SIZE);
         pool_ptr = sym_pool;
