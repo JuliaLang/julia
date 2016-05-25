@@ -658,7 +658,17 @@ get(A::AbstractArray, i::Integer, default) = checkbounds(Bool, A, i) ? A[i] : de
 get(A::AbstractArray, I::Tuple{}, default) = similar(A, typeof(default), 0)
 get(A::AbstractArray, I::Dims, default) = checkbounds(Bool, A, I...) ? A[I...] : default
 
+function get!{T}(X::AbstractVector{T}, A::AbstractVector, I::Union{Range, AbstractVector{Int}}, default::T)
+    # 1d is not linear indexing
+    ind = findin(I, indices1(A))
+    X[ind] = A[I[ind]]
+    Xind = indices1(X)
+    X[first(Xind):first(ind)-1] = default
+    X[last(ind)+1:last(Xind)] = default
+    X
+end
 function get!{T}(X::AbstractArray{T}, A::AbstractArray, I::Union{Range, AbstractVector{Int}}, default::T)
+    # Linear indexing
     ind = findin(I, 1:length(A))
     X[ind] = A[I[ind]]
     X[1:first(ind)-1] = default
@@ -666,8 +676,9 @@ function get!{T}(X::AbstractArray{T}, A::AbstractArray, I::Union{Range, Abstract
     X
 end
 
-get(A::AbstractArray, I::Range, default) = get!(similar(A, typeof(default), length(I)), A, I, default)
+get(A::AbstractArray, I::Range, default) = get!(similar(A, typeof(default), index_shape(A, I)), A, I, default)
 
+# TODO: DEPRECATE FOR #14770 (just the partial linear indexing part)
 function get!{T}(X::AbstractArray{T}, A::AbstractArray, I::RangeVecIntList, default::T)
     fill!(X, default)
     dst, src = indcopy(size(A), I)
@@ -675,7 +686,7 @@ function get!{T}(X::AbstractArray{T}, A::AbstractArray, I::RangeVecIntList, defa
     X
 end
 
-get(A::AbstractArray, I::RangeVecIntList, default) = get!(similar(A, typeof(default), map(length, I)...), A, I, default)
+get(A::AbstractArray, I::RangeVecIntList, default) = get!(similar(A, typeof(default), index_shape(A, I...)), A, I, default)
 
 ## structured matrix methods ##
 replace_in_print_matrix(A::AbstractMatrix,i::Integer,j::Integer,s::AbstractString) = s
