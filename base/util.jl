@@ -397,7 +397,7 @@ if is_windows()
 function getpass(prompt::AbstractString)
     print(prompt)
     flush(STDOUT)
-    p = Array(UInt8, 128) # mimic Unix getpass in ignoring more than 128-char passwords
+    p = Array{UInt8}(128) # mimic Unix getpass in ignoring more than 128-char passwords
                           # (also avoids any potential memory copies arising from push!)
     try
         plen = 0

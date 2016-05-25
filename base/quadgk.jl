@@ -220,7 +220,7 @@ function eignewt(b,m,n)
     H = SymTridiagonal(zeros(m), Float64[ b[i] for i in 1:m-1 ])
     lambda0 = sort(eigvals(H))
 
-    lambda = Array(eltype(b), n)
+    lambda = Array{eltype(b)}(n)
     for i = 1:n
         lambda[i] = lambda0[i]
         for k = 1:1000
@@ -243,7 +243,7 @@ function eigvec1(b,z::Number,m=length(b)+1)
     # "cheat" and use the fact that our eigenvector v must have a
     # nonzero first entries (since it is a quadrature weight), so we
     # can set v[1] = 1 to solve for the rest of the components:.
-    v = Array(eltype(b), m)
+    v = Array{eltype(b)}(m)
     v[1] = 1
     if m > 1
         s = v[1]

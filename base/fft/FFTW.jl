@@ -84,7 +84,7 @@ pointer{T}(a::FakeArray{T}) = convert(Ptr{T}, C_NULL)
 FakeArray{T, N}(::Type{T}, sz::NTuple{N, Int}) =
     FakeArray{T, N}(sz, colmajorstrides(sz))
 FakeArray{T}(::Type{T}, sz::Int...) = FakeArray(T, sz)
-fakesimilar(flags, X, T) = flags & ESTIMATE != 0 ? FakeArray(T, size(X)) : Array(T, size(X))
+fakesimilar(flags, X, T) = flags & ESTIMATE != 0 ? FakeArray(T, size(X)) : Array{T}(size(X))
 alignment_of(A::FakeArray) = Int32(0)
 
 ## Julia wrappers around FFTW functions
@@ -433,7 +433,7 @@ function fix_kinds(region, kinds)
             if isempty(kinds)
                 throw(ArgumentError("must supply a transform kind"))
             end
-            k = Array(Int32, length(region))
+            k = Array{Int32}(length(region))
             k[1:length(kinds)] = [kinds...]
             k[length(kinds)+1:end] = kinds[end]
             kinds = k
@@ -566,12 +566,12 @@ end
 # (FIXME: is there a way to use the Julia promotion rules more cleverly here?)
 fftwcomplex{T<:fftwComplex}(X::StridedArray{T}) = X
 fftwcomplex{T<:fftwReal}(X::AbstractArray{T}) =
-    copy!(Array(typeof(complex(one(T))), size(X)), X)
-fftwcomplex{T<:Real}(X::AbstractArray{T}) = copy!(Array(Complex128, size(X)),X)
+    copy!(Array{typeof(complex(one(T)))}(size(X)), X)
+fftwcomplex{T<:Real}(X::AbstractArray{T}) = copy!(Array{Complex128}(size(X)),X)
 fftwcomplex{T<:Complex}(X::AbstractArray{T}) =
-    copy!(Array(Complex128, size(X)), X)
+    copy!(Array{Complex128}(size(X)), X)
 fftwfloat{T<:fftwReal}(X::StridedArray{T}) = X
-fftwfloat{T<:Real}(X::AbstractArray{T}) = copy!(Array(Float64, size(X)), X)
+fftwfloat{T<:Real}(X::AbstractArray{T}) = copy!(Array{Float64}(size(X)), X)
 fftwfloat{T<:Complex}(X::AbstractArray{T}) = fftwcomplex(X)
 
 for (f,direction) in ((:fft,FORWARD), (:bfft,BACKWARD))
@@ -597,7 +597,7 @@ for (f,direction) in ((:fft,FORWARD), (:bfft,BACKWARD))
             $plan_f!(X, 1:ndims(X); kws...)
 
         function plan_inv{T<:fftwComplex,N,inplace}(p::cFFTWPlan{T,$direction,inplace,N})
-            X = Array(T, p.sz)
+            X = Array{T}(p.sz)
             Y = inplace ? X : fakesimilar(p.flags, X, T)
             ScaledPlan(cFFTWPlan{T,$idirection,inplace,N}(X, Y, p.region,
                                                           p.flags, NO_TIMELIMIT),
@@ -614,7 +614,7 @@ end
 
 function *{T,K,N}(p::cFFTWPlan{T,K,false}, x::StridedArray{T,N})
     assert_applicable(p, x)
-    y = Array(T, p.osz)::Array{T,N}
+    y = Array{T}(p.osz)::Array{T,N}
     unsafe_execute!(p, x, y)
     return y
 end
@@ -634,7 +634,7 @@ for (Tr,Tc) in ((:Float32,:Complex64),(:Float64,:Complex128))
                               flags::Integer=ESTIMATE,
                               timelimit::Real=NO_TIMELIMIT)
             osize = rfft_output_size(X, region)
-            Y = flags&ESTIMATE != 0 ? FakeArray($Tc,osize...) : Array($Tc,osize...)
+            Y = flags&ESTIMATE != 0 ? FakeArray($Tc,osize...) : Array{$Tc}(osize...)
             rFFTWPlan{$Tr,$FORWARD,false,N}(X, Y, region, flags, timelimit)
         end
 
@@ -642,7 +642,7 @@ for (Tr,Tc) in ((:Float32,:Complex64),(:Float64,:Complex128))
                                flags::Integer=ESTIMATE,
                                timelimit::Real=NO_TIMELIMIT)
             osize = brfft_output_size(X, d, region)
-            Y = flags&ESTIMATE != 0 ? FakeArray($Tr,osize...) : Array($Tr,osize...)
+            Y = flags&ESTIMATE != 0 ? FakeArray($Tr,osize...) : Array{$Tr}(osize...)
 
             # FFTW currently doesn't support PRESERVE_INPUT for
             # multidimensional out-of-place c2r transforms, so
@@ -661,8 +661,8 @@ for (Tr,Tc) in ((:Float32,:Complex64),(:Float64,:Complex128))
         plan_brfft(X::StridedArray{$Tr};kws...)=plan_brfft(X,1:ndims(X);kws...)
 
         function plan_inv{N}(p::rFFTWPlan{$Tr,$FORWARD,false,N})
-            X = Array($Tr, p.sz)
-            Y = p.flags&ESTIMATE != 0 ? FakeArray($Tc,p.osz) : Array($Tc,p.osz)
+            X = Array{$Tr}(p.sz)
+            Y = p.flags&ESTIMATE != 0 ? FakeArray($Tc,p.osz) : Array{$Tc}(p.osz)
             ScaledPlan(rFFTWPlan{$Tc,$BACKWARD,false,N}(Y, X, p.region,
                                                         length(p.region) <= 1 ?
                                                         p.flags | PRESERVE_INPUT :
@@ -671,8 +671,8 @@ for (Tr,Tc) in ((:Float32,:Complex64),(:Float64,:Complex128))
         end
 
         function plan_inv{N}(p::rFFTWPlan{$Tc,$BACKWARD,false,N})
-            X = Array($Tc, p.sz)
-            Y = p.flags&ESTIMATE != 0 ? FakeArray($Tr,p.osz) : Array($Tr,p.osz)
+            X = Arra{$Tc}(p.sz)
+            Y = p.flags&ESTIMATE != 0 ? FakeArray($Tr,p.osz) : Array{$Tr}(p.osz)
             ScaledPlan(rFFTWPlan{$Tr,$FORWARD,false,N}(Y, X, p.region,
                                                        p.flags, NO_TIMELIMIT),
                        normalization(Y, p.region))
@@ -691,7 +691,7 @@ for (Tr,Tc) in ((:Float32,:Complex64),(:Float64,:Complex128))
 
         function *{N}(p::rFFTWPlan{$Tr,$FORWARD,false}, x::StridedArray{$Tr,N})
             assert_applicable(p, x)
-            y = Array($Tc, p.osz)::Array{$Tc,N}
+            y = Array{$Tc}(p.osz)::Array{$Tc,N}
             unsafe_execute!(p, x, y)
             return y
         end
@@ -699,12 +699,12 @@ for (Tr,Tc) in ((:Float32,:Complex64),(:Float64,:Complex128))
         function *{N}(p::rFFTWPlan{$Tc,$BACKWARD,false}, x::StridedArray{$Tc,N})
             if p.flags & PRESERVE_INPUT != 0
                 assert_applicable(p, x)
-                y = Array($Tr, p.osz)::Array{$Tr,N}
+                y = Array{$Tr}(p.osz)::Array{$Tr,N}
                 unsafe_execute!(p, x, y)
             else # need to make a copy to avoid overwriting x
                 xc = copy(x)
                 assert_applicable(p, xc)
-                y = Array($Tr, p.osz)::Array{$Tr,N}
+                y = Array{$Tr}(p.osz)::Array{$Tr,N}
                 unsafe_execute!(p, xc, y)
             end
             return y
@@ -828,7 +828,7 @@ function logical_size(n::Integer, k::Integer)
 end
 
 function plan_inv{T<:fftwNumber,K,inplace,N}(p::r2rFFTWPlan{T,K,inplace,N})
-    X = Array(T, p.sz)
+    X = Array{T}(p.sz)
     iK = fix_kinds(p.region, [inv_kind[k] for k in K])
     Y = inplace ? X : fakesimilar(p.flags, X, T)
     ScaledPlan(r2rFFTWPlan{T,ANY,inplace,N}(X, Y, p.region, iK,
@@ -846,7 +846,7 @@ end
 
 function *{T,K,N}(p::r2rFFTWPlan{T,K,false}, x::StridedArray{T,N})
     assert_applicable(p, x)
-    y = Array(T, p.osz)::Array{T,N}
+    y = Array{T}(p.osz)::Array{T,N}
     unsafe_execute!(p, x, y)
     return y
 end

@@ -25,7 +25,7 @@ gc()
 
 # issue #1211
 include("ziggurat.jl")
-a = Array(Float64, 1000000)
+a = Array{Float64}(1000000)
 @timeit randn_zig!(a) "randn_zig" "Ziggurat gaussian number generator"
 
 # issue #950

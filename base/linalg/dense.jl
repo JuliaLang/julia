@@ -107,7 +107,7 @@ tril(M::Matrix, k::Integer) = tril!(copy(M), k)
 function gradient(F::Vector, h::Vector)
     n = length(F)
     T = typeof(one(eltype(F))/one(eltype(h)))
-    g = Array(T,n)
+    g = Array{T}(n)
     if n == 1
         g[1] = zero(T)
     elseif n > 1
@@ -139,7 +139,7 @@ function diagm{T}(v::AbstractVector{T}, k::Integer=0)
     A
 end
 
-diagm(x::Number) = (X = Array(typeof(x),1,1); X[1,1] = x; X)
+diagm(x::Number) = (X = Array{typeof(x)}(1,1); X[1,1] = x; X)
 
 function trace{T}(A::Matrix{T})
     n = checksquare(A)
@@ -151,7 +151,7 @@ function trace{T}(A::Matrix{T})
 end
 
 function kron{T,S}(a::AbstractMatrix{T}, b::AbstractMatrix{S})
-    R = Array(promote_type(T,S), size(a,1)*size(b,1), size(a,2)*size(b,2))
+    R = Array{promote_type(T,S)}(size(a,1)*size(b,1), size(a,2)*size(b,2))
     m = 1
     for j = 1:size(a,2), l = 1:size(b,2), i = 1:size(a,1)
         aij = a[i,j]
@@ -460,7 +460,7 @@ function pinv{T}(A::StridedMatrix{T}, tol::Real)
     m, n = size(A)
     Tout = typeof(zero(T)/sqrt(one(T) + one(T)))
     if m == 0 || n == 0
-        return Array(Tout, n, m)
+        return Array{Tout}(n, m)
     end
     if istril(A)
         if istriu(A)

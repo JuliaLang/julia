@@ -53,7 +53,7 @@ end
 function qrfactPivotedUnblocked!(A::StridedMatrix)
     m, n = size(A)
     piv = collect(UnitRange{BlasInt}(1,n))
-    τ = Array(eltype(A), min(m,n))
+    τ = Array{eltype(A)}(min(m,n))
     for j = 1:min(m,n)
 
         # Find column with maximum norm in trailing submatrix

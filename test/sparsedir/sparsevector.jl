@@ -365,7 +365,7 @@ end
 ### Concatenation
 
 let m = 80, n = 100
-    A = Array(SparseVector{Float64,Int}, n)
+    A = Array{SparseVector{Float64,Int}}(n)
     tnnz = 0
     for i = 1:length(A)
         A[i] = sprand(m, 0.3)

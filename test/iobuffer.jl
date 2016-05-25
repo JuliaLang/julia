@@ -14,7 +14,7 @@ let io = IOBuffer()
 @test eof(io)
 seek(io, 0)
 @test read(io,UInt8) == convert(UInt8, 'a')
-a = Array(UInt8, 2)
+a = Array{UInt8}(2)
 @test read!(io, a) == a
 @test a == UInt8['b','c']
 @test String(io) == "abc"
@@ -128,7 +128,7 @@ end
 
 # issue 5453
 let io=IOBuffer("abcdef")
-a = Array(UInt8,1024)
+a = Array{UInt8}(1024)
 @test_throws EOFError read!(io,a)
 @test eof(io)
 end

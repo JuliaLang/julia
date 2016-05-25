@@ -8,7 +8,7 @@ u32 = utf32(u8)
 @test length(u32) == 5
 @test String(u32) == u8
 @test collect(u8) == collect(u32)
-@test u8 == utf32(u32.data[1:end-1]) == utf32(copy!(Array(UInt8, 20), 1, reinterpret(UInt8, u32.data), 1, 20))
+@test u8 == utf32(u32.data[1:end-1]) == utf32(copy!(Array{UInt8}(20), 1, reinterpret(UInt8, u32.data), 1, 20))
 @test u8 == utf32(pointer(u32)) == utf32(convert(Ptr{Int32}, pointer(u32)))
 @test_throws UnicodeError utf32(UInt8[1,2,3])
 

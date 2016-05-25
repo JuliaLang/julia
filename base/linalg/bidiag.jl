@@ -447,7 +447,7 @@ factorize(A::Bidiagonal) = A
 eigvals(M::Bidiagonal) = M.dv
 function eigvecs{T}(M::Bidiagonal{T})
     n = length(M.dv)
-    Q = Array(T, n, n)
+    Q = Array{T}(n, n)
     blks = [0; find(x -> x == 0, M.ev); n]
     if M.isupper
         for idx_block = 1:length(blks) - 1, i = blks[idx_block] + 1:blks[idx_block + 1] #index of eigenvector

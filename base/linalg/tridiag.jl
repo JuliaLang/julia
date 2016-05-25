@@ -249,7 +249,7 @@ function inv_usmani{T}(a::Vector{T}, b::Vector{T}, c::Vector{T})
     for i=n-1:-1:1
         φ[i] = b[i]*φ[i+1]-a[i]*c[i]*φ[i+2]
     end
-    α = Array(T, n, n)
+    α = Array{T}(n, n)
     for i=1:n, j=1:n
         sign = (i+j)%2==0 ? (+) : (-)
         if i<j

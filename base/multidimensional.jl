@@ -115,7 +115,7 @@ end
 @generated function eachindex(::LinearSlow, A::AbstractArray, B::AbstractArray...)
     K = max(ndims(A), map(ndims, B)...)
     startargs = fill(1, K)
-    stopargs = Array(Expr, K)
+    stopargs = Array{Expr}(K)
     for i = 1:K
         Bargs = [:(size(B[$j],$i)) for j = 1:length(B)]
         stopargs[i] = :(max(size(A,$i),$(Bargs...)))
@@ -417,7 +417,7 @@ end
 @generated function findn{T,N}(A::AbstractArray{T,N})
     quote
         nnzA = countnz(A)
-        @nexprs $N d->(I_d = Array(Int, nnzA))
+        @nexprs $N d->(I_d = Array{Int}(nnzA))
         k = 1
         @nloops $N i A begin
             @inbounds if (@nref $N A i) != zero(T)
@@ -703,7 +703,7 @@ end
 @generated function findn{N}(B::BitArray{N})
     quote
         nnzB = countnz(B)
-        I = ntuple(x->Array(Int, nnzB), $N)
+        I = ntuple(x->Array{Int}(nnzB), $N)
         if nnzB > 0
             count = 1
             @nloops $N i B begin
@@ -820,7 +820,7 @@ If `dim` is specified, returns unique regions of the array `itr` along `dim`.
         end
 
         # Collect index of first row for each hash
-        uniquerow = Array(Int, size(A, dim))
+        uniquerow = Array{Int}(size(A, dim))
         firstrow = Dict{Prehashed,Int}()
         for k = 1:size(A, dim)   # fixme (iter): use `eachindex(A, dim)` after #15459 is implemented
             uniquerow[k] = get!(firstrow, Prehashed(hashes[k]), k)

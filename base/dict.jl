@@ -104,7 +104,7 @@ function show{K,V}(io::IO, t::Associative{K,V})
         rows -= 2 # Subtract the summary and final ⋮ continuation lines
 
         # determine max key width to align the output, caching the strings
-        ks = Array(AbstractString, min(rows, length(t)))
+        ks = Array{AbstractString}(min(rows, length(t)))
         keylen = 0
         for (i, k) in enumerate(keys(t))
             i > rows && break
@@ -251,7 +251,7 @@ function merge(d::Associative, others::Associative...)
 end
 
 function filter!(f, d::Associative)
-    badkeys = Array(keytype(d), 0)
+    badkeys = Array{keytype(d)}(0)
     for (k,v) in d
         # don't delete!(d, k) here, since associative types
         # may not support mutation during iteration
@@ -426,7 +426,7 @@ type Dict{K,V} <: Associative{K,V}
 
     function Dict()
         n = 16
-        new(zeros(UInt8,n), Array(K,n), Array(V,n), 0, 0, false, 1, 0)
+        new(zeros(UInt8,n), Array{K}(n), Array{V}(n), 0, 0, false, 1, 0)
     end
     function Dict(kv)
         h = Dict{K,V}()
@@ -540,8 +540,8 @@ function rehash!{K,V}(h::Dict{K,V}, newsz = length(h.keys))
     end
 
     slots = zeros(UInt8,newsz)
-    keys = Array(K, newsz)
-    vals = Array(V, newsz)
+    keys = Array{K}(newsz)
+    vals = Array{V}(newsz)
     count0 = h.count
     count = 0
     maxprobe = h.maxprobe

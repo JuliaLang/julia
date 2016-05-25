@@ -74,7 +74,7 @@ B = slice(A, 1:3, 2, 1:3);
     end
     Ip = I.parameters
     NP = length(Ip)
-    indexexprs = Array(Expr, NP)
+    indexexprs = Array{Expr}(NP)
     j = 1
     for i = 1:NP
         if Ip[i] == Int

@@ -972,7 +972,7 @@ end
 @noinline function fieldoffsets(x::DataType)
     depwarn("fieldoffsets is deprecated. use `map(idx->fieldoffset(x, idx), 1:nfields(x))` instead", :fieldoffsets)
     nf = nfields(x)
-    offsets = Array(Int, nf)
+    offsets = Array{Int}(nf)
     for i = 1:nf
         offsets[i] = fieldoffset(x, i)
     end
@@ -1184,6 +1184,7 @@ end
 @deprecate ==(x::Integer, y::Char) x == UInt32(y)
 @deprecate isless(x::Char, y::Integer) UInt32(x) < y
 @deprecate isless(x::Integer, y::Char) x < UInt32(y)
+
 # delete these methods along with deprecations:
 isequal(x::Char, y::Integer) = false
 isequal(x::Integer, y::Char) = false

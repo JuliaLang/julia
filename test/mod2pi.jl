@@ -155,7 +155,7 @@ function testModPi()
     numTestCases = size(testCases,1)
     modFns = [mod2pi]
     xDivisors = [2pi]
-    errsNew, errsOld = Array(Float64,0), Array(Float64,0)
+    errsNew, errsOld = Array{Float64}(0), Array{Float64}(0)
     for rowIdx in 1:numTestCases
         xExact = testCases[rowIdx,1]
         for colIdx in 1:1

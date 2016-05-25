@@ -12,10 +12,10 @@ using Base.Test
 @test ones(0,0)*ones(0,4) == zeros(0,4)
 @test ones(3,0)*ones(0,0) == zeros(3,0)
 @test ones(0,0)*ones(0,0) == zeros(0,0)
-@test Array(Float64, 5, 0) |> t -> t't == zeros(0,0)
-@test Array(Float64, 5, 0) |> t -> t*t' == zeros(5,5)
-@test Array(Complex128, 5, 0) |> t -> t't == zeros(0,0)
-@test Array(Complex128, 5, 0) |> t -> t*t' == zeros(5,5)
+@test Array{Float64}(5, 0) |> t -> t't == zeros(0,0)
+@test Array{Float64}(5, 0) |> t -> t*t' == zeros(5,5)
+@test Array{Complex128}(5, 0) |> t -> t't == zeros(0,0)
+@test Array{Complex128}(5, 0) |> t -> t*t' == zeros(5,5)
 
 # 2x2
 let
@@ -97,7 +97,7 @@ let
     end
     AA = rand(1:20, 5, 5) .- 10
     BB = rand(1:20, 5, 5) .- 10
-    CC = Array(Int, size(AA, 1), size(BB, 2))
+    CC = Array{Int}(size(AA, 1), size(BB, 2))
     for Atype = ["Array", "SubArray"], Btype = ["Array", "SubArray"], Ctype = ["Array", "SubArray"]
         A = Atype == "Array" ? AA : sub(AA, 1:5, 1:5)
         B = Btype == "Array" ? BB : sub(BB, 1:5, 1:5)
@@ -116,7 +116,7 @@ let
         @test_throws DimensionMismatch Base.LinAlg.Ac_mul_Bt!(C,ones(Int,4,4),B)
     end
     vv = [1,2]
-    CC = Array(Int, 2, 2)
+    CC = Array{Int}(2, 2)
     for vtype = ["Array", "SubArray"], Ctype = ["Array", "SubArray"]
         v = vtype == "Array" ? vv : sub(vv, 1:2)
         C = Ctype == "Array" ? CC : sub(CC, 1:2, 1:2)
@@ -135,14 +135,14 @@ let
         @test_throws DimensionMismatch Base.LinAlg.generic_matvecmul!(B,'N',A,zeros(6))
     end
     vv = [1,2,3]
-    CC = Array(Int, 3, 3)
+    CC = Array{Int}(3, 3)
     for vtype = ["Array", "SubArray"], Ctype = ["Array", "SubArray"]
         v = vtype == "Array" ? vv : sub(vv, 1:3)
         C = Ctype == "Array" ? CC : sub(CC, 1:3, 1:3)
         @test A_mul_Bt!(C, v, v) == v*v'
     end
     vvf = map(Float64,vv)
-    CC = Array(Float64, 3, 3)
+    CC = Array{Float64}(3, 3)
     for vtype = ["Array", "SubArray"], Ctype = ["Array", "SubArray"]
         vf = vtype == "Array" ? vvf : sub(vvf, 1:3)
         C = Ctype == "Array" ? CC : sub(CC, 1:3, 1:3)
@@ -276,12 +276,12 @@ end
 
 # Issue 11978
 let
-    A = Array(Matrix{Float64}, 2, 2)
+    A = Array{Matrix{Float64}}(2, 2)
     A[1,1] = eye(3)
     A[1,2] = eye(3,2)
     A[2,1] = eye(2,3)
     A[2,2] = eye(2)
-    b = Array(Vector{Float64}, 2)
+    b = Array{Vector{Float64}}(2)
     b[1] = ones(3)
     b[2] = ones(2)
     @test A*b == Vector{Float64}[[2,2,1], [2,2]]

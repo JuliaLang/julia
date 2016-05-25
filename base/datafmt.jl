@@ -18,7 +18,7 @@ const offs_chunk_size = 5000
 countlines(f::AbstractString, eol::Char='\n') = open(io->countlines(io,eol), f)::Int
 function countlines(io::IO, eol::Char='\n')
     isascii(eol) || throw(ArgumentError("only ASCII line terminators are supported"))
-    a = Array(UInt8, 8192)
+    a = Array{UInt8}(8192)
     nl = 0
     while !eof(io)
         nb = readbytes!(io, a)
@@ -78,8 +78,8 @@ type DLMOffsets <: DLMHandler
     bufflen::Int
 
     function DLMOffsets(sbuff::String)
-        offsets = Array(Array{Int,1}, 1)
-        offsets[1] = Array(Int, offs_chunk_size)
+        offsets = Array{Array{Int,1}}(1)
+        offsets[1] = Array{Int}(offs_chunk_size)
         thresh = ceil(min(typemax(UInt), Base.Sys.total_memory()) / sizeof(Int) / 5)
         new(offsets, 1, thresh, length(sbuff.data))
     end
@@ -103,7 +103,7 @@ function store_cell(dlmoffsets::DLMOffsets, row::Int, col::Int,
                 return
             end
         end
-        offsets = Array(Int, offs_chunk_size)
+        offsets = Array{Int}(offs_chunk_size)
         push!(oarr, offsets)
         offidx = 1
     end
@@ -142,7 +142,7 @@ function DLMStore{T}(::Type{T}, dims::NTuple{2,Integer},
     nrows <= 0 && throw(ArgumentError("number of rows in dims must be > 0, got $nrows"))
     ncols <= 0 && throw(ArgumentError("number of columns in dims must be > 0, got $ncols"))
     hdr_offset = has_header ? 1 : 0
-    DLMStore{T}(fill(SubString(sbuff,1,0), 1, ncols), Array(T, nrows-hdr_offset, ncols),
+    DLMStore{T}(fill(SubString(sbuff,1,0), 1, ncols), Array{T}(nrows-hdr_offset, ncols),
         nrows, ncols, 0, 0, hdr_offset, sbuff, auto, eol)
 end
 

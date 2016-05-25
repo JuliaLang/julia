@@ -66,8 +66,8 @@ let T = TypeVar(:T,true)
                   Tuple{Number, Array{Number,1}}, isequal)
     @testintersect(Tuple{Array{T}, Array{T}}, Tuple{Array, Array{Any}}, Bottom, isnot)
     f47{T}(x::Vector{Vector{T}}) = 0
-    @test_throws MethodError f47(Array(Vector,0))
-    @test f47(Array(Vector{Int},0)) == 0
+    @test_throws MethodError f47(Array{Vector}(0))
+    @test f47(Array{Vector{Int}}(0)) == 0
     @testintersect(Tuple{T,T}, Tuple{Union{Float64,Int64},Int64}, Tuple{Int64,Int64})
     @testintersect(Tuple{T,T}, Tuple{Int64,Union{Float64,Int64}}, Tuple{Int64,Int64})
 
@@ -559,7 +559,7 @@ let
     @test !isdefined(a,1) && !isdefined(a,2)
     a[1] = 1
     @test isdefined(a,1) && !isdefined(a,2)
-    a = Array(Float64,1)
+    a = Array{Float64}(1)
     @test isdefined(a,1)
     @test isdefined(a)
     @test !isdefined(a,2)
@@ -582,7 +582,7 @@ let
     @test !isassigned(a,1) && !isassigned(a,2)
     a[1] = 1
     @test isassigned(a,1) && !isassigned(a,2)
-    a = Array(Float64,1)
+    a = Array{Float64}(1)
     @test isassigned(a,1)
     @test isassigned(a)
     @test !isassigned(a,2)
@@ -1068,7 +1068,7 @@ let
 
     # issue #1886
     X = [1:4;]
-    r = Array(UnitRange{Int},1)
+    r = Array{UnitRange{Int}}(1)
     r[1] = 2:3
     X[r...] *= 2
     @test X == [1,4,6,4]
@@ -1132,7 +1132,7 @@ immutable Foo2509; foo::Int; end
 # issue #2517
 immutable Foo2517; end
 @test repr(Foo2517()) == "Foo2517()"
-@test repr(Array(Foo2517,1)) == "Foo2517[Foo2517()]"
+@test repr(Array{Foo2517}(1)) == "Foo2517[Foo2517()]"
 @test Foo2517() === Foo2517()
 
 # issue #1474
@@ -1261,13 +1261,13 @@ end
 # issue #3167
 let
     function foo(x)
-        ret=Array(typeof(x[1]), length(x))
+        ret=Array{typeof(x[1])}(length(x))
         for j = 1:length(x)
             ret[j] = x[j]
         end
         return ret
     end
-    x = Array(Union{Dict{Int64,AbstractString},Array{Int64,3},Number,AbstractString,Void}, 3)
+    x = Array{Union{Dict{Int64,AbstractString},Array{Int64,3},Number,AbstractString,Void}}(3)
     x[1] = 1.0
     x[2] = 2.0
     x[3] = 3.0
@@ -1535,7 +1535,7 @@ end
 @test invalid_tupleref()==true
 
 # issue #5150
-f5150(T) = Array(Rational{T},1)
+f5150(T) = Array{Rational{T}}(1)
 @test typeof(f5150(Int)) === Array{Rational{Int},1}
 
 
@@ -1686,7 +1686,7 @@ type Polygon5884{T<:Real}
 end
 
 function test5884()
-    star = Array(Polygon5884,(3,))
+    star = Array{Polygon5884}((3,))
     star[1] = Polygon5884([Complex(1.0,1.0)])
     p1 = star[1].points[1]
     @test p1 == Complex(1.0,1.0)
@@ -1886,7 +1886,7 @@ end
 obj = ObjMember(DateRange6387{Int64}())
 
 function v6387{T}(r::Range{T})
-    a = Array(T,1)
+    a = Array{T}(1)
     a[1] = Core.Intrinsics.box(Date6387{Int64}, Core.Intrinsics.unbox(Int64,Int64(1)))
     a
 end
@@ -1899,8 +1899,8 @@ end
 day_in(obj)
 
 # issue #6784
-@test ndims(Array(Array{Float64},3,5)) == 2
-@test ndims(Array(Array,3,5)) == 2
+@test ndims(Array{Array{Float64}}(3,5)) == 2
+@test ndims(Array{Array}(3,5)) == 2
 
 # issue #6793
 function segfault6793(;gamma=1)
@@ -2147,7 +2147,7 @@ end
 
 # issue #9475
 module I9475
-    arr = Array(Any, 1)
+    arr = Array{Any}(1)
     @eval @eval $arr[1] = 1
 end
 
@@ -3213,7 +3213,7 @@ end
 
 # issue #12394
 type Empty12394 end
-let x = Array(Empty12394,1), y = [Empty12394()]
+let x = Array{Empty12394}(1), y = [Empty12394()]
     @test_throws UndefRefError x==y
     @test_throws UndefRefError y==x
 end
@@ -3358,7 +3358,7 @@ end
 #13433, read!(::IO, a::Vector{UInt8}) should return a
 type IO13433 <: IO end
 Base.read(::IO13433, ::Type{UInt8}) = 0x01
-@test read!(IO13433(), Array(UInt8, 4)) == [0x01, 0x01, 0x01, 0x01]
+@test read!(IO13433(), Array{UInt8}(4)) == [0x01, 0x01, 0x01, 0x01]
 
 # issue #13647, comparing boxed isbits immutables
 immutable X13647
@@ -3408,7 +3408,7 @@ end
 
 # issue #8487
 @test [x for x in 1:3] == [x for x ∈ 1:3] == [x for x = 1:3]
-let A = Array(Int, 4,3)
+let A = Array{Int}(4,3)
     for i ∈ 1:size(A,1), j ∈ 1:size(A,2)
         A[i,j] = 17*i + 51*j
     end
@@ -3687,7 +3687,7 @@ end
 
 # issue #15180
 function f15180{T}(x::T)
-    X = Array(T, 1)
+    X = Array{T}(1)
     X[1] = x
     @noinline ef{J}(::J) = (J,X[1]) # Use T
     ef{J}(::J, ::Int) = (T,J)

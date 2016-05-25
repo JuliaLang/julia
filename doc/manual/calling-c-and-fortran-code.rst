@@ -136,7 +136,7 @@ Here is a slightly more complex example that discovers the local
 machine's hostname::
 
     function gethostname()
-      hostname = Array(UInt8, 128)
+      hostname = Array{UInt8}(128)
       ccall((:gethostname, "libc"), Int32,
             (Ptr{UInt8}, Csize_t),
             hostname, sizeof(hostname))
@@ -879,7 +879,7 @@ Here is a third example passing Julia arrays::
     #                                double result_array[])
     function sf_bessel_Jn_array(nmin::Integer, nmax::Integer, x::Real)
         if nmax<nmin throw(DomainError()) end
-        result_array = Array(Cdouble, nmax-nmin+1)
+        result_array = Array{Cdouble}(nmax-nmin+1)
         errorcode = ccall(
             (:gsl_sf_bessel_Jn_array, :libgsl), #name of C function and library
             Cint,                               #output type
@@ -999,7 +999,7 @@ conventions are: ``stdcall``, ``cdecl``, ``fastcall``, and ``thiscall``.
 For example (from ``base/libc.jl``) we see the same ``gethostname`` :func:`ccall` as above,
 but with the correct signature for Windows::
 
-    hn = Array(UInt8, 256)
+    hn = Array{UInt8}(256)
     err = ccall(:gethostname, stdcall, Int32, (Ptr{UInt8}, UInt32), hn, length(hn))
 
 For more information, please see the `LLVM Language Reference`_.

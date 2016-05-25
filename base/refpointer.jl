@@ -70,8 +70,8 @@ function (::Type{Ref{P}}){P<:Ptr,T}(a::Array{T}) # Ref{P<:Ptr}(a::Array)
         # this Array already has the right memory layout for the requested Ref
         return RefArray(a,1,false) # root something, so that this function is type-stable
     else
-        ptrs = Array(P, length(a)+1)
-        roots = Array(Any, length(a))
+        ptrs = Array{P}(length(a)+1)
+        roots = Array{Any}(length(a))
         for i = 1:length(a)
             root = cconvert(P, a[i])
             ptrs[i] = unsafe_convert(P, root)::P

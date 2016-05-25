@@ -21,7 +21,7 @@ const JPOLY1e21  = "e172e20c5d2de26b567c0cace9e7c6cc4407bd5ffcd22ca59d37b73d54fd
 
 type DSFMT_state
     val::Vector{Int32}
-    DSFMT_state() = new(Array(Int32, JN32))
+    DSFMT_state() = new(Array{Int32}(JN32))
     DSFMT_state(val::Vector{Int32}) = new(val)
 end
 
