@@ -995,3 +995,4 @@ dense counterparts. The following functions are specific to sparse arrays.
              # perform sparse wizardry...
           end
        end
+

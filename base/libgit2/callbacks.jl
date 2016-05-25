@@ -27,27 +27,28 @@ end
 """Credentials callback function
 
 Function provides different credential acquisition functionality w.r.t. a connection protocol.
-If payload is provided then `payload_ptr` should contain `LibGit2.AbstractCredentials` object.
+If a payload is provided then `payload_ptr` should contain a `LibGit2.AbstractCredentials` object.
 
-For `LibGit2.Consts.CREDTYPE_USERPASS_PLAINTEXT` type, if payload contains fields:
+For `LibGit2.Consts.CREDTYPE_USERPASS_PLAINTEXT` type, if the payload contains fields:
 `user` & `pass`, they are used to create authentication credentials.
-Empty `user` name and `pass`word trigger authentication error.
+Empty `user` name and `pass`word trigger an authentication error.
 
-For `LibGit2.Consts.CREDTYPE_SSH_KEY` type, if payload contains fields:
+For `LibGit2.Consts.CREDTYPE_SSH_KEY` type, if the payload contains fields:
 `user`, `prvkey`, `pubkey` & `pass`, they are used to create authentication credentials.
-Empty `user` name triggers authentication error.
+Empty `user` name triggers an authentication error.
 
-Order of credential checks (if supported):
-- ssh key pair (ssh-agent if specified in payload's `usesshagent` field)
+Credentials are checked in the following order (if supported):
+- ssh key pair (`ssh-agent` if specified in payload's `usesshagent` field)
 - plain text
 
-**Note**: Due to the specifics of `libgit2` authentication procedure, when authentication fails,
-this function is called again without any indication whether authentication was successful or not.
-To avoid an infinite loop from repeatedly using the same faulty credentials,
-`checkused!` function can be called to test if credentials were used if call returns `true` value.
-Used credentials trigger user prompt for (re)entering required information.
-`UserPasswordCredentials` and `CachedCredentials` are implemented using a call counting strategy
-that prevents repeated usage of faulty credentials.
+**Note**: Due to the specifics of the `libgit2` authentication procedure, when
+authentication fails, this function is called again without any indication whether
+authentication was successful or not. To avoid an infinite loop from repeatedly
+using the same faulty credentials, the `checkused!` function can be called. This
+function returns `true` if the credentials were used.
+Using credentials triggers a user prompt for (re)entering required information.
+`UserPasswordCredentials` and `CachedCredentials` are implemented using a call
+counting strategy that prevents repeated usage of faulty credentials.
 """
 function credentials_callback(cred::Ptr{Ptr{Void}}, url_ptr::Cstring,
                               username_ptr::Cstring,
