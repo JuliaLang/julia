@@ -21,6 +21,31 @@ end
 
 size{T,N}(t::AbstractArray{T,N}, d) = d <= N ? size(t)[d] : 1
 size{N}(x, d1::Integer, d2::Integer, dx::Vararg{Integer, N}) = (size(x, d1), size(x, d2), ntuple(k->size(x, dx[k]), Val{N})...)
+"""
+    indices(A, d)
+
+Returns the valid range of indices for array `A` along dimension `d`.
+"""
+function indices(A::AbstractArray, d)
+    @_inline_meta
+    1:size(A,d)
+end
+"""
+    indices(A)
+
+Returns the tuple of valid indices for array `A`.
+"""
+indices{T,N}(A::AbstractArray{T,N}) = _indices((), A)
+_indices{T,N}(out::NTuple{N}, A::AbstractArray{T,N}) = out
+function _indices(out, A::AbstractArray)
+    @_inline_meta
+    _indices((out..., indices(A, length(out)+1)), A)
+end
+# This simpler implementation suffers from #16327
+# function indices{T,N}(A::AbstractArray{T,N})
+#     @_inline_meta
+#     ntuple(d->indices(A, d), Val{N})
+# end
 eltype{T}(::Type{AbstractArray{T}}) = T
 eltype{T,N}(::Type{AbstractArray{T,N}}) = T
 elsize{T}(::AbstractArray{T}) = sizeof(T)
