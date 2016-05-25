@@ -60,13 +60,13 @@ splat2(3, 3:5)
     print(stagediobuf, indx)
     :(nothing)
 end
-A = rand(5,5,3);
+A = rand(5,5,3)
 splat3(A, 1:2, 1:2, 1)
 @test takebuf_string(stagediobuf) == "(UnitRange{$intstr},UnitRange{$intstr},$intstr)"
 splat3(A, 1:2, 1, 1:2)
 @test takebuf_string(stagediobuf) == "(UnitRange{$intstr},$intstr,UnitRange{$intstr})"
 
-B = view(A, 1:3, 2, 1:3);
+B = view(A, 1:3, 2, 1:3)
 @generated function mygetindex(S::SubArray, indexes::Real...)
     T, N, A, I = S.parameters
     if N != length(indexes)

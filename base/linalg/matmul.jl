@@ -652,31 +652,31 @@ end
 function matmul3x3!{T,S,R}(C::AbstractMatrix{R}, tA, tB, A::AbstractMatrix{T}, B::AbstractMatrix{S})
     @inbounds begin
     if tA == 'T'
-        A11 = transpose(A[1,1]); A12 = transpose(A[2,1]); A13 = transpose(A[3,1]);
-        A21 = transpose(A[1,2]); A22 = transpose(A[2,2]); A23 = transpose(A[3,2]);
-        A31 = transpose(A[1,3]); A32 = transpose(A[2,3]); A33 = transpose(A[3,3]);
+        A11 = transpose(A[1,1]); A12 = transpose(A[2,1]); A13 = transpose(A[3,1])
+        A21 = transpose(A[1,2]); A22 = transpose(A[2,2]); A23 = transpose(A[3,2])
+        A31 = transpose(A[1,3]); A32 = transpose(A[2,3]); A33 = transpose(A[3,3])
     elseif tA == 'C'
-        A11 = ctranspose(A[1,1]); A12 = ctranspose(A[2,1]); A13 = ctranspose(A[3,1]);
-        A21 = ctranspose(A[1,2]); A22 = ctranspose(A[2,2]); A23 = ctranspose(A[3,2]);
-        A31 = ctranspose(A[1,3]); A32 = ctranspose(A[2,3]); A33 = ctranspose(A[3,3]);
+        A11 = ctranspose(A[1,1]); A12 = ctranspose(A[2,1]); A13 = ctranspose(A[3,1])
+        A21 = ctranspose(A[1,2]); A22 = ctranspose(A[2,2]); A23 = ctranspose(A[3,2])
+        A31 = ctranspose(A[1,3]); A32 = ctranspose(A[2,3]); A33 = ctranspose(A[3,3])
     else
-        A11 = A[1,1]; A12 = A[1,2]; A13 = A[1,3];
-        A21 = A[2,1]; A22 = A[2,2]; A23 = A[2,3];
-        A31 = A[3,1]; A32 = A[3,2]; A33 = A[3,3];
+        A11 = A[1,1]; A12 = A[1,2]; A13 = A[1,3]
+        A21 = A[2,1]; A22 = A[2,2]; A23 = A[2,3]
+        A31 = A[3,1]; A32 = A[3,2]; A33 = A[3,3]
     end
 
     if tB == 'T'
-        B11 = transpose(B[1,1]); B12 = transpose(B[2,1]); B13 = transpose(B[3,1]);
-        B21 = transpose(B[1,2]); B22 = transpose(B[2,2]); B23 = transpose(B[3,2]);
-        B31 = transpose(B[1,3]); B32 = transpose(B[2,3]); B33 = transpose(B[3,3]);
+        B11 = transpose(B[1,1]); B12 = transpose(B[2,1]); B13 = transpose(B[3,1])
+        B21 = transpose(B[1,2]); B22 = transpose(B[2,2]); B23 = transpose(B[3,2])
+        B31 = transpose(B[1,3]); B32 = transpose(B[2,3]); B33 = transpose(B[3,3])
     elseif tB == 'C'
-        B11 = ctranspose(B[1,1]); B12 = ctranspose(B[2,1]); B13 = ctranspose(B[3,1]);
-        B21 = ctranspose(B[1,2]); B22 = ctranspose(B[2,2]); B23 = ctranspose(B[3,2]);
-        B31 = ctranspose(B[1,3]); B32 = ctranspose(B[2,3]); B33 = ctranspose(B[3,3]);
+        B11 = ctranspose(B[1,1]); B12 = ctranspose(B[2,1]); B13 = ctranspose(B[3,1])
+        B21 = ctranspose(B[1,2]); B22 = ctranspose(B[2,2]); B23 = ctranspose(B[3,2])
+        B31 = ctranspose(B[1,3]); B32 = ctranspose(B[2,3]); B33 = ctranspose(B[3,3])
     else
-        B11 = B[1,1]; B12 = B[1,2]; B13 = B[1,3];
-        B21 = B[2,1]; B22 = B[2,2]; B23 = B[2,3];
-        B31 = B[3,1]; B32 = B[3,2]; B33 = B[3,3];
+        B11 = B[1,1]; B12 = B[1,2]; B13 = B[1,3]
+        B21 = B[2,1]; B22 = B[2,2]; B23 = B[2,3]
+        B31 = B[3,1]; B32 = B[3,2]; B33 = B[3,3]
     end
 
     C[1,1] = A11*B11 + A12*B21 + A13*B31

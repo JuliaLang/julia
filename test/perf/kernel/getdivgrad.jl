@@ -11,7 +11,7 @@ function getDivGrad(n1,n2,n3)
     # DIV from faces to cell-centers
     Div = [D1 D2 D3]
 
-    return Div*Div';
+    return Div*Div'
 end
 
 #----------------- 1D finite difference on staggered grid
