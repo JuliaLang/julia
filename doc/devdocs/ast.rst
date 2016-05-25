@@ -178,12 +178,14 @@ These symbols appear in the ``head`` field of ``Expr``\s in lowered form.
     metadata. ``args[1]`` is typically a symbol specifying the kind of metadata,
     and the rest of the arguments are free-form. The following kinds of metadata
     are commonly used:
-    - ``:inline`` and ``:noinline``: Inlining hints.
-    - ``:push_loc``: enters a sequence of statements from a specified source location.
-        ``args[2]`` specifies a filename, as a symbol.
-        ``args[3]`` optionally specifies the name of an (inlined) function that originally
-                    contained the code.
-    - ``:pop_loc``: returns to the source location before the matching ``:push_loc``.
+
+    ``:inline`` and ``:noinline``: Inlining hints.
+
+    ``:push_loc``: enters a sequence of statements from a specified source location.
+      - ``args[2]`` specifies a filename, as a symbol.
+      - ``args[3]`` optionally specifies the name of an (inlined) function that originally contained the code.
+
+    ``:pop_loc``: returns to the source location before the matching ``:push_loc``.
 
 LambdaInfo
 ~~~~~~~~~~

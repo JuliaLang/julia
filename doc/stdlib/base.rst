@@ -1011,7 +1011,7 @@ System
 
    .. Docstring generated from Julia source
 
-   Returns the version number for the Windows NT Kernel as a (major, minor) pair, or (0, 0) if this is not running on Windows.
+   Returns the version number for the Windows NT Kernel as a (major, minor) pair, or ``(0, 0)`` if this is not running on Windows.
 
 .. function:: @static
 
