@@ -1407,15 +1407,14 @@ static jl_value_t *static_constant_instance(Constant *constant, jl_value_t *jt)
     }
 
     size_t nargs = 0;
-    ConstantStruct *cst = NULL;
-    ConstantVector *cvec = NULL;
-    ConstantArray *carr = NULL;
-    if ((cst = dyn_cast<ConstantStruct>(constant)) != NULL)
+    if (ConstantStruct *cst = dyn_cast<ConstantStruct>(constant))
         nargs = cst->getType()->getNumElements();
-    else if ((cvec = dyn_cast<ConstantVector>(constant)) != NULL)
+    else if (ConstantVector *cvec = dyn_cast<ConstantVector>(constant))
         nargs = cvec->getType()->getNumElements();
-    else if ((carr = dyn_cast<ConstantArray>(constant)) != NULL)
+    else if (ConstantArray *carr = dyn_cast<ConstantArray>(constant))
         nargs = carr->getType()->getNumElements();
+    else if (ConstantDataVector *cdv = dyn_cast<ConstantDataVector>(constant))
+        nargs = cdv->getType()->getNumElements();
     else if (isa<Function>(constant))
         return NULL;
     else

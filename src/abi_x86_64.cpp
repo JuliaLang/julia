@@ -36,6 +36,7 @@
 //
 //===----------------------------------------------------------------------===//
 
+#include "abi_x86_vec.h"
 
 // used to track the state of the ABI generator during
 // code generation
@@ -133,6 +134,10 @@ void classifyType(Classification& accum, jl_value_t *ty, uint64_t offset)
             accum.addField(offset, Memory);
         }
     }
+    // struct types that map to SIMD registers
+    else if (is_native_simd_type(ty)) {
+        accum.addField(offset, Sse);
+    }
     // Other struct types
     else if (jl_datatype_size(ty) <= 16) {
         size_t i;
@@ -191,11 +196,16 @@ void needPassByRef(AbiState *state, jl_value_t *ty, bool *byRef, bool *inReg)
     }
 }
 
+// Called on behalf of ccall to determine preferred LLVM representation
+// for an argument or return value.
 Type *preferred_llvm_type(jl_value_t *ty, bool isret)
 {
     (void) isret;
     // no need to rewrite these types (they are returned as pointers anyways)
     if (!jl_is_datatype(ty) || jl_is_abstracttype(ty) || jl_is_cpointer_type(ty) || jl_is_array_type(ty))
+        return NULL;
+
+    if (is_native_simd_type(ty))
         return NULL;
 
     int size = jl_datatype_size(ty);
