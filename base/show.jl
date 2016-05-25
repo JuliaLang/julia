@@ -1528,15 +1528,13 @@ end
 # returns compact, prefix
 function array_eltype_show_how(X)
     e = eltype(X)
-    leaf = isleaftype(e)
-    plain = e<:Number || e<:AbstractString ||
-            (e<:Nullable && (eltype(e)<:Number || eltype(e)<:AbstractString))
     if isa(e,DataType) && e === e.name.primary
-        str = string(e.name)
+        str = string(e.name) # Print "Array" rather than "Array{T,N}"
     else
         str = string(e)
     end
-    leaf&&plain, (!isempty(X) && (e===Float64 || e===Int || (leaf && !plain)) ? "" : str)
+    # Types hard-coded here are those which are created by default for a given syntax
+    isleaftype(e), (!isempty(X) && (e===Float64 || e===Int || e===Char) ? "" : str)
 end
 
 function show_vector(io::IO, v, opn, cls)

@@ -105,7 +105,7 @@ the difference between the two)::
 IO Output Contextual Properties
 -------------------------------
 
-Sometimes IO output can benefit from the ability to pass contextual information into show methods. The ``IOContext`` object provides this framework for associating arbitrary metadata with an IO object. For example, ``showlimited`` adds a hinting parameter to the IO object that the invoked show method should print a shorter output (if applicable).
+Sometimes IO output can benefit from the ability to pass contextual information into show methods. The ``IOContext`` object provides this framework for associating arbitrary metadata with an IO object. For example, ``showcompact`` adds a hinting parameter to the IO object that the invoked show method should print a shorter output (if applicable).
 
 Working with Files
 ------------------
