@@ -113,6 +113,7 @@ linearindexing(::LinearIndexing, ::LinearIndexing) = LinearSlow()
 
 ## Bounds checking ##
 @generated function trailingsize{T,N,n}(A::AbstractArray{T,N}, ::Type{Val{n}})
+    (isa(n, Int) && isa(N, Int)) || error("Must have concrete type")
     n > N && return 1
     ex = :(size(A, $n))
     for m = n+1:N
