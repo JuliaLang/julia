@@ -3345,14 +3345,6 @@ The lowest value representable by the given (real) numeric DataType `T`.
 typemin
 
 """
-    call(x, args...)
-
-If `x` is not a `Function`, then `x(args...)` is equivalent to `call(x, args...)`. This
-means that function-like behavior can be added to any type by defining new `call` methods.
-"""
-call
-
-"""
     countfrom(start=1, step=1)
 
 An iterator that counts forever, starting at `start` and incrementing by `step`.
