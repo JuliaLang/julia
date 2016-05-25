@@ -227,7 +227,7 @@ for elty1 in (Float32, Float64, BigFloat, Complex64, Complex128, Complex{BigFloa
         @test_approx_eq_eps det(A1) det(lufact(full(A1))) sqrt(eps(real(float(one(elty1)))))*n*n
 
         # Matrix square root
-        @test sqrtm(A1) |> t->t*t ≈ A1
+        @test sqrtm(A1) |> t -> t*t ≈ A1
 
         # naivesub errors
         @test_throws DimensionMismatch naivesub!(A1,ones(elty1,n+1))
