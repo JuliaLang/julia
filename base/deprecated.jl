@@ -1254,6 +1254,7 @@ end
 
 @deprecate_binding WORD_SIZE Sys.WORD_SIZE
 
+@deprecate showcompact_lim show
 
 # During the 0.5 development cycle, do not add any deprecations below this line
 # To be deprecated in 0.6
