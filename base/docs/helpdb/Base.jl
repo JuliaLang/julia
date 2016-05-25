@@ -1718,7 +1718,7 @@ Scaled Bessel function of the third kind of order `nu`, ``H^{(2)}_\\nu(x) e^{x i
 hankelh2x
 
 """
-    ndigits(n, b)
+    ndigits(n, b = 10)
 
 Compute the number of digits in number `n` written in base `b`.
 """

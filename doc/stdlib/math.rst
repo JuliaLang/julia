@@ -1676,7 +1676,7 @@ Mathematical Functions
 
    Generalized zeta function :math:`\zeta(s, z)`\ , defined by the sum :math:`\sum_{k=0}^\infty ((k+z)^2)^{-s/2}`\ , where any term with :math:`k+z=0` is excluded.  For :math:`\Re z > 0`\ , this definition is equivalent to the Hurwitz zeta function :math:`\sum_{k=0}^\infty (k+z)^{-s}`\ .   For :math:`z=1`\ , it yields the Riemann zeta function :math:`\zeta(s)`\ .
 
-.. function:: ndigits(n, b)
+.. function:: ndigits(n, b = 10)
 
    .. Docstring generated from Julia source
 
