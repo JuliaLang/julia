@@ -947,10 +947,10 @@ Taken to its extreme, pre-allocation can make your code uglier, so
 performance measurements and some judgment may be required.
 
 
-Use parentheses in arithmetic operations
-----------------------------------------
+Use parentheses in long arithmetic operations
+---------------------------------------------
 
-If your code has a long arithmetic operation involving `+` or `*` operators,
+If your code has a long arithmetic operation involving ``+`` or ``*`` operators,
 then consider using parentheses to chain up to four or five operations together.
 This is to avoid the splatting penalty from a longer list of arguments to function
 return statement.
