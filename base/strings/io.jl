@@ -324,3 +324,22 @@ function unindent(str::AbstractString, indent::Int; tabwidth=8)
     end
     takebuf_string(buf)
 end
+
+function convert(::Type{String}, chars::AbstractVector{Char})
+    sprint(length(chars), io->begin
+        state = start(chars)
+        while !done(chars, state)
+            c, state = next(chars, state)
+            if '\ud7ff' < c && c + 1024 < '\ue000'
+                d, state = next(chars, state)
+                if '\ud7ff' < d - 1024 && d < '\ue000'
+                    c = Char(0x10000 + ((UInt32(c) & 0x03ff) << 10) | (UInt32(d) & 0x03ff))
+                else
+                    write(io, c)
+                    c = d
+                end
+            end
+            write(io, c)
+        end
+    end)
+end

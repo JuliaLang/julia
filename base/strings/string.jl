@@ -33,6 +33,8 @@ const utf8_trailing = [
 
 ## required core functionality ##
 
+is_valid_continuation(c) = ((c & 0xc0) == 0x80)
+
 function endof(s::String)
     d = s.data
     i = length(d)
@@ -239,109 +241,10 @@ function reverse(s::String)
     String(buf)
 end
 
-## outputting UTF-8 strings ##
-
 write(io::IO, s::String) = write(io, s.data)
 
 pointer(x::String) = pointer(x.data)
 pointer(x::String, i::Integer) = pointer(x.data)+(i-1)
 
-## transcoding to UTF-8 ##
-
 convert(::Type{String}, s::String) = s
-
-function convert(::Type{String}, dat::Vector{UInt8})
-    # handle zero length string quickly
-    isempty(dat) && return empty_utf8
-    # get number of bytes to allocate
-    len, flags, num4byte, num3byte, num2byte = unsafe_checkstring(dat)
-    if (flags & (UTF_LONG | UTF_SURROGATE)) == 0
-        len = sizeof(dat)
-        @inbounds return String(copy!(Vector{UInt8}(len), 1, dat, 1, len))
-    end
-    # Copy, but eliminate over-long encodings and surrogate pairs
-    len += num2byte + num3byte*2 + num4byte*3
-    buf = Vector{UInt8}(len)
-    out = 0
-    pos = 0
-    @inbounds while out < len
-        ch::UInt32 = dat[pos += 1]
-        # Handle ASCII characters
-        if ch <= 0x7f
-            buf[out += 1] = ch
-        # Handle overlong < 0x100
-        elseif ch < 0xc2
-            buf[out += 1] = ((ch & 3) << 6) | (dat[pos += 1] & 0x3f)
-        # Handle 0x100-0x7ff
-        elseif ch < 0xe0
-            buf[out += 1] = ch
-            buf[out += 1] = dat[pos += 1]
-        elseif ch != 0xed
-            buf[out += 1] = ch
-            buf[out += 1] = dat[pos += 1]
-            buf[out += 1] = dat[pos += 1]
-            # Copy 4-byte encoded value
-            ch >= 0xf0 && (buf[out += 1] = dat[pos += 1])
-        # Handle surrogate pairs
-        else
-            ch = dat[pos += 1]
-            if ch < 0xa0 # not surrogate pairs
-                buf[out += 1] = 0xed
-                buf[out += 1] = ch
-                buf[out += 1] = dat[pos += 1]
-            else
-                # Pick up surrogate pairs (CESU-8 format)
-                ch = ((((((ch & 0x3f) << 6) | (dat[pos + 1] & 0x3f)) << 10)
-                       + (((dat[pos + 3] & 0x3f)%UInt32 << 6) | (dat[pos + 4] & 0x3f)))
-                      - 0x01f0c00)
-                pos += 4
-                output_utf8_4byte!(buf, out, ch)
-                out += 4
-            end
-        end
-    end
-    String(buf)
-end
-
-"""
-Converts an already validated vector of `UInt16` or `UInt32` to a `String`
-
-Input Arguments:
-
-* `dat` Vector of code units (`UInt16` or `UInt32`), explicit `\0` is not converted
-* `len` length of output in bytes
-
-Returns:
-
-* `String`
-"""
-function encode_to_utf8{T<:Union{UInt16, UInt32}}(::Type{T}, dat, len)
-    buf = Vector{UInt8}(len)
-    out = 0
-    pos = 0
-    @inbounds while out < len
-        ch::UInt32 = dat[pos += 1]
-        # Handle ASCII characters
-        if ch <= 0x7f
-            buf[out += 1] = ch
-        # Handle 0x80-0x7ff
-        elseif ch < 0x800
-            buf[out += 1] = 0xc0 | (ch >>> 6)
-            buf[out += 1] = 0x80 | (ch & 0x3f)
-        # Handle 0x10000-0x10ffff (if input is UInt32)
-        elseif ch > 0xffff # this is only for T == UInt32, should not be generated for UInt16
-            output_utf8_4byte!(buf, out, ch)
-            out += 4
-        # Handle surrogate pairs
-        elseif is_surrogate_codeunit(ch)
-            output_utf8_4byte!(buf, out, get_supplementary(ch, dat[pos += 1]))
-            out += 4
-        # Handle 0x800-0xd7ff, 0xe000-0xffff UCS-2 characters
-        else
-            buf[out += 1] = 0xe0 | ((ch >>> 12) & 0x3f)
-            buf[out += 1] = 0x80 | ((ch >>> 6) & 0x3f)
-            buf[out += 1] = 0x80 | (ch & 0x3f)
-        end
-    end
-    String(buf)
-end
+convert(::Type{String}, v::Vector{UInt8}) = String(v)

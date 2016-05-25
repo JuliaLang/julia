@@ -1009,5 +1009,6 @@ end
 Base.convert(::Type{GenericString}, s::AbstractString) = GenericString(s)
 Base.endof(s::GenericString) = endof(s.string)
 Base.next(s::GenericString, i::Int) = next(s.string, i)
+Base.reverseind(s::GenericString, i::Integer) = reverseind(s.string, i)
 
 end # module
