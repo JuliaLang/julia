@@ -226,14 +226,15 @@ checkbounds(A::AbstractArray) = checkbounds(A, 1) # 0-d case
 ## Constructors ##
 
 # default arguments to similar()
+typealias SimIdx Union{Integer,UnitRangeInteger}
 similar{T}(a::AbstractArray{T})                          = similar(a, T)
 similar(   a::AbstractArray, T::Type)                    = similar(a, T, size(a))
-similar{T}(a::AbstractArray{T}, dims::DimsInteger)       = similar(a, T, dims)
-similar{T}(a::AbstractArray{T}, dims::Integer...)        = similar(a, T, dims)
-similar(   a::AbstractArray, T::Type, dims::Integer...)  = similar(a, T, dims)
-# similar creates an Array by default
+similar{T}(a::AbstractArray{T}, dims::Tuple)             = similar(a, T, dims)
+similar{T}(a::AbstractArray{T}, dims::SimIdx...)         = similar(a, T, dims)
+similar(   a::AbstractArray, T::Type, dims::SimIdx...)   = similar(a, T, dims)
 similar(   a::AbstractArray, T::Type, dims::DimsInteger) = similar(a, T, convert(Dims, dims))
-similar(   a::AbstractArray, T::Type, dims::Dims)        = Array{T}(dims)
+# similar creates an Array by default
+similar(   a::AbstractArray, T::Type, dims::Dims)        = Array(T, dims)
 
 ## from general iterable to any array
 

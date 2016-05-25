@@ -157,15 +157,18 @@ Methods to implement                                                            
 :func:`setindex!(A, v, I::Vararg{Int, N}) <setindex!>`                                                             (if ``LinearSlow``, where ``N = ndims(A)``) N-dimensional scalar indexed assignment
 **Optional methods**                                                  **Default definition**                       **Brief description**
 :func:`Base.linearindexing(::Type) <Base.linearindexing>`             ``Base.LinearSlow()``                        Returns either ``Base.LinearFast()`` or ``Base.LinearSlow()``. See the description below.
-:func:`indices(A, d) <indices>`                                       ``1:size(A, d)``                             Returns the range of valid indices along dimension ``d``
 :func:`getindex(A, I...) <getindex>`                                  defined in terms of scalar :func:`getindex`  :ref:`Multidimensional and nonscalar indexing <man-array-indexing>`
 :func:`setindex!(A, I...) <setindex!>`                                defined in terms of scalar :func:`setindex!` :ref:`Multidimensional and nonscalar indexed assignment <man-array-indexing>`
 :func:`start`/:func:`next`/:func:`done`                               defined in terms of scalar :func:`getindex`  Iteration
 :func:`length(A) <length>`                                            ``prod(size(A))``                            Number of elements
-:func:`similar(A) <similar>`                                          ``similar(A, eltype(A), size(A))``        Return a mutable array with the same shape and element type
-:func:`similar(A, ::Type{S}) <similar>`                               ``similar(A, S, size(A))``                Return a mutable array with the same shape and the specified element type
+:func:`similar(A) <similar>`                                          ``similar(A, eltype(A), size(A))``           Return a mutable array with the same shape and element type
+:func:`similar(A, ::Type{S}) <similar>`                               ``similar(A, S, size(A))``                   Return a mutable array with the same shape and the specified element type
 :func:`similar(A, dims::NTuple{Int}) <similar>`                       ``similar(A, eltype(A), dims)``              Return a mutable array with the same element type and size `dims`
-:func:`similar(A, ::Type{S}, dims::NTuple{Int}) <similar>`            ``Array(S, dims)``                           Return a mutable array with the specified element type and size
+:func:`similar(A, ::Type{S}, dims::NTuple{Int}) <similar>`            ``Array{S}(dims)``                           Return a mutable array with the specified element type and size
+**Non-traditional indices**                                           **Default definition**                       **Brief description**
+:func:`indices(A, d) <indices>`                                       ``1:size(A, d)``                             Return the range of valid indices along dimension ``d``
+:func:`Base.similar(A, ::Type{S}, inds::NTuple{Ind}) <similar>`       ``similar(A, S, map(dimlength, inds))``      Return a mutable array with the specified indices ``inds`` (see below for discussion of ``Ind``)
+:func:`Base.index_shape_dim <index_shape_dim>`                        See source                                   Return valid ``Ind`` for indexing along dimension(s)
 ===================================================================== ============================================ =======================================================================================
 
 If a type is defined as a subtype of ``AbstractArray``, it inherits a very large set of rich behaviors including iteration and multidimensional indexing built on top of single-element access.  See the :ref:`arrays manual page <man-arrays>` and :ref:`standard library section <stdlib-arrays>` for more supported methods.
@@ -284,3 +287,30 @@ In addition to all the iterable and indexable methods from above, these types ca
 
     julia> dot(A[:,1],A[:,2])
     32.0
+
+If you are defining an array type that allows non-traditional indexing
+(indices that start at something other than 1), you should specialize
+``indices``.  You should also specialize ``similar`` so that the
+``dims`` argument (ordinarily a ``Dims`` size-tuple) can be a mixture
+of ``Integer`` and ``UnitRange`` objects; the ``Integer`` entries
+imply that the indexing starts from 1, whereas the dimensions encoded
+with ``UnitRange`` may have arbitrary starting index. Finally, to
+support constructs like ``A[I]``, where ``I`` has non-traditional
+indexing, you should specialize ``Base.index_shape_dim``. The general
+signature of this function is
+
+    Base.index_shape_dim(A, dim, i, I...)
+
+and it should compute the shape of the result for indexing with ``i``
+along dimension ``dim``, then call itself recursively for the
+remaining dimensions.  In general you may need several specializations
+for different types.  Here are some of the fallback definitions for
+traditional (1-based) indexing:
+
+    Base.index_shape_dim(A, dim, i::Colon, I...) = (size(A, dim), Base.index_shape_dim(A, dim+1, I...)...)
+    Base.index_shape_dim(A, dim, i::AbstractArray{Bool}, I...) = (sum(i), Base.index_shape_dim(A, dim+1, I...)...)
+    Base.index_shape_dim(A, dim, i::AbstractArray, I...) = (size(i)..., Base.index_shape_dim(A, dim+1, I...)...)
+
+For a given dimension, you can either return scalar(s) (indicating
+traditional indexing along this dimension) or ``UnitRange``(s)
+(indicating nontraditional indexing).
