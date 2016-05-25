@@ -130,7 +130,7 @@ Library improvements
 
   * `cov` and `cor` don't use keyword arguments anymore and are therefore now type stable ([#13465]).
 
-  * Linear algebra:
+  * Arrays and linear algebra:
 
     * All dimensions indexed by scalars are now dropped, whereas previously only
       trailing scalar dimensions would be omitted from the result ([#13612]).
