@@ -105,6 +105,10 @@
 #if defined(_CPU_ARM_) || defined(_CPU_AARCH64_)
 #  include <llvm/IR/InlineAsm.h>
 #endif
+#if defined(USE_POLLY)
+#include <polly/RegisterPasses.h>
+#include <polly/ScopDetection.h>
+#endif
 
 using namespace llvm;
 
@@ -4161,6 +4165,12 @@ static std::unique_ptr<Module> emit_function(jl_lambda_info_t *lam, jl_llvm_func
     f->setHasUWTable(); // force NeedsWinEH
 #endif
 
+#ifdef USE_POLLY
+    if (!has_meta(code, polly_sym)) {
+        f->addFnAttr(polly::PollySkipFnAttr);
+    }
+#endif
+
 #ifdef JL_DEBUG_BUILD
     f->addFnAttr(Attribute::StackProtectReq);
 #endif
@@ -5674,6 +5684,12 @@ extern "C" void jl_init_codegen(void)
 #ifndef LLVM34
     // this option disables LLVM's signal handlers
     llvm::DisablePrettyStackTrace = true;
+#endif
+
+#ifdef USE_POLLY
+    PassRegistry &Registry = *PassRegistry::getPassRegistry();
+    polly::initializePollyPasses(Registry);
+    initializeAnalysis(Registry);
 #endif
 
     InitializeNativeTarget();

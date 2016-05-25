@@ -1421,6 +1421,7 @@ export
     @simd,
     @inline,
     @noinline,
+    @polly,
 
     @assert,
     @enum,

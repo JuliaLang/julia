@@ -37,10 +37,17 @@ SRCS := \
 	simplevector APInt-C runtime_intrinsics runtime_ccall \
 	threadgroup threading stackwalk gc gc-debug gc-pages safepoint
 
+LLVMLINK :=
+
 ifeq ($(JULIACODEGEN),LLVM)
 SRCS += codegen disasm debuginfo llvm-simdloop llvm-gcroot
 FLAGS += -I$(shell $(LLVM_CONFIG_HOST) --includedir)
 LLVM_LIBS := all
+ifeq ($(USE_POLLY),1)
+LLVMLINK += -lPolly -lPollyISL
+FLAGS += -I$(shell $(LLVM_CONFIG_HOST) --src-root)/tools/polly/include
+FLAGS += -DUSE_POLLY
+endif
 else
 SRCS += anticodegen
 LLVM_LIBS := support
@@ -51,12 +58,12 @@ HEADERS := $(addprefix $(SRCDIR)/,julia.h julia_threads.h julia_internal.h optio
 # In LLVM < 3.4, --ldflags includes both options and libraries, so use it both before and after --libs
 # In LLVM >= 3.4, --ldflags has only options, and --system-libs has the libraries.
 ifneq ($(USE_LLVM_SHLIB),1)
-LLVMLINK := $(shell $(LLVM_CONFIG_HOST) --ldflags) $(shell $(LLVM_CONFIG_HOST) --libs $(LLVM_LIBS)) $(shell $(LLVM_CONFIG_HOST) --ldflags) $(shell $(LLVM_CONFIG_HOST) --system-libs 2> /dev/null)
+LLVMLINK += $(shell $(LLVM_CONFIG_HOST) --ldflags) $(shell $(LLVM_CONFIG_HOST) --libs $(LLVM_LIBS)) $(shell $(LLVM_CONFIG_HOST) --ldflags) $(shell $(LLVM_CONFIG_HOST) --system-libs 2> /dev/null)
 else
 ifeq ($(LLVM_USE_CMAKE),1)
-LLVMLINK := $(shell $(LLVM_CONFIG_HOST) --ldflags) -lLLVM
+LLVMLINK += $(shell $(LLVM_CONFIG_HOST) --ldflags) -lLLVM
 else
-LLVMLINK := $(shell $(LLVM_CONFIG_HOST) --ldflags) -lLLVM-$(shell $(LLVM_CONFIG_HOST) --version)
+LLVMLINK += $(shell $(LLVM_CONFIG_HOST) --ldflags) -lLLVM-$(shell $(LLVM_CONFIG_HOST) --version)
 endif
 FLAGS += -DLLVM_SHLIB
 endif

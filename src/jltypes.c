@@ -3786,6 +3786,7 @@ void jl_init_types(void)
     slot_sym = jl_symbol("slot");
     static_parameter_sym = jl_symbol("static_parameter");
     compiler_temp_sym = jl_symbol("#temp#");
+    polly_sym = jl_symbol("polly");
 
     tttvar = jl_new_typevar(jl_symbol("T"),
                                   (jl_value_t*)jl_bottom_type,

@@ -71,6 +71,13 @@ macro propagate_inbounds(ex)
     end
 end
 
+"""
+Tells the compiler to apply the polyhedral optimizer Polly to a function.
+"""
+macro polly(ex)
+    esc(isa(ex, Expr) ? pushmeta!(ex, :polly) : ex)
+end
+
 ## some macro utilities ##
 
 find_vars(e) = find_vars(e, [])
