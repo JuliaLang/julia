@@ -2955,7 +2955,7 @@ f10978(T::TupleType10978) = isa(T, TupleType10978)
 @test f10978(Tuple{Int})
 
 # issue #10995
-#typealias TupleType{T<:Tuple} Type{T};
+#typealias TupleType{T<:Tuple} Type{T}
 f10995(::Any) = (while false; end; nothing)
 f10995(T::TupleType10978) = (while false; end; @assert isa(T, TupleType10978))
 g10995(x) = f10995(typeof(x))

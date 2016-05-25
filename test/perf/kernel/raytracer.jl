@@ -131,7 +131,7 @@ function Raytracer(levels, n, ss)
                 for dy in 0:1:(ss-1)
                     d = Vec(x+dx*1./ss-n/2., y+dy*1./ss-n/2., n*1.0)
                     ray = Ray(Vec(0., 0., -4.0), unitize(d))
-                    g += ray_trace(light, ray, scene);
+                    g += ray_trace(light, ray, scene)
                 end
             end
             # write(f, trunc(UInt8, 0.5 + 255. * g / (ss*ss)))
