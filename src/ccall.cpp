@@ -876,7 +876,6 @@ static std::string generate_func_sig(
     size_t nargt = jl_svec_len(tt);
     assert(rt && !jl_is_abstract_ref_type(rt));
 
-    AttrBuilder retattrs;
     std::vector<AttrBuilder> paramattrs;
     AbiState abi = default_abi_state;
     sret = 0;
@@ -885,7 +884,7 @@ static std::string generate_func_sig(
         *prt = *lrt = T_void;
     }
     else {
-        *prt = preferred_llvm_type(rt, true);
+        *prt = sret ? NULL : preferred_llvm_type(rt, true);
         if (*prt == NULL)
             *prt = *lrt;
 
@@ -895,6 +894,7 @@ static std::string generate_func_sig(
 #if !defined(_OS_WINDOWS_) || defined(LLVM35) // llvm used to use the old mingw ABI, skipping this marking works around that difference
             paramattrs[0].addAttribute(Attribute::StructRet);
 #endif
+            paramattrs[0].addAttribute(Attribute::NoAlias);
             fargt_sig.push_back(PointerType::get(*prt, 0));
             sret = 1;
         }
@@ -953,14 +953,8 @@ static std::string generate_func_sig(
             needPassByRef(&abi, tti, &byRef, &inReg);
         }
 
-        Type *pat = preferred_llvm_type(tti, false);
-        if (pat != NULL) {
-            assert(!byRef); // it is an error for an ABI to specify a preferred type for a pointer arg
-        }
-        else if (byRef) {
-            pat = PointerType::get(t, 0);
-        }
-        else {
+        Type *pat = byRef ? PointerType::get(t, 0) : preferred_llvm_type(tti, false);
+        if (pat == NULL) {
             pat = t;
         }
 
@@ -992,10 +986,6 @@ static std::string generate_func_sig(
             }
             i++;
         } while (current_isVa && i < nargs); // if is this is the vararg, loop to the end
-    }
-
-    if (retattrs.hasAttributes()) {
-        attributes = AttributeSet::get(jl_LLVMContext, AttributeSet::ReturnIndex, retattrs);
     }
 
     for (i = 0; i < nargs + sret; ++i) {
