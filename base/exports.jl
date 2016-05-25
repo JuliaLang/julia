@@ -491,6 +491,7 @@ export
     broadcast_setindex!,
     cat,
     checkbounds,
+    checkindex,
     circshift,
     clamp!,
     colon,
