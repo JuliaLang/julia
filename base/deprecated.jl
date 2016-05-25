@@ -488,16 +488,6 @@ end
     end
 )
 
-if sizeof(Cwchar_t) == 2
-    @deprecate_binding WString UTF16String
-    @deprecate_binding wstring utf16
-    utf16(s::Cwstring) = utf16(convert(Ptr{Cwchar_t}, s))
-elseif sizeof(Cwchar_t) == 4
-    @deprecate_binding WString UTF32String
-    @deprecate_binding wstring utf32
-    utf32(s::Cwstring) = utf32(convert(Ptr{Cwchar_t}, s))
-end
-
 @deprecate ==(x::Char, y::Integer) UInt32(x) == y
 @deprecate ==(x::Integer, y::Char) x == UInt32(y)
 @deprecate isless(x::Char, y::Integer) UInt32(x) < y
