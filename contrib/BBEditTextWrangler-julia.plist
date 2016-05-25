@@ -75,7 +75,6 @@
             <string>@ip_str</string>
             <string>@label</string>
             <string>@less</string>
-            <string>@math_const</string>
             <string>@MIME</string>
             <string>@MIME_str</string>
             <string>@noinline</string>
@@ -216,7 +215,6 @@
             <string>bkfact</string>
             <string>blas_set_num_threads</string>
             <string>blkdiag</string>
-            <string>bool</string>
             <string>break</string>
             <string>brfft</string>
             <string>broadcast!</string>
@@ -232,7 +230,6 @@
             <string>c_malloc</string>
             <string>c_realloc</string>
             <string>call</string>
-            <string>cartesianmap</string>
             <string>cat</string>
             <string>catalan</string>
             <string>catch</string>
@@ -244,7 +241,6 @@
             <string>cell</string>
             <string>cfunction</string>
             <string>cglobal</string>
-            <string>char</string>
             <string>charwidth</string>
             <string>checkbounds</string>
             <string>chmod</string>
@@ -270,9 +266,6 @@
             <string>code_warntype</string>
             <string>collect</string>
             <string>colon</string>
-            <string>complex128</string>
-            <string>complex32</string>
-            <string>complex64</string>
             <string>complex</string>
             <string>cond</string>
             <string>condskeel</string>
@@ -457,14 +450,7 @@
             <string>fldmod</string>
             <string>flipbits!</string>
             <string>flipdim</string>
-            <string>fliplr</string>
             <string>flipsign</string>
-            <string>flipud</string>
-            <string>float16</string>
-            <string>float32</string>
-            <string>float32_isvalid</string>
-            <string>float64</string>
-            <string>float64_isvalid</string>
             <string>float</string>
             <string>floor</string>
             <string>flush</string>
@@ -480,7 +466,6 @@
             <string>functionloc</string>
             <string>gamma</string>
             <string>gc</string>
-            <string>gc_disable</string>
             <string>gc_enable</string>
             <string>gcd</string>
             <string>gcdx</string>
@@ -554,13 +539,6 @@
             <string>init_worker</string>
             <string>insert!</string>
             <string>instances</string>
-            <string>int128</string>
-            <string>int16</string>
-            <string>int32</string>
-            <string>int64</string>
-            <string>int8</string>
-            <string>int</string>
-            <string>integer</string>
             <string>interrupt</string>
             <string>intersect!</string>
             <string>intersect</string>
@@ -595,7 +573,6 @@
             <string>isempty</string>
             <string>isequal</string>
             <string>iseven</string>
-            <string>isexecutable</string>
             <string>isfifo</string>
             <string>isfile</string>
             <string>isfinite</string>
@@ -672,7 +649,6 @@
             <string>lexless</string>
             <string>lfact</string>
             <string>lgamma</string>
-            <string>linrange</string>
             <string>linreg</string>
             <string>linspace</string>
             <string>listen</string>
@@ -739,8 +715,6 @@
             <string>mktemp</string>
             <string>mktempdir</string>
             <string>mmap</string>
-            <string>mmap_array</string>
-            <string>mmap_bitarray</string>
             <string>mod1</string>
             <string>mod2pi</string>
             <string>mod</string>
@@ -795,15 +769,12 @@
             <string>parent</string>
             <string>parentindexes</string>
             <string>parse</string>
-            <string>parsefloat</string>
-            <string>parseint</string>
             <string>peakflops</string>
             <string>permute!</string>
             <string>permutedims!</string>
             <string>permutedims</string>
             <string>pi</string>
             <string>pinv</string>
-            <string>pipe</string>
             <string>pipeline</string>
             <string>plan_bfft!</string>
             <string>plan_bfft</string>
@@ -919,7 +890,6 @@
             <string>reinterpret</string>
             <string>reload</string>
             <string>relpath</string>
-            <string>rem1</string>
             <string>rem</string>
             <string>remotecall</string>
             <string>remotecall_fetch</string>
@@ -1046,7 +1016,6 @@
             <string>srand</string>
             <string>start</string>
             <string>start_reading</string>
-            <string>start_timer</string>
             <string>start_watching</string>
             <string>startswith</string>
             <string>stat</string>
@@ -1054,7 +1023,6 @@
             <string>stdm</string>
             <string>step</string>
             <string>stop_reading</string>
-            <string>stop_timer</string>
             <string>strerror</string>
             <string>strftime</string>
             <string>stride</string>
@@ -1163,7 +1131,6 @@
             <string>whos</string>
             <string>widemul</string>
             <string>widen</string>
-            <string>with_env</string>
             <string>withenv</string>
             <string>workers</string>
             <string>workspace</string>
@@ -1201,6 +1168,7 @@
         <string>AbstractFloat</string>
         <string>AbstractMatrix</string>
         <string>AbstractRNG</string>
+        <string>AbstractRemoteRef</string>
         <string>AbstractSparseArray</string>
         <string>AbstractSparseMatrix</string>
         <string>AbstractSparseVector</string>
@@ -1313,7 +1281,6 @@
         <string>FFTW</string>
         <string>FileMonitor</string>
         <string>Filter</string>
-        <string>FloatingPoint</string>
         <string>FloatRange</string>
         <string>Function</string>
         <string>GeneralizedSchur</string>
@@ -1405,10 +1372,8 @@
         <string>RegexMatch</string>
         <string>RegexMatchIterator</string>
         <string>RemoteException</string>
-        <string>RemoteRef</string>
         <string>RepString</string>
         <string>RevString</string>
-        <string>RopeString</string>
         <string>RoundDown</string>
         <string>RoundFromZero</string>
         <string>RoundingMode</string>
@@ -1431,7 +1396,6 @@
         <string>SharedArray</string>
         <string>SharedMatrix</string>
         <string>SharedVector</string>
-        <string>SparseMatrix</string>
         <string>SparseMatrixCSC</string>
         <string>SpawnNullStream</string>
         <string>StatStruct</string>
@@ -1477,7 +1441,7 @@
         <string>UInt</string>
         <string>UnicodeError</string>
         <string>UniformScaling</string>
-        <string>UnionType</string>
+        <string>Union</string>
         <string>UnitRange</string>
         <string>UpperTriangular</string>
         <string>UTF16String</string>

@@ -9,11 +9,11 @@
 
 fname = ARGS[1]
 
-io,_ = open(pipe(`strings -n 3 $fname`,
-                 `tr -d "() \t+-"`,
-                 `sort`, `uniq -c`, `sort -g -r`,
-                 `grep -v Main`,  # for some reason Main breaks things
-                 `head -n 315`))  # 63 + 252
+io,_ = open(pipeline(`strings -n 3 $fname`,
+                     `tr -d "() \t+-"`,
+                     `sort`, `uniq -c`, `sort -g -r`,
+                     `grep -v Main`,  # for some reason Main breaks things
+                     `head -n 315`))  # 63 + 252
 
 function outputline(io, line)
     row = split(chomp(line), " ", keep=false)

@@ -884,6 +884,8 @@ function rem1{T<:Real}(x::T, y::T)
     depwarn("`rem1(x,y)` is discontinued, as it cannot be defined consistently for `x==0`. Rewrite the expression using `mod1` instead.", :rem1)
     rem(x-1,y)+1
 end
+rem1(x::Real, y::Real) = rem1(promote(x,y)...)
+export rem1
 
 # Filesystem module updates
 

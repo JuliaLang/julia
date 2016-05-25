@@ -69,7 +69,7 @@ In addition to function names, complete function calls may be entered to see whi
     help> AbstractString
     DataType   : AbstractString
       supertype: Any
-      subtypes : Any[DirectIndexString,RepString,RevString{T<:AbstractString},RopeString,SubString{T<:AbstractString},String]
+      subtypes : Any[DirectIndexString,RepString,RevString{T<:AbstractString},SubString{T<:AbstractString},String]
 
 Help mode can be exited by pressing backspace at the beginning of the line.
 

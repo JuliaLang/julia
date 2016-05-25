@@ -1077,7 +1077,7 @@ static jl_value_t *jl_type_intersect(jl_value_t *a, jl_value_t *b,
     // uses to instantiate its supertype. this tells us what subtype parameter
     // values are implied by the intersected supertype, or that the
     // intersected supertype cannot come from this subtype (in which case
-    // our final answer is Union()).
+    // our final answer is Union{}).
     size_t i;
     // hack: we need type_match to find assignments for all typevars
     int prev_mim = match_intersection_mode;
@@ -1125,7 +1125,7 @@ static jl_value_t *jl_type_intersect(jl_value_t *a, jl_value_t *b,
             if (jl_svecref(env, e) == tp) {
                 elt = jl_type_intersect(elt, jl_svecref(env, e+1),
                                         penv, eqc, invariant);
-                // note: elt might be Union() if "Union()" was the type parameter
+                // note: elt might be Union{} if "Union{}" was the type parameter
                 break;
             }
         }

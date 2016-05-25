@@ -159,7 +159,7 @@ Use naming conventions consistent with Julia's ``base/``
 --------------------------------------------------------
 
 - modules and type names use capitalization and camel case:
-  ``module SparseMatrix``,  ``immutable UnitRange``.
+  ``module SparseArrays``,  ``immutable UnitRange``.
 - functions are lowercase (:func:`maximum`, :func:`convert`) and,
   when readable, with multiple words squashed together (:func:`isequal`, :func:`haskey`).
   When necessary, use underscores as word separators.
