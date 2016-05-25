@@ -713,6 +713,19 @@ hist2d(v::AbstractMatrix) = hist2d(v, sturges(size(v,1)))
 @deprecate(pointer_to_string(p::Ptr{UInt8}, own::Bool=false),
     unsafe_wrap(String, p, own))
 
+function checkbounds(::Type{Bool}, sz::Integer, i)
+    depwarn("checkbounds(Bool, size(A, d), i) is deprecated, use checkindex(Bool, indices(A, d), i).", :checkbounds)
+    checkbounds(Bool, 1:sz, i)
+end
+immutable FakeArray{T,N} <: AbstractArray{T,N}
+    dims::NTuple{N,Int}
+end
+size(A::FakeArray) = A.dims
+function checkbounds{N,T}(::Type{Bool}, sz::NTuple{N,Integer}, I1::T, I...)
+    depwarn("checkbounds(Bool, size(A), I...) is deprecated, use checkbounds(Bool, A, I...).", :checkbounds)
+    checkbounds(Bool, FakeArray(sz), I1, I...)
+end
+
 # During the 0.5 development cycle, do not add any deprecations below this line
 # To be deprecated in 0.6
 
