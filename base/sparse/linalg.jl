@@ -868,13 +868,12 @@ function factorize(A::SparseMatrixCSC)
         elseif istriu(A)
             return UpperTriangular(A)
         end
-        AC = CHOLMOD.Sparse(A)
-        if ishermitian(AC)
+        if ishermitian(A)
             try
-                return cholfact(A)
+                return cholfact(Hermitian(A))
             catch e
                 isa(e, PosDefException) || rethrow(e)
-                return ldltfact(A)
+                return ldltfact(Hermitian(A))
             end
         end
         return lufact(A)
