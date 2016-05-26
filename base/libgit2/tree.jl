@@ -81,7 +81,6 @@ This returns a `GitTreeEntry` that is owned by the `GitTree`.
 You don't have to free it, but you must not use it after the `GitTree` is released.
 """
 function lookup(tree::GitTree, fname::AbstractString)
-    te_ptr_ptr = Ref{Ptr{Void}}(C_NULL)
     res = ccall((:git_tree_entry_byname, :libgit2), Ptr{Void},
                 (Ref{Void}, Cstring), tree.ptr, fname)
     res == C_NULL && return nothing

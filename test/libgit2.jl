@@ -479,7 +479,7 @@ mktempdir() do dir
                 @test startswith(tfcontent, commit_msg1)
 
                 entrs = LibGit2.treewalk(addfile, ht, String[])[]
-                @test length(find(e->e == test_file, entrs)) > 0
+                @test length(find(e->e == test_file, entrs)) == 1
 
             finally
                 finalize(ht)
