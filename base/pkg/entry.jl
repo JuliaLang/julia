@@ -582,8 +582,8 @@ function build!(pkgs::Vector, errs::Dict, seen::Set=Set())
             end
         end
     catch err
-        kill(pobj)
         close(io)
+        isa(err, PkgError) ? wait(pobj) : kill(pobj)
         rethrow(err)
     finally
         isfile(errfile) && Base.rm(errfile)
