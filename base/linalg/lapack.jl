@@ -5,7 +5,7 @@ module LAPACK
 
 const liblapack = Base.liblapack_name
 
-import Base.@blasfunc
+import ..LinAlg.BLAS.@blasfunc
 
 import ..LinAlg: BlasFloat, Char, BlasInt, LAPACKException,
     DimensionMismatch, SingularException, PosDefException, chkstride1, checksquare

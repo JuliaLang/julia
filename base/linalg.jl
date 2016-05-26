@@ -252,8 +252,8 @@ include("linalg/arnoldi.jl")
 
 function __init__()
     try
-        Base.check_blas()
-        if Base.blas_vendor() == :mkl
+        BLAS.check()
+        if BLAS.vendor() == :mkl
             ccall((:MKL_Set_Interface_Layer, Base.libblas_name), Void, (Cint,), USE_BLAS64 ? 1 : 0)
         end
     catch ex
