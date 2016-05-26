@@ -280,6 +280,12 @@ ndigits_mismatch(n) = ndigits(n) != ndigits(BigInt(n))
 @test !any(ndigits_mismatch, 512:999)
 @test !any(ndigits_mismatch, 8192:9999)
 
+# The following should not crash (#16579)
+ndigits(rand(big(-999:999)), rand(63:typemax(Int)))
+ndigits(rand(big(-999:999)), big(2)^rand(2:999))
+
+@test_throws DomainError ndigits(rand(big(-999:999)), rand(typemin(Int):1))
+
 # conversion from float
 @test BigInt(2.0) == BigInt(2.0f0) == BigInt(big(2.0)) == 2
 @test_throws InexactError convert(BigInt, 2.1)
