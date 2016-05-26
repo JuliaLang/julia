@@ -1536,7 +1536,7 @@ expand
 [`gemm!`](:func:`Base.LinAlg.BLAS.gemm!`). By default, if no arguments are specified, it
 multiplies a matrix of size `n x n`, where `n = 2000`. If the underlying BLAS is using
 multiple threads, higher flop rates are realized. The number of BLAS threads can be set with
-`blas_set_num_threads(n)`.
+`BLAS.set_num_threads(n)`.
 
 If the keyword argument `parallel` is set to `true`, `peakflops` is run in parallel on all
 the worker processors. The flop rate of the entire parallel computer is returned. When
