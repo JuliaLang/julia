@@ -63,6 +63,10 @@ the following elements:
 
       reload("Tmp")
       include("tst.jl")
+ 
+For macro developers, reloading the module that defines the macro
+will not cause macro redefinition.  Instead, use the ``workspace()`` command
+to clear out old macro definitions, or else restart the REPL.
 
 Simplify initialization
 ~~~~~~~~~~~~~~~~~~~~~~~
