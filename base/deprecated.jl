@@ -1234,9 +1234,7 @@ export
 
 export OS_NAME
 const OS_NAME =
-    if Sys.KERNEL === :Darwin
-        :OSX
-    elseif Sys.KERNEL === :NT
+    if Sys.KERNEL === :NT
         :Windows
     else
         Sys.KERNEL
