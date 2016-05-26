@@ -25,10 +25,6 @@ length(a::Array) = arraylen(a)
 elsize{T}(a::Array{T}) = isbits(T) ? sizeof(T) : sizeof(Ptr)
 sizeof(a::Array) = elsize(a) * length(a)
 
-strides{T}(a::Array{T,1}) = (1,)
-strides{T}(a::Array{T,2}) = (1, size(a,1))
-strides{T}(a::Array{T,3}) = (1, size(a,1), size(a,1)*size(a,2))
-
 function isassigned{T}(a::Array{T}, i::Int...)
     ii = sub2ind(size(a), i...)
     1 <= ii <= length(a) || return false
