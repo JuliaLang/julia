@@ -107,9 +107,11 @@ ifeq ($(USE_LLVM_SHLIB),1)
 # NOTE: we could also --disable-static here (on the condition we link tools
 #       against libLLVM) but there doesn't seem to be a CMake counterpart option
 LLVM_FLAGS += --enable-shared
-LLVM_CMAKE += -DLLVM_BUILD_LLVM_DYLIB:BOOL=ON -DLLVM_DYLIB_EXPORT_ALL:BOOL=ON
-# NOTE: LLVM_DYLIB_EXPORT_ALL has been removed recently,
-#       and LLVM now defaults to exporting all symbols
+LLVM_CMAKE += -DLLVM_BUILD_LLVM_DYLIB:BOOL=ON
+# NOTE: starting with LLVM 3.8, all symbols are exported
+ifeq ($(LLVM_VER_SHORT),$(filter $(LLVM_VER_SHORT),3.3 3.4 3.5 3.6 3.7))
+LLVM_CMAKE += -DLLVM_DYLIB_EXPORT_ALL:BOOL=ON
+endif
 endif
 ifeq ($(USE_INTEL_JITEVENTS), 1)
 LLVM_FLAGS += --with-intel-jitevents
@@ -200,7 +202,7 @@ LLVM_MFLAGS += OPTIONAL_PARALLEL_DIRS=clang
 else
 # block default building of Clang
 LLVM_MFLAGS += OPTIONAL_PARALLEL_DIRS=
-ifeq ($(LLVM_VER_SHORT),$(filter $(LLVM_VER_SHORT),3.3 3.4 3.5 3.6 3.7 3.8))
+ifeq ($(LLVM_VER_SHORT),$(filter $(LLVM_VER_SHORT),3.3 3.4 3.5 3.6 3.7))
 LLVM_CMAKE += -DLLVM_EXTERNAL_CLANG_BUILD=OFF
 LLVM_CMAKE += -DLLVM_EXTERNAL_COMPILER_RT_BUILD=OFF
 else
@@ -213,7 +215,7 @@ LLVM_MFLAGS += OPTIONAL_DIRS=lldb
 else
 # block default building of lldb
 LLVM_MFLAGS += OPTIONAL_DIRS=
-ifeq ($(LLVM_VER_SHORT),$(filter $(LLVM_VER_SHORT),3.3 3.4 3.5 3.6 3.7 3.8))
+ifeq ($(LLVM_VER_SHORT),$(filter $(LLVM_VER_SHORT),3.3 3.4 3.5 3.6 3.7))
 LLVM_CMAKE += -DLLVM_EXTERNAL_LLDB_BUILD=OFF
 else
 LLVM_CMAKE += -DLLVM_TOOL_LLDB_BUILD=OFF
