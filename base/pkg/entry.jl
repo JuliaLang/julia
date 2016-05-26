@@ -707,8 +707,8 @@ function build!(pkgs::Vector, errs::Dict, seen::Set=Set())
             end
         end
     catch
-        kill(pobj)
         close(io)
+        kill(pobj)
         rethrow()
     finally
         isfile(errfile) && Base.rm(errfile)

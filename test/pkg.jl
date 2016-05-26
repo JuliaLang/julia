@@ -232,8 +232,7 @@ end"""
         end
     end
 
-    # issue # 15948
-    # Non-installed but registered packages cause the SIGTERM issue consistently.
+    # issue #15948
     let package = "Example"
         Pkg.rm(package)  # Remove package if installed
         @test Pkg.installed(package) == nothing  # Registered with METADATA but not installed
