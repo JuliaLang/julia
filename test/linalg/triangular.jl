@@ -225,6 +225,7 @@ for elty1 in (Float32, Float64, BigFloat, Complex64, Complex128, Complex{BigFloa
 
         # Determinant
         @test_approx_eq_eps det(A1) det(lufact(full(A1))) sqrt(eps(real(float(one(elty1)))))*n*n
+        @test_approx_eq_eps logdet(A1) logdet(lufact(full(A1))) sqrt(eps(real(float(one(elty1)))))*n*n
 
         # Matrix square root
         @test sqrtm(A1) |> t -> t*t ≈ A1

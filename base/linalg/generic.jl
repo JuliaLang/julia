@@ -563,8 +563,11 @@ function det{T}(A::AbstractMatrix{T})
 end
 det(x::Number) = x
 
-logdet(A::AbstractMatrix) = logdet(lufact(A))
 logabsdet(A::AbstractMatrix) = logabsdet(lufact(A))
+function logdet(A::AbstractMatrix)
+    d,s = logabsdet(A)
+    return d + log(s)
+end
 
 # isapprox: approximate equality of arrays [like isapprox(Number,Number)]
 function isapprox{T<:Number,S<:Number}(x::AbstractArray{T}, y::AbstractArray{S}; rtol::Real=Base.rtoldefault(T,S), atol::Real=0, norm::Function=vecnorm)
