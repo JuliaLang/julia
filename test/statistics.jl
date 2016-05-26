@@ -324,6 +324,11 @@ end
 @test quantile(0.0:100.0, 0.0:0.1:1.0, sorted=true) == collect(0.0:10.0:100.0)
 @test quantile(100f0:-1f0:0.0, 0.0:0.1:1.0) == collect(0f0:10f0:100f0)
 
+@test quantile([0,1],1e-18) == 1e-18
+
+# StatsBase issue 164
+y = [0.40003674665581906,0.4085630862624367,0.41662034698690303,0.41662034698690303,0.42189053966652057,0.42189053966652057,0.42553514344518345,0.43985732442991354]
+@test issorted(quantile(y, linspace(0.01, 0.99, 17)))
 
 # test invalid hist nbins argument (#9999)
 @test_throws ArgumentError hist(Int[], -1)
