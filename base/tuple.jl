@@ -172,10 +172,7 @@ end
 isempty(x::Tuple{}) = true
 isempty(x::Tuple) = false
 
-revargs() = ()
-revargs(x, r...) = (revargs(r...)..., x)
-
-reverse(t::Tuple) = revargs(t...)
+reverse(t::Tuple) = tuple(reverse(collect(t))...)
 
 ## specialized reduction ##
 
