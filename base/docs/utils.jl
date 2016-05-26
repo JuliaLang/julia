@@ -284,7 +284,7 @@ function print_joined_cols(io::IO, ss, delim = "", last = delim; cols = displays
         total += length(ss[i])
         total + max(i-2,0)*length(delim) + (i>1?1:0)*length(last) > cols && (i-=1; break)
     end
-    print_joined(io, ss[1:i], delim, last)
+    join(io, ss[1:i], delim, last)
 end
 
 print_joined_cols(args...; cols = displaysize(STDOUT)[2]) = print_joined_cols(STDOUT, args...; cols=cols)

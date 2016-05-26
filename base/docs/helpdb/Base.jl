@@ -784,12 +784,12 @@ Equivalent to `stat(file).mode`
 filemode
 
 """
-    print_joined(io, items, delim, [last])
+    join(io, items, delim, [last])
 
 Print elements of `items` to `io` with `delim` between them. If `last` is specified, it is
 used as the final delimiter instead of `delim`.
 """
-print_joined
+join(io, items, delim, last)
 
 """
     lfact(x)
@@ -5013,12 +5013,12 @@ process as a worker using TCP/IP sockets for transport.
 init_worker
 
 """
-    print_escaped(io, str::AbstractString, esc::AbstractString)
+    escape_string(io, str::AbstractString, esc::AbstractString)
 
 General escaping of traditional C and Unicode escape sequences, plus any characters in esc
 are also escaped (with a backslash).
 """
-print_escaped
+escape_string(io, str, esc)
 
 """
     typejoin(T, S)
@@ -6669,7 +6669,7 @@ two strings. For example
 
 `strings` can be any iterable over elements `x` which are convertible to strings via `print(io::IOBuffer, x)`.
 """
-join
+join(strings, delim, last)
 
 """
     linreg(x, y) -> a, b
@@ -7138,11 +7138,11 @@ implemented.) Use [`vecnorm`](:func:`vecnorm`) to compute the Frobenius norm.
 norm
 
 """
-    print_unescaped(io, s::AbstractString)
+    unescape_string(io, s::AbstractString)
 
-General unescaping of traditional C and Unicode escape sequences. Reverse of [`print_escaped`](:func:`print_escaped`).
+General unescaping of traditional C and Unicode escape sequences. Reverse of [`escape_string`](:func:`escape_string`).
 """
-print_unescaped
+unescape_string(io, s)
 
 """
     digits!(array, n, [base])
@@ -8678,10 +8678,9 @@ A_ldiv_Bc
 """
     escape_string(str::AbstractString) -> AbstractString
 
-General escaping of traditional C and Unicode escape sequences. See
-[`print_escaped`](:func:`print_escaped`) for more general escaping.
+General escaping of traditional C and Unicode escape sequences.
 """
-escape_string
+escape_string(str)
 
 """
     significand(x)
@@ -9187,9 +9186,9 @@ map!(f,destination,collection...)
     unescape_string(s::AbstractString) -> AbstractString
 
 General unescaping of traditional C and Unicode escape sequences. Reverse of
-[`escape_string`](:func:`escape_string`). See also [`print_unescaped`](:func:`print_unescaped`).
+[`escape_string`](:func:`escape_string`). See also [`unescape_string`](:func:`unescape_string`).
 """
-unescape_string
+unescape_string(s)
 
 """
     redirect_stdout()
