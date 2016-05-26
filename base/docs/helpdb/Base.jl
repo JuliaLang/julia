@@ -1212,13 +1212,6 @@ Returns a tuple `(filename,line)` giving the location of a `Method` definition.
 functionloc(m)
 
 """
-    stride(A, k)
-
-Returns the distance in memory (in number of elements) between adjacent elements in dimension `k`.
-"""
-stride
-
-"""
     last(coll)
 
 Get the last element of an ordered collection, if it can be computed in O(1) time. This is
@@ -4187,13 +4180,6 @@ broadcast!
 Compute the cross product of two 3-vectors.
 """
 cross
-
-"""
-    strides(A)
-
-Returns a tuple of the memory strides in each dimension.
-"""
-strides
 
 """
     keys(collection)
