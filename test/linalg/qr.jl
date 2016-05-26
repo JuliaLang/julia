@@ -48,6 +48,9 @@ debug && println("QR decomposition (without pivoting)")
                 @test_throws KeyError qra[:Z]
                 @test_approx_eq q'*full(q, thin = false) eye(n)
                 @test_approx_eq q*full(q, thin = false)' eye(n)
+                @test_approx_eq q'*eye(n)' full(q, thin = false)'
+                @test_approx_eq full(q, thin = false)'q eye(n)
+                @test_approx_eq eye(n)'q' full(q, thin = false)'
                 @test_approx_eq q*r a
                 @test_approx_eq_eps a*(qra\b) b 3000ε
                 @test_approx_eq full(qra) a
