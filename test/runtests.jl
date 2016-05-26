@@ -1183,3 +1183,6 @@ if VERSION < v"0.5.0-dev+4267"
 else
     @test Compat.KERNEL == Sys.KERNEL
 end
+
+io = IOBuffer()
+@test @compat(get(io, :limit, false)) == false
