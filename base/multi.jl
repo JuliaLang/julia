@@ -1144,7 +1144,7 @@ function handle_msg(msg::JoinCompleteMsg, r_stream, w_stream, version)
 end
 
 function disable_threaded_libs()
-    blas_set_num_threads(1)
+    BLAS.set_num_threads(1)
 end
 
 worker_timeout() = parse(Float64, get(ENV, "JULIA_WORKER_TIMEOUT", "60.0"))

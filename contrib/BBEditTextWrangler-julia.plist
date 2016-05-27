@@ -216,7 +216,6 @@
             <string>bitunpack</string>
             <string>bkfact!</string>
             <string>bkfact</string>
-            <string>blas_set_num_threads</string>
             <string>blkdiag</string>
             <string>bool</string>
             <string>break</string>
