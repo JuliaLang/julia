@@ -105,13 +105,13 @@ function show(io::IO, m::Method; kwtype::Nullable{DataType}=Nullable{DataType}()
         show_delim_array(io, tv, '{', ',', '}', false)
     end
     print(io, "(")
-    print_joined(io, [isempty(d[2]) ? d[1] : d[1]*"::"*d[2] for d in decls[2:end]],
+    join(io, [isempty(d[2]) ? d[1] : d[1]*"::"*d[2] for d in decls[2:end]],
                  ", ", ", ")
     if !isnull(kwtype)
         kwargs = kwarg_decl(m.sig, get(kwtype))
         if !isempty(kwargs)
             print(io, "; ")
-            print_joined(io, kwargs, ", ", ", ")
+            join(io, kwargs, ", ", ", ")
         end
     end
     print(io, ")")
@@ -227,13 +227,13 @@ function writemime(io::IO, ::MIME"text/html", m::Method; kwtype::Nullable{DataTy
         print(io,"</i>")
     end
     print(io, "(")
-    print_joined(io, [isempty(d[2]) ? d[1] : d[1]*"::<b>"*d[2]*"</b>"
+    join(io, [isempty(d[2]) ? d[1] : d[1]*"::<b>"*d[2]*"</b>"
                       for d in decls[2:end]], ", ", ", ")
     if !isnull(kwtype)
         kwargs = kwarg_decl(m.sig, get(kwtype))
         if !isempty(kwargs)
             print(io, "; <i>")
-            print_joined(io, kwargs, ", ", ", ")
+            join(io, kwargs, ", ", ", ")
             print(io, "</i>")
         end
     end

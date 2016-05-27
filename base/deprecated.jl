@@ -1268,6 +1268,10 @@ end
 
 @deprecate blas_set_num_threads BLAS.set_num_threads
 
+@deprecate print_escaped escape_string
+@deprecate print_unescaped unescape_string
+@deprecate print_joined join
+
 # During the 0.5 development cycle, do not add any deprecations below this line
 # To be deprecated in 0.6
 

@@ -36,7 +36,7 @@ function VersionSet(versions::Vector{VersionNumber})
 end
 VersionSet(versions::VersionNumber...) = VersionSet(VersionNumber[versions...])
 
-show(io::IO, s::VersionSet) = print_joined(io, s.intervals, " ∪ ")
+show(io::IO, s::VersionSet) = join(io, s.intervals, " ∪ ")
 isempty(s::VersionSet) = all(i->isempty(i), s.intervals)
 in(v::VersionNumber, s::VersionSet) = any(i->in(v,i), s.intervals)
 function intersect(A::VersionSet, B::VersionSet)

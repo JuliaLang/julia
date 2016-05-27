@@ -451,13 +451,13 @@
 
    .. Docstring generated from Julia source
 
-   General escaping of traditional C and Unicode escape sequences. See :func:`print_escaped` for more general escaping.
+   General escaping of traditional C and Unicode escape sequences.
 
 .. function:: unescape_string(s::AbstractString) -> AbstractString
 
    .. Docstring generated from Julia source
 
-   General unescaping of traditional C and Unicode escape sequences. Reverse of :func:`escape_string`\ . See also :func:`print_unescaped`\ .
+   General unescaping of traditional C and Unicode escape sequences. Reverse of :func:`escape_string`\ . See also :func:`unescape_string`\ .
 
 .. function:: utf16(s)
 

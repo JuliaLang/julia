@@ -54,11 +54,11 @@ function print(io::IO, v::VersionNumber)
     print(io, v.patch)
     if !isempty(v.prerelease)
         print(io, '-')
-        print_joined(io, v.prerelease,'.')
+        join(io, v.prerelease,'.')
     end
     if !isempty(v.build)
         print(io, '+')
-        print_joined(io, v.build,'.')
+        join(io, v.build,'.')
     end
 end
 show(io::IO, v::VersionNumber) = print(io, "v\"", v, "\"")
