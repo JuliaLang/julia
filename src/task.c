@@ -136,7 +136,7 @@ extern size_t jl_page_size;
 jl_datatype_t *jl_task_type;
 
 #ifdef COPY_STACKS
-#if (defined(_CPU_X86_64_) || defined(_CPU_X86_)) && !defined(_COMPILER_MICROSOFT_)
+#if (defined(_CPU_X86_64_) || defined(_CPU_X86_) || defined(_CPU_AARCH64_)) && !defined(_COMPILER_MICROSOFT_)
 #define ASM_COPY_STACKS
 #endif
 
@@ -324,6 +324,7 @@ static void ctx_switch(jl_tls_states_t *ptls, jl_task_t *t, jl_jmp_buf *where)
         }
         else {
 #ifdef ASM_COPY_STACKS
+            // Start the task without `setjmp`
             void *stackbase = ptls->stackbase;
 #ifdef _CPU_X86_64_
 #ifdef _OS_WINDOWS_
@@ -332,16 +333,23 @@ static void ctx_switch(jl_tls_states_t *ptls, jl_task_t *t, jl_jmp_buf *where)
             asm(" movq %0, %%rsp;\n"
                 " xorq %%rbp, %%rbp;\n"
                 " push %%rbp;\n" // instead of RSP
-                " jmp %P1;\n" // call stack_task with fake stack frame
+                " jmp %P1;\n" // call `start_task` with fake stack frame
                 " ud2"
                 : : "r"(stackbase), "i"(&start_task) : "memory" );
 #elif defined(_CPU_X86_)
             asm(" movl %0, %%esp;\n"
                 " xorl %%ebp, %%ebp;\n"
                 " push %%ebp;\n" // instead of ESP
-                " jmp %P1;\n" // call stack_task with fake stack frame
+                " jmp %P1;\n" // call `start_task` with fake stack frame
                 " ud2"
                 : : "r" (stackbase), ""(&start_task) : "memory" );
+#elif defined(_CPU_AARCH64_)
+            asm(" mov sp, %0;\n"
+                " mov x29, xzr;\n" // Clear link register (x29) and frame pointer
+                " mov x30, xzr;\n" // (x30) to terminate unwinder.
+                " br %1;\n" // call `start_task` with fake stack frame
+                " brk #0x1" // abort
+                : : "r" (stackbase), "r"(&start_task) : "memory" );
 #else
 #error ASM_COPY_STACKS not supported on this cpu architecture
 #endif
