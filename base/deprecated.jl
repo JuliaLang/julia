@@ -934,6 +934,16 @@ for deprecatedfunc in [:combinations, :factorial, :prevprod, :levicivita,
     end
 end
 
+# Primes functions that have been moved out of base (#16481)
+for deprecatedfunc in [:isprime, :primes, :primesmask, :factor]
+    @eval begin
+        $deprecatedfunc(args...) = error(string($deprecatedfunc, args,
+            " has been moved to the package Primes.jl.\n",
+            "Run Pkg.add(\"Primes\") to install Primes on Julia v0.5-"))
+        export $deprecatedfunc
+    end
+end
+
 #14335
 @deprecate super(T::DataType) supertype(T)
 
