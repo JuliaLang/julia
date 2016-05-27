@@ -722,8 +722,8 @@ Associative Collections
 To explicitly specify types use the syntax ``Dict{KeyType,ValueType}(...)``.
 For example, ``Dict{String,Int32}("A"=>1, "B"=>2)``.
 
-As with :obj:`Array`\ s, :obj:`Dict`\ s may be created with comprehensions. For example,
-``[i => f(i) for i = 1:10]``.
+:obj:`Dict`\ s may also be created with generators. For example,
+``Dict(i => f(i) for i = 1:10)``.
 
 Given a dictionary ``D``, the syntax ``D[x]`` returns the value of key ``x`` (if it exists) or throws an error, and ``D[x] = y`` stores the key-value pair ``x => y`` in ``D`` (replacing any existing value for the key ``x``).  Multiple arguments to ``D[...]`` are converted to tuples; for example, the syntax ``D[x,y]``  is equivalent to ``D[(x,y)]``, i.e. it refers to the value keyed by the tuple ``(x,y)``.
 
@@ -967,18 +967,6 @@ Set-Like Collections
    .. Docstring generated from Julia source
 
    Construct the symmetric difference of sets ``s1`` and ``s2``\ , storing the result in ``s1``\ .
-
-.. function:: complement(s)
-
-   .. Docstring generated from Julia source
-
-   Returns the set-complement of :obj:`IntSet` ``s``\ .
-
-.. function:: complement!(s)
-
-   .. Docstring generated from Julia source
-
-   Mutates :obj:`IntSet` ``s`` into its set-complement.
 
 .. function:: intersect!(s1, s2)
 

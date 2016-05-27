@@ -49,7 +49,7 @@ type Interface
         np = length(pkgs)
 
         # generate pdict
-        pdict = (String=>Int)[ pkgs[i] => i for i = 1:np ]
+        pdict = Dict{String,Int}(pkgs[i] => i for i = 1:np)
 
         # generate spp and pvers
         spp = Array{Int}(np)

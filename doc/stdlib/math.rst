@@ -194,12 +194,6 @@ Mathematical Operators
 
    Return ``(fld1(x,y), mod1(x,y))``\ .
 
-.. function:: rem1(x, y)
-
-   .. Docstring generated from Julia source
-
-   (Deprecated.) Remainder after division, returning in the range ``(0, y]``\ .
-
 .. _//:
 .. function:: //(num, den)
 

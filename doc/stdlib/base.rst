@@ -577,7 +577,7 @@ Types
 
    .. Docstring generated from Julia source
 
-   Determine whether ``T`` is a concrete type that can have instances, meaning its only subtypes are itself and ``None`` (but ``T`` itself is not ``None``\ ).
+   Determine whether ``T`` is a concrete type that can have instances, meaning its only subtypes are itself and ``Union{}`` (but ``T`` itself is not ``Union{}``\ ).
 
 .. function:: typejoin(T, S)
 
@@ -667,12 +667,6 @@ Generic Functions
 
        julia> [1:5;] |> x->x.^2 |> sum |> inv
        0.01818181818181818
-
-.. function:: call(x, args...)
-
-   .. Docstring generated from Julia source
-
-   If ``x`` is not a ``Function``\ , then ``x(args...)`` is equivalent to ``call(x, args...)``\ . This means that function-like behavior can be added to any type by defining new ``call`` methods.
 
 Syntax
 ------
@@ -878,7 +872,7 @@ System
 
    .. Docstring generated from Julia source
 
-   Redirect I/O to or from the given ``command``\ . Keyword arguments specify which of the command's streams should be redirected. ``append`` controls whether file output appends to the file. This is a more general version of the 2-argument ``pipeline`` function. ``pipeline(from, to)`` is equivalent to ``pipeline(from, stdout=to)`` when ``from`` is a command, and to ``pipe(to, stdin=from)`` when ``from`` is another kind of data source.
+   Redirect I/O to or from the given ``command``\ . Keyword arguments specify which of the command's streams should be redirected. ``append`` controls whether file output appends to the file. This is a more general version of the 2-argument ``pipeline`` function. ``pipeline(from, to)`` is equivalent to ``pipeline(from, stdout=to)`` when ``from`` is a command, and to ``pipeline(to, stdin=from)`` when ``from`` is another kind of data source.
 
    **Examples**:
 
@@ -1011,7 +1005,7 @@ System
 
    .. Docstring generated from Julia source
 
-   Returns the version number for the Windows NT Kernel as a (major, minor) pair, or (0, 0) if this is not running on Windows.
+   Returns the version number for the Windows NT Kernel as a (major, minor) pair, or ``(0, 0)`` if this is not running on Windows.
 
 .. function:: @static
 

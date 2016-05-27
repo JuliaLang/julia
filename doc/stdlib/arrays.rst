@@ -31,12 +31,6 @@ Basic functions
        julia> size(A,3,2)
        (4,3)
 
-.. function:: iseltype(A,T)
-
-   .. Docstring generated from Julia source
-
-   Tests whether ``A`` or its elements are of type ``T``\ .
-
 .. function:: length(A) -> Integer
 
    .. Docstring generated from Julia source
@@ -995,3 +989,4 @@ dense counterparts. The following functions are specific to sparse arrays.
              # perform sparse wizardry...
           end
        end
+

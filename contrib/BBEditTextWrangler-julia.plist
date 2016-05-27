@@ -75,7 +75,6 @@
             <string>@ip_str</string>
             <string>@label</string>
             <string>@less</string>
-            <string>@math_const</string>
             <string>@MIME</string>
             <string>@MIME_str</string>
             <string>@noinline</string>
@@ -179,13 +178,11 @@
             <string>atreplinit</string>
             <string>backtrace</string>
             <string>baremodule</string>
-            <string>base64</string>
             <string>base64decode</string>
             <string>base64encode</string>
             <string>base</string>
             <string>basename</string>
             <string>begin</string>
-            <string>beginswith</string>
             <string>besselh</string>
             <string>besselhx</string>
             <string>besseli</string>
@@ -217,7 +214,6 @@
             <string>bkfact!</string>
             <string>bkfact</string>
             <string>blkdiag</string>
-            <string>bool</string>
             <string>break</string>
             <string>brfft</string>
             <string>broadcast!</string>
@@ -233,7 +229,6 @@
             <string>c_malloc</string>
             <string>c_realloc</string>
             <string>call</string>
-            <string>cartesianmap</string>
             <string>cat</string>
             <string>catalan</string>
             <string>catch</string>
@@ -245,7 +240,6 @@
             <string>cell</string>
             <string>cfunction</string>
             <string>cglobal</string>
-            <string>char</string>
             <string>charwidth</string>
             <string>checkbounds</string>
             <string>chmod</string>
@@ -271,11 +265,6 @@
             <string>code_warntype</string>
             <string>collect</string>
             <string>colon</string>
-            <string>complement!</string>
-            <string>complement</string>
-            <string>complex128</string>
-            <string>complex32</string>
-            <string>complex64</string>
             <string>complex</string>
             <string>cond</string>
             <string>condskeel</string>
@@ -459,14 +448,7 @@
             <string>fldmod</string>
             <string>flipbits!</string>
             <string>flipdim</string>
-            <string>fliplr</string>
             <string>flipsign</string>
-            <string>flipud</string>
-            <string>float16</string>
-            <string>float32</string>
-            <string>float32_isvalid</string>
-            <string>float64</string>
-            <string>float64_isvalid</string>
             <string>float</string>
             <string>floor</string>
             <string>flush</string>
@@ -480,10 +462,8 @@
             <string>fullname</string>
             <string>function</string>
             <string>functionloc</string>
-            <string>functionlocs</string>
             <string>gamma</string>
             <string>gc</string>
-            <string>gc_disable</string>
             <string>gc_enable</string>
             <string>gcd</string>
             <string>gcdx</string>
@@ -526,7 +506,6 @@
             <string>hton</string>
             <string>hvcat</string>
             <string>hypot</string>
-            <string>iceil</string>
             <string>idct!</string>
             <string>idct</string>
             <string>identity</string>
@@ -535,7 +514,6 @@
             <string>ifft!</string>
             <string>ifft</string>
             <string>ifftshift</string>
-            <string>ifloor</string>
             <string>ignorestatus</string>
             <string>im</string>
             <string>imag</string>
@@ -559,13 +537,6 @@
             <string>init_worker</string>
             <string>insert!</string>
             <string>instances</string>
-            <string>int128</string>
-            <string>int16</string>
-            <string>int32</string>
-            <string>int64</string>
-            <string>int8</string>
-            <string>int</string>
-            <string>integer</string>
             <string>interrupt</string>
             <string>intersect!</string>
             <string>intersect</string>
@@ -576,7 +547,6 @@
             <string>ipermute!</string>
             <string>ipermutedims</string>
             <string>irfft</string>
-            <string>iround</string>
             <string>is_apple</string>
             <string>is_assigned_char</string>
             <string>is_bsd</string>
@@ -590,7 +560,6 @@
             <string>isascii</string>
             <string>isassigned</string>
             <string>isbits</string>
-            <string>isblank</string>
             <string>isblockdev</string>
             <string>ischardev</string>
             <string>iscntrl</string>
@@ -599,11 +568,9 @@
             <string>isdigit</string>
             <string>isdir</string>
             <string>isdirpath</string>
-            <string>iseltype</string>
             <string>isempty</string>
             <string>isequal</string>
             <string>iseven</string>
-            <string>isexecutable</string>
             <string>isfifo</string>
             <string>isfile</string>
             <string>isfinite</string>
@@ -657,7 +624,6 @@
             <string>isvalid</string>
             <string>iswritable</string>
             <string>isxdigit</string>
-            <string>itrunc</string>
             <string>join</string>
             <string>joinpath</string>
             <string>keys</string>
@@ -680,7 +646,6 @@
             <string>lexless</string>
             <string>lfact</string>
             <string>lgamma</string>
-            <string>linrange</string>
             <string>linreg</string>
             <string>linspace</string>
             <string>listen</string>
@@ -747,8 +712,6 @@
             <string>mktemp</string>
             <string>mktempdir</string>
             <string>mmap</string>
-            <string>mmap_array</string>
-            <string>mmap_bitarray</string>
             <string>mod1</string>
             <string>mod2pi</string>
             <string>mod</string>
@@ -756,7 +719,6 @@
             <string>module</string>
             <string>module_name</string>
             <string>module_parent</string>
-            <string>msync</string>
             <string>mtime</string>
             <string>muladd</string>
             <string>mv</string>
@@ -804,15 +766,12 @@
             <string>parent</string>
             <string>parentindexes</string>
             <string>parse</string>
-            <string>parsefloat</string>
-            <string>parseint</string>
             <string>peakflops</string>
             <string>permute!</string>
             <string>permutedims!</string>
             <string>permutedims</string>
             <string>pi</string>
             <string>pinv</string>
-            <string>pipe</string>
             <string>pipeline</string>
             <string>plan_bfft!</string>
             <string>plan_bfft</string>
@@ -880,8 +839,6 @@
             <string>radians2degrees</string>
             <string>rand!</string>
             <string>rand</string>
-            <string>randbool!</string>
-            <string>randbool</string>
             <string>randcycle</string>
             <string>randexp!</string>
             <string>randexp</string>
@@ -928,7 +885,6 @@
             <string>reinterpret</string>
             <string>reload</string>
             <string>relpath</string>
-            <string>rem1</string>
             <string>rem</string>
             <string>remotecall</string>
             <string>remotecall_fetch</string>
@@ -1022,7 +978,6 @@
             <string>sinpi</string>
             <string>size</string>
             <string>sizehint!</string>
-            <string>sizehint</string>
             <string>sizeof</string>
             <string>skip</string>
             <string>skipchars</string>
@@ -1056,7 +1011,6 @@
             <string>srand</string>
             <string>start</string>
             <string>start_reading</string>
-            <string>start_timer</string>
             <string>start_watching</string>
             <string>startswith</string>
             <string>stat</string>
@@ -1064,7 +1018,6 @@
             <string>stdm</string>
             <string>step</string>
             <string>stop_reading</string>
-            <string>stop_timer</string>
             <string>strerror</string>
             <string>strftime</string>
             <string>stride</string>
@@ -1139,12 +1092,6 @@
             <string>typemin</string>
             <string>typeof</string>
             <string>ucfirst</string>
-            <string>uint128</string>
-            <string>uint16</string>
-            <string>uint32</string>
-            <string>uint64</string>
-            <string>uint8</string>
-            <string>uint</string>
             <string>unescape_string</string>
             <string>union!</string>
             <string>union</string>
@@ -1179,7 +1126,6 @@
             <string>whos</string>
             <string>widemul</string>
             <string>widen</string>
-            <string>with_env</string>
             <string>withenv</string>
             <string>workers</string>
             <string>workspace</string>
@@ -1217,6 +1163,7 @@
         <string>AbstractFloat</string>
         <string>AbstractMatrix</string>
         <string>AbstractRNG</string>
+        <string>AbstractRemoteRef</string>
         <string>AbstractSparseArray</string>
         <string>AbstractSparseMatrix</string>
         <string>AbstractSparseVector</string>
@@ -1246,7 +1193,6 @@
         <string>At_rdiv_Bt</string>
         <string>Base64DecodePipe</string>
         <string>Base64EncodePipe</string>
-        <string>Base64Pipe</string>
         <string>Base</string>
         <string>Bidiagonal</string>
         <string>BigFloat</string>
@@ -1330,7 +1276,6 @@
         <string>FFTW</string>
         <string>FileMonitor</string>
         <string>Filter</string>
-        <string>FloatingPoint</string>
         <string>FloatRange</string>
         <string>Function</string>
         <string>GeneralizedSchur</string>
@@ -1387,8 +1332,6 @@
         <string>NaN32</string>
         <string>NaN64</string>
         <string>NaN</string>
-        <string>None</string>
-        <string>Nothing</string>
         <string>Nullable</string>
         <string>NullException</string>
         <string>Number</string>
@@ -1424,10 +1367,8 @@
         <string>RegexMatch</string>
         <string>RegexMatchIterator</string>
         <string>RemoteException</string>
-        <string>RemoteRef</string>
         <string>RepString</string>
         <string>RevString</string>
-        <string>RopeString</string>
         <string>RoundDown</string>
         <string>RoundFromZero</string>
         <string>RoundingMode</string>
@@ -1450,7 +1391,6 @@
         <string>SharedArray</string>
         <string>SharedMatrix</string>
         <string>SharedVector</string>
-        <string>SparseMatrix</string>
         <string>SparseMatrixCSC</string>
         <string>SpawnNullStream</string>
         <string>StatStruct</string>
@@ -1473,8 +1413,8 @@
         <string>SymTridiagonal</string>
         <string>Sys</string>
         <string>SystemError</string>
+        <string>TCPSocket</string>
         <string>Task</string>
-        <string>TcpSocket</string>
         <string>Test</string>
         <string>Text</string>
         <string>TextDisplay</string>
@@ -1487,16 +1427,16 @@
         <string>Tuple</string>
         <string>Type</string>
         <string>TypeError</string>
-        <string>UdpSocket</string>
-        <string>Uint128</string>
-        <string>Uint16</string>
-        <string>Uint32</string>
-        <string>Uint64</string>
-        <string>Uint8</string>
-        <string>Uint</string>
+        <string>UDPSocket</string>
+        <string>UInt128</string>
+        <string>UInt16</string>
+        <string>UInt32</string>
+        <string>UInt64</string>
+        <string>UInt8</string>
+        <string>UInt</string>
         <string>UnicodeError</string>
         <string>UniformScaling</string>
-        <string>UnionType</string>
+        <string>Union</string>
         <string>UnitRange</string>
         <string>UpperTriangular</string>
         <string>UTF16String</string>
