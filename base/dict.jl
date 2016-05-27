@@ -105,11 +105,18 @@ function show{K,V}(io::IO, t::Associative{K,V})
 
         # determine max key width to align the output, caching the strings
         ks = Array{AbstractString}(min(rows, length(t)))
+        vs = Array{AbstractString}(min(rows, length(t)))
         keylen = 0
-        for (i, k) in enumerate(keys(t))
+        vallen = 0
+        for (i, (k, v)) in enumerate(t)
             i > rows && break
             ks[i] = sprint(0, show, k, env=recur_io)
-            keylen = clamp(length(ks[i]), keylen, div(cols, 3))
+            vs[i] = sprint(0, show, v, env=recur_io)
+            keylen = clamp(length(ks[i]), keylen, cols)
+            vallen = clamp(length(vs[i]), vallen, cols)
+        end
+        if keylen > max(div(cols, 2), cols - vallen)
+            keylen = max(cld(cols, 3), cols - vallen)
         end
     else
         rows = cols = 0
@@ -130,8 +137,7 @@ function show{K,V}(io::IO, t::Associative{K,V})
         print(io, " => ")
 
         if limit
-            val = sprint(0, show, v, env=recur_io)
-            val = _truncate_at_width_or_chars(val, cols - keylen, "\r\n")
+            val = _truncate_at_width_or_chars(vs[i], cols - keylen, "\r\n")
             print(io, val)
         else
             show(recur_io, v)
