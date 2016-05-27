@@ -90,7 +90,7 @@ Breaking changes
 Library improvements
 --------------------
 
-  * Most of the  combinatorics functions have been moved from `Base`
+  * Most of the combinatorics functions have been moved from `Base`
     to the [Combinatorics.jl package](https://github.com/JuliaLang/Combinatorics.jl) ([#13897]).
 
   * Packages:
@@ -172,6 +172,9 @@ Library improvements
     The `@windows_only` and `@osx` family of macros have been replaced with functions such as `is_windows()` and
     or `is_apple()`. There's now also an `@static` macro that will evaluate the condition of an if-statement at
     compile time, for when a static branch is required ([#16219]).
+
+  * Prime number related functions have been moved from `Base` to the
+    [Primes.jl package](https://github.com/JuliaMath/Primes.jl) ([#16481]).
 
 Deprecated or removed
 ---------------------

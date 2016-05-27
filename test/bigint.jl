@@ -217,12 +217,6 @@ g = parse(BigInt,"-1")
 @test (|)(a, b, c, d, f) == parse(BigInt,"-1358954753")
 @test (|)(a, b, c, d, f, g) == parse(BigInt,"-1")
 
-@test isprime(BigInt(1000000007))
-@test isprime(BigInt(1000000007), 1)
-@test isprime(BigInt(10000000019))
-@test isprime(parse(BigInt,"359334085968622831041960188598043661065388726959079837"))
-@test !isprime(BigInt(1))
-@test !isprime(BigInt(10000000020))
 
 @test trailing_ones(a) == 8
 @test trailing_zeros(b) == 2
