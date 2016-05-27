@@ -496,11 +496,6 @@
             <string>hex2bytes</string>
             <string>hex2num</string>
             <string>hex</string>
-            <string>hist!</string>
-            <string>hist2d!</string>
-            <string>hist2d</string>
-            <string>hist</string>
-            <string>histrange</string>
             <string>homedir</string>
             <string>htol</string>
             <string>hton</string>

@@ -334,17 +334,23 @@ for rng in ([], [MersenneTwister()], [RandomDevice()])
     end
 end
 
+function hist(X,n)
+    v = zeros(Int,n)
+    for x in X
+        v[floor(Int,x*n)+1] += 1
+    end
+    v
+end
+
 # test uniform distribution of floats
-let bins = [prevfloat(0.0):0.25:1.0;]
-    for rng in [srand(MersenneTwister()), RandomDevice()]
-        for T in [Float16,Float32,Float64]
-            # array version
-            _, counts = hist(rand(rng, T, 2000), bins)
-            @test minimum(counts) > 300 # should fail with proba < 1e-26
-            # scalar version
-            _, counts = hist([rand(rng, T) for i in 1:2000], bins)
-            @test minimum(counts) > 300
-        end
+for rng in [srand(MersenneTwister()), RandomDevice()]
+    for T in [Float16,Float32,Float64]
+        # array version
+        counts = hist(rand(rng, T, 2000), 4)
+        @test minimum(counts) > 300 # should fail with proba < 1e-26
+        # scalar version
+        counts = hist([rand(rng, T) for i in 1:2000], 4)
+        @test minimum(counts) > 300
     end
 end
 
