@@ -31,8 +31,7 @@ import Base:
     pipe_reader,
     pipe_writer,
     read,
-    readuntil,
-    writemime
+    readuntil
 
 ## TextTerminal ##
 

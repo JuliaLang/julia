@@ -408,7 +408,7 @@ precompile(Base.wait, (RemoteChannel,))
 precompile(Base.write, (Base.Terminals.TTYTerminal, String))
 precompile(Base.write, (Base.Terminals.TerminalBuffer, String))
 precompile(Base.write, (IOBuffer, Vector{UInt8}))
-precompile(Base.writemime, (Base.Terminals.TTYTerminal, Base.Multimedia.MIME{Symbol("text/plain")}, Int))
+precompile(Base.show, (Base.Terminals.TTYTerminal, Base.Multimedia.MIME{Symbol("text/plain")}, Int))
 
 # The following are intended to help speed Pkg.update()
 precompile(Base.Pkg.Entry.update, (String,))

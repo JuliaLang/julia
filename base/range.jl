@@ -237,7 +237,7 @@ linspace(start::Real, stop::Real, len::Real=50) =
 
 function show(io::IO, r::LinSpace)
     if get(io, :multiline, false)
-        # writemime for linspace, e.g.
+        # show for linspace, e.g.
         # linspace(1,3,7)
         # 7-element LinSpace{Float64}:
         #   1.0,1.33333,1.66667,2.0,2.33333,2.66667,3.0
@@ -276,7 +276,7 @@ function print_range(io::IO, r::Range,
                      post::AbstractString = "",
                      hdots::AbstractString = ",\u2026,") # horiz ellipsis
     # This function borrows from print_matrix() in show.jl
-    # and should be called by writemime (replutil.jl) and by display()
+    # and should be called by show and display
     limit = get(io, :limit, false)
     sz = displaysize(io)
     if !haskey(io, :compact)

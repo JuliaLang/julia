@@ -1224,7 +1224,6 @@ export
     @MIME_str,
     reprmime,
     stringmime,
-    writemime,
     mimewritable,
     popdisplay,
     pushdisplay,

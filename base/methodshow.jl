@@ -203,7 +203,7 @@ function url(m::Method)
     end
 end
 
-function writemime(io::IO, ::MIME"text/html", m::Method; kwtype::Nullable{DataType}=Nullable{DataType}())
+function show(io::IO, ::MIME"text/html", m::Method; kwtype::Nullable{DataType}=Nullable{DataType}())
     tv, decls, file, line = arg_decl_parts(m)
     ft = m.sig.parameters[1]
     d1 = decls[1]
@@ -249,7 +249,7 @@ function writemime(io::IO, ::MIME"text/html", m::Method; kwtype::Nullable{DataTy
     end
 end
 
-function writemime(io::IO, mime::MIME"text/html", ms::MethodList)
+function show(io::IO, mime::MIME"text/html", ms::MethodList)
     mt = ms.mt
     name = mt.name
     n = length(ms)
@@ -260,23 +260,23 @@ function writemime(io::IO, mime::MIME"text/html", ms::MethodList)
     kwtype = isdefined(mt, :kwsorter) ? Nullable{DataType}(typeof(mt.kwsorter)) : Nullable{DataType}()
     for meth in ms
         print(io, "<li> ")
-        writemime(io, mime, meth; kwtype=kwtype)
+        show(io, mime, meth; kwtype=kwtype)
         print(io, "</li> ")
     end
     print(io, "</ul>")
 end
 
-writemime(io::IO, mime::MIME"text/html", mt::MethodTable) = writemime(io, mime, MethodList(mt))
+show(io::IO, mime::MIME"text/html", mt::MethodTable) = show(io, mime, MethodList(mt))
 
 # pretty-printing of Vector{Method} for output of methodswith:
 
-function writemime(io::IO, mime::MIME"text/html", mt::AbstractVector{Method})
+function show(io::IO, mime::MIME"text/html", mt::AbstractVector{Method})
     print(io, summary(mt))
     if !isempty(mt)
         print(io, ":<ul>")
         for d in mt
             print(io, "<li> ")
-            writemime(io, mime, d)
+            show(io, mime, d)
         end
         print(io, "</ul>")
     end

@@ -1265,6 +1265,7 @@ end
 @deprecate_binding WORD_SIZE Sys.WORD_SIZE
 
 @deprecate showcompact_lim show
+@deprecate writemime show
 
 @deprecate blas_set_num_threads BLAS.set_num_threads
 

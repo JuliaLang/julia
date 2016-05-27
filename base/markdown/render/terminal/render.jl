@@ -79,7 +79,7 @@ function term(io::IO, br::HorizontalRule, columns)
    println(io, " " ^ margin, "-" ^ (columns - 2margin))
 end
 
-term(io::IO, x, _) = writemime(io, MIME"text/plain"(), x)
+term(io::IO, x, _) = show(io, MIME"text/plain"(), x)
 
 # Inline Content
 
@@ -124,7 +124,7 @@ function terminline(io::IO, code::Code)
     print_with_format(:cyan, io, code.code)
 end
 
-terminline(io::IO, x) = writemime(io, MIME"text/plain"(), x)
+terminline(io::IO, x) = show(io, MIME"text/plain"(), x)
 
 # Show in terminal
 

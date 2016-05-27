@@ -244,10 +244,10 @@ let data = "1 2 3"
     readdlm(IOBuffer(data), ' ', BigInt) == BigInt[1 2 3]
 end
 
-# test writemime
-@test sprint(io -> writemime(io, "text/csv", [1 2; 3 4])) == "1,2\n3,4\n"
+# test show with MIME types
+@test sprint(io -> show(io, "text/csv", [1 2; 3 4])) == "1,2\n3,4\n"
 
-for writefunc in ((io,x) -> writemime(io, "text/csv", x),
+for writefunc in ((io,x) -> show(io, "text/csv", x),
                   (io,x) -> invoke(writedlm, (IO, Any, Any), io, x, ","))
     # iterable collections of iterable rows:
     let x = [(1,2), (3,4)], io = IOBuffer()
