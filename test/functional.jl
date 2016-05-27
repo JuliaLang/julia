@@ -61,6 +61,8 @@ let z = zip(1:2, 3:4, 5:6)
     @test eltype(z) == Tuple{Int,Int,Int}
 end
 
+@test eltype(Filter(isodd, 1:5)) == Int
+
 # typed `collect`
 @test collect(Float64, Filter(isodd, [1,2,3,4]))[1] === 1.0
 
