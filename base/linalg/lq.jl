@@ -106,22 +106,35 @@ end
 ## Multiplication by Q
 ### QB
 A_mul_B!{T<:BlasFloat}(A::LQPackedQ{T}, B::StridedVecOrMat{T})   = LAPACK.ormlq!('L','N',A.factors,A.τ,B)
-function *{TA,TB}(A::LQPackedQ{TA},B::StridedVecOrMat{TB})
-    TAB = promote_type(TA, TB)
+function (*)(A::LQPackedQ,B::StridedVecOrMat)
+    TAB = promote_type(eltype(A), eltype(B))
     A_mul_B!(convert(AbstractMatrix{TAB}, A), copy_oftype(B, TAB))
 end
 
 ### QcB
 Ac_mul_B!{T<:BlasReal}(A::LQPackedQ{T}, B::StridedVecOrMat{T})    = LAPACK.ormlq!('L','T',A.factors,A.τ,B)
 Ac_mul_B!{T<:BlasComplex}(A::LQPackedQ{T}, B::StridedVecOrMat{T}) = LAPACK.ormlq!('L','C',A.factors,A.τ,B)
-function Ac_mul_B{TA,TB}(A::LQPackedQ{TA}, B::StridedVecOrMat{TB})
-    TAB = promote_type(TA,TB)
+function Ac_mul_B(A::LQPackedQ, B::StridedVecOrMat)
+    TAB = promote_type(eltype(A), eltype(B))
     if size(B,1) == size(A.factors,2)
         Ac_mul_B!(convert(AbstractMatrix{TAB}, A), copy_oftype(B, TAB))
     elseif size(B,1) == size(A.factors,1)
         Ac_mul_B!(convert(AbstractMatrix{TAB}, A), [B; zeros(TAB, size(A.factors, 2) - size(A.factors, 1), size(B, 2))])
     else
         throw(DimensionMismatch("first dimension of B, $(size(B,1)), must equal one of the dimensions of A, $(size(A))"))
+    end
+end
+
+### QBc/QcBc
+for (f1, f2) in ((:A_mul_Bc, :A_mul_B!),
+                 (:Ac_mul_Bc, :Ac_mul_B!))
+    @eval begin
+        function ($f1)(A::LQPackedQ, B::StridedVecOrMat)
+            TAB = promote_type(eltype(A), eltype(B))
+            BB = similar(B, TAB, (size(B, 2), size(B, 1)))
+            ctranspose!(BB, B)
+            return ($f2)(A, BB)
+        end
     end
 end
 
@@ -144,6 +157,19 @@ A_mul_Bc!{T<:BlasComplex}(A::StridedMatrix{T}, B::LQPackedQ{T}) = LAPACK.ormlq!(
 function A_mul_Bc{TA<:Number,TB<:Number}( A::StridedVecOrMat{TA}, B::LQPackedQ{TB})
     TAB = promote_type(TA,TB)
     A_mul_Bc!(copy_oftype(A, TAB), convert(AbstractMatrix{TAB},(B)))
+end
+
+### AcQ/AcQc
+for (f1, f2) in ((:Ac_mul_B, :A_mul_B!),
+                 (:Ac_mul_Bc, :A_mul_Bc!))
+    @eval begin
+        function ($f1)(A::StridedMatrix, B::LQPackedQ)
+            TAB = promote_type(eltype(A), eltype(B))
+            AA = similar(A, TAB, (size(A, 2), size(A, 1)))
+            ctranspose!(AA, A)
+            return ($f2)(AA, B)
+        end
+    end
 end
 
 function \{TA,Tb}(A::LQ{TA}, b::StridedVector{Tb})
