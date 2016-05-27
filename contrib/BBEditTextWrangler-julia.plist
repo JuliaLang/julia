@@ -806,10 +806,7 @@
             <string>prevpow2</string>
             <string>prevpow</string>
             <string>print</string>
-            <string>print_escaped</string>
-            <string>print_joined</string>
             <string>print_shortest</string>
-            <string>print_unescaped</string>
             <string>print_with_color</string>
             <string>println</string>
             <string>process_exited</string>
@@ -1132,7 +1129,6 @@
             <string>write</string>
             <string>writecsv</string>
             <string>writedlm</string>
-            <string>writemime</string>
             <string>writesto</string>
             <string>wstring</string>
             <string>xcorr</string>
