@@ -845,9 +845,18 @@ JL_DLLEXPORT jl_datatype_t *jl_new_uninitialized_datatype(size_t nfields, int8_t
 unsigned jl_special_vector_alignment(size_t nfields, jl_value_t *t) {
     if (!is_vecelement_type(t))
         return 0;
-    if (nfields>16 || (1<<nfields & 0x1157C) == 0)
-        // Number of fields is not 2, 3, 4, 5, 6, 8, 10, 12, or 16.
-        return 0;
+    // LLVM 3.7 and 3.8 either crash or generate wrong code for many
+    // SIMD vector sizes N. It seems the rule is that N can have at
+    // most 2 non-zero bits. (This is true at least for N<=100.) See
+    // also <https://llvm.org/bugs/show_bug.cgi?id=27708>.
+    size_t mask = nfields;
+    // See e.g.
+    // <https://graphics.stanford.edu/%7Eseander/bithacks.html> for an
+    // explanation of this bit-counting algorithm.
+    mask &= mask-1;             // clear least-significant 1 if present
+    mask &= mask-1;             // clear another 1
+    if (mask)
+        return 0;               // nfields has more than two 1s
     assert(jl_datatype_nfields(t)==1);
     jl_value_t *ty = jl_field_type(t, 0);
     if( !jl_is_bitstype(ty) )
