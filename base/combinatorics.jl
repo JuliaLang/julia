@@ -100,7 +100,7 @@ to verify that `p` is a permutation.
 To return a new permutation, use `v[p]`. Note that this is generally faster than
 `permute!(v,p)` for large vectors.
 """
-permute!(a, p::AbstractVector) = permute!!(a, copy!(similar(p), p))
+permute!(a, p::AbstractVector) = permute!!(a, copymutable(p))
 
 function ipermute!!{T<:Integer}(a, p::AbstractVector{T})
     count = 0
@@ -130,7 +130,7 @@ end
 
 Like `permute!`, but the inverse of the given permutation is applied.
 """
-ipermute!(a, p::AbstractVector) = ipermute!!(a, copy!(similar(p), p))
+ipermute!(a, p::AbstractVector) = ipermute!!(a, copymutable(p))
 
 """
     invperm(v)

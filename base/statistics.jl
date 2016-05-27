@@ -507,7 +507,7 @@ function median!{T}(v::AbstractVector{T})
 end
 median!{T}(v::AbstractArray{T}) = median!(vec(v))
 
-median{T}(v::AbstractArray{T}) = median!(vec(copy!(similar(v), v)))
+median{T}(v::AbstractArray{T}) = median!(copy!(Array(T, length(v)), v))
 median{T}(v::AbstractArray{T}, region) = mapslices(median!, v, region)
 
 # for now, use the R/S definition of quantile; may want variants later
@@ -612,4 +612,4 @@ for `k = 1:n` where `n = length(v)`. This corresponds to Definition 7 of Hyndman
   *The American Statistician*, Vol. 50, No. 4, pp. 361-365
 """
 quantile(v::AbstractVector, p; sorted::Bool=false) =
-    quantile!(sorted ? v : copy!(similar(v),v), p; sorted=sorted)
+    quantile!(sorted ? v : copymutable(v), p; sorted=sorted)
