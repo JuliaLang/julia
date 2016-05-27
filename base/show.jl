@@ -891,7 +891,7 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int)
                 end
                 print(io, ")")
             else
-                print_escaped(io, x, "\"\$")
+                escape_string(io, x, "\"\$")
             end
         end
         print(io, '"')

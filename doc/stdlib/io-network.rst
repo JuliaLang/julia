@@ -302,19 +302,19 @@ General I/O
 
    Read a value written by ``serialize``\ . ``deserialize`` assumes the binary data read from ``stream`` is correct and has been serialized by a compatible implementation of ``serialize``\ . It has been designed with simplicity and performance as a goal and does not validate the data read. Malformed data can result in process termination. The caller has to ensure the integrity and correctness of data read from ``stream``\ .
 
-.. function:: print_escaped(io, str::AbstractString, esc::AbstractString)
+.. function:: escape_string(io, str::AbstractString, esc::AbstractString)
 
    .. Docstring generated from Julia source
 
    General escaping of traditional C and Unicode escape sequences, plus any characters in esc are also escaped (with a backslash).
 
-.. function:: print_unescaped(io, s::AbstractString)
+.. function:: unescape_string(io, s::AbstractString)
 
    .. Docstring generated from Julia source
 
-   General unescaping of traditional C and Unicode escape sequences. Reverse of :func:`print_escaped`\ .
+   General unescaping of traditional C and Unicode escape sequences. Reverse of :func:`escape_string`\ .
 
-.. function:: print_joined(io, items, delim, [last])
+.. function:: join(io, items, delim, [last])
 
    .. Docstring generated from Julia source
 
