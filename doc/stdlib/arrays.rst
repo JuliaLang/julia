@@ -316,18 +316,6 @@ All mathematical operations and functions are supported for arrays
 
    Like ``broadcast``\ , but allocates a ``BitArray`` to store the result, rather then an ``Array``\ .
 
-.. function:: broadcast_function(f)
-
-   .. Docstring generated from Julia source
-
-   Returns a function ``broadcast_f`` such that ``broadcast_function(f)(As...) === broadcast(f, As...)``\ . Most useful in the form ``const broadcast_f = broadcast_function(f)``\ .
-
-.. function:: broadcast!_function(f)
-
-   .. Docstring generated from Julia source
-
-   Like ``broadcast_function``\ , but for ``broadcast!``\ .
-
 Indexing, Assignment, and Concatenation
 ---------------------------------------
 

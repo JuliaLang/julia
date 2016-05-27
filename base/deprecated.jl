@@ -1273,6 +1273,9 @@ end
 @deprecate print_unescaped unescape_string
 @deprecate print_joined join
 
+@deprecate broadcast!_function(f) (B, As...) -> broadcast!(f, B, As...)
+@deprecate broadcast_function(f)  (As...) -> broadcast(f, As...)
+
 ##### histogram #####
 
 ## nice-valued ranges for histograms

@@ -3483,15 +3483,6 @@ not representable.
 trunc
 
 """
-    broadcast_function(f)
-
-Returns a function `broadcast_f` such that
-`broadcast_function(f)(As...) === broadcast(f, As...)`. Most useful in the form
-`const broadcast_f = broadcast_function(f)`.
-"""
-broadcast_function
-
-"""
     unsafe_convert(T,x)
 
 Convert `x` to a value of type `T`
@@ -5624,15 +5615,6 @@ the results need to be used judiciously. See [Manual](:ref:`man-code-warntype`) 
 information.
 """
 code_warntype
-
-"""
-```
-broadcast!_function(f)
-```
-
-Like `broadcast_function`, but for `broadcast!`.
-"""
-broadcast!_function
 
 """
     setrounding(T, mode)
