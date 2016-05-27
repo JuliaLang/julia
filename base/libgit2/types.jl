@@ -63,7 +63,7 @@ function Base.getindex(p::AbstractCredentials, keys...)
     end
     return nothing
 end
-"Sets credentials with `key` parameter with value"
+"Sets credentials with `key` parameter to a value"
 function Base.setindex!(p::AbstractCredentials, val, keys...)
     for k in keys
         ks = Symbol(k)
@@ -73,7 +73,7 @@ function Base.setindex!(p::AbstractCredentials, val, keys...)
 end
 "Checks if credentials were used"
 checkused!(p::AbstractCredentials) = true
-"Resets credentials for another usage"
+"Resets credentials for another use"
 reset!(p::AbstractCredentials, cnt::Int=3) = nothing
 
 immutable CheckoutOptions
@@ -745,7 +745,8 @@ type CachedCredentials <: AbstractCredentials
     count::Int            # authentication failure protection count
     CachedCredentials() = new(Dict{AbstractString,SSHCredentials}(),3)
 end
-"Returns specific credential parameter value: first index is a credential parameter name, second index is a host name (with schema)"
+"Returns specific credential parameter value: first index is a credential
+parameter name, second index is a host name (with schema)"
 function Base.getindex(p::CachedCredentials, keys...)
     length(keys) != 2 && return nothing
     key, host = keys
@@ -758,7 +759,8 @@ function Base.getindex(p::CachedCredentials, keys...)
     end
     return nothing
 end
-"Sets specific credential parameter value: first index is a credential parameter name, second index is a host name (with schema)"
+"Sets specific credential parameter value: first index is a credential
+parameter name, second index is a host name (with schema)"
 function Base.setindex!(p::CachedCredentials, val, keys...)
     length(keys) != 2 && return nothing
     key, host = keys

@@ -67,7 +67,7 @@ end
 # Assumes conversion is performed by rounding to nearest value.
 
 # To avoid ambiguous dispatch with methods in mpfr.jl:
-call{T<:AbstractFloat}(::Type{T},x::Real,r::RoundingMode) = _convert_rounding(T,x,r)
+(::Type{T}){T<:AbstractFloat}(x::Real,r::RoundingMode) = _convert_rounding(T,x,r)
 
 _convert_rounding{T<:AbstractFloat}(::Type{T},x::Real,r::RoundingMode{:Nearest}) = convert(T,x)
 function _convert_rounding{T<:AbstractFloat}(::Type{T},x::Real,r::RoundingMode{:Down})

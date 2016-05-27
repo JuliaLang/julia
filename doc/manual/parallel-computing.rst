@@ -44,7 +44,7 @@ wait for a remote call to finish by calling :func:`wait` on the returned
 `Future`, and you can obtain the full value of the result using
 :func:`fetch`.
 
-On the other hand ``RemoteRefs`` are rewritable. For example, multiple processes
+On the other hand ``RemoteChannel`` s are rewritable. For example, multiple processes
 can co-ordinate their processing by referencing the same remote ``Channel``\ .
 
 Let's try this out. Starting with ``julia -p n`` provides ``n`` worker

@@ -1,6 +1,6 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
-# SubString, RevString, RepString, and RopeString types
+# SubString, RevString, and RepString types
 
 ## substrings reference original strings ##
 

@@ -201,24 +201,24 @@ function convert{T<:Signed}(::Type{T}, x::BigInt)
 end
 
 
-function call(::Type{Float64}, n::BigInt, ::RoundingMode{:ToZero})
+function (::Type{Float64})(n::BigInt, ::RoundingMode{:ToZero})
     ccall((:__gmpz_get_d, :libgmp), Float64, (Ptr{BigInt},), &n)
 end
 
-function call{T<:Union{Float16,Float32}}(::Type{T}, n::BigInt, ::RoundingMode{:ToZero})
+function (::Type{T}){T<:Union{Float16,Float32}}(n::BigInt, ::RoundingMode{:ToZero})
     T(Float64(n,RoundToZero),RoundToZero)
 end
 
-function call{T<:CdoubleMax}(::Type{T}, n::BigInt, ::RoundingMode{:Down})
+function (::Type{T}){T<:CdoubleMax}(n::BigInt, ::RoundingMode{:Down})
     x = T(n,RoundToZero)
     x > n ? prevfloat(x) : x
 end
-function call{T<:CdoubleMax}(::Type{T}, n::BigInt, ::RoundingMode{:Up})
+function (::Type{T}){T<:CdoubleMax}(n::BigInt, ::RoundingMode{:Up})
     x = T(n,RoundToZero)
     x < n ? nextfloat(x) : x
 end
 
-function call{T<:CdoubleMax}(::Type{T}, n::BigInt, ::RoundingMode{:Nearest})
+function (::Type{T}){T<:CdoubleMax}(n::BigInt, ::RoundingMode{:Nearest})
     x = T(n,RoundToZero)
     if maxintfloat(T) <= abs(x) < T(Inf)
         r = n-BigInt(x)

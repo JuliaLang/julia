@@ -54,7 +54,7 @@ function undocumented_by_file(m::Module)
     for (f,_) in undocumented(m)
         s = string(f)
         try
-            for (file, line) in functionlocs(eval(f))
+            for (file, line) in map(functionloc,methods(eval(f)))
                 if startswith(file, JULIA_HOME)
                     file = replace(file, JULIA_HOME, "\$JULIA_HOME", 1)
                 end

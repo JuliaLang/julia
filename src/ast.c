@@ -219,10 +219,7 @@ static void jl_init_ast_ctx(jl_ast_context_t *ast_ctx)
     jl_ast_ctx(fl_ctx)->slot_sym = symbol(fl_ctx, "slot");
 
     // Enable / disable syntax deprecation warnings
-    // Disable in imaging mode to avoid i/o errors (#10727)
-    if (jl_generating_output())
-        jl_parse_depwarn_(fl_ctx, 0);
-    else if (jl_options.depwarn == JL_OPTIONS_DEPWARN_ERROR)
+    if (jl_options.depwarn == JL_OPTIONS_DEPWARN_ERROR)
         jl_parse_deperror(fl_ctx, 1);
     else
         jl_parse_depwarn_(fl_ctx, (int)jl_options.depwarn);

@@ -77,6 +77,7 @@
     <list name="types">
       <item> AbstractArray </item>
       <item> AbstractMatrix </item>
+      <item> AbstractRemoteRef </item>
       <item> AbstractSparseMatrix </item>
       <item> AbstractVector </item>
       <item> Any </item>
@@ -157,11 +158,9 @@
       <item> Regex </item>
       <item> RegexMatch </item>
       <item> RegexMatchIterator </item>
-      <item> RemoteRef </item>
       <item> RepString </item>
       <item> RevString </item>
       <item> Reverse </item>
-      <item> RopeString </item>
       <item> Schur </item>
       <item> Set </item>
       <item> Signed </item>
@@ -180,8 +179,8 @@
       <item> Symbol </item>
       <item> Symmetric </item>
       <item> SymTridiagonal </item>
+      <item> TCPSocket </item>
       <item> Task </item>
-      <item> TcpSocket </item>
       <item> TimeoutAsyncWork </item>
       <item> TmStruct </item>
       <item> Triangular </item>

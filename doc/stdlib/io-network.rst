@@ -630,7 +630,7 @@ Text I/O
 
    .. Docstring generated from Julia source
 
-   Returns a new write-only I/O stream, which converts any bytes written to it into base64-encoded ASCII bytes written to ``ostream``\ . Calling ``close`` on the ``Base64Pipe`` stream is necessary to complete the encoding (but does not close ``ostream``\ ).
+   Returns a new write-only I/O stream, which converts any bytes written to it into base64-encoded ASCII bytes written to ``ostream``\ . Calling ``close`` on the ``Base64EncodePipe`` stream is necessary to complete the encoding (but does not close ``ostream``\ ).
 
 .. function:: Base64DecodePipe(istream)
 
@@ -643,7 +643,7 @@ Text I/O
 
    .. Docstring generated from Julia source
 
-   Given a ``write``\ -like function ``writefunc``\ , which takes an I/O stream as its first argument, ``base64(writefunc, args...)`` calls ``writefunc`` to write ``args...`` to a base64-encoded string, and returns the string. ``base64(args...)`` is equivalent to ``base64(write, args...)``\ : it converts its arguments into bytes using the standard ``write`` functions and returns the base64-encoded string.
+   Given a ``write``\ -like function ``writefunc``\ , which takes an I/O stream as its first argument, ``base64encode(writefunc, args...)`` calls ``writefunc`` to write ``args...`` to a base64-encoded string, and returns the string. ``base64encode(args...)`` is equivalent to ``base64encode(write, args...)``\ : it converts its arguments into bytes using the standard ``write`` functions and returns the base64-encoded string.
 
 .. function:: base64decode(string)
 

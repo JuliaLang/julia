@@ -88,19 +88,3 @@
 
    Flushes the C ``stdout`` and ``stderr`` streams (which may have been written to by external C code).
 
-.. function:: msync(ptr, len, [flags])
-
-   .. Docstring generated from Julia source
-
-   Forces synchronization of the :func:`mmap`\ ped memory region from ``ptr`` to ``ptr+len``\ . Flags defaults to ``MS_SYNC``\ , but can be a combination of ``MS_ASYNC``\ , ``MS_SYNC``\ , or ``MS_INVALIDATE``\ . See your platform man page for specifics. The flags argument is not valid on Windows.
-
-   You may not need to call ``msync``\ , because synchronization is performed at intervals automatically by the operating system. However, you can call this directly if, for example, you are concerned about losing the result of a long-running calculation.
-
-.. variable:: MS_ASYNC
-              MS_SYNC
-              MS_INVALIDATE
-
-   .. Docstring generated from Julia source
-
-   Enum constants for :func:`msync`\ . See your platform man page for details. (not available on Windows).
-
