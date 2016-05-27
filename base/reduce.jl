@@ -387,13 +387,22 @@ end
 any(itr) = any(identity, itr)
 all(itr) = all(identity, itr)
 
+nonboolean_error(f, op) = throw(ArgumentError("""
+    Using non-boolean collections with $f(itr) is not allowed, use
+    reduce($op, itr) instead. If you are using $f(map(f, itr)) or
+    $f([f(x) for x in itr]), use $f(f, itr) instead.
+"""))
+or_bool_only(a, b) = nonboolean_error(:any, :|)
+or_bool_only(a::Bool, b::Bool) = a|b
+and_bool_only(a, b) = nonboolean_error(:all, :&)
+and_bool_only(a::Bool, b::Bool) = a&b
+
 any(f::Any, itr) = any(Predicate(f), itr)
 any(f::Predicate, itr) = mapreduce_sc_impl(f, |, itr)
 any(f::typeof(identity), itr) =
     eltype(itr) <: Bool ?
         mapreduce_sc_impl(f, |, itr) :
         reduce(or_bool_only, itr)
-or_bool_only(a::Bool, b::Bool) = a | b
 
 all(f::Any, itr) = all(Predicate(f), itr)
 all(f::Predicate, itr) = mapreduce_sc_impl(f, &, itr)
@@ -401,7 +410,6 @@ all(f::typeof(identity), itr) =
     eltype(itr) <: Bool ?
         mapreduce_sc_impl(f, &, itr) :
         reduce(and_bool_only, itr)
-and_bool_only(a::Bool, b::Bool) = a & b
 
 ## in & contains
 
