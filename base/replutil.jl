@@ -1,7 +1,7 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
 # fallback text/plain representation of any type:
-writemime(io::IO, ::MIME"text/plain", x) = show(io, x)
+show(io::IO, ::MIME"text/plain", x) = show(io, x)
 
 
 # showing exception objects as descriptive error messages
@@ -15,7 +15,7 @@ function showerror(io::IO, ex::BoundsError)
         if isa(ex.a, AbstractArray)
             print(io, summary(ex.a))
         else
-            writemime(io, MIME"text/plain"(), ex.a)
+            show(io, MIME"text/plain"(), ex.a)
         end
         if isdefined(ex, :i)
             !isa(ex.a, AbstractArray) && print(io, "\n ")

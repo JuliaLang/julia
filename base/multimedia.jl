@@ -3,13 +3,13 @@
 module Multimedia
 
 export Display, display, pushdisplay, popdisplay, displayable, redisplay,
-   MIME, @MIME, @MIME_str, writemime, reprmime, stringmime, istextmime,
+   MIME, @MIME, @MIME_str, reprmime, stringmime, istextmime,
    mimewritable, TextDisplay
 
 ###########################################################################
 # We define a singleton type MIME{mime symbol} for each MIME type, so
 # that Julia's dispatch and overloading mechanisms can be used to
-# dispatch writemime and to add conversions for new types.
+# dispatch show and to add conversions for new types.
 
 immutable MIME{mime} end
 
@@ -33,14 +33,14 @@ macro MIME_str(s)
 end
 
 ###########################################################################
-# For any type T one can define writemime(io, ::MIME"type", x::T) = ...
+# For any type T one can define show(io, ::MIME"type", x::T) = ...
 # in order to provide a way to export T as a given mime type.
 
 mimewritable{mime}(::MIME{mime}, x) =
-  method_exists(writemime, Tuple{IO, MIME{mime}, typeof(x)})
+  method_exists(show, Tuple{IO, MIME{mime}, typeof(x)})
 
 # it is convenient to accept strings instead of ::MIME
-writemime(io::IO, m::AbstractString, x) = writemime(io, MIME(m), x)
+show(io::IO, m::AbstractString, x) = show(io, MIME(m), x)
 mimewritable(m::AbstractString, x) = mimewritable(MIME(m), x)
 
 ###########################################################################
@@ -57,21 +57,21 @@ mimewritable(m::AbstractString, x) = mimewritable(MIME(m), x)
 # format and is returned unmodified.  This is useful so that raw data can be
 # passed to display(m::MIME, x).
 
-verbose_writemime(io, m, x) = writemime(IOContext(io,multiline=true,limit=false), m, x)
+verbose_show(io, m, x) = show(IOContext(io,multiline=true,limit=false), m, x)
 
 macro textmime(mime)
     quote
         mimeT = MIME{Symbol($mime)}
         # avoid method ambiguities with the general definitions below:
         # (Q: should we treat Vector{UInt8} as a String?)
-        Base.Multimedia.reprmime(m::mimeT, x::Vector{UInt8}) = sprint(verbose_writemime, m, x)
+        Base.Multimedia.reprmime(m::mimeT, x::Vector{UInt8}) = sprint(verbose_show, m, x)
         Base.Multimedia.stringmime(m::mimeT, x::Vector{UInt8}) = reprmime(m, x)
 
         Base.Multimedia.istextmime(::mimeT) = true
         if $(mime != "text/plain") # strings are shown escaped for text/plain
             Base.Multimedia.reprmime(m::mimeT, x::AbstractString) = x
         end
-        Base.Multimedia.reprmime(m::mimeT, x) = sprint(verbose_writemime, m, x)
+        Base.Multimedia.reprmime(m::mimeT, x) = sprint(verbose_show, m, x)
         Base.Multimedia.stringmime(m::mimeT, x) = reprmime(m, x)
     end
 end
@@ -79,11 +79,11 @@ end
 istextmime(::MIME) = false
 function reprmime(m::MIME, x)
     s = IOBuffer()
-    verbose_writemime(s, m, x)
+    verbose_show(s, m, x)
     takebuf_array(s)
 end
 reprmime(m::MIME, x::Vector{UInt8}) = x
-stringmime(m::MIME, x) = base64encode(verbose_writemime, m, x)
+stringmime(m::MIME, x) = base64encode(verbose_show, m, x)
 stringmime(m::MIME, x::Vector{UInt8}) = base64encode(write, x)
 
 # it is convenient to accept strings instead of ::MIME
@@ -118,7 +118,7 @@ displayable(mime::AbstractString) = displayable(MIME(mime))
 immutable TextDisplay <: Display
     io::IO
 end
-display(d::TextDisplay, M::MIME"text/plain", x) = writemime(d.io, M, x)
+display(d::TextDisplay, M::MIME"text/plain", x) = show(d.io, M, x)
 display(d::TextDisplay, x) = display(d, MIME"text/plain"(), x)
 
 import Base: close, flush
@@ -152,7 +152,7 @@ macro try_display(expr)
   quote
     try $(esc(expr))
     catch e
-      isa(e, MethodError) && e.f in (display, redisplay, writemime) ||
+      isa(e, MethodError) && e.f in (display, redisplay, show) ||
         rethrow()
     end
   end

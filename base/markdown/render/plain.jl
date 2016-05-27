@@ -60,7 +60,7 @@ function plain(io::IO, l::LaTeX)
 end
 
 function plain(io::IO, md)
-    writemime(io,  MIME"text/plain"(), md)
+    show(io,  MIME"text/plain"(), md)
     println(io)
 end
 
@@ -95,9 +95,9 @@ plaininline(io::IO, md::Code) = print(io, "`", md.code, "`")
 
 plaininline(io::IO, br::LineBreak) = println(io)
 
-plaininline(io::IO, x) = writemime(io, MIME"text/plain"(), x)
+plaininline(io::IO, x) = show(io, MIME"text/plain"(), x)
 
-# writemime
+# show
 
-Base.writemime(io::IO, ::MIME"text/plain", md::MD) = plain(io, md)
-Base.writemime(io::IO, ::MIME"text/markdown", md::MD) = plain(io, md)
+Base.show(io::IO, md::MD) = plain(io, md)
+Base.show(io::IO, ::MIME"text/markdown", md::MD) = plain(io, md)
