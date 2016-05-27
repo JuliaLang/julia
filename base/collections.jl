@@ -106,7 +106,7 @@ end
 
 Returns a new vector in binary heap order, optionally using the given ordering.
 """
-heapify(xs::AbstractArray, o::Ordering=Forward) = heapify!(copy(xs), o)
+heapify(xs::AbstractArray, o::Ordering=Forward) = heapify!(copy!(similar(xs), xs), o)
 
 """
     isheap(v, [ord])
