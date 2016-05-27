@@ -50,12 +50,12 @@ zip(a) = Zip1(a)
 length(z::Zip1) = length(z.a)
 size(z::Zip1) = size(z.a)
 eltype{I}(::Type{Zip1{I}}) = Tuple{eltype(I)}
-@inline start(z::Zip1) = (start(z.a),)
+@inline start(z::Zip1) = start(z.a)
 @inline function next(z::Zip1, st)
-    n = next(z.a,st[1])
-    return ((n[1],), (n[2],))
+    n = next(z.a,st)
+    return ((n[1],), n[2])
 end
-@inline done(z::Zip1, st) = done(z.a,st[1])
+@inline done(z::Zip1, st) = done(z.a,st)
 
 iteratorsize{I}(::Type{Zip1{I}}) = iteratorsize(I)
 iteratoreltype{I}(::Type{Zip1{I}}) = iteratoreltype(I)
@@ -139,7 +139,7 @@ end
 
 done(f::Filter, s) = s[1]
 
-eltype{I}(::Type{Filter{I}}) = eltype(I)
+eltype{F,I}(::Type{Filter{F,I}}) = eltype(I)
 iteratoreltype{F,I}(::Type{Filter{F,I}}) = iteratoreltype(I)
 iteratorsize{T<:Filter}(::Type{T}) = SizeUnknown()
 
