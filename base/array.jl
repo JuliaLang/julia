@@ -244,16 +244,23 @@ function _collect(cont, itr, ::HasEltype, isz::SizeUnknown)
     return a
 end
 
-_default_eltype(itr::ANY) = Union{}
-_default_eltype{I,T}(::Generator{I,Type{T}}) = T
+if isdefined(Core, :Inference)
+    function _default_eltype(itrt::ANY)
+        rt = Core.Inference.return_type(first, Tuple{itrt})
+        return isleaftype(rt) ? rt : Union{}
+    end
+else
+    _default_eltype(itr::ANY) = Union{}
+end
+_default_eltype{I,T}(::Type{Generator{I,Type{T}}}) = T
 
 _collect(c, itr, ::EltypeUnknown, isz::SizeUnknown) =
-    grow_to!(_similar_for(c, _default_eltype(itr), itr, isz), itr)
+    grow_to!(_similar_for(c, _default_eltype(typeof(itr)), itr, isz), itr)
 
 function _collect(c, itr, ::EltypeUnknown, isz::Union{HasLength,HasShape})
     st = start(itr)
     if done(itr,st)
-        return _similar_for(c, _default_eltype(itr), itr, isz)
+        return _similar_for(c, _default_eltype(typeof(itr)), itr, isz)
     end
     v1, st = next(itr, st)
     collect_to_with_first!(_similar_for(c, typeof(v1), itr, isz), v1, itr, st)
