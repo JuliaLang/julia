@@ -486,9 +486,7 @@ export
 # arrays
     bitbroadcast,
     broadcast!,
-    broadcast!_function,
     broadcast,
-    broadcast_function,
     broadcast_getindex,
     broadcast_setindex!,
     cat,
