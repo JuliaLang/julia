@@ -44,6 +44,8 @@ end
 @test median!([1 2 3 4]) == 2.5
 @test median!([1 2; 3 4]) == 2.5
 
+@test invoke(median, (AbstractVector,), 1:10) == median(1:10) == 5.5
+
 # mean
 @test_throws ArgumentError mean(())
 @test mean((1,2,3)) === 2.
