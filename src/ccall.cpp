@@ -1235,6 +1235,17 @@ static jl_cgval_t emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
         emit_signal_fence();
         return ghostValue(jl_void_type);
     }
+    if (fptr == (void(*)(void))&jl_get_ptls_states ||
+        ((!f_lib || (intptr_t)f_lib == 2) && f_name &&
+         strcmp(f_name, "jl_get_ptls_states") == 0)) {
+        assert(lrt == T_pint8);
+        assert(!isVa);
+        assert(nargt == 0);
+        JL_GC_POP();
+        return mark_or_box_ccall_result(
+            builder.CreateBitCast(ctx->ptlsStates, lrt),
+            retboxed, args[2], rt, static_rt, ctx);
+    }
     if (fptr == &jl_sigatomic_begin ||
         ((!f_lib || (intptr_t)f_lib == 2) && f_name &&
          strcmp(f_name, "jl_sigatomic_begin") == 0)) {
