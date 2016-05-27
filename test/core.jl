@@ -2269,7 +2269,7 @@ f9534d(x) = (a=(1,2,4,6,7); a[x])
 @test try; f9534d() catch ex; (ex::BoundsError).a === (1,2,4,6,7) && ex.i == 7; end
 @test try; f9534d(-1) catch ex; (ex::BoundsError).a === (1,2,4,6,7) && ex.i == -1; end
 f9534e(x) = (a=IOBuffer(); setfield!(a, x, 3))
-@test try; f9534e(-2) catch ex; isa((ex::BoundsError).a,Base.IOBuffer) && ex.i == -2; end
+@test try; f9534e(-2) catch ex; (ex::BoundsError).a == Base.IOBuffer && ex.i == -2; end
 f9534f() = (a=IOBuffer(); getfield(a, -2))
 f9534f(x) = (a=IOBuffer(); getfield(a, x))
 @test try; f9534f() catch ex; isa((ex::BoundsError).a,Base.IOBuffer) && ex.i == -2; end
