@@ -1338,7 +1338,7 @@ end
 
 shuffle!(a::AbstractVector) = shuffle!(GLOBAL_RNG, a)
 
-shuffle(r::AbstractRNG, a::AbstractVector) = shuffle!(r, copy(a))
+shuffle(r::AbstractRNG, a::AbstractVector) = shuffle!(r, copy!(similar(a), a))
 shuffle(a::AbstractVector) = shuffle(GLOBAL_RNG, a)
 
 function randperm(r::AbstractRNG, n::Integer)
