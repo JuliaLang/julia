@@ -728,9 +728,9 @@ export
 # collections
     all!,
     all,
-    allunique,
     any!,
     any,
+    anyduplicated,
     collect,
     contains,
     count,

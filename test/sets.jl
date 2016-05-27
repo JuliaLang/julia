@@ -207,19 +207,19 @@ u = unique([1,1,2])
 @test unique(iseven, [5,1,8,9,3,4,10,7,2,6]) == [5,8]
 @test unique(n->n % 3, [5,1,8,9,3,4,10,7,2,6]) == [5,1,9]
 
-# allunique
-@test allunique([])
-@test allunique(Set())
-@test allunique([1,2,3])
-@test allunique([:a,:b,:c])
-@test allunique(Set([1,2,3]))
-@test !allunique([1,1,2])
-@test !allunique([:a,:b,:c,:a])
-@test allunique(4:7)
-@test allunique(1:1)
-@test allunique(4.0:0.3:7.0)
-@test allunique(4:-1:5)       # empty range
-@test allunique(7:-1:1)       # negative step
+# anyduplicated
+@test !anyduplicated([])
+@test !anyduplicated(Set())
+@test !anyduplicated([1,2,3])
+@test !anyduplicated([:a,:b,:c])
+@test !anyduplicated(Set([1,2,3]))
+@test anyduplicated([1,1,2])
+@test anyduplicated([:a,:b,:c,:a])
+@test !anyduplicated(4:7)
+@test !anyduplicated(1:1)
+@test !anyduplicated(4.0:0.3:7.0)
+@test !anyduplicated(4:-1:5)       # empty range
+@test !anyduplicated(7:-1:1)       # negative step
 
 # filter
 s = Set([1,2,3,4])
