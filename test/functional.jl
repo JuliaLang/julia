@@ -175,6 +175,12 @@ let i = 0
         i <= 10 || break
     end
 end
+@test eltype(repeated(0))    == Int
+@test eltype(repeated(0, 5)) == Int
+@test Base.iteratorsize(repeated(0))      == Base.IsInfinite()
+@test Base.iteratorsize(repeated(0, 5))   == Base.HasLength()
+@test Base.iteratoreltype(repeated(0))    == Base.HasEltype()
+@test Base.iteratoreltype(repeated(0, 5)) == Base.HasEltype()
 
 
 # product

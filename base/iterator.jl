@@ -284,19 +284,23 @@ end
 
 done(it::Cycle, state) = state[2]
 
-# Repeat an object infinitely many times
+
+# Repeated - repeat an object infinitely many times
 
 immutable Repeated{O}
     x::O
 end
 repeated(x) = Repeated(x)
+repeated(x, n::Int) = take(repeated(x), n)
+
 eltype{O}(::Type{Repeated{O}}) = O
-iteratorsize{O}(::Type{Repeated{O}}) = IsInfinite()
+
 start(it::Repeated) = nothing
 next(it::Repeated, state) = (it.x, nothing)
 done(it::Repeated, state) = false
 
-repeated(x, n::Int) = take(repeated(x), n)
+iteratorsize{O}(::Type{Repeated{O}}) = IsInfinite()
+iteratoreltype{O}(::Type{Repeated{O}}) = HasEltype()
 
 # product
 
