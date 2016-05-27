@@ -281,4 +281,13 @@ temp_pkg_dir() do
         @test contains(msg, "Pkg.build(\"BuildFail\")")
         @test contains(msg, "Throw build error")
     end
+
+    # issue #15948
+    let package = "Example"
+        Pkg.rm(package)  # Remove package if installed
+        @test Pkg.installed(package) == nothing  # Registered with METADATA but not installed
+        msg = readstring(ignorestatus(`$(Base.julia_cmd()) -f -e "redirect_stderr(STDOUT); Pkg.build(\"$package\")"`))
+        @test contains(msg, "$package is not an installed package")
+        @test !contains(msg, "signal (15)")
+    end
 end
