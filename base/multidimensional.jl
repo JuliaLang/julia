@@ -180,6 +180,14 @@ index_shape_dim(A, dim, ::Colon) = (trailingsize(A, dim),)
 @inline index_shape_dim(A, dim, i::AbstractArray{Bool}, I...) = (sum(i), index_shape_dim(A, dim+1, I...)...)
 @inline index_shape_dim{N}(A, dim, i::AbstractArray{CartesianIndex{N}}, I...) = (size(i)..., index_shape_dim(A, dim+N, I...)...)
 
+@inline decolon(A::AbstractVector, ::Colon) = (indices(A,1),)
+@inline decolon(A::AbstractArray, ::Colon) = (1:length(A),)
+@inline decolon(A::AbstractArray, I...) = decolon_dim(A, 1, I...)
+@inline decolon_dim(A::AbstractArray, dim)                = ()
+@inline decolon_dim(A::AbstractArray, dim, ::Colon)       = dim == ndims(A) ?  (indices(A, dim),) : (1:trailingsize(A, dim),)
+@inline decolon_dim(A::AbstractArray, dim, i1, I...)      = (i1, decolon_dim(A, dim+1, I...)...)
+@inline decolon_dim(A::AbstractArray, dim, ::Colon, I...) = (indices(A, dim), decolon_dim(A, dim+1, I...)...)
+
 ### From abstractarray.jl: Internal multidimensional indexing definitions ###
 # These are not defined on directly on getindex to avoid
 # ambiguities for AbstractArray subtypes. See the note in abstractarray.jl
@@ -257,10 +265,12 @@ end
     N = length(I)
     quote
         $(Expr(:meta, :inline))
+        @nexprs $N d->(I_d = I[d])
+        J = @ncall $N decolon src I
+        @nexprs $N d->(J_d = J[d])
         D = eachindex(dest)
         Ds = start(D)
-        idxlens = index_lengths(src, I...)
-        @nloops $N i d->(1:idxlens[d]) d->(@inbounds j_d = getindex(I[d], i_d)) begin
+        @nloops $N j d->J_d begin
             d, Ds = next(D, Ds)
             @inbounds dest[d] = @ncall $N getindex src j
         end
@@ -338,8 +348,10 @@ end
         @nexprs $N d->(I_d = I[d])
         idxlens = @ncall $N index_lengths A I
         @ncall $N setindex_shape_check X (d->idxlens[d])
+        J = @ncall $N decolon A I
+        @nexprs $N d->(J_d = J[d])
         Xs = start(X)
-        @nloops $N i d->(1:idxlens[d]) d->(@inbounds j_d = I_d[i_d]) begin
+        @nloops $N j d->J_d begin
             v, Xs = next(X, Xs)
             @inbounds @ncall $N setindex! A v j
         end
