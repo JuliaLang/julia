@@ -87,7 +87,8 @@ using Base.Test
 @inline h(x) = (y = g(x); y)       # this test could be extended to check for that if we switch to linear representation
 f(x) = (y = h(x); y)
 trace = (try; f(3); catch; catch_stacktrace(); end)[1:3]
-for (frame, func, inlined) in zip(trace, [g,h,f], (true, true, false))
+can_inline = Bool(Base.JLOptions().can_inline)
+for (frame, func, inlined) in zip(trace, [g,h,f], (can_inline, can_inline, false))
     @test frame.func === typeof(func).name.mt.name
     #@test get(frame.linfo).def === which(func, (Any,)).func
     #@test get(frame.linfo).specTypes === Tuple{typeof(func), Int}
