@@ -154,11 +154,17 @@ typedef struct {
         //
         // For a quick sweep preceded by a full sweep. If this bit is set,
         // the page needs to be swept. If this bit is not set, there could
-        // still be old dead objects in the page.
+        // still be old dead objects in the page and `nold` and `prev_nold`
+        // should be used to determine if the page needs to be swept.
         uint16_t has_young: 1;
     };
-    uint16_t nfree; // number of free objects in this page.
-                    // invalid if pool that owns this page is allocating objects from this page.
+    // number of old objects in this page
+    uint16_t nold;
+    // number of old objects in this page during the previous full sweep
+    uint16_t prev_nold;
+    // number of free objects in this page.
+    // invalid if pool that owns this page is allocating objects from this page.
+    uint16_t nfree;
     uint16_t osize; // size of each object in this page
     uint16_t fl_begin_offset; // offset of first free object in this page
     uint16_t fl_end_offset;   // offset of last free object in this page
