@@ -83,6 +83,10 @@ static int sig_match_by_type_simple(jl_value_t **types, size_t n, jl_tupletype_t
     }
     if (va) {
         jl_value_t *decl = jl_field_type(sig, i);
+        if (jl_vararg_kind(decl) == JL_VARARG_INT) {
+            if (n-i != jl_unbox_long(jl_tparam1(decl)))
+                return 0;
+        }
         jl_value_t *t = jl_tparam0(decl);
         for(; i < n; i++) {
             if (!jl_subtype(types[i], t, 0))
@@ -150,6 +154,10 @@ static inline int sig_match_simple(jl_value_t **args, size_t n, jl_value_t **sig
     }
     if (va) {
         jl_value_t *decl = sig[i];
+        if (jl_vararg_kind(decl) == JL_VARARG_INT) {
+            if (n-i != jl_unbox_long(jl_tparam1(decl)))
+                return 0;
+        }
         jl_value_t *t = jl_tparam0(decl);
         for(; i < n; i++) {
             if (!jl_subtype(args[i], t, 1))
