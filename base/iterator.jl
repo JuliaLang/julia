@@ -320,10 +320,8 @@ _prod_size(a, b, ::HasLength, ::HasLength)  = (length(a),  length(b))
 _prod_size(a, b, ::HasLength, ::HasShape)   = (length(a),  size(b)...)
 _prod_size(a, b, ::HasShape,  ::HasLength)  = (size(a)..., length(b))
 _prod_size(a, b, ::HasShape,  ::HasShape)   = (size(a)..., size(b)...)
-_prod_size(a, b, A, ::Union{HasShape, HasLength}) =
-    throw(ArgumentError("Cannot compute size for object of type $(typeof(a))"))
-_prod_size(a, b, ::Union{HasShape, HasLength}, B) =
-    throw(ArgumentError("Cannot compute size for object of type $(typeof(b))"))
+_prod_size(a, b, A, B) =
+    throw(ArgumentError("Cannot construct size for objects of types $(typeof(a)) and $(typeof(b))"))
 
 # one iterator
 immutable Prod1{I} <: AbstractProdIterator
@@ -417,12 +415,11 @@ end
 
 prod_iteratorsize(::Union{HasLength,HasShape}, ::Union{HasLength,HasShape}) = HasShape()
 # products can have an infinite iterator
+prod_iteratorsize(::IsInfinite, ::IsInfinite) = IsInfinite()
 prod_iteratorsize(a, ::IsInfinite) = IsInfinite()
 prod_iteratorsize(::IsInfinite, b) = IsInfinite()
 prod_iteratorsize(a, b) = SizeUnknown()
 
-_size(p::Prod2) = (length(p.a), length(p.b))
-_size(p::Prod) = (length(p.a), _size(p.b)...)
 
 """
     IteratorND(iter, dims)
@@ -443,7 +440,7 @@ immutable IteratorND{I,N}
         end
         new{I,N}(iter, shape)
     end
-    (::Type{IteratorND}){I<:AbstractProdIterator}(p::I) = IteratorND(p, _size(p))
+    (::Type{IteratorND}){I<:AbstractProdIterator}(p::I) = IteratorND(p, size(p))
 end
 
 start(i::IteratorND) = start(i.iter)

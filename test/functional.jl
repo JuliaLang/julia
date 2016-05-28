@@ -334,6 +334,7 @@ let f1 = Filter(i->i>0, 1:10)
     @test Base.iteratorsize(Base.product(countfrom(1), f1)) == Base.IsInfinite()
 end
 @test Base.iteratorsize(Base.product(1:2, countfrom(1)))          == Base.IsInfinite()
+@test Base.iteratorsize(Base.product(countfrom(2), countfrom(1))) == Base.IsInfinite()
 @test Base.iteratorsize(Base.product(countfrom(1), 1:2))          == Base.IsInfinite()
 @test Base.iteratorsize(Base.product(1:2))                        == Base.HasShape()
 @test Base.iteratorsize(Base.product(1:2, 1:2))                   == Base.HasShape()
