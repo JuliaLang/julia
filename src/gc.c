@@ -407,10 +407,13 @@ static inline int gc_setmark_pool(void *o, int mark_mode)
         mark_mode = GC_MARKED;
     }
     if (!(bits & GC_MARKED)) {
-        if (mark_mode == GC_MARKED)
+        if (mark_mode == GC_MARKED) {
             perm_scanned_bytes += page->osize;
-        else
+            page->nold++;
+        }
+        else {
             scanned_bytes += page->osize;
+        }
         objprofile_count(jl_typeof(jl_valueof(o)),
                          mark_mode == GC_MARKED, page->osize);
     }
@@ -878,8 +881,8 @@ static gcval_t **sweep_page(jl_gc_pool_t *p, jl_gc_pagemeta_t *pg, gcval_t **pfl
     // For quick sweep, we might be able to skip the page if the page doesn't
     // have any young live cell before marking.
     if (sweep_mask == GC_MARKED_NOESC && !pg->has_young) {
-        // TODO handle `prev_sweep_mask == GC_MARKED` with additional counters
-        if (prev_sweep_mask == GC_MARKED_NOESC) {
+        assert(prev_sweep_mask == GC_MARKED_NOESC || pg->prev_nold >= pg->nold);
+        if (prev_sweep_mask == GC_MARKED_NOESC || pg->prev_nold == pg->nold) {
             // the position of the freelist begin/end in this page
             // is stored in its metadata
             if (pg->fl_begin_offset != (uint16_t)-1) {
@@ -895,6 +898,7 @@ static gcval_t **sweep_page(jl_gc_pool_t *p, jl_gc_pagemeta_t *pg, gcval_t **pfl
     {  // scope to avoid clang goto errors
         int has_marked = 0;
         int has_young = 0;
+        int16_t prev_nold = 0;
         int pg_nfree = 0;
         gcval_t **pfl_begin = NULL;
         uint8_t msk = 1; // mask for the age bit in the current age byte
@@ -914,6 +918,7 @@ static gcval_t **sweep_page(jl_gc_pool_t *p, jl_gc_pagemeta_t *pg, gcval_t **pfl
                     if (sweep_mask == GC_MARKED || bits == GC_MARKED_NOESC) {
                         bits = gc_bits(v) = GC_QUEUED; // promote
                     }
+                    prev_nold++;
                 }
                 else {
                     assert(bits == GC_MARKED_NOESC);
@@ -939,6 +944,10 @@ static gcval_t **sweep_page(jl_gc_pool_t *p, jl_gc_pagemeta_t *pg, gcval_t **pfl
         pg->fl_end_offset = pfl_begin ? (char*)pfl - data : (uint16_t)-1;
 
         pg->nfree = pg_nfree;
+        if (sweep_mask == GC_MARKED) {
+            pg->nold = 0;
+            pg->prev_nold = prev_nold;
+        }
         page_done++;
     }
  free_page:
