@@ -5,7 +5,7 @@ module Broadcast
 using ..Cartesian
 using Base: promote_op, promote_eltype, promote_eltype_op, @get!, _msk_end, unsafe_bitgetindex
 import Base: .+, .-, .*, ./, .\, .//, .==, .<, .!=, .<=, .÷, .%, .<<, .>>, .^
-export broadcast, broadcast!, broadcast_function, broadcast!_function, bitbroadcast
+export broadcast, broadcast!, bitbroadcast
 export broadcast_getindex, broadcast_setindex!
 
 ## Broadcasting utilities ##
@@ -220,9 +220,6 @@ end
 broadcast(f, As...) = broadcast!(f, Array{promote_eltype_op(f, As...)}(broadcast_shape(As...)), As...)
 
 bitbroadcast(f, As...) = broadcast!(f, BitArray(broadcast_shape(As...)), As...)
-
-broadcast!_function(f) = (B, As...) -> broadcast!(f, B, As...)
-broadcast_function(f) = (As...) -> broadcast(f, As...)
 
 broadcast_getindex(src::AbstractArray, I::AbstractArray...) = broadcast_getindex!(Array{eltype(src)}(broadcast_shape(I...)), src, I...)
 @generated function broadcast_getindex!(dest::AbstractArray, src::AbstractArray, I::AbstractArray...)
