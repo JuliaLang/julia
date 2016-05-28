@@ -434,6 +434,12 @@ let d = Dict(:a=>1, :b=>2), a = Dict(3=>4, 5=>6)
     @test Dict( (x,b)=>(c,y) for (x,c) in d, (b,y) in a ) == Dict((:a,5)=>(1,6),(:b,5)=>(2,6),(:a,3)=>(1,4),(:b,3)=>(2,4))
 end
 
+let i = 1
+    local g = (i+j for i=2:2, j=3:3)
+    @test first(g) == 5
+    @test i == 1
+end
+
 # partition(c, n)
 let v = collect(Base.partition([1,2,3,4,5], 1))
     @test all(i->v[i][1] == i, v)
