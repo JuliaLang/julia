@@ -100,7 +100,7 @@ r = reshape(s, (length(s),))
 @test parentindexes(r) == (1:1, 1:3)
 @test reshape(r, (3,)) === r
 @test convert(Array{Int,1}, r) == [2,3,4]
-@test_throws MethodError convert(Array{Int,2}, r)
+@test_throws DimensionMismatch convert(Array{Int,2}, r)
 @test convert(Array{Int}, r) == [2,3,4]
 @test Base.unsafe_convert(Ptr{Int}, r) == Base.unsafe_convert(Ptr{Int}, s)
 
@@ -115,7 +115,7 @@ r = reshape(s, length(s))
 @test parentindexes(r) == (1:1, 1:3)
 @test reshape(r, (3,)) === r
 @test convert(Array{Int,1}, r) == [2,3,5]
-@test_throws MethodError convert(Array{Int,2}, r)
+@test_throws DimensionMismatch convert(Array{Int,2}, r)
 @test convert(Array{Int}, r) == [2,3,5]
 @test_throws ErrorException Base.unsafe_convert(Ptr{Int}, r)
 r[2] = -1

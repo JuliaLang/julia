@@ -7244,15 +7244,6 @@ for the effects of compilation.
 :@allocated
 
 """
-    Array(dims)
-
-`Array{T}(dims)` constructs an uninitialized dense array with element type `T`. `dims` may
-be a tuple or a series of integer arguments. The syntax `Array(T, dims)` is also available,
-but deprecated.
-"""
-Array
-
-"""
     isreal(x) -> Bool
 
 Test whether `x` or all its elements are numerically equal to some real number.
