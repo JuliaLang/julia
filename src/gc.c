@@ -320,7 +320,6 @@ static int64_t scanned_bytes; // young bytes scanned while marking
 static int64_t perm_scanned_bytes; // old bytes scanned while marking
 static int prev_sweep_mask = GC_MARKED;
 
-static size_t array_nbytes(jl_array_t*);
 #define inc_sat(v,s) v = (v) >= s ? s : (v)+1
 
 // Full collection heuristics
@@ -415,8 +414,9 @@ static inline int gc_setmark_pool(void *o, int mark_mode)
         objprofile_count(jl_typeof(jl_valueof(o)),
                          mark_mode == GC_MARKED, page->osize);
     }
+    assert(mark_mode & GC_MARKED);
+    page->has_marked = 1;
     _gc_setmark(o, mark_mode);
-    page->gc_bits |= mark_mode;
     verify_val(jl_valueof(o));
     return mark_mode;
 }
@@ -667,7 +667,6 @@ static void sweep_malloced_arrays(void)
 // pool allocation
 static inline gcval_t *reset_page(jl_gc_pool_t *p, jl_gc_pagemeta_t *pg, gcval_t *fl)
 {
-    pg->gc_bits = 0;
     pg->nfree = (GC_PAGE_SZ - GC_PAGE_OFFSET) / p->osize;
     jl_tls_states_t *ptls = jl_all_tls_states[pg->thread_n];
     pg->pool_n = p - ptls->heap.norm_pools;
@@ -675,7 +674,8 @@ static inline gcval_t *reset_page(jl_gc_pool_t *p, jl_gc_pagemeta_t *pg, gcval_t
     gcval_t *beg = (gcval_t*)(pg->data + GC_PAGE_OFFSET);
     gcval_t *end = (gcval_t*)((char*)beg + (pg->nfree - 1)*p->osize);
     end->next = fl;
-    pg->allocd = 0;
+    pg->has_young = 0;
+    pg->has_marked = 0;
     pg->fl_begin_offset = GC_PAGE_OFFSET;
     pg->fl_end_offset = (char*)end - (char*)beg + GC_PAGE_OFFSET;
     return beg;
@@ -724,7 +724,7 @@ static inline void *__pool_alloc(jl_gc_pool_t *p, int osize, int end_offset)
             jl_gc_pagemeta_t *pg = page_metadata(v);
             assert(pg->osize == p->osize);
             pg->nfree = 0;
-            pg->allocd = 1;
+            pg->has_young = 1;
             if (next)
                 p->nfree = page_metadata(next)->nfree;
         }
@@ -745,7 +745,7 @@ static inline void *__pool_alloc(jl_gc_pool_t *p, int osize, int end_offset)
         jl_gc_pagemeta_t *pg = page_metadata(v);
         assert(pg->osize == p->osize);
         pg->nfree = 0;
-        pg->allocd = 1;
+        pg->has_young = 1;
         p->newpages = v->next;
     }
     v->flags = 0;
@@ -873,12 +873,15 @@ static gcval_t **sweep_page(jl_gc_pool_t *p, jl_gc_pagemeta_t *pg, gcval_t **pfl
     freedall = 1;
     old_nfree += pg->nfree;
 
-    if (pg->gc_bits == GC_MARKED) {
-        // this page only contains GC_MARKED and free cells
-        // if we are doing a quick sweep and nothing has been allocated inside since last sweep
-        // we can skip it
-        if (sweep_mask == GC_MARKED_NOESC && !pg->allocd) {
-            // the position of the freelist begin/end in this page is stored in its metadata
+    if (!pg->has_marked)
+        goto free_page;
+    // For quick sweep, we might be able to skip the page if the page doesn't
+    // have any young live cell before marking.
+    if (sweep_mask == GC_MARKED_NOESC && !pg->has_young) {
+        // TODO handle `prev_sweep_mask == GC_MARKED` with additional counters
+        if (prev_sweep_mask == GC_MARKED_NOESC) {
+            // the position of the freelist begin/end in this page
+            // is stored in its metadata
             if (pg->fl_begin_offset != (uint16_t)-1) {
                 *pfl = page_pfl_beg(pg);
                 pfl = prev_pfl = (gcval_t**)page_pfl_end(pg);
@@ -888,11 +891,10 @@ static gcval_t **sweep_page(jl_gc_pool_t *p, jl_gc_pagemeta_t *pg, gcval_t **pfl
             goto free_page;
         }
     }
-    else if (pg->gc_bits == GC_CLEAN) {
-        goto free_page;
-    }
 
     {  // scope to avoid clang goto errors
+        int has_marked = 0;
+        int has_young = 0;
         int pg_nfree = 0;
         gcval_t **pfl_begin = NULL;
         uint8_t msk = 1; // mask for the age bit in the current age byte
@@ -906,14 +908,19 @@ static gcval_t **sweep_page(jl_gc_pool_t *p, jl_gc_pagemeta_t *pg, gcval_t **pfl
                 *ages &= ~msk;
             }
             else { // marked young or old
-                if (*ages & msk) { // old enough
+                if (*ages & msk || bits == GC_MARKED) { // old enough
+                    // `!age && bits == GC_MARKED` is possible for
+                    // non-first-class objects like `jl_binding_t`
                     if (sweep_mask == GC_MARKED || bits == GC_MARKED_NOESC) {
-                        gc_bits(v) = GC_QUEUED; // promote
+                        bits = gc_bits(v) = GC_QUEUED; // promote
                     }
                 }
-                else if ((sweep_mask & bits) == sweep_mask) {
-                    gc_bits(v) = GC_CLEAN; // unmark
+                else {
+                    assert(bits == GC_MARKED_NOESC);
+                    bits = gc_bits(v) = GC_CLEAN; // unmark
+                    has_young = 1;
                 }
+                has_marked |= (bits & GC_MARKED) != 0;
                 *ages |= msk;
                 freedall = 0;
             }
@@ -925,12 +932,14 @@ static gcval_t **sweep_page(jl_gc_pool_t *p, jl_gc_pagemeta_t *pg, gcval_t **pfl
             }
         }
 
+        assert(!freedall);
+        pg->has_marked = has_marked;
+        pg->has_young = has_young;
         pg->fl_begin_offset = pfl_begin ? (char*)pfl_begin - data : (uint16_t)-1;
         pg->fl_end_offset = pfl_begin ? (char*)pfl - data : (uint16_t)-1;
 
         pg->nfree = pg_nfree;
         page_done++;
-        pg->allocd = 0;
     }
  free_page:
     pg_freedall += freedall;
@@ -966,10 +975,6 @@ static gcval_t **sweep_page(jl_gc_pool_t *p, jl_gc_pagemeta_t *pg, gcval_t **pfl
         nfree += obj_per_page;
     }
     else {
-        if (sweep_mask == GC_MARKED)
-            pg->gc_bits = GC_CLEAN;
-        if (sweep_mask == GC_MARKED_NOESC)
-            pg->gc_bits = GC_MARKED;
         nfree += pg->nfree;
     }
 
@@ -1024,7 +1029,7 @@ static int gc_sweep_inc(int sweep_mask)
             gcval_t *last = p->freelist;
             if (last) {
                 jl_gc_pagemeta_t *pg = page_metadata(last);
-                pg->allocd = 1;
+                pg->has_young = 1;
                 pg->nfree = p->nfree;
             }
             p->freelist =  NULL;
@@ -1034,7 +1039,7 @@ static int gc_sweep_inc(int sweep_mask)
             if (last) {
                 jl_gc_pagemeta_t *pg = page_metadata(last);
                 pg->nfree = (GC_PAGE_SZ - ((char*)last - gc_page_data(last))) / p->osize;
-                pg->allocd = 1;
+                pg->has_young = 1;
             }
             p->newpages = NULL;
         }

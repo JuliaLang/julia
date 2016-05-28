@@ -348,8 +348,8 @@ static void gc_scrub_range(char *stack_lo, char *stack_hi)
             continue;
         jl_gc_pagemeta_t *pg = page_metadata(tag);
         // Make sure the sweep rebuild the freelist
-        pg->allocd = 1;
-        pg->gc_bits = 0x3;
+        pg->has_marked = 1;
+        pg->has_young = 1;
         // Find the age bit
         char *page_begin = gc_page_data(tag) + GC_PAGE_OFFSET;
         int obj_id = (((char*)tag) - page_begin) / osize;
@@ -358,6 +358,7 @@ static void gc_scrub_range(char *stack_lo, char *stack_hi)
         // (especially on 32bit where it's more likely to have pointer-like
         //  bit patterns)
         *ages &= ~(1 << (obj_id % 8));
+        // set mark to GC_MARKED_NOESC (young and marked)
         memset(tag, 0xff, osize);
     }
 }
