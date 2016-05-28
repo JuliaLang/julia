@@ -101,6 +101,25 @@ for elty in (Float32, Float64, Complex64, Complex128)
     @test_throws Base.LinAlg.LAPACKException LAPACK.gbtrf!(2,1,6,zeros(AB))
 end
 
+#pbtrf and pbtrs
+for elty in (Float32, Float64, Complex64, Complex128)
+    d1 = rand(elty, 10) .+ 10
+    d1 += conj(d1)
+    d2 = 0.1 .* rand(elty, 9)
+    d3 = 0.1 .* rand(elty, 8)
+    AB = [0 0 d3'; 0 d2'; d1']
+    AB = LAPACK.pbtrf!('U', 2, AB)
+    C = rand(elty, 10, 10)
+    D = copy(C)
+    D = LAPACK.pbtrs!('U',2, AB, D)
+    A = diagm(d3, -2) + diagm(conj(d3), 2) + diagm(d2, -1) + diagm(conj(d2), 1) + diagm(d1)
+    @test A\C ≈ D
+    d1n = d1 .- 100
+    ABn = [0 0 d3'; 0 d2'; d1n']
+    @test_throws Base.LinAlg.PosDefException LAPACK.pbtrf!('U', 2, ABn)
+    @test_throws DimensionMismatch LAPACK.pbtrs!('U',2, AB, ones(elty,12,12))
+end
+
 #geqp3, geqrt, error handling!
 for elty in (Float32, Float64, Complex64, Complex128)
     A = rand(elty,10,10)
