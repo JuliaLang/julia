@@ -264,8 +264,6 @@ static size_t max_collect_interval =  500000000UL;
 
 #define NS_TO_S(t) ((double)(t/1000)/(1000*1000))
 #define NS2MS(t) ((double)(t/1000)/1000)
-static int64_t live_bytes = 0;
-static int64_t promoted_bytes = 0;
 
 JL_DLLEXPORT size_t jl_gc_total_freed_bytes=0;
 #ifdef GC_FINAL_STATS
@@ -324,6 +322,41 @@ static int prev_sweep_mask = GC_MARKED;
 
 static size_t array_nbytes(jl_array_t*);
 #define inc_sat(v,s) v = (v) >= s ? s : (v)+1
+
+// Full collection heuristics
+static int64_t live_bytes = 0;
+static int64_t promoted_bytes = 0;
+
+static int64_t last_full_live_ub = 0;
+static int64_t last_full_live_est = 0;
+// upper bound and estimated live object sizes
+// This heuristic should be really unlikely to trigger.
+// However, this should be simple enough to trigger a full collection
+// when it's necessary if other heuristics are messed up.
+// It is also possible to take the total memory available into account
+// if necessary.
+STATIC_INLINE int gc_check_heap_size(int64_t sz_ub, int64_t sz_est)
+{
+    if (__unlikely(!last_full_live_ub || last_full_live_ub > sz_ub)) {
+        last_full_live_ub = sz_ub;
+    }
+    else if (__unlikely(last_full_live_ub * 3 / 2 < sz_ub)) {
+        return 1;
+    }
+    if (__unlikely(!last_full_live_est || last_full_live_est > sz_est)) {
+        last_full_live_est = sz_est;
+    }
+    else if (__unlikely(last_full_live_est * 2 < sz_est)) {
+        return 1;
+    }
+    return 0;
+}
+
+STATIC_INLINE void gc_update_heap_size(int64_t sz_ub, int64_t sz_est)
+{
+    last_full_live_ub = sz_ub;
+    last_full_live_est = sz_est;
+}
 
 static inline int gc_setmark_big(void *o, int mark_mode)
 {
@@ -1681,7 +1714,9 @@ static void _jl_gc_collect(int full, char *stack_hi)
 #if defined(GC_TIME) || defined(GC_FINAL_STATS)
             post_time = jl_hrtime() - post_time;
 #endif
-            estimate_freed = live_bytes - scanned_bytes - perm_scanned_bytes + actual_allocd;
+            int64_t live_sz_ub = live_bytes + actual_allocd;
+            int64_t live_sz_est = scanned_bytes + perm_scanned_bytes;
+            estimate_freed = live_sz_ub - live_sz_est;
 
             gc_verify();
 
@@ -1700,7 +1735,13 @@ static void _jl_gc_collect(int full, char *stack_hi)
             for (int i = 0;i < jl_n_threads;i++)
                 nptr += jl_all_tls_states[i]->heap.remset_nptr;
             int large_frontier = nptr*sizeof(void*) >= default_collect_interval; // many pointers in the intergen frontier => "quick" mark is not quick
-            if ((full || large_frontier || ((not_freed_enough || promoted_bytes >= gc_num.interval) && (promoted_bytes >= default_collect_interval || prev_sweep_mask == GC_MARKED))) && gc_num.pause > 1) {
+            if ((full || large_frontier ||
+                 ((not_freed_enough || promoted_bytes >= gc_num.interval) &&
+                  (promoted_bytes >= default_collect_interval ||
+                   prev_sweep_mask == GC_MARKED)) ||
+                 gc_check_heap_size(live_sz_ub, live_sz_est)) &&
+                gc_num.pause > 1) {
+                gc_update_heap_size(live_sz_ub, live_sz_est);
                 if (prev_sweep_mask != GC_MARKED || full) {
                     if (full) recollect = 1; // TODO enable this?
                 }
