@@ -357,6 +357,26 @@ function rewrite_pairs_to_tuples!(expr::Expr)
     return expr
 end
 
+# rewrites accesses to IOContext dicts
+function rewrite_iocontext!(expr::Expr)
+    if expr.head == :call && expr.args[1] == :get
+        key = expr.args[3]
+        if     (((isa(key, QuoteNode) && key.value == :limit) ||
+                 (isa(key, Expr) && key.head == :quote && key.args[1] == :limit))
+                && expr.args[4] == false)
+            if VERSION >= v"0.5.0-dev+1936" && VERSION < v"0.5.0-dev+4305"
+                expr.args[1] = :(Base.limit_output)
+                deleteat!(expr.args, 3:4)
+            elseif VERSION < v"0.5.0-dev+1936"
+                expr.head = :quote
+                expr.args[1] = false
+                deleteat!(expr.args, 3:4)
+            end
+        end
+    end
+    expr
+end
+
 if VERSION < v"0.4.0-dev+707"
     macro inline(ex)
         esc(ex)
@@ -514,6 +534,9 @@ function _compat(ex::Expr)
             rewrite_pairs_to_tuples!(ex)
         elseif VERSION < v"0.4.0-dev+1246" && f == :String
             ex = Expr(:call, :bytestring, ex.args[2:end]...)
+        end
+        if VERSION < v"0.5.0-dev+4305"
+            rewrite_iocontext!(ex)
         end
     elseif ex.head === :curly
         f = ex.args[1]
