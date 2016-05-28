@@ -353,6 +353,15 @@ const pi3o2_l  = 1.8369701987210297e-16 # convert(Float64, pi * BigFloat(3/2) - 
 const pi4o2_h  = 6.283185307179586      # convert(Float64, pi * BigFloat(2))
 const pi4o2_l  = 2.4492935982947064e-16 # convert(Float64, pi * BigFloat(2) - pi4o2_h)
 
+"""
+    mod2pi(x)
+
+Modulus after division by `2π`, returning in the range ``[0,2π)``.
+
+This function computes a floating point representation of the modulus after division by
+numerically exact `2π`, and is therefore not exactly the same as `mod(x,2π)`, which would
+compute the modulus of `x` relative to division by the floating-point number `2π`.
+"""
 function mod2pi(x::Float64) # or modtau(x)
 # with r = mod2pi(x)
 # a) 0 <= r < 2π  (note: boundary open or closed - a bit fuzzy, due to rem_pio2 implementation)

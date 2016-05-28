@@ -2161,17 +2161,6 @@ See also [`sortperm!`](:func:`sortperm!`).
 sortperm
 
 """
-    mod2pi(x)
-
-Modulus after division by 2pi, returning in the range \[0,2pi).
-
-This function computes a floating point representation of the modulus after division by
-numerically exact 2pi, and is therefore not exactly the same as mod(x,2pi), which would
-compute the modulus of `x` relative to division by the floating-point number 2pi.
-"""
-mod2pi
-
-"""
     cumsum!(B, A, [dim])
 
 Cumulative sum of `A` along a dimension, storing the result in `B`. The dimension defaults
@@ -7584,18 +7573,6 @@ Get the vector of processes that have mapped the shared array.
 procs(::SharedArray)
 
 """
-    mod(x, y)
-
-Modulus after flooring division, returning in the range \[0,`y`), if `y` is positive, or
-(`y`,0\] if `y` is negative.
-
-```julia
-x == fld(x,y)*y + mod(x,y)
-```
-"""
-mod
-
-"""
     qr(A [,pivot=Val{false}][;thin=true]) -> Q, R, [p]
 
 Compute the (pivoted) QR factorization of `A` such that either `A = Q*R` or `A[:,p] = Q*R`.
@@ -7730,32 +7707,6 @@ get!(f::Function,collection,key)
 Matrix inverse.
 """
 inv
-
-"""
-    fld1(x, y)
-
-Flooring division, returning a value consistent with `mod1(x,y)`
-
-```julia
-x == fld(x,y)*y + mod(x,y)
-x == (fld1(x,y)-1)*y + mod1(x,y)
-```
-"""
-fld1
-
-"""
-    mod1(x, y)
-
-Modulus after flooring division, returning a value in the range `(0, y]`.
-"""
-mod1
-
-"""
-    fldmod1(x, y)
-
-Return `(fld1(x,y), mod1(x,y))`.
-"""
-fldmod1
 
 """
     @assert cond [text]

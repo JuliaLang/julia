@@ -241,14 +241,39 @@ const % = rem
 const ÷ = div
 .÷(x::Real, y::Real) = x÷y
 
-# mod returns in [0,y) or (y,0] (for negative y),
-# whereas mod1 returns in (0,y] or [y,0)
+
+"""
+    mod1(x, y)
+
+Modulus after flooring division, returning a value `r` such that `mod(r, y) == mod(x, y)`
+ in the range ``(0, y]`` for positive `y` and in the range ``[y,0)`` for negative `y`.
+"""
 mod1{T<:Real}(x::T, y::T) = (m=mod(x,y); ifelse(m==0, y, m))
-fld1{T<:Real}(x::T, y::T) = (m=mod(x,y); fld(x-m,y))
-fldmod1{T<:Real}(x::T, y::T) = (fld1(x,y), mod1(x,y))
 # efficient version for integers
 mod1{T<:Integer}(x::T, y::T) = mod(x+y-T(1),y)+T(1)
+
+
+"""
+    fld1(x, y)
+
+Flooring division, returning a value consistent with `mod1(x,y)`
+
+```julia
+x == fld(x,y)*y + mod(x,y)
+x == (fld1(x,y)-1)*y + mod1(x,y)
+```
+"""
+fld1{T<:Real}(x::T, y::T) = (m=mod(x,y); fld(x-m,y))
+# efficient version for integers
 fld1{T<:Integer}(x::T, y::T) = fld(x+y-T(1),y)
+
+"""
+    fldmod1(x, y)
+
+Return `(fld1(x,y), mod1(x,y))`.
+"""
+fldmod1{T<:Real}(x::T, y::T) = (fld1(x,y), mod1(x,y))
+# efficient version for integers
 fldmod1{T<:Integer}(x::T, y::T) = (fld1(x,y), mod1(x,y))
 
 # transpose
