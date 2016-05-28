@@ -338,6 +338,9 @@ static inline void objprofile_reset(void)
 }
 #endif
 
+// For debugging
+void gc_count_pool(void);
+
 #ifdef __cplusplus
 }
 #endif
