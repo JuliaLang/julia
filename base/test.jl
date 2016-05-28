@@ -782,6 +782,49 @@ macro test_approx_eq(a, b)
     :(test_approx_eq($(esc(a)), $(esc(b)), $(string(a)), $(string(b))))
 end
 
+"""
+    @inferred f(x)
+
+Tests that the call expression `f(x)` returns a value of the same type
+inferred by the compiler. It's useful to check for type stability.
+
+`f(x)` can be any call expression.
+Returns the result of `f(x)` if the types match,
+and an `Error` `Result` if it finds different types.
+
+```jldoctest
+julia> using Base.Test
+
+julia> f(a,b,c) = b > 1 ? 1 : 1.0
+f (generic function with 1 method)
+
+julia> typeof(f(1,2,3))
+Int64
+
+julia> @code_warntype f(1,2,3)
+Variables:
+  #self#::#f
+  a::Int64
+  b::Int64
+  c::Int64
+
+Body:
+  begin  # REPL[2], line 1:
+      unless (Base.slt_int)(1,b::Int64)::Bool goto 4
+      return 1
+      4:
+      return 1.0
+  end::Union{Float64,Int64}
+
+julia> @inferred f(1,2,3)
+ERROR: return type Int64 does not match inferred return type Union{Float64,Int64}
+ in error(::String) at ./error.jl:21
+ in eval(::Module, ::Any) at ./boot.jl:226
+
+julia> @inferred max(1,2)
+2
+```
+"""
 macro inferred(ex)
     ex.head == :call || error("@inferred requires a call expression")
     Base.remove_linenums!(quote

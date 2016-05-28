@@ -349,7 +349,7 @@ function socket_reuse_port()
     # TODO: Support OSX and change the above code to call setsockopt before bind once libuv provides
     # early access to a socket fd, i.e., before a bind call.
 
-    @linux_only begin
+    @static if is_linux()
         try
             rc = ccall(:jl_tcp_reuseport, Int32, (Ptr{Void}, ), s.handle)
             if rc > 0  # SO_REUSEPORT is unsupported, just return the ephemerally bound socket

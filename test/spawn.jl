@@ -11,10 +11,12 @@
 #TODO:
 # - Windows:
 #   - Add a test whether coreutils are available and skip tests if not
-@windows_only oldpath = ENV["PATH"]
-@windows_only ENV["PATH"] = joinpath(JULIA_HOME,"..","Git","usr","bin")*";"*oldpath
+if is_windows()
+    oldpath = ENV["PATH"]
+    ENV["PATH"] = joinpath(JULIA_HOME, "..", "Git", "usr", "bin") * ";" * oldpath
+end
 
-valgrind_off = ccall(:jl_running_on_valgrind,Cint,()) == 0
+valgrind_off = ccall(:jl_running_on_valgrind, Cint, ()) == 0
 
 yes = `perl -le 'while (1) {print STDOUT "y"}'`
 
@@ -32,7 +34,7 @@ out = readstring(`echo hello` & `echo world`)
 @test (run(`printf "       \033[34m[stdio passthrough ok]\033[0m\n"`); true)
 
 # Test for SIGPIPE being treated as normal termination (throws an error if broken)
-@unix_only @test (run(pipeline(yes,`head`,DevNull)); true)
+is_unix() && run(pipeline(yes, `head`, DevNull))
 
 begin
     a = Base.Condition()
@@ -80,11 +82,11 @@ run(pipeline(`echo hello world`, file))
 rm(file)
 
 # Stream Redirection
-@unix_only begin
-    r = Channel(1)
+if !is_windows() # WINNT reports operation not supported on socket (ENOTSUP) for this test
+    local r = Channel(1), port, server, sock, client
     @async begin
         port, server = listenany(2326)
-        put!(r,port)
+        put!(r, port)
         client = accept(server)
         @test readstring(pipeline(client, `cat`)) == "hello world\n"
         close(server)
@@ -103,9 +105,12 @@ end
        readstring(`sh -c "echo \$TEST"`); end) == "Hello World\n"
 pathA = readchomp(setenv(`sh -c "pwd -P"`;dir=".."))
 pathB = readchomp(setenv(`sh -c "cd .. && pwd -P"`))
-@unix_only @test Base.samefile(pathA, pathB)
-# on windows, sh returns posix-style paths that are not valid according to ispath
-@windows_only @test pathA == pathB
+if is_windows()
+    # on windows, sh returns posix-style paths that are not valid according to ispath
+    @test pathA == pathB
+else
+    @test Base.samefile(pathA, pathB)
+end
 
 # Here we test that if we close a stream with pending writes, we don't lose the writes.
 str = ""
@@ -336,15 +341,18 @@ end
 @test_throws ErrorException collect(eachline(pipeline(`cat _doesnt_exist__111_`, stderr=DevNull)))
 
 # make sure windows_verbatim strips quotes
-@windows_only readstring(`cmd.exe /c dir /b spawn.jl`) == readstring(Cmd(`cmd.exe /c dir /b "\"spawn.jl\""`, windows_verbatim=true))
+if is_windows()
+    readstring(`cmd.exe /c dir /b spawn.jl`) == readstring(Cmd(`cmd.exe /c dir /b "\"spawn.jl\""`, windows_verbatim=true))
+end
 
 # make sure Cmd is nestable
 @test string(Cmd(Cmd(`ls`, detach=true))) == "`ls`"
 
-@windows_only ENV["PATH"] = oldpath
+if is_windows()
+    ENV["PATH"] = oldpath
+end
 
 # equality tests for Cmd
-
 @test Base.Cmd(``) == Base.Cmd(``)
 @test Base.Cmd(`lsof -i :9090`) == Base.Cmd(`lsof -i :9090`)
 @test Base.Cmd(`echo test`) == Base.Cmd(`echo test`)
@@ -354,3 +362,12 @@ end
 @test Base.Set([``, ``]) == Base.Set([``])
 @test Set([``, `echo`]) != Set([``, ``])
 @test Set([`echo`, ``, ``, `echo`]) == Set([`echo`, ``])
+
+# equality tests for AndCmds
+@test Base.AndCmds(`echo abc`, `echo def`) == Base.AndCmds(`echo abc`, `echo def`)
+@test Base.AndCmds(`echo abc`, `echo def`) != Base.AndCmds(`echo abc`, `echo xyz`)
+
+# tests for reducing over collection of Cmd
+@test_throws ArgumentError reduce(&, Base.AbstractCmd[])
+@test_throws ArgumentError reduce(&, Base.Cmd[])
+@test reduce(&, [`echo abc`, `echo def`, `echo hij`]) == `echo abc` & `echo def` & `echo hij`

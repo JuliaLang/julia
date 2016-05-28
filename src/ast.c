@@ -136,7 +136,7 @@ value_t fl_invoke_julia_macro(fl_context_t *fl_ctx, value_t *args, uint32_t narg
 {
     if (nargs < 1)
         argcount(fl_ctx, "invoke-julia-macro", nargs, 1);
-    jl_value_t *f = NULL;
+    jl_lambda_info_t *mfunc = NULL;
     jl_value_t **margs;
     // Reserve one more slot for the result
     JL_GC_PUSHARGS(margs, nargs + 1);
@@ -147,8 +147,13 @@ value_t fl_invoke_julia_macro(fl_context_t *fl_ctx, value_t *args, uint32_t narg
     JL_TRY {
         margs[0] = scm_to_julia(fl_ctx, args[0], 1);
         margs[0] = jl_toplevel_eval(margs[0]);
-        f = margs[0];
-        margs[nargs] = result = jl_apply_generic(margs, nargs);
+        mfunc = jl_method_lookup(jl_gf_mtable(margs[0]), margs, nargs, 1);
+        if (mfunc == NULL) {
+            JL_GC_POP();
+            jl_method_error((jl_function_t*)margs[0], margs, nargs);
+            // unreachable
+        }
+        margs[nargs] = result = jl_call_method_internal(mfunc, margs, nargs);
     }
     JL_CATCH {
         JL_GC_POP();
@@ -166,7 +171,7 @@ value_t fl_invoke_julia_macro(fl_context_t *fl_ctx, value_t *args, uint32_t narg
     value_t scm = julia_to_scm(fl_ctx, result);
     fl_gc_handle(fl_ctx, &scm);
     value_t scmresult;
-    jl_module_t *defmod = jl_gf_mtable(f)->module;
+    jl_module_t *defmod = mfunc->def->module;
     if (defmod == NULL || defmod == jl_current_module) {
         scmresult = fl_cons(fl_ctx, scm, fl_ctx->F);
     }
@@ -214,10 +219,7 @@ static void jl_init_ast_ctx(jl_ast_context_t *ast_ctx)
     jl_ast_ctx(fl_ctx)->slot_sym = symbol(fl_ctx, "slot");
 
     // Enable / disable syntax deprecation warnings
-    // Disable in imaging mode to avoid i/o errors (#10727)
-    if (jl_generating_output())
-        jl_parse_depwarn_(fl_ctx, 0);
-    else if (jl_options.depwarn == JL_OPTIONS_DEPWARN_ERROR)
+    if (jl_options.depwarn == JL_OPTIONS_DEPWARN_ERROR)
         jl_parse_deperror(fl_ctx, 1);
     else
         jl_parse_depwarn_(fl_ctx, (int)jl_options.depwarn);
@@ -310,7 +312,7 @@ static jl_sym_t *scmsym_to_julia(fl_context_t *fl_ctx, value_t s)
 {
     assert(issymbol(s));
     if (fl_isgensym(fl_ctx, s)) {
-        static char gsname[16];
+        char gsname[16];
         char *n = uint2str(&gsname[1], sizeof(gsname)-1,
                            ((gensym_t*)ptr(s))->id, 10);
         *(--n) = '#';
@@ -498,16 +500,10 @@ static jl_value_t *scm_to_julia_(fl_context_t *fl_ctx, value_t e, int eo)
         else
             n++;
         if (!eo) {
-            if (sym == line_sym && n==2) {
-                // NOTE: n==3 case exists: '(line, linenum, filename, funcname) passes
-                //       the original name through to keyword-arg specializations.
-                //       See 'line handling in julia-syntax.scm:keywords-method-def-expr
-                jl_value_t *filename = NULL, *linenum = NULL;
-                JL_GC_PUSH2(&filename, &linenum);
-                filename = scm_to_julia_(fl_ctx, car_(cdr_(e)), 0);
-                linenum  = scm_to_julia_(fl_ctx, car_(e), 0);
-                jl_value_t *temp = jl_new_struct(jl_linenumbernode_type,
-                                                 filename, linenum);
+            if (sym == line_sym && n==1) {
+                jl_value_t *linenum = scm_to_julia_(fl_ctx, car_(e), 0);
+                JL_GC_PUSH1(&linenum);
+                jl_value_t *temp = jl_new_struct(jl_linenumbernode_type, linenum);
                 JL_GC_POP();
                 return temp;
             }
@@ -658,21 +654,13 @@ static value_t julia_to_scm_(fl_context_t *fl_ctx, jl_value_t *v)
         fl_free_gc_handles(fl_ctx, 1);
         return scmv;
     }
-    if (jl_typeis(v, jl_linenumbernode_type)) {
-        // GC Note: jl_fieldref(v, 1) allocates but neither jl_fieldref(v, 0)
-        //          or julia_to_list2 should allocate here
-        value_t args = julia_to_list2(fl_ctx, jl_fieldref(v,1), jl_fieldref(v,0));
-        fl_gc_handle(fl_ctx, &args);
-        value_t hd = julia_to_scm_(fl_ctx, (jl_value_t*)line_sym);
-        value_t scmv = fl_cons(fl_ctx, hd, args);
-        fl_free_gc_handles(fl_ctx, 1);
-        return scmv;
-    }
     // GC Note: jl_fieldref(v, 0) allocate for LabelNode, GotoNode
     //          but we don't need a GC root here because julia_to_list2
     //          shouldn't allocate in this case.
     if (jl_typeis(v, jl_labelnode_type))
         return julia_to_list2(fl_ctx, (jl_value_t*)label_sym, jl_fieldref(v,0));
+    if (jl_typeis(v, jl_linenumbernode_type))
+        return julia_to_list2(fl_ctx, (jl_value_t*)line_sym, jl_fieldref(v,0));
     if (jl_typeis(v, jl_gotonode_type))
         return julia_to_list2(fl_ctx, (jl_value_t*)goto_sym, jl_fieldref(v,0));
     if (jl_typeis(v, jl_quotenode_type))
@@ -753,6 +741,7 @@ jl_value_t *jl_parse_eval_all(const char *fname, size_t len,
         fl_free_gc_handles(fl_ctx, 1);
     }
     else {
+        assert(memchr(fname, 0, len) == NULL); // was checked already in jl_load
         ast = fl_applyn(fl_ctx, 1, symbol_value(symbol(fl_ctx, "jl-parse-file")), f);
     }
     fl_free_gc_handles(fl_ctx, 1);

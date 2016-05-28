@@ -541,7 +541,7 @@ extern JL_DLLEXPORT jl_value_t *jl_false;
 extern JL_DLLEXPORT jl_value_t *jl_nothing;
 
 // some important symbols
-extern jl_sym_t *call_sym;
+extern jl_sym_t *call_sym;    extern jl_sym_t *empty_sym;
 extern jl_sym_t *dots_sym;    extern jl_sym_t *vararg_sym;
 extern jl_sym_t *quote_sym;   extern jl_sym_t *newvar_sym;
 extern jl_sym_t *top_sym;     extern jl_sym_t *dot_sym;
@@ -570,6 +570,7 @@ extern jl_sym_t *copyast_sym; extern jl_sym_t *fastmath_sym;
 extern jl_sym_t *pure_sym; extern jl_sym_t *simdloop_sym;
 extern jl_sym_t *meta_sym; extern jl_sym_t *list_sym;
 extern jl_sym_t *inert_sym; extern jl_sym_t *static_parameter_sym;
+extern jl_sym_t *polly_sym;
 
 // gc -------------------------------------------------------------------------
 
@@ -738,8 +739,7 @@ STATIC_INLINE void jl_array_uint8_set(void *a, size_t i, uint8_t x)
 #define jl_nfields(v)    jl_datatype_nfields(jl_typeof(v))
 
 // Not using jl_fieldref to avoid allocations
-#define jl_linenode_file(x) (*(jl_sym_t**)x)
-#define jl_linenode_line(x) (((intptr_t*)x)[1])
+#define jl_linenode_line(x) (((intptr_t*)x)[0])
 #define jl_labelnode_label(x) (((intptr_t*)x)[0])
 #define jl_slot_number(x) (((intptr_t*)x)[0])
 #define jl_typedslot_get_type(x) (((jl_value_t**)x)[1])
@@ -1024,8 +1024,6 @@ JL_DLLEXPORT jl_sym_t *jl_get_root_symbol(void);
 JL_DLLEXPORT jl_value_t *jl_generic_function_def(jl_sym_t *name, jl_value_t **bp,
                                                  jl_value_t *bp_owner,
                                                  jl_binding_t *bnd);
-JL_DLLEXPORT jl_function_t *jl_new_generic_function(jl_sym_t *name, jl_module_t *module);
-JL_DLLEXPORT jl_function_t *jl_new_generic_function_with_supertype(jl_sym_t *name, jl_module_t *module, jl_datatype_t *st, int iskw);
 JL_DLLEXPORT void jl_method_def(jl_svec_t *argdata, jl_lambda_info_t *f, jl_value_t *isstaged);
 JL_DLLEXPORT jl_function_t *jl_get_kwsorter(jl_typename_t *tn);
 JL_DLLEXPORT jl_value_t *jl_box_bool(int8_t x);
@@ -1170,7 +1168,7 @@ JL_DLLEXPORT int jl_array_rank(jl_value_t *a);
 JL_DLLEXPORT size_t jl_array_size(jl_value_t *a, int d);
 
 // strings
-JL_DLLEXPORT const char *jl_bytestring_ptr(jl_value_t *s);
+JL_DLLEXPORT const char *jl_string_ptr(jl_value_t *s);
 
 // modules and global variables
 extern JL_DLLEXPORT jl_module_t *jl_main_module;
@@ -1226,7 +1224,7 @@ JL_DLLEXPORT int jl_cpu_cores(void);
 JL_DLLEXPORT long jl_getpagesize(void);
 JL_DLLEXPORT long jl_getallocationgranularity(void);
 JL_DLLEXPORT int jl_is_debugbuild(void);
-JL_DLLEXPORT jl_sym_t *jl_get_OS_NAME(void);
+JL_DLLEXPORT jl_sym_t *jl_get_UNAME(void);
 JL_DLLEXPORT jl_sym_t *jl_get_ARCH(void);
 
 // environment entries
@@ -1446,7 +1444,8 @@ typedef struct _jl_task_t {
     jl_jmp_buf ctx;
     size_t bufsz;
     void *stkbuf;
-    size_t ssize:31;
+
+    size_t ssize;
     size_t started:1;
 
     // current exception handler
@@ -1464,12 +1463,6 @@ typedef struct _jl_task_t {
     arraylist_t locks;
 #endif
 } jl_task_t;
-
-typedef struct {
-    jl_tls_states_t *ptls;
-    uv_thread_t system_id;
-    void *signal_stack;
-} jl_thread_task_state_t;
 
 #define jl_current_task (jl_get_ptls_states()->current_task)
 #define jl_root_task (jl_get_ptls_states()->root_task)

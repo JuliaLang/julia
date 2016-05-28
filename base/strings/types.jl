@@ -1,6 +1,6 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
-# SubString, RevString, RepString, and RopeString types
+# SubString, RevString, and RepString types
 
 ## substrings reference original strings ##
 
@@ -75,7 +75,8 @@ prevind(s::SubString, i::Integer) = prevind(s.string, i+s.offset)-s.offset
 
 convert{T<:AbstractString}(::Type{SubString{T}}, s::T) = SubString(s, 1, endof(s))
 
-bytestring(p::SubString{String}) = bytestring(p.string.data[1+p.offset:p.offset+nextind(p, p.endof)-1])
+String(p::SubString{String}) =
+    String(p.string.data[1+p.offset:p.offset+nextind(p, p.endof)-1])
 
 function getindex(s::AbstractString, r::UnitRange{Int})
     checkbounds(s, r) || throw(BoundsError(s, r))
@@ -168,7 +169,7 @@ convert(::Type{RepString}, s::AbstractString) = RepString(s,1)
 function repeat(s::String, r::Integer)
     r < 0 && throw(ArgumentError("can't repeat a string $r times"))
     d = s.data; n = length(d)
-    out = Array(UInt8, n*r)
+    out = Array{UInt8}(n*r)
     for i=1:r
         copy!(out, 1+(i-1)*n, d, 1, n)
     end

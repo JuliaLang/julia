@@ -24,7 +24,7 @@ function generic_lufact!{T,Pivot}(A::StridedMatrix{T}, ::Type{Val{Pivot}} = Val{
     m, n = size(A)
     minmn = min(m,n)
     info = 0
-    ipiv = Array(BlasInt, minmn)
+    ipiv = Array{BlasInt}(minmn)
     @inbounds begin
         for k = 1:minmn
             # find index max
@@ -241,7 +241,7 @@ cond(A::LU, p::Number) = norm(A[:L]*A[:U],p)*norm(inv(A),p)
 function lufact!{T}(A::Tridiagonal{T}, pivot::Union{Type{Val{false}}, Type{Val{true}}} = Val{true})
     n = size(A, 1)
     info = 0
-    ipiv = Array(BlasInt, n)
+    ipiv = Array{BlasInt}(n)
     dl = A.dl
     d = A.d
     du = A.du

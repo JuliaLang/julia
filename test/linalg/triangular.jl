@@ -24,6 +24,7 @@ for elty1 in (Float32, Float64, BigFloat, Complex64, Complex128, Complex{BigFloa
         # Construct test matrix
         A1 = t1(elty1 == Int ? rand(1:7, n, n) : convert(Matrix{elty1}, (elty1 <: Complex ? complex(randn(n, n), randn(n, n)) : randn(n, n)) |> t -> chol(t't) |> t -> uplo1 == :U ? t : ctranspose(t)))
 
+
         debug && println("elty1: $elty1, A1: $t1")
 
         # Convert
@@ -226,7 +227,7 @@ for elty1 in (Float32, Float64, BigFloat, Complex64, Complex128, Complex{BigFloa
         @test_approx_eq_eps det(A1) det(lufact(full(A1))) sqrt(eps(real(float(one(elty1)))))*n*n
 
         # Matrix square root
-        @test sqrtm(A1) |> t->t*t ≈ A1
+        @test sqrtm(A1) |> t -> t*t ≈ A1
 
         # naivesub errors
         @test_throws DimensionMismatch naivesub!(A1,ones(elty1,n+1))
@@ -285,6 +286,7 @@ for elty1 in (Float32, Float64, BigFloat, Complex64, Complex128, Complex{BigFloa
                 @test_approx_eq full(A1.'A2.') full(A1).'full(A2).'
                 @test_approx_eq full(A1'A2') full(A1)'full(A2)'
                 @test_approx_eq full(A1/A2) full(A1)/full(A2)
+                @test_approx_eq full(A1\A2) full(A1)\full(A2)
                 @test_throws DimensionMismatch eye(n+1)/A2
                 @test_throws DimensionMismatch eye(n+1)/A2.'
                 @test_throws DimensionMismatch eye(n+1)/A2'
@@ -489,3 +491,6 @@ end
 # Test that UpperTriangular(LowerTriangular) throws. See #16201
 @test_throws ArgumentError LowerTriangular(UpperTriangular(randn(3,3)))
 @test_throws ArgumentError UpperTriangular(LowerTriangular(randn(3,3)))
+
+# Issue 16196
+@test UpperTriangular(eye(3)) \ sub(ones(3), [1,2,3]) == ones(3)

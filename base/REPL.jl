@@ -15,7 +15,7 @@ export
 import Base:
     Display,
     display,
-    writemime,
+    show,
     AnyDict,
     ==
 
@@ -111,7 +111,7 @@ end
 function display(d::REPLDisplay, ::MIME"text/plain", x)
     io = outstream(d.repl)
     Base.have_color && write(io, answer_color(d.repl))
-    writemime(io, MIME("text/plain"), x)
+    show(IOContext(io, multiline=true, limit=true), MIME("text/plain"), x)
     println(io)
 end
 display(d::REPLDisplay, x) = display(d, MIME("text/plain"), x)
@@ -271,10 +271,10 @@ end
 
 immutable LatexCompletions <: CompletionProvider; end
 
-bytestring_beforecursor(buf::IOBuffer) = bytestring(buf.data[1:buf.ptr-1])
+beforecursor(buf::IOBuffer) = String(buf.data[1:buf.ptr-1])
 
 function complete_line(c::REPLCompletionProvider, s)
-    partial = bytestring_beforecursor(s.input_buffer)
+    partial = beforecursor(s.input_buffer)
     full = LineEdit.input_string(s)
     ret, range, should_complete = completions(full, endof(partial))
     return ret, partial[range], should_complete
@@ -282,14 +282,14 @@ end
 
 function complete_line(c::ShellCompletionProvider, s)
     # First parse everything up to the current position
-    partial = bytestring_beforecursor(s.input_buffer)
+    partial = beforecursor(s.input_buffer)
     full = LineEdit.input_string(s)
     ret, range, should_complete = shell_completions(full, endof(partial))
     return ret, partial[range], should_complete
 end
 
 function complete_line(c::LatexCompletions, s)
-    partial = bytestring_beforecursor(LineEdit.buffer(s))
+    partial = beforecursor(LineEdit.buffer(s))
     full = LineEdit.input_string(s)
     ret, range, should_complete = bslash_completions(full, endof(partial))[2]
     return ret, partial[range], should_complete
@@ -323,11 +323,11 @@ An editor may have converted tabs to spaces at line """
 
 function hist_getline(file)
     while !eof(file)
-        line = utf8(readline(file))
+        line = readline(file)
         isempty(line) && return line
         line[1] in "\r\n" || return line
     end
-    return utf8("")
+    return ""
 end
 
 function hist_from_file(hp, file)
@@ -383,7 +383,7 @@ function mode_idx(hist::REPLHistoryProvider, mode)
 end
 
 function add_history(hist::REPLHistoryProvider, s)
-    str = rstrip(bytestring(s.input_buffer))
+    str = rstrip(String(s.input_buffer))
     isempty(strip(str)) && return
     mode = mode_idx(hist, LineEdit.mode(s))
     !isempty(hist.history) &&
@@ -497,7 +497,7 @@ function history_move_prefix(s::LineEdit.PrefixSearchState,
                              prefix::AbstractString,
                              backwards::Bool,
                              cur_idx = hist.cur_idx)
-    cur_response = bytestring(LineEdit.buffer(s))
+    cur_response = String(LineEdit.buffer(s))
     # when searching forward, start at last_idx
     if !backwards && hist.last_idx > 0
         cur_idx = hist.last_idx
@@ -537,8 +537,8 @@ function history_search(hist::REPLHistoryProvider, query_buffer::IOBuffer, respo
 
     qpos = position(query_buffer)
     qpos > 0 || return true
-    searchdata = bytestring_beforecursor(query_buffer)
-    response_str = bytestring(response_buffer)
+    searchdata = beforecursor(query_buffer)
+    response_str = String(response_buffer)
 
     # Alright, first try to see if the current match still works
     a = position(response_buffer) + 1
@@ -589,7 +589,7 @@ const julia_green = "\033[1m\033[32m"
 
 function return_callback(s)
     ast = Base.syntax_deprecation_warnings(false) do
-        Base.parse_input_line(bytestring(LineEdit.buffer(s)))
+        Base.parse_input_line(String(LineEdit.buffer(s)))
     end
     if  !isa(ast, Expr) || (ast.head != :continue && ast.head != :incomplete)
         return true

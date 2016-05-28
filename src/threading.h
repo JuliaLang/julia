@@ -15,13 +15,8 @@ extern "C" {
 
 // thread ID
 #define ti_tid (jl_get_ptls_states()->tid)
-extern jl_thread_task_state_t *jl_all_task_states;
+extern jl_tls_states_t **jl_all_tls_states;
 extern JL_DLLEXPORT int jl_n_threads;  // # threads we're actually using
-
-#ifdef JULIA_ENABLE_THREADING
-// GC
-extern struct _jl_thread_heap_t **jl_all_heaps;
-#endif
 
 // thread state
 enum {

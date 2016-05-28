@@ -261,15 +261,15 @@ end
 
 # show
 for d in (Dict("\n" => "\n", "1" => "\n", "\n" => "2"),
-          [string(i) => i for i = 1:30],
-          [reshape(1:i^2,i,i) => reshape(1:i^2,i,i) for i = 1:24],
-          [utf8(Char['α':'α'+i;]) => utf8(Char['α':'α'+i;]) for i = (1:10)*10],
+          Dict(string(i) => i for i = 1:30),
+          Dict(reshape(1:i^2,i,i) => reshape(1:i^2,i,i) for i = 1:24),
+          Dict(String(Char['α':'α'+i;]) => String(Char['α':'α'+i;]) for i = (1:10)*10),
           Dict("key" => zeros(0, 0)))
     for cols in (12, 40, 80), rows in (2, 10, 24)
         # Ensure output is limited as requested
         s = IOBuffer()
-        io = Base.IOContext(Base.IOContext(s, :limit_output => true), :displaysize => (rows, cols))
-        Base.showdict(io, d)
+        io = Base.IOContext(s, limit=true, displaysize=(rows, cols), multiline=true)
+        Base.show(io, d)
         out = split(takebuf_string(s),'\n')
         for line in out[2:end]
             @test strwidth(line) <= cols
@@ -278,8 +278,8 @@ for d in (Dict("\n" => "\n", "1" => "\n", "\n" => "2"),
 
         for f in (keys, values)
             s = IOBuffer()
-            io = Base.IOContext(Base.IOContext(s, :limit_output => true), :displaysize => (rows, cols))
-            Base.showkv(io, f(d))
+            io = Base.IOContext(s, limit=true, displaysize=(rows, cols), multiline=true)
+            Base.show(io, f(d))
             out = split(takebuf_string(s),'\n')
             for line in out[2:end]
                 @test strwidth(line) <= cols
@@ -288,7 +288,7 @@ for d in (Dict("\n" => "\n", "1" => "\n", "\n" => "2"),
         end
     end
     # Simply ensure these do not throw errors
-    Base.showdict(IOBuffer(), d)
+    Base.show(IOBuffer(), d)
     @test !isempty(summary(d))
     @test !isempty(summary(keys(d)))
     @test !isempty(summary(values(d)))
@@ -301,7 +301,7 @@ let d = Dict((1=>2) => (3=>45), (3=>10) => (10=>11))
 
     # Check explicitly for the expected strings, since the CPU bitness effects
     # dictionary ordering.
-    result = bytestring(buf)
+    result = String(buf)
     @test contains(result, "Dict")
     @test contains(result, "(1=>2)=>(3=>45)")
     @test contains(result, "(3=>10)=>(10=>11)")
@@ -311,20 +311,20 @@ end
 type Alpha end
 Base.show(io::IO, ::Alpha) = print(io,"α")
 let sbuff = IOBuffer(),
-    io = Base.IOContext(Base.IOContext(sbuff, :limit_output => true), :displaysize => (10, 20))
+    io = Base.IOContext(sbuff, limit=true, displaysize=(10, 20), multiline=true)
 
-    Base.showdict(io, Dict(Alpha()=>1))
-    @test !contains(bytestring(sbuff), "…")
-    @test endswith(bytestring(sbuff), "α => 1")
+    Base.show(io, Dict(Alpha()=>1))
+    @test !contains(String(sbuff), "…")
+    @test endswith(String(sbuff), "α => 1")
 end
 
 # issue #2540
-let d = Dict{Any,Any}([x => 1 for x in ['a', 'b', 'c']])
+let d = Dict{Any,Any}(Dict(x => 1 for x in ['a', 'b', 'c']))
     @test d == Dict('a'=>1, 'b'=>1, 'c'=> 1)
 end
 
 # issue #2629
-let d = Dict{AbstractString,AbstractString}([ a => "foo" for a in ["a","b","c"]])
+let d = Dict{AbstractString,AbstractString}(Dict( a => "foo" for a in ["a","b","c"]))
     @test d == Dict("a"=>"foo","b"=>"foo","c"=>"foo")
 end
 
@@ -369,9 +369,9 @@ let
     a[3] = T10647(a)
     @test a == a
     show(IOBuffer(), a)
-    Base.show(Base.IOContext(IOBuffer(), :limit_output => true), a)
-    Base.showdict(IOBuffer(), a)
-    Base.showdict(Base.IOContext(IOBuffer(), :limit_output => true), a)
+    Base.show(Base.IOContext(IOBuffer(), :limit => true), a)
+    Base.show(IOBuffer(), a)
+    Base.show(Base.IOContext(IOBuffer(), :limit => true), a)
 end
 
 

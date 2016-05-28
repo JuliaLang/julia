@@ -58,6 +58,8 @@ Command-line option changes
 Compiler/Runtime improvements
 -----------------------------
 
+  * Machine SIMD types can be represented in Julia as a homogeneous tuple of `VecElement` ([#15244]).
+
 Breaking changes
 ----------------
 
@@ -82,10 +84,13 @@ Breaking changes
     is now divided among the fields `code`, `slotnames`, `slottypes`, `slotflags`,
     `gensymtypes`, `rettype`, `nargs`, and `isva` in the `LambdaInfo` type ([#15609]).
 
+  * Juxtaposition of numeric literals ending in `.` (e.g. `1.x`) is no longer
+    allowed ([#15731]).
+
 Library improvements
 --------------------
 
-  * Most of the  combinatorics functions have been moved from `Base`
+  * Most of the combinatorics functions have been moved from `Base`
     to the [Combinatorics.jl package](https://github.com/JuliaLang/Combinatorics.jl) ([#13897]).
 
   * Packages:
@@ -153,7 +158,23 @@ Library improvements
 
     * `extrema` can now operate over a region ([#15550]).
 
-  * The new `Base.StackTraces` module makes stack traces easier to use programmatically. ([#14469])
+  * The new `Base.StackTraces` module makes stack traces easier to use programmatically ([#14469]).
+
+  * There is now a default no-op `flush(io)` function for all `IO` types ([#16403]).
+
+  * Concatenating dense and sparse matrices now returns a sparse matrix ([#15172]).
+
+  * The `libjulia` library is now properly versioned and installed to the public `<prefix>/lib`
+    directory, instead of the private `<prefix>/lib/julia` directory ([#16362]).
+
+  * System reflection is now more consistently exposed from Sys and not Base.
+    `OS_NAME` has been replaced by `Sys.KERNEL` and always reports the name of the kernel (as reported by `uname`).
+    The `@windows_only` and `@osx` family of macros have been replaced with functions such as `is_windows()` and
+    or `is_apple()`. There's now also an `@static` macro that will evaluate the condition of an if-statement at
+    compile time, for when a static branch is required ([#16219]).
+
+  * Prime number related functions have been moved from `Base` to the
+    [Primes.jl package](https://github.com/JuliaMath/Primes.jl) ([#16481]).
 
 Deprecated or removed
 ---------------------
@@ -217,6 +238,7 @@ Deprecated or removed
 [#14759]: https://github.com/JuliaLang/julia/issues/14759
 [#14798]: https://github.com/JuliaLang/julia/issues/14798
 [#15032]: https://github.com/JuliaLang/julia/issues/15032
+[#15172]: https://github.com/JuliaLang/julia/issues/15172
 [#15192]: https://github.com/JuliaLang/julia/issues/15192
 [#15242]: https://github.com/JuliaLang/julia/issues/15242
 [#15258]: https://github.com/JuliaLang/julia/issues/15258
@@ -224,4 +246,8 @@ Deprecated or removed
 [#15431]: https://github.com/JuliaLang/julia/issues/15431
 [#15550]: https://github.com/JuliaLang/julia/issues/15550
 [#15609]: https://github.com/JuliaLang/julia/issues/15609
+[#15731]: https://github.com/JuliaLang/julia/issues/15731
 [#15763]: https://github.com/JuliaLang/julia/issues/15763
+[#16219]: https://github.com/JuliaLang/julia/issues/16219
+[#16362]: https://github.com/JuliaLang/julia/issues/16362
+[#16403]: https://github.com/JuliaLang/julia/issues/16403

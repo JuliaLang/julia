@@ -63,7 +63,7 @@ function rst(io::IO, l::LaTeX)
     end
 end
 
-rst(io::IO, md) = writemime(io, "text/rst", md)
+rst(io::IO, md) = show(io, "text/rst", md)
 
 # Inline elements
 
@@ -113,8 +113,8 @@ rstinline(io::IO, br::LineBreak) = println(io)
 
 rstinline(io::IO, l::LaTeX) = print(io, ":math:`", l.formula, "`")
 
-rstinline(io::IO, x) = writemime(io, MIME"text/rst"(), x)
+rstinline(io::IO, x) = show(io, MIME"text/rst"(), x)
 
-# writemime
+# show
 
-Base.writemime(io::IO, ::MIME"text/rst", md::MD) = rst(io, md)
+Base.show(io::IO, ::MIME"text/rst", md::MD) = rst(io, md)

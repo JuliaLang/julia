@@ -1093,10 +1093,8 @@ static void jl_serialize_header(ios_t *s)
     write_uint16(s, JI_FORMAT_VERSION);
     ios_write(s, (char *) &BOM, 2);
     write_uint8(s, sizeof(void*));
-    const char *OS_NAME = jl_symbol_name(jl_get_OS_NAME());
-    const char *ARCH = jl_symbol_name(jl_get_ARCH());
-    ios_write(s, OS_NAME, strlen(OS_NAME)+1);
-    ios_write(s, ARCH, strlen(ARCH)+1);
+    ios_write(s, JL_BUILD_UNAME, strlen(JL_BUILD_UNAME)+1);
+    ios_write(s, JL_BUILD_ARCH, strlen(JL_BUILD_ARCH)+1);
     ios_write(s, JULIA_VERSION_STRING, strlen(JULIA_VERSION_STRING)+1);
     const char *branch = jl_git_branch(), *commit = jl_git_commit();
     ios_write(s, branch, strlen(branch)+1);
@@ -1763,8 +1761,8 @@ JL_DLLEXPORT int jl_deserialize_verify_header(ios_t *s)
             read_uint16(s) == JI_FORMAT_VERSION &&
             ios_read(s, (char *) &bom, 2) == 2 && bom == BOM &&
             read_uint8(s) == sizeof(void*) &&
-            readstr_verify(s, jl_symbol_name(jl_get_OS_NAME())) && !read_uint8(s) &&
-            readstr_verify(s, jl_symbol_name(jl_get_ARCH())) && !read_uint8(s) &&
+            readstr_verify(s, JL_BUILD_UNAME) && !read_uint8(s) &&
+            readstr_verify(s, JL_BUILD_ARCH) && !read_uint8(s) &&
             readstr_verify(s, JULIA_VERSION_STRING) && !read_uint8(s) &&
             readstr_verify(s, jl_git_branch()) && !read_uint8(s) &&
             readstr_verify(s, jl_git_commit()) && !read_uint8(s));
@@ -1993,9 +1991,9 @@ static void jl_restore_system_image_from_stream(ios_t *f)
     jl_top_module = (jl_module_t*)jl_deserialize_value(f, NULL);
     jl_internal_main_module = jl_main_module;
     jl_typeinf_func = (jl_function_t*)jl_deserialize_value(f, NULL);
-    jl_type_type->name->mt = (jl_methtable_t*)jl_deserialize_value(f, NULL);
-    jl_typector_type->name->mt = jl_uniontype_type->name->mt = jl_datatype_type->name->mt =
-        jl_type_type->name->mt;
+    jl_type_type_mt = (jl_methtable_t*)jl_deserialize_value(f, NULL);
+    jl_type_type->name->mt = jl_typector_type->name->mt = jl_uniontype_type->name->mt = jl_datatype_type->name->mt =
+        jl_type_type_mt;
 
     jl_core_module = (jl_module_t*)jl_get_global(jl_main_module,
                                                  jl_symbol("Core"));
@@ -2129,7 +2127,9 @@ JL_DLLEXPORT jl_array_t *jl_uncompress_ast(jl_lambda_info_t *li, jl_array_t *dat
     ios_setbuf(&src, (char*)bytes->data, jl_array_len(bytes), 0);
     src.size = jl_array_len(bytes);
     int en = jl_gc_enable(0); // Might GC
+
     jl_array_t *v = (jl_array_t*)jl_deserialize_value(&src, NULL);
+
     jl_gc_enable(en);
     tree_literal_values = NULL;
     tree_enclosing_module = NULL;
@@ -2405,7 +2405,7 @@ void jl_init_serializer(void)
                      (void*)Int32_tag, (void*)Array1d_tag, (void*)Singleton_tag,
                      jl_module_type, jl_tvar_type, jl_lambda_info_type, jl_method_type,
                      (void*)CommonSym_tag, (void*)NearbyGlobal_tag, jl_globalref_type,
-                     // everything above here represents a class of object rather only than a literal
+                     // everything above here represents a class of object rather than only a literal
 
                      jl_emptysvec, jl_emptytuple, jl_false, jl_true, jl_nothing, jl_any_type,
                      call_sym, goto_ifnot_sym, return_sym, body_sym, line_sym,

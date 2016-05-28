@@ -6,7 +6,7 @@ export BigInt
 
 import Base: *, +, -, /, <, <<, >>, >>>, <=, ==, >, >=, ^, (~), (&), (|), ($),
              binomial, cmp, convert, div, divrem, factorial, fld, gcd, gcdx, lcm, mod,
-             ndigits, promote_rule, rem, show, isqrt, string, isprime, powermod,
+             ndigits, promote_rule, rem, show, isqrt, string, powermod,
              sum, trailing_zeros, trailing_ones, count_ones, base, tryparse_internal,
              bin, oct, dec, hex, isequal, invmod, prevpow2, nextpow2, ndigits0z, widen, signed, unsafe_trunc, trunc
 
@@ -19,7 +19,7 @@ else
 end
 typealias CdoubleMax Union{Float16, Float32, Float64}
 
-gmp_version() = VersionNumber(bytestring(unsafe_load(cglobal((:__gmp_version, :libgmp), Ptr{Cchar}))))
+gmp_version() = VersionNumber(String(unsafe_load(cglobal((:__gmp_version, :libgmp), Ptr{Cchar}))))
 gmp_bits_per_limb() = Int(unsafe_load(cglobal((:__gmp_bits_per_limb, :libgmp), Cint)))
 
 const GMP_VERSION = gmp_version()
@@ -84,8 +84,8 @@ convert(::Type{BigInt}, x::BigInt) = x
 function tryparse_internal(::Type{BigInt}, s::AbstractString, startpos::Int, endpos::Int, base::Int, raise::Bool)
     _n = Nullable{BigInt}()
 
-    # don't make a copy in the common case where we are parsing a whole bytestring
-    bstr = startpos == start(s) && endpos == endof(s) ? bytestring(s) : bytestring(SubString(s,startpos,endpos))
+    # don't make a copy in the common case where we are parsing a whole String
+    bstr = startpos == start(s) && endpos == endof(s) ? String(s) : String(SubString(s,startpos,endpos))
 
     sgn, base, i = Base.parseint_preamble(true,base,bstr,start(bstr),endof(bstr))
     if i == 0
@@ -201,24 +201,24 @@ function convert{T<:Signed}(::Type{T}, x::BigInt)
 end
 
 
-function call(::Type{Float64}, n::BigInt, ::RoundingMode{:ToZero})
+function (::Type{Float64})(n::BigInt, ::RoundingMode{:ToZero})
     ccall((:__gmpz_get_d, :libgmp), Float64, (Ptr{BigInt},), &n)
 end
 
-function call{T<:Union{Float16,Float32}}(::Type{T}, n::BigInt, ::RoundingMode{:ToZero})
+function (::Type{T}){T<:Union{Float16,Float32}}(n::BigInt, ::RoundingMode{:ToZero})
     T(Float64(n,RoundToZero),RoundToZero)
 end
 
-function call{T<:CdoubleMax}(::Type{T}, n::BigInt, ::RoundingMode{:Down})
+function (::Type{T}){T<:CdoubleMax}(n::BigInt, ::RoundingMode{:Down})
     x = T(n,RoundToZero)
     x > n ? prevfloat(x) : x
 end
-function call{T<:CdoubleMax}(::Type{T}, n::BigInt, ::RoundingMode{:Up})
+function (::Type{T}){T<:CdoubleMax}(n::BigInt, ::RoundingMode{:Up})
     x = T(n,RoundToZero)
     x < n ? nextfloat(x) : x
 end
 
-function call{T<:CdoubleMax}(::Type{T}, n::BigInt, ::RoundingMode{:Nearest})
+function (::Type{T}){T<:CdoubleMax}(n::BigInt, ::RoundingMode{:Nearest})
     x = T(n,RoundToZero)
     if maxintfloat(T) <= abs(x) < T(Inf)
         r = n-BigInt(x)
@@ -520,12 +520,12 @@ end
 
 function ndigits0z(x::BigInt, b::Integer=10)
     b < 2 && throw(DomainError())
-    if ispow2(b)
-        Int(ccall((:__gmpz_sizeinbase,:libgmp), Culong, (Ptr{BigInt}, Int32), &x, b))
+    if ispow2(b) && 2 <= b <= 62 # GMP assumes b is in this range
+        Int(ccall((:__gmpz_sizeinbase,:libgmp), Csize_t, (Ptr{BigInt}, Cint), &x, b))
     else
         # non-base 2 mpz_sizeinbase might return an answer 1 too big
         # use property that log(b, x) < ndigits(x, b) <= log(b, x) + 1
-        n = Int(ccall((:__gmpz_sizeinbase,:libgmp), Culong, (Ptr{BigInt}, Int32), &x, 2))
+        n = Int(ccall((:__gmpz_sizeinbase,:libgmp), Csize_t, (Ptr{BigInt}, Cint), &x, 2))
         lb = log2(b) # assumed accurate to <1ulp (true for openlibm)
         q,r = divrem(n,lb)
         iq = Int(q)
@@ -540,8 +540,6 @@ function ndigits0z(x::BigInt, b::Integer=10)
     end
 end
 ndigits(x::BigInt, b::Integer=10) = x.size == 0 ? 1 : ndigits0z(x,b)
-
-isprime(x::BigInt, reps=25) = ccall((:__gmpz_probab_prime_p,:libgmp), Cint, (Ptr{BigInt}, Cint), &x, reps) > 0
 
 prevpow2(x::BigInt) = x.size < 0 ? -prevpow2(-x) : (x <= 2 ? x : one(BigInt) << (ndigits(x, 2)-1))
 nextpow2(x::BigInt) = x.size < 0 ? -nextpow2(-x) : (x <= 2 ? x : one(BigInt) << ndigits(x-1, 2))

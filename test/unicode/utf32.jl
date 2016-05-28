@@ -6,9 +6,9 @@ u32 = utf32(u8)
 @test sizeof(u32) == 20
 @test length(u32.data) == 6 && u32.data[end] == 0
 @test length(u32) == 5
-@test utf8(u32) == u8
+@test String(u32) == u8
 @test collect(u8) == collect(u32)
-@test u8 == utf32(u32.data[1:end-1]) == utf32(copy!(Array(UInt8, 20), 1, reinterpret(UInt8, u32.data), 1, 20))
+@test u8 == utf32(u32.data[1:end-1]) == utf32(copy!(Array{UInt8}(20), 1, reinterpret(UInt8, u32.data), 1, 20))
 @test u8 == utf32(pointer(u32)) == utf32(convert(Ptr{Int32}, pointer(u32)))
 @test_throws UnicodeError utf32(UInt8[1,2,3])
 
@@ -16,9 +16,9 @@ u32 = utf32(u8)
 function tstcvt(strUTF8::String, strUTF16::UTF16String, strUTF32::UTF32String)
     @test utf16(strUTF8) == strUTF16
     @test utf32(strUTF8) == strUTF32
-    @test utf8(strUTF16) == strUTF8
+    @test String(strUTF16) == strUTF8
     @test utf32(strUTF16) == strUTF32
-    @test utf8(strUTF32)  == strUTF8
+    @test String(strUTF32)  == strUTF8
     @test utf16(strUTF32) == strUTF16
 end
 
@@ -49,7 +49,7 @@ str3_UTF32 = utf32(str3_UTF8)
 str4_UTF32 = utf32(str4_UTF8)
 strS_UTF32 = utf32(strS_UTF8)
 
-@test utf8(strAscii) == strAscii
+@test String(strAscii) == strAscii
 @test utf16(strAscii) == strAscii
 @test utf32(strAscii) == strAscii
 
@@ -62,13 +62,13 @@ tstcvt(str4_UTF8,str4_UTF16,str4_UTF32)
 # Test converting surrogate pairs
 @test utf16(strS_UTF8) == strC_UTF8
 @test utf32(strS_UTF8) == strC_UTF8
-@test utf8(strS_UTF16) == strC_UTF8
+@test String(strS_UTF16) == strC_UTF8
 @test utf32(strS_UTF16) == strC_UTF8
-@test utf8(strS_UTF32)  == strC_UTF8
+@test String(strS_UTF32)  == strC_UTF8
 @test utf16(strS_UTF32) == strC_UTF8
 
 # Test converting overlong \0
-@test utf8(strZ)  == strz_UTF8
+@test convert(String, strZ) == strz_UTF8
 @test utf16(String(strZ)) == strz_UTF8
 @test utf32(String(strZ)) == strz_UTF8
 
@@ -172,7 +172,7 @@ end
 # Wstring
 u8 = "\U10ffff\U1d565\U1d7f6\U00066\U2008a"
 w = wstring(u8)
-@test length(w) == 5 && utf8(w) == u8 && collect(u8) == collect(w)
+@test length(w) == 5 && String(w) == u8 && collect(u8) == collect(w)
 @test u8 == WString(w.data)
 
 # 12268
@@ -211,7 +211,7 @@ end
 
 # Test pointer() functions
 let str = ascii("this ")
-    u8  = utf8(str)
+    u8  = String(str)
     u16 = utf16(str)
     u32 = utf32(str)
     pa  = pointer(str)

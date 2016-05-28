@@ -85,7 +85,7 @@ of an environment variable, one makes a call like this::
     julia> path = ccall((:getenv, "libc"), Cstring, (Cstring,), "SHELL")
     Cstring(@0x00007fff5fbffc45)
 
-    julia> bytestring(path)
+    julia> String(path)
     "/bin/bash"
 
 Note that the argument type tuple must be written as ``(Cstring,)``,
@@ -117,7 +117,7 @@ which is a simplified version of the actual definition from
       if val == C_NULL
         error("getenv: undefined variable: ", var)
       end
-      bytestring(val)
+      String(val)
     end
 
 The C ``getenv`` function indicates an error by returning ``NULL``, but
@@ -136,12 +136,12 @@ Here is a slightly more complex example that discovers the local
 machine's hostname::
 
     function gethostname()
-      hostname = Array(UInt8, 128)
+      hostname = Array{UInt8}(128)
       ccall((:gethostname, "libc"), Int32,
             (Ptr{UInt8}, Csize_t),
             hostname, sizeof(hostname))
       hostname[end] = 0; # ensure null-termination
-      return bytestring(pointer(hostname))
+      return String(pointer(hostname))
     end
 
 This example first allocates an array of bytes, then calls the C library
@@ -561,6 +561,47 @@ Arrays of unknown size are not supported.
 
 In the future, some of these restrictions may be reduced or eliminated.
 
+SIMD Values
+~~~~~~~~~~~
+
+Note: This feature is currently implemented on 64-bit x86 platforms only.
+
+If a C/C++ routine has an argument or return value that is a native
+SIMD type, the corresponding Julia type is a homogeneous tuple
+of ``VecElement`` that naturally maps to the SIMD type.  Specifically:
+
+    - The tuple must be the same size as the SIMD type.
+      For example, a tuple representing an ``__m128`` on x86
+      must have a size of 16 bytes.
+
+    - The element type of the tuple must be an instance of ``VecElement{T}``
+      where ``T`` is a bitstype that is 1, 2, 4 or 8 bytes.
+
+For instance, consider this C routine that uses AVX intrinsics::
+
+    #include <immintrin.h>
+
+    __m256 dist( __m256 a, __m256 b ) {
+        return _mm256_sqrt_ps(_mm256_add_ps(_mm256_mul_ps(a, a),
+                                            _mm256_mul_ps(b, b)));
+    }
+
+The following Julia code calls ``dist`` using ``ccall``::
+
+    typealias m256 NTuple{8,VecElement{Float32}}
+
+    a = m256(ntuple(i->VecElement(sin(Float32(i))),8))
+    b = m256(ntuple(i->VecElement(cos(Float32(i))),8))
+
+    function call_dist(a::m256, b::m256)
+        ccall((:dist, "libdist"), m256, (m256, m256), a, b)
+    end
+
+    println(call_dist(a,b))
+
+The host machine must have the requisite SIMD registers.  For example,
+the code above will not work on hosts without AVX support.
+
 Memory Ownership
 ~~~~~~~~~~~~~~~~
 
@@ -776,8 +817,8 @@ Here is a simple example of a C wrapper that returns a ``Ptr`` type::
             (Csize_t,),                        #tuple of input types
             n                                  #name of Julia variable to pass in
         )
-        if output_ptr==C_NULL #Could not allocate memory
-            throw(MemoryError())
+        if output_ptr==C_NULL # Could not allocate memory
+            throw(OutOfMemoryError())
         end
         return output_ptr
     end
@@ -838,7 +879,7 @@ Here is a third example passing Julia arrays::
     #                                double result_array[])
     function sf_bessel_Jn_array(nmin::Integer, nmax::Integer, x::Real)
         if nmax<nmin throw(DomainError()) end
-        result_array = Array(Cdouble, nmax-nmin+1)
+        result_array = Array{Cdouble}(nmax-nmin+1)
         errorcode = ccall(
             (:gsl_sf_bessel_Jn_array, :libgsl), #name of C function and library
             Cint,                               #output type
@@ -885,7 +926,7 @@ it is finished with them.
 
 Whenever you have created a pointer to Julia data, you must ensure the original data
 exists until you are done with using the pointer. Many methods in Julia such as
-:func:`unsafe_load` and :func:`bytestring` make copies of data instead of taking ownership
+:func:`unsafe_load` and :func:`String` make copies of data instead of taking ownership
 of the buffer, so that it is safe to free (or alter) the original data without
 affecting Julia. A notable exception is :func:`pointer_to_array` which, for performance
 reasons, shares (or can be told to take ownership of) the underlying buffer.
@@ -958,7 +999,7 @@ conventions are: ``stdcall``, ``cdecl``, ``fastcall``, and ``thiscall``.
 For example (from ``base/libc.jl``) we see the same ``gethostname`` :func:`ccall` as above,
 but with the correct signature for Windows::
 
-    hn = Array(UInt8, 256)
+    hn = Array{UInt8}(256)
     err = ccall(:gethostname, stdcall, Int32, (Ptr{UInt8}, UInt32), hn, length(hn))
 
 For more information, please see the `LLVM Language Reference`_.
@@ -1063,3 +1104,4 @@ C++
 
 Limited support for C++ is provided by the `Cpp <https://github.com/timholy/Cpp.jl>`_,
 `Clang <https://github.com/ihnorton/Clang.jl>`_, and `Cxx <https://github.com/Keno/Cxx.jl>`_ packages.
+

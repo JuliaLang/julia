@@ -136,11 +136,11 @@ end
 @test "\x0f" == unescape_string("\\x0f")
 @test "\x0F" == unescape_string("\\x0F")
 
-extrapath = @windows? joinpath(JULIA_HOME,"..","Git","usr","bin")*";" : ""
+extrapath = is_windows() ? joinpath(JULIA_HOME,"..","Git","usr","bin")*";" : ""
 withenv("PATH" => extrapath * ENV["PATH"]) do
 if !success(`iconv --version`)
     warn("iconv not found, skipping unicode tests!")
-    @windows_only warn("Use WinRPM.install(\"win_iconv\") to run these tests")
+    is_windows() && warn("Use WinRPM.install(\"win_iconv\") to run these tests")
 else
     # Create unicode test data directory
     unicodedir = mktempdir()
@@ -228,15 +228,15 @@ Base.next(jt::i9178, n) = (jt.nnext += 1 ; ("$(jt.nnext),$(jt.ndone)", n+1))
 arr = ["a","b","c"]
 @test "[$(join(arr, " - "))]" == "[a - b - c]"
 
-# print_joined with empty input
+# join with empty input
 myio = IOBuffer()
-print_joined(myio, "", "", 1)
+join(myio, "", "", 1)
 @test isempty(takebuf_array(myio))
 
 # unescape_chars
 @test Base.unescape_chars("\\t","t") == "t"
-@test_throws ArgumentError print_unescaped(IOBuffer(), string('\\',"xZ"))
-@test_throws ArgumentError print_unescaped(IOBuffer(), string('\\',"777"))
+@test_throws ArgumentError unescape_string(IOBuffer(), string('\\',"xZ"))
+@test_throws ArgumentError unescape_string(IOBuffer(), string('\\',"777"))
 
 # 11659
 # The indentation code was not correctly counting tab stops

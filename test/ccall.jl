@@ -31,7 +31,7 @@ end
 @test ccall_echo_load(IntLike(993), Ptr{Int}, Ref{IntLike}) === 993
 @test ccall_echo_load(IntLike(881), Ptr{IntLike}, Ref{IntLike}).x === 881
 @test ccall_echo_func(532, Int, Int) === 532
-if WORD_SIZE == 64
+if Sys.WORD_SIZE == 64
     # this test is valid only for x86_64 and win64
     @test ccall_echo_func(164, IntLike, Int).x === 164
 end
@@ -523,4 +523,37 @@ let A = [1]
     finalizer(A, cglobal((:finalizer_cptr, libccalltest), Void))
     finalize(A)
     @test ccall((:get_c_int, libccalltest), Cint, ()) == -1
+end
+
+# SIMD Registers
+
+typealias VecReg{N,T} NTuple{N,VecElement{T}}
+typealias V4xF32 VecReg{4,Float32}
+typealias V4xI32 VecReg{4,Int32}
+
+if Sys.ARCH==:x86_64
+
+    function test_sse(a1::V4xF32,a2::V4xF32,a3::V4xF32,a4::V4xF32)
+        ccall((:test_m128, libccalltest), V4xF32, (V4xF32,V4xF32,V4xF32,V4xF32), a1, a2, a3, a4)
+    end
+
+    function test_sse(a1::V4xI32,a2::V4xI32,a3::V4xI32,a4::V4xI32)
+        ccall((:test_m128i, libccalltest), V4xI32, (V4xI32,V4xI32,V4xI32,V4xI32), a1, a2, a3, a4)
+    end
+
+    foo_ams(a1, a2, a3, a4) = VecReg(ntuple(i->VecElement(a1[i].value+a2[i].value*(a3[i].value-a4[i].value)),4))
+
+    rt_sse{T}(a1::T,a2::T,a3::T,a4::T) = ccall(cfunction(foo_ams,T,(T,T,T,T)), T, (T,T,T,T), a1, a2, a3,a4)
+
+    for s in [Float32,Int32]
+        a1 = VecReg(ntuple(i->VecElement(s(1i)),4))
+        a2 = VecReg(ntuple(i->VecElement(s(2i)),4))
+        a3 = VecReg(ntuple(i->VecElement(s(3i)),4))
+        a4 = VecReg(ntuple(i->VecElement(s(4i)),4))
+        r = VecReg(ntuple(i->VecElement(s(1i+2i*(3i-4i))),4))
+        @test test_sse(a1,a2,a3,a4) == r
+
+        # cfunction round-trip
+        @test rt_sse(a1,a2,a3,a4) == r
+    end
 end

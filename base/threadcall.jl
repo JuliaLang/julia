@@ -76,7 +76,7 @@ function do_threadcall(wrapper::Function, rettype::Type, argtypes::Vector, argva
     end
 
     # create return buffer
-    ret_arr = Array(UInt8, sizeof(rettype))
+    ret_arr = Array{UInt8}(sizeof(rettype))
 
     # wait for a worker thread to be available
     acquire(threadcall_restrictor)

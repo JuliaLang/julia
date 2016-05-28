@@ -120,11 +120,15 @@ svdfact(M::Bidiagonal; thin::Bool=true) = svdfact!(copy(M),thin=thin)
 ####################
 
 function show(io::IO, M::Bidiagonal)
-    println(io, summary(M), ":")
-    print(io, " diag:")
-    print_matrix(io, (M.dv)')
-    print(io, M.isupper?"\n super:":"\n sub:")
-    print_matrix(io, (M.ev)')
+    if get(io, :multiline, false)
+        Base.showarray(io, M)
+    else
+        println(io, summary(M), ":")
+        print(io, " diag:")
+        print_matrix(io, (M.dv)')
+        print(io, M.isupper?"\n super:":"\n sub:")
+        print_matrix(io, (M.ev)')
+    end
 end
 
 size(M::Bidiagonal) = (length(M.dv), length(M.dv))
@@ -223,7 +227,6 @@ end
 *(B::Number, A::Bidiagonal) = A*B
 /(A::Bidiagonal, B::Number) = Bidiagonal(A.dv/B, A.ev/B, A.isupper)
 ==(A::Bidiagonal, B::Bidiagonal) = (A.dv==B.dv) && (A.ev==B.ev) && (A.isupper==B.isupper)
-
 
 BiTriSym = Union{Bidiagonal, Tridiagonal, SymTridiagonal}
 BiTri = Union{Bidiagonal, Tridiagonal}
@@ -361,6 +364,11 @@ function A_mul_B_td!(C::AbstractMatrix, A::AbstractMatrix, B::BiTriSym)
     C
 end
 
+SpecialMatrix = Union{Bidiagonal, SymTridiagonal, Tridiagonal}
+# to avoid ambiguity warning, but shouldn't be necessary
+*(A::AbstractTriangular, B::SpecialMatrix) = full(A) * full(B)
+*(A::SpecialMatrix, B::SpecialMatrix) = full(A) * full(B)
+
 #Generic multiplication
 for func in (:*, :Ac_mul_B, :A_mul_Bc, :/, :A_rdiv_Bc)
     @eval ($func){T}(A::Bidiagonal{T}, B::AbstractVector{T}) = ($func)(full(A), B)
@@ -439,7 +447,7 @@ factorize(A::Bidiagonal) = A
 eigvals(M::Bidiagonal) = M.dv
 function eigvecs{T}(M::Bidiagonal{T})
     n = length(M.dv)
-    Q = Array(T, n, n)
+    Q = Array{T}(n, n)
     blks = [0; find(x -> x == 0, M.ev); n]
     if M.isupper
         for idx_block = 1:length(blks) - 1, i = blks[idx_block] + 1:blks[idx_block + 1] #index of eigenvector

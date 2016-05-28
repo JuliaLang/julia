@@ -149,7 +149,7 @@ Avoid elaborate container types
 
 It is usually not much help to construct arrays like the following::
 
-    a = Array(Union{Int,AbstractString,Tuple,Array}, n)
+    a = Array{Union{Int,AbstractString,Tuple,Array}}(n)
 
 In this case :func:`cell(n) <cell>` is better. It is also more helpful to the compiler
 to annotate specific uses (e.g. ``a[i]::Int``) than to try to pack many
@@ -159,7 +159,7 @@ Use naming conventions consistent with Julia's ``base/``
 --------------------------------------------------------
 
 - modules and type names use capitalization and camel case:
-  ``module SparseMatrix``,  ``immutable UnitRange``.
+  ``module SparseArrays``,  ``immutable UnitRange``.
 - functions are lowercase (:func:`maximum`, :func:`convert`) and,
   when readable, with multiple words squashed together (:func:`isequal`, :func:`haskey`).
   When necessary, use underscores as word separators.

@@ -15,10 +15,11 @@ typealias DenseVecOrMat{T} Union{DenseVector{T}, DenseMatrix{T}}
 size(a::Array, d) = arraysize(a, d)
 size(a::Vector) = (arraysize(a,1),)
 size(a::Matrix) = (arraysize(a,1), arraysize(a,2))
-size{_}(a::Array{_,3}) = (arraysize(a,1), arraysize(a,2), arraysize(a,3))
-size{_}(a::Array{_,4}) = (arraysize(a,1), arraysize(a,2), arraysize(a,3), arraysize(a,4))
+size(a::Array) = _size((), a)
+_size{_,N}(out::NTuple{N}, A::Array{_,N}) = out
+_size{_,M,N}(out::NTuple{M}, A::Array{_,N}) = _size((out..., size(A,M+1)), A)
+
 asize_from(a::Array, n) = n > ndims(a) ? () : (arraysize(a,n), asize_from(a, n+1)...)
-size{_,N}(a::Array{_,N}) = asize_from(a, 1)::NTuple{N,Int}
 
 length(a::Array) = arraylen(a)
 elsize{T}(a::Array{T}) = isbits(T) ? sizeof(T) : sizeof(Ptr)
@@ -117,19 +118,19 @@ end
 
 ## Constructors ##
 
-similar(a::Array, T::Type, dims::Dims) = Array(T, dims)
-similar{T}(a::Array{T,1})              = Array(T, size(a,1))
-similar{T}(a::Array{T,2})              = Array(T, size(a,1), size(a,2))
-similar{T}(a::Array{T,1}, dims::Dims)  = Array(T, dims)
-similar{T}(a::Array{T,1}, m::Int)      = Array(T, m)
-similar{T}(a::Array{T,1}, S::Type)     = Array(S, size(a,1))
-similar{T}(a::Array{T,2}, dims::Dims)  = Array(T, dims)
-similar{T}(a::Array{T,2}, m::Int)      = Array(T, m)
-similar{T}(a::Array{T,2}, S::Type)     = Array(S, size(a,1), size(a,2))
+similar(a::Array, T::Type, dims::Dims) = Array{T}(dims)
+similar{T}(a::Array{T,1})              = Array{T}(size(a,1))
+similar{T}(a::Array{T,2})              = Array{T}(size(a,1), size(a,2))
+similar{T}(a::Array{T,1}, dims::Dims)  = Array{T}(dims)
+similar{T}(a::Array{T,1}, m::Int)      = Array{T}(m)
+similar{T}(a::Array{T,1}, S::Type)     = Array{S}(size(a,1))
+similar{T}(a::Array{T,2}, dims::Dims)  = Array{T}(dims)
+similar{T}(a::Array{T,2}, m::Int)      = Array{T}(m)
+similar{T}(a::Array{T,2}, S::Type)     = Array{S}(size(a,1), size(a,2))
 
 # T[x...] constructs Array{T,1}
 function getindex(T::Type, vals...)
-    a = Array(T,length(vals))
+    a = Array{T}(length(vals))
     @inbounds for i = 1:length(vals)
         a[i] = vals[i]
     end
@@ -138,7 +139,7 @@ end
 getindex(T::Type) = Array{T}(0)
 
 function getindex(::Type{Any}, vals::ANY...)
-    a = Array(Any,length(vals))
+    a = Array{Any}(length(vals))
     @inbounds for i = 1:length(vals)
         a[i] = vals[i]
     end
@@ -159,16 +160,16 @@ function fill!{T<:Union{Integer,AbstractFloat}}(a::Array{T}, x)
     return a
 end
 
-fill(v, dims::Dims)       = fill!(Array(typeof(v), dims), v)
-fill(v, dims::Integer...) = fill!(Array(typeof(v), dims...), v)
+fill(v, dims::Dims)       = fill!(Array{typeof(v)}(dims), v)
+fill(v, dims::Integer...) = fill!(Array{typeof(v)}(dims...), v)
 
-cell(dims::Integer...)   = Array(Any, dims...)
-cell(dims::Tuple{Vararg{Integer}}) = Array(Any, convert(Tuple{Vararg{Int}}, dims))
+cell(dims::Integer...)   = Array{Any}(dims...)
+cell(dims::Tuple{Vararg{Integer}}) = Array{Any}(convert(Tuple{Vararg{Int}}, dims))
 
 for (fname, felt) in ((:zeros,:zero), (:ones,:one))
     @eval begin
-        ($fname)(T::Type, dims...)       = fill!(Array(T, dims...), ($felt)(T))
-        ($fname)(dims...)                = fill!(Array(Float64, dims...), ($felt)(Float64))
+        ($fname)(T::Type, dims...)       = fill!(Array{T}(dims...), ($felt)(T))
+        ($fname)(dims...)                = fill!(Array{Float64}(dims...), ($felt)(Float64))
         ($fname){T}(A::AbstractArray{T}) = fill!(similar(A), ($felt)(T))
     end
 end
@@ -197,7 +198,7 @@ convert{T,n}(::Type{Array{T}}, x::Array{T,n}) = x
 convert{T,n}(::Type{Array{T,n}}, x::Array{T,n}) = x
 
 convert{T,n,S}(::Type{Array{T}}, x::AbstractArray{S, n}) = convert(Array{T, n}, x)
-convert{T,n,S}(::Type{Array{T,n}}, x::AbstractArray{S,n}) = copy!(Array(T, size(x)), x)
+convert{T,n,S}(::Type{Array{T,n}}, x::AbstractArray{S,n}) = copy!(Array{T}(size(x)), x)
 
 promote_rule{T,n,S}(::Type{Array{T,n}}, ::Type{Array{S,n}}) = Array{promote_type(T,S),n}
 
@@ -690,13 +691,13 @@ function vcat{T}(arrays::Vector{T}...)
     for a in arrays
         n += length(a)
     end
-    arr = Array(T, n)
+    arr = Array{T}(n)
     ptr = pointer(arr)
     offset = 0
     if isbits(T)
         elsz = sizeof(T)
     else
-        elsz = div(WORD_SIZE,8)
+        elsz = Core.sizeof(Ptr{Void})
     end
     for a in arrays
         nba = length(a)*elsz
@@ -717,6 +718,14 @@ function hcat{T}(V::Vector{T}...)
     [ V[j][i]::T for i=1:length(V[1]), j=1:length(V) ]
 end
 
+hcat(A::Matrix...) = typed_hcat(promote_eltype(A...), A...)
+hcat{T}(A::Matrix{T}...) = typed_hcat(T, A...)
+
+vcat(A::Matrix...) = typed_vcat(promote_eltype(A...), A...)
+vcat{T}(A::Matrix{T}...) = typed_vcat(T, A...)
+
+hvcat(rows::Tuple{Vararg{Int}}, xs::Matrix...) = typed_hvcat(promote_eltype(xs...), rows, xs...)
+hvcat{T}(rows::Tuple{Vararg{Int}}, xs::Matrix{T}...) = typed_hvcat(T, rows, xs...)
 
 ## find ##
 
@@ -783,13 +792,13 @@ findlast(testf::Function, A) = findprev(testf, A, length(A))
 function find(testf::Function, A)
     # use a dynamic-length array to store the indexes, then copy to a non-padded
     # array for the return
-    tmpI = Array(Int, 0)
+    tmpI = Array{Int}(0)
     for (i,a) = enumerate(A)
         if testf(a)
             push!(tmpI, i)
         end
     end
-    I = Array(Int, length(tmpI))
+    I = Array{Int}(length(tmpI))
     copy!(I, tmpI)
     I
 end
@@ -807,8 +816,8 @@ function find(A)
     return I
 end
 
-find(x::Number) = x == 0 ? Array(Int,0) : [1]
-find(testf::Function, x::Number) = !testf(x) ? Array(Int,0) : [1]
+find(x::Number) = x == 0 ? Array{Int}(0) : [1]
+find(testf::Function, x::Number) = !testf(x) ? Array{Int}(0) : [1]
 
 findn(A::AbstractVector) = find(A)
 
@@ -831,7 +840,7 @@ function findnz{T}(A::AbstractMatrix{T})
     nnzA = countnz(A)
     I = zeros(Int, nnzA)
     J = zeros(Int, nnzA)
-    NZs = Array(T, nnzA)
+    NZs = Array{T}(nnzA)
     count = 1
     if nnzA > 0
         for j=1:size(A,2), i=1:size(A,1)
@@ -894,7 +903,7 @@ function indexin(a::AbstractArray, b::AbstractArray)
 end
 
 function findin(a, b)
-    ind = Array(Int, 0)
+    ind = Array{Int}(0)
     bset = Set(b)
     @inbounds for (i,ai) in enumerate(a)
         ai in bset && push!(ind, i)
@@ -943,7 +952,7 @@ function filter!(f, a::Vector)
 end
 
 function filter(f, a::Vector)
-    r = Array(eltype(a), 0)
+    r = Array{eltype(a)}(0)
     for ai in a
         if f(ai)
             push!(r, ai)
@@ -956,7 +965,7 @@ end
 # These are moderately efficient, preserve order, and remove dupes.
 
 function intersect(v1, vs...)
-    ret = Array(eltype(v1),0)
+    ret = Array{eltype(v1)}(0)
     for v_elem in v1
         inall = true
         for vsi in vs
@@ -972,7 +981,7 @@ function intersect(v1, vs...)
 end
 
 function union(vs...)
-    ret = Array(promote_eltype(vs...),0)
+    ret = Array{promote_eltype(vs...)}(0)
     seen = Set()
     for v in vs
         for v_elem in v
@@ -988,7 +997,7 @@ end
 function setdiff(a, b)
     args_type = promote_type(eltype(a), eltype(b))
     bset = Set(b)
-    ret = Array(args_type,0)
+    ret = Array{args_type}(0)
     seen = Set{eltype(a)}()
     for a_elem in a
         if !in(a_elem, seen) && !in(a_elem, bset)

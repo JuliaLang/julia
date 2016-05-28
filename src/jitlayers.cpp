@@ -69,6 +69,10 @@ static void addOptimizationPasses(T *PM)
 
     PM->add(createEarlyCSEPass()); //// ****
 
+#ifdef USE_POLLY
+    polly::registerPollyPasses(*PM);
+#endif
+
     PM->add(createLoopIdiomPass()); //// ****
     PM->add(createLoopRotatePass());           // Rotate loops.
     // LoopRotate strips metadata from terminator, so run LowerSIMD afterwards
@@ -1005,6 +1009,8 @@ static void jl_dump_shadow(char *fname, int jit_model, const char *sysimg_data, 
         jl_TargetMachine->Options,
 #if defined(_OS_LINUX_) || defined(_OS_FREEBSD_)
         Reloc::PIC_,
+#elif defined(LLVM39)
+        jit_model ? Reloc::PIC_ : Optional<Reloc::Model>(),
 #else
         jit_model ? Reloc::PIC_ : Reloc::Default,
 #endif

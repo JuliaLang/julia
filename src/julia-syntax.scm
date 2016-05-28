@@ -333,7 +333,7 @@
                                   (string "call(" n "::" t ", ...)")
                                   (string "(" n "::" t ")(...)"))))
         (if (symbol? name)
-            `(block (method ,name) ,mdef ,name)  ;; return the function
+            `(block (method ,name) ,mdef (unnecessary ,name))  ;; return the function
             mdef))))))
 
 ;; keyword default values that can be assigned right away. however, this creates
@@ -406,9 +406,7 @@
         ,(method-def-expr-
           name positional-sparams (append pargl vararg)
           `(block
-            ,(if (null? lno)
-                 `(line 0 || ||)
-                 (append (car lno) '(||)))
+            ,@lno
             ,@(if (not ordered-defaults)
                   '()
                   (map make-assignment keynames vals))
@@ -436,11 +434,7 @@
                  (car not-optional))
             ,@(cdr not-optional) ,@vararg)
           `(block
-            ,@(cond ((null? lno) '())
-		    ((not name) lno)
-		    (else
-		     ;; TODO jb/functions get a better `name` for functions specified by type
-		     (list (append (car lno) (list (undot-name name))))))
+            ,@lno
             ,@stmts) isstaged)
 
         ;; call with unsorted keyword args. this sorts and re-dispatches.
@@ -455,7 +449,6 @@
              ,(if (any kwarg? pargl) (gensy) UNUSED)
              (call (core kwftype) ,ftype)) (:: ,kw (core Array)) ,@pargl ,@vararg)
           `(block
-            (line 0 || ||)
             ;; initialize keyword args to their defaults, or set a flag telling
             ;; whether this keyword needs to be set.
             ,@(map (lambda (name dflt flag)
@@ -1266,7 +1259,7 @@
     (if (null? lhss)
         `(block ,@(reverse stmts)
                 ,@(reverse after)
-                (tuple ,@(reverse elts)))
+                (unnecessary (tuple ,@(reverse elts))))
         (let ((L (car lhss))
               (R (car rhss)))
           (if (and (symbol-like? L)
@@ -1534,17 +1527,19 @@
 
    'block
    (lambda (e)
-     (let ((e (flatten-blocks e)))
-       (cond ((null? (cdr e)) '(null))
-             ((null? (cddr e)) (expand-forms (cadr e)))
-             (else
-              `(block
-                ,.(map (lambda (x)
-                         (if (decl? x)
-                             `(decl ,@(map expand-forms (cdr x)))
-                             (expand-forms x)))
-                       (butlast (cdr e)))
-                ,(expand-forms (last e)))))))
+     (cond ((null? (cdr e)) '(null))
+           ((and (null? (cddr e))
+                 (not (and (pair? (cadr e))
+                           (eq? (car (cadr e)) 'line))))
+            (expand-forms (cadr e)))
+           (else
+            `(block
+              ,.(map (lambda (x)
+                       (if (decl? x)
+                           `(decl ,@(map expand-forms (cdr x)))
+                           (expand-forms x)))
+                     (butlast (cdr e)))
+              ,(expand-forms (last (cdr e)))))))
 
    '|.|
    (lambda (e) ; e = (|.| f x)
@@ -1587,7 +1582,7 @@
                 `(block ,.(if (eq? rr rhs) '() `((= ,rr ,rhs)))
                         ,@(map (lambda (l) `(= ,l ,rr))
                                lhss)
-                        ,rr))))))
+                        (unnecessary ,rr)))))))
       ((symbol-like? lhs)
        `(= ,lhs ,(expand-forms (caddr e))))
       ((atom? lhs)
@@ -1618,7 +1613,7 @@
                       (call (top convert)
                             (call (core fieldtype) (call (core typeof) ,aa) ,bb)
                             ,rr))
-                ,rr))))
+                (unnecessary ,rr)))))
          ((tuple)
           ;; multiple assignment
           (let ((lhss (cdr lhs))
@@ -1644,7 +1639,7 @@
                                       ,xx ,(+ i 1) ,st))))
                            (iota (length lhss))
                            lhss)
-                    ,xx)))))
+                    (unnecessary ,xx))))))
          ((typed_hcat)
           (error "invalid spacing in left side of indexed assignment"))
          ((typed_vcat)
@@ -1673,7 +1668,7 @@
                  ,@rini
                  ,(expand-forms
                    `(call setindex! ,arr ,r ,@new-idxs))
-                 ,r)))))
+                 (unnecessary ,r))))))
          ((|::|)
           ;; (= (|::| x T) rhs)
           (let ((x (cadr lhs))
@@ -2021,6 +2016,7 @@
 
    'dict_comprehension
    (lambda (e)
+     (syntax-deprecation #f "[a=>b for (a,b) in c]" "Dict(a=>b for (a,b) in c)")
      (expand-forms (lower-dict-comprehension (cadr e) (cddr e))))
 
    'typed_dict_comprehension
@@ -2596,6 +2592,15 @@ f(x) = yt(x)
             (cons (last e2) (append tl (butlast (cdr e2))))
             (cons e2 tl)))))
 
+(define (first-non-meta blk)
+  (let loop ((xs (cdr blk)))
+    (if (null? xs)
+        #f
+        (let ((elt (car xs)))
+          (if (and (pair? elt) (eq? (car elt) 'meta))
+              (loop (cdr xs))
+              elt)))))
+
 ;; return `body` with `stmts` inserted after any meta nodes
 (define (insert-after-meta body stmts)
   (let ((meta (take-while (lambda (x) (and (pair? x)
@@ -2657,7 +2662,7 @@ f(x) = yt(x)
                         (take-statements-while
                          (lambda (e)
                            (or (atom? e)
-                               (memq (car e) '(quote top core line inert local
+                               (memq (car e) '(quote top core line inert local unnecessary
                                                meta inbounds boundscheck simdloop
                                                implicit-global global globalref
                                                const newvar = null method))))
@@ -2715,11 +2720,17 @@ f(x) = yt(x)
                                    `($ (call (core QuoteNode) ,e))
                                    `(call (core getfield) ,fname (inert ,e)))))
                    (if (and (vinfo:asgn cv) (vinfo:capt cv))
-                       `(call (core getfield) ,access (inert contents))
+                       (let ((val `(call (core getfield) ,access (inert contents))))
+                         (if (eq? (vinfo:type cv) 'Any)
+                             val
+                             `(call (core typeassert) ,val ,(vinfo:type cv))))
                        access)))
                 (vi
                  (if (and (vinfo:asgn vi) (vinfo:capt vi))
-                     `(call (core getfield) ,e (inert contents))
+                     (let ((val `(call (core getfield) ,e (inert contents))))
+                       (if (eq? (vinfo:type vi) 'Any)
+                           val
+                           `(call (core typeassert) ,val ,(vinfo:type vi))))
                      e))
                 (else e))))
        ((atom? e) e)
@@ -2741,9 +2752,9 @@ f(x) = yt(x)
            (let ((vi (assq (cadr e) (car (lam:vinfo lam)))))
              (if (and vi (vinfo:asgn vi) (vinfo:capt vi)
                       ;; avoid redundant box for vars with newvar nodes
-                      (not (any (lambda (x) (and (length= x 2)
-                                                 (eq? (car x) 'newvar) (eq? (cadr x) (cadr e))))
-                                (lam:body lam))))
+                      (not (expr-contains-p (lambda (x) (and (length= x 2)
+                                                             (eq? (car x) 'newvar) (eq? (cadr x) (cadr e))))
+                                            (lam:body lam))))
                  `(= ,(cadr e) (call (core Box)))
                  `(newvar ,(cadr e)))))
           ((const)
@@ -2941,6 +2952,8 @@ f(x) = yt(x)
 ;; only possible returned values.
 (define (compile-body e vi lam)
   (let ((code '())
+        (filename #f)
+        (first-line #t)
         (label-counter 0)     ;; counter for generating label addresses
         (label-map (table))   ;; maps label names to generated addresses
         (label-level (table)) ;; exception handler level of each label
@@ -3050,14 +3063,34 @@ f(x) = yt(x)
                      rr)
                    (emit `(= ,(cadr e) ,rhs)))))
             ((block body)
-             (let loop ((xs (cdr e)))
-               (if (null? (cdr xs))
-                   (compile (car xs) break-labels value tail)
-                   (begin (compile (car xs) break-labels #f #f)
-                          (loop (cdr xs))))))
+             (let* ((last-fname filename)
+                    (fnm        (first-non-meta e))
+                    (fname      (if (and (length> e 1) (pair? fnm) (eq? (car fnm) 'line)
+                                         (length> fnm 2))
+                                    (caddr fnm)
+                                    filename)))
+               (if (not (eq? fname last-fname))
+                   (begin (set! filename fname)
+                          ;; don't need a filename node for start of function
+                          (if (not (eq? e (lam:body lam))) (emit `(meta push_loc ,fname)))))
+               (begin0
+                (let loop ((xs (cdr e)))
+                  (if (null? (cdr xs))
+                      (compile (car xs) break-labels value tail)
+                      (begin (compile (car xs) break-labels #f #f)
+                             (loop (cdr xs)))))
+                (if (not (eq? fname last-fname))
+                    (begin (if (not tail) (emit `(meta pop_loc)))
+                           (set! filename last-fname))))))
             ((return)
              (compile (cadr e) break-labels #t #t)
              '(null))
+            ((unnecessary)
+             ;; `unnecessary` marks expressions generated by lowering that
+             ;; do not need to be evaluated if their value is unused.
+             (if value
+                 (compile (cadr e) break-labels value tail)
+                 #f))
             ((if)
              (let ((test `(gotoifnot ,(compile-cond (cadr e) break-labels) _))
                    (end-jump `(goto _))
@@ -3203,7 +3236,13 @@ f(x) = yt(x)
             ;; other top level expressions and metadata
             ((import importall using export line meta inbounds boundscheck simdloop)
              (let ((have-ret? (and (pair? code) (pair? (car code)) (eq? (caar code) 'return))))
-               (emit e)
+               (if (eq? (car e) 'line)
+                   (if first-line
+                       (begin (set! first-line #f)
+                              (emit e))
+                       ;; strip filenames out of non-initial line nodes
+                       (emit `(line ,(cadr e))))
+                   (emit e))
                (if (and tail (not have-ret?))
                    (emit-return '(null)))
                '(null)))
@@ -3264,12 +3303,22 @@ f(x) = yt(x)
 (define (label-to-idx-map body)
   (let ((tbl (table)))
     (let loop ((stmts (cdr body))
+               (prev  (cdr body))
                (i 1))
       (if (pair? stmts)
-          (let ((el (car stmts)))
+          (let* ((el  (car stmts))
+                 (nxt (cdr stmts))
+                 ;; is next statement also a label?
+                 (nl  (and (pair? nxt) (pair? (car nxt)) (eq? (caar nxt) 'label))))
             (if (and (pair? el) (eq? (car el) 'label))
-                (put! tbl (cadr el) i))
-            (loop (cdr stmts) (+ i 1)))))
+                (begin (put! tbl (cadr el) i)
+                       (loop nxt
+                             (if nl prev nxt)
+                             (if nl ;; merge adjacent labels
+                                 (begin (set-cdr! prev (cdr nxt))
+                                        i)
+                                 (+ i 1))))
+                (loop nxt nxt (+ i 1))))))
     tbl))
 
 (define (renumber-labels! lam label2idx)

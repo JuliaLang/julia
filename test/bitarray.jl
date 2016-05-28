@@ -515,7 +515,7 @@ for m1 = 1 : v1 + 1
             @test b == i
             b2 = copy(b1)
             i2 = copy(i1)
-            i3 = [j => rand(0:1) for j = 1:v2]
+            i3 = Dict(j => rand(0:1) for j = 1:v2)
             b = splice!(b2, m1:m2, values(i3))
             i = splice!(i2, m1:m2, values(i3))
             @test isequal(Array(b2), i2)
@@ -545,7 +545,7 @@ for m1 = 1 : v1
         @test b == i
         b2 = copy(b1)
         i2 = copy(i1)
-        i3 = [j => rand(0:1) for j = 1:v2]
+        i3 = Dict(j => rand(0:1) for j = 1:v2)
         b = splice!(b2, m1:m2, values(i3))
         i = splice!(i2, m1:m2, values(i3))
         @test isequal(Array(b2), i2)
@@ -962,7 +962,7 @@ elts = (1:64:64*64+1) .+ (0:64)
 B1 = falses(maximum(elts))
 B1[elts] = true
 B1′ = ~B1
-B2 = fill!(Array(Bool, maximum(elts)), false)
+B2 = fill!(Array{Bool}(maximum(elts)), false)
 B2[elts] = true
 @test B1 == B2
 @test all(B1 .== B2)

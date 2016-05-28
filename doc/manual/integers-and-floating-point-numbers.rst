@@ -87,15 +87,15 @@ system has a 32-bit architecture or a 64-bit architecture::
     julia> typeof(1)
     Int64
 
-The Julia internal variable :const:`WORD_SIZE` indicates whether the target system
+The Julia internal variable :const:`Sys.WORD_SIZE` indicates whether the target system
 is 32-bit or 64-bit.::
 
     # 32-bit system:
-    julia> WORD_SIZE
+    julia> Sys.WORD_SIZE
     32
 
     # 64-bit system:
-    julia> WORD_SIZE
+    julia> Sys.WORD_SIZE
     64
 
 Julia also defines the types :class:`Int` and :class:`UInt`, which are aliases for the
@@ -697,10 +697,10 @@ imply multiplication:
 .. doctest::
 
     julia> (x-1)(x+1)
-    ERROR: MethodError: `Int64` has no method matching Int64(::Int64)
+    ERROR: MethodError: objects of type Int64 are not callable
 
     julia> x(x+1)
-    ERROR: MethodError: `Int64` has no method matching Int64(::Int64)
+    ERROR: MethodError: objects of type Int64 are not callable
 
 Both expressions are interpreted as function application: any
 expression that is not a numeric literal, when immediately followed by a

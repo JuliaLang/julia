@@ -2,7 +2,7 @@
 
 module Markdown
 
-import Base: writemime, ==
+import Base: show, ==
 import Core: @doc_str
 
 include("parse/config.jl")

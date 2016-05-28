@@ -71,9 +71,9 @@ typealias UMFVTypes Union{Float64,Complex128}
 ## UMFPACK
 
 # the control and info arrays
-const umf_ctrl = Array(Float64, UMFPACK_CONTROL)
+const umf_ctrl = Array{Float64}(UMFPACK_CONTROL)
 ccall((:umfpack_dl_defaults,:libumfpack), Void, (Ptr{Float64},), umf_ctrl)
-const umf_info = Array(Float64, UMFPACK_INFO)
+const umf_info = Array{Float64}(UMFPACK_INFO)
 
 function show_umf_ctrl(level::Real = 2.0)
     old_prt::Float64 = umf_ctrl[1]
@@ -199,7 +199,7 @@ for itype in UmfpackIndexTypes
     @eval begin
         function umfpack_symbolic!(U::UmfpackLU{Float64,$itype})
             if U.symbolic != C_NULL return U end
-            tmp = Array(Ptr{Void},1)
+            tmp = Array{Ptr{Void}}(1)
             @isok ccall(($sym_r, :libumfpack), $itype,
                         ($itype, $itype, Ptr{$itype}, Ptr{$itype}, Ptr{Float64}, Ptr{Void},
                          Ptr{Float64}, Ptr{Float64}),
@@ -210,7 +210,7 @@ for itype in UmfpackIndexTypes
         end
         function umfpack_symbolic!(U::UmfpackLU{Complex128,$itype})
             if U.symbolic != C_NULL return U end
-            tmp = Array(Ptr{Void},1)
+            tmp = Array{Ptr{Void}}(1)
             @isok ccall(($sym_c, :libumfpack), $itype,
                         ($itype, $itype, Ptr{$itype}, Ptr{$itype}, Ptr{Float64}, Ptr{Float64}, Ptr{Void},
                          Ptr{Float64}, Ptr{Float64}),
@@ -222,7 +222,7 @@ for itype in UmfpackIndexTypes
         function umfpack_numeric!(U::UmfpackLU{Float64,$itype})
             if U.numeric != C_NULL return U end
             if U.symbolic == C_NULL umfpack_symbolic!(U) end
-            tmp = Array(Ptr{Void}, 1)
+            tmp = Array{Ptr{Void}}(1)
             status = ccall(($num_r, :libumfpack), $itype,
                            (Ptr{$itype}, Ptr{$itype}, Ptr{Float64}, Ptr{Void}, Ptr{Void},
                             Ptr{Float64}, Ptr{Float64}),
@@ -237,7 +237,7 @@ for itype in UmfpackIndexTypes
         function umfpack_numeric!(U::UmfpackLU{Complex128,$itype})
             if U.numeric != C_NULL return U end
             if U.symbolic == C_NULL umfpack_symbolic!(U) end
-            tmp = Array(Ptr{Void}, 1)
+            tmp = Array{Ptr{Void}}(1)
             status = ccall(($num_c, :libumfpack), $itype,
                            (Ptr{$itype}, Ptr{$itype}, Ptr{Float64}, Ptr{Float64}, Ptr{Void}, Ptr{Void},
                             Ptr{Float64}, Ptr{Float64}),
@@ -249,10 +249,12 @@ for itype in UmfpackIndexTypes
             U.numeric = tmp[1]
             return U
         end
-        function solve(lu::UmfpackLU{Float64,$itype}, b::VecOrMat{Float64}, typ::Integer)
+        function solve!(x::VecOrMat{Float64}, lu::UmfpackLU{Float64,$itype}, b::VecOrMat{Float64}, typ::Integer)
+            if x === b
+                throw(ArgumentError("output array must not be aliased with input array"))
+            end
             umfpack_numeric!(lu)
-            size(b,1)==lu.m || throw(DimensionMismatch())
-            x = similar(b)
+            (size(b,1) == lu.m) && (size(b) == size(x)) || throw(DimensionMismatch())
             joff = 1
             for k = 1:size(b,2)
                 @isok ccall(($sol_r, :libumfpack), $itype,
@@ -263,68 +265,58 @@ for itype in UmfpackIndexTypes
             end
             x
         end
-        function solve(lu::UmfpackLU{Complex128,$itype}, b::VecOrMat{Complex128}, typ::Integer)
+        function solve!(x::VecOrMat{Complex128}, lu::UmfpackLU{Complex128,$itype}, b::VecOrMat{Complex128}, typ::Integer)
+            if x === b
+                throw(ArgumentError("output array must not be aliased with input array"))
+            end
             umfpack_numeric!(lu)
-            size(b,1)==lu.m || throw(DimensionMismatch())
-            x = similar(b)
+            (size(b,1) == lu.m) && (size(b) == size(x)) || throw(DimensionMismatch())
             n = size(b,1)
-            br = Array(Float64, n)
-            bi = Array(Float64, n)
-            xr = Array(Float64, n)
-            xi = Array(Float64, n)
-            joff = 0
+            joff = 1
             for k = 1:size(b,2)
-                for j = 1:n
-                    bj = b[joff+j]
-                    br[j] = real(bj)
-                    bi[j] = imag(bj)
-                end
                 @isok ccall(($sol_c, :libumfpack), $itype,
                             ($itype, Ptr{$itype}, Ptr{$itype}, Ptr{Float64}, Ptr{Float64},
                              Ptr{Float64}, Ptr{Float64}, Ptr{Float64}, Ptr{Float64},
                              Ptr{Void}, Ptr{Float64}, Ptr{Float64}),
-                            typ, lu.colptr, lu.rowval, real(lu.nzval), imag(lu.nzval),
-                            xr, xi, br, bi,
+                            typ, lu.colptr, lu.rowval, lu.nzval, C_NULL,
+                            pointer(x, joff), C_NULL, pointer(b, joff), C_NULL,
                             lu.numeric, umf_ctrl, umf_info)
-                for j = 1:n
-                    x[joff+j] = complex(xr[j],xi[j])
-                end
                 joff += n
             end
             x
         end
         function det(lu::UmfpackLU{Float64,$itype})
-            mx = Array(Float64,1)
+            mx = Array{Float64}(1)
             @isok ccall(($det_r,:libumfpack), $itype,
                            (Ptr{Float64},Ptr{Float64},Ptr{Void},Ptr{Float64}),
                            mx, C_NULL, lu.numeric, umf_info)
             mx[1]
         end
         function det(lu::UmfpackLU{Complex128,$itype})
-            mx = Array(Float64,1)
-            mz = Array(Float64,1)
+            mx = Array{Float64}(1)
+            mz = Array{Float64}(1)
             @isok ccall(($det_z,:libumfpack), $itype,
                         (Ptr{Float64},Ptr{Float64},Ptr{Float64},Ptr{Void},Ptr{Float64}),
                         mx, mz, C_NULL, lu.numeric, umf_info)
             complex(mx[1], mz[1])
         end
         function umf_lunz(lu::UmfpackLU{Float64,$itype})
-            lnz = Array($itype, 1)
-            unz = Array($itype, 1)
-            n_row = Array($itype, 1)
-            n_col = Array($itype, 1)
-            nz_diag = Array($itype, 1)
+            lnz = Array{$itype}(1)
+            unz = Array{$itype}(1)
+            n_row = Array{$itype}(1)
+            n_col = Array{$itype}(1)
+            nz_diag = Array{$itype}(1)
             @isok ccall(($lunz_r,:libumfpack), $itype,
                            (Ptr{$itype},Ptr{$itype},Ptr{$itype},Ptr{$itype},Ptr{$itype},Ptr{Void}),
                            lnz, unz, n_row, n_col, nz_diag, lu.numeric)
             (lnz[1], unz[1], n_row[1], n_col[1], nz_diag[1])
         end
         function umf_lunz(lu::UmfpackLU{Complex128,$itype})
-            lnz = Array($itype, 1)
-            unz = Array($itype, 1)
-            n_row = Array($itype, 1)
-            n_col = Array($itype, 1)
-            nz_diag = Array($itype, 1)
+            lnz = Array{$itype}(1)
+            unz = Array{$itype}(1)
+            n_row = Array{$itype}(1)
+            n_col = Array{$itype}(1)
+            nz_diag = Array{$itype}(1)
             @isok ccall(($lunz_z,:libumfpack), $itype,
                            (Ptr{$itype},Ptr{$itype},Ptr{$itype},Ptr{$itype},Ptr{$itype},Ptr{Void}),
                            lnz, unz, n_row, n_col, nz_diag, lu.numeric)
@@ -333,15 +325,15 @@ for itype in UmfpackIndexTypes
         function umf_extract(lu::UmfpackLU{Float64,$itype})
             umfpack_numeric!(lu)        # ensure the numeric decomposition exists
             (lnz, unz, n_row, n_col, nz_diag) = umf_lunz(lu)
-            Lp = Array($itype, n_row + 1)
-            Lj = Array($itype, lnz) # L is returned in CSR (compressed sparse row) format
-            Lx = Array(Float64, lnz)
-            Up = Array($itype, n_col + 1)
-            Ui = Array($itype, unz)
-            Ux = Array(Float64, unz)
-            P  = Array($itype, n_row)
-            Q  = Array($itype, n_col)
-            Rs = Array(Float64, n_row)
+            Lp = Array{$itype}(n_row + 1)
+            Lj = Array{$itype}(lnz) # L is returned in CSR (compressed sparse row) format
+            Lx = Array{Float64}(lnz)
+            Up = Array{$itype}(n_col + 1)
+            Ui = Array{$itype}(unz)
+            Ux = Array{Float64}(unz)
+            P  = Array{$itype}(n_row)
+            Q  = Array{$itype}(n_col)
+            Rs = Array{Float64}(n_row)
             @isok ccall(($get_num_r,:libumfpack), $itype,
                         (Ptr{$itype},Ptr{$itype},Ptr{Float64},
                          Ptr{$itype},Ptr{$itype},Ptr{Float64},
@@ -358,17 +350,17 @@ for itype in UmfpackIndexTypes
         function umf_extract(lu::UmfpackLU{Complex128,$itype})
             umfpack_numeric!(lu)        # ensure the numeric decomposition exists
             (lnz, unz, n_row, n_col, nz_diag) = umf_lunz(lu)
-            Lp = Array($itype, n_row + 1)
-            Lj = Array($itype, lnz) # L is returned in CSR (compressed sparse row) format
-            Lx = Array(Float64, lnz)
-            Lz = Array(Float64, lnz)
-            Up = Array($itype, n_col + 1)
-            Ui = Array($itype, unz)
-            Ux = Array(Float64, unz)
-            Uz = Array(Float64, unz)
-            P  = Array($itype, n_row)
-            Q  = Array($itype, n_col)
-            Rs = Array(Float64, n_row)
+            Lp = Array{$itype}(n_row + 1)
+            Lj = Array{$itype}(lnz) # L is returned in CSR (compressed sparse row) format
+            Lx = Array{Float64}(lnz)
+            Lz = Array{Float64}(lnz)
+            Up = Array{$itype}(n_col + 1)
+            Ui = Array{$itype}(unz)
+            Ux = Array{Float64}(unz)
+            Uz = Array{Float64}(unz)
+            P  = Array{$itype}(n_row)
+            Q  = Array{$itype}(n_col)
+            Rs = Array{Float64}(n_row)
             @isok ccall(($get_num_z,:libumfpack), $itype,
                         (Ptr{$itype},Ptr{$itype},Ptr{Float64},Ptr{Float64},
                          Ptr{$itype},Ptr{$itype},Ptr{Float64},Ptr{Float64},
@@ -391,26 +383,29 @@ function nnz(lu::UmfpackLU)
 end
 
 ### Solve with Factorization
-A_ldiv_B!{T<:UMFVTypes}(lu::UmfpackLU{T}, b::Vector{T}) = solve(lu, b, UMFPACK_A)
-A_ldiv_B!{T<:UMFVTypes}(lu::UmfpackLU{T}, b::Matrix{T}) = solve(lu, b, UMFPACK_A)
-function A_ldiv_B!{Tb<:Complex}(lu::UmfpackLU{Float64}, b::Vector{Tb})
-    r = solve(lu, [convert(Float64,real(be)) for be in b], UMFPACK_A)
-    i = solve(lu, [convert(Float64,imag(be)) for be in b], UMFPACK_A)
-    Tb[r[k]+im*i[k] for k = 1:length(r)]
-end
+for (f!, umfpack) in ((:A_ldiv_B!, :UMFPACK_A),
+                      (:Ac_ldiv_B!, :UMFPACK_At),
+                      (:At_ldiv_B!, :UMFPACK_Aat))
+    @eval begin
+        $f!{T<:UMFVTypes}(x::VecOrMat{T}, lu::UmfpackLU{T}, b::VecOrMat{T}) = solve!(x, lu, b, $umfpack)
+        $f!{T<:UMFVTypes}(lu::UmfpackLU{T}, b::Vector{T}) = $f!(b, lu, copy(b))
+        $f!{T<:UMFVTypes}(lu::UmfpackLU{T}, b::Matrix{T}) = $f!(b, lu, copy(b))
 
-Ac_ldiv_B!{T<:UMFVTypes}(lu::UmfpackLU{T}, b::VecOrMat{T}) = solve(lu, b, UMFPACK_At)
-function Ac_ldiv_B!{Tb<:Complex}(lu::UmfpackLU{Float64}, b::Vector{Tb})
-    r = solve(lu, [convert(Float64,real(be)) for be in b], UMFPACK_At)
-    i = solve(lu, [convert(Float64,imag(be)) for be in b], UMFPACK_At)
-    Tb[r[k]+im*i[k] for k = 1:length(r)]
-end
-
-At_ldiv_B!{T<:UMFVTypes}(lu::UmfpackLU{T}, b::VecOrMat{T}) = solve(lu, b, UMFPACK_Aat)
-function At_ldiv_B!{Tb<:Complex}(lu::UmfpackLU{Float64}, b::Vector{Tb})
-    r = solve(lu, [convert(Float64,real(be)) for be in b], UMFPACK_Aat)
-    i = solve(lu, [convert(Float64,imag(be)) for be in b], UMFPACK_Aat)
-    Tb[r[k]+im*i[k] for k = 1:length(r)]
+        function $f!{Tb<:Complex}(x::Vector{Tb}, lu::UmfpackLU{Float64}, b::Vector{Tb})
+            n = size(b, 1)
+            # TODO: Optionally let user allocate these and pass in somehow
+            r = similar(b, Float64)
+            i = similar(b, Float64)
+            solve!(r, lu, convert(Vector{Float64}, real(b)), $umfpack)
+            solve!(i, lu, convert(Vector{Float64}, imag(b)), $umfpack)
+            # We have checked size in solve!
+            @inbounds for k in eachindex(x)
+                x[k] = Tb(r[k] + im*i[k])
+            end
+            return x
+        end
+        $f!{Tb<:Complex}(lu::UmfpackLU{Float64}, b::Vector{Tb}) = $f!(b, lu, copy(b))
+    end
 end
 
 function getindex(lu::UmfpackLU, d::Symbol)

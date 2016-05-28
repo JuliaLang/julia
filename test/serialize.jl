@@ -94,7 +94,7 @@ end
 # Module
 create_serialization_stream() do s # user-defined module
     mod = b"SomeModule"
-    modstring = bytestring(mod)
+    modstring = String(mod)
     eval(parse("module $(modstring); end"))
     modtype = eval(parse("$(modstring)"))
     serialize(s, modtype)
@@ -204,7 +204,7 @@ create_serialization_stream() do s # small 1d array
     arr4 = reshape([true, false, false, false, true, false, false, false, true], 3, 3)
     serialize(s, arr4)       # boolean array
 
-    arr5 = Array(TA1, 3)
+    arr5 = Array{TA1}(3)
     arr5[2] = TA1(0x01)
     serialize(s, arr5)
 

@@ -21,7 +21,7 @@ end
 
 # map over Bottom[] should return Bottom[]
 # issue #6719
-@test isequal(typeof(map(x -> x, Array(Union{},0))), Array{Union{},1})
+@test isequal(typeof(map(x -> x, Array{Union{}}(0))), Array{Union{},1})
 
 # maps of tuples (formerly in test/core.jl) -- tuple.jl
 @test map((x,y)->x+y,(1,2,3),(4,5,6)) == (5,7,9)
@@ -37,6 +37,9 @@ end
 # TODO: @test_throws isequal(filter(x->x+1, [0 1 2 3 2 1 0]), [2, 3, 2])
 @test isequal(filter(x->(x>10), [0 1 2 3 2 1 0]), [])
 @test isequal(filter((ss)->length(ss)==3, ["abcd", "efg", "hij", "klmn", "opq"]), ["efg", "hij", "opq"])
+
+# numbers
+@test size(collect(1)) == size(1)
 
 # zip and filter iterators
 # issue #4718
@@ -57,6 +60,8 @@ let z = zip(1:2, 3:4, 5:6)
     @test collect(z) == [(1,3,5), (2,4,6)]
     @test eltype(z) == Tuple{Int,Int,Int}
 end
+
+@test eltype(Filter(isodd, 1:5)) == Int
 
 # typed `collect`
 @test collect(Float64, Filter(isodd, [1,2,3,4]))[1] === 1.0
@@ -172,6 +177,12 @@ let i = 0
         i <= 10 || break
     end
 end
+@test eltype(repeated(0))    == Int
+@test eltype(repeated(0, 5)) == Int
+@test Base.iteratorsize(repeated(0))      == Base.IsInfinite()
+@test Base.iteratorsize(repeated(0, 5))   == Base.HasLength()
+@test Base.iteratoreltype(repeated(0))    == Base.HasEltype()
+@test Base.iteratoreltype(repeated(0, 5)) == Base.HasEltype()
 
 
 # product

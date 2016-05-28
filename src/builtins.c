@@ -939,8 +939,7 @@ static void jl_check_type_tuple(jl_value_t *t, jl_sym_t *name, const char *ctx)
 JL_CALLABLE(jl_f_applicable)
 {
     JL_NARGSV(applicable, 1);
-    jl_typemap_entry_t *entry;
-    return jl_method_lookup(jl_gf_mtable(args[0]), args, nargs, 1, &entry) != NULL ?
+    return jl_method_lookup(jl_gf_mtable(args[0]), args, nargs, 1) != NULL ?
         jl_true : jl_false;
 }
 
@@ -1363,8 +1362,7 @@ static size_t jl_static_show_x_(JL_STREAM *out, jl_value_t *v, jl_datatype_t *vt
         n += jl_printf(out, ">");
     }
     else if (vt == jl_linenumbernode_type) {
-        n += jl_printf(out, "# line %" PRIuPTR " %s",
-                       jl_linenode_line(v), jl_symbol_name(jl_linenode_file(v)));
+        n += jl_printf(out, "# line %" PRIuPTR, jl_linenode_line(v));
     }
     else if (vt == jl_expr_type) {
         jl_expr_t *e = (jl_expr_t*)v;

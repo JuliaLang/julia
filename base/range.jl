@@ -236,13 +236,25 @@ linspace(start::Real, stop::Real, len::Real=50) =
     linspace(promote(AbstractFloat(start), AbstractFloat(stop))..., len)
 
 function show(io::IO, r::LinSpace)
-    print(io, "linspace(")
-    show(io, first(r))
-    print(io, ',')
-    show(io, last(r))
-    print(io, ',')
-    show(io, length(r))
-    print(io, ')')
+    if get(io, :multiline, false)
+        # show for linspace, e.g.
+        # linspace(1,3,7)
+        # 7-element LinSpace{Float64}:
+        #   1.0,1.33333,1.66667,2.0,2.33333,2.66667,3.0
+        print(io, summary(r))
+        if !isempty(r)
+            println(io, ":")
+            print_range(io, r)
+        end
+    else
+        print(io, "linspace(")
+        show(io, first(r))
+        print(io, ',')
+        show(io, last(r))
+        print(io, ',')
+        show(io, length(r))
+        print(io, ')')
+    end
 end
 
 """
@@ -264,9 +276,12 @@ function print_range(io::IO, r::Range,
                      post::AbstractString = "",
                      hdots::AbstractString = ",\u2026,") # horiz ellipsis
     # This function borrows from print_matrix() in show.jl
-    # and should be called by writemime (replutil.jl) and by display()
-    limit = limit_output(io)
+    # and should be called by show and display
+    limit = get(io, :limit, false)
     sz = displaysize(io)
+    if !haskey(io, :compact)
+        io = IOContext(io, compact=true)
+    end
     screenheight, screenwidth = sz[1] - 4, sz[2]
     screenwidth -= length(pre) + length(post)
     postsp = ""
@@ -746,7 +761,7 @@ function vcat{T}(rs::Range{T}...)
     for ra in rs
         n += length(ra)
     end
-    a = Array(T,n)
+    a = Array{T}(n)
     i = 1
     for ra in rs, x in ra
         @inbounds a[i] = x

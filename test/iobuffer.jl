@@ -14,10 +14,10 @@ let io = IOBuffer()
 @test eof(io)
 seek(io, 0)
 @test read(io,UInt8) == convert(UInt8, 'a')
-a = Array(UInt8, 2)
+a = Array{UInt8}(2)
 @test read!(io, a) == a
 @test a == UInt8['b','c']
-@test bytestring(io) == "abc"
+@test String(io) == "abc"
 seek(io, 1)
 truncate(io, 2)
 @test position(io) == 1
@@ -128,7 +128,7 @@ end
 
 # issue 5453
 let io=IOBuffer("abcdef")
-a = Array(UInt8,1024)
+a = Array{UInt8}(1024)
 @test_throws EOFError read!(io,a)
 @test eof(io)
 end
@@ -159,12 +159,12 @@ let io=IOBuffer(SubString("***αhelloworldω***",4,16)), io2 = IOBuffer(b"goodni
     @test_throws ArgumentError write(io,'β')
     a = Array{UInt8}(10)
     @test read!(io, a) === a
-    @test bytestring(a) == "helloworld"
+    @test String(a) == "helloworld"
     @test read(io, Char) == 'ω'
     @test_throws EOFError read(io,UInt8)
     skip(io, -3)
     @test readstring(io) == "dω"
-    @test bytestring(io) == "αhelloworldω"
+    @test String(io) == "αhelloworldω"
     @test_throws ArgumentError write(io,"!")
     @test takebuf_array(io) == b"αhelloworldω"
     seek(io, 2)
@@ -179,7 +179,7 @@ let io=IOBuffer(SubString("***αhelloworldω***",4,16)), io2 = IOBuffer(b"goodni
     seek(io2, 0)
     write(io2, io2)
     @test readstring(io2) == ""
-    @test bytestring(io2) == "goodnightmoonhelloworld"
+    @test String(io2) == "goodnightmoonhelloworld"
 end
 
 # issue #11917
@@ -211,3 +211,5 @@ let bstream = BufferStream()
     @test eof(bstream)
     @test nb_available(bstream) == 0
 end
+
+@test flush(IOBuffer()) === nothing # should be a no-op

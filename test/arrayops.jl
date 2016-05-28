@@ -59,7 +59,7 @@ a[[1 2], 1] = 0
 a[:, [1 2]] = 2
 @test a == 2ones(2,2)
 
-a = Array(Float64, 2, 2, 2, 2, 2)
+a = Array{Float64}(2, 2, 2, 2, 2)
 a[1,1,1,1,1] = 10
 a[1,2,1,1,2] = 20
 a[1,1,2,2,1] = 30
@@ -308,9 +308,9 @@ _array_equiv(a,b) = eltype(a) == eltype(b) && a == b
 @test_throws MethodError UInt8[1:3]
 @test_throws MethodError UInt8[1:3,]
 @test_throws MethodError UInt8[1:3,4:6]
-a = Array(UnitRange{Int},1); a[1] = 1:3
+a = Array{UnitRange{Int}}(1); a[1] = 1:3
 @test _array_equiv([1:3,], a)
-a = Array(UnitRange{Int},2); a[1] = 1:3; a[2] = 4:6
+a = Array{UnitRange{Int}}(2); a[1] = 1:3; a[2] = 4:6
 @test _array_equiv([1:3,4:6], a)
 
 # typed hvcat
@@ -502,53 +502,86 @@ let
     @test isequal(cumsum(A,2),A2)
     @test isequal(cumsum(A,3),A3)
 
-    R = repeat([1, 2], inner = [1], outer = [1])
+    R = repeat([1, 2])
     @test R == [1, 2]
-    R = repeat([1, 2], inner = [2], outer = [1])
+    R = repeat([1, 2], inner=1)
+    @test R == [1, 2]
+    R = repeat([1, 2], outer=1)
+    @test R == [1, 2]
+    R = repeat([1, 2], inner=(1,))
+    @test R == [1, 2]
+    R = repeat([1, 2], outer=(1,))
+    @test R == [1, 2]
+    R = repeat([1, 2], inner=[1])
+    @test R == [1, 2]
+    R = repeat([1, 2], outer=[1])
+    @test R == [1, 2]
+    R = repeat([1, 2], inner=1, outer=1)
+    @test R == [1, 2]
+    R = repeat([1, 2], inner=(1,), outer=(1,))
+    @test R == [1, 2]
+    R = repeat([1, 2], inner=[1], outer=[1])
+    @test R == [1, 2]
+
+    R = repeat([1, 2], inner=2)
     @test R == [1, 1, 2, 2]
-    R = repeat([1, 2], inner = [1], outer = [2])
+    R = repeat([1, 2], outer=2)
     @test R == [1, 2, 1, 2]
-    R = repeat([1, 2], inner = [2], outer = [2])
+    R = repeat([1, 2], inner=(2,))
+    @test R == [1, 1, 2, 2]
+    R = repeat([1, 2], outer=(2,))
+    @test R == [1, 2, 1, 2]
+    R = repeat([1, 2], inner=[2])
+    @test R == [1, 1, 2, 2]
+    R = repeat([1, 2], outer=[2])
+    @test R == [1, 2, 1, 2]
+
+    R = repeat([1, 2], inner=2, outer=2)
     @test R == [1, 1, 2, 2, 1, 1, 2, 2]
-    R = repeat([1, 2], inner = [1, 1], outer = [1, 1])
+    R = repeat([1, 2], inner=(2,), outer=(2,))
+    @test R == [1, 1, 2, 2, 1, 1, 2, 2]
+    R = repeat([1, 2], inner=[2], outer=[2])
+    @test R == [1, 1, 2, 2, 1, 1, 2, 2]
+
+    R = repeat([1, 2], inner = (1, 1), outer = (1, 1))
     @test R == [1, 2]''
-    R = repeat([1, 2], inner = [2, 1], outer = [1, 1])
+    R = repeat([1, 2], inner = (2, 1), outer = (1, 1))
     @test R == [1, 1, 2, 2]''
-    R = repeat([1, 2], inner = [1, 2], outer = [1, 1])
+    R = repeat([1, 2], inner = (1, 2), outer = (1, 1))
     @test R == [1 1; 2 2]
-    R = repeat([1, 2], inner = [1, 1], outer = [2, 1])
+    R = repeat([1, 2], inner = (1, 1), outer = (2, 1))
     @test R == [1, 2, 1, 2]''
-    R = repeat([1, 2], inner = [1, 1], outer = [1, 2])
+    R = repeat([1, 2], inner = (1, 1), outer = (1, 2))
     @test R == [1 1; 2 2]
 
     R = repeat([1 2;
-                3 4], inner = [1, 1], outer = [1, 1])
+                3 4], inner = (1, 1), outer = (1, 1))
     @test R == [1 2;
                   3 4]
     R = repeat([1 2;
-                3 4], inner = [1, 1], outer = [2, 1])
+                3 4], inner = (1, 1), outer = (2, 1))
     @test R == [1 2;
                   3 4;
                   1 2;
                   3 4]
     R = repeat([1 2;
-                3 4], inner = [1, 1], outer = [1, 2])
+                3 4], inner = (1, 1), outer = (1, 2))
     @test R == [1 2 1 2;
                   3 4 3 4]
     R = repeat([1 2;
-                3 4], inner = [1, 1], outer = [2, 2])
+                3 4], inner = (1, 1), outer = (2, 2))
     @test R == [1 2 1 2;
                   3 4 3 4;
                   1 2 1 2;
                   3 4 3 4]
     R = repeat([1 2;
-                3 4], inner = [2, 1], outer = [1, 1])
+                3 4], inner = (2, 1), outer = (1, 1))
     @test R == [1 2;
                   1 2;
                   3 4;
                   3 4]
     R = repeat([1 2;
-                3 4], inner = [2, 1], outer = [2, 1])
+                3 4], inner = (2, 1), outer = (2, 1))
     @test R == [1 2;
                   1 2;
                   3 4;
@@ -558,13 +591,13 @@ let
                   3 4;
                   3 4]
     R = repeat([1 2;
-                3 4], inner = [2, 1], outer = [1, 2])
+                3 4], inner = (2, 1), outer = (1, 2))
     @test R == [1 2 1 2;
                   1 2 1 2;
                   3 4 3 4;
                   3 4 3 4;]
     R = repeat([1 2;
-                3 4], inner = [2, 1], outer = [2, 2])
+                3 4], inner = (2, 1), outer = (2, 2))
     @test R == [1 2 1 2;
                   1 2 1 2;
                   3 4 3 4;
@@ -574,49 +607,49 @@ let
                   3 4 3 4;
                   3 4 3 4]
     R = repeat([1 2;
-                3 4], inner = [1, 2], outer = [1, 1])
+                3 4], inner = (1, 2), outer = (1, 1))
     @test R == [1 1 2 2;
                   3 3 4 4]
     R = repeat([1 2;
-                3 4], inner = [1, 2], outer = [2, 1])
+                3 4], inner = (1, 2), outer = (2, 1))
     @test R == [1 1 2 2;
                   3 3 4 4;
                   1 1 2 2;
                   3 3 4 4]
     R = repeat([1 2;
-                3 4], inner = [1, 2], outer = [1, 2])
+                3 4], inner = (1, 2), outer = (1, 2))
     @test R == [1 1 2 2 1 1 2 2;
                   3 3 4 4 3 3 4 4]
     R = repeat([1 2;
-                3 4], inner = [1, 2], outer = [2, 2])
+                3 4], inner = (1, 2), outer = (2, 2))
     @test R == [1 1 2 2 1 1 2 2;
                   3 3 4 4 3 3 4 4;
                   1 1 2 2 1 1 2 2;
                   3 3 4 4 3 3 4 4]
     R = repeat([1 2;
-                3 4], inner = [2, 2], outer = [1, 1])
+                3 4], inner = (2, 2), outer = [1, 1])
     @test R == [1 1 2 2;
-                  1 1 2 2;
-                  3 3 4 4;
-                  3 3 4 4]
-    R = repeat([1 2;
-                3 4], inner = [2, 2], outer = [2, 1])
-    @test R == [1 1 2 2;
-                  1 1 2 2;
-                  3 3 4 4;
-                  3 3 4 4;
-                  1 1 2 2;
                   1 1 2 2;
                   3 3 4 4;
                   3 3 4 4]
     R = repeat([1 2;
-                3 4], inner = [2, 2], outer = [1, 2])
+                3 4], inner = (2, 2), outer = (2, 1))
+    @test R == [1 1 2 2;
+                  1 1 2 2;
+                  3 3 4 4;
+                  3 3 4 4;
+                  1 1 2 2;
+                  1 1 2 2;
+                  3 3 4 4;
+                  3 3 4 4]
+    R = repeat([1 2;
+                3 4], inner = (2, 2), outer = (1, 2))
     @test R == [1 1 2 2 1 1 2 2;
                   1 1 2 2 1 1 2 2;
                   3 3 4 4 3 3 4 4;
                   3 3 4 4 3 3 4 4]
     R = repeat([1 2;
-                3 4], inner = [2, 2], outer = [2, 2])
+                3 4], inner = (2, 2), outer = (2, 2))
     @test R == [1 1 2 2 1 1 2 2;
                   1 1 2 2 1 1 2 2;
                   3 3 4 4 3 3 4 4;
@@ -625,17 +658,25 @@ let
                   1 1 2 2 1 1 2 2;
                   3 3 4 4 3 3 4 4;
                   3 3 4 4 3 3 4 4]
+    @test_throws ArgumentError repeat([1 2;
+                                       3 4], inner=2, outer=(2, 2))
+    @test_throws ArgumentError repeat([1 2;
+                                       3 4], inner=(2, 2), outer=2)
+    @test_throws ArgumentError repeat([1 2;
+                                       3 4], inner=(2,), outer=(2, 2))
+    @test_throws ArgumentError repeat([1 2;
+                                       3 4], inner=(2, 2), outer=(2,))
 
     A = reshape(1:8, 2, 2, 2)
-    R = repeat(A, inner = [1, 1, 2], outer = [1, 1, 1])
+    R = repeat(A, inner = (1, 1, 2), outer = (1, 1, 1))
     T = reshape([1:4; 1:4; 5:8; 5:8], 2, 2, 4)
     @test R == T
-    A = Array(Int, 2, 2, 2)
+    A = Array{Int}(2, 2, 2)
     A[:, :, 1] = [1 2;
                   3 4]
     A[:, :, 2] = [5 6;
                   7 8]
-    R = repeat(A, inner = [2, 2, 2], outer = [2, 2, 2])
+    R = repeat(A, inner = (2, 2, 2), outer = (2, 2, 2))
     @test R[1, 1, 1] == 1
     @test R[2, 2, 2] == 1
     @test R[3, 3, 3] == 8
@@ -644,6 +685,19 @@ let
     @test R[6, 6, 6] == 1
     @test R[7, 7, 7] == 8
     @test R[8, 8, 8] == 8
+
+    R = repeat(1:2)
+    @test R == [1, 2]
+    R = repeat(1:2, inner=1)
+    @test R == [1, 2]
+    R = repeat(1:2, inner=2)
+    @test R == [1, 1, 2, 2]
+    R = repeat(1:2, outer=1)
+    @test R == [1, 2]
+    R = repeat(1:2, outer=2)
+    @test R == [1, 2, 1, 2]
+    R = repeat(1:2, inner=(3,), outer=(2,))
+    @test R == [1, 1, 1, 2, 2, 2, 1, 1, 1, 2, 2, 2]
 
     A = rand(4,4)
     for s in Any[A[1:2:4, 1:2:4], sub(A, 1:2:4, 1:2:4)]
@@ -752,13 +806,9 @@ B = cat(3, 1, 2, 3)
 let
     local a,h,i
     a = rand(5,5)
-    h = mapslices(v -> hist(v,0:0.1:1)[2], a, 1)
-    H = mapslices(v -> hist(v,0:0.1:1)[2], a, 2)
     s = mapslices(sort, a, [1])
     S = mapslices(sort, a, [2])
     for i = 1:5
-        @test h[:,i] == hist(a[:,i],0:0.1:1)[2]
-        @test vec(H[i,:]) == hist(vec(a[i,:]),0:0.1:1)[2]
         @test s[:,i] == sort(a[:,i])
         @test vec(S[i,:]) == sort(vec(a[i,:]))
     end
@@ -880,7 +930,7 @@ let
 end
 
 # fill
-@test fill!(Array(Float64,1),-0.0)[1] === -0.0
+@test fill!(Array{Float64}(1),-0.0)[1] === -0.0
 A = ones(3,3)
 S = sub(A, 2, 1:3)
 fill!(S, 2)
@@ -889,11 +939,11 @@ fill!(S, 3)
 @test A == [1 1 3; 2 2 3; 1 1 1]
 rt = Base.return_types(fill!, Tuple{Array{Int32, 3}, UInt8})
 @test length(rt) == 1 && rt[1] == Array{Int32, 3}
-A = Array(Union{UInt8,Int8}, 3)
+A = Array{Union{UInt8,Int8}}(3)
 fill!(A, UInt8(3))
 @test A == [0x03, 0x03, 0x03]
 # Issue #9964
-A = Array(Vector{Float64}, 2)
+A = Array{Vector{Float64}}(2)
 fill!(A, [1, 2])
 @test A[1] == [1, 2]
 @test A[1] === A[2]
@@ -970,7 +1020,7 @@ end
 @test isequal(flipdim(1:10, 1), 10:-1:1)
 @test isequal(flipdim(1:10, 2), 1:10)
 @test_throws ArgumentError flipdim(1:10, -1)
-@test isequal(flipdim(Array(Int,0,0),1), Array(Int,0,0))  # issue #5872
+@test isequal(flipdim(Array{Int}(0,0),1), Array{Int}(0,0))  # issue #5872
 
 # isdiag, istril, istriu
 @test isdiag(3)
@@ -1076,15 +1126,15 @@ end
 @test pr8622() == [0,3,1,0]
 
 #6828 - size of specific dimensions
-a = Array(Float64, 10)
+a = Array{Float64}(10)
 @test size(a) == (10,)
 @test size(a, 1) == 10
 @test size(a,2,1) == (1,10)
-a = Array(Float64, 2,3)
+a = Array{Float64}(2,3)
 @test size(a) == (2,3)
 @test size(a,4,3,2,1) == (1,1,3,2)
 @test size(a,1,2) == (2,3)
-a = Array(Float64, 9,8,7,6,5,4,3,2,1)
+a = Array{Float64}(9,8,7,6,5,4,3,2,1)
 @test size(a,1,1) == (9,9)
 @test size(a,4) == 6
 @test size(a,9,8,7,6,5,4,3,2,19,8,7,6,5,4,3,2,1) == (1,2,3,4,5,6,7,8,1,2,3,4,5,6,7,8,9)

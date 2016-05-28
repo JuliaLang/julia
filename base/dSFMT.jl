@@ -21,7 +21,7 @@ const JPOLY1e21  = "e172e20c5d2de26b567c0cace9e7c6cc4407bd5ffcd22ca59d37b73d54fd
 
 type DSFMT_state
     val::Vector{Int32}
-    DSFMT_state() = new(Array(Int32, JN32))
+    DSFMT_state() = new(Array{Int32}(JN32))
     DSFMT_state(val::Vector{Int32}) = new(val)
 end
 
@@ -29,7 +29,7 @@ function dsfmt_get_idstring()
     idstring = ccall((:dsfmt_get_idstring,:libdSFMT),
                      Ptr{UInt8},
                      ())
-    return bytestring(idstring)
+    return String(idstring)
 end
 
 function dsfmt_get_min_array_size()
@@ -151,9 +151,9 @@ end
 
 ## Windows entropy
 
-@windows_only begin
+if is_windows()
     function win32_SystemFunction036!{T}(a::Array{T})
-        ccall((:SystemFunction036,:Advapi32),stdcall,UInt8,(Ptr{Void},UInt32),a,sizeof(a))
+        ccall((:SystemFunction036, :Advapi32), stdcall, UInt8, (Ptr{Void}, UInt32), a, sizeof(a))
     end
 end
 

@@ -569,6 +569,8 @@ JL_DLLEXPORT jl_value_t *jl_toplevel_eval(jl_value_t *v)
 
 JL_DLLEXPORT jl_value_t *jl_load(const char *fname, size_t len)
 {
+    if (NULL != memchr(fname, 0, len))
+        jl_exceptionf(jl_argumenterror_type, "file name may not contain \\0");
     if (jl_current_module->istopmod) {
         jl_printf(JL_STDOUT, "%s\r\n", fname);
 #ifdef _OS_WINDOWS_

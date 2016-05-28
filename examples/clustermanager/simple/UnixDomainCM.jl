@@ -44,7 +44,7 @@ function connect(manager::UnixDomainCM, pid::Int, config::WorkerConfig)
             if isa(address, Tuple)
                 sock = connect(address...)
             else
-                sock = connect(ascii(address))
+                sock = connect(address)
             end
             return (sock, sock)
         catch e
@@ -62,7 +62,7 @@ end
 function start_worker(sockname, cookie)
     Base.init_worker(cookie, UnixDomainCM(0))
 
-    srvr = listen(ascii(sockname))
+    srvr = listen(sockname)
     while true
         sock = accept(srvr)
         Base.process_messages(sock, sock)

@@ -2,7 +2,7 @@
 
 module BLAS
 
-import Base: copy!, @blasfunc
+import Base: copy!
 import Base.LinAlg: axpy!, dot
 
 export
@@ -59,12 +59,99 @@ const liblapack = Base.liblapack_name
 
 import ..LinAlg: BlasReal, BlasComplex, BlasFloat, BlasInt, DimensionMismatch, checksquare, axpy!
 
+# utility routines
+function vendor()
+    try
+        cglobal((:openblas_set_num_threads, Base.libblas_name), Void)
+        return :openblas
+    end
+    try
+        cglobal((:openblas_set_num_threads64_, Base.libblas_name), Void)
+        return :openblas64
+    end
+    try
+        cglobal((:MKL_Set_Num_Threads, Base.libblas_name), Void)
+        return :mkl
+    end
+    return :unknown
+end
+
+if vendor() == :openblas64
+    macro blasfunc(x)
+        return Expr(:quote, Symbol(x, "64_"))
+    end
+    openblas_get_config() = strip(String( ccall((:openblas_get_config64_, Base.libblas_name), Ptr{UInt8}, () )))
+else
+    macro blasfunc(x)
+        return Expr(:quote, x)
+    end
+    openblas_get_config() = strip(String( ccall((:openblas_get_config, Base.libblas_name), Ptr{UInt8}, () )))
+end
+
 """
-    blas_set_num_threads(n)
+    set_num_threads(n)
 
 Set the number of threads the BLAS library should use.
 """
-blas_set_num_threads
+function set_num_threads(n::Integer)
+    blas = vendor()
+    if blas == :openblas
+        return ccall((:openblas_set_num_threads, Base.libblas_name), Void, (Int32,), n)
+    elseif blas == :openblas64
+        return ccall((:openblas_set_num_threads64_, Base.libblas_name), Void, (Int32,), n)
+    elseif blas == :mkl
+        # MKL may let us set the number of threads in several ways
+        return ccall((:MKL_Set_Num_Threads, Base.libblas_name), Void, (Cint,), n)
+    end
+
+    # OSX BLAS looks at an environment variable
+    @static if is_apple()
+        ENV["VECLIB_MAXIMUM_THREADS"] = n
+    end
+
+    return nothing
+end
+
+function check()
+    blas = vendor()
+    if blas == :openblas || blas == :openblas64
+        openblas_config = openblas_get_config()
+        openblas64 = ismatch(r".*USE64BITINT.*", openblas_config)
+        if Base.USE_BLAS64 != openblas64
+            if !openblas64
+                println("ERROR: OpenBLAS was not built with 64bit integer support.")
+                println("You're seeing this error because Julia was built with USE_BLAS64=1")
+                println("Please rebuild Julia with USE_BLAS64=0")
+            else
+                println("ERROR: Julia was not built with support for OpenBLAS with 64bit integer support")
+                println("You're seeing this error because Julia was built with USE_BLAS64=0")
+                println("Please rebuild Julia with USE_BLAS64=1")
+            end
+            println("Quitting.")
+            quit()
+        end
+    elseif blas == :mkl
+        if Base.USE_BLAS64
+            ENV["MKL_INTERFACE_LAYER"] = "ILP64"
+        end
+    end
+
+    #
+    # Check if BlasInt is the expected bitsize, by triggering an error
+    #
+    (_, info) = LinAlg.LAPACK.potrf!('U', [1.0 0.0; 0.0 -1.0])
+    if info != 2 # mangled info code
+        if info == 2^33
+            error("""BLAS and LAPACK are compiled with 32-bit integer support, but Julia expects 64-bit integers. Please build Julia with USE_BLAS64=0.""")
+        elseif info == 0
+            error("""BLAS and LAPACK are compiled with 64-bit integer support but Julia expects 32-bit integers. Please build Julia with USE_BLAS64=1.""")
+        else
+            error("""The LAPACK library produced an undefined error code. Please verify the installation of BLAS and LAPACK.""")
+        end
+    end
+
+end
+
 
 # Level 1
 ## copy
@@ -173,7 +260,7 @@ for (fname, elty) in ((:cblas_zdotc_sub,:Complex128),
                 # *     .. Array Arguments ..
                 #       DOUBLE PRECISION DX(*),DY(*)
         function dotc(n::Integer, DX::Union{Ptr{$elty},DenseArray{$elty}}, incx::Integer, DY::Union{Ptr{$elty},DenseArray{$elty}}, incy::Integer)
-            result = Array($elty, 1)
+            result = Array{$elty}(1)
             ccall((@blasfunc($fname), libblas), Void,
                 (BlasInt, Ptr{$elty}, BlasInt, Ptr{$elty}, BlasInt, Ptr{$elty}),
                  n, DX, incx, DY, incy, result)
@@ -191,7 +278,7 @@ for (fname, elty) in ((:cblas_zdotu_sub,:Complex128),
                 # *     .. Array Arguments ..
                 #       DOUBLE PRECISION DX(*),DY(*)
         function dotu(n::Integer, DX::Union{Ptr{$elty},DenseArray{$elty}}, incx::Integer, DY::Union{Ptr{$elty},DenseArray{$elty}}, incy::Integer)
-            result = Array($elty, 1)
+            result = Array{$elty}(1)
             ccall((@blasfunc($fname), libblas), Void,
                 (BlasInt, Ptr{$elty}, BlasInt, Ptr{$elty}, BlasInt, Ptr{$elty}),
                  n, DX, incx, DY, incy, result)

@@ -72,7 +72,7 @@ By default you will be building the latest unstable version of Julia. However, m
 
     git checkout release-0.4
 
-Now run `make` to build the `julia` executable. To perform a parallel build, use `make -j N` and supply the maximum number of concurrent processes.
+Now run `make` to build the `julia` executable. To perform a parallel build, use `make -j N` and supply the maximum number of concurrent processes. (See [Platform Specific Build Notes](https://github.com/JuliaLang/julia#platform-specific-build-notes) for details.)
 When compiled the first time, it will automatically download and build its [external dependencies](#Required-Build-Tools-External-Libraries).
 This takes a while, but only has to be done once. If the defaults in the build do not work for you, and you need to set specific make parameters, you can save them in `Make.user`. The build will automatically check for the existence of `Make.user` and use it if it exists.
 Building Julia requires 1.5GiB of disk space and approximately 700MiB of virtual memory.

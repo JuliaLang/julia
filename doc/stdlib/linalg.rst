@@ -979,11 +979,34 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
    Construct a matrix by repeating the given matrix ``n`` times in dimension 1 and ``m`` times in dimension 2.
 
-.. function:: repeat(A, inner = Int[], outer = Int[])
+.. function:: repeat(A::AbstractArray; inner=ntuple(x->1, ndims(A)), outer=ntuple(x->1, ndims(A)))
 
    .. Docstring generated from Julia source
 
-   Construct an array by repeating the entries of ``A``\ . The i-th element of ``inner`` specifies the number of times that the individual entries of the i-th dimension of ``A`` should be repeated. The i-th element of ``outer`` specifies the number of times that a slice along the i-th dimension of ``A`` should be repeated.
+   Construct an array by repeating the entries of ``A``\ . The i-th element of ``inner`` specifies the number of times that the individual entries of the i-th dimension of ``A`` should be repeated. The i-th element of ``outer`` specifies the number of times that a slice along the i-th dimension of ``A`` should be repeated. If ``inner`` or ``outer`` are omitted, no repetition is performed.
+
+   .. doctest::
+
+       julia> repeat(1:2, inner=2)
+       4-element Array{Int64,1}:
+        1
+        1
+        2
+        2
+
+       julia> repeat(1:2, outer=2)
+       4-element Array{Int64,1}:
+        1
+        2
+        1
+        2
+
+       julia> repeat([1 2; 3 4], inner=(2, 1), outer=(1, 3))
+       4×6 Array{Int64,2}:
+        1  2  1  2  1  2
+        1  2  1  2  1  2
+        3  4  3  4  3  4
+        3  4  3  4  3  4
 
 .. function:: kron(A, B)
 
@@ -1284,7 +1307,7 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
    .. Docstring generated from Julia source
 
-   ``peakflops`` computes the peak flop rate of the computer by using double precision :func:`Base.LinAlg.BLAS.gemm!`\ . By default, if no arguments are specified, it multiplies a matrix of size ``n x n``\ , where ``n = 2000``\ . If the underlying BLAS is using multiple threads, higher flop rates are realized. The number of BLAS threads can be set with ``blas_set_num_threads(n)``\ .
+   ``peakflops`` computes the peak flop rate of the computer by using double precision :func:`Base.LinAlg.BLAS.gemm!`\ . By default, if no arguments are specified, it multiplies a matrix of size ``n x n``\ , where ``n = 2000``\ . If the underlying BLAS is using multiple threads, higher flop rates are realized. The number of BLAS threads can be set with ``BLAS.set_num_threads(n)``\ .
 
    If the keyword argument ``parallel`` is set to ``true``\ , ``peakflops`` is run in parallel on all the worker processors. The flop rate of the entire parallel computer is returned. When running in parallel, only 1 BLAS thread is used. The argument ``n`` still refers to the size of the problem that is solved on each processor.
 
@@ -1556,7 +1579,7 @@ Usually a function has 4 methods defined, one each for ``Float64``,
 
    Returns the solution to ``A*x = b`` or one of the other two variants determined by ``tA`` (transpose ``A``\ ) and ``ul`` (triangle of ``A`` is used.) ``dA`` indicates if ``A`` is unit-triangular (the diagonal is assumed to be all ones).
 
-.. function:: blas_set_num_threads(n)
+.. function:: set_num_threads(n)
 
    .. Docstring generated from Julia source
 

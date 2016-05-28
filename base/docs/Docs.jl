@@ -482,6 +482,16 @@ function objectdoc(str, def, expr, sig = :(Union{}))
     end
 end
 
+function calldoc(str, def)
+    args = def.args[2:end]
+    if isempty(args) || all(validcall, args)
+        objectdoc(str, nothing, def, signature(def))
+    else
+        docerror(def)
+    end
+end
+validcall(x) = isa(x, Symbol) || isexpr(x, [:(::), :..., :kw, :parameters])
+
 function moduledoc(meta, def, def′)
     name  = namify(def′)
     docex = Expr(:call, doc!, bindingexpr(name),
@@ -613,7 +623,7 @@ function docm(meta, ex, define = true)
     #
     isexpr(x, FUNC_HEADS) &&  isexpr(x.args[1], :call) ? objectdoc(meta, def, x, signature(x)) :
     isexpr(x, :function)  && !isexpr(x.args[1], :call) ? objectdoc(meta, def, x) :
-    isexpr(x, :call)                                   ? objectdoc(meta, nothing, x, signature(x)) :
+    isexpr(x, :call)                                   ? calldoc(meta, x) :
 
     # Type definitions.
     #
@@ -653,9 +663,9 @@ end
 
 function docerror(ex)
     txt = """
-    invalid doc expression:
+    cannot document the following expression:
 
-    @doc "..." $(isa(ex, AbstractString) ? repr(ex) : ex)"""
+    $(isa(ex, AbstractString) ? repr(ex) : ex)"""
     if isexpr(ex, :macrocall)
         txt *= "\n\n'$(ex.args[1])' not documentable. See 'Base.@__doc__' docs for details."
     end

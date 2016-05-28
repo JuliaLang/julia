@@ -274,15 +274,6 @@ macro big_str(s)
     :(throw(ArgumentError($message)))
 end
 
-## system word size ##
-
-"""
-    WORD_SIZE
-
-Standard word size on the current machine, in bits.
-"""
-const WORD_SIZE = convert(Int, Int.size)*8
-
 ## integer promotions ##
 
 promote_rule(::Type{Int8}, ::Type{Int16})   = Int16
@@ -298,7 +289,7 @@ for T in BitSigned_types
         $(sizeof(T) < sizeof(Int) ? Int : T)
 end
 @eval promote_rule{T<:Union{Int8,Int16,Int32}}(::Type{UInt32}, ::Type{T}) =
-    $(WORD_SIZE == 64 ? Int : UInt)
+    $(Core.sizeof(Int) == 8 ? Int : UInt)
 promote_rule(::Type{UInt32}, ::Type{Int64}) = Int64
 promote_rule{T<:BitSigned64}(::Type{UInt64}, ::Type{T}) = UInt64
 promote_rule{T<:Union{UInt32, UInt64}}(::Type{T}, ::Type{Int128}) = Int128
@@ -349,7 +340,7 @@ widemul(x::Number,y::Bool) = x*y
 
 ## wide multiplication, Int128 multiply and divide ##
 
-if WORD_SIZE == 32
+if Core.sizeof(Int) == 4
     function widemul(u::Int64, v::Int64)
         local u0::UInt64, v0::UInt64, w0::UInt64
         local u1::Int64, v1::Int64, w1::UInt64, w2::Int64, t::UInt64

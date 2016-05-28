@@ -31,12 +31,6 @@ Basic functions
        julia> size(A,3,2)
        (4,3)
 
-.. function:: iseltype(A,T)
-
-   .. Docstring generated from Julia source
-
-   Tests whether ``A`` or its elements are of type ``T``\ .
-
 .. function:: length(A) -> Integer
 
    .. Docstring generated from Julia source
@@ -235,7 +229,7 @@ Constructors
 
    Create an uninitialized mutable array with the given element type and size, based upon the given source array. The second and third arguments are both optional, defaulting to the given array's ``eltype`` and ``size``\ . The dimensions may be specified either as a single tuple argument or as a series of integer arguments.
 
-   Custom AbstractArray subtypes may choose which specific array type is best-suited to return for the given element type and dimensionality. If they do not specialize this method, the default is an ``Array(element_type, dims...)``\ .
+   Custom AbstractArray subtypes may choose which specific array type is best-suited to return for the given element type and dimensionality. If they do not specialize this method, the default is an ``Array{element_type}(dims...)``\ .
 
    For example, ``similar(1:10, 1, 4)`` returns an uninitialized ``Array{Int,2}`` since ranges are neither mutable nor support 2 dimensions:
 

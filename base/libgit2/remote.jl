@@ -35,7 +35,7 @@ end
 function url(rmt::GitRemote)
     url_ptr = ccall((:git_remote_url, :libgit2), Cstring, (Ptr{Void}, ), rmt.ptr)
     url_ptr == Cstring_NULL && return ""
-    return  bytestring(url_ptr)
+    return  String(url_ptr)
 end
 
 function fetch_refspecs(rmt::GitRemote)

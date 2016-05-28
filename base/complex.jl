@@ -67,15 +67,15 @@ flipsign(x::Complex, y::Real) = ifelse(signbit(y), -x, x)
 
 function show(io::IO, z::Complex)
     r, i = reim(z)
-    compact = limit_output(io)
-    showcompact_lim(io, r)
+    compact = get(io, :compact, false)
+    show(io, r)
     if signbit(i) && !isnan(i)
         i = -i
         print(io, compact ? "-" : " - ")
     else
         print(io, compact ? "+" : " + ")
     end
-    showcompact_lim(io, i)
+    show(io, i)
     if !(isa(i,Integer) && !isa(i,Bool) || isa(i,AbstractFloat) && isfinite(i))
         print(io, "*")
     end
@@ -760,22 +760,12 @@ function lexcmp(a::Complex, b::Complex)
 end
 
 #Rounding complex numbers
-# Superfluous tuple splatting in return arguments is a work around for 32-bit systems (#10027)
 #Requires two different RoundingModes for the real and imaginary components
-
-if WORD_SIZE==32
-function round{T<:AbstractFloat, MR, MI}(z::Complex{T}, ::RoundingMode{MR}, ::RoundingMode{MI})
-    Complex((round(real(z), RoundingMode{MR}()),
-             round(imag(z), RoundingMode{MI}()))...)
-end
-round(z::Complex) = Complex((round(real(z)), round(imag(z)))...)
-else
 function round{T<:AbstractFloat, MR, MI}(z::Complex{T}, ::RoundingMode{MR}, ::RoundingMode{MI})
     Complex(round(real(z), RoundingMode{MR}()),
             round(imag(z), RoundingMode{MI}()))
 end
 round(z::Complex) = Complex(round(real(z)), round(imag(z)))
-end
 
 @vectorize_1arg Complex round
 

@@ -73,7 +73,7 @@ Same as [`plan_idct`](:func:`plan_idct`), but operates in-place on `A`.
 plan_idct!
 
 function plan_inv{T,K,inplace}(p::DCTPlan{T,K,inplace})
-    X = Array(T, p.plan.sz)
+    X = Array{T}(p.plan.sz)
     iK = inv_kind[K]
     DCTPlan{T,iK,inplace}(inplace ?
                           plan_r2r!(X, iK, p.region, flags=p.plan.flags) :
@@ -168,9 +168,9 @@ function A_mul_B!{T}(y::StridedArray{T}, p::DCTPlan{T,REDFT01},
 end
 
 *{T}(p::DCTPlan{T,REDFT10,false}, x::StridedArray{T}) =
-    A_mul_B!(Array(T, p.plan.osz), p, x)
+    A_mul_B!(Array{T}(p.plan.osz), p, x)
 
 *{T}(p::DCTPlan{T,REDFT01,false}, x::StridedArray{T}) =
-    A_mul_B!(Array(T, p.plan.osz), p, copy(x)) # need copy to preserve input
+    A_mul_B!(Array{T}(p.plan.osz), p, copy(x)) # need copy to preserve input
 
 *{T,K}(p::DCTPlan{T,K,true}, x::StridedArray{T}) = A_mul_B!(x, p, x)

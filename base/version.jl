@@ -54,11 +54,11 @@ function print(io::IO, v::VersionNumber)
     print(io, v.patch)
     if !isempty(v.prerelease)
         print(io, '-')
-        print_joined(io, v.prerelease,'.')
+        join(io, v.prerelease,'.')
     end
     if !isempty(v.build)
         print(io, '+')
-        print_joined(io, v.build,'.')
+        join(io, v.build,'.')
     end
 end
 show(io::IO, v::VersionNumber) = print(io, "v\"", v, "\"")
@@ -82,7 +82,7 @@ function split_idents(s::AbstractString)
     idents = split(s, '.')
     ntuple(length(idents)) do i
         ident = idents[i]
-        ismatch(r"^\d+$", ident) ? parse(Int, ident) : bytestring(ident)
+        ismatch(r"^\d+$", ident) ? parse(Int, ident) : String(ident)
     end
 end
 

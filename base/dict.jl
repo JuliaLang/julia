@@ -33,8 +33,6 @@ function summary(t::Associative)
     string(typeof(t), " with ", n, (n==1 ? " entry" : " entries"))
 end
 
-show{K,V}(io::IO, t::Associative{K,V}) = showdict(io, t; compact = true)
-
 function _truncate_at_width_or_chars(str, width, chars="", truncmark="…")
     truncwidth = strwidth(truncmark)
     (width <= 0 || width < truncwidth) && return ""
@@ -52,16 +50,19 @@ function _truncate_at_width_or_chars(str, width, chars="", truncmark="…")
     lastidx != 0 && str[lastidx] in chars && (lastidx = prevind(str, lastidx))
     truncidx == 0 && (truncidx = lastidx)
     if lastidx < endof(str)
-        return bytestring(SubString(str, 1, truncidx) * truncmark)
+        return String(SubString(str, 1, truncidx) * truncmark)
     else
-        return bytestring(str)
+        return String(str)
     end
 end
 
-showdict(t::Associative; kw...) = showdict(STDOUT, t; kw...)
-function showdict{K,V}(io::IO, t::Associative{K,V}; compact = false)
-    recur_io = IOContext(io, :SHOWN_SET => t)
-    limit::Bool = limit_output(io)
+function show{K,V}(io::IO, t::Associative{K,V})
+    recur_io = IOContext(io, SHOWN_SET=t, multiline=false)
+    limit::Bool = get(io, :limit, false)
+    compact = !get(io, :multiline, false)
+    if !haskey(io, :compact)
+        recur_io = IOContext(recur_io, compact=true)
+    end
     if compact
         # show in a Julia-syntax-like form: Dict(k=>v, ...)
         if isempty(t)
@@ -103,12 +104,19 @@ function showdict{K,V}(io::IO, t::Associative{K,V}; compact = false)
         rows -= 2 # Subtract the summary and final ⋮ continuation lines
 
         # determine max key width to align the output, caching the strings
-        ks = Array(AbstractString, min(rows, length(t)))
+        ks = Array{AbstractString}(min(rows, length(t)))
+        vs = Array{AbstractString}(min(rows, length(t)))
         keylen = 0
-        for (i, k) in enumerate(keys(t))
+        vallen = 0
+        for (i, (k, v)) in enumerate(t)
             i > rows && break
             ks[i] = sprint(0, show, k, env=recur_io)
-            keylen = clamp(length(ks[i]), keylen, div(cols, 3))
+            vs[i] = sprint(0, show, v, env=recur_io)
+            keylen = clamp(length(ks[i]), keylen, cols)
+            vallen = clamp(length(vs[i]), vallen, cols)
+        end
+        if keylen > max(div(cols, 2), cols - vallen)
+            keylen = max(cld(cols, 3), cols - vallen)
         end
     else
         rows = cols = 0
@@ -129,8 +137,7 @@ function showdict{K,V}(io::IO, t::Associative{K,V}; compact = false)
         print(io, " => ")
 
         if limit
-            val = sprint(0, show, v, env=recur_io)
-            val = _truncate_at_width_or_chars(val, cols - keylen, "\r\n")
+            val = _truncate_at_width_or_chars(vs[i], cols - keylen, "\r\n")
             print(io, val)
         else
             show(recur_io, v)
@@ -148,14 +155,14 @@ end
 summary{T<:Union{KeyIterator,ValueIterator}}(iter::T) =
     string(T.name, " for a ", summary(iter.dict))
 
-show(io::IO, iter::Union{KeyIterator,ValueIterator}) = show(io, collect(iter))
-
-showkv(iter::Union{KeyIterator,ValueIterator}) = showkv(STDOUT, iter)
-function showkv{T<:Union{KeyIterator,ValueIterator}}(io::IO, iter::T)
+function show(io::IO, iter::Union{KeyIterator,ValueIterator})
+    if !get(io, :multiline, false)
+        return show(io, collect(iter))
+    end
     print(io, summary(iter))
     isempty(iter) && return
-    print(io, ". ", T<:KeyIterator ? "Keys" : "Values", ":")
-    limit::Bool = limit_output(io)
+    print(io, ". ", isa(iter,KeyIterator) ? "Keys" : "Values", ":")
+    limit::Bool = get(io, :limit, false)
     if limit
         sz = displaysize(io)
         rows, cols = sz[1] - 3, sz[2]
@@ -250,7 +257,7 @@ function merge(d::Associative, others::Associative...)
 end
 
 function filter!(f, d::Associative)
-    badkeys = Array(keytype(d), 0)
+    badkeys = Array{keytype(d)}(0)
     for (k,v) in d
         # don't delete!(d, k) here, since associative types
         # may not support mutation during iteration
@@ -425,7 +432,7 @@ type Dict{K,V} <: Associative{K,V}
 
     function Dict()
         n = 16
-        new(zeros(UInt8,n), Array(K,n), Array(V,n), 0, 0, false, 1, 0)
+        new(zeros(UInt8,n), Array{K}(n), Array{V}(n), 0, 0, false, 1, 0)
     end
     function Dict(kv)
         h = Dict{K,V}()
@@ -539,8 +546,8 @@ function rehash!{K,V}(h::Dict{K,V}, newsz = length(h.keys))
     end
 
     slots = zeros(UInt8,newsz)
-    keys = Array(K, newsz)
-    vals = Array(V, newsz)
+    keys = Array{K}(newsz)
+    vals = Array{V}(newsz)
     count0 = h.count
     count = 0
     maxprobe = h.maxprobe

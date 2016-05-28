@@ -111,11 +111,14 @@ function rationalize{T<:Integer}(::Type{T}, x::AbstractFloat; tol::Real=eps(x))
     r = x-a
     y = one(x)
 
-    nt, t, tt = tol, zero(tol), zero(tol)
+    nt, t, tt = tol, zero(tol), tol
 
+    # compute the successive convergents of the continued fraction
+    #  np // nq = (p*a + pp) // (q*a + qq)
     while r > nt
         try
             ia = convert(T,a)
+
             np = checked_add(checked_mul(ia,p),pp)
             nq = checked_add(checked_mul(ia,q),qq)
             p, pp = np, p
@@ -125,11 +128,16 @@ function rationalize{T<:Integer}(::Type{T}, x::AbstractFloat; tol::Real=eps(x))
             return p // q
         end
 
-        t, tt = nt, t
+        # naive approach of using
+        #   x = 1/r; a = trunc(x); r = x - a
+        # is inexact, so we store x as x/y
         x, y = y, r
-
         a, r = divrem(x,y)
-        nt = a*t + tt
+
+        # maintain
+        # x0 = (p + (-1)^i * r) / q
+        t, tt = nt, t
+        nt = a*t+tt
     end
 
     # find optimal semiconvergent
@@ -152,7 +160,7 @@ den(x::Integer) = one(x)
 num(x::Rational) = x.num
 den(x::Rational) = x.den
 
-sign(x::Rational) = sign(x.num)
+sign(x::Rational) = oftype(x, sign(x.num))
 signbit(x::Rational) = signbit(x.num)
 copysign(x::Rational, y::Real) = copysign(x.num,y) // x.den
 copysign(x::Rational, y::Rational) = copysign(x.num,y.num) // x.den

@@ -49,10 +49,10 @@ type Interface
         np = length(pkgs)
 
         # generate pdict
-        pdict = (String=>Int)[ pkgs[i] => i for i = 1:np ]
+        pdict = Dict{String,Int}(pkgs[i] => i for i = 1:np)
 
         # generate spp and pvers
-        spp = Array(Int, np)
+        spp = Array{Int}(np)
 
         pvers = [ VersionNumber[] for i = 1:np ]
 
@@ -82,11 +82,11 @@ type Interface
         end
 
         ## generate wveights:
-        vweight = Array(Vector{VersionWeight}, np)
+        vweight = Array{Vector{VersionWeight}}(np)
         for p0 = 1:np
             pvers0 = pvers[p0]
             spp0 = spp[p0]
-            vweight0 = vweight[p0] = Array(VersionWeight, spp0)
+            vweight0 = vweight[p0] = Array{VersionWeight}(spp0)
             for v0 = 1:spp0-1
                 vweight0[v0] = VersionWeight(pvers0[v0])
             end
@@ -241,7 +241,7 @@ function enforce_optimality!(sol::Vector{Int}, interface::Interface)
 
     # prepare some useful structures
     # pdeps[p0][v0] has all dependencies of package p0 version v0
-    pdeps = [ Array(Requires, spp[p0]-1) for p0 = 1:np ]
+    pdeps = [ Array{Requires}(spp[p0]-1) for p0 = 1:np ]
     # prevdeps[p1][p0][v0] is the VersionSet of package p1 which package p0 version v0
     # depends upon
     prevdeps = [ Dict{Int,Dict{Int,VersionSet}}() for p0 = 1:np ]

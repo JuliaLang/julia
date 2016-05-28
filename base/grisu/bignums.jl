@@ -54,7 +54,7 @@ type Bignum
     used_digits::Int32
     exponent::Int32
     function Bignum()
-        bigits = Array(UInt32,kBigitCapacity)
+        bigits = Array{UInt32}(kBigitCapacity)
         @inbounds for i = 1:kBigitCapacity
             bigits[i] = 0
         end

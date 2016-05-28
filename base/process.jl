@@ -94,6 +94,9 @@ immutable AndCmds <: AbstractCmd
     AndCmds(a::AbstractCmd, b::AbstractCmd) = new(a, b)
 end
 
+hash(x::AndCmds, h::UInt) = hash(x.a, hash(x.b, h))
+==(x::AndCmds, y::AndCmds) = x.a == y.a && x.b == y.b
+
 shell_escape(cmd::Cmd) = shell_escape(cmd.exec...)
 
 function show(io::IO, cmd::Cmd)
@@ -137,7 +140,7 @@ immutable FileRedirect
     filename::AbstractString
     append::Bool
     function FileRedirect(filename, append)
-        if lowercase(filename) == (@unix? "/dev/null" : "nul")
+        if lowercase(filename) == (@static is_windows() ? "nul" : "/dev/null")
             warn_once("for portability use DevNull instead of a file redirect")
         end
         new(filename, append)
@@ -209,13 +212,13 @@ Mark a command object so that it will be run in a new process group, allowing it
 """
 detach(cmd::Cmd) = Cmd(cmd; detach=true)
 
-# like bytestring(s), but throw an error if s contains NUL, since
+# like String(s), but throw an error if s contains NUL, since
 # libuv requires NUL-terminated strings
 function cstr(s)
     if Base.containsnul(s)
         throw(ArgumentError("strings containing NUL cannot be passed to spawned processes"))
     end
-    return bytestring(s)
+    return String(s)
 end
 
 # convert various env representations into an array of "key=val" strings
@@ -235,6 +238,8 @@ setenv(cmd::Cmd; dir="") = Cmd(cmd; dir=dir)
 (&)(left::AbstractCmd, right::AbstractCmd) = AndCmds(left, right)
 redir_out(src::AbstractCmd, dest::AbstractCmd) = OrCmds(src, dest)
 redir_err(src::AbstractCmd, dest::AbstractCmd) = ErrOrCmds(src, dest)
+Base.mr_empty{T2<:Base.AbstractCmd}(f, op::typeof(&), T1::Type{T2}) =
+    throw(ArgumentError("reducing over an empty collection of type $T1 with operator & is not allowed"))
 
 # Stream Redirects
 redir_out(dest::Redirectable, src::AbstractCmd) = CmdRedirect(src, dest, STDIN_NO)
@@ -584,7 +589,7 @@ function read(cmd::AbstractCmd, stdin::Redirectable=DevNull)
 end
 
 function readstring(cmd::AbstractCmd, stdin::Redirectable=DevNull)
-    return bytestring(read(cmd, stdin))
+    return String(read(cmd, stdin))
 end
 
 function writeall(cmd::AbstractCmd, stdin::AbstractString, stdout::Redirectable=DevNull)
@@ -702,7 +707,7 @@ function arg_gen(head, tail...)
     tail = arg_gen(tail...)
     vals = String[]
     for h = head, t = tail
-        push!(vals, cstr(bytestring(h, t)))
+        push!(vals, cstr(string(h,t)))
     end
     vals
 end

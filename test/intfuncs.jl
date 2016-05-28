@@ -79,6 +79,10 @@ end
 
 @test ndigits(146, -3) == 5
 
+let n = rand(Int)
+    @test ndigits(n) == ndigits(big(n)) == ndigits(n, 10)
+end
+
 @test bin(3) == "11"
 @test bin(3, 2) == "11"
 @test bin(3, 3) == "011"

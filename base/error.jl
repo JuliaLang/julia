@@ -50,14 +50,21 @@ macro assert(ex, msgs...)
     :($(esc(ex)) ? $(nothing) : throw(Main.Base.AssertionError($msg)))
 end
 
+const DEFAULT_RETRY_N = 1
+const DEFAULT_RETRY_ON = e->true
+const DEFAULT_RETRY_MAX_DELAY = 10.0
 
 """
-    retry(f, [condition]; n=3; max_delay=10) -> Function
+    retry(f, [retry_on]; n=DEFAULT_RETRY_N, max_delay=DEFAULT_RETRY_MAX_DELAY) -> Function
 
 Returns a lambda that retries function `f` up to `n` times in the
-event of an exception. If `condition` is a `Type` then retry only
-for exceptions of that type. If `condition` is a function
-`cond(::Exception) -> Bool` then retry only if it is true.
+event of an exception. If `retry_on` is a `Type` then retry only
+for exceptions of that type. If `retry_on` is a function
+`test_error(::Exception) -> Bool` then retry only if it is true.
+
+The first retry happens after a gap of 50 milliseconds or `max_delay`,
+whichever is lower. Subsequently, the delays between retries are
+exponentially increased with a random factor upto `max_delay`.
 
 **Examples**
 ```julia
@@ -65,46 +72,21 @@ retry(http_get, e -> e.status == "503")(url)
 retry(read, UVError)(io)
 ```
 """
-function retry(f::Function, condition::Function=e->true;
-               n::Int=3, max_delay::Int=10)
+function retry(f::Function, retry_on::Function=DEFAULT_RETRY_ON; n=DEFAULT_RETRY_N, max_delay=DEFAULT_RETRY_MAX_DELAY)
     (args...) -> begin
-        delay = 0.05
-        for i = 1:n
+        delay = min(0.05, max_delay)
+        for i = 1:n+1
             try
                 return f(args...)
             catch e
-                if i == n || try condition(e) end != true
+                if i > n || try retry_on(e) end != true
                     rethrow(e)
                 end
             end
-            sleep(delay * (0.8 + (rand() * 0.4)))
-            delay = min(max_delay, delay * 5)
+            sleep(delay)
+            delay = min(max_delay, delay * (0.8 + (rand() * 0.4)) * 5)
         end
     end
 end
 
 retry(f::Function, t::Type; kw...) = retry(f, e->isa(e, t); kw...)
-
-
-"""
-    @catch(f) -> Function
-
-Returns a lambda that executes `f` and returns either the result of `f` or
-an `Exception` thrown by `f`.
-
-**Examples**
-```julia
-julia> r = @catch(length)([1,2,3])
-3
-
-julia> r = @catch(length)()
-MethodError(length,())
-
-julia> typeof(r)
-MethodError
-```
-"""
-catchf(f) = (args...) -> try f(args...) catch ex; ex end
-macro catch(f)
-    esc(:(Base.catchf($f)))
-end

@@ -217,12 +217,6 @@ g = parse(BigInt,"-1")
 @test (|)(a, b, c, d, f) == parse(BigInt,"-1358954753")
 @test (|)(a, b, c, d, f, g) == parse(BigInt,"-1")
 
-@test isprime(BigInt(1000000007))
-@test isprime(BigInt(1000000007), 1)
-@test isprime(BigInt(10000000019))
-@test isprime(parse(BigInt,"359334085968622831041960188598043661065388726959079837"))
-@test !isprime(BigInt(1))
-@test !isprime(BigInt(10000000020))
 
 @test trailing_ones(a) == 8
 @test trailing_zeros(b) == 2
@@ -279,6 +273,12 @@ ndigits_mismatch(n) = ndigits(n) != ndigits(BigInt(n))
 @test !any(ndigits_mismatch, 64:99)
 @test !any(ndigits_mismatch, 512:999)
 @test !any(ndigits_mismatch, 8192:9999)
+
+# The following should not crash (#16579)
+ndigits(rand(big(-999:999)), rand(63:typemax(Int)))
+ndigits(rand(big(-999:999)), big(2)^rand(2:999))
+
+@test_throws DomainError ndigits(rand(big(-999:999)), rand(typemin(Int):1))
 
 # conversion from float
 @test BigInt(2.0) == BigInt(2.0f0) == BigInt(big(2.0)) == 2

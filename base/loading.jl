@@ -4,16 +4,16 @@
 
 # Cross-platform case-sensitive path canonicalization
 
-if OS_NAME ∈ (:Linux, :FreeBSD)
-    # Case-sensitive filesystems, don't have to do anything
+if is_unix() && !is_apple()
+    # assume case-sensitive filesystems, don't have to do anything
     isfile_casesensitive(path) = isfile(path)
-elseif OS_NAME == :Windows
+elseif is_windows()
     # GetLongPathName Win32 function returns the case-preserved filename on NTFS.
     function isfile_casesensitive(path)
         isfile(path) || return false  # Fail fast
         Filesystem.longpath(path) == path
     end
-elseif OS_NAME == :Darwin
+elseif is_apple()
     # HFS+ filesystem is case-preserving. The getattrlist API returns
     # a case-preserved filename. In the rare event that HFS+ is operating
     # in case-sensitive mode, this will still work but will be redundant.
@@ -44,10 +44,10 @@ elseif OS_NAME == :Darwin
     # getattrpath(path, &attr_list, &buf, sizeof(buf), FSOPT_NOFOLLOW);
     function isfile_casesensitive(path)
         isfile(path) || return false
-        path_basename = bytestring(basename(path))
+        path_basename = String(basename(path))
         local casepreserved_basename
         const header_size = 12
-        buf = Array(UInt8, length(path_basename) + header_size + 1)
+        buf = Array{UInt8}(length(path_basename) + header_size + 1)
         while true
             ret = ccall(:getattrlist, Cint,
                         (Cstring, Ptr{Void}, Ptr{Void}, Csize_t, Culong),
@@ -111,7 +111,7 @@ function find_in_path(name::String, wd)
     end
     return nothing
 end
-find_in_path(name::AbstractString, wd = pwd()) = find_in_path(bytestring(name), wd)
+find_in_path(name::AbstractString, wd = pwd()) = find_in_path(String(name), wd)
 
 function find_in_node_path(name::String, srcpath, node::Int=1)
     if myid() == node
@@ -382,7 +382,7 @@ include_string(txt::String, fname::String) =
           txt, sizeof(txt), fname, sizeof(fname))
 
 include_string(txt::AbstractString, fname::AbstractString="string") =
-    include_string(bytestring(txt), bytestring(fname))
+    include_string(String(txt), String(fname))
 
 function source_path(default::Union{AbstractString,Void}="")
     t = current_task()
@@ -525,7 +525,7 @@ function cache_dependencies(f::IO)
     while true
         n = ntoh(read(f, Int32))
         n == 0 && break
-        push!(files, (bytestring(read(f, n)), ntoh(read(f, Float64))))
+        push!(files, (String(read(f, n)), ntoh(read(f, Float64))))
     end
     return modules, files
 end

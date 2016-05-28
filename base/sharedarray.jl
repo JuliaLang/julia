@@ -77,7 +77,7 @@ function SharedArray(T::Type, dims::NTuple; init=false, pids=Int[])
 
         func_mapshmem = () -> shm_mmap_array(T, dims, shm_seg_name, JL_O_RDWR)
 
-        refs = Array(Future, length(pids))
+        refs = Array{Future}(length(pids))
         for (i, p) in enumerate(pids)
             refs[i] = remotecall(func_mapshmem, p)
         end
@@ -159,7 +159,7 @@ function SharedArray{T,N}(filename::AbstractString, ::Type{T}, dims::NTuple{N,In
     mode == "r" && !isfile(filename) && throw(ArgumentError("file $filename does not exist, but mode $mode cannot create it"))
 
     # Create the file if it doesn't exist, map it if it does
-    refs = Array(Future, length(pids))
+    refs = Array{Future}(length(pids))
     func_mmap = mode -> open(filename, mode) do io
         Mmap.mmap(io, Array{T,N}, dims, offset; shared=true)
     end
@@ -224,7 +224,7 @@ function finalize_refs{T,N}(S::SharedArray{T,N})
         empty!(S.refs)
         init_loc_flds(S)
         finalize(S.s)
-        S.s = Array(T, ntuple(d->0,N))
+        S.s = Array{T}(ntuple(d->0,N))
     end
     S
 end
@@ -238,7 +238,7 @@ linearindexing{S<:SharedArray}(::Type{S}) = LinearFast()
 
 function reshape{T,N}(a::SharedArray{T}, dims::NTuple{N,Int})
     (length(a) != prod(dims)) && throw(DimensionMismatch("dimensions must be consistent with array size"))
-    refs = Array(Future, length(a.pids))
+    refs = Array{Future}(length(a.pids))
     for (i, p) in enumerate(a.pids)
         refs[i] = remotecall(p, a.refs[i], dims) do r,d
             reshape(fetch(r),d)
@@ -339,7 +339,7 @@ function init_loc_flds{T,N}(S::SharedArray{T,N})
         S.loc_subarr_1d = sub_1dim(S, S.pidx)
     else
         S.pidx = 0
-        S.loc_subarr_1d = sub(Array(T, ntuple(d->0,N)), 1:0)
+        S.loc_subarr_1d = sub(Array{T}(ntuple(d->0,N)), 1:0)
     end
 end
 
@@ -477,8 +477,13 @@ complex(S1::SharedArray,S2::SharedArray) = convert(SharedArray, complex(S1.s, S2
 
 function print_shmem_limits(slen)
     try
-        @linux_only pfx = "kernel"
-        @osx_only pfx = "kern.sysv"
+        if is_linux()
+            pfx = "kernel"
+        elseif is_apple()
+            pfx = "kern.sysv"
+        else
+            return
+        end
 
         shmmax_MB = div(parse(Int, split(readstring(`sysctl $(pfx).shmmax`))[end]), 1024*1024)
         page_size = parse(Int, split(readstring(`getconf PAGE_SIZE`))[end])
@@ -501,7 +506,7 @@ function shm_mmap_array(T, dims, shm_seg_name, mode)
     local A = nothing
 
     if prod(dims) == 0
-        return Array(T, dims)
+        return Array{T}(dims)
     end
 
     try
@@ -521,8 +526,18 @@ end
 
 # platform-specific code
 
-@unix_only begin
+if is_windows()
+function _shm_mmap_array(T, dims, shm_seg_name, mode)
+    readonly = !((mode & JL_O_RDWR) == JL_O_RDWR)
+    create = (mode & JL_O_CREAT) == JL_O_CREAT
+    s = Mmap.Anonymous(shm_seg_name, readonly, create)
+    Mmap.mmap(s, Array{T,length(dims)}, dims, zero(Int64))
+end
 
+# no-op in windows
+shm_unlink(shm_seg_name) = 0
+
+else # !windows
 function _shm_mmap_array(T, dims, shm_seg_name, mode)
     fd_mem = shm_open(shm_seg_name, mode, S_IRUSR | S_IWUSR)
     systemerror("shm_open() failed for " * shm_seg_name, fd_mem < 0)
@@ -542,18 +557,4 @@ end
 shm_unlink(shm_seg_name) = ccall(:shm_unlink, Cint, (Cstring,), shm_seg_name)
 shm_open(shm_seg_name, oflags, permissions) = ccall(:shm_open, Cint, (Cstring, Cint, Cmode_t), shm_seg_name, oflags, permissions)
 
-end # @unix_only
-
-@windows_only begin
-
-function _shm_mmap_array(T, dims, shm_seg_name, mode)
-    readonly = !((mode & JL_O_RDWR) == JL_O_RDWR)
-    create = (mode & JL_O_CREAT) == JL_O_CREAT
-    s = Mmap.Anonymous(shm_seg_name, readonly, create)
-    Mmap.mmap(s, Array{T,length(dims)}, dims, zero(Int64))
-end
-
-# no-op in windows
-shm_unlink(shm_seg_name) = 0
-
-end # @windows_only
+end # os-test

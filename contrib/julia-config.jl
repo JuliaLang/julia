@@ -9,71 +9,80 @@ const options =
 ];
 
 function imagePath()
-    opts = Base.JLOptions();
-    bytestring(opts.image_file);
+    opts = Base.JLOptions()
+    String(opts.image_file)
 end
 
 function libDir()
-    abspath(dirname(Libdl.dlpath("libjulia")));
+    abspath(dirname(Libdl.dlpath("libjulia")))
 end
 
 function includeDir()
-    joinpath(match(r"(.*)(bin)",JULIA_HOME).captures[1],"include","julia");
+    joinpath(match(r"(.*)(bin)",JULIA_HOME).captures[1],"include","julia")
 end
 
 function unixInitDir()
     filePart = split(imagePath(),"/")[end]
-    return match(Regex("(.*)(/julia/$filePart)"),imagePath()).captures[1];
+    return match(Regex("(.*)(/julia/$filePart)"),imagePath()).captures[1]
 end
 
 function windowsInitDir()
     if imagePath()[end-1:end] == "ji"
-        return match(r"(.*)(\\julia\\sys.ji)",imagePath()).captures[1];
+        return match(r"(.*)(\\julia\\sys.ji)",imagePath()).captures[1]
     else
-        return match(r"(.*)(\\julia\\sys.dll)",imagePath()).captures[1];
+        return match(r"(.*)(\\julia\\sys.dll)",imagePath()).captures[1]
     end
 end
 
 function initDir()
-    @unix_only return unixInitDir();
-    @windows_only return windowsInitDir();
+    if is_unix()
+        return unixInitDir()
+    else
+        return windowsInitDir()
+    end
 end
 
 function ldflags()
-    replace("""-L$(libDir())""","\\","\\\\");
+    replace("""-L$(libDir())""","\\","\\\\")
 end
 
 function ldlibs()
-    @unix_only return replace("""-Wl,-rpath,$(libDir()) -ljulia""","\\","\\\\");
-    @windows_only return replace("""-ljulia""","\\","\\\\");
+    if is_unix()
+        return replace("""-Wl,-rpath,$(libDir()) -ljulia""","\\","\\\\")
+    else
+        return replace("""-ljulia""","\\","\\\\")
+    end
 end
 
 function cflags()
-    arg1 = replace(initDir(),"\\","\\\\\\\\");
-    arg2 = replace(includeDir(),"\\","\\\\");
-    @unix_only return """-fPIC -DJULIA_INIT_DIR=\\"$arg1\\" -I$arg2""";
-    return """-DJULIA_INIT_DIR=\\"$arg1\\" -I$arg2""";
+    arg1 = replace(initDir(),"\\","\\\\\\\\")
+    arg2 = replace(includeDir(),"\\","\\\\")
+    if is_unix()
+        return """-fPIC -DJULIA_INIT_DIR=\\"$arg1\\" -I$arg2"""
+    else
+        return """-DJULIA_INIT_DIR=\\"$arg1\\" -I$arg2"""
+    end
 end
 
 function check_args(args)
-    checked = intersect(args,options);
+    checked = intersect(args,options)
     if length(checked) == 0 || length(checked) != length(args)
-        println(STDERR,"Usage: julia-config [",reduce((x,y)->"$x|$y",options),"]");
-        exit(1);
+        println(STDERR,"Usage: julia-config [",reduce((x,y)->"$x|$y",options),"]")
+        exit(1)
     end
 end
 
 function main()
-    check_args(ARGS);
+    check_args(ARGS)
     for args in ARGS
         if args == "--ldflags"
-            println(ldflags());
+            println(ldflags())
         elseif args == "--cflags"
-            println(cflags());
+            println(cflags())
         elseif args == "--ldlibs"
-            println(ldlibs());
+            println(ldlibs())
         end
     end
 end
 
-main();
+main()

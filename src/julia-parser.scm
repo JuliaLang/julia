@@ -323,6 +323,11 @@
                    (string.sub s 1)
                    s)
                r is-float32-literal)))
+      (if (and (eqv? #\. (string.char s (string.dec s (length s))))
+               (let ((nxt (peek-char port)))
+                 (or (identifier-start-char? nxt)
+                     (memv nxt '(#\( #\[ #\{ #\@ #\` #\~ #\")))))
+          (error (string "invalid numeric constant \"" s (peek-char port) "\"")))
       ;; n is #f for integers > typemax(UInt64)
       (cond (is-hex-float-literal (numchk n s) (double n))
             ((eq? pred char-hex?) (fix-uint-neg neg (sized-uint-literal n s 4)))
@@ -593,7 +598,9 @@
   (if (invalid-initial-token? t)
       (error (string "unexpected \"" t "\"")))
   (if (closer? t)
-      (list head)  ; empty block
+      (if add-linenums    ;; empty block
+          (list head (line-number-node s))
+          (list head))
       (let loop ((ex
                   ;; in allow-empty mode skip leading runs of operator
                   (if (and allow-empty (memv t ops))
@@ -815,9 +822,9 @@
               (- num)))
       num))
 
-; given an expression and the next token, is there a juxtaposition
-; operator between them?
-(define (juxtapose? expr t)
+;; given an expression and the next token, is there a juxtaposition
+;; operator between them?
+(define (juxtapose? s expr t)
   (and (or (number? expr)
            (large-number? expr)
            (not (number? t))    ;; disallow "x.3" and "sqrt(2)2"
@@ -825,17 +832,23 @@
            #;(and (pair? expr) (memq (car expr) '(|'| |.'|))
                 (not (memv t '(#\( #\[ #\{))))
            )
+       (not (ts:space? s))
        (not (operator? t))
        (not (initial-reserved-word? t))
        (not (closing-token? t))
        (not (newline? t))
-       (not (and (pair? expr) (syntactic-unary-op? (car expr))))))
+       (not (and (pair? expr) (syntactic-unary-op? (car expr))))
+       ;; TODO: this would disallow juxtaposition with 0, which is ambiguous
+       ;; with e.g. hex literals `0x...`. however this is used for `0im`, which
+       ;; we might not want to break.
+       #;(or (not (and (eq? expr 0)
+                     (symbol? t)))
+           (error (string "invalid numeric constant \"" expr t "\"")))))
 
 (define (parse-juxtapose ex s)
   (let ((next (peek-token s)))
     ;; numeric literal juxtaposition is a unary operator
-    (cond ((and (juxtapose? ex next)
-                (not (ts:space? s)))
+    (cond ((juxtapose? s ex next)
            (begin
              #;(if (and (number? ex) (= ex 0))
                  (error "juxtaposition with literal \"0\""))
@@ -1006,6 +1019,9 @@
                      ((comprehension)
                       (loop (list* 'typed_comprehension ex (cdr al))))
                      ((dict_comprehension)
+		      (syntax-deprecation
+		       s (string #\( (deparse ex) #\) "[a=>b for (a,b) in c]")
+		       (string (deprecated-dict-replacement ex) "(a=>b for (a,b) in c)"))
                       (loop (list* 'typed_dict_comprehension ex (cdr al))))
                      (else (error "unknown parse-cat result (internal error)"))))))
             ((|.|)
@@ -1138,7 +1154,10 @@
               (error "let variables should end in \";\" or newline"))
           (let ((ex (parse-block s)))
             (expect-end s word)
-            `(let ,ex ,@binds))))
+            ;; don't need line info in an empty let block
+            (if (and (length= ex 2) (pair? (cadr ex)) (eq? (caadr ex) 'line))
+                `(let (block) ,@binds)
+                `(let ,ex ,@binds)))))
        ((global local)
         (let* ((lno (input-port-line (ts:port s)))
                (const (and (eq? (peek-token s) 'const)
@@ -1170,13 +1189,8 @@
                                                   (eq? (car sig) 'tuple))))
                                     (error (string "expected \"(\" in " word " definition"))
                                     sig)))
-                     (loc   (begin (if (not (eq? (peek-token s) 'end))
-                                       ;; if ends on same line, don't skip the following newline
-                                       (skip-ws-and-comments (ts:port s)))
-                                   (line-number-node s)))
                      (body  (parse-block s)))
                 (expect-end s word)
-                (add-filename-to-block! body loc)
                 (list word def body)))))
        ((abstract)
         (list 'abstract (parse-subtype-spec s)))
@@ -1184,12 +1198,9 @@
         (let ((immu? (eq? word 'immutable)))
           (if (reserved-word? (peek-token s))
               (error (string "invalid type name \"" (take-token s) "\"")))
-          (let ((sig (parse-subtype-spec s))
-                (loc (begin (if (newline? (peek-token s))
-                                (skip-ws-and-comments (ts:port s)))
-                            (line-number-node s))))
+          (let ((sig (parse-subtype-spec s)))
             (begin0 (list 'type (if (eq? word 'type) 'true 'false)
-                          sig (add-filename-to-block! (parse-block s) loc))
+                          sig (parse-block s))
                     (expect-end s word)))))
        ((bitstype)
         (list 'bitstype (with-space-sensitive (parse-cond s))
@@ -1225,15 +1236,13 @@
                           '(block)
                           #f
                           finalb)
-                    (let* ((var (if nl (parse-eq s) (parse-eq* s)))
+                    (let* ((var (if nl #f (parse-eq* s)))
                            (var? (and (not nl) (or (symbol? var) (and (length= var 2) (eq? (car var) '$)))))
                            (catch-block (if (eq? (require-token s) 'finally)
                                             '(block)
                                             (parse-block s))))
                       (loop (require-token s)
-                            (if var?
-                                catch-block
-                                `(block ,var ,@(cdr catch-block)))
+                            catch-block
                             (if var? var 'false)
                             finalb)))))
              ((and (eq? nxt 'finally)
@@ -1299,23 +1308,15 @@
         (error "invalid \"do\" syntax"))
        (else (error "unhandled reserved word")))))))
 
-(define (add-filename-to-block! body loc)
-  (if (and (length> body 1)
-           (pair? (cadr body))
-           (eq? (caadr body) 'line))
-      (set-car! (cdr body) loc))
-  body)
-
 (define (parse-do s)
   (with-bindings
    ((expect-end-current-line (input-port-line (ts:port s))))
    (without-whitespace-newline
-    (let* ((doargs (if (memv (peek-token s) '(#\newline #\;))
-                       '()
-                       (parse-comma-separated s parse-range)))
-           (loc (line-number-node s)))
+    (let ((doargs (if (memv (peek-token s) '(#\newline #\;))
+                      '()
+                      (parse-comma-separated s parse-range))))
       `(-> (tuple ,@doargs)
-           ,(begin0 (add-filename-to-block! (parse-block s) loc)
+           ,(begin0 (parse-block s)
                     (expect-end s 'do)))))))
 
 (define (macrocall-to-atsym e)
@@ -1997,7 +1998,7 @@
                         (syntax-deprecation s "{a for a in b}" "Any[a for a in b]")
                         `(typed_comprehension (top Any) ,@(cdr vex)))
                        ((dict_comprehension)
-                        (syntax-deprecation s "{a=>b for (a,b) in c}" "Dict{Any,Any}([a=>b for (a,b) in c])")
+                        (syntax-deprecation s "{a=>b for (a,b) in c}" "Dict{Any,Any}(a=>b for (a,b) in c)")
                         `(typed_dict_comprehension (=> (top Any) (top Any)) ,@(cdr vex)))
                        ((dict)
                         (syntax-deprecation s "{a=>b, ...}" "Dict{Any,Any}(a=>b, ...)")

@@ -176,11 +176,11 @@ else
 end
 
 # Check that stride of matrix/vector is 1
-function chkstride1(A...)
-    for a in A
-        stride(a,1)== 1 || error("matrix does not have contiguous columns")
-    end
-end
+# Writing like this to avoid splatting penalty when called with multiple arguments,
+# see PR 16416
+@inline chkstride1(A...) = _chkstride1(true, A...)
+@noinline _chkstride1(ok::Bool) = ok || error("matrix does not have contiguous columns")
+@inline _chkstride1(ok::Bool, A, B...) = _chkstride1(ok & (stride(A, 1) == 1), B...)
 
 """
     LinAlg.checksquare(A)
@@ -252,8 +252,8 @@ include("linalg/arnoldi.jl")
 
 function __init__()
     try
-        Base.check_blas()
-        if Base.blas_vendor() == :mkl
+        BLAS.check()
+        if BLAS.vendor() == :mkl
             ccall((:MKL_Set_Interface_Layer, Base.libblas_name), Void, (Cint,), USE_BLAS64 ? 1 : 0)
         end
     catch ex

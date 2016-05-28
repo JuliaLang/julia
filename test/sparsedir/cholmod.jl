@@ -591,7 +591,7 @@ Dp = spdiagm(dp)
 sparse(cholfact(sparse(Float64[ 10 1 1 1; 1 10 0 0; 1 0 10 0; 1 0 0 10]))); gc()
 
 # Issue 11747 - Wrong show method defined for FactorComponent
-Base.writemime(IOBuffer(), MIME"text/plain"(), cholfact(sparse(Float64[ 10 1 1 1; 1 10 0 0; 1 0 10 0; 1 0 0 10]))[:L])
+Base.show(IOBuffer(), MIME"text/plain"(), cholfact(sparse(Float64[ 10 1 1 1; 1 10 0 0; 1 0 10 0; 1 0 0 10]))[:L])
 
 # Element promotion and type inference
 @inferred cholfact(As)\ones(Int, size(As, 1))
@@ -632,3 +632,10 @@ Fnew = deserialize(b)
 @test_throws MethodError cholfact(speye(BigFloat, 5))
 @test_throws MethodError cholfact(Symmetric(speye(BigFloat, 5)))
 @test_throws MethodError cholfact(Hermitian(speye(Complex{BigFloat}, 5)))
+
+# test \ for Factor and StridedVecOrMat
+let x = rand(5)
+    A = cholfact(sparse(diagm(x.\1)))
+    @test_approx_eq A\sub(ones(10),1:2:10) x
+    @test_approx_eq A\slice(eye(5,5),:,:) diagm(x)
+end

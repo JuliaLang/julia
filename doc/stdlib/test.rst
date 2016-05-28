@@ -12,7 +12,7 @@ binary install, you can run the test suite using ``Base.runtests()``.
 
 .. currentmodule:: Base
 
-.. function:: runtests([tests=["all"] [, numcores=iceil(CPU_CORES/2) ]])
+.. function:: runtests([tests=["all"] [, numcores=ceil(Integer, Sys.CPU_CORES / 2) ]])
 
    .. Docstring generated from Julia source
 
@@ -243,6 +243,47 @@ writing new tests.
    .. Docstring generated from Julia source
 
    Test two floating point numbers ``a`` and ``b`` for equality taking in account a margin of tolerance given by ``tol``\ .
+
+.. function:: @inferred f(x)
+
+   .. Docstring generated from Julia source
+
+   Tests that the call expression ``f(x)`` returns a value of the same type inferred by the compiler. It's useful to check for type stability.
+
+   ``f(x)`` can be any call expression. Returns the result of ``f(x)`` if the types match, and an ``Error`` ``Result`` if it finds different types.
+
+   .. doctest::
+
+       julia> using Base.Test
+
+       julia> f(a,b,c) = b > 1 ? 1 : 1.0
+       f (generic function with 1 method)
+
+       julia> typeof(f(1,2,3))
+       Int64
+
+       julia> @code_warntype f(1,2,3)
+       Variables:
+         #self#::#f
+         a::Int64
+         b::Int64
+         c::Int64
+
+       Body:
+         begin  # REPL[2], line 1:
+             unless (Base.slt_int)(1,b::Int64)::Bool goto 4
+             return 1
+             4:
+             return 1.0
+         end::Union{Float64,Int64}
+
+       julia> @inferred f(1,2,3)
+       ERROR: return type Int64 does not match inferred return type Union{Float64,Int64}
+        in error(::String) at ./error.jl:21
+        in eval(::Module, ::Any) at ./boot.jl:226
+
+       julia> @inferred max(1,2)
+       2
 
 Creating Custom ``AbstractTestSet`` Types
 -----------------------------------------

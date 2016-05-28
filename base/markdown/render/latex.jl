@@ -69,7 +69,7 @@ function latex(io::IO, md::List)
     end
 end
 
-function writemime(io::IO, ::MIME"text/latex", md::HorizontalRule)
+function show(io::IO, ::MIME"text/latex", md::HorizontalRule)
     println(io, "\\rule{\\textwidth}{1pt}")
 end
 
@@ -136,5 +136,4 @@ latex(md) = sprint(latex, md)
 latexinline(md) = sprint(latexinline, md)
 latexesc(s) = sprint(latexesc, s)
 
-writemime(io::IO, ::MIME"text/latex", md::MD) = latex(io, md)
-#writemime(io::IO, ::MIME"text/latex", md::MD) = writemime(io, "text/plain", md)
+show(io::IO, ::MIME"text/latex", md::MD) = latex(io, md)

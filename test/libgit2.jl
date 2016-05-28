@@ -79,6 +79,7 @@ mktempdir() do dir
     commit_oid1 = LibGit2.Oid()
     commit_oid2 = LibGit2.Oid()
     commit_oid3 = LibGit2.Oid()
+    master_branch = "master"
     test_branch = "test_branch"
     tag1 = "tag1"
     tag2 = "tag2"
@@ -248,18 +249,32 @@ mktempdir() do dir
             try
                 brnch = LibGit2.branch(repo)
                 brref = LibGit2.head(repo)
-                @test LibGit2.isbranch(brref)
-                @test LibGit2.name(brref) == "refs/heads/master"
-                @test LibGit2.shortname(brref) == "master"
-                @test LibGit2.ishead(brref)
-                @test LibGit2.upstream(brref) == nothing
-                @test repo.ptr == LibGit2.owner(brref).ptr
-                @test brnch == "master"
-                @test LibGit2.headname(repo) == "master"
-                LibGit2.branch!(repo, test_branch, string(commit_oid1), set_head=false)
+                try
+                    @test LibGit2.isbranch(brref)
+                    @test !LibGit2.isremote(brref)
+                    @test LibGit2.name(brref) == "refs/heads/master"
+                    @test LibGit2.shortname(brref) == master_branch
+                    @test LibGit2.ishead(brref)
+                    @test LibGit2.upstream(brref) === nothing
+                    @test repo.ptr == LibGit2.owner(brref).ptr
+                    @test brnch == master_branch
+                    @test LibGit2.headname(repo) == master_branch
+                    LibGit2.branch!(repo, test_branch, string(commit_oid1), set_head=false)
+
+                    @test LibGit2.lookup_branch(repo, test_branch, true) === nothing
+                    tbref = LibGit2.lookup_branch(repo, test_branch, false)
+                    try
+                        @test LibGit2.shortname(tbref) == test_branch
+                        @test LibGit2.upstream(tbref) === nothing
+                    finally
+                        finalize(tbref)
+                    end
+                finally
+                    finalize(brref)
+                end
 
                 branches = map(b->LibGit2.shortname(b[1]), LibGit2.GitBranchIter(repo))
-                @test "master" in branches
+                @test master_branch in branches
                 @test test_branch in branches
             finally
                 finalize(repo)
@@ -360,8 +375,16 @@ mktempdir() do dir
             LibGit2.branch!(repo, test_branch)
             @test_throws LibGit2.Error.GitError LibGit2.merge!(repo, fastforward=true)
 
+            # Set the username and email for the test_repo (needed for rebase)
+            cfg = LibGit2.GitConfig(repo)
+            LibGit2.set!(cfg, "user.name", "AAAA")
+            LibGit2.set!(cfg, "user.email", "BBBB@BBBB.COM")
+
+            # Try rebasing on master instead
+            LibGit2.rebase!(repo, master_branch)
+
             # Switch to the master branch
-            LibGit2.branch!(repo, "master")
+            LibGit2.branch!(repo, master_branch)
 
         finally
             finalize(repo)
@@ -383,8 +406,17 @@ mktempdir() do dir
 
                 # all tag in place
                 branches = map(b->LibGit2.shortname(b[1]), LibGit2.GitBranchIter(repo))
-                @test "master" in branches
+                @test master_branch in branches
                 @test test_branch in branches
+
+                # issue #16337
+                tag2ref = LibGit2.GitReference(repo, "refs/tags/$tag2")
+                try
+                    @test_throws LibGit2.Error.GitError LibGit2.upstream(tag2ref)
+                finally
+                    finalize(tag2ref)
+                end
+
             finally
                 finalize(repo)
             end
@@ -434,6 +466,57 @@ mktempdir() do dir
         finally
             finalize(repo)
         end
+    #end
+
+    #@testset "Credentials" begin
+        creds = LibGit2.EmptyCredentials()
+        @test LibGit2.checkused!(creds)
+        @test LibGit2.reset!(creds) === nothing
+        @test creds[:user] === nothing
+        @test creds[:pass] === nothing
+        @test creds[:pubkey, "localhost"] === nothing
+
+        creds_user = "USER"
+        creds_pass = "PASS"
+        creds = LibGit2.UserPasswordCredentials(creds_user, creds_pass)
+        @test !LibGit2.checkused!(creds)
+        @test !LibGit2.checkused!(creds)
+        @test !LibGit2.checkused!(creds)
+        @test LibGit2.checkused!(creds)
+        @test LibGit2.reset!(creds) == 3
+        @test !LibGit2.checkused!(creds)
+        @test creds.count == 2
+        @test creds[:user] == creds_user
+        @test creds[:pass] == creds_pass
+        @test creds[:pubkey] === nothing
+        @test creds[:user, "localhost"] == creds_user
+        @test creds[:pubkey, "localhost"] === nothing
+        @test creds[:usesshagent, "localhost"] == "Y"
+        creds[:usesshagent, "localhost"] = "E"
+        @test creds[:usesshagent, "localhost"] == "E"
+
+        creds = LibGit2.CachedCredentials()
+        @test !LibGit2.checkused!(creds)
+        @test !LibGit2.checkused!(creds)
+        @test !LibGit2.checkused!(creds)
+        @test LibGit2.checkused!(creds)
+        @test LibGit2.reset!(creds) == 3
+        @test !LibGit2.checkused!(creds)
+        @test creds.count == 2
+        @test creds[:user, "localhost"] === nothing
+        @test creds[:pass, "localhost"] === nothing
+        @test creds[:pubkey, "localhost"] === nothing
+        @test creds[:prvkey, "localhost"] === nothing
+        @test creds[:usesshagent, "localhost"] === nothing
+        creds[:user, "localhost"] = creds_user
+        creds[:pass, "localhost"] = creds_pass
+        creds[:usesshagent, "localhost"] = "Y"
+        @test creds[:user] === nothing
+        @test creds[:user, "localhost2"] === nothing
+        @test creds[:user, "localhost"] == creds_user
+        @test creds[:pass, "localhost"] == creds_pass
+        @test creds[:pubkey, "localhost"] === nothing
+        @test creds[:usesshagent, "localhost"] == "Y"
     #end
 end
 

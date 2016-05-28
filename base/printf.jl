@@ -98,7 +98,7 @@ function parse1(s::AbstractString, k::Integer)
     while c in "#0- + '"
         c, k = next_or_die(s,k)
     end
-    flags = ascii(s[j:k-2])
+    flags = String(s[j:k-2])
     # parse width
     while '0' <= c <= '9'
         width = 10*width + c-'0'
@@ -667,14 +667,14 @@ function gen_p(flags::String, width::Int, precision::Int, c::Char)
     #
     @gensym x
     blk = Expr(:block)
-    ptrwidth = WORD_SIZE>>2
+    ptrwidth = Sys.WORD_SIZE>>2
     width -= ptrwidth+2
     if width > 0 && !('-' in flags)
         push!(blk.args, pad(width, width, ' '))
     end
     push!(blk.args, :(write(out, '0')))
     push!(blk.args, :(write(out, 'x')))
-    push!(blk.args, :(write(out, bytestring(hex(unsigned($x), $ptrwidth)))))
+    push!(blk.args, :(write(out, String(hex(unsigned($x), $ptrwidth)))))
     if width > 0 && '-' in flags
         push!(blk.args, pad(width, width, ' '))
     end

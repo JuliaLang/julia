@@ -46,8 +46,8 @@ end
 #   "Fast Half Float Conversion" by Jeroen van der Zijp
 #   ftp://ftp.fox-toolkit.org/pub/fasthalffloatconversion.pdf
 
-const basetable = Array(UInt16, 512)
-const shifttable = Array(UInt8, 512)
+const basetable = Array{UInt16}(512)
+const shifttable = Array{UInt8}(512)
 
 for i = 0:255
     e = i - 127

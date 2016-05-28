@@ -185,9 +185,9 @@ let undefvar
     @test contains(err_str, "Exponentiation yielding a complex result requires a complex argument")
 
     err_str = @except_str [5,4,3][-2,1] BoundsError
-    @test err_str == "BoundsError: attempt to access 3-element Array{$Int,1}:\n 5\n 4\n 3\n  at index [-2,1]"
+    @test err_str == "BoundsError: attempt to access 3-element Array{$Int,1} at index [-2,1]"
     err_str = @except_str [5,4,3][1:5] BoundsError
-    @test err_str == "BoundsError: attempt to access 3-element Array{$Int,1}:\n 5\n 4\n 3\n  at index [1:5]"
+    @test err_str == "BoundsError: attempt to access 3-element Array{$Int,1} at index [1:5]"
 
     err_str = @except_str 0::Bool TypeError
     @test err_str == "TypeError: non-boolean ($Int) used in boolean context"
@@ -354,10 +354,10 @@ end
 
 # Issue #14684: `display` should prints associative types in full.
 let d = Dict(1 => 2, 3 => 45)
-    buf = IOBuffer()
+    buf = IOContext(IOBuffer(), multiline=true)
     td = TextDisplay(buf)
     display(td, d)
-    result = bytestring(td.io)
+    result = String(td.io.io)
 
     @test contains(result, summary(d))
 

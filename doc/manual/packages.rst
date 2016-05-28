@@ -989,14 +989,19 @@ For example::
     @osx Homebrew
 
 will require the ``Homebrew`` package only on systems where the operating system is OS X.
-The system conditions that are currently supported are::
+The system conditions that are currently supported are (hierarchically):
 
-    @windows
-    @unix
-    @osx
-    @linux
+* ``@unix``
 
-The ``@unix`` condition is satisfied on all UNIX systems, including OS X, Linux and FreeBSD.
+  * ``@linux``
+
+  * ``@bsd``
+
+    * ``@osx``
+
+* ``@windows``
+
+The ``@unix`` condition is satisfied on all UNIX systems, including Linux and BSD.
 Negated system conditionals are also supported by adding a ``!`` after the leading ``@``.
 Examples::
 

@@ -5,34 +5,32 @@
 *************************************
 
 When dealing with platform libraries, it is often necessary to provide special cases
-for various platforms. The variable ``OS_NAME`` can be used to write these special
-cases. There are several macros intended to make this easier: ``@windows_only``,
-``@unix_only``, ``@linux_only``, and ``@osx_only``. These may be used as follows::
+for various platforms. The variable ``Sys.KERNEL`` can be used to write these special
+cases. There are several functions intended to make this easier:
+``is_unix``, ``is_linux``, ``is_apple``, ``is_bsd``, and ``is_windows``. These may be used as follows::
 
-    @windows_only begin
+    if is_windows()
         some_complicated_thing(a)
     end
 
-Note that ``@linux_only`` and ``@osx_only`` are mutually exclusive subsets of ``@unix_only``\ . (This
-similarly applies to ``@unix``\ .)
-Additionally, there are:``@windows``, ``@unix``, ``@linux``, and ``@osx``. Their usage takes
-the form of a ternary conditional operator, as demonstrated in the following examples.
+Note that ``is_linux`` and ``is_apple`` are mutually exclusive subsets of ``is_unix``\ .
+Additionally, there is a macro ``@static`` which makes it possible to
+use these functions to conditionally hide invalid code, as demonstrated in the following examples.
 
 Simple blocks::
 
-    ccall( (@windows? :_fopen : :fopen), ...)
+    ccall( (@static is_windows() ? :_fopen : :fopen), ...)
 
 Complex blocks::
 
-    @linux? (
-             begin
-                 some_complicated_thing(a)
-             end
-           : begin
-                 some_different_thing(a)
-             end
-           )
+    @static if is_linux()
+        some_complicated_thing(a)
+    else
+        some_different_thing(a)
+    end
 
-Chaining (parentheses optional, but recommended for readability)::
+When chaining conditionals (including if/elseif/end),
+the ``@static`` must be repeated for each level
+(parentheses optional, but recommended for readability)::
 
-    @windows? :a : (@osx? :b : :c)
+    @static is_windows() ? :a : (@static is_apple() ? :b : :c)

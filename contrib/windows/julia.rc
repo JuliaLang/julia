@@ -1,4 +1,5 @@
 #include <winver.h>
+#include <winuser.h>
 1 VERSIONINFO
 FILEVERSION     JLVER
 PRODUCTVERSION  JLVER
@@ -31,3 +32,4 @@ BEGIN
   END
 END
 2 ICON "julia.ico"
+1 RT_MANIFEST "julia-manifest.xml"

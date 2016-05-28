@@ -4,7 +4,9 @@ module Libc
 
 export FILE, TmStruct, strftime, strptime, getpid, gethostname, free, malloc, calloc, realloc,
     errno, strerror, flush_cstdio, systemsleep, time
-@windows_only export GetLastError, FormatMessage
+if is_windows()
+    export GetLastError, FormatMessage
+end
 
 import Base: utf16to8
 
@@ -21,20 +23,22 @@ end
 
 Base.cconvert(::Type{Int32}, fd::RawFD) = fd.fd
 
-dup(x::RawFD) = RawFD(ccall((@windows? :_dup : :dup),Int32,(Int32,),x.fd))
-dup(src::RawFD,target::RawFD) = systemerror("dup",-1==
-    ccall((@windows? :_dup2 : :dup2),Int32,
-    (Int32,Int32),src.fd,target.fd))
+dup(x::RawFD) = RawFD(ccall((@static is_windows() ? :_dup : :dup), Int32, (Int32,), x.fd))
+dup(src::RawFD, target::RawFD) = systemerror("dup", -1 ==
+    ccall((@static is_windows() ? :_dup2 : :dup2), Int32,
+    (Int32, Int32), src.fd, target.fd))
 
 # Wrapper for an OS file descriptor (for Windows)
-@windows_only immutable WindowsRawSocket
-    handle::Ptr{Void}   # On Windows file descriptors are HANDLE's and 64-bit on 64-bit Windows
+if is_windows()
+    immutable WindowsRawSocket
+        handle::Ptr{Void}   # On Windows file descriptors are HANDLE's and 64-bit on 64-bit Windows
+    end
+    Base.cconvert(::Type{Ptr{Void}}, fd::WindowsRawSocket) = fd.handle
+    _get_osfhandle(fd::RawFD) = WindowsRawSocket(ccall(:_get_osfhandle,Ptr{Void},(Cint,),fd.fd))
+    _get_osfhandle(fd::WindowsRawSocket) = fd
+else
+    _get_osfhandle(fd::RawFD) = fd
 end
-@windows_only Base.cconvert(::Type{Ptr{Void}}, fd::WindowsRawSocket) = fd.handle
-
-@unix_only _get_osfhandle(fd::RawFD) = fd
-@windows_only _get_osfhandle(fd::RawFD) = WindowsRawSocket(ccall(:_get_osfhandle,Ptr{Void},(Cint,),fd.fd))
-@windows_only _get_osfhandle(fd::WindowsRawSocket) = fd
 
 ## FILE (not auto-finalized) ##
 
@@ -46,8 +50,7 @@ modestr(s::IO) = modestr(isreadable(s), iswritable(s))
 modestr(r::Bool, w::Bool) = r ? (w ? "r+" : "r") : (w ? "w" : throw(ArgumentError("neither readable nor writable")))
 
 function FILE(fd::RawFD, mode)
-    @unix_only FILEp = ccall(:fdopen, Ptr{Void}, (Cint, Cstring), fd, mode)
-    @windows_only FILEp = ccall(:_fdopen, Ptr{Void}, (Cint, Cstring), fd, mode)
+    FILEp = ccall((@static is_windows() ? :_fdopen : :fdopen), Ptr{Void}, (Cint, Cstring), fd, mode)
     systemerror("fdopen", FILEp == C_NULL)
     FILE(FILEp)
 end
@@ -82,8 +85,16 @@ flush_cstdio() = ccall(:jl_flush_cstdio, Void, ())
 ## time-related functions ##
 
 # TODO: check for usleep errors?
-@unix_only systemsleep(s::Real) = ccall(:usleep, Int32, (UInt32,), round(UInt32,s*1e6))
-@windows_only systemsleep(s::Real) = (ccall(:Sleep, stdcall, Void, (UInt32,), round(UInt32,s*1e3)); return Int32(0))
+if is_unix()
+    systemsleep(s::Real) = ccall(:usleep, Int32, (UInt32,), round(UInt32, s*1e6))
+elseif is_windows()
+    function systemsleep(s::Real)
+        ccall(:Sleep, stdcall, Void, (UInt32,), round(UInt32, s * 1e3))
+        return Int32(0)
+    end
+else
+    error("systemsleep undefined for this OS")
+end
 
 immutable TimeVal
    sec::Int64
@@ -142,13 +153,13 @@ library.
 strftime(t) = strftime("%c", t)
 strftime(fmt::AbstractString, t::Real) = strftime(fmt, TmStruct(t))
 function strftime(fmt::AbstractString, tm::TmStruct)
-    timestr = Array(UInt8, 128)
+    timestr = Array{UInt8}(128)
     n = ccall(:strftime, Int, (Ptr{UInt8}, Int, Cstring, Ptr{TmStruct}),
               timestr, length(timestr), fmt, &tm)
     if n == 0
         return ""
     end
-    bytestring(pointer(timestr), n)
+    return String(pointer(timestr), n)
 end
 
 """
@@ -174,14 +185,14 @@ function strptime(fmt::AbstractString, timestr::AbstractString)
         # TODO: better error message
         throw(ArgumentError("invalid arguments"))
     end
-    @osx_only begin
+    @static if is_apple()
         # if we didn't explicitly parse the weekday or year day, use mktime
         # to fill them in automatically.
         if !ismatch(r"([^%]|^)%(a|A|j|w|Ow)", fmt)
             ccall(:mktime, Int, (Ptr{TmStruct},), &tm)
         end
     end
-    tm
+    return tm
 end
 
 # system date in seconds
@@ -201,11 +212,14 @@ getpid() = ccall(:jl_getpid, Int32, ())
 ## network functions ##
 
 function gethostname()
-    hn = Array(UInt8, 256)
-    @unix_only err=ccall(:gethostname, Int32, (Ptr{UInt8}, UInt), hn, length(hn))
-    @windows_only err=ccall(:gethostname, stdcall, Int32, (Ptr{UInt8}, UInt32), hn, length(hn))
+    hn = Array{UInt8}(256)
+    err = @static if is_windows()
+        ccall(:gethostname, stdcall, Int32, (Ptr{UInt8}, UInt32), hn, length(hn))
+    else
+        ccall(:gethostname, Int32, (Ptr{UInt8}, UInt), hn, length(hn))
+    end
     systemerror("gethostname", err != 0)
-    bytestring(pointer(hn))
+    return String(pointer(hn))
 end
 
 ## system error handling ##
@@ -228,7 +242,7 @@ errno(e::Integer) = ccall(:jl_set_errno, Void, (Cint,), e)
 
 Convert a system call error code to a descriptive string
 """
-strerror(e::Integer) = bytestring(ccall(:strerror, Cstring, (Int32,), e))
+strerror(e::Integer) = String(ccall(:strerror, Cstring, (Int32,), e))
 strerror() = strerror(errno())
 
 """
@@ -245,7 +259,7 @@ Convert a Win32 system call error code to a descriptive string [only available o
 """
 function FormatMessage end
 
-@windows_only begin
+if is_windows()
     GetLastError() = ccall(:GetLastError,stdcall,UInt32,())
 
     function FormatMessage(e=GetLastError())
@@ -259,8 +273,8 @@ function FormatMessage end
                     FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS | FORMAT_MESSAGE_MAX_WIDTH_MASK,
                     C_NULL, e, 0, lpMsgBuf, 0, C_NULL)
         p = lpMsgBuf[1]
-        len == 0 && return utf8("")
-        buf = Array(UInt16, len)
+        len == 0 && return ""
+        buf = Array{UInt16}(len)
         unsafe_copy!(pointer(buf), p, len)
         ccall(:LocalFree,stdcall,Ptr{Void},(Ptr{Void},),p)
         return String(utf16to8(buf))

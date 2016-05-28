@@ -2,11 +2,11 @@
 
 function StrArrayStruct{T<:AbstractString}(strs::T...)
     strcount = length(strs)
-    map(s->Base.unsafe_convert(Cstring, bytestring(s)), strs) # check for null-strings
+    map(s->Base.unsafe_convert(Cstring, String(s)), strs) # check for null-strings
     sa_strings = convert(Ptr{Cstring}, Libc.malloc(sizeof(Cstring) * strcount))
     for i=1:strcount
         len = length(strs[i])
-        in_ptr  = pointer(bytestring(strs[i]))
+        in_ptr  = pointer(String(strs[i]))
         out_ptr = convert(Ptr{UInt8}, Libc.malloc(sizeof(UInt8) * (len + 1)))
         unsafe_copy!(out_ptr, in_ptr, len)
         unsafe_store!(out_ptr, zero(UInt8), len + 1) # NULL byte
@@ -17,9 +17,9 @@ end
 StrArrayStruct{T<:AbstractString}(strs::Vector{T}) = StrArrayStruct(strs...)
 
 function Base.convert(::Type{Vector{AbstractString}}, sa::StrArrayStruct)
-    arr = Array(AbstractString, sa.count)
+    arr = Array{AbstractString}(sa.count)
     for i=1:sa.count
-        arr[i] = bytestring(unsafe_load(sa.strings, i))
+        arr[i] = String(unsafe_load(sa.strings, i))
     end
     return arr
 end

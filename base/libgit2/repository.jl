@@ -14,7 +14,7 @@ function GitRepo(path::AbstractString)
 end
 
 function GitRepoExt(path::AbstractString, flags::Cuint = Cuint(Consts.REPOSITORY_OPEN_DEFAULT))
-    separator = @unix? ":" : ";"
+    separator = @static is_windows() ? ";" : ":"
     repo_ptr_ptr = Ref{Ptr{Void}}(C_NULL)
     err = ccall((:git_repository_open_ext, :libgit2), Cint,
                 (Ptr{Ptr{Void}}, Cstring, Cuint, Cstring),
@@ -116,8 +116,8 @@ function get{T <: GitObject}(::Type{T}, r::GitRepo, oid::AbstractString)
 end
 
 function gitdir(repo::GitRepo)
-    return bytestring(ccall((:git_repository_path, :libgit2), Cstring,
-                            (Ptr{Void},), repo.ptr))
+    return String(ccall((:git_repository_path, :libgit2), Cstring,
+                        (Ptr{Void},), repo.ptr))
 end
 
 function path(repo::GitRepo)

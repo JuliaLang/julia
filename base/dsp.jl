@@ -10,7 +10,7 @@ _zerosi(b,a,T) = zeros(promote_type(eltype(b), eltype(a), T), max(length(a), len
 
 function filt{T,S}(b::Union{AbstractVector, Number}, a::Union{AbstractVector, Number},
                    x::AbstractArray{T}, si::AbstractArray{S}=_zerosi(b,a,T))
-    filt!(Array(promote_type(eltype(b), eltype(a), T, S), size(x)), b, a, x, si)
+    filt!(Array{promote_type(eltype(b), eltype(a), T, S)}(size(x)), b, a, x, si)
 end
 
 # in-place filtering: returns results in the out argument, which may shadow x

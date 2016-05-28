@@ -28,7 +28,7 @@ ccall(:jl_exit_on_sigint, Void, (Cint,), 0)
 # in the mix. If verification needs to be done, keep it to the bare minimum. Basically
 # this should make sure nothing crashes without depending on how exactly the control
 # characters are being used.
-if @unix? true : (Base.windows_version() >= Base.WINDOWS_VISTA_VER)
+if !is_windows() || Sys.windows_version() >= Sys.WINDOWS_VISTA_VER
     stdin_write, stdout_read, stderr_read, repl = fake_repl()
 
     repl.specialdisplay = Base.REPL.REPLDisplay(repl)
@@ -398,7 +398,7 @@ begin
     LineEdit.enter_search(s, custom_histp, true)
 end
 # Simple non-standard REPL tests
-if @unix? true : (Base.windows_version() >= Base.WINDOWS_VISTA_VER)
+if !is_windows() || Sys.windows_version() >= Sys.WINDOWS_VISTA_VER
     stdin_write, stdout_read, stdout_read, repl = fake_repl()
     panel = LineEdit.Prompt("testπ";
         prompt_prefix="\e[38;5;166m",
@@ -443,7 +443,7 @@ ccall(:jl_exit_on_sigint, Void, (Cint,), 1)
 let exename = Base.julia_cmd()
 
 # Test REPL in dumb mode
-@unix_only begin
+if !is_windows()
     const O_RDWR = Base.Filesystem.JL_O_RDWR
     const O_NOCTTY = Base.Filesystem.JL_O_NOCTTY
 
@@ -481,9 +481,9 @@ let exename = Base.julia_cmd()
 end
 
 # Test stream mode
-if @unix? true : (Base.windows_version() >= Base.WINDOWS_VISTA_VER)
+if !is_windows() || Sys.windows_version() >= Sys.WINDOWS_VISTA_VER
     outs, ins, p = readandwrite(`$exename --startup-file=no --quiet`)
     write(ins,"1\nquit()\n")
     @test readstring(outs) == "1\n"
 end
-end
+end # let exename

@@ -311,7 +311,7 @@ end
 ## Issue related tests
 # issue #1447
 let
-    A = [1.+0.im 0; 0 1]
+    A = [1.+0.0im 0; 0 1]
     B = pinv(A)
     for i = 1:4
         @test_approx_eq A[i] B[i]

@@ -96,12 +96,12 @@ function lpad(s::AbstractString, n::Integer, p::AbstractString=" ")
     if m <= 0; return s; end
     l = strwidth(p)
     if l==1
-        return bytestring(p^m * s)
+        return String(p^m * s)
     end
     q = div(m,l)
     r = m - q*l
     i = r != 0 ? chr2ind(p, r) : -1
-    bytestring(p^q*p[1:i]*s)
+    String(p^q*p[1:i]*s)
 end
 
 function rpad(s::AbstractString, n::Integer, p::AbstractString=" ")
@@ -109,12 +109,12 @@ function rpad(s::AbstractString, n::Integer, p::AbstractString=" ")
     if m <= 0; return s; end
     l = strwidth(p)
     if l==1
-        return bytestring(s * p^m)
+        return String(s * p^m)
     end
     q = div(m,l)
     r = m - q*l
     i = r != 0 ? chr2ind(p, r) : -1
-    bytestring(s*p^q*p[1:i])
+    String(s*p^q*p[1:i])
 end
 
 lpad(s, n::Integer, p=" ") = lpad(string(s),n,string(p))
@@ -207,7 +207,7 @@ function replace(str::String, pattern, repl, limit::Integer)
     write(out, SubString(str,i))
     takebuf_string(out)
 end
-replace(s::AbstractString, pat, f, n::Integer) = replace(bytestring(s), pat, f, n)
+replace(s::AbstractString, pat, f, n::Integer) = replace(String(s), pat, f, n)
 replace(s::AbstractString, pat, r) = replace(s, pat, r, 0)
 
 # hex <-> bytes conversion
@@ -243,3 +243,13 @@ function bytes2hex(a::AbstractArray{UInt8})
     end
     return String(b)
 end
+
+# check for pure ASCII-ness
+
+function ascii(s::String)
+    for (i, b) in enumerate(s.data)
+        b < 0x80 || throw(ArgumentError("invalid ASCII at index $i in $(repr(s))"))
+    end
+    return s
+end
+ascii(x::AbstractString) = ascii(convert(String, x))

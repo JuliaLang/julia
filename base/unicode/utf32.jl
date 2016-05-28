@@ -128,7 +128,7 @@ convert{T<:AbstractString, S<:Union{UInt32,Char,Int32}}(::Type{T}, v::AbstractVe
 
 # specialize for performance reasons:
 function convert{T<:Union{UInt32,Char,Int32}}(::Type{String}, data::AbstractVector{T})
-    s = IOBuffer(Array(UInt8,length(data)), true, true)
+    s = IOBuffer(Array{UInt8}(length(data)), true, true)
     truncate(s,0)
     for x in data
         print(s, Char(x))
@@ -148,15 +148,15 @@ function convert(T::Type{UTF32String}, bytes::AbstractArray{UInt8})
     data = reinterpret(UInt32, bytes)
     # check for byte-order mark (BOM):
     if data[1] == 0x0000feff # native byte order
-        d = Array(UInt32, length(data))
+        d = Array{UInt32}(length(data))
         copy!(d,1, data, 2, length(data)-1)
     elseif data[1] == 0xfffe0000 # byte-swapped
-        d = Array(UInt32, length(data))
+        d = Array{UInt32}(length(data))
         for i = 2:length(data)
             @inbounds d[i-1] = bswap(data[i])
         end
     else
-        d = Array(UInt32, length(data) + 1)
+        d = Array{UInt32}(length(data) + 1)
         copy!(d, 1, data, 1, length(data)) # assume native byte order
     end
     d[end] = 0 # NULL terminate

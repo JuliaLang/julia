@@ -67,7 +67,7 @@ dimension sizes passed as a variable number of arguments.
 =================================================== =====================================================================
 Function                                            Description
 =================================================== =====================================================================
-:func:`Array(type, dims...) <Array>`                an uninitialized dense array
+:func:`Array{type}(dims...) <Array>`                an uninitialized dense array
 :func:`cell(dims...) <cell>`                        an uninitialized cell array (heterogeneous array)
 :func:`zeros(type, dims...) <zeros>`                an array of all zeros of specified type, defaults to ``Float64`` if
                                                     ``type`` not specified
@@ -319,14 +319,13 @@ Example:
      6  10
      7  11
 
-    julia> x[map(isprime, x)]
-    6-element Array{Int64,1}:
+    julia> x[map(ispow2, x)]
+    5-element Array{Int64,1}:
+      1
       2
-      3
-      5
-      7
-     11
-     13
+      4
+      8
+     16
 
     julia> x[1, [2 3; 4 1]]
     2x2 Array{Int64,2}:

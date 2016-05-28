@@ -73,6 +73,7 @@ union jl_typemap_t jl_cfunction_list;
 
 jl_sym_t *call_sym;    jl_sym_t *dots_sym;
 jl_sym_t *module_sym;  jl_sym_t *slot_sym;
+jl_sym_t *empty_sym;
 jl_sym_t *export_sym;  jl_sym_t *import_sym;
 jl_sym_t *importall_sym; jl_sym_t *toplevel_sym;
 jl_sym_t *quote_sym;   jl_sym_t *amp_sym;
@@ -101,6 +102,7 @@ jl_sym_t *pure_sym; jl_sym_t *simdloop_sym;
 jl_sym_t *meta_sym; jl_sym_t *compiler_temp_sym;
 jl_sym_t *inert_sym; jl_sym_t *vararg_sym;
 jl_sym_t *unused_sym; jl_sym_t *static_parameter_sym;
+jl_sym_t *polly_sym;
 
 typedef struct {
     int64_t a;
@@ -378,6 +380,21 @@ JL_DLLEXPORT jl_lambda_info_t *jl_new_lambda_info_uninit(jl_svec_t *sparam_syms)
     return li;
 }
 
+// invoke (compiling if necessary) the jlcall function pointer for a method template
+STATIC_INLINE jl_value_t *jl_call_staged(jl_svec_t *sparam_vals, jl_lambda_info_t *meth,
+                                         jl_value_t **args, uint32_t nargs)
+{
+    if (__unlikely(meth->fptr == NULL)) {
+        jl_compile_linfo(meth);
+        jl_generate_fptr(meth);
+    }
+    assert(jl_svec_len(meth->sparam_syms) == jl_svec_len(sparam_vals));
+    if (__likely(meth->jlcall_api == 0))
+        return meth->fptr(args[0], &args[1], nargs-1);
+    else
+        return ((jl_fptr_sparam_t)meth->fptr)(sparam_vals, args[0], &args[1], nargs-1);
+}
+
 static jl_lambda_info_t *jl_instantiate_staged(jl_method_t *generator, jl_tupletype_t *tt, jl_svec_t *env)
 {
     size_t i, l;
@@ -403,14 +420,14 @@ static jl_lambda_info_t *jl_instantiate_staged(jl_method_t *generator, jl_tuplet
         jl_expr_t *body = jl_exprn(jl_symbol("block"), 2);
         jl_cellset(((jl_expr_t*)jl_exprarg(ex,1))->args, 0, body);
         linenum = jl_box_long(generator->line);
-        jl_value_t *linenode = jl_new_struct(jl_linenumbernode_type, generator->file, linenum);
+        jl_value_t *linenode = jl_new_struct(jl_linenumbernode_type, linenum);
         jl_cellset(body->args, 0, linenode);
 
         // invoke code generator
         assert(jl_nparams(tt) == jl_array_len(argnames) ||
                (func->isva && (jl_nparams(tt) >= jl_array_len(argnames) - 1)));
         jl_cellset(body->args, 1,
-                jl_call_unspecialized(sparam_vals, func, jl_svec_data(tt->parameters), jl_nparams(tt)));
+                jl_call_staged(sparam_vals, func, jl_svec_data(tt->parameters), jl_nparams(tt)));
 
         if (func->sparam_syms != jl_emptysvec) {
             // mark this function as having the same static parameters as the generator
@@ -504,7 +521,6 @@ JL_DLLEXPORT void jl_method_init_properties(jl_method_t *m)
     jl_lambda_info_t *li = m->lambda_template;
     jl_value_t *body1 = skip_meta(li->code);
     if (jl_is_linenode(body1)) {
-        m->file = jl_linenode_file(body1);
         m->line = jl_linenode_line(body1);
     }
     else if (jl_is_expr(body1) && ((jl_expr_t*)body1)->head == line_sym) {
@@ -608,10 +624,6 @@ static size_t symbol_nbytes(size_t len)
 
 static jl_sym_t *mk_symbol(const char *str, size_t len)
 {
-#ifndef MEMDEBUG
-    static char *sym_pool = NULL;
-    static char *pool_ptr = NULL;
-#endif
     jl_sym_t *sym;
     size_t nb = symbol_nbytes(len);
 
@@ -622,6 +634,8 @@ static jl_sym_t *mk_symbol(const char *str, size_t len)
 #ifdef MEMDEBUG
     sym = (jl_sym_t*)jl_valueof(malloc(nb));
 #else
+    static char *sym_pool = NULL;
+    static char *pool_ptr = NULL;
     if (sym_pool == NULL || pool_ptr+nb > sym_pool+SYM_POOL_SIZE) {
         sym_pool = (char*)malloc(SYM_POOL_SIZE);
         pool_ptr = sym_pool;
@@ -711,7 +725,7 @@ void jl_set_gs_ctr(uint32_t ctr) { gs_ctr = ctr; }
 
 JL_DLLEXPORT jl_sym_t *jl_gensym(void)
 {
-    static char name[16];
+    char name[16];
     char *n;
     n = uint2str(&name[2], sizeof(name)-2, gs_ctr, 10);
     *(--n) = '#'; *(--n) = '#';
@@ -721,7 +735,7 @@ JL_DLLEXPORT jl_sym_t *jl_gensym(void)
 
 JL_DLLEXPORT jl_sym_t *jl_tagged_gensym(const char *str, int32_t len)
 {
-    static char gs_name[14];
+    char gs_name[14];
     if (symbol_nbytes(len) >= SYM_POOL_SIZE)
         jl_exceptionf(jl_argumenterror_type, "Symbol length exceeds maximum");
     if (memchr(str, 0, len))
@@ -831,9 +845,18 @@ JL_DLLEXPORT jl_datatype_t *jl_new_uninitialized_datatype(size_t nfields, int8_t
 unsigned jl_special_vector_alignment(size_t nfields, jl_value_t *t) {
     if (!is_vecelement_type(t))
         return 0;
-    if (nfields>16 || (1<<nfields & 0x1157C) == 0)
-        // Number of fields is not 2, 3, 4, 5, 6, 8, 10, 12, or 16.
-        return 0;
+    // LLVM 3.7 and 3.8 either crash or generate wrong code for many
+    // SIMD vector sizes N. It seems the rule is that N can have at
+    // most 2 non-zero bits. (This is true at least for N<=100.) See
+    // also <https://llvm.org/bugs/show_bug.cgi?id=27708>.
+    size_t mask = nfields;
+    // See e.g.
+    // <https://graphics.stanford.edu/%7Eseander/bithacks.html> for an
+    // explanation of this bit-counting algorithm.
+    mask &= mask-1;             // clear least-significant 1 if present
+    mask &= mask-1;             // clear another 1
+    if (mask)
+        return 0;               // nfields has more than two 1s
     assert(jl_datatype_nfields(t)==1);
     jl_value_t *ty = jl_field_type(t, 0);
     if( !jl_is_bitstype(ty) )

@@ -7,7 +7,7 @@
 # high-resolution relative time, in nanoseconds
 time_ns() = ccall(:jl_hrtime, UInt64, ())
 
-# This type must be kept in sync with the C struct in src/gc.c
+# This type must be kept in sync with the C struct in src/gc.h
 immutable GC_Num
     allocd      ::Int64 # GC internal
     freed       ::Int64 # GC internal
@@ -40,7 +40,7 @@ immutable GC_Diff
 end
 
 function GC_Diff(new::GC_Num, old::GC_Num)
-    # logic from gc.c:jl_gc_total_bytes
+    # logic from `src/gc.c:jl_gc_total_bytes`
     old_allocd = old.allocd + Int64(old.collect) + Int64(old.total_allocd)
     new_allocd = new.allocd + Int64(new.collect) + Int64(new.total_allocd)
     return GC_Diff(new_allocd - old_allocd,
@@ -214,92 +214,6 @@ macro timed(ex)
     end
 end
 
-# BLAS utility routines
-function blas_vendor()
-    try
-        cglobal((:openblas_set_num_threads, Base.libblas_name), Void)
-        return :openblas
-    end
-    try
-        cglobal((:openblas_set_num_threads64_, Base.libblas_name), Void)
-        return :openblas64
-    end
-    try
-        cglobal((:MKL_Set_Num_Threads, Base.libblas_name), Void)
-        return :mkl
-    end
-    return :unknown
-end
-
-if blas_vendor() == :openblas64
-    macro blasfunc(x)
-        return Expr(:quote, Symbol(x, "64_"))
-    end
-    openblas_get_config() = strip(bytestring( ccall((:openblas_get_config64_, Base.libblas_name), Ptr{UInt8}, () )))
-else
-    macro blasfunc(x)
-        return Expr(:quote, x)
-    end
-    openblas_get_config() = strip(bytestring( ccall((:openblas_get_config, Base.libblas_name), Ptr{UInt8}, () )))
-end
-
-function blas_set_num_threads(n::Integer)
-    blas = blas_vendor()
-    if blas == :openblas
-        return ccall((:openblas_set_num_threads, Base.libblas_name), Void, (Int32,), n)
-    elseif blas == :openblas64
-        return ccall((:openblas_set_num_threads64_, Base.libblas_name), Void, (Int32,), n)
-    elseif blas == :mkl
-        # MKL may let us set the number of threads in several ways
-        return ccall((:MKL_Set_Num_Threads, Base.libblas_name), Void, (Cint,), n)
-    end
-
-    # OSX BLAS looks at an environment variable
-    @osx_only ENV["VECLIB_MAXIMUM_THREADS"] = n
-
-    return nothing
-end
-
-function check_blas()
-    blas = blas_vendor()
-    if blas == :openblas || blas == :openblas64
-        openblas_config = openblas_get_config()
-        openblas64 = ismatch(r".*USE64BITINT.*", openblas_config)
-        if Base.USE_BLAS64 != openblas64
-            if !openblas64
-                println("ERROR: OpenBLAS was not built with 64bit integer support.")
-                println("You're seeing this error because Julia was built with USE_BLAS64=1")
-                println("Please rebuild Julia with USE_BLAS64=0")
-            else
-                println("ERROR: Julia was not built with support for OpenBLAS with 64bit integer support")
-                println("You're seeing this error because Julia was built with USE_BLAS64=0")
-                println("Please rebuild Julia with USE_BLAS64=1")
-            end
-            println("Quitting.")
-            quit()
-        end
-    elseif blas == :mkl
-        if Base.USE_BLAS64
-            ENV["MKL_INTERFACE_LAYER"] = "ILP64"
-        end
-    end
-
-    #
-    # Check if BlasInt is the expected bitsize, by triggering an error
-    #
-    (_, info) = LinAlg.LAPACK.potrf!('U', [1.0 0.0; 0.0 -1.0])
-    if info != 2 # mangled info code
-        if info == 2^33
-            error("""BLAS and LAPACK are compiled with 32-bit integer support, but Julia expects 64-bit integers. Please build Julia with USE_BLAS64=0.""")
-        elseif info == 0
-            error("""BLAS and LAPACK are compiled with 64-bit integer support but Julia expects 32-bit integers. Please build Julia with USE_BLAS64=1.""")
-        else
-            error("""The LAPACK library produced an undefined error code. Please verify the installation of BLAS and LAPACK.""")
-        end
-    end
-
-end
-
 function fftw_vendor()
     if Base.libfftw_name == "libmkl_rt"
         return :mkl
@@ -375,8 +289,8 @@ warn(err::Exception; prefix="ERROR: ", kw...) =
 
 function julia_cmd(julia=joinpath(JULIA_HOME, julia_exename()))
     opts = JLOptions()
-    cpu_target = bytestring(opts.cpu_target)
-    image_file = bytestring(opts.image_file)
+    cpu_target = String(opts.cpu_target)
+    image_file = String(opts.image_file)
     compile = if opts.compile_enabled == 0
                   "no"
               elseif opts.compile_enabled == 2
@@ -390,3 +304,34 @@ function julia_cmd(julia=joinpath(JULIA_HOME, julia_exename()))
 end
 
 julia_exename() = ccall(:jl_is_debugbuild,Cint,())==0 ? "julia" : "julia-debug"
+
+if is_windows()
+function getpass(prompt::AbstractString)
+    print(prompt)
+    flush(STDOUT)
+    p = Array{UInt8}(128) # mimic Unix getpass in ignoring more than 128-char passwords
+                          # (also avoids any potential memory copies arising from push!)
+    try
+        plen = 0
+        while true
+            c = ccall(:_getch, UInt8, ())
+            if c == 0xff || c == UInt8('\n') || c == UInt8('\r')
+                break # EOF or return
+            elseif c == 0x00 || c == 0xe0
+                ccall(:_getch, UInt8, ()) # ignore function/arrow keys
+            elseif c == UInt8('\b') && plen > 0
+                plen -= 1 # delete last character on backspace
+            elseif !iscntrl(Char(c)) && plen < 128
+                p[plen += 1] = c
+            end
+        end
+        return String(pointer(p), plen)
+    finally
+        fill!(p, 0) # don't leave password in memory
+    end
+
+    return ""
+end
+else
+getpass(prompt::AbstractString) = String(ccall(:getpass, Cstring, (Cstring,), prompt))
+end

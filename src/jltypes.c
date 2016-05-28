@@ -22,6 +22,7 @@ extern "C" {
 
 jl_datatype_t *jl_any_type;
 jl_datatype_t *jl_type_type;
+jl_methtable_t *jl_type_type_mt;
 jl_datatype_t *jl_typename_type;
 jl_datatype_t *jl_sym_type;
 jl_datatype_t *jl_symbol_type;
@@ -1076,7 +1077,7 @@ static jl_value_t *jl_type_intersect(jl_value_t *a, jl_value_t *b,
     // uses to instantiate its supertype. this tells us what subtype parameter
     // values are implied by the intersected supertype, or that the
     // intersected supertype cannot come from this subtype (in which case
-    // our final answer is Union()).
+    // our final answer is Union{}).
     size_t i;
     // hack: we need type_match to find assignments for all typevars
     int prev_mim = match_intersection_mode;
@@ -1124,7 +1125,7 @@ static jl_value_t *jl_type_intersect(jl_value_t *a, jl_value_t *b,
             if (jl_svecref(env, e) == tp) {
                 elt = jl_type_intersect(elt, jl_svecref(env, e+1),
                                         penv, eqc, invariant);
-                // note: elt might be Union() if "Union()" was the type parameter
+                // note: elt might be Union{} if "Union{}" was the type parameter
                 break;
             }
         }
@@ -3263,7 +3264,8 @@ void jl_init_types(void)
     jl_any_type = jl_new_abstracttype((jl_value_t*)jl_symbol("Any"), NULL, jl_emptysvec);
     jl_any_type->super = jl_any_type;
     jl_type_type = jl_new_abstracttype((jl_value_t*)jl_symbol("Type"), jl_any_type, jl_emptysvec);
-    jl_type_type->name->mt = jl_new_method_table(jl_type_type->name->name, jl_current_module);
+    jl_type_type_mt = jl_new_method_table(jl_type_type->name->name, jl_current_module);
+    jl_type_type->name->mt = jl_type_type_mt;
 
     // initialize them. lots of cycles.
     jl_datatype_type->name = jl_new_typename(jl_symbol("DataType"));
@@ -3531,8 +3533,8 @@ void jl_init_types(void)
 
     jl_linenumbernode_type =
         jl_new_datatype(jl_symbol("LineNumberNode"), jl_any_type, jl_emptysvec,
-                        jl_svec(2, jl_symbol("file"), jl_symbol("line")),
-                        jl_svec(2, jl_symbol_type, jl_long_type), 0, 0, 2);
+                        jl_svec(1, jl_symbol("line")),
+                        jl_svec(1, jl_long_type), 0, 0, 1);
 
     jl_labelnode_type =
         jl_new_datatype(jl_symbol("LabelNode"), jl_any_type, jl_emptysvec,
@@ -3728,6 +3730,7 @@ void jl_init_types(void)
     jl_compute_field_offsets(jl_simplevector_type);
     jl_simplevector_type->pointerfree = 0;
 
+    empty_sym = jl_symbol("");
     call_sym = jl_symbol("call");
     quote_sym = jl_symbol("quote");
     inert_sym = jl_symbol("inert");
@@ -3783,6 +3786,7 @@ void jl_init_types(void)
     slot_sym = jl_symbol("slot");
     static_parameter_sym = jl_symbol("static_parameter");
     compiler_temp_sym = jl_symbol("#temp#");
+    polly_sym = jl_symbol("polly");
 
     tttvar = jl_new_typevar(jl_symbol("T"),
                                   (jl_value_t*)jl_bottom_type,

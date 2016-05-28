@@ -167,7 +167,7 @@ end
 ## ipermutedims in terms of permutedims ##
 
 function ipermutedims(A::AbstractArray,perm)
-    iperm = Array(Int,length(perm))
+    iperm = Array{Int}(length(perm))
     for (i,p) = enumerate(perm)
         iperm[p] = i
     end
@@ -200,31 +200,62 @@ function repmat(a::AbstractVector, m::Int)
     return b
 end
 
-# Generalized repmat
-function repeat{T}(A::AbstractArray{T};
-                   inner::Array{Int} = ones(Int, ndims(A)),
-                   outer::Array{Int} = ones(Int, ndims(A)))
+"""
+    repeat(A::AbstractArray; inner=ntuple(x->1, ndims(A)), outer=ntuple(x->1, ndims(A)))
+
+Construct an array by repeating the entries of `A`. The i-th element of `inner` specifies
+the number of times that the individual entries of the i-th dimension of `A` should be
+repeated. The i-th element of `outer` specifies the number of times that a slice along the
+i-th dimension of `A` should be repeated. If `inner` or `outer` are omitted, no repetition
+is performed.
+
+```jldoctest
+julia> repeat(1:2, inner=2)
+4-element Array{Int64,1}:
+ 1
+ 1
+ 2
+ 2
+
+julia> repeat(1:2, outer=2)
+4-element Array{Int64,1}:
+ 1
+ 2
+ 1
+ 2
+
+julia> repeat([1 2; 3 4], inner=(2, 1), outer=(1, 3))
+4×6 Array{Int64,2}:
+ 1  2  1  2  1  2
+ 1  2  1  2  1  2
+ 3  4  3  4  3  4
+ 3  4  3  4  3  4
+```
+"""
+function repeat(A::AbstractArray;
+                inner=ntuple(x->1, ndims(A)),
+                outer=ntuple(x->1, ndims(A)))
     ndims_in = ndims(A)
     length_inner = length(inner)
     length_outer = length(outer)
+
+    length_inner >= ndims_in || throw(ArgumentError("number of inner repetitions ($(length(inner))) cannot be less than number of dimensions of input ($(ndims(A)))"))
+    length_outer >= ndims_in || throw(ArgumentError("number of outer repetitions ($(length(outer))) cannot be less than number of dimensions of input ($(ndims(A)))"))
+
     ndims_out = max(ndims_in, length_inner, length_outer)
 
-    if length_inner < ndims_in || length_outer < ndims_in
-        throw(ArgumentError("inner/outer repetitions must be set for all input dimensions"))
-    end
-
-    inner = vcat(inner, ones(Int,ndims_out-length_inner))
-    outer = vcat(outer, ones(Int,ndims_out-length_outer))
+    inner = vcat(collect(inner), ones(Int,ndims_out-length_inner))
+    outer = vcat(collect(outer), ones(Int,ndims_out-length_outer))
 
     size_in = size(A)
     size_out = ntuple(i->inner[i]*size(A,i)*outer[i],ndims_out)::Dims
     inner_size_out = ntuple(i->inner[i]*size(A,i),ndims_out)::Dims
 
-    indices_in = Array(Int, ndims_in)
-    indices_out = Array(Int, ndims_out)
+    indices_in = Vector{Int}(ndims_in)
+    indices_out = Vector{Int}(ndims_out)
 
     length_out = prod(size_out)
-    R = Array(T, size_out)
+    R = similar(A, size_out)
 
     for index_out in 1:length_out
         ind2sub!(indices_out, size_out, index_out)

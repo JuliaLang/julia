@@ -52,10 +52,29 @@ end
 
 "Abstract payload type for callback functions"
 abstract AbstractPayload
-user(p::AbstractPayload) = throw(AssertionError("Function 'user' is not implemented for type $(typeof(p))"))
-password(p::AbstractPayload) = throw(AssertionError("Function 'password' is not implemented for type $(typeof(p))"))
-isused(p::AbstractPayload) = throw(AssertionError("Function 'isused' is not implemented for type $(typeof(p))"))
-setused!(p::AbstractPayload,v::Bool) = throw(AssertionError("Function 'setused!' is not implemented for type $(typeof(p))"))
+
+"Abstract credentials payload"
+abstract AbstractCredentials <: AbstractPayload
+"Returns a credentials parameter"
+function Base.getindex(p::AbstractCredentials, keys...)
+    for k in keys
+        ks = Symbol(k)
+        isdefined(p, ks) && return getfield(p, ks)
+    end
+    return nothing
+end
+"Sets credentials with `key` parameter to a value"
+function Base.setindex!(p::AbstractCredentials, val, keys...)
+    for k in keys
+        ks = Symbol(k)
+        isdefined(p, ks) && setfield!(p, ks, val)
+    end
+    return p
+end
+"Checks if credentials were used"
+checkused!(p::AbstractCredentials) = true
+"Resets credentials for another use"
+reset!(p::AbstractCredentials, cnt::Int=3) = nothing
 
 immutable CheckoutOptions
     version::Cuint
@@ -357,28 +376,87 @@ immutable DiffDelta
 end
 DiffDelta() = DiffDelta(Cint(0), UInt32(0), UInt16(0), UInt16(0), DiffFile(), DiffFile())
 
-immutable MergeOptions
-    version::Cuint
-    flags::Cint
-    rename_threshold::Cuint
-    target_limit::Cuint
-    metric::Ptr{Void}
-    file_favor::Cint
-    file_flags::Cuint
+# TODO: double check this when libgit2 v0.25.0 is released
+if LibGit2.version() >= v"0.25.0"
+    immutable MergeOptions
+        version::Cuint
+        flags::Cint
+        rename_threshold::Cuint
+        target_limit::Cuint
+        metric::Ptr{Void}
+        recursion_limit::Cuint
+        default_driver::Cstring
+        file_favor::Cint
+        file_flags::Cuint
+    end
+    MergeOptions(; flags::Cint = Cint(0),
+                   rename_threshold::Cuint = Cuint(50),
+                   target_limit::Cuint = Cuint(200),
+                   metric::Ptr{Void} = C_NULL,
+                   recursion_limit::Cuint = Cuint(0),
+                   default_driver::Cstring = Cstring_NULL,
+                   file_favor::Cint = Cint(Consts.MERGE_FILE_FAVOR_NORMAL),
+                   file_flags::Cuint = Cuint(Consts.MERGE_FILE_DEFAULT)) =
+        MergeOptions(one(Cuint),
+                     flags,
+                     rename_threshold,
+                     target_limit,
+                     metric,
+                     recursion_limit,
+                     default_driver,
+                     file_favor,
+                     file_flags)
+elseif LibGit2.version() >= v"0.24.0"
+    immutable MergeOptions
+        version::Cuint
+        flags::Cint
+        rename_threshold::Cuint
+        target_limit::Cuint
+        metric::Ptr{Void}
+        recursion_limit::Cuint
+        file_favor::Cint
+        file_flags::Cuint
+    end
+    MergeOptions(; flags::Cint = Cint(0),
+                   rename_threshold::Cuint = Cuint(50),
+                   target_limit::Cuint = Cuint(200),
+                   metric::Ptr{Void} = C_NULL,
+                   recursion_limit::Cuint = Cuint(0),
+                   file_favor::Cint = Cint(Consts.MERGE_FILE_FAVOR_NORMAL),
+                   file_flags::Cuint = Cuint(Consts.MERGE_FILE_DEFAULT)) =
+        MergeOptions(one(Cuint),
+                     flags,
+                     rename_threshold,
+                     target_limit,
+                     metric,
+                     recursion_limit,
+                     file_favor,
+                     file_flags)
+else
+    immutable MergeOptions
+        version::Cuint
+        flags::Cint
+        rename_threshold::Cuint
+        target_limit::Cuint
+        metric::Ptr{Void}
+        file_favor::Cint
+        file_flags::Cuint
+    end
+    MergeOptions(; flags::Cint = Cint(0),
+                   rename_threshold::Cuint = Cuint(50),
+                   target_limit::Cuint = Cuint(200),
+                   metric::Ptr{Void} = C_NULL,
+                   file_favor::Cint = Cint(Consts.MERGE_FILE_FAVOR_NORMAL),
+                   file_flags::Cuint = Cuint(Consts.MERGE_FILE_DEFAULT)) =
+        MergeOptions(one(Cuint),
+                     flags,
+                     rename_threshold,
+                     target_limit,
+                     metric,
+                     file_favor,
+                     file_flags)
 end
-MergeOptions(; flags::Cint = Cint(0),
-               rename_threshold::Cuint = Cuint(50),
-               target_limit::Cuint = Cuint(200),
-               metric::Ptr{Void} = C_NULL,
-               file_favor::Cint = Cint(Consts.MERGE_FILE_FAVOR_NORMAL),
-               file_flags::Cuint = Cuint(Consts.MERGE_FILE_DEFAULT)) =
-    MergeOptions(one(Cuint),
-                 flags,
-                 rename_threshold,
-                 target_limit,
-                 metric,
-                 file_favor,
-                 file_flags)
+
 
 if LibGit2.version() >= v"0.24.0"
     immutable PushOptions
@@ -456,10 +534,11 @@ if LibGit2.version() >= v"0.24.0"
         checkout_opts::CheckoutOptions
     end
     RebaseOptions(; quiet::Cint = Cint(1),
+                    inmemory::Cint = Cint(0),
                     rewrite_notes_ref::Cstring = Cstring_NULL,
                     merge_opts::MergeOptions = MergeOptions(),
                     checkout_opts::CheckoutOptions = CheckoutOptions()) =
-        RebaseOptions(one(Cuint), quiet, Cint(0), rewrite_notes_ref, merge_opts, checkout_opts)
+        RebaseOptions(one(Cuint), quiet, inmemory, rewrite_notes_ref, merge_opts, checkout_opts)
 else
     immutable RebaseOptions
         version::Cuint
@@ -628,13 +707,75 @@ function getobjecttype(obj_type::Cint)
     end
 end
 
-type UserPasswordCredentials <: AbstractPayload
+"Empty credentials"
+type EmptyCredentials <: AbstractCredentials end
+
+"Credentials that support only `user` and `password` parameters"
+type UserPasswordCredentials <: AbstractCredentials
     user::AbstractString
     pass::AbstractString
-    used::Bool
-    UserPasswordCredentials(u::AbstractString,p::AbstractString) = new(u,p,false)
+    usesshagent::AbstractString  # used for ssh-agent authentication
+    count::Int                   # authentication failure protection count
+    UserPasswordCredentials(u::AbstractString,p::AbstractString) = new(u,p,"Y",3)
 end
-user(p::UserPasswordCredentials) = p.user
-password(p::UserPasswordCredentials) = p.pass
-isused(p::UserPasswordCredentials) = p.used
-setused!(p::UserPasswordCredentials, val::Bool) = (p.used = val)
+"Checks if credentials were used or failed authentication, see `LibGit2.credentials_callback`"
+function checkused!(p::UserPasswordCredentials)
+    p.count <= 0 && return true
+    p.count -= 1
+    return false
+end
+"Resets authentication failure protection count"
+reset!(p::UserPasswordCredentials, cnt::Int=3) = (p.count = cnt)
+
+"SSH credentials type"
+type SSHCredentials <: AbstractCredentials
+    user::AbstractString
+    pass::AbstractString
+    pubkey::AbstractString
+    prvkey::AbstractString
+    usesshagent::AbstractString  # used for ssh-agent authentication
+
+    SSHCredentials(u::AbstractString,p::AbstractString) = new(u,p,"","","Y")
+    SSHCredentials() = SSHCredentials("","")
+end
+
+"Credentials that support caching"
+type CachedCredentials <: AbstractCredentials
+    cred::Dict{AbstractString,SSHCredentials}
+    count::Int            # authentication failure protection count
+    CachedCredentials() = new(Dict{AbstractString,SSHCredentials}(),3)
+end
+"Returns specific credential parameter value: first index is a credential
+parameter name, second index is a host name (with schema)"
+function Base.getindex(p::CachedCredentials, keys...)
+    length(keys) != 2 && return nothing
+    key, host = keys
+    if haskey(p.cred, host)
+        creds = p.cred[host]
+        if isdefined(creds,key)
+            kval = getfield(creds, key)
+            !isempty(kval) && return kval
+        end
+    end
+    return nothing
+end
+"Sets specific credential parameter value: first index is a credential
+parameter name, second index is a host name (with schema)"
+function Base.setindex!(p::CachedCredentials, val, keys...)
+    length(keys) != 2 && return nothing
+    key, host = keys
+    if !haskey(p.cred, host)
+        p.cred[host] = SSHCredentials()
+    end
+    creds = p.cred[host]
+    isdefined(creds,key) && setfield!(creds, key, val)
+    return p
+end
+"Checks if credentials were used or failed authentication, see `LibGit2.credentials_callback`"
+function checkused!(p::CachedCredentials)
+    p.count <= 0 && return true
+    p.count -= 1
+    return false
+end
+"Resets authentication failure protection count"
+reset!(p::CachedCredentials, cnt::Int=3) = (p.count = cnt)

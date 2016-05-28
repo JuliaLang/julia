@@ -47,8 +47,8 @@ function test_threaded_atomic_minmax{T}(m::T,n::T)
     mid = m + (n-m)>>1
     x = Atomic{T}(mid)
     y = Atomic{T}(mid)
-    oldx = Array(T,n-m+1)
-    oldy = Array(T,n-m+1)
+    oldx = Array{T}(n-m+1)
+    oldy = Array{T}(n-m+1)
     @threads for i = m:n
         oldx[i-m+1] = atomic_min!(x, T(i))
         oldy[i-m+1] = atomic_max!(y, T(i))
@@ -240,7 +240,7 @@ let atomic_types = [Int8, Int16, Int32, Int64, Int128,
                     Float16, Float32, Float64]
     # Temporarily omit 128-bit types on 32bit x86
     # 128-bit atomics do not exist on AArch32.
-    if Base.ARCH === :i686 || startswith(string(Base.ARCH), "arm")
+    if Sys.ARCH === :i686 || startswith(string(Sys.ARCH), "arm")
         filter!(T -> sizeof(T)<=8, atomic_types)
     end
     for T in atomic_types

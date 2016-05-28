@@ -300,21 +300,21 @@ General I/O
 
    .. Docstring generated from Julia source
 
-   Read a value written by ``serialize``\ .
+   Read a value written by ``serialize``\ . ``deserialize`` assumes the binary data read from ``stream`` is correct and has been serialized by a compatible implementation of ``serialize``\ . It has been designed with simplicity and performance as a goal and does not validate the data read. Malformed data can result in process termination. The caller has to ensure the integrity and correctness of data read from ``stream``\ .
 
-.. function:: print_escaped(io, str::AbstractString, esc::AbstractString)
+.. function:: escape_string(io, str::AbstractString, esc::AbstractString)
 
    .. Docstring generated from Julia source
 
    General escaping of traditional C and Unicode escape sequences, plus any characters in esc are also escaped (with a backslash).
 
-.. function:: print_unescaped(io, s::AbstractString)
+.. function:: unescape_string(io, s::AbstractString)
 
    .. Docstring generated from Julia source
 
-   General unescaping of traditional C and Unicode escape sequences. Reverse of :func:`print_escaped`\ .
+   General unescaping of traditional C and Unicode escape sequences. Reverse of :func:`escape_string`\ .
 
-.. function:: print_joined(io, items, delim, [last])
+.. function:: join(io, items, delim, [last])
 
    .. Docstring generated from Julia source
 
@@ -434,7 +434,9 @@ Text I/O
 
    .. Docstring generated from Julia source
 
-   Show a more compact representation of a value. This is used for printing array elements. If a new type has a different compact representation, it should test ``Base.limit_output(io)`` in its normal ``show`` method.
+   Show a more compact representation of a value.
+
+   This is used for printing array elements. If a new type has a different compact representation, it should test ``get(io, :compact, false)`` in its normal ``show`` method. A compact representation should skip any type information, which would be redundant with that printed once for the whole array.
 
 .. function:: showall(x)
 
@@ -628,7 +630,7 @@ Text I/O
 
    .. Docstring generated from Julia source
 
-   Returns a new write-only I/O stream, which converts any bytes written to it into base64-encoded ASCII bytes written to ``ostream``\ . Calling ``close`` on the ``Base64Pipe`` stream is necessary to complete the encoding (but does not close ``ostream``\ ).
+   Returns a new write-only I/O stream, which converts any bytes written to it into base64-encoded ASCII bytes written to ``ostream``\ . Calling ``close`` on the ``Base64EncodePipe`` stream is necessary to complete the encoding (but does not close ``ostream``\ ).
 
 .. function:: Base64DecodePipe(istream)
 
@@ -641,7 +643,7 @@ Text I/O
 
    .. Docstring generated from Julia source
 
-   Given a ``write``\ -like function ``writefunc``\ , which takes an I/O stream as its first argument, ``base64(writefunc, args...)`` calls ``writefunc`` to write ``args...`` to a base64-encoded string, and returns the string. ``base64(args...)`` is equivalent to ``base64(write, args...)``\ : it converts its arguments into bytes using the standard ``write`` functions and returns the base64-encoded string.
+   Given a ``write``\ -like function ``writefunc``\ , which takes an I/O stream as its first argument, ``base64encode(writefunc, args...)`` calls ``writefunc`` to write ``args...`` to a base64-encoded string, and returns the string. ``base64encode(args...)`` is equivalent to ``base64encode(write, args...)``\ : it converts its arguments into bytes using the standard ``write`` functions and returns the base64-encoded string.
 
 .. function:: base64decode(string)
 
@@ -655,12 +657,6 @@ Text I/O
 
    Return the nominal size of the screen that may be used for rendering output to this io object
 
-.. function:: limit_output(io) -> Bool
-
-   .. Docstring generated from Julia source
-
-   Output hinting for identifying contexts where the user requested a compact output
-
 Multimedia I/O
 --------------
 
@@ -672,7 +668,7 @@ of three parts:
 
 * A function ``display(x)`` to request the richest available multimedia
   display of a Julia object ``x`` (with a plain-text fallback).
-* Overloading ``writemime`` allows one to indicate arbitrary multimedia
+* Overloading ``show`` allows one to indicate arbitrary multimedia
   representations (keyed by standard MIME types) of user-defined types.
 * Multimedia-capable display backends may be registered by subclassing
   a generic ``Display`` type and pushing them onto a stack of display
@@ -709,27 +705,29 @@ Julia environments (such as the IPython-based IJulia notebook).
 
    Returns a boolean value indicating whether the given ``mime`` type (string) is displayable by any of the displays in the current display stack, or specifically by the display ``d`` in the second variant.
 
-.. function:: writemime(stream, mime, x)
+.. function:: show(stream, mime, x)
 
    .. Docstring generated from Julia source
 
-   The ``display`` functions ultimately call ``writemime`` in order to write an object ``x`` as a given ``mime`` type to a given I/O ``stream`` (usually a memory buffer), if possible. In order to provide a rich multimedia representation of a user-defined type ``T``\ , it is only necessary to define a new ``writemime`` method for ``T``\ , via: ``writemime(stream, ::MIME"mime", x::T) = ...``\ , where ``mime`` is a MIME-type string and the function body calls ``write`` (or similar) to write that representation of ``x`` to ``stream``\ . (Note that the ``MIME""`` notation only supports literal strings; to construct ``MIME`` types in a more flexible manner use ``MIME{Symbol("")}``\ .)
+   The ``display`` functions ultimately call ``show`` in order to write an object ``x`` as a given ``mime`` type to a given I/O ``stream`` (usually a memory buffer), if possible. In order to provide a rich multimedia representation of a user-defined type ``T``\ , it is only necessary to define a new ``show`` method for ``T``\ , via: ``show(stream, ::MIME"mime", x::T) = ...``\ , where ``mime`` is a MIME-type string and the function body calls ``write`` (or similar) to write that representation of ``x`` to ``stream``\ . (Note that the ``MIME""`` notation only supports literal strings; to construct ``MIME`` types in a more flexible manner use ``MIME{Symbol("")}``\ .)
 
-   For example, if you define a ``MyImage`` type and know how to write it to a PNG file, you could define a function ``writemime(stream, ::MIME"image/png", x::MyImage) = ...`` to allow your images to be displayed on any PNG-capable ``Display`` (such as IJulia). As usual, be sure to ``import Base.writemime`` in order to add new methods to the built-in Julia function ``writemime``\ .
+   For example, if you define a ``MyImage`` type and know how to write it to a PNG file, you could define a function ``show(stream, ::MIME"image/png", x::MyImage) = ...`` to allow your images to be displayed on any PNG-capable ``Display`` (such as IJulia). As usual, be sure to ``import Base.show`` in order to add new methods to the built-in Julia function ``show``\ .
 
    Technically, the ``MIME"mime"`` macro defines a singleton type for the given ``mime`` string, which allows us to exploit Julia's dispatch mechanisms in determining how to display objects of any given type.
+
+   The default MIME type is ``MIME"text/plain"``\ . There is a fallback definition for ``text/plain`` output that calls ``show`` with 2 arguments. Therefore, this case should be handled by defining a 2-argument ``show`` method.
 
 .. function:: mimewritable(mime, x)
 
    .. Docstring generated from Julia source
 
-   Returns a boolean value indicating whether or not the object ``x`` can be written as the given ``mime`` type. (By default, this is determined automatically by the existence of the corresponding ``writemime`` function for ``typeof(x)``\ .)
+   Returns a boolean value indicating whether or not the object ``x`` can be written as the given ``mime`` type. (By default, this is determined automatically by the existence of the corresponding ``show`` function for ``typeof(x)``\ .)
 
 .. function:: reprmime(mime, x)
 
    .. Docstring generated from Julia source
 
-   Returns an ``AbstractString`` or ``Vector{UInt8}`` containing the representation of ``x`` in the requested ``mime`` type, as written by ``writemime`` (throwing a ``MethodError`` if no appropriate ``writemime`` is available). An ``AbstractString`` is returned for MIME types with textual representations (such as ``"text/html"`` or ``"application/postscript"``\ ), whereas binary data is returned as ``Vector{UInt8}``\ . (The function ``istextmime(mime)`` returns whether or not Julia treats a given ``mime`` type as text.)
+   Returns an ``AbstractString`` or ``Vector{UInt8}`` containing the representation of ``x`` in the requested ``mime`` type, as written by ``show`` (throwing a ``MethodError`` if no appropriate ``show`` is available). An ``AbstractString`` is returned for MIME types with textual representations (such as ``"text/html"`` or ``"application/postscript"``\ ), whereas binary data is returned as ``Vector{UInt8}``\ . (The function ``istextmime(mime)`` returns whether or not Julia treats a given ``mime`` type as text.)
 
    As a special case, if ``x`` is an ``AbstractString`` (for textual MIME types) or a ``Vector{UInt8}`` (for binary MIME types), the ``reprmime`` function assumes that ``x`` is already in the requested ``mime`` format and simply returns ``x``\ .
 

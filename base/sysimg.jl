@@ -117,6 +117,7 @@ include(String(vcat(length(Core.ARGS)>=2?Core.ARGS[2].data:"".data, "build_h.jl"
 include(String(vcat(length(Core.ARGS)>=2?Core.ARGS[2].data:"".data, "version_git.jl".data))) # include($BUILDROOT/base/version_git.jl)
 include("osutils.jl")
 include("c.jl")
+include("sysinfo.jl")
 
 # Core I/O
 include("io.jl")
@@ -125,7 +126,6 @@ include("iobuffer.jl")
 
 # strings & printing
 include("char.jl")
-include("ascii.jl")
 include("string.jl")
 include("unicode.jl")
 include("parse.jl")
@@ -178,8 +178,6 @@ using .Cartesian
 include("multidimensional.jl")
 include("permuteddimsarray.jl")
 using .PermutedDimsArrays
-
-include("primes.jl")
 
 let SOURCE_PATH = ""
     global include = function(path)
@@ -294,10 +292,6 @@ include("dft.jl")
 importall .DFT
 include("dsp.jl")
 importall .DSP
-
-# system information
-include("sysinfo.jl")
-import .Sys.CPU_CORES
 
 # Numerical integration
 include("quadgk.jl")

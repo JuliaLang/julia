@@ -53,7 +53,11 @@ end
 
 # init with default values
 # Use a max size of 1M profile samples, and fire timer every 1ms
-@windows? (__init__() = init(1_000_000, 0.01)) : (__init__() = init(1_000_000, 0.001))
+if is_windows()
+    __init__() = init(1_000_000, 0.01)
+else
+    __init__() = init(1_000_000, 0.001)
+end
 
 """
     clear()
@@ -117,7 +121,11 @@ end
 
 function getdict(data::Vector{UInt})
     uip = unique(data)
-    Dict{UInt, StackFrame}([ip=>lookup(ip) for ip in uip])
+    Dict{UInt, StackFrame}(map(uip) do ip
+        lk = lookup(ip)
+        # TODO handle inlined frames
+        ip => first(lk)
+    end)
 end
 
 """
@@ -204,9 +212,7 @@ end
 
 
 # Number of backtrace "steps" that are triggered by taking the backtrace, e.g., inside profile_bt
-# May be platform-specific?
-#@unix_only const btskip = 2
-#@windows_only const btskip = 0
+# TODO: may be platform-specific?
 const btskip = 0
 
 ## Print as a flat list
@@ -225,8 +231,8 @@ function count_flat{T<:Unsigned}(data::Vector{T})
         end
         linecount[ip] = get(linecount, ip, 0)+1
     end
-    iplist = Array(T, 0)
-    n = Array(Int, 0)
+    iplist = Array{T}(0)
+    n = Array{Int}(0)
     for (k,v) in linecount
         push!(iplist, k)
         push!(n, v)
@@ -309,7 +315,7 @@ function print_flat(io::IO, lilist::Vector{StackFrame}, n::Vector{Int}, combine:
         Base.print(io, rpad(rtruncto(string(li.file), wfile), wfile, " "), " ")
         Base.print(io, lpad(string(li.line), wline, " "), " ")
         fname = string(li.func)
-        if !li.from_c && !isnull(li.outer_linfo)
+        if !li.from_c && !isnull(li.linfo)
             fname = sprint(show_spec_linfo, li)
         end
         Base.print(io, rpad(ltruncto(fname, wfunc), wfunc, " "))
@@ -328,8 +334,8 @@ function tree_aggregate{T<:Unsigned}(data::Vector{T})
         treecount[tmp] = get(treecount, tmp, 0)+1
         istart = iend+1+btskip
     end
-    bt = Array(Vector{T}, 0)
-    counts = Array(Int, 0)
+    bt = Array{Vector{T}}(0)
+    counts = Array{Int}(0)
     for (k,v) in treecount
         if !isempty(k)
             push!(bt, k)
@@ -348,7 +354,7 @@ function tree_format(lilist::Vector{StackFrame}, counts::Vector{Int}, level::Int
     ntext = cols-nindent-ndigcounts-ndigline-5
     widthfile = floor(Integer,0.4ntext)
     widthfunc = floor(Integer,0.6ntext)
-    strs = Array(String, length(lilist))
+    strs = Array{String}(length(lilist))
     showextra = false
     if level > nindent
         nextra = level-nindent
@@ -371,7 +377,7 @@ function tree_format(lilist::Vector{StackFrame}, counts::Vector{Int}, level::Int
                           ")")
             else
                 fname = string(li.func)
-                if !li.from_c && !isnull(li.outer_linfo)
+                if !li.from_c && !isnull(li.linfo)
                     fname = sprint(show_spec_linfo, li)
                 end
                 strs[i] = string(base,
@@ -411,9 +417,9 @@ function tree{T<:Unsigned}(io::IO, bt::Vector{Vector{T}}, counts::Vector{Int}, l
         end
         # Generate counts
         dlen = length(d)
-        lilist = Array(StackFrame, dlen)
-        group = Array(Vector{Int}, dlen)
-        n = Array(Int, dlen)
+        lilist = Array{StackFrame}(dlen)
+        group = Array{Vector{Int}}(dlen)
+        n = Array{Int}(dlen)
         i = 1
         for (key, v) in d
             lilist[i] = key
@@ -435,9 +441,9 @@ function tree{T<:Unsigned}(io::IO, bt::Vector{Vector{T}}, counts::Vector{Int}, l
         end
         # Generate counts, and do the code lookup
         dlen = length(d)
-        lilist = Array(StackFrame, dlen)
-        group = Array(Vector{Int}, dlen)
-        n = Array(Int, dlen)
+        lilist = Array{StackFrame}(dlen)
+        group = Array{Vector{Int}}(dlen)
+        n = Array{Int}(dlen)
         i = 1
         for (key, v) in d
             lilist[i] = lidict[key]
@@ -530,7 +536,7 @@ truncto(str::Symbol, w::Int) = truncto(string(str), w)
 
 # Order alphabetically (file, function) and then by line number
 function liperm(lilist::Vector{StackFrame})
-    comb = Array(String, length(lilist))
+    comb = Array{String}(length(lilist))
     for i = 1:length(lilist)
         li = lilist[i]
         if li != UNKNOWN

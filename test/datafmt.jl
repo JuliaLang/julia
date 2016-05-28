@@ -233,7 +233,7 @@ end
 for data in ["A B C", "A B C\n"]
     data,hdr = readdlm(IOBuffer(data), header=true)
     @test hdr == AbstractString["A" "B" "C"]
-    @test data == Array(Float64, 0, 3)
+    @test data == Array{Float64}(0, 3)
 end
 
 # fix #13179 parsing unicode lines with default delmiters
@@ -244,10 +244,10 @@ let data = "1 2 3"
     readdlm(IOBuffer(data), ' ', BigInt) == BigInt[1 2 3]
 end
 
-# test writemime
-@test sprint(io -> writemime(io, "text/csv", [1 2; 3 4])) == "1,2\n3,4\n"
+# test show with MIME types
+@test sprint(io -> show(io, "text/csv", [1 2; 3 4])) == "1,2\n3,4\n"
 
-for writefunc in ((io,x) -> writemime(io, "text/csv", x),
+for writefunc in ((io,x) -> show(io, "text/csv", x),
                   (io,x) -> invoke(writedlm, (IO, Any, Any), io, x, ","))
     # iterable collections of iterable rows:
     let x = [(1,2), (3,4)], io = IOBuffer()
@@ -262,4 +262,3 @@ for writefunc in ((io,x) -> writemime(io, "text/csv", x),
         @test vec(readcsv(io)) == x
     end
 end
-

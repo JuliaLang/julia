@@ -1,6 +1,6 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
-replstr(x) = sprint((io,x) -> writemime(io,MIME("text/plain"),x), x)
+replstr(x) = sprint((io,x) -> show(IOContext(io, multiline=true, limit=true), MIME("text/plain"), x), x)
 
 @test replstr(cell(2)) == "2-element Array{Any,1}:\n #undef\n #undef"
 @test replstr(cell(2,2)) == "2×2 Array{Any,2}:\n #undef  #undef\n #undef  #undef"
@@ -11,8 +11,8 @@ immutable T5589
 end
 @test replstr(T5589(Array(String,100))) == "T5589(String[#undef,#undef,#undef,#undef,#undef,#undef,#undef,#undef,#undef,#undef  …  #undef,#undef,#undef,#undef,#undef,#undef,#undef,#undef,#undef,#undef])"
 
-@test replstr(parse("type X end")) == ":(type X\n    end)"
-@test replstr(parse("immutable X end")) == ":(immutable X\n    end)"
+@test replstr(parse("type X end")) == ":(type X # none, line 1:\n    end)"
+@test replstr(parse("immutable X end")) == ":(immutable X # none, line 1:\n    end)"
 s = "ccall(:f,Int,(Ptr{Void},),&x)"
 @test replstr(parse(s)) == ":($s)"
 
@@ -316,18 +316,18 @@ end
 @test Base.inbase(LinAlg)
 @test !Base.inbase(Core)
 
-let repr = sprint(io -> writemime(io,"text/plain", methods(Base.inbase)))
+let repr = sprint(io -> show(io,"text/plain", methods(Base.inbase)))
     @test contains(repr, "inbase(m::Module)")
 end
-let repr = sprint(io -> writemime(io,"text/html", methods(Base.inbase)))
+let repr = sprint(io -> show(io,"text/html", methods(Base.inbase)))
     @test contains(repr, "inbase(m::<b>Module</b>)")
 end
 
 f5971(x, y...; z=1, w...) = nothing
-let repr = sprint(io -> writemime(io,"text/plain", methods(f5971)))
+let repr = sprint(io -> show(io,"text/plain", methods(f5971)))
     @test contains(repr, "f5971(x, y...; z)")
 end
-let repr = sprint(io -> writemime(io,"text/html", methods(f5971)))
+let repr = sprint(io -> show(io,"text/html", methods(f5971)))
     @test contains(repr, "f5971(x, y...; <i>z</i>)")
 end
 
@@ -338,7 +338,7 @@ else
 end
 
 # print_matrix should be able to handle small and large objects easily, test by
-# calling writemime. This also indirectly tests print_matrix_row, which
+# calling show. This also indirectly tests print_matrix_row, which
 # is used repeatedly by print_matrix.
 # This fits on screen:
 @test replstr(eye(10)) == "10×10 Array{Float64,2}:\n 1.0  0.0  0.0  0.0  0.0  0.0  0.0  0.0  0.0  0.0\n 0.0  1.0  0.0  0.0  0.0  0.0  0.0  0.0  0.0  0.0\n 0.0  0.0  1.0  0.0  0.0  0.0  0.0  0.0  0.0  0.0\n 0.0  0.0  0.0  1.0  0.0  0.0  0.0  0.0  0.0  0.0\n 0.0  0.0  0.0  0.0  1.0  0.0  0.0  0.0  0.0  0.0\n 0.0  0.0  0.0  0.0  0.0  1.0  0.0  0.0  0.0  0.0\n 0.0  0.0  0.0  0.0  0.0  0.0  1.0  0.0  0.0  0.0\n 0.0  0.0  0.0  0.0  0.0  0.0  0.0  1.0  0.0  0.0\n 0.0  0.0  0.0  0.0  0.0  0.0  0.0  0.0  1.0  0.0\n 0.0  0.0  0.0  0.0  0.0  0.0  0.0  0.0  0.0  1.0"
@@ -361,15 +361,15 @@ end
 
 
 # issue #15309
-l1, l2, l2n = Expr(:line,42), Expr(:line,42,:myfile), LineNumberNode(:myfile,42)
-@test string(l2n) == " # myfile, line 42:"
-@test string(l2)  == string(l2n)
-@test string(l1)  == replace(string(l2n),"myfile, ","",1)
+l1, l2, l2n = Expr(:line,42), Expr(:line,42,:myfile), LineNumberNode(42)
+@test string(l2n) == " # line 42:"
+@test string(l2)  == " # myfile, line 42:"
+@test string(l1)  == string(l2n)
 ex = Expr(:block, l1, :x, l2, :y, l2n, :z)
 @test replace(string(ex)," ","") == replace("""
 begin  # line 42:
     x # myfile, line 42:
-    y # myfile, line 42:
+    y # line 42:
     z
 end""", " ", "")
 # Test the printing of whatever form of line number representation

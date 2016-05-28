@@ -1,67 +1,7 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
 # fallback text/plain representation of any type:
-writemime(io::IO, ::MIME"text/plain", x) = showcompact(io, x)
-writemime(io::IO, ::MIME"text/plain", x::Number) = show(io, x)
-writemime(io::IO, ::MIME"text/plain", x::Associative) = showdict(io, x)
-
-function writemime(io::IO, ::MIME"text/plain", f::Function)
-    ft = typeof(f)
-    mt = ft.name.mt
-    name = mt.name
-    isself = isdefined(ft.name.module, name) &&
-             ft == typeof(getfield(ft.name.module, name))
-    n = length(mt)
-    m = n==1 ? "method" : "methods"
-    ns = isself ? string(name) : string("(::", name, ")")
-    what = startswith(ns, '@') ? "macro" : "generic function"
-    print(io, ns, " (", what, " with $n $m)")
-end
-
-function writemime(io::IO, ::MIME"text/plain", f::Builtin)
-    print(io, typeof(f).name.mt.name, " (built-in function)")
-end
-
-# writemime for linspace, e.g.
-# linspace(1,3,7)
-# 7-element LinSpace{Float64}:
-#   1.0,1.33333,1.66667,2.0,2.33333,2.66667,3.0
-function writemime(io::IO, ::MIME"text/plain", r::LinSpace)
-    print(io, summary(r))
-    if !isempty(r)
-        println(io, ":")
-        print_range(IOContext(io, :limit_output => true), r)
-    end
-end
-
-# writemime for ranges
-function writemime(io::IO, ::MIME"text/plain", r::Range)
-    show(io, r)
-end
-
-function writemime(io::IO, ::MIME"text/plain", v::AbstractVector)
-    print(io, summary(v))
-    if !isempty(v)
-        println(io, ":")
-        print_matrix(IOContext(io, :limit_output => true), v)
-    end
-end
-
-writemime(io::IO, ::MIME"text/plain", v::AbstractArray) =
-    showarray(IOContext(io, :limit_output => true), v, header=true, repr=false)
-
-function writemime(io::IO, ::MIME"text/plain", v::DataType)
-    show(io, v)
-    # TODO: maybe show constructor info?
-end
-
-function writemime(io::IO, ::MIME"text/plain", t::Task)
-    show(io, t)
-    if t.state == :failed
-        println(io)
-        showerror(io, CapturedException(t.result, t.backtrace))
-    end
-end
+show(io::IO, ::MIME"text/plain", x) = show(io, x)
 
 
 # showing exception objects as descriptive error messages
@@ -72,13 +12,18 @@ function showerror(io::IO, ex::BoundsError)
     print(io, "BoundsError")
     if isdefined(ex, :a)
         print(io, ": attempt to access ")
-        writemime(io, MIME"text/plain"(), ex.a)
+        if isa(ex.a, AbstractArray)
+            print(io, summary(ex.a))
+        else
+            show(io, MIME"text/plain"(), ex.a)
+        end
         if isdefined(ex, :i)
-            print(io, "\n  at index [")
+            !isa(ex.a, AbstractArray) && print(io, "\n ")
+            print(io, " at index [")
             if isa(ex.i, Range)
                 print(io, ex.i)
             else
-                print_joined(io, ex.i, ',')
+                join(io, ex.i, ',')
             end
             print(io, ']')
         end
@@ -125,7 +70,7 @@ showerror(io::IO, ex::InitError) = showerror(io, ex, [])
 function showerror(io::IO, ex::DomainError, bt; backtrace=true)
     print(io, "DomainError:")
     for b in bt
-        code = StackTraces.lookup(b)
+        code = StackTraces.lookup(b)[1]
         if !code.from_c
             if code.func == :nan_dom_err
                 continue
@@ -454,25 +399,27 @@ function process_backtrace(process_func::Function, top_function::Symbol, t::Vect
     last_frame = StackTraces.UNKNOWN
     count = 0
     for i = eachindex(t)
-        lkup = StackTraces.lookup(t[i])
-        if lkup === StackTraces.UNKNOWN
-            continue
-        end
-
-        if lkup.from_c && skipC; continue; end
-        if i == 1 && lkup.func == :error; continue; end
-        if lkup.func == top_function; break; end
-        count += 1
-        if !in(count, set); continue; end
-
-        if lkup.file != last_frame.file || lkup.line != last_frame.line || lkup.func != last_frame.func
-            if n > 0
-                process_func(last_frame, n)
+        lkups = StackTraces.lookup(t[i])
+        for lkup in lkups
+            if lkup === StackTraces.UNKNOWN
+                continue
             end
-            n = 1
-            last_frame = lkup
-        else
-            n += 1
+
+            if lkup.from_c && skipC; continue; end
+            if i == 1 && lkup.func == :error; continue; end
+            if lkup.func == top_function; break; end
+            count += 1
+            if !in(count, set); continue; end
+
+            if lkup.file != last_frame.file || lkup.line != last_frame.line || lkup.func != last_frame.func
+                if n > 0
+                    process_func(last_frame, n)
+                end
+                n = 1
+                last_frame = lkup
+            else
+                n += 1
+            end
         end
     end
     if n > 0

@@ -60,7 +60,7 @@ function depwarn(msg, funcsym)
     opts = JLOptions()
     if opts.depwarn > 0
         ln = Int(unsafe_load(cglobal(:jl_lineno, Cint)))
-        fn = bytestring(unsafe_load(cglobal(:jl_filename, Ptr{Cchar})))
+        fn = String(unsafe_load(cglobal(:jl_filename, Ptr{Cchar})))
         bt = backtrace()
         caller = firstcaller(bt, funcsym)
         if opts.depwarn == 1 # raise a warning
@@ -76,15 +76,18 @@ function firstcaller(bt::Array{Ptr{Void},1}, funcsym::Symbol)
     # Identify the calling line
     i = 1
     while i <= length(bt)
-        lkup = StackTraces.lookup(bt[i])
+        lkups = StackTraces.lookup(bt[i])
         i += 1
-        if lkup === StackTraces.UNKNOWN
-            continue
-        end
-        if lkup.func == funcsym
-            break
+        for lkup in lkups
+            if lkup === StackTraces.UNKNOWN
+                continue
+            end
+            if lkup.func == funcsym
+                @goto found
+            end
         end
     end
+    @label found
     if i <= length(bt)
         return bt[i]
     end
@@ -582,7 +585,7 @@ function msync end
 msync{T}(A::Array{T}) = msync(pointer(A), length(A)*sizeof(T))
 msync(B::BitArray) = msync(pointer(B.chunks), length(B.chunks)*sizeof(UInt64))
 
-@unix_only begin
+if is_unix()
 export mmap
 @noinline function mmap(len::Integer, prot::Integer, flags::Integer, fd, offset::Integer)
     depwarn("`mmap` is deprecated, use `Mmap.mmap(io, Array{T,N}, dims, offset)` instead to return an mmapped-array", :mmap)
@@ -631,7 +634,7 @@ end
 end
 
 
-@windows_only begin
+if is_windows()
 @noinline function munmap(viewhandle::Ptr, mmaphandle::Ptr)
     depwarn("`munmap` is deprecated, `mmap` Arrays are automatically munmapped when finalized", :munmap)
     status = ccall(:UnmapViewOfFile, stdcall, Cint, (Ptr{Void},), viewhandle)!=0
@@ -651,9 +654,11 @@ end
 
 end
 
-@unix_only @deprecate mmap_array{T,N}(::Type{T}, dims::NTuple{N,Integer}, s::IO, offset=position(s)) Mmap.mmap(s, Array{T,N}, dims, offset)
+if is_unix()
+    @deprecate mmap_array{T,N}(::Type{T}, dims::NTuple{N,Integer}, s::IO, offset=position(s)) Mmap.mmap(s, Array{T,N}, dims, offset)
+end
 
-@windows_only begin
+if is_windows()
 type SharedMemSpec
     name :: AbstractString
     readonly :: Bool
@@ -879,6 +884,8 @@ function rem1{T<:Real}(x::T, y::T)
     depwarn("`rem1(x,y)` is discontinued, as it cannot be defined consistently for `x==0`. Rewrite the expression using `mod1` instead.", :rem1)
     rem(x-1,y)+1
 end
+rem1(x::Real, y::Real) = rem1(promote(x,y)...)
+export rem1
 
 # Filesystem module updates
 
@@ -929,14 +936,24 @@ for deprecatedfunc in [:combinations, :factorial, :prevprod, :levicivita,
     end
 end
 
+# Primes functions that have been moved out of base (#16481)
+for deprecatedfunc in [:isprime, :primes, :primesmask, :factor]
+    @eval begin
+        $deprecatedfunc(args...) = error(string($deprecatedfunc, args,
+            " has been moved to the package Primes.jl.\n",
+            "Run Pkg.add(\"Primes\") to install Primes on Julia v0.5-"))
+        export $deprecatedfunc
+    end
+end
+
 #14335
 @deprecate super(T::DataType) supertype(T)
 
-function with_output_limit(thk, lim=true) # thk is usually show()
-    depwarn("with_output_limit is deprecated. use `io = IOContext(io, :limit_output => lim)` as a replacement", :with_output_limit)
+function with_output_limit(thk, lim::Bool=true) # thk is usually show()
+    depwarn("with_output_limit is deprecated. use `io = IOContext(io, :limit => lim)` as a replacement", :with_output_limit)
     global _limit_output
     last = _limit_output
-    _limit_output::Bool = lim
+    _limit_output = lim
     try
         thk()
     finally
@@ -967,7 +984,7 @@ end
 @noinline function fieldoffsets(x::DataType)
     depwarn("fieldoffsets is deprecated. use `map(idx->fieldoffset(x, idx), 1:nfields(x))` instead", :fieldoffsets)
     nf = nfields(x)
-    offsets = Array(Int, nf)
+    offsets = Array{Int}(nf)
     for i = 1:nf
         offsets[i] = fieldoffset(x, i)
     end
@@ -1011,18 +1028,13 @@ export call
 # and added to pmap.jl
 # pmap(f, c...) = pmap(default_worker_pool(), f, c...)
 
-function pmap(f, c...; err_retry=nothing, err_stop=nothing, pids=nothing)
+function pmap(f, c...; err_retry=nothing, err_stop=nothing, pids=nothing, kwargs...)
+    kwargs = Dict{Symbol, Any}(kwargs)
+
     if err_retry != nothing
         depwarn("err_retry is deprecated, use pmap(retry(f), c...).", :pmap)
         if err_retry == true
             f = retry(f)
-        end
-    end
-
-    if err_stop != nothing
-        depwarn("err_stop is deprecated, use pmap(@catch(f), c...).", :pmap)
-        if err_stop == false
-            f = @catch(f)
         end
     end
 
@@ -1033,7 +1045,14 @@ function pmap(f, c...; err_retry=nothing, err_stop=nothing, pids=nothing)
         p = WorkerPool(pids)
     end
 
-    return pmap(p, f, c...)
+    if err_stop != nothing
+        depwarn("err_stop is deprecated, use pmap(f, c...; on_error = error_handling_func).", :pmap)
+        if err_stop == false
+            kwargs[:on_error] = e->e
+        end
+    end
+
+    pmap(p, f, c...; kwargs...)
 end
 
 # 15692
@@ -1155,13 +1174,262 @@ end
 @deprecate_binding UTF8String String
 @deprecate_binding ByteString String
 
+@deprecate utf8(p::Ptr{UInt8}, len::Integer) String(p, len)
+@deprecate utf8(p::Ptr{UInt8}) String(p)
+@deprecate utf8(v::Vector{UInt8}) String(v)
+@deprecate utf8(s::AbstractString) String(s)
+@deprecate utf8(x) convert(String, x)
+
+@deprecate ascii(p::Ptr{UInt8}, len::Integer) ascii(String(p, len))
+@deprecate ascii(p::Ptr{UInt8}) ascii(String(p))
+@deprecate ascii(v::Vector{UInt8}) ascii(String(v))
+@deprecate ascii(x) ascii(convert(String, x))
+
+@deprecate bytestring(s::Cstring) String(s)
+@deprecate bytestring(v::Vector{UInt8}) String(v)
+@deprecate bytestring(io::Base.AbstractIOBuffer) String(io)
+@deprecate bytestring(p::Union{Ptr{Int8},Ptr{UInt8}}) String(p)
+@deprecate bytestring(p::Union{Ptr{Int8},Ptr{UInt8}}, len::Integer) String(p,len)
+@deprecate bytestring(s::AbstractString...) string(s...)
+
 @deprecate ==(x::Char, y::Integer) UInt32(x) == y
 @deprecate ==(x::Integer, y::Char) x == UInt32(y)
 @deprecate isless(x::Char, y::Integer) UInt32(x) < y
 @deprecate isless(x::Integer, y::Char) x < UInt32(y)
+
 # delete these methods along with deprecations:
 isequal(x::Char, y::Integer) = false
 isequal(x::Integer, y::Char) = false
+
+#6674 and #4233
+macro windows(qm,ex)
+    depwarn("`@windows` is deprecated, use `@static is_windows()` instead", Symbol("@windows"))
+    return @static is_windows() ? esc(ex.args[1]) : esc(ex.args[2])
+end
+macro unix(qm,ex)
+    depwarn("`@unix` is deprecated, use `@static is_unix()` instead", Symbol("@unix"))
+    return @static is_unix() ? esc(ex.args[1]) : esc(ex.args[2])
+end
+macro osx(qm,ex)
+    depwarn("`@osx` is deprecated, use `@static is_apple()` instead", Symbol("@osx"))
+    return @static is_apple() ? esc(ex.args[1]) : esc(ex.args[2])
+end
+macro linux(qm,ex)
+    depwarn("`@linux` is deprecated, use `@static is_linux()` instead", Symbol("@linux"))
+    return @static is_linux() ? esc(ex.args[1]) : esc(ex.args[2])
+end
+macro windows_only(ex)
+    depwarn("`@windows_only` is deprecated, use `@static if is_windows()` instead", Symbol("@windows_only"))
+    return @static if is_windows() esc(ex) end
+end
+macro unix_only(ex)
+    depwarn("`@unix_only` is deprecated, use `@static if is_unix()` instead", Symbol("@unix_only"))
+    return @static if is_unix() esc(ex) end
+end
+macro osx_only(ex)
+    depwarn("`@osx_only` is deprecated, use `@static if is_apple()` instead", Symbol("@osx_only"))
+    return @static if is_apple() esc(ex) end
+end
+macro linux_only(ex)
+    depwarn("`@linux_only` is deprecated, use `@static if is_linux()` instead", Symbol("@linux_only"))
+    return @static if is_linux() esc(ex) end
+end
+export
+    @windows,
+    @unix,
+    @osx,
+    @linux,
+    @windows_only,
+    @unix_only,
+    @osx_only,
+    @linux_only
+
+export OS_NAME
+const OS_NAME =
+    if Sys.KERNEL === :NT
+        :Windows
+    else
+        Sys.KERNEL
+    end
+deprecate(:OS_NAME) # use Sys.KERNEL now
+
+export CPU_CORES
+function _set_CPU_CORES()
+    global const CPU_CORES = Sys.CPU_CORES
+    deprecate(Base, :CPU_CORES)
+end
+module Init_CPU_CORES
+    const __init__ = Base._set_CPU_CORES
+end
+
+@deprecate_binding WORD_SIZE Sys.WORD_SIZE
+
+@deprecate showcompact_lim show
+@deprecate_binding writemime show
+
+@deprecate blas_set_num_threads BLAS.set_num_threads
+
+@deprecate print_escaped escape_string
+@deprecate print_unescaped unescape_string
+@deprecate print_joined join
+
+##### histogram #####
+
+## nice-valued ranges for histograms
+export hist, hist!, hist2d, hist2d!, histrange
+
+function histrange{T<:AbstractFloat,N}(v::AbstractArray{T,N}, n::Integer)
+    depwarn("histrange(...) is deprecated, use StatsBase.histrange(...) instead",:histrange)
+    nv = length(v)
+    if nv == 0 && n < 0
+        throw(ArgumentError("number of bins must be ≥ 0 for an empty array, got $n"))
+    elseif nv > 0 && n < 1
+        throw(ArgumentError("number of bins must be ≥ 1 for a non-empty array, got $n"))
+    end
+    if nv == 0
+        return 0.0:1.0:0.0
+    end
+    lo, hi = extrema(v)
+    if hi == lo
+        step = 1.0
+    else
+        bw = (hi - lo) / n
+        e = 10.0^floor(log10(bw))
+        r = bw / e
+        if r <= 2
+            step = 2*e
+        elseif r <= 5
+            step = 5*e
+        else
+            step = 10*e
+        end
+    end
+    start = step*(ceil(lo/step)-1)
+    nm1 = ceil(Int,(hi - start)/step)
+    start:step:(start + nm1*step)
+end
+
+function histrange{T<:Integer,N}(v::AbstractArray{T,N}, n::Integer)
+    depwarn("histrange(...) is deprecated, use StatsBase.histrange(...) instead",:histrange)
+    nv = length(v)
+    if nv == 0 && n < 0
+        throw(ArgumentError("number of bins must be ≥ 0 for an empty array, got $n"))
+    elseif nv > 0 && n < 1
+        throw(ArgumentError("number of bins must be ≥ 1 for a non-empty array, got $n"))
+    end
+    if nv == 0
+        return 0:1:0
+    end
+    if n <= 0
+        throw(ArgumentError("number of bins n=$n must be positive"))
+    end
+    lo, hi = extrema(v)
+    if hi == lo
+        step = 1
+    else
+        bw = (Float64(hi) - Float64(lo)) / n
+        e = 10.0^max(0,floor(log10(bw)))
+        r = bw / e
+        if r <= 1
+            step = e
+        elseif r <= 2
+            step = 2*e
+        elseif r <= 5
+            step = 5*e
+        else
+            step = 10*e
+        end
+    end
+    start = step*(ceil(lo/step)-1)
+    nm1 = ceil(Int,(hi - start)/step)
+    start:step:(start + nm1*step)
+end
+
+## midpoints of intervals
+midpoints(r::Range) = r[1:length(r)-1] + 0.5*step(r)
+midpoints(v::AbstractVector) = [0.5*(v[i] + v[i+1]) for i in 1:length(v)-1]
+
+## hist ##
+function sturges(n)  # Sturges' formula
+    depwarn("sturges(n) is deprecated, use StatsBase.sturges(n) instead.",:sturges)
+    n==0 && return one(n)
+    ceil(Int,log2(n))+1
+end
+
+function hist!{HT}(h::AbstractArray{HT}, v::AbstractVector, edg::AbstractVector; init::Bool=true)
+    depwarn("hist(...) and hist!(...) are deprecated. Use fit(Histogram,...) in StatsBase.jl instead.",:hist!)
+    n = length(edg) - 1
+    length(h) == n || throw(DimensionMismatch("length(histogram) must equal length(edges) - 1"))
+    if init
+        fill!(h, zero(HT))
+    end
+    for x in v
+        i = searchsortedfirst(edg, x)-1
+        if 1 <= i <= n
+            h[i] += 1
+        end
+    end
+    edg, h
+end
+
+hist(v::AbstractVector, edg::AbstractVector) = hist!(Array(Int, length(edg)-1), v, edg)
+hist(v::AbstractVector, n::Integer) = hist(v,histrange(v,n))
+hist(v::AbstractVector) = hist(v,sturges(length(v)))
+
+function hist!{HT}(H::AbstractArray{HT,2}, A::AbstractMatrix, edg::AbstractVector; init::Bool=true)
+    depwarn("hist(...) and hist!(...) are deprecated. Use fit(Histogram,...) in StatsBase.jl instead.",:hist!)
+
+    m, n = size(A)
+    sH = size(H)
+    sE = (length(edg)-1,n)
+    sH == sE || throw(DimensionMismatch("incorrect size of histogram"))
+    if init
+        fill!(H, zero(HT))
+    end
+    for j = 1:n
+        hist!(sub(H, :, j), sub(A, :, j), edg)
+    end
+    edg, H
+end
+
+hist(A::AbstractMatrix, edg::AbstractVector) = hist!(Array(Int, length(edg)-1, size(A,2)), A, edg)
+hist(A::AbstractMatrix, n::Integer) = hist(A,histrange(A,n))
+hist(A::AbstractMatrix) = hist(A,sturges(size(A,1)))
+
+
+## hist2d
+function hist2d!{HT}(H::AbstractArray{HT,2}, v::AbstractMatrix,
+                     edg1::AbstractVector, edg2::AbstractVector; init::Bool=true)
+    depwarn("hist2d!(...) and hist2d(...) are deprecated. Use fit(Histogram,...) in StatsBase.jl instead.",:hist2d!)
+
+    size(v,2) == 2 || throw(DimensionMismatch("hist2d requires an Nx2 matrix"))
+    n = length(edg1) - 1
+    m = length(edg2) - 1
+    size(H) == (n, m) || throw(DimensionMismatch("incorrect size of histogram"))
+    if init
+        fill!(H, zero(HT))
+    end
+    for i = 1:size(v,1)             # fixme (iter): update when #15459 is done
+        x = searchsortedfirst(edg1, v[i,1]) - 1
+        y = searchsortedfirst(edg2, v[i,2]) - 1
+        if 1 <= x <= n && 1 <= y <= m
+            @inbounds H[x,y] += 1
+        end
+    end
+    edg1, edg2, H
+end
+
+hist2d(v::AbstractMatrix, edg1::AbstractVector, edg2::AbstractVector) =
+    hist2d!(Array(Int, length(edg1)-1, length(edg2)-1), v, edg1, edg2)
+
+hist2d(v::AbstractMatrix, edg::AbstractVector) = hist2d(v, edg, edg)
+
+hist2d(v::AbstractMatrix, n1::Integer, n2::Integer) =
+    hist2d(v, histrange(sub(v,:,1),n1), histrange(sub(v,:,2),n2))
+hist2d(v::AbstractMatrix, n::Integer) = hist2d(v, n, n)
+hist2d(v::AbstractMatrix) = hist2d(v, sturges(size(v,1)))
+
+
 
 # During the 0.5 development cycle, do not add any deprecations below this line
 # To be deprecated in 0.6

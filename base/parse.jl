@@ -153,7 +153,7 @@ tryparse(::Type{Float64}, s::SubString{String}) = ccall(:jl_try_substrtod, Nulla
 tryparse(::Type{Float32}, s::String) = ccall(:jl_try_substrtof, Nullable{Float32}, (Ptr{UInt8},Csize_t,Csize_t), s, 0, sizeof(s))
 tryparse(::Type{Float32}, s::SubString{String}) = ccall(:jl_try_substrtof, Nullable{Float32}, (Ptr{UInt8},Csize_t,Csize_t), s.string, s.offset, s.endof)
 
-tryparse{T<:Union{Float32,Float64}}(::Type{T}, s::AbstractString) = tryparse(T, bytestring(s))
+tryparse{T<:Union{Float32,Float64}}(::Type{T}, s::AbstractString) = tryparse(T, String(s))
 
 function parse{T<:AbstractFloat}(::Type{T}, s::AbstractString)
     nf = tryparse(T, s)
@@ -169,7 +169,7 @@ float{S<:AbstractString}(a::AbstractArray{S}) = map!(float, similar(a,typeof(flo
 function parse(str::AbstractString, pos::Int; greedy::Bool=true, raise::Bool=true)
     # pos is one based byte offset.
     # returns (expr, end_pos). expr is () in case of parse error.
-    bstr = bytestring(str)
+    bstr = String(str)
     ex, pos = ccall(:jl_parse_string, Any,
                     (Ptr{UInt8}, Csize_t, Int32, Int32),
                     bstr, sizeof(bstr), pos-1, greedy ? 1:0)

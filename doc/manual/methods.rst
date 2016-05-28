@@ -223,7 +223,9 @@ pairs of arguments to which no other method definition applies.
 
 Although it seems a simple concept, multiple dispatch on the types of
 values is perhaps the single most powerful and central feature of the
-Julia language. Core operations typically have dozens of methods::
+Julia language. Core operations typically have dozens of methods:
+
+.. doctest::
 
     julia> methods(+)
     # 139 methods for generic function "+":
@@ -320,9 +322,9 @@ Julia language. Core operations typically have dozens of methods::
     +(A::Base.LinAlg.SymTridiagonal{T},B::Base.LinAlg.Diagonal{T}) at linalg/special.jl:122
     +(A::Base.LinAlg.Bidiagonal{T},B::Base.LinAlg.SymTridiagonal{T}) at linalg/special.jl:121
     +(A::Base.LinAlg.SymTridiagonal{T},B::Base.LinAlg.Bidiagonal{T}) at linalg/special.jl:122
-    +{Tv1,Ti1,Tv2,Ti2}(A_1::Base.SparseMatrix.SparseMatrixCSC{Tv1,Ti1},A_2::Base.SparseMatrix.SparseMatrixCSC{Tv2,Ti2}) at sparse/sparsematrix.jl:873
-    +(A::Base.SparseMatrix.SparseMatrixCSC{Tv,Ti<:Integer},B::Array{T,N}) at sparse/sparsematrix.jl:885
-    +(A::Array{T,N},B::Base.SparseMatrix.SparseMatrixCSC{Tv,Ti<:Integer}) at sparse/sparsematrix.jl:887
+    +{Tv1,Ti1,Tv2,Ti2}(A_1::Base.SparseArrays.SparseMatrixCSC{Tv1,Ti1},A_2::Base.SparseMatrix.SparseMatrixCSC{Tv2,Ti2}) at sparse/sparsematrix.jl:873
+    +(A::Base.SparseArrays.SparseMatrixCSC{Tv,Ti<:Integer},B::Array{T,N}) at sparse/sparsematrix.jl:885
+    +(A::Array{T,N},B::Base.SparseArrays.SparseMatrixCSC{Tv,Ti<:Integer}) at sparse/sparsematrix.jl:887
     +{P<:Base.Dates.Period}(Y::Union{SubArray{P<:Base.Dates.Period,N,A<:DenseArray{T,N},I<:Tuple{Vararg{Union{Colon,Range{Int64},Int64}}},LD},DenseArray{P<:Base.Dates.Period,N}},x::P<:Base.Dates.Period) at dates/periods.jl:50
     +{T<:Base.Dates.TimeType}(r::Range{T<:Base.Dates.TimeType},x::Base.Dates.Period) at dates/ranges.jl:39
     +{T<:Number}(x::AbstractArray{T<:Number,N}) at abstractarray.jl:442

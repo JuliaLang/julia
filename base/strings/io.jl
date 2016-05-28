@@ -30,14 +30,14 @@ println(xs...) = println(STDOUT, xs...)
 ## conversion of general objects to strings ##
 
 function sprint(size::Integer, f::Function, args...; env=nothing)
-    s = IOBuffer(Array(UInt8,size), true, true)
+    s = IOBuffer(Array{UInt8}(size), true, true)
     truncate(s,0)
     if env !== nothing
         f(IOContext(s, env), args...)
     else
         f(s, args...)
     end
-    bytestring(resize!(s.data, s.size))
+    String(resize!(s.data, s.size))
 end
 sprint(f::Function, args...) = sprint(0, f, args...)
 
@@ -48,7 +48,7 @@ tostr_sizehint(x::Float32) = 12
 
 function print_to_string(xs...; env=nothing)
     # specialized for performance reasons
-    s = IOBuffer(Array(UInt8,tostr_sizehint(xs[1])), true, true)
+    s = IOBuffer(Array{UInt8}(tostr_sizehint(xs[1])), true, true)
     # specialized version of truncate(s,0)
     s.size = 0
     s.ptr = 1
@@ -67,7 +67,6 @@ end
 
 string_with_env(env, xs...) = print_to_string(xs...; env=env)
 string(xs...) = print_to_string(xs...)
-bytestring(s::AbstractString...) = print_to_string(s...)
 
 print(io::IO, s::AbstractString) = (write(io, s); nothing)
 write(io::IO, s::AbstractString) = (len = 0; for c in s; len += write(io, c); end; len)
@@ -97,7 +96,7 @@ IOBuffer(str::String) = IOBuffer(str.data)
 IOBuffer(s::SubString{String}) = IOBuffer(sub(s.string.data, s.offset + 1 : s.offset + sizeof(s)))
 
 # join is implemented using IO
-function print_joined(io, strings, delim, last)
+function join(io::IO, strings, delim, last)
     i = start(strings)
     if done(strings,i)
         return
@@ -113,7 +112,7 @@ function print_joined(io, strings, delim, last)
     end
 end
 
-function print_joined(io, strings, delim)
+function join(io::IO, strings, delim)
     i = start(strings)
     is_done = done(strings,i)
     while !is_done
@@ -125,16 +124,16 @@ function print_joined(io, strings, delim)
         end
     end
 end
-print_joined(io, strings) = print_joined(io, strings, "")
+join(io::IO, strings) = join(io, strings, "")
 
-join(args...) = sprint(print_joined, args...)
+join(args...) = sprint(join, args...)
 
 ## string escaping & unescaping ##
 
 escape_nul(s::AbstractString, i::Int) =
     !done(s,i) && '0' <= next(s,i)[1] <= '7' ? "\\x00" : "\\0"
 
-function print_escaped(io, s::AbstractString, esc::AbstractString)
+function escape_string(io, s::AbstractString, esc::AbstractString)
     i = start(s)
     while !done(s,i)
         c, j = next(s,i)
@@ -151,10 +150,10 @@ function print_escaped(io, s::AbstractString, esc::AbstractString)
     end
 end
 
-escape_string(s::AbstractString) = sprint(endof(s), print_escaped, s, "\"")
+escape_string(s::AbstractString) = sprint(endof(s), escape_string, s, "\"")
 function print_quoted(io, s::AbstractString)
     print(io, '"')
-    print_escaped(io, s, "\"\$") #"# work around syntax highlighting problem
+    escape_string(io, s, "\"\$") #"# work around syntax highlighting problem
     print(io, '"')
 end
 
@@ -179,7 +178,7 @@ unescape_chars(s::AbstractString, esc::AbstractString) =
 
 # general unescaping of traditional C and Unicode escape sequences
 
-function print_unescaped(io, s::AbstractString)
+function unescape_string(io, s::AbstractString)
     i = start(s)
     while !done(s,i)
         c, i = next(s,i)
@@ -232,7 +231,7 @@ function print_unescaped(io, s::AbstractString)
     end
 end
 
-unescape_string(s::AbstractString) = sprint(endof(s), print_unescaped, s)
+unescape_string(s::AbstractString) = sprint(endof(s), unescape_string, s)
 
 macro b_str(s); :($(unescape_string(s)).data); end
 
@@ -271,7 +270,7 @@ function unindent(str::AbstractString, indent::Int; tabwidth=8)
     pos = start(str)
     endpos = endof(str)
     # Note: this loses the type of the original string
-    buf = IOBuffer(Array(UInt8,endpos), true, true)
+    buf = IOBuffer(Array{UInt8}(endpos), true, true)
     truncate(buf,0)
     cutting = true
     col = 0     # current column (0 based)

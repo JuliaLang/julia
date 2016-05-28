@@ -50,6 +50,9 @@
                 ((hcat)   (string #\[ (deparse-arglist (cdr e) " ") #\]))
                 ((global local const)
                  (string (car e) " " (deparse (cadr e))))
+                ((top)        (deparse (cadr e)))
+                ((core)       (string "Core." (deparse (cadr e))))
+                ((globalref)  (string (deparse (cadr e)) "." (deparse (caddr e))))
                 ((:)
                  (string (deparse (cadr e)) ': (deparse (caddr e))
                          (if (length> e 3)
@@ -120,7 +123,9 @@
          (bad-formal-argument v))
         (else
          (case (car v)
-           ((... kw)      (decl-var (cadr v)))
+           ((... kw)
+	    (arg-name (cadr v)) ;; to check for errors
+	    (decl-var (cadr v)))
            ((|::|)
             (if (not (symbol? (cadr v)))
                 (bad-formal-argument (cadr v)))

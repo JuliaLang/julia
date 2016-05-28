@@ -134,17 +134,17 @@ end
 function recv_data()
     try
         #println("On $(manager.zid_self) waiting to recv message")
-        zid = parse(Int,bytestring(ZMQ.recv(manager.sub)))
+        zid = parse(Int,String(ZMQ.recv(manager.sub)))
         assert(zid == manager.zid_self)
 
-        from_zid = parse(Int,bytestring(ZMQ.recv(manager.sub)))
-        mtype = bytestring(ZMQ.recv(manager.sub))
+        from_zid = parse(Int,String(ZMQ.recv(manager.sub)))
+        mtype = String(ZMQ.recv(manager.sub))
 
         #println("$zid received message of type $mtype from $from_zid")
 
         data = ZMQ.recv(manager.sub)
         if mtype == CONTROL_MSG
-            cmsg = bytestring(data)
+            cmsg = String(data)
             if cmsg == REQUEST_ACK
                 #println("$from_zid REQUESTED_ACK from $zid")
                 # send back a control_msg
@@ -181,7 +181,7 @@ function start_master(np)
                 #println("master recv data from $from_zid")
 
                 (r_s, w_s, t_r) = manager.map_zmq_julia[from_zid]
-                write(r_s, convert(Ptr{Uint8}, data), length(data))
+                unsafe_write(r_s, pointer(data), length(data))
             end
         catch e
             Base.show_backtrace(STDOUT,catch_backtrace())
@@ -197,7 +197,7 @@ end
 function launch(manager::ZMQCMan, params::Dict, launched::Array, c::Condition)
     #println("launch $(params[:np])")
     for i in 1:params[:np]
-        io, pobj = open(`julia worker.jl $i $(Base.cluster_cookie())`, "r")
+        io, pobj = open(`$(params[:exename]) worker.jl $i $(Base.cluster_cookie())`, "r")
 
         wconfig = WorkerConfig()
         wconfig.userdata = Dict(:zid=>i, :io=>io)
@@ -247,7 +247,7 @@ function start_worker(zid, cookie)
             (r_s, w_s, t_r) = streams
         end
 
-        write(r_s, convert(Ptr{Uint8}, data), length(data))
+        unsafe_write(r_s, pointer(data), length(data))
     end
 end
 

@@ -61,10 +61,8 @@ end
 # Worker initialization messages
 type IdentifySocketMsg <: AbstractMsg
     from_pid::Int
-    cookie::AbstractString
 end
 type IdentifySocketAckMsg <: AbstractMsg
-    cookie::AbstractString
 end
 type JoinPGRPMsg <: AbstractMsg
     self_pid::Int
@@ -72,13 +70,11 @@ type JoinPGRPMsg <: AbstractMsg
     notify_oid::RRID
     topology::Symbol
     worker_pool
-    cookie::AbstractString
 end
 type JoinCompleteMsg <: AbstractMsg
     notify_oid::RRID
     cpu_cores::Int
     ospid::Int
-    cookie::AbstractString
 end
 
 
@@ -163,19 +159,23 @@ type Worker
     w_stream::IO
     manager::ClusterManager
     config::WorkerConfig
+    version::Nullable{VersionNumber}  # Julia version of the remote process
 
-    function Worker(id, r_stream, w_stream, manager, config)
+    function Worker(id::Int, r_stream::IO, w_stream::IO, manager::ClusterManager;
+                             version=Nullable{VersionNumber}(), config=WorkerConfig())
         w = Worker(id)
         w.r_stream = r_stream
         w.w_stream = buffer_writes(w_stream)
         w.manager = manager
         w.config = config
+        w.version = version
         set_worker_state(w, W_CONNECTED)
         register_worker_streams(w)
         w
     end
 
-    function Worker(id)
+    function Worker(id::Int)
+        @assert id > 0
         if haskey(map_pid_wrkr, id)
             return map_pid_wrkr[id]
         end
@@ -186,8 +186,6 @@ type Worker
 
     Worker() = Worker(get_next_pid())
 end
-
-Worker(id, r_stream, w_stream, manager) = Worker(id, r_stream, w_stream, manager, WorkerConfig())
 
 function set_worker_state(w, state)
     w.state = state
@@ -269,6 +267,17 @@ function flush_gc_msgs()
     end
 end
 
+function send_connection_hdr(w::Worker, cookie=true)
+    # For a connection initiated from the remote side to us, we only send the version,
+    # else when we initiate a connection we first send the cookie followed by our version.
+    # The remote side validates the cookie.
+
+    if cookie
+        write(w.w_stream, LPROC.cookie)
+    end
+    write(w.w_stream, rpad(VERSION_STRING, HDR_VERSION_LEN)[1:HDR_VERSION_LEN])
+end
+
 ## process group creation ##
 
 type LocalProcess
@@ -281,8 +290,19 @@ end
 
 const LPROC = LocalProcess()
 
+const HDR_VERSION_LEN=16
+const HDR_COOKIE_LEN=16
 cluster_cookie() = LPROC.cookie
-cluster_cookie(cookie) = (LPROC.cookie = cookie; cookie)
+function cluster_cookie(cookie)
+    # The cookie must be an ASCII string with length <=  HDR_COOKIE_LEN
+    assert(isascii(cookie))
+    assert(length(cookie) <= HDR_COOKIE_LEN)
+
+    cookie = rpad(cookie, HDR_COOKIE_LEN)
+
+    LPROC.cookie = cookie
+    cookie
+end
 
 const map_pid_wrkr = Dict{Int, Union{Worker, LocalProcess}}()
 const map_sock_wrkr = ObjectIdDict()
@@ -505,15 +525,6 @@ type Future <: AbstractRemoteRef
     Future(w::Int, rrid::RRID, v) = (r = new(w,rrid.whence,rrid.id,v); return test_existing_ref(r))
 end
 
-function finalize_future(f::Future)
-    if f.where > 0
-        isnull(f.v) && send_del_client(f)
-        f.where = 0
-        f.v = Nullable{Any}()
-    end
-    f
-end
-
 type RemoteChannel{T<:AbstractChannel} <: AbstractRemoteRef
     where::Int
     whence::Int
@@ -522,32 +533,42 @@ type RemoteChannel{T<:AbstractChannel} <: AbstractRemoteRef
     RemoteChannel(w::Int, rrid::RRID) = (r = new(w, rrid.whence, rrid.id); return test_existing_ref(r))
 end
 
-function test_existing_ref(r::Future)
+function test_existing_ref(r::AbstractRemoteRef)
     found = getkey(client_refs, r, false)
-    if !is(found,false) && (client_refs[r] == true)
-        if isnull(found.v) && !isnull(r.v)
-            # we have recd the value from another source, probably a deserialized ref, send a del_client message
-            send_del_client(r)
-            found.v = r.v
-        end
-        return found
+    if !is(found,false)
+        if client_refs[r] == true
+            @assert r.where > 0
+            if isa(r, Future) && isnull(found.v) && !isnull(r.v)
+                # we have recd the value from another source, probably a deserialized ref, send a del_client message
+                send_del_client(r)
+                found.v = r.v
+            end
+            return found
+         else
+            # just delete the entry.
+            delete!(client_refs, found)
+         end
     end
+
     client_refs[r] = true
-    finalizer(r, finalize_future)
+    finalizer(r, finalize_ref)
     return r
 end
 
-function test_existing_ref(r::RemoteChannel)
-    found = getkey(client_refs, r, false)
-    !is(found,false) && (client_refs[r] == true) && return found
-    client_refs[r] = true
-    finalizer(r, finalize_remote_channel)
-    return r
-end
-
-function finalize_remote_channel(r::RemoteChannel)
-    if r.where > 0
-        send_del_client(r)
+function finalize_ref(r::AbstractRemoteRef)
+    if r.where > 0      # Handle the case of the finalizer having being called manually
+        if haskey(client_refs, r)
+            # NOTE: Change below line to deleting the entry once issue https://github.com/JuliaLang/julia/issues/14445
+            # is fixed.
+            client_refs[r] = false
+        end
+        if isa(r, RemoteChannel)
+            send_del_client(r)
+        else
+            # send_del_client only if the reference has not been set
+            isnull(r.v) && send_del_client(r)
+            r.v = Nullable{Any}()
+        end
         r.where = 0
     end
     return r
@@ -609,13 +630,7 @@ function isready(rr::RemoteChannel, args...)
     end
 end
 
-function del_client(rr::AbstractRemoteRef)
-    del_client(remoteref_id(rr), myid())
-    if haskey(client_refs, rr)
-        client_refs[rr] = false
-    end
-    nothing
-end
+del_client(rr::AbstractRemoteRef) = del_client(remoteref_id(rr), myid())
 
 del_client(id, client) = del_client(PGRP, id, client)
 function del_client(pg, id, client)
@@ -956,40 +971,38 @@ function deliver_result(sock::IO, msg, oid, value)
 end
 
 ## message event handlers ##
-process_messages(r_stream::TCPSocket, w_stream::TCPSocket) = @schedule process_tcp_streams(r_stream, w_stream)
-
-function process_tcp_streams(r_stream::TCPSocket, w_stream::TCPSocket)
-        disable_nagle(r_stream)
-        wait_connected(r_stream)
-        if r_stream != w_stream
-            disable_nagle(w_stream)
-            wait_connected(w_stream)
-        end
-        message_handler_loop(r_stream, w_stream)
+function process_messages(r_stream::TCPSocket, w_stream::TCPSocket, incoming=true)
+    @schedule process_tcp_streams(r_stream, w_stream, incoming)
 end
 
-process_messages(r_stream::IO, w_stream::IO) = @schedule message_handler_loop(r_stream, w_stream)
+function process_tcp_streams(r_stream::TCPSocket, w_stream::TCPSocket, incoming)
+    disable_nagle(r_stream)
+    wait_connected(r_stream)
+    if r_stream != w_stream
+        disable_nagle(w_stream)
+        wait_connected(w_stream)
+    end
+    message_handler_loop(r_stream, w_stream, incoming)
+end
 
-function message_handler_loop(r_stream::IO, w_stream::IO)
+function process_messages(r_stream::IO, w_stream::IO, incoming=true)
+    @schedule message_handler_loop(r_stream, w_stream, incoming)
+end
+
+function message_handler_loop(r_stream::IO, w_stream::IO, incoming::Bool)
     try
-        # Check for a valid first message with a cookie.
-        msg = deserialize(r_stream)
-        if !any(x->isa(msg, x), [JoinPGRPMsg, JoinCompleteMsg, IdentifySocketMsg, IdentifySocketAckMsg]) ||
-                (msg.cookie != cluster_cookie())
-
-            println(STDERR, "Unknown first message $(typeof(msg)) or cookie mismatch.")
-            error("Invalid connection credentials.")
-        end
-
+        version = process_hdr(r_stream, incoming)
         while true
-            handle_msg(msg, r_stream, w_stream)
             msg = deserialize(r_stream)
             # println("got msg: ", msg)
+            handle_msg(msg, r_stream, w_stream, version)
         end
     catch e
+        # println(STDERR, "Process($(myid())) - Exception ", e)
         iderr = worker_id_from_socket(r_stream)
         if (iderr < 1)
-            println(STDERR, "Socket from unknown remote worker in worker $(myid())")
+            println(STDERR, e)
+            println(STDERR, "Process($(myid())) - Unknown remote, closing connection.")
         else
             werr = worker_from_id(iderr)
             oldstate = werr.state
@@ -1024,35 +1037,63 @@ function message_handler_loop(r_stream::IO, w_stream::IO)
     end
 end
 
-handle_msg(msg::CallMsg{:call}, r_stream, w_stream) = schedule_call(msg.response_oid, ()->msg.f(msg.args...; msg.kwargs...))
-function handle_msg(msg::CallMsg{:call_fetch}, r_stream, w_stream)
+function process_hdr(s, validate_cookie)
+    if validate_cookie
+        cookie = read(s, HDR_COOKIE_LEN)
+        self_cookie = cluster_cookie()
+        for i in 1:HDR_COOKIE_LEN
+            if UInt8(self_cookie[i]) != cookie[i]
+                error("Process($(myid())) - Invalid connection credentials sent by remote.")
+            end
+        end
+    end
+
+    # When we have incompatible julia versions trying to connect to each other,
+    # and can be detected, raise an appropriate error.
+    # For now, just return the version.
+    return VersionNumber(strip(String(read(s, HDR_VERSION_LEN))))
+end
+
+function handle_msg(msg::CallMsg{:call}, r_stream, w_stream, version)
+    schedule_call(msg.response_oid, ()->msg.f(msg.args...; msg.kwargs...))
+end
+function handle_msg(msg::CallMsg{:call_fetch}, r_stream, w_stream, version)
     @schedule begin
         v = run_work_thunk(()->msg.f(msg.args...; msg.kwargs...), false)
         deliver_result(w_stream, :call_fetch, msg.response_oid, v)
     end
 end
 
-function handle_msg(msg::CallWaitMsg, r_stream, w_stream)
+function handle_msg(msg::CallWaitMsg, r_stream, w_stream, version)
     @schedule begin
         rv = schedule_call(msg.response_oid, ()->msg.f(msg.args...; msg.kwargs...))
         deliver_result(w_stream, :call_wait, msg.notify_oid, fetch(rv.c))
     end
 end
 
-handle_msg(msg::RemoteDoMsg, r_stream, w_stream) = @schedule run_work_thunk(()->msg.f(msg.args...; msg.kwargs...), true)
-
-handle_msg(msg::ResultMsg, r_stream, w_stream) = put!(lookup_ref(msg.response_oid), msg.value)
-
-function handle_msg(msg::IdentifySocketMsg, r_stream, w_stream)
-    # register a new peer worker connection
-    w=Worker(msg.from_pid, r_stream, w_stream, cluster_manager)
-    send_msg_now(w, IdentifySocketAckMsg(cluster_cookie()))
+function handle_msg(msg::RemoteDoMsg, r_stream, w_stream, version)
+    @schedule run_work_thunk(()->msg.f(msg.args...; msg.kwargs...), true)
 end
-handle_msg(msg::IdentifySocketAckMsg, r_stream, w_stream) = nothing
 
-function handle_msg(msg::JoinPGRPMsg, r_stream, w_stream)
+function handle_msg(msg::ResultMsg, r_stream, w_stream, version)
+    put!(lookup_ref(msg.response_oid), msg.value)
+end
+
+function handle_msg(msg::IdentifySocketMsg, r_stream, w_stream, version)
+    # register a new peer worker connection
+    w=Worker(msg.from_pid, r_stream, w_stream, cluster_manager; version=version)
+    send_connection_hdr(w, false)
+    send_msg_now(w, IdentifySocketAckMsg())
+end
+
+function handle_msg(msg::IdentifySocketAckMsg, r_stream, w_stream, version)
+    w = map_sock_wrkr[r_stream]
+    w.version = version
+end
+
+function handle_msg(msg::JoinPGRPMsg, r_stream, w_stream, version)
     LPROC.id = msg.self_pid
-    controller = Worker(1, r_stream, w_stream, cluster_manager)
+    controller = Worker(1, r_stream, w_stream, cluster_manager; version=version)
     register_worker(LPROC)
     topology(msg.topology)
 
@@ -1070,16 +1111,17 @@ function handle_msg(msg::JoinPGRPMsg, r_stream, w_stream)
     for wt in wait_tasks; wait(wt); end
 
     set_default_worker_pool(msg.worker_pool)
-
-    send_msg_now(controller, JoinCompleteMsg(msg.notify_oid, Sys.CPU_CORES, getpid(), cluster_cookie()))
+    send_connection_hdr(controller, false)
+    send_msg_now(controller, JoinCompleteMsg(msg.notify_oid, Sys.CPU_CORES, getpid()))
 end
 
 function connect_to_peer(manager::ClusterManager, rpid::Int, wconfig::WorkerConfig)
     try
         (r_s, w_s) = connect(manager, rpid, wconfig)
-        w = Worker(rpid, r_s, w_s, manager, wconfig)
-        process_messages(w.r_stream, w.w_stream)
-        send_msg_now(w, IdentifySocketMsg(myid(), cluster_cookie()))
+        w = Worker(rpid, r_s, w_s, manager; config=wconfig)
+        process_messages(w.r_stream, w.w_stream, false)
+        send_connection_hdr(w, true)
+        send_msg_now(w, IdentifySocketMsg(myid()))
     catch e
         display_error(e, catch_backtrace())
         println(STDERR, "Error [$e] on $(myid()) while connecting to peer $rpid. Exiting.")
@@ -1087,12 +1129,13 @@ function connect_to_peer(manager::ClusterManager, rpid::Int, wconfig::WorkerConf
     end
 end
 
-function handle_msg(msg::JoinCompleteMsg, r_stream, w_stream)
+function handle_msg(msg::JoinCompleteMsg, r_stream, w_stream, version)
     w = map_sock_wrkr[r_stream]
     environ = get(w.config.environ, Dict())
     environ[:cpu_cores] = msg.cpu_cores
     w.config.environ = environ
     w.config.ospid = msg.ospid
+    w.version = version
 
     ntfy_channel = lookup_ref(msg.notify_oid)
     put!(ntfy_channel, w.id)
@@ -1101,7 +1144,7 @@ function handle_msg(msg::JoinCompleteMsg, r_stream, w_stream)
 end
 
 function disable_threaded_libs()
-    blas_set_num_threads(1)
+    BLAS.set_num_threads(1)
 end
 
 worker_timeout() = parse(Float64, get(ENV, "JULIA_WORKER_TIMEOUT", "60.0"))
@@ -1132,7 +1175,7 @@ function start_worker(out::IO, cookie::AbstractString)
     end
     @schedule while isopen(sock)
         client = accept(sock)
-        process_messages(client, client)
+        process_messages(client, client, true)
     end
     print(out, "julia_worker:")  # print header
     print(out, "$(dec(LPROC.bind_port))#") # print port
@@ -1361,7 +1404,7 @@ function create_worker(manager, wconfig)
     w = Worker()
 
     (r_s, w_s) = connect(manager, w.id, wconfig)
-    w = Worker(w.id, r_s, w_s, manager, wconfig)
+    w = Worker(w.id, r_s, w_s, manager; config=wconfig)
     # install a finalizer to perform cleanup if necessary
     finalizer(w, (w)->if myid() == 1 manage(w.manager, w.id, w.config, :finalize) end)
 
@@ -1372,19 +1415,21 @@ function create_worker(manager, wconfig)
 
     # Start a new task to handle inbound messages from connected worker in master.
     # Also calls `wait_connected` on TCP streams.
-    process_messages(w.r_stream, w.w_stream)
+    process_messages(w.r_stream, w.w_stream, false)
 
     # send address information of all workers to the new worker.
     # Cluster managers set the address of each worker in `WorkerConfig.connect_at`.
-    # A new worker uses this to setup a all-to-all network. Workers with higher pids connect to
-    # workers with lower pids. Except process 1 (master) which initiates connections
-    # to all workers.
-    # Flow:
-    # - master sends (:join_pgrp, list_of_all_worker_addresses) to all workers
+    # A new worker uses this to setup an all-to-all network if topology :all_to_all is specified.
+    # Workers with higher pids connect to workers with lower pids. Except process 1 (master) which
+    # initiates connections to all workers.
+
+    # Connection Setup Protocol:
+    # - Master sends 16-byte cookie followed by 16-byte version string and a JoinPGRP message to all workers
     # - On each worker
-    #   - each worker sends a :identify_socket to all workers less than its pid
-    #   - each worker then sends a :join_complete back to the master along with its OS_PID and NUM_CORES
-    # - once master receives a :join_complete it triggers rr_ntfy_join (signifies that worker setup is complete)
+    #   - Worker responds with a 16-byte version followed by a JoinCompleteMsg
+    #   - Connects to all workers less than its pid. Sends the cookie, version and an IdentifySocket message
+    #   - Workers with incoming connection requests write back their Version and an IdentifySocketAckMsg message
+    # - On master, receiving a JoinCompleteMsg triggers rr_ntfy_join (signifies that worker setup is complete)
 
     join_list = []
     if PGRP.topology == :all_to_all
@@ -1415,7 +1460,8 @@ function create_worker(manager, wconfig)
     end
 
     all_locs = map(x -> isa(x, Worker) ? (get(x.config.connect_at, ()), x.id) : ((), x.id, true), join_list)
-    send_msg_now(w, JoinPGRPMsg(w.id, all_locs, ntfy_oid, PGRP.topology, default_worker_pool(), cluster_cookie()))
+    send_connection_hdr(w, true)
+    send_msg_now(w, JoinPGRPMsg(w.id, all_locs, ntfy_oid, PGRP.topology, default_worker_pool()))
 
     @schedule manage(w.manager, w.id, w.config, :register)
     wait(rr_ntfy_join)
@@ -1518,7 +1564,7 @@ function splitrange(N::Int, np::Int)
     each = div(N,np)
     extras = rem(N,np)
     nchunks = each > 0 ? np : extras
-    chunks = Array(UnitRange{Int}, nchunks)
+    chunks = Array{UnitRange{Int}}(nchunks)
     lo = 1
     for i in 1:nchunks
         hi = lo + each - 1
@@ -1671,7 +1717,7 @@ end
 function disable_nagle(sock)
     # disable nagle on all OSes
     ccall(:uv_tcp_nodelay, Cint, (Ptr{Void}, Cint), sock.handle, 1)
-    @linux_only begin
+    @static if is_linux()
         # tcp_quickack is a linux only option
         if ccall(:jl_tcp_quickack, Cint, (Ptr{Void}, Cint), sock.handle, 1) < 0
             warn_once("Parallel networking unoptimized ( Error enabling TCP_QUICKACK : ", Libc.strerror(Libc.errno()), " )")
@@ -1724,4 +1770,3 @@ function getindex(r::RemoteChannel, args...)
     end
     return remotecall_fetch(getindex, r.where, r, args...)
 end
-

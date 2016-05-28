@@ -90,7 +90,7 @@ wait(port)
 wait(tsk)
 
 mktempdir() do tmpdir
-    socketname = @windows ? ("\\\\.\\pipe\\uv-test-" * randstring(6)) : joinpath(tmpdir, "socket")
+    socketname = is_windows() ? ("\\\\.\\pipe\\uv-test-" * randstring(6)) : joinpath(tmpdir, "socket")
     c = Base.Condition()
     tsk = @async begin
         s = listen(socketname)
@@ -145,10 +145,10 @@ begin
 
     c = Condition()
     tsk = @async begin
-        @test bytestring(recv(a)) == "Hello World"
+        @test String(recv(a)) == "Hello World"
     # Issue 6505
         @async begin
-            @test bytestring(recv(a)) == "Hello World"
+            @test String(recv(a)) == "Hello World"
             notify(c)
         end
         send(b,ip"127.0.0.1",port,"Hello World")
@@ -160,7 +160,7 @@ begin
     tsk = @async begin
         @test begin
             (addr,data) = recvfrom(a)
-            addr == ip"127.0.0.1" && bytestring(data) == "Hello World"
+            addr == ip"127.0.0.1" && String(data) == "Hello World"
         end
     end
     send(b, ip"127.0.0.1",port,"Hello World")
@@ -171,7 +171,7 @@ begin
     close(a)
     close(b)
 end
-if @unix? true : (Base.windows_version() >= Base.WINDOWS_VISTA_VER)
+if !is_windows() || Sys.windows_version() >= Sys.WINDOWS_VISTA_VER
     a = UDPSocket()
     b = UDPSocket()
     bind(a, ip"::1", UInt16(port))
@@ -180,7 +180,7 @@ if @unix? true : (Base.windows_version() >= Base.WINDOWS_VISTA_VER)
     tsk = @async begin
         @test begin
             (addr, data) = recvfrom(a)
-            addr == ip"::1" && bytestring(data) == "Hello World"
+            addr == ip"::1" && String(data) == "Hello World"
         end
     end
     send(b, ip"::1", port, "Hello World")
@@ -243,7 +243,7 @@ end
 # Local-machine broadcast
 let
     # (Mac OS X's loopback interface doesn't support broadcasts)
-    bcastdst = @osx ? ip"255.255.255.255" : ip"127.255.255.255"
+    bcastdst = is_apple() ? ip"255.255.255.255" : ip"127.255.255.255"
 
     function create_socket()
         s = UDPSocket()
@@ -254,7 +254,7 @@ let
     try
         @sync begin
             send(c, bcastdst, 2000, "hello")
-            recvs = [@async @test bytestring(recv(s)) == "hello" for s in (a, b)]
+            recvs = [@async @test String(recv(s)) == "hello" for s in (a, b)]
             map(wait, recvs)
         end
     catch e

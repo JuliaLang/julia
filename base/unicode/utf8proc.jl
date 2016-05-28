@@ -10,7 +10,7 @@ export isgraphemebreak
 # also exported by Base:
 export normalize_string, graphemes, is_assigned_char, charwidth, isvalid,
    islower, isupper, isalpha, isdigit, isnumber, isalnum,
-   iscntrl, ispunct, isspace, isprint, isgraph, isblank
+   iscntrl, ispunct, isspace, isprint, isgraph
 
 # whether codepoints are valid Unicode scalar values, i.e. 0-0xd7ff, 0xe000-0x10ffff
 isvalid(::Type{Char}, ch::Unsigned) = !((ch - 0xd800 < 0x800) | (ch > 0x10ffff))
@@ -73,12 +73,12 @@ function utf8proc_map(s::String, flags::Integer)
     result = ccall(:utf8proc_map, Cssize_t,
                    (Ptr{UInt8}, Cssize_t, Ref{Ptr{UInt8}}, Cint),
                    s, sizeof(s), p, flags)
-    result < 0 && error(bytestring(ccall(:utf8proc_errmsg, Cstring,
+    result < 0 && error(String(ccall(:utf8proc_errmsg, Cstring,
                                          (Cssize_t,), result)))
     pointer_to_string(p[], result, true)::String
 end
 
-utf8proc_map(s::AbstractString, flags::Integer) = utf8proc_map(bytestring(s), flags)
+utf8proc_map(s::AbstractString, flags::Integer) = utf8proc_map(String(s), flags)
 
 function normalize_string(s::AbstractString; stable::Bool=false, compat::Bool=false, compose::Bool=true, decompose::Bool=false, stripignore::Bool=false, rejectna::Bool=false, newline2ls::Bool=false, newline2ps::Bool=false, newline2lf::Bool=false, stripcc::Bool=false, casefold::Bool=false, lump::Bool=false, stripmark::Bool=false)
     flags = 0

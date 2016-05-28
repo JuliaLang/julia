@@ -50,53 +50,23 @@
 
    Create a string from any value using the ``showall`` function.
 
-.. function:: bytestring(::Ptr{UInt8}, [length])
+.. function:: String(p::Ptr{UInt8}, [length::Integer])
 
    .. Docstring generated from Julia source
 
-   Create a string from the address of a C (0-terminated) string encoded in ASCII or UTF-8. A copy is made; the ptr can be safely freed. If ``length`` is specified, the string does not have to be 0-terminated.
+   Create a string from the address of a C (0-terminated) string encoded as UTF-8. A copy is made so the pointer can be safely freed. If ``length`` is specified, the string does not have to be 0-terminated.
 
-.. function:: bytestring(s)
-
-   .. Docstring generated from Julia source
-
-   Convert a string to a contiguous byte array representation appropriate for passing it to C functions. The string will be encoded as either ASCII or UTF-8.
-
-.. function:: ascii(::Array{UInt8,1})
+.. function:: String(s::AbstractString)
 
    .. Docstring generated from Julia source
 
-   Create an ASCII string from a byte array.
+   Convert a string to a contiguous byte array representation encoded as UTF-8 bytes. This representation is often appropriate for passing strings to C.
 
-.. function:: ascii(s)
-
-   .. Docstring generated from Julia source
-
-   Convert a string to a contiguous ASCII string (all characters must be valid ASCII characters).
-
-.. function:: ascii(::Ptr{UInt8}, [length])
+.. function:: ascii(s::AbstractString)
 
    .. Docstring generated from Julia source
 
-   Create an ASCII string from the address of a C (0-terminated) string encoded in ASCII. A copy is made; the ptr can be safely freed. If ``length`` is specified, the string does not have to be 0-terminated.
-
-.. function:: utf8(::Array{UInt8,1})
-
-   .. Docstring generated from Julia source
-
-   Create a UTF-8 string from a byte array.
-
-.. function:: utf8(::Ptr{UInt8}, [length])
-
-   .. Docstring generated from Julia source
-
-   Create a UTF-8 string from the address of a C (0-terminated) string encoded in UTF-8. A copy is made; the ptr can be safely freed. If ``length`` is specified, the string does not have to be 0-terminated.
-
-.. function:: utf8(s)
-
-   .. Docstring generated from Julia source
-
-   Convert a string to a contiguous UTF-8 string (all characters must be valid UTF-8 characters).
+   Convert a string to ``String`` type and check that it contains only ASCII data, otherwise throwing an ``ArugmentError`` indicating the position of the first non-ASCII byte.
 
 .. function:: @r_str -> Regex
 
@@ -481,13 +451,13 @@
 
    .. Docstring generated from Julia source
 
-   General escaping of traditional C and Unicode escape sequences. See :func:`print_escaped` for more general escaping.
+   General escaping of traditional C and Unicode escape sequences.
 
 .. function:: unescape_string(s::AbstractString) -> AbstractString
 
    .. Docstring generated from Julia source
 
-   General unescaping of traditional C and Unicode escape sequences. Reverse of :func:`escape_string`\ . See also :func:`print_unescaped`\ .
+   General unescaping of traditional C and Unicode escape sequences. Reverse of :func:`escape_string`\ . See also :func:`unescape_string`\ .
 
 .. function:: utf16(s)
 

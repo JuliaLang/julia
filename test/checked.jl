@@ -242,11 +242,8 @@ end
 
 @test checked_sub(Int128(-1),Int128(-2)) === Int128(1)
 
-if WORD_SIZE == 32
-    @test_throws OverflowError checked_mul(UInt(2)^30, UInt(2)^2)
-else
-    @test_throws OverflowError checked_mul(UInt(2)^62, UInt(2)^2)
-end
+@test_throws OverflowError checked_mul(UInt32(2)^30, UInt32(2)^2)
+@test_throws OverflowError checked_mul(UInt64(2)^62, UInt64(2)^2)
 
 @test checked_add(UInt128(1), UInt128(2)) === UInt128(3)
 @test_throws OverflowError checked_add(UInt128(2)^127, UInt128(2)^127)

@@ -438,7 +438,7 @@ c, r, res = test_scomplete(s)
 # which would raise an error in the repl code.
 @test (String[], 0:-1, false) == test_scomplete("\$a")
 
-@unix_only begin
+if is_unix()
     #Assume that we can rely on the existence and accessibility of /tmp
 
     # Tests path in Julia code and closing " if it's a file
@@ -569,7 +569,7 @@ c, r, res = test_scomplete(s)
             withenv("PATH" => string(tempdir(), ":", dir)) do
                 s = string("repl-completio")
                 c,r = test_scomplete(s)
-                @test [utf8("repl-completion")] == c
+                @test ["repl-completion"] == c
                 @test s[r] == "repl-completio"
             end
 
@@ -589,12 +589,12 @@ let #test that it can auto complete with spaces in file/path
     mkdir(dir)
     cd(path) do
         open(joinpath(space_folder, "space .file"),"w") do f
-            s = @windows? "rm $dir_space\\\\space" : "cd $dir_space/space"
+            s = is_windows() ? "rm $dir_space\\\\space" : "cd $dir_space/space"
             c,r = test_scomplete(s)
             @test r == endof(s)-4:endof(s)
             @test "space\\ .file" in c
 
-            s = @windows? "cd(\"β $dir_space\\\\space" : "cd(\"β $dir_space/space"
+            s = is_windows() ? "cd(\"β $dir_space\\\\space" : "cd(\"β $dir_space/space"
             c,r = test_complete(s)
             @test r == endof(s)-4:endof(s)
             @test "space\\ .file\"" in c
@@ -612,7 +612,7 @@ end
 c,r = test_complete("cd(\"folder_do_not_exist_77/file")
 @test length(c) == 0
 
-@windows_only begin
+if is_windows()
     tmp = tempname()
     path = dirname(tmp)
     file = basename(tmp)
@@ -636,7 +636,7 @@ c,r = test_complete("cd(\"folder_do_not_exist_77/file")
         s = "cd(\"$(file[1:2])"
         c,r = test_complete(s)
         @test r == length(s) - 1:length(s)
-        @test file  in c
+        @test (length(c) > 1 && file in c) || (["$file\""] == c)
     end
     rm(tmp)
 end

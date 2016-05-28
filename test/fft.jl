@@ -11,9 +11,9 @@ m4 = [16.    2     3    13;
 
 true_fft_m4 = [
     34.            34.            34.            34.;
-     7. - 1.im  -5. + 3.im  -3. + 5.im   1. - 7.im;
+     7. - 1.0im  -5. + 3.0im  -3. + 5.0im   1. - 7.0im;
     16.           -16.           -16.            16.;
-     7. + 1.im  -5. - 3.im  -3. - 5.im   1. + 7.im ]
+     7. + 1.0im  -5. - 3.0im  -3. - 5.0im   1. + 7.0im ]
 
 true_fftn_m4 = [
  136.        0          0         0 ;
@@ -32,7 +32,7 @@ b[3:6,9:12] = m4
 sm4 = slice(b,3:6,9:12)
 
 m3d = map(Float32,copy(reshape(1:5*3*2, 5, 3, 2)))
-true_fftd3_m3d = Array(Float32, 5, 3, 2)
+true_fftd3_m3d = Array{Float32}(5, 3, 2)
 true_fftd3_m3d[:,:,1] = 17:2:45
 true_fftd3_m3d[:,:,2] = -15
 

@@ -25,6 +25,7 @@ showerror(io::IO, ce::CapturedException) = showerror(io, ce.ex, ce.processed_bt,
 type CompositeException <: Exception
     exceptions::Vector{Any}
     CompositeException() = new(Any[])
+    CompositeException(exceptions) = new(exceptions)
 end
 length(c::CompositeException) = length(c.exceptions)
 push!(c::CompositeException, ex) = push!(c.exceptions, ex)
@@ -46,7 +47,13 @@ function showerror(io::IO, ex::CompositeException)
 end
 
 function show(io::IO, t::Task)
-    print(io, "Task ($(t.state)) @0x$(hex(convert(UInt, pointer_from_objref(t)), WORD_SIZE>>2))")
+    print(io, "Task ($(t.state)) @0x$(hex(convert(UInt, pointer_from_objref(t)), Sys.WORD_SIZE>>2))")
+    if get(io, :multiline, false)
+        if t.state == :failed
+            println(io)
+            showerror(io, CapturedException(t.result, t.backtrace))
+        end
+    end
 end
 
 macro task(ex)

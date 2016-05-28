@@ -11,7 +11,7 @@ const SHORTEST = 1
 const FIXED = 2
 const PRECISION = 3
 
-const DIGITS = Array(UInt8,309+17)
+const DIGITS = Array{UInt8}(309+17)
 
 include("grisu/float.jl")
 include("grisu/fastshortest.jl")
@@ -116,14 +116,24 @@ function _show(io::IO, x::AbstractFloat, mode, n::Int, typed, nanstr, infstr)
     nothing
 end
 
-Base.show(io::IO, x::AbstractFloat) = Base.limit_output(io) ? showcompact(io, x) : _show(io, x, SHORTEST, 0, true)
+function Base.show(io::IO, x::Union{Float64,Float32})
+    if get(io, :compact, false)
+        _show(io, x, PRECISION, 6, false)
+    else
+        _show(io, x, SHORTEST, 0, true)
+    end
+end
+
+function Base.show(io::IO, x::Float16)
+    if get(io, :compact, false)
+        _show(io, x, PRECISION, 5, false)
+    else
+        _show(io, x, SHORTEST, 0, true)
+    end
+end
 
 Base.print(io::IO, x::Float32) = _show(io, x, SHORTEST, 0, false)
 Base.print(io::IO, x::Float16) = _show(io, x, SHORTEST, 0, false)
-
-Base.showcompact(io::IO, x::Float64) = _show(io, x, PRECISION, 6, false)
-Base.showcompact(io::IO, x::Float32) = _show(io, x, PRECISION, 6, false)
-Base.showcompact(io::IO, x::Float16) = _show(io, x, PRECISION, 5, false)
 
 # normal:
 #   0 < pt < len        ####.####           len+1

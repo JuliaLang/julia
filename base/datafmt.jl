@@ -4,7 +4,7 @@
 
 module DataFmt
 
-import Base: _default_delims, tryparse_internal, writemime
+import Base: _default_delims, tryparse_internal, show
 
 export countlines, readdlm, readcsv, writedlm, writecsv
 
@@ -18,7 +18,7 @@ const offs_chunk_size = 5000
 countlines(f::AbstractString, eol::Char='\n') = open(io->countlines(io,eol), f)::Int
 function countlines(io::IO, eol::Char='\n')
     isascii(eol) || throw(ArgumentError("only ASCII line terminators are supported"))
-    a = Array(UInt8, 8192)
+    a = Array{UInt8}(8192)
     nl = 0
     while !eof(io)
         nb = readbytes!(io, a)
@@ -42,7 +42,7 @@ readdlm(input, dlm::Char, T::Type, eol::Char; opts...) =
 
 function readdlm_auto(input, dlm::Char, T::Type, eol::Char, auto::Bool; opts...)
     optsd = val_opts(opts)
-    use_mmap = get(optsd, :use_mmap, @windows ? false : true)
+    use_mmap = get(optsd, :use_mmap, is_windows() ? false : true)
     if isa(input, AbstractString)
         fsz = filesize(input)
         if use_mmap && fsz > 0 && fsz < typemax(Int)
@@ -51,7 +51,7 @@ function readdlm_auto(input, dlm::Char, T::Type, eol::Char, auto::Bool; opts...)
             input = readstring(input)
         end
     end
-    sinp = isa(input, Vector{UInt8}) ? bytestring(input) :
+    sinp = isa(input, Vector{UInt8}) ? String(input) :
            isa(input, IO) ? readstring(input) :
            input
     readdlm_string(sinp, dlm, T, eol, auto, optsd)
@@ -78,8 +78,8 @@ type DLMOffsets <: DLMHandler
     bufflen::Int
 
     function DLMOffsets(sbuff::String)
-        offsets = Array(Array{Int,1}, 1)
-        offsets[1] = Array(Int, offs_chunk_size)
+        offsets = Array{Array{Int,1}}(1)
+        offsets[1] = Array{Int}(offs_chunk_size)
         thresh = ceil(min(typemax(UInt), Base.Sys.total_memory()) / sizeof(Int) / 5)
         new(offsets, 1, thresh, length(sbuff.data))
     end
@@ -103,7 +103,7 @@ function store_cell(dlmoffsets::DLMOffsets, row::Int, col::Int,
                 return
             end
         end
-        offsets = Array(Int, offs_chunk_size)
+        offsets = Array{Int}(offs_chunk_size)
         push!(oarr, offsets)
         offidx = 1
     end
@@ -142,7 +142,7 @@ function DLMStore{T}(::Type{T}, dims::NTuple{2,Integer},
     nrows <= 0 && throw(ArgumentError("number of rows in dims must be > 0, got $nrows"))
     ncols <= 0 && throw(ArgumentError("number of columns in dims must be > 0, got $ncols"))
     hdr_offset = has_header ? 1 : 0
-    DLMStore{T}(fill(SubString(sbuff,1,0), 1, ncols), Array(T, nrows-hdr_offset, ncols),
+    DLMStore{T}(fill(SubString(sbuff,1,0), 1, ncols), Array{T}(nrows-hdr_offset, ncols),
         nrows, ncols, 0, 0, hdr_offset, sbuff, auto, eol)
 end
 
@@ -623,7 +623,7 @@ end
 writedlm(io, a; opts...) = writedlm(io, a, '\t'; opts...)
 writecsv(io, a; opts...) = writedlm(io, a, ','; opts...)
 
-writemime(io::IO, ::MIME"text/csv", a) = writedlm(io, a, ',')
-writemime(io::IO, ::MIME"text/tab-separated-values", a) = writedlm(io, a, '\t')
+show(io::IO, ::MIME"text/csv", a) = writedlm(io, a, ',')
+show(io::IO, ::MIME"text/tab-separated-values", a) = writedlm(io, a, '\t')
 
 end # module DataFmt

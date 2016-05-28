@@ -572,7 +572,7 @@ function uv_getaddrinfocb(req::Ptr{Void}, status::Cint, addrinfo::Ptr{Void})
                 cb(IPv4(ntoh(ccall(:jl_sockaddr_host4,UInt32,(Ptr{Void},),sockaddr))))
                 break
             #elseif ccall(:jl_sockaddr_is_ip6,Int32,(Ptr{Void},),sockaddr) == 1
-            #    host = Array(UInt128,1)
+            #    host = Array{UInt128}(1)
             #    scope_id = ccall(:jl_sockaddr_host6,UInt32,(Ptr{Void},Ptr{UInt128}),sockaddr,host)
             #    cb(IPv6(ntoh(host[1])))
             #    break
@@ -586,6 +586,7 @@ function uv_getaddrinfocb(req::Ptr{Void}, status::Cint, addrinfo::Ptr{Void})
 end
 
 function getaddrinfo(cb::Function, host::String)
+    isascii(host) || error("non-ASCII hostname: $host")
     callback_dict[cb] = cb
     status = ccall(:jl_getaddrinfo, Int32, (Ptr{Void}, Cstring, Ptr{UInt8}, Any, Ptr{Void}),
                    eventloop(), host, C_NULL, cb, uv_jl_getaddrinfocb::Ptr{Void})
@@ -598,10 +599,9 @@ function getaddrinfo(cb::Function, host::String)
     end
     return nothing
 end
-getaddrinfo(cb::Function, host::AbstractString) = getaddrinfo(cb,ascii(host))
+getaddrinfo(cb::Function, host::AbstractString) = getaddrinfo(cb, String(host))
 
 function getaddrinfo(host::String)
-    isascii(host) || error("non-ASCII hostname: $host")
     c = Condition()
     getaddrinfo(host) do IP
         notify(c,IP)
@@ -625,7 +625,7 @@ getaddrinfo(host::AbstractString) = getaddrinfo(String(host))
 const _sizeof_uv_interface_address = ccall(:jl_uv_sizeof_interface_address,Int32,())
 
 function getipaddr()
-    addr = Array(Ptr{UInt8},1)
+    addr = Array{Ptr{UInt8}}(1)
     addr[1] = C_NULL
     count = zeros(Int32,1)
     lo_present = false
@@ -648,7 +648,7 @@ function getipaddr()
             return rv
         # Uncomment to enbable IPv6
         #elseif ccall(:jl_sockaddr_in_is_ip6,Int32,(Ptr{Void},),sockaddr) == 1
-        #   host = Array(UInt128,1)
+        #   host = Array{UInt128}(1)
         #   ccall(:jl_sockaddr_host6,UInt32,(Ptr{Void},Ptr{UInt128}),sockaddrr,host)
         #   return IPv6(ntoh(host[1]))
         end
@@ -779,7 +779,7 @@ function getsockname(sock::Union{TCPServer,TCPSocket})
             addrv4 = raddress[1:4]
             naddr = ntoh(unsafe_load(Ptr{Cuint}(pointer(addrv4)), 1))
             addr = IPv4(naddr)
-        elseif rfamily[] == @windows? 23 : (@osx? 30 : 10) # AF_INET6
+        elseif rfamily[] == @static is_windows() ? 23 : (@static is_apple() ? 30 : 10) # AF_INET6
             naddr = ntoh(unsafe_load(Ptr{UInt128}(pointer(raddress)), 1))
             addr = IPv6(naddr)
         else

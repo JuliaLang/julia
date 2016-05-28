@@ -44,7 +44,7 @@ wait for a remote call to finish by calling :func:`wait` on the returned
 `Future`, and you can obtain the full value of the result using
 :func:`fetch`.
 
-On the other hand ``RemoteRefs`` are rewritable. For example, multiple processes
+On the other hand ``RemoteChannel`` s are rewritable. For example, multiple processes
 can co-ordinate their processing by referencing the same remote ``Channel``\ .
 
 Let's try this out. Starting with ``julia -p n`` provides ``n`` worker
@@ -942,21 +942,21 @@ and ``SSHManager``:
 - ``LocalManager``, i.e. ``addprocs(N)``, by default binds only to the loopback interface.
   This means that workers consequently started on remote hosts, or anyone with malicious intentions
   is unable to connect to the cluster. A ``addprocs(4)`` followed by a ``addprocs(["remote_host"])``
-  will fail. Some users may need to create a cluster comprised of their local system and a few remote systems. This can be done by
-  explicitly requesting ``LocalManager`` to bind to an external network interface via the ``restrict`` keyword
-  argument -  ``addprocs(4; restrict=false)``.
+  will fail. Some users may need to create a cluster comprised of their local system and a few remote systems.
+  This can be done by explicitly requesting ``LocalManager`` to bind to an external network interface via the
+  ``restrict`` keyword argument. For example, ``addprocs(4; restrict=false)``.
 
 - ``SSHManager``, i.e. ``addprocs(list_of_remote_hosts)`` launches workers on remote hosts via SSH.
-   It is to be noted that by default SSH is only used to launch Julia workers.
-   Subsequent master-worker and worker-worker connections use plain, unencrypted TCP/IP sockets. The remote hosts
-   must have passwordless login enabled. Additional SSH flags or credentials may be specified via keyword
-   argument ``sshflags``.
+  It is to be noted that by default SSH is only used to launch Julia workers.
+  Subsequent master-worker and worker-worker connections use plain, unencrypted TCP/IP sockets. The remote hosts
+  must have passwordless login enabled. Additional SSH flags or credentials may be specified via keyword
+  argument ``sshflags``.
 
 - ``addprocs(list_of_remote_hosts; tunnel=true, sshflags=<ssh keys and other flags>)`` is useful when we wish to use
   SSH connections for master-worker too. A typical scenario for this is a local laptop running the Julia REPL (i.e., the master)
   with the rest of the cluster on the cloud, say on Amazon EC2. In this case only port 22 needs to be
   opened at the remote cluster coupled with SSH client authenticated via PKI.
-  Authentication credentials can be supplied via ``sshflags``, for example ``sshflags=`-e <keyfile>` ``.
+  Authentication credentials can be supplied via ``sshflags``, for example ``sshflags=`-e <keyfile>```.
 
   Note that worker-worker connections are still plain TCP and the local security policy on the remote cluster
   must allow for free connections between worker nodes, at least for ports 9009 and above.

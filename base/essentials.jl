@@ -92,7 +92,7 @@ function append_any(xs...)
     # used by apply() and quote
     # must be a separate function from append(), since apply() needs this
     # exact function.
-    out = Array(Any, 4)
+    out = Array{Any}(4)
     l = 4
     i = 1
     for x in xs

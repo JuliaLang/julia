@@ -251,6 +251,10 @@ tlayout = TLayout(5,7,11)
 @test_throws BoundsError fieldname(TLayout, 4)
 @test_throws BoundsError fieldoffset(TLayout, 4)
 
+@test fieldnames((1,2,3)) == fieldnames(NTuple{3, Int}) == [fieldname(NTuple{3, Int}, i) for i = 1:3] == [1, 2, 3]
+@test_throws BoundsError fieldname(NTuple{3, Int}, 0)
+@test_throws BoundsError fieldname(NTuple{3, Int}, 4)
+
 import Base: isstructtype, type_alignment, return_types
 @test !isstructtype(Union{})
 @test !isstructtype(Union{Int,Float64})
@@ -273,6 +277,14 @@ end
     end
 end
 @test functionloc(f15447)[2] > 0
+
+# issue #14346
+@noinline function f14346(id, mask, limit)
+    if id <= limit && mask[id]
+        return true
+    end
+end
+@test functionloc(f14346)[2] == @__LINE__-4
 
 # test jl_get_llvm_fptr. We test functions both in and definitely not in the system image
 definitely_not_in_sysimg() = nothing
@@ -408,3 +420,22 @@ tracefoo(x::Int64, y::Int64) = x*y
 @test didtrace
 didtrace = false
 ccall(:jl_register_newmeth_tracer, Void, (Ptr{Void},), C_NULL)
+
+# test for reflection over large method tables
+for i = 1:100; @eval fLargeTable(::Val{$i}, ::Any) = 1; end
+for i = 1:100; @eval fLargeTable(::Any, ::Val{$i}) = 2; end
+fLargeTable(::Any...) = 3
+fLargeTable(::Complex, ::Complex) = 4
+fLargeTable(::Union{Complex64, Complex128}...) = 5
+fLargeTable() = 4
+@test length(methods(fLargeTable)) == 204
+@test length(methods(fLargeTable, Tuple{})) == 1
+@test fLargeTable(1im, 2im) == 4
+@test fLargeTable(1.0im, 2.0im) == 5
+@test_throws MethodError fLargeTable(Val{1}(), Val{1}())
+@test fLargeTable(Val{1}(), 1) == 1
+@test fLargeTable(1, Val{1}()) == 2
+
+# issue #15280
+function f15280(x) end
+@test functionloc(f15280)[2] > 0
