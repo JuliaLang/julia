@@ -477,14 +477,11 @@ static void sweep_weak_refs(void)
         size_t n = 0;
         size_t ndel = 0;
         size_t l = ptls->heap.weak_refs.len;
-        jl_weakref_t *wr;
         void **lst = ptls->heap.weak_refs.items;
-        void *tmp;
-#define SWAP_wr(a,b) (tmp=a,a=b,b=tmp,1)
         if (l == 0)
             continue;
-        do {
-            wr = (jl_weakref_t*)lst[n];
+        while (1) {
+            jl_weakref_t *wr = (jl_weakref_t*)lst[n];
             if (gc_marked(jl_astaggedvalue(wr))) {
                 // weakref itself is alive
                 if (!gc_marked(jl_astaggedvalue(wr->value)))
@@ -494,8 +491,12 @@ static void sweep_weak_refs(void)
             else {
                 ndel++;
             }
-        } while ((n < l-ndel) && SWAP_wr(lst[n],lst[n+ndel]));
-
+            if (n >= l - ndel)
+                break;
+            void *tmp = lst[n];
+            lst[n] = lst[n + ndel];
+            lst[n+ndel] = tmp;
+        }
         ptls->heap.weak_refs.len -= ndel;
     }
 }
@@ -539,11 +540,11 @@ static bigval_t **sweep_big_list(int sweep_mask, bigval_t **pv)
     bigval_t *v = *pv;
     while (v != NULL) {
         bigval_t *nxt = v->next;
-        if (gc_marked(&v->header)) {
+        int bits = gc_bits(&v->header);
+        if (bits & GC_MARKED) {
             pv = &v->next;
             int age = v->age;
-            int bits = gc_bits(&v->header);
-            if (age >= PROMOTE_AGE) {
+            if (age >= PROMOTE_AGE || bits == GC_MARKED) {
                 if (sweep_mask == GC_MARKED || bits == GC_MARKED_NOESC) {
                     bits = GC_QUEUED;
                 }
@@ -551,10 +552,8 @@ static bigval_t **sweep_big_list(int sweep_mask, bigval_t **pv)
             else {
                 inc_sat(age, PROMOTE_AGE);
                 v->age = age;
-                if ((sweep_mask & bits) == sweep_mask) {
-                    bits = GC_CLEAN;
-                    big_reset++;
-                }
+                bits = GC_CLEAN;
+                big_reset++;
             }
             gc_bits(&v->header) = bits;
         }
@@ -1453,25 +1452,19 @@ static int push_root(jl_value_t *v, int d, int bits)
 #undef MARK
 
  queue_the_root:
-    if (mark_sp >= mark_stack_size) grow_mark_stack();
+    if (mark_sp >= mark_stack_size)
+        grow_mark_stack();
     mark_stack[mark_sp++] = (jl_value_t*)v;
     return bits;
 }
 
-static void visit_mark_stack_inc(int mark_mode)
+static void visit_mark_stack(void)
 {
-    while(mark_sp > 0 && !should_timeout()) {
+    while (mark_sp > 0 && !should_timeout()) {
         jl_value_t *v = mark_stack[--mark_sp];
-        assert(gc_bits(jl_astaggedvalue(v)) == GC_QUEUED ||
-               gc_bits(jl_astaggedvalue(v)) == GC_MARKED ||
-               gc_bits(jl_astaggedvalue(v)) == GC_MARKED_NOESC);
+        assert(gc_bits(jl_astaggedvalue(v)));
         push_root(v, 0, gc_bits(jl_astaggedvalue(v)));
     }
-}
-
-static void visit_mark_stack(int mark_mode)
-{
-    visit_mark_stack_inc(mark_mode);
     assert(!mark_sp);
 }
 
@@ -1483,8 +1476,6 @@ double jl_clock_now(void);
 
 extern jl_module_t *jl_old_base_module;
 extern jl_array_t *jl_module_init_order;
-
-static int inc_count = 0;
 
 // mark the initial root set
 void pre_mark(void)
@@ -1569,7 +1560,7 @@ void post_mark(arraylist_t *list, int dryrun)
             arraylist_push(&finalizer_list_marked, fin);
         }
     }
-    visit_mark_stack(GC_MARKED_NOESC);
+    visit_mark_stack();
 }
 
 // collector entry point and control
@@ -1628,7 +1619,6 @@ static void big_obj_stats(void);
 #if defined(GC_TIME)
 static int saved_mark_sp = 0;
 #endif
-static int sweep_mask = GC_MARKED;
 #define MIN_SCAN_BYTES 1024*1024
 
 // Only one thread should be running in this function
@@ -1641,7 +1631,6 @@ static void _jl_gc_collect(int full, char *stack_hi)
 #endif
     int64_t last_perm_scanned_bytes = perm_scanned_bytes;
     if (!sweeping) {
-        inc_count++;
         assert(mark_sp == 0);
 
         // 1. mark every object in the remset
@@ -1684,7 +1673,7 @@ static void _jl_gc_collect(int full, char *stack_hi)
 
         // 3. walk roots
         pre_mark();
-        visit_mark_stack(GC_MARKED_NOESC);
+        visit_mark_stack();
 
         gc_num.since_sweep += gc_num.allocd + (int64_t)gc_num.interval;
 
@@ -1715,6 +1704,7 @@ static void _jl_gc_collect(int full, char *stack_hi)
         uint64_t sweep_t0 = jl_hrtime();
 #endif
         int64_t actual_allocd = gc_num.since_sweep;
+        static int sweep_mask = GC_MARKED;
         if (!sweeping) {
             // marking is over
 #if defined(GC_TIME) || defined(GC_FINAL_STATS)
@@ -1817,7 +1807,6 @@ static void _jl_gc_collect(int full, char *stack_hi)
 
 
             gc_num.allocd = -(int64_t)gc_num.interval;
-            inc_count = 0;
             live_bytes += -gc_num.freed + gc_num.since_sweep;
             gc_num.since_sweep = 0;
             jl_gc_total_freed_bytes += gc_num.freed;
@@ -1831,7 +1820,7 @@ static void _jl_gc_collect(int full, char *stack_hi)
         total_fin_time += + post_time;
 #endif
 #ifdef GC_TIME
-        jl_printf(JL_STDOUT, "GC sweep pause %.2f ms live %ld kB (freed %d kB EST %d kB [error %d] = %d%% of allocd %d kB b/r %ld/%ld) (%.2f ms in post_mark) (marked in %d inc) mask %d | next in %d kB\n", NS2MS(sweep_pause), live_bytes/1024, SAVE2/1024, estimate_freed/1024, (SAVE2 - estimate_freed), pct, SAVE3/1024, bonus/1024, SAVE/1024, NS2MS(post_time), inc_count, sweep_mask, -gc_num.allocd/1024);
+        jl_printf(JL_STDOUT, "GC sweep pause %.2f ms live %ld kB (freed %d kB EST %d kB [error %d] = %d%% of allocd %d kB b/r %ld/%ld) (%.2f ms in post_mark) (marked) mask %d | next in %d kB\n", NS2MS(sweep_pause), live_bytes/1024, SAVE2/1024, estimate_freed/1024, (SAVE2 - estimate_freed), pct, SAVE3/1024, bonus/1024, SAVE/1024, NS2MS(post_time), sweep_mask, -gc_num.allocd/1024);
 #endif
     }
     gc_num.pause++;
@@ -1841,12 +1830,6 @@ static void _jl_gc_collect(int full, char *stack_hi)
     max_pause = max_pause < pause ? pause : max_pause;
 #endif
 
-#ifdef GC_TIME
-    if (estimate_freed != SAVE2) {
-        // this should not happen but it does
-        // mostly because of gc_counted_* allocations
-    }
-#endif
     if (recollect) {
         gc_num.pause--;
         _jl_gc_collect(0, stack_hi);
