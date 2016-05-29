@@ -540,9 +540,9 @@ void gc_count_pool(void)
     memset(&poolobj_sizes, 0, sizeof(poolobj_sizes));
     empty_pages = 0;
     for (int i = 0; i < REGION_COUNT; i++) {
-        if (regions[i].pages) {
-            gc_count_pool_region(&regions[i]);
-        }
+        if (!regions[i].pages)
+            break;
+        gc_count_pool_region(&regions[i]);
     }
     jl_safe_printf("****** Pool stat: ******\n");
     for (int i = 0;i < 4;i++)
