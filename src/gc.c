@@ -297,7 +297,7 @@ static uint64_t total_fin_time = 0;
  *                         --[(quick)sweep && age<=promotion]---
  */
 
-// A quick sweep is a sweep where sweep_mask == GC_MARKED_NOESC.
+// A quick sweep is a sweep where `!sweep_full`
 // It means we won't touch GC_MARKED objects (old gen).
 
 // When a reachable object has survived more than PROMOTE_AGE+1 collections
@@ -317,7 +317,7 @@ static uint64_t total_fin_time = 0;
 
 static int64_t scanned_bytes; // young bytes scanned while marking
 static int64_t perm_scanned_bytes; // old bytes scanned while marking
-static int prev_sweep_mask = GC_MARKED;
+static int prev_sweep_full = 1;
 
 #define inc_sat(v,s) v = (v) >= s ? s : (v)+1
 
@@ -534,7 +534,7 @@ static int big_reset;
 
 // Sweep list rooted at *pv, removing and freeing any unmarked objects.
 // Return pointer to last `next` field in the culled list.
-static bigval_t **sweep_big_list(int sweep_mask, bigval_t **pv)
+static bigval_t **sweep_big_list(int sweep_full, bigval_t **pv)
 {
     bigval_t *v = *pv;
     while (v != NULL) {
@@ -544,7 +544,7 @@ static bigval_t **sweep_big_list(int sweep_mask, bigval_t **pv)
             pv = &v->next;
             int age = v->age;
             if (age >= PROMOTE_AGE || bits == GC_MARKED) {
-                if (sweep_mask == GC_MARKED || bits == GC_MARKED_NOESC) {
+                if (sweep_full || bits == GC_MARKED_NOESC) {
                     bits = GC_QUEUED;
                 }
             }
@@ -574,13 +574,12 @@ static bigval_t **sweep_big_list(int sweep_mask, bigval_t **pv)
     return pv;
 }
 
-static void sweep_big(int sweep_mask)
+static void sweep_big(int sweep_full)
 {
     for (int i = 0;i < jl_n_threads;i++)
-        sweep_big_list(sweep_mask,
-                       &jl_all_tls_states[i]->heap.big_objects);
-    if (sweep_mask == GC_MARKED) {
-        bigval_t **last_next = sweep_big_list(sweep_mask, &big_objects_marked);
+        sweep_big_list(sweep_full, &jl_all_tls_states[i]->heap.big_objects);
+    if (sweep_full) {
+        bigval_t **last_next = sweep_big_list(sweep_full, &big_objects_marked);
         // Move all survivors from big_objects_marked list to big_objects list.
         if (jl_thread_heap.big_objects)
             jl_thread_heap.big_objects->prev = last_next;
@@ -829,7 +828,7 @@ static int freed_pages = 0;
 static int page_done = 0;
 #endif
 static gcval_t **sweep_page(jl_gc_pool_t *p, jl_gc_pagemeta_t *pg, gcval_t **pfl,int,int);
-static void sweep_pool_region(gcval_t ***pfl, int region_i, int sweep_mask)
+static void sweep_pool_region(gcval_t ***pfl, int region_i, int sweep_full)
 {
     region_t *region = &regions[region_i];
 
@@ -848,7 +847,7 @@ static void sweep_pool_region(gcval_t ***pfl, int region_i, int sweep_mask)
                     jl_tls_states_t *ptls = jl_all_tls_states[t_n];
                     jl_gc_pool_t *p = &ptls->heap.norm_pools[p_n];
                     int osize = pg->osize;
-                    pfl[t_n * JL_GC_N_POOLS + p_n] = sweep_page(p, pg, pfl[t_n * JL_GC_N_POOLS + p_n], sweep_mask, osize);
+                    pfl[t_n * JL_GC_N_POOLS + p_n] = sweep_page(p, pg, pfl[t_n * JL_GC_N_POOLS + p_n], sweep_full, osize);
                 }
             }
         }
@@ -861,7 +860,7 @@ static void sweep_pool_region(gcval_t ***pfl, int region_i, int sweep_mask)
 }
 
 // Returns pointer to terminal pointer of list rooted at *pfl.
-static gcval_t **sweep_page(jl_gc_pool_t *p, jl_gc_pagemeta_t *pg, gcval_t **pfl, int sweep_mask, int osize)
+static gcval_t **sweep_page(jl_gc_pool_t *p, jl_gc_pagemeta_t *pg, gcval_t **pfl, int sweep_full, int osize)
 {
     int freedall;
     gcval_t **prev_pfl = pfl;
@@ -880,9 +879,9 @@ static gcval_t **sweep_page(jl_gc_pool_t *p, jl_gc_pagemeta_t *pg, gcval_t **pfl
         goto free_page;
     // For quick sweep, we might be able to skip the page if the page doesn't
     // have any young live cell before marking.
-    if (sweep_mask == GC_MARKED_NOESC && !pg->has_young) {
-        assert(prev_sweep_mask == GC_MARKED_NOESC || pg->prev_nold >= pg->nold);
-        if (prev_sweep_mask == GC_MARKED_NOESC || pg->prev_nold == pg->nold) {
+    if (!sweep_full && !pg->has_young) {
+        assert(!prev_sweep_full || pg->prev_nold >= pg->nold);
+        if (!prev_sweep_full || pg->prev_nold == pg->nold) {
             // the position of the freelist begin/end in this page
             // is stored in its metadata
             if (pg->fl_begin_offset != (uint16_t)-1) {
@@ -915,7 +914,7 @@ static gcval_t **sweep_page(jl_gc_pool_t *p, jl_gc_pagemeta_t *pg, gcval_t **pfl
                 if (*ages & msk || bits == GC_MARKED) { // old enough
                     // `!age && bits == GC_MARKED` is possible for
                     // non-first-class objects like `jl_binding_t`
-                    if (sweep_mask == GC_MARKED || bits == GC_MARKED_NOESC) {
+                    if (sweep_full || bits == GC_MARKED_NOESC) {
                         bits = gc_bits(v) = GC_QUEUED; // promote
                     }
                     prev_nold++;
@@ -944,7 +943,7 @@ static gcval_t **sweep_page(jl_gc_pool_t *p, jl_gc_pagemeta_t *pg, gcval_t **pfl
         pg->fl_end_offset = pfl_begin ? (char*)pfl - data : (uint16_t)-1;
 
         pg->nfree = pg_nfree;
-        if (sweep_mask == GC_MARKED) {
+        if (sweep_full) {
             pg->nold = 0;
             pg->prev_nold = prev_nold;
         }
@@ -962,7 +961,7 @@ static gcval_t **sweep_page(jl_gc_pool_t *p, jl_gc_pagemeta_t *pg, gcval_t **pfl
     if (freedall) {
         // FIXME - need to do accounting on a per-thread basis
         // on quick sweeps, keep a few pages empty but allocated for performance
-        if (sweep_mask == GC_MARKED_NOESC && lazy_freed_pages <= default_collect_interval/GC_PAGE_SZ) {
+        if (!sweep_full && lazy_freed_pages <= default_collect_interval/GC_PAGE_SZ) {
             gcval_t *begin = reset_page(p, pg, 0);
             gcval_t **pend = (gcval_t**)((char*)begin + ((int)pg->nfree - 1)*osize);
             gcval_t *npg = p->newpages;
@@ -999,7 +998,7 @@ static gcval_t **sweep_page(jl_gc_pool_t *p, jl_gc_pagemeta_t *pg, gcval_t **pfl
     return pfl;
 }
 
-static void gc_sweep_once(int sweep_mask)
+static void gc_sweep_other(int sweep_full)
 {
 #ifdef GC_TIME
     double t0 = jl_clock_now();
@@ -1014,13 +1013,13 @@ static void gc_sweep_once(int sweep_mask)
     big_freed = 0;
     big_reset = 0;
 #endif
-    sweep_big(sweep_mask);
+    sweep_big(sweep_full);
 #ifdef GC_TIME
     jl_printf(JL_STDOUT, "GC sweep big %.2f (freed %d/%d with %d rst)\n", (jl_clock_now() - t0)*1000, big_freed, big_total, big_reset);
 #endif
 }
 
-static void gc_sweep_inc(int sweep_mask)
+static void gc_sweep_pool(int sweep_full)
 {
 #ifdef GC_TIME
     double t0 = jl_clock_now();
@@ -1061,7 +1060,7 @@ static void gc_sweep_inc(int sweep_mask)
     for (int i = 0; i < REGION_COUNT; i++) {
         if (!regions[i].pages)
             break;
-        sweep_pool_region(pfl, i, sweep_mask);
+        sweep_pool_region(pfl, i, sweep_full);
     }
 
 
@@ -1080,7 +1079,7 @@ static void gc_sweep_inc(int sweep_mask)
 #ifdef GC_TIME
     double sweep_pool_sec = jl_clock_now() - t0;
     double sweep_speed = ((((double)total_pages)*GC_PAGE_SZ)/(1024*1024*1024))/sweep_pool_sec;
-    jl_printf(JL_STDOUT, "GC sweep pools end %.2f at %.1f GB/s (skipped %d%% of %d, done %d pgs, %d freed with %d lazily) mask %d\n", sweep_pool_sec*1000, sweep_speed, total_pages ? (skipped_pages*100)/total_pages : 0, total_pages, page_done, freed_pages, lazy_freed_pages,  sweep_mask);
+    jl_printf(JL_STDOUT, "GC sweep pools end %.2f at %.1f GB/s (skipped %d%% of %d, done %d pgs, %d freed with %d lazily) full? %d\n", sweep_pool_sec*1000, sweep_speed, total_pages ? (skipped_pages*100)/total_pages : 0, total_pages, page_done, freed_pages, lazy_freed_pages,  sweep_full);
 #endif
 }
 
@@ -1627,7 +1626,6 @@ static void big_obj_stats(void);
 static void _jl_gc_collect(int full, char *stack_hi)
 {
     uint64_t t0 = jl_hrtime();
-    int recollect = 0;
     int64_t last_perm_scanned_bytes = perm_scanned_bytes;
     assert(mark_sp == 0);
 
@@ -1688,24 +1686,21 @@ static void _jl_gc_collect(int full, char *stack_hi)
 #ifdef GC_FINAL_STATS
     total_mark_time += mark_pause;
 #endif
-    int64_t estimate_freed = -1;
-
 #if defined(GC_TIME) || defined(GC_FINAL_STATS)
     uint64_t sweep_t0 = jl_hrtime();
 #endif
     int64_t actual_allocd = gc_num.since_sweep;
-    int sweep_mask = GC_MARKED;
     // marking is over
     // 4. check for objects to finalize
     post_mark(&finalizer_list, 0);
-    if (prev_sweep_mask == GC_MARKED)
+    if (prev_sweep_full)
         post_mark(&finalizer_list_marked, 0);
 #if defined(GC_TIME) || defined(GC_FINAL_STATS)
     uint64_t post_time = jl_hrtime() - sweep_t0;
 #endif
     int64_t live_sz_ub = live_bytes + actual_allocd;
     int64_t live_sz_est = scanned_bytes + perm_scanned_bytes;
-    estimate_freed = live_sz_ub - live_sz_est;
+    int64_t estimate_freed = live_sz_ub - live_sz_est;
 
     gc_verify();
 
@@ -1716,7 +1711,7 @@ static void _jl_gc_collect(int full, char *stack_hi)
     objprofile_printall();
     objprofile_reset();
     gc_num.total_allocd += gc_num.since_sweep;
-    if (prev_sweep_mask == GC_MARKED_NOESC)
+    if (!prev_sweep_full)
         promoted_bytes += perm_scanned_bytes - last_perm_scanned_bytes;
     // 5. next collection decision
     int not_freed_enough = estimate_freed < (7*(actual_allocd/10));
@@ -1724,10 +1719,11 @@ static void _jl_gc_collect(int full, char *stack_hi)
     for (int i = 0;i < jl_n_threads;i++)
         nptr += jl_all_tls_states[i]->heap.remset_nptr;
     int large_frontier = nptr*sizeof(void*) >= default_collect_interval; // many pointers in the intergen frontier => "quick" mark is not quick
+    int sweep_full;
+    int recollect = 0;
     if ((full || large_frontier ||
          ((not_freed_enough || promoted_bytes >= gc_num.interval) &&
-          (promoted_bytes >= default_collect_interval ||
-           prev_sweep_mask == GC_MARKED)) ||
+          (promoted_bytes >= default_collect_interval || prev_sweep_full)) ||
          gc_check_heap_size(live_sz_ub, live_sz_est)) &&
         gc_num.pause > 1) {
         gc_update_heap_size(live_sz_ub, live_sz_est);
@@ -1743,27 +1739,27 @@ static void _jl_gc_collect(int full, char *stack_hi)
             }
         }
         last_long_collect_interval = gc_num.interval;
-        sweep_mask = GC_MARKED;
+        sweep_full = 1;
         promoted_bytes = 0;
     }
     else {
         gc_num.interval = default_collect_interval / 2;
-        sweep_mask = gc_quick_sweep_mask;
+        sweep_full = gc_sweep_always_full;
     }
-    if (sweep_mask == GC_MARKED)
+    if (sweep_full)
         perm_scanned_bytes = 0;
     scanned_bytes = 0;
     // 5. start sweeping
     sweep_weak_refs();
-    gc_sweep_once(sweep_mask);
+    gc_sweep_other(sweep_full);
     gc_scrub(stack_hi);
-    gc_sweep_inc(sweep_mask);
+    gc_sweep_pool(sweep_full);
     // sweeping is over
     // 6. if it is a quick sweep, put back the remembered objects in queued state
     // so that we don't trigger the barrier again on them.
     for (int t_i = 0;t_i < jl_n_threads;t_i++) {
         jl_tls_states_t *ptls = jl_all_tls_states[t_i];
-        if (sweep_mask == GC_MARKED_NOESC) {
+        if (!sweep_full) {
             for (int i = 0; i < ptls->heap.remset->len; i++) {
                 gc_bits(jl_astaggedvalue(ptls->heap.remset->items[i])) = GC_QUEUED;
             }
@@ -1777,14 +1773,14 @@ static void _jl_gc_collect(int full, char *stack_hi)
             ptls->heap.rem_bindings.len = 0;
         }
     }
-    gc_num.full_sweep += sweep_mask != GC_MARKED_NOESC;
+    gc_num.full_sweep += sweep_full;
 
 #ifdef GC_TIME
     SAVE2 = gc_num.freed;
     SAVE3 = gc_num.since_sweep;
     pct = actual_allocd ? (gc_num.freed*100)/actual_allocd : -1;
 #endif
-    prev_sweep_mask = sweep_mask;
+    prev_sweep_full = sweep_full;
 
     gc_num.allocd = -(int64_t)gc_num.interval;
     live_bytes += -gc_num.freed + gc_num.since_sweep;
@@ -1799,7 +1795,7 @@ static void _jl_gc_collect(int full, char *stack_hi)
     total_fin_time += + post_time;
 #endif
 #ifdef GC_TIME
-    jl_printf(JL_STDOUT, "GC sweep pause %.2f ms live %ld kB (freed %d kB EST %d kB [error %d] = %d%% of allocd %d kB b/r %ld/%ld) (%.2f ms in post_mark) (marked) mask %d | next in %d kB\n", NS2MS(sweep_pause), live_bytes/1024, SAVE2/1024, estimate_freed/1024, (SAVE2 - estimate_freed), pct, SAVE3/1024, bonus/1024, SAVE/1024, NS2MS(post_time), sweep_mask, -gc_num.allocd/1024);
+    jl_printf(JL_STDOUT, "GC sweep pause %.2f ms live %ld kB (freed %d kB EST %d kB [error %d] = %d%% of allocd %d kB b/r %ld/%ld) (%.2f ms in post_mark) (marked) full? %d | next in %d kB\n", NS2MS(sweep_pause), live_bytes/1024, SAVE2/1024, estimate_freed/1024, (SAVE2 - estimate_freed), pct, SAVE3/1024, bonus/1024, SAVE/1024, NS2MS(post_time), sweep_full, -gc_num.allocd/1024);
 #endif
     gc_num.pause++;
     uint64_t pause = jl_hrtime() - t0;

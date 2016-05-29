@@ -56,7 +56,7 @@ typedef struct {
 } jl_alloc_num_t;
 
 typedef struct {
-    int sweep_mask;
+    int always_full;
     int wait_for_debugger;
     jl_alloc_num_t pool;
     jl_alloc_num_t other;
@@ -312,13 +312,13 @@ extern int gc_verifying;
 
 #ifdef GC_DEBUG_ENV
 JL_DLLEXPORT extern jl_gc_debug_env_t jl_gc_debug_env;
-#define gc_quick_sweep_mask jl_gc_debug_env.sweep_mask
+#define gc_sweep_always_full jl_gc_debug_env.always_full
 int gc_debug_check_other(void);
 int gc_debug_check_pool(void);
 void gc_debug_print(void);
 void gc_scrub(char *stack_hi);
 #else
-#define gc_quick_sweep_mask GC_MARKED_NOESC
+#define gc_sweep_always_full 0
 static inline int gc_debug_check_other(void)
 {
     return 0;
