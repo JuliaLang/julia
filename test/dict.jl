@@ -81,8 +81,7 @@ h["a","b","c"] = 4
 @test keytype(h) == Any
 @test valtype(h) == Any
 
-let
-    td = Dict{AbstractString,Float64}()
+let td = Dict{AbstractString,Float64}()
     @test eltype(td) == Pair{AbstractString,Float64}
     @test keytype(td) == AbstractString
     @test valtype(td) == Float64
@@ -90,8 +89,7 @@ let
     @test valtype(Dict{AbstractString,Float64}) === Float64
 end
 
-let
-    z = Dict()
+let z = Dict()
     get_KeyError = false
     try
         z["a"]
@@ -104,8 +102,7 @@ end
 _d = Dict("a"=>0)
 @test isa([k for k in filter(x->length(x)==1, collect(keys(_d)))], Vector{String})
 
-let
-    d = Dict(((1, 2), (3, 4)))
+let d = Dict(((1, 2), (3, 4)))
     @test d[1] === 2
     @test d[3] === 4
     d2 = Dict(1 => 2, 3 => 4)
@@ -154,8 +151,7 @@ end
 @test_throws KeyError Dict("a"=>2)[Base.secret_table_token]
 
 # issue #1821
-let
-    d = Dict{String, Vector{Int}}()
+let d = Dict{String, Vector{Int}}()
     d["a"] = [1, 2]
     @test_throws MethodError d["b"] = 1
     @test isa(repr(d), AbstractString)  # check that printable without error
@@ -343,15 +339,13 @@ for k5886 in keys(d5886)
 end
 
 # issue #8877
-let
-    a = Dict("foo"  => 0.0, "bar" => 42.0)
-    b = Dict("フー" => 17, "バー" => 4711)
+let a = Dict("foo"  => 0.0, "bar" => 42.0),
+        b = Dict("フー" => 17, "バー" => 4711)
     @test typeof(merge(a, b)) === Dict{String,Float64}
 end
 
 # issue 9295
-let
-    d = Dict()
+let d = Dict()
     @test push!(d, 'a' => 1) === d
     @test d['a'] == 1
     @test push!(d, 'b' => 2, 'c' => 3) === d
@@ -366,8 +360,7 @@ end
 
 # issue #10647
 type T10647{T}; x::T; end
-let
-    a = ObjectIdDict()
+let a = ObjectIdDict()
     a[1] = a
     a[a] = 2
     a[3] = T10647(a)
