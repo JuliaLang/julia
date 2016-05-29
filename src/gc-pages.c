@@ -152,9 +152,7 @@ NOINLINE void *jl_gc_alloc_page(void)
     VirtualAlloc(ptr, GC_PAGE_SZ, MEM_COMMIT, PAGE_READWRITE);
 #endif
     current_pg_count++;
-#ifdef GC_FINAL_STATS
-    max_pg_count = max_pg_count < current_pg_count ? current_pg_count : max_pg_count;
-#endif
+    gc_final_count_page(current_pg_count);
     JL_UNLOCK_NOGC(&pagealloc_lock);
     return ptr;
 }
