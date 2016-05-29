@@ -51,7 +51,6 @@ end
 # Scan dependencies for (explicit or implicit) contradictions
 function sanity_check(deps::Dict{String,Dict{VersionNumber,Available}},
                       pkgs::Set{String} = Set{String}())
-
     isempty(pkgs) || (deps = Query.undirected_dependencies_subset(deps, pkgs))
 
     deps, eq_classes = Query.prune_versions(deps)
