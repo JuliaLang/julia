@@ -117,8 +117,7 @@ function sanity_check(deps::Dict{String,Dict{VersionNumber,Available}},
             end
         end
         if ok
-            let
-                p0 = interface.pdict[p]
+            let p0 = interface.pdict[p]
                 svn = red_pvers[p0][sol[p0]]
                 @assert svn == vn
             end

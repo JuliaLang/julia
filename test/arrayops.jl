@@ -264,8 +264,7 @@ end
     @test size(Matrix()) == (0,0)
 end
 @testset "get" begin
-    let
-        A = reshape(1:24, 3, 8)
+    let A = reshape(1:24, 3, 8)
         x = get(A, 32, -12)
         @test x == -12
         x = get(A, 14, -12)
@@ -902,8 +901,7 @@ end
 end
 
 @testset "single multidimensional index" begin
-    let
-        a = rand(6,6)
+    let a = rand(6,6)
         I = [1 4 5; 4 2 6; 5 6 3]
         a2 = a[I]
         @test size(a2) == size(I)
@@ -1184,8 +1182,7 @@ for N = 1:Nmax
 end
 
 # issue #6645 (32-bit)
-let
-    x = Float64[]
+let x = Float64[]
     for i=1:5; push!(x, 1.0); end
     @test dot(zeros(5),x) == 0.0
 end
@@ -1221,8 +1218,7 @@ end
 @test pr8622() == [0,3,1,0]
 
 #6828 - size of specific dimensions
-let
-    a = Array{Float64}(10)
+let a = Array{Float64}(10)
     @test size(a) == (10,)
     @test size(a, 1) == 10
     @test size(a,2,1) == (1,10)
@@ -1851,11 +1847,10 @@ for op in (:.+, :.*, :.÷, :.%, :.<<, :.>>, :.-, :./, :.\, :.//, :.^)
     @eval @test typeof($(op)(A,A)) == Matrix{Foo}
 end
 
-end
+end # module AutoRetType
 
 @testset "concatenations of dense matrices/vectors yield dense matrices/vectors" begin
-    let
-        N = 4
+    let N = 4
         densevec = ones(N)
         densemat = diagm(ones(N))
         # Test that concatenations of homogeneous pairs of either dense matrices or dense vectors
@@ -1877,8 +1872,7 @@ end
 end
 
 @testset "type constructor Array{T, N}(d...) works (especially for N>3)" begin
-    let
-        a = Array{Float64}(10)
+    let a = Array{Float64}(10)
         b = Array{Float64, 1}(10)
         @test size(a) == (10,)
         @test size(a, 1) == 10

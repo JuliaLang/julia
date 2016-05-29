@@ -48,8 +48,7 @@ end
 @test isa(collect(Any, [1,2]), Vector{Any})
 
 # foreach
-let
-    a = []
+let a = []
     foreach(()->push!(a,0))
     @test a == [0]
     a = []
