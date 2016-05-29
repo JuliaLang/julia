@@ -474,7 +474,7 @@ void gc_debug_init(void)
     gc_stack_lo = (char*)gc_get_stack_ptr();
     char *env = getenv("JULIA_GC_NO_GENERATIONAL");
     if (env && strcmp(env, "0") != 0)
-        jl_gc_debug_env.sweep_mask = GC_MARKED;
+        jl_gc_debug_env.always_full = 1;
     env = getenv("JULIA_GC_WAIT_FOR_DEBUGGER");
     jl_gc_debug_env.wait_for_debugger = env && strcmp(env, "0") != 0;
     gc_debug_alloc_init(&jl_gc_debug_env.pool, "POOL");
