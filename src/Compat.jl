@@ -22,22 +22,6 @@ if VERSION < v"0.4.0-dev+4603"
     export Cstring, Cwstring
 end
 
-if isdefined(Core, :String) && isdefined(Core, :AbstractString)
-    # Not exported in order to not break code on 0.5
-    typealias UTF8String Core.String
-    typealias ASCIIString Core.String
-else
-    typealias String Base.ByteString
-    if VERSION >= v"0.4.0-dev+1246"
-        call(::Type{Base.ByteString},s::Cstring) = bytestring(s)
-        call(::Type{Base.ByteString},v::Vector{UInt8}) = bytestring(v)
-        call(::Type{Base.ByteString},io::Base.AbstractIOBuffer) = bytestring(io)
-        call(::Type{Base.ByteString},p::Union{Ptr{Int8},Ptr{UInt8}}) = bytestring(p)
-        call(::Type{Base.ByteString},p::Union{Ptr{Int8},Ptr{UInt8}}, len::Integer) = bytestring(p, len)
-        call(::Type{Base.ByteString},s::AbstractString) = bytestring(s)
-    end
-end
-
 if VERSION < v"0.4.0-dev+2340"
     const base64encode = base64
     export base64encode
@@ -1243,6 +1227,22 @@ if VERSION < v"0.4.0-dev+1884"
     randexp(rng::MersenneTwister) = Base.Random.randmtzig_exprnd(rng)
     randexp() = Base.Random.randmtzig_exprnd()
     export randexp
+end
+
+if isdefined(Core, :String) && isdefined(Core, :AbstractString)
+    # Not exported in order to not break code on 0.5
+    typealias UTF8String Core.String
+    typealias ASCIIString Core.String
+else
+    typealias String Base.ByteString
+    if VERSION >= v"0.4.0-dev+1246"
+        @compat (::Type{Base.ByteString})(s::Cstring) = bytestring(s)
+        @compat (::Type{Base.ByteString})(v::Vector{UInt8}) = bytestring(v)
+        @compat (::Type{Base.ByteString})(io::Base.AbstractIOBuffer) = bytestring(io)
+        @compat (::Type{Base.ByteString})(p::Union{Ptr{Int8},Ptr{UInt8}}) = bytestring(p)
+        @compat (::Type{Base.ByteString})(p::Union{Ptr{Int8},Ptr{UInt8}}, len::Integer) = bytestring(p, len)
+        @compat (::Type{Base.ByteString})(s::AbstractString) = bytestring(s)
+    end
 end
 
 end # module
