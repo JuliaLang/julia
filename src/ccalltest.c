@@ -344,6 +344,10 @@ JL_DLLEXPORT struct16 test_16(struct16 a, float b) {
     return a;
 }
 
+// Note for AArch64:
+// `i128` is a native type on aarch64 so the type here is wrong.
+// However, it happens to have the same calling convention with `[2 x i64]`
+// when used as first argument or return value.
 #define int128_t struct3b
 JL_DLLEXPORT int128_t test_128(int128_t a, int64_t b) {
     //Unpack a Int128
@@ -393,7 +397,8 @@ JL_DLLEXPORT void *test_echo_p(void *p) {
 
 #include <xmmintrin.h>
 
-JL_DLLEXPORT __m128i test_m128i(__m128i a, __m128i b, __m128i c, __m128i d ) {
+JL_DLLEXPORT __m128i test_m128i(__m128i a, __m128i b, __m128i c, __m128i d )
+{
     // 64-bit x86 has only level 2 SSE, which does not have a <4 x int32> multiplication,
     // so we use floating-point instead, and assume caller knows about the hack.
     return _mm_add_epi32(a,
@@ -401,8 +406,47 @@ JL_DLLEXPORT __m128i test_m128i(__m128i a, __m128i b, __m128i c, __m128i d ) {
                                                     _mm_cvtepi32_ps(_mm_sub_epi32(c,d)))));
 }
 
-JL_DLLEXPORT __m128 test_m128(__m128 a, __m128 b, __m128 c, __m128 d ) {
+JL_DLLEXPORT __m128 test_m128(__m128 a, __m128 b, __m128 c, __m128 d )
+{
     return _mm_add_ps(a, _mm_mul_ps(b, _mm_sub_ps(c, d)));
+}
+
+#endif
+
+#ifdef _CPU_AARCH64_
+
+JL_DLLEXPORT __int128 test_aa64_i128_1(int64_t v1, __int128 v2)
+{
+    return v1 * 2 - v2;
+}
+
+typedef struct {
+    int32_t v1;
+    __int128 v2;
+} struct_aa64_1;
+
+JL_DLLEXPORT struct_aa64_1 test_aa64_i128_2(int64_t v1, __int128 v2,
+                                            struct_aa64_1 v3)
+{
+    struct_aa64_1 x = {(int32_t)v1 / 2 + 1 - v3.v1, v2 * 2 - 1 - v3.v2};
+    return x;
+}
+
+typedef struct {
+    __fp16 v1;
+    double v2;
+} struct_aa64_2;
+
+JL_DLLEXPORT __fp16 test_aa64_fp16_1(int v1, float v2, double v3, __fp16 v4)
+{
+    return (__fp16)(v1 + v2 * 2 + v3 * 3 + v4 * 4);
+}
+
+JL_DLLEXPORT struct_aa64_2 test_aa64_fp16_2(int v1, float v2,
+                                            double v3, __fp16 v4)
+{
+    struct_aa64_2 x = {v4 / 2 + 1, v1 * 2 + v2 * 4 - v3};
+    return x;
 }
 
 #endif
