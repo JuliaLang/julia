@@ -1442,24 +1442,46 @@ end
 `print_matrix_repr(io, X)` prints matrix X with opening and closing square brackets.
 """
 function print_matrix_repr(io, X::AbstractArray)
+    limit = get(io, :limit, false)::Bool
     compact, prefix = array_eltype_show_how(X)
     if compact && !haskey(io, :compact)
         io = IOContext(io, :compact => compact)
     end
+    nr, nc = size(X,1), size(X,2)
+    rdots, cdots = false, false
+    rr1, rr2 = 1:nr, 1:0
+    cr1, cr2 = 1:nc, 1:0
+    if limit
+        if nr > 20
+            rr1, rr2 = 1:10, nr-9:nr
+            rdots = true
+        end
+        if nc > 20
+            cr1, cr2 = 1:10, nc-9:nc
+            cdots = true
+        end
+    end
     print(io, prefix, "[")
-    for i=1:size(X,1)
-        for j=1:size(X,2)
-            j > 1 && print(io, " ")
-            if !isassigned(X,i,j)
-                print(io, undef_ref_str)
-            else
-                el = X[i,j]
-                show(io, el)
+    for rr in (rr1, rr2)
+        for i in rr
+            for cr in (cr1, cr2)
+                for j in cr
+                    j > first(cr) && print(io, " ")
+                    if !isassigned(X,i,j)
+                        print(io, undef_ref_str)
+                    else
+                        el = X[i,j]
+                        show(io, el)
+                    end
+                end
+                if last(cr) == nc
+                    i < nr && print(io, "; ")
+                elseif cdots
+                    print(io, " \u2026 ")
+                end
             end
         end
-        if i < size(X,1)
-            print(io, "; ")
-        end
+        last(rr) != nr && rdots && print(io, "\u2026 ; ")
     end
     print(io, "]")
 end
