@@ -843,7 +843,7 @@ JL_DLLEXPORT jl_datatype_t *jl_new_uninitialized_datatype(size_t nfields, int8_t
 // For sake of Ahead-Of-Time (AOT) compilation, this routine has to work
 // without LLVM being available.
 unsigned jl_special_vector_alignment(size_t nfields, jl_value_t *t) {
-    if (!is_vecelement_type(t))
+    if (!jl_is_vecelement_type(t))
         return 0;
     // LLVM 3.7 and 3.8 either crash or generate wrong code for many
     // SIMD vector sizes N. It seems the rule is that N can have at
@@ -859,7 +859,7 @@ unsigned jl_special_vector_alignment(size_t nfields, jl_value_t *t) {
         return 0;               // nfields has more than two 1s
     assert(jl_datatype_nfields(t)==1);
     jl_value_t *ty = jl_field_type(t, 0);
-    if( !jl_is_bitstype(ty) )
+    if (!jl_is_bitstype(ty))
         // LLVM requires that a vector element be a primitive type.
         // LLVM allows pointer types as vector elements, but until a
         // motivating use case comes up for Julia, we reject pointers.

@@ -954,7 +954,7 @@ STATIC_INLINE int jl_is_tuple_type(void *t)
             ((jl_datatype_t*)(t))->name == jl_tuple_typename);
 }
 
-STATIC_INLINE int is_vecelement_type(jl_value_t* t)
+STATIC_INLINE int jl_is_vecelement_type(jl_value_t* t)
 {
     return (jl_is_datatype(t) &&
             ((jl_datatype_t*)(t))->name == jl_vecelement_typename);

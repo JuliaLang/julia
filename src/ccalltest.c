@@ -449,4 +449,30 @@ JL_DLLEXPORT struct_aa64_2 test_aa64_fp16_2(int v1, float v2,
     return x;
 }
 
+#include <arm_neon.h>
+
+JL_DLLEXPORT int64x2_t test_aa64_vec_1(int32x2_t v1, float _v2, int32x2_t v3)
+{
+    int v2 = (int)_v2;
+    return vmovl_s32(v1 * v2 + v3);
+}
+
+// This is a homogenious short vector aggregate
+typedef struct {
+    int8x8_t v1;
+    float32x2_t v2;
+} struct_aa64_3;
+
+// This is NOT a homogenious short vector aggregate
+typedef struct {
+    float32x2_t v2;
+    int16x8_t v1;
+} struct_aa64_4;
+
+JL_DLLEXPORT struct_aa64_3 test_aa64_vec_2(struct_aa64_3 v1, struct_aa64_4 v2)
+{
+    struct_aa64_3 x = {v1.v1 + vmovn_s16(v2.v1), v1.v2 - v2.v2};
+    return x;
+}
+
 #endif

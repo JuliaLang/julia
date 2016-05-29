@@ -16,11 +16,53 @@ namespace {
 typedef bool AbiState;
 static const AbiState default_abi_state = 0;
 
+static Type *get_llvm_vectype(jl_datatype_t *dt)
+{
+    // Assume jl_is_datatype(dt) && !jl_is_abstracttype(dt)
+    // `!dt->mutabl && dt->pointerfree && !dt->haspadding && dt->nfields > 0`
+    size_t nfields = dt->nfields;
+    assert(nfields > 0);
+    if (nfields < 2)
+        return nullptr;
+    static Type *T_vec64 = VectorType::get(T_int32, 2);
+    static Type *T_vec128 = VectorType::get(T_int32, 4);
+    Type *lltype;
+    // Short vector should be either 8 bytes or 16 bytes.
+    // Note that there are only two distinct fundamental types for
+    // short vectors so we normalize them to <2 x i32> and <4 x i32>
+    switch (dt->size) {
+    case 8:
+        lltype = T_vec64;
+        break;
+    case 16:
+        lltype = T_vec128;
+        break;
+    default:
+        return nullptr;
+    }
+    // Since `dt` is pointer free and has no padding and is 8 or 16 in size,
+    // `ft0` must be concrete, immutable with no padding and we don't need
+    // to check if its size is legal since it is included in
+    // the homogeneity check.
+    jl_datatype_t *ft0 = (jl_datatype_t*)jl_field_type(dt, 0);
+    // `ft0` should be a `VecElement` type and the true element type
+    // should be a `bitstype`
+    if (ft0->name != jl_vecelement_typename ||
+        ((jl_datatype_t*)jl_field_type(ft0, 0))->nfields)
+        return nullptr;
+    for (int i = 1; i < nfields; i++) {
+        if (jl_field_type(dt, i) != (jl_value_t*)ft0) {
+            // Not homogeneous
+            return nullptr;
+        }
+    }
+    return lltype;
+}
+
 static Type *get_llvm_fptype(jl_datatype_t *dt)
 {
     // Assume jl_is_datatype(dt) && !jl_is_abstracttype(dt)
-    if (dt->mutabl || jl_datatype_nfields(dt) != 0)
-        return NULL;
+    // `!dt->mutabl && dt->pointerfree && !dt->haspadding && dt->nfields == 0`
     Type *lltype;
     // Check size first since it's cheaper.
     switch (dt->size) {
@@ -37,9 +79,17 @@ static Type *get_llvm_fptype(jl_datatype_t *dt)
         lltype = T_float128;
         break;
     default:
-        return NULL;
+        return nullptr;
     }
-    return jl_is_floattype((jl_value_t*)dt) ? lltype : NULL;
+    return jl_is_floattype((jl_value_t*)dt) ? lltype : nullptr;
+}
+
+static Type *get_llvm_fp_or_vectype(jl_datatype_t *dt)
+{
+    // Assume jl_is_datatype(dt) && !jl_is_abstracttype(dt)
+    if (dt->mutabl || !dt->pointerfree || dt->haspadding)
+        return nullptr;
+    return dt->nfields ? get_llvm_vectype(dt) : get_llvm_fptype(dt);
 }
 
 struct ElementType {
@@ -50,8 +100,6 @@ struct ElementType {
 
 // Whether a type is a homogeneous floating-point aggregates (HFA) or a
 // homogeneous short-vector aggregates (HVA). Returns the element type.
-// We only handle HFA of HP, SP, DP and QP here since these are the only ones we
-// have (no vectors).
 // An Homogeneous Aggregate is a Composite Type where all of the Fundamental
 // Data Types of the members that compose the type are the same.
 // Note that it is the fundamental types that are important and not the member
@@ -62,6 +110,7 @@ static bool isHFAorHVA(jl_datatype_t *dt, size_t dsz, size_t &nele, ElementType 
     //     dt is a pointerfree type, (all members are isbits)
     //     dsz == dt->size > 0
     //     0 <= nele <= 3
+    //     dt has no padding
 
     // We ignore zero sized member here. This isn't really consistent with
     // GCC for zero-sized array members. GCC seems to treat structs with
@@ -82,6 +131,14 @@ static bool isHFAorHVA(jl_datatype_t *dt, size_t dsz, size_t &nele, ElementType 
         if (fieldsz == dsz) {
             dt = (jl_datatype_t*)jl_field_type(dt, i);
             continue;
+        }
+        if (Type *vectype = get_llvm_vectype(dt)) {
+            if ((ele.sz && dsz != ele.sz) || (ele.type && ele.type != vectype))
+                return false;
+            ele.type = vectype;
+            ele.sz = dsz;
+            nele++;
+            return true;
         }
         // Otherwise, process each members
         for (;i < nfields;i++) {
@@ -183,9 +240,7 @@ static Type *classify_arg(jl_value_t *ty, bool *fpreg, bool *onstack,
     //   the argument is allocated to the least significant bits of register
     //   v[NSRN]. The NSRN is incremented by one. The argument has now been
     //   allocated.
-    // Note that this is missing QP float as well as short vector types since we
-    // don't really have those types.
-    if (get_llvm_fptype(dt)) {
+    if (get_llvm_fp_or_vectype(dt)) {
         *fpreg = true;
         return NULL;
     }
@@ -323,7 +378,7 @@ Type *preferred_llvm_type(jl_value_t *ty, bool)
     if (!jl_is_datatype(ty) || jl_is_abstracttype(ty))
         return NULL;
     jl_datatype_t *dt = (jl_datatype_t*)ty;
-    if (Type *fptype = get_llvm_fptype(dt))
+    if (Type *fptype = get_llvm_fp_or_vectype(dt))
         return fptype;
     bool fpreg = false;
     bool onstack = false;
