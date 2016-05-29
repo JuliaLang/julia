@@ -385,7 +385,7 @@ static Type *julia_struct_to_llvm(jl_value_t *jt, bool *isboxed)
                 latypes.push_back(lty);
             }
             if (!isTuple) {
-                if (is_vecelement_type(jt))
+                if (jl_is_vecelement_type(jt))
                     // VecElement type is unwrapped in LLVM
                     jst->struct_decl = latypes[0];
                 else
@@ -1101,7 +1101,7 @@ static jl_cgval_t emit_getfield_knownidx(const jl_cgval_t &strct, unsigned idx, 
     }
     else if (strct.ispointer()) { // something stack allocated
         Value *addr;
-        if (is_vecelement_type((jl_value_t*)jt))
+        if (jl_is_vecelement_type((jl_value_t*)jt))
             // VecElement types are unwrapped in LLVM.
             addr = strct.V;
         else
@@ -1678,7 +1678,7 @@ static jl_cgval_t emit_new_struct(jl_value_t *ty, size_t nargs, jl_value_t **arg
             // or instead initialize the stack buffer with stores
             bool init_as_value = false;
             if (lt->isVectorTy() ||
-                is_vecelement_type(ty) ||
+                jl_is_vecelement_type(ty) ||
                 type_is_ghost(lt)) // maybe also check the size ?
                 init_as_value = true;
 
@@ -1714,7 +1714,7 @@ static jl_cgval_t emit_new_struct(jl_value_t *ty, size_t nargs, jl_value_t **arg
                             strct = builder.CreateInsertValue(strct, fval, ArrayRef<unsigned>(&idx,1));
                         else {
                             // Must be a VecElement type, which comes unwrapped in LLVM.
-                            assert(is_vecelement_type(ty));
+                            assert(jl_is_vecelement_type(ty));
                             strct = fval;
                         }
                     }
