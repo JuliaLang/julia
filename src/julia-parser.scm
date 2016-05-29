@@ -604,7 +604,9 @@
       (let loop ((ex
                   ;; in allow-empty mode skip leading runs of operator
                   (if (and allow-empty (memv t ops))
-                      '()
+                      (if add-linenums
+                          (list (line-number-node s))
+                          '())
                       (if add-linenums
                           (let ((loc (line-number-node s)))
                             ;; note: line-number must happen before (down s)
@@ -1237,12 +1239,16 @@
                           #f
                           finalb)
                     (let* ((var (if nl #f (parse-eq* s)))
-                           (var? (and (not nl) (or (symbol? var) (and (length= var 2) (eq? (car var) '$)))))
+                           (var? (and (not nl) (or (and (symbol? var) (not (eq? var 'false))
+                                                        (not (eq? var 'true)))
+                                                   (and (length= var 2) (eq? (car var) '$)))))
                            (catch-block (if (eq? (require-token s) 'finally)
-                                            '(block)
+                                            `(block ,(line-number-node s))
                                             (parse-block s))))
                       (loop (require-token s)
-                            catch-block
+                            (if (or var? (not var))
+                                catch-block
+                                `(block ,(cadr catch-block) ,var ,@(cddr catch-block)))
                             (if var? var 'false)
                             finalb)))))
              ((and (eq? nxt 'finally)
