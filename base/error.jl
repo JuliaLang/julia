@@ -27,7 +27,7 @@ backtrace() = ccall(:jl_backtrace_from_here, Array{Ptr{Void},1}, (Int32,), false
 catch_backtrace() = ccall(:jl_get_backtrace, Array{Ptr{Void},1}, ())
 
 ## keyword arg lowering generates calls to this ##
-kwerr(kw) = error("unrecognized keyword argument \"", kw, "\"")
+kwerr(kw, args...) = throw(MethodError(typeof(args[1]).name.mt.kwsorter, (kw,args...)))
 
 ## system error handling ##
 
