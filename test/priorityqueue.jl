@@ -88,6 +88,9 @@ end
 xs = heapify!([v for v in values(priorities)])
 @test issorted([heappop!(xs) for _ in length(priorities)])
 
+xs = heapify(10:-1:1)
+@test issorted([heappop!(xs) for _ in 1:10])
+
 xs = Array(Int, 0)
 for priority in values(priorities)
     heappush!(xs, priority)

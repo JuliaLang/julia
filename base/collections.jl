@@ -2,7 +2,7 @@
 
 module Collections
 
-import Base: setindex!, done, get, hash, haskey, isempty, length, next, getindex, start
+import Base: setindex!, done, get, hash, haskey, isempty, length, next, getindex, start, copymutable
 import ..Order: Forward, Ordering, lt
 
 export
@@ -106,7 +106,7 @@ end
 
 Returns a new vector in binary heap order, optionally using the given ordering.
 """
-heapify(xs::AbstractArray, o::Ordering=Forward) = heapify!(copy(xs), o)
+heapify(xs::AbstractArray, o::Ordering=Forward) = heapify!(copymutable(xs), o)
 
 """
     isheap(v, [ord])

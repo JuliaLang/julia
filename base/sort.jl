@@ -2,7 +2,7 @@
 
 module Sort
 
-using Base.Order
+using Base.Order, Base.copymutable
 
 import
     Base.sort,
@@ -66,7 +66,7 @@ select!(v::AbstractVector, k::Union{Int,OrdinalRange};
     lt=isless, by=identity, rev::Bool=false, order::Ordering=Forward) =
     select!(v, k, ord(lt,by,rev,order))
 
-select(v::AbstractVector, k::Union{Int,OrdinalRange}; kws...) = select!(copy!(similar(v), v), k; kws...)
+select(v::AbstractVector, k::Union{Int,OrdinalRange}; kws...) = select!(copymutable(v), k; kws...)
 
 
 # reference on sorted binary search:
@@ -410,7 +410,7 @@ function sort!(v::AbstractVector;
     sort!(v, alg, ord(lt,by,rev,order))
 end
 
-sort(v::AbstractVector; kws...) = sort!(copy!(similar(v), v); kws...)
+sort(v::AbstractVector; kws...) = sort!(copymutable(v); kws...)
 
 
 ## selectperm: the permutation to sort the first k elements of an array ##

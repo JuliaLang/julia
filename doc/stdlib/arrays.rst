@@ -720,7 +720,7 @@ Combinatorics
 
    .. Docstring generated from Julia source
 
-   Construct a random permutation of length ``n``\ . The optional ``rng`` argument specifies a random number generator, see :ref:`Random Numbers <random-numbers>`\ .
+   Construct a random permutation of length ``n``\ . The optional ``rng`` argument specifies a random number generator (see :ref:`Random Numbers <random-numbers>`\ ). To randomly permute a arbitrary vector, see :func:`shuffle` or :func:`shuffle!`\ .
 
 .. function:: invperm(v)
 
@@ -758,13 +758,13 @@ Combinatorics
 
    .. Docstring generated from Julia source
 
-   Return a randomly permuted copy of ``v``\ . The optional ``rng`` argument specifies a random number generator, see :ref:`Random Numbers <random-numbers>`\ .
+   Return a randomly permuted copy of ``v``\ . The optional ``rng`` argument specifies a random number generator (see :ref:`Random Numbers <random-numbers>`\ ). To permute ``v`` in-place, see :func:`shuffle!`\ .  To obtain randomly permuted indices, see :func:`randperm`\ .
 
 .. function:: shuffle!([rng,] v)
 
    .. Docstring generated from Julia source
 
-   In-place version of :func:`shuffle`\ .
+   In-place version of :func:`shuffle`\ : randomly permute the array ``v`` in-place, optionally supplying the random-number generator ``rng``\ .
 
 .. function:: reverse(v [, start=1 [, stop=length(v) ]] )
 

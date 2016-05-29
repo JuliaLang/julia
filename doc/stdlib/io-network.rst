@@ -713,9 +713,9 @@ Julia environments (such as the IPython-based IJulia notebook).
 
    For example, if you define a ``MyImage`` type and know how to write it to a PNG file, you could define a function ``show(stream, ::MIME"image/png", x::MyImage) = ...`` to allow your images to be displayed on any PNG-capable ``Display`` (such as IJulia). As usual, be sure to ``import Base.show`` in order to add new methods to the built-in Julia function ``show``\ .
 
-   Technically, the ``MIME"mime"`` macro defines a singleton type for the given ``mime`` string, which allows us to exploit Julia's dispatch mechanisms in determining how to display objects of any given type.
+   The default MIME type is ``MIME"text/plain"``\ . There is a fallback definition for ``text/plain`` output that calls ``show`` with 2 arguments. Therefore, this case should be handled by defining a 2-argument ``show(stream::IO, x::MyType)`` method.
 
-   The default MIME type is ``MIME"text/plain"``\ . There is a fallback definition for ``text/plain`` output that calls ``show`` with 2 arguments. Therefore, this case should be handled by defining a 2-argument ``show`` method.
+   Technically, the ``MIME"mime"`` macro defines a singleton type for the given ``mime`` string, which allows us to exploit Julia's dispatch mechanisms in determining how to display objects of any given type.
 
 .. function:: mimewritable(mime, x)
 
