@@ -4,6 +4,7 @@ module Random
 
 using Base.dSFMT
 using Base.GMP: GMP_VERSION, Limb
+import Base.copymutable
 
 export srand,
        rand, rand!,
@@ -1338,7 +1339,7 @@ end
 
 shuffle!(a::AbstractVector) = shuffle!(GLOBAL_RNG, a)
 
-shuffle(r::AbstractRNG, a::AbstractVector) = shuffle!(r, copy(a))
+shuffle(r::AbstractRNG, a::AbstractVector) = shuffle!(r, copymutable(a))
 shuffle(a::AbstractVector) = shuffle(GLOBAL_RNG, a)
 
 function randperm(r::AbstractRNG, n::Integer)

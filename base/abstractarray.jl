@@ -290,7 +290,7 @@ function copy!(dest::AbstractArray, doffs::Integer,
     return dest
 end
 
-copy(a::AbstractArray) = copy!(similar(a), a)
+copy(a::AbstractArray) = copymutable(a)
 
 function copy!{R,S}(B::AbstractVecOrMat{R}, ir_dest::Range{Int}, jr_dest::Range{Int},
                     A::AbstractVecOrMat{S}, ir_src::Range{Int}, jr_src::Range{Int})
@@ -339,6 +339,18 @@ function copy_transpose!{R,S}(B::AbstractVecOrMat{R}, ir_dest::Range{Int}, jr_de
     end
     return B
 end
+
+copymutable(a::AbstractArray) = copy!(similar(a), a)
+copymutable(itr) = collect(itr)
+"""
+    copymutable(a)
+
+Make a mutable copy of an array or iterable `a`.  For `a::Array`,
+this is equivalent to `copy(a)`, but for other array types it may
+differ depending on the type of `similar(a)`.  For generic iterables
+this is equivalent to `collect(a)`.
+"""
+copymutable
 
 zero{T}(x::AbstractArray{T}) = fill!(similar(x), zero(T))
 
