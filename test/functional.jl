@@ -188,14 +188,178 @@ end
 # product
 # -------
 
-@test isempty(Base.product(1:2,1:0))
-@test isempty(Base.product(1:2,1:0,1:10))
-@test isempty(Base.product(1:2,1:10,1:0))
-@test isempty(Base.product(1:0,1:2,1:10))
-@test collect(Base.product(1:2,3:4)) == [(1,3),(2,3),(1,4),(2,4)]
-@test isempty(collect(Base.product(1:0,1:2)))
-@test length(Base.product(1:2,1:10,4:6)) == 60
-@test Base.iteratorsize(Base.product(1:2, countfrom(1))) == Base.IsInfinite()
+# empty?
+for itr in [Base.product(1:0),
+            Base.product(1:2, 1:0),
+            Base.product(1:0, 1:2),
+            Base.product(1:0, 1:1, 1:2),
+            Base.product(1:1, 1:0, 1:2),
+            Base.product(1:1, 1:2 ,1:0)]
+    @test isempty(itr)
+    @test isempty(collect(itr))
+end
+
+# collect a product - first iterators runs faster
+@test collect(Base.product(1:2))           == [(i,)      for i=1:2]
+@test collect(Base.product(1:2, 3:4))      == [(i, j)    for i=1:2, j=3:4]
+@test collect(Base.product(1:2, 3:4, 5:6)) == [(i, j, k) for i=1:2, j=3:4, k=5:6]
+
+# iteration order
+let
+    expected = [(1,3,5), (2,3,5), (1,4,5), (2,4,5), (1,3,6), (2,3,6), (1,4,6), (2,4,6)]
+    actual = Base.product(1:2, 3:4, 5:6)
+    for (exp, act) in zip(expected, actual)
+        @test exp == act
+    end
+end
+
+# collect multidimensional array
+let
+    a, b = 1:3, [4 6;
+                 5 7]
+    p = Base.product(a, b)
+    @test size(p)    == (3, 2, 2)
+    @test length(p)  == 12
+    @test ndims(p)   == 3
+    @test eltype(p)  == NTuple{2, Int}
+    cp = collect(p)
+    for i = 1:3
+        @test cp[i, :, :] == [(i, 4) (i, 6);
+                              (i, 5) (i, 7)]
+    end
+end
+
+# with 1D inputs
+let
+    a, b, c = 1:2, 1.0:10.0, Int32(1):Int32(0)
+
+    # length
+    @test length(Base.product(a))       == 2
+    @test length(Base.product(a, b))    == 20
+    @test length(Base.product(a, b, c)) == 0
+
+    # size
+    @test size(Base.product(a))         == (2, )
+    @test size(Base.product(a, b))      == (2, 10)
+    @test size(Base.product(a, b, c))   == (2, 10, 0)
+
+    # eltype
+    @test eltype(Base.product(a))       == Tuple{Int}
+    @test eltype(Base.product(a, b))    == Tuple{Int, Float64}
+    @test eltype(Base.product(a, b, c)) == Tuple{Int, Float64, Int32}
+
+    # ndims
+    @test ndims(Base.product(a))        == 1
+    @test ndims(Base.product(a, b))     == 2
+    @test ndims(Base.product(a, b, c))  == 3
+end
+
+# with multidimensional inputs
+let
+    a, b, c = randn(4, 4), randn(3, 3, 3), randn(2, 2, 2, 2)
+    args = Any[(a,),
+               (a, a),
+               (a, b),
+               (a, a, a),
+               (a, b, c)]
+    sizes = Any[(4, 4),
+                (4, 4, 4, 4),
+                (4, 4, 3, 3, 3),
+                (4, 4, 4, 4, 4, 4),
+                (4, 4, 3, 3, 3, 2, 2, 2, 2)]
+    for (method, fun) in zip([size, ndims, length], [x->x, length, prod])
+        for i in 1:length(args)
+            @test method(Base.product(args[i]...)) == method(collect(Base.product(args[i]...))) == fun(sizes[i])
+        end
+    end
+end
+
+# more tests on product with iterators of various type
+let
+    iters = (1:2,
+             rand(2, 2, 2),
+             take(1:4, 2),
+             Base.product(1:2, 1:3),
+             Base.product(rand(2, 2), rand(1, 1, 1))
+             )
+    for method in [size, length, ndims, eltype]
+        for i = 1:length(iters)
+            args = iters[i]
+            @test method(Base.product(args...)) == method(collect(Base.product(args...)))
+            for j = 1:length(iters)
+                args = iters[i], iters[j]
+                @test method(Base.product(args...)) == method(collect(Base.product(args...)))
+                for k = 1:length(iters)
+                    args = iters[i], iters[j], iters[k]
+                    @test method(Base.product(args...)) == method(collect(Base.product(args...)))
+                end
+            end
+        end
+    end
+end
+
+# product of finite length and infinite length iterators
+let
+    a = 1:2
+    b = countfrom(1)
+    ab = Base.product(a, b)
+    ba = Base.product(b, a)
+    abexp = [(1, 1), (2, 1), (1, 2), (2, 2), (1, 3), (2, 3)]
+    baexp = [(1, 1), (2, 1), (3, 1), (4, 1), (5, 1), (6, 1)]
+    for (expected, actual) in zip([abexp, baexp], [ab, ba])
+        for (i, el) in enumerate(actual)
+            @test el == expected[i]
+            i == length(expected) && break
+        end
+        @test_throws ArgumentError length(actual)
+        @test_throws ArgumentError size(actual)
+        @test_throws ArgumentError ndims(actual)
+    end
+
+    # size infinite or unknown raises an error
+    for itr in Any[countfrom(1), Filter(i->0, 1:10)]
+        @test_throws ArgumentError length(Base.product(itr))
+        @test_throws ArgumentError   size(Base.product(itr))
+        @test_throws ArgumentError  ndims(Base.product(itr))
+    end
+end
+
+# iteratorsize trait business
+let f1 = Filter(i->i>0, 1:10)
+    @test Base.iteratorsize(Base.product(f1))               == Base.SizeUnknown()
+    @test Base.iteratorsize(Base.product(1:2, f1))          == Base.SizeUnknown()
+    @test Base.iteratorsize(Base.product(f1, 1:2))          == Base.SizeUnknown()
+    @test Base.iteratorsize(Base.product(f1, f1))           == Base.SizeUnknown()
+    @test Base.iteratorsize(Base.product(f1, countfrom(1))) == Base.IsInfinite()
+    @test Base.iteratorsize(Base.product(countfrom(1), f1)) == Base.IsInfinite()
+end
+@test Base.iteratorsize(Base.product(1:2, countfrom(1)))          == Base.IsInfinite()
+@test Base.iteratorsize(Base.product(countfrom(2), countfrom(1))) == Base.IsInfinite()
+@test Base.iteratorsize(Base.product(countfrom(1), 1:2))          == Base.IsInfinite()
+@test Base.iteratorsize(Base.product(1:2))                        == Base.HasShape()
+@test Base.iteratorsize(Base.product(1:2, 1:2))                   == Base.HasShape()
+@test Base.iteratorsize(Base.product(take(1:2, 1), take(1:2, 1))) == Base.HasShape()
+@test Base.iteratorsize(Base.product(take(1:2, 2)))               == Base.HasLength()
+@test Base.iteratorsize(Base.product([1 2; 3 4]))                 == Base.HasShape()
+
+# iteratoreltype trait business
+let f1 = Filter(i->i>0, 1:10)
+    @test Base.iteratoreltype(Base.product(f1))               == Base.HasEltype() # FIXME? eltype(f1) is Any
+    @test Base.iteratoreltype(Base.product(1:2, f1))          == Base.HasEltype() # FIXME? eltype(f1) is Any
+    @test Base.iteratoreltype(Base.product(f1, 1:2))          == Base.HasEltype() # FIXME? eltype(f1) is Any
+    @test Base.iteratoreltype(Base.product(f1, f1))           == Base.HasEltype() # FIXME? eltype(f1) is Any
+    @test Base.iteratoreltype(Base.product(f1, countfrom(1))) == Base.HasEltype() # FIXME? eltype(f1) is Any
+    @test Base.iteratoreltype(Base.product(countfrom(1), f1)) == Base.HasEltype() # FIXME? eltype(f1) is Any
+end
+@test Base.iteratoreltype(Base.product(1:2, countfrom(1)))          == Base.HasEltype()
+@test Base.iteratoreltype(Base.product(countfrom(1), 1:2))          == Base.HasEltype()
+@test Base.iteratoreltype(Base.product(1:2))                        == Base.HasEltype()
+@test Base.iteratoreltype(Base.product(1:2, 1:2))                   == Base.HasEltype()
+@test Base.iteratoreltype(Base.product(take(1:2, 1), take(1:2, 1))) == Base.HasEltype()
+@test Base.iteratoreltype(Base.product(take(1:2, 2)))               == Base.HasEltype()
+@test Base.iteratoreltype(Base.product([1 2; 3 4]))                 == Base.HasEltype()
+
+
 
 # flatten
 # -------
