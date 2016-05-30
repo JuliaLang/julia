@@ -827,7 +827,7 @@ adapted accordingly). We could conceivably do this in at least four ways
 
     function copy_cols{T}(x::Vector{T})
         n = size(x, 1)
-        out = Array{eltype(x)}(n, n)
+        out = Array{T}(n, n)
         for i=1:n
             out[:, i] = x
         end
@@ -836,7 +836,7 @@ adapted accordingly). We could conceivably do this in at least four ways
 
     function copy_rows{T}(x::Vector{T})
         n = size(x, 1)
-        out = Array{eltype(x)}(n, n)
+        out = Array{T}(n, n)
         for i=1:n
             out[i, :] = x
         end
