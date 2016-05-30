@@ -242,12 +242,10 @@ parentheses lets us add a third argument to ``map``:
 
 .. doctest::
 
-    julia> map(tuple, (1/(i+j) for i=1:2, j=1:2), [1:4;])
-    4-element Array{Any,1}:
-    (0.5,1)
-    (0.333333,2)
-    (0.333333,3)
-    (0.25,4)
+    julia> map(tuple, (1/(i+j) for i=1:2, j=1:2), [1 3; 2 4])
+    2×2 Array{Tuple{Float64,Int64},2}:
+     (0.5,1)       (0.333333,3)
+     (0.333333,2)  (0.25,4)
 
 .. _man-array-indexing:
 
