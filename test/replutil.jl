@@ -52,16 +52,19 @@ no_color = no_color = "\nClosest candidates are:\n  method_c3(::Float64, !Matche
 test_have_color(buf, color, no_color)
 
 # Test for the method error in issue #8651
-Base.show_method_candidates(buf, MethodError(readline,("",)))
-test_have_color(buf, "\e[0m\nClosest candidates are:\n  readline(::AbstractString)\e[0m", "\nClosest candidates are:\n  readline(::AbstractString)")
+method_c4() = true
+method_c4(x::AbstractString) = false
+Base.show_method_candidates(buf, MethodError(method_c4,("",)))
+test_have_color(buf, "\e[0m\nClosest candidates are:\n  method_c4(::AbstractString)\n  method_c4()\e[0m", "\nClosest candidates are:\n  method_c4(::AbstractString)\n  method_c4()")
 
-method_c4(::Type{Float64}) = true
-Base.show_method_candidates(buf, MethodError(method_c4,(Float64,)))
-test_have_color(buf, "\e[0m\nClosest candidates are:\n  method_c4(::Type{Float64})\e[0m",
-                "\nClosest candidates are:\n  method_c4(::Type{Float64})")
+method_c5(::Type{Float64}) = true
+Base.show_method_candidates(buf, MethodError(method_c5,(Float64,)))
+test_have_color(buf, "\e[0m\nClosest candidates are:\n  method_c5(::Type{Float64})\e[0m",
+                "\nClosest candidates are:\n  method_c5(::Type{Float64})")
 
-Base.show_method_candidates(buf, MethodError(method_c4,(Int32,)))
-test_have_color(buf, "", "")
+Base.show_method_candidates(buf, MethodError(method_c5,(Int32,)))
+test_have_color(buf, "\e[0m\nClosest candidates are:\n  method_c5(\e[1m\e[31m::Type{Float64}\e[0m)\e[0m",
+                "\nClosest candidates are:\n  method_c5(!Matched::Type{Float64})")
 
 type Test_type end
 test_type = Test_type()
@@ -82,6 +85,41 @@ test_have_color(buf, "\e[0m\nClosest candidates are:\n  PR16155(::Any, ::Any)\n 
 Base.show_method_candidates(buf, MethodError(PR16155,(Int64(3), 2.0, Int64(3))))
 test_have_color(buf, "\e[0m\nClosest candidates are:\n  PR16155(::Int64, ::Any)\n  PR16155(::Any, ::Any)\n  PR16155{T}(::Any)\e[0m",
                      "\nClosest candidates are:\n  PR16155(::Int64, ::Any)\n  PR16155(::Any, ::Any)\n  PR16155{T}(::Any)")
+
+method_c6(; x=1) = x
+method_c6(a; y=1) = y
+m_error = try method_c6(y=1) catch e; e; end
+showerror(buf, m_error)
+error_out = takebuf_string(buf)
+m_error = try method_c6(1, x=1) catch e; e; end
+showerror(buf, m_error)
+error_out1 = takebuf_string(buf)
+
+if Base.have_color
+    @test contains(error_out, "method_c6(; x)\e[1m\e[31m got an unsupported keyword argument \"y\"\e[0m")
+    @test contains(error_out, "method_c6(\e[1m\e[31m::Any\e[0m; y)")
+    @test contains(error_out1, "method_c6(::Any; y)\e[1m\e[31m got an unsupported keyword argument \"x\"\e[0m")
+else
+    @test contains(error_out, "method_c6(; x) got an unsupported keyword argument \"y\"")
+    @test contains(error_out, "method_c6(!Matched::Any; y)")
+    @test contains(error_out1, "method_c6(::Any; y) got an unsupported keyword argument \"x\"")
+end
+
+method_c7(a, b; kargs...) = a
+Base.show_method_candidates(buf, MethodError(method_c7, (1, 1)), [(:x, 1), (:y, 2)])
+test_have_color(buf, "\e[0m\nClosest candidates are:\n  method_c7(::Any, ::Any; kargs...)\e[0m",
+                     "\nClosest candidates are:\n  method_c7(::Any, ::Any; kargs...)")
+method_c8(a, b; y=1, w=1) = a
+Base.show_method_candidates(buf, MethodError(method_c8, (1, 1)), [(:x, 1), (:y, 2), (:z, 1), (:w, 1)])
+test_have_color(buf, "\e[0m\nClosest candidates are:\n  method_c8(::Any, ::Any; y, w)\e[1m\e[31m got an unsupported keyword argument \"x\", \"z\"\e[0m\e[0m",
+                     "\nClosest candidates are:\n  method_c8(::Any, ::Any; y, w) got an unsupported keyword argument \"x\", \"z\"")
+
+addConstraint_15639(c::Int32) = c
+addConstraint_15639(c::Int64; uncset=nothing) = addConstraint_15639(Int32(c), uncset=uncset)
+
+Base.show_method_candidates(buf, MethodError(addConstraint_15639, (Int32(1),)), [(:uncset, nothing)])
+test_have_color(buf, "\e[0m\nClosest candidates are:\n  addConstraint_15639(::Int32)\e[1m\e[31m got an unsupported keyword argument \"uncset\"\e[0m\n  addConstraint_15639(\e[1m\e[31m::Int64\e[0m; uncset)\e[0m",
+                     "\nClosest candidates are:\n  addConstraint_15639(::Int32) got an unsupported keyword argument \"uncset\"\n  addConstraint_15639(!Matched::Int64; uncset)")
 
 macro except_str(expr, err_type)
     return quote
