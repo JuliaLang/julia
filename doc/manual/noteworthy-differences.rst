@@ -147,7 +147,7 @@ noteworthy differences:
   multiplication in Julia, equivalent to R's ``A %*% B``. In R, this same
   notation would perform an element-wise (Hadamard) product. To get the
   element-wise multiplication operation, you need to write ``A .* B`` in Julia.
-- Julia performs matrix transposition using the :obj:`.'` operator and conjugated
+- Julia performs matrix transposition using the :obj:`.' <Base..'>` operator and conjugated
   transposition using the :obj:`'` operator. Julia's ``A.'`` is therefore
   equivalent to R's ``t(A)``.
 - Julia does not require parentheses when writing ``if`` statements or

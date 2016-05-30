@@ -294,11 +294,11 @@ work on arrays. For example, ``0 .< A .< 1`` gives a boolean array whose
 entries are true where the corresponding elements of ``A`` are between 0
 and 1.
 
-The operator :obj:`.<` is intended for array objects; the operation
+The operator :obj:`.\< <Base..\<>` is intended for array objects; the operation
 ``A .< B`` is valid only if ``A`` and ``B`` have the same dimensions.  The
 operator returns an array with boolean entries and with the same dimensions
 as ``A`` and ``B``.  Such operators are called *elementwise*; Julia offers a
-suite of elementwise operators: :obj:`.*`, :obj:`.+`, etc.  Some of the elementwise
+suite of elementwise operators: :obj:`.* <Base..*>`, :obj:`.+ <Base..+>`, etc.  Some of the elementwise
 operators can take a scalar operand such as the example ``0 .< A .< 1`` in
 the preceding paragraph.
 This notation means that the scalar operand should be replicated for each entry of
