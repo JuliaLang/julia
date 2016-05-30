@@ -68,7 +68,7 @@ jl_options_t jl_options = { 0,    // quiet
                             0,    // malloc_log
                             2,    // opt_level
                             JL_OPTIONS_CHECK_BOUNDS_DEFAULT, // check_bounds
-                            1,    // depwarn
+                            JL_OPTIONS_DEPWARN_ON, // depwarn
                             1,    // can_inline
                             JL_OPTIONS_FAST_MATH_DEFAULT,
                             0,    // worker
