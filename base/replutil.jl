@@ -123,6 +123,16 @@ function showerror(io::IO, ex::MethodError)
     ft = typeof(f)
     name = ft.name.mt.name
     f_is_function = false
+    kwargs = Any[]
+    if startswith(string(ft.name), "#kw#")
+        f = ex.args[2]
+        ft = typeof(f)
+        name = ft.name.mt.name
+        arg_types_param = arg_types_param[3:end]
+        temp = ex.args[1]
+        kwargs = Any[(temp[i*2-1], temp[i*2]) for i in 1:(length(temp) ÷ 2)]
+        ex = MethodError(f, ex.args[3:end])
+    end
     if f == Base.convert && length(arg_types_param) == 2 && !is_arg_types
         f_is_function = true
         # See #13033
@@ -149,6 +159,14 @@ function showerror(io::IO, ex::MethodError)
         for (i, typ) in enumerate(arg_types_param)
             print(io, "::$typ")
             i == length(arg_types_param) || print(io, ", ")
+        end
+        if !isempty(kwargs)
+            print(io, "; ")
+            for (i, (k, v)) in enumerate(kwargs)
+                print(io, k, "=")
+                show(IOContext(io, :limit=>true), v)
+                i == length(kwargs) || print(io, ", ")
+            end
         end
         print(io, ")")
     end
@@ -189,7 +207,7 @@ function showerror(io::IO, ex::MethodError)
                   "\nsince type constructors fall back to convert methods.")
     end
     try
-        show_method_candidates(io, ex)
+        show_method_candidates(io, ex, kwargs)
     catch
         warn(io, "Error showing method candidates, aborted")
     end
@@ -222,7 +240,7 @@ function showerror_nostdio(err, msg::AbstractString)
     ccall(:jl_printf, Cint, (Ptr{Void},Cstring), stderr_stream, "\n")
 end
 
-function show_method_candidates(io::IO, ex::MethodError)
+function show_method_candidates(io::IO, ex::MethodError, kwargs::Vector=Any[])
     is_arg_types = isa(ex.args, DataType)
     arg_types = is_arg_types ? ex.args : typesof(ex.args...)
     arg_types_param = Any[arg_types.parameters...]
@@ -233,7 +251,7 @@ function show_method_candidates(io::IO, ex::MethodError)
     else
         f = ex.f
     end
-
+    ft = typeof(f)
     lines = []
     # These functions are special cased to only show if first argument is matched.
     special = f in [convert, getindex, setindex!]
@@ -262,7 +280,6 @@ function show_method_candidates(io::IO, ex::MethodError)
                 use_constructor_syntax = isa(func, Type)
                 print(buf, use_constructor_syntax ? func : typeof(func).name.mt.name)
             end
-            right_matches = 0
             tv = method.tvars
             if !isa(tv,SimpleVector)
                 tv = Any[tv]
@@ -318,17 +335,19 @@ function show_method_candidates(io::IO, ex::MethodError)
                 end
             end
 
-            if right_matches > 0
+            if right_matches > 0 || length(ex.args) < 2
                 if length(t_i) < length(sig)
                     # If the methods args is longer than input then the method
                     # arguments is printed as not a match
-                    for sigtype in sig[length(t_i)+1:end]
+                    for (k, sigtype) in enumerate(sig[length(t_i)+1:end])
                         if Base.isvarargtype(sigtype)
                             sigstr = string(sigtype.parameters[1], "...")
                         else
                             sigstr = string(sigtype)
                         end
-                        print(buf, ", ")
+                        if !((min(length(t_i), length(sig)) == 0) && k==1)
+                            print(buf, ", ")
+                        end
                         if Base.have_color
                             Base.with_output_color(:red, buf) do buf
                                 print(buf, "::$sigstr")
@@ -338,7 +357,28 @@ function show_method_candidates(io::IO, ex::MethodError)
                         end
                     end
                 end
+                kwords = Symbol[]
+                if isdefined(ft.name.mt, :kwsorter)
+                    kwsorter_t = typeof(ft.name.mt.kwsorter)
+                    kwords = kwarg_decl(method.sig, kwsorter_t)
+                    length(kwords) > 0 && print(buf, "; ", join(kwords, ", "))
+                end
                 print(buf, ")")
+                if !isempty(kwargs)
+                    unexpected = Symbol[]
+                    if isempty(kwords) || !(any(endswith(string(kword), "...") for kword in kwords))
+                        for (k, v) in kwargs
+                            if !(k in kwords)
+                                push!(unexpected, k)
+                            end
+                        end
+                    end
+                    if !isempty(unexpected)
+                        Base.with_output_color(:red, buf) do buf
+                            print(buf, " got an unsupported keyword argument \"", join(unexpected, "\", \""), "\"")
+                        end
+                    end
+                end
                 push!(lines, (buf, right_matches))
             end
         end
