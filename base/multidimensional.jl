@@ -219,7 +219,7 @@ end
         @nexprs $N d->(I_d = to_index(I[d]))
         shape = @ncall $N index_shape A I
         dest = similar(A, shape)
-        size(dest) == shape || throw_checksize_error(dest, shape)
+        size(dest) == map(dimlength, shape) || throw_checksize_error(dest, shape)
         @ncall $N _unsafe_getindex! dest A I
     end
 end
@@ -228,7 +228,7 @@ end
 function _unsafe_getindex(::LinearIndexing, src::AbstractArray, I::AbstractArray{Bool})
     shape = index_shape(src, I)
     dest = similar(src, shape)
-    size(dest) == shape || throw_checksize_error(dest, shape)
+    size(dest) == map(dimlength, shape) || throw_checksize_error(dest, shape)
 
     D = eachindex(dest)
     Ds = start(D)
@@ -278,6 +278,8 @@ end
     end
 end
 
+dimlength(r::Range) = length(r)
+dimlength(i::Integer) = i
 @noinline throw_checksize_error(A, sz) = throw(DimensionMismatch("output array is the wrong size; expected $sz, got $(size(A))"))
 
 ## setindex! ##
