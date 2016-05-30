@@ -1452,12 +1452,12 @@ function print_matrix_repr(io, X::AbstractArray)
     rr1, rr2 = 1:nr, 1:0
     cr1, cr2 = 1:nc, 1:0
     if limit
-        if nr > 20
-            rr1, rr2 = 1:10, nr-9:nr
+        if nr > 4
+            rr1, rr2 = 1:2, nr-1:nr
             rdots = true
         end
-        if nc > 20
-            cr1, cr2 = 1:10, nc-9:nc
+        if nc > 4
+            cr1, cr2 = 1:2, nc-1:nc
             cdots = true
         end
     end
