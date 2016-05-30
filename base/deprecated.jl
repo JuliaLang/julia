@@ -56,9 +56,11 @@ macro deprecate(old,new)
     end
 end
 
-function depwarn(msg, funcsym)
-    opts = JLOptions()
-    if opts.depwarn == 1  # raise a warning
+function depwarn(io::IO, msg, funcsym; mode=-1)
+    if mode < 0
+        mode = JLOptions().depwarn
+    end
+    if mode == 1  # raise a warning
         caller = firstcaller(backtrace(5), funcsym)
         if caller != C_NULL
             (caller in have_warned) && return
@@ -70,11 +72,12 @@ function depwarn(msg, funcsym)
         end
         ln = Int(unsafe_load(cglobal(:jl_lineno, Cint)))
         fn = String(unsafe_load(cglobal(:jl_filename, Ptr{Cchar})))
-        warn(msg, once=(caller != C_NULL), key=caller, bt=bt, filename=fn, lineno=ln)
-    elseif opts.depwarn == 2  # raise an error
+        warn(io, msg, once=(caller != C_NULL), key=caller, bt=bt, filename=fn, lineno=ln)
+    elseif mode == 2  # raise an error
         throw(ErrorException(msg))
     end
 end
+depwarn(msg, funcsym) = depwarn(STDERR, msg, funcsym)
 
 function firstcaller(bt::Array{Ptr{Void},1}, funcsym::Symbol)
     # Identify the calling line
