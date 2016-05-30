@@ -159,6 +159,14 @@ const val = Foo(1.0)
 function multidoc  end,
 function multidoc! end
 
+"returntype-1"
+returntype(x::Float64)::Float64 = x
+
+"returntype-2"
+function returntype(x::Int)::Int
+    x
+end
+
 end
 
 let md = meta(DocsTest)[@var(DocsTest)]
@@ -221,6 +229,11 @@ let IT = @var(DocsTest.IT)
     @test docstrings_equal(d, doc"IT")
     @test d.data[:fields][:x] == "IT.x"
     @test d.data[:fields][:y] == "IT.y"
+end
+
+let rt = @var(DocsTest.returntype)
+    md = meta(DocsTest)[rt]
+    @test md.order == [Tuple{Float64}, Tuple{Int}]
 end
 
 @test docstrings_equal(@doc(DocsTest.TA), doc"TA")
