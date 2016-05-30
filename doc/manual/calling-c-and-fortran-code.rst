@@ -564,7 +564,8 @@ In the future, some of these restrictions may be reduced or eliminated.
 SIMD Values
 ~~~~~~~~~~~
 
-Note: This feature is currently implemented on 64-bit x86 platforms only.
+Note: This feature is currently implemented on 64-bit x86
+and AArch64 platforms only.
 
 If a C/C++ routine has an argument or return value that is a native
 SIMD type, the corresponding Julia type is a homogeneous tuple

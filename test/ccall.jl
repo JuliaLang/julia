@@ -531,7 +531,27 @@ typealias VecReg{N,T} NTuple{N,VecElement{T}}
 typealias V4xF32 VecReg{4,Float32}
 typealias V4xI32 VecReg{4,Int32}
 
-if Sys.ARCH==:x86_64
+immutable Struct_AA64_1
+    v1::Int32
+    v2::Int128
+end
+immutable Struct_AA64_2
+    v1::Float16
+    v2::Float64
+end
+
+# This is a homogenious short vector aggregate
+immutable Struct_AA64_3
+    v1::VecReg{8,Int8}
+    v2::VecReg{2,Float32}
+end
+# This is NOT a homogenious short vector aggregate
+immutable Struct_AA64_4
+    v2::VecReg{2,Float32}
+    v1::VecReg{8,Int16}
+end
+
+if Sys.ARCH === :x86_64
 
     function test_sse(a1::V4xF32,a2::V4xF32,a3::V4xF32,a4::V4xF32)
         ccall((:test_m128, libccalltest), V4xF32, (V4xF32,V4xF32,V4xF32,V4xF32), a1, a2, a3, a4)
@@ -555,5 +575,64 @@ if Sys.ARCH==:x86_64
 
         # cfunction round-trip
         @test rt_sse(a1,a2,a3,a4) == r
+    end
+elseif Sys.ARCH === :aarch64
+    for v1 in 1:99:1000, v2 in -100:-1999:-20000
+        @test ccall((:test_aa64_i128_1, libccalltest), Int128,
+                    (Int64, Int128), v1, v2) == v1 * 2 - v2
+    end
+    for v1 in 1:4, v2 in -4:-1, v3_1 in 3:5, v3_2 in 7:9
+        res = ccall((:test_aa64_i128_2, libccalltest), Struct_AA64_1,
+                    (Int64, Int128, Struct_AA64_1),
+                    v1, v2, Struct_AA64_1(v3_1, v3_2))
+        expected = Struct_AA64_1(v1 ÷ 2 + 1 - v3_1, v2 * 2 - 1 - v3_2)
+        @test res === expected
+    end
+    for v1 in 1:4, v2 in -4:-1, v3 in 3:5, v4 in -(1:3)
+        res = ccall((:test_aa64_fp16_1, libccalltest), Float16,
+                    (Cint, Float32, Float64, Float16),
+                    v1, v2, v3, v4)
+        expected = Float16(v1 + v2 * 2 + v3 * 3 + v4 * 4)
+        @test res === expected
+
+        res = ccall((:test_aa64_fp16_2, libccalltest), Struct_AA64_2,
+                    (Cint, Float32, Float64, Float16),
+                    v1, v2, v3, v4)
+        expected = Struct_AA64_2(v4 / 2 + 1, v1 * 2 + v2 * 4 - v3)
+        @test res === expected
+    end
+    for v1_1 in 1:4, v1_2 in -2:2, v2 in -4:-1, v3_1 in 3:5, v3_2 in 6:8
+        res = ccall((:test_aa64_vec_1, libccalltest),
+                    VecReg{2,Int64},
+                    (VecReg{2,Int32}, Float32, VecReg{2,Int32}),
+                    (VecElement(Int32(v1_1)), VecElement(Int32(v1_2))),
+                    v2, (VecElement(Int32(v3_1)), VecElement(Int32(v3_2))))
+        expected = (VecElement(v1_1 * v2 + v3_1), VecElement(v1_2 * v2 + v3_2))
+        @test res === expected
+    end
+    for v1_11 in 1:4, v1_12 in -2:2, v1_21 in 1:4, v1_22 in -2:2,
+        v2_11 in 1:4, v2_12 in -2:2, v2_21 in 1:4, v2_22 in -2:2
+        v1 = Struct_AA64_3((VecElement(Int8(v1_11)), VecElement(Int8(v1_12)),
+                            VecElement(Int8(0)), VecElement(Int8(0)),
+                            VecElement(Int8(0)), VecElement(Int8(0)),
+                            VecElement(Int8(0)), VecElement(Int8(0))),
+                           (VecElement(Float32(v1_21)),
+                            VecElement(Float32(v1_22))))
+        v2 = Struct_AA64_4((VecElement(Float32(v2_21)),
+                            VecElement(Float32(v2_22))),
+                           (VecElement(Int16(v2_11)), VecElement(Int16(v2_12)),
+                            VecElement(Int16(0)), VecElement(Int16(0)),
+                            VecElement(Int16(0)), VecElement(Int16(0)),
+                            VecElement(Int16(0)), VecElement(Int16(0))))
+        res = ccall((:test_aa64_vec_2, libccalltest),
+                    Struct_AA64_3, (Struct_AA64_3, Struct_AA64_4), v1, v2)
+        expected = Struct_AA64_3((VecElement(Int8(v1_11 + v2_11)),
+                                  VecElement(Int8(v1_12 + v2_12)),
+                                  VecElement(Int8(0)), VecElement(Int8(0)),
+                                  VecElement(Int8(0)), VecElement(Int8(0)),
+                                  VecElement(Int8(0)), VecElement(Int8(0))),
+                                 (VecElement(Float32(v1_21 - v2_21)),
+                                  VecElement(Float32(v1_22 - v2_22))))
+        @test res === expected
     end
 end
