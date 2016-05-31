@@ -475,7 +475,7 @@
                           (let ((rkw (make-ssavalue)))
                             `(block
                               (= ,rkw ,restkw-expr)
-                              (if (comparison (call (core nfields) ,rkw) === 0)
+                              (if (comparison (call (core nfields) (call (core typeof) ,rkw)) === 0)
                                   (block)
                                   (call (top kwerr)
                                         (call (core fieldname) (call (core typeof) ,rkw) 1)))))
