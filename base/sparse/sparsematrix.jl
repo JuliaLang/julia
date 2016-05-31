@@ -13,9 +13,12 @@ immutable SparseMatrixCSC{Tv,Ti<:Integer} <: AbstractSparseMatrix{Tv,Ti}
     nzval::Vector{Tv}       # Nonzero values
 
     function SparseMatrixCSC(m::Integer, n::Integer, colptr::Vector{Ti}, rowval::Vector{Ti}, nzval::Vector{Tv})
-        m < 0 && throw(ArgumentError("number of rows (m) must be ≥ 0, got $m"))
-        n < 0 && throw(ArgumentError("number of columns (n) must be ≥ 0, got $n"))
+        check_array_size(m, n)
         new(Int(m), Int(n), colptr, rowval, nzval)
+    end
+    function SparseMatrixCSC(m::Integer, n::Integer)
+        check_array_size(m, n)
+        SparseMatrixCSC{Tv,Ti}(m, n, ones(Ti, n+1), Array{Ti}(0), Array{Tv}(0))
     end
 end
 function SparseMatrixCSC(m::Integer, n::Integer, colptr::Vector, rowval::Vector, nzval::Vector)
@@ -23,6 +26,9 @@ function SparseMatrixCSC(m::Integer, n::Integer, colptr::Vector, rowval::Vector,
     Ti = promote_type(eltype(colptr), eltype(rowval))
     SparseMatrixCSC{Tv,Ti}(m, n, colptr, rowval, nzval)
 end
+SparseMatrixCSC(m::Integer, n::Integer) = SparseMatrixCSC{Float64}(m, n)
+(::Type{SparseMatrixCSC{Tv}}){Tv}(m::Integer, n::Integer) = SparseMatrixCSC{Tv,Int}(m, n)
+(::Type{T}){T<:SparseMatrixCSC}(dims::Dims{2}) = T(dims[1], dims[2])
 
 size(S::SparseMatrixCSC) = (S.m, S.n)
 
