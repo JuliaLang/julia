@@ -75,17 +75,15 @@ Currently, the `@compat` macro supports the following syntaxes:
 
 ## Type Aliases
 
-* `String` has undergone multiple changes: in julia 0.3 it was an abstract type and then got renamed to `AbstractString`; later, `ASCIIString` and `UTF8String` got merged into a concrete type, `String`.
+* `String` has undergone multiple changes: in Julia 0.3 it was an abstract type and then got renamed to `AbstractString` in 0.4; in 0.5, `ASCIIString` and `ByteString` were deprecated, and `UTF8String` was renamed to the (now concrete) type `String`.
 
-    For packages that still need `ASCIIString` or `UTF8String` on julia 0.4 and
-    want to avoid the deprecation warning on julia 0.5,
-    use `Compat.ASCIIString` and `Compat.UTF8String` instead.
-    Note that `Compat.ASCIIString` does **not** guarantee `isascii` on julia 0.5.
-    Use `isascii` to check if the string is pure ASCII if needed.
+    Compat provides unexported `Compat.UTF8String` and `Compat.ASCIIString` type aliases which are equivalent to the same types from Base on Julia 0.3 and 0.4, but to `String` on Julia 0.5. In most cases, using these types by calling `import Compat: UTF8String, ASCIIString` should be enough. Though note that `Compat.ASCIIString` does **not** guarantee that the string only contains ASCII characters on Julia 0.5: call `isascii` to check if the string is pure ASCII if needed.
+
+    Compat also provides an unexported `Compat.String` type which is equivalent to `ByteString` on Julia 0.3 and 0.4, and to `String` on Julia 0.5. This type should be used only in places where `ByteString` was used on Julia 0.3 and 0.4, i.e. where either `ASCIIString` or `UTF8String` should be accepted. It should **not** be used as the default type for variables or fields holding strings, as it introduces type-instability in Julia 0.3 and 0.4: use `Compat.UTF8String` or `Compat.ASCIIString` instead.
 
 * `bytestring` has been replaced in all cases with additional `String` construction methods; for 0.3 compatibility, the usage involves replacing `bytestring(args...)` with `@compat String(args...)`
 
-* `typealias AbstractString String` - `String` has been renamed to `AbstractString` [#8872](https://github.com/JuliaLang/julia/pull/8872)
+* `typealias AbstractString String` - `String` has been renamed to `AbstractString` in Julia 0.4 [#8872](https://github.com/JuliaLang/julia/pull/8872)
 
 * `typealias AbstractFloat FloatingPoint` - `FloatingPoint` has been renamed to `AbstractFloat` [#12162](https://github.com/JuliaLang/julia/pull/12162)
 
