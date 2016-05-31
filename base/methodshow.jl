@@ -74,7 +74,7 @@ function arg_decl_parts(m::Method)
 end
 
 function kwarg_decl(sig::ANY, kwtype::DataType)
-    sig = Tuple{kwtype, Array, sig.parameters...}
+    sig = Tuple{kwtype, Struct, sig.parameters...}
     kwli = ccall(:jl_methtable_lookup, Any, (Any, Any), kwtype.name.mt, sig)
     if kwli !== nothing
         kwli = kwli::Method
