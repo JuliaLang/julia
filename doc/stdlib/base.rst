@@ -1210,7 +1210,7 @@ Errors
 
    An error occurred when running a module's ``__init__`` function. The actual error thrown is available in the ``.error`` field.
 
-.. function:: retry(f, [retry_on]; n=DEFAULT_RETRY_N, max_delay=DEFAULT_RETRY_MAX_DELAY) -> Function
+.. function:: retry(f, [retry_on]; n=1, max_delay=10.0) -> Function
 
    .. Docstring generated from Julia source
 
