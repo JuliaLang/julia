@@ -168,14 +168,14 @@ extrapath = @windows? joinpath(JULIA_HOME,"..","Git","usr","bin")*";" : ""
 end
 
 let convert_funcs_and_types =
-    ((integer, :Integer), (signed, :Signed), (unsigned, :Unsigned),
-     (int, :Int), (int8, :Int8), (int16, :Int16), (int32, :Int32),
-     (int64, :Int64), (int128, :Int128), (uint, :UInt),
-     (uint8, :UInt8), (uint16, :UInt16), (uint32, :UInt32),
-     (uint64, :UInt64), (uint128, :UInt128),
-     (float16, :Float16), (float32, :Float32), (float64, :Float64),
-     (complex32,:Complex32), (complex64,:Complex64),(complex128,:Complex128),
-     (char,:Char))
+    ((:integer, :Integer), (:signed, :Signed), (:unsigned, :Unsigned),
+     (:int, :Int), (:int8, :Int8), (:int16, :Int16), (:int32, :Int32),
+     (:int64, :Int64), (:int128, :Int128), (:uint, :UInt),
+     (:uint8, :UInt8), (:uint16, :UInt16), (:uint32, :UInt32),
+     (:uint64, :UInt64), (:uint128, :UInt128),
+     (:float16, :Float16), (:float32, :Float32), (:float64, :Float64),
+     (:complex32,:Complex32), (:complex64,:Complex64),(:complex128,:Complex128),
+     (:char,:Char))
 
     for (df,t) in convert_funcs_and_types
         x = @compat UInt8(10)
@@ -187,14 +187,14 @@ let convert_funcs_and_types =
             @test typeof(r1) === ty
         end
         if VERSION <  v"0.4.0-dev+3732"
-            r2 = df(x)
+            r2 = eval(df)(x)
             @test r1 === r2
             if t === :Signed || t === :Complex32
                 continue
             end
             x = fill(x, 10)
             r1 = eval(:(@compat map($t, $x)))
-            r2 = df(x)
+            r2 = eval(df)(x)
             @test r1 == r2
             @test typeof(r1) === typeof(r2)
         end
@@ -253,7 +253,7 @@ end
 @test tryparse(Int64, "nonsense", 36) === Nullable{Int64}(@compat Int64(1856056985582))
 
 # Make sure exports from Libc and Libdl are defined
-for x in [:strftime,:systemsleep,:getpid,:FILE,:malloc,:flush_cstdio,:realloc,:strptime,:Libc,:errno,:msync,:TmStruct,:calloc,:time,:strerror,:gethostname,:free]
+for x in [:strftime,:systemsleep,:getpid,:FILE,:malloc,:flush_cstdio,:realloc,:strptime,:Libc,:errno,:TmStruct,:calloc,:time,:strerror,:gethostname,:free]
     getfield(Libc, x)
 end
 for x in [:RTLD_LOCAL,:RTLD_GLOBAL,:find_library,:dlsym,:RTLD_LAZY,:RTLD_NODELETE,:DL_LOAD_PATH,:RTLD_NOW,:Libdl,:dlext,:dlsym_e,:RTLD_FIRST,:dlopen,:dllist,:dlpath,:RTLD_NOLOAD,:dlclose,:dlopen_e,:RTLD_DEEPBIND]
