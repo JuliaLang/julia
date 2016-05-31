@@ -2375,11 +2375,7 @@ function inlineable(f::ANY, ft::ANY, e::Expr, atypes::Vector{Any}, sv::Inference
     if isa(f,IntrinsicFunction) || ft ⊑ IntrinsicFunction
         return NF
     end
-    #=println("F ==============")
-    println(f)
-    println(istopfunction(topmod,f,:struct))
-    println(e.typ)
-    println("================")=#
+
     if (is(f, Core.struct) &&
         e.typ <: Core.Struct && isleaftype(e.typ))
         new_e = Expr(:new, e.typ, argexprs[3:end]...)

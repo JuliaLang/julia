@@ -489,83 +489,6 @@
                             ,@(if (null? vararg) '()
                                   (list `(... ,(arg-name (car vararg))))))))
               #f))
-        ;; call with unsorted keyword args. this sorts and re-dispatches.
-        ,(method-def-expr-
-          name
-          (filter ;; remove sparams that don't occur, to avoid printing the warning twice
-           (lambda (s) (let ((name (if (symbol? s) s (cadr s))))
-                         (expr-contains-eq name (cons 'list argl))))
-           positional-sparams)
-          `((|::|
-             ;; if there are optional positional args, we need to be able to reference the function name
-             ,(if (any kwarg? pargl) (gensy) UNUSED)
-             (call (core kwftype) ,ftype)) (:: ,kw (core Array)) ,@pargl ,@vararg)
-          `(block
-            ;; initialize keyword args to their defaults, or set a flag telling
-            ;; whether this keyword needs to be set.
-            ,@(map (lambda (name dflt flag)
-                     (if (const-default? dflt)
-                         `(= ,name ,dflt)
-                         `(= ,flag true)))
-                   keynames vals flags)
-            ,@(if (null? restkw) '()
-                  `((= ,rkw (cell1d))))
-            ;; for i = 1:(length(kw)>>1)
-            (for (= ,i (: 1 (call (top >>) (call (top length) ,kw) 1)))
-                 (block
-                  ;; ii = i*2 - 1
-                  (= ,ii (call (top -) (call (top *) ,i 2) 1))
-                  (= ,elt (call (core arrayref) ,kw ,ii))
-                  ,(foldl (lambda (kvf else)
-                            (let* ((k    (car kvf))
-                                   (rval0 `(call (core arrayref) ,kw
-                                                 (call (top +) ,ii 1)))
-                                   ;; note: if the "declared" type of a KW arg
-                                   ;; includes something from keyword-sparam-names,
-                                   ;; then don't assert it here, since those static
-                                   ;; parameters don't have values yet.
-                                   ;; instead, the type will be picked up when the
-                                   ;; underlying method is called.
-                                   (rval (if (and (decl? k)
-                                                  (not (any (lambda (s)
-                                                              (expr-contains-eq s (caddr k)))
-                                                            keyword-sparam-names)))
-                                             `(call (core typeassert)
-                                                    ,rval0
-                                                    ,(caddr k))
-                                             rval0)))
-                              ;; if kw[ii] == 'k; k = kw[ii+1]::Type; end
-                              `(if (comparison ,elt === (quote ,(decl-var k)))
-                                   (block
-                                    (= ,(decl-var k) ,rval)
-                                    ,@(if (not (const-default? (cadr kvf)))
-                                          `((= ,(caddr kvf) false))
-                                          '()))
-                                   ,else)))
-                          (if (null? restkw)
-                              ;; if no rest kw, give error for unrecognized
-                              `(call (top kwerr) ,elt)
-                              ;; otherwise add to rest keywords
-                              `(ccall 'jl_cell_1d_push Void (tuple Any Any)
-                                      ,rkw (tuple ,elt
-                                                  (call (core arrayref) ,kw
-                                                        (call (top +) ,ii 1)))))
-                          (map list vars vals flags))))
-            ;; set keywords that weren't present to their default values
-            ,@(apply append
-                     (map (lambda (name dflt flag)
-                            (if (const-default? dflt)
-                                '()
-                                `((if ,flag (= ,name ,dflt)))))
-                          keynames vals flags))
-            ;; finally, call the core function
-            (return (call ,mangled
-                          ,@keynames
-                          ,@(if (null? restkw) '() (list rkw))
-                          ,@(map arg-name pargl)
-                          ,@(if (null? vararg) '()
-                                (list `(... ,(arg-name (car vararg))))))))
-          #f)
         ;; return primary function
         ,(if (or (not (symbol? name)) (is-call-name? name))
              '(null) name)))))
@@ -1416,35 +1339,6 @@
                        ,struct-val ,f ,@pa))))
          `(call (call (core kwfunc) ,f)
                 ,struct ,f ,@pa)))))
-;         `(call (call (core kwfunc) ,f) (cell1d ,@keyargs) ,f ,@pa)
-         #;(let ((container (make-ssavalue)))
-           `(block
-             (= ,container (cell1d ,@(apply append keyargs)))
-             ,@(map (lambda (rk)
-                      (let* ((k (make-ssavalue))
-                             (v (make-ssavalue))
-                             (push-expr `(ccall 'jl_cell_1d_push2 Void
-                                                (tuple Any Any Any)
-                                                ,container
-                                                (|::| ,k (core Symbol))
-                                                ,v)))
-                        (if (vararg? rk)
-                            `(for (= (tuple ,k ,v) ,(cadr rk))
-                                  ,push-expr)
-                            `(block (= (tuple ,k ,v) ,rk)
-                                    ,push-expr))))
-                    restkeys)
-             ,(if (not (null? keys))
-                  `(call (call (core kwfunc) ,f) ,container ,f ,@pa)
-                  (let* ((expr_stmts (remove-argument-side-effects `(call ,f ,@pa)))
-                         (pa         (cddr (car expr_stmts)))
-                         (stmts      (cdr expr_stmts)))
-                    `(block
-                      ,@stmts
-                      (if (call (top isempty) ,container)
-                          (call ,f ,@pa)
-(call (call (core kwfunc) ,f) ,container ,f ,@pa)))))))
-;))))
 
 ;; convert e.g. A'*B to Ac_mul_B(A,B)
 (define (expand-transposed-op e ops)
