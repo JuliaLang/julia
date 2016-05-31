@@ -1958,7 +1958,7 @@ static jl_value_t *lookup_type(jl_typename_t *tn, jl_value_t **key, size_t n)
     JL_LOCK(&typecache_lock); // Might GC
     ssize_t idx = lookup_type_idx(tn, key, n, ord);
     jl_value_t *t = (idx < 0) ? NULL : jl_svecref(ord ? tn->cache : tn->linearcache, idx);
-    JL_UNLOCK(&typecache_lock);
+    JL_UNLOCK(&typecache_lock); // Might GC
     return t;
 }
 
@@ -2033,7 +2033,7 @@ jl_value_t *jl_cache_type_(jl_datatype_t *type)
             type = (jl_datatype_t*)jl_svecref(ord ? type->name->cache : type->name->linearcache, idx);
         else
             cache_insert_type((jl_value_t*)type, ~idx, ord);
-        JL_UNLOCK(&typecache_lock);
+        JL_UNLOCK(&typecache_lock); // Might GC
     }
     return (jl_value_t*)type;
 }

@@ -595,6 +595,8 @@ static void array_resize_buffer(jl_array_t *a, size_t newlen, size_t oldlen, siz
         }
         memcpy(newdata + offsnb, (char*)a->data, oldnbytes);
     }
+    assert(oldlen == a->nrows &&
+           "Race condition detected: recursive resizing on the same array.");
 
     a->data = newdata + offsnb;
     a->flags.isshared = 0;
