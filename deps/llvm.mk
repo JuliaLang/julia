@@ -420,6 +420,7 @@ $(LLVM_SRC_DIR)/llvm-D17326_unpack_load.patch-applied: $(LLVM_SRC_DIR)/llvm-D142
 $(eval $(call LLVM_PATCH,llvm-D17712))
 $(eval $(call LLVM_PATCH,llvm-PR26180))
 $(eval $(call LLVM_PATCH,llvm-PR27046))
+$(eval $(call LLVM_PATCH,llvm-3.8.0_ppc64_SUBFC8))
 endif # LLVM_VER
 
 ifeq ($(LLVM_VER),3.7.1)
