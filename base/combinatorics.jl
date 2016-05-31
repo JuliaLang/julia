@@ -154,12 +154,6 @@ end
 
 Next integer not less than `n` that can be written as ``\\prod k_i^{p_i}`` for integers
 ``p_1``, ``p_2``, etc.
-
-For a list of integers i1, i2, i3, find the smallest
-
-    i1^n1 * i2^n2 * i3^n3 >= x
-
-for integer n1, n2, n3
 """
 function nextprod(a::Vector{Int}, x)
     if x > typemax(Int)
