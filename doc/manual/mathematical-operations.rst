@@ -304,7 +304,7 @@ the preceding paragraph.
 This notation means that the scalar operand should be replicated for each entry of
 the array.
 
-Note the evaluation behavior of chained comparisons::
+Note the evaluation behavior of chained comparisons:
 
 .. doctest::
 
