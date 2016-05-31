@@ -450,3 +450,14 @@ add_method_to_glob_fn!()
 @test (try error(); catch 0; end) === 0
 @test (try error(); catch false; end) === false  # false and true are Bool literals, not variables
 @test (try error(); catch true; end) === true
+
+# issue #16671
+@test parse("1.") === 1.0
+
+# issue #16672
+let isline(x) = isa(x,Expr) && x.head === :line
+    @test count(isline, parse("begin end").args) == 1
+    @test count(isline, parse("begin; end").args) == 1
+    @test count(isline, parse("begin; x+2; end").args) == 1
+    @test count(isline, parse("begin; x+2; y+1; end").args) == 2
+end
