@@ -44,8 +44,9 @@ if is_windows()
 else # !windows
     immutable RandomDevice <: AbstractRNG
         file::IOStream
+        unlimited::Bool
 
-        RandomDevice(unlimited::Bool=true) = new(open(unlimited ? "/dev/urandom" : "/dev/random"))
+        RandomDevice(unlimited::Bool=true) = new(open(unlimited ? "/dev/urandom" : "/dev/random"), unlimited)
     end
 
     rand{ T<:Union{Bool, Base.BitInteger}}(rd::RandomDevice,  ::Type{T})  = read( rd.file, T)
