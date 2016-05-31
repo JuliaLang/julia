@@ -555,10 +555,12 @@ public:
         return NewF;
     }
 
-#ifdef LLVM38
-    virtual Value *materializeDeclFor(Value *V)
+#if defined(LLVM39)
+    virtual Value *materialize(Value *V) override
+#elif defined(LLVM38)
+    virtual Value *materializeDeclFor(Value *V) override
 #else
-    virtual Value *materializeValueFor (Value *V)
+    virtual Value *materializeValueFor (Value *V) override
 #endif
     {
         Function *F = dyn_cast<Function>(V);
