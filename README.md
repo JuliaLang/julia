@@ -53,6 +53,8 @@ Currently, the `@compat` macro supports the following syntaxes:
 
 * `@compat Dict{Foo,Bar}(foo => bar, baz => qux)` - type-declared `Dict` construction. (Also works for `DataStructures.OrderedDict`)
 
+* `@compat(get(io, :limit, false))` to detect whether compressed output has been requested (performs useful work only on `v"0.5.0-dev+1936"`, defaults to `false` otherwise)
+
 * `@compat split(str, splitter; keywords...)` - the Julia 0.4-style keyword-based `split` function
 
 * `@compat rsplit(str, splitter; keywords...)` - the Julia 0.4-style keyword-based `rsplit` function
