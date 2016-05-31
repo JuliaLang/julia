@@ -134,7 +134,7 @@ Mathematical Operators
 
    .. Docstring generated from Julia source
 
-   Modulus after flooring division, returning in the range [0,``y``\ ), if ``y`` is positive, or (``y``\ ,0] if ``y`` is negative.
+   Modulus after flooring division, returning in the range :math:`[0,y)`\ , if ``y`` is positive, or :math:`(y,0]` if ``y`` is negative.
 
    .. code-block:: julia
 
@@ -144,9 +144,9 @@ Mathematical Operators
 
    .. Docstring generated from Julia source
 
-   Modulus after division by 2pi, returning in the range [0,2pi).
+   Modulus after division by ``2π``\ , returning in the range :math:`[0,2π)`\ .
 
-   This function computes a floating point representation of the modulus after division by numerically exact 2pi, and is therefore not exactly the same as mod(x,2pi), which would compute the modulus of ``x`` relative to division by the floating-point number 2pi.
+   This function computes a floating point representation of the modulus after division by numerically exact ``2π``\ , and is therefore not exactly the same as ``mod(x,2π)``\ , which would compute the modulus of ``x`` relative to division by the floating-point number ``2π``\ .
 
 .. function:: rem(x, y)
               %(x, y)
@@ -186,7 +186,7 @@ Mathematical Operators
 
    .. Docstring generated from Julia source
 
-   Modulus after flooring division, returning a value in the range ``(0, y]``\ .
+   Modulus after flooring division, returning a value ``r`` such that ``mod(r, y) == mod(x, y)``  in the range :math:`(0, y]` for positive ``y`` and in the range :math:`[y,0)` for negative ``y``\ .
 
 .. function:: fldmod1(x, y)
 

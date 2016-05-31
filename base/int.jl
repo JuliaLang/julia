@@ -88,8 +88,24 @@ rem(x::Unsigned, y::Signed) = rem(x,unsigned(abs(y)))
 fld(x::Signed, y::Unsigned) = div(x,y)-(signbit(x)&(rem(x,y)!=0))
 fld(x::Unsigned, y::Signed) = div(x,y)-(signbit(y)&(rem(x,y)!=0))
 
+
+"""
+    mod(x, y)
+
+Modulus after flooring division, returning in the range ``[0,y)``, if `y` is positive, or
+``(y,0]`` if `y` is negative.
+
+```julia
+x == fld(x,y)*y + mod(x,y)
+```
+"""
+function mod{T<:Integer}(x::T, y::T)
+    y == -1 && return T(0)   # avoid potential overflow in fld
+    x - fld(x,y)*y
+end
 mod(x::Signed, y::Unsigned) = rem(y+unsigned(rem(x,y)),y)
 mod(x::Unsigned, y::Signed) = rem(y+signed(rem(x,y)),y)
+mod{T<:Unsigned}(x::T, y::T) = rem(x,y)
 
 cld(x::Signed, y::Unsigned) = div(x,y)+(!signbit(x)&(rem(x,y)!=0))
 cld(x::Unsigned, y::Signed) = div(x,y)+(!signbit(y)&(rem(x,y)!=0))
@@ -101,12 +117,6 @@ rem{T<:BitSigned64}(x::T, y::T) = box(T,checked_srem_int(unbox(T,x),unbox(T,y)))
 div{T<:BitUnsigned64}(x::T, y::T) = box(T,checked_udiv_int(unbox(T,x),unbox(T,y)))
 rem{T<:BitUnsigned64}(x::T, y::T) = box(T,checked_urem_int(unbox(T,x),unbox(T,y)))
 
-# x == fld(x,y)*y + mod(x,y)
-mod{T<:Unsigned}(x::T, y::T) = rem(x,y)
-function mod{T<:Integer}(x::T, y::T)
-    y == -1 && return T(0)   # avoid potential overflow in fld
-    x - fld(x,y)*y
- end
 
 # fld(x,y) == div(x,y) - ((x>=0) != (y>=0) && rem(x,y) != 0 ? 1 : 0)
 fld{T<:Unsigned}(x::T, y::T) = div(x,y)
