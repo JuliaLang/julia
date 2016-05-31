@@ -1341,3 +1341,16 @@ uv = Array(v)
 B = bitrand(10,10)
 uB = Array(B)
 @test diag(uB) == Array(diag(B))
+
+# test non-Int dims constructor
+A = BitArray(Int32(10))
+B = BitArray(Int64(10))
+@test A == B
+
+A = trues(Int32(10))
+B = trues(Int64(10))
+@test A == B
+
+A = falses(Int32(10))
+B = falses(Int64(10))
+@test A == B
