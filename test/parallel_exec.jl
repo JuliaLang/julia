@@ -986,3 +986,16 @@ end
 
 # issue #15451
 @test remotecall_fetch(x->(y->2y)(x)+1, workers()[1], 3) == 7
+
+# issue #16451
+rng=RandomDevice()
+retval = @parallel (+) for _ in 1:10
+    rand(rng)
+end
+@test retval > 0.0 && retval < 10.0
+
+rand(rng)
+retval = @parallel (+) for _ in 1:10
+    rand(rng)
+end
+@test retval > 0.0 && retval < 10.0
