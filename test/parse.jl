@@ -461,3 +461,18 @@ let isline(x) = isa(x,Expr) && x.head === :line
     @test count(isline, parse("begin; x+2; end").args) == 1
     @test count(isline, parse("begin; x+2; y+1; end").args) == 2
 end
+
+# issue #16686
+@test parse("try x
+             catch test()
+                 y
+             end") == Expr(:try,
+                           Expr(:block,
+                                Expr(:line, 1, :none),
+                                :x),
+                           false,
+                           Expr(:block,
+                                Expr(:line, 2, :none),
+                                Expr(:call, :test),
+                                Expr(:line, 3, :none),
+                                :y))
