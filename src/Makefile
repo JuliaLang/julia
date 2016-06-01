@@ -190,8 +190,16 @@ JL_MAJOR_SHLIB_EXT := $(SHLIB_EXT).$(SOMAJOR)
 endif
 endif
 
+ifeq ($(SHLIB_EXT), so)
+  SONAME       := -Wl,-soname=libjulia.$(JL_MAJOR_SHLIB_EXT)
+  SONAME_DEBUG := -Wl,-soname=libjulia-debug.$(JL_MAJOR_SHLIB_EXT)
+else
+  SONAME       :=
+  SONAME_DEBUG :=
+endif
+
 $(build_shlibdir)/libjulia-debug.$(JL_MAJOR_MINOR_SHLIB_EXT): $(SRCDIR)/julia.expmap $(DOBJS) $(BUILDDIR)/flisp/libflisp-debug.a $(BUILDDIR)/support/libsupport-debug.a $(LIBUV)
-	@$(call PRINT_LINK, $(CXXLD) $(CXXFLAGS) $(CXXLDFLAGS) $(DEBUGFLAGS) $(DOBJS) $(RPATH_ORIGIN) -o $@ $(LDFLAGS) $(JLIBLDFLAGS) $(DEBUG_LIBS))
+	@$(call PRINT_LINK, $(CXXLD) $(CXXFLAGS) $(CXXLDFLAGS) $(DEBUGFLAGS) $(DOBJS) $(RPATH_ORIGIN) -o $@ $(LDFLAGS) $(JLIBLDFLAGS) $(DEBUG_LIBS) $(SONAME_DEBUG))
 	$(INSTALL_NAME_CMD)libjulia-debug.$(SHLIB_EXT) $@
 ifneq ($(OS), WINNT)
 	@ln -sf libjulia-debug.$(JL_MAJOR_MINOR_SHLIB_EXT) $(build_shlibdir)/libjulia-debug.$(JL_MAJOR_SHLIB_EXT)
@@ -202,12 +210,6 @@ $(BUILDDIR)/libjulia-debug.a: $(SRCDIR)/julia.expmap $(DOBJS) $(BUILDDIR)/flisp/
 	rm -f $@
 	@$(call PRINT_LINK, ar -rcs $@ $(DOBJS))
 libjulia-debug: $(build_shlibdir)/libjulia-debug.$(JL_MAJOR_MINOR_SHLIB_EXT)
-
-ifeq ($(SHLIB_EXT), so)
-  SONAME := -Wl,-soname=libjulia.$(JL_MAJOR_SHLIB_EXT)
-else
-  SONAME :=
-endif
 
 $(build_shlibdir)/libjulia.$(JL_MAJOR_MINOR_SHLIB_EXT): $(SRCDIR)/julia.expmap $(OBJS) $(BUILDDIR)/flisp/libflisp.a $(BUILDDIR)/support/libsupport.a $(LIBUV)
 	@$(call PRINT_LINK, $(CXXLD) $(CXXFLAGS) $(CXXLDFLAGS) $(SHIPFLAGS) $(OBJS) $(RPATH_ORIGIN) -o $@ $(LDFLAGS) $(JLIBLDFLAGS) $(RELEASE_LIBS) $(SONAME))
