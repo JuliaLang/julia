@@ -161,7 +161,7 @@ end
 @test CartesianTest.f(1,2,3,4) == (1,2,3,4)
 @test CartesianTest.f(1,2,3,4,5) == (1,2,3,4,5)
 
-extrapath = @windows? joinpath(JULIA_HOME,"..","Git","usr","bin")*";" : ""
+extrapath = is_windows() ? joinpath(JULIA_HOME,"..","Git","usr","bin")*";" : ""
 @compat withenv("PATH" => extrapath * ENV["PATH"]) do
     @test readstring(pipeline(`echo hello`, `sort`)) == "hello\n"
     @test success(pipeline(`true`, `true`))
@@ -406,11 +406,13 @@ let s = "abcdef", u8 = "abcdef\uff", u16 = utf16(u8), u32 = utf32(u8),
     @test isvalid(UTF32String, u32)
 end
 
-# chol
-let A = rand(2,2)
-    B = A'*A
-    U = @compat chol(B, Val{:U})
-    @test_approx_eq U'*U B
+if VERSION < v"0.5.0-dev+907"
+    # chol
+    let A = rand(2,2)
+        B = A'*A
+        U = @compat chol(B, Val{:U})
+        @test_approx_eq U'*U B
+    end
 end
 
 # @generated
@@ -920,7 +922,7 @@ cd(dirwalk) do
         touch(joinpath("sub_dir1", "file$i"))
     end
     touch(joinpath("sub_dir2", "file_dir2"))
-    has_symlinks = @unix? true : (isdefined(Base, :WINDOWS_VISTA_VER) && Base.windows_version() >= Base.WINDOWS_VISTA_VER)
+    has_symlinks = is_unix() ? true : (isdefined(Base, :WINDOWS_VISTA_VER) && Base.windows_version() >= Base.WINDOWS_VISTA_VER)
     follow_symlink_vec = has_symlinks ? [true, false] : [false]
     has_symlinks && symlink(abspath("sub_dir2"), joinpath("sub_dir1", "link"))
     for follow_symlinks in follow_symlink_vec
