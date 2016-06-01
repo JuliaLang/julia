@@ -59,10 +59,17 @@ end
 function depwarn(msg, funcsym)
     opts = JLOptions()
     if opts.depwarn == 1  # raise a warning
+        caller = firstcaller(backtrace(5), funcsym)
+        if caller != C_NULL
+            (caller in have_warned) && return
+            bt = backtrace()
+        else
+            bt = backtrace()
+            caller = firstcaller(bt, funcsym)
+            (caller in have_warned) && return
+        end
         ln = Int(unsafe_load(cglobal(:jl_lineno, Cint)))
         fn = String(unsafe_load(cglobal(:jl_filename, Ptr{Cchar})))
-        bt = backtrace()
-        caller = firstcaller(bt, funcsym)
         warn(msg, once=(caller != C_NULL), key=caller, bt=bt, filename=fn, lineno=ln)
     elseif opts.depwarn == 2  # raise an error
         throw(ErrorException(msg))
