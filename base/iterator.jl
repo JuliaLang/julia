@@ -559,3 +559,60 @@ function next(itr::PartitionIterator, state)
     end
     return resize!(v, i), state
 end
+
+
+immutable Concat{I,T,S}
+    first::T
+    itr::I
+    st::S
+end
+
+function Concat(c)
+    s = start(c)
+    done(c, s) && throw(ArgumentError("argument to Concat must contain at least one element"))
+    head, s = next(c, s)
+    Concat(head, c, s)
+end
+
+"""
+    concat(iter)
+
+Given an iterator with trait `HasShape()` that yields iterators with trait
+`HasShape()`, return an iterator that yields the elements of those iterators
+concatenated.
+
+```jldoctest
+julia> collect(Base.concat(((3*(i-1)+j for j in 1:3) for i in 1:4)))
+3×4 Array{Int64,2}:
+ 1  4  7  10
+ 2  5  8  11
+ 3  6  9  12
+```
+"""
+concat(it) = Concat(it)
+
+eltype{I,T,S}(::Type{Concat{I,T,S}}) = eltype(T)
+iteratorsize{I,T,S}(::Type{Concat{I,T,S}}) = HasShape()
+iteratoreltype{I,T,S}(::Type{Concat{I,T,S}}) = iteratoreltype(T)
+size(it::Concat) = (size(it.first)...,size(it.itr)...)
+length(it::Concat) = prod(size(it))
+
+function start(c::Concat)
+    return c.st, c.first, start(c.first)
+end
+
+function next(c::Concat, state)
+    s, inner, s2 = state
+    val, s2 = next(inner, s2)
+    while done(inner, s2) && !done(c.itr, s)
+        inner, s = next(c.itr, s)
+        size(inner) == size(c.first) || throw(DimensionMismatch("elements of different size in argument to Concat"))
+        s2 = start(inner)
+    end
+    return val, (s, inner, s2)
+end
+
+@inline function done(c::Concat, state)
+    s, inner, s2 = state
+    return done(c.itr, s) && done(inner, s2)
+end

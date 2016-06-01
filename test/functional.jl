@@ -374,6 +374,20 @@ import Base.flatten
 @test eltype(flatten(UnitRange{Int8}[1:2, 3:4])) == Int8
 @test_throws ArgumentError collect(flatten(Any[]))
 
+
+# concat
+# ------
+
+import Base.concat
+
+@test collect(concat(i:i+10 for i in 1:3)) == [1:11 2:12 3:13]
+@test typeof(collect(concat(i:i+10 for i in 1:3))) == Array{Int,2}
+@test_throws DimensionMismatch collect(concat(i:10 for i in 1:3))
+@test_throws ArgumentError collect(concat(Any[]))
+
+@test [reshape(1:6,3,2)[k,l]*i+j for k in 1:3, l in 1:2, i in 1:4, j in 1:5] == collect(Base.concat([reshape(1:6,3,2)*i+j for i in 1:4, j in 1:5]))
+
+
 # foreach
 let
     a = []
