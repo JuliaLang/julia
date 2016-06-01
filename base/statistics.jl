@@ -2,7 +2,7 @@
 
 ##### mean #####
 
-function mean(iterable)
+function mean(f::Callable, iterable)
     state = start(iterable)
     if done(iterable, state)
         throw(ArgumentError("mean of empty collection undefined: $(repr(iterable))"))
@@ -11,11 +11,13 @@ function mean(iterable)
     total, state = next(iterable, state)
     while !done(iterable, state)
         value, state = next(iterable, state)
-        total += value
+        total += f(value)
         count += 1
     end
     return total/count
 end
+mean(iterable) = mean(identity, iterable)
+mean(f::Callable, A::AbstractArray) = sum(f, A) / length(A)
 mean(A::AbstractArray) = sum(A) / length(A)
 
 function mean!{T}(R::AbstractArray{T}, A::AbstractArray)
