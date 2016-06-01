@@ -3,11 +3,6 @@
 ## Functions to check validity of UTF-8, UTF-16, and UTF-32 encoded strings,
 #  and also to return information necessary to convert to other encodings
 
-is_surrogate_lead(c::Unsigned) = ((c & ~0x003ff) == 0xd800)
-is_surrogate_trail(c::Unsigned) = ((c & ~0x003ff) == 0xdc00)
-is_surrogate_codeunit(c::Unsigned) = ((c & ~0x007ff) == 0xd800)
-is_valid_continuation(c) = ((c & 0xc0) == 0x80)
-
 ## Return flags for check_string function
 
 const UTF_LONG = 1              ##< Long encodings are present

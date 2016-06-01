@@ -162,32 +162,8 @@ function show_spec_linfo(io::IO, frame::StackFrame)
         end
     else
         linfo = get(frame.linfo)
-        params =
-            if isdefined(linfo, :specTypes)
-                linfo.specTypes.parameters
-            else
-                nothing
-            end
-        if params !== nothing
-            ft = params[1]
-            if ft <: Function && isempty(ft.parameters) &&
-                    isdefined(ft.name.module, ft.name.mt.name) &&
-                    ft == typeof(getfield(ft.name.module, ft.name.mt.name))
-                print(io, ft.name.mt.name)
-            elseif isa(ft, DataType) && is(ft.name, Type.name) && isleaftype(ft)
-                f = ft.parameters[1]
-                print(io, f)
-            else
-                print(io, "(::", ft, ")")
-            end
-            first = true
-            print(io, '(')
-            for i = 2:length(params)
-                first || print(io, ", ")
-                first = false
-                print(io, "::", params[i])
-            end
-            print(io, ')')
+        if isdefined(linfo, :specTypes)
+            Base.show_lambda_types(io, linfo.specTypes.parameters)
         else
             print(io, linfo.name)
         end

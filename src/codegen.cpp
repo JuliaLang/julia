@@ -370,6 +370,7 @@ static Function *jlcopyast_func;
 static Function *jltuple_func;
 static Function *jlnsvec_func;
 static Function *jlapplygeneric_func;
+static Function *jlinvoke_func;
 static Function *jlapply2va_func;
 static Function *jlgetfield_func;
 static Function *jlmethod_func;
@@ -868,7 +869,8 @@ static void to_function(jl_lambda_info_t *li)
 
     // if not inlineable, code won't be needed again
     if (JL_DELETE_NON_INLINEABLE &&
-        li->def && li->inferred && !li->inlineable && !jl_options.outputji) {
+        li->def && li->inferred && !li->inlineable &&
+        li != li->def->lambda_template && !jl_options.outputji) {
         li->code = jl_nothing;
         li->slottypes = jl_nothing;
         li->ssavaluetypes = jl_box_long(jl_array_len(li->ssavaluetypes)); jl_gc_wb(li, li->ssavaluetypes);
@@ -1014,28 +1016,6 @@ extern "C" void jl_generate_fptr(jl_lambda_info_t *li)
     JL_UNLOCK(&codegen_lock); // Might GC
 }
 
-extern "C" jl_lambda_info_t *jl_compile_for_dispatch(jl_lambda_info_t *li)
-{
-    if (li->inInference || li->inCompile) {
-        // if inference is running on this function, get a copy
-        // of the function to be compiled without inference and run.
-        assert(li->def != NULL);
-        li = jl_get_unspecialized(li);
-    }
-    if (li->fptr == NULL) {
-        if (li->functionObjectsDecls.functionObject == NULL) {
-            if (li->code == jl_nothing)
-                jl_type_infer(li, 0);
-            if (li->functionObjectsDecls.functionObject == NULL && li->code == jl_nothing) {
-                li = jl_get_unspecialized(li);
-            }
-            jl_compile_linfo(li);
-        }
-        jl_generate_fptr(li);
-    }
-    return li;
-}
-
 // this generates llvm code for the lambda info
 // (and adds it to the shadow module), but doesn't yet compile
 // or generate object code for it
@@ -1138,17 +1118,22 @@ void *jl_get_llvmf(jl_tupletype_t *tt, bool getwrapper, bool getdeclarations)
         JL_GC_POP();
         return NULL;
     }
-
-    if (linfo->code == jl_nothing) {
-        // re-infer if we've deleted the code
-        linfo = jl_type_infer(linfo, 0);
-        if (linfo->code == jl_nothing) {
-            JL_GC_POP();
-            return NULL;
-        }
-    }
+    // make sure to compile this normally first,
+    // since `emit_function` doesn't handle recursive compilation correctly
+    linfo = jl_compile_for_dispatch(linfo);
 
     if (!getdeclarations) {
+        if (linfo->code == jl_nothing) {
+            // re-infer if we've deleted the code
+            // XXX: this only /partially/ corrupts linfo
+            // (by confusing the compiler about the
+            // validity of the code it already generated)
+            linfo = jl_type_infer(linfo, 0);
+            if (linfo->code == jl_nothing || linfo->inInference) {
+                JL_GC_POP();
+                return NULL;
+            }
+        }
         // emit this function into a new module
         Function *f, *specf;
         jl_llvm_functions_t declarations;
@@ -1185,7 +1170,6 @@ void *jl_get_llvmf(jl_tupletype_t *tt, bool getwrapper, bool getdeclarations)
             return specf;
         }
     }
-    jl_compile_linfo(linfo);
     Function *llvmf;
     if (!getwrapper && linfo->functionObjectsDecls.specFunctionObject != NULL) {
         llvmf = (Function*)linfo->functionObjectsDecls.specFunctionObject;
@@ -2713,15 +2697,53 @@ static jl_cgval_t emit_call_function_object(jl_lambda_info_t *li, const jl_cgval
                            expr_type(callexpr, ctx), ctx);
 }
 
+static jl_cgval_t emit_invoke(jl_expr_t *ex, jl_codectx_t *ctx)
+{
+    jl_value_t **args = (jl_value_t**)jl_array_data(ex->args);
+    size_t arglen = jl_array_dim0(ex->args);
+    size_t nargs = arglen - 1;
+    assert(arglen >= 2);
+    jl_lambda_info_t *li = (jl_lambda_info_t*)args[0];
+    assert(jl_is_lambda_info(li));
+
+    jl_cgval_t result;
+    if (li->functionObjectsDecls.functionObject == NULL) {
+        assert(!li->inCompile);
+        if (li->code == jl_nothing && !li->inInference && li->inferred) {
+            // XXX: it was inferred in the past, so it's almost valid to re-infer it now
+            jl_type_infer(li, 0);
+        }
+        if (!li->inInference && li->inferred && li->code != jl_nothing) {
+            jl_compile_linfo(li);
+        }
+    }
+    Value *theFptr = (Value*)li->functionObjectsDecls.functionObject;
+    if (theFptr) {
+        jl_cgval_t fval = emit_expr(args[1], ctx);
+        result = emit_call_function_object(li, fval, theFptr, &args[1], nargs - 1, (jl_value_t*)ex, ctx);
+    }
+    else {
+        result = mark_julia_type(emit_jlcall(prepare_call(jlinvoke_func), literal_pointer_val((jl_value_t*)li),
+                                             &args[1], nargs, ctx),
+                                 true, expr_type((jl_value_t*)ex, ctx), ctx);
+    }
+
+    if (result.typ == jl_bottom_type) {
+        CreateTrap(builder);
+    }
+    return result;
+}
+
 static jl_cgval_t emit_call(jl_expr_t *ex, jl_codectx_t *ctx)
 {
     jl_value_t *expr = (jl_value_t*)ex;
     jl_value_t **args = (jl_value_t**)jl_array_data(ex->args);
     size_t arglen = jl_array_dim0(ex->args);
     size_t nargs = arglen - 1;
+    assert(arglen >= 1);
     Value *theFptr = NULL;
-    jl_cgval_t result;
     jl_value_t *aty = NULL;
+    jl_cgval_t result;
 
     jl_function_t *f = (jl_function_t*)static_eval(args[0], ctx, true);
     JL_GC_PUSH2(&f, &aty);
@@ -2765,7 +2787,8 @@ static jl_cgval_t emit_call(jl_expr_t *ex, jl_codectx_t *ctx)
                   jl_sprint((jl_value_t*)aty));
               }*/
             jl_lambda_info_t *li = jl_get_specialization1((jl_tupletype_t*)aty);
-            if (li != NULL) {
+            if (li != NULL && !li->inInference) {
+                jl_compile_linfo(li);
                 assert(li->functionObjectsDecls.functionObject != NULL);
                 theFptr = (Value*)li->functionObjectsDecls.functionObject;
                 jl_cgval_t fval;
@@ -3207,6 +3230,9 @@ static jl_cgval_t emit_expr(jl_value_t *expr, jl_codectx_t *ctx)
         builder.CreateCondBr(isfalse, ifnot, ifso);
         builder.SetInsertPoint(ifso);
     }
+    else if (head == invoke_sym) {
+        return emit_invoke(ex, ctx);
+    }
     else if (head == call_sym) {
         if (ctx->linfo->def) { // don't bother codegen constant-folding for toplevel
             jl_value_t *c = static_eval(expr, ctx, true, true);
@@ -3532,9 +3558,18 @@ static Function *gen_cfun_wrapper(jl_function_t *ff, jl_value_t *jlrettype, jl_t
         jl_error("va_arg syntax not allowed for cfunction argument list");
 
     const char *name = "cfunction";
+    // try to look up this function for direct invoking
     jl_lambda_info_t *lam = jl_get_specialization1((jl_tupletype_t*)sigt);
     jl_value_t *astrt = (jl_value_t*)jl_any_type;
+    // infer it first, if necessary
+    if (lam && lam->inInference)
+        lam = NULL; // TODO: use emit_invoke framework to dispatch these
+    if (lam && (lam->code == jl_nothing || !lam->inferred))
+        jl_type_infer(lam, 0);
+    if (lam && (lam->inInference || !lam->inferred))
+        lam = NULL; // TODO: use emit_invoke framework to dispatch these
     if (lam != NULL) {
+        jl_compile_linfo(lam);
         name = jl_symbol_name(lam->def->name);
         astrt = lam->rettype;
         if (astrt != (jl_value_t*)jl_bottom_type &&
@@ -5359,6 +5394,15 @@ static void init_julia_llvm_env(Module *m)
                                            Function::ExternalLinkage,
                                            "jl_apply_generic", m);
     add_named_global(jlapplygeneric_func, &jl_apply_generic);
+
+    std::vector<Type *> invokeargs(0);
+    invokeargs.push_back(T_pjlvalue);
+    invokeargs.push_back(T_ppjlvalue);
+    invokeargs.push_back(T_uint32);
+    jlinvoke_func = Function::Create(FunctionType::get(T_pjlvalue, invokeargs, false),
+                                     Function::ExternalLinkage,
+                                     "jl_invoke", m);
+    add_named_global(jlinvoke_func, &jl_invoke);
 
     std::vector<Type *> exp_args(0);
     exp_args.push_back(T_int1);
