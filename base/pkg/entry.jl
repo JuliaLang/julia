@@ -423,6 +423,7 @@ function update(branch::AbstractString)
 
     # Print deferred errors
     length(deferred_errors) > 0 && throw(PkgError("Update finished with errors.", deferred_errors))
+    nothing
 end
 
 
