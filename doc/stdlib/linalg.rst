@@ -1459,17 +1459,180 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
    If the keyword argument ``parallel`` is set to ``true``\ , ``peakflops`` is run in parallel on all the worker processors. The flop rate of the entire parallel computer is returned. When running in parallel, only 1 BLAS thread is used. The argument ``n`` still refers to the size of the problem that is solved on each processor.
 
+Low-level matrix operations
+---------------------------
+
+Matrix operations involving transpositions operations like ``A' \ B`` are converted
+by the Julia parser into calls to specially named functions like ``Ac_ldiv_B``.
+If you want to overload these operations for your own types, then it is useful
+to know the names of these functions.
+
+Also, in many cases there are in-place versions of matrix operations that
+allow you to supply a pre-allocated output vector or matrix.  This is useful
+when optimizing critical code in order to avoid the overhead of repeated allocations.
+These in-place operations are suffixed with ``!`` below (e.g. ``A_mul_B!``)
+according to the usual Julia convention.
+
+.. function:: A_ldiv_B!([Y,] A, B) -> Y
+
+   .. Docstring generated from Julia source
+
+   Compute ``A  B`` in-place and store the result in ``Y``\ , returning the result. If only two arguments are passed, then ``A_ldiv_B!(A, B)`` overwrites ``B`` with the result.
+
+   The argument ``A`` should *not* be a matrix.  Rather, instead of matrices it should be a factorization object (e.g. produced by :func:`factorize` or :func:`cholfact`\ ). The reason for this is that factorization itself is both expensive and typically allocates memory (although it can also be done in-place via, e.g., :func:`lufact`\ ), and performance-critical situations requiring ``A_ldiv_B!`` usually also require fine-grained control over the factorization of ``A``\ .
+
+.. function:: A_ldiv_Bc(A, B)
+
+   .. Docstring generated from Julia source
+
+   For matrices or vectors :math:`A` and :math:`B`\ , calculates :math:`A` \\ :math:`Bᴴ`\ .
+
+.. function:: A_ldiv_Bt(A, B)
+
+   .. Docstring generated from Julia source
+
+   For matrices or vectors :math:`A` and :math:`B`\ , calculates :math:`A` \\ :math:`Bᵀ`\ .
+
+.. function:: A_mul_B!(Y, A, B) -> Y
+
+   .. Docstring generated from Julia source
+
+   Calculates the matrix-matrix or matrix-vector product :math:`A⋅B` and stores the result in ``Y``\ , overwriting the existing value of ``Y``\ . Note that ``Y`` must not be aliased with either ``A`` or ``B``\ .
+
+   .. doctest::
+
+       julia> A=[1.0 2.0; 3.0 4.0]; B=[1.0 1.0; 1.0 1.0]; Y = similar(B); A_mul_B!(Y, A, B);
+
+       julia> Y
+       2×2 Array{Float64,2}:
+        3.0  3.0
+        7.0  7.0
+
+.. function:: A_mul_Bc(A, B)
+
+   .. Docstring generated from Julia source
+
+   For matrices or vectors :math:`A` and :math:`B`\ , calculates :math:`A⋅Bᴴ`\ .
+
+.. function:: A_mul_Bt(A, B)
+
+   .. Docstring generated from Julia source
+
+   For matrices or vectors :math:`A` and :math:`B`\ , calculates :math:`A⋅Bᵀ`\ .
+
+.. function:: A_rdiv_Bc(A, B)
+
+   .. Docstring generated from Julia source
+
+   For matrices or vectors :math:`A` and :math:`B`\ , calculates :math:`A / Bᴴ`\ .
+
+.. function:: A_rdiv_Bt(A, B)
+
+   .. Docstring generated from Julia source
+
+   For matrices or vectors :math:`A` and :math:`B`\ , calculates :math:`A / Bᵀ`\ .
+
+.. function:: Ac_ldiv_B(A, B)
+
+   .. Docstring generated from Julia source
+
+   For matrices or vectors :math:`A` and :math:`B`\ , calculates :math:`Aᴴ` \\ :math:`B`\ .
+
+.. function:: Ac_ldiv_B!([Y,] A, B) -> Y
+
+   .. Docstring generated from Julia source
+
+   Similar to :func:`A_ldiv_B!`\ , but return :math:`Aᴴ` \\ :math:`B`\ , computing the result in-place in ``Y`` (or overwriting ``B`` if ``Y`` is not supplied).
+
+.. function:: Ac_ldiv_Bc(A, B)
+
+   .. Docstring generated from Julia source
+
+   For matrices or vectors :math:`A` and :math:`B`\ , calculates :math:`Aᴴ` \\ :math:`Bᴴ`\ .
+
+.. function:: Ac_mul_B(A, B)
+
+   .. Docstring generated from Julia source
+
+   For matrices or vectors :math:`A` and :math:`B`\ , calculates :math:`Aᴴ⋅B`\ .
+
+.. function:: Ac_mul_Bc(A, B)
+
+   .. Docstring generated from Julia source
+
+   For matrices or vectors :math:`A` and :math:`B`\ , calculates :math:`Aᴴ Bᴴ`\ .
+
+.. function:: Ac_rdiv_B(A, B)
+
+   .. Docstring generated from Julia source
+
+   For matrices or vectors :math:`A` and :math:`B`\ , calculates :math:`Aᴴ / B`\ .
+
+.. function:: Ac_rdiv_Bc(A, B)
+
+   .. Docstring generated from Julia source
+
+   For matrices or vectors :math:`A` and :math:`B`\ , calculates :math:`Aᴴ / Bᴴ`\ .
+
+.. function:: At_ldiv_B(A, B)
+
+   .. Docstring generated from Julia source
+
+   For matrices or vectors :math:`A` and :math:`B`\ , calculates :math:`Aᵀ` \\ :math:`B`\ .
+
+.. function:: At_ldiv_B!([Y,] A, B) -> Y
+
+   .. Docstring generated from Julia source
+
+   Similar to :func:`A_ldiv_B!`\ , but return :math:`Aᵀ` \\ :math:`B`\ , computing the result in-place in ``Y`` (or overwriting ``B`` if ``Y`` is not supplied).
+
+.. function:: At_ldiv_Bt(A, B)
+
+   .. Docstring generated from Julia source
+
+   For matrices or vectors :math:`A` and :math:`B`\ , calculates :math:`Aᵀ` \\ :math:`Bᵀ`\ .
+
+.. function:: At_mul_B(A, B)
+
+   .. Docstring generated from Julia source
+
+   For matrices or vectors :math:`A` and :math:`B`\ , calculates :math:`Aᵀ⋅B`\ .
+
+.. function:: At_mul_Bt(A, B)
+
+   .. Docstring generated from Julia source
+
+   For matrices or vectors :math:`A` and :math:`B`\ , calculates :math:`Aᵀ⋅Bᵀ`\ .
+
+.. function:: At_rdiv_B(A, B)
+
+   .. Docstring generated from Julia source
+
+   For matrices or vectors :math:`A` and :math:`B`\ , calculates :math:`Aᵀ / B`\ .
+
+.. function:: At_rdiv_Bt(A, B)
+
+   .. Docstring generated from Julia source
+
+   For matrices or vectors :math:`A` and :math:`B`\ , calculates :math:`Aᵀ / Bᵀ`\ .
+
 BLAS Functions
 --------------
 
 .. module:: Base.LinAlg.BLAS
 
-:mod:`Base.LinAlg.BLAS` provides wrappers for some of the BLAS functions for
-linear algebra.  Those BLAS functions that overwrite one of the input
-arrays have names ending in ``'!'``.
+In Julia (as in much of scientific computation), dense linear-algebra operations are
+based on the `LAPACK library <http://www.netlib.org/lapack/>`_, which in turn
+is built on top of basic linear-algebra building-blocks known as the
+`BLAS <http://www.netlib.org/blas/>`_.  There are highly optimized implementations
+of BLAS available for every computer architecture, and sometimes in
+high-performance linear algebra routines it is useful to call the BLAS
+functions directly.
 
-Usually a function has 4 methods defined, one each for ``Float64``,
-``Float32``, ``Complex128`` and ``Complex64`` arrays.
+:mod:`Base.LinAlg.BLAS` provides wrappers for some of the BLAS functions.
+Those BLAS functions that overwrite one of the input
+arrays have names ending in ``'!'``.  Usually, a BLAS function has four methods defined,
+for ``Float64``, ``Float32``, ``Complex128``, and ``Complex64`` arrays.
 
 .. currentmodule:: Base.LinAlg.BLAS
 
@@ -2362,4 +2525,3 @@ set of functions in future releases.
    Solves the Sylvester matrix equation ``A * X +/- X * B = scale*C`` where ``A`` and ``B`` are both quasi-upper triangular. If ``transa = N``\ , ``A`` is not modified. If ``transa = T``\ , ``A`` is transposed. If ``transa = C``\ , ``A`` is conjugate transposed. Similarly for ``transb`` and ``B``\ . If ``isgn = 1``\ , the equation ``A * X + X * B = scale * C`` is solved. If ``isgn = -1``\ , the equation ``A * X - X * B = scale * C`` is solved.
 
    Returns ``X`` (overwriting ``C``\ ) and ``scale``\ .
-

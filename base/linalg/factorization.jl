@@ -41,3 +41,41 @@ for (f1, f2) in ((:\, :A_ldiv_B!),
         end
     end
 end
+
+# support the same 3-arg idiom as in our other in-place A_*_B functions:
+for f in (:A_ldiv_B!, :Ac_ldiv_B!, :At_ldiv_B!)
+    @eval $f(Y::AbstractVecOrMat, A::Factorization, B::AbstractVecOrMat) =
+        $f(A, copy!(Y, B))
+end
+
+"""
+    A_ldiv_B!([Y,] A, B) -> Y
+
+Compute `A \ B` in-place and store the result in `Y`, returning the result.
+If only two arguments are passed, then `A_ldiv_B!(A, B)` overwrites `B` with
+the result.
+
+The argument `A` should *not* be a matrix.  Rather, instead of matrices it should be a
+factorization object (e.g. produced by [`factorize`](:func:`factorize`) or [`cholfact`](:func:`cholfact`)).
+The reason for this is that factorization itself is both expensive and typically allocates memory
+(although it can also be done in-place via, e.g., [`lufact`](:func:`lufact`)),
+and performance-critical situations requiring `A_ldiv_B!` usually also require fine-grained
+control over the factorization of `A`.
+"""
+A_ldiv_B!
+
+"""
+    Ac_ldiv_B!([Y,] A, B) -> Y
+
+Similar to [`A_ldiv_B!`](:func:`A_ldiv_B!`), but return ``Aᴴ`` \\ ``B``,
+computing the result in-place in `Y` (or overwriting `B` if `Y` is not supplied).
+"""
+Ac_ldiv_B!
+
+"""
+    At_ldiv_B!([Y,] A, B) -> Y
+
+Similar to [`A_ldiv_B!`](:func:`A_ldiv_B!`), but return ``Aᵀ`` \\ ``B``,
+computing the result in-place in `Y` (or overwriting `B` if `Y` is not supplied).
+"""
+At_ldiv_B!
