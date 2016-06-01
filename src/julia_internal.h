@@ -72,6 +72,7 @@ STATIC_INLINE jl_value_t *newstruct(jl_datatype_t *type)
 jl_lambda_info_t *jl_type_infer(jl_lambda_info_t *li, int force);
 void jl_generate_fptr(jl_lambda_info_t *li);
 void jl_compile_linfo(jl_lambda_info_t *li);
+JL_DLLEXPORT int jl_compile_hint(jl_tupletype_t *types);
 jl_lambda_info_t *jl_compile_for_dispatch(jl_lambda_info_t *li);
 
 // invoke (compiling if necessary) the jlcall function pointer for a method

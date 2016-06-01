@@ -505,7 +505,12 @@ static jl_cgval_t generic_box(jl_value_t *targ, jl_value_t *x, jl_codectx_t *ctx
             vx = builder.CreateBitCast(vx, llvmt);
     }
 
-    return mark_julia_type(vx, false, bt, ctx);
+    if (jl_is_leaf_type(bt))
+        return mark_julia_type(vx, false, bt, ctx);
+    else
+        return mark_julia_type(
+            init_bits_value(emit_allocobj(nb), boxed(bt_value, ctx), vx, tbaa_immut),
+            true, bt, ctx);
 }
 
 // put a bits type tag on some value

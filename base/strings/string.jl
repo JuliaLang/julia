@@ -9,6 +9,11 @@
 
 ## basic UTF-8 decoding & iteration ##
 
+is_surrogate_lead(c::Unsigned) = ((c & ~0x003ff) == 0xd800)
+is_surrogate_trail(c::Unsigned) = ((c & ~0x003ff) == 0xdc00)
+is_surrogate_codeunit(c::Unsigned) = ((c & ~0x007ff) == 0xd800)
+is_valid_continuation(c) = ((c & 0xc0) == 0x80)
+
 const utf8_offset = [
     0x00000000, 0x00003080,
     0x000e2080, 0x03c82080,
