@@ -3058,6 +3058,7 @@ f(x) = yt(x)
                                                    globalref cdecl stdcall fastcall thiscall)))
           (cond (tail  (emit-return e))
                 (value e)
+                ((or (eq? e 'true) (eq? e 'false)) #f)
                 ((symbol? e) (emit e) #f)  ;; keep symbols for undefined-var checking
                 (else #f))
           (case (car e)
