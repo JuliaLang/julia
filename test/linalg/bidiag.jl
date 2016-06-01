@@ -6,6 +6,17 @@ import Base.LinAlg: BlasReal, BlasFloat
 n = 10 #Size of test matrix
 srand(1)
 
+@testset "Constructors" begin
+    D = Bidiagonal((n, n))
+    @test size(D) == (n, n)
+    @test isa(D, Bidiagonal{Float64})
+    D = Bidiagonal(n, n)
+    @test size(D) == (n, n)
+    @test isa(D, Bidiagonal{Float64})
+    @test_throws DimensionMismatch Bidiagonal((n, n+1))
+    @test_throws DimensionMismatch Bidiagonal(n, n+1)
+end
+
 @testset for relty in (Int, Float32, Float64, BigFloat), elty in (relty, Complex{relty})
     if relty <: AbstractFloat
         dv = convert(Vector{elty}, randn(n))
@@ -28,6 +39,14 @@ srand(1)
         @test_throws ArgumentError Bidiagonal(dv,ev,'R')
         @test_throws DimensionMismatch Bidiagonal(dv,ones(elty,n),true)
         @test_throws ArgumentError Bidiagonal(dv,ev)
+        D = Bidiagonal{elty}((n, n))
+        @test size(D) == (n, n)
+        @test isa(D, Bidiagonal{elty})
+        D = Bidiagonal{elty}(n, n)
+        @test size(D) == (n, n)
+        @test isa(D, Bidiagonal{elty})
+        @test_throws DimensionMismatch Bidiagonal{elty}((n, n+1))
+        @test_throws DimensionMismatch Bidiagonal{elty}(n, n+1)
     end
 
     BD = Bidiagonal(dv, ev, true)

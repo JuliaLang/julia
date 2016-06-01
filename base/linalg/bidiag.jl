@@ -11,6 +11,12 @@ type Bidiagonal{T} <: AbstractMatrix{T}
         end
         new(dv, ev, isupper)
     end
+    function Bidiagonal(m::Integer, n::Integer)
+        check_array_size(m, n)
+        checksquaredims(m, n, Bidiagonal{T})
+        new(Vector{T}(n), Vector{T}(n-1))
+    end
+    Bidiagonal(dims::Dims{2}) = Bidiagonal{T}(dims...)
 end
 """
     Bidiagonal(dv, ev, isupper::Bool)
@@ -54,6 +60,17 @@ julia> ev = [7; 8; 9]
 """
 Bidiagonal{T}(dv::AbstractVector{T}, ev::AbstractVector{T}, isupper::Bool) = Bidiagonal{T}(collect(dv), collect(ev), isupper)
 Bidiagonal(dv::AbstractVector, ev::AbstractVector) = throw(ArgumentError("did you want an upper or lower Bidiagonal? Try again with an additional true (upper) or false (lower) argument."))
+
+"""
+    Bidiagonal{T}(dims)
+
+Constructs a bidiagonal matrix with uninitialized diagonal and off-diagonal elements of
+type `T`. If `T` is omitted, it defaults to `Float64`. The dims may be given as two integer
+arguments or as tuple of two `Int`s, both of which have to be equal as `Bidiagonal`
+matrices are always square.
+"""
+Bidiagonal(m::Integer, n::Integer) = Bidiagonal{Float64}(m, n)
+Bidiagonal(dims::Dims{2}) = Bidiagonal(dims...)
 
 """
     Bidiagonal(dv, ev, uplo::Char)

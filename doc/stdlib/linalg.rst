@@ -317,6 +317,12 @@ Linear algebra functions in Julia are largely implemented by calling functions f
         ⋅  3  3  ⋅
         ⋅  ⋅  4  4
 
+.. function:: Bidiagonal{T}(dims)
+
+   .. Docstring generated from Julia source
+
+   Constructs a bidiagonal matrix with uninitialized diagonal and off-diagonal elements of type ``T``\ . If ``T`` is omitted, it defaults to ``Float64``\ . The dims may be given as two integer arguments or as tuple of two ``Int``\ s, both of which have to be equal as ``Bidiagonal`` matrices are always square.
+
 .. function:: SymTridiagonal(dv, ev)
 
    .. Docstring generated from Julia source
@@ -346,6 +352,12 @@ Linear algebra functions in Julia are largely implemented by calling functions f
         7  2  8  ⋅
         ⋅  8  3  9
         ⋅  ⋅  9  4
+
+.. function:: SymTridiagonal{T}(dims)
+
+   .. Docstring generated from Julia source
+
+   Constructs a symmetric tridiagonal matrix with uninitialized diagonal and sub/super–diagonal elements of type ``T``\ . If ``T`` is omitted, it defaults to ``Float64``\ . The dims may be given as two integer arguments or as tuple of two ``Int``\ s, both of which have to be equal as ``SymTridiagonal`` matrices are always square.
 
 .. function:: Tridiagonal(dl, d, du)
 
@@ -382,6 +394,12 @@ Linear algebra functions in Julia are largely implemented by calling functions f
         1  8  5  ⋅
         ⋅  2  9  6
         ⋅  ⋅  3  0
+
+.. function:: Tridiagonal{T}(dims)
+
+   .. Docstring generated from Julia source
+
+   Constructs a tridiagonal matrix with uninitialized diagonal and sub/super–diagonal elements of type ``T``\ . If ``T`` is omitted, it defaults to ``Float64``\ . The dims may be given as two integer arguments or as tuple of two ``Int``\ s, both of which have to be equal as ``Tridiagonal`` matrices are always square.
 
 .. function:: Symmetric(A, uplo=:U)
 
