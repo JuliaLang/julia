@@ -443,6 +443,23 @@ end
 # For static evaluation of method_exists, when it evaluates to true.
 # We don't evaluate it at compile-time when false, because someone
 # might define the missing method later.
+"""
+    @method_exists(f, tt)
+
+Determine whether the given generic function `f` has a method matching
+the given tuple `tt` of argument types. When used in a function, if
+the method exists at the time the function is compiled, this statement
+simply gets replaced by `true` (and hence has no runtime overhead). If
+the function does not exist, then it is equivalent to the function
+form, `method_exists`.
+
+```jldoctest
+julia> @method_exists(length, Tuple{Array})
+true
+```
+"""
+:@method_exists
+
 macro method_exists(f, tt)
     exmt = :(typeof($f).name.mt)  # get the method table for f
     # Form the tuple-type of the function + argument types

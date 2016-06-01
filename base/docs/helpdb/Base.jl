@@ -6918,23 +6918,6 @@ true
 method_exists
 
 """
-    @method_exists(f, tt)
-
-Determine whether the given generic function `f` has a method matching
-the given tuple `tt` of argument types. When used in a function, if
-the method exists at the time the function is compiled, this statement
-simple gets replaced by `true` (and hence has no runtime overhead). If
-the function does not exist, then it is equivalent to the function
-form, `method_exists`.
-
-```jldoctest
-julia> @method_exists(length, Tuple{Array})
-true
-```
-"""
-:@method_exists
-
-"""
     nextpow(a, x)
 
 The smallest `a^n` not less than `x`, where `n` is a non-negative integer. `a` must be
