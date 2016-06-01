@@ -1249,7 +1249,8 @@
                           '(block)
                           #f
                           finalb)
-                    (let* ((var (if nl #f (parse-eq* s)))
+                    (let* ((loc (line-number-node s))
+                           (var (if nl #f (parse-eq* s)))
                            (var? (and (not nl) (or (and (symbol? var) (not (eq? var 'false))
                                                         (not (eq? var 'true)))
                                                    (and (length= var 2) (eq? (car var) '$)))))
@@ -1259,7 +1260,7 @@
                       (loop (require-token s)
                             (if (or var? (not var))
                                 catch-block
-                                `(block ,(cadr catch-block) ,var ,@(cddr catch-block)))
+                                `(block ,loc ,var ,@(cdr catch-block)))
                             (if var? var 'false)
                             finalb)))))
              ((and (eq? nxt 'finally)
