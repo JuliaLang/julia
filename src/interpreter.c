@@ -67,6 +67,20 @@ static jl_value_t *do_call(jl_value_t **args, size_t nargs, interpreter_state *s
     return result;
 }
 
+static jl_value_t *do_invoke(jl_value_t **args, size_t nargs, interpreter_state *s)
+{
+    jl_value_t **argv;
+    JL_GC_PUSHARGS(argv, nargs - 1);
+    size_t i;
+    for (i = 1; i < nargs; i++)
+        argv[i - 1] = eval(args[i], s);
+    jl_lambda_info_t *meth = (jl_lambda_info_t*)args[0];
+    assert(jl_is_lambda_info(meth) && !meth->inInference);
+    jl_value_t *result = jl_call_method_internal(meth, argv, nargs - 1);
+    JL_GC_POP();
+    return result;
+}
+
 jl_value_t *jl_eval_global_var(jl_module_t *m, jl_sym_t *e)
 {
     jl_value_t *v = jl_get_global(m, e);
@@ -172,6 +186,9 @@ static jl_value_t *eval(jl_value_t *e, interpreter_state *s)
     size_t nargs = jl_array_len(ex->args);
     if (ex->head == call_sym) {
         return do_call(args, nargs, s);
+    }
+    else if (ex->head == invoke_sym) {
+        return do_invoke(args, nargs, s);
     }
     else if (ex->head == new_sym) {
         jl_value_t *thetype = eval(args[0], s);

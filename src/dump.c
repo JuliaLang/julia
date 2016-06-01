@@ -867,7 +867,6 @@ static void jl_serialize_value_(ios_t *s, jl_value_t *v)
         jl_serialize_value(s, (jl_value_t*)li->sparam_syms);
         jl_serialize_value(s, (jl_value_t*)li->sparam_vals);
         jl_serialize_value(s, (jl_value_t*)li->specTypes);
-        jl_serialize_value(s, (jl_value_t*)li->unspecialized_ducttape);
         write_int8(s, li->inferred);
         write_int8(s, li->pure);
         write_int8(s, li->inlineable);
@@ -1501,8 +1500,7 @@ static jl_value_t *jl_deserialize_value_(ios_t *s, jl_value_t *vtag, jl_value_t 
         jl_gc_wb(li, li->sparam_vals);
         li->specTypes = (jl_tupletype_t*)jl_deserialize_value(s, (jl_value_t**)&li->specTypes);
         if (li->specTypes) jl_gc_wb(li, li->specTypes);
-        li->unspecialized_ducttape = (jl_lambda_info_t*)jl_deserialize_value(s, (jl_value_t**)&li->unspecialized_ducttape);
-        if (li->unspecialized_ducttape) jl_gc_wb(li, li->unspecialized_ducttape);
+        li->unspecialized_ducttape = NULL;
         li->inferred = read_int8(s);
         li->pure = read_int8(s);
         li->inlineable = read_int8(s);
@@ -2413,7 +2411,7 @@ void jl_init_serializer(void)
                      // everything above here represents a class of object rather than only a literal
 
                      jl_emptysvec, jl_emptytuple, jl_false, jl_true, jl_nothing, jl_any_type,
-                     call_sym, goto_ifnot_sym, return_sym, body_sym, line_sym,
+                     call_sym, invoke_sym, goto_ifnot_sym, return_sym, body_sym, line_sym,
                      lambda_sym, jl_symbol("tuple"), assign_sym,
 
                      // empirical list of very common symbols
