@@ -8,7 +8,8 @@ function mean(f::Callable, iterable)
         throw(ArgumentError("mean of empty collection undefined: $(repr(iterable))"))
     end
     count = 1
-    total, state = next(iterable, state)
+    value, state = next(iterable, state)
+    total = f(value)
     while !done(iterable, state)
         value, state = next(iterable, state)
         total += f(value)
