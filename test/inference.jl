@@ -5,14 +5,14 @@
 # issue 9770
 @noinline x9770() = false
 function f9770(x)
-    if x9770()
+    return if x9770()
         g9770(:a, :foo)
     else
         x
     end
 end
 function g9770(x,y)
-   if isa(y, Symbol)
+   return if isa(y, Symbol)
        f9770(x)
    else
        g9770(:a, :foo)
@@ -58,7 +58,7 @@ function g3182(t::DataType)
     # subtype of Type, but we cannot infer the T in Type{T} just
     # by knowing (at compile time) that the argument is a DataType.
     # however the ::Type{T} method should still match at run time.
-    f3182(t)
+    return f3182(t)
 end
 @test g3182(Complex) == 0
 
@@ -107,7 +107,7 @@ barTuple2() = fooTuple{tuple(:y)}()
 # issue #12476
 function f12476(a)
     (k, v) = a
-    v
+    return v
 end
 @inferred f12476(1.0 => 1)
 
@@ -143,14 +143,17 @@ f12826{I<:Integer}(v::Vector{I}) = v[1]
 
 
 # non-terminating inference, issue #14009
+# non-terminating codegen, issue #16201
 type A14009{T}; end
 A14009{T}(a::T) = A14009{T}()
 f14009(a) = rand(Bool) ? f14009(A14009(a)) : a
 code_typed(f14009, (Int,))
+code_llvm(DevNull, f14009, (Int,))
 
 type B14009{T}; end
 g14009(a) = g14009(B14009{a})
 code_typed(g14009, (Type{Int},))
+code_llvm(DevNull, f14009, (Int,))
 
 
 # issue #9232
@@ -164,6 +167,7 @@ result_type9232{T1<:Number,T2<:Number}(::Type{T1}, ::Type{T2}) = arithtype9232(T
 function g10878(x; kw...); end
 invoke_g10878() = invoke(g10878, Tuple{Any}, 1)
 @code_typed invoke_g10878()
+code_llvm(DevNull, invoke_g10878, ())
 
 
 # issue #10930

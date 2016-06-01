@@ -2064,23 +2064,6 @@ static Value *emit_f_is(const jl_cgval_t &arg1, const jl_cgval_t &arg2, jl_codec
 #endif
 }
 
-static jl_svec_t *call_arg_types(jl_value_t **args, size_t n, jl_codectx_t *ctx)
-{
-    jl_svec_t *t = jl_alloc_svec(n);
-    JL_GC_PUSH1(&t);
-    size_t i;
-    for(i=0; i < n; i++) {
-        jl_value_t *ty = expr_type(args[i], ctx);
-        if (!jl_is_leaf_type(ty)) {
-            t = NULL;
-            break;
-        }
-        jl_svecset(t, i, ty);
-    }
-    JL_GC_POP();
-    return t;
-}
-
 static bool emit_builtin_call(jl_cgval_t *ret, jl_value_t *f, jl_value_t **args, size_t nargs,
                               jl_codectx_t *ctx, jl_value_t *expr)
 // returns true if the call has been handled
@@ -2742,11 +2725,10 @@ static jl_cgval_t emit_call(jl_expr_t *ex, jl_codectx_t *ctx)
     size_t nargs = arglen - 1;
     assert(arglen >= 1);
     Value *theFptr = NULL;
-    jl_value_t *aty = NULL;
     jl_cgval_t result;
 
     jl_function_t *f = (jl_function_t*)static_eval(args[0], ctx, true);
-    JL_GC_PUSH2(&f, &aty);
+    JL_GC_PUSH1(&f);
     if (f != NULL) {
         // function is a compile-time constant
         if (jl_typeis(f, jl_intrinsic_type)) {
@@ -2773,45 +2755,6 @@ static jl_cgval_t emit_call(jl_expr_t *ex, jl_codectx_t *ctx)
             result = mark_julia_type(emit_jlcall(theFptr, V_null, &args[1], nargs, ctx), true, expr_type(expr,ctx), ctx);
             JL_GC_POP();
             return result;
-        }
-    }
-
-    if (ctx->linfo->inferred) {
-        aty = (jl_value_t*)call_arg_types(args, arglen, ctx);
-        // attempt compile-time specialization for inferred types
-        if (aty != NULL) {
-            aty = (jl_value_t*)jl_apply_tuple_type((jl_svec_t*)aty);
-            /*if (trace) {
-                  jl_printf(JL_STDOUT, "call %s%s\n",
-                  jl_sprint(args[0]),
-                  jl_sprint((jl_value_t*)aty));
-              }*/
-            jl_lambda_info_t *li = jl_get_specialization1((jl_tupletype_t*)aty);
-            if (li != NULL && !li->inInference) {
-                jl_compile_linfo(li);
-                assert(li->functionObjectsDecls.functionObject != NULL);
-                theFptr = (Value*)li->functionObjectsDecls.functionObject;
-                jl_cgval_t fval;
-                if (f != NULL) {
-                    // TODO jb/functions: avoid making too many roots here
-                    if (!jl_is_globalref(args[0]) && !jl_is_symbol(args[0]) &&
-                        !jl_is_leaf_type(f)) {
-                        if (ctx->linfo->def)
-                            jl_add_linfo_root(ctx->linfo, f);
-                        else // for toplevel thunks, just write the value back to the AST to root it
-                            jl_array_ptr_set(ex->args, 0, f);
-                    }
-                    fval = mark_julia_const((jl_value_t*)f);
-                }
-                else {
-                    fval = emit_expr(args[0], ctx);
-                }
-                if (ctx->linfo->def) // root this li in case it gets deleted from the cache in `f`
-                    jl_add_linfo_root(ctx->linfo, (jl_value_t*)li);
-                result = emit_call_function_object(li, fval, theFptr, args, nargs, expr, ctx);
-                JL_GC_POP();
-                return result;
-            }
         }
     }
 
