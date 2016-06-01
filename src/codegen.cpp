@@ -4780,7 +4780,8 @@ static std::unique_ptr<Module> emit_function(jl_lambda_info_t *lam, jl_llvm_func
             // always emit expressions that update the boundscheck stack
             emit_stmtpos(stmt, &ctx);
         }
-        else if (is_inbounds(&ctx) && is_bounds_check_block(&ctx)) {
+        else if (is_inbounds(&ctx) && is_bounds_check_block(&ctx) &&
+                 jl_options.check_bounds != JL_OPTIONS_CHECK_BOUNDS_ON) {
             // elide bounds check blocks
         }
         else {
