@@ -337,6 +337,9 @@ ifneq ($(LLVM_GIT_VER),)
 	(cd $(LLVM_SRC_DIR) && \
 		git checkout $(LLVM_GIT_VER))
 endif # LLVM_GIT_VER
+	# Debug output only. Disable pager and ignore error.
+	(cd $(LLVM_SRC_DIR) && \
+		git show HEAD --stat | cat) || true
 endif # LLVM_VER
 ifneq ($(LLVM_VER),svn)
 ifneq ($(LLVM_CLANG_TAR),)
