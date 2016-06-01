@@ -382,7 +382,6 @@ typedef struct _jl_module_t {
     htable_t bindings;
     arraylist_t usings;  // modules with all bindings potentially imported
     uint8_t istopmod;
-    uint8_t std_imports;  // only for temporarily deprecating `importall Base.Operators`
     uint64_t uuid;
     uint32_t counter;
 } jl_module_t;
