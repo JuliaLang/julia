@@ -117,8 +117,8 @@ end
 .^(x::Number,y::Number) = x^y
 .+(x::Number,y::Number) = x+y
 .-(x::Number,y::Number) = x-y
-.<<(x::Number,y::Number) = x<<y
-.>>(x::Number,y::Number) = x>>y
+.<<(x::Integer,y::Integer) = x<<y
+.>>(x::Integer,y::Integer) = x>>y
 
 .==(x::Number,y::Number) = x == y
 .!=(x::Number,y::Number) = x != y
@@ -150,13 +150,13 @@ julia> bits(Int8(12))
 ```
 See also [`>>`](:func:`>>`), [`>>>`](:func:`>>>`).
 """
-function <<(x, c::Integer)
+function <<(x::Integer, c::Integer)
     typemin(Int) <= c <= typemax(Int) && return x << (c % Int)
     (x >= 0 || c >= 0) && return zero(x)
     oftype(x, -1)
 end
-<<(x, c::Unsigned) = c <= typemax(UInt) ? x << (c % UInt) : zero(x)
-<<(x, c::Int) = c >= 0 ? x << unsigned(c) : x >> unsigned(-c)
+<<(x::Integer, c::Unsigned) = c <= typemax(UInt) ? x << (c % UInt) : zero(x)
+<<(x::Integer, c::Int) = c >= 0 ? x << unsigned(c) : x >> unsigned(-c)
 
 """
     >>(x, n)
@@ -188,13 +188,13 @@ julia> bits(Int8(-4))
 ```
 See also [`>>>`](:func:`>>>`), [`<<`](:func:`<<`).
 """
-function >>(x, c::Integer)
+function >>(x::Integer, c::Integer)
     typemin(Int) <= c <= typemax(Int) && return x >> (c % Int)
     (x >= 0 || c < 0) && return zero(x)
     oftype(x, -1)
 end
->>(x, c::Unsigned) = c <= typemax(UInt) ? x >> (c % UInt) : zero(x)
->>(x, c::Int) = c >= 0 ? x >> unsigned(c) : x << unsigned(-c)
+>>(x::Integer, c::Unsigned) = c <= typemax(UInt) ? x >> (c % UInt) : zero(x)
+>>(x::Integer, c::Int) = c >= 0 ? x >> unsigned(c) : x << unsigned(-c)
 
 """
     >>>(x, n)
@@ -221,9 +221,10 @@ is equivalent to [`>>`](:func:`>>`).
 
 See also [`>>`](:func:`>>`), [`<<`](:func:`<<`).
 """
->>>(x, c::Integer) = typemin(Int) <= c <= typemax(Int) ? x >>> (c % Int) : zero(x)
->>>(x, c::Unsigned) = c <= typemax(UInt) ? x >>> (c % UInt) : zero(x)
->>>(x, c::Int) = c >= 0 ? x >>> unsigned(c) : x << unsigned(-c)
+>>>(x::Integer, c::Integer) =
+    typemin(Int) <= c <= typemax(Int) ? x >>> (c % Int) : zero(x)
+>>>(x::Integer, c::Unsigned) = c <= typemax(UInt) ? x >>> (c % UInt) : zero(x)
+>>>(x::Integer, c::Int) = c >= 0 ? x >>> unsigned(c) : x << unsigned(-c)
 
 # fallback div, fld, and cld implementations
 # NOTE: C89 fmod() and x87 FPREM implicitly provide truncating float division,
