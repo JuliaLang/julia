@@ -183,7 +183,7 @@ temp_pkg_dir() do
         Pkg.free("Example")
 
         Pkg.pin("Example", v"0.4.0")
-        Pkg.update()
+        @test Pkg.update() == nothing
         Pkg.installed()["Example"] == v"0.4.0"
     end
 
