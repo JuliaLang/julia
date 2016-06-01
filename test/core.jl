@@ -600,11 +600,23 @@ Type11167{Float32,5}
 
 # dispatch
 let
-    local foo, bar, baz
-    foo(x::Tuple{Vararg{Any}})=0
-    foo(x::Tuple{Vararg{Integer}})=1
-    @test foo((:a,))==0
-    @test foo(( 2,))==1
+    local foo, foo2, fooN, bar, baz
+    foo(x::Tuple{Vararg{Any}}) = 0
+    foo(x::Tuple{Vararg{Integer}}) = 1
+    @test foo((:a,)) == 0
+    @test foo(( 2,)) == 1
+
+    foo2(x::Vararg{Any,2}) = 2
+    @test foo2(1,2) == 2
+    @test_throws MethodError foo2(1)
+    @test_throws MethodError foo2(1,2,3)
+
+    fooN{T,N}(A::Array{T,N}, x::Vararg{Any,N}) = -1
+    @test fooN([1,2], 1) == -1
+    @test_throws MethodError fooN([1,2], 1, 2) == -1
+    @test fooN([1 2; 3 4], 1, 2) == -1
+    @test_throws MethodError fooN([1 2; 3 4], 1)
+    @test_throws MethodError fooN([1 2; 3 4], 1, 2, 3)
 
     bar{T}(x::Tuple{T,T,T,T})=1
     bar(x::Tuple{Any,Any,Any,Any})=2
