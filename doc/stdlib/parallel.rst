@@ -247,6 +247,28 @@ General Parallel Computing Support
 
    Create a WorkerPool from a vector of worker ids.
 
+.. function:: CachingPool(workers::Vector{Int})
+
+   .. Docstring generated from Julia source
+
+   An implementation of an ``AbstractWorkerPool``\ . ``remote``\ , ``remotecall_fetch``\ , ``pmap`` and other remote calls which execute functions remotely, benefit from caching the serialized/deserialized functions on the worker nodes, especially for closures which capture large amounts of data.
+
+   The remote cache is maintained for the lifetime of the returned ``CachingPool`` object. To clear the cache earlier, use ``clear!(pool)``\ .
+
+   For global variables, only the bindings are captured in a closure, not the data. ``let`` blocks can be used to capture global data.
+
+   For example:
+
+   .. code-block:: julia
+
+       const foo=rand(10^8);
+       wp=CachingPool(workers())
+       let foo=foo
+           pmap(wp, i->sum(foo)+i, 1:100);
+       end
+
+   The above would transfer ``foo`` only once to each worker.
+
 .. function:: rmprocs(pids...)
 
    .. Docstring generated from Julia source
@@ -273,7 +295,7 @@ General Parallel Computing Support
 
    For multiple collection arguments, apply f elementwise.
 
-.. function:: pmap([::WorkerPool], f, c...; distributed=true, batch_size=1, on_error=nothing, retry_n=0, retry_max_delay=DEFAULT_RETRY_MAX_DELAY, retry_on=DEFAULT_RETRY_ON) -> collection
+.. function:: pmap([::AbstractWorkerPool], f, c...; distributed=true, batch_size=1, on_error=nothing, retry_n=0, retry_max_delay=DEFAULT_RETRY_MAX_DELAY, retry_on=DEFAULT_RETRY_ON) -> collection
 
    .. Docstring generated from Julia source
 
@@ -377,13 +399,13 @@ General Parallel Computing Support
 
    Perform ``fetch(remotecall(...))`` in one message.  Keyword arguments, if any, are passed through to ``func``\ . Any remote exceptions are captured in a ``RemoteException`` and thrown.
 
-.. function:: remotecall_fetch(f, pool::WorkerPool, args...; kwargs...)
+.. function:: remotecall_fetch(f, pool::AbstractWorkerPool, args...; kwargs...)
 
    .. Docstring generated from Julia source
 
    Call ``f(args...; kwargs...)`` on one of the workers in ``pool``\ . Waits for completion and returns the result.
 
-.. function:: remote([::WorkerPool], f) -> Function
+.. function:: remote([::AbstractWorkerPool], f) -> Function
 
    .. Docstring generated from Julia source
 
@@ -530,6 +552,12 @@ General Parallel Computing Support
 
        foo = 1
        @eval @everywhere bar=$foo
+
+.. function:: clear!(pool::CachingPool) -> pool
+
+   .. Docstring generated from Julia source
+
+   Removes all cached functions from all participating workers.
 
 .. function:: Base.remoteref_id(r::AbstractRemoteRef) -> (whence, id)
 
