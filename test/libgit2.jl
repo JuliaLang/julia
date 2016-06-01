@@ -17,6 +17,7 @@ const LIBGIT2_VER = v"0.23.0"
     z = LibGit2.Oid()
     @test LibGit2.iszero(z)
     @test z == zero(LibGit2.Oid)
+    @test z == LibGit2.Oid(z)
     rs = string(z)
     rr = LibGit2.raw(z)
     @test z == LibGit2.Oid(rr)
@@ -24,6 +25,7 @@ const LIBGIT2_VER = v"0.23.0"
     @test z == LibGit2.Oid(pointer(rr))
     for i in 11:length(rr); rr[i] = 0; end
     @test LibGit2.Oid(rr) == LibGit2.Oid(rs[1:20])
+    @test_throws ArgumentError LibGit2.Oid(Ptr{UInt8}(C_NULL))
 #end
 
 #@testset "StrArrayStruct" begin
@@ -361,6 +363,10 @@ mktempdir() do dir
                 LibGit2.add!(repo, test_file)
                 status = LibGit2.GitStatus(repo)
                 @test length(status) != 0
+                @test_throws BoundsError status[0]
+                @test_throws BoundsError status[length(status)+1]
+                #we've added a file - show that it is new
+                @test status[1].status == LibGit2.Consts.STATUS_WT_NEW
             finally
                 finalize(repo)
                 close(repo_file)
