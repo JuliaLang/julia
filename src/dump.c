@@ -72,7 +72,7 @@ static const jl_fptr_t id_to_fptrs[] = {
   jl_f_getfield, jl_f_setfield, jl_f_fieldtype, jl_f_nfields,
   jl_f_arrayref, jl_f_arrayset, jl_f_arraysize, jl_f_apply_type,
   jl_f_applicable, jl_f_invoke, jl_unprotect_stack, jl_f_sizeof, jl_f__expr,
-  jl_f_intrinsic_call,
+  jl_f_intrinsic_call, jl_f_struct,
   NULL };
 
 // pointers to non-AST-ish objects in a compressed tree
@@ -568,6 +568,7 @@ static void jl_serialize_datatype(ios_t *s, jl_datatype_t *dt)
 
     jl_serialize_value(s, dt->parameters);
     jl_serialize_value(s, dt->name);
+    jl_serialize_value(s, dt->names);
     jl_serialize_value(s, dt->super);
 }
 
@@ -1242,6 +1243,8 @@ static jl_value_t *jl_deserialize_datatype(ios_t *s, int pos, jl_value_t **loc)
     jl_gc_wb(dt, dt->parameters);
     dt->name = (jl_typename_t*)jl_deserialize_value(s, (jl_value_t**)&dt->name);
     jl_gc_wb(dt, dt->name);
+    dt->names = (jl_svec_t*)jl_deserialize_value(s, (jl_value_t**)&dt->names);
+    jl_gc_wb(dt, dt->names);
     dt->super = (jl_datatype_t*)jl_deserialize_value(s, (jl_value_t**)&dt->super);
     jl_gc_wb(dt, dt->super);
     if (datatype_list) {
@@ -1249,7 +1252,7 @@ static jl_value_t *jl_deserialize_datatype(ios_t *s, int pos, jl_value_t **loc)
             dt->name == jl_pointer_type->name || dt->name == jl_type_type->name ||
             dt->name == jl_simplevector_type->name || dt->name == jl_abstractarray_type->name ||
             dt->name == jl_densearray_type->name || dt->name == jl_tuple_typename ||
-            dt->name == jl_vararg_type->name) {
+            dt->name == jl_vararg_type->name || dt->name == jl_struct_typename) {
             // builtin types are not serialized, so their caches aren't
             // explicitly saved. so we reconstruct the caches of builtin
             // parametric types here.
@@ -2472,7 +2475,7 @@ void jl_init_serializer(void)
                      jl_typector_type->name, jl_intrinsic_type->name, jl_task_type->name,
                      jl_labelnode_type->name, jl_linenumbernode_type->name, jl_builtin_type->name,
                      jl_gotonode_type->name, jl_quotenode_type->name,
-                     jl_globalref_type->name,
+                     jl_globalref_type->name, jl_struct_type->name, jl_struct_type, jl_tparam0(jl_struct_type), jl_tparam1(jl_struct_type),
 
                      jl_root_task,
 

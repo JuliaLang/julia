@@ -1120,13 +1120,17 @@ void *jl_get_llvmf(jl_tupletype_t *tt, bool getwrapper, bool getdeclarations)
     jl_lambda_info_t *linfo = NULL;
     JL_GC_PUSH2(&linfo, &tt);
     if (tt != NULL) {
-        linfo = jl_get_specialization1(tt);
-        if (linfo == NULL) {
-            linfo = jl_method_lookup_by_type(
-                ((jl_datatype_t*)jl_tparam0(tt))->name->mt, tt, 0, 0);
-            if (linfo == NULL || jl_has_call_ambiguities(tt, linfo->def)) {
-                JL_GC_POP();
-                return NULL;
+        jl_value_t *ftype = jl_tparam0(tt);
+        if (!(jl_subtype(ftype, (jl_value_t*)jl_builtin_type, 0) ||
+              jl_subtype(ftype, (jl_value_t*)jl_intrinsic_type, 0))) {
+            linfo = jl_get_specialization1(tt);
+            if (linfo == NULL) {
+                linfo = jl_method_lookup_by_type(((jl_datatype_t*)ftype)->name->mt,
+                                                 tt, 0, 0);
+                if (linfo == NULL || jl_has_call_ambiguities(tt, linfo->def)) {
+                    JL_GC_POP();
+                    return NULL;
+                }
             }
         }
     }
@@ -2579,7 +2583,7 @@ static bool emit_builtin_call(jl_cgval_t *ret, jl_value_t *f, jl_value_t **args,
             // this is issue #8798
             sty != jl_datatype_type) {
             if (jl_is_leaf_type((jl_value_t*)sty) ||
-                (sty->name->names == jl_emptysvec && sty->size > 0)) {
+                (jl_field_names(sty) == jl_emptysvec && sty->size > 0)) {
                 *ret = mark_julia_type(ConstantInt::get(T_size, sty->size), false, jl_long_type, ctx);
                 JL_GC_POP();
                 return true;
@@ -2610,6 +2614,22 @@ static bool emit_builtin_call(jl_cgval_t *ret, jl_value_t *f, jl_value_t **args,
                 return true;
             }
         }
+    }
+
+    else if (0 && f==jl_builtin_struct && nargs >= 1) {
+        //jl_datatype_t *sty = (jl_datatype_t*)expr_type(args[2], ctx);
+        //rt1 = (jl_value_t*)sty;
+        jl_value_t *names = static_eval(args[1], ctx, true, true);
+        rt1 = names;
+        jl_value_t *typ = expr_type(expr, ctx);
+        if (names && jl_is_leaf_type(typ)) { // TODO repeated
+            *ret = emit_new_struct(expr_type(expr, ctx), nargs, args+1, ctx);
+            JL_GC_POP();
+            return true;
+        }
+        /*jl_printf(JL_STDOUT, "args :\n");
+        jl_static_show(JL_STDOUT, args[0]);
+        jl_static_show(JL_STDOUT, args[1]);*/
     }
     // TODO: other known builtins
     JL_GC_POP();
@@ -5313,6 +5333,7 @@ static void init_julia_llvm_env(Module *m)
     builtin_func_map[jl_f__apply] = jlcall_func_to_llvm("jl_f__apply", &jl_f__apply, m);
     builtin_func_map[jl_f_throw] = jlcall_func_to_llvm("jl_f_throw", &jl_f_throw, m);
     builtin_func_map[jl_f_tuple] = jlcall_func_to_llvm("jl_f_tuple", &jl_f_tuple, m);
+    builtin_func_map[jl_f_struct] = jlcall_func_to_llvm("jl_f_struct", &jl_f_struct, m);
     builtin_func_map[jl_f_svec] = jlcall_func_to_llvm("jl_f_svec", &jl_f_svec, m);
     builtin_func_map[jl_f_applicable] = jlcall_func_to_llvm("jl_f_applicable", &jl_f_applicable, m);
     builtin_func_map[jl_f_invoke] = jlcall_func_to_llvm("jl_f_invoke", &jl_f_invoke, m);

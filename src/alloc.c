@@ -60,6 +60,8 @@ jl_value_t *jl_stackovf_exception;
 #ifdef SEGV_EXCEPTION
 jl_value_t *jl_segv_exception;
 #endif
+jl_typename_t *jl_struct_typename;
+jl_datatype_t *jl_struct_type;
 JL_DLLEXPORT jl_value_t *jl_diverror_exception;
 JL_DLLEXPORT jl_value_t *jl_domain_exception;
 JL_DLLEXPORT jl_value_t *jl_overflow_exception;
@@ -160,7 +162,7 @@ void jl_assign_bits(void *dest, jl_value_t *bits)
 
 JL_DLLEXPORT int jl_field_index(jl_datatype_t *t, jl_sym_t *fld, int err)
 {
-    jl_svec_t *fn = t->name->names;
+    jl_svec_t *fn = jl_field_names(t);
     for(size_t i=0; i < jl_svec_len(fn); i++) {
         if (jl_svecref(fn,i) == (jl_value_t*)fld) {
             return (int)i;
@@ -827,6 +829,7 @@ JL_DLLEXPORT jl_datatype_t *jl_new_uninitialized_datatype(size_t nfields, int8_t
     // corruption otherwise.
     t->fielddesc_type = fielddesc_type;
     t->nfields = nfields;
+    t->names = NULL;
     t->haspadding = 0;
     t->pointerfree = 0;
     t->depth = 0;

@@ -841,6 +841,8 @@ void jl_get_builtin_hooks(void)
     jl_string_type = (jl_datatype_t*)core("String");
     jl_weakref_type = (jl_datatype_t*)core("WeakRef");
     jl_vecelement_typename = ((jl_datatype_t*)core("VecElement"))->name;
+    jl_struct_type = ((jl_datatype_t*)core("Struct"));
+    jl_struct_typename = jl_struct_type->name;
 }
 
 JL_DLLEXPORT void jl_get_system_hooks(void)
@@ -868,6 +870,7 @@ void jl_get_builtins(void)
     jl_builtin_arrayset = core("arrayset");     jl_builtin_arraysize = core("arraysize");
     jl_builtin_apply_type = core("apply_type"); jl_builtin_applicable = core("applicable");
     jl_builtin_invoke = core("invoke");         jl_builtin__expr = core("_expr");
+    jl_builtin_struct = core("struct");
 }
 
 #ifdef __cplusplus
