@@ -342,8 +342,8 @@ push!(t::Associative, p::Pair, q::Pair, r::Pair...) = push!(push!(push!(t, p), q
 # hashing objects by identity
 
 type ObjectIdDict <: Associative{Any,Any}
-    ht::Array{Any,1}
-    ObjectIdDict() = new(cell(32))
+    ht::Vector{Any}
+    ObjectIdDict() = new(Vector{Any}(32))
 
     function ObjectIdDict(itr)
         d = ObjectIdDict()
@@ -383,7 +383,7 @@ function delete!(t::ObjectIdDict, key::ANY)
     t
 end
 
-empty!(t::ObjectIdDict) = (t.ht = cell(length(t.ht)); t)
+empty!(t::ObjectIdDict) = (t.ht = Vector{Any}(length(t.ht)); t)
 
 _oidd_nextind(a, i) = reinterpret(Int,ccall(:jl_eqtable_nextind, Csize_t, (Any, Csize_t), a, i))
 

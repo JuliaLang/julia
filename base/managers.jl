@@ -57,7 +57,7 @@ end
 function launch(manager::SSHManager, params::Dict, launched::Array, launch_ntfy::Condition)
     # Launch one worker on each unique host in parallel. Additional workers are launched later.
     # Wait for all launches to complete.
-    launch_tasks = cell(length(manager.machines))
+    launch_tasks = Vector{Any}(length(manager.machines))
 
     for (i,(machine, cnt)) in enumerate(manager.machines)
         let machine=machine, cnt=cnt

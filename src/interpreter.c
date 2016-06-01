@@ -147,7 +147,7 @@ static jl_value_t *eval(jl_value_t *e, jl_value_t **locals, jl_lambda_info_t *la
                 jl_error("access to invalid slot number");
             jl_value_t *v = locals[n-1];
             if (v == NULL)
-                jl_undefined_var_error((jl_sym_t*)jl_cellref(lam->slotnames,n-1));
+                jl_undefined_var_error((jl_sym_t*)jl_array_ptr_ref(lam->slotnames,n-1));
             return v;
         }
         if (jl_is_globalref(e)) {
@@ -453,7 +453,7 @@ static jl_value_t *eval_body(jl_array_t *stmts, jl_value_t **locals, jl_lambda_i
     while (1) {
         if (i >= ns)
             jl_error("`body` expression must terminate in `return`. Use `block` instead.");
-        jl_value_t *stmt = jl_cellref(stmts,i);
+        jl_value_t *stmt = jl_array_ptr_ref(stmts,i);
         if (jl_is_gotonode(stmt)) {
             i = jl_gotonode_label(stmt)-1;
             continue;

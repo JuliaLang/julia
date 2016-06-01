@@ -490,7 +490,6 @@ export
     broadcast_getindex,
     broadcast_setindex!,
     cat,
-    cell,
     checkbounds,
     circshift,
     clamp!,

@@ -1997,21 +1997,21 @@
            (let ((vex (parse-cat s #\])))
              (if (null? vex) '(vect) vex)))
 
-          ;; cell expression
+          ;; Array{Any} expression
           ((eqv? t #\{ )
            (take-token s)
            (if (eqv? (require-token s) #\})
                (begin (syntax-deprecation s "{}" "[]")
                       (take-token s)
-                      '(cell1d))
+                      '(vectany))
                (let ((vex (parse-cat s #\} #t)))
                  (if (null? vex)
                      (begin (syntax-deprecation s "{}" "[]")
-                            '(cell1d))
+                            '(vectany))
                      (case (car vex)
                        ((vect)
                         (syntax-deprecation s "{a,b, ...}" "Any[a,b, ...]")
-                        `(cell1d ,@(cdr vex)))
+                        `(vectany ,@(cdr vex)))
                        ((comprehension)
                         (syntax-deprecation s "{a for a in b}" "Any[a for a in b]")
                         `(typed_comprehension (top Any) ,@(cdr vex)))
@@ -2023,7 +2023,7 @@
                         `(typed_dict (=> (top Any) (top Any)) ,@(cdr vex)))
                        ((hcat)
                         (syntax-deprecation s "{a b ...}" "Any[a b ...]")
-                        `(cell2d 1 ,(length (cdr vex)) ,@(cdr vex)))
+                        `(matrany 1 ,(length (cdr vex)) ,@(cdr vex)))
                        (else  ; (vcat ...)
                         (if (and (pair? (cadr vex)) (eq? (caadr vex) 'row))
                             (let ((nr (length (cdr vex)))
@@ -2035,10 +2035,10 @@
                                                (eq? (car x) 'row)
                                                (length= (cdr x) nc)))
                                         (cddr vex)))
-                                  (error "inconsistent shape in cell expression"))
+                                  (error "inconsistent shape in Array{Any} expression"))
                               (begin
                                 (syntax-deprecation s "{a b; c d}" "Any[a b; c d]")
-                                `(cell2d ,nr ,nc
+                                `(matrany ,nr ,nc
                                          ,@(apply append
                                                   ;; transpose to storage order
                                                   (apply map list
@@ -2046,10 +2046,10 @@
                             (if (any (lambda (x) (and (pair? x)
                                                       (eq? (car x) 'row)))
                                      (cddr vex))
-                                (error "inconsistent shape in cell expression")
+                                (error "inconsistent shape in Array{Any} expression")
                                 (begin
                                   (syntax-deprecation s "{a,b, ...}" "Any[a,b, ...]")
-                                  `(cell1d ,@(cdr vex)))))))))))
+                                  `(vectany ,@(cdr vex)))))))))))
 
           ;; string literal
           ((eqv? t #\")

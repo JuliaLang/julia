@@ -897,7 +897,7 @@ end
 # fallback definition of hvcat in terms of hcat and vcat
 function hvcat(rows::Tuple{Vararg{Int}}, as...)
     nbr = length(rows)  # number of block rows
-    rs = cell(nbr)
+    rs = Array{Any}(nbr)
     a = 1
     for i = 1:nbr
         rs[i] = hcat(as[a:a-1+rows[i]]...)
@@ -908,7 +908,7 @@ end
 
 function typed_hvcat(T::Type, rows::Tuple{Vararg{Int}}, as...)
     nbr = length(rows)  # number of block rows
-    rs = cell(nbr)
+    rs = Array{Any}(nbr)
     a = 1
     for i = 1:nbr
         rs[i] = hcat(as[a:a-1+rows[i]]...)
@@ -1065,7 +1065,7 @@ function mapslices(f, A::AbstractArray, dims::AbstractVector)
 
     otherdims = setdiff(alldims, dims)
 
-    idx = cell(ndimsA)
+    idx = Array{Any}(ndimsA)
     fill!(idx, 1)
     Asliceshape = tuple(dimsA[dims]...)
     itershape   = tuple(dimsA[otherdims]...)
@@ -1084,7 +1084,7 @@ function mapslices(f, A::AbstractArray, dims::AbstractVector)
     Rsize[dims] = [size(r1)...; ones(Int,max(0,length(dims)-ndims(r1)))]
     R = similar(r1, tuple(Rsize...))
 
-    ridx = cell(ndims(R))
+    ridx = Array{Any}(ndims(R))
     fill!(ridx, 1)
     for d in dims
         ridx[d] = 1:size(R,d)

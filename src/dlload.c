@@ -168,7 +168,7 @@ static void *jl_load_dynamic_library_(const char *modname, unsigned flags, int t
         if (DL_LOAD_PATH != NULL) {
             size_t j;
             for (j = 0; j < jl_array_len(DL_LOAD_PATH); j++) {
-                char *dl_path = jl_string_data(jl_cell_data(DL_LOAD_PATH)[j]);
+                char *dl_path = jl_string_data(jl_array_ptr_data(DL_LOAD_PATH)[j]);
                 size_t len = strlen(dl_path);
                 if (len == 0)
                     continue;
