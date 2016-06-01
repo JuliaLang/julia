@@ -187,3 +187,6 @@ end
 # issue #3596
 @test Int128(1)<<0 == 1
 @test repr(Int128(1)<<1) == "2"
+
+# issue #16700
+@test_throws MethodError 1.0 >> 8
