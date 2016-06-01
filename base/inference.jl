@@ -873,7 +873,7 @@ end
 function precise_container_types(args, types, vtypes::VarTable, sv)
     n = length(args)
     assert(n == length(types))
-    result = cell(n)
+    result = Vector{Any}(n)
     for i = 1:n
         ai = args[i]
         ti = types[i]
@@ -2942,7 +2942,7 @@ function inlining_pass(e::Expr, sv, linfo)
     end
 
     for ninline = 1:100
-        ata = cell(length(e.args))
+        ata = Vector{Any}(length(e.args))
         ata[1] = ft
         for i = 2:length(e.args)
             a = exprtype(e.args[i], sv)
@@ -2970,7 +2970,7 @@ function inlining_pass(e::Expr, sv, linfo)
 
         if is(f,_apply)
             na = length(e.args)
-            newargs = cell(na-2)
+            newargs = Vector{Any}(na-2)
             for i = 3:na
                 aarg = e.args[i]
                 t = widenconst(exprtype(aarg,sv))
@@ -3337,7 +3337,7 @@ function alloc_elim_pass!(linfo::LambdaInfo, sv::InferenceState)
                     end
                 end
             else
-                vals = cell(nv)
+                vals = Vector{Any}(nv)
                 for j=1:nv
                     tupelt = tup[j+1]
                     if (isa(tupelt,Number) || isa(tupelt,AbstractString) ||

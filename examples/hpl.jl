@@ -111,7 +111,7 @@ function hpl_par(A::Matrix, b::Vector, blocksize::Integer, run_parallel::Bool)
     B_rows[end] = n
     B_cols = [B_rows, [n+1]]
     nB = length(B_rows)
-    depend = cell(nB, nB)
+    depend = Array{Any}(nB, nB)
 
     ## Small matrix case
     if nB <= 1

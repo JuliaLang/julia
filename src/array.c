@@ -384,7 +384,7 @@ JL_DLLEXPORT jl_value_t *jl_cstr_to_string(const char *str)
     return jl_pchar_to_string(str, strlen(str));
 }
 
-JL_DLLEXPORT jl_array_t *jl_alloc_cell_1d(size_t n)
+JL_DLLEXPORT jl_array_t *jl_alloc_array_ptr_1d(size_t n)
 {
     return jl_alloc_array_1d(jl_array_any_type, n);
 }
@@ -757,19 +757,19 @@ JL_DLLEXPORT void jl_array_del_beg(jl_array_t *a, size_t dec)
     a->offset = newoffs;
 }
 
-JL_DLLEXPORT void jl_cell_1d_push(jl_array_t *a, jl_value_t *item)
+JL_DLLEXPORT void jl_array_ptr_1d_push(jl_array_t *a, jl_value_t *item)
 {
     assert(jl_typeis(a, jl_array_any_type));
     jl_array_grow_end(a, 1);
-    jl_cellset(a, jl_array_dim(a,0)-1, item);
+    jl_array_ptr_set(a, jl_array_dim(a,0)-1, item);
 }
 
-JL_DLLEXPORT void jl_cell_1d_push2(jl_array_t *a, jl_value_t *b, jl_value_t *c)
+JL_DLLEXPORT void jl_array_ptr_1d_push2(jl_array_t *a, jl_value_t *b, jl_value_t *c)
 {
     assert(jl_typeis(a, jl_array_any_type));
     jl_array_grow_end(a, 2);
-    jl_cellset(a, jl_array_dim(a,0)-2, b);
-    jl_cellset(a, jl_array_dim(a,0)-1, c);
+    jl_array_ptr_set(a, jl_array_dim(a,0)-2, b);
+    jl_array_ptr_set(a, jl_array_dim(a,0)-1, c);
 }
 
 JL_DLLEXPORT jl_value_t *(jl_array_data_owner)(jl_array_t *a)

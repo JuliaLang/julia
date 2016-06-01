@@ -148,7 +148,7 @@ Arrays::
     jl_array_t *jl_alloc_array_1d(jl_value_t *atype, size_t nr);
     jl_array_t *jl_alloc_array_2d(jl_value_t *atype, size_t nr, size_t nc);
     jl_array_t *jl_alloc_array_3d(jl_value_t *atype, size_t nr, size_t nc, size_t z);
-    jl_array_t *jl_alloc_cell_1d(size_t n);
+    jl_array_t *jl_alloc_array_ptr_1d(size_t n);
 
 Note that many of these have alternative allocation functions for various special-purposes.
 The list here reflects the more common usages, but a more complete list can be found by reading the `julia.h header file

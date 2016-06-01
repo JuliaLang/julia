@@ -11,7 +11,7 @@
 n = 20
 intvls = [2, .2, .1, .005]
 
-pipe_fds = cell(n)
+pipe_fds = Vector{Any}(n)
 for i in 1:n
     @static if is_windows()
         pipe_fds[i] = Array{Libc.WindowsRawSocket}(2)

@@ -149,12 +149,6 @@ Constructors
 
    Construct a 1-d array of the specified type. This is usually called with the syntax ``Type[]``\ . Element values can be specified using ``Type[a,b,c,...]``\ .
 
-.. function:: cell(dims)
-
-   .. Docstring generated from Julia source
-
-   Construct an uninitialized cell array (heterogeneous array). ``dims`` can be either a tuple or a series of integer arguments.
-
 .. function:: zeros(type, dims)
 
    .. Docstring generated from Julia source

@@ -3650,7 +3650,7 @@ readdlm(source, delim, T, eol)
     readdlm(source, delim::Char, eol::Char; options...)
 
 If all data is numeric, the result will be a numeric array. If some elements cannot be
-parsed as numbers, a cell array of numbers and strings is returned.
+parsed as numbers, a heterogeneous array of numbers and strings is returned.
 """
 readdlm(source, delim::Char, eol::Char)
 
@@ -3665,8 +3665,8 @@ readdlm(source, delim::Char, T::Type)
     readdlm(source, delim::Char; options...)
 
 The end of line delimiter is taken as `n`. If all data is numeric, the result will be a
-numeric array. If some elements cannot be parsed as numbers, a cell array of numbers and
-strings is returned.
+numeric array. If some elements cannot be parsed as numbers, a heterogeneous array of
+numbers and strings is returned.
 """
 readdlm(source, delim::Char)
 
@@ -3683,7 +3683,8 @@ readdlm(source, T::Type)
 
 The columns are assumed to be separated by one or more whitespaces. The end of line
 delimiter is taken as `n`. If all data is numeric, the result will be a numeric array. If
-some elements cannot be parsed as numbers, a cell array of numbers and strings is returned.
+some elements cannot be parsed as numbers, a heterogeneous array of numbers and strings
+is returned.
 """
 readdlm(source)
 
@@ -9541,14 +9542,6 @@ a string. A character is classified as lowercase if it belongs to Unicode catego
 Letter: Lowercase.
 """
 islower
-
-"""
-    cell(dims)
-
-Construct an uninitialized cell array (heterogeneous array). `dims` can be either a tuple or
-a series of integer arguments.
-"""
-cell
 
 """
     read(stream::IO, nb=typemax(Int); all=true)

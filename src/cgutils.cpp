@@ -936,13 +936,13 @@ static jl_value_t *expr_type(jl_value_t *e, jl_codectx_t *ctx)
         int idx = ((jl_ssavalue_t*)e)->id;
         assert(jl_is_array(ctx->linfo->ssavaluetypes));
         jl_array_t *ssavalue_types = (jl_array_t*)ctx->linfo->ssavaluetypes;
-        return jl_cellref(ssavalue_types, idx);
+        return jl_array_ptr_ref(ssavalue_types, idx);
     }
     if (jl_typeis(e, jl_slotnumber_type)) {
         jl_array_t *slot_types = (jl_array_t*)ctx->linfo->slottypes;
         if (!jl_is_array(slot_types))
             return (jl_value_t*)jl_any_type;
-        return jl_cellref(slot_types, jl_slot_number(e)-1);
+        return jl_array_ptr_ref(slot_types, jl_slot_number(e)-1);
     }
     if (jl_typeis(e, jl_typedslot_type)) {
         jl_value_t *typ = jl_typedslot_get_type(e);

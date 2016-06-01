@@ -2,9 +2,9 @@
 
 replstr(x) = sprint((io,x) -> show(IOContext(io, multiline=true, limit=true), MIME("text/plain"), x), x)
 
-@test replstr(cell(2)) == "2-element Array{Any,1}:\n #undef\n #undef"
-@test replstr(cell(2,2)) == "2×2 Array{Any,2}:\n #undef  #undef\n #undef  #undef"
-@test replstr(cell(2,2,2)) == "2×2×2 Array{Any,3}:\n[:, :, 1] =\n #undef  #undef\n #undef  #undef\n\n[:, :, 2] =\n #undef  #undef\n #undef  #undef"
+@test replstr(Array{Any}(2)) == "2-element Array{Any,1}:\n #undef\n #undef"
+@test replstr(Array{Any}(2,2)) == "2×2 Array{Any,2}:\n #undef  #undef\n #undef  #undef"
+@test replstr(Array{Any}(2,2,2)) == "2×2×2 Array{Any,3}:\n[:, :, 1] =\n #undef  #undef\n #undef  #undef\n\n[:, :, 2] =\n #undef  #undef\n #undef  #undef"
 
 immutable T5589
     names::Vector{String}

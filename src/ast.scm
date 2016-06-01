@@ -36,7 +36,7 @@
                  (string #\( (deparse-arglist (cdr e))
                          (if (length= e 2) #\, "")
                          #\)))
-                ((cell1d) (string #\{ (deparse-arglist (cdr e)) #\}))
+                ((vectany) (string #\{ (deparse-arglist (cdr e)) #\}))
                 ((call)   (string (deparse (cadr e)) #\( (deparse-arglist (cddr e)) #\)))
                 ((ref)    (string (deparse (cadr e)) #\[ (deparse-arglist (cddr e)) #\]))
                 ((curly)  (string (deparse (cadr e)) #\{ (deparse-arglist (cddr e)) #\}))
