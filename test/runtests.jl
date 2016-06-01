@@ -23,6 +23,13 @@ move_to_node1("compile")
 # since it starts a lot of workers and can easily exceed the maximum memory
 max_worker_rss != typemax(Csize_t) && move_to_node1("parallel")
 
+# boundscheck test handled specially because it should be run without
+# --check-bounds=yes
+boundscheck_test = "boundscheck" in tests
+if boundscheck_test
+    splice!(tests, findfirst(tests, "boundscheck"))
+end
+
 cd(dirname(@__FILE__)) do
     n = 1
     if net_on
@@ -78,6 +85,13 @@ cd(dirname(@__FILE__)) do
     for t in node1_tests
         n > 1 && print("\tFrom worker 1:\t")
         runtests(t)
+    end
+
+    if boundscheck_test
+        p = addprocs(1)[1]
+        remotecall_fetch(()->include("testdefs.jl"), p)
+        resp = remotecall_fetch(() -> runtests("boundscheck"), p)
+        push!(results, ("boundscheck", resp))
     end
 
     println("    \033[32;1mSUCCESS\033[0m")
