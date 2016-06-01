@@ -597,6 +597,7 @@ isquotedmacrocall(x) =
     isexpr(x.args[1].value, :macrocall, 1)
 # Simple expressions / atoms the may be documented.
 isbasicdoc(x) = isexpr(x, :.) || isa(x, Union{QuoteNode, Symbol})
+is_signature(x) = isexpr(x, :call) || (isexpr(x, :(::), 2) && isexpr(x.args[1], :call))
 
 function docm(meta, ex, define = true)
     # Some documented expressions may be decorated with macro calls which obscure the actual
@@ -621,7 +622,7 @@ function docm(meta, ex, define = true)
     #   function f end
     #   f(...)
     #
-    isexpr(x, FUNC_HEADS) &&  isexpr(x.args[1], :call) ? objectdoc(meta, def, x, signature(x)) :
+    isexpr(x, FUNC_HEADS) && is_signature(x.args[1])   ? objectdoc(meta, def, x, signature(x)) :
     isexpr(x, :function)  && !isexpr(x.args[1], :call) ? objectdoc(meta, def, x) :
     isexpr(x, :call)                                   ? calldoc(meta, x) :
 
