@@ -7164,15 +7164,6 @@ Letter: Uppercase, or Lt, Letter: Titlecase.
 isupper
 
 """
-    pointer_to_array(pointer, dims[, take_ownership::Bool])
-
-Wrap a native pointer as a Julia Array object. The pointer element type determines the array
-element type. `own` optionally specifies whether Julia should take ownership of the memory,
-calling `free` on the pointer when the array is no longer referenced.
-"""
-pointer_to_array
-
-"""
     show(x)
 
 Write an informative text representation of a value to the current output stream. New types

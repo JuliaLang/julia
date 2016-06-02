@@ -74,7 +74,7 @@ function last_error()
     if err != C_NULL
         err_obj   = unsafe_load(err)
         err_class = Class[err_obj.class][]
-        err_msg   = String(err_obj.message)
+        err_msg   = unsafe_string(err_obj.message)
     else
         err_class = Class[0][]
         err_msg = "No errors"

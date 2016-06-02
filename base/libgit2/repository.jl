@@ -116,7 +116,7 @@ function get{T <: GitObject}(::Type{T}, r::GitRepo, oid::AbstractString)
 end
 
 function gitdir(repo::GitRepo)
-    return String(ccall((:git_repository_path, :libgit2), Cstring,
+    return unsafe_string(ccall((:git_repository_path, :libgit2), Cstring,
                         (Ptr{Void},), repo.ptr))
 end
 

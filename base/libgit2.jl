@@ -107,7 +107,7 @@ function diff_files(repo::GitRepo, branch1::AbstractString, branch2::AbstractStr
             delta = diff[i]
             delta === nothing && break
             if delta.status in filter
-                push!(files, String(delta.new_file.path))
+                push!(files, unsafe_string(delta.new_file.path))
             end
         end
         finalize(diff)
@@ -337,7 +337,7 @@ function cat{T<:GitObject}(repo::GitRepo, ::Type{T}, object::AbstractString)
 
     obj = get(T, repo, obj_id)
     if isa(obj, GitBlob)
-        return String(convert(Ptr{UInt8}, content(obj)))
+        return unsafe_string(convert(Ptr{UInt8}, content(obj)))
     else
         return nothing
     end

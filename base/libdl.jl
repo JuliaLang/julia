@@ -144,7 +144,7 @@ find_library(libname::Union{Symbol,AbstractString}, extrapaths=String[]) =
 
 function dlpath(handle::Ptr{Void})
     p = ccall(:jl_pathname_for_handle, Cstring, (Ptr{Void},), handle)
-    s = String(p)
+    s = unsafe_string(p)
     is_windows() && Libc.free(p)
     return s
 end
@@ -190,7 +190,7 @@ if is_linux()
     # This callback function called by dl_iterate_phdr() on Linux
     function dl_phdr_info_callback(di::dl_phdr_info, size::Csize_t, dynamic_libraries::Array{AbstractString,1})
         # Skip over objects without a path (as they represent this own object)
-        name = String(di.name)
+        name = unsafe_string(di.name)
         if !isempty(name)
             push!(dynamic_libraries, name)
         end
@@ -212,7 +212,7 @@ function dllist()
 
         # start at 1 instead of 0 to skip self
         for i in 1:numImages-1
-            name = String(ccall(:_dyld_get_image_name, Cstring, (UInt32,), i))
+            name = unsafe_string(ccall(:_dyld_get_image_name, Cstring, (UInt32,), i))
             push!(dynamic_libraries, name)
         end
     end

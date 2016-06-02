@@ -50,17 +50,31 @@
 
    Create a string from any value using the ``showall`` function.
 
-.. function:: String(p::Ptr{UInt8}, [length::Integer])
-
-   .. Docstring generated from Julia source
-
-   Create a string from the address of a C (0-terminated) string encoded as UTF-8. A copy is made so the pointer can be safely freed. If ``length`` is specified, the string does not have to be 0-terminated.
-
 .. function:: String(s::AbstractString)
 
    .. Docstring generated from Julia source
 
    Convert a string to a contiguous byte array representation encoded as UTF-8 bytes. This representation is often appropriate for passing strings to C.
+
+.. function:: unsafe_string(p::Ptr{UInt8}, [length::Integer])
+
+   .. Docstring generated from Julia source
+
+   Copy a string from the address of a C-style (NUL-terminated) string encoded as UTF-8. (The pointer can be safely freed afterwards.) If ``length`` is specified (the length of the data in bytes), the string does not have to be NUL-terminated.
+
+   This function is labelled "unsafe" because it will crash if ``p`` is not a valid memory address to data of the requested length.
+
+   See also :func:`unsafe_string_wrapper`\ , which takes a pointer and wraps a string object around it without making a copy.
+
+.. function:: unsafe_string_wrapper(p::Ptr{UInt8}, [length,] own=false)
+
+   .. Docstring generated from Julia source
+
+   Wrap a pointer ``p`` to an array of bytes in a ``String`` object, interpreting the bytes as UTF-8 encoded characters *without making a copy*. The optional ``length`` argument indicates the length in bytes of the pointer's data; if it is omitted, the data is assumed to be NUL-terminated.  The ``own`` argument optionally specifies whether Julia should take ownership of the memory, calling ``free`` on the pointer when the array is no longer referenced.
+
+   This function is labelled "unsafe" because it will crash if ``p`` is not a valid memory address to data of the requested length.
+
+   See also :func:`unsafe_string`\ , which takes a pointer and makes a copy of the data, and :func:`unsafe_array_wrapper`\ .
 
 .. function:: ascii(s::AbstractString)
 
