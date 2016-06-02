@@ -248,6 +248,13 @@ let s = "ba\0d"
     @test_throws ArgumentError Base.unsafe_convert(Cstring, s)
     @test_throws ArgumentError Base.unsafe_convert(Cwstring, wstring(s))
 end
+# issue 16499: ensure Cstrings are NUL terminated
+let s = "aaaa"
+    a = pointer_to_string(pointer(s.data),2)
+    @test sizeof(a) == 2
+    b = pointer_to_string(Base.unsafe_convert(Cstring,a))
+    @test sizeof(b) == 2
+end
 
 cstrdup(s) = @static is_windows() ? ccall(:_strdup, Cstring, (Cstring,), s) : ccall(:strdup, Cstring, (Cstring,), s)
 let p = cstrdup("hello")

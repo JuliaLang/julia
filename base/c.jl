@@ -86,6 +86,11 @@ function unsafe_convert(::Type{Cstring}, s::String)
     if containsnul(p, sizeof(s))
         throw(ArgumentError("embedded NULs are not allowed in C strings: $(repr(s))"))
     end
+    if unsafe_load(p, sizeof(s)+1) != 0
+        # ensure null terminated, copying if necessary
+        s = String(s.data)
+        p = unsafe_convert(Ptr{Cchar}, s)
+    end
     return Cstring(p)
 end
 
