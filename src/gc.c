@@ -809,20 +809,36 @@ int64_t lazy_freed_pages = 0;
 // Returns pointer to terminal pointer of list rooted at *pfl.
 static gcval_t **sweep_page(jl_gc_pool_t *p, jl_gc_pagemeta_t *pg, gcval_t **pfl, int sweep_full, int osize)
 {
-    gcval_t **prev_pfl = pfl;
-    gcval_t *v;
-    size_t old_nfree = 0, nfree = 0;
-    int obj_per_page = (GC_PAGE_SZ - GC_PAGE_OFFSET)/osize;
     char *data = pg->data;
     uint8_t *ages = pg->ages;
-    v = (gcval_t*)(data + GC_PAGE_OFFSET);
+    gcval_t *v = (gcval_t*)(data + GC_PAGE_OFFSET);
     char *lim = (char*)v + GC_PAGE_SZ - GC_PAGE_OFFSET - osize;
-    old_nfree += pg->nfree;
+    size_t old_nfree = pg->nfree;
+    size_t nfree;
 
     int freedall = 1;
     int pg_skpd = 1;
-    if (!pg->has_marked)
-        goto free_page;
+    if (!pg->has_marked) {
+        // lazy version: (empty) if the whole page was already unused, free it
+        // eager version: (freedall) free page as soon as possible
+        // the eager one uses less memory.
+        // FIXME - need to do accounting on a per-thread basis
+        // on quick sweeps, keep a few pages empty but allocated for performance
+        if (!sweep_full && lazy_freed_pages <= default_collect_interval / GC_PAGE_SZ) {
+            gcval_t *begin = reset_page(p, pg, 0);
+            gcval_t **pend = (gcval_t**)((char*)begin + ((int)pg->nfree - 1)*osize);
+            gcval_t *npg = p->newpages;
+            *pend = npg;
+            p->newpages = begin;
+            begin->next = (gcval_t*)0;
+            lazy_freed_pages++;
+        }
+        else {
+            jl_gc_free_page(data);
+        }
+        nfree = (GC_PAGE_SZ - GC_PAGE_OFFSET) / osize;
+        goto done;
+    }
     // For quick sweep, we might be able to skip the page if the page doesn't
     // have any young live cell before marking.
     if (!sweep_full && !pg->has_young) {
@@ -832,10 +848,11 @@ static gcval_t **sweep_page(jl_gc_pool_t *p, jl_gc_pagemeta_t *pg, gcval_t **pfl
             // is stored in its metadata
             if (pg->fl_begin_offset != (uint16_t)-1) {
                 *pfl = page_pfl_beg(pg);
-                pfl = prev_pfl = (gcval_t**)page_pfl_end(pg);
+                pfl = (gcval_t**)page_pfl_end(pg);
             }
             freedall = 0;
-            goto free_page;
+            nfree = pg->nfree;
+            goto done;
         }
     }
 
@@ -894,41 +911,11 @@ static gcval_t **sweep_page(jl_gc_pool_t *p, jl_gc_pagemeta_t *pg, gcval_t **pfl
             pg->prev_nold = prev_nold;
         }
     }
-free_page:
-    // lazy version: (empty) if the whole page was already unused, free it
-    // eager version: (freedall) free page as soon as possible
-    // the eager one uses less memory.
-    if (freedall) {
-        // FIXME - need to do accounting on a per-thread basis
-        // on quick sweeps, keep a few pages empty but allocated for performance
-        if (!sweep_full && lazy_freed_pages <= default_collect_interval/GC_PAGE_SZ) {
-            gcval_t *begin = reset_page(p, pg, 0);
-            gcval_t **pend = (gcval_t**)((char*)begin + ((int)pg->nfree - 1)*osize);
-            gcval_t *npg = p->newpages;
-            *pend = npg;
-            p->newpages = begin;
-            begin->next = (gcval_t*)0;
-            lazy_freed_pages++;
-            pfl = prev_pfl;
-        }
-        else {
-            pfl = prev_pfl;
-#ifdef MEMDEBUG
-            memset(pg->data, 0xbb, GC_PAGE_SZ);
-#endif
-            jl_gc_free_page(data);
-#ifdef MEMDEBUG
-            memset(pg, 0xbb, sizeof(jl_gc_pagemeta_t));
-#endif
-        }
-        nfree += obj_per_page;
-    }
-    else {
-        nfree += pg->nfree;
-    }
+    nfree = pg->nfree;
 
+done:
     gc_time_count_page(freedall, pg_skpd);
-    gc_num.freed += (nfree - old_nfree)*osize;
+    gc_num.freed += (nfree - old_nfree) * osize;
     return pfl;
 }
 
