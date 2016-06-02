@@ -4,11 +4,24 @@ include("choosetests.jl")
 tests, net_on = choosetests(ARGS)
 tests = unique(tests)
 
-# Base.compile only works from node 1, so compile test is handled specially
-compile_test = "compile" in tests
-if compile_test
-    splice!(tests, findfirst(tests, "compile"))
+const max_worker_rss = if haskey(ENV, "JULIA_TEST_MAXRSS_MB")
+    parse(Int, ENV["JULIA_TEST_MAXRSS_MB"]) * 2^20
+else
+    typemax(Csize_t)
 end
+
+const node1_tests = String[]
+function move_to_node1(t)
+    if t in tests
+        splice!(tests, findfirst(tests, t))
+        push!(node1_tests, t)
+    end
+end
+# Base.compile only works from node 1, so compile test is handled specially
+move_to_node1("compile")
+# In a constrained memory environment, run the parallel test after all other tests
+# since it starts a lot of workers and can easily exceed the maximum memory
+max_worker_rss != typemax(Csize_t) && move_to_node1("parallel")
 
 cd(dirname(@__FILE__)) do
     n = 1
@@ -21,11 +34,6 @@ cd(dirname(@__FILE__)) do
     @everywhere include("testdefs.jl")
 
     results=[]
-    if haskey(ENV, "JULIA_TEST_MAXRSS_MB")
-        max_worker_rss = parse(Int, ENV["JULIA_TEST_MAXRSS_MB"]) * 2^20
-    else
-        max_worker_rss = typemax(Csize_t)
-    end
     @sync begin
         for p in workers()
             @async begin
@@ -64,11 +72,13 @@ cd(dirname(@__FILE__)) do
         error("Some tests exited with errors.")
     end
 
-    if compile_test
+    # Free up memory =)
+    n > 1 && rmprocs(workers(), waitfor=5.0)
+
+    for t in node1_tests
         n > 1 && print("\tFrom worker 1:\t")
-        runtests("compile")
+        runtests(t)
     end
 
-    is_unix() && n > 1 && rmprocs(workers(), waitfor=5.0)
     println("    \033[32;1mSUCCESS\033[0m")
 end
