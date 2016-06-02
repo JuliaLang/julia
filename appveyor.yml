@@ -1,9 +1,10 @@
 environment:
 #  USEMSVC: "1"
-  JULIA_TEST_MAXRSS_MB: 500
   matrix:
   - ARCH: "i686"
+    JULIA_TEST_MAXRSS_MB: 500
   - ARCH: "x86_64"
+    JULIA_TEST_MAXRSS_MB: 450
 
 # Only build on master and PR's for now, not personal branches
 # Whether or not PR's get built is determined in the webhook settings
