@@ -3,6 +3,9 @@ import Compat.String
 @compat import Base.show
 using Base.Test
 
+v = 1
+@test_throws AssertionError @assert(v < 1)
+
 type TestCustomShowType end
 @compat function show(io::IO, ::MIME"text/plain", ::TestCustomShowType)
     print(io, "MyTestCustomShowType")
@@ -17,8 +20,11 @@ myio = IOBuffer()
 display(TextDisplay(myio), MIME"text/plain"(), TestCustomShowType2())
 @test String(myio) == "MyTestCustomShowType2"
 
-v = 1
-@test_throws AssertionError @assert(v < 1)
+type TestCustomShowType3 end
+@compat show(io::IO, ::TestCustomShowType3) = print(io, "2-Argument-show")
+myio = IOBuffer()
+display(TextDisplay(myio), TestCustomShowType3())
+@test String(myio) == "2-Argument-show"
 
 d = Dict{Int,Int}()
 d[1] = 1

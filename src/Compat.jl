@@ -188,7 +188,11 @@ if VERSION < v"0.5.0-dev+961"
 end
 
 function rewrite_show(ex)
-    return Expr(:call, :writemime, ex.args[2], ex.args[3], ex.args[4])
+    argtypes = ex.args[2:end]
+    if length(argtypes) == 2
+        insert!(argtypes, 2, Expr(:(::), :macrocall, MIME"text/plain"))
+    end
+    return Expr(:call, :writemime, argtypes...)
 end
 
 function rewrite_dict(ex)
@@ -442,7 +446,7 @@ function _compat(ex::Expr)
             rewrite_pairs_to_tuples!(ex)
         elseif VERSION < v"0.4.0-dev+1246" && f == :String
             ex = Expr(:call, :bytestring, ex.args[2:end]...)
-        elseif VERSION < v"0.5.0-dev+4356" && length(ex.args) == 4 && ex.args[1] === :show
+        elseif VERSION < v"0.5.0-dev+4356" && length(ex.args) > 2 && ex.args[1] === :show
             ex = rewrite_show(ex)
         end
         if VERSION < v"0.5.0-dev+4305"
