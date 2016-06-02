@@ -237,7 +237,7 @@ function _eigs(A, B;
     end
 
     # Refer to ex-*.doc files in ARPACK/DOCUMENTS for calling sequence
-    matvecA(x) = A * x
+    matvecA!(y, x) = A_mul_B!(y, A, x)
     if !isgeneral           # Standard problem
         matvecB = x -> x
         if !isshift         #    Regular mode
@@ -263,7 +263,7 @@ function _eigs(A, B;
 
     # Compute the Ritz values and Ritz vectors
     (resid, v, ldv, iparam, ipntr, workd, workl, lworkl, rwork, TOL) =
-       ARPACK.aupd_wrapper(T, matvecA, matvecB, solveSI, n, sym, iscmplx, bmat, nev, ncv, whichstr, tol, maxiter, mode, v0)
+       ARPACK.aupd_wrapper(T, matvecA!, matvecB, solveSI, n, sym, iscmplx, bmat, nev, ncv, whichstr, tol, maxiter, mode, v0)
 
     # Postprocessing to get eigenvalues and eigenvectors
     output = ARPACK.eupd_wrapper(T, n, sym, iscmplx, bmat, nev, whichstr, ritzvec, TOL,
@@ -294,8 +294,12 @@ function SVDOperator{T}(A::AbstractMatrix{T})
     SVDOperator{Tnew,typeof(Anew)}(Anew)
 end
 
-## v = [ left_singular_vector; right_singular_vector ]
-*{T,S}(s::SVDOperator{T,S}, v::Vector{T}) = [s.X * v[s.m+1:end]; s.X' * v[1:s.m]]
+function A_mul_B!{T,S}(u::StridedVector{T}, s::SVDOperator{T,S}, v::StridedVector{T})
+    a, b = s.m, length(v)
+    A_mul_B!(sub(u,1:a), s.X, sub(v,a+1:b)) # left singular vector
+    Ac_mul_B!(sub(u,a+1:b), s.X, sub(v,1:a)) # right singular vector
+    u
+end
 size(s::SVDOperator)  = s.m + s.n, s.m + s.n
 issymmetric(s::SVDOperator) = true
 
