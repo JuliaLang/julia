@@ -417,12 +417,40 @@ istriu(x::Number) = true
 istril(x::Number) = true
 isdiag(x::Number) = true
 
-linreg{T<:Number}(X::AbstractVector{T}, y::AbstractVector{T}) = [ones(T, size(X,1)) X] \ y
+"""
+    linreg(x, y)
 
-# weighted least squares
-function linreg(x::AbstractVector, y::AbstractVector, w::AbstractVector)
-    sw = sqrt(w)
-    [sw sw.*x] \ (sw.*y)
+Perform simple linear regression using Ordinary Least Squares. Returns `a` and `b` such
+that `a + b*x` is the closest straight line to the given points `(x, y)`, i.e., such that
+the squared error between `y` and `a + b*x` is minimized.
+
+Examples:
+
+    using PyPlot
+    x = 1.0:12.0
+    y = [5.5, 6.3, 7.6, 8.8, 10.9, 11.79, 13.48, 15.02, 17.77, 20.81, 22.0, 22.99]
+    a, b = linreg(x, y)          # Linear regression
+    plot(x, y, "o")              # Plot (x, y) points
+    plot(x, a + b*x)             # Plot line determined by linear regression
+
+See also:
+
+`\\`, `cov`, `std`, `mean`
+
+"""
+function linreg(x::AbstractVector, y::AbstractVector)
+    # Least squares given
+    # Y = a + b*X
+    # where
+    # b = cov(X, Y)/var(X)
+    # a = mean(Y) - b*mean(X)
+    size(x) == size(y) || throw(DimensionMismatch("x and y must be the same size"))
+    mx = mean(x)
+    my = mean(y)
+    # don't need to worry about the scaling (n vs n - 1) since they cancel in the ratio
+    b = Base.covm(x, mx, y, my)/Base.varm(x, mx)
+    a = my - b*mx
+    return (a, b)
 end
 
 # multiply by diagonal matrix as vector
