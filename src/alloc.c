@@ -444,6 +444,7 @@ STATIC_INLINE jl_value_t *jl_call_staged(jl_svec_t *sparam_vals, jl_lambda_info_
 
 static jl_lambda_info_t *jl_instantiate_staged(jl_method_t *generator, jl_tupletype_t *tt, jl_svec_t *env)
 {
+    JL_TIMING(STAGED_FUNCTION);
     size_t i, l;
     jl_expr_t *ex = NULL;
     jl_value_t *linenum = NULL;

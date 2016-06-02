@@ -37,9 +37,10 @@ endif
 
 SRCS := \
 	jltypes gf typemap ast builtins module interpreter \
-	alloc dlload sys init task array dump toplevel jl_uv jlapi signal-handling \
+	alloc dlload sys init task array dump toplevel jl_uv \
 	simplevector APInt-C runtime_intrinsics runtime_ccall \
-	threadgroup threading stackwalk gc gc-debug gc-pages safepoint jloptions
+	threadgroup threading stackwalk gc gc-debug gc-pages \
+   	jlapi signal-handling safepoint jloptions timing
 
 ifeq ($(USEMSVC), 1)
 SRCS += getopt
@@ -61,7 +62,7 @@ SRCS += anticodegen
 LLVM_LIBS := support
 endif
 
-HEADERS := $(addprefix $(SRCDIR)/,julia.h julia_threads.h julia_internal.h options.h) $(BUILDDIR)/julia_version.h $(wildcard $(SRCDIR)/support/*.h) $(LIBUV_INC)/uv.h
+HEADERS := $(addprefix $(SRCDIR)/,julia.h julia_threads.h julia_internal.h options.h timing.h) $(BUILDDIR)/julia_version.h $(wildcard $(SRCDIR)/support/*.h) $(LIBUV_INC)/uv.h
 
 # In LLVM < 3.4, --ldflags includes both options and libraries, so use it both before and after --libs
 # In LLVM >= 3.4, --ldflags has only options, and --system-libs has the libraries.

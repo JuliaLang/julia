@@ -327,6 +327,7 @@ public:
         CompileLayer(
                 ObjectLayer,
                 [this](Module &M) {
+                    JL_TIMING(LLVM_OPT);
                     PM.run(M);
                     std::unique_ptr<MemoryBuffer> ObjBuffer(
                         new ObjectMemoryBuffer(std::move(ObjBufferSV)));
@@ -411,6 +412,7 @@ public:
             }
         }
 #endif
+        JL_TIMING(LLVM_MODULE_FINISH);
         // We need a memory manager to allocate memory and resolve symbols for this
         // new module. Create one that resolves symbols by looking back into the JIT.
         auto Resolver = orc::createLambdaResolver(
