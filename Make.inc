@@ -40,7 +40,7 @@ USE_SYSTEM_LIBGIT2:=0
 USE_SYSTEM_PATCHELF:=0
 
 # Link to the LLVM shared library
-USE_LLVM_SHLIB := 0
+USE_LLVM_SHLIB := 1
 
 ## Settings for various Intel tools
 # Set to 1 to use MKL
