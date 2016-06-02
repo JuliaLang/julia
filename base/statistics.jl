@@ -9,7 +9,7 @@ function mean(f::Callable, iterable)
     end
     count = 1
     value, state = next(iterable, state)
-    total = f(value)
+    total = f(value) + zero(f(value))
     while !done(iterable, state)
         value, state = next(iterable, state)
         total += f(value)
