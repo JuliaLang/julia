@@ -687,12 +687,12 @@ static jl_sym_t *_jl_symbol(const char *str, size_t len)
         JL_LOCK(&symbol_table_lock); // Might GC
         // Someone might have updated it, check and look up again
         if (*slot != NULL && (node = symtab_lookup(slot, str, len, &slot))) {
-            JL_UNLOCK(&symbol_table_lock);
+            JL_UNLOCK(&symbol_table_lock); // Might GC
             return node;
         }
         node = mk_symbol(str, len);
         jl_atomic_store_release(slot, node);
-        JL_UNLOCK(&symbol_table_lock);
+        JL_UNLOCK(&symbol_table_lock); // Might GC
     }
     return node;
 }

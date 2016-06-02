@@ -96,7 +96,6 @@ jl_tupletype_t *jl_argtype_with_function(jl_function_t *f, jl_tupletype_t *types
 // MSVC miscalculates sizeof(jl_taggedvalue_t) because
 // empty structs are a GNU extension
 #define sizeof_jl_taggedvalue_t (sizeof(void*))
-void jl_gc_inhibit_finalizers(int state);
 void jl_gc_setmark(jl_value_t *v);
 void jl_gc_sync_total_bytes(void);
 void jl_gc_track_malloced_array(jl_array_t *a);

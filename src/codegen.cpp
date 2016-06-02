@@ -830,7 +830,6 @@ static void to_function(jl_lambda_info_t *li)
 {
     // setup global state
     JL_LOCK(&codegen_lock);
-    JL_SIGATOMIC_BEGIN();
     assert(!li->inInference);
     li->inCompile = 1;
     BasicBlock *old = nested_compile ? builder.GetInsertBlock() : NULL;
@@ -839,7 +838,6 @@ static void to_function(jl_lambda_info_t *li)
     if (!nested_compile && dump_compiles_stream != NULL)
         last_time = jl_hrtime();
     nested_compile = true;
-    jl_gc_inhibit_finalizers(nested_compile);
     std::unique_ptr<Module> m;
     Function *f = NULL, *specf = NULL;
     // actually do the work of emitting the function
@@ -860,8 +858,7 @@ static void to_function(jl_lambda_info_t *li)
             builder.SetCurrentDebugLocation(olddl);
         }
         li->inCompile = 0;
-        JL_SIGATOMIC_END();
-        JL_UNLOCK(&codegen_lock);
+        JL_UNLOCK(&codegen_lock); // Might GC
         jl_rethrow_with_add("error compiling %s", jl_symbol_name(li->def ? li->def->name : anonymous_sym));
     }
     // record that this function name came from this linfo,
@@ -897,9 +894,7 @@ static void to_function(jl_lambda_info_t *li)
     }
     li->inCompile = 0;
     nested_compile = last_n_c;
-    jl_gc_inhibit_finalizers(nested_compile);
-    JL_UNLOCK(&codegen_lock);
-    JL_SIGATOMIC_END();
+    JL_UNLOCK(&codegen_lock); // Might GC
     if (dump_compiles_stream != NULL) {
         uint64_t this_time = jl_hrtime();
         jl_printf(dump_compiles_stream, "%" PRIu64 "\t\"", this_time - last_time);
@@ -1024,12 +1019,10 @@ extern "C" void jl_generate_fptr(jl_lambda_info_t *li)
     assert(li->functionObjectsDecls.functionObject);
     assert(!li->inCompile);
     if (li->fptr == NULL) {
-        JL_SIGATOMIC_BEGIN();
         li->fptr = (jl_fptr_t)getAddressForFunction((Function*)li->functionObjectsDecls.functionObject);
         assert(li->fptr != NULL);
-        JL_SIGATOMIC_END();
     }
-    JL_UNLOCK(&codegen_lock);
+    JL_UNLOCK(&codegen_lock); // Might GC
 }
 
 // this generates llvm code for the lambda info
@@ -3872,12 +3865,11 @@ static Function *jl_cfunction_object(jl_function_t *ff, jl_value_t *declrt, jl_t
             jl_emptysvec, NULL, jl_emptysvec, NULL, /*offs*/0, &cfunction_cache, NULL);
 
     // Backup the info for the nested compile
-    JL_SIGATOMIC_BEGIN(); // no errors expected beyond this point
+    JL_LOCK(&codegen_lock);
     BasicBlock *old = nested_compile ? builder.GetInsertBlock() : NULL;
     DebugLoc olddl = builder.getCurrentDebugLocation();
     bool last_n_c = nested_compile;
     nested_compile = true;
-    jl_gc_inhibit_finalizers(nested_compile);
     Function *f = gen_cfun_wrapper(ff, crt, (jl_tupletype_t*)argt, sf, declrt, (jl_tupletype_t*)sigt);
     // Restore the previous compile context
     if (old != NULL) {
@@ -3885,8 +3877,7 @@ static Function *jl_cfunction_object(jl_function_t *ff, jl_value_t *declrt, jl_t
         builder.SetCurrentDebugLocation(olddl);
     }
     nested_compile = last_n_c;
-    jl_gc_inhibit_finalizers(nested_compile);
-    JL_SIGATOMIC_END();
+    JL_UNLOCK(&codegen_lock); // Might GC
     JL_GC_POP();
     return f;
 }

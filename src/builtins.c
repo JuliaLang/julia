@@ -194,15 +194,18 @@ JL_CALLABLE(jl_f_throw)
 
 JL_DLLEXPORT void jl_enter_handler(jl_handler_t *eh)
 {
+    jl_tls_states_t *ptls = jl_get_ptls_states();
+    jl_task_t *current_task = ptls->current_task;
     // Must have no safepoint
-    eh->prev = jl_current_task->eh;
-    eh->gcstack = jl_pgcstack;
+    eh->prev = current_task->eh;
+    eh->gcstack = ptls->pgcstack;
 #ifdef JULIA_ENABLE_THREADING
-    eh->gc_state = jl_gc_state();
-    eh->locks_len = jl_current_task->locks.len;
+    eh->gc_state = ptls->gc_state;
+    eh->locks_len = current_task->locks.len;
 #endif
-    eh->defer_signal = jl_get_ptls_states()->defer_signal;
-    jl_current_task->eh = eh;
+    eh->defer_signal = ptls->defer_signal;
+    eh->finalizers_inhibited = ptls->finalizers_inhibited;
+    current_task->eh = eh;
 }
 
 JL_DLLEXPORT void jl_pop_handler(int n)

@@ -218,7 +218,7 @@ void jl_type_infer(jl_lambda_info_t *li, int force)
 #endif
         jl_value_t *info = jl_apply(fargs, 2); (void)info;
         assert(li->def || li->inInference == 0); // if this is toplevel expr, make sure inference finished
-        JL_UNLOCK(&codegen_lock);
+        JL_UNLOCK(&codegen_lock); // Might GC
     }
     inInference = lastIn;
 #endif
@@ -654,8 +654,8 @@ static jl_lambda_info_t *cache_method(jl_methtable_t *mt, union jl_typemap_t *ca
         assert(li);
         newmeth = li;
         jl_typemap_insert(cache, parent, type, jl_emptysvec, origtype, guardsigs, (jl_value_t*)newmeth, jl_cachearg_offset(mt), &lambda_cache, NULL);
+        JL_UNLOCK(&codegen_lock); // Might GC
         JL_GC_POP();
-        JL_UNLOCK(&codegen_lock);
         return newmeth;
     }
 
@@ -677,10 +677,10 @@ static jl_lambda_info_t *cache_method(jl_methtable_t *mt, union jl_typemap_t *ca
             if (jl_symbol_name(definition->name)[0] != '@')  // don't bother with typeinf on macros
                 jl_type_infer(newmeth, 0);
     }
-    JL_GC_POP();
-    JL_UNLOCK(&codegen_lock);
+    JL_UNLOCK(&codegen_lock); // Might GC
     if (definition->traced && jl_method_tracer)
         jl_call_tracer(jl_method_tracer, (jl_value_t*)newmeth);
+    JL_GC_POP();
     return newmeth;
 }
 
@@ -1937,6 +1937,18 @@ JL_DLLEXPORT jl_value_t *jl_matching_methods(jl_tupletype_t *types, int lim, int
     if (mt == NULL)
         return (jl_value_t*)jl_alloc_array_ptr_1d(0);
     return ml_matches(mt->defs, 0, types, lim, include_ambiguous);
+}
+
+static jl_mutex_t typeinf_lock;
+
+JL_DLLEXPORT void jl_typeinf_begin(void)
+{
+    JL_LOCK(&typeinf_lock);
+}
+
+JL_DLLEXPORT void jl_typeinf_end(void)
+{
+    JL_UNLOCK(&typeinf_lock);
 }
 
 #ifdef __cplusplus
