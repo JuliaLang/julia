@@ -1,6 +1,21 @@
 using Compat
 import Compat.String
+@compat import Base.show
 using Base.Test
+
+type TestCustomShowType end
+@compat function show(io::IO, ::MIME"text/plain", ::TestCustomShowType)
+    print(io, "MyTestCustomShowType")
+end
+myio = IOBuffer()
+display(TextDisplay(myio), MIME"text/plain"(), TestCustomShowType())
+@test String(myio) == "MyTestCustomShowType"
+
+type TestCustomShowType2 end
+@compat show(io::IO, ::MIME"text/plain", ::TestCustomShowType2) = print(io, "MyTestCustomShowType2")
+myio = IOBuffer()
+display(TextDisplay(myio), MIME"text/plain"(), TestCustomShowType2())
+@test String(myio) == "MyTestCustomShowType2"
 
 v = 1
 @test_throws AssertionError @assert(v < 1)
