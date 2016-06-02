@@ -1763,7 +1763,7 @@ jl_value_t *jl_apply_type_(jl_value_t *tc, jl_value_t **params, size_t n)
         return tc;
     }
     size_t i;
-    char *tname;
+    const char *tname;
     jl_svec_t *tp;
     jl_datatype_t *stprimary = NULL;
     if (jl_is_typector(tc)) {
@@ -1973,6 +1973,7 @@ static ssize_t lookup_type_idx(jl_typename_t *tn, jl_value_t **key, size_t n, in
 
 static jl_value_t *lookup_type(jl_typename_t *tn, jl_value_t **key, size_t n)
 {
+    JL_TIMING(TYPE_CACHE_LOOKUP);
     int ord = is_typekey_ordered(key, n);
     JL_LOCK(&typecache_lock); // Might GC
     ssize_t idx = lookup_type_idx(tn, key, n, ord);
@@ -2046,6 +2047,7 @@ static void cache_insert_type(jl_value_t *type, ssize_t insert_at, int ordered)
 jl_value_t *jl_cache_type_(jl_datatype_t *type)
 {
     if (is_cacheable(type)) {
+        JL_TIMING(TYPE_CACHE_INSERT);
         int ord = is_typekey_ordered(jl_svec_data(type->parameters), jl_svec_len(type->parameters));
         JL_LOCK(&typecache_lock); // Might GC
         ssize_t idx = lookup_type_idx(type->name, jl_svec_data(type->parameters),
