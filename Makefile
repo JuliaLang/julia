@@ -598,7 +598,7 @@ ifneq (,$(filter $(ARCH), i386 i486 i586 i686))
 		"mingw32-libexpat1 mingw32-zlib1" && \
 	$(JLDOWNLOAD) https://juliacache.s3.amazonaws.com/mingw32-libgfortran3-5.3.0-1.1.noarch.rpm && \
 	$(JLDOWNLOAD) https://juliacache.s3.amazonaws.com/mingw32-libquadmath0-5.3.0-1.1.noarch.rpm && \
-	$(JLDOWNLOAD) https://juliacache.s3.amazonaws.com/mingw32-libstdc++6-5.3.0-1.1.noarch.rpm && \
+	$(JLDOWNLOAD) https://juliacache.s3.amazonaws.com/mingw32-libstdc%2B%2B6-5.3.0-1.1.noarch.rpm && \
 	$(JLDOWNLOAD) https://juliacache.s3.amazonaws.com/mingw32-libgcc_s_sjlj1-5.3.0-1.1.noarch.rpm && \
 	$(JLDOWNLOAD) https://juliacache.s3.amazonaws.com/mingw32-libssp0-5.3.0-1.1.noarch.rpm && \
 	for i in *.rpm; do 7z x -y $$i; done && \
@@ -615,7 +615,7 @@ else ifeq ($(ARCH),x86_64)
 		"mingw64-libexpat1 mingw64-zlib1" && \
 	$(JLDOWNLOAD) https://juliacache.s3.amazonaws.com/mingw64-libgfortran3-5.3.0-1.1.noarch.rpm && \
 	$(JLDOWNLOAD) https://juliacache.s3.amazonaws.com/mingw64-libquadmath0-5.3.0-1.1.noarch.rpm && \
-	$(JLDOWNLOAD) https://juliacache.s3.amazonaws.com/mingw64-libstdc++6-5.3.0-1.1.noarch.rpm && \
+	$(JLDOWNLOAD) https://juliacache.s3.amazonaws.com/mingw64-libstdc%2B%2B6-5.3.0-1.1.noarch.rpm && \
 	$(JLDOWNLOAD) https://juliacache.s3.amazonaws.com/mingw64-libgcc_s_seh1-5.3.0-1.1.noarch.rpm && \
 	$(JLDOWNLOAD) https://juliacache.s3.amazonaws.com/mingw64-libssp0-5.3.0-1.1.noarch.rpm && \
 	for i in *.rpm; do 7z x -y $$i; done && \
