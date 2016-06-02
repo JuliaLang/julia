@@ -755,6 +755,11 @@ function vcat{Tv,Ti}(X::AbstractSparseVector{Tv,Ti}...)
     SparseVector(len, rnzind, rnzval)
 end
 
+hcat(Xin::Union{AbstractSparseVector, SparseMatrixCSC}...) = hcat(map(SparseMatrixCSC, Xin)...)
+vcat(Xin::Union{AbstractSparseVector, SparseMatrixCSC}...) = vcat(map(SparseMatrixCSC, Xin)...)
+hcat(Xin::Union{Vector, AbstractSparseVector}...) = hcat(map(sparse, Xin)...)
+vcat(Xin::Union{Vector, AbstractSparseVector}...) = vcat(map(sparse, Xin)...)
+
 ### math functions
 
 ### Unary Map
