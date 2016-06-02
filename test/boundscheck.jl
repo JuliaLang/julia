@@ -4,6 +4,9 @@ module TestBoundsCheck
 
 using Base.Test
 
+@enum BCOption bc_default bc_on bc_off
+bc_opt = BCOption(Base.JLOptions().check_bounds)
+
 # test for boundscheck block eliminated at same level
 @inline function A1()
     r = 0
@@ -25,8 +28,16 @@ function A1_inbounds()
     return r
 end
 
-@test A1() == 1
-@test A1_inbounds() == 0
+if bc_opt == bc_default
+    @test A1() == 1
+    @test A1_inbounds() == 0
+elseif bc_opt == bc_on
+    @test A1() == 1
+    @test A1_inbounds() == 1
+else
+    @test A1() == 0
+    @test A1_inbounds() == 0
+end
 
 # test for boundscheck block eliminated one layer deep, if the called method is inlined
 @inline function A2()
@@ -49,10 +60,22 @@ Base.@propagate_inbounds function A2_propagate_inbounds()
     return r
 end
 
-@test A2() == 2
-@test A2_inbounds() == 1
-@test A2_notinlined() == 2
-@test A2_propagate_inbounds() == 2
+if bc_opt == bc_default
+    @test A2() == 2
+    @test A2_inbounds() == 1
+    @test A2_notinlined() == 2
+    @test A2_propagate_inbounds() == 2
+elseif bc_opt == bc_on
+    @test A2() == 2
+    @test A2_inbounds() == 2
+    @test A2_notinlined() == 2
+    @test A2_propagate_inbounds() == 2
+else
+    @test A2() == 1
+    @test A2_inbounds() == 1
+    @test A2_notinlined() == 1
+    @test A2_propagate_inbounds() == 1
+end
 
 # test boundscheck NOT eliminated two layers deep, unless propagated
 
@@ -71,9 +94,19 @@ function A3_inbounds2()
     return r
 end
 
-@test A3() == 3
-@test A3_inbounds() == 3
-@test A3_inbounds2() == 2
+if bc_opt == bc_default
+    @test A3() == 3
+    @test A3_inbounds() == 3
+    @test A3_inbounds2() == 2
+elseif bc_opt == bc_on
+    @test A3() == 3
+    @test A3_inbounds() == 3
+    @test A3_inbounds2() == 3
+else
+    @test A3() == 2
+    @test A3_inbounds() == 2
+    @test A3_inbounds2() == 2
+end
 
 # swapped nesting order of @boundscheck and @inbounds
 function A1_nested()
@@ -82,10 +115,14 @@ function A1_nested()
     return r
 end
 
-@test A1_nested() == 1
+if bc_opt == bc_default || bc_opt == bc_on
+    @test A1_nested() == 1
+else
+    @test A1_nested() == 0
+end
 
 # elide a throw
-cb(x) = x > 0 || throw("cb:error")
+cb(x) = x > 0 || throw(BoundsError())
 
 function B1()
     y = [1,2,3]
@@ -95,7 +132,11 @@ function B1()
     return 0
 end
 
-@test B1() == 0
+if bc_opt == bc_default || bc_opt == bc_off
+    @test B1() == 0
+else
+    @test_throws BoundsError B1()
+end
 
 # elide a simple branch
 cond(x) = x > 0 ? x : -x
