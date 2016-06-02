@@ -1398,17 +1398,6 @@ JL_DLLEXPORT void jl_yield(void);
 
 // async signal handling ------------------------------------------------------
 
-#define JL_SIGATOMIC_BEGIN() do {               \
-        jl_get_ptls_states()->defer_signal++;   \
-        jl_signal_fence();                      \
-    } while (0)
-#define JL_SIGATOMIC_END() do {                                 \
-        jl_signal_fence();                                      \
-        if (--jl_get_ptls_states()->defer_signal == 0) {        \
-            jl_sigint_safepoint();                              \
-        }                                                       \
-    } while (0)
-
 JL_DLLEXPORT void jl_sigint_action(void);
 JL_DLLEXPORT void jl_install_sigint_handler(void);
 JL_DLLEXPORT void jl_sigatomic_begin(void);
@@ -1426,6 +1415,7 @@ typedef struct _jl_handler_t {
     size_t locks_len;
 #endif
     sig_atomic_t defer_signal;
+    int finalizers_inhibited;
 } jl_handler_t;
 
 typedef struct _jl_task_t {
@@ -1507,23 +1497,26 @@ static inline void jl_lock_frame_pop(void)
 
 STATIC_INLINE void jl_eh_restore_state(jl_handler_t *eh)
 {
+    jl_tls_states_t *ptls = jl_get_ptls_states();
+    jl_task_t *current_task = ptls->current_task;
     // `eh` may not be `jl_current_task->eh`. See `jl_pop_handler`
     // This function should **NOT** have any safepoint before the ones at the
     // end.
-    sig_atomic_t old_defer_signal = jl_get_ptls_states()->defer_signal;
-    int8_t old_gc_state = jl_get_ptls_states()->gc_state;
-    jl_current_task->eh = eh->prev;
-    jl_pgcstack = eh->gcstack;
+    sig_atomic_t old_defer_signal = ptls->defer_signal;
+    int8_t old_gc_state = ptls->gc_state;
+    current_task->eh = eh->prev;
+    ptls->pgcstack = eh->gcstack;
 #ifdef JULIA_ENABLE_THREADING
-    arraylist_t *locks = &jl_current_task->locks;
+    arraylist_t *locks = &current_task->locks;
     if (locks->len > eh->locks_len) {
         for (size_t i = locks->len;i > eh->locks_len;i--)
             jl_mutex_unlock_nogc((jl_mutex_t*)locks->items[i - 1]);
         locks->len = eh->locks_len;
     }
 #endif
-    jl_get_ptls_states()->defer_signal = eh->defer_signal;
-    jl_get_ptls_states()->gc_state = eh->gc_state;
+    ptls->defer_signal = eh->defer_signal;
+    ptls->gc_state = eh->gc_state;
+    ptls->finalizers_inhibited = eh->finalizers_inhibited;
     if (old_gc_state && !eh->gc_state) {
         jl_gc_safepoint();
     }

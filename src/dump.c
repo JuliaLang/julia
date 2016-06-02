@@ -1879,7 +1879,6 @@ static void jl_save_system_image_to_stream(ios_t *f)
 {
     jl_gc_collect(1); // full
     jl_gc_collect(0); // incremental (sweep finalizers)
-    JL_SIGATOMIC_BEGIN();
     JL_LOCK(&dump_lock); // Might GC
     int en = jl_gc_enable(0);
     htable_reset(&backref_table, 250000);
@@ -1920,8 +1919,7 @@ static void jl_save_system_image_to_stream(ios_t *f)
     arraylist_free(&reinit_list);
 
     jl_gc_enable(en);
-    JL_UNLOCK(&dump_lock);
-    JL_SIGATOMIC_END();
+    JL_UNLOCK(&dump_lock); // Might GC
 }
 
 JL_DLLEXPORT void jl_save_system_image(const char *fname)
@@ -1978,7 +1976,6 @@ JL_DLLEXPORT void jl_preload_sysimg_so(const char *fname)
 
 static void jl_restore_system_image_from_stream(ios_t *f)
 {
-    JL_SIGATOMIC_BEGIN();
     JL_LOCK(&dump_lock); // Might GC
     int en = jl_gc_enable(0);
     DUMP_MODES last_mode = mode;
@@ -2037,8 +2034,7 @@ static void jl_restore_system_image_from_stream(ios_t *f)
     jl_gc_enable(en);
     mode = last_mode;
     jl_update_all_fptrs();
-    JL_UNLOCK(&dump_lock);
-    JL_SIGATOMIC_END();
+    JL_UNLOCK(&dump_lock); // Might GC
 }
 
 JL_DLLEXPORT void jl_restore_system_image(const char *fname)
@@ -2077,7 +2073,6 @@ JL_DLLEXPORT void jl_restore_system_image_data(const char *buf, size_t len)
 
 JL_DLLEXPORT jl_array_t *jl_compress_ast(jl_lambda_info_t *li, jl_array_t *ast)
 {
-    JL_SIGATOMIC_BEGIN();
     JL_LOCK(&dump_lock); // Might GC
     assert(jl_is_lambda_info(li));
     DUMP_MODES last_mode = mode;
@@ -2104,16 +2099,16 @@ JL_DLLEXPORT jl_array_t *jl_compress_ast(jl_lambda_info_t *li, jl_array_t *ast)
     }
     tree_literal_values = last_tlv;
     tree_enclosing_module = last_tem;
+    JL_GC_PUSH1(&v);
     jl_gc_enable(en);
     mode = last_mode;
-    JL_UNLOCK(&dump_lock);
-    JL_SIGATOMIC_END();
+    JL_UNLOCK(&dump_lock); // Might GC
+    JL_GC_POP();
     return v;
 }
 
 JL_DLLEXPORT jl_array_t *jl_uncompress_ast(jl_lambda_info_t *li, jl_array_t *data)
 {
-    JL_SIGATOMIC_BEGIN();
     JL_LOCK(&dump_lock); // Might GC
     assert(jl_is_lambda_info(li));
     assert(jl_is_array(data));
@@ -2129,13 +2124,13 @@ JL_DLLEXPORT jl_array_t *jl_uncompress_ast(jl_lambda_info_t *li, jl_array_t *dat
     int en = jl_gc_enable(0); // Might GC
 
     jl_array_t *v = (jl_array_t*)jl_deserialize_value(&src, NULL);
-
+    JL_GC_PUSH1(&v);
     jl_gc_enable(en);
     tree_literal_values = NULL;
     tree_enclosing_module = NULL;
     mode = last_mode;
-    JL_UNLOCK(&dump_lock);
-    JL_SIGATOMIC_END();
+    JL_UNLOCK(&dump_lock); // Might GC
+    JL_GC_POP();
     return v;
 }
 
@@ -2152,7 +2147,6 @@ JL_DLLEXPORT int jl_save_incremental(const char *fname, jl_array_t *worklist)
     jl_serialize_mod_list(&f); // this can throw, keep it early (before any actual initialization)
     jl_serialize_dependency_list(&f);
 
-    JL_SIGATOMIC_BEGIN();
     JL_LOCK(&dump_lock); // Might GC
     arraylist_new(&reinit_list, 0);
     htable_new(&backref_table, 5000);
@@ -2178,8 +2172,7 @@ JL_DLLEXPORT int jl_save_incremental(const char *fname, jl_array_t *worklist)
     htable_reset(&backref_table, 0);
     arraylist_free(&reinit_list);
     ios_close(&f);
-    JL_UNLOCK(&dump_lock);
-    JL_SIGATOMIC_END();
+    JL_UNLOCK(&dump_lock); // Might GC
 
     if (jl_fs_rename(tmpfname, fname) < 0) {
         jl_printf(JL_STDERR, "Cannot write cache file \"%s\".\n", fname);
@@ -2318,7 +2311,6 @@ static jl_array_t *_jl_restore_incremental(ios_t *f)
     }
     size_t deplen = read_uint64(f);
     ios_skip(f, deplen); // skip past the dependency list
-    JL_SIGATOMIC_BEGIN();
     JL_LOCK(&dump_lock); // Might GC
     arraylist_new(&backref_list, 4000);
     arraylist_push(&backref_list, jl_main_module);
@@ -2349,10 +2341,9 @@ static jl_array_t *_jl_restore_incremental(ios_t *f)
     arraylist_free(&flagref_list);
     arraylist_free(&backref_list);
     ios_close(f);
-    JL_UNLOCK(&dump_lock);
-    JL_SIGATOMIC_END();
-
     JL_GC_PUSH2(&init_order,&restored);
+    JL_UNLOCK(&dump_lock); // Might GC
+
     if (tracee_list) {
         jl_methtable_t *mt;
         while ((mt = (jl_methtable_t*)arraylist_pop(tracee_list)) != NULL)

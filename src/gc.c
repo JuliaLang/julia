@@ -87,8 +87,6 @@ static inline void jl_gc_wait_for_the_world(void)
 }
 #endif
 
-static int jl_gc_finalizers_inhibited; // don't run finalizers during codegen #11956
-
 // malloc wrappers, aligned allocation
 
 #define malloc_cache_align(sz) jl_malloc_aligned(sz, JL_CACHE_BYTE_ALIGNMENT)
@@ -183,17 +181,17 @@ static void run_finalizers(void)
     arraylist_free(&copied_list);
 }
 
-void jl_gc_inhibit_finalizers(int state)
+JL_DLLEXPORT void jl_gc_enable_finalizers(int on)
 {
     jl_tls_states_t *ptls = jl_get_ptls_states();
-    // NOTE: currently only called with the codegen lock held, but might need
-    // more synchronization in the future
-    if (jl_gc_finalizers_inhibited && !state && !ptls->in_finalizer) {
+    int old_val = ptls->finalizers_inhibited;
+    int new_val = old_val + (on ? -1 : 1);
+    ptls->finalizers_inhibited = new_val;
+    if (!new_val && old_val && !ptls->in_finalizer) {
         ptls->in_finalizer = 1;
         run_finalizers();
         ptls->in_finalizer = 0;
     }
-    jl_gc_finalizers_inhibited = state;
 }
 
 static void schedule_all_finalizers(arraylist_t *flist)
@@ -1830,7 +1828,10 @@ JL_DLLEXPORT void jl_gc_collect(int full)
     jl_safepoint_end_gc();
     jl_gc_state_set(old_state, JL_GC_STATE_WAITING);
 
-    if (!jl_gc_finalizers_inhibited) {
+    // Only disable finalizers on current thread
+    // Doing this on all threads is racy (it's impossible to check
+    // or wait for finalizers on other threads without dead lock).
+    if (!ptls->finalizers_inhibited) {
         int8_t was_in_finalizer = ptls->in_finalizer;
         ptls->in_finalizer = 1;
         run_finalizers();

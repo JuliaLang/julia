@@ -107,6 +107,8 @@ typedef struct _jl_tls_states_t {
     pthread_t system_id;
     void *signal_stack;
 #endif
+    // Counter to disable finalizer **on the current thread**
+    int finalizers_inhibited;
 } jl_tls_states_t;
 
 #ifdef __MIC__
@@ -384,12 +386,24 @@ STATIC_INLINE int8_t jl_gc_state_save_and_set(int8_t state)
 #define jl_gc_safe_leave(state) ((void)jl_gc_state_set((state), JL_GC_STATE_SAFE))
 JL_DLLEXPORT void (jl_gc_safepoint)(void);
 
+#define JL_SIGATOMIC_BEGIN() do {               \
+        jl_get_ptls_states()->defer_signal++;   \
+        jl_signal_fence();                      \
+    } while (0)
+#define JL_SIGATOMIC_END() do {                                 \
+        jl_signal_fence();                                      \
+        if (--jl_get_ptls_states()->defer_signal == 0) {        \
+            jl_sigint_safepoint();                              \
+        }                                                       \
+    } while (0)
+
 // Recursive spin lock
 typedef struct {
     volatile unsigned long owner;
     uint32_t count;
 } jl_mutex_t;
 
+JL_DLLEXPORT void jl_gc_enable_finalizers(int on);
 static inline void jl_lock_frame_push(jl_mutex_t *lock);
 static inline void jl_lock_frame_pop(void);
 
@@ -428,8 +442,10 @@ static inline void jl_mutex_lock_nogc(jl_mutex_t *lock)
 
 static inline void jl_mutex_lock(jl_mutex_t *lock)
 {
+    JL_SIGATOMIC_BEGIN();
     jl_mutex_wait(lock, 1);
     jl_lock_frame_push(lock);
+    jl_gc_enable_finalizers(0);
 }
 
 static inline void jl_mutex_unlock_nogc(jl_mutex_t *lock)
@@ -445,7 +461,9 @@ static inline void jl_mutex_unlock_nogc(jl_mutex_t *lock)
 static inline void jl_mutex_unlock(jl_mutex_t *lock)
 {
     jl_mutex_unlock_nogc(lock);
+    jl_gc_enable_finalizers(1);
     jl_lock_frame_pop();
+    JL_SIGATOMIC_END();
 }
 
 // Locks
@@ -459,8 +477,16 @@ static inline void jl_mutex_check_type(jl_mutex_t *m)
 {
     (void)m;
 }
-#define JL_LOCK(m) jl_mutex_check_type(m)
-#define JL_UNLOCK(m) jl_mutex_check_type(m)
+#define JL_LOCK(m) do {                         \
+        JL_SIGATOMIC_BEGIN();                   \
+        jl_gc_enable_finalizers(0);             \
+        jl_mutex_check_type(m);                 \
+    } while (0)
+#define JL_UNLOCK(m) do {                       \
+        jl_gc_enable_finalizers(1);             \
+        jl_mutex_check_type(m);                 \
+        JL_SIGATOMIC_END();                     \
+    } while (0)
 #define JL_LOCK_NOGC(m) jl_mutex_check_type(m)
 #define JL_UNLOCK_NOGC(m) jl_mutex_check_type(m)
 #endif // JULIA_ENABLE_THREADING
