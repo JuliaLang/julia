@@ -442,7 +442,7 @@ function _compat(ex::Expr)
             rewrite_pairs_to_tuples!(ex)
         elseif VERSION < v"0.4.0-dev+1246" && f == :String
             ex = Expr(:call, :bytestring, ex.args[2:end]...)
-        elseif length(ex.args) == 4 && ex.args[1] === :show
+        elseif VERSION < v"0.5.0-dev+4356" && length(ex.args) == 4 && ex.args[1] === :show
             ex = rewrite_show(ex)
         end
         if VERSION < v"0.5.0-dev+4305"
