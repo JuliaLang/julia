@@ -33,7 +33,7 @@ end
 function name(tag::GitTag)
     str_ptr = ccall((:git_tag_name, :libgit2), Cstring, (Ptr{Void}, ), tag.ptr)
     str_ptr == C_NULL && throw(Error.GitError(Error.ERROR))
-    return String(str_ptr)
+    return unsafe_string(str_ptr)
 end
 
 function target(tag::GitTag)

@@ -80,12 +80,12 @@ if vendor() == :openblas64
     macro blasfunc(x)
         return Expr(:quote, Symbol(x, "64_"))
     end
-    openblas_get_config() = strip(String( ccall((:openblas_get_config64_, Base.libblas_name), Ptr{UInt8}, () )))
+    openblas_get_config() = strip(unsafe_string(ccall((:openblas_get_config64_, Base.libblas_name), Ptr{UInt8}, () )))
 else
     macro blasfunc(x)
         return Expr(:quote, x)
     end
-    openblas_get_config() = strip(String( ccall((:openblas_get_config, Base.libblas_name), Ptr{UInt8}, () )))
+    openblas_get_config() = strip(unsafe_string(ccall((:openblas_get_config, Base.libblas_name), Ptr{UInt8}, () )))
 end
 
 """

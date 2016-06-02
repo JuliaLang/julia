@@ -20,30 +20,26 @@ String(s::AbstractString) = print_to_string(s)
 String(s::String) = s
 
 """
-    String(v::Vector{UInt8})
+    unsafe_string(p::Ptr{UInt8}, [length::Integer])
 
-Wrap a vector of bytes encoding string data as UTF-8 in a `String` object.
-The resulting `String` object takes ownership of the array.
-"""
-String(s::Vector{UInt8}) =
-    ccall(:jl_pchar_to_string, Ref{String}, (Ptr{UInt8},Int), s, length(s))
+Copy a string from the address of a C-style (NUL-terminated) string encoded as UTF-8.
+(The pointer can be safely freed afterwards.) If `length` is specified
+(the length of the data in bytes), the string does not have to be NUL-terminated.
 
-"""
-    String(p::Ptr{UInt8}, [length::Integer])
+This function is labelled "unsafe" because it will crash if `p` is not
+a valid memory address to data of the requested length.
 
-Create a string from the address of a C (0-terminated) string encoded as UTF-8.
-A copy is made so the pointer can be safely freed. If `length` is specified, the
-string does not have to be 0-terminated.
+See also [`unsafe_string_wrapper`](:func:`unsafe_string_wrapper`), which takes a pointer
+and wraps a string object around it without making a copy.
 """
-function String(p::Union{Ptr{UInt8},Ptr{Int8}}, len::Integer)
+function unsafe_string(p::Union{Ptr{UInt8},Ptr{Int8}}, len::Integer)
     p == C_NULL && throw(ArgumentError("cannot convert NULL to string"))
     ccall(:jl_pchar_to_string, Ref{String}, (Ptr{UInt8},Int), p, len)
 end
-function String(p::Union{Ptr{UInt8},Ptr{Int8}})
+function unsafe_string(p::Union{Ptr{UInt8},Ptr{Int8}})
     p == C_NULL && throw(ArgumentError("cannot convert NULL to string"))
     ccall(:jl_cstr_to_string, Ref{String}, (Cstring,), p)
 end
-String(s::Cstring) = String(convert(Ptr{UInt8}, s))
 
 convert(::Type{Vector{UInt8}}, s::AbstractString) = String(s).data
 convert(::Type{Array{UInt8}}, s::AbstractString) = String(s).data

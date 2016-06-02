@@ -2,8 +2,8 @@
 
 function Signature(ptr::Ptr{SignatureStruct})
     sig   = unsafe_load(ptr)::SignatureStruct
-    name  = String(sig.name)
-    email = String(sig.email)
+    name  = unsafe_string(sig.name)
+    email = unsafe_string(sig.email)
     time   = sig.when.time
     offset = sig.when.offset
     return Signature(name, email, time, offset)

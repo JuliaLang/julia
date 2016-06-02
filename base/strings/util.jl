@@ -96,12 +96,12 @@ function lpad(s::AbstractString, n::Integer, p::AbstractString=" ")
     if m <= 0; return s; end
     l = strwidth(p)
     if l==1
-        return String(p^m * s)
+        return string(p^m, s)
     end
     q = div(m,l)
     r = m - q*l
     i = r != 0 ? chr2ind(p, r) : -1
-    String(p^q*p[1:i]*s)
+    string(p^q, p[1:i], s)
 end
 
 function rpad(s::AbstractString, n::Integer, p::AbstractString=" ")
@@ -109,12 +109,12 @@ function rpad(s::AbstractString, n::Integer, p::AbstractString=" ")
     if m <= 0; return s; end
     l = strwidth(p)
     if l==1
-        return String(s * p^m)
+        return string(s, p^m)
     end
     q = div(m,l)
     r = m - q*l
     i = r != 0 ? chr2ind(p, r) : -1
-    String(s*p^q*p[1:i])
+    string(s, p^q, p[1:i])
 end
 
 lpad(s, n::Integer, p=" ") = lpad(string(s),n,string(p))

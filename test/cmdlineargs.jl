@@ -58,7 +58,7 @@ let exename = `$(Base.julia_cmd()) --precompiled=yes`
 
     # --cpu-target
     # NOTE: this test only holds true when there is a sys.{dll,dylib,so} shared library present.
-    if Libdl.dlopen_e(splitext(String(Base.JLOptions().image_file))[1]) != C_NULL
+    if Libdl.dlopen_e(splitext(unsafe_string(Base.JLOptions().image_file))[1]) != C_NULL
         @test !success(`$exename -C invalidtarget --precompiled=yes`)
         @test !success(`$exename --cpu-target=invalidtarget --precompiled=yes`)
     else
@@ -77,7 +77,7 @@ let exename = `$(Base.julia_cmd()) --precompiled=yes`
         touch(fname)
         fname = realpath(fname)
         try
-            @test readchomp(`$exename --machinefile $fname -e "println(String(Base.JLOptions().machinefile))"`) == fname
+            @test readchomp(`$exename --machinefile $fname -e "println(unsafe_string(Base.JLOptions().machinefile))"`) == fname
         finally
             rm(fname)
         end
