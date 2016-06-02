@@ -777,7 +777,7 @@ jl_value_t *jl_parse_eval_all(const char *fname, size_t len,
             else if (head == line_sym)
                 jl_lineno = jl_unbox_long(jl_exprarg(form,0));
             else
-                result = jl_toplevel_eval_flex(form, 1);
+                result = jl_toplevel_eval_flex(form, 1, 1);
             JL_SIGATOMIC_BEGIN();
             ast = cdr_(ast);
         }
