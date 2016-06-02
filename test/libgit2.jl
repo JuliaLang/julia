@@ -315,6 +315,10 @@ mktempdir() do dir
                 tags = LibGit2.tag_list(repo)
                 @test length(tags) == 1
                 @test tag1 in tags
+                tag1ref = LibGit2.GitReference(repo, "refs/tags/$tag1")
+                tag1tag = LibGit2.peel(LibGit2.GitTag,tag1ref)
+                @test LibGit2.name(tag1tag) == tag1
+                @test LibGit2.target(tag1tag) == commit_oid1
 
                 tag_oid2 = LibGit2.tag_create(repo, tag2, commit_oid2)
                 @test !LibGit2.iszero(tag_oid2)

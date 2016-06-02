@@ -35,6 +35,7 @@ function name(tag::GitTag)
 end
 
 function target(tag::GitTag)
-    oid_ptr = Ref(ccall((:git_tag_target_id, :libgit2), Ptr{Oid}, (Ptr{Void}, ), tag.ptr))
-    return oid_ptr[]
+    oid_ptr = ccall((:git_tag_target_id, :libgit2), Ptr{Oid}, (Ptr{Void}, ), tag.ptr)
+    oid_ptr == C_NULL && return Oid()
+    return Oid(oid_ptr)
 end
