@@ -326,6 +326,9 @@ mktempdir() do dir
                 @test length(tags) == 2
                 @test tag2 in tags
 
+                refs = LibGit2.ref_list(repo)
+                @test refs == ["refs/heads/master","refs/heads/test_branch","refs/tags/tag1","refs/tags/tag2"]
+
                 LibGit2.tag_delete(repo, tag1)
                 tags = LibGit2.tag_list(repo)
                 @test length(tags) == 1

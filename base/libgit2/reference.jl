@@ -73,6 +73,13 @@ function isbranch(ref::GitReference)
     return err == 1
 end
 
+function istag(ref::GitReference)
+    isempty(ref) && return false
+    err = ccall((:git_reference_is_tag, :libgit2), Cint,
+                  (Ptr{Void},), ref.ptr)
+    return err == 1
+end
+
 function isremote(ref::GitReference)
     isempty(ref) && return false
     err = ccall((:git_reference_is_remote, :libgit2), Cint,
@@ -94,6 +101,15 @@ function peel{T <: GitObject}(::Type{T}, ref::GitReference)
         throw(Error.GitError(err))
     end
     return T(obj_ptr_ptr[])
+end
+
+function ref_list(repo::GitRepo)
+    with(StrArrayStruct()) do sa
+        sa_ref = Ref(sa)
+        @check ccall((:git_reference_list, :libgit2), Cint,
+                      (Ptr{StrArrayStruct}, Ptr{Void}), sa_ref, repo.ptr)
+        convert(Vector{AbstractString}, sa_ref[])
+    end
 end
 
 function create_branch(repo::GitRepo,
