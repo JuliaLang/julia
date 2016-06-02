@@ -6,7 +6,7 @@ import ..LinAlg: BlasInt, ARPACKException
 
 ## aupd and eupd wrappers
 
-function aupd_wrapper(T, matvecA::Function, matvecB::Function, solveSI::Function, n::Integer,
+function aupd_wrapper(T, matvecA!::Function, matvecB::Function, solveSI::Function, n::Integer,
                       sym::Bool, cmplx::Bool, bmat::String,
                       nev::Integer, ncv::Integer, which::String,
                       tol::Real, maxiter::Integer, mode::Integer, v0::Vector)
@@ -53,12 +53,11 @@ function aupd_wrapper(T, matvecA::Function, matvecB::Function, solveSI::Function
             throw(ARPACKException(info[1]))
         end
 
-        load_idx = ipntr[1]+zernm1
-        store_idx = ipntr[2]+zernm1
-        x = workd[load_idx]
+        x = sub(workd, ipntr[1]+zernm1)
+        y = sub(workd, ipntr[2]+zernm1)
         if mode == 1  # corresponds to dsdrv1, dndrv1 or zndrv1
             if ido[1] == 1
-                workd[store_idx] = matvecA(x)
+                matvecA!(y, x)
             elseif ido[1] == 99
                 break
             else
@@ -66,7 +65,7 @@ function aupd_wrapper(T, matvecA::Function, matvecB::Function, solveSI::Function
             end
         elseif mode == 3 && bmat == "I" # corresponds to dsdrv2, dndrv2 or zndrv2
             if ido[1] == -1 || ido[1] == 1
-                workd[store_idx] = solveSI(x)
+                y[:] = solveSI(x)
             elseif ido[1] == 99
                 break
             else
@@ -74,13 +73,13 @@ function aupd_wrapper(T, matvecA::Function, matvecB::Function, solveSI::Function
             end
         elseif mode == 2 # corresponds to dsdrv3, dndrv3 or zndrv3
             if ido[1] == -1 || ido[1] == 1
-                tmp = matvecA(x)
+                matvecA!(y, x)
                 if sym
-                    workd[load_idx] = tmp    # overwrite as per Remark 5 in dsaupd.f
+                    x[:] = y    # overwrite as per Remark 5 in dsaupd.f
                 end
-                workd[store_idx] = solveSI(tmp)
+                y[:] = solveSI(y)
             elseif ido[1] == 2
-                workd[store_idx] = matvecB(x)
+                y[:] = matvecB(x)
             elseif ido[1] == 99
                 break
             else
@@ -88,11 +87,11 @@ function aupd_wrapper(T, matvecA::Function, matvecB::Function, solveSI::Function
             end
         elseif mode == 3 && bmat == "G" # corresponds to dsdrv4, dndrv4 or zndrv4
             if ido[1] == -1
-                workd[store_idx] = solveSI(matvecB(x))
+                y[:] = solveSI(matvecB(x))
             elseif  ido[1] == 1
-                workd[store_idx] = solveSI(workd[ipntr[3]+zernm1])
+                y[:] = solveSI(sub(workd,ipntr[3]+zernm1))
             elseif ido[1] == 2
-                workd[store_idx] = matvecB(x)
+                y[:] = matvecB(x)
             elseif ido[1] == 99
                 break
             else
