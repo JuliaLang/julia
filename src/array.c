@@ -450,7 +450,7 @@ JL_DLLEXPORT jl_value_t *jl_arrayref(jl_array_t *a, size_t i)
 }
 
 static size_t array_nd_index(jl_array_t *a, jl_value_t **args, size_t nidxs,
-                             char *fname)
+                             const char *fname)
 {
     size_t i=0;
     size_t k, stride=1;

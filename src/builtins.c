@@ -206,6 +206,9 @@ JL_DLLEXPORT void jl_enter_handler(jl_handler_t *eh)
     eh->defer_signal = ptls->defer_signal;
     eh->finalizers_inhibited = ptls->finalizers_inhibited;
     current_task->eh = eh;
+#ifdef ENABLE_TIMINGS
+    eh->timing_stack = current_task->timing_stack;
+#endif
 }
 
 JL_DLLEXPORT void jl_pop_handler(int n)
@@ -1205,7 +1208,7 @@ void jl_init_primitives(void)
 
 // toys for debugging ---------------------------------------------------------
 
-static size_t jl_show_svec(JL_STREAM *out, jl_svec_t *t, char *head, char *opn, char *cls)
+static size_t jl_show_svec(JL_STREAM *out, jl_svec_t *t, const char *head, const char *opn, const char *cls)
 {
     size_t i, n=0, len = jl_svec_len(t);
     n += jl_printf(out, "%s", head);

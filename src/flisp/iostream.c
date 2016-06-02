@@ -61,14 +61,14 @@ value_t fl_eof_objectp(fl_context_t *fl_ctx, value_t *args, uint32_t nargs)
     return (fl_ctx->FL_EOF == args[0]) ? fl_ctx->T : fl_ctx->F;
 }
 
-static ios_t *toiostream(fl_context_t *fl_ctx, value_t v, char *fname)
+static ios_t *toiostream(fl_context_t *fl_ctx, value_t v, const char *fname)
 {
     if (!fl_isiostream(fl_ctx, v))
         type_error(fl_ctx, fname, "iostream", v);
     return value2c(ios_t*, v);
 }
 
-ios_t *fl_toiostream(fl_context_t *fl_ctx, value_t v, char *fname)
+ios_t *fl_toiostream(fl_context_t *fl_ctx, value_t v, const char *fname)
 {
     return toiostream(fl_ctx, v, fname);
 }
