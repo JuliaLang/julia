@@ -805,37 +805,6 @@ static inline int szclass(size_t sz)
 // sweep phase
 
 int64_t lazy_freed_pages = 0;
-static gcval_t **sweep_page(jl_gc_pool_t *p, jl_gc_pagemeta_t *pg, gcval_t **pfl,int,int);
-static void sweep_pool_region(gcval_t ***pfl, int region_i, int sweep_full)
-{
-    region_t *region = &regions[region_i];
-
-    // the actual sweeping
-    int ub = 0;
-    int lb = region->lb;
-    for (int pg_i = 0; pg_i <= region->ub; pg_i++) {
-        uint32_t line = region->allocmap[pg_i];
-        if (line) {
-            ub = pg_i;
-            for (int j = 0; j < 32; j++) {
-                if ((line >> j) & 1) {
-                    jl_gc_pagemeta_t *pg = &region->meta[pg_i*32 + j];
-                    int p_n = pg->pool_n;
-                    int t_n = pg->thread_n;
-                    jl_tls_states_t *ptls = jl_all_tls_states[t_n];
-                    jl_gc_pool_t *p = &ptls->heap.norm_pools[p_n];
-                    int osize = pg->osize;
-                    pfl[t_n * JL_GC_N_POOLS + p_n] = sweep_page(p, pg, pfl[t_n * JL_GC_N_POOLS + p_n], sweep_full, osize);
-                }
-            }
-        }
-        else if (pg_i < lb) {
-            lb = pg_i;
-        }
-    }
-    region->ub = ub;
-    region->lb = lb;
-}
 
 // Returns pointer to terminal pointer of list rooted at *pfl.
 static gcval_t **sweep_page(jl_gc_pool_t *p, jl_gc_pagemeta_t *pg, gcval_t **pfl, int sweep_full, int osize)
@@ -961,6 +930,37 @@ free_page:
     gc_time_count_page(freedall, pg_skpd);
     gc_num.freed += (nfree - old_nfree)*osize;
     return pfl;
+}
+
+static void sweep_pool_region(gcval_t ***pfl, int region_i, int sweep_full)
+{
+    region_t *region = &regions[region_i];
+
+    // the actual sweeping
+    int ub = 0;
+    int lb = region->lb;
+    for (int pg_i = 0; pg_i <= region->ub; pg_i++) {
+        uint32_t line = region->allocmap[pg_i];
+        if (line) {
+            ub = pg_i;
+            for (int j = 0; j < 32; j++) {
+                if ((line >> j) & 1) {
+                    jl_gc_pagemeta_t *pg = &region->meta[pg_i*32 + j];
+                    int p_n = pg->pool_n;
+                    int t_n = pg->thread_n;
+                    jl_tls_states_t *ptls = jl_all_tls_states[t_n];
+                    jl_gc_pool_t *p = &ptls->heap.norm_pools[p_n];
+                    int osize = pg->osize;
+                    pfl[t_n * JL_GC_N_POOLS + p_n] = sweep_page(p, pg, pfl[t_n * JL_GC_N_POOLS + p_n], sweep_full, osize);
+                }
+            }
+        }
+        else if (pg_i < lb) {
+            lb = pg_i;
+        }
+    }
+    region->ub = ub;
+    region->lb = lb;
 }
 
 static void gc_sweep_other(int sweep_full)
