@@ -4,7 +4,7 @@ using Base.Test
 
 function redirected_stderr()
     rd, wr = redirect_stderr()
-    @async readall(rd) # make sure the kernel isn't being forced to buffer the output
+    @async readstring(rd) # make sure the kernel isn't being forced to buffer the output
     nothing
 end
 
@@ -20,16 +20,28 @@ try
     write(Foo_file,
           """
           __precompile__(true)
+
+          # test that docs get reconnected
           module $Foo_module
-          @doc "foo function" foo(x) = x + 1
-          include_dependency("foo.jl")
-          include_dependency("foo.jl")
-          module Bar
-          @doc "bar function" bar(x) = x + 2
-          include_dependency("bar.jl")
-          end
+              @doc "foo function" foo(x) = x + 1
+              include_dependency("foo.jl")
+              include_dependency("foo.jl")
+              module Bar
+                  @doc "bar function" bar(x) = x + 2
+                  include_dependency("bar.jl")
+              end
+
+              # test that types and methods get reconnected correctly
+              # issue 16529 (adding a method to a type with no instances)
+              (::Task)(::UInt8, ::UInt16, ::UInt32) = 2
+
+              # issue 16471 (capturing references to an kwfunc)
+              Base.Test.@test_throws ErrorException Core.kwfunc(Base.nothing)
+              Base.nothing(::UInt8, ::UInt16, ::UInt32; x = 52) = x
+              const nothingkw = Core.kwfunc(Base.nothing)
           end
           """)
+    @test_throws ErrorException Core.kwfunc(Base.nothing) # make sure `nothing` didn't have a kwfunc (which would invalidate the attempted test)
 
     # Issue #12623
     @test __precompile__(true) === nothing
@@ -38,7 +50,7 @@ try
     cachefile = joinpath(dir, "$Foo_module.ji")
 
     # use _require_from_serialized to ensure that the test fails if
-    # the module doesn't load from the image:
+    # the module doesn't reload from the image:
     try
         redirected_stderr()
         @test nothing !== Base._require_from_serialized(myid(), Foo_module, #=broadcast-load=#false)
@@ -58,6 +70,11 @@ try
         @test sort(deps[1]) == map(s -> (s, Base.module_uuid(eval(s))),
                                    [:Base,:Core,:Main])
         @test map(x -> x[1], sort(deps[2])) == [Foo_file,joinpath(dir,"bar.jl"),joinpath(dir,"foo.jl")]
+
+        @test current_task()(0x01, 0x4000, 0x30031234) == 2
+        @test nothing(0x01, 0x4000, 0x30031234) == 52
+        @test nothing(0x01, 0x4000, 0x30031234; x = 9142) == 9142
+        @test Foo.nothingkw === Core.kwfunc(Base.nothing)
     end
 
     Baz_file = joinpath(dir, "Baz.jl")
