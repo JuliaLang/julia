@@ -63,6 +63,7 @@ function show{K,V}(io::IO, t::Associative{K,V})
     if !haskey(io, :compact)
         recur_io = IOContext(recur_io, compact=true)
     end
+
     if compact
         # show in a Julia-syntax-like form: Dict(k=>v, ...)
         if isempty(t)
@@ -76,13 +77,11 @@ function show{K,V}(io::IO, t::Associative{K,V})
             print(io, '(')
             if !show_circular(io, t)
                 first = true
-                n = 0
-                for pair in t
+                for (i, p) in enumerate(t)
                     first || print(io, ',')
                     first = false
-                    show(recur_io, pair)
-                    n+=1
-                    limit && n >= 10 && (print(io, "…"); break)
+                    show(recur_io, p)
+                    limit && i >= 10 && (print(io, "…"); break)
                 end
             end
             print(io, ')')
@@ -95,6 +94,8 @@ function show{K,V}(io::IO, t::Associative{K,V})
     isempty(t) && return
     print(io, ":\n  ")
     show_circular(io, t) && return
+    ck = collect(keys(t))
+    sp = sortperm(map(string,ck));
     if limit
         sz = displaysize(io)
         rows, cols = sz[1] - 3, sz[2]
@@ -108,8 +109,10 @@ function show{K,V}(io::IO, t::Associative{K,V})
         vs = Array{AbstractString}(min(rows, length(t)))
         keylen = 0
         vallen = 0
-        for (i, (k, v)) in enumerate(t)
+        for (i, s) in enumerate(sp)
             i > rows && break
+            k = ck[s]
+            v = t[k]
             ks[i] = sprint(0, show, k, env=recur_io)
             vs[i] = sprint(0, show, v, env=recur_io)
             keylen = clamp(length(ks[i]), keylen, cols)
@@ -123,7 +126,9 @@ function show{K,V}(io::IO, t::Associative{K,V})
     end
 
     first = true
-    for (i, (k, v)) in enumerate(t)
+    for (i, s) in enumerate(sp)
+        k = ck[s]
+        v = t[k]
         first || print(io, "\n  ")
         first = false
         limit && i > rows && (print(io, rpad("⋮", keylen), " => ⋮"); break)
