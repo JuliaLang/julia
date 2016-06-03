@@ -154,8 +154,8 @@ jl_value_t *jl_eval_module_expr(jl_expr_t *ex)
         }
     }
 
-    jl_value_t *defaultdefs = NULL;
-    JL_GC_PUSH2(&last_module, &defaultdefs);
+    jl_value_t *defaultdefs = NULL, *form = NULL;
+    JL_GC_PUSH3(&last_module, &defaultdefs, &form);
     jl_module_t *task_last_m = jl_current_task->current_module;
     jl_current_task->current_module = jl_current_module = newm;
     jl_module_t *prev_outermost = outermost;
@@ -166,7 +166,7 @@ jl_value_t *jl_eval_module_expr(jl_expr_t *ex)
     if (std_imports) {
         // add `eval` function
         defaultdefs = jl_call_scm_on_ast("module-default-defs", (jl_value_t*)ex);
-        jl_toplevel_eval_flex(defaultdefs, 0);
+        jl_toplevel_eval_flex(defaultdefs, 0, 1);
         defaultdefs = NULL;
     }
 
@@ -174,8 +174,8 @@ jl_value_t *jl_eval_module_expr(jl_expr_t *ex)
     JL_TRY {
         for(int i=0; i < jl_array_len(exprs); i++) {
             // process toplevel form
-            jl_value_t *form = jl_array_ptr_ref(exprs, i);
-            (void)jl_toplevel_eval_flex(form, 1);
+            form = jl_expand(jl_array_ptr_ref(exprs, i));
+            (void)jl_toplevel_eval_flex(form, 1, 1);
         }
     }
     JL_CATCH {
@@ -426,7 +426,7 @@ int jl_is_toplevel_only_expr(jl_value_t *e)
          ((jl_expr_t*)e)->head == toplevel_sym);
 }
 
-jl_value_t *jl_toplevel_eval_flex(jl_value_t *e, int fast)
+jl_value_t *jl_toplevel_eval_flex(jl_value_t *e, int fast, int expanded)
 {
     //jl_show(ex);
     //jl_printf(JL_STDOUT, "\n");
@@ -496,7 +496,7 @@ jl_value_t *jl_toplevel_eval_flex(jl_value_t *e, int fast)
     if (ex->head == toplevel_sym) {
         int i=0; jl_value_t *res=jl_nothing;
         for(i=0; i < jl_array_len(ex->args); i++) {
-            res = jl_toplevel_eval_flex(jl_array_ptr_ref(ex->args, i), fast);
+            res = jl_toplevel_eval_flex(jl_array_ptr_ref(ex->args, i), fast, 0);
         }
         return res;
     }
@@ -507,7 +507,7 @@ jl_value_t *jl_toplevel_eval_flex(jl_value_t *e, int fast)
     int ewc = 0;
     JL_GC_PUSH3(&thunk, &thk, &ex);
 
-    if (ex->head != body_sym && ex->head != thunk_sym && ex->head != return_sym &&
+    if (!expanded && ex->head != body_sym && ex->head != thunk_sym && ex->head != return_sym &&
         ex->head != method_sym) {
         // not yet expanded
         ex = (jl_expr_t*)jl_expand(e);
@@ -517,7 +517,7 @@ jl_value_t *jl_toplevel_eval_flex(jl_value_t *e, int fast)
     if (head == toplevel_sym) {
         int i=0; jl_value_t *res=jl_nothing;
         for(i=0; i < jl_array_len(ex->args); i++) {
-            res = jl_toplevel_eval_flex(jl_array_ptr_ref(ex->args, i), fast);
+            res = jl_toplevel_eval_flex(jl_array_ptr_ref(ex->args, i), fast, 0);
         }
         JL_GC_POP();
         return res;
@@ -564,7 +564,7 @@ jl_value_t *jl_toplevel_eval_flex(jl_value_t *e, int fast)
 
 JL_DLLEXPORT jl_value_t *jl_toplevel_eval(jl_value_t *v)
 {
-    return jl_toplevel_eval_flex(v, 1);
+    return jl_toplevel_eval_flex(v, 1, 0);
 }
 
 JL_DLLEXPORT jl_value_t *jl_load(const char *fname, size_t len)
@@ -707,32 +707,6 @@ jl_value_t *jl_first_argument_datatype(jl_value_t *argtypes)
     return (jl_value_t*)first_arg_datatype(argtypes, 0);
 }
 
-static jl_lambda_info_t *expr_to_lambda(jl_expr_t *f)
-{
-    // this occurs when there is a closure being added to an out-of-scope function
-    // the user should only do this at the toplevel
-    // the result is that the closure variables get interpolated directly into the AST
-    jl_svec_t *tvar_syms = NULL;
-    jl_lambda_info_t *li = NULL;
-    JL_GC_PUSH3(&f, &tvar_syms, &li);
-    assert(jl_is_expr(f) && ((jl_expr_t*)f)->head == lambda_sym);
-    // move tvar symbol array from args[1][4] to linfo
-    jl_array_t *le = (jl_array_t*)jl_exprarg(f, 1);
-    assert(jl_is_array(le) && jl_array_len(le) == 4);
-    jl_array_t *tvar_syms_arr = (jl_array_t*)jl_array_ptr_ref(le, 3);
-    jl_array_del_end(le, 1);
-    size_t i, l = jl_array_len(tvar_syms_arr);
-    tvar_syms = jl_alloc_svec_uninit(l);
-    for (i = 0; i < l; i++) {
-        jl_svecset(tvar_syms, i, jl_arrayref(tvar_syms_arr, i));
-    }
-    // wrap in a LambdaInfo
-    li = jl_new_lambda_info_uninit(tvar_syms);
-    jl_lambda_info_set_ast(li, (jl_value_t*)f);
-    JL_GC_POP();
-    return li;
-}
-
 extern tracer_cb jl_newmeth_tracer;
 JL_DLLEXPORT void jl_method_def(jl_svec_t *argdata, jl_lambda_info_t *f, jl_value_t *isstaged)
 {
@@ -744,8 +718,12 @@ JL_DLLEXPORT void jl_method_def(jl_svec_t *argdata, jl_lambda_info_t *f, jl_valu
     jl_method_t *m = NULL;
     JL_GC_PUSH2(&f, &m);
 
-    if (!jl_is_lambda_info(f))
-        f = expr_to_lambda((jl_expr_t*)f);
+    if (!jl_is_lambda_info(f)) {
+        // this occurs when there is a closure being added to an out-of-scope function
+        // the user should only do this at the toplevel
+        // the result is that the closure variables get interpolated directly into the AST
+        f = jl_new_lambda_info_from_ast((jl_expr_t*)f);
+    }
 
     assert(jl_is_lambda_info(f));
     assert(jl_is_tuple_type(argtypes));
