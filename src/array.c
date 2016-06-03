@@ -384,7 +384,7 @@ JL_DLLEXPORT jl_value_t *jl_cstr_to_string(const char *str)
     return jl_pchar_to_string(str, strlen(str));
 }
 
-JL_DLLEXPORT jl_array_t *jl_alloc_array_ptr_1d(size_t n)
+JL_DLLEXPORT jl_array_t *jl_alloc_vec_any(size_t n)
 {
     return jl_alloc_array_1d(jl_array_any_type, n);
 }

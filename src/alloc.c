@@ -55,7 +55,7 @@ jl_datatype_t *jl_ref_type;
 jl_datatype_t *jl_pointer_type;
 jl_datatype_t *jl_void_type;
 jl_datatype_t *jl_voidpointer_type;
-jl_value_t *jl_an_empty_array_ptr=NULL;
+jl_value_t *jl_an_empty_vec_any=NULL;
 jl_value_t *jl_stackovf_exception;
 #ifdef SEGV_EXCEPTION
 jl_value_t *jl_segv_exception;
@@ -319,7 +319,7 @@ void jl_lambda_info_set_ast(jl_lambda_info_t *li, jl_value_t *ast)
     jl_value_t *ssavalue_types = jl_lam_ssavalues((jl_expr_t*)ast);
     assert(jl_is_long(ssavalue_types));
     size_t nssavalue = jl_unbox_long(ssavalue_types);
-    li->slotnames = jl_alloc_array_ptr_1d(nslots);
+    li->slotnames = jl_alloc_vec_any(nslots);
     jl_gc_wb(li, li->slotnames);
     li->slottypes = jl_nothing;
     li->slotflags = jl_alloc_array_1d(jl_array_uint8_type, nslots);
@@ -410,7 +410,7 @@ static jl_lambda_info_t *jl_instantiate_staged(jl_method_t *generator, jl_tuplet
         ex = jl_exprn(lambda_sym, 2);
 
         int nargs = func->nargs;
-        jl_array_t *argnames = jl_alloc_array_ptr_1d(nargs);
+        jl_array_t *argnames = jl_alloc_vec_any(nargs);
         jl_array_ptr_set(ex->args, 0, argnames);
         for (i = 0; i < nargs; i++)
             jl_array_ptr_set(argnames, i, jl_array_ptr_ref(func->slotnames, i));
@@ -1227,7 +1227,7 @@ JL_DLLEXPORT jl_value_t *jl_box_bool(int8_t x)
 
 jl_expr_t *jl_exprn(jl_sym_t *head, size_t n)
 {
-    jl_array_t *ar = n==0 ? (jl_array_t*)jl_an_empty_array_ptr : jl_alloc_array_ptr_1d(n);
+    jl_array_t *ar = n==0 ? (jl_array_t*)jl_an_empty_vec_any : jl_alloc_vec_any(n);
     JL_GC_PUSH1(&ar);
     jl_expr_t *ex = (jl_expr_t*)jl_gc_alloc_3w(); assert(NWORDS(sizeof(jl_expr_t))==3);
     jl_set_typeof(ex, jl_expr_type);
@@ -1242,7 +1242,7 @@ JL_CALLABLE(jl_f__expr)
 {
     JL_NARGSV(Expr, 1);
     JL_TYPECHK(Expr, symbol, args[0]);
-    jl_array_t *ar = jl_alloc_array_ptr_1d(nargs-1);
+    jl_array_t *ar = jl_alloc_vec_any(nargs-1);
     JL_GC_PUSH1(&ar);
     for(size_t i=0; i < nargs-1; i++)
         jl_array_ptr_set(ar, i, args[i+1]);

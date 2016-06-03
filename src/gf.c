@@ -144,7 +144,7 @@ jl_value_t *jl_mk_builtin_func(const char *name, jl_fptr_t fptr)
     jl_lambda_info_t *li = jl_new_lambda_info_uninit(jl_emptysvec);
     li->fptr = fptr;
     // TODO jb/functions: what should li->ast be?
-    li->code = (jl_array_t*)jl_an_empty_array_ptr; jl_gc_wb(li, li->code);
+    li->code = (jl_array_t*)jl_an_empty_vec_any; jl_gc_wb(li, li->code);
     li->def = jl_new_method_uninit();
     li->def->name = sname;
     li->def->lambda_template = li;
@@ -276,7 +276,7 @@ JL_DLLEXPORT void jl_set_typeinf_func(jl_value_t *f)
 {
     jl_typeinf_func = (jl_function_t*)f;
     // give type inference a chance to see all of these
-    jl_array_t *unspec = jl_alloc_array_ptr_1d(0);
+    jl_array_t *unspec = jl_alloc_vec_any(0);
     JL_GC_PUSH1(&unspec);
     jl_reset_mt_caches(jl_main_module, unspec);
     size_t i, l;
@@ -665,7 +665,7 @@ static jl_lambda_info_t *cache_method(jl_methtable_t *mt, union jl_typemap_t *ca
     if (newmeth->code != NULL) {
         jl_array_t *spe = definition->specializations;
         if (spe == NULL) {
-            spe = jl_alloc_array_ptr_1d(1);
+            spe = jl_alloc_vec_any(1);
             jl_array_ptr_set(spe, 0, newmeth);
         }
         else {
@@ -781,11 +781,11 @@ static int check_ambiguous_visitor(jl_typemap_entry_t *oldentry, struct typemap_
             return 1;
         jl_method_t *mambig = oldentry->func.method;
         if (m->ambig == jl_nothing) {
-            m->ambig = (jl_value_t*) jl_alloc_array_ptr_1d(0);
+            m->ambig = (jl_value_t*) jl_alloc_vec_any(0);
             jl_gc_wb(m, m->ambig);
         }
         if (mambig->ambig == jl_nothing) {
-            mambig->ambig = (jl_value_t*) jl_alloc_array_ptr_1d(0);
+            mambig->ambig = (jl_value_t*) jl_alloc_vec_any(0);
             jl_gc_wb(mambig, mambig->ambig);
         }
         jl_array_ptr_1d_push((jl_array_t*) m->ambig, (jl_value_t*) mambig);
@@ -807,7 +807,7 @@ static int check_ambiguous_visitor(jl_typemap_entry_t *oldentry, struct typemap_
     else if (closure->after) {
         // record that this method definition is being partially replaced
         if (closure->shadowed == NULL) {
-            closure->shadowed = jl_alloc_array_ptr_1d(0);
+            closure->shadowed = jl_alloc_vec_any(0);
         }
         jl_array_ptr_1d_push(closure->shadowed, oldentry->func.value);
     }
@@ -935,7 +935,7 @@ void jl_method_table_insert(jl_methtable_t *mt, jl_method_t *method, jl_tupletyp
     if (oldvalue) {
         method->ambig = ((jl_method_t*)oldvalue)->ambig;
         method_overwrite(newentry, (jl_method_t*)oldvalue);
-        jl_array_t *shadowed = jl_alloc_array_ptr_1d(1);
+        jl_array_t *shadowed = jl_alloc_vec_any(1);
         jl_array_ptr_set(shadowed, 0, oldvalue);
         oldvalue = (jl_value_t*)shadowed;
     }
@@ -1433,7 +1433,7 @@ static void jl_compile_all(void)
 {
     // this "found" array will contain
     // TypeMapEntries for Methods and LambdaInfos that need to be compiled
-    jl_array_t *m = jl_alloc_array_ptr_1d(0);
+    jl_array_t *m = jl_alloc_vec_any(0);
     JL_GC_PUSH1(&m);
     while (1) {
         _compile_all_enq_module(jl_main_module, m);
@@ -1502,7 +1502,7 @@ static void jl_compile_specializations(void)
 {
     // this "found" array will contain function
     // type signatures that were inferred but haven't been compiled
-    jl_array_t *m = jl_alloc_array_ptr_1d(0);
+    jl_array_t *m = jl_alloc_vec_any(0);
     JL_GC_PUSH1(&m);
     _precompile_enq_module(jl_main_module, m);
     size_t i, l;
@@ -1846,7 +1846,7 @@ static int ml_matches_visitor(jl_typemap_entry_t *ml, struct typemap_intersectio
                         }
                         if (k >= len) {
                             if (len == 0) {
-                                closure->t = (jl_value_t*)jl_alloc_array_ptr_1d(0);
+                                closure->t = (jl_value_t*)jl_alloc_vec_any(0);
                             }
                             jl_array_ptr_1d_push((jl_array_t*)closure->t,
                                             (jl_value_t*)jl_svec(3, mti, env, mambig));
@@ -1875,7 +1875,7 @@ static int ml_matches_visitor(jl_typemap_entry_t *ml, struct typemap_intersectio
             }
             closure->matc = jl_svec(3, closure->match.ti, closure->match.env, meth);
             if (len == 0) {
-                closure->t = (jl_value_t*)jl_alloc_array_ptr_1d(1);
+                closure->t = (jl_value_t*)jl_alloc_vec_any(1);
                 jl_array_ptr_set(closure->t, 0, (jl_value_t*)closure->matc);
             }
             else {
@@ -1910,7 +1910,7 @@ static jl_value_t *ml_matches(union jl_typemap_t defs, int offs,
     env.match.va = va;
     env.match.ti = NULL;
     env.match.env = jl_emptysvec;
-    env.t = jl_an_empty_array_ptr;
+    env.t = jl_an_empty_vec_any;
     env.matc = NULL;
     env.lim = lim;
     env.include_ambiguous = include_ambiguous;
@@ -1931,11 +1931,11 @@ JL_DLLEXPORT jl_value_t *jl_matching_methods(jl_tupletype_t *types, int lim, int
 {
     assert(jl_nparams(types) > 0);
     if (jl_tparam0(types) == jl_bottom_type)
-        return (jl_value_t*)jl_alloc_array_ptr_1d(0);
+        return (jl_value_t*)jl_alloc_vec_any(0);
     assert(jl_is_datatype(jl_tparam0(types)));
     jl_methtable_t *mt = ((jl_datatype_t*)jl_tparam0(types))->name->mt;
     if (mt == NULL)
-        return (jl_value_t*)jl_alloc_array_ptr_1d(0);
+        return (jl_value_t*)jl_alloc_vec_any(0);
     return ml_matches(mt->defs, 0, types, lim, include_ambiguous);
 }
 
