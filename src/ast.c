@@ -92,7 +92,7 @@ static void jl_ast_preserve(fl_context_t *fl_ctx, jl_value_t *obj)
     assert(ctx->roots);
     jl_array_t *roots = *ctx->roots;
     if (!roots) {
-        roots = *ctx->roots = jl_alloc_array_ptr_1d(1);
+        roots = *ctx->roots = jl_alloc_vec_any(1);
         jl_array_ptr_set(roots, 0, obj);
     }
     else {
@@ -342,8 +342,8 @@ static jl_svec_t *full_svec(fl_context_t *fl_ctx, value_t e, int expronly)
 static jl_value_t *full_list(fl_context_t *fl_ctx, value_t e, int expronly)
 {
     size_t ln = llength(e);
-    if (ln == 0) return jl_an_empty_array_ptr;
-    jl_array_t *ar = jl_alloc_array_ptr_1d(ln);
+    if (ln == 0) return jl_an_empty_vec_any;
+    jl_array_t *ar = jl_alloc_vec_any(ln);
     JL_GC_PUSH1(&ar);
     size_t i=0;
     while (iscons(e)) {
@@ -358,8 +358,8 @@ static jl_value_t *full_list(fl_context_t *fl_ctx, value_t e, int expronly)
 static jl_value_t *full_list_of_lists(fl_context_t *fl_ctx, value_t e, int expronly)
 {
     size_t ln = llength(e);
-    if (ln == 0) return jl_an_empty_array_ptr;
-    jl_array_t *ar = jl_alloc_array_ptr_1d(ln);
+    if (ln == 0) return jl_an_empty_vec_any;
+    jl_array_t *ar = jl_alloc_vec_any(ln);
     JL_GC_PUSH1(&ar);
     size_t i=0;
     while (iscons(e)) {
@@ -470,7 +470,7 @@ static jl_value_t *scm_to_julia_(fl_context_t *fl_ctx, value_t e, int eo)
             e = cdr_(e);
 
             value_t ee = car_(e);
-            vinf = jl_alloc_array_ptr_1d(3);
+            vinf = jl_alloc_vec_any(3);
             jl_array_ptr_set(vinf, 0, full_list_of_lists(fl_ctx, car_(ee), eo));
             ee = cdr_(ee);
             jl_array_ptr_set(vinf, 1, full_list_of_lists(fl_ctx, car_(ee), eo));
@@ -565,7 +565,7 @@ static jl_value_t *scm_to_julia_(fl_context_t *fl_ctx, value_t e, int eo)
         JL_GC_PUSH1(&ex);
         // allocate a fresh args array for empty exprs passed to macros
         if (eo && n == 0) {
-            ex->args = jl_alloc_array_ptr_1d(0);
+            ex->args = jl_alloc_vec_any(0);
             jl_gc_wb(ex, ex->args);
         }
         for(i=0; i < n; i++) {
@@ -860,12 +860,12 @@ jl_lambda_info_t *jl_wrap_expr(jl_value_t *expr)
 {
     // `(lambda () (() () () ()) ,expr)
     jl_expr_t *le=NULL, *bo=NULL; jl_value_t *vi=NULL;
-    jl_value_t *mt = jl_an_empty_array_ptr;
+    jl_value_t *mt = jl_an_empty_vec_any;
     jl_lambda_info_t *li = NULL;
     JL_GC_PUSH4(&le, &vi, &bo, &li);
     le = jl_exprn(lambda_sym, 3);
     jl_array_ptr_set(le->args, 0, mt);
-    vi = (jl_value_t*)jl_alloc_array_ptr_1d(3);
+    vi = (jl_value_t*)jl_alloc_vec_any(3);
     jl_array_ptr_set(vi, 0, mt);
     jl_array_ptr_set(vi, 1, mt);
     // front end always wraps toplevel exprs with ssavalues in (thunk (lambda () ...))
@@ -952,7 +952,7 @@ JL_DLLEXPORT jl_value_t *jl_copy_ast(jl_value_t *expr)
         JL_GC_PUSH2(&ne, &expr);
         ne = jl_exprn(e->head, l);
         if (l == 0) {
-            ne->args = jl_alloc_array_ptr_1d(0);
+            ne->args = jl_alloc_vec_any(0);
             jl_gc_wb(ne, ne->args);
         }
         else {
@@ -968,7 +968,7 @@ JL_DLLEXPORT jl_value_t *jl_copy_ast(jl_value_t *expr)
         size_t i, l = jl_array_len(a);
         jl_array_t *na = NULL;
         JL_GC_PUSH2(&na, &expr);
-        na = jl_alloc_array_ptr_1d(l);
+        na = jl_alloc_vec_any(l);
         for(i=0; i < l; i++)
             jl_array_ptr_set(na, i, jl_copy_ast(jl_array_ptr_ref(a,i)));
         JL_GC_POP();
