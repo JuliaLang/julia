@@ -462,6 +462,14 @@ let isline(x) = isa(x,Expr) && x.head === :line
     @test count(isline, parse("begin; x+2; y+1; end").args) == 2
 end
 
+# issue #16736
+let
+    local lineoffset0 = @__LINE__ + 1
+    local lineoffset1 = @__LINE__
+    local lineoffset2 = @__LINE__ - 1
+    @test lineoffset0 == lineoffset1 == lineoffset2
+end
+
 # issue #16686
 @test parse("try x
              catch test()

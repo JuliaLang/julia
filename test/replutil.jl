@@ -265,7 +265,7 @@ end
 @test stringmime("text/plain", FunctionLike()) == "(::FunctionLike) (generic function with 0 methods)"
 @test ismatch(r"^@doc \(macro with \d+ method[s]?\)$", stringmime("text/plain", getfield(Base, Symbol("@doc"))))
 
-method_defs_lineno = @__LINE__
+method_defs_lineno = @__LINE__+1
 Base.Symbol() = throw(ErrorException("1"))
 (::Symbol)() = throw(ErrorException("2"))
 EightBitType() = throw(ErrorException("3"))
