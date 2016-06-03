@@ -325,7 +325,8 @@ function getpass(prompt::AbstractString)
                 p[plen += 1] = c
             end
         end
-        return unsafe_string(pointer(p), plen)
+        return unsafe_string(pointer(p), plen) # use unsafe_string rather than String(p[1:plen])
+                                               # to be absolutely certain we never make an extra copy
     finally
         fill!(p, 0) # don't leave password in memory
     end

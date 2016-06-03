@@ -159,7 +159,7 @@ function strftime(fmt::AbstractString, tm::TmStruct)
     if n == 0
         return ""
     end
-    return unsafe_string(pointer(timestr), n)
+    return String(timestr[1:n])
 end
 
 """
