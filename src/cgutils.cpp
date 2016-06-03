@@ -194,7 +194,8 @@ static DIType julia_type_to_di(jl_value_t *jt, DIBuilder *dbuilder, bool isboxed
         return ct;
     }
     else {
-        jdt->ditype = dbuilder->createTypedef(jl_pvalue_dillvmt, jl_symbol_name(jdt->name->name), NULL, 0, NULL);
+        jdt->ditype = dbuilder->createTypedef(jl_pvalue_dillvmt,
+            jl_symbol_name(jdt->name->name), NULL, 0, NULL);
         return (llvm::DIType*)jdt->ditype;
     }
     #endif
@@ -874,7 +875,8 @@ static jl_cgval_t typed_load(Value *ptr, Value *idx_0based, jl_value_t *jltype,
     //    elt = data;
     //}
     //else {
-        Instruction *load = builder.CreateAlignedLoad(data, isboxed ? alignment : julia_alignment(data, jltype, alignment), false);
+        Instruction *load = builder.CreateAlignedLoad(data, isboxed ?
+            alignment : julia_alignment(data, jltype, alignment), false);
         if (tbaa) {
             elt = tbaa_decorate(tbaa, load);
         }
@@ -911,7 +913,8 @@ static void typed_store(Value *ptr, Value *idx_0based, const jl_cgval_t &rhs,
         data = emit_bitcast(ptr, PointerType::get(elty, 0));
     else
         data = ptr;
-    Instruction *store = builder.CreateAlignedStore(r, builder.CreateGEP(data, idx_0based), isboxed ? alignment : julia_alignment(r, jltype, alignment));
+    Instruction *store = builder.CreateAlignedStore(r, builder.CreateGEP(data,
+        idx_0based), isboxed ? alignment : julia_alignment(r, jltype, alignment));
     if (tbaa)
         tbaa_decorate(tbaa, store);
 }
@@ -1006,7 +1009,8 @@ static Value *data_pointer(const jl_cgval_t &x, jl_codectx_t *ctx, Type *astype 
     return data;
 }
 
-static bool emit_getfield_unknownidx(jl_cgval_t *ret, const jl_cgval_t &strct, Value *idx, jl_datatype_t *stt, jl_codectx_t *ctx)
+static bool emit_getfield_unknownidx(jl_cgval_t *ret, const jl_cgval_t &strct,
+        Value *idx, jl_datatype_t *stt, jl_codectx_t *ctx)
 {
     size_t nfields = jl_datatype_nfields(stt);
     if (strct.ispointer()) { // boxed or stack
@@ -1366,7 +1370,8 @@ static Value *emit_allocobj(jl_codectx_t *ctx, size_t static_size,
 static Value *init_bits_value(Value *newv, Value *v, MDNode *tbaa)
 {
     // newv should already be tagged
-    tbaa_decorate(tbaa, builder.CreateAlignedStore(v, emit_bitcast(newv, PointerType::get(v->getType(),0)), sizeof(void*))); // min alignment in julia's gc is pointer-aligned
+    tbaa_decorate(tbaa, builder.CreateAlignedStore(v, emit_bitcast(newv,
+        PointerType::get(v->getType(),0)), sizeof(void*))); // min alignment in julia's gc is pointer-aligned
     return newv;
 }
 static Value *as_value(Type *t, const jl_cgval_t&);
@@ -1627,7 +1632,8 @@ static void emit_write_barrier(jl_codectx_t *ctx, Value *parent, Value *ptr)
     builder.CreateCondBr(parent_old_marked, barrier_may_trigger, cont);
 
     builder.SetInsertPoint(barrier_may_trigger);
-    Value *ptr_mark_bit = builder.CreateAnd(tbaa_decorate(tbaa_tag, builder.CreateLoad(emit_bitcast(emit_typeptr_addr(ptr), T_psize))), 1);
+    Value *ptr_mark_bit = builder.CreateAnd(tbaa_decorate(tbaa_tag,
+        builder.CreateLoad(emit_bitcast(emit_typeptr_addr(ptr), T_psize))), 1);
     Value *ptr_not_marked = builder.CreateICmpEQ(ptr_mark_bit, ConstantInt::get(T_size, 0));
     builder.CreateCondBr(ptr_not_marked, barrier_trigger, cont);
     builder.SetInsertPoint(barrier_trigger);
@@ -1669,7 +1675,8 @@ static void emit_setfield(jl_datatype_t *sty, const jl_cgval_t &strct, size_t id
             int align = jl_field_offset(sty, idx0);
             align |= 16;
             align &= -align;
-            typed_store(addr, ConstantInt::get(T_size, 0), rhs, jfty, ctx, strct.tbaa, data_pointer(strct, ctx, T_pjlvalue), align);
+            typed_store(addr, ConstantInt::get(T_size, 0), rhs, jfty, ctx,
+                strct.tbaa, data_pointer(strct, ctx, T_pjlvalue), align);
         }
     }
     else {
@@ -1811,7 +1818,8 @@ static jl_cgval_t emit_new_struct(jl_value_t *ty, size_t nargs, jl_value_t **arg
 static Value *emit_exc_in_transit(jl_codectx_t *ctx)
 {
     Value *pexc_in_transit = emit_bitcast(ctx->ptlsStates, T_ppjlvalue);
-    Constant *offset = ConstantInt::getSigned(T_int32, offsetof(jl_tls_states_t, exception_in_transit) / sizeof(void*));
+    Constant *offset = ConstantInt::getSigned(T_int32,
+        offsetof(jl_tls_states_t, exception_in_transit) / sizeof(void*));
     return builder.CreateGEP(pexc_in_transit, ArrayRef<Value*>(offset), "jl_exception_in_transit");
 }
 
@@ -1837,6 +1845,7 @@ static Value *emit_defer_signal(jl_codectx_t *ctx)
 {
     Value *ptls = emit_bitcast(ctx->ptlsStates,
                                         PointerType::get(T_sigatomic, 0));
-    Constant *offset = ConstantInt::getSigned(T_int32, offsetof(jl_tls_states_t, defer_signal) / sizeof(sig_atomic_t));
+    Constant *offset = ConstantInt::getSigned(T_int32,
+        offsetof(jl_tls_states_t, defer_signal) / sizeof(sig_atomic_t));
     return builder.CreateGEP(ptls, ArrayRef<Value*>(offset), "jl_defer_signal");
 }
