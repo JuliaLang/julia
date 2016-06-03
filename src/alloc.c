@@ -631,8 +631,9 @@ static jl_sym_t *mk_symbol(const char *str, size_t len)
         jl_exceptionf(jl_argumenterror_type, "Symbol length exceeds maximum length");
     }
 
+    jl_taggedvalue_t *tag;
 #ifdef MEMDEBUG
-    sym = (jl_sym_t*)jl_valueof(malloc(nb));
+    tag = (jl_taggedvalue_t*)malloc(nb);
 #else
     static char *sym_pool = NULL;
     static char *pool_ptr = NULL;
@@ -640,10 +641,12 @@ static jl_sym_t *mk_symbol(const char *str, size_t len)
         sym_pool = (char*)malloc(SYM_POOL_SIZE);
         pool_ptr = sym_pool;
     }
-    sym = (jl_sym_t*)jl_valueof(pool_ptr);
+    tag = (jl_taggedvalue_t*)pool_ptr;
     pool_ptr += nb;
 #endif
-    jl_set_typeof(sym, jl_sym_type);
+    sym = (jl_sym_t*)jl_valueof(tag);
+    // set to old marked since we don't need write barrier on it.
+    tag->type_bits = ((uintptr_t)jl_sym_type) | GC_MARKED;
     sym->left = sym->right = NULL;
     sym->hash = hash_symbol(str, len);
     memcpy(jl_symbol_name(sym), str, len);
