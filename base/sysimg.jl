@@ -341,21 +341,6 @@ include("docs/Docs.jl")
 using .Docs, .Markdown
 Docs.loaddocs(Core.Inference.CoreDocs.DOCS)
 
-# String constructor docstring, ugly workaround for #16730
-Docs.doc!(Docs.Binding(current_module(),:String), Docs.docstr(Core.svec(
-"""
-    String(v::Vector{UInt8})
-
-Create a new `String` from a vector `v` of bytes containing
-UTF-8 encoded characters.   This function takes "ownership" of
-the array, which means that you should not subsequently modify
-`v` (since strings are supposed to be immutable in Julia) for
-as long as the string exists.
-
-If you need to subsequently modify `v`, use `String(copy(v))` instead.
-"""
-), Dict(:source => :(String(v::Vector{UInt8}) = new(v)), :path=>"boot.jl", :linenumber=>219, :module=>current_module())), Tuple{Vector{UInt8}})
-
 function __init__()
     # Base library init
     reinit_stdio()
