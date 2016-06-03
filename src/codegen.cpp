@@ -5658,6 +5658,7 @@ static inline SmallVector<std::string,10> getTargetFeatures() {
     }
     return attr;
 }
+#include <llvm/CodeGen/LinkAllCodegenComponents.h>
 
 extern "C" void jl_init_codegen(void)
 {
@@ -5670,7 +5671,7 @@ extern "C" void jl_init_codegen(void)
 #ifdef JL_DEBUG_BUILD
     cl::ParseEnvironmentOptions("Julia", "JULIA_LLVM_ARGS");
 #endif
-
+    llvm::linkStatepointExampleGC();
     imaging_mode = jl_generating_output();
     jl_init_debuginfo();
     jl_init_runtime_ccall();
@@ -5778,8 +5779,8 @@ extern "C" void jl_init_codegen(void)
                                " Is the LLVM backend for this CPU enabled?");
 #if defined(USE_MCJIT) && (!defined(_CPU_ARM_) && !defined(_CPU_PPC64_))
     // FastISel seems to be buggy for ARM. Ref #13321
-    if (jl_options.opt_level < 3)
-        jl_TargetMachine->setFastISel(true);
+    //if (jl_options.opt_level < 3)
+    //    jl_TargetMachine->setFastISel(true);
 #endif
 
 #ifdef USE_ORCJIT

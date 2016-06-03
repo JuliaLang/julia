@@ -1152,10 +1152,11 @@ NOINLINE static int gc_mark_module(jl_module_t *m, int d)
     return refyoung;
 }
 
-static void gc_mark_stack(jl_value_t *ta, jl_gcframe_t *s, intptr_t offset, int d)
+static void gc_mark_stack(jl_value_t *ta, jl_gcframe_t *s, intptr_t offset, int d, int dbg)
 {
     while (s != NULL) {
         s = (jl_gcframe_t*)((char*)s + offset);
+        if (dbg) printf("GCFRAME : %p\n", s);
         jl_value_t ***rts = (jl_value_t***)(((void**)s)+2);
         size_t nr = s->nroots>>1;
         if (s->nroots & 1) {
@@ -1177,6 +1178,8 @@ static void gc_mark_stack(jl_value_t *ta, jl_gcframe_t *s, intptr_t offset, int 
     }
 }
 
+bt_context_t gc_current_task_context;
+void gc_unwind_tasks(bt_context_t *context);
 static void gc_mark_task_stack(jl_task_t *ta, int d)
 {
     int stkbuf = (ta->stkbuf != (void*)(intptr_t)-1 && ta->stkbuf != NULL);
@@ -1189,7 +1192,8 @@ static void gc_mark_task_stack(jl_task_t *ta, int d)
         gc_setmark_buf(ta->stkbuf, gc_bits(jl_astaggedvalue(ta)));
     }
     if (ta == ptls->current_task) {
-        gc_mark_stack((jl_value_t*)ta, ptls->pgcstack, 0, d);
+        gc_mark_stack((jl_value_t*)ta, ptls->pgcstack, 0, d, 1);
+        gc_unwind_tasks(&gc_current_task_context);
     }
     else if (stkbuf) {
         intptr_t offset;
@@ -1198,7 +1202,7 @@ static void gc_mark_task_stack(jl_task_t *ta, int d)
 #else
         offset = 0;
 #endif
-        gc_mark_stack((jl_value_t*)ta, ta->gcstack, offset, d);
+        gc_mark_stack((jl_value_t*)ta, ta->gcstack, offset, d, 0);
     }
 }
 
@@ -1554,6 +1558,122 @@ void jl_gc_sync_total_bytes(void) {last_gc_total_bytes = jl_gc_total_bytes();}
 
 #define MIN_SCAN_BYTES 1024*1024
 
+static htable_t addr_to_stackmap;
+
+/*void jl_gc_register_stackmaps(uint8_t *addr, uint8_t *text, size_t size)
+{
+    
+    while (1) {
+        void** bp = ptrhash_bp(&addr_to_stackmap, (void*)((uintptr_t)text & -0x1000));
+        if (*bp != HT_NOTFOUND)
+            abort();
+        *bp = addr;
+        text += 0x1000;
+        if (size < 0x1000)
+            break;
+        size -= 0x1000;
+    }
+    }*/
+
+
+
+void jl_gc_register_stackmaps(uint8_t *s, uint8_t *text, size_t size)
+{
+    uint8_t version = *s;
+    s += 4;
+    if (version != 1) {
+        printf("unsupported LLVM stackmaps version %d\n", version);
+        abort();
+    }
+    uint32_t nfunc = *(uint32_t*)s, nconst = *((uint32_t*)s+1), nrec = *((uint32_t*)s+2);
+    s += 12;
+    for (size_t i = 0; i < nfunc; i++) {
+        uint64_t fbase = *(uint64_t*)s;
+        uint64_t ssize = *((uint64_t*)s+1);
+        printf("F %p %p\n", fbase, ssize);
+        s += 16;
+    }
+    s += nconst * 8;
+    for (size_t i = 0; i < nrec; i++) {
+        uint64_t id = *(uint64_t*)s;
+        s += 8;
+        uint32_t rel_ip = *(uint32_t*)s;
+        s += 4;
+        s += 2;
+        printf("R %p %p\n", id, text + rel_ip);
+        void** bp = ptrhash_bp(&addr_to_stackmap, text+rel_ip);
+        if (*bp != HT_NOTFOUND)
+            printf("AAAAAARG !!\n");
+        *bp = s;
+        uint16_t nloc = *(uint16_t*)s;
+        s += 2;
+        
+        for (size_t j = 0; j < nloc; j++) {
+            uint8_t loc_typ = *(uint8_t*)s;
+            s += 2;
+            uint16_t dwarf_reg = *(uint16_t*)s;
+            s += 2;
+            int32_t offset = *(int32_t*)s;
+            s += 4;
+            printf("\tloc %d %d %d\n", loc_typ, dwarf_reg, offset);
+        }
+
+        uint16_t nliveout = *((uint16_t*)s+1);
+        s += 4;
+        /*for (size_t j = 0; j < nliveout; j++) {
+                uint16 : Dwarf RegNum
+                uint8  : Reserved
+                uint8  : Size in Bytes
+                }*/
+        s += nliveout * 4;
+        //printf("S : %d", ((uintptr_t)s)%8);
+        if ((((uintptr_t)s) % 8)) {
+            s += 4;
+        }
+    }
+}
+
+void gc_unwind_tasks(bt_context_t *context)
+{
+    bt_cursor_t cursor;
+    if (unw_init_local(&cursor, context) < 0)
+        abort();
+    uintptr_t ip, sp;
+    while (1) {
+        if (unw_step(&cursor) < 0) {
+            break;
+        }
+        if (unw_get_reg(&cursor, UNW_REG_IP, &ip) < 0)
+            abort();
+        if (unw_get_reg(&cursor, UNW_REG_SP, &sp) < 0)
+            abort();
+        if (!ip) break;
+        printf("IP %p\n", ip);
+        void **bp = ptrhash_bp(&addr_to_stackmap, ip);
+        if (*bp != HT_NOTFOUND) {
+            printf("GOT STACKMAP : %p\n", *bp);
+            uint8_t *s = *bp;
+            uint16_t nloc = *(uint16_t*)s;
+            s += 2;
+            
+            for (size_t j = 0; j < nloc; j++) {
+                uint8_t loc_typ = *(uint8_t*)s;
+                s += 2;
+                uint16_t dwarf_reg = *(uint16_t*)s;
+                s += 2;
+                int32_t offset = *(int32_t*)s;
+                s += 4;
+                printf("\tloc %d %d %d\n", loc_typ, dwarf_reg, offset);
+                if (dwarf_reg == 7) {
+                    jl_value_t** roots = (jl_value_t**)(sp + offset);
+                    printf("got rsp : %p\n", roots);
+                }
+            }
+
+        }
+    }
+}
+
 // Only one thread should be running in this function
 static void _jl_gc_collect(int full, char *stack_hi)
 {
@@ -1747,6 +1867,8 @@ JL_DLLEXPORT void jl_gc_collect(int full)
 
     if (!jl_gc_disable_counter) {
         JL_LOCK_NOGC(&finalizers_lock);
+        memset(&gc_current_task_context, 0, sizeof(bt_context_t));
+        unw_getcontext(&gc_current_task_context);
         _jl_gc_collect(full, stack_hi);
         JL_UNLOCK_NOGC(&finalizers_lock);
     }
@@ -1860,6 +1982,7 @@ void jl_gc_init(void)
     arraylist_new(&finalizer_list, 0);
     arraylist_new(&finalizer_list_marked, 0);
     arraylist_new(&to_finalize, 0);
+    htable_new(&addr_to_stackmap, 512);
 
     gc_num.interval = default_collect_interval;
     last_long_collect_interval = default_collect_interval;

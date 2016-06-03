@@ -233,7 +233,7 @@ void jl_callback_triggered_linfos(void)
             jl_call_tracer(jl_linfo_tracer, (jl_value_t*)linfo);
     }
 }
-
+#include <iostream>
 class JuliaJITEventListener: public JITEventListener
 {
 #ifndef USE_MCJIT
@@ -322,12 +322,26 @@ public:
 
 #ifdef LLVM38
         std::map<StringRef,object::SectionRef,strrefcomp> loadedSections;
+        std::cout << "===" << std::endl;
+        uint8_t *text_addr = NULL, *stackmaps_addr = NULL;
+        size_t text_size = 0;
         for (const object::SectionRef &lSection: obj.sections()) {
             StringRef sName;
             if (!lSection.getName(sName)) {
                 loadedSections[sName] = lSection;
+                if (sName == ".llvm_stackmaps") {
+                    stackmaps_addr = (uint8_t*)L.getSectionLoadAddress(lSection);
+                    std::cout << "section " << sName.str() << " : " << L.getSectionLoadAddress(lSection) << std::endl;
+                } else if (sName == ".text") {
+                    text_addr = (uint8_t*)L.getSectionLoadAddress(lSection);
+                    text_size = lSection.getSize();
+                    //std::cout << "section " << sName.str() << " : " << L.getSectionLoadAddress(lSection) << std::endl;
+                }
             }
         }
+        if (stackmaps_addr)
+            jl_gc_register_stackmaps(stackmaps_addr, text_addr, text_size);
+        std::cout << "===" << std::endl;
         auto getLoadAddress = [&] (const StringRef &sName) -> uint64_t {
             auto search = loadedSections.find(sName);
             if (search == loadedSections.end())

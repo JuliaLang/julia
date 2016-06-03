@@ -8,12 +8,16 @@
 #include <llvm/IR/Instructions.h>
 #include <llvm/IR/IRBuilder.h>
 #include <llvm/IR/Intrinsics.h>
+#include <llvm/IR/IntrinsicInst.h>
 #include <llvm/Support/raw_ostream.h>
 #include <llvm/Transforms/Utils/BasicBlockUtils.h>
 #ifdef LLVM36
 #include <llvm/IR/DIBuilder.h>
 #include <llvm/IR/DebugInfoMetadata.h>
 #endif
+       #include <stdlib.h>
+
+       int rand(void);
 
 #include <vector>
 #include <queue>
@@ -53,6 +57,7 @@ public:
         jlcall_frame_func(M.getFunction("julia.jlcall_frame_decl")),
         tbaa_gcframe(tbaa)
     {
+        //M.dump();
 /* Algorithm sketch:
  *  Compute liveness for each basic block
  *    liveness computed at the basic-block level for <inst, arg-offset> pairs
@@ -816,7 +821,8 @@ void allocate_frame()
                                    builder.CreatePointerCast(builder.CreateConstGEP1_32(gcframe, 1), PointerType::get(T_ppjlvalue,0)));
         inst->setMetadata(llvm::LLVMContext::MD_tbaa, tbaa_gcframe);
         builder.CreateStore(gcframe, builder.Insert(get_pgcstack(ptlsStates)));
-
+        /*builder.CreateCall(Intrinsic::getDeclaration(&M, Intrinsic::experimental_stackmap),
+          ArrayRef<Value*> { ConstantInt::get(T_int64, 42), ConstantInt::get(T_int32, 0), gcframe });*/
         // Finish by emitting the gc pops before any return
         for(Function::iterator I = F.begin(), E = F.end(); I != E; ++I) {
             if (isa<ReturnInst>(I->getTerminator())) {
@@ -830,8 +836,46 @@ void allocate_frame()
                 inst->setMetadata(llvm::LLVMContext::MD_tbaa, tbaa_gcframe);
             }
         }
+        //#if 0
+        for (Function::iterator bb = F.begin(), be = F.end(); bb != be; ++bb) {
+            for (BasicBlock::iterator i = bb->begin(), ie = bb->end(); i != ie; ) {
+                Instruction *inst = &*i;
+                ++i;
+                if (!isa<CallInst>(inst))
+                    continue;
+                CallInst *call = (CallInst*)inst;
+                if (isa<IntrinsicInst>(call))
+                    continue;
+                if (call->getCalledValue() == M.getFunction("jl_get_ptls_states"))
+                    continue;
+                //                if (call->getCalledValue() == M.getFunction("jl_throw"))
+                //  continue;
+                
+                builder.SetInsertPoint(call);
+                int nargs = call->getNumArgOperands();
+                Value **args = (Value**)alloca(nargs*sizeof(Value*));
+                /*args[0] = ConstantInt::get(T_int64, 43);
+                  args[1] = ConstantInt::get(T_int32, 0);
+                  args[2] = call->getCalledValue();
+                  args[3] = ConstantInt::get(T_int64, nargs);
+                  args[4] = ConstantInt::get(T_int64, 0);*/
+                for (int k = 0; k < nargs; k++)
+                    args[k] = call->getArgOperand(k);
+                /*args[5+nargs] = ConstantInt::get(T_int64, 0);
+                  args[6+nargs] = ConstantInt::get(T_int64, 1);
+                  args[7+nargs] = gcframe;
+                  CallInst *statepoint = builder.CreateCall(Intrinsic::getDeclaration(&M, Intrinsic::experimental_gc_statepoint), ArrayRef<Value*>(args,8+nargs));*/
+                /*CallInst *statepoint = builder.CreateGCStatepointCall(43, 0, call->getCalledValue(), ArrayRef<Value*>(args, nargs), ArrayRef<Value*>(gcframe), ArrayRef<Value*>());
+                  CallInst *result = builder.CreateGCResult(statepoint, call->getType());*/
+                CallInst *result = CallInst::Create(call, ArrayRef<OperandBundleDef>(OperandBundleDef("deopt", ArrayRef<Value*>(gcframe))), call);
+                call->replaceAllUsesWith(result);
+                call->eraseFromParent();
+            }
+        }
+        F.setGC("statepoint-example");
+        //#endif
     }
-
+    //M.dump();
 #ifndef NDEBUG
     jl_gc_frame_stats.count++;
     jl_gc_frame_stats.locals += argSpaceSize;

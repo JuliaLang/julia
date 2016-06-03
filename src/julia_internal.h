@@ -107,7 +107,7 @@ void jl_gc_track_malloced_array(jl_array_t *a);
 void jl_gc_count_allocd(size_t sz);
 void jl_gc_run_all_finalizers(void);
 void *allocb(size_t sz);
-
+void jl_gc_register_stackmaps(uint8_t*,uint8_t*,size_t);
 void gc_queue_binding(jl_binding_t *bnd);
 void gc_setmark_buf(void *buf, int);
 
