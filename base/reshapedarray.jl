@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 using  Base.MultiplicativeInverses: SignedMultiplicativeInverse
 
 immutable ReshapedArray{T,N,P<:AbstractArray,MI<:Tuple{Vararg{SignedMultiplicativeInverse{Int}}}} <: AbstractArray{T,N}

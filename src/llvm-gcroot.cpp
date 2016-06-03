@@ -1,3 +1,5 @@
+// This file is a part of Julia. License is MIT: http://julialang.org/license
+
 #include "llvm-version.h"
 #include <llvm/ADT/SmallBitVector.h>
 #include <llvm/IR/Value.h>

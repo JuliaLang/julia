@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 immutable Hessenberg{T,S<:AbstractMatrix} <: Factorization{T}
     factors::S
     τ::Vector{T}
