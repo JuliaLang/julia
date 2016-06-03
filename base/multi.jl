@@ -1040,6 +1040,10 @@ end
 function process_hdr(s, validate_cookie)
     if validate_cookie
         cookie = read(s, HDR_COOKIE_LEN)
+        if length(cookie) < HDR_COOKIE_LEN
+            error("Cookie read failed. Connection closed by peer.")
+        end
+
         self_cookie = cluster_cookie()
         for i in 1:HDR_COOKIE_LEN
             if UInt8(self_cookie[i]) != cookie[i]
@@ -1051,7 +1055,12 @@ function process_hdr(s, validate_cookie)
     # When we have incompatible julia versions trying to connect to each other,
     # and can be detected, raise an appropriate error.
     # For now, just return the version.
-    return VersionNumber(strip(String(read(s, HDR_VERSION_LEN))))
+    version = read(s, HDR_VERSION_LEN)
+    if length(version) < HDR_VERSION_LEN
+        error("Version read failed. Connection closed by peer.")
+    end
+
+    return VersionNumber(strip(String(version)))
 end
 
 function handle_msg(msg::CallMsg{:call}, r_stream, w_stream, version)
