@@ -2911,7 +2911,7 @@ function vcat(Xin::Union{Vector, Matrix, SparseMatrixCSC}...)
     vcat(X...)
 end
 
-function hvcat(rows::Tuple{Vararg{Int}}, X::Union{Matrix, SparseMatrixCSC}...)
+function hvcat(rows::Tuple{Vararg{Int}}, X::Union{Vector, Matrix, SparseMatrixCSC}...)
     nbr = length(rows)  # number of block rows
 
     tmp_rows = Array{SparseMatrixCSC}(nbr)

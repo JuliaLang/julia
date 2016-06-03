@@ -989,7 +989,7 @@ for Tv in [Float32, Float64, Int64, Int32, Complex128]
     end
 end
 
-# Matrix vector cat not supported for sparse #13130 and #16661
+# ref 13130 and 16661
 @test issparse([sprand(10,10,.1) sprand(10,.1)])
 @test issparse([sprand(10,1,.1); sprand(10,.1)])
 
