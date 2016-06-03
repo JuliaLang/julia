@@ -191,7 +191,7 @@ jl_function_t *jl_new_generic_function(jl_sym_t *name, jl_module_t *module);
 jl_function_t *jl_module_call_func(jl_module_t *m);
 int jl_is_submodule(jl_module_t *child, jl_module_t *parent);
 
-jl_value_t *jl_toplevel_eval_flex(jl_value_t *e, int fast);
+jl_value_t *jl_toplevel_eval_flex(jl_value_t *e, int fast, int expanded);
 jl_value_t *jl_toplevel_eval_in_warn(jl_module_t *m, jl_value_t *ex,
                                      int delay_warn);
 
@@ -205,7 +205,6 @@ jl_value_t *jl_static_eval(jl_value_t *ex, void *ctx_, jl_module_t *mod,
                            jl_lambda_info_t *li, int sparams, int allow_alloc);
 int jl_is_toplevel_only_expr(jl_value_t *e);
 void jl_type_infer(jl_lambda_info_t *li, int force);
-void jl_lambda_info_set_ast(jl_lambda_info_t *li, jl_value_t *ast);
 jl_value_t *jl_call_scm_on_ast(char *funcname, jl_value_t *expr);
 
 jl_lambda_info_t *jl_method_lookup_by_type(jl_methtable_t *mt, jl_tupletype_t *types,
@@ -213,13 +212,6 @@ jl_lambda_info_t *jl_method_lookup_by_type(jl_methtable_t *mt, jl_tupletype_t *t
 jl_lambda_info_t *jl_method_lookup(jl_methtable_t *mt, jl_value_t **args, size_t nargs, int cache);
 jl_value_t *jl_gf_invoke(jl_tupletype_t *types, jl_value_t **args, size_t nargs);
 
-jl_array_t *jl_lam_args(jl_expr_t *l);
-jl_array_t *jl_lam_vinfo(jl_expr_t *l);
-jl_array_t *jl_lam_capt(jl_expr_t *l);
-jl_value_t *jl_lam_ssavalues(jl_expr_t *l);
-jl_array_t *jl_lam_staticparams(jl_expr_t *l);
-int jl_lam_vars_captured(jl_expr_t *ast);
-jl_expr_t *jl_lam_body(jl_expr_t *l);
 jl_value_t *jl_first_argument_datatype(jl_value_t *argtypes);
 int jl_has_intrinsics(jl_lambda_info_t *li, jl_value_t *v, jl_module_t *m);
 

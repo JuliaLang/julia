@@ -85,8 +85,8 @@
                              (scope-block
                               (block ,@(map (lambda (v) `(implicit-global ,v)) gv)
                                      ,ex))))))
-          (if (and (null? (car (caddr th)))
-                   (= 0 (caddr (caddr th))))
+          (if (and (null? (cdadr (caddr th)))
+                   (= 0 (cadddr (caddr th))))
               ;; if no locals, return just body of function
               (cadddr th)
               `(thunk ,th))))))
