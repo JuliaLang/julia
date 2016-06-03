@@ -38,7 +38,6 @@ JL_DLLEXPORT void jl_add_standard_imports(jl_module_t *m)
     assert(jl_base_module != NULL);
     // using Base
     jl_module_using(m, jl_base_module);
-    m->std_imports = 1;
 }
 
 JL_DLLEXPORT jl_module_t *jl_new_main_module(void)
