@@ -36,25 +36,6 @@ isposdef(x::Number) = imag(x)==0 && real(x) > 0
 stride1(x::Array) = 1
 stride1(x::StridedVector) = stride(x, 1)::Int
 
-import Base: mapreduce_seq_impl
-
-mapreduce_seq_impl{T<:BlasReal}(::typeof(abs), ::typeof(+), a::Union{Array{T},StridedVector{T}}, ifirst::Int, ilast::Int) =
-    BLAS.asum(ilast-ifirst+1, pointer(a, ifirst), stride1(a))
-
-function mapreduce_seq_impl{T<:BlasReal}(::typeof(abs2), ::typeof(+), a::Union{Array{T},StridedVector{T}}, ifirst::Int, ilast::Int)
-    n = ilast-ifirst+1
-    px = pointer(a, ifirst)
-    incx = stride1(a)
-    BLAS.dot(n, px, incx, px, incx)
-end
-
-function mapreduce_seq_impl{T<:BlasComplex}(::typeof(abs2), ::typeof(+), a::Union{Array{T},StridedVector{T}}, ifirst::Int, ilast::Int)
-    n = ilast-ifirst+1
-    px = pointer(a, ifirst)
-    incx = stride1(a)
-    real(BLAS.dotc(n, px, incx, px, incx))
-end
-
 function norm{T<:BlasFloat, TI<:Integer}(x::StridedVector{T}, rx::Union{UnitRange{TI},Range{TI}})
     if minimum(rx) < 1 || maximum(rx) > length(x)
         throw(BoundsError(x, rx))
