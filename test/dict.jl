@@ -294,6 +294,10 @@ for d in (Dict("\n" => "\n", "1" => "\n", "\n" => "2"),
     @test !isempty(summary(values(d)))
 end
 
+# ensure non-compact is sorted by key
+@test sprint((x,y)->show(IOContext(x,multiline=true),y),Dict("c"=>2, "a"=>1, :b=>4)) ==
+      "Dict{Any,Int64} with 3 entries:\n  \"a\" => 1\n  :b => 4\n  \"c\" => 2"
+
 # Issue #15739 - Compact REPL printouts of an `Associative` use brackets when appropriate
 let d = Dict((1=>2) => (3=>45), (3=>10) => (10=>11))
     buf = IOBuffer()
