@@ -2016,8 +2016,12 @@
                            (car vars)
                            (gensy)))
               (splat (cond ((eq? argname (car vars))  '())
-                           ((length= vars 1)          `((= ,(car vars) ,argname)))
-                           (else                      `((= (tuple ,@vars) ,argname))))))
+                           ((length= vars 1)
+                            `(,@(map (lambda (v) `(local ,v)) (lhs-vars (car vars)))
+                              (= ,(car vars) ,argname)))
+                           (else
+                            `(,@(map (lambda (v) `(local ,v)) (lhs-vars `(tuple ,@vars)))
+                              (= (tuple ,@vars) ,argname))))))
          (expand-forms
           `(call (top Generator) (-> ,argname (block ,@splat ,expr))
                  ,(if (length= ranges 1)
