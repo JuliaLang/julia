@@ -74,8 +74,9 @@ pointer(p::Cwstring) = convert(Ptr{Cwchar_t}, p)
 ==(x::Ptr, y::Union{Cstring,Cwstring}) = x == pointer(y)
 
 # here, not in pointer.jl, to avoid bootstrapping problems in coreimg.jl
-unsafe_string_wrapper(p::Cstring, own::Bool=false) = unsafe_string_wrapper(convert(Ptr{UInt8}, p), own)
-unsafe_string_wrapper(p::Cstring, len::Integer, own::Bool=false) = unsafe_string_wrapper(convert(Ptr{UInt8}, p), len, own)
+unsafe_wrap(::Type{String}, p::Cstring, own::Bool=false) = unsafe_wrap(String, convert(Ptr{UInt8}, p), own)
+unsafe_wrap(::Type{String}, p::Cstring, len::Integer, own::Bool=false) =
+    unsafe_wrap(String, convert(Ptr{UInt8}, p), len, own)
 unsafe_string(s::Cstring) = unsafe_string(convert(Ptr{UInt8}, s))
 
 # convert strings to String etc. to pass as pointers

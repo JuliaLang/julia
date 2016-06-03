@@ -929,7 +929,7 @@ Whenever you have created a pointer to Julia data, you must ensure the original 
 exists until you are done with using the pointer. Many methods in Julia such as
 :func:`unsafe_load` and :func:`String` make copies of data instead of taking ownership
 of the buffer, so that it is safe to free (or alter) the original data without
-affecting Julia. A notable exception is :func:`unsafe_array_wrapper` which, for performance
+affecting Julia. A notable exception is :func:`unsafe_wrap` which, for performance
 reasons, shares (or can be told to take ownership of) the underlying buffer.
 
 The garbage collector does not guarantee any order of finalization. That is, if ``a``
@@ -1060,7 +1060,7 @@ Any operation that throws an error is probably currently unimplemented
 and should be posted as a bug so that it can be resolved.
 
 If the pointer of interest is a plain-data array (bitstype or immutable), the
-function :func:`unsafe_array_wrapper(ptr,dims,[own]) <unsafe_array_wrapper>` may be
+function :func:`unsafe_wrap(Array, ptr,dims,[own]) <unsafe_wrap>` may be
 more useful. The final parameter should be true if Julia should "take
 ownership" of the underlying buffer and call ``free(ptr)`` when the returned
 ``Array`` object is finalized.  If the ``own`` parameter is omitted or false,

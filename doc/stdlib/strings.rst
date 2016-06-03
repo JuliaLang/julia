@@ -66,7 +66,7 @@
 
    See also :func:`unsafe_string_wrapper`\ , which takes a pointer and wraps a string object around it without making a copy.
 
-.. function:: unsafe_string_wrapper(p::Ptr{UInt8}, [length,] own=false)
+.. function:: unsafe_wrap(String, p::Ptr{UInt8}, [length,] own=false)
 
    .. Docstring generated from Julia source
 
@@ -74,7 +74,7 @@
 
    This function is labelled "unsafe" because it will crash if ``p`` is not a valid memory address to data of the requested length.
 
-   See also :func:`unsafe_string`\ , which takes a pointer and makes a copy of the data, and :func:`unsafe_array_wrapper`\ .
+   See also :func:`unsafe_string`\ , which takes a pointer and makes a copy of the data.
 
 .. function:: ascii(s::AbstractString)
 

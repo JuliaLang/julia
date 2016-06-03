@@ -799,7 +799,7 @@ end
 
 function get_perm(F::Factor)
     s = unsafe_load(get(F.p))
-    p = unsafe_array_wrapper(s.Perm, s.n, false)
+    p = unsafe_wrap(Array, s.Perm, s.n, false)
     p+1
 end
 get_perm(FC::FactorComponent) = get_perm(Factor(FC))
@@ -989,21 +989,21 @@ function convert{Tv}(::Type{SparseMatrixCSC{Tv,SuiteSparse_long}}, A::Sparse{Tv}
     if s.stype != 0
         throw(ArgumentError("matrix has stype != 0. Convert to matrix with stype == 0 before converting to SparseMatrixCSC"))
     end
-    return SparseMatrixCSC(s.nrow, s.ncol, increment(unsafe_array_wrapper(s.p, (s.ncol + 1,), false)), increment(unsafe_array_wrapper(s.i, (s.nzmax,), false)), copy(unsafe_array_wrapper(s.x, (s.nzmax,), false)))
+    return SparseMatrixCSC(s.nrow, s.ncol, increment(unsafe_wrap(Array, s.p, (s.ncol + 1,), false)), increment(unsafe_wrap(Array, s.i, (s.nzmax,), false)), copy(unsafe_wrap(Array, s.x, (s.nzmax,), false)))
 end
 function convert(::Type{Symmetric{Float64,SparseMatrixCSC{Float64,SuiteSparse_long}}}, A::Sparse{Float64})
     s = unsafe_load(A.p)
     if !issymmetric(A)
         throw(ArgumentError("matrix is not symmetric"))
     end
-    return Symmetric(SparseMatrixCSC(s.nrow, s.ncol, increment(unsafe_array_wrapper(s.p, (s.ncol + 1,), false)), increment(unsafe_array_wrapper(s.i, (s.nzmax,), false)), copy(unsafe_array_wrapper(s.x, (s.nzmax,), false))), s.stype > 0 ? :U : :L)
+    return Symmetric(SparseMatrixCSC(s.nrow, s.ncol, increment(unsafe_wrap(Array, s.p, (s.ncol + 1,), false)), increment(unsafe_wrap(Array, s.i, (s.nzmax,), false)), copy(unsafe_wrap(Array, s.x, (s.nzmax,), false))), s.stype > 0 ? :U : :L)
 end
 function convert{Tv<:VTypes}(::Type{Hermitian{Tv,SparseMatrixCSC{Tv,SuiteSparse_long}}}, A::Sparse{Tv})
     s = unsafe_load(A.p)
     if !ishermitian(A)
         throw(ArgumentError("matrix is not Hermitian"))
     end
-    return Hermitian(SparseMatrixCSC(s.nrow, s.ncol, increment(unsafe_array_wrapper(s.p, (s.ncol + 1,), false)), increment(unsafe_array_wrapper(s.i, (s.nzmax,), false)), copy(unsafe_array_wrapper(s.x, (s.nzmax,), false))), s.stype > 0 ? :U : :L)
+    return Hermitian(SparseMatrixCSC(s.nrow, s.ncol, increment(unsafe_wrap(Array, s.p, (s.ncol + 1,), false)), increment(unsafe_wrap(Array, s.i, (s.nzmax,), false)), copy(unsafe_wrap(Array, s.x, (s.nzmax,), false))), s.stype > 0 ? :U : :L)
 end
 function sparse(A::Sparse{Float64}) # Notice! Cannot be type stable because of stype
     s = unsafe_load(A.p)
@@ -1143,7 +1143,7 @@ function getindex{T}(A::Sparse{T}, i0::Integer, i1::Integer)
     r1 = Int(unsafe_load(s.p, i1) + 1)
     r2 = Int(unsafe_load(s.p, i1 + 1))
     (r1 > r2) && return zero(T)
-    r1 = Int(searchsortedfirst(unsafe_array_wrapper(s.i, (s.nzmax,), false), i0 - 1, r1, r2, Base.Order.Forward))
+    r1 = Int(searchsortedfirst(unsafe_wrap(Array, s.i, (s.nzmax,), false), i0 - 1, r1, r2, Base.Order.Forward))
     ((r1 > r2) || (unsafe_load(s.i, r1) + 1 != i0)) ? zero(T) : unsafe_load(s.x, r1)
 end
 

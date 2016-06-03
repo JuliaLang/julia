@@ -465,8 +465,8 @@ function _generic_matmatmul!{T,S,R}(C::AbstractVecOrMat{R}, tA, tB, A::AbstractV
     @inbounds begin
     if tile_size > 0
         sz = (tile_size, tile_size)
-        Atile = unsafe_array_wrapper(convert(Ptr{T}, pointer(Abuf)), sz)
-        Btile = unsafe_array_wrapper(convert(Ptr{S}, pointer(Bbuf)), sz)
+        Atile = unsafe_wrap(Array, convert(Ptr{T}, pointer(Abuf)), sz)
+        Btile = unsafe_wrap(Array, convert(Ptr{S}, pointer(Bbuf)), sz)
 
         z = zero(R)
 
@@ -485,7 +485,7 @@ function _generic_matmatmul!{T,S,R}(C::AbstractVecOrMat{R}, tA, tB, A::AbstractV
                 end
             end
         else
-            Ctile = unsafe_array_wrapper(convert(Ptr{R}, pointer(Cbuf)), sz)
+            Ctile = unsafe_wrap(Array, convert(Ptr{R}, pointer(Cbuf)), sz)
             for jb = 1:tile_size:nB
                 jlim = min(jb+tile_size-1,nB)
                 jlen = jlim-jb+1

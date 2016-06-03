@@ -976,15 +976,15 @@ end
 let
     local a, aa
     a = [1,2,3]
-    aa = unsafe_array_wrapper(pointer(a), length(a))
+    aa = unsafe_wrap(Array, pointer(a), length(a))
     @test aa == a
-    aa = unsafe_array_wrapper(pointer(a), (length(a),))
+    aa = unsafe_wrap(Array, pointer(a), (length(a),))
     @test aa == a
-    aa = unsafe_array_wrapper(pointer(a), UInt(length(a)))
+    aa = unsafe_wrap(Array, pointer(a), UInt(length(a)))
     @test aa == a
-    aa = unsafe_array_wrapper(pointer(a), UInt16(length(a)))
+    aa = unsafe_wrap(Array, pointer(a), UInt16(length(a)))
     @test aa == a
-    @test_throws InexactError unsafe_array_wrapper(pointer(a), -3)
+    @test_throws InexactError unsafe_wrap(Array, pointer(a), -3)
 end
 
 immutable FooBar
