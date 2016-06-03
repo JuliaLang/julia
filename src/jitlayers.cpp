@@ -1,5 +1,7 @@
 // This file is a part of Julia. License is MIT: http://julialang.org/license
 
+#include <llvm/ExecutionEngine/SectionMemoryManager.h>
+
 // Except for parts of this file which were copied from LLVM, under the UIUC license (marked below).
 
 // this defines the set of optimization passes defined for Julia at various optimization levels
@@ -129,6 +131,42 @@ static void addOptimizationPasses(T *PM)
     //PM->add(createCFGSimplificationPass());     // Merge & remove BBs
 }
 
+#ifdef USE_MCJIT
+#ifdef LLVM37
+class RTDyldMemoryManagerJL : public SectionMemoryManager {
+    RTDyldMemoryManagerJL(const RTDyldMemoryManagerJL&) = delete;
+    void operator=(const RTDyldMemoryManagerJL&) = delete;
+
+public:
+    RTDyldMemoryManagerJL() {};
+    ~RTDyldMemoryManagerJL() override {};
+    void registerEHFrames(uint8_t *Addr, uint64_t LoadAddr, size_t Size) override;
+    void deregisterEHFrames(uint8_t *Addr, uint64_t LoadAddr, size_t Size) override;
+};
+
+void RTDyldMemoryManagerJL::registerEHFrames(uint8_t *Addr,
+                                             uint64_t LoadAddr,
+                                             size_t Size)
+{
+    register_eh_frames(Addr, Size);
+}
+
+void RTDyldMemoryManagerJL::deregisterEHFrames(uint8_t *Addr,
+                                               uint64_t LoadAddr,
+                                               size_t Size)
+{
+    deregister_eh_frames(Addr, Size);
+}
+#else
+typedef SectionMemoryManager RTDyldMemoryManagerJL;
+#endif
+
+RTDyldMemoryManager* createRTDyldMemoryManager()
+{
+    return new RTDyldMemoryManagerJL();
+}
+#endif
+
 #ifdef USE_ORCJIT
 
 // ------------------------ TEMPORARILY COPIED FROM LLVM -----------------
@@ -189,17 +227,6 @@ void NotifyDebugger(jit_code_entry *JITCodeEntry)
 }
 }
 // ------------------------ END OF TEMPORARY COPY FROM LLVM -----------------
-
-#if defined(_OS_DARWIN_) && defined(LLVM37) && defined(LLVM_SHLIB)
-#define CUSTOM_MEMORY_MANAGER createRTDyldMemoryManagerOSX
-extern RTDyldMemoryManager *createRTDyldMemoryManagerOSX();
-#elif defined(_OS_LINUX_) && defined(LLVM37) && defined(JL_UNW_HAS_FORMAT_IP)
-#define CUSTOM_MEMORY_MANAGER createRTDyldMemoryManagerUnix
-extern RTDyldMemoryManager *createRTDyldMemoryManagerUnix();
-#endif
-#ifndef CUSTOM_MEMORY_MANAGER
-#define CUSTOM_MEMORY_MANAGER() new SectionMemoryManager
-#endif
 
 #ifdef _OS_LINUX_
 // Resolve non-lock free atomic functions in the libatomic library.
@@ -322,7 +349,7 @@ public:
       : TM(TM),
         DL(TM.createDataLayout()),
         ObjStream(ObjBufferSV),
-        MemMgr(CUSTOM_MEMORY_MANAGER()),
+        MemMgr(createRTDyldMemoryManager()),
         ObjectLayer(DebugObjectRegistrar(*this)),
         CompileLayer(
                 ObjectLayer,
