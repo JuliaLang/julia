@@ -495,7 +495,7 @@ extern JL_DLLEXPORT jl_value_t *jl_inexact_exception;
 extern JL_DLLEXPORT jl_value_t *jl_undefref_exception;
 extern JL_DLLEXPORT jl_value_t *jl_interrupt_exception;
 extern JL_DLLEXPORT jl_datatype_t *jl_boundserror_type;
-extern JL_DLLEXPORT jl_value_t *jl_an_empty_array_ptr;
+extern JL_DLLEXPORT jl_value_t *jl_an_empty_vec_any;
 
 extern JL_DLLEXPORT jl_datatype_t *jl_bool_type;
 extern JL_DLLEXPORT jl_datatype_t *jl_char_type;
@@ -1147,7 +1147,7 @@ JL_DLLEXPORT jl_array_t *jl_pchar_to_array(const char *str, size_t len);
 JL_DLLEXPORT jl_value_t *jl_pchar_to_string(const char *str, size_t len);
 JL_DLLEXPORT jl_value_t *jl_cstr_to_string(const char *str);
 JL_DLLEXPORT jl_value_t *jl_array_to_string(jl_array_t *a);
-JL_DLLEXPORT jl_array_t *jl_alloc_array_ptr_1d(size_t n);
+JL_DLLEXPORT jl_array_t *jl_alloc_vec_any(size_t n);
 JL_DLLEXPORT jl_value_t *jl_arrayref(jl_array_t *a, size_t i);  // 0-indexed
 JL_DLLEXPORT void jl_arrayset(jl_array_t *a, jl_value_t *v, size_t i);  // 0-indexed
 JL_DLLEXPORT void jl_arrayunset(jl_array_t *a, size_t i);  // 0-indexed

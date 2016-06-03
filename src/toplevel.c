@@ -74,7 +74,7 @@ static void jl_module_load_time_initialize(jl_module_t *m)
     int build_mode = jl_generating_output();
     if (build_mode) {
         if (jl_module_init_order == NULL)
-            jl_module_init_order = jl_alloc_array_ptr_1d(0);
+            jl_module_init_order = jl_alloc_vec_any(0);
         jl_array_ptr_1d_push(jl_module_init_order, (jl_value_t*)m);
         jl_function_t *f = jl_module_get_initializer(m);
         if (f) {
