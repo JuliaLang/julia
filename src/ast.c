@@ -323,54 +323,6 @@ static jl_sym_t *scmsym_to_julia(fl_context_t *fl_ctx, value_t s)
 
 static jl_value_t *scm_to_julia_(fl_context_t *fl_ctx, value_t e, int expronly);
 
-static jl_svec_t *full_svec(fl_context_t *fl_ctx, value_t e, int expronly)
-{
-    size_t ln = llength(e);
-    if (ln == 0) return jl_emptysvec;
-    jl_svec_t *ar = jl_alloc_svec_uninit(ln);
-    JL_GC_PUSH1(&ar);
-    size_t i=0;
-    while (iscons(e)) {
-        jl_svecset(ar, i, scm_to_julia_(fl_ctx, car_(e), expronly));
-        e = cdr_(e);
-        i++;
-    }
-    JL_GC_POP();
-    return ar;
-}
-
-static jl_value_t *full_list(fl_context_t *fl_ctx, value_t e, int expronly)
-{
-    size_t ln = llength(e);
-    if (ln == 0) return jl_an_empty_vec_any;
-    jl_array_t *ar = jl_alloc_vec_any(ln);
-    JL_GC_PUSH1(&ar);
-    size_t i=0;
-    while (iscons(e)) {
-        jl_array_ptr_set(ar, i, scm_to_julia_(fl_ctx, car_(e), expronly));
-        e = cdr_(e);
-        i++;
-    }
-    JL_GC_POP();
-    return (jl_value_t*)ar;
-}
-
-static jl_value_t *full_list_of_lists(fl_context_t *fl_ctx, value_t e, int expronly)
-{
-    size_t ln = llength(e);
-    if (ln == 0) return jl_an_empty_vec_any;
-    jl_array_t *ar = jl_alloc_vec_any(ln);
-    JL_GC_PUSH1(&ar);
-    size_t i=0;
-    while (iscons(e)) {
-        jl_array_ptr_set(ar, i, full_list(fl_ctx, car_(e),expronly));
-        e = cdr_(e);
-        i++;
-    }
-    JL_GC_POP();
-    return (jl_value_t*)ar;
-}
-
 static jl_value_t *scm_to_julia(fl_context_t *fl_ctx, value_t e, int expronly)
 {
     jl_value_t *v = NULL;
@@ -457,44 +409,6 @@ static jl_value_t *scm_to_julia_(fl_context_t *fl_ctx, value_t e, int eo)
         else
             sym = list_sym;
         size_t n = llength(e)-1;
-        size_t i;
-        if (sym == lambda_sym) {
-            jl_expr_t *ex = jl_exprn(lambda_sym, n);
-            jl_svec_t *tvars = NULL;
-            jl_array_t *vinf = NULL;
-            jl_lambda_info_t *nli = NULL;
-            JL_GC_PUSH4(&ex, &tvars, &vinf, &nli);
-            e = cdr_(e);
-            value_t largs = car_(e);
-            jl_array_ptr_set(ex->args, 0, full_list(fl_ctx, largs, eo));
-            e = cdr_(e);
-
-            value_t ee = car_(e);
-            vinf = jl_alloc_vec_any(3);
-            jl_array_ptr_set(vinf, 0, full_list_of_lists(fl_ctx, car_(ee), eo));
-            ee = cdr_(ee);
-            jl_array_ptr_set(vinf, 1, full_list_of_lists(fl_ctx, car_(ee), eo));
-            ee = cdr_(ee);
-            jl_array_ptr_set(vinf, 2, isfixnum(car_(ee)) ?
-                       jl_box_long(numval(car_(ee))) :
-                       full_list(fl_ctx,car_(ee),eo));
-            ee = cdr_(ee);
-            tvars = full_svec(fl_ctx, car_(ee), eo);
-            assert(!iscons(cdr_(ee)));
-            jl_array_ptr_set(ex->args, 1, vinf);
-            e = cdr_(e);
-
-            for(i=2; i < n; i++) {
-                assert(iscons(e));
-                jl_array_ptr_set(ex->args, i, scm_to_julia_(fl_ctx, car_(e), eo));
-                e = cdr_(e);
-            }
-            nli = jl_new_lambda_info_uninit(tvars);
-            jl_lambda_info_set_ast(nli, (jl_value_t*)ex);
-            JL_GC_POP();
-            return (jl_value_t*)nli;
-        }
-
         if (issymbol(hd))
             e = cdr_(e);
         else
@@ -561,21 +475,24 @@ static jl_value_t *scm_to_julia_(fl_context_t *fl_ctx, value_t e, int eo)
         else if (sym == inert_sym && !iscons(car_(e))) {
             sym = quote_sym;
         }
-        jl_expr_t *ex = jl_exprn(sym, n);
+        jl_value_t *ex = (jl_value_t*)jl_exprn(sym, n);
         JL_GC_PUSH1(&ex);
         // allocate a fresh args array for empty exprs passed to macros
         if (eo && n == 0) {
-            ex->args = jl_alloc_vec_any(0);
-            jl_gc_wb(ex, ex->args);
+            ((jl_expr_t*)ex)->args = jl_alloc_vec_any(0);
+            jl_gc_wb(ex, ((jl_expr_t*)ex)->args);
         }
+        size_t i;
         for(i=0; i < n; i++) {
             assert(iscons(e));
-            jl_array_ptr_set(ex->args, i, scm_to_julia_(fl_ctx, car_(e), eo));
+            jl_array_ptr_set(((jl_expr_t*)ex)->args, i, scm_to_julia_(fl_ctx, car_(e), eo));
             e = cdr_(e);
         }
+        if (sym == lambda_sym)
+            ex = (jl_value_t*)jl_new_lambda_info_from_ast((jl_expr_t*)ex);
         JL_GC_POP();
         if (sym == list_sym)
-            return (jl_value_t*)ex->args;
+            return (jl_value_t*)((jl_expr_t*)ex)->args;
         return (jl_value_t*)ex;
     }
     if (iscprim(e) && cp_class((cprim_t*)ptr(e)) == fl_ctx->wchartype) {
@@ -865,11 +782,12 @@ jl_lambda_info_t *jl_wrap_expr(jl_value_t *expr)
     JL_GC_PUSH4(&le, &vi, &bo, &li);
     le = jl_exprn(lambda_sym, 3);
     jl_array_ptr_set(le->args, 0, mt);
-    vi = (jl_value_t*)jl_alloc_vec_any(3);
+    vi = (jl_value_t*)jl_alloc_vec_any(4);
     jl_array_ptr_set(vi, 0, mt);
     jl_array_ptr_set(vi, 1, mt);
     // front end always wraps toplevel exprs with ssavalues in (thunk (lambda () ...))
     jl_array_ptr_set(vi, 2, jl_box_long(0));
+    jl_array_ptr_set(vi, 3, mt);
     jl_array_ptr_set(le->args, 1, vi);
     if (!jl_is_expr(expr) || ((jl_expr_t*)expr)->head != body_sym) {
         bo = jl_exprn(body_sym, 1);
@@ -878,54 +796,12 @@ jl_lambda_info_t *jl_wrap_expr(jl_value_t *expr)
         expr = (jl_value_t*)bo;
     }
     jl_array_ptr_set(le->args, 2, expr);
-    li = jl_new_lambda_info_uninit(jl_emptysvec);
-    jl_lambda_info_set_ast(li, (jl_value_t*)le);
+    li = jl_new_lambda_info_from_ast(le);
     JL_GC_POP();
     return li;
 }
 
 // syntax tree accessors
-
-// get array of formal argument expressions
-jl_array_t *jl_lam_args(jl_expr_t *l)
-{
-    assert(jl_is_expr(l));
-    assert(l->head == lambda_sym);
-    jl_value_t *ae = jl_exprarg(l,0);
-    assert(jl_is_array(ae));
-    return (jl_array_t*)ae;
-}
-
-// get array of var info records (for args and locals)
-jl_array_t *jl_lam_vinfo(jl_expr_t *l)
-{
-    assert(jl_is_expr(l));
-    jl_value_t *le = jl_exprarg(l, 1);
-    assert(jl_is_array(le));
-    jl_value_t *ll = jl_array_ptr_ref(le, 0);
-    assert(jl_is_array(ll));
-    return (jl_array_t*)ll;
-}
-
-// get array of types for SSAValues, or its length (if not type-inferred)
-jl_value_t *jl_lam_ssavalues(jl_expr_t *l)
-{
-    assert(jl_is_expr(l));
-    jl_value_t *le = jl_exprarg(l, 1);
-    assert(jl_is_array(le));
-    assert(jl_array_len(le) == 3);
-    return jl_array_ptr_ref(le, 2);
-}
-
-// get array of body forms
-jl_expr_t *jl_lam_body(jl_expr_t *l)
-{
-    assert(jl_is_expr(l));
-    jl_value_t *be = jl_exprarg(l, 2);
-    assert(jl_is_expr(be));
-    assert(((jl_expr_t*)be)->head == body_sym);
-    return (jl_expr_t*)be;
-}
 
 JL_DLLEXPORT int jl_is_rest_arg(jl_value_t *ex)
 {

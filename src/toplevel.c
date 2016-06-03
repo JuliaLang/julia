@@ -707,32 +707,6 @@ jl_value_t *jl_first_argument_datatype(jl_value_t *argtypes)
     return (jl_value_t*)first_arg_datatype(argtypes, 0);
 }
 
-static jl_lambda_info_t *expr_to_lambda(jl_expr_t *f)
-{
-    // this occurs when there is a closure being added to an out-of-scope function
-    // the user should only do this at the toplevel
-    // the result is that the closure variables get interpolated directly into the AST
-    jl_svec_t *tvar_syms = NULL;
-    jl_lambda_info_t *li = NULL;
-    JL_GC_PUSH3(&f, &tvar_syms, &li);
-    assert(jl_is_expr(f) && ((jl_expr_t*)f)->head == lambda_sym);
-    // move tvar symbol array from args[1][4] to linfo
-    jl_array_t *le = (jl_array_t*)jl_exprarg(f, 1);
-    assert(jl_is_array(le) && jl_array_len(le) == 4);
-    jl_array_t *tvar_syms_arr = (jl_array_t*)jl_array_ptr_ref(le, 3);
-    jl_array_del_end(le, 1);
-    size_t i, l = jl_array_len(tvar_syms_arr);
-    tvar_syms = jl_alloc_svec_uninit(l);
-    for (i = 0; i < l; i++) {
-        jl_svecset(tvar_syms, i, jl_arrayref(tvar_syms_arr, i));
-    }
-    // wrap in a LambdaInfo
-    li = jl_new_lambda_info_uninit(tvar_syms);
-    jl_lambda_info_set_ast(li, (jl_value_t*)f);
-    JL_GC_POP();
-    return li;
-}
-
 extern tracer_cb jl_newmeth_tracer;
 JL_DLLEXPORT void jl_method_def(jl_svec_t *argdata, jl_lambda_info_t *f, jl_value_t *isstaged)
 {
@@ -744,8 +718,12 @@ JL_DLLEXPORT void jl_method_def(jl_svec_t *argdata, jl_lambda_info_t *f, jl_valu
     jl_method_t *m = NULL;
     JL_GC_PUSH2(&f, &m);
 
-    if (!jl_is_lambda_info(f))
-        f = expr_to_lambda((jl_expr_t*)f);
+    if (!jl_is_lambda_info(f)) {
+        // this occurs when there is a closure being added to an out-of-scope function
+        // the user should only do this at the toplevel
+        // the result is that the closure variables get interpolated directly into the AST
+        f = jl_new_lambda_info_from_ast((jl_expr_t*)f);
+    }
 
     assert(jl_is_lambda_info(f));
     assert(jl_is_tuple_type(argtypes));

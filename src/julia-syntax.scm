@@ -2820,15 +2820,7 @@ f(x) = yt(x)
                        (else
                         (let* ((exprs     (lift-toplevel (convert-lambda lam2 '|#anon| #t '())))
                                (top-stmts (cdr exprs))
-                               (newlam    (renumber-slots-and-labels (linearize (car exprs))))
-                               (vi        (lam:vinfo newlam))
-                               ;; insert `list` expression heads to make the lambda vinfo
-                               ;; lists quotable
-                               (newlam `(lambda (list ,@(cadr newlam))
-                                          (list (list ,@(map (lambda (l) (cons 'list l))
-                                                             (car vi)))
-                                                (list ,@(cadr vi)) ,(caddr vi) (list ,@(cadddr vi)))
-                                          ,@(cdddr newlam))))
+                               (newlam    (renumber-slots-and-labels (linearize (car exprs)))))
                           `(block
                             ,@top-stmts
                             ,@sp-inits
@@ -3329,6 +3321,15 @@ f(x) = yt(x)
 
 ;; pass 6: renumber slots and labels
 
+(define (listify-lambda lam)
+  ;; insert `list` expression heads to make the lambda vinfo lists valid expressions
+  (let ((vi (lam:vinfo lam)))
+    `(lambda (list ,@(cadr lam))
+       (list (list ,@(map (lambda (l) (cons 'list l))
+                          (car vi)))
+             (list ,@(cadr vi)) ,(caddr vi) (list ,@(cadddr vi)))
+       ,@(cdddr lam))))
+
 (define (label-to-idx-map body)
   (let ((tbl (table)))
     (let loop ((stmts (cdr body))
@@ -3396,9 +3397,10 @@ f(x) = yt(x)
                       (map renumber-slots (cdr e))))))
   (let ((body (renumber-slots (lam:body lam)))
         (vi   (lam:vinfo lam)))
-    `(lambda ,(cadr lam)
-       (,(car vi) ,(cadr vi) ,nssavalues ,(last vi))
-       ,body)))
+    (listify-lambda
+     `(lambda ,(cadr lam)
+        (,(car vi) ,(cadr vi) ,nssavalues ,(last vi))
+        ,body))))
 
 (define (renumber-slots-and-labels ex)
   (if (atom? ex) ex
