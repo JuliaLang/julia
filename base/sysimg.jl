@@ -238,6 +238,7 @@ importall .Enums
 include("serialize.jl")
 importall .Serializer
 include("channels.jl")
+include("clusterserialize.jl")
 include("multi.jl")
 include("workerpool.jl")
 include("pmap.jl")
