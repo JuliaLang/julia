@@ -1,4 +1,7 @@
-# DO NOT CHANGE LINE NUMBERS BELOW
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
+# DO NOT ALTER ORDER OR SPACING OF METHODS BELOW
+const lineoffset = @__LINE__ + 0 # XXX: __LINE__ at the end of a line is off-by-one
 ambig(x, y) = 1
 ambig(x::Integer, y) = 2
 ambig(x, y::Integer) = 3
@@ -10,7 +13,7 @@ ambigs = Any[[], [3], [2,5], [], [3]]
 
 mt = methods(ambig)
 
-getline(m::Method) = m.line - 1  # -1 for the comment at the top
+getline(m::Method) = m.line - lineoffset
 
 for m in mt
     ln = getline(m)

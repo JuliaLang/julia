@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 module MultiplicativeInverses
 
 import Base: div, divrem, rem, unsigned
