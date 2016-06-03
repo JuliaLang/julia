@@ -93,33 +93,36 @@ foldr(op, itr) = mapfoldr(identity, op, itr)
 
 ## reduce & mapreduce
 
-# mapreduce_***_impl require ifirst < ilast
-function mapreduce_seq_impl(f, op, A::AbstractArray, ifirst::Int, ilast::Int)
-    fx1 = r_promote(op, f(A[ifirst]))
-    fx2 = f(A[ifirst+=1])
-    v = op(fx1, fx2)
-    while ifirst < ilast
-        @inbounds Ai = A[ifirst+=1]
-        v = op(v, f(Ai))
-    end
-    return v
-end
-
-function mapreduce_pairwise_impl(f, op, A::AbstractArray, ifirst::Int, ilast::Int, blksize::Int)
+function mapreduce_impl(f, op, A::AbstractArray, ifirst::Int, ilast::Int, blksize::Int=pairwise_blocksize(f, op))
     if ifirst + blksize > ilast
-        return mapreduce_seq_impl(f, op, A, ifirst, ilast)
+        # sequential portion
+        fx1 = r_promote(op, f(A[ifirst]))
+        fx2 = r_promote(op, f(A[ifirst + 1]))
+        v = op(fx1, fx2)
+        @simd for i = ifirst + 2 : ilast
+            @inbounds Ai = A[i]
+            v = op(v, f(Ai))
+        end
+        return v
     else
+        # pairwise portion
         imid = (ifirst + ilast) >>> 1
-        v1 = mapreduce_pairwise_impl(f, op, A, ifirst, imid, blksize)
-        v2 = mapreduce_pairwise_impl(f, op, A, imid+1, ilast, blksize)
+        v1 = mapreduce_impl(f, op, A, ifirst, imid, blksize)
+        v2 = mapreduce_impl(f, op, A, imid+1, ilast, blksize)
         return op(v1, v2)
     end
 end
 
 mapreduce(f, op, itr) = mapfoldl(f, op, itr)
 mapreduce(f, op, v0, itr) = mapfoldl(f, op, v0, itr)
-mapreduce_impl(f, op, A::AbstractArray, ifirst::Int, ilast::Int) =
-    mapreduce_pairwise_impl(f, op, A, ifirst, ilast, 1024)
+
+# Note: sum_seq usually uses four or more accumulators after partial
+# unrolling, so each accumulator gets at most 256 numbers
+pairwise_blocksize(f, op) = 1024
+
+# This combination appears to show a benefit from a larger block size
+pairwise_blocksize(::typeof(abs2), ::typeof(+)) = 4096
+
 
 # handling empty arrays
 mr_empty(f, op, T) = throw(ArgumentError("reducing over an empty collection is not allowed"))
@@ -227,25 +230,6 @@ mapreduce(f, op::ShortCircuiting, itr::Any)           = mapreduce_sc(f,op,itr)
 ###### Specific reduction functions ######
 
 ## sum
-
-function mapreduce_seq_impl(f, op::typeof(+), a::AbstractArray, ifirst::Int, ilast::Int)
-    s = r_promote(op, f(a[ifirst])) + f(a[ifirst+1])
-    @simd for i = ifirst+2:ilast
-        @inbounds ai = a[i]
-        s += f(ai)
-    end
-    s
-end
-
-# Note: sum_seq usually uses four or more accumulators after partial
-# unrolling, so each accumulator gets at most 256 numbers
-sum_pairwise_blocksize(f) = 1024
-
-# This appears to show a benefit from a larger block size
-sum_pairwise_blocksize(::typeof(abs2)) = 4096
-
-mapreduce_impl(f, op::typeof(+), A::AbstractArray, ifirst::Int, ilast::Int) =
-    mapreduce_pairwise_impl(f, op, A, ifirst, ilast, sum_pairwise_blocksize(f))
 
 sum(f::Callable, a) = mapreduce(f, +, a)
 sum(a) = mapreduce(identity, +, a)
