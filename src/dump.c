@@ -617,7 +617,6 @@ static void jl_serialize_module(ios_t *s, jl_module_t *m)
         }
     }
     write_uint8(s, m->istopmod);
-    write_uint8(s, m->std_imports);
     write_uint64(s, m->uuid);
     write_int32(s, m->counter);
 }
@@ -1564,7 +1563,6 @@ static jl_value_t *jl_deserialize_value_(ios_t *s, jl_value_t *vtag, jl_value_t 
             i++;
         }
         m->istopmod = read_uint8(s);
-        m->std_imports = read_uint8(s);
         m->uuid = read_uint64(s);
         m->counter = read_int32(s);
         return (jl_value_t*)m;

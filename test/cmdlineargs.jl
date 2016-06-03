@@ -255,10 +255,10 @@ let exename = `$(Base.julia_cmd()) --precompiled=yes`
     # issue #12679
     extrapath = is_windows() ? joinpath(JULIA_HOME, "..", "Git", "usr", "bin") * ";" : ""
     withenv("PATH" => extrapath * ENV["PATH"]) do
-        @test readchomp(pipeline(ignorestatus(`$exename -f --compile=yes -foo`),stderr=`cat`)) == "ERROR: unknown option `-o`"
-        @test readchomp(pipeline(ignorestatus(`$exename -f -p`),stderr=`cat`)) == "ERROR: option `-p/--procs` is missing an argument"
-        @test readchomp(pipeline(ignorestatus(`$exename -f --inline`),stderr=`cat`)) == "ERROR: option `--inline` is missing an argument"
-        @test readchomp(pipeline(ignorestatus(`$exename -f -e "@show ARGS" -now -- julia RUN.jl`),stderr=`cat`)) == "ERROR: unknown option `-n`"
+        @test readchomp(pipeline(ignorestatus(`$exename --startup-file=no --compile=yes -foo`),stderr=`cat`)) == "ERROR: unknown option `-o`"
+        @test readchomp(pipeline(ignorestatus(`$exename --startup-file=no -p`),stderr=`cat`)) == "ERROR: option `-p/--procs` is missing an argument"
+        @test readchomp(pipeline(ignorestatus(`$exename --startup-file=no --inline`),stderr=`cat`)) == "ERROR: option `--inline` is missing an argument"
+        @test readchomp(pipeline(ignorestatus(`$exename --startup-file=no -e "@show ARGS" -now -- julia RUN.jl`),stderr=`cat`)) == "ERROR: unknown option `-n`"
     end
 
     # --compilecache={yes|no}

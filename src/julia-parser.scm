@@ -101,7 +101,7 @@
 (define operator? (Set operators))
 
 (define initial-reserved-words '(begin while if for try return break continue
-                         stagedfunction function macro quote let local global const
+                         function macro quote let local global const
                          abstract typealias type bitstype immutable ccall do
                          module baremodule using import export importall))
 
@@ -187,7 +187,7 @@
                              str))
                        str))))
         (if (equal? str "--")
-            (syntax-deprecation port str ""))
+            (error "invalid operator \"--\""))
         (string->symbol str))))
 
 (define (accum-digits c pred port lz)
@@ -1007,21 +1007,8 @@
              ;; ref(a,i) = x
              (let ((al (with-end-symbol (parse-cat s #\] (dict-literal? ex)))))
                (if (null? al)
-                   (if (dict-literal? ex)
-                       (begin
-                         (syntax-deprecation
-                          s (string #\( (deparse ex) #\) "[]")
-                          (string (deprecated-dict-replacement ex) "()"))
-                         (loop (list 'typed_dict ex)))
-                       (loop (list 'ref ex)))
+                   (loop (list 'ref ex))
                    (case (car al)
-                     ((dict)
-                      (if (dict-literal? ex)
-                          (begin (syntax-deprecation
-                                  s (string #\( (deparse ex) #\) "[a=>b, ...]")
-                                  (string (deprecated-dict-replacement ex) "(a=>b, ...)"))
-                                 (loop (list* 'typed_dict ex (cdr al))))
-                          (loop (list* 'ref ex (cdr al)))))
                      ((vect)  (loop (list* 'ref ex (cdr al))))
                      ((hcat)  (loop (list* 'typed_hcat ex (cdr al))))
                      ((vcat)
@@ -1177,8 +1164,7 @@
           (if const
               `(const ,expr)
               expr)))
-       ((stagedfunction function macro)
-        (if (eq? word 'stagedfunction) (syntax-deprecation s "stagedfunction" "@generated function"))
+       ((function macro)
         (let* ((paren (eqv? (require-token s) #\())
                (sig   (parse-def s (not (eq? word 'macro)))))
           (if (and (eq? word 'function) (not paren) (symbol-or-interpolate? sig))
@@ -1525,13 +1511,6 @@
             (else
              (error "missing separator in array expression")))))))
 
-(define (parse-dict s first closer)
-  (let ((v (parse-vect s first closer)))
-    (if (any dict-literal? (cdr v))
-        (if (every dict-literal? (cdr v))
-            `(dict ,@(cdr v))
-            (error "invalid dict literal")))))
-
 (define (parse-comprehension s first closer)
   (let ((r (parse-comma-separated-iters s)))
     (if (not (eqv? (require-token s) closer))
@@ -1601,15 +1580,11 @@
                '())
         (let ((first (parse-eq* s)))
           (if (and (dict-literal? first)
-                   (or (null? isdict) (car isdict)))
-              (case (peek-non-newline-token s)
-                ((for)
-                 (take-token s)
-                 (parse-dict-comprehension s first closer))
-                (else
-                 (if (or (null? isdict) (not (car isdict)))
-                     (syntax-deprecation s "[a=>b, ...]" "Dict(a=>b, ...)"))
-                 (parse-dict s first closer)))
+                   (or (null? isdict) (car isdict))
+                   (eq? (peek-non-newline-token s) 'for))
+              (begin
+                (take-token s)
+                (parse-dict-comprehension s first closer))
               (let ((t (peek-token s)))
                 (cond ((or (eqv? t #\,) (eqv? t closer))
                        (parse-vect s first closer))
@@ -2000,56 +1975,7 @@
           ;; Array{Any} expression
           ((eqv? t #\{ )
            (take-token s)
-           (if (eqv? (require-token s) #\})
-               (begin (syntax-deprecation s "{}" "[]")
-                      (take-token s)
-                      '(vectany))
-               (let ((vex (parse-cat s #\} #t)))
-                 (if (null? vex)
-                     (begin (syntax-deprecation s "{}" "[]")
-                            '(vectany))
-                     (case (car vex)
-                       ((vect)
-                        (syntax-deprecation s "{a,b, ...}" "Any[a,b, ...]")
-                        `(vectany ,@(cdr vex)))
-                       ((comprehension)
-                        (syntax-deprecation s "{a for a in b}" "Any[a for a in b]")
-                        `(typed_comprehension (top Any) ,@(cdr vex)))
-                       ((dict_comprehension)
-                        (syntax-deprecation s "{a=>b for (a,b) in c}" "Dict{Any,Any}(a=>b for (a,b) in c)")
-                        `(typed_dict_comprehension (=> (top Any) (top Any)) ,@(cdr vex)))
-                       ((dict)
-                        (syntax-deprecation s "{a=>b, ...}" "Dict{Any,Any}(a=>b, ...)")
-                        `(typed_dict (=> (top Any) (top Any)) ,@(cdr vex)))
-                       ((hcat)
-                        (syntax-deprecation s "{a b ...}" "Any[a b ...]")
-                        `(matrany 1 ,(length (cdr vex)) ,@(cdr vex)))
-                       (else  ; (vcat ...)
-                        (if (and (pair? (cadr vex)) (eq? (caadr vex) 'row))
-                            (let ((nr (length (cdr vex)))
-                                  (nc (length (cdadr vex))))
-                              ;; make sure all rows are the same length
-                              (if (not (every
-                                        (lambda (x)
-                                          (and (pair? x)
-                                               (eq? (car x) 'row)
-                                               (length= (cdr x) nc)))
-                                        (cddr vex)))
-                                  (error "inconsistent shape in Array{Any} expression"))
-                              (begin
-                                (syntax-deprecation s "{a b; c d}" "Any[a b; c d]")
-                                `(matrany ,nr ,nc
-                                         ,@(apply append
-                                                  ;; transpose to storage order
-                                                  (apply map list
-                                                         (map cdr (cdr vex)))))))
-                            (if (any (lambda (x) (and (pair? x)
-                                                      (eq? (car x) 'row)))
-                                     (cddr vex))
-                                (error "inconsistent shape in Array{Any} expression")
-                                (begin
-                                  (syntax-deprecation s "{a,b, ...}" "Any[a,b, ...]")
-                                  `(vectany ,@(cdr vex)))))))))))
+           (error "discontinued syntax { ... }"))
 
           ;; string literal
           ((eqv? t #\")

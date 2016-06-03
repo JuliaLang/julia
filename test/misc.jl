@@ -131,7 +131,7 @@ let
     redir_err = "redirect_stderr(STDOUT)"
     exename = Base.julia_cmd()
     script = "$redir_err; module A; f() = 1; end; A.f() = 1"
-    warning_str = readstring(`$exename -f -e $script`)
+    warning_str = readstring(`$exename --startup-file=no -e $script`)
     @test contains(warning_str, "f()")
 end
 

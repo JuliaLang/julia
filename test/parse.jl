@@ -476,3 +476,30 @@ end
                                 Expr(:call, :test),
                                 Expr(:line, 3, :none),
                                 :y))
+
+# test that pre 0.5 deprecated syntax is a parse error
+@test_throws ParseError parse("Int [1,2,3]")
+@test_throws ParseError parse("Int [x for x in 1:10]")
+@test_throws ParseError parse("foo (x) = x")
+@test_throws ParseError parse("foo {T<:Int}(x::T) = x")
+
+@test_throws ParseError parse("Foo .bar")
+
+@test_throws ParseError parse("import x .y")
+@test_throws ParseError parse("using x .y")
+
+@test_throws ParseError parse("--x")
+@test_throws ParseError parse("stagedfunction foo(x); end")
+
+@test_throws ParseError parse("{1,2,3}")
+@test_throws ParseError parse("{1 2 3 4}")
+@test_throws ParseError parse("{1,2; 3,4}")
+@test_throws ParseError parse("{x for x in 1:10}")
+@test_throws ParseError parse("{x=>y for (x,y) in zip([1,2,3],[4,5,6])}")
+@test_throws ParseError parse("{:a=>1, :b=>2}")
+
+# this now is parsed as getindex(Pair{Any,Any}, ...)
+@test_throws MethodError eval(parse("(Any=>Any)[]"))
+@test_throws MethodError eval(parse("(Any=>Any)[:a=>1,:b=>2]"))
+# to be removed post 0.5
+#@test_throws MethodError eval(parse("(Any=>Any)[x=>y for (x,y) in zip([1,2,3],[4,5,6])]"))

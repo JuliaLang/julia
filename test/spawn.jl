@@ -180,16 +180,16 @@ exename = Base.julia_cmd()
 if valgrind_off
     # If --trace-children=yes is passed to valgrind, we will get a
     # valgrind banner here, not "Hello World\n".
-    @test readstring(pipeline(`$exename -f -e 'println(STDERR,"Hello World")'`, stderr=`cat`)) == "Hello World\n"
+    @test readstring(pipeline(`$exename --startup-file=no -e 'println(STDERR,"Hello World")'`, stderr=`cat`)) == "Hello World\n"
     out = Pipe()
-    proc = spawn(pipeline(`$exename -f -e 'println(STDERR,"Hello World")'`, stderr = out))
+    proc = spawn(pipeline(`$exename --startup-file=no -e 'println(STDERR,"Hello World")'`, stderr = out))
     close(out.in)
     @test readstring(out) == "Hello World\n"
     @test success(proc)
 end
 
 # issue #6310
-@test readstring(pipeline(`echo "2+2"`, `$exename -f`)) == "4\n"
+@test readstring(pipeline(`echo "2+2"`, `$exename --startup-file=no`)) == "4\n"
 
 # issue #5904
 @test run(pipeline(ignorestatus(`false`), `true`)) === nothing
@@ -238,7 +238,7 @@ let fname = tempname()
     import Base.zzzInvalidIdentifier
     """
     try
-        (in,p) = open(pipeline(`$exename -f`, stderr=STDERR), "w")
+        (in,p) = open(pipeline(`$exename --startup-file=no`, stderr=STDERR), "w")
         write(in,cmd)
         close(in)
         wait(p)
@@ -258,7 +258,7 @@ let bad = "bad\0name"
 end
 
 # issue #12829
-let out = Pipe(), echo = `$exename -f -e 'print(STDOUT, " 1\t", readstring(STDIN))'`, ready = Condition()
+let out = Pipe(), echo = `$exename --startup-file=no -e 'print(STDOUT, " 1\t", readstring(STDIN))'`, ready = Condition()
     @test_throws ArgumentError write(out, "not open error")
     @async begin # spawn writer task
         open(echo, "w", out) do in1

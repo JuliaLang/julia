@@ -1793,25 +1793,6 @@
          (error "assignment not allowed inside tuple"))
      (expand-forms `(call (core tuple) ,@(cdr e))))
 
-   'dict
-   (lambda (e)
-     ;; TODO: deprecate
-     `(call (top Dict)
-            ,.(map expand-forms (cdr e))))
-
-   'typed_dict
-   (lambda (e)
-     ;; TODO: deprecate
-     (let ((atypes (cadr e))
-           (args   (cddr e)))
-       (if (and (length= atypes 3)
-                (eq? (car atypes) '=>))
-           `(call (call (core apply_type) (top Dict)
-                        ,(expand-forms (cadr atypes))
-                        ,(expand-forms (caddr atypes)))
-                  ,.(map expand-forms args))
-           (error (string "invalid \"typed_dict\" syntax " (deparse atypes))))))
-
    '=>
    (lambda (e) `(call => ,(expand-forms (cadr e)) ,(expand-forms (caddr e))))
 
