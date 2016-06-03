@@ -400,7 +400,7 @@ function sparse_IJ_sorted!{Ti<:Integer}(I::AbstractVector{Ti}, J::AbstractVector
 
     m = m < 0 ? 0 : m
     n = n < 0 ? 0 : n
-    if isempty(V); return spzeros(eltype(V),Ti,m,n); end
+    if isempty(V); return SparseMatrixCSC{eltype(V),Ti}(m,n); end
 
     cols = zeros(Ti, n+1)
     cols[1] = 1  # For cumsum purposes
@@ -1335,18 +1335,26 @@ sparse array will not contain any nonzero values. No storage will be allocated
 for nonzero values during construction. The type defaults to `Float64` if not
 specified.
 """
-spzeros(m::Integer, n::Integer) = spzeros(Float64, m, n)
-spzeros(Tv::Type, m::Integer, n::Integer) = spzeros(Tv, Int, m, n)
-function spzeros(Tv::Type, Ti::Type, m::Integer, n::Integer)
-    ((m < 0) || (n < 0)) && throw(ArgumentError("invalid Array dimensions"))
-    SparseMatrixCSC(m, n, ones(Ti, n+1), Array{Ti}(0), Array{Tv}(0))
-end
+spzeros(m::Integer, n::Integer) = zeros(SparseMatrixCSC, m, n)
+spzeros(Tv::Type, m::Integer, n::Integer) = zeros(SparseMatrixCSC{Tv}, m, n)
+spzeros(Tv::Type, Ti::Type, m::Integer, n::Integer) = zeros(SparseMatrixCSC{Tv,Ti}, m, n)
 # de-splatting variant
 spzeros(Tv::Type, Ti::Type, sz::Tuple{Integer,Integer}) = spzeros(Tv, Ti, sz[1], sz[2])
 
-speye(n::Integer) = speye(Float64, n)
-speye(T::Type, n::Integer) = speye(T, n, n)
-speye(m::Integer, n::Integer) = speye(Float64, m, n)
+function eye{Tv,Ti}(::Type{SparseMatrixCSC{Tv,Ti}}, m::Integer, n::Integer)
+    check_array_size(m, n)
+    x = min(m,n)
+    rowval = collect(Ti, 1:x)
+    colptr = Ti[rowval; fill(Ti(x+1), n+1-x)]
+    nzval  = ones(Tv, x)
+    return SparseMatrixCSC(m, n, colptr, rowval, nzval)
+end
+eye{Tv}(::Type{SparseMatrixCSC{Tv}}, m::Integer, n::Integer) = eye(SparseMatrixCSC{Tv,Int}, m, n)
+eye(::Type{SparseMatrixCSC}, m::Integer, n::Integer) = eye(SparseMatrixCSC{Float64,Int}, m, n)
+
+speye(n::Integer) = eye(SparseMatrixCSC, n)
+speye(T::Type, n::Integer) = eye(SparseMatrixCSC{T}, n, n)
+speye(m::Integer, n::Integer) = eye(SparseMatrixCSC, m, n)
 
 """
     speye(S)
@@ -1371,8 +1379,8 @@ julia> speye(A)
 
 Note the difference from [`spones`](:func:`spones`).
 """
-speye{T}(S::SparseMatrixCSC{T}) = speye(T, size(S, 1), size(S, 2))
-eye(S::SparseMatrixCSC) = speye(S)
+speye{T}(S::SparseMatrixCSC{T}) = eye(SparseMatrixCSC{T}, size(S, 1), size(S, 2))
+eye{T<:SparseMatrixCSC}(S::T) = eye(T, S)
 
 """
     speye([type,]m[,n])
@@ -1381,14 +1389,7 @@ Create a sparse identity matrix of size `m x m`. When `n` is supplied,
 create a sparse identity matrix of size `m x n`. The type defaults to `Float64`
 if not specified.
 """
-function speye(T::Type, m::Integer, n::Integer)
-    ((m < 0) || (n < 0)) && throw(ArgumentError("invalid Array dimensions"))
-    x = min(m,n)
-    rowval = [1:x;]
-    colptr = [rowval; fill(Int(x+1), n+1-x)]
-    nzval  = ones(T, x)
-    return SparseMatrixCSC(m, n, colptr, rowval, nzval)
-end
+speye(T::Type, m::Integer, n::Integer) = eye(SparseMatrixCSC{T}, m, n)
 
 function one{T}(S::SparseMatrixCSC{T})
     m,n = size(S)
