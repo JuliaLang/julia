@@ -75,7 +75,7 @@ function utf8proc_map(s::String, flags::Integer)
                    s, sizeof(s), p, flags)
     result < 0 && error(unsafe_string(ccall(:utf8proc_errmsg, Cstring,
                                          (Cssize_t,), result)))
-    unsafe_string_wrapper(p[], result, true)::String
+    unsafe_wrap(String, p[], result, true)::String
 end
 
 utf8proc_map(s::AbstractString, flags::Integer) = utf8proc_map(String(s), flags)

@@ -88,7 +88,7 @@ function get_ovec(match_data)
                 (Ptr{Void},), match_data)
     n = ccall((:pcre2_get_ovector_count_8, PCRE_LIB), UInt32,
               (Ptr{Void},), match_data)
-    unsafe_array_wrapper(ptr, 2n, false)
+    unsafe_wrap(Array, ptr, 2n, false)
 end
 
 function compile(pattern::AbstractString, options::Integer)

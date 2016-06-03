@@ -112,11 +112,11 @@
 
    Calling ``Ref(array[, index])`` is generally preferable to this function.
 
-.. function:: unsafe_array_wrapper(pointer, dims, own=false)
+.. function:: unsafe_wrap(Array, pointer, dims, own=false)
 
    .. Docstring generated from Julia source
 
-   Wrap a native pointer as a Julia Array object. The pointer element type determines the array element type. ``own`` optionally specifies whether Julia should take ownership of the memory, calling ``free`` on the pointer when the array is no longer referenced.
+   Wrap a native pointer as a Julia ``Array `object. The pointer element type determines the array element type. `dims`` is either an integer (for a 1d array) or a tuple of the array dimensions. ``own`` optionally specifies whether Julia should take ownership of the memory, calling ``free`` on the pointer when the array is no longer referenced.
 
    This function is labelled "unsafe" because it will crash if ``pointer`` is not a valid memory address to data of the requested length.
 

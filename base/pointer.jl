@@ -35,15 +35,29 @@ unsafe_convert{S,T}(::Type{Ptr{S}}, a::AbstractArray{T}) = convert(Ptr{S}, unsaf
 unsafe_convert{T}(::Type{Ptr{T}}, a::AbstractArray{T}) = error("conversion to pointer not defined for $(typeof(a))")
 
 # unsafe pointer to array conversions
-function unsafe_array_wrapper{T}(p::Ptr{T}, d::Integer, own::Bool=false)
-    ccall(:jl_ptr_to_array_1d, Vector{T},
-          (Any, Ptr{Void}, Csize_t, Cint), Array{T,1}, p, d, own)
-end
-function unsafe_array_wrapper{T,N}(p::Ptr{T}, dims::NTuple{N,Int}, own::Bool=false)
+"""
+    unsafe_wrap(Array, pointer, dims, own=false)
+
+Wrap a native pointer as a Julia `Array `object. The pointer element type determines the array
+element type. `dims` is either an integer (for a 1d array) or a tuple of the array dimensions.
+`own` optionally specifies whether Julia should take ownership of the memory,
+calling `free` on the pointer when the array is no longer referenced.
+
+This function is labelled "unsafe" because it will crash if `pointer` is not
+a valid memory address to data of the requested length.
+"""
+function unsafe_wrap{T,N}(::Union{Type{Array},Type{Array{T}},Type{Array{T,N}}},
+                          p::Ptr{T}, dims::NTuple{N,Int}, own::Bool=false)
     ccall(:jl_ptr_to_array, Array{T,N}, (Any, Ptr{Void}, Any, Int32),
           Array{T,N}, p, dims, own)
 end
-function unsafe_array_wrapper{T,N}(p::Ptr{T}, dims::NTuple{N,Integer}, own::Bool=false)
+function unsafe_wrap{T}(::Union{Type{Array},Type{Array{T}},Type{Array{T,1}}},
+                        p::Ptr{T}, d::Integer, own::Bool=false)
+    ccall(:jl_ptr_to_array_1d, Vector{T},
+          (Any, Ptr{Void}, Csize_t, Cint), Array{T,1}, p, d, own)
+end
+function unsafe_wrap{T,N}(Atype::Union{Type{Array},Type{Array{T}},Type{Array{T,N}}},
+                          p::Ptr{T}, dims::NTuple{N,Integer}, own::Bool=false)
     i = 1
     for d in dims
         if !(0 <= d <= typemax(Int))
@@ -51,19 +65,8 @@ function unsafe_array_wrapper{T,N}(p::Ptr{T}, dims::NTuple{N,Integer}, own::Bool
         end
         i += 1
     end
-    unsafe_array_wrapper(p, convert(Tuple{Vararg{Int}}, dims), own)
+    unsafe_wrap(Atype, p, convert(Tuple{Vararg{Int}}, dims), own)
 end
-"""
-    unsafe_array_wrapper(pointer, dims, own=false)
-
-Wrap a native pointer as a Julia Array object. The pointer element type determines the array
-element type. `own` optionally specifies whether Julia should take ownership of the memory,
-calling `free` on the pointer when the array is no longer referenced.
-
-This function is labelled "unsafe" because it will crash if `pointer` is not
-a valid memory address to data of the requested length.
-"""
-unsafe_array_wrapper
 
 unsafe_load(p::Ptr,i::Integer) = pointerref(p, Int(i))
 unsafe_load(p::Ptr) = unsafe_load(p, 1)
@@ -73,11 +76,8 @@ unsafe_store!{T}(p::Ptr{T}, x) = pointerset(p, convert(T,x), 1)
 
 # unsafe pointer to string conversions (don't make a copy, unlike unsafe_string)
 # (Cstring versions are in c.jl)
-unsafe_string_wrapper(p::Union{Ptr{UInt8},Ptr{Int8}}, len::Integer, own::Bool=false) = ccall(:jl_array_to_string, Ref{String}, (Any,), ccall(:jl_ptr_to_array_1d, Vector{UInt8}, (Any, Ptr{UInt8}, Csize_t, Cint), Vector{UInt8}, p, len, own))
-unsafe_string_wrapper(p::Union{Ptr{UInt8},Ptr{Int8}}, own::Bool=false) =
-    unsafe_string_wrapper(p, ccall(:strlen, Csize_t, (Ptr{UInt8},), p), own)
 """
-    unsafe_string_wrapper(p::Ptr{UInt8}, [length,] own=false)
+    unsafe_wrap(String, p::Ptr{UInt8}, [length,] own=false)
 
 Wrap a pointer `p` to an array of bytes in a `String` object,
 interpreting the bytes as UTF-8 encoded characters *without making a
@@ -91,9 +91,14 @@ This function is labelled "unsafe" because it will crash if `p` is not
 a valid memory address to data of the requested length.
 
 See also [`unsafe_string`](:func:`unsafe_string`), which takes a pointer
-and makes a copy of the data, and [`unsafe_array_wrapper`](:func:`unsafe_array_wrapper`).
+and makes a copy of the data.
 """
-unsafe_string_wrapper
+unsafe_wrap(::Type{String}, p::Union{Ptr{UInt8},Ptr{Int8}}, len::Integer, own::Bool=false) =
+    ccall(:jl_array_to_string, Ref{String}, (Any,),
+          ccall(:jl_ptr_to_array_1d, Vector{UInt8}, (Any, Ptr{UInt8}, Csize_t, Cint),
+                Vector{UInt8}, p, len, own))
+unsafe_wrap(::Type{String}, p::Union{Ptr{UInt8},Ptr{Int8}}, own::Bool=false) =
+    unsafe_wrap(String, p, ccall(:strlen, Csize_t, (Ptr{UInt8},), p), own)
 
 # convert a raw Ptr to an object reference, and vice-versa
 unsafe_pointer_to_objref(x::Ptr) = ccall(:jl_value_ptr, Any, (Ptr{Void},), x)
