@@ -1,4 +1,4 @@
-//===-- abi_win32.cpp - x86 ABI description ---------------------*- C++ -*-===//
+//===-- abi_ppc64le.cpp - Power v2 ABI description ---------------------*- C++ -*-===//
 //
 //                         LDC – the LLVM D compiler
 //
@@ -32,44 +32,77 @@
 //
 //===----------------------------------------------------------------------===//
 //
-// The ABI implementation used for 32 bit x86 targets on Windows.
+// The ABI implementation used for 64 bit little-endian PowerPC targets.
 //
+// The PowerOpen 64bit ELF v2 ABI can be found here:
+// https://members.openpowerfoundation.org/document/dl/576
 //===----------------------------------------------------------------------===//
 
 
 typedef bool AbiState;
 AbiState default_abi_state = 0;
 
+// count the homogeneous floating agregate size (saturating at max count of 8)
+static unsigned isHFA(jl_datatype_t *ty, jl_datatype_t **ty0)
+{
+    size_t i, l = ty->nfields;
+    if (l == 0) {
+        if (*ty0 == NULL) {
+            if (ty == jl_float64_type || ty == jl_float32_type)
+                *ty0 = ty;
+        }
+        return ty == *ty0 ? 1 : 9;
+    }
+    int n = 0;
+    for (i = 0; i < l; i++) {
+        jl_value_t *fld = jl_field_type(ty, i);
+        if (!jl_is_datatype(fld))
+            return 9;
+        n += isHFA((jl_datatype_t*)fld, ty0);
+        if (n > 8)
+            return 9;
+    }
+    return n;
+}
+
 bool use_sret(AbiState *state, jl_value_t *ty)
 {
     // Assume jl_is_datatype(ty) && !jl_is_abstracttype(ty)
     jl_datatype_t *dt = (jl_datatype_t*)ty;
-    // Use sret if the size of the argument is not one of 1, 2, 4, 8 bytes
-    // This covers the special case of Complex64
-    size_t size = dt->size;
-    if (size == 1 || size == 2 || size == 4 || size == 8)
-        return false;
-    return true;
+    jl_datatype_t *ty0 = NULL;
+    if (dt->size > 16 && isHFA(dt, &ty0) > 8)
+        return true;
+    return false;
 }
 
 void needPassByRef(AbiState *state, jl_value_t *ty, bool *byRef, bool *inReg)
 {
-    // Assume jl_is_datatype(ty) && !jl_is_abstracttype(ty)
-    jl_datatype_t *dt = (jl_datatype_t*)ty;
-    // Use pass by reference for all structs
-    *byRef = dt->nfields > 0;
+    if (!jl_is_datatype(ty) || jl_is_abstracttype(ty) || jl_is_cpointer_type(ty) || jl_is_array_type(ty))
+        return;
+    size_t size = jl_datatype_size(ty);
+    if (size > 64)
+        *byRef = true;
 }
 
 Type *preferred_llvm_type(jl_value_t *ty, bool isret)
 {
     // Arguments are either scalar or passed by value
-    if (!isret || !jl_is_datatype(ty) || jl_is_abstracttype(ty))
+    if (!jl_is_datatype(ty) || jl_is_abstracttype(ty) || jl_is_cpointer_type(ty) || jl_is_array_type(ty))
         return NULL;
     jl_datatype_t *dt = (jl_datatype_t*)ty;
-    // rewrite integer sized (non-sret) struct to the corresponding integer
+    size_t size = dt->size;
+    // don't need to change bitstypes
     if (!dt->nfields)
         return NULL;
-    return Type::getIntNTy(jl_LLVMContext, dt->size * 8);
+    // legalize this into [n x f32/f64]
+    jl_datatype_t *ty0 = NULL;
+    int hfa = isHFA(dt, &ty0);
+    if (hfa <= 8)
+        return ArrayType::get(ty0 == jl_float32_type ? T_float32 : T_float64, hfa);
+    // rewrite integer-sized (non-HFA) struct to an array of i64
+    if (size > 8)
+        return ArrayType::get(T_int64, (size + 7) / 8);
+    return Type::getIntNTy(jl_LLVMContext, size * 8);
 }
 
 bool need_private_copy(jl_value_t *ty, bool byRef)
