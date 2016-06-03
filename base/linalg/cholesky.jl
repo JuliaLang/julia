@@ -3,6 +3,30 @@
 ##########################
 # Cholesky Factorization #
 ##########################
+
+# The dispatch structure in the chol!, chol, cholfact, and cholfact! methods is a bit
+# complicated and some explanation is therefore provided in the following
+#
+# In the methods below, LAPACK is called when possible, i.e. StridedMatrices with Float32,
+# Float64, Complex{Float32}, and Complex{Float64} element types. For other element or
+# matrix types, the unblocked Julia implementation in _chol! is used. For cholfact
+# and cholfact! pivoting is supported through a Val{Bool} argument. A type argument is
+# necessary for type stability since the output cholfact and cholfact! is either Cholesky or
+# PivotedCholesky. The latter is only
+# supported for the four LAPACK element types. For other types, e.g. BigFloats Val{true} will
+# give an error. It is required that the input is Hermitian (including real symmetric) either
+# through the Hermitian and Symmetric views or exact symmetric or Hermitian elements which
+# is checked for and an error is thrown if the check fails. The dispatch
+# is further complicated by a limitation in the formulation of Unions. The relevant union
+# would be Union{Symmetric{T<:Real,S}, Hermitian} but, right now, it doesn't work in Julia
+# so we'll have to define methods for the two elements of the union separately.
+
+# FixMe? The dispatch below seems overly complicated. One simplification could be to merge
+# the two Cholesky types into a single one. It would remove the need for Val completely but
+# the cost would be extra unnecessary/ununsed fields for the unpivoted Cholesky and runtime
+# checks of those fields before calls to LAPACK to check which version of the Cholesky
+# factorization the type represents.
+
 immutable Cholesky{T,S<:AbstractMatrix} <: Factorization{T}
     factors::S
     uplo::Char
@@ -23,24 +47,27 @@ function CholeskyPivoted{T}(A::AbstractMatrix{T}, uplo::Char, piv::Vector{BlasIn
     CholeskyPivoted{T,typeof(A)}(A, uplo, piv, rank, tol, info)
 end
 
-function chol!{T<:BlasFloat}(A::StridedMatrix{T}, ::Type{UpperTriangular})
+
+# _chol!. Internal methods for calling unpivoted Cholesky
+## BLAS/LAPACK element types
+function _chol!{T<:BlasFloat}(A::StridedMatrix{T}, ::Type{UpperTriangular})
     C, info = LAPACK.potrf!('U', A)
     return @assertposdef UpperTriangular(C) info
 end
-function chol!{T<:BlasFloat}(A::StridedMatrix{T}, ::Type{LowerTriangular})
+function _chol!{T<:BlasFloat}(A::StridedMatrix{T}, ::Type{LowerTriangular})
     C, info = LAPACK.potrf!('L', A)
     return @assertposdef LowerTriangular(C) info
 end
-chol!(A::StridedMatrix) = chol!(A, UpperTriangular)
 
-function chol!{T}(A::AbstractMatrix{T}, ::Type{UpperTriangular})
+## Non BLAS/LAPACK element types (generic)
+function _chol!(A::AbstractMatrix, ::Type{UpperTriangular})
     n = checksquare(A)
     @inbounds begin
         for k = 1:n
             for i = 1:k - 1
                 A[k,k] -= A[i,k]'A[i,k]
             end
-            Akk = chol!(A[k,k], UpperTriangular)
+            Akk = _chol!(A[k,k], UpperTriangular)
             A[k,k] = Akk
             AkkInv = inv(Akk')
             for j = k + 1:n
@@ -53,14 +80,14 @@ function chol!{T}(A::AbstractMatrix{T}, ::Type{UpperTriangular})
     end
     return UpperTriangular(A)
 end
-function chol!{T}(A::AbstractMatrix{T}, ::Type{LowerTriangular})
+function _chol!(A::AbstractMatrix, ::Type{LowerTriangular})
     n = checksquare(A)
     @inbounds begin
         for k = 1:n
             for i = 1:k - 1
                 A[k,k] -= A[k,i]*A[k,i]'
             end
-            Akk = chol!(A[k,k], LowerTriangular)
+            Akk = _chol!(A[k,k], LowerTriangular)
             A[k,k] = Akk
             AkkInv = inv(Akk)
             for j = 1:k
@@ -78,19 +105,8 @@ function chol!{T}(A::AbstractMatrix{T}, ::Type{LowerTriangular})
     return LowerTriangular(A)
 end
 
-"""
-    chol(A::AbstractMatrix) -> U
-
-Compute the Cholesky factorization of a positive definite matrix `A`
-and return the UpperTriangular matrix `U` such that `A = U'U`.
-"""
-function chol{T}(A::AbstractMatrix{T})
-    S = promote_type(typeof(chol(one(T))), Float32)
-    AA = similar(A, S, size(A))
-    copy!(AA, A)
-    chol!(AA)
-end
-function chol!(x::Number, uplo)
+## Numbers
+function _chol!(x::Number, uplo)
     rx = real(x)
     if rx != abs(x)
         throw(ArgumentError("x must be positive semidefinite"))
@@ -98,35 +114,78 @@ function chol!(x::Number, uplo)
     rxr = sqrt(rx)
     convert(promote_type(typeof(x), typeof(rxr)), rxr)
 end
+
+
+
+# chol!. Destructive methods for computing Cholesky factor of real symmetric or Hermitian
+# matrix
+chol!(A::Hermitian)                                = _chol!(A.data, UpperTriangular)
+chol!{T<:Real,S<:StridedMatrix}(A::Symmetric{T,S}) = _chol!(A.data, UpperTriangular)
+function chol!(A::StridedMatrix)
+    ishermitian(A) || throw(ArgumentError("matrix is not symmetric/Hermitian. This error can be avoided by calling chol!(Hermitian(A)) which will ignore either the upper or lower triangle of the matrix."))
+    return _chol!(A, UpperTriangular)
+end
+
+
+
+# chol. Non-destructive methods for computing Cholesky factor of a real symmetric or
+# Hermitian matrix. Promotes elements to type that is stable under square roots.
+function chol(A::Hermitian)
+    T = promote_type(typeof(chol(one(eltype(A)))), Float32)
+    AA = similar(A, T, size(A))
+    copy!(AA, A.data)
+    chol!(Hermitian(AA))
+end
+function chol{T<:Real,S<:AbstractMatrix}(A::Symmetric{T,S})
+    TT = promote_type(typeof(chol(one(T))), Float32)
+    AA = similar(A, TT, size(A))
+    copy!(AA, A.data)
+    chol!(Hermitian(AA))
+end
+
+## for StridedMatrices, check that matrix is symmetric/Hermitian
+"""
+    chol(A) -> U
+
+Compute the Cholesky factorization of a positive definite matrix `A`
+and return the UpperTriangular matrix `U` such that `A = U'U`.
+"""
+function chol(A::AbstractMatrix)
+    ishermitian(A) || throw(ArgumentError("matrix is not symmetric/Hermitian. This error can be avoided by calling chol(Hermitian(A)) which will ignore either the upper or lower triangle of the matrix."))
+    return chol(Hermitian(A))
+end
+
+## Numbers
 """
     chol(x::Number) -> y
 
 Compute the square root of a non-negative number `x`.
 """
-chol(x::Number, args...) = chol!(x, nothing)
+chol(x::Number, args...) = _chol!(x, nothing)
 
-cholfact!{T<:BlasFloat}(A::StridedMatrix{T}, uplo::Symbol, ::Type{Val{false}}) =
-    _cholfact!(A, Val{false}, uplo)
-cholfact!{T<:BlasFloat}(A::StridedMatrix{T}, uplo::Symbol, ::Type{Val{true}}; tol = 0.0) =
-    _cholfact!(A, Val{true}, uplo; tol = tol)
-cholfact!{T<:BlasFloat}(A::StridedMatrix{T}, uplo::Symbol = :U) =
-    _cholfact!(A, Val{false}, uplo)
 
-function _cholfact!{T<:BlasFloat}(A::StridedMatrix{T}, ::Type{Val{false}}, uplo::Symbol=:U)
+
+# cholfact!. Destructive methods for computing Cholesky factorization of real symmetric
+# or Hermitian matrix
+## No pivoting
+function cholfact!(A::Hermitian, uplo::Symbol, ::Type{Val{false}})
     if uplo == :U
-        return Cholesky(chol!(A, UpperTriangular).data, uplo)
+        Cholesky(_chol!(A.data, UpperTriangular).data, 'U')
     else
-        return Cholesky(chol!(A, LowerTriangular).data, uplo)
+        Cholesky(_chol!(A.data, LowerTriangular).data, 'L')
     end
 end
-function _cholfact!{T<:BlasFloat}(A::StridedMatrix{T}, ::Type{Val{true}}, uplo::Symbol=:U; tol=0.0)
-    uplochar = char_uplo(uplo)
-    A, piv, rank, info = LAPACK.pstrf!(uplochar, A, tol)
-    return CholeskyPivoted{T,typeof(A)}(A, uplochar, piv, rank, tol, info)
+function cholfact!{T<:Real,S}(A::Symmetric{T,S}, uplo::Symbol, ::Type{Val{false}})
+    if uplo == :U
+        Cholesky(_chol!(A.data, UpperTriangular).data, 'U')
+    else
+        Cholesky(_chol!(A.data, LowerTriangular).data, 'L')
+    end
 end
 
+### for StridedMatrices, check that matrix is symmetric/Hermitian
 """
-    cholfact!(A::StridedMatrix, uplo::Symbol, Val{false}) -> Cholesky
+    cholfact!(A, uplo::Symbol, Val{false}) -> Cholesky
 
 The same as `cholfact`, but saves space by overwriting the input `A`, instead
 of creating a copy. An `InexactError` exception is thrown if the factorisation
@@ -134,27 +193,62 @@ produces a number not representable by the element type of `A`, e.g. for
 integer types.
 """
 function cholfact!(A::StridedMatrix, uplo::Symbol, ::Type{Val{false}})
-    if uplo == :U
-        Cholesky(chol!(A, UpperTriangular).data, 'U')
-    else
-        Cholesky(chol!(A, LowerTriangular).data, 'L')
-    end
+    ishermitian(A) || throw(ArgumentError("matrix is not symmetric/Hermitian. This error can be avoided by calling cholfact!(Hermitian(A)) which will ignore either the upper or lower triangle of the matrix."))
+    return cholfact!(Hermitian(A), uplo, Val{false})
 end
 
+### Default to no pivoting (and storing of upper factor) when not explicit
+cholfact!(A::Hermitian, uplo::Symbol = :U) = cholfact!(A, uplo, Val{false})
+cholfact!{T<:Real,S}(A::Symmetric{T,S}, uplo::Symbol = :U) = cholfact!(A, uplo, Val{false})
+#### for StridedMatrices, check that matrix is symmetric/Hermitian
+function cholfact!(A::StridedMatrix, uplo::Symbol = :U)
+    ishermitian(A) || throw(ArgumentError("matrix is not symmetric/Hermitian. This error can be avoided by calling cholfact!(Hermitian(A)) which will ignore either the upper or lower triangle of the matrix."))
+    return cholfact!(Hermitian(A), uplo)
+end
+
+
+## With pivoting
+### BLAS/LAPACK element types
+function cholfact!{T<:BlasReal,S<:StridedMatrix}(A::RealHermSymComplexHerm{T,S},
+        uplo::Symbol, ::Type{Val{true}}; tol = 0.0)
+    uplochar = char_uplo(uplo)
+    AA, piv, rank, info = LAPACK.pstrf!(uplochar, A.data, tol)
+    return CholeskyPivoted{eltype(AA),typeof(AA)}(AA, uplochar, piv, rank, tol, info)
+end
+
+### Non BLAS/LAPACK element types (generic). Since generic fallback for pivoted Cholesky
+### is not implemented yet we throw an error
+cholfact!{T<:Real,S}(A::RealHermSymComplexHerm{T,S}, uplo::Symbol, ::Type{Val{true}};
+    tol = 0.0) =
+        throw(ArgumentError("generic pivoted Cholesky fectorization is not implemented yet"))
+
+### for StridedMatrices, check that matrix is symmetric/Hermitian
 """
-    cholfact!(A::StridedMatrix, uplo::Symbol, Val{true}) -> PivotedCholesky
+    cholfact!(A, uplo::Symbol, Val{true}; tol = 0.0) -> CholeskyPivoted
 
 The same as `cholfact`, but saves space by overwriting the input `A`, instead
 of creating a copy. An `InexactError` exception is thrown if the
 factorisation produces a number not representable by the element type of `A`,
 e.g. for integer types.
 """
-cholfact!(A::StridedMatrix, uplo::Symbol, ::Type{Val{true}}; tol = 0.0) =
-    throw(ArgumentError("generic pivoted Cholesky fectorization is not implemented yet"))
-cholfact!(A::StridedMatrix, uplo::Symbol = :U) = cholfact!(A, uplo, Val{false})
+function cholfact!(A::StridedMatrix, uplo::Symbol, ::Type{Val{true}}; tol = 0.0)
+    ishermitian(A) || throw(ArgumentError("matrix is not symmetric/Hermitian. This error can be avoided by calling cholfact!(Hermitian(A)) which will ignore either the upper or lower triangle of the matrix."))
+    return cholfact!(Hermitian(A), uplo, Val{true}; tol = tol)
+end
 
+
+
+# cholfact. Non-destructive methods for computing Cholesky factorization of real symmetric
+# or Hermitian matrix
+## No pivoting
+cholfact(A::Hermitian, uplo::Symbol, ::Type{Val{false}}) =
+    cholfact!(copy_oftype(A, promote_type(typeof(chol(one(eltype(A)))),Float32)), uplo, Val{false})
+cholfact{T<:Real,S<:StridedMatrix}(A::Symmetric{T,S}, uplo::Symbol, ::Type{Val{false}}) =
+    cholfact!(copy_oftype(A, promote_type(typeof(chol(one(eltype(A)))),Float32)), uplo, Val{false})
+
+### for StridedMatrices, check that matrix is symmetric/Hermitian
 """
-    cholfact(A::StridedMatrix, uplo::Symbol, Val{false}) -> Cholesky
+    cholfact(A, uplo::Symbol, Val{false}) -> Cholesky
 
 Compute the Cholesky factorization of a dense symmetric positive definite matrix `A`
 and return a `Cholesky` factorization.
@@ -164,11 +258,34 @@ The triangular Cholesky factor can be obtained from the factorization `F` with: 
 The following functions are available for `Cholesky` objects: `size`, `\\`, `inv`, `det`.
 A `PosDefException` exception is thrown in case the matrix is not positive definite.
 """
-cholfact{T}(A::StridedMatrix{T}, uplo::Symbol, ::Type{Val{false}}) =
-    cholfact!(copy_oftype(A, promote_type(typeof(chol(one(T))),Float32)), uplo, Val{false})
+function cholfact(A::StridedMatrix, uplo::Symbol, ::Type{Val{false}})
+    ishermitian(A) || throw(ArgumentError("matrix is not symmetric/Hermitian. This error can be avoided by calling cholfact(Hermitian(A)) which will ignore either the upper or lower triangle of the matrix."))
+    return cholfact(Hermitian(A), uplo, Val{false})
+end
 
+### Default to no pivoting (and storing of upper factor) when not explicit
+cholfact(A::Hermitian, uplo::Symbol = :U) = cholfact(A, uplo, Val{false})
+cholfact{T<:Real,S<:StridedMatrix}(A::Symmetric{T,S}, uplo::Symbol = :U) =
+    cholfact(A, uplo, Val{false})
+#### for StridedMatrices, check that matrix is symmetric/Hermitian
+function cholfact(A::StridedMatrix, uplo::Symbol = :U)
+    ishermitian(A) || throw(ArgumentError("matrix is not symmetric/Hermitian. This error can be avoided by calling cholfact(Hermitian(A)) which will ignore either the upper or lower triangle of the matrix."))
+    return cholfact(Hermitian(A), uplo)
+end
+
+
+## With pivoting
+cholfact(A::Hermitian, uplo::Symbol, ::Type{Val{true}}; tol = 0.0) =
+        cholfact!(copy_oftype(A, promote_type(typeof(chol(one(eltype(A)))),Float32)),
+            uplo, Val{true}; tol = tol)
+cholfact{T<:Real,S<:StridedMatrix}(A::RealHermSymComplexHerm{T,S}, uplo::Symbol,
+    ::Type{Val{true}}; tol = 0.0) =
+        cholfact!(copy_oftype(A, promote_type(typeof(chol(one(eltype(A)))),Float32)),
+            uplo, Val{true}; tol = tol)
+
+### for StridedMatrices, check that matrix is symmetric/Hermitian
 """
-    cholfact(A::StridedMatrix, uplo::Symbol, Val{true}; tol = 0.0) -> CholeskyPivoted
+    cholfact(A, uplo::Symbol, Val{true}; tol = 0.0) -> CholeskyPivoted
 
 Compute the pivoted Cholesky factorization of a dense symmetric positive semi-definite matrix `A`
 and return a `CholeskyPivoted` factorization.
@@ -179,15 +296,18 @@ The following functions are available for `PivotedCholesky` objects: `size`, `\\
 The argument `tol` determines the tolerance for determining the rank.
 For negative values, the tolerance is the machine precision.
 """
-cholfact{T}(A::StridedMatrix{T}, uplo::Symbol, ::Type{Val{true}}; tol = 0.0) =
-    cholfact!(copy_oftype(A, promote_type(typeof(chol(one(T))),Float32)), uplo, Val{true}; tol = tol)
+function cholfact(A::StridedMatrix, uplo::Symbol, ::Type{Val{true}}; tol = 0.0)
+    ishermitian(A) || throw(ArgumentError("matrix is not symmetric/Hermitian. This error can be avoided by calling cholfact(Hermitian(A)) which will ignore either the upper or lower triangle of the matrix."))
+    return cholfact(Hermitian(A), uplo, Val{true}; tol = tol)
+end
 
-cholfact{T}(A::StridedMatrix{T}, uplo::Symbol = :U) = cholfact(A, uplo, Val{false})
-
+## Number
 function cholfact(x::Number, uplo::Symbol=:U)
     xf = fill(chol(x), 1, 1)
     Cholesky(xf, uplo)
 end
+
+
 
 function convert{Tnew,Told,S}(::Type{Cholesky{Tnew}}, C::Cholesky{Told,S})
     Cnew = convert(AbstractMatrix{Tnew}, C.factors)
