@@ -503,3 +503,20 @@ end
 @test_throws MethodError eval(parse("(Any=>Any)[:a=>1,:b=>2]"))
 # to be removed post 0.5
 #@test_throws MethodError eval(parse("(Any=>Any)[x=>y for (x,y) in zip([1,2,3],[4,5,6])]"))
+
+# issue #16720
+let err = try
+    include_string("module A
+
+       function broken()
+
+           x[1] = some_func(
+
+       end
+
+       end")
+    catch e
+        e
+    end
+    @test err.line == 7
+end
