@@ -138,12 +138,33 @@ typedef struct _mallocarray_t {
 // pool page metadata
 typedef struct {
     struct {
-        uint16_t pool_n : 8; // index (into norm_pool) of pool that owns this page
-        uint16_t allocd : 1; // true if an allocation happened in this page since last sweep
-        uint16_t gc_bits : 2; // this is a bitwise | of all gc_bits in this page
+        // index of pool that owns this page
+        uint16_t pool_n : 8;
+        // Whether any cell in the page is marked
+        // This bit is set before sweeping iff there's live cells in the page.
+        // Note that before marking or after sweeping there can be live
+        // (and young) cells in the page for `!has_marked`.
+        uint16_t has_marked: 1;
+        // Whether any cell was live and young **before sweeping**.
+        // For a normal sweep (quick sweep that is NOT preceded by a
+        // full sweep) this bit is set iff there are young or newly dead
+        // objects in the page and the page needs to be swept.
+        //
+        // For a full sweep, this bit should be ignored.
+        //
+        // For a quick sweep preceded by a full sweep. If this bit is set,
+        // the page needs to be swept. If this bit is not set, there could
+        // still be old dead objects in the page and `nold` and `prev_nold`
+        // should be used to determine if the page needs to be swept.
+        uint16_t has_young: 1;
     };
-    uint16_t nfree; // number of free objects in this page.
-                    // invalid if pool that owns this page is allocating objects from this page.
+    // number of old objects in this page
+    uint16_t nold;
+    // number of old objects in this page during the previous full sweep
+    uint16_t prev_nold;
+    // number of free objects in this page.
+    // invalid if pool that owns this page is allocating objects from this page.
+    uint16_t nfree;
     uint16_t osize; // size of each object in this page
     uint16_t fl_begin_offset; // offset of first free object in this page
     uint16_t fl_end_offset;   // offset of last free object in this page
@@ -337,6 +358,9 @@ static inline void objprofile_reset(void)
 {
 }
 #endif
+
+// For debugging
+void gc_count_pool(void);
 
 #ifdef __cplusplus
 }
