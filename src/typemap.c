@@ -215,7 +215,7 @@ static void mtcache_rehash(jl_array_t **pa, jl_value_t *parent, int8_t tparam, i
     size_t i, len = jl_array_len(*pa);
     size_t newlen = next_power_of_two(len) * 2;
     jl_value_t **d = (jl_value_t**)jl_array_data(*pa);
-    jl_array_t *n = jl_alloc_array_ptr_1d(newlen);
+    jl_array_t *n = jl_alloc_vec_any(newlen);
     for (i = 1; i <= len; i++) {
         union jl_typemap_t ml;
         ml.unknown = d[i - 1];
@@ -238,7 +238,7 @@ static void mtcache_rehash(jl_array_t **pa, jl_value_t *parent, int8_t tparam, i
                 // hash collision: start over after doubling the size again
                 i = 0;
                 newlen *= 2;
-                n = jl_alloc_array_ptr_1d(newlen);
+                n = jl_alloc_vec_any(newlen);
             }
         }
     }
@@ -278,7 +278,7 @@ static union jl_typemap_t *mtcache_hash_bp(jl_array_t **pa, jl_value_t *ty,
             // since they should have a lower priority and need to go into the sorted list
             return NULL;
         if (*pa == (void*)jl_nothing) {
-            *pa = jl_alloc_array_ptr_1d(INIT_CACHE_SIZE);
+            *pa = jl_alloc_vec_any(INIT_CACHE_SIZE);
             jl_gc_wb(parent, *pa);
         }
         while (1) {

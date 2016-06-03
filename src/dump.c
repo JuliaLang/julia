@@ -938,7 +938,7 @@ static void jl_serialize_value_(ios_t *s, jl_value_t *v)
                         offsetof(jl_typemap_level_t, key) == 4 * sizeof(jl_value_t*) &&
                         sizeof(jl_typemap_level_t) == 5 * sizeof(jl_value_t*));
                     if (node->arg1 != (void*)jl_nothing) {
-                        jl_array_t *a = jl_alloc_array_ptr_1d(0);
+                        jl_array_t *a = jl_alloc_vec_any(0);
                         for (i = 0, l = jl_array_len(node->arg1); i < l; i++) {
                             jl_value_t *d = jl_array_ptr_ref(node->arg1, i);
                             if (d != NULL && d != jl_nothing)
@@ -950,7 +950,7 @@ static void jl_serialize_value_(ios_t *s, jl_value_t *v)
                         jl_serialize_value(s, jl_nothing);
                     }
                     if (node->targ != (void*)jl_nothing) {
-                        jl_array_t *a = jl_alloc_array_ptr_1d(0);
+                        jl_array_t *a = jl_alloc_vec_any(0);
                         for (i = 0, l = jl_array_len(node->targ); i < l; i++) {
                             jl_value_t *d = jl_array_ptr_ref(node->targ, i);
                             if (d != NULL && d != jl_nothing)
@@ -1982,7 +1982,7 @@ static void jl_restore_system_image_from_stream(ios_t *f)
     mode = MODE_SYSTEM_IMAGE;
     arraylist_new(&backref_list, 250000);
 
-    datatype_list = jl_alloc_array_ptr_1d(0);
+    datatype_list = jl_alloc_vec_any(0);
 
     jl_main_module = (jl_module_t*)jl_deserialize_value(f, NULL);
     jl_top_module = (jl_module_t*)jl_deserialize_value(f, NULL);
@@ -2084,7 +2084,7 @@ JL_DLLEXPORT jl_array_t *jl_compress_ast(jl_lambda_info_t *li, jl_array_t *ast)
     int en = jl_gc_enable(0); // Might GC
 
     if (li->def->roots == NULL) {
-        li->def->roots = jl_alloc_array_ptr_1d(0);
+        li->def->roots = jl_alloc_vec_any(0);
         jl_gc_wb(li->def, li->def->roots);
     }
     tree_literal_values = li->def->roots;

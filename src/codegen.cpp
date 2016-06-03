@@ -1864,7 +1864,7 @@ static void jl_add_linfo_root(jl_lambda_info_t *li, jl_value_t *val)
     JL_GC_PUSH1(&val);
     jl_method_t *m = li->def;
     if (m->roots == NULL) {
-        m->roots = jl_alloc_array_ptr_1d(1);
+        m->roots = jl_alloc_vec_any(1);
         jl_gc_wb(m, m->roots);
         jl_array_ptr_set(m->roots, 0, val);
     }
