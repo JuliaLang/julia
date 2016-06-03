@@ -26,15 +26,20 @@ OBJS := $(SRCS:%=$(BUILDDIR)/%.o)
 DOBJS := $(SRCS:%=$(BUILDDIR)/%.dbg.obj)
 DEBUGFLAGS += $(FLAGS)
 SHIPFLAGS += $(FLAGS)
+
 ifeq ($(USE_LLVM_SHLIB),1)
 ifeq ($(LLVM_USE_CMAKE),1)
 LLVMLINK := $(shell $(LLVM_CONFIG_HOST) --ldflags) -lLLVM
 else
+ifeq ($(OS),WINNT)
+LLVMLINK := $(shell $(LLVM_CONFIG_HOST) --ldflags) -lLLVM-$(LLVM_VER_SHORT)
+else
 LLVMLINK := $(shell $(LLVM_CONFIG_HOST) --ldflags) -lLLVM-$(shell $(LLVM_CONFIG_HOST) --version)
-endif
+endif # OS == WINNT
+endif # LLVM_USE_CMAKE == 1
 else
 LLVMLINK :=
-endif
+endif # USE_LLVM_SHLIB == 1
 JLDFLAGS += $(LDFLAGS) $(NO_WHOLE_ARCHIVE) $(OSLIBS) $(LLVMLINK) $(RPATH)
 
 ifeq ($(USE_SYSTEM_LIBM),0)
