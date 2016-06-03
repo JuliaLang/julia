@@ -348,8 +348,8 @@ static void gc_scrub_range(char *stack_lo, char *stack_hi)
             continue;
         jl_gc_pagemeta_t *pg = page_metadata(tag);
         // Make sure the sweep rebuild the freelist
-        pg->allocd = 1;
-        pg->gc_bits = 0x3;
+        pg->has_marked = 1;
+        pg->has_young = 1;
         // Find the age bit
         char *page_begin = gc_page_data(tag) + GC_PAGE_OFFSET;
         int obj_id = (((char*)tag) - page_begin) / osize;
@@ -358,6 +358,7 @@ static void gc_scrub_range(char *stack_lo, char *stack_hi)
         // (especially on 32bit where it's more likely to have pointer-like
         //  bit patterns)
         *ages &= ~(1 << (obj_id % 8));
+        // set mark to GC_MARKED_NOESC (young and marked)
         memset(tag, 0xff, osize);
     }
 }
@@ -494,6 +495,62 @@ void gc_debug_init(void)
         htable_new(&obj_sizes[g], 0);
     }
 #endif
+}
+
+// Simple and dumb way to count cells with different gc bits in allocated pages
+// Use as ground truth for debugging memory-leak-like issues.
+static int64_t poolobj_sizes[4];
+static int64_t empty_pages;
+
+static void gc_count_pool_page(jl_gc_pagemeta_t *pg)
+{
+    int osize = pg->osize;
+    char *data = pg->data;
+    gcval_t *v = (gcval_t*)(data + GC_PAGE_OFFSET);
+    char *lim = (char*)v + GC_PAGE_SZ - GC_PAGE_OFFSET - osize;
+    int has_live = 0;
+    while ((char*)v <= lim) {
+        int bits = gc_bits(v);
+        if (bits & GC_MARKED)
+            has_live = 1;
+        poolobj_sizes[bits] += osize;
+        v = (gcval_t*)((char*)v + osize);
+    }
+    if (!has_live) {
+        empty_pages++;
+    }
+}
+
+static void gc_count_pool_region(region_t *region)
+{
+    for (int pg_i = 0; pg_i < region->pg_cnt / 32; pg_i++) {
+        uint32_t line = region->allocmap[pg_i];
+        if (line) {
+            for (int j = 0; j < 32; j++) {
+                if ((line >> j) & 1) {
+                    gc_count_pool_page(&region->meta[pg_i*32 + j]);
+                }
+            }
+        }
+    }
+}
+
+void gc_count_pool(void)
+{
+    memset(&poolobj_sizes, 0, sizeof(poolobj_sizes));
+    empty_pages = 0;
+    for (int i = 0; i < REGION_COUNT; i++) {
+        if (regions[i].pages) {
+            gc_count_pool_region(&regions[i]);
+        }
+    }
+    jl_safe_printf("****** Pool stat: ******\n");
+    for (int i = 0;i < 4;i++)
+        jl_safe_printf("bits(%d): %"  PRId64 "\n", i, poolobj_sizes[i]);
+    // empty_pages is inaccurate after the sweep since young objects are
+    // also GC_CLEAN
+    jl_safe_printf("free pages: % "  PRId64 "\n", empty_pages);
+    jl_safe_printf("************************\n");
 }
 
 #ifdef __cplusplus
