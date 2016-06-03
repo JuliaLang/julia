@@ -307,16 +307,20 @@ jl_value_t *jl_resolve_globals(jl_value_t *expr, jl_lambda_info_t *lam)
     return expr;
 }
 
-void jl_lambda_info_set_ast(jl_lambda_info_t *li, jl_value_t *ast)
+// copy a :lambda Expr into its LambdaInfo representation
+void jl_lambda_info_set_ast(jl_lambda_info_t *li, jl_expr_t *ast)
 {
     assert(jl_is_expr(ast));
-    jl_array_t *body = jl_lam_body((jl_expr_t*)ast)->args;
+    jl_expr_t *bodyex = (jl_expr_t*)jl_exprarg(ast, 2);
+    assert(jl_is_expr(bodyex));
+    jl_array_t *body = bodyex->args;
     li->code = body; jl_gc_wb(li, li->code);
     if (has_meta(body, pure_sym))
         li->pure = 1;
-    jl_array_t *vis = jl_lam_vinfo((jl_expr_t*)ast);
+    jl_array_t *vinfo = (jl_array_t*)jl_exprarg(ast, 1);
+    jl_array_t *vis = (jl_array_t*)jl_array_ptr_ref(vinfo, 0);
     size_t nslots = jl_array_len(vis);
-    jl_value_t *ssavalue_types = jl_lam_ssavalues((jl_expr_t*)ast);
+    jl_value_t *ssavalue_types = jl_array_ptr_ref(vinfo, 2);
     assert(jl_is_long(ssavalue_types));
     size_t nssavalue = jl_unbox_long(ssavalue_types);
     li->slotnames = jl_alloc_vec_any(nslots);
@@ -345,13 +349,20 @@ void jl_lambda_info_set_ast(jl_lambda_info_t *li, jl_value_t *ast)
         jl_array_ptr_set(li->slotnames, i, name);
         jl_array_uint8_set(li->slotflags, i, jl_unbox_long(jl_array_ptr_ref(vi, 2)));
     }
-    jl_array_t *args = jl_lam_args((jl_expr_t*)ast);
+    jl_array_t *sparams = (jl_array_t*)jl_array_ptr_ref(vinfo, 3);
+    assert(jl_is_array(sparams));
+    li->sparam_syms = jl_alloc_svec_uninit(jl_array_len(sparams));
+    jl_gc_wb(li, li->sparam_syms);
+    for(i=0; i < jl_array_len(sparams); i++) {
+        jl_svecset(li->sparam_syms, i, jl_array_ptr_ref(sparams, i));
+    }
+    jl_array_t *args = (jl_array_t*)jl_exprarg(ast, 0);
     size_t narg = jl_array_len(args);
     li->nargs = narg;
     li->isva = narg > 0 && jl_is_rest_arg(jl_array_ptr_ref(args, narg - 1));
 }
 
-JL_DLLEXPORT jl_lambda_info_t *jl_new_lambda_info_uninit(jl_svec_t *sparam_syms)
+JL_DLLEXPORT jl_lambda_info_t *jl_new_lambda_info_uninit(void)
 {
     jl_lambda_info_t *li =
         (jl_lambda_info_t*)newobj((jl_value_t*)jl_lambda_info_type,
@@ -360,7 +371,7 @@ JL_DLLEXPORT jl_lambda_info_t *jl_new_lambda_info_uninit(jl_svec_t *sparam_syms)
     li->slotnames = li->slotflags = NULL;
     li->slottypes = li->ssavaluetypes = NULL;
     li->rettype = (jl_value_t*)jl_any_type;
-    li->sparam_syms = sparam_syms;
+    li->sparam_syms = jl_emptysvec;
     li->sparam_vals = jl_emptysvec;
     li->fptr = NULL;
     li->jlcall_api = 0;
@@ -377,6 +388,16 @@ JL_DLLEXPORT jl_lambda_info_t *jl_new_lambda_info_uninit(jl_svec_t *sparam_syms)
     li->def = NULL;
     li->pure = 0;
     li->inlineable = 0;
+    return li;
+}
+
+JL_DLLEXPORT jl_lambda_info_t *jl_new_lambda_info_from_ast(jl_expr_t *ast)
+{
+    jl_lambda_info_t *li=NULL;
+    JL_GC_PUSH1(&li);
+    li = jl_new_lambda_info_uninit();
+    jl_lambda_info_set_ast(li, ast);
+    JL_GC_POP();
     return li;
 }
 
@@ -469,12 +490,13 @@ static jl_lambda_info_t *jl_instantiate_staged(jl_method_t *generator, jl_tuplet
 static jl_lambda_info_t *jl_copy_lambda(jl_lambda_info_t *linfo)
 {
     assert(linfo->sparam_vals == jl_emptysvec);
-    jl_lambda_info_t *new_linfo = jl_new_lambda_info_uninit(linfo->sparam_syms);
+    jl_lambda_info_t *new_linfo = jl_new_lambda_info_uninit();
     new_linfo->code = linfo->code;
     new_linfo->slotnames = linfo->slotnames;
     new_linfo->slottypes = linfo->slottypes;
     new_linfo->slotflags = linfo->slotflags;
     new_linfo->ssavaluetypes = linfo->ssavaluetypes;
+    new_linfo->sparam_syms = linfo->sparam_syms;
     new_linfo->sparam_vals = linfo->sparam_vals;
     new_linfo->pure = linfo->pure;
     new_linfo->inlineable = linfo->inlineable;
