@@ -19,6 +19,22 @@ This representation is often appropriate for passing strings to C.
 String(s::AbstractString) = print_to_string(s)
 String(s::String) = s
 
+# String constructor docstring from boot.jl, workaround for #16730
+# and the unavailability of @doc in boot.jl context.
+"""
+    String(v::Vector{UInt8})
+
+Create a new `String` from a vector `v` of bytes containing
+UTF-8 encoded characters.   This function takes "ownership" of
+the array, which means that you should not subsequently modify
+`v` (since strings are supposed to be immutable in Julia) for
+as long as the string exists.
+
+If you need to subsequently modify `v`, use `String(copy(v))` instead.
+"""
+String(v::Array{UInt8,1})
+
+
 """
     unsafe_string(p::Ptr{UInt8}, [length::Integer])
 
@@ -38,7 +54,7 @@ function unsafe_string(p::Union{Ptr{UInt8},Ptr{Int8}}, len::Integer)
 end
 function unsafe_string(p::Union{Ptr{UInt8},Ptr{Int8}})
     p == C_NULL && throw(ArgumentError("cannot convert NULL to string"))
-    ccall(:jl_cstr_to_string, Ref{String}, (Cstring,), p)
+    ccall(:jl_cstr_to_string, Ref{String}, (Ptr{UInt8},), p)
 end
 
 convert(::Type{Vector{UInt8}}, s::AbstractString) = String(s).data
