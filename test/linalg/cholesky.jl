@@ -136,8 +136,8 @@ begin
     # Cholesky factor of Matrix with non-commutative elements, here 2x2-matrices
 
     X = Matrix{Float64}[0.1*rand(2,2) for i in 1:3, j = 1:3]
-    L = full(Base.LinAlg.chol!(X*X', LowerTriangular))
-    U = full(Base.LinAlg.chol!(X*X', UpperTriangular))
+    L = full(Base.LinAlg._chol!(X*X', LowerTriangular))
+    U = full(Base.LinAlg._chol!(X*X', UpperTriangular))
     XX = full(X*X')
 
     @test sum(sum(norm, L*L' - XX)) < eps()
@@ -152,8 +152,8 @@ for elty in (Float32, Float64, Complex{Float32}, Complex{Float64})
         A = randn(5,5)
     end
     A = convert(Matrix{elty}, A'A)
-    @test_approx_eq full(cholfact(A)[:L]) full(invoke(Base.LinAlg.chol!, Tuple{AbstractMatrix, Type{LowerTriangular}}, copy(A), LowerTriangular))
-    @test_approx_eq full(cholfact(A)[:U]) full(invoke(Base.LinAlg.chol!, Tuple{AbstractMatrix, Type{UpperTriangular}}, copy(A), UpperTriangular))
+    @test_approx_eq full(cholfact(A)[:L]) full(invoke(Base.LinAlg._chol!, Tuple{AbstractMatrix, Type{LowerTriangular}}, copy(A), LowerTriangular))
+    @test_approx_eq full(cholfact(A)[:U]) full(invoke(Base.LinAlg._chol!, Tuple{AbstractMatrix, Type{UpperTriangular}}, copy(A), UpperTriangular))
 end
 
 # Test up- and downdates
@@ -196,3 +196,7 @@ let apd = [5.8525753f0 + 0.0f0im -0.79540455f0 + 0.7066077f0im 0.98274714f0 + 1.
         @test E[i,j] <= (n+1)ε/(1-(n+1)ε)*real(sqrt(apd[i,i]*apd[j,j]))
     end
 end
+
+# Fail if non-Hermitian
+@test_throws ArgumentError cholfact(randn(5,5))
+@test_throws ArgumentError cholfact(complex(randn(5,5), randn(5,5)))
