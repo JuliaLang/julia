@@ -165,8 +165,12 @@ help new users get started with Julia:
 
 - `Julia and IJulia cheatsheet <http://math.mit.edu/~stevenj/Julia-cheatsheet.pdf>`_
 - `Learn Julia in a few minutes <http://learnxinyminutes.com/docs/julia/>`_
+- `Learn Julia the Hard Way <https://github.com/chrisvoncsefalvay/learn-julia-the-hard-way>`_
+- `Julia by Example <http://samuelcolvin.github.io/JuliaByExample/>`_
+- `Hands-on Julia <https://github.com/dpsanders/hands_on_julia>`_
 - `Tutorial for Homer Reid's numerical analysis class <http://homerreid.dyndns.org/teaching/18.330/JuliaProgramming.shtml>`_
 - `An introductory presentation <https://raw.githubusercontent.com/ViralBShah/julia-presentations/master/Fifth-Elephant-2013/Fifth-Elephant-2013.pdf>`_
 - `Videos from the Julia tutorial at MIT <http://julialang.org/blog/2013/03/julia-tutorial-MIT>`_
 - `Forio Julia Tutorials <http://forio.com/labs/julia-studio/tutorials/>`_
+- `YouTube videos from the JuliaCons <https://www.youtube.com/user/JuliaLanguage/playlists>`_
 
