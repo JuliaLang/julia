@@ -246,3 +246,16 @@ end
 
 # Issue 15401
 @test eye(5) \ Diagonal(ones(5)) == eye(5)
+
+# Triangular and Diagonal
+for T in (LowerTriangular(randn(5,5)), LinAlg.UnitLowerTriangular(randn(5,5)))
+    D = Diagonal(randn(5))
+    @test T'D   == Array(T)'*Array(D)
+    @test T.'D  == Array(T).'*Array(D)
+    @test D*T'  == Array(D)*Array(T)'
+    @test D*T.' == Array(D)*Array(T).'
+end
+
+# Diagonal and Q
+Q = qrfact(randn(5,5))[:Q]
+@test D*Q' == Array(D)*Q'
