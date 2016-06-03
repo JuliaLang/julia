@@ -1341,28 +1341,11 @@ static void processFDEs(const char *EHFrameAddr, size_t EHFrameSize, callback f)
  * ourselves to ensure the right one gets picked.
  */
 
-#include "llvm/ExecutionEngine/SectionMemoryManager.h"
-class RTDyldMemoryManagerOSX : public SectionMemoryManager
-{
-    RTDyldMemoryManagerOSX(const RTDyldMemoryManagerOSX&) = delete;
-    void operator=(const RTDyldMemoryManagerOSX&) = delete;
-
-public:
-    RTDyldMemoryManagerOSX() {};
-    ~RTDyldMemoryManagerOSX() override {};
-    void registerEHFrames(uint8_t *Addr, uint64_t LoadAddr, size_t Size) override;
-    void deregisterEHFrames(uint8_t *Addr, uint64_t LoadAddr, size_t Size) override;
-};
-
 static void (*libc_register_frame)(void*)   = NULL;
 static void (*libc_deregister_frame)(void*) = NULL;
 
 // This implementation handles frame registration for local targets.
-// Memory managers for remote targets should re-implement this function
-// and use the LoadAddr parameter.
-void RTDyldMemoryManagerOSX::registerEHFrames(uint8_t *Addr,
-                                              uint64_t LoadAddr,
-                                              size_t Size)
+void register_eh_frames(uint8_t *Addr, size_t Size)
 {
   // On OS X OS X __register_frame takes a single FDE as an argument.
   // See http://lists.cs.uiuc.edu/pipermail/llvmdev/2013-April/061768.html
@@ -1376,9 +1359,7 @@ void RTDyldMemoryManagerOSX::registerEHFrames(uint8_t *Addr,
     });
 }
 
-void RTDyldMemoryManagerOSX::deregisterEHFrames(uint8_t *Addr,
-                                                uint64_t LoadAddr,
-                                                size_t Size)
+void deregister_eh_frames(uint8_t *Addr, size_t Size)
 {
    processFDEs((char*)Addr, Size, [](const char *Entry) {
         if (!libc_deregister_frame) {
@@ -1390,27 +1371,8 @@ void RTDyldMemoryManagerOSX::deregisterEHFrames(uint8_t *Addr,
     });
 }
 
-RTDyldMemoryManager* createRTDyldMemoryManagerOSX()
-{
-    return new RTDyldMemoryManagerOSX();
-}
-
-#endif
-
-#if defined(_OS_LINUX_) && defined(LLVM37) && defined(JL_UNW_HAS_FORMAT_IP)
+#elif defined(_OS_LINUX_) && defined(LLVM37) && defined(JL_UNW_HAS_FORMAT_IP)
 #include <type_traits>
-#include "llvm/ExecutionEngine/SectionMemoryManager.h"
-class RTDyldMemoryManagerUnix : public SectionMemoryManager
-{
-    RTDyldMemoryManagerUnix(const RTDyldMemoryManagerUnix&) = delete;
-    void operator=(const RTDyldMemoryManagerUnix&) = delete;
-
-public:
-    RTDyldMemoryManagerUnix() {};
-    ~RTDyldMemoryManagerUnix() override {};
-    void registerEHFrames(uint8_t *Addr, uint64_t LoadAddr, size_t Size) override;
-    void deregisterEHFrames(uint8_t *Addr, uint64_t LoadAddr, size_t Size) override;
-};
 
 struct unw_table_entry
 {
@@ -1592,9 +1554,7 @@ static DW_EH_PE parseCIE(const uint8_t *Addr, const uint8_t *End)
     return DW_EH_PE_absptr;
 }
 
-void RTDyldMemoryManagerUnix::registerEHFrames(uint8_t *Addr,
-                                               uint64_t LoadAddr,
-                                               size_t Size)
+void register_eh_frames(uint8_t *Addr, size_t Size)
 {
 #ifndef _CPU_ARM_
     // System unwinder
@@ -1725,9 +1685,7 @@ void RTDyldMemoryManagerUnix::registerEHFrames(uint8_t *Addr,
     _U_dyn_register(di);
 }
 
-void RTDyldMemoryManagerUnix::deregisterEHFrames(uint8_t *Addr,
-                                           uint64_t LoadAddr,
-                                           size_t Size)
+void deregister_eh_frames(uint8_t *Addr, size_t Size)
 {
 #ifndef _CPU_ARM_
     __deregister_frame(Addr);
@@ -1737,9 +1695,14 @@ void RTDyldMemoryManagerUnix::deregisterEHFrames(uint8_t *Addr,
     // data structures).
 }
 
-RTDyldMemoryManager* createRTDyldMemoryManagerUnix()
+#else
+
+void register_eh_frames(uint8_t *Addr, size_t Size)
 {
-    return new RTDyldMemoryManagerUnix();
+}
+
+void deregister_eh_frames(uint8_t *Addr, size_t Size)
+{
 }
 
 #endif
