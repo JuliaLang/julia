@@ -155,3 +155,5 @@ end
 
 # issue #12854
 @test_throws TypeError ntuple(identity, Val{1:2})
+
+@test tuple type indexing

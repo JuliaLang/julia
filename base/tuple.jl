@@ -2,6 +2,14 @@
 
 ## indexing ##
 
+length{T<:Tuple}(t::Type{T}) = length(t.parameters)
+endof{T<:Tuple}(t::Type{T}) = length(t)
+size{T<:Tuple}(t::Type{T}, d) = d==1 ? length(t) : throw(ArgumentError("invalid tuple dimension $d"))
+getindex{T<:Tuple}(t::Type{T}, i::Int) = t.parameters[i]
+getindex{T<:Tuple}(t::Type{T}, i::Real) = getindex(t, convert(Int, i))
+getindex{T<:Tuple}(t::Type{T}, r::AbstractArray) = Tuple{[t[ri] for ri in r]...}
+getindex{T<:Tuple}(t::Type{T}, b::AbstractArray{Bool}) = getindex(t, find(b))
+
 length(t::Tuple) = nfields(t)
 endof(t::Tuple) = length(t)
 size(t::Tuple, d) = d==1 ? length(t) : throw(ArgumentError("invalid tuple dimension $d"))
@@ -12,6 +20,12 @@ getindex(t::Tuple, b::AbstractArray{Bool}) = getindex(t,find(b))
 
 ## iterating ##
 
+start{T<:Tuple}(t::Type{T}) = 1
+done{T<:Tuple}(t::Type{T}, i::Int) = (length(t) < i)
+next{T<:Tuple}(t::Type{T}, i::Int) = (t.parameters[i], i + 1)
+
+eachindex{T<:Tuple}(t::Type{T}) = 1:length(t)
+
 start(t::Tuple) = 1
 done(t::Tuple, i::Int) = (length(t) < i)
 next(t::Tuple, i::Int) = (t[i], i+1)
@@ -20,18 +34,18 @@ eachindex(t::Tuple) = 1:length(t)
 
 function eachindex(t::Tuple, t2::Tuple...)
     @_inline_meta
-    1:_maxlength(t, t2...)
+    return 1:_maxlength(t, t2...)
 end
 _maxlength(t::Tuple) = length(t)
 function _maxlength(t::Tuple, t2::Tuple, t3::Tuple...)
     @_inline_meta
-    max(length(t), _maxlength(t2, t3...))
+    return max(length(t), _maxlength(t2, t3...))
 end
 
 # this allows partial evaluation of bounded sequences of next() calls on tuples,
 # while reducing to plain next() for arbitrary iterables.
-indexed_next(t::Tuple, i::Int, state) = (t[i], i+1)
-indexed_next(a::Array, i::Int, state) = (a[i], i+1)
+indexed_next(t::Tuple, i::Int, state) = (t[i], i + 1)
+indexed_next(a::Array, i::Int, state) = (a[i], i + 1)
 indexed_next(I, i, state) = done(I,state) ? throw(BoundsError()) : next(I, state)
 
 # Use dispatch to avoid a branch in first
@@ -47,13 +61,13 @@ eltype{T,_}(::Type{NTuple{_,T}}) = T
 
 function front(t::Tuple)
     @_inline_meta
-    _front((), t...)
+    return _front((), t...)
 end
 front(::Tuple{}) = error("Cannot call front on an empty tuple")
 _front(out, v) = out
 function _front(out, v, t...)
     @_inline_meta
-    _front((out..., v), t...)
+    return _front((out..., v), t...)
 end
 
 ## mapping ##
@@ -70,14 +84,14 @@ ntuple(f::Function, n::Integer) =
 # inferrable ntuple
 function ntuple{F,N}(f::F, ::Type{Val{N}})
     Core.typeassert(N, Int)
-    _ntuple((), f, Val{N})
+    return _ntuple((), f, Val{N})
 end
 
 # Build up the output until it has length N
 _ntuple{F,N}(out::NTuple{N}, f::F, ::Type{Val{N}}) = out
 function _ntuple{F,N,M}(out::NTuple{M}, f::F, ::Type{Val{N}})
     @_inline_meta
-    _ntuple((out..., f(M+1)), f, Val{N})
+    return _ntuple((out..., f(M+1)), f, Val{N})
 end
 
 # 1 argument function
@@ -94,7 +108,7 @@ function map(f, t::Tuple{Any,Any,Any,Any,Any,Any,Any,Any,
     for i=1:n
         A[i] = f(t[i])
     end
-    (A...,)
+    return (A...,)
 end
 # 2 argument function
 map(f, t::Tuple{},        s::Tuple{})        = ()
@@ -117,11 +131,11 @@ function _ftl{N}(out::NTuple{N}, val, ::Type{Val{N}}, t...)
 end
 function _ftl{N}(out, val, ::Type{Val{N}}, t1, t...)
     @_inline_meta
-    _ftl((out..., t1), val, Val{N}, t...)
+    return _ftl((out..., t1), val, Val{N}, t...)
 end
 function _ftl{N}(out, val, ::Type{Val{N}})
     @_inline_meta
-    _ftl((out..., val), val, Val{N})
+    return _ftl((out..., val), val, Val{N})
 end
 
 ## comparison ##

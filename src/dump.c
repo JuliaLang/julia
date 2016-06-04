@@ -821,15 +821,10 @@ static void jl_serialize_value_(ios_t *s, jl_value_t *v)
         // it might reference types in the old Base module.
         union jl_typemap_t *tf = &m->tfunc;
         if (tf->unknown && tf->unknown != jl_nothing) {
-            if (m->module == jl_core_module) {
-                tf->unknown = jl_nothing;
-            }
-            else {
-                // go through the t-func cache, replacing ASTs with just return
-                // types for abstract argument types. these ASTs are generally
-                // not needed (e.g. they don't get inlined).
-                jl_typemap_visitor(*tf, jl_prune_tcache, NULL);
-            }
+            // go through the t-func cache, replacing ASTs with just return
+            // types for abstract argument types. these ASTs are generally
+            // not needed (e.g. they don't get inlined).
+            jl_typemap_visitor(*tf, jl_prune_tcache, NULL);
         }
         jl_serialize_value(s, tf->unknown);
         jl_serialize_value(s, (jl_value_t*)m->name);
