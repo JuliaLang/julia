@@ -639,3 +639,8 @@ let x = rand(5)
     @test_approx_eq A\sub(ones(10),1:2:10) x
     @test_approx_eq A\slice(eye(5,5),:,:) diagm(x)
 end
+
+# Real factorization and complex rhs
+A = sprandn(5,5,0.4) |> t -> t't + I
+B = complex(randn(5,2), randn(5,2))
+@test_approx_eq cholfact(A)\B A\B

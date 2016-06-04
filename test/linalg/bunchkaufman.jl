@@ -107,7 +107,7 @@ end
 
 # test example due to @timholy in PR 15354
 let
-    A = rand(6,5); A = A'*A
+    A = rand(6,5); A = complex(A'*A) # to avoid calling the real-lhs-complex-rhs method
     F = cholfact(A);
     v6 = rand(Complex128, 6)
     v5 = sub(v6, 1:5)
