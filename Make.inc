@@ -179,6 +179,7 @@ sysconfdir := $(prefix)/etc
 build_prefix := $(BUILDROOT)/usr
 build_staging := $(build_prefix)-staging
 build_bindir := $(build_prefix)/bin
+build_depsbindir := $(build_prefix)/tools
 build_libdir := $(build_prefix)/lib
 build_libexecdir := $(build_prefix)/libexec
 build_datarootdir := $(build_prefix)/share
@@ -707,7 +708,7 @@ ifeq ($(origin LLVM_CONFIG), undefined)
 ifeq ($(USE_SYSTEM_LLVM), 1)
 LLVM_CONFIG := llvm-config$(EXE)
 else
-LLVM_CONFIG := $(build_bindir)/llvm-config$(EXE)
+LLVM_CONFIG := $(build_depsbindir)/llvm-config$(EXE)
 endif
 endif # LLVM_CONFIG undefined
 
@@ -734,7 +735,7 @@ endif
 ifeq ($(USE_SYSTEM_PCRE), 1)
 PCRE_CONFIG := pcre2-config
 else
-PCRE_CONFIG := $(build_bindir)/pcre2-config
+PCRE_CONFIG := $(build_depsbindir)/pcre2-config
 endif
 
 # Use ILP64 BLAS interface when building openblas from source on 64-bit architectures
