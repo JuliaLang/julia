@@ -438,6 +438,7 @@ $(eval $(call LLVM_PATCH,llvm-3.7.1_3))
 $(eval $(call LLVM_PATCH,llvm-D14260))
 $(eval $(call LLVM_PATCH,llvm-3.8.0_bindir))
 $(eval $(call LLVM_PATCH,llvm-3.8.0_winshlib))
+$(eval $(call LLVM_PATCH,llvm-3.8.0_winshlibcmake))
 $(eval $(call LLVM_PATCH,llvm-nodllalias))
 $(LLVM_SRC_DIR)/llvm-nodllalias.patch-applied: $(LLVM_SRC_DIR)/llvm-3.8.0_winshlib.patch-applied
 # Cygwin and openSUSE still use win32-threads mingw, https://llvm.org/bugs/show_bug.cgi?id=26365
