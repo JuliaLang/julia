@@ -221,7 +221,8 @@ function doc!(b::Binding, str::DocStr, sig::ANY = Union{})
     if haskey(m.docs, sig)
         # We allow for docstrings to be updated, but print a warning since it is possible
         # that over-writing a docstring *may* have been accidental.
-        warn("replacing docs for '$b :: $sig'.")
+        s = "replacing docs for '$b :: $sig' in module '$(current_module())'."
+        isdefined(Base, :STDERR) ? warn(s) : ccall(:jl_, Void, (Any,), "WARNING: $s")
     else
         # The ordering of docstrings for each Binding is defined by the order in which they
         # are initially added. Replacing a specific docstring does not change it's ordering.
