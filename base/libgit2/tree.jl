@@ -1,7 +1,6 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
-"""
-Traverse the entries in a tree and its subtrees in post or pre order.
+"""Traverse the entries in a tree and its subtrees in post or preorder.
 
 Function parameter should have following signature:
 
@@ -16,19 +15,19 @@ function treewalk(f::Function, tree::GitTree, payload=Any[], post::Bool = false)
     return cbf_payload
 end
 
-"Get the filename of a tree entry."
+"Returns a file name, as a `String`, of a tree entry."
 function filename(te::GitTreeEntry)
     str = ccall((:git_tree_entry_name, :libgit2), Cstring, (Ptr{Void},), te.ptr)
-    str != C_NULL && return unsafe_string(str)
-    return nothing
+    str == C_NULL && return ""
+    return String(str)
 end
 
-"Get the UNIX file attributes of a tree entry."
+"Returns UNIX file attributes, as a `Cint`, of a tree entry."
 function filemode(te::GitTreeEntry)
     return ccall((:git_tree_entry_filemode, :libgit2), Cint, (Ptr{Void},), te.ptr)
 end
 
-"Convert a tree entry to the `GitAnyObject` it points to."
+"Returns a `GitAnyObject` which is referenced by a tree entry."
 function object(repo::GitRepo, te::GitTreeEntry)
     obj_ptr_ptr = Ref{Ptr{Void}}(C_NULL)
     @check ccall((:git_tree_entry_to_object, :libgit2), Cint,
@@ -37,7 +36,7 @@ function object(repo::GitRepo, te::GitTreeEntry)
     return GitAnyObject(obj_ptr_ptr[])
 end
 
-"Get the id of the object pointed by the entry."
+"Returns an object identifier, as a `Oid`, of a tree entry."
 function oid(te::GitTreeEntry)
     return Oid(ccall((:git_tree_entry_id, :libgit2), Ptr{Oid}, (Ptr{Void},), te.ptr))
 end
@@ -75,7 +74,7 @@ function GitTreeEntry(tree::GitTree, teoid::Oid)
     return GitTreeEntry(res)
 end
 
-"""Lookup a tree entry by its filename.
+"""Lookup a tree entry by its file name.
 
 This returns a `GitTreeEntry` that is owned by the `GitTree`.
 You don't have to free it, but you must not use it after the `GitTree` is released.
