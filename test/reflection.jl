@@ -114,6 +114,18 @@ end
 @test isbits(Float32)
 @test isbits(Int)
 @test !isbits(AbstractString)
+@test isbits(Tuple{Int, Vararg{Int, 2}})
+@test !isbits(Tuple{Int, Vararg{Int}})
+@test !isbits(Tuple{Integer, Vararg{Int, 2}})
+@test isbits(Tuple{Int, Vararg{Any, 0}})
+@test isbits(Tuple{Vararg{Any, 0}})
+
+# issue #16670
+@test isleaftype(Tuple{Int, Vararg{Int, 2}})
+@test !isleaftype(Tuple{Integer, Vararg{Int, 2}})
+@test !isleaftype(Tuple{Int, Vararg{Int}})
+@test isleaftype(Type{Tuple{Integer, Vararg{Int}}})
+@test isleaftype(Type{Vector})
 
 # issue #10165
 i10165(::DataType) = 0

@@ -3150,6 +3150,23 @@ end
 @test_throws ErrorException NTuple{-1, Int}
 @test_throws TypeError Union{Int, 1}
 
+type FooNTuple{N}
+    z::Tuple{Integer, Vararg{Int, N}}
+end
+@test_throws ErrorException FooNTuple{-1}
+@test_throws ErrorException FooNTuple{typemin(Int)}
+@test_throws TypeError FooNTuple{0x01}
+@test fieldtype(FooNTuple{0}, 1) == Tuple{Integer}
+
+type FooTupleT{T}
+    z::Tuple{Int, T, Int}
+end
+@test_throws TypeError FooTupleT{Vararg{Int, 2}}
+@test fieldtype(FooTupleT{Int}, 1) == NTuple{3, Int}
+
+@test Tuple{} === NTuple{0, Any}
+@test Tuple{Int} === Tuple{Int, Vararg{Integer, 0}}
+
 # issue #12003
 const DATE12003 = DateTime(1917,1,1)
 failure12003(dt=DATE12003) = Dates.year(dt)
