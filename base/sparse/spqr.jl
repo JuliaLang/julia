@@ -144,20 +144,31 @@ qrfact(A::SparseMatrixCSC) = qrfact(A, Val{true})
 #
 # This definition is similar to the definition in factorization.jl except the we here have to use
 # \ instead of A_ldiv_B! because of limitations in SPQR
-function (\)(F::Factorization{Float64}, B::StridedVector{Complex{Float64}})
+
+## Two helper methods
+_ret_size(F::Factorization, b::AbstractVector) = (size(F, 2),)
+_ret_size(F::Factorization, B::AbstractMatrix) = (size(F, 2), size(B, 2))
+
+function (\)(F::Factorization{Float64}, B::VecOrMat{Complex{Float64}})
+# | z | z |  reinterpret  | x | x | x | x |  transpose  | x | y |  reshape  | x | y | x | y |
+# | z | z |      ->       | y | y | y | y |     ->      | x | y |     ->    | x | y | x | y |
+#                                                       | x | y |
+#                                                       | x | y |
     c2r = reshape(transpose(reinterpret(Float64, B, (2, length(B)))), size(B, 1), 2*size(B, 2))
     x = F\c2r
-    return reinterpret(Complex{Float64}, transpose(reshape(x, div(length(x), 2), 2)), (size(F,2),))
+
+# | z | z |  reinterpret  | x | x | x | x |  transpose  | x | y |  reshape  | x | y | x | y |
+# | z | z |      <-       | y | y | y | y |     <-      | x | y |     <-    | x | y | x | y |
+#                                                       | x | y |
+#                                                       | x | y |
+    return reinterpret(Complex{Float64}, transpose(reshape(x, (length(x) >> 1), 2)), _ret_size(F, B))
 end
-function (\)(F::Factorization{Float64}, B::StridedMatrix{Complex{Float64}})
-    c2r = reshape(transpose(reinterpret(Float64, B, (2, length(B)))), size(B, 1), 2*size(B, 2))
-    x = F\c2r
-    return reinterpret(Complex{Float64}, transpose(reshape(x, div(length(x), 2), 2)), (size(F,2), size(B,2)))
-end
+
 function (\){T<:VTypes}(F::Factorization{T}, B::StridedVecOrMat{T})
     QtB = qmult(QTX, F, Dense(B))
     convert(typeof(B), solve(RETX_EQUALS_B, F, QtB))
 end
+
 (\)(F::Factorization, B::StridedVecOrMat) = F\convert(AbstractArray{eltype(F)}, B)
 
 end # module

@@ -151,7 +151,7 @@ end
 @test_throws ErrorException transpose(qrfact(big(randn(3,3))))
 @test_throws ErrorException ctranspose(qrfact(big(randn(3,3))))
 
-#Issue 7304
+# Issue 7304
 let
     A = [-√.5 -√.5; -√.5 √.5]
     Q = full(qrfact(A)[:Q])
@@ -177,3 +177,6 @@ end
 
 B = rand(7,2)
 @test_approx_eq (1:7)\B collect(1:7)\B
+
+# Issue 16520
+@test_throws DimensionMismatch ones(3,2)\(1:5)

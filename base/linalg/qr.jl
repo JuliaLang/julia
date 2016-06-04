@@ -545,29 +545,68 @@ function A_ldiv_B!(A::QRPivoted, B::StridedMatrix)
     B
 end
 
-function \{TA,Tb}(A::Union{QR{TA},QRCompactWY{TA},QRPivoted{TA}}, b::StridedVector{Tb})
-    S = promote_type(TA,Tb)
-    m,n = size(A)
-    m == length(b) || throw(DimensionMismatch("left hand side has $m rows, but right hand side has length $(length(b))"))
-    AA = convert(Factorization{S}, A)
-    if n > m
-        x = A_ldiv_B!(AA, [b; zeros(S, n - m)])
+# convenience methods
+## return only the solution of a least squares problem while avoiding promoting
+## vectors to matrices.
+_cut_B(x::AbstractVector, r::UnitRange) = length(x)  > length(r) ? x[r]   : x
+_cut_B(X::AbstractMatrix, r::UnitRange) = size(X, 1) > length(r) ? X[r,:] : X
+
+## append right hand side with zeros if necessary
+function _append_zeros(b::AbstractVector, T::Type, n)
+    if n > length(b)
+        x = zeros(T, n)
+        return copy!(x, b)
     else
-        x = A_ldiv_B!(AA, copy_oftype(b, S))
+        return copy_oftype(b, T)
     end
-    return length(x) > n ? x[1:n] : x
 end
-function \{TA,TB}(A::Union{QR{TA},QRCompactWY{TA},QRPivoted{TA}},B::StridedMatrix{TB})
-    S = promote_type(TA,TB)
-    m,n = size(A)
-    m == size(B,1) || throw(DimensionMismatch("left hand side has $m rows, but right hand side has $(size(B,1)) rows"))
-    AA = convert(Factorization{S}, A)
-    if n > m
-        X = A_ldiv_B!(AA, [B; zeros(S, n - m, size(B, 2))])
+function _append_zeros(B::AbstractMatrix, T::Type, n)
+    if n > size(B, 1)
+        X = zeros(T, (n, size(B, 2)))
+        X[1:size(B,1), :] = B
+        return X
     else
-        X = A_ldiv_B!(AA, copy_oftype(B, S))
+        return copy_oftype(B, T)
     end
-    return size(X, 1) > n ? X[1:n,:] : X
+end
+
+function (\){TA,TB}(A::Union{QR{TA},QRCompactWY{TA},QRPivoted{TA}}, B::AbstractVecOrMat{TB})
+    S = promote_type(TA,TB)
+    m, n = size(A)
+    m == size(B,1) || throw(DimensionMismatch("left hand side has $m rows, but right hand side has $(size(B,1)) rows"))
+
+    AA = convert(Factorization{S}, A)
+
+    X = A_ldiv_B!(AA, _append_zeros(B, S, n))
+
+    return _cut_B(X, 1:n)
+end
+
+# With a real lhs and complex rhs with the same precision, we can reinterpret the complex
+# rhs as a real rhs with twice the number of columns.
+
+# convenience to compute the return size correctly for vector and matrices
+_ret_size(A::Factorization, b::AbstractVector) = (max(size(A, 2), length(b)),)
+_ret_size(A::Factorization, B::AbstractMatrix) = (max(size(A, 2), size(B, 1)), size(B, 2))
+
+function (\){T<:BlasReal}(A::Union{QR{T},QRCompactWY{T},QRPivoted{T}}, BIn::VecOrMat{Complex{T}})
+    m, n = size(A)
+    m == size(BIn, 1) || throw(DimensionMismatch("left hand side has $m rows, but right hand side has $(size(BIn,1)) rows"))
+
+# | z | z |  reinterpret  | x | x | x | x |  transpose  | x | y |  reshape  | x | y | x | y |
+# | z | z |      ->       | y | y | y | y |     ->      | x | y |     ->    | x | y | x | y |
+#                                                       | x | y |
+#                                                       | x | y |
+    B = reshape(transpose(reinterpret(T, BIn, (2, length(BIn)))), size(BIn, 1), 2*size(BIn, 2))
+
+    X = A_ldiv_B!(A, _append_zeros(B, T, n))
+
+# | z | z |  reinterpret  | x | x | x | x |  transpose  | x | y |  reshape  | x | y | x | y |
+# | z | z |      <-       | y | y | y | y |     <-      | x | y |     <-    | x | y | x | y |
+#                                                       | x | y |
+#                                                       | x | y |
+    XX = reinterpret(Complex{T}, transpose(reshape(X, div(length(X), 2), 2)), _ret_size(A, BIn))
+    return _cut_B(XX, 1:n)
 end
 
 ##TODO:  Add methods for rank(A::QRP{T}) and adjust the (\) method accordingly
