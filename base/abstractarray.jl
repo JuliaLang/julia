@@ -239,7 +239,17 @@ similar(   a::AbstractArray, T::Type, dims::Dims)        = Array(T, dims)
 ## from general iterable to any array
 
 function copy!(dest::AbstractArray, src)
-    i = 1
+    destiter = eachindex(dest)
+    state = start(destiter)
+    for x in src
+        i, state = next(destiter, state)
+        dest[i] = x
+    end
+    return dest
+end
+
+function copy!(dest::AbstractArray, dstart::Integer, src)
+    i = Int(dstart)
     for x in src
         dest[i] = x
         i += 1
@@ -247,44 +257,28 @@ function copy!(dest::AbstractArray, src)
     return dest
 end
 
-# if src is not an AbstractArray, moving to the offset might be O(n)
-function copy!(dest::AbstractArray, doffs::Integer, src)
-    doffs < 1 && throw(BoundsError(dest, doffs))
-    st = start(src)
-    i, dmax = doffs, length(dest)
-    while !done(src, st)
-        i > dmax && throw(BoundsError(dest, i))
-        val, st = next(src, st)
-        @inbounds dest[i] = val
-        i += 1
-    end
-    return dest
-end
-
 # copy from an some iterable object into an AbstractArray
-function copy!(dest::AbstractArray, doffs::Integer, src, soffs::Integer)
-    if (doffs < 1) | (soffs < 1)
-        doffs < 1 && throw(BoundsError(dest, doffs))
-        throw(ArgumentError(string("source start offset (",soffs,") is < 1")))
+function copy!(dest::AbstractArray, dstart::Integer, src, sstart::Integer)
+    if (sstart < 1)
+        throw(ArgumentError(string("source start offset (",sstart,") is < 1")))
     end
     st = start(src)
-    for j = 1:(soffs-1)
+    for j = 1:(sstart-1)
         if done(src, st)
             throw(ArgumentError(string("source has fewer elements than required, ",
-                                       "expected at least ",soffs,", got ",j-1)))
+                                       "expected at least ",sstart,", got ",j-1)))
         end
         _, st = next(src, st)
     end
     dn = done(src, st)
     if dn
         throw(ArgumentError(string("source has fewer elements than required, ",
-                                      "expected at least ",soffs,", got ",soffs-1)))
+                                      "expected at least ",sstart,", got ",sstart-1)))
     end
-    i, dmax = doffs, length(dest)
+    i = Int(dstart)
     while !dn
-        i > dmax && throw(BoundsError(dest, i))
         val, st = next(src, st)
-        @inbounds dest[i] = val
+        dest[i] = val
         i += 1
         dn = done(src, st)
     end
@@ -292,24 +286,24 @@ function copy!(dest::AbstractArray, doffs::Integer, src, soffs::Integer)
 end
 
 # this method must be separate from the above since src might not have a length
-function copy!(dest::AbstractArray, doffs::Integer, src, soffs::Integer, n::Integer)
-    n < 0 && throw(BoundsError(dest, n))
+function copy!(dest::AbstractArray, dstart::Integer, src, sstart::Integer, n::Integer)
+    n < 0 && throw(ArgumentError(string("tried to copy n=", n, " elements, but n should be nonnegative")))
     n == 0 && return dest
-    dmax = doffs + n - 1
-    if (dmax > length(dest)) | (doffs < 1) | (soffs < 1)
-        doffs < 1 && throw(BoundsError(dest, doffs))
-        soffs < 1 && throw(ArgumentError(string("source start offset (",soffs,") is < 1")))
-        throw(BoundsError(dest, dmax))
+    dmax = dstart + n - 1
+    inds = linindices(dest)
+    if (dstart ∉ inds || dmax ∉ inds) | (sstart < 1)
+        sstart < 1 && throw(ArgumentError(string("source start offset (",sstart,") is < 1")))
+        throw(BoundsError(dest, dstart:dmax))
     end
     st = start(src)
-    for j = 1:(soffs-1)
+    for j = 1:(sstart-1)
         if done(src, st)
             throw(ArgumentError(string("source has fewer elements than required, ",
-                                       "expected at least ",soffs,", got ",j-1)))
+                                       "expected at least ",sstart,", got ",j-1)))
         end
         _, st = next(src, st)
     end
-    i = doffs
+    i = Int(dstart)
     while i <= dmax && !done(src, st)
         val, st = next(src, st)
         @inbounds dest[i] = val
@@ -326,17 +320,17 @@ copy!(dest::AbstractArray, src::AbstractArray) =
     copy!(linearindexing(dest), dest, linearindexing(src), src)
 
 function copy!(::LinearIndexing, dest::AbstractArray, ::LinearIndexing, src::AbstractArray)
-    n = length(src)
-    n > length(dest) && throw(BoundsError(dest, n))
-    @inbounds for i = 1:n
+    destinds, srcinds = linindices(dest), linindices(src)
+    isempty(srcinds) || (first(srcinds) ∈ destinds && last(srcinds) ∈ destinds) || throw(BoundsError(dest, srcinds))
+    @inbounds for i in srcinds
         dest[i] = src[i]
     end
     return dest
 end
 
 function copy!(::LinearIndexing, dest::AbstractArray, ::LinearSlow, src::AbstractArray)
-    n = length(src)
-    n > length(dest) && throw(BoundsError(dest, n))
+    destinds, srcinds = linindices(dest), linindices(src)
+    isempty(srcinds) || (first(srcinds) ∈ destinds && last(srcinds) ∈ destinds) || throw(BoundsError(dest, srcinds))
     i = 0
     @inbounds for a in src
         dest[i+=1] = a
@@ -344,26 +338,26 @@ function copy!(::LinearIndexing, dest::AbstractArray, ::LinearSlow, src::Abstrac
     return dest
 end
 
-function copy!(dest::AbstractArray, doffs::Integer, src::AbstractArray)
-    copy!(dest, doffs, src, 1, length(src))
+function copy!(dest::AbstractArray, dstart::Integer, src::AbstractArray)
+    copy!(dest, dstart, src, first(linindices(src)), length(src))
 end
 
-function copy!(dest::AbstractArray, doffs::Integer, src::AbstractArray, soffs::Integer)
-    soffs > length(src) && throw(BoundsError(src, soffs))
-    copy!(dest, doffs, src, soffs, length(src)-soffs+1)
+function copy!(dest::AbstractArray, dstart::Integer, src::AbstractArray, sstart::Integer)
+    srcinds = linindices(src)
+    sstart ∈ srcinds || throw(BoundsError(src, sstart))
+    copy!(dest, dstart, src, sstart, last(srcinds)-sstart+1)
 end
 
-function copy!(dest::AbstractArray, doffs::Integer,
-               src::AbstractArray, soffs::Integer,
+function copy!(dest::AbstractArray, dstart::Integer,
+               src::AbstractArray, sstart::Integer,
                n::Integer)
     n == 0 && return dest
-    n < 0  && throw(BoundsError(src, n))
-    soffs+n-1 > length(src)  && throw(BoundsError(src, soffs+n-1))
-    doffs+n-1 > length(dest) && throw(BoundsError(dest, doffs+n-1))
-    doffs < 1 && throw(BoundsError(dest, doffs))
-    soffs < 1 && throw(BoundsError(src, soffs))
-    @inbounds for i = 0:(n-1) #Fixme iter
-        dest[doffs+i] = src[soffs+i]
+    n < 0 && throw(ArgumentError(string("tried to copy n=", n, " elements, but n should be nonnegative")))
+    destinds, srcinds = linindices(dest), linindices(src)
+    (dstart ∈ destinds && dstart+n-1 ∈ destinds) || throw(BoundsError(dest, dstart:dstart+n-1))
+    (sstart ∈ srcinds  && sstart+n-1 ∈ srcinds)  || throw(BoundsError(src,  sstart:sstart+n-1))
+    @inbounds for i = 0:(n-1)
+        dest[dstart+i] = src[sstart+i]
     end
     return dest
 end
@@ -453,7 +447,7 @@ function eachindex(A::AbstractArray, B::AbstractArray...)
     @_inline_meta
     eachindex(linearindexing(A,B...), A, B...)
 end
-eachindex(::LinearFast, A::AbstractArray) = 1:length(A)
+eachindex(::LinearFast, A::AbstractArray) = linindices(A)
 function eachindex(::LinearFast, A::AbstractArray, B::AbstractArray...)
     @_inline_meta
     1:_maxlength(A, B...)
