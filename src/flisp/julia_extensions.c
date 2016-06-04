@@ -96,7 +96,7 @@ static int is_wc_cat_id_start(uint32_t wc, utf8proc_propval_t cat)
             (wc >= 0x208a && wc <= 0x208e) ||
 
             // angle symbols
-            (wc >= 0x2220 && wc <= 0x2222) || // ∠, ∡, ∢
+            (wc >= 0x2221 && wc <= 0x2222) || // ∡, ∢
             (wc >= 0x299b && wc <= 0x29af) || // ⦛, ⦜, ⦝, ⦞, ⦟, ⦠, ⦡, ⦢, ⦣, ⦤, ⦥, ⦦, ⦧, ⦨, ⦩, ⦪, ⦫, ⦬, ⦭, ⦮, ⦯
 
             // Other_ID_Start
