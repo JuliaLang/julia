@@ -115,6 +115,10 @@ Library improvements
       package provides the old-style `handler` functionality, for compatibility
       with code that needs to support both Julia v0.4 and v0.5.
 
+  * New `°` constant (which can be typed by tab-completing `\degree`) equal
+    to `π/180`, useful for defining angles in degrees, e.g. `30°`, in a way
+    that is automatically converted to radians.
+
   * The functions `remotecall`, `remotecall_fetch`, and `remotecall_wait` now have the
     function argument as the first argument to allow for do-block syntax ([#13338]).
 

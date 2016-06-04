@@ -106,6 +106,7 @@ big(x::Irrational) = convert(BigFloat,x)
 @irrational γ        0.57721566490153286061  euler
 @irrational catalan  0.91596559417721901505  catalan
 @irrational φ        1.61803398874989484820  (1+sqrt(big(5)))/2
+@irrational °      0.0174532925199432957692  big(π)/180
 
 # aliases
 const pi = π
