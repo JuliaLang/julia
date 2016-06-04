@@ -268,7 +268,7 @@ $(llvm_python_workaround):
 	/usr/bin/python2 -c 'import sys; sys.exit(not sys.version_info < (3, 0))' && \
 	ln -sf /usr/bin/python2 "$@/python" && \
 	ln -sf /usr/bin/python2-config "$@/python-config"
-LLVM_FLAGS += --with-python="$(shell $(SRCDIR)/find_python2)"
+LLVM_FLAGS += --with-python="$(shell $(SRCDIR)/tools/find_python2)"
 
 ifeq ($(BUILD_CUSTOM_LIBCXX),1)
 
