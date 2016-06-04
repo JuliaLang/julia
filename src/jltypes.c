@@ -2123,15 +2123,37 @@ static jl_value_t *inst_datatype(jl_datatype_t *dt, jl_svec_t *p, jl_value_t **i
     if (stack_lkup)
         return stack_lkup;
 
-    if (istuple && ntp == 1 && jl_is_vararg_type(iparams[0])) {
-        // normalize Tuple{Vararg{Int,3}} to Tuple{Int,Int,Int}
-        jl_datatype_t *va = (jl_datatype_t*)iparams[0];
+    if (istuple && ntp > 0 && jl_is_vararg_type(iparams[ntp - 1])) {
+        // normalize Tuple{..., Vararg{Int, 3}} to Tuple{..., Int, Int, Int}
+        jl_value_t *va = iparams[ntp - 1];
         if (jl_is_long(jl_tparam1(va))) {
             ssize_t nt = jl_unbox_long(jl_tparam1(va));
             if (nt < 0)
                 jl_errorf("apply_type: Vararg length N is negative: %zd", nt);
-            if (jl_is_leaf_type(jl_tparam0(va)))
-                return jl_tupletype_fill(nt, jl_tparam0(va));
+            va = jl_tparam0(va);
+            if (nt == 0 || jl_is_leaf_type(va)) {
+                if (ntp == 1)
+                    return jl_tupletype_fill(nt, va);
+                size_t i, l;
+                for (i = 0, l = ntp - 1; i < l; i++) {
+                    if (!jl_is_leaf_type(iparams[i]))
+                        break;
+                }
+                if (i == l) {
+                    p = jl_alloc_svec(ntp - 1 + nt);
+                    for (i = 0, l = ntp - 1; i < l; i++) {
+                        jl_svecset(p, i, iparams[i]);
+                    }
+                    l = ntp - 1 + nt;
+                    for (; i < l; i++) {
+                        jl_svecset(p, i, va);
+                    }
+                    JL_GC_PUSH1(&p);
+                    jl_value_t *ndt = (jl_value_t*)jl_apply_tuple_type(p);
+                    JL_GC_POP();
+                    return ndt;
+                }
+            }
         }
     }
 
@@ -2149,7 +2171,7 @@ static jl_value_t *inst_datatype(jl_datatype_t *dt, jl_svec_t *p, jl_value_t **i
         return jl_typeof(jl_emptytuple);
     }
 
-    jl_datatype_t *ndt=NULL;
+    jl_datatype_t *ndt = NULL;
     jl_svec_t *ftypes;
 
     // move array of instantiated parameters to heap; we need to keep it
