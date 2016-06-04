@@ -307,18 +307,63 @@ jl_value_t *jl_nth_slot_type(jl_tupletype_t *sig, size_t i)
     return NULL;
 }
 
+// compute the type of the Vararg variable of a Vararg signature
+jl_tupletype_t *jl_compute_vararg_type(jl_tupletype_t *tt, int nreq)
+{
+    size_t i, np = jl_nparams(tt);
+    jl_svec_t *p = jl_alloc_svec(np - nreq);
+    JL_GC_PUSH1(&p);
+    for (i = nreq; i < np; i++) {
+        jl_value_t *elt = jl_svecref(tt->parameters, i);
+        jl_value_t *va_N = NULL;
+        jl_svecset(p, i - nreq, elt);
+        if (jl_is_vararg_type(elt)) {
+            va_N = jl_tparam1(elt);
+            elt = jl_tparam0(elt);
+        }
+        if (jl_is_type_type(elt)) {
+            elt = jl_typeof(jl_tparam0(elt));
+            if (elt == (jl_value_t*)jl_tvar_type)
+                elt = (jl_value_t*)jl_type_type;
+            if (va_N)
+                elt = (jl_value_t*)jl_wrap_vararg(elt, va_N);
+            jl_svecset(p, i - nreq, elt);
+        }
+        assert(elt != (jl_value_t*)jl_tvar_type);
+    }
+    tt = jl_apply_tuple_type(p);
+    JL_GC_POP();
+    return tt;
+}
+
 // after intersection, the argument tuple type needs to be corrected to reflect the signature match
 // that occurred, if the arguments contained a Type but the signature matched on the kind
 static jl_tupletype_t *join_tsig(jl_tupletype_t *tt, jl_tupletype_t *sig)
 {
+    size_t i, n, np = jl_nparams(tt), nsig = jl_datatype_nfields(sig);
+    if (nsig == 0)
+        return tt;
     jl_svec_t *newparams = NULL;
     JL_GC_PUSH1(&newparams);
-    int changed = 0;
-    size_t i, np;
-    for (i = 0, np = jl_nparams(tt); i < np; i++) {
-        jl_value_t *elt = jl_tparam(tt, i);
+    jl_value_t *va = jl_tparam(sig, nsig - 1);
+    if (va && jl_is_vararg_type(va)) {
+        va = jl_tparam0(va);
+        n = nsig - 1;
+        assert(np >= n);
+    }
+    else {
+        va = NULL;
+        n = nsig;
+        assert(np == nsig);
+    }
+    for (i = 0; i < np; i++) {
         jl_value_t *newelt = NULL;
-        jl_value_t *decl_i = jl_nth_slot_type(sig, i);
+        jl_value_t *elt = jl_tparam(tt, i);
+        jl_value_t *decl_i;
+        if (va == NULL || i < n)
+            decl_i = jl_tparam(sig, i);
+        else
+            decl_i = va;
 
         if (jl_is_type_type(elt)) {
             // if the declared type was not Any or Union{Type, ...},
@@ -343,14 +388,12 @@ static jl_tupletype_t *join_tsig(jl_tupletype_t *tt, jl_tupletype_t *sig)
         }
         // prepare to build a new type with the replacement above
         if (newelt) {
-            if (!changed) {
+            if (newparams == NULL)
                 newparams = jl_svec_copy(tt->parameters);
-                changed = 1;
-            }
             jl_svecset(newparams, i, newelt);
         }
     }
-    if (changed)
+    if (newparams)
         tt = jl_apply_tuple_type(newparams);
     JL_GC_POP();
     return tt;

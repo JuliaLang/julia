@@ -223,6 +223,7 @@ jl_expr_t *jl_lam_body(jl_expr_t *l);
 jl_value_t *jl_first_argument_datatype(jl_value_t *argtypes);
 int jl_has_intrinsics(jl_lambda_info_t *li, jl_value_t *v, jl_module_t *m);
 
+jl_tupletype_t *jl_compute_vararg_type(jl_tupletype_t *tt, int nreq);
 jl_value_t *jl_nth_slot_type(jl_tupletype_t *sig, size_t i);
 void jl_compute_field_offsets(jl_datatype_t *st);
 jl_array_t *jl_new_array_for_deserialization(jl_value_t *atype, uint32_t ndims, size_t *dims,
