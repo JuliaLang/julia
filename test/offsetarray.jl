@@ -149,3 +149,58 @@ b = A[1,i1]
 @test indices(b) == (-4:-3,)
 @test b[-4] == 3
 @test b[-3] == 1
+
+# copy!
+a = OAs.OffsetArray{Int}((-3:-1,))
+fill!(a, -1)
+copy!(a, (1,2))   # non-array iterables
+@test a[-3] == 1
+@test a[-2] == 2
+@test a[-1] == -1
+fill!(a, -1)
+copy!(a, -2, (1,2))
+@test a[-3] == -1
+@test a[-2] == 1
+@test a[-1] == 2
+@test_throws BoundsError copy!(a, 1, (1,2))
+fill!(a, -1)
+copy!(a, -2, (1,2,3), 2)
+@test a[-3] == -1
+@test a[-2] == 2
+@test a[-1] == 3
+@test_throws BoundsError copy!(a, -2, (1,2,3), 1)
+fill!(a, -1)
+copy!(a, -2, (1,2,3), 1, 2)
+@test a[-3] == -1
+@test a[-2] == 1
+@test a[-1] == 2
+
+b = 1:2    # copy between AbstractArrays
+bo = OAs.OffsetArray(1:2, (-3,))
+@test_throws BoundsError copy!(a, b)
+fill!(a, -1)
+copy!(a, bo)
+@test a[-3] == -1
+@test a[-2] == 1
+@test a[-1] == 2
+fill!(a, -1)
+copy!(a, -2, bo)
+@test a[-3] == -1
+@test a[-2] == 1
+@test a[-1] == 2
+@test_throws BoundsError copy!(a, -4, bo)
+@test_throws BoundsError copy!(a, -1, bo)
+fill!(a, -1)
+copy!(a, -3, b, 2)
+@test a[-3] == 2
+@test a[-2] == a[-1] == -1
+@test_throws BoundsError copy!(a, -3, b, 1, 4)
+am = OAs.OffsetArray{Int}((1:1, 7:9))  # for testing linear indexing
+fill!(am, -1)
+copy!(am, b)
+@test am[1] == 1
+@test am[2] == 2
+@test am[3] == -1
+@test am[1,7] == 1
+@test am[1,8] == 2
+@test am[1,9] == -1
