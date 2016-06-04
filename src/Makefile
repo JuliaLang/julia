@@ -63,10 +63,14 @@ else
 ifeq ($(LLVM_USE_CMAKE),1)
 LLVMLINK += $(shell $(LLVM_CONFIG_HOST) --ldflags) -lLLVM
 else
+ifeq ($(OS),WINNT)
+LLVMLINK += $(shell $(LLVM_CONFIG_HOST) --ldflags) -lLLVM-$(LLVM_VER_SHORT)
+else
 LLVMLINK += $(shell $(LLVM_CONFIG_HOST) --ldflags) -lLLVM-$(shell $(LLVM_CONFIG_HOST) --version)
-endif
+endif # OS == WINNT
+endif # LLVM_USE_CMAKE == 1
 FLAGS += -DLLVM_SHLIB
-endif
+endif # USE_LLVM_SHLIB == 1
 
 COMMON_LIBS := -L$(build_shlibdir) -L$(build_libdir) $(LIBUV) $(LIBUTF8PROC) $(NO_WHOLE_ARCHIVE) $(LLVMLINK) $(OSLIBS)
 DEBUG_LIBS := $(WHOLE_ARCHIVE) $(BUILDDIR)/flisp/libflisp-debug.a $(WHOLE_ARCHIVE) $(BUILDDIR)/support/libsupport-debug.a $(COMMON_LIBS)
