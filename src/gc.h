@@ -56,7 +56,7 @@ typedef struct {
 } jl_alloc_num_t;
 
 typedef struct {
-    int sweep_mask;
+    int always_full;
     int wait_for_debugger;
     jl_alloc_num_t pool;
     jl_alloc_num_t other;
@@ -199,10 +199,7 @@ extern bigval_t *big_objects_marked;
 extern arraylist_t finalizer_list;
 extern arraylist_t finalizer_list_marked;
 extern arraylist_t to_finalize;
-
-// Counters
-// GC_FINAL_STATS only
-extern size_t max_pg_count;
+extern int64_t lazy_freed_pages;
 
 #define bigval_header(data) container_of((data), bigval_t, header)
 
@@ -270,6 +267,66 @@ void jl_gc_free_page(void *p);
 
 // GC debug
 
+#if defined(GC_TIME) || defined(GC_FINAL_STATS)
+void gc_settime_premark_end(void);
+void gc_settime_postmark_end(void);
+#else
+#define gc_settime_premark_end()
+#define gc_settime_postmark_end()
+#endif
+
+#ifdef GC_FINAL_STATS
+void gc_final_count_page(size_t pg_cnt);
+void gc_final_pause_end(int64_t t0, int64_t tend);
+#else
+#define gc_final_count_page(pg_cnt)
+#define gc_final_pause_end(t0, tend)
+#endif
+
+#ifdef GC_TIME
+void gc_time_pool_start(void);
+void gc_time_count_page(int freedall, int pg_skpd);
+void gc_time_pool_end(int sweep_full);
+
+void gc_time_big_start(void);
+void gc_time_count_big(int old_bits, int bits);
+void gc_time_big_end(void);
+
+void gc_time_mallocd_array_start(void);
+void gc_time_count_mallocd_array(int bits);
+void gc_time_mallocd_array_end(void);
+
+void gc_time_mark_pause(int64_t t0, int64_t scanned_bytes,
+                        int64_t perm_scanned_bytes);
+void gc_time_sweep_pause(uint64_t gc_end_t, int64_t actual_allocd,
+                         int64_t live_bytes, int64_t estimate_freed,
+                         int sweep_full);
+#else
+#define gc_time_pool_start()
+STATIC_INLINE void gc_time_count_page(int freedall, int pg_skpd)
+{
+    (void)freedall;
+    (void)pg_skpd;
+}
+#define gc_time_pool_end(sweep_full)
+#define gc_time_big_start()
+STATIC_INLINE void gc_time_count_big(int old_bits, int bits)
+{
+    (void)old_bits;
+    (void)bits;
+}
+#define gc_time_big_end()
+#define gc_time_mallocd_array_start()
+STATIC_INLINE void gc_time_count_mallocd_array(int bits)
+{
+    (void)bits;
+}
+#define gc_time_mallocd_array_end()
+#define gc_time_mark_pause(t0, scanned_bytes, perm_scanned_bytes)
+#define gc_time_sweep_pause(gc_end_t, actual_allocd, live_bytes,        \
+                            estimate_freed, sweep_full)
+#endif
+
 #ifdef GC_VERIFY
 extern jl_value_t *lostval;
 void gc_verify(void);
@@ -312,13 +369,13 @@ extern int gc_verifying;
 
 #ifdef GC_DEBUG_ENV
 JL_DLLEXPORT extern jl_gc_debug_env_t jl_gc_debug_env;
-#define gc_quick_sweep_mask jl_gc_debug_env.sweep_mask
+#define gc_sweep_always_full jl_gc_debug_env.always_full
 int gc_debug_check_other(void);
 int gc_debug_check_pool(void);
 void gc_debug_print(void);
 void gc_scrub(char *stack_hi);
 #else
-#define gc_quick_sweep_mask GC_MARKED_NOESC
+#define gc_sweep_always_full 0
 static inline int gc_debug_check_other(void)
 {
     return 0;
@@ -352,6 +409,14 @@ static inline void objprofile_printall(void)
 static inline void objprofile_reset(void)
 {
 }
+#endif
+
+#ifdef MEMPROFILE
+static void gc_stats_all_pool(void);
+static void gc_stats_big_obj(void);
+#else
+#define gc_stats_all_pool()
+#define gc_stats_big_obj()
 #endif
 
 // For debugging

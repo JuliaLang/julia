@@ -128,11 +128,7 @@ STATIC_INLINE void jl_gc_wb_buf(void *parent, void *bufptr) // parent isa jl_val
 
 void gc_debug_print_status(void);
 void gc_debug_critical_error(void);
-#if defined(GC_FINAL_STATS)
 void jl_print_gc_stats(JL_STREAM *s);
-#else
-#define jl_print_gc_stats(s) ((void)s)
-#endif
 int jl_assign_type_uid(void);
 jl_value_t *jl_cache_type_(jl_datatype_t *type);
 int  jl_get_t_uid_ctr(void);
