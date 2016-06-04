@@ -21,8 +21,8 @@ $(BUILDDIR)/dsfmt-$(DSFMT_VER)/config.status: $(SRCDIR)/srccache/dsfmt-$(DSFMT_V
 	$(JLCHECKSUM) $<
 	mkdir -p $(dir $@) && \
 	$(TAR) -C $(dir $@) --strip-components 1 -xf $< && \
-	cd $(dir $@) && patch < $(SRCDIR)/dSFMT.h.patch
-	cd $(dir $@) && patch < $(SRCDIR)/dSFMT.c.patch
+	cd $(dir $@) && patch < $(SRCDIR)/patches/dSFMT.h.patch
+	cd $(dir $@) && patch < $(SRCDIR)/patches/dSFMT.c.patch
 	echo 1 > $@
 $(DSFMT_OBJ_SOURCE): $(BUILDDIR)/dsfmt-$(DSFMT_VER)/config.status
 	cd $(dir $<) && \
