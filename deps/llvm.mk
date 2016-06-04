@@ -87,7 +87,7 @@ LLVM_FLAGS += --disable-profiling --enable-static $(LLVM_TARGET_FLAGS)
 LLVM_FLAGS += --disable-bindings --disable-docs --disable-libedit --disable-terminfo
 # LLVM has weird install prefixes (see llvm-$(LLVM_VER)/build_$(LLVM_BUILDTYPE)/Makefile.config for the full list)
 # We map them here to the "normal" ones, which means just prefixing "PROJ_" to the variable name.
-LLVM_MFLAGS := PROJ_libdir=$(build_libdir) PROJ_bindir=$(build_bindir) PROJ_includedir=$(build_includedir)
+LLVM_MFLAGS := PROJ_libdir=$(build_libdir) PROJ_bindir=$(build_depsbindir) PROJ_includedir=$(build_includedir)
 ifeq ($(LLVM_ASSERTIONS), 1)
 LLVM_FLAGS += --enable-assertions
 LLVM_CMAKE += -DLLVM_ENABLE_ASSERTIONS:BOOL=ON
@@ -426,6 +426,9 @@ else ifeq ($(LLVM_VER),3.7.1)
 $(eval $(call LLVM_PATCH,llvm-3.7.1))
 $(eval $(call LLVM_PATCH,llvm-3.7.1_2))
 $(eval $(call LLVM_PATCH,llvm-3.7.1_3))
+$(eval $(call LLVM_PATCH,llvm-3.7.1_symlinks))
+$(eval $(call LLVM_PATCH,llvm-3.8.0_bindir))
+$(LLVM_SRC_DIR)/llvm-3.8.0_bindir.patch-applied: $(LLVM_SRC_DIR)/llvm-3.7.1_symlinks.patch-applied
 $(eval $(call LLVM_PATCH,llvm-D14260))
 $(eval $(call LLVM_PATCH,llvm-nodllalias))
 $(LLVM_SRC_DIR)/llvm-3.7.1_2.patch-applied: $(LLVM_SRC_DIR)/llvm-3.7.1.patch-applied
@@ -433,6 +436,7 @@ $(LLVM_SRC_DIR)/llvm-nodllalias.patch-applied: $(LLVM_SRC_DIR)/llvm-3.7.1_2.patc
 else ifeq ($(LLVM_VER),3.8.0)
 $(eval $(call LLVM_PATCH,llvm-3.7.1_3))
 $(eval $(call LLVM_PATCH,llvm-D14260))
+$(eval $(call LLVM_PATCH,llvm-3.8.0_bindir))
 $(eval $(call LLVM_PATCH,llvm-3.8.0_winshlib))
 $(eval $(call LLVM_PATCH,llvm-nodllalias))
 $(LLVM_SRC_DIR)/llvm-nodllalias.patch-applied: $(LLVM_SRC_DIR)/llvm-3.8.0_winshlib.patch-applied
@@ -518,7 +522,7 @@ reinstall-llvm:
 
 clean-llvm:
 	-$(MAKE) -C $(LLVM_BUILDDIR_withtype) clean
-	-rm -f $(build_bindir)/llvm-config
+	-rm -f $(build_depsbindir)/llvm-config
 distclean-llvm:
 	-rm -rf $(LLVM_TAR) $(LLVM_CLANG_TAR) \
 		$(LLVM_COMPILER_RT_TAR) $(LLVM_LIBCXX_TAR) $(LLVM_LLDB_TAR) \

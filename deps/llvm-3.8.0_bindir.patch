@@ -1,0 +1,35 @@
+diff --git a/cmake/modules/AddLLVM.cmake b/cmake/modules/AddLLVM.cmake
+index cc7445f..117960c 100644
+--- a/cmake/modules/AddLLVM.cmake
++++ b/cmake/modules/AddLLVM.cmake
+@@ -771,7 +771,7 @@ macro(add_llvm_tool name)
+     if( LLVM_BUILD_TOOLS )
+       install(TARGETS ${name}
+               EXPORT LLVMExports
+-              RUNTIME DESTINATION bin
++              RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
+               COMPONENT ${name})
+ 
+       if (NOT CMAKE_CONFIGURATION_TYPES)
+@@ -1211,7 +1211,7 @@ function(llvm_install_symlink name dest)
+   set(full_dest ${dest}${CMAKE_EXECUTABLE_SUFFIX})
+ 
+   install(SCRIPT ${INSTALL_SYMLINK}
+-          CODE "install_symlink(${full_name} ${full_dest} bin)"
++          CODE "install_symlink(${full_name} ${full_dest} ${CMAKE_INSTALL_BINDIR})"
+           COMPONENT ${component})
+ 
+   if (NOT CMAKE_CONFIGURATION_TYPES AND NOT ARG_ALWAYS_GENERATE)
+diff --git a/cmake/modules/TableGen.cmake b/cmake/modules/TableGen.cmake
+index fca7d1b..8ae6bf3 100644
+--- a/cmake/modules/TableGen.cmake
++++ b/cmake/modules/TableGen.cmake
+@@ -141,7 +141,7 @@ macro(add_tablegen target project)
+   if (${project} STREQUAL LLVM AND NOT LLVM_INSTALL_TOOLCHAIN_ONLY)
+     install(TARGETS ${target}
+             EXPORT LLVMExports
+-            RUNTIME DESTINATION bin)
++            RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
+   endif()
+   set_property(GLOBAL APPEND PROPERTY LLVM_EXPORTS ${target})
+ endmacro()
