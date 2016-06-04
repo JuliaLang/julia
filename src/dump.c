@@ -529,6 +529,20 @@ static void jl_serialize_datatype(ios_t *s, jl_datatype_t *dt)
         tag = 4;
     else if (dt == jl_uint8_type)
         tag = 8;
+
+    if (strncmp(jl_symbol_name(dt->name->name), "#kw#", 4) == 0) {
+        /* XXX: yuck, but the auto-generated kw types from the serializer isn't a real type, so we *must* be very careful */
+        assert(tag == 0 || tag == 5 || tag == 6);
+        if (tag == 6) {
+            jl_methtable_t *mt = dt->name->mt;
+            jl_datatype_t *primarydt = (jl_datatype_t*)jl_get_global(mt->module, mt->name);
+            assert(jl_is_datatype(primarydt));
+            assert(jl_typeof(primarydt->name->mt->kwsorter) == (jl_value_t*)dt);
+            dt = primarydt;
+            tag = 9;
+        }
+    }
+
     writetag(s, (jl_value_t*)SmallDataType_tag);
     write_uint8(s, 0); // virtual size
     jl_serialize_value(s, (jl_value_t*)jl_datatype_type);
@@ -542,6 +556,11 @@ static void jl_serialize_datatype(ios_t *s, jl_datatype_t *dt)
         jl_serialize_value(s, dt->parameters);
         return;
     }
+    if (tag == 9) {
+        jl_serialize_value(s, dt);
+        return;
+    }
+
     size_t nf = jl_datatype_nfields(dt);
     write_uint16(s, nf);
     write_int32(s, dt->size);
@@ -993,37 +1012,25 @@ struct jl_serialize_methcache_from_mod_env {
     ios_t *s;
     jl_sym_t *name;
     jl_module_t *mod;
-    int8_t iskw;
 };
 
 static int jl_serialize_methcache_from_mod(jl_typemap_entry_t *ml, void *closure)
 {
     struct jl_serialize_methcache_from_mod_env *env = (struct jl_serialize_methcache_from_mod_env*)closure;
     if (module_in_worklist(ml->func.method->module)) {
-        jl_serialize_value(env->s, env->mod);
-        jl_serialize_value(env->s, env->name);
-        write_int8(env->s, env->iskw);
-        jl_serialize_value(env->s, ml->simplesig);
         jl_serialize_value(env->s, ml->func.method);
+        jl_serialize_value(env->s, ml->simplesig);
     }
     return 1;
 }
 
-static void jl_serialize_methtable_from_mod(ios_t *s, jl_typename_t *tn, int8_t iskw)
+static void jl_serialize_methtable_from_mod(ios_t *s, jl_typename_t *tn)
 {
     struct jl_serialize_methcache_from_mod_env env;
     env.s = s;
     env.mod = tn->module;
     env.name = tn->name;
-    env.iskw = iskw;
     assert(tn->module);
-    if (iskw) {
-        if (!tn->mt->kwsorter)
-            return;
-        assert(tn->mt->module == jl_gf_mtable(tn->mt->kwsorter)->module);
-        tn = ((jl_datatype_t*)jl_typeof(tn->mt->kwsorter))->name;
-        assert(tn->mt->kwsorter == NULL);
-    }
     jl_typemap_visitor(tn->mt->defs, jl_serialize_methcache_from_mod, &env);
 }
 
@@ -1036,14 +1043,12 @@ static void jl_serialize_lambdas_from_mod(ios_t *s, jl_module_t *m)
         if (table[i] != HT_NOTFOUND) {
             jl_binding_t *b = (jl_binding_t*)table[i];
             if (b->owner == m && b->value && b->constp) {
-                if (jl_is_datatype(b->value) &&
-                        (strlen(jl_symbol_name(b->name)) <= 4 || strncmp(jl_symbol_name(b->name), "#kw#", 4))) { /* XXX: yuck, but the auto-generated kw types from the serializer isn't a real type, so we *must* reject it */
+                if (jl_is_datatype(b->value)) {
                     jl_typename_t *tn = ((jl_datatype_t*)b->value)->name;
                     if (tn->module == m && tn->name == b->name) {
                         jl_methtable_t *mt = tn->mt;
                         if (mt != NULL && (jl_value_t*)mt != jl_nothing && (mt != jl_type_type_mt || tn == jl_type_type->name)) {
-                            jl_serialize_methtable_from_mod(s, tn, 0);
-                            jl_serialize_methtable_from_mod(s, tn, 1);
+                            jl_serialize_methtable_from_mod(s, tn);
                         }
                     }
                 }
@@ -1175,12 +1180,18 @@ static jl_value_t *jl_deserialize_datatype(ios_t *s, int pos, jl_value_t **loc)
         backref_list.items[pos] = dtv;
         return dtv;
     }
+    if (tag == 9) {
+        jl_datatype_t *primarydt = (jl_datatype_t*)jl_deserialize_value(s, NULL);
+        jl_value_t *dtv = jl_typeof(jl_get_kwsorter(primarydt->name));
+        backref_list.items[pos] = dtv;
+        return dtv;
+    }
     uint16_t nf = read_uint16(s);
     size_t size = read_int32(s);
     uint8_t flags = read_uint8(s);
     uint8_t depth = read_int32(s);
     uint8_t fielddesc_type = read_int8(s);
-    jl_datatype_t *dt;
+    jl_datatype_t *dt = NULL;
     if (tag == 2)
         dt = jl_int32_type;
     else if (tag == 3)
@@ -1189,8 +1200,10 @@ static jl_value_t *jl_deserialize_datatype(ios_t *s, int pos, jl_value_t **loc)
         dt = jl_int64_type;
     else if (tag == 8)
         dt = jl_uint8_type;
-    else
+    else if (tag == 0 || tag == 5)
         dt = jl_new_uninitialized_datatype(nf, fielddesc_type);
+    else
+        assert(0);
     assert(tree_literal_values==NULL && mode != MODE_AST);
     backref_list.items[pos] = dt;
     dt->size = size;
@@ -1684,19 +1697,12 @@ static jl_value_t *jl_deserialize_value_(ios_t *s, jl_value_t *vtag, jl_value_t 
 static void jl_deserialize_lambdas_from_mod(ios_t *s)
 {
     while (1) {
-        jl_module_t *mod = (jl_module_t*)jl_deserialize_value(s, NULL);
-        if (mod == NULL)
-            return;
-        jl_sym_t *name = (jl_sym_t*)jl_deserialize_value(s, NULL);
-        jl_datatype_t *gf = (jl_datatype_t*)jl_get_global(mod, name);
-        assert(jl_is_datatype(gf));
-        int8_t iskw = read_int8(s);
-        if (iskw) {
-            gf = (jl_datatype_t*)jl_typeof(jl_get_kwsorter(gf->name));
-            assert(jl_is_datatype(gf));
-        }
-        jl_tupletype_t *simpletype = (jl_tupletype_t*)jl_deserialize_value(s, NULL);
         jl_method_t *meth = (jl_method_t*)jl_deserialize_value(s, NULL);
+        if (meth == NULL)
+            return;
+        jl_tupletype_t *simpletype = (jl_tupletype_t*)jl_deserialize_value(s, NULL);
+        jl_datatype_t *gf = (jl_datatype_t*)jl_tparam0(meth->sig);
+        assert(jl_is_datatype(gf));
         jl_method_table_insert(gf->name->mt, meth, simpletype);
     }
 }
