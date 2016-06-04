@@ -45,7 +45,7 @@ end
 
 # General tests for docstrings.
 
-const LINE_NUMBER = @__LINE__
+const LINE_NUMBER = @__LINE__+1
 "DocsTest"
 module DocsTest
 
