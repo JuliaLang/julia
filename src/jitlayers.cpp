@@ -131,43 +131,12 @@ static void addOptimizationPasses(T *PM)
     //PM->add(createCFGSimplificationPass());     // Merge & remove BBs
 }
 
-#ifdef USE_MCJIT
-#ifdef LLVM37
-class RTDyldMemoryManagerJL : public SectionMemoryManager {
-    RTDyldMemoryManagerJL(const RTDyldMemoryManagerJL&) = delete;
-    void operator=(const RTDyldMemoryManagerJL&) = delete;
-
-public:
-    RTDyldMemoryManagerJL() {};
-    ~RTDyldMemoryManagerJL() override {};
-    void registerEHFrames(uint8_t *Addr, uint64_t LoadAddr, size_t Size) override;
-    void deregisterEHFrames(uint8_t *Addr, uint64_t LoadAddr, size_t Size) override;
-};
-
-void RTDyldMemoryManagerJL::registerEHFrames(uint8_t *Addr,
-                                             uint64_t LoadAddr,
-                                             size_t Size)
-{
-    register_eh_frames(Addr, Size);
-}
-
-void RTDyldMemoryManagerJL::deregisterEHFrames(uint8_t *Addr,
-                                               uint64_t LoadAddr,
-                                               size_t Size)
-{
-    deregister_eh_frames(Addr, Size);
-}
-#else
-typedef SectionMemoryManager RTDyldMemoryManagerJL;
-#endif
-
-RTDyldMemoryManager* createRTDyldMemoryManager()
-{
-    return new RTDyldMemoryManagerJL();
-}
-#endif
-
 #ifdef USE_ORCJIT
+
+#ifndef LLVM38
+void notifyObjectLoaded(RTDyldMemoryManager *memmgr,
+                        llvm::orc::ObjectLinkingLayerBase::ObjSetHandleT H);
+#endif
 
 // ------------------------ TEMPORARILY COPIED FROM LLVM -----------------
 // This must be kept in sync with gdb/gdb/jit.h .
@@ -259,6 +228,9 @@ class JuliaOJIT {
         void operator()(ObjectLinkingLayerBase::ObjSetHandleT H, const ObjSetT &Objects,
                         const LoadResult &LOS)
         {
+#ifndef LLVM38
+            notifyObjectLoaded(JIT.MemMgr, H);
+#endif
             auto oit = Objects.begin();
             auto lit = LOS.begin();
             for (; oit != Objects.end(); ++oit, ++lit) {
@@ -290,7 +262,7 @@ class JuliaOJIT {
                 ORCNotifyObjectEmitted(JuliaListener.get(),
                         *Object,
                         *SavedObjects.back().getBinary(),
-                        *LO);
+                        *LO, JIT.MemMgr);
 
                 // record all of the exported symbols defined in this object
                 // in the primary hash table for the enclosing JIT
@@ -416,7 +388,7 @@ public:
     }
 
 
-    ModuleHandleT addModule(std::unique_ptr<Module> M)
+    void addModule(std::unique_ptr<Module> M)
     {
 #ifndef NDEBUG
         // validate the relocations for M
@@ -461,7 +433,6 @@ public:
         // Force LLVM to emit the module so that we can register the symbols
         // in our lookup table.
         CompileLayer.emitAndFinalize(modset);
-        return modset;
     }
 
     void removeModule(ModuleHandleT H)
