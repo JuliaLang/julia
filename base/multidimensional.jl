@@ -522,6 +522,14 @@ function fill!{T}(A::AbstractArray{T}, x)
     A
 end
 
+function fill!(filler, A::AbstractArray, start::Integer, stop::Integer)
+    start >= 1 && stop <= length(A) || throw(BoundsError())
+    for i in start:stop
+        @inbounds A[i] = filler(i)
+    end
+    A
+end
+
 function copy!{T,N}(dest::AbstractArray{T,N}, src::AbstractArray{T,N})
     length(dest) >= length(src) || throw(BoundsError())
     for (Isrc, Idest) in zip(eachindex(src), eachindex(dest))

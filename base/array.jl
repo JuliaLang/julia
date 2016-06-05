@@ -494,6 +494,14 @@ function resize!(a::Vector, nl::Integer)
     return a
 end
 
+function resize!(filler, a::Vector, nl::Integer)
+    l = length(a)
+    resize!(a, nl)
+    fill!(filler, a, l+1, nl)
+end
+
+resize!(a::Vector, nl::Integer, default) = resize!(_->default, a, nl)
+
 function sizehint!(a::Vector, sz::Integer)
     ccall(:jl_array_sizehint, Void, (Any, UInt), a, sz)
     a
