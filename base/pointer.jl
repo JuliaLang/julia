@@ -56,17 +56,8 @@ function unsafe_wrap{T}(::Union{Type{Array},Type{Array{T}},Type{Array{T,1}}},
     ccall(:jl_ptr_to_array_1d, Vector{T},
           (Any, Ptr{Void}, Csize_t, Cint), Array{T,1}, p, d, own)
 end
-function unsafe_wrap{T,N}(Atype::Union{Type{Array},Type{Array{T}},Type{Array{T,N}}},
-                          p::Ptr{T}, dims::NTuple{N,Integer}, own::Bool=false)
-    i = 1
-    for d in dims
-        if !(0 <= d <= typemax(Int))
-            throw(ArgumentError("Array dimension must be 0 ≤ dim ≤ $(typemax(Int)), got $d for dimension $i"))
-        end
-        i += 1
-    end
+unsafe_wrap{N,I<:Integer}(Atype::Type, p::Ptr, dims::NTuple{N,I}, own::Bool=false) =
     unsafe_wrap(Atype, p, convert(Tuple{Vararg{Int}}, dims), own)
-end
 
 unsafe_load(p::Ptr,i::Integer) = pointerref(p, Int(i))
 unsafe_load(p::Ptr) = unsafe_load(p, 1)
