@@ -340,9 +340,6 @@ static GlobalVariable *jldll_var;
 JITMemoryManager *createJITMemoryManagerWin();
 #endif
 #endif //_OS_WINDOWS_
-#ifdef USE_MCJIT
-RTDyldMemoryManager *createRTDyldMemoryManager();
-#endif
 
 static Function *jltls_states_func;
 #ifndef JULIA_ENABLE_THREADING

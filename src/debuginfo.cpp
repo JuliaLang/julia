@@ -298,12 +298,13 @@ public:
     virtual void NotifyObjectEmitted(const object::ObjectFile &obj,
                                      const RuntimeDyld::LoadedObjectInfo &L)
     {
-        return _NotifyObjectEmitted(obj,obj,L);
+        return _NotifyObjectEmitted(obj,obj,L,nullptr);
     }
 
     virtual void _NotifyObjectEmitted(const object::ObjectFile &obj,
-                                     const object::ObjectFile &debugObj,
-                                     const RuntimeDyld::LoadedObjectInfo &L)
+                                      const object::ObjectFile &debugObj,
+                                      const RuntimeDyld::LoadedObjectInfo &L,
+                                      RTDyldMemoryManager *memmgr)
 #else
     virtual void NotifyObjectEmitted(const ObjectImage &obj)
 #endif
@@ -340,6 +341,7 @@ public:
         uint64_t SectionAddrCheck = 0; // assert that all of the Sections are at the same location
         uint8_t *UnwindData = NULL;
 #if defined(_CPU_X86_64_)
+        uint64_t SectionLoadOffset = 1; // The real offset shouldn't be 1.
         uint8_t *catchjmp = NULL;
         for (const object::SymbolRef &sym_iter : debugObj.symbols()) {
             StringRef sName;
@@ -400,25 +402,37 @@ public:
                     assert(SectionAddrCheck == SectionLoadAddr);
                 else
                     SectionAddrCheck = SectionLoadAddr;
+#ifdef USE_ORCJIT
+                if (memmgr)
+                    SectionAddr =
+                        (uintptr_t)lookupWriteAddressFor(memmgr,
+                                                         (void*)SectionLoadAddr);
+#endif
+                if (SectionLoadOffset != 1)
+                    assert(SectionLoadOffset == SectionAddr - SectionLoadAddr);
+                else
+                    SectionLoadOffset = SectionAddr - SectionLoadAddr;
             }
         }
         assert(catchjmp);
         assert(UnwindData);
         assert(SectionAddrCheck);
-        catchjmp[0] = 0x48;
-        catchjmp[1] = 0xb8; // mov RAX, QWORD PTR [&_seh_exception_handle]
-        *(uint64_t*)(&catchjmp[2]) = (uint64_t)&_seh_exception_handler;
-        catchjmp[10] = 0xff;
-        catchjmp[11] = 0xe0; // jmp RAX
-        UnwindData[0] = 0x09; // version info, UNW_FLAG_EHANDLER
-        UnwindData[1] = 4;    // size of prolog (bytes)
-        UnwindData[2] = 2;    // count of unwind codes (slots)
-        UnwindData[3] = 0x05; // frame register (rbp) = rsp
-        UnwindData[4] = 4;    // second instruction
-        UnwindData[5] = 0x03; // mov RBP, RSP
-        UnwindData[6] = 1;    // first instruction
-        UnwindData[7] = 0x50; // push RBP
-        *(DWORD*)&UnwindData[8] = (DWORD)(catchjmp - (uint8_t*)SectionAddrCheck); // relative location of catchjmp
+        assert(SectionLoadOffset != 1);
+        catchjmp[SectionLoadOffset] = 0x48;
+        catchjmp[SectionLoadOffset + 1] = 0xb8; // mov RAX, QWORD PTR [&_seh_exception_handle]
+        *(uint64_t*)(&catchjmp[SectionLoadOffset + 2]) =
+            (uint64_t)&_seh_exception_handler;
+        catchjmp[SectionLoadOffset + 10] = 0xff;
+        catchjmp[SectionLoadOffset + 11] = 0xe0; // jmp RAX
+        UnwindData[SectionLoadOffset] = 0x09; // version info, UNW_FLAG_EHANDLER
+        UnwindData[SectionLoadOffset + 1] = 4;    // size of prolog (bytes)
+        UnwindData[SectionLoadOffset + 2] = 2;    // count of unwind codes (slots)
+        UnwindData[SectionLoadOffset + 3] = 0x05; // frame register (rbp) = rsp
+        UnwindData[SectionLoadOffset + 4] = 4;    // second instruction
+        UnwindData[SectionLoadOffset + 5] = 0x03; // mov RBP, RSP
+        UnwindData[SectionLoadOffset + 6] = 1;    // first instruction
+        UnwindData[SectionLoadOffset + 7] = 0x50; // push RBP
+        *(DWORD*)&UnwindData[SectionLoadOffset + 8] = (DWORD)(catchjmp - (uint8_t*)SectionAddrCheck); // relative location of catchjmp
 #endif // defined(_OS_X86_64_)
 #endif // defined(_OS_WINDOWS_)
 
@@ -606,9 +620,10 @@ public:
 JL_DLLEXPORT void ORCNotifyObjectEmitted(JITEventListener *Listener,
                                          const object::ObjectFile &obj,
                                          const object::ObjectFile &debugObj,
-                                         const RuntimeDyld::LoadedObjectInfo &L)
+                                         const RuntimeDyld::LoadedObjectInfo &L,
+                                         RTDyldMemoryManager *memmgr)
 {
-    ((JuliaJITEventListener*)Listener)->_NotifyObjectEmitted(obj,debugObj,L);
+    ((JuliaJITEventListener*)Listener)->_NotifyObjectEmitted(obj,debugObj,L,memmgr);
 }
 #endif
 
@@ -1665,7 +1680,7 @@ void register_eh_frames(uint8_t *Addr, size_t Size)
             if (start < start_ip)
                 start_ip = start;
             if (end_ip < (start + size))
-                end_ip = start+size;
+                end_ip = start + size;
             table[cur_entry].fde_offset =
                 safe_trunc<int32_t>((intptr_t)Entry - (intptr_t)Addr);
             start_ips[cur_entry] = start;
