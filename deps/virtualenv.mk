@@ -10,7 +10,7 @@ $(VIRTUALENV_SOURCE): $(SRCDIR)/srccache/virtualenv-$(VIRTUALENV_VER).tar.gz
 	cd $(dir $<) && $(TAR) zxf $<
 	touch -c $@
 $(VIRTUALENV_TARGET): $(VIRTUALENV_SOURCE)
-	"$(shell $(SRCDIR)/find_python2)" $< $@
+	"$(shell $(SRCDIR)/tools/find_python2)" $< $@
 ifeq ($(BUILD_OS), WINNT)
 	-[ -e $@/Scripts ] && ! [ -e $@/bin ] && cmd //C mklink //J `echo $@/bin $@/Scripts | sed -e 's#/#\\\\#g'`
 endif

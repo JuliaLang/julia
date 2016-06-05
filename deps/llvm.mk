@@ -268,7 +268,7 @@ $(llvm_python_workaround):
 	/usr/bin/python2 -c 'import sys; sys.exit(not sys.version_info < (3, 0))' && \
 	ln -sf /usr/bin/python2 "$@/python" && \
 	ln -sf /usr/bin/python2-config "$@/python-config"
-LLVM_FLAGS += --with-python="$(shell $(SRCDIR)/find_python2)"
+LLVM_FLAGS += --with-python="$(shell $(SRCDIR)/tools/find_python2)"
 
 ifeq ($(BUILD_CUSTOM_LIBCXX),1)
 
@@ -404,8 +404,8 @@ endif # LLVM_VER
 # Apply version-specific LLVM patches
 LLVM_PATCH_LIST:=
 define LLVM_PATCH
-$$(LLVM_SRC_DIR)/$1.patch-applied: $(LLVM_SRC_DIR)/configure | $$(SRCDIR)/$1.patch
-	cd $$(LLVM_SRC_DIR) && patch -p1 < $$(SRCDIR)/$1.patch
+$$(LLVM_SRC_DIR)/$1.patch-applied: $(LLVM_SRC_DIR)/configure | $$(SRCDIR)/patches/$1.patch
+	cd $$(LLVM_SRC_DIR) && patch -p1 < $$(SRCDIR)/patches/$1.patch
 	echo 1 > $$@
 LLVM_PATCH_LIST += $$(LLVM_SRC_DIR)/$1.patch-applied
 endef
