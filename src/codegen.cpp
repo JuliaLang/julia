@@ -4082,7 +4082,11 @@ static std::unique_ptr<Module> emit_function(jl_lambda_info_t *lam, jl_llvm_func
 
     std::stringstream funcName;
     // try to avoid conflicts in the global symbol table
-    funcName << "julia_" << ctx.name;
+    funcName << "julia_" << ctx.name
+#if (defined(_OS_LINUX_) && !defined(LLVM34))
+        + (ctx.name[0] == '@') ? 1 : 0
+#endif
+    ;
 
     Function *fwrap = NULL;
     funcName << "_" << globalUnique++;
