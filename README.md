@@ -33,11 +33,14 @@ import Compat.String
 and then as needed add
 
 ```
-@compat ...Julia master syntax...
+@compat ...compat syntax...
 ```
 
 wherever you want to use syntax that differs in the latest Julia
-`master` (the development version of Julia).
+`master` (the development version of Julia). The `compat syntax` is usually
+the syntax on Julia `master`. However, in a few cases where this is not possible,
+a slightly different syntax might be used.
+Please check the list below for the specific syntax you need.
 
 ## Supported syntax
 
@@ -108,17 +111,17 @@ Currently, the `@compat` macro supports the following syntaxes:
 
 ## New functions
 
-* `eachindex`, as in `for i in eachindex(A)`, can be used in julia 0.3. This is the recommended way to iterate over each index in an `AbstractArray`. On julia 0.3 `eachindex` just returns `1:length(A)`, but in julia 0.4 it can return a more sophisticated iterator.
+* `eachindex`, as in `for i in eachindex(A)`, can be used in Julia 0.3. This is the recommended way to iterate over each index in an `AbstractArray`. On Julia 0.3 `eachindex` just returns `1:length(A)`, but in Julia 0.4 it can return a more sophisticated iterator.
 
-* `isdiag`, which tests whether a matrix is diagonal, can be used in julia 0.3.
+* `isdiag`, which tests whether a matrix is diagonal, can be used in Julia 0.3.
 
-* `keytype` and `valtype`, which return key and value type of Associative type, can be used in julia 0.3.
+* `keytype` and `valtype`, which return key and value type of Associative type, can be used in Julia 0.3.
 
-* `tryparse`, which is a variant on `Base.parse` that returns a `Nullable`, can be used in julia 0.3.
+* `tryparse`, which is a variant on `Base.parse` that returns a `Nullable`, can be used in Julia 0.3.
 
 * `fma(x,y,z)` and `muladd(x,y,z)` can be used in Julia 0.3 for `x*y+z`.
 
-* `Timer(timeout::Real, repeat::Real=0.0)` and `Timer(cb::Function, timeout::Real, repeat::Real=0.0)` allow julia 0.4-style Timers to be constructed and used.
+* `Timer(timeout::Real, repeat::Real=0.0)` and `Timer(cb::Function, timeout::Real, repeat::Real=0.0)` allow Julia 0.4-style Timers to be constructed and used.
 
 * `__precompile__(iscompiled::Bool)` and `include_dependency(path::AbstractString)` allow
   Julia 0.4 precompilation information to be provided (with no effect in earlier versions).
@@ -126,7 +129,7 @@ Currently, the `@compat` macro supports the following syntaxes:
 
 * `isapprox(A, B)` for arrays ([JuliaLang/julia#12472](https://github.com/JuliaLang/julia/pull/12472)), and synonyms `≈` ([U+2248](http://www.fileformat.info/info/unicode/char/2248/index.htm), LaTeX `\approx`) and `≉` ([U+2249](http://www.fileformat.info/info/unicode/char/2249/index.htm), LaTeX `\napprox`) for `isapprox` and `!isapprox`, respectively.
 
-* `withenv` can be used in julia 0.3 (see [the 0.4 docs](http://docs.julialang.org/en/release-0.4/stdlib/base/#Base.withenv)). Note that you must prepend calls to `withenv` with `@compat` if you'd like to use it with the `=>` syntax.
+* `withenv` can be used in Julia 0.3 (see [the 0.4 docs](http://docs.julialang.org/en/release-0.4/stdlib/base/#Base.withenv)). Note that you must prepend calls to `withenv` with `@compat` if you'd like to use it with the `=>` syntax.
 
 * `foreach`, similar to `map` but when the return value is not needed ([#13744](https://github.com/JuliaLang/julia/pull/13774)).
 
@@ -225,9 +228,21 @@ Currently, the `@compat` macro supports the following syntaxes:
 
 * [`Nullable` types](http://julia.readthedocs.org/en/latest/manual/types/?highlight=nullable#nullable-types-representing-missing-values) and their associated operations.
 
-* The parametric `Val{T}` ["value types"](http://julia.readthedocs.org/en/latest/manual/types/#value-types) can be used in julia 0.3.
+* The parametric `Val{T}` ["value types"](http://julia.readthedocs.org/en/latest/manual/types/#value-types) can be used in Julia 0.3.
 
 ## Developer tips
+
+One of the most important rules for `Compat.jl` is to avoid breaking user code
+whenever possible, especially on a released version.
+
+Although the syntax used in the most recent Julia version
+is the preferred compat syntax, there are cases where this shouldn't be used.
+Examples include when the new syntax already has a different meaning
+on previous versions of Julia, or when functions are removed from `Base`
+Julia and the alternative cannot be easily implemented on previous versions.
+In such cases, possible solutions are forcing the new feature to be used with
+qualified name in `Compat.jl` (e.g. use `Compat.<name>`) or
+reimplementing the old features on a later Julia version.
 
 If you're adding additional compatibility code to this package, the [`bin/version.sh`](https://github.com/JuliaLang/Compat.jl/blob/master/bin/version.sh) script is useful for extracting the version number from a git commit SHA. For example, from the git repository of `julia`, run something like this:
 
