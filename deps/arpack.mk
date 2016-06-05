@@ -60,7 +60,7 @@ $(BUILDDIR)/arpack-ng-$(ARPACK_VER)/config.status: | $(LAPACK_OBJ_TARGET)
 endif
 
 $(SRCDIR)/srccache/arpack-ng-$(ARPACK_VER)/arpack-tests-blasint.patch-applied: $(SRCDIR)/srccache/arpack-ng-$(ARPACK_VER)/configure
-	cd $(dir $@) && patch -p1 < $(SRCDIR)/arpack-tests-blasint.patch
+	cd $(dir $@) && patch -p1 < $(SRCDIR)/patches/arpack-tests-blasint.patch
 	echo 1 > $@
 $(BUILDDIR)/arpack-ng-$(ARPACK_VER)/config.status: $(SRCDIR)/srccache/arpack-ng-$(ARPACK_VER)/configure $(SRCDIR)/srccache/arpack-ng-$(ARPACK_VER)/arpack-tests-blasint.patch-applied
 	mkdir -p $(dir $@)
