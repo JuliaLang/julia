@@ -51,7 +51,7 @@ end ## hpl()
 ### Panel factorization ###
 
 function panel_factor_seq(A, I, col_dep)
-    n = size (A, 1)
+    n = size(A, 1)
 
     ## Enforce dependencies
     #wait(col_dep)
@@ -70,7 +70,7 @@ end ## panel_factor_seq()
 ### Trailing update ###
 
 function trailing_update_seq(A, I, J, panel_p, row_dep, col_dep)
-    n = size (A, 1)
+    n = size(A, 1)
 
     ## Enforce dependencies
     #wait(row_dep, col_dep)
