@@ -302,12 +302,12 @@ add_tfunc(Core._expr, 1, IInf, (args...)->Expr)
 add_tfunc(applicable, 1, IInf, (f, args...)->Bool)
 add_tfunc(Core.Intrinsics.arraylen, 1, 1, x->Int)
 add_tfunc(arraysize, 2, 2, (a,d)->Int)
-add_tfunc(pointerref, 2, 2,
-          function (a,i)
+add_tfunc(pointerref, 3, 3,
+          function (a,i,align)
               a = widenconst(a)
               isa(a,DataType) && a<:Ptr && isa(a.parameters[1],Union{Type,TypeVar}) ? a.parameters[1] : Any
           end)
-add_tfunc(pointerset, 3, 3, (a,v,i)->a)
+add_tfunc(pointerset, 4, 4, (a,v,i,align)->a)
 
 function typeof_tfunc(t::ANY)
     if isa(t,Const)

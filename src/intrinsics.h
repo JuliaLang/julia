@@ -97,8 +97,8 @@
     ADD_I(powi_llvm, 2) \
     ALIAS(sqrt_llvm_fast, sqrt_llvm) \
     /*  pointer access */ \
-    ADD_I(pointerref, 2) \
-    ADD_I(pointerset, 3) \
+    ADD_I(pointerref, 3) \
+    ADD_I(pointerset, 4) \
     /* c interface */ \
     ALIAS(ccall, ccall) \
     ALIAS(cglobal, cglobal) \
