@@ -1007,6 +1007,11 @@ Notice that ``Vararg{T}`` matches zero or more elements of type ``T``.
 Vararg tuple types are used to represent the arguments accepted by varargs
 methods (see :ref:`man-varargs-functions`).
 
+The type ``Vararg{T,N}`` matches exactly ``N`` elements of ``T``.  ``NTuple{N,T}`` is
+a convenient alias for ``Tuple{Vararg{T,N}}``, i.e. a tuple type matching exactly
+``N`` elements of ``T``.
+
+
 .. _man-singleton-types:
 
 Singleton Types
