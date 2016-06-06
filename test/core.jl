@@ -4263,3 +4263,11 @@ end
 g1090{T}(x::T)::T = x+1.0
 @test g1090(1) === 2
 @test g1090(Float32(3)) === Float32(4)
+
+# issue #16783
+function f16783()
+    T = UInt32
+    x::T = 0
+    bar() = x+1
+end
+@test f16783()() == 1
