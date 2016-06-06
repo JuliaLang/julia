@@ -60,11 +60,9 @@ end
 unsafe_wrap{N,I<:Integer}(Atype::Type, p::Ptr, dims::NTuple{N,I}, own::Bool=false) =
     unsafe_wrap(Atype, p, convert(Tuple{Vararg{Int}}, dims), own)
 
-unsafe_load(p::Ptr,i::Integer) = pointerref(p, Int(i))
-unsafe_load(p::Ptr) = unsafe_load(p, 1)
-unsafe_store!(p::Ptr{Any}, x::ANY, i::Integer) = pointerset(p, x, Int(i))
-unsafe_store!{T}(p::Ptr{T}, x, i::Integer) = pointerset(p, convert(T,x), Int(i))
-unsafe_store!{T}(p::Ptr{T}, x) = pointerset(p, convert(T,x), 1)
+unsafe_load(p::Ptr, i::Integer=1) = pointerref(p, Int(i), 1)
+unsafe_store!(p::Ptr{Any}, x::ANY, i::Integer=1) = pointerset(p, x, Int(i), 1)
+unsafe_store!{T}(p::Ptr{T}, x, i::Integer=1) = pointerset(p, convert(T,x), Int(i), 1)
 
 # unsafe pointer to string conversions (don't make a copy, unlike unsafe_string)
 # (Cstring versions are in c.jl)
