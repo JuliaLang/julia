@@ -855,9 +855,11 @@ bool jl_dylib_DI_for_fptr(size_t pointer, const llvm::object::ObjectFile **obj, 
     uint64_t fbase;
 #ifdef _OS_LINUX_
     struct link_map *extra_info;
+#ifdef __GLIBC__
     dladdr_success = dladdr1((void*)pointer, &dlinfo, (void**)&extra_info, RTLD_DL_LINKMAP) != 0;
 #else
     dladdr_success = dladdr((void*)pointer, &dlinfo) != 0;
+#endif
 #endif
 
     if (dladdr_success && dlinfo.dli_fname) {
