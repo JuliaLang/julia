@@ -519,7 +519,6 @@ struct jl_varinfo_t {
 #else
     DIVariable dinfo;
 #endif
-    bool isAssigned;
     bool isSA;
     bool isVolatile;
     bool isArgument;
@@ -533,7 +532,7 @@ struct jl_varinfo_t {
 #else
                      dinfo(DIVariable()),
 #endif
-                     isAssigned(true), isSA(false),
+                     isSA(false),
                      isVolatile(false), isArgument(false),
                      escapes(true), usedUndef(false), used(false)
     {
@@ -2504,7 +2503,7 @@ static bool emit_builtin_call(jl_cgval_t *ret, jl_value_t *f, jl_value_t **args,
     }
 
     else if (f==jl_builtin_nfields && nargs==1) {
-        if (ctx->vaStack && slot_eq(args[1], ctx->vaSlot) && !ctx->slots[ctx->vaSlot].isAssigned) {
+        if (ctx->vaStack && slot_eq(args[1], ctx->vaSlot)) {
             *ret = mark_julia_type(emit_n_varargs(ctx), false, jl_long_type, ctx);
             JL_GC_POP();
             return true;
@@ -2912,10 +2911,6 @@ static jl_cgval_t emit_local(jl_value_t *slotload, jl_codectx_t *ctx)
     size_t sl = jl_slot_number(slotload) - 1;
     jl_varinfo_t &vi = ctx->slots[sl];
     jl_sym_t *sym = slot_symbol(sl, ctx);
-    if (!vi.isArgument && !vi.isAssigned) {
-        undef_var_error_if_null(V_null, sym, ctx);
-        return jl_cgval_t();
-    }
     if (vi.memloc) {
         Value *bp = vi.memloc;
         jl_value_t *typ;
@@ -2933,7 +2928,7 @@ static jl_cgval_t emit_local(jl_value_t *slotload, jl_codectx_t *ctx)
         if (vi.isArgument || !vi.usedUndef) { // arguments are always defined
             Instruction *v = builder.CreateLoad(bp, vi.isVolatile);
             return mark_julia_type(v, true, typ, ctx,
-                                   vi.isAssigned); // means it's an argument so don't need an additional root
+                                   !vi.isArgument); // if an argument, doesn't need an additional root
         }
         else {
             jl_cgval_t v = emit_checked_var(bp, sym, ctx, vi.isVolatile, nullptr);
@@ -2941,7 +2936,7 @@ static jl_cgval_t emit_local(jl_value_t *slotload, jl_codectx_t *ctx)
             return v;
         }
     }
-    else if (!vi.isVolatile || !vi.isAssigned) {
+    else if (!vi.isVolatile || vi.isArgument) {
         return vi.value;
     }
     else {
@@ -3025,7 +3020,6 @@ static void emit_assignment(jl_value_t *l, jl_value_t *r, jl_codectx_t *ctx)
             assign_arrayvar(*av, rval_info, ctx);
     }
 
-    assert(vi.isAssigned);
     if (vi.memloc) {
         // boxed variables
         if (((!vi.isSA && rval_info.gcroot) || !rval_info.isboxed) && isa<AllocaInst>(vi.memloc)) {
@@ -4036,11 +4030,10 @@ static std::unique_ptr<Module> emit_function(jl_lambda_info_t *lam, jl_llvm_func
     for(i=0; i < vinfoslen; i++) {
         jl_varinfo_t &varinfo = ctx.slots[i];
         uint8_t flags = jl_array_uint8_ref(lam->slotflags, i);
-        varinfo.isAssigned = (jl_vinfo_assigned(flags)!=0);
         varinfo.escapes = false;
         varinfo.isSA = (jl_vinfo_sa(flags)!=0);
         varinfo.usedUndef = (jl_vinfo_usedundef(flags)!=0) || (!varinfo.isArgument && !lam->inferred);
-        if (!varinfo.isArgument || varinfo.isAssigned) {
+        if (!varinfo.isArgument) {
             jl_value_t *typ = jl_is_array(lam->slottypes) ? jl_array_ptr_ref(lam->slottypes,i) : (jl_value_t*)jl_any_type;
             if (!jl_is_type(typ))
                 typ = (jl_value_t*)jl_any_type;
@@ -4444,7 +4437,7 @@ static std::unique_ptr<Module> emit_function(jl_lambda_info_t *lam, jl_llvm_func
         jl_sym_t *s = slot_symbol(i, &ctx);
         if (s == unused_sym) continue;
         jl_varinfo_t &varinfo = ctx.slots[i];
-        assert(!varinfo.memloc); // variables shouldn't also have memory locs already
+        assert(!varinfo.memloc); // variables shouldn't have memory locs already
         if (!varinfo.usedUndef) {
             if (varinfo.value.constant) {
                 // no need to explicitly load/store a constant/ghost value
@@ -4456,7 +4449,7 @@ static std::unique_ptr<Module> emit_function(jl_lambda_info_t *lam, jl_llvm_func
                 continue;
             }
             else if (store_unboxed_p(i, &ctx)) {
-                if (varinfo.isAssigned) { // otherwise, just leave it in the input register
+                if (!varinfo.isArgument) { // otherwise, just leave it in the input register
                     Value *lv = alloc_local(i, &ctx); (void)lv;
 #ifdef LLVM36
                     if (ctx.debug_enabled) {
@@ -4472,8 +4465,8 @@ static std::unique_ptr<Module> emit_function(jl_lambda_info_t *lam, jl_llvm_func
                 continue;
             }
         }
-        if (varinfo.isAssigned || // always need a slot if the variable is assigned
-            specsig || // for arguments, give them stack slots if then aren't in `argArray` (otherwise, will use that pointer)
+        if (!varinfo.isArgument || // always need a slot if the variable is assigned
+            specsig || // for arguments, give them stack slots if they aren't in `argArray` (otherwise, will use that pointer)
             (va && (int)i == ctx.vaSlot && varinfo.escapes) || // or it's the va arg tuple
             (s != unused_sym && i == 0)) { // or it is the first argument (which isn't in `argArray`)
             AllocaInst *av = new AllocaInst(T_pjlvalue, jl_symbol_name(s), /*InsertBefore*/ctx.ptlsStates);
@@ -4561,7 +4554,7 @@ static std::unique_ptr<Module> emit_function(jl_lambda_info_t *lam, jl_llvm_func
             if (vi.memloc == NULL) {
                 if (vi.value.V) {
                     // copy theArg into its local variable slot (unboxed)
-                    assert(vi.isAssigned && vi.value.ispointer());
+                    assert(vi.value.ispointer());
                     tbaa_decorate(vi.value.tbaa,
                                   builder.CreateStore(emit_unbox(vi.value.V->getType()->getContainedType(0),
                                                                  theArg, vi.value.typ),
@@ -4569,7 +4562,6 @@ static std::unique_ptr<Module> emit_function(jl_lambda_info_t *lam, jl_llvm_func
                 }
                 else {
                     // keep track of original (possibly boxed) value to avoid re-boxing or moving
-                    assert(!vi.isAssigned || vi.value.constant);
                     vi.value = theArg;
 #ifdef LLVM36
                     if (specsig && theArg.V && ctx.debug_enabled) {
@@ -4583,9 +4575,9 @@ static std::unique_ptr<Module> emit_function(jl_lambda_info_t *lam, jl_llvm_func
                         }
                         ctx.dbuilder->insertDeclare(parg, vi.dinfo, ctx.dbuilder->createExpression(addr),
 #ifdef LLVM37
-                                        builder.getCurrentDebugLocation(),
+                                                    builder.getCurrentDebugLocation(),
 #endif
-                                        builder.GetInsertBlock());
+                                                    builder.GetInsertBlock());
                     }
 #endif
                 }
@@ -4607,7 +4599,7 @@ static std::unique_ptr<Module> emit_function(jl_lambda_info_t *lam, jl_llvm_func
     // step 11. allocate rest argument if necessary
     if (va && ctx.vaSlot != -1) {
         jl_varinfo_t &vi = ctx.slots[ctx.vaSlot];
-        if (!vi.escapes && !vi.isAssigned) {
+        if (!vi.escapes) {
             ctx.vaStack = true;
         }
         else if (!vi.value.constant) {

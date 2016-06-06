@@ -20,7 +20,6 @@ const MAX_TUPLE_SPLAT = 16
 const Slot_Assigned     = 2
 const Slot_AssignedOnce = 16
 const Slot_UsedUndef    = 32
-const Slot_Called       = 64
 
 #### inference state types ####
 
@@ -2544,26 +2543,18 @@ function inlineable(f::ANY, ft::ANY, e::Expr, atypes::Vector{Any}, sv::Inference
             end
         end
 
-        islocal = false # if the argument name is also used as a local variable,
-                        # we need to keep it as a variable name
-        if linfo.slotflags[i] & (Slot_Assigned | Slot_AssignedOnce) != 0
-            islocal = true
-            aeitype = tmerge(aeitype, linfo.slottypes[i])
-        end
-
         # ok for argument to occur more than once if the actual argument
         # is a symbol or constant, or is not affected by previous statements
         # that will exist after the inlining pass finishes
         if needtypeassert
             vnew1 = unique_name(enclosing_ast, ast)
-            add_variable(enclosing_ast, vnew1, aeitype, !islocal)
+            add_variable(enclosing_ast, vnew1, aeitype, true)
             v1 = (aeitype===Any ? vnew1 : SymbolNode(vnew1,aeitype))
             push!(spvals, v1)
             vnew2 = unique_name(enclosing_ast, ast)
             v2 = (argtype===Any ? vnew2 : SymbolNode(vnew2,argtype))
             unshift!(body.args, Expr(:(=), args_i, v2))
             args[i] = args_i = vnew2
-            islocal = false
             aeitype = argtype
             affect_free = stmts_free
             occ = 3
@@ -2578,7 +2569,7 @@ function inlineable(f::ANY, ft::ANY, e::Expr, atypes::Vector{Any}, sv::Inference
             cond.typ = Bool
             partmatch.args[1] = cond
         else
-            affect_free = stmts_free && !islocal # false = previous statements might affect the result of evaluating argument
+            affect_free = stmts_free  # false = previous statements might affect the result of evaluating argument
             occ = 0
             for j = length(body.args):-1:1
                 b = body.args[j]
@@ -2595,16 +2586,11 @@ function inlineable(f::ANY, ft::ANY, e::Expr, atypes::Vector{Any}, sv::Inference
             end
         end
         free = effect_free(aei,sv,true)
-        if ((occ==0 && is(aeitype,Bottom)) || islocal || (occ > 1 && !inline_worthy(aei, occ*2000)) ||
+        if ((occ==0 && is(aeitype,Bottom)) || (occ > 1 && !inline_worthy(aei, occ*2000)) ||
                 (affect_free && !free) || (!affect_free && !effect_free(aei,sv,false)))
-            if occ != 0 # islocal=true is implied by occ!=0
-                if !islocal
-                    vnew = newvar!(sv, aeitype)
-                    argexprs[i] = vnew
-                else
-                    vnew = add_slot!(enclosing, aeitype, #=SSA=#false)
-                    argexprs[i] = vnew
-                end
+            if occ != 0
+                vnew = newvar!(sv, aeitype)
+                argexprs[i] = vnew
                 unshift!(prelude_stmts, Expr(:(=), vnew, aei))
                 stmts_free &= free
             elseif !free && !isType(aeitype)
@@ -3033,8 +3019,6 @@ function is_known_call_p(e::Expr, pred, sv)
     return isa(f,Const) && pred(f.val)
 end
 
-is_var_assigned(linfo, v) = isa(v,Slot) && linfo.slotflags[v.id]&Slot_Assigned != 0
-
 function delete_var!(linfo, id, T)
     filter!(x->!(isa(x,Expr) && (x.head === :(=) || x.head === :const) &&
                  isa(x.args[1],T) && x.args[1].id == id),
@@ -3064,8 +3048,9 @@ end
 occurs_undef(var::Int, expr, flags) =
     flags[var]&Slot_UsedUndef != 0 && occurs_more(expr, e->(isa(e,Slot) && e.id==var), 0)>0
 
-# remove all single-assigned vars v in "v = x" where x is an argument
-# and not assigned.
+is_argument(linfo, v) = isa(v,Slot) && v.id <= linfo.nargs
+
+# remove all single-assigned vars v in "v = x" where x is an argument.
 # "sa" is the result of find_sa_vars
 # T: Slot or SSAValue
 function remove_redundant_temp_vars(linfo, sa, T)
@@ -3073,7 +3058,7 @@ function remove_redundant_temp_vars(linfo, sa, T)
     ssavalue_types = linfo.ssavaluetypes
     bexpr = Expr(:block); bexpr.args = linfo.code
     for (v,init) in sa
-        if (isa(init, Slot) && !is_var_assigned(linfo, init::Slot))
+        if (isa(init, Slot) && is_argument(linfo, init::Slot))
             # this transformation is not valid for vars used before def.
             # we need to preserve the point of assignment to know where to
             # throw errors (issue #4645).
