@@ -1895,7 +1895,7 @@ type ObjMember
     member::DateRange6387
 end
 
-obj = ObjMember(DateRange6387{Int64}())
+obj6387 = ObjMember(DateRange6387{Int64}())
 
 function v6387{T}(r::Range{T})
     a = Array{T}(1)
@@ -1908,7 +1908,7 @@ function day_in(obj::ObjMember)
     @test isa(x, Vector{Date6387{Int64}})
     @test isa(x[1], Date6387{Int64})
 end
-day_in(obj)
+day_in(obj6387)
 
 # issue #6784
 @test ndims(Array{Array{Float64}}(3,5)) == 2
@@ -3786,6 +3786,31 @@ let ary = Vector{Any}(10)
         ccall(:jl_array_grow_beg, Void, (Any, Csize_t), ary, 4)
         check_undef_and_fill(ary, 1:(2n + 4))
     end
+end
+
+# check if we can run multiple finalizers at the same time
+# Use a `@noinline` function to make sure the inefficient gc root generation
+# doesn't keep the object alive.
+@noinline function create_dead_object13995(finalized)
+    obj = Ref(1)
+    finalizer(obj, (x)->(finalized[1] = true))
+    finalizer(obj, (x)->(finalized[2] = true))
+    finalizer(obj, (x)->(finalized[3] = true))
+    finalizer(obj, (x)->(finalized[4] = true))
+    nothing
+end
+# disable GC to make sure no collection/promotion happens
+# when we are constructing the objects
+let gc_enabled13995 = gc_enable(false)
+    finalized13995 = [false, false, false, false]
+    create_dead_object13995(finalized13995)
+    gc_enable(true)
+    # obj is unreachable and young, a single young gc should collect it
+    # and trigger all the finalizers.
+    gc(false)
+    gc_enable(false)
+    @test finalized13995 == [true, true, true, true]
+    gc_enable(gc_enabled13995)
 end
 
 # issue #15283
