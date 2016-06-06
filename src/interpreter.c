@@ -103,6 +103,7 @@ static void check_can_assign_type(jl_binding_t *b)
 }
 
 void jl_reinstantiate_inner_types(jl_datatype_t *t);
+void jl_reset_instantiate_inner_types(jl_datatype_t *t);
 
 void jl_set_datatype_super(jl_datatype_t *tt, jl_value_t *super)
 {
@@ -268,11 +269,17 @@ static jl_value_t *eval(jl_value_t *e, interpreter_state *s)
         check_can_assign_type(b);
         b->value = (jl_value_t*)dt;
         jl_gc_wb_binding(b, dt);
-        inside_typedef = 1;
-        super = eval(args[2], s);
-        inside_typedef = 0;
-        jl_set_datatype_super(dt, super);
-        jl_reinstantiate_inner_types(dt);
+        JL_TRY {
+            inside_typedef = 1;
+            super = eval(args[2], s);
+            jl_set_datatype_super(dt, super);
+            jl_reinstantiate_inner_types(dt);
+        }
+        JL_CATCH {
+            jl_reset_instantiate_inner_types(dt);
+            b->value = temp;
+            jl_rethrow();
+        }
         b->value = temp;
         if (temp==NULL || !equiv_type(dt, (jl_datatype_t*)temp)) {
             jl_checked_assignment(b, (jl_value_t*)dt);
@@ -304,11 +311,17 @@ static jl_value_t *eval(jl_value_t *e, interpreter_state *s)
         check_can_assign_type(b);
         b->value = (jl_value_t*)dt;
         jl_gc_wb_binding(b, dt);
-        inside_typedef = 1;
-        super = eval(args[3], s);
-        inside_typedef = 0;
-        jl_set_datatype_super(dt, super);
-        jl_reinstantiate_inner_types(dt);
+        JL_TRY {
+            inside_typedef = 1;
+            super = eval(args[3], s);
+            jl_set_datatype_super(dt, super);
+            jl_reinstantiate_inner_types(dt);
+        }
+        JL_CATCH {
+            jl_reset_instantiate_inner_types(dt);
+            b->value = temp;
+            jl_rethrow();
+        }
         b->value = temp;
         if (temp==NULL || !equiv_type(dt, (jl_datatype_t*)temp)) {
             jl_checked_assignment(b, (jl_value_t*)dt);
@@ -359,11 +372,10 @@ static jl_value_t *eval(jl_value_t *e, interpreter_state *s)
                                      "type definition",
                                      (jl_value_t*)jl_type_type, elt);
             }
-            inside_typedef = 0;
             jl_reinstantiate_inner_types(dt);
         }
         JL_CATCH {
-            inside_typedef = 0;
+            jl_reset_instantiate_inner_types(dt);
             b->value = temp;
             jl_rethrow();
         }

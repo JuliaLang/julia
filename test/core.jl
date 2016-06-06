@@ -319,6 +319,10 @@ type Foo_{T} x::Foo_{Int} end
 type Circ_{T} x::Circ_{T} end
 @test is(Circ_{Int}, Circ_{Int}.types[1])
 
+abstract Sup2a_
+abstract Sup2b_{A <: Sup2a_, B} <: Sup2a_
+@test_throws ErrorException eval(:(abstract Qux2_{T} <: Sup2b_{Qux2_{Int}, T})) # wrapped in eval to avoid #16793
+
 # issue #3890
 type A3890{T1}
     x::Matrix{Complex{T1}}
