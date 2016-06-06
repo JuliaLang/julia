@@ -429,21 +429,23 @@ jl_value_t *jl_toplevel_eval_flex(jl_value_t *e, int fast, int expanded)
 {
     //jl_show(ex);
     //jl_printf(JL_STDOUT, "\n");
-    if (!jl_is_expr(e))
+    if (!jl_is_expr(e)) {
+        if (jl_is_linenode(e)) {
+            jl_lineno = jl_linenode_line(e);
+            return jl_nothing;
+        }
         return jl_interpret_toplevel_expr(e);
+    }
 
     jl_expr_t *ex = (jl_expr_t*)e;
     if (ex->head == null_sym || ex->head == error_sym || ex->head == jl_incomplete_sym) {
         // expression types simple enough not to need expansion
         return jl_interpret_toplevel_expr(e);
     }
-
-    if (ex->head == module_sym) {
+    else if (ex->head == module_sym) {
         return jl_eval_module_expr(ex);
     }
-
-    // handle import, using, importall, export toplevel-only forms
-    if (ex->head == importall_sym) {
+    else if (ex->head == importall_sym) {
         jl_module_t *m = eval_import_path(ex->args);
         if (m==NULL) return jl_nothing;
         jl_sym_t *name = (jl_sym_t*)jl_array_ptr_ref(ex->args, jl_array_len(ex->args)-1);
@@ -455,8 +457,7 @@ jl_value_t *jl_toplevel_eval_flex(jl_value_t *e, int fast, int expanded)
         jl_module_importall(jl_current_module, m);
         return jl_nothing;
     }
-
-    if (ex->head == using_sym) {
+    else if (ex->head == using_sym) {
         jl_module_t *m = eval_import_path(ex->args);
         if (m==NULL) return jl_nothing;
         jl_sym_t *name = (jl_sym_t*)jl_array_ptr_ref(ex->args, jl_array_len(ex->args)-1);
@@ -471,8 +472,7 @@ jl_value_t *jl_toplevel_eval_flex(jl_value_t *e, int fast, int expanded)
         }
         return jl_nothing;
     }
-
-    if (ex->head == import_sym) {
+    else if (ex->head == import_sym) {
         jl_module_t *m = eval_import_path(ex->args);
         if (m==NULL) return jl_nothing;
         jl_sym_t *name = (jl_sym_t*)jl_array_ptr_ref(ex->args, jl_array_len(ex->args)-1);
@@ -481,8 +481,7 @@ jl_value_t *jl_toplevel_eval_flex(jl_value_t *e, int fast, int expanded)
         jl_module_import(jl_current_module, m, name);
         return jl_nothing;
     }
-
-    if (ex->head == export_sym) {
+    else if (ex->head == export_sym) {
         for(size_t i=0; i < jl_array_len(ex->args); i++) {
             jl_sym_t *name = (jl_sym_t*)jl_array_ptr_ref(ex->args, i);
             if (!jl_is_symbol(name))
@@ -491,13 +490,9 @@ jl_value_t *jl_toplevel_eval_flex(jl_value_t *e, int fast, int expanded)
         }
         return jl_nothing;
     }
-
-    if (ex->head == toplevel_sym) {
-        int i=0; jl_value_t *res=jl_nothing;
-        for(i=0; i < jl_array_len(ex->args); i++) {
-            res = jl_toplevel_eval_flex(jl_array_ptr_ref(ex->args, i), fast, 0);
-        }
-        return res;
+    else if (ex->head == line_sym) {
+        jl_lineno = jl_unbox_long(jl_exprarg(ex,0));
+        return jl_nothing;
     }
 
     jl_value_t *thunk=NULL;
@@ -507,7 +502,7 @@ jl_value_t *jl_toplevel_eval_flex(jl_value_t *e, int fast, int expanded)
     JL_GC_PUSH3(&thunk, &thk, &ex);
 
     if (!expanded && ex->head != body_sym && ex->head != thunk_sym && ex->head != return_sym &&
-        ex->head != method_sym) {
+        ex->head != method_sym && ex->head != toplevel_sym) {
         // not yet expanded
         ex = (jl_expr_t*)jl_expand(e);
     }

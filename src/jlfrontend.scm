@@ -77,7 +77,7 @@
 (define (expand-toplevel-expr-- e)
   (let ((ex0 (julia-expand-macros e)))
     (if (and (pair? ex0) (eq? (car ex0) 'toplevel))
-        `(toplevel ,@(map expand-toplevel-expr (cdr ex0)))
+        ex0
         (let* ((ex (julia-expand0 ex0))
                (gv (toplevel-expr-globals ex))
                (th (julia-expand1
