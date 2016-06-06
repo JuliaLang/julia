@@ -50,7 +50,7 @@ static Type *get_llvm_vectype(jl_datatype_t *dt)
     if (ft0->name != jl_vecelement_typename ||
         ((jl_datatype_t*)jl_field_type(ft0, 0))->nfields)
         return nullptr;
-    for (int i = 1; i < nfields; i++) {
+    for (size_t i = 1; i < nfields; i++) {
         if (jl_field_type(dt, i) != (jl_value_t*)ft0) {
             // Not homogeneous
             return nullptr;
