@@ -126,6 +126,13 @@ _length(A) = length(A)
 endof(a::AbstractArray) = length(a)
 first(a::AbstractArray) = a[first(eachindex(a))]
 
+function check_array_size(dims::DimsInteger)
+    for i in 1:length(dims)
+        dims[i] >= 0 || throw(ArgumentError("dimension size must be ≥ 0, got $(dims[i]) for dimension $i"))
+    end
+end
+check_array_size(dims::Integer...) = check_array_size(dims)
+
 function first(itr)
     state = start(itr)
     done(itr, state) && throw(ArgumentError("collection must be non-empty"))
