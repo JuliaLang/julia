@@ -853,7 +853,7 @@ bool jl_dylib_DI_for_fptr(size_t pointer, const llvm::object::ObjectFile **obj, 
     Dl_info dlinfo;
     int dladdr_success;
     uint64_t fbase;
-#ifdef _OS_LINUX_
+#ifdef __GLIBC__
     struct link_map *extra_info;
     dladdr_success = dladdr1((void*)pointer, &dlinfo, (void**)&extra_info, RTLD_DL_LINKMAP) != 0;
 #else
@@ -861,7 +861,7 @@ bool jl_dylib_DI_for_fptr(size_t pointer, const llvm::object::ObjectFile **obj, 
 #endif
 
     if (dladdr_success && dlinfo.dli_fname) {
-#ifdef _OS_LINUX_
+#ifdef __GLIBC__
         // dlinfo.dli_fbase is not the right value for the main executable on linux
         fbase = (uintptr_t)extra_info->l_addr;
 #else
