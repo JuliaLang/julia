@@ -1312,7 +1312,9 @@ static const char *processFDE(const char *Entry, callback f)
     uint32_t Length = *((const uint32_t *)P);
     P += 4;
     uint32_t Offset = *((const uint32_t *)P);
-    if (Offset != 0) {
+    // Offset == 0: CIE
+    // Length == 0: Terminator
+    if (Offset != 0 && Length != 0) {
         f(Entry);
     }
     return P + Length;
