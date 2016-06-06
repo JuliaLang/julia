@@ -116,6 +116,14 @@ linearindexing(A::AbstractArray, B::AbstractArray...) = linearindexing(linearind
 linearindexing(::LinearFast, ::LinearFast) = LinearFast()
 linearindexing(::LinearIndexing, ::LinearIndexing) = LinearSlow()
 
+abstract IndicesBehavior
+immutable IndicesStartAt1  <: IndicesBehavior end   # indices 1:size(A,d)
+immutable IndicesUnitRange <: IndicesBehavior end   # arb UnitRange indices
+immutable IndicesList      <: IndicesBehavior end   # indices like (:cat, :dog, :mouse)
+
+indicesbehavior(A::AbstractArray) = indicesbehavior(typeof(A))
+indicesbehavior{T<:AbstractArray}(::Type{T}) = IndicesStartAt1()
+
 ## Bounds checking ##
 @generated function trailingsize{T,N,n}(A::AbstractArray{T,N}, ::Type{Val{n}})
     (isa(n, Int) && isa(N, Int)) || error("Must have concrete type")
@@ -228,13 +236,16 @@ checkbounds(A::AbstractArray) = checkbounds(A, 1) # 0-d case
 # default arguments to similar()
 typealias SimIdx Union{Integer,UnitRangeInteger}
 similar{T}(a::AbstractArray{T})                          = similar(a, T)
-similar(   a::AbstractArray, T::Type)                    = similar(a, T, size(a))
+similar(   a::AbstractArray, T::Type)                    = _similar(indicesbehavior(a), a, T)
 similar{T}(a::AbstractArray{T}, dims::Tuple)             = similar(a, T, dims)
 similar{T}(a::AbstractArray{T}, dims::SimIdx...)         = similar(a, T, dims)
 similar(   a::AbstractArray, T::Type, dims::SimIdx...)   = similar(a, T, dims)
 similar(   a::AbstractArray, T::Type, dims::DimsInteger) = similar(a, T, convert(Dims, dims))
 # similar creates an Array by default
 similar(   a::AbstractArray, T::Type, dims::Dims)        = Array(T, dims)
+
+_similar(::IndicesStartAt1, a::AbstractArray, T::Type)   = similar(a, T, size(a))
+_similar(::IndicesBehavior, a::AbstractArray, T::Type)   = similar(a, T, indices(a))
 
 ## from general iterable to any array
 
@@ -1048,9 +1059,28 @@ end
 # fallbacks
 function sub2ind(A::AbstractArray, I...)
     @_inline_meta
-    sub2ind(size(A), I...)  # faster than sub2ind(indices(A), I....); specialize if this is not OK
+    sub2ind(indicesbehavior(A), A, I...)
 end
-ind2sub(A::AbstractArray, ind) = (@_inline_meta; ind2sub(size(A), ind))
+function sub2ind(::IndicesStartAt1, A::AbstractArray, I...)
+    @_inline_meta
+    sub2ind(size(A), I...)
+end
+function sub2ind(::IndicesBehavior, A::AbstractArray, I...)
+    @_inline_meta
+    sub2ind(indices(A), I...)
+end
+function ind2sub(A::AbstractArray, ind)
+    @_inline_meta
+    ind2sub(indicesbehavior(A), A, ind)
+end
+function ind2sub(::IndicesStartAt1, A::AbstractArray, ind)
+    @_inline_meta
+    ind2sub(size(A), ind)
+end
+function ind2sub(::IndicesBehavior, A::AbstractArray, ind)
+    @_inline_meta
+    ind2sub(indices(A), ind)
+end
 
 sub2ind(::Tuple{}) = 1
 sub2ind(::DimsInteger) = 1
