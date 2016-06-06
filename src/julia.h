@@ -590,31 +590,31 @@ typedef struct _jl_gcframe_t {
 
 #define jl_pgcstack (jl_get_ptls_states()->pgcstack)
 
-#define JL_GC_PUSH1(arg1)                                                 \
-  void *__gc_stkf[] = {(void*)3, jl_pgcstack, arg1};                      \
+#define JL_GC_PUSH1(arg1)                                               \
+    void *__gc_stkf[] = {(void*)((1<<2) | 3), jl_pgcstack, arg1};       \
   jl_pgcstack = (jl_gcframe_t*)__gc_stkf;
 
-#define JL_GC_PUSH2(arg1, arg2)                                           \
-  void *__gc_stkf[] = {(void*)5, jl_pgcstack, arg1, arg2};                \
+#define JL_GC_PUSH2(arg1, arg2)                                         \
+    void *__gc_stkf[] = {(void*)((2<<2) | 3), jl_pgcstack, arg1, arg2}; \
   jl_pgcstack = (jl_gcframe_t*)__gc_stkf;
 
 #define JL_GC_PUSH3(arg1, arg2, arg3)                                     \
-  void *__gc_stkf[] = {(void*)7, jl_pgcstack, arg1, arg2, arg3};          \
+    void *__gc_stkf[] = {(void*)((3<<2) | 3), jl_pgcstack, arg1, arg2, arg3}; \
   jl_pgcstack = (jl_gcframe_t*)__gc_stkf;
 
 #define JL_GC_PUSH4(arg1, arg2, arg3, arg4)                               \
-  void *__gc_stkf[] = {(void*)9, jl_pgcstack, arg1, arg2, arg3, arg4};    \
+    void *__gc_stkf[] = {(void*)((4<<2) | 3), jl_pgcstack, arg1, arg2, arg3, arg4}; \
   jl_pgcstack = (jl_gcframe_t*)__gc_stkf;
 
 #define JL_GC_PUSH5(arg1, arg2, arg3, arg4, arg5)                               \
-  void *__gc_stkf[] = {(void*)11, jl_pgcstack, arg1, arg2, arg3, arg4, arg5};    \
+    void *__gc_stkf[] = {(void*)((5<<2) | 3), jl_pgcstack, arg1, arg2, arg3, arg4, arg5}; \
   jl_pgcstack = (jl_gcframe_t*)__gc_stkf;
 
-#define JL_GC_PUSHARGS(rts_var,n)                               \
+#define JL_GC_PUSHARGS(rts_var,n)                                     \
   rts_var = ((jl_value_t**)alloca(((n)+2)*sizeof(jl_value_t*)))+2;    \
-  ((void**)rts_var)[-2] = (void*)(((size_t)(n))<<1);                  \
-  ((void**)rts_var)[-1] = jl_pgcstack;                          \
-  memset((void*)rts_var, 0, (n)*sizeof(jl_value_t*));           \
+  ((void**)rts_var)[-2] = (void*)((((size_t)(n))<<2) | 2);            \
+  ((void**)rts_var)[-1] = jl_pgcstack;                                \
+  memset((void*)rts_var, 0, (n)*sizeof(jl_value_t*));                 \
   jl_pgcstack = (jl_gcframe_t*)&(((void**)rts_var)[-2])
 
 #define JL_GC_POP() (jl_pgcstack = jl_pgcstack->prev)

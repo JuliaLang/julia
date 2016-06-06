@@ -814,7 +814,7 @@ void allocate_frame()
         builder.SetCurrentDebugLocation(noDbg);
 
         Instruction *inst =
-            builder.CreateStore(ConstantInt::get(T_size, (argSpaceSize + maxDepth) << 1),
+            builder.CreateStore(ConstantInt::get(T_size, (argSpaceSize + maxDepth) << 2),
                                 builder.CreateBitCast(builder.CreateConstGEP1_32(gcframe, 0), T_size->getPointerTo()));
         inst->setMetadata(llvm::LLVMContext::MD_tbaa, tbaa_gcframe);
         inst = builder.CreateStore(builder.CreateLoad(builder.Insert(get_pgcstack(ptlsStates))),
@@ -875,7 +875,6 @@ void allocate_frame()
         F.setGC("statepoint-example");
         //#endif
     }
-    //M.dump();
 #ifndef NDEBUG
     jl_gc_frame_stats.count++;
     jl_gc_frame_stats.locals += argSpaceSize;
@@ -891,3 +890,39 @@ void jl_codegen_finalize_temp_arg(CallInst *ptlsStates, Type *T_pjlvalue,
     JuliaGCAllocator allocator(ptlsStates, T_pjlvalue, tbaa);
     allocator.allocate_frame();
 }
+
+#include "llvm/IR/LegacyPassManager.h"
+/*
+  This pass adds a statepoint-id to each statepoint such that the number is unique
+  per function in the module. This is used to find function boundaries in the stackmap.
+  It's better to do so right at the end of optimizations to avoid IPO messing with us.
+ */
+struct StatepointNumberingPass : public ModulePass {
+    static char ID;
+    StatepointNumberingPass() : ModulePass(ID) {
+    }
+    bool runOnModule(Module &M) override {
+        bool changed = false;
+        int function_id = 0;
+        for (Function &F : M.functions()) {
+            auto statepoint_id = std::to_string(function_id);
+            for (Function::iterator bb = F.begin(), be = F.end(); bb != be; ++bb) {
+                for (BasicBlock::iterator i = bb->begin(), ie = bb->end(); i != ie; ++i) {
+                    if (CallInst *call = dyn_cast<CallInst>(&*i)) {
+                        if (call->countOperandBundlesOfType("deopt") > 0) {
+                            call->addAttribute(AttributeSet::FunctionIndex, "statepoint-id", StringRef(statepoint_id));
+                            changed = true;
+                        }
+                    }
+                }
+            }
+            function_id++;
+        }
+        return changed;
+    }
+};
+void addStatepointNumberingPass(llvm::legacy::PassManager* PM)
+{
+    PM->add(new StatepointNumberingPass());
+}
+char StatepointNumberingPass::ID = 0;

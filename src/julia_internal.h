@@ -360,7 +360,7 @@ typedef struct {
 extern volatile int jl_in_stackwalk;
 #else
 // This gives unwind only local unwinding options ==> faster code
-#  define UNW_LOCAL_ONLY
+//#  define UNW_LOCAL_ONLY
 #  include <libunwind.h>
 typedef unw_context_t bt_context_t;
 typedef unw_cursor_t bt_cursor_t;

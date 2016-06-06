@@ -1,0 +1,16 @@
+diff -ur libunwind-1.1-julia2/src/mi/Gfind_dynamic_proc_info.c libunwind-1.1-julia2.MINE/src/mi/Gfind_dynamic_proc_info.c
+--- libunwind-1.1-julia2/src/mi/Gfind_dynamic_proc_info.c	2016-01-06 07:48:23.000000000 -0500
++++ libunwind-1.1-julia2.MINE/src/mi/Gfind_dynamic_proc_info.c	2016-06-06 08:37:55.364416906 -0400
+@@ -84,8 +84,8 @@
+                              unw_proc_info_t *pi, int need_unwind_info,
+                              void *arg)
+ {
+-  if (as == unw_local_addr_space)
++    //if (as == unw_local_addr_space)
+     return local_find_proc_info (as, ip, pi, need_unwind_info, arg);
+-  else
+-    return remote_find_proc_info (as, ip, pi, need_unwind_info, arg);
++    /*else
++      return remote_find_proc_info (as, ip, pi, need_unwind_info, arg);*/
+ }
+Only in libunwind-1.1-julia2.MINE/src/mi: Gfind_dynamic_proc_info.c~

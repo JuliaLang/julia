@@ -16,6 +16,8 @@
 #endif
 #include <assert.h>
 #include <inttypes.h>
+#undef UNW_LOCAL_ONLY
+#include <libunwind.h>
 #include "julia.h"
 #include "julia_internal.h"
 #include "threading.h"

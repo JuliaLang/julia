@@ -2,6 +2,7 @@
 
 // Except for parts of this file which were copied from LLVM, under the UIUC license (marked below).
 
+void addStatepointNumberingPass(legacy::PassManager*);
 // this defines the set of optimization passes defined for Julia at various optimization levels
 template <class T>
 static void addOptimizationPasses(T *PM)
@@ -23,6 +24,7 @@ static void addOptimizationPasses(T *PM)
 #   endif
 #endif
     if (jl_options.opt_level <= 1) {
+        addStatepointNumberingPass(PM);
         return;
     }
 #ifdef LLVM37
@@ -127,6 +129,7 @@ static void addOptimizationPasses(T *PM)
     PM->add(createInstructionCombiningPass());  // Clean up after loop vectorizer
 #endif
     //PM->add(createCFGSimplificationPass());     // Merge & remove BBs
+    addStatepointNumberingPass(PM);
 }
 
 #ifdef USE_ORCJIT

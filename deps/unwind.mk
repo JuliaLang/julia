@@ -10,6 +10,7 @@ $(SRCDIR)/srccache/libunwind-$(UNWIND_VER).tar.gz: | $(SRCDIR)/srccache
 $(SRCDIR)/srccache/libunwind-$(UNWIND_VER)/configure: $(SRCDIR)/srccache/libunwind-$(UNWIND_VER).tar.gz
 	$(JLCHECKSUM) $<
 	cd $(dir $<) && $(TAR) xfz $<
+	patch -d $(SRCDIR)/srccache -p0 < $(SRCDIR)/libunwind-remote-unw-hack.diff
 	touch -c $@
 $(BUILDDIR)/libunwind-$(UNWIND_VER)/config.status: $(SRCDIR)/srccache/libunwind-$(UNWIND_VER)/configure
 	mkdir -p $(dir $@)
