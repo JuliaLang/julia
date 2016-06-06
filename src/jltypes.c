@@ -2108,8 +2108,10 @@ void jl_precompute_memoized_dt(jl_datatype_t *dt)
     }
 }
 
+static arraylist_t partial_inst;
+
 static jl_value_t *inst_datatype(jl_datatype_t *dt, jl_svec_t *p, jl_value_t **iparams, size_t ntp,
-                                 int cacheable, int isabstract, jl_typestack_t *stack,
+                                 int cacheable, jl_typestack_t *stack,
                                  jl_value_t **env, size_t n)
 {
     jl_typestack_t top;
@@ -2194,10 +2196,10 @@ static jl_value_t *inst_datatype(jl_datatype_t *dt, jl_svec_t *p, jl_value_t **i
     stack = &top;
     ndt->name = tn;
     jl_gc_wb(ndt, ndt->name);
-    ndt->super = jl_any_type;
+    ndt->super = NULL;
     ndt->parameters = p;
     jl_gc_wb(ndt, ndt->parameters);
-    ndt->types = istuple ? p : jl_emptysvec; // to be filled in below
+    ndt->types = istuple ? p : NULL; // to be filled in below
     ndt->mutabl = dt->mutabl;
     ndt->abstract = dt->abstract;
     ndt->instance = NULL;
@@ -2206,51 +2208,67 @@ static jl_value_t *inst_datatype(jl_datatype_t *dt, jl_svec_t *p, jl_value_t **i
     ndt->ditype = NULL;
     ndt->size = 0;
     ndt->alignment = 1;
+    ndt->pointerfree = 0;
     jl_precompute_memoized_dt(ndt);
 
     // assign uid as early as possible
     if (cacheable && !ndt->abstract)
         ndt->uid = jl_assign_type_uid();
 
-    if (istuple)
+    if (istuple) {
         ndt->super = jl_any_type;
-    else
+    }
+    else if (dt->super) {
         ndt->super = (jl_datatype_t*)inst_type_w_((jl_value_t*)dt->super, env,n,stack, 1);
-    jl_gc_wb(ndt, ndt->super);
+        jl_gc_wb(ndt, ndt->super);
+    }
     ftypes = dt->types;
-    if (ftypes != NULL) {
-        if (!istuple) {
-            // recursively instantiate the types of the fields
-            ndt->types = inst_all(ftypes, env, n, stack, 1);
-            jl_gc_wb(ndt, ndt->types);
+    if (!istuple && ndt->name->names == jl_emptysvec) {
+        assert(ftypes == NULL || ftypes == jl_emptysvec);
+        ndt->size = dt->size;
+        ndt->alignment = dt->alignment;
+        ndt->pointerfree = dt->pointerfree;
+        ndt->types = jl_emptysvec;
+        if (jl_is_datatype_make_singleton(ndt)) {
+            ndt->instance = newstruct(ndt);
+            jl_gc_wb(ndt, ndt->instance);
         }
-        if (!isabstract) {
-            if (jl_svec_len(ftypes) == 0) {
-                ndt->size = dt->size;
-                ndt->alignment = dt->alignment;
-                ndt->pointerfree = dt->pointerfree;
+    }
+    if (ftypes == NULL || dt->super == NULL) {
+        // in the process of creating this type definition:
+        // need to instantiate the super and types fields later
+        assert(inside_typedef && !istuple);
+        arraylist_push(&partial_inst, ndt);
+    }
+    else {
+        if (ftypes != jl_emptysvec) {
+            assert(!ndt->abstract);
+            if (!istuple) {
+                // recursively instantiate the types of the fields
+                ndt->types = inst_all(ftypes, env, n, stack, 1);
+                jl_gc_wb(ndt, ndt->types);
             }
-            else {
+            if (cacheable) {
                 jl_compute_field_offsets(ndt);
-            }
-            if (jl_is_datatype_make_singleton(ndt)) {
-                ndt->instance = newstruct(ndt);
-                jl_gc_wb(ndt, ndt->instance);
+                if (jl_is_datatype_make_singleton(ndt)) {
+                    ndt->instance = newstruct(ndt);
+                    jl_gc_wb(ndt, ndt->instance);
+                }
             }
         }
         else {
-            ndt->size = 0;
-            ndt->pointerfree = 0;
+            assert(ndt->name->names == jl_emptysvec);
         }
-        if (tn == jl_array_typename)
-            ndt->pointerfree = 0;
     }
+    if (tn == jl_array_typename)
+        assert(!ndt->pointerfree);
     if (istuple)
         ndt->ninitialized = ntp;
     else
         ndt->ninitialized = dt->ninitialized;
 
-    if (cacheable) jl_cache_type_(ndt);
+    if (cacheable)
+        jl_cache_type_(ndt);
 
     JL_GC_POP();
     return (jl_value_t*)ndt;
@@ -2268,16 +2286,15 @@ static void check_tuple_parameter(jl_value_t *pi, size_t i, size_t np)
 
 static jl_tupletype_t *jl_apply_tuple_type_v_(jl_value_t **p, size_t np, jl_svec_t *params)
 {
-    int isabstract = 0, cacheable = 1;
+    int cacheable = 1;
     for(size_t i=0; i < np; i++) {
         jl_value_t *pi = p[i];
         check_tuple_parameter(pi, i, np);
         if (!jl_is_leaf_type(pi))
-            isabstract = 1;
+            cacheable = 0;
     }
-    cacheable = !isabstract;
     jl_datatype_t *ndt = (jl_datatype_t*)inst_datatype(jl_anytuple_type, params, p, np,
-                                                       cacheable, isabstract, NULL, NULL, 0);
+                                                       cacheable, NULL, NULL, 0);
     return ndt;
 }
 
@@ -2293,12 +2310,12 @@ JL_DLLEXPORT jl_tupletype_t *jl_apply_tuple_type_v(jl_value_t **p, size_t np)
 
 jl_datatype_t *jl_inst_concrete_tupletype(jl_svec_t *p)
 {
-    return (jl_datatype_t*)inst_datatype(jl_anytuple_type, p, jl_svec_data(p), jl_svec_len(p), 1, 0, NULL, NULL, 0);
+    return (jl_datatype_t*)inst_datatype(jl_anytuple_type, p, jl_svec_data(p), jl_svec_len(p), 1, NULL, NULL, 0);
 }
 
 jl_datatype_t *jl_inst_concrete_tupletype_v(jl_value_t **p, size_t np)
 {
-    return (jl_datatype_t*)inst_datatype(jl_anytuple_type, NULL, p, np, 1, 0, NULL, NULL, 0);
+    return (jl_datatype_t*)inst_datatype(jl_anytuple_type, NULL, p, np, 1, NULL, NULL, 0);
 }
 
 static jl_svec_t *inst_all(jl_svec_t *p, jl_value_t **env, size_t n,
@@ -2356,9 +2373,9 @@ static jl_value_t *inst_tuple_w_(jl_value_t *t, jl_value_t **env, size_t n,
         iparams[0] = (jl_value_t*)ip_heap;
         iparams = jl_svec_data(ip_heap);
     }
-    int cacheable = 1, isabstract = 0;
+    int cacheable = 1;
     if (jl_is_va_tuple(tt)) {
-        cacheable = 0; isabstract = 1;
+        cacheable = 0;
     }
     int i;
     for(i=0; i < ntp; i++) {
@@ -2368,11 +2385,11 @@ static jl_value_t *inst_tuple_w_(jl_value_t *t, jl_value_t **env, size_t n,
             jl_gc_wb(ip_heap, iparams[i]);
         jl_value_t *pi = iparams[i];
         check_tuple_parameter(pi, i, ntp);
-        if (!isabstract && !jl_is_leaf_type(pi)) {
-            cacheable = 0; isabstract = 1;
+        if (cacheable && !jl_is_leaf_type(pi)) {
+            cacheable = 0;
         }
     }
-    jl_value_t *result = inst_datatype((jl_datatype_t*)tt, ip_heap, iparams, ntp, cacheable, isabstract,
+    jl_value_t *result = inst_datatype((jl_datatype_t*)tt, ip_heap, iparams, ntp, cacheable,
                                        stack, env, n);
     JL_GC_POP();
     return result;
@@ -2422,7 +2439,7 @@ static jl_value_t *inst_type_w_(jl_value_t *t, jl_value_t **env, size_t n,
     assert(ntp == jl_svec_len(((jl_datatype_t*)tc)->parameters));
     jl_value_t **iparams;
     JL_GC_PUSHARGS(iparams, ntp);
-    int cacheable = 1, isabstract = 0, bound = 0;
+    int cacheable = 1, bound = 0;
     for(i=0; i < ntp; i++) {
         jl_value_t *elt = jl_svecref(tp, i);
         if (elt == t) {
@@ -2445,15 +2462,14 @@ static jl_value_t *inst_type_w_(jl_value_t *t, jl_value_t **env, size_t n,
                     }
                 }
             }
-            if (jl_has_typevars(iparams[i]))
-                isabstract = 1;
+            if (cacheable && jl_has_typevars(iparams[i]))
+                cacheable = 0;
         }
-        cacheable = !isabstract;
     }
     // if t's parameters are not bound in the environment, return it uncopied (#9378)
     if (!bound && t == tc) { JL_GC_POP(); return (jl_value_t*)t; }
 
-    jl_value_t *result = inst_datatype((jl_datatype_t*)tt, NULL, iparams, ntp, cacheable, isabstract,
+    jl_value_t *result = inst_datatype((jl_datatype_t*)tt, NULL, iparams, ntp, cacheable,
                                        stack, env, n);
     JL_GC_POP();
     return result;
@@ -2476,25 +2492,56 @@ jl_datatype_t *jl_wrap_Type(jl_value_t *t)
         jl_instantiate_type_with((jl_value_t*)jl_type_type, env, 1);
 }
 
-void jl_reinstantiate_inner_types(jl_datatype_t *t)
+void jl_reinstantiate_inner_types(jl_datatype_t *t) // can throw!
 {
-    jl_typestack_t top;
     assert(jl_is_datatype(t));
+    jl_typestack_t top;
     top.tt = t;
     top.prev = NULL;
-    size_t n = jl_svec_len(t->parameters);
-    if (n == 0) return;
-    t->name->cache = jl_emptysvec;
-    t->name->linearcache = jl_emptysvec;
-    jl_value_t **env = (jl_value_t**)alloca(n*2*sizeof(void*));
-    for(int i=0; i < n; i++) {
-        env[i*2] = jl_svecref(t->parameters,i);
-        env[i*2+1] = env[i*2];
+    size_t i, j, n = jl_svec_len(t->parameters);
+    if (n == 0) {
+        assert(partial_inst.len == 0);
+        return;
     }
-    t->super = (jl_datatype_t*)inst_type_w_((jl_value_t*)t->super, env, n, &top, 1);
-    jl_gc_wb(t, t->super);
-    t->types = inst_all(t->types, env, n, &top, 1);
-    jl_gc_wb(t, t->types);
+
+    jl_value_t **env = (jl_value_t**)alloca(n * 2 * sizeof(void*));
+    for (i = 0; i < n; i++) {
+        env[i * 2] = jl_svecref(t->parameters, i);
+        env[i * 2 + 1] = NULL;
+    }
+
+    for (j = 0; j < partial_inst.len; j++) {
+        jl_datatype_t *ndt = (jl_datatype_t*)partial_inst.items[j];
+        assert(ndt->name->primary == (jl_value_t*)t);
+        for (i = 0; i < n; i++)
+            env[i * 2 + 1] = jl_svecref(ndt->parameters, i);
+
+        ndt->super = (jl_datatype_t*)inst_type_w_((jl_value_t*)t->super, env, n, &top, 1);
+        jl_gc_wb(ndt, ndt->super);
+    }
+
+    if (t->name->names != jl_emptysvec) {
+        for (j = 0; j < partial_inst.len; j++) {
+            jl_datatype_t *ndt = (jl_datatype_t*)partial_inst.items[j];
+            assert(ndt->name->primary == (jl_value_t*)t);
+            for (i = 0; i < n; i++)
+                env[i * 2 + 1] = jl_svecref(ndt->parameters, i);
+
+            ndt->types = inst_all(t->types, env, n, &top, /*check*/1);
+            jl_gc_wb(ndt, ndt->types);
+            if (ndt->uid) { // cacheable
+                jl_compute_field_offsets(ndt);
+                if (jl_is_datatype_make_singleton(ndt)) {
+                    ndt->instance = newstruct(ndt);
+                    jl_gc_wb(ndt, ndt->instance);
+                }
+            }
+        }
+    }
+    else {
+        assert(t->types == jl_emptysvec);
+    }
+    partial_inst.len = 0;
 }
 
 // subtype comparison
@@ -3268,6 +3315,7 @@ extern void jl_init_int32_int64_cache(void);
 
 void jl_init_types(void)
 {
+    arraylist_new(&partial_inst, 0);
     // create base objects
     jl_datatype_type = jl_new_uninitialized_datatype(11, 1);
     jl_set_typeof(jl_datatype_type, jl_datatype_type);

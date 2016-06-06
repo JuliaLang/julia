@@ -4288,3 +4288,16 @@ function f16783()
     bar() = x+1
 end
 @test f16783()() == 1
+
+# issue #16767
+type A16767{T}
+    a::Base.RefValue{T}
+end
+type B16767{T}
+    b::A16767{B16767{T}}
+end
+type C16767{T}
+    b::A16767{C16767{:a}}
+end
+@test B16767.types[1].types[1].parameters[1].types === Base.svec(A16767{B16767})
+@test C16767.types[1].types[1].parameters[1].types === Base.svec(A16767{C16767{:a}})
