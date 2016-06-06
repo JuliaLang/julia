@@ -693,6 +693,8 @@ jl_value_t *jl_parse_eval_all(const char *fname, size_t len,
                 jl_interpret_toplevel_expr(form);
             else if (head == line_sym)
                 jl_lineno = jl_unbox_long(jl_exprarg(form,0));
+            else if (jl_is_linenode(form))
+                jl_lineno = jl_linenode_line(form);
             else
                 result = jl_toplevel_eval_flex(form, 1, 1);
             JL_SIGATOMIC_BEGIN();
