@@ -2726,14 +2726,16 @@ f(x) = yt(x)
                        (let ((val `(call (core getfield) ,access (inert contents))))
                          (if (eq? (vinfo:type cv) 'Any)
                              val
-                             `(call (core typeassert) ,val ,(vinfo:type cv))))
+                             `(call (core typeassert) ,val
+                                    ,(cl-convert (vinfo:type cv) fname lam namemap toplevel interp))))
                        access)))
                 (vi
                  (if (and (vinfo:asgn vi) (vinfo:capt vi))
                      (let ((val `(call (core getfield) ,e (inert contents))))
                        (if (eq? (vinfo:type vi) 'Any)
                            val
-                           `(call (core typeassert) ,val ,(vinfo:type vi))))
+                           `(call (core typeassert) ,val
+                                  ,(cl-convert (vinfo:type vi) fname lam namemap toplevel interp))))
                      e))
                 (else e))))
        ((atom? e) e)
