@@ -5349,7 +5349,9 @@ readlink
 """
     deg2rad(x)
 
-Convert `x` from degrees to radians.
+Convert `x` from degrees to radians.   Note that the constant `°` is
+also useful for this purpose: it is defined as ``π/180``, so multiplying
+by it converts degrees to radians, e.g. `30°` gives the angle ``π/6``.
 """
 deg2rad
 

@@ -195,6 +195,11 @@ General Number Functions and Constants
 
    The golden ratio
 
+.. data:: °
+
+   The constant π/180, useful for converting degrees to radians.
+   For example, ``30°`` gives the angle π/6.
+
 .. data:: Inf
 
    Positive infinity of type ``Float64``
@@ -599,4 +604,3 @@ As ``BigInt`` represents unbounded integers, the interval must be specified (e.g
    Create an array of the size ``jumps`` of initialized ``MersenneTwister`` RNG objects where the first RNG object given as a parameter and following ``MersenneTwister`` RNGs in the array initialized such that a state of the RNG object in the array would be moved forward (without generating numbers) from a previous RNG object array element on a particular number of steps encoded by the jump polynomial ``jumppoly``\ .
 
    Default jump polynomial moves forward ``MersenneTwister`` RNG state by 10^20 steps.
-
