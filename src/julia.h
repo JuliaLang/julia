@@ -1361,11 +1361,6 @@ JL_DLLEXPORT jl_array_t *jl_uncompress_ast(jl_lambda_info_t *li, jl_array_t *dat
 JL_DLLEXPORT int jl_is_operator(char *sym);
 JL_DLLEXPORT int jl_operator_precedence(char *sym);
 
-STATIC_INLINE int jl_vinfo_assigned(uint8_t vi)
-{
-    return (vi&2)!=0;
-}
-
 STATIC_INLINE int jl_vinfo_sa(uint8_t vi)
 {
     return (vi&16)!=0;
