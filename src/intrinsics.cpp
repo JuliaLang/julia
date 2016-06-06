@@ -18,7 +18,12 @@ static void jl_init_intrinsic_functions_codegen(Module *m)
     std::vector<Type *> args3(0); \
     args3.push_back(T_pjlvalue); \
     args3.push_back(T_pjlvalue); \
-    args3.push_back(T_pjlvalue);
+    args3.push_back(T_pjlvalue); \
+    std::vector<Type *> args4(0); \
+    args4.push_back(T_pjlvalue); \
+    args4.push_back(T_pjlvalue); \
+    args4.push_back(T_pjlvalue); \
+    args4.push_back(T_pjlvalue);
 
 #define ADD_I(name, nargs) do { \
         Function *func = Function::Create(FunctionType::get(T_pjlvalue, args##nargs, false), \
@@ -723,14 +728,15 @@ static jl_cgval_t emit_checked_fptoui(jl_value_t *targ, jl_value_t *x, jl_codect
     return mark_julia_type(ans, false, jlto, ctx);
 }
 
-static jl_cgval_t emit_runtime_pointerref(jl_value_t *e, jl_value_t *i, jl_codectx_t *ctx)
+static jl_cgval_t emit_runtime_pointerref(jl_value_t *e, jl_value_t *i, jl_value_t *align, jl_codectx_t *ctx)
 {
     jl_cgval_t parg = emit_expr(e, ctx);
     Value *iarg = boxed(emit_expr(i, ctx), ctx);
+    Value *alignarg = boxed(emit_expr(align, ctx), ctx);
 #ifdef LLVM37
-    Value *ret = builder.CreateCall(prepare_call(jlpref_func), { boxed(parg, ctx), iarg });
+    Value *ret = builder.CreateCall(prepare_call(jlpref_func), { boxed(parg, ctx), iarg, alignarg });
 #else
-    Value *ret = builder.CreateCall2(prepare_call(jlpref_func), boxed(parg, ctx), iarg);
+    Value *ret = builder.CreateCall3(prepare_call(jlpref_func), boxed(parg, ctx), iarg, alignarg);
 #endif
     jl_value_t *ety;
     if (jl_is_cpointer_type(parg.typ)) {
@@ -742,28 +748,32 @@ static jl_cgval_t emit_runtime_pointerref(jl_value_t *e, jl_value_t *i, jl_codec
     return mark_julia_type(ret, true, ety, ctx);
 }
 
-static jl_cgval_t emit_pointerref(jl_value_t *e, jl_value_t *i, jl_codectx_t *ctx)
+static jl_cgval_t emit_pointerref(jl_value_t *e, jl_value_t *i, jl_value_t *align, jl_codectx_t *ctx)
 {
     jl_value_t *aty = expr_type(e, ctx);
     if (!jl_is_cpointer_type(aty))
-        return emit_runtime_pointerref(e, i, ctx);
+        return emit_runtime_pointerref(e, i, align, ctx);
         //jl_error("pointerref: expected pointer type as first argument");
     jl_value_t *ety = jl_tparam0(aty);
     if (jl_is_typevar(ety))
-        return emit_runtime_pointerref(e, i, ctx);
+        return emit_runtime_pointerref(e, i, align, ctx);
         //jl_error("pointerref: invalid pointer");
     if (expr_type(i, ctx) != (jl_value_t*)jl_long_type)
-        return emit_runtime_pointerref(e, i, ctx);
+        return emit_runtime_pointerref(e, i, align, ctx);
         //jl_error("pointerref: invalid index type");
+    jl_cgval_t align_val = emit_expr(align, ctx);
+    if (align_val.constant == NULL || !jl_is_long(align_val.constant))
+        return emit_runtime_pointerref(e, i, align, ctx);
+        //jl_error("pointerref: invalid or non-statically evaluatable alignment")
     Value *thePtr = auto_unbox(e,ctx);
     Value *idx = emit_unbox(T_size, emit_expr(i, ctx), (jl_value_t*)jl_long_type);
     Value *im1 = builder.CreateSub(idx, ConstantInt::get(T_size, 1));
     if (!jl_isbits(ety)) {
         if (ety == (jl_value_t*)jl_any_type)
             return mark_julia_type(
-                    builder.CreateLoad(builder.CreateGEP(
+                    builder.CreateAlignedLoad(builder.CreateGEP(
                         emit_bitcast(thePtr, T_ppjlvalue),
-                        im1)),
+                        im1), jl_unbox_long(align_val.constant)),
                     true,
                     ety, ctx);
         if (!jl_is_structtype(ety) || jl_is_array_type(ety) || !jl_is_leaf_type(ety)) {
@@ -781,33 +791,33 @@ static jl_cgval_t emit_pointerref(jl_value_t *e, jl_value_t *i, jl_codectx_t *ct
                              thePtr, size, 1)->getCalledValue());
         return mark_julia_type(strct, true, ety, ctx);
     }
-    // TODO: alignment?
-    return typed_load(thePtr, im1, ety, ctx, tbaa_data, 1);
+    return typed_load(thePtr, im1, ety, ctx, tbaa_data, jl_unbox_long(align_val.constant));
 }
 
-static jl_cgval_t emit_runtime_pointerset(jl_value_t *e, jl_value_t *x, jl_value_t *i, jl_codectx_t *ctx)
+static jl_cgval_t emit_runtime_pointerset(jl_value_t *e, jl_value_t *x, jl_value_t *i, jl_value_t *align, jl_codectx_t *ctx)
 {
     jl_cgval_t parg = emit_expr(e, ctx);
-    Value *iarg = boxed(emit_expr(i, ctx), ctx);
     Value *xarg = boxed(emit_expr(x, ctx), ctx);
+    Value *iarg = boxed(emit_expr(i, ctx), ctx);
+    Value *alignarg = boxed(emit_expr(align, ctx), ctx);
 #ifdef LLVM37
-    builder.CreateCall(prepare_call(jlpset_func), { boxed(parg, ctx), xarg, iarg });
+    builder.CreateCall(prepare_call(jlpset_func), { boxed(parg, ctx), xarg, iarg, alignarg });
 #else
-    builder.CreateCall3(prepare_call(jlpset_func), boxed(parg, ctx), xarg, iarg);
+    builder.CreateCall3(prepare_call(jlpset_func), boxed(parg, ctx), xarg, iarg, alignarg);
 #endif
     return parg;
 }
 
 // e[i] = x
-static jl_cgval_t emit_pointerset(jl_value_t *e, jl_value_t *x, jl_value_t *i, jl_codectx_t *ctx)
+static jl_cgval_t emit_pointerset(jl_value_t *e, jl_value_t *x, jl_value_t *i, jl_value_t *align, jl_codectx_t *ctx)
 {
     jl_value_t *aty = expr_type(e, ctx);
     if (!jl_is_cpointer_type(aty))
-        return emit_runtime_pointerset(e, x, i, ctx);
+        return emit_runtime_pointerset(e, x, i, align, ctx);
         //jl_error("pointerset: expected pointer type as first argument");
     jl_value_t *ety = jl_tparam0(aty);
     if (jl_is_typevar(ety))
-        return emit_runtime_pointerset(e, x, i, ctx);
+        return emit_runtime_pointerset(e, x, i, align, ctx);
         //jl_error("pointerset: invalid pointer");
     jl_value_t *xty = expr_type(x, ctx);
     jl_cgval_t val;
@@ -818,8 +828,12 @@ static jl_cgval_t emit_pointerset(jl_value_t *e, jl_value_t *x, jl_value_t *i, j
         emit_typecheck(val, ety, "pointerset: type mismatch in assign", ctx);
     }
     if (expr_type(i, ctx) != (jl_value_t*)jl_long_type)
-        return emit_runtime_pointerset(e, x, i, ctx);
+        return emit_runtime_pointerset(e, x, i, align, ctx);
         //jl_error("pointerset: invalid index type");
+    jl_cgval_t align_val = emit_expr(align, ctx);
+    if (align_val.constant == NULL || !jl_is_long(align_val.constant))
+        return emit_runtime_pointerset(e, x, i, align, ctx);
+        //jl_error("pointerset: invalid or non-statically evaluatable alignment")
     Value *idx = emit_unbox(T_size, emit_expr(i, ctx),(jl_value_t*)jl_long_type);
     Value *im1 = builder.CreateSub(idx, ConstantInt::get(T_size, 1));
     Value *thePtr = auto_unbox(e,ctx);
@@ -836,14 +850,14 @@ static jl_cgval_t emit_pointerset(jl_value_t *e, jl_value_t *x, jl_value_t *i, j
         im1 = builder.CreateMul(im1, ConstantInt::get(T_size,
                     LLT_ALIGN(size, ((jl_datatype_t*)ety)->layout->alignment)));
         prepare_call(builder.CreateMemCpy(builder.CreateGEP(emit_bitcast(thePtr, T_pint8), im1),
-                             data_pointer(val, ctx, T_pint8), size, 1)->getCalledValue());
+                             data_pointer(val, ctx, T_pint8), size, jl_unbox_long(align_val.constant))->getCalledValue());
     }
     else {
         if (!emitted) {
             val = emit_expr(x, ctx);
         }
-        // TODO: alignment?
-        typed_store(thePtr, im1, val, ety, ctx, tbaa_data, NULL, 1);
+        assert(jl_is_datatype(ety));
+        typed_store(thePtr, im1, val, ety, ctx, tbaa_data, NULL, jl_unbox_long(align_val.constant));
     }
     return mark_julia_type(thePtr, false, aty, ctx);
 }
@@ -959,9 +973,9 @@ static jl_cgval_t emit_intrinsic(intrinsic f, jl_value_t **args, size_t nargs,
         return mark_julia_type(r, true, (jl_value_t*)jl_any_type, ctx);
 #else
     case pointerref:
-        return emit_pointerref(args[1], args[2], ctx);
+        return emit_pointerref(args[1], args[2], args[3], ctx);
     case pointerset:
-        return emit_pointerset(args[1], args[2], args[3], ctx);
+        return emit_pointerset(args[1], args[2], args[3], args[4], ctx);
     case box:
         return generic_box(args[1], args[2], ctx);
     case unbox:
