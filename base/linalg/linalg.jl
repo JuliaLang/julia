@@ -218,6 +218,11 @@ function checksquare(A...)
     return sizes
 end
 
+function checksquaredims(m::Integer, n::Integer, mat_type::Type)
+    n==m || throw(DimensionMismatch("$mat_type matrix must be square"))
+    return n
+end
+
 function char_uplo(uplo::Symbol)
     if uplo == :U
         'U'
