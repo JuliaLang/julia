@@ -21,15 +21,18 @@ OffsetArray{T,N}(A::AbstractArray{T,N}, offsets::Vararg{Int,N}) = OffsetArray(A,
 (::Type{OffsetArray{T,N}}){T,N}(inds::Indices{N}) = OffsetArray{T,N,Array{T,N}}(Array{T,N}(map(Base.dimlength, inds)), map(indsoffset, inds))
 (::Type{OffsetArray{T}}){T,N}(inds::Indices{N}) = OffsetArray{T,N}(inds)
 
+Base.linearindexing{T<:OffsetArray}(::Type{T}) = Base.linearindexing(parenttype(T))
+Base.indicesbehavior{T<:OffsetArray}(::Type{T}) = Base.IndicesUnitRange()
+parenttype{T,N,AA}(::Type{OffsetArray{T,N,AA}}) = AA
+parenttype(A::OffsetArray) = parenttype(typeof(A))
+
 Base.parent(A::OffsetArray) = A.parent
 Base.size(A::OffsetArray) = size(parent(A))
 Base.indices(A::OffsetArray, d) = 1 <= d <= length(A.offsets) ? ((1:size(parent(A),d))+A.offsets[d]) : (1:1)
-Base.linearindexing(A::OffsetArray) = Base.linearindexing(parent(A))
 Base.eachindex(::LinearSlow, A::OffsetArray) = CartesianRange(indices(A))
 Base.eachindex(::LinearFast, A::OffsetVector) = indices(A, 1)
 Base.summary(A::OffsetArray) = string(typeof(A))*" with indices "*string(indices(A))
 
-Base.similar(A::OffsetArray, T::Type) = similar(parent(A), T, indices(A))
 function Base.similar(A::OffsetArray, T::Type, dims::Dims)
     B = similar(parent(A), T, dims)
 end
@@ -37,9 +40,6 @@ function Base.similar(A::AbstractArray, T::Type, inds::Tuple{Vararg{SimIdx}})
     B = similar(A, T, map(Base.dimlength, inds))
     OffsetArray(B, map(indsoffset, inds))
 end
-
-Base.ind2sub(A::OffsetArray, ind) = ind2sub(indices(A), ind)
-@inline Base.sub2ind(A::OffsetArray, I...) = sub2ind(indices(A), I...)
 
 @inline function Base.getindex{T,N}(A::OffsetArray{T,N}, I::Vararg{Int,N})
     @boundscheck checkbounds(A, I...)
@@ -71,11 +71,6 @@ end
     @inbounds parent(A)[i] = val
     val
 end
-
-# Ensuring that indexing with OffsetArray indices works as expected
-@inline Base.index_shape_dim(A, dim, i::OffsetArray{Bool}, I...) = (sum(i)..., Base.index_shape_dim(A, dim+1, I...)...)
-@inline Base.index_shape_dim{N}(A, dim, i::OffsetArray{CartesianIndex{N}}, I...) = (indices(i)..., Base.index_shape_dim(A, dim+N, I...)...)
-@inline Base.index_shape_dim(A, dim, i::OffsetArray, I...) = (indices(i)..., Base.index_shape_dim(A, dim+1, I...)...)
 
 # Computing a shifted index (subtracting the offset)
 offset{N}(offsets::NTuple{N,Int}, inds::NTuple{N,Int}) = _offset((), offsets, inds)
