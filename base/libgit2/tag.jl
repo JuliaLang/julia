@@ -31,11 +31,13 @@ function tag_create(repo::GitRepo, tag::AbstractString, commit::Union{AbstractSt
 end
 
 function name(tag::GitTag)
-    return String(ccall((:git_tag_name, :libgit2), Cstring, (Ptr{Void}, ), tag.ptr))
+    str_ptr = ccall((:git_tag_name, :libgit2), Cstring, (Ptr{Void}, ), tag.ptr)
+    str_ptr == C_NULL && throw(Error.GitError(Error.ERROR))
+    return String(str_ptr)
 end
 
 function target(tag::GitTag)
     oid_ptr = ccall((:git_tag_target_id, :libgit2), Ptr{Oid}, (Ptr{Void}, ), tag.ptr)
-    oid_ptr == C_NULL && return Oid()
+    oid_ptr == C_NULL && throw(Error.GitError(Error.ERROR))
     return Oid(oid_ptr)
 end
