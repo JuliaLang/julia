@@ -2494,6 +2494,7 @@ jl_datatype_t *jl_wrap_Type(jl_value_t *t)
 
 void jl_reinstantiate_inner_types(jl_datatype_t *t) // can throw!
 {
+    inside_typedef = 0;
     assert(jl_is_datatype(t));
     jl_typestack_t top;
     top.tt = t;
@@ -2543,6 +2544,14 @@ void jl_reinstantiate_inner_types(jl_datatype_t *t) // can throw!
     }
     partial_inst.len = 0;
 }
+
+void jl_reset_instantiate_inner_types(jl_datatype_t *t)
+{
+    // the declaration of `t` is invalid, forget about all of the WIP
+    inside_typedef = 0;
+    partial_inst.len = 0;
+}
+
 
 // subtype comparison
 
@@ -2717,6 +2726,8 @@ int jl_subtype_le(jl_value_t *a, jl_value_t *b, int ta, int invariant)
                 return 0;
             }
             tta = tta->super; super = 1;
+            if (tta == NULL)
+                jl_error("cannot compute subtype relation for type under construction");
         }
         assert(!invariant);
         return 0;
