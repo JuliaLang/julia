@@ -195,10 +195,6 @@ function contains_is(itr, x::ANY)
     return false
 end
 
-_ieval(x::ANY, sv) =
-    ccall(:jl_interpret_toplevel_expr_in, Any, (Any, Any, Any, Any),
-          sv.mod, x, svec(), svec())
-
 _topmod(sv::InferenceState) = _topmod(sv.mod)
 _topmod(m::Module) = ccall(:jl_base_relative_to, Any, (Any,), m)::Module
 
@@ -3459,8 +3455,6 @@ function reindex_labels!(linfo::LambdaInfo, sv::InferenceState)
         end
     end
 end
-
-#tfunc(f,t) = methods(f,t)[1].func.code.tfunc
 
 
 #### bootstrapping ####
