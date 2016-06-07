@@ -70,12 +70,6 @@ convert{T<:VecElement}(::Type{T}, arg::T) = arg
 include("checked.jl")
 importall .Checked
 
-# Symbol constructors
-if !isdefined(Core, :Inference)
-    Symbol(s::String) = Symbol(s.data)
-    Symbol(a::Array{UInt8,1}) =
-        ccall(:jl_symbol_n, Ref{Symbol}, (Ptr{UInt8}, Int32), a, length(a))
-end
 # vararg Symbol constructor
 Symbol(x...) = Symbol(string(x...))
 

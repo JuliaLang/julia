@@ -203,7 +203,10 @@ JL_DLLEXPORT void jl_atexit_hook(int exitcode)
         jl_value_t *f = jl_get_global(jl_base_module, jl_symbol("_atexit"));
         if (f != NULL) {
             JL_TRY {
+                size_t last_age = jl_get_ptls_states()->world_age;
+                jl_get_ptls_states()->world_age = jl_get_world_counter();
                 jl_apply(&f, 1);
+                jl_get_ptls_states()->world_age = last_age;
             }
             JL_CATCH {
                 jl_printf(JL_STDERR, "\natexit hook threw an error: ");

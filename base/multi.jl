@@ -124,10 +124,10 @@ for (idx, tname) in enumerate(msgtypes)
     end
 end
 
-function deserialize_msg(s)
+function deserialize_msg(s::AbstractSerializer)
     idx = read(s.io, UInt8)
     t = msgtypes[idx]
-    return deserialize_msg(s, t)
+    return eval(current_module(), Expr(:body, Expr(:return, Expr(:call, deserialize_msg, QuoteNode(s), QuoteNode(t)))))
 end
 
 function send_msg_unknown(s::IO, header, msg)
@@ -321,7 +321,7 @@ function send_msg_(w::Worker, header, msg, now::Bool)
     try
         reset_state(w.w_serializer)
         serialize_hdr_raw(io, header)
-        serialize(w.w_serializer, msg)  # io is wrapped in w_serializer
+        eval(current_module(), Expr(:body, Expr(:return, Expr(:call, serialize, QuoteNode(w.w_serializer), QuoteNode(msg)))))  # io is wrapped in w_serializer
         write(io, MSG_BOUNDARY)
 
         if !now && w.gcflag
@@ -812,7 +812,7 @@ function lookup_ref(pg, rrid, f)
         rv = get(pg.refs, rrid, false)
         if rv === false
             # first we've heard of this ref
-            rv = RemoteValue(f())
+            rv = RemoteValue(eval(Main, Expr(:body, Expr(:return, Expr(:call, f)))))
             pg.refs[rrid] = rv
             push!(rv.clientset, rrid.whence)
         end

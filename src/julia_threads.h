@@ -68,6 +68,7 @@ typedef struct {
 #define JL_MAX_BT_SIZE 80000
 typedef struct _jl_tls_states_t {
     struct _jl_gcframe_t *pgcstack;
+    size_t world_age;
     struct _jl_value_t *exception_in_transit;
     volatile size_t *safepoint;
     // Whether it is safe to execute GC at the same time.

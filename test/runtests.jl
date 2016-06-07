@@ -108,7 +108,7 @@ cd(dirname(@__FILE__)) do
         n > 1 && print("\tFrom worker 1:\t")
         local resp
         try
-            resp = runtests(t)
+            resp = eval(Expr(:call, () -> runtests(t))) # runtests is defined by the include above
         catch e
             resp = [e]
         end

@@ -921,6 +921,53 @@ true for macros too - and just like for macros, the use of [`eval()`](@ref) in a
 is a sign that you're doing something the wrong way.) However, unlike macros, the runtime system
 cannot correctly handle a call to [`eval()`](@ref), so it is disallowed.
 
+It is also important to see how `@generated` functions interact with method redefinition.
+Following the principle that a correct `@generated` function must not observe any
+mutable state or cause any mutation of global state, we see the following behavior.
+Observe that the generated function *cannot* call any method that was not defined
+prior to the *definition* of the generated function itself.
+
+```julia
+julia> # initially f(x) has one definition:
+
+julia> f(x) = "original definition";
+
+julia> # start some other operations that use f(x):
+
+julia> g(x) = f(x);
+
+julia> @generated gen1(x) = f(x);
+
+julia> @generated gen2(x) = :(f(x));
+
+julia> # now we add some new definitions for f(x):
+
+julia> f(x::Int) = "definition for Int";
+
+julia> f(x::Type{Int}) = "definition for Type{Int}";
+
+julia> # and compare how these results differ:
+
+julia> f(1)
+"definition for Int"
+
+julia> g(1)
+"definition for Int"
+
+julia> gen1(1)
+"original definition"
+
+julia> gen2(1)
+"definition for Int"
+
+julia> # each method of a generated function has its own view of defined functions:
+
+julia> @generated gen1(x::Real) = f(x);
+
+julia> gen1(1)
+"definition for Type{Int}"
+```
+
 The example generated function `foo` above did not do anything a normal function `foo(x) = x * x`
 could not do (except printing the type on the first invocation, and incurring higher overhead).
 However, the power of a generated function lies in its ability to compute different quoted expressions
