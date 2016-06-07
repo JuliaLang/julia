@@ -2,15 +2,6 @@
 
 # Note: Tests usually run with `--depwarn=error` (2)
 
-let
-    @noinline a_16617() = backtrace()
-    @noinline b_16617() = a_16617()
-    bt = b_16617()
-
-    caller = Base.firstcaller(bt, :a_16617)  # Determine the caller of `a_16617`
-    @test first(StackTraces.lookup(caller)).func == :b_16617
-end
-
 # Calling the same deprecated function from different callers should generate multiple
 # warnings
 let

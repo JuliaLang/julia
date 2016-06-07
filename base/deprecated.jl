@@ -61,15 +61,9 @@ function depwarn(io::IO, msg, funcsym; mode=-1)
         mode = JLOptions().depwarn
     end
     if mode == 1  # raise a warning
-        caller = firstcaller(backtrace(5), funcsym)
-        if caller != C_NULL
-            (caller in have_warned) && return
-            bt = backtrace()
-        else
-            bt = backtrace()
-            caller = firstcaller(bt, funcsym)
-            (caller in have_warned) && return
-        end
+        caller = backtrace_caller(funcsym, 1)
+        (caller in have_warned) && return
+        bt = backtrace()
         ln = Int(unsafe_load(cglobal(:jl_lineno, Cint)))
         fn = String(unsafe_load(cglobal(:jl_filename, Ptr{Cchar})))
         warn(io, msg, once=(caller != C_NULL), key=caller, bt=bt, filename=fn, lineno=ln)
@@ -78,29 +72,6 @@ function depwarn(io::IO, msg, funcsym; mode=-1)
     end
 end
 depwarn(msg, funcsym) = depwarn(STDERR, msg, funcsym)
-
-function firstcaller(bt::Array{Ptr{Void},1}, funcsym::Symbol)
-    # Identify the calling line
-    i = 1
-    len = length(bt)
-    while i <= len
-        lkups = StackTraces.lookup(bt[i])
-        i += 1
-        for lkup in lkups
-            if lkup === StackTraces.UNKNOWN
-                continue
-            end
-            if lkup.func == funcsym
-                @goto found
-            end
-        end
-    end
-    @label found
-    if i <= len
-        return bt[i]
-    end
-    return C_NULL
-end
 
 deprecate(s::Symbol) = deprecate(current_module(), s)
 deprecate(m::Module, s::Symbol) = ccall(:jl_deprecate_binding, Void, (Any, Any), m, s)

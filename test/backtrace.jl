@@ -99,3 +99,11 @@ let
     @test i1 > 0 && i2 > 0
     @test b1[i1].line != b2[i2].line
 end
+
+let
+    @noinline a_16617() = Base.backtrace_caller(:a_16617, 1)  # Return the caller of `a_16617`
+    @noinline b_16617() = a_16617()
+    caller = b_16617()
+
+    @test first(StackTraces.lookup(caller)).func == :b_16617
+end

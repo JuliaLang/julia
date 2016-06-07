@@ -104,6 +104,64 @@ int jl_num_frames(uintptr_t ip, int skipC)
     return count;
 }
 
+int jl_frame_contains(uintptr_t ip, jl_sym_t *name, int skipC)
+{
+    if (!name)
+        return 0;
+
+    char *func_name = jl_symbol_name(name);
+    jl_frame_t *frames;
+    int n = jl_getFunctionInfo(&frames, ip, 0, 0);
+    int found = 0;
+    for (int i = 0; i < n && !found; i++) {
+        jl_frame_t frame = frames[i];
+        if (!skipC || (skipC && !frame.fromC)) {
+            if (frame.func_name && strcmp(frame.func_name, func_name) == 0)
+                found = 1;
+        }
+        free(frame.func_name);
+        free(frame.file_name);
+    }
+    free(frames);
+    return found;
+}
+
+JL_DLLEXPORT jl_value_t *jl_backtrace_caller(jl_sym_t *name, int num_callers)
+{
+    if (num_callers < 0)
+        return NULL;
+
+    jl_value_t *ip = (jl_value_t*)jl_svec2(jl_voidpointer_type, jl_box_long(1));
+    JL_GC_PUSH1(&ip);
+    jl_value_t *caller = NULL;
+    bt_context_t context;
+    bt_cursor_t cursor;
+    memset(&context, 0, sizeof(context));
+    jl_unw_get(&context);
+    if (jl_unw_init(&cursor, &context)) {
+        int found = 0, callers = 0;
+        size_t n = 0;
+        do {
+            n = jl_unw_stepn(&cursor, (uintptr_t*) ip, NULL, 1);
+            jl_value_t** stack = (jl_value_t**)ip;
+
+            if (n > 0) {
+                if (!found)
+                    found = jl_frame_contains((uintptr_t) stack[0], name, 1);
+                else
+                    callers += jl_num_frames((uintptr_t) stack[0], 1);
+
+                if (found && callers >= num_callers) {
+                    caller = stack[0];
+                    break;
+                }
+            }
+        } while (n > 1 && !caller);
+    }
+    JL_GC_POP();
+    return caller;
+}
+
 static jl_value_t *array_ptr_void_type = NULL;
 JL_DLLEXPORT jl_value_t *jl_backtrace_from_here(int returnsp, int maxunwind, int skipC)
 {
