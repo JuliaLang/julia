@@ -857,7 +857,6 @@ static void jl_typemap_list_insert_(jl_typemap_entry_t **pml, jl_value_t *parent
                                     jl_typemap_entry_t *newrec, const struct jl_typemap_info *tparams)
 {
     if (*pml == (void*)jl_nothing || newrec->isleafsig) {
-        // insert at head of pml list
         newrec->next = *pml;
         jl_gc_wb(newrec, newrec->next);
         *pml = newrec;
@@ -949,26 +948,28 @@ jl_typemap_entry_t *jl_typemap_insert(union jl_typemap_t *cache, jl_value_t *par
         simpletype = (jl_tupletype_t*)jl_nothing;
     }
 
-    jl_typemap_entry_t *ml = jl_typemap_assoc_by_type(*cache, type, NULL, 1, 0, offs);
-    if (ml) {
-        if (overwritten != NULL)
-            *overwritten = ml->func.value;
-        if (newvalue == NULL)  // don't overwrite with guard entries
+    if ((jl_value_t*)simpletype == jl_nothing) {
+        jl_typemap_entry_t *ml = jl_typemap_assoc_by_type(*cache, type, NULL, 1, 0, offs);
+        if (ml && ml->simplesig == (void*)jl_nothing) {
+            if (overwritten != NULL)
+                *overwritten = ml->func.value;
+            if (newvalue == NULL)  // don't overwrite with guard entries
+                return ml;
+            // sigatomic begin
+            ml->sig = type;
+            jl_gc_wb(ml, ml->sig);
+            ml->simplesig = simpletype;
+            jl_gc_wb(ml, ml->simplesig);
+            ml->tvars = tvars;
+            jl_gc_wb(ml, ml->tvars);
+            ml->va = jl_is_va_tuple(type);
+            // TODO: `l->func` or `l->func->roots` might need to be rooted
+            ml->func.value = newvalue;
+            if (newvalue)
+                jl_gc_wb(ml, newvalue);
+            // sigatomic end
             return ml;
-        // sigatomic begin
-        ml->sig = type;
-        jl_gc_wb(ml, ml->sig);
-        ml->simplesig = simpletype;
-        jl_gc_wb(ml, ml->simplesig);
-        ml->tvars = tvars;
-        jl_gc_wb(ml, ml->tvars);
-        ml->va = jl_is_va_tuple(type);
-        // TODO: `l->func` or `l->func->roots` might need to be rooted
-        ml->func.value = newvalue;
-        if (newvalue)
-            jl_gc_wb(ml, newvalue);
-        // sigatomic end
-        return ml;
+        }
     }
     if (overwritten != NULL)
         *overwritten = NULL;
@@ -1000,6 +1001,7 @@ jl_typemap_entry_t *jl_typemap_insert(union jl_typemap_t *cache, jl_value_t *par
         else if (!jl_is_leaf_type(decl)) // anything else can go through the general subtyping test
             newrec->isleafsig = newrec->issimplesig = 0;
     }
+    // TODO: assert that guardsigs == jl_emptysvec && simplesig == jl_nothing if isleafsig and optimize with that knowledge?
     jl_typemap_insert_generic(cache, parent, newrec, NULL, offs, tparams);
     JL_GC_POP();
     return newrec;
@@ -1061,9 +1063,16 @@ static void jl_typemap_list_insert_sorted(jl_typemap_entry_t **pml, jl_value_t *
     l = *pml;
     jl_value_t *pa = parent;
     while (l != (void*)jl_nothing) {
-        if (!l->isleafsig) {
-            if (jl_args_morespecific((jl_value_t*)newrec->sig, (jl_value_t*)l->sig))
-                break;
+        if (!l->isleafsig) { // quickly ignore all of the leafsig entries (these were handled by caller)
+            if (jl_args_morespecific((jl_value_t*)newrec->sig, (jl_value_t*)l->sig)) {
+                if (l->simplesig == (void*)jl_nothing ||
+                    newrec->simplesig != (void*)jl_nothing || !sigs_eq((jl_value_t*)l->sig, (jl_value_t*)newrec->sig, 1)) {
+                    // might need to insert multiple entries for a lookup differing only by their simplesig
+                    // when simplesig contains a kind
+                    // TODO: make this test more correct or figure out a better way to compute this
+                    break;
+                }
+            }
         }
         pl = &l->next;
         pa = (jl_value_t*)l;
