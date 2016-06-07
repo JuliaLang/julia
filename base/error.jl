@@ -27,7 +27,7 @@ rethrow(e) = ccall(:jl_rethrow_other, Bottom, (Any,), e)
 function backtrace_caller(name::Symbol, callers::Integer=0)
     ccall(:jl_backtrace_caller, Ptr{Void}, (Ref{Symbol}, Int32), name, callers)
 end
-backtrace() = ccall(:jl_backtrace_from_here, Array{Ptr{Void},1}, (Int32, Int32, Int32), false, -1, false)
+backtrace() = ccall(:jl_backtrace_from_here, Array{Ptr{Void},1}, (Int32,), false)
 catch_backtrace() = ccall(:jl_get_backtrace, Array{Ptr{Void},1}, ())
 
 ## keyword arg lowering generates calls to this ##
