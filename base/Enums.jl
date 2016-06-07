@@ -96,7 +96,9 @@ macro enum(T,syms...)
             if get(io, :compact, false)
                 print(io, x)
             else
-                print(io, x, "::", $(esc(typename)), " = ", Int(x))
+                print(io, x, "::")
+                show(IOContext(io, :multiline => false), typeof(x))
+                print(io, " = ", Int(x))
             end
         end
         function Base.show(io::IO,t::Type{$(esc(typename))})
