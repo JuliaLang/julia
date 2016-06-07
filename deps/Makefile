@@ -47,7 +47,6 @@ CMAKE_CC_ARG := $(CC_ARG) $(DEPS_CFLAGS)
 CMAKE_CXX_ARG := $(CXX_ARG) $(DEPS_CXXFLAGS)
 
 CMAKE_COMMON := -DCMAKE_INSTALL_PREFIX:PATH=$(build_prefix)
-CMAKE_COMMON += -DCMAKE_INSTALL_BINDIR:PATH=$(shell $(JULIAHOME)/contrib/relative_path.sh $(build_prefix) $(build_depsbindir))
 ifneq ($(VERBOSE), 0)
 CMAKE_COMMON += -DCMAKE_VERBOSE_MAKEFILE=ON
 endif
