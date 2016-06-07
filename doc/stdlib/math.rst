@@ -1680,7 +1680,7 @@ Statistics
 
    .. Docstring generated from Julia source
 
-   Apply the function `f` to each element of `v` and take the mean.
+   Apply the function ``f`` to each element of ``v`` and take the mean.
 
 .. function:: mean!(r, v)
 

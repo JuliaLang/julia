@@ -2,6 +2,11 @@
 
 ##### mean #####
 
+"""
+    mean(f::Function, v)
+
+Apply the function `f` to each element of `v` and take the mean.
+"""
 function mean(f::Callable, iterable)
     state = start(iterable)
     if done(iterable, state)
