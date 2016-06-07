@@ -116,6 +116,24 @@ S = OAs.OffsetArray(slice(A0, 1:2, 1:2), (-1,2))  # LinearSlow
 @test eachindex(A) == 1:4
 @test eachindex(S) == CartesianRange((0:1,3:4))
 
+# show
+io = IOBuffer()
+show(io, A)
+str = takebuf_string(io)
+@test str == "[1 3; 2 4]"
+show(io, S)
+str = takebuf_string(io)
+@test str == "[1 3; 2 4]"
+show(IOContext(io, multiline=true), A)
+strs = split(strip(takebuf_string(io)), '\n')
+@test strs[2] == " 1  3"
+@test strs[3] == " 2  4"
+v = OAs.OffsetArray(rand(3), (-2,))
+show(io, v)
+str = takebuf_string(io)
+show(io, parent(v))
+@test str == takebuf_string(io)
+
 # Similar
 B = similar(A, Float32)
 @test isa(B, OAs.OffsetArray{Float32,2})
