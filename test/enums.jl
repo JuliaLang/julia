@@ -156,6 +156,7 @@ end
 @test string(apple) == "apple"
 
 @test reprmime("text/plain", Fruit) == "Enum $(string(Fruit)):\napple = 0\norange = 1\nkiwi = 2"
+@test reprmime("text/plain", orange) == "orange::TestEnums.Fruit = 1"
 
 @enum LogLevel DEBUG INFO WARN ERROR CRITICAL
 @test DEBUG < CRITICAL
