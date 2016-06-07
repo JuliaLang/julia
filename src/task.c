@@ -163,8 +163,8 @@ static void NOINLINE save_stack(jl_task_t *t)
 {
     if (t->state == done_sym || t->state == failed_sym)
         return;
-    volatile char *_x;
-    size_t nb = (char*)jl_stackbase - (char*)&_x;
+    char *frame_addr = (char*)jl_get_frame_addr();
+    size_t nb = (char*)jl_stackbase - frame_addr;
     char *buf;
     if (t->stkbuf == NULL || t->bufsz < nb) {
         buf = (char*)allocb(nb);
@@ -175,7 +175,7 @@ static void NOINLINE save_stack(jl_task_t *t)
         buf = (char*)t->stkbuf;
     }
     t->ssize = nb;
-    memcpy(buf, (char*)&_x, nb);
+    memcpy(buf, frame_addr, nb);
     // this task's stack could have been modified after
     // it was marked by an incremental collection
     // move the barrier back instead of walking it again here

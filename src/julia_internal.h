@@ -222,6 +222,18 @@ extern DLLEXPORT jl_value_t *jl_segv_exception;
 
 DLLEXPORT jl_value_t *(jl_array_data_owner)(jl_array_t *a);
 
+STATIC_INLINE void *jl_get_frame_addr(void)
+{
+#ifdef __GNUC__
+    return __builtin_frame_address(0);
+#else
+    void *dummy = NULL;
+    // The mask is to suppress the compiler warning about returning
+    // address of local variable
+    return (void*)((uintptr_t)&dummy & ~(uintptr_t)15);
+#endif
+}
+
 #ifdef __cplusplus
 }
 #endif
