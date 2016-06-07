@@ -119,12 +119,53 @@ mktempdir() do dir
 
                 config = joinpath(cache_repo, ".git", "config")
                 lines = split(open(readstring, config, "r"), "\n")
-                @test any(map(x->x == "[remote \"upstream\"]", lines))
+                @test any(x->x == "[remote \"upstream\"]", lines)
 
                 remote = LibGit2.get(LibGit2.GitRemote, repo, branch)
                 @test LibGit2.url(remote) == repo_url
                 @test LibGit2.isattached(repo)
                 finalize(remote)
+            finally
+                finalize(repo)
+            end
+        #end
+
+        #@testset "with remote branch and refspec" begin
+            repo = LibGit2.init(cache_repo)
+            try
+                @test isdir(cache_repo)
+                @test isdir(joinpath(cache_repo, ".git"))
+
+                # set a remote branch
+                branch = "upstream2"
+                LibGit2.GitRemote(repo, branch, repo_url,"+refs/heads/$branch:refs/remotes/origin/$branch") |> finalize
+
+                config = joinpath(cache_repo, ".git", "config")
+                lines = split(open(readstring, config, "r"), "\n")
+                @test any(x->x == "[remote \"upstream\"]", lines)
+
+                remote = LibGit2.get(LibGit2.GitRemote, repo, branch)
+                @test LibGit2.url(remote) == repo_url
+                @test LibGit2.isattached(repo)
+                finalize(remote)
+            finally
+                finalize(repo)
+            end
+        #end
+
+        #@testset "anonymous" begin
+            repo = LibGit2.init(cache_repo)
+            try
+                @test isdir(cache_repo)
+                @test isdir(joinpath(cache_repo, ".git"))
+
+                # set a remote branch
+                branch = "upstream3"
+                LibGit2.GitRemoteAnon(repo, repo_url) |> finalize
+
+                config = joinpath(cache_repo, ".git", "config")
+                lines = split(open(readstring, config, "r"), "\n")
+                @test any(x->x == "[remote \"upstream\"]", lines)
             finally
                 finalize(repo)
             end
@@ -232,7 +273,7 @@ mktempdir() do dir
                 @test LibGit2.iscommit(string(commit_oid1),repo)
                 @test LibGit2.iscommit(string(commit_oid2),repo)
                 @test LibGit2.is_ancestor_of(string(commit_oid1),string(commit_oid2),repo)
-
+                @test LibGit2.revcount(repo, string(commit_oid1), string(commit_oid2)) == (-1,1)
                 # lookup commits
                 cmt = LibGit2.get(LibGit2.GitCommit, repo, commit_oid1)
                 try
