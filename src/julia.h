@@ -246,6 +246,7 @@ typedef struct _jl_lambda_info_t {
     jl_array_t *slotflags;  // local var bit flags
     struct _jl_lambda_info_t *unspecialized_ducttape; // if template can't be compiled due to intrinsics, an un-inferred executable copy may get stored here
     jl_method_t *def; // method this is specialized from, (null if this is a toplevel thunk)
+    jl_value_t *constval;  // value of the function if jlcall_api==2
     int32_t nargs;
     int8_t isva;
     int8_t inferred;
@@ -253,7 +254,7 @@ typedef struct _jl_lambda_info_t {
     int8_t inlineable;
     int8_t inInference; // flags to tell if inference is running on this function
     int8_t inCompile; // flag to tell if codegen is running on this function
-    int8_t jlcall_api; // the c-abi for fptr; 0 = jl_fptr_t, 1 = jl_fptr_sparam_t
+    int8_t jlcall_api; // the c-abi for fptr; 0 = jl_fptr_t, 1 = jl_fptr_sparam_t, 2 = constval
     int8_t compile_traced; // if set will notify callback if this linfo is compiled
     jl_fptr_t fptr; // jlcall entry point
 
