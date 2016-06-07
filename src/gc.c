@@ -57,10 +57,7 @@ arraylist_t to_finalize;
 
 NOINLINE uintptr_t gc_get_stack_ptr(void)
 {
-    void *dummy = NULL;
-    // The mask is to suppress the compiler warning about returning
-    // address of local variable
-    return (uintptr_t)&dummy & ~(uintptr_t)15;
+    return (uintptr_t)jl_get_frame_addr();
 }
 
 #define should_timeout() 0
