@@ -5965,7 +5965,7 @@ besselk
 """
     readchomp(x)
 
-Read the entirety of `x` as a string but remove trailing newlines. Equivalent to `chomp(readstring(x))`.
+Read the entirety of `x` as a string and remove a trailing newline. Equivalent to `chomp(readstring(x))`.
 """
 readchomp
 
