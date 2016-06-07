@@ -500,14 +500,14 @@ end
 
 function sortrows(A::AbstractMatrix; kws...)
     c = 1:size(A,2)
-    rows = [ sub(A,i,c) for i=1:size(A,1) ]  # fixme (iter): update when #15459 is done
+    rows = [ sub(A,i,c) for i in indices(A,1) ]
     p = sortperm(rows; kws..., order=Lexicographic)
     A[p,:]
 end
 
 function sortcols(A::AbstractMatrix; kws...)
     r = 1:size(A,1)
-    cols = [ sub(A,r,i) for i=1:size(A,2) ]  # fixme (iter): update when #15459 is done
+    cols = [ sub(A,r,i) for i in indices(A,2) ]
     p = sortperm(cols; kws..., order=Lexicographic)
     A[:,p]
 end

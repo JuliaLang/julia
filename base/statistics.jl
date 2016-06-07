@@ -91,41 +91,43 @@ centralize_sumabs2(A::AbstractArray, m::Number) =
 centralize_sumabs2(A::AbstractArray, m::Number, ifirst::Int, ilast::Int) =
     mapreduce_impl(centralizedabs2fun(m), +, A, ifirst, ilast)
 
-@generated function centralize_sumabs2!{S,T,N}(R::AbstractArray{S}, A::AbstractArray{T,N}, means::AbstractArray)
-    quote
-        # following the implementation of _mapreducedim! at base/reducedim.jl
-        lsiz = check_reducedims(R,A)
-        isempty(R) || fill!(R, zero(S))
-        isempty(A) && return R
-        @nextract $N sizeR d->size(R,d)
-        sizA1 = size(A, 1)
+function centralize_sumabs2!{S,T,N}(R::AbstractArray{S}, A::AbstractArray{T,N}, means::AbstractArray)
+    # following the implementation of _mapreducedim! at base/reducedim.jl
+    lsiz = check_reducedims(R,A)
+    isempty(R) || fill!(R, zero(S))
+    isempty(A) && return R
+    sizA1 = size(A, 1)
 
-        if has_fast_linear_indexing(A) && lsiz > 16
-            # use centralize_sumabs2, which is probably better tuned to achieve higher performance
-            nslices = div(length(A), lsiz)
-            ibase = 0
-            for i = 1:nslices
-                @inbounds R[i] = centralize_sumabs2(A, means[i], ibase+1, ibase+lsiz)
-                ibase += lsiz
-            end
-        elseif size(R, 1) == 1 && sizA1 > 1
-            # keep the accumulator as a local variable when reducing along the first dimension
-            @nloops $N i d->(d>1? (1:size(A,d)) : (1:1)) d->(j_d = sizeR_d==1 ? 1 : i_d) begin
-                @inbounds r = (@nref $N R j)
-                @inbounds m = (@nref $N means j)
-                for i_1 = 1:sizA1                # fixme (iter): change when #15459 is done
-                    @inbounds r += abs2((@nref $N A i) - m)
-                end
-                @inbounds (@nref $N R j) = r
-            end
-        else
-            # general implementation
-            @nloops $N i A d->(j_d = sizeR_d==1 ? 1 : i_d) begin
-                @inbounds (@nref $N R j) += abs2((@nref $N A i) - (@nref $N means j))
-            end
+    if has_fast_linear_indexing(A) && lsiz > 16
+        nslices = div(length(A), lsiz)
+        ibase = first(linindices(A))-1
+        for i = 1:nslices
+            @inbounds R[i] = centralize_sumabs2(A, means[i], ibase+1, ibase+lsiz)
+            ibase += lsiz
         end
         return R
     end
+    IRmax = dims_tail(map(last, indices(R)), A)
+    if size(R, 1) == 1 && sizA1 > 1
+        i1 = first(indices(A, 1))
+        @inbounds for IA in CartesianRange(tail(indices(A)))
+            IR = min(IA, IRmax)
+            r = R[i1,IR]
+            m = means[i1,IR]
+            @simd for i in indices(A, 1)
+                r += abs2(A[i,IA] - m)
+            end
+            R[i1,IR] = r
+        end
+    else
+        @inbounds for IA in CartesianRange(tail(indices(A)))
+            IR = min(IA, IRmax)
+            @simd for i in indices(A, 1)
+                R[i,IR] += abs2(A[i,IA] - means[i,IR])
+            end
+        end
+    end
+    return R
 end
 
 function varm{T}(A::AbstractArray{T}, m::Number; corrected::Bool=true)

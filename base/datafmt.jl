@@ -563,12 +563,11 @@ function writedlm(io::IO, a::AbstractMatrix, dlm; opts...)
     optsd = val_opts(opts)
     quotes = get(optsd, :quotes, true)
     pb = PipeBuffer()
-    nr = size(a, 1)
-    nc = size(a, 2)
-    for i = 1:nr  # fixme (iter): improve if timholy/ArrayIteration.jl is merged into Base
-        for j = 1:nc
+    lastc = last(indices(a, 2))
+    for i = indices(a, 1)
+        for j = indices(a, 2)
             writedlm_cell(pb, a[i, j], dlm, quotes)
-            j == nc ? write(pb,'\n') : print(pb,dlm)
+            j == lastc ? write(pb,'\n') : print(pb,dlm)
         end
         (nb_available(pb) > (16*1024)) && write(io, takebuf_array(pb))
     end

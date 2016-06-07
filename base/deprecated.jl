@@ -683,7 +683,7 @@ function hist2d!{HT}(H::AbstractArray{HT,2}, v::AbstractMatrix,
     if init
         fill!(H, zero(HT))
     end
-    for i = 1:size(v,1)             # fixme (iter): update when #15459 is done
+    for i = indices(v,1)
         x = searchsortedfirst(edg1, v[i,1]) - 1
         y = searchsortedfirst(edg2, v[i,2]) - 1
         if 1 <= x <= n && 1 <= y <= m

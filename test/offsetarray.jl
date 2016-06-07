@@ -199,3 +199,39 @@ copy!(am, b)
 @test am[1,7] == 1
 @test am[1,8] == 2
 @test am[1,9] == -1
+
+dest = similar(am)
+map!(+, dest, am, am)
+@test dest[1,7] == 2
+@test dest[1,8] == 4
+@test dest[1,9] == -2
+
+A = OAs.OffsetArray(rand(4,4), (-3,5))
+C = similar(A)
+cumsum!(C, A, 1)
+@test parent(C) == cumsum(parent(A), 1)
+cumsum!(C, A, 2)
+@test parent(C) == cumsum(parent(A), 2)
+R = similar(A, (-2:-2, 6:9))
+maximum!(R, A)
+@test parent(R) == maximum(parent(A), 1)
+R = similar(A, (-2:1, 6:6))
+maximum!(R, A)
+@test parent(R) == maximum(parent(A), 2)
+
+v  = OAs.OffsetArray([1,1e100,1,-1e100], (-3,))*1000
+v2 = OAs.OffsetArray([1,-1e100,1,1e100], (5,))*1000
+@test isa(v, OAs.OffsetArray)
+cv  = OAs.OffsetArray([1,1e100,1e100,2], (-3,))*1000
+cv2 = OAs.OffsetArray([1,-1e100,-1e100,2], (5,))*1000
+@test isequal(cumsum_kbn(v), cv)
+@test isequal(cumsum_kbn(v2), cv2)
+@test isequal(sum_kbn(v), sum_kbn(parent(v)))
+
+io = IOBuffer()
+writedlm(io, A)
+seek(io, 0)
+@test readdlm(io, eltype(A)) == parent(A)
+
+amin, amax = extrema(parent(A))
+@test clamp(A, (amax+amin)/2, amax) == clamp(parent(A), (amax+amin)/2, amax)
