@@ -2912,10 +2912,10 @@ function inlining_pass(e::Expr, sv, linfo)
             basenumtype = Union{corenumtype, Main.Base.Complex64, Main.Base.Complex128, Main.Base.Rational}
             if isa(a1,basenumtype) || ((isa(a1,Symbol) || isa(a1,Slot) || isa(a1,SSAValue)) &&
                                        exprtype(a1,sv) ⊑ basenumtype)
-                if e.args[3]==2
+                if isequal(e.args[3], 2)
                     e.args = Any[GlobalRef(Main.Base,:*), a1, a1]
                     f = Main.Base.:*; ft = abstract_eval_constant(f)
-                elseif e.args[3]==3
+                elseif isequal(e.args[3], 3)
                     e.args = Any[GlobalRef(Main.Base,:*), a1, a1, a1]
                     f = Main.Base.:*; ft = abstract_eval_constant(f)
                 end

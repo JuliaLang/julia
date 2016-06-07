@@ -385,8 +385,8 @@ function exprresolve(ex::Expr)
     can_eval, result = exprresolve_arith(ex)
     if can_eval
         return result
-    elseif ex.head == :call && (ex.args[1] == :+ || ex.args[1] == :-) && length(ex.args) == 3 && ex.args[3] == 0
-        # simplify x+0 and x-0
+    elseif ex.head == :call && (ex.args[1] === :+ || ex.args[1] === :-) && length(ex.args) == 3 && isequal(ex.args[3], 0)
+        # simplify x + 0 and x - 0
         return ex.args[2]
     end
     # Resolve array references

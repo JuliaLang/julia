@@ -397,7 +397,7 @@ all(f::typeof(identity), itr) =
 
 ## in & contains
 
-in(x, itr) = any(Predicate(y -> y == x), itr)
+in(x, itr) = any(Predicate(y -> isequal(y, x)), itr)
 
 const ∈ = in
 ∉(x, itr)=!∈(x, itr)

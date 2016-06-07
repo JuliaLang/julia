@@ -83,7 +83,7 @@ try
         @test true
         @test false
         @test 1 == 1
-        @test 2 == :foo
+        @test 2 == 212
         @test 3 == 3
         @testset "d" begin
             @test 4 == 4
@@ -95,7 +95,7 @@ try
     @testset "inner1" begin
         @test 1 == 1
         @test 2 == 2
-        @test 3 == :bar
+        @test 3 == 32123
         @test 4 == 4
         @test_throws ErrorException 1+1
         @test_throws ErrorException error()

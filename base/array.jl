@@ -740,7 +740,7 @@ findfirst(A) = findnext(A, 1)
 # returns the index of the next matching element
 function findnext(A, v, start::Integer)
     for i = start:length(A)
-        if A[i] == v
+        if isequal(A[i], v)
             return i
         end
     end
@@ -771,7 +771,7 @@ findlast(A) = findprev(A, length(A))
 # returns the index of the matching element, or 0 if no matching
 function findprev(A, v, start::Integer)
     for i = start:-1:1
-        A[i] == v && return i
+        isequal(A[i], v) && return i
     end
     return 0
 end
