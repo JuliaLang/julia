@@ -181,29 +181,20 @@ end
 
 const ShortCircuiting = Union{typeof(&), typeof(|)}
 
-shortcircuits(::typeof(&), x::Bool) = !x
-shortcircuits(::typeof(|),  x::Bool) =  x
-
-shorted(::typeof(&)) = false
-shorted(::typeof(|))  = true
-
-sc_finish(::typeof(&)) = true
-sc_finish(::typeof(|))  = false
-
 ## short-circuiting (sc) mapreduce definitions
 
-function mapreduce_sc_impl(f, op, itr::AbstractArray)
+function mapreduce_sc_impl(f, op::typeof(&), itr)
     for x in itr
-        shortcircuits(op, f(x)) && return shorted(op)
+        f(x) || return false
     end
-    return sc_finish(op)
+    return true
 end
 
-function mapreduce_sc_impl(f, op, itr)
+function mapreduce_sc_impl(f, op::typeof(|), itr)
     for x in itr
-        shortcircuits(op, f(x)) && return shorted(op)
+        f(x) && return true
     end
-    return sc_finish(op)
+    return false
 end
 
 # mapreduce_sc tests if short-circuiting is safe;
