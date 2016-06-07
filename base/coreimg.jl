@@ -38,11 +38,6 @@ if !isdefined(Main, :Base)
     (::Type{T}){T}(arg) = convert(T, arg)::T
 end
 
-# Symbol constructors
-Symbol(s::String) = Symbol(s.data)
-Symbol(a::Array{UInt8,1}) =
-    ccall(:jl_symbol_n, Ref{Symbol}, (Ptr{UInt8}, Int32), a, length(a))
-
 # core array operations
 include("array.jl")
 include("abstractarray.jl")

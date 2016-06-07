@@ -105,7 +105,10 @@ static void run_finalizer(jl_ptls_t ptls, jl_value_t *o, jl_value_t *ff)
     assert(!jl_typeis(ff, jl_voidpointer_type));
     jl_value_t *args[2] = {ff,o};
     JL_TRY {
+        size_t last_age = jl_get_ptls_states()->world_age;
+        jl_get_ptls_states()->world_age = jl_world_counter;
         jl_apply(args, 2);
+        jl_get_ptls_states()->world_age = last_age;
     }
     JL_CATCH {
         jl_printf(JL_STDERR, "error in running finalizer: ");

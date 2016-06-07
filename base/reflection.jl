@@ -342,7 +342,7 @@ tt_cons(t::ANY, tup::ANY) = (@_pure_meta; Tuple{t, (isa(tup, Type) ? tup.paramet
 
 Returns an array of lowered ASTs for the methods matching the given generic function and type signature.
 """
-function code_lowered(f, t::ANY=Tuple)
+function code_lowered(f::ANY, t::ANY=Tuple)
     asts = map(methods(f, t)) do m
         m = m::Method
         return uncompressed_ast(m, m.isstaged ? m.unspecialized.inferred : m.source)
@@ -352,13 +352,16 @@ end
 
 # low-level method lookup functions used by the compiler
 
-function _methods(f::ANY,t::ANY,lim)
+function _methods(f::ANY, t::ANY, lim::Int, world::UInt)
     ft = isa(f,Type) ? Type{f} : typeof(f)
     tt = isa(t,Type) ? Tuple{ft, t.parameters...} : Tuple{ft, t...}
-    return _methods_by_ftype(tt, lim)
+    return _methods_by_ftype(tt, lim, world)
 end
 
-function _methods_by_ftype(t::ANY, lim)
+function _methods_by_ftype(t::ANY, lim::Int, world::UInt)
+    return _methods_by_ftype(t, lim, world, UInt[typemin(UInt)], UInt[typemax(UInt)])
+end
+function _methods_by_ftype(t::ANY, lim::Int, world::UInt, min::Array{UInt,1}, max::Array{UInt,1})
     tp = t.parameters::SimpleVector
     nu = 1
     for ti in tp
@@ -367,15 +370,16 @@ function _methods_by_ftype(t::ANY, lim)
         end
     end
     if 1 < nu <= 64
-        return _methods(Any[tp...], length(tp), lim, [])
+        return _methods_by_ftype(Any[tp...], length(tp), lim, [], world, min, max)
     end
     # XXX: the following can return incorrect answers that the above branch would have corrected
-    return ccall(:jl_matching_methods, Any, (Any,Cint,Cint), t, lim, 0)
+    return ccall(:jl_matching_methods, Any, (Any, Cint, Cint, UInt, Ptr{UInt}, Ptr{UInt}), t, lim, 0, world, min, max)
 end
 
-function _methods(t::Array,i,lim::Integer,matching::Array{Any,1})
+function _methods_by_ftype(t::Array, i, lim::Integer, matching::Array{Any,1}, world::UInt, min::Array{UInt,1}, max::Array{UInt,1})
     if i == 0
-        new = ccall(:jl_matching_methods, Any, (Any,Cint,Cint), Tuple{t...}, lim, 0)
+        world = typemax(UInt)
+        new = ccall(:jl_matching_methods, Any, (Any, Cint, Cint, UInt, Ptr{UInt}, Ptr{UInt}), Tuple{t...}, lim, 0, world, min, max)
         new === false && return false
         append!(matching, new::Array{Any,1})
     else
@@ -383,14 +387,14 @@ function _methods(t::Array,i,lim::Integer,matching::Array{Any,1})
         if isa(ti, Union)
             for ty in (ti::Union).types
                 t[i] = ty
-                if _methods(t,i-1,lim,matching) === false
+                if _methods_by_ftype(t, i - 1, lim, matching, world, min, max) === false
                     t[i] = ti
                     return false
                 end
             end
             t[i] = ti
         else
-            return _methods(t,i-1,lim,matching)
+            return _methods_by_ftype(t, i - 1, lim, matching, world, min, max)
         end
     end
     return matching
@@ -430,7 +434,8 @@ function methods(f::ANY, t::ANY)
         throw(ArgumentError("argument is not a generic function"))
     end
     t = to_tuple_type(t)
-    return MethodList(Method[m[3] for m in _methods(f,t,-1)], typeof(f).name.mt)
+    world = typemax(UInt)
+    return MethodList(Method[m[3] for m in _methods(f, t, -1, world)], typeof(f).name.mt)
 end
 
 methods(f::Core.Builtin) = MethodList(Method[], typeof(f).name.mt)
@@ -438,7 +443,10 @@ methods(f::Core.Builtin) = MethodList(Method[], typeof(f).name.mt)
 function methods_including_ambiguous(f::ANY, t::ANY)
     ft = isa(f,Type) ? Type{f} : typeof(f)
     tt = isa(t,Type) ? Tuple{ft, t.parameters...} : Tuple{ft, t...}
-    ms = ccall(:jl_matching_methods, Any, (Any,Cint,Cint), tt, -1, 1)::Array{Any,1}
+    world = typemax(UInt)
+    min = UInt[typemin(UInt)]
+    max = UInt[typemax(UInt)]
+    ms = ccall(:jl_matching_methods, Any, (Any, Cint, Cint, UInt, Ptr{UInt}, Ptr{UInt}), tt, -1, 1, world, min, max)::Array{Any,1}
     return MethodList(Method[m[3] for m in ms], typeof(f).name.mt)
 end
 function methods(f::ANY)
@@ -523,6 +531,7 @@ function _dump_function(f::ANY, t::ANY, native::Bool, wrapper::Bool,
         throw(ArgumentError("argument is not a generic function"))
     end
     # get the MethodInstance for the method match
+    world = typemax(UInt)
     meth = which(f, t)
     t = to_tuple_type(t)
     ft = isa(f, Type) ? Type{f} : typeof(f)
@@ -530,21 +539,21 @@ function _dump_function(f::ANY, t::ANY, native::Bool, wrapper::Bool,
     (ti, env) = ccall(:jl_match_method, Any, (Any, Any, Any),
                       tt, meth.sig, meth.tvars)::SimpleVector
     meth = func_for_method_checked(meth, tt)
-    linfo = ccall(:jl_specializations_get_linfo, Ref{Core.MethodInstance}, (Any, Any, Any), meth, tt, env)
+    linfo = ccall(:jl_specializations_get_linfo, Ref{Core.MethodInstance}, (Any, Any, Any, UInt), meth, tt, env, world)
     # get the code for it
-    return _dump_function(linfo, native, wrapper, strip_ir_metadata, dump_module, syntax, optimize, params)
+    return _dump_function_linfo(linfo, world, native, wrapper, strip_ir_metadata, dump_module, syntax, optimize, params)
 end
 
-function _dump_function(linfo::Core.MethodInstance, native::Bool, wrapper::Bool,
-                        strip_ir_metadata::Bool, dump_module::Bool, syntax::Symbol=:att,
-                        optimize::Bool=true, params::CodegenParams=CodegenParams())
+function _dump_function_linfo(linfo::Core.MethodInstance, world::UInt, native::Bool, wrapper::Bool,
+                              strip_ir_metadata::Bool, dump_module::Bool, syntax::Symbol=:att,
+                              optimize::Bool=true, params::CodegenParams=CodegenParams())
     if syntax != :att && syntax != :intel
         throw(ArgumentError("'syntax' must be either :intel or :att"))
     end
     if native
-        llvmf = ccall(:jl_get_llvmf_decl, Ptr{Void}, (Any, Bool, CodegenParams), linfo, wrapper, params)
+        llvmf = ccall(:jl_get_llvmf_decl, Ptr{Void}, (Any, UInt, Bool, CodegenParams), linfo, world, wrapper, params)
     else
-        llvmf = ccall(:jl_get_llvmf_defn, Ptr{Void}, (Any, Bool, Bool, CodegenParams), linfo, wrapper, optimize, params)
+        llvmf = ccall(:jl_get_llvmf_defn, Ptr{Void}, (Any, UInt, Bool, Bool, CodegenParams), linfo, world, wrapper, optimize, params)
     end
     if llvmf == C_NULL
         error("could not compile the specified method")
@@ -612,10 +621,11 @@ function code_typed(f::ANY, types::ANY=Tuple; optimize=true)
     end
     types = to_tuple_type(types)
     asts = []
-    params = Core.Inference.InferenceParams()
-    for x in _methods(f, types, -1)
+    world = typemax(UInt)
+    params = Core.Inference.InferenceParams(world)
+    for x in _methods(f, types, -1, world)
         meth = func_for_method_checked(x[3], types)
-        (code, ty) = Core.Inference.typeinf_code(meth, x[1], x[2], optimize, optimize, params)
+        (_, code, ty) = Core.Inference.typeinf_code(meth, x[1], x[2], optimize, optimize, params)
         code === nothing && error("inference not successful") # Inference disabled?
         push!(asts, uncompressed_ast(meth, code) => ty)
     end
@@ -629,8 +639,9 @@ function return_types(f::ANY, types::ANY=Tuple)
     end
     types = to_tuple_type(types)
     rt = []
-    params = Core.Inference.InferenceParams()
-    for x in _methods(f, types, -1)
+    world = typemax(UInt)
+    params = Core.Inference.InferenceParams(world)
+    for x in _methods(f, types, -1, world)
         meth = func_for_method_checked(x[3], types)
         ty = Core.Inference.typeinf_type(meth, x[1], x[2], true, params)
         ty === nothing && error("inference not successful") # Inference disabled?
@@ -659,7 +670,7 @@ function which(f::ANY, t::ANY)
     else
         ft = isa(f,Type) ? Type{f} : typeof(f)
         tt = Tuple{ft, t.parameters...}
-        m = ccall(:jl_gf_invoke_lookup, Any, (Any,), tt)
+        m = ccall(:jl_gf_invoke_lookup, Any, (Any, UInt), tt, typemax(UInt))
         if m === nothing
             error("no method found for the specified argument types")
         end
@@ -765,13 +776,14 @@ true
 function method_exists(f::ANY, t::ANY)
     t = to_tuple_type(t)
     t = Tuple{isa(f,Type) ? Type{f} : typeof(f), t.parameters...}
-    return ccall(:jl_method_exists, Cint, (Any, Any), typeof(f).name.mt, t) != 0
+    return ccall(:jl_method_exists, Cint, (Any, Any, UInt), typeof(f).name.mt, t,
+        typemax(UInt)) != 0
 end
 
 function isambiguous(m1::Method, m2::Method)
     ti = typeintersect(m1.sig, m2.sig)
     ti === Bottom && return false
-    ml = _methods_by_ftype(ti, -1)
+    ml = _methods_by_ftype(ti, -1, typemax(UInt))
     isempty(ml) && return true
     for m in ml
         if ti <: m[3].sig
@@ -780,3 +792,8 @@ function isambiguous(m1::Method, m2::Method)
     end
     return true
 end
+
+min_world(m::Method) = reinterpret(UInt, m.min_world)
+max_world(m::Method) = reinterpret(UInt, m.max_world)
+min_world(m::Core.MethodInstance) = reinterpret(UInt, m.min_world)
+max_world(m::Core.MethodInstance) = reinterpret(UInt, m.max_world)

@@ -308,6 +308,7 @@ unsafe_convert{T}(::Type{T}, x::T) = x
 
 typealias NTuple{N,T} Tuple{Vararg{T,N}}
 
+
 # primitive array constructors
 (::Type{Array{T,N}}){T,N}(d::NTuple{N,Int}) =
     ccall(:jl_new_array, Array{T,N}, (Any,Any), Array{T,N}, d)
@@ -336,6 +337,15 @@ Array{T}(::Type{T}, d::Int...)            = Array(T, d)
 Array{T}(::Type{T}, m::Int)               = Array{T,1}(m)
 Array{T}(::Type{T}, m::Int,n::Int)        = Array{T,2}(m,n)
 Array{T}(::Type{T}, m::Int,n::Int,o::Int) = Array{T,3}(m,n,o)
+
+
+# primitive Symbol constructors
+Symbol(s::String) = Symbol(s.data)
+function Symbol(a::Array{UInt8,1})
+    return ccall(:jl_symbol_n, Ref{Symbol}, (Ptr{UInt8}, Int),
+          ccall(:jl_array_ptr, Ptr{UInt8}, (Any,), a),
+          Intrinsics.arraylen(a))
+end
 
 
 # docsystem basics

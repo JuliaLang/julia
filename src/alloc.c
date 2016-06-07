@@ -409,6 +409,7 @@ JL_DLLEXPORT jl_method_instance_t *jl_new_method_instance_uninit(void)
     li->inferred_const = NULL;
     li->rettype = (jl_value_t*)jl_any_type;
     li->sparam_vals = jl_emptysvec;
+    li->backedges = NULL;
     li->fptr = NULL;
     li->unspecialized_ducttape = NULL;
     li->jlcall_api = 0;
@@ -418,6 +419,8 @@ JL_DLLEXPORT jl_method_instance_t *jl_new_method_instance_uninit(void)
     li->specTypes = NULL;
     li->inInference = 0;
     li->def = NULL;
+    li->min_world = 0;
+    li->max_world = 0;
     return li;
 }
 
@@ -457,8 +460,9 @@ STATIC_INLINE jl_value_t *jl_call_staged(jl_svec_t *sparam_vals, jl_method_insta
     fptr.fptr = generator->fptr;
     fptr.jlcall_api = generator->jlcall_api;
     if (__unlikely(fptr.fptr == NULL || fptr.jlcall_api == 0)) {
-        void *F = jl_compile_linfo(generator, (jl_code_info_t*)generator->inferred, &jl_default_cgparams).functionObject;
-        fptr = jl_generate_fptr(generator, F);
+        size_t world = generator->def->min_world;
+        void *F = jl_compile_linfo(&generator, (jl_code_info_t*)generator->inferred, world, &jl_default_cgparams).functionObject;
+        fptr = jl_generate_fptr(generator, F, world);
     }
     assert(jl_svec_len(generator->def->sparam_syms) == jl_svec_len(sparam_vals));
     if (fptr.jlcall_api == 1)
@@ -515,6 +519,7 @@ JL_DLLEXPORT jl_code_info_t *jl_code_for_staged(jl_method_instance_t *linfo)
         // invoke code generator
         assert(jl_nparams(tt) == jl_array_len(argnames) ||
                (linfo->def->isva && (jl_nparams(tt) >= jl_array_len(argnames) - 1)));
+        // TODO: set world to that of the generator while calling func
         jl_array_ptr_set(body->args, 1,
                 jl_call_staged(sparam_vals, generator, jl_svec_data(tt->parameters), jl_nparams(tt)));
 
@@ -574,10 +579,12 @@ jl_method_instance_t *jl_get_specialized(jl_method_t *m, jl_tupletype_t *types, 
     new_linfo->def = m;
     new_linfo->specTypes = types;
     new_linfo->sparam_vals = sp;
+    new_linfo->min_world = m->min_world;
+    new_linfo->max_world = m->max_world;
     return new_linfo;
 }
 
-JL_DLLEXPORT void jl_method_set_source(jl_method_t *m, jl_code_info_t *src)
+static void jl_method_set_source(jl_method_t *m, jl_code_info_t *src)
 {
     uint8_t j;
     uint8_t called = 0;
@@ -642,6 +649,8 @@ JL_DLLEXPORT jl_method_t *jl_new_method_uninit(void)
     m->nargs = 0;
     m->needs_sparam_vals_ducttape = 2;
     m->traced = 0;
+    m->min_world = 1;
+    m->max_world = ~(size_t)0;
     JL_MUTEX_INIT(&m->writelock);
     return m;
 }
@@ -663,6 +672,7 @@ jl_method_t *jl_new_method(jl_code_info_t *definition,
     JL_GC_PUSH1(&root);
 
     jl_method_t *m = jl_new_method_uninit();
+    m->min_world = ++jl_world_counter;
     m->isstaged = isstaged;
     m->name = name;
     m->sig = sig;
@@ -772,7 +782,7 @@ JL_DLLEXPORT jl_sym_t *jl_symbol_lookup(const char *str)
     return symtab_lookup(&symtab, str, strlen(str), NULL);
 }
 
-JL_DLLEXPORT jl_sym_t *jl_symbol_n(const char *str, int32_t len)
+JL_DLLEXPORT jl_sym_t *jl_symbol_n(const char *str, size_t len)
 {
     if (memchr(str, 0, len))
         jl_exceptionf(jl_argumenterror_type, "Symbol name may not contain \\0");
@@ -844,6 +854,7 @@ JL_DLLEXPORT jl_methtable_t *jl_new_method_table(jl_sym_t *name, jl_module_t *mo
     mt->cache.unknown = jl_nothing;
     mt->max_args = 0;
     mt->kwsorter = NULL;
+    mt->backedges = NULL;
     JL_MUTEX_INIT(&mt->writelock);
     return mt;
 }
@@ -862,9 +873,6 @@ JL_DLLEXPORT jl_typename_t *jl_new_typename_in(jl_sym_t *name, jl_module_t *modu
     tn->names = NULL;
     tn->hash = bitmix(bitmix(module ? module->uuid : 0, name->hash), 0xa1ada1da);
     tn->mt = NULL;
-    JL_GC_PUSH1(&tn);
-    tn->mt = NULL;
-    JL_GC_POP();
     return tn;
 }
 
