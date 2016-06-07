@@ -651,6 +651,18 @@ jl_value_t *jl_lookup_match(jl_value_t *a, jl_value_t *b, jl_svec_t **penv, jl_s
 
 unsigned jl_special_vector_alignment(size_t nfields, jl_value_t *field_type);
 
+STATIC_INLINE void *jl_get_frame_addr(void)
+{
+#ifdef __GNUC__
+    return __builtin_frame_address(0);
+#else
+    void *dummy = NULL;
+    // The mask is to suppress the compiler warning about returning
+    // address of local variable
+    return (void*)((uintptr_t)&dummy & ~(uintptr_t)15);
+#endif
+}
+
 #ifdef __cplusplus
 }
 #endif
