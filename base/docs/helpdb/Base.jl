@@ -5965,7 +5965,7 @@ besselk
 """
     readchomp(x)
 
-Read the entirety of `x` as a string but remove trailing newlines. Equivalent to `chomp(readstring(x))`.
+Read the entirety of `x` as a string and remove a single trailing newline. Equivalent to `chomp(readstring(x))`.
 """
 readchomp
 
@@ -9986,7 +9986,7 @@ unsafe_pointer_to_objref
 """
     chomp(string)
 
-Remove a trailing newline from a string.
+Remove a single trailing newline from a string.
 """
 chomp
 

@@ -333,7 +333,7 @@
 
    .. Docstring generated from Julia source
 
-   Remove a trailing newline from a string.
+   Remove a single trailing newline from a string.
 
 .. function:: ind2chr(string, i)
 
