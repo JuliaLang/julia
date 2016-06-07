@@ -73,7 +73,8 @@ The following are equivalent:
 function pmap(p::WorkerPool, f, c;  distributed=true, batch_size=1, on_error=nothing,
                                     retry_n=0,
                                     retry_max_delay=DEFAULT_RETRY_MAX_DELAY,
-                                    retry_on=DEFAULT_RETRY_ON)
+                                    retry_on=DEFAULT_RETRY_ON,
+                                    cache=false)
     f_orig = f
     # Don't do remote calls if there are no workers.
     if (length(p) == 0) || (length(p) == 1 && fetch(p.channel) == myid())
@@ -85,10 +86,16 @@ function pmap(p::WorkerPool, f, c;  distributed=true, batch_size=1, on_error=not
         batch_size = 1
     end
 
+    wp = cache ? CachedWorkerPool(p) : p
+
     # If not batching, do simple remote call.
     if batch_size == 1
         if distributed
-            f = remote(p, f)
+            if cache
+                f = cached_remote(wp, f)
+            else
+                f = remote(wp, f)
+            end
         end
 
         if retry_n > 0
@@ -97,6 +104,8 @@ function pmap(p::WorkerPool, f, c;  distributed=true, batch_size=1, on_error=not
         if on_error != nothing
             f = wrap_on_error(f, on_error)
         end
+
+        cache ? release(wp) : nothing
         return collect(AsyncGenerator(f, c))
     else
         batches = batchsplit(c, min_batch_count = length(p) * 3,
@@ -111,11 +120,13 @@ function pmap(p::WorkerPool, f, c;  distributed=true, batch_size=1, on_error=not
         if (on_error != nothing) || (retry_n > 0)
             f = wrap_on_error(f, (x,e)->BatchProcessingError(x,e); capture_data=true)
         end
-        f = wrap_batch(f, p, on_error)
+        f = wrap_batch(f, wp, on_error)
         results = collect(flatten(AsyncGenerator(f, batches)))
         if (on_error != nothing) || (retry_n > 0)
             process_batch_errors!(p, f_orig, results, on_error, retry_on, retry_n, retry_max_delay)
         end
+
+        cache ? release(wp) : nothing
         return results
     end
 end
@@ -140,11 +151,11 @@ end
 
 wrap_retry(f, retry_on, n, max_delay) = retry(f, retry_on; n=n, max_delay=max_delay)
 
-function wrap_batch(f, p, on_error)
+function wrap_batch(f, wp, on_error)
     f = asyncmap_batch(f)
     return batch -> begin
         try
-            remotecall_fetch(f, p, batch)
+            remotecall_fetch(f, wp, batch)
         catch e
             if on_error != nothing
                 return Any[BatchProcessingError(batch[i], e) for i in 1:length(batch)]

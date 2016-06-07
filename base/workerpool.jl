@@ -34,6 +34,17 @@ length(pool::WorkerPool) = pool.count
 isready(pool::WorkerPool) = isready(pool.channel)
 
 function remotecall_pool(rc_f, f, pool::WorkerPool, args...; kwargs...)
+    worker = take_free_worker(pool)
+    try
+        rc_f(f, worker, args...; kwargs...)
+    finally
+        if worker != 1
+            put!(pool.channel, worker)
+        end
+    end
+end
+
+function take_free_worker(pool::WorkerPool)
     # Find an active worker
     worker = 0
     while true
@@ -54,16 +65,8 @@ function remotecall_pool(rc_f, f, pool::WorkerPool, args...; kwargs...)
             pool.count = pool.count - 1
         end
     end
-
-    try
-        rc_f(f, worker, args...; kwargs...)
-    finally
-        if worker != 1
-            put!(pool.channel, worker)
-        end
-    end
+    return worker
 end
-
 
 """
     remotecall(f, pool::WorkerPool, args...; kwargs...)
@@ -114,3 +117,57 @@ using `remotecall_fetch`.
 """
 remote(f) = (args...; kwargs...)->remotecall_fetch(f, default_worker_pool(), args...; kwargs...)
 remote(p::WorkerPool, f) = (args...; kwargs...)->remotecall_fetch(f, p, args...; kwargs...)
+
+type CachedWorkerPool # Manages a cache for code/data on workers.
+    pool::WorkerPool
+    directory::Dict{Tuple, RemoteChannel}  # Mapping between a tuple (worker_id, object_id) and a remote_ref
+    CachedWorkerPool(pool) = new(pool, Dict{Int, Any}())
+end
+
+function release(p::CachedWorkerPool)  # For a quick release of remote function cache
+    for (_,rr) in p.directory
+        finalize(rr)
+    end
+    empty!(p.directory)
+end
+
+function exec_from_cache(f, rr::RemoteChannel, args...)
+    if (f==nothing)
+        if !isready(rr)
+            error("Requested function not found in cache")
+        else
+            fetch(rr)(args...)
+        end
+    else
+        if isready(rr)
+            warn("Serialized function found in cache. Removing from cache.")
+            take!(rr)
+        end
+        put!(rr, f)
+        f(args...)
+    end
+end
+
+function remotecall_fetch(f, cwp::CachedWorkerPool, args...)
+    worker = take_free_worker(cwp.pool)
+    oid = object_id(f)
+    if haskey(cwp.directory, (worker, oid))
+        rr = cwp.directory[(worker, oid)]
+        remote_f = nothing
+    else
+        # TODO : Handle directory state if `f` is unable to be cached remotely.
+        rr = RemoteChannel(worker)
+        cwp.directory[(worker, oid)] = rr
+        remote_f = f
+    end
+
+    try
+        remotecall_fetch(exec_from_cache, worker, remote_f, rr, args...)
+    finally
+        if worker != 1
+            put!(cwp.pool.channel, worker)
+        end
+    end
+end
+
+cached_remote(cwp::CachedWorkerPool, f) = (args...) -> remotecall_fetch(f, cwp, args...)
