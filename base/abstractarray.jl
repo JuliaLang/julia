@@ -1290,8 +1290,7 @@ ith_all(i, ::Tuple{}) = ()
 ith_all(i, as) = (as[1][i], ith_all(i, tail(as))...)
 
 function map_n!{F}(f::F, dest::AbstractArray, As)
-    n = length(As[1])
-    for i = 1:n #Fixme iter, one might make a @generated function here
+    for i = linindices(As[1])
         dest[i] = f(ith_all(i, As)...)
     end
     return dest

@@ -88,7 +88,7 @@ padding(width, twidth, a) =
 
 function padcells!(rows, align; len = length, min = 0)
     widths = colwidths(rows, len = len, min = min)
-    for i = 1:length(rows), j = 1:length(rows[1])  # fixme (iter): can we make indexing more general here?
+    for i = 1:length(rows), j = indices(rows[1],1)
         cell = rows[i][j]
         lpad, rpad = padding(len(cell), widths[j], align[j])
         rows[i][j] = " "^lpad * cell * " "^rpad
@@ -105,13 +105,13 @@ _dash(width, align) =
 function plain(io::IO, md::Table)
     cells = mapmap(plaininline, md.rows)
     padcells!(cells, md.align, len = length, min = 3)
-    for i = 1:length(cells) # fixme (iter): can we make indexing more general here?
+    for i = indices(cells,1)
         print(io, "| ")
         join(io, cells[i], " | ")
         println(io, " |")
         if i == 1
             print(io, "|")
-            join(io, [_dash(length(cells[i][j]), md.align[j]) for j = 1:length(cells[1])], "|")
+            join(io, [_dash(length(cells[i][j]), md.align[j]) for j = indices(cells[1],1)], "|")
             println(io, "|")
         end
     end

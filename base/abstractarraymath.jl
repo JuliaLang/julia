@@ -107,13 +107,14 @@ end
 
 # Uses K-B-N summation
 function cumsum_kbn{T<:AbstractFloat}(v::AbstractVector{T})
-    n = length(v)
-    r = similar(v, n)
-    if n == 0; return r; end
+    r = similar(v)
+    if isempty(v); return r; end
 
-    s = r[1] = v[1]
+    inds = indices(v, 1)
+    i1 = first(inds)
+    s = r[i1] = v[i1]
     c = zero(T)
-    for i=2:n #Fixme iter
+    for i=i1+1:last(inds)
         vi = v[i]
         t = s + vi
         if abs(s) >= abs(vi)

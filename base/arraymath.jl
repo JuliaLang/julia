@@ -338,7 +338,7 @@ for (f, f!, fp, op) = ((:cumsum, :cumsum!, :cumsum_pairwise!, :+),
         if n < 128
             @inbounds s_ = v[i1]
             @inbounds c[i1] = ($op)(s, s_)
-            for i = i1+1:i1+n-1 #Fixme iter
+            for i = i1+1:i1+n-1
                 @inbounds s_ = $(op)(s_, v[i])
                 @inbounds c[i] = $(op)(s, s_)
             end
@@ -353,7 +353,7 @@ for (f, f!, fp, op) = ((:cumsum, :cumsum!, :cumsum_pairwise!, :+),
     @eval function ($f!)(result::AbstractVector, v::AbstractVector)
         n = length(v)
         if n == 0; return result; end
-        ($fp)(v, result, $(op==:+ ? :(zero(v[1])) : :(one(v[1]))), 1, n)
+        ($fp)(v, result, $(op==:+ ? :(zero(first(v))) : :(one(first(v)))), first(indices(v,1)), n)
         return result
     end
 

@@ -433,42 +433,48 @@ cumsum!(B, A::AbstractArray) = cumsum!(B, A, 1)
 cumprod(A::AbstractArray, axis::Integer=1) = cumprod!(similar(A), A, axis)
 cumprod!(B, A) = cumprod!(B, A, 1)
 
-for (f, op) in ((:cumsum!, :+),
-                (:cumprod!, :*))
-    @eval begin
-        @generated function ($f){T,N}(B, A::AbstractArray{T,N}, axis::Integer)
-            quote
-                if size(B, axis) < 1
-                    return B
-                end
-                size(B) == size(A) || throw(DimensionMismatch("Size of B must match A"))
-                if axis > N
-                    copy!(B, A)
-                    return B
-                end
-                if axis == 1
-                    # We can accumulate to a temporary variable, which allows register usage and will be slightly faster
-                    @inbounds @nloops $N i d->(d > 1 ? (1:size(A,d)) : (1:1)) begin
-                        tmp = convert(eltype(B), @nref($N, A, i))
-                        @nref($N, B, i) = tmp
-                        for i_1 = 2:size(A,1)
-                            tmp = ($($op))(tmp, @nref($N, A, i))
-                            @nref($N, B, i) = tmp
-                        end
-                    end
-                else
-                    @nexprs $N d->(isaxis_d = axis == d)
-                    # Copy the initial element in each 1d vector along dimension `axis`
-                    @inbounds @nloops $N i d->(d == axis ? (1:1) : (1:size(A,d))) @nref($N, B, i) = @nref($N, A, i)
-                    # Accumulate
-                    @inbounds @nloops $N i d->((1+isaxis_d):size(A, d)) d->(j_d = i_d - isaxis_d) begin
-                        @nref($N, B, i) = ($($op))(@nref($N, B, j), @nref($N, A, i))
-                    end
-                end
-                B
+cumsum!(B, A, axis::Integer) = cumop!(+, B, A, axis)
+cumprod!(B, A, axis::Integer) = cumop!(*, B, A, axis)
+
+function cumop!(op, B, A, axis::Integer)
+    if size(B, axis) < 1
+        return B
+    end
+    indices(B) == indices(A) || throw(DimensionMismatch("Shape of B must match A"))
+    if axis > ndims(A)
+        copy!(B, A)
+        return B
+    end
+    if axis == 1
+        # We can accumulate to a temporary variable, which allows register usage and will be slightly faster
+        ind1 = indices(A,1)
+        @inbounds for I in CartesianRange(tail(indices(A)))
+            tmp = convert(eltype(B), A[first(ind1), I])
+            B[first(ind1), I] = tmp
+            for i_1 = first(ind1)+1:last(ind1)
+                tmp = op(tmp, A[i_1, I])
+                B[i_1, I] = tmp
             end
         end
+    else
+        R1 = CartesianRange(indices(A)[1:axis-1])   # not type-stable
+        R2 = CartesianRange(indices(A)[axis+1:end])
+        _cumop!(op, B, A, R1, indices(A, axis), R2) # use function barrier
     end
+    return B
+end
+
+@noinline function _cumop!(op, B, A, R1, ind, R2)
+    # Copy the initial element in each 1d vector along dimension `axis`
+    i = first(ind)
+    @inbounds for J in R2, I in R1
+        B[I, i, J] = A[I, i, J]
+    end
+    # Accumulate
+    @inbounds for J in R2, i in first(ind)+1:last(ind), I in R1
+        B[I, i, J] = op(B[I, i-1, J], A[I, i, J])
+    end
+    B
 end
 
 ### from abstractarray.jl
@@ -806,7 +812,7 @@ If `dim` is specified, returns unique regions of the array `itr` along `dim`.
             while any(collided)
                 # Collect index of first row for each collided hash
                 empty!(firstrow)
-                for j = 1:size(A, dim)  # fixme (iter): use `eachindex(A, dim)` after #15459 is implemented
+                for j = indices(A, dim)
                     collided[j] || continue
                     uniquerow[j] = get!(firstrow, Prehashed(hashes[j]), j)
                 end
