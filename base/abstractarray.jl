@@ -796,7 +796,10 @@ function hvcat(nbc::Integer, as...)
     hvcat(ntuple(i->nbc, nbr), as...)
 end
 
-function hvcat{T}(rows::Tuple{Vararg{Int}}, as::AbstractMatrix{T}...)
+hvcat(rows::Tuple{Vararg{Int}}, xs::AbstractMatrix...) = typed_hvcat(promote_eltype(xs...), rows, xs...)
+hvcat{T}(rows::Tuple{Vararg{Int}}, xs::AbstractMatrix{T}...) = typed_hvcat(T, rows, xs...)
+
+function typed_hvcat(T::Type, rows::Tuple{Vararg{Int}}, as::AbstractMatrix...)
     nbr = length(rows)  # number of block rows
 
     nc = 0
@@ -840,6 +843,7 @@ function hvcat{T}(rows::Tuple{Vararg{Int}}, as::AbstractMatrix{T}...)
 end
 
 hvcat(rows::Tuple{Vararg{Int}}) = []
+typed_hvcat(T::Type, rows::Tuple{Vararg{Int}}) = []
 
 function hvcat{T<:Number}(rows::Tuple{Vararg{Int}}, xs::T...)
     nr = length(rows)
@@ -874,6 +878,8 @@ function hvcat_fill(a::Array, xs::Tuple)
     a
 end
 
+hvcat(rows::Tuple{Vararg{Int}}, xs::Number...) = typed_hvcat(promote_typeof(xs...), rows, xs...)
+
 function typed_hvcat(T::Type, rows::Tuple{Vararg{Int}}, xs::Number...)
     nr = length(rows)
     nc = rows[1]
@@ -887,11 +893,6 @@ function typed_hvcat(T::Type, rows::Tuple{Vararg{Int}}, xs::Number...)
         throw(ArgumentError("argument count $(len) does not match specified shape $((nr,nc))"))
     end
     hvcat_fill(Array{T}(nr, nc), xs)
-end
-
-function hvcat(rows::Tuple{Vararg{Int}}, xs::Number...)
-    T = promote_typeof(xs...)
-    typed_hvcat(T, rows, xs...)
 end
 
 # fallback definition of hvcat in terms of hcat and vcat
