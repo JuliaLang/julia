@@ -36,9 +36,10 @@ unsafe_convert{T}(::Type{Ptr{T}}, a::AbstractArray{T}) = error("conversion to po
 
 # unsafe pointer to array conversions
 """
-    unsafe_wrap(Array, pointer, dims, own=false)
+    unsafe_wrap(Array, pointer::Ptr{T}, dims, own=false)
 
-Wrap a native pointer as a Julia `Array `object. The pointer element type determines the array
+Wrap a Julia `Array` object around the data at the address given by `pointer`,
+without making a copy.  The pointer element type `T` determines the array
 element type. `dims` is either an integer (for a 1d array) or a tuple of the array dimensions.
 `own` optionally specifies whether Julia should take ownership of the memory,
 calling `free` on the pointer when the array is no longer referenced.
