@@ -64,7 +64,7 @@
 
    This function is labelled "unsafe" because it will crash if ``p`` is not a valid memory address to data of the requested length.
 
-   See also :func:`unsafe_string_wrapper`\ , which takes a pointer and wraps a string object around it without making a copy.
+   See also :func:`unsafe_wrap`\ , which takes a pointer and wraps a string object around it without making a copy.
 
 .. function:: unsafe_wrap(String, p::Ptr{UInt8}, [length,] own=false)
 
