@@ -76,25 +76,6 @@ function var(iterable; corrected::Bool=true, mean=nothing)
     end
 end
 
-function varzm{T}(A::AbstractArray{T}; corrected::Bool=true)
-    n = length(A)
-    n == 0 && return convert(real(momenttype(T)), NaN)
-    return sumabs2(A) / (n - Int(corrected))
-end
-
-function varzm!{S}(R::AbstractArray{S}, A::AbstractArray; corrected::Bool=true)
-    if isempty(A)
-        fill!(R, convert(S, NaN))
-    else
-        rn = div(length(A), length(r)) - Int(corrected)
-        scale!(sumabs2!(R, A; init=true), convert(S, 1/rn))
-    end
-    return R
-end
-
-varzm{T}(A::AbstractArray{T}, region; corrected::Bool=true) =
-    varzm!(reducedim_initarray(A, region, 0, real(momenttype(T))), A; corrected=corrected)
-
 centralizedabs2fun(m::Number) = x -> abs2(x - m)
 centralize_sumabs2(A::AbstractArray, m::Number) =
     mapreduce(centralizedabs2fun(m), +, A)
@@ -159,20 +140,12 @@ varm{T}(A::AbstractArray{T}, m::AbstractArray, region; corrected::Bool=true) =
     varm!(reducedim_initarray(A, region, 0, real(momenttype(T))), A, m; corrected=corrected)
 
 
-function var{T}(A::AbstractArray{T}; corrected::Bool=true, mean=nothing)
+var{T}(A::AbstractArray{T}; corrected::Bool=true, mean=nothing) =
     convert(real(momenttype(T)),
-            mean == 0 ? varzm(A; corrected=corrected) :
-            mean === nothing ? varm(A, Base.mean(A); corrected=corrected) :
-            isa(mean, Number) ? varm(A, mean::Number; corrected=corrected) :
-            throw(ArgumentError("invalid value of mean, $(mean)::$(typeof(mean))")))::real(momenttype(T))
-end
+            varm(A, mean === nothing ? Base.mean(A) : mean; corrected=corrected))
 
-function var(A::AbstractArray, region; corrected::Bool=true, mean=nothing)
-    mean == 0 ? varzm(A, region; corrected=corrected) :
-    mean === nothing ? varm(A, Base.mean(A, region), region; corrected=corrected) :
-    isa(mean, AbstractArray) ? varm(A, mean::AbstractArray, region; corrected=corrected) :
-    throw(ArgumentError("invalid value of mean, $(mean)::$(typeof(mean))"))
-end
+var(A::AbstractArray, region; corrected::Bool=true, mean=nothing) =
+    varm(A, mean === nothing ? Base.mean(A, region) : mean, region; corrected=corrected)
 
 varm(iterable, m::Number; corrected::Bool=true) =
     var(iterable, corrected=corrected, mean=m)
