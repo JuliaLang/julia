@@ -61,7 +61,7 @@ imag{T<:Real}(x::AbstractArray{T}) = zero(x)
 # index A[:,:,...,i,:,:,...] where "i" is in dimension "d"
 # TODO: more optimized special cases
 slicedim(A::AbstractArray, d::Integer, i) =
-    A[[ n==d ? i : (1:size(A,n)) for n in 1:ndims(A) ]...]
+    A[[ n==d ? i : (indices(A,n)) for n in 1:ndims(A) ]...]
 
 function flipdim(A::AbstractVector, d::Integer)
     d > 0 || throw(ArgumentError("dimension to flip must be positive"))
@@ -71,8 +71,7 @@ end
 
 function flipdim(A::AbstractArray, d::Integer)
     nd = ndims(A)
-    sd = d > nd ? 1 : size(A, d)
-    if sd == 1 || isempty(A)
+    if d > nd || isempty(A)
         return copy(A)
     end
     B = similar(A)
@@ -80,16 +79,18 @@ function flipdim(A::AbstractArray, d::Integer)
     for i = 1:nd
         nnd += Int(size(A,i)==1 || i==d)
     end
+    inds = indices(A, d)
+    sd = first(inds)+last(inds)
     if nnd==nd
         # flip along the only non-singleton dimension
-        for i = 1:sd
-            B[i] = A[sd+1-i]
+        for i in inds
+            B[i] = A[sd-i]
         end
         return B
     end
-    alli = [ 1:size(B,n) for n in 1:nd ]
-    for i = 1:sd
-        B[[ n==d ? sd+1-i : alli[n] for n in 1:nd ]...] = slicedim(A, d, i)
+    alli = [ indices(B,n) for n in 1:nd ]
+    for i in inds
+        B[[ n==d ? sd-i : alli[n] for n in 1:nd ]...] = slicedim(A, d, i)
     end
     return B
 end
