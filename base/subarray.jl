@@ -257,7 +257,6 @@ getindex(::Colon, i) = to_index(i)
 unsafe_getindex(::Colon, i) = to_index(i)
 
 step(::Colon) = 1
-first(::Colon) = 1
 isempty(::Colon) = false
 in(::Integer, ::Colon) = true
 
@@ -292,30 +291,34 @@ iscontiguous{F<:FastContiguousSubArray}(::Type{F}) = true
 first_index(V::FastSubArray) = V.first_index
 first_index(V::SubArray) = first_index(V.parent, V.indexes)
 function first_index(P::AbstractArray, indexes::Tuple)
-    f = 1
+    f = first(linindices(P))
     s = 1
     for i = 1:length(indexes)
-        f += (first(indexes[i])-1)*s
+        f += (_first(indexes[i], P, i)-first(indices(P, i)))*s
         s *= size(P, i)
     end
     f
 end
+_first(::Colon, P, ::Colon) = first(linindices(P))
+_first(i, P, ::Colon) = first(i)
+_first(::Colon, P, d) = first(indices(P, d))
+_first(i, P, d) = first(i)
 
 # Computing the first index simply steps through the indices, accumulating the
 # sum of index each multiplied by the parent's stride.
 # The running sum is `f`; the cumulative stride product is `s`.
-compute_first_index(parent, I::Tuple) = compute_first_index(1, 1, parent, 1, I)
+compute_first_index(parent, I::Tuple) = compute_first_index(first(linindices(parent)), 1, parent, 1, I)
 compute_first_index(f, s, parent, dim, I::Tuple{Real, Vararg{Any}}) =
-    (@_inline_meta; compute_first_index(f + (I[1]-1)*s, s*size(parent, dim), parent, dim+1, tail(I)))
+    (@_inline_meta; compute_first_index(f + (I[1]-first(indices(parent,dim)))*s, s*size(parent, dim), parent, dim+1, tail(I)))
 compute_first_index(f, s, parent, dim, I::Tuple{NoSlice, Vararg{Any}}) =
-    (@_inline_meta; compute_first_index(f + (I[1].i-1)*s, s*size(parent, dim), parent, dim+1, tail(I)))
+    (@_inline_meta; compute_first_index(f + (I[1].i-first(indices(parent,dim)))*s, s*size(parent, dim), parent, dim+1, tail(I)))
 # Just splat out the cartesian indices and continue
 compute_first_index(f, s, parent, dim, I::Tuple{AbstractCartesianIndex, Vararg{Any}}) =
     (@_inline_meta; compute_first_index(f, s, parent, dim, (I[1].I..., tail(I)...)))
 compute_first_index(f, s, parent, dim, I::Tuple{Colon, Vararg{Any}}) =
     (@_inline_meta; compute_first_index(f, s*size(parent, dim), parent, dim+1, tail(I)))
 compute_first_index(f, s, parent, dim, I::Tuple{Any, Vararg{Any}}) =
-    (@_inline_meta; compute_first_index(f + (first(I[1])-1)*s, s*size(parent, dim), parent, dim+1, tail(I)))
+    (@_inline_meta; compute_first_index(f + (first(I[1])-first(indices(parent,dim)))*s, s*size(parent, dim), parent, dim+1, tail(I)))
 compute_first_index(f, s, parent, dim, I::Tuple{}) = f
 
 

@@ -726,6 +726,11 @@ function checkbounds{N,T}(::Type{Bool}, sz::NTuple{N,Integer}, I1::T, I...)
     checkbounds(Bool, FakeArray(sz), I1, I...)
 end
 
+function first(::Colon)
+    depwarn("first(:) is no longer unambiguous, call Base._first(:, A, dim)", :first)
+    1
+end
+
 # During the 0.5 development cycle, do not add any deprecations below this line
 # To be deprecated in 0.6
 
