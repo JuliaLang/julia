@@ -116,7 +116,7 @@ isless(a::AbstractString, b::AbstractString) = cmp(a,b) < 0
 cmp(a::String, b::String) = lexcmp(a.data, b.data)
 cmp(a::Symbol, b::Symbol) = Int(sign(ccall(:strcmp, Int32, (Cstring, Cstring), a, b)))
 
-==(a::String, b::String) = endof(a) == endof(b) && cmp(a,b) == 0
+==(a::String, b::String) = length(a.data) == length(b.data) && cmp(a,b) == 0
 isless(a::Symbol, b::Symbol) = cmp(a,b) < 0
 
 ## Generic validation functions ##
