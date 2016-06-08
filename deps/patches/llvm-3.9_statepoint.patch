@@ -1,0 +1,28 @@
+diff --git a/lib/CodeGen/PrologEpilogInserter.cpp b/lib/CodeGen/PrologEpilogInserter.cpp
+index be3e5e2..6064e6f 100644
+--- a/lib/CodeGen/PrologEpilogInserter.cpp
++++ b/lib/CodeGen/PrologEpilogInserter.cpp
+@@ -1094,7 +1094,7 @@ void PEI::replaceFrameIndices(MachineBasicBlock *BB, MachineFunction &Fn,
+         unsigned Reg;
+         MachineOperand &Offset = MI->getOperand(i + 1);
+         const unsigned refOffset =
+-          TFI->getFrameIndexReferenceFromSP(Fn, MI->getOperand(i).getIndex(),
++          TFI->getFrameIndexReference(Fn, MI->getOperand(i).getIndex(),
+                                             Reg);
+ 
+         Offset.setImm(Offset.getImm() + refOffset);
+diff --git a/lib/CodeGen/SelectionDAG/SelectionDAGBuilder.cpp b/lib/CodeGen/SelectionDAG/SelectionDAGBuilder.cpp
+index 6a727a1..5defd28 100644
+--- a/lib/CodeGen/SelectionDAG/SelectionDAGBuilder.cpp
++++ b/lib/CodeGen/SelectionDAG/SelectionDAGBuilder.cpp
+@@ -7180,8 +7180,8 @@ void SelectionDAGBuilder::populateCallLoweringInfo(
+ 
+   // Populate the argument list.
+   // Attributes for args start at offset 1, after the return attribute.
+-  for (unsigned ArgI = ArgIdx, ArgE = ArgIdx + NumArgs, AttrI = ArgIdx + 1;
+-       ArgI != ArgE; ++ArgI) {
++  for (unsigned ArgI = ArgIdx, ArgE = ArgIdx + NumArgs, AttrI = ArgIdx+1;
++       ArgI != ArgE; ++ArgI, ++AttrI) {
+     const Value *V = CS->getOperand(ArgI);
+ 
+     assert(!V->getType()->isEmptyTy() && "Empty type passed to intrinsic.");

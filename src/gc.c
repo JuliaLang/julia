@@ -1860,7 +1860,7 @@ static void _jl_gc_collect(int full, char *stack_hi)
     assert(mark_sp == 0);
     for (int i = 0; i < pending_stackmaps.len; i++)
         gc_parse_stackmaps(pending_stackmaps.items[i]);
-
+    pending_stackmaps.len = 0;
     // 1. mark every object in the remset
     reset_remset();
     for (int t_i = 0;t_i < jl_n_threads;t_i++) {
