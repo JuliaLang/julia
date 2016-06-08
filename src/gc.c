@@ -1030,6 +1030,7 @@ static jl_value_t **mark_stack_base = NULL;
 static size_t mark_stack_size = 0;
 static size_t mark_sp = 0;
 
+static int gc_mark_frame(jl_gcframe_t *s, intptr_t offset, int d);
 
 static void grow_mark_stack(void)
 {
@@ -1152,174 +1153,61 @@ NOINLINE static int gc_mark_module(jl_module_t *m, int d)
     return refyoung;
 }
 
-bt_context_t gc_current_task_context;
-jl_jmp_buf __tmpctx;
-int gc_unwind_tasks(jl_task_t *, void*);
+#ifdef GC_STACKMAPS
+#include "gc-stackmaps.c"
+#else
+void gc_parse_pending_stackmaps(void) {}
+void jl_gc_register_stackmaps(uint8_t *s) { (void)s; }
+void gc_stackmaps_init(void) {}
+#endif
 
-static void gc_mark_stack(jl_value_t *ta, jl_gcframe_t *s, intptr_t offset, int d, int dbg)
+static int gc_mark_frame(jl_gcframe_t *s, intptr_t offset, int d)
 {
+    int isjit = !(s->nroots & 2);
+    jl_value_t ***rts = (jl_value_t***)(((void**)s)+2);
+    size_t nr = s->nroots>>2;
+    if (s->nroots & 1) {
+        for(size_t i=0; i < nr; i++) {
+            jl_value_t **ptr = (jl_value_t**)((char*)rts[i] + offset);
+            if (*ptr != NULL)
+                gc_push_root(*ptr, d);
+        }
+    }
+    else {
+        for(size_t i=0; i < nr; i++) {
+            if (rts[i] != NULL) {
+                verify_parent2("task", ta, &rts[i], "stack(%d)", (int)i);
+                gc_push_root(rts[i], d);
+            }
+        }
+    }
+    return isjit;
+}
+
+static void gc_mark_stack(jl_value_t *ta, jl_gcframe_t *s, intptr_t offset, int d)
+{
+#ifdef GC_DEBUG_STACKMAPS
+    arraylist_t jit_frames;
+    arraylist_new(&jit_frames, 64);
+#endif
     while (s != NULL) {
         s = (jl_gcframe_t*)((char*)s + offset);
-        jl_value_t ***rts = (jl_value_t***)(((void**)s)+2);
-        size_t nr = s->nroots>>2;
-        if (s->nroots & 1) {
-            for(size_t i=0; i < nr; i++) {
-                jl_value_t **ptr = (jl_value_t**)((char*)rts[i] + offset);
-                if (*ptr != NULL)
-                    gc_push_root(*ptr, d);
-            }
+        int isjit = gc_mark_frame(s, offset, d);
+#ifdef GC_DEBUG_STACKMAPS
+        if (isjit) {
+            arraylist_push(&jit_frames, s);
         }
-        else {
-            int dbg2 = !(s->nroots & 2);
-            for(size_t i=0; i < nr; i++) {
-                if (rts[i] != NULL) {
-                    verify_parent2("task", ta, &rts[i], "stack(%d)", (int)i);
-                    gc_push_root(rts[i], d);
-                }
-            }
-            if (dbg2) { if (!gc_unwind_task(ta, s)) abort(); }
-        }
+#endif
         s = s->prev;
     }
+#ifdef GC_DEBUG_STACKMAPS
+    gc_unwind_task((jl_task_t*)ta, &jit_frames);
+    arraylist_free(&jit_frames);
+#else
+    gc_unwind_task((jl_task_t*)ta, d);
+#endif
 }
 
-static unw_addr_space_t task_addr_space;
-static unw_accessors_t *local_accessors;
-typedef struct {
-    jl_task_t *task;
-    jl_jmp_buf ctx;
-} task_unwind_ctx_t;
-int task_find_proc_info(unw_addr_space_t as,
-                        unw_word_t ip, unw_proc_info_t *pip,
-                        int need_unwind_info, void *arg)
-{
-    //printf("find proc info %p\n", ip);
-    /*    abort();
-          return 0;*/
-    int res = local_accessors->find_proc_info(unw_local_addr_space,
-                                              ip, pip, need_unwind_info, NULL);
-    //printf("\tresult %d : %p\n", res, pip->start_ip);
-    return res;
-}
-void task_put_unwind_info(unw_addr_space_t as,
-                          unw_proc_info_t *pip, void *arg)
-{
-    //printf("free proc info\n");
-    /*    abort();
-          return 0;*/
-    local_accessors->put_unwind_info(unw_local_addr_space,
-      pip, NULL);
-}
-
-
-int task_get_dyn_info_list_addr(unw_addr_space_t as,
-                                unw_word_t *dilap, void *arg)
-{
-    //*dilap = (unw_word_t) &_U_dyn_info_list;
-    //return 0;
-    int res = local_accessors->get_dyn_info_list_addr(unw_local_addr_space,
-                                                   dilap, NULL);
-    //printf("get dyn info list %d : %p\n", res, *dilap);
-    return res;
-}
-
-uintptr_t task_remap_memory(task_unwind_ctx_t *ctx, uintptr_t addr)
-{
-    jl_task_t *task = ctx->task;
-    jl_tls_states_t *ptls = jl_get_ptls_states();
-    //printf("Access mem %p (%s)\n", addr, write ? "w" : "r");
-    uintptr_t stacktop = ptls->stackbase - task->ssize;
-    //printf("Range %p -> %p\n", stacktop, ptls->stackbase);
-    if (addr >=  stacktop && addr <= ptls->stackbase) {
-        addr += task->stkbuf - stacktop;
-        //printf("Redirect to %p\n", addr);
-    }
-    return addr;
-}
-
-int task_access_mem(unw_addr_space_t as,
-                    unw_word_t addr, unw_word_t *valp,
-                    int write, void *arg)
-{
-    task_unwind_ctx_t *ctx = (task_unwind_ctx_t*)arg;
-    addr = task_remap_memory(ctx, addr);
-    if (write)
-        abort();
-        //*(uintptr_t*)addr = *valp;
-    else
-        *valp = *(uintptr_t*)addr;
-    //printf("\tvalp = %p\n", *valp);
-    return 0;
-    /*return local_accessors->access_mem(unw_local_addr_space,
-      addr, valp, write, arg);*/
-}
-static intptr_t ptr_demangle(intptr_t p)
-{
-    intptr_t ret;
-    asm(" movq %1, %%rax;\n"
-        " rorq $17, %%rax;"
-        " xorq %%fs:0x30, %%rax;"
-        " movq %%rax, %0;"
-        : "=r"(ret) : "r"(p) : "%rax" );
-    return ret;
-}
-
-int task_access_reg(unw_addr_space_t as,
-                    unw_regnum_t regnum, unw_word_t *valp,
-                    int write, void *arg)
-{
-    //printf("Access reg %s (%s)\n", unw_regname(regnum), write ? "w" : "r");
-    task_unwind_ctx_t *ctx = (task_unwind_ctx_t*)arg;
-    if (write) abort();
-    uintptr_t *jmpbuf_regs = (uintptr_t*)ctx->ctx;
-    switch (regnum) {
-    case UNW_REG_IP:
-        *valp = ptr_demangle(jmpbuf_regs[7]);
-        break;
-    case UNW_REG_SP:
-        *valp = ptr_demangle(jmpbuf_regs[6]);
-        break;
-    case UNW_X86_64_RBP:
-        *valp = ptr_demangle(jmpbuf_regs[1]);
-        break;
-    default:
-        abort();
-    }
-    /*int res = local_accessors->access_reg(unw_local_addr_space,
-      regnum, valp, write, arg);*/
-    //printf("\tvalp = %p\n", *valp);
-    return 0;
-}
-int task_access_fpreg(unw_addr_space_t as,
-                      unw_regnum_t regnum, unw_fpreg_t *fpvalp,
-                      int write, void *arg)
-{
-    printf("access fpreg\n");
-    abort();
-    return 0;
-    /*return local_accessors->access_fpreg(unw_local_addr_space,
-      regnum, fpvalp, write, arg);*/
-}
-int task_resume(unw_addr_space_t as,
-                unw_cursor_t *cp, void *arg)
-{
-    printf("resume\n");
-    abort();
-    return 0;
-    /*return local_accessors->resume(unw_local_addr_space,
-      cp, arg);*/
-}
-int task_get_proc_name(unw_addr_space_t as,
-                       unw_word_t addr, char *bufp,
-                       size_t buf_len, unw_word_t *offp,
-                       void *arg)
-{
-    printf("get proc name %p\n", addr);
-    abort();
-    return 0;
-    /*return local_accessors->get_proc_name(unw_local_addr_space,
-      addr, bufp, buf_len, offp, arg);*/
-}
 
 static void gc_mark_task_stack(jl_task_t *ta, int d)
 {
@@ -1333,8 +1221,7 @@ static void gc_mark_task_stack(jl_task_t *ta, int d)
         gc_setmark_buf(ta->stkbuf, gc_bits(jl_astaggedvalue(ta)));
     }
     if (ta == ptls->current_task) {
-        gc_mark_stack((jl_value_t*)ta, ptls->pgcstack, 0, d, 1);
-        //        gc_unwind_tasks(&gc_current_task_context);
+        gc_mark_stack((jl_value_t*)ta, ptls->pgcstack, 0, d);
     }
     else if (stkbuf) {
         intptr_t offset;
@@ -1343,7 +1230,7 @@ static void gc_mark_task_stack(jl_task_t *ta, int d)
 #else
         offset = 0;
 #endif
-        gc_mark_stack((jl_value_t*)ta, ta->gcstack, offset, d, 0);
+        gc_mark_stack((jl_value_t*)ta, ta->gcstack, offset, d);
     }
 }
 
@@ -1699,174 +1586,13 @@ void jl_gc_sync_total_bytes(void) {last_gc_total_bytes = jl_gc_total_bytes();}
 
 #define MIN_SCAN_BYTES 1024*1024
 
-static htable_t addr_to_stackmap;
-static arraylist_t pending_stackmaps;
-
-void jl_gc_register_stackmaps(uint8_t *s, uint8_t *b, size_t a)
-{
-    arraylist_push(&pending_stackmaps, s);
-}
-
-void gc_parse_stackmaps(uint8_t *s)
-{
-    uint8_t version = *s;
-    s += 4;
-    if (version != 1) {
-        printf("unsupported LLVM stackmaps version %d\n", version);
-        abort();
-    }
-    uint32_t nfunc = *(uint32_t*)s, nconst = *((uint32_t*)s+1), nrec = *((uint32_t*)s+2);
-    s += 12;
-    uint64_t *functions = s;
-    for (size_t i = 0; i < nfunc; i++) {
-        uint64_t fbase = *(uint64_t*)s;
-        uint64_t ssize = *((uint64_t*)s+1);
-        //printf("F %p %p %d\n", fbase, ssize, frec);
-        s += 16;
-    }
-    s += nconst * 8;
-    uint64_t last_id;
-    for (size_t i = 0; i < nrec; i++) {
-        uint64_t id = *(uint64_t*)s;
-        if (i > 0 && id != last_id)
-            functions += 2;
-        s += 8;
-        uint32_t rel_ip = *(uint32_t*)s;
-        s += 4;
-        s += 2;
-        //printf("R %p %p %d %p\n", id, functions[2], rel_ip, functions[0] + rel_ip);
-        void** bp = ptrhash_bp(&addr_to_stackmap, functions[0]+rel_ip);
-        if (*bp != HT_NOTFOUND) {
-            abort();
-        }
-        *bp = s;
-        uint16_t nloc = *(uint16_t*)s;
-        s += 2;
-        
-        for (size_t j = 0; j < nloc; j++) {
-            uint8_t loc_typ = *(uint8_t*)s;
-            s += 2;
-            uint16_t dwarf_reg = *(uint16_t*)s;
-            s += 2;
-            int32_t offset = *(int32_t*)s;
-            s += 4;
-            //printf("\tloc %d %d %d\n", loc_typ, dwarf_reg, offset);
-        }
-
-        uint16_t nliveout = *((uint16_t*)s+1);
-        s += 4;
-        s += nliveout * 4;
-        if ((((uintptr_t)s) % 8)) {
-            s += 4;
-        }
-        last_id = id;
-    }
-}
-typedef struct {
-    uint8_t type;
-    uint8_t _reserved;
-    uint16_t dwarf_reg;
-    int32_t offset;
-} __attribute__((__packed__)) stackmap_loc_t;
-
-int gc_unwind_task(jl_task_t *task, void *roots)
-{
-    bt_cursor_t cursor;
-    int islocal = 1;
-    task_unwind_ctx_t ctx;
-    if (task == jl_current_task) {
-        //printf("UNWINDING CURRENT TASK =============\n");
-        if (unw_init_local(&cursor, &gc_current_task_context) < 0)
-            abort();
-    }
-    else {
-        //printf("UNWINDING REMOTE TASK =============\n");
-        islocal = 0;
-        ctx.task = task;
-        memcpy(&ctx.ctx, task->ctx, sizeof(void*)*8);
-        if (unw_init_remote(&cursor, task_addr_space, &ctx) < 0)
-            abort();
-    }
-    //printf("Looking for %p\n\n", roots);
-    uintptr_t ip;
-    while (1) {
-        if (unw_step(&cursor) < 0) {
-            break;
-        }
-        if (unw_get_reg(&cursor, UNW_REG_IP, &ip) < 0)
-            abort();
-        if (!ip) break;
-#if 0
-        uintptr_t sp = 0, bp = 0;
-        unw_get_reg(&cursor, UNW_REG_SP, &sp);
-        unw_get_reg(&cursor, UNW_X86_64_RBP, &bp);
-        printf("FRAME ip:%p sp:%p bp:%p\n", ip, sp, bp);
-#endif
-        void **sm_bp = ptrhash_bp(&addr_to_stackmap, ip);
-        if (*sm_bp != HT_NOTFOUND) {
-            uint8_t *s = *sm_bp;
-            uint16_t nloc = *(uint16_t*)s;
-            s += 2;
-            stackmap_loc_t *locs = (stackmap_loc_t*)s;
-            // the first 3 entries are additional metadata emitted by
-            // the statepoint lowering. check that they are what we expect.
-            if (nloc != 4) {
-                fprintf(stderr, "Too many location entries in stack map : %d\n", nloc);
-                abort();
-            }
-            if (!(locs[0].type == 4 &&
-                  locs[1].type == 4 &&
-                  locs[2].type == 4 && locs[2].offset == 1)) {
-                fprintf(stderr, "Unexpected statepoint metadata\n");
-                abort();
-            }
-            stackmap_loc_t *loc = &locs[3];
-            if (loc->type != 2) { // register relative address
-                fprintf(stderr, "Unsupported stack map location type %d\n", loc->type);
-                abort();
-            }
-            unw_regnum_t reg;
-            switch (loc->dwarf_reg) {
-            case 7: // %rsp
-                reg = UNW_REG_SP;
-                break;
-            case 6: // %rbp
-                reg = UNW_X86_64_RBP;
-                break;
-            default:
-                fprintf(stderr, "Unsupported register %d\n", loc->dwarf_reg);
-                abort();
-            }
-            uintptr_t gcframe;
-            if (unw_get_reg(&cursor, reg, &gcframe) < 0) {
-                fprintf(stderr, "Could not read required reg %d from frame (ip:%p)\n", loc->dwarf_reg, ip);
-                abort();
-            }
-            gcframe = gcframe + loc->offset;
-            if (task != jl_current_task)
-                gcframe = task_remap_memory(&ctx, gcframe);
-            //printf("Found %p with %d + %p\n", gcframe, loc->dwarf_reg, loc->offset);
-            if (gcframe == roots) {
-                //printf("Got it!\n");
-                return 1;
-            }
-            /*if (!islocal)
-              abort();*/
-        }
-        //printf("\n");
-    }
-    return 0;
-}
-
 // Only one thread should be running in this function
 static void _jl_gc_collect(int full, char *stack_hi)
 {
     uint64_t t0 = jl_hrtime();
     int64_t last_perm_scanned_bytes = perm_scanned_bytes;
     assert(mark_sp == 0);
-    for (int i = 0; i < pending_stackmaps.len; i++)
-        gc_parse_stackmaps(pending_stackmaps.items[i]);
-    pending_stackmaps.len = 0;
+    gc_parse_pending_stackmaps();
     // 1. mark every object in the remset
     reset_remset();
     for (int t_i = 0;t_i < jl_n_threads;t_i++) {
@@ -2053,9 +1779,9 @@ JL_DLLEXPORT void jl_gc_collect(int full)
 
     if (!jl_gc_disable_counter) {
         JL_LOCK_NOGC(&finalizers_lock);
-        memset(&gc_current_task_context, 0, sizeof(bt_context_t));
+#ifdef GC_STACKMAPS
         unw_getcontext(&gc_current_task_context);
-        jl_setjmp(__tmpctx, 0);
+#endif
         _jl_gc_collect(full, stack_hi);
         JL_UNLOCK_NOGC(&finalizers_lock);
     }
@@ -2164,25 +1890,12 @@ void jl_mk_thread_heap(jl_thread_heap_t *heap)
 void jl_gc_init(void)
 {
     jl_gc_init_page();
+    gc_stackmaps_init();
     gc_debug_init();
 
-    local_accessors = unw_get_accessors(unw_local_addr_space);
-    unw_accessors_t task_accessors = {
-        task_find_proc_info,
-        task_put_unwind_info,
-        task_get_dyn_info_list_addr,
-        task_access_mem,
-        task_access_reg,
-        task_access_fpreg,
-        task_resume,
-        task_get_proc_name
-    };
-    task_addr_space = unw_create_addr_space(&task_accessors, 0);
     arraylist_new(&finalizer_list, 0);
     arraylist_new(&finalizer_list_marked, 0);
     arraylist_new(&to_finalize, 0);
-    htable_new(&addr_to_stackmap, 512);
-    arraylist_new(&pending_stackmaps, 512);
     gc_num.interval = default_collect_interval;
     last_long_collect_interval = default_collect_interval;
     gc_num.allocd = -default_collect_interval;

@@ -817,23 +817,23 @@ void allocate_frame()
             builder.CreateStore(ConstantInt::get(T_size, (argSpaceSize + maxDepth) << 2),
                                 builder.CreateBitCast(builder.CreateConstGEP1_32(gcframe, 0), T_size->getPointerTo()));
         inst->setMetadata(llvm::LLVMContext::MD_tbaa, tbaa_gcframe);
-        inst = builder.CreateStore(builder.CreateLoad(builder.Insert(get_pgcstack(ptlsStates))),
+        /*inst = builder.CreateStore(builder.CreateLoad(builder.Insert(get_pgcstack(ptlsStates))),
                                    builder.CreatePointerCast(builder.CreateConstGEP1_32(gcframe, 1), PointerType::get(T_ppjlvalue,0)));
         inst->setMetadata(llvm::LLVMContext::MD_tbaa, tbaa_gcframe);
-        builder.CreateStore(gcframe, builder.Insert(get_pgcstack(ptlsStates)));
+        builder.CreateStore(gcframe, builder.Insert(get_pgcstack(ptlsStates)));*/
         /*builder.CreateCall(Intrinsic::getDeclaration(&M, Intrinsic::experimental_stackmap),
           ArrayRef<Value*> { ConstantInt::get(T_int64, 42), ConstantInt::get(T_int32, 0), gcframe });*/
         // Finish by emitting the gc pops before any return
         for(Function::iterator I = F.begin(), E = F.end(); I != E; ++I) {
             if (isa<ReturnInst>(I->getTerminator())) {
                 builder.SetInsertPoint(I->getTerminator()); // set insert *before* Ret
-                Instruction *gcpop =
+                /*Instruction *gcpop =
                     (Instruction*)builder.CreateConstGEP1_32(gcframe, 1);
                 inst = builder.CreateLoad(gcpop);
                 inst->setMetadata(llvm::LLVMContext::MD_tbaa, tbaa_gcframe);
                 inst = builder.CreateStore(builder.CreatePointerCast(inst, T_ppjlvalue),
                                            builder.Insert(get_pgcstack(ptlsStates)));
-                inst->setMetadata(llvm::LLVMContext::MD_tbaa, tbaa_gcframe);
+                                           inst->setMetadata(llvm::LLVMContext::MD_tbaa, tbaa_gcframe);*/
             }
         }
         //#if 0

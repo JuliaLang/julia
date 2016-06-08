@@ -265,10 +265,7 @@ static int jl_load_sysimg_so(void)
         }
 #endif
     }
-    void *aaa = jl_dlsym(jl_sysimg_handle, "__LLVM_StackMaps");
-    /*printf("STACKMAPS %p\n", aaa);
-      abort();*/
-    jl_gc_register_stackmaps(aaa, sysimage_base, 0);
+    jl_gc_register_stackmaps((uint8_t*)jl_dlsym_e(jl_sysimg_handle, "__LLVM_StackMaps"));
     const char *sysimg_data = (const char*)jl_dlsym_e(jl_sysimg_handle, "jl_system_image_data");
     if (sysimg_data) {
         size_t len = *(size_t*)jl_dlsym(jl_sysimg_handle, "jl_system_image_size");

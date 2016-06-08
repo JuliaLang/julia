@@ -48,6 +48,13 @@
 // be considered untrusted, but can be helpful during development
 // #define SEGV_EXCEPTION
 
+// GC_STACKMAPS enables the use of stackmaps instead of the shadow stack
+// to root temporaries and locals in generated code.
+#define GC_STACKMAPS
+// GC_DEBUG_STACKMAPS uses both the stackmaps and the shadow stack and check
+// that they agree
+//#define GC_DEBUG_STACKMAPS
+
 // profiling options
 
 // GC_FINAL_STATS prints total GC stats at exit

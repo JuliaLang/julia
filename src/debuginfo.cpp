@@ -337,7 +337,7 @@ public:
             }
         }
         if (stackmaps_addr)
-            jl_gc_register_stackmaps(stackmaps_addr, text_addr, text_size);
+            jl_gc_register_stackmaps(stackmaps_addr);
         auto getLoadAddress = [&] (const StringRef &sName) -> uint64_t {
             auto search = loadedSections.find(sName);
             if (search == loadedSections.end())

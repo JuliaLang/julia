@@ -574,6 +574,9 @@ extern jl_sym_t *polly_sym;
 // gc -------------------------------------------------------------------------
 
 typedef struct _jl_gcframe_t {
+    // the two low order bits of this field are reserved for flags
+    // bit 0: true if the "roots" are actually pointers to where the roots are
+    // bit 1: true if the frame is owned by the C runtime (used for debugging)
     size_t nroots;
     struct _jl_gcframe_t *prev;
     // actual roots go here
