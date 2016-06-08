@@ -316,8 +316,7 @@ static inline void jl_set_gc_and_wait(void)
 }
 #endif
 
-void jl_dump_bitcode(char *fname, const char *sysimg_data, size_t sysimg_len);
-void jl_dump_objfile(char *fname, int jit_model, const char *sysimg_data, size_t sysimg_len);
+void jl_dump_native(const char *bc_fname, const char *obj_fname, const char *sysimg_data, size_t sysimg_len);
 int32_t jl_get_llvm_gv(jl_value_t *p);
 // the first argument to jl_idtable_rehash is used to return a value
 // make sure it is rooted if it is used after the function returns
