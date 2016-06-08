@@ -992,6 +992,8 @@ jl_typemap_entry_t *jl_typemap_insert(union jl_typemap_t *cache, jl_value_t *par
         jl_value_t *decl = jl_field_type(type, i);
         if (decl == (jl_value_t*)jl_datatype_type)
             newrec->isleafsig = 0; // Type{} may have a higher priority than DataType
+        else if (decl == (jl_value_t*)jl_typector_type)
+            newrec->isleafsig = 0; // Type{} may have a higher priority than TypeConstructor
         else if (jl_is_type_type(decl))
             newrec->isleafsig = 0; // Type{} may need special processing to compute the match
         else if (jl_is_vararg_type(decl))
