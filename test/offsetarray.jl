@@ -116,6 +116,12 @@ S = OAs.OffsetArray(slice(A0, 1:2, 1:2), (-1,2))  # LinearSlow
 @test eachindex(A) == 1:4
 @test eachindex(S) == CartesianRange((0:1,3:4))
 
+# slice
+@test slice(A, :, 3) == [1,2]
+@test slice(A, 0, :) == [1,3]
+@test slice(A, 0:0, 4) == [3]
+@test slice(A, 1, 3:4) == [2,4]
+
 # show
 io = IOBuffer()
 show(io, A)
