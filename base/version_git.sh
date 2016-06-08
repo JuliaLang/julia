@@ -1,3 +1,4 @@
+#!/bin/sh
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
 # This file collects git info and create a julia file with the GIT_VERSION_INFO struct
