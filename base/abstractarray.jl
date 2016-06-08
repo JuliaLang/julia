@@ -247,6 +247,10 @@ similar(   a::AbstractArray, T::Type, dims::Dims)        = Array(T, dims)
 _similar(::IndicesStartAt1, a::AbstractArray, T::Type)   = similar(a, T, size(a))
 _similar(::IndicesBehavior, a::AbstractArray, T::Type)   = similar(a, T, indices(a))
 
+allocate_for(f, a::AbstractArray, dim::Integer) = f(size(a,dim))
+allocate_for(f, a::AbstractArray, dims::Dims) = f(size(a,dims))
+allocate_for{T,N}(f, a::AbstractArray{T,N}) = allocate_for(f, a, ntuple(d->d, Val{N}))
+
 ## from general iterable to any array
 
 function copy!(dest::AbstractArray, src)
