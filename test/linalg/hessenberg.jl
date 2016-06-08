@@ -6,7 +6,6 @@ using Base.Test
 using Base.LinAlg: BlasComplex, BlasFloat, BlasReal, QRPivoted
 
 let n = 10
-
     srand(1234321)
 
     Areal  = randn(n,n)/2
@@ -19,7 +18,7 @@ let n = 10
                     complex(Areal, Aimg) :
                     Areal)
 
-    debug && println("\ntype of a: ", eltya, " type of b: ", eltyb, "\n")
+debug && println("\ntype of a: ", eltya, " type of b: ", eltyb, "\n")
 
         if eltya != BigFloat
             H = hessfact(A)

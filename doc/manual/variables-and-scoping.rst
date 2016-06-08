@@ -400,8 +400,8 @@ storage. Here is an example where the behavior of ``let`` is needed::
     Fs = Array{Any}(2)
     i = 1
     while i <= 2
-      Fs[i] = ()->i
-      i += 1
+        Fs[i] = ()->i
+        i += 1
     end
 
     julia> Fs[1]()
@@ -418,10 +418,10 @@ behave identically. We can use ``let`` to create a new binding for
     Fs = Array{Any}(2)
     i = 1
     while i <= 2
-      let i = i
-        Fs[i] = ()->i
-      end
-      i += 1
+        let i = i
+            Fs[i] = ()->i
+        end
+        i += 1
     end
 
     julia> Fs[1]()
@@ -437,11 +437,11 @@ block without creating any new bindings:
 .. doctest::
 
     julia> let
-             local x = 1
-             let
-               local x = 2
-             end
-             x
+               local x = 1
+               let
+                   local x = 2
+               end
+               x
            end
     1
 

@@ -1088,7 +1088,6 @@ test2_12992()
 test2_12992()
 
 # issue 13559
-
 if !is_windows()
 function test_13559()
     fn = tempname()

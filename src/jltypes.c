@@ -2115,7 +2115,7 @@ void jl_precompute_memoized_dt(jl_datatype_t *dt)
         if (d > dt->depth)
             dt->depth = d;
         if (!dt->hastypevars)
-           dt->hastypevars = jl_has_typevars__(p, 0, NULL, 0);
+            dt->hastypevars = jl_has_typevars__(p, 0, NULL, 0);
         if (!dt->haswildcard)
             dt->haswildcard = jl_has_typevars__(p, 1, NULL, 0);
         if (dt->isleaftype)

@@ -121,7 +121,6 @@ for (f,fi,pf,pfi) in ((fft,ifft,plan_fft,plan_ifft),
     # The following capabilities are FFTW only.
     # They are not available in MKL, and hence do not test them.
     if Base.fftw_vendor() != :mkl
-
         ifft3_fft3_m3d = fi(f(m3d))
 
         fftd3_m3d = f(m3d,3)
@@ -156,9 +155,8 @@ for (f,fi,pf,pfi) in ((fft,ifft,plan_fft,plan_ifft),
             @test pfftd3_m3d[i] ≈ true_fftd3_m3d[i]
             @test pifftd3_fftd3_m3d[i] ≈ m3d[i]
             @test pfft!d3_m3d[i] ≈ true_fftd3_m3d[i]
-        @test pifft!d3_fftd3_m3d[i] ≈ m3d[i]
+            @test pifft!d3_fftd3_m3d[i] ≈ m3d[i]
         end
-
     end  # if fftw_vendor() != :mkl
 
     # rfft/rfftn
@@ -206,7 +204,6 @@ for (f,fi,pf,pfi) in ((fft,ifft,plan_fft,plan_ifft),
     end
 
     if Base.fftw_vendor() != :mkl
-
         rfftn_m3d = rfft(m3d)
         rfftd3_m3d = rfft(m3d,3)
         @test size(rfftd3_m3d) == size(fftd3_m3d)
@@ -225,7 +222,6 @@ for (f,fi,pf,pfi) in ((fft,ifft,plan_fft,plan_ifft),
         for i = 1:3, j = 1:3, k = 1:2
             @test rfftn_m3d[i,j,k] ≈ fftn_m3d[i,j,k]
         end
-
     end # !mkl
 end
 

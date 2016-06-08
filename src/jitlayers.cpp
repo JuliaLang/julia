@@ -1079,7 +1079,6 @@ void jl_dump_native(const char *bc_fname, const char *obj_fname, const char *sys
         if (!err.empty())
             jl_safe_printf("%s\n", err.c_str());
         else {
-
 #ifndef LLVM37
             bc_FOS.reset(new formatted_raw_ostream(*bc_OS.get()));
 #endif
@@ -1103,7 +1102,6 @@ void jl_dump_native(const char *bc_fname, const char *obj_fname, const char *sys
         if (!err.empty())
             jl_safe_printf("%s\n", err.c_str());
         else {
-
 #ifndef LLVM37
             obj_FOS.reset(new formatted_raw_ostream(*obj_OS.get()));
 #endif
