@@ -124,6 +124,10 @@ immutable IndicesList      <: IndicesBehavior end   # indices like (:cat, :dog, 
 indicesbehavior(A::AbstractArray) = indicesbehavior(typeof(A))
 indicesbehavior{T<:AbstractArray}(::Type{T}) = IndicesStartAt1()
 
+shapeinfo(a) = shapeinfo(indicesbehavior(a), a)
+shapeinfo(::IndicesStartAt1, a) = size(a)
+shapeinfo(::IndicesBehavior, a) = indices(a)
+
 ## Bounds checking ##
 @generated function trailingsize{T,N,n}(A::AbstractArray{T,N}, ::Type{Val{n}})
     (isa(n, Int) && isa(N, Int)) || error("Must have concrete type")

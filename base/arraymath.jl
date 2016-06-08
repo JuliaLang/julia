@@ -59,21 +59,21 @@ for f in (:+, :-, :div, :mod, :&, :|, :$)
             return F
         end
         function ($f){S,T}(A::AbstractArray{S}, B::Range{T})
-            F = similar(A, promote_op($f,S,T), promote_shape(size(A),size(B)))
+            F = similar(A, promote_op($f,S,T), promote_shape(A,B))
             for (iF, iA, iB) in zip(eachindex(F), eachindex(A), eachindex(B))
                 @inbounds F[iF] = ($f)(A[iA], B[iB])
             end
             return F
         end
         function ($f){S,T}(A::Range{S}, B::AbstractArray{T})
-            F = similar(B, promote_op($f,S,T), promote_shape(size(A),size(B)))
+            F = similar(B, promote_op($f,S,T), promote_shape(A,B))
             for (iF, iA, iB) in zip(eachindex(F), eachindex(A), eachindex(B))
                 @inbounds F[iF] = ($f)(A[iA], B[iB])
             end
             return F
         end
         function ($f){S,T}(A::AbstractArray{S}, B::AbstractArray{T})
-            F = similar(A, promote_op($f,S,T), promote_shape(size(A),size(B)))
+            F = similar(A, promote_op($f,S,T), promote_shape(A,B))
             for (iF, iA, iB) in zip(eachindex(F), eachindex(A), eachindex(B))
                 @inbounds F[iF] = ($f)(A[iA], B[iB])
             end

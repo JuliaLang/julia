@@ -127,6 +127,12 @@ S = OAs.OffsetArray(slice(A0, 1:2, 1:2), (-1,2))  # LinearSlow
 @test slice(A, 0:0, 4) == [3]
 @test slice(A, 1, 3:4) == [2,4]
 
+# iteration
+for (a,d) in zip(A, A0)
+    @test a == d
+end
+
+
 # show
 io = IOBuffer()
 show(io, A)
@@ -236,9 +242,13 @@ map!(+, dest, am, am)
 @test dest[1,9] == -2
 
 A = OAs.OffsetArray(rand(4,4), (-3,5))
+@test maximum(A) == maximum(parent(A))
+@test minimum(A) == minimum(parent(A))
+@test extrema(A) == extrema(parent(A))
 C = similar(A)
 cumsum!(C, A, 1)
 @test parent(C) == cumsum(parent(A), 1)
+@test parent(cumsum(A, 1)) == cumsum(parent(A), 1)
 cumsum!(C, A, 2)
 @test parent(C) == cumsum(parent(A), 2)
 R = similar(A, (-2:-2, 6:9))
@@ -247,6 +257,16 @@ maximum!(R, A)
 R = similar(A, (-2:1, 6:6))
 maximum!(R, A)
 @test parent(R) == maximum(parent(A), 2)
+amin, iamin = findmin(A)
+pmin, ipmin = findmin(parent(A))
+@test amin == pmin
+@test A[iamin] == amin
+@test amin == parent(A)[ipmin]
+amax, iamax = findmax(A)
+pmax, ipmax = findmax(parent(A))
+@test amax == pmax
+@test A[iamax] == amax
+@test amax == parent(A)[ipmax]
 
 v  = OAs.OffsetArray([1,1e100,1,-1e100], (-3,))*1000
 v2 = OAs.OffsetArray([1,-1e100,1,1e100], (5,))*1000
@@ -273,3 +293,15 @@ v = OAs.OffsetArray(rand(8), (-2,))
 @test sortcols(A) == OAs.OffsetArray(sortcols(parent(A)), (0, A.offsets[2]))
 @test sort(A, 1) == OAs.OffsetArray(sort(parent(A), 1), A.offsets)
 @test sort(A, 2) == OAs.OffsetArray(sort(parent(A), 2), A.offsets)
+
+# @test mapslices(v->sort(v), A, 1) == mapslices(v->sort(v), parent(A), 1)
+# @test mapslices(v->sort(v), A, 2) == mapslices(v->sort(v), parent(A), 2)
+
+@test rotl90(A) == OAs.OffsetArray(rotl90(parent(A)), A.offsets[[2,1]])
+@test rotr90(A) == OAs.OffsetArray(rotr90(parent(A)), A.offsets[[2,1]])
+# @test flipdim(A, 1) == flipdim(parent(A), 1)
+# @test flipdim(A, 2) == flipdim(parent(A), 2)
+
+@test A+1 == OAs.OffsetArray(parent(A)+1, A.offsets)
+@test 2*A == OAs.OffsetArray(2*parent(A), A.offsets)
+@test A+A == OAs.OffsetArray(parent(A)+parent(A), A.offsets)
