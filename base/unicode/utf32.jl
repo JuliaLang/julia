@@ -173,7 +173,7 @@ isvalid(str::Vector{Char}) = isvalid(UTF32String, str)
 
 utf32(x) = convert(UTF32String, x)
 
-utf32(p::Ptr{UInt32}, len::Integer) = utf32(pointer_to_array(p, len))
+utf32(p::Ptr{UInt32}, len::Integer) = utf32(unsafe_wrap(Array, p, len))
 utf32(p::Union{Ptr{Char}, Ptr{Int32}}, len::Integer) = utf32(convert(Ptr{UInt32}, p), len)
 function utf32(p::Union{Ptr{UInt32}, Ptr{Char}, Ptr{Int32}})
     len = 0

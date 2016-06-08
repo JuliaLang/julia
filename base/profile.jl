@@ -207,7 +207,7 @@ function fetch()
     if (len == maxlen)
         warn("The profile data buffer is full; profiling probably terminated\nbefore your program finished. To profile for longer runs, call Profile.init\nwith a larger buffer and/or larger delay.")
     end
-    pointer_to_array(get_data_pointer(), (len,))
+    unsafe_wrap(Array, get_data_pointer(), (len,))
 end
 
 

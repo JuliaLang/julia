@@ -508,7 +508,7 @@ function uv_recvcb(handle::Ptr{Void}, nread::Cssize_t, buf::Ptr{Void}, addr::Ptr
                   ccall(:jl_sockaddr_host6, UInt32, (Ptr{Void}, Ptr{UInt8}), addr, pointer(tmp))
                   IPv6(ntoh(tmp[1]))
               end
-    buf = pointer_to_array(convert(Ptr{UInt8},buf_addr),Int(buf_size),true)
+    buf = unsafe_wrap(Array, convert(Ptr{UInt8},buf_addr),Int(buf_size),true)
     notify(sock.recvnotify,(addrout,buf[1:nread]))
     nothing
 end

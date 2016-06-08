@@ -60,7 +60,7 @@ function depwarn(msg, funcsym)
     opts = JLOptions()
     if opts.depwarn > 0
         ln = Int(unsafe_load(cglobal(:jl_lineno, Cint)))
-        fn = String(unsafe_load(cglobal(:jl_filename, Ptr{Cchar})))
+        fn = unsafe_string(unsafe_load(cglobal(:jl_filename, Ptr{Cchar})))
         bt = backtrace()
         caller = firstcaller(bt, funcsym)
         if opts.depwarn == 1 # raise a warning
@@ -442,23 +442,26 @@ end
 @deprecate_binding UTF8String String
 @deprecate_binding ByteString String
 
-@deprecate utf8(p::Ptr{UInt8}, len::Integer) String(p, len)
-@deprecate utf8(p::Ptr{UInt8}) String(p)
+@deprecate utf8(p::Ptr{UInt8}, len::Integer) unsafe_string(p, len)
+@deprecate utf8(p::Ptr{UInt8}) unsafe_string(p)
 @deprecate utf8(v::Vector{UInt8}) String(v)
 @deprecate utf8(s::AbstractString) String(s)
 @deprecate utf8(x) convert(String, x)
 
-@deprecate ascii(p::Ptr{UInt8}, len::Integer) ascii(String(p, len))
-@deprecate ascii(p::Ptr{UInt8}) ascii(String(p))
+@deprecate ascii(p::Ptr{UInt8}, len::Integer) ascii(unsafe_string(p, len))
+@deprecate ascii(p::Ptr{UInt8}) ascii(unsafe_string(p))
 @deprecate ascii(v::Vector{UInt8}) ascii(String(v))
 @deprecate ascii(x) ascii(convert(String, x))
 
-@deprecate bytestring(s::Cstring) String(s)
-@deprecate bytestring(v::Vector{UInt8}) String(v)
+@deprecate bytestring(s::Cstring) unsafe_string(s)
+@deprecate bytestring(v::Vector{UInt8}) String(copy(v))
 @deprecate bytestring(io::Base.AbstractIOBuffer) String(io)
-@deprecate bytestring(p::Union{Ptr{Int8},Ptr{UInt8}}) String(p)
-@deprecate bytestring(p::Union{Ptr{Int8},Ptr{UInt8}}, len::Integer) String(p,len)
+@deprecate bytestring(p::Union{Ptr{Int8},Ptr{UInt8}}) unsafe_string(p)
+@deprecate bytestring(p::Union{Ptr{Int8},Ptr{UInt8}}, len::Integer) unsafe_string(p,len)
 @deprecate bytestring(s::AbstractString...) string(s...)
+@deprecate String(s::Cstring) unsafe_string(s)
+@deprecate String(p::Union{Ptr{Int8},Ptr{UInt8}}) unsafe_string(p)
+@deprecate String(p::Union{Ptr{Int8},Ptr{UInt8}}, len::Integer) unsafe_string(p,len)
 
 @deprecate ==(x::Char, y::Integer) UInt32(x) == y
 @deprecate ==(x::Integer, y::Char) x == UInt32(y)
@@ -700,10 +703,13 @@ hist2d(v::AbstractMatrix, n1::Integer, n2::Integer) =
 hist2d(v::AbstractMatrix, n::Integer) = hist2d(v, n, n)
 hist2d(v::AbstractMatrix) = hist2d(v, sturges(size(v,1)))
 
-
-
 @deprecate cell(dims::Integer...) Array{Any}(dims...)
 @deprecate cell(dims::Tuple{Vararg{Integer}}) Array{Any}(dims)
+
+@deprecate pointer_to_array{T,N}(p::Ptr{T}, d::Union{Integer,NTuple{N,Int},NTuple{N,Integer}},
+                                 own::Bool=false) unsafe_wrap(Array, p, d, own)
+@deprecate pointer_to_string(p::Ptr{UInt8}, len::Integer, own::Bool=false) unsafe_wrap(String, p, len, own)
+@deprecate pointer_to_string(p::Ptr{UInt8}, own::Bool=false) unsafe_wrap(String, p, own)
 
 # During the 0.5 development cycle, do not add any deprecations below this line
 # To be deprecated in 0.6

@@ -88,7 +88,7 @@ function get_ovec(match_data)
                 (Ptr{Void},), match_data)
     n = ccall((:pcre2_get_ovector_count_8, PCRE_LIB), UInt32,
               (Ptr{Void},), match_data)
-    pointer_to_array(ptr, 2n, false)
+    unsafe_wrap(Array, ptr, 2n, false)
 end
 
 function compile(pattern::AbstractString, options::Integer)
@@ -123,7 +123,7 @@ function err_message(errno)
     buffer = Array{UInt8}(256)
     ccall((:pcre2_get_error_message_8, PCRE_LIB), Void,
           (Int32, Ptr{UInt8}, Csize_t), errno, buffer, sizeof(buffer))
-    String(pointer(buffer))
+    unsafe_string(pointer(buffer))
 end
 
 function exec(re,subject,offset,options,match_data)
@@ -176,7 +176,7 @@ function capture_names(re)
         idx = (high_byte << 8) | low_byte
         # The capture group name is a null-terminated string located directly
         # after the index.
-        names[idx] = String(nametable_ptr+offset+1)
+        names[idx] = unsafe_string(nametable_ptr+offset+1)
     end
     names
 end

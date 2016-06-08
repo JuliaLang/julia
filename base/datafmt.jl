@@ -40,26 +40,22 @@ readdlm(input, dlm::Char, eol::Char; opts...) =
 readdlm(input, dlm::Char, T::Type, eol::Char; opts...) =
     readdlm_auto(input, dlm, T, eol, false; opts...)
 
-function readdlm_auto(input, dlm::Char, T::Type, eol::Char, auto::Bool; opts...)
+readdlm_auto(input::Vector{UInt8}, dlm::Char, T::Type, eol::Char, auto::Bool; opts...) =
+    readdlm_string(String(input), dlm, T, eol, auto, val_opts(opts))
+readdlm_auto(input::IO, dlm::Char, T::Type, eol::Char, auto::Bool; opts...) =
+    readdlm_string(readstring(input), dlm, T, eol, auto, val_opts(opts))
+function readdlm_auto(input::AbstractString, dlm::Char, T::Type, eol::Char, auto::Bool; opts...)
     optsd = val_opts(opts)
     use_mmap = get(optsd, :use_mmap, is_windows() ? false : true)
-    if isa(input, AbstractString)
-        fsz = filesize(input)
-        if use_mmap && fsz > 0 && fsz < typemax(Int)
-            input = as_mmap(input, fsz)
-        else
-            input = readstring(input)
-        end
-    end
-    sinp = isa(input, Vector{UInt8}) ? String(input) :
-           isa(input, IO) ? readstring(input) :
-           input
-    readdlm_string(sinp, dlm, T, eol, auto, optsd)
-end
-
-function as_mmap(fname::AbstractString, fsz::Int64)
-    open(fname) do io
-        Mmap.mmap(io, Vector{UInt8}, (Int(fsz),))
+    fsz = filesize(input)
+    if use_mmap && fsz > 0 && fsz < typemax(Int)
+        a = Mmap.mmap(input, Vector{UInt8}, (Int(fsz),))
+        # TODO: It would be nicer to use String(a) without making a copy,
+        # but because the mmap'ed array is not NUL-terminated this causes
+        # jl_try_substrtod to segfault below.
+        return readdlm_string(String(copy(a)), dlm, T, eol, auto, optsd)
+    else
+        return readdlm_string(readstring(input), dlm, T, eol, auto, optsd)
     end
 end
 

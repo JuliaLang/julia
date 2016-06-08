@@ -10,7 +10,7 @@ const options =
 
 function imagePath()
     opts = Base.JLOptions()
-    String(opts.image_file)
+    unsafe_string(opts.image_file)
 end
 
 function libDir()

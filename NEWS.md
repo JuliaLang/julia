@@ -92,6 +92,16 @@ Breaking changes
 Library improvements
 --------------------
 
+  * Strings ([#16107]):
+
+    * The `UTF8String` and `ASCIIString` types have been merged into a single
+      `String` type ([#16058]).  Use `isascii(s)` to check whether
+      a string contains only ASCII characters.
+
+    * The basic string construction routines are now `string(args...)`,
+      `String(s)`, `unsafe_string(ptr)` (formerly `bytestring(ptr)`), and
+      `unsafe_wrap(String, ptr)` (formerly `pointer_to_string`) ([#16731]).
+
   * Most of the combinatorics functions have been moved from `Base`
     to the [Combinatorics.jl package](https://github.com/JuliaLang/Combinatorics.jl) ([#13897]).
 
@@ -251,7 +261,10 @@ Deprecated or removed
 [#15609]: https://github.com/JuliaLang/julia/issues/15609
 [#15731]: https://github.com/JuliaLang/julia/issues/15731
 [#15763]: https://github.com/JuliaLang/julia/issues/15763
+[#16058]: https://github.com/JuliaLang/julia/issues/16058
+[#16107]: https://github.com/JuliaLang/julia/issues/16107
 [#16219]: https://github.com/JuliaLang/julia/issues/16219
 [#16362]: https://github.com/JuliaLang/julia/issues/16362
 [#16403]: https://github.com/JuliaLang/julia/issues/16403
 [#16481]: https://github.com/JuliaLang/julia/issues/16481
+[#16731]: https://github.com/JuliaLang/julia/issues/16731
