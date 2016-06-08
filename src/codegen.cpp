@@ -37,6 +37,9 @@
 #include <llvm/Support/TargetRegistry.h>
 #include <llvm/Analysis/Passes.h>
 #include <llvm/Bitcode/ReaderWriter.h>
+#ifdef LLVM35
+#include <llvm/Bitcode/BitcodeWriterPass.h>
+#endif
 #ifdef LLVM37
 #include <llvm/Analysis/TargetTransformInfo.h>
 #include <llvm/Analysis/TargetLibraryInfo.h>
@@ -538,22 +541,6 @@ struct jl_varinfo_t {
     {
     }
 };
-
-// --- helpers for reloading IR image
-static void jl_dump_shadow(char *fname, int jit_model, const char *sysimg_data, size_t sysimg_len, bool dump_as_bc);
-
-extern "C"
-void jl_dump_bitcode(char *fname, const char *sysimg_data, size_t sysimg_len)
-{
-    jl_dump_shadow(fname, 0, sysimg_data, sysimg_len, true);
-}
-
-extern "C"
-void jl_dump_objfile(char *fname, int jit_model, const char *sysimg_data, size_t sysimg_len)
-{
-    jl_dump_shadow(fname, jit_model, sysimg_data, sysimg_len, false);
-}
-
 
 // aggregate of array metadata
 typedef struct {

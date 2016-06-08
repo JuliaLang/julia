@@ -775,11 +775,10 @@ static void julia_save(void)
             }
         }
 
-        if (jl_options.outputbc)
-            jl_dump_bitcode((char*)jl_options.outputbc, (const char*)s->buf, (size_t)s->size);
-
-        if (jl_options.outputo)
-            jl_dump_objfile((char*)jl_options.outputo, 0, (const char*)s->buf, (size_t)s->size);
+        if (jl_options.outputo || jl_options.outputbc)
+            jl_dump_native(jl_options.outputbc,
+                           jl_options.outputo,
+                           (const char*)s->buf, (size_t)s->size);
     }
     JL_GC_POP();
 }
