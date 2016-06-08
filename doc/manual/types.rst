@@ -1003,9 +1003,14 @@ which denotes any number of trailing elements:
     julia> isa(("1",1,2,3.0), Tuple{AbstractString,Vararg{Int}})
     false
 
-Notice that ``Vararg{T}`` matches zero or more elements of type ``T``.
+Notice that ``Vararg{T}`` corresponds to zero or more elements of type ``T``.
 Vararg tuple types are used to represent the arguments accepted by varargs
 methods (see :ref:`man-varargs-functions`).
+
+The type ``Vararg{T,N}`` corresponds to exactly ``N`` elements of type ``T``.  ``NTuple{N,T}`` is
+a convenient alias for ``Tuple{Vararg{T,N}}``, i.e. a tuple type containing exactly
+``N`` elements of type ``T``.
+
 
 .. _man-singleton-types:
 
