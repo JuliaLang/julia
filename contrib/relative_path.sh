@@ -1,4 +1,4 @@
-#!/usr/bin/env bash
+#!/bin/sh
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
 # both $1 and $2 are absolute paths beginning with /
