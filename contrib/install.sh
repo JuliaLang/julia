@@ -16,7 +16,6 @@ DEST=$1
 
 for SRC in $ARGS; do
     cp -a $SRC $DEST
-    DESTFILE=$DEST/$(basename $SRC)
     
     if [ -d "$DEST" ]; then
       DESTFILE="$DEST/$(basename "$SRC")"
