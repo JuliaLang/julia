@@ -547,6 +547,13 @@ function _getindex{T,N}(::LinearFast, A::AbstractArray{T,N}, I::Vararg{Real,N})
     @inbounds r = getindex(A, sub2ind(A, J...))
     r
 end
+function _getindex(::LinearFast, A::AbstractVector, I1::Real, I::Real...)
+    @_inline_meta
+    J = to_indexes(I1, I...)
+    @boundscheck checkbounds(A, J...)
+    @inbounds r = getindex(A, J[1])
+    r
+end
 function _getindex(::LinearFast, A::AbstractArray, I::Real...) # TODO: DEPRECATE FOR #14770
     @_inline_meta
     J = to_indexes(I...)
@@ -617,6 +624,13 @@ function _setindex!{T,N}(::LinearFast, A::AbstractArray{T,N}, v, I::Vararg{Real,
     J = to_indexes(I...)
     @boundscheck checkbounds(A, J...)
     @inbounds r = setindex!(A, v, sub2ind(A, J...))
+    r
+end
+function _setindex!(::LinearFast, A::AbstractArray, v, I1::Real, I::Real...)
+    @_inline_meta
+    J = to_indexes(I1, I...)
+    @boundscheck checkbounds(A, J...)
+    @inbounds r = setindex!(A, v, J[1])
     r
 end
 function _setindex!(::LinearFast, A::AbstractArray, v, I::Real...) # TODO: DEPRECATE FOR #14770
