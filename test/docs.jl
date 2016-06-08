@@ -29,7 +29,7 @@ macro macro_doctest() end
 @doc "Helps test if macros can be documented with `@doc \"...\" -> @...`." ->
 :@macro_doctest
 
-@test (@doc @macro_doctest) != nothing
+@test (@doc @macro_doctest) !== nothing
 
 # issue #11548
 

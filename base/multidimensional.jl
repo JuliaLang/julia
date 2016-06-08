@@ -628,7 +628,7 @@ end
 end
 @generated function _unsafe_setindex!(B::BitArray, X::Union{BitArray,Array}, I0::Union{Colon,UnitRange{Int}}, I::Union{Int,UnitRange{Int},Colon}...)
     N = length(I)
-    rangeexp = [I[d] == Colon ? :(1:size(B, $(d+1))) : :(I[$d]) for d = 1:N]
+    rangeexp = [I[d] === Colon ? :(1:size(B, $(d+1))) : :(I[$d]) for d = 1:N]
     quote
         idxlens = @ncall $N index_lengths B I0 d->I[d]
         @ncall $N setindex_shape_check X idxlens[1] d->idxlens[d+1]
@@ -667,7 +667,7 @@ end
 end
 @generated function _unsafe_setindex!(B::BitArray, x, I0::Union{Colon,UnitRange{Int}}, I::Union{Int,UnitRange{Int},Colon}...)
     N = length(I)
-    rangeexp = [I[d] == Colon ? :(1:size(B, $(d+1))) : :(I[$d]) for d = 1:N]
+    rangeexp = [I[d] === Colon ? :(1:size(B, $(d+1))) : :(I[$d]) for d = 1:N]
     quote
         y = Bool(x)
         idxlens = @ncall $N index_lengths B I0 d->I[d]

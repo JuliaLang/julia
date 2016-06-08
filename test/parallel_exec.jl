@@ -712,16 +712,16 @@ function walk_args(i)
     if i > length(pmap_args)
         kwargs = []
         for (k,v) in kwdict
-            if v != :default
+            if v !== :default
                 push!(kwargs, (k,v))
             end
         end
 
         data = [1:100...]
 
-        testw = kwdict[:distributed] == false ? [1] : workers()
+        testw = kwdict[:distributed] === false ? [1] : workers()
 
-        if (kwdict[:on_error] == :default) && (kwdict[:retry_n] == :default)
+        if (kwdict[:on_error] === :default) && (kwdict[:retry_n] === :default)
             mapf = x -> (x*2, myid())
             results_test = pmap_res -> begin
                 results = [x[1] for x in pmap_res]
@@ -731,7 +731,7 @@ function walk_args(i)
                     @test p in pids
                 end
             end
-        elseif kwdict[:retry_n] != :default
+        elseif kwdict[:retry_n] !== :default
             mapf = x -> iseven(myid()) ? error("foobar") : (x*2, myid())
             results_test = pmap_res -> begin
                 results = [x[1] for x in pmap_res]
@@ -745,7 +745,7 @@ function walk_args(i)
                     end
                 end
             end
-        else (kwdict[:on_error] != :default) && (kwdict[:retry_n] == :default)
+        else (kwdict[:on_error] !== :default) && (kwdict[:retry_n] === :default)
             mapf = x -> iseven(x) ? error("foobar") : (x*2, myid())
             results_test = pmap_res -> begin
                 w = testw

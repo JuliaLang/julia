@@ -3152,7 +3152,7 @@ end
 # boundscheck context in the method body
 function inbounds_meta_elim_pass!(code::Array{Any,1})
     if findfirst(x -> isa(x, Expr) &&
-                      ((x.head === :inbounds && x.args[1] == true) || x.head === :boundscheck),
+                      ((x.head === :inbounds && x.args[1] === true) || x.head === :boundscheck),
                  code) == 0
         filter!(x -> !(isa(x, Expr) && x.head === :inbounds), code)
     end
