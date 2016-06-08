@@ -14,12 +14,12 @@ function Base.length(status::GitStatus)
 end
 
 function Base.getindex(status::GitStatus, i::Csize_t)
-    if length(status) == 0
+    if i < 1 || i > length(status)
         throw(BoundsError())
     end
     entry_ptr = ccall((:git_status_byindex, :libgit2), Ptr{Void},
                        (Ptr{Void}, Csize_t), status.ptr, i-1)
-    entry_ptr == C_NULL && return nothing
+    entry_ptr == C_NULL && throw(Error.GitError(Error.ERROR))
     return unsafe_load(convert(Ptr{StatusEntry}, entry_ptr), 1)
 end
 Base.getindex(status::GitStatus, i::Int) = getindex(status, Csize_t(i))
