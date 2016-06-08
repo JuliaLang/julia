@@ -960,26 +960,10 @@ static void jl_gen_llvm_globaldata(llvm::Module *mod, ValueToValueMapTy &VMap,
 
 // takes the running content that has collected in the shadow module and dump it to disk
 // this builds the object file portion of the sysimage files for fast startup
-static void jl_dump_shadow(char *fname, int jit_model, const char *sysimg_data, size_t sysimg_len,
-                           bool dump_as_bc)
+extern "C"
+void jl_dump_native(const char *bc_fname, const char *obj_fname, const char *sysimg_data, size_t sysimg_len)
 {
-#ifdef LLVM36
-    std::error_code err;
-    StringRef fname_ref = StringRef(fname);
-    raw_fd_ostream OS(fname_ref, err, sys::fs::F_None);
-#elif defined(LLVM35)
-    std::string err;
-    raw_fd_ostream OS(fname, err, sys::fs::F_None);
-#else
-    std::string err;
-    raw_fd_ostream OS(fname, err);
-#endif
-#ifdef LLVM37 // 3.7 simplified formatted output; just use the raw stream alone
-    raw_fd_ostream& FOS(OS);
-#else
-    formatted_raw_ostream FOS(OS);
-#endif
-
+    assert(imaging_mode);
     // We don't want to use MCJIT's target machine because
     // it uses the large code model and we may potentially
     // want less optimizations there.
@@ -1010,11 +994,11 @@ static void jl_dump_shadow(char *fname, int jit_model, const char *sysimg_data, 
 #if defined(_OS_LINUX_) || defined(_OS_FREEBSD_)
         Reloc::PIC_,
 #elif defined(LLVM39)
-        jit_model ? Reloc::PIC_ : Optional<Reloc::Model>(),
+        Optional<Reloc::Model>(),
 #else
-        jit_model ? Reloc::PIC_ : Reloc::Default,
+        Reloc::Default,
 #endif
-        jit_model ? CodeModel::JITDefault : CodeModel::Default,
+        CodeModel::Default,
         CodeGenOpt::Aggressive // -O3 TODO: respect command -O0 flag?
         ));
 
@@ -1042,19 +1026,75 @@ static void jl_dump_shadow(char *fname, int jit_model, const char *sysimg_data, 
 #endif
 
     addOptimizationPasses(&PM);
-    if (!dump_as_bc) {
-        if (TM->addPassesToEmitFile(PM, FOS, TargetMachine::CGFT_ObjectFile, false)) {
-            jl_error("Could not generate obj file for this target");
+
+    std::unique_ptr<raw_fd_ostream> bc_OS;
+    std::unique_ptr<raw_fd_ostream> obj_OS;
+#ifdef LLVM37 // 3.7 simplified formatted output; just use the raw stream alone
+    std::unique_ptr<raw_fd_ostream> &bc_FOS = bc_OS;
+    std::unique_ptr<raw_fd_ostream> &obj_FOS = obj_OS;
+#else
+    std::unique_ptr<formatted_raw_ostream> bc_FOS;
+    std::unique_ptr<formatted_raw_ostream> obj_FOS;
+#endif
+
+    if (bc_fname) {
+#if defined(LLVM35)
+        // call output handler directly to avoid special case handling of `-` filename
+        int FD;
+        std::error_code EC = sys::fs::openFileForWrite(bc_fname, FD, sys::fs::F_None);
+        bc_OS.reset(new raw_fd_ostream(FD, true));
+        std::string err;
+        if (EC)
+            err = "ERROR: failed to open --output-bc file '" + std::string(bc_fname) + "': " + EC.message();
+#else
+        std::string err;
+        bc_OS.reset(new raw_fd_ostream(bc_fname, err, raw_fd_ostream::F_Binary));
+#endif
+        if (!err.empty())
+            jl_safe_printf("%s\n", err.c_str());
+        else {
+
+#ifndef LLVM37
+            bc_FOS.reset(new formatted_raw_ostream(*bc_OS.get()));
+#endif
+            PM.add(createBitcodeWriterPass(*bc_FOS.get()));     // Unroll small loops
         }
     }
 
-    // now copy the module, since PM.run may modify it
+    if (obj_fname) {
+#if defined(LLVM35)
+        // call output handler directly to avoid special case handling of `-` filename
+        int FD;
+        std::error_code EC = sys::fs::openFileForWrite(obj_fname, FD, sys::fs::F_None);
+        obj_OS.reset(new raw_fd_ostream(FD, true));
+        std::string err;
+        if (EC)
+            err = "ERROR: failed to open --output-o file '" + std::string(obj_fname) + "': " + EC.message();
+#else
+        std::string err;
+        obj_OS.reset(new raw_fd_ostream(obj_fname, err, raw_fd_ostream::F_Binary));
+#endif
+        if (!err.empty())
+            jl_safe_printf("%s\n", err.c_str());
+        else {
+
+#ifndef LLVM37
+            obj_FOS.reset(new formatted_raw_ostream(*obj_OS.get()));
+#endif
+            if (TM->addPassesToEmitFile(PM, *obj_FOS.get(), TargetMachine::CGFT_ObjectFile, false)) {
+                jl_safe_printf("ERROR: target does not support generation of object files\n");
+            }
+        }
+    }
+
     ValueToValueMapTy VMap;
-#ifdef LLVM38
-    Module *clone = CloneModule(shadow_output, VMap).release();
+#if defined(USE_MCJIT) || defined(USE_ORCJIT)
+    // now copy the module (if using the old JIT), since PM.run may modify it
+    Module *clone = shadow_output;
 #else
     Module *clone = CloneModule(shadow_output, VMap);
 #endif
+
 #ifdef LLVM37
     // Reset the target triple to make sure it matches the new target machine
     clone->setTargetTriple(TM->getTargetTriple().str());
@@ -1070,9 +1110,10 @@ static void jl_dump_shadow(char *fname, int jit_model, const char *sysimg_data, 
 
     // do the actual work
     PM.run(*clone);
-    if (dump_as_bc)
-        WriteBitcodeToFile(clone, FOS);
+#if !defined(USE_MCJIT) && !defined(USE_ORCJIT)
     delete clone;
+#endif
+    imaging_mode = false;
 }
 
 static int32_t jl_assign_functionID(Function *functionObject, int specsig)
