@@ -16,7 +16,9 @@ DEST=$1
 
 for SRC in $ARGS; do
     cp -a $SRC $DEST
+    DESTFILE="$DEST"
 
     # Do the chmod dance, and ignore errors on platforms that don't like setting permissions of symlinks
-    chmod $PERMS $DEST 2>/dev/null
+    # TODO: Test if it's a symlink instead of having to redirect stderr to devnull
+    chmod $PERMS $DESTFILE 2>/dev/null
 done
