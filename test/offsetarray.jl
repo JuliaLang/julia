@@ -299,8 +299,8 @@ v = OAs.OffsetArray(rand(8), (-2,))
 
 @test rotl90(A) == OAs.OffsetArray(rotl90(parent(A)), A.offsets[[2,1]])
 @test rotr90(A) == OAs.OffsetArray(rotr90(parent(A)), A.offsets[[2,1]])
-# @test flipdim(A, 1) == flipdim(parent(A), 1)
-# @test flipdim(A, 2) == flipdim(parent(A), 2)
+@test flipdim(A, 1) == OAs.OffsetArray(flipdim(parent(A), 1), A.offsets)
+@test flipdim(A, 2) == OAs.OffsetArray(flipdim(parent(A), 2), A.offsets)
 
 @test A+1 == OAs.OffsetArray(parent(A)+1, A.offsets)
 @test 2*A == OAs.OffsetArray(2*parent(A), A.offsets)
