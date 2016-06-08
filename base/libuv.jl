@@ -59,9 +59,9 @@ type UVError <: Exception
     UVError(p::AbstractString,code::Integer)=new(p,code)
 end
 
-struverror(err::Int32) = String(ccall(:uv_strerror,Cstring,(Int32,),err))
+struverror(err::Int32) = unsafe_string(ccall(:uv_strerror,Cstring,(Int32,),err))
 struverror(err::UVError) = struverror(err.code)
-uverrorname(err::Int32) = String(ccall(:uv_err_name,Cstring,(Int32,),err))
+uverrorname(err::Int32) = unsafe_string(ccall(:uv_err_name,Cstring,(Int32,),err))
 uverrorname(err::UVError) = uverrorname(err.code)
 
 uv_error(prefix::Symbol, c::Integer) = uv_error(string(prefix),c)

@@ -112,11 +112,13 @@
 
    Calling ``Ref(array[, index])`` is generally preferable to this function.
 
-.. function:: pointer_to_array(pointer, dims[, take_ownership::Bool])
+.. function:: unsafe_wrap(Array, pointer::Ptr{T}, dims, own=false)
 
    .. Docstring generated from Julia source
 
-   Wrap a native pointer as a Julia Array object. The pointer element type determines the array element type. ``own`` optionally specifies whether Julia should take ownership of the memory, calling ``free`` on the pointer when the array is no longer referenced.
+   Wrap a Julia ``Array`` object around the data at the address given by ``pointer``\ , without making a copy.  The pointer element type ``T`` determines the array element type. ``dims`` is either an integer (for a 1d array) or a tuple of the array dimensions. ``own`` optionally specifies whether Julia should take ownership of the memory, calling ``free`` on the pointer when the array is no longer referenced.
+
+   This function is labelled "unsafe" because it will crash if ``pointer`` is not a valid memory address to data of the requested length.
 
 .. function:: pointer_from_objref(object_instance)
 

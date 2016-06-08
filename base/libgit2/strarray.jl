@@ -19,7 +19,7 @@ StrArrayStruct{T<:AbstractString}(strs::Vector{T}) = StrArrayStruct(strs...)
 function Base.convert(::Type{Vector{AbstractString}}, sa::StrArrayStruct)
     arr = Array{AbstractString}(sa.count)
     for i=1:sa.count
-        arr[i] = String(unsafe_load(sa.strings, i))
+        arr[i] = unsafe_string(unsafe_load(sa.strings, i))
     end
     return arr
 end

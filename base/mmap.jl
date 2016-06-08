@@ -136,7 +136,7 @@ function mmap{T,N}(io::IO,
         ptr == C_NULL && error("could not create mapping view: $(Libc.FormatMessage())")
     end # os-test
     # convert mmapped region to Julia Array at `ptr + (offset - offset_page)` since file was mapped at offset_page
-    A = pointer_to_array(convert(Ptr{T}, UInt(ptr) + UInt(offset - offset_page)), dims)
+    A = unsafe_wrap(Array, convert(Ptr{T}, UInt(ptr) + UInt(offset - offset_page)), dims)
     finalizer(A, function(x)
         @static if is_unix()
             systemerror("munmap",  ccall(:munmap, Cint, (Ptr{Void}, Int), ptr, mmaplen) != 0)

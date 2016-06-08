@@ -1,7 +1,10 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
 # constructors
-@test String([0x61,0x62,0x63,0x21]) == "abc!"
+let d = [0x61,0x62,0x63,0x21]
+    @test String(d) == "abc!"
+    @test String(d).data === d # String(d) should not make a copy
+end
 @test String("abc!") == "abc!"
 
 # {starts,ends}with
@@ -215,14 +218,14 @@ end
 # issue #11142
 s = "abcdefghij"
 sp = pointer(s)
-@test String(sp) == s
-@test String(sp,5) == "abcde"
-@test typeof(String(sp)) == String
+@test unsafe_string(sp) == s
+@test unsafe_string(sp,5) == "abcde"
+@test typeof(unsafe_string(sp)) == String
 s = "abcde\uff\u2000\U1f596"
 sp = pointer(s)
-@test String(sp) == s
-@test String(sp,5) == "abcde"
-@test typeof(String(sp)) == String
+@test unsafe_string(sp) == s
+@test unsafe_string(sp,5) == "abcde"
+@test typeof(unsafe_string(sp)) == String
 
 @test get(tryparse(BigInt, "1234567890")) == BigInt(1234567890)
 @test isnull(tryparse(BigInt, "1234567890-"))
@@ -240,8 +243,8 @@ for T in [BigInt, Int8, UInt8, Int16, UInt16, Int32, UInt32, Int64, UInt64, Int1
     @test isnull(tryparse(T, "1\0"))
 end
 let s = normalize_string("tést",:NFKC)
-    @test String(Base.unsafe_convert(Cstring, s)) == s
-    @test String(convert(Cstring, Symbol(s))) == s
+    @test unsafe_string(Base.unsafe_convert(Cstring, s)) == s
+    @test unsafe_string(convert(Cstring, Symbol(s))) == s
     @test wstring(Base.unsafe_convert(Cwstring, wstring(s))) == s
 end
 let s = "ba\0d"
@@ -251,7 +254,7 @@ end
 
 cstrdup(s) = @static is_windows() ? ccall(:_strdup, Cstring, (Cstring,), s) : ccall(:strdup, Cstring, (Cstring,), s)
 let p = cstrdup("hello")
-    @test String(p) == "hello" == pointer_to_string(cstrdup(p), true)
+    @test unsafe_string(p) == "hello" == unsafe_wrap(String, cstrdup(p), true)
     Libc.free(p)
 end
 let p = @static is_windows() ? ccall(:_wcsdup, Cwstring, (Cwstring,), "tést") : ccall(:wcsdup, Cwstring, (Cwstring,), "tést")
@@ -482,8 +485,8 @@ foobaz(ch) = reinterpret(Char, typemax(UInt32))
 @test ["a","b"].*["c","d"]' == ["ac" "ad"; "bc" "bd"]
 
 # Make sure NULL pointers are handled consistently by String
-@test_throws ArgumentError String(Ptr{UInt8}(0))
-@test_throws ArgumentError String(Ptr{UInt8}(0), 10)
+@test_throws ArgumentError unsafe_string(Ptr{UInt8}(0))
+@test_throws ArgumentError unsafe_string(Ptr{UInt8}(0), 10)
 
 # ascii works on ASCII strings and fails on non-ASCII strings
 @test ascii("Hello, world") == "Hello, world"

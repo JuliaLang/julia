@@ -85,7 +85,7 @@ of an environment variable, one makes a call like this::
     julia> path = ccall((:getenv, "libc"), Cstring, (Cstring,), "SHELL")
     Cstring(@0x00007fff5fbffc45)
 
-    julia> String(path)
+    julia> unsafe_string(path)
     "/bin/bash"
 
 Note that the argument type tuple must be written as ``(Cstring,)``,
@@ -117,7 +117,7 @@ which is a simplified version of the actual definition from
       if val == C_NULL
         error("getenv: undefined variable: ", var)
       end
-      String(val)
+      unsafe_string(val)
     end
 
 The C ``getenv`` function indicates an error by returning ``NULL``, but
@@ -141,7 +141,7 @@ machine's hostname::
             (Ptr{UInt8}, Csize_t),
             hostname, sizeof(hostname))
       hostname[end] = 0; # ensure null-termination
-      return String(pointer(hostname))
+      return unsafe_string(pointer(hostname))
     end
 
 This example first allocates an array of bytes, then calls the C library
@@ -929,7 +929,7 @@ Whenever you have created a pointer to Julia data, you must ensure the original 
 exists until you are done with using the pointer. Many methods in Julia such as
 :func:`unsafe_load` and :func:`String` make copies of data instead of taking ownership
 of the buffer, so that it is safe to free (or alter) the original data without
-affecting Julia. A notable exception is :func:`pointer_to_array` which, for performance
+affecting Julia. A notable exception is :func:`unsafe_wrap` which, for performance
 reasons, shares (or can be told to take ownership of) the underlying buffer.
 
 The garbage collector does not guarantee any order of finalization. That is, if ``a``
@@ -1060,7 +1060,7 @@ Any operation that throws an error is probably currently unimplemented
 and should be posted as a bug so that it can be resolved.
 
 If the pointer of interest is a plain-data array (bitstype or immutable), the
-function :func:`pointer_to_array(ptr,dims,[own]) <pointer_to_array>` may be
+function :func:`unsafe_wrap(Array, ptr,dims,[own]) <unsafe_wrap>` may be
 more useful. The final parameter should be true if Julia should "take
 ownership" of the underlying buffer and call ``free(ptr)`` when the returned
 ``Array`` object is finalized.  If the ``own`` parameter is omitted or false,
@@ -1105,4 +1105,3 @@ C++
 
 Limited support for C++ is provided by the `Cpp <https://github.com/timholy/Cpp.jl>`_,
 `Clang <https://github.com/ihnorton/Clang.jl>`_, and `Cxx <https://github.com/Keno/Cxx.jl>`_ packages.
-

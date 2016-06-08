@@ -283,7 +283,7 @@ let mt = MersenneTwister()
         # certain architectures (e.g. ARM)
         pc8 += 8
     end
-    c = pointer_to_array(Ptr{Float64}(pc8), 1000) # Int(pointer(c)) % 16 == 8
+    c = unsafe_wrap(Array, Ptr{Float64}(pc8), 1000) # Int(pointer(c)) % 16 == 8
 
     for A in (a, b, c)
         srand(mt, 0)

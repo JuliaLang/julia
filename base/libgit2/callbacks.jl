@@ -15,7 +15,7 @@ function mirror_callback(remote::Ptr{Ptr{Void}}, repo_ptr::Ptr{Void},
 
     # And set the configuration option to true for the push command
     config = GitConfig(GitRepo(repo_ptr))
-    name_str = String(name)
+    name_str = unsafe_string(name)
     err= try set!(config, "remote.$name_str.mirror", true)
          catch -1
          finally finalize(config)
@@ -54,7 +54,7 @@ function credentials_callback(cred::Ptr{Ptr{Void}}, url_ptr::Cstring,
                               username_ptr::Cstring,
                               allowed_types::Cuint, payload_ptr::Ptr{Void})
     err = 0
-    url = String(url_ptr)
+    url = unsafe_string(url_ptr)
 
     # parse url for schema and host
     urlparts = match(urlmatcher, url)
@@ -106,7 +106,7 @@ function credentials_callback(cred::Ptr{Ptr{Void}}, url_ptr::Cstring,
             uname = creds[:user, credid] # check if credentials were already used
             uname !== nothing && !isusedcreds ? uname : prompt("Username for '$schema$host'")
         else
-            String(username_ptr)
+            unsafe_string(username_ptr)
         end
         creds[:user, credid] = username # save credentials
 
@@ -190,7 +190,7 @@ end
 function fetchhead_foreach_callback(ref_name::Cstring, remote_url::Cstring,
                         oid::Ptr{Oid}, is_merge::Cuint, payload::Ptr{Void})
     fhead_vec = unsafe_pointer_to_objref(payload)::Vector{FetchHead}
-    push!(fhead_vec, FetchHead(String(ref_name), String(remote_url), Oid(oid), is_merge == 1))
+    push!(fhead_vec, FetchHead(unsafe_string(ref_name), unsafe_string(remote_url), Oid(oid), is_merge == 1))
     return Cint(0)
 end
 

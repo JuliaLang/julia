@@ -20,7 +20,7 @@ export export_wisdom, import_wisdom, import_system_wisdom, forget_wisdom,
 const libfftw = Base.libfftw_name
 const libfftwf = Base.libfftwf_name
 
-const version = convert(VersionNumber, split(String(cglobal((:fftw_version,Base.DFT.FFTW.libfftw), UInt8)), ['-', ' '])[2])
+const version = convert(VersionNumber, split(unsafe_string(cglobal((:fftw_version,Base.DFT.FFTW.libfftw), UInt8)), ['-', ' '])[2])
 
 ## Direction of FFT
 
@@ -282,7 +282,7 @@ sprint_plan_{T<:fftwDouble}(plan::FFTWPlan{T}) =
 sprint_plan_{T<:fftwSingle}(plan::FFTWPlan{T}) =
     ccall((:fftwf_sprint_plan,libfftwf), Ptr{UInt8}, (PlanPtr,), plan)
 function sprint_plan(plan::FFTWPlan)
-    pointer_to_string(sprint_plan_(plan), true)
+    unsafe_wrap(String, sprint_plan_(plan), true)
 end
 
 function show{T,K,inplace}(io::IO, p::cFFTWPlan{T,K,inplace})

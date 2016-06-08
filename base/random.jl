@@ -353,8 +353,8 @@ end
 function rand!{T<:Union{Float16, Float32}}(r::MersenneTwister, A::Array{T}, ::Type{Close1Open2})
     n = length(A)
     n128 = n * sizeof(T) ÷ 16
-    rand!(r, pointer_to_array(convert(Ptr{Float64}, pointer(A)), 2*n128), 2*n128, Close1Open2)
-    A128 = pointer_to_array(convert(Ptr{UInt128}, pointer(A)), n128)
+    rand!(r, unsafe_wrap(Array, convert(Ptr{Float64}, pointer(A)), 2*n128), 2*n128, Close1Open2)
+    A128 = unsafe_wrap(Array, convert(Ptr{UInt128}, pointer(A)), n128)
     @inbounds for i in 1:n128
         u = A128[i]
         u $= u << 26
@@ -390,7 +390,7 @@ function rand!(r::MersenneTwister, A::Array{UInt128}, n::Int=length(A))
     if n > length(A)
         throw(BoundsError(A,n))
     end
-    Af = pointer_to_array(convert(Ptr{Float64}, pointer(A)), 2n)
+    Af = unsafe_wrap(Array, convert(Ptr{Float64}, pointer(A)), 2n)
     i = n
     while true
         rand!(r, Af, 2i, Close1Open2)
@@ -417,7 +417,7 @@ end
 function rand!{T<:Union{Int8, UInt8, Int16, UInt16, Int32, UInt32, Int64, UInt64, Int128}}(r::MersenneTwister, A::Array{T})
     n=length(A)
     n128 = n * sizeof(T) ÷ 16
-    rand!(r, pointer_to_array(convert(Ptr{UInt128}, pointer(A)), n128))
+    rand!(r, unsafe_wrap(Array, convert(Ptr{UInt128}, pointer(A)), n128))
     for i = 16*n128÷sizeof(T)+1:n
         @inbounds A[i] = rand(r, T)
     end
@@ -534,7 +534,7 @@ if GMP_VERSION.major >= 6
         while true
             # note: on CRAY computers, the second argument may be of type Cint (48 bits) and not Clong
             xd = ccall((:__gmpz_limbs_write, :libgmp), Ptr{Limb}, (Ptr{BigInt}, Clong), &x, g.nlimbs)
-            limbs = pointer_to_array(xd, g.nlimbs)
+            limbs = unsafe_wrap(Array, xd, g.nlimbs)
             rand!(rng, limbs)
             limbs[end] &= g.mask
             ccall((:__gmpz_limbs_finish, :libgmp), Void, (Ptr{BigInt}, Clong), &x, g.nlimbs)
