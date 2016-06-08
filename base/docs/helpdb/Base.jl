@@ -1198,18 +1198,18 @@ regions.
 permutedims!
 
 """
-    functionloc(f::Function, types)
+    location(f::Function, types)
 
 Returns a tuple `(filename,line)` giving the location of a generic `Function` definition.
 """
-functionloc(f, types)
+location(f, types)
 
 """
-    functionloc(m::Method)
+    location(m::Method)
 
 Returns a tuple `(filename,line)` giving the location of a `Method` definition.
 """
-functionloc(m)
+location(m)
 
 """
     stride(A, k)

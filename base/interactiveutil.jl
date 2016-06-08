@@ -64,9 +64,11 @@ function edit(path::AbstractString, line::Integer=0)
     nothing
 end
 
-edit(f)          = edit(functionloc(f)...)
-edit(f, t::ANY)  = edit(functionloc(f,t)...)
+edit(f)          = edit(location(f)...)
+edit(f, t::ANY)  = edit(location(f,t)...)
 edit(file, line::Integer) = error("could not find source file for function")
+edit(s::Symbol) = edit(which(s), s)
+edit(m::Module, s::Symbol) = edit(location(m, s)...)
 
 # terminal pager
 
@@ -76,9 +78,11 @@ function less(file::AbstractString, line::Integer)
 end
 
 less(file::AbstractString) = less(file, 1)
-less(f)          = less(functionloc(f)...)
-less(f, t::ANY)  = less(functionloc(f,t)...)
+less(f)          = less(location(f)...)
+less(f, t::ANY)  = less(location(f,t)...)
 less(file, line::Integer) = error("could not find source file for function")
+less(s::Symbol) = less(which(s), s)
+less(m::Module, s::Symbol) = less(location(m, s)...)
 
 # clipboard copy and paste
 
@@ -277,6 +281,9 @@ typesof(args...) = Tuple{map(a->(isa(a,Type) ? Type{a} : typeof(a)), args)...}
 
 gen_call_with_extracted_types(fcn, ex0::Symbol) = Expr(:call, fcn, Meta.quot(ex0))
 function gen_call_with_extracted_types(fcn, ex0)
+    if isa(ex0, Expr) && ex0.head == :(.)
+        return Expr(:call, fcn, ex0.args[1], ex0.args[2])
+    end
     if isa(ex0, Expr) &&
         any(a->(Meta.isexpr(a, :kw) || Meta.isexpr(a, :parameters)), ex0.args)
         # keyword args not used in dispatch, so just remove them
@@ -322,7 +329,7 @@ function gen_call_with_extracted_types(fcn, ex0)
     exret
 end
 
-for fname in [:which, :less, :edit, :functionloc, :code_typed, :code_warntype,
+for fname in [:which, :less, :edit, :location, :code_typed, :code_warntype,
               :code_lowered, :code_llvm, :code_llvm_raw, :code_native]
     @eval begin
         macro ($fname)(ex0)
@@ -358,13 +365,13 @@ function on the resulting expression.
 :@edit
 
 """
-    @functionloc
+    @location
 
-Applied to a function or macro call, it evaluates the arguments to the specified call, and
-returns a tuple `(filename,line)` giving the location for the method that would be called for those arguments.
-It calls out to the `functionloc` function.
+Applied to a function, macro call, or global variable, it evaluates the arguments to the
+specified call, and returns a tuple `(filename,line)` giving the location for the method
+that would be called for those arguments. It calls out to the `location` function.
 """
-:@functionloc
+:@location
 
 """
     @code_typed

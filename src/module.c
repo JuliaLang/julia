@@ -79,6 +79,8 @@ static jl_binding_t *new_binding(jl_sym_t *name)
     b->exportp = 0;
     b->imported = 0;
     b->deprecated = 0;
+    b->file = null_sym;
+    b->line = 0;
     return b;
 }
 
@@ -435,6 +437,34 @@ JL_DLLEXPORT void jl_set_global(jl_module_t *m, jl_sym_t *var, jl_value_t *val)
         bp->value = val;
         jl_gc_wb(m, val);
     }
+}
+
+JL_DLLEXPORT int jl_location_defined(jl_binding_t *b)
+{
+    return b && b->file != null_sym && b->line > 0;
+}
+
+JL_DLLEXPORT void jl_set_location(jl_binding_t *b, const char *filename, int line)
+{
+    if (b == NULL) return;
+    b->file = jl_symbol(filename);
+    b->line = line;
+}
+
+JL_DLLEXPORT jl_value_t *jl_get_location(jl_module_t *m, jl_sym_t *var)
+{
+    jl_binding_t *b = jl_get_binding(m, var);
+    jl_sym_t *file;
+    int32_t line;
+    if (b != NULL) {
+        file = b->file;
+        line = b->line;
+    }
+    else {
+        file = null_sym;
+        line = 0;
+    }
+    return (jl_value_t*)jl_svec2(file, jl_box_int32(line));
 }
 
 JL_DLLEXPORT void jl_set_const(jl_module_t *m, jl_sym_t *var, jl_value_t *val)

@@ -373,6 +373,8 @@ typedef struct {
     unsigned exportp:1;
     unsigned imported:1;
     unsigned deprecated:1;
+    jl_sym_t *file;
+    int32_t line;
 } jl_binding_t;
 
 typedef struct _jl_module_t {
@@ -1017,6 +1019,7 @@ JL_DLLEXPORT jl_sym_t *jl_symbol(const char *str);
 JL_DLLEXPORT jl_sym_t *jl_symbol_lookup(const char *str);
 JL_DLLEXPORT jl_sym_t *jl_symbol_n(const char *str, int32_t len);
 JL_DLLEXPORT jl_sym_t *jl_gensym(void);
+int jl_is_gensym(jl_sym_t *s);
 JL_DLLEXPORT jl_sym_t *jl_tagged_gensym(const char *str, int32_t len);
 JL_DLLEXPORT jl_sym_t *jl_get_root_symbol(void);
 JL_DLLEXPORT jl_value_t *jl_generic_function_def(jl_sym_t *name, jl_value_t **bp,
@@ -1191,6 +1194,9 @@ JL_DLLEXPORT int jl_is_const(jl_module_t *m, jl_sym_t *var);
 JL_DLLEXPORT jl_value_t *jl_get_global(jl_module_t *m, jl_sym_t *var);
 JL_DLLEXPORT void jl_set_global(jl_module_t *m, jl_sym_t *var, jl_value_t *val);
 JL_DLLEXPORT void jl_set_const(jl_module_t *m, jl_sym_t *var, jl_value_t *val);
+JL_DLLEXPORT int jl_location_defined(jl_binding_t *b);
+JL_DLLEXPORT void jl_set_location(jl_binding_t *b, const char *filename, int line);
+JL_DLLEXPORT jl_value_t *jl_get_location(jl_module_t *m, jl_sym_t *var);
 JL_DLLEXPORT void jl_checked_assignment(jl_binding_t *b, jl_value_t *rhs);
 JL_DLLEXPORT void jl_declare_constant(jl_binding_t *b);
 JL_DLLEXPORT void jl_module_using(jl_module_t *to, jl_module_t *from);

@@ -122,6 +122,8 @@ static int jl_linfo_nssavalues(jl_lambda_info_t *li)
     return jl_is_long(li->ssavaluetypes) ? jl_unbox_long(li->ssavaluetypes) : jl_array_len(li->ssavaluetypes);
 }
 
+extern const char *jl_filename;
+
 static jl_value_t *eval(jl_value_t *e, jl_value_t **locals, jl_lambda_info_t *lam)
 {
     if (jl_is_symbol(e)) {
@@ -197,6 +199,9 @@ static jl_value_t *eval(jl_value_t *e, jl_value_t **locals, jl_lambda_info_t *la
             JL_GC_PUSH1(&rhs);
             jl_binding_t *b = jl_get_binding_wr(m, (jl_sym_t*)sym);
             jl_checked_assignment(b, rhs);
+            if (!jl_is_gensym((jl_sym_t*)sym) && !jl_location_defined(b)) {
+                jl_set_location(b, jl_filename, jl_lineno);
+            }
             JL_GC_POP();
         }
         return rhs;
@@ -266,6 +271,9 @@ static jl_value_t *eval(jl_value_t *e, jl_value_t **locals, jl_lambda_info_t *la
         jl_value_t *sym = args[0];
         assert(jl_is_symbol(sym));
         jl_binding_t *b = jl_get_binding_wr(jl_current_module, (jl_sym_t*)sym);
+        if (!jl_is_gensym((jl_sym_t*)sym) && !jl_location_defined(b)) {
+            jl_set_location(b, jl_filename, jl_lineno);
+        }
         jl_declare_constant(b);
         return (jl_value_t*)jl_nothing;
     }
@@ -292,6 +300,9 @@ static jl_value_t *eval(jl_value_t *e, jl_value_t **locals, jl_lambda_info_t *la
         temp = b->value;
         check_can_assign_type(b);
         b->value = (jl_value_t*)dt;
+        if (!jl_is_gensym((jl_sym_t*)name) && !jl_location_defined(b)) {
+            jl_set_location(b, jl_filename, jl_lineno);
+        }
         jl_gc_wb_binding(b, dt);
         super = eval(args[2], locals, lam);
         jl_set_datatype_super(dt, super);
@@ -324,6 +335,9 @@ static jl_value_t *eval(jl_value_t *e, jl_value_t **locals, jl_lambda_info_t *la
         temp = b->value;
         check_can_assign_type(b);
         b->value = (jl_value_t*)dt;
+        if (!jl_is_gensym((jl_sym_t*)name) && !jl_location_defined(b)) {
+            jl_set_location(b, jl_filename, jl_lineno);
+        }
         jl_gc_wb_binding(b, dt);
         super = eval(args[3], locals, lam);
         jl_set_datatype_super(dt, super);
@@ -360,6 +374,9 @@ static jl_value_t *eval(jl_value_t *e, jl_value_t **locals, jl_lambda_info_t *la
         // temporarily assign so binding is available for field types
         check_can_assign_type(b);
         b->value = (jl_value_t*)dt;
+        if (!jl_is_gensym((jl_sym_t*)name) && !jl_location_defined(b)) {
+            jl_set_location(b, jl_filename, jl_lineno);
+        }
         jl_gc_wb_binding(b,dt);
 
         JL_TRY {

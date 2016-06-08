@@ -400,8 +400,17 @@ function which_module(m::Module, s::Symbol)
     binding_module(m, s)
 end
 
-functionloc(m::LambdaInfo) = functionloc(m.def)
-function functionloc(m::Method)
+function location(m::Module, s::Symbol)
+    f, ln = ccall(:jl_get_location, Any, (Ref{Module}, Ref{Symbol}), m, s)
+    if f == :null || ln <= 0
+        error("could not determine location of global symbol")
+    end
+    return find_source_file(string(f)), ln
+end
+location(s::Symbol) = location(which(s), s)
+
+location(m::LambdaInfo) = location(m.def)
+function location(m::Method)
     ln = m.line
     if ln <= 0
         error("could not determine location of method definition")
@@ -409,9 +418,9 @@ function functionloc(m::Method)
     (find_source_file(string(m.file)), ln)
 end
 
-functionloc(f::ANY, types::ANY) = functionloc(which(f,types))
+location(f::ANY, types::ANY) = location(which(f,types))
 
-function functionloc(f)
+function location(f)
     mt = methods(f)
     if isempty(mt)
         if isa(f,Function)
@@ -423,7 +432,7 @@ function functionloc(f)
     if length(mt) > 1
         error("function has multiple methods; please specify a type signature")
     end
-    functionloc(first(mt))
+    location(first(mt))
 end
 
 function function_module(f, types::ANY)

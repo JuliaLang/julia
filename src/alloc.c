@@ -758,6 +758,12 @@ JL_DLLEXPORT jl_sym_t *jl_gensym(void)
     return jl_symbol(n);
 }
 
+int jl_is_gensym(jl_sym_t *s)
+{
+    char *n = jl_symbol_name(s);
+    return n[0] == '#';
+}
+
 JL_DLLEXPORT jl_sym_t *jl_tagged_gensym(const char *str, int32_t len)
 {
     char gs_name[14];

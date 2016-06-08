@@ -70,7 +70,7 @@ end # module
 
 #issue 12977: line numbers for kwarg methods.
 linenum = @__LINE__; f12977(; args...) = ()
-loc = functionloc(f12977)
+loc = location(f12977)
 @test endswith(loc[1], "backtrace.jl")
 @test loc[2] == linenum
 

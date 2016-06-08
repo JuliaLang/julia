@@ -201,7 +201,7 @@ let
     @test Base.binding_module(:c7648)==TestMod7648
     @test Base.function_name(foo7648)==:foo7648
     @test Base.function_module(foo7648, (Any,))==TestMod7648
-    @test basename(functionloc(foo7648, (Any,))[1]) == "reflection.jl"
+    @test basename(location(foo7648, (Any,))[1]) == "reflection.jl"
     @test first(methods(TestMod7648.TestModSub9475.foo7648)) == @which foo7648(5)
     @test TestMod7648==@which foo7648
     @test TestMod7648.TestModSub9475==@which a9475
@@ -288,7 +288,7 @@ end
         return nb
     end
 end
-@test functionloc(f15447)[2] > 0
+@test location(f15447)[2] > 0
 
 # issue #14346
 @noinline function f14346(id, mask, limit)
@@ -296,7 +296,7 @@ end
         return true
     end
 end
-@test functionloc(f14346)[2] == @__LINE__-4
+@test location(f14346)[2] == @__LINE__-4
 
 # test jl_get_llvm_fptr. We test functions both in and definitely not in the system image
 definitely_not_in_sysimg() = nothing
@@ -324,7 +324,7 @@ let
     @test which(m, Tuple{Int,Int})==@which @macrotest 1 1
 
     @test first(methods(m,Tuple{Int, Int}))==@which MacroTest.@macrotest 1 1
-    @test functionloc(@which @macrotest 1 1) == @functionloc @macrotest 1 1
+    @test location(@which @macrotest 1 1) == @location @macrotest 1 1
 end
 
 # issue #15714
@@ -450,4 +450,47 @@ fLargeTable() = 4
 
 # issue #15280
 function f15280(x) end
-@test functionloc(f15280)[2] > 0
+@test location(f15280)[2] > 0
+
+# Test location function with global bindings
+const LOCATION_CONST =
+    if true
+        "foo"
+    end
+@test location(:LOCATION_CONST)[2] == @__LINE__ - 4  # Line at =
+
+global LOCATION_GLOBAL =
+    if true
+        "foo"
+    end
+@test location(:LOCATION_GLOBAL)[2] == @__LINE__ - 2  # Ideally would be at the name
+
+LOCATION_GLOBAL2 =
+    if true
+        "foo"
+    end
+@test location(:LOCATION_GLOBAL2)[2] == @__LINE__ - 2  # Ideally would be at the name
+
+function location_func()
+    global LOCATION_GLOBAL3
+    LOCATION_GLOBAL3 = 1
+    LOCATION_LOCAL = 2
+    return
+end
+location_func()
+@test_throws ErrorException location(:LOCATION_GLOBAL3)
+@test_throws ErrorException location(:LOCATION_LOCAL)
+
+abstract LocationAbstract
+@test location(:LocationAbstract)[2] == @__LINE__ - 1
+
+type LocationType
+end
+@test location(:LocationType)[2] == @__LINE__ - 2
+
+immutable LocationImmutable
+end
+@test location(:LocationImmutable)[2] == @__LINE__ - 2
+
+bitstype 8 LocationBits
+@test location(:LocationBits)[2] == @__LINE__ - 1
