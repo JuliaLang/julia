@@ -1676,6 +1676,12 @@ Statistics
 
    Compute the mean of whole array ``v``\ , or optionally along the dimensions in ``region``\ . Note: Julia does not ignore ``NaN`` values in the computation. For applications requiring the handling of missing data, the ``DataArray`` package is recommended.
 
+.. function:: mean(f::Function, v)
+
+   .. Docstring generated from Julia source
+
+   Apply the function ``f`` to each element of ``v`` and take the mean.
+
 .. function:: mean!(r, v)
 
    .. Docstring generated from Julia source
