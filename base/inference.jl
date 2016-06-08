@@ -1410,10 +1410,6 @@ end
 #### entry points for inferring a LambdaInfo given a type signature ####
 
 function typeinf_edge(method::Method, atypes::ANY, sparams::SimpleVector, needtree::Bool, optimize::Bool, cached::Bool, caller)
-    #println(method)
-    if method.module === Core && isempty(method.lambda_template.sparam_syms)
-        atypes = Tuple
-    end
     local frame = nothing
     offs = 0
     # check cached t-functions
