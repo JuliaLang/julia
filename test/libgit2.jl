@@ -219,6 +219,13 @@ mktempdir() do dir
                 @test LibGit2.iszero(commit_oid2)
                 commit_oid2 = LibGit2.commit(repo, commit_msg2; author=test_sig, committer=test_sig)
                 @test !LibGit2.iszero(commit_oid2)
+                auths = LibGit2.authors(repo)
+                @test length(auths) == 3
+                for auth in auths
+                    @test auth.name == test_sig.name
+                    @test auth.time == test_sig.time
+                    @test auth.email == test_sig.email
+                end
 
                 # lookup commits
                 cmt = LibGit2.get(LibGit2.GitCommit, repo, commit_oid1)
@@ -315,12 +322,20 @@ mktempdir() do dir
                 tags = LibGit2.tag_list(repo)
                 @test length(tags) == 1
                 @test tag1 in tags
+                tag1ref = LibGit2.GitReference(repo, "refs/tags/$tag1")
+                @test isempty(LibGit2.fullname(tag1ref)) #because this is a reference to an OID
+                tag1tag = LibGit2.peel(LibGit2.GitTag,tag1ref)
+                @test LibGit2.name(tag1tag) == tag1
+                @test LibGit2.target(tag1tag) == commit_oid1
 
                 tag_oid2 = LibGit2.tag_create(repo, tag2, commit_oid2)
                 @test !LibGit2.iszero(tag_oid2)
                 tags = LibGit2.tag_list(repo)
                 @test length(tags) == 2
                 @test tag2 in tags
+
+                refs = LibGit2.ref_list(repo)
+                @test refs == ["refs/heads/master","refs/heads/test_branch","refs/tags/tag1","refs/tags/tag2"]
 
                 LibGit2.tag_delete(repo, tag1)
                 tags = LibGit2.tag_list(repo)
