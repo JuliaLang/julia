@@ -294,8 +294,8 @@ v = OAs.OffsetArray(rand(8), (-2,))
 @test sort(A, 1) == OAs.OffsetArray(sort(parent(A), 1), A.offsets)
 @test sort(A, 2) == OAs.OffsetArray(sort(parent(A), 2), A.offsets)
 
-# @test mapslices(v->sort(v), A, 1) == mapslices(v->sort(v), parent(A), 1)
-# @test mapslices(v->sort(v), A, 2) == mapslices(v->sort(v), parent(A), 2)
+@test mapslices(v->sort(v), A, 1) == OAs.OffsetArray(mapslices(v->sort(v), parent(A), 1), (0,A.offsets[2]))
+@test mapslices(v->sort(v), A, 2) == OAs.OffsetArray(mapslices(v->sort(v), parent(A), 2), (A.offsets[1], 0))
 
 @test rotl90(A) == OAs.OffsetArray(rotl90(parent(A)), A.offsets[[2,1]])
 @test rotr90(A) == OAs.OffsetArray(rotr90(parent(A)), A.offsets[[2,1]])

@@ -1225,21 +1225,19 @@ function mapslices(f, A::AbstractArray, dims::AbstractVector)
         return map(f,A)
     end
 
-    dimsA = [size(A)...]
+    dimsA = [shapeinfo(A)...]
     ndimsA = ndims(A)
     alldims = [1:ndimsA;]
 
     otherdims = setdiff(alldims, dims)
 
-    idx = Array{Any}(ndimsA)
-    fill!(idx, 1)
-    Asliceshape = tuple(dimsA[dims]...)
+    idx = Any[first(ind) for ind in indices(A)]
     itershape   = tuple(dimsA[otherdims]...)
     for d in dims
-        idx[d] = 1:size(A,d)
+        idx[d] = Colon()
     end
 
-    r1 = f(reshape(A[idx...], Asliceshape))
+    r1 = f(slice(A, idx...))
 
     # determine result size and allocate
     Rsize = copy(dimsA)
@@ -1247,27 +1245,31 @@ function mapslices(f, A::AbstractArray, dims::AbstractVector)
     if !isa(r1, AbstractArray) || ndims(r1) == 0
         r1 = [r1]
     end
-    Rsize[dims] = [size(r1)...; ones(Int,max(0,length(dims)-ndims(r1)))]
-    R = similar(r1, tuple(Rsize...))
+    nextra = max(0,length(dims)-ndims(r1))
+    if eltype(Rsize) == Int
+        Rsize[dims] = [size(r1)..., ntuple(d->1, nextra)...]
+    else
+        Rsize[dims] = [indices(r1)..., ntuple(d->1:1, nextra)...]
+    end
+    R = similar(r1, tuple(Rsize...,))
 
-    ridx = Array{Any}(ndims(R))
-    fill!(ridx, 1)
+    ridx = Any[map(first, indices(R))...]
     for d in dims
-        ridx[d] = 1:size(R,d)
+        ridx[d] = indices(R,d)
     end
 
     R[ridx...] = r1
 
-    first = true
+    isfirst = true
     nidx = length(otherdims)
     for I in CartesianRange(itershape)
-        if first
-            first = false
+        if isfirst
+            isfirst = false
         else
             for i in 1:nidx
                 idx[otherdims[i]] = ridx[otherdims[i]] = I.I[i]
             end
-            R[ridx...] = f(reshape(A[idx...], Asliceshape))
+            R[ridx...] = f(slice(A, idx...))
         end
     end
 
