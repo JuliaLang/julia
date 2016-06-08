@@ -1718,29 +1718,24 @@ void gc_parse_stackmaps(uint8_t *s)
     uint32_t nfunc = *(uint32_t*)s, nconst = *((uint32_t*)s+1), nrec = *((uint32_t*)s+2);
     s += 12;
     uint64_t *functions = s;
-    uint64_t *functions2 = s;
     for (size_t i = 0; i < nfunc; i++) {
         uint64_t fbase = *(uint64_t*)s;
         uint64_t ssize = *((uint64_t*)s+1);
-        uint64_t frec = *((uint64_t*)s+2);
         //printf("F %p %p %d\n", fbase, ssize, frec);
-        s += 24;
+        s += 16;
     }
     s += nconst * 8;
-    size_t current_nrec = 0;
     uint64_t last_id;
     for (size_t i = 0; i < nrec; i++) {
         uint64_t id = *(uint64_t*)s;
         if (i > 0 && id != last_id)
-            functions2 += 3;
+            functions += 2;
         s += 8;
         uint32_t rel_ip = *(uint32_t*)s;
         s += 4;
         s += 2;
-        if (functions != functions2)
-            abort();
         //printf("R %p %p %d %p\n", id, functions[2], rel_ip, functions[0] + rel_ip);
-        void** bp = ptrhash_bp(&addr_to_stackmap, functions2[0]+rel_ip);
+        void** bp = ptrhash_bp(&addr_to_stackmap, functions[0]+rel_ip);
         if (*bp != HT_NOTFOUND) {
             abort();
         }
@@ -1765,18 +1760,13 @@ void gc_parse_stackmaps(uint8_t *s)
             s += 4;
         }
         last_id = id;
-        current_nrec++;
-        if (current_nrec >= functions[2]) {
-            functions += 3;
-            current_nrec = 0;
-        }
     }
 }
 typedef struct {
     uint8_t type;
     uint8_t _reserved;
     uint16_t dwarf_reg;
-    uint32_t offset;
+    int32_t offset;
 } __attribute__((__packed__)) stackmap_loc_t;
 
 int gc_unwind_task(jl_task_t *task, void *roots)
@@ -1785,20 +1775,20 @@ int gc_unwind_task(jl_task_t *task, void *roots)
     int islocal = 1;
     task_unwind_ctx_t ctx;
     if (task == jl_current_task) {
-        //printf("UNWINDING CURRENT TASK =============\n");
+        printf("UNWINDING CURRENT TASK =============\n");
         if (unw_init_local(&cursor, &gc_current_task_context) < 0)
             abort();
     }
     else {
-        //printf("UNWINDING REMOTE TASK =============\n");
+        printf("UNWINDING REMOTE TASK =============\n");
         islocal = 0;
         ctx.task = task;
         memcpy(&ctx.ctx, task->ctx, sizeof(void*)*8);
         if (unw_init_remote(&cursor, task_addr_space, &ctx) < 0)
             abort();
     }
-    //printf("Looking for %p\n\n", roots);
-    uintptr_t ip, sp;
+    printf("Looking for %p\n\n", roots);
+    uintptr_t ip, sp, bp;
     while (1) {
         if (unw_step(&cursor) < 0) {
             break;
@@ -1807,14 +1797,13 @@ int gc_unwind_task(jl_task_t *task, void *roots)
             abort();
         if (unw_get_reg(&cursor, UNW_REG_SP, &sp) < 0)
             abort();
+        if (unw_get_reg(&cursor, UNW_X86_64_RBP, &bp) < 0)
+            abort();
         if (!ip) break;
-        uintptr_t sp2 = sp;
-        if (task != jl_current_task)
-            sp2 = task_remap_memory(&ctx, sp2);
-        //printf("IP %p %p %p\n", ip, sp, sp2);
-        void **bp = ptrhash_bp(&addr_to_stackmap, ip);
-        if (*bp != HT_NOTFOUND) {
-            uint8_t *s = *bp;
+        printf("FRAME ip:%p sp:%p bp:%p\n", ip, sp, bp);
+        void **sm_bp = ptrhash_bp(&addr_to_stackmap, ip);
+        if (*sm_bp != HT_NOTFOUND) {
+            uint8_t *s = *sm_bp;
             uint16_t nloc = *(uint16_t*)s;
             s += 2;
             stackmap_loc_t *locs = (stackmap_loc_t*)s;
@@ -1835,21 +1824,30 @@ int gc_unwind_task(jl_task_t *task, void *roots)
                 fprintf(stderr, "Unsupported stack map location type %d\n", loc->type);
                 abort();
             }
-            if (loc->dwarf_reg != 7) { // %rsp on x86-64
+            uintptr_t gcframe;
+            switch (loc->dwarf_reg) {
+            case 7: // %rsp
+                gcframe = sp;
+                break;
+            case 6: // %rbp
+                gcframe = bp;
+                break;
+            default:
                 fprintf(stderr, "Unsupported register %d\n", loc->dwarf_reg);
                 abort();
             }
-            uintptr_t gcframe = sp + loc->offset;
+            gcframe = gcframe + loc->offset;
             if (task != jl_current_task)
                 gcframe = task_remap_memory(&ctx, gcframe);
+            printf("Found %p with %d + %p\n", gcframe, loc->dwarf_reg, loc->offset);
             if (gcframe == roots) {
-                //printf("Got it %p\n", gcframe);
+                printf("Got it!\n");
                 return 1;
             }
             /*if (!islocal)
               abort();*/
         }
-        //printf("\n");
+        printf("\n");
     }
     return 0;
 }

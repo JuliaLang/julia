@@ -918,6 +918,8 @@ struct StatepointNumberingPass : public ModulePass {
             }
             function_id++;
         }
+        /*if (changed)
+          M.dump();*/
         return changed;
     }
 };

@@ -558,8 +558,7 @@ public:
     }
 
 #if defined(LLVM39)
-    //    virtual Value *materialize(Value *V) override
-        virtual Value *materializeDeclFor(Value *V) override
+    virtual Value *materialize(Value *V) override
 #elif defined(LLVM38)
     virtual Value *materializeDeclFor(Value *V) override
 #else

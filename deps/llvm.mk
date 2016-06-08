@@ -451,6 +451,8 @@ $(eval $(call LLVM_PATCH,llvm-D17712))
 $(eval $(call LLVM_PATCH,llvm-PR26180))
 $(eval $(call LLVM_PATCH,llvm-PR27046))
 $(eval $(call LLVM_PATCH,llvm-3.8.0_ppc64_SUBFC8))
+else ifeq ($(LLVM_VER),svn)
+$(eval $(call LLVM_PATCH,llvm-3.9_statepoint))
 endif # LLVM_VER
 
 ifeq ($(LLVM_VER),3.7.1)
