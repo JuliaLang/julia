@@ -135,17 +135,43 @@ end
 
 ## Generic indexing functions ##
 
-prevind(s::DirectIndexString, i::Integer) = i-1
-prevind(s::AbstractArray   , i::Integer) = i-1
-nextind(s::DirectIndexString, i::Integer) = i+1
-nextind(s::AbstractArray   , i::Integer) = i+1
+prevind(s::DirectIndexString, i::Integer) = Int(i)-1
+prevind(s::AbstractArray    , i::Integer) = Int(i)-1
+nextind(s::DirectIndexString, i::Integer) = Int(i)+1
+nextind(s::AbstractArray    , i::Integer) = Int(i)+1
+
+function prevind(s::String, i::Integer)
+    j = Int(i)
+    e = endof(s.data)
+    if j > e
+        return endof(s)
+    end
+    j -= 1
+    while j > 0 && is_valid_continuation(s.data[j])
+        j -= 1
+    end
+    j
+end
+
+function nextind(s::String, i::Integer)
+    j = Int(i)
+    if j < 1
+        return 1
+    end
+    e = endof(s.data)
+    j += 1
+    while j <= e && is_valid_continuation(s.data[j])
+        j += 1
+    end
+    j
+end
 
 function prevind(s::AbstractString, i::Integer)
     e = endof(s)
     if i > e
         return e
     end
-    j = i-1
+    j = Int(i)-1
     while j >= 1
         if isvalid(s,j)
             return j
@@ -161,9 +187,9 @@ function nextind(s::AbstractString, i::Integer)
         return 1
     end
     if i > e
-        return i+1
+        return Int(i)+1
     end
-    for j = i+1:e
+    for j = Int(i)+1:e
         if isvalid(s,j)
             return j
         end
