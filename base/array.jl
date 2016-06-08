@@ -209,7 +209,6 @@ for (fname, felt) in ((:zeros,:zero), (:ones,:one))
     @eval begin
         ($fname)(T::Type, dims...)       = fill!(Array{T}(dims...), ($felt)(T))
         ($fname)(dims...)                = fill!(Array{Float64}(dims...), ($felt)(Float64))
-        ($fname){T}(A::AbstractArray{T}) = fill!(similar(A), ($felt)(T))
     end
 end
 
@@ -219,13 +218,7 @@ end
 `m`-by-`n` identity matrix.
 The default element type is `Float64`.
 """
-function eye(T::Type, m::Integer, n::Integer)
-    a = zeros(T,m,n)
-    for i = 1:min(m,n)
-        a[i,i] = one(T)
-    end
-    return a
-end
+eye(T::Type, m::Integer, n::Integer) = eye(Matrix{T}, m, n)
 
 """
     eye(m, n)

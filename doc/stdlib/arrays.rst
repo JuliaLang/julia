@@ -295,6 +295,28 @@ Constructors
         0  0  0
         0  0  0
 
+.. function:: zeros(array_type, dims)
+
+   .. Docstring generated from Julia source
+
+   Create an array of specified type of all zeros. The element type defaults to ``Float64`` if not specified.
+
+   .. doctest::
+
+       julia> zeros(Diagonal, 3, 3)
+       3×3 Diagonal{Float64}:
+        0.0   ⋅    ⋅
+         ⋅   0.0   ⋅
+         ⋅    ⋅   0.0
+
+   .. doctest::
+
+       julia> zeros(Diagonal{Int8}, 3, 3)
+       3×3 Diagonal{Int8}:
+        0  ⋅  ⋅
+        ⋅  0  ⋅
+        ⋅  ⋅  0
+
 .. function:: zeros(A)
 
    .. Docstring generated from Julia source
@@ -313,6 +335,12 @@ Constructors
         0  0
         0  0
 
+.. function:: zeros(array_type, A)
+
+   .. Docstring generated from Julia source
+
+   Create an array of specified type of all zeros with the shape of A.
+
 .. function:: ones(type, dims)
 
    .. Docstring generated from Julia source
@@ -325,6 +353,30 @@ Constructors
        2×3 Array{Complex{Float64},2}:
         1.0+0.0im  1.0+0.0im  1.0+0.0im
         1.0+0.0im  1.0+0.0im  1.0+0.0im
+
+.. function:: ones(array_type, dims)
+
+   .. Docstring generated from Julia source
+
+   Create an array of specified type of all ones. The element type defaults to ``Float64`` if not specified.
+
+   .. doctest::
+
+       julia> ones(SparseMatrixCSC, 2, 3)
+       2×3 sparse matrix with 6 Float64 nonzero entries:
+           [1, 1]  =  1.0
+           [2, 1]  =  1.0
+           [1, 2]  =  1.0
+           [2, 2]  =  1.0
+           [1, 3]  =  1.0
+           [2, 3]  =  1.0
+
+   .. doctest::
+
+       julia> ones(SparseMatrixCSC{Int8}, 1, 2)
+       1×2 sparse matrix with 2 Int8 nonzero entries:
+           [1, 1]  =  1
+           [1, 2]  =  1
 
 .. function:: ones(A)
 
@@ -343,6 +395,12 @@ Constructors
        2×2 Array{Int64,2}:
         1  1
         1  1
+
+.. function:: ones(array_type, A)
+
+   .. Docstring generated from Julia source
+
+   Create an array of specified type of all ones with the shape of A.
 
 .. function:: BitArray(dims::Integer...)
               BitArray{N}(dims::NTuple{N,Int})
@@ -601,6 +659,18 @@ Constructors
 
    ``m``\ -by-``n`` identity matrix. The default element type is ``Float64``\ .
 
+.. function:: eye(array_type, n::Integer)
+
+   .. Docstring generated from Julia source
+
+   ``n``\ -by-``n`` identity matrix of type ``array_type``\ .
+
+.. function:: eye(array_type, m::Integer, n::Integer)
+
+   .. Docstring generated from Julia source
+
+   ``m``\ -by-``n`` identity matrix of type ``array_type``\ .
+
 .. function:: eye(A)
 
    .. Docstring generated from Julia source
@@ -622,6 +692,12 @@ Constructors
         0  0  1
 
    Note the difference from :func:`ones`\ .
+
+.. function:: eye(array_type, A)
+
+   .. Docstring generated from Julia source
+
+   Identity matrix of type ``array_type`` of the same dimensions as ``A``\ .
 
 .. function:: linspace(start::Real, stop::Real, n::Real=50)
 
@@ -2430,4 +2506,3 @@ dense counterparts. The following functions are specific to sparse arrays.
    For additional (algorithmic) information, and for versions of these methods that forgo argument checking, see (unexported) parent methods :func:`Base.SparseArrays.unchecked_noalias_permute!` and :func:`Base.SparseArrays.unchecked_aliasing_permute!`\ .
 
    See also: :func:`Base.SparseArrays.permute`
-

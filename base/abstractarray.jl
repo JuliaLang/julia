@@ -713,6 +713,108 @@ fill{T<:AbstractArray}(::Type{T}, v, dims::Dims) = fill!(fixate_eltype(T, typeof
 
 zero{T}(x::AbstractArray{T}) = fill!(similar(x), zero(T))
 
+for (fname, felt) in ((:zeros,:zero), (:ones,:one))
+    @eval begin
+        function ($fname){T<:AbstractArray}(::Type{T}, dims::Dims)
+            array_type=fixate_eltype(T,Float64)
+            fill(array_type, ($felt)(eltype(array_type)), dims)
+        end
+        ($fname){T}(A::AbstractArray{T}) = fill!(similar(A), ($felt)(T))
+    end
+end
+
+"""
+    zeros(array_type, dims)
+
+Create an array of specified type of all zeros.
+The element type defaults to `Float64` if not specified.
+
+```jldoctest
+julia> zeros(Diagonal, 3, 3)
+3×3 Diagonal{Float64}:
+ 0.0   ⋅    ⋅
+  ⋅   0.0   ⋅
+  ⋅    ⋅   0.0
+```
+
+```jldoctest
+julia> zeros(Diagonal{Int8}, 3, 3)
+3×3 Diagonal{Int8}:
+ 0  ⋅  ⋅
+ ⋅  0  ⋅
+ ⋅  ⋅  0
+```
+"""
+zeros{T<:AbstractArray}(::Type{T}, dims::Integer...) = zeros(T, convert(Dims, dims))
+
+"""
+    zeros(array_type, A)
+
+Create an array of specified type of all zeros with the shape of A.
+"""
+zeros{T<:AbstractArray}(::Type{T}, A::AbstractArray) = zeros(fixate_eltype(T, eltype(A)), size(A))
+
+"""
+    ones(array_type, dims)
+
+Create an array of specified type of all ones.
+The element type defaults to `Float64` if not specified.
+
+```jldoctest
+julia> ones(SparseMatrixCSC, 2, 3)
+2×3 sparse matrix with 6 Float64 nonzero entries:
+    [1, 1]  =  1.0
+    [2, 1]  =  1.0
+    [1, 2]  =  1.0
+    [2, 2]  =  1.0
+    [1, 3]  =  1.0
+    [2, 3]  =  1.0
+```
+
+```jldoctest
+julia> ones(SparseMatrixCSC{Int8}, 1, 2)
+1×2 sparse matrix with 2 Int8 nonzero entries:
+    [1, 1]  =  1
+    [1, 2]  =  1
+```
+"""
+ones{T<:AbstractArray}(::Type{T}, dims::Integer...) = ones(T, convert(Dims, dims))
+
+"""
+    ones(array_type, A)
+
+Create an array of specified type of all ones with the shape of A.
+"""
+ones{T<:AbstractArray}(::Type{T}, A::AbstractArray) = ones(fixate_eltype(T, eltype(A)), size(A))
+
+"""
+    eye(array_type, m::Integer, n::Integer)
+
+`m`-by-`n` identity matrix of type `array_type`.
+"""
+function eye{T<:AbstractMatrix}(::Type{T}, m::Integer, n::Integer)
+    a = zeros(T,m,n)
+    for i = 1:min(m,n)
+        a[i,i] = one(eltype(a))
+    end
+    return a
+end
+
+"""
+    eye(array_type, n::Integer)
+
+`n`-by-`n` identity matrix of type `array_type`.
+"""
+eye{T<:AbstractMatrix}(::Type{T}, n::Integer) = eye(T, n, n)
+
+"""
+    eye(array_type, A)
+
+Identity matrix of type `array_type` of the same dimensions as `A`.
+"""
+eye{T<:AbstractMatrix}(::Type{T}, x::AbstractMatrix) =
+    eye(fixate_eltype(T, eltype(x)), size(x, 1), size(x, 2))
+
 ## iteration support for arrays by iterating over `eachindex` in the array ##
 # Allows fast iteration by default for both LinearFast and LinearSlow arrays
 
