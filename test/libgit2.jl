@@ -52,6 +52,16 @@ const LIBGIT2_VER = v"0.23.0"
     finally
         finalize(sa2)
     end
+    vs = vec([p1,p2])
+    sa4 = LibGit2.StrArrayStruct(vs)
+    try
+        arr3 = convert(Vector{AbstractString}, sa4)
+        @test arr3[1] == p1
+        @test arr3[2] == p2
+    finally
+        finalize(sa4)
+    end
+
 #end
 
 #@testset "Signature" begin
@@ -143,7 +153,6 @@ mktempdir() do dir
                 config = joinpath(cache_repo, ".git", "config")
                 lines = split(open(readstring, config, "r"), "\n")
                 @test any(x->x == "[remote \"upstream\"]", lines)
-
                 remote = LibGit2.get(LibGit2.GitRemote, repo, branch)
                 @test LibGit2.url(remote) == repo_url
                 @test LibGit2.isattached(repo)
@@ -218,6 +227,7 @@ mktempdir() do dir
                     @test LibGit2.fetch_refspecs(rmt)[1] == "+refs/*:refs/*"
                     @test LibGit2.isattached(repo)
                     @test LibGit2.remotes(repo) == ["origin"]
+                    @test LibGit2.name(rmt) == "origin"
                 finally
                     finalize(rmt)
                 end

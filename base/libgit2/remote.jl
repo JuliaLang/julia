@@ -88,3 +88,9 @@ function push{T<:AbstractString}(rmt::GitRemote, refspecs::Vector{T};
         !no_refs && finalize(sa)
     end
 end
+
+function name(rmt::GitRemote)
+    str_ptr = ccall((:git_remote_name, :libgit2), Cstring, (Ptr{Void}, ), rmt.ptr)
+    str_ptr == C_NULL && return nothing
+    return unsafe_string(str_ptr)
+end
