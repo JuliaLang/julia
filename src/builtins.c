@@ -393,6 +393,27 @@ JL_CALLABLE(jl_f_typeassert)
     return args[0];
 }
 
+// perform f(args...) on stack
+JL_DLLEXPORT jl_value_t *jl_apply_2va(jl_value_t *f, jl_value_t **args, uint32_t nargs)
+{
+    nargs++;
+    int onstack = (nargs < jl_page_size/sizeof(jl_value_t*));
+    jl_value_t **newargs;
+    JL_GC_PUSHARGS(newargs, onstack ? nargs : 1);
+    jl_svec_t *arg_heap = NULL;
+    newargs[0] = f;  // make sure f is rooted
+    if (!onstack) {
+        arg_heap = jl_alloc_svec(nargs);
+        newargs[0] = (jl_value_t*)arg_heap;
+        newargs = jl_svec_data(arg_heap);
+        newargs[0] = f;
+    }
+    memcpy(&newargs[1], args, (nargs-1)*sizeof(jl_value_t*));
+    jl_value_t *ret = jl_apply_generic(newargs, nargs);
+    JL_GC_POP();
+    return ret;
+}
+
 static jl_function_t *jl_append_any_func;
 
 JL_CALLABLE(jl_f__apply)

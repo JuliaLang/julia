@@ -375,6 +375,7 @@ static Function *jlcopyast_func;
 static Function *jltuple_func;
 static Function *jlnsvec_func;
 static Function *jlapplygeneric_func;
+static Function *jlapply2va_func;
 static Function *jlgetfield_func;
 static Function *jlmethod_func;
 static Function *jlgenericfunction_func;
@@ -1772,9 +1773,8 @@ static void simple_escape_analysis(jl_value_t *expr, bool esc, jl_codectx_t *ctx
                     else {
                         if ((fv==jl_builtin_getfield && alen==3 &&
                              expr_type(jl_exprarg(e,2),ctx) == (jl_value_t*)jl_long_type) ||
-                            fv==jl_builtin_nfields /*||   // TODO jb/functions
-                            (fv==jl_builtin__apply && alen==3 &&
-                            expr_type(jl_exprarg(e,2),ctx) == (jl_value_t*)jl_function_type)*/) {
+                            fv==jl_builtin_nfields ||
+                            (fv==jl_builtin__apply && alen==3)) {
                             esc = false;
                         }
                     }
@@ -2208,10 +2208,7 @@ static bool emit_builtin_call(jl_cgval_t *ret, jl_value_t *f, jl_value_t **args,
         }
     }
 
-    // TODO jb/functions
-    /*
-    else if (f==jl_builtin__apply && nargs==2 && ctx->vaStack &&
-             symbol_eq(args[2], ctx->vaName)) {
+    else if (f==jl_builtin__apply && nargs==2 && ctx->vaStack && slot_eq(args[2], ctx->vaSlot)) {
         // turn Core._apply(f, Tuple) ==> f(Tuple...) using the jlcall calling convention if Tuple is the vaStack allocation
         Value *theF = boxed(emit_expr(args[1], ctx), ctx);
         Value *nva = emit_n_varargs(ctx);
@@ -2220,12 +2217,12 @@ static bool emit_builtin_call(jl_cgval_t *ret, jl_value_t *f, jl_value_t **args,
 #endif
         Value *r =
 #ifdef LLVM37
-            builder.CreateCall(prepare_call(theFptr), {theF,
+            builder.CreateCall(prepare_call(jlapply2va_func), {theF,
                                 builder.CreateGEP(ctx->argArray,
                                                   ConstantInt::get(T_size, ctx->nReqArgs)),
                                 nva});
 #else
-            builder.CreateCall3(prepare_call(theFptr), theF,
+            builder.CreateCall3(prepare_call(jlapply2va_func), theF,
                                 builder.CreateGEP(ctx->argArray,
                                                   ConstantInt::get(T_size, ctx->nReqArgs)),
                                 nva);
@@ -2234,7 +2231,6 @@ static bool emit_builtin_call(jl_cgval_t *ret, jl_value_t *f, jl_value_t **args,
         JL_GC_POP();
         return true;
     }
-    */
 
     else if (f==jl_builtin_tuple) {
         if (nargs == 0) {
@@ -5322,6 +5318,8 @@ static void init_julia_llvm_env(Module *m)
     builtin_func_map[jl_f_apply_type] = jlcall_func_to_llvm("jl_f_apply_type", &jl_f_apply_type, m);
     jltuple_func = builtin_func_map[jl_f_tuple];
     jlgetfield_func = builtin_func_map[jl_f_getfield];
+
+    jlapply2va_func = jlcall_func_to_llvm("jl_apply_2va", &jl_apply_2va, m);
 
     jltypeassert_func = Function::Create(FunctionType::get(T_void, two_pvalue_llvmt, false),
                                         Function::ExternalLinkage,

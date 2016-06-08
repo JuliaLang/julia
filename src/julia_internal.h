@@ -97,6 +97,8 @@ STATIC_INLINE jl_value_t *jl_call_method_internal(jl_lambda_info_t *meth, jl_val
 
 jl_tupletype_t *jl_argtype_with_function(jl_function_t *f, jl_tupletype_t *types);
 
+JL_DLLEXPORT jl_value_t *jl_apply_2va(jl_value_t *f, jl_value_t **args, uint32_t nargs);
+
 #define GC_MAX_SZCLASS (2032-sizeof(void*))
 // MSVC miscalculates sizeof(jl_taggedvalue_t) because
 // empty structs are a GNU extension
