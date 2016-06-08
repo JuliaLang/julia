@@ -345,7 +345,6 @@ function send_connection_hdr(w::Worker, cookie=true)
     # For a connection initiated from the remote side to us, we only send the version,
     # else when we initiate a connection we first send the cookie followed by our version.
     # The remote side validates the cookie.
-
     if cookie
         write(w.w_stream, LPROC.cookie)
     end

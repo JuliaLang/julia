@@ -53,7 +53,6 @@ If an `init` function of the type `initfn(S::SharedArray)` is specified, it is c
 the participating workers.
 """
 function SharedArray{T,N}(::Type{T}, dims::Dims{N}; init=false, pids=Int[])
-
     isbits(T) || throw(ArgumentError("type of SharedArray elements must be bits types, got $(T)"))
 
     pids, onlocalhost = shared_pids(pids)
