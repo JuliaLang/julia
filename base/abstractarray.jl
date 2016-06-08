@@ -689,6 +689,28 @@ function copymutable(a::AbstractArray)
 end
 copymutable(itr) = collect(itr)
 
+"""
+    fill(array_type, x, dims)
+
+Create an array of type `array_type` filled with the value `x`. For example,
+`fill(BitArray, true, (5,5))` returns a 5×5 `BitArray`, with each element initialized to
+`true`.
+
+```jldoctest
+julia> fill(BitArray, true, (5,5))
+5×5 BitArray{2}:
+ true  true  true  true  true
+ true  true  true  true  true
+ true  true  true  true  true
+ true  true  true  true  true
+ true  true  true  true  true
+```
+
+If `x` is an object reference, all elements will refer to the same object. `fill(Array,
+Foo(), dims)` will return an array filled with the result of evaluating `Foo()` once.
+"""
+fill{T<:AbstractArray}(::Type{T}, v, dims::Dims) = fill!(fixate_eltype(T, typeof(v))(dims), v)
+
 zero{T}(x::AbstractArray{T}) = fill!(similar(x), zero(T))
 
 ## iteration support for arrays by iterating over `eachindex` in the array ##

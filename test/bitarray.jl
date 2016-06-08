@@ -111,6 +111,8 @@ timesofar("conversions")
 ## utility functions ##
 
 let b1 = bitrand(v1)
+    @test isequal(fill(BitArray, true, (v1,)), trues(size(b1)))
+    @test isequal(fill(BitArray, false, (n1, n2)), falses(n1, n2))
     @test isequal(fill!(b1, true), trues(size(b1)))
     @test isequal(fill!(b1, false), falses(size(b1)))
 end

@@ -202,8 +202,8 @@ julia> fill(1.0, (5,5))
 If `x` is an object reference, all elements will refer to the same object. `fill(Foo(),
 dims)` will return an array filled with the result of evaluating `Foo()` once.
 """
-fill(v, dims::Dims)       = fill!(Array{typeof(v)}(dims), v)
-fill(v, dims::Integer...) = fill!(Array{typeof(v)}(dims...), v)
+fill(v, dims::Dims)       = fill(Array, v, dims)
+fill(v, dims::Integer...) = fill(Array, v, convert(Dims, dims))
 
 for (fname, felt) in ((:zeros,:zero), (:ones,:one))
     @eval begin

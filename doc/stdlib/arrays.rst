@@ -458,6 +458,24 @@ Constructors
 
    If ``x`` is an object reference, all elements will refer to the same object. ``fill(Foo(), dims)`` will return an array filled with the result of evaluating ``Foo()`` once.
 
+.. function:: fill(array_type, x, dims)
+
+   .. Docstring generated from Julia source
+
+   Create an array of type ``array_type`` filled with the value ``x``\ . For example, ``fill(BitArray, true, (5,5))`` returns a 5×5 ``BitArray``\ , with each element initialized to ``true``\ .
+
+   .. doctest::
+
+       julia> fill(BitArray, true, (5,5))
+       5×5 BitArray{2}:
+        true  true  true  true  true
+        true  true  true  true  true
+        true  true  true  true  true
+        true  true  true  true  true
+        true  true  true  true  true
+
+   If ``x`` is an object reference, all elements will refer to the same object. ``fill(Array, Foo(), dims)`` will return an array filled with the result of evaluating ``Foo()`` once.
+
 .. function:: fill!(A, x)
 
    .. Docstring generated from Julia source

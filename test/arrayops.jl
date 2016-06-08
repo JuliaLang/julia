@@ -1061,6 +1061,34 @@ end
     end
 end
 
+@testset "fill" begin
+    A = fill(Array, 0, (10,))
+    @test isa(A, Vector{Int})
+    @test size(A) == (10,)
+    @test all(x -> x == 0, A)
+    A = fill(Array{Int8}, 0, (5, 5))
+    @test isa(A, Matrix{Int8})
+    @test size(A) == (5, 5)
+    @test all(x -> x == 0, A)
+    @test fill!(Array{Float64}(1),-0.0)[1] === -0.0
+    A = ones(3,3)
+    S = view(A, 2, 1:3)
+    fill!(S, 2)
+    S = view(A, 1:2, 3)
+    fill!(S, 3)
+    @test A == [1 1 3; 2 2 3; 1 1 1]
+    rt = Base.return_types(fill!, Tuple{Array{Int32, 3}, UInt8})
+    @test length(rt) == 1 && rt[1] == Array{Int32, 3}
+    A = Array{Union{UInt8,Int8}}(3)
+    fill!(A, UInt8(3))
+    @test A == [0x03, 0x03, 0x03]
+    # Issue #9964
+    A = Array{Vector{Float64}}(2)
+    fill!(A, [1, 2])
+    @test A[1] == [1, 2]
+    @test A[1] === A[2]
+end
+
 @testset "reverse" begin
     @test reverse([2,3,1]) == [1,3,2]
     @test reverse([1:10;],1,4) == [4,3,2,1,5,6,7,8,9,10]
