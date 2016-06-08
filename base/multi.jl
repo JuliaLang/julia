@@ -535,7 +535,7 @@ end
 
 function test_existing_ref(r::AbstractRemoteRef)
     found = getkey(client_refs, r, false)
-    if !is(found,false)
+    if found !== false
         if client_refs[r] == true
             @assert r.where > 0
             if isa(r, Future) && isnull(found.v) && !isnull(r.v)
@@ -640,7 +640,7 @@ function del_client(pg, id, client)
 # 14445 is fixed.
     @async begin
         rv = get(pg.refs, id, false)
-        if rv != false
+        if rv !== false
             delete!(rv.clientset, client)
             if isempty(rv.clientset)
                 delete!(pg.refs, id)
@@ -1366,7 +1366,7 @@ function setup_launched_worker(manager, wconfig, launched_q)
     # process on the remote machine, with a request to start additional workers of the
     # same type. This is done by setting an appropriate value to `WorkerConfig.cnt`.
     cnt = get(wconfig.count, 1)
-    if cnt == :auto
+    if cnt === :auto
         cnt = get(wconfig.environ)[:cpu_cores]
     end
     cnt = cnt - 1   # Removing self from the requested number
@@ -1757,12 +1757,12 @@ function terminate_all_workers()
 
     if nprocs() > 1
         ret = rmprocs(workers(); waitfor=0.5)
-        if ret != :ok
+        if ret !== :ok
             warn("Forcibly interrupting busy workers")
             # Might be computation bound, interrupt them and try again
             interrupt(workers())
             ret = rmprocs(workers(); waitfor=0.5)
-            if ret != :ok
+            if ret !== :ok
                 warn("Unable to terminate all workers")
             end
         end

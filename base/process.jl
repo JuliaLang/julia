@@ -709,7 +709,7 @@ function arg_gen(head, tail...)
     for h = head, t = tail
         push!(vals, cstr(string(h,t)))
     end
-    vals
+    return vals
 end
 
 function cmd_gen(parsed)
@@ -717,11 +717,11 @@ function cmd_gen(parsed)
     for arg in parsed
         append!(args, arg_gen(arg...))
     end
-    Cmd(args)
+    return Cmd(args)
 end
 
 macro cmd(str)
-    :(cmd_gen($(shell_parse(str)[1])))
+    return :(cmd_gen($(shell_parse(str)[1])))
 end
 
 wait(x::Process)      = if !process_exited(x); stream_wait(x, x.exitnotify); end

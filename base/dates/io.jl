@@ -116,9 +116,17 @@ function DateFormat(f::AbstractString, locale::AbstractString="english")
         last_offset = m.offset + width
     end
 
-    tran = last_offset > endof(f) ? r"(?=\s|$)" : replace(f[last_offset:end], r"\\(.)", s"\1")
     if !isempty(params)
-        slot = tran == "" ? FixedWidthSlot(params...) : DelimitedSlot(params..., tran)
+        if last_offset > endof(f)
+            slot = DelimitedSlot(params..., r"(?=\s|$)")
+        else
+            tran = replace(f[last_offset:end], r"\\(.)", s"\1")
+            if tran == ""
+                slot = FixedWidthSlot(params...)
+            else
+                slot = DelimitedSlot(params..., tran)
+            end
+        end
         push!(slots,slot)
     end
 
@@ -165,7 +173,7 @@ function parse(x::AbstractString,df::DateFormat)
     cursor = 1
     for slot in df.slots
         cursor, pe = getslot(x,slot,df.locale,cursor)
-        pe != nothing && (isa(pe,Period) ? push!(periods,pe) : push!(extra,pe))
+        pe !== nothing && (isa(pe,Period) ? push!(periods,pe) : push!(extra,pe))
         cursor > endof(x) && break
     end
     sort!(periods,rev=true,lt=periodisless)

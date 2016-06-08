@@ -734,7 +734,7 @@ function gen_g(flags::String, width::Int, precision::Int, c::Char)
     # print space padding
     if !('-' in flags) && !('0' in flags)
         padexpr = dynamic_pad(:width, :padding, ' ')
-        push!(blk.args, :(if padding != nothing
+        push!(blk.args, :(if padding !== nothing
                           $padexpr; end))
     end
     # print sign
@@ -744,7 +744,7 @@ function gen_g(flags::String, width::Int, precision::Int, c::Char)
     # print zero padding
     if !('-' in flags) && '0' in flags
         padexpr = dynamic_pad(:width, :padding, '0')
-        push!(blk.args, :(if padding != nothing
+        push!(blk.args, :(if padding !== nothing
                           $padexpr; end))
     end
     # finally print value
@@ -752,7 +752,7 @@ function gen_g(flags::String, width::Int, precision::Int, c::Char)
     # print space padding
     if '-' in flags
         padexpr = dynamic_pad(:width, :padding, ' ')
-        push!(blk.args, :(if padding != nothing
+        push!(blk.args, :(if padding !== nothing
                           $padexpr; end))
     end
 
@@ -1132,7 +1132,7 @@ function _printf(macroname, io, fmt, args)
 
     has_splatting = false
     for arg in args
-       if typeof(arg) == Expr && arg.head == :...
+       if isa(arg, Expr) && arg.head == :...
           has_splatting = true
           break
        end
