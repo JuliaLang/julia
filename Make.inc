@@ -687,9 +687,11 @@ endif
 ifeq ($(OS),WINNT)
 LIBUNWIND:=
 else
+# -lunwind must come _before_ -lunwind-generic to avoid
+# shadowing the actual _U_dyn_info_list_addr with a weak definition
 ifeq ($(USE_SYSTEM_LIBUNWIND), 1)
 ifneq ($(OS),Darwin)
-LIBUNWIND:=-lunwind-generic -lunwind
+LIBUNWIND:=-lunwind -lunwind-generic
 # Only for linux since we want to use not yet released libunwind features
 JCFLAGS+=-DSYSTEM_LIBUNWIND
 JCPPFLAGS+=-DSYSTEM_LIBUNWIND
@@ -699,7 +701,7 @@ ifeq ($(OS),Darwin)
 LIBUNWIND:=$(build_libdir)/libosxunwind.a
 JCPPFLAGS+=-DLIBOSXUNWIND
 else
-LIBUNWIND:=$(build_libdir)/libunwind-generic.a $(build_libdir)/libunwind.a
+LIBUNWIND:=$(build_libdir)/libunwind.a $(build_libdir)/libunwind-generic.a
 endif
 endif
 endif
