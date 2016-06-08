@@ -714,12 +714,12 @@ function permutedims(B::StridedArray, perm)
 end
 
 function checkdims_perm{TP,TB,N}(P::AbstractArray{TP,N}, B::AbstractArray{TB,N}, perm)
-    dimsB = size(B)
+    indsB = indices(B)
     length(perm) == N || throw(ArgumentError("expected permutation of size $N, but length(perm)=$(length(perm))"))
     isperm(perm) || throw(ArgumentError("input is not a permutation"))
-    dimsP = size(P)
+    indsP = indices(P)
     for i = 1:length(perm)
-        dimsP[i] == dimsB[perm[i]] || throw(DimensionMismatch("destination tensor of incorrect size"))
+        indsP[i] == indsB[perm[i]] || throw(DimensionMismatch("destination tensor of incorrect size"))
     end
     nothing
 end
