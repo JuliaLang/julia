@@ -147,6 +147,7 @@ function invperm(a::AbstractVector)
     end
     b
 end
+invperm(a::Tuple) = (invperm([a...])...,)
 
 #XXX This function should be moved to Combinatorics.jl but is currently used by Base.DSP.
 """
