@@ -36,6 +36,10 @@ start(R::ReshapedArrayIterator) = start(R.iter)
 end
 length(R::ReshapedArrayIterator) = length(R.iter)
 
+reshape(parent::AbstractArray, ref::AbstractArray) = reshape(indicesbehavior(ref), parent, ref)
+reshape(::IndicesStartAt1, parent::AbstractArray, ref::AbstractArray) = reshape(parent, size(ref))
+reshape(::IndicesBehavior, parent::AbstractArray, ref::AbstractArray) = reshape(parent, indices(ref))
+
 reshape(parent::AbstractArray, dims::Dims) = _reshape(parent, dims)
 reshape(parent::AbstractArray, len::Integer) = reshape(parent, (Int(len),))
 reshape(parent::AbstractArray, dims::Int...) = reshape(parent, dims)

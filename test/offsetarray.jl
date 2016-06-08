@@ -41,6 +41,11 @@ function Base.similar(A::AbstractArray, T::Type, inds::Tuple{Vararg{SimIdx}})
     OffsetArray(B, map(indsoffset, inds))
 end
 
+Base.allocate_for(f, A::OffsetArray, dim::Integer) = OffsetArray(f(size(A,dim)), (A.offsets[dim],))
+Base.allocate_for{N}(f, A::OffsetArray, dims::Dims{N}) = OffsetArray(f(size(A,dims)), A.offsets[dims]::Dims{N})
+
+Base.reshape(A::AbstractArray, inds::Indices) = OffsetArray(reshape(A, map(Base.dimlength, inds)), map(indsoffset, inds))
+
 @inline function Base.getindex{T,N}(A::OffsetArray{T,N}, I::Vararg{Int,N})
     @boundscheck checkbounds(A, I...)
     @inbounds ret = parent(A)[offset(A.offsets, I)...]
@@ -259,3 +264,12 @@ seek(io, 0)
 
 amin, amax = extrema(parent(A))
 @test clamp(A, (amax+amin)/2, amax) == clamp(parent(A), (amax+amin)/2, amax)
+
+@test unique(A, 1) == parent(A)
+@test unique(A, 2) == parent(A)
+v = OAs.OffsetArray(rand(8), (-2,))
+@test sort(v) == OAs.OffsetArray(sort(parent(v)), v.offsets)
+@test sortrows(A) == OAs.OffsetArray(sortrows(parent(A)), (A.offsets[1], 0))
+@test sortcols(A) == OAs.OffsetArray(sortcols(parent(A)), (0, A.offsets[2]))
+@test sort(A, 1) == OAs.OffsetArray(sort(parent(A), 1), A.offsets)
+@test sort(A, 2) == OAs.OffsetArray(sort(parent(A), 2), A.offsets)
