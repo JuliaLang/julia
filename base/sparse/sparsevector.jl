@@ -1538,14 +1538,17 @@ for isunittri in (true, false), islowertri in (true, false)
                 :(typeof(zero(TA)*zero(Tb) + zero(TA)*zero(Tb))) :
                 :(typeof((zero(TA)*zero(Tb) + zero(TA)*zero(Tb))/one(TA))) )
             r = convert(Array{TAb}, b)
-            # this operation involves only b[nzrange], so we extract
-            # and operate on solely that section for efficiency
-            nzrange = $( (islowertri && !istrans) || (!islowertri && istrans) ?
-                :(b.nzind[1]:b.n) :
-                :(1:b.nzind[end]) )
-            nzrangeviewr = sub(r, nzrange)
-            nzrangeviewA = $tritype(sub(A.data, nzrange, nzrange))
-            ($ipfunc)(convert(AbstractArray{TAb}, nzrangeviewA), nzrangeviewr)
+            # If b has no nonzero entries, then r is necessarily zero. If b has nonzero
+            # entries, then the operation involves only b[nzrange], so we extract and
+            # operate on solely b[nzrange] for efficiency.
+            if nnz(b) != 0
+                nzrange = $( (islowertri && !istrans) || (!islowertri && istrans) ?
+                    :(b.nzind[1]:b.n) :
+                    :(1:b.nzind[end]) )
+                nzrangeviewr = sub(r, nzrange)
+                nzrangeviewA = $tritype(sub(A.data, nzrange, nzrange))
+                ($ipfunc)(convert(AbstractArray{TAb}, nzrangeviewA), nzrangeviewr)
+            end
             r
         end
 
@@ -1563,22 +1566,26 @@ for isunittri in (true, false), islowertri in (true, false)
         # we can achieve greater efficiency where the triangular matrix provides
         # good view support. hence the StridedMatrix restriction.
         @eval function ($func){TA,Tb,S<:StridedMatrix}(A::$tritype{TA,S}, b::SparseVector{Tb})
-            # densify the relevant part of b in one shot rather
-            # than potentially repeatedly reallocating during the solve
-            $( (islowertri && !istrans) || (!islowertri && istrans) ?
-                :(_densifyfirstnztoend!(b)) :
-                :(_densifystarttolastnz!(b)) )
-            # this operation involves only the densified section, so
-            # for efficiency we extract and operate on solely that section
-            # furthermore we operate on that section as a dense vector
-            # such that dispatch has a chance to exploit, e.g., tuned BLAS
-            nzrange = $( (islowertri && !istrans) || (!islowertri && istrans) ?
-                :(b.nzind[1]:b.n) :
-                :(1:b.nzind[end]) )
-            nzrangeviewbnz = sub(b.nzval, nzrange - b.nzind[1] + 1)
-            nzrangeviewA = $tritype(sub(A.data, nzrange, nzrange))
-            ($func)(nzrangeviewA, nzrangeviewbnz)
-            # could strip any miraculous zeros here perhaps
+            # If b has no nonzero entries, the result is necessarily zero and this call
+            # reduces to a no-op. If b has nonzero entries, then...
+            if nnz(b) != 0
+                # densify the relevant part of b in one shot rather
+                # than potentially repeatedly reallocating during the solve
+                $( (islowertri && !istrans) || (!islowertri && istrans) ?
+                    :(_densifyfirstnztoend!(b)) :
+                    :(_densifystarttolastnz!(b)) )
+                # this operation involves only the densified section, so
+                # for efficiency we extract and operate on solely that section
+                # furthermore we operate on that section as a dense vector
+                # such that dispatch has a chance to exploit, e.g., tuned BLAS
+                nzrange = $( (islowertri && !istrans) || (!islowertri && istrans) ?
+                    :(b.nzind[1]:b.n) :
+                    :(1:b.nzind[end]) )
+                nzrangeviewbnz = sub(b.nzval, nzrange - b.nzind[1] + 1)
+                nzrangeviewA = $tritype(sub(A.data, nzrange, nzrange))
+                ($func)(nzrangeviewA, nzrangeviewbnz)
+                # could strip any miraculous zeros here perhaps
+            end
             b
         end
     end
