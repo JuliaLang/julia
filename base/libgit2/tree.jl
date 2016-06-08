@@ -18,8 +18,8 @@ end
 
 function filename(te::GitTreeEntry)
     str = ccall((:git_tree_entry_name, :libgit2), Cstring, (Ptr{Void},), te.ptr)
-    str != C_NULL && return unsafe_string(str)
-    return nothing
+    str == C_NULL && throw(Error.GitError(Error.ERROR))
+    return unsafe_string(str)
 end
 
 function filemode(te::GitTreeEntry)

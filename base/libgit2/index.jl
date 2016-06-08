@@ -112,9 +112,12 @@ function Base.count(idx::GitIndex)
 end
 
 function Base.getindex(idx::GitIndex, i::Csize_t)
+    if i < 1 || i > count(idx)
+        throw(BoundsError(idx,i))
+    end
     ie_ptr = ccall((:git_index_get_byindex, :libgit2), Ptr{Void},
                   (Ptr{Void}, Csize_t), idx.ptr, i-1)
-    ie_ptr == C_NULL && return nothing
+    ie_ptr == C_NULL && throw(BoundsError(idx,i))
     return unsafe_load(convert(Ptr{IndexEntry}, ie_ptr), 1)
 end
 Base.getindex(idx::GitIndex, i::Int) = getindex(idx, Csize_t(i))

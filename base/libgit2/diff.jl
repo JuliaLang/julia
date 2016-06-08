@@ -36,9 +36,12 @@ function Base.count(diff::GitDiff)
 end
 
 function Base.getindex(diff::GitDiff, i::Csize_t)
+    if i < 1 || i > count(diff)
+        throw(BoundsError(diff, i))
+    end
     delta_ptr = ccall((:git_diff_get_delta, :libgit2), Ptr{Void},
                        (Ptr{Void}, Csize_t), diff.ptr, i-1)
-    delta_ptr == C_NULL && return nothing
+    delta_ptr == C_NULL && throw(BoundsError(diff, i))
     return unsafe_load(convert(Ptr{DiffDelta}, delta_ptr), 1)
 end
 Base.getindex(diff::GitDiff, i::Int) = getindex(diff, Csize_t(i))

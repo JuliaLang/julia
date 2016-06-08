@@ -21,9 +21,12 @@ function current(rb::GitRebase)
 end
 
 function Base.getindex(rb::GitRebase, i::Csize_t)
+    if i < 1 || i > count(rb)
+        throw(BoundsError(rb,i))
+    end
     rb_op_ptr = ccall((:git_rebase_operation_byindex, :libgit2), Ptr{Void},
                        (Ptr{Void}, Csize_t), rb.ptr, i-1)
-    rb_op_ptr == C_NULL && return nothing
+    rb_op_ptr == C_NULL && throw(BoundsError(rb,i))
     return unsafe_load(convert(Ptr{RebaseOperation}, rb_op_ptr), 1)
 end
 Base.getindex(rb::GitRebase, i::Int) = getindex(rb, Csize_t(i))

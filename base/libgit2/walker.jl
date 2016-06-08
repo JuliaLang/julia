@@ -50,8 +50,8 @@ end
 
 function repository(w::GitRevWalker)
     ptr = ccall((:git_revwalk_repository, :libgit2), Ptr{Void}, (Ptr{Void},), w.ptr)
-    ptr != C_NULL && return GitRepo(ptr)
-    return  nothing
+    ptr == C_NULL && throw(Error.GitError(Error.ERROR))
+    return GitRepo(ptr)
 end
 
 function Base.map(f::Function, walker::GitRevWalker;
