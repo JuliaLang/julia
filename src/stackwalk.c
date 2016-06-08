@@ -130,9 +130,7 @@ JL_DLLEXPORT jl_value_t *jl_backtrace_caller(jl_sym_t *name, int num_callers)
 {
     if (num_callers < 0)
         return NULL;
-
-    jl_value_t *ip = (jl_value_t*)jl_svec2(jl_voidpointer_type, jl_box_long(1));
-    JL_GC_PUSH1(&ip);
+    uintptr_t ip;
     jl_value_t *caller = NULL;
     bt_context_t context;
     bt_cursor_t cursor;
@@ -142,23 +140,21 @@ JL_DLLEXPORT jl_value_t *jl_backtrace_caller(jl_sym_t *name, int num_callers)
         int found = 0, callers = 0;
         size_t n = 0;
         do {
-            n = jl_unw_stepn(&cursor, (uintptr_t*) ip, NULL, 1);
-            jl_value_t** stack = (jl_value_t**)ip;
+            n = jl_unw_stepn(&cursor, &ip, NULL, 1);
 
             if (n > 0) {
                 if (!found)
-                    found = jl_frame_contains((uintptr_t) stack[0], name, 1);
+                    found = jl_frame_contains(ip, name, 1);
                 else
-                    callers += jl_num_frames((uintptr_t) stack[0], 1);
+                    callers += jl_num_frames(ip, 1);
 
                 if (found && callers >= num_callers) {
-                    caller = stack[0];
+                    caller = (jl_value_t *)ip;
                     break;
                 }
             }
-        } while (n > 1 && !caller);
+        } while (n > 1);
     }
-    JL_GC_POP();
     return caller;
 }
 
