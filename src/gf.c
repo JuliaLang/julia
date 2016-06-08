@@ -360,7 +360,8 @@ static jl_value_t *ml_matches(union jl_typemap_t ml, int offs,
                               jl_tupletype_t *type, int lim, int include_ambiguous);
 
 static jl_lambda_info_t *cache_method(jl_methtable_t *mt, union jl_typemap_t *cache, jl_value_t *parent,
-                                      jl_tupletype_t *type, jl_tupletype_t *origtype,
+                                      jl_tupletype_t *type, // the specialized type signature for type lambda
+                                      jl_tupletype_t *tt, // the original tupletype of the signature
                                       jl_typemap_entry_t *m, jl_svec_t *sparams)
 {
     JL_LOCK(&codegen_lock); // Might GC
@@ -380,13 +381,11 @@ static jl_lambda_info_t *cache_method(jl_methtable_t *mt, union jl_typemap_t *ca
     JL_GC_PUSH5(&temp, &temp2, &temp3, &newmeth, &newparams);
     size_t np = jl_nparams(type);
     newparams = jl_svec_copy(type->parameters);
-    if (type == origtype)
-        origtype = NULL;
 
     for (i=0; i < np; i++) {
         jl_value_t *elt = jl_tparam(type,i);
         jl_value_t *decl_i = jl_nth_slot_type(decl,i);
-        if ((origtype && elt != jl_tparam(origtype, i)) || // if join_tsig made a swap
+        if ((tt != type && elt != jl_tparam(tt, i)) || // if join_tsig made a swap
                 is_kind(elt)) { // might see a kind if called at compile-time
             // kind slots always need guard entries (checking for subtypes of Type)
             need_guard_entries = 1;
@@ -555,9 +554,8 @@ static jl_lambda_info_t *cache_method(jl_methtable_t *mt, union jl_typemap_t *ca
 
     int cache_with_orig = 0;
     jl_svec_t* guardsigs = jl_emptysvec;
+    jl_tupletype_t *origtype = type; // backup the prior value of `type`
     if (hasnewparams) {
-        if (origtype == NULL)
-            origtype = type;
         type = jl_apply_tuple_type(newparams);
         temp2 = (jl_value_t*)type;
     }
@@ -611,56 +609,72 @@ static jl_lambda_info_t *cache_method(jl_methtable_t *mt, union jl_typemap_t *ca
             }
         }
     }
-    if (!cache_with_orig) {
-        // if there is a need to cache_with_orig,
-        // the method is still specialized on `types`,
-        // but origtype is used as the simplesig
-        // in the method cache to prevent anything else from matching this entry
-        origtype = NULL;
-    }
-    if (makesimplesig && origtype == NULL) {
-        // reduce the complexity of rejecting this entry in the cache
-        // by replacing non-simple types with jl_any_type to build origtype
-        // (the only case this applies to currently due to the above logic is jl_function_type)
-        size_t np = jl_nparams(type);
-        newparams = jl_svec_copy(type->parameters);
-        for (i = 0; i < np; i++) {
-            jl_value_t *elt = jl_svecref(newparams, i);
-            if (elt == (jl_value_t*)jl_function_type)
-                jl_svecset(newparams, i, jl_any_type);
-        }
-        origtype = jl_apply_tuple_type(newparams);
-        temp = (jl_value_t*)origtype;
-    }
 
     // here we infer types and specialize the method
-    jl_array_t *lilist=NULL;
-    jl_lambda_info_t *li=NULL;
+    int from_specializations = 1;
     if (definition->specializations != NULL) {
         // reuse code already generated for this combination of lambda and
         // arguments types. this happens for inner generic functions where
         // a new closure is generated on each call to the enclosing function.
-        lilist = definition->specializations;
+        jl_array_t *lilist = definition->specializations;
         int k;
-        for(k=0; k < lilist->nrows; k++) {
-            li = (jl_lambda_info_t*)jl_array_ptr_ref(lilist, k);
-            if (jl_types_equal((jl_value_t*)li->specTypes, (jl_value_t*)type))
+        for (k = 0; k < lilist->nrows; k++) {
+            jl_lambda_info_t *li = (jl_lambda_info_t*)jl_array_ptr_ref(lilist, k);
+            if (jl_types_equal((jl_value_t*)li->specTypes, (jl_value_t*)type)) {
+                newmeth = li;
                 break;
+            }
         }
-        if (k == lilist->nrows) lilist=NULL;
     }
 
-    if (lilist != NULL && !li->inInference) {
-        assert(li);
-        newmeth = li;
-        jl_typemap_insert(cache, parent, type, jl_emptysvec, origtype, guardsigs, (jl_value_t*)newmeth, jl_cachearg_offset(mt), &lambda_cache, NULL);
+    if (!newmeth || newmeth->inInference) {
+        from_specializations = 0;
+        newmeth = jl_get_specialized(definition, type, sparams);
+    }
+
+    if (cache_with_orig) {
+        // if there is a need to cache with one of the original signatures,
+        // the method is still specialized on `types`,
+        // but one of the original types will be used as the entry signature
+        // in the method cache, possible with a simplesig also,
+        // to prevent anything else from matching this entry
+        type = origtype; // restore `type` to be the `origtype` backup (discard computed simplified `type`)
+        origtype = tt; // choose `tt` as the primary key
+        makesimplesig = 0;
+    }
+    else {
+        // don't need `origtype` anymore: `type` is an unambiguous method match
+        origtype = type;
+    }
+
+    // compute the type this will be cached under
+    // if we haven't selected an origtype yet, promote `type`,
+    // and then decide if it is beneficial to build a new simplesig
+    if (origtype == type) {
+        type = NULL; // don't need `type` anymore: it's equivalent to the `origtype`
+        if (makesimplesig) {
+            // reduce the complexity of rejecting this entry in the cache
+            // by replacing non-simple types with jl_any_type to build a new `type`
+            // (the only case this applies to currently due to the above logic is jl_function_type)
+            size_t np = jl_nparams(origtype);
+            newparams = jl_svec_copy(origtype->parameters);
+            for (i = 0; i < np; i++) {
+                jl_value_t *elt = jl_svecref(newparams, i);
+                if (elt == (jl_value_t*)jl_function_type)
+                    jl_svecset(newparams, i, jl_any_type);
+            }
+            type = jl_apply_tuple_type(newparams);
+            temp2 = (jl_value_t*)type;
+        }
+    }
+
+    jl_typemap_insert(cache, parent, origtype, jl_emptysvec, type, guardsigs, (jl_value_t*)newmeth, jl_cachearg_offset(mt), &lambda_cache, NULL);
+
+    if (from_specializations) {
         JL_UNLOCK(&codegen_lock); // Might GC
         JL_GC_POP();
         return newmeth;
     }
-
-    newmeth = jl_get_specialized(definition, type, sparams);
-    jl_typemap_insert(cache, parent, type, jl_emptysvec, origtype, guardsigs, (jl_value_t*)newmeth, jl_cachearg_offset(mt), &lambda_cache, NULL);
 
     if (newmeth->code != NULL) {
         jl_array_t *spe = definition->specializations;

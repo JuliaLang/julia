@@ -207,12 +207,14 @@ let T = TypeVar(:T, Tuple{Vararg{RangeIndex}}, true)
 end
 
 # issue #11840
+typealias TT11840{T} Tuple{T,T}
 f11840(::Type) = "Type"
 f11840(::DataType) = "DataType"
 f11840{T<:Tuple}(::Type{T}) = "Tuple"
 @test f11840(Type) == "DataType"
 @test f11840(AbstractVector) == "Type"
 @test f11840(Tuple) == "Tuple"
+@test f11840(TT11840) == "Tuple"
 
 g11840(::DataType) = 1
 g11840(::Type) = 2
@@ -220,7 +222,21 @@ g11840{T<:Tuple}(sig::Type{T}) = 3
 @test g11840(Vector.body) == 1
 @test g11840(Vector) == 2
 @test g11840(Vector.body) == 1
+@test g11840(Vector) == 2
 @test g11840(Tuple) == 3
+@test g11840(TT11840) == 3
+
+g11840b(::DataType) = 1
+g11840b(::Type) = 2
+# FIXME: how to compute that the guard entry is still required,
+# even though Type{Vector} ∩ DataType = Bottom and this method would set cache_with_orig = true
+#g11840b{T<:Tuple}(sig::Type{T}) = 3
+@test g11840b(Vector) == 2
+@test g11840b(Vector.body) == 1
+@test g11840b(Vector) == 2
+@test g11840b(Vector.body) == 1
+#@test g11840b(Tuple) == 3
+#@test g11840b(TT11840) == 3
 
 h11840(::DataType) = '1'
 h11840(::Type) = '2'
@@ -232,6 +248,7 @@ h11840{T<:Tuple}(::Type{T}) = '4'
 @test h11840(Union{Vector, Matrix}) == '2'
 @test h11840(Union{Vector.body, Matrix.body}) == '2'
 @test h11840(Tuple) == '4'
+@test h11840(TT11840) == '4'
 
 # join
 @test typejoin(Int8,Int16) === Signed
