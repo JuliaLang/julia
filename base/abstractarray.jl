@@ -126,6 +126,27 @@ _length(A) = length(A)
 endof(a::AbstractArray) = length(a)
 first(a::AbstractArray) = a[first(eachindex(a))]
 
+function fixate_eltype{T<:AbstractArray}(::Type{T}, default::Type)
+    @_pure_meta
+    aa_type = T
+    while aa_type.name.primary != AbstractArray
+        aa_type = supertype(aa_type)
+    end
+    if isa(aa_type.parameters[1], TypeVar)
+        varname = aa_type.parameters[1].name
+        new_params = collect(T.parameters)
+        for i in eachindex(new_params)
+            p = new_params[i]
+            if isa(p, TypeVar) && p.name == varname
+                new_params[i] = default
+            end
+        end
+        return T.name.primary{new_params...}
+    else
+        return T
+    end
+end
+
 function check_array_size(dims::DimsInteger)
     for i in 1:length(dims)
         dims[i] >= 0 || throw(ArgumentError("dimension size must be ≥ 0, got $(dims[i]) for dimension $i"))
