@@ -55,6 +55,9 @@ end
 @test mean([1,2,3]) == 2.
 @test mean([0 1 2; 4 5 6], 1) == [2.  3.  4.]
 @test mean([1 2 3; 4 5 6], 1) == [2.5 3.5 4.5]
+@test mean(i->i+1, 0:2) === 2.
+@test mean(isodd, [3]) === 1.
+@test mean(x->3x, (1,1)) === 3.
 
 @test isnan(mean([NaN]))
 @test isnan(mean([0.0,NaN]))

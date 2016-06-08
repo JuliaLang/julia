@@ -2,20 +2,29 @@
 
 ##### mean #####
 
-function mean(iterable)
+"""
+    mean(f::Function, v)
+
+Apply the function `f` to each element of `v` and take the mean.
+"""
+function mean(f::Callable, iterable)
     state = start(iterable)
     if done(iterable, state)
         throw(ArgumentError("mean of empty collection undefined: $(repr(iterable))"))
     end
     count = 1
-    total, state = next(iterable, state)
+    value, state = next(iterable, state)
+    f_value = f(value)
+    total = f_value + zero(f_value)
     while !done(iterable, state)
         value, state = next(iterable, state)
-        total += value
+        total += f(value)
         count += 1
     end
     return total/count
 end
+mean(iterable) = mean(identity, iterable)
+mean(f::Callable, A::AbstractArray) = sum(f, A) / length(A)
 mean(A::AbstractArray) = sum(A) / length(A)
 
 function mean!{T}(R::AbstractArray{T}, A::AbstractArray)
