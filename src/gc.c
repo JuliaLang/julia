@@ -1775,32 +1775,33 @@ int gc_unwind_task(jl_task_t *task, void *roots)
     int islocal = 1;
     task_unwind_ctx_t ctx;
     if (task == jl_current_task) {
-        printf("UNWINDING CURRENT TASK =============\n");
+        //printf("UNWINDING CURRENT TASK =============\n");
         if (unw_init_local(&cursor, &gc_current_task_context) < 0)
             abort();
     }
     else {
-        printf("UNWINDING REMOTE TASK =============\n");
+        //printf("UNWINDING REMOTE TASK =============\n");
         islocal = 0;
         ctx.task = task;
         memcpy(&ctx.ctx, task->ctx, sizeof(void*)*8);
         if (unw_init_remote(&cursor, task_addr_space, &ctx) < 0)
             abort();
     }
-    printf("Looking for %p\n\n", roots);
-    uintptr_t ip, sp, bp;
+    //printf("Looking for %p\n\n", roots);
+    uintptr_t ip;
     while (1) {
         if (unw_step(&cursor) < 0) {
             break;
         }
         if (unw_get_reg(&cursor, UNW_REG_IP, &ip) < 0)
             abort();
-        if (unw_get_reg(&cursor, UNW_REG_SP, &sp) < 0)
-            abort();
-        if (unw_get_reg(&cursor, UNW_X86_64_RBP, &bp) < 0)
-            abort();
         if (!ip) break;
+#if 0
+        uintptr_t sp = 0, bp = 0;
+        unw_get_reg(&cursor, UNW_REG_SP, &sp);
+        unw_get_reg(&cursor, UNW_X86_64_RBP, &bp);
         printf("FRAME ip:%p sp:%p bp:%p\n", ip, sp, bp);
+#endif
         void **sm_bp = ptrhash_bp(&addr_to_stackmap, ip);
         if (*sm_bp != HT_NOTFOUND) {
             uint8_t *s = *sm_bp;
@@ -1824,30 +1825,35 @@ int gc_unwind_task(jl_task_t *task, void *roots)
                 fprintf(stderr, "Unsupported stack map location type %d\n", loc->type);
                 abort();
             }
-            uintptr_t gcframe;
+            unw_regnum_t reg;
             switch (loc->dwarf_reg) {
             case 7: // %rsp
-                gcframe = sp;
+                reg = UNW_REG_SP;
                 break;
             case 6: // %rbp
-                gcframe = bp;
+                reg = UNW_X86_64_RBP;
                 break;
             default:
                 fprintf(stderr, "Unsupported register %d\n", loc->dwarf_reg);
                 abort();
             }
+            uintptr_t gcframe;
+            if (unw_get_reg(&cursor, reg, &gcframe) < 0) {
+                fprintf(stderr, "Could not read required reg %d from frame (ip:%p)\n", loc->dwarf_reg, ip);
+                abort();
+            }
             gcframe = gcframe + loc->offset;
             if (task != jl_current_task)
                 gcframe = task_remap_memory(&ctx, gcframe);
-            printf("Found %p with %d + %p\n", gcframe, loc->dwarf_reg, loc->offset);
+            //printf("Found %p with %d + %p\n", gcframe, loc->dwarf_reg, loc->offset);
             if (gcframe == roots) {
-                printf("Got it!\n");
+                //printf("Got it!\n");
                 return 1;
             }
             /*if (!islocal)
               abort();*/
         }
-        printf("\n");
+        //printf("\n");
     }
     return 0;
 }
