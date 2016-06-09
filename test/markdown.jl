@@ -409,3 +409,57 @@ let in_dollars =
     @test latex_doc == dollars
     @test latex_doc == backticks
 end
+
+# Nested backticks for inline code and math.
+
+let t_1 = "`code` ``math`` ```code``` ````math```` `````code`````",
+    t_2 = "`` `math` `` ``` `code` ``code`` ``` ```` `math` ``math`` ```math``` ````",
+    t_3 = "`` ` `` ``` `` ` `` ` ` ```",
+    t_4 = """`code
+    over several
+    lines` ``math
+    over several
+    lines`` ``math with
+    ` some extra ` ` backticks`
+    ``""",
+    t_5 = "``code at end of string`",
+    t_6 = "```math at end of string``"
+    @test Markdown.parse(t_1) == MD(Paragraph([
+        Code("code"),
+        " ",
+        LaTeX("math"),
+        " ",
+        Code("code"),
+        " ",
+        LaTeX("math"),
+        " ",
+        Code("code"),
+    ]))
+    @test Markdown.parse(t_2) == MD(Paragraph([
+        LaTeX("`math`"),
+        " ",
+        Code("`code` ``code``"),
+        " ",
+        LaTeX("`math` ``math`` ```math```"),
+    ]))
+    @test Markdown.parse(t_3) == MD(Paragraph([
+        LaTeX("`"),
+        " ",
+        Code("`` ` `` ` `"),
+    ]))
+    @test Markdown.parse(t_4) == MD(Paragraph([
+        Code("code over several lines"),
+        " ",
+        LaTeX("math over several lines"),
+        " ",
+        LaTeX("math with ` some extra ` ` backticks`")
+    ]))
+    @test Markdown.parse(t_5) == MD(Paragraph([
+        "`",
+        Code("code at end of string"),
+    ]))
+    @test Markdown.parse(t_6) == MD(Paragraph([
+        "`",
+        LaTeX("math at end of string"),
+    ]))
+end
