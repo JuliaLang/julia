@@ -416,7 +416,7 @@ sort(v::AbstractVector; kws...) = sort!(copymutable(v); kws...)
 ## other iterables and fallback ##
 
 sort(s::String; kws...) = String(sort(collect(s); kws...))
-sort(n::Number) = throw(MethodError("no method matching sort(::Number)"))
+sort(n::Number) = throw(MethodError(sort, n))
 sort(itr; kws...) = sort(collect(itr); kws...)
 
 
