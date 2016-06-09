@@ -16,7 +16,7 @@ DEST=$1
 
 for SRC in $ARGS; do
     cp -a $SRC $DEST
-    
+
     if [ -d "$DEST" ]; then
       DESTFILE="$DEST/$(basename "$SRC")"
     else
@@ -24,6 +24,6 @@ for SRC in $ARGS; do
     fi
 
     # Do the chmod dance, and ignore errors on platforms that don't like setting permissions of symlinks
-    # TODO: Test if it's a symlink instead of having to redirect stderr to devnull
+    # TODO: Test if it's a symlink instead of having to redirect stderr to /dev/null
     chmod $PERMS $DESTFILE 2>/dev/null
 done
