@@ -1,6 +1,9 @@
 #!/bin/sh
-# This file is a part of StackOverflow. License is CC-BY-SA
+# This file is based on code from StackOverflow. License is CC-BY-SA
 # Source copied from http://stackoverflow.com/a/14914070
+
+# both $1 and $2 are absolute paths beginning with /
+# returns relative path to $2/$target from $1/$source
 
 relpath () {
     [ $# -ge 1 ] && [ $# -le 2 ] || return 1
