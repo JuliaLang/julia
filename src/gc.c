@@ -1087,6 +1087,7 @@ static int push_root(jl_value_t *v, int d, int);
 #ifdef JL_DEBUG_BUILD
 static void *volatile gc_findval; // for usage from gdb, for finding the gc-root for a value
 #endif
+// Returns whether the object is young
 static inline int gc_push_root(void *v, int d) // v isa jl_value_t*
 {
 #ifdef JL_DEBUG_BUILD
@@ -1097,10 +1098,9 @@ static inline int gc_push_root(void *v, int d) // v isa jl_value_t*
     jl_taggedvalue_t *o = jl_astaggedvalue(v);
     verify_val(v);
     int bits = o->bits.gc;
-    if (!gc_marked(bits)) {
-        return push_root((jl_value_t*)v, d, bits);
-    }
-    return bits;
+    if (!gc_marked(bits))
+        return !gc_old(push_root((jl_value_t*)v, d, bits));
+    return !gc_old(bits);
 }
 
 void jl_gc_setmark(jl_value_t *v) // TODO rename this as it is misleading now
@@ -1156,8 +1156,9 @@ static void gc_mark_stack(jl_value_t *ta, jl_gcframe_t *s, intptr_t offset, int 
         if (s->nroots & 1) {
             for(size_t i=0; i < nr; i++) {
                 jl_value_t **ptr = (jl_value_t**)((char*)rts[i] + offset);
-                if (*ptr != NULL)
+                if (*ptr != NULL) {
                     gc_push_root(*ptr, d);
+                }
             }
         }
         else {
@@ -1326,7 +1327,7 @@ static int push_root(jl_value_t *v, int d, int bits)
         gc_mark_task((jl_task_t*)v, d);
         // tasks should always be remarked since we do not trigger the write barrier
         // for stores to stack slots
-        refyoung = GC_MARKED_NOESC;
+        refyoung = 1;
     }
     else if (vt == (jl_value_t*)jl_symbol_type) {
         // symbols have their own allocator and are never freed
@@ -1380,7 +1381,7 @@ static int push_root(jl_value_t *v, int d, int bits)
 ret:
     if (gc_verifying)
         return bits;
-    if ((bits == GC_OLD_MARKED) && (refyoung == GC_MARKED_NOESC)) {
+    if ((bits == GC_OLD_MARKED) && refyoung) {
         jl_thread_heap.remset_nptr += nptr;
         // v is an old object referencing young objects
         arraylist_push(jl_thread_heap.remset, v);
@@ -1581,7 +1582,7 @@ static void _jl_gc_collect(int full, char *stack_hi)
             // A null pointer can happen here when the binding is cleaned up
             // as an exception is thrown after it was already queued (#10221)
             if (!ptr->value) continue;
-            if (gc_push_root(ptr->value, 0) == GC_MARKED_NOESC) {
+            if (gc_push_root(ptr->value, 0)) {
                 ptls->heap.rem_bindings.items[n_bnd_refyoung] = ptr;
                 n_bnd_refyoung++;
             }

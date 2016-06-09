@@ -361,8 +361,9 @@ static void gc_scrub_range(char *stack_lo, char *stack_hi)
         // (especially on 32bit where it's more likely to have pointer-like
         //  bit patterns)
         *ages &= ~(1 << (obj_id % 8));
-        // set mark to GC_MARKED_NOESC (young and marked)
         memset(tag, 0xff, osize);
+        // set mark to GC_MARKED_NOESC (young and marked)
+        tag->bits.gc = GC_MARKED_NOESC;
     }
 }
 
