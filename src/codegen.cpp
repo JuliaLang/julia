@@ -3,13 +3,13 @@
 #include "llvm-version.h"
 #include "platform.h"
 #include "options.h"
-#if defined(_OS_WINDOWS_)
-// trick pre-llvm36 into skipping the generation of _chkstk calls
+#if defined(_OS_WINDOWS_) && !defined(LLVM38)
+// trick pre-llvm38 into skipping the generation of _chkstk calls
 //   since it has some codegen issues associated with them:
 //   (a) assumed to be within 32-bit offset
 //   (b) bad asm is generated for certain code patterns:
 //       see https://github.com/JuliaLang/julia/pull/11644#issuecomment-112276813
-// also MCJIT debugging support on windows needs ELF (currently)
+// also, use ELF because RuntimeDyld COFF I686 support didn't exist
 #define FORCE_ELF
 #endif
 #if defined(_CPU_X86_)
@@ -2816,7 +2816,7 @@ static Value *global_binding_pointer(jl_module_t *m, jl_sym_t *s,
             name << "delayedvar" << globalUnique++;
             Constant *initnul = ConstantPointerNull::get((PointerType*)T_pjlvalue);
             GlobalVariable *bindinggv = new GlobalVariable(*ctx->f->getParent(), T_pjlvalue,
-                    false, GlobalVariable::PrivateLinkage,
+                    false, GlobalVariable::InternalLinkage,
                     initnul, name.str());
             Value *cachedval = builder.CreateLoad(bindinggv);
             BasicBlock *have_val = BasicBlock::Create(jl_LLVMContext, "found"),

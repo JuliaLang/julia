@@ -526,6 +526,35 @@ JuliaOJIT *jl_ExecutionEngine;
 ExecutionEngine *jl_ExecutionEngine;
 #endif
 
+// MSVC's link.exe requires each function declaration to have a Comdat section
+// rather than litter the code with conditionals,
+// all global values that get emitted call this function
+// and it decides whether the definition needs a Comdat section and adds the appropriate declaration
+// TODO: consider moving this into jl_add_to_shadow or jl_dump_shadow? the JIT doesn't care, so most calls are now no-ops
+template<class T> // for GlobalObject's
+static T *addComdat(T *G)
+{
+#if defined(_OS_WINDOWS_)
+    if (imaging_mode && !G->isDeclaration()) {
+#ifdef LLVM35
+        // Add comdat information to make MSVC link.exe happy
+        if (G->getParent() == shadow_output) {
+            Comdat *jl_Comdat = G->getParent()->getOrInsertComdat(G->getName());
+            // ELF only supports Comdat::Any
+            jl_Comdat->setSelectionKind(Comdat::NoDuplicates);
+            G->setComdat(jl_Comdat);
+        }
+        // add __declspec(dllexport) to everything marked for export
+        if (G->getLinkage() == GlobalValue::ExternalLinkage)
+            G->setDLLStorageClass(GlobalValue::DLLExportStorageClass);
+        else
+            G->setDLLStorageClass(GlobalValue::DefaultStorageClass);
+#endif
+    }
+#endif
+    return G;
+}
+
 // destructively move the contents of src into dest
 // this assumes that the targets of the two modules are the same
 // including the DataLayout and ModuleFlags (for example)
@@ -537,6 +566,7 @@ static void jl_merge_module(Module *dest, std::unique_ptr<Module> src)
         GlobalVariable *sG = &*I;
         GlobalValue *dG = dest->getNamedValue(sG->getName());
         ++I;
+        // Replace a declaration with the definition:
         if (dG) {
             if (sG->isDeclaration()) {
                 sG->replaceAllUsesWith(dG);
@@ -548,14 +578,18 @@ static void jl_merge_module(Module *dest, std::unique_ptr<Module> src)
                 dG->eraseFromParent();
             }
         }
+        // Reparent the global variable:
         sG->removeFromParent();
         dest->getGlobalList().push_back(sG);
+        // Comdat is owned by the Module, recreate it in the new parent:
+        addComdat(sG);
     }
 
     for (Module::iterator I = src->begin(), E = src->end(); I != E;) {
         Function *sG = &*I;
         GlobalValue *dG = dest->getNamedValue(sG->getName());
         ++I;
+        // Replace a declaration with the definition:
         if (dG) {
             if (sG->isDeclaration()) {
                 sG->replaceAllUsesWith(dG);
@@ -567,8 +601,11 @@ static void jl_merge_module(Module *dest, std::unique_ptr<Module> src)
                 dG->eraseFromParent();
             }
         }
+        // Reparent the global variable:
         sG->removeFromParent();
         dest->getFunctionList().push_back(sG);
+        // Comdat is owned by the Module, recreate it in the new parent:
+        addComdat(sG);
     }
 
     for (Module::alias_iterator I = src->alias_begin(), E = src->alias_end(); I != E;) {
@@ -665,30 +702,6 @@ static void jl_finalize_function(Function *F, Module *collector = NULL)
     jl_finalize_function(F->getName().str(), collector);
 }
 #endif
-
-// MSVC's link.exe requires each function declaration to have a Comdat section
-// rather than litter the code with conditionals,
-// all global values that get emitted call this function
-// and it decides whether the definition needs a Comdat section and adds the appropriate declation
-// TODO: consider moving this into jl_add_to_shadow or jl_dump_shadow? the JIT doesn't care, so most calls are now no-ops
-template<class T> // for GlobalObject's
-static T *addComdat(T *G)
-{
-#if defined(_OS_WINDOWS_)
-    if (imaging_mode && !G->isDeclaration()) {
-#ifdef LLVM35
-        // Add comdat information to make MSVC link.exe happy
-        Comdat *jl_Comdat = G->getParent()->getOrInsertComdat(G->getName());
-        jl_Comdat->setSelectionKind(Comdat::NoDuplicates);
-        G->setComdat(jl_Comdat);
-        // add __declspec(dllexport) to everything marked for export
-        if (G->getLinkage() == GlobalValue::ExternalLinkage)
-            G->setDLLStorageClass(GlobalValue::DLLExportStorageClass);
-#endif
-    }
-#endif
-    return G;
-}
 
 // Connect Modules via prototypes, each owned by module `M`
 static GlobalVariable *global_proto(GlobalVariable *G, Module *M = NULL)
