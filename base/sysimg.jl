@@ -126,8 +126,8 @@ include("iobuffer.jl")
 
 # strings & printing
 include("char.jl")
-include("string.jl")
-include("unicode.jl")
+include("strings/strings.jl")
+include("unicode/unicode.jl")
 include("parse.jl")
 include("shell.jl")
 include("regex.jl")
@@ -160,7 +160,7 @@ importall .Filesystem
 include("process.jl")
 include("multimedia.jl")
 importall .Multimedia
-include("grisu.jl")
+include("grisu/grisu.jl")
 import .Grisu.print_shortest
 include("methodshow.jl")
 
@@ -274,7 +274,7 @@ include("client.jl")
 include("util.jl")
 
 # dense linear algebra
-include("linalg.jl")
+include("linalg/linalg.jl")
 importall .LinAlg
 const ⋅ = dot
 const × = cross
@@ -302,10 +302,10 @@ include("fastmath.jl")
 importall .FastMath
 
 # libgit2 support
-include("libgit2.jl")
+include("libgit2/libgit2.jl")
 
 # package manager
-include("pkg.jl")
+include("pkg/pkg.jl")
 const Git = Pkg.Git
 
 # Stack frames and traces
@@ -317,11 +317,11 @@ include("profile.jl")
 importall .Profile
 
 # dates
-include("Dates.jl")
+include("dates/Dates.jl")
 import .Dates: Date, DateTime, now
 
 # sparse matrices, vectors, and sparse linear algebra
-include("sparse.jl")
+include("sparse/sparse.jl")
 importall .SparseArrays
 
 # threads

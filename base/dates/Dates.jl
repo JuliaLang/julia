@@ -4,15 +4,15 @@ module Dates
 
 importall ..Base.Operators
 
-include("dates/types.jl")
-include("dates/periods.jl")
-include("dates/accessors.jl")
-include("dates/query.jl")
-include("dates/arithmetic.jl")
-include("dates/conversions.jl")
-include("dates/ranges.jl")
-include("dates/adjusters.jl")
-include("dates/io.jl")
+include("types.jl")
+include("periods.jl")
+include("accessors.jl")
+include("query.jl")
+include("arithmetic.jl")
+include("conversions.jl")
+include("ranges.jl")
+include("adjusters.jl")
+include("io.jl")
 
 export Period, DatePeriod, TimePeriod,
        Year, Month, Week, Day, Hour, Minute, Second, Millisecond,
