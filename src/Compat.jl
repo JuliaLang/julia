@@ -527,7 +527,7 @@ function _compat(ex::Expr)
             return Expr(:call, :broadcast, _compat(ex.args[1]), _compat(ex.args[2]))
         end
     elseif ex.head === :import
-        if length(ex.args) == 2 && ex.args[1] === :Base && ex.args[2] === :show
+        if VERSION < v"0.5.0-dev+4340" && length(ex.args) == 2 && ex.args[1] === :Base && ex.args[2] === :show
             ex.args[2] = :writemime
         end
     end
