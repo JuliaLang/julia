@@ -1,6 +1,5 @@
 #!/bin/sh
-# This file is based on code from StackOverflow. License is CC-BY-SA
-# Source copied from http://stackoverflow.com/a/14914070
+# This file is a part of Julia. License is MIT: http://julialang.org/license
 
 # both $1 and $2 are absolute paths beginning with /
 # returns relative path to $2/$target from $1/$source
