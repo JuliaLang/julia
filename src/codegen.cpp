@@ -3,13 +3,13 @@
 #include "llvm-version.h"
 #include "platform.h"
 #include "options.h"
-#if defined(_OS_WINDOWS_)
-// trick pre-llvm36 into skipping the generation of _chkstk calls
+#if defined(_OS_WINDOWS_) && !defined(LLVM38)
+// trick pre-llvm38 into skipping the generation of _chkstk calls
 //   since it has some codegen issues associated with them:
 //   (a) assumed to be within 32-bit offset
 //   (b) bad asm is generated for certain code patterns:
 //       see https://github.com/JuliaLang/julia/pull/11644#issuecomment-112276813
-// also MCJIT debugging support on windows needs ELF (currently)
+// also, use ELF because RuntimeDyld COFF I686 support didn't exist
 #define FORCE_ELF
 #endif
 #if defined(_CPU_X86_)
@@ -37,6 +37,9 @@
 #include <llvm/Support/TargetRegistry.h>
 #include <llvm/Analysis/Passes.h>
 #include <llvm/Bitcode/ReaderWriter.h>
+#ifdef LLVM35
+#include <llvm/Bitcode/BitcodeWriterPass.h>
+#endif
 #ifdef LLVM37
 #include <llvm/Analysis/TargetTransformInfo.h>
 #include <llvm/Analysis/TargetLibraryInfo.h>
@@ -539,22 +542,6 @@ struct jl_varinfo_t {
     {
     }
 };
-
-// --- helpers for reloading IR image
-static void jl_dump_shadow(char *fname, int jit_model, const char *sysimg_data, size_t sysimg_len, bool dump_as_bc);
-
-extern "C"
-void jl_dump_bitcode(char *fname, const char *sysimg_data, size_t sysimg_len)
-{
-    jl_dump_shadow(fname, 0, sysimg_data, sysimg_len, true);
-}
-
-extern "C"
-void jl_dump_objfile(char *fname, int jit_model, const char *sysimg_data, size_t sysimg_len)
-{
-    jl_dump_shadow(fname, jit_model, sysimg_data, sysimg_len, false);
-}
-
 
 // aggregate of array metadata
 typedef struct {
@@ -2829,7 +2816,7 @@ static Value *global_binding_pointer(jl_module_t *m, jl_sym_t *s,
             name << "delayedvar" << globalUnique++;
             Constant *initnul = ConstantPointerNull::get((PointerType*)T_pjlvalue);
             GlobalVariable *bindinggv = new GlobalVariable(*ctx->f->getParent(), T_pjlvalue,
-                    false, GlobalVariable::PrivateLinkage,
+                    false, GlobalVariable::InternalLinkage,
                     initnul, name.str());
             Value *cachedval = builder.CreateLoad(bindinggv);
             BasicBlock *have_val = BasicBlock::Create(jl_LLVMContext, "found"),
