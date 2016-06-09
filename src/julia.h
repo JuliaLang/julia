@@ -77,7 +77,6 @@ struct _jl_taggedvalue_t {
         jl_value_t *type; // 16-byte aligned
         struct {
             uintptr_t gc:2;
-            uintptr_t pooled:1;
         } bits;
     };
     // jl_value_t value;

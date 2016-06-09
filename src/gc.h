@@ -101,7 +101,6 @@ typedef struct _bigval_t {
         uintptr_t header;
         struct {
             uintptr_t gc:2;
-            uintptr_t pooled:1;
         } bits;
     };
     // must be 64-byte aligned here, in 32 & 64 bit modes
@@ -238,11 +237,15 @@ STATIC_INLINE region_t *find_region(void *ptr, int maybe)
     return NULL;
 }
 
-STATIC_INLINE jl_gc_pagemeta_t *page_metadata(void *data)
+STATIC_INLINE jl_gc_pagemeta_t *page_metadata_(void *data, region_t *r)
 {
-    region_t *r = find_region(data, 0);
     int pg_idx = page_index(r, (char*)data - GC_PAGE_OFFSET);
     return &r->meta[pg_idx];
+}
+
+STATIC_INLINE jl_gc_pagemeta_t *page_metadata(void *data)
+{
+    return page_metadata_(data, find_region(data, 0));
 }
 
 STATIC_INLINE void gc_big_object_unlink(const bigval_t *hdr)

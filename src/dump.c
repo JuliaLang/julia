@@ -1544,7 +1544,7 @@ static jl_value_t *jl_deserialize_value_(ios_t *s, jl_value_t *vtag, jl_value_t 
                 break;
             jl_binding_t *b = jl_get_binding_wr(m, name);
             b->value = jl_deserialize_value(s, &b->value);
-            jl_gc_wb_buf(m, b);
+            jl_gc_wb_buf(m, b, sizeof(jl_binding_t));
             if (b->value != NULL) jl_gc_wb(m, b->value);
             b->globalref = jl_deserialize_value(s, &b->globalref);
             if (b->globalref != NULL) jl_gc_wb(m, b->globalref);

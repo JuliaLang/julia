@@ -566,9 +566,10 @@ JL_DLLEXPORT jl_task_t *jl_new_task(jl_function_t *start, size_t ssize)
 #else
     JL_GC_PUSH1(&t);
 
-    char *stk = allocb(ssize+pagesz+(pagesz-1));
+    size_t stkbuf_sz = ssize + pagesz + (pagesz - 1);
+    char *stk = allocb(stkbuf_sz);
     t->stkbuf = stk;
-    jl_gc_wb_buf(t, t->stkbuf);
+    jl_gc_wb_buf(t, t->stkbuf, stkbuf_sz);
     stk = (char*)LLT_ALIGN((uintptr_t)stk, pagesz);
     // add a guard page to detect stack overflow
     if (mprotect(stk, pagesz-1, PROT_NONE) == -1)
