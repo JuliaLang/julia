@@ -603,7 +603,7 @@ static void array_resize_buffer(jl_array_t *a, size_t newlen, size_t oldlen, siz
     if (a->flags.ptrarray || es==1)
         memset(newdata+offsnb+oldnbytes, 0, nbytes-oldnbytes-offsnb);
     if (a->flags.how == 1)
-        jl_gc_wb_buf(a, newdata);
+        jl_gc_wb_buf(a, newdata, newlen * es);
     a->maxsize = newlen;
 }
 

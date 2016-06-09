@@ -392,7 +392,8 @@ static inline int gc_setmark_big(jl_taggedvalue_t *o, int mark_mode)
     return mark_mode;
 }
 
-static inline int gc_setmark_pool(jl_taggedvalue_t *o, int mark_mode)
+static inline int gc_setmark_pool_(jl_taggedvalue_t *o, int mark_mode,
+                                   region_t *r)
 {
 #ifdef MEMDEBUG
     return gc_setmark_big(o, mark_mode);
@@ -401,7 +402,7 @@ static inline int gc_setmark_pool(jl_taggedvalue_t *o, int mark_mode)
         o->bits.gc = mark_mode;
         return mark_mode;
     }
-    jl_gc_pagemeta_t *page = page_metadata(o);
+    jl_gc_pagemeta_t *page = page_metadata_(o, r);
     int bits = o->bits.gc;
     if (mark_reset_age && !gc_marked(bits)) {
         // Reset the object as if it was just allocated
@@ -434,23 +435,35 @@ static inline int gc_setmark_pool(jl_taggedvalue_t *o, int mark_mode)
     return mark_mode;
 }
 
+static inline int gc_setmark_pool(jl_taggedvalue_t *o, int mark_mode)
+{
+    return gc_setmark_pool_(o, mark_mode, find_region(o, 0));
+}
+
 static inline int gc_setmark(jl_value_t *v, int sz)
 {
     jl_taggedvalue_t *o = jl_astaggedvalue(v);
-    sz += sizeof(jl_taggedvalue_t);
-    if (sz <= GC_MAX_SZCLASS + sizeof(jl_taggedvalue_t))
+    if (sz <= GC_MAX_SZCLASS)
         return gc_setmark_pool(o, GC_MARKED);
     else
         return gc_setmark_big(o, GC_MARKED);
 }
 
-inline void gc_setmark_buf(void *o, int mark_mode)
+inline void gc_setmark_buf(void *o, int mark_mode, size_t minsz)
 {
     jl_taggedvalue_t *buf = jl_astaggedvalue(o);
-    if (buf->bits.pooled)
-        gc_setmark_pool(buf, mark_mode);
-    else
-        gc_setmark_big(buf, mark_mode);
+    // If the object is larger than the max pool size it can't be a pool object.
+    // This should be accurate most of the time but there might be corner cases
+    // where the size estimate is a little off so we do a pool lookup to make
+    // sure.
+    if (minsz <= GC_MAX_SZCLASS) {
+        region_t *r = find_region(buf, 1);
+        if (r) {
+            gc_setmark_pool_(buf, mark_mode, r);
+            return;
+        }
+    }
+    gc_setmark_big(buf, mark_mode);
 }
 
 #define should_collect() (__unlikely(gc_num.allocd>0))
@@ -1124,7 +1137,8 @@ NOINLINE static int gc_mark_module(jl_module_t *m, int d)
     for(i=1; i < m->bindings.size; i+=2) {
         if (table[i] != HT_NOTFOUND) {
             jl_binding_t *b = (jl_binding_t*)table[i];
-            gc_setmark_buf(b, jl_astaggedvalue(m)->bits.gc);
+            gc_setmark_buf(b, jl_astaggedvalue(m)->bits.gc,
+                           sizeof(jl_binding_t));
             void *vb = jl_astaggedvalue(b);
             verify_parent1("module", m, &vb, "binding_buff");
             (void)vb;
@@ -1184,10 +1198,15 @@ static void gc_mark_task_stack(jl_task_t *ta, int d)
     int16_t tid = ta->tid;
     jl_tls_states_t *ptls = jl_all_tls_states[tid];
     if (stkbuf) {
-#ifndef COPY_STACKS
-        if (ta != ptls->root_task) // stkbuf isn't owned by julia for the root task
+#ifdef COPY_STACKS
+        gc_setmark_buf(ta->stkbuf, jl_astaggedvalue(ta)->bits.gc, ta->bufsz);
+#else
+        // stkbuf isn't owned by julia for the root task
+        if (ta != ptls->root_task) {
+            gc_setmark_buf(ta->stkbuf, jl_astaggedvalue(ta)->bits.gc,
+                           ta->ssize);
+        }
 #endif
-            gc_setmark_buf(ta->stkbuf, jl_astaggedvalue(ta)->bits.gc);
     }
     if (ta == ptls->current_task) {
         gc_mark_stack((jl_value_t*)ta, ptls->pgcstack, 0, d);
@@ -1294,7 +1313,8 @@ static int push_root(jl_value_t *v, int d, int bits)
             void *val_buf = jl_astaggedvalue((char*)a->data - a->offset*a->elsize);
             verify_parent1("array", v, &val_buf, "buffer ('loc' addr is meaningless)");
             (void)val_buf;
-            gc_setmark_buf((char*)a->data - a->offset*a->elsize, o->bits.gc);
+            gc_setmark_buf((char*)a->data - a->offset*a->elsize, o->bits.gc,
+                           array_nbytes(a));
         }
         if (a->flags.ptrarray && a->data!=NULL) {
             size_t l = jl_array_len(a);
@@ -1774,13 +1794,10 @@ void *allocb(size_t sz)
     if (allocsz > GC_MAX_SZCLASS + sizeof(jl_taggedvalue_t)) {
         b = alloc_big(allocsz);
         b->header = jl_buff_tag;
-        b->bits.pooled = 0;
     }
     else {
         b = pool_alloc(&jl_thread_heap.norm_pools[szclass(allocsz)]);
         b->header = jl_buff_tag;
-        // This is ignored for `MEMDEBUG` build
-        b->bits.pooled = 1;
     }
     return jl_valueof(b);
 }
