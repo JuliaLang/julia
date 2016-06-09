@@ -278,10 +278,10 @@ ndigits_mismatch(n) = ndigits(n) != ndigits(BigInt(n))
 @test !any(ndigits_mismatch, 8192:9999)
 
 # The following should not crash (#16579)
-ndigits(rand(big.(-999:999)), rand(63:typemax(Int)))
-ndigits(rand(big.(-999:999)), big(2)^rand(2:999))
+ndigits(big(rand(Int)), rand(63:typemax(Int)))
+ndigits(big(rand(Int)), big(2)^rand(2:999))
 
-for i in big.([-20:-1;1:20])
+for i in big.([-20:-1;1:20; rand(Int)])
     for b in -10:1
         @test_throws DomainError ndigits(i, b)
     end

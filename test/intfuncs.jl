@@ -85,8 +85,14 @@ end
 
 @test ndigits(146, -3) == 5
 
-let n = rand(Int)
+let (n, b) = rand(Int, 2)
+    -1 <= b <= 1 && (b = 2) # invalid bases
     @test ndigits(n) == ndigits(big(n)) == ndigits(n, 10)
+    @test ndigits(n, b) == ndigits(big(n), b)
+end
+
+for b in -1:1
+    @test_throws DomainError ndigits(rand(Int), b)
 end
 @test ndigits(Int8(5)) == ndigits(5)
 

@@ -347,8 +347,11 @@ function ndigits0z(x::UInt128)
     return n + ndigits0z(UInt64(x))
 end
 ndigits0z(x::Integer) = ndigits0z(unsigned(abs(x)))
+ndigits(x::Integer) = x==0 ? 1 : ndigits0z(x)
 
-function ndigits0znb(n::Signed, b::Int)
+# The suffix "nb" stands for "negative base"
+function ndigits0znb(n::Integer, b::Integer)
+    # precondition: b < -1 && !(typeof(n) <: Unsigned)
     d = 0
     while n != 0
         n = cld(n,b)
@@ -357,7 +360,10 @@ function ndigits0znb(n::Signed, b::Int)
     return d
 end
 
+ndigits0znb(n::Unsigned, b::Integer) = ndigits0znb(signed(n), b)
+
 function ndigits0z(n::Unsigned, b::Int)
+    # precondition: b > 1
     b < 0   && return ndigits0znb(signed(n), b)
     b == 2  && return sizeof(n)<<3 - leading_zeros(n)
     b == 8  && return (sizeof(n)<<3 - leading_zeros(n) + 2) ÷ 3
@@ -379,20 +385,23 @@ function ndigits0z(n::Unsigned, b::Int)
     end
     return d
 end
-ndigits0z(x::Integer, b::Integer) = ndigits0z(unsigned(abs(x)),Int(b))
 
-ndigitsnb(x::Integer, b::Integer) = x==0 ? 1 : ndigits0znb(x, b)
-
-ndigits(x::Unsigned, b::Integer) = x==0 ? 1 : ndigits0z(x,Int(b))
-ndigits(x::Unsigned)             = x==0 ? 1 : ndigits0z(x)
+ndigits0z(x::Integer, b::Integer) = ndigits0z(unsigned(abs(x)), Int(b))
 
 """
     ndigits(n::Integer, b::Integer=10)
 
 Compute the number of digits in integer `n` written in base `b`.
 """
-ndigits(x::Integer, b::Integer) = b >= 0 ? ndigits(unsigned(abs(x)),Int(b)) : ndigitsnb(x, b)
-ndigits(x::Integer) = ndigits(unsigned(abs(x)))
+function ndigits(x::Integer, b::Integer)
+    if b < -1
+        x == 0 ? 1 : ndigits0znb(x, b)
+    elseif b > 1
+        x == 0 ? 1 : ndigits0z(x, b)
+    else
+        throw(DomainError())
+    end
+end
 
 ## integer to string functions ##
 
@@ -544,8 +553,7 @@ higher indexes, such that `n == sum([digits[k]*base^(k-1) for k=1:length(digits)
 """
 digits(n::Integer, base::T=10, pad::Integer=1) where {T<:Integer} = digits(T, n, base, pad)
 
-function digits(::Type{T}, n::Integer, base::Integer=10, pad::Integer=1) where T<:Integer
-    2 <= base || throw(ArgumentError("base must be ≥ 2, got $base"))
+function digits(T::Type{<:Integer}, n::Integer, base::Integer=10, pad::Integer=1)
     digits!(zeros(T, max(pad, ndigits0z(n,base))), n, base)
 end
 
