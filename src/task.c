@@ -279,6 +279,7 @@ JL_DLLEXPORT void julia_init(JL_IMAGE_SEARCH rel)
     char __stk;
     jl_set_base_ctx(&__stk); // separate function, to record the size of a stack frame
 #endif
+    _julia_init2();
 }
 
 static void ctx_switch(jl_tls_states_t *ptls, jl_task_t *t, jl_jmp_buf *where)

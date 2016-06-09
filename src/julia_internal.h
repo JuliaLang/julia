@@ -249,6 +249,7 @@ void jl_init_runtime_ccall(void);
 void jl_mk_thread_heap(jl_thread_heap_t *heap);
 
 void _julia_init(JL_IMAGE_SEARCH rel);
+void _julia_init2(void);
 
 void jl_set_base_ctx(char *__stk);
 

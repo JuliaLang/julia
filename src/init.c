@@ -700,7 +700,10 @@ void _julia_init(JL_IMAGE_SEARCH rel)
     // This needs to be after jl_start_threads
     if (jl_options.handle_signals == JL_OPTIONS_HANDLE_SIGNALS_ON)
         jl_install_default_signal_handlers();
+}
 
+void _julia_init2(void)
+{
     jl_gc_enable(1);
 
     if (jl_options.image_file && (!jl_generating_output() || jl_options.incremental)) {
