@@ -5,8 +5,7 @@ static unw_addr_space_t task_addr_space;
 static unw_accessors_t *local_accessors;
 typedef struct {
     jl_task_t *task;
-    jl_jmp_buf ctx;
-    uintptr_t stacktop;
+    uintptr_t stackbase;
 } task_unwind_ctx_t;
 
 void jl_gc_register_stackmaps(uint8_t *s)
@@ -122,10 +121,9 @@ int task_get_dyn_info_list_addr(unw_addr_space_t as,
 uintptr_t task_remap_memory(task_unwind_ctx_t *ctx, uintptr_t addr)
 {
     jl_task_t *task = ctx->task;
-    jl_tls_states_t *ptls = jl_get_ptls_states();
-    uintptr_t stacktop = (uintptr_t)ptls->stackbase - task->ssize;
-    if (addr >=  stacktop && addr <= ptls->stackbase) {
-        addr += task->stkbuf - stacktop;
+    intptr_t stacktop = ctx->stackbase - task->ssize;
+    if (addr >=  stacktop && addr <= ctx->stackbase) {
+        addr += (intptr_t)task->stkbuf - stacktop;
     }
     return addr;
 }
@@ -174,7 +172,7 @@ int task_access_reg(unw_addr_space_t as,
 #endif
         return -UNW_EINVAL;
     }
-    uintptr_t *jmpbuf_regs = (uintptr_t*)ctx->ctx;
+    uintptr_t *jmpbuf_regs = (uintptr_t*)ctx->task->ctx;
     switch (regnum) {
     case UNW_REG_IP:
         *valp = ptr_demangle(jmpbuf_regs[7]);
@@ -238,6 +236,7 @@ void gc_unwind_task(jl_task_t *task, arraylist_t *frames)
 void gc_unwind_task(jl_task_t *task, int d)
 #endif
 {
+    uintptr_t stackbase = (uintptr_t)jl_get_ptls_states()->stackbase;
     bt_cursor_t cursor;
     task_unwind_ctx_t ctx;
     if (task == jl_current_task) {
@@ -246,7 +245,7 @@ void gc_unwind_task(jl_task_t *task, int d)
     }
     else {
         ctx.task = task;
-        memcpy(&ctx.ctx, task->ctx, sizeof(void*)*8);
+        ctx.stackbase = stackbase;
         if (unw_init_remote(&cursor, task_addr_space, &ctx) < 0)
             abort();
     }
@@ -254,17 +253,22 @@ void gc_unwind_task(jl_task_t *task, int d)
 #ifdef GC_DEBUG_STACKMAPS
     int frame_idx = 0;
 #endif
-    uintptr_t ip;
+    uintptr_t ip, sp;
     while (1) {
         if (unw_step(&cursor) < 0) {
             break;
         }
-        if (unw_get_reg(&cursor, UNW_REG_IP, &ip) < 0)
+        if (unw_get_reg(&cursor, UNW_REG_IP, &ip) < 0) {
+            fprintf(stderr, "Could not read ip\n");
             abort();
-        if (!ip) break;
+        }
+        if (unw_get_reg(&cursor, UNW_REG_SP, &sp) < 0) {
+            fprintf(stderr, "Could not read sp (ip:%p)", (void*)ip);
+            abort();
+        }
+        if (!ip || sp >= stackbase) break;
 #if 0
-        uintptr_t sp = 0, bp = 0;
-        unw_get_reg(&cursor, UNW_REG_SP, &sp);
+        uintptr_t bp = 0;
         unw_get_reg(&cursor, UNW_X86_64_RBP, &bp);
         printf("FRAME ip:%p sp:%p bp:%p\n", ip, sp, bp);
 #endif
@@ -299,22 +303,27 @@ void gc_unwind_task(jl_task_t *task, int d)
                 fprintf(stderr, "Unsupported stack map location type %d\n", loc->type);
                 abort();
             }
-            unw_regnum_t reg;
-            switch (loc->dwarf_reg) {
-            case 7: // %rsp
-                reg = UNW_REG_SP;
-                break;
-            case 6: // %rbp
-                reg = UNW_X86_64_RBP;
-                break;
-            default:
-                fprintf(stderr, "Unsupported register %d\n", loc->dwarf_reg);
-                abort();
-            }
             uintptr_t gcframe;
-            if (unw_get_reg(&cursor, reg, &gcframe) < 0) {
-                fprintf(stderr, "Could not read required reg %d from frame (ip:%p)\n", loc->dwarf_reg, (void*)ip);
-                abort();
+            if (loc->dwarf_reg == 7) { // %rsp
+                gcframe = sp;
+            }
+            else {
+                unw_regnum_t reg;
+                switch (loc->dwarf_reg) {
+                case 6: // %rbp
+                    reg = UNW_X86_64_RBP;
+                    break;
+                case 3: // %rbx
+                    reg = UNW_X86_64_RBX;
+                    break;
+                default:
+                    fprintf(stderr, "Unsupported register %d\n", loc->dwarf_reg);
+                    abort();
+                }
+                if (unw_get_reg(&cursor, reg, &gcframe) < 0) {
+                    fprintf(stderr, "Could not read required reg %d from frame (ip:%p)\n", loc->dwarf_reg, (void*)ip);
+                    abort();
+                }
             }
             gcframe = gcframe + loc->offset;
             if (task != jl_current_task)
@@ -333,7 +342,7 @@ void gc_unwind_task(jl_task_t *task, int d)
                 frame_idx++;
             }
 #else
-            gc_mark_frame(gcframe, nroots, 0, 0, d);
+            gc_mark_frame((jl_value_t**)gcframe, nroots, 0, 0, d);
 #endif
         }
     }
