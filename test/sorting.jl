@@ -348,3 +348,11 @@ end
 
 # issue #12833 - type stability of sort
 @test Base.return_types(sort, (Vector{Int},)) == [Vector{Int}]
+
+# general iterables
+@test sort(take([3,2,1], 2)) == [2,3]
+@test sort(drop([1,3,2], 1)) == [2,3]
+@test sort("Julia") == "Jailu"
+@test sort("Julia", by=isupper) == "uliaJ"
+@test sort(graphemes("bca")) == collect(graphemes("abc"))
+@test_throws MethodError sort(1)
