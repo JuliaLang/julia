@@ -9,14 +9,14 @@ typealias RangeIndex Union{Int, Range{Int}, UnitRange{Int}, Colon}
 
 ## Basic functions ##
 
-vect() = Array{Any}(0)
+vect() = Array{Any,1}(0)
 vect{T}(X::T...) = T[ X[i] for i=1:length(X) ]
 
 function vect(X...)
     T = promote_typeof(X...)
     #T[ X[i] for i=1:length(X) ]
     # TODO: this is currently much faster. should figure out why. not clear.
-    copy!(Array{T}(length(X)), X)
+    copy!(Array{T,1}(length(X)), X)
 end
 
 size{T,N}(t::AbstractArray{T,N}, d) = d <= N ? size(t)[d] : 1
@@ -156,7 +156,7 @@ similar{T}(a::AbstractArray{T}, dims::Integer...)        = similar(a, T, dims)
 similar(   a::AbstractArray, T::Type, dims::Integer...)  = similar(a, T, dims)
 # similar creates an Array by default
 similar(   a::AbstractArray, T::Type, dims::DimsInteger) = similar(a, T, convert(Dims, dims))
-similar(   a::AbstractArray, T::Type, dims::Dims)        = Array{T}(dims)
+similar(   a::AbstractArray, T::Type, dims::Dims)        = Array{T,nfields(dims)}(dims)
 
 ## from general iterable to any array
 
@@ -609,12 +609,12 @@ promote_eltype() = Bottom
 promote_eltype(v1, vs...) = promote_type(eltype(v1), promote_eltype(vs...))
 
 #TODO: ERROR CHECK
-cat(catdim::Integer) = Array{Any}(0)
+cat(catdim::Integer) = Array{Any,1}(0)
 
-vcat() = Array{Any}(0)
-hcat() = Array{Any}(0)
-typed_vcat{T}(::Type{T}) = Array{T}(0)
-typed_hcat{T}(::Type{T}) = Array{T}(0)
+vcat() = Array{Any,1}(0)
+hcat() = Array{Any,1}(0)
+typed_vcat{T}(::Type{T}) = Array{T,1}(0)
+typed_hcat{T}(::Type{T}) = Array{T,1}(0)
 
 ## cat: special cases
 vcat{T}(X::T...)         = T[ X[i] for i=1:length(X) ]
@@ -624,8 +624,8 @@ hcat{T<:Number}(X::T...) = T[ X[j] for i=1, j=1:length(X) ]
 
 vcat(X::Number...) = hvcat_fill(Array{promote_typeof(X...)}(length(X)), X)
 hcat(X::Number...) = hvcat_fill(Array{promote_typeof(X...)}(1,length(X)), X)
-typed_vcat{T}(::Type{T}, X::Number...) = hvcat_fill(Array{T}(length(X)), X)
-typed_hcat{T}(::Type{T}, X::Number...) = hvcat_fill(Array{T}(1,length(X)), X)
+typed_vcat{T}(::Type{T}, X::Number...) = hvcat_fill(Array{T,1}(length(X)), X)
+typed_hcat{T}(::Type{T}, X::Number...) = hvcat_fill(Array{T,2}(1,length(X)), X)
 
 vcat(V::AbstractVector...) = typed_vcat(promote_eltype(V...), V...)
 vcat{T}(V::AbstractVector{T}...) = typed_vcat(T, V...)
@@ -843,13 +843,13 @@ function typed_hvcat{T}(::Type{T}, rows::Tuple{Vararg{Int}}, as::AbstractMatrix.
 end
 
 hvcat(rows::Tuple{Vararg{Int}}) = []
-typed_hvcat{T}(::Type{T}, rows::Tuple{Vararg{Int}}) = Array{T}(0)
+typed_hvcat{T}(::Type{T}, rows::Tuple{Vararg{Int}}) = Array{T,1}(0)
 
 function hvcat{T<:Number}(rows::Tuple{Vararg{Int}}, xs::T...)
     nr = length(rows)
     nc = rows[1]
 
-    a = Array{T}(nr, nc)
+    a = Array{T,2}(nr, nc)
     if length(a) != length(xs)
         throw(ArgumentError("argument count does not match specified shape (expected $(length(a)), got $(length(xs)))"))
     end
@@ -892,13 +892,13 @@ function typed_hvcat{T}(::Type{T}, rows::Tuple{Vararg{Int}}, xs::Number...)
     if nr*nc != len
         throw(ArgumentError("argument count $(len) does not match specified shape $((nr,nc))"))
     end
-    hvcat_fill(Array{T}(nr, nc), xs)
+    hvcat_fill(Array{T,2}(nr, nc), xs)
 end
 
 # fallback definition of hvcat in terms of hcat and vcat
 function hvcat(rows::Tuple{Vararg{Int}}, as...)
     nbr = length(rows)  # number of block rows
-    rs = Array{Any}(nbr)
+    rs = Array{Any,1}(nbr)
     a = 1
     for i = 1:nbr
         rs[i] = hcat(as[a:a-1+rows[i]]...)
@@ -909,7 +909,7 @@ end
 
 function typed_hvcat{T}(::Type{T}, rows::Tuple{Vararg{Int}}, as...)
     nbr = length(rows)  # number of block rows
-    rs = Array{Any}(nbr)
+    rs = Array{Any,1}(nbr)
     a = 1
     for i = 1:nbr
         rs[i] = hcat(as[a:a-1+rows[i]]...)
@@ -993,7 +993,7 @@ sub2ind(a::AbstractArray, I::Integer...) = sub2ind(size(a), I...)
 function sub2ind{T<:Integer}(dims::Tuple{Vararg{Integer}}, I::AbstractVector{T}...)
     N = length(dims)
     M = length(I[1])
-    indices = Array{T}(length(I[1]))
+    indices = Array{T,1}(length(I[1]))
     copy!(indices,I[1])
 
     s = dims[1]
@@ -1009,7 +1009,7 @@ end
 
 function ind2sub{N,T<:Integer}(dims::NTuple{N,Integer}, ind::AbstractVector{T})
     M = length(ind)
-    t = NTuple{N,Vector{T}}(ntuple(n->Array{T}(M),N))
+    t = NTuple{N,Vector{T}}(ntuple(n->Array{T,1}(M), N))
     copy!(t[1],ind)
     for j = 1:N-1
         d = dims[j]
@@ -1066,7 +1066,7 @@ function mapslices(f, A::AbstractArray, dims::AbstractVector)
 
     otherdims = setdiff(alldims, dims)
 
-    idx = Array{Any}(ndimsA)
+    idx = Array{Any,1}(ndimsA)
     fill!(idx, 1)
     Asliceshape = tuple(dimsA[dims]...)
     itershape   = tuple(dimsA[otherdims]...)
@@ -1085,7 +1085,7 @@ function mapslices(f, A::AbstractArray, dims::AbstractVector)
     Rsize[dims] = [size(r1)...; ones(Int,max(0,length(dims)-ndims(r1)))]
     R = similar(r1, tuple(Rsize...))
 
-    ridx = Array{Any}(ndims(R))
+    ridx = Array{Any,1}(ndims(R))
     fill!(ridx, 1)
     for d in dims
         ridx[d] = 1:size(R,d)
