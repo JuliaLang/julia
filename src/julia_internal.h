@@ -16,13 +16,10 @@
 extern "C" {
 #endif
 
-#define GC_CLEAN 0 // freshly allocated
-#define GC_MARKED 1 // reachable and old
-#define GC_QUEUED 2 // if it is reachable it will be marked as old
-#define GC_MARKED_NOESC (GC_MARKED | GC_QUEUED) // reachable and young
-
-#define GC_OLD_MARKED GC_MARKED
-#define GC_OLD GC_QUEUED
+#define GC_CLEAN  0 // freshly allocated
+#define GC_MARKED 1 // reachable and young
+#define GC_OLD    2 // if it is reachable it will be marked as old
+#define GC_OLD_MARKED (GC_OLD | GC_MARKED) // reachable and old
 
 // useful constants
 extern jl_methtable_t *jl_type_type_mt;

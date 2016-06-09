@@ -217,7 +217,7 @@ STATIC_INLINE int gc_marked(int bits)
 
 STATIC_INLINE int gc_old(int bits)
 {
-    return bits == GC_OLD || bits == GC_OLD_MARKED;
+    return (bits & GC_OLD) != 0;
 }
 
 NOINLINE uintptr_t gc_get_stack_ptr(void);
