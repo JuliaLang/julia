@@ -1548,7 +1548,7 @@ function showcompact(io::IO, x)
             show(IOContext(io, :multiline => false), x)
         end
     else
-        if get(io, :multiline, false)
+        if !get(io, :multiline, false)
             show(IOContext(io, :compact => true), x)
         else
             show(IOContext(IOContext(io, :compact => true),
