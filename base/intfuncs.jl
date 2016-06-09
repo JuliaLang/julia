@@ -486,14 +486,21 @@ num2hex(n::Integer) = hex(n, sizeof(n)*2)
 const base36digits = ['0':'9';'a':'z']
 const base62digits = ['0':'9';'A':'Z';'a':'z']
 
-function base(b::Int, x::Unsigned, pad::Int, neg::Bool)
-    2 <= b <= 62 || throw(ArgumentError("base must be 2 ≤ base ≤ 62, got $b"))
-    digits = b <= 36 ? base36digits : base62digits
+
+function base(b::Int, x::Integer, pad::Int, neg::Bool)
+    (x >= 0) | (b < 0) || throw(DomainError())
+    2 <= abs(b) <= 62 || throw(ArgumentError("base must satisfy 2 ≤ abs(base) ≤ 62, got $b"))
+    digits = abs(b) <= 36 ? base36digits : base62digits
     i = neg + ndigits(x, b, pad)
     a = StringVector(i)
-    while i > neg
-        a[i] = digits[1+rem(x,b)]
-        x = div(x,b)
+    @inbounds while i > neg
+        if b > 0
+            a[i] = digits[1+rem(x,b)]
+            x = div(x,b)
+        else
+            a[i] = digits[1+mod(x,-b)]
+            x = cld(x,b)
+        end
         i -= 1
     end
     if neg; a[1]='-'; end
@@ -514,7 +521,8 @@ julia> base(5,13,4)
 "0023"
 ```
 """
-base(b::Integer, n::Integer, pad::Integer=1) = base(Int(b), unsigned(abs(n)), pad, n<0)
+base(b::Integer, n::Integer, pad::Integer=1) =
+    base(Int(b), b > 0 ? unsigned(abs(n)) : convert(Signed, n), Int(pad), (b>0) & (n<0))
 
 for sym in (:bin, :oct, :dec, :hex)
     @eval begin
@@ -589,12 +597,18 @@ Fills an array of the digits of `n` in the given base. More significant digits a
 indexes. If the array length is insufficient, the least significant digits are filled up to
 the array length. If the array length is excessive, the excess portion is filled with zeros.
 """
-function digits!(a::AbstractArray{T,1}, n::Integer, base::Integer=10) where T<:Integer
-    2 <= base || throw(ArgumentError("base must be ≥ 2, got $base"))
-    base - 1 <= typemax(T) || throw(ArgumentError("type $T too small for base $base"))
+function digits!(a::AbstractVector{T}, n::Integer, base::Integer=10) where T<:Integer
+    base < 0 && isa(n, Unsigned) && return digits!(a, convert(Signed, n), base)
+    2 <= abs(base) || throw(ArgumentError("base must be ≥ 2 or ≤ -2, got $base"))
+    abs(base) - 1 <= typemax(T) || throw(ArgumentError("type $T too small for base $base"))
     for i in eachindex(a)
-        a[i] = rem(n, base)
-        n = div(n, base)
+        if base > 0
+            a[i] = rem(n, base)
+            n = div(n, base)
+        else
+            a[i] = mod(n, -base)
+            n = cld(n, base)
+        end
     end
     return a
 end

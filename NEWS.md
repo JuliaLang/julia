@@ -28,6 +28,8 @@ This section lists changes that do not have deprecation warnings.
 Library improvements
 --------------------
 
+  * the functions `base` and `digits` digits now accept a negative
+    base (like `ndigits` did).
 
 Compiler/Runtime improvements
 -----------------------------
