@@ -8,6 +8,8 @@
 // Build-time options for debugging, tweaking, and selecting alternative
 // implementations of core features.
 
+#define N_CALL_CACHE 4096
+
 // object layout options ------------------------------------------------------
 
 // how much space we're willing to waste if an array outgrows its
