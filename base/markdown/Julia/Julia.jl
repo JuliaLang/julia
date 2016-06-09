@@ -10,5 +10,5 @@ include("interp.jl")
 @flavor julia [blocktex, blockinterp, hashheader, list, indentcode, fencedcode,
                blockquote, github_table, horizontalrule, setextheader, paragraph,
 
-               linebreak, escapes, tex, interp, en_dash, inline_tex, inline_code,
+               linebreak, escapes, tex, interp, en_dash, inline_code,
                asterisk_bold, asterisk_italic, image, footnote, link]

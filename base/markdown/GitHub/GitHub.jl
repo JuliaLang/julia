@@ -61,5 +61,5 @@ end
 @flavor github [list, indentcode, blockquote, fencedcode, hashheader,
                 github_table, github_paragraph,
 
-                linebreak, escapes, en_dash, inline_tex, inline_code, asterisk_bold,
+                linebreak, escapes, en_dash, inline_code, asterisk_bold,
                 asterisk_italic, image, footnote, link]
