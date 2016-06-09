@@ -276,17 +276,25 @@ void gc_unwind_task(jl_task_t *task, int d)
             stackmap_loc_t *locs = (stackmap_loc_t*)s;
             // the first 3 entries are additional metadata emitted by
             // the statepoint lowering. check that they are what we expect.
-            if (nloc != 4) {
+            if (nloc != 5) {
                 fprintf(stderr, "Too many location entries in stack map : %d\n", nloc);
                 abort();
             }
             if (!(locs[0].type == 4 &&
                   locs[1].type == 4 &&
-                  locs[2].type == 4 && locs[2].offset == 1)) {
+                  locs[2].type == 4 && locs[2].offset == 2)) {
                 fprintf(stderr, "Unexpected statepoint metadata\n");
                 abort();
             }
-            stackmap_loc_t *loc = &locs[3];
+            // entry 4 should be the number of roots in the frame
+            stackmap_loc_t *n_roots_loc = &locs[3];
+            if (n_roots_loc->type != 4) {
+                fprintf(stderr, "Unexpected stack map location type for nroots : %d\n", n_roots_loc->type);
+                abort();
+            }
+            size_t nroots = n_roots_loc->offset;
+            // entry 5 is the location of the frame on the stack
+            stackmap_loc_t *loc = &locs[4];
             if (loc->type != 2) { // register relative address
                 fprintf(stderr, "Unsupported stack map location type %d\n", loc->type);
                 abort();
@@ -325,8 +333,7 @@ void gc_unwind_task(jl_task_t *task, int d)
                 frame_idx++;
             }
 #else
-            int isjit = gc_mark_frame((jl_gcframe_t*)gcframe, 0, d);
-            assert(isjit);
+            gc_mark_frame(gcframe, nroots, 0, 0, d);
 #endif
         }
     }

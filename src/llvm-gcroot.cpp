@@ -24,6 +24,7 @@
 #include <set>
 
 #include "julia.h"
+#include "options.h"
 
 #ifdef LLVM37
 #define LLVM37_param(x) (x),
@@ -467,7 +468,12 @@ void allocate_frame()
 {
     Instruction *last_gcframe_inst = gcframe;
     collapseRedundantRoots();
-
+#if defined(GC_STACKMAPS) && !defined(GC_DEBUG_STACKMAPS)
+    // we don't need to store the size and the prev pointer
+    const int gcframe_offset = 0;
+#else
+    const int gcframe_offset = 2;
+#endif
 /* # initialize the kill BasicBlock of all jlcall-frames
  * bb-uses : map<BB, map< pair<inst, arg-offset>, assign|live|kill > >
  * for inst in gc-frame(f)
@@ -729,7 +735,7 @@ void allocate_frame()
         ++I;
         if (CallInst* callInst = dyn_cast<CallInst>(inst)) {
             if (callInst->getCalledFunction() == gcroot_func) {
-                unsigned offset = 2 + argSpaceSize++;
+                unsigned offset = gcframe_offset + argSpaceSize++;
                 Instruction *argTempi = GetElementPtrInst::Create(LLVM37_param(NULL) gcframe, ArrayRef<Value*>(ConstantInt::get(T_int32, offset)));
                 argTempi->insertAfter(last_gcframe_inst);
 #ifdef LLVM36
@@ -798,9 +804,9 @@ void allocate_frame()
             last_gcframe_inst = store;
         }
 
-        gcframe->setOperand(0, ConstantInt::get(T_int32, 2 + argSpaceSize + maxDepth)); // fix up the size of the gc frame
+        gcframe->setOperand(0, ConstantInt::get(T_int32, gcframe_offset + argSpaceSize + maxDepth)); // fix up the size of the gc frame
         if (tempSlot)
-            tempSlot->setOperand(1, ConstantInt::get(T_int32, 2 + argSpaceSize)); // fix up the offset to the temp slot space
+            tempSlot->setOperand(1, ConstantInt::get(T_int32, gcframe_offset + argSpaceSize)); // fix up the offset to the temp slot space
 
         IRBuilder<> builder(F.getContext());
         Type *T_ppjlvalue = V_null->getType()->getPointerTo();
@@ -813,30 +819,33 @@ void allocate_frame()
         DebugLoc noDbg;
         builder.SetCurrentDebugLocation(noDbg);
 
+#if !defined(GC_STACKMAPS) || defined(GC_DEBUG_STACKMAPS)
         Instruction *inst =
             builder.CreateStore(ConstantInt::get(T_size, (argSpaceSize + maxDepth) << 2),
                                 builder.CreateBitCast(builder.CreateConstGEP1_32(gcframe, 0), T_size->getPointerTo()));
         inst->setMetadata(llvm::LLVMContext::MD_tbaa, tbaa_gcframe);
-        /*inst = builder.CreateStore(builder.CreateLoad(builder.Insert(get_pgcstack(ptlsStates))),
+
+        inst = builder.CreateStore(builder.CreateLoad(builder.Insert(get_pgcstack(ptlsStates))),
                                    builder.CreatePointerCast(builder.CreateConstGEP1_32(gcframe, 1), PointerType::get(T_ppjlvalue,0)));
         inst->setMetadata(llvm::LLVMContext::MD_tbaa, tbaa_gcframe);
-        builder.CreateStore(gcframe, builder.Insert(get_pgcstack(ptlsStates)));*/
-        /*builder.CreateCall(Intrinsic::getDeclaration(&M, Intrinsic::experimental_stackmap),
-          ArrayRef<Value*> { ConstantInt::get(T_int64, 42), ConstantInt::get(T_int32, 0), gcframe });*/
+        builder.CreateStore(gcframe, builder.Insert(get_pgcstack(ptlsStates)));
         // Finish by emitting the gc pops before any return
         for(Function::iterator I = F.begin(), E = F.end(); I != E; ++I) {
             if (isa<ReturnInst>(I->getTerminator())) {
                 builder.SetInsertPoint(I->getTerminator()); // set insert *before* Ret
-                /*Instruction *gcpop =
+                Instruction *gcpop =
                     (Instruction*)builder.CreateConstGEP1_32(gcframe, 1);
                 inst = builder.CreateLoad(gcpop);
                 inst->setMetadata(llvm::LLVMContext::MD_tbaa, tbaa_gcframe);
                 inst = builder.CreateStore(builder.CreatePointerCast(inst, T_ppjlvalue),
                                            builder.Insert(get_pgcstack(ptlsStates)));
-                                           inst->setMetadata(llvm::LLVMContext::MD_tbaa, tbaa_gcframe);*/
+                                           inst->setMetadata(llvm::LLVMContext::MD_tbaa, tbaa_gcframe);
             }
         }
-        //#if 0
+#endif
+#ifdef GC_STACKMAPS
+        // add the gc frame to the deopt bundle of every call in the function
+        SmallVector<Value*,2> deopt({ ConstantInt::get(T_int32, argSpaceSize + maxDepth), gcframe });
         for (Function::iterator bb = F.begin(), be = F.end(); bb != be; ++bb) {
             for (BasicBlock::iterator i = bb->begin(), ie = bb->end(); i != ie; ) {
                 Instruction *inst = &*i;
@@ -848,32 +857,15 @@ void allocate_frame()
                     continue;
                 if (call->getCalledValue() == M.getFunction("jl_get_ptls_states"))
                     continue;
-                //                if (call->getCalledValue() == M.getFunction("jl_throw"))
-                //  continue;
                 
                 builder.SetInsertPoint(call);
-                int nargs = call->getNumArgOperands();
-                Value **args = (Value**)alloca(nargs*sizeof(Value*));
-                /*args[0] = ConstantInt::get(T_int64, 43);
-                  args[1] = ConstantInt::get(T_int32, 0);
-                  args[2] = call->getCalledValue();
-                  args[3] = ConstantInt::get(T_int64, nargs);
-                  args[4] = ConstantInt::get(T_int64, 0);*/
-                for (int k = 0; k < nargs; k++)
-                    args[k] = call->getArgOperand(k);
-                /*args[5+nargs] = ConstantInt::get(T_int64, 0);
-                  args[6+nargs] = ConstantInt::get(T_int64, 1);
-                  args[7+nargs] = gcframe;
-                  CallInst *statepoint = builder.CreateCall(Intrinsic::getDeclaration(&M, Intrinsic::experimental_gc_statepoint), ArrayRef<Value*>(args,8+nargs));*/
-                /*CallInst *statepoint = builder.CreateGCStatepointCall(43, 0, call->getCalledValue(), ArrayRef<Value*>(args, nargs), ArrayRef<Value*>(gcframe), ArrayRef<Value*>());
-                  CallInst *result = builder.CreateGCResult(statepoint, call->getType());*/
-                CallInst *result = CallInst::Create(call, ArrayRef<OperandBundleDef>(OperandBundleDef("deopt", ArrayRef<Value*>(gcframe))), call);
+                CallInst *result = CallInst::Create(call, ArrayRef<OperandBundleDef>(OperandBundleDef("deopt", deopt)), call);
                 call->replaceAllUsesWith(result);
                 call->eraseFromParent();
             }
         }
         F.setGC("statepoint-example");
-        //#endif
+#endif
     }
 #ifndef NDEBUG
     jl_gc_frame_stats.count++;

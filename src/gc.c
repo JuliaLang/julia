@@ -1030,7 +1030,7 @@ static jl_value_t **mark_stack_base = NULL;
 static size_t mark_stack_size = 0;
 static size_t mark_sp = 0;
 
-static int gc_mark_frame(jl_gcframe_t *s, intptr_t offset, int d);
+static void gc_mark_frame(jl_value_t **s, size_t nroots, int isindirect, intptr_t offset, int d);
 
 static void grow_mark_stack(void)
 {
@@ -1161,12 +1161,9 @@ void jl_gc_register_stackmaps(uint8_t *s) { (void)s; }
 void gc_stackmaps_init(void) {}
 #endif
 
-static int gc_mark_frame(jl_gcframe_t *s, intptr_t offset, int d)
+static void gc_mark_frame(jl_value_t **rts, size_t nr, int isindirect, intptr_t offset, int d)
 {
-    int isjit = !(s->nroots & 2);
-    jl_value_t ***rts = (jl_value_t***)(((void**)s)+2);
-    size_t nr = s->nroots>>2;
-    if (s->nroots & 1) {
+    if (isindirect) {
         for(size_t i=0; i < nr; i++) {
             jl_value_t **ptr = (jl_value_t**)((char*)rts[i] + offset);
             if (*ptr != NULL)
@@ -1181,7 +1178,6 @@ static int gc_mark_frame(jl_gcframe_t *s, intptr_t offset, int d)
             }
         }
     }
-    return isjit;
 }
 
 static void gc_mark_stack(jl_value_t *ta, jl_gcframe_t *s, intptr_t offset, int d)
@@ -1192,7 +1188,10 @@ static void gc_mark_stack(jl_value_t *ta, jl_gcframe_t *s, intptr_t offset, int 
 #endif
     while (s != NULL) {
         s = (jl_gcframe_t*)((char*)s + offset);
-        int isjit = gc_mark_frame(s, offset, d);
+        int isindirect = s->nroots & 1;
+        int isjit = !(s->nroots & 2);
+        jl_value_t **rts = (jl_value_t**)(((void**)s)+2);
+        gc_mark_frame(rts, s->nroots >> 2, isindirect, offset, d);
 #ifdef GC_DEBUG_STACKMAPS
         if (isjit) {
             arraylist_push(&jit_frames, s);
