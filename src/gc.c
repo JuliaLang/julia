@@ -429,15 +429,14 @@ static inline int gc_setmark_pool(jl_taggedvalue_t *o, int mark_mode)
     return mark_mode;
 }
 
-
-static inline int gc_setmark(jl_value_t *v, int sz, int mark_mode)
+static inline int gc_setmark(jl_value_t *v, int sz)
 {
     jl_taggedvalue_t *o = jl_astaggedvalue(v);
     sz += sizeof(jl_taggedvalue_t);
     if (sz <= GC_MAX_SZCLASS + sizeof(jl_taggedvalue_t))
-        return gc_setmark_pool(o, mark_mode);
+        return gc_setmark_pool(o, GC_MARKED_NOESC);
     else
-        return gc_setmark_big(o, mark_mode);
+        return gc_setmark_big(o, GC_MARKED_NOESC);
 }
 
 inline void gc_setmark_buf(void *o, int mark_mode)
@@ -1235,29 +1234,22 @@ static int push_root(jl_value_t *v, int d, int bits)
     int refyoung = 0, nptr = 0;
 
     if (vt == (jl_value_t*)jl_weakref_type) {
-        bits = gc_setmark(v, sizeof(jl_weakref_t), GC_MARKED_NOESC);
+        bits = gc_setmark(v, sizeof(jl_weakref_t));
         goto ret;
     }
     if ((jl_is_datatype(vt) && ((jl_datatype_t*)vt)->pointerfree)) {
         int sz = jl_datatype_size(vt);
-        bits = gc_setmark(v, sz, GC_MARKED_NOESC);
+        bits = gc_setmark(v, sz);
         goto ret;
     }
-#define MARK(v, s) do {                         \
-            s;                                  \
-            if (d >= MAX_MARK_DEPTH)            \
-                goto queue_the_root;            \
-            if (should_timeout())               \
-                goto queue_the_root;            \
-    } while (0)
-
     d++;
 
     // some values have special representations
     if (vt == (jl_value_t*)jl_simplevector_type) {
         size_t l = jl_svec_len(v);
-        MARK(v, bits = gc_setmark(v, l * sizeof(void*) +
-                                  sizeof(jl_svec_t), GC_MARKED_NOESC));
+        bits = gc_setmark(v, l * sizeof(void*) + sizeof(jl_svec_t));
+        if (d >= MAX_MARK_DEPTH)
+            goto queue_the_root;
         jl_value_t **data = jl_svec_data(v);
         nptr += l;
         for(size_t i=0; i < l; i++) {
@@ -1272,28 +1264,20 @@ static int push_root(jl_value_t *v, int d, int bits)
         jl_array_t *a = (jl_array_t*)v;
         jl_taggedvalue_t *o = jl_astaggedvalue(v);
         int todo = !gc_marked(bits);
-        if (a->flags.pooled)
-            MARK(a,
-                 bits = gc_setmark_pool(o, GC_MARKED_NOESC);
-                 if (a->flags.how == 2 && todo) {
-                     objprofile_count(jl_malloc_tag, o->bits.gc == GC_OLD_MARKED,
-                                      array_nbytes(a));
-                     if (o->bits.gc == GC_OLD_MARKED)
-                         perm_scanned_bytes += array_nbytes(a);
-                     else
-                         scanned_bytes += array_nbytes(a);
-                 });
-        else
-            MARK(a,
-                 bits = gc_setmark_big(o, GC_MARKED_NOESC);
-                 if (a->flags.how == 2 && todo) {
-                     objprofile_count(jl_malloc_tag, o->bits.gc == GC_OLD_MARKED,
-                                      array_nbytes(a));
-                     if (o->bits.gc == GC_OLD_MARKED)
-                         perm_scanned_bytes += array_nbytes(a);
-                     else
-                         scanned_bytes += array_nbytes(a);
-                 });
+        bits = (a->flags.pooled ? gc_setmark_pool(o, GC_MARKED_NOESC) :
+                gc_setmark_big(o, GC_MARKED_NOESC));
+        if (a->flags.how == 2 && todo) {
+            objprofile_count(jl_malloc_tag, o->bits.gc == GC_OLD_MARKED,
+                             array_nbytes(a));
+            if (o->bits.gc == GC_OLD_MARKED) {
+                perm_scanned_bytes += array_nbytes(a);
+            }
+            else {
+                scanned_bytes += array_nbytes(a);
+            }
+        }
+        if (d >= MAX_MARK_DEPTH)
+            goto queue_the_root;
         if (a->flags.how == 3) {
             jl_value_t *owner = jl_array_data_owner(a);
             refyoung |= gc_push_root(owner, d);
@@ -1329,12 +1313,16 @@ static int push_root(jl_value_t *v, int d, int bits)
     }
     else if (vt == (jl_value_t*)jl_module_type) {
         // should increase nptr here
-        MARK(v, bits = gc_setmark(v, sizeof(jl_module_t), GC_MARKED_NOESC));
+        bits = gc_setmark(v, sizeof(jl_module_t));
+        if (d >= MAX_MARK_DEPTH)
+            goto queue_the_root;
         refyoung |= gc_mark_module((jl_module_t*)v, d);
     }
     else if (vt == (jl_value_t*)jl_task_type) {
         // ditto nptr
-        MARK(v, bits = gc_setmark(v, sizeof(jl_task_t), GC_MARKED_NOESC));
+        bits = gc_setmark(v, sizeof(jl_task_t));
+        if (d >= MAX_MARK_DEPTH)
+            goto queue_the_root;
         gc_mark_task((jl_task_t*)v, d);
         // tasks should always be remarked since we do not trigger the write barrier
         // for stores to stack slots
@@ -1356,7 +1344,9 @@ static int push_root(jl_value_t *v, int d, int bits)
         else {
             dtsz = jl_datatype_size(dt);
         }
-        MARK(v, bits = gc_setmark(v, dtsz, GC_MARKED_NOESC));
+        bits = gc_setmark(v, dtsz);
+        if (d >= MAX_MARK_DEPTH)
+            goto queue_the_root;
 
         int nf = (int)jl_datatype_nfields(dt);
         // TODO check if there is a perf improvement for objects with a lot of fields
@@ -1396,8 +1386,6 @@ ret:
         arraylist_push(jl_thread_heap.remset, v);
     }
     return bits;
-
-#undef MARK
 
 queue_the_root:
     if (mark_sp >= mark_stack_size)
