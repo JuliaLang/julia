@@ -43,6 +43,7 @@ end
 
 Base.allocate_for(f, A::OffsetArray, dim::Integer) = OffsetArray(f(size(A,dim)), (A.offsets[dim],))
 Base.allocate_for{N}(f, A::OffsetArray, dims::Dims{N}) = OffsetArray(f(size(A,dims)), A.offsets[dims]::Dims{N})
+Base.allocate_for(f, inds::Tuple{Vararg{SimIdx}}) = OffsetArray(f(map(Base.dimlength, inds)), map(indsoffset, inds))
 
 Base.reshape(A::AbstractArray, inds::Indices) = OffsetArray(reshape(A, map(Base.dimlength, inds)), map(indsoffset, inds))
 
@@ -168,17 +169,19 @@ B = similar(parent(A), (-3:3,4))
 @test indices(B) == (-3:3, 1:4)
 
 # Indexing with OffsetArray indices
-A = [1 3; 2 4]
 i1 = OAs.OffsetArray([2,1], (-5,))
 i1 = OAs.OffsetArray([2,1], -5)
-b = A[i1, 1]
+b = A0[i1, 1]
 @test indices(b) == (-4:-3,)
 @test b[-4] == 2
 @test b[-3] == 1
-b = A[1,i1]
+b = A0[1,i1]
 @test indices(b) == (-4:-3,)
 @test b[-4] == 3
 @test b[-3] == 1
+
+# logical indexing
+@test A[A .> 2] == [3,4]
 
 # copy!
 a = OAs.OffsetArray{Int}((-3:-1,))

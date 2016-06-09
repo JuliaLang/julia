@@ -125,8 +125,11 @@ indicesbehavior(A::AbstractArray) = indicesbehavior(typeof(A))
 indicesbehavior{T<:AbstractArray}(::Type{T}) = IndicesStartAt1()
 
 shapeinfo(a) = shapeinfo(indicesbehavior(a), a)
+shapeinfo(a, d) = shapeinfo(indicesbehavior(a), a, d)
 shapeinfo(::IndicesStartAt1, a) = size(a)
+shapeinfo(::IndicesStartAt1, a, d) = size(a, d)
 shapeinfo(::IndicesBehavior, a) = indices(a)
+shapeinfo(::IndicesBehavior, a, d) = indices(a, d)
 
 ## Bounds checking ##
 @generated function trailingsize{T,N,n}(A::AbstractArray{T,N}, ::Type{Val{n}})
@@ -254,6 +257,7 @@ _similar(::IndicesBehavior, a::AbstractArray, T::Type)   = similar(a, T, indices
 allocate_for(f, a::AbstractArray, dim::Integer) = f(size(a,dim))
 allocate_for(f, a::AbstractArray, dims::Dims) = f(size(a,dims))
 allocate_for{T,N}(f, a::AbstractArray{T,N}) = allocate_for(f, a, ntuple(d->d, Val{N}))
+allocate_for(f, dims::Dims) = f(dims)
 
 ## from general iterable to any array
 
