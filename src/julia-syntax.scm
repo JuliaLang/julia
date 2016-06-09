@@ -355,6 +355,8 @@
   (or (number? x) (string? x) (char? x) (and (pair? x) (memq (car x) '(quote inert)))
       (eq? x 'true) (eq? x 'false)))
 
+(define empty-vector-any '(call (core Array) (core Any) 0))
+
 (define (keywords-method-def-expr name sparams argl body isstaged rett)
   (let* ((kargl (cdar argl))  ;; keyword expressions (= k v)
          (pargl (cdr argl))   ;; positional args
@@ -425,7 +427,7 @@
             ;; call mangled(vals..., [rest_kw ,]pargs..., [vararg]...)
             (return (call ,mangled
                           ,@(if ordered-defaults keynames vals)
-                          ,@(if (null? restkw) '() '((vectany)))
+                          ,@(if (null? restkw) '() (list empty-vector-any))
                           ,@(map arg-name pargl)
                           ,@(if (null? vararg) '()
                                 (list `(... ,(arg-name (car vararg))))))))
@@ -469,7 +471,7 @@
                          `(= ,flag true)))
                    keynames vals flags)
             ,@(if (null? restkw) '()
-                  `((= ,rkw (vectany))))
+                  `((= ,rkw ,empty-vector-any)))
             ;; for i = 1:(length(kw)>>1)
             (for (= ,i (: 1 (call (top >>) (call (top length) ,kw) 1)))
                  (block
@@ -1359,10 +1361,10 @@
                                 `((quote ,(cadr a)) ,(caddr a)))
                               keys))))
      (if (null? restkeys)
-         `(call (call (core kwfunc) ,f) (vectany ,@keyargs) ,f ,@pa)
+         `(call (call (core kwfunc) ,f) (call (top vector_any) ,@keyargs) ,f ,@pa)
          (let ((container (make-ssavalue)))
            `(block
-             (= ,container (vectany ,@keyargs))
+             (= ,container (call (top vector_any) ,@keyargs))
              ,@(map (lambda (rk)
                       (let* ((k (make-ssavalue))
                              (v (make-ssavalue))
@@ -1796,42 +1798,8 @@
    '=>
    (lambda (e) `(call => ,(expand-forms (cadr e)) ,(expand-forms (caddr e))))
 
-   'vectany
-   (lambda (e)
-     (let ((args (cdr e)))
-       (cond ((has-parameters? args)
-              (error "unexpected semicolon in array expression"))
-             ((any vararg? args)
-              (expand-forms
-               `(call (top vector_any) ,@args)))
-             (else
-              (let ((name (make-ssavalue)))
-                `(block (= ,name (call (core Array) (core Any)
-                                       ,(length args)))
-                        ,.(map (lambda (i elt)
-                                 `(call (core arrayset) ,name
-                                        ,(expand-forms elt) ,(+ 1 i)))
-                               (iota (length args))
-                               args)
-                        ,name))))))
-
-   'matrany
-   (lambda (e)
-     (let ((nr (cadr e))
-           (nc (caddr e))
-           (args (cdddr e)))
-       (if (any vararg? args)
-           (expand-forms
-            `(call (top matrix_any) ,nr ,nc ,@args))
-           (let ((name (make-ssavalue)))
-             `(block (= ,name (call (core Array) (core Any)
-                                    ,nr ,nc))
-                     ,.(map (lambda (i elt)
-                              `(call (core arrayset) ,name
-                                     ,(expand-forms elt) ,(+ 1 i)))
-                            (iota (* nr nc))
-                            args)
-                     ,name)))))
+   'cell1d (lambda (e) (error "{ } vector syntax is discontinued"))
+   'cell2d (lambda (e) (error "{ } matrix syntax is discontinued"))
 
    'string
    (lambda (e) (expand-forms `(call (top string) ,@(cdr e))))
