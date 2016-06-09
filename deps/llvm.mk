@@ -83,6 +83,7 @@ LLVM_LDFLAGS := $(LDFLAGS)
 LLVM_TARGETS := host
 LLVM_TARGET_FLAGS := --enable-targets=$(LLVM_TARGETS)
 LLVM_CMAKE += -DLLVM_TARGETS_TO_BUILD:STRING="$(LLVM_TARGETS)" -DCMAKE_BUILD_TYPE="$(LLVM_CMAKE_BUILDTYPE)"
+LLVM_CMAKE += -DLLVM_TOOLS_INSTALL_DIR=$(shell $(JULIAHOME)/contrib/relative_path.sh $(build_prefix) $(build_depsbindir))
 LLVM_FLAGS += --disable-profiling --enable-static $(LLVM_TARGET_FLAGS)
 LLVM_FLAGS += --disable-bindings --disable-docs --disable-libedit --disable-terminfo
 # LLVM has weird install prefixes (see llvm-$(LLVM_VER)/build_$(LLVM_BUILDTYPE)/Makefile.config for the full list)
@@ -402,12 +403,14 @@ endif # LLVM_VER
 	touch -c $@
 
 # Apply version-specific LLVM patches
+LLVM_PATCH_PREV:=
 LLVM_PATCH_LIST:=
 define LLVM_PATCH
-$$(LLVM_SRC_DIR)/$1.patch-applied: $(LLVM_SRC_DIR)/configure | $$(SRCDIR)/patches/$1.patch
+$$(LLVM_SRC_DIR)/$1.patch-applied: $(LLVM_SRC_DIR)/configure | $$(SRCDIR)/patches/$1.patch $(LLVM_PATCH_PREV)
 	cd $$(LLVM_SRC_DIR) && patch -p1 < $$(SRCDIR)/patches/$1.patch
 	echo 1 > $$@
-LLVM_PATCH_LIST += $$(LLVM_SRC_DIR)/$1.patch-applied
+LLVM_PATCH_PREV := $$(LLVM_SRC_DIR)/$1.patch-applied
+LLVM_PATCH_LIST += $(LLVM_PATCH_PREV)
 endef
 ifeq ($(LLVM_VER),3.3)
 $(eval $(call LLVM_PATCH,llvm-3.3))
@@ -415,38 +418,29 @@ $(eval $(call LLVM_PATCH,instcombine-llvm-3.3))
 $(eval $(call LLVM_PATCH,int128-vector.llvm-3.3))
 $(eval $(call LLVM_PATCH,osx-10.10.llvm-3.3))
 $(eval $(call LLVM_PATCH,win64-int128.llvm-3.3))
-else ifeq ($(LLVM_VER),3.7.0)
+else ifeq ($(LLVM_VER_SHORT),3.7)
+ifeq ($(LLVM_VER),3.7.0)
 $(eval $(call LLVM_PATCH,llvm-3.7.0))
-$(eval $(call LLVM_PATCH,llvm-3.7.1))
-$(eval $(call LLVM_PATCH,llvm-3.7.1_2))
-$(eval $(call LLVM_PATCH,llvm-3.7.1_3))
-$(eval $(call LLVM_PATCH,llvm-D14260))
-$(LLVM_SRC_DIR)/llvm-3.7.1_2.patch-applied: $(LLVM_SRC_DIR)/llvm-3.7.1.patch-applied
-else ifeq ($(LLVM_VER),3.7.1)
+endif
 $(eval $(call LLVM_PATCH,llvm-3.7.1))
 $(eval $(call LLVM_PATCH,llvm-3.7.1_2))
 $(eval $(call LLVM_PATCH,llvm-3.7.1_3))
 $(eval $(call LLVM_PATCH,llvm-3.7.1_symlinks))
 $(eval $(call LLVM_PATCH,llvm-3.8.0_bindir))
-$(LLVM_SRC_DIR)/llvm-3.8.0_bindir.patch-applied: $(LLVM_SRC_DIR)/llvm-3.7.1_symlinks.patch-applied
 $(eval $(call LLVM_PATCH,llvm-D14260))
 $(eval $(call LLVM_PATCH,llvm-nodllalias))
-$(LLVM_SRC_DIR)/llvm-3.7.1_2.patch-applied: $(LLVM_SRC_DIR)/llvm-3.7.1.patch-applied
-$(LLVM_SRC_DIR)/llvm-nodllalias.patch-applied: $(LLVM_SRC_DIR)/llvm-3.7.1_2.patch-applied
 else ifeq ($(LLVM_VER),3.8.0)
 $(eval $(call LLVM_PATCH,llvm-3.7.1_3))
 $(eval $(call LLVM_PATCH,llvm-D14260))
 $(eval $(call LLVM_PATCH,llvm-3.8.0_bindir))
 $(eval $(call LLVM_PATCH,llvm-3.8.0_winshlib))
 $(eval $(call LLVM_PATCH,llvm-nodllalias))
-$(LLVM_SRC_DIR)/llvm-nodllalias.patch-applied: $(LLVM_SRC_DIR)/llvm-3.8.0_winshlib.patch-applied
 # Cygwin and openSUSE still use win32-threads mingw, https://llvm.org/bugs/show_bug.cgi?id=26365
 $(eval $(call LLVM_PATCH,llvm-3.8.0_threads))
 # fix replutil test on unix
 $(eval $(call LLVM_PATCH,llvm-D17165-D18583))
 # Segfault for aggregate load
 $(eval $(call LLVM_PATCH,llvm-D17326_unpack_load))
-$(LLVM_SRC_DIR)/llvm-D17326_unpack_load.patch-applied: $(LLVM_SRC_DIR)/llvm-D14260.patch-applied
 $(eval $(call LLVM_PATCH,llvm-D17712))
 $(eval $(call LLVM_PATCH,llvm-PR26180))
 $(eval $(call LLVM_PATCH,llvm-PR27046))
