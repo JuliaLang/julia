@@ -299,28 +299,6 @@ function convert(::Type{String}, dat::Vector{UInt8})
     String(buf)
 end
 
-function convert(::Type{String}, a::Vector{UInt8}, invalids_as::AbstractString)
-    l = length(a)
-    idx = 1
-    iscopy = false
-    while idx <= l
-        if !is_valid_continuation(a[idx])
-            nextidx = idx+1+utf8_trailing[a[idx]+1]
-            (nextidx <= (l+1)) && (idx = nextidx; continue)
-        end
-        !iscopy && (a = copy(a); iscopy = true)
-        endn = idx
-        while endn <= l
-            !is_valid_continuation(a[endn]) && break
-            endn += 1
-        end
-        (endn > idx) && (endn -= 1)
-        splice!(a, idx:endn, invalids_as.data)
-        l = length(a)
-    end
-    String(a)
-end
-
 """
 Converts an already validated vector of `UInt16` or `UInt32` to a `String`
 

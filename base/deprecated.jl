@@ -463,6 +463,31 @@ end
 @deprecate String(p::Union{Ptr{Int8},Ptr{UInt8}}) unsafe_string(p)
 @deprecate String(p::Union{Ptr{Int8},Ptr{UInt8}}, len::Integer) unsafe_string(p,len)
 
+@deprecate(
+    convert(::Type{String}, a::Vector{UInt8}, invalids_as::AbstractString),
+    let a = a, invalids_as = invalids_as
+        l = length(a)
+        idx = 1
+        iscopy = false
+        while idx <= l
+            if !is_valid_continuation(a[idx])
+                nextidx = idx+1+utf8_trailing[a[idx]+1]
+                (nextidx <= (l+1)) && (idx = nextidx; continue)
+            end
+            !iscopy && (a = copy(a); iscopy = true)
+            endn = idx
+            while endn <= l
+                !is_valid_continuation(a[endn]) && break
+                endn += 1
+            end
+            (endn > idx) && (endn -= 1)
+            splice!(a, idx:endn, invalids_as.data)
+            l = length(a)
+        end
+        String(a)
+    end
+)
+
 @deprecate ==(x::Char, y::Integer) UInt32(x) == y
 @deprecate ==(x::Integer, y::Char) x == UInt32(y)
 @deprecate isless(x::Char, y::Integer) UInt32(x) < y

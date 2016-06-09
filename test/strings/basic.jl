@@ -154,14 +154,6 @@ end
 @test lcfirst("")==""
 @test lcfirst("*")=="*"
 
-#more String tests
-@test convert(String, UInt8[32,107,75], "*") == " kK"
-@test convert(String, UInt8[132,107,75], "*") == "*kK"
-@test convert(String, UInt8[32,107,75], "αβ") == " kK"
-@test convert(String, UInt8[132,107,75], "αβ") == "αβkK"
-@test convert(String, UInt8[], "*") == ""
-@test convert(String, UInt8[255], "αβ") == "αβ"
-
 # test AbstractString functions at beginning of string.jl
 immutable tstStringType <: AbstractString
     data::Array{UInt8,1}
