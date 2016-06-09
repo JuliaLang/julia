@@ -737,6 +737,14 @@ function digits(T::Type{<:Integer}, n::Integer, base::Integer=10, pad::Integer=1
 end
 
 """
+    hastypemax(T::Type) -> Bool
+
+Return `true` if and only if `typemax(T)` is defined.
+"""
+hastypemax(::Base.BitIntegerType) = true
+hastypemax(::Type{T}) where {T} = applicable(typemax, T)
+
+"""
     digits!(array, n::Integer, base::Integer=10)
 
 Fills an array of the digits of `n` in the given base. More significant digits are at higher
@@ -765,7 +773,8 @@ julia> digits!([2,2,2,2,2,2], 10, 2)
 function digits!(a::AbstractVector{T}, n::Integer, base::Integer=10) where T<:Integer
     base < 0 && isa(n, Unsigned) && return digits!(a, convert(Signed, n), base)
     2 <= abs(base) || throw(ArgumentError("base must be ≥ 2 or ≤ -2, got $base"))
-    abs(base) - 1 <= typemax(T) || throw(ArgumentError("type $T too small for base $base"))
+    hastypemax(T) && abs(base) - 1 > typemax(T) &&
+        throw(ArgumentError("type $T too small for base $base"))
     for i in eachindex(a)
         if base > 0
             a[i] = rem(n, base)
