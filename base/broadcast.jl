@@ -3,7 +3,7 @@
 module Broadcast
 
 using ..Cartesian
-using Base: promote_op, promote_eltype, promote_eltype_op, @get!, _msk_end, unsafe_bitgetindex
+using Base: promote_op, promote_eltype, promote_eltype_op, @get!, _msk_end, unsafe_bitgetindex, shapeinfo, linindices, allocate_for
 import Base: .+, .-, .*, ./, .\, .//, .==, .<, .!=, .<=, .÷, .%, .<<, .>>, .^
 export broadcast, broadcast!, bitbroadcast
 export broadcast_getindex, broadcast_setindex!
@@ -338,46 +338,46 @@ for (f, scalarf, bitf, bitfbody) in ((:.==, :(==), :biteq , :(~a $ b)),
     end
 end
 
+function bitcache(op, A, B, refA, refB, l::Int, ind::Int, C::Vector{Bool})
+    left = l - ind + 1
+    @inbounds begin
+        for j = 1:min(bitcache_size, left)
+            C[j] = (op)(refA(A, ind), refB(B, ind))
+            ind += 1
+        end
+        C[left+1:bitcache_size] = false
+    end
+    return ind
+end
+
 # note: the following are not broadcasting, but need to be defined here to avoid
 # ambiguity warnings
 
-for (f, cachef, scalarf) in ((:.==, :bitcache_eq , :(==)),
-                             (:.< , :bitcache_lt , :<   ),
-                             (:.!=, :bitcache_neq, :!=  ),
-                             (:.<=, :bitcache_le , :<=  ))
-    @eval ($cachef)(A::AbstractArray, B::AbstractArray, l::Int, ind::Int, C::Vector{Bool}) = 0
-    for (sigA, sigB, expA, expB, shape) in ((:Any, :AbstractArray,
-                                             :A, :(B[ind]),
-                                             :(size(B))),
-                                            (:AbstractArray, :Any,
-                                             :(A[ind]), :B,
-                                             :(size(A))))
+for (f, scalarf) in ((:.==, ==),
+                     (:.< , :<   ),
+                     (:.!=, :!=  ),
+                     (:.<=, :<=  ))
+    for (sigA, sigB, active, refA, refB) in ((:Any, :AbstractArray, :B,
+                                              :((A,ind)->A), :((B,ind)->B[ind])),
+                                             (:AbstractArray, :Any, :A,
+                                             :((A,ind)->A[ind]), :((B,ind)->B)))
+        shape = :(shapeinfo($active))
         @eval begin
-            function ($cachef)(A::$sigA, B::$sigB, l::Int, ind::Int, C::Vector{Bool})
-                left = l - ind + 1
-                @inbounds begin
-                    for j = 1:min(bitcache_size, left)
-                        C[j] = ($scalarf)($expA, $expB)
-                        ind += 1
-                    end
-                    C[left+1:bitcache_size] = false
-                end
-                return ind
-            end
             function ($f)(A::$sigA, B::$sigB)
-                F = BitArray($shape)
+                P = allocate_for(BitArray, $shape)
+                F = parent(P)
                 l = length(F)
                 l == 0 && return F
                 Fc = F.chunks
                 C = Array{Bool}(bitcache_size)
-                ind = 1
+                ind = first(linindices($active))
                 cind = 1
                 for i = 1:div(l + bitcache_size - 1, bitcache_size)
-                    ind = ($cachef)(A, B, l, ind, C)
+                    ind = bitcache($scalarf, A, B, $refA, $refB, l, ind, C)
                     dumpbitcache(Fc, cind, C)
                     cind += bitcache_chunks
                 end
-                return F
+                return P
             end
         end
     end
