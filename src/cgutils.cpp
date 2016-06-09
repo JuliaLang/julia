@@ -1594,16 +1594,16 @@ static void emit_write_barrier(jl_codectx_t *ctx, Value *parent, Value *ptr)
 {
     Value *parenttag = builder.CreateBitCast(emit_typeptr_addr(parent), T_psize);
     Value *parent_type = tbaa_decorate(tbaa_tag, builder.CreateLoad(parenttag));
-    Value *parent_mark_bits = builder.CreateAnd(parent_type, 1);
+    Value *parent_bits = builder.CreateAnd(parent_type, 3);
 
     // the branch hint does not seem to make it to the generated code
-    //builder.CreateCall(expect_func, {parent_marked, ConstantInt::get(T_int1, 0)});
-    Value *parent_marked = builder.CreateICmpEQ(parent_mark_bits, ConstantInt::get(T_size, 1));
+    Value *parent_old_marked = builder.CreateICmpEQ(parent_bits,
+                                                    ConstantInt::get(T_size, 3));
 
     BasicBlock *cont = BasicBlock::Create(jl_LLVMContext, "cont");
     BasicBlock *barrier_may_trigger = BasicBlock::Create(jl_LLVMContext, "wb_may_trigger", ctx->f);
     BasicBlock *barrier_trigger = BasicBlock::Create(jl_LLVMContext, "wb_trigger", ctx->f);
-    builder.CreateCondBr(parent_marked, barrier_may_trigger, cont);
+    builder.CreateCondBr(parent_old_marked, barrier_may_trigger, cont);
 
     builder.SetInsertPoint(barrier_may_trigger);
     Value *ptr_mark_bit = builder.CreateAnd(tbaa_decorate(tbaa_tag, builder.CreateLoad(builder.CreateBitCast(emit_typeptr_addr(ptr), T_psize))), 1);

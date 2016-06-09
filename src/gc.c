@@ -273,13 +273,18 @@ static int mark_reset_age = 0;
  * <-[(quick)sweep]-
  *                 |
  *     ---->  GC_OLD  <--[(quick)sweep && age>promotion]--
- *     |     |     ^                                     |
- *     |   [mark]  |                                     |
- *  [sweep]  |  [write barrier]                          |
- *     |     v     |                                     |
+ *     |     |                                           |
+ *     |     |  GC_MARKED (in remset)                    |
+ *     |     |     ^            |                        |
+ *     |   [mark]  |          [mark]                     |
+ *     |     |     |            |                        |
+ *     |     |     |            |                        |
+ *  [sweep]  | [write barrier]  |                        |
+ *     |     v     |            v                        |
  *     ----- GC_OLD_MARKED <----                         |
- *              |              |                         |
- *              --[quicksweep]--                         |
+ *              |               ^                        |
+ *              |               |                        |
+ *              --[quicksweep]---                        |
  *                                                       |
  *  ========= above this line objects are old =========  |
  *                                                       |
@@ -1061,13 +1066,13 @@ JL_DLLEXPORT void jl_gc_queue_root(jl_value_t *ptr)
     // Disable this assert since it can happen with multithreading (same
     // with the ones in gc_queue_binding) when two threads are writing
     // to the same object.
-    assert(o->bits.gc != GC_OLD);
+    assert(o->bits.gc == GC_OLD_MARKED);
 #endif
     // The modification of the `gc_bits` is not atomic but it
     // should be safe here since GC is not allowed to run here and we only
     // write GC_OLD to the GC bits outside GC. This could cause
     // duplicated objects in the remset but that shouldn't be a problem.
-    o->bits.gc = GC_OLD;
+    o->bits.gc = GC_MARKED;
     arraylist_push(jl_thread_heap.remset, ptr);
     jl_thread_heap.remset_nptr++; // conservative
 }
@@ -1077,9 +1082,9 @@ void gc_queue_binding(jl_binding_t *bnd)
     jl_taggedvalue_t *buf = jl_astaggedvalue(bnd);
 #ifndef JULIA_ENABLE_THREADING
     // Will fail for multithreading. See `jl_gc_queue_root`
-    assert(buf->bits.gc != GC_OLD);
+    assert(buf->bits.gc == GC_OLD_MARKED);
 #endif
-    buf->bits.gc = GC_OLD;
+    buf->bits.gc = GC_MARKED;
     arraylist_push(&jl_thread_heap.rem_bindings, bnd);
 }
 
@@ -1685,11 +1690,11 @@ static void _jl_gc_collect(int full, char *stack_hi)
         jl_tls_states_t *ptls = jl_all_tls_states[t_i];
         if (!sweep_full) {
             for (int i = 0; i < ptls->heap.remset->len; i++) {
-                jl_astaggedvalue(ptls->heap.remset->items[i])->bits.gc = GC_OLD;
+                jl_astaggedvalue(ptls->heap.remset->items[i])->bits.gc = GC_MARKED;
             }
             for (int i = 0; i < ptls->heap.rem_bindings.len; i++) {
                 void *ptr = ptls->heap.rem_bindings.items[i];
-                jl_astaggedvalue(ptr)->bits.gc = GC_OLD;
+                jl_astaggedvalue(ptr)->bits.gc = GC_MARKED;
             }
         }
         else {
