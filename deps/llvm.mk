@@ -415,29 +415,26 @@ $(eval $(call LLVM_PATCH,instcombine-llvm-3.3))
 $(eval $(call LLVM_PATCH,int128-vector.llvm-3.3))
 $(eval $(call LLVM_PATCH,osx-10.10.llvm-3.3))
 $(eval $(call LLVM_PATCH,win64-int128.llvm-3.3))
-else ifeq ($(LLVM_VER),3.7.0)
+else ifeq($(LLVM_VER_SHORT),3.7)
+ifeq ($(LLVM_VER),3.7.0)
 $(eval $(call LLVM_PATCH,llvm-3.7.0))
+endif
 $(eval $(call LLVM_PATCH,llvm-3.7.1))
 $(eval $(call LLVM_PATCH,llvm-3.7.1_2))
-$(eval $(call LLVM_PATCH,llvm-3.7.1_3))
-$(eval $(call LLVM_PATCH,llvm-D14260))
 $(LLVM_SRC_DIR)/llvm-3.7.1_2.patch-applied: $(LLVM_SRC_DIR)/llvm-3.7.1.patch-applied
-else ifeq ($(LLVM_VER),3.7.1)
-$(eval $(call LLVM_PATCH,llvm-3.7.1))
-$(eval $(call LLVM_PATCH,llvm-3.7.1_2))
 $(eval $(call LLVM_PATCH,llvm-3.7.1_3))
 $(eval $(call LLVM_PATCH,llvm-3.7.1_symlinks))
 $(eval $(call LLVM_PATCH,llvm-3.8.0_bindir))
 $(LLVM_SRC_DIR)/llvm-3.8.0_bindir.patch-applied: $(LLVM_SRC_DIR)/llvm-3.7.1_symlinks.patch-applied
 $(eval $(call LLVM_PATCH,llvm-D14260))
 $(eval $(call LLVM_PATCH,llvm-nodllalias))
-$(LLVM_SRC_DIR)/llvm-3.7.1_2.patch-applied: $(LLVM_SRC_DIR)/llvm-3.7.1.patch-applied
 $(LLVM_SRC_DIR)/llvm-nodllalias.patch-applied: $(LLVM_SRC_DIR)/llvm-3.7.1_2.patch-applied
 else ifeq ($(LLVM_VER),3.8.0)
 $(eval $(call LLVM_PATCH,llvm-3.7.1_3))
 $(eval $(call LLVM_PATCH,llvm-D14260))
 $(eval $(call LLVM_PATCH,llvm-3.8.0_bindir))
 $(eval $(call LLVM_PATCH,llvm-3.8.0_winshlib))
+$(eval $(call LLVM_PATCH,llvm-3.8.0_winshlibcmake))
 $(eval $(call LLVM_PATCH,llvm-nodllalias))
 $(LLVM_SRC_DIR)/llvm-nodllalias.patch-applied: $(LLVM_SRC_DIR)/llvm-3.8.0_winshlib.patch-applied
 # Cygwin and openSUSE still use win32-threads mingw, https://llvm.org/bugs/show_bug.cgi?id=26365
