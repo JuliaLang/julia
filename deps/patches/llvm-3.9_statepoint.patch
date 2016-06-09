@@ -1,3 +1,16 @@
+diff --git a/lib/Analysis/AliasAnalysis.cpp b/lib/Analysis/AliasAnalysis.cpp
+index 117f8cb..263dd48 100644
+--- a/lib/Analysis/AliasAnalysis.cpp
++++ b/lib/Analysis/AliasAnalysis.cpp
+@@ -445,7 +445,7 @@ ModRefInfo AAResults::callCapturesBefore(const Instruction *I,
+ 
+   unsigned ArgNo = 0;
+   ModRefInfo R = MRI_NoModRef;
+-  for (ImmutableCallSite::arg_iterator CI = CS.arg_begin(), CE = CS.arg_end();
++  for (auto CI = CS.data_operands_begin(), CE = CS.data_operands_end();
+        CI != CE; ++CI, ++ArgNo) {
+     // Only look at the no-capture or byval pointer arguments.  If this
+     // pointer were passed to arguments that were neither of these, then it
 diff --git a/lib/CodeGen/PrologEpilogInserter.cpp b/lib/CodeGen/PrologEpilogInserter.cpp
 index be3e5e2..6064e6f 100644
 --- a/lib/CodeGen/PrologEpilogInserter.cpp
