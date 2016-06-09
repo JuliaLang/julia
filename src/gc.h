@@ -89,13 +89,13 @@ typedef struct _bigval_t {
         size_t sz;
         uintptr_t age : 2;
     };
-    #ifdef _P64 // Add padding so that the data below is 64-byte aligned
-        // (8 pointers of 8 bytes each) - (4 other pointers in struct)
-        void *_padding[8 - 4];
-    #else
-        // (16 pointers of 4 bytes each) - (4 other pointers in struct)
-        void *_padding[16 - 4];
-    #endif
+#ifdef _P64 // Add padding so that the value is 64-byte aligned
+    // (8 pointers of 8 bytes each) - (4 other pointers in struct)
+    void *_padding[8 - 4];
+#else
+    // (16 pointers of 4 bytes each) - (4 other pointers in struct)
+    void *_padding[16 - 4];
+#endif
     //struct jl_taggedvalue_t <>;
     union {
         uintptr_t header;
@@ -174,8 +174,7 @@ typedef struct {
     int lb;
     // an upper bound of the last non-free page
     int ub;
-} region_t
-;
+} region_t;
 
 extern jl_gc_num_t gc_num;
 extern region_t regions[REGION_COUNT];
@@ -185,7 +184,10 @@ extern arraylist_t finalizer_list_marked;
 extern arraylist_t to_finalize;
 extern int64_t lazy_freed_pages;
 
-#define bigval_header(data) container_of((data), bigval_t, header)
+STATIC_INLINE bigval_t *bigval_header(jl_taggedvalue_t *o)
+{
+    return container_of(o, bigval_t, header);
+}
 
 // round an address inside a gcpage's data to its beginning
 STATIC_INLINE char *gc_page_data(void *x)
@@ -215,7 +217,7 @@ STATIC_INLINE int gc_marked(int bits)
 
 STATIC_INLINE int gc_old(int bits)
 {
-    return bits == GC_QUEUED || bits == GC_MARKED;
+    return bits == GC_OLD || bits == GC_OLD_MARKED;
 }
 
 NOINLINE uintptr_t gc_get_stack_ptr(void);

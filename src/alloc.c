@@ -667,7 +667,7 @@ static jl_sym_t *mk_symbol(const char *str, size_t len)
 #endif
     sym = (jl_sym_t*)jl_valueof(tag);
     // set to old marked since we don't need write barrier on it.
-    tag->header = ((uintptr_t)jl_sym_type) | GC_MARKED;
+    tag->header = ((uintptr_t)jl_sym_type) | GC_OLD_MARKED;
     sym->left = sym->right = NULL;
     sym->hash = hash_symbol(str, len);
     memcpy(jl_symbol_name(sym), str, len);
