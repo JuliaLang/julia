@@ -54,6 +54,8 @@
 #define container_of(ptr, type, member) \
     ((type *) ((char *)(ptr) - offsetof(type, member)))
 
+typedef struct _jl_taggedvalue_t jl_taggedvalue_t;
+
 #include <julia_threads.h>
 
 #ifdef __cplusplus
@@ -68,21 +70,25 @@ extern "C" {
 
 typedef struct _jl_value_t jl_value_t;
 
-typedef struct {
+struct _jl_taggedvalue_t {
     union {
+        uintptr_t header;
+        jl_taggedvalue_t *next;
         jl_value_t *type; // 16-byte aligned
-        uintptr_t type_bits;
-        uintptr_t gc_bits:2;
+        struct {
+            uintptr_t gc:2;
+            uintptr_t pooled:1;
+        } bits;
     };
     // jl_value_t value;
-} jl_taggedvalue_t;
+};
 
 #define jl_astaggedvalue(v)                                             \
     ((jl_taggedvalue_t*)((char*)(v) - sizeof(jl_taggedvalue_t)))
 #define jl_valueof(v)                                           \
     ((jl_value_t*)((char*)(v) + sizeof(jl_taggedvalue_t)))
 #define jl_typeof(v)                                                    \
-    ((jl_value_t*)(jl_astaggedvalue(v)->type_bits & ~(uintptr_t)15))
+    ((jl_value_t*)(jl_astaggedvalue(v)->header & ~(uintptr_t)15))
 static inline void jl_set_typeof(void *v, void *t)
 {
     // Do not call this on a value that is already initialized.
@@ -643,15 +649,15 @@ JL_DLLEXPORT void jl_gc_queue_root(jl_value_t *root); // root isa jl_value_t*
 STATIC_INLINE void jl_gc_wb(void *parent, void *ptr)
 {
     // parent and ptr isa jl_value_t*
-    if (__unlikely((jl_astaggedvalue(parent)->gc_bits & 1) == 1 &&
-                   (jl_astaggedvalue(ptr)->gc_bits & 1) == 0))
+    if (__unlikely((jl_astaggedvalue(parent)->bits.gc & 1) == 1 &&
+                   (jl_astaggedvalue(ptr)->bits.gc & 1) == 0))
         jl_gc_queue_root((jl_value_t*)parent);
 }
 
 STATIC_INLINE void jl_gc_wb_back(void *ptr) // ptr isa jl_value_t*
 {
     // if ptr is marked
-    if (__unlikely((jl_astaggedvalue(ptr)->gc_bits & 1) == 1)) {
+    if (__unlikely((jl_astaggedvalue(ptr)->bits.gc & 1) == 1)) {
         jl_gc_queue_root((jl_value_t*)ptr);
     }
 }

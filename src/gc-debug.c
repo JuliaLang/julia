@@ -104,7 +104,7 @@ static arraylist_t bits_save[4];
 // freelist in pools
 static void clear_mark(int bits)
 {
-    gcval_t *pv;
+    jl_taggedvalue_t *pv;
     if (!gc_verifying) {
         for (int i = 0; i < 4; i++) {
             bits_save[i].len = 0;
@@ -141,12 +141,12 @@ static void clear_mark(int bits)
                         jl_gc_pagemeta_t *pg = page_metadata(region->pages[pg_i*32 + j].data + GC_PAGE_OFFSET);
                         jl_tls_states_t *ptls = jl_all_tls_states[pg->thread_n];
                         jl_gc_pool_t *pool = &ptls->heap.norm_pools[pg->pool_n];
-                        pv = (gcval_t*)(pg->data + GC_PAGE_OFFSET);
+                        pv = (jl_taggedvalue_t*)(pg->data + GC_PAGE_OFFSET);
                         char *lim = (char*)pv + GC_PAGE_SZ - GC_PAGE_OFFSET - pool->osize;
                         while ((char*)pv <= lim) {
                             if (!gc_verifying) arraylist_push(&bits_save[gc_bits(pv)], pv);
                             gc_bits(pv) = bits;
-                            pv = (gcval_t*)((char*)pv + pool->osize);
+                            pv = (jl_taggedvalue_t*)((char*)pv + pool->osize);
                         }
                     }
                 }
@@ -220,7 +220,7 @@ void gc_verify(void)
     visit_mark_stack();
     int clean_len = bits_save[GC_CLEAN].len;
     for(int i = 0; i < clean_len + bits_save[GC_QUEUED].len; i++) {
-        gcval_t *v = (gcval_t*)bits_save[i >= clean_len ? GC_QUEUED : GC_CLEAN].items[i >= clean_len ? i - clean_len : i];
+        jl_taggedvalue_t *v = (jl_taggedvalue_t*)bits_save[i >= clean_len ? GC_QUEUED : GC_CLEAN].items[i >= clean_len ? i - clean_len : i];
         if (gc_marked(v)) {
             jl_printf(JL_STDERR, "Error. Early free of %p type :", v);
             jl_(jl_typeof(jl_valueof(v)));
@@ -246,8 +246,7 @@ void gc_verify(void)
 
 #ifdef GC_DEBUG_ENV
 JL_DLLEXPORT jl_gc_debug_env_t jl_gc_debug_env = {
-    GC_MARKED_NOESC,
-    0,
+    0, 0,
     {0, UINT64_MAX, 0, 0, 0, {0, 0, 0}},
     {0, UINT64_MAX, 0, 0, 0, {0, 0, 0}},
     {0, UINT64_MAX, 0, 0, 0, {0, 0, 0}}
@@ -348,7 +347,7 @@ static void gc_scrub_range(char *stack_lo, char *stack_hi)
         char *p = *stack_p;
         size_t osize;
         jl_taggedvalue_t *tag = jl_gc_find_taggedvalue_pool(p, &osize);
-        if (osize <= sizeof_jl_taggedvalue_t || !tag || gc_marked(tag))
+        if (osize <= sizeof(jl_taggedvalue_t) || !tag || gc_marked(tag))
             continue;
         jl_gc_pagemeta_t *pg = page_metadata(tag);
         // Make sure the sweep rebuild the freelist
@@ -725,14 +724,14 @@ void gc_debug_init(void)
 static size_t pool_stats(jl_gc_pool_t *p, size_t *pwaste, size_t *np,
                          size_t *pnold)
 {
-    gcval_t *v;
+    jl_taggedvalue_t *v;
     jl_gc_pagemeta_t *pg = p->pages;
     size_t osize = p->osize;
     size_t nused=0, nfree=0, npgs=0, nold = 0;
 
     while (pg != NULL) {
         npgs++;
-        v = (gcval_t*)(pg->data + GC_PAGE_OFFSET);
+        v = (jl_taggedvalue_t*)(pg->data + GC_PAGE_OFFSET);
         char *lim = (char*)v + GC_PAGE_SZ - GC_PAGE_OFFSET - osize;
         int i = 0;
         while ((char*)v <= lim) {
@@ -745,7 +744,7 @@ static size_t pool_stats(jl_gc_pool_t *p, size_t *pwaste, size_t *np,
                     nold++;
                 }
             }
-            v = (gcval_t*)((char*)v + osize);
+            v = (jl_taggedvalue_t*)((char*)v + osize);
             i++;
         }
         jl_gc_pagemeta_t *nextpg = NULL;
@@ -831,7 +830,7 @@ static void gc_count_pool_page(jl_gc_pagemeta_t *pg)
 {
     int osize = pg->osize;
     char *data = pg->data;
-    gcval_t *v = (gcval_t*)(data + GC_PAGE_OFFSET);
+    jl_taggedvalue_t *v = (jl_taggedvalue_t*)(data + GC_PAGE_OFFSET);
     char *lim = (char*)v + GC_PAGE_SZ - GC_PAGE_OFFSET - osize;
     int has_live = 0;
     while ((char*)v <= lim) {
@@ -839,7 +838,7 @@ static void gc_count_pool_page(jl_gc_pagemeta_t *pg)
         if (bits & GC_MARKED)
             has_live = 1;
         poolobj_sizes[bits] += osize;
-        v = (gcval_t*)((char*)v + osize);
+        v = (jl_taggedvalue_t*)((char*)v + osize);
     }
     if (!has_live) {
         empty_pages++;
