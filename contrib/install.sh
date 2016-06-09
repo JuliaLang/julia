@@ -18,9 +18,9 @@ for SRC in $ARGS; do
     cp -a $SRC $DEST
 
     if [ -d "$DEST" ]; then
-      DESTFILE="$DEST/$(basename "$SRC")"
+        DESTFILE="$DEST/$(basename "$SRC")"
     else
-      DESTFILE="$DEST"
+        DESTFILE="$DEST"
     fi
 
     # Do the chmod dance, and ignore errors on platforms that don't like setting permissions of symlinks
