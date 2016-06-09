@@ -649,15 +649,15 @@ JL_DLLEXPORT void jl_gc_queue_root(jl_value_t *root); // root isa jl_value_t*
 STATIC_INLINE void jl_gc_wb(void *parent, void *ptr)
 {
     // parent and ptr isa jl_value_t*
-    if (__unlikely((jl_astaggedvalue(parent)->bits.gc & 1) == 1 &&
+    if (__unlikely(jl_astaggedvalue(parent)->bits.gc == 3 &&
                    (jl_astaggedvalue(ptr)->bits.gc & 1) == 0))
         jl_gc_queue_root((jl_value_t*)parent);
 }
 
 STATIC_INLINE void jl_gc_wb_back(void *ptr) // ptr isa jl_value_t*
 {
-    // if ptr is marked
-    if (__unlikely((jl_astaggedvalue(ptr)->bits.gc & 1) == 1)) {
+    // if ptr is old
+    if (__unlikely(jl_astaggedvalue(ptr)->bits.gc & 2)) {
         jl_gc_queue_root((jl_value_t*)ptr);
     }
 }
