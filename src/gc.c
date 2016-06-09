@@ -283,7 +283,7 @@ static int mark_reset_age = 0;
  *                                                       |
  *  ========= above this line objects are old =========  |
  *                                                       |
- *  ----[new]------> GC_CLEAN ------[mark]--------> GC_MARKED_NOESC
+ *  ----[new]------> GC_CLEAN ------[mark]-----------> GC_MARKED
  *                    |    ^                                   |
  *  <-[(quick)sweep]---    |                                   |
  *                         --[(quick)sweep && age<=promotion]---
@@ -363,7 +363,7 @@ static inline int gc_setmark_big(jl_taggedvalue_t *o, int mark_mode)
         gc_big_object_unlink(hdr);
         gc_big_object_link(hdr, &jl_thread_heap.big_objects);
         bits = GC_CLEAN;
-        mark_mode = GC_MARKED_NOESC;
+        mark_mode = GC_MARKED;
     }
     else {
         if (gc_old(bits))
@@ -401,7 +401,7 @@ static inline int gc_setmark_pool(jl_taggedvalue_t *o, int mark_mode)
     if (mark_reset_age && !gc_marked(bits)) {
         // Reset the object as if it was just allocated
         bits = GC_CLEAN;
-        mark_mode = GC_MARKED_NOESC;
+        mark_mode = GC_MARKED;
         page->has_young = 1;
         char *page_begin = gc_page_data(o) + GC_PAGE_OFFSET;
         int obj_id = (((char*)o) - page_begin) / page->osize;
@@ -434,9 +434,9 @@ static inline int gc_setmark(jl_value_t *v, int sz)
     jl_taggedvalue_t *o = jl_astaggedvalue(v);
     sz += sizeof(jl_taggedvalue_t);
     if (sz <= GC_MAX_SZCLASS + sizeof(jl_taggedvalue_t))
-        return gc_setmark_pool(o, GC_MARKED_NOESC);
+        return gc_setmark_pool(o, GC_MARKED);
     else
-        return gc_setmark_big(o, GC_MARKED_NOESC);
+        return gc_setmark_big(o, GC_MARKED);
 }
 
 inline void gc_setmark_buf(void *o, int mark_mode)
@@ -539,7 +539,7 @@ static bigval_t **sweep_big_list(int sweep_full, bigval_t **pv)
             pv = &v->next;
             int age = v->age;
             if (age >= PROMOTE_AGE || bits == GC_OLD_MARKED) {
-                if (sweep_full || bits == GC_MARKED_NOESC) {
+                if (sweep_full || bits == GC_MARKED) {
                     bits = GC_OLD;
                 }
             }
@@ -887,13 +887,13 @@ static jl_taggedvalue_t **sweep_page(jl_gc_pool_t *p, jl_gc_pagemeta_t *pg, jl_t
                 if (*ages & msk || bits == GC_OLD_MARKED) { // old enough
                     // `!age && bits == GC_OLD_MARKED` is possible for
                     // non-first-class objects like `jl_binding_t`
-                    if (sweep_full || bits == GC_MARKED_NOESC) {
+                    if (sweep_full || bits == GC_MARKED) {
                         bits = v->bits.gc = GC_OLD; // promote
                     }
                     prev_nold++;
                 }
                 else {
-                    assert(bits == GC_MARKED_NOESC);
+                    assert(bits == GC_MARKED);
                     bits = v->bits.gc = GC_CLEAN; // unmark
                     has_young = 1;
                 }
@@ -1107,7 +1107,7 @@ void jl_gc_setmark(jl_value_t *v) // TODO rename this as it is misleading now
 {
     jl_taggedvalue_t *o = jl_astaggedvalue(v);
     if (!gc_marked(o->bits.gc)) {
-        gc_setmark_pool(o, GC_MARKED_NOESC);
+        gc_setmark_pool(o, GC_MARKED);
     }
 }
 
@@ -1227,7 +1227,8 @@ JL_DLLEXPORT void jl_gc_lookfor(jl_value_t *v) { lookforme = v; }
 #define MAX_MARK_DEPTH 400
 // mark v and recurse on its children (or store them on the mark stack when recursion depth becomes too high)
 // it does so assuming the gc bits of v are "bits" and returns the new bits of v
-// if v becomes GC_OLD_MARKED and some of its children are GC_MARKED_NOESC (young), v is added to the remset
+// if v becomes GC_OLD_MARKED and some of its children are GC_MARKED (young),
+// v is added to the remset
 static int push_root(jl_value_t *v, int d, int bits)
 {
     assert(v != NULL);
@@ -1265,8 +1266,8 @@ static int push_root(jl_value_t *v, int d, int bits)
         jl_array_t *a = (jl_array_t*)v;
         jl_taggedvalue_t *o = jl_astaggedvalue(v);
         int todo = !gc_marked(bits);
-        bits = (a->flags.pooled ? gc_setmark_pool(o, GC_MARKED_NOESC) :
-                gc_setmark_big(o, GC_MARKED_NOESC));
+        bits = (a->flags.pooled ? gc_setmark_pool(o, GC_MARKED) :
+                gc_setmark_big(o, GC_MARKED));
         if (a->flags.how == 2 && todo) {
             objprofile_count(jl_malloc_tag, o->bits.gc == GC_OLD_MARKED,
                              array_nbytes(a));
