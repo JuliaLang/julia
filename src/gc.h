@@ -208,9 +208,15 @@ STATIC_INLINE int page_index(region_t *region, void *data)
     return (gc_page_data(data) - region->pages->data) / GC_PAGE_SZ;
 }
 
-#define gc_bits(o) (((jl_taggedvalue_t*)(o))->bits.gc)
-#define gc_marked(o)  (((jl_taggedvalue_t*)(o))->bits.gc & GC_MARKED)
-#define _gc_setmark(o, mark_mode) (((jl_taggedvalue_t*)(o))->bits.gc = mark_mode)
+STATIC_INLINE int gc_marked(int bits)
+{
+    return (bits & GC_MARKED) != 0;
+}
+
+STATIC_INLINE int gc_old(int bits)
+{
+    return bits == GC_QUEUED || bits == GC_MARKED;
+}
 
 NOINLINE uintptr_t gc_get_stack_ptr(void);
 
