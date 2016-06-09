@@ -12,19 +12,19 @@ type TestCustomShowType end
 end
 myio = IOBuffer()
 display(TextDisplay(myio), MIME"text/plain"(), TestCustomShowType())
-@test String(myio) == "MyTestCustomShowType"
+@test @compat String(myio) == "MyTestCustomShowType"
 
 type TestCustomShowType2 end
 @compat show(io::IO, ::MIME"text/plain", ::TestCustomShowType2) = print(io, "MyTestCustomShowType2")
 myio = IOBuffer()
 display(TextDisplay(myio), MIME"text/plain"(), TestCustomShowType2())
-@test String(myio) == "MyTestCustomShowType2"
+@test @compat String(myio) == "MyTestCustomShowType2"
 
 type TestCustomShowType3 end
 @compat show(io::IO, ::TestCustomShowType3) = print(io, "2-Argument-show")
 myio = IOBuffer()
 display(TextDisplay(myio), TestCustomShowType3())
-@test String(myio) == "2-Argument-show"
+@test @compat String(myio) == "2-Argument-show"
 
 d = Dict{Int,Int}()
 d[1] = 1
