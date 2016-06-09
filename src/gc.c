@@ -272,12 +272,12 @@ static int mark_reset_age = 0;
  *
  * <-[(quick)sweep]-
  *                 |
- *     ---> GC_QUEUED <--[(quick)sweep && age>promotion]--
+ *     ---->  GC_OLD  <--[(quick)sweep && age>promotion]--
  *     |     |     ^                                     |
  *     |   [mark]  |                                     |
  *  [sweep]  |  [write barrier]                          |
  *     |     v     |                                     |
- *     ----- GC_MARKED <--------                         |
+ *     ----- GC_OLD_MARKED <----                         |
  *              |              |                         |
  *              --[quicksweep]--                         |
  *                                                       |
@@ -290,10 +290,10 @@ static int mark_reset_age = 0;
  */
 
 // A quick sweep is a sweep where `!sweep_full`
-// It means we won't touch GC_MARKED objects (old gen).
+// It means we won't touch GC_OLD_MARKED objects (old gen).
 
 // When a reachable object has survived more than PROMOTE_AGE+1 collections
-// it is tagged with GC_QUEUED during sweep and will be promoted on next mark
+// it is tagged with GC_OLD during sweep and will be promoted on next mark
 // because at that point we can know easily if it references young objects.
 // Marked old objects that reference young ones are kept in the remset.
 
@@ -354,7 +354,7 @@ static inline int gc_setmark_big(jl_taggedvalue_t *o, int mark_mode)
         o->bits.gc = mark_mode;
         return 0;
     }
-    assert(find_region(o,1) == NULL);
+    assert(find_region(o, 1) == NULL);
     bigval_t *hdr = bigval_header(o);
     int bits = o->bits.gc;
     if (mark_reset_age && !gc_marked(bits)) {
@@ -367,20 +367,20 @@ static inline int gc_setmark_big(jl_taggedvalue_t *o, int mark_mode)
     }
     else {
         if (gc_old(bits))
-            mark_mode = GC_MARKED;
-        if ((mark_mode == GC_MARKED) && (bits != GC_MARKED)) {
+            mark_mode = GC_OLD_MARKED;
+        if ((mark_mode == GC_OLD_MARKED) && (bits != GC_OLD_MARKED)) {
             // Move hdr from big_objects list to big_objects_marked list
             gc_big_object_unlink(hdr);
             gc_big_object_link(hdr, &big_objects_marked);
         }
     }
     if (!gc_marked(bits)) {
-        if (mark_mode == GC_MARKED)
+        if (mark_mode == GC_OLD_MARKED)
             perm_scanned_bytes += hdr->sz&~3;
         else
             scanned_bytes += hdr->sz&~3;
         objprofile_count(jl_typeof(jl_valueof(o)),
-                         mark_mode == GC_MARKED, hdr->sz&~3);
+                         mark_mode == GC_OLD_MARKED, hdr->sz&~3);
     }
     o->bits.gc = mark_mode;
     verify_val(jl_valueof(o));
@@ -409,10 +409,10 @@ static inline int gc_setmark_pool(jl_taggedvalue_t *o, int mark_mode)
         *ages &= ~(1 << (obj_id % 8));
     }
     else if (gc_old(bits)) {
-        mark_mode = GC_MARKED;
+        mark_mode = GC_OLD_MARKED;
     }
     if (!gc_marked(bits)) {
-        if (mark_mode == GC_MARKED) {
+        if (mark_mode == GC_OLD_MARKED) {
             perm_scanned_bytes += page->osize;
             page->nold++;
         }
@@ -420,7 +420,7 @@ static inline int gc_setmark_pool(jl_taggedvalue_t *o, int mark_mode)
             scanned_bytes += page->osize;
         }
         objprofile_count(jl_typeof(jl_valueof(o)),
-                         mark_mode == GC_MARKED, page->osize);
+                         mark_mode == GC_OLD_MARKED, page->osize);
     }
     assert(gc_marked(mark_mode));
     page->has_marked = 1;
@@ -539,9 +539,9 @@ static bigval_t **sweep_big_list(int sweep_full, bigval_t **pv)
         if (gc_marked(bits)) {
             pv = &v->next;
             int age = v->age;
-            if (age >= PROMOTE_AGE || bits == GC_MARKED) {
+            if (age >= PROMOTE_AGE || bits == GC_OLD_MARKED) {
                 if (sweep_full || bits == GC_MARKED_NOESC) {
-                    bits = GC_QUEUED;
+                    bits = GC_OLD;
                 }
             }
             else {
@@ -885,11 +885,11 @@ static jl_taggedvalue_t **sweep_page(jl_gc_pool_t *p, jl_gc_pagemeta_t *pg, jl_t
                 *ages &= ~msk;
             }
             else { // marked young or old
-                if (*ages & msk || bits == GC_MARKED) { // old enough
-                    // `!age && bits == GC_MARKED` is possible for
+                if (*ages & msk || bits == GC_OLD_MARKED) { // old enough
+                    // `!age && bits == GC_OLD_MARKED` is possible for
                     // non-first-class objects like `jl_binding_t`
                     if (sweep_full || bits == GC_MARKED_NOESC) {
-                        bits = v->bits.gc = GC_QUEUED; // promote
+                        bits = v->bits.gc = GC_OLD; // promote
                     }
                     prev_nold++;
                 }
@@ -1062,13 +1062,13 @@ JL_DLLEXPORT void jl_gc_queue_root(jl_value_t *ptr)
     // Disable this assert since it can happen with multithreading (same
     // with the ones in gc_queue_binding) when two threads are writing
     // to the same object.
-    assert(o->bits.gc != GC_QUEUED);
+    assert(o->bits.gc != GC_OLD);
 #endif
     // The modification of the `gc_bits` is not atomic but it
     // should be safe here since GC is not allowed to run here and we only
-    // write GC_QUEUED to the GC bits outside GC. This could cause
+    // write GC_OLD to the GC bits outside GC. This could cause
     // duplicated objects in the remset but that shouldn't be a problem.
-    o->bits.gc = GC_QUEUED;
+    o->bits.gc = GC_OLD;
     arraylist_push(jl_thread_heap.remset, ptr);
     jl_thread_heap.remset_nptr++; // conservative
 }
@@ -1078,9 +1078,9 @@ void gc_queue_binding(jl_binding_t *bnd)
     jl_taggedvalue_t *buf = jl_astaggedvalue(bnd);
 #ifndef JULIA_ENABLE_THREADING
     // Will fail for multithreading. See `jl_gc_queue_root`
-    assert(buf->bits.gc != GC_QUEUED);
+    assert(buf->bits.gc != GC_OLD);
 #endif
-    buf->bits.gc = GC_QUEUED;
+    buf->bits.gc = GC_OLD;
     arraylist_push(&jl_thread_heap.rem_bindings, bnd);
 }
 
@@ -1098,7 +1098,7 @@ static inline int gc_push_root(void *v, int d) // v isa jl_value_t*
     jl_taggedvalue_t *o = jl_astaggedvalue(v);
     verify_val(v);
     int bits = o->bits.gc;
-    if (!gc_marked(o->bits.gc)) {
+    if (!gc_marked(bits)) {
         return push_root((jl_value_t*)v, d, bits);
     }
     return bits;
@@ -1227,7 +1227,7 @@ JL_DLLEXPORT void jl_gc_lookfor(jl_value_t *v) { lookforme = v; }
 #define MAX_MARK_DEPTH 400
 // mark v and recurse on its children (or store them on the mark stack when recursion depth becomes too high)
 // it does so assuming the gc bits of v are "bits" and returns the new bits of v
-// if v becomes GC_MARKED (old) and some of its children are GC_MARKED_NOESC (young), v is added to the remset
+// if v becomes GC_OLD_MARKED and some of its children are GC_MARKED_NOESC (young), v is added to the remset
 static int push_root(jl_value_t *v, int d, int bits)
 {
     assert(v != NULL);
@@ -1276,9 +1276,9 @@ static int push_root(jl_value_t *v, int d, int bits)
             MARK(a,
                  bits = gc_setmark_pool(o, GC_MARKED_NOESC);
                  if (a->flags.how == 2 && todo) {
-                     objprofile_count(jl_malloc_tag, o->bits.gc == GC_MARKED,
+                     objprofile_count(jl_malloc_tag, o->bits.gc == GC_OLD_MARKED,
                                       array_nbytes(a));
-                     if (o->bits.gc == GC_MARKED)
+                     if (o->bits.gc == GC_OLD_MARKED)
                          perm_scanned_bytes += array_nbytes(a);
                      else
                          scanned_bytes += array_nbytes(a);
@@ -1287,9 +1287,9 @@ static int push_root(jl_value_t *v, int d, int bits)
             MARK(a,
                  bits = gc_setmark_big(o, GC_MARKED_NOESC);
                  if (a->flags.how == 2 && todo) {
-                     objprofile_count(jl_malloc_tag, o->bits.gc == GC_MARKED,
+                     objprofile_count(jl_malloc_tag, o->bits.gc == GC_OLD_MARKED,
                                       array_nbytes(a));
-                     if (o->bits.gc == GC_MARKED)
+                     if (o->bits.gc == GC_OLD_MARKED)
                          perm_scanned_bytes += array_nbytes(a);
                      else
                          scanned_bytes += array_nbytes(a);
@@ -1315,7 +1315,7 @@ static int push_root(jl_value_t *v, int d, int bits)
             else {
                 nptr += l;
                 void *data = a->data;
-                for(size_t i=0; i < l; i++) {
+                for (size_t i=0; i < l; i++) {
                     jl_value_t *elt = ((jl_value_t**)data)[i];
                     if (elt != NULL) {
                         verify_parent2("array", v, &((jl_value_t**)data)[i], "elem(%d)", (int)i);
@@ -1390,7 +1390,7 @@ static int push_root(jl_value_t *v, int d, int bits)
 ret:
     if (gc_verifying)
         return bits;
-    if ((bits == GC_MARKED) && (refyoung == GC_MARKED_NOESC)) {
+    if ((bits == GC_OLD_MARKED) && (refyoung == GC_MARKED_NOESC)) {
         jl_thread_heap.remset_nptr += nptr;
         // v is an old object referencing young objects
         arraylist_push(jl_thread_heap.remset, v);
@@ -1399,7 +1399,7 @@ ret:
 
 #undef MARK
 
- queue_the_root:
+queue_the_root:
     if (mark_sp >= mark_stack_size)
         grow_mark_stack();
     mark_stack[mark_sp++] = (jl_value_t*)v;
@@ -1476,8 +1476,8 @@ static void post_mark(arraylist_t *list)
         jl_value_t *fin = (jl_value_t*)list->items[i+1];
         int isfreed = !gc_marked(jl_astaggedvalue(v)->bits.gc);
         int isold = (list != &finalizer_list_marked &&
-                     jl_astaggedvalue(v)->bits.gc == GC_MARKED &&
-                     jl_astaggedvalue(fin)->bits.gc == GC_MARKED);
+                     jl_astaggedvalue(v)->bits.gc == GC_OLD_MARKED &&
+                     jl_astaggedvalue(fin)->bits.gc == GC_OLD_MARKED);
         if (isfreed || isold) {
             // remove from this list
             if (i < list->len - 2) {
@@ -1571,16 +1571,16 @@ static void _jl_gc_collect(int full, char *stack_hi)
         for (int i = 0; i < ptls->heap.last_remset->len; i++) {
             jl_value_t *item = (jl_value_t*)ptls->heap.last_remset->items[i];
             objprofile_count(jl_typeof(item), 2, 0);
-            jl_astaggedvalue(item)->bits.gc = GC_MARKED;
+            jl_astaggedvalue(item)->bits.gc = GC_OLD_MARKED;
         }
         for (int i = 0; i < ptls->heap.rem_bindings.len; i++) {
             void *ptr = ptls->heap.rem_bindings.items[i];
-            jl_astaggedvalue(ptr)->bits.gc = GC_MARKED;
+            jl_astaggedvalue(ptr)->bits.gc = GC_OLD_MARKED;
         }
 
         for (int i = 0; i < ptls->heap.last_remset->len; i++) {
             jl_value_t *item = (jl_value_t*)ptls->heap.last_remset->items[i];
-            push_root(item, 0, GC_MARKED);
+            push_root(item, 0, GC_OLD_MARKED);
         }
     }
 
@@ -1695,11 +1695,11 @@ static void _jl_gc_collect(int full, char *stack_hi)
         jl_tls_states_t *ptls = jl_all_tls_states[t_i];
         if (!sweep_full) {
             for (int i = 0; i < ptls->heap.remset->len; i++) {
-                jl_astaggedvalue(ptls->heap.remset->items[i])->bits.gc = GC_QUEUED;
+                jl_astaggedvalue(ptls->heap.remset->items[i])->bits.gc = GC_OLD;
             }
             for (int i = 0; i < ptls->heap.rem_bindings.len; i++) {
                 void *ptr = ptls->heap.rem_bindings.items[i];
-                jl_astaggedvalue(ptr)->bits.gc = GC_QUEUED;
+                jl_astaggedvalue(ptr)->bits.gc = GC_OLD;
             }
         }
         else {
@@ -1985,7 +1985,7 @@ JL_DLLEXPORT void *jl_gc_managed_realloc(void *d, size_t sz, size_t oldsz,
     if (allocsz < sz)  // overflow in adding offs, size was "negative"
         jl_throw(jl_memory_exception);
 
-    if (jl_astaggedvalue(owner)->bits.gc == GC_MARKED) {
+    if (jl_astaggedvalue(owner)->bits.gc == GC_OLD_MARKED) {
         perm_scanned_bytes += allocsz - oldsz;
         live_bytes += allocsz - oldsz;
     }

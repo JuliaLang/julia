@@ -21,6 +21,9 @@ extern "C" {
 #define GC_QUEUED 2 // if it is reachable it will be marked as old
 #define GC_MARKED_NOESC (GC_MARKED | GC_QUEUED) // reachable and young
 
+#define GC_OLD_MARKED GC_MARKED
+#define GC_OLD GC_QUEUED
+
 // useful constants
 extern jl_methtable_t *jl_type_type_mt;
 

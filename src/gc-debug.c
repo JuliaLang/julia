@@ -183,8 +183,8 @@ static void gc_verify_track(void)
         for(int i = 0; i < lostval_parents.len; i++) {
             lostval_parent = (jl_value_t*)lostval_parents.items[i];
             int clean_len = bits_save[GC_CLEAN].len;
-            for(int j = 0; j < clean_len + bits_save[GC_QUEUED].len; j++) {
-                void *p = bits_save[j >= clean_len ? GC_QUEUED : GC_CLEAN].items[j >= clean_len ? j - clean_len : j];
+            for(int j = 0; j < clean_len + bits_save[GC_OLD].len; j++) {
+                void *p = bits_save[j >= clean_len ? GC_OLD : GC_CLEAN].items[j >= clean_len ? j - clean_len : j];
                 if (jl_valueof(p) == lostval_parent) {
                     lostval = lostval_parent;
                     lostval_parent = NULL;
@@ -219,8 +219,8 @@ void gc_verify(void)
     gc_mark_object_list(&finalizer_list_marked, 0);
     visit_mark_stack();
     int clean_len = bits_save[GC_CLEAN].len;
-    for(int i = 0; i < clean_len + bits_save[GC_QUEUED].len; i++) {
-        jl_taggedvalue_t *v = (jl_taggedvalue_t*)bits_save[i >= clean_len ? GC_QUEUED : GC_CLEAN].items[i >= clean_len ? i - clean_len : i];
+    for(int i = 0; i < clean_len + bits_save[GC_OLD].len; i++) {
+        jl_taggedvalue_t *v = (jl_taggedvalue_t*)bits_save[i >= clean_len ? GC_OLD : GC_CLEAN].items[i >= clean_len ? i - clean_len : i];
         if (gc_marked(v->bits.gc)) {
             jl_printf(JL_STDERR, "Error. Early free of %p type :", v);
             jl_(jl_typeof(jl_valueof(v)));
@@ -740,7 +740,7 @@ static size_t pool_stats(jl_gc_pool_t *p, size_t *pwaste, size_t *np,
             }
             else {
                 nused++;
-                if (v->bits.gc == GC_MARKED) {
+                if (v->bits.gc == GC_OLD_MARKED) {
                     nold++;
                 }
             }
