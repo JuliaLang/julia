@@ -697,27 +697,25 @@ jl_typemap_entry_t *jl_typemap_assoc_by_type(union jl_typemap_t ml_or_cache, jl_
 jl_typemap_entry_t *jl_typemap_entry_assoc_exact(jl_typemap_entry_t *ml, jl_value_t **args, size_t n)
 {
     // some manually-unrolled common special cases
-    jl_typemap_entry_t *prev = NULL, *first = ml;
     while (ml->simplesig == (void*)jl_nothing && ml->guardsigs == jl_emptysvec && ml->isleafsig) {
         // use a tight loop for a long as possible
         if (n == jl_datatype_nfields(ml->sig) && jl_typeof(args[0]) == jl_tparam(ml->sig, 0)) {
             if (n == 1)
-                goto matchnm;
+                return ml;
             if (n == 2) {
                 if (jl_typeof(args[1]) == jl_tparam(ml->sig, 1))
-                    goto matchnm;
+                    return ml;
             }
             else if (n == 3) {
                 if (jl_typeof(args[1]) == jl_tparam(ml->sig, 1) &&
                     jl_typeof(args[2]) == jl_tparam(ml->sig, 2))
-                    goto matchnm;
+                    return ml;
             }
             else {
                 if (sig_match_leaf(args, jl_svec_data(ml->sig->parameters), n))
-                    goto matchnm;
+                    return ml;
             }
         }
-        prev = ml;
         ml = ml->next;
         if (ml == (void*)jl_nothing)
             return NULL;
@@ -762,24 +760,12 @@ jl_typemap_entry_t *jl_typemap_entry_assoc_exact(jl_typemap_entry_t *ml, jl_valu
                     }
                 }
             }
-            goto matchnm;
+            return ml;
         }
 nomatch:
-        prev = ml;
         ml = ml->next;
     }
     return NULL;
-matchnm:
-    if (prev != NULL && ml->isleafsig && first->next != ml) {
-        // LRU queue: move ml from prev->next to first->next
-        prev->next = ml->next;
-        jl_gc_wb(prev, prev->next);
-        ml->next = first->next;
-        jl_gc_wb(ml, ml->next);
-        first->next = ml;
-        jl_gc_wb(first, first->next);
-    }
-    return ml;
 }
 
 jl_typemap_entry_t *jl_typemap_level_assoc_exact(jl_typemap_level_t *cache, jl_value_t **args, size_t n, int8_t offs)
