@@ -237,6 +237,11 @@ void gc_unwind_task(jl_task_t *task, int d)
 #endif
 {
     uintptr_t stackbase = (uintptr_t)jl_get_ptls_states()->stackbase;
+    if (!stackbase) {
+        // TODO this can happen if gc runs too early, before base_ctx is setup
+        // for example in module initializers
+        abort();
+    }
     bt_cursor_t cursor;
     task_unwind_ctx_t ctx;
     if (task == jl_current_task) {

@@ -137,7 +137,7 @@ static void finalize_object(arraylist_t *list, jl_value_t *o,
 // be pointers to `jl_value_t` objects
 static void jl_gc_push_arraylist(arraylist_t *list)
 {
-    list->items[0] = (void*)(((uintptr_t)list->len - 2) << 1);
+    list->items[0] = (void*)((((uintptr_t)list->len - 2) << 2) | 2);
     list->items[1] = jl_pgcstack;
     jl_pgcstack = (jl_gcframe_t*)list->items;
 }
