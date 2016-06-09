@@ -34,7 +34,7 @@ extern "C" {
 
 #define GC_PAGE_LG2 14 // log2(size of a page)
 #define GC_PAGE_SZ (1 << GC_PAGE_LG2) // 16k
-#define GC_PAGE_OFFSET (JL_SMALL_BYTE_ALIGNMENT - (sizeof_jl_taggedvalue_t % JL_SMALL_BYTE_ALIGNMENT))
+#define GC_PAGE_OFFSET (JL_SMALL_BYTE_ALIGNMENT - (sizeof(jl_taggedvalue_t) % JL_SMALL_BYTE_ALIGNMENT))
 
 // 8G * 32768 = 2^48
 // It's really unlikely that we'll actually allocate that much though...
@@ -80,23 +80,6 @@ typedef struct {
     int         full_sweep;
 } jl_gc_num_t;
 
-// layout for small (<2k) objects
-
-typedef struct _buff_t {
-    union {
-        uintptr_t header;
-        struct _buff_t *next;
-        uintptr_t flags;
-        jl_value_t *type; // 16-bytes aligned
-        struct {
-            uintptr_t gc_bits:2;
-            uintptr_t pooled:1;
-        };
-    };
-    char data[];
-} buff_t;
-typedef buff_t gcval_t;
-
 // layout for big (>2k) objects
 
 typedef struct _bigval_t {
@@ -106,21 +89,22 @@ typedef struct _bigval_t {
         size_t sz;
         uintptr_t age : 2;
     };
-    #ifdef _P64 // Add padding so that char data[] below is 64-byte aligned
+    #ifdef _P64 // Add padding so that the data below is 64-byte aligned
         // (8 pointers of 8 bytes each) - (4 other pointers in struct)
         void *_padding[8 - 4];
     #else
         // (16 pointers of 4 bytes each) - (4 other pointers in struct)
         void *_padding[16 - 4];
     #endif
-    //struct buff_t <>;
+    //struct jl_taggedvalue_t <>;
     union {
         uintptr_t header;
-        uintptr_t flags;
-        uintptr_t gc_bits:2;
+        struct {
+            uintptr_t gc:2;
+            uintptr_t pooled:1;
+        } bits;
     };
     // must be 64-byte aligned here, in 32 & 64 bit modes
-    char data[];
 } bigval_t;
 
 // data structure for tracking malloc'd arrays.
@@ -180,8 +164,8 @@ typedef struct {
     // Page layout:
     //  Padding: GC_PAGE_OFFSET
     //  Blocks: osize * n
-    //    Tag: sizeof_jl_taggedvalue_t
-    //    Data: <= osize - sizeof_jl_taggedvalue_t
+    //    Tag: sizeof(jl_taggedvalue_t)
+    //    Data: <= osize - sizeof(jl_taggedvalue_t)
     jl_gc_page_t *pages; // [pg_cnt]; must be first, to preserve page alignment
     uint32_t *allocmap; // [pg_cnt / 32]
     jl_gc_pagemeta_t *meta; // [pg_cnt]
@@ -209,14 +193,14 @@ STATIC_INLINE char *gc_page_data(void *x)
     return (char*)(((uintptr_t)x >> GC_PAGE_LG2) << GC_PAGE_LG2);
 }
 
-STATIC_INLINE gcval_t *page_pfl_beg(jl_gc_pagemeta_t *p)
+STATIC_INLINE jl_taggedvalue_t *page_pfl_beg(jl_gc_pagemeta_t *p)
 {
-    return (gcval_t*)(p->data + p->fl_begin_offset);
+    return (jl_taggedvalue_t*)(p->data + p->fl_begin_offset);
 }
 
-STATIC_INLINE gcval_t *page_pfl_end(jl_gc_pagemeta_t *p)
+STATIC_INLINE jl_taggedvalue_t *page_pfl_end(jl_gc_pagemeta_t *p)
 {
-    return (gcval_t*)(p->data + p->fl_end_offset);
+    return (jl_taggedvalue_t*)(p->data + p->fl_end_offset);
 }
 
 STATIC_INLINE int page_index(region_t *region, void *data)
@@ -224,9 +208,9 @@ STATIC_INLINE int page_index(region_t *region, void *data)
     return (gc_page_data(data) - region->pages->data) / GC_PAGE_SZ;
 }
 
-#define gc_bits(o) (((gcval_t*)(o))->gc_bits)
-#define gc_marked(o)  (((gcval_t*)(o))->gc_bits & GC_MARKED)
-#define _gc_setmark(o, mark_mode) (((gcval_t*)(o))->gc_bits = mark_mode)
+#define gc_bits(o) (((jl_taggedvalue_t*)(o))->bits.gc)
+#define gc_marked(o)  (((jl_taggedvalue_t*)(o))->bits.gc & GC_MARKED)
+#define _gc_setmark(o, mark_mode) (((jl_taggedvalue_t*)(o))->bits.gc = mark_mode)
 
 NOINLINE uintptr_t gc_get_stack_ptr(void);
 
