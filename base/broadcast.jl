@@ -140,9 +140,9 @@ end
     B
 end
 
-broadcast(f, As...) = broadcast!(f, Array{promote_eltype_op(f, As...)}(broadcast_shape(As...)), As...)
+broadcast(f, As...) = broadcast!(f, allocate_for(Array{promote_eltype_op(f, As...)}, broadcast_shape(As...)), As...)
 -
-bitbroadcast(f, As...) = broadcast!(f, BitArray(broadcast_shape(As...)), As...)
+bitbroadcast(f, As...) = broadcast!(f, allocate_for(BitArray, broadcast_shape(As...)), As...)
 
 broadcast_getindex(src::AbstractArray, I::AbstractArray...) = broadcast_getindex!(Array{eltype(src)}(broadcast_shape(I...)), src, I...)
 @generated function broadcast_getindex!(dest::AbstractArray, src::AbstractArray, I::AbstractArray...)
