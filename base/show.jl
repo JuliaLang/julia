@@ -1542,9 +1542,18 @@ end
 showcompact(x) = showcompact(STDOUT, x)
 function showcompact(io::IO, x)
     if get(io, :compact, false)
-        show(io, x)
+        if !get(io, :multiline, false)
+            show(io, x)
+        else
+            show(IOContext(io, :multiline => false), x)
+        end
     else
-        show(IOContext(io, :compact => true), x)
+        if !get(io, :multiline, false)
+            show(IOContext(io, :compact => true), x)
+        else
+            show(IOContext(IOContext(io, :compact => true),
+                           :multiline => false), x)
+        end
     end
 end
 

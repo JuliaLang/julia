@@ -447,3 +447,16 @@ end
 # PR #16651
 @test !contains(repr(ones(10,10)), "\u2026")
 @test contains(sprint((io,x)->show(IOContext(io,:limit=>true), x), ones(30,30)), "\u2026")
+
+# showcompact() also sets :multiline=>false (#16817)
+let io = IOBuffer()
+    x = [1, 2]
+    showcompact(io, x)
+    @test takebuf_string(io) == "[1,2]"
+    showcompact(IOContext(io, :multiline=>true), x)
+    @test takebuf_string(io) == "[1,2]"
+    showcompact(IOContext(io, :compact=>true), x)
+    @test takebuf_string(io) == "[1,2]"
+    showcompact(IOContext(IOContext(io, :compact=>true), :multiline=>true), x)
+    @test takebuf_string(io) == "[1,2]"
+end
