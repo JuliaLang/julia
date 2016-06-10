@@ -1972,10 +1972,31 @@
            (let ((vex (parse-cat s #\])))
              (if (null? vex) '(vect) vex)))
 
-          ;; Array{Any} expression
           ((eqv? t #\{ )
            (take-token s)
-           (error "discontinued syntax { ... }"))
+           (if (eqv? (require-token s) #\})
+               (begin (take-token s)
+                      '(cell1d))
+               (let ((vex (parse-cat s #\} #t)))
+                 (if (null? vex)
+                     '(cell1d)
+                     (case (car vex)
+                       ((vect) `(cell1d ,@(cdr vex)))
+                       ((hcat) `(cell2d 1 ,(length (cdr vex)) ,@(cdr vex)))
+                       ((comprehension)      (error "{a for a in b} syntax is discontinued"))
+                       ((dict_comprehension) (error "{a=>b for (a,b) in c} syntax is discontinued"))
+                       ((dict) `(cell1d ,@(cdr vec)))
+                       (else
+                        (if (and (pair? (cadr vex)) (eq? (caadr vex) 'row))
+                            (let ((nr (length (cdr vex)))
+                                  (nc (length (cdadr vex))))
+                              (begin
+                                `(cell2d ,nr ,nc
+                                         ,@(apply append
+                                                  ;; transpose to storage order
+                                                  (apply map list
+                                                         (map cdr (cdr vex)))))))
+                            `(cell1d ,@(cdr vex)))))))))
 
           ;; string literal
           ((eqv? t #\")

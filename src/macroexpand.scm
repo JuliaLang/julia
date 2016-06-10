@@ -17,9 +17,9 @@
   (if (splice-expr? x)
       (if (= d 0)
           (cadr (cadr (cadr x)))
-          (list 'vectany
+          (list 'call '(top vector_any)
                 (wrap-with-splice (julia-bq-expand (cadr (cadr (cadr x))) (- d 1)))))
-      (list 'vectany (julia-bq-expand x d))))
+      (list 'call '(top vector_any) (julia-bq-expand x d))))
 
 (define (julia-bq-expand x d)
   (cond ((or (eq? x 'true) (eq? x 'false))  x)
