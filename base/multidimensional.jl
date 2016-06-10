@@ -301,9 +301,8 @@ function _unsafe_getindex(::LinearIndexing, src::AbstractArray, I::AbstractArray
 
     D = eachindex(dest)
     Ds = start(D)
-    for (i, s) in zip(eachindex(I), eachindex(src))
-        @inbounds Ii = I[i]
-        if Ii
+    for (b, s) in zip(I, eachindex(src))
+        if b
             d, Ds = next(D, Ds)
             @inbounds dest[d] = src[s]
         end
