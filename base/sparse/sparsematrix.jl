@@ -2901,17 +2901,17 @@ end
 
 # Sparse/dense concatenation
 
-function hcat(Xin::Union{Matrix, SparseMatrixCSC}...)
+function hcat(Xin::Union{Vector, Matrix, SparseMatrixCSC}...)
     X = SparseMatrixCSC[issparse(x) ? x : sparse(x) for x in Xin]
     hcat(X...)
 end
 
-function vcat(Xin::Union{Matrix, SparseMatrixCSC}...)
+function vcat(Xin::Union{Vector, Matrix, SparseMatrixCSC}...)
     X = SparseMatrixCSC[issparse(x) ? x : sparse(x) for x in Xin]
     vcat(X...)
 end
 
-function hvcat(rows::Tuple{Vararg{Int}}, X::Union{Matrix, SparseMatrixCSC}...)
+function hvcat(rows::Tuple{Vararg{Int}}, X::Union{Vector, Matrix, SparseMatrixCSC}...)
     nbr = length(rows)  # number of block rows
 
     tmp_rows = Array{SparseMatrixCSC}(nbr)
