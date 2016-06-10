@@ -820,7 +820,7 @@ bool jl_dylib_DI_for_fptr(size_t pointer, const llvm::object::ObjectFile **obj, 
         bool insysimage = (fbase == jl_sysimage_base);
         if (isSysImg)
             *isSysImg = insysimage;
-        if (onlySysImg && insysimage) {
+        if (onlySysImg && !insysimage) {
             return false;
         }
         static char frame_info_func[
@@ -876,7 +876,7 @@ bool jl_dylib_DI_for_fptr(size_t pointer, const llvm::object::ObjectFile **obj, 
         bool insysimage = (fbase == jl_sysimage_base);
         if (isSysImg)
             *isSysImg = insysimage;
-        if (onlySysImg && insysimage) {
+        if (onlySysImg && !insysimage) {
             return false;
         }
         // In case we fail with the debug info lookup, we at least still
