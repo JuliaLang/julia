@@ -706,10 +706,12 @@ hist2d(v::AbstractMatrix) = hist2d(v, sturges(size(v,1)))
 @deprecate cell(dims::Integer...) Array{Any}(dims...)
 @deprecate cell(dims::Tuple{Vararg{Integer}}) Array{Any}(dims)
 
-@deprecate pointer_to_array{T,N}(p::Ptr{T}, d::Union{Integer,NTuple{N,Int},NTuple{N,Integer}},
-                                 own::Bool=false) unsafe_wrap(Array, p, d, own)
-@deprecate pointer_to_string(p::Ptr{UInt8}, len::Integer, own::Bool=false) unsafe_wrap(String, p, len, own)
-@deprecate pointer_to_string(p::Ptr{UInt8}, own::Bool=false) unsafe_wrap(String, p, own)
+@deprecate(pointer_to_array{T}(p::Ptr{T}, d::Union{Integer, Tuple{Vararg{Integer}}}, own::Bool=false),
+    unsafe_wrap(Array, p, d, own))
+@deprecate(pointer_to_string(p::Ptr{UInt8}, len::Integer, own::Bool=false),
+    unsafe_wrap(String, p, len, own))
+@deprecate(pointer_to_string(p::Ptr{UInt8}, own::Bool=false),
+    unsafe_wrap(String, p, own))
 
 # During the 0.5 development cycle, do not add any deprecations below this line
 # To be deprecated in 0.6
