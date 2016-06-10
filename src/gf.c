@@ -1469,6 +1469,7 @@ static int _precompile_enq_tfunc(jl_typemap_entry_t *l, void *closure)
 
 static int _precompile_enq_spec(jl_typemap_entry_t *def, void *closure)
 {
+    jl_typemap_visitor(def->func.method->tfunc, _precompile_enq_tfunc, closure);
     jl_array_t *spec = def->func.method->specializations;
     if (spec == NULL)
         return 1;
@@ -1478,7 +1479,6 @@ static int _precompile_enq_spec(jl_typemap_entry_t *def, void *closure)
         if (jl_is_lambda_info(li) && !((jl_lambda_info_t*)li)->functionID)
             jl_array_ptr_1d_push((jl_array_t*)closure, (jl_value_t*)((jl_lambda_info_t*)li)->specTypes);
     }
-    jl_typemap_visitor(def->func.method->tfunc, _precompile_enq_tfunc, closure);
     return 1;
 }
 
