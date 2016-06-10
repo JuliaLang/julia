@@ -485,12 +485,13 @@ function fill!{T}(A::AbstractArray{T}, x)
 end
 
 function copy!{T,N}(dest::AbstractArray{T,N}, src::AbstractArray{T,N})
-    checkbounds(dest, indices(src)...)
+    @boundscheck checkbounds(dest, indices(src)...)
     for I in eachindex(linearindexing(src,dest), src)
         @inbounds dest[I] = src[I]
     end
     dest
 end
+
 
 ### BitArrays
 

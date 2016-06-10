@@ -211,10 +211,6 @@ function getindex{T,N}(V::FastSubArray{T,N}, I::Vararg{Real,N})
     r
 end
 
-# Nonscalar indexing just copies a view
-getindex{T,N}(V::SubArray{T,N}, i::ViewIndex) = (@_propagate_inbounds_meta; copy(slice(V, i)))
-getindex{T,N}(V::SubArray{T,N}, I::Vararg{ViewIndex,N}) = (@_propagate_inbounds_meta; copy(slice(V, I...)))
-
 # Setindex is similar, but since we don't specially define non-scalar methods
 # we only need to define the canonical methods. We don't need to worry about
 # e.g., linear indexing for SlowSubArray since the fallbacks can do their thing
@@ -236,7 +232,6 @@ function setindex!(V::FastContiguousSubArray, x, i::Real)
     @inbounds V.parent[V.first_index + to_index(i)-1] = x
     V
 end
-# Nonscalar setindex! falls back to the defaults
 
 function unsafe_slice{T,N}(V::SubArray{T,N}, I::Vararg{ViewIndex,N})
     @_inline_meta
