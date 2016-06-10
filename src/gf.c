@@ -1555,6 +1555,17 @@ static jl_value_t *verify_type(jl_value_t *v)
     return v;
 }
 
+STATIC_INLINE uint32_t int32hash_fast(uint32_t a)
+{
+//    a = (a+0x7ed55d16) + (a<<12);
+//    a = (a^0xc761c23c) ^ (a>>19);
+//    a = (a+0x165667b1) + (a<<5);
+//    a = (a+0xd3a2646c) ^ (a<<9);
+//    a = (a+0xfd7046c5) + (a<<3);
+//    a = (a^0xb55a4f09) ^ (a>>16);
+    return a;
+}
+
 STATIC_INLINE int sig_match_fast(jl_value_t **args, jl_value_t **sig, size_t i, size_t n)
 {
     // NOTE: This function is a huge performance hot spot!!
@@ -1645,10 +1656,10 @@ JL_DLLEXPORT jl_value_t *jl_apply_generic(jl_value_t **args, uint32_t nargs)
       if no generic match, use the concrete one even if inexact
       otherwise instantiate the generic method and use it
     */
-    int callsite = int32hash((uintptr_t)__builtin_return_address(0));
+    uint32_t callsite = int32hash_fast((uintptr_t)__builtin_return_address(0));
     // implementation 1
-//    int cache_idx1 = (callsite) & (N_CALL_CACHE - 1);
-//    int cache_idx2 = (callsite >> 16) & (N_CALL_CACHE - 1);
+//    uint32_t cache_idx1 = (callsite) & (N_CALL_CACHE - 1);
+//    uint32_t cache_idx2 = (callsite >> 16) & (N_CALL_CACHE - 1);
 //    jl_typemap_entry_t *entry1 = call_cache[cache_idx1];
 //    jl_typemap_entry_t *entry2 = call_cache[cache_idx2];
 //    jl_methtable_t *mt = NULL;
@@ -1681,10 +1692,10 @@ JL_DLLEXPORT jl_value_t *jl_apply_generic(jl_value_t **args, uint32_t nargs)
 //    }
 
     // implementation 2
-//    int cache_idx1 = (callsite) & (N_CALL_CACHE - 1);
-//    int cache_idx2 = (callsite >> 8) & (N_CALL_CACHE - 1);
-//    int cache_idx3 = (callsite >> 16) & (N_CALL_CACHE - 1);
-//    int cache_idx4 = (callsite >> 24) & (N_CALL_CACHE - 1);
+//    uint32_t cache_idx1 = (callsite) & (N_CALL_CACHE - 1);
+//    uint32_t cache_idx2 = (callsite >> 8) & (N_CALL_CACHE - 1);
+//    uint32_t cache_idx3 = (callsite >> 16) & (N_CALL_CACHE - 1);
+//    uint32_t cache_idx4 = (callsite >> 24) & (N_CALL_CACHE - 1);
 //    jl_typemap_entry_t *entry = call_cache[cache_idx1];
 //    jl_methtable_t *mt = NULL;
 //    if (!entry || nargs != jl_svec_len(entry->sig->parameters) ||
