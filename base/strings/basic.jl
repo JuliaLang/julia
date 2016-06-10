@@ -276,7 +276,6 @@ promote_rule{S<:AbstractString,T<:AbstractString}(::Type{S}, ::Type{T}) = String
 
 isxdigit(c::Char) = '0'<=c<='9' || 'a'<=c<='f' || 'A'<=c<='F'
 isxdigit(s::AbstractString) = all(isxdigit, s)
-need_full_hex(s::AbstractString, i::Int) = !done(s,i) && isxdigit(next(s,i)[1])
 
 ## checking UTF-8 & ACSII validity ##
 

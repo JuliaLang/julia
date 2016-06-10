@@ -130,6 +130,8 @@ join(args...) = sprint(join, args...)
 
 ## string escaping & unescaping ##
 
+need_full_hex(s::AbstractString, i::Int) = !done(s,i) && isxdigit(next(s,i)[1])
+
 escape_nul(s::AbstractString, i::Int) =
     !done(s,i) && '0' <= next(s,i)[1] <= '7' ? "\\x00" : "\\0"
 
@@ -151,6 +153,7 @@ function escape_string(io, s::AbstractString, esc::AbstractString)
 end
 
 escape_string(s::AbstractString) = sprint(endof(s), escape_string, s, "\"")
+
 function print_quoted(io, s::AbstractString)
     print(io, '"')
     escape_string(io, s, "\"\$") #"# work around syntax highlighting problem
