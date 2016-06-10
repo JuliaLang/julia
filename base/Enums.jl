@@ -97,7 +97,7 @@ macro enum(T,syms...)
                 print(io, x)
             else
                 print(io, x, "::")
-                show(IOContext(io, :multiline => false), typeof(x))
+                showcompact(io, typeof(x))
                 print(io, " = ", Int(x))
             end
         end

@@ -35,9 +35,11 @@ function show{T}(io::IO, x::Nullable{T})
             show(io, x.value)
         end
     else
-        print(io, "Nullable{", T, "}(")
+        print(io, "Nullable{")
+        showcompact(io, eltype(x))
+        print(io, "}(")
         if !isnull(x)
-            show(io, x.value)
+            showcompact(io, x.value)
         end
         print(io, ')')
     end
