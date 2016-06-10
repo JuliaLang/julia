@@ -27,6 +27,9 @@ let exename = `$(Base.julia_cmd()) --precompiled=yes`
     @test !success(`$exename --eval="exit(1)"`)
     @test !success(`$exename -e`)
     @test !success(`$exename --eval`)
+    # --eval --interactive (replaced --post-boot)
+    @test  success(`$exename -i -e "exit(0)"`)
+    @test !success(`$exename -i -e "exit(1)"`)
 
     # --print
     @test readstring(`$exename -E "1+1"`) == "2\n"
@@ -34,20 +37,12 @@ let exename = `$(Base.julia_cmd()) --precompiled=yes`
     @test !success(`$exename -E`)
     @test !success(`$exename --print`)
 
-    # --post-boot
-    @test  success(`$exename -P "exit(0)"`)
-    @test !success(`$exename -P "exit(1)"`)
-    @test  success(`$exename --post-boot="exit(0)"`)
-    @test !success(`$exename --post-boot="exit(1)"`)
-    @test !success(`$exename -P`)
-    @test !success(`$exename --post-boot`)
-
     # --load
     let testfile = tempname()
         try
             write(testfile, "testvar = :test\n")
-            @test split(readchomp(`$exename --load=$testfile -P "println(testvar)"`), '\n')[end] == "test"
-            @test split(readchomp(`$exename -P "println(testvar)" -L $testfile`), '\n')[end] == "test"
+            @test split(readchomp(`$exename -i --load=$testfile -e "println(testvar)"`), '\n')[end] == "test"
+            @test split(readchomp(`$exename -i -e "println(testvar)" -L $testfile`), '\n')[end] == "test"
         finally
             rm(testfile)
         end
@@ -66,7 +61,7 @@ let exename = `$(Base.julia_cmd()) --precompiled=yes`
     end
 
     # --procs
-    @test readchomp(`$exename -q -p 2 -P "println(nworkers()); exit(0)"`) == "2"
+    @test readchomp(`$exename -q -p 2 -e "println(nworkers())"`) == "2"
     @test !success(`$exename -p 0`)
     @test !success(`$exename --procs=1.0`)
 
@@ -95,8 +90,6 @@ let exename = `$(Base.julia_cmd()) --precompiled=yes`
     # --history-file
     @test readchomp(`$exename -E "Bool(Base.JLOptions().historyfile)" --history-file=yes`) == "true"
     @test readchomp(`$exename -E "Bool(Base.JLOptions().historyfile)" --history-file=no`) == "false"
-    # deprecated
-    @test readchomp(`$exename -E "Bool(Base.JLOptions().historyfile)" --no-history-file`) == "false"
     @test !success(`$exename --history-file=false`)
 
     # --startup-file
@@ -255,7 +248,7 @@ let exename = `$(Base.julia_cmd()) --precompiled=yes`
     # issue #12679
     extrapath = is_windows() ? joinpath(JULIA_HOME, "..", "Git", "usr", "bin") * ";" : ""
     withenv("PATH" => extrapath * ENV["PATH"]) do
-        @test readchomp(pipeline(ignorestatus(`$exename --startup-file=no --compile=yes -foo`),stderr=`cat`)) == "ERROR: unknown option `-o`"
+        @test readchomp(pipeline(ignorestatus(`$exename --startup-file=no --compile=yes -ioo`),stderr=`cat`)) == "ERROR: unknown option `-o`"
         @test readchomp(pipeline(ignorestatus(`$exename --startup-file=no -p`),stderr=`cat`)) == "ERROR: option `-p/--procs` is missing an argument"
         @test readchomp(pipeline(ignorestatus(`$exename --startup-file=no --inline`),stderr=`cat`)) == "ERROR: option `--inline` is missing an argument"
         @test readchomp(pipeline(ignorestatus(`$exename --startup-file=no -e "@show ARGS" -now -- julia RUN.jl`),stderr=`cat`)) == "ERROR: unknown option `-n`"

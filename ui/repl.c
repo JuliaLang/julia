@@ -62,14 +62,11 @@ static const char opts[]  =
     " --compilecache={yes|no}   Enable/disable incremental precompilation of modules\n"
     " -H, --home <dir>          Set location of julia executable\n"
     " --startup-file={yes|no}   Load ~/.juliarc.jl\n"
-    " -f, --no-startup          Don't load ~/.juliarc (deprecated, use --startup-file=no)\n"
-    " -F                        Load ~/.juliarc (deprecated, use --startup-file=yes)\n"
     " --handle-signals={yes|no} Enable or disable Julia's default signal handlers\n\n"
 
     // actions
     " -e, --eval <expr>         Evaluate <expr>\n"
     " -E, --print <expr>        Evaluate and show <expr>\n"
-    " -P, --post-boot <expr>    Evaluate <expr>, but don't disable interactive mode (deprecated, use -i -e instead)\n"
     " -L, --load <file>         Load <file> immediately on all processors\n\n"
 
     // parallel options
@@ -81,8 +78,7 @@ static const char opts[]  =
     " -i                        Interactive mode; REPL runs and isinteractive() is true\n"
     " -q, --quiet               Quiet startup (no banner)\n"
     " --color={yes|no}          Enable or disable color text\n"
-    " --history-file={yes|no}   Load or save history\n"
-    " --no-history-file         Don't load history file (deprecated, use --history-file=no)\n\n"
+    " --history-file={yes|no}   Load or save history\n\n"
 
     // code generation options
     " --compile={yes|no|all|min}Enable or disable JIT compiler, or request exhaustive compilation\n"
@@ -98,14 +94,20 @@ static const char opts[]  =
     // compiler output options
     " --output-o name           Generate an object file (including system image data)\n"
     " --output-ji name          Generate a system image data file (.ji)\n"
-    " --output-bc name          Generate LLVM bitcode (.bc)\n\n"
+    " --output-bc name          Generate LLVM bitcode (.bc)\n"
     " --output-incremental=no   Generate an incremental output file (rather than complete)\n\n"
 
     // instrumentation options
     " --code-coverage={none|user|all}, --code-coverage\n"
     "                           Count executions of source lines (omitting setting is equivalent to \"user\")\n"
     " --track-allocation={none|user|all}, --track-allocation\n"
-    "                           Count bytes allocated by each source line\n";
+    "                           Count bytes allocated by each source line\n\n"
+
+    "Deprecated options:\n"
+    " -F                        Load ~/.juliarc (deprecated, use --startup-file=yes)\n"
+    " -f, --no-startup          Don't load ~/.juliarc (deprecated, use --startup-file=no)\n"
+    " -P, --post-boot <expr>    Evaluate <expr>, but don't disable interactive mode (deprecated, use -i -e instead)\n"
+    " --no-history-file         Don't load history file (deprecated, use --history-file=no)\n";
 
 void parse_opts(int *argcp, char ***argvp)
 {
@@ -142,7 +144,6 @@ void parse_opts(int *argcp, char ***argvp)
         { "home",            required_argument, 0, 'H' },
         { "eval",            required_argument, 0, 'e' },
         { "print",           required_argument, 0, 'E' },
-        { "post-boot",       required_argument, 0, 'P' },
         { "load",            required_argument, 0, 'L' },
         { "sysimage",        required_argument, 0, 'J' },
         { "precompiled",     required_argument, 0, opt_use_precompiled },
@@ -152,9 +153,7 @@ void parse_opts(int *argcp, char ***argvp)
         { "machinefile",     required_argument, 0, opt_machinefile },
         { "color",           required_argument, 0, opt_color },
         { "history-file",    required_argument, 0, opt_history_file },
-        { "no-history-file", no_argument,       0, opt_no_history_file }, // deprecated
         { "startup-file",    required_argument, 0, opt_startup_file },
-        { "no-startup",      no_argument,       0, 'f' },                 // deprecated
         { "compile",         required_argument, 0, opt_compile },
         { "code-coverage",   optional_argument, 0, opt_code_coverage },
         { "track-allocation",optional_argument, 0, opt_track_allocation },
@@ -172,6 +171,10 @@ void parse_opts(int *argcp, char ***argvp)
         { "worker",          required_argument, 0, opt_worker },
         { "bind-to",         required_argument, 0, opt_bind_to },
         { "lisp",            no_argument,       &lisp_prompt, 1 },
+        // deprecated options
+        { "post-boot",       required_argument, 0, 'P' },
+        { "no-history-file", no_argument,       0, opt_no_history_file }, // deprecated
+        { "no-startup",      no_argument,       0, 'f' },                 // deprecated
         { 0, 0, 0, 0 }
     };
     // getopt handles argument parsing up to -- delineator
@@ -236,6 +239,7 @@ restart_switch:
             jl_options.print = strdup(optarg);
             break;
         case 'P': // post-boot
+            jl_printf(JL_STDOUT, "WARNING: julia -P/--post-boot option is deprecated, use -i -e instead.\n");
             jl_options.postboot = strdup(optarg);
             break;
         case 'L': // load
@@ -296,6 +300,7 @@ restart_switch:
                 jl_errorf("julia: invalid argument to --history-file={yes|no} (%s)", optarg);
             break;
         case opt_no_history_file:
+            jl_printf(JL_STDOUT, "WARNING: julia --no-history-file option is deprecated, use --history-file=no instead.\n");
             jl_options.historyfile = JL_OPTIONS_HISTORYFILE_OFF;
             break;
         case opt_startup_file:
@@ -307,9 +312,11 @@ restart_switch:
                 jl_errorf("julia: invalid argument to --startup-file={yes|no} (%s)", optarg);
             break;
         case 'f':
+            jl_printf(JL_STDOUT, "WARNING: julia -f/--no-startup option is deprecated, use --startup-file=no instead.\n");
             jl_options.startupfile = JL_OPTIONS_STARTUPFILE_OFF;
             break;
         case 'F':
+            jl_printf(JL_STDOUT, "WARNING: julia -F option is deprecated, use --startup-file=yes instead.\n");
             jl_options.startupfile = JL_OPTIONS_STARTUPFILE_ON;
             break;
         case opt_compile:
