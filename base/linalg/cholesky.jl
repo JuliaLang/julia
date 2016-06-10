@@ -11,8 +11,8 @@
 # Float64, Complex{Float32}, and Complex{Float64} element types. For other element or
 # matrix types, the unblocked Julia implementation in _chol! is used. For cholfact
 # and cholfact! pivoting is supported through a Val{Bool} argument. A type argument is
-# necessary for type stability since the output cholfact and cholfact! is either Cholesky or
-# PivotedCholesky. The latter is only
+# necessary for type stability since the output of cholfact and cholfact! is either
+# Cholesky or PivotedCholesky. The latter is only
 # supported for the four LAPACK element types. For other types, e.g. BigFloats Val{true} will
 # give an error. It is required that the input is Hermitian (including real symmetric) either
 # through the Hermitian and Symmetric views or exact symmetric or Hermitian elements which
@@ -21,9 +21,9 @@
 # would be Union{Symmetric{T<:Real,S}, Hermitian} but, right now, it doesn't work in Julia
 # so we'll have to define methods for the two elements of the union separately.
 
-# FixMe? The dispatch below seems overly complicated. One simplification could be to merge
-# the two Cholesky types into a single one. It would remove the need for Val completely but
-# the cost would be extra unnecessary/ununsed fields for the unpivoted Cholesky and runtime
+# FixMe? The dispatch below seems overly complicated. One simplification could be to
+# merge the two Cholesky types into one. It would remove the need for Val completely but
+# the cost would be extra unnecessary/unused fields for the unpivoted Cholesky and runtime
 # checks of those fields before calls to LAPACK to check which version of the Cholesky
 # factorization the type represents.
 
@@ -115,21 +115,23 @@ function _chol!(x::Number, uplo)
     convert(promote_type(typeof(x), typeof(rxr)), rxr)
 end
 
-
+non_hermitian_error(f) = throw(ArgumentError("matrix is not symmetric/" *
+    "Hermitian. This error can be avoided by calling $f(Hermitian(A)) " *
+    "which will ignore either the upper or lower triangle of the matrix."))
 
 # chol!. Destructive methods for computing Cholesky factor of real symmetric or Hermitian
 # matrix
 chol!(A::Hermitian)                                = _chol!(A.data, UpperTriangular)
 chol!{T<:Real,S<:StridedMatrix}(A::Symmetric{T,S}) = _chol!(A.data, UpperTriangular)
 function chol!(A::StridedMatrix)
-    ishermitian(A) || throw(ArgumentError("matrix is not symmetric/Hermitian. This error can be avoided by calling chol!(Hermitian(A)) which will ignore either the upper or lower triangle of the matrix."))
+    ishermitian(A) || non_hermitian_error("chol!")
     return _chol!(A, UpperTriangular)
 end
 
 
 
 # chol. Non-destructive methods for computing Cholesky factor of a real symmetric or
-# Hermitian matrix. Promotes elements to type that is stable under square roots.
+# Hermitian matrix. Promotes elements to a type that is stable under square roots.
 function chol(A::Hermitian)
     T = promote_type(typeof(chol(one(eltype(A)))), Float32)
     AA = similar(A, T, size(A))
@@ -151,7 +153,7 @@ Compute the Cholesky factorization of a positive definite matrix `A`
 and return the UpperTriangular matrix `U` such that `A = U'U`.
 """
 function chol(A::AbstractMatrix)
-    ishermitian(A) || throw(ArgumentError("matrix is not symmetric/Hermitian. This error can be avoided by calling chol(Hermitian(A)) which will ignore either the upper or lower triangle of the matrix."))
+    ishermitian(A) || non_hermitian_error("chol")
     return chol(Hermitian(A))
 end
 
@@ -193,7 +195,7 @@ produces a number not representable by the element type of `A`, e.g. for
 integer types.
 """
 function cholfact!(A::StridedMatrix, uplo::Symbol, ::Type{Val{false}})
-    ishermitian(A) || throw(ArgumentError("matrix is not symmetric/Hermitian. This error can be avoided by calling cholfact!(Hermitian(A)) which will ignore either the upper or lower triangle of the matrix."))
+    ishermitian(A) || non_hermitian_error("cholfact!")
     return cholfact!(Hermitian(A), uplo, Val{false})
 end
 
@@ -202,7 +204,7 @@ cholfact!(A::Hermitian, uplo::Symbol = :U) = cholfact!(A, uplo, Val{false})
 cholfact!{T<:Real,S}(A::Symmetric{T,S}, uplo::Symbol = :U) = cholfact!(A, uplo, Val{false})
 #### for StridedMatrices, check that matrix is symmetric/Hermitian
 function cholfact!(A::StridedMatrix, uplo::Symbol = :U)
-    ishermitian(A) || throw(ArgumentError("matrix is not symmetric/Hermitian. This error can be avoided by calling cholfact!(Hermitian(A)) which will ignore either the upper or lower triangle of the matrix."))
+    ishermitian(A) || non_hermitian_error("cholfact!")
     return cholfact!(Hermitian(A), uplo)
 end
 
@@ -220,7 +222,7 @@ end
 ### is not implemented yet we throw an error
 cholfact!{T<:Real,S}(A::RealHermSymComplexHerm{T,S}, uplo::Symbol, ::Type{Val{true}};
     tol = 0.0) =
-        throw(ArgumentError("generic pivoted Cholesky fectorization is not implemented yet"))
+        throw(ArgumentError("generic pivoted Cholesky factorization is not implemented yet"))
 
 ### for StridedMatrices, check that matrix is symmetric/Hermitian
 """
@@ -232,7 +234,7 @@ factorisation produces a number not representable by the element type of `A`,
 e.g. for integer types.
 """
 function cholfact!(A::StridedMatrix, uplo::Symbol, ::Type{Val{true}}; tol = 0.0)
-    ishermitian(A) || throw(ArgumentError("matrix is not symmetric/Hermitian. This error can be avoided by calling cholfact!(Hermitian(A)) which will ignore either the upper or lower triangle of the matrix."))
+    ishermitian(A) || non_hermitian_error("cholfact!")
     return cholfact!(Hermitian(A), uplo, Val{true}; tol = tol)
 end
 
@@ -259,7 +261,7 @@ The following functions are available for `Cholesky` objects: `size`, `\\`, `inv
 A `PosDefException` exception is thrown in case the matrix is not positive definite.
 """
 function cholfact(A::StridedMatrix, uplo::Symbol, ::Type{Val{false}})
-    ishermitian(A) || throw(ArgumentError("matrix is not symmetric/Hermitian. This error can be avoided by calling cholfact(Hermitian(A)) which will ignore either the upper or lower triangle of the matrix."))
+    ishermitian(A) || non_hermitian_error("cholfact")
     return cholfact(Hermitian(A), uplo, Val{false})
 end
 
@@ -269,7 +271,7 @@ cholfact{T<:Real,S<:StridedMatrix}(A::Symmetric{T,S}, uplo::Symbol = :U) =
     cholfact(A, uplo, Val{false})
 #### for StridedMatrices, check that matrix is symmetric/Hermitian
 function cholfact(A::StridedMatrix, uplo::Symbol = :U)
-    ishermitian(A) || throw(ArgumentError("matrix is not symmetric/Hermitian. This error can be avoided by calling cholfact(Hermitian(A)) which will ignore either the upper or lower triangle of the matrix."))
+    ishermitian(A) || non_hermitian_error("cholfact")
     return cholfact(Hermitian(A), uplo)
 end
 
@@ -297,7 +299,7 @@ The argument `tol` determines the tolerance for determining the rank.
 For negative values, the tolerance is the machine precision.
 """
 function cholfact(A::StridedMatrix, uplo::Symbol, ::Type{Val{true}}; tol = 0.0)
-    ishermitian(A) || throw(ArgumentError("matrix is not symmetric/Hermitian. This error can be avoided by calling cholfact(Hermitian(A)) which will ignore either the upper or lower triangle of the matrix."))
+    ishermitian(A) || non_hermitian_error("cholfact")
     return cholfact(Hermitian(A), uplo, Val{true}; tol = tol)
 end
 
