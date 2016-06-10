@@ -390,7 +390,10 @@ function copy!(dest::AbstractArray, dstart::Integer,
     return dest
 end
 
-copy(a::AbstractArray) = copymutable(a)
+function copy(a::AbstractArray)
+    @_propagate_inbounds_meta
+    copymutable(a)
+end
 
 function copy!{R,S}(B::AbstractVecOrMat{R}, ir_dest::Range{Int}, jr_dest::Range{Int},
                     A::AbstractVecOrMat{S}, ir_src::Range{Int}, jr_src::Range{Int})
@@ -440,7 +443,10 @@ function copy_transpose!{R,S}(B::AbstractVecOrMat{R}, ir_dest::Range{Int}, jr_de
     return B
 end
 
-copymutable(a::AbstractArray) = copy!(similar(a), a)
+function copymutable(a::AbstractArray)
+    @_propagate_inbounds_meta
+    copy!(similar(a), a)
+end
 copymutable(itr) = collect(itr)
 """
     copymutable(a)
