@@ -123,6 +123,7 @@ immutable IndicesList      <: IndicesBehavior end   # indices like (:cat, :dog, 
 
 indicesbehavior(A::AbstractArray) = indicesbehavior(typeof(A))
 indicesbehavior{T<:AbstractArray}(::Type{T}) = IndicesStartAt1()
+indicesbehavior(::Number) = IndicesStartAt1()
 
 shapeinfo(a) = shapeinfo(indicesbehavior(a), a)
 shapeinfo(a, d) = shapeinfo(indicesbehavior(a), a, d)
@@ -258,6 +259,10 @@ allocate_for(f, a::AbstractArray, dim::Integer) = f(size(a,dim))
 allocate_for(f, a::AbstractArray, dims::Dims) = f(size(a,dims))
 allocate_for{T,N}(f, a::AbstractArray{T,N}) = allocate_for(f, a, ntuple(d->d, Val{N}))
 allocate_for(f, dims::Dims) = f(dims)
+
+normalize_indices(A) = normalize_indices(indicesbehavior(A), A)
+normalize_indices(::IndicesStartAt1, A) = A
+normalize_indices(::IndicesBehavior, A) = parent(A)
 
 ## from general iterable to any array
 
@@ -540,7 +545,8 @@ end
 _getindex(::LinearIndexing, A::AbstractArray, I...) = error("indexing $(typeof(A)) with types $(typeof(I)) is not supported")
 
 ## LinearFast Scalar indexing: canonical method is one Int
-_getindex(::LinearFast, A::AbstractArray, ::Int) = error("indexing not defined for ", typeof(A))
+_getindex(::LinearFast, A::AbstractVector, ::Int) = error("indexing not defined for ", typeof(A))
+_getindex(::LinearFast, A::AbstractArray,  ::Int) = error("indexing not defined for ", typeof(A))
 _getindex{T}(::LinearFast, A::AbstractArray{T,0}) = A[1]
 _getindex(::LinearFast, A::AbstractArray, i::Real) = (@_propagate_inbounds_meta; getindex(A, to_index(i)))
 function _getindex{T,N}(::LinearFast, A::AbstractArray{T,N}, I::Vararg{Real,N})
