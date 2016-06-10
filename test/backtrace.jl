@@ -3,7 +3,7 @@
 bt = backtrace()
 have_backtrace = false
 for l in bt
-    lkup = ccall(:jl_lookup_code_address, Any, (Ptr{Void},), l)
+    lkup = ccall(:jl_lookup_code_address, Any, (Ptr{Void}, Cint), l, true)
     if lkup[1][1] == :backtrace
         @test lkup[1][5] == false # fromC
         have_backtrace = true
@@ -73,9 +73,6 @@ linenum = @__LINE__; f12977(; args...) = ()
 loc = functionloc(f12977)
 @test endswith(loc[1], "backtrace.jl")
 @test loc[2] == linenum
-
-# issue #922: SimplifyCFG pass merges throws
-code_loc(p, skipC=true) = ccall(:jl_lookup_code_address, Any, (Ptr{Void},Cint), p-1, skipC)
 
 @noinline function test_throw_commoning(x)
     if x==1; throw(AssertionError()); end
