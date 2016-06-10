@@ -451,3 +451,50 @@ fLargeTable() = 4
 # issue #15280
 function f15280(x) end
 @test functionloc(f15280)[2] > 0
+
+# bug found in #16850, Base.url with backslashes on Windows
+function module_depth(from::Module, to::Module)
+    if from === to
+        return 0
+    else
+        return 1 + module_depth(from, module_parent(to))
+    end
+end
+function has_backslashes(mod::Module)
+    for n in names(mod, true, true)
+        isdefined(mod, n) || continue
+        f = getfield(mod, n)
+        if isa(f, Module) && module_depth(Main, f) <= module_depth(Main, mod)
+            continue
+        end
+        h = has_backslashes(f)
+        isnull(h) || return h
+    end
+    return Nullable{Method}()
+end
+function has_backslashes(f::Function)
+    for m in methods(f)
+        h = has_backslashes(m)
+        isnull(h) || return h
+    end
+    return Nullable{Method}()
+end
+function has_backslashes(meth::Method)
+    if '\\' in string(meth.file)
+        return Nullable{Method}(meth)
+    else
+        return Nullable{Method}()
+    end
+end
+has_backslashes(x) = Nullable{Method}()
+h16850 = has_backslashes(Base)
+if is_windows()
+    if isnull(h16850)
+        warn("No methods found in Base with backslashes in file name, ",
+             "skipping test for Base.url")
+    else
+        @test !('\\' in Base.url(get(h16850)))
+    end
+else
+    @test isnull(h16850)
+end
