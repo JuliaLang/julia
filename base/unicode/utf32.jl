@@ -126,16 +126,6 @@ convert(::Type{UTF32String}, data::AbstractVector{Char}) =
 convert{T<:AbstractString, S<:Union{UInt32,Char,Int32}}(::Type{T}, v::AbstractVector{S}) =
     convert(T, utf32(v))
 
-# specialize for performance reasons:
-function convert{T<:Union{UInt32,Char,Int32}}(::Type{String}, data::AbstractVector{T})
-    s = IOBuffer(Array{UInt8}(length(data)), true, true)
-    truncate(s,0)
-    for x in data
-        print(s, Char(x))
-    end
-    takebuf_string(s)
-end
-
 convert(::Type{Vector{UInt32}}, str::UTF32String) = str.data
 convert(::Type{Array{UInt32}},  str::UTF32String) = str.data
 
@@ -196,13 +186,6 @@ function map(f, s::UTF32String)
     UTF32String(out)
 end
 
-# Definitions for C compatible strings, that don't allow embedded
-# '\0', and which are terminated by a '\0'
-
-containsnul(s::AbstractString) = '\0' in s
-containsnul(s::String) = containsnul(unsafe_convert(Ptr{Cchar}, s), sizeof(s))
-containsnul(s::Union{UTF16String,UTF32String}) = findfirst(s.data, 0) != length(s.data)
-
 if sizeof(Cwchar_t) == 2
     const WString = UTF16String
     const wstring = utf16
@@ -221,13 +204,7 @@ function unsafe_convert(::Type{Cwstring}, s::WString)
     return Cwstring(unsafe_convert(Ptr{Cwchar_t}, s))
 end
 
-# pointer conversions of ASCII/UTF8/UTF16/UTF32 strings:
-pointer(x::Union{String,UTF16String,UTF32String}) = pointer(x.data)
-pointer(x::String, i::Integer) = pointer(x.data)+(i-1)
+pointer(x::Union{UTF16String,UTF32String}) = pointer(x.data)
 pointer(x::Union{UTF16String,UTF32String}, i::Integer) = pointer(x)+(i-1)*sizeof(eltype(x.data))
-
-# pointer conversions of SubString of ASCII/UTF8/UTF16/UTF32:
-pointer(x::SubString{String}) = pointer(x.string.data) + x.offset
-pointer(x::SubString{String}, i::Integer) = pointer(x.string.data) + x.offset + (i-1)
 pointer{T<:Union{UTF16String,UTF32String}}(x::SubString{T}) = pointer(x.string.data) + x.offset*sizeof(eltype(x.string.data))
 pointer{T<:Union{UTF16String,UTF32String}}(x::SubString{T}, i::Integer) = pointer(x.string.data) + (x.offset + (i-1))*sizeof(eltype(x.string.data))

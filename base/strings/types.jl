@@ -177,3 +177,6 @@ function repeat(s::String, r::Integer)
 end
 
 (^)(s::AbstractString, r::Integer) = repeat(s,r)
+
+pointer(x::SubString{String}) = pointer(x.string.data) + x.offset
+pointer(x::SubString{String}, i::Integer) = pointer(x.string.data) + x.offset + (i-1)

@@ -228,6 +228,9 @@ end
 
 write(io::IO, s::String) = write(io, s.data)
 
+pointer(x::String) = pointer(x.data)
+pointer(x::String, i::Integer) = pointer(x.data)+(i-1)
+
 ## transcoding to UTF-8 ##
 
 convert(::Type{String}, s::String) = s
