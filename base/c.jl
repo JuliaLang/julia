@@ -83,7 +83,11 @@ unsafe_string(s::Cstring) = unsafe_string(convert(Ptr{UInt8}, s))
 cconvert(::Type{Cstring}, s::AbstractString) = String(s)
 cconvert(::Type{Cwstring}, s::AbstractString) = wstring(s)
 
-containsnul(p::Ptr, len) = C_NULL != ccall(:memchr, Ptr{Cchar}, (Ptr{Cchar}, Cint, Csize_t), p, 0, len)
+containsnul(p::Ptr, len) =
+    C_NULL != ccall(:memchr, Ptr{Cchar}, (Ptr{Cchar}, Cint, Csize_t), p, 0, len)
+containsnul(s::String) = containsnul(unsafe_convert(Ptr{Cchar}, s), sizeof(s))
+containsnul(s::AbstractString) = '\0' in s
+
 function unsafe_convert(::Type{Cstring}, s::String)
     p = unsafe_convert(Ptr{Cchar}, s)
     if containsnul(p, sizeof(s))
