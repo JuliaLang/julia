@@ -566,14 +566,13 @@ JL_DLLEXPORT jl_method_t *jl_new_method_uninit(void)
     jl_method_t *m =
         (jl_method_t*)newobj((jl_value_t*)jl_method_type,
                              NWORDS(sizeof(jl_method_t)));
-    m->tfunc.unknown = jl_nothing;
+    m->specializations.unknown = jl_nothing;
     m->sig = NULL;
     m->tvars = NULL;
     m->ambig = NULL;
     m->roots = NULL;
     m->module = jl_current_module;
     m->lambda_template = NULL;
-    m->specializations = NULL;
     m->name = NULL;
     m->file = null_sym;
     m->line = 0;
