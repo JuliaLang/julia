@@ -266,12 +266,22 @@ function rewrite_iocontext!(expr::Expr)
     if expr.head == :call && expr.args[1] == :get
         key = expr.args[3]
         if     (((isa(key, QuoteNode) && key.value == :limit) ||
-                 (isa(key, Expr) && key.head == :quote && key.args[1] == :limit))
+                 (isa(key, Expr) && key.head == :quote && key.args[1] == :limit) ||
+                ((isa(key, QuoteNode) && key.value == :compact) ||
+                 (isa(key, Expr) && key.head == :quote && key.args[1] == :compact)))
                 && expr.args[4] == false)
             if VERSION >= v"0.5.0-dev+1936" && VERSION < v"0.5.0-dev+4305"
                 expr.args[1] = :(Base.limit_output)
                 deleteat!(expr.args, 3:4)
             elseif VERSION < v"0.5.0-dev+1936"
+                expr.head = :quote
+                expr.args[1] = false
+                deleteat!(expr.args, 3:4)
+            end
+        elseif (((isa(key, QuoteNode) && key.value == :multiline) ||
+                 (isa(key, Expr) && key.head == :quote && key.args[1] == :multiline))
+                && expr.args[4] == false)
+            if VERSION < v"0.5.0-dev+4305"
                 expr.head = :quote
                 expr.args[1] = false
                 deleteat!(expr.args, 3:4)
