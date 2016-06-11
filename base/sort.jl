@@ -413,6 +413,13 @@ end
 sort(v::AbstractVector; kws...) = sort!(copymutable(v); kws...)
 
 
+## other iterables and fallback ##
+
+sort(s::String; kws...) = String(sort(collect(s); kws...))
+sort(n::Number) = throw(MethodError(sort, n))
+sort(itr; kws...) = sort(collect(itr); kws...)
+
+
 ## selectperm: the permutation to sort the first k elements of an array ##
 
 selectperm(v::AbstractVector, k::Union{Integer,OrdinalRange}; kwargs...) =
