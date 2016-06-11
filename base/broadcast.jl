@@ -140,9 +140,9 @@ end
     B
 end
 
-broadcast(f, As...) = broadcast!(f, allocate_for(Array{promote_eltype_op(f, As...)}, broadcast_shape(As...)), As...)
--
-bitbroadcast(f, As...) = broadcast!(f, allocate_for(BitArray, broadcast_shape(As...)), As...)
+broadcast(f, As...) = broadcast!(f, allocate_for(Array{promote_eltype_op(f, As...)}, As, broadcast_shape(As...)), As...)
+
+bitbroadcast(f, As...) = broadcast!(f, allocate_for(BitArray, As, broadcast_shape(As...)), As...)
 
 broadcast_getindex(src::AbstractArray, I::AbstractArray...) = broadcast_getindex!(Array{eltype(src)}(broadcast_shape(I...)), src, I...)
 @generated function broadcast_getindex!(dest::AbstractArray, src::AbstractArray, I::AbstractArray...)
@@ -293,7 +293,7 @@ for (f, scalarf) in ((:.==, :(==)),
         shape = :(shapeinfo($active))
         @eval begin
             function ($f)(A::$sigA, B::$sigB)
-                P = allocate_for(BitArray, $shape)
+                P = allocate_for(BitArray, $active, $shape)
                 F = parent(P)
                 l = length(F)
                 l == 0 && return F

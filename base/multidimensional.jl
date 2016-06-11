@@ -774,7 +774,7 @@ If `dim` is specified, returns unique regions of the array `itr` along `dim`.
 @generated function unique{T,N}(A::AbstractArray{T,N}, dim::Int)
     quote
         1 <= dim <= $N || return copy(A)
-        hashes = allocate_for(inds->zeros(UInt, inds), A, dim)
+        hashes = allocate_for(inds->zeros(UInt, inds), A, shapeinfo(A, dim))
 
         # Compute hash for each row
         k = 0
@@ -783,7 +783,7 @@ If `dim` is specified, returns unique regions of the array `itr` along `dim`.
         end
 
         # Collect index of first row for each hash
-        uniquerow = allocate_for(Array{Int}, A, dim)
+        uniquerow = allocate_for(Array{Int}, A, shapeinfo(A, dim))
         firstrow = Dict{Prehashed,Int}()
         for k = indices(A, dim)
             uniquerow[k] = get!(firstrow, Prehashed(hashes[k]), k)
@@ -791,7 +791,7 @@ If `dim` is specified, returns unique regions of the array `itr` along `dim`.
         uniquerows = collect(values(firstrow))
 
         # Check for collisions
-        collided = allocate_for(falses, A, dim)
+        collided = allocate_for(falses, A, shapeinfo(A, dim))
         @inbounds begin
             @nloops $N i A d->(if d == dim
                 k = i_d
@@ -806,7 +806,7 @@ If `dim` is specified, returns unique regions of the array `itr` along `dim`.
         end
 
         if any(collided)
-            nowcollided = allocate_for(BitArray, A, dim)
+            nowcollided = allocate_for(BitArray, A, shapeinfo(A, dim))
             while any(collided)
                 # Collect index of first row for each collided hash
                 empty!(firstrow)
