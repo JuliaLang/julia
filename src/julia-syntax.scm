@@ -355,7 +355,7 @@
   (or (number? x) (string? x) (char? x) (and (pair? x) (memq (car x) '(quote inert)))
       (eq? x 'true) (eq? x 'false)))
 
-(define empty-vector-any '(call (core Array) (core Any) 0))
+(define empty-vector-any '(call (core AnyVector) 0))
 
 (define (keywords-method-def-expr name sparams argl body isstaged rett)
   (let* ((kargl (cdar argl))  ;; keyword expressions (= k v)
@@ -461,7 +461,7 @@
           `((|::|
              ;; if there are optional positional args, we need to be able to reference the function name
              ,(if (any kwarg? pargl) (gensy) UNUSED)
-             (call (core kwftype) ,ftype)) (:: ,kw (core Array)) ,@pargl ,@vararg)
+             (call (core kwftype) ,ftype)) (:: ,kw (core AnyVector)) ,@pargl ,@vararg)
           `(block
             ;; initialize keyword args to their defaults, or set a flag telling
             ;; whether this keyword needs to be set.
