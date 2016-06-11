@@ -725,7 +725,7 @@ static void jl_serialize_value_(ios_t *s, jl_value_t *v)
                 arraylist_push(&reinit_list, (void*)pos);
                 arraylist_push(&reinit_list, (void*)3);
             }
-            if (jl_is_method(v) && jl_typeof(((jl_method_t*)v)->tfunc.unknown) == (jl_value_t*)jl_typemap_level_type) {
+            if (jl_is_method(v) && jl_typeof(((jl_method_t*)v)->specializations.unknown) == (jl_value_t*)jl_typemap_level_type) {
                 arraylist_push(&reinit_list, (void*)pos);
                 arraylist_push(&reinit_list, (void*)4);
             }
@@ -835,7 +835,7 @@ static void jl_serialize_value_(ios_t *s, jl_value_t *v)
     else if (jl_is_method(v)) {
         writetag(s, jl_method_type);
         jl_method_t *m = (jl_method_t*)v;
-        union jl_typemap_t *tf = &m->tfunc;
+        union jl_typemap_t *tf = &m->specializations;
         if (tf->unknown && tf->unknown != jl_nothing) {
             // go through the t-func cache, replacing ASTs with just return
             // types for abstract argument types. these ASTs are generally
@@ -844,7 +844,6 @@ static void jl_serialize_value_(ios_t *s, jl_value_t *v)
         }
         jl_serialize_value(s, tf->unknown);
         jl_serialize_value(s, (jl_value_t*)m->name);
-        jl_serialize_value(s, (jl_value_t*)m->specializations);
         write_int8(s, m->isstaged);
         jl_serialize_value(s, (jl_value_t*)m->file);
         write_int32(s, m->line);
@@ -1445,12 +1444,10 @@ static jl_value_t *jl_deserialize_value_(ios_t *s, jl_value_t *vtag, jl_value_t 
                                  NWORDS(sizeof(jl_method_t)));
         if (usetable)
             arraylist_push(&backref_list, m);
-        m->tfunc.unknown = jl_deserialize_value(s, (jl_value_t**)&m->tfunc);
-        jl_gc_wb(m, m->tfunc.unknown);
+        m->specializations.unknown = jl_deserialize_value(s, (jl_value_t**)&m->specializations);
+        jl_gc_wb(m, m->specializations.unknown);
         m->name = (jl_sym_t*)jl_deserialize_value(s, NULL);
         jl_gc_wb(m, m->name);
-        m->specializations = (jl_array_t*)jl_deserialize_value(s, (jl_value_t**)&m->specializations);
-        if (m->specializations) jl_gc_wb(m, m->specializations);
         m->isstaged = read_int8(s);
         m->file = (jl_sym_t*)jl_deserialize_value(s, NULL);
         m->line = read_int32(s);
@@ -1834,9 +1831,9 @@ static void jl_reinit_item(ios_t *f, jl_value_t *v, int how, arraylist_t *tracee
                     arraylist_push(tracee_list, mt);
                 break;
             }
-            case 4: { // rehash tfunc
+            case 4: { // rehash specializations tfunc
                 jl_method_t *m = (jl_method_t*)v;
-                jl_typemap_rehash(m->tfunc, 0);
+                jl_typemap_rehash(m->specializations, 0);
                 break;
             }
             default:
