@@ -41,9 +41,9 @@ function Base.similar(A::AbstractArray, T::Type, inds::Tuple{Vararg{SimIdx}})
     OffsetArray(B, map(indsoffset, inds))
 end
 
-Base.allocate_for(f, A::OffsetArray, dim::Integer) = OffsetArray(f(size(A,dim)), (A.offsets[dim],))
-Base.allocate_for{N}(f, A::OffsetArray, dims::Dims{N}) = OffsetArray(f(size(A,dims)), A.offsets[dims]::Dims{N})
-Base.allocate_for(f, inds::Tuple{Vararg{SimIdx}}) = OffsetArray(f(map(Base.dimlength, inds)), map(indsoffset, inds))
+Base.allocate_for(f, A::OffsetArray, shape::SimIdx) = OffsetArray(f(Base.dimlength(shape)), (indsoffset(shape),))
+Base.allocate_for(f, A::OffsetArray, shape::Tuple{Vararg{SimIdx}}) = OffsetArray(f(map(Base.dimlength, shape)), map(indsoffset, shape))
+Base.promote_indices(a::OffsetArray, b::OffsetArray) = a
 
 Base.reshape(A::AbstractArray, inds::Indices) = OffsetArray(reshape(A, map(Base.dimlength, inds)), map(indsoffset, inds))
 

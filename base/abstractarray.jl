@@ -255,11 +255,31 @@ similar(   a::AbstractArray, T::Type, dims::Dims)        = Array(T, dims)
 _similar(::IndicesStartAt1, a::AbstractArray, T::Type)   = similar(a, T, size(a))
 _similar(::IndicesBehavior, a::AbstractArray, T::Type)   = similar(a, T, indices(a))
 
-allocate_for(f, a::AbstractArray, dim::Integer) = f(size(a,dim))
-allocate_for(f, a::AbstractArray, dims::Dims) = f(size(a,dims))
-allocate_for{T,N}(f, a::AbstractArray{T,N}) = allocate_for(f, a, ntuple(d->d, Val{N}))
-allocate_for(f, dims::Dims) = f(dims)
+allocate_for(f, a, shape::Union{SimIdx,Tuple{Vararg{SimIdx}}}) = f(shape)
+allocate_for(f, a) = allocate_for(f, a, shapeinfo(a))
+# allocate_for when passed multiple arrays. Necessary for broadcast, etc.
+function allocate_for(f, as::Tuple, shape::Union{SimIdx,Tuple{Vararg{SimIdx}}})
+    @_inline_meta
+    a = promote_indices(as...)
+    allocate_for(f, a, shape)
+end
 
+promote_indices(a) = a
+function promote_indices(a, b, c...)
+    @_inline_meta
+    promote_indices(promote_indices(a, b), c...)
+end
+# overload this to return true for your type, e.g.,
+#   promote_indices(a::OffsetArray, b::OffsetArray) = a
+promote_indices(a::AbstractArray, b::AbstractArray) = _promote_indices(indicesbehavior(a), indicesbehavior(b), a, b)
+_promote_indices(::IndicesStartAt1, ::IndicesStartAt1, a, b) = a
+_promote_indices(::IndicesBehavior, ::IndicesBehavior, a, b) = throw(ArgumentError("types $(typeof(a)) and $(typeof(b)) do not have promote_indices defined"))
+promote_indices(a::Number, b::AbstractArray) = b
+promote_indices(a::AbstractArray, b::Number) = a
+
+# Strip off the index-changing container---this assumes that `parent`
+# performs such an operation. TODO: since few things in Base need this, it
+# would be great to find a way to eliminate this function.
 normalize_indices(A) = normalize_indices(indicesbehavior(A), A)
 normalize_indices(::IndicesStartAt1, A) = A
 normalize_indices(::IndicesBehavior, A) = parent(A)
