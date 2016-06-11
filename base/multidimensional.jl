@@ -301,11 +301,29 @@ function _unsafe_getindex(::LinearIndexing, src::AbstractArray, I::AbstractArray
 
     D = eachindex(dest)
     Ds = start(D)
-    for (i, s) in zip(eachindex(I), eachindex(src))
-        @inbounds Ii = I[i]
-        if Ii
+    for (b, s) in zip(I, eachindex(src))
+        if b
             d, Ds = next(D, Ds)
             @inbounds dest[d] = src[s]
+        end
+    end
+    dest
+end
+
+# specialized form for LinearFast
+function _unsafe_getindex(::LinearFast, src::AbstractArray, I::AbstractArray{Bool})
+    shape = index_shape(src, I)
+    dest = similar(src, shape)
+    size(dest) == shape || throw_checksize_error(dest, shape)
+
+    D = eachindex(dest)
+    Ds = start(D)
+    s = 0
+    for i in eachindex(I)
+        s += 1
+        @inbounds if I[i]
+            d, Ds = next(D, Ds)
+            dest[d] = src[s]
         end
     end
     dest
@@ -365,6 +383,25 @@ function _unsafe_setindex!(::LinearIndexing, A::AbstractArray, x, I::AbstractArr
             done(X, Xs) && throw_setindex_mismatch(x, c+1)
             (v, Xs) = next(X, Xs)
             @inbounds A[iA] = v
+            c += 1
+        end
+    end
+    setindex_shape_check(X, c)
+    A
+end
+
+# specialized form for LinearFast
+function _unsafe_setindex!(::LinearFast, A::AbstractArray, x, I::AbstractArray{Bool})
+    X = _iterable(x)
+    Xs = start(X)
+    iA = 0
+    c = 0
+    for i in eachindex(I)
+        iA += 1
+        @inbounds if I[i]
+            done(X, Xs) && throw_setindex_mismatch(x, c+1)
+            (v, Xs) = next(X, Xs)
+            A[iA] = v
             c += 1
         end
     end
