@@ -48,7 +48,7 @@ developers may find the notes in [CONTRIBUTING](https://github.com/JuliaLang/jul
 <a name="Currently-Supported-Platforms"/>
 ## Currently Supported Platforms
 
-- **GNU/Linux**
+- **Linux**
 - **Darwin/OS X**
 - **FreeBSD**
 - **Windows**
