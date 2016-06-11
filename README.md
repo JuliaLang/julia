@@ -48,7 +48,7 @@ developers may find the notes in [CONTRIBUTING](https://github.com/JuliaLang/jul
 <a name="Currently-Supported-Platforms"/>
 ## Currently Supported Platforms
 
-- **GNU/Linux**
+- **Linux**
 - **Darwin/OS X**
 - **FreeBSD**
 - **Windows**
@@ -395,6 +395,7 @@ You can read about [getting started](http://julialang.org/manual/getting-started
 
 The following distributions include julia, but the versions may be out of date due to rapid development:
 
+* [Alpine Linux](http://pkgs.alpinelinux.org/package/edge/testing/x86_64/julia)
 * [Arch Linux](https://www.archlinux.org/packages/community/i686/julia/)
 * [Debian GNU/Linux](http://packages.debian.org/sid/julia)
 * [Fedora Linux](https://admin.fedoraproject.org/pkgdb/package/julia/), RHEL/CentOS/OEL/Scientific Linux (EPEL)
