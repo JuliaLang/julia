@@ -3447,6 +3447,7 @@ static void finalize_gc_frame(Function *F)
         Value *getter = tbaa_decorate(tbaa_const,
                                       new LoadInst(GV, "", ptlsStates));
         ptlsStates->setCalledFunction(getter);
+        ptlsStates->setAttributes(jltls_states_func->getAttributes());
     }
 #else
     ptlsStates->replaceAllUsesWith(prepare_global(jltls_states_var, M));
