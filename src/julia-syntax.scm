@@ -2812,11 +2812,11 @@ f(x) = yt(x)
                         (typedef  ;; expression to define the type
                          (let* ((fieldtypes (map (lambda (v)
                                                    (if (is-var-boxed? v lam)
-                                                       'Any ;; TODO
+                                                       '(core Box)
                                                        (gensy)))
                                                  capt-vars))
                                 (para (append capt-sp
-                                              (filter (lambda (v) (not (eq? v 'Any))) fieldtypes))))
+                                              (filter (lambda (v) (symbol? v)) fieldtypes))))
                            (if (null? para)
                                (type-for-closure tname capt-vars '(core Function))
                                (type-for-closure-parameterized tname para capt-vars fieldtypes '(core Function)))))
