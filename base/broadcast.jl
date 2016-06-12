@@ -3,7 +3,7 @@
 module Broadcast
 
 using Base.Cartesian
-using Base: promote_op, promote_eltype, promote_eltype_op, @get!, _msk_end, unsafe_bitgetindex, shapeinfo, linindices, allocate_for, tail, dimlength
+using Base: promote_op, promote_eltype, promote_eltype_op, @get!, _msk_end, unsafe_bitgetindex, shape, linearindices, allocate_for, tail, dimlength
 import Base: .+, .-, .*, ./, .\, .//, .==, .<, .!=, .<=, .÷, .%, .<<, .>>, .^
 export broadcast, broadcast!, bitbroadcast
 export broadcast_getindex, broadcast_setindex!
@@ -13,8 +13,8 @@ export broadcast_getindex, broadcast_setindex!
 ## Calculate the broadcast shape of the arguments, or error if incompatible
 # array inputs
 broadcast_shape() = ()
-broadcast_shape(A) = shapeinfo(A)
-@inline broadcast_shape(A, B...) = broadcast_shape((), shapeinfo(A), map(shapeinfo, B)...)
+broadcast_shape(A) = shape(A)
+@inline broadcast_shape(A, B...) = broadcast_shape((), shape(A), map(shape, B)...)
 # shape inputs
 broadcast_shape(shape::Tuple) = shape
 @inline broadcast_shape(shape::Tuple, shape1::Tuple, shapes::Tuple...) = broadcast_shape(_bcs((), shape, shape1), shapes...)
@@ -39,19 +39,19 @@ _bcsm(a::Number, b::Number) = a == b || b == 1
 ## Check that all arguments are broadcast compatible with shape
 ## Check that all arguments are broadcast compatible with shape
 # comparing one input against a shape
-check_broadcast_shape(shape) = nothing
-check_broadcast_shape(shape, A) = check_broadcast_shape(shape, shapeinfo(A))
+check_broadcast_shape(shp) = nothing
+check_broadcast_shape(shp, A) = check_broadcast_shape(shp, shape(A))
 check_broadcast_shape(::Tuple{}, ::Tuple{}) = nothing
-check_broadcast_shape(shape, ::Tuple{}) = nothing
-check_broadcast_shape(::Tuple{}, Ashape::Tuple) = throw(DimensionMismatch("cannot broadcast array to have fewer dimensions"))
-function check_broadcast_shape(shape, Ashape::Tuple)
-    _bcsm(shape[1], Ashape[1]) || throw(DimensionMismatch("array could not be broadcast to match destination"))
-    check_broadcast_shape(tail(shape), tail(Ashape))
+check_broadcast_shape(shp, ::Tuple{}) = nothing
+check_broadcast_shape(::Tuple{}, Ashp::Tuple) = throw(DimensionMismatch("cannot broadcast array to have fewer dimensions"))
+function check_broadcast_shape(shp, Ashp::Tuple)
+    _bcsm(shp[1], Ashp[1]) || throw(DimensionMismatch("array could not be broadcast to match destination"))
+    check_broadcast_shape(tail(shp), tail(Ashp))
 end
 # comparing many inputs
-@inline function check_broadcast_shape(shape, A, As...)
-    check_broadcast_shape(shape, A)
-    check_broadcast_shape(shape, As...)
+@inline function check_broadcast_shape(shp, A, As...)
+    check_broadcast_shape(shp, A)
+    check_broadcast_shape(shp, As...)
 end
 
 ## Indexing manipulations
@@ -133,7 +133,7 @@ end
 end
 
 @inline function broadcast!{nargs}(f, B::AbstractArray, As::Vararg{Any,nargs})
-    check_broadcast_shape(shapeinfo(B), As...)
+    check_broadcast_shape(shape(B), As...)
     sz = size(B)
     mapindex = map(x->newindexer(sz, x), As)
     _broadcast!(f, B, mapindex, As, Val{nargs})
@@ -290,7 +290,7 @@ for (f, scalarf) in ((:.==, :(==)),
                                               :((A,ind)->A), :((B,ind)->B[ind])),
                                              (:AbstractArray, :Any, :A,
                                               :((A,ind)->A[ind]), :((B,ind)->B)))
-        shape = :(shapeinfo($active))
+        shape = :(shape($active))
         @eval begin
             function ($f)(A::$sigA, B::$sigB)
                 P = allocate_for(BitArray, $active, $shape)
@@ -299,7 +299,7 @@ for (f, scalarf) in ((:.==, :(==)),
                 l == 0 && return F
                 Fc = F.chunks
                 C = Array{Bool}(bitcache_size)
-                ind = first(linindices($active))
+                ind = first(linearindices($active))
                 cind = 1
                 for i = 1:div(l + bitcache_size - 1, bitcache_size)
                     ind = bitcache($scalarf, A, B, $refA, $refB, l, ind, C)

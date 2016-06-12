@@ -235,7 +235,7 @@ function sum_kbn{T<:AbstractFloat}(A::AbstractArray{T})
     if isempty(A)
         return c
     end
-    inds = linindices(A)
+    inds = linearindices(A)
     s = A[first(inds)] + c
     for i in first(inds)+1:last(inds)
         @inbounds Ai = A[i]

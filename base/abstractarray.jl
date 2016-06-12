@@ -49,8 +49,8 @@ end
 #     ntuple(d->indices(A, d), Val{N})
 # end
 indices1(A) = (@_inline_meta; indices(A, 1))
-linindices(A) = 1:length(A)
-linindices(A::AbstractVector) = indices1(A)
+linearindices(A) = 1:length(A)
+linearindices(A::AbstractVector) = indices1(A)
 eltype{T}(::Type{AbstractArray{T}}) = T
 eltype{T,N}(::Type{AbstractArray{T,N}}) = T
 elsize{T}(::AbstractArray{T}) = sizeof(T)
@@ -125,12 +125,12 @@ indicesbehavior(A::AbstractArray) = indicesbehavior(typeof(A))
 indicesbehavior{T<:AbstractArray}(::Type{T}) = IndicesStartAt1()
 indicesbehavior(::Number) = IndicesStartAt1()
 
-shapeinfo(a) = shapeinfo(indicesbehavior(a), a)
-shapeinfo(a, d) = shapeinfo(indicesbehavior(a), a, d)
-shapeinfo(::IndicesStartAt1, a) = size(a)
-shapeinfo(::IndicesStartAt1, a, d) = size(a, d)
-shapeinfo(::IndicesBehavior, a) = indices(a)
-shapeinfo(::IndicesBehavior, a, d) = indices(a, d)
+shape(a) = shape(indicesbehavior(a), a)
+shape(a, d) = shape(indicesbehavior(a), a, d)
+shape(::IndicesStartAt1, a) = size(a)
+shape(::IndicesStartAt1, a, d) = size(a, d)
+shape(::IndicesBehavior, a) = indices(a)
+shape(::IndicesBehavior, a, d) = indices(a, d)
 
 ## Bounds checking ##
 @generated function trailingsize{T,N,n}(A::AbstractArray{T,N}, ::Type{Val{n}})
@@ -256,7 +256,7 @@ _similar(::IndicesStartAt1, a::AbstractArray, T::Type)   = similar(a, T, size(a)
 _similar(::IndicesBehavior, a::AbstractArray, T::Type)   = similar(a, T, indices(a))
 
 allocate_for(f, a, shape::Union{SimIdx,Tuple{Vararg{SimIdx}}}) = f(shape)
-allocate_for(f, a) = allocate_for(f, a, shapeinfo(a))
+allocate_for(f, a) = allocate_for(f, a, shape(a))
 # allocate_for when passed multiple arrays. Necessary for broadcast, etc.
 function allocate_for(f, as::Tuple, shape::Union{SimIdx,Tuple{Vararg{SimIdx}}})
     @_inline_meta
@@ -338,7 +338,7 @@ function copy!(dest::AbstractArray, dstart::Integer, src, sstart::Integer, n::In
     n < 0 && throw(ArgumentError(string("tried to copy n=", n, " elements, but n should be nonnegative")))
     n == 0 && return dest
     dmax = dstart + n - 1
-    inds = linindices(dest)
+    inds = linearindices(dest)
     if (dstart ∉ inds || dmax ∉ inds) | (sstart < 1)
         sstart < 1 && throw(ArgumentError(string("source start offset (",sstart,") is < 1")))
         throw(BoundsError(dest, dstart:dmax))
@@ -368,7 +368,7 @@ copy!(dest::AbstractArray, src::AbstractArray) =
     copy!(linearindexing(dest), dest, linearindexing(src), src)
 
 function copy!(::LinearIndexing, dest::AbstractArray, ::LinearIndexing, src::AbstractArray)
-    destinds, srcinds = linindices(dest), linindices(src)
+    destinds, srcinds = linearindices(dest), linearindices(src)
     isempty(srcinds) || (first(srcinds) ∈ destinds && last(srcinds) ∈ destinds) || throw(BoundsError(dest, srcinds))
     @inbounds for i in srcinds
         dest[i] = src[i]
@@ -377,7 +377,7 @@ function copy!(::LinearIndexing, dest::AbstractArray, ::LinearIndexing, src::Abs
 end
 
 function copy!(::LinearIndexing, dest::AbstractArray, ::LinearSlow, src::AbstractArray)
-    destinds, srcinds = linindices(dest), linindices(src)
+    destinds, srcinds = linearindices(dest), linearindices(src)
     isempty(srcinds) || (first(srcinds) ∈ destinds && last(srcinds) ∈ destinds) || throw(BoundsError(dest, srcinds))
     i = 0
     @inbounds for a in src
@@ -387,11 +387,11 @@ function copy!(::LinearIndexing, dest::AbstractArray, ::LinearSlow, src::Abstrac
 end
 
 function copy!(dest::AbstractArray, dstart::Integer, src::AbstractArray)
-    copy!(dest, dstart, src, first(linindices(src)), length(src))
+    copy!(dest, dstart, src, first(linearindices(src)), length(src))
 end
 
 function copy!(dest::AbstractArray, dstart::Integer, src::AbstractArray, sstart::Integer)
-    srcinds = linindices(src)
+    srcinds = linearindices(src)
     sstart ∈ srcinds || throw(BoundsError(src, sstart))
     copy!(dest, dstart, src, sstart, last(srcinds)-sstart+1)
 end
@@ -401,7 +401,7 @@ function copy!(dest::AbstractArray, dstart::Integer,
                n::Integer)
     n == 0 && return dest
     n < 0 && throw(ArgumentError(string("tried to copy n=", n, " elements, but n should be nonnegative")))
-    destinds, srcinds = linindices(dest), linindices(src)
+    destinds, srcinds = linearindices(dest), linearindices(src)
     (dstart ∈ destinds && dstart+n-1 ∈ destinds) || throw(BoundsError(dest, dstart:dstart+n-1))
     (sstart ∈ srcinds  && sstart+n-1 ∈ srcinds)  || throw(BoundsError(src,  sstart:sstart+n-1))
     @inbounds for i = 0:(n-1)
@@ -501,7 +501,7 @@ function eachindex(A::AbstractArray, B::AbstractArray...)
     @_inline_meta
     eachindex(linearindexing(A,B...), A, B...)
 end
-eachindex(::LinearFast, A::AbstractArray) = linindices(A)
+eachindex(::LinearFast, A::AbstractArray) = linearindices(A)
 function eachindex(::LinearFast, A::AbstractArray, B::AbstractArray...)
     @_inline_meta
     1:_maxlength(A, B...)
@@ -545,7 +545,7 @@ end
 # a data Ref. they just map the array element type to the pointer type for
 # convenience in cases that work.
 pointer{T}(x::AbstractArray{T}) = unsafe_convert(Ptr{T}, x)
-pointer{T}(x::AbstractArray{T}, i::Integer) = (@_inline_meta; unsafe_convert(Ptr{T},x) + (i-first(linindices(x)))*elsize(x))
+pointer{T}(x::AbstractArray{T}, i::Integer) = (@_inline_meta; unsafe_convert(Ptr{T},x) + (i-first(linearindices(x)))*elsize(x))
 
 
 ## Approach:
@@ -1266,7 +1266,7 @@ function mapslices(f, A::AbstractArray, dims::AbstractVector)
         return map(f,A)
     end
 
-    dimsA = [shapeinfo(A)...]
+    dimsA = [shape(A)...]
     ndimsA = ndims(A)
     alldims = [1:ndimsA;]
 
@@ -1355,7 +1355,7 @@ ith_all(i, ::Tuple{}) = ()
 ith_all(i, as) = (as[1][i], ith_all(i, tail(as))...)
 
 function map_n!{F}(f::F, dest::AbstractArray, As)
-    for i = linindices(As[1])
+    for i = linearindices(As[1])
         dest[i] = f(ith_all(i, As)...)
     end
     return dest

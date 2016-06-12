@@ -484,6 +484,7 @@ export
     zeta,
 
 # arrays
+    allocate_for,
     bitbroadcast,
     broadcast!,
     broadcast,
@@ -537,6 +538,7 @@ export
     isperm,
     issorted,
     last,
+    linearindices,
     linspace,
     logspace,
     mapslices,
@@ -581,6 +583,7 @@ export
     searchsortedlast,
     select!,
     select,
+    shape,
     shuffle,
     shuffle!,
     size,
