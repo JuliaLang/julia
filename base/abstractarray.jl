@@ -545,7 +545,7 @@ end
 # a data Ref. they just map the array element type to the pointer type for
 # convenience in cases that work.
 pointer{T}(x::AbstractArray{T}) = unsafe_convert(Ptr{T}, x)
-pointer{T}(x::AbstractArray{T}, i::Integer) = (@_inline_meta; unsafe_convert(Ptr{T},x) + (i-1)*elsize(x))
+pointer{T}(x::AbstractArray{T}, i::Integer) = (@_inline_meta; unsafe_convert(Ptr{T},x) + (i-first(linindices(x)))*elsize(x))
 
 
 ## Approach:
@@ -1187,6 +1187,11 @@ _lookup(ind, d::Integer) = ind+1
 _lookup(ind, r::UnitRange) = ind+first(r)
 _div(ind, d::Integer) = div(ind, d), 1, d
 _div(ind, r::UnitRange) = (d = unsafe_length(r); (div(ind, d), first(r), d))
+
+smart_ind2sub(shape::NTuple{1}, ind) = (ind,)
+smart_ind2sub(shape, ind) = ind2sub(shape, ind)
+smart_sub2ind(shape::NTuple{1}, i) = (i,)
+smart_sub2ind(shape, I...) = (@_inline_meta; sub2ind(shape, I...))
 
 # Vectorized forms
 function sub2ind{N,T<:Integer}(inds::Union{Dims{N},Indices{N}}, I::AbstractVector{T}...)
