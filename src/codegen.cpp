@@ -3546,7 +3546,7 @@ static Function *gen_cfun_wrapper(jl_function_t *ff, jl_value_t *jlrettype, jl_t
 
     // Save the Function object reference
     sf->func.value = jl_box_voidpointer((void*)cw_proto);
-    jl_gc_wb(&sf->func.value, sf);
+    jl_gc_wb(sf, sf->func.value);
 
     // See whether this function is specsig or jlcall or generic (unknown)
     bool specsig, jlfunc_sret;
