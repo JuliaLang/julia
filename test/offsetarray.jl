@@ -177,6 +177,18 @@ show(io, v)
 str = takebuf_string(io)
 show(io, parent(v))
 @test str == takebuf_string(io)
+function cmp_showf(printfunc, io, A)
+    ioc = IOContext(io, limit=true, multiline=true, compact=true)
+    printfunc(ioc, A)
+    str1 = takebuf_string(io)
+    printfunc(ioc, parent(A))
+    str2 = takebuf_string(io)
+    @test str1 == str2
+end
+cmp_showf(Base.print_matrix, io, OffsetArray(rand(5,5), (10,-9)))       # rows&cols fit
+cmp_showf(Base.print_matrix, io, OffsetArray(rand(10^3,5), (10,-9)))    # columns fit
+cmp_showf(Base.print_matrix, io, OffsetArray(rand(5,10^3), (10,-9)))    # rows fit
+cmp_showf(Base.print_matrix, io, OffsetArray(rand(10^3,10^3), (10,-9))) # neither fits
 
 # Similar
 B = similar(A, Float32)
