@@ -1327,7 +1327,7 @@ function print_matrix(io::IO, X::AbstractVecOrMat,
                 print(io, i == first(rowsA) ? pre : presp)
                 print_matrix_row(io, X,A,i,colsA,sep)
                 print(io, i == last(rowsA) ? post : postsp)
-                if i != m; println(io, ); end
+                if i != last(rowsA); println(io, ); end
             end
         else # rows fit down screen but cols don't, so need horizontal ellipsis
             c = div(screenwidth-length(hdots)+1,2)+1  # what goes to right of ellipsis
@@ -1336,11 +1336,11 @@ function print_matrix(io::IO, X::AbstractVecOrMat,
             Lalign = alignment(io, X, rowsA, colsA, c, c, sepsize) # alignments for left of ellipsis
             for i in rowsA
                 print(io, i == first(rowsA) ? pre : presp)
-                print_matrix_row(io, X,Lalign,i,1:length(Lalign),sep)
+                print_matrix_row(io, X,Lalign,i,colsA[1:length(Lalign)],sep)
                 print(io, (i - first(rowsA)) % hmod == 0 ? hdots : repeat(" ", length(hdots)))
                 print_matrix_row(io, X,Ralign,i,n-length(Ralign)+colsA,sep)
                 print(io, i == last(rowsA) ? post : postsp)
-                if i != m; println(io, ); end
+                if i != last(rowsA); println(io, ); end
             end
         end
     else # rows don't fit so will need vertical ellipsis
@@ -1350,7 +1350,7 @@ function print_matrix(io::IO, X::AbstractVecOrMat,
                 print_matrix_row(io, X,A,i,colsA,sep)
                 print(io, i == last(rowsA) ? post : postsp)
                 if i != rowsA[end]; println(io, ); end
-                if i == halfheight
+                if i == rowsA[halfheight]
                     print(io, i == first(rowsA) ? pre : presp)
                     print_matrix_vdots(io, vdots,A,sep,vmod,1)
                     println(io, i == last(rowsA) ? post : postsp)
@@ -1364,12 +1364,12 @@ function print_matrix(io::IO, X::AbstractVecOrMat,
             r = mod((length(Ralign)-n+1),vmod) # where to put dots on right half
             for i in rowsA
                 print(io, i == first(rowsA) ? pre : presp)
-                print_matrix_row(io, X,Lalign,i,1:length(Lalign),sep)
+                print_matrix_row(io, X,Lalign,i,colsA[1:length(Lalign)],sep)
                 print(io, (i - first(rowsA)) % hmod == 0 ? hdots : repeat(" ", length(hdots)))
                 print_matrix_row(io, X,Ralign,i,n-length(Ralign)+colsA,sep)
                 print(io, i == last(rowsA) ? post : postsp)
                 if i != rowsA[end]; println(io, ); end
-                if i == halfheight
+                if i == rowsA[halfheight]
                     print(io, i == first(rowsA) ? pre : presp)
                     print_matrix_vdots(io, vdots,Lalign,sep,vmod,1)
                     print(io, ddots)
