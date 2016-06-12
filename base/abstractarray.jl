@@ -524,6 +524,7 @@ _getindex(::LinearIndexing, A::AbstractArray, I...) = error("indexing $(typeof(A
 
 ## LinearFast Scalar indexing: canonical method is one Int
 _getindex(::LinearFast, A::AbstractArray, ::Int) = error("indexing not defined for ", typeof(A))
+_getindex{T}(::LinearFast, A::AbstractArray{T,0}) = A[1]
 _getindex(::LinearFast, A::AbstractArray, i::Real) = (@_propagate_inbounds_meta; getindex(A, to_index(i)))
 function _getindex{T,N}(::LinearFast, A::AbstractArray{T,N}, I::Vararg{Real,N})
     # We must check bounds for sub2ind; so we can then use @inbounds
@@ -574,7 +575,7 @@ end
             # ind2sub requires all dimensions to be > 0:
             @_propagate_inbounds_meta
             @boundscheck (&)($(szcheck...)) || throw_boundserror(A, I)
-            getindex(A, $(Isplat...), ind2sub($sz, $last_idx)...)  # FIXME
+            getindex(A, $(Isplat...), ind2sub($sz, $last_idx)...)
         end
     end
 end
@@ -595,6 +596,7 @@ _setindex!(::LinearIndexing, A::AbstractArray, v, I...) = error("indexing $(type
 
 ## LinearFast Scalar indexing
 _setindex!(::LinearFast, A::AbstractArray, v, ::Int) = error("indexed assignment not defined for ", typeof(A))
+_setindex!{T}(::LinearFast, A::AbstractArray{T,0}, v) = (@_propagate_inbounds_meta; setindex!(A, v, 1))
 _setindex!(::LinearFast, A::AbstractArray, v, i::Real) = (@_propagate_inbounds_meta; setindex!(A, v, to_index(i)))
 function _setindex!{T,N}(::LinearFast, A::AbstractArray{T,N}, v, I::Vararg{Real,N})
     # We must check bounds for sub2ind; so we can then use @inbounds
