@@ -49,6 +49,18 @@ end
 #     ntuple(d->indices(A, d), Val{N})
 # end
 indices1(A) = (@_inline_meta; indices(A, 1))
+"""
+    linearindices(A)
+
+Returns a `UnitRange` specifying the valid range of indices for `A[i]`
+where `i` is an `Int`. For arrays with conventional indexing (indices
+start at 1), or any multidimensional array, this is `1:length(A)`;
+however, for one-dimensional arrays with unconventional indices, this
+is `indices(A, 1)`.
+
+Calling this function is the "safe" way to write algorithms that
+exploit linear indexing.
+"""
 linearindices(A) = 1:length(A)
 linearindices(A::AbstractVector) = indices1(A)
 eltype{T}(::Type{AbstractArray{T}}) = T
@@ -125,7 +137,23 @@ indicesbehavior(A::AbstractArray) = indicesbehavior(typeof(A))
 indicesbehavior{T<:AbstractArray}(::Type{T}) = IndicesStartAt1()
 indicesbehavior(::Number) = IndicesStartAt1()
 
+"""
+    shape(A)
+
+Returns a tuple specifying the "shape" of array `A`. For arrays with
+conventional indexing (indices start at 1), this is equivalent to
+`size(A)`; otherwise it is equivalent to `incides(A)`.
+"""
 shape(a) = shape(indicesbehavior(a), a)
+"""
+    shape(A, d)
+
+Specifies the "shape" of the array `A` along dimension `d`. For arrays
+with conventional indexing (starting at 1), this is equivalent to
+`size(A, d)`; for arrays with unconventional indexing (indexing may
+start at something different from 1), it is equivalent to `indices(A,
+d)`.
+"""
 shape(a, d) = shape(indicesbehavior(a), a, d)
 shape(::IndicesStartAt1, a) = size(a)
 shape(::IndicesStartAt1, a, d) = size(a, d)
@@ -243,6 +271,43 @@ checkbounds(A::AbstractArray) = checkbounds(A, 1) # 0-d case
 
 # default arguments to similar()
 typealias SimIdx Union{Integer,UnitRangeInteger}
+"""
+    similar(array, [element_type=eltype(array)], [dims=size(array)])
+
+Create an uninitialized mutable array with the given element type and size, based upon the
+given source array. The second and third arguments are both optional, defaulting to the
+given array's `eltype` and `size`. The dimensions may be specified either as a single tuple
+argument or as a series of integer arguments.
+
+Custom AbstractArray subtypes may choose which specific array type is best-suited to return
+for the given element type and dimensionality. If they do not specialize this method, the
+default is an `Array{element_type}(dims...)`.
+
+For example, `similar(1:10, 1, 4)` returns an uninitialized `Array{Int,2}` since ranges are
+neither mutable nor support 2 dimensions:
+
+    julia> similar(1:10, 1, 4)
+    1×4 Array{Int64,2}:
+     4419743872  4374413872  4419743888  0
+
+Conversely, `similar(trues(10,10), 2)` returns an uninitialized `BitVector` with two
+elements since `BitArray`s are both mutable and can support 1-dimensional arrays:
+
+    julia> similar(trues(10,10), 2)
+    2-element BitArray{1}:
+     false
+     false
+
+Since `BitArray`s can only store elements of type `Bool`, however, if you request a
+different element type it will create a regular `Array` instead:
+
+    julia> similar(falses(10), Float64, 2, 4)
+    2×4 Array{Float64,2}:
+     2.18425e-314  2.18425e-314  2.18425e-314  2.18425e-314
+     2.18425e-314  2.18425e-314  2.18425e-314  2.18425e-314
+
+See also `allocate_for`.
+"""
 similar{T}(a::AbstractArray{T})                          = similar(a, T)
 similar(   a::AbstractArray, T::Type)                    = _similar(indicesbehavior(a), a, T)
 similar{T}(a::AbstractArray{T}, dims::Tuple)             = similar(a, T, dims)
@@ -255,6 +320,37 @@ similar(   a::AbstractArray, T::Type, dims::Dims)        = Array(T, dims)
 _similar(::IndicesStartAt1, a::AbstractArray, T::Type)   = similar(a, T, size(a))
 _similar(::IndicesBehavior, a::AbstractArray, T::Type)   = similar(a, T, indices(a))
 
+"""
+    allocate_for(storagetype, referencearray, [shape])
+
+Create an uninitialized mutable array analogous to that specified by
+`storagetype`, but with type and shape specified by the final two
+arguments. The main purpose of this function is to support allocation
+of arrays that may have unconventional indexing (starting at other
+than 1), as determined by `referencearray` and the optional `shape`
+information.
+
+    **Examples**:
+
+    allocate_for(Array{Int}, A)
+
+creates an array that "acts like" an `Array{Int}` (and might indeed be
+backed by one), but which is indexed identically to `A`. If `A` has
+conventional indexing, this will likely just call
+`Array{Int}(size(A))`, but if `A` has unconventional indexing then the
+indices of the result will match `A`.
+
+    allocate_for(BitArray, A, (shape(A, 2),))
+
+would create a 1-dimensional logical array whose indices match those
+of the columns of `A`.
+
+The main purpose of the `referencearray` argument is to select a
+particular array type supporting unconventional indexing (as it is
+possible that several different ones will be simultaneously in use).
+
+See also `similar`.
+"""
 allocate_for(f, a, shape::Union{SimIdx,Tuple{Vararg{SimIdx}}}) = f(shape)
 allocate_for(f, a) = allocate_for(f, a, shape(a))
 # allocate_for when passed multiple arrays. Necessary for broadcast, etc.

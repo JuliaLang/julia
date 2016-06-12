@@ -27,6 +27,11 @@ New language features
   * Function return type syntax `function f()::T` has been added ([#1090]). Values returned
     from a function with such a declaration will be converted to the specified type `T`.
 
+  * Experimental support for arrays with indexing starting at values
+    different from 1. The array types are expected to be defined in
+    packages, but now Julia provides an API for writing generic
+    algorithms for arbitrary indexing schemes ([#16260]).
+
 Language changes
 ----------------
 
@@ -268,3 +273,4 @@ Deprecated or removed
 [#16403]: https://github.com/JuliaLang/julia/issues/16403
 [#16481]: https://github.com/JuliaLang/julia/issues/16481
 [#16731]: https://github.com/JuliaLang/julia/issues/16731
+[#16280]: https://github.com/JuliaLang/julia/issues/16260
