@@ -106,7 +106,7 @@ JL_DLLEXPORT jl_binding_t *jl_get_binding_wr(jl_module_t *m, jl_sym_t *var)
     b = new_binding(var);
     b->owner = m;
     *bp = b;
-    jl_gc_wb_buf(m, b);
+    jl_gc_wb_buf(m, b, sizeof(jl_binding_t));
     return *bp;
 }
 
@@ -146,7 +146,7 @@ JL_DLLEXPORT jl_binding_t *jl_get_binding_for_method_def(jl_module_t *m, jl_sym_
     b = new_binding(var);
     b->owner = m;
     *bp = b;
-    jl_gc_wb_buf(m, b);
+    jl_gc_wb_buf(m, b, sizeof(jl_binding_t));
     return *bp;
 }
 
@@ -316,7 +316,7 @@ static void module_import_(jl_module_t *to, jl_module_t *from, jl_sym_t *s,
             nb->imported = (explici!=0);
             nb->deprecated = b->deprecated;
             *bp = nb;
-            jl_gc_wb_buf(to, nb);
+            jl_gc_wb_buf(to, nb, sizeof(jl_binding_t));
         }
     }
 }
@@ -387,7 +387,7 @@ JL_DLLEXPORT void jl_module_export(jl_module_t *from, jl_sym_t *s)
         // don't yet know who the owner is
         b->owner = NULL;
         *bp = b;
-        jl_gc_wb_buf(from, b);
+        jl_gc_wb_buf(from, b, sizeof(jl_binding_t));
     }
     assert(*bp != HT_NOTFOUND);
     (*bp)->exportp = 1;

@@ -640,7 +640,7 @@ static uintptr_t hash_symbol(const char *str, size_t len)
 
 static size_t symbol_nbytes(size_t len)
 {
-    return (sizeof_jl_taggedvalue_t + sizeof(jl_sym_t) + len + 1 + 7) & -8;
+    return (sizeof(jl_taggedvalue_t) + sizeof(jl_sym_t) + len + 1 + 7) & -8;
 }
 
 static jl_sym_t *mk_symbol(const char *str, size_t len)
@@ -667,7 +667,7 @@ static jl_sym_t *mk_symbol(const char *str, size_t len)
 #endif
     sym = (jl_sym_t*)jl_valueof(tag);
     // set to old marked since we don't need write barrier on it.
-    tag->type_bits = ((uintptr_t)jl_sym_type) | GC_MARKED;
+    tag->header = ((uintptr_t)jl_sym_type) | GC_OLD_MARKED;
     sym->left = sym->right = NULL;
     sym->hash = hash_symbol(str, len);
     memcpy(jl_symbol_name(sym), str, len);
