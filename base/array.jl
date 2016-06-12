@@ -300,7 +300,7 @@ end
 
 ## Iteration ##
 start(A::Array) = 1
-next(a::Array,i) = (a[i],i+1)
+next(a::Array,i) = (@inbounds ret = (a[i],i+1); ret)
 done(a::Array,i) = i == length(a)+1
 
 ## Indexing: getindex ##
