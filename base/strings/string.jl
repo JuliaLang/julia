@@ -186,7 +186,7 @@ function string(a::Union{String,Char}...)
                 push!(s, 0xef); push!(s, 0xbf); push!(s, 0xbd)
             end
         else
-            append!(s,d.data)
+            append!(s,(d::String).data)
         end
     end
     String(s)
