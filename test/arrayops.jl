@@ -1262,8 +1262,8 @@ I2 = CartesianIndex((-1,5,2))
 @test length(CartesianIndex{3}((1,2))) == 3
 @test length(CartesianIndex{3}(1,2,3)) == 3
 @test length(CartesianIndex{3}((1,2,3))) == 3
-@test_throws DimensionMismatch CartesianIndex{3}(1,2,3,4)
-@test_throws DimensionMismatch CartesianIndex{3}((1,2,3,4))
+@test_throws ArgumentError CartesianIndex{3}(1,2,3,4)
+@test_throws ArgumentError CartesianIndex{3}((1,2,3,4))
 
 @test length(I1) == 3
 
