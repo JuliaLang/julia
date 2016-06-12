@@ -16,10 +16,10 @@
 extern "C" {
 #endif
 
-#define GC_CLEAN 0 // freshly allocated
-#define GC_MARKED 1 // reachable and old
-#define GC_QUEUED 2 // if it is reachable it will be marked as old
-#define GC_MARKED_NOESC (GC_MARKED | GC_QUEUED) // reachable and young
+#define GC_CLEAN  0 // freshly allocated
+#define GC_MARKED 1 // reachable and young
+#define GC_OLD    2 // if it is reachable it will be marked as old
+#define GC_OLD_MARKED (GC_OLD | GC_MARKED) // reachable and old
 
 // useful constants
 extern jl_methtable_t *jl_type_type_mt;
@@ -100,9 +100,6 @@ jl_tupletype_t *jl_argtype_with_function(jl_function_t *f, jl_tupletype_t *types
 JL_DLLEXPORT jl_value_t *jl_apply_2va(jl_value_t *f, jl_value_t **args, uint32_t nargs);
 
 #define GC_MAX_SZCLASS (2032-sizeof(void*))
-// MSVC miscalculates sizeof(jl_taggedvalue_t) because
-// empty structs are a GNU extension
-#define sizeof_jl_taggedvalue_t (sizeof(void*))
 void jl_gc_setmark(jl_value_t *v);
 void jl_gc_sync_total_bytes(void);
 void jl_gc_track_malloced_array(jl_array_t *a);
@@ -111,21 +108,21 @@ void jl_gc_run_all_finalizers(void);
 void *allocb(size_t sz);
 
 void gc_queue_binding(jl_binding_t *bnd);
-void gc_setmark_buf(void *buf, int);
+void gc_setmark_buf(void *buf, int, size_t);
 
 STATIC_INLINE void jl_gc_wb_binding(jl_binding_t *bnd, void *val) // val isa jl_value_t*
 {
-    if (__unlikely((jl_astaggedvalue(bnd)->gc_bits & 1) == 1 &&
-                   (jl_astaggedvalue(val)->gc_bits & 1) == 0))
+    if (__unlikely(jl_astaggedvalue(bnd)->bits.gc == 3 &&
+                   (jl_astaggedvalue(val)->bits.gc & 1) == 0))
         gc_queue_binding(bnd);
 }
 
-STATIC_INLINE void jl_gc_wb_buf(void *parent, void *bufptr) // parent isa jl_value_t*
+STATIC_INLINE void jl_gc_wb_buf(void *parent, void *bufptr, size_t minsz) // parent isa jl_value_t*
 {
     // if parent is marked and buf is not
-    if (__unlikely((jl_astaggedvalue(parent)->gc_bits & 1) == 1))
-        //            (jl_astaggedvalue(bufptr)->gc_bits) != 1))
-        gc_setmark_buf(bufptr, jl_astaggedvalue(parent)->gc_bits);
+    if (__unlikely(jl_astaggedvalue(parent)->bits.gc & 1)) {
+        gc_setmark_buf(bufptr, 3, minsz);
+    }
 }
 
 void gc_debug_print_status(void);
