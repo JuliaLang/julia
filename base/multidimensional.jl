@@ -378,30 +378,12 @@ end
     end
 end
 
-# Cartesian indexing
-function cartindex_exprs(indexes, syms)
-    exprs = Any[]
-    for (i,ind) in enumerate(indexes)
-        if ind <: CartesianIndex
-            for j = 1:length(ind)
-                push!(exprs, :($syms[$i][$j]))
-            end
-        else
-            push!(exprs, :($syms[$i]))
-        end
-    end
-    if isempty(exprs)
-        push!(exprs, 1)  # Handle the zero-dimensional case
-    end
-    exprs
+@propagate_inbounds function _getindex{T,N}(l::LinearIndexing, A::AbstractArray{T,N}, I::Union{Real,AbstractArray,Colon,CartesianIndex}...)
+    getindex(A, IteratorsMD._flatten((), I...)...)
 end
-@generated function _getindex{T,N}(l::LinearIndexing, A::AbstractArray{T,N}, I::Union{Real,AbstractArray,Colon,CartesianIndex}...)
-    :(@_propagate_inbounds_meta; getindex(A, $(cartindex_exprs(I, :I)...)))
+@propagate_inbounds function _setindex!{T,N}(l::LinearIndexing, A::AbstractArray{T,N}, v, I::Union{Real,AbstractArray,Colon,CartesianIndex}...)
+    setindex!(A, v, IteratorsMD._flatten((), I...)...)
 end
-@generated function _setindex!{T,N}(l::LinearIndexing, A::AbstractArray{T,N}, v, I::Union{Real,AbstractArray,Colon,CartesianIndex}...)
-    :(@_propagate_inbounds_meta; setindex!(A, v, $(cartindex_exprs(I, :I)...)))
-end
-
 
 ##
 
