@@ -5,8 +5,8 @@ module IteratorsMD
 
 import Base: eltype, length, size, start, done, next, last, getindex, setindex!, linearindexing, min, max, zero, one, isless, eachindex, ndims, iteratorsize
 importall ..Base.Operators
-import Base: simd_outer_range, simd_inner_length, simd_index, @generated
-import Base: @nref, @ncall, @nif, @nexprs, LinearFast, LinearSlow, to_index, AbstractCartesianIndex
+import Base: simd_outer_range, simd_inner_length, simd_index
+using Base: LinearFast, LinearSlow, AbstractCartesianIndex, fill_to_length, tail
 
 export CartesianIndex, CartesianRange
 
@@ -21,27 +21,17 @@ end
 
 CartesianIndex{N}(index::NTuple{N,Integer}) = CartesianIndex{N}(index)
 (::Type{CartesianIndex})(index::Integer...) = CartesianIndex(index)
-(::Type{CartesianIndex{N}}){N}(index::Integer...) = CartesianIndex{N}(index)
+(::Type{CartesianIndex{N}}){N}(index::Vararg{Integer,N}) = CartesianIndex{N}(index)
 # Allow passing tuples smaller than N
-@generated function (::Type{CartesianIndex{N}}){N,M}(index::NTuple{M,Integer})
-    M == N && return :(CartesianIndex(index))
-    M > N && return :(throw(DimensionMismatch("Cannot create CartesianIndex{$N} from $M indexes")))
-    args = [i <= M ? :(index[$i]) : 1 for i = 1:N]
-    :(CartesianIndex(tuple($(args...))))
-end
+(::Type{CartesianIndex{N}}){N}(index::Tuple) = CartesianIndex{N}(fill_to_length(index, 1, Val{N}))
+(::Type{CartesianIndex{N}}){N}(index::Integer...) = CartesianIndex{N}(index)
+(::Type{CartesianIndex{N}}){N}() = CartesianIndex{N}(())
 # Un-nest passed CartesianIndexes
-CartesianIndex(index::Union{Integer, CartesianIndex}...) = CartesianIndex(index)
-@generated function CartesianIndex{N}(index::NTuple{N, Union{Integer, CartesianIndex}})
-    ex = Expr(:tuple)
-    for (i, T) in enumerate(index.parameters)
-        if T <: Integer
-            push!(ex.args, :(index[$i]))
-        else
-            push!(ex.args, Expr(:..., :(index[$i].I)))
-        end
-    end
-    :($(Expr(:meta, :inline)); CartesianIndex($ex))
-end
+CartesianIndex(index::Union{Integer, CartesianIndex}...) = CartesianIndex(_flatten((), index...))
+_flatten(out) = out
+@inline _flatten(out, i::Integer, I...)        = _flatten((out..., i), I...)
+@inline _flatten(out, i::CartesianIndex, I...) = _flatten((out..., i.I...), I...)
+CartesianIndex(index::Tuple{Vararg{Union{Integer, CartesianIndex}}}) = CartesianIndex(index...)
 
 # length
 length{N}(::CartesianIndex{N})=N
@@ -57,27 +47,17 @@ one{N}(::CartesianIndex{N}) = one(CartesianIndex{N})
 one{N}(::Type{CartesianIndex{N}}) = CartesianIndex(ntuple(x -> 1, Val{N}))
 
 # arithmetic, min/max
-for op in (:+, :-, :min, :max)
-    @eval begin
-        @generated function ($op){N}(index1::CartesianIndex{N}, index2::CartesianIndex{N})
-            I = index1
-            args = [:($($op)(index1[$d],index2[$d])) for d = 1:N]
-            :($I($(args...)))
-        end
-    end
-end
+(+){N}(index1::CartesianIndex{N}, index2::CartesianIndex{N}) = CartesianIndex{N}(map(+, index1.I, index2.I))
+(-){N}(index1::CartesianIndex{N}, index2::CartesianIndex{N}) = CartesianIndex{N}(map(-, index1.I, index2.I))
+min{N}(index1::CartesianIndex{N}, index2::CartesianIndex{N}) = CartesianIndex{N}(map(min, index1.I, index2.I))
+max{N}(index1::CartesianIndex{N}, index2::CartesianIndex{N}) = CartesianIndex{N}(map(max, index1.I, index2.I))
 
 (+){N}(index::CartesianIndex{N}, i::Integer) = CartesianIndex{N}(map(x->x+i, index.I))
 (+){N}(i::Integer, index::CartesianIndex{N}) = index+i
 (-){N}(index::CartesianIndex{N}, i::Integer) = CartesianIndex{N}(map(x->x-i, index.I))
 (-){N}(i::Integer, index::CartesianIndex{N}) = CartesianIndex{N}(map(x->i-x, index.I))
-
-@generated function *{N}(a::Integer, index::CartesianIndex{N})
-    I = index
-    args = [:(a*index[$d]) for d = 1:N]
-    :($I($(args...)))
-end
-*(index::CartesianIndex,a::Integer)=*(a,index)
+(*){N}(a::Integer, index::CartesianIndex{N}) = CartesianIndex{N}(map(x->a*x, index.I))
+(*)(index::CartesianIndex,a::Integer)=*(a,index)
 
 # comparison
 @inline isless{N}(I1::CartesianIndex{N}, I2::CartesianIndex{N}) = _isless(0, I1.I, I2.I)
@@ -94,10 +74,7 @@ immutable CartesianRange{I<:CartesianIndex}
     stop::I
 end
 
-@generated function CartesianRange{N}(I::CartesianIndex{N})
-    startargs = fill(1, N)
-    :(CartesianRange($I($(startargs...)), I))
-end
+CartesianRange{N}(index::CartesianIndex{N}) = CartesianRange(one(index), index)
 CartesianRange(::Tuple{}) = CartesianRange{CartesianIndex{0}}(CartesianIndex{0}(()),CartesianIndex{0}(()))
 CartesianRange{N}(sz::NTuple{N,Int}) = CartesianRange(CartesianIndex(sz))
 CartesianRange{N}(rngs::NTuple{N,Union{Int,UnitRange{Int}}}) = CartesianRange(CartesianIndex(map(r->first(r), rngs)), CartesianIndex(map(r->last(r), rngs)))
@@ -105,88 +82,65 @@ CartesianRange{N}(rngs::NTuple{N,Union{Int,UnitRange{Int}}}) = CartesianRange(Ca
 ndims(R::CartesianRange) = length(R.start)
 ndims{I<:CartesianIndex}(::Type{CartesianRange{I}}) = length(I)
 
-@generated function eachindex{T,N}(::LinearSlow, A::AbstractArray{T,N})
-    startargs = fill(1, N)
-    stopargs = [:(size(A,$i)) for i=1:N]
-    meta = Expr(:meta, :inline)
-    :($meta; CartesianRange(CartesianIndex{$N}($(startargs...)), CartesianIndex{$N}($(stopargs...))))
-end
+eachindex(::LinearSlow, A::AbstractArray) = CartesianRange(size(A))
 
-@generated function eachindex(::LinearSlow, A::AbstractArray, B::AbstractArray...)
-    K = max(ndims(A), map(ndims, B)...)
-    startargs = fill(1, K)
-    stopargs = Array{Expr}(K)
-    for i = 1:K
-        Bargs = [:(size(B[$j],$i)) for j = 1:length(B)]
-        stopargs[i] = :(max(size(A,$i),$(Bargs...)))
-    end
-    meta = Expr(:meta, :inline)
-    :($meta; CartesianRange(CartesianIndex{$K}($(startargs...)), CartesianIndex{$K}($(stopargs...))))
-end
+@inline eachindex(::LinearSlow, A::AbstractArray, B::AbstractArray...) = CartesianRange(maxsize((), A, B...))
+maxsize(sz) = sz
+@inline maxsize(sz, A, B...) = maxsize(maxt(sz, size(A)), B...)
+@inline maxt(a::Tuple{}, b::Tuple{}) = ()
+@inline maxt(a::Tuple{}, b::Tuple)   = b
+@inline maxt(a::Tuple,   b::Tuple{}) = a
+@inline maxt(a::Tuple,   b::Tuple)   = (max(a[1], b[1]), maxt(tail(a), tail(b))...)
 
 eltype{I}(::Type{CartesianRange{I}}) = I
 iteratorsize{I}(::Type{CartesianRange{I}}) = Base.HasShape()
 
-@generated function start{I<:CartesianIndex}(iter::CartesianRange{I})
-    N = length(I)
-    cmp = [:(iter.start[$d] > iter.stop[$d]) for d = 1:N]
-    extest = Expr(:||, cmp...)
-    inc = [d < N ? :(iter.start[$d]) : :(iter.stop[$N]+1) for d = 1:N]
-    exstop = :(CartesianIndex{$N}($(inc...)))
-    meta = Expr(:meta, :inline)
-    quote
-        $meta
-        $extest ? $exstop : iter.start
+@inline function start{I<:CartesianIndex}(iter::CartesianRange{I})
+    if any(map(>, iter.start.I, iter.stop.I))
+        return iter.stop+1
     end
+    iter.start
 end
-@generated function next{I<:CartesianIndex}(iter::CartesianRange{I}, state)
-    N = length(I)
-    meta = Expr(:meta, :inline)
-    quote
-        $meta
-        index=state
-        @nif $N d->(index[d] < iter.stop[d]) d->(@nexprs($N, k->(ind_k = ifelse(k>=d, index[k] + (k==d), iter.start[k]))))
-        newindex = @ncall $N $I ind
-        index, newindex
+@inline function next{I<:CartesianIndex}(iter::CartesianRange{I}, state)
+    state, I(inc(state.I, iter.start.I, iter.stop.I))
+end
+# increment & carry
+@inline inc(::Tuple{}, ::Tuple{}, ::Tuple{}) = ()
+@inline inc(state::Tuple{Int}, start::Tuple{Int}, stop::Tuple{Int}) = (state[1]+1,)
+@inline function inc(state, start, stop)
+    if state[1] < stop[1]
+        return (state[1]+1,tail(state)...)
     end
+    newtail = inc(tail(state), tail(start), tail(stop))
+    (start[1], newtail...)
 end
-@generated function done{I<:CartesianIndex}(iter::CartesianRange{I}, state)
-    N = length(I)
-    :(state[$N] > iter.stop[$N])
-end
+@inline done{I<:CartesianIndex}(iter::CartesianRange{I}, state) = state.I[end] > iter.stop.I[end]
 
 # 0-d cartesian ranges are special-cased to iterate once and only once
 start{I<:CartesianIndex{0}}(iter::CartesianRange{I}) = false
 next{I<:CartesianIndex{0}}(iter::CartesianRange{I}, state) = iter.start, true
 done{I<:CartesianIndex{0}}(iter::CartesianRange{I}, state) = state
 
-@generated function size{I<:CartesianIndex}(iter::CartesianRange{I})
-    N = length(I)
-    N == 0 && return ()
-    args = [:(iter.stop[$i]-iter.start[$i]+1) for i=1:N]
-    Expr(:tuple,args...)
-end
+size{I<:CartesianIndex}(iter::CartesianRange{I}) = map(dimlength, iter.start.I, iter.stop.I)
+dimlength(start, stop) = stop-start+1
 
 length(iter::CartesianRange) = prod(size(iter))
 
 last(iter::CartesianRange) = iter.stop
 
-@generated function simd_outer_range{I}(iter::CartesianRange{I})
-    N = length(I)
-    N == 0 && return :(CartesianRange(CartesianIndex{0}(),CartesianIndex{0}()))
-    startargs = [:(iter.start[$i]) for i=2:N]
-    stopargs  = [:(iter.stop[$i]) for i=2:N]
-    :(CartesianRange(CartesianIndex{$(N-1)}($(startargs...)), CartesianIndex{$(N-1)}($(stopargs...))))
+simd_outer_range(iter::CartesianRange{CartesianIndex{0}}) = iter
+function simd_outer_range{I}(iter::CartesianRange{I})
+    start = CartesianIndex(tail(iter.start.I))
+    stop  = CartesianIndex(tail(iter.stop.I))
+    CartesianRange(start, stop)
 end
 
 simd_inner_length{I<:CartesianIndex{0}}(iter::CartesianRange{I}, ::CartesianIndex) = 1
 simd_inner_length(iter::CartesianRange, I::CartesianIndex) = iter.stop[1]-iter.start[1]+1
 
 simd_index{I<:CartesianIndex{0}}(iter::CartesianRange{I}, ::CartesianIndex, I1::Int) = iter.start
-@generated function simd_index{N}(iter::CartesianRange, Ilast::CartesianIndex{N}, I1::Int)
-    args = [d == 1 ? :(I1+iter.start[1]) : :(Ilast[$(d-1)]) for d = 1:N+1]
-    meta = Expr(:meta, :inline)
-    :($meta; CartesianIndex{$(N+1)}($(args...)))
+@inline function simd_index{N}(iter::CartesianRange, Ilast::CartesianIndex{N}, I1::Int)
+    CartesianIndex((I1+iter.start[1], Ilast.I...))
 end
 
 end  # IteratorsMD
