@@ -185,7 +185,7 @@ end
 function getindex(V::SlowSubArray, i::Real)
     @_inline_meta
     @boundscheck checkbounds(V, i)
-    @inbounds r = V.parent[reindex(V, V.indexes, smart_ind2sub(shapeinfo(V), to_index(i)))...]
+    @inbounds r = V.parent[reindex(V, V.indexes, smart_ind2sub(shape(V), to_index(i)))...]
     r
 end
 
@@ -208,7 +208,7 @@ end
 function getindex{T,N}(V::FastSubArray{T,N}, I::Vararg{Real,N})
     @_inline_meta
     @boundscheck checkbounds(V, I...)
-    @inbounds r = getindex(V, smart_sub2ind(shapeinfo(V), to_indexes(I...)...))
+    @inbounds r = getindex(V, smart_sub2ind(shape(V), to_indexes(I...)...))
     r
 end
 
@@ -287,7 +287,7 @@ iscontiguous{F<:FastContiguousSubArray}(::Type{F}) = true
 first_index(V::FastSubArray) = V.offset1 + V.stride1
 first_index(V::SubArray) = first_index(V.parent, V.indexes)
 function first_index(P::AbstractArray, indexes::Tuple)
-    f = first(linindices(P))
+    f = first(linearindices(P))
     s = 1
     for i = 1:length(indexes)
         f += (_first(indexes[i], P, i)-first(indices(P, i)))*s
@@ -295,7 +295,7 @@ function first_index(P::AbstractArray, indexes::Tuple)
     end
     f
 end
-_first(::Colon, P, ::Colon) = first(linindices(P))
+_first(::Colon, P, ::Colon) = first(linearindices(P))
 _first(i, P, ::Colon) = first(i)
 _first(::Colon, P, d) = first(indices(P, d))
 _first(i, P, d) = first(i)
@@ -336,7 +336,7 @@ unsafe_convert{T,N,P,I<:Tuple{Vararg{Union{RangeIndex, NoSlice}}}}(::Type{Ptr{T}
 
 pointer(V::FastSubArray, i::Int) = pointer(V.parent, V.offset1 + V.stride1*i)
 pointer(V::FastContiguousSubArray, i::Int) = pointer(V.parent, V.offset1 + i)
-pointer(V::SubArray, i::Int) = pointer(V, smart_ind2sub(shapeinfo(V), i))
+pointer(V::SubArray, i::Int) = pointer(V, smart_ind2sub(shape(V), i))
 
 function pointer{T,N,P<:Array,I<:Tuple{Vararg{Union{RangeIndex, NoSlice}}}}(V::SubArray{T,N,P,I}, is::Tuple{Vararg{Int}})
     index = first_index(V)

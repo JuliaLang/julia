@@ -291,7 +291,7 @@ function show(io::IO, l::LambdaInfo)
 end
 
 function show_delim_array(io::IO, itr::Union{AbstractArray,SimpleVector}, op, delim, cl,
-                          delim_one, i1=first(linindices(itr)), l=last(linindices(itr)))
+                          delim_one, i1=first(linearindices(itr)), l=last(linearindices(itr)))
     print(io, op)
     if !show_circular(io, itr)
         recur_io = IOContext(io, SHOWN_SET=itr, multiline=false)
