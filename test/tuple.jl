@@ -40,7 +40,7 @@
 
 ## filling to specified length
 @test @inferred(Base.fill_to_length((1,2,3), -1, Val{5})) == (1,2,3,-1,-1)
-@test_throws ErrorException Base.fill_to_length((1,2,3), -1, Val{2})
+@test_throws ArgumentError Base.fill_to_length((1,2,3), -1, Val{2})
 
 ## iterating ##
 @test start((1,2,3)) === 1
@@ -72,18 +72,21 @@ begin
     foo(x) = 2x
     foo(x, y) = x + y
     foo(x, y, z) = x + y + z
+    longtuple = ntuple(identity, 20)
 
     # 1 argument
     @test map(foo, ()) === ()
     @test map(foo, (1,)) === (2,)
     @test map(foo, (1,2)) === (2,4)
     @test map(foo, (1,2,3,4)) === (2,4,6,8)
+    @test map(foo, longtuple) === ntuple(i->2i,20)
 
     # 2 arguments
     @test map(foo, (), ()) === ()
     @test map(foo, (1,), (1,)) === (2,)
     @test map(foo, (1,2), (1,2)) === (2,4)
     @test map(foo, (1,2,3,4), (1,2,3,4)) === (2,4,6,8)
+    @test map(foo, longtuple, longtuple) === ntuple(i->2i,20)
 
     # n arguments
     @test map(foo, (), (), ()) === ()
@@ -91,6 +94,7 @@ begin
     @test map(foo, (1,), (1,), (1,)) === (3,)
     @test map(foo, (1,2), (1,2), (1,2)) === (3,6)
     @test map(foo, (1,2,3,4), (1,2,3,4), (1,2,3,4)) === (3,6,9,12)
+    @test map(foo, longtuple, longtuple, longtuple) === ntuple(i->3i,20)
 end
 
 ## comparison ##

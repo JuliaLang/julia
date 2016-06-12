@@ -85,10 +85,11 @@ map(f, t::Tuple{})              = ()
 map(f, t::Tuple{Any,})          = (f(t[1]),)
 map(f, t::Tuple{Any, Any})      = (f(t[1]), f(t[2]))
 map(f, t::Tuple{Any, Any, Any}) = (f(t[1]), f(t[2]), f(t[3]))
-map(f, t::Tuple)                = (f(t[1]), map(f,tail(t))...)
+map(f, t::Tuple)                = (@_inline_meta; (f(t[1]), map(f,tail(t))...))
 # stop inlining after some number of arguments to avoid code blowup
-function map(f, t::Tuple{Any,Any,Any,Any,Any,Any,Any,Any,
-                         Any,Any,Any,Any,Any,Any,Any,Any,Vararg{Any}})
+typealias Any16{N} Tuple{Any,Any,Any,Any,Any,Any,Any,Any,
+                         Any,Any,Any,Any,Any,Any,Any,Any,Vararg{Any,N}}
+function map(f, t::Any16)
     n = length(t)
     A = Array{Any}(n)
     for i=1:n
@@ -100,6 +101,18 @@ end
 map(f, t::Tuple{},        s::Tuple{})        = ()
 map(f, t::Tuple{Any,},    s::Tuple{Any,})    = (f(t[1],s[1]),)
 map(f, t::Tuple{Any,Any}, s::Tuple{Any,Any}) = (f(t[1],s[1]), f(t[2],s[2]))
+function map(f, t::Tuple, s::Tuple)
+    @_inline_meta
+    (f(t[1],s[1]), map(f, tail(t), tail(s))...)
+end
+function map(f, t::Any16, s::Any16)
+    n = length(t)
+    A = Array{Any}(n)
+    for i = 1:n
+        A[i] = f(t[i], s[i])
+    end
+    (A...,)
+end
 # n argument function
 heads() = ()
 heads(t::Tuple, ts::Tuple...) = (t[1], heads(ts...)...)
@@ -108,12 +121,13 @@ tails(t::Tuple, ts::Tuple...) = (tail(t), tails(ts...)...)
 map(f, ::Tuple{}, ts::Tuple...) = ()
 map(f, t1::Tuple, t2::Tuple, ts::Tuple...) = (f(heads(t1, t2, ts...)...), map(f, tails(t1, t2, ts...)...)...)
 
+
 # type-stable padding
 fill_to_length{N}(t::Tuple, val, ::Type{Val{N}}) = _ftl((), val, Val{N}, t...)
 _ftl{N}(out::NTuple{N}, val, ::Type{Val{N}}) = out
 function _ftl{N}(out::NTuple{N}, val, ::Type{Val{N}}, t...)
     @_inline_meta
-    error("input tuple of length $(N+length(t)), requested $N")
+    throw(ArgumentError("input tuple of length $(N+length(t)), requested $N"))
 end
 function _ftl{N}(out, val, ::Type{Val{N}}, t1, t...)
     @_inline_meta
