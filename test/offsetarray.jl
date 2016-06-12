@@ -30,10 +30,20 @@ parenttype(A::OffsetArray) = parenttype(typeof(A))
 
 Base.parent(A::OffsetArray) = A.parent
 Base.size(A::OffsetArray) = size(parent(A))
-Base.indices(A::OffsetArray, d) = 1 <= d <= length(A.offsets) ? ((1:size(parent(A),d))+A.offsets[d]) : (1:1)
 Base.eachindex(::LinearSlow, A::OffsetArray) = CartesianRange(indices(A))
 Base.eachindex(::LinearFast, A::OffsetVector) = indices(A, 1)
 Base.summary(A::OffsetArray) = string(typeof(A))*" with indices "*string(indices(A))
+
+# Implementations of indices and indices1. Since bounds-checking is
+# performance-critical and relies on indices, these are usually worth
+# optimizing thoroughly.
+@inline Base.indices(A::OffsetArray, d) = 1 <= d <= length(A.offsets) ? (o = A.offsets[d]; (1+o:size(parent(A),d)+o)) : (1:1)
+@inline Base.indices(A::OffsetArray) = _indices((), A)  # would rather use ntuple, but see #15276
+@inline _indices{T,N}(out::NTuple{N}, A::OffsetArray{T,N}) = out
+@inline _indices(out, A::OffsetArray) = (d = length(out)+1; o = A.offsets[d]; _indices((out..., (1+o:size(parent(A),d)+o)), A))
+# By optimizing indices1 we can avoid a branch on the dim-check
+Base.indices1{T}(A::OffsetArray{T,0}) = 1:1
+@inline Base.indices1(A::OffsetArray) = (o = A.offsets[1]; 1+o:size(parent(A),1)+o)
 
 function Base.similar(A::OffsetArray, T::Type, dims::Dims)
     B = similar(parent(A), T, dims)
