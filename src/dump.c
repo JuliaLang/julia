@@ -467,15 +467,12 @@ static int module_in_worklist(jl_module_t *mod)
 
 static int jl_prune_tcache(jl_typemap_entry_t *ml, void *closure)
 {
-    if (!jl_is_leaf_type((jl_value_t*)ml->sig)) {
-        jl_value_t *ret = ml->func.value;
-        if (jl_is_lambda_info(ret)) {
-            jl_array_t *code = ((jl_lambda_info_t*)ret)->code;
-            if (jl_is_array(code) && jl_array_len(code) > 500) {
-                ml->func.value = ((jl_lambda_info_t*)ret)->rettype;
-                jl_gc_wb(ml, ml->func.value);
-            }
-        }
+    jl_value_t *ret = ml->func.value;
+    if (jl_is_lambda_info(ret) &&
+        ((!jl_is_leaf_type((jl_value_t*)ml->sig) && !((jl_lambda_info_t*)ret)->inlineable) ||
+         ((jl_lambda_info_t*)ret)->code == jl_nothing)) {
+        ml->func.value = ((jl_lambda_info_t*)ret)->rettype;
+        jl_gc_wb(ml, ml->func.value);
     }
     return 1;
 }
@@ -1476,7 +1473,7 @@ static jl_value_t *jl_deserialize_value_(ios_t *s, jl_value_t *vtag, jl_value_t 
                                       NWORDS(sizeof(jl_lambda_info_t)));
         if (usetable)
             arraylist_push(&backref_list, li);
-        li->code = (jl_array_t*)jl_deserialize_value(s, (jl_value_t**)&li->code); jl_gc_wb(li, li->code);
+        li->code = jl_deserialize_value(s, &li->code); jl_gc_wb(li, li->code);
         li->slotnames = (jl_array_t*)jl_deserialize_value(s, (jl_value_t**)&li->slotnames); jl_gc_wb(li, li->slotnames);
         li->slottypes = jl_deserialize_value(s, &li->slottypes); jl_gc_wb(li, li->slottypes);
         li->slotflags = (jl_array_t*)jl_deserialize_value(s, (jl_value_t**)&li->slotflags); jl_gc_wb(li, li->slotflags);
@@ -2076,6 +2073,7 @@ JL_DLLEXPORT jl_array_t *jl_compress_ast(jl_lambda_info_t *li, jl_array_t *ast)
 {
     JL_LOCK(&dump_lock); // Might GC
     assert(jl_is_lambda_info(li));
+    assert(jl_is_array(ast));
     DUMP_MODES last_mode = mode;
     mode = MODE_AST;
     ios_t dest;

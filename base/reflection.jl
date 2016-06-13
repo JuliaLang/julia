@@ -300,7 +300,7 @@ isempty(mt::MethodTable) = (mt.defs === nothing)
 
 uncompressed_ast(l::Method) = uncompressed_ast(l.lambda_template)
 uncompressed_ast(l::LambdaInfo) =
-    isa(l.code,Array{Any,1}) ? l.code::Array{Any,1} : ccall(:jl_uncompress_ast, Array{Any,1}, (Any,Any), l, l.code)
+    isa(l.code,Array{UInt8,1}) ? ccall(:jl_uncompress_ast, Array{Any,1}, (Any,Any), l, l.code) : l.code
 
 # Printing code representations in IR and assembly
 function _dump_function(f, t::ANY, native, wrapper, strip_ir_metadata, dump_module)

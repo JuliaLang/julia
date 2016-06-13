@@ -514,7 +514,7 @@ static jl_value_t *eval_body(jl_array_t *stmts, interpreter_state *s, int start,
 
 jl_value_t *jl_interpret_call(jl_lambda_info_t *lam, jl_value_t **args, uint32_t nargs, jl_svec_t *sparam_vals)
 {
-    jl_array_t *stmts = lam->code;
+    jl_array_t *stmts = (jl_array_t*)lam->code;
     assert(jl_typeis(stmts, jl_array_any_type));
     jl_value_t **locals;
     JL_GC_PUSHARGS(locals, jl_linfo_nslots(lam) + jl_linfo_nssavalues(lam));

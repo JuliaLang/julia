@@ -24,6 +24,9 @@
 // with KEEP_BODIES, we keep LLVM function bodies around for later debugging
 // #define KEEP_BODIES
 
+// delete julia IR for non-inlineable functions after they're codegen'd
+#define JL_DELETE_NON_INLINEABLE 1
+
 // GC options -----------------------------------------------------------------
 
 // debugging options

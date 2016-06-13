@@ -874,6 +874,16 @@ static void to_function(jl_lambda_info_t *li)
     // mark the pointer calling convention
     li->jlcall_api = (f->getFunctionType() == jl_func_sig ? 0 : 1);
 
+    // if not inlineable, code won't be needed again
+    if (JL_DELETE_NON_INLINEABLE &&
+        li->def && li->inferred && !li->inlineable && !jl_options.outputji) {
+        li->code = jl_nothing;
+        li->slottypes = jl_nothing;
+        li->ssavaluetypes = jl_box_long(jl_array_len(li->ssavaluetypes)); jl_gc_wb(li, li->ssavaluetypes);
+        li->slotflags = NULL;
+        li->slotnames = NULL;
+    }
+
     // done compiling: restore global state
     if (old != NULL) {
         builder.SetInsertPoint(old);
@@ -1113,6 +1123,15 @@ void *jl_get_llvmf(jl_tupletype_t *tt, bool getwrapper, bool getdeclarations)
     if (linfo == NULL) {
         JL_GC_POP();
         return NULL;
+    }
+
+    if (linfo->code == jl_nothing) {
+        // re-infer if we've deleted the code
+        jl_type_infer(linfo, 0);
+        if (linfo->code == jl_nothing) {
+            JL_GC_POP();
+            return NULL;
+        }
     }
 
     if (!getdeclarations) {
@@ -3946,7 +3965,7 @@ static std::unique_ptr<Module> emit_function(jl_lambda_info_t *lam, jl_llvm_func
     assert(declarations && "Capturing declarations is always required");
 
     // step 1. unpack AST and allocate codegen context for this function
-    jl_array_t *code = lam->code;
+    jl_array_t *code = (jl_array_t*)lam->code;
     JL_GC_PUSH1(&code);
     if (!jl_typeis(code,jl_array_any_type))
         code = jl_uncompress_ast(lam, code);

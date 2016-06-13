@@ -320,11 +320,6 @@ function serialize(s::SerializationState, meth::Method)
     serialize(s, meth.ambig)
     serialize(s, meth.isstaged)
     serialize(s, meth.lambda_template)
-    if isdefined(meth, :roots)
-        serialize(s, meth.roots)
-    else
-        writetag(s.io, UNDEFREF_TAG)
-    end
     nothing
 end
 
@@ -611,12 +606,6 @@ function deserialize(s::SerializationState, ::Type{Method})
     ambig = deserialize(s)
     isstaged = deserialize(s)::Bool
     template = deserialize(s)::LambdaInfo
-    tag = Int32(read(s.io, UInt8)::UInt8)
-    if tag != UNDEFREF_TAG
-        roots = handle_deserialize(s, tag)::Array{Any, 1}
-    else
-        roots = nothing
-    end
     if makenew
         meth.module = mod
         meth.name = name
@@ -627,7 +616,6 @@ function deserialize(s::SerializationState, ::Type{Method})
         meth.ambig = ambig
         meth.isstaged = isstaged
         meth.lambda_template = template
-        roots === nothing || (meth.roots = roots)
         ccall(:jl_method_init_properties, Void, (Any,), meth)
         known_object_data[lnumber] = meth
     end
@@ -637,8 +625,8 @@ end
 function deserialize(s::SerializationState, ::Type{LambdaInfo})
     linfo = ccall(:jl_new_lambda_info_uninit, Ref{LambdaInfo}, (Ptr{Void},), C_NULL)
     deserialize_cycle(s, linfo)
-    linfo.code = deserialize(s)::Array{Any, 1}
-    linfo.slotnames = deserialize(s)::Array{Any, 1}
+    linfo.code = deserialize(s)
+    linfo.slotnames = deserialize(s)
     linfo.slottypes = deserialize(s)
     linfo.slotflags = deserialize(s)
     linfo.ssavaluetypes = deserialize(s)
