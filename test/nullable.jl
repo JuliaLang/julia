@@ -1,5 +1,9 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
+# "is a null with type T", curried on 2nd argument
+isnull_oftype(x::Nullable, T::Type) = eltype(x) == T && isnull(x)
+isnull_oftype(t::Type) = x -> isnull_oftype(x, t)
+
 types = [
     Bool,
     Float16,
@@ -387,6 +391,77 @@ end
 @test Base.promote_op(+, Nullable{Float64}, Nullable{Int}) == Nullable{Float64}
 @test Base.promote_op(-, Nullable{Float64}, Nullable{Int}) == Nullable{Float64}
 @test Base.promote_op(-, Nullable{DateTime}, Nullable{DateTime}) == Nullable{Base.Dates.Millisecond}
+
+# filter
+for p in (_ -> true, _ -> false)
+    @test @inferred(filter(p, Nullable()))      |> isnull_oftype(Union{})
+    @test @inferred(filter(p, Nullable{Int}())) |> isnull_oftype(Int)
+end
+@test @inferred(filter(_ -> true, Nullable(85)))  === Nullable(85)
+@test @inferred(filter(_ -> false, Nullable(85))) |> isnull_oftype(Int)
+@test @inferred(filter(x -> x > 0, Nullable(85))) === Nullable(85)
+@test @inferred(filter(x -> x < 0, Nullable(85))) |> isnull_oftype(Int)
+@test get(@inferred(filter(x -> length(x) > 2, Nullable("test")))) == "test"
+@test @inferred(filter(x -> length(x) > 5, Nullable("test"))) |>
+    isnull_oftype(String)
+
+# map
+sqr(x) = x^2
+@test @inferred(map(sqr, Nullable()))        |> isnull_oftype(Union{})
+@test @inferred(map(sqr, Nullable{Int}()))   |> isnull_oftype(Int)
+@test @inferred(map(sqr, Nullable(2)))       === Nullable(4)
+@test @inferred(map(+, Nullable(0.0)))       === Nullable(0.0)
+@test @inferred(map(-, Nullable(1.0)))       === Nullable(-1.0)
+@test @inferred(map(-, Nullable{Float64}())) |> isnull_oftype(Float64)
+@test @inferred(map(sin, Nullable(1)))       === Nullable(sin(1))
+@test @inferred(map(sin, Nullable{Int}()))   |> isnull_oftype(Float64)
+
+# should not throw if function wouldn't be called
+@test map(x -> x ? 0 : 0.0, Nullable())       |> isnull_oftype(Union{})
+@test map(x -> x ? 0 : 0.0, Nullable(true))   === Nullable(0)
+@test map(x -> x ? 0 : 0.0, Nullable(false))  === Nullable(0.0)
+@test map(x -> x ? 0 : 0.0, Nullable{Bool}()) |> isnull_oftype(Union{})
+
+# broadcast and elementwise
+#=
+@test sin.(Nullable(0.0))             === Nullable(0.0)
+@test sin.(Nullable{Float64}())       |> isnull_oftype(Float64)
+
+@test Nullable(8) .+ Nullable(10)     === Nullable(18)
+@test Nullable(8) .- Nullable(10)     === Nullable(-2)
+@test Nullable(8) .+ Nullable{Int}()  |> isnull_oftype(Int)
+@test Nullable{Int}() .- Nullable(10) |> isnull_oftype(Int)
+
+@test log.(10, Nullable(1.0))                 === Nullable(0.0)
+@test log.(10, Nullable{Float64}())           |> isnull_oftype(Float64)
+@test log.(Nullable(10), Nullable(1.0))       === Nullable(0.0)
+@test log.(Nullable(10), Nullable{Float64}()) |> isnull_oftype(Float64)
+
+@test Nullable(2) .^ Nullable(4)      === Nullable(16)
+@test Nullable(2) .^ Nullable{Int}()  |> isnull_oftype(Int)
+
+# multi-arg broadcast
+@test Nullable(1) .+ Nullable(1) .+ Nullable(1) .+ Nullable(1) .+ Nullable(1) .+
+    Nullable(1) === Nullable(6)
+@test Nullable(1) .+ Nullable(1) .+ Nullable(1) .+ Nullable{Int}() .+
+    Nullable(1) .+ Nullable(1) |> isnull_oftype(Int)
+
+us = map(Nullable, 1:20)
+@test broadcast(max, us...)                  === Nullable(20)
+@test broadcast(max, us..., Nullable{Int}()) |> isnull_oftype(Int)
+
+# test all elementwise operations
+for (eop, op) in ((.+, +), (.-, -), (.*, *), (./, /), (.\, \), (.//, //),
+                  (.==, ==), (.<, <), (.!=, !=), (.<=, <=), (.÷, ÷), (.%, %),
+                  (.<<, <<), (.>>, >>), (.^, ^))
+    # op(1, 1) chosen because it works for all operations
+    res = op(1, 1)
+    @test eop(Nullable(1), Nullable(1))         === Nullable(res)
+    @test eop(Nullable{Int}(), Nullable(1))     |> isnull_oftype(typeof(res))
+    @test eop(Nullable(1), Nullable{Int}())     |> isnull_oftype(typeof(res))
+    @test eop(Nullable{Int}(), Nullable{Int}()) |> isnull_oftype(typeof(res))
+end
+=#
 
 # issue #11675
 @test repr(Nullable()) == "Nullable{Union{}}()"

@@ -246,3 +246,53 @@ function hash(x::Nullable, h::UInt)
         return hash(x.value, h + nullablehash_seed)
     end
 end
+
+# higher-order functions
+"""
+    filter(p, x::Nullable)
+
+Return null if either `x` is null or `p(get(x))` is false, and `x` otherwise.
+"""
+function filter{T}(p, x::Nullable{T})
+    if isbits(T)
+        val = unsafe_get(x)
+        Nullable{T}(val, !isnull(x) && p(val))
+    elseif isnull(x) || p(unsafe_get(x))
+        x
+    else
+        Nullable{T}()
+    end
+end
+
+"""
+Return the given type if it is concrete, and `Union{}` otherwise.
+"""
+concretify{T}(::Type{T}) = isleaftype(T) ? T : Union{}
+
+"""
+    map(f, x::Nullable)
+
+Return `f` applied to the value of `x` if it has one, as a `Nullable`. If `x`
+is null, then return a null value of type `Nullable{S}`. `S` is guaranteed to
+be either `Union{}` or a concrete type. Whichever of these is chosen is an
+implementation detail, but typically the choice that maximizes performance
+would be used. If `x` has a value, then the return type is guaranteed to be of
+type `Nullable{typeof(f(x))}`.
+"""
+function map{T}(f, x::Nullable{T})
+    S = promote_op(f, T)
+    if isleaftype(S) && null_safe_op(f, T)
+        Nullable{S}(f(unsafe_get(x)), isnull(x))
+    else
+        if isnull(x)
+            Nullable{concretify(S)}()
+        else
+            Nullable(f(unsafe_get(x)))
+        end
+    end
+end
+
+# optimizations for common cases TODO
+
+# extra null_safe_op overloads
+null_safe_op(+, Int) = true
