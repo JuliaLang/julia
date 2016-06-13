@@ -1421,7 +1421,7 @@ function typeinf_edge(method::Method, atypes::ANY, sparams::SimpleVector, needtr
                 # something completely new
             elseif isa(code, LambdaInfo)
                 # something existing
-                if code.inferred
+                if code.inferred && !(needtree && code.code === nothing)
                     return (code, code.rettype, true)
                 end
             else
@@ -1457,7 +1457,7 @@ function typeinf_edge(method::Method, atypes::ANY, sparams::SimpleVector, needtr
         # inference not started yet, make a new frame for a new lambda
         # add lam to be inferred and record the edge
 
-        if caller === nothing && needtree && in_typeinf_loop
+        if caller === nothing && in_typeinf_loop
             # if the caller needed the ast, but we are already in the typeinf loop
             # then just return early -- we can't fulfill this request
             # if the client was inlining, then this means we decided not to try to infer this
@@ -1486,7 +1486,7 @@ function typeinf_edge(method::Method, atypes::ANY, sparams::SimpleVector, needtr
             end
         end
 
-        if isa(code, LambdaInfo)
+        if isa(code, LambdaInfo) && code.code !== nothing
             # reuse the existing code object
             linfo = code
             @assert typeseq(linfo.specTypes, atypes)
@@ -2412,11 +2412,10 @@ function inlineable(f::ANY, ft::ANY, e::Expr, atypes::Vector{Any}, sv::Inference
     #     end
     # end
 
-    (linfo, ty, inferred) = typeinf(method, metharg, methsp, true)
-    if is(linfo,nothing) || !inferred
+    (linfo, ty, inferred) = typeinf(method, metharg, methsp, false)
+    if !inferred || linfo === nothing
         return NF
-    end
-    if !linfo.inlineable
+    elseif !linfo.inlineable
         # TODO
         #=
         if incompletematch
@@ -2442,6 +2441,11 @@ function inlineable(f::ANY, ft::ANY, e::Expr, atypes::Vector{Any}, sv::Inference
             return NF
         end
         =#
+        return NF
+    elseif linfo.code === nothing
+        (linfo, ty, inferred) = typeinf(method, metharg, methsp, true)
+    end
+    if linfo === nothing || !inferred || !linfo.inlineable
         return NF
     end
 
@@ -2483,7 +2487,9 @@ function inlineable(f::ANY, ft::ANY, e::Expr, atypes::Vector{Any}, sv::Inference
     nm = length(methargs)
 
     ast = linfo.code
-    if !isa(ast,Array{Any,1})
+    if ast === nothing
+        return NF
+    elseif !isa(ast,Array{Any,1})
         ast = ccall(:jl_uncompress_ast, Any, (Any,Any), linfo, ast)
     else
         ast = copy_exprargs(ast)

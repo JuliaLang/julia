@@ -143,8 +143,8 @@ jl_value_t *jl_mk_builtin_func(const char *name, jl_fptr_t fptr)
     jl_value_t *f = jl_new_generic_function_with_supertype(sname, jl_core_module, jl_builtin_type, 0);
     jl_lambda_info_t *li = jl_new_lambda_info_uninit();
     li->fptr = fptr;
-    // TODO jb/functions: what should li->ast be?
-    li->code = (jl_array_t*)jl_an_empty_vec_any; jl_gc_wb(li, li->code);
+    // TODO jb/functions: what should li->code be?
+    li->code = jl_nothing; jl_gc_wb(li, li->code);
     li->def = jl_new_method_uninit();
     li->def->name = sname;
     li->def->lambda_template = li;
@@ -164,7 +164,7 @@ jl_lambda_info_t *jl_get_unspecialized(jl_lambda_info_t *method)
         return method->unspecialized_ducttape;
     if (method->sparam_syms != jl_emptysvec) {
         if (def->needs_sparam_vals_ducttape == 2) {
-            jl_array_t *code = method->code;
+            jl_array_t *code = (jl_array_t*)method->code;
             JL_GC_PUSH1(&code);
             if (!jl_typeis(code, jl_array_any_type))
                 code = jl_uncompress_ast(def->lambda_template, code);
