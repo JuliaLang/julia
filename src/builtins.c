@@ -1534,7 +1534,7 @@ JL_DLLEXPORT size_t jl_static_show(JL_STREAM *out, jl_value_t *v)
 
 JL_DLLEXPORT size_t jl_static_show_func_sig(JL_STREAM *s, jl_value_t *type)
 {
-    jl_value_t *ftype = jl_first_argument_datatype(type);
+    jl_value_t *ftype = (jl_value_t*)jl_first_argument_datatype(type);
     if (ftype == NULL)
         return jl_static_show(s, type);
     size_t n = 0;

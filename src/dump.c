@@ -1691,8 +1691,8 @@ static void jl_deserialize_lambdas_from_mod(ios_t *s)
         if (meth == NULL)
             return;
         jl_tupletype_t *simpletype = (jl_tupletype_t*)jl_deserialize_value(s, NULL);
-        jl_datatype_t *gf = (jl_datatype_t*)jl_tparam0(meth->sig);
-        assert(jl_is_datatype(gf));
+        jl_datatype_t *gf = jl_first_argument_datatype((jl_value_t*)meth->sig);
+        assert(jl_is_datatype(gf) && gf->name->mt);
         jl_method_table_insert(gf->name->mt, meth, simpletype);
     }
 }

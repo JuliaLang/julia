@@ -661,7 +661,7 @@ JL_DLLEXPORT jl_value_t *jl_generic_function_def(jl_sym_t *name, jl_value_t **bp
     return gf;
 }
 
-jl_datatype_t *first_arg_datatype(jl_value_t *a, int got_tuple1)
+static jl_datatype_t *first_arg_datatype(jl_value_t *a, int got_tuple1)
 {
     if (jl_is_datatype(a)) {
         if (got_tuple1)
@@ -696,9 +696,9 @@ jl_datatype_t *first_arg_datatype(jl_value_t *a, int got_tuple1)
 }
 
 // get DataType of first tuple element, or NULL if cannot be determined
-jl_value_t *jl_first_argument_datatype(jl_value_t *argtypes)
+jl_datatype_t *jl_first_argument_datatype(jl_value_t *argtypes)
 {
-    return (jl_value_t*)first_arg_datatype(argtypes, 0);
+    return first_arg_datatype(argtypes, 0);
 }
 
 extern tracer_cb jl_newmeth_tracer;
@@ -726,17 +726,17 @@ JL_DLLEXPORT void jl_method_def(jl_svec_t *argdata, jl_lambda_info_t *f, jl_valu
 
     if (jl_is_tuple_type(argtypes) && jl_nparams(argtypes) > 0 && !jl_is_type(jl_tparam0(argtypes)))
         jl_error("function type in method definition is not a type");
-    jl_value_t *ftype = jl_first_argument_datatype((jl_value_t*)argtypes);
+    jl_datatype_t *ftype = jl_first_argument_datatype((jl_value_t*)argtypes);
     if (ftype == NULL ||
-        !(jl_is_type_type(ftype) ||
+        !(jl_is_type_type((jl_value_t*)ftype) ||
           (jl_is_datatype(ftype) &&
-           (!((jl_datatype_t*)ftype)->abstract || jl_is_leaf_type(ftype)) &&
-           ((jl_datatype_t*)ftype)->name->mt != NULL)))
+           (!ftype->abstract || jl_is_leaf_type((jl_value_t*)ftype)) &&
+           ftype->name->mt != NULL)))
         jl_error("cannot add methods to an abstract type");
-    mt = ((jl_datatype_t*)ftype)->name->mt;
+    mt = ftype->name->mt;
     name = mt->name;
 
-    if (jl_subtype(ftype, (jl_value_t*)jl_builtin_type, 0))
+    if (jl_subtype((jl_value_t*)ftype, (jl_value_t*)jl_builtin_type, 0))
         jl_error("cannot add methods to a builtin function");
 
     m = jl_new_method(f, name, argtypes, tvars, isstaged == jl_true);
