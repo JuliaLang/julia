@@ -218,7 +218,6 @@ function finalize_refs{T,N}(S::SharedArray{T,N})
         empty!(S.pids)
         empty!(S.refs)
         init_loc_flds(S)
-        finalize(S.s)
         S.s = Array(T, ntuple(d->0,N))
     end
     S
