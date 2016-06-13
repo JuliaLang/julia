@@ -5433,22 +5433,6 @@ Compute the cotangent of `x`, where `x` is in radians.
 cot
 
 """
-    get(x)
-
-Attempt to access the value of the `Nullable` object, `x`. Returns the value if it is
-present; otherwise, throws a `NullException`.
-"""
-get(x)
-
-"""
-    get(x, y)
-
-Attempt to access the value of the `Nullable{T}` object, `x`. Returns
-the value if it is present; otherwise, returns `convert(T, y)`.
-"""
-get(x,y)
-
-"""
     get(collection, key, default)
 
 Return the value stored for the given key, or the given default value if no mapping for the

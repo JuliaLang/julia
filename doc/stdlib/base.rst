@@ -728,17 +728,11 @@ Nullables
 
    Wrap value ``x`` in an object of type ``Nullable``\ , which indicates whether a value is present. ``Nullable(x)`` yields a non-empty wrapper, and ``Nullable{T}()`` yields an empty instance of a wrapper that might contain a value of type ``T``\ .
 
-.. function:: get(x)
+.. function:: get(x::Nullable[, y])
 
    .. Docstring generated from Julia source
 
-   Attempt to access the value of the ``Nullable`` object, ``x``\ . Returns the value if it is present; otherwise, throws a ``NullException``\ .
-
-.. function:: get(x, y)
-
-   .. Docstring generated from Julia source
-
-   Attempt to access the value of the ``Nullable{T}`` object, ``x``\ . Returns the value if it is present; otherwise, returns ``convert(T, y)``\ .
+   Attempt to access the value of ``x``\ . Returns the value if it is present; otherwise, returns ``y`` if provided, or throws a ``NullException`` if not.
 
 .. function:: isnull(x)
 
