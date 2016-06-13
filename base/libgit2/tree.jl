@@ -19,7 +19,7 @@ end
 function filename(te::GitTreeEntry)
     str = ccall((:git_tree_entry_name, :libgit2), Cstring, (Ptr{Void},), te.ptr)
     str == C_NULL && return ""
-    return String(str)
+    return unsafe_string(str)
 end
 
 "Returns UNIX file attributes, as a `Cint`, of a tree entry."
