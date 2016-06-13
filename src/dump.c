@@ -485,12 +485,10 @@ static void jl_serialize_datatype(ios_t *s, jl_datatype_t *dt)
 {
     int tag = 0;
     if (mode == MODE_MODULE_POSTWORK) {
-        if (dt->uid != 0) {
-            if (dt->name->primary == (jl_value_t*)dt)
-                tag = 6; // primary type
-            else
-                tag = 7; // must use apply_type
-        }
+        if (dt->name->primary == (jl_value_t*)dt)
+            tag = 6; // primary type
+        else if (dt->uid != 0)
+            tag = 7; // must use apply_type
     }
     else if (mode == MODE_MODULE) {
         int internal = module_in_worklist(dt->name->module);
@@ -575,19 +573,21 @@ static void jl_serialize_datatype(ios_t *s, jl_datatype_t *dt)
             write_int32(s, dt->uid);
         }
     }
-    if (has_instance)
-        jl_serialize_value(s, dt->instance);
     if (nf > 0) {
         write_int32(s, dt->alignment);
         write_int8(s, dt->haspadding);
         size_t fieldsize = jl_fielddesc_size(dt->fielddesc_type);
         ios_write(s, jl_datatype_fields(dt), nf * fieldsize);
-        jl_serialize_value(s, dt->types);
     }
 
-    jl_serialize_value(s, dt->parameters);
+    if (has_instance)
+        jl_serialize_value(s, dt->instance);
     jl_serialize_value(s, dt->name);
+    jl_serialize_value(s, dt->parameters);
     jl_serialize_value(s, dt->super);
+
+    if (nf > 0)
+        jl_serialize_value(s, dt->types);
 }
 
 static void jl_serialize_module(ios_t *s, jl_module_t *m)
@@ -849,7 +849,8 @@ static void jl_serialize_value_(ios_t *s, jl_value_t *v)
         write_int32(s, m->line);
         jl_serialize_value(s, (jl_value_t*)m->sig);
         jl_serialize_value(s, (jl_value_t*)m->tvars);
-        jl_serialize_value(s, (jl_value_t*)m->ambig);
+        if (mode != MODE_MODULE_POSTWORK)
+            jl_serialize_value(s, (jl_value_t*)m->ambig);
         write_int8(s, m->called);
         jl_serialize_value(s, (jl_value_t*)m->module);
         jl_serialize_value(s, (jl_value_t*)m->roots);
@@ -1209,6 +1210,10 @@ static jl_value_t *jl_deserialize_datatype(ios_t *s, int pos, jl_value_t **loc)
     dt->haswildcard = (flags>>5)&1;
     dt->isleaftype = (flags>>6)&1;
     dt->depth = depth;
+    dt->types = NULL;
+    dt->parameters = NULL;
+    dt->name = NULL;
+    dt->super = NULL;
     if (!dt->abstract) {
         dt->ninitialized = read_uint16(s);
         dt->uid = mode != MODE_MODULE && mode != MODE_MODULE_POSTWORK ? read_int32(s) : 0;
@@ -1217,27 +1222,12 @@ static jl_value_t *jl_deserialize_datatype(ios_t *s, int pos, jl_value_t **loc)
         dt->ninitialized = 0;
         dt->uid = 0;
     }
-    int has_instance = (flags>>3)&1;
-    if (has_instance) {
-        assert(mode != MODE_MODULE_POSTWORK); // there shouldn't be an instance on a type with uid = 0
-        dt->instance = jl_deserialize_value(s, &dt->instance);
-        jl_gc_wb(dt, dt->instance);
-    }
-    if (tag == 5) {
-        assert(pos > 0);
-        assert(mode != MODE_MODULE_POSTWORK);
-        arraylist_push(&flagref_list, loc);
-        arraylist_push(&flagref_list, (void*)(uintptr_t)pos);
-        dt->uid = -1; // mark that this type needs a new uid
-    }
 
     if (nf > 0) {
         dt->alignment = read_int32(s);
         dt->haspadding = read_int8(s);
         size_t fieldsize = jl_fielddesc_size(fielddesc_type);
         ios_read(s, jl_datatype_fields(dt), nf * fieldsize);
-        dt->types = (jl_svec_t*)jl_deserialize_value(s, (jl_value_t**)&dt->types);
-        jl_gc_wb(dt, dt->types);
     }
     else {
         dt->alignment = dt->size;
@@ -1246,12 +1236,32 @@ static jl_value_t *jl_deserialize_datatype(ios_t *s, int pos, jl_value_t **loc)
             dt->alignment = MAX_ALIGN;
         dt->types = jl_emptysvec;
     }
-    dt->parameters = (jl_svec_t*)jl_deserialize_value(s, (jl_value_t**)&dt->parameters);
-    jl_gc_wb(dt, dt->parameters);
+
+    if (tag == 5) {
+        assert(pos > 0);
+        assert(mode != MODE_MODULE_POSTWORK);
+        arraylist_push(&flagref_list, loc);
+        arraylist_push(&flagref_list, (void*)(uintptr_t)pos);
+        dt->uid = -1; // mark that this type needs a new uid
+    }
+
+    int has_instance = (flags >> 3) & 1;
+    if (has_instance) {
+        assert(mode != MODE_MODULE_POSTWORK); // there shouldn't be an instance on a type with uid = 0
+        dt->instance = jl_deserialize_value(s, &dt->instance);
+        jl_gc_wb(dt, dt->instance);
+    }
     dt->name = (jl_typename_t*)jl_deserialize_value(s, (jl_value_t**)&dt->name);
     jl_gc_wb(dt, dt->name);
+    dt->parameters = (jl_svec_t*)jl_deserialize_value(s, (jl_value_t**)&dt->parameters);
+    jl_gc_wb(dt, dt->parameters);
     dt->super = (jl_datatype_t*)jl_deserialize_value(s, (jl_value_t**)&dt->super);
     jl_gc_wb(dt, dt->super);
+
+    if (nf > 0) {
+        dt->types = (jl_svec_t*)jl_deserialize_value(s, (jl_value_t**)&dt->types);
+        jl_gc_wb(dt, dt->types);
+    }
     if (datatype_list) {
         if (dt->name == jl_array_type->name || dt->name == jl_ref_type->name ||
             dt->name == jl_pointer_type->name || dt->name == jl_type_type->name ||
@@ -1455,8 +1465,13 @@ static jl_value_t *jl_deserialize_value_(ios_t *s, jl_value_t *vtag, jl_value_t 
         jl_gc_wb(m, m->sig);
         m->tvars = (jl_svec_t*)jl_deserialize_value(s, (jl_value_t**)&m->tvars);
         jl_gc_wb(m, m->tvars);
-        m->ambig = jl_deserialize_value(s, (jl_value_t**)&m->ambig);
-        jl_gc_wb(m, m->ambig);
+        if (mode != MODE_MODULE_POSTWORK) {
+            m->ambig = jl_deserialize_value(s, (jl_value_t**)&m->ambig);
+            jl_gc_wb(m, m->ambig);
+        }
+        else {
+            m->ambig = jl_nothing;
+        }
         m->called = read_int8(s);
         m->module = (jl_module_t*)jl_deserialize_value(s, (jl_value_t**)&m->module);
         jl_gc_wb(m, m->module);
