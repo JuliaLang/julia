@@ -582,9 +582,9 @@ zero{T}(x::AbstractArray{T}) = fill!(similar(x), zero(T))
 # While the definitions for LinearFast are all simple enough to inline on their
 # own, LinearSlow's CartesianRange is more complicated and requires explicit
 # inlining.
-start(A::AbstractArray) = (@_inline_meta(); itr = eachindex(A); (itr, start(itr)))
-next(A::AbstractArray,i) = (@_inline_meta(); (idx, s) = next(i[1], i[2]); @inbounds ret = (A[idx], (i[1], s)); ret)
-done(A::AbstractArray,i) = done(i[1], i[2])
+start(A::AbstractArray) = (@_inline_meta; itr = eachindex(A); (itr, start(itr)))
+next(A::AbstractArray,i) = (@_propagate_inbounds_meta; (idx, s) = next(i[1], i[2]); (A[idx], (i[1], s)))
+done(A::AbstractArray,i) = (@_propagate_inbounds_meta; done(i[1], i[2]))
 
 # eachindex iterates over all indices. LinearSlow definitions are later.
 eachindex(A::AbstractArray) = (@_inline_meta(); eachindex(linearindexing(A), A))
