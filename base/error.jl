@@ -18,8 +18,18 @@
 
 ## native julia error handling ##
 
-error(s::AbstractString) = throw(Main.Base.ErrorException(s))
-error(s...) = throw(Main.Base.ErrorException(Main.Base.string(s...)))
+if isdefined(Main, :Base)
+    error(s::AbstractString) = throw(Main.Base.ErrorException(s))
+    error(s...) = throw(Main.Base.ErrorException(Main.Base.string(s...)))
+else
+    error(s::AbstractString) = (print(s); throw(InterruptException()))
+    function error(ss...)
+        print("Error with ")
+        print(length(ss))
+        print(" arguments")
+        throw(InterruptException())
+    end
+end
 
 rethrow() = ccall(:jl_rethrow, Bottom, ())
 rethrow(e) = ccall(:jl_rethrow_other, Bottom, (Any,), e)

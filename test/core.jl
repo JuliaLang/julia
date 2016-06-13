@@ -206,6 +206,18 @@ let T = TypeVar(:T, Tuple{Vararg{RangeIndex}}, true)
     @test  args_morespecific(t2, t1)
 end
 
+let T = TypeVar(:T, Any, true), N = TypeVar(:N, Any, true)
+    a = Tuple{Array{T,N}, Vararg{Int,N}}
+    b = Tuple{Array,Int}
+    @test  args_morespecific(a, b)
+    @test !args_morespecific(b, a)
+    a = Tuple{Array, Vararg{Int,N}}
+    @test !args_morespecific(a, b)
+    @test  args_morespecific(b, a)
+end
+
+# with bound varargs
+
 # issue #11840
 typealias TT11840{T} Tuple{T,T}
 f11840(::Type) = "Type"

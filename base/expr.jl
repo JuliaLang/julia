@@ -83,7 +83,7 @@ end
 find_vars(e) = find_vars(e, [])
 function find_vars(e, lst)
     if isa(e,Symbol)
-        if current_module()===Main && isdefined(e)
+        if current_module()===Main && isdefined(Main,:Base) && isdefined(e)
             # Main runs on process 1, so send globals from there, excluding
             # things defined in Base.
             if !isdefined(Base,e) || eval(Base,e)!==eval(current_module(),e)
