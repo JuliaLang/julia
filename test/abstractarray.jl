@@ -525,3 +525,64 @@ A = TSlowNIndexes(rand(2,2))
 #16381
 @inferred size(rand(3,2,1), 2, 1)
 @inferred size(rand(3,2,1), 2, 1, 3)
+
+# conversion to arrays
+let v = collect(1:15), m = reshape(v, 5, 3),
+    sv = sparse(v), sm = sparse(m),
+    r = 1:15, t = take(1:20, 15),
+    g1 = (i for i in 1:15), g2 = ((j-1)*5+i for i in 1:5, j in 1:3)
+    for x in (v, m, sv, sm, r, t, g1, g2)
+        @test Vector(x) == convert(Vector, x) == v
+        @test Vector{Int}(x) == convert(Vector{Int}, x) == v
+        @test Vector{Float64}(x) == convert(Vector{Float64}, x) == v
+    end
+
+    for x in (v, sv, r, t, g1)
+        @test Array(x) == convert(Array, x) == v
+        @test Array{Int}(x) == convert(Array{Int}, x) == v
+        @test Array{Float64}(x) == convert(Array{Float64}, x) == v
+
+        @test_throws DimensionMismatch Matrix(x)
+        @test_throws DimensionMismatch convert(Matrix, x)
+
+        @test_throws DimensionMismatch Matrix{Int}(x)
+        @test_throws DimensionMismatch convert(Matrix{Int}, x)
+
+        @test_throws DimensionMismatch Matrix{Float64}(x)
+        @test_throws DimensionMismatch convert(Matrix{Float64}, x)
+
+        @test_throws DimensionMismatch Array{Int, 3}(x)
+        @test_throws DimensionMismatch convert(Array{Int, 3}, x)
+
+        @test_throws DimensionMismatch Array{Float64, 3}(x)
+        @test_throws DimensionMismatch convert(Array{Float64, 3}, x)
+    end
+
+    for x in (m, sm, g2)
+        @test Matrix(x) == convert(Matrix, x) == m
+        @test Matrix{Int}(x) == convert(Matrix{Int}, x) == m
+        @test Matrix{Float64}(x) == convert(Matrix{Float64}, x) == m
+
+        @test Array(x) == convert(Array, x) == m
+        @test Array{Int}(x) == convert(Array{Int}, x) == m
+        @test Array{Float64}(x) == convert(Array{Float64}, x) == m
+
+        @test_throws DimensionMismatch Array{Int, 3}(x)
+        @test_throws DimensionMismatch convert(Array{Int, 3}, x)
+
+        @test_throws DimensionMismatch Array{Float64, 3}(x)
+        @test_throws DimensionMismatch convert(Array{Float64, 3}, x)
+    end
+end
+
+@test convert(Array, 1) == ones()
+@test convert(Array{Int}, 1) == ones()
+@test convert(Array{Float64}, 1) == ones()
+@test_throws DimensionMismatch convert(Array{Int,3}, 1)
+@test_throws DimensionMismatch convert(Array{Float64,3}, 1)
+@test convert(Vector, 1) == ones(1)
+@test convert(Vector{Int}, 1) == ones(1)
+@test convert(Vector{Float64}, 1) == ones(1)
+@test_throws DimensionMismatch convert(Matrix, 1)
+@test_throws DimensionMismatch convert(Matrix{Int}, 1)
+@test_throws DimensionMismatch convert(Matrix{Float64}, 1)

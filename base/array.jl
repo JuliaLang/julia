@@ -2,6 +2,38 @@
 
 ## array.jl: Dense arrays
 
+"""
+    Array{T}(dims)
+    Vector{T}(m)
+    Matrix{T}(m, n)
+
+`Array{T}(dims)` constructs an uninitialized dense array with element type `T`. `dims` may
+be a tuple or a series of integer arguments, each giving the size of the corresponding
+dimension. `Vector{T}(m)` and `Matrix{T}(m, n)` are aliases to create one- and two-
+dimensional arrays.
+
+The syntax `Array(T, dims)` is also available, but deprecated.
+
+
+    Array{[T],[N]}(itr)
+    Vector{[T]}(itr)
+    Matrix{[T]}(itr)
+
+Return an array of all elements in collection `itr`.
+
+`Array(itr)` creates an array of the same element type and size as `itr`, while
+`Array{T}(itr)` and `Array{T,N}(itr)` allow specifying the element type and
+dimensionality of the result. `Vector{T}(itr)` and `Matrix{T}(itr)` are aliases
+to create one- and two-dimensional arrays.
+
+`Array{T,1}(itr)` and `Vector{T}(itr)` convert multidimensional collections
+to vectors using the column-major convention. On the other hand, `Array{T,N}(itr)`
+and `Matrix{T}(itr)` only accept collections of the same rank (i.e. `N` for general
+array and `2` for matrix): use `squeeze` or `reshape` on the result to add or remove
+dimensions.
+"""
+Array
+
 typealias Vector{T} Array{T,1}
 typealias Matrix{T} Array{T,2}
 typealias VecOrMat{T} Union{Vector{T}, Matrix{T}}
@@ -191,13 +223,37 @@ end
 
 ## Conversions ##
 
-convert{T,n}(::Type{Array{T}}, x::Array{T,n}) = x
-convert{T,n}(::Type{Array{T,n}}, x::Array{T,n}) = x
+convert{T,N}(::Type{Array{T}}, x::Array{T,N}) = x
+convert{T,N}(::Type{Array{T,N}}, x::Array{T,N}) = x
+# Defined to prevent ambiguities
+convert{T}(::Type{Vector{T}}, x::Vector{T}) = x
+convert{T}(::Type{Matrix{T}}, x::Matrix{T}) = x
 
-convert{T,n,S}(::Type{Array{T}}, x::AbstractArray{S, n}) = convert(Array{T, n}, x)
-convert{T,n,S}(::Type{Array{T,n}}, x::AbstractArray{S,n}) = copy!(Array{T}(size(x)), x)
+convert{T,N,S}(::Type{Array{T}}, x::AbstractArray{S, N}) = convert(Array{T, N}, x)
+convert{T,N,S}(::Type{Array{T,N}}, x::AbstractArray{S,N}) = copy!(Array{T}(size(x)), x)
 
-promote_rule{T,n,S}(::Type{Array{T,n}}, ::Type{Array{S,n}}) = Array{promote_type(T,S),n}
+convert{S}(::Type{Vector}, x::AbstractArray{S,1}) = convert(Vector{S}, x)
+convert{S}(::Type{Matrix}, x::AbstractArray{S,2}) = convert(Matrix{S}, x)
+
+function _check_itr_dim(itr, N)
+    if !isa(iteratorsize(itr), HasShape)
+        throw(DimensionMismatch("cannot convert iterator of type $(typeof(itr)) with unknown size to an Array{T, $N}"))
+    elseif ndims(itr) != N
+        throw(DimensionMismatch("cannot convert iterator of type $(typeof(itr)) with size $(size(itr)) to an Array{T, $N}"))
+    end
+end
+
+convert(::Type{Array}, itr::Any) = collect(itr)
+convert{T}(::Type{Array{T}}, itr::Any) = collect(T, itr)
+convert{T,N}(::Type{Array{T,N}}, itr::Any) = (_check_itr_dim(itr, N); collect(T, itr))
+
+convert(::Type{Vector}, itr::Any) = vec(collect(itr))
+convert{T}(::Type{Vector{T}}, itr::Any) = vec(collect(T, itr))
+
+convert(::Type{Matrix}, itr::Any) = (_check_itr_dim(itr, 2); collect(itr))
+convert{T}(::Type{Matrix{T}}, itr::Any) = (_check_itr_dim(itr, 2); collect(T, itr))
+
+promote_rule{T,N,S}(::Type{Array{T,N}}, ::Type{Array{S,N}}) = Array{promote_type(T,S),N}
 
 ## copying iterators to containers
 

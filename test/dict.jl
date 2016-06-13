@@ -151,7 +151,7 @@ end
 let
     d = Dict{String, Vector{Int}}()
     d["a"] = [1, 2]
-    @test_throws MethodError d["b"] = 1
+    @test_throws MethodError d["b"] = :a
     @test isa(repr(d), AbstractString)  # check that printable without error
 end
 
