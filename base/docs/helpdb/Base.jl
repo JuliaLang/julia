@@ -6875,7 +6875,7 @@ EnvHash
     method_exists(f, Tuple type) -> Bool
 
 Determine whether the given generic function has a method matching the given
-[`Tuple`](:obj:`Tuple`) of argument types.
+[`Tuple`](:obj:`Tuple`) of argument types. See also `@method_exists`.
 
 ```jldoctest
 julia> method_exists(length, Tuple{Array})

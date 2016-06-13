@@ -1357,6 +1357,7 @@ export
     @which,
     @edit,
     @functionloc,
+    @method_exists,
     @less,
     @code_typed,
     @code_warntype,

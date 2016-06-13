@@ -440,6 +440,40 @@ function method_exists(f::ANY, t::ANY)
     return ccall(:jl_method_exists, Cint, (Any, Any), typeof(f).name.mt, t) != 0
 end
 
+# For static evaluation of method_exists, when it evaluates to true.
+# We don't evaluate it at compile-time when false, because someone
+# might define the missing method later.
+"""
+    @method_exists(f, tt)
+
+Determine whether the given generic function `f` has a method matching
+the given tuple `tt` of argument types. When used in a function, if
+the method exists at the time the function is compiled, this statement
+simply gets replaced by `true` (and hence has no runtime overhead). If
+the function does not exist, then it is equivalent to the function
+form, `method_exists`.
+
+```jldoctest
+julia> @method_exists(length, Tuple{Array})
+true
+```
+"""
+:@method_exists
+
+macro method_exists(f, tt)
+    exmt = :(typeof($f).name.mt)  # get the method table for f
+    # Form the tuple-type of the function + argument types
+    if tt.head == :curly && tt.args[1] == :Tuple
+        extt = :(Tuple{typeof($f), $(tt.args[2:end]...)})
+    elseif tt.head == :tuple
+        extt = :(Tuple{typeof($f), $(tt.args...)})
+    else
+        error("expected a tuple or tuple-type")
+    end
+    # Issue the ccall
+    esc(:(ccall(:jl_method_exists, Cint, (Any, Any), $exmt, $extt) != 0))
+end
+
 function isambiguous(m1::Method, m2::Method)
     ti = typeintersect(m1.sig, m2.sig)
     ti === Bottom && return false
