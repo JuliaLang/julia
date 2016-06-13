@@ -58,19 +58,19 @@ end
 # newindex(I, rule) replaces a CartesianIndex with something that is
 # appropriate for a particular array/scalar. `rule` is a tuple that
 # describes the manipulations that should be made.
-immutable Keep end      # preserve the index
-immutable Subst1 end    # substitute with 1
 @inline newindex(I::CartesianIndex, ::Tuple{}) = 1    # for scalars
 @inline newindex(I::CartesianIndex, indexmap) = CartesianIndex(_newindex((), I.I, indexmap...))
 @inline _newindex(out, I) = out  # can truncate if indexmap is shorter than I
-@inline _newindex(out, I, ::Keep,   indexmap...) = _newindex((out..., I[1]), tail(I), indexmap...)
-@inline _newindex(out, I, ::Subst1, indexmap...) = _newindex((out..., 1), tail(I), indexmap...)
+@inline _newindex(out, I, keep::Bool, indexmap...) = _newindex((out..., ifelse(keep, I[1], 1)), tail(I), indexmap...)
 
-# This is not (and cannot be) type-stable, so we need a `noinline` in
-# the kernel function
 newindexer(sz, x::Number) = ()
-newindexer(sz, A) = ntuple(d->size(A,d) == sz[d] ? Keep() : Subst1(),
-                           ndims(A))
+@inline newindexer(sz, A) = _newindexer(sz, size(A))
+@inline _newindexer(sz, szA::Tuple{}) = ()
+@inline _newindexer(sz, szA) = (sz[1] == szA[1], _newindexer(tail(sz), tail(szA))...)
+
+# map(x->newindexer(sz, x), As), but see #15276
+map_newindexer(sz, ::Tuple{}) = ()
+@inline map_newindexer(sz, As) = (newindexer(sz, As[1]), map_newindexer(sz, tail(As))...)
 
 # For output BitArrays
 const bitcache_chunks = 64 # this can be changed
@@ -140,9 +140,9 @@ end
     B
 end
 
-broadcast(f, As...) = broadcast!(f, allocate_for(Array{promote_eltype_op(f, As...)}, As, broadcast_shape(As...)), As...)
+@inline broadcast(f, As...) = broadcast!(f, allocate_for(Array{promote_eltype_op(f, As...)}, As, broadcast_shape(As...)), As...)
 
-bitbroadcast(f, As...) = broadcast!(f, allocate_for(BitArray, As, broadcast_shape(As...)), As...)
+@inline bitbroadcast(f, As...) = broadcast!(f, allocate_for(BitArray, As, broadcast_shape(As...)), As...)
 
 broadcast_getindex(src::AbstractArray, I::AbstractArray...) = broadcast_getindex!(Array{eltype(src)}(broadcast_shape(I...)), src, I...)
 @generated function broadcast_getindex!(dest::AbstractArray, src::AbstractArray, I::AbstractArray...)
