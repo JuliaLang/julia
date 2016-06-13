@@ -485,7 +485,8 @@ are several possible approaches, here is one that is widely used:
   error, :ref:`make sure you've set up your SSH keys <man-pkg-dev-setup>`.)
   Julia will then give you a hyperlink; open that link, edit the message, and
   then click "submit." At that point, the package owner will be notified of
-  your changes and may initiate discussion.
+  your changes and may initiate discussion. (If you are comfortable with git,
+  you can also do these steps manually from the shell.)
 
 - The package owner may suggest additional improvements. To respond to those
   suggestions, you can easily update the pull request (this only works for
