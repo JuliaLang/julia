@@ -2,7 +2,7 @@
 
 module TestBroadcastInternals
 
-using Base.Broadcast: broadcast_shape, check_broadcast_shape, newindex, _bcs, _bcsm, Keep, Subst1
+using Base.Broadcast: broadcast_shape, check_broadcast_shape, newindex, _bcs, _bcsm
 using Base.Test
 
 @test @inferred(_bcs((), (3,5), (3,5))) == (3,5)
@@ -43,12 +43,12 @@ check_broadcast_shape((-1:1, 6:9), 1)
 check_broadcast_shape((-1:1, 6:9), zeros(1,1))
 
 ci(x) = CartesianIndex(x)
-@test @inferred(newindex(ci((2,2)), (Keep(), Keep())))     == ci((2,2))
-@test @inferred(newindex(ci((2,2)), (Keep(), Subst1())))   == ci((2,1))
-@test @inferred(newindex(ci((2,2)), (Subst1(), Keep())))   == ci((1,2))
-@test @inferred(newindex(ci((2,2)), (Subst1(), Subst1()))) == ci((1,1))
-@test @inferred(newindex(ci((2,2)), (Keep(),)))   == ci((2,))
-@test @inferred(newindex(ci((2,2)), (Subst1(),))) == ci((1,))
+@test @inferred(newindex(ci((2,2)), (true, true)))   == ci((2,2))
+@test @inferred(newindex(ci((2,2)), (true, false)))  == ci((2,1))
+@test @inferred(newindex(ci((2,2)), (false, true)))  == ci((1,2))
+@test @inferred(newindex(ci((2,2)), (false, false))) == ci((1,1))
+@test @inferred(newindex(ci((2,2)), (true,)))   == ci((2,))
+@test @inferred(newindex(ci((2,2)), (false,))) == ci((1,))
 @test @inferred(newindex(ci((2,2)), ())) == 1
 
 end
