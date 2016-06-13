@@ -5764,7 +5764,7 @@ extern "C" void jl_init_codegen(void)
                                " Is the LLVM backend for this CPU enabled?");
 #if defined(USE_MCJIT) && (!defined(_CPU_ARM_) && !defined(_CPU_PPC64_))
     // FastISel seems to be buggy for ARM. Ref #13321
-    if (jl_options.opt_level < 3)
+    if (jl_options.opt_level < 2)
         jl_TargetMachine->setFastISel(true);
 #endif
 
