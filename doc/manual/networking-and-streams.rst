@@ -21,7 +21,6 @@ taking the stream as their first argument, e.g.::
 
     julia> write(STDOUT,"Hello World");  # suppress return value 11 with ;
     Hello World
-
     julia> read(STDIN,Char)
 
     '\n'
