@@ -47,7 +47,7 @@ Basic functions
 
    .. Docstring generated from Julia source
 
-   Returns a tuple specifying the "shape" of array ``A``\ . For arrays with conventional indexing (indices start at 1), this is equivalent to ``size(A)``\ ; otherwise it is equivalent to ``incides(A)``\ .
+   Returns a tuple specifying the "shape" of array ``A``\ . For arrays with conventional indexing (indices start at 1), this is equivalent to ``size(A)``\ ; otherwise it is equivalent to ``indices(A)``\ .
 
 .. function:: shape(A, d)
 
