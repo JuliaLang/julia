@@ -99,7 +99,7 @@ static void addOptimizationPasses(T *PM)
     PM->add(createInstructionCombiningPass()); // Clean up after the unroller
 #endif
     PM->add(createGVNPass());                  // Remove redundancies
-    //PM->add(createMemCpyOptPass());            // Remove memcpy / form memset
+    PM->add(createMemCpyOptPass());            // Remove memcpy / form memset
     PM->add(createSCCPPass());                 // Constant prop with SCCP
 
     // Run instcombine after redundancy elimination to exploit opportunities

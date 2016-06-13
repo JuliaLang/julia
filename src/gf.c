@@ -1303,13 +1303,13 @@ static int _compile_all_union(jl_tupletype_t *sig, jl_svec_t *tvars)
 
 static void _compile_all_deq(jl_array_t *found)
 {
-    size_t found_i, found_l = jl_array_len(found);
+    int found_i, found_l = jl_array_len(found);
     jl_printf(JL_STDERR, "found %d uncompiled methods for compile-all\n", (int)found_l);
     jl_lambda_info_t *linfo = NULL;
     JL_GC_PUSH1(&linfo);
     for (found_i = 0; found_i < found_l; found_i++) {
         if (found_i % (found_l / 300) == 0 || found_i == found_l - 1) // show 300 progress steps, to show progress without overwhelming log files
-            jl_printf(JL_STDERR, " %zd / %zd\r", found_i + 1, found_l);
+            jl_printf(JL_STDERR, " %d / %d\r", found_i + 1, found_l);
         jl_typemap_entry_t *ml = (jl_typemap_entry_t*)jl_array_ptr_ref(found, found_i);
         if (ml->func.value == NULL)
             continue; // XXX: how does this happen
