@@ -245,9 +245,9 @@ function _unsafe_getindex(::LinearIndexing, src::AbstractArray, I::AbstractArray
     D = eachindex(dest)
     Ds = start(D)
     for (b, s) in zip(I, eachindex(src))
-        if b
+        @inbounds if b
             d, Ds = next(D, Ds)
-            @inbounds dest[d] = src[s]
+            dest[d] = src[s]
         end
     end
     dest
@@ -282,9 +282,9 @@ end
         @nexprs $N d->(J_d = J[d])
         D = eachindex(dest)
         Ds = start(D)
-        @nloops $N j d->J_d begin
+        @inbounds @nloops $N j d->J_d begin
             d, Ds = next(D, Ds)
-            @inbounds dest[d] = @ncall $N getindex src j
+            dest[d] = @ncall $N getindex src j
         end
         dest
     end
@@ -324,12 +324,12 @@ function _unsafe_setindex!(::LinearIndexing, A::AbstractArray, x, I::AbstractArr
     X = _iterable(x)
     Xs = start(X)
     c = 0
-    for (iA, i) in zip(eachindex(A), eachindex(I))
-        @inbounds Ii = I[i]
+    @inbounds for (iA, i) in zip(eachindex(A), eachindex(I))
+        Ii = I[i]
         if Ii
             done(X, Xs) && throw_setindex_mismatch(x, c+1)
             (v, Xs) = next(X, Xs)
-            @inbounds A[iA] = v
+            A[iA] = v
             c += 1
         end
     end
@@ -365,9 +365,9 @@ end
         J = @ncall $N decolon A I
         @nexprs $N d->(J_d = J[d])
         Xs = start(X)
-        @nloops $N j d->J_d begin
+        @inbounds @nloops $N j d->J_d begin
             v, Xs = next(X, Xs)
-            @inbounds @ncall $N setindex! A v j
+            @ncall $N setindex! A v j
         end
         A
     end
