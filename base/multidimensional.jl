@@ -169,17 +169,22 @@ index_lengths_dim(A, dim, ::Colon) = (trailingsize(A, dim),)
 @inline index_lengths_dim{N}(A, dim, i::AbstractArray{CartesianIndex{N}}, I...) = (length(i), index_lengths_dim(A, dim+N, I...)...)
 
 # shape of array to create for getindex() with indexes I, dropping scalars
+# Rather than use an Integer dim, we grow a tuple (true, true, ...)
+# whose length is equal to the dimension we're to process next. This
+# allows us to dispatch, which is important for the type-stability of
+# the lines involving Colon as the final index.
 index_shape(A::AbstractVector, I::Colon) = shape(A)
 index_shape(A::AbstractArray,  I::Colon) = (length(A),)
-@inline index_shape(A::AbstractArray, I...) = index_shape_dim(A, 1, I...)
+@inline index_shape(A::AbstractArray, I...) = index_shape_dim(A, (true,), I...)
+@inline index_shape_dim(A, dim, ::Colon) = (trailingsize(A, length(dim)),)
+@inline index_shape_dim{T,N}(A::AbstractArray{T,N}, dim::NTuple{N}, ::Colon) = (shape(A, N),)
 @inline index_shape_dim(A, dim, I::Real...) = ()
-@inline index_shape_dim(A, dim, ::Colon) = (trailingsize(A, dim),)
-@inline index_shape_dim(A, dim, ::Colon, i, I...) = (size(A, dim), index_shape_dim(A, dim+1, i, I...)...)
-@inline index_shape_dim(A, dim, ::Real, I...) = (index_shape_dim(A, dim+1, I...)...)
-@inline index_shape_dim{N}(A, dim, ::CartesianIndex{N}, I...) = (index_shape_dim(A, dim+N, I...)...)
-@inline index_shape_dim(A, dim, i::AbstractArray, I...) = (shape(i)..., index_shape_dim(A, dim+1, I...)...)
-@inline index_shape_dim(A, dim, i::AbstractArray{Bool}, I...) = (sum(i), index_shape_dim(A, dim+1, I...)...)
-@inline index_shape_dim{N}(A, dim, i::AbstractArray{CartesianIndex{N}}, I...) = (shape(i)..., index_shape_dim(A, dim+N, I...)...)
+@inline index_shape_dim(A, dim, ::Colon, i, I...) = (shape(A, length(dim)), index_shape_dim(A, (dim...,true), i, I...)...)
+@inline index_shape_dim(A, dim, ::Real, I...) = (index_shape_dim(A, (dim...,true), I...)...)
+@inline index_shape_dim{N}(A, dim, ::CartesianIndex{N}, I...) = (index_shape_dim(A, (dim...,ntuple(d->true,Val{N})...), I...)...)
+@inline index_shape_dim(A, dim, i::AbstractArray, I...) = (shape(i)..., index_shape_dim(A, (dim...,true), I...)...)
+@inline index_shape_dim(A, dim, i::AbstractArray{Bool}, I...) = (sum(i), index_shape_dim(A, (dim...,true), I...)...)
+@inline index_shape_dim{N}(A, dim, i::AbstractArray{CartesianIndex{N}}, I...) = (shape(i)..., index_shape_dim(A, (dim...,ntuple(d->true,Val{N})...), I...)...)
 
 @inline decolon(A::AbstractVector, ::Colon) = (indices(A,1),)
 @inline decolon(A::AbstractArray,  ::Colon) = (1:length(A),)
