@@ -155,3 +155,15 @@ Functions for package development (e.g. ``tag``, ``publish``, etc.) have been mo
 
    Run the tests for each package in ``pkgs`` ensuring that each package's test dependencies are installed for the duration of the test. A package is tested by running its ``test/runtests.jl`` file and test dependencies are specified in ``test/REQUIRE``\ .
 
+.. function:: dependents(pkg)
+
+   .. Docstring generated from Julia source
+
+   Returns an array of names of packages which have ``pkg`` in their ``REQUIRE`` file.
+
+.. function:: dependencies(pkg)
+
+   .. Docstring generated from Julia source
+
+   Returns a Dict of requirement specifications for ``pkg`` from its ``REQUIRE`` file.
+

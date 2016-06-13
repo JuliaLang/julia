@@ -30,9 +30,17 @@ function Base.showerror(io::IO, pkgerr::PkgError)
     end
 end
 
-for file in split("dir types reqs cache read query resolve write entry git")
-    include("pkg/$file.jl")
-end
+include("pkg/dir.jl" )
+include("pkg/types.jl" )
+include("pkg/reqs.jl" )
+include("pkg/cache.jl" )
+include("pkg/read.jl" )
+include("pkg/query.jl" )
+include("pkg/resolve.jl" )
+include("pkg/write.jl" )
+include("pkg/entry.jl" )
+include("pkg/git.jl" )
+
 const cd = Dir.cd
 
 dir(path...) = Dir.path(path...)
@@ -244,7 +252,19 @@ installed for the duration of the test. A package is tested by running its
 """
 test(pkgs::AbstractString...; coverage::Bool=false) = cd(Entry.test,AbstractString[pkgs...]; coverage=coverage)
 
-dependents(packagename::AbstractString) = Reqs.dependents(packagename)
+"""
+    dependents(pkg)
+
+Returns an array of names of packages which have `pkg` in their `REQUIRE` file.
+"""
+dependents(pkg::AbstractString) = Reqs.dependents(pkg)
+
+"""
+    dependencies(pkg)
+
+Returns a Dict of requirement specifications for `pkg` from its `REQUIRE` file.
+"""
+dependencies(pkg::AbstractString) = Reqs.dependencies(pkg)
 
 """
     setprotocol!(proto)
