@@ -14,6 +14,14 @@ A = rand(3,3,3)
 @test checkbounds(Bool, A, 2, 2, 2, 1) == true
 @test checkbounds(Bool, A, 2, 2, 2, 2) == false
 
+@test  Base.checkbounds_indices((1:5, 1:5), (2,2))
+@test !Base.checkbounds_indices((1:5, 1:5), (7,2))
+@test !Base.checkbounds_indices((1:5, 1:5), (2,0))
+@test  Base.checkbounds_indices((1:5, 1:5), (13,))
+@test !Base.checkbounds_indices((1:5, 1:5), (26,))
+@test  Base.checkbounds_indices((1:5, 1:5), (2,2,1))
+@test !Base.checkbounds_indices((1:5, 1:5), (2,2,2))
+
 # sub2ind & ind2sub
 # 0-dimensional
 for i = 1:4

@@ -155,6 +155,10 @@ using .IteratorsMD
 @inline _chkbnds{T,N}(A::AbstractArray{T,N}, checked::NTuple{N,Bool}, I1::CartesianIndex, I...) = _chkbnds(A, checked, I1.I..., I...)
 @inline _chkbnds{T,N,M}(A::AbstractArray{T,N}, checked::NTuple{M,Bool}, I1::CartesianIndex, I...) = _chkbnds(A, checked, I1.I..., I...)
 
+@inline checkbounds_indices(::Tuple{},   I::Tuple{CartesianIndex,Vararg{Any}}) = checkbounds_indices((),   (I[1].I..., tail(I)...))
+@inline checkbounds_indices(inds::Tuple{Any}, I::Tuple{CartesianIndex,Vararg{Any}}) = checkbounds_indices(inds, (I[1].I..., tail(I)...))
+@inline checkbounds_indices(inds::Tuple, I::Tuple{CartesianIndex,Vararg{Any}}) = checkbounds_indices(inds, (I[1].I..., tail(I)...))
+
 # Recursively compute the lengths of a list of indices, without dropping scalars
 # These need to be inlined for more than 3 indexes
 index_lengths(A::AbstractArray, I::Colon) = (length(A),)
