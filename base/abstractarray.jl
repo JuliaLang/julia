@@ -137,6 +137,13 @@ indicesbehavior(A::AbstractArray) = indicesbehavior(typeof(A))
 indicesbehavior{T<:AbstractArray}(::Type{T}) = IndicesStartAt1()
 indicesbehavior(::Number) = IndicesStartAt1()
 
+abstract IndicesPerformance
+immutable IndicesFast1D <: IndicesPerformance end  # indices(A, d) is fast
+immutable IndicesSlow1D <: IndicesPerformance end  # indices(A) is better than indices(A,d)
+
+indicesperformance(A::AbstractArray) = indicesperformance(typeof(A))
+indicesperformance{T<:AbstractArray}(::Type{T}) = IndicesFast1D()
+
 """
     shape(A)
 
@@ -207,6 +214,25 @@ Return `true` if the specified `indexes` are in bounds for the given `array`. Su
 behaviors.
 """
 function checkbounds(::Type{Bool}, A::AbstractArray, I...)
+    @_inline_meta
+    _checkbounds(Bool, indicesperformance(A), A, I...)
+end
+function _checkbounds(::Type{Bool}, ::IndicesSlow1D, A::AbstractArray, I...)
+    @_inline_meta
+    checkbounds_indices(indices(A), I)
+end
+_checkbounds(::Type{Bool}, ::IndicesSlow1D, A::AbstractArray, I::AbstractArray{Bool}) = _chkbnds(A, (true,), I)
+
+# Bounds-checking for arrays for which indices(A) is faster than indices(A, d)
+checkbounds_indices(::Tuple{},  ::Tuple{})    = true
+checkbounds_indices(::Tuple{}, I::Tuple{Any}) = (@_inline_meta; checkindex(Bool, 1:1, I[1]))
+checkbounds_indices(::Tuple{}, I::Tuple)      = (@_inline_meta; checkindex(Bool, 1:1, I[1]) & checkbounds_indices((), tail(I)))
+checkbounds_indices(inds::Tuple{Any}, I::Tuple{Any}) = (@_inline_meta; checkindex(Bool, inds[1], I[1]))
+checkbounds_indices(inds::Tuple, I::Tuple{Any}) = (@_inline_meta; checkindex(Bool, 1:prod(map(dimlength, inds)), I[1]))
+checkbounds_indices(inds::Tuple, I::Tuple) = (@_inline_meta; checkindex(Bool, inds[1], I[1]) & checkbounds_indices(tail(inds), tail(I)))
+
+# Bounds-checking for arrays for which indices(A, d) is fast
+function _checkbounds(::Type{Bool}, ::IndicesFast1D, A::AbstractArray, I...)
     @_inline_meta
     # checked::NTuple{M} means we have checked dimensions 1:M-1, now
     # need to check dimension M. checked[M] indicates whether all the

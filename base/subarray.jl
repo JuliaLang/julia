@@ -180,14 +180,6 @@ function getindex{T,N}(V::SlowSubArray{T,N}, I::Vararg{Real,N})
     @inbounds r = V.parent[reindex(V, V.indexes, to_indexes(I...))...]
     r
 end
-# Explicitly define scalar linear indexing -- this is needed so the nonscalar
-# indexing methods don't take precedence here
-function getindex(V::SlowSubArray, i::Real)
-    @_inline_meta
-    @boundscheck checkbounds(V, i)
-    @inbounds r = V.parent[reindex(V, V.indexes, smart_ind2sub(shape(V), to_index(i)))...]
-    r
-end
 
 typealias FastSubArray{T,N,P,I} SubArray{T,N,P,I,true}
 function getindex(V::FastSubArray, i::Real)
@@ -204,17 +196,7 @@ function getindex(V::FastContiguousSubArray, i::Real)
     @inbounds r = V.parent[V.offset1 + to_index(i)]
     r
 end
-# Just like the slow case, explicitly define scalar indexing at N dims, too
-function getindex{T,N}(V::FastSubArray{T,N}, I::Vararg{Real,N})
-    @_inline_meta
-    @boundscheck checkbounds(V, I...)
-    @inbounds r = getindex(V, smart_sub2ind(shape(V), to_indexes(I...)...))
-    r
-end
 
-# Setindex is similar, but since we don't specially define non-scalar methods
-# we only need to define the canonical methods. We don't need to worry about
-# e.g., linear indexing for SlowSubArray since the fallbacks can do their thing
 function setindex!{T,N}(V::SlowSubArray{T,N}, x, I::Vararg{Real,N})
     @_inline_meta
     @boundscheck checkbounds(V, I...)
@@ -366,6 +348,9 @@ _indices1(::IndicesBehavior, S::SubArray) = (@_inline_meta; _indices1(S, 1, S.in
 _indices1(S::SubArray, dim, i1, I...) = (@_inline_meta; 1:length(i1))
 _indices1(S::SubArray, dim, i1::Real, I...) = (@_inline_meta; _indices1(S, dim+1, I...))
 _indices1(S::SubArray, dim, i1::Colon, I...) = (@_inline_meta; indices(parent(S), dim))
+
+# Moreover, incides(S) is fast but indices(S, d) is slower
+indicesperformance{T<:SubArray}(::Type{T}) = IndicesSlow1D()
 
 indicesbehavior(S::SubArray) = _indicesbehavior(indicesbehavior(parent(S)), S)
 _indicesbehavior(::IndicesStartAt1, S::SubArray) = IndicesStartAt1()
