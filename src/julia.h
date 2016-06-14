@@ -70,14 +70,16 @@ extern "C" {
 
 typedef struct _jl_value_t jl_value_t;
 
+struct _jl_taggedvalue_bits {
+    uintptr_t gc:2;
+};
+
 struct _jl_taggedvalue_t {
     union {
         uintptr_t header;
         jl_taggedvalue_t *next;
         jl_value_t *type; // 16-byte aligned
-        struct {
-            uintptr_t gc:2;
-        } bits;
+        struct _jl_taggedvalue_bits bits;
     };
     // jl_value_t value;
 };
