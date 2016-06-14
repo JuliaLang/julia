@@ -521,7 +521,7 @@ jl_value_t *jl_toplevel_eval_flex(jl_value_t *e, int fast, int expanded)
         thk = (jl_lambda_info_t*)jl_exprarg(ex,0);
         assert(jl_is_lambda_info(thk));
         assert(jl_typeis(thk->code, jl_array_any_type));
-        ewc = jl_eval_with_compiler_p(thk, thk->code, fast, jl_current_module);
+        ewc = jl_eval_with_compiler_p(thk, (jl_array_t*)thk->code, fast, jl_current_module);
     }
     else {
         if (head && jl_eval_expr_with_compiler_p((jl_value_t*)ex, fast, jl_current_module)) {
@@ -774,7 +774,7 @@ JL_DLLEXPORT void jl_method_def(jl_svec_t *argdata, jl_lambda_info_t *f, jl_valu
         jl_call_tracer(jl_newmeth_tracer, (jl_value_t*)m);
 
     if (jl_boot_file_loaded && f->code && jl_typeis(f->code, jl_array_any_type)) {
-        f->code = jl_compress_ast(f, f->code);
+        f->code = (jl_value_t*)jl_compress_ast(f, (jl_array_t*)f->code);
         jl_gc_wb(f, f->code);
     }
     JL_GC_POP();
