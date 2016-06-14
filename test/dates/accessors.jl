@@ -70,6 +70,7 @@ function test_dates1()
                     @test d == Dates.dayofmonth(dt)
                     @test h == Dates.hour(dt)
                     @test mi == Dates.minute(dt)
+                    @test (m,d) == Dates.monthday(dt)
                     #@test s == Dates.second(dt)
                     #@test ms == Dates.millisecond(dt)
                 end
