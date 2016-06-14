@@ -1734,10 +1734,8 @@ let
 end
 
 # make sure front end can correctly print values to error messages
-let
-    ex = expand(parse("\"a\"=1"))
-    @test ex == Expr(:error, "invalid assignment location \"\"a\"\"") ||
-          ex == Expr(:error, "invalid assignment location \"#<julia_value>\"")
+let ex = expand(parse("\"a\"=1"))
+    @test ex == Expr(:error, "invalid assignment location \"\"a\"\"")
 end
 
 # make sure that incomplete tags are detected correctly
