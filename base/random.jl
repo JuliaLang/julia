@@ -4,7 +4,7 @@ module Random
 
 using Base.dSFMT
 using Base.GMP: GMP_VERSION, Limb
-import Base.copymutable
+import Base: copymutable, copy, copy!, ==
 
 export srand,
        rand, rand!,
@@ -64,15 +64,36 @@ rand(rng::RandomDevice, ::Type{CloseOpen}) = rand(rng, Close1Open2) - 1.0
 const MTCacheLength = dsfmt_get_min_array_size()
 
 type MersenneTwister <: AbstractRNG
+    seed::Vector{UInt32}
     state::DSFMT_state
     vals::Vector{Float64}
     idx::Int
-    seed::Vector{UInt32}
 
-    MersenneTwister(state::DSFMT_state, seed) = new(state, Array{Float64}(MTCacheLength), MTCacheLength, seed)
-    MersenneTwister(seed) = srand(new(DSFMT_state(), Array{Float64}(MTCacheLength)), seed)
-    MersenneTwister() = MersenneTwister(0)
+    function MersenneTwister(seed, state, vals, idx)
+        length(vals) == MTCacheLength &&  0 <= idx <= MTCacheLength || throw(DomainError())
+        new(seed, state, vals, idx)
+    end
 end
+
+MersenneTwister(seed::Vector{UInt32}, state::DSFMT_state) =
+    MersenneTwister(seed, state, zeros(Float64, MTCacheLength), MTCacheLength)
+
+MersenneTwister(seed=0) = srand(MersenneTwister(Vector{UInt32}(), DSFMT_state()), seed)
+
+function copy!(dst::MersenneTwister, src::MersenneTwister)
+    copy!(resize!(dst.seed, length(src.seed)), src.seed)
+    copy!(dst.state, src.state)
+    copy!(dst.vals, src.vals)
+    dst.idx = src.idx
+    dst
+end
+
+copy(src::MersenneTwister) =
+    MersenneTwister(copy(src.seed), copy(src.state), copy(src.vals), src.idx)
+
+==(r1::MersenneTwister, r2::MersenneTwister) =
+    r1.seed == r2.seed && r1.state == r2.state && isequal(r1.vals, r2.vals) && r1.idx == r2.idx
+
 
 ## Low level API for MersenneTwister
 
@@ -117,7 +138,7 @@ function randjump(mt::MersenneTwister, jumps::Integer, jumppoly::AbstractString)
     push!(mts, mt)
     for i in 1:jumps-1
         cmt = mts[end]
-        push!(mts, MersenneTwister(dSFMT.dsfmt_jump(cmt.state, jumppoly),  cmt.seed))
+        push!(mts, MersenneTwister(cmt.seed, dSFMT.dsfmt_jump(cmt.state, jumppoly)))
     end
     return mts
 end
