@@ -273,4 +273,4 @@ Deprecated or removed
 [#16403]: https://github.com/JuliaLang/julia/issues/16403
 [#16481]: https://github.com/JuliaLang/julia/issues/16481
 [#16731]: https://github.com/JuliaLang/julia/issues/16731
-[#16280]: https://github.com/JuliaLang/julia/issues/16260
+[#16260]: https://github.com/JuliaLang/julia/issues/16260
