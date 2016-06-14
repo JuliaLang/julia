@@ -133,6 +133,42 @@ epoch `-4713-11-24T12:00:00` as a `Float64`.
 """
 datetime2julian(dt::DateTime) = (value(dt) - JULIANEPOCH)/86400000.0
 
+# ISO 8601 conversions
+const ISO8601DATEEPOCH = value(Date(0, 1, 1))
+const ISO8601DATETIMEEPOCH = value(DateTime(0, 1, 1))
+
+"""
+    iso86012date(days) -> DateTime
+
+Takes the number of days since epoch `0000-01-01T00:00:00` and returns the corresponding
+`Date`.
+"""
+iso86012date(i) = Date(UTD(ISO8601DATEEPOCH + Int64(i)))
+
+"""
+    iso86012datetime(milliseconds) -> DateTime
+
+Takes the number of milliseconds since epoch `0000-01-01T00:00:00` and returns the
+corresponding `DateTime`.
+"""
+iso86012datetime(i) = DateTime(UTM(ISO8601DATETIMEEPOCH + Int64(i)))
+
+"""
+    date2iso8601(dt::DateTime) -> Int64
+
+Takes the given `Date` and returns the number of days since `0000-01-01T00:00:00` as an
+`Int64`.
+"""
+date2iso8601(dt::Date) = value(dt) - ISO8601DATEEPOCH
+
+"""
+    datetime2iso8601(dt::DateTime) -> Int64
+
+Takes the given `DateTime` and returns the number of milliseconds since
+`0000-01-01T00:00:00` as an `Int64`.
+"""
+datetime2iso8601(dt::DateTime) = value(dt) - ISO8601DATETIMEEPOCH
+
 @vectorize_1arg Real unix2datetime
 @vectorize_1arg DateTime datetime2unix
 @vectorize_1arg Real rata2datetime
