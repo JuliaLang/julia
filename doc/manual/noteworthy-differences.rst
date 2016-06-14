@@ -367,3 +367,15 @@ Noteworthy differences from C/C++
   in order to have dynamic dispatch.
   On the other hand, in Julia every method is "virtual" (although it's more general than that
   since methods are dispatched on every argument type, not only ``this``, using the most-specific-declaration rule).
+
+Noteworthy differences from Common Lisp
+----------------------------------------
+
+- Julia uses 1-based indexing for arrays.
+- Functions and variables share the same namespace ("Lisp-1")
+- There is a :obj:`Pair` type, but it is not meant to be used as a ``cons``. Various iterable collections can be used interchangeably in most parts of the language (eg splat, tuples, etc).
+- Julia does not encourage continuous manipulation of the image and hotswapping, reloading the workspace is frequently necessary (see also `#265 <https://github.com/JuliaLang/julia/issues/265>`_).
+- Bignums are supported, but conversion is not automatic, ordinary integers overflow.
+- Modules (namespaces) can be hierarchical. :func:`import` and :func:`using` have a dual function: they load the code and make it available in the namespace. :func:`import` for only the module name is possible (roughly equivalent to ``asdf:load-op``). Slot names don't need to be exported separately. Global variables can't be assigned from outside the module.
+- Macros start with ``@``, and are not as seamlessly integrated into the language, consequently macro usage is not as widespread as in CL. A form of hygiene for macros is supported by the language (see :ref:`man-macros`). Because of the different syntax, there is no equivalent to ``&body``.
+- All functions are generic and use multiple dispatch. Argument lists don't have to follow the same template, which leads to a powerful idiom (see ``do``). Optional and keyword arguments are handled differently (see :ref:`devdocs-functions`). Method ambiguities are not resolved like in CLOS, necessitating the definition of a more specific method.
