@@ -31,7 +31,7 @@ function Base.showerror(io::IO, pkgerr::PkgError)
 end
 
 for file in split("dir types reqs cache read query resolve write entry git")
-    include("pkg/$file.jl")
+    include("$file.jl")
 end
 const cd = Dir.cd
 
