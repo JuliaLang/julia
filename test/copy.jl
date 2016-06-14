@@ -37,7 +37,7 @@ for (dest, src, bigsrc, emptysrc, res) in [
         @test_throws exc copy!(dest, 1, x, idx, 1)
     end
 
-    @test_throws BoundsError copy!(dest, 1, src(), 1, -1)
+    @test_throws ArgumentError copy!(dest, 1, src(), 1, -1)
 
     @test_throws BoundsError copy!(dest, bigsrc())
 
