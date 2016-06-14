@@ -42,6 +42,8 @@ public:
     JuliaGCAllocator(CallInst *ptlsStates, Type *T_pjlvalue, MDNode *tbaa) :
         F(*ptlsStates->getParent()->getParent()),
         M(*F.getParent()),
+        T_int1(Type::getInt1Ty(F.getContext())),
+        T_int8(Type::getInt8Ty(F.getContext())),
         T_int32(Type::getInt32Ty(F.getContext())),
         T_int64(Type::getInt64Ty(F.getContext())),
         V_null(Constant::getNullValue(T_pjlvalue)),
@@ -69,6 +71,8 @@ public:
 private:
 Function &F;
 Module &M;
+Type *const T_int1;
+Type *const T_int8;
 Type *const T_int32;
 Type *const T_int64;
 Value *const V_null;
@@ -784,13 +788,16 @@ void allocate_frame()
     }
     else {
         // Initialize the slots for temporary variables to NULL
-        for (unsigned i = 0; i < maxDepth; i++) {
-            Instruction *argTempi = GetElementPtrInst::Create(LLVM37_param(NULL) tempSlot, ArrayRef<Value*>(ConstantInt::get(T_int32, i)));
-            argTempi->insertAfter(last_gcframe_inst);
-            StoreInst *store = new StoreInst(V_null, argTempi);
-            store->setMetadata(llvm::LLVMContext::MD_tbaa, tbaa_gcframe);
-            store->insertAfter(argTempi);
-            last_gcframe_inst = store;
+        if (maxDepth > 0) {
+            BitCastInst *tempSlot_i8 = new BitCastInst(tempSlot, PointerType::get(T_int8, 0), "", last_gcframe_inst);
+            CallInst *zeroing =
+                CallInst::Create(Intrinsic::getDeclaration(&M, Intrinsic::memset, {tempSlot_i8->getType(), T_int32}),
+                                 {tempSlot_i8, ConstantInt::get(T_int8, 0),
+                                  ConstantInt::get(T_int32, sizeof(jl_value_t*)*maxDepth),
+                                  ConstantInt::get(T_int32, 0), ConstantInt::get(T_int1, 0)});
+            zeroing->setMetadata(llvm::LLVMContext::MD_tbaa, tbaa_gcframe);
+            zeroing->insertAfter(tempSlot_i8);
+            last_gcframe_inst = zeroing;
         }
 
         gcframe->setOperand(0, ConstantInt::get(T_int32, 2 + argSpaceSize + maxDepth)); // fix up the size of the gc frame
