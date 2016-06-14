@@ -47,7 +47,7 @@ function length(s::String)
     cnum
 end
 
-function next(s::String, i::Int)
+@noinline function slow_utf8_next(d::Vector{UInt8}, b::UInt8, i::Int)
     # potentially faster version
     # d = s.data
     # a::UInt32 = d[i]
@@ -59,31 +59,42 @@ function next(s::String, i::Int)
     # if a < 0xf0; return Char(c - 0x000e2080); end
     # return Char(c<<6 + d[i+3] - 0x03c82080)
 
-    d = s.data
-    b = d[i]
     if is_valid_continuation(b)
         throw(UnicodeError(UTF_ERR_INVALID_INDEX, i, d[i]))
     end
-    trailing = utf8_trailing[b+1]
+    trailing = utf8_trailing[b + 1]
     if length(d) < i + trailing
         return '\ufffd', i+1
     end
     c::UInt32 = 0
-    for j = 1:trailing+1
+    for j = 1:(trailing + 1)
         c <<= 6
         c += d[i]
         i += 1
     end
-    c -= utf8_offset[trailing+1]
-    Char(c), i
+    c -= utf8_offset[trailing + 1]
+    return Char(c), i
+end
+
+@inline function next(s::String, i::Int)
+    # function is split into this critical fast-path
+    # for pure ascii data, such as parsing numbers,
+    # and a longer function that can handle any utf8 data
+    d = s.data
+    b = d[i]
+    if b < 0x80
+        return Char(b), i + 1
+    end
+    return slow_utf8_next(d, b, i)
 end
 
 function first_utf8_byte(ch::Char)
     c = UInt32(ch)
-    c < 0x80    ? c%UInt8 :
-    c < 0x800   ? ((c>>6)  | 0xc0)%UInt8 :
-    c < 0x10000 ? ((c>>12) | 0xe0)%UInt8 :
-                  ((c>>18) | 0xf0)%UInt8
+    b = c < 0x80    ? c%UInt8 :
+        c < 0x800   ? ((c>>6)  | 0xc0)%UInt8 :
+        c < 0x10000 ? ((c>>12) | 0xe0)%UInt8 :
+                      ((c>>18) | 0xf0)%UInt8
+    return b
 end
 
 function reverseind(s::String, i::Integer)
