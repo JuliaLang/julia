@@ -18,8 +18,8 @@
 
 ## native julia error handling ##
 
-error(s::AbstractString) = throw(Main.Base.ErrorException(s))
-error(s...) = throw(Main.Base.ErrorException(Main.Base.string(s...)))
+error(s::AbstractString) = throw(ErrorException(s))
+error(s...) = throw(ErrorException(Main.Base.string(s...)))
 
 rethrow() = ccall(:jl_rethrow, Bottom, ())
 rethrow(e) = ccall(:jl_rethrow_other, Bottom, (Any,), e)
