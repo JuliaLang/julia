@@ -314,7 +314,7 @@ void jl_lambda_info_set_ast(jl_lambda_info_t *li, jl_expr_t *ast)
     jl_expr_t *bodyex = (jl_expr_t*)jl_exprarg(ast, 2);
     assert(jl_is_expr(bodyex));
     jl_array_t *body = bodyex->args;
-    li->code = body; jl_gc_wb(li, li->code);
+    li->code = (jl_value_t*)body; jl_gc_wb(li, li->code);
     if (has_meta(body, pure_sym))
         li->pure = 1;
     jl_array_t *vinfo = (jl_array_t*)jl_exprarg(ast, 1);
@@ -473,7 +473,7 @@ static jl_lambda_info_t *jl_instantiate_staged(jl_method_t *generator, jl_tuplet
         func->specTypes = tt;
         jl_gc_wb(func, tt);
 
-        jl_array_t *stmts = func->code;
+        jl_array_t *stmts = (jl_array_t*)func->code;
         for(i = 0, l = jl_array_len(stmts); i < l; i++) {
             jl_array_ptr_set(stmts, i, jl_resolve_globals(jl_array_ptr_ref(stmts, i), func));
         }
@@ -541,7 +541,7 @@ JL_DLLEXPORT jl_lambda_info_t *jl_get_specialized(jl_method_t *m, jl_tupletype_t
 JL_DLLEXPORT void jl_method_init_properties(jl_method_t *m)
 {
     jl_lambda_info_t *li = m->lambda_template;
-    jl_value_t *body1 = skip_meta(li->code);
+    jl_value_t *body1 = skip_meta((jl_array_t*)li->code);
     if (jl_is_linenode(body1)) {
         m->line = jl_linenode_line(body1);
     }
@@ -614,7 +614,7 @@ jl_method_t *jl_new_method(jl_lambda_info_t *definition, jl_sym_t *name, jl_tupl
         m->called = oldm->called;
     }
     else {
-        jl_array_t *stmts = definition->code;
+        jl_array_t *stmts = (jl_array_t*)definition->code;
         int i, l;
         for(i = 0, l = jl_array_len(stmts); i < l; i++) {
             jl_array_ptr_set(stmts, i, jl_resolve_globals(jl_array_ptr_ref(stmts, i), definition));

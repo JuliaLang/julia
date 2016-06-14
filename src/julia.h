@@ -233,15 +233,15 @@ typedef struct _jl_method_t {
 // a function pointer.
 typedef struct _jl_lambda_info_t {
     JL_DATA_TYPE
-    jl_array_t *code;  // compressed uint8 array, or Any array of statements
-    jl_array_t *slotnames; // names of local variables
-    jl_value_t *slottypes;
-    jl_array_t *slotflags;  // local var bit flags
-    jl_value_t *ssavaluetypes;  // types of ssa values
     jl_value_t *rettype;
     jl_svec_t *sparam_syms; // sparams is a vector of values indexed by symbols
     jl_svec_t *sparam_vals;
     jl_tupletype_t *specTypes;  // argument types this was specialized for
+    jl_value_t *code;  // compressed uint8 array, or Any array of statements
+    jl_value_t *slottypes;
+    jl_value_t *ssavaluetypes;  // types of ssa values
+    jl_array_t *slotnames; // names of local variables
+    jl_array_t *slotflags;  // local var bit flags
     struct _jl_lambda_info_t *unspecialized_ducttape; // if template can't be compiled due to intrinsics, an un-inferred executable copy may get stored here
     jl_method_t *def; // method this is specialized from, (null if this is a toplevel thunk)
     int32_t nargs;
