@@ -22,7 +22,7 @@ static void addOptimizationPasses(T *PM)
     PM->add(llvm::createMemorySanitizerPass(true));
 #   endif
 #endif
-    if (jl_options.opt_level <= 1) {
+    if (jl_options.opt_level == 0) {
         return;
     }
 #ifdef LLVM37
