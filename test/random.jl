@@ -410,3 +410,7 @@ let mta = MersenneTwister(seed), mtb = MersenneTwister(seed)
         @test rand(mtb, Float64) == tmp[j]
     end
 end
+
+# test that the following is not an error (#16925)
+srand(typemax(UInt))
+srand(typemax(UInt128))
