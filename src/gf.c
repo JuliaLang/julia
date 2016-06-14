@@ -111,10 +111,20 @@ static int8_t jl_cachearg_offset(jl_methtable_t *mt)
 
 /// ----- Insertion logic for special entries ----- ///
 
-JL_DLLEXPORT jl_typemap_entry_t *jl_specializations_insert(jl_method_t *m, jl_tupletype_t *type,
-                                                           jl_value_t *value)
+JL_DLLEXPORT jl_lambda_info_t *jl_get_specialized(jl_method_t *m, jl_tupletype_t *types, jl_svec_t *sp);
+
+// get or create the LambdaInfo for a specialization
+JL_DLLEXPORT jl_lambda_info_t *jl_specializations_get_linfo(jl_method_t *m, jl_tupletype_t *type, jl_svec_t *sparams)
 {
-    return jl_typemap_insert(&m->specializations, (jl_value_t*)m, type, jl_emptysvec, NULL, jl_emptysvec, value, /*offs*/0, &tfunc_cache, NULL);
+    jl_typemap_entry_t *sf = jl_typemap_assoc_by_type(m->specializations, type, NULL, 1, /*subtype*/0, /*offs*/0);
+    if (sf && jl_is_lambda_info(sf->func.value) && ((jl_lambda_info_t*)sf->func.value)->code != jl_nothing)
+        return (jl_lambda_info_t*)sf->func.value;
+    jl_lambda_info_t *li = jl_get_specialized(m, type, sparams);
+    JL_GC_PUSH1(&li);
+    // TODO: fuse lookup and insert steps
+    jl_typemap_insert(&m->specializations, (jl_value_t*)m, type, jl_emptysvec, NULL, jl_emptysvec, (jl_value_t*)li, 0, &tfunc_cache, NULL);
+    JL_GC_POP();
+    return li;
 }
 
 JL_DLLEXPORT jl_value_t *jl_specializations_lookup(jl_method_t *m, jl_tupletype_t *type)
@@ -154,8 +164,6 @@ jl_value_t *jl_mk_builtin_func(const char *name, jl_fptr_t fptr)
     return f;
 }
 
-JL_DLLEXPORT jl_lambda_info_t *jl_get_specialized(jl_method_t *m, jl_tupletype_t *types, jl_svec_t *sp);
-
 jl_lambda_info_t *jl_get_unspecialized(jl_lambda_info_t *method)
 {
     // one unspecialized version of a function can be shared among all cached specializations
@@ -189,11 +197,11 @@ jl_lambda_info_t *jl_get_unspecialized(jl_lambda_info_t *method)
 }
 
 /*
-  run type inference on lambda "li" in-place, for given argument types.
-  "def" is the original method definition of which this is an instance;
-  can be equal to "li->def" if not applicable.
+  run type inference on lambda "li" for given argument types.
+  if "li" has been inferred before but the IR was deleted, returns a
+  new LambdaInfo with the IR reconstituted.
 */
-void jl_type_infer(jl_lambda_info_t *li, int force)
+jl_lambda_info_t *jl_type_infer(jl_lambda_info_t *li, int force)
 {
 #ifdef ENABLE_INFERENCE
     jl_module_t *mod = NULL;
@@ -207,7 +215,6 @@ void jl_type_infer(jl_lambda_info_t *li, int force)
         (mod != jl_core_module || !lastIn)))) { // avoid any potential recursion in calling jl_typeinf_func on itself
         JL_LOCK(&codegen_lock); // Might GC
         assert(li->inInference == 0);
-        li->inInference = 1;
         jl_value_t *fargs[2];
         fargs[0] = (jl_value_t*)jl_typeinf_func;
         fargs[1] = (jl_value_t*)li;
@@ -216,12 +223,13 @@ void jl_type_infer(jl_lambda_info_t *li, int force)
         jl_static_show_func_sig(JL_STDERR, (jl_value_t*)li->specTypes);
         jl_printf(JL_STDERR, "\n");
 #endif
-        jl_value_t *info = jl_apply(fargs, 2); (void)info;
+        li = (jl_lambda_info_t*)jl_apply(fargs, 2);
         assert(li->def || li->inInference == 0); // if this is toplevel expr, make sure inference finished
         JL_UNLOCK(&codegen_lock); // Might GC
     }
     inInference = lastIn;
 #endif
+    return li;
 }
 
 static int get_spec_unspec_list(jl_typemap_entry_t *l, void *closure)
@@ -610,19 +618,7 @@ static jl_lambda_info_t *cache_method(jl_methtable_t *mt, union jl_typemap_t *ca
     }
 
     // here we infer types and specialize the method
-    int from_specializations = 1;
-    // get a specialized version of the method (or reuse an existing one)
-    if (definition->specializations.unknown != jl_nothing) {
-        jl_value_t *li = jl_specializations_lookup(definition, type);
-        if (jl_typeof(li) == (jl_value_t*)jl_lambda_info_type) {
-            newmeth = (jl_lambda_info_t*)li;
-        }
-    }
-
-    if (!newmeth) {
-        from_specializations = 0;
-        newmeth = jl_get_specialized(definition, type, sparams);
-    }
+    newmeth = jl_specializations_get_linfo(definition, type, sparams);
 
     if (cache_with_orig) {
         // if there is a need to cache with one of the original signatures,
@@ -662,15 +658,7 @@ static jl_lambda_info_t *cache_method(jl_methtable_t *mt, union jl_typemap_t *ca
 
     jl_typemap_insert(cache, parent, origtype, jl_emptysvec, type, guardsigs, (jl_value_t*)newmeth, jl_cachearg_offset(mt), &lambda_cache, NULL);
 
-    if (from_specializations) {
-        JL_UNLOCK(&codegen_lock); // Might GC
-        JL_GC_POP();
-        return newmeth;
-    }
-
-    if (newmeth->code != NULL && !newmeth->inferred && !newmeth->inInference) {
-        // notify type inference of the new method it should infer
-        jl_specializations_insert(definition, newmeth->specTypes, (jl_value_t*)newmeth);
+    if (!newmeth->inferred && !newmeth->inInference) {
         if (jl_options.compile_enabled != JL_OPTIONS_COMPILE_OFF) // don't bother with typeinf if compile is off
             if (jl_symbol_name(definition->name)[0] != '@')  // don't bother with typeinf on macros
                 jl_type_infer(newmeth, 0);
@@ -705,9 +693,8 @@ static jl_lambda_info_t *jl_mt_assoc_by_type(jl_methtable_t *mt, jl_datatype_t *
     jl_lambda_info_t *nf;
     if (!cache)
         nf = jl_get_specialized(m, sig, env);
-    else {
+    else
         nf = cache_method(mt, &mt->cache, (jl_value_t*)mt, sig, tt, entry, env);
-    }
     JL_GC_POP();
     return nf;
 }

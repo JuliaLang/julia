@@ -47,7 +47,6 @@ type InferenceState
 
     # info on the state of inference and the linfo
     linfo::LambdaInfo
-    destination::LambdaInfo   # results need to be copied here when we finish
     nargs::Int
     stmt_types::Vector{Any}
     # return type
@@ -73,11 +72,9 @@ type InferenceState
     inworkq::Bool
     optimize::Bool
     inferred::Bool
-    tfunc_bp::Union{TypeMapEntry, Void}
 
     function InferenceState(linfo::LambdaInfo, optimize::Bool)
         @assert isa(linfo.code,Array{Any,1})
-        linfo.inInference = true
         nslots = length(linfo.slotnames)
         nl = label_counter(linfo.code)+1
 
@@ -156,12 +153,12 @@ type InferenceState
         inmodule = isdefined(linfo, :def) ? linfo.def.module : current_module() # toplevel thunks are inferred in the current module
         frame = new(
             sp, nl, Dict{SSAValue, Bool}(), inmodule, 0, false,
-            linfo, linfo, la, s, Union{}, W, n,
+            linfo, la, s, Union{}, W, n,
             cur_hand, handler_at, n_handlers,
             ssavalue_uses, ssavalue_init,
             ObjectIdDict(), #Dict{InferenceState, Vector{LineNum}}(),
             Vector{Tuple{InferenceState, Vector{LineNum}}}(),
-            false, false, false, optimize, false, nothing)
+            false, false, false, optimize, false)
         push!(active, frame)
         nactive[] += 1
         return frame
@@ -1387,25 +1384,25 @@ function newvar!(sv::InferenceState, typ)
 end
 
 # create a specialized LambdaInfo from a method
-function specialize_method(method::Method, types::ANY, sp::SimpleVector)
-    li = ccall(:jl_get_specialized, Ref{LambdaInfo}, (Any, Any, Any), method, types, sp)
-    return li
+function specialize_method(method::Method, types::ANY, sp::SimpleVector, cached)
+    if cached
+        return ccall(:jl_specializations_get_linfo, Ref{LambdaInfo}, (Any, Any, Any), method, types, sp)
+    else
+        return ccall(:jl_get_specialized, Ref{LambdaInfo}, (Any, Any, Any), method, types, sp)
+    end
 end
 
 # create copies of any field that type-inference might modify
 function unshare_linfo!(li::LambdaInfo)
-    if !isa(li.code, Array{Any,1})
+    orig = li.def.lambda_template
+    if isa(li.code, Array{UInt8,1})
         li.code = ccall(:jl_uncompress_ast, Any, (Any,Any), li, li.code)
-    else
-        li.code = copy_exprargs(li.code)
+    elseif li.code === orig.code
+        li.code = copy_exprargs(orig.code)
     end
-    li.slotnames = copy(li.slotnames)
-    li.slotflags = copy(li.slotflags)
-    if isa(li.slottypes, Array)
-        li.slottypes = copy(li.slottypes)
-    end
-    if isa(li.ssavaluetypes, Array)
-        li.ssavaluetypes = copy(li.ssavaluetypes)
+    if !li.def.isstaged
+        li.slotnames = copy(li.slotnames)
+        li.slotflags = copy(li.slotflags)
     end
     return li
 end
@@ -1414,9 +1411,11 @@ end
 function typeinf_edge(method::Method, atypes::ANY, sparams::SimpleVector, needtree::Bool, optimize::Bool, cached::Bool, caller)
     local code = nothing
     local frame = nothing
-    # check cached specializations
-    # for an existing result stored there
-    if cached
+    if isa(caller, LambdaInfo)
+        code = caller
+    elseif cached
+        # check cached specializations
+        # for an existing result stored there
         if !is(method.specializations, nothing)
             code = ccall(:jl_specializations_lookup, Any, (Any, Any), method, atypes)
             if isa(code, Void)
@@ -1436,89 +1435,80 @@ function typeinf_edge(method::Method, atypes::ANY, sparams::SimpleVector, needtr
                 code = nothing
             end
         end
-
-        if isa(code, LambdaInfo) && code.inInference
-            # inference on this signature may be in progress,
-            # find the corresponding frame in the active list
-            for infstate in active
-                infstate === nothing && continue
-                infstate = infstate::InferenceState
-                if code === infstate.linfo
-                    frame = infstate
-                    break
-                end
-            end
-        end
     end
 
-    if isa(caller, LambdaInfo)
-        code = caller
-    end
-
-    if frame === nothing
-        # inference not started yet, make a new frame for a new lambda
-        # add lam to be inferred and record the edge
-
-        if caller === nothing && in_typeinf_loop
-            # if the caller needed the ast, but we are already in the typeinf loop
-            # then just return early -- we can't fulfill this request
-            # if the client was inlining, then this means we decided not to try to infer this
-            # particular signature (due to signature coarsening in abstract_call_gf_by_type)
-            # and attempting to force it now would be a bad idea (non terminating)
-            skip = true
-            if method.module == _topmod(method.module) || (isdefined(Main, :Base) && method.module == Main.Base)
-                # however, some gf have special tfunc and meaning they wouldn't have been inferred yet
-                # check the same conditions from abstract_call to detect this case
-                if method.name == :promote_type || method.name == :typejoin
-                    skip = false
-                elseif method.name == :getindex || method.name == :next || method.name == :indexed_next
-                    argtypes = atypes.parameters
-                    if length(argtypes)>2 && argtypes[3] ⊑ Int
-                        at2 = widenconst(argtypes[2])
-                        if (at2 <: Tuple ||
-                            (isa(at2, DataType) && isdefined(Main, :Base) && isdefined(Main.Base, :Pair) &&
-                             (at2::DataType).name === Main.Base.Pair.name))
-                            skip = false
-                        end
+    if caller === nothing && in_typeinf_loop
+        # if the caller needed the ast, but we are already in the typeinf loop
+        # then just return early -- we can't fulfill this request
+        # if the client was inlining, then this means we decided not to try to infer this
+        # particular signature (due to signature coarsening in abstract_call_gf_by_type)
+        # and attempting to force it now would be a bad idea (non terminating)
+        skip = true
+        if method.module == _topmod(method.module) || (isdefined(Main, :Base) && method.module == Main.Base)
+            # however, some gf have special tfunc and meaning they wouldn't have been inferred yet
+            # check the same conditions from abstract_call to detect this case
+            if method.name == :promote_type || method.name == :typejoin
+                skip = false
+            elseif method.name == :getindex || method.name == :next || method.name == :indexed_next
+                argtypes = atypes.parameters
+                if length(argtypes)>2 && argtypes[3] ⊑ Int
+                    at2 = widenconst(argtypes[2])
+                    if (at2 <: Tuple ||
+                        (isa(at2, DataType) && isdefined(Main, :Base) && isdefined(Main.Base, :Pair) &&
+                         (at2::DataType).name === Main.Base.Pair.name))
+                        skip = false
                     end
                 end
             end
-            if skip
-                return (nothing, Union{}, false)
-            end
         end
+        if skip
+            return (nothing, Union{}, false)
+        end
+    end
 
-        if isa(code, LambdaInfo) && code.code !== nothing
-            # reuse the existing code object
-            linfo = code
-            @assert typeseq(linfo.specTypes, atypes)
-        elseif method.isstaged
-            if !isleaftype(atypes)
-                # don't call staged functions on abstract types.
-                # (see issues #8504, #10230)
-                # we can't guarantee that their type behavior is monotonic.
-                return (nothing, Any, false)
-            end
-            try
-                # user code might throw errors – ignore them
-                linfo = specialize_method(method, atypes, sparams)
-            catch
-                return (nothing, Any, false)
-            end
-        else
-            linfo = specialize_method(method, atypes, sparams)
+    if isa(code, LambdaInfo) && code.code !== nothing
+        # reuse the existing code object
+        linfo = code
+        @assert typeseq(linfo.specTypes, atypes)
+    elseif method.isstaged
+        if !isleaftype(atypes)
+            # don't call staged functions on abstract types.
+            # (see issues #8504, #10230)
+            # we can't guarantee that their type behavior is monotonic.
+            return (nothing, Any, false)
         end
-        # our stack frame inference context
+        try
+            # user code might throw errors – ignore them
+            linfo = specialize_method(method, atypes, sparams, cached)
+        catch
+            return (nothing, Any, false)
+        end
+    else
+        linfo = specialize_method(method, atypes, sparams, cached)
+    end
+
+    if linfo.inInference
+        # inference on this signature may be in progress,
+        # find the corresponding frame in the active list
+        for infstate in active
+            infstate === nothing && continue
+            infstate = infstate::InferenceState
+            if linfo === infstate.linfo
+                frame = infstate
+                break
+            end
+        end
+        # TODO: this assertion seems iffy
+        assert(frame !== nothing)
+    else
+        # inference not started yet, make a new frame for a new lambda
+        linfo.inInference = true
         frame = InferenceState(unshare_linfo!(linfo::LambdaInfo), optimize)
-        if cached
-            frame.tfunc_bp = ccall(:jl_specializations_insert, Ref{TypeMapEntry}, (Any, Any, Any), method, atypes, linfo)
-        end
     end
     frame = frame::InferenceState
 
-    if !isa(caller, Void) && !isa(caller, LambdaInfo)
-        # if we were called from inside inference,
-        # the caller will be the InferenceState object
+    if isa(caller, InferenceState)
+        # if we were called from inside inference, the caller will be the InferenceState object
         # for which the edge was required
         caller = caller::InferenceState
         if haskey(caller.edges, frame)
@@ -1554,26 +1544,30 @@ function typeinf_ext(linfo::LambdaInfo)
     if isdefined(linfo, :def)
         # method lambda - infer this specialization via the method cache
         (code, _t, _) = typeinf_edge(linfo.def, linfo.specTypes, linfo.sparam_vals, true, true, true, linfo)
-        if code.inferred
+        if code.inferred && linfo !== code
+            # This case occurs when the IR for a function has been deleted.
+            # `code` will be a newly-created LambdaInfo, and we need to copy its
+            # contents to the existing one to copy the info to the method cache.
             linfo.inferred = true
             linfo.inInference = false
-            if linfo !== code
-                linfo.code = code.code
-                linfo.slotnames = code.slotnames
-                linfo.slottypes = code.slottypes
-                linfo.slotflags = code.slotflags
-                linfo.ssavaluetypes = code.ssavaluetypes
-                linfo.rettype = code.rettype
-                linfo.pure = code.pure
-            end
+            linfo.code = code.code
+            linfo.slotnames = code.slotnames
+            linfo.slottypes = code.slottypes
+            linfo.slotflags = code.slotflags
+            linfo.ssavaluetypes = code.ssavaluetypes
+            linfo.rettype = code.rettype
+            linfo.pure = code.pure
+            linfo.inlineable = code.inlineable
         end
+        return code
     else
         # toplevel lambda - infer directly
+        linfo.inInference = true
         frame = InferenceState(linfo, true)
         typeinf_loop(frame)
         @assert frame.inferred # TODO: deal with this better
+        return linfo
     end
-    nothing
 end
 
 
@@ -1946,20 +1940,6 @@ function finish(me::InferenceState)
         me.linfo.code = compressedtree
     end
     me.linfo.rettype = me.bestguess
-
-    if me.destination !== me.linfo
-        out = me.destination
-        out.inferred = true
-        out.inInference = false
-        out.code = me.linfo.code
-        out.slotnames = me.linfo.slotnames
-        out.slottypes = me.linfo.slottypes
-        out.slotflags = me.linfo.slotflags
-        out.ssavaluetypes = me.linfo.ssavaluetypes
-        out.rettype = me.linfo.rettype
-        out.pure = me.linfo.pure
-        out.inlineable = me.linfo.inlineable
-    end
 
     # lazy-delete the item from active for several reasons:
     # efficiency, correctness, and recursion-safety
