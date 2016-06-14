@@ -485,7 +485,7 @@ function getfield_tfunc(s0::ANY, name)
         i::Int = name.val
         nf = s.types.length
         if isvatuple(s) && i >= nf
-            return s.types[nf].parameters[1], false
+            return unwrapva(s.types[nf]), false
         end
         if i < 1 || i > nf
             return Bottom, true
