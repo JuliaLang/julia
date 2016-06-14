@@ -636,17 +636,28 @@ static void cvalue_printdata(fl_context_t *fl_ctx, ios_t *f, void *data,
         numerictype_t nt = sym_to_numtype(fl_ctx, type);
         if (nt == N_NUMTYPES) {
             // These states should be context independent.
-            static size_t (*volatile jl_static_print)(ios_t*, void*) = 0;
+            static size_t (*volatile jl_static_print)(ios_t*, void*) = NULL;
             static volatile int init = 0;
             if (init == 0) {
 #if defined(RTLD_SELF)
-                jl_static_print = (size_t (*)(ios_t *, void *)) dlsym(RTLD_SELF, "jl_static_show");
+                jl_static_print = (size_t (*)(ios_t*, void*))
+                    dlsym(RTLD_SELF, "jl_static_show");
 #elif defined(RTLD_DEFAULT)
-                jl_static_print = (size_t (*)(ios_t *, void *)) dlsym(RTLD_DEFAULT, "jl_static_show");
+                jl_static_print = (size_t (*)(ios_t*, void*))
+                    dlsym(RTLD_DEFAULT, "jl_static_show");
+#elif defined(_OS_WINDOWS_)
+                HMODULE handle;
+                if (GetModuleHandleExW(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS |
+                                       GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
+                                       (LPCWSTR)(&cvalue_printdata),
+                                       &handle)) {
+                    jl_static_print = (size_t (*)(ios_t*, void*))
+                        GetProcAddress(handle, "jl_static_show");
+                }
 #endif
                 init = 1;
             }
-            if (jl_static_print != 0 && fl_ctx->jl_sym == type) {
+            if (jl_static_print != NULL && fl_ctx->jl_sym == type) {
                 fl_ctx->HPOS += ios_printf(f, "#<julia: ");
                 fl_ctx->HPOS += jl_static_print(f, *(void**)data);
                 fl_ctx->HPOS += ios_printf(f, ">");
