@@ -24,9 +24,6 @@ end
 
 println(io::IO, xs...) = print(io, xs..., '\n')
 
-print(xs...)   = print(STDOUT, xs...)
-println(xs...) = println(STDOUT, xs...)
-
 ## conversion of general objects to strings ##
 
 function sprint(size::Integer, f::Function, args...; env=nothing)
