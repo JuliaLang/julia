@@ -163,6 +163,7 @@ function run_repl(repl::AbstractREPL, consumer = x->nothing)
     repl_channel = Channel(1)
     response_channel = Channel(1)
     backend = start_repl_backend(repl_channel, response_channel)
+    consumer(backend)
     run_frontend(repl, REPLBackendRef(repl_channel,response_channel))
     return backend
 end
