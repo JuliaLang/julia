@@ -1,5 +1,84 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
+# Bounds checking
+A = rand(3,3,3)
+@test checkbounds(Bool, A, 1, 1, 1) == true
+@test checkbounds(Bool, A, 1, 3, 3) == true
+@test checkbounds(Bool, A, 1, 4, 3) == false
+@test checkbounds(Bool, A, 1, -1, 3) == false
+@test checkbounds(Bool, A, 1, 9) == true     # partial linear indexing
+@test checkbounds(Bool, A, 1, 10) == false     # partial linear indexing
+@test checkbounds(Bool, A, 1) == true
+@test checkbounds(Bool, A, 27) == true
+@test checkbounds(Bool, A, 28) == false
+@test checkbounds(Bool, A, 2, 2, 2, 1) == true
+@test checkbounds(Bool, A, 2, 2, 2, 2) == false
+
+@test  Base.checkbounds_indices((1:5, 1:5), (2,2))
+@test !Base.checkbounds_indices((1:5, 1:5), (7,2))
+@test !Base.checkbounds_indices((1:5, 1:5), (2,0))
+@test  Base.checkbounds_indices((1:5, 1:5), (13,))
+@test !Base.checkbounds_indices((1:5, 1:5), (26,))
+@test  Base.checkbounds_indices((1:5, 1:5), (2,2,1))
+@test !Base.checkbounds_indices((1:5, 1:5), (2,2,2))
+
+# sub2ind & ind2sub
+# 0-dimensional
+for i = 1:4
+    @test sub2ind((), i) == i
+end
+@test sub2ind((), 2, 2) == 3
+@test ind2sub((), 1) == ()
+@test_throws BoundsError ind2sub((), 2)
+# 1-dimensional
+for i = 1:4
+    @test sub2ind((3,), i) == i
+    @test ind2sub((3,), i) == (i,)
+end
+@test sub2ind((3,), 2, 2) == 5
+@test_throws MethodError ind2sub((3,), 2, 2)
+#   ambiguity btw cartesian indexing and linear indexing in 1d when
+#   indices may be nontraditional
+@test_throws ArgumentError sub2ind((1:3,), 2)
+@test_throws ArgumentError ind2sub((1:3,), 2)
+# 2-dimensional
+k = 0
+for j = 1:3, i = 1:4
+    @test sub2ind((4,3), i, j) == (k+=1)
+    @test ind2sub((4,3), k) == (i,j)
+    @test sub2ind((1:4,1:3), i, j) == k
+    @test ind2sub((1:4,1:3), k) == (i,j)
+    @test sub2ind((0:3,3:5), i-1, j+2) == k
+    @test ind2sub((0:3,3:5), k) == (i-1, j+2)
+end
+# Delete when partial linear indexing is deprecated (#14770)
+@test sub2ind((4,3), 7) == 7
+@test sub2ind((1:4,1:3), 7) == 7
+@test sub2ind((0:3,3:5), 7) == 8
+# 3-dimensional
+l = 0
+for k = 1:2, j = 1:3, i = 1:4
+    @test sub2ind((4,3,2), i, j, k) == (l+=1)
+    @test ind2sub((4,3,2), l) == (i,j,k)
+    @test sub2ind((1:4,1:3,1:2), i, j, k) == l
+    @test ind2sub((1:4,1:3,1:2), l) == (i,j,k)
+    @test sub2ind((0:3,3:5,-101:-100), i-1, j+2, k-102) == l
+    @test ind2sub((0:3,3:5,-101:-100), l) == (i-1, j+2, k-102)
+end
+
+A = reshape(collect(1:9), (3,3))
+@test ind2sub(size(A), 6) == (3,2)
+@test sub2ind(size(A), 3, 2) == 6
+@test ind2sub(A, 6) == (3,2)
+@test sub2ind(A, 3, 2) == 6
+
+# PR #9256
+function pr9256()
+    m = [1 2 3; 4 5 6; 7 8 9]
+    ind2sub(m, 6)
+end
+@test pr9256() == (3,2)
+
 # token type on which to dispatch testing methods in order to avoid potential
 # name conflicts elsewhere in the base test suite
 type TestAbstractArray end
@@ -254,12 +333,13 @@ end
 
 function test_in_bounds(::Type{TestAbstractArray})
     n = rand(2:5)
-    dims = tuple(rand(2:5, n)...)
-    len = prod(dims)
+    sz = rand(2:5, n)
+    len = prod(sz)
+    A = zeros(sz...)
     for i in 1:len
-        @test checkbounds(Bool, dims, i) == true
+        @test checkbounds(Bool, A, i) == true
     end
-    @test checkbounds(Bool, dims, len + 1) == false
+    @test checkbounds(Bool, A, len + 1) == false
 end
 
 type UnimplementedFastArray{T, N} <: AbstractArray{T, N} end
@@ -525,3 +605,9 @@ A = TSlowNIndexes(rand(2,2))
 #16381
 @inferred size(rand(3,2,1), 2, 1)
 @inferred size(rand(3,2,1), 2, 1, 3)
+
+@test @inferred(indices(rand(3,2)))    == (1:3,1:2)
+@test @inferred(indices(rand(3,2,1)))  == (1:3,1:2,1:1)
+@test @inferred(indices(rand(3,2), 1)) == 1:3
+@test @inferred(indices(rand(3,2), 2)) == 1:2
+@test @inferred(indices(rand(3,2), 3)) == 1:1

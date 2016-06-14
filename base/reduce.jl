@@ -231,13 +231,13 @@ sumabs2(a) = mapreduce(abs2, +, a)
 # Kahan (compensated) summation: O(1) error growth, at the expense
 # of a considerable increase in computational expense.
 function sum_kbn{T<:AbstractFloat}(A::AbstractArray{T})
-    n = length(A)
     c = r_promote(+, zero(T)::T)
-    if n == 0
+    if isempty(A)
         return c
     end
-    s = A[1] + c
-    for i in 2:n
+    inds = linearindices(A)
+    s = A[first(inds)] + c
+    for i in first(inds)+1:last(inds)
         @inbounds Ai = A[i]
         t = s + Ai
         if abs(s) >= abs(Ai)

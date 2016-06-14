@@ -56,7 +56,8 @@ end
 
 function copy!{T}(dest::Array{T}, doffs::Integer, src::Array{T}, soffs::Integer, n::Integer)
     n == 0 && return dest
-    if n < 0 || soffs < 1 || doffs < 1 || soffs+n-1 > length(src) || doffs+n-1 > length(dest)
+    n > 0 || throw(ArgumentError(string("tried to copy n=", n, " elements, but n should be nonnegative")))
+    if soffs < 1 || doffs < 1 || soffs+n-1 > length(src) || doffs+n-1 > length(dest)
         throw(BoundsError())
     end
     unsafe_copy!(dest, doffs, src, soffs, n)
@@ -299,8 +300,8 @@ end
 
 ## Iteration ##
 start(A::Array) = 1
-next(a::Array,i) = (a[i],i+1)
-done(a::Array,i) = i == length(a)+1
+next(a::Array,i) = (@_propagate_inbounds_meta; (a[i],i+1))
+done(a::Array,i) = (@_inline_meta; i == length(a)+1)
 
 ## Indexing: getindex ##
 
@@ -917,6 +918,7 @@ function findin(a, b)
 end
 
 # Copying subregions
+# TODO: DEPRECATE FOR #14770
 function indcopy(sz::Dims, I::Vector)
     n = length(I)
     s = sz[n]

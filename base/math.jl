@@ -42,7 +42,7 @@ clamp{X,L,H}(x::X, lo::L, hi::H) =
 
 clamp{T}(x::AbstractArray{T,1}, lo, hi) = [clamp(xx, lo, hi) for xx in x]
 clamp{T}(x::AbstractArray{T,2}, lo, hi) =
-    [clamp(x[i,j], lo, hi) for i in 1:size(x,1), j in 1:size(x,2)]  # fixme (iter): change to `eachindex` when #15459 is ready
+    [clamp(x[i,j], lo, hi) for i in indices(x,1), j in indices(x,2)]
 clamp{T}(x::AbstractArray{T}, lo, hi) =
     reshape([clamp(xx, lo, hi) for xx in x], size(x))
 

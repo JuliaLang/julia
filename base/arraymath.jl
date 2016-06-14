@@ -59,21 +59,21 @@ for f in (:+, :-, :div, :mod, :&, :|, :$)
             return F
         end
         function ($f){S,T}(A::AbstractArray{S}, B::Range{T})
-            F = similar(A, promote_op($f,S,T), promote_shape(size(A),size(B)))
+            F = similar(A, promote_op($f,S,T), promote_shape(A,B))
             for (iF, iA, iB) in zip(eachindex(F), eachindex(A), eachindex(B))
                 @inbounds F[iF] = ($f)(A[iA], B[iB])
             end
             return F
         end
         function ($f){S,T}(A::Range{S}, B::AbstractArray{T})
-            F = similar(B, promote_op($f,S,T), promote_shape(size(A),size(B)))
+            F = similar(B, promote_op($f,S,T), promote_shape(A,B))
             for (iF, iA, iB) in zip(eachindex(F), eachindex(A), eachindex(B))
                 @inbounds F[iF] = ($f)(A[iA], B[iB])
             end
             return F
         end
         function ($f){S,T}(A::AbstractArray{S}, B::AbstractArray{T})
-            F = similar(A, promote_op($f,S,T), promote_shape(size(A),size(B)))
+            F = similar(A, promote_op($f,S,T), promote_shape(A,B))
             for (iF, iA, iB) in zip(eachindex(F), eachindex(A), eachindex(B))
                 @inbounds F[iF] = ($f)(A[iA], B[iB])
             end
@@ -211,26 +211,29 @@ function flipdim{T}(A::Array{T}, d::Integer)
 end
 
 function rotl90(A::AbstractMatrix)
-    m,n = size(A)
-    B = similar(A,(n,m))
-    for i=1:m, j=1:n #Fixme iter
-        B[n-j+1,i] = A[i,j]
+    B = similar_transpose(A)
+    ind2 = indices(A,2)
+    n = first(ind2)+last(ind2)
+    for i=indices(A,1), j=ind2
+        B[n-j,i] = A[i,j]
     end
     return B
 end
 function rotr90(A::AbstractMatrix)
-    m,n = size(A)
-    B = similar(A,(n,m))
-    for i=1:m, j=1:n #Fixme iter
-        B[j,m-i+1] = A[i,j]
+    B = similar_transpose(A)
+    ind1 = indices(A,1)
+    m = first(ind1)+last(ind1)
+    for i=ind1, j=indices(A,2)
+        B[j,m-i] = A[i,j]
     end
     return B
 end
 function rot180(A::AbstractMatrix)
-    m,n = size(A)
     B = similar(A)
-    for i=1:m, j=1:n #Fixme iter
-        B[m-i+1,n-j+1] = A[i,j]
+    ind1, ind2 = indices(A,1), indices(A,2)
+    m, n = first(ind1)+last(ind1), first(ind2)+last(ind2)
+    for j=ind2, i=ind1
+        B[m-i,n-j] = A[i,j]
     end
     return B
 end
@@ -243,96 +246,65 @@ end
 rotr90(A::AbstractMatrix, k::Integer) = rotl90(A,-k)
 rot180(A::AbstractMatrix, k::Integer) = mod(k, 2) == 1 ? rot180(A) : copy(A)
 
+similar_transpose(A::AbstractMatrix) = similar_transpose(indicesbehavior(A), A)
+similar_transpose(::IndicesStartAt1, A::AbstractMatrix) = similar(A, (size(A,2), size(A,1)))
+similar_transpose(::IndicesBehavior, A::AbstractMatrix) = similar(A, (indices(A,2), indices(A,1)))
 
 ## Transpose ##
-const transposebaselength=64
-function transpose!(B::AbstractMatrix,A::AbstractMatrix)
-    m, n = size(A)
-    size(B,1) == n && size(B,2) == m || throw(DimensionMismatch("transpose"))
-
-    if m*n<=4*transposebaselength
-        @inbounds begin
-            for j = 1:n #Fixme iter
-                for i = 1:m #Fixme iter
-                    B[j,i] = transpose(A[i,j])
-                end
-            end
-        end
-    else
-        transposeblock!(B,A,m,n,0,0)
-    end
-    return B
-end
+transpose!(B::AbstractMatrix, A::AbstractMatrix) = transpose_f!(transpose, B, A)
+ctranspose!(B::AbstractMatrix, A::AbstractMatrix) = transpose_f!(ctranspose, B, A)
 function transpose!(B::AbstractVector, A::AbstractMatrix)
-    length(B) == length(A) && size(A,1) == 1 || throw(DimensionMismatch("transpose"))
+    indices(B,1) == indices(A,2) && indices(A,1) == 1:1 || throw(DimensionMismatch("transpose"))
     copy!(B, A)
 end
 function transpose!(B::AbstractMatrix, A::AbstractVector)
-    length(B) == length(A) && size(B,1) == 1 || throw(DimensionMismatch("transpose"))
+    indices(B,2) == indices(A,1) && indices(B,1) == 1:1 || throw(DimensionMismatch("transpose"))
     copy!(B, A)
 end
-function transposeblock!(B::AbstractMatrix,A::AbstractMatrix,m::Int,n::Int,offseti::Int,offsetj::Int)
-    if m*n<=transposebaselength
-        @inbounds begin
-            for j = offsetj+(1:n) #Fixme iter
-                for i = offseti+(1:m) #Fixme iter
-                    B[j,i] = transpose(A[i,j])
-                end
-            end
-        end
-    elseif m>n
-        newm=m>>1
-        transposeblock!(B,A,newm,n,offseti,offsetj)
-        transposeblock!(B,A,m-newm,n,offseti+newm,offsetj)
-    else
-        newn=n>>1
-        transposeblock!(B,A,m,newn,offseti,offsetj)
-        transposeblock!(B,A,m,n-newn,offseti,offsetj+newn)
-    end
-    return B
-end
-function ctranspose!(B::AbstractMatrix,A::AbstractMatrix)
-    m, n = size(A)
-    size(B,1) == n && size(B,2) == m || throw(DimensionMismatch("transpose"))
-
-    if m*n<=4*transposebaselength
-        @inbounds begin
-            for j = 1:n #Fixme iter
-                for i = 1:m #Fixme iter
-                    B[j,i] = ctranspose(A[i,j])
-                end
-            end
-        end
-    else
-        ctransposeblock!(B,A,m,n,0,0)
-    end
-    return B
-end
 function ctranspose!(B::AbstractVector, A::AbstractMatrix)
-    length(B) == length(A) && size(A,1) == 1 || throw(DimensionMismatch("transpose"))
+    indices(B,1) == indices(A,2) && indices(A,1) == 1:1 || throw(DimensionMismatch("transpose"))
     ccopy!(B, A)
 end
 function ctranspose!(B::AbstractMatrix, A::AbstractVector)
-    length(B) == length(A) && size(B,1) == 1 || throw(DimensionMismatch("transpose"))
+    indices(B,2) == indices(A,1) && indices(B,1) == 1:1 || throw(DimensionMismatch("transpose"))
     ccopy!(B, A)
 end
-function ctransposeblock!(B::AbstractMatrix,A::AbstractMatrix,m::Int,n::Int,offseti::Int,offsetj::Int)
+
+const transposebaselength=64
+function transpose_f!(f,B::AbstractMatrix,A::AbstractMatrix)
+    indices(B,1) == indices(A,2) && indices(B,2) == indices(A,1) || throw(DimensionMismatch(string(f)))
+
+    m, n = size(A)
+    if m*n<=4*transposebaselength
+        @inbounds begin
+            for j = indices(A,2)
+                for i = indices(A,1)
+                    B[j,i] = f(A[i,j])
+                end
+            end
+        end
+    else
+        transposeblock!(f,B,A,m,n,first(indices(A,1))-1,first(indices(A,2))-1)
+    end
+    return B
+end
+function transposeblock!(f,B::AbstractMatrix,A::AbstractMatrix,m::Int,n::Int,offseti::Int,offsetj::Int)
     if m*n<=transposebaselength
         @inbounds begin
-            for j = offsetj+(1:n) #Fixme iter
-                for i = offseti+(1:m) #Fixme iter
-                    B[j,i] = ctranspose(A[i,j])
+            for j = offsetj+(1:n)
+                for i = offseti+(1:m)
+                    B[j,i] = f(A[i,j])
                 end
             end
         end
     elseif m>n
         newm=m>>1
-        ctransposeblock!(B,A,newm,n,offseti,offsetj)
-        ctransposeblock!(B,A,m-newm,n,offseti+newm,offsetj)
+        transposeblock!(f,B,A,newm,n,offseti,offsetj)
+        transposeblock!(f,B,A,m-newm,n,offseti+newm,offsetj)
     else
         newn=n>>1
-        ctransposeblock!(B,A,m,newn,offseti,offsetj)
-        ctransposeblock!(B,A,m,n-newn,offseti,offsetj+newn)
+        transposeblock!(f,B,A,m,newn,offseti,offsetj)
+        transposeblock!(f,B,A,m,n-newn,offseti,offsetj+newn)
     end
     return B
 end
@@ -343,11 +315,11 @@ function ccopy!(B, A)
 end
 
 function transpose(A::AbstractMatrix)
-    B = similar(A, size(A, 2), size(A, 1))
+    B = similar_transpose(A)
     transpose!(B, A)
 end
 function ctranspose(A::AbstractMatrix)
-    B = similar(A, size(A, 2), size(A, 1))
+    B = similar_transpose(A)
     ctranspose!(B, A)
 end
 ctranspose{T<:Real}(A::AbstractVecOrMat{T}) = transpose(A)
@@ -366,7 +338,7 @@ for (f, f!, fp, op) = ((:cumsum, :cumsum!, :cumsum_pairwise!, :+),
         if n < 128
             @inbounds s_ = v[i1]
             @inbounds c[i1] = ($op)(s, s_)
-            for i = i1+1:i1+n-1 #Fixme iter
+            for i = i1+1:i1+n-1
                 @inbounds s_ = $(op)(s_, v[i])
                 @inbounds c[i] = $(op)(s, s_)
             end
@@ -381,7 +353,7 @@ for (f, f!, fp, op) = ((:cumsum, :cumsum!, :cumsum_pairwise!, :+),
     @eval function ($f!)(result::AbstractVector, v::AbstractVector)
         n = length(v)
         if n == 0; return result; end
-        ($fp)(v, result, $(op==:+ ? :(zero(v[1])) : :(one(v[1]))), 1, n)
+        ($fp)(v, result, $(op==:+ ? :(zero(first(v))) : :(one(first(v)))), first(indices(v,1)), n)
         return result
     end
 

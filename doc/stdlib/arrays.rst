@@ -31,6 +31,30 @@ Basic functions
        julia> size(A,3,2)
        (4,3)
 
+.. function:: indices(A)
+
+   .. Docstring generated from Julia source
+
+   Returns the tuple of valid indices for array ``A``\ .
+
+.. function:: indices(A, d)
+
+   .. Docstring generated from Julia source
+
+   Returns the valid range of indices for array ``A`` along dimension ``d``\ .
+
+.. function:: shape(A)
+
+   .. Docstring generated from Julia source
+
+   Returns a tuple specifying the "shape" of array ``A``\ . For arrays with conventional indexing (indices start at 1), this is equivalent to ``size(A)``\ ; otherwise it is equivalent to ``incides(A)``\ .
+
+.. function:: shape(A, d)
+
+   .. Docstring generated from Julia source
+
+   Specifies the "shape" of the array ``A`` along dimension ``d``\ . For arrays with conventional indexing (starting at 1), this is equivalent to ``size(A, d)``\ ; for arrays with unconventional indexing (indexing may start at something different from 1), it is equivalent to ``indices(A, d)``\ .
+
 .. function:: length(A) -> Integer
 
    .. Docstring generated from Julia source
@@ -71,6 +95,14 @@ Basic functions
        A[iter] = 0
 
    If you supply more than one ``AbstractArray`` argument, ``eachindex`` will create an iterable object that is fast for all arguments (a ``UnitRange`` if all inputs have fast linear indexing, a CartesianRange otherwise).  If the arrays have different sizes and/or dimensionalities, ``eachindex`` returns an iterable that spans the largest range along each dimension.
+
+.. function:: linearindices(A)
+
+   .. Docstring generated from Julia source
+
+   Returns a ``UnitRange`` specifying the valid range of indices for ``A[i]`` where ``i`` is an ``Int``\ . For arrays with conventional indexing (indices start at 1), or any multidimensional array, this is ``1:length(A)``\ ; however, for one-dimensional arrays with unconventional indices, this is ``indices(A, 1)``\ .
+
+   Calling this function is the "safe" way to write algorithms that exploit linear indexing.
 
 .. function:: Base.linearindexing(A)
 
@@ -250,6 +282,32 @@ Constructors
        2×4 Array{Float64,2}:
         2.18425e-314  2.18425e-314  2.18425e-314  2.18425e-314
         2.18425e-314  2.18425e-314  2.18425e-314  2.18425e-314
+
+   See also ``allocate_for``\ .
+
+.. function:: allocate_for(storagetype, referencearray, [shape])
+
+   .. Docstring generated from Julia source
+
+   Create an uninitialized mutable array analogous to that specified by ``storagetype``\ , but with type and shape specified by the final two arguments. The main purpose of this function is to support allocation of arrays that may have unconventional indexing (starting at other than 1), as determined by ``referencearray`` and the optional ``shape`` information.
+
+   .. code-block:: julia
+
+       **Examples**:
+
+       allocate_for(Array{Int}, A)
+
+   creates an array that "acts like" an ``Array{Int}`` (and might indeed be backed by one), but which is indexed identically to ``A``\ . If ``A`` has conventional indexing, this will likely just call ``Array{Int}(size(A))``\ , but if ``A`` has unconventional indexing then the indices of the result will match ``A``\ .
+
+   .. code-block:: julia
+
+       allocate_for(BitArray, A, (shape(A, 2),))
+
+   would create a 1-dimensional logical array whose indices match those of the columns of ``A``\ .
+
+   The main purpose of the ``referencearray`` argument is to select a particular array type supporting unconventional indexing (as it is possible that several different ones will be simultaneously in use).
+
+   See also ``similar``\ .
 
 .. function:: reinterpret(type, A)
 
@@ -568,13 +626,19 @@ Indexing, Assignment, and Concatenation
 
    .. Docstring generated from Julia source
 
-   Throw an error if the specified indexes are not in bounds for the given array. Subtypes of ``AbstractArray`` should specialize this method if they need to provide custom bounds checking behaviors.
+   Throw an error if the specified ``indexes`` are not in bounds for the given ``array``\ .
 
-.. function:: checkbounds(::Type{Bool}, dimlength::Integer, index)
+.. function:: checkbounds(Bool, array, indexes...)
 
    .. Docstring generated from Julia source
 
-   Return a ``Bool`` describing if the given index is within the bounds of the given dimension length. Custom types that would like to behave as indices for all arrays can extend this method in order to provide a specialized bounds checking implementation.
+   Return ``true`` if the specified ``indexes`` are in bounds for the given ``array``\ . Subtypes of ``AbstractArray`` should specialize this method if they need to provide custom bounds checking behaviors.
+
+.. function:: checkindex(Bool, inds::UnitRange, index)
+
+   .. Docstring generated from Julia source
+
+   Return ``true`` if the given ``index`` is within the bounds of ``inds``\ . Custom types that would like to behave as indices for all arrays can extend this method in order to provide a specialized bounds checking implementation.
 
 .. function:: randsubseq(A, p) -> Vector
 

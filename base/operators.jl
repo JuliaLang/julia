@@ -373,6 +373,23 @@ function promote_shape(a::Dims, b::Dims)
     return a
 end
 
+function promote_shape(a::AbstractArray, b::AbstractArray)
+    if ndims(a) < ndims(b)
+        return promote_shape(b, a)
+    end
+    for i=1:ndims(b)
+        if indices(a, i) != indices(b, i)
+            throw(DimensionMismatch("dimensions must match"))
+        end
+    end
+    for i=ndims(b)+1:ndims(a)
+        if indices(a, i) != 1:1
+            throw(DimensionMismatch("dimensions must match"))
+        end
+    end
+    return shape(a)
+end
+
 function throw_setindex_mismatch(X, I)
     if length(I) == 1
         throw(DimensionMismatch("tried to assign $(length(X)) elements to $(I[1]) destinations"))

@@ -290,8 +290,8 @@ function show(io::IO, l::LambdaInfo)
     show(lambda_io, body)
 end
 
-function show_delim_array(io::IO, itr::Union{AbstractArray,SimpleVector}, op, delim, cl, delim_one,
-                          i1=1, l=length(itr))
+function show_delim_array(io::IO, itr::Union{AbstractArray,SimpleVector}, op, delim, cl,
+                          delim_one, i1=first(linearindices(itr)), l=last(linearindices(itr)))
     print(io, op)
     if !show_circular(io, itr)
         recur_io = IOContext(io, SHOWN_SET=itr, multiline=false)
@@ -301,7 +301,7 @@ function show_delim_array(io::IO, itr::Union{AbstractArray,SimpleVector}, op, de
         newline = true
         first = true
         i = i1
-        if l > 0
+        if l >= i1
             while true
                 if !isassigned(itr, i)
                     print(io, undef_ref_str)
@@ -313,7 +313,7 @@ function show_delim_array(io::IO, itr::Union{AbstractArray,SimpleVector}, op, de
                     show(recur_io, x)
                 end
                 i += 1
-                if i > i1+l-1
+                if i > l
                     delim_one && first && print(io, delim)
                     break
                 end
@@ -1234,6 +1234,7 @@ is specified as string sep.
 function print_matrix_row(io::IO,
         X::AbstractVecOrMat, A::Vector,
         i::Integer, cols::AbstractVector, sep::AbstractString)
+    isempty(A) || first(indices(cols,1)) == 1 || throw(DimensionMismatch("indices of cols ($(indices(cols,1))) must start at 1"))
     for k = 1:length(A)
         j = cols[k]
         if isassigned(X,Int(i),Int(j)) # isassigned accepts only `Int` indices
@@ -1303,25 +1304,30 @@ function print_matrix(io::IO, X::AbstractVecOrMat,
     @assert strwidth(hdots) == strwidth(ddots)
     sepsize = length(sep)
     m, n = size(X,1), size(X,2)
+    rowsA, colsA = collect(indices(X,1)), collect(indices(X,2))
     # To figure out alignments, only need to look at as many rows as could
     # fit down screen. If screen has at least as many rows as A, look at A.
     # If not, then we only need to look at the first and last chunks of A,
     # each half a screen height in size.
     halfheight = div(screenheight,2)
-    rowsA = m <= screenheight ? (1:m) : [1:halfheight; m-div(screenheight-1,2)+1:m]
+    if m > screenheight
+        rowsA = [rowsA[1:halfheight]; rowsA[m-div(screenheight-1,2)+1:m]]
+    end
     # Similarly for columns, only necessary to get alignments for as many
     # columns as could conceivably fit across the screen
     maxpossiblecols = div(screenwidth, 1+sepsize)
-    colsA = n <= maxpossiblecols ? (1:n) : [1:maxpossiblecols; (n-maxpossiblecols+1):n]
+    if n > maxpossiblecols
+        colsA = [colsA[1:maxpossiblecols]; colsA[(n-maxpossiblecols+1):n]]
+    end
     A = alignment(io, X, rowsA, colsA, screenwidth, screenwidth, sepsize)
     # Nine-slicing is accomplished using print_matrix_row repeatedly
     if m <= screenheight # rows fit vertically on screen
         if n <= length(A) # rows and cols fit so just print whole matrix in one piece
             for i in rowsA
-                print(io, i == 1 ? pre : presp)
+                print(io, i == first(rowsA) ? pre : presp)
                 print_matrix_row(io, X,A,i,colsA,sep)
-                print(io, i == m ? post : postsp)
-                if i != m; println(io, ); end
+                print(io, i == last(rowsA) ? post : postsp)
+                if i != last(rowsA); println(io, ); end
             end
         else # rows fit down screen but cols don't, so need horizontal ellipsis
             c = div(screenwidth-length(hdots)+1,2)+1  # what goes to right of ellipsis
@@ -1329,25 +1335,25 @@ function print_matrix(io::IO, X::AbstractVecOrMat,
             c = screenwidth - sum(map(sum,Ralign)) - (length(Ralign)-1)*sepsize - length(hdots)
             Lalign = alignment(io, X, rowsA, colsA, c, c, sepsize) # alignments for left of ellipsis
             for i in rowsA
-                print(io, i == 1 ? pre : presp)
-                print_matrix_row(io, X,Lalign,i,1:length(Lalign),sep)
-                print(io, i % hmod == 1 ? hdots : repeat(" ", length(hdots)))
+                print(io, i == first(rowsA) ? pre : presp)
+                print_matrix_row(io, X,Lalign,i,colsA[1:length(Lalign)],sep)
+                print(io, (i - first(rowsA)) % hmod == 0 ? hdots : repeat(" ", length(hdots)))
                 print_matrix_row(io, X,Ralign,i,n-length(Ralign)+colsA,sep)
-                print(io, i == m ? post : postsp)
-                if i != m; println(io, ); end
+                print(io, i == last(rowsA) ? post : postsp)
+                if i != last(rowsA); println(io, ); end
             end
         end
     else # rows don't fit so will need vertical ellipsis
         if n <= length(A) # rows don't fit, cols do, so only vertical ellipsis
             for i in rowsA
-                print(io, i == 1 ? pre : presp)
+                print(io, i == first(rowsA) ? pre : presp)
                 print_matrix_row(io, X,A,i,colsA,sep)
-                print(io, i == m ? post : postsp)
+                print(io, i == last(rowsA) ? post : postsp)
                 if i != rowsA[end]; println(io, ); end
-                if i == halfheight
-                    print(io, i == 1 ? pre : presp)
+                if i == rowsA[halfheight]
+                    print(io, i == first(rowsA) ? pre : presp)
                     print_matrix_vdots(io, vdots,A,sep,vmod,1)
-                    println(io, i == m ? post : postsp)
+                    println(io, i == last(rowsA) ? post : postsp)
                 end
             end
         else # neither rows nor cols fit, so use all 3 kinds of dots
@@ -1357,18 +1363,18 @@ function print_matrix(io::IO, X::AbstractVecOrMat,
             Lalign = alignment(io, X, rowsA, colsA, c, c, sepsize)
             r = mod((length(Ralign)-n+1),vmod) # where to put dots on right half
             for i in rowsA
-                print(io, i == 1 ? pre : presp)
-                print_matrix_row(io, X,Lalign,i,1:length(Lalign),sep)
-                print(io, i % hmod == 1 ? hdots : repeat(" ", length(hdots)))
+                print(io, i == first(rowsA) ? pre : presp)
+                print_matrix_row(io, X,Lalign,i,colsA[1:length(Lalign)],sep)
+                print(io, (i - first(rowsA)) % hmod == 0 ? hdots : repeat(" ", length(hdots)))
                 print_matrix_row(io, X,Ralign,i,n-length(Ralign)+colsA,sep)
-                print(io, i == m ? post : postsp)
+                print(io, i == last(rowsA) ? post : postsp)
                 if i != rowsA[end]; println(io, ); end
-                if i == halfheight
-                    print(io, i == 1 ? pre : presp)
+                if i == rowsA[halfheight]
+                    print(io, i == first(rowsA) ? pre : presp)
                     print_matrix_vdots(io, vdots,Lalign,sep,vmod,1)
                     print(io, ddots)
                     print_matrix_vdots(io, vdots,Ralign,sep,vmod,r)
-                    println(io, i == m ? post : postsp)
+                    println(io, i == last(rowsA) ? post : postsp)
                 end
             end
         end
@@ -1401,18 +1407,20 @@ function show_nd(io::IO, a::AbstractArray, print_matrix, label_slices)
     if isempty(a)
         return
     end
-    tail = size(a)[3:end]
+    tail = indices(a)[3:end]
     nd = ndims(a)-2
     for I in CartesianRange(tail)
         idxs = I.I
         if limit
             for i = 1:nd
                 ii = idxs[i]
-                if size(a,i+2) > 10
-                    if ii == 4 && all(x->x==1,idxs[1:i-1])
+                ind = tail[i]
+                if length(ind) > 10
+                    if ii == ind[4] && all(d->idxs[d]==first(tail[d]),1:i-1)
                         for j=i+1:nd
                             szj = size(a,j+2)
-                            if szj>10 && 3 < idxs[j] <= szj-3
+                            indj = tail[j]
+                            if szj>10 && first(indj)+2 < idxs[j] <= last(indj)-3
                                 @goto skip
                             end
                         end
@@ -1420,7 +1428,7 @@ function show_nd(io::IO, a::AbstractArray, print_matrix, label_slices)
                         print(io, "...\n\n")
                         @goto skip
                     end
-                    if 3 < ii <= size(a,i+2)-3
+                    if ind[3] < ii <= ind[end-3]
                         @goto skip
                     end
                 end
@@ -1431,9 +1439,9 @@ function show_nd(io::IO, a::AbstractArray, print_matrix, label_slices)
             for i = 1:(nd-1); print(io, "$(idxs[i]), "); end
             println(io, idxs[end], "] =")
         end
-        slice = sub(a, 1:size(a,1), 1:size(a,2), idxs...)
+        slice = sub(a, indices(a,1), indices(a,2), idxs...)
         print_matrix(io, slice)
-        print(io, idxs == tail ? "" : "\n\n")
+        print(io, idxs == map(last,tail) ? "" : "\n\n")
         @label skip
     end
 end
@@ -1449,15 +1457,15 @@ function print_matrix_repr(io, X::AbstractArray)
     end
     nr, nc = size(X,1), size(X,2)
     rdots, cdots = false, false
-    rr1, rr2 = 1:nr, 1:0
-    cr1, cr2 = 1:nc, 1:0
+    rr1, rr2 = indices(X,1), 1:0
+    cr1, cr2 = indices(X,2), 1:0
     if limit
         if nr > 4
-            rr1, rr2 = 1:2, nr-1:nr
+            rr1, rr2 = rr1[1:2], rr1[nr-1:nr]
             rdots = true
         end
         if nc > 4
-            cr1, cr2 = 1:2, nc-1:nc
+            cr1, cr2 = cr1[1:2], cr1[nc-1:nc]
             cdots = true
         end
     end
@@ -1474,8 +1482,8 @@ function print_matrix_repr(io, X::AbstractArray)
                         show(io, el)
                     end
                 end
-                if last(cr) == nc
-                    i < nr && print(io, "; ")
+                if last(cr) == last(indices(X,2))
+                    i < last(indices(X,1)) && print(io, "; ")
                 elseif cdots
                     print(io, " \u2026 ")
                 end
@@ -1577,14 +1585,16 @@ function show_vector(io::IO, v, opn, cls)
     end
     print(io, prefix)
     if limited && length(v) > 20
-        show_delim_array(io, v, opn, ",", "", false, 1, 10)
+        inds = _indices1(v)
+        show_delim_array(io, v, opn, ",", "", false, inds[1], inds[1]+9)
         print(io, "  \u2026  ")
-        n = length(v)
-        show_delim_array(io, v, "", ",", cls, false, n-9, 10)
+        show_delim_array(io, v, "", ",", cls, false, inds[end-9], inds[end])
     else
         show_delim_array(io, v, opn, ",", cls, false)
     end
 end
+_indices1(v::AbstractArray) = indices(v,1)
+_indices1(iter) = 1:length(iter)
 
 # printing BitArrays
 

@@ -2,8 +2,8 @@
 
 ## 1-dimensional ranges ##
 
-typealias Dims Tuple{Vararg{Int}}
-typealias DimsInteger Tuple{Vararg{Integer}}
+typealias Dims{N} NTuple{N,Int}
+typealias DimsInteger{N} NTuple{N,Integer}
 
 abstract Range{T} <: AbstractArray{T,1}
 
@@ -820,5 +820,6 @@ function in(x, r::Range)
     n >= 1 && n <= length(r) && r[n] == x
 end
 
+in{T<:Integer}(x::Integer, r::UnitRange{T}) = (first(r) <= x) & (x <= last(r))
 in{T<:Integer}(x, r::Range{T}) = isinteger(x) && !isempty(r) && x>=minimum(r) && x<=maximum(r) && (mod(convert(T,x),step(r))-mod(first(r),step(r)) == 0)
 in(x::Char, r::Range{Char}) = !isempty(r) && x >= minimum(r) && x <= maximum(r) && (mod(Int(x) - Int(first(r)), step(r)) == 0)

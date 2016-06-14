@@ -959,7 +959,11 @@ function convert{T}(::Type{Matrix{T}}, D::Dense{T})
     a = Array{T}(s.nrow, s.ncol)
     copy!(a, D)
 end
-function Base.copy!(dest::AbstractArray, D::Dense)
+
+Base.copy!(dest::Base.PermutedDimsArrays.PermutedDimsArray, src::Dense) = _copy!(dest, src) # ambig
+Base.copy!(dest::AbstractArray, D::Dense) = _copy!(dest, D)
+
+function _copy!(dest::AbstractArray, D::Dense)
     s = unsafe_load(D.p)
     n = s.nrow*s.ncol
     n <= length(dest) || throw(BoundsError(dest, n))
