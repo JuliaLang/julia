@@ -954,7 +954,7 @@ void JL_NORETURN jl_method_error_bare(jl_function_t *f, jl_value_t *args)
         (jl_value_t*)f,
         args
     };
-    if (jl_base_module) {
+    if (fargs[0]) {
         jl_throw(jl_apply_generic(fargs, 3));
     }
     else {

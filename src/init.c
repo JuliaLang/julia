@@ -820,6 +820,7 @@ void jl_get_builtin_hooks(void)
     jl_number_type = (jl_datatype_t*)core("Number");
     jl_signed_type = (jl_datatype_t*)core("Signed");
 
+    jl_errorexception_type = (jl_datatype_t*)core("ErrorException");
     jl_stackovf_exception  = jl_new_struct_uninit((jl_datatype_t*)core("StackOverflowError"));
     jl_diverror_exception  = jl_new_struct_uninit((jl_datatype_t*)core("DivideError"));
     jl_domain_exception    = jl_new_struct_uninit((jl_datatype_t*)core("DomainError"));
@@ -844,9 +845,8 @@ void jl_get_builtin_hooks(void)
 
 JL_DLLEXPORT void jl_get_system_hooks(void)
 {
-    if (jl_errorexception_type) return; // only do this once
+    if (jl_argumenterror_type) return; // only do this once
 
-    jl_errorexception_type = (jl_datatype_t*)basemod("ErrorException");
     jl_argumenterror_type = (jl_datatype_t*)basemod("ArgumentError");
     jl_methoderror_type = (jl_datatype_t*)basemod("MethodError");
     jl_loaderror_type = (jl_datatype_t*)basemod("LoadError");

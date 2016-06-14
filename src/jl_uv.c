@@ -78,22 +78,13 @@ void jl_init_signal_async(void)
 }
 #endif
 
-extern jl_module_t *jl_old_base_module;
-static jl_value_t *close_cb = NULL;
-
 static void jl_uv_call_close_callback(jl_value_t *val)
 {
-    jl_value_t *cb;
-    if (!jl_old_base_module) {
-        if (close_cb == NULL)
-            close_cb = jl_get_global(jl_base_module, jl_symbol("_uv_hook_close"));
-        cb = close_cb;
-    }
-    else {
-        cb = jl_get_global(jl_base_relative_to(((jl_datatype_t*)jl_typeof(val))->name->module), jl_symbol("_uv_hook_close"));
-    }
-    assert(cb);
-    jl_value_t *args[2] = {cb,val};
+    jl_value_t *args[2];
+    args[0] = jl_get_global(jl_base_relative_to(((jl_datatype_t*)jl_typeof(val))->name->module),
+            jl_symbol("_uv_hook_close")); // topmod(typeof(val))._uv_hook_close
+    args[1] = val;
+    assert(args[0]);
     jl_apply(args, 2);
 }
 

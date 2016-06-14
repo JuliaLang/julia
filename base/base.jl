@@ -1,9 +1,5 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
-type ErrorException <: Exception
-    msg::AbstractString
-end
-
 type SystemError <: Exception
     prefix::AbstractString
     errnum::Int32

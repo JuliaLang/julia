@@ -29,7 +29,6 @@ JL_DLLEXPORT int jl_lineno = 0; // need to update jl_critical_error if this is T
 // current file name
 JL_DLLEXPORT const char *jl_filename = "no file"; // need to update jl_critical_error if this is TLS
 
-jl_module_t *jl_old_base_module = NULL;
 // the Main we started with, in case it is switched
 jl_module_t *jl_internal_main_module = NULL;
 
@@ -131,16 +130,7 @@ jl_value_t *jl_eval_module_expr(jl_expr_t *ex)
 
     if (parent_module == jl_main_module && name == jl_symbol("Base")) {
         // pick up Base module during bootstrap
-        jl_old_base_module = jl_base_module;
         jl_base_module = newm;
-        // reinitialize global variables
-        // to pick up new types from Base
-        jl_errorexception_type = NULL;
-        jl_argumenterror_type = NULL;
-        jl_methoderror_type = NULL;
-        jl_loaderror_type = NULL;
-        jl_initerror_type = NULL;
-        jl_current_task->tls = jl_nothing; // may contain an entry for :SOURCE_FILE that is not valid in the new base
     }
     // export all modules from Main
     if (parent_module == jl_main_module)
