@@ -168,3 +168,6 @@ ms = Dates.Millisecond(1)
 @test Dates.Date(d,y) == Dates.Date(1,1,1)
 @test Dates.Date(d,m) == Dates.Date(1,1,1)
 @test Dates.Date(m,y) == Dates.Date(1,1,1)
+
+@test isfinite(Dates.Date)
+@test isfinite(Dates.DateTime)
