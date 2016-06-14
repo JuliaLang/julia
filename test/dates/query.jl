@@ -20,6 +20,7 @@ daysofweek = [Dates.Tue,Dates.Sat,Dates.Sun,Dates.Thu,Dates.Sun,Dates.Fri,
               Dates.Sun,Dates.Thu,Dates.Mon,Dates.Thu,Dates.Mon,Dates.Wed]
 dows = ["Tuesday","Saturday","Sunday","Thursday","Sunday","Friday",
         "Sunday","Thursday","Monday","Thursday","Monday","Wednesday"]
+daysinmonth = [31,28,31,30,31,30,31,31,30,31,30,31]
 for (i,dt) in enumerate([jan,feb,mar,apr,may,jun,jul,aug,sep,oct,nov,dec])
     @test Dates.month(dt) == i
     @test Dates.monthname(dt) == monthnames[i]
@@ -31,6 +32,7 @@ for (i,dt) in enumerate([jan,feb,mar,apr,may,jun,jul,aug,sep,oct,nov,dec])
     @test Dates.dayname(Dates.dayofweek(dt)) == dows[i]
     @test Dates.dayabbr(dt) == dows[i][1:3]
     @test Dates.dayabbr(Dates.dayofweek(dt)) == dows[i][1:3]
+    @test Dates.daysinmonth(dt) == daysinmonth[i]
 end
 
 # Customizing locale

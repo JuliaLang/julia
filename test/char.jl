@@ -75,6 +75,8 @@ let
     #size(c::Char) = ()
     for x in testarrays
         @test size(x) == ()
+        @test_throws BoundsError size(x,0)
+        @test size(x,1) == 1
     end
 
     #ndims(c::Char) = 0
