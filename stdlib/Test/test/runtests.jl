@@ -280,10 +280,11 @@ end
                     @test S(1) == T(1)
                 end
             end
-            srand(123)
             @testset "some loops fail" begin
-                @testset for i in 1:5
-                    @test i <= rand(1:10)
+                guardsrand(123) do
+                    @testset for i in 1:5
+                        @test i <= rand(1:10)
+                    end
                 end
                 # should add 3 errors and 3 passing tests
                 @testset for i in 1:6
@@ -599,3 +600,23 @@ msg = split(read(pipeline(ignorestatus(`$(Base.julia_cmd()) --startup-file=no --
 Test.print_test_results(Test.DefaultTestSet(""))'`), stderr=DevNull), String), "\n")[1]
 
 @test msg == rstrip(msg)
+
+# test guarded srand
+let seed = rand(UInt)
+    orig = copy(Base.GLOBAL_RNG)
+    @test guardsrand(()->rand(), seed) == guardsrand(()->rand(), seed)
+    @test guardsrand(()->rand(Int), seed) == guardsrand(()->rand(Int), seed)
+    r1, r2 = MersenneTwister(0), MersenneTwister(0)
+    a, b = guardsrand(r1) do
+        srand(r1, 0)
+        rand(r1), rand(r1, Int)
+    end::Tuple{Float64,Int}
+    c, d = guardsrand(r2) do
+        srand(r2, 0)
+        rand(r2), rand(r2, Int)
+    end::Tuple{Float64,Int}
+    @test a == c == rand(r1) == rand(r2)
+    @test b == d == rand(r1, Int) == rand(r2, Int)
+    @test orig == Base.GLOBAL_RNG
+    @test rand(orig) == rand()
+end

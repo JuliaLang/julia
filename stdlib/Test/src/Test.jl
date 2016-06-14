@@ -21,6 +21,7 @@ export @testset
 export @inferred
 export detect_ambiguities, detect_unbound_args
 export GenericString, GenericSet, GenericDict, GenericArray
+export guardsrand
 
 #-----------------------------------------------------------------------
 
@@ -1428,6 +1429,24 @@ Base.getindex(a::GenericArray, i...) = a.a[i...]
 Base.setindex!(a::GenericArray, x, i...) = a.a[i...] = x
 
 Base.similar(A::GenericArray, s::Integer...) = GenericArray(similar(A.a, s...))
+
+"`guardsrand(f)` runs the function `f()` and then restores the
+state of the global RNG as it was before."
+function guardsrand(f::Function, r::AbstractRNG=Base.GLOBAL_RNG)
+    old = copy(r)
+    try
+        f()
+    finally
+        copy!(r, old)
+    end
+end
+
+"`guardsrand(f, seed)` is equivalent to running `srand(seed); f()` and
+then restoring the state of the global RNG as it was before."
+guardsrand(f::Function, seed::Integer) = guardsrand() do
+    srand(seed)
+    f()
+end
 
 # 0.7 deprecations
 

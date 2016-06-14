@@ -10,8 +10,7 @@ import Base.LinAlg.BlasInt
 @test_throws ArgumentError Base.LinAlg.LAPACK.chktrans('Z')
 
 @testset "syevr" begin
-    let
-        srand(123)
+    guardsrand(123) do
         Ainit = randn(5,5)
         @testset for elty in (Float32, Float64, Complex64, Complex128)
             if elty == Complex64 || elty == Complex128
