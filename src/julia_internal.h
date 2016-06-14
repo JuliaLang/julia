@@ -69,7 +69,7 @@ STATIC_INLINE jl_value_t *newstruct(jl_datatype_t *type)
     return jv;
 }
 
-void jl_type_infer(jl_lambda_info_t *li, int force);
+jl_lambda_info_t *jl_type_infer(jl_lambda_info_t *li, int force);
 void jl_generate_fptr(jl_lambda_info_t *li);
 void jl_compile_linfo(jl_lambda_info_t *li);
 jl_lambda_info_t *jl_compile_for_dispatch(jl_lambda_info_t *li);

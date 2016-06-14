@@ -1141,7 +1141,7 @@ void *jl_get_llvmf(jl_tupletype_t *tt, bool getwrapper, bool getdeclarations)
 
     if (linfo->code == jl_nothing) {
         // re-infer if we've deleted the code
-        jl_type_infer(linfo, 0);
+        linfo = jl_type_infer(linfo, 0);
         if (linfo->code == jl_nothing) {
             JL_GC_POP();
             return NULL;
