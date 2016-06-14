@@ -177,7 +177,7 @@ srand(r::MersenneTwister, filename::AbstractString, n::Integer=4) = srand(r, mak
 
 function dsfmt_gv_srand()
     # Temporary fix for #8874 and #9124: update global RNG for Rmath
-    dsfmt_gv_init_by_array(GLOBAL_RNG.seed+1)
+    dsfmt_gv_init_by_array(GLOBAL_RNG.seed+UInt32(1))
     return GLOBAL_RNG
 end
 
