@@ -147,6 +147,8 @@ export
 
 const (===) = is
 
+typealias AnyVector Array{Any,1}
+
 abstract Number
 abstract Real     <: Number
 abstract AbstractFloat <: Real
