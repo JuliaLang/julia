@@ -427,10 +427,7 @@ JL_DLLEXPORT void jl_uv_writecb(uv_write_t *req, int status)
     }
 }
 
-// Note: jl_write() is called only by jl_vprintf().
-// See: doc/devdocs/stdio.rst
-
-static void jl_write(uv_stream_t *stream, const char *str, size_t n)
+JL_DLLEXPORT void jl_uv_puts(uv_stream_t *stream, const char *str, size_t n)
 {
     assert(stream);
     static_assert(offsetof(uv_stream_t,type) == offsetof(ios_t,bm) &&
@@ -477,6 +474,17 @@ static void jl_write(uv_stream_t *stream, const char *str, size_t n)
     }
 }
 
+JL_DLLEXPORT void jl_uv_putb(uv_stream_t *stream, uint8_t b)
+{
+    jl_uv_puts(stream, (char*)&b, 1);
+}
+
+JL_DLLEXPORT void jl_uv_putc(uv_stream_t *stream, uint32_t wchar)
+{
+    char s[4];
+    jl_uv_puts(stream, s, u8_wc_toutf8(s, wchar));
+}
+
 extern int vasprintf(char **str, const char *fmt, va_list ap);
 
 JL_DLLEXPORT int jl_vprintf(uv_stream_t *s, const char *format, va_list args)
@@ -493,7 +501,7 @@ JL_DLLEXPORT int jl_vprintf(uv_stream_t *s, const char *format, va_list args)
     c = vasprintf(&str, format, al);
 
     if (c >= 0) {
-        jl_write(s, str, c);
+        jl_uv_puts(s, str, c);
         free(str);
     }
     va_end(al);

@@ -4,8 +4,8 @@ baremodule Base
 
 using Core.TopModule, Core.Intrinsics
 ccall(:jl_set_istopmod, Void, (Bool,), true)
-
 include = Core.include
+include("coreio.jl")
 
 eval(x) = Core.eval(Base,x)
 eval(m,x) = Core.eval(m,x)
@@ -19,11 +19,21 @@ include("exports.jl")
 if false
     # simple print definitions for debugging. enable these if something
     # goes wrong during bootstrap before printing code is available.
-    show(x::ANY) = ccall(:jl_static_show, Void, (Ptr{Void}, Any),
-                         pointerref(cglobal(:jl_uv_stdout,Ptr{Void}),1), x)
-    print(x::ANY) = show(x)
-    println(x::ANY) = ccall(:jl_, Void, (Any,), x)
-    print(a::ANY...) = for x=a; print(x); end
+    # otherwise, they just just eventually get (noisily) overwritten later
+    global show, print, println
+    show(io::IO, x::ANY) = Core.show(io, x)
+    print(io::IO, a::ANY...) = Core.print(io, a...)
+    println(io::IO, x::ANY...) = Core.println(io, x...)
+    if false # show that the IO system now (relatively) operational
+        print("HELLO")
+        println(" WORLD")
+        show("αβγ :)"); println()
+        println(STDERR, "TEST")
+        println(STDERR, STDERR)
+        println(STDERR, 'a')
+        println(STDERR, 'α')
+        show(STDOUT, 'α')
+    end
 end
 
 ## Load essential files and libraries

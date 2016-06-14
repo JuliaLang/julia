@@ -954,11 +954,11 @@ void JL_NORETURN jl_method_error_bare(jl_function_t *f, jl_value_t *args)
         (jl_value_t*)f,
         args
     };
-    if (jl_base_module) {
+    if (fargs[0]) {
         jl_throw(jl_apply_generic(fargs, 3));
     }
     else {
-        jl_printf((JL_STREAM*)STDERR_FILENO, "A method error occurred before the base module was defined. Aborting...\n");
+        jl_printf((JL_STREAM*)STDERR_FILENO, "A method error occurred before the base MethodError type was defined. Aborting...\n");
         jl_static_show((JL_STREAM*)STDERR_FILENO,(jl_value_t*)f); jl_printf((JL_STREAM*)STDERR_FILENO,"\n");
         jl_static_show((JL_STREAM*)STDERR_FILENO,args); jl_printf((JL_STREAM*)STDERR_FILENO,"\n");
         jl_bt_size = rec_backtrace(jl_bt_data, JL_MAX_BT_SIZE);
