@@ -697,19 +697,23 @@ end
 
 """
     Base.runtests(tests=["all"], numcores=ceil(Int, Sys.CPU_CORES / 2);
-                  exit_on_error=false)
+                  exit_on_error=false, [seed])
 
 Run the Julia unit tests listed in `tests`, which can be either a string or an array of
 strings, using `numcores` processors. If `exit_on_error` is `false`, when one test
 fails, all remaining tests in other files will still be run; they are otherwise discarded,
 when `exit_on_error == true`.
+If a seed is provided via the keyword argument, it is used to seed the
+global RNG in the context where the tests are run; otherwise the seed is chosen randomly.
 """
 function runtests(tests = ["all"], numcores = ceil(Int, Sys.CPU_CORES / 2);
-                  exit_on_error=false)
+                  exit_on_error=false,
+                  seed::Union{BitInteger,Void}=nothing)
     if isa(tests,AbstractString)
         tests = split(tests)
     end
     exit_on_error && push!(tests, "--exit-on-error")
+    seed != nothing && push!(tests, "--seed=0x$(hex(seed % UInt128))") # cast to UInt128 to avoid a minus sign
     ENV2 = copy(ENV)
     ENV2["JULIA_CPU_CORES"] = "$numcores"
     try

@@ -4,7 +4,7 @@ using Test
 include("choosetests.jl")
 include("testenv.jl")
 
-tests, net_on, exit_on_error = choosetests(ARGS)
+tests, net_on, exit_on_error, seed = choosetests(ARGS)
 tests = unique(tests)
 
 const max_worker_rss = if haskey(ENV, "JULIA_TEST_MAXRSS_MB")
@@ -55,7 +55,7 @@ cd(dirname(@__FILE__)) do
                     local resp
                     wrkr = p
                     try
-                        resp = remotecall_fetch(runtests, wrkr, test)
+                        resp = remotecall_fetch(runtests, wrkr, test; seed=seed)
                     catch e
                         resp = [e]
                     end
@@ -105,7 +105,7 @@ cd(dirname(@__FILE__)) do
         n > 1 && print("\tFrom worker 1:\t")
         local resp
         try
-            resp = eval(Expr(:call, () -> runtests(t))) # runtests is defined by the include above
+            resp = eval(Expr(:call, () -> runtests(t, seed=seed))) # runtests is defined by the include above
         catch e
             resp = [e]
         end
@@ -188,7 +188,8 @@ cd(dirname(@__FILE__)) do
     else
         println("    \033[31;1mFAILURE\033[0m\n")
         skipped > 0 &&
-            println("$skipped test", skipped > 1 ? "s were" : " was", " skipped due to failure.\n")
+            println("$skipped test", skipped > 1 ? "s were" : " was", " skipped due to failure.")
+        println("The global RNG seed was 0x$(hex(seed)).\n")
         Test.print_test_errors(o_ts)
         throw(Test.FallbackTestSetException("Test run finished with errors"))
     end
