@@ -11,16 +11,15 @@ fname = ARGS[1]
 
 io,_ = open(pipeline(`strings -n 3 $fname`,
                      `tr -d "() \t+-"`,
+                     `grep -v '^$'`,  # rm empty lines
+                     `grep -v '\\'`,  # avoid backslashes
                      `sort`, `uniq -c`, `sort -g -r`,
-                     `grep -v Main`,  # for some reason Main breaks things
                      `head -n 315`))  # 63 + 252
 
 function outputline(io, line)
     row = split(chomp(line), " ", keep=false)
     println(io, "jl_symbol(\"", row[2], "\"),")
 end
-
-foreach(f, it) = for x in it; f(x); end
 
 lines = eachline(io)
 
