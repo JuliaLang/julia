@@ -790,11 +790,15 @@ void allocate_frame()
         // Initialize the slots for temporary variables to NULL
         if (maxDepth > 0) {
             BitCastInst *tempSlot_i8 = new BitCastInst(tempSlot, PointerType::get(T_int8, 0), "", last_gcframe_inst);
-            CallInst *zeroing =
-                CallInst::Create(Intrinsic::getDeclaration(&M, Intrinsic::memset, {tempSlot_i8->getType(), T_int32}),
-                                 {tempSlot_i8, ConstantInt::get(T_int8, 0),
-                                  ConstantInt::get(T_int32, sizeof(jl_value_t*)*maxDepth),
-                                  ConstantInt::get(T_int32, 0), ConstantInt::get(T_int1, 0)});
+            Type *argsT[2] = {tempSlot_i8->getType(), T_int32};
+            Function *memset = Intrinsic::getDeclaration(&M, Intrinsic::memset, makeArrayRef(argsT));
+            Value *args[5] = {
+                tempSlot_i8, // dest
+                ConstantInt::get(T_int8, 0), // val
+                ConstantInt::get(T_int32, sizeof(jl_value_t*)*maxDepth), // len
+                ConstantInt::get(T_int32, 0), // align
+                ConstantInt::get(T_int1, 0)}; // volatile
+            CallInst *zeroing = CallInst::Create(memset, makeArrayRef(args));
             zeroing->setMetadata(llvm::LLVMContext::MD_tbaa, tbaa_gcframe);
             zeroing->insertAfter(tempSlot_i8);
             last_gcframe_inst = zeroing;
