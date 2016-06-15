@@ -999,3 +999,15 @@ retval = @parallel (+) for _ in 1:10
     rand(rng)
 end
 @test retval > 0.0 && retval < 10.0
+
+# serialization tests
+wrkr1 = workers()[1]
+wrkr2 = workers()[end]
+
+@test remotecall_fetch(p->remotecall_fetch(myid, p), wrkr1, wrkr2) == wrkr2
+
+# Send f to wrkr1 and wrkr2. Then try calling f on wrkr2 from wrkr1
+f_myid = ()->myid()
+@test wrkr1 == remotecall_fetch(f_myid, wrkr1)
+@test wrkr2 == remotecall_fetch(f_myid, wrkr2)
+@test wrkr2 == remotecall_fetch((f, p)->remotecall_fetch(f, p), wrkr1, f_myid, wrkr2)

@@ -101,6 +101,7 @@ export
     RoundNearestTiesUp,
     RoundToZero,
     RoundUp,
+    AbstractSerializer,
     SerializationState,
     Set,
     SharedArray,

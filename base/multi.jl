@@ -1,5 +1,8 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
+import .Serializer: reset_state
+
+
 # todo:
 # * fetch/wait latency seems to be excessive
 # * message aggregation
@@ -76,7 +79,6 @@ type JoinCompleteMsg <: AbstractMsg
     cpu_cores::Int
     ospid::Int
 end
-
 
 function send_msg_unknown(s::IO, msg)
     error("attempt to send to unknown socket")
@@ -157,6 +159,8 @@ type Worker
 
     r_stream::IO
     w_stream::IO
+    w_serializer::ClusterSerializer  # writes can happen from any task hence store the
+                                     # serializer as part of the Worker object
     manager::ClusterManager
     config::WorkerConfig
     version::Nullable{VersionNumber}  # Julia version of the remote process
@@ -166,6 +170,7 @@ type Worker
         w = Worker(id)
         w.r_stream = r_stream
         w.w_stream = buffer_writes(w_stream)
+        w.w_serializer = ClusterSerializer(w.w_stream)
         w.manager = manager
         w.config = config
         w.version = version
@@ -242,7 +247,8 @@ function send_msg_(w::Worker, msg, now::Bool)
     io = w.w_stream
     lock(io.lock)
     try
-        serialize(io, msg)
+        reset_state(w.w_serializer)
+        serialize(w.w_serializer, msg)  # io is wrapped in w_serializer
 
         if !now && w.gcflag
             flush_gc_msgs(w)
@@ -704,29 +710,29 @@ end
 
 channel_type{T}(rr::RemoteChannel{T}) = T
 
-serialize(s::SerializationState, f::Future) = serialize(s, f, isnull(f.v))
-serialize(s::SerializationState, rr::RemoteChannel) = serialize(s, rr, true)
-function serialize(s::SerializationState, rr::AbstractRemoteRef, addclient)
+serialize(s::AbstractSerializer, f::Future) = serialize(s, f, isnull(f.v))
+serialize(s::AbstractSerializer, rr::RemoteChannel) = serialize(s, rr, true)
+function serialize(s::AbstractSerializer, rr::AbstractRemoteRef, addclient)
     if addclient
         p = worker_id_from_socket(s.io)
         (p !== rr.where) && send_add_client(rr, p)
     end
-    invoke(serialize, Tuple{SerializationState, Any}, s, rr)
+    invoke(serialize, Tuple{AbstractSerializer, Any}, s, rr)
 end
 
-function deserialize{T<:Future}(s::SerializationState, t::Type{T})
+function deserialize{T<:Future}(s::AbstractSerializer, t::Type{T})
     f = deserialize_rr(s,t)
     Future(f.where, RRID(f.whence, f.id), f.v) # ctor adds to client_refs table
 end
 
-function deserialize{T<:RemoteChannel}(s::SerializationState, t::Type{T})
+function deserialize{T<:RemoteChannel}(s::AbstractSerializer, t::Type{T})
     rr = deserialize_rr(s,t)
     # call ctor to make sure this rr gets added to the client_refs table
     RemoteChannel{channel_type(rr)}(rr.where, RRID(rr.whence, rr.id))
 end
 
 function deserialize_rr(s, t)
-    rr = invoke(deserialize, Tuple{SerializationState, DataType}, s, t)
+    rr = invoke(deserialize, Tuple{AbstractSerializer, DataType}, s, t)
     if rr.where == myid()
         # send_add_client() is not executed when the ref is being
         # serialized to where it exists
@@ -992,8 +998,10 @@ end
 function message_handler_loop(r_stream::IO, w_stream::IO, incoming::Bool)
     try
         version = process_hdr(r_stream, incoming)
+        serializer = ClusterSerializer(r_stream)
         while true
-            msg = deserialize(r_stream)
+            reset_state(serializer)
+            msg = deserialize(serializer)
             # println("got msg: ", msg)
             handle_msg(msg, r_stream, w_stream, version)
         end
