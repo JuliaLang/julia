@@ -3902,15 +3902,6 @@ Compute the logarithm of `x` to base 2. Throws `DomainError` for negative `Real`
 log2
 
 """
-    SymTridiagonal(d, du)
-
-Construct a real symmetric tridiagonal matrix from the diagonal and upper diagonal,
-respectively. The result is of type `SymTridiagonal` and provides efficient specialized
-eigensolvers, but may be converted into a regular matrix with [`full`](:func:`full`).
-"""
-SymTridiagonal
-
-"""
     colon(start, [step], stop)
 
 Called by `:` syntax for constructing ranges.
@@ -5381,16 +5372,6 @@ function and type signature to [`STDOUT`](:const:`STDOUT`).
 All metadata and dbg.* calls are removed from the printed bitcode. Use code_llvm_raw for the full IR.
 """
 code_llvm
-
-"""
-    Bidiagonal(dv, ev, isupper)
-
-Constructs an upper (`isupper=true`) or lower (`isupper=false`) bidiagonal matrix using the
-given diagonal (`dv`) and off-diagonal (`ev`) vectors.  The result is of type `Bidiagonal`
-and provides efficient specialized linear solvers, but may be converted into a regular
-matrix with [`full`](:func:`full`).
-"""
-Bidiagonal
 
 """
     notify(condition, val=nothing; all=true, error=false)
@@ -7523,15 +7504,6 @@ getpid
 Return ``x^{1/3}``.  The prefix operator `∛` is equivalent to `cbrt`.
 """
 cbrt
-
-"""
-    Tridiagonal(dl, d, du)
-
-Construct a tridiagonal matrix from the lower diagonal, diagonal, and upper diagonal,
-respectively.  The result is of type `Tridiagonal` and provides efficient specialized linear
-solvers, but may be converted into a regular matrix with [`full`](:func:`full`).
-"""
-Tridiagonal
 
 """
     findprev(A, i)

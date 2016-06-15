@@ -12,9 +12,25 @@ type Bidiagonal{T} <: AbstractMatrix{T}
         new(dv, ev, isupper)
     end
 end
+"""
+    Bidiagonal(dv, ev, isupper)
+
+Constructs an upper (`isupper=true`) or lower (`isupper=false`) bidiagonal matrix using the
+given diagonal (`dv`) and off-diagonal (`ev`) vectors.  The result is of type `Bidiagonal`
+and provides efficient specialized linear solvers, but may be converted into a regular
+matrix with [`full`](:func:`full`). `ev`'s length must be one less than the length of `dv`.
+"""
 Bidiagonal{T}(dv::AbstractVector{T}, ev::AbstractVector{T}, isupper::Bool) = Bidiagonal{T}(collect(dv), collect(ev), isupper)
 Bidiagonal(dv::AbstractVector, ev::AbstractVector) = throw(ArgumentError("did you want an upper or lower Bidiagonal? Try again with an additional true (upper) or false (lower) argument."))
 
+"""
+    Bidiagonal(dv, ev, uplo)
+
+Constructs an upper (`uplo='U'`) or lower (`uplo='L'`) bidiagonal matrix using the
+given diagonal (`dv`) and off-diagonal (`ev`) vectors.  The result is of type `Bidiagonal`
+and provides efficient specialized linear solvers, but may be converted into a regular
+matrix with [`full`](:func:`full`). `ev`'s length must be one less than the length of `dv`.
+"""
 #Convert from BLAS uplo flag to boolean internal
 Bidiagonal(dv::AbstractVector, ev::AbstractVector, uplo::Char) = begin
     if uplo === 'U'
@@ -31,6 +47,12 @@ function Bidiagonal{Td,Te}(dv::AbstractVector{Td}, ev::AbstractVector{Te}, isupp
     Bidiagonal(convert(Vector{T}, dv), convert(Vector{T}, ev), isupper)
 end
 
+"""
+    Bidiagonal(A, uplo)
+
+Construct a `Bidiagonal` matrix from the main diagonal of `A` and
+its first super- (if `isupper=true`) or sub-diagonal (if `isupper=false`).
+"""
 Bidiagonal(A::AbstractMatrix, isupper::Bool)=Bidiagonal(diag(A), diag(A, isupper?1:-1), isupper)
 
 function getindex{T}(A::Bidiagonal{T}, i::Integer, j::Integer)
