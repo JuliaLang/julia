@@ -46,6 +46,9 @@ static const char opts[]  =
     " -O, --optimize={0,1,2,3}  Set the optimization level (default 2 if unspecified or 3 if specified as -O)\n"
     " --inline={yes|no}         Control whether inlining is permitted (overrides functions declared as @inline)\n"
     " --check-bounds={yes|no}   Emit bounds checks always or never (ignoring declarations)\n"
+#ifdef USE_POLLY
+    " --polly={yes|no}          Enable or disable the polyhedral optimizer Polly (overrides @polly declaration)\n"
+#endif
     " --math-mode={ieee,fast}   Disallow or enable unsafe floating point optimizations (overrides @fastmath declaration)\n\n"
 
     // error and warning options
@@ -83,6 +86,7 @@ JL_DLLEXPORT void jl_parse_opts(int *argcp, char ***argvp)
            opt_output_bc,
            opt_depwarn,
            opt_inline,
+           opt_polly,
            opt_math_mode,
            opt_worker,
            opt_bind_to,
@@ -125,6 +129,7 @@ JL_DLLEXPORT void jl_parse_opts(int *argcp, char ***argvp)
         { "output-incremental",required_argument, 0, opt_incremental },
         { "depwarn",         required_argument, 0, opt_depwarn },
         { "inline",          required_argument, 0, opt_inline },
+        { "polly",           required_argument, 0, opt_polly },
         { "math-mode",       required_argument, 0, opt_math_mode },
         { "handle-signals",  required_argument, 0, opt_handle_signals },
         // hidden command line options
@@ -396,6 +401,15 @@ restart_switch:
                 jl_options.can_inline = 0;
             else {
                 jl_errorf("julia: invalid argument to --inline (%s)", optarg);
+            }
+            break;
+       case opt_polly:
+            if (!strcmp(optarg,"yes"))
+                jl_options.polly = JL_OPTIONS_POLLY_ON;
+            else if (!strcmp(optarg,"no"))
+                jl_options.polly = JL_OPTIONS_POLLY_OFF;
+            else {
+                jl_errorf("julia: invalid argument to --polly (%s)", optarg);
             }
             break;
         case opt_math_mode:
