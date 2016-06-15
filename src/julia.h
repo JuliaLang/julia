@@ -656,7 +656,7 @@ STATIC_INLINE void jl_gc_wb(void *parent, void *ptr)
 STATIC_INLINE void jl_gc_wb_back(void *ptr) // ptr isa jl_value_t*
 {
     // if ptr is old
-    if (__unlikely(jl_astaggedvalue(ptr)->bits.gc & 2)) {
+    if (__unlikely(jl_astaggedvalue(ptr)->bits.gc == 3)) {
         jl_gc_queue_root((jl_value_t*)ptr);
     }
 }
