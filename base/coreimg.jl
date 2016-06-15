@@ -2,19 +2,23 @@
 
 Main.Core.eval(Main.Core, :(baremodule Inference
 using Core.TopModule, Core.Intrinsics
+import Core: print, println, show, write, unsafe_write, STDOUT, STDERR
+if false # show that the IO system is already (relatively) operational
+    print("HELLO")
+    println(" WORLD")
+    show("αβγ :)"); println()
+    println(STDERR, "TEST")
+    println(STDERR, STDERR)
+    println(STDERR, 'a')
+    println(STDERR, 'α')
+end
+
 ccall(:jl_set_istopmod, Void, (Bool,), false)
 
 eval(x) = Core.eval(Inference,x)
 eval(m,x) = Core.eval(m,x)
 
 include = Core.include
-
-# simple print definitions for debugging.
-show(x::ANY) = ccall(:jl_static_show, Void, (Ptr{Void}, Any),
-                     pointerref(cglobal(:jl_uv_stdout,Ptr{Void}),1), x)
-print(x::ANY) = show(x)
-println(x::ANY) = ccall(:jl_, Void, (Any,), x) # includes a newline
-print(a::ANY...) = for x=a; print(x); end
 
 ## Load essential files and libraries
 include("essentials.jl")

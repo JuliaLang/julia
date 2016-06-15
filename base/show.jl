@@ -1,6 +1,5 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
-show(x) = show(STDOUT::IO, x)
 print(io::IO, s::Symbol) = (write(io,s); nothing)
 
 immutable IOContext{IO_t <: IO} <: AbstractPipe

@@ -99,9 +99,9 @@ function reinit_stdio()
     global uv_jl_timercb       = cfunction(uv_timercb, Void, (Ptr{Void},))
 
     global uv_eventloop = ccall(:jl_global_event_loop, Ptr{Void}, ())
-    global STDIN = init_stdio(ccall(:jl_stdin_stream ,Ptr{Void},()))
-    global STDOUT = init_stdio(ccall(:jl_stdout_stream,Ptr{Void},()))
-    global STDERR = init_stdio(ccall(:jl_stderr_stream,Ptr{Void},()))
+    global STDIN = init_stdio(ccall(:jl_stdin_stream, Ptr{Void}, ()))
+    global STDOUT = init_stdio(ccall(:jl_stdout_stream, Ptr{Void}, ()))
+    global STDERR = init_stdio(ccall(:jl_stderr_stream, Ptr{Void}, ()))
 end
 
 """

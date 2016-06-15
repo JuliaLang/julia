@@ -147,21 +147,6 @@ immutable FileRedirect
     end
 end
 
-immutable DevNullStream <: IO end
-const DevNull = DevNullStream()
-isreadable(::DevNullStream) = false
-iswritable(::DevNullStream) = true
-isopen(::DevNullStream) = true
-read(::DevNullStream, ::Type{UInt8}) = throw(EOFError())
-write(::DevNullStream, ::UInt8) = 1
-close(::DevNullStream) = nothing
-flush(::DevNullStream) = nothing
-wait_connected(::DevNullStream) = nothing
-wait_readnb(::DevNullStream) = wait()
-wait_readbyte(::DevNullStream) = wait()
-wait_close(::DevNullStream) = wait()
-eof(::DevNullStream) = true
-
 uvhandle(::DevNullStream) = C_NULL
 uvtype(::DevNullStream) = UV_STREAM
 

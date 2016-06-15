@@ -275,12 +275,45 @@ end
 @test repr(:(bitstype A B)) == ":(bitstype A B)"
 @test repr(:(bitstype 100 B)) == ":(bitstype 100 B)"
 
-oldout = STDOUT
-try
-    rd, wr = redirect_stdout()
-    @test dump(STDERR) == nothing
-finally
-    redirect_stdout(oldout)
+let oldout = STDOUT, olderr = STDERR
+    local rdout, wrout, rderr, wrerr, out, err, rd, wr
+    try
+        rd, wr = redirect_stdout()
+        @test dump(STDERR) == nothing
+
+        # pr 16917
+        rdout, wrout = redirect_stdout()
+        @test wrout === STDOUT
+        out = @async readstring(rdout)
+        rderr, wrerr = redirect_stderr()
+        @test wrerr === STDERR
+        err = @async readstring(rderr)
+        if !is_windows()
+            close(wrout)
+            close(wrerr)
+        end
+        for io in (Core.STDOUT, Core.STDERR)
+            Core.println(io, "TESTA")
+            println(io, "TESTB")
+            print(io, 'Α', 1)
+            Core.print(io, 'Β', 2)
+            Core.show(io, "A")
+            println(io)
+        end
+        Core.println("A")
+        Core.print("1", 2, 3.0)
+        Core.show("C")
+        Core.println()
+        redirect_stdout(oldout)
+        redirect_stderr(olderr)
+        close(wrout)
+        close(wrerr)
+        @test wait(out) == "TESTA\nTESTB\nΑ1Β2\"A\"\nA\n123\"C\"\n"
+        @test wait(err) == "TESTA\nTESTB\nΑ1Β2\"A\"\n"
+    finally
+        redirect_stdout(oldout)
+        redirect_stderr(olderr)
+    end
 end
 
 # issue #12960
