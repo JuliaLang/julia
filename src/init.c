@@ -79,6 +79,7 @@ jl_options_t jl_options = { 0,    // quiet
                             JL_OPTIONS_CHECK_BOUNDS_DEFAULT, // check_bounds
                             1,    // depwarn
                             1,    // can_inline
+                            JL_OPTIONS_POLLY_ON, // polly
                             JL_OPTIONS_FAST_MATH_DEFAULT,
                             0,    // worker
                             JL_OPTIONS_HANDLE_SIGNALS_ON,

@@ -186,6 +186,13 @@ let exename = `$(Base.julia_cmd()) --precompiled=yes --startup-file=no`
     # --inline takes yes/no as argument
     @test !success(`$exename --inline=false`)
 
+    # --polly
+    @test readchomp(`$exename -E "Bool(Base.JLOptions().polly)"`) == "true"
+    @test readchomp(`$exename --polly=yes -E "Bool(Base.JLOptions().polly)"`) == "true"
+    @test readchomp(`$exename --polly=no -E "Bool(Base.JLOptions().polly)"`) == "false"
+    # --polly takes yes/no as argument
+    @test !success(`$exename --polly=false`)
+
     # --fast-math
     let JL_OPTIONS_FAST_MATH_DEFAULT = 0,
         JL_OPTIONS_FAST_MATH_ON = 1,
