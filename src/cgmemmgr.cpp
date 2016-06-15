@@ -15,9 +15,6 @@
 #endif
 #ifdef _OS_LINUX_
 #  include <sys/syscall.h>
-#  ifdef __NR_memfd_create
-#    include <linux/memfd.h>
-#  endif
 #endif
 #ifndef _OS_WINDOWS_
 #  include <sys/mman.h>
@@ -102,10 +99,13 @@ static bool check_fd_or_close(int fd)
 {
     if (fd == -1)
         return false;
-    // This can fail due to `noexec` mount option ....
     fcntl(fd, F_SETFD, FD_CLOEXEC);
     fchmod(fd, S_IRWXU);
-    ftruncate(fd, jl_page_size);
+    if (ftruncate(fd, jl_page_size) != 0) {
+        close(fd);
+        return false;
+    }
+    // This can fail due to `noexec` mount option ....
     void *ptr = mmap(nullptr, jl_page_size, PROT_READ | PROT_EXEC,
                      MAP_SHARED, fd, 0);
     if (ptr == MAP_FAILED) {
@@ -159,7 +159,7 @@ static intptr_t get_anon_hdl(void)
     // Linux and FreeBSD can create an anonymous fd without touching the
     // file system.
 #  ifdef __NR_memfd_create
-    fd = syscall(__NR_memfd_create, "julia-codegen", MFD_CLOEXEC);
+    fd = syscall(__NR_memfd_create, "julia-codegen", 0);
     if (check_fd_or_close(fd))
         return fd;
 #  endif
@@ -279,7 +279,7 @@ static void write_self_mem(void *dest, void *ptr, size_t size)
 {
     while (size > 0) {
         ssize_t ret = pwrite(self_mem_fd, ptr, size, (uintptr_t)dest);
-        if (ret == size)
+        if ((size_t)ret == size)
             return;
         if (ret == -1 && (errno == EAGAIN || errno == EINTR))
             continue;
@@ -334,6 +334,14 @@ struct Block {
 
     Block(const Block&) = delete;
     Block &operator=(const Block&) = delete;
+    Block(Block &&other)
+        : ptr(other.ptr),
+          total(other.total),
+          avail(other.avail)
+    {
+        other.ptr = nullptr;
+        other.total = other.avail = 0;
+    }
 
     Block() = default;
 
