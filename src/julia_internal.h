@@ -69,26 +69,18 @@ STATIC_INLINE jl_value_t *newstruct(jl_datatype_t *type)
     return jv;
 }
 
+void jl_type_infer(jl_lambda_info_t *li, int force);
 void jl_generate_fptr(jl_lambda_info_t *li);
 void jl_compile_linfo(jl_lambda_info_t *li);
+jl_lambda_info_t *jl_compile_for_dispatch(jl_lambda_info_t *li);
 
 // invoke (compiling if necessary) the jlcall function pointer for a method
 jl_lambda_info_t *jl_get_unspecialized(jl_lambda_info_t *method);
 STATIC_INLINE jl_value_t *jl_call_method_internal(jl_lambda_info_t *meth, jl_value_t **args, uint32_t nargs)
 {
     jl_lambda_info_t *mfptr = meth;
-    if (__unlikely(meth->fptr == NULL)) {
-        if (meth->inInference || meth->inCompile) {
-            // if inference is running on this function, get a copy
-            // of the function to be compiled without inference and run.
-            assert(meth->def != NULL);
-            mfptr = jl_get_unspecialized(meth);
-        }
-        if (mfptr->fptr == NULL) {
-            jl_compile_linfo(mfptr);
-            jl_generate_fptr(mfptr);
-        }
-    }
+    if (__unlikely(mfptr->fptr == NULL))
+        mfptr = jl_compile_for_dispatch(mfptr);
     if (mfptr->jlcall_api == 0)
         return mfptr->fptr(args[0], &args[1], nargs-1);
     else
@@ -204,7 +196,6 @@ jl_value_t *jl_interpret_toplevel_expr(jl_value_t *e);
 jl_value_t *jl_static_eval(jl_value_t *ex, void *ctx_, jl_module_t *mod,
                            jl_lambda_info_t *li, int sparams, int allow_alloc);
 int jl_is_toplevel_only_expr(jl_value_t *e);
-void jl_type_infer(jl_lambda_info_t *li, int force);
 jl_value_t *jl_call_scm_on_ast(char *funcname, jl_value_t *expr);
 
 jl_lambda_info_t *jl_method_lookup_by_type(jl_methtable_t *mt, jl_tupletype_t *types,
