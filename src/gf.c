@@ -164,7 +164,7 @@ jl_lambda_info_t *jl_get_unspecialized(jl_lambda_info_t *method)
         return method->unspecialized_ducttape;
     if (method->sparam_syms != jl_emptysvec) {
         if (def->needs_sparam_vals_ducttape == 2) {
-            jl_array_t *code = (jl_array_t*)method->code;
+            jl_array_t *code = (jl_array_t*)def->lambda_template->code;
             JL_GC_PUSH1(&code);
             if (!jl_typeis(code, jl_array_any_type))
                 code = jl_uncompress_ast(def->lambda_template, code);
@@ -1094,6 +1094,11 @@ jl_lambda_info_t *jl_get_specialization1(jl_tupletype_t *types)
     if (sf->functionObjectsDecls.functionObject == NULL) {
         if (sf->fptr != NULL)
             goto not_found;
+        if (sf->code == jl_nothing) {
+            jl_type_infer(sf, 0);
+            if (sf->code == jl_nothing)
+                goto not_found;
+        }
         jl_compile_linfo(sf);
     }
     JL_GC_POP();

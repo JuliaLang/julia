@@ -1022,6 +1022,28 @@ extern "C" void jl_generate_fptr(jl_lambda_info_t *li)
     JL_UNLOCK(&codegen_lock); // Might GC
 }
 
+extern "C" jl_lambda_info_t *jl_compile_for_dispatch(jl_lambda_info_t *li)
+{
+    if (li->inInference || li->inCompile) {
+        // if inference is running on this function, get a copy
+        // of the function to be compiled without inference and run.
+        assert(li->def != NULL);
+        li = jl_get_unspecialized(li);
+    }
+    if (li->fptr == NULL) {
+        if (li->functionObjectsDecls.functionObject == NULL) {
+            if (li->code == jl_nothing)
+                jl_type_infer(li, 0);
+            if (li->functionObjectsDecls.functionObject == NULL && li->code == jl_nothing) {
+                li = jl_get_unspecialized(li);
+            }
+            jl_compile_linfo(li);
+        }
+        jl_generate_fptr(li);
+    }
+    return li;
+}
+
 // this generates llvm code for the lambda info
 // (and adds it to the shadow module), but doesn't yet compile
 // or generate object code for it
