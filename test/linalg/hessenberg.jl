@@ -25,6 +25,7 @@ let n = 10
             H = hessfact(A)
             @test size(H[:Q], 1) == size(A, 1)
             @test size(H[:Q], 2) == size(A, 2)
+            @test size(H[:Q]) == size(A)
             @test_throws KeyError H[:Z]
             @test_approx_eq full(H) A
             @test_approx_eq (H[:Q] * H[:H]) * H[:Q]' A

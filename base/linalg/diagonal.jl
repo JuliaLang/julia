@@ -153,9 +153,9 @@ end
 
 At_mul_B(A::AbstractTriangular, D::Diagonal) = A_mul_B!(transpose(A), D)
 function At_mul_B(A::AbstractMatrix, D::Diagonal)
-    Ac = similar(A, promote_op(*, eltype(A), eltype(D.diag)), (size(A, 2), size(A, 1)))
-    transpose!(Ac, A)
-    A_mul_B!(Ac, D)
+    At = similar(A, promote_op(*, eltype(A), eltype(D.diag)), (size(A, 2), size(A, 1)))
+    transpose!(At, A)
+    A_mul_B!(At, D)
 end
 
 A_mul_Bc(D::Diagonal, B::AbstractTriangular) = A_mul_B!(D, ctranspose(B))
@@ -168,9 +168,9 @@ end
 
 A_mul_Bt(D::Diagonal, B::AbstractTriangular) = A_mul_B!(D, transpose(B))
 function A_mul_Bt(D::Diagonal, A::AbstractMatrix)
-    Ac = similar(A, promote_op(*, eltype(A), eltype(D.diag)), (size(A, 2), size(A, 1)))
-    ctranspose!(Ac, A)
-    A_mul_B!(D, Ac)
+    At = similar(A, promote_op(*, eltype(A), eltype(D.diag)), (size(A, 2), size(A, 1)))
+    transpose!(At, A)
+    A_mul_B!(D, At)
 end
 
 A_mul_B!(A::Diagonal,B::Diagonal)  = throw(MethodError(A_mul_B!, Tuple{Diagonal,Diagonal}))
