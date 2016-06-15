@@ -897,9 +897,9 @@ let f = open(file, "w")
     test_LibcFILE(convert(Libc.FILE, f))
     close(f)
     if is_windows()
-        f = RawFD(ccall(:_open, Cint, (Ptr{UInt8}, Cint), file, Base.Filesystem.JL_O_RDONLY))
+        f = RawFD(ccall(:_open, Cint, (Cstring, Cint), file, Base.Filesystem.JL_O_RDONLY))
     else
-        f = RawFD(ccall(:open, Cint, (Ptr{UInt8}, Cint), file, Base.Filesystem.JL_O_RDONLY))
+        f = RawFD(ccall(:open, Cint, (Cstring, Cint), file, Base.Filesystem.JL_O_RDONLY))
     end
     test_LibcFILE(Libc.FILE(f, Libc.modestr(true, false)))
 end

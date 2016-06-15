@@ -46,17 +46,6 @@ if !is_windows()
     end
 end
 
-# C NUL-terminated string pointers; these can be used in ccall
-# instead of Ptr{Cchar} and Ptr{Cwchar_t}, respectively, to enforce
-# a check for embedded NUL chars in the string (to avoid silent truncation).
-if Int === Int64
-    bitstype 64 Cstring
-    bitstype 64 Cwstring
-else
-    bitstype 32 Cstring
-    bitstype 32 Cwstring
-end
-
 # construction from typed pointers
 convert{T<:Union{Int8,UInt8}}(::Type{Cstring}, p::Ptr{T}) = box(Cstring, p)
 convert(::Type{Cwstring}, p::Ptr{Cwchar_t}) = box(Cwstring, p)
@@ -87,6 +76,9 @@ function cconvert(::Type{Cwstring}, s::AbstractString)
     !isempty(v) && v[end] == 0 || push!(v, 0)
     return v
 end
+
+eltype(::Type{Cstring}) = UInt8
+eltype(::Type{Cwstring}) = Cwchar_t
 
 containsnul(p::Ptr, len) =
     C_NULL != ccall(:memchr, Ptr{Cchar}, (Ptr{Cchar}, Cint, Csize_t), p, 0, len)

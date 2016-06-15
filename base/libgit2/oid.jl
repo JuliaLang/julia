@@ -28,7 +28,7 @@ function Oid(id::AbstractString)
               (Ptr{Oid}, Ptr{UInt8}, Csize_t), oid_ptr, bstr, len)
     else
         ccall((:git_oid_fromstrp, :libgit2), Cint,
-              (Ptr{Oid}, Ptr{Cchar}), oid_ptr, bstr)
+              (Ptr{Oid}, Cstring), oid_ptr, bstr)
     end
     err != 0 && return Oid()
     return oid_ptr[]
@@ -46,7 +46,7 @@ function Oid(repo::GitRepo, ref_name::AbstractString)
     isempty(repo) && return Oid()
     oid_ptr  = Ref(Oid())
     @check ccall((:git_reference_name_to_id, :libgit2), Cint,
-                    (Ptr{Oid}, Ptr{Void}, Ptr{UInt8}),
+                    (Ptr{Oid}, Ptr{Void}, Cstring),
                      oid_ptr, repo.ptr, ref_name)
     return oid_ptr[]
 end

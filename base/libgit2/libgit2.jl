@@ -297,7 +297,7 @@ function clone{P<:AbstractPayload}(repo_url::AbstractString, repo_path::Abstract
                remote_cb::Ptr{Void} = C_NULL,
                payload::Nullable{P}=Nullable{AbstractPayload}())
     # setup clone options
-    lbranch = Base.cconvert(Cstring, String(branch))
+    lbranch = Base.cconvert(Cstring, branch)
     fetch_opts=FetchOptions(callbacks = RemoteCallbacks(credentials_cb(), payload))
     clone_opts = CloneOptions(
                 bare = Cint(isbare),

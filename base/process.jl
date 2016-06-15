@@ -310,8 +310,8 @@ function _jl_spawn(cmd, argv, loop::Ptr{Void}, pp::Process,
     proc = Libc.malloc(_sizeof_uv_process)
     disassociate_julia_struct(proc)
     error = ccall(:jl_spawn, Int32,
-        (Ptr{UInt8}, Ptr{Ptr{UInt8}}, Ptr{Void}, Ptr{Void}, Any, Int32,
-         Ptr{Void}, Int32, Ptr{Void}, Int32, Ptr{Void}, Int32, Ptr{Ptr{UInt8}}, Ptr{UInt8}, Ptr{Void}),
+        (Cstring, Ptr{Cstring}, Ptr{Void}, Ptr{Void}, Any, Int32,
+         Ptr{Void}, Int32, Ptr{Void}, Int32, Ptr{Void}, Int32, Ptr{Cstring}, Cstring, Ptr{Void}),
         cmd, argv, loop, proc, pp, uvtype(in),
         uvhandle(in), uvtype(out), uvhandle(out), uvtype(err), uvhandle(err),
         pp.cmd.flags, pp.cmd.env === nothing ? C_NULL : pp.cmd.env, isempty(pp.cmd.dir) ? C_NULL : pp.cmd.dir,
