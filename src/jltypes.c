@@ -2725,9 +2725,9 @@ int jl_subtype_le(jl_value_t *a, jl_value_t *b, int ta, int invariant)
             else if (invariant) {
                 return 0;
             }
+            if (tta->super == NULL)
+                jl_errorf("circular type parameter constraint in definition of %s", jl_symbol_name(tta->name->name));
             tta = tta->super; super = 1;
-            if (tta == NULL)
-                jl_error("cannot compute subtype relation for type under construction");
         }
         assert(!invariant);
         return 0;
