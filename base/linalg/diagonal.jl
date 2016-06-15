@@ -5,7 +5,17 @@
 immutable Diagonal{T} <: AbstractMatrix{T}
     diag::Vector{T}
 end
+"""
+    Diagonal(A::AbstractMatrix)
+
+Constructs a matrix from the diagonal of `A`.
+"""
 Diagonal(A::AbstractMatrix) = Diagonal(diag(A))
+"""
+    Diagonal(V::AbstractVector)
+
+Constructs a matrix with `V` as its diagonal.
+"""
 Diagonal(V::AbstractVector) = Diagonal(collect(V))
 
 convert{T}(::Type{Diagonal{T}}, D::Diagonal{T}) = D
