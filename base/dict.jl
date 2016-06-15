@@ -395,9 +395,10 @@ copy(o::ObjectIdDict) = ObjectIdDict(o)
 
 get!(o::ObjectIdDict, key, default) = (o[key] = get(o, key, default))
 
-# SerializationState type needed as soon as ObjectIdDict is available
+abstract AbstractSerializer
 
-type SerializationState{I<:IO}
+# Serializer type needed as soon as ObjectIdDict is available
+type SerializationState{I<:IO} <: AbstractSerializer
     io::I
     counter::Int
     table::ObjectIdDict
