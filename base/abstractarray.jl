@@ -149,7 +149,7 @@ indicesperformance{T<:AbstractArray}(::Type{T}) = IndicesFast1D()
 
 Returns a tuple specifying the "shape" of array `A`. For arrays with
 conventional indexing (indices start at 1), this is equivalent to
-`size(A)`; otherwise it is equivalent to `incides(A)`.
+`size(A)`; otherwise it is equivalent to `indices(A)`.
 """
 shape(a) = shape(indicesbehavior(a), a)
 """
