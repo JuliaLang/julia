@@ -625,24 +625,25 @@ for (typ, ref, sup, fnc) in (
             (:GitTag,        :Void, :GitObject, nothing)
         )
 
-    @eval type $typ <: $sup
-        ptr::Ptr{$ref}
-        function $typ(ptr::Ptr{$ref})
-            @assert ptr != C_NULL
-            obj = new(ptr)
-            return obj
-        end
-    end
-
-    if fnc !== nothing
-        @eval function Base.finalize(obj::$typ)
-            if obj.ptr != C_NULL
-                ccall(($fnc, :libgit2), Void, (Ptr{$ref},), obj.ptr)
-                obj.ptr = C_NULL
+    @eval begin
+        type $typ <: $sup
+            ptr::Ptr{$ref}
+            function $typ(ptr::Ptr{$ref})
+                @assert ptr != C_NULL
+                obj = new(ptr)
+                return obj
             end
         end
+        if $fnc !== nothing
+            function Base.finalize(obj::$typ)
+                if obj.ptr != C_NULL
+                    ccall(($fnc, :libgit2), Void, (Ptr{$ref},), obj.ptr)
+                    obj.ptr = C_NULL
+                end
+            end
+            Base.finalize(obj::Nullable{$typ}) = !isnull(obj) && Base.finalize(Base.get(obj))
+        end
     end
-
 end
 
 # Structure has the same layout as SignatureStruct
