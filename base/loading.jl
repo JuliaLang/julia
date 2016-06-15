@@ -171,7 +171,7 @@ function _require_from_serialized(node::Int, mod::Symbol, path_to_try::String, t
         end
     elseif node == myid()
         myid() == 1 && recompile_stale(mod, path_to_try)
-        restored = ccall(:jl_restore_incremental, Any, (Ptr{UInt8},), path_to_try)
+        restored = ccall(:jl_restore_incremental, Any, (Cstring,), path_to_try)
     else
         content = remotecall_fetch(open, node, read, path_to_try)
         restored = _include_from_serialized(content)
