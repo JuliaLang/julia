@@ -159,7 +159,7 @@ JL_DLLEXPORT int jl_has_typevars(jl_value_t *v)
     return jl_has_typevars__(v, 0, NULL, 0);
 }
 
-JL_DLLEXPORT int jl_is_leaf_type(jl_value_t *v)
+JL_DLLEXPORT int (jl_is_leaf_type)(jl_value_t *v)
 {
     if (jl_is_datatype(v)) {
         int isleaf = ((jl_datatype_t*)v)->isleaftype;

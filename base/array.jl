@@ -36,6 +36,8 @@ end
 ## copy ##
 
 function unsafe_copy!{T}(dest::Ptr{T}, src::Ptr{T}, n)
+    # Do not use this to copy data between pointer arrays.
+    # It can't be made safe no matter how carefully you checked.
     ccall(:memmove, Ptr{Void}, (Ptr{Void}, Ptr{Void}, UInt),
           dest, src, n*sizeof(T))
     return dest
@@ -63,11 +65,7 @@ end
 
 copy!{T}(dest::Array{T}, src::Array{T}) = copy!(dest, 1, src, 1, length(src))
 
-function copy(a::Array)
-    b = similar(a)
-    ccall(:memcpy, Ptr{Void}, (Ptr{Void}, Ptr{Void}, UInt), b, a, sizeof(a))
-    return b
-end
+copy{T<:Array}(a::T) = ccall(:jl_array_copy, Ref{T}, (Any,), a)
 
 function reinterpret{T,S}(::Type{T}, a::Array{S,1})
     nel = Int(div(length(a)*sizeof(S),sizeof(T)))
