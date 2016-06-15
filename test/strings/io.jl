@@ -253,4 +253,3 @@ join(myio, "", "", 1)
 @test Base.unindent("\n    \tfoo",4) == "\n    foo"
 @test Base.unindent("\n\t\n    \tfoo",4) == "\n    \n    foo"
 @test Base.unindent("\n\tfoo\tbar",4) == "\n    foo     bar"
-
