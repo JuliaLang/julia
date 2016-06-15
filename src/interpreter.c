@@ -254,7 +254,7 @@ static jl_value_t *eval(jl_value_t *e, interpreter_state *s)
     }
     else if (ex->head == abstracttype_sym) {
         if (inside_typedef)
-            jl_error("user code attempted to eval a new abstract type definition while defining a type");
+            jl_error("cannot eval a new abstract type definition while defining another type");
         jl_value_t *name = args[0];
         jl_value_t *para = eval(args[1], s);
         jl_value_t *super = NULL;
@@ -289,7 +289,7 @@ static jl_value_t *eval(jl_value_t *e, interpreter_state *s)
     }
     else if (ex->head == bitstype_sym) {
         if (inside_typedef)
-            jl_error("user code attempted to eval a new bits type definition while defining a type");
+            jl_error("cannot eval a new bits type definition while defining another type");
         jl_value_t *name = args[0];
         jl_value_t *super = NULL, *para = NULL, *vnb = NULL, *temp = NULL;
         jl_datatype_t *dt = NULL;
@@ -331,7 +331,7 @@ static jl_value_t *eval(jl_value_t *e, interpreter_state *s)
     }
     else if (ex->head == compositetype_sym) {
         if (inside_typedef)
-            jl_error("user code attempted to eval a new data type definition while defining a type");
+            jl_error("cannot eval a new data type definition while defining another type");
         jl_value_t *name = args[0];
         assert(jl_is_symbol(name));
         jl_value_t *para = eval(args[1], s);
