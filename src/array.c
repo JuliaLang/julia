@@ -22,7 +22,7 @@ extern "C" {
 
 static inline int store_unboxed(jl_value_t *el_type)
 {
-    return jl_is_datatype(el_type) && jl_is_leaf_type(el_type) && jl_is_immutable(el_type) && jl_is_pointerfree((jl_datatype_t*)el_type);
+    return jl_is_leaf_type(el_type) && jl_is_immutable(el_type) && jl_is_pointerfree((jl_datatype_t*)el_type);
 }
 
 int jl_array_store_unboxed(jl_value_t *el_type)
@@ -80,6 +80,7 @@ static jl_array_t *_new_array_(jl_value_t *atype, uint32_t ndims, size_t *dims,
         tsz += tot;
         tsz = JL_ARRAY_ALIGN(tsz, JL_SMALL_BYTE_ALIGNMENT); // align whole object
         a = (jl_array_t*)jl_gc_allocobj(tsz);
+        // No allocation or safepoint allowed after this
         jl_set_typeof(a, atype);
         a->flags.how = 0;
         data = (char*)a + doffs;
@@ -89,21 +90,16 @@ static jl_array_t *_new_array_(jl_value_t *atype, uint32_t ndims, size_t *dims,
     }
     else {
         tsz = JL_ARRAY_ALIGN(tsz, JL_CACHE_BYTE_ALIGNMENT); // align whole object
-        a = (jl_array_t*)jl_gc_allocobj(tsz);
-        JL_GC_PUSH1(&a);
-        jl_set_typeof(a, atype);
-        // temporarily initialize to make gc-safe
-        a->data = NULL;
-        a->flags.how = 2;
-        // Make sure the GC can correctly identify if this is pool allocated
-        // and mark the page accordingly
-        a->flags.pooled = tsz <= GC_MAX_SZCLASS;
-
         data = jl_gc_managed_malloc(tot);
+        // Allocate the Array **after** allocating the data
+        // to make sure the array is still young
+        a = (jl_array_t*)jl_gc_allocobj(tsz);
+        // No allocation or safepoint allowed after this
+        jl_set_typeof(a, atype);
+        a->flags.how = 2;
         jl_gc_track_malloced_array(a);
         if (!isunboxed)
             memset(data, 0, tot);
-        JL_GC_POP();
     }
     a->flags.pooled = tsz <= GC_MAX_SZCLASS;
 
@@ -173,6 +169,7 @@ JL_DLLEXPORT jl_array_t *jl_reshape_array(jl_value_t *atype, jl_array_t *data,
     int ndimwords = jl_array_ndimwords(ndims);
     int tsz = JL_ARRAY_ALIGN(sizeof(jl_array_t) + ndimwords*sizeof(size_t) + sizeof(void*), JL_SMALL_BYTE_ALIGNMENT);
     a = (jl_array_t*)jl_gc_allocobj(tsz);
+    // No allocation or safepoint allowed after this
     jl_set_typeof(a, atype);
     a->flags.pooled = tsz <= GC_MAX_SZCLASS;
     a->flags.ndims = ndims;
@@ -180,7 +177,8 @@ JL_DLLEXPORT jl_array_t *jl_reshape_array(jl_value_t *atype, jl_array_t *data,
     a->data = NULL;
     a->flags.isaligned = data->flags.isaligned;
     jl_value_t *el_type = jl_tparam0(atype);
-    if (store_unboxed(el_type)) {
+    assert(store_unboxed(el_type) == !data->flags.ptrarray);
+    if (!data->flags.ptrarray) {
         a->elsize = jl_datatype_size(el_type);
         a->flags.ptrarray = 0;
     }
@@ -247,6 +245,7 @@ JL_DLLEXPORT jl_array_t *jl_ptr_to_array_1d(jl_value_t *atype, void *data,
     int ndimwords = jl_array_ndimwords(1);
     int tsz = JL_ARRAY_ALIGN(sizeof(jl_array_t) + ndimwords*sizeof(size_t), JL_CACHE_BYTE_ALIGNMENT);
     a = (jl_array_t*)jl_gc_allocobj(tsz);
+    // No allocation or safepoint allowed after this
     jl_set_typeof(a, atype);
     a->flags.pooled = tsz <= GC_MAX_SZCLASS;
     a->data = data;
@@ -301,6 +300,7 @@ JL_DLLEXPORT jl_array_t *jl_ptr_to_array(jl_value_t *atype, void *data,
     int ndimwords = jl_array_ndimwords(ndims);
     int tsz = JL_ARRAY_ALIGN(sizeof(jl_array_t) + ndimwords*sizeof(size_t), JL_CACHE_BYTE_ALIGNMENT);
     a = (jl_array_t*)jl_gc_allocobj(tsz);
+    // No allocation or safepoint allowed after this
     jl_set_typeof(a, atype);
     a->flags.pooled = tsz <= GC_MAX_SZCLASS;
     a->data = data;
@@ -607,7 +607,7 @@ static void array_resize_buffer(jl_array_t *a, size_t newlen, size_t oldlen, siz
     a->maxsize = newlen;
 }
 
-static void array_try_unshare(jl_array_t *a)
+static void NOINLINE array_try_unshare(jl_array_t *a)
 {
     if (a->flags.isshared) {
         if (a->flags.how != 3)
@@ -666,18 +666,6 @@ JL_DLLEXPORT void jl_array_del_end(jl_array_t *a, size_t dec)
     a->length -= dec;
 #endif
     a->nrows -= dec;
-}
-
-JL_DLLEXPORT void jl_array_sizehint(jl_array_t *a, size_t sz)
-{
-    if (sz <= jl_array_len(a))
-        return;
-    size_t inc = sz - jl_array_len(a);
-    jl_array_grow_end(a, inc);
-#ifdef STORE_ARRAY_LEN
-    a->length -= inc;
-#endif
-    a->nrows -= inc;
 }
 
 JL_DLLEXPORT void jl_array_grow_beg(jl_array_t *a, size_t inc)
@@ -759,19 +747,43 @@ JL_DLLEXPORT void jl_array_del_beg(jl_array_t *a, size_t dec)
     a->offset = newoffs;
 }
 
+JL_DLLEXPORT void jl_array_sizehint(jl_array_t *a, size_t sz)
+{
+    size_t n = jl_array_nrows(a);
+    if (sz <= n)
+        return;
+    size_t inc = sz - n;
+    jl_array_grow_end(a, inc);
+    a->nrows = n;
+#ifdef STORE_ARRAY_LEN
+    a->length = n;
+#endif
+}
+
+JL_DLLEXPORT jl_array_t *jl_array_copy(jl_array_t *ary)
+{
+    size_t elsz = ary->elsize;
+    jl_array_t *new_ary = _new_array_(jl_typeof(ary), jl_array_ndims(ary),
+                                      &ary->nrows, !ary->flags.ptrarray, elsz);
+    memcpy(new_ary->data, ary->data, jl_array_len(ary) * elsz);
+    return new_ary;
+}
+
 JL_DLLEXPORT void jl_array_ptr_1d_push(jl_array_t *a, jl_value_t *item)
 {
     assert(jl_typeis(a, jl_array_any_type));
     jl_array_grow_end(a, 1);
-    jl_array_ptr_set(a, jl_array_dim(a,0)-1, item);
+    size_t n = jl_array_nrows(a);
+    jl_array_ptr_set(a, n - 1, item);
 }
 
 JL_DLLEXPORT void jl_array_ptr_1d_push2(jl_array_t *a, jl_value_t *b, jl_value_t *c)
 {
     assert(jl_typeis(a, jl_array_any_type));
     jl_array_grow_end(a, 2);
-    jl_array_ptr_set(a, jl_array_dim(a,0)-2, b);
-    jl_array_ptr_set(a, jl_array_dim(a,0)-1, c);
+    size_t n = jl_array_nrows(a);
+    jl_array_ptr_set(a, n - 2, b);
+    jl_array_ptr_set(a, n - 1, c);
 }
 
 JL_DLLEXPORT jl_value_t *(jl_array_data_owner)(jl_array_t *a)
