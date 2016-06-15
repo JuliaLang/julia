@@ -365,11 +365,6 @@ mfe22 = eye(Float64, 2)
 # issue #5190
 @test_throws ArgumentError sparsevec([3,5,7],[0.1,0.0,3.2],4)
 
-# issue #5169
-@test nnz(sparse([1,1],[1,2],[0.0,-0.0])) == 2
-@test nnz(Base.SparseArrays.dropzeros!(sparse([1,1],[1,2],[0.0,-0.0]))) == 0
-# changed from `== 0` to `== 2` and added dropzeros! form in #14798,
-# matching sparse()'s behavioral revision discussed in #12605, #9928, #9906, #6769
 
 # issue #5386
 K,J,V = findnz(SparseMatrixCSC(2,1,[1,3],[1,2],[1.0,0.0]))
@@ -379,11 +374,6 @@ K,J,V = findnz(SparseMatrixCSC(2,1,[1,3],[1,2],[1.0,0.0]))
 A = speye(Bool, 5)
 @test find(A) == find(x -> x == true, A) == find(full(A))
 
-# issue #5437
-@test nnz(sparse([1,2,3],[1,2,3],[0.0,1.0,2.0])) == 3
-@test nnz(Base.SparseArrays.dropzeros!(sparse([1,2,3],[1,2,3],[0.0,1.0,2.0]))) == 2
-# changed from `== 2` to `== 3` and added dropzeros! form in #14798,
-# matching sparse()'s behavioral revision discussed in #12605, #9928, #9906, #6769
 
 # issue #5824
 @test sprand(4,5,0.5).^0 == sparse(ones(4,5))
@@ -1063,10 +1053,44 @@ perm = randperm(10)
 @test Base.droptol!(A,0.01).colptr == [1,1,1,2,2,3,4,6,6,7,9]
 @test isequal(Base.droptol!(sparse([1], [1], [1]), 1), SparseMatrixCSC(1,1,Int[1,1],Int[],Int[]))
 
-# dropzeros
-A = sparse([1 2 3; 4 5 6; 7 8 9])
-A.nzval[2] = A.nzval[6] = A.nzval[7] = 0
-@test Base.dropzeros!(A).colptr == [1, 3, 5, 7]
+# Test dropzeros[!]
+let smalldim = 5, largedim = 10, nzprob = 0.4, targetnumposzeros = 5, targetnumnegzeros = 5
+    for (m, n) in ((largedim, largedim), (smalldim, largedim), (largedim, smalldim))
+        A = sprand(m, n, nzprob)
+        struczerosA = find(x -> x == 0, A)
+        poszerosinds = unique(rand(struczerosA, targetnumposzeros))
+        negzerosinds = unique(rand(struczerosA, targetnumnegzeros))
+        Aposzeros = setindex!(copy(A), 2, poszerosinds)
+        Anegzeros = setindex!(copy(A), -2, negzerosinds)
+        Abothsigns = setindex!(copy(Aposzeros), -2, negzerosinds)
+        map!(x -> x == 2 ? 0.0 : x, Aposzeros.nzval)
+        map!(x -> x == -2 ? -0.0 : x, Anegzeros.nzval)
+        map!(x -> x == 2 ? 0.0 : x == -2 ? -0.0 : x, Abothsigns.nzval)
+        for Awithzeros in (Aposzeros, Anegzeros, Abothsigns)
+            # Basic functionality / dropzeros!
+            @test Base.dropzeros!(copy(Awithzeros)) == A
+            @test Base.dropzeros!(copy(Awithzeros), false) == A
+            # Basic functionality / dropzeros
+            @test Base.SparseArrays.dropzeros(Awithzeros) == A
+            @test Base.SparseArrays.dropzeros(Awithzeros, false) == A
+            # Check trimming works as expected
+            @test length(Base.dropzeros!(copy(Awithzeros)).nzval) == length(A.nzval)
+            @test length(Base.dropzeros!(copy(Awithzeros)).rowval) == length(A.rowval)
+            @test length(Base.dropzeros!(copy(Awithzeros), false).nzval) == length(Awithzeros.nzval)
+            @test length(Base.dropzeros!(copy(Awithzeros), false).rowval) == length(Awithzeros.rowval)
+        end
+    end
+    # original lone dropzeros test
+    A = sparse([1 2 3; 4 5 6; 7 8 9])
+    A.nzval[2] = A.nzval[6] = A.nzval[7] = 0
+    @test Base.dropzeros!(A).colptr == [1, 3, 5, 7]
+    # test for issue #5169, modified for new behavior following #15242/#14798
+    @test nnz(sparse([1, 1], [1, 2], [0.0, -0.0])) == 2
+    @test nnz(Base.SparseArrays.dropzeros!(sparse([1, 1], [1, 2], [0.0, -0.0]))) == 0
+    # test for issue #5437, modified for new behavior following #15242/#14798
+    @test nnz(sparse([1, 2, 3], [1, 2, 3], [0.0, 1.0, 2.0])) == 3
+    @test nnz(Base.SparseArrays.dropzeros!(sparse([1, 2, 3],[1, 2, 3],[0.0, 1.0, 2.0]))) == 2
+end
 
 #trace
 @test_throws DimensionMismatch trace(sparse(ones(5,6)))
