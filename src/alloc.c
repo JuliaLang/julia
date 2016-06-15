@@ -308,7 +308,7 @@ jl_value_t *jl_resolve_globals(jl_value_t *expr, jl_lambda_info_t *lam)
 }
 
 // copy a :lambda Expr into its LambdaInfo representation
-void jl_lambda_info_set_ast(jl_lambda_info_t *li, jl_expr_t *ast)
+static void jl_lambda_info_set_ast(jl_lambda_info_t *li, jl_expr_t *ast)
 {
     assert(jl_is_expr(ast));
     jl_expr_t *bodyex = (jl_expr_t*)jl_exprarg(ast, 2);
