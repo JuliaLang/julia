@@ -78,9 +78,7 @@ Currently, the `@compat` macro supports the following syntaxes:
 
 * `@compat withenv(f, "a" => a, "b" => b...)` on 0.3.
 
-* `@compat import Base.show => Base.writemime` because writemime is deprecated in Julia 0.5 ([#16563]).
-
-* `@compat function show(args...) => writemime` because writemime is deprecated in Julia 0.5 ([#16563]).
+* `@compat import Base.show` and `@compat function show(args...)` for handling the deprecation of `writemime` in Julia 0.5 ([#16563]). See https://github.com/JuliaLang/Compat.jl/pull/219.
 
 ## Type Aliases
 
