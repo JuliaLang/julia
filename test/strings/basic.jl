@@ -37,7 +37,7 @@ str = "s\u2200"
 @test sizeof("\u2222") == 3
 
 # issue #3597
-@test string(utf32(['T', 'e', 's', 't'])[1:1], "X") == "TX"
+@test string(GenericString("Test")[1:1], "X") == "TX"
 
 for T = (UInt8,Int8,UInt16,Int16,UInt32,Int32,UInt64,Int64,UInt128,Int128,BigInt),
     b = 2:62, _ = 1:10
@@ -449,21 +449,19 @@ end
 @test ucfirst("abc") == "Abc"
 @test lcfirst("ABC") == "aBC"
 @test lcfirst("aBC") == "aBC"
-@test ucfirst(utf32("")) == ""
-@test lcfirst(utf32("")) == ""
-@test ucfirst(utf32("a")) == "A"
-@test lcfirst(utf32("A")) == "a"
-@test lcfirst(utf32("a")) == "a"
-@test ucfirst(utf32("A")) == "A"
+@test ucfirst(GenericString("")) == ""
+@test lcfirst(GenericString("")) == ""
+@test ucfirst(GenericString("a")) == "A"
+@test lcfirst(GenericString("A")) == "a"
+@test lcfirst(GenericString("a")) == "a"
+@test ucfirst(GenericString("A")) == "A"
 
-# issue # 11464: uppercase/lowercase of UTF16String becomes a String
+# issue # 11464: uppercase/lowercase of GenericString becomes a String
 str = "abcdef\uff\uffff\u10ffffABCDEF"
 @test typeof(uppercase("abcdef")) == String
-@test typeof(uppercase(utf16(str))) == UTF16String
-@test typeof(uppercase(utf32(str))) == UTF32String
+@test typeof(uppercase(GenericString(str))) == String
 @test typeof(lowercase("ABCDEF")) == String
-@test typeof(lowercase(utf16(str))) == UTF16String
-@test typeof(lowercase(utf32(str))) == UTF32String
+@test typeof(lowercase(GenericString(str))) == String
 
 foomap(ch) = (ch > Char(65))
 foobar(ch) = Char(0xd800)
@@ -483,7 +481,7 @@ foobaz(ch) = reinterpret(Char, typemax(UInt32))
 # ascii works on ASCII strings and fails on non-ASCII strings
 @test ascii("Hello, world") == "Hello, world"
 @test typeof(ascii("Hello, world")) == String
-@test ascii(utf32("Hello, world")) == "Hello, world"
-@test typeof(ascii(utf32("Hello, world"))) == String
+@test ascii(GenericString("Hello, world")) == "Hello, world"
+@test typeof(ascii(GenericString("Hello, world"))) == String
 @test_throws ArgumentError ascii("Hello, ∀")
-@test_throws ArgumentError ascii(utf32("Hello, ∀"))
+@test_throws ArgumentError ascii(GenericString("Hello, ∀"))
