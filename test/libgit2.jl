@@ -446,7 +446,7 @@ mktempdir() do dir
         #@testset "tree" begin
             function addfile(root::Cstring, tentry::Ptr{Void}, payload::Ptr{Void})
                 strarr = unsafe_pointer_to_objref(payload)
-                sroot = String(root)
+                sroot = unsafe_string(root)
                 te = LibGit2.GitTreeEntry(tentry)
                 fmode = LibGit2.filemode(te)
                 fname = LibGit2.filename(te)
@@ -461,22 +461,31 @@ mktempdir() do dir
             ht = LibGit2.peel(LibGit2.GitTree, head)
             try
                 # get tree entry by filename
-                tfte = LibGit2.lookup(ht, test_file)
+                @test isnull(LibGit2.lookup(ht, "no such name"))
+                tfte = get(LibGit2.lookup(ht, test_file))
+                try
+                    @test LibGit2.filename(tfte) == test_file
+                    @test LibGit2.filemode(tfte) == Cint(LibGit2.Consts.FILEMODE_BLOB)
 
-                @test LibGit2.filename(tfte) == test_file
-                @test LibGit2.filemode(tfte) == Cint(LibGit2.Consts.FILEMODE_BLOB)
+                    @test isnull(LibGit2.GitTreeEntry(ht, LibGit2.Oid()))
+                    tfoid = LibGit2.oid(tfte)
+                    tfte2 = LibGit2.GitTreeEntry(ht, tfoid)
+                    try
+                        @test !isnull(tfte2)
+                        @test LibGit2.filename(get(tfte2)) == test_file
 
-                tfoid = LibGit2.oid(tfte)
-
-                tfte2 = LibGit2.GitTreeEntry(ht, tfoid)
-                @test LibGit2.filename(tfte2) == test_file
-
-                tfcontent = LibGit2.with(LibGit2.object(repo, tfte2)) do obj
-                    LibGit2.with(LibGit2.peel(LibGit2.GitBlob, obj)) do blob
-                        String(convert(Cstring, LibGit2.content(blob)))
+                        tfcontent = LibGit2.with(LibGit2.object(repo, get(tfte2))) do obj
+                            LibGit2.with(LibGit2.peel(LibGit2.GitBlob, obj)) do blob
+                                unsafe_string(convert(Cstring, LibGit2.content(blob)))
+                            end
+                        end
+                        @test startswith(tfcontent, commit_msg1)
+                    finally
+                        finalize(tfte2)
                     end
+                finally
+                    finalize(tfte)
                 end
-                @test startswith(tfcontent, commit_msg1)
 
                 entrs = LibGit2.treewalk(addfile, ht, String[])[]
                 @test length(find(e->e == test_file, entrs)) == 1
