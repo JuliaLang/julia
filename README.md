@@ -78,6 +78,10 @@ Currently, the `@compat` macro supports the following syntaxes:
 
 * `@compat withenv(f, "a" => a, "b" => b...)` on 0.3.
 
+* `@compat import Base.show => Base.writemime` because writemime is deprecated in Julia 0.5 ([#16563]).
+
+* `@compat function show(args...) => writemime` because writemime is deprecated in Julia 0.5 ([#16563]).
+
 ## Type Aliases
 
 * `String` has undergone multiple changes: in Julia 0.3 it was an abstract type and then got renamed to `AbstractString` in 0.4; in 0.5, `ASCIIString` and `ByteString` were deprecated, and `UTF8String` was renamed to the (now concrete) type `String`.

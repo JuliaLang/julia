@@ -1,9 +1,30 @@
 using Compat
 import Compat.String
+@compat import Base.show
 using Base.Test
 
 v = 1
 @test_throws AssertionError @assert(v < 1)
+
+type TestCustomShowType end
+@compat function show(io::IO, ::MIME"text/plain", ::TestCustomShowType)
+    print(io, "MyTestCustomShowType")
+end
+myio = IOBuffer()
+display(TextDisplay(myio), MIME"text/plain"(), TestCustomShowType())
+@test @compat String(myio) == "MyTestCustomShowType"
+
+type TestCustomShowType2 end
+@compat show(io::IO, ::MIME"text/plain", ::TestCustomShowType2) = print(io, "MyTestCustomShowType2")
+myio = IOBuffer()
+display(TextDisplay(myio), MIME"text/plain"(), TestCustomShowType2())
+@test @compat String(myio) == "MyTestCustomShowType2"
+
+type TestCustomShowType3 end
+@compat show(io::IO, ::TestCustomShowType3) = print(io, "2-Argument-show")
+myio = IOBuffer()
+display(TextDisplay(myio), TestCustomShowType3())
+@test @compat String(myio) == "2-Argument-show"
 
 d = Dict{Int,Int}()
 d[1] = 1
