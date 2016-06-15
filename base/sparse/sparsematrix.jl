@@ -77,8 +77,8 @@ convenient iterating over a sparse matrix :
 nzrange(S::SparseMatrixCSC, col::Integer) = S.colptr[col]:(S.colptr[col+1]-1)
 
 function Base.show(io::IO, S::SparseMatrixCSC)
-    if get(io, :multiline, false)
-        print(io, S.m, "×", S.n, " sparse matrix with ", nnz(S), " ", eltype(S), " nonzero entries:")
+    if get(io, :multiline, false) || (nnz(S) == 0)
+        print(io, S.m, "×", S.n, " sparse matrix with ", nnz(S), " ", eltype(S), " nonzero entries", nnz(S) == 0 ? "" : ":")
     end
 
     limit::Bool = get(io, :limit, false)
