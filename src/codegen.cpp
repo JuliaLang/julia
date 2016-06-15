@@ -4373,7 +4373,7 @@ static std::unique_ptr<Module> emit_function(jl_lambda_info_t *lam, jl_llvm_func
         for(i=0; i < vinfoslen; i++) {
             jl_sym_t *s = (jl_sym_t*)jl_array_ptr_ref(lam->slotnames,i);
             jl_varinfo_t &varinfo = ctx.slots[i];
-            if (varinfo.isArgument)
+            if (varinfo.isArgument || s == compiler_temp_sym || s == unused_sym)
                 continue;
 #ifdef LLVM38
             varinfo.dinfo = ctx.dbuilder->createAutoVariable(
@@ -4469,7 +4469,7 @@ static std::unique_ptr<Module> emit_function(jl_lambda_info_t *lam, jl_llvm_func
                 if (!varinfo.isArgument) { // otherwise, just leave it in the input register
                     Value *lv = alloc_local(i, &ctx); (void)lv;
 #ifdef LLVM36
-                    if (ctx.debug_enabled) {
+                    if (ctx.debug_enabled && varinfo.dinfo) {
                         assert((Metadata*)varinfo.dinfo->getType() != jl_pvalue_dillvmt);
                         ctx.dbuilder->insertDeclare(lv, varinfo.dinfo, ctx.dbuilder->createExpression(),
 #ifdef LLVM37
@@ -4489,7 +4489,7 @@ static std::unique_ptr<Module> emit_function(jl_lambda_info_t *lam, jl_llvm_func
             AllocaInst *av = new AllocaInst(T_pjlvalue, jl_symbol_name(s), /*InsertBefore*/ctx.ptlsStates);
             varinfo.memloc = av;
 #ifdef LLVM36
-            if (ctx.debug_enabled) {
+            if (ctx.debug_enabled && varinfo.dinfo) {
                 DIExpression *expr;
                 if ((Metadata*)varinfo.dinfo->getType() == jl_pvalue_dillvmt) {
                     expr = ctx.dbuilder->createExpression();
