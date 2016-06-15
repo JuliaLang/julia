@@ -640,6 +640,9 @@ jl_value_t *jl_lookup_match(jl_value_t *a, jl_value_t *b, jl_svec_t **penv, jl_s
 
 unsigned jl_special_vector_alignment(size_t nfields, jl_value_t *field_type);
 
+void register_eh_frames(uint8_t *Addr, size_t Size);
+void deregister_eh_frames(uint8_t *Addr, size_t Size);
+
 STATIC_INLINE void *jl_get_frame_addr(void)
 {
 #ifdef __GNUC__

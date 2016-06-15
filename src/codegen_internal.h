@@ -1,5 +1,11 @@
 // This file is a part of Julia. License is MIT: http://julialang.org/license
 
+#if defined(LLVM38) && !defined(LLVM37)
+#  include <llvm/ExecutionEngine/Orc/ObjectLinkingLayer.h>
+void notifyObjectLoaded(RTDyldMemoryManager *memmgr,
+                        llvm::orc::ObjectLinkingLayerBase::ObjSetHandleT H);
+#endif
+
 // Declarations for disasm.cpp
 extern "C"
 void jl_dump_asm_internal(uintptr_t Fptr, size_t Fsize, int64_t slide,
@@ -28,8 +34,16 @@ extern bool jl_dylib_DI_for_fptr(size_t pointer, const object::ObjectFile **obje
         bool onlySysImg, bool *isSysImg, void **saddr, char **name, char **filename);
 
 #ifdef USE_ORCJIT
-extern JL_DLLEXPORT void ORCNotifyObjectEmitted(JITEventListener *Listener,
-                                      const object::ObjectFile &obj,
-                                      const object::ObjectFile &debugObj,
-                                      const RuntimeDyld::LoadedObjectInfo &L);
+JL_DLLEXPORT void ORCNotifyObjectEmitted(JITEventListener *Listener,
+                                         const object::ObjectFile &obj,
+                                         const object::ObjectFile &debugObj,
+                                         const RuntimeDyld::LoadedObjectInfo &L,
+                                         RTDyldMemoryManager *memmgr);
+#ifdef _OS_WINDOWS_
+void *lookupWriteAddressFor(RTDyldMemoryManager *memmgr, void *rt_addr);
+#endif
+#endif
+
+#ifdef USE_MCJIT
+RTDyldMemoryManager* createRTDyldMemoryManager(void);
 #endif
