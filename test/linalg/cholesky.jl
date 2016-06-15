@@ -25,6 +25,7 @@ for eltya in (Float32, Float64, Complex64, Complex128, BigFloat, Int)
     a = eltya == Int ? rand(1:7, n, n) : convert(Matrix{eltya}, eltya <: Complex ? complex(areal, aimg) : areal)
     a2 = eltya == Int ? rand(1:7, n, n) : convert(Matrix{eltya}, eltya <: Complex ? complex(a2real, a2img) : a2real)
     apd  = a'*a                  # symmetric positive-definite
+    apds = Symmetric(apd)
     ε = εa = eps(abs(float(one(eltya))))
 
     @inferred cholfact(apd)
@@ -57,6 +58,12 @@ for eltya in (Float32, Float64, Complex64, Complex128, BigFloat, Int)
     @test_approx_eq cholfact(apos).factors √apos
     @test_throws ArgumentError chol(-one(eltya))
 
+    if eltya <: Real
+        capds = cholfact(apds)
+        @test_approx_eq inv(capds)*apds eye(n)
+        @test abs((det(capds) - det(apd))/det(capds)) <= ε*κ*n
+    end
+
     # test chol of 2x2 Strang matrix
     S = convert(AbstractMatrix{eltya},full(SymTridiagonal([2,2],[-1])))
     U = Bidiagonal([2,sqrt(eltya(3))],[-1],true) / sqrt(eltya(2))
@@ -69,6 +76,14 @@ for eltya in (Float32, Float64, Complex64, Complex128, BigFloat, Int)
     @test_approx_eq l*l' apd
     @test triu(capd.factors) ≈ lapd[:U]
     @test tril(lapd.factors) ≈ capd[:L]
+    if eltya <: Real
+        capds = cholfact(apds)
+        lapds = cholfact(apds, :L)
+        ls = lapds[:L]
+        @test_approx_eq ls*ls' apd
+        @test triu(capds.factors) ≈ lapds[:U]
+        @test tril(lapds.factors) ≈ capds[:L]
+    end
 
     #pivoted upper Cholesky
     if eltya != BigFloat
@@ -200,3 +215,6 @@ end
 # Fail if non-Hermitian
 @test_throws ArgumentError cholfact(randn(5,5))
 @test_throws ArgumentError cholfact(complex(randn(5,5), randn(5,5)))
+@test_throws ArgumentError Base.LinAlg.chol!(randn(5,5))
+@test_throws ArgumentError Base.LinAlg.cholfact!(randn(5,5),:U,Val{false})
+@test_throws ArgumentError cholfact(randn(5,5),:U,Val{false})

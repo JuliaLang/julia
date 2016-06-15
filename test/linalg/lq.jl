@@ -66,7 +66,11 @@ debug && println("LQ decomposition")
                     @test eye(eltyb,n)*q ≈ convert(AbstractMatrix{tab},q)
                 end
                 @test_approx_eq_eps q*b full(q, thin=false)*b 100ε
+                @test_approx_eq_eps q.'*b full(q, thin=false).'*b 100ε
                 @test_approx_eq_eps q'*b full(q, thin=false)'*b 100ε
+                @test_approx_eq_eps a*q a*full(q, thin=false) 100ε
+                @test_approx_eq_eps a*q.' a*full(q, thin=false).' 100ε
+                @test_approx_eq_eps a*q' a*full(q, thin=false)' 100ε
                 @test_throws DimensionMismatch q*b[1:n1 + 1]
                 @test_throws DimensionMismatch Ac_mul_B(q,ones(eltya,n+2,n+2))
                 @test_throws DimensionMismatch ones(eltyb,n+2,n+2)*q
