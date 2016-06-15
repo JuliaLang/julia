@@ -67,7 +67,6 @@ export
     UniformScaling,
     InsertionSort,
     IntSet,
-    IO,
     IOBuffer,
     IOStream,
     LinSpace,

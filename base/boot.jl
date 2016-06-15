@@ -127,7 +127,7 @@ export
     Signed, Int, Int8, Int16, Int32, Int64, Int128,
     Unsigned, UInt, UInt8, UInt16, UInt32, UInt64, UInt128,
     # string types
-    Char, DirectIndexString, AbstractString, String,
+    Char, DirectIndexString, AbstractString, String, IO,
     # errors
     ErrorException, BoundsError, DivideError, DomainError, Exception, InexactError,
     InterruptException, OutOfMemoryError, ReadOnlyMemoryError, OverflowError,
@@ -325,6 +325,7 @@ Array{T}(::Type{T}, m::Int)               = Array{T,1}(m)
 Array{T}(::Type{T}, m::Int,n::Int)        = Array{T,2}(m,n)
 Array{T}(::Type{T}, m::Int,n::Int,o::Int) = Array{T,3}(m,n,o)
 
+
 # docsystem basics
 macro doc(x...)
     atdoc(x...)
@@ -337,6 +338,41 @@ macro doc_str(s)
 end
 atdoc     = (str, expr) -> Expr(:escape, expr)
 atdoc!(λ) = global atdoc = λ
+
+
+# simple stand-alone print definitions for debugging
+abstract IO
+type CoreSTDOUT <: IO end
+type CoreSTDERR <: IO end
+const STDOUT = CoreSTDOUT()
+const STDERR = CoreSTDERR()
+io_pointer(::CoreSTDOUT) = Intrinsics.pointerref(Intrinsics.cglobal(:jl_uv_stdout, Ptr{Void}), 1)
+io_pointer(::CoreSTDERR) = Intrinsics.pointerref(Intrinsics.cglobal(:jl_uv_stderr, Ptr{Void}), 1)
+
+unsafe_write(io::IO, x::Ptr{UInt8}, nb::UInt) =
+    (ccall(:jl_uv_puts, Void, (Ptr{Void}, Ptr{UInt8}, UInt), io_pointer(io), x, nb); nb)
+unsafe_write(io::IO, x::Ptr{UInt8}, nb::Int) =
+    (ccall(:jl_uv_puts, Void, (Ptr{Void}, Ptr{UInt8}, Int), io_pointer(io), x, nb); nb)
+write(io::IO, x::UInt8) =
+    (ccall(:jl_uv_putb, Void, (Ptr{Void}, UInt8), io_pointer(io), x); 1)
+function write(io::IO, x::String)
+    nb = sizeof(x.data)
+    unsafe_write(io, ccall(:jl_array_ptr, Ptr{UInt8}, (Any,), x.data), nb)
+    return nb
+end
+
+show(io::IO, x::ANY) = ccall(:jl_static_show, Void, (Ptr{Void}, Any), io_pointer(io), x)
+print(io::IO, x::Char) = ccall(:jl_uv_putc, Void, (Ptr{Void}, Char), io_pointer(io), x)
+print(io::IO, x::String) = write(io, x)
+print(io::IO, x::ANY) = show(io, x)
+print(io::IO, x::ANY, a::ANY...) = (print(io, x); print(io, a...))
+println(io::IO) = write(io, 0x0a) # 0x0a = '\n'
+println(io::IO, x::ANY...) = (print(io, x...); println(io))
+
+show(a::ANY) = show(STDOUT, a)
+print(a::ANY...) = print(STDOUT, a...)
+println(a::ANY...) = println(STDOUT, a...)
+
 
 module TopModule
     # this defines the types that lowering expects to be defined in a (top) module

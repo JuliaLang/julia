@@ -472,6 +472,7 @@ void objprofile_printall(void)
 }
 #endif
 
+#if defined(GC_TIME) || defined(GC_FINAL_STATS)
 STATIC_INLINE double jl_ns2ms(int64_t t)
 {
     return t / (double)1e6;
@@ -482,7 +483,6 @@ STATIC_INLINE double jl_ns2s(int64_t t)
     return t / (double)1e9;
 }
 
-#if defined(GC_TIME) || defined(GC_FINAL_STATS)
 static uint64_t gc_premark_end;
 static uint64_t gc_postmark_end;
 void gc_settime_premark_end(void)

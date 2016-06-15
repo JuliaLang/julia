@@ -82,7 +82,7 @@ to be printed before this are routed to the standard C library
 
 In ``sys.c``, the :code:`JL_STD*` stream pointers are statically initialised
 to integer constants: ``STD*_FILENO (0, 1 and 2)``. In ``jl_uv.c`` the
-:c:func:`jl_write` function checks its :code:`uv_stream_t* stream`
+:c:func:`jl_uv_puts` function checks its :code:`uv_stream_t* stream`
 argument and calls :c:func:`fwrite` if stream is set to :c:macro:`STDOUT_FILENO`
 or :c:macro:`STDERR_FILENO`.
 
@@ -118,7 +118,7 @@ to point to :c:type:`ios_t` streams.
 
 This is needed because :c:func:`jl_printf` caller :c:func:`jl_static_show`
 is passed an :code:`ios_t` stream by femtolisp's :c:func:`fl_print` function.
-Julia's :c:func:`jl_write` function has special handling for this::
+Julia's :c:func:`jl_uv_puts` function has special handling for this::
 
     if (stream->type > UV_HANDLE_TYPE_MAX) {
         return ios_write((ios_t*)stream, str, n);
