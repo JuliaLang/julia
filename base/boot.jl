@@ -129,7 +129,7 @@ export
     # string types
     Char, DirectIndexString, AbstractString, String,
     # errors
-    BoundsError, DivideError, DomainError, Exception, InexactError,
+    ErrorException, BoundsError, DivideError, DomainError, Exception, InexactError,
     InterruptException, OutOfMemoryError, ReadOnlyMemoryError, OverflowError,
     StackOverflowError, SegmentationFault, UndefRefError, UndefVarError, TypeError,
     # AST representation
@@ -186,6 +186,10 @@ function Typeof end
 (f::typeof(Typeof))(x::ANY) = isa(x,Type) ? Type{x} : typeof(x)
 
 abstract Exception
+type ErrorException <: Exception
+    msg::AbstractString
+    ErrorException(msg::AbstractString) = new(msg)
+end
 immutable BoundsError        <: Exception
     a::Any
     i::Any

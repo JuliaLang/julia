@@ -1433,7 +1433,6 @@ void visit_mark_stack(void)
 
 void jl_mark_box_caches(void);
 
-extern jl_module_t *jl_old_base_module;
 extern jl_array_t *jl_module_init_order;
 extern jl_typemap_entry_t *call_cache[N_CALL_CACHE];
 
@@ -1442,7 +1441,6 @@ void pre_mark(void)
 {
     // modules
     gc_push_root(jl_main_module, 0);
-    if (jl_old_base_module) gc_push_root(jl_old_base_module, 0);
     gc_push_root(jl_internal_main_module, 0);
 
     size_t i;
