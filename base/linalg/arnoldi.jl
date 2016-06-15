@@ -132,7 +132,14 @@ The following keyword arguments are supported:
 iterations `niter` and the number of matrix vector multiplications `nmult`, as well as the
 final residual vector `resid`.
 
-**note**
+**Example**
+
+```julia
+X = sprand(10, 5, 0.2)
+eigs(X, nsv = 2, tol = 1e-3)
+```
+
+**Note**
 
 The `sigma` and `which` keywords interact: the description of eigenvalues searched for by
 `which` do _not_ necessarily refer to the eigenvalue problem ``Av = Bv\\lambda``, but rather
