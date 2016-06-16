@@ -260,9 +260,16 @@ static int self_mem_fd = -1;
 
 static int init_self_mem()
 {
+#ifdef O_CLOEXEC
     int fd = open("/proc/self/mem", O_RDWR | O_SYNC | O_CLOEXEC);
     if (fd == -1)
         return -1;
+#else
+    int fd = open("/proc/self/mem", O_RDWR | O_SYNC);
+    if (fd == -1)
+        return -1;
+    fcntl(fd, F_SETFD, FD_CLOEXEC);
+#endif
     // buffer to check if write works;
     volatile uint64_t buff = 0;
     uint64_t v = 0x12345678;
