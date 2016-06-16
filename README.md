@@ -137,6 +137,8 @@ Currently, the `@compat` macro supports the following syntaxes:
 
 * `walkdir`, returns an iterator that walks the directory tree of a directory. ([#13707](https://github.com/JuliaLang/julia/pull/13707))
 
+* `allunique`, checks whether all elements in an iterable appear only once ([#15914](https://github.com/JuliaLang/julia/pull/15914)).
+
 ## Renamed functions
 
 * `pointer_to_array` and `pointer_to_string` have been replaced with `unsafe_wrap(Array, ...)` and `unsafe_wrap(String, ...)` respectively.

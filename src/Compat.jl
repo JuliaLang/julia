@@ -1291,4 +1291,9 @@ if VERSION < v"0.5.0-dev+4612"
     unsafe_string(p::Ptr{UInt8}, len) = bytestring(p, len)
 end
 
+if !isdefined(Base, :allunique)
+    allunique(itr) = length(itr) == length(unique(itr))
+    export allunique
+end
+
 end # module

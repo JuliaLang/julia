@@ -1225,3 +1225,9 @@ let
     x = [1, 2]
     @test unsafe_wrap(Array, pointer(x), 2) == [1, 2]
 end
+
+@test allunique([1, 2, 3])
+@test !allunique([1, 2, 1])
+@test allunique(1:3)
+@test allunique(FloatRange(0.0, 0.0, 0.0, 1.0))
+@test !allunique(FloatRange(0.0, 0.0, 2.0, 1.0))
