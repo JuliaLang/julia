@@ -3823,6 +3823,27 @@ let ary = Vector{Any}(10)
         ccall(:jl_array_grow_beg, Void, (Any, Csize_t), ary, 4)
         check_undef_and_fill(ary, 1:(2n + 4))
     end
+
+    ary = Vector{Any}(100)
+    ccall(:jl_array_grow_end, Void, (Any, Csize_t), ary, 10000)
+    ary[:] = 1:length(ary)
+    ccall(:jl_array_del_beg, Void, (Any, Csize_t), ary, 10000)
+    # grow on the back until a buffer reallocation happens
+    cur_ptr = pointer(ary)
+    while cur_ptr == pointer(ary)
+        len = length(ary)
+        ccall(:jl_array_grow_end, Void, (Any, Csize_t), ary, 10)
+        for i in (len + 1):(len + 10)
+            @test !isdefined(ary, i)
+        end
+    end
+
+    ary = Vector{Any}(100)
+    ary[:] = 1:length(ary)
+    ccall(:jl_array_grow_at, Void, (Any, Csize_t, Csize_t), ary, 50, 10)
+    for i in 51:60
+        @test !isdefined(ary, i)
+    end
 end
 
 # check if we can run multiple finalizers at the same time
@@ -3888,6 +3909,46 @@ let
     arrayset_unknown_dim(Int, 1)
     arrayset_unknown_dim(Int, 2)
     arrayset_unknown_dim(Int, 3)
+end
+
+module TestSharedArrayResize
+using Base.Test
+# Attempting to change the shape of a shared array should unshare it and
+# not modify the original data
+function test_shared_array_resize{T}(::Type{T})
+    len = 100
+    a = Vector{T}(len)
+    function test_unshare(f)
+        a′ = reshape(reshape(a, (len ÷ 2, 2)), len)
+        a[:] = 1:length(a)
+        # The operation should fail on the owner shared array
+        # and has no side effect.
+        @test_throws ErrorException f(a)
+        @test a == [1:len;]
+        @test a′ == [1:len;]
+        @test pointer(a) == pointer(a′)
+        # The operation should pass on the non-owner shared array
+        # and should unshare the arrays with no effect on the original one.
+        f(a′)
+        @test a == [1:len;]
+        @test pointer(a) != pointer(a′)
+    end
+
+    test_unshare(a->ccall(:jl_array_del_end, Void, (Any, Csize_t), a, 0))
+    test_unshare(a->ccall(:jl_array_del_end, Void, (Any, Csize_t), a, 1))
+    test_unshare(a->ccall(:jl_array_del_beg, Void, (Any, Csize_t), a, 0))
+    test_unshare(a->ccall(:jl_array_del_beg, Void, (Any, Csize_t), a, 1))
+    test_unshare(a->deleteat!(a, 10))
+    test_unshare(a->deleteat!(a, 90))
+    test_unshare(a->ccall(:jl_array_grow_end, Void, (Any, Csize_t), a, 0))
+    test_unshare(a->ccall(:jl_array_grow_end, Void, (Any, Csize_t), a, 1))
+    test_unshare(a->ccall(:jl_array_grow_beg, Void, (Any, Csize_t), a, 0))
+    test_unshare(a->ccall(:jl_array_grow_beg, Void, (Any, Csize_t), a, 1))
+    test_unshare(a->insert!(a, 10, 10))
+    test_unshare(a->insert!(a, 90, 90))
+end
+test_shared_array_resize(Int)
+test_shared_array_resize(Any)
 end
 
 module TestArrayNUL
