@@ -975,6 +975,23 @@ function vcat{T}(arrays::Vector{T}...)
     return arr
 end
 
+hcat(A::Matrix...) = typed_hcat(Array{promote_eltype(A...)}, A...)
+hcat{T}(A::Matrix{T}...) = typed_hcat(Array{T}, A...)
+
+vcat(A::Matrix...) = typed_vcat(Array{promote_eltype(A...)}, A...)
+vcat{T}(A::Matrix{T}...) = typed_vcat(Array{T}, A...)
+
+hcat(A::Union{Matrix, Vector}...) = typed_hcat(Array{promote_eltype(A...)}, A...)
+hcat{T}(A::Union{Matrix{T}, Vector{T}}...) = typed_hcat(Array{T}, A...)
+
+vcat(A::Union{Matrix, Vector}...) = typed_vcat(Array{promote_eltype(A...)}, A...)
+vcat{T}(A::Union{Matrix{T}, Vector{T}}...) = typed_vcat(Array{T}, A...)
+
+hvcat(rows::Tuple{Vararg{Int}}, xs::Vector...) = typed_hvcat(Array{promote_eltype(xs...)}, rows, xs...)
+hvcat{T}(rows::Tuple{Vararg{Int}}, xs::Vector{T}...) = typed_hvcat(Array{T}, rows, xs...)
+
+hvcat(rows::Tuple{Vararg{Int}}, xs::Matrix...) = typed_hvcat(Array{promote_eltype(xs...)}, rows, xs...)
+hvcat{T}(rows::Tuple{Vararg{Int}}, xs::Matrix{T}...) = typed_hvcat(Array{T}, rows, xs...)
 
 ## find ##
 
