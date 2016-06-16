@@ -2,13 +2,13 @@
 
 module Libc
 
+import Base: transcode
+
 export FILE, TmStruct, strftime, strptime, getpid, gethostname, free, malloc, calloc, realloc,
-    errno, strerror, flush_cstdio, systemsleep, time
+    errno, strerror, flush_cstdio, systemsleep, time, transcode
 if is_windows()
     export GetLastError, FormatMessage
 end
-
-import Base: utf16to8
 
 include(string(length(Core.ARGS)>=2?Core.ARGS[2]:"","errno_h.jl"))  # include($BUILDROOT/base/errno_h.jl)
 
@@ -277,7 +277,7 @@ if is_windows()
         buf = Array{UInt16}(len)
         unsafe_copy!(pointer(buf), p, len)
         ccall(:LocalFree,stdcall,Ptr{Void},(Ptr{Void},),p)
-        return String(utf16to8(buf))
+        return String(transcode(UInt8, buf))
     end
 end
 
