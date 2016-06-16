@@ -209,11 +209,14 @@ static jl_value_t *eval(jl_value_t *e, interpreter_state *s)
         ssize_t n = jl_unbox_long(args[0]);
         assert(n > 0);
         if (s->sparam_vals)
-            return jl_svecref(s->sparam_vals, n-1);
+            return jl_svecref(s->sparam_vals, n - 1);
+        if (n <= jl_svec_len(lam->sparam_vals)) {
+            jl_value_t *sp = jl_svecref(lam->sparam_vals, n - 1);
+            if (!jl_is_typevar(sp))
+                return sp;
+        }
         // static parameter val unknown needs to be an error for ccall
-        if (n > jl_svec_len(lam->sparam_vals))
-            jl_error("could not determine static parameter value");
-        return jl_svecref(lam->sparam_vals, n-1);
+        jl_error("could not determine static parameter value");
     }
     else if (ex->head == inert_sym) {
         return args[0];

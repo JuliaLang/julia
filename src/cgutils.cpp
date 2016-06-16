@@ -956,6 +956,8 @@ static jl_value_t *expr_type(jl_value_t *e, jl_codectx_t *ctx)
             if (idx >= jl_svec_len(ctx->linfo->sparam_vals))
                 return (jl_value_t*)jl_any_type;
             e = jl_svecref(ctx->linfo->sparam_vals, idx);
+            if (jl_is_typevar(e))
+                return (jl_value_t*)jl_any_type;
             goto type_of_constant;
         }
         jl_value_t *typ = ((jl_expr_t*)e)->etype;
