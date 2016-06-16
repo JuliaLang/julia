@@ -75,18 +75,16 @@ type InferenceState
     inferred::Bool
     tfunc_bp::Union{TypeMapEntry, Void}
 
-    function InferenceState(linfo::LambdaInfo, atypes::ANY, sparams::SimpleVector, optimize::Bool)
+    function InferenceState(linfo::LambdaInfo, optimize::Bool)
         @assert isa(linfo.code,Array{Any,1})
         linfo.inInference = true
         nslots = length(linfo.slotnames)
         nl = label_counter(linfo.code)+1
 
-        if length(linfo.sparam_vals) > 0
-            sp = linfo.sparam_vals
-        elseif isempty(sparams) && !isempty(linfo.sparam_syms)
+        if isempty(linfo.sparam_vals) && !isempty(linfo.sparam_syms)
             sp = svec(Any[ TypeVar(sym, Any, true) for sym in linfo.sparam_syms ]...)
         else
-            sp = sparams
+            sp = linfo.sparam_vals
         end
 
         if !isa(linfo.slottypes, Array)
@@ -101,6 +99,7 @@ type InferenceState
         # initial types
         s[1] = Any[ VarState(Bottom,true) for i=1:nslots ]
 
+        atypes = linfo.specTypes
         la = linfo.nargs
         if la > 0
             if linfo.isva
@@ -1510,7 +1509,7 @@ function typeinf_edge(method::Method, atypes::ANY, sparams::SimpleVector, needtr
             linfo = specialize_method(method, atypes, sparams)
         end
         # our stack frame inference context
-        frame = InferenceState(unshare_linfo!(linfo::LambdaInfo), atypes, sparams, optimize)
+        frame = InferenceState(unshare_linfo!(linfo::LambdaInfo), optimize)
         if cached
             frame.tfunc_bp = ccall(:jl_specializations_insert, Ref{TypeMapEntry}, (Any, Any, Any), method, atypes, linfo)
         end
@@ -1554,7 +1553,7 @@ end
 function typeinf_ext(linfo::LambdaInfo)
     if isdefined(linfo, :def)
         # method lambda - infer this specialization via the method cache
-        (code, _t, _) = typeinf_edge(linfo.def, linfo.specTypes, svec(), true, true, true, linfo)
+        (code, _t, _) = typeinf_edge(linfo.def, linfo.specTypes, linfo.sparam_vals, true, true, true, linfo)
         if code.inferred
             linfo.inferred = true
             linfo.inInference = false
@@ -1570,7 +1569,7 @@ function typeinf_ext(linfo::LambdaInfo)
         end
     else
         # toplevel lambda - infer directly
-        frame = InferenceState(linfo, linfo.specTypes, svec(), true)
+        frame = InferenceState(linfo, true)
         typeinf_loop(frame)
         @assert frame.inferred # TODO: deal with this better
     end
