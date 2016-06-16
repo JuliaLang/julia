@@ -1,5 +1,6 @@
 // This file is a part of Julia. License is MIT: http://julialang.org/license
 
+#include <iostream>
 #include <llvm/ExecutionEngine/SectionMemoryManager.h>
 
 // Except for parts of this file which were copied from LLVM, under the UIUC license (marked below).
@@ -398,9 +399,15 @@ public:
             if (F->isDeclaration()) {
                 if (F->use_empty())
                     F->eraseFromParent();
-                else
-                    assert(F->isIntrinsic() || findUnmangledSymbol(F->getName()) ||
-                            SectionMemoryManager::getSymbolAddressInProcess(F->getName()));
+                else if (!(F->isIntrinsic() ||
+                           findUnmangledSymbol(F->getName()) ||
+                           SectionMemoryManager::getSymbolAddressInProcess(
+                               F->getName()))) {
+                    std::cerr << "FATAL ERROR: "
+                              << "Symbol \"" << F->getName().str() << "\""
+                              << "not found";
+                    abort();
+                }
             }
         }
 #endif

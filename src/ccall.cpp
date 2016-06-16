@@ -528,6 +528,8 @@ public:
 
         SmallVector<ReturnInst*, 8> Returns;
         llvm::CloneFunctionInto(NewF,F,VMap,true,Returns,"",NULL,NULL,this);
+        NewF->setComdat(nullptr);
+        NewF->setSection("");
     }
 
     Function *CloneFunction(Function *F)
@@ -552,6 +554,7 @@ public:
         Function *NewF = destModule->getFunction(F->getName());
         if (!NewF) {
             NewF = function_proto(F);
+            NewF->setComdat(nullptr);
             destModule->getFunctionList().push_back(NewF);
         }
         return NewF;
@@ -609,6 +612,7 @@ public:
                 NULL,
                 GV->getName());
             newGV->copyAttributesFrom(GV);
+            newGV->setComdat(nullptr);
             if (GV->isDeclaration())
                 return newGV;
             if (!GV->getName().empty()) {
