@@ -48,7 +48,7 @@ if Base.fftw_vendor() != :mkl
     X = reshape([1,2,7,2,1,5,9,-1,3,4,6,9],3,4)
     Y = rand(17,14)
     Y[3:5,9:12] = X
-    sX = slice(Y,3:5,9:12)
+    sX = view(Y,3:5,9:12)
 
     true_Xdct = [  13.856406460551018  -3.863239728836245   2.886751345948129  -0.274551994240164; -2.828427124746190  -2.184015211898548  -4.949747468305834   3.966116180118245; 4.898979485566356  -0.194137576915510  -2.857738033247041   2.731723009609389 ]
 
@@ -87,8 +87,8 @@ if Base.fftw_vendor() != :mkl
 
     sXdct = dct(sX)
     psXdct = plan_dct(sX)*(sX)
-    sYdct! = copy(Y); sXdct! = slice(sYdct!,3:5,9:12); dct!(sXdct!)
-    psYdct! = copy(Y); psXdct! = slice(psYdct!,3:5,9:12); plan_dct!(psXdct!)*(psXdct!)
+    sYdct! = copy(Y); sXdct! = view(sYdct!,3:5,9:12); dct!(sXdct!)
+    psYdct! = copy(Y); psXdct! = view(psYdct!,3:5,9:12); plan_dct!(psXdct!)*(psXdct!)
 
     for i = 1:length(X)
         @test_approx_eq Xdct[i] true_Xdct[i]

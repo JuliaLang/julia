@@ -2061,7 +2061,7 @@ function issue7897!(data, arr)
 end
 
 a = ones(UInt8, 10)
-sa = sub(a,4:6)
+sa = view(a,4:6)
 # This can throw an error, but shouldn't segfault
 try
     issue7897!(sa, zeros(10))

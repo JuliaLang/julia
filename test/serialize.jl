@@ -227,9 +227,9 @@ end
 
 # SubArray
 create_serialization_stream() do s # slices
-    slc1 = slice(ones(UInt8, 4), 2:3)
+    slc1 = view(ones(UInt8, 4), 2:3)
     serialize(s, slc1)
-    slc2 = slice(ones(UInt8, 4, 4) .+ [0x00, 0x01, 0x02, 0x03], 1, 2:4)
+    slc2 = view(ones(UInt8, 4, 4) .+ [0x00, 0x01, 0x02, 0x03], 1, 2:4)
     serialize(s, slc2)
 
     seek(s, 0)
@@ -251,7 +251,7 @@ Base.getindex(A::ArrayWrapper, i::Real...) = getindex(A.data, i...)
 end
 
 let A = rand(3,4)
-    for B in (sub(A, :, 2:4), slice(A, 2, 1:3))
+    for B in (view(A, :, 2:4), view(A, 2, 1:3))
         C = ArrayWrappers.ArrayWrapper(B)
         io = IOBuffer()
         serialize(io, C)

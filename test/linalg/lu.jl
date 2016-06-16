@@ -60,8 +60,8 @@ debug && println("(Automatic) Square LU decomposition")
                     b = Bs
                     c = Cs
                 else
-                    b = sub(Bs, 1:n, 1)
-                    c = sub(Cs, 1:n)
+                    b = view(Bs, 1:n, 1)
+                    c = view(Cs, 1:n)
                 end
                 @test norm(a*(lua\b) - b, 1) < ε*κ*n*2 # Two because the right hand side has two columns
                 @test norm(a'*(lua'\b) - b, 1) < ε*κ*n*2 # Two because the right hand side has two columns
@@ -97,7 +97,7 @@ debug && println("Tridiagonal LU")
                 if atype == "Array"
                     b = Bs
                 else
-                    b = sub(Bs, 1:n, 1)
+                    b = view(Bs, 1:n, 1)
                 end
 
                 @test norm(d*(lud\b) - b, 1) < ε*κd*n*2 # Two because the right hand side has two columns
@@ -157,7 +157,7 @@ let Bs = b
         if atype == "Array"
             b = Bs
         else
-            b = sub(Bs, 1:n, 1)
+            b = view(Bs, 1:n, 1)
         end
         @test a*(lua\b) ≈ b
     end
