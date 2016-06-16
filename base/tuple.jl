@@ -41,7 +41,7 @@ first(t::Tuple) = t[1]
 # eltype
 
 eltype(::Type{Tuple{}}) = Bottom
-eltype{T,_}(::Type{NTuple{_,T}}) = T
+eltype{T}(::Type{Tuple{Vararg{T}}}) = T
 
 # front (the converse of tail: it skips the last entry)
 

@@ -873,16 +873,19 @@ function precise_container_types(args, types, vtypes::VarTable, sv)
         ai = args[i]
         ti = types[i]
         tti = widenconst(ti)
-        if isa(ai,Expr) && ai.head === :call && (abstract_evals_to_constant(ai.args[1], svec, vtypes, sv) ||
-                                                 abstract_evals_to_constant(ai.args[1], tuple, vtypes, sv))
+        if isa(tti, TypeConstructor)
+            tti = tti.body
+        end
+        if isa(ai, Expr) && ai.head === :call && (abstract_evals_to_constant(ai.args[1], svec, vtypes, sv) ||
+                                                  abstract_evals_to_constant(ai.args[1], tuple, vtypes, sv))
             aa = ai.args
             result[i] = Any[ (isa(aa[j],Expr) ? aa[j].typ : abstract_eval(aa[j],vtypes,sv)) for j=2:length(aa) ]
             if _any(isvarargtype, result[i])
                 return nothing
             end
-        elseif isa(ti, Union)
+        elseif isa(tti, Union)
             return nothing
-        elseif ti ⊑ Tuple
+        elseif tti <: Tuple
             if i == n
                 if isvatuple(tti) && length(tti.parameters) == 1
                     result[i] = Any[Vararg{tti.parameters[1].parameters[1]}]
@@ -894,7 +897,7 @@ function precise_container_types(args, types, vtypes::VarTable, sv)
             else
                 return nothing
             end
-        elseif ti⊑AbstractArray && i==n
+        elseif tti <: AbstractArray && i == n
             result[i] = Any[Vararg{eltype(tti)}]
         else
             return nothing
@@ -1264,7 +1267,7 @@ function tmerge(typea::ANY, typeb::ANY)
     typea, typeb = widenconst(typea), widenconst(typeb)
     typea === typeb && return typea
     if (typea <: Tuple) && (typeb <: Tuple)
-        if length(typea.parameters) == length(typeb.parameters) && !isvatuple(typea) && !isvatuple(typeb)
+        if isa(typea, DataType) && isa(typeb, DataType) && length(typea.parameters) == length(typeb.parameters) && !isvatuple(typea) && !isvatuple(typeb)
             return typejoin(typea, typeb)
         end
         return Tuple
