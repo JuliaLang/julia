@@ -791,6 +791,46 @@ JL_DLLEXPORT jl_value_t *(jl_array_data_owner)(jl_array_t *a)
     return jl_array_data_owner(a);
 }
 
+STATIC_INLINE int jl_has_implicit_byte_owned(jl_array_t *a)
+{
+    assert(a->flags.how != 3);
+    if (!a->flags.isshared)
+        return 1;
+    return a->flags.how == 1;
+}
+
+STATIC_INLINE int jl_has_implicit_byte(jl_array_t *a)
+{
+    // * unshared:
+    //   * how: 0-2
+    //     We own and allocated the data.
+    //     It should have the extra byte.
+    // * shared:
+    //   * how: 0, 2
+    //     The data might come from external source without implicit NUL byte.
+    //     There could be an entra byte for a `reinterpreted` array
+    //     but that should be unlikely for strings.
+    //   * how: 1
+    //     We allocated the data with the extra byte.
+    //   * how: 3
+    //     We should check the owner.
+    if (a->flags.how == 3) {
+        a = (jl_array_t*)jl_array_data_owner(a);
+        return a->elsize == 1 && jl_has_implicit_byte_owned(a);
+    }
+    return jl_has_implicit_byte_owned(a);
+}
+
+// Create an array with the same content
+JL_DLLEXPORT jl_array_t *jl_array_cconvert_cstring(jl_array_t *a)
+{
+    assert(jl_typeof(a) == jl_array_uint8_type);
+    if (!jl_has_implicit_byte(a))
+        a = jl_array_copy(a);
+    ((char*)a->data)[a->nrows] = 0;
+    return a;
+}
+
 #ifdef __cplusplus
 }
 #endif

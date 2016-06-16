@@ -551,28 +551,30 @@ JL_DLLEXPORT jl_value_t *jl_toplevel_eval(jl_value_t *v)
     return jl_toplevel_eval_flex(v, 1, 0);
 }
 
-JL_DLLEXPORT jl_value_t *jl_load(const char *fname, size_t len)
+JL_DLLEXPORT jl_value_t *jl_load(const char *fname)
 {
-    if (NULL != memchr(fname, 0, len))
-        jl_exceptionf(jl_argumenterror_type, "file name may not contain \\0");
     if (jl_current_module->istopmod) {
         jl_printf(JL_STDOUT, "%s\r\n", fname);
 #ifdef _OS_WINDOWS_
         uv_run(uv_default_loop(), (uv_run_mode)1);
 #endif
     }
-    char *fpath = (char*)fname;
     uv_stat_t stbuf;
-    if (jl_stat(fpath, (char*)&stbuf) != 0 || (stbuf.st_mode & S_IFMT) != S_IFREG) {
-        jl_errorf("could not open file %s", fpath);
+    if (jl_stat(fname, (char*)&stbuf) != 0 || (stbuf.st_mode & S_IFMT) != S_IFREG) {
+        jl_errorf("could not open file %s", fname);
     }
-    return jl_parse_eval_all(fpath, len, NULL, 0);
+    return jl_parse_eval_all(fname, NULL, 0);
 }
 
 // load from filename given as a String object
 JL_DLLEXPORT jl_value_t *jl_load_(jl_value_t *str)
 {
-    return jl_load(jl_string_data(str), jl_string_len(str));
+    jl_array_t *ary =
+        jl_array_cconvert_cstring((jl_array_t*)(jl_data_ptr(str)[0]));
+    JL_GC_PUSH1(&ary);
+    jl_value_t *res = jl_load((const char*)ary->data);
+    JL_GC_POP();
+    return res;
 }
 
 // method definition ----------------------------------------------------------

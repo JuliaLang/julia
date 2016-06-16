@@ -487,7 +487,7 @@ static int exec_program(char *program)
             JL_EH_POP();
             return 1;
         }
-        jl_load(program, strlen(program));
+        jl_load(program);
     }
     JL_CATCH {
         err = 1;
