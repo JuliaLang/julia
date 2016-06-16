@@ -41,27 +41,28 @@ macro generated(f)
     end
 end
 
+argtail(x, rest...) = rest
+tail(x::Tuple) = argtail(x...)
 
-tuple_type_head(::Type{Union{}}) = throw(MethodError(tuple_type_head, (Union{},)))
-function tuple_type_head{T<:Tuple}(::Type{T})
+tuple_type_head(T::TypeConstructor) = tuple_type_head(T.body)
+function tuple_type_head(T::DataType)
     @_pure_meta
-    T.parameters[1]
+    T.name === Tuple.name || throw(MethodError(tuple_type_head, (T,)))
+    return T.parameters[1]
 end
-
-isvarargtype(t::ANY) = isa(t,DataType)&&is((t::DataType).name,Vararg.name)
-isvatuple(t::DataType) = (n = length(t.parameters); n > 0 && isvarargtype(t.parameters[n]))
-unwrapva(t::ANY) = isvarargtype(t) ? t.parameters[1] : t
-
-function tuple_type_tail{T<:Tuple}(::Type{T})
+tuple_type_tail(T::TypeConstructor) = tuple_type_tail(T.body)
+function tuple_type_tail(T::DataType)
     @_pure_meta
+    T.name === Tuple.name || throw(MethodError(tuple_type_tail, (T,)))
     if isvatuple(T) && length(T.parameters) == 1
         return T
     end
-    Tuple{argtail(T.parameters...)...}
+    return Tuple{argtail(T.parameters...)...}
 end
 
-argtail(x, rest...) = rest
-tail(x::Tuple) = argtail(x...)
+isvarargtype(t::ANY) = isa(t, DataType) && is((t::DataType).name, Vararg.name)
+isvatuple(t::DataType) = (n = length(t.parameters); n > 0 && isvarargtype(t.parameters[n]))
+unwrapva(t::ANY) = isvarargtype(t) ? t.parameters[1] : t
 
 convert{T<:Tuple{Any,Vararg{Any}}}(::Type{T}, x::Tuple{Any, Vararg{Any}}) =
     tuple(convert(tuple_type_head(T),x[1]), convert(tuple_type_tail(T), tail(x))...)

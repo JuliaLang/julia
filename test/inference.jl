@@ -252,3 +252,9 @@ end
 let g() = Int <: Real ? 1 : ""
     @test Base.return_types(g, Tuple{}) == [Int]
 end
+
+typealias NInt{N} Tuple{Vararg{Int, N}}
+@test Base.eltype(NInt) === Int
+fNInt(x::NInt) = (x...)
+gNInt() = fNInt(x)
+@test Base.return_types(gNInt, ()) == Any[NInt]
