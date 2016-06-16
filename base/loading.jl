@@ -60,7 +60,7 @@ elseif is_apple()
                 continue
             end
             casepreserved_basename =
-              sub(buf, (header_size+1):(header_size+filename_length-1))
+              view(buf, (header_size+1):(header_size+filename_length-1))
             break
         end
         # Hack to compensate for inability to create a string from a subarray with no allocations.

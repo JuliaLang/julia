@@ -85,51 +85,25 @@ parentindexes(a::AbstractArray) = ntuple(i->1:size(a,i), ndims(a))
 
 ## SubArray creation
 # Drops singleton dimensions (those indexed with a scalar)
-function slice{T,N}(A::AbstractArray{T,N}, I::Vararg{ViewIndex,N})
+function view{T,N}(A::AbstractArray{T,N}, I::Vararg{ViewIndex,N})
     @_inline_meta
     @boundscheck checkbounds(A, I...)
-    unsafe_slice(A, I...)
+    unsafe_view(A, I...)
 end
-function slice(A::AbstractArray, i::ViewIndex)
+function view(A::AbstractArray, i::ViewIndex)
     @_inline_meta
     @boundscheck checkbounds(A, i)
-    unsafe_slice(reshape(A, Val{1}), i)
+    unsafe_view(reshape(A, Val{1}), i)
 end
-function slice{N}(A::AbstractArray, I::Vararg{ViewIndex,N}) # TODO: DEPRECATE FOR #14770
+function view{N}(A::AbstractArray, I::Vararg{ViewIndex,N}) # TODO: DEPRECATE FOR #14770
     @_inline_meta
     @boundscheck checkbounds(A, I...)
-    unsafe_slice(reshape(A, Val{N}), I...)
+    unsafe_view(reshape(A, Val{N}), I...)
 end
-function unsafe_slice{T,N}(A::AbstractArray{T,N}, I::Vararg{ViewIndex,N})
+function unsafe_view{T,N}(A::AbstractArray{T,N}, I::Vararg{ViewIndex,N})
     @_inline_meta
     J = to_indexes(I...)
     SubArray(A, J, map(dimlength, index_shape(A, J...)))
-end
-
-keep_leading_scalars(T::Tuple{}) = T
-keep_leading_scalars(T::Tuple{Real, Vararg{Real}}) = T
-keep_leading_scalars(T::Tuple{Real, Vararg{Any}}) = (@_inline_meta; (NoSlice(T[1]), keep_leading_scalars(tail(T))...))
-keep_leading_scalars(T::Tuple{Any, Vararg{Any}}) = (@_inline_meta; (T[1], keep_leading_scalars(tail(T))...))
-
-function sub{T,N}(A::AbstractArray{T,N}, I::Vararg{ViewIndex,N})
-    @_inline_meta
-    @boundscheck checkbounds(A, I...)
-    unsafe_sub(A, I...)
-end
-function sub(A::AbstractArray, i::ViewIndex)
-    @_inline_meta
-    @boundscheck checkbounds(A, i)
-    unsafe_sub(reshape(A, Val{1}), i)
-end
-function sub{N}(A::AbstractArray, I::Vararg{ViewIndex,N}) # TODO: DEPRECATE FOR #14770
-    @_inline_meta
-    @boundscheck checkbounds(A, I...)
-    unsafe_sub(reshape(A, Val{N}), I...)
-end
-function unsafe_sub{T,N}(A::AbstractArray{T,N}, I::Vararg{ViewIndex,N})
-    @_inline_meta
-    J = keep_leading_scalars(to_indexes(I...))
-    SubArray(A, J, index_shape(A, J...))
 end
 
 # Re-indexing is the heart of a view, transforming A[i, j][x, y] to A[i[x], j[y]]
@@ -216,15 +190,9 @@ function setindex!(V::FastContiguousSubArray, x, i::Real)
     V
 end
 
-function unsafe_slice{T,N}(V::SubArray{T,N}, I::Vararg{ViewIndex,N})
+function unsafe_view{T,N}(V::SubArray{T,N}, I::Vararg{ViewIndex,N})
     @_inline_meta
     idxs = reindex(V, V.indexes, to_indexes(I...))
-    SubArray(V.parent, idxs, index_shape(V.parent, idxs...))
-end
-
-function unsafe_sub{T,N}(V::SubArray{T,N}, I::Vararg{ViewIndex,N})
-    @_inline_meta
-    idxs = reindex(V, V.indexes, keep_leading_scalars(to_indexes(I...)))
     SubArray(V.parent, idxs, index_shape(V.parent, idxs...))
 end
 

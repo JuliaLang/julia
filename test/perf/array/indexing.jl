@@ -167,7 +167,7 @@ function makearrays{T}(::Type{T}, sz)
     Astrd1 = ArrayStrides1(A)
     outersz = (sz[1]+1,sz[2]+2)
     B = reshape(convert(Vector{T}, [1:prod(outersz);]), outersz)
-    Asub = sub(B, 1:sz[1], 2:sz[2]+1)
+    Asub = view(B, 1:sz[1], 2:sz[2]+1)
     Bit = trues(sz)
     (A, AF, AS, ASS, Asub, Bit,)
 end

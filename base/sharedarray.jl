@@ -327,7 +327,7 @@ function range_1dim(S::SharedArray, pidx)
     end
 end
 
-sub_1dim(S::SharedArray, pidx) = sub(S.s, range_1dim(S, pidx))
+sub_1dim(S::SharedArray, pidx) = view(S.s, range_1dim(S, pidx))
 
 function init_loc_flds{T,N}(S::SharedArray{T,N})
     if myid() in S.pids
@@ -342,7 +342,7 @@ function init_loc_flds{T,N}(S::SharedArray{T,N})
         S.loc_subarr_1d = sub_1dim(S, S.pidx)
     else
         S.pidx = 0
-        S.loc_subarr_1d = sub(Array{T}(ntuple(d->0,N)), 1:0)
+        S.loc_subarr_1d = view(Array{T}(ntuple(d->0,N)), 1:0)
     end
 end
 

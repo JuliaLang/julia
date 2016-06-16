@@ -28,8 +28,8 @@ for eltya in (Float32, Float64, Complex64, Complex128, Int)
             a = aa
             a2 = aa2
         else
-            a = sub(aa, 1:n, 1:n)
-            a2 = sub(aa2, 1:n, 1:n)
+            a = view(aa, 1:n, 1:n)
+            a2 = view(aa2, 1:n, 1:n)
         end
         ε = εa = eps(abs(float(one(eltya))))
 

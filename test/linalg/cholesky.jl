@@ -116,7 +116,7 @@ debug && println("\ntype of a: ", eltya, " type of b: ", eltyb, "\n")
                 if atype == "Array"
                     b = Bs
                 else
-                    b = sub(Bs, 1:n, 1)
+                    b = view(Bs, 1:n, 1)
                 end
 
                 # Test error bound on linear solver: LAWNS 14, Theorem 2.1

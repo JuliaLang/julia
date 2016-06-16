@@ -43,8 +43,8 @@ let AA = randn(2, 2)
                 A = AA
                 S = SS
             else
-                A = sub(AA, 1:2, 1:2)
-                S = sub(SS, 1:3, 1:3)
+                A = view(AA, 1:2, 1:2)
+                S = view(SS, 1:3, 1:3)
             end
 
             @test A + I == A + eye(A)
@@ -74,7 +74,7 @@ let AA = randn(2, 2)
             if atype == "Array"
                 T = LowerTriangular(randn(3,3))
             else
-                T = LowerTriangular(sub(randn(3,3), 1:3, 1:3))
+                T = LowerTriangular(view(randn(3,3), 1:3, 1:3))
             end
             @test T + J == full(T) + J
             @test J + T == J + full(T)
@@ -85,7 +85,7 @@ let AA = randn(2, 2)
             if atype == "Array"
                 T = LinAlg.UnitLowerTriangular(randn(3,3))
             else
-                T = LinAlg.UnitLowerTriangular(sub(randn(3,3), 1:3, 1:3))
+                T = LinAlg.UnitLowerTriangular(view(randn(3,3), 1:3, 1:3))
             end
             @test T + J == full(T) + J
             @test J + T == J + full(T)
@@ -96,7 +96,7 @@ let AA = randn(2, 2)
             if atype == "Array"
                 T = UpperTriangular(randn(3,3))
             else
-                T = UpperTriangular(sub(randn(3,3), 1:3, 1:3))
+                T = UpperTriangular(view(randn(3,3), 1:3, 1:3))
             end
             @test T + J == full(T) + J
             @test J + T == J + full(T)
@@ -107,7 +107,7 @@ let AA = randn(2, 2)
             if atype == "Array"
                 T = LinAlg.UnitUpperTriangular(randn(3,3))
             else
-                T = LinAlg.UnitUpperTriangular(sub(randn(3,3), 1:3, 1:3))
+                T = LinAlg.UnitUpperTriangular(view(randn(3,3), 1:3, 1:3))
             end
             @test T + J == full(T) + J
             @test J + T == J + full(T)

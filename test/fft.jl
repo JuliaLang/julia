@@ -29,7 +29,7 @@ true_fftd2_m4 = [
 
 b = rand(17,14)
 b[3:6,9:12] = m4
-sm4 = slice(b,3:6,9:12)
+sm4 = view(b,3:6,9:12)
 
 m3d = map(Float32,copy(reshape(1:5*3*2, 5, 3, 2)))
 true_fftd3_m3d = Array{Float32}(5, 3, 2)
@@ -78,9 +78,9 @@ for (f,fi,pf,pfi) in ((fft,ifft,plan_fft,plan_ifft),
     sfftn_m4 = f(sm4)
     psfftn_m4 = pf(sm4)*sm4
     sfft!n_b = map(Complex128,b)
-    sfft!n_m4 = slice(sfft!n_b,3:6,9:12); fft!(sfft!n_m4)
+    sfft!n_m4 = view(sfft!n_b,3:6,9:12); fft!(sfft!n_m4)
     psfft!n_b = map(Complex128,b)
-    psfft!n_m4 = slice(psfft!n_b,3:6,9:12); plan_fft!(psfft!n_m4)*psfft!n_m4
+    psfft!n_m4 = view(psfft!n_b,3:6,9:12); plan_fft!(psfft!n_m4)*psfft!n_m4
 
     for i = 1:length(m4)
         @test_approx_eq fft_m4[i] true_fft_m4[i]

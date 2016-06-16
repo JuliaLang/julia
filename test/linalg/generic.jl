@@ -57,10 +57,10 @@ let X = [3  9   5;
          2  1  10]
     @test diff(X,1) == [4  -5 -3; -5  -3  8]
     @test diff(X,2) == [6 -4; -3 -2; -1 9]
-    @test diff(sub(X, 1:2, 1:2),1) == [4 -5]
-    @test diff(sub(X, 1:2, 1:2),2) == reshape([6; -3], (2,1))
-    @test diff(sub(X, 2:3, 2:3),1) == [-3 8]
-    @test diff(sub(X, 2:3, 2:3),2) == reshape([-2; 9], (2,1))
+    @test diff(view(X, 1:2, 1:2),1) == [4 -5]
+    @test diff(view(X, 1:2, 1:2),2) == reshape([6; -3], (2,1))
+    @test diff(view(X, 2:3, 2:3),1) == [-3 8]
+    @test diff(view(X, 2:3, 2:3),2) == reshape([-2; 9], (2,1))
     @test_throws ArgumentError diff(X,3)
     @test_throws ArgumentError diff(X,-1)
 end
@@ -78,7 +78,7 @@ y = [3; 7; 10]
 x = 1:12
 y = [5.5; 6.3; 7.6; 8.8; 10.9; 11.79; 13.48; 15.02; 17.77; 20.81; 22.0; 22.99]
 @test_approx_eq [linreg(x,y)...] [2.5559090909090867, 1.6960139860139862]
-@test_approx_eq [linreg(sub(x,1:6),sub(y,1:6))...] [3.8366666666666642,1.3271428571428574]
+@test_approx_eq [linreg(view(x,1:6),view(y,1:6))...] [3.8366666666666642,1.3271428571428574]
 
 # check (LinSpace, UnitRange)
 x = linspace(1.0, 12.0, 100)
@@ -114,8 +114,8 @@ y4 = [6.58; 5.76; 7.71; 8.84; 8.47; 7.04; 5.25; 12.50; 5.56; 7.91; 6.89]
 # test diag
 let A = eye(4)
     @test diag(A) == ones(4)
-    @test diag(sub(A, 1:3, 1:3)) == ones(3)
-    @test diag(sub(A, 1:2, 1:2)) == ones(2)
+    @test diag(view(A, 1:3, 1:3)) == ones(3)
+    @test diag(view(A, 1:2, 1:2)) == ones(2)
 end
 
 # test generic axpy
@@ -142,14 +142,14 @@ let aa = reshape([1.:6;], (2,3))
         if atype == "Array"
             a = aa
         else
-            a = sub(aa, 1:2, 1:2)
+            a = view(aa, 1:2, 1:2)
         end
 
         # 2-argument version of scale!
         @test scale!(copy(a), 5.) == a*5
         @test scale!(5., copy(a)) == a*5
         b = randn(Base.LinAlg.SCAL_CUTOFF) # make sure we try BLAS path
-        subB = sub(b, :, :)
+        subB = view(b, :, :)
         @test scale!(copy(b), 5.) == b*5
         @test scale!(copy(subB), 5.) == subB*5
         @test scale!([1.; 2.], copy(a)) == a.*[1; 2]

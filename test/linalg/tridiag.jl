@@ -76,8 +76,8 @@ for elty in (Float32, Float64, Complex64, Complex128, Int)
                 BB = Bs
                 vv = vs
             else
-                BB = sub(Bs, 1:n, 1)
-                vv = sub(vs, 1:n)
+                BB = view(Bs, 1:n, 1)
+                vv = view(vs, 1:n)
             end
         end
 
@@ -113,7 +113,7 @@ for elty in (Float32, Float64, Complex64, Complex128, Int)
                 if atype == "Array"
                     vv = vs
                 else
-                    vv = sub(vs, 1:n)
+                    vv = view(vs, 1:n)
                 end
             end
             invFsv = Fs\vv

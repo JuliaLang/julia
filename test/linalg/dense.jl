@@ -159,7 +159,7 @@ for elty in (Float32, Float64, BigFloat, Complex{Float32}, Complex{Float64}, Com
 
     ## Vector
     x = ones(elty,10)
-    xs = sub(x,1:2:10)
+    xs = view(x,1:2:10)
     @test_approx_eq norm(x, -Inf) 1
     @test_approx_eq norm(x, -1) 1/10
     @test_approx_eq norm(x, 0) 10
@@ -199,11 +199,11 @@ for elty in (Float32, Float64, BigFloat, Complex{Float32}, Complex{Float64}, Com
         x = elty <: Integer ? convert(Vector{elty}, rand(1:10, nnorm)) :
             elty <: Complex ? convert(Vector{elty}, complex(randn(nnorm), randn(nnorm))) :
             convert(Vector{elty}, randn(nnorm))
-        xs = sub(x,1:2:nnorm)
+        xs = view(x,1:2:nnorm)
         y = elty <: Integer ? convert(Vector{elty}, rand(1:10, nnorm)) :
             elty <: Complex ? convert(Vector{elty}, complex(randn(nnorm), randn(nnorm))) :
             convert(Vector{elty}, randn(nnorm))
-        ys = sub(y,1:2:nnorm)
+        ys = view(y,1:2:nnorm)
         α = elty <: Integer ? randn() :
             elty <: Complex ? convert(elty, complex(randn(),randn())) :
             convert(elty, randn())
@@ -244,7 +244,7 @@ for elty in (Float32, Float64, BigFloat, Complex{Float32}, Complex{Float64}, Com
     end
     ## Matrix (Operator)
         A = ones(elty,10,10)
-        As = sub(A,1:5,1:5)
+        As = view(A,1:5,1:5)
         @test_approx_eq norm(A, 1) 10
         elty <: Union{BigFloat,Complex{BigFloat},BigInt} || @test_approx_eq norm(A, 2) 10
         @test_approx_eq norm(A, Inf) 10
@@ -256,11 +256,11 @@ for elty in (Float32, Float64, BigFloat, Complex{Float32}, Complex{Float64}, Com
         A = elty <: Integer ? convert(Matrix{elty}, rand(1:10, mmat, nmat)) :
             elty <: Complex ? convert(Matrix{elty}, complex(randn(mmat, nmat), randn(mmat, nmat))) :
             convert(Matrix{elty}, randn(mmat, nmat))
-        As = sub(A,1:nmat,1:nmat)
+        As = view(A,1:nmat,1:nmat)
         B = elty <: Integer ? convert(Matrix{elty}, rand(1:10, mmat, nmat)) :
             elty <: Complex ? convert(Matrix{elty}, complex(randn(mmat, nmat), randn(mmat, nmat))) :
             convert(Matrix{elty}, randn(mmat, nmat))
-        Bs = sub(B,1:nmat,1:nmat)
+        Bs = view(B,1:nmat,1:nmat)
         α = elty <: Integer ? randn() :
             elty <: Complex ? convert(elty, complex(randn(),randn())) :
             convert(elty, randn())
@@ -323,7 +323,7 @@ let
     A = [1 2 0 0; 0 1 0 0; 0 0 0 0; 0 0 0 0]
     Asq = sqrtm(A)
     @test_approx_eq Asq*Asq A
-    A2 = sub(A, 1:2, 1:2)
+    A2 = view(A, 1:2, 1:2)
     A2sq = sqrtm(A2)
     @test_approx_eq A2sq*A2sq A2
 end
@@ -544,5 +544,5 @@ end
 
 # stride1
 a = rand(10)
-b = slice(a,2:2:10)
+b = view(a,2:2:10)
 @test Base.LinAlg.stride1(b) == 2

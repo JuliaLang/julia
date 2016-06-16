@@ -379,11 +379,11 @@ function A_ldiv_B!{T<:BlasFloat}(C::CholeskyPivoted{T}, B::StridedMatrix{T})
     chkfullrank(C)
     n = size(C, 1)
     for i=1:size(B, 2)
-        permute!(sub(B, 1:n, i), C.piv)
+        permute!(view(B, 1:n, i), C.piv)
     end
     LAPACK.potrs!(C.uplo, C.factors, B)
     for i=1:size(B, 2)
-        ipermute!(sub(B, 1:n, i), C.piv)
+        ipermute!(view(B, 1:n, i), C.piv)
     end
     B
 end

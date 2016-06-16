@@ -123,7 +123,7 @@ for elty1 in (Float32, Float64, BigFloat, Complex64, Complex128, Complex{BigFloa
         @test factorize(A1) == A1
 
         # [c]transpose[!] (test views as well, see issue #14317)
-        let vrange = 1:n-1, viewA1 = t1(sub(A1.data, vrange, vrange))
+        let vrange = 1:n-1, viewA1 = t1(view(A1.data, vrange, vrange))
             # transpose
             @test full(A1.') == full(A1).'
             @test full(viewA1.') == full(viewA1).'
@@ -132,10 +132,10 @@ for elty1 in (Float32, Float64, BigFloat, Complex64, Complex128, Complex{BigFloa
             @test full(viewA1') == full(viewA1)'
             # transpose!
             @test transpose!(copy(A1)) == A1.'
-            @test transpose!(t1(sub(copy(A1).data, vrange, vrange))) == viewA1.'
+            @test transpose!(t1(view(copy(A1).data, vrange, vrange))) == viewA1.'
             # ctranspose!
             @test ctranspose!(copy(A1)) == A1'
-            @test ctranspose!(t1(sub(copy(A1).data, vrange, vrange))) == viewA1'
+            @test ctranspose!(t1(view(copy(A1).data, vrange, vrange))) == viewA1'
         end
 
         # diag
@@ -150,7 +150,7 @@ for elty1 in (Float32, Float64, BigFloat, Complex64, Complex128, Complex{BigFloa
         @test full(-A1) == -full(A1)
 
         # copy and copy! (test views as well, see issue #14317)
-        let vrange = 1:n-1, viewA1 = t1(sub(A1.data, vrange, vrange))
+        let vrange = 1:n-1, viewA1 = t1(view(A1.data, vrange, vrange))
             # copy
             @test copy(A1) == copy(full(A1))
             @test copy(viewA1) == copy(full(viewA1))
@@ -493,4 +493,4 @@ end
 @test_throws ArgumentError UpperTriangular(LowerTriangular(randn(3,3)))
 
 # Issue 16196
-@test UpperTriangular(eye(3)) \ sub(ones(3), [1,2,3]) == ones(3)
+@test UpperTriangular(eye(3)) \ view(ones(3), [1,2,3]) == ones(3)

@@ -5383,14 +5383,14 @@ is raised as an exception in the woken tasks.
 notify
 
 """
-    sub(A, inds...)
+    view(A, inds...)
 
 Like [`getindex`](:func:`getindex`), but returns a view into the parent array `A` with the
 given indices instead of making a copy.  Calling [`getindex`](:func:`getindex`) or
 [`setindex!`](:func:`setindex!`) on the returned [`SubArray`](:obj:`SubArray`) computes the
 indices to the parent array on the fly without checking bounds.
 """
-sub
+view
 
 """
     expanduser(path::AbstractString) -> AbstractString
@@ -7407,14 +7407,6 @@ julia> "Hello " * "world"
 ```
 """
 Base.:(*)(s::AbstractString, t::AbstractString)
-
-"""
-    slice(A, inds...)
-
-Returns a view of array `A` with the given indices like [`sub`](:func:`sub`), but drops all
-dimensions indexed with scalars.
-"""
-slice
 
 """
     time()

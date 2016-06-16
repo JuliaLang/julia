@@ -28,20 +28,20 @@ function qrfactUnblocked!{T}(A::AbstractMatrix{T})
     m, n = size(A)
     τ = zeros(T, min(m,n))
     for k = 1:min(m - 1 + !(T<:Real), n)
-        x = slice(A, k:m, k)
+        x = view(A, k:m, k)
         τk = reflector!(x)
         τ[k] = τk
-        reflectorApply!(x, τk, slice(A, k:m, k + 1:n))
+        reflectorApply!(x, τk, view(A, k:m, k + 1:n))
     end
     QR(A, τ)
 end
 
 # Find index for columns with largest two norm
 function indmaxcolumn(A::StridedMatrix)
-    mm = norm(slice(A, :, 1))
+    mm = norm(view(A, :, 1))
     ii = 1
     for i = 2:size(A, 2)
-        mi = norm(slice(A, :, i))
+        mi = norm(view(A, :, i))
         if abs(mi) > mm
             mm = mi
             ii = i
@@ -57,7 +57,7 @@ function qrfactPivotedUnblocked!(A::StridedMatrix)
     for j = 1:min(m,n)
 
         # Find column with maximum norm in trailing submatrix
-        jm = indmaxcolumn(slice(A, j:m, j:n)) + j - 1
+        jm = indmaxcolumn(view(A, j:m, j:n)) + j - 1
 
         if jm != j
             # Flip elements in pivoting vector
@@ -74,12 +74,12 @@ function qrfactPivotedUnblocked!(A::StridedMatrix)
         end
 
         # Compute reflector of columns j
-        x = slice(A, j:m, j)
+        x = view(A, j:m, j)
         τj = LinAlg.reflector!(x)
         τ[j] = τj
 
         # Update trailing submatrix with reflector
-        LinAlg.reflectorApply!(x, τj, sub(A, j:m, j+1:n))
+        LinAlg.reflectorApply!(x, τj, view(A, j:m, j+1:n))
     end
     return LinAlg.QRPivoted{eltype(A), typeof(A)}(A, τ, piv)
 end
@@ -451,8 +451,8 @@ for (f1, f2) in ((:Ac_mul_B, :A_mul_B!),
     end
 end
 
-A_ldiv_B!{T<:BlasFloat}(A::QRCompactWY{T}, b::StridedVector{T}) = (A_ldiv_B!(UpperTriangular(A[:R]), sub(Ac_mul_B!(A[:Q], b), 1:size(A, 2))); b)
-A_ldiv_B!{T<:BlasFloat}(A::QRCompactWY{T}, B::StridedMatrix{T}) = (A_ldiv_B!(UpperTriangular(A[:R]), sub(Ac_mul_B!(A[:Q], B), 1:size(A, 2), 1:size(B, 2))); B)
+A_ldiv_B!{T<:BlasFloat}(A::QRCompactWY{T}, b::StridedVector{T}) = (A_ldiv_B!(UpperTriangular(A[:R]), view(Ac_mul_B!(A[:Q], b), 1:size(A, 2))); b)
+A_ldiv_B!{T<:BlasFloat}(A::QRCompactWY{T}, B::StridedMatrix{T}) = (A_ldiv_B!(UpperTriangular(A[:R]), view(Ac_mul_B!(A[:Q], B), 1:size(A, 2), 1:size(B, 2))); B)
 
 # Julia implementation similarly to xgelsy
 function A_ldiv_B!{T<:BlasFloat}(A::QRPivoted{T}, B::StridedMatrix{T}, rcond::Real)
@@ -467,8 +467,8 @@ function A_ldiv_B!{T<:BlasFloat}(A::QRPivoted{T}, B::StridedMatrix{T}, rcond::Re
     xmax = ones(T, 1)
     tmin = tmax = ar
     while rnk < nr
-        tmin, smin, cmin = LAPACK.laic1!(2, xmin, tmin, sub(A.factors, 1:rnk, rnk + 1), A.factors[rnk + 1, rnk + 1])
-        tmax, smax, cmax = LAPACK.laic1!(1, xmax, tmax, sub(A.factors, 1:rnk, rnk + 1), A.factors[rnk + 1, rnk + 1])
+        tmin, smin, cmin = LAPACK.laic1!(2, xmin, tmin, view(A.factors, 1:rnk, rnk + 1), A.factors[rnk + 1, rnk + 1])
+        tmax, smax, cmax = LAPACK.laic1!(1, xmax, tmax, view(A.factors, 1:rnk, rnk + 1), A.factors[rnk + 1, rnk + 1])
         tmax*rcond > tmin && break
         push!(xmin, cmin)
         push!(xmax, cmax)
@@ -479,10 +479,10 @@ function A_ldiv_B!{T<:BlasFloat}(A::QRPivoted{T}, B::StridedMatrix{T}, rcond::Re
         rnk += 1
     end
     C, τ = LAPACK.tzrzf!(A.factors[1:rnk,:])
-    A_ldiv_B!(UpperTriangular(C[1:rnk,1:rnk]),sub(Ac_mul_B!(getq(A),sub(B, 1:mA, 1:nrhs)),1:rnk,1:nrhs))
+    A_ldiv_B!(UpperTriangular(C[1:rnk,1:rnk]),view(Ac_mul_B!(getq(A),view(B, 1:mA, 1:nrhs)),1:rnk,1:nrhs))
     B[rnk+1:end,:] = zero(T)
-    LAPACK.ormrz!('L', eltype(B)<:Complex ? 'C' : 'T', C, τ, sub(B,1:nA,1:nrhs))
-    B[1:nA,:] = sub(B, 1:nA, :)[invperm(A[:p]::Vector{BlasInt}),:]
+    LAPACK.ormrz!('L', eltype(B)<:Complex ? 'C' : 'T', C, τ, view(B,1:nA,1:nrhs))
+    B[1:nA,:] = view(B, 1:nA, :)[invperm(A[:p]::Vector{BlasInt}),:]
     return B, rnk
 end
 A_ldiv_B!{T<:BlasFloat}(A::QRPivoted{T}, B::StridedVector{T}) = vec(A_ldiv_B!(A,reshape(B,length(B),1)))
@@ -491,13 +491,13 @@ function A_ldiv_B!{T}(A::QR{T}, B::StridedMatrix{T})
     m, n = size(A)
     minmn = min(m,n)
     mB, nB = size(B)
-    Ac_mul_B!(A[:Q], sub(B, 1:m, :))
+    Ac_mul_B!(A[:Q], view(B, 1:m, :))
     R = A[:R]
     @inbounds begin
         if n > m # minimum norm solution
             τ = zeros(T,m)
             for k = m:-1:1 # Trapezoid to triangular by elementary operation
-                x = slice(R, k, [k; m + 1:n])
+                x = view(R, k, [k; m + 1:n])
                 τk = reflector!(x)
                 τ[k] = τk'
                 for i = 1:k - 1
@@ -513,7 +513,7 @@ function A_ldiv_B!{T}(A::QR{T}, B::StridedMatrix{T})
                 end
             end
         end
-        Base.A_ldiv_B!(UpperTriangular(sub(R, :, 1:minmn)), sub(B, 1:minmn, :))
+        Base.A_ldiv_B!(UpperTriangular(view(R, :, 1:minmn)), view(B, 1:minmn, :))
         if n > m # Apply elementary transformation to solution
             B[m + 1:mB,1:nB] = zero(T)
             for j = 1:nB
@@ -536,12 +536,12 @@ end
 A_ldiv_B!(A::QR, B::StridedVector) = A_ldiv_B!(A, reshape(B, length(B), 1))[:]
 function A_ldiv_B!(A::QRPivoted, b::StridedVector)
     A_ldiv_B!(QR(A.factors,A.τ), b)
-    b[1:size(A.factors, 2)] = sub(b, 1:size(A.factors, 2))[invperm(A.jpvt)]
+    b[1:size(A.factors, 2)] = view(b, 1:size(A.factors, 2))[invperm(A.jpvt)]
     b
 end
 function A_ldiv_B!(A::QRPivoted, B::StridedMatrix)
     A_ldiv_B!(QR(A.factors, A.τ), B)
-    B[1:size(A.factors, 2),:] = sub(B, 1:size(A.factors, 2), :)[invperm(A.jpvt),:]
+    B[1:size(A.factors, 2),:] = view(B, 1:size(A.factors, 2), :)[invperm(A.jpvt),:]
     B
 end
 

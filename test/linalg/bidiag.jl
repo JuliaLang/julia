@@ -139,8 +139,8 @@ for relty in (Int, Float32, Float64, BigFloat), elty in (relty, Complex{relty})
                     b = bb
                     c = cc
                 else
-                    b = sub(bb, 1:n)
-                    c = sub(cc, 1:n, 1:2)
+                    b = view(bb, 1:n)
+                    c = view(cc, 1:n, 1:2)
                 end
             end
             debug && println("Linear solver")

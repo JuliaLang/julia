@@ -830,7 +830,7 @@ function (::Type{Sparse}){Tv<:VTypes}(m::Integer, n::Integer,
     # check if columns are sorted
     iss = true
     for i = 2:length(colptr)
-        if !issorted(sub(rowval, colptr[i - 1] + 1:colptr[i]))
+        if !issorted(view(rowval, colptr[i - 1] + 1:colptr[i]))
             iss = false
             break
         end

@@ -115,7 +115,7 @@ function A_mul_B!{T<:Base.LinAlg.BlasFloat}(rho2::StridedVector{T},Phi::CPM{T},r
     rho=reshape(rho,(size(Phi.kraus,3),size(Phi.kraus,3)))
     rho1=zeros(T,(size(Phi.kraus,1),size(Phi.kraus,1)))
     for s=1:size(Phi.kraus,2)
-        As=slice(Phi.kraus,:,s,:)
+        As=view(Phi.kraus,:,s,:)
         rho1+=As*rho*As'
     end
     return copy!(rho2,rho1)

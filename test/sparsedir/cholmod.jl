@@ -636,8 +636,8 @@ Fnew = deserialize(b)
 # test \ for Factor and StridedVecOrMat
 let x = rand(5)
     A = cholfact(sparse(diagm(x.\1)))
-    @test_approx_eq A\sub(ones(10),1:2:10) x
-    @test_approx_eq A\slice(eye(5,5),:,:) diagm(x)
+    @test_approx_eq A\view(ones(10),1:2:10) x
+    @test_approx_eq A\view(eye(5,5),:,:) diagm(x)
 end
 
 # Real factorization and complex rhs

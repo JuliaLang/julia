@@ -509,7 +509,7 @@ function sortrows(A::AbstractMatrix; kws...)
     T = slicetypeof(A, inds, :)
     rows = allocate_for(Vector{T}, A, shape(A, 1))
     for i in inds
-        rows[i] = slice(A, i, :)
+        rows[i] = view(A, i, :)
     end
     p = sortperm(rows; kws..., order=Lexicographic)
     A[p,:]
@@ -520,7 +520,7 @@ function sortcols(A::AbstractMatrix; kws...)
     T = slicetypeof(A, :, inds)
     cols = allocate_for(Vector{T}, A, shape(A, 2))
     for i in inds
-        cols[i] = slice(A, :, i)
+        cols[i] = view(A, :, i)
     end
     p = sortperm(cols; kws..., order=Lexicographic)
     A[:,p]

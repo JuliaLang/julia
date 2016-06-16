@@ -303,8 +303,8 @@ end
 
 function A_mul_B!{T,S}(u::StridedVector{T}, s::SVDOperator{T,S}, v::StridedVector{T})
     a, b = s.m, length(v)
-    A_mul_B!(sub(u,1:a), s.X, sub(v,a+1:b)) # left singular vector
-    Ac_mul_B!(sub(u,a+1:b), s.X, sub(v,1:a)) # right singular vector
+    A_mul_B!(view(u,1:a), s.X, view(v,a+1:b)) # left singular vector
+    Ac_mul_B!(view(u,a+1:b), s.X, view(v,1:a)) # right singular vector
     u
 end
 size(s::SVDOperator)  = s.m + s.n, s.m + s.n

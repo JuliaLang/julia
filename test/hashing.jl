@@ -83,7 +83,7 @@ end
 @test hash(:(X.x)) == hash(:(X.x))
 @test hash(:(X.x)) != hash(:(X.y))
 
-@test hash([1,2]) == hash(sub([1,2,3,4],1:2))
+@test hash([1,2]) == hash(view([1,2,3,4],1:2))
 
 # test explicit zeros in SparseMatrixCSC
 x = sprand(10, 10, 0.5)

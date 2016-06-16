@@ -100,7 +100,7 @@ for elty in [Float32, Float64, Complex64, Complex128]
 
         # nrm2, iamax, and asum for StridedVectors
         a = rand(elty,n)
-        b = slice(a,2:2:n,1)
+        b = view(a,2:2:n,1)
         @test BLAS.nrm2(b) ≈ norm(b)
         if elty <: Real
             @test BLAS.asum(b) ≈ sum(abs(b))

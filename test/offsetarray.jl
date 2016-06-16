@@ -105,7 +105,7 @@ using OAs
 # Basics
 A0 = [1 3; 2 4]
 A = OffsetArray(A0, (-1,2))                   # LinearFast
-S = OffsetArray(slice(A0, 1:2, 1:2), (-1,2))  # LinearSlow
+S = OffsetArray(view(A0, 1:2, 1:2), (-1,2))  # LinearSlow
 @test indices(A) == indices(S) == (0:1, 3:4)
 @test A[0,3] == A[1] == S[0,3] == S[1] == 1
 @test A[1,3] == A[2] == S[1,3] == S[2] == 2
@@ -137,26 +137,26 @@ S = OffsetArray(slice(A0, 1:2, 1:2), (-1,2))  # LinearSlow
 @test eachindex(S) == CartesianRange((0:1,3:4))
 
 # slice
-S = slice(A, :, 3)
+S = view(A, :, 3)
 @test S == OffsetArray([1,2], (A.offsets[1],))
 @test S[0] == 1
 @test S[1] == 2
 @test_throws BoundsError S[2]
-S = slice(A, 0, :)
+S = view(A, 0, :)
 @test S == OffsetArray([1,3], (A.offsets[2],))
 @test S[3] == 1
 @test S[4] == 3
 @test_throws BoundsError S[1]
-S = slice(A, 0:0, 4)
+S = view(A, 0:0, 4)
 @test S == [3]
 @test S[1] == 3
 @test_throws BoundsError S[0]
-S = slice(A, 1, 3:4)
+S = view(A, 1, 3:4)
 @test S == [2,4]
 @test S[1] == 2
 @test S[2] == 4
 @test_throws BoundsError S[3]
-S = slice(A, :, :)
+S = view(A, :, :)
 @test S == A
 @test S[0,3] == S[1] == 1
 @test S[1,3] == S[2] == 2

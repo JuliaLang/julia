@@ -8,12 +8,12 @@ using Base.Order: Forward
 @test sort(['a':'z';], rev=true) == ['z':-1:'a';]
 @test sortperm([2,3,1]) == [3,1,2]
 @test sortperm!([1,2,3], [2,3,1]) == [3,1,2]
-let s = sub([1,2,3,4], 1:3)
+let s = view([1,2,3,4], 1:3)
     r = sortperm!(s, [2,3,1])
     @test r == [3,1,2]
     @test r === s
 end
-@test_throws ArgumentError sortperm!(sub([1,2,3,4], 1:4), [2,3,1])
+@test_throws ArgumentError sortperm!(view([1,2,3,4], 1:4), [2,3,1])
 @test !issorted([2,3,1])
 @test issorted([1,2,3])
 @test reverse([2,3,1]) == [1,3,2]
@@ -125,7 +125,7 @@ for alg in [InsertionSort, MergeSort]
     @test issorted(b)
     @test a[ix] == b
 
-    sortperm!(sub(ix, 1:100), sub(a, 1:100), alg=alg)
+    sortperm!(view(ix, 1:100), view(a, 1:100), alg=alg)
     b = a[ix][1:100]
     @test issorted(b)
 
@@ -141,7 +141,7 @@ for alg in [InsertionSort, MergeSort]
     @test issorted(b, rev=true)
     @test a[ix] == b
 
-    sortperm!(sub(ix, 1:100), sub(a, 1:100), alg=alg, rev=true)
+    sortperm!(view(ix, 1:100), view(a, 1:100), alg=alg, rev=true)
     b = a[ix][1:100]
     @test issorted(b, rev=true)
 
@@ -157,7 +157,7 @@ for alg in [InsertionSort, MergeSort]
     @test issorted(b, by=x->1/x)
     @test a[ix] == b
 
-    sortperm!(sub(ix, 1:100), sub(a, 1:100), by=x->1/x)
+    sortperm!(view(ix, 1:100), view(a, 1:100), by=x->1/x)
     b = a[ix][1:100]
     @test issorted(b, by=x->1/x)
 

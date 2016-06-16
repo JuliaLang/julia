@@ -102,7 +102,7 @@ type _FDWatcher
             if fd.fd+1 > length(FDWatchers)
                 old_len = length(FDWatchers)
                 resize!(FDWatchers, fd.fd+1)
-                fill!(sub(FDWatchers, old_len+1:fd.fd+1), nothing)
+                fill!(view(FDWatchers, old_len+1:fd.fd+1), nothing)
             elseif FDWatchers[fd.fd + 1] !== nothing
                 this = FDWatchers[fd.fd + 1]::_FDWatcher
                 this.refcount = (this.refcount[1] + Int(readable), this.refcount[2] + Int(writable))

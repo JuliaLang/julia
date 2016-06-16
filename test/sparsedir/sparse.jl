@@ -289,7 +289,7 @@ cA = sprandn(5,5,0.2) + im*sprandn(5,5,0.2)
 @test full(conj(cA)) == conj(full(cA))
 
 # transpose of SubArrays
-A = sub(sprandn(10, 10, 0.3), 1:4, 1:4)
+A = view(sprandn(10, 10, 0.3), 1:4, 1:4)
 @test  transpose(full(A)) == full(transpose(A))
 @test ctranspose(full(A)) == full(ctranspose(A))
 

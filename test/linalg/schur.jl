@@ -24,9 +24,9 @@ for eltya in (Float32, Float64, Complex64, Complex128, Int)
         if atype == "Array"
             a = a
         else
-            a = sub(a, 1:n, 1:n)
-            asym = sub(asym, 1:n, 1:n)
-            apd = sub(apd, 1:n, 1:n)
+            a = view(a, 1:n, 1:n)
+            asym = view(asym, 1:n, 1:n)
+            apd = view(apd, 1:n, 1:n)
         end
         ε = εa = eps(abs(float(one(eltya))))
 
@@ -61,8 +61,8 @@ for eltya in (Float32, Float64, Complex64, Complex128, Int)
             a1_sf = a[1:n1, 1:n1]
             a2_sf = a[n1+1:n2, n1+1:n2]
         else
-            a1_sf = sub(a, 1:n1, 1:n1)
-            a2_sf = sub(a, n1+1:n2, n1+1:n2)
+            a1_sf = view(a, 1:n1, 1:n1)
+            a2_sf = view(a, n1+1:n2, n1+1:n2)
         end
         f = schurfact(a1_sf, a2_sf)
         @test_approx_eq f[:Q]*f[:S]*f[:Z]' a1_sf

@@ -1550,8 +1550,8 @@ for isunittri in (true, false), islowertri in (true, false)
                 nzrange = $( (islowertri && !istrans) || (!islowertri && istrans) ?
                     :(b.nzind[1]:b.n) :
                     :(1:b.nzind[end]) )
-                nzrangeviewr = sub(r, nzrange)
-                nzrangeviewA = $tritype(sub(A.data, nzrange, nzrange))
+                nzrangeviewr = view(r, nzrange)
+                nzrangeviewA = $tritype(view(A.data, nzrange, nzrange))
                 ($ipfunc)(convert(AbstractArray{TAb}, nzrangeviewA), nzrangeviewr)
             end
             r
@@ -1586,8 +1586,8 @@ for isunittri in (true, false), islowertri in (true, false)
                 nzrange = $( (islowertri && !istrans) || (!islowertri && istrans) ?
                     :(b.nzind[1]:b.n) :
                     :(1:b.nzind[end]) )
-                nzrangeviewbnz = sub(b.nzval, nzrange - b.nzind[1] + 1)
-                nzrangeviewA = $tritype(sub(A.data, nzrange, nzrange))
+                nzrangeviewbnz = view(b.nzval, nzrange - b.nzind[1] + 1)
+                nzrangeviewA = $tritype(view(A.data, nzrange, nzrange))
                 ($func)(nzrangeviewA, nzrangeviewbnz)
                 # could strip any miraculous zeros here perhaps
             end
