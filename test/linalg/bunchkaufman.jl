@@ -30,10 +30,10 @@ for eltya in (Float32, Float64, Complex64, Complex128, Int)
             a = a
             a2 = a2
         else
-            a = sub(a, 1:n, 1:n)
-            a2 = sub(a2, 1:n, 1:n)
-            asym = sub(asym, 1:n, 1:n)
-            apd = sub(apd, 1:n, 1:n)
+            a = view(a, 1:n, 1:n)
+            a2 = view(a2, 1:n, 1:n)
+            asym = view(asym, 1:n, 1:n)
+            apd = view(apd, 1:n, 1:n)
         end
         ε = εa = eps(abs(float(one(eltya))))
 
@@ -43,7 +43,7 @@ for eltya in (Float32, Float64, Complex64, Complex128, Int)
                 if btype == "Array"
                     b = b
                 else
-                    b = sub(b, 1:n, 1:2)
+                    b = view(b, 1:n, 1:2)
                 end
 
                 εb = eps(abs(float(one(eltyb))))
@@ -92,7 +92,7 @@ let
             if Astype == "Array"
                 As = As
             else
-                As = sub(As, 1:n, 1:n)
+                As = view(As, 1:n, 1:n)
             end
 
             for rook in (false, true)
@@ -110,6 +110,6 @@ let
     A = rand(6,5); A = complex(A'*A) # to avoid calling the real-lhs-complex-rhs method
     F = cholfact(A);
     v6 = rand(Complex128, 6)
-    v5 = sub(v6, 1:5)
+    v5 = view(v6, 1:5)
     @test F\v5 == F\v6[1:5]
 end
