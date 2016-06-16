@@ -3130,27 +3130,51 @@ end
 symequal(x::SSAValue, y::SSAValue) = is(x.id,y.id)
 symequal(x::Slot    , y::Slot)     = is(x.id,y.id)
 symequal(x::ANY     , y::ANY)      = is(x,y)
-
-function occurs_outside_getfield(linfo::LambdaInfo, e::ANY, sym::ANY,
-                                 sv::InferenceState, field_count, field_names)
+const USE_UNKNOWN = 0xff
+const USE_GETFIELD = 0x1
+const USE_SETFIELD = 0x2
+# find out uses of fields of variable "sym"
+function collect_field_uses(linfo::LambdaInfo, e::ANY, sym::ANY,
+                            sv::InferenceState, field_count, field_names,
+                            allow_setfield::Bool, use_field_types, typ)
     if e===sym || (isa(e,Slot) && isa(sym,Slot) && (e::Slot).id == (sym::Slot).id)
-        return true
+        return USE_UNKNOWN
     end
     if isa(e,Expr)
         e = e::Expr
-        if is_known_call(e, getfield, sv) && symequal(e.args[2],sym)
+        is_setfield = allow_setfield && is_known_call(e, setfield!, sv)
+        if (is_setfield || is_known_call(e, getfield, sv)) &&
+            symequal(e.args[2],sym)
             idx = e.args[3]
+            n_idx = 0
             if isa(idx,QuoteNode) && (idx.value in field_names)
-                return false
+                n_idx = findfirst(field_names, idx.value)
             end
             if isa(idx,Int) && (1 <= idx <= field_count)
-                return false
+                n_idx = idx::Int
             end
-            return true
+            if n_idx > 0
+                if is_setfield
+                    val_type = widenconst(exprtype(e.args[4], sv))
+                    if !(val_type <: fieldtype(typ, n_idx))
+                        # a setfield call cannot be proven to respect
+                        # the declared type of the field
+                        return USE_UNKNOWN
+                    end
+                    use_field_types[n_idx] = typejoin(use_field_types[n_idx],
+                                                      val_type)
+                    return USE_SETFIELD
+                else
+                    return USE_GETFIELD
+                end
+            end
+            return USE_UNKNOWN
         end
         if is(e.head,:(=))
-            return occurs_outside_getfield(linfo, e.args[2], sym, sv,
-                                           field_count, field_names)
+            return collect_field_uses(linfo, e.args[2], sym, sv,
+                                      field_count, field_names,
+                                      allow_setfield, use_field_types,
+                                      typ)
         else
             if (e.head === :block && isa(sym, Slot) &&
                 linfo.slotflags[(sym::Slot).id] & Slot_UsedUndef == 0)
@@ -3158,17 +3182,23 @@ function occurs_outside_getfield(linfo::LambdaInfo, e::ANY, sym::ANY,
             else
                 ignore_void = false
             end
+            use = 0x0
             for a in e.args
                 if ignore_void && isa(a, Slot) && (a::Slot).id == (sym::Slot).id
                     continue
                 end
-                if occurs_outside_getfield(linfo, a, sym, sv, field_count, field_names)
-                    return true
+                use |= collect_field_uses(linfo, a, sym, sv,
+                                          field_count, field_names,
+                                          allow_setfield, use_field_types,
+                                          typ)
+                if use == USE_UNKNOWN
+                    return use
                 end
             end
+            return use
         end
     end
-    return false
+    return 0x0
 end
 
 # removes inbounds metadata if we never encounter an inbounds=true or
@@ -3240,7 +3270,7 @@ _getfield_elim_pass!(e::ANY, sv) = e
 function is_allocation(e :: ANY, sv::InferenceState)
     isa(e, Expr) || return false
     if is_known_call(e, tuple, sv)
-        return (length(e.args)-1,())
+        return (length(e.args)-1,(),Tuple)
     elseif e.head === :new
         typ = widenconst(exprtype(e, sv))
         if isleaftype(typ)
@@ -3254,7 +3284,7 @@ function is_allocation(e :: ANY, sv::InferenceState)
                 # for pointer fields
                 names = names[1:nf]
             end
-            return (nf, names)
+            return (nf, names, typ)
         end
     end
     false
@@ -3317,21 +3347,43 @@ function alloc_elim_pass!(linfo::LambdaInfo, sv::InferenceState)
             is_ssa = false # doesn't matter as long as it's a Bool...
         end
         alloc = is_allocation(rhs, sv)
+        needs_var = false
+        use_field_types = nothing
         if alloc !== false
-            nv, field_names = alloc
+            use = 0x0
+            nv, field_names, typ = alloc
             tup = rhs.args
             # This makes sure the value doesn't escape so we can elide
             # allocation of mutable types too
-            if (var !== nothing &&
-                occurs_outside_getfield(linfo, bexpr, var, sv, nv, field_names))
-                i += 1
-                continue
+            if var !== nothing
+                ismutable = typ.mutable
+                if ismutable
+                    # if the object is used in setfields, we collect an upper bound
+                    # of the possible types occuring for each field
+                    # ideally we'd just run inference again to get flow-sensitive information
+                    use_field_types = map(i->widenconst(exprtype(rhs.args[i],sv)),
+                                          2:length(rhs.args))
+                end
+                use = collect_field_uses(linfo, bexpr, var,
+                                         sv, nv, field_names, ismutable,
+                                         use_field_types, typ)
+                if use == USE_UNKNOWN
+                    i += 1
+                    continue
+                elseif use & USE_SETFIELD != 0
+                    # the object is used in a setfield call so we need
+                    # assignable variables for its fields
+                    # this could be made more granular on a per-field basis
+                    needs_var = true
+                end
             end
 
             deleteat!(body, i)  # remove tuple allocation
             # convert tuple allocation to a series of local var assignments
             n_ins = 0
             if var === nothing
+                # void use, just remove the allocation and leave the arguments
+                @assert(!needs_var)
                 for j=1:nv
                     tupelt = tup[j+1]
                     if !(isa(tupelt,Number) || isa(tupelt,AbstractString) ||
@@ -3344,18 +3396,25 @@ function alloc_elim_pass!(linfo::LambdaInfo, sv::InferenceState)
                 vals = Vector{Any}(nv)
                 for j=1:nv
                     tupelt = tup[j+1]
-                    if (isa(tupelt,Number) || isa(tupelt,AbstractString) ||
-                        isa(tupelt,QuoteNode) || isa(tupelt, SSAValue))
+                    if (!needs_var &&
+                        (isa(tupelt,Number) || isa(tupelt,AbstractString) ||
+                         isa(tupelt,QuoteNode) || isa(tupelt, SSAValue)))
                         vals[j] = tupelt
                     else
-                        elty = exprtype(tupelt,sv)
-                        if is_ssa
+                        elty = if use & USE_SETFIELD != 0
+                            use_field_types[j]
+                        else
+                            widenconst(exprtype(tupelt,sv))
+                        end
+                        if is_ssa && !needs_var
                             tmpv = newvar!(sv, elty)
                         else
                             var = var::Slot
                             tmpv = add_slot!(linfo, elty, false,
                                              linfo.slotnames[var.id])
-                            linfo.slotflags[tmpv.id] |= Slot_UsedUndef
+                            if !is_ssa
+                                linfo.slotflags[tmpv.id] |= Slot_UsedUndef
+                            end
                         end
                         tmp = Expr(:(=), tmpv, tupelt)
                         insert!(body, i+n_ins, tmp)
@@ -3363,9 +3422,9 @@ function alloc_elim_pass!(linfo::LambdaInfo, sv::InferenceState)
                         n_ins += 1
                     end
                 end
-                replace_getfield!(linfo, bexpr, var, vals, field_names, sv)
+                replace_getfield!(linfo, body, var, vals, field_names, sv)
                 if isa(var, Slot) && is_ssa
-                    # occurs_outside_getfield might have allowed
+                    # collect_field_uses might have allowed
                     # void use of the slot, we need to delete them too
                     i -= delete_void_use!(body, var::Slot, i)
                 end
@@ -3400,41 +3459,98 @@ function delete_void_use!(body, var::Slot, i0)
     ndel
 end
 
-function replace_getfield!(linfo::LambdaInfo, e::Expr, tupname, vals, field_names, sv)
-    for i = 1:length(e.args)
-        a = e.args[i]
-        if isa(a,Expr) && is_known_call(a, getfield, sv) &&
-            symequal(a.args[2],tupname)
-            idx = if isa(a.args[3], Int)
-                a.args[3]
-            else
-                @assert isa(a.args[3], QuoteNode)
-                findfirst(field_names, a.args[3].value)
-            end
-            @assert(idx > 0) # clients should check that all getfields are valid
-            val = vals[idx]
-            # original expression might have better type info than
-            # the tuple element expression that's replacing it.
-            if isa(val,Slot)
-                val = val::Slot
-                valtyp = isa(val,TypedSlot) ? val.typ : linfo.slottypes[val.id]
-                if a.typ ⊑ valtyp && !(valtyp ⊑ a.typ)
-                    if isa(val,TypedSlot)
-                        val = TypedSlot(val.id, a.typ)
-                    end
-                    linfo.slottypes[val.id] = widenconst(a.typ)
-                end
-            elseif isa(val,SSAValue)
-                val = val::SSAValue
-                typ = exprtype(val, sv)
-                if a.typ ⊑ typ && !(typ ⊑ a.typ)
-                    sv.linfo.ssavaluetypes[val.id+1] = a.typ
-                end
-            end
-            e.args[i] = val
-        elseif isa(a, Expr)
-            replace_getfield!(linfo, a::Expr, tupname, vals, field_names, sv)
+# this function has a somewhat convoluted implementation because
+# we might need to pull out setfield! calls from nested expressions
+# into assignments
+# A lot of simplification are possible when *very-linear-mode*
+function replace_getfield!(linfo, stmts::Vector, tupname, vals, field_names, sv)
+    i = 1
+    while i <= length(stmts)
+        e = stmts[i]
+        if !isa(e,Expr)
+            i += 1
+            continue
         end
+        prelude, result = replace_getfield!(linfo, e, tupname,
+                                            vals, field_names, sv,
+                                            true #= toplevel =#)
+        if prelude !== nothing
+            splice!(stmts, i:i-1, prelude)
+            i += length(prelude)
+        end
+        stmts[i] = result
+        i += 1
+    end
+end
+
+function replace_getfield!(linfo::LambdaInfo, a::Expr, tupname,
+                           vals, field_names, sv, toplevel)
+    is_setfield = is_known_call(a, setfield!, sv)
+    if ((is_setfield || is_known_call(a, getfield, sv)) &&
+        symequal(a.args[2],tupname))
+        idx = if isa(a.args[3], Int)
+            a.args[3]
+        else
+            @assert isa(a.args[3], QuoteNode)
+            findfirst(field_names, a.args[3].value)
+        end
+        @assert(idx > 0) # clients should check that all getfields are valid
+        val = vals[idx]
+        # original expression might have better type info than
+        # the tuple element expression that's replacing it.
+        if isa(val,Slot)
+            val = val::Slot
+            valtyp = isa(val,TypedSlot) ? val.typ : linfo.slottypes[val.id]
+            if a.typ ⊑ valtyp && !(valtyp ⊑ a.typ)
+                if isa(val,TypedSlot)
+                    val = TypedSlot(val.id, a.typ)
+                end
+                linfo.slottypes[val.id] = widenconst(a.typ)
+            end
+        elseif isa(val,SSAValue)
+            val = val::SSAValue
+            typ = exprtype(val, sv)
+            if a.typ ⊑ typ && !(typ ⊑ a.typ)
+                sv.linfo.ssavaluetypes[val.id+1] = a.typ
+            end
+        end
+        if is_setfield
+            assign = Expr(:(=), val, a.args[4])
+            if toplevel
+                return (nothing, assign)
+            else
+                return (Any[assign], val)
+            end
+        else
+            return (nothing, val)
+        end
+    else
+        prelude = nothing
+        last_extracted = 0
+        for i=1:length(a.args)
+            e = a.args[i]
+            isa(e, Expr) || continue
+            pre, ea = replace_getfield!(linfo, e::Expr, tupname,
+                                        vals, field_names, sv,
+                                        #= toplevel =# false)
+            if pre !== nothing
+                if last_extracted == 0
+                    prelude = Array(Any, 0)
+                end
+                for j = last_extracted+1:i-1
+                    aj = a.args[j]
+                    if !effect_free(a.args[j], sv, true)
+                        v = newvar!(sv, exprtype(sv, aj))
+                        e.args[j] = v
+                        push!(prelude, Expr(:(=), v, aj))
+                    end
+                end
+                last_extracted = i-1
+                append!(prelude, pre)
+            end
+            a.args[i] = ea
+        end
+        (prelude, a)
     end
 end
 
