@@ -260,7 +260,11 @@ static int self_mem_fd = -1;
 
 static int init_self_mem()
 {
-    int fd = open("/proc/self/mem", O_RDWR | O_SYNC | O_CLOEXEC);
+    int fd = open("/proc/self/mem", O_RDWR | O_SYNC
+#ifdef O_CLOEXEC
+        | O_CLOEXEC
+#endif
+        );
     if (fd == -1)
         return -1;
     // buffer to check if write works;
