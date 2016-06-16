@@ -1642,8 +1642,12 @@ jl_value_t *jl_static_eval(jl_value_t *ex, void *ctx_, jl_module_t *mod,
         }
         else if (e->head == static_parameter_sym) {
             size_t idx = jl_unbox_long(jl_exprarg(e,0));
-            if (linfo && idx <= jl_svec_len(linfo->sparam_vals))
-                return jl_svecref(linfo->sparam_vals, idx-1);
+            if (linfo && idx <= jl_svec_len(linfo->sparam_vals)) {
+                jl_value_t *e = jl_svecref(linfo->sparam_vals, idx - 1);
+                if (jl_is_typevar(e))
+                    return NULL;
+                return e;
+            }
         }
         return NULL;
     }
@@ -2701,7 +2705,7 @@ static jl_cgval_t emit_invoke(jl_expr_t *ex, jl_codectx_t *ctx)
         }
     }
     Value *theFptr = (Value*)li->functionObjectsDecls.functionObject;
-    if (theFptr) {
+    if (theFptr && li->jlcall_api == 0) {
         jl_cgval_t fval = emit_expr(args[1], ctx);
         result = emit_call_function_object(li, fval, theFptr, &args[1], nargs - 1, (jl_value_t*)ex, ctx);
     }
@@ -2861,15 +2865,16 @@ static jl_cgval_t emit_checked_var(Value *bp, jl_sym_t *name, jl_codectx_t *ctx,
 static jl_cgval_t emit_sparam(size_t i, jl_codectx_t *ctx)
 {
     if (jl_svec_len(ctx->linfo->sparam_vals) > 0) {
-        return mark_julia_const(jl_svecref(ctx->linfo->sparam_vals, i));
+        jl_value_t *e = jl_svecref(ctx->linfo->sparam_vals, i);
+        if (!jl_is_typevar(e)) {
+            return mark_julia_const(e);
+        }
     }
-    else {
-        assert(ctx->spvals_ptr != NULL);
-        Value *bp = builder.CreateConstInBoundsGEP1_32(LLVM37_param(T_pjlvalue)
-                builder.CreateBitCast(ctx->spvals_ptr, T_ppjlvalue),
-                i + sizeof(jl_svec_t) / sizeof(jl_value_t*));
-        return mark_julia_type(tbaa_decorate(tbaa_const, builder.CreateLoad(bp)), true, jl_any_type, ctx);
-    }
+    assert(ctx->spvals_ptr != NULL);
+    Value *bp = builder.CreateConstInBoundsGEP1_32(LLVM37_param(T_pjlvalue)
+            builder.CreateBitCast(ctx->spvals_ptr, T_ppjlvalue),
+            i + sizeof(jl_svec_t) / sizeof(jl_value_t*));
+    return mark_julia_type(tbaa_decorate(tbaa_const, builder.CreateLoad(bp)), true, jl_any_type, ctx);
 }
 
 static jl_cgval_t emit_global(jl_sym_t *sym, jl_codectx_t *ctx)
@@ -4052,6 +4057,11 @@ static std::unique_ptr<Module> emit_function(jl_lambda_info_t *lam, jl_llvm_func
 
     bool specsig = false;
     bool needsparams = jl_svec_len(lam->sparam_syms) != jl_svec_len(lam->sparam_vals);
+    for (i = 0; !needsparams && i < jl_svec_len(lam->sparam_vals); i++) {
+        jl_value_t *e = jl_svecref(lam->sparam_vals, i);
+        if (jl_is_typevar(e))
+            needsparams = true;
+    }
     if (!va && !needsparams && lam->specTypes != jl_anytuple_type && lam->inferred) {
         // not vararg, consider specialized signature
         for(size_t i=0; i < jl_nparams(lam->specTypes); i++) {
