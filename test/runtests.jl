@@ -1211,3 +1211,17 @@ io = IOBuffer()
 @test @compat(get(io, :limit, false)) == false
 @test @compat(get(io, :compact, false)) == false
 @test @compat(get(io, :multiline, false)) == false
+
+
+let
+    test_str = "test"
+    ptr = pointer(test_str.data)
+    wrapped_str = unsafe_wrap(Compat.String, ptr)
+    new_str = unsafe_string(ptr)
+    @test wrapped_str == "test"
+    @test new_str == "test"
+    @test ptr == pointer(wrapped_str)  # Test proper pointer aliasing behavior
+    @test ptr ≠ pointer(new_str)
+    x = [1, 2]
+    @test unsafe_wrap(Array, pointer(x), 2) == [1, 2]
+end

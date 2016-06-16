@@ -88,7 +88,7 @@ Currently, the `@compat` macro supports the following syntaxes:
 
     Compat also provides an unexported `Compat.String` type which is equivalent to `ByteString` on Julia 0.3 and 0.4, and to `String` on Julia 0.5. This type should be used only in places where `ByteString` was used on Julia 0.3 and 0.4, i.e. where either `ASCIIString` or `UTF8String` should be accepted. It should **not** be used as the default type for variables or fields holding strings, as it introduces type-instability in Julia 0.3 and 0.4: use `Compat.UTF8String` or `Compat.ASCIIString` instead.
 
-* `bytestring` has been replaced in all cases with additional `String` construction methods; for 0.3 compatibility, the usage involves replacing `bytestring(args...)` with `@compat String(args...)`
+* `bytestring` has been replaced in most cases with additional `String` construction methods; for 0.3 compatibility, the usage involves replacing `bytestring(args...)` with `@compat String(args...)`. However, for converting a `Ptr{UInt8}` to a string, use the new `unsafe_string(...)` method to make a copy or `unsafe_wrap(String, ...)` to avoid a copy.
 
 * `typealias AbstractString String` - `String` has been renamed to `AbstractString` in Julia 0.4 [#8872](https://github.com/JuliaLang/julia/pull/8872)
 
@@ -138,6 +138,10 @@ Currently, the `@compat` macro supports the following syntaxes:
 * `walkdir`, returns an iterator that walks the directory tree of a directory. ([#13707](https://github.com/JuliaLang/julia/pull/13707))
 
 ## Renamed functions
+
+* `pointer_to_array` and `pointer_to_string` have been replaced with `unsafe_wrap(Array, ...)` and `unsafe_wrap(String, ...)` respectively.
+
+* `bytestring(::Ptr, ...)` has been replaced with `unsafe_string`.
 
 * `itrunc`, `iround`, `iceil`, `ifloor` are now accessed via `trunc(T, x)`, etc. ([#9133](https://github.com/JuliaLang/julia/pull/9133)).  Truncated conversions between integer types are now `n % T` ([#8646](https://github.com/JuliaLang/julia/issues/8646)).
 

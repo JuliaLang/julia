@@ -1269,4 +1269,26 @@ else
     end
 end
 
+if !isdefined(Base, :pointer_to_string)
+
+    function pointer_to_string(p::Ptr{UInt8}, len::Integer, own::Bool=false)
+        a = ccall(:jl_ptr_to_array_1d, Vector{UInt8},
+                  (Any, Ptr{UInt8}, Csize_t, Cint), Vector{UInt8}, p, len, own)
+        ccall(:jl_array_to_string, String, (Any,), a)
+    end
+
+    pointer_to_string(p::Ptr{UInt8}, own::Bool=false) =
+        pointer_to_string(p, ccall(:strlen, Csize_t, (Cstring,), p), own)
+
+end
+
+if VERSION < v"0.5.0-dev+4612"
+    export unsafe_string, unsafe_wrap
+    unsafe_wrap(::Type{Compat.String}, p::Ptr, own::Bool=false) = pointer_to_string(p, own)
+    unsafe_wrap(::Type{Compat.String}, p::Ptr, len, own::Bool=false) = pointer_to_string(p, len, own)
+    unsafe_wrap(::Type{Array}, p::Ptr, dims, own::Bool=false) = pointer_to_array(p, dims, own)
+    unsafe_string(p::Ptr{UInt8}) = bytestring(p)
+    unsafe_string(p::Ptr{UInt8}, len) = bytestring(p, len)
+end
+
 end # module
