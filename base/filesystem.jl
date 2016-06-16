@@ -42,8 +42,8 @@ export File,
 import Base:
     UVError, _sizeof_uv_fs, check_open, close, eof, eventloop, fd, isopen,
     nb_available, position, read, read!, readavailable, seek, seekend, show,
-    skip, stat, unsafe_read, unsafe_write, utf16to8, utf8to16, uv_error,
-    uvhandle, uvtype, write
+    skip, stat, unsafe_read, unsafe_write, transcode, uv_error, uvhandle,
+    uvtype, write
 
 if is_windows()
     import Base: cwstring
