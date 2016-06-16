@@ -252,3 +252,10 @@ end
 let g() = Int <: Real ? 1 : ""
     @test Base.return_types(g, Tuple{}) == [Int]
 end
+
+# issue #10880
+function cat10880(a, b)
+    Tuple{a.parameters..., b.parameters...}
+end
+@test Base.return_types(cat10880, Tuple{Type{Tuple{Int8,Int16}},Type{Tuple{Int32}}})[1] ==
+    Type{Tuple{Int8,Int16,Int32}}
