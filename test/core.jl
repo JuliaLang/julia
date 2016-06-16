@@ -3890,6 +3890,51 @@ let
     arrayset_unknown_dim(Int, 3)
 end
 
+module TestArrayNUL
+using Base.Test
+function check_nul(a::Vector{UInt8})
+    b = ccall(:jl_array_cconvert_cstring,
+              Ref{Vector{UInt8}}, (Vector{UInt8},), a)
+    @test unsafe_load(pointer(b), length(b) + 1) == 0x0
+    return b === a
+end
+
+a = UInt8[]
+b = "aaa"
+c = [0x2, 0x1, 0x3]
+
+@test check_nul(a)
+@test check_nul(b.data)
+@test check_nul(c)
+d = [0x2, 0x1, 0x3]
+@test check_nul(d)
+push!(d, 0x3)
+@test check_nul(d)
+push!(d, 0x3)
+@test check_nul(d)
+ccall(:jl_array_del_end, Void, (Any, UInt), d, 2)
+@test check_nul(d)
+ccall(:jl_array_grow_end, Void, (Any, UInt), d, 1)
+@test check_nul(d)
+ccall(:jl_array_grow_end, Void, (Any, UInt), d, 1)
+@test check_nul(d)
+ccall(:jl_array_grow_end, Void, (Any, UInt), d, 10)
+@test check_nul(d)
+ccall(:jl_array_del_beg, Void, (Any, UInt), d, 8)
+@test check_nul(d)
+ccall(:jl_array_grow_beg, Void, (Any, UInt), d, 8)
+@test check_nul(d)
+ccall(:jl_array_grow_beg, Void, (Any, UInt), d, 8)
+@test check_nul(d)
+f = unsafe_wrap(Array, pointer(d), length(d))
+@test !check_nul(f)
+f = unsafe_wrap(Array, ccall(:malloc, Ptr{UInt8}, (Csize_t,), 10), 10, true)
+@test !check_nul(f)
+g = reinterpret(UInt8, UInt16[0x1, 0x2])
+@test !check_nul(g)
+@test check_nul(copy(g))
+end
+
 # issue #15370
 @test isdefined(Core, :Box)
 @test !isdefined(Base, :Box)
