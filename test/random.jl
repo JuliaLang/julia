@@ -216,8 +216,8 @@ u1 = uuid1()
 u4 = uuid4()
 @test uuid_version(u1) == 1
 @test uuid_version(u4) == 4
-@test u1 == UUID(string(u1)) == UUID(utf16(string(u1))) == UUID(utf32(string(u1)))
-@test u4 == UUID(string(u4)) == UUID(utf16(string(u4))) == UUID(utf32(string(u4)))
+@test u1 == UUID(string(u1)) == UUID(GenericString(string(u1)))
+@test u4 == UUID(string(u4)) == UUID(GenericString(string(u4)))
 @test u1 == UUID(UInt128(u1))
 @test u4 == UUID(UInt128(u4))
 @test uuid4(MersenneTwister()) == uuid4(MersenneTwister())
