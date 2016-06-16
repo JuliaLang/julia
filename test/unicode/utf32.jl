@@ -169,12 +169,6 @@ for T in (String, UTF16String, UTF32String)
     end
 end
 
-# Wstring
-u8 = "\U10ffff\U1d565\U1d7f6\U00066\U2008a"
-w = wstring(u8)
-@test length(w) == 5 && String(w) == u8 && collect(u8) == collect(w)
-@test u8 == WString(w.data)
-
 # 12268
 for (fun, S, T) in ((utf16, UInt16, UTF16String), (utf32, UInt32, UTF32String))
     # AbstractString
