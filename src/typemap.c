@@ -514,8 +514,11 @@ int jl_typemap_intersection_visitor(union jl_typemap_t map, int offs,
 
 int sigs_eq(jl_value_t *a, jl_value_t *b, int useenv)
 {
-    if (jl_has_typevars(a) || jl_has_typevars(b)) {
-        return jl_types_equal_generic(a,b,useenv);
+    // useenv == 0 : subtyping + ensure typevars correspond
+    // useenv == 1 : subtyping + ensure typevars correspond + fail if bound != bound in some typevar match
+    // useenv == 2 : ignore typevars (because UnionAll getting lost in intersection can cause jl_types_equal to fail in the wrong direction for some purposes)
+    if (useenv != 2 && (jl_has_typevars(a) || jl_has_typevars(b))) {
+        return jl_types_equal_generic(a, b, useenv);
     }
     return jl_subtype(a, b, 0) && jl_subtype(b, a, 0);
 }
