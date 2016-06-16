@@ -196,7 +196,7 @@ jl_value_t *jl_toplevel_eval_in_warn(jl_module_t *m, jl_value_t *ex,
 
 jl_lambda_info_t *jl_wrap_expr(jl_value_t *expr);
 jl_value_t *jl_eval_global_var(jl_module_t *m, jl_sym_t *e);
-jl_value_t *jl_parse_eval_all(const char *fname, size_t len,
+jl_value_t *jl_parse_eval_all(const char *fname,
                               const char *content, size_t contentlen);
 jl_value_t *jl_interpret_toplevel_thunk(jl_lambda_info_t *lam);
 jl_value_t *jl_interpret_toplevel_expr(jl_value_t *e);
@@ -661,6 +661,8 @@ STATIC_INLINE void *jl_get_frame_addr(void)
     return (void*)((uintptr_t)&dummy & ~(uintptr_t)15);
 #endif
 }
+
+JL_DLLEXPORT jl_array_t *jl_array_cconvert_cstring(jl_array_t *a);
 
 #ifdef __cplusplus
 }
