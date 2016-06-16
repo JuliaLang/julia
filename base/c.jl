@@ -106,13 +106,15 @@ if is_windows()
 function cwstring(s::AbstractString)
     bytes = String(s).data
     0 in bytes && throw(ArgumentError("embedded NULs are not allowed in C strings: $(repr(s))"))
-    return push!(utf8to16(bytes), 0)
+    return push!(transcode(UInt16, bytes), 0)
 end
 end
 
-# conversions between UTF-8 and UTF-16 for Windows APIs
+# transcoding between data in UTF-8 and UTF-16 for Windows APIs
 
-function utf8to16(src::Vector{UInt8})
+transcode{T<:Union{UInt8,UInt16}}(::Type{T}, src::Vector{T}) = src
+
+function transcode(::Type{UInt16}, src::Vector{UInt8})
     dst = UInt16[]
     i, n = 1, length(src)
     n > 0 || return dst
@@ -162,7 +164,7 @@ function utf8to16(src::Vector{UInt8})
     return dst
 end
 
-function utf16to8(src::Vector{UInt16})
+function transcode(::Type{UInt8}, src::Vector{UInt16})
     dst = UInt8[]
     i, n = 1, length(src)
     n > 0 || return dst
