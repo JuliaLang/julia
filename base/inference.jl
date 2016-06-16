@@ -75,18 +75,16 @@ type InferenceState
     inferred::Bool
     tfunc_bp::Union{TypeMapEntry, Void}
 
-    function InferenceState(linfo::LambdaInfo, atypes::ANY, sparams::SimpleVector, optimize::Bool)
+    function InferenceState(linfo::LambdaInfo, optimize::Bool)
         @assert isa(linfo.code,Array{Any,1})
         linfo.inInference = true
         nslots = length(linfo.slotnames)
         nl = label_counter(linfo.code)+1
 
-        if length(linfo.sparam_vals) > 0
-            sp = linfo.sparam_vals
-        elseif isempty(sparams) && !isempty(linfo.sparam_syms)
+        if isempty(linfo.sparam_vals) && !isempty(linfo.sparam_syms)
             sp = svec(Any[ TypeVar(sym, Any, true) for sym in linfo.sparam_syms ]...)
         else
-            sp = sparams
+            sp = linfo.sparam_vals
         end
 
         if !isa(linfo.slottypes, Array)
@@ -101,6 +99,7 @@ type InferenceState
         # initial types
         s[1] = Any[ VarState(Bottom,true) for i=1:nslots ]
 
+        atypes = linfo.specTypes
         la = linfo.nargs
         if la > 0
             if linfo.isva
@@ -873,16 +872,19 @@ function precise_container_types(args, types, vtypes::VarTable, sv)
         ai = args[i]
         ti = types[i]
         tti = widenconst(ti)
-        if isa(ai,Expr) && ai.head === :call && (abstract_evals_to_constant(ai.args[1], svec, vtypes, sv) ||
-                                                 abstract_evals_to_constant(ai.args[1], tuple, vtypes, sv))
+        if isa(tti, TypeConstructor)
+            tti = tti.body
+        end
+        if isa(ai, Expr) && ai.head === :call && (abstract_evals_to_constant(ai.args[1], svec, vtypes, sv) ||
+                                                  abstract_evals_to_constant(ai.args[1], tuple, vtypes, sv))
             aa = ai.args
             result[i] = Any[ (isa(aa[j],Expr) ? aa[j].typ : abstract_eval(aa[j],vtypes,sv)) for j=2:length(aa) ]
             if _any(isvarargtype, result[i])
                 return nothing
             end
-        elseif isa(ti, Union)
+        elseif isa(tti, Union)
             return nothing
-        elseif ti ⊑ Tuple
+        elseif tti <: Tuple
             if i == n
                 if isvatuple(tti) && length(tti.parameters) == 1
                     result[i] = Any[Vararg{tti.parameters[1].parameters[1]}]
@@ -894,7 +896,7 @@ function precise_container_types(args, types, vtypes::VarTable, sv)
             else
                 return nothing
             end
-        elseif ti⊑AbstractArray && i==n
+        elseif tti <: AbstractArray && i == n
             result[i] = Any[Vararg{eltype(tti)}]
         else
             return nothing
@@ -1264,7 +1266,7 @@ function tmerge(typea::ANY, typeb::ANY)
     typea, typeb = widenconst(typea), widenconst(typeb)
     typea === typeb && return typea
     if (typea <: Tuple) && (typeb <: Tuple)
-        if length(typea.parameters) == length(typeb.parameters) && !isvatuple(typea) && !isvatuple(typeb)
+        if isa(typea, DataType) && isa(typeb, DataType) && length(typea.parameters) == length(typeb.parameters) && !isvatuple(typea) && !isvatuple(typeb)
             return typejoin(typea, typeb)
         end
         return Tuple
@@ -1507,7 +1509,7 @@ function typeinf_edge(method::Method, atypes::ANY, sparams::SimpleVector, needtr
             linfo = specialize_method(method, atypes, sparams)
         end
         # our stack frame inference context
-        frame = InferenceState(unshare_linfo!(linfo::LambdaInfo), atypes, sparams, optimize)
+        frame = InferenceState(unshare_linfo!(linfo::LambdaInfo), optimize)
         if cached
             frame.tfunc_bp = ccall(:jl_specializations_insert, Ref{TypeMapEntry}, (Any, Any, Any), method, atypes, linfo)
         end
@@ -1551,7 +1553,7 @@ end
 function typeinf_ext(linfo::LambdaInfo)
     if isdefined(linfo, :def)
         # method lambda - infer this specialization via the method cache
-        (code, _t, _) = typeinf_edge(linfo.def, linfo.specTypes, svec(), true, true, true, linfo)
+        (code, _t, _) = typeinf_edge(linfo.def, linfo.specTypes, linfo.sparam_vals, true, true, true, linfo)
         if code.inferred
             linfo.inferred = true
             linfo.inInference = false
@@ -1567,7 +1569,7 @@ function typeinf_ext(linfo::LambdaInfo)
         end
     else
         # toplevel lambda - infer directly
-        frame = InferenceState(linfo, linfo.specTypes, svec(), true)
+        frame = InferenceState(linfo, true)
         typeinf_loop(frame)
         @assert frame.inferred # TODO: deal with this better
     end
