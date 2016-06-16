@@ -203,7 +203,7 @@ function tempdir()
         error("GetTempPath failed: $(Libc.FormatMessage())")
     end
     resize!(temppath,lentemppath)
-    return String(utf16to8(temppath))
+    return String(transcode(UInt8, temppath))
 end
 tempname(uunique::UInt32=UInt32(0)) = tempname(tempdir(), uunique)
 const temp_prefix = cwstring("jl_")
@@ -216,7 +216,7 @@ function tempname(temppath::AbstractString,uunique::UInt32)
         error("GetTempFileName failed: $(Libc.FormatMessage())")
     end
     resize!(tname,lentname)
-    return String(utf16to8(tname))
+    return String(transcode(UInt8, tname))
 end
 function mktemp(parent=tempdir())
     filename = tempname(parent, UInt32(0))

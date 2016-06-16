@@ -136,7 +136,7 @@ function realpath(path::AbstractString)
         systemerror(:realpath, n == 0)
         x = n < length(buf) # is the buffer big enough?
         resize!(buf, n) # shrink if x, grow if !x
-        x && return String(utf16to8(buf))
+        x && return String(transcode(UInt8, buf))
     end
 end
 
@@ -150,7 +150,7 @@ function longpath(path::AbstractString)
         systemerror(:longpath, n == 0)
         x = n < length(buf) # is the buffer big enough?
         resize!(buf, n) # shrink if x, grow if !x
-        x && return String(utf16to8(buf))
+        x && return String(transcode(UInt8, buf))
     end
 end
 
