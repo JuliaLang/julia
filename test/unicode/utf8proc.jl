@@ -256,7 +256,11 @@ let grphtest = (("b\u0300lahβlahb\u0302láh", ["b\u0300","l","a","h",
 end
 
 # up-to-date character widths (#3721, #6939)
-@test charwidth('\U1f355') == strwidth("\U1f355") == strwidth(utf16("\U1f355")) == strwidth("\U1f355\u0302") == strwidth(utf16("\U1f355\u0302")) == 2
+@test charwidth('\U1f355') == 2
+@test strwidth("\U1f355") == 2
+@test strwidth(GenericString("\U1f355")) == 2
+@test strwidth("\U1f355\u0302") == 2
+@test strwidth(GenericString("\U1f355\u0302")) == 2
 
 # handling of embedded NUL chars (#10958)
 @test length("\0w") == length("\0α") == 2
@@ -264,7 +268,7 @@ end
 @test normalize_string("\0W", casefold=true) == "\0w"
 
 # Make sure AbstractString case is covered (for utf8proc_map)
-@test normalize_string(utf32("\u006e\u0303"), :NFC) == "\u00f1"
+@test normalize_string(GenericString("\u006e\u0303"), :NFC) == "\u00f1"
 
 @test_throws ArgumentError normalize_string("\u006e\u0303", compose=false, compat=true)
 @test_throws ArgumentError normalize_string("\u006e\u0303", compose=false, stripmark=true)
@@ -289,7 +293,7 @@ let str = ascii("This is a test")
     g = graphemes(str)
     h = hash(str)
     @test hash(g) == h
-    @test convert(UTF16String, g) == str
+    @test convert(GenericString, g) == str
     io = IOBuffer()
     show(io, g)
     check = "length-14 GraphemeIterator{String} for \"$str\""
