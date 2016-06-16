@@ -308,6 +308,7 @@ function test_primitives{T}(::Type{T}, shape, ::Type{TestAbstractArray})
     @test last(B) == B[length(B)]
 
     # strides(a::AbstractArray)
+    @inferred strides(B)
     strides_B = strides(B)
     for (i, _stride) in enumerate(collect(strides_B))
         @test _stride == stride(B, i)
