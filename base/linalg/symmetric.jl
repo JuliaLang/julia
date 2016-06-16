@@ -5,11 +5,45 @@ immutable Symmetric{T,S<:AbstractMatrix} <: AbstractMatrix{T}
     data::S
     uplo::Char
 end
+"""
+    Symmetric(A, uplo=:U)
+
+Construct a `Symmetric` matrix from the upper (if `uplo = :U`) or lower (if `uplo = :L`) triangle of `A`.
+
+**Example**
+
+```julia
+A = randn(10,10)
+Supper = Symmetric(A)
+Slower = Symmetric(A,:L)
+eigfact(Supper)
+```
+
+`eigfact` will use a method specialized for matrices known to be symmetric.
+Note that `Supper` will not be equal to `Slower` unless `A` is itself symmetric (e.g. if `A == A.'`).
+"""
 Symmetric(A::AbstractMatrix, uplo::Symbol=:U) = (checksquare(A);Symmetric{eltype(A),typeof(A)}(A, char_uplo(uplo)))
 immutable Hermitian{T,S<:AbstractMatrix} <: AbstractMatrix{T}
     data::S
     uplo::Char
 end
+"""
+    Hermitian(A, uplo=:U)
+
+Construct a `Hermitian` matrix from the upper (if `uplo = :U`) or lower (if `uplo = :L`) triangle of `A`.
+
+**Example**
+
+```julia
+A = randn(10,10)
+Hupper = Hermitian(A)
+Hlower = Hermitian(A,:L)
+eigfact(Hupper)
+```
+
+`eigfact` will use a method specialized for matrices known to be Hermitian.
+Note that `Hupper` will not be equal to `Hlower` unless `A` is itself Hermitian (e.g. if `A == A'`).
+"""
 function Hermitian(A::AbstractMatrix, uplo::Symbol=:U)
     n = checksquare(A)
     for i=1:n

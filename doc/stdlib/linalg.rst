@@ -59,6 +59,82 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
    Reconstruct the matrix ``A`` from the factorization ``F=factorize(A)``\ .
 
+.. function:: Diagonal(A::AbstractMatrix)
+
+   .. Docstring generated from Julia source
+
+   Constructs a matrix from the diagonal of ``A``\ .
+
+.. function:: Diagonal(V::AbstractVector)
+
+   .. Docstring generated from Julia source
+
+   Constructs a matrix with ``V`` as its diagonal.
+
+.. function:: Bidiagonal(dv, ev, isupper)
+
+   .. Docstring generated from Julia source
+
+   Constructs an upper (``isupper=true``\ ) or lower (``isupper=false``\ ) bidiagonal matrix using the given diagonal (``dv``\ ) and off-diagonal (``ev``\ ) vectors.  The result is of type ``Bidiagonal`` and provides efficient specialized linear solvers, but may be converted into a regular matrix with :func:`full`\ . ``ev``\ 's length must be one less than the length of ``dv``\ .
+
+.. function:: Bidiagonal(dv, ev, uplo)
+
+   .. Docstring generated from Julia source
+
+   Constructs an upper (``uplo='U'``\ ) or lower (``uplo='L'``\ ) bidiagonal matrix using the given diagonal (``dv``\ ) and off-diagonal (``ev``\ ) vectors.  The result is of type ``Bidiagonal`` and provides efficient specialized linear solvers, but may be converted into a regular matrix with :func:`full`\ . ``ev``\ 's length must be one less than the length of ``dv``\ .
+
+.. function:: Bidiagonal(A, uplo)
+
+   .. Docstring generated from Julia source
+
+   Construct a ``Bidiagonal`` matrix from the main diagonal of ``A`` and its first super- (if ``isupper=true``\ ) or sub-diagonal (if ``isupper=false``\ ).
+
+.. function:: SymTridiagonal(dv, ev)
+
+   .. Docstring generated from Julia source
+
+   Construct a symmetric tridiagonal matrix from the diagonal and first sub/super-diagonal, respectively. The result is of type ``SymTridiagonal`` and provides efficient specialized eigensolvers, but may be converted into a regular matrix with :func:`full`\ .
+
+.. function:: Tridiagonal(dl, d, du)
+
+   .. Docstring generated from Julia source
+
+   Construct a tridiagonal matrix from the first subdiagonal, diagonal, and first superdiagonal, respectively.  The result is of type ``Tridiagonal`` and provides efficient specialized linear solvers, but may be converted into a regular matrix with :func:`full`\ . The lengths of ``dl`` and ``du`` must be one less than the length of ``d``\ .
+
+.. function:: Symmetric(A, uplo=:U)
+
+   .. Docstring generated from Julia source
+
+   Construct a ``Symmetric`` matrix from the upper (if ``uplo = :U``\ ) or lower (if ``uplo = :L``\ ) triangle of ``A``\ .
+
+   **Example**
+
+   .. code-block:: julia
+
+       A = randn(10,10)
+       Supper = Symmetric(A)
+       Slower = Symmetric(A,:L)
+       eigfact(Supper)
+
+   ``eigfact`` will use a method specialized for matrices known to be symmetric. Note that ``Supper`` will not be equal to ``Slower`` unless ``A`` is itself symmetric (e.g. if ``A == A.'``\ ).
+
+.. function:: Hermitian(A, uplo=:U)
+
+   .. Docstring generated from Julia source
+
+   Construct a ``Hermitian`` matrix from the upper (if ``uplo = :U``\ ) or lower (if ``uplo = :L``\ ) triangle of ``A``\ .
+
+   **Example**
+
+   .. code-block:: julia
+
+       A = randn(10,10)
+       Hupper = Hermitian(A)
+       Hlower = Hermitian(A,:L)
+       eigfact(Hupper)
+
+   ``eigfact`` will use a method specialized for matrices known to be Hermitian. Note that ``Hupper`` will not be equal to ``Hlower`` unless ``A`` is itself Hermitian (e.g. if ``A == A'``\ ).
+
 .. function:: lu(A) -> L, U, p
 
    .. Docstring generated from Julia source
@@ -822,19 +898,13 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
    .. Docstring generated from Julia source
 
-   Construct a tridiagonal matrix from the lower diagonal, diagonal, and upper diagonal, respectively.  The result is of type ``Tridiagonal`` and provides efficient specialized linear solvers, but may be converted into a regular matrix with :func:`full`\ .
+   Construct a tridiagonal matrix from the first subdiagonal, diagonal, and first superdiagonal, respectively.  The result is of type ``Tridiagonal`` and provides efficient specialized linear solvers, but may be converted into a regular matrix with :func:`full`\ . The lengths of ``dl`` and ``du`` must be one less than the length of ``d``\ .
 
 .. function:: Bidiagonal(dv, ev, isupper)
 
    .. Docstring generated from Julia source
 
-   Constructs an upper (``isupper=true``\ ) or lower (``isupper=false``\ ) bidiagonal matrix using the given diagonal (``dv``\ ) and off-diagonal (``ev``\ ) vectors.  The result is of type ``Bidiagonal`` and provides efficient specialized linear solvers, but may be converted into a regular matrix with :func:`full`\ .
-
-.. function:: SymTridiagonal(d, du)
-
-   .. Docstring generated from Julia source
-
-   Construct a real symmetric tridiagonal matrix from the diagonal and upper diagonal, respectively. The result is of type ``SymTridiagonal`` and provides efficient specialized eigensolvers, but may be converted into a regular matrix with :func:`full`\ .
+   Constructs an upper (``isupper=true``\ ) or lower (``isupper=false``\ ) bidiagonal matrix using the given diagonal (``dv``\ ) and off-diagonal (``ev``\ ) vectors.  The result is of type ``Bidiagonal`` and provides efficient specialized linear solvers, but may be converted into a regular matrix with :func:`full`\ . ``ev``\ 's length must be one less than the length of ``dv``\ .
 
 .. function:: rank(M)
 
@@ -1253,7 +1323,14 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
    ``eigs`` returns the ``nev`` requested eigenvalues in ``d``\ , the corresponding Ritz vectors ``v`` (only if ``ritzvec=true``\ ), the number of converged eigenvalues ``nconv``\ , the number of iterations ``niter`` and the number of matrix vector multiplications ``nmult``\ , as well as the final residual vector ``resid``\ .
 
-   **note**
+   **Example**
+
+   .. code-block:: julia
+
+       X = sprand(10, 5, 0.2)
+       eigs(X, nsv = 2, tol = 1e-3)
+
+   **Note**
 
    The ``sigma`` and ``which`` keywords interact: the description of eigenvalues searched for by ``which`` do _not_ necessarily refer to the eigenvalue problem :math:`Av = Bv\lambda`\ , but rather the linear operator constructed by the specification of the iteration mode implied by ``sigma``\ .
 
