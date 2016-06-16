@@ -274,3 +274,9 @@ end
 
 # Make sure `julia --lisp` doesn't break
 run(pipeline(DevNull, `$(Base.julia_cmd()) --lisp`, DevNull))
+
+# --precompiled={yes|no}
+let exename = `$(Base.julia_cmd())`
+    @test readchomp(`$exename --precompiled=yes -E "Bool(Base.JLOptions().use_precompiled)"`) == "true"
+    @test readchomp(`$exename --precompiled=no -E "Bool(Base.JLOptions().use_precompiled)"`) == "false"
+end
