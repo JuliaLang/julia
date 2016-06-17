@@ -1361,7 +1361,7 @@ You can safely access the value of a :obj:`Nullable` object using :func:`get`:
 
     julia> get(Nullable{Float64}())
     ERROR: NullException()
-     in get at nullable.jl:30
+     in get at nullable.jl:32
 
     julia> get(Nullable(1.0))
     1.0
