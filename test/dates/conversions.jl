@@ -44,22 +44,6 @@
 @test Dates.julian2datetime(2452695.625) == Dates.DateTime(2003,2,25,3)
 @test Dates.datetime2julian(Dates.DateTime(2013,12,3,21)) == 2456630.375
 
-# Test conversion to and from the ISO 8601 year 0000 epoch (used for rounding)
-@test Dates.iso86012date(-1) == Dates.Date(-1, 12, 31)
-@test Dates.iso86012date(0) == Dates.Date(0, 1, 1)
-@test Dates.iso86012date(1) == Dates.Date(0, 1, 2)
-@test Dates.iso86012date(736329) == Dates.Date(2016, 1, 1)
-@test Dates.iso86012datetime(-86400000) == Dates.DateTime(-1, 12, 31)
-@test Dates.iso86012datetime(0) == Dates.DateTime(0, 1, 1)
-@test Dates.iso86012datetime(86400000) == Dates.DateTime(0, 1, 2)
-@test Dates.iso86012datetime(736329 * 86400000) == Dates.DateTime(2016, 1, 1)
-@test Dates.date2iso8601(Dates.Date(-1, 12, 31)) == -1
-@test Dates.date2iso8601(Dates.Date(0, 1, 1)) == 0
-@test Dates.date2iso8601(Dates.Date(2016, 1, 1)) == 736329
-@test Dates.datetime2iso8601(Dates.DateTime(-1, 12, 31)) == -86400000
-@test Dates.datetime2iso8601(Dates.DateTime(0, 1, 1)) == 0
-@test Dates.datetime2iso8601(Dates.DateTime(2016, 1, 1)) == 736329 * 86400000
-
 @test typeof(Dates.now()) <: Dates.DateTime
 @test typeof(Dates.today()) <: Dates.Date
 @test typeof(Dates.now(Dates.UTC)) <: Dates.DateTime
