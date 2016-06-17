@@ -2,6 +2,8 @@
 
 module dSFMT
 
+import Base: copy, copy!, ==
+
 export DSFMT_state, dsfmt_get_min_array_size, dsfmt_get_idstring,
        dsfmt_init_gen_rand, dsfmt_init_by_array, dsfmt_gv_init_by_array,
        dsfmt_fill_array_close_open!, dsfmt_fill_array_close1_open2!,
@@ -21,9 +23,15 @@ const JPOLY1e21  = "e172e20c5d2de26b567c0cace9e7c6cc4407bd5ffcd22ca59d37b73d54fd
 
 type DSFMT_state
     val::Vector{Int32}
-    DSFMT_state() = new(Array{Int32}(JN32))
-    DSFMT_state(val::Vector{Int32}) = new(val)
+
+    DSFMT_state(val::Vector{Int32} = zeros(Int32, JN32)) =
+        new(length(val) == JN32 ? val : throw(DomainError()))
 end
+
+copy!(dst::DSFMT_state, src::DSFMT_state) = (copy!(dst.val, src.val); dst)
+copy(src::DSFMT_state) = DSFMT_state(copy(src.val))
+
+==(s1::DSFMT_state, s2::DSFMT_state) = s1.val == s2.val
 
 function dsfmt_get_idstring()
     idstring = ccall((:dsfmt_get_idstring,:libdSFMT),
