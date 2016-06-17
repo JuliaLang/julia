@@ -333,7 +333,7 @@ const powers_of_ten = [
     0x000000e8d4a51000, 0x000009184e72a000, 0x00005af3107a4000, 0x00038d7ea4c68000,
     0x002386f26fc10000, 0x016345785d8a0000, 0x0de0b6b3a7640000, 0x8ac7230489e80000,
 ]
-function ndigits0z(x::Union{UInt8,UInt16,UInt32,UInt64})
+function ndigits0z(x::Base.BitUnsigned64)
     lz = (sizeof(x)<<3)-leading_zeros(x)
     nd = (1233*lz)>>12+1
     nd -= x < powers_of_ten[nd]
@@ -346,8 +346,11 @@ function ndigits0z(x::UInt128)
     end
     return n + ndigits0z(UInt64(x))
 end
-ndigits0z(x::Integer) = ndigits0z(unsigned(abs(x)))
-ndigits(x::Integer) = x==0 ? 1 : ndigits0z(x)
+
+ndigits0z(x::Signed) = ndigits0z(unsigned(abs(x)))
+
+ndigits0z(x::Integer) = ndigits(x, false)
+ndigits(x::Integer, min1::Bool=true) = x==0 ? min1%Int : ndigits0zpb(x, 10)
 
 # The suffix "nb" stands for "negative base"
 function ndigits0znb(n::Integer, b::Integer)
@@ -362,7 +365,9 @@ end
 
 ndigits0znb(n::Unsigned, b::Integer) = ndigits0znb(signed(n), b)
 
-function ndigits0z(n::Unsigned, b::Int)
+# The suffix "pb" stands for "positive base"
+# TODO: allow b::Integer
+function ndigits0zpb(n::Base.BitUnsigned, b::Int)
     # precondition: b > 1
     b < 0   && return ndigits0znb(signed(n), b)
     b == 2  && return sizeof(n)<<3 - leading_zeros(n)
@@ -386,18 +391,33 @@ function ndigits0z(n::Unsigned, b::Int)
     return d
 end
 
-ndigits0z(x::Integer, b::Integer) = ndigits0z(unsigned(abs(x)), Int(b))
+ndigits0zpb(x::Base.BitSigned, b::Integer) = ndigits0zpb(unsigned(abs(x)), Int(b))
+ndigits0zpb(x::Base.BitUnsigned, b::Integer) = ndigits0zpb(x, Int(b))
+
+# The suffix "0z" means that the output is 0 on input zero (cf. #16841)
+"""
+    ndigits0z(n::Integer, b::Integer=10)
+
+Return 0 if `n == 0`, otherwise compute the number of digits in
+integer `n` written in base `b` (i.e. equal to `ndigits(n, b)`
+in this case).
+The base `b` must not be in `[-1, 0, 1]`.
+"""
+ndigits0z(x::Integer, b::Integer) = ndigits(x, b, false)
 
 """
     ndigits(n::Integer, b::Integer=10)
 
 Compute the number of digits in integer `n` written in base `b`.
+The base `b` must not be in `[-1, 0, 1]
 """
-function ndigits(x::Integer, b::Integer)
+function ndigits(x::Integer, b::Integer, min1::Bool=true)
+    # min1: whether the minimum value of this function should be 1
+    # (for the special input value 0), or not (then ndigits(0, b) == 0)
     if b < -1
-        x == 0 ? 1 : ndigits0znb(x, b)
+        x == 0 ? min1%Int : ndigits0znb(x, b)
     elseif b > 1
-        x == 0 ? 1 : ndigits0z(x, b)
+        x == 0 ? min1%Int : ndigits0zpb(x, b)
     else
         throw(DomainError())
     end

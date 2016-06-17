@@ -99,6 +99,10 @@ end
 # issue #19367
 @test ndigits(Int128(2)^64, 256) == 9
 
+# test unsigned bases
+@test ndigits(9, 0x2) == 4
+@test ndigits(0x9, 0x2) == 4
+
 @test bin('3') == "110011"
 @test bin('3',7) == "0110011"
 @test bin(3) == "11"
