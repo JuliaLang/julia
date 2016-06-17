@@ -4360,7 +4360,7 @@ position
 """
     selectperm(v, k, [alg=<algorithm>,] [by=<transform>,] [lt=<comparison>,] [rev=false])
 
-Return a partial permutation of the the vector `v`, according to the order specified by
+Return a partial permutation of the vector `v`, according to the order specified by
 `by`, `lt` and `rev`, so that `v[output]` returns the first `k` (or range of adjacent values
 if `k` is a range) values of a fully sorted version of `v`. If `k` is a single index
 (Integer), an array of the first `k` indices is returned; if `k` is a range, an array of

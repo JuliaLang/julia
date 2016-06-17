@@ -284,7 +284,7 @@ play_move(int i, int j, int color)
      * than one direction.
      */
     if (on_board(ai, aj) && board[pos2] == color && !same_string(pos, pos2)) {
-      /* The strings are linked together simply by swapping the the
+      /* The strings are linked together simply by swapping the
        * next_stone pointers.
        */
       int tmp = next_stone[pos2];

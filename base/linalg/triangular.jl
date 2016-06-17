@@ -1557,7 +1557,7 @@ for (f, g) in ((:/, :A_rdiv_B!), (:A_rdiv_Bc, :A_rdiv_Bc!), (:A_rdiv_Bt, :A_rdiv
 end
 end
 
-# If these are not defined, the they will fallback to the versions in matmul.jl
+# If these are not defined, they will fallback to the versions in matmul.jl
 # and dispatch to generic_matmatmul! which is very costly to compile. The methods
 # below might compute an unnecessary copy. Eliminating the copy requires adding
 # all the promotion logic here once again. Since these methods are probably relatively
