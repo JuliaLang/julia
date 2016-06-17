@@ -71,7 +71,8 @@ jl_value_t *jl_memory_exception;
 jl_value_t *jl_readonlymemory_exception;
 union jl_typemap_t jl_cfunction_list;
 
-jl_sym_t *call_sym;    jl_sym_t *dots_sym;
+jl_sym_t *call_sym;    jl_sym_t *invoke_sym;
+jl_sym_t *dots_sym;
 jl_sym_t *module_sym;  jl_sym_t *slot_sym;
 jl_sym_t *empty_sym;
 jl_sym_t *export_sym;  jl_sym_t *import_sym;
