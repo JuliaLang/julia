@@ -595,13 +595,13 @@ JL_DLLEXPORT int64x2_t test_aa64_vec_1(int32x2_t v1, float _v2, int32x2_t v3)
     return vmovl_s32(v1 * v2 + v3);
 }
 
-// This is a homogenious short vector aggregate
+// This is a homogeneous short vector aggregate
 typedef struct {
     int8x8_t v1;
     float32x2_t v2;
 } struct_aa64_3;
 
-// This is NOT a homogenious short vector aggregate
+// This is NOT a homogeneous short vector aggregate
 typedef struct {
     float32x2_t v2;
     int16x8_t v1;
@@ -611,6 +611,115 @@ JL_DLLEXPORT struct_aa64_3 test_aa64_vec_2(struct_aa64_3 v1, struct_aa64_4 v2)
 {
     struct_aa64_3 x = {v1.v1 + vmovn_s16(v2.v1), v1.v2 - v2.v2};
     return x;
+}
+
+#endif
+
+#if defined(_CPU_PPC64_)
+
+typedef int32_t int32x2_t __attribute__ ((vector_size (8)));
+typedef float float32x2_t __attribute__ ((vector_size (8)));
+typedef int32_t int32x4_t __attribute__ ((vector_size (16)));
+typedef float float32x4_t __attribute__ ((vector_size (16)));
+typedef double float64x2_t __attribute__ ((vector_size (16)));
+
+typedef struct {
+    int64_t m;
+    float32x4_t v;
+} struct_huge1_ppc64;
+
+typedef struct {
+    float32x4_t v1;
+    int32x2_t v2;
+} struct_huge2_ppc64;
+
+typedef struct {
+    float32x4_t v1;
+    struct {
+        float f1;
+        float f2;
+        float f3;
+        float f4;
+    };
+} struct_huge3_ppc64;
+
+typedef struct {
+    float32x2_t v1;
+    float64x2_t v2;
+} struct_huge4_ppc64;
+
+typedef struct {
+    float32x4_t v1[9];
+} struct_huge5_ppc64;
+
+typedef struct {
+    float32x4_t v1[8];
+    float32x4_t v2;
+} struct_huge6_ppc64;
+
+typedef struct {
+    float32x4_t v1[8];
+} struct_huge1_ppc64_hva;
+
+typedef struct {
+    struct {
+        float32x4_t vf[2];
+    } v[2];
+} struct_huge2_ppc64_hva;
+
+typedef struct {
+    float32x4_t vf1;
+    struct {
+        float32x4_t vf2[2];
+    };
+} struct_huge3_ppc64_hva;
+
+typedef struct {
+    int32x4_t v1;
+    float32x4_t v2;
+} struct_huge4_ppc64_hva;
+
+typedef struct {
+    float32x4_t v1;
+    float64x2_t v2;
+} struct_huge5_ppc64_hva;
+
+test_huge(1_ppc64, m);
+test_huge(2_ppc64, v1[0]);
+test_huge(3_ppc64, v1[0]);
+test_huge(4_ppc64, v1[0]);
+test_huge(5_ppc64, v1[0][0]);
+test_huge(6_ppc64, v1[0][0]);
+test_huge(1_ppc64_hva, v1[0][0]);
+test_huge(2_ppc64_hva, v[0].vf[0][0]);
+test_huge(3_ppc64_hva, vf1[0]);
+test_huge(4_ppc64_hva, v1[0]);
+test_huge(5_ppc64_hva, v1[0]);
+
+JL_DLLEXPORT int64_t test_ppc64_vec1long(
+        int64_t d1, int64_t d2, int64_t d3, int64_t d4, int64_t d5, int64_t d6,
+        int64_t d7, int64_t d8, int64_t d9, struct_huge1_ppc64 vs)
+{
+    return d1 + d2 + d3 + d4 + d5 + d6 + d7 + d8 + d9 + vs.m + vs.v[0] + vs.v[1] + vs.v[2] + vs.v[3];
+}
+
+JL_DLLEXPORT int64_t test_ppc64_vec1long_vec(
+        int64_t d1, int64_t d2, int64_t d3, int64_t d4, int64_t d5, int64_t d6,
+        int64_t d7, int64_t d8, int64_t d9, float32x4_t vs)
+{
+    return d1 + d2 + d3 + d4 + d5 + d6 + d7 + d8 + d9 + vs[0] + vs[1] + vs[2] + vs[3];
+}
+
+JL_DLLEXPORT float32x4_t test_ppc64_vec2(int64_t d1, float32x4_t a, float32x4_t b, float32x4_t c, float32x4_t d,
+                                         float32x4_t e, float32x4_t f, float32x4_t g, float32x4_t h, float32x4_t i,
+                                         float32x4_t j, float32x4_t k, float32x4_t l, float32x4_t m, float32x4_t n)
+{
+    float32x4_t r;
+    r[0] = d1 + a[0] + b[0] + c[0] + d[0] + e[0] + f[0] + g[0] + h[0] + i[0] + j[0] + k[0] + l[0] + m[0] + n[0];
+    r[1] = d1 + a[1] + b[1] + c[1] + d[1] + e[1] + f[1] + g[1] + h[1] + i[1] + j[1] + k[1] + l[1] + m[1] + n[1];
+    r[2] = d1 + a[2] + b[2] + c[2] + d[2] + e[2] + f[2] + g[2] + h[2] + i[2] + j[2] + k[2] + l[2] + m[2] + n[2];
+    r[3] = d1 + a[3] + b[3] + c[3] + d[3] + e[3] + f[3] + g[3] + h[3] + i[3] + j[3] + k[3] + l[3] + m[3] + n[3];
+    return r;
 }
 
 #endif

@@ -61,6 +61,9 @@ include("operators.jl")
 include("pointer.jl")
 include("refpointer.jl")
 (::Type{T}){T}(arg) = convert(T, arg)::T
+(::Type{VecElement{T}}){T}(arg) = VecElement{T}(convert(T, arg))
+convert{T<:VecElement}(::Type{T}, arg) = T(arg)
+convert{T<:VecElement}(::Type{T}, arg::T) = arg
 include("checked.jl")
 importall .Checked
 

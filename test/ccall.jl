@@ -47,7 +47,7 @@ end
 
 ## Tests for passing and returning structs
 
-let
+let a, ci_ary, x
     a = 20 + 51im
 
     x = ccall((:ctest, libccalltest), Complex{Int}, (Complex{Int},), a)
@@ -66,7 +66,7 @@ let
     Libc.free(convert(Ptr{Void},x))
 end
 
-let
+let a, b, x
     a = 2.84 + 5.2im
 
     x = ccall((:cgtest, libccalltest), Complex128, (Complex128,), a)
@@ -80,7 +80,7 @@ let
     @test a == 2.84 + 5.2im
 end
 
-let
+let a, b, x
     a = 3.34f0 + 53.2f0im
 
     x = ccall((:cftest, libccalltest), Complex64, (Complex64,), a)
@@ -97,7 +97,7 @@ end
 
 ## Tests for native Julia data types
 
-let
+let a
     a = 2.84 + 5.2im
 
     @test_throws MethodError ccall((:cptest, libccalltest), Ptr{Complex{Int}}, (Ptr{Complex{Int}},), a)
@@ -113,7 +113,7 @@ type Struct1
 end
 copy(a::Struct1) = Struct1(a.x, a.y)
 
-let
+let a, b, a2, x
     a = Struct1(352.39422f23, 19.287577)
     b = Float32(123.456)
 
@@ -127,7 +127,7 @@ let
     @test x.y ≈ a.y - 2*b
 end
 
-let
+let a, b, x, y
     a = Complex{Int32}(Int32(10),Int32(31))
     b = Int32(42)
 
@@ -140,7 +140,7 @@ let
     @test x == a + b*1 - b*2im
 end
 
-let
+let a, b, x, y, z
     a = Complex{Int64}(Int64(20),Int64(51))
     b = Int64(42)
 
@@ -162,7 +162,7 @@ type Struct4
     z::Int32
 end
 
-let
+let a, b, x
     a = Struct4(-512275808,882558299,-2133022131)
     b = Int32(42)
 
@@ -180,7 +180,7 @@ type Struct5
     a::Int32
 end
 
-let
+let a, b, x
     a = Struct5(1771319039, 406394736, -1269509787, -745020976)
     b = Int32(42)
 
@@ -198,7 +198,7 @@ type Struct6
     z::Int64
 end
 
-let
+let a, b, x
     a = Struct6(-654017936452753226, -5573248801240918230, -983717165097205098)
     b = Int64(42)
 
@@ -214,7 +214,7 @@ type Struct7
     y::Cchar
 end
 
-let
+let a, b, x
     a = Struct7(-384082741977533896, 'h')
     b = Int8(42)
 
@@ -229,7 +229,7 @@ type Struct8
     y::Cchar
 end
 
-let
+let a, b, x
     a = Struct8(-384082896, 'h')
     b = Int8(42)
 
@@ -244,7 +244,7 @@ type Struct9
     y::Int16
 end
 
-let
+let a, b, x
     a = Struct9(-394092996, -3840)
     b = Int16(42)
 
@@ -261,7 +261,7 @@ type Struct10
     a::Cchar
 end
 
-let
+let a, b, x
     a = Struct10('0', '1', '2', '3')
     b = Int8(2)
 
@@ -277,7 +277,7 @@ type Struct11
     x::Complex64
 end
 
-let
+let a, b, x
     a = Struct11(0.8877077f0 + 0.4591081f0im)
     b = Float32(42)
 
@@ -291,7 +291,7 @@ type Struct12
     y::Complex64
 end
 
-let
+let a, b, x
     a = Struct12(0.8877077f5 + 0.4591081f2im, 0.0004842868f0 - 6982.3265f3im)
     b = Float32(42)
 
@@ -305,7 +305,7 @@ type Struct13
     x::Complex128
 end
 
-let
+let a, b, x
     a = Struct13(42968.97560380495 - 803.0576845153616im)
     b = Float64(42)
 
@@ -319,7 +319,7 @@ type Struct14
     y::Float32
 end
 
-let
+let a, b, x
     a = Struct14(0.024138331f0, 0.89759064f32)
     b = Float32(42)
 
@@ -334,7 +334,7 @@ type Struct15
     y::Float64
 end
 
-let
+let a, b, x
     a = Struct15(4.180997967273657, -0.404218594294923)
     b = Float64(42)
 
@@ -353,7 +353,7 @@ type Struct16
     c::Float64
 end
 
-let
+let a, b, x
     a = Struct16(0.1604656f0, 0.6297606f0, 0.83588994f0,
                  0.6460273620993535, 0.9472692581106656, 0.47328535437352093)
     b = Float32(42)
@@ -368,7 +368,7 @@ let
     @test x.c ≈ a.c - b*6
 end
 
-let
+let a, b, x
     a = Int128(0x7f00123456789abc)<<64 + typemax(UInt64)
     b = Int64(1)
 
@@ -385,7 +385,7 @@ type Struct_Big
 end
 copy(a::Struct_Big) = Struct_Big(a.x, a.y, a.z)
 
-let
+let a, a2, x
     a = Struct_Big(424,-5,Int8('Z'))
     a2 = copy(a)
 
@@ -443,12 +443,16 @@ function verify_huge(init, a, b)
     end
     # make sure b was modifed as expected
     a1, b1 = getfield(a, 1), getfield(b, 1)
-    if isa(a1, Tuple)
-        @test oftype(a1[1], a1[1] * 39) === b1[1]
+    while isa(a1, Tuple)
         @test a1[2:end] === b1[2:end]
-    else
-        @test oftype(a1, a1 * 39) === b1
+        a1 = a1[1]
+        b1 = b1[1]
     end
+    if isa(a1, VecElement)
+        a1 = a1.value
+        b1 = b1.value
+    end
+    @test oftype(a1, a1 * 39) === b1
     for i = 2:nfields(a)
         @test getfield(a, i) === getfield(b, i)
     end
@@ -458,7 +462,8 @@ macro test_huge(i, b, init)
     ty = Symbol("Struct_huge", i, b)
     return quote
         let a = $ty($(esc(init))...), f
-            f(b) = ccall(($f, libccalltest), $ty, (Cchar, $ty, Cchar), '0' + $i, a, $b)
+            f(b) = ccall(($f, libccalltest), $ty, (Cchar, $ty, Cchar), '0' + $i, a, $b[1])
+            #code_llvm(f, typeof((a,)))
             verify_huge($ty($(esc(init))...), a, f(a))
         end
     end
@@ -605,7 +610,10 @@ end
 # SIMD Registers
 
 typealias VecReg{N,T} NTuple{N,VecElement{T}}
+typealias V2xF32 VecReg{2,Float32}
 typealias V4xF32 VecReg{4,Float32}
+typealias V2xF64 VecReg{2,Float64}
+typealias V2xI32 VecReg{2,Int32}
 typealias V4xI32 VecReg{4,Int32}
 
 immutable Struct_AA64_1
@@ -628,8 +636,64 @@ immutable Struct_AA64_4
     v1::VecReg{8,Int16}
 end
 
-if Sys.ARCH === :x86_64
+type Struct_huge1_ppc64
+    m::Int64
+    v::V4xF32
+end
 
+type Struct_huge2_ppc64
+    v1::V4xF32
+    v2::V2xI32
+end
+
+type Struct_huge3_ppc64
+    v1::V4xF32
+    f::NTuple{4,Float32}
+end
+
+type Struct_huge4_ppc64
+    v1::V2xF32
+    v2::V2xF64
+end
+
+type Struct_huge5_ppc64
+    v1::NTuple{9,V4xF32}
+end
+
+type Struct_huge6_ppc64
+    v1::NTuple{8,V4xF32}
+    v2::V4xF32
+end
+
+type Struct_huge7_ppc64
+    v1::VecReg{3,Int32}
+    v2::VecReg{3,Int32}
+end
+
+type Struct_huge1_ppc64_hva
+    v1::NTuple{8,V4xF32}
+end
+
+type Struct_huge2_ppc64_hva
+    v1::NTuple{2,NTuple{2,V4xF32}}
+end
+
+type Struct_huge3_ppc64_hva
+    vf1::V4xF32
+    vf2::Tuple{NTuple{2,V4xF32}}
+end
+
+type Struct_huge4_ppc64_hva
+    v1::V4xI32
+    v2::V4xF32
+end
+
+type Struct_huge5_ppc64_hva
+    v1::V4xI32
+    v2::V2xF64
+end
+
+if Sys.ARCH === :x86_64
     function test_sse(a1::V4xF32,a2::V4xF32,a3::V4xF32,a4::V4xF32)
         ccall((:test_m128, libccalltest), V4xF32, (V4xF32,V4xF32,V4xF32,V4xF32), a1, a2, a3, a4)
     end
@@ -653,6 +717,7 @@ if Sys.ARCH === :x86_64
         # cfunction round-trip
         @test rt_sse(a1,a2,a3,a4) == r
     end
+
 elseif Sys.ARCH === :aarch64
     for v1 in 1:99:1000, v2 in -100:-1999:-20000
         @test ccall((:test_aa64_i128_1, libccalltest), Int128,
@@ -712,4 +777,68 @@ elseif Sys.ARCH === :aarch64
                                   VecElement(Float32(v1_22 - v2_22))))
         @test res === expected
     end
+
+elseif Sys.ARCH === :powerpc64le
+@test_huge 1 "_ppc64" (1, (2.0, 3.0, 4.0, 5.0),)
+@test_huge 2 "_ppc64" ((1.0, 2.0, 3.0, 4.0), (11, 12))
+@test_huge 3 "_ppc64" ((1, 2, 3, 4), (11.0, 12.0, 13.0, 14.0))
+@test_huge 4 "_ppc64" ((1, 2), (11.0, 12.0))
+@test_huge 5 "_ppc64" ((((1.0, 2.0, 3.0, 4.0),
+                         (5.0, 6.0, 7.0, 8.0),
+                         (11.0, 12.0, 13.0, 14.0),
+                         (15.0, 16.0, 17.0, 18.0),
+                         (21.0, 22.0, 23.0, 24.0),
+                         (25.0, 26.0, 27.0, 28.0),
+                         (31.0, 32.0, 33.0, 34.0),
+                         (35.0, 36.0, 37.0, 38.0),
+                         (41.0, 42.0, 43.0, 44.0)),))
+@test_huge 6 "_ppc64" ((((1.0, 2.0, 3.0, 4.0),
+                         (5.0, 6.0, 7.0, 8.0),
+                         (11.0, 12.0, 13.0, 14.0),
+                         (15.0, 16.0, 17.0, 18.0),
+                         (21.0, 22.0, 23.0, 24.0),
+                         (25.0, 26.0, 27.0, 28.0),
+                         (31.0, 32.0, 33.0, 34.0),
+                         (35.0, 36.0, 37.0, 38.0)),
+                        (41.0, 42.0, 43.0, 44.0)))
+@test_huge 1 "_ppc64_hva" ((((1.0, 2.0, 3.0, 4.0),
+                             (5.0, 6.0, 7.0, 8.0),
+                             (11.0, 12.0, 13.0, 14.0),
+                             (15.0, 16.0, 17.0, 18.0),
+                             (21.0, 22.0, 23.0, 24.0),
+                             (25.0, 26.0, 27.0, 28.0),
+                             (31.0, 32.0, 33.0, 34.0),
+                             (35.0, 36.0, 37.0, 38.0)),))
+@test_huge 2 "_ppc64_hva" (((((1.0, 2.0, 3.0, 4.0),
+                              (5.0, 6.0, 7.0, 8.0)),
+                             ((11.0, 12.0, 13.0, 14.0),
+                              (15.0, 16.0, 17.0, 18.0))),))
+@test_huge 3 "_ppc64_hva" (((1.0, 2.0, 3.0, 4.0),
+                            (((11.0, 12.0, 13.0, 14.0),
+                              (15.0, 16.0, 17.0, 18.0)),)))
+@test_huge 4 "_ppc64_hva" (((1, 2, 3, 4),
+                            (11.0, 12.0, 13.0, 14.0)))
+@test_huge 5 "_ppc64_hva" (((1, 2, 3, 4),
+                            (11.0, 12.0)))
+
+@test 18451 == ccall((:test_ppc64_vec1long, libccalltest), Int64,
+    (Int64, Int64, Int64, Int64, Int64, Int64, Int64, Int64, Int64, Struct_huge1_ppc64),
+    1, 2, 3, 4, 5, 6, 7, 8, 9, Struct_huge1_ppc64(18000, (100, 101, 102, 103)))
+
+@test 941 == ccall((:test_ppc64_vec1long_vec, libccalltest), Int64,
+    (Int64, Int64, Int64, Int64, Int64, Int64, Int64, Int64, Int64, V4xF32),
+    11, 12, 13, 14, 15, 16, 17, 18, 19, (200, 201, 202, 203))
+
+@test V4xF32((614232, 614218, 614204, 614190)) ==
+     ccall((:test_ppc64_vec2, libccalltest), V4xF32,
+    (Int64, V4xF32, V4xF32, V4xF32, V4xF32,
+     V4xF32, V4xF32, V4xF32, V4xF32, V4xF32,
+     V4xF32, V4xF32, V4xF32, V4xF32, V4xF32),
+    600000, (4, 3, 2, 1), (5, 4, 3, 2), (6, 5, 4, 3), (7, 6, 5, 4),
+    (14, 13, 12, 11), (15, 14, 13, 12), (16, 15, 14, 13), (17, 16, 15, 14), (18, 17, 16, 15),
+    (1024, 1023, 1022, 1021), (1025, 1024, 1023, 1022), (1026, 1025, 1024, 1023), (1027, 1026, 1025, 1024), (10028, 10027, 10026, 10025))
+
+else
+warn("ccall: no VecReg tests run for this platform")
+
 end
