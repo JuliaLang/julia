@@ -74,8 +74,12 @@ Expr types
 These symbols appear in the ``head`` field of ``Expr``\s in lowered form.
 
 ``call``
-    function call. ``args[1]`` is the function to call, ``args[2:end]`` are the
-    arguments.
+    function call (dynamic dispatch). ``args[1]`` is the function to call,
+    ``args[2:end]`` are the arguments.
+
+``invoke``
+    function call (static dispatch). ``args[1]`` is the LambdaInfo to call,
+    ``args[2:end]`` are the arguments (including the function that is being called, at ``args[2]``).
 
 ``static_parameter``
     reference a static parameter by index.
