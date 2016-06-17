@@ -82,3 +82,11 @@ let a1 = Base.svec(1, 2, 3, []), a2 = Base.svec(1, 2, 3)
     @test a3 !== b3
     @test a3[1] === a3[2]
 end
+
+# issue #16667 (Specific fixes for BigFloat, BigInt only)
+let a1 = [big"1.5", big"1e42"], a2 = [big"123", big"456"]
+    b1 = deepcopy(a1)
+    @test a1[1] === b1[1]
+    b2 = deepcopy(a2)
+    @test a2[1] === b2[1]
+end
