@@ -190,3 +190,8 @@ end
 
 # issue #16700
 @test_throws MethodError 1.0 >> 8
+
+# PR #16988
+@test true << 2 === 1 << 2
+@test true >> 2 === 1 >> 2
+@test true >>> 2 === 1 >>> 2
