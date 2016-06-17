@@ -59,6 +59,7 @@ function unsafe_read(s::IO, p::Ptr{UInt8}, n::UInt)
     nothing
 end
 
+unsafe_read(s::IO, ::Type{UInt8}) = read(s, UInt8)
 
 # Generic wrappers around other IO objects
 abstract AbstractPipe <: IO

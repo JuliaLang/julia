@@ -92,6 +92,13 @@ end
     return byte
 end
 
+@inline function unsafe_read(from::AbstractIOBuffer, ::Type{UInt8})
+    ptr = from.ptr
+    @inbounds byte = from.data[ptr]
+    from.ptr = ptr + 1
+    return byte
+end
+
 function peek(from::AbstractIOBuffer)
     from.readable || throw(ArgumentError("read failed, IOBuffer is not readable"))
     if from.ptr > from.size

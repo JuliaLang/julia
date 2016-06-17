@@ -528,3 +528,63 @@ let err = try
     end
     @test err.line == 7
 end
+
+for I in [Int8,Int16,Int32,Int64,Int128,
+            UInt8,UInt16,UInt32,UInt64,UInt128], B in [2, 4, 6, 8, 10, 12, 16, 20, 24, 32, 40, 52, 60, 62]
+    # test preamble
+    @test isnull(Base.parse(IOBuffer(""), I, Base.Options{B}()))
+    @test isnull(Base.parse(IOBuffer(" "), I, Base.Options{B}()))
+    @test isnull(Base.parse(IOBuffer("  "), I, Base.Options{B}()))
+    @test isnull(Base.parse(IOBuffer("\t\t"), I, Base.Options{B}()))
+    @test isnull(Base.parse(IOBuffer(" \t"), I, Base.Options{B}()))
+    @test_throws Base.ParsingError Base.parse(IOBuffer("+"), I, Base.Options{B}())
+    @test_throws Base.ParsingError Base.parse(IOBuffer("-"), I, Base.Options{B}())
+    @test_throws Base.ParsingError Base.parse(IOBuffer(" +"), I, Base.Options{B}())
+    @test_throws Base.ParsingError Base.parse(IOBuffer(" -"), I, Base.Options{B}())
+    @test_throws Base.ParsingError Base.parse(IOBuffer("+ "), I, Base.Options{B}())
+    @test_throws Base.ParsingError Base.parse(IOBuffer("- "), I, Base.Options{B}())
+    # extremities
+    for i in (typemin(I),I(0),typemax(I))
+        @test Nullable{I}(i) === Base.parse(IOBuffer(Base.base(B,i)), I, Base.Options{B}())
+    end
+    # test random values
+    N = 1000
+    for i = 1:N
+        r = rand(I)
+        str = Base.base(B, r)
+        @test Nullable{I}(r) === Base.parse(IOBuffer(str), I, Base.Options{B}())
+        @test Nullable{I}(r) === Base.parse(IOBuffer(string(" ",str)), I, Base.Options{B}())
+        @test Nullable{I}(r) === Base.parse(IOBuffer(string("\t",str)), I, Base.Options{B}())
+        @test Nullable{I}(r) === Base.parse(IOBuffer(string(" ",str," ")), I, Base.Options{B}())
+        @test Nullable{I}(r) === Base.parse(IOBuffer(string("\t",str,"\t")), I, Base.Options{B}())
+    end
+    # test overflow
+    if sizeof(I) < 16
+        str = Base.base(B, typemax(widen(I)))
+        @test_throws OverflowError Base.parse(IOBuffer(str), I, Base.Options{B}())
+        @test_throws OverflowError Base.parse(IOBuffer(string(" ",str)), I, Base.Options{B}())
+        @test_throws OverflowError Base.parse(IOBuffer(string("\t",str)), I, Base.Options{B}())
+        @test_throws OverflowError Base.parse(IOBuffer(string(" ",str," ")), I, Base.Options{B}())
+        @test_throws OverflowError Base.parse(IOBuffer(string("\t",str,"\t")), I, Base.Options{B}())
+        str = Base.base(B, widen(I)(typemax(I))+1)
+        @test_throws OverflowError Base.parse(IOBuffer(string(str)), I, Base.Options{B}())
+        @test_throws OverflowError Base.parse(IOBuffer(string(" ",str)), I, Base.Options{B}())
+        @test_throws OverflowError Base.parse(IOBuffer(string("\t",str)), I, Base.Options{B}())
+        @test_throws OverflowError Base.parse(IOBuffer(string(" ",str," ")), I, Base.Options{B}())
+        @test_throws OverflowError Base.parse(IOBuffer(string("\t",str,"\t")), I, Base.Options{B}())
+        if I <: Signed
+            str = Base.base(B, typemin(widen(I)))
+            @test_throws OverflowError Base.parse(IOBuffer(string(str)), I, Base.Options{B}())
+            @test_throws OverflowError Base.parse(IOBuffer(string(" ",str)), I, Base.Options{B}())
+            @test_throws OverflowError Base.parse(IOBuffer(string("\t",str)), I, Base.Options{B}())
+            @test_throws OverflowError Base.parse(IOBuffer(string(" ",str," ")), I, Base.Options{B}())
+            @test_throws OverflowError Base.parse(IOBuffer(string("\t",str,"\t")), I, Base.Options{B}())
+            str = Base.base(B, widen(I)(typemin(I))-1)
+            @test_throws OverflowError Base.parse(IOBuffer(string(str)), I, Base.Options{B}())
+            @test_throws OverflowError Base.parse(IOBuffer(string(" ",str)), I, Base.Options{B}())
+            @test_throws OverflowError Base.parse(IOBuffer(string("\t",str)), I, Base.Options{B}())
+            @test_throws OverflowError Base.parse(IOBuffer(string(" ",str," ")), I, Base.Options{B}())
+            @test_throws OverflowError Base.parse(IOBuffer(string("\t",str,"\t")), I, Base.Options{B}())
+        end
+    end
+end

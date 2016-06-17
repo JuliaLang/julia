@@ -194,3 +194,82 @@ function parse(str::AbstractString; raise::Bool=true)
     end
     return ex
 end
+
+const SPACE   = UInt8(' ')
+const TAB     = UInt8('\t')
+const ZERO    = UInt8('0')
+const NINE    = UInt8('9')
+const littleA = UInt8('a')
+const bigA    = UInt8('A')
+const littleZ = UInt8('z')
+const bigZ    = UInt8('Z')
+
+immutable ParsingError <: Exception
+    msg::String
+end
+
+immutable Options{base}
+end
+
+Options() = Options{0}()
+
+basedetect{B}(io, b, opt::Options{B}) = B
+function basedetect(io, b, opt::Options{0})
+    if b == ZERO && !eof(io)
+        b = unsafe_read(io, UInt8)
+        base = b == UInt8('b') ? 2 : b == UInt8('o') ? 8 : c == UInt8('x') ? 16 : 10
+        base != 10 && unsafe_read(io, UInt8) # read 'x' like 0x00
+        return base
+    else
+        return 10
+    end
+end
+
+function parse{B,T<:Integer}(io::IO, ::Type{T}, opt::Options{B}=Options())
+    isreadable(io) || throw(ArgumentError("$io is not readable"))
+    eof(io) && return Nullable{T}()
+    b = unsafe_read(io, UInt8)
+    # ignore leading whitespace
+    while b == SPACE || b == TAB
+        eof(io) && return Nullable{T}()
+        b = unsafe_read(io, UInt8)
+    end
+    negative = false
+    if T <: Signed
+        # handle potential leading '-' or '+'
+        negative, b = b == UInt8('-') ? (true,  !eof(io) ? unsafe_read(io, UInt8) :
+                                            throw(ParsingError("premature end of input afer '-' character"))) :
+                      b == UInt8('+') ? (false, !eof(io) ? unsafe_read(io, UInt8) :
+                                            throw(ParsingError("premature end of input afer '+' character"))) : (false, b)
+    end
+    # # ignore whitespace again?
+    # while b == SPACE || b == TAB
+    #     eof(io) && return Nullable{T}() # allows parsing "+ " or "- " as null
+    #     b = unsafe_read(io, UInt8)
+    # end
+    # auto-detect base if not explicitly given
+    base::T = basedetect(io, b, opt)
+    a::UInt8 = ifelse(base <= 36, 10, 36)
+    n::T = 0
+    Tmax = div(typemax(T), base) + negative
+    Tmin = div(typemin(T), base)
+    while true
+        d::T = ZERO    <= b <= NINE    ? T(b - ZERO)             :
+               bigA    <= b <= bigZ    ? T(b - bigA + UInt8(10)) :
+               littleA <= b <= littleZ ? T(b - littleA + a)      : base
+        d >= base && throw(ParsingError("invalid base $base digit: '$(Char(b))'"))
+        (n < Tmin || n > Tmax) && throw(OverflowError())
+        n *= base
+        (n - negative > typemax(T) - d) && throw(OverflowError())
+        n += d
+        eof(io) && return Nullable{T}(ifelse(negative,-n,n))
+        b = unsafe_read(io, UInt8)
+        (b == SPACE || b == TAB) && break
+    end
+    # ignore trailing whitespace
+    while !eof(io)
+        b = unsafe_read(io, UInt8)
+        (b == SPACE || b == TAB) || throw(ParsingError("extra character after whitespace: '$(Char(b))'"))
+    end
+    return Nullable{T}(ifelse(negative,-n,n))
+end
