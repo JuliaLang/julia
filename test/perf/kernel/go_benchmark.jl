@@ -269,7 +269,7 @@ function play_move(board::Board, i::Int, j::Int, color::Int)
     # may happen if the same string neighbors the new stone in more
     # than one direction.
     if on_board(board, ai, aj) && board[pos2] == color && !same_string(board, pos, pos2)
-      # The strings are linked together simply by swapping the the
+      # The strings are linked together simply by swapping the
       # next_stone pointers.
       (board.next_stone[pos], board.next_stone[pos2]) = (board.next_stone[pos2], board.next_stone[pos])
     end
