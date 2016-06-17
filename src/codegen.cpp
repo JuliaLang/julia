@@ -870,7 +870,6 @@ static void to_function(jl_lambda_info_t *li)
     if (JL_DELETE_NON_INLINEABLE &&
         li->def && li->inferred && !li->inlineable && !jl_options.outputji) {
         li->code = jl_nothing;
-        li->slottypes = jl_nothing;
         li->ssavaluetypes = jl_box_long(jl_array_len(li->ssavaluetypes)); jl_gc_wb(li, li->ssavaluetypes);
         li->slotflags = NULL;
         li->slotnames = NULL;
