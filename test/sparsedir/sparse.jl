@@ -1409,3 +1409,10 @@ end
 @test !issparse([rand(10,10)  rand(10,10)])
 @test !issparse([rand(10,10); rand(10,10)])
 @test !issparse([rand(10,10)  rand(10,10); rand(10,10) rand(10,10)])
+
+# issue #14816
+let m = 5
+    intmat = fill(1, m, m)
+    ltintmat = LowerTriangular(rand(1:5, m, m))
+    @test isapprox(At_ldiv_B(ltintmat, sparse(intmat)), At_ldiv_B(ltintmat, intmat))
+end
