@@ -159,7 +159,7 @@ let xr = sprand(Bool, 1000, 0.9)
     @test all(nonzeros(xr))
 end
 
-let r1 = MersenneTwister(), r2 = MersenneTwister()
+let r1 = MersenneTwister(0), r2 = MersenneTwister(0)
     @test sprand(r1, 100, .9) == sprand(r2, 100, .9)
     @test sprandn(r1, 100, .9) == sprandn(r2, 100, .9)
     @test sprand(r1, Bool, 100, .9, ) == sprand(r2,  Bool, 100, .9)

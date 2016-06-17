@@ -15,7 +15,7 @@ srand(0); rand(); x = rand(384)
 @test length(randn(4, 5)) == 20
 @test length(bitrand(4, 5)) == 20
 
-@test rand(MersenneTwister()) == 0.8236475079774124
+@test rand(MersenneTwister()) != rand(MersenneTwister())
 @test rand(MersenneTwister(0)) == 0.8236475079774124
 @test rand(MersenneTwister(42)) == 0.5331830160438613
 # Try a seed larger than 2^32
@@ -39,7 +39,6 @@ A = zeros(UInt128, 2, 2)
 
 # rand from AbstractArray
 let mt = MersenneTwister()
-    srand(mt)
     @test rand(mt, 0:3:1000) in 0:3:1000
     @test issubset(rand!(mt, Array{Int}(100), 0:3:1000), 0:3:1000)
     coll = Any[2, UInt128(128), big(619), "string"]
@@ -227,7 +226,7 @@ u4 = uuid4()
 @test u4 == UUID(string(u4)) == UUID(GenericString(string(u4)))
 @test u1 == UUID(UInt128(u1))
 @test u4 == UUID(UInt128(u4))
-@test uuid4(MersenneTwister()) == uuid4(MersenneTwister())
+@test uuid4(MersenneTwister(0)) == uuid4(MersenneTwister(0))
 @test_throws ArgumentError UUID("550e8400e29b-41d4-a716-446655440000")
 @test_throws ArgumentError UUID("550e8400e29b-41d4-a716-44665544000098")
 @test_throws ArgumentError UUID("z50e8400-e29b-41d4-a716-446655440000")
@@ -278,7 +277,7 @@ let mt = MersenneTwister(0)
 end
 
 # Issue #9037
-let mt = MersenneTwister()
+let mt = MersenneTwister(0)
     a = Array{Float64}(0)
     resize!(a, 1000) # could be 8-byte aligned
     b = Array{Float64}(1000) # should be 16-byte aligned
@@ -378,7 +377,7 @@ function hist(X,n)
 end
 
 # test uniform distribution of floats
-for rng in [srand(MersenneTwister()), RandomDevice()]
+for rng in [MersenneTwister(), RandomDevice()]
     for T in [Float16,Float32,Float64]
         # array version
         counts = hist(rand(rng, T, 2000), 4)
