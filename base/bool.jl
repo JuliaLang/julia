@@ -20,6 +20,10 @@ typemax(::Type{Bool}) = true
 (|)(x::Bool, y::Bool) = box(Bool,or_int(unbox(Bool,x),unbox(Bool,y)))
 ($)(x::Bool, y::Bool) = (x!=y)
 
+>>(x::Bool, c::Unsigned) = Int(x) >> c
+<<(x::Bool, c::Unsigned) = Int(x) << c
+>>>(x::Bool, c::Unsigned) = Int(x) >>> c
+
 signbit(x::Bool) = false
 sign(x::Bool) = x
 abs(x::Bool) = x
