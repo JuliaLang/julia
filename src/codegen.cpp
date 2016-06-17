@@ -3757,7 +3757,6 @@ static Function *gen_cfun_wrapper(jl_function_t *ff, jl_value_t *jlrettype, jl_t
     jl_cgval_t retval;
     if (lam == NULL) {
         assert(theFptr);
-        assert(nargs >= 0);
 #ifdef LLVM37
         Value *ret = builder.CreateCall(prepare_call(theFptr), {myargs,
                                         ConstantInt::get(T_int32, nargs + 1)});
@@ -3780,7 +3779,6 @@ static Function *gen_cfun_wrapper(jl_function_t *ff, jl_value_t *jlrettype, jl_t
     }
     else {
         assert(theFptr);
-        assert(nargs >= 0);
         // for jlcall, we need to pass the function object even if it is a ghost.
         // here we reconstruct the function instance from its type (first elt of argt)
         Value *theF = literal_pointer_val((jl_value_t*)ff);

@@ -43,22 +43,50 @@ typedef bool AbiState;
 AbiState default_abi_state = 0;
 
 // count the homogeneous floating agregate size (saturating at max count of 8)
-static unsigned isHFA(jl_datatype_t *ty, jl_datatype_t **ty0)
+static unsigned isHFA(jl_datatype_t *ty, jl_datatype_t **ty0, bool *hva)
 {
     size_t i, l = ty->nfields;
+    // handle homogeneous float aggregates
     if (l == 0) {
-        if (*ty0 == NULL) {
-            if (ty == jl_float64_type || ty == jl_float32_type)
-                *ty0 = ty;
-        }
-        return ty == *ty0 ? 1 : 9;
+        if (ty != jl_float64_type && ty != jl_float32_type)
+            return 9;
+        *hva = false;
+        if (*ty0 == NULL)
+            *ty0 = ty;
+        else if (*hva || ty->size != (*ty0)->size)
+            return 9;
+        return 1;
     }
+
+    // handle homogeneous vector aggregates
+    jl_datatype_t *fld0 = (jl_datatype_t*)jl_field_type(ty, 0);
+    if (!jl_is_datatype(fld0) || ty->name == jl_vecelement_typename)
+        return 9;
+    if (fld0->name == jl_vecelement_typename) {
+        if (!jl_is_bitstype(jl_tparam0(fld0)) || jl_datatype_size(ty) > 16)
+            return 9;
+        if (l != 1 && l != 2 && l != 4 && l != 8 && l != 16)
+            return 9;
+        *hva = true;
+        if (*ty0 == NULL)
+            *ty0 = ty;
+        else if (!*hva || ty->size != (*ty0)->size)
+            return 9;
+        for (i = 1; i < l; i++) {
+            jl_datatype_t *fld = (jl_datatype_t*)jl_field_type(ty, i);
+            if (fld != fld0)
+                return 9;
+        }
+        return 1;
+    }
+
+    // recurse through other struct types
     int n = 0;
     for (i = 0; i < l; i++) {
-        jl_value_t *fld = jl_field_type(ty, i);
+        jl_datatype_t *fld = (jl_datatype_t*)jl_field_type(ty, i);
         if (!jl_is_datatype(fld))
             return 9;
-        n += isHFA((jl_datatype_t*)fld, ty0);
+        n += isHFA((jl_datatype_t*)fld, ty0, hva);
         if (n > 8)
             return 9;
     }
@@ -70,7 +98,8 @@ bool use_sret(AbiState *state, jl_value_t *ty)
     // Assume jl_is_datatype(ty) && !jl_is_abstracttype(ty)
     jl_datatype_t *dt = (jl_datatype_t*)ty;
     jl_datatype_t *ty0 = NULL;
-    if (dt->size > 16 && isHFA(dt, &ty0) > 8)
+    bool hva = false;
+    if (dt->size > 16 && isHFA(dt, &ty0, &hva) > 8)
         return true;
     return false;
 }
@@ -79,8 +108,10 @@ void needPassByRef(AbiState *state, jl_value_t *ty, bool *byRef, bool *inReg)
 {
     if (!jl_is_datatype(ty) || jl_is_abstracttype(ty) || jl_is_cpointer_type(ty) || jl_is_array_type(ty))
         return;
-    size_t size = jl_datatype_size(ty);
-    if (size > 64)
+    jl_datatype_t *dt = (jl_datatype_t*)ty;
+    jl_datatype_t *ty0 = NULL;
+    bool hva = false;
+    if (dt->size > 64 && isHFA(dt, &ty0, &hva) > 8)
         *byRef = true;
 }
 
@@ -96,12 +127,37 @@ Type *preferred_llvm_type(jl_value_t *ty, bool isret)
         return NULL;
     // legalize this into [n x f32/f64]
     jl_datatype_t *ty0 = NULL;
-    int hfa = isHFA(dt, &ty0);
-    if (hfa <= 8)
-        return ArrayType::get(ty0 == jl_float32_type ? T_float32 : T_float64, hfa);
-    // rewrite integer-sized (non-HFA) struct to an array of i64
-    if (size > 8)
-        return ArrayType::get(T_int64, (size + 7) / 8);
+    bool hva = false;
+    int hfa = isHFA(dt, &ty0, &hva);
+    if (hfa <= 8) {
+        if (ty0 == jl_float32_type) {
+            return ArrayType::get(T_float32, hfa);
+        }
+        else if (ty0 == jl_float64_type) {
+            return ArrayType::get(T_float64, hfa);
+        }
+        else {
+            jl_datatype_t *vecty = (jl_datatype_t*)jl_field_type(ty0, 0);
+            assert(jl_is_datatype(vecty) && vecty->name == jl_vecelement_typename);
+            jl_value_t *elemty = jl_tparam0(vecty);
+            assert(jl_is_bitstype(elemty));
+
+            Type *ety = julia_type_to_llvm(elemty);
+            Type *vty = VectorType::get(ety, ty0->nfields);
+            return ArrayType::get(vty, hfa);
+        }
+    }
+    // rewrite integer-sized (non-HFA) struct to an array
+    // the bitsize of the integer gives the desired alignment
+    if (size > 8) {
+        if (dt->alignment <= 8) {
+            return ArrayType::get(T_int64, (size + 7) / 8);
+        }
+        else {
+            Type *T_int128 = Type::getIntNTy(jl_LLVMContext, 128);
+            return ArrayType::get(T_int128, (size + 15) / 16);
+        }
+    }
     return Type::getIntNTy(jl_LLVMContext, size * 8);
 }
 
