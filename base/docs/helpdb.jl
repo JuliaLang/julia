@@ -3120,7 +3120,7 @@ doc"""
 ```rst
 ..  ordschur(Q, T, select) -> Schur
 
-Reorders the Schur factorization of a real matrix ``A=Q*T*Q'`` according to the logical array ``select`` returning a Schur object ``F``. The selected eigenvalues appear in the leading diagonal of ``F[:Schur]`` and the the corresponding leading columns of ``F[:vectors]`` form an orthonormal basis of the corresponding right invariant subspace. A complex conjugate pair of eigenvalues must be either both included or excluded via ``select``.
+Reorders the Schur factorization of a real matrix ``A=Q*T*Q'`` according to the logical array ``select`` returning a Schur object ``F``. The selected eigenvalues appear in the leading diagonal of ``F[:Schur]`` and the corresponding leading columns of ``F[:vectors]`` form an orthonormal basis of the corresponding right invariant subspace. A complex conjugate pair of eigenvalues must be either both included or excluded via ``select``.
 ```
 """
 ordschur(Q, T, select)
@@ -5389,7 +5389,7 @@ position
 doc"""
     selectperm(v, k, [alg=<algorithm>,] [by=<transform>,] [lt=<comparison>,] [rev=false])
 
-Return a partial permutation of the the vector `v`, according to the order specified by `by`, `lt` and `rev`, so that `v[output]` returns the first `k` (or range of adjacent values if `k` is a range) values of a fully sorted version of `v`. If `k` is a single index (Integer), an array of the first `k` indices is returned; if `k` is a range, an array of those indices is returned. Note that the handling of integer values for `k` is different from `select` in that it returns a vector of `k` elements instead of just the `k` th element. Also note that this is equivalent to, but more efficient than, calling `sortperm(...)[k]`
+Return a partial permutation of the vector `v`, according to the order specified by `by`, `lt` and `rev`, so that `v[output]` returns the first `k` (or range of adjacent values if `k` is a range) values of a fully sorted version of `v`. If `k` is a single index (Integer), an array of the first `k` indices is returned; if `k` is a range, an array of those indices is returned. Note that the handling of integer values for `k` is different from `select` in that it returns a vector of `k` elements instead of just the `k` th element. Also note that this is equivalent to, but more efficient than, calling `sortperm(...)[k]`
 """
 selectperm
 
