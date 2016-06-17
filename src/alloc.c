@@ -84,7 +84,7 @@ jl_sym_t *line_sym;    jl_sym_t *jl_incomplete_sym;
 jl_sym_t *goto_sym;    jl_sym_t *goto_ifnot_sym;
 jl_sym_t *label_sym;   jl_sym_t *return_sym;
 jl_sym_t *lambda_sym;  jl_sym_t *assign_sym;
-jl_sym_t *null_sym;    jl_sym_t *body_sym;
+jl_sym_t *body_sym;
 jl_sym_t *method_sym;  jl_sym_t *core_sym;
 jl_sym_t *enter_sym;   jl_sym_t *leave_sym;
 jl_sym_t *exc_sym;     jl_sym_t *error_sym;
@@ -103,7 +103,7 @@ jl_sym_t *pure_sym; jl_sym_t *simdloop_sym;
 jl_sym_t *meta_sym; jl_sym_t *compiler_temp_sym;
 jl_sym_t *inert_sym; jl_sym_t *vararg_sym;
 jl_sym_t *unused_sym; jl_sym_t *static_parameter_sym;
-jl_sym_t *polly_sym;
+jl_sym_t *polly_sym; jl_sym_t *inline_sym;
 
 typedef struct {
     int64_t a;
@@ -316,8 +316,28 @@ static void jl_lambda_info_set_ast(jl_lambda_info_t *li, jl_expr_t *ast)
     assert(jl_is_expr(bodyex));
     jl_array_t *body = bodyex->args;
     li->code = (jl_value_t*)body; jl_gc_wb(li, li->code);
-    if (has_meta(body, pure_sym))
-        li->pure = 1;
+    size_t j, n = jl_array_len(body);
+    jl_value_t **bd = (jl_value_t**)jl_array_data((jl_array_t*)li->code);
+    for(j=0; j < n; j++) {
+        jl_value_t *st = bd[j];
+        if (jl_is_expr(st) && ((jl_expr_t*)st)->head == meta_sym) {
+            size_t k, ins = 0, na = jl_expr_nargs(st);
+            jl_array_t *meta = ((jl_expr_t*)st)->args;
+            for(k=0; k < na; k++) {
+                jl_value_t *ma = jl_array_ptr_ref(meta, k);
+                if (ma == (jl_value_t*)pure_sym)
+                    li->pure = 1;
+                else if (ma == (jl_value_t*)inline_sym)
+                    li->inlineable = 1;
+                else
+                    jl_array_ptr_set(meta, ins++, ma);
+            }
+            if (ins == 0)
+                bd[j] = jl_nothing;
+            else
+                jl_array_del_end(meta, na-ins);
+        }
+    }
     jl_array_t *vinfo = (jl_array_t*)jl_exprarg(ast, 1);
     jl_array_t *vis = (jl_array_t*)jl_array_ptr_ref(vinfo, 0);
     size_t nslots = jl_array_len(vis);
@@ -530,15 +550,17 @@ JL_DLLEXPORT jl_lambda_info_t *jl_get_specialized(jl_method_t *m, jl_tupletype_t
 JL_DLLEXPORT void jl_method_init_properties(jl_method_t *m)
 {
     jl_lambda_info_t *li = m->lambda_template;
-    jl_value_t *body1 = skip_meta((jl_array_t*)li->code);
-    if (jl_is_linenode(body1)) {
-        m->line = jl_linenode_line(body1);
+    size_t j, n = jl_array_len((jl_array_t*)li->code);
+    jl_value_t **body = (jl_value_t**)jl_array_data((jl_array_t*)li->code);
+    for(j=0; j < n; j++) {
+        jl_value_t *st = body[j];
+        if (jl_is_expr(st) && ((jl_expr_t*)st)->head == line_sym) {
+            m->line = jl_unbox_long(jl_exprarg(st, 0));
+            m->file = (jl_sym_t*)jl_exprarg(st, 1);
+            body[j] = jl_nothing;
+            break;
+        }
     }
-    else if (jl_is_expr(body1) && ((jl_expr_t*)body1)->head == line_sym) {
-        m->file = (jl_sym_t*)jl_exprarg(body1, 1);
-        m->line = jl_unbox_long(jl_exprarg(body1, 0));
-    }
-
     int i;
     uint8_t called=0;
     for(i=1; i < li->nargs && i <= 8; i++) {
@@ -563,7 +585,7 @@ JL_DLLEXPORT jl_method_t *jl_new_method_uninit(void)
     m->module = jl_current_module;
     m->lambda_template = NULL;
     m->name = NULL;
-    m->file = null_sym;
+    m->file = empty_sym;
     m->line = 0;
     m->called = 0xff;
     m->invokes.unknown = NULL;

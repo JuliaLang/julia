@@ -3942,7 +3942,6 @@ void jl_init_types(void)
     using_sym = jl_symbol("using");
     importall_sym = jl_symbol("importall");
     assign_sym = jl_symbol("=");
-    null_sym = jl_symbol("null");
     body_sym = jl_symbol("body");
     colons_sym = jl_symbol("::");
     method_sym = jl_symbol("method");
@@ -3978,6 +3977,7 @@ void jl_init_types(void)
     static_parameter_sym = jl_symbol("static_parameter");
     compiler_temp_sym = jl_symbol("#temp#");
     polly_sym = jl_symbol("polly");
+    inline_sym = jl_symbol("inline");
 
     tttvar = jl_new_typevar(jl_symbol("T"),
                                   (jl_value_t*)jl_bottom_type,

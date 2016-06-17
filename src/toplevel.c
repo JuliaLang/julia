@@ -428,7 +428,7 @@ jl_value_t *jl_toplevel_eval_flex(jl_value_t *e, int fast, int expanded)
     }
 
     jl_expr_t *ex = (jl_expr_t*)e;
-    if (ex->head == null_sym || ex->head == error_sym || ex->head == jl_incomplete_sym) {
+    if (ex->head == error_sym || ex->head == jl_incomplete_sym) {
         // expression types simple enough not to need expansion
         return jl_interpret_toplevel_expr(e);
     }

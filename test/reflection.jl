@@ -364,10 +364,7 @@ function test_typed_ast_printing(f::ANY, types::ANY, must_used_vars)
     for str in (sprint(io->code_warntype(io, f, types)),
                 sprint(io->show(io, li)))
         # Test to make sure the clearing of file path below works
-        # If we don't store the full path in line number node/ast printing
-        # anymore, the test and the string replace below should be fixed.
-        @test contains(str, @__FILE__)
-        str = replace(str, @__FILE__, "")
+        @test string(li.def.file) == @__FILE__
         for var in must_used_vars
             @test contains(str, string(var))
         end
