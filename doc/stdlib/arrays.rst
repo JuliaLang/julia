@@ -1036,3 +1036,34 @@ dense counterparts. The following functions are specific to sparse arrays.
           end
        end
 
+.. function:: dropzeros!(A::SparseMatrixCSC, trim::Bool = true)
+
+   .. Docstring generated from Julia source
+
+   Removes stored numerical zeros from ``A``\ , optionally trimming resulting excess space from ``A.rowval`` and ``A.nzval`` when ``trim`` is ``true``\ .
+
+   For an out-of-place version, see :func:`Base.SparseArrays.dropzeros`\ . For algorithmic information, see :func:`Base.SparseArrays.fkeep!`\ .
+
+.. function:: dropzeros(A::SparseMatrixCSC, trim::Bool = true)
+
+   .. Docstring generated from Julia source
+
+   Generates a copy of ``A`` and removes stored numerical zeros from that copy, optionally trimming excess space from the result's ``rowval`` and ``nzval`` arrays when ``trim`` is ``true``\ .
+
+   For an in-place version and algorithmic information, see :func:`Base.SparseArrays.dropzeros!`\ .
+
+.. function:: dropzeros!(x::SparseVector, trim::Bool = true)
+
+   .. Docstring generated from Julia source
+
+   Removes stored numerical zeros from ``x``\ , optionally trimming resulting excess space from ``x.nzind`` and ``x.nzval`` when ``trim`` is ``true``\ .
+
+   For an out-of-place version, see :func:`Base.SparseArrays.dropzeros`\ . For algorithmic information, see :func:`Base.SparseArrays.fkeep!`\ .
+
+.. function:: dropzeros(x::SparseVector, trim::Bool = true)
+
+   .. Docstring generated from Julia source
+
+   Generates a copy of ``x`` and removes numerical zeros from that copy, optionally trimming excess space from the result's ``nzind`` and ``nzval`` arrays when ``trim`` is ``true``\ .
+
+   For an in-place version and algorithmic information, see :func:`Base.SparseArrays.dropzeros!`\ .
