@@ -1416,3 +1416,6 @@ let m = 5
     ltintmat = LowerTriangular(rand(1:5, m, m))
     @test isapprox(At_ldiv_B(ltintmat, sparse(intmat)), At_ldiv_B(ltintmat, intmat))
 end
+
+# Test temporary fix for issue #16548 in PR #16979. Brittle. Expect to remove with `\` revisions.
+@test which(\, (SparseMatrixCSC, AbstractVecOrMat)).module == Base.SparseArrays
