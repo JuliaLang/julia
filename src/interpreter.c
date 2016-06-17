@@ -202,9 +202,6 @@ static jl_value_t *eval(jl_value_t *e, interpreter_state *s)
         JL_GC_POP();
         return v;
     }
-    else if (ex->head == null_sym) {
-        return (jl_value_t*)jl_nothing;
-    }
     else if (ex->head == static_parameter_sym) {
         ssize_t n = jl_unbox_long(args[0]);
         assert(n > 0);

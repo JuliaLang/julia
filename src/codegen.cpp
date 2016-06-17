@@ -3250,9 +3250,6 @@ static jl_cgval_t emit_expr(jl_value_t *expr, jl_codectx_t *ctx)
                                literal_pointer_val(bnd));
         }
     }
-    else if (head == null_sym) {
-        return ghostValue(jl_void_type);
-    }
     else if (head == static_typeof_sym) {
         jl_value_t *extype = expr_type((jl_value_t*)ex, ctx);
         if (jl_is_type_type(extype)) {
@@ -3374,8 +3371,7 @@ static jl_cgval_t emit_expr(jl_value_t *expr, jl_codectx_t *ctx)
         jl_value_t *arg = args[0];
         if (jl_is_quotenode(arg)) {
             jl_value_t *arg1 = jl_fieldref(arg,0);
-            if (!((jl_is_expr(arg1) && ((jl_expr_t*)arg1)->head!=null_sym) ||
-                  jl_typeis(arg1,jl_array_any_type) || jl_is_quotenode(arg1))) {
+            if (!(jl_is_expr(arg1) || jl_typeis(arg1,jl_array_any_type) || jl_is_quotenode(arg1))) {
                 // elide call to jl_copy_ast when possible
                 return emit_expr(arg, ctx);
             }
@@ -4160,7 +4156,7 @@ static std::unique_ptr<Module> emit_function(jl_lambda_info_t *lam, jl_llvm_func
 #endif
 
 #ifdef USE_POLLY
-    if (!has_meta(code, polly_sym)) {
+    if (!jl_has_meta(code, polly_sym)) {
         f->addFnAttr(polly::PollySkipFnAttr);
     }
 #endif
@@ -4177,24 +4173,14 @@ static std::unique_ptr<Module> emit_function(jl_lambda_info_t *lam, jl_llvm_func
         (jl_options.code_coverage == JL_LOG_USER && in_user_code);
     bool do_malloc_log = jl_options.malloc_log  == JL_LOG_ALL ||
         (jl_options.malloc_log    == JL_LOG_USER && in_user_code);
-    jl_value_t *stmt = skip_meta(stmts);
     StringRef filename = "<missing>";
     StringRef dbgFuncName = ctx.name;
     int lno = -1;
-    // look for initial (line num filename [funcname]) node, [funcname] for kwarg methods.
-    if (jl_is_linenode(stmt)) {
-        lno = jl_linenode_line(stmt);
-    }
-    else if (jl_is_expr(stmt) && ((jl_expr_t*)stmt)->head == line_sym &&
-             jl_array_dim0(((jl_expr_t*)stmt)->args) > 0) {
-        jl_value_t *a1 = jl_exprarg(stmt,0);
-        if (jl_is_long(a1))
-            lno = jl_unbox_long(a1);
-    }
-    if (lno == -1 && lam->def)
+    if (lam->def) {
         lno = lam->def->line;
-    if (lam->def && lam->def->file != empty_sym)
-        filename = jl_symbol_name(lam->def->file);
+        if (lam->def->file != empty_sym)
+            filename = jl_symbol_name(lam->def->file);
+    }
     ctx.file = filename;
     int toplineno = lno;
 
@@ -4694,10 +4680,20 @@ static std::unique_ptr<Module> emit_function(jl_lambda_info_t *lam, jl_llvm_func
                 DI_sp_stack.push_back(SP);
                 DI_loc_stack.push_back(builder.getCurrentDebugLocation());
                 std::string inl_name;
-                if (jl_array_len(stmt_e->args) > 2)
-                    inl_name = jl_symbol_name((jl_sym_t*)jl_exprarg(stmt_e, 2));
-                else
+                int inlined_func_lineno = 0;
+                if (jl_array_len(stmt_e->args) > 2) {
+                    size_t ii;
+                    for(ii=2; ii < jl_array_len(stmt_e->args); ii++) {
+                        jl_value_t *arg = jl_exprarg(stmt_e, ii);
+                        if (jl_is_symbol(arg))
+                            inl_name = jl_symbol_name((jl_sym_t*)arg);
+                        else if (jl_is_long(arg))
+                            inlined_func_lineno = jl_unbox_long(arg);
+                    }
+                }
+                else {
                     inl_name = "macro expansion";
+                }
                 SP = dbuilder.createFunction(new_file,
                                              inl_name + ";",
                                              inl_name,
@@ -4710,7 +4706,7 @@ static std::unique_ptr<Module> emit_function(jl_lambda_info_t *lam, jl_llvm_func
                                              0,
                                              true,
                                              nullptr);
-                builder.SetCurrentDebugLocation(DebugLoc::get(0, 0, (MDNode*)SP, builder.getCurrentDebugLocation()));
+                builder.SetCurrentDebugLocation(DebugLoc::get(inlined_func_lineno, 0, (MDNode*)SP, builder.getCurrentDebugLocation()));
             }
             else if (meta_arg == (jl_value_t*)jl_symbol("pop_loc")) {
                 SP = DI_sp_stack.back();

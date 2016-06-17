@@ -3342,7 +3342,7 @@ typealias PossiblyInvalidUnion{T} Union{T,Int}
 @test split(string(gensym("abc")),'#')[3] == "abc"
 
 # meta nodes for optional positional arguments
-@test Base.uncompressed_ast(expand(:(@inline f(p::Int=2) = 3)).args[2].args[3])[1].args[1] === :inline
+@test expand(:(@inline f(p::Int=2) = 3)).args[2].args[3].inlineable
 
 # issue #13007
 call13007{T,N}(::Type{Array{T,N}}) = 0
