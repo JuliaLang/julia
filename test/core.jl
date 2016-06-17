@@ -4303,3 +4303,14 @@ type C16767{T}
 end
 @test B16767.types[1].types[1].parameters[1].types === Base.svec(A16767{B16767})
 @test C16767.types[1].types[1].parameters[1].types === Base.svec(A16767{C16767{:a}})
+
+# issue #16340
+function f16340{T}(x::T)
+    function g{T}(y::T)
+        return (T,T)
+    end
+    return g
+end
+let g = f16340(1)
+    @test isa(typeof(g).name.mt.defs.tvars, TypeVar)
+end

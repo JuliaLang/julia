@@ -2347,7 +2347,7 @@
                 (map (lambda (decl) (make-var-info (decl-var decl)))
                      args)
                 (map make-var-info locl)))
-         (capt-sp (filter (lambda (v) (and (memq v fv) (not (memq v glo))))
+         (capt-sp (filter (lambda (v) (and (memq v fv) (not (memq v glo)) (not (memq v new-sp))))
                           sp))
          ;; captured vars: vars from the environment that occur
          ;; in our set of free variables (fv).
