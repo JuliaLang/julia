@@ -4211,11 +4211,10 @@ Pick a random element or array of random elements from the set of values specifi
 rand
 
 """
-    base(base, n, [pad])
+    base(base::Integer, n::Integer, [pad::Integer])
 
 Convert an integer to a string in the given base, optionally specifying a number of digits
-to pad to. The base can be specified as either an integer, or as a `UInt8` array of
-character values to use as digit symbols.
+to pad to.
 """
 base
 
