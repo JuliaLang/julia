@@ -268,7 +268,7 @@ That is really all there is to using promotions. The rest is just a
 matter of clever application, the most typical "clever" application
 being the definition of catch-all methods for numeric operations like
 the arithmetic operators ``+``, ``-``, ``*`` and ``/``. Here are some of
-the the catch-all method definitions given in
+the catch-all method definitions given in
 `promotion.jl <https://github.com/JuliaLang/julia/blob/master/base/promotion.jl>`_::
 
     +(x::Number, y::Number) = +(promote(x,y)...)

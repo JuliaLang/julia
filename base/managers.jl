@@ -201,7 +201,7 @@ function ssh_tunnel(user, host, bind_addr, port, sshflags)
     # the connection is forwarded to `port` on the remote server over the local port `localport`
     # the -f option backgrounds the ssh session
     # `sleep 60` command specifies that an alloted time of 60 seconds is allowed to start the
-    # remote julia process and estabilish the network connections specified the the process topology.
+    # remote julia process and establish the network connections specified by the process topology.
     # If no connections are made within 60 seconds, ssh will exit and an error will be printed on the
     # process that launched the remote process.
     ssh = `ssh -T -a -x -o ExitOnForwardFailure=yes`

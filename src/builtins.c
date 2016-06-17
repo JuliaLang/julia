@@ -480,7 +480,7 @@ JL_CALLABLE(jl_f__apply)
         newargs[0] = (jl_value_t*)arg_heap;
         newargs = jl_svec_data(arg_heap);
     }
-    // GC Note: here we assume that the the return value of `jl_svecref`,
+    // GC Note: here we assume that the return value of `jl_svecref`,
     //          `jl_array_ptr_ref` will not be young if `arg_heap` becomes old
     //          since they are allocated before `arg_heap`. Otherwise,
     //          we need to add write barrier for !onstack
