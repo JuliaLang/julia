@@ -333,7 +333,7 @@ A = copy(reshape(1:120, 3, 5, 8))
 sA = view(A, 2:2, 1:5, :)
 @test strides(sA) == (1, 3, 15)
 @test parent(sA) == A
-@test parentindexes(sA) == (Base.NoSlice(2), 1:5, :)
+@test parentindexes(sA) == (2:2, 1:5, :)
 @test Base.parentdims(sA) == [1:3;]
 @test size(sA) == (1, 5, 8)
 @test sA[1, 2, 1:8][:] == [5:15:120;]
@@ -463,5 +463,5 @@ let A = rand(10), sA = view(copy(A), :)
 end
 
 # the following segfaults with LLVM 3.8 on Windows, ref #15417
-@test collect(view(view(reshape(1:13^3, 13, 13, 13), 3:7, 6, :), 1:2:5, :, 1:2:5)) ==
+@test collect(view(view(reshape(1:13^3, 13, 13, 13), 3:7, 6:6, :), 1:2:5, :, 1:2:5)) ==
     cat(3,[68,70,72],[406,408,410],[744,746,748])

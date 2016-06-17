@@ -377,7 +377,7 @@ Indexing, Assignment, and Concatenation
 
    Returns a subset of array ``A`` as specified by ``inds``\ , where each ``ind`` may be an ``Int``\ , a ``Range``\ , or a ``Vector``\ . See the manual section on :ref:`array indexing <man-array-indexing>` for details.
 
-.. function:: sub(A, inds...)
+.. function:: view(A, inds...)
 
    .. Docstring generated from Julia source
 
@@ -400,12 +400,6 @@ Indexing, Assignment, and Concatenation
    .. Docstring generated from Julia source
 
    Return all the data of ``A`` where the index for dimension ``d`` equals ``i``\ . Equivalent to ``A[:,:,...,i,:,:,...]`` where ``i`` is in position ``d``\ .
-
-.. function:: slice(A, inds...)
-
-   .. Docstring generated from Julia source
-
-   Returns a view of array ``A`` with the given indices like :func:`sub`\ , but drops all dimensions indexed with scalars.
 
 .. function:: setindex!(A, X, inds...)
 
