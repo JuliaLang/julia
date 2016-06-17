@@ -707,6 +707,8 @@ export
 
 # sparse
     full,
+    dropzeros,
+    dropzeros!,
 
 # bitarrays
     falses,
