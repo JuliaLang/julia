@@ -30,8 +30,6 @@ macros and pass them to the ``@doc`` macro just as well.
 
 Here is a more complex example, still using Markdown:
 
-.. doctest::
-
     """
         bar(x[, y])
 
