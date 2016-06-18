@@ -45,10 +45,10 @@ to specify additional information.
 To use the metadata, you have to parse these ``:meta`` expressions.
 If your implementation can be performed within Julia, ``Base.popmeta!`` is
 very handy: ``Base.popmeta!(body, :symbol)`` will scan a function *body*
-expression (one without the function signature) for a ``:meta``
-expression, extract any arguments, and return a tuple ``(found::Bool,
-args::Array{Any})``. If the metadata did not have any arguments, or
-``:symbol`` was not found, the ``args`` array will be empty.
+expression (one without the function signature) for the first ``:meta``
+expression containing ``:symbol``, extract any arguments, and return a tuple
+``(found::Bool, args::Array{Any})``. If the metadata did not have any
+arguments, or ``:symbol`` was not found, the ``args`` array will be empty.
 
 Not yet provided is a convenient infrastructure for parsing ``:meta``
 expressions from C++.
