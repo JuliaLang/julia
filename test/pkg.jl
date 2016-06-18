@@ -231,4 +231,13 @@ end"""
             @test covlines[i] == covline
         end
     end
+
+    # issue #15948
+    let package = "Example"
+        Pkg.rm(package)  # Remove package if installed
+        @test Pkg.installed(package) == nothing  # Registered with METADATA but not installed
+        msg = readall(ignorestatus(`$(Base.julia_cmd()) -f -e "redirect_stderr(STDOUT); Pkg.build(\"$package\")"`))
+        @test contains(msg, "$package is not an installed package")
+        @test !contains(msg, "signal (15)")
+    end
 end
