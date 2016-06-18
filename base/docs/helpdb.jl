@@ -11391,9 +11391,14 @@ Constuct a `Date` type by `Period` type parts. Arguments may be in any order. `D
 Dates.Date(period::Dates.Period...)
 
 doc"""
-    Date(f::Function, y[, m]; step=Day(1), negate=false, limit=10000) -> Date
+    Date(f::Function, y[, m, d]; step=Day(1), negate=false, limit=10000) -> Date
 
-Create a `Date` through the adjuster API. The starting point will be constructed from the provided `y, m` arguments, and will be adjusted until `f::Function` returns `true`. The step size in adjusting can be provided manually through the `step` keyword. If `negate=true`, then the adjusting will stop when `f::Function` returns `false` instead of `true`. `limit` provides a limit to the max number of iterations the adjustment API will pursue before throwing an error (given that `f::Function` is never satisfied).
+Create a `Date` through the adjuster API. The starting point will be constructed from the
+provided `y, m, d` arguments, and will be adjusted until `f::Function` returns `true`. The
+step size in adjusting can be provided manually through the `step` keyword. If
+`negate=true`, then the adjusting will stop when `f::Function` returns `false` instead of
+`true`. `limit` provides a limit to the max number of iterations the adjustment API will
+pursue before throwing an error (given that `f::Function` is never satisfied).
 """
 Dates.Date(f::Function, y)
 
