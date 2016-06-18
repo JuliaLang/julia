@@ -1386,11 +1386,11 @@ For associative collection types, this will be the type of the Value, This is no
 valtype
 
 doc"""
-    edit(file::AbstractString, [line])
+    edit(path::AbstractString, [line])
 
-Edit a file optionally providing a line number to edit at. Returns to the julia prompt when you quit the editor.
+Edit a file or directory optionally providing a line number to edit the file at. Returns to the julia prompt when you quit the editor.
 """
-edit(file::AbstractString, line=?)
+edit(path::AbstractString, line=?)
 
 doc"""
     edit(function, [types])
