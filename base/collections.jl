@@ -17,6 +17,25 @@ export
     peek
 
 
+# Some algorithms that can be defined only after infrastructure is in place
+Base.append!(a::Vector, iter) = _append!(a, Base.iteratorsize(iter), iter)
+
+function _append!(a, ::Base.HasLength, iter)
+    n = length(a)
+    resize!(a, n+length(iter))
+    @inbounds for (i,item) in zip(n+1:length(a), iter)
+        a[i] = item
+    end
+    a
+end
+
+function _append!(a, ::Base.IteratorSize, iter)
+    for item in iter
+        push!(a, item)
+    end
+    a
+end
+
 # Heap operations on flat arrays
 # ------------------------------
 
