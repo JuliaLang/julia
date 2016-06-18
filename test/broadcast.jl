@@ -55,13 +55,13 @@ end
 
 function as_sub(x::AbstractVector)
     y = similar(x, eltype(x), tuple(([size(x)...]*2)...))
-    y = sub(y, 2:2:length(y))
+    y = view(y, 2:2:length(y))
     y[:] = x[:]
     y
 end
 function as_sub(x::AbstractMatrix)
     y = similar(x, eltype(x), tuple(([size(x)...]*2)...))
-    y = sub(y, 2:2:size(y,1), 2:2:size(y,2))
+    y = view(y, 2:2:size(y,1), 2:2:size(y,2))
     for j=1:size(x,2)
         for i=1:size(x,1)
             y[i,j] = x[i,j]
@@ -71,7 +71,7 @@ function as_sub(x::AbstractMatrix)
 end
 function as_sub{T}(x::AbstractArray{T,3})
     y = similar(x, eltype(x), tuple(([size(x)...]*2)...))
-    y = sub(y, 2:2:size(y,1), 2:2:size(y,2), 2:2:size(y,3))
+    y = view(y, 2:2:size(y,1), 2:2:size(y,2), 2:2:size(y,3))
     for k=1:size(x,3)
         for j=1:size(x,2)
             for i=1:size(x,1)

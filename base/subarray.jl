@@ -32,40 +32,16 @@ end
 check_parent_index_match{T,N}(parent::AbstractArray{T,N}, indexes::NTuple{N}) = nothing
 check_parent_index_match(parent, indexes) = throw(ArgumentError("number of indices ($(length(indexes))) must match the parent dimensionality ($(ndims(parent)))"))
 
-# The NoSlice one-element vector type keeps dimensions without losing performance
-immutable NoSlice <: AbstractVector{Int}
-    i::Int
-end
-size(::NoSlice) = (1,)
-length(::NoSlice) = 1
-linearindexing(::Type{NoSlice}) = LinearFast()
-function getindex(N::NoSlice, i::Int)
-    @_inline_meta
-    @boundscheck i == 1 || throw_boundserror(N, i)
-    N.i
-end
-function getindex(N::NoSlice, i::NoSlice)
-    @_inline_meta
-    @boundscheck i.i == 1 || throw_boundserror(N, i)
-    N
-end
-getindex(N::NoSlice, ::Colon) = N
-function getindex(N::NoSlice, r::Range{Int})
-    @_inline_meta
-    @boundscheck checkbounds(N, r)
-    N
-end
-
 # This computes the linear indexing compatability for a given tuple of indices
 viewindexing() = LinearFast()
 # Leading scalar indexes simply increase the stride
-viewindexing(I::Tuple{Union{Real, NoSlice}, Vararg{Any}}) = (@_inline_meta; viewindexing(tail(I)))
+viewindexing(I::Tuple{Real, Vararg{Any}}) = (@_inline_meta; viewindexing(tail(I)))
 # Colons may begin a section which may be followed by any number of Colons
 viewindexing(I::Tuple{Colon, Colon, Vararg{Any}}) = (@_inline_meta; viewindexing(tail(I)))
 # A UnitRange can follow Colons, but only if all other indices are scalar
-viewindexing(I::Tuple{Colon, UnitRange, Vararg{Union{Real, NoSlice}}}) = LinearFast()
+viewindexing(I::Tuple{Colon, UnitRange, Vararg{Real}}) = LinearFast()
 # In general, ranges are only fast if all other indices are scalar
-viewindexing(I::Tuple{Union{Range, Colon}, Vararg{Union{Real, NoSlice}}}) = LinearFast()
+viewindexing(I::Tuple{Union{Range, Colon}, Vararg{Real}}) = LinearFast()
 # All other index combinations are slow
 viewindexing(I::Tuple{Vararg{Any}}) = LinearSlow()
 # Of course, all other array types are slow
@@ -85,51 +61,25 @@ parentindexes(a::AbstractArray) = ntuple(i->1:size(a,i), ndims(a))
 
 ## SubArray creation
 # Drops singleton dimensions (those indexed with a scalar)
-function slice{T,N}(A::AbstractArray{T,N}, I::Vararg{ViewIndex,N})
+function view{T,N}(A::AbstractArray{T,N}, I::Vararg{ViewIndex,N})
     @_inline_meta
     @boundscheck checkbounds(A, I...)
-    unsafe_slice(A, I...)
+    unsafe_view(A, I...)
 end
-function slice(A::AbstractArray, i::ViewIndex)
+function view(A::AbstractArray, i::ViewIndex)
     @_inline_meta
     @boundscheck checkbounds(A, i)
-    unsafe_slice(reshape(A, Val{1}), i)
+    unsafe_view(reshape(A, Val{1}), i)
 end
-function slice{N}(A::AbstractArray, I::Vararg{ViewIndex,N}) # TODO: DEPRECATE FOR #14770
+function view{N}(A::AbstractArray, I::Vararg{ViewIndex,N}) # TODO: DEPRECATE FOR #14770
     @_inline_meta
     @boundscheck checkbounds(A, I...)
-    unsafe_slice(reshape(A, Val{N}), I...)
+    unsafe_view(reshape(A, Val{N}), I...)
 end
-function unsafe_slice{T,N}(A::AbstractArray{T,N}, I::Vararg{ViewIndex,N})
+function unsafe_view{T,N}(A::AbstractArray{T,N}, I::Vararg{ViewIndex,N})
     @_inline_meta
     J = to_indexes(I...)
     SubArray(A, J, map(dimlength, index_shape(A, J...)))
-end
-
-keep_leading_scalars(T::Tuple{}) = T
-keep_leading_scalars(T::Tuple{Real, Vararg{Real}}) = T
-keep_leading_scalars(T::Tuple{Real, Vararg{Any}}) = (@_inline_meta; (NoSlice(T[1]), keep_leading_scalars(tail(T))...))
-keep_leading_scalars(T::Tuple{Any, Vararg{Any}}) = (@_inline_meta; (T[1], keep_leading_scalars(tail(T))...))
-
-function sub{T,N}(A::AbstractArray{T,N}, I::Vararg{ViewIndex,N})
-    @_inline_meta
-    @boundscheck checkbounds(A, I...)
-    unsafe_sub(A, I...)
-end
-function sub(A::AbstractArray, i::ViewIndex)
-    @_inline_meta
-    @boundscheck checkbounds(A, i)
-    unsafe_sub(reshape(A, Val{1}), i)
-end
-function sub{N}(A::AbstractArray, I::Vararg{ViewIndex,N}) # TODO: DEPRECATE FOR #14770
-    @_inline_meta
-    @boundscheck checkbounds(A, I...)
-    unsafe_sub(reshape(A, Val{N}), I...)
-end
-function unsafe_sub{T,N}(A::AbstractArray{T,N}, I::Vararg{ViewIndex,N})
-    @_inline_meta
-    J = keep_leading_scalars(to_indexes(I...))
-    SubArray(A, J, index_shape(A, J...))
 end
 
 # Re-indexing is the heart of a view, transforming A[i, j][x, y] to A[i[x], j[y]]
@@ -216,15 +166,9 @@ function setindex!(V::FastContiguousSubArray, x, i::Real)
     V
 end
 
-function unsafe_slice{T,N}(V::SubArray{T,N}, I::Vararg{ViewIndex,N})
+function unsafe_view{T,N}(V::SubArray{T,N}, I::Vararg{ViewIndex,N})
     @_inline_meta
     idxs = reindex(V, V.indexes, to_indexes(I...))
-    SubArray(V.parent, idxs, index_shape(V.parent, idxs...))
-end
-
-function unsafe_sub{T,N}(V::SubArray{T,N}, I::Vararg{ViewIndex,N})
-    @_inline_meta
-    idxs = reindex(V, V.indexes, keep_leading_scalars(to_indexes(I...)))
     SubArray(V.parent, idxs, index_shape(V.parent, idxs...))
 end
 
@@ -246,7 +190,6 @@ substrides(parent, I::Tuple) = substrides(1, parent, 1, I)
 substrides(s, parent, dim, ::Tuple{}) = ()
 substrides(s, parent, dim, I::Tuple{Real, Vararg{Any}}) = (substrides(s*size(parent, dim), parent, dim+1, tail(I))...)
 substrides(s, parent, dim, I::Tuple{AbstractCartesianIndex, Vararg{Any}}) = substrides(s, parent, dim, (I[1].I..., tail(I)...))
-substrides(s, parent, dim, I::Tuple{NoSlice, Vararg{Any}}) = (s, substrides(s*size(parent, dim), parent, dim+1, tail(I))...)
 substrides(s, parent, dim, I::Tuple{Colon, Vararg{Any}}) = (s, substrides(s*size(parent, dim), parent, dim+1, tail(I))...)
 substrides(s, parent, dim, I::Tuple{Range, Vararg{Any}}) = (s*step(I[1]), substrides(s*size(parent, dim), parent, dim+1, tail(I))...)
 substrides(s, parent, dim, I::Tuple{Any, Vararg{Any}}) = throw(ArgumentError("strides is invalid for SubArrays with indices of type $(typeof(I[1]))"))
@@ -255,7 +198,7 @@ stride(V::SubArray, d::Integer) = d <= ndims(V) ? strides(V)[d] : strides(V)[end
 
 compute_stride1(parent, I::Tuple) = compute_stride1(1, parent, 1, I)
 compute_stride1(s, parent, dim, I::Tuple{}) = s
-compute_stride1(s, parent, dim, I::Tuple{Union{DroppedScalar, NoSlice}, Vararg{Any}}) =
+compute_stride1(s, parent, dim, I::Tuple{DroppedScalar, Vararg{Any}}) =
     (@_inline_meta; compute_stride1(s*size(parent, dim), parent, dim+1, tail(I)))
 compute_stride1(s, parent, dim, I::Tuple{Range, Vararg{Any}}) = s*step(I[1])
 compute_stride1(s, parent, dim, I::Tuple{Colon, Vararg{Any}}) = s
@@ -295,8 +238,6 @@ compute_offset1(parent, stride1::Integer, dims, inds, I::Tuple) = compute_linind
 compute_linindex(parent, I) = compute_linindex(1, 1, parent, 1, I)
 compute_linindex(f, s, parent, dim, I::Tuple{Real, Vararg{Any}}) =
     (@_inline_meta; compute_linindex(f + (I[1]-first(indices(parent,dim)))*s, s*size(parent, dim), parent, dim+1, tail(I)))
-compute_linindex(f, s, parent, dim, I::Tuple{NoSlice, Vararg{Any}}) =
-    (@_inline_meta; compute_linindex(f + (I[1].i-first(indices(parent,dim)))*s, s*size(parent, dim), parent, dim+1, tail(I)))
 # Just splat out the cartesian indices and continue
 compute_linindex(f, s, parent, dim, I::Tuple{AbstractCartesianIndex, Vararg{Any}}) =
     (@_inline_meta; compute_linindex(f, s, parent, dim, (I[1].I..., tail(I)...)))
@@ -309,18 +250,17 @@ compute_linindex(f, s, parent, dim, I::Tuple{}) = f
 find_extended_dims(I) = (@_inline_meta; _find_extended_dims((), (), 1, I...))
 _find_extended_dims(dims, inds, dim) = dims, inds
 _find_extended_dims(dims, inds, dim, ::Real, I...) = _find_extended_dims(dims, inds, dim+1, I...)
-_find_extended_dims(dims, inds, dim, ::NoSlice, I...) = _find_extended_dims(dims, inds, dim+1, I...)
 _find_extended_dims(dims, inds, dim, i1::AbstractCartesianIndex, I...) = _find_extended_dims(dims, inds, dim, i1.I..., I...)
 _find_extended_dims(dims, inds, dim, i1, I...) = _find_extended_dims((dims..., dim), (inds..., i1), dim+1, I...)
 
-unsafe_convert{T,N,P,I<:Tuple{Vararg{Union{RangeIndex, NoSlice}}}}(::Type{Ptr{T}}, V::SubArray{T,N,P,I}) =
+unsafe_convert{T,N,P,I<:Tuple{Vararg{RangeIndex}}}(::Type{Ptr{T}}, V::SubArray{T,N,P,I}) =
     unsafe_convert(Ptr{T}, V.parent) + (first_index(V)-1)*sizeof(T)
 
 pointer(V::FastSubArray, i::Int) = pointer(V.parent, V.offset1 + V.stride1*i)
 pointer(V::FastContiguousSubArray, i::Int) = pointer(V.parent, V.offset1 + i)
 pointer(V::SubArray, i::Int) = pointer(V, smart_ind2sub(shape(V), i))
 
-function pointer{T,N,P<:Array,I<:Tuple{Vararg{Union{RangeIndex, NoSlice}}}}(V::SubArray{T,N,P,I}, is::Tuple{Vararg{Int}})
+function pointer{T,N,P<:Array,I<:Tuple{Vararg{RangeIndex}}}(V::SubArray{T,N,P,I}, is::Tuple{Vararg{Int}})
     index = first_index(V)
     strds = strides(V)
     for d = 1:length(is)

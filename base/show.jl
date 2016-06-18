@@ -1479,7 +1479,7 @@ function show_nd(io::IO, a::AbstractArray, print_matrix, label_slices)
             for i = 1:(nd-1); print(io, "$(idxs[i]), "); end
             println(io, idxs[end], "] =")
         end
-        slice = sub(a, indices(a,1), indices(a,2), idxs...)
+        slice = view(a, indices(a,1), indices(a,2), idxs...)
         print_matrix(io, slice)
         print(io, idxs == map(last,tail) ? "" : "\n\n")
         @label skip

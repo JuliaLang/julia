@@ -66,7 +66,7 @@ splat3(A, 1:2, 1:2, 1)
 splat3(A, 1:2, 1, 1:2)
 @test takebuf_string(stagediobuf) == "(UnitRange{$intstr},$intstr,UnitRange{$intstr})"
 
-B = slice(A, 1:3, 2, 1:3);
+B = view(A, 1:3, 2, 1:3);
 @generated function mygetindex(S::SubArray, indexes::Real...)
     T, N, A, I = S.parameters
     if N != length(indexes)

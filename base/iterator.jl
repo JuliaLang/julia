@@ -547,7 +547,7 @@ done(itr::PartitionIterator, state) = done(itr.c, state)
 function next{T<:Vector}(itr::PartitionIterator{T}, state)
     l = state
     r = min(state + itr.n-1, length(itr.c))
-    return sub(itr.c, l:r), r + 1
+    return view(itr.c, l:r), r + 1
 end
 
 function next(itr::PartitionIterator, state)
