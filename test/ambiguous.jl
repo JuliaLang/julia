@@ -43,6 +43,21 @@ end
 callambig(x, y) = ambig(x, y)
 @test_throws MethodError callambig(0x03, 4)
 
+# Printing ambiguity errors
+let err = try
+              ambig(0x03, 4)
+          catch _e_
+              _e_
+          end
+    io = IOBuffer()
+    Base.showerror(io, err)
+    lines = split(takebuf_string(io), '\n')
+    ambig_checkline(str) = startswith(str, "  ambig(x, y::Integer) at") ||
+                           startswith(str, "  ambig(x::Integer, y) at")
+    @test ambig_checkline(lines[2])
+    @test ambig_checkline(lines[3])
+end
+
 ## Other ways of accessing functions
 # Test that non-ambiguous cases work
 io = IOBuffer()
