@@ -3996,6 +3996,19 @@ g = reinterpret(UInt8, UInt16[0x1, 0x2])
 @test check_nul(copy(g))
 end
 
+# Copy of `#undef`
+copy!(Vector{Any}(10), Vector{Any}(10))
+function test_copy_alias{T}(::Type{T})
+    ary = T[1:100;]
+    unsafe_copy!(ary, 1, ary, 11, 90)
+    @test ary == [11:100; 91:100]
+    ary = T[1:100;]
+    unsafe_copy!(ary, 11, ary, 1, 90)
+    @test ary == [1:10; 1:90]
+end
+test_copy_alias(Int)
+test_copy_alias(Any)
+
 # issue #15370
 @test isdefined(Core, :Box)
 @test !isdefined(Base, :Box)

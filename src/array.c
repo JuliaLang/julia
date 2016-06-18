@@ -32,6 +32,15 @@ int jl_array_store_unboxed(jl_value_t *el_type)
     return store_unboxed(el_type);
 }
 
+STATIC_INLINE jl_value_t *jl_array_owner(jl_array_t *a)
+{
+    if (a->flags.how == 3) {
+        a = (jl_array_t*)jl_array_data_owner(a);
+        assert(a->flags.how != 3);
+    }
+    return (jl_value_t*)a;
+}
+
 #if defined(_P64) && defined(UINT128MAX)
 typedef __uint128_t wideint_t;
 #else
@@ -190,14 +199,9 @@ JL_DLLEXPORT jl_array_t *jl_reshape_array(jl_value_t *atype, jl_array_t *data,
         a->flags.ptrarray = 1;
     }
 
-    jl_array_t *owner = data;
     // if data is itself a shared wrapper,
     // owner should point back to the original array
-    if (owner->flags.how == 3) {
-        owner = (jl_array_t*)jl_array_data_owner(owner);
-    }
-    assert(owner->flags.how != 3);
-    jl_array_data_owner(a) = (jl_value_t*)owner;
+    jl_array_data_owner(a) = jl_array_owner(data);
 
     a->flags.how = 3;
     a->data = data->data;
@@ -526,11 +530,7 @@ JL_DLLEXPORT void jl_arrayset(jl_array_t *a, jl_value_t *rhs, size_t i)
     }
     else {
         ((jl_value_t**)a->data)[i] = rhs;
-        jl_value_t *owner = (jl_value_t*)a;
-        if (a->flags.how == 3) {
-            owner = jl_array_data_owner(a);
-        }
-        jl_gc_wb(owner, rhs);
+        jl_gc_wb(jl_array_owner(a), rhs);
     }
 }
 
@@ -919,6 +919,67 @@ JL_DLLEXPORT jl_array_t *jl_array_copy(jl_array_t *ary)
                                       &ary->nrows, !ary->flags.ptrarray, elsz);
     memcpy(new_ary->data, ary->data, jl_array_len(ary) * elsz);
     return new_ary;
+}
+
+// Copy element by element until we hit a young object, at which point
+// we can continue using `memmove`.
+static NOINLINE ssize_t jl_array_ptr_copy_forward(jl_value_t *owner,
+                                                  void **src_p, void **dest_p,
+                                                  ssize_t n)
+{
+    for (ssize_t i = 0; i < n; i++) {
+        void *val = src_p[i];
+        dest_p[i] = val;
+        // `val` is young or old-unmarked
+        if (val && !(jl_astaggedvalue(val)->bits.gc & GC_MARKED)) {
+            jl_gc_queue_root(owner);
+            return i;
+        }
+    }
+    return n;
+}
+
+static NOINLINE ssize_t jl_array_ptr_copy_backward(jl_value_t *owner,
+                                                   void **src_p, void **dest_p,
+                                                   ssize_t n)
+{
+    for (ssize_t i = 0; i < n; i++) {
+        void *val = src_p[n - i - 1];
+        dest_p[n - i - 1] = val;
+        // `val` is young or old-unmarked
+        if (val && !(jl_astaggedvalue(val)->bits.gc & GC_MARKED)) {
+            jl_gc_queue_root(owner);
+            return i;
+        }
+    }
+    return n;
+}
+
+// Unsafe, assume inbounds and that dest and src have the same eltype
+// `doffs` and `soffs` are zero based.
+JL_DLLEXPORT void jl_array_ptr_copy(jl_array_t *dest, void **dest_p,
+                                    jl_array_t *src, void **src_p, ssize_t n)
+{
+    assert(dest->flags.ptrarray && src->flags.ptrarray);
+    jl_value_t *owner = jl_array_owner(dest);
+    // Destination is old and doesn't refer any young object
+    if (__unlikely(jl_astaggedvalue(owner)->bits.gc == GC_OLD_MARKED)) {
+        jl_value_t *src_owner = jl_array_owner(src);
+        // Source is young or might refer young objects
+        if (!(jl_astaggedvalue(src_owner)->bits.gc & GC_OLD)) {
+            ssize_t done;
+            if (dest_p < src_p || dest_p > src_p + n) {
+                done = jl_array_ptr_copy_forward(owner, src_p, dest_p, n);
+                dest_p += done;
+                src_p += done;
+            }
+            else {
+                done = jl_array_ptr_copy_backward(owner, src_p, dest_p, n);
+            }
+            n -= done;
+        }
+    }
+    memmove(dest_p, src_p, n * sizeof(void*));
 }
 
 JL_DLLEXPORT void jl_array_ptr_1d_push(jl_array_t *a, jl_value_t *item)
