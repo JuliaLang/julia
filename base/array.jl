@@ -47,9 +47,8 @@ function unsafe_copy!{T}(dest::Array{T}, doffs, src::Array{T}, soffs, n)
     if isbits(T)
         unsafe_copy!(pointer(dest, doffs), pointer(src, soffs), n)
     else
-        for i=0:n-1
-            @inbounds arrayset(dest, src[i+soffs], i+doffs)
-        end
+        ccall(:jl_array_ptr_copy, Void, (Any, Ptr{Void}, Any, Ptr{Void}, Int),
+              dest, pointer(dest, doffs), src, pointer(src, soffs), n)
     end
     return dest
 end
@@ -615,17 +614,22 @@ function vcat{T}(arrays::Vector{T}...)
     end
     arr = Array{T}(n)
     ptr = pointer(arr)
-    offset = 0
     if isbits(T)
-        elsz = sizeof(T)
+        elsz = Core.sizeof(T)
     else
         elsz = Core.sizeof(Ptr{Void})
     end
     for a in arrays
-        nba = length(a)*elsz
-        ccall(:memcpy, Ptr{Void}, (Ptr{Void}, Ptr{Void}, UInt),
-              ptr+offset, a, nba)
-        offset += nba
+        na = length(a)
+        nba = na * elsz
+        if isbits(T)
+            ccall(:memcpy, Ptr{Void}, (Ptr{Void}, Ptr{Void}, UInt),
+                  ptr, a, nba)
+        else
+            ccall(:jl_array_ptr_copy, Void, (Any, Ptr{Void}, Any, Ptr{Void}, Int),
+                  arr, ptr, a, pointer(a), na)
+        end
+        ptr += nba
     end
     return arr
 end
