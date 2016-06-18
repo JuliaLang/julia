@@ -67,28 +67,38 @@ body.args = Base.uncompressed_ast(ast)
 @test popmeta!(body, :test) == (true, [42])
 @test popmeta!(body, :nonexistent) == (false, [])
 
-metaex = Expr(:meta, :foo)
+# Simple popmeta!() tests
 ex1 = quote
-    $metaex
+    $(Expr(:meta, :foo))
     x*x+1
 end
-metaex = Expr(:meta, :foo)
-ex2 = quote
-    y = x
-    $metaex
-    y*y+1
-end
-metaex = Expr(:block, Expr(:meta, :foo))
-ex3 = quote
-    y = x
-    $metaex
-    x*x+1
-end
-
 @test popmeta!(ex1, :foo)[1]
-@test popmeta!(ex2, :foo)[1]
-@test popmeta!(ex3, :foo)[1]
+@test !popmeta!(ex1, :foo)[1]
+@test !popmeta!(ex1, :bar)[1]
 @test !(popmeta!(:(x*x+1), :foo)[1])
+
+# Find and pop meta information from general ast locations
+multi_meta = quote
+    $(Expr(:meta, :foo1))
+    y = x
+    $(Expr(:meta, :foo2, :foo3))
+    begin
+        $(Expr(:meta, :foo4, Expr(:foo5, 1, 2)))
+    end
+    x*x+1
+end
+@test popmeta!(deepcopy(multi_meta), :foo1) == (true, [])
+@test popmeta!(deepcopy(multi_meta), :foo2) == (true, [])
+@test popmeta!(deepcopy(multi_meta), :foo3) == (true, [])
+@test popmeta!(deepcopy(multi_meta), :foo4) == (true, [])
+@test popmeta!(deepcopy(multi_meta), :foo5) == (true, [1,2])
+@test popmeta!(deepcopy(multi_meta), :bar)  == (false, [])
+
+# Test that popmeta!() removes meta blocks entirely when they become empty.
+for m in [:foo1, :foo2, :foo3, :foo4, :foo5]
+    @test popmeta!(multi_meta, m)[1]
+end
+@test Base.findmeta(multi_meta.args)[1] == 0
 
 end
 
