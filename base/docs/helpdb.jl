@@ -11280,8 +11280,9 @@ doc"""
 ```rst
 ..  DateTime(dt::AbstractString, format::AbstractString; locale="english") -> DateTime
 
-Construct a ``DateTime`` type by parsing the ``dt`` date string following the pattern given in
-the ``format`` string. The following codes can be used for constructing format strings:
+Construct a ``DateTime`` by parsing the ``dt`` date string following the pattern given in
+the ``format`` string. The following character codes can be used to construct the ``format``
+string:
 
 =============== ========= ===============================================================
 Code            Matches    Comment
@@ -11308,9 +11309,48 @@ Dates.DateTime(dt::AbstractString, format::AbstractString)
 
 doc"""
 ```rst
+..  format(dt::TimeType, format::AbstractString; locale="english") -> AbstractString
+
+Construct a string by using a ``TimeType`` object and applying the provided ``format``. The
+following character codes can be used to construct the ``format`` string:
+
+=============== ========= ===============================================================
+Code            Examples  Comment
+=============== ========= ===============================================================
+``y``           6         Numeric year with a fixed width
+``m``           1, 12     Numeric month with a minimum width
+``u``           Jan       Month name shortened to 3-chars according to the ``locale``
+``U``           January   Full month name according to the ``locale`` keyword
+``d``           1, 31     Day of the month with a minimum width
+``H``           0, 23     Hour (24-hour clock) with a minimum width
+``M``           0, 59     Minute with a minimum width
+``S``           0, 59     Second with a minimum width
+``s``           000, 500  Millisecond with a minimum width of 3
+``e``           Mon, Tue  Abbreviated days of the week
+``E``           Monday    Full day of week name
+=============== ========= ===============================================================
+
+The number of sequential code characters indicate the width of the code. A format of
+``yyyy-mm`` specifies that the code ``y`` should have a width of four while ``m`` a width of
+two. Codes that yield numeric digits have an associated mode: fixed-width or minimum-width.
+The fixed-width mode left-pads the value with zeros when it is shorter than the specified
+width and truncates the value when longer. Minimum-width mode works the same as fixed-width
+except that it does not truncate values longer than the width.
+
+When creating a ``format`` you can use any non-code characters as a separator. For example to
+generate the string "1996-01-15T00:00:00" you could use ``format``: "yyyy-mm-ddTHH:MM:SS".
+```
+"""
+Dates.format(dt::AbstractString, format::AbstractString)
+
+doc"""
+```rst
 ..  DateTime(dt::AbstractString, df::DateFormat) -> DateTime
 
-Similar form as above for parsing a ``DateTime``, but passes a ``DateFormat`` object instead of a raw formatting string. It is more efficient if similarly formatted date strings will be parsed repeatedly to first create a ``DateFormat`` object then use this method for parsing.
+Construct a ``DateTime`` by parsing the ``dt`` date string following the pattern given in
+the :func:`Dates.DateFormat` object. Similar to
+``DateTime(::AbstractString, ::AbstractString)`` but more efficient when repeatedly parsing
+similarly formatted date strings with a pre-created ``DateFormat`` object.
 ```
 """
 Dates.DateTime(dt::AbstractString, df::Dates.DateFormat)
@@ -11360,14 +11400,17 @@ Dates.Date(f::Function, y)
 doc"""
     Date(dt::DateTime) -> Date
 
-Converts a `DateTime` type to a `Date`. The hour, minute, second, and millisecond parts of the `DateTime` are truncated, so only the year, month and day parts are used in construction.
+Converts a `DateTime` to a `Date`. The hour, minute, second, and millisecond parts of the
+`DateTime` are truncated, so only the year, month and day parts are used in construction.
 """
 Dates.Date(dt::DateTime)
 
 doc"""
     Date(dt::AbstractString, format::AbstractString; locale="english") -> Date
 
-Construct a `Date` type by parsing a `dt` date string following the pattern given in the `format` string. Follows the same conventions as `DateTime` above.
+Construct a `Date` object by parsing a `dt` date string following the pattern given in the
+`format` string. Follows the same conventions as
+`DateTime(::AbstractString, ::AbstractString)`.
 """
 Dates.Date(dt::AbstractString, format::AbstractString)
 
@@ -11431,20 +11474,6 @@ Takes the number of Julian calendar days since epoch
 Dates.julian2datetime
 
 doc"""
-    year(dt::TimeType) -> Int64
-    month(dt::TimeType) -> Int64
-    week(dt::TimeType) -> Int64
-    day(dt::TimeType) -> Int64
-    hour(dt::TimeType) -> Int64
-    minute(dt::TimeType) -> Int64
-    second(dt::TimeType) -> Int64
-    millisecond(dt::TimeType) -> Int64
-
-Return the field part of a `Date` or `DateTime` as an `Int64`.
-"""
-Dates.year
-
-doc"""
     toprev(dt::TimeType,dow::Int;same::Bool=false) -> TimeType
 
 Adjusts `dt` to the previous day of week corresponding to `dow` with `1 = Monday, 2 = Tuesday, etc`. Setting `same=true` allows the current `dt` to be considered as the previous `dow`, allowing for no adjustment to occur.
@@ -11483,13 +11512,6 @@ Returns the number of days in the month of `dt`. Value will be 28, 29, 30, or 31
 Dates.daysinmonth
 
 doc"""
-    yearmonth(dt::TimeType) -> (Int64, Int64)
-
-Simultaneously return the year and month parts of a `Date` or `DateTime`.
-"""
-Dates.yearmonth
-
-doc"""
     daysofweekinmonth(dt::TimeType) -> Int
 
 For the day of week of `dt`, returns the total number of that day of the week in `dt`'s month. Returns 4 or 5. Useful in temporal expressions for specifying the last day of a week in a month by including `dayofweekofmonth(dt) == daysofweekinmonth(dt)` in the adjuster function.
@@ -11497,18 +11519,15 @@ For the day of week of `dt`, returns the total number of that day of the week in
 Dates.daysofweekinmonth
 
 doc"""
-    yearmonthday(dt::TimeType) -> (Int64, Int64, Int64)
+```rst
+..  DateFormat(format::AbstractString, locale::AbstractString="english") -> DateFormat
 
-Simultaneously return the year, month, and day parts of a `Date` or `DateTime`.
+Construct a date formatting object that can be used for parsing date strings or
+formatting a date object as a string. For details on the syntax for ``format`` see
+:ref:`parsing <man-date-parsing>` and :ref:`formatting <man-date-formatting>`.
+```
 """
-Dates.yearmonthday
-
-doc"""
-    Dates.DateFormat(format::AbstractString) -> DateFormat
-
-Construct a date formatting object that can be passed repeatedly for parsing similarly formatted date strings. `format` is a format string in the form described above (e.g. `"yyyy-mm-dd"`).
-"""
-Dates.Dates.DateFormat
+Dates.DateFormat
 
 doc"""
     lastdayofweek(dt::TimeType) -> TimeType
@@ -11523,13 +11542,6 @@ doc"""
 `func` takes a single TimeType argument and returns a `Bool` indicating whether the input should be "included" in the final set. `recur` applies `func` over each element in the range of `dr`, including those elements for which `func` returns `true` in the resulting Array, unless `negate=true`, then only elements where `func` returns `false` are included.
 """
 Dates.recur
-
-doc"""
-    monthday(dt::TimeType) -> (Int64, Int64)
-
-Simultaneously return the month and day parts of a `Date` or `DateTime`.
-"""
-Dates.monthday
 
 doc"""
     default(p::Period) -> Period
@@ -11628,35 +11640,6 @@ doc"""
 Returns the day of the week as an `Int64` with `1 = Monday, 2 = Tuesday, etc.`.
 """
 Dates.dayofweek
-
-doc"""
-    Year(dt::TimeType) -> Year
-    Month(dt::TimeType) -> Month
-    Week(dt::TimeType) -> Week
-    Day(dt::TimeType) -> Day
-    Hour(dt::TimeType) -> Hour
-    Minute(dt::TimeType) -> Minute
-    Second(dt::TimeType) -> Second
-    Millisecond(dt::TimeType) -> Millisecond
-
-Return the field part of a `Date` or `DateTime` as a `Period` type.
-"""
-Dates.Year(dt::Dates.TimeType)
-
-doc"""
-    Year(v)
-    Month(v)
-    Week(v)
-    Day(v)
-    Hour(v)
-    Minute(v)
-    Second(v)
-    Millisecond(v)
-
-Construct a `Period` type with the given `v` value. Input must be losslessly
-convertible to an `Int64`.
-"""
-Dates.Year(v)
 
 doc"""
     quarterofyear(dt::TimeType) -> Int

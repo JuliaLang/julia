@@ -82,7 +82,7 @@ SLOT_RULE['s'] = Millisecond
 
 duplicates(slots) = any(map(x->count(y->x.parser==y.parser,slots),slots) .> 1)
 
-function DateFormat(f::AbstractString,locale::AbstractString="english")
+function DateFormat(f::AbstractString, locale::AbstractString="english")
     slots = Slot[]
     prefix = ""
     params = ()
