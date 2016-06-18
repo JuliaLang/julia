@@ -353,9 +353,7 @@ UTF-8 is not the only encoding that Julia supports, and adding support
 for new encodings is quite easy.  In particular, Julia also provides
 :obj:`UTF16String` and :obj:`UTF32String` types, constructed by
 :func:`utf16` and :func:`utf32` respectively, for UTF-16 and
-UTF-32 encodings.  It also provides aliases :obj:`WString` and
-:func:`wstring` for either UTF-16 or UTF-32 strings, depending on the
-size of ``Cwchar_t``. Additional discussion of other encodings and how to
+UTF-32 encodings. Additional discussion of other encodings and how to
 implement support for them is beyond the scope of this document for
 the time being. For further discussion of UTF-8 encoding issues, see
 the section below on `byte array literals <#Byte+Array+Literals>`_,

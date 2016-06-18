@@ -500,10 +500,3 @@
    .. Docstring generated from Julia source
 
    Create a string from the address of a NUL-terminated UTF-32 string. A copy is made; the pointer can be safely freed. If ``length`` is specified, the string does not have to be NUL-terminated.
-
-.. function:: wstring(s)
-
-   .. Docstring generated from Julia source
-
-   This is a synonym for either ``utf32(s)`` or ``utf16(s)``\ , depending on whether ``Cwchar_t`` is 32 or 16 bits, respectively. The synonym ``WString`` for ``UTF32String`` or ``UTF16String`` is also provided.
-

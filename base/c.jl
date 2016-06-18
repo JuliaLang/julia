@@ -81,7 +81,12 @@ unsafe_string(s::Cstring) = unsafe_string(convert(Ptr{UInt8}, s))
 
 # convert strings to String etc. to pass as pointers
 cconvert(::Type{Cstring}, s::AbstractString) = String(s)
-cconvert(::Type{Cwstring}, s::AbstractString) = wstring(s)
+
+function cconvert(::Type{Cwstring}, s::AbstractString)
+    v = transcode(Cwchar_t, String(s).data)
+    !isempty(v) && v[end] == 0 || push!(v, 0)
+    return v
+end
 
 containsnul(p::Ptr, len) =
     C_NULL != ccall(:memchr, Ptr{Cchar}, (Ptr{Cchar}, Cint, Csize_t), p, 0, len)
@@ -90,16 +95,24 @@ containsnul(s::AbstractString) = '\0' in s
 
 function unsafe_convert(::Type{Cstring}, s::String)
     p = unsafe_convert(Ptr{Cchar}, s)
-    if containsnul(p, sizeof(s))
+    containsnul(p, sizeof(s)) &&
         throw(ArgumentError("embedded NULs are not allowed in C strings: $(repr(s))"))
-    end
     return Cstring(p)
+end
+
+function unsafe_convert(::Type{Cwstring}, v::Vector{Cwchar_t})
+    for i = 1:length(v)-1
+        v[i] == 0 &&
+            throw(ArgumentError("embedded NULs are not allowed in C strings: $(repr(v))"))
+    end
+    v[end] == 0 ||
+        throw(ArgumentError("C string data must be NUL terminated: $(repr(v))"))
+    p = unsafe_convert(Ptr{Cwchar_t}, v)
+    return Cwstring(p)
 end
 
 # symbols are guaranteed not to contain embedded NUL
 convert(::Type{Cstring}, s::Symbol) = Cstring(unsafe_convert(Ptr{Cchar}, s))
-
-# in string.jl: unsafe_convert(::Type{Cwstring}, s::WString)
 
 # FIXME: this should be handled by implicit conversion to Cwstring, but good luck with that
 if is_windows()
@@ -113,6 +126,7 @@ end
 # transcoding between data in UTF-8 and UTF-16 for Windows APIs
 
 transcode{T<:Union{UInt8,UInt16}}(::Type{T}, src::Vector{T}) = src
+transcode(::Type{Int32}, src::Vector{UInt32}) = reinterpret(Int32, src)
 
 function transcode(::Type{UInt16}, src::Vector{UInt8})
     dst = UInt16[]
