@@ -45,15 +45,21 @@ function show{T}(io::IO, x::Nullable{T})
     end
 end
 
-get(x::Nullable) = x.isnull ? throw(NullException()) : x.value
+"""
+    get(x::Nullable[, y])
 
-@inline function get{T}(x::Nullable{T}, y)
-    if isbits(T)
-        ifelse(x.isnull, convert(T, y), x.value)
+Attempt to access the value of `x`. Returns the value if it is present;
+otherwise, returns `y` if provided, or throws a `NullException` if not.
+"""
+@inline function get{S,T}(x::Nullable{S}, y::T)
+    if isbits(S)
+        ifelse(x.isnull, y, x.value)
     else
-        x.isnull ? convert(T, y) : x.value
+        x.isnull ? y : x.value
     end
 end
+
+get(x::Nullable) = x.isnull ? throw(NullException()) : x.value
 
 isnull(x::Nullable) = x.isnull
 
