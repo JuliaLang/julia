@@ -43,7 +43,7 @@ for eltya in (Float32, Float64, Complex64, Complex128)
 debug && println("\ntype of a: ", eltya, " type of b: ", eltyb, "\n")
 debug && println("LQ decomposition")
         for i = 1:2
-            let a = i == 1 ? a : sub(a, 1:n - 1, 1:n - 1), b = i == 1 ? b : sub(b, 1:n - 1), n = i == 1 ? n : n - 1
+            let a = i == 1 ? a : view(a, 1:n - 1, 1:n - 1), b = i == 1 ? b : view(b, 1:n - 1), n = i == 1 ? n : n - 1
                 lqa   = lqfact(a)
                 l,q   = lqa[:L], lqa[:Q]
                 qra   = qrfact(a)

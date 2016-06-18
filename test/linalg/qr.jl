@@ -41,7 +41,7 @@ for eltya in (Float32, Float64, Complex64, Complex128, BigFloat, Int)
 debug && println("\ntype of a: ", eltya, " type of b: ", eltyb, "\n")
 debug && println("QR decomposition (without pivoting)")
         for i = 1:2
-            let a = i == 1 ? a : sub(a, 1:n - 1, 1:n - 1), b = i == 1 ? b : sub(b, 1:n - 1), n = i == 1 ? n : n - 1
+            let a = i == 1 ? a : view(a, 1:n - 1, 1:n - 1), b = i == 1 ? b : view(b, 1:n - 1), n = i == 1 ? n : n - 1
                 qra   = @inferred qrfact(a)
                 @inferred qr(a)
                 q, r  = qra[:Q], qra[:R]
@@ -58,7 +58,7 @@ debug && println("QR decomposition (without pivoting)")
                 if eltya != Int
                     @test eye(eltyb,n)*q ≈ convert(AbstractMatrix{tab},q)
                     ac = copy(a)
-                    @test qrfact!(a[:, 1:5])\b == qrfact!(sub(ac, :, 1:5))\b
+                    @test qrfact!(a[:, 1:5])\b == qrfact!(view(ac, :, 1:5))\b
                 end
 
 debug && println("Thin QR decomposition (without pivoting)")

@@ -3127,7 +3127,7 @@ function spdiagm_internal(B, d)
         range = 1+i:numel+i
         I[range] = row+1:row+numel
         J[range] = col+1:col+numel
-        copy!(sub(V, range), vec)
+        copy!(view(V, range), vec)
         i += numel
     end
 

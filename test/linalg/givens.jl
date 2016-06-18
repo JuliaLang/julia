@@ -19,7 +19,7 @@ for elty in (Float32, Float64, Complex64, Complex128)
         if Atype == "Array"
             A = A
         else
-            A = sub(A, 1:10, 1:10)
+            A = view(A, 1:10, 1:10)
         end
         Ac = copy(A)
         R = Base.LinAlg.Rotation(Base.LinAlg.Givens{elty}[])
@@ -56,7 +56,7 @@ for elty in (Float32, Float64, Complex64, Complex128)
         if Atype == "Array"
             x = A[:, 1]
         else
-            x = sub(A, 1:10, 1)
+            x = view(A, 1:10, 1)
         end
         G, r = givens(x[2], x[4], 2, 4)
         @test (G*x)[2] ≈ r

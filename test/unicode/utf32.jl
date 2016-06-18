@@ -198,7 +198,7 @@ for (fun, S, T) in ((utf16, UInt16, UTF16String), (utf32, UInt32, UTF32String))
     @test_throws UnicodeError map(islower, x)
     @test_throws ArgumentError map(islower, tst)
     # SubArray conversion
-    subarr = sub(cmp, 1:6)
+    subarr = view(cmp, 1:6)
     @test convert(T, subarr) == str[4:end]
 end
 
