@@ -1043,6 +1043,10 @@ A = [1,2]
 @test append!(A, A) == [1,2,1,2]
 @test prepend!(A, A) == [1,2,1,2,1,2,1,2]
 
+A = [1,2]
+s = Set([1,2,3])
+@test sort(append!(A, s)) == [1,1,2,2,3]
+
 # cases where shared arrays can/can't be grown
 A = [1 3;2 4]
 B = reshape(A, 4)
