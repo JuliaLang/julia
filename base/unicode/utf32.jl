@@ -153,6 +153,9 @@ function convert(T::Type{UTF32String}, bytes::AbstractArray{UInt8})
     UTF32String(d)
 end
 
+cconvert(::Type{Cwstring}, v::Vector{UInt32}) = transcode(Cwchar_t, v)
+cconvert(::Type{Cwstring}, s::UTF32String) = transcode(Cwchar_t, s.data)
+
 function isvalid(::Type{UTF32String}, str::Union{Vector{UInt32}, Vector{Char}})
     for c in str
         @inbounds if !isvalid(Char, UInt32(c)) ; return false ; end
@@ -184,24 +187,6 @@ function map(f, s::UTF32String)
         out[i] = (c2::Char)
     end
     UTF32String(out)
-end
-
-if sizeof(Cwchar_t) == 2
-    const WString = UTF16String
-    const wstring = utf16
-elseif sizeof(Cwchar_t) == 4
-    const WString = UTF32String
-    const wstring = utf32
-end
-wstring(s::Cwstring) = wstring(convert(Ptr{Cwchar_t}, s))
-
-# Cwstring is defined in c.jl, but conversion needs to be defined here
-# to have WString
-function unsafe_convert(::Type{Cwstring}, s::WString)
-    if containsnul(s)
-        throw(ArgumentError("embedded NUL chars are not allowed in C strings: $(repr(s))"))
-    end
-    return Cwstring(unsafe_convert(Ptr{Cwchar_t}, s))
 end
 
 pointer(x::Union{UTF16String,UTF32String}) = pointer(x.data)

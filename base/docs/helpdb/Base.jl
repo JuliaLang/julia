@@ -2776,15 +2776,6 @@ Equivalent to `writedlm` with `delim` set to comma.
 writecsv
 
 """
-    wstring(s)
-
-This is a synonym for either `utf32(s)` or `utf16(s)`, depending on whether `Cwchar_t` is 32
-or 16 bits, respectively. The synonym `WString` for `UTF32String` or `UTF16String` is also
-provided.
-"""
-wstring
-
-"""
     withenv(f::Function, kv::Pair...)
 
 Execute `f()` in an environment that is temporarily modified (not replaced as in `setenv`)

@@ -127,7 +127,6 @@ export
     VersionNumber,
     WeakKeyDict,
     WorkerConfig,
-    WString,
     Zip,
 
 # Ccall types
@@ -881,7 +880,6 @@ export
     utf16,
     utf32,
     warn,
-    wstring,
 
 # random numbers
     AbstractRNG,

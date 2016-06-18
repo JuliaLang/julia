@@ -486,15 +486,11 @@ C name                  Standard Julia Alias    Julia Base Type
 .. note::
 
     For ``wchar_t*`` arguments, the Julia type should be ``Cwstring`` (if the C
-    routine expects a NUL-terminated string) or ``Ptr{Cwchar_t}`` otherwise, and
-    data can be converted to/from ordinary Julia strings by the ``wstring(s)``
-    function (equivalent to either ``utf16(s)`` or ``utf32(s)`` depending upon the
-    width of ``Cwchar_t``); this conversion will be called automatically for
-    ``Cwstring`` arguments.    Note also that ASCII, UTF-8, UTF-16, and UTF-32
-    string data in Julia is internally NUL-terminated, so it can be passed to C
-    functions expecting NUL-terminated data without making a copy (but using the
-    ``Cwstring`` type will cause an error to be thrown if the string itself
-    contains NUL characters).
+    routine expects a NUL-terminated string) or ``Ptr{Cwchar_t}`` otherwise. Note
+    also that ASCII, UTF-8, UTF-16, and UTF-32 string data in Julia is internally
+    NUL-terminated, so it can be passed to C functions expecting NUL-terminated
+    data without making a copy (but using the ``Cwstring`` type will cause an
+    error to be thrown if the string itself contains NUL characters).
 
 .. note::
 

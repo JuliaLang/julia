@@ -237,20 +237,12 @@ end
 let s = normalize_string("tést",:NFKC)
     @test unsafe_string(Base.unsafe_convert(Cstring, s)) == s
     @test unsafe_string(convert(Cstring, Symbol(s))) == s
-    @test wstring(Base.unsafe_convert(Cwstring, wstring(s))) == s
 end
-let s = "ba\0d"
-    @test_throws ArgumentError Base.unsafe_convert(Cstring, s)
-    @test_throws ArgumentError Base.unsafe_convert(Cwstring, wstring(s))
-end
+@test_throws ArgumentError Base.unsafe_convert(Cstring, "ba\0d")
 
 cstrdup(s) = @static is_windows() ? ccall(:_strdup, Cstring, (Cstring,), s) : ccall(:strdup, Cstring, (Cstring,), s)
 let p = cstrdup("hello")
     @test unsafe_string(p) == "hello" == unsafe_wrap(String, cstrdup(p), true)
-    Libc.free(p)
-end
-let p = @static is_windows() ? ccall(:_wcsdup, Cwstring, (Cwstring,), "tést") : ccall(:wcsdup, Cwstring, (Cwstring,), "tést")
-    @test wstring(p) == "tést"
     Libc.free(p)
 end
 
