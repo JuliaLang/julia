@@ -224,7 +224,7 @@ Generator Expressions
 Comprehensions can also be written without the enclosing square brackets, producing
 an object known as a generator. This object can be iterated to produce values on
 demand, instead of allocating an array and storing them in advance
-(see <man-interfaces-iteration>).
+(see :ref:`man-interfaces-iteration`).
 For example, the following expression sums a series without allocating memory:
 
 .. doctest::
