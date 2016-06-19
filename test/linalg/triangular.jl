@@ -221,6 +221,7 @@ for elty1 in (Float32, Float64, BigFloat, Complex64, Complex128, Complex{BigFloa
         # make sure the call to LAPACK works right
         if elty1 <: BlasFloat
             @test_approx_eq Base.LinAlg.inv!(copy(A1)) inv(lufact(full(A1)))
+            @test_approx_eq pinv(A1) pinv(full(A1))
         end
 
         # Determinant

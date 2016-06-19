@@ -1838,3 +1838,4 @@ for func in (:svd, :svdfact, :svdfact!, :svdvals)
 end
 
 factorize(A::AbstractTriangular) = A
+pinv{T<:BlasFloat}(A::AbstractTriangular{T}) = pinv(full(A))
