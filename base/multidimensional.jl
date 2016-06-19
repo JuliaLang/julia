@@ -6,7 +6,7 @@ module IteratorsMD
 import Base: eltype, length, size, start, done, next, last, getindex, setindex!, linearindexing, min, max, zero, one, isless, eachindex, ndims, iteratorsize
 importall ..Base.Operators
 import Base: simd_outer_range, simd_inner_length, simd_index
-using Base: LinearFast, LinearSlow, AbstractCartesianIndex, fill_to_length, tail
+using Base: LinearFast, LinearSlow, AbstractCartesianIndex, fill_to_length, tail, map2
 
 export CartesianIndex, CartesianRange
 
@@ -47,10 +47,10 @@ one{N}(::CartesianIndex{N}) = one(CartesianIndex{N})
 one{N}(::Type{CartesianIndex{N}}) = CartesianIndex(ntuple(x -> 1, Val{N}))
 
 # arithmetic, min/max
-(+){N}(index1::CartesianIndex{N}, index2::CartesianIndex{N}) = CartesianIndex{N}(map(+, index1.I, index2.I))
-(-){N}(index1::CartesianIndex{N}, index2::CartesianIndex{N}) = CartesianIndex{N}(map(-, index1.I, index2.I))
-min{N}(index1::CartesianIndex{N}, index2::CartesianIndex{N}) = CartesianIndex{N}(map(min, index1.I, index2.I))
-max{N}(index1::CartesianIndex{N}, index2::CartesianIndex{N}) = CartesianIndex{N}(map(max, index1.I, index2.I))
+(+){N}(index1::CartesianIndex{N}, index2::CartesianIndex{N}) = CartesianIndex{N}(map2(+, index1.I, index2.I))
+(-){N}(index1::CartesianIndex{N}, index2::CartesianIndex{N}) = CartesianIndex{N}(map2(-, index1.I, index2.I))
+min{N}(index1::CartesianIndex{N}, index2::CartesianIndex{N}) = CartesianIndex{N}(map2(min, index1.I, index2.I))
+max{N}(index1::CartesianIndex{N}, index2::CartesianIndex{N}) = CartesianIndex{N}(map2(max, index1.I, index2.I))
 
 (+){N}(index::CartesianIndex{N}, i::Integer) = CartesianIndex{N}(map(x->x+i, index.I))
 (+){N}(i::Integer, index::CartesianIndex{N}) = index+i
@@ -96,7 +96,7 @@ eltype{I}(::Type{CartesianRange{I}}) = I
 iteratorsize{I}(::Type{CartesianRange{I}}) = Base.HasShape()
 
 @inline function start{I<:CartesianIndex}(iter::CartesianRange{I})
-    if any(map(>, iter.start.I, iter.stop.I))
+    if any(map2(>, iter.start.I, iter.stop.I))
         return iter.stop+1
     end
     iter.start
@@ -121,7 +121,7 @@ start{I<:CartesianIndex{0}}(iter::CartesianRange{I}) = false
 next{I<:CartesianIndex{0}}(iter::CartesianRange{I}, state) = iter.start, true
 done{I<:CartesianIndex{0}}(iter::CartesianRange{I}, state) = state
 
-size{I<:CartesianIndex}(iter::CartesianRange{I}) = map(dimlength, iter.start.I, iter.stop.I)
+size{I<:CartesianIndex}(iter::CartesianRange{I}) = map2(dimlength, iter.start.I, iter.stop.I)
 dimlength(start, stop) = stop-start+1
 
 length(iter::CartesianRange) = prod(size(iter))
