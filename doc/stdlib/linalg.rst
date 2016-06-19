@@ -71,23 +71,49 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
    Constructs a matrix with ``V`` as its diagonal.
 
-.. function:: Bidiagonal(dv, ev, isupper)
+.. function:: Bidiagonal(dv, ev, isupper::Bool)
 
    .. Docstring generated from Julia source
 
    Constructs an upper (``isupper=true``\ ) or lower (``isupper=false``\ ) bidiagonal matrix using the given diagonal (``dv``\ ) and off-diagonal (``ev``\ ) vectors.  The result is of type ``Bidiagonal`` and provides efficient specialized linear solvers, but may be converted into a regular matrix with :func:`full`\ . ``ev``\ 's length must be one less than the length of ``dv``\ .
 
-.. function:: Bidiagonal(dv, ev, uplo)
+   **Example**
+
+   .. code-block:: julia
+
+       dv = rand(5)
+       ev = rand(4)
+       Bu = Bidiagonal(dv, ev, true) #e is on the first superdiagonal
+       Bl = Bidiagonal(dv, ev, false) #e is on the first subdiagonal
+
+.. function:: Bidiagonal(dv, ev, uplo::Char)
 
    .. Docstring generated from Julia source
 
    Constructs an upper (``uplo='U'``\ ) or lower (``uplo='L'``\ ) bidiagonal matrix using the given diagonal (``dv``\ ) and off-diagonal (``ev``\ ) vectors.  The result is of type ``Bidiagonal`` and provides efficient specialized linear solvers, but may be converted into a regular matrix with :func:`full`\ . ``ev``\ 's length must be one less than the length of ``dv``\ .
 
-.. function:: Bidiagonal(A, uplo)
+   **Example**
+
+   .. code-block:: julia
+
+       dv = rand(5)
+       ev = rand(4)
+       Bu = Bidiagonal(dv, ev, 'U') #e is on the first superdiagonal
+       Bl = Bidiagonal(dv, ev, 'L') #e is on the first subdiagonal
+
+.. function:: Bidiagonal(A, isupper::Bool)
 
    .. Docstring generated from Julia source
 
    Construct a ``Bidiagonal`` matrix from the main diagonal of ``A`` and its first super- (if ``isupper=true``\ ) or sub-diagonal (if ``isupper=false``\ ).
+
+   **Example**
+
+   .. code-block:: julia
+
+       A = rand(5,5)
+       Bu = Bidiagonal(A, true) #contains the main diagonal and first superdiagonal of A
+       Bl = Bidiagonal(A, false) #contains the main diagonal and first subdiagonal of A
 
 .. function:: SymTridiagonal(dv, ev)
 
@@ -899,12 +925,6 @@ Linear algebra functions in Julia are largely implemented by calling functions f
    .. Docstring generated from Julia source
 
    Construct a tridiagonal matrix from the first subdiagonal, diagonal, and first superdiagonal, respectively.  The result is of type ``Tridiagonal`` and provides efficient specialized linear solvers, but may be converted into a regular matrix with :func:`full`\ . The lengths of ``dl`` and ``du`` must be one less than the length of ``d``\ .
-
-.. function:: Bidiagonal(dv, ev, isupper)
-
-   .. Docstring generated from Julia source
-
-   Constructs an upper (``isupper=true``\ ) or lower (``isupper=false``\ ) bidiagonal matrix using the given diagonal (``dv``\ ) and off-diagonal (``ev``\ ) vectors.  The result is of type ``Bidiagonal`` and provides efficient specialized linear solvers, but may be converted into a regular matrix with :func:`full`\ . ``ev``\ 's length must be one less than the length of ``dv``\ .
 
 .. function:: rank(M)
 
