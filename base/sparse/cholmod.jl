@@ -1252,9 +1252,13 @@ function cholfact!{Tv}(F::Factor{Tv}, A::Sparse{Tv}; shift::Real=0.0)
 end
 
 """
-    cholfact!(F::Factor, A::Union{SparseMatrixCSC{<:Real},SparseMatrixCSC{Complex{<:Real}},Symmetric{<:Real,SparseMatrixCSC{<:Real,SuiteSparse_long}},Hermitian{Complex{<:Real},SparseMatrixCSC{Complex{<:Real},SuiteSparse_long}}}; shift = 0.0) -> CHOLMOD.Factor
+    cholfact!(F::Factor, A; shift = 0.0) -> CHOLMOD.Factor
 
 Compute the Cholesky (``LL'``) factorization of `A`, reusing the symbolic factorization `F`.
+`A` must be a `SparseMatrixCSC`, `Symmetric{SparseMatrixCSC}`, or
+`Hermitian{SparseMatrixCSC}`. Note that even if `A` doesn't
+have the type tag, its structure and values must still be
+symmetric/Hermitian.
 
 ** Note **
 
@@ -1289,9 +1293,13 @@ function cholfact(A::Sparse; shift::Real=0.0,
 end
 
 """
-    cholfact(::Union{SparseMatrixCSC{<:Real},SparseMatrixCSC{Complex{<:Real}},Symmetric{<:Real,SparseMatrixCSC{<:Real,SuiteSparse_long}},Hermitian{Complex{<:Real},SparseMatrixCSC{Complex{<:Real},SuiteSparse_long}}}; shift = 0.0, perm = Int[]) -> CHOLMOD.Factor
+    cholfact(A; shift = 0.0, perm = Int[]) -> CHOLMOD.Factor
 
 Compute the Cholesky factorization of a sparse positive definite matrix `A`.
+`A` must be a `SparseMatrixCSC`, `Symmetric{SparseMatrixCSC}`, or
+`Hermitian{SparseMatrixCSC}`. Note that even if `A` doesn't
+have the type tag, its structure and values must still be
+symmetric/Hermitian.
 A fill-reducing permutation is used.
 `F = cholfact(A)` is most frequently used to solve systems of equations with `F\\b`,
 but also the methods `diag`, `det`, `logdet` are defined for `F`.
@@ -1342,9 +1350,13 @@ function ldltfact!{Tv}(F::Factor{Tv}, A::Sparse{Tv}; shift::Real=0.0)
 end
 
 """
-    ldltfact!(F::Factor, A::Union{SparseMatrixCSC{<:Real},SparseMatrixCSC{Complex{<:Real}},Symmetric{<:Real,SparseMatrixCSC{<:Real,SuiteSparse_long}},Hermitian{Complex{<:Real},SparseMatrixCSC{Complex{<:Real},SuiteSparse_long}}}; shift = 0.0) -> CHOLMOD.Factor
+    ldltfact!(F::Factor, A; shift = 0.0) -> CHOLMOD.Factor
 
 Compute the ``LDL'`` factorization of `A`, reusing the symbolic factorization `F`.
+`A` must be a `SparseMatrixCSC`, `Symmetric{SparseMatrixCSC}`, or
+`Hermitian{SparseMatrixCSC}`. Note that even if `A` doesn't
+have the type tag, its structure and values must still be
+symmetric/Hermitian.
 
 ** Note **
 
@@ -1379,9 +1391,13 @@ function ldltfact(A::Sparse; shift::Real=0.0,
 end
 
 """
-    ldltfact(::Union{SparseMatrixCSC{<:Real},SparseMatrixCSC{Complex{<:Real}},Symmetric{<:Real,SparseMatrixCSC{<:Real,SuiteSparse_long}},Hermitian{Complex{<:Real},SparseMatrixCSC{Complex{<:Real},SuiteSparse_long}}}; shift = 0.0, perm=Int[]) -> CHOLMOD.Factor
+    ldltfact(A; shift = 0.0, perm=Int[]) -> CHOLMOD.Factor
 
-Compute the ``LDL'`` factorization of a sparse symmetric or Hermitian matrix.
+Compute the ``LDL'`` factorization of a sparse matrix `A`.
+`A` must be a `SparseMatrixCSC`, `Symmetric{SparseMatrixCSC}`, or
+`Hermitian{SparseMatrixCSC}`. Note that even if `A` doesn't
+have the type tag, its structure and values must still be
+symmetric/Hermitian.
 A fill-reducing permutation is used.
 `F = ldltfact(A)` is most frequently used to solve systems of equations `A*x = b` with `F\\b`.
 The returned factorization object `F` also supports the methods `diag`,
