@@ -740,21 +740,26 @@ end
 ### trmv, Triangular matrix-vector multiplication
 
 """
-    trmv(side, ul, tA, dA, alpha, A, b)
+    trmv(ul, tA, dA, A, b)
 
-Returns `alpha*A*b` or one of the other three variants determined by `side` (`A` on left or
-right) and `tA` (transpose `A`). Only the `ul` triangle of `A` is used. `dA` indicates if
-`A` is unit-triangular (the diagonal is assumed to be all ones).
+Returns `op(A)*b`, where `op` is determined by `tA`
+(`N` for identity, `T` for transpose `A`, and `C` for conjugate
+transpose `A`). Only the `ul` triangle (`U` for upper, `L`
+for lower) of `A` is used. `dA` indicates if `A` is
+unit-triangular (the diagonal is assumed to be all ones if `U`,
+or non-unit if `N`).
 """
 function trmv end
 
 """
-    trmv!(side, ul, tA, dA, alpha, A, b)
+    trmv!(ul, tA, dA, A, b)
 
-Update `b` as `alpha*A*b` or one of the other three variants determined by `side` (`A` on
-left or right) and `tA` (transpose `A`). Only the `ul` triangle of `A` is used. `dA`
-indicates if `A` is unit-triangular (the diagonal is assumed to be all ones). Returns the
-updated `b`.
+Returns `op(A)*b`, where `op` is determined by `tA`
+(`N` for identity, `T` for transpose `A`, and `C` for conjugate
+transpose `A`). Only the `ul` triangle (`U` for upper, `L`
+for lower) of `A` is used. `dA` indicates if `A` is
+unit-triangular (the diagonal is assumed to be all ones if `U`,
+or non-unit if `N`). The multiplication occurs in-place on `b`.
 """
 function trmv! end
 
