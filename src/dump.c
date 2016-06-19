@@ -1267,6 +1267,8 @@ static jl_value_t *jl_deserialize_datatype(ios_t *s, int pos, jl_value_t **loc)
             // builtin types are not serialized, so their caches aren't
             // explicitly saved. so we reconstruct the caches of builtin
             // parametric types here.
+            // XXX: need to make sure to serialize all leaftypes in this cache
+            // that were referenced from compiled code
             jl_array_ptr_1d_push(datatype_list, (jl_value_t*)dt);
         }
     }
