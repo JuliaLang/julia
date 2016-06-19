@@ -233,7 +233,7 @@ static int OpInfoLookup(void *DisInfo, uint64_t PC, uint64_t Offset, uint64_t Si
     default: return 0;          // Cannot handle input address size
     }
     int skipC = 0;
-    jl_frame_t *frame;
+    jl_frame_t *frame = NULL;
     jl_getFunctionInfo(&frame, pointer, skipC, 1);
     char *name = frame->func_name;
     free(frame->file_name);

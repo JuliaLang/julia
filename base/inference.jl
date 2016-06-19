@@ -73,9 +73,10 @@ type InferenceState
     typegotoredo::Bool
     inworkq::Bool
     optimize::Bool
+    needtree::Bool
     inferred::Bool
 
-    function InferenceState(linfo::LambdaInfo, optimize::Bool)
+    function InferenceState(linfo::LambdaInfo, optimize::Bool, needtree::Bool)
         @assert isa(linfo.code,Array{Any,1})
         nslots = length(linfo.slotnames)
         nl = label_counter(linfo.code)+1
@@ -160,7 +161,7 @@ type InferenceState
             ssavalue_uses, ssavalue_init,
             ObjectIdDict(), #Dict{InferenceState, Vector{LineNum}}(),
             Vector{Tuple{InferenceState, Vector{LineNum}}}(),
-            false, false, false, optimize, false)
+            false, false, false, optimize, needtree, false)
         push!(active, frame)
         nactive[] += 1
         return frame
@@ -1475,6 +1476,7 @@ function typeinf_edge(method::Method, atypes::ANY, sparams::SimpleVector, needtr
             # don't call staged functions on abstract types.
             # (see issues #8504, #10230)
             # we can't guarantee that their type behavior is monotonic.
+            # XXX: this test is wrong if Types (such as DataType) are present
             return (nothing, Any, false)
         end
         try
@@ -1487,6 +1489,8 @@ function typeinf_edge(method::Method, atypes::ANY, sparams::SimpleVector, needtr
         linfo = specialize_method(method, atypes, sparams, cached)
     end
 
+    # XXX: the following logic is likely subtly broken if code.code was nothing,
+    #      although it seems unlikely something bad (infinite recursion) will happen as a result
     if linfo.inInference
         # inference on this signature may be in progress,
         # find the corresponding frame in the active list
@@ -1500,10 +1504,13 @@ function typeinf_edge(method::Method, atypes::ANY, sparams::SimpleVector, needtr
         end
         # TODO: this assertion seems iffy
         assert(frame !== nothing)
+        if needtree
+            frame.needtree = true
+        end
     else
         # inference not started yet, make a new frame for a new lambda
         linfo.inInference = true
-        frame = InferenceState(unshare_linfo!(linfo::LambdaInfo), optimize)
+        frame = InferenceState(unshare_linfo!(linfo::LambdaInfo), optimize, needtree)
     end
     frame = frame::InferenceState
 
@@ -1543,8 +1550,8 @@ end
 function typeinf_ext(linfo::LambdaInfo)
     if isdefined(linfo, :def)
         # method lambda - infer this specialization via the method cache
-        (code, _t, _) = typeinf_edge(linfo.def, linfo.specTypes, linfo.sparam_vals, true, true, true, linfo)
-        if code.inferred && linfo !== code
+        (code, _t, inferred) = typeinf_edge(linfo.def, linfo.specTypes, linfo.sparam_vals, true, true, true, linfo)
+        if inferred && code.inferred && linfo !== code
             # This case occurs when the IR for a function has been deleted.
             # `code` will be a newly-created LambdaInfo, and we need to copy its
             # contents to the existing one to copy the info to the method cache.
@@ -1564,7 +1571,7 @@ function typeinf_ext(linfo::LambdaInfo)
     else
         # toplevel lambda - infer directly
         linfo.inInference = true
-        frame = InferenceState(linfo, true)
+        frame = InferenceState(linfo, true, true)
         typeinf_loop(frame)
         @assert frame.inferred # TODO: deal with this better
         return linfo
@@ -1877,7 +1884,8 @@ function isinlineable(linfo::LambdaInfo)
             end
         end
         if !inlineable
-            body = Expr(:block); body.args = linfo.code
+            body = Expr(:block)
+            body.args = linfo.code
             inlineable = inline_worthy(body, cost)
         end
     end
@@ -1905,9 +1913,6 @@ function finish(me::InferenceState)
     end
     type_annotate!(me.linfo, me.stmt_types, me, me.nargs)
 
-    # make sure (meta pure) is stripped from full tree
-    ispure = popmeta!(me.linfo.code, :pure)[1]
-
     # run optimization passes on fulltree
     if me.optimize
         # This pass is required for the AST to be valid in codegen
@@ -1925,22 +1930,34 @@ function finish(me::InferenceState)
         reindex_labels!(me.linfo, me)
     end
     widen_all_consts!(me.linfo)
-
-    # finalize and record the linfo result
-    me.inferred = true
+    # make sure (meta pure) is stripped from full tree
+    ispure = popmeta!(me.linfo.code, :pure)[1]
+    me.linfo.pure = ispure
 
     # determine and cache inlineability
     me.linfo.inlineable = isinlineable(me.linfo)
 
-    if isdefined(me.linfo, :def)
-        # compress code for non-toplevel thunks
-        compressedtree = ccall(:jl_compress_ast, Any, (Any,Any), me.linfo, me.linfo.code)
-        me.linfo.code = compressedtree
+    if !me.needtree
+        me.needtree = me.linfo.inlineable || ccall(:jl_is_cacheable_sig, Int32, (Any, Any, Any),
+            me.linfo.specTypes, me.linfo.def.sig, me.linfo.def) != 0
     end
-    me.linfo.pure = ispure
+
+    if me.needtree
+        if isdefined(me.linfo, :def)
+            # compress code for non-toplevel thunks
+            compressedtree = ccall(:jl_compress_ast, Any, (Any,Any), me.linfo, me.linfo.code)
+            me.linfo.code = compressedtree
+        end
+    else
+        ccall(:jl_set_lambda_code_null, Void, (Any,), me.linfo)
+        me.linfo.inlineable = false
+    end
+
     ccall(:jl_set_lambda_rettype, Void, (Any, Any), me.linfo, me.bestguess)
     me.linfo.inferred = true
     me.linfo.inInference = false
+    # finalize and record the linfo result
+    me.inferred = true
 
     # lazy-delete the item from active for several reasons:
     # efficiency, correctness, and recursion-safety

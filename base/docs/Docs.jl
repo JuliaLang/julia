@@ -59,7 +59,7 @@ include("bindings.jl")
 import Base.Markdown: @doc_str, MD
 import Base.Meta: quot, isexpr
 import Base: Callable
-import Core.Inference.CoreDocs: lazy_iterpolate
+import ..CoreDocs: lazy_iterpolate
 
 export doc
 

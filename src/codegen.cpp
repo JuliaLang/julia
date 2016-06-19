@@ -870,11 +870,8 @@ static void to_function(jl_lambda_info_t *li)
     // if not inlineable, code won't be needed again
     if (JL_DELETE_NON_INLINEABLE &&
         li->def && li->inferred && !li->inlineable &&
-        li != li->def->lambda_template && !jl_options.outputji) {
-        li->code = jl_nothing;
-        li->ssavaluetypes = jl_box_long(jl_array_len(li->ssavaluetypes)); jl_gc_wb(li, li->ssavaluetypes);
-        li->slotflags = NULL;
-        li->slotnames = NULL;
+        li != li->def->lambda_template && !imaging_mode) {
+        jl_set_lambda_code_null(li);
     }
 
     // done compiling: restore global state

@@ -12,7 +12,10 @@ eval(m,x) = Core.eval(m,x)
 
 # init core docsystem
 import Core: @doc, @__doc__, @doc_str
-Core.atdoc!(Core.Inference.CoreDocs.docm)
+if isdefined(Core, :Inference)
+    import Core.Inference.CoreDocs
+    Core.atdoc!(CoreDocs.docm)
+end
 
 include("exports.jl")
 
@@ -61,6 +64,12 @@ include("refpointer.jl")
 include("checked.jl")
 importall .Checked
 
+# Symbol constructors
+if !isdefined(Core, :Inference)
+    Symbol(s::String) = Symbol(s.data)
+    Symbol(a::Array{UInt8,1}) =
+        ccall(:jl_symbol_n, Ref{Symbol}, (Ptr{UInt8}, Int32), a, length(a))
+end
 # vararg Symbol constructor
 Symbol(x...) = Symbol(string(x...))
 
@@ -128,6 +137,11 @@ include(String(vcat(length(Core.ARGS)>=2?Core.ARGS[2].data:"".data, "version_git
 include("osutils.jl")
 include("c.jl")
 include("sysinfo.jl")
+
+if !isdefined(Core, :Inference)
+    include("docs/core.jl")
+    Core.atdoc!(CoreDocs.docm)
+end
 
 # Core I/O
 include("io.jl")
@@ -352,7 +366,7 @@ include("docs/basedocs.jl")
 include("markdown/Markdown.jl")
 include("docs/Docs.jl")
 using .Docs, .Markdown
-Docs.loaddocs(Core.Inference.CoreDocs.DOCS)
+isdefined(Core, :Inference) && Docs.loaddocs(Core.Inference.CoreDocs.DOCS)
 
 function __init__()
     # Base library init
