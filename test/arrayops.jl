@@ -1439,3 +1439,32 @@ let A = [-10,0,3], B = [-10.0,0.0,3.0], C = [1,im,0]
     @test ~A == [9,-1,-4]
     @test typeof(~A) == Vector{Int}
 end
+
+
+# issue 15654
+@test cumprod([5], 2) == [5]
+@test cumprod([1 2; 3 4], 3) == [1 2; 3 4]
+@test cumprod([1 2; 3 4], 1) == [1 2; 3 8]
+@test cumprod([1 2; 3 4], 2) == [1 2; 3 12]
+
+@test cumsum([5], 2) == [5]
+@test cumsum([1 2; 3 4], 1) == [1 2; 4 6]
+@test cumsum([1 2; 3 4], 2) == [1 3; 3 7]
+@test cumsum([1 2; 3 4], 3) == [1 2; 3 4]
+
+module TestNLoops15895
+
+using Base.Cartesian
+using Base.Test
+
+# issue 15894
+function f15894(d)
+    s = zero(eltype(d))
+    @nloops 1 i d begin
+        s += @nref 1 d i
+    end
+    s
+end
+@test f15894(ones(Int, 100)) == 100
+
+end

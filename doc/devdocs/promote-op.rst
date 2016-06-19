@@ -32,7 +32,7 @@ Fortunately, it's possible to provide such definitions via ``promote_op``::
 The first one defines the promotion rule for ``+``, and the second one
 for ``*``.  ``AddFun``, ``MulFun``, and ``DotMulFun`` are "functor
 types" defined in `functor.jl
-<https://github.com/JuliaLang/julia/blob/master/base/functors.jl>`_.
+<https://github.com/JuliaLang/julia/blob/release-0.4/base/functors.jl>`_.
 
 It's worth noting that as julia's internal representation of functions
 evolves, this interface may change in a future version of Julia.

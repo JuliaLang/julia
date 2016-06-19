@@ -43,6 +43,26 @@ s1, s2, s3, s4 = 5, 8, 3, 4
 allsizes = [((), BitArray{0}), ((v1,), BitVector),
             ((n1,n2), BitMatrix), ((s1,s2,s3,s4), BitArray{4})]
 
+# trues and falses
+for (sz,T) in allsizes
+    a = falses(sz...)
+    @test a == falses(sz)
+    @test !any(a)
+    @test sz == size(a)
+    b = trues(sz...)
+    @test b == trues(sz)
+    @test all(b)
+    @test sz == size(b)
+    c = trues(a)
+    @test all(c)
+    @test !any(a)
+    @test sz == size(c)
+    d = falses(b)
+    @test !any(d)
+    @test all(b)
+    @test sz == size(d)
+end
+
 ## Conversions ##
 
 for (sz,T) in allsizes
@@ -1289,3 +1309,18 @@ uv = bitunpack(v)
 B = bitrand(10,10)
 uB = bitunpack(B)
 @test diag(uB) == bitunpack(diag(B))
+uB = Array(B)
+@test diag(uB) == Array(diag(B))
+
+# test non-Int dims constructor
+A = BitArray(Int32(10))
+B = BitArray(Int64(10))
+@test A == B
+
+A = trues(Int32(10))
+B = trues(Int64(10))
+@test A == B
+
+A = falses(Int32(10))
+B = falses(Int64(10))
+@test A == B

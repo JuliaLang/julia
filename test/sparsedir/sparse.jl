@@ -986,43 +986,64 @@ A = sparse([1.0])
 @test_throws ArgumentError norm(sprand(5,5,0.2),3)
 @test_throws ArgumentError norm(sprand(5,5,0.2),2)
 
-# test ishermitian and issym real matrices
-A = speye(5,5)
-@test ishermitian(A) == true
-@test issym(A) == true
-A[1,3] = 1.0
-@test ishermitian(A) == false
-@test issym(A) == false
-A[3,1] = 1.0
-@test ishermitian(A) == true
-@test issym(A) == true
+# test ishermitian and issym
+let
+    # real matrices
+    A = speye(5,5)
+    @test ishermitian(A) == true
+    @test issym(A) == true
+    A[1,3] = 1.0
+    @test ishermitian(A) == false
+    @test issym(A) == false
+    A[3,1] = 1.0
+    @test ishermitian(A) == true
+    @test issym(A) == true
 
-# test ishermitian and issym complex matrices
-A = speye(5,5) + im*speye(5,5)
-@test ishermitian(A) == false
-@test issym(A) == true
-A[1,4] = 1.0 + im
-@test ishermitian(A) == false
-@test issym(A) == false
+    # complex matrices
+    A = speye(5,5) + im*speye(5,5)
+    @test ishermitian(A) == false
+    @test issym(A) == true
+    A[1,4] = 1.0 + im
+    @test ishermitian(A) == false
+    @test issym(A) == false
 
-A = speye(Complex128, 5,5)
-A[3,2] = 1.0 + im
-@test ishermitian(A) == false
-@test issym(A) == false
-A[2,3] = 1.0 - im
-@test ishermitian(A) == true
-@test issym(A) == false
+    A = speye(Complex128, 5,5)
+    A[3,2] = 1.0 + im
+    @test ishermitian(A) == false
+    @test issym(A) == false
+    A[2,3] = 1.0 - im
+    @test ishermitian(A) == true
+    @test issym(A) == false
 
-A = sparse(zeros(5,5))
-@test ishermitian(A) == true
-@test issym(A) == true
+    A = sparse(zeros(5,5))
+    @test ishermitian(A) == true
+    @test issym(A) == true
 
-# Test with explicit zeros
-A = speye(Complex128, 5,5)
-A[3,1] = 2
-A.nzval[2] = 0.0
-@test ishermitian(A) == true
-@test issym(A) == true
+    # explicit zeros
+    A = speye(Complex128, 5,5)
+    A[3,1] = 2
+    A.nzval[2] = 0.0
+    @test ishermitian(A) == true
+    @test issym(A) == true
+
+    # 15504
+    m = n = 5
+    colptr = [1, 5, 9, 13, 13, 17]
+    rowval = [1, 2, 3, 5, 1, 2, 3, 5, 1, 2, 3, 5, 1, 2, 3, 5]
+    nzval = [0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 1.0, 1.0, 0.0, 1.0, 1.0, 1.0, 0.0, 1.0, 1.0, 1.0]
+    A = SparseMatrixCSC(m, n, colptr, rowval, nzval)
+    @test issym(A) == true
+    A.nzval[end - 3]  = 2.0
+    @test issym(A) == false
+
+    # 16521
+    @test issym(sparse([0 0; 1 0])) == false
+    @test issym(sparse([0 1; 0 0])) == false
+    @test issym(sparse([0 0; 1 1])) == false
+    @test issym(sparse([1 0; 1 0])) == false
+    @test issym(sparse([0 1; 1 0])) == true
+    @test issym(sparse([1 1; 1 0])) == true
+end
 
 # equality ==
 A1 = speye(10)
@@ -1096,11 +1117,13 @@ Ai = ceil(Int,Ar*100)
 A = sparse([1.0])
 Ac = sprandn(20,20,.5) + im* sprandn(20,20,.5)
 Ar = sprandn(20,20,.5)
-@test cond(A,1) == 1.0
-@test_approx_eq_eps cond(Ar,1) cond(full(Ar),1) 1e-4
-@test_approx_eq_eps cond(Ac,1) cond(full(Ac),1) 1e-4
-@test_approx_eq_eps cond(Ar,Inf) cond(full(Ar),Inf) 1e-4
-@test_approx_eq_eps cond(Ac,Inf) cond(full(Ac),Inf) 1e-4
+if Base.USE_GPL_LIBS
+    @test cond(A,1) == 1.0
+    @test_approx_eq_eps cond(Ar,1) cond(full(Ar),1) 1e-4
+    @test_approx_eq_eps cond(Ac,1) cond(full(Ac),1) 1e-4
+    @test_approx_eq_eps cond(Ar,Inf) cond(full(Ar),Inf) 1e-4
+    @test_approx_eq_eps cond(Ac,Inf) cond(full(Ac),Inf) 1e-4
+end
 @test_throws ArgumentError cond(A,2)
 @test_throws ArgumentError cond(A,3)
 let Arect = spzeros(10, 6)
@@ -1114,11 +1137,13 @@ Ac = sprandn(20,20,.5) + im* sprandn(20,20,.5)
 Aci = ceil(Int64,100*sprand(20,20,.5))+ im*ceil(Int64,sprand(20,20,.5))
 Ar = sprandn(20,20,.5)
 Ari = ceil(Int64,100*Ar)
-@test_approx_eq_eps Base.SparseMatrix.normestinv(Ac,3) norm(inv(full(Ac)),1) 1e-4
-@test_approx_eq_eps Base.SparseMatrix.normestinv(Aci,3) norm(inv(full(Aci)),1) 1e-4
-@test_approx_eq_eps Base.SparseMatrix.normestinv(Ar) norm(inv(full(Ar)),1) 1e-4
-@test_throws ArgumentError Base.SparseMatrix.normestinv(Ac,0)
-@test_throws ArgumentError Base.SparseMatrix.normestinv(Ac,21)
+if Base.USE_GPL_LIBS
+    @test_approx_eq_eps Base.SparseMatrix.normestinv(Ac,3) norm(inv(full(Ac)),1) 1e-4
+    @test_approx_eq_eps Base.SparseMatrix.normestinv(Aci,3) norm(inv(full(Aci)),1) 1e-4
+    @test_approx_eq_eps Base.SparseMatrix.normestinv(Ar) norm(inv(full(Ar)),1) 1e-4
+    @test_throws ArgumentError Base.SparseMatrix.normestinv(Ac,0)
+    @test_throws ArgumentError Base.SparseMatrix.normestinv(Ac,21)
+end
 @test_throws DimensionMismatch Base.SparseMatrix.normestinv(sprand(3,5,.9))
 
 @test_throws ErrorException transpose(sub(sprandn(10, 10, 0.3), 1:4, 1:4))
@@ -1166,10 +1191,10 @@ end
 let
     A = spdiagm(rand(5)) + sprandn(5,5,0.2) + im*sprandn(5,5,0.2)
     A = A*A'
-    @test abs(det(factorize(Hermitian(A)))) ≈ abs(det(factorize(full(A))))
+    @test !Base.USE_GPL_LIBS || abs(det(factorize(Hermitian(A)))) ≈ abs(det(factorize(full(A))))
     A = spdiagm(rand(5)) + sprandn(5,5,0.2)
     A = A*A.'
-    @test abs(det(factorize(Symmetric(A)))) ≈ abs(det(factorize(full(A))))
+    @test !Base.USE_GPL_LIBS || abs(det(factorize(Symmetric(A)))) ≈ abs(det(factorize(full(A))))
     @test_throws ErrorException chol(A)
     @test_throws ErrorException lu(A)
     @test_throws ErrorException eig(A)

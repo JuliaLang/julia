@@ -20,7 +20,7 @@ for SRC in $ARGS; do
 
     # If there are surrounding quotes, remove them.  We do this simply by knowing that the destination is always an absolute path
     if [ "$(echo $DESTFILE | head -c1)" != "/" ]; then
-        DESTFILE=$(echo $DESTFILE | awk '{print substr($0, 2, length-2)}')
+        DESTFILE=$(echo $DESTFILE | awk '{print substr($0, 2, length($0)-2)}')
     fi
 
     # Do the chmod dance, and ignore errors on platforms that don't like setting permissions of symlinks

@@ -273,5 +273,10 @@ end
 @test isnull(convert(Nullable{Int}, nothing))
 @test isa(convert(Nullable{Int}, nothing), Nullable{Int})
 
+@test convert(Nullable, 1) === Nullable(1)
+@test convert(Nullable, Nullable(1)) === Nullable(1)
+@test isequal(convert(Nullable, "a"), Nullable("a"))
+@test isequal(convert(Nullable, Nullable("a")), Nullable("a"))
+
 # issue #11675
 @test repr(Nullable()) == "Nullable{Union{}}()"

@@ -1386,11 +1386,11 @@ For associative collection types, this will be the type of the Value, This is no
 valtype
 
 doc"""
-    edit(file::AbstractString, [line])
+    edit(path::AbstractString, [line])
 
-Edit a file optionally providing a line number to edit at. Returns to the julia prompt when you quit the editor.
+Edit a file or directory optionally providing a line number to edit the file at. Returns to the julia prompt when you quit the editor.
 """
-edit(file::AbstractString, line=?)
+edit(path::AbstractString, line=?)
 
 doc"""
     edit(function, [types])
@@ -1873,13 +1873,6 @@ doc"""
 Test whether any values in `A` along the singleton dimensions of `r` are `true`, and write results to `r`.
 """
 any!
-
-doc"""
-    falses(dims)
-
-Create a `BitArray` with all values set to `false`
-"""
-falses
 
 doc"""
     filter!(function, collection)
@@ -3127,7 +3120,7 @@ doc"""
 ```rst
 ..  ordschur(Q, T, select) -> Schur
 
-Reorders the Schur factorization of a real matrix ``A=Q*T*Q'`` according to the logical array ``select`` returning a Schur object ``F``. The selected eigenvalues appear in the leading diagonal of ``F[:Schur]`` and the the corresponding leading columns of ``F[:vectors]`` form an orthonormal basis of the corresponding right invariant subspace. A complex conjugate pair of eigenvalues must be either both included or excluded via ``select``.
+Reorders the Schur factorization of a real matrix ``A=Q*T*Q'`` according to the logical array ``select`` returning a Schur object ``F``. The selected eigenvalues appear in the leading diagonal of ``F[:Schur]`` and the corresponding leading columns of ``F[:vectors]`` form an orthonormal basis of the corresponding right invariant subspace. A complex conjugate pair of eigenvalues must be either both included or excluded via ``select``.
 ```
 """
 ordschur(Q, T, select)
@@ -5396,7 +5389,7 @@ position
 doc"""
     selectperm(v, k, [alg=<algorithm>,] [by=<transform>,] [lt=<comparison>,] [rev=false])
 
-Return a partial permutation of the the vector `v`, according to the order specified by `by`, `lt` and `rev`, so that `v[output]` returns the first `k` (or range of adjacent values if `k` is a range) values of a fully sorted version of `v`. If `k` is a single index (Integer), an array of the first `k` indices is returned; if `k` is a range, an array of those indices is returned. Note that the handling of integer values for `k` is different from `select` in that it returns a vector of `k` elements instead of just the `k` th element. Also note that this is equivalent to, but more efficient than, calling `sortperm(...)[k]`
+Return a partial permutation of the vector `v`, according to the order specified by `by`, `lt` and `rev`, so that `v[output]` returns the first `k` (or range of adjacent values if `k` is a range) values of a fully sorted version of `v`. If `k` is a single index (Integer), an array of the first `k` indices is returned; if `k` is a range, an array of those indices is returned. Note that the handling of integer values for `k` is different from `select` in that it returns a vector of `k` elements instead of just the `k` th element. Also note that this is equivalent to, but more efficient than, calling `sortperm(...)[k]`
 """
 selectperm
 
@@ -6753,7 +6746,7 @@ julia> deleteat!([6, 5, 4, 3, 2, 1], 1:2:5)
 
 julia> deleteat!([6, 5, 4, 3, 2, 1], (2, 2))
 ERROR: ArgumentError: indices must be unique and sorted
- in deleteat! at array.jl:546
+ in deleteat! at array.jl:547
 ```
 """
 deleteat!(collection, itr)
@@ -8611,13 +8604,6 @@ doc"""
 Modulus after division, returning in the range \[0,`y`), if `y` is positive, or (`y`,0\] if `y` is negative.
 """
 mod
-
-doc"""
-    trues(dims)
-
-Create a `BitArray` with all values set to `true`
-"""
-trues
 
 doc"""
     qr(A [,pivot=Val{false}][;thin=true]) -> Q, R, [p]
@@ -11294,8 +11280,9 @@ doc"""
 ```rst
 ..  DateTime(dt::AbstractString, format::AbstractString; locale="english") -> DateTime
 
-Construct a ``DateTime`` type by parsing the ``dt`` date string following the pattern given in
-the ``format`` string. The following codes can be used for constructing format strings:
+Construct a ``DateTime`` by parsing the ``dt`` date string following the pattern given in
+the ``format`` string. The following character codes can be used to construct the ``format``
+string:
 
 =============== ========= ===============================================================
 Code            Matches    Comment
@@ -11322,9 +11309,48 @@ Dates.DateTime(dt::AbstractString, format::AbstractString)
 
 doc"""
 ```rst
+..  format(dt::TimeType, format::AbstractString; locale="english") -> AbstractString
+
+Construct a string by using a ``TimeType`` object and applying the provided ``format``. The
+following character codes can be used to construct the ``format`` string:
+
+=============== ========= ===============================================================
+Code            Examples  Comment
+=============== ========= ===============================================================
+``y``           6         Numeric year with a fixed width
+``m``           1, 12     Numeric month with a minimum width
+``u``           Jan       Month name shortened to 3-chars according to the ``locale``
+``U``           January   Full month name according to the ``locale`` keyword
+``d``           1, 31     Day of the month with a minimum width
+``H``           0, 23     Hour (24-hour clock) with a minimum width
+``M``           0, 59     Minute with a minimum width
+``S``           0, 59     Second with a minimum width
+``s``           000, 500  Millisecond with a minimum width of 3
+``e``           Mon, Tue  Abbreviated days of the week
+``E``           Monday    Full day of week name
+=============== ========= ===============================================================
+
+The number of sequential code characters indicate the width of the code. A format of
+``yyyy-mm`` specifies that the code ``y`` should have a width of four while ``m`` a width of
+two. Codes that yield numeric digits have an associated mode: fixed-width or minimum-width.
+The fixed-width mode left-pads the value with zeros when it is shorter than the specified
+width and truncates the value when longer. Minimum-width mode works the same as fixed-width
+except that it does not truncate values longer than the width.
+
+When creating a ``format`` you can use any non-code characters as a separator. For example to
+generate the string "1996-01-15T00:00:00" you could use ``format``: "yyyy-mm-ddTHH:MM:SS".
+```
+"""
+Dates.format(dt::AbstractString, format::AbstractString)
+
+doc"""
+```rst
 ..  DateTime(dt::AbstractString, df::DateFormat) -> DateTime
 
-Similar form as above for parsing a ``DateTime``, but passes a ``DateFormat`` object instead of a raw formatting string. It is more efficient if similarly formatted date strings will be parsed repeatedly to first create a ``DateFormat`` object then use this method for parsing.
+Construct a ``DateTime`` by parsing the ``dt`` date string following the pattern given in
+the :func:`Dates.DateFormat` object. Similar to
+``DateTime(::AbstractString, ::AbstractString)`` but more efficient when repeatedly parsing
+similarly formatted date strings with a pre-created ``DateFormat`` object.
 ```
 """
 Dates.DateTime(dt::AbstractString, df::Dates.DateFormat)
@@ -11365,23 +11391,31 @@ Constuct a `Date` type by `Period` type parts. Arguments may be in any order. `D
 Dates.Date(period::Dates.Period...)
 
 doc"""
-    Date(f::Function, y[, m]; step=Day(1), negate=false, limit=10000) -> Date
+    Date(f::Function, y[, m, d]; step=Day(1), negate=false, limit=10000) -> Date
 
-Create a `Date` through the adjuster API. The starting point will be constructed from the provided `y, m` arguments, and will be adjusted until `f::Function` returns `true`. The step size in adjusting can be provided manually through the `step` keyword. If `negate=true`, then the adjusting will stop when `f::Function` returns `false` instead of `true`. `limit` provides a limit to the max number of iterations the adjustment API will pursue before throwing an error (given that `f::Function` is never satisfied).
+Create a `Date` through the adjuster API. The starting point will be constructed from the
+provided `y, m, d` arguments, and will be adjusted until `f::Function` returns `true`. The
+step size in adjusting can be provided manually through the `step` keyword. If
+`negate=true`, then the adjusting will stop when `f::Function` returns `false` instead of
+`true`. `limit` provides a limit to the max number of iterations the adjustment API will
+pursue before throwing an error (given that `f::Function` is never satisfied).
 """
 Dates.Date(f::Function, y)
 
 doc"""
     Date(dt::DateTime) -> Date
 
-Converts a `DateTime` type to a `Date`. The hour, minute, second, and millisecond parts of the `DateTime` are truncated, so only the year, month and day parts are used in construction.
+Converts a `DateTime` to a `Date`. The hour, minute, second, and millisecond parts of the
+`DateTime` are truncated, so only the year, month and day parts are used in construction.
 """
 Dates.Date(dt::DateTime)
 
 doc"""
     Date(dt::AbstractString, format::AbstractString; locale="english") -> Date
 
-Construct a `Date` type by parsing a `dt` date string following the pattern given in the `format` string. Follows the same conventions as `DateTime` above.
+Construct a `Date` object by parsing a `dt` date string following the pattern given in the
+`format` string. Follows the same conventions as
+`DateTime(::AbstractString, ::AbstractString)`.
 """
 Dates.Date(dt::AbstractString, format::AbstractString)
 
@@ -11445,20 +11479,6 @@ Takes the number of Julian calendar days since epoch
 Dates.julian2datetime
 
 doc"""
-    year(dt::TimeType) -> Int64
-    month(dt::TimeType) -> Int64
-    week(dt::TimeType) -> Int64
-    day(dt::TimeType) -> Int64
-    hour(dt::TimeType) -> Int64
-    minute(dt::TimeType) -> Int64
-    second(dt::TimeType) -> Int64
-    millisecond(dt::TimeType) -> Int64
-
-Return the field part of a `Date` or `DateTime` as an `Int64`.
-"""
-Dates.year
-
-doc"""
     toprev(dt::TimeType,dow::Int;same::Bool=false) -> TimeType
 
 Adjusts `dt` to the previous day of week corresponding to `dow` with `1 = Monday, 2 = Tuesday, etc`. Setting `same=true` allows the current `dt` to be considered as the previous `dow`, allowing for no adjustment to occur.
@@ -11497,13 +11517,6 @@ Returns the number of days in the month of `dt`. Value will be 28, 29, 30, or 31
 Dates.daysinmonth
 
 doc"""
-    yearmonth(dt::TimeType) -> (Int64, Int64)
-
-Simultaneously return the year and month parts of a `Date` or `DateTime`.
-"""
-Dates.yearmonth
-
-doc"""
     daysofweekinmonth(dt::TimeType) -> Int
 
 For the day of week of `dt`, returns the total number of that day of the week in `dt`'s month. Returns 4 or 5. Useful in temporal expressions for specifying the last day of a week in a month by including `dayofweekofmonth(dt) == daysofweekinmonth(dt)` in the adjuster function.
@@ -11511,18 +11524,15 @@ For the day of week of `dt`, returns the total number of that day of the week in
 Dates.daysofweekinmonth
 
 doc"""
-    yearmonthday(dt::TimeType) -> (Int64, Int64, Int64)
+```rst
+..  DateFormat(format::AbstractString, locale::AbstractString="english") -> DateFormat
 
-Simultaneously return the year, month, and day parts of a `Date` or `DateTime`.
+Construct a date formatting object that can be used for parsing date strings or
+formatting a date object as a string. For details on the syntax for ``format`` see
+:ref:`parsing <man-date-parsing>` and :ref:`formatting <man-date-formatting>`.
+```
 """
-Dates.yearmonthday
-
-doc"""
-    Dates.DateFormat(format::AbstractString) -> DateFormat
-
-Construct a date formatting object that can be passed repeatedly for parsing similarly formatted date strings. `format` is a format string in the form described above (e.g. `"yyyy-mm-dd"`).
-"""
-Dates.Dates.DateFormat
+Dates.DateFormat
 
 doc"""
     lastdayofweek(dt::TimeType) -> TimeType
@@ -11537,13 +11547,6 @@ doc"""
 `func` takes a single TimeType argument and returns a `Bool` indicating whether the input should be "included" in the final set. `recur` applies `func` over each element in the range of `dr`, including those elements for which `func` returns `true` in the resulting Array, unless `negate=true`, then only elements where `func` returns `false` are included.
 """
 Dates.recur
-
-doc"""
-    monthday(dt::TimeType) -> (Int64, Int64)
-
-Simultaneously return the month and day parts of a `Date` or `DateTime`.
-"""
-Dates.monthday
 
 doc"""
     default(p::Period) -> Period
@@ -11642,35 +11645,6 @@ doc"""
 Returns the day of the week as an `Int64` with `1 = Monday, 2 = Tuesday, etc.`.
 """
 Dates.dayofweek
-
-doc"""
-    Year(dt::TimeType) -> Year
-    Month(dt::TimeType) -> Month
-    Week(dt::TimeType) -> Week
-    Day(dt::TimeType) -> Day
-    Hour(dt::TimeType) -> Hour
-    Minute(dt::TimeType) -> Minute
-    Second(dt::TimeType) -> Second
-    Millisecond(dt::TimeType) -> Millisecond
-
-Return the field part of a `Date` or `DateTime` as a `Period` type.
-"""
-Dates.Year(dt::Dates.TimeType)
-
-doc"""
-    Year(v)
-    Month(v)
-    Week(v)
-    Day(v)
-    Hour(v)
-    Minute(v)
-    Second(v)
-    Millisecond(v)
-
-Construct a `Period` type with the given `v` value. Input must be losslessly
-convertible to an `Int64`.
-"""
-Dates.Year(v)
 
 doc"""
     quarterofyear(dt::TimeType) -> Int

@@ -207,7 +207,7 @@ function err_li(S::SubArray, ld::Int, szC)
     error("Linear indexing inference mismatch")
 end
 
-function runtests(A::Array, I...)
+function runsubarraytests(A::Array, I...)
     # Direct test of linear indexing inference
     C = Agen_nodrop(A, I...)
     ld = single_stride_dim(C)
@@ -230,7 +230,7 @@ function runtests(A::Array, I...)
     test_mixed(S, C)
 end
 
-function runtests(A::SubArray, I...)
+function runsubarraytests(A::SubArray, I...)
     # When A was created with sub, we have to check bounds, since some
     # of the "residual" dimensions have size 1. It's possible that we
     # need dedicated tests for sub.
@@ -289,28 +289,28 @@ end
 # indexN is a cartesian index, indexNN is a linear index for 2 dimensions, and indexNNN is a linear index for 3 dimensions
 function runviews{T}(SB::AbstractArray{T,3}, indexN, indexNN, indexNNN)
     for i3 in indexN, i2 in indexN, i1 in indexN
-        runtests(SB, i1, i2, i3)
+        runsubarraytests(SB, i1, i2, i3)
     end
     for i2 in indexNN, i1 in indexN
-        runtests(SB, i1, i2)
+        runsubarraytests(SB, i1, i2)
     end
     for i1 in indexNNN
-        runtests(SB, i1)
+        runsubarraytests(SB, i1)
     end
 end
 
 function runviews{T}(SB::AbstractArray{T,2}, indexN, indexNN, indexNNN)
     for i2 in indexN, i1 in indexN
-        runtests(SB, i1, i2)
+        runsubarraytests(SB, i1, i2)
     end
     for i1 in indexNN
-        runtests(SB, i1)
+        runsubarraytests(SB, i1)
     end
 end
 
 function runviews{T}(SB::AbstractArray{T,1}, indexN, indexNN, indexNNN)
     for i1 in indexN
-        runtests(SB, i1)
+        runsubarraytests(SB, i1)
     end
 end
 
@@ -364,7 +364,7 @@ if !testfull
                      (6,6,[8,4,6,12,5,7]),
                      (1,:,sub(1:13,[9,12,4,13,1])),
                      (sub(1:13,[9,12,4,13,1]),2:6,4))
-            runtests(B, oind...)
+            runsubarraytests(B, oind...)
             sliceB = slice(B, oind)
             runviews(sliceB, index5, index25, index125)
             subB = sub(B, oind)
