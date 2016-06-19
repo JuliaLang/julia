@@ -7950,15 +7950,6 @@ Return the index of the first element of `A` for which `predicate` returns `true
 findfirst
 
 """
-    factorize(A)
-
-Compute a convenient factorization (including LU, Cholesky, Bunch-Kaufman, LowerTriangular,
-UpperTriangular) of `A`, based upon the type of the input matrix. The return value can then
-be reused for efficient solving of multiple systems. For example: `A=factorize(A); x=A\\b; y=A\\C`.
-"""
-factorize
-
-"""
     promote_rule(type1, type2)
 
 Specifies what type should be used by `promote` when given values of types `type1` and
