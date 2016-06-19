@@ -1630,17 +1630,17 @@ Usually a function has 4 methods defined, one each for ``Float64``,
 
    Returns the solution to ``A*X = alpha*B`` or one of the other three variants determined by ``side`` (``A`` on left or right of ``X``\ ) and ``tA`` (transpose ``A``\ ). Only the ``ul`` triangle of ``A`` is used. ``dA`` indicates if ``A`` is unit-triangular (the diagonal is assumed to be all ones).
 
-.. function:: trmv!(side, ul, tA, dA, alpha, A, b)
+.. function:: trmv!(ul, tA, dA, A, b)
 
    .. Docstring generated from Julia source
 
-   Update ``b`` as ``alpha*A*b`` or one of the other three variants determined by ``side`` (``A`` on left or right) and ``tA`` (transpose ``A``\ ). Only the ``ul`` triangle of ``A`` is used. ``dA`` indicates if ``A`` is unit-triangular (the diagonal is assumed to be all ones). Returns the updated ``b``\ .
+   Returns ``op(A)*b``\ , where ``op`` is determined by ``tA`` (``N`` for identity, ``T`` for transpose ``A``\ , and ``C`` for conjugate transpose ``A``\ ). Only the ``ul`` triangle (``U`` for upper, ``L`` for lower) of ``A`` is used. ``dA`` indicates if ``A`` is unit-triangular (the diagonal is assumed to be all ones if ``U``\ , or non-unit if ``N``\ ). The multiplication occurs in-place on ``b``\ .
 
-.. function:: trmv(side, ul, tA, dA, alpha, A, b)
+.. function:: trmv(ul, tA, dA, A, b)
 
    .. Docstring generated from Julia source
 
-   Returns ``alpha*A*b`` or one of the other three variants determined by ``side`` (``A`` on left or right) and ``tA`` (transpose ``A``\ ). Only the ``ul`` triangle of ``A`` is used. ``dA`` indicates if ``A`` is unit-triangular (the diagonal is assumed to be all ones).
+   Returns ``op(A)*b``\ , where ``op`` is determined by ``tA`` (``N`` for identity, ``T`` for transpose ``A``\ , and ``C`` for conjugate transpose ``A``\ ). Only the ``ul`` triangle (``U`` for upper, ``L`` for lower) of ``A`` is used. ``dA`` indicates if ``A`` is unit-triangular (the diagonal is assumed to be all ones if ``U``\ , or non-unit if ``N``\ ).
 
 .. function:: trsv!(ul, tA, dA, A, b)
 
