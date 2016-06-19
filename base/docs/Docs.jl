@@ -448,7 +448,7 @@ function metadata(expr)
     push!(args, :($(Pair)(:source, $(quot(expr)))))
     # Filename and linenumber of the docstring.
     push!(args, :($(Pair)(:path, $(Base).@__FILE__)))
-    push!(args, :($(Pair)(:linenumber, $(unsafe_load(cglobal(:jl_lineno, Int))))))
+    push!(args, :($(Pair)(:linenumber, $(unsafe_load(cglobal(:jl_lineno, Cint))))))
     # Module in which the docstring is defined.
     push!(args, :($(Pair)(:module, $(current_module)())))
     # Field docs for concrete types.
