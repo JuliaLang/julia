@@ -51,7 +51,42 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
    .. Docstring generated from Julia source
 
-   Compute a convenient factorization (including LU, Cholesky, Bunch-Kaufman, LowerTriangular, UpperTriangular) of ``A``\ , based upon the type of the input matrix. The return value can then be reused for efficient solving of multiple systems. For example: ``A=factorize(A); x=A\b; y=A\C``\ .
+   Compute a convenient factorization of ``A``\ , based upon the type of the input matrix. ``factorize`` checks ``A`` to see if it is symmetric/triangular/etc. if ``A`` is passed as a generic matrix. ``factorize`` checks every element of ``A`` to verify/rule out each property. It will short-circuit as soon as it can rule out symmetry/triangular structure. The return value can be reused for efficient solving of multiple systems. For example: ``A=factorize(A); x=A\b; y=A\C``\ .
+
+   +----------------------------+--------------------------------------+
+   | Properties of ``A``        | type of factorization                |
+   +============================+======================================+
+   | Positive-definite          | Cholesky (see :func:`cholfact`\ )    |
+   +----------------------------+--------------------------------------+
+   | Dense Symmetric/Hermitian  | Bunch-Kaufman (see :func:`bkfact`\ ) |
+   +----------------------------+--------------------------------------+
+   | Sparse Symmetric/Hermitian | LDLt (see :func:`ldltfact`\ )        |
+   +----------------------------+--------------------------------------+
+   | Triangular                 | Triangular                           |
+   +----------------------------+--------------------------------------+
+   | Diagonal                   | Diagonal                             |
+   +----------------------------+--------------------------------------+
+   | Bidiagonal                 | Bidiagonal                           |
+   +----------------------------+--------------------------------------+
+   | Tridiagonal                | LU (see :func:`lufact`\ )            |
+   +----------------------------+--------------------------------------+
+   | Symmetric real tridiagonal | LDLt (see :func:`ldltfact`\ )        |
+   +----------------------------+--------------------------------------+
+   | General square             | LU (see :func:`lufact`\ )            |
+   +----------------------------+--------------------------------------+
+   | General non-square         | QR (see :func:`qrfact`\ )            |
+   +----------------------------+--------------------------------------+
+
+   If ``factorize`` is called on a Hermitian positive-definite matrix, for instance, then ``factorize`` will return a Cholesky factorization.
+
+   Example:
+
+   .. code-block:: julia
+
+       A = diagm(rand(5)) + diagm(rand(4),1); #A is really bidiagonal
+       factorize(A) #factorize will check to see that A is already factorized
+
+   This returns a ``5×5 Bidiagonal{Float64}``\ , which can now be passed to other linear algebra functions (e.g. eigensolvers) which will use specialized methods for ``Bidiagonal`` types.
 
 .. function:: full(F)
 
@@ -283,11 +318,11 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
    Compute the pivoted Cholesky factorization of a dense symmetric positive semi-definite matrix ``A`` and return a ``CholeskyPivoted`` factorization. The ``uplo`` argument may be ``:L`` for using the lower part or ``:U`` for the upper part of ``A``\ . The default is to use ``:U``\ . The triangular Cholesky factor can be obtained from the factorization ``F`` with: ``F[:L]`` and ``F[:U]``\ . The following functions are available for ``PivotedCholesky`` objects: ``size``\ , ``\``\ , ``inv``\ , ``det``\ , and ``rank``\ . The argument ``tol`` determines the tolerance for determining the rank. For negative values, the tolerance is the machine precision.
 
-.. function:: cholfact(::Union{SparseMatrixCSC{<:Real},SparseMatrixCSC{Complex{<:Real}},Symmetric{<:Real,SparseMatrixCSC{<:Real,SuiteSparse_long}},Hermitian{Complex{<:Real},SparseMatrixCSC{Complex{<:Real},SuiteSparse_long}}}; shift = 0.0, perm = Int[]) -> CHOLMOD.Factor
+.. function:: cholfact(A; shift = 0.0, perm = Int[]) -> CHOLMOD.Factor
 
    .. Docstring generated from Julia source
 
-   Compute the Cholesky factorization of a sparse positive definite matrix ``A``\ . A fill-reducing permutation is used. ``F = cholfact(A)`` is most frequently used to solve systems of equations with ``F\b``\ , but also the methods ``diag``\ , ``det``\ , ``logdet`` are defined for ``F``\ . You can also extract individual factors from ``F``\ , using ``F[:L]``\ . However, since pivoting is on by default, the factorization is internally represented as ``A == P'*L*L'*P`` with a permutation matrix ``P``\ ; using just ``L`` without accounting for ``P`` will give incorrect answers. To include the effects of permutation, it's typically preferable to extact "combined" factors like ``PtL = F[:PtL]`` (the equivalent of ``P'*L``\ ) and ``LtP = F[:UP]`` (the equivalent of ``L'*P``\ ).
+   Compute the Cholesky factorization of a sparse positive definite matrix ``A``\ . ``A`` must be a ``SparseMatrixCSC``\ , ``Symmetric{SparseMatrixCSC}``\ , or ``Hermitian{SparseMatrixCSC}``\ . A fill-reducing permutation is used. ``F = cholfact(A)`` is most frequently used to solve systems of equations with ``F\b``\ , but also the methods ``diag``\ , ``det``\ , ``logdet`` are defined for ``F``\ . You can also extract individual factors from ``F``\ , using ``F[:L]``\ . However, since pivoting is on by default, the factorization is internally represented as ``A == P'*L*L'*P`` with a permutation matrix ``P``\ ; using just ``L`` without accounting for ``P`` will give incorrect answers. To include the effects of permutation, it's typically preferable to extact "combined" factors like ``PtL = F[:PtL]`` (the equivalent of ``P'*L``\ ) and ``LtP = F[:UP]`` (the equivalent of ``L'*P``\ ).
 
    Setting optional ``shift`` keyword argument computes the factorization of ``A+shift*I`` instead of ``A``\ . If the ``perm`` argument is nonempty, it should be a permutation of ``1:size(A,1)`` giving the ordering to use (instead of CHOLMOD's default AMD ordering).
 
@@ -297,11 +332,11 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
    Many other functions from CHOLMOD are wrapped but not exported from the ``Base.SparseArrays.CHOLMOD`` module.
 
-.. function:: cholfact!(F::Factor, A::Union{SparseMatrixCSC{<:Real},SparseMatrixCSC{Complex{<:Real}},Symmetric{<:Real,SparseMatrixCSC{<:Real,SuiteSparse_long}},Hermitian{Complex{<:Real},SparseMatrixCSC{Complex{<:Real},SuiteSparse_long}}}; shift = 0.0) -> CHOLMOD.Factor
+.. function:: cholfact!(F::Factor, A; shift = 0.0) -> CHOLMOD.Factor
 
    .. Docstring generated from Julia source
 
-   Compute the Cholesky (:math:`LL'`\ ) factorization of ``A``\ , reusing the symbolic factorization ``F``\ .
+   Compute the Cholesky (:math:`LL'`\ ) factorization of ``A``\ , reusing the symbolic factorization ``F``\ . ``A`` must be a ``SparseMatrixCSC``\ , ``Symmetric{SparseMatrixCSC}``\ , or ``Hermitian{SparseMatrixCSC}``\ .
 
    ** Note **
 
@@ -353,11 +388,11 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
    Compute an ``LDLt`` factorization of a real symmetric tridiagonal matrix such that ``A = L*Diagonal(d)*L'`` where ``L`` is a unit lower triangular matrix and ``d`` is a vector. The main use of an ``LDLt`` factorization ``F = ldltfact(A)`` is to solve the linear system of equations ``Ax = b`` with ``F\b``\ .
 
-.. function:: ldltfact(::Union{SparseMatrixCSC{<:Real},SparseMatrixCSC{Complex{<:Real}},Symmetric{<:Real,SparseMatrixCSC{<:Real,SuiteSparse_long}},Hermitian{Complex{<:Real},SparseMatrixCSC{Complex{<:Real},SuiteSparse_long}}}; shift = 0.0, perm=Int[]) -> CHOLMOD.Factor
+.. function:: ldltfact(A; shift = 0.0, perm=Int[]) -> CHOLMOD.Factor
 
    .. Docstring generated from Julia source
 
-   Compute the :math:`LDL'` factorization of a sparse symmetric or Hermitian matrix. A fill-reducing permutation is used. ``F = ldltfact(A)`` is most frequently used to solve systems of equations ``A*x = b`` with ``F\b``\ . The returned factorization object ``F`` also supports the methods ``diag``\ , ``det``\ , and ``logdet``\ . You can extract individual factors from ``F`` using ``F[:L]``\ . However, since pivoting is on by default, the factorization is internally represented as ``A == P'*L*D*L'*P`` with a permutation matrix ``P``\ ; using just ``L`` without accounting for ``P`` will give incorrect answers. To include the effects of permutation, it's typically preferable to extact "combined" factors like ``PtL = F[:PtL]`` (the equivalent of ``P'*L``\ ) and ``LtP = F[:UP]`` (the equivalent of ``L'*P``\ ). The complete list of supported factors is ``:L, :PtL, :D, :UP, :U, :LD, :DU, :PtLD, :DUP``\ .
+   Compute the :math:`LDL'` factorization of a sparse matrix ``A``\ . ``A`` must be a ``SparseMatrixCSC``\ , ``Symmetric{SparseMatrixCSC}``\ , or ``Hermitian{SparseMatrixCSC}``\ . Note that even if ``A`` doesn't have the type tag, its structure must still be symmetric/Hermitian. A fill-reducing permutation is used. ``F = ldltfact(A)`` is most frequently used to solve systems of equations ``A*x = b`` with ``F\b``\ . The returned factorization object ``F`` also supports the methods ``diag``\ , ``det``\ , and ``logdet``\ . You can extract individual factors from ``F`` using ``F[:L]``\ . However, since pivoting is on by default, the factorization is internally represented as ``A == P'*L*D*L'*P`` with a permutation matrix ``P``\ ; using just ``L`` without accounting for ``P`` will give incorrect answers. To include the effects of permutation, it's typically preferable to extact "combined" factors like ``PtL = F[:PtL]`` (the equivalent of ``P'*L``\ ) and ``LtP = F[:UP]`` (the equivalent of ``L'*P``\ ). The complete list of supported factors is ``:L, :PtL, :D, :UP, :U, :LD, :DU, :PtLD, :DUP``\ .
 
    Setting optional ``shift`` keyword argument computes the factorization of ``A+shift*I`` instead of ``A``\ . If the ``perm`` argument is nonempty, it should be a permutation of ``1:size(A,1)`` giving the ordering to use (instead of CHOLMOD's default AMD ordering).
 
@@ -367,11 +402,11 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
    Many other functions from CHOLMOD are wrapped but not exported from the ``Base.SparseArrays.CHOLMOD`` module.
 
-.. function:: ldltfact!(F::Factor, A::Union{SparseMatrixCSC{<:Real},SparseMatrixCSC{Complex{<:Real}},Symmetric{<:Real,SparseMatrixCSC{<:Real,SuiteSparse_long}},Hermitian{Complex{<:Real},SparseMatrixCSC{Complex{<:Real},SuiteSparse_long}}}; shift = 0.0) -> CHOLMOD.Factor
+.. function:: ldltfact!(F::Factor, A; shift = 0.0) -> CHOLMOD.Factor
 
    .. Docstring generated from Julia source
 
-   Compute the :math:`LDL'` factorization of ``A``\ , reusing the symbolic factorization ``F``\ .
+   Compute the :math:`LDL'` factorization of ``A``\ , reusing the symbolic factorization ``F``\ . ``A`` must be a ``SparseMatrixCSC``\ , ``Symmetric{SparseMatrixCSC}``\ , or ``Hermitian{SparseMatrixCSC}``\ .
 
    ** Note **
 
