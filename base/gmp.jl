@@ -554,4 +554,14 @@ Base.checked_fld(a::BigInt, b::BigInt) = fld(a, b)
 Base.checked_mod(a::BigInt, b::BigInt) = mod(a, b)
 Base.checked_cld(a::BigInt, b::BigInt) = cld(a, b)
 
+function Base.deepcopy_internal(x::BigInt, stackdict::ObjectIdDict)
+    if haskey(stackdict, x)
+        return stackdict[x]
+    end
+    y = BigInt()
+    ccall((:__gmpz_set,:libgmp), Void, (Ptr{BigInt}, Ptr{BigInt}), &y, &x)
+    stackdict[x] = y
+    return y
+end
+
 end # module

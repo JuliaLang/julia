@@ -214,6 +214,8 @@ importall .Sort
 # version
 include("version.jl")
 
+function deepcopy_internal end
+
 # BigInts and BigFloats
 include("gmp.jl")
 importall .GMP
