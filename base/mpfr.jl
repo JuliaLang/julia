@@ -51,7 +51,7 @@ type BigFloat <: AbstractFloat
         N = precision(BigFloat)
         z = new(zero(Clong), zero(Cint), zero(Clong), C_NULL)
         ccall((:mpfr_init2,:libmpfr), Void, (Ptr{BigFloat}, Clong), &z, N)
-        finalizer(z, Base.GMP._mpfr_clear_func)
+        finalizer(z, cglobal((:mpfr_clear, :libmpfr)))
         return z
     end
     # Not recommended for general use
@@ -887,7 +887,7 @@ function Base.deepcopy_internal(x::BigFloat, stackdict::ObjectIdDict)
     N = precision(x)
     y = BigFloat(zero(Clong), zero(Cint), zero(Clong), C_NULL)
     ccall((:mpfr_init2,:libmpfr), Void, (Ptr{BigFloat}, Clong), &y, N)
-    finalizer(y, Base.GMP._mpfr_clear_func)
+    finalizer(y, cglobal((:mpfr_clear, :libmpfr)))
     ccall((:mpfr_set, :libmpfr), Int32, (Ptr{BigFloat}, Ptr{BigFloat}, Int32),
           &y, &x, ROUNDING_MODE[end])
     stackdict[x] = y
