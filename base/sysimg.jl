@@ -2,7 +2,7 @@
 
 baremodule Base
 
-using Core.TopModule, Core.Intrinsics
+using Core.Intrinsics
 ccall(:jl_set_istopmod, Void, (Bool,), true)
 include = Core.include
 include("coreio.jl")

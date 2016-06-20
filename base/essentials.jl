@@ -100,7 +100,7 @@ function append_any(xs...)
                 ccall(:jl_array_grow_end, Void, (Any, UInt), out, 16)
                 l += 16
             end
-            arrayset(out, y, i)
+            Core.arrayset(out, y, i)
             i += 1
         end
     end
@@ -109,7 +109,7 @@ function append_any(xs...)
 end
 
 # simple Array{Any} operations needed for bootstrap
-setindex!(A::Array{Any}, x::ANY, i::Int) = arrayset(A, x, i)
+setindex!(A::Array{Any}, x::ANY, i::Int) = Core.arrayset(A, x, i)
 
 function length_checked_equal(args...)
     n = length(args[1])
@@ -184,7 +184,7 @@ end
 
 map(f, v::SimpleVector) = Any[ f(v[i]) for i = 1:length(v) ]
 
-getindex(v::SimpleVector, I::AbstractArray) = svec(Any[ v[i] for i in I ]...)
+getindex(v::SimpleVector, I::AbstractArray) = Core.svec(Any[ v[i] for i in I ]...)
 
 function isassigned(v::SimpleVector, i::Int)
     1 <= i <= length(v) || return false

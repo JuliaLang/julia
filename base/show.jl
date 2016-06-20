@@ -142,7 +142,7 @@ function show(io::IO, f::Function)
     ft = typeof(f)
     mt = ft.name.mt
     if get(io, :multiline, false)
-        if isa(f, Builtin)
+        if isa(f, Core.Builtin)
             print(io, mt.name, " (built-in function)")
         else
             name = mt.name
@@ -163,8 +163,8 @@ function show(io::IO, f::Function)
     end
 end
 
-function show(io::IO, x::IntrinsicFunction)
-    print(io, "(intrinsic function #", box(Int32,unbox(IntrinsicFunction,x)), ")")
+function show(io::IO, x::Core.IntrinsicFunction)
+    print(io, "(intrinsic function #", box(Int32, unbox(Core.IntrinsicFunction, x)), ")")
 end
 
 function show(io::IO, x::Union)
@@ -467,13 +467,13 @@ unquoted(ex::QuoteNode)  = ex.value
 unquoted(ex::Expr)       = ex.args[1]
 
 function is_intrinsic_expr(x::ANY)
-    isa(x, IntrinsicFunction) && return true
+    isa(x, Core.IntrinsicFunction) && return true
     if isa(x, GlobalRef)
         x = x::GlobalRef
         return (isdefined(x.mod, x.name) &&
-                isa(getfield(x.mod, x.name), IntrinsicFunction))
+                isa(getfield(x.mod, x.name), Core.IntrinsicFunction))
     elseif isa(x, Expr)
-        return (x::Expr).typ === IntrinsicFunction
+        return (x::Expr).typ === Core.IntrinsicFunction
     end
     return false
 end
@@ -487,10 +487,10 @@ const indent_width = 4
 function show_expr_type(io::IO, ty, emph)
     if is(ty, Function)
         print(io, "::F")
-    elseif is(ty, IntrinsicFunction)
+    elseif is(ty, Core.IntrinsicFunction)
         print(io, "::I")
     else
-        if emph && (!isleaftype(ty) || ty == Box)
+        if emph && (!isleaftype(ty) || ty == Core.Box)
             emphasize(io, "::$ty")
         else
             print(io, "::$ty")
