@@ -24,7 +24,7 @@ if is_unix()
     const path_dir_splitter = r"^(.*?)(/+)([^/]*)$"
     const path_ext_splitter = r"^((?:.*/)?(?:\.|[^/\.])[^/]*?)(\.[^/\.]*|)$"
 
-    splitdrive(path::AbstractString) = ("",path)
+    splitdrive(path::String) = ("",path)
     homedir() = ENV["HOME"]
 elseif is_windows()
     const path_separator    = "\\"
@@ -34,7 +34,7 @@ elseif is_windows()
     const path_dir_splitter = r"^(.*?)([/\\]+)([^/\\]*)$"
     const path_ext_splitter = r"^((?:.*[/\\])?(?:\.|[^/\\\.])[^/\\]*?)(\.[^/\\\.]*|)$"
 
-    function splitdrive(path::AbstractString)
+    function splitdrive(path::String)
         m = match(r"^(\w+:|\\\\\w+\\\w+|\\\\\?\\UNC\\\w+\\\w+|\\\\\?\\\w+:|)(.*)$", path)
         String(m.captures[1]), String(m.captures[2])
     end
@@ -43,8 +43,8 @@ else
     error("path primitives for this OS need to be defined")
 end
 
-isabspath(path::AbstractString) = ismatch(path_absolute_re, path)
-isdirpath(path::AbstractString) = ismatch(path_directory_re, splitdrive(path)[2])
+isabspath(path::String) = ismatch(path_absolute_re, path)
+isdirpath(path::String) = ismatch(path_directory_re, splitdrive(path)[2])
 
 function splitdir(path::String)
     a, b = splitdrive(path)
@@ -53,12 +53,11 @@ function splitdir(path::String)
     a = string(a, isempty(m.captures[1]) ? m.captures[2][1] : m.captures[1])
     a, String(m.captures[3])
 end
-splitdir(path::AbstractString) = splitdir(String(path))
 
  dirname(path::AbstractString) = splitdir(path)[1]
 basename(path::AbstractString) = splitdir(path)[2]
 
-function splitext(path::AbstractString)
+function splitext(path::String)
     a, b = splitdrive(path)
     m = match(path_ext_splitter, b)
     m === nothing && return (path,"")
@@ -67,7 +66,7 @@ end
 
 function pathsep(paths::AbstractString...)
     for path in paths
-        m = match(path_separator_re, path)
+        m = match(path_separator_re, String(path))
         m !== nothing && return m.match[1:1]
     end
     return path_separator
@@ -76,7 +75,7 @@ end
 joinpath(a::AbstractString) = a
 joinpath(a::AbstractString, b::AbstractString, c::AbstractString...) = joinpath(joinpath(a,b), c...)
 
-function joinpath(a::AbstractString, b::AbstractString)
+function joinpath(a::String, b::String)
     isabspath(b) && return b
     A, a = splitdrive(a)
     B, b = splitdrive(b)
@@ -86,8 +85,9 @@ function joinpath(a::AbstractString, b::AbstractString)
     ismatch(path_separator_re, a[end:end]) ? string(C,a,b) :
                                              string(C,a,pathsep(a,b),b)
 end
+joinpath(a::AbstractString, b::AbstractString) = joinpath(String(a), String(b))
 
-function normpath(path::AbstractString)
+function normpath(path::String)
     isabs = isabspath(path)
     isdir = isdirpath(path)
     drive, path = splitdrive(path)
@@ -122,17 +122,17 @@ function normpath(path::AbstractString)
 end
 normpath(a::AbstractString, b::AbstractString...) = normpath(joinpath(a,b...))
 
-abspath(a::AbstractString) = normpath(isabspath(a) ? a : joinpath(pwd(),a))
+abspath(a::String) = normpath(isabspath(a) ? a : joinpath(pwd(),a))
 abspath(a::AbstractString, b::AbstractString...) = abspath(joinpath(a,b...))
 
 if is_windows()
 function realpath(path::AbstractString)
-    path = cwstring(path)
-    buf = zeros(UInt16, length(path))
+    p = cwstring(path)
+    buf = zeros(UInt16, length(p))
     while true
         n = ccall((:GetFullPathNameW, "kernel32"), stdcall,
             UInt32, (Ptr{UInt16}, UInt32, Ptr{UInt16}, Ptr{Void}),
-            path, length(buf), buf, C_NULL)
+            p, length(buf), buf, C_NULL)
         systemerror(:realpath, n == 0)
         x = n < length(buf) # is the buffer big enough?
         resize!(buf, n) # shrink if x, grow if !x
@@ -141,12 +141,12 @@ function realpath(path::AbstractString)
 end
 
 function longpath(path::AbstractString)
-    path = cwstring(path)
-    buf = zeros(UInt16, length(path))
+    p = cwstring(path)
+    buf = zeros(UInt16, length(p))
     while true
         n = ccall((:GetLongPathNameW, "kernel32"), stdcall,
             UInt32, (Ptr{UInt16}, Ptr{UInt16}, UInt32),
-            path, buf, length(buf))
+            p, buf, length(buf))
         systemerror(:longpath, n == 0)
         x = n < length(buf) # is the buffer big enough?
         resize!(buf, n) # shrink if x, grow if !x
@@ -176,7 +176,7 @@ function expanduser(path::AbstractString)
 end
 end
 
-function relpath(path::AbstractString, startpath::AbstractString = ".")
+function relpath(path::String, startpath::String = ".")
     isempty(path) && throw(ArgumentError("`path` must be specified"))
     isempty(startpath) && throw(ArgumentError("`startpath` must be specified"))
     curdir = "."
@@ -203,4 +203,10 @@ function relpath(path::AbstractString, startpath::AbstractString = ".")
         relpath_ = pathpart
     end
     return isempty(relpath_) ? curdir :  relpath_
+end
+relpath(path::AbstractString, startpath::AbstractString) =
+    relpath(String(path), String(startpath))
+
+for f in (:isabspath, :isdirpath, :splitdir, :splitdrive, :splitext, :normpath, :abspath)
+    @eval $f(path::AbstractString) = $f(String(path))
 end
