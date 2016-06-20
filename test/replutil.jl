@@ -367,3 +367,13 @@ let d = Dict(1 => 2, 3 => 45)
         @test contains(replace(result, " ", ""), string(el))
     end
 end
+
+# issue #17007, printing ambiguity errors
+f17007(x::Integer, y::Integer) = true
+f17007(x::Int, y::Any) = false
+let
+    local buf = IOBuffer()
+    Base.showerror(buf, MethodError(f17007, (1, 2)))
+    @test contains(takebuf_string(buf),
+                   "MethodError: f17007(::Int64, ::Int64) is ambiguous. Candidates:\n  f17007(x::Int64, y)")
+end
