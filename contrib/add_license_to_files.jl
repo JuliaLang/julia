@@ -34,7 +34,6 @@ const skipfiles = [
     # files to check - already copyright
     # see: https://github.com/JuliaLang/julia/pull/11073#issuecomment-98099389
     "../base/special/trig.jl",
-    "../base/sparse/csparse.jl",
     "../base/linalg/givens.jl",
     #
     "../src/abi_llvm.cpp",
