@@ -507,6 +507,24 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
    Optionally takes a ``thin`` Boolean argument, which if ``true`` omits the columns that span the rows of ``R`` in the QR factorization that are zero. The resulting matrix is the ``Q`` in a thin QR factorization (sometimes called the reduced QR factorization). If ``false``\ , returns a ``Q`` that spans all rows of ``R`` in its corresponding QR factorization.
 
+.. function:: lqfact!(A) -> LQ
+
+   .. Docstring generated from Julia source
+
+   Compute the LQ factorization of ``A``\ , using the input matrix as a workspace. See also :func:`lq\ .
+
+.. function:: lqfact(A) -> LQ
+
+   .. Docstring generated from Julia source
+
+   Compute the LQ factorization of ``A``\ . See also :func:`lq\ .
+
+.. function:: lq(A; [thin=true]) -> L, Q
+
+   .. Docstring generated from Julia source
+
+   Perform an LQ factorization of ``A`` such that ``A = L*Q``\ . The default is to compute a thin factorization. The LQ factorization is the QR factorization of ``A.'``\ . ``L`` is not extended with zeros if the full ``Q`` is requested.
+
 .. function:: bkfact(A) -> BunchKaufman
 
    .. Docstring generated from Julia source

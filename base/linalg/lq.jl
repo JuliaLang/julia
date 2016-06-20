@@ -17,10 +17,29 @@ end
 LQ{T}(factors::AbstractMatrix{T}, τ::Vector{T}) = LQ{T,typeof(factors)}(factors, τ)
 LQPackedQ{T}(factors::AbstractMatrix{T}, τ::Vector{T}) = LQPackedQ{T,typeof(factors)}(factors, τ)
 
+"""
+    lqfact!(A) -> LQ
+
+Compute the LQ factorization of `A`, using the input
+matrix as a workspace. See also [`lq`](:func:`lq).
+"""
 lqfact!{T<:BlasFloat}(A::StridedMatrix{T}) = LQ(LAPACK.gelqf!(A)...)
+"""
+    lqfact(A) -> LQ
+
+Compute the LQ factorization of `A`. See also [`lq`](:func:`lq).
+"""
 lqfact{T<:BlasFloat}(A::StridedMatrix{T})  = lqfact!(copy(A))
 lqfact(x::Number) = lqfact(fill(x,1,1))
 
+"""
+    lq(A; [thin=true]) -> L, Q
+
+Perform an LQ factorization of `A` such that `A = L*Q`. The
+default is to compute a thin factorization. The LQ factorization
+is the QR factorization of `A.'`. `L` is not extended with
+zeros if the full `Q` is requested.
+"""
 function lq(A::Union{Number, AbstractMatrix}; thin::Bool=true)
     F = lqfact(A)
     F[:L], full(F[:Q], thin=thin)
