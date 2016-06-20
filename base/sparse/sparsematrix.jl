@@ -615,112 +615,102 @@ end
 
 ## Transposition methods
 
-# qftranspose! is the parent method on which the others are built.
 """
-    qftranspose!{Tv,Ti}(C::SparseMatrixCSC{Tv,Ti}, A::SparseMatrixCSC{Tv,Ti}, q::AbstractVector, f)
+    halfperm!{Tv,Ti<:Integer}(X::SparseMatrixCSC{Tv,Ti}, A::SparseMatrixCSC{Tv,Ti},
+        q::AbstractVector, f = identity)
 
-Column-permute and transpose `A` (`(AQ)^T`), applying `f` to each element of `A` in the
-  process, and store the result in preallocated `C`. Permutation vector `q` defines the
-  column-permutation `Q`. The number of columns of `C` (`C.n`) must match the number of
-  rows of `A` (`A.m`). The number of rows of `C` (`C.m`) must match the number of columns
-  of `A` (`A.n`). The length of `C`'s internal row-index (`length(C.rowval)`) and
-  entry-value (`length(C.nzval)`) arrays must be at least the number of allocated entries
-  in `A` (`nnz(A)`). The length of the permutation vector `q` (`length(q)`) must match the
-  number of columns of `A` (`A.n`).
+Column-permute and transpose `A`, simultaneously applying `f` to each entry of `A`, storing
+the result `(f(A)Q)^T` (`map(f, transpose(A[:,q]))`) in `X`.
 
-This method implements the HALFPERM algorithm described in F. Gustavson, "Two fast
-  algorithms for sparse matrices: multiplication and permuted transposition," ACM TOMS
-  4(3), 250-269 (1978). The algorithm runs in `O(A.m, A.n, nnz(A))` time and requires no
-  space beyond that passed in.
+`X`'s dimensions must match those of `transpose(A)` (`X.m == A.n` and `X.n == A.m`), and `X`
+must have enough storage to accommodate all allocated entries in `A` (`length(X.rowval) >= nnz(A)`
+and  `length(X.nzval) >= nnz(A)`). Column-permutation `q`'s length must match `A`'s column
+count (`length(q) == A.n`).
+
+This method is the parent of several methods performing transposition and permutation
+operations on `SparseMatrixCSC`s. As this method performs no argument checking, prefer
+the safer child methods (`[c]transpose[!]`, `permute[!]`) to direct use.
+
+This method implements the `HALFPERM` algorithm described in F. Gustavson, "Two fast
+algorithms for sparse matrices: multiplication and permuted transposition," ACM TOMS 4(3),
+250-269 (1978). The algorithm runs in `O(A.m, A.n, nnz(A))` time and requires no space
+beyond that passed in.
 """
-function qftranspose!{Tv,Ti}(C::SparseMatrixCSC{Tv,Ti}, A::SparseMatrixCSC{Tv,Ti}, q::AbstractVector, f)
-    # Attach source matrix
-    Am, An = A.m, A.n
-    Acolptr = A.colptr
-    Arowval = A.rowval
-    Anzval = A.nzval
-    Annz = Acolptr[end]-1
-
-    # Attach destination matrix
-    Cm, Cn = C.m, C.n
-    Ccolptr = C.colptr
-    Crowval = C.rowval
-    Cnzval = C.nzval
-
-    # Check compatibility of source and destination
-    if !(Cm == An)
-        throw(DimensionMismatch("the number of rows of the first argument, C.m = $(Cm),"
-            * "must match the number of columns of the second argument, A.n = $(An)") )
-    elseif !(Cn == Am)
-        throw(DimensionMismatch("the number of columns of the first argument, C.n = $(Cn),"
-            * "must match the number of rows of the second argument, A.m = $(Am)") )
-    elseif !(length(q) == A.n)
-        throw(DimensionMismatch("the length of the permtuation vector, length(q) = "
-            * "$(length(q)), must match the number of columns of the second argument,"
-            * "A.n = $(An)") )
-    elseif !(length(Crowval) >= Annz)
-        throw(ArgumentError("the first argument's row-index array's length,"
-            * "length(C.rowval) = $(length(Crowval)), must be at least the number of"
-            * "allocated entries in the second argument, nnz(A) = $(Annz)") )
-    elseif !(length(Cnzval) >= Annz)
-        throw(ArgumentError("the first argument's entry-value array's length,"
-            * "length(C.nzval) = $(length(Cnzval)), must be at least the number of"
-            * "allocated entries in the second argument, nnz(A) = $(Annz)") )
+function halfperm!{Tv,Ti<:Integer}(X::SparseMatrixCSC{Tv,Ti}, A::SparseMatrixCSC{Tv,Ti},
+        q::AbstractVector, f = identity)
+    _computecolptrs_halfperm!(X, A)
+    _distributevals_halfperm!(X, A, q, f)
+    return X
+end
+"""
+Helper method for `halfperm!`. Computes `transpose(A[:,q])`'s column pointers, storing them
+shifted one position forward in `X.colptr`; `_distributevals_halfperm!` fixes this shift.
+"""
+function _computecolptrs_halfperm!{Tv,Ti<:Integer}(X::SparseMatrixCSC{Tv,Ti},
+        A::SparseMatrixCSC{Tv,Ti})
+    # Compute `transpose(A[:,q])`'s column counts. Store shifted forward one position in X.colptr.
+    fill!(X.colptr, 0)
+    @inbounds for k in 1:nnz(A)
+        X.colptr[A.rowval[k] + 1] += 1
     end
-
-    # Compute the column counts of C and store them shifted forward by one in Ccolptr
-    Ccolptr[1:end] = 0
-    @inbounds for k in 1:Annz
-        Ccolptr[Arowval[k]+1] += 1
-    end
-
-    # From these column counts, compute C's column pointers
-    # and store them shifted forward by one in Ccolptr
+    # Compute `transpose(A[:,q])`'s column pointers. Store shifted forward one position in X.colptr.
+    X.colptr[1] = 1
     countsum = 1
-    @inbounds for k in 2:(Cn+1)
-        overwritten = Ccolptr[k]
-        Ccolptr[k] = countsum
+    @inbounds for k in 2:(A.m + 1)
+        overwritten = X.colptr[k]
+        X.colptr[k] = countsum
         countsum += overwritten
     end
-
-    # Distribution-sort the row indices and nonzero values into Crowval and Cnzval,
-    # tracking write positions in Ccolptr
-    @inbounds for Aj in 1:An
-        qAj = q[Aj]
-        for Ak in Acolptr[qAj]:(Acolptr[qAj+1]-1)
-            Ai = Arowval[Ak]
-            Ck = Ccolptr[Ai+1]
-            Crowval[Ck] = qAj
-            Cnzval[Ck] = f(Anzval[Ak])
-            Ccolptr[Ai+1] += 1
+end
+"""
+Helper method for `halfperm!`. With `transpose(A[:,q])`'s column pointers shifted one
+position forward in `X.colptr`, computes `map(f, transpose(A[:,q]))` by appropriately
+distributing `A.rowval` and `f`-transformed `A.nzval` into `X.rowval` and `X.nzval`
+respectively. Simultaneously fixes the one-position-forward shift in `X.colptr`.
+"""
+function _distributevals_halfperm!{Tv,Ti<:Integer}(X::SparseMatrixCSC{Tv,Ti},
+        A::SparseMatrixCSC{Tv,Ti}, q::AbstractVector, f)
+    @inbounds for Xi in 1:A.n
+        Aj = q[Xi]
+        for Ak in nzrange(A, Aj)
+            Ai = A.rowval[Ak]
+            Xk = X.colptr[Ai + 1]
+            X.rowval[Xk] = Xi
+            X.nzval[Xk] = f(A.nzval[Ak])
+            X.colptr[Ai + 1] += 1
         end
     end
-
-    # Tracking write positions in Ccolptr as in the last block fixes the colptr shift,
-    # but the first colptr remains incorrect
-    Ccolptr[1] = 1
-
-    C
+    return # kill potential type instability
 end
-transpose!{Tv,Ti}(C::SparseMatrixCSC{Tv,Ti}, A::SparseMatrixCSC{Tv,Ti}) = qftranspose!(C, A, 1:A.n, identity)
-ctranspose!{Tv,Ti}(C::SparseMatrixCSC{Tv,Ti}, A::SparseMatrixCSC{Tv,Ti}) = qftranspose!(C, A, 1:A.n, conj)
-"See `qftranspose!`" ftranspose!{Tv,Ti}(C::SparseMatrixCSC{Tv,Ti}, A::SparseMatrixCSC{Tv,Ti}, f) = qftranspose!(C, A, 1:A.n, f)
 
-"""
-    qftranspose{Tv,Ti}(A::SparseMatrixCSC{Tv,Ti}, q::AbstractVector, f)
-
-Return-allocating version of `qftranspose!`. See `qftranspose!` for documentation.
-"""
-function qftranspose{Tv,Ti}(A::SparseMatrixCSC{Tv,Ti}, q::AbstractVector, f)
-    Cm, Cn, Cnnz = A.n, A.m, nnz(A)
-    Ccolptr = zeros(Ti, Cn+1)
-    Crowval = Array{Ti}(Cnnz)
-    Cnzval = Array{Tv}(Cnnz)
-    qftranspose!(SparseMatrixCSC(Cm, Cn, Ccolptr, Crowval, Cnzval), A, q, f)
+function ftranspose!{Tv,Ti}(X::SparseMatrixCSC{Tv,Ti}, A::SparseMatrixCSC{Tv,Ti}, f)
+    # Check compatibility of source argument A and destination argument X
+    if X.n != A.m
+        throw(DimensionMismatch(string("destination argument `X`'s column count, ",
+            "`X.n (= $(X.n))`, must match source argument `A`'s row count, `A.m (= $(A.m))`")))
+    elseif X.m != A.n
+        throw(DimensionMismatch(string("destination argument `X`'s row count,
+            `X.m (= $(X.m))`, must match source argument `A`'s column count, `A.n (= $(A.n))`")))
+    elseif length(X.rowval) < nnz(A)
+        throw(ArgumentError(string("the length of destination argument `X`'s `rowval` ",
+            "array, `length(X.rowval) (= $(length(X.rowval)))`, must be greater than or ",
+            "equal to source argument `A`'s allocated entry count, `nnz(A) (= $(nnz(A)))`")))
+    elseif length(X.nzval) < nnz(A)
+        throw(ArgumentError(string("the length of destination argument `X`'s `nzval` ",
+            "array, `length(X.nzval) (= $(length(X.nzval)))`, must be greater than or ",
+            "equal to source argument `A`'s allocated entry count, `nnz(A) (= $(nnz(A)))`")))
+    end
+    halfperm!(X, A, 1:A.n, f)
 end
-transpose{Tv,Ti}(A::SparseMatrixCSC{Tv,Ti}) = qftranspose(A, 1:A.n, identity)
-ctranspose{Tv,Ti}(A::SparseMatrixCSC{Tv,Ti}) = qftranspose(A, 1:A.n, conj)
-"See `qftranspose`" ftranspose{Tv,Ti}(A::SparseMatrixCSC{Tv,Ti}, f) = qftranspose(A, 1:A.n, f)
+transpose!{Tv,Ti}(X::SparseMatrixCSC{Tv,Ti}, A::SparseMatrixCSC{Tv,Ti}) = ftranspose!(X, A, identity)
+ctranspose!{Tv,Ti}(X::SparseMatrixCSC{Tv,Ti}, A::SparseMatrixCSC{Tv,Ti}) = ftranspose!(X, A, conj)
+
+function ftranspose{Tv,Ti}(A::SparseMatrixCSC{Tv,Ti}, f)
+    X = SparseMatrixCSC(A.n, A.m, Vector{Ti}(A.m+1), Vector{Ti}(nnz(A)), Vector{Tv}(nnz(A)))
+    halfperm!(X, A, 1:A.n, f)
+end
+transpose{Tv,Ti}(A::SparseMatrixCSC{Tv,Ti}) = ftranspose(A, identity)
+ctranspose{Tv,Ti}(A::SparseMatrixCSC{Tv,Ti}) = ftranspose(A, conj)
 
 
 ## fkeep! and children tril!, triu!, droptol!, dropzeros[!]
