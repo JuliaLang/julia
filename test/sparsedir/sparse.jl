@@ -368,20 +368,6 @@ end
 @test full(spdiagm((ones(2), ones(2)), (0, -1), 3, 3)) ==
                        [1.0  0.0  0.0; 1.0  1.0  0.0;  0.0  1.0  0.0]
 
-# elimination tree
-## upper triangle of the pattern test matrix from Figure 4.2 of
-## "Direct Methods for Sparse Linear Systems" by Tim Davis, SIAM, 2006
-rowval = Int32[1,2,2,3,4,5,1,4,6,1,7,2,5,8,6,9,3,4,6,8,10,3,5,7,8,10,11]
-colval = Int32[1,2,3,3,4,5,6,6,6,7,7,8,8,8,9,9,10,10,10,10,10,11,11,11,11,11,11]
-A = sparse(rowval, colval, ones(length(rowval)))
-p = etree(A)
-P,post = etree(A, true)
-@test P == p
-@test P == Int32[6,3,8,6,8,7,9,10,10,11,0]
-@test post == Int32[2,3,5,8,1,4,6,7,9,10,11]
-@test isperm(post)
-
-
 # issue #4986, reinterpret
 sfe22 = speye(Float64, 2)
 mfe22 = eye(Float64, 2)
@@ -1068,13 +1054,9 @@ A = sparse(tril(rand(5,5)))
 @test istril(A)
 @test !istril(sparse(ones(5,5)))
 
-# symperm
-srand(1234321)
-A = triu(sprand(10,10,0.2))       # symperm operates on upper triangle
-perm = randperm(10)
-@test symperm(A,perm).colptr == [1,1,2,4,5,5,6,8,8,9,10]
-
 # droptol
+srand(1234321)
+A = triu(sprand(10,10,0.2))
 @test Base.droptol!(A,0.01).colptr == [1,1,1,2,2,3,4,6,6,7,9]
 @test isequal(Base.droptol!(sparse([1], [1], [1]), 1), SparseMatrixCSC(1,1,Int[1,1],Int[],Int[]))
 
@@ -1315,12 +1297,6 @@ if Base.USE_GPL_LIBS
     @test_throws ArgumentError Base.SparseArrays.normestinv(Ac,21)
 end
 @test_throws DimensionMismatch Base.SparseArrays.normestinv(sprand(3,5,.9))
-
-# csc_permute
-A = sprand(10,10,0.2)
-p = randperm(10)
-q = randperm(10)
-@test Base.SparseArrays.csc_permute(A, invperm(p), q) == full(A)[p, q]
 
 # issue #13008
 @test_throws ArgumentError sparse(collect(1:100), collect(1:100), fill(5,100), 5, 5)

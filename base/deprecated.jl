@@ -769,6 +769,25 @@ end
 @deprecate slice view
 @deprecate sub view
 
+# Point users to SuiteSparse
+function ereach{Tv,Ti}(A::SparseMatrixCSC{Tv,Ti}, k::Integer, parent::Vector{Ti})
+    error(string("ereach(A, k, parent) now lives in package SuiteSparse.jl. Run",
+        "Pkg.add(\"SuiteSparse\") to install SuiteSparse on Julia v0.5."))
+end
+function etree{Tv,Ti}(A::SparseMatrixCSC{Tv,Ti}, postorder::Bool)
+    error(string("etree(A[, post]) now lives in package SuiteSparse.jl. Run",
+        "Pkg.add(\"SuiteSparse\") to install SuiteSparse on Julia v0.5."))
+end
+etree(A::SparseMatrixCSC) = etree(A, false)
+function csc_permute{Tv,Ti}(A::SparseMatrixCSC{Tv,Ti}, pinv::Vector{Ti}, q::Vector{Ti})
+    error(string("csc_permute(A, pinv, q) now lives in package SuiteSparse.jl. Run",
+        "Pkg.add(\"SuiteSparse\") to install SuiteSparse on Julia v0.5."))
+end
+function symperm{Tv,Ti}(A::SparseMatrixCSC{Tv,Ti}, pinv::Vector{Ti})
+    error(string("symperm(A, pinv) now lives in package SuiteSparse.jl. Run,",
+        "Pkg.add(\"SuiteSparse\") to install SuiteSparse on Julia v0.5."))
+end
+
 # During the 0.5 development cycle, do not add any deprecations below this line
 # To be deprecated in 0.6
 
