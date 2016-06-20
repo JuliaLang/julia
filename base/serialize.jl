@@ -2,7 +2,8 @@
 
 module Serializer
 
-import Base: GMP, Bottom, svec, unsafe_convert, uncompressed_ast
+import Base: GMP, Bottom, unsafe_convert, uncompressed_ast
+import Core: svec
 using Base: ViewIndex, index_lengths
 
 export serialize, deserialize
