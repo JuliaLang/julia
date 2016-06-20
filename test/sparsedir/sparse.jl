@@ -288,6 +288,31 @@ end
 cA = sprandn(5,5,0.2) + im*sprandn(5,5,0.2)
 @test full(conj(cA)) == conj(full(cA))
 
+# Test SparseMatrixCSC [c]transpose[!] methods
+let smalldim = 5, largedim = 10, nzprob = 0.4
+    (m, n) = (smalldim, smalldim)
+    A = sprand(m, n, nzprob)
+    # Test common error checking of [c]transpose! methods (ftranspose!)
+    @test_throws DimensionMismatch transpose!(A[:, 1:(smalldim - 1)], A)
+    @test_throws DimensionMismatch transpose!(A[1:(smalldim - 1), 1], A)
+    @test_throws ArgumentError transpose!((B = similar(A); resize!(B.rowval, nnz(A) - 1); B), A)
+    @test_throws ArgumentError transpose!((B = similar(A); resize!(B.nzval, nnz(A) - 1); B), A)
+    # Test overall functionality of [c]transpose[!]
+    for (m, n) in ((smalldim, smalldim), (smalldim, largedim), (largedim, smalldim))
+        A = sprand(m, n, nzprob)
+        At = transpose(A)
+        # transpose[!]
+        fullAt = transpose(full(A))
+        @test transpose(A) == fullAt
+        @test transpose!(similar(At), A) == fullAt
+        # ctranspose[!]
+        C = A + im*A/2
+        fullCh = ctranspose(full(C))
+        @test ctranspose(C) == fullCh
+        @test ctranspose!(similar(sparse(fullCh)), C) == fullCh
+    end
+end
+
 # transpose of SubArrays
 A = view(sprandn(10, 10, 0.3), 1:4, 1:4)
 @test  transpose(full(A)) == full(transpose(A))
