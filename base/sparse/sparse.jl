@@ -36,7 +36,6 @@ export AbstractSparseArray, AbstractSparseMatrix, AbstractSparseVector,
 include("abstractsparse.jl")
 include("sparsematrix.jl")
 include("sparsevector.jl")
-include("csparse.jl")
 
 include("linalg.jl")
 if Base.USE_GPL_LIBS
