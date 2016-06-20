@@ -135,7 +135,11 @@ function getindex(T::Type, vals...)
     end
     return a
 end
+
 getindex(T::Type) = Array{T}(0)
+getindex(T::Type, x) = (a = Array{T}(1); @inbounds a[1] = x; a)
+getindex(T::Type, x, y) = (a = Array{T}(2); @inbounds (a[1] = x; a[2] = y); a)
+getindex(T::Type, x, y, z) = (a = Array{T}(3); @inbounds (a[1] = x; a[2] = y; a[3] = z); a)
 
 function getindex(::Type{Any}, vals::ANY...)
     a = Array{Any}(length(vals))
