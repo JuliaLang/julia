@@ -246,14 +246,14 @@ function MethodList(mt::MethodTable)
 end
 
 function methods(f::ANY, t::ANY)
-    if isa(f,Builtin)
+    if isa(f, Core.Builtin)
         throw(ArgumentError("argument is not a generic function"))
     end
     t = to_tuple_type(t)
     return MethodList(Method[m[3] for m in _methods(f,t,-1)], typeof(f).name.mt)
 end
 
-methods(f::Builtin) = MethodList(Method[], typeof(f).name.mt)
+methods(f::Core.Builtin) = MethodList(Method[], typeof(f).name.mt)
 
 function methods(f::ANY)
     # return all matches
@@ -372,7 +372,7 @@ function return_types(f::ANY, types::ANY=Tuple)
 end
 
 function which(f::ANY, t::ANY)
-    if isa(f,Builtin)
+    if isa(f, Core.Builtin)
         throw(ArgumentError("argument is not a generic function"))
     end
     t = to_tuple_type(t)

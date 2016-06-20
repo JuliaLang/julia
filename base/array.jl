@@ -12,6 +12,8 @@ typealias DenseVecOrMat{T} Union{DenseVector{T}, DenseMatrix{T}}
 
 ## Basic functions ##
 
+import Core: arraysize, arrayset, arrayref
+
 size(a::Array, d) = arraysize(a, d)
 size(a::Vector) = (arraysize(a,1),)
 size(a::Matrix) = (arraysize(a,1), arraysize(a,2))

@@ -69,8 +69,8 @@ end
 @test isnull(deepcopy(Nullable{Array}()))
 
 # issue #15250
-let a1 = Base.svec(1, 2, 3, []), a2 = Base.svec(1, 2, 3)
-    a3 = Base.svec(a1,a1)
+let a1 = Core.svec(1, 2, 3, []), a2 = Core.svec(1, 2, 3)
+    a3 = Core.svec(a1,a1)
     b1 = deepcopy(a1)
     @test a1 == b1
     @test a1 !== b1

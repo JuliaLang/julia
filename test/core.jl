@@ -3874,7 +3874,7 @@ end
 
 # issue #15370
 @test isdefined(Core, :Box)
-@test isdefined(Base, :Box)
+@test !isdefined(Base, :Box)
 @test !isdefined(Main, :Box)
 
 # issue #1784
@@ -4301,8 +4301,8 @@ end
 type C16767{T}
     b::A16767{C16767{:a}}
 end
-@test B16767.types[1].types[1].parameters[1].types === Base.svec(A16767{B16767})
-@test C16767.types[1].types[1].parameters[1].types === Base.svec(A16767{C16767{:a}})
+@test B16767.types[1].types[1].parameters[1].types === Core.svec(A16767{B16767})
+@test C16767.types[1].types[1].parameters[1].types === Core.svec(A16767{C16767{:a}})
 
 # issue #16340
 function f16340{T}(x::T)
