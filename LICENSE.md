@@ -66,7 +66,6 @@ their own licenses:
 The following components of Julia's standard library have separate licenses:
 
 - base/fftw.jl (see [FFTW](http://fftw.org/doc/License-and-Copyright.html))
-- base/sparse/csparse.jl (LGPL-2.1+)
 - base/linalg/umfpack.jl (see [SUITESPARSE](http://faculty.cse.tamu.edu/davis/suitesparse.html))
 - base/linalg/cholmod.jl (see [SUITESPARSE](http://faculty.cse.tamu.edu/davis/suitesparse.html))
 
