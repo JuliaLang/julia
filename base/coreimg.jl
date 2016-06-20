@@ -1,7 +1,7 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
 Main.Core.eval(Main.Core, :(baremodule Inference
-using Core.TopModule, Core.Intrinsics
+using Core.Intrinsics
 import Core: print, println, show, write, unsafe_write, STDOUT, STDERR
 if false # show that the IO system is already (relatively) operational
     print("HELLO")

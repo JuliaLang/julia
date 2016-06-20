@@ -17,7 +17,7 @@ function deepcopy_internal(x::SimpleVector, stackdict::ObjectIdDict)
     if haskey(stackdict, x)
         return stackdict[x]
     end
-    y = svec(Any[deepcopy_internal(x[i], stackdict) for i = 1:length(x)]...)
+    y = Core.svec(Any[deepcopy_internal(x[i], stackdict) for i = 1:length(x)]...)
     stackdict[x] = y
     return y
 end
