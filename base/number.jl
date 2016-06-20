@@ -63,4 +63,21 @@ zero{T<:Number}(::Type{T}) = convert(T,0)
 one(x::Number)  = oftype(x,1)
 one{T<:Number}(::Type{T}) = convert(T,1)
 
+promote_op{S<:Number,T}(op::Type{T}, ::Type{S}) = T # to fix ambiguities
+function promote_op{S<:Number}(op::Any, ::Type{S})
+    R = typeof(op(one(S)))
+    R <: S ? S : R # preserve the most general (abstract) type when possible
+end
+function promote_op{S<:Number,T<:Number}(op::Any, ::Type{S}, ::Type{T})
+    R = typeof(op(one(S), one(T)))
+    # preserve the most general (abstract) type when possible
+    if T <: S && R <: S
+        return S
+    elseif S <: T && R <: T
+        return T
+    else
+        return R
+    end
+end
+
 factorial(x::Number) = gamma(x + 1) # fallback for x not Integer

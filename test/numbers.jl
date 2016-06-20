@@ -2742,3 +2742,56 @@ testmi(typemin(Int)+1:typemin(Int)+1000, -100:100)
 @test_throws ArgumentError Base.multiplicativeinverse(0)
 testmi(map(UInt32, 0:1000), map(UInt32, 1:100))
 testmi(typemax(UInt32)-UInt32(1000):typemax(UInt32), map(UInt32, 1:100))
+
+# PR #16995
+let types = (Base.BitInteger_types..., BigInt, Bool,
+             Rational{Int}, Rational{BigInt},
+             Float16, Float32, Float64, BigFloat,
+             Complex{Int}, Complex{UInt}, Complex32, Complex64, Complex128)
+    for S in types
+        for op in (+, -)
+            @test Base.promote_op(op, S) === typeof(op(one(S)))
+            @inferred Base.promote_op(op, S)
+            @inferred op(one(S))
+        end
+    end
+
+    @test Base.promote_op(!, Bool) === Bool
+    @inferred Base.promote_op(!, Bool)
+
+    for S in types, T in types
+        for op in (+, -, *, /, ^, (==))
+            @test Base.promote_op(op, S, T) === typeof(op(one(S), one(T)))
+            @inferred Base.promote_op(op, S, T)
+            @inferred op(one(S), one(T))
+        end
+    end
+end
+
+let types = (Base.BitInteger_types..., BigInt, Bool,
+             Rational{Int}, Rational{BigInt},
+             Float16, Float32, Float64, BigFloat)
+    for S in types, T in types
+        for op in (<, >, <=, >=)
+            @test Base.promote_op(op, S, T) === typeof(op(one(S), one(T)))
+            @inferred Base.promote_op(op, S, T)
+            @inferred op(one(S), one(T))
+        end
+    end
+end
+
+let types = (Base.BitInteger_types..., BigInt, Bool)
+    for S in types
+        @test Base.promote_op(~, S) === typeof(~one(S))
+        @inferred Base.promote_op(~, S)
+        @inferred ~one(S)
+    end
+
+    for S in types, T in types
+        for op in (&, |, <<, >>, (>>>), %, ÷)
+            @test Base.promote_op(op, S, T) === typeof(op(one(S), one(T)))
+            @inferred Base.promote_op(op, S, T)
+            @inferred op(one(S), one(T))
+        end
+    end
+end

@@ -165,9 +165,9 @@ m = [1:2;]'
 @test @inferred([0,1.2].+reshape([0,-2],1,1,2)) == reshape([0 -2; 1.2 -0.8],2,1,2)
 rt = Base.return_types(.+, Tuple{Array{Float64, 3}, Array{Int, 1}})
 @test length(rt) == 1 && rt[1] == Array{Float64, 3}
-rt = Base.return_types(broadcast, Tuple{Function, Array{Float64, 3}, Array{Int, 1}})
+rt = Base.return_types(broadcast, Tuple{typeof(+), Array{Float64, 3}, Array{Int, 1}})
 @test length(rt) == 1 && rt[1] == Array{Float64, 3}
-rt = Base.return_types(broadcast!, Tuple{Function, Array{Float64, 3}, Array{Float64, 3}, Array{Int, 1}})
+rt = Base.return_types(broadcast!, Tuple{typeof(+), Array{Float64, 3}, Array{Float64, 3}, Array{Int, 1}})
 @test length(rt) == 1 && rt[1] == Array{Float64, 3}
 
 # f.(args...) syntax (#15032)
@@ -196,3 +196,8 @@ end
 let a = broadcast(Float32, [3, 4, 5])
     @test eltype(a) == Float32
 end
+
+# PR 16988
+@test Base.promote_op(+, Bool) === Int
+@test isa(broadcast(+, true), Array{Int,0})
+@test Base.promote_op(Float64, Bool) === Float64

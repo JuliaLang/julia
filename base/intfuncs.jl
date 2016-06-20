@@ -186,7 +186,7 @@ ndigits0z(x::Integer) = ndigits0z(unsigned(abs(x)))
 
 const ndigits_max_mul = Core.sizeof(Int) == 4 ? 69000000 : 290000000000000000
 
-function ndigits0znb(n::Int, b::Int)
+function ndigits0znb(n::Integer, b::Integer)
     d = 0
     while n != 0
         n = cld(n,b)
@@ -198,7 +198,7 @@ end
 function ndigits0z(n::Unsigned, b::Int)
     d = 0
     if b < 0
-        d = ndigits0znb(signed(n), b)
+        d = ndigits0znb(n, b)
     else
         b == 2  && return (sizeof(n)<<3-leading_zeros(n))
         b == 8  && return div((sizeof(n)<<3)-leading_zeros(n)+2,3)
