@@ -207,7 +207,7 @@ function showerror_ambiguous(io::IO, meth, f, args)
     end
     print(io, " is ambiguous. Candidates:")
     for m in meth
-        print(io, "\n  ", m)
+        print(io, "\n  ", m[3])
     end
     nothing
 end
