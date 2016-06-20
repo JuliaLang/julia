@@ -1,5 +1,7 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
+import Core: _apply, svec, apply_type, Builtin, IntrinsicFunction
+
 #### parameters limiting potentially-infinite types ####
 const MAX_TYPEUNION_LEN = 3
 const MAX_TYPE_DEPTH = 7
@@ -292,7 +294,7 @@ add_tfunc(Core.sizeof, 1, 1, x->Int)
 add_tfunc(nfields, 1, 1, x->(isa(x,Const) ? Const(nfields(x.val)) :
                              isType(x) && isleaftype(x.parameters[1]) ? Const(nfields(x.parameters[1])) :
                              Int))
-add_tfunc(_expr, 1, IInf, (args...)->Expr)
+add_tfunc(Core._expr, 1, IInf, (args...)->Expr)
 add_tfunc(applicable, 1, IInf, (f, args...)->Bool)
 add_tfunc(Core.Intrinsics.arraylen, 1, 1, x->Int)
 add_tfunc(arraysize, 2, 2, (a,d)->Int)

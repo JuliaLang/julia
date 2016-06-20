@@ -139,7 +139,7 @@ export
     fieldtype, getfield, setfield!, nfields, throw, tuple, is, ===, isdefined, eval,
     # sizeof    # not exported, to avoid conflicting with Base.sizeof
     # type reflection
-    issubtype, typeof, isa,
+    issubtype, typeof, isa, typeassert,
     # method reflection
     applicable, invoke,
     # constants
@@ -373,16 +373,4 @@ show(a::ANY) = show(STDOUT, a)
 print(a::ANY...) = print(STDOUT, a...)
 println(a::ANY...) = println(STDOUT, a...)
 
-
-module TopModule
-    # this defines the types that lowering expects to be defined in a (top) module
-    # that are usually inherited from Core, but could be defined custom for a module
-    using Core: Box, IntrinsicFunction, Builtin,
-            arrayref, arrayset, arraysize,
-            _expr, _apply, typeassert, apply_type, svec, kwfunc
-    export Box, IntrinsicFunction, Builtin,
-            arrayref, arrayset, arraysize,
-            _expr, _apply, typeassert, apply_type, svec, kwfunc
-end
-using .TopModule
 ccall(:jl_set_istopmod, Void, (Bool,), true)
