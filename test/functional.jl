@@ -66,6 +66,8 @@ end
 # typed `collect`
 @test collect(Float64, Filter(isodd, [1,2,3,4]))[1] === 1.0
 
+@test isa(collect(Any, [1,2]), Vector{Any})
+
 # enumerate (issue #6284)
 let b = IOBuffer("1\n2\n3\n"), a = []
     for (i,x) in enumerate(eachline(b))

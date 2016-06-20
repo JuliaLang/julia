@@ -201,18 +201,28 @@ promote_rule{T,n,S}(::Type{Array{T,n}}, ::Type{Array{S,n}}) = Array{promote_type
 
 ## copying iterators to containers
 
-# make a collection similar to `c` and appropriate for collecting `itr`
-_similar_for(c::AbstractArray, T, itr, ::SizeUnknown) = similar(c, T, 0)
-_similar_for(c::AbstractArray, T, itr, ::HasLength) = similar(c, T, Int(length(itr)::Integer))
-_similar_for(c::AbstractArray, T, itr, ::HasShape) = similar(c, T, convert(Dims,size(itr)))
-_similar_for(c, T, itr, isz) = similar(c, T)
-
 """
     collect(element_type, collection)
 
 Return an array of type `Array{element_type,1}` of all items in a collection.
 """
-collect{T}(::Type{T}, itr) = collect(Generator(T, itr))
+collect{T}(::Type{T}, itr) = _collect(T, itr, iteratorsize(itr))
+
+_collect{T}(::Type{T}, itr, isz::HasLength) = copy!(Array{T,1}(Int(length(itr)::Integer)), itr)
+_collect{T}(::Type{T}, itr, isz::HasShape)  = copy!(Array{T}(convert(Dims,size(itr))), itr)
+function _collect{T}(::Type{T}, itr, isz::SizeUnknown)
+    a = Array{T,1}(0)
+    for x in itr
+        push!(a,x)
+    end
+    return a
+end
+
+# make a collection similar to `c` and appropriate for collecting `itr`
+_similar_for(c::AbstractArray, T, itr, ::SizeUnknown) = similar(c, T, 0)
+_similar_for(c::AbstractArray, T, itr, ::HasLength) = similar(c, T, Int(length(itr)::Integer))
+_similar_for(c::AbstractArray, T, itr, ::HasShape) = similar(c, T, convert(Dims,size(itr)))
+_similar_for(c, T, itr, isz) = similar(c, T)
 
 """
     collect(collection)
