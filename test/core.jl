@@ -2124,6 +2124,12 @@ c99991{T}(::Type{UnitRange{T}},x::Range{T}) = 2
 @test c99991(UnitRange{Float64}, 1.0:2.0) == 1
 @test c99991(UnitRange{Int}, 1:2) == 2
 
+# issue #17016, method specificity involving vararg tuples
+typealias T_17016{N} Tuple{Any,Any,Vararg{Any,N}}
+f17016(f, t::T_17016) = 0
+f17016(f, t1::Tuple) = 1
+@test f17016(0, (1,2,3)) == 0
+
 # issue #8798
 let
     const npy_typestrs = Dict("b1"=>Bool,
