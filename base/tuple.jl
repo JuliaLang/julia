@@ -105,6 +105,10 @@ function map(f, t::Tuple, s::Tuple)
     @_inline_meta
     (f(t[1],s[1]), map(f, tail(t), tail(s))...)
 end
+function map2(f, t::Tuple, s::Tuple)  # this is here to work around a method-sorting bug, see #17016
+    @_inline_meta
+    (f(t[1],s[1]), map(f, tail(t), tail(s))...)
+end
 function map(f, t::Any16, s::Any16)
     n = length(t)
     A = Array{Any}(n)
