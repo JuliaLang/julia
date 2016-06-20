@@ -539,7 +539,7 @@ ExecutionEngine *jl_ExecutionEngine;
 template<class T> // for GlobalObject's
 static T *addComdat(T *G)
 {
-#if defined(_OS_WINDOWS_)
+#if defined(_OS_WINDOWS_) && defined(_COMPILER_MICROSOFT_)
     if (imaging_mode && !G->isDeclaration()) {
 #ifdef LLVM35
         // Add comdat information to make MSVC link.exe happy
