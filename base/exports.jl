@@ -558,6 +558,7 @@ export
     ones,
     parent,
     parentindexes,
+    permute,
     permute!,
     permutedims,
     permutedims!,

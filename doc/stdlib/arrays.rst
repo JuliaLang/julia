@@ -1056,3 +1056,32 @@ dense counterparts. The following functions are specific to sparse arrays.
 
    For an in-place version and algorithmic information, see :func:`Base.SparseArrays.dropzeros!`\ .
 
+.. function:: permute{Tv,Ti,Tp<:Integer,Tq<:Integer}(A::SparseMatrixCSC{Tv,Ti}, p::AbstractVector{Tp},
+..............    q::AbstractVector{Tq})
+
+   .. Docstring generated from Julia source
+
+   Bilaterally permute ``A``\ , returning ``PAQ`` (``A[p,q]``\ ). Column-permutation ``q``\ 's length must match ``A``\ 's column count (``length(q) == A.n``\ ). Row-permutation ``p``\ 's length must match ``A``\ 's row count (``length(p) == A.m``\ ).
+
+   For expert drivers and additional information, see :func:`Base.SparseArrays.permute!`\ .
+
+.. function:: permute!{Tv,Ti,Tp<:Integer,Tq<:Integer}(X::SparseMatrixCSC{Tv,Ti}, A::SparseMatrixCSC{Tv,Ti},
+..............    p::AbstractVector{Tp}, q::AbstractVector{Tq}[, C::SparseMatrixCSC{Tv,Ti}])
+
+   .. Docstring generated from Julia source
+
+   Bilaterally permute ``A``\ , storing result ``PAQ`` (``A[p,q]``\ ) in ``X``\ . Stores intermediate result ``(AQ)^T`` (``transpose(A[:,q])``\ ) in optional argument ``C`` if present. Requires that none of ``X``\ , ``A``\ , and, if present, ``C`` alias each other; to store result ``PAQ`` back into ``A``\ , use the following method lacking ``X``\ :
+
+   .. code-block:: julia
+
+       permute!{Tv,Ti,Tp<:Integer,Tq<:Integer}(A::SparseMatrixCSC{Tv,Ti}, p::AbstractVector{Tp},
+           q::AbstractVector{Tq}[, C::SparseMatrixCSC{Tv,Ti}[, workcolptr::Vector{Ti}]])
+
+   ``X``\ 's dimensions must match those of ``A`` (``X.m == A.m`` and ``X.n == A.n``\ ), and ``X`` must have enough storage to accommodate all allocated entries in ``A`` (``length(X.rowval) >= nnz(A)`` and ``length(X.nzval) >= nnz(A)``\ ). Column-permutation ``q``\ 's length must match ``A``\ 's column count (``length(q) == A.n``\ ). Row-permutation ``p``\ 's length must match ``A``\ 's row count (``length(p) == A.m``\ ).
+
+   ``C``\ 's dimensions must match those of ``transpose(A)`` (``C.m == A.n`` and ``C.n == A.m``\ ), and ``C`` must have enough storage to accommodate all allocated entries in ``A`` (``length(C.rowval)`` >= nnz(A)``and``\ length(C.nzval) >= nnz(A)`).
+
+   For additional (algorithmic) information, and for versions of these methods that forgo argument checking, see (unexported) parent methods :func:`Base.SparseArrays.unchecked_noalias_permute!` and :func:`Base.SparseArrays.unchecked_aliasing_permute!`\ .
+
+   See also: :func:`Base.SparseArrays.permute`
+

@@ -288,16 +288,40 @@ end
 cA = sprandn(5,5,0.2) + im*sprandn(5,5,0.2)
 @test full(conj(cA)) == conj(full(cA))
 
-# Test SparseMatrixCSC [c]transpose[!] methods
+# Test SparseMatrixCSC [c]transpose[!] and permute[!] methods
 let smalldim = 5, largedim = 10, nzprob = 0.4
     (m, n) = (smalldim, smalldim)
     A = sprand(m, n, nzprob)
+    X = similar(A)
+    C = transpose(A)
+    p = randperm(m)
+    q = randperm(n)
     # Test common error checking of [c]transpose! methods (ftranspose!)
     @test_throws DimensionMismatch transpose!(A[:, 1:(smalldim - 1)], A)
     @test_throws DimensionMismatch transpose!(A[1:(smalldim - 1), 1], A)
     @test_throws ArgumentError transpose!((B = similar(A); resize!(B.rowval, nnz(A) - 1); B), A)
     @test_throws ArgumentError transpose!((B = similar(A); resize!(B.nzval, nnz(A) - 1); B), A)
-    # Test overall functionality of [c]transpose[!]
+    # Test common error checking of permute[!] methods / source-perm compat
+    @test_throws DimensionMismatch permute(A, p[1:(end - 1)], q)
+    @test_throws DimensionMismatch permute(A, p, q[1:(end - 1)])
+    # Test common error checking of permute[!] methods / source-dest compat
+    @test_throws DimensionMismatch permute!(A[1:(m - 1), :], A, p, q)
+    @test_throws DimensionMismatch permute!(A[:, 1:(m - 1)], A, p, q)
+    @test_throws ArgumentError permute!((Y = copy(X); resize!(Y.rowval, nnz(A) - 1); Y), A, p, q)
+    @test_throws ArgumentError permute!((Y = copy(X); resize!(Y.nzval, nnz(A) - 1); Y), A, p, q)
+    # Test common error checking of permute[!] methods / source-workmat compat
+    @test_throws DimensionMismatch permute!(X, A, p, q, C[1:(m - 1), :])
+    @test_throws DimensionMismatch permute!(X, A, p, q, C[:, 1:(m - 1)])
+    @test_throws ArgumentError permute!(X, A, p, q, (D = copy(C); resize!(D.rowval, nnz(A) - 1); D))
+    @test_throws ArgumentError permute!(X, A, p, q, (D = copy(C); resize!(D.nzval, nnz(A) - 1); D))
+    # Test common error checking of permute[!] methods / source-workcolptr compat
+    @test_throws DimensionMismatch permute!(A, p, q, C, Vector{eltype(A.rowval)}(length(A.colptr) - 1))
+    # Test common error checking of permute[!] methods / permutation validity
+    @test_throws ArgumentError permute!(A, (r = copy(p); r[2] = r[1]; r), q)
+    @test_throws ArgumentError permute!(A, (r = copy(p); r[2] = m + 1; r), q)
+    @test_throws ArgumentError permute!(A, p, (r = copy(q); r[2] = r[1]; r))
+    @test_throws ArgumentError permute!(A, p, (r = copy(q); r[2] = n + 1; r))
+    # Test overall functionality of [c]transpose[!] and permute[!]
     for (m, n) in ((smalldim, smalldim), (smalldim, largedim), (largedim, smalldim))
         A = sprand(m, n, nzprob)
         At = transpose(A)
@@ -310,6 +334,16 @@ let smalldim = 5, largedim = 10, nzprob = 0.4
         fullCh = ctranspose(full(C))
         @test ctranspose(C) == fullCh
         @test ctranspose!(similar(sparse(fullCh)), C) == fullCh
+        # permute[!]
+        p = randperm(m)
+        q = randperm(n)
+        fullPAQ = full(A)[p,q]
+        @test permute(A, p, q) == sparse(full(A[p,q]))
+        @test permute!(similar(A), A, p, q) == fullPAQ
+        @test permute!(similar(A), A, p, q, similar(At)) == fullPAQ
+        @test permute!(copy(A), p, q) == fullPAQ
+        @test permute!(copy(A), p, q, similar(At)) == fullPAQ
+        @test permute!(copy(A), p, q, similar(At), similar(A.colptr)) == fullPAQ
     end
 end
 
