@@ -1974,7 +1974,13 @@
                             `(,@(map (lambda (v) `(local ,v)) (lhs-vars `(tuple ,@vars)))
                               (= (tuple ,@vars) ,argname))))))
          (expand-forms
-          `(call (top Generator) (-> ,argname (block ,@splat ,expr))
+          `(call (top Generator)
+                 ,(if (and (null? splat)
+                           (length= expr 3) (eq? (car expr) 'call)
+                           (eq? (caddr expr) argname)
+                           (not (expr-contains-eq argname (cadr expr))))
+                      (cadr expr)  ;; eta reduce `x->f(x)` => `f`
+                      `(-> ,argname (block ,@splat ,expr)))
                  ,(if (length= ranges 1)
                       (car ranges)
                       `(call (top product) ,@ranges)))))))
