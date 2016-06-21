@@ -2823,6 +2823,11 @@ static int jl_tuple_morespecific(jl_datatype_t *cdt, jl_datatype_t *pdt, int inv
                 return 0;
             }
         }
+        else if (ci==clenr-1 && pi==plenr-1 && clenr == plenr && !cseq && pseq) {
+            // make Vararg{X, 1} more specific than Vararg{X, N}
+            if (jl_is_vararg_type(child[ci]) && type_eqv_with_ANY(ce,pe))
+                return 1;
+        }
 
         if (some_morespecific && cseq && !pseq)
             return 1;
@@ -2837,7 +2842,13 @@ static int jl_tuple_morespecific(jl_datatype_t *cdt, jl_datatype_t *pdt, int inv
             // argument count (i.e. ...)
         }
 
-        if (cseq && pseq) return 1;
+        /*
+          Ideally this would test `clenr > plenr`, but that causes something
+          bad to happen with these two definitions:
+          sub2ind(              inds::Indices{1},                I::Integer...)
+          sub2ind{N,T<:Integer}(inds::Union{Dims{N},Indices{N}}, I::AbstractVector{T}...)
+        */
+        if (cseq && pseq) return clenr >= plenr || some_morespecific;
         ci++;
         pi++;
     }
