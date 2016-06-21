@@ -6,13 +6,13 @@
 @test Dates.epochms2datetime(-86400000) == Dates.DateTime(-1, 12, 31)
 @test Dates.epochms2datetime(0) == Dates.DateTime(0, 1, 1)
 @test Dates.epochms2datetime(86400000) == Dates.DateTime(0, 1, 2)
-@test Dates.epochms2datetime(736329 * 86400000) == Dates.DateTime(2016, 1, 1)
+@test Dates.epochms2datetime(Int64(736329) * 86400000) == Dates.DateTime(2016, 1, 1)
 @test Dates.date2epochdays(Dates.Date(-1, 12, 31)) == -1
 @test Dates.date2epochdays(Dates.Date(0, 1, 1)) == 0
 @test Dates.date2epochdays(Dates.Date(2016, 1, 1)) == 736329
 @test Dates.datetime2epochms(Dates.DateTime(-1, 12, 31)) == -86400000
 @test Dates.datetime2epochms(Dates.DateTime(0, 1, 1)) == 0
-@test Dates.datetime2epochms(Dates.DateTime(2016, 1, 1)) == 736329 * 86400000
+@test Dates.datetime2epochms(Dates.DateTime(2016, 1, 1)) == Int64(736329) * 86400000
 
 # Basic rounding tests
 dt = Dates.Date(2016, 2, 28)    # Sunday

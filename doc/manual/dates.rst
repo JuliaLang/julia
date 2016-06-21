@@ -450,12 +450,12 @@ Why round to the first day in July, even though it is month 7 (an odd number)? T
 that months are 1-indexed (the first month is assigned 1), unlike hours, minutes, seconds,
 and milliseconds (the first of which are assigned 0).
 
-This means that rounding seconds, minutes, hours, or years (because the ISO 8601
-specification includes a year zero) to an even multiple will result in that field having
-an even value, while rounding to an even multiple of months will result in that field
-having an odd value. Because both months and years may contain an irregular number of
-days, whether rounding to an even number of days will result in an even value in the days
-field is uncertain.
+This means that rounding a :class:`DateTime` to an even multiple of seconds, minutes,
+hours, or years (because the ISO 8601 specification includes a year zero) will result in
+a :class:`DateTime` with an even value in that field, while rounding a :class:`DateTime`
+to an even multiple of months will result in the months field having an odd value. Because
+both months and years may contain an irregular number of days, whether rounding to an even
+number of days will result in an even value in the days field is uncertain.
 
 
 See the `API reference <http://docs.julialang.org/en/latest/stdlib/dates/>`_ for additional information on methods exported from the :mod:`Dates` module.

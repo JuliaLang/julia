@@ -6,7 +6,7 @@ const DATETIMEEPOCH = value(DateTime(0))
 const WEEKEPOCH = value(Date(0, 1, 3))
 
 """
-    epochdays2date(days) -> DateTime
+    epochdays2date(days) -> Date
 
 Takes the number of days since the rounding epoch (`0000-01-01T00:00:00`) and returns the
 corresponding `Date`.
@@ -22,7 +22,7 @@ returns the corresponding `DateTime`.
 epochms2datetime(i) = DateTime(UTM(DATETIMEEPOCH + Int64(i)))
 
 """
-    date2epochdays(dt::DateTime) -> Int64
+    date2epochdays(dt::Date) -> Int64
 
 Takes the given `Date` and returns the number of days since the rounding epoch
 (`0000-01-01T00:00:00`) as an `Int64`.

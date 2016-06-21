@@ -638,7 +638,7 @@ or 15 minutes) with ``floor``, ``ceil``, or ``round``.
        julia> round(DateTime(2016, 8, 6, 12, 0, 0), Dates.Day)
        2016-08-07T00:00:00
 
-   Valid RoundingModes for ``round(::TimeType, ::Period, ::RoundingMode)`` are ``RoundNearestTiesUp`` (default), ``RoundDown`` (``floor``\ ), and ``RoundUp`` (``ceil``\ ).
+   Valid rounding modes for ``round(::TimeType, ::Period, ::RoundingMode)`` are ``RoundNearestTiesUp`` (default), ``RoundDown`` (``floor``\ ), and ``RoundUp`` (``ceil``\ ).
 
 The following functions are not exported:
 
@@ -648,7 +648,7 @@ The following functions are not exported:
 
    Simultaneously return the ``floor`` and ``ceil`` of a ``Date`` or ``DateTime`` at resolution ``p``\ . More efficient than calling both ``floor`` and ``ceil`` individually.
 
-.. function:: epochdays2date(days) -> DateTime
+.. function:: epochdays2date(days) -> Date
 
    .. Docstring generated from Julia source
 
@@ -660,7 +660,7 @@ The following functions are not exported:
 
    Takes the number of milliseconds since the rounding epoch (``0000-01-01T00:00:00``\ ) and returns the corresponding ``DateTime``\ .
 
-.. function:: date2epochdays(dt::DateTime) -> Int64
+.. function:: date2epochdays(dt::Date) -> Int64
 
    .. Docstring generated from Julia source
 
