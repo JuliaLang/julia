@@ -6994,13 +6994,6 @@ If `n` is not an `Integer`, `factorial(n)` is equivalent to [`gamma(n+1)`](:func
 factorial(n)
 
 """
-    factorial(n,k)
-
-Compute `factorial(n)/factorial(k)`.
-"""
-factorial(n,k)
-
-"""
     bitrand([rng], [dims...])
 
 Generate a `BitArray` of random boolean values.
