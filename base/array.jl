@@ -206,6 +206,7 @@ promote_rule{T,n,S}(::Type{Array{T,n}}, ::Type{Array{S,n}}) = Array{promote_type
 
 # make a collection similar to `c` and appropriate for collecting `itr`
 _similar_for(c::AbstractArray, T, itr, ::SizeUnknown) = similar(c, T, 0)
+_similar_for(c::AbstractArray, T, itr, ::IsScalar) = similar(c, T, ())
 _similar_for(c::AbstractArray, T, itr, ::HasLength) = similar(c, T, Int(length(itr)::Integer))
 _similar_for(c::AbstractArray, T, itr, ::HasShape) = similar(c, T, convert(Dims,size(itr)))
 _similar_for(c, T, itr, isz) = similar(c, T)
@@ -217,6 +218,8 @@ Return an array of type `Array{element_type,1}` of all items in a collection.
 """
 collect{T}(::Type{T}, itr) = collect(Generator(T, itr))
 
+_collect{T}(::Type{T}, itr, ::IsScalar) = (a = Array{T}(); a[] = itr; a)
+
 """
     collect(collection)
 
@@ -225,6 +228,12 @@ Return an array of all items in a collection. For associative collections, retur
 collect(itr) = _collect(1:1 #= Array =#, itr, iteratoreltype(itr), iteratorsize(itr))
 
 collect_similar(cont, itr) = _collect(cont, itr, iteratoreltype(itr), iteratorsize(itr))
+
+function _collect(cont, itr, ::IteratorEltype, isz::IsScalar)
+    a = _similar_for(cont, typeof(itr), itr, isz)
+    a[start(eachindex(a))] = itr
+    return a
+end
 
 _collect(cont, itr, ::HasEltype, isz::Union{HasLength,HasShape}) =
     copy!(_similar_for(cont, eltype(itr), itr, isz), itr)

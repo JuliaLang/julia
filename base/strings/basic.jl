@@ -2,6 +2,8 @@
 
 ## core string functions ##
 
+iteratorsize{T<:AbstractString}(::Type{T}) = HasLength()
+
 endof(s::AbstractString) = error("you must implement endof(", typeof(s), ")")
 next(s::AbstractString, i::Int) = error("you must implement next(", typeof(s), ",Int)")
 next(s::DirectIndexString, i::Int) = (s[i],i+1)

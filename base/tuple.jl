@@ -12,6 +12,8 @@ getindex(t::Tuple, b::AbstractArray{Bool}) = getindex(t,find(b))
 
 ## iterating ##
 
+iteratorsize{T<:Tuple}(::Type{T}) = HasLength()
+
 start(t::Tuple) = 1
 done(t::Tuple, i::Int) = (length(t) < i)
 next(t::Tuple, i::Int) = (t[i], i+1)
