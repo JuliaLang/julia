@@ -181,11 +181,6 @@ function _methods(f::ANY,t::ANY,lim)
     tt = isa(t,Type) ? Tuple{ft, t.parameters...} : Tuple{ft, t...}
     return _methods_by_ftype(tt, lim)
 end
-function methods_including_ambiguous(f::ANY, t::ANY)
-    ft = isa(f,Type) ? Type{f} : typeof(f)
-    tt = isa(t,Type) ? Tuple{ft, t.parameters...} : Tuple{ft, t...}
-    return ccall(:jl_matching_methods, Any, (Any,Cint,Cint), tt, -1, 1)
-end
 function _methods_by_ftype(t::ANY, lim)
     tp = t.parameters::SimpleVector
     nu = 1
@@ -254,6 +249,13 @@ function methods(f::ANY, t::ANY)
 end
 
 methods(f::Core.Builtin) = MethodList(Method[], typeof(f).name.mt)
+
+function methods_including_ambiguous(f::ANY, t::ANY)
+    ft = isa(f,Type) ? Type{f} : typeof(f)
+    tt = isa(t,Type) ? Tuple{ft, t.parameters...} : Tuple{ft, t...}
+    ms = ccall(:jl_matching_methods, Any, (Any,Cint,Cint), tt, -1, 1)::Array{Any,1}
+    return MethodList(Method[m[3] for m in ms], typeof(f).name.mt)
+end
 
 function methods(f::ANY)
     # return all matches
