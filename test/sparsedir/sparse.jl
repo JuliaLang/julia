@@ -1109,28 +1109,28 @@ let smalldim = 5, largedim = 10, nzprob = 0.4, targetnumposzeros = 5, targetnumn
         map!(x -> x == 2 ? 0.0 : x == -2 ? -0.0 : x, Abothsigns.nzval)
         for Awithzeros in (Aposzeros, Anegzeros, Abothsigns)
             # Basic functionality / dropzeros!
-            @test Base.dropzeros!(copy(Awithzeros)) == A
-            @test Base.dropzeros!(copy(Awithzeros), false) == A
+            @test dropzeros!(copy(Awithzeros)) == A
+            @test dropzeros!(copy(Awithzeros), false) == A
             # Basic functionality / dropzeros
-            @test Base.SparseArrays.dropzeros(Awithzeros) == A
-            @test Base.SparseArrays.dropzeros(Awithzeros, false) == A
+            @test dropzeros(Awithzeros) == A
+            @test dropzeros(Awithzeros, false) == A
             # Check trimming works as expected
-            @test length(Base.dropzeros!(copy(Awithzeros)).nzval) == length(A.nzval)
-            @test length(Base.dropzeros!(copy(Awithzeros)).rowval) == length(A.rowval)
-            @test length(Base.dropzeros!(copy(Awithzeros), false).nzval) == length(Awithzeros.nzval)
-            @test length(Base.dropzeros!(copy(Awithzeros), false).rowval) == length(Awithzeros.rowval)
+            @test length(dropzeros!(copy(Awithzeros)).nzval) == length(A.nzval)
+            @test length(dropzeros!(copy(Awithzeros)).rowval) == length(A.rowval)
+            @test length(dropzeros!(copy(Awithzeros), false).nzval) == length(Awithzeros.nzval)
+            @test length(dropzeros!(copy(Awithzeros), false).rowval) == length(Awithzeros.rowval)
         end
     end
     # original lone dropzeros test
     A = sparse([1 2 3; 4 5 6; 7 8 9])
     A.nzval[2] = A.nzval[6] = A.nzval[7] = 0
-    @test Base.dropzeros!(A).colptr == [1, 3, 5, 7]
+    @test dropzeros!(A).colptr == [1, 3, 5, 7]
     # test for issue #5169, modified for new behavior following #15242/#14798
     @test nnz(sparse([1, 1], [1, 2], [0.0, -0.0])) == 2
-    @test nnz(Base.SparseArrays.dropzeros!(sparse([1, 1], [1, 2], [0.0, -0.0]))) == 0
+    @test nnz(dropzeros!(sparse([1, 1], [1, 2], [0.0, -0.0]))) == 0
     # test for issue #5437, modified for new behavior following #15242/#14798
     @test nnz(sparse([1, 2, 3], [1, 2, 3], [0.0, 1.0, 2.0])) == 3
-    @test nnz(Base.SparseArrays.dropzeros!(sparse([1, 2, 3],[1, 2, 3],[0.0, 1.0, 2.0]))) == 2
+    @test nnz(dropzeros!(sparse([1, 2, 3],[1, 2, 3],[0.0, 1.0, 2.0]))) == 2
 end
 
 #trace
