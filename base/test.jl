@@ -130,8 +130,9 @@ end
 """
     Broken
 
-The test condition either has been explicitly skipped or is the expected
-(failed) result of a broken test.
+The test condition is the expected (failed) result of a broken test.
+This will result in a error if the test succeeds, forcing the tester
+to update the test.
 """
 type Broken <: Result
     test_type::Symbol
@@ -195,10 +196,9 @@ end
     @test_broken ex
 
 For use to indicate a test that should pass but currently consistently
-fails.
-Tests that the expression `ex` evaluates to `false` or causes an exception.
-Returns a `Broken` `Result` if it does, and an `Error` `Result` if it is
-`true`.
+fails. Tests that the expression `ex` evaluates to `false` or causes an
+exception. Returns a `Broken` `Result` if it does, and an `Error` `Result`
+if it is `true`.
 """
 macro test_broken(ex)
     orig_ex = Expr(:quote,ex)
@@ -211,8 +211,8 @@ end
     @test_skip ex
 
 For use to indicate a test that should pass but currently intermittently
-fails.
-Does not evaluate the expression.
+fails. Does not evaluate the expression, which makes it useful for tests
+of not-yet-implemented functionality.
 """
 macro test_skip(ex)
     orig_ex = Expr(:quote, ex)
