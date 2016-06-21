@@ -316,8 +316,8 @@ januarymondays2014 = [Dates.Date(2014,1,6),Dates.Date(2014,1,13),Dates.Date(2014
 @test Dates.recur(Dates.ismonday,startdate:stopdate) == januarymondays2014
 @test Dates.recur(x->!Dates.ismonday(x),startdate,stopdate;negate=true) == januarymondays2014
 
-@test_throws ArgumentError Dates.recur((x,y)->x+y,Dates.Date(2013):Dates.Date(2014))
-@test_throws ArgumentError Dates.DateFunction((x,y)->x+y, false, Date(0))
+@test_throws MethodError Dates.recur((x,y)->x+y,Dates.Date(2013):Dates.Date(2014))
+@test_throws MethodError Dates.DateFunction((x,y)->x+y, false, Date(0))
 @test_throws ArgumentError Dates.DateFunction((dt)->2, false, Date(0))
 @test length(Dates.recur(x->true,Dates.Date(2013):Dates.Date(2013,2))) == 32
 @test length(Dates.recur(x->true,Dates.Date(2013):Dates.Date(2013,1,1))) == 1
