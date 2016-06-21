@@ -1347,12 +1347,6 @@ Mathematical Functions
 
    Factorial of ``n``\ .  If ``n`` is an :obj:`Integer`\ , the factorial is computed as an integer (promoted to at least 64 bits).  Note that this may overflow if ``n`` is not small, but you can use ``factorial(big(n))`` to compute the result exactly in arbitrary precision. If ``n`` is not an ``Integer``\ , ``factorial(n)`` is equivalent to :func:`gamma(n+1) <gamma>`\ .
 
-.. function:: factorial(n,k)
-
-   .. Docstring generated from Julia source
-
-   Compute ``factorial(n)/factorial(k)``\ .
-
 .. function:: gcd(x,y)
 
    .. Docstring generated from Julia source
