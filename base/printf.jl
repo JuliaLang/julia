@@ -864,10 +864,12 @@ function decode(b::Int, x::BigInt)
     neg = x.size < 0
     pt = Base.ndigits(x, abs(b))
     length(DIGITS) < pt+1 && resize!(DIGITS, pt+1)
-    z = Base.GMP._W(x)
-    neg && (z.size = -z.size)
-    ccall((:__gmpz_get_str, :libgmp), Cstring,
-          (Ptr{UInt8}, Cint, Ptr{MPZ}), DIGITS, b, &z)
+    Base.GMP.withMPZtmp() do T
+        z = Base.T.W(x)
+        neg && (z.size = -z.size)
+        ccall((:__gmpz_get_str, :libgmp), Cstring,
+              (Ptr{UInt8}, Cint, Ptr{MPZ}), DIGITS, b, &z)
+    end
     return Int32(pt), Int32(pt), neg
 end
 decode_oct(x::BigInt) = decode(8, x)
@@ -883,11 +885,13 @@ function decode_0ct(x::BigInt)
     end
     pt = Base.ndigits0z(x, 8) + 1
     length(DIGITS) < pt+1 && resize!(DIGITS, pt+1)
-    z = Base.GMP._W(x)
-    neg && (z.size = -z.size)
-    p = convert(Ptr{UInt8}, DIGITS) + 1
-    ccall((:__gmpz_get_str, :libgmp), Cstring,
-          (Ptr{UInt8}, Cint, Ptr{MPZ}), p, 8, &z)
+    Base.GMP.withMPZtmp() do T
+        z = T.W(x)
+        neg && (z.size = -z.size)
+        p = convert(Ptr{UInt8}, DIGITS) + 1
+        ccall((:__gmpz_get_str, :libgmp), Cstring,
+              (Ptr{UInt8}, Cint, Ptr{MPZ}), p, 8, &z)
+    end
     return neg, Int32(pt), Int32(pt)
 end
 

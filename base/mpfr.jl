@@ -22,7 +22,7 @@ import
 
 import Base.Rounding: rounding_raw, setrounding_raw
 
-import Base.GMP: ClongMax, CulongMax, CdoubleMax, Limb, MPZ
+import Base.GMP: ClongMax, CulongMax, CdoubleMax, Limb, MPZ, withMPZtmp
 using Base: GMP
 
 import Base.Math.lgamma_r
@@ -78,9 +78,11 @@ for (fJ, fC) in ((:si,:Clong), (:ui,:Culong), (:d,:Float64))
 end
 
 function convert(::Type{BigFloat}, x::BigInt)
-    z = BigFloat()
-    ccall((:mpfr_set_z, :libmpfr), Int32, (Ptr{BigFloat}, Ptr{MPZ}, Int32), &z, &GMP._W(x), ROUNDING_MODE[end])
-    return z
+    withMPZtmp() do T
+        z = BigFloat()
+        ccall((:mpfr_set_z, :libmpfr), Int32, (Ptr{BigFloat}, Ptr{MPZ}, Int32), &z, &T.W(x), ROUNDING_MODE[end])
+        return z
+    end
 end
 
 convert(::Type{BigFloat}, x::Integer) = BigFloat(BigInt(x))
@@ -119,9 +121,11 @@ end
 
 function unsafe_cast(::Type{BigInt}, x::BigFloat, ri::Cint)
     # actually safe, just keep naming consistent
-    ccall((:mpfr_get_z, :libmpfr), Int32, (Ptr{MPZ}, Ptr{BigFloat}, Int32),
-          &GMP._Z, &x, ri)
-    BigInt(GMP._Z)
+    withMPZtmp() do T
+        ccall((:mpfr_get_z, :libmpfr), Int32, (Ptr{MPZ}, Ptr{BigFloat}, Int32),
+              &T.Z, &x, ri)
+        BigInt(T.Z)
+    end
 end
 unsafe_cast(::Type{Int128}, x::BigFloat, ri::Cint) = Int128(unsafe_cast(BigInt,x,ri))
 unsafe_cast(::Type{UInt128}, x::BigFloat, ri::Cint) = UInt128(unsafe_cast(BigInt,x,ri))
@@ -233,9 +237,11 @@ for (fJ, fC) in ((:+,:add), (:*,:mul))
 
         # BigInt
         function ($fJ)(x::BigFloat, c::BigInt)
-            z = BigFloat()
-            ccall(($(string(:mpfr_,fC,:_z)), :libmpfr), Int32, (Ptr{BigFloat}, Ptr{BigFloat}, Ptr{MPZ}, Int32), &z, &x, &GMP._W(c), ROUNDING_MODE[end])
-            return z
+            withMPZtmp() do T
+                z = BigFloat()
+                ccall(($(string(:mpfr_,fC,:_z)), :libmpfr), Int32, (Ptr{BigFloat}, Ptr{BigFloat}, Ptr{MPZ}, Int32), &z, &x, &T.W(c), ROUNDING_MODE[end])
+                return z
+            end
         end
         ($fJ)(c::BigInt, x::BigFloat) = ($fJ)(x,c)
     end
@@ -288,18 +294,22 @@ for (fJ, fC) in ((:-,:sub), (:/,:div))
 
         # BigInt
         function ($fJ)(x::BigFloat, c::BigInt)
-            z = BigFloat()
-            ccall(($(string(:mpfr_,fC,:_z)), :libmpfr), Int32, (Ptr{BigFloat}, Ptr{BigFloat}, Ptr{MPZ}, Int32), &z, &x, &GMP._W(c), ROUNDING_MODE[end])
-            return z
+            withMPZtmp() do T
+                z = BigFloat()
+                ccall(($(string(:mpfr_,fC,:_z)), :libmpfr), Int32, (Ptr{BigFloat}, Ptr{BigFloat}, Ptr{MPZ}, Int32), &z, &x, &T.W(c), ROUNDING_MODE[end])
+                return z
+            end
         end
         # no :mpfr_z_div function
     end
 end
 
 function -(c::BigInt, x::BigFloat)
-    z = BigFloat()
-    ccall((:mpfr_z_sub, :libmpfr), Int32, (Ptr{BigFloat}, Ptr{MPZ}, Ptr{BigFloat}, Int32), &z, &GMP._W(c), &x, ROUNDING_MODE[end])
-    return z
+    withMPZtmp() do T
+        z = BigFloat()
+        ccall((:mpfr_z_sub, :libmpfr), Int32, (Ptr{BigFloat}, Ptr{MPZ}, Ptr{BigFloat}, Int32), &z, &T.W(c), &x, ROUNDING_MODE[end])
+        return z
+    end
 end
 
 function fma(x::BigFloat, y::BigFloat, z::BigFloat)
@@ -361,10 +371,12 @@ end
 
 # BigInt
 function div(x::BigFloat, c::BigInt)
-    z = BigFloat()
-    ccall((:mpfr_div_z, :libmpfr), Int32, (Ptr{BigFloat}, Ptr{BigFloat}, Ptr{MPZ}, Int32), &z, &x, &GMP._W(c), to_mpfr(RoundToZero))
-    ccall((:mpfr_trunc, :libmpfr), Int32, (Ptr{BigFloat}, Ptr{BigFloat}), &z, &z)
-    return z
+    withMPZtmp() do T
+        z = BigFloat()
+        ccall((:mpfr_div_z, :libmpfr), Int32, (Ptr{BigFloat}, Ptr{BigFloat}, Ptr{MPZ}, Int32), &z, &x, &T.W(c), to_mpfr(RoundToZero))
+        ccall((:mpfr_trunc, :libmpfr), Int32, (Ptr{BigFloat}, Ptr{BigFloat}), &z, &z)
+        return z
+    end
 end
 
 
@@ -432,9 +444,11 @@ function ^(x::BigFloat, y::ClongMax)
 end
 
 function ^(x::BigFloat, y::BigInt)
-    z = BigFloat()
-    ccall((:mpfr_pow_z, :libmpfr), Int32, (Ptr{BigFloat}, Ptr{BigFloat}, Ptr{MPZ}, Int32), &z, &x, &GMP._W(y), ROUNDING_MODE[end])
-    return z
+    withMPZtmp() do T
+        z = BigFloat()
+        ccall((:mpfr_pow_z, :libmpfr), Int32, (Ptr{BigFloat}, Ptr{BigFloat}, Ptr{MPZ}, Int32), &z, &x, &T.W(y), ROUNDING_MODE[end])
+        return z
+    end
 end
 
 ^(x::BigFloat, y::Integer)  = typemin(Clong)  <= y <= typemax(Clong)  ? x^Clong(y)  : x^BigInt(y)
@@ -645,7 +659,9 @@ end
 
 function cmp(x::BigFloat, y::BigInt)
     isnan(x) && throw(DomainError())
-    ccall((:mpfr_cmp_z, :libmpfr), Int32, (Ptr{BigFloat}, Ptr{MPZ}), &x, &GMP._W(y))
+    withMPZtmp() do T
+        ccall((:mpfr_cmp_z, :libmpfr), Int32, (Ptr{BigFloat}, Ptr{MPZ}), &x, &T.W(y))
+    end
 end
 function cmp(x::BigFloat, y::ClongMax)
     isnan(x) && throw(DomainError())

@@ -538,8 +538,8 @@ function rand{T<:Integer, U<:Unsigned}(rng::AbstractRNG, g::RangeGeneratorInt{T,
     (unsigned(g.a) + rem_knuth(x, g.k)) % T
 end
 
-function rand(rng::AbstractRNG, g::RangeGeneratorBigInt)
-    x = Base.GMP._Z
+rand(rng::AbstractRNG, g::RangeGeneratorBigInt) = Base.GMP.withMPZtmp() do T
+    x = T.Z
     ccall((:__gmpz_realloc2, :libgmp), Void, (Ptr{MPZ}, Culong), &x,
           g.nlimbsmax*8*sizeof(Limb))
     limbs = unsafe_wrap(Array, x.d, g.nlimbs)
@@ -556,7 +556,7 @@ function rand(rng::AbstractRNG, g::RangeGeneratorBigInt)
         x.size -= 1
     end
     ccall((:__gmpz_add, :libgmp), Void, (Ptr{MPZ}, Ptr{MPZ}, Ptr{MPZ}),
-          &x, &x, &Base.GMP._W(g.a))
+          &x, &x, &T.W(g.a))
     return BigInt(x)
 end
 
