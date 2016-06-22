@@ -114,7 +114,6 @@ function Base.replace_in_print_matrix(A::Bidiagonal,i::Integer,j::Integer,s::Abs
 end
 
 #Converting from Bidiagonal to dense Matrix
-full{T}(M::Bidiagonal{T}) = convert(Matrix{T}, M)
 function convert{T}(::Type{Matrix{T}}, A::Bidiagonal)
     n = size(A, 1)
     B = zeros(T, n, n)
@@ -130,6 +129,8 @@ function convert{T}(::Type{Matrix{T}}, A::Bidiagonal)
     return B
 end
 convert{T}(::Type{Matrix}, A::Bidiagonal{T}) = convert(Matrix{T}, A)
+convert(::Type{Array}, A::Bidiagonal) = convert(Matrix, A)
+full(A::Bidiagonal) = convert(Array, A)
 promote_rule{T,S}(::Type{Matrix{T}}, ::Type{Bidiagonal{S}})=Matrix{promote_type(T,S)}
 
 #Converting from Bidiagonal to Tridiagonal
