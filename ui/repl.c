@@ -60,7 +60,7 @@ static const char opts[]  =
     " -J, --sysimage <file>     Start up with the given system image file\n"
     " --precompiled={yes|no}    Use precompiled code from system image if available\n"
     " --compilecache={yes|no}   Enable/disable incremental precompilation of modules\n"
-    " -H, --home <dir>          Set location of julia executable\n"
+    " -H, --home <dir>          Set location of `julia` executable\n"
     " --startup-file={yes|no}   Load ~/.juliarc.jl\n"
     " --handle-signals={yes|no} Enable or disable Julia's default signal handlers\n\n"
 

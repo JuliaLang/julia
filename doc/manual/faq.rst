@@ -536,13 +536,13 @@ Memory
 Why does ``x += y`` allocate memory when ``x`` and ``y`` are arrays?
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-In julia, ``x += y`` gets replaced during parsing by ``x = x + y``.
+In Julia, ``x += y`` gets replaced during parsing by ``x = x + y``.
 For arrays, this has the consequence that, rather than storing the
 result in the same location in memory as ``x``, it allocates a new
 array to store the result.
 
 While this behavior might surprise some, the choice is deliberate. The
-main reason is the presence of ``immutable`` objects within julia,
+main reason is the presence of ``immutable`` objects within Julia,
 which cannot change their value once created.  Indeed, a number is an
 immutable object; the statements ``x = 5; x += 1`` do not modify the
 meaning of ``5``, they modify the value bound to ``x``. For an
