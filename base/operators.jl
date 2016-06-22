@@ -528,48 +528,36 @@ end
 macro vectorize_1arg(S,f)
     S = esc(S); f = esc(f); T = esc(:T)
     quote
-        ($f){$T<:$S}(x::AbstractArray{$T,1}) = [ ($f)(elem) for elem in x ]
-        ($f){$T<:$S}(x::AbstractArray{$T,2}) =
-            [ ($f)(x[i,j]) for i=1:size(x,1), j=1:size(x,2) ]
-        ($f){$T<:$S}(x::AbstractArray{$T}) =
-            reshape([ ($f)(y) for y in x ], size(x))
+        ($f){$T<:$S}(x::AbstractArray{$T}) = [ ($f)(elem) for elem in x ]
     end
 end
 
 macro vectorize_2arg(S,f)
     S = esc(S); f = esc(f); T1 = esc(:T1); T2 = esc(:T2)
     quote
-        ($f){$T1<:$S, $T2<:$S}(x::($T1), y::AbstractArray{$T2}) =
-            reshape([ ($f)(x, z) for z in y ], size(y))
-        ($f){$T1<:$S, $T2<:$S}(x::AbstractArray{$T1}, y::($T2)) =
-            reshape([ ($f)(z, y) for z in x ], size(x))
-
-        function ($f){$T1<:$S, $T2<:$S}(x::AbstractArray{$T1}, y::AbstractArray{$T2})
-            shp = promote_shape(size(x),size(y))
-            reshape([ ($f)(xx, yy) for (xx, yy) in zip(x, y) ], shp)
-        end
+        ($f){$T1<:$S, $T2<:$S}(x::($T1), y::AbstractArray{$T2}) = [ ($f)(x, z) for z in y ]
+        ($f){$T1<:$S, $T2<:$S}(x::AbstractArray{$T1}, y::($T2)) = [ ($f)(z, y) for z in x ]
+        ($f){$T1<:$S, $T2<:$S}(x::AbstractArray{$T1}, y::AbstractArray{$T2}) =
+            [ ($f)(xx, yy) for (xx, yy) in zip(x, y) ]
     end
 end
 
 # vectorized ifelse
 
 function ifelse(c::AbstractArray{Bool}, x, y)
-    reshape([ifelse(ci, x, y) for ci in c], size(c))
+    [ifelse(ci, x, y) for ci in c]
 end
 
 function ifelse(c::AbstractArray{Bool}, x::AbstractArray, y::AbstractArray)
-    shp = promote_shape(size(c), promote_shape(size(x), size(y)))
-    reshape([ifelse(c_elem, x_elem, y_elem) for (c_elem, x_elem, y_elem) in zip(c, x, y)], shp)
+    [ifelse(c_elem, x_elem, y_elem) for (c_elem, x_elem, y_elem) in zip(c, x, y)]
 end
 
 function ifelse(c::AbstractArray{Bool}, x::AbstractArray, y)
-    shp = promote_shape(size(c), size(c))
-    reshape([ifelse(c_elem, x_elem, y) for (c_elem, x_elem) in zip(c, x)], shp)
+    [ifelse(c_elem, x_elem, y) for (c_elem, x_elem) in zip(c, x)]
 end
 
 function ifelse(c::AbstractArray{Bool}, x, y::AbstractArray)
-    shp = promote_shape(size(c), size(y))
-    reshape([ifelse(c_elem, x, y_elem) for (c_elem, y_elem) in zip(c, y)], shp)
+    [ifelse(c_elem, x, y_elem) for (c_elem, y_elem) in zip(c, y)]
 end
 
 # Pair
