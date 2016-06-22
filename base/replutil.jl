@@ -203,9 +203,9 @@ function showerror_ambiguous(io::IO, meth, f, args)
     p = args.parameters
     for (i,a) in enumerate(p)
         print(io, "::", a)
-        i == length(p) ? print(io, ")") : print(io, ", ")
+        i < length(p) && print(io, ", ")
     end
-    print(io, " is ambiguous. Candidates:")
+    print(io, ") is ambiguous. Candidates:")
     for m in meth
         print(io, "\n  ", m)
     end
