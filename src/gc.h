@@ -219,6 +219,16 @@ STATIC_INLINE int gc_old(int bits)
     return (bits & GC_OLD) != 0;
 }
 
+STATIC_INLINE uintptr_t gc_ptr_tag(void *v, uintptr_t mask)
+{
+    return ((uintptr_t)v) & mask;
+}
+
+STATIC_INLINE void *gc_ptr_clear_tag(void *v, uintptr_t mask)
+{
+    return (void*)(((uintptr_t)v) & ~mask);
+}
+
 NOINLINE uintptr_t gc_get_stack_ptr(void);
 
 STATIC_INLINE region_t *find_region(void *ptr, int maybe)
@@ -355,7 +365,7 @@ void add_lostval_parent(jl_value_t *parent);
     } while(0);
 
 #define verify_parent(ty, obj, slot, args...) do {                      \
-        if (*(jl_value_t**)(slot) == lostval &&                         \
+        if (gc_ptr_clear_tag(*(void**)(slot), 3) == (void*)lostval &&   \
             (jl_value_t*)(obj) != lostval) {                            \
             jl_printf(JL_STDOUT, "Found parent %p %p at %s:%d\n",       \
                       (void*)(ty), (void*)(obj), __FILE__, __LINE__);   \

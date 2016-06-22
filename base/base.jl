@@ -72,6 +72,13 @@ function finalizer(o::ANY, f::ANY)
     end
     ccall(:jl_gc_add_finalizer, Void, (Any,Any), o, f)
 end
+function finalizer{T}(o::T, f::Ptr{Void})
+    @_inline_meta
+    if isimmutable(T)
+        error("objects of type ", T, " cannot be finalized")
+    end
+    ccall(:jl_gc_add_ptr_finalizer, Void, (Any, Ptr{Void}), o, f)
+end
 
 finalize(o::ANY) = ccall(:jl_finalize, Void, (Any,), o)
 
