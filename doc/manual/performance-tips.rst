@@ -751,16 +751,16 @@ This might be worthwhile when the following are true:
   ``Array{Car{:Honda,:Accord},N}``.
 
 When the latter holds, a function processing such a homogenous array
-can be productively specialized: julia knows the type of each element
+can be productively specialized: Julia knows the type of each element
 in advance (all objects in the container have the same concrete type),
-so julia can "look up" the correct method calls when the function is
+so Julia can "look up" the correct method calls when the function is
 being compiled (obviating the need to check at run-time) and thereby
 emit efficient code for processing the whole list.
 
 When these do not hold, then it's likely that you'll get no benefit;
 worse, the resulting "combinatorial explosion of types" will be
 counterproductive.  If ``items[i+1]`` has a different type than
-``item[i]``, julia has to look up the type at run-time, search for the
+``item[i]``, Julia has to look up the type at run-time, search for the
 appropriate method in method tables, decide (via type intersection)
 which one matches, determine whether it has been JIT-compiled yet (and
 do so if not), and then make the call. In essence, you're asking the
@@ -773,7 +773,7 @@ lookup, and (3) a "switch" statement can be found `on the mailing list
 <https://groups.google.com/d/msg/julia-users/jUMu9A3QKQQ/qjgVWr7vAwAJ>`_.
 
 Perhaps even worse than the run-time impact is the compile-time
-impact: julia will compile specialized functions for each different
+impact: Julia will compile specialized functions for each different
 ``Car{Make, Model}``; if you have hundreds or thousands of such types,
 then every function that accepts such an object as a parameter (from a
 custom ``get_year`` function you might write yourself, to the generic
