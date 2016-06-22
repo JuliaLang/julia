@@ -351,6 +351,22 @@ Control flow      ``&&`` followed by ``||`` followed by ``?``
 Assignments       ``= += -= *= /= //= \= ^= ÷= %= |= &= $= <<= >>= >>>=`` and ``.+= .-= .*= ./= .//= .\= .^= .÷= .%=``
 ================= =============================================================================================
 
+.. _man-elementary-functions:
+
+Elementary Functions
+~~~~~~~~~~~~~~~~~~~~
+
+Julia provides a comprehensive collection of mathematical functions and
+operators. These mathematical operations are defined over as broad a
+class of numerical values as permit sensible definitions, including
+integers, floating-point numbers, rationals, and complexes, wherever
+such definitions make sense.
+
+Moreover, these functions (like any Julia function) can be applied
+in "vectorized" fashion to arrays and other collections with the
+syntax ``f.(A)``, e.g. ``sin.(A)`` will compute the elementwise
+sine of each element of an array ``A``.  See :ref:`man-dot-vectorizing`:.
+
 .. _man-numerical-conversions:
 
 Numerical Conversions
@@ -417,22 +433,6 @@ The following examples show the different forms.
 
 See :ref:`man-conversion-and-promotion` for how to define your own
 conversions and promotions.
-
-.. _man-elementary-functions:
-
-Elementary Functions
---------------------
-
-Julia provides a comprehensive collection of mathematical functions and
-operators. These mathematical operations are defined over as broad a
-class of numerical values as permit sensible definitions, including
-integers, floating-point numbers, rationals, and complexes, wherever
-such definitions make sense.
-
-Moreover, these functions (like any Julia function) can be applied
-in "vectorized" fashion to arrays and other collections with the
-syntax ``f.(A)``, e.g. ``sin.(A)`` will compute the elementwise
-sine of each element of an array ``A``.  See :ref:`man-dot-vectorizing`:.
 
 .. _man-rounding-functions:
 
