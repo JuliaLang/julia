@@ -54,7 +54,6 @@ type MPZ <: Integer
     ref::BigInt
 
     MPZ() = new(zero(Cint), zero(Cint), C_NULL)
-    # global objects can't be initialized via libgmp in a constructor, hence the init() function
 end
 
 function init(z::MPZ)
@@ -112,6 +111,18 @@ function withMPZtmp(f::Function)
     end
 end
 
+macro withtmp(ex)
+    quote
+        local gcstate = gc_enable(false)
+        @inbounds $(esc(:T)) = _MPZtmp[threadid()]
+        try
+           $(esc(ex))
+        finally
+            gc_enable(gcstate)
+        end
+    end
+end
+
 function __init__()
     try
         if gmp_version().major != GMP_VERSION.major || gmp_bits_per_limb() != GMP_BITS_PER_LIMB
@@ -158,7 +169,7 @@ function tryparse_internal(::Type{BigInt}, s::AbstractString, startpos::Int, end
     end
 
     if !Base.containsnul(bstr) # embedded NUL char (not handled correctly by GMP)
-        withMPZtmp() do T
+        @withtmp begin
             err = ccall((:__gmpz_set_str, :libgmp),
                         Int32, (Ptr{MPZ}, Ptr{UInt8}, Int32),
                         &T.Z, pointer(bstr)+(i-start(bstr)), base)
@@ -177,7 +188,7 @@ convert(::Type{BigInt}, x::ULimbMax) = BigInt((x!=0) % Int, Limb[x])
 convert(::Type{BigInt}, x::Bool) = BigInt(x % UInt)
 
 
-unsafe_trunc(::Type{BigInt}, x::Union{Float32,Float64}) = withMPZtmp() do T
+unsafe_trunc(::Type{BigInt}, x::Union{Float32,Float64}) = @withtmp begin
     ccall((:__gmpz_set_d, :libgmp), Void, (Ptr{MPZ}, Cdouble), &T.Z, x)
     BigInt(T.Z)
 end
@@ -256,7 +267,7 @@ function convert{T<:Signed}(::Type{T}, x::BigInt)
 end
 
 
-(::Type{Float64})(n::BigInt, ::RoundingMode{:ToZero}) = withMPZtmp() do T
+(::Type{Float64})(n::BigInt, ::RoundingMode{:ToZero}) = @withtmp begin
     ccall((:__gmpz_get_d, :libgmp), Float64, (Ptr{MPZ},), &T.W(n))
 end
 
@@ -308,7 +319,7 @@ for (fJ, fC) in ((:+, :add), (:-,:sub), (:*, :mul),
                  (:&, :and), (:|, :ior), (:$, :xor))
     @eval begin
         function ($fJ)(x::BigInt, y::BigInt)
-            withMPZtmp() do T
+            @withtmp begin
                 ccall(($(string(:__gmpz_,fC)), :libgmp), Void,
                       (Ptr{MPZ}, Ptr{MPZ}, Ptr{MPZ}),
                       &T.Z, &T.V(x), &T.W(y))
@@ -323,7 +334,7 @@ function invmod(x::BigInt, y::BigInt)
     if y == 1
         return big(0)
     end
-    withMPZtmp() do T
+    @withtmp begin
         if (y==0 || ccall((:__gmpz_invert, :libgmp), Cint,
                           (Ptr{MPZ}, Ptr{MPZ}, Ptr{MPZ}), &T.Z, &T.V(x), &T.W(y)) == 0)
             error("no inverse exists")
@@ -336,14 +347,14 @@ end
 for (fJ, fC) in ((:+, :add), (:*, :mul), (:&, :and), (:|, :ior), (:$, :xor))
     @eval begin
         function ($fJ)(a::BigInt, b::BigInt, c::BigInt)
-            withMPZtmp() do T
+            @withtmp begin
                 ccall(($(string(:__gmpz_,fC)), :libgmp), Void, (Ptr{MPZ}, Ptr{MPZ}, Ptr{MPZ}), &T.Z, &T.V(a), &T.W(b))
                 ccall(($(string(:__gmpz_,fC)), :libgmp), Void, (Ptr{MPZ}, Ptr{MPZ}, Ptr{MPZ}), &T.Z, &T.Z, &T.W(c))
                 return BigInt(T.Z)
             end
         end
         function ($fJ)(a::BigInt, b::BigInt, c::BigInt, d::BigInt)
-            withMPZtmp() do T
+            @withtmp begin
                 ccall(($(string(:__gmpz_,fC)), :libgmp), Void, (Ptr{MPZ}, Ptr{MPZ}, Ptr{MPZ}), &T.Z, &T.V(a), &T.W(b))
                 ccall(($(string(:__gmpz_,fC)), :libgmp), Void, (Ptr{MPZ}, Ptr{MPZ}, Ptr{MPZ}), &T.Z, &T.Z, &T.W(c))
                 ccall(($(string(:__gmpz_,fC)), :libgmp), Void, (Ptr{MPZ}, Ptr{MPZ}, Ptr{MPZ}), &T.Z, &T.Z, &T.W(d))
@@ -351,7 +362,7 @@ for (fJ, fC) in ((:+, :add), (:*, :mul), (:&, :and), (:|, :ior), (:$, :xor))
             end
         end
         function ($fJ)(a::BigInt, b::BigInt, c::BigInt, d::BigInt, e::BigInt)
-            withMPZtmp() do T
+            @withtmp begin
                 ccall(($(string(:__gmpz_,fC)), :libgmp), Void, (Ptr{MPZ}, Ptr{MPZ}, Ptr{MPZ}), &T.Z, &T.V(a), &T.W(b))
                 ccall(($(string(:__gmpz_,fC)), :libgmp), Void, (Ptr{MPZ}, Ptr{MPZ}, Ptr{MPZ}), &T.Z, &T.Z, &T.W(c))
                 ccall(($(string(:__gmpz_,fC)), :libgmp), Void, (Ptr{MPZ}, Ptr{MPZ}, Ptr{MPZ}), &T.Z, &T.Z, &T.W(d))
@@ -363,20 +374,20 @@ for (fJ, fC) in ((:+, :add), (:*, :mul), (:&, :and), (:|, :ior), (:$, :xor))
 end
 
 # Basic arithmetic without promotion
-+(x::BigInt, c::CulongMax) = withMPZtmp() do T
++(x::BigInt, c::CulongMax) = @withtmp begin
     ccall((:__gmpz_add_ui, :libgmp), Void, (Ptr{MPZ}, Ptr{MPZ}, Culong),
           &T.Z, &T.W(x), c)
     return BigInt(T.Z)
 end
 +(c::CulongMax, x::BigInt) = x + c
 
--(x::BigInt, c::CulongMax) = withMPZtmp() do T
+-(x::BigInt, c::CulongMax) = @withtmp begin
     ccall((:__gmpz_sub_ui, :libgmp), Void, (Ptr{MPZ}, Ptr{MPZ}, Culong),
           &T.Z, &T.W(x), c)
     return BigInt(T.Z)
 end
 
--(c::CulongMax, x::BigInt) = withMPZtmp() do T
+-(c::CulongMax, x::BigInt) = @withtmp begin
     ccall((:__gmpz_ui_sub, :libgmp), Void, (Ptr{MPZ}, Culong, Ptr{MPZ}),
           &T.Z, c, &T.W(x))
     return BigInt(T.Z)
@@ -387,7 +398,7 @@ end
 -(x::BigInt, c::ClongMax) = c < 0 ? +(x, -(c % Culong)) : -(x, convert(Culong, c))
 -(c::ClongMax, x::BigInt) = c < 0 ? -(x + -(c % Culong)) : -(convert(Culong, c), x)
 
-*(x::BigInt, c::CulongMax) = withMPZtmp() do T
+*(x::BigInt, c::CulongMax) = @withtmp begin
     ccall((:__gmpz_mul_ui, :libgmp), Void, (Ptr{MPZ}, Ptr{MPZ}, Culong),
           &T.Z, &T.W(x), c)
     return BigInt(T.Z)
@@ -395,7 +406,7 @@ end
 
 *(c::CulongMax, x::BigInt) = x * c
 
-*(x::BigInt, c::ClongMax) = withMPZtmp() do T
+*(x::BigInt, c::ClongMax) = @withtmp begin
     ccall((:__gmpz_mul_si, :libgmp), Void, (Ptr{MPZ}, Ptr{MPZ}, Clong),
           &T.Z, &T.W(x), c)
     return BigInt(T.Z)
@@ -407,7 +418,7 @@ end
 for (fJ, fC) in ((:-, :neg), (:~, :com))
     @eval begin
         function ($fJ)(x::BigInt)
-            withMPZtmp() do T
+            @withtmp begin
                 ccall(($(string(:__gmpz_,fC)), :libgmp), Void, (Ptr{MPZ}, Ptr{MPZ}),
                       &T.Z, &T.W(x))
                 return BigInt(T.Z)
@@ -418,7 +429,7 @@ end
 
 function <<(x::BigInt, c::UInt)
     c == 0 && return x
-    withMPZtmp() do T
+    @withtmp begin
         ccall((:__gmpz_mul_2exp, :libgmp), Void, (Ptr{MPZ}, Ptr{MPZ}, Culong),
               &T.Z, &T.W(x), c)
         return BigInt(T.Z)
@@ -427,7 +438,7 @@ end
 
 function >>(x::BigInt, c::UInt)
     c == 0 && return x
-    withMPZtmp() do T
+    @withtmp begin
         ccall((:__gmpz_fdiv_q_2exp, :libgmp), Void, (Ptr{MPZ}, Ptr{MPZ}, Culong),
               &T.Z, &T.W(x), c)
         return BigInt(T.Z)
@@ -437,34 +448,34 @@ end
 >>>(x::BigInt, c::UInt) = x >> c
 
 
-trailing_zeros(x::BigInt) = withMPZtmp() do T
+trailing_zeros(x::BigInt) = @withtmp begin
     Int(ccall((:__gmpz_scan1, :libgmp), Culong, (Ptr{MPZ}, Culong), &T.W(x), 0))
 end
 
-trailing_ones(x::BigInt) = withMPZtmp() do T
+trailing_ones(x::BigInt) = @withtmp begin
     Int(ccall((:__gmpz_scan0, :libgmp), Culong, (Ptr{MPZ}, Culong), &T.W(x), 0))
 end
 
-count_ones(x::BigInt) = withMPZtmp() do T
+count_ones(x::BigInt) = @withtmp begin
     Int(ccall((:__gmpz_popcount, :libgmp), Culong, (Ptr{MPZ},), &T.W(x)))
 end
 
 function divrem(x::BigInt, y::BigInt)
-    withMPZtmp() do T
+    @withtmp begin
         ccall((:__gmpz_tdiv_qr, :libgmp), Void, (Ptr{MPZ}, Ptr{MPZ}, Ptr{MPZ}, Ptr{MPZ}), &T.Y, &T.Z, &T.V(x), &T.W(y))
         BigInt(T.Y), BigInt(T.Z)
     end
 end
 
-cmp(x::BigInt, y::BigInt) = withMPZtmp() do T
+cmp(x::BigInt, y::BigInt) = @withtmp begin
     ccall((:__gmpz_cmp, :libgmp), Int32, (Ptr{MPZ}, Ptr{MPZ}), &T.V(x), &T.W(y))
 end
 
-cmp(x::BigInt, y::ClongMax) = withMPZtmp() do T
+cmp(x::BigInt, y::ClongMax) = @withtmp begin
     ccall((:__gmpz_cmp_si, :libgmp), Int32, (Ptr{MPZ}, Clong), &T.W(x), y)
 end
 
-cmp(x::BigInt, y::CulongMax) = withMPZtmp() do T
+cmp(x::BigInt, y::CulongMax) = @withtmp begin
     ccall((:__gmpz_cmp_ui, :libgmp), Int32, (Ptr{MPZ}, Culong), &T.W(x), y)
 end
 
@@ -478,14 +489,14 @@ end
 cmp(x::CdoubleMax, y::BigInt) = -cmp(y,x)
 
 function isqrt(x::BigInt)
-    withMPZtmp() do T
+    @withtmp begin
         ccall((:__gmpz_sqrt, :libgmp), Void, (Ptr{MPZ}, Ptr{MPZ}), &T.Z, &T.W(x))
         return BigInt(T.Z)
     end
 end
 
 function ^(x::BigInt, y::Culong)
-    withMPZtmp() do T
+    @withtmp begin
         ccall((:__gmpz_pow_ui, :libgmp), Void, (Ptr{MPZ}, Ptr{MPZ}, Culong), &T.Z, &T.W(x), y)
         return BigInt(T.Z)
     end
@@ -517,7 +528,7 @@ end
 ^(x::Integer, y::BigInt ) = bigint_pow(BigInt(x), y)
 
 function powermod(x::BigInt, p::BigInt, m::BigInt)
-    withMPZtmp() do T
+    @withtmp begin
         ccall((:__gmpz_powm, :libgmp), Void,
               (Ptr{MPZ}, Ptr{MPZ}, Ptr{MPZ}, Ptr{MPZ}),
               &T.Z, &T.U(x), &T.V(p), &T.W(m))
@@ -532,7 +543,7 @@ function gcdx(a::BigInt, b::BigInt)
     if b == 0 # shortcut this to ensure consistent results with gcdx(a,b)
         return a < 0 ? (-a,-one(BigInt),zero(BigInt)) : (a,one(BigInt),zero(BigInt))
     end
-    g, s, t = withMPZtmp() do T
+    g, s, t = @withtmp begin
         ccall((:__gmpz_gcdext, :libgmp), Void,
               (Ptr{MPZ}, Ptr{MPZ}, Ptr{MPZ}, Ptr{MPZ}, Ptr{MPZ}),
               &T.X, &T.Y, &T.Z, &T.V(a), &T.W(b))
@@ -550,7 +561,7 @@ function gcdx(a::BigInt, b::BigInt)
 end
 
 function sum(arr::AbstractArray{BigInt})
-    withMPZtmp() do T
+    @withtmp begin
         T.Z.size = 0
         for i in arr
             ccall((:__gmpz_add, :libgmp), Void,
@@ -563,14 +574,14 @@ end
 
 function factorial(x::BigInt)
     x.size < 0 && return BigInt(0)
-    withMPZtmp() do T
+    @withtmp begin
         ccall((:__gmpz_fac_ui, :libgmp), Void, (Ptr{MPZ}, Culong), &T.Z, x)
         return BigInt(T.Z)
     end
 end
 
 function binomial(n::BigInt, k::UInt)
-    withMPZtmp() do T
+    @withtmp begin
         ccall((:__gmpz_bin_ui, :libgmp), Void, (Ptr{MPZ}, Ptr{MPZ}, Culong), &T.Z, &T.W(n), k)
         return BigInt(T.Z)
     end
@@ -605,7 +616,7 @@ hex(n::BigInt) = base(16, n)
 
 function base(b::Integer, n::BigInt)
     2 <= b <= 62 || throw(ArgumentError("base must be 2 ≤ base ≤ 62, got $b"))
-    p = withMPZtmp() do T
+    p = @withtmp begin
         ccall((:__gmpz_get_str,:libgmp), Ptr{UInt8}, (Ptr{UInt8}, Cint, Ptr{MPZ}),
               C_NULL, b, &T.W(n))
     end
@@ -615,13 +626,13 @@ end
 function ndigits0z(x::BigInt, b::Integer=10)
     b < 2 && throw(DomainError())
     if ispow2(b) && 2 <= b <= 62 # GMP assumes b is in this range
-        withMPZtmp() do T
+        @withtmp begin
             Int(ccall((:__gmpz_sizeinbase,:libgmp), Csize_t, (Ptr{MPZ}, Cint), &T.W(x), b))
         end
     else
         # non-base 2 mpz_sizeinbase might return an answer 1 too big
         # use property that log(b, x) < ndigits(x, b) <= log(b, x) + 1
-        n = withMPZtmp() do T
+        n = @withtmp begin
             Int(ccall((:__gmpz_sizeinbase,:libgmp), Csize_t, (Ptr{MPZ}, Cint), &T.W(x), 2))
         end
         lb = log2(b) # assumed accurate to <1ulp (true for openlibm)

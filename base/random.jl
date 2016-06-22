@@ -538,7 +538,7 @@ function rand{T<:Integer, U<:Unsigned}(rng::AbstractRNG, g::RangeGeneratorInt{T,
     (unsigned(g.a) + rem_knuth(x, g.k)) % T
 end
 
-rand(rng::AbstractRNG, g::RangeGeneratorBigInt) = Base.GMP.withMPZtmp() do T
+rand(rng::AbstractRNG, g::RangeGeneratorBigInt) = Base.GMP.@withtmp begin
     x = T.Z
     ccall((:__gmpz_realloc2, :libgmp), Void, (Ptr{MPZ}, Culong), &x,
           g.nlimbsmax*8*sizeof(Limb))
