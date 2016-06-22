@@ -51,6 +51,10 @@ region_t regions[REGION_COUNT];
 bigval_t *big_objects_marked = NULL;
 
 // finalization
+// `finalizer_list` and `finalizer_list_marked` might have tagged pointers.
+// If an object pointer has the lowest bit set, the next pointer is an unboxed
+// c function pointer.
+// `to_finalize` should not have tagged pointers.
 arraylist_t finalizer_list;
 arraylist_t finalizer_list_marked;
 arraylist_t to_finalize;
@@ -97,38 +101,38 @@ static void schedule_finalization(void *o, void *f)
 
 static void run_finalizer(jl_value_t *o, jl_value_t *ff)
 {
-    if (jl_typeis(ff, jl_voidpointer_type)) {
-        void *p = jl_unbox_voidpointer(ff);
-        if (p)
-            ((void (*)(void*))p)(jl_data_ptr(o));
+    assert(!jl_typeis(ff, jl_voidpointer_type));
+    jl_value_t *args[2] = {ff,o};
+    JL_TRY {
+        jl_apply(args, 2);
     }
-    else {
-        jl_value_t *args[2] = {ff,o};
-        JL_TRY {
-            jl_apply(args, 2);
-        }
-        JL_CATCH {
-            jl_printf(JL_STDERR, "error in running finalizer: ");
-            jl_static_show(JL_STDERR, jl_exception_in_transit);
-            jl_printf(JL_STDERR, "\n");
-        }
+    JL_CATCH {
+        jl_printf(JL_STDERR, "error in running finalizer: ");
+        jl_static_show(JL_STDERR, jl_exception_in_transit);
+        jl_printf(JL_STDERR, "\n");
     }
 }
 
 static void finalize_object(arraylist_t *list, jl_value_t *o,
                             arraylist_t *copied_list)
 {
-    for(int i = 0; i < list->len; i+=2) {
-        if (o == (jl_value_t*)list->items[i]) {
-            void *f = list->items[i+1];
+    for (int i = 0; i < list->len; i+=2) {
+        void *v = list->items[i];
+        if (o == (jl_value_t*)gc_ptr_clear_tag(v, 1)) {
+            void *f = list->items[i + 1];
             if (i < list->len - 2) {
                 list->items[i] = list->items[list->len-2];
                 list->items[i+1] = list->items[list->len-1];
                 i -= 2;
             }
             list->len -= 2;
-            arraylist_push(copied_list, o);
-            arraylist_push(copied_list, f);
+            if (gc_ptr_tag(v, 1)) {
+                ((void (*)(void*))f)(o);
+            }
+            else {
+                arraylist_push(copied_list, o);
+                arraylist_push(copied_list, f);
+            }
         }
     }
 }
@@ -195,9 +199,10 @@ static void schedule_all_finalizers(arraylist_t *flist)
 {
     // Multi-thread version should steal the entire list while holding a lock.
     for(size_t i=0; i < flist->len; i+=2) {
-        jl_value_t *f = (jl_value_t*)flist->items[i+1];
-        if (f != HT_NOTFOUND && !jl_is_cpointer(f)) {
-            schedule_finalization(flist->items[i], flist->items[i+1]);
+        void *v = flist->items[i];
+        void *f = flist->items[i + 1];
+        if (!gc_ptr_tag(v, 1)) {
+            schedule_finalization(v, f);
         }
     }
     flist->len = 0;
@@ -212,11 +217,29 @@ void jl_gc_run_all_finalizers(void)
     run_finalizers();
 }
 
+static void gc_add_ptr_finalizer(jl_value_t *v, void *f)
+{
+    arraylist_push(&finalizer_list, (void*)(((uintptr_t)v) | 1));
+    arraylist_push(&finalizer_list, f);
+}
+
 JL_DLLEXPORT void jl_gc_add_finalizer(jl_value_t *v, jl_function_t *f)
 {
     JL_LOCK_NOGC(&finalizers_lock);
-    arraylist_push(&finalizer_list, (void*)v);
-    arraylist_push(&finalizer_list, (void*)f);
+    if (__unlikely(jl_typeis(f, jl_voidpointer_type))) {
+        gc_add_ptr_finalizer(v, jl_unbox_voidpointer(f));
+    }
+    else {
+        arraylist_push(&finalizer_list, v);
+        arraylist_push(&finalizer_list, f);
+    }
+    JL_UNLOCK_NOGC(&finalizers_lock);
+}
+
+JL_DLLEXPORT void jl_gc_add_ptr_finalizer(jl_value_t *v, void *f)
+{
+    JL_LOCK_NOGC(&finalizers_lock);
+    gc_add_ptr_finalizer(v, f);
     JL_UNLOCK_NOGC(&finalizers_lock);
 }
 
@@ -1238,7 +1261,13 @@ NOINLINE static void gc_mark_task(jl_task_t *ta, int d)
 void gc_mark_object_list(arraylist_t *list, size_t start)
 {
     for (size_t i = start;i < list->len;i++) {
-        gc_push_root(list->items[i], 0);
+        void *v = list->items[i];
+        if (gc_ptr_tag(v, 1)) {
+            v = gc_ptr_clear_tag(v, 1);
+            i++;
+            assert(i < list->len);
+        }
+        gc_push_root(v, 0);
     }
 }
 
@@ -1484,13 +1513,15 @@ void pre_mark(void)
 // this must happen last in the mark phase.
 static void post_mark(arraylist_t *list)
 {
-    for(size_t i=0; i < list->len; i+=2) {
-        jl_value_t *v = (jl_value_t*)list->items[i];
-        jl_value_t *fin = (jl_value_t*)list->items[i+1];
+    for (size_t i=0; i < list->len; i+=2) {
+        void *v0 = list->items[i];
+        int is_cptr = gc_ptr_tag(v0, 1);
+        void *v = gc_ptr_clear_tag(v0, 1);
+        void *fin = list->items[i+1];
         int isfreed = !gc_marked(jl_astaggedvalue(v)->bits.gc);
         int isold = (list != &finalizer_list_marked &&
                      jl_astaggedvalue(v)->bits.gc == GC_OLD_MARKED &&
-                     jl_astaggedvalue(fin)->bits.gc == GC_OLD_MARKED);
+                     (is_cptr || jl_astaggedvalue(fin)->bits.gc == GC_OLD_MARKED));
         if (isfreed || isold) {
             // remove from this list
             if (i < list->len - 2) {
@@ -1502,10 +1533,8 @@ static void post_mark(arraylist_t *list)
         }
         if (isfreed) {
             // schedule finalizer or execute right away if it is not julia code
-            if (jl_typeof(fin) == (jl_value_t*)jl_voidpointer_type) {
-                void *p = jl_unbox_voidpointer(fin);
-                if (p)
-                    ((void (*)(void*))p)(jl_data_ptr(v));
+            if (is_cptr) {
+                ((void (*)(void*))fin)(jl_data_ptr(v));
                 continue;
             }
             schedule_finalization(v, fin);
@@ -1513,7 +1542,7 @@ static void post_mark(arraylist_t *list)
         if (isold) {
             // The caller relies on the new objects to be pushed to the end of
             // the list!!
-            arraylist_push(&finalizer_list_marked, v);
+            arraylist_push(&finalizer_list_marked, v0);
             arraylist_push(&finalizer_list_marked, fin);
         }
     }
