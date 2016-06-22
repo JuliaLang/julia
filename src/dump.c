@@ -333,6 +333,30 @@ static void jl_serialize_gv_syms(ios_t *s, jl_sym_t *v)
     if (v->right) jl_serialize_gv_syms(s, v->right);
 }
 
+static void jl_serialize_gv_svec(ios_t *s, jl_svec_t *svec)
+{
+    size_t i, l = jl_svec_len(svec);
+    for (i = 0; i < l; i++) {
+        jl_value_t *v = jl_svecref(svec, i);
+        if (v) {
+            void *bp = ptrhash_get(&backref_table, v);
+            if (bp == HT_NOTFOUND) {
+                int32_t gv = jl_get_llvm_gv((jl_value_t*)v);
+                if (gv != 0) {
+                    jl_serialize_value(s, v);
+                    write_int32(s, gv);
+                }
+            }
+        }
+    }
+}
+
+static void jl_serialize_gv_tn(ios_t *s, jl_typename_t *tn)
+{
+    jl_serialize_gv_svec(s, tn->cache);
+    jl_serialize_gv_svec(s, tn->linearcache);
+}
+
 static void jl_serialize_gv_others(ios_t *s)
 {
     // ensures all objects referenced in the code have
@@ -364,6 +388,15 @@ static void jl_serialize_gv_others(ios_t *s)
         }
     }
     jl_serialize_gv_syms(s, jl_get_root_symbol());
+    jl_serialize_gv_tn(s, jl_array_type->name);
+    jl_serialize_gv_tn(s, jl_ref_type->name);
+    jl_serialize_gv_tn(s, jl_pointer_type->name);
+    jl_serialize_gv_tn(s, jl_type_type->name);
+    jl_serialize_gv_tn(s, jl_simplevector_type->name);
+    jl_serialize_gv_tn(s, jl_abstractarray_type->name);
+    jl_serialize_gv_tn(s, jl_densearray_type->name);
+    jl_serialize_gv_tn(s, jl_tuple_typename);
+    jl_serialize_gv_tn(s, jl_vararg_type->name);
     jl_serialize_value(s, NULL); // signal the end of this list
 }
 
@@ -1267,8 +1300,6 @@ static jl_value_t *jl_deserialize_datatype(ios_t *s, int pos, jl_value_t **loc)
             // builtin types are not serialized, so their caches aren't
             // explicitly saved. so we reconstruct the caches of builtin
             // parametric types here.
-            // XXX: need to make sure to serialize all leaftypes in this cache
-            // that were referenced from compiled code
             jl_array_ptr_1d_push(datatype_list, (jl_value_t*)dt);
         }
     }
@@ -2013,7 +2044,7 @@ static void jl_restore_system_image_from_stream(ios_t *f)
 
     // ensure everything in deser_tag is reassociated with its GlobalValue
     intptr_t i;
-    for (i=2; i < 255; i++) {
+    for (i = 2; i < 255; i++) {
         jl_deserialize_gv(f, deser_tag[i]);
     }
     jl_deserialize_globalvals(f);
@@ -2027,7 +2058,7 @@ static void jl_restore_system_image_from_stream(ios_t *f)
     jl_set_gs_ctr(gs_ctr);
 
     // cache builtin parametric types
-    for(int i=0; i < jl_array_len(datatype_list); i++) {
+    for (int i = 0; i < jl_array_len(datatype_list); i++) {
         jl_value_t *v = jl_array_ptr_ref(datatype_list, i);
         jl_cache_type_((jl_datatype_t*)v);
     }
