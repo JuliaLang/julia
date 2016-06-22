@@ -347,6 +347,17 @@ Control flow      ``&&`` followed by ``||`` followed by ``?``
 Assignments       ``= += -= *= /= //= \= ^= ÷= %= |= &= $= <<= >>= >>>=`` and ``.+= .-= .*= ./= .//= .\= .^= .÷= .%=``
 ================= =============================================================================================
 
+.. _man-elementary-functions:
+
+Elementary Functions
+~~~~~~~~~~~~~~~~~~~~
+
+Julia provides a comprehensive collection of mathematical functions and
+operators. These mathematical operations are defined over as broad a
+class of numerical values as permit sensible definitions, including
+integers, floating-point numbers, rationals, and complexes, wherever
+such definitions make sense.
+
 .. _man-numerical-conversions:
 
 Numerical Conversions
@@ -409,17 +420,6 @@ The following examples show the different forms.
 
 See :ref:`man-conversion-and-promotion` for how to define your own
 conversions and promotions.
-
-.. _man-elementary-functions:
-
-Elementary Functions
---------------------
-
-Julia provides a comprehensive collection of mathematical functions and
-operators. These mathematical operations are defined over as broad a
-class of numerical values as permit sensible definitions, including
-integers, floating-point numbers, rationals, and complexes, wherever
-such definitions make sense.
 
 .. _man-rounding-functions:
 
