@@ -336,7 +336,7 @@ A = [RootInt(3) RootInt(5)]
 
 function test_mul(C, A, B)
     A_mul_B!(C, A, B)
-    @test full(A) * full(B) ≈ C
+    @test convert(Array, A) * convert(Array, B) ≈ C
     @test A*B ≈ C
 end
 
