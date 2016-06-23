@@ -257,6 +257,7 @@ cause a compile-time error:
 
     julia> $a + b
     ERROR: unsupported or misplaced expression $
+     in eval(::Module, ::Any) at ./boot.jl:237
 
 In this example, the tuple ``(1,2,3)`` is interpolated as an
 expression into a conditional test:
@@ -264,7 +265,7 @@ expression into a conditional test:
 .. doctest::
 
     julia> ex = :(a in $:((1,2,3)) )
-    :($(Expr(:in, :a, :((1,2,3)))))
+    :(a in (1,2,3))
 
 Interpolating symbols into a nested expression requires enclosing each
 symbol in an enclosing quote block::
@@ -297,6 +298,9 @@ at global scope using :func:`eval`:
 
     julia> eval(ex)
     ERROR: UndefVarError: b not defined
+     in eval(::Module, ::Any) at ./boot.jl:237
+     in eval(::Any) at ./boot.jl:236
+     in eval(::Module, ::Any) at ./boot.jl:237
 
     julia> a = 1; b = 2;
 
@@ -316,6 +320,7 @@ module's environment:
 
     julia> x
     ERROR: UndefVarError: x not defined
+     in eval(::Module, ::Any) at ./boot.jl:237
 
     julia> eval(ex)
     1
@@ -420,6 +425,7 @@ Here is an extraordinarily simple macro:
     julia> macro sayhello()
                return :( println("Hello, world!") )
            end
+    @sayhello (macro with 1 method)
 
 Macros have a dedicated character in Julia's syntax: the ``@`` (at-sign),
 followed by the unique name declared in a ``macro NAME ... end`` block.
@@ -545,6 +551,7 @@ This macro can be used like this:
 
     julia> @assert 1==0
     ERROR: AssertionError: 1 == 0
+     in eval(::Module, ::Any) at ./boot.jl:237
 
 In place of the written syntax, the macro call is expanded at parse time to
 its returned result. This is equivalent to writing::

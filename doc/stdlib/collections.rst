@@ -1134,7 +1134,8 @@ Dequeues
 
        julia> deleteat!([6, 5, 4, 3, 2, 1], (2, 2))
        ERROR: ArgumentError: indices must be unique and sorted
-        in deleteat! at array.jl:543
+        in deleteat!(::Array{Int64,1}, ::Tuple{Int64,Int64}) at ./array.jl:565
+        in eval(::Module, ::Any) at ./boot.jl:237
 
 .. function:: splice!(collection, index, [replacement]) -> item
 
@@ -1324,17 +1325,11 @@ inserted and priorities accessed or changed using indexing notation.
 
     julia> # Insert keys with associated priorities
            pq["a"] = 10; pq["b"] = 5; pq["c"] = 15; pq
-    Base.Collections.PriorityQueue{Any,Any,Base.Order.ForwardOrdering} with 3 entries:
-      "c" => 15
-      "b" => 5
-      "a" => 10
+    Base.Collections.PriorityQueue{Any,Any,Base.Order.ForwardOrdering}("c"=>15,"b"=>5,"a"=>10)
 
     julia> # Change the priority of an existing key
            pq["a"] = 0; pq
-    Base.Collections.PriorityQueue{Any,Any,Base.Order.ForwardOrdering} with 3 entries:
-      "c" => 15
-      "b" => 5
-      "a" => 0
+    Base.Collections.PriorityQueue{Any,Any,Base.Order.ForwardOrdering}("c"=>15,"b"=>5,"a"=>0)
 
 Heap Functions
 --------------

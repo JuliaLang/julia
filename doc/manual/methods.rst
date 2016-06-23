@@ -93,22 +93,26 @@ Applying it to any other types of arguments will result in a :exc:`MethodError`:
 .. doctest::
 
     julia> f(2.0, 3)
-    ERROR: MethodError: `f` has no method matching f(::Float64, ::Int64)
+    ERROR: MethodError: no method matching f(::Float64, ::Int64)
     Closest candidates are:
       f(::Float64, !Matched::Float64)
+     in eval(::Module, ::Any) at ./boot.jl:237
 
     julia> f(Float32(2.0), 3.0)
-    ERROR: MethodError: `f` has no method matching f(::Float32, ::Float64)
+    ERROR: MethodError: no method matching f(::Float32, ::Float64)
     Closest candidates are:
       f(!Matched::Float64, ::Float64)
+     in eval(::Module, ::Any) at ./boot.jl:237
 
     julia> f(2.0, "3.0")
-    ERROR: MethodError: `f` has no method matching f(::Float64, ::String)
+    ERROR: MethodError: no method matching f(::Float64, ::String)
     Closest candidates are:
       f(::Float64, !Matched::Float64)
+     in eval(::Module, ::Any) at ./boot.jl:237
 
     julia> f("2.0", "3.0")
-    ERROR: MethodError: `f` has no method matching f(::String, ::String)
+    ERROR: MethodError: no method matching f(::String, ::String)
+     in eval(::Module, ::Any) at ./boot.jl:237
 
 As you can see, the arguments must be precisely of type :obj:`Float64`.
 Other numeric types, such as integers or 32-bit floating-point values,
@@ -173,12 +177,14 @@ function ``f`` remains undefined, and applying it will still result in a
 .. doctest::
 
     julia> f("foo", 3)
-    ERROR: MethodError: `f` has no method matching f(::String, ::Int64)
+    ERROR: MethodError: no method matching f(::String, ::Int64)
     Closest candidates are:
       f(!Matched::Number, ::Number)
+     in eval(::Module, ::Any) at ./boot.jl:237
 
     julia> f()
-    ERROR: MethodError: `f` has no method matching f()
+    ERROR: MethodError: no method matching f()
+     in eval(::Module, ::Any) at ./boot.jl:237
 
 You can easily see which methods exist for a function by entering the
 function object itself in an interactive session:
@@ -412,19 +418,19 @@ the intersection case:
 
 .. doctest::
 
-    julia> g(x::Float64, y::Float64) = 2x + 2y;
+    julia> h(x::Float64, y::Float64) = 2x + 2y;
 
-    julia> g(x::Float64, y) = 2x + y;
+    julia> h(x::Float64, y) = 2x + y;
 
-    julia> g(x, y::Float64) = x + 2y;
+    julia> h(x, y::Float64) = x + 2y;
 
-    julia> g(2.0, 3)
+    julia> h(2.0, 3)
     7.0
 
-    julia> g(2, 3.0)
+    julia> h(2, 3.0)
     8.0
 
-    julia> g(2.0, 3.0)
+    julia> h(2.0, 3.0)
     10.0
 
 To suppress Julia's warning, the disambiguating method must be defined
@@ -492,9 +498,10 @@ signature:
      4
 
     julia> myappend([1,2,3],2.5)
-    ERROR: MethodError: `myappend` has no method matching myappend(::Array{Int64,1}, ::Float64)
+    ERROR: MethodError: no method matching myappend(::Array{Int64,1}, ::Float64)
     Closest candidates are:
       myappend{T}(::Array{T,1}, !Matched::T)
+     in eval(::Module, ::Any) at ./boot.jl:237
 
     julia> myappend([1.0,2.0,3.0],4.0)
     4-element Array{Float64,1}:
@@ -504,9 +511,10 @@ signature:
      4.0
 
     julia> myappend([1.0,2.0,3.0],4)
-    ERROR: MethodError: `myappend` has no method matching myappend(::Array{Float64,1}, ::Int64)
+    ERROR: MethodError: no method matching myappend(::Array{Float64,1}, ::Int64)
     Closest candidates are:
       myappend{T}(::Array{T,1}, !Matched::T)
+     in eval(::Module, ::Any) at ./boot.jl:237
 
 As you can see, the type of the appended element must match the element
 type of the vector it is appended to, or else a :exc:`MethodError` is raised.

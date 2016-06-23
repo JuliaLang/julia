@@ -517,9 +517,9 @@ the name of the function to vectorize. Here is a simple example:
 
     julia> methods(square)
     # 4 methods for generic function "square":
-    square{T<:Number}(::AbstractArray{T<:Number,1}) at operators.jl:374
-    square{T<:Number}(::AbstractArray{T<:Number,2}) at operators.jl:375
-    square{T<:Number}(::AbstractArray{T<:Number,N}) at operators.jl:377
+    square{T<:Number}(x::AbstractArray{T,1}) at operators.jl:...
+    square{T<:Number}(x::AbstractArray{T,2}) at operators.jl:...
+    square{T<:Number}(x::AbstractArray{T,N<:Any}) at operators.jl:...
     square(x) at none:1
 
     julia> square([1 2 4; 5 6 7])
@@ -651,7 +651,7 @@ stride parameters.
      0.507762   0.573567   0.220124  0.165816      0.211049  0.433277   0.539476
 
     julia> b = sub(a, 2:2:8,2:2:4)
-    4×2 SubArray{Float64,2,Array{Float64,2},Tuple{StepRange{Int64,Int64},StepRange{Int64,Int64}},1}:
+    4×2 SubArray{Float64,2,Array{Float64,2},Tuple{StepRange{Int64,Int64},StepRange{Int64,Int64}},false}:
      0.537192  0.996234
      0.736979  0.228787
      0.991511  0.74485

@@ -412,14 +412,23 @@ types:
 
 .. doctest::
 
-    julia> (typemin(Float16),typemax(Float16))
-    (-Inf16,Inf16)
+    julia> typemin(Float16)
+    -Inf16
 
-    julia> (typemin(Float32),typemax(Float32))
-    (-Inf32,Inf32)
+    julia> typemax(Float16)
+    Inf16
 
-    julia> (typemin(Float64),typemax(Float64))
-    (-Inf,Inf)
+    julia> typemin(Float32)
+    -Inf32
+
+    julia> typemax(Float32)
+    Inf32
+
+    julia> typemin(Float64)
+    -Inf
+
+    julia> typemax(Float64)
+    Inf
 
 
 Machine epsilon

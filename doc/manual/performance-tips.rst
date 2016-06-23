@@ -279,7 +279,7 @@ change:
 .. doctest::
 
     julia> m.a = 4.5f0
-    4.5
+    4.5f0
 
     julia> typeof(m.a)
     Float64
