@@ -385,6 +385,10 @@ dt = Dates.DateTime(2014,8,23,17,22,15)
 
 # Issue: https://github.com/quinnj/TimeZones.jl/issues/19
 let
+    @test Dates.DateTime("1995y01m", "y\\ym\\m") == Dates.DateTime(1995)
+    @test Dates.DateTime("1995yy01", "y\\y\\ym") == Dates.DateTime(1995)
+end
+let
     ds = "2015-07-24T05:38:19.591Z"
     dt = Dates.DateTime(2015,7,24,5,38,19,591)
 
