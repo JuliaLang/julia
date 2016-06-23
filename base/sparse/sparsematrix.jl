@@ -1688,39 +1688,39 @@ for (op, pro) in ((+,   :eltype_plus),
     end
 end # macro
 
-(.+)(A::SparseMatrixCSC, B::Number) = full(A) .+ B
-( +)(A::SparseMatrixCSC, B::Array ) = full(A)  + B
-(.+)(A::Number, B::SparseMatrixCSC) = A .+ full(B)
-( +)(A::Array , B::SparseMatrixCSC) = A  + full(B)
+(.+)(A::SparseMatrixCSC, B::Number) = convert(Array, A) .+ B
+( +)(A::SparseMatrixCSC, B::Array ) = convert(Array, A)  + B
+(.+)(A::Number, B::SparseMatrixCSC) = A .+ convert(Array, B)
+( +)(A::Array , B::SparseMatrixCSC) = A  + convert(Array, B)
 
-(.-)(A::SparseMatrixCSC, B::Number) = full(A) .- B
-( -)(A::SparseMatrixCSC, B::Array ) = full(A)  - B
-(.-)(A::Number, B::SparseMatrixCSC) = A .- full(B)
-( -)(A::Array , B::SparseMatrixCSC) = A  - full(B)
+(.-)(A::SparseMatrixCSC, B::Number) = convert(Array, A) .- B
+( -)(A::SparseMatrixCSC, B::Array ) = convert(Array, A)  - B
+(.-)(A::Number, B::SparseMatrixCSC) = A .- convert(Array, B)
+( -)(A::Array , B::SparseMatrixCSC) = A  - convert(Array, B)
 
 (.*)(A::AbstractArray, B::AbstractArray) = broadcast_zpreserving(*, A, B)
 (.*)(A::SparseMatrixCSC, B::Number) = SparseMatrixCSC(A.m, A.n, copy(A.colptr), copy(A.rowval), A.nzval .* B)
 (.*)(A::Number, B::SparseMatrixCSC) = SparseMatrixCSC(B.m, B.n, copy(B.colptr), copy(B.rowval), A .* B.nzval)
 
 (./)(A::SparseMatrixCSC, B::Number) = SparseMatrixCSC(A.m, A.n, copy(A.colptr), copy(A.rowval), A.nzval ./ B)
-(./)(A::Number, B::SparseMatrixCSC) = (./)(A, full(B))
-(./)(A::SparseMatrixCSC, B::Array) = (./)(full(A), B)
-(./)(A::Array, B::SparseMatrixCSC) = (./)(A, full(B))
-(./)(A::SparseMatrixCSC, B::SparseMatrixCSC) = (./)(full(A), full(B))
+(./)(A::Number, B::SparseMatrixCSC) = (./)(A, convert(Array, B))
+(./)(A::SparseMatrixCSC, B::Array) = (./)(convert(Array, A), B)
+(./)(A::Array, B::SparseMatrixCSC) = (./)(A, convert(Array, B))
+(./)(A::SparseMatrixCSC, B::SparseMatrixCSC) = (./)(convert(Array,  A), convert(Array, B))
 
-(.\)(A::SparseMatrixCSC, B::Number) = (.\)(full(A), B)
+(.\)(A::SparseMatrixCSC, B::Number) = (.\)(convert(Array, A), B)
 (.\)(A::Number, B::SparseMatrixCSC) = SparseMatrixCSC(B.m, B.n, copy(B.colptr), copy(B.rowval), A .\ B.nzval )
-(.\)(A::SparseMatrixCSC, B::Array) = (.\)(full(A), B)
-(.\)(A::Array, B::SparseMatrixCSC) = (.\)(A, full(B))
-(.\)(A::SparseMatrixCSC, B::SparseMatrixCSC) = (.\)(full(A), full(B))
+(.\)(A::SparseMatrixCSC, B::Array) = (.\)(convert(Array, A), B)
+(.\)(A::Array, B::SparseMatrixCSC) = (.\)(A, convert(Array, B))
+(.\)(A::SparseMatrixCSC, B::SparseMatrixCSC) = (.\)(convert(Array,  A), convert(Array, B))
 
 (.^)(A::SparseMatrixCSC, B::Number) =
     B==0 ? sparse(ones(typeof(one(eltype(A)).^B), A.m, A.n)) :
            SparseMatrixCSC(A.m, A.n, copy(A.colptr), copy(A.rowval), A.nzval .^ B)
 (.^)(::Irrational{:e}, B::SparseMatrixCSC) = exp(B)
-(.^)(A::Number, B::SparseMatrixCSC) = (.^)(A, full(B))
-(.^)(A::SparseMatrixCSC, B::Array) = (.^)(full(A), B)
-(.^)(A::Array, B::SparseMatrixCSC) = (.^)(A, full(B))
+(.^)(A::Number, B::SparseMatrixCSC) = (.^)(A, convert(Array, B))
+(.^)(A::SparseMatrixCSC, B::Array) = (.^)(convert(Array, A), B)
+(.^)(A::Array, B::SparseMatrixCSC) = (.^)(A, convert(Array, B))
 
 .+{Tv1,Ti1,Tv2,Ti2}(A_1::SparseMatrixCSC{Tv1,Ti1}, A_2::SparseMatrixCSC{Tv2,Ti2}) =
    broadcast!(+, spzeros(eltype_plus(A_1, A_2), promote_type(Ti1, Ti2), to_shape(broadcast_shape(A_1, A_2))), A_1, A_2)
@@ -2854,11 +2854,11 @@ setindex!(A::SparseMatrixCSC, x::Matrix, I::AbstractVector{Bool}, J::AbstractVec
 setindex!{T<:Integer}(A::SparseMatrixCSC, x::Matrix, I::AbstractVector{T}, J::AbstractVector{Bool}) = setindex!(A, sparse(x), I, find(J))
 setindex!{T<:Integer}(A::SparseMatrixCSC, x::Matrix, I::AbstractVector{Bool}, J::AbstractVector{T}) = setindex!(A, sparse(x), find(I),J)
 
-setindex!(A::Matrix, x::SparseMatrixCSC, I::Integer, J::AbstractVector{Bool}) = setindex!(A, full(x), I, find(J))
-setindex!(A::Matrix, x::SparseMatrixCSC, I::AbstractVector{Bool}, J::Integer) = setindex!(A, full(x), find(I), J)
-setindex!(A::Matrix, x::SparseMatrixCSC, I::AbstractVector{Bool}, J::AbstractVector{Bool}) = setindex!(A, full(x), find(I), find(J))
-setindex!{T<:Integer}(A::Matrix, x::SparseMatrixCSC, I::AbstractVector{T}, J::AbstractVector{Bool}) = setindex!(A, full(x), I, find(J))
-setindex!{T<:Integer}(A::Matrix, x::SparseMatrixCSC, I::AbstractVector{Bool}, J::AbstractVector{T}) = setindex!(A, full(x), find(I), J)
+setindex!(A::Matrix, x::SparseMatrixCSC, I::Integer, J::AbstractVector{Bool}) = setindex!(A, convert(Array, x), I, find(J))
+setindex!(A::Matrix, x::SparseMatrixCSC, I::AbstractVector{Bool}, J::Integer) = setindex!(A, convert(Array, x), find(I), J)
+setindex!(A::Matrix, x::SparseMatrixCSC, I::AbstractVector{Bool}, J::AbstractVector{Bool}) = setindex!(A, convert(Array, x), find(I), find(J))
+setindex!{T<:Integer}(A::Matrix, x::SparseMatrixCSC, I::AbstractVector{T}, J::AbstractVector{Bool}) = setindex!(A, convert(Array, x), I, find(J))
+setindex!{T<:Integer}(A::Matrix, x::SparseMatrixCSC, I::AbstractVector{Bool}, J::AbstractVector{T}) = setindex!(A, convert(Array, x), find(I), J)
 
 setindex!{Tv,Ti}(A::SparseMatrixCSC{Tv,Ti}, x, I::AbstractVector{Bool}) = throw(BoundsError())
 function setindex!{Tv,Ti}(A::SparseMatrixCSC{Tv,Ti}, x, I::AbstractMatrix{Bool})

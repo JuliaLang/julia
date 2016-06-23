@@ -292,8 +292,8 @@ end
 A_ldiv_B!{T,Ti}(L::LowerTriangular{T,SparseMatrixCSC{T,Ti}}, B::StridedVecOrMat) = fwdTriSolve!(L.data, B)
 A_ldiv_B!{T,Ti}(U::UpperTriangular{T,SparseMatrixCSC{T,Ti}}, B::StridedVecOrMat) = bwdTriSolve!(U.data, B)
 
-(\){T,Ti}(L::LowerTriangular{T,SparseMatrixCSC{T,Ti}}, B::SparseMatrixCSC) = A_ldiv_B!(L, full(B))
-(\){T,Ti}(U::UpperTriangular{T,SparseMatrixCSC{T,Ti}}, B::SparseMatrixCSC) = A_ldiv_B!(U, full(B))
+(\){T,Ti}(L::LowerTriangular{T,SparseMatrixCSC{T,Ti}}, B::SparseMatrixCSC) = A_ldiv_B!(L, convert(Array, B))
+(\){T,Ti}(U::UpperTriangular{T,SparseMatrixCSC{T,Ti}}, B::SparseMatrixCSC) = A_ldiv_B!(U, convert(Array, B))
 
 ## triu, tril
 
@@ -504,7 +504,7 @@ function norm(A::SparseMatrixCSC,p::Real=2)
         return float(real(zero(eltype(A))))
     elseif m == 1 || n == 1
         # TODO: compute more efficiently using A.nzval directly
-        return norm(full(A), p)
+        return norm(convert(Array, A), p)
     else
         Tnorm = typeof(float(real(zero(eltype(A)))))
         Tsum = promote_type(Float64,Tnorm)
@@ -519,7 +519,7 @@ function norm(A::SparseMatrixCSC,p::Real=2)
             end
             return convert(Tnorm, nA)
         elseif p==2
-            throw(ArgumentError("2-norm not yet implemented for sparse matrices. Try norm(full(A)) or norm(A, p) where p=1 or Inf."))
+            throw(ArgumentError("2-norm not yet implemented for sparse matrices. Try norm(convert(Array, A)) or norm(A, p) where p=1 or Inf."))
         elseif p==Inf
             rowSum = zeros(Tsum,m)
             for i=1:length(A.nzval)
@@ -544,7 +544,7 @@ function cond(A::SparseMatrixCSC, p::Real=2)
         normA = norm(A, Inf)
         return normA * normAinv
     elseif p == 2
-        throw(ArgumentError("2-norm condition number is not implemented for sparse matrices, try cond(full(A), 2) instead"))
+        throw(ArgumentError("2-norm condition number is not implemented for sparse matrices, try cond(convert(Array, A), 2) instead"))
     else
         throw(ArgumentError("second argument must be either 1 or Inf, got $p"))
     end
