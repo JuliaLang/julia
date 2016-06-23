@@ -293,7 +293,7 @@ fldmod1{T<:Real}(x::T, y::T) = (fld1(x,y), mod1(x,y))
 fldmod1{T<:Integer}(x::T, y::T) = (fld1(x,y), mod1(x,y))
 
 # transpose
-transpose(x) = x
+transpose(x) = throw(ArgumentError("transpose not implemented for $(typeof(x)). Consider permutedims."))
 ctranspose(x) = conj(transpose(x))
 conj(x) = x
 
