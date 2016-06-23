@@ -384,9 +384,11 @@ be a tuple:
     (1,2,(3,4))
 
 Also, the function that arguments are spliced into need not be a varargs
-function (although it often is)::
+function (although it often is):
 
-    baz(a,b) = a + b
+.. doctest::
+
+    julia> baz(a,b) = a + b;
 
     julia> args = [1,2]
     2-element Array{Int64,1}:
@@ -403,7 +405,10 @@ function (although it often is)::
      3
 
     julia> baz(args...)
-    no method baz(Int64,Int64,Int64)
+    ERROR: MethodError: no method matching baz(::Int64, ::Int64, ::Int64)
+    Closest candidates are:
+      baz(::Any, ::Any)
+    ...
 
 As you can see, if the wrong number of elements are in the spliced
 container, then the function call will fail, just as it would if too
