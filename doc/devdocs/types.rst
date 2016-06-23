@@ -130,9 +130,9 @@ one can extract the underlying :obj:`TypeVar`:
 .. testcode:: s
 
    g{S<:Integer}(x::S) = 0
-   m = start(methods(g))
+   m = first(methods(g))
    p = m.sig.parameters
-   tv = p[1]
+   tv = p[2]
    dump(tv)
 
 .. testoutput:: s
@@ -140,7 +140,7 @@ one can extract the underlying :obj:`TypeVar`:
    TypeVar
      name: Symbol S
      lb: Union{}
-     ub: Integer::DataType  <: Real
+     ub: Integer  <: Real
      bound: Bool true
 
 Here ``ub`` is ``Integer``, as specified in the function definition.
@@ -160,27 +160,27 @@ parameters. For example:
    julia> h3{T<:Real}(A::Array{T}, b::T) = 1
    h3 (generic function with 1 method)
 
-   julia> p1 = start(methods(h1)).sig.parameters
-   svec(Array{T,N},Real)
+   julia> p1 = first(methods(h1)).sig.parameters
+   svec(#h1,Array{T,N},Real)
 
-   julia> p2 = start(methods(h2)).sig.parameters
-   svec(Array{T,N},T<:Real)
+   julia> p2 = first(methods(h2)).sig.parameters
+   svec(#h2,Array{T,N},T<:Real)
 
-   julia> p3 = start(methods(h3)).sig.parameters
-   svec(Array{T<:Real,N},T<:Real)
+   julia> p3 = first(methods(h3)).sig.parameters
+   svec(#h3,Array{T<:Real,N},T<:Real)
 
-   julia> dump(p1[1].parameters[1])
+   julia> dump(p1[2].parameters[1])
    TypeVar
      name: Symbol T
      lb: Union{}
-     ub: Any::DataType  <: Any
+     ub: Any <: Any
      bound: Bool false
 
-   julia> dump(p3[1].parameters[1])
+   julia> dump(p3[2].parameters[1])
    TypeVar
      name: Symbol T
      lb: Union{}
-     ub: Real::DataType  <: Number
+     ub: Real <: Number
      bound: Bool true
 
 Note that ``p2`` shows two objects called ``T``, but only one of them
@@ -194,7 +194,7 @@ One can construct :obj:`TypeVar`\s manually:
 .. doctest::
 
    julia> TypeVar(:V, Signed, Real, false)
-   Signed<:V<:Real
+   V<:Real
 
 There are convenience versions that allow you to omit any of these
 arguments except the ``name`` symbol.
@@ -215,20 +215,21 @@ a lot about how Julia does dispatch:
 
    julia> methods(candid)
    # 1 method for generic function "candid":
-   candid{T}(A::Array{T,N}, x::T) at none:1
+   candid{T}(A::Array{T,N<:Any}, x::T) at none:1
 
    julia> methods(sneaky)
    # 1 method for generic function "sneaky":
-   sneaky{T}(A::Array{T,N}, x::T) at none:1
+   sneaky{T}(A::Array{T,N<:Any}, x::T<:Any) at none:1
 
 These therefore print identically, but they have very different behavior:
 
 .. doctest::
 
    julia> candid([1],3.2)
-   ERROR: MethodError: `candid` has no method matching candid(::Array{Int64,1}, ::Float64)
+   ERROR: MethodError: no method matching candid(::Array{Int64,1}, ::Float64)
    Closest candidates are:
      candid{T}(::Array{T,N}, !Matched::T)
+    in eval(::Module, ::Any) at ./boot.jl:237
 
    julia> sneaky([1],3.2)
    1
@@ -244,11 +245,11 @@ bound :obj:`TypeVar` objects with a hash (``#T`` instead of ``T``):
 
 .. doctest::
 
-   julia> jl_(start(methods(candid)))
-   Method(sig=Tuple{Array{#T<:Any, N<:Any}, #T<:Any}, va=false, isstaged=false, tvars=#T<:Any, func=#<function>, invokes=nothing, next=nothing)
+   julia> jl_(first(methods(candid)))
+   Method(sig=Tuple{Main.#candid, Array{#T<:Any, N<:Any}, #T<:Any}, va=false, isstaged=false, tvars=#T<:Any, func=Main.candid(?), invokes=nothing, next=nothing)
 
-   julia> jl_(start(methods(sneaky)))
-   Method(sig=Tuple{Array{#T<:Any, N<:Any}, T<:Any}, va=false, isstaged=false, tvars=#T<:Any, func=#<function>, invokes=nothing, next=nothing)
+   julia> jl_(first(methods(sneaky)))
+   Method(sig=Tuple{Main.#sneaky, Array{#T<:Any, N<:Any}, T<:Any}, va=false, isstaged=false, tvars=#T<:Any, func=Main.sneaky(?), invokes=nothing, next=nothing)
 
 Even though both print as ``T``, in ``sneaky`` the second ``T`` is
 not bound, and hence it isn't constrained to be the same type as the
@@ -320,8 +321,17 @@ the type, which is an object of type :obj:`TypeName`:
      cache: SimpleVector
        length: Int64 135
      linearcache: SimpleVector
-       length: Int64 18
-     uid: Int64 37
+       length: Int64 60
+     uid: Int64 43
+     mt: MethodTable
+       name: Symbol Array
+       defs: Void nothing
+       cache: Void nothing
+       cache_arg1: Void nothing
+       cache_targ: Void nothing
+       max_args: Int64 0
+       kwsorter: #undef
+       module: Module Core
 
 In this case, the relevant field is ``primary``, which holds a
 reference to the "primary" instance of the type::
@@ -357,20 +367,10 @@ type:
    MyType{Float32,5}
 
    julia> MyType.name.cache
-   svec(MyType{Float32,5},MyType{Int64,2},Evaluation succeeded, but an error occurred while showing value of type SimpleVector:
-   ERROR: UndefRefError: access to undefined reference
-    in getindex at ./essentials.jl:211
-    in show_delim_array at show.jl:229
-    in show at show.jl:257
-    in anonymous at show.jl:1278
-    in with_output_limit at ./show.jl:1255
-    in showlimited at show.jl:1277
-    in display at multimedia.jl:120
-    [inlined code] from multimedia.jl:151
-    in display at multimedia.jl:162
+   svec(MyType{Float32,5},MyType{Int64,2},#undef,#undef,#undef,#undef,#undef,#undef)
 
-(The error is triggered because the cache is pre-allocated to have
-length 8, but only the first two entries are populated.)
+(The cache is pre-allocated to have length 8, but only the first two entries
+are populated.)
 Consequently, when you instantiate a parametric type, each concrete
 type gets saved in a type-cache.  However, instances with :obj:`TypeVar`
 parameters are not cached.

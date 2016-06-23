@@ -121,7 +121,8 @@ Now ``OrderedPair`` objects can only be constructed such that
 
     julia> OrderedPair(2,1)
     ERROR: out of order
-     in call at none:5
+     in OrderedPair(::Int64, ::Int64) at ./none:5
+     in eval(::Module, ::Any) at ./boot.jl:237
 
 You can still reach in and directly change the field values to violate
 this invariant, but messing around with an object's internals uninvited is
@@ -266,6 +267,7 @@ access to an uninitialized reference is an immediate error:
 
     julia> z.xx
     ERROR: UndefRefError: access to undefined reference
+     in eval(::Module, ::Any) at ./boot.jl:237
 
 This avoids the need to continually check for ``null`` values.
 However, not all object fields are references. Julia considers some
@@ -323,9 +325,14 @@ types of the arguments given to the constructor. Here are some examples:
     Point{Float64}(1.0,2.5)
 
     julia> Point(1,2.5)
-    ERROR: MethodError: `convert` has no method matching convert(::Type{Point{T<:Real}}, ::Int64, ::Float64)
-    This may have arisen from a call to the constructor Point{T<:Real}(...),
-    since type constructors fall back to convert methods.
+    ERROR: MethodError: no method matching Point{T<:Real}(::Int64, ::Float64)
+    Closest candidates are:
+      (!Matched::Type{BoundsError})(::ANY, ::ANY)
+      (!Matched::Type{TypeError})(::Any, ::Any, !Matched::Any, !Matched::Any)
+      (!Matched::Type{TypeConstructor})(::ANY, ::ANY)
+      ...
+     in eval(::Module, ::Any) at ./boot.jl:237
+
 
     ## explicit T ##
 
@@ -334,7 +341,9 @@ types of the arguments given to the constructor. Here are some examples:
 
     julia> Point{Int64}(1.0,2.5)
     ERROR: InexactError()
-     in call at none:2
+     [inlined code] from ./int.jl:229
+     in Point{Int64}(::Float64, ::Float64) at ./none:2
+     in eval(::Module, ::Any) at ./boot.jl:237
 
     julia> Point{Float64}(1.0,2.5)
     Point{Float64}(1.0,2.5)
@@ -419,9 +428,13 @@ However, other similar calls still don't work:
 .. doctest::
 
     julia> Point(1.5,2)
-    ERROR: MethodError: `convert` has no method matching convert(::Type{Point{T<:Real}}, ::Float64, ::Int64)
-    This may have arisen from a call to the constructor Point{T<:Real}(...),
-    since type constructors fall back to convert methods.
+    ERROR: MethodError: no method matching Point{T<:Real}(::Float64, ::Int64)
+    Closest candidates are:
+      (!Matched::Type{BoundsError})(::ANY, ::ANY)
+      (!Matched::Type{TypeError})(::Any, ::Any, !Matched::Any, !Matched::Any)
+      (!Matched::Type{TypeConstructor})(::ANY, ::ANY)
+      ...
+     in eval(::Module, ::Any) at ./boot.jl:237
 
 For a much more general way of making all such calls work sensibly, see
 :ref:`man-conversion-and-promotion`. At the risk

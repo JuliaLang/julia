@@ -101,10 +101,11 @@ requested conversion:
     This may have arisen from a call to the constructor AbstractFloat(...),
     since type constructors fall back to convert methods.
     Closest candidates are:
-      convert(::Type{AbstractFloat}, ::Bool)
-      convert(::Type{AbstractFloat}, ::Int8)
-      convert(::Type{AbstractFloat}, ::Int16)
+      convert(::Type{AbstractFloat}, !Matched::Bool)
+      convert(::Type{AbstractFloat}, !Matched::Int8)
+      convert(::Type{AbstractFloat}, !Matched::Int16)
       ...
+     in eval(::Module, ::Any) at ./boot.jl:237
 
 Some languages consider parsing strings as numbers or formatting
 numbers as strings to be conversions (many dynamic languages will even
@@ -146,7 +147,8 @@ to one and zero:
 
     julia> convert(Bool, 1im)
     ERROR: InexactError()
-     in convert at complex.jl:18
+     in convert(::Type{Bool}, ::Complex{Int64}) at ./complex.jl:18
+     in eval(::Module, ::Any) at ./boot.jl:237
 
     julia> convert(Bool, 0im)
     false
@@ -161,7 +163,8 @@ This is the actual implementation in Julia::
 
     julia> convert(Bool, 1im)
     ERROR: InexactError()
-     in convert at complex.jl:18
+     in convert(::Type{Bool}, ::Complex{Int64}) at ./complex.jl:18
+     in eval(::Module, ::Any) at ./boot.jl:237
 
 
 Case Study: Rational Conversions
@@ -250,10 +253,10 @@ promotion is to convert numeric arguments to a common type:
     (1.0,2.5,3.0,0.75)
 
     julia> promote(1.5, im)
-    (1.5 + 0.0im,0.0 + 1.0im)
+    (1.5+0.0im,0.0+1.0im)
 
     julia> promote(1 + 2im, 3//4)
-    (1//1 + 2//1*im,3//4 + 0//1*im)
+    (1//1+2//1*im,3//4+0//1*im)
 
 Floating-point values are promoted to the largest of the floating-point
 argument types. Integer values are promoted to the larger of either the

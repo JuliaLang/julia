@@ -400,21 +400,23 @@ The following examples show the different forms.
 
     julia> Int8(128)
     ERROR: InexactError()
-     in call at ./essentials.jl:58
-     in eval at ./boot.jl:263
+     in Int8(::Int64) at ./sysimg.jl:50
+     in eval(::Module, ::Any) at ./boot.jl:237
 
     julia> Int8(127.0)
     127
 
     julia> Int8(3.14)
     ERROR: InexactError()
-     in call at ./essentials.jl:58
-     in eval at ./boot.jl:263
+     [inlined code] from ./int.jl:229
+     in Int8(::Float64) at ./sysimg.jl:50
+     in eval(::Module, ::Any) at ./boot.jl:237
 
     julia> Int8(128.0)
     ERROR: InexactError()
-     in call at ./essentials.jl:58
-     in eval at ./boot.jl:263
+     [inlined code] from ./int.jl:229
+     in Int8(::Float64) at ./sysimg.jl:50
+     in eval(::Module, ::Any) at ./boot.jl:237
 
     julia> 127 % Int8
     127
@@ -427,9 +429,9 @@ The following examples show the different forms.
 
     julia> round(Int8,127.6)
     ERROR: InexactError()
-     in trunc at ./float.jl:357
-     in round at ./float.jl:177
-     in eval at ./boot.jl:263
+     in trunc(::Type{Int8}, ::Float64) at ./float.jl:373
+     in round(::Type{Int8}, ::Float64) at ./float.jl:180
+     in eval(::Module, ::Any) at ./boot.jl:237
 
 See :ref:`man-conversion-and-promotion` for how to define your own
 conversions and promotions.

@@ -104,9 +104,14 @@ variable assignments:
 .. doctest::
 
    julia> expand( :(f() = 1) )
-   :($(Expr(:method, :f, :((top(svec))((top(apply_type))(Tuple),(top(svec))())), AST(:($(Expr(:lambda, Any[], Any[Any[],Any[],0,Any[]], :(begin  # none, line 1:
+   :(begin
+           $(Expr(:method, :f))
+           $(Expr(:method, :f, :((top(svec))((top(apply_type))(Tuple,((top(getfield))(Core,:Typeof))(f)),(top(svec))())), LambdaInfo for anonymous
+   :(begin  # none, line 1:
            return 1
-       end))))), false)))
+       end), false))
+           return f
+       end)
 
 .. rubric:: Intermediate and compiled representations
 
