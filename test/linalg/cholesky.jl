@@ -46,7 +46,7 @@ for eltya in (Float32, Float64, Complex64, Complex128, BigFloat, Int)
     for i=1:n, j=1:n
         @test E[i,j] <= (n+1)ε/(1-(n+1)ε)*real(sqrt(apd[i,i]*apd[j,j]))
     end
-    E = abs(apd - full(capd))
+    E = abs(apd - convert(Array, capd))
     for i=1:n, j=1:n
         @test E[i,j] <= (n+1)ε/(1-(n+1)ε)*real(sqrt(apd[i,i]*apd[j,j]))
     end
@@ -65,13 +65,13 @@ for eltya in (Float32, Float64, Complex64, Complex128, BigFloat, Int)
     end
 
     # test chol of 2x2 Strang matrix
-    S = convert(AbstractMatrix{eltya},full(SymTridiagonal([2,2],[-1])))
+    S = convert(AbstractMatrix{eltya},convert(Array, SymTridiagonal([2,2],[-1])))
     U = Bidiagonal([2,sqrt(eltya(3))],[-1],true) / sqrt(eltya(2))
-    @test full(chol(S)) ≈ full(U)
+    @test convert(Array, chol(S)) ≈ convert(Array, U)
 
     #lower Cholesky factor
     lapd = cholfact(apd, :L)
-    @test full(lapd) ≈ apd
+    @test convert(Array, lapd) ≈ apd
     l = lapd[:L]
     @test l*l' ≈ apd
     @test triu(capd.factors) ≈ lapd[:U]
@@ -95,12 +95,12 @@ for eltya in (Float32, Float64, Complex64, Complex128, BigFloat, Int)
         if isreal(apd)
             @test apd*inv(cpapd) ≈ eye(n)
         end
-        @test full(cpapd) ≈ apd
+        @test convert(Array, cpapd) ≈ apd
         #getindex
         @test_throws KeyError cpapd[:Z]
 
         @test size(cpapd) == size(apd)
-        @test full(copy(cpapd)) ≈ apd
+        @test convert(Array, copy(cpapd)) ≈ apd
         @test det(cpapd) ≈ det(apd)
         @test cpapd[:P]*cpapd[:L]*cpapd[:U]*cpapd[:P]' ≈ apd
     end
@@ -151,9 +151,9 @@ begin
     # Cholesky factor of Matrix with non-commutative elements, here 2x2-matrices
 
     X = Matrix{Float64}[0.1*rand(2,2) for i in 1:3, j = 1:3]
-    L = full(Base.LinAlg._chol!(X*X', LowerTriangular))
-    U = full(Base.LinAlg._chol!(X*X', UpperTriangular))
-    XX = full(X*X')
+    L = convert(Array, Base.LinAlg._chol!(X*X', LowerTriangular))
+    U = convert(Array, Base.LinAlg._chol!(X*X', UpperTriangular))
+    XX = convert(Array, X*X')
 
     @test sum(sum(norm, L*L' - XX)) < eps()
     @test sum(sum(norm, U'*U - XX)) < eps()
@@ -167,8 +167,8 @@ for elty in (Float32, Float64, Complex{Float32}, Complex{Float64})
         A = randn(5,5)
     end
     A = convert(Matrix{elty}, A'A)
-    @test full(cholfact(A)[:L]) ≈ full(invoke(Base.LinAlg._chol!, Tuple{AbstractMatrix, Type{LowerTriangular}}, copy(A), LowerTriangular))
-    @test full(cholfact(A)[:U]) ≈ full(invoke(Base.LinAlg._chol!, Tuple{AbstractMatrix, Type{UpperTriangular}}, copy(A), UpperTriangular))
+    @test convert(Array, cholfact(A)[:L]) ≈ convert(Array, invoke(Base.LinAlg._chol!, Tuple{AbstractMatrix, Type{LowerTriangular}}, copy(A), LowerTriangular))
+    @test convert(Array, cholfact(A)[:U]) ≈ convert(Array, invoke(Base.LinAlg._chol!, Tuple{AbstractMatrix, Type{UpperTriangular}}, copy(A), UpperTriangular))
 end
 
 # Test up- and downdates

@@ -11,7 +11,7 @@ srand(123)
 
 debug && println("Test basic type functionality")
 @test_throws DimensionMismatch LowerTriangular(randn(5, 4))
-@test LowerTriangular(randn(3, 3)) |> t -> [size(t, i) for i = 1:3] == [size(full(t), i) for i = 1:3]
+@test LowerTriangular(randn(3, 3)) |> t -> [size(t, i) for i = 1:3] == [size(convert(Array, t), i) for i = 1:3]
 
 # The following test block tries to call all methods in base/linalg/triangular.jl in order for a combination of input element types. Keep the ordering when adding code.
 for elty1 in (Float32, Float64, BigFloat, Complex64, Complex128, Complex{BigFloat}, Int)
@@ -29,13 +29,13 @@ for elty1 in (Float32, Float64, BigFloat, Complex64, Complex128, Complex{BigFloa
 
         # Convert
         @test convert(AbstractMatrix{elty1}, A1) == A1
-        @test convert(Matrix, A1) == full(A1)
+        @test convert(Matrix, A1) == convert(Array, A1)
 
         # full!
-        @test full!(copy(A1)) == full(A1)
+        @test full!(copy(A1)) == convert(Array, A1)
 
         # fill!
-        @test full!(fill!(copy(A1), 1)) == full(t1(ones(size(A1)...)))
+        @test full!(fill!(copy(A1), 1)) == convert(Array, t1(ones(size(A1)...)))
 
         # similar
         @test isa(similar(A1), t1)
@@ -48,14 +48,14 @@ for elty1 in (Float32, Float64, BigFloat, Complex64, Complex128, Complex{BigFloa
         # getindex
         ## Linear indexing
         for i = 1:length(A1)
-            @test A1[i] == full(A1)[i]
+            @test A1[i] == convert(Array, A1)[i]
         end
         @test isa(A1[2:4,1], Vector)
 
         ## Cartesian indexing
         for i = 1:size(A1, 1)
             for j = 1:size(A1, 2)
-                @test A1[i,j] == full(A1)[i,j]
+                @test A1[i,j] == convert(Array, A1)[i,j]
             end
         end
 
@@ -101,8 +101,8 @@ for elty1 in (Float32, Float64, BigFloat, Complex64, Complex128, Complex{BigFloa
         #tril/triu
         if uplo1 == :L
             @test tril(A1,0)  == A1
-            @test tril(A1,-1) == LowerTriangular(tril(full(A1),-1))
-            @test tril(A1,1)  == t1(tril(tril(full(A1),1)))
+            @test tril(A1,-1) == LowerTriangular(tril(convert(Array, A1),-1))
+            @test tril(A1,1)  == t1(tril(tril(convert(Array, A1),1)))
             @test_throws ArgumentError tril!(A1,n+1)
             @test triu(A1,0)  == t1(diagm(diag(A1)))
             @test triu(A1,-1) == t1(tril(triu(A1.data,-1)))
@@ -110,8 +110,8 @@ for elty1 in (Float32, Float64, BigFloat, Complex64, Complex128, Complex{BigFloa
             @test_throws ArgumentError triu!(A1,n+1)
         else
             @test triu(A1,0)  == A1
-            @test triu(A1,1)  == UpperTriangular(triu(full(A1),1))
-            @test triu(A1,-1) == t1(triu(triu(full(A1),-1)))
+            @test triu(A1,1)  == UpperTriangular(triu(convert(Array, A1),1))
+            @test triu(A1,-1) == t1(triu(triu(convert(Array, A1),-1)))
             @test_throws ArgumentError triu!(A1,n+1)
             @test tril(A1,0)  == t1(diagm(diag(A1)))
             @test tril(A1,1)  == t1(triu(tril(A1.data,1)))
@@ -125,11 +125,11 @@ for elty1 in (Float32, Float64, BigFloat, Complex64, Complex128, Complex{BigFloa
         # [c]transpose[!] (test views as well, see issue #14317)
         let vrange = 1:n-1, viewA1 = t1(view(A1.data, vrange, vrange))
             # transpose
-            @test full(A1.') == full(A1).'
-            @test full(viewA1.') == full(viewA1).'
+            @test convert(Array, A1.') == convert(Array, A1).'
+            @test convert(Array, viewA1.') == convert(Array, viewA1).'
             # ctranspose
-            @test full(A1') == full(A1)'
-            @test full(viewA1') == full(viewA1)'
+            @test convert(Array, A1') == convert(Array, A1)'
+            @test convert(Array, viewA1') == convert(Array, viewA1)'
             # transpose!
             @test transpose!(copy(A1)) == A1.'
             @test transpose!(t1(view(copy(A1).data, vrange, vrange))) == viewA1.'
@@ -139,21 +139,21 @@ for elty1 in (Float32, Float64, BigFloat, Complex64, Complex128, Complex{BigFloa
         end
 
         # diag
-        @test diag(A1) == diag(full(A1))
+        @test diag(A1) == diag(convert(Array, A1))
 
         # real
-        @test full(real(A1)) == real(full(A1))
-        @test full(imag(A1)) == imag(full(A1))
-        @test full(abs(A1)) == abs(full(A1))
+        @test convert(Array, real(A1)) == real(convert(Array, A1))
+        @test convert(Array, imag(A1)) == imag(convert(Array, A1))
+        @test convert(Array, abs(A1)) == abs(convert(Array, A1))
 
         # Unary operations
-        @test full(-A1) == -full(A1)
+        @test convert(Array, -A1) == -convert(Array, A1)
 
         # copy and copy! (test views as well, see issue #14317)
         let vrange = 1:n-1, viewA1 = t1(view(A1.data, vrange, vrange))
             # copy
-            @test copy(A1) == copy(full(A1))
-            @test copy(viewA1) == copy(full(viewA1))
+            @test copy(A1) == copy(convert(Array, A1))
+            @test copy(viewA1) == copy(convert(Array, viewA1))
             # copy!
             B = similar(A1)
             copy!(B, A1)
@@ -171,7 +171,7 @@ for elty1 in (Float32, Float64, BigFloat, Complex64, Complex128, Complex{BigFloa
 
         #expm/logm
         if (elty1 == Float64 || elty1 == Complex128) && (t1 == UpperTriangular || t1 == LowerTriangular)
-            @test expm(full(logm(A1))) ≈ full(A1)
+            @test expm(convert(Array, logm(A1))) ≈ convert(Array, A1)
         end
 
         # scale
@@ -209,23 +209,23 @@ for elty1 in (Float32, Float64, BigFloat, Complex64, Complex128, Complex{BigFloa
         end
 
         # Binary operations
-        @test A1*0.5 == full(A1)*0.5
-        @test 0.5*A1 == 0.5*full(A1)
-        @test A1/0.5 == full(A1)/0.5
-        @test 0.5\A1 == 0.5\full(A1)
+        @test A1*0.5 == convert(Array, A1)*0.5
+        @test 0.5*A1 == 0.5*convert(Array, A1)
+        @test A1/0.5 == convert(Array, A1)/0.5
+        @test 0.5\A1 == 0.5\convert(Array, A1)
 
         # inversion
-        @test inv(A1) ≈ inv(lufact(full(A1)))
-        inv(full(A1)) # issue #11298
+        @test inv(A1) ≈ inv(lufact(convert(Array, A1)))
+        inv(convert(Array, A1)) # issue #11298
         @test isa(inv(A1), t1)
         # make sure the call to LAPACK works right
         if elty1 <: BlasFloat
-            @test Base.LinAlg.inv!(copy(A1)) ≈ inv(lufact(full(A1)))
+            @test Base.LinAlg.inv!(copy(A1)) ≈ inv(lufact(convert(Array, A1)))
         end
 
         # Determinant
-        @test_approx_eq_eps det(A1) det(lufact(full(A1))) sqrt(eps(real(float(one(elty1)))))*n*n
-        @test_approx_eq_eps logdet(A1) logdet(lufact(full(A1))) sqrt(eps(real(float(one(elty1)))))*n*n
+        @test_approx_eq_eps det(A1) det(lufact(convert(Array, A1))) sqrt(eps(real(float(one(elty1)))))*n*n
+        @test_approx_eq_eps logdet(A1) logdet(lufact(convert(Array, A1))) sqrt(eps(real(float(one(elty1)))))*n*n
 
         # Matrix square root
         @test sqrtm(A1) |> t -> t*t ≈ A1
@@ -237,7 +237,7 @@ for elty1 in (Float32, Float64, BigFloat, Complex64, Complex128, Complex{BigFloa
         if !(elty1 in (BigFloat, Complex{BigFloat})) # Not handled yet
             vals, vecs = eig(A1)
             if (t1 == UpperTriangular || t1 == LowerTriangular) && elty1 != Int # Cannot really handle degenerate eigen space and Int matrices will probably have repeated eigenvalues.
-                @test_approx_eq_eps vecs*diagm(vals)/vecs full(A1) sqrt(eps(float(real(one(vals[1])))))*(norm(A1, Inf)*n)^2
+                @test_approx_eq_eps vecs*diagm(vals)/vecs convert(Array, A1) sqrt(eps(float(real(one(vals[1])))))*(norm(A1, Inf)*n)^2
             end
         end
 
@@ -246,7 +246,7 @@ for elty1 in (Float32, Float64, BigFloat, Complex64, Complex128, Complex{BigFloa
             for p in (1.0, Inf)
                 @test_approx_eq_eps cond(A1, p) cond(A1, p) (cond(A1, p) + cond(A1, p))
             end
-            @test cond(A1,2) == cond(full(A1),2)
+            @test cond(A1,2) == cond(convert(Array, A1),2)
         end
 
         if !(elty1 in (BigFloat, Complex{BigFloat})) # Not implemented yet
@@ -275,19 +275,19 @@ for elty1 in (Float32, Float64, BigFloat, Complex64, Complex128, Complex{BigFloa
                 end
 
                 # Binary operations
-                @test full(A1 + A2) == full(A1) + full(A2)
-                @test full(A1 - A2) == full(A1) - full(A2)
+                @test convert(Array, A1 + A2) == convert(Array, A1) + convert(Array, A2)
+                @test convert(Array, A1 - A2) == convert(Array, A1) - convert(Array, A2)
 
                 # Triangular-Triangualar multiplication and division
-                @test full(A1*A2) ≈ full(A1)*full(A2)
-                @test full(A1.'A2) ≈ full(A1).'full(A2)
-                @test full(A1'A2) ≈ full(A1)'full(A2)
-                @test full(A1*A2.') ≈ full(A1)*full(A2).'
-                @test full(A1*A2') ≈ full(A1)*full(A2)'
-                @test full(A1.'A2.') ≈ full(A1).'full(A2).'
-                @test full(A1'A2') ≈ full(A1)'full(A2)'
-                @test full(A1/A2) ≈ full(A1)/full(A2)
-                @test full(A1\A2) ≈ full(A1)\full(A2)
+                @test convert(Array, A1*A2) ≈ convert(Array, A1)*convert(Array, A2)
+                @test convert(Array, A1.'A2) ≈ convert(Array, A1).'convert(Array, A2)
+                @test convert(Array, A1'A2) ≈ convert(Array, A1)'convert(Array, A2)
+                @test convert(Array, A1*A2.') ≈ convert(Array, A1)*convert(Array, A2).'
+                @test convert(Array, A1*A2') ≈ convert(Array, A1)*convert(Array, A2)'
+                @test convert(Array, A1.'A2.') ≈ convert(Array, A1).'convert(Array, A2).'
+                @test convert(Array, A1'A2') ≈ convert(Array, A1)'convert(Array, A2)'
+                @test convert(Array, A1/A2) ≈ convert(Array, A1)/convert(Array, A2)
+                @test convert(Array, A1\A2) ≈ convert(Array, A1)\convert(Array, A2)
                 @test_throws DimensionMismatch eye(n+1)/A2
                 @test_throws DimensionMismatch eye(n+1)/A2.'
                 @test_throws DimensionMismatch eye(n+1)/A2'
@@ -308,29 +308,29 @@ for elty1 in (Float32, Float64, BigFloat, Complex64, Complex128, Complex{BigFloa
 
             if !(eltyB in (BigFloat, Complex{BigFloat})) # rand does not support BigFloat and Complex{BigFloat} as of Dec 2015
                 Tri = Tridiagonal(rand(eltyB,n-1),rand(eltyB,n),rand(eltyB,n-1))
-                @test Base.LinAlg.A_mul_B!(Tri,copy(A1)) ≈ Tri*full(A1)
+                @test Base.LinAlg.A_mul_B!(Tri,copy(A1)) ≈ Tri*convert(Array, A1)
             end
 
             # Triangular-dense Matrix/vector multiplication
-            @test A1*B[:,1] ≈ full(A1)*B[:,1]
-            @test A1*B ≈ full(A1)*B
-            @test A1.'B[:,1] ≈ full(A1).'B[:,1]
-            @test A1'B[:,1] ≈ full(A1)'B[:,1]
-            @test A1.'B ≈ full(A1).'B
-            @test A1'B ≈ full(A1)'B
-            @test A1*B.' ≈ full(A1)*B.'
-            @test A1*B' ≈ full(A1)*B'
-            @test B*A1 ≈ B*full(A1)
-            @test B[:,1].'A1 ≈ B[:,1].'full(A1)
-            @test B[:,1]'A1 ≈ B[:,1]'full(A1)
-            @test B.'A1 ≈ B.'full(A1)
-            @test B'A1 ≈ B'full(A1)
-            @test B*A1.' ≈ B*full(A1).'
-            @test B*A1' ≈ B*full(A1)'
-            @test B[:,1].'A1.' ≈ B[:,1].'full(A1).'
-            @test B[:,1]'A1' ≈ B[:,1]'full(A1)'
-            @test B.'A1.' ≈ B.'full(A1).'
-            @test B'A1' ≈ B'full(A1)'
+            @test A1*B[:,1] ≈ convert(Array, A1)*B[:,1]
+            @test A1*B ≈ convert(Array, A1)*B
+            @test A1.'B[:,1] ≈ convert(Array, A1).'B[:,1]
+            @test A1'B[:,1] ≈ convert(Array, A1)'B[:,1]
+            @test A1.'B ≈ convert(Array, A1).'B
+            @test A1'B ≈ convert(Array, A1)'B
+            @test A1*B.' ≈ convert(Array, A1)*B.'
+            @test A1*B' ≈ convert(Array, A1)*B'
+            @test B*A1 ≈ B*convert(Array, A1)
+            @test B[:,1].'A1 ≈ B[:,1].'convert(Array, A1)
+            @test B[:,1]'A1 ≈ B[:,1]'convert(Array, A1)
+            @test B.'A1 ≈ B.'convert(Array, A1)
+            @test B'A1 ≈ B'convert(Array, A1)
+            @test B*A1.' ≈ B*convert(Array, A1).'
+            @test B*A1' ≈ B*convert(Array, A1)'
+            @test B[:,1].'A1.' ≈ B[:,1].'convert(Array, A1).'
+            @test B[:,1]'A1' ≈ B[:,1]'convert(Array, A1)'
+            @test B.'A1.' ≈ B.'convert(Array, A1).'
+            @test B'A1' ≈ B'convert(Array, A1)'
 
             if eltyB == elty1
                 @test A_mul_B!(zeros(B),A1,B) ≈ A1*B
@@ -346,29 +346,29 @@ for elty1 in (Float32, Float64, BigFloat, Complex64, Complex128, Complex{BigFloa
             @test_throws DimensionMismatch Base.LinAlg.A_mul_Bt!(ones(eltyB,n+1,n+1),A1)
 
             # ... and division
-            @test A1\B[:,1] ≈ full(A1)\B[:,1]
-            @test A1\B ≈ full(A1)\B
-            @test A1.'\B[:,1] ≈ full(A1).'\B[:,1]
-            @test A1'\B[:,1] ≈ full(A1)'\B[:,1]
-            @test A1.'\B ≈ full(A1).'\B
-            @test A1'\B ≈ full(A1)'\B
-            @test A1\B.' ≈ full(A1)\B.'
-            @test A1\B' ≈ full(A1)\B'
-            @test A1.'\B.' ≈ full(A1).'\B.'
-            @test A1'\B' ≈ full(A1)'\B'
+            @test A1\B[:,1] ≈ convert(Array, A1)\B[:,1]
+            @test A1\B ≈ convert(Array, A1)\B
+            @test A1.'\B[:,1] ≈ convert(Array, A1).'\B[:,1]
+            @test A1'\B[:,1] ≈ convert(Array, A1)'\B[:,1]
+            @test A1.'\B ≈ convert(Array, A1).'\B
+            @test A1'\B ≈ convert(Array, A1)'\B
+            @test A1\B.' ≈ convert(Array, A1)\B.'
+            @test A1\B' ≈ convert(Array, A1)\B'
+            @test A1.'\B.' ≈ convert(Array, A1).'\B.'
+            @test A1'\B' ≈ convert(Array, A1)'\B'
             @test_throws DimensionMismatch A1\ones(elty1,n+2)
             @test_throws DimensionMismatch A1'\ones(elty1,n+2)
             @test_throws DimensionMismatch A1.'\ones(elty1,n+2)
             if t1 == UpperTriangular || t1 == LowerTriangular
                 @test_throws Base.LinAlg.SingularException naivesub!(t1(zeros(elty1,n,n)),ones(eltyB,n))
             end
-            @test B/A1 ≈ B/full(A1)
-            @test B/A1.' ≈ B/full(A1).'
-            @test B/A1' ≈ B/full(A1)'
-            @test B.'/A1 ≈ B.'/full(A1)
-            @test B'/A1 ≈ B'/full(A1)
-            @test B.'/A1.' ≈ B.'/full(A1).'
-            @test B'/A1' ≈ B'/full(A1)'
+            @test B/A1 ≈ B/convert(Array, A1)
+            @test B/A1.' ≈ B/convert(Array, A1).'
+            @test B/A1' ≈ B/convert(Array, A1)'
+            @test B.'/A1 ≈ B.'/convert(Array, A1)
+            @test B'/A1 ≈ B'/convert(Array, A1)
+            @test B.'/A1.' ≈ B.'/convert(Array, A1).'
+            @test B'/A1' ≈ B'/convert(Array, A1)'
 
             # Error bounds
             !(elty1 in (BigFloat, Complex{BigFloat})) && !(eltyB in (BigFloat, Complex{BigFloat})) && errorbounds(A1, A1\B, B)
@@ -403,8 +403,8 @@ for eltya in (Float32, Float64, Complex64, Complex128, BigFloat, Int)
 
         debug && println("Solve upper triangular system")
         Atri = UpperTriangular(lufact(A)[:U]) |> t -> eltya <: Complex && eltyb <: Real ? real(t) : t # Here the triangular matrix can't be too badly conditioned
-        b = convert(Matrix{eltyb}, eltya <: Complex ? full(Atri)*ones(n, 2) : full(Atri)*ones(n, 2))
-        x = full(Atri) \ b
+        b = convert(Matrix{eltyb}, eltya <: Complex ? convert(Array, Atri)*ones(n, 2) : convert(Array, Atri)*ones(n, 2))
+        x = convert(Array, Atri) \ b
 
         debug && println("Test error estimates")
         if eltya != BigFloat && eltyb != BigFloat
@@ -431,8 +431,8 @@ for eltya in (Float32, Float64, Complex64, Complex128, BigFloat, Int)
 
         debug && println("Solve lower triangular system")
         Atri = UpperTriangular(lufact(A)[:U]) |> t -> eltya <: Complex && eltyb <: Real ? real(t) : t # Here the triangular matrix can't be too badly conditioned
-        b = convert(Matrix{eltyb}, eltya <: Complex ? full(Atri)*ones(n, 2) : full(Atri)*ones(n, 2))
-        x = full(Atri)\b
+        b = convert(Matrix{eltyb}, eltya <: Complex ? convert(Array, Atri)*ones(n, 2) : convert(Array, Atri)*ones(n, 2))
+        x = convert(Array, Atri)\b
 
         debug && println("Test error estimates")
         if eltya != BigFloat && eltyb != BigFloat
