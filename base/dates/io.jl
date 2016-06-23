@@ -151,15 +151,15 @@ end
 slotparse(slot::Slot{DayOfWeekSlot},str,locale) = nothing
 
 function getslot(str,slot::DelimitedSlot,locale,cursor)
-    endind = first(search(str, slot.suffix, nextind(str, cursor)))
-    if endind == 0 # we didn't find the next delimiter
+    index = search(str, slot.suffix, nextind(str, cursor))
+    if first(index) == 0  # we didn't find the next delimiter
         s = str[cursor:end]
-        index = endof(str) + 1
+        cursor = endof(str) + 1
     else
-        s = str[cursor:(endind - 1)]
-        index = nextind(str, endind)
+        s = str[cursor:(first(index) - 1)]
+        cursor = nextind(str, last(index))
     end
-    return index, slotparse(slot, strip(s),locale)
+    return cursor, slotparse(slot, strip(s),locale)
 end
 function getslot(str,slot,locale,cursor)
     cursor + slot.width, slotparse(slot, strip(str[cursor:(cursor + slot.width - 1)]), locale)

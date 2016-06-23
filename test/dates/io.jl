@@ -262,6 +262,8 @@ f = "/yyyy/m/d"
 # from Jiahao
 @test Dates.Date("2009年12月01日","yyyy年mm月dd日") == Dates.Date(2009,12,1)
 @test Dates.format(Dates.Date(2009,12,1),"yyyy年mm月dd日") == "2009年12月01日"
+@test Dates.Date("2009(年)12(月)01(日)","yyyy(年)mm(月)dd(日)") == Dates.Date(2009,12,1)
+@test Dates.format(Dates.Date(2009,12,1),"yyyy(年)mm(月)dd(日)") == "2009(年)12(月)01(日)"
 @test Dates.Date("2009-12-01","yyyy-mm-dd") == Dates.Date(2009,12,1)
 
 # French: from Milan
