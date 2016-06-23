@@ -120,12 +120,12 @@ debug && println("Factorize")
     @test factorize(A) == Bidiagonal(d,e,true)
     if eltya <: Real
         A = diagm(d) + diagm(e,1) + diagm(e,-1)
-        @test full(factorize(A)) ≈ full(factorize(SymTridiagonal(d,e)))
+        @test convert(Array, factorize(A)) ≈ convert(Array, factorize(SymTridiagonal(d,e)))
         A = diagm(d) + diagm(e,1) + diagm(e,-1) + diagm(f,2) + diagm(f,-2)
         @test inv(factorize(A)) ≈ inv(factorize(Symmetric(A)))
     end
     A = diagm(d) + diagm(e,1) + diagm(e2,-1)
-    @test full(factorize(A)) ≈ full(factorize(Tridiagonal(e2,d,e)))
+    @test convert(Array, factorize(A)) ≈ convert(Array, factorize(Tridiagonal(e2,d,e)))
     A = diagm(d) + diagm(e,1) + diagm(f,2)
     @test factorize(A) == UpperTriangular(A)
 end # for eltya

@@ -39,7 +39,7 @@ for eltya in (Float32, Float64, Complex64, Complex128, Int)
         usv = svdfact(a)
         @test usv[:S] === svdvals(usv)
         @test usv[:U] * (Diagonal(usv[:S]) * usv[:Vt]) ≈ a
-        @test full(usv) ≈ a
+        @test convert(Array, usv) ≈ a
         @test usv[:Vt]' ≈ usv[:V]
         @test_throws KeyError usv[:Z]
         b = rand(eltya,n)
