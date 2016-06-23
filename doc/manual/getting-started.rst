@@ -104,7 +104,9 @@ put it in ``~/.juliarc.jl``:
     \end{CJK*}
 
 There are various ways to run Julia code and provide options, similar to
-those available for the ``perl`` and ``ruby`` programs::
+those available for the ``perl`` and ``ruby`` programs:
+
+.. code-block:: none
 
     julia [switches] -- [programfile] [args...]
      -v, --version             Display version information
