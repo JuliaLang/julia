@@ -14,8 +14,6 @@ void jl_dump_objfile(char *fname, int jit_model, const char *sysimg_data, size_t
 int32_t jl_get_llvm_gv(jl_value_t *p) UNAVAILABLE
 void jl_write_malloc_log(void) UNAVAILABLE
 void jl_write_coverage_data(void) UNAVAILABLE
-void jl_generate_fptr(jl_lambda_info_t *li) UNAVAILABLE
-void jl_compile_linfo(jl_lambda_info_t *li) UNAVAILABLE
 
 JL_DLLEXPORT void jl_clear_malloc_data(void) UNAVAILABLE
 JL_DLLEXPORT void jl_extern_c(jl_function_t *f, jl_value_t *rt, jl_value_t *argt, char *name) UNAVAILABLE
@@ -47,4 +45,13 @@ jl_value_t *jl_static_eval(jl_value_t *ex, void *ctx_, jl_module_t *mod,
 void jl_register_fptrs(uint64_t sysimage_base, void **fptrs, jl_lambda_info_t **linfos, size_t n)
 {
     (void)sysimage_base; (void)fptrs; (void)linfos; (void)n;
+}
+
+void jl_compile_linfo(jl_lambda_info_t *li) { }
+
+jl_value_t *jl_interpret_call(jl_lambda_info_t *lam, jl_value_t **args, uint32_t nargs);
+void jl_generate_fptr(jl_lambda_info_t *li)
+{
+    li->fptr = (jl_fptr_t)&jl_interpret_call;
+    li->jlcall_api = 3;
 }
