@@ -2,7 +2,7 @@
 
 module CoreDocs
 
-import Core.Inference: esc, push!, getindex, current_module, unsafe_load, Csize_t
+import ..esc, ..push!, ..getindex, ..current_module, ..unsafe_load, ..Csize_t
 
 function doc!(str, ex)
     ptr  = unsafe_load(Core.Intrinsics.cglobal(:jl_filename, Ptr{UInt8}))

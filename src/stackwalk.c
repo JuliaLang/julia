@@ -387,7 +387,7 @@ JL_DLLEXPORT void jl_gdblookup(uintptr_t ip)
     // This function is not allowed to reference any TLS variables since
     // it can be called from an unmanaged thread on OSX.
     // it means calling getFunctionInfo with noInline = 1
-    jl_frame_t *frames;
+    jl_frame_t *frames = NULL;
     int n = jl_getFunctionInfo(&frames, ip, 0, 1);
     int i;
 
