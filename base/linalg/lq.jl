@@ -42,8 +42,9 @@ zeros if the full `Q` is requested.
 """
 function lq(A::Union{Number, AbstractMatrix}; thin::Bool=true)
     F = lqfact(A)
-    F[:L], full(F[:Q], thin=thin)
+    F[:L], thin ? convert(Array, F[:Q]) : thickQ(F[:Q])
 end
+thickQ{T}(Q::LQPackedQ{T}) = A_mul_B!(Q, eye(T, size(Q.factors,2), size(Q.factors,1)))
 
 copy(A::LQ) = LQ(copy(A.factors), copy(A.τ))
 
@@ -112,8 +113,8 @@ size(A::LQPackedQ) = size(A.factors)
 
 ## Multiplication by LQ
 A_mul_B!{T<:BlasFloat}(A::LQ{T}, B::StridedVecOrMat{T}) = A[:L]*LAPACK.ormlq!('L','N',A.factors,A.τ,B)
-A_mul_B!{T<:BlasFloat}(A::LQ{T}, B::QR{T}) = A[:L]*LAPACK.ormlq!('L','N',A.factors,A.τ,full(B))
-A_mul_B!{T<:BlasFloat}(A::QR{T}, B::LQ{T}) = A_mul_B!(zeros(full(A)), full(A), full(B))
+A_mul_B!{T<:BlasFloat}(A::LQ{T}, B::QR{T}) = A[:L]*LAPACK.ormlq!('L','N',A.factors,A.τ,convert(Array, B))
+A_mul_B!{T<:BlasFloat}(A::QR{T}, B::LQ{T}) = A_mul_B!(zeros(convert(Array, A)), convert(Array, A), convert(Array, B))
 function *{TA,TB}(A::LQ{TA},B::StridedVecOrMat{TB})
     TAB = promote_type(TA, TB)
     A_mul_B!(convert(Factorization{TAB},A), copy_oftype(B, TAB))

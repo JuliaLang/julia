@@ -206,7 +206,7 @@ expm(x::Number) = exp(x)
 function expm!{T<:BlasFloat}(A::StridedMatrix{T})
     n = checksquare(A)
     if ishermitian(A)
-        return full(expm(Hermitian(A)))
+        return convert(Array, expm(Hermitian(A)))
     end
     ilo, ihi, scale = LAPACK.gebal!('B', A)    # modifies A
     nA   = norm(A, 1)
@@ -321,13 +321,13 @@ function logm{T}(A::StridedMatrix{T})
         return full(logm(Symmetric(A)))
     end
     if ishermitian(A)
-        return full(logm(Hermitian(A)))
+        return convert(Array, logm(Hermitian(A)))
     end
 
     # Use Schur decomposition
     n = checksquare(A)
     if istriu(A)
-        retmat = full(logm(UpperTriangular(complex(A))))
+        retmat = convert(Array, logm(UpperTriangular(complex(A))))
         d = diag(A)
     else
         S,Q,d = schur(complex(A))
@@ -358,27 +358,27 @@ logm(a::Complex) = log(a)
 
 function sqrtm{T<:Real}(A::StridedMatrix{T})
     if issymmetric(A)
-        return full(sqrtm(Symmetric(A)))
+        return convert(Array, sqrtm(Symmetric(A)))
     end
     n = checksquare(A)
     if istriu(A)
-        return full(sqrtm(UpperTriangular(A)))
+        return convert(Array, sqrtm(UpperTriangular(A)))
     else
         SchurF = schurfact(complex(A))
-        R = full(sqrtm(UpperTriangular(SchurF[:T])))
+        R = convert(Array, sqrtm(UpperTriangular(SchurF[:T])))
         return SchurF[:vectors] * R * SchurF[:vectors]'
     end
 end
 function sqrtm{T<:Complex}(A::StridedMatrix{T})
     if ishermitian(A)
-        return full(sqrtm(Hermitian(A)))
+        return convert(Array, sqrtm(Hermitian(A)))
     end
     n = checksquare(A)
     if istriu(A)
-        return full(sqrtm(UpperTriangular(A)))
+        return convert(Array, sqrtm(UpperTriangular(A)))
     else
         SchurF = schurfact(A)
-        R = full(sqrtm(UpperTriangular(SchurF[:T])))
+        R = convert(Array, sqrtm(UpperTriangular(SchurF[:T])))
         return SchurF[:vectors] * R * SchurF[:vectors]'
     end
 end

@@ -308,7 +308,7 @@ factorize(A::Tridiagonal) = lufact(A)
 function getindex{T}(F::Base.LinAlg.LU{T,Tridiagonal{T}}, d::Symbol)
     m, n = size(F)
     if d == :L
-        L = full(Bidiagonal(ones(T, n), F.factors.dl, false))
+        L = convert(Array, Bidiagonal(ones(T, n), F.factors.dl, false))
         for i = 2:n
             tmp = L[F.ipiv[i], 1:i - 1]
             L[F.ipiv[i], 1:i - 1] = L[i, 1:i - 1]
@@ -316,7 +316,7 @@ function getindex{T}(F::Base.LinAlg.LU{T,Tridiagonal{T}}, d::Symbol)
         end
         return L
     elseif d == :U
-        U = full(Bidiagonal(F.factors.d, F.factors.du, true))
+        U = convert(Array, Bidiagonal(F.factors.d, F.factors.du, true))
         for i = 1:n - 2
             U[i,i + 2] = F.factors.du2[i]
         end

@@ -18,7 +18,7 @@ end
 Constructs an upper (`isupper=true`) or lower (`isupper=false`) bidiagonal matrix using the
 given diagonal (`dv`) and off-diagonal (`ev`) vectors.  The result is of type `Bidiagonal`
 and provides efficient specialized linear solvers, but may be converted into a regular
-matrix with [`full`](:func:`full`). `ev`'s length must be one less than the length of `dv`.
+matrix with [`convert(Array, _)`](:func:`convert`). `ev`'s length must be one less than the length of `dv`.
 
 **Example**
 
@@ -38,7 +38,7 @@ Bidiagonal(dv::AbstractVector, ev::AbstractVector) = throw(ArgumentError("did yo
 Constructs an upper (`uplo='U'`) or lower (`uplo='L'`) bidiagonal matrix using the
 given diagonal (`dv`) and off-diagonal (`ev`) vectors.  The result is of type `Bidiagonal`
 and provides efficient specialized linear solvers, but may be converted into a regular
-matrix with [`full`](:func:`full`). `ev`'s length must be one less than the length of `dv`.
+matrix with [`convert(Array, _)`](:func:`convert`). `ev`'s length must be one less than the length of `dv`.
 
 **Example**
 
@@ -302,7 +302,7 @@ end
 function A_mul_B_td!(C::AbstractMatrix, A::BiTriSym, B::BiTriSym)
     check_A_mul_B!_sizes(C, A, B)
     n = size(A,1)
-    n <= 3 && return A_mul_B!(C, full(A), full(B))
+    n <= 3 && return A_mul_B!(C, convert(Array, A), convert(Array, B))
     fill!(C, zero(eltype(C)))
     Al = diag(A, -1)
     Ad = diag(A, 0)
@@ -361,7 +361,7 @@ function A_mul_B_td!(C::AbstractVecOrMat, A::BiTriSym, B::AbstractVecOrMat)
     if size(C,2) != nB
         throw(DimensionMismatch("A has second dimension $nA, B has $(size(B,2)), C has $(size(C,2)) but all must match"))
     end
-    nA <= 3 && return A_mul_B!(C, full(A), full(B))
+    nA <= 3 && return A_mul_B!(C, convert(Array, A), convert(Array, B))
     l = diag(A, -1)
     d = diag(A, 0)
     u = diag(A, 1)
@@ -382,7 +382,7 @@ end
 function A_mul_B_td!(C::AbstractMatrix, A::AbstractMatrix, B::BiTriSym)
     check_A_mul_B!_sizes(C, A, B)
     n = size(A,1)
-    n <= 3 && return A_mul_B!(C, full(A), full(B))
+    n <= 3 && return A_mul_B!(C, convert(Array, A), convert(Array, B))
     m = size(B,2)
     Bl = diag(B, -1)
     Bd = diag(B, 0)
@@ -412,12 +412,12 @@ end
 
 SpecialMatrix = Union{Bidiagonal, SymTridiagonal, Tridiagonal}
 # to avoid ambiguity warning, but shouldn't be necessary
-*(A::AbstractTriangular, B::SpecialMatrix) = full(A) * full(B)
-*(A::SpecialMatrix, B::SpecialMatrix) = full(A) * full(B)
+*(A::AbstractTriangular, B::SpecialMatrix) = convert(Array, A) * convert(Array, B)
+*(A::SpecialMatrix, B::SpecialMatrix) = convert(Array, A) * convert(Array, B)
 
 #Generic multiplication
 for func in (:*, :Ac_mul_B, :A_mul_Bc, :/, :A_rdiv_Bc)
-    @eval ($func){T}(A::Bidiagonal{T}, B::AbstractVector{T}) = ($func)(full(A), B)
+    @eval ($func){T}(A::Bidiagonal{T}, B::AbstractVector{T}) = ($func)(convert(Array, A), B)
 end
 
 #Linear solvers
