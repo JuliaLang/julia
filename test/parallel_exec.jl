@@ -452,6 +452,13 @@ map!(x->1, d)
 @test 2.0 == remotecall_fetch(D->D[2], id_other, Base.shmem_fill(2.0, 2; pids=[id_me, id_other]))
 @test 3.0 == remotecall_fetch(D->D[1], id_other, Base.shmem_fill(3.0, 1; pids=[id_me, id_other]))
 
+# Shared arrays of singleton immutables
+@everywhere immutable ShmemFoo end
+for T in [Void, ShmemFoo]
+    s = SharedArray(T, 10)
+    @test T() === remotecall_fetch(x->x[3], workers()[1], s)
+end
+
 # Issue #14664
 d = SharedArray(Int,10)
 @sync @parallel for i=1:10
