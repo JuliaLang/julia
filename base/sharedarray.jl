@@ -75,7 +75,7 @@ function SharedArray(T::Type, dims::NTuple; init=false, pids=Int[])
         end
 
         # All good, immediately unlink the segment.
-        if prod(dims) > 0
+        if (prod(dims) > 0) && (sizeof(T) > 0)
             if onlocalhost
                 rc = shm_unlink(shm_seg_name)
             else
@@ -480,7 +480,7 @@ function shm_mmap_array(T, dims, shm_seg_name, mode)
     local s = nothing
     local A = nothing
 
-    if prod(dims) == 0
+    if (prod(dims) == 0) || (sizeof(T) == 0)
         return Array(T, dims)
     end
 
