@@ -356,8 +356,8 @@ for elty in (Float64, Complex{Float64})
 
     # Factor
     @test_throws ArgumentError cholfact(A1)
-    @test_throws Base.LinAlg.PosDefException cholfact(A1 + A1' - 2eigmax(full(A1 + A1'))I)
-    @test_throws Base.LinAlg.PosDefException cholfact(A1 + A1', shift=-2eigmax(full(A1 + A1')))
+    @test_throws Base.LinAlg.PosDefException cholfact(A1 + A1' - 2eigmax(convert(Array, A1 + A1'))I)
+    @test_throws Base.LinAlg.PosDefException cholfact(A1 + A1', shift=-2eigmax(convert(Array, A1 + A1')))
     @test_throws ArgumentError ldltfact(A1 + A1' - 2real(A1[1,1])I)
     @test_throws ArgumentError ldltfact(A1 + A1', shift=-2real(A1[1,1]))
     @test_throws ArgumentError cholfact(A1)
@@ -372,19 +372,19 @@ for elty in (Float64, Complex{Float64})
     @test F\CHOLMOD.Sparse(sparse(ones(elty, 5))) ≈ A1pd\ones(5)
     @test_throws DimensionMismatch F\CHOLMOD.Dense(ones(elty, 4))
     @test_throws DimensionMismatch F\CHOLMOD.Sparse(sparse(ones(elty, 4)))
-    @test F'\ones(elty, 5) ≈ full(A1pd)'\ones(5)
-    @test F'\sparse(ones(elty, 5)) ≈ full(A1pd)'\ones(5)
-    @test logdet(F) ≈ logdet(full(A1pd))
+    @test F'\ones(elty, 5) ≈ convert(Array, A1pd)'\ones(5)
+    @test F'\sparse(ones(elty, 5)) ≈ convert(Array, A1pd)'\ones(5)
+    @test logdet(F) ≈ logdet(convert(Array, A1pd))
     @test det(F) == exp(logdet(F))
     let # to test supernodal, we must use a larger matrix
         Ftmp = sprandn(100,100,0.1)
         Ftmp = Ftmp'Ftmp + I
-        @test logdet(cholfact(Ftmp)) ≈ logdet(full(Ftmp))
+        @test logdet(cholfact(Ftmp)) ≈ logdet(convert(Array, Ftmp))
     end
-    @test logdet(ldltfact(A1pd)) ≈ logdet(full(A1pd))
+    @test logdet(ldltfact(A1pd)) ≈ logdet(convert(Array, A1pd))
     @test isposdef(A1pd)
     @test !isposdef(A1)
-    @test !isposdef(A1 + A1' |> t -> t - 2eigmax(full(t))*I)
+    @test !isposdef(A1 + A1' |> t -> t - 2eigmax(convert(Array, t))*I)
 
     if elty <: Real
         @test CHOLMOD.issymmetric(Sparse(A1pd, 0))
