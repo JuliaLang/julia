@@ -252,7 +252,7 @@ prevent name conflicts for globals initialized after load time.
 Module initialization and precompilation
 ----------------------------------------
 
-Large modules can take several second to load because executing all of
+Large modules can take several seconds to load because executing all of
 the statements in a module often involves compiling a large amount of code.
 Julia provides the ability to create precompiled versions of modules
 to reduce this time.
