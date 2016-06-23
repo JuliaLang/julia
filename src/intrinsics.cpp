@@ -301,6 +301,10 @@ static Value *emit_unbox(Type *to, const jl_cgval_t &x, jl_value_t *jt, Value *d
         builder.CreateStore(unboxed, dest, volatile_store);
         return NULL;
     }
+    if (jl_is_vt(x.typ) && !dest) {
+        assert(0 && "Should never actually unbox !ptrfree");
+        abort();
+    }
 
     // bools stored as int8, so an extra Trunc is needed to get an int1
     Value *p = x.constant ? literal_pointer_val(x.constant) : x.V;

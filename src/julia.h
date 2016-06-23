@@ -493,7 +493,7 @@ extern JL_DLLEXPORT jl_datatype_t *jl_tvar_type;
 extern JL_DLLEXPORT jl_datatype_t *jl_task_type;
 extern JL_DLLEXPORT jl_datatype_t *jl_function_type;
 extern JL_DLLEXPORT jl_datatype_t *jl_builtin_type;
-
+extern JL_DLLEXPORT jl_datatype_t *jl_valuetype_type;
 extern JL_DLLEXPORT jl_datatype_t *jl_uniontype_type;
 extern JL_DLLEXPORT jl_datatype_t *jl_datatype_type;
 
@@ -1751,6 +1751,11 @@ typedef struct {
 #define jl_root_task (jl_get_ptls_states()->root_task)
 #define jl_exception_in_transit (jl_get_ptls_states()->exception_in_transit)
 #define jl_task_arg_in_transit (jl_get_ptls_states()->task_arg_in_transit)
+
+static inline int jl_is_vt(void* t)
+{
+    return ((jl_datatype_t*)t)->super == jl_valuetype_type;
+}
 
 #ifdef __cplusplus
 }

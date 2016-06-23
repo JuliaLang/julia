@@ -1007,6 +1007,15 @@ void JuliaGCAllocator::allocate_frame()
         if (CallInst* callInst = dyn_cast<CallInst>(inst)) {
             if (callInst->getCalledValue() == gcroot_func) {
                 unsigned offset = 2 + argSpaceSize++;
+                if (callInst->getArgOperand(0) != V_null) {
+                    Instruction *tagaddr = GetElementPtrInst::Create(LLVM37_param(NULL) gcframe, ArrayRef<Value*>(ConstantInt::get(T_int32, offset)));
+                    offset++;
+                    tagaddr->insertAfter(last_gcframe_inst);
+                    StoreInst *tagstore = new StoreInst(callInst->getArgOperand(0), tagaddr);
+                    tagstore->setMetadata(llvm::LLVMContext::MD_tbaa, tbaa_gcframe);
+                    tagstore->insertAfter(tagaddr);
+                    argSpaceSize++;
+                }
                 Instruction *argTempi = GetElementPtrInst::Create(LLVM37_param(NULL) gcframe, ArrayRef<Value*>(ConstantInt::get(T_int32, offset)));
                 argTempi->insertAfter(last_gcframe_inst);
 #if JL_LLVM_VERSION >= 30600

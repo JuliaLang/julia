@@ -183,7 +183,7 @@ if is(Int,Int64)
 else
     typealias UInt UInt32
 end
-
+abstract ValueType
 abstract AbstractString
 
 function Typeof end

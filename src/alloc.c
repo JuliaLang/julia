@@ -71,7 +71,6 @@ jl_datatype_t *jl_boundserror_type;
 jl_value_t *jl_memory_exception;
 jl_value_t *jl_readonlymemory_exception;
 union jl_typemap_t jl_cfunction_list;
-
 jl_sym_t *call_sym;    jl_sym_t *invoke_sym;
 jl_sym_t *dots_sym;    jl_sym_t *empty_sym;
 jl_sym_t *module_sym;  jl_sym_t *slot_sym;
@@ -1004,7 +1003,7 @@ void jl_compute_field_offsets(jl_datatype_t *st)
     for (size_t i = 0; i < nfields; i++) {
         jl_value_t *ty = jl_field_type(st, i);
         size_t fsz, al;
-        if (jl_isbits(ty) && jl_is_leaf_type(ty) && ((jl_datatype_t*)ty)->layout) {
+        if ((jl_isbits(ty) || jl_is_vt(ty)) && jl_is_leaf_type(ty) && ((jl_datatype_t*)ty)->layout) {
             fsz = jl_datatype_size(ty);
             // Should never happen
             if (__unlikely(fsz > max_size))
