@@ -769,7 +769,7 @@ Warnings and informational messages
 
 Julia also provides other functions that write messages to the standard error
 I/O, but do not throw any :exc:`Exception`\ s and hence do not interrupt
-execution.:
+execution:
 
 .. doctest::
 
