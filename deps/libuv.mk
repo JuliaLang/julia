@@ -6,7 +6,7 @@ $(eval $(call git-external,libuv,LIBUV,configure,.libs/libuv.la,$(SRCDIR)/srccac
 UV_SRC_TARGET := $(BUILDDIR)/$(LIBUV_SRC_DIR)/.libs/libuv.la
 UV_OBJ_TARGET := $(build_libdir)/libuv.la
 
-UV_CFLAGS :=
+UV_CFLAGS := -D_GNU_SOURCE
 ifeq ($(USEMSVC), 1)
 UV_CFLAGS += -DBUILDING_UV_SHARED
 endif
