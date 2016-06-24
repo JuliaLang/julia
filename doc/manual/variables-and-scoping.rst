@@ -31,7 +31,7 @@ introducing scope blocks are:
 +================================+==================================================================================+
 | :ref:`global <man-global>`     | module, baremodule, at interactive prompt (REPL)                                 |
 +--------------------------------+------------------------------+---------------------------------------------------+
-| :ref:`local <man-local-scope>` | :ref:`soft <man-soft-scope>` | for, while, list-comprehensions,                  |
+| :ref:`local <man-local-scope>` | :ref:`soft <man-soft-scope>` | for, while, comprehensions,                       |
 |                                |                              | try-catch-finally, let                            |
 |                                +------------------------------+---------------------------------------------------+
 |                                | :ref:`hard <man-hard-scope>` | functions (either syntax, anonymous & do-blocks), |
@@ -188,9 +188,9 @@ Soft Local Scope
   ``local``.
 
 Soft local scopes are introduced by for-loops, while-loops,
-list-comprehensions, try-catch-finally-blocks, and let-blocks.  There
+comprehensions, try-catch-finally-blocks, and let-blocks.  There
 are some extra rules for :ref:`let-blocks <man-let-blocks>` and for
-:ref:`for-loops and list-comprehensions <man-for-loops-scope>`.
+:ref:`for-loops and comprehensions <man-for-loops-scope>`.
 
 In the following example the ``x`` and ``y`` refer always to the same
 variables as the soft local scope inherits both read and write

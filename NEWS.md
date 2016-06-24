@@ -7,6 +7,9 @@ New language features
   * Generator expressions, e.g. `f(i) for i in 1:n` ([#4470]). This returns an iterator
     that computes the specified values on demand.
 
+  * Generators and comprehensions support filtering using `if` ([#550]) and nested
+    iteration using multiple `for` keywords ([#4867]).
+
   * Broadcasting syntax: ``f.(args...)`` is equivalent to ``broadcast(f, args...)`` ([#15032]).
 
   * Macro expander functions are now generic, so macros can have multiple definitions
@@ -68,6 +71,13 @@ Language changes
 
   * The built-in `NTuple` type has been removed; `NTuple{N,T}` is now
     implemented internally as `Tuple{Vararg{T,N}}` ([#11242]).
+
+  * Array comprehensions preserve the dimensions of the input ranges. For example,
+    `[ 2x for x in A]` will have the same dimensions as `A`.
+
+  * The result type of an array comprehension depends only on the types of elements
+    computed, instead of using type inference ([#7258]). If the result is empty, then
+    type inference is still used to determine the element type.
 
 Command-line option changes
 ---------------------------
