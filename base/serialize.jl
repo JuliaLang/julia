@@ -893,7 +893,7 @@ end
 
 deserialize(s::AbstractSerializer, ::Type{BigFloat}) = parse(BigFloat, deserialize(s))
 
-deserialize(s::AbstractSerializer, ::Type{BigInt}) = get(GMP.tryparse_internal(BigInt, deserialize(s), 62, true))
+deserialize(s::AbstractSerializer, ::Type{BigInt}) = parse(BigInt, deserialize(s), 62)
 
 function deserialize(s::AbstractSerializer, t::Type{Regex})
     pattern = deserialize(s)
