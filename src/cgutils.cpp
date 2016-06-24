@@ -1345,7 +1345,7 @@ static Value *emit_array_nd_index(const jl_cgval_t &ainfo, jl_value_t *ex, size_
 
 // --- boxing ---
 
-static Value *emit_allocobj(size_t static_size);
+static Value *emit_allocobj(jl_codectx_t *ctx, size_t static_size);
 static void init_tag(Value *v, Value *jt)
 {
     tbaa_decorate(tbaa_tag, builder.CreateStore(jt, emit_typeptr_addr(v)));
@@ -1532,7 +1532,7 @@ static Value *boxed(const jl_cgval_t &vinfo, jl_codectx_t *ctx, bool gcrooted)
         return literal_pointer_val(jb->instance);
     }
     else {
-        box = init_bits_cgval(emit_allocobj(jl_datatype_size(jt)), vinfo, jb->mutabl ? tbaa_mutab : tbaa_immut, ctx);
+        box = init_bits_cgval(emit_allocobj(ctx, jl_datatype_size(jt)), vinfo, jb->mutabl ? tbaa_mutab : tbaa_immut, ctx);
     }
 
     if (gcrooted) {
@@ -1566,29 +1566,23 @@ static void emit_cpointercheck(const jl_cgval_t &x, const std::string &msg, jl_c
 }
 
 // allocation for known size object
-static Value *emit_allocobj(size_t static_size)
+static Value *emit_allocobj(jl_codectx_t *ctx, size_t static_size)
 {
-    if (static_size == sizeof(void*)*1)
-        return builder.CreateCall(prepare_call(jlalloc1w_func)
-#ifdef LLVM37
-                                  , {}
-#endif
-                                  );
-    else if (static_size == sizeof(void*)*2)
-        return builder.CreateCall(prepare_call(jlalloc2w_func)
-#ifdef LLVM37
-                                  , {}
-#endif
-                                  );
-    else if (static_size == sizeof(void*)*3)
-        return builder.CreateCall(prepare_call(jlalloc3w_func)
-#ifdef LLVM37
-                                  , {}
-#endif
-                                  );
-    else
-        return builder.CreateCall(prepare_call(jlallocobj_func),
-                                  ConstantInt::get(T_size, static_size));
+    int osize;
+    int end_offset;
+    int offset = jl_gc_classify_pools(static_size, &osize, &end_offset);
+    Value *ptls_ptr = builder.CreateBitCast(ctx->ptlsStates, T_pint8);
+    if (offset < 0) {
+        Value *args[] = {ptls_ptr,
+                         ConstantInt::get(T_size, static_size + sizeof(void*))};
+        return builder.CreateCall(prepare_call(jlalloc_big_func),
+                                  ArrayRef<Value*>(args, 2));
+    }
+    Value *pool_ptr = builder.CreateConstGEP1_32(ptls_ptr, offset);
+    Value *args[] = {ptls_ptr, pool_ptr, ConstantInt::get(T_int32, osize),
+                     ConstantInt::get(T_int32, end_offset)};
+    return builder.CreateCall(prepare_call(jlalloc_pool_func),
+                              ArrayRef<Value*>(args, 4));
 }
 
 // if ptr is NULL this emits a write barrier _back_
@@ -1739,7 +1733,7 @@ static jl_cgval_t emit_new_struct(jl_value_t *ty, size_t nargs, jl_value_t **arg
             f1 = boxed(fval_info, ctx);
             j++;
         }
-        Value *strct = emit_allocobj(sty->size);
+        Value *strct = emit_allocobj(ctx, sty->size);
         jl_cgval_t strctinfo = mark_julia_type(strct, true, ty, ctx);
         tbaa_decorate(tbaa_tag, builder.CreateStore(literal_pointer_val((jl_value_t*)ty),
                                                     emit_typeptr_addr(strct)));

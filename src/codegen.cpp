@@ -378,11 +378,8 @@ static Function *jlgenericfunction_func;
 static Function *jlenter_func;
 static Function *jlleave_func;
 static Function *jlegal_func;
-static Function *jlallocobj_func;
-static Function *jlalloc1w_func;
-static Function *jlalloc2w_func;
-static Function *jlalloc3w_func;
-static Function *jl_alloc_svec_func;
+static Function *jlalloc_pool_func;
+static Function *jlalloc_big_func;
 static Function *jlsubtype_func;
 static Function *setjmp_func;
 static Function *memcmp_func;
@@ -3659,7 +3656,7 @@ static Function *gen_cfun_wrapper(jl_function_t *ff, jl_value_t *jlrettype, jl_t
                 (void)julia_type_to_llvm(jargty, &isboxed);
                 if (isboxed) {
                     // passed an unboxed T, but want something boxed
-                    Value *mem = emit_allocobj(jl_datatype_size(jargty));
+                    Value *mem = emit_allocobj(&ctx, jl_datatype_size(jargty));
                     tbaa_decorate(tbaa_tag, builder.CreateStore(literal_pointer_val((jl_value_t*)jargty),
                                                                 emit_typeptr_addr(mem)));
                     tbaa_decorate(jl_is_mutable(jargty) ? tbaa_mutab : tbaa_immut,
@@ -5465,40 +5462,25 @@ static void init_julia_llvm_env(Module *m)
                          "jl_subtype", m);
     add_named_global(jlsubtype_func, &jl_subtype);
 
-    std::vector<Type*> aoargs(0);
-    aoargs.push_back(T_size);
-    jlallocobj_func =
-        Function::Create(FunctionType::get(T_pjlvalue, aoargs, false),
+    std::vector<Type*> alloc_pool_args(0);
+    alloc_pool_args.push_back(T_pint8);
+    alloc_pool_args.push_back(T_pint8);
+    alloc_pool_args.push_back(T_int32);
+    alloc_pool_args.push_back(T_int32);
+    jlalloc_pool_func =
+        Function::Create(FunctionType::get(T_pjlvalue, alloc_pool_args, false),
                          Function::ExternalLinkage,
-                         "jl_gc_allocobj", m);
-    add_named_global(jlallocobj_func, &jl_gc_allocobj);
+                         "jl_gc_pool_alloc", m);
+    add_named_global(jlalloc_pool_func, &jl_gc_pool_alloc);
 
-    std::vector<Type*> empty_args(0);
-    jlalloc1w_func =
-        Function::Create(FunctionType::get(T_pjlvalue, empty_args, false),
+    std::vector<Type*> alloc_big_args(0);
+    alloc_big_args.push_back(T_pint8);
+    alloc_big_args.push_back(T_size);
+    jlalloc_big_func =
+        Function::Create(FunctionType::get(T_pjlvalue, alloc_big_args, false),
                          Function::ExternalLinkage,
-                         "jl_gc_alloc_1w", m);
-    add_named_global(jlalloc1w_func, &jl_gc_alloc_1w);
-
-    jlalloc2w_func =
-        Function::Create(FunctionType::get(T_pjlvalue, empty_args, false),
-                         Function::ExternalLinkage,
-                         "jl_gc_alloc_2w", m);
-    add_named_global(jlalloc2w_func, &jl_gc_alloc_2w);
-
-    jlalloc3w_func =
-        Function::Create(FunctionType::get(T_pjlvalue, empty_args, false),
-                         Function::ExternalLinkage,
-                         "jl_gc_alloc_3w", m);
-    add_named_global(jlalloc3w_func, &jl_gc_alloc_3w);
-
-    std::vector<Type*> atargs(0);
-    atargs.push_back(T_size);
-    jl_alloc_svec_func =
-        Function::Create(FunctionType::get(T_pjlvalue, atargs, false),
-                         Function::ExternalLinkage,
-                         "jl_alloc_svec", m);
-    add_named_global(jl_alloc_svec_func, &jl_alloc_svec);
+                         "jl_gc_big_alloc", m);
+    add_named_global(jlalloc_big_func, &jl_gc_big_alloc);
 
     std::vector<Type *> dlsym_args(0);
     dlsym_args.push_back(T_pint8);

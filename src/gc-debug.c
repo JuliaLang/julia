@@ -139,8 +139,8 @@ static void clear_mark(int bits)
                 for (int j = 0; j < 32; j++) {
                     if ((line >> j) & 1) {
                         jl_gc_pagemeta_t *pg = page_metadata(region->pages[pg_i*32 + j].data + GC_PAGE_OFFSET);
-                        jl_tls_states_t *ptls = jl_all_tls_states[pg->thread_n];
-                        jl_gc_pool_t *pool = &ptls->heap.norm_pools[pg->pool_n];
+                        jl_tls_states_t *ptls2 = jl_all_tls_states[pg->thread_n];
+                        jl_gc_pool_t *pool = &ptls2->heap.norm_pools[pg->pool_n];
                         pv = (jl_taggedvalue_t*)(pg->data + GC_PAGE_OFFSET);
                         char *lim = (char*)pv + GC_PAGE_SZ - GC_PAGE_OFFSET - pool->osize;
                         while ((char*)pv <= lim) {
@@ -660,9 +660,9 @@ void gc_time_mark_pause(int64_t t0, int64_t scanned_bytes,
     int64_t last_remset_len = 0;
     int64_t remset_nptr = 0;
     for (int t_i = 0;t_i < jl_n_threads;t_i++) {
-        jl_tls_states_t *ptls = jl_all_tls_states[t_i];
-        last_remset_len += ptls->heap.last_remset->len;
-        remset_nptr = ptls->heap.remset_nptr;
+        jl_tls_states_t *ptls2 = jl_all_tls_states[t_i];
+        last_remset_len += ptls2->heap.last_remset->len;
+        remset_nptr = ptls2->heap.remset_nptr;
     }
     jl_printf(JL_STDOUT, "GC mark pause %.2f ms | "
               "scanned %" PRId64 " kB = %" PRId64 " + %" PRId64 " | "
@@ -779,14 +779,14 @@ void gc_stats_all_pool(void)
     size_t nb=0, w, tw=0, no=0,tp=0, nold=0,noldbytes=0, np, nol;
     for (int i = 0; i < JL_GC_N_POOLS; i++) {
         for (int t_i = 0;t_i < jl_n_threads;t_i++) {
-            jl_tls_states_t *ptls = jl_all_tls_states[t_i];
-            size_t b = pool_stats(&ptls->heap.norm_pools[i], &w, &np, &nol);
+            jl_tls_states_t *ptls2 = jl_all_tls_states[t_i];
+            size_t b = pool_stats(&ptls2->heap.norm_pools[i], &w, &np, &nol);
             nb += b;
-            no += (b / ptls->heap.norm_pools[i].osize);
+            no += (b / ptls2->heap.norm_pools[i].osize);
             tw += w;
             tp += np;
             nold += nol;
-            noldbytes += nol * ptls->heap.norm_pools[i].osize;
+            noldbytes += nol * ptls2->heap.norm_pools[i].osize;
         }
     }
     jl_printf(JL_STDOUT,
