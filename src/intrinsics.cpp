@@ -509,7 +509,7 @@ static jl_cgval_t generic_box(jl_value_t *targ, jl_value_t *x, jl_codectx_t *ctx
         return mark_julia_type(vx, false, bt, ctx);
     else
         return mark_julia_type(
-            init_bits_value(emit_allocobj(nb), boxed(bt_value, ctx), vx, tbaa_immut),
+            init_bits_value(emit_allocobj(ctx, nb), boxed(bt_value, ctx), vx, tbaa_immut),
             true, bt, ctx);
 }
 
@@ -550,7 +550,7 @@ static jl_cgval_t generic_unbox(jl_value_t *targ, jl_value_t *x, jl_codectx_t *c
         Value *runtime_bt = boxed(bt_value, ctx);
         // XXX: emit type validity check on runtime_bt (bitstype of size nb)
 
-        Value *newobj = emit_allocobj(nb);
+        Value *newobj = emit_allocobj(ctx, nb);
         tbaa_decorate(tbaa_tag, builder.CreateStore(runtime_bt, emit_typeptr_addr(newobj)));
         if (!v.ispointer()) {
             tbaa_decorate(tbaa_value, builder.CreateAlignedStore(emit_unbox(llvmt, v, v.typ), builder.CreatePointerCast(newobj, llvmt->getPointerTo()), alignment));
@@ -774,7 +774,7 @@ static jl_cgval_t emit_pointerref(jl_value_t *e, jl_value_t *i, jl_codectx_t *ct
         }
         assert(jl_is_datatype(ety));
         uint64_t size = jl_datatype_size(ety);
-        Value *strct = emit_allocobj(size);
+        Value *strct = emit_allocobj(ctx, size);
         tbaa_decorate(tbaa_tag, builder.CreateStore(literal_pointer_val((jl_value_t*)ety),
                                                     emit_typeptr_addr(strct)));
         im1 = builder.CreateMul(im1, ConstantInt::get(T_size,
