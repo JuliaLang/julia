@@ -234,146 +234,20 @@ Julia language. Core operations typically have dozens of methods:
 .. doctest::
 
     julia> methods(+)
-    # 139 methods for generic function "+":
-    +(x::Bool) at bool.jl:33
-    +(x::Bool,y::Bool) at bool.jl:36
-    +(y::AbstractFloat,x::Bool) at bool.jl:46
-    +(x::Int64,y::Int64) at int.jl:14
-    +(x::Int8,y::Int8) at int.jl:14
-    +(x::UInt8,y::UInt8) at int.jl:14
-    +(x::Int16,y::Int16) at int.jl:14
-    +(x::UInt16,y::UInt16) at int.jl:14
-    +(x::Int32,y::Int32) at int.jl:14
-    +(x::UInt32,y::UInt32) at int.jl:14
-    +(x::UInt64,y::UInt64) at int.jl:14
-    +(x::Int128,y::Int128) at int.jl:14
-    +(x::UInt128,y::UInt128) at int.jl:14
-    +(x::Float32,y::Float32) at float.jl:192
-    +(x::Float64,y::Float64) at float.jl:193
-    +(z::Complex{T<:Real},w::Complex{T<:Real}) at complex.jl:96
-    +(x::Real,z::Complex{T<:Real}) at complex.jl:106
-    +(z::Complex{T<:Real},x::Real) at complex.jl:107
-    +(x::Rational{T<:Integer},y::Rational{T<:Integer}) at rational.jl:167
-    +(a::Float16,b::Float16) at float16.jl:136
-    +(x::Base.GMP.BigInt,y::Base.GMP.BigInt) at gmp.jl:243
-    +(a::Base.GMP.BigInt,b::Base.GMP.BigInt,c::Base.GMP.BigInt) at gmp.jl:266
-    +(a::Base.GMP.BigInt,b::Base.GMP.BigInt,c::Base.GMP.BigInt,d::Base.GMP.BigInt) at gmp.jl:272
-    +(a::Base.GMP.BigInt,b::Base.GMP.BigInt,c::Base.GMP.BigInt,d::Base.GMP.BigInt,e::Base.GMP.BigInt) at gmp.jl:279
-    +(x::Base.GMP.BigInt,c::Union{UInt32,UInt16,UInt8,UInt64}) at gmp.jl:291
-    +(c::Union{UInt32,UInt16,UInt8,UInt64},x::Base.GMP.BigInt) at gmp.jl:295
-    +(x::Base.GMP.BigInt,c::Union{Int16,Int32,Int8,Int64}) at gmp.jl:307
-    +(c::Union{Int16,Int32,Int8,Int64},x::Base.GMP.BigInt) at gmp.jl:308
-    +(x::Base.MPFR.BigFloat,y::Base.MPFR.BigFloat) at mpfr.jl:206
-    +(x::Base.MPFR.BigFloat,c::Union{UInt32,UInt16,UInt8,UInt64}) at mpfr.jl:213
-    +(c::Union{UInt32,UInt16,UInt8,UInt64},x::Base.MPFR.BigFloat) at mpfr.jl:217
-    +(x::Base.MPFR.BigFloat,c::Union{Int16,Int32,Int8,Int64}) at mpfr.jl:221
-    +(c::Union{Int16,Int32,Int8,Int64},x::Base.MPFR.BigFloat) at mpfr.jl:225
-    +(x::Base.MPFR.BigFloat,c::Union{Float16,Float64,Float32}) at mpfr.jl:229
-    +(c::Union{Float16,Float64,Float32},x::Base.MPFR.BigFloat) at mpfr.jl:233
-    +(x::Base.MPFR.BigFloat,c::Base.GMP.BigInt) at mpfr.jl:237
-    +(c::Base.GMP.BigInt,x::Base.MPFR.BigFloat) at mpfr.jl:241
-    +(a::Base.MPFR.BigFloat,b::Base.MPFR.BigFloat,c::Base.MPFR.BigFloat) at mpfr.jl:318
-    +(a::Base.MPFR.BigFloat,b::Base.MPFR.BigFloat,c::Base.MPFR.BigFloat,d::Base.MPFR.BigFloat) at mpfr.jl:324
-    +(a::Base.MPFR.BigFloat,b::Base.MPFR.BigFloat,c::Base.MPFR.BigFloat,d::Base.MPFR.BigFloat,e::Base.MPFR.BigFloat) at mpfr.jl:331
-    +(x::Irrational{sym},y::Irrational{sym}) at constants.jl:71
-    +{T<:Number}(x::T<:Number,y::T<:Number) at promotion.jl:205
-    +{T<:AbstractFloat}(x::Bool,y::T<:AbstractFloat) at bool.jl:43
-    +(x::Number,y::Number) at promotion.jl:167
-    +(x::Integer,y::Ptr{T}) at pointer.jl:70
-    +(x::Bool,A::AbstractArray{Bool,N}) at array.jl:829
-    +(x::Integer,y::Char) at char.jl:41
-    +(x::Number) at operators.jl:72
-    +(r1::OrdinalRange{T,S},r2::OrdinalRange{T,S}) at operators.jl:325
-    +{T<:AbstractFloat}(r1::FloatRange{T<:AbstractFloat},r2::FloatRange{T<:AbstractFloat}) at operators.jl:331
-    +(r1::FloatRange{T<:AbstractFloat},r2::FloatRange{T<:AbstractFloat}) at operators.jl:348
-    +(r1::FloatRange{T<:AbstractFloat},r2::OrdinalRange{T,S}) at operators.jl:349
-    +(r1::OrdinalRange{T,S},r2::FloatRange{T<:AbstractFloat}) at operators.jl:350
-    +(x::Ptr{T},y::Integer) at pointer.jl:68
-    +{S,T}(A::Range{S},B::Range{T}) at array.jl:773
-    +{S,T}(A::Range{S},B::AbstractArray{T,N}) at array.jl:791
-    +(A::AbstractArray{Bool,N},x::Bool) at array.jl:828
-    +(A::BitArray{N},B::BitArray{N}) at bitarray.jl:926
-    +(A::Union{DenseArray{Bool,N},SubArray{Bool,N,A<:DenseArray{T,N},I<:Tuple{Vararg{Union{Colon,Range{Int64},Int64}}},LD}},B::Union{DenseArray{Bool,N},SubArray{Bool,N,A<:DenseArray{T,N},I<:Tuple{Vararg{Union{Colon,Range{Int64},Int64}}},LD}}) at array.jl:859
-    +(A::Base.LinAlg.SymTridiagonal{T},B::Base.LinAlg.SymTridiagonal{T}) at linalg/tridiag.jl:59
-    +(A::Base.LinAlg.Tridiagonal{T},B::Base.LinAlg.Tridiagonal{T}) at linalg/tridiag.jl:254
-    +(A::Base.LinAlg.Tridiagonal{T},B::Base.LinAlg.SymTridiagonal{T}) at linalg/special.jl:113
-    +(A::Base.LinAlg.SymTridiagonal{T},B::Base.LinAlg.Tridiagonal{T}) at linalg/special.jl:112
-    +(A::Base.LinAlg.UpperTriangular{T,S<:AbstractArray{T,2}},B::Base.LinAlg.UpperTriangular{T,S<:AbstractArray{T,2}}) at linalg/triangular.jl:164
-    +(A::Base.LinAlg.LowerTriangular{T,S<:AbstractArray{T,2}},B::Base.LinAlg.LowerTriangular{T,S<:AbstractArray{T,2}}) at linalg/triangular.jl:165
-    +(A::Base.LinAlg.UpperTriangular{T,S<:AbstractArray{T,2}},B::Base.LinAlg.UnitUpperTriangular{T,S<:AbstractArray{T,2}}) at linalg/triangular.jl:166
-    +(A::Base.LinAlg.LowerTriangular{T,S<:AbstractArray{T,2}},B::Base.LinAlg.UnitLowerTriangular{T,S<:AbstractArray{T,2}}) at linalg/triangular.jl:167
-    +(A::Base.LinAlg.UnitUpperTriangular{T,S<:AbstractArray{T,2}},B::Base.LinAlg.UpperTriangular{T,S<:AbstractArray{T,2}}) at linalg/triangular.jl:168
-    +(A::Base.LinAlg.UnitLowerTriangular{T,S<:AbstractArray{T,2}},B::Base.LinAlg.LowerTriangular{T,S<:AbstractArray{T,2}}) at linalg/triangular.jl:169
-    +(A::Base.LinAlg.UnitUpperTriangular{T,S<:AbstractArray{T,2}},B::Base.LinAlg.UnitUpperTriangular{T,S<:AbstractArray{T,2}}) at linalg/triangular.jl:170
-    +(A::Base.LinAlg.UnitLowerTriangular{T,S<:AbstractArray{T,2}},B::Base.LinAlg.UnitLowerTriangular{T,S<:AbstractArray{T,2}}) at linalg/triangular.jl:171
-    +(A::Base.LinAlg.AbstractTriangular{T,S<:AbstractArray{T,2}},B::Base.LinAlg.AbstractTriangular{T,S<:AbstractArray{T,2}}) at linalg/triangular.jl:172
-    +(Da::Base.LinAlg.Diagonal{T},Db::Base.LinAlg.Diagonal{T}) at linalg/diagonal.jl:50
-    +(A::Base.LinAlg.Bidiagonal{T},B::Base.LinAlg.Bidiagonal{T}) at linalg/bidiag.jl:111
-    +{T}(B::BitArray{2},J::Base.LinAlg.UniformScaling{T}) at linalg/uniformscaling.jl:28
-    +(A::Base.LinAlg.Diagonal{T},B::Base.LinAlg.Bidiagonal{T}) at linalg/special.jl:103
-    +(A::Base.LinAlg.Bidiagonal{T},B::Base.LinAlg.Diagonal{T}) at linalg/special.jl:104
-    +(A::Base.LinAlg.Diagonal{T},B::Base.LinAlg.Tridiagonal{T}) at linalg/special.jl:103
-    +(A::Base.LinAlg.Tridiagonal{T},B::Base.LinAlg.Diagonal{T}) at linalg/special.jl:104
-    +(A::Base.LinAlg.Diagonal{T},B::Array{T,2}) at linalg/special.jl:103
-    +(A::Array{T,2},B::Base.LinAlg.Diagonal{T}) at linalg/special.jl:104
-    +(A::Base.LinAlg.Bidiagonal{T},B::Base.LinAlg.Tridiagonal{T}) at linalg/special.jl:103
-    +(A::Base.LinAlg.Tridiagonal{T},B::Base.LinAlg.Bidiagonal{T}) at linalg/special.jl:104
-    +(A::Base.LinAlg.Bidiagonal{T},B::Array{T,2}) at linalg/special.jl:103
-    +(A::Array{T,2},B::Base.LinAlg.Bidiagonal{T}) at linalg/special.jl:104
-    +(A::Base.LinAlg.Tridiagonal{T},B::Array{T,2}) at linalg/special.jl:103
-    +(A::Array{T,2},B::Base.LinAlg.Tridiagonal{T}) at linalg/special.jl:104
-    +(A::Base.LinAlg.SymTridiagonal{T},B::Array{T,2}) at linalg/special.jl:112
-    +(A::Array{T,2},B::Base.LinAlg.SymTridiagonal{T}) at linalg/special.jl:113
-    +(A::Base.LinAlg.Diagonal{T},B::Base.LinAlg.SymTridiagonal{T}) at linalg/special.jl:121
-    +(A::Base.LinAlg.SymTridiagonal{T},B::Base.LinAlg.Diagonal{T}) at linalg/special.jl:122
-    +(A::Base.LinAlg.Bidiagonal{T},B::Base.LinAlg.SymTridiagonal{T}) at linalg/special.jl:121
-    +(A::Base.LinAlg.SymTridiagonal{T},B::Base.LinAlg.Bidiagonal{T}) at linalg/special.jl:122
-    +{Tv1,Ti1,Tv2,Ti2}(A_1::Base.SparseArrays.SparseMatrixCSC{Tv1,Ti1},A_2::Base.SparseMatrix.SparseMatrixCSC{Tv2,Ti2}) at sparse/sparsematrix.jl:873
-    +(A::Base.SparseArrays.SparseMatrixCSC{Tv,Ti<:Integer},B::Array{T,N}) at sparse/sparsematrix.jl:885
-    +(A::Array{T,N},B::Base.SparseArrays.SparseMatrixCSC{Tv,Ti<:Integer}) at sparse/sparsematrix.jl:887
-    +{P<:Base.Dates.Period}(Y::Union{SubArray{P<:Base.Dates.Period,N,A<:DenseArray{T,N},I<:Tuple{Vararg{Union{Colon,Range{Int64},Int64}}},LD},DenseArray{P<:Base.Dates.Period,N}},x::P<:Base.Dates.Period) at dates/periods.jl:50
-    +{T<:Base.Dates.TimeType}(r::Range{T<:Base.Dates.TimeType},x::Base.Dates.Period) at dates/ranges.jl:39
-    +{T<:Number}(x::AbstractArray{T<:Number,N}) at abstractarray.jl:442
-    +{S,T}(A::AbstractArray{S,N},B::Range{T}) at array.jl:782
-    +{S,T}(A::AbstractArray{S,N},B::AbstractArray{T,N}) at array.jl:800
-    +(A::AbstractArray{T,N},x::Number) at array.jl:832
-    +(x::Number,A::AbstractArray{T,N}) at array.jl:833
-    +(x::Char,y::Integer) at char.jl:40
-    +{N}(index1::Base.IteratorsMD.CartesianIndex{N},index2::Base.IteratorsMD.CartesianIndex{N}) at multidimensional.jl:121
-    +(J1::Base.LinAlg.UniformScaling{T<:Number},J2::Base.LinAlg.UniformScaling{T<:Number}) at linalg/uniformscaling.jl:27
-    +(J::Base.LinAlg.UniformScaling{T<:Number},B::BitArray{2}) at linalg/uniformscaling.jl:29
-    +(J::Base.LinAlg.UniformScaling{T<:Number},A::AbstractArray{T,2}) at linalg/uniformscaling.jl:30
-    +(J::Base.LinAlg.UniformScaling{T<:Number},x::Number) at linalg/uniformscaling.jl:31
-    +(x::Number,J::Base.LinAlg.UniformScaling{T<:Number}) at linalg/uniformscaling.jl:32
-    +{TA,TJ}(A::AbstractArray{TA,2},J::Base.LinAlg.UniformScaling{TJ}) at linalg/uniformscaling.jl:35
-    +{T}(a::Base.Pkg.Resolve.VersionWeights.HierarchicalValue{T},b::Base.Pkg.Resolve.VersionWeights.HierarchicalValue{T}) at pkg/resolve/versionweight.jl:21
-    +(a::Base.Pkg.Resolve.VersionWeights.VWPreBuildItem,b::Base.Pkg.Resolve.VersionWeights.VWPreBuildItem) at pkg/resolve/versionweight.jl:83
-    +(a::Base.Pkg.Resolve.VersionWeights.VWPreBuild,b::Base.Pkg.Resolve.VersionWeights.VWPreBuild) at pkg/resolve/versionweight.jl:129
-    +(a::Base.Pkg.Resolve.VersionWeights.VersionWeight,b::Base.Pkg.Resolve.VersionWeights.VersionWeight) at pkg/resolve/versionweight.jl:183
-    +(a::Base.Pkg.Resolve.MaxSum.FieldValues.FieldValue,b::Base.Pkg.Resolve.MaxSum.FieldValues.FieldValue) at pkg/resolve/fieldvalue.jl:43
-    +{P<:Base.Dates.Period}(x::P<:Base.Dates.Period,y::P<:Base.Dates.Period) at dates/periods.jl:43
-    +{P<:Base.Dates.Period}(x::P<:Base.Dates.Period,Y::Union{SubArray{P<:Base.Dates.Period,N,A<:DenseArray{T,N},I<:Tuple{Vararg{Union{Colon,Range{Int64},Int64}}},LD},DenseArray{P<:Base.Dates.Period,N}}) at dates/periods.jl:49
-    +(x::Base.Dates.Period,y::Base.Dates.Period) at dates/periods.jl:196
-    +(x::Base.Dates.CompoundPeriod,y::Base.Dates.Period) at dates/periods.jl:197
-    +(y::Base.Dates.Period,x::Base.Dates.CompoundPeriod) at dates/periods.jl:198
-    +(x::Base.Dates.CompoundPeriod,y::Base.Dates.CompoundPeriod) at dates/periods.jl:199
-    +(dt::Base.Dates.DateTime,y::Base.Dates.Year) at dates/arithmetic.jl:13
-    +(dt::Base.Dates.Date,y::Base.Dates.Year) at dates/arithmetic.jl:17
-    +(dt::Base.Dates.DateTime,z::Base.Dates.Month) at dates/arithmetic.jl:37
-    +(dt::Base.Dates.Date,z::Base.Dates.Month) at dates/arithmetic.jl:43
-    +(x::Base.Dates.Date,y::Base.Dates.Week) at dates/arithmetic.jl:60
-    +(x::Base.Dates.Date,y::Base.Dates.Day) at dates/arithmetic.jl:62
-    +(x::Base.Dates.DateTime,y::Base.Dates.Period) at dates/arithmetic.jl:64
-    +(a::Base.Dates.TimeType,b::Base.Dates.Period,c::Base.Dates.Period) at dates/periods.jl:210
-    +(a::Base.Dates.TimeType,b::Base.Dates.Period,c::Base.Dates.Period,d::Base.Dates.Period...) at dates/periods.jl:212
-    +(x::Base.Dates.TimeType,y::Base.Dates.CompoundPeriod) at dates/periods.jl:216
-    +(x::Base.Dates.CompoundPeriod,y::Base.Dates.TimeType) at dates/periods.jl:221
-    +(x::Base.Dates.Instant) at dates/arithmetic.jl:4
-    +(x::Base.Dates.TimeType) at dates/arithmetic.jl:8
-    +(y::Base.Dates.Period,x::Base.Dates.TimeType) at dates/arithmetic.jl:66
-    +{T<:Base.Dates.TimeType}(x::Base.Dates.Period,r::Range{T<:Base.Dates.TimeType}) at dates/ranges.jl:40
-    +(a,b,c) at operators.jl:83
-    +(a,b,c,xs...) at operators.jl:84
+    # 166 methods for generic function "+":
+    ...
+    +(a::Float16, b::Float16) at float16.jl:136...
+    +(x::Float32, y::Float32) at float.jl:206...
+    +(x::Float64, y::Float64) at float.jl:207...
+    +(x::Bool, z::Complex{Bool}) at complex.jl:137...
+    +(x::Bool, y::Bool) at bool.jl:36...
+    +(x::Bool) at bool.jl:33...
+    +{T<:AbstractFloat}(x::Bool, y::T) at bool.jl:43...
+    +(x::Bool, z::Complex) at complex.jl:144...
+    +(x::Bool, A::AbstractArray{Bool,N<:Any}) at arraymath.jl:105...
+    +(x::Char, y::Integer) at char.jl:40
+    ...
+    +(a, b, c, xs...) at operators.jl:119
 
 Multiple dispatch together with the flexible parametric type system give
 Julia its ability to abstractly express high-level algorithms decoupled
