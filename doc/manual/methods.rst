@@ -266,13 +266,6 @@ arguments:
     julia> g(x::Float64, y) = 2x + y;
 
     julia> g(x, y::Float64) = x + 2y;
-    WARNING: New definition
-        g(Any, Float64) at none:1
-    is ambiguous with:
-        g(Float64, Any) at none:1.
-    To fix, define
-        g(Float64, Float64)
-    before the new definition.
 
     julia> g(2.0, 3)
     7.0
@@ -281,14 +274,16 @@ arguments:
     8.0
 
     julia> g(2.0, 3.0)
-    7.0
+    ERROR: MethodError: g(::Float64, ::Float64) is ambiguous. Candidates:
+      g(x, y::Float64) at none:1
+      g(x::Float64, y) at none:1
+     in eval(::Module, ::Any) at ./boot.jl:231...
 
 Here the call ``g(2.0, 3.0)`` could be handled by either the
 ``g(Float64, Any)`` or the ``g(Any, Float64)`` method, and neither is
-more specific than the other. In such cases, Julia warns you about this
-ambiguity, but allows you to proceed, arbitrarily picking a method. You
-should avoid method ambiguities by specifying an appropriate method for
-the intersection case:
+more specific than the other. In such cases, Julia raises a ``MethodError``
+rather than arbitrarily picking a method. You can avoid method ambiguities
+by specifying an appropriate method for the intersection case:
 
 .. doctest::
 
@@ -307,9 +302,9 @@ the intersection case:
     julia> h(2.0, 3.0)
     10.0
 
-To suppress Julia's warning, the disambiguating method must be defined
-first, since otherwise the ambiguity exists, if transiently, until the
-more specific method is defined.
+It is recommended that the disambiguating method be defined first,
+since otherwise the ambiguity exists, if transiently, until the more
+specific method is defined.
 
 .. _man-parametric-methods:
 
