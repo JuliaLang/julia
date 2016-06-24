@@ -172,7 +172,10 @@ static void gc_verify_track(void)
         clear_mark(GC_CLEAN);
         pre_mark();
         gc_mark_object_list(&to_finalize, 0);
-        gc_mark_object_list(&finalizer_list, 0);
+        for (int i = 0;i < jl_n_threads;i++) {
+            jl_tls_states_t *ptls2 = jl_all_tls_states[i];
+            gc_mark_object_list(&ptls2->finalizers, 0);
+        }
         gc_mark_object_list(&finalizer_list_marked, 0);
         visit_mark_stack();
         if (lostval_parents.len == 0) {
@@ -215,7 +218,10 @@ void gc_verify(void)
     gc_verifying = 1;
     pre_mark();
     gc_mark_object_list(&to_finalize, 0);
-    gc_mark_object_list(&finalizer_list, 0);
+    for (int i = 0;i < jl_n_threads;i++) {
+        jl_tls_states_t *ptls2 = jl_all_tls_states[i];
+        gc_mark_object_list(&ptls2->finalizers, 0);
+    }
     gc_mark_object_list(&finalizer_list_marked, 0);
     visit_mark_stack();
     int clean_len = bits_save[GC_CLEAN].len;

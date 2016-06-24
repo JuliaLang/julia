@@ -251,9 +251,10 @@ public:
     virtual void NotifyFunctionEmitted(const Function &F, void *Code,
                                        size_t Size, const EmittedFunctionDetails &Details)
     {
+        jl_tls_states_t *ptls = jl_get_ptls_states();
         // This function modify linfo->fptr in GC safe region.
         // This should be fine since the GC won't scan this field.
-        int8_t gc_state = jl_gc_safe_enter();
+        int8_t gc_state = jl_gc_safe_enter(ptls);
         uv_rwlock_wrlock(&threadsafe);
         StringRef sName = F.getName();
         StringMap<jl_lambda_info_t*>::iterator linfo_it = linfo_in_flight.find(sName);
@@ -274,7 +275,7 @@ public:
             const_cast<Function*>(&F)->deleteBody();
 #endif
         uv_rwlock_wrunlock(&threadsafe);
-        jl_gc_safe_leave(gc_state);
+        jl_gc_safe_leave(ptls, gc_state);
     }
 
     std::map<size_t, FuncInfo, revcomp>& getMap()
@@ -309,9 +310,10 @@ public:
     virtual void NotifyObjectEmitted(const ObjectImage &obj)
 #endif
     {
+        jl_tls_states_t *ptls = jl_get_ptls_states();
         // This function modify linfo->fptr in GC safe region.
         // This should be fine since the GC won't scan this field.
-        int8_t gc_state = jl_gc_safe_enter();
+        int8_t gc_state = jl_gc_safe_enter(ptls);
         uv_rwlock_wrlock(&threadsafe);
 #ifdef LLVM36
         object::section_iterator Section = debugObj.section_begin();
@@ -601,7 +603,7 @@ public:
 #endif
 #endif
         uv_rwlock_wrunlock(&threadsafe);
-        jl_gc_safe_leave(gc_state);
+        jl_gc_safe_leave(ptls, gc_state);
     }
 
     // must implement if we ever start freeing code
@@ -1174,17 +1176,18 @@ int jl_DI_for_fptr(uint64_t fptr, uint64_t *symsize, int64_t *slide, int64_t *se
 extern "C"
 JL_DLLEXPORT jl_value_t *jl_get_dobj_data(uint64_t fptr)
 {
+    jl_tls_states_t *ptls = jl_get_ptls_states();
     // Used by Gallium.jl
     const object::ObjectFile *object = NULL;
     DIContext *context;
     int64_t slide, section_slide;
-    int8_t gc_state = jl_gc_safe_enter();
+    int8_t gc_state = jl_gc_safe_enter(ptls);
     if (!jl_DI_for_fptr(fptr, NULL, &slide, NULL, &object, NULL))
         if (!jl_dylib_DI_for_fptr(fptr, &object, &context, &slide, &section_slide, false, NULL, NULL, NULL, NULL)) {
-            jl_gc_safe_leave(gc_state);
+            jl_gc_safe_leave(ptls, gc_state);
             return jl_nothing;
         }
-    jl_gc_safe_leave(gc_state);
+    jl_gc_safe_leave(ptls, gc_state);
     if (object == NULL)
         return jl_nothing;
     return (jl_value_t*)jl_ptr_to_array_1d((jl_value_t*)jl_array_uint8_type,
@@ -1195,8 +1198,9 @@ JL_DLLEXPORT jl_value_t *jl_get_dobj_data(uint64_t fptr)
 extern "C"
 JL_DLLEXPORT uint64_t jl_get_section_start(uint64_t fptr)
 {
+    jl_tls_states_t *ptls = jl_get_ptls_states();
     // Used by Gallium.jl
-    int8_t gc_state = jl_gc_safe_enter();
+    int8_t gc_state = jl_gc_safe_enter(ptls);
     std::map<size_t, ObjectInfo, revcomp> &objmap = jl_jit_events->getObjectMap();
     std::map<size_t, ObjectInfo, revcomp>::iterator fit = objmap.lower_bound(fptr);
 
@@ -1212,7 +1216,7 @@ JL_DLLEXPORT uint64_t jl_get_section_start(uint64_t fptr)
        }
     }
     uv_rwlock_rdunlock(&threadsafe);
-    jl_gc_safe_leave(gc_state);
+    jl_gc_safe_leave(ptls, gc_state);
     return ret;
 }
 

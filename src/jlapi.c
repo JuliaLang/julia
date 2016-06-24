@@ -326,27 +326,32 @@ JL_DLLEXPORT jl_value_t *(jl_typeof)(jl_value_t *v)
 
 JL_DLLEXPORT int8_t (jl_gc_unsafe_enter)(void)
 {
-    return jl_gc_unsafe_enter();
+    jl_tls_states_t *ptls = jl_get_ptls_states();
+    return jl_gc_unsafe_enter(ptls);
 }
 
 JL_DLLEXPORT void (jl_gc_unsafe_leave)(int8_t state)
 {
-    jl_gc_unsafe_leave(state);
+    jl_tls_states_t *ptls = jl_get_ptls_states();
+    jl_gc_unsafe_leave(ptls, state);
 }
 
 JL_DLLEXPORT int8_t (jl_gc_safe_enter)(void)
 {
-    return jl_gc_safe_enter();
+    jl_tls_states_t *ptls = jl_get_ptls_states();
+    return jl_gc_safe_enter(ptls);
 }
 
 JL_DLLEXPORT void (jl_gc_safe_leave)(int8_t state)
 {
-    jl_gc_safe_leave(state);
+    jl_tls_states_t *ptls = jl_get_ptls_states();
+    jl_gc_safe_leave(ptls, state);
 }
 
 JL_DLLEXPORT void (jl_gc_safepoint)(void)
 {
-    jl_gc_safepoint();
+    jl_tls_states_t *ptls = jl_get_ptls_states();
+    jl_gc_safepoint_(ptls);
 }
 
 JL_DLLEXPORT void (jl_cpu_pause)(void)

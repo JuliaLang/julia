@@ -122,7 +122,7 @@ static void ti_initthread(int16_t tid)
         abort();
     }
     ptls->bt_data = (uintptr_t*)bt_data;
-    jl_mk_thread_heap(&ptls->heap);
+    jl_mk_thread_heap(ptls);
     jl_install_thread_signal_handler();
 
     jl_all_tls_states[tid] = ptls;
@@ -178,6 +178,7 @@ static uv_barrier_t thread_init_done;
 // thread function: used by all except the main thread
 void ti_threadfun(void *arg)
 {
+    jl_tls_states_t *ptls = jl_get_ptls_states();
     ti_threadarg_t *ta = (ti_threadarg_t *)arg;
     ti_threadgroup_t *tg;
     ti_threadwork_t *work;
@@ -200,7 +201,7 @@ void ti_threadfun(void *arg)
     // critical region. In general, the following part of this function
     // shouldn't call any managed code without calling `jl_gc_unsafe_enter`
     // first.
-    jl_gc_state_set(JL_GC_STATE_SAFE, 0);
+    jl_gc_state_set(ptls, JL_GC_STATE_SAFE, 0);
     uv_barrier_wait(&thread_init_done);
     // initialize this thread in the thread group
     tg = ta->tg;
@@ -232,7 +233,7 @@ void ti_threadfun(void *arg)
                 //       the work, and after we have proper GC transition
                 //       support in the codegen and runtime we don't need to
                 //       enter GC unsafe region when starting the work.
-                int8_t gc_state = jl_gc_unsafe_enter();
+                int8_t gc_state = jl_gc_unsafe_enter(ptls);
                 // This is probably always NULL for now
                 jl_module_t *last_m = jl_current_module;
                 JL_GC_PUSH1(&last_m);
@@ -240,7 +241,7 @@ void ti_threadfun(void *arg)
                 ti_run_fun(work->args);
                 jl_current_module = last_m;
                 JL_GC_POP();
-                jl_gc_unsafe_leave(gc_state);
+                jl_gc_unsafe_leave(ptls, gc_state);
             }
         }
 
@@ -384,6 +385,7 @@ JL_DLLEXPORT void *jl_threadgroup(void) { return (void *)tgworld; }
 // and run it in all threads
 JL_DLLEXPORT jl_value_t *jl_threading_run(jl_svec_t *args)
 {
+    jl_tls_states_t *ptls = jl_get_ptls_states();
     // GC safe
 #if PROFILE_JL_THREADING
     uint64_t tstart = uv_hrtime();
@@ -392,7 +394,7 @@ JL_DLLEXPORT jl_value_t *jl_threading_run(jl_svec_t *args)
     jl_tupletype_t *argtypes = NULL;
     JL_TYPECHK(jl_threading_run, simplevector, (jl_value_t*)args);
 
-    int8_t gc_state = jl_gc_unsafe_enter();
+    int8_t gc_state = jl_gc_unsafe_enter(ptls);
     JL_GC_PUSH1(&argtypes);
     argtypes = arg_type_tuple(jl_svec_data(args), jl_svec_len(args));
     jl_compile_hint(argtypes);
@@ -426,10 +428,10 @@ JL_DLLEXPORT jl_value_t *jl_threading_run(jl_svec_t *args)
     user_ns[ti_tid] += (trun - tfork);
 #endif
 
-    jl_gc_state_set(JL_GC_STATE_SAFE, 0);
+    jl_gc_state_set(ptls, JL_GC_STATE_SAFE, 0);
     // wait for completion (TODO: nowait?)
     ti_threadgroup_join(tgworld, ti_tid);
-    jl_gc_state_set(0, JL_GC_STATE_SAFE);
+    jl_gc_state_set(ptls, 0, JL_GC_STATE_SAFE);
 
 #if PROFILE_JL_THREADING
     uint64_t tjoin = uv_hrtime();
@@ -437,7 +439,7 @@ JL_DLLEXPORT jl_value_t *jl_threading_run(jl_svec_t *args)
 #endif
 
     JL_GC_POP();
-    jl_gc_unsafe_leave(gc_state);
+    jl_gc_unsafe_leave(ptls, gc_state);
 
     return tw->ret;
 }

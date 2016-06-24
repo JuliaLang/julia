@@ -350,10 +350,11 @@ size_t rec_backtrace_ctx_dwarf(uintptr_t *data, size_t maxsize,
 
 JL_DLLEXPORT jl_value_t *jl_lookup_code_address(void *ip, int skipC)
 {
+    jl_tls_states_t *ptls = jl_get_ptls_states();
     jl_frame_t *frames = NULL;
-    int8_t gc_state = jl_gc_safe_enter();
+    int8_t gc_state = jl_gc_safe_enter(ptls);
     int n = jl_getFunctionInfo(&frames, (uintptr_t)ip, skipC, 0);
-    jl_gc_safe_leave(gc_state);
+    jl_gc_safe_leave(ptls, gc_state);
     jl_value_t *rs = (jl_value_t*)jl_alloc_svec(n);
     JL_GC_PUSH1(&rs);
     for (int i = 0; i < n; i++) {

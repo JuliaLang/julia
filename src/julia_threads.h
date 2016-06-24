@@ -109,6 +109,7 @@ typedef struct _jl_tls_states_t {
 #endif
     // Counter to disable finalizer **on the current thread**
     int finalizers_inhibited;
+    arraylist_t finalizers;
 } jl_tls_states_t;
 
 #ifdef __MIC__
@@ -340,11 +341,11 @@ JL_DLLEXPORT JL_CONST_FUNC jl_tls_states_t *(jl_get_ptls_states)(void);
 // This triggers a SegFault when we are in GC
 // Assign it to a variable to make sure the compiler emit the load
 // and to avoid Clang warning for -Wunused-volatile-lvalue
-#define jl_gc_safepoint() do {                                          \
-        jl_signal_fence();                                              \
-        size_t safepoint_load = *jl_get_ptls_states()->safepoint;       \
-        jl_signal_fence();                                              \
-        (void)safepoint_load;                                           \
+#define jl_gc_safepoint_(ptls) do {                     \
+        jl_signal_fence();                              \
+        size_t safepoint_load = *ptls->safepoint;       \
+        jl_signal_fence();                              \
+        (void)safepoint_load;                           \
     } while (0)
 #define jl_sigint_safepoint() do {                                      \
         jl_signal_fence();                                              \
@@ -355,9 +356,11 @@ JL_DLLEXPORT JL_CONST_FUNC jl_tls_states_t *(jl_get_ptls_states)(void);
 #ifndef JULIA_ENABLE_THREADING
 extern JL_DLLEXPORT jl_tls_states_t jl_tls_states;
 #define jl_get_ptls_states() (&jl_tls_states)
-#define jl_gc_state() ((int8_t)0)
-STATIC_INLINE int8_t jl_gc_state_set(int8_t state, int8_t old_state)
+#define jl_gc_state(ptls) ((int8_t)0)
+STATIC_INLINE int8_t jl_gc_state_set(jl_tls_states_t *ptls,
+                                     int8_t state, int8_t old_state)
 {
+    (void)ptls;
     (void)state;
     return old_state;
 }
@@ -365,25 +368,27 @@ STATIC_INLINE int8_t jl_gc_state_set(int8_t state, int8_t old_state)
 typedef jl_tls_states_t *(*jl_get_ptls_states_func)(void);
 JL_DLLEXPORT void jl_set_ptls_states_getter(jl_get_ptls_states_func f);
 // Make sure jl_gc_state() is always a rvalue
-#define jl_gc_state() ((int8_t)(jl_get_ptls_states()->gc_state))
-STATIC_INLINE int8_t jl_gc_state_set(int8_t state, int8_t old_state)
+#define jl_gc_state(ptls) ((int8_t)ptls->gc_state)
+STATIC_INLINE int8_t jl_gc_state_set(jl_tls_states_t *ptls,
+                                     int8_t state, int8_t old_state)
 {
-    jl_get_ptls_states()->gc_state = state;
+    ptls->gc_state = state;
     // A safe point is required if we transition from GC-safe region to
     // non GC-safe region.
     if (old_state && !state)
-        jl_gc_safepoint();
+        jl_gc_safepoint_(ptls);
     return old_state;
 }
 #endif // ifndef JULIA_ENABLE_THREADING
-STATIC_INLINE int8_t jl_gc_state_save_and_set(int8_t state)
+STATIC_INLINE int8_t jl_gc_state_save_and_set(jl_tls_states_t *ptls,
+                                              int8_t state)
 {
-    return jl_gc_state_set(state, jl_gc_state());
+    return jl_gc_state_set(ptls, state, jl_gc_state(ptls));
 }
-#define jl_gc_unsafe_enter() jl_gc_state_save_and_set(0)
-#define jl_gc_unsafe_leave(state) ((void)jl_gc_state_set((state), 0))
-#define jl_gc_safe_enter() jl_gc_state_save_and_set(JL_GC_STATE_SAFE)
-#define jl_gc_safe_leave(state) ((void)jl_gc_state_set((state), JL_GC_STATE_SAFE))
+#define jl_gc_unsafe_enter(ptls) jl_gc_state_save_and_set(ptls, 0)
+#define jl_gc_unsafe_leave(ptls, state) ((void)jl_gc_state_set(ptls, (state), 0))
+#define jl_gc_safe_enter(ptls) jl_gc_state_save_and_set(ptls, JL_GC_STATE_SAFE)
+#define jl_gc_safe_leave(ptls, state) ((void)jl_gc_state_set(ptls, (state), JL_GC_STATE_SAFE))
 JL_DLLEXPORT void (jl_gc_safepoint)(void);
 
 #define JL_SIGATOMIC_BEGIN() do {               \
@@ -428,8 +433,10 @@ static inline void jl_mutex_wait(jl_mutex_t *lock, int safepoint)
             lock->count = 1;
             return;
         }
-        if (safepoint)
-            jl_gc_safepoint();
+        if (safepoint) {
+            jl_tls_states_t *ptls = jl_get_ptls_states();
+            jl_gc_safepoint_(ptls);
+        }
         jl_cpu_pause();
         owner = lock->owner;
     }

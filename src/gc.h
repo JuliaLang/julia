@@ -178,7 +178,6 @@ typedef struct {
 extern jl_gc_num_t gc_num;
 extern region_t regions[REGION_COUNT];
 extern bigval_t *big_objects_marked;
-extern arraylist_t finalizer_list;
 extern arraylist_t finalizer_list_marked;
 extern arraylist_t to_finalize;
 extern int64_t lazy_freed_pages;
