@@ -327,7 +327,7 @@ Example:
 .. doctest::
 
     julia> x = reshape(1:16, 4, 4)
-    4×4 Array{Int64,2}:
+    4×4 Base.ReshapedArray{Int64,2,UnitRange{Int64},Tuple{}}:
      1  5   9  13
      2  6  10  14
      3  7  11  15
@@ -347,7 +347,7 @@ Example:
      16
 
     julia> x[1, [2 3; 4 1]]
-    2x2 Array{Int64,2}:
+    2×2 Array{Int64,2}:
       5  9
      13  1
 
@@ -396,7 +396,7 @@ Example:
 
 .. doctest::
 
-    julia> x = reshape(1:9, 3, 3)
+    julia> x = collect(reshape(1:9, 3, 3))
     3×3 Array{Int64,2}:
      1  4  7
      2  5  8
@@ -736,7 +736,7 @@ you can use the same names with an ``sp`` prefix:
 .. doctest::
 
     julia> spzeros(3,5)
-    3×5 sparse matrix with 0 Float64 nonzero entries:
+    3×5 sparse matrix with 0 Float64 nonzero entries
 
     julia> speye(3,5)
     3×5 sparse matrix with 3 Float64 nonzero entries:

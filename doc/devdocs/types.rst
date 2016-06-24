@@ -194,7 +194,7 @@ One can construct :obj:`TypeVar`\s manually:
 .. doctest::
 
    julia> TypeVar(:V, Signed, Real, false)
-   V<:Real
+   Signed<:V<:Real
 
 There are convenience versions that allow you to omit any of these
 arguments except the ``name`` symbol.
@@ -388,7 +388,7 @@ able to accommodate any tuple.  Let's check the parameters:
    Tuple
 
    julia> Tuple.parameters
-   svec(Vararg{Any})
+   svec(Vararg{Any,N})
 
 It's worth noting that the parameter is a type, ``Any``, rather than a
 ``TypeVar T<:Any``: compare
@@ -396,7 +396,7 @@ It's worth noting that the parameter is a type, ``Any``, rather than a
 .. doctest::
 
    julia> jl_(Tuple.parameters)
-   svec(Vararg{Any})
+   svec(Vararg{Any, N<:Any})
 
    julia> jl_(Array.parameters)
    svec(T<:Any, N<:Any)
