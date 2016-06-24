@@ -43,6 +43,11 @@ extern unsigned sig_stack_size;
 JL_DLLEXPORT extern int jl_lineno;
 JL_DLLEXPORT extern const char *jl_filename;
 
+JL_DLLEXPORT void *jl_gc_pool_alloc(jl_tls_states_t *ptls, jl_gc_pool_t *p,
+                                    int osize, int end_offset);
+JL_DLLEXPORT jl_value_t *jl_gc_big_alloc(jl_tls_states_t *ptls, size_t allocsz);
+int jl_gc_classify_pools(size_t sz, int *osize, int *end_offset);
+
 STATIC_INLINE jl_value_t *newobj(jl_value_t *type, size_t nfields)
 {
     jl_value_t *jv = NULL;
