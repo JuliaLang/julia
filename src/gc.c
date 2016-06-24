@@ -102,6 +102,7 @@ static void schedule_finalization(void *o, void *f)
 
 static void run_finalizer(jl_value_t *o, jl_value_t *ff)
 {
+    jl_ptls_t ptls = jl_get_ptls_states();
     assert(!jl_typeis(ff, jl_voidpointer_type));
     jl_value_t *args[2] = {ff,o};
     JL_TRY {
@@ -109,7 +110,7 @@ static void run_finalizer(jl_value_t *o, jl_value_t *ff)
     }
     JL_CATCH {
         jl_printf(JL_STDERR, "error in running finalizer: ");
-        jl_static_show(JL_STDERR, jl_exception_in_transit);
+        jl_static_show(JL_STDERR, ptls->exception_in_transit);
         jl_printf(JL_STDERR, "\n");
     }
 }
@@ -161,22 +162,22 @@ static void finalize_object(arraylist_t *list, jl_value_t *o,
 
 // The first two entries are assumed to be empty and the rest are assumed to
 // be pointers to `jl_value_t` objects
-static void jl_gc_push_arraylist(arraylist_t *list)
+static void jl_gc_push_arraylist(jl_ptls_t ptls, arraylist_t *list)
 {
     void **items = list->items;
     items[0] = (void*)(((uintptr_t)list->len - 2) << 1);
-    items[1] = jl_pgcstack;
-    jl_pgcstack = (jl_gcframe_t*)items;
+    items[1] = ptls->pgcstack;
+    ptls->pgcstack = (jl_gcframe_t*)items;
 }
 
 // Same assumption as `jl_gc_push_arraylist`. Requires the finalizers lock
 // to be hold for the current thread and will release the lock when the
 // function returns.
-static void jl_gc_run_finalizers_in_list(arraylist_t *list)
+static void jl_gc_run_finalizers_in_list(jl_ptls_t ptls, arraylist_t *list)
 {
     size_t len = list->len;
     jl_value_t **items = (jl_value_t**)list->items;
-    jl_gc_push_arraylist(list);
+    jl_gc_push_arraylist(ptls, list);
     JL_UNLOCK_NOGC(&finalizers_lock);
     for (size_t i = 2;i < len;i += 2) {
         run_finalizer(items[i], items[i + 1]);
@@ -184,7 +185,7 @@ static void jl_gc_run_finalizers_in_list(arraylist_t *list)
     JL_GC_POP();
 }
 
-static void run_finalizers(void)
+static void run_finalizers(jl_ptls_t ptls)
 {
     JL_LOCK_NOGC(&finalizers_lock);
     if (to_finalize.len == 0) {
@@ -201,7 +202,7 @@ static void run_finalizers(void)
     arraylist_push(&copied_list, copied_list.items[0]);
     arraylist_push(&copied_list, copied_list.items[1]);
     // This releases the finalizers lock.
-    jl_gc_run_finalizers_in_list(&copied_list);
+    jl_gc_run_finalizers_in_list(ptls, &copied_list);
     arraylist_free(&copied_list);
 }
 
@@ -212,7 +213,7 @@ JL_DLLEXPORT void jl_gc_enable_finalizers(jl_ptls_t ptls, int on)
     ptls->finalizers_inhibited = new_val;
     if (!new_val && old_val && !ptls->in_finalizer) {
         ptls->in_finalizer = 1;
-        run_finalizers();
+        run_finalizers(ptls);
         ptls->in_finalizer = 0;
     }
 }
@@ -233,14 +234,14 @@ static void schedule_all_finalizers(arraylist_t *flist)
     flist->len = 0;
 }
 
-void jl_gc_run_all_finalizers(void)
+void jl_gc_run_all_finalizers(jl_ptls_t ptls)
 {
     for (int i = 0;i < jl_n_threads;i++) {
         jl_ptls_t ptls2 = jl_all_tls_states[i];
         schedule_all_finalizers(&ptls2->finalizers);
     }
     schedule_all_finalizers(&finalizer_list_marked);
-    run_finalizers();
+    run_finalizers(ptls);
 }
 
 static void gc_add_finalizer_(jl_ptls_t ptls, void *v, void *f)
@@ -302,7 +303,7 @@ JL_DLLEXPORT void jl_finalize_th(jl_ptls_t ptls, jl_value_t *o)
     finalize_object(&finalizer_list_marked, o, &copied_list, 0);
     if (copied_list.len > 2) {
         // This releases the finalizers lock.
-        jl_gc_run_finalizers_in_list(&copied_list);
+        jl_gc_run_finalizers_in_list(ptls, &copied_list);
     }
     else {
         JL_UNLOCK_NOGC(&finalizers_lock);
@@ -1926,7 +1927,7 @@ JL_DLLEXPORT void jl_gc_collect(int full)
     if (!ptls->finalizers_inhibited) {
         int8_t was_in_finalizer = ptls->in_finalizer;
         ptls->in_finalizer = 1;
-        run_finalizers();
+        run_finalizers(ptls);
         ptls->in_finalizer = was_in_finalizer;
     }
 }

@@ -82,6 +82,7 @@ JL_DLLEXPORT void jl_register_linfo_tracer(void (*callback)(jl_lambda_info_t *tr
 
 void jl_call_tracer(tracer_cb callback, jl_value_t *tracee)
 {
+    jl_ptls_t ptls = jl_get_ptls_states();
     int last_in = in_pure_callback;
     JL_TRY {
         in_pure_callback = 1;
@@ -91,7 +92,7 @@ void jl_call_tracer(tracer_cb callback, jl_value_t *tracee)
     JL_CATCH {
         in_pure_callback = last_in;
         jl_printf(JL_STDERR, "WARNING: tracer callback function threw an error:\n");
-        jl_static_show(JL_STDERR, jl_exception_in_transit);
+        jl_static_show(JL_STDERR, ptls->exception_in_transit);
         jl_printf(JL_STDERR, "\n");
         jlbacktrace();
     }

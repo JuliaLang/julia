@@ -1796,7 +1796,9 @@ static void jl_finalize_serializer(ios_t *f) {
 }
 
 void jl_typemap_rehash(union jl_typemap_t ml, int8_t offs);
-static void jl_reinit_item(ios_t *f, jl_value_t *v, int how, arraylist_t *tracee_list) {
+static void jl_reinit_item(ios_t *f, jl_value_t *v, int how, arraylist_t *tracee_list)
+{
+    jl_ptls_t ptls = jl_get_ptls_states();
     JL_TRY {
         switch (how) {
             case 1: { // rehash ObjectIdDict
@@ -1846,11 +1848,13 @@ static void jl_reinit_item(ios_t *f, jl_value_t *v, int how, arraylist_t *tracee
         jl_printf(JL_STDERR, "WARNING: error while reinitializing value ");
         jl_static_show(JL_STDERR, v);
         jl_printf(JL_STDERR, ":\n");
-        jl_static_show(JL_STDERR, jl_exception_in_transit);
+        jl_static_show(JL_STDERR, ptls->exception_in_transit);
         jl_printf(JL_STDERR, "\n");
     }
 }
-static jl_array_t *jl_finalize_deserializer(ios_t *f, arraylist_t *tracee_list) {
+
+static jl_array_t *jl_finalize_deserializer(ios_t *f, arraylist_t *tracee_list)
+{
     jl_array_t *init_order = NULL;
     if (mode != MODE_MODULE)
         init_order = (jl_array_t*)jl_deserialize_value(f, NULL);
@@ -1984,6 +1988,7 @@ JL_DLLEXPORT void jl_preload_sysimg_so(const char *fname)
 
 static void jl_restore_system_image_from_stream(ios_t *f)
 {
+    jl_ptls_t ptls = jl_get_ptls_states();
     JL_LOCK(&dump_lock); // Might GC
     int en = jl_gc_enable(0);
     DUMP_MODES last_mode = mode;
@@ -2011,7 +2016,7 @@ static void jl_restore_system_image_from_stream(ios_t *f)
                                                  jl_symbol("Core"));
     jl_base_module = (jl_module_t*)jl_get_global(jl_main_module,
                                                  jl_symbol("Base"));
-    jl_current_module = jl_base_module; // run start_image in Base
+    ptls->current_module = jl_base_module; // run start_image in Base
 
     // ensure everything in deser_tag is reassociated with its GlobalValue
     for (i = 2; i < 255; i++) {
@@ -2392,6 +2397,7 @@ JL_DLLEXPORT jl_value_t *jl_restore_incremental(const char *fname)
 
 void jl_init_serializer(void)
 {
+    jl_ptls_t ptls = jl_get_ptls_states();
     htable_new(&ser_tag, 0);
     htable_new(&common_symbol_tag, 0);
     htable_new(&fptr_to_id, sizeof(id_to_fptrs)/sizeof(*id_to_fptrs));
@@ -2474,7 +2480,7 @@ void jl_init_serializer(void)
                      jl_gotonode_type->name, jl_quotenode_type->name,
                      jl_globalref_type->name,
 
-                     jl_root_task,
+                     ptls->root_task,
 
                      NULL };
 

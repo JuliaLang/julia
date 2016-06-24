@@ -210,9 +210,10 @@ JL_DLLEXPORT void jl_enter_handler(jl_handler_t *eh)
 
 JL_DLLEXPORT void jl_pop_handler(int n)
 {
+    jl_ptls_t ptls = jl_get_ptls_states();
     if (__unlikely(n <= 0))
         return;
-    jl_handler_t *eh = jl_current_task->eh;
+    jl_handler_t *eh = ptls->current_task->eh;
     while (--n > 0)
         eh = eh->prev;
     jl_eh_restore_state(eh);
@@ -540,6 +541,7 @@ JL_DLLEXPORT jl_value_t *jl_toplevel_eval_in(jl_module_t *m, jl_value_t *ex)
 
 jl_value_t *jl_toplevel_eval_in_warn(jl_module_t *m, jl_value_t *ex, int delay_warn)
 {
+    jl_ptls_t ptls = jl_get_ptls_states();
     static int jl_warn_on_eval = 0;
     int last_delay_warn = jl_warn_on_eval;
     if (m == NULL)
@@ -548,8 +550,8 @@ jl_value_t *jl_toplevel_eval_in_warn(jl_module_t *m, jl_value_t *ex, int delay_w
         return jl_eval_global_var(m, (jl_sym_t*)ex);
     jl_value_t *v=NULL;
     int last_lineno = jl_lineno;
-    jl_module_t *last_m = jl_current_module;
-    jl_module_t *task_last_m = jl_current_task->current_module;
+    jl_module_t *last_m = ptls->current_module;
+    jl_module_t *task_last_m = ptls->current_task->current_module;
     if (!delay_warn && jl_options.incremental && jl_generating_output()) {
         if (m != last_m) {
             jl_printf(JL_STDERR, "WARNING: eval from module %s to %s:    \n",
@@ -567,27 +569,28 @@ jl_value_t *jl_toplevel_eval_in_warn(jl_module_t *m, jl_value_t *ex, int delay_w
         jl_error("eval cannot be used in a generated function");
     JL_TRY {
         jl_warn_on_eval = delay_warn && (jl_warn_on_eval || m != last_m); // compute whether a warning was suppressed
-        jl_current_task->current_module = jl_current_module = m;
+        ptls->current_task->current_module = ptls->current_module = m;
         v = jl_toplevel_eval(ex);
     }
     JL_CATCH {
         jl_warn_on_eval = last_delay_warn;
         jl_lineno = last_lineno;
-        jl_current_module = last_m;
-        jl_current_task->current_module = task_last_m;
+        ptls->current_module = last_m;
+        ptls->current_task->current_module = task_last_m;
         jl_rethrow();
     }
     jl_warn_on_eval = last_delay_warn;
     jl_lineno = last_lineno;
-    jl_current_module = last_m;
-    jl_current_task->current_module = task_last_m;
+    ptls->current_module = last_m;
+    ptls->current_task->current_module = task_last_m;
     assert(v);
     return v;
 }
 
 JL_CALLABLE(jl_f_isdefined)
 {
-    jl_module_t *m = jl_current_module;
+    jl_ptls_t ptls = jl_get_ptls_states();
+    jl_module_t *m = ptls->current_module;
     jl_sym_t *s=NULL;
     JL_NARGSV(isdefined, 1);
     if (jl_is_array(args[0])) {

@@ -200,7 +200,7 @@ static void JL_NORETURN finish_task(jl_task_t *t, jl_value_t *resultval)
     if (ptls->tid != 0) {
         // For now, only thread 0 runs the task scheduler.
         // The others return to the thread loop
-        jl_switchto(jl_root_task, jl_nothing);
+        jl_switchto(ptls->root_task, jl_nothing);
         gc_debug_critical_error();
         abort();
     }
@@ -531,7 +531,8 @@ JL_DLLEXPORT void jl_throw(jl_value_t *e)
 
 JL_DLLEXPORT void jl_rethrow(void)
 {
-    throw_internal(jl_exception_in_transit);
+    jl_ptls_t ptls = jl_get_ptls_states();
+    throw_internal(ptls->exception_in_transit);
 }
 
 JL_DLLEXPORT void jl_rethrow_other(jl_value_t *e)
@@ -541,6 +542,7 @@ JL_DLLEXPORT void jl_rethrow_other(jl_value_t *e)
 
 JL_DLLEXPORT jl_task_t *jl_new_task(jl_function_t *start, size_t ssize)
 {
+    jl_ptls_t ptls = jl_get_ptls_states();
     size_t pagesz = jl_page_size;
     jl_task_t *t = (jl_task_t*)jl_gc_allocobj(sizeof(jl_task_t));
     jl_set_typeof(t, jl_task_type);
@@ -551,7 +553,7 @@ JL_DLLEXPORT jl_task_t *jl_new_task(jl_function_t *start, size_t ssize)
     ssize = LLT_ALIGN(ssize, pagesz);
     t->ssize = ssize;
     t->current_module = NULL;
-    t->parent = jl_current_task;
+    t->parent = ptls->current_task;
     t->tls = jl_nothing;
     t->consumers = jl_nothing;
     t->state = runnable_sym;
@@ -607,7 +609,8 @@ JL_CALLABLE(jl_unprotect_stack)
 
 JL_DLLEXPORT jl_value_t *jl_get_current_task(void)
 {
-    return (jl_value_t*)jl_current_task;
+    jl_ptls_t ptls = jl_get_ptls_states();
+    return (jl_value_t*)ptls->current_task;
 }
 
 jl_function_t *jl_unprotect_stack_func;
@@ -655,38 +658,38 @@ void jl_init_tasks(void)
 void jl_init_root_task(void *stack, size_t ssize)
 {
     jl_ptls_t ptls = jl_get_ptls_states();
-    jl_current_task = (jl_task_t*)jl_gc_allocobj(sizeof(jl_task_t));
-    jl_set_typeof(jl_current_task, jl_task_type);
+    ptls->current_task = (jl_task_t*)jl_gc_allocobj(sizeof(jl_task_t));
+    jl_set_typeof(ptls->current_task, jl_task_type);
 #ifdef COPY_STACKS
-    jl_current_task->ssize = 0;  // size of saved piece
-    jl_current_task->bufsz = 0;
-    jl_current_task->stkbuf = NULL;
+    ptls->current_task->ssize = 0;  // size of saved piece
+    ptls->current_task->bufsz = 0;
+    ptls->current_task->stkbuf = NULL;
 #else
-    jl_current_task->ssize = ssize;
-    jl_current_task->stkbuf = stack;
+    ptls->current_task->ssize = ssize;
+    ptls->current_task->stkbuf = stack;
 #endif
-    jl_current_task->started = 1;
-    jl_current_task->parent = jl_current_task;
-    jl_current_task->current_module = jl_current_module;
-    jl_current_task->tls = jl_nothing;
-    jl_current_task->consumers = jl_nothing;
-    jl_current_task->state = runnable_sym;
-    jl_current_task->start = NULL;
-    jl_current_task->result = jl_nothing;
-    jl_current_task->donenotify = jl_nothing;
-    jl_current_task->exception = jl_nothing;
-    jl_current_task->backtrace = jl_nothing;
-    jl_current_task->eh = NULL;
-    jl_current_task->gcstack = NULL;
-    jl_current_task->tid = ptls->tid;
+    ptls->current_task->started = 1;
+    ptls->current_task->parent = ptls->current_task;
+    ptls->current_task->current_module = ptls->current_module;
+    ptls->current_task->tls = jl_nothing;
+    ptls->current_task->consumers = jl_nothing;
+    ptls->current_task->state = runnable_sym;
+    ptls->current_task->start = NULL;
+    ptls->current_task->result = jl_nothing;
+    ptls->current_task->donenotify = jl_nothing;
+    ptls->current_task->exception = jl_nothing;
+    ptls->current_task->backtrace = jl_nothing;
+    ptls->current_task->eh = NULL;
+    ptls->current_task->gcstack = NULL;
+    ptls->current_task->tid = ptls->tid;
 #ifdef JULIA_ENABLE_THREADING
-    arraylist_new(&jl_current_task->locks, 0);
+    arraylist_new(&ptls->current_task->locks, 0);
 #endif
 
-    jl_root_task = jl_current_task;
+    ptls->root_task = ptls->current_task;
 
-    jl_exception_in_transit = (jl_value_t*)jl_nothing;
-    jl_task_arg_in_transit = (jl_value_t*)jl_nothing;
+    ptls->exception_in_transit = (jl_value_t*)jl_nothing;
+    ptls->task_arg_in_transit = (jl_value_t*)jl_nothing;
 }
 
 JL_DLLEXPORT int jl_is_task_started(jl_task_t *t)
