@@ -1325,11 +1325,17 @@ inserted and priorities accessed or changed using indexing notation.
 
     julia> # Insert keys with associated priorities
            pq["a"] = 10; pq["b"] = 5; pq["c"] = 15; pq
-    Base.Collections.PriorityQueue{Any,Any,Base.Order.ForwardOrdering}("c"=>15,"b"=>5,"a"=>10)
+    Base.Collections.PriorityQueue{Any,Any,Base.Order.ForwardOrdering} with 3 entries:
+      "c" => 15
+      "b" => 5
+      "a" => 10
 
     julia> # Change the priority of an existing key
            pq["a"] = 0; pq
-    Base.Collections.PriorityQueue{Any,Any,Base.Order.ForwardOrdering}("c"=>15,"b"=>5,"a"=>0)
+    Base.Collections.PriorityQueue{Any,Any,Base.Order.ForwardOrdering} with 3 entries:
+      "c" => 15
+      "b" => 5
+      "a" => 0
 
 Heap Functions
 --------------
