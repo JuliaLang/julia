@@ -147,7 +147,7 @@ typedef struct {
     uint16_t osize; // size of each object in this page
     uint16_t fl_begin_offset; // offset of first free object in this page
     uint16_t fl_end_offset;   // offset of last free object in this page
-    uint16_t thread_n;        // index (into jl_thread_heap) of heap that owns this page
+    uint16_t thread_n;        // thread id of the heap that owns this page
     char *data;
     uint8_t *ages;
 } jl_gc_pagemeta_t;
@@ -278,8 +278,6 @@ void pre_mark(void);
 void gc_mark_object_list(arraylist_t *list, size_t start);
 void visit_mark_stack(void);
 void gc_debug_init(void);
-
-#define jl_thread_heap (jl_get_ptls_states()->heap)
 
 // GC pages
 

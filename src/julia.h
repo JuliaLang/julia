@@ -1508,7 +1508,7 @@ static inline void jl_lock_frame_pop(void)
 
 STATIC_INLINE void jl_eh_restore_state(jl_handler_t *eh)
 {
-    jl_tls_states_t *ptls = jl_get_ptls_states();
+    jl_ptls_t ptls = jl_get_ptls_states();
     jl_task_t *current_task = ptls->current_task;
     // `eh` may not be `jl_current_task->eh`. See `jl_pop_handler`
     // This function should **NOT** have any safepoint before the ones at the
@@ -1532,7 +1532,7 @@ STATIC_INLINE void jl_eh_restore_state(jl_handler_t *eh)
         jl_gc_safepoint_(ptls);
     }
     if (old_defer_signal && !eh->defer_signal) {
-        jl_sigint_safepoint();
+        jl_sigint_safepoint(ptls);
     }
 }
 

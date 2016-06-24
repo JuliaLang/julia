@@ -111,6 +111,7 @@ typedef struct _jl_tls_states_t {
     int finalizers_inhibited;
     arraylist_t finalizers;
 } jl_tls_states_t;
+typedef jl_tls_states_t *jl_ptls_t;
 
 #ifdef __MIC__
 #  define jl_cpu_pause() _mm_delay_64(100)
@@ -337,7 +338,7 @@ JL_DLLEXPORT void (jl_cpu_pause)(void);
 JL_DLLEXPORT void (jl_cpu_wake)(void);
 
 // Accessing the tls variables, gc safepoint and gc states
-JL_DLLEXPORT JL_CONST_FUNC jl_tls_states_t *(jl_get_ptls_states)(void);
+JL_DLLEXPORT JL_CONST_FUNC jl_ptls_t (jl_get_ptls_states)(void);
 // This triggers a SegFault when we are in GC
 // Assign it to a variable to make sure the compiler emit the load
 // and to avoid Clang warning for -Wunused-volatile-lvalue
@@ -347,32 +348,32 @@ JL_DLLEXPORT JL_CONST_FUNC jl_tls_states_t *(jl_get_ptls_states)(void);
         jl_signal_fence();                              \
         (void)safepoint_load;                           \
     } while (0)
-#define jl_sigint_safepoint() do {                                      \
-        jl_signal_fence();                                              \
-        size_t safepoint_load = jl_get_ptls_states()->safepoint[-1];    \
-        jl_signal_fence();                                              \
-        (void)safepoint_load;                                           \
+#define jl_sigint_safepoint(ptls) do {                  \
+        jl_signal_fence();                              \
+        size_t safepoint_load = ptls->safepoint[-1];    \
+        jl_signal_fence();                              \
+        (void)safepoint_load;                           \
     } while (0)
 #ifndef JULIA_ENABLE_THREADING
 extern JL_DLLEXPORT jl_tls_states_t jl_tls_states;
 #define jl_get_ptls_states() (&jl_tls_states)
 #define jl_gc_state(ptls) ((int8_t)0)
-STATIC_INLINE int8_t jl_gc_state_set(jl_tls_states_t *ptls,
-                                     int8_t state, int8_t old_state)
+STATIC_INLINE int8_t jl_gc_state_set(jl_ptls_t ptls, int8_t state,
+                                     int8_t old_state)
 {
     (void)ptls;
     (void)state;
     return old_state;
 }
 #else // ifndef JULIA_ENABLE_THREADING
-typedef jl_tls_states_t *(*jl_get_ptls_states_func)(void);
+typedef jl_ptls_t (*jl_get_ptls_states_func)(void);
 #if !defined(_OS_DARWIN_) && !defined(_OS_WINDOWS_)
 JL_DLLEXPORT void jl_set_ptls_states_getter(jl_get_ptls_states_func f);
 #endif
 // Make sure jl_gc_state() is always a rvalue
 #define jl_gc_state(ptls) ((int8_t)ptls->gc_state)
-STATIC_INLINE int8_t jl_gc_state_set(jl_tls_states_t *ptls,
-                                     int8_t state, int8_t old_state)
+STATIC_INLINE int8_t jl_gc_state_set(jl_ptls_t ptls, int8_t state,
+                                     int8_t old_state)
 {
     ptls->gc_state = state;
     // A safe point is required if we transition from GC-safe region to
@@ -382,7 +383,7 @@ STATIC_INLINE int8_t jl_gc_state_set(jl_tls_states_t *ptls,
     return old_state;
 }
 #endif // ifndef JULIA_ENABLE_THREADING
-STATIC_INLINE int8_t jl_gc_state_save_and_set(jl_tls_states_t *ptls,
+STATIC_INLINE int8_t jl_gc_state_save_and_set(jl_ptls_t ptls,
                                               int8_t state)
 {
     return jl_gc_state_set(ptls, state, jl_gc_state(ptls));
@@ -400,7 +401,7 @@ JL_DLLEXPORT void (jl_gc_safepoint)(void);
 #define JL_SIGATOMIC_END() do {                                 \
         jl_signal_fence();                                      \
         if (--jl_get_ptls_states()->defer_signal == 0) {        \
-            jl_sigint_safepoint();                              \
+            jl_sigint_safepoint(jl_get_ptls_states());          \
         }                                                       \
     } while (0)
 
@@ -410,7 +411,7 @@ typedef struct {
     uint32_t count;
 } jl_mutex_t;
 
-JL_DLLEXPORT void jl_gc_enable_finalizers(int on);
+JL_DLLEXPORT void jl_gc_enable_finalizers(jl_ptls_t ptls, int on);
 static inline void jl_lock_frame_push(jl_mutex_t *lock);
 static inline void jl_lock_frame_pop(void);
 
@@ -436,7 +437,7 @@ static inline void jl_mutex_wait(jl_mutex_t *lock, int safepoint)
             return;
         }
         if (safepoint) {
-            jl_tls_states_t *ptls = jl_get_ptls_states();
+            jl_ptls_t ptls = jl_get_ptls_states();
             jl_gc_safepoint_(ptls);
         }
         jl_cpu_pause();
@@ -451,10 +452,11 @@ static inline void jl_mutex_lock_nogc(jl_mutex_t *lock)
 
 static inline void jl_mutex_lock(jl_mutex_t *lock)
 {
+    jl_ptls_t ptls = jl_get_ptls_states();
     JL_SIGATOMIC_BEGIN();
     jl_mutex_wait(lock, 1);
     jl_lock_frame_push(lock);
-    jl_gc_enable_finalizers(0);
+    jl_gc_enable_finalizers(ptls, 0);
 }
 
 static inline void jl_mutex_unlock_nogc(jl_mutex_t *lock)
@@ -469,8 +471,9 @@ static inline void jl_mutex_unlock_nogc(jl_mutex_t *lock)
 
 static inline void jl_mutex_unlock(jl_mutex_t *lock)
 {
+    jl_ptls_t ptls = jl_get_ptls_states();
     jl_mutex_unlock_nogc(lock);
-    jl_gc_enable_finalizers(1);
+    jl_gc_enable_finalizers(ptls, 1);
     jl_lock_frame_pop();
     JL_SIGATOMIC_END();
 }
@@ -486,15 +489,15 @@ static inline void jl_mutex_check_type(jl_mutex_t *m)
 {
     (void)m;
 }
-#define JL_LOCK(m) do {                         \
-        JL_SIGATOMIC_BEGIN();                   \
-        jl_gc_enable_finalizers(0);             \
-        jl_mutex_check_type(m);                 \
+#define JL_LOCK(m) do {                                   \
+        JL_SIGATOMIC_BEGIN();                             \
+        jl_gc_enable_finalizers(jl_get_ptls_states(), 0); \
+        jl_mutex_check_type(m);                           \
     } while (0)
-#define JL_UNLOCK(m) do {                       \
-        jl_gc_enable_finalizers(1);             \
-        jl_mutex_check_type(m);                 \
-        JL_SIGATOMIC_END();                     \
+#define JL_UNLOCK(m) do {                                       \
+        jl_gc_enable_finalizers(jl_get_ptls_states(), 1);       \
+        jl_mutex_check_type(m);                                 \
+        JL_SIGATOMIC_END();                                     \
     } while (0)
 #define JL_LOCK_NOGC(m) jl_mutex_check_type(m)
 #define JL_UNLOCK_NOGC(m) jl_mutex_check_type(m)

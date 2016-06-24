@@ -87,6 +87,7 @@ size_t jl_page_size;
 
 void jl_init_stack_limits(int ismaster)
 {
+    jl_ptls_t ptls = jl_get_ptls_states();
 #ifdef _OS_WINDOWS_
     (void)ismaster;
 #  ifdef _COMPILER_MICROSOFT_
@@ -104,8 +105,8 @@ void jl_init_stack_limits(int ismaster)
 #    endif
 #  endif
     // https://en.wikipedia.org/wiki/Win32_Thread_Information_Block
-    jl_stack_hi = (char*)tib[1]; // Stack Base / Bottom of stack (high address)
-    jl_stack_lo = (char*)tib[2]; // Stack Limit / Ceiling of stack (low address)
+    ptls->stack_hi = (char*)tib[1]; // Stack Base / Bottom of stack (high address)
+    ptls->stack_lo = (char*)tib[2]; // Stack Limit / Ceiling of stack (low address)
 #else
 #  ifdef JULIA_ENABLE_THREADING
     // Only use pthread_*_np functions to get stack address for non-master
@@ -119,8 +120,8 @@ void jl_init_stack_limits(int ismaster)
         size_t stacksize;
         pthread_attr_getstack(&attr, &stackaddr, &stacksize);
         pthread_attr_destroy(&attr);
-        jl_stack_lo = (char*)stackaddr;
-        jl_stack_hi = (char*)stackaddr + stacksize;
+        ptls->stack_lo = (char*)stackaddr;
+        ptls->stack_hi = (char*)stackaddr + stacksize;
         return;
 #    elif defined(_OS_DARWIN_)
         extern void *pthread_get_stackaddr_np(pthread_t thread);
@@ -128,8 +129,8 @@ void jl_init_stack_limits(int ismaster)
         pthread_t thread = pthread_self();
         void *stackaddr = pthread_get_stackaddr_np(thread);
         size_t stacksize = pthread_get_stacksize_np(thread);
-        jl_stack_lo = (char*)stackaddr;
-        jl_stack_hi = (char*)stackaddr + stacksize;
+        ptls->stack_lo = (char*)stackaddr;
+        ptls->stack_hi = (char*)stackaddr + stacksize;
         return;
 #    elif defined(_OS_FREEBSD_)
         pthread_attr_t attr;
@@ -139,8 +140,8 @@ void jl_init_stack_limits(int ismaster)
         size_t stacksize;
         pthread_attr_getstack(&attr, &stackaddr, &stacksize);
         pthread_attr_destroy(&attr);
-        jl_stack_lo = (char*)stackaddr;
-        jl_stack_hi = (char*)stackaddr + stacksize;
+        ptls->stack_lo = (char*)stackaddr;
+        ptls->stack_hi = (char*)stackaddr + stacksize;
         return;
 #    else
 #      warning "Getting stack size for thread is not supported."
@@ -152,8 +153,8 @@ void jl_init_stack_limits(int ismaster)
     struct rlimit rl;
     getrlimit(RLIMIT_STACK, &rl);
     size_t stack_size = rl.rlim_cur;
-    jl_stack_hi = (char*)&stack_size;
-    jl_stack_lo = jl_stack_hi - stack_size;
+    ptls->stack_hi = (char*)&stack_size;
+    ptls->stack_lo = ptls->stack_hi - stack_size;
 #endif
 }
 
@@ -525,7 +526,8 @@ static void jl_resolve_sysimg_location(JL_IMAGE_SEARCH rel)
 
 static void jl_set_io_wait(int v)
 {
-    jl_get_ptls_states()->io_wait = v;
+    jl_ptls_t ptls = jl_get_ptls_states();
+    ptls->io_wait = v;
 }
 
 void _julia_init(JL_IMAGE_SEARCH rel)
@@ -534,6 +536,7 @@ void _julia_init(JL_IMAGE_SEARCH rel)
     // Make sure we finalize the tls callback before starting any threads.
     jl_get_ptls_states_getter();
 #endif
+    jl_ptls_t ptls = jl_get_ptls_states();
     jl_safepoint_init();
     libsupport_init();
     ios_set_io_wait_func = jl_set_io_wait;
@@ -614,7 +617,7 @@ void _julia_init(JL_IMAGE_SEARCH rel)
     jl_init_frontend();
     jl_init_types();
     jl_init_tasks();
-    jl_init_root_task(jl_stack_lo, jl_stack_hi-jl_stack_lo);
+    jl_init_root_task(ptls->stack_lo, ptls->stack_hi-ptls->stack_lo);
 
     init_stdio();
     // libuv stdio cleanup depends on jl_init_tasks() because JL_TRY is used in jl_atexit_hook()
@@ -793,7 +796,7 @@ void jl_get_builtin_hooks(void)
 {
     int t;
     for (t = 0; t < jl_n_threads; t++) {
-        jl_tls_states_t *ptls2 = jl_all_tls_states[t];
+        jl_ptls_t ptls2 = jl_all_tls_states[t];
         ptls2->root_task->tls = jl_nothing;
         ptls2->root_task->consumers = jl_nothing;
         ptls2->root_task->donenotify = jl_nothing;

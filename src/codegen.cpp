@@ -1334,7 +1334,7 @@ static uint64_t compute_obj_symsize(const object::ObjectFile *obj, uint64_t offs
 extern "C" JL_DLLEXPORT
 const jl_value_t *jl_dump_function_asm(void *f, int raw_mc)
 {
-    jl_tls_states_t *ptls = jl_get_ptls_states();
+    jl_ptls_t ptls = jl_get_ptls_states();
     std::string code;
     llvm::raw_string_ostream stream(code);
 #ifndef LLVM37

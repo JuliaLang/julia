@@ -97,6 +97,7 @@ static int mangle_pointers;
 
 static void _probe_arch(void)
 {
+    jl_ptls_t ptls = jl_get_ptls_states();
     struct _probe_data p;
     memset(p.probe_env, 0, sizeof(jl_jmp_buf));
     memset(p.probe_sameAR, 0, sizeof(jl_jmp_buf));
@@ -112,12 +113,12 @@ static void _probe_arch(void)
 
 #if defined(__linux__) && defined(__i386__)
     char **s = (char**)p.ref_probe;
-    mangle_pointers = !(s[4] > jl_stack_lo &&
-                        s[4] < jl_stack_hi);
+    mangle_pointers = !(s[4] > ptls->stack_lo &&
+                        s[4] < ptls->stack_hi);
 #elif defined(__linux__) && defined(__x86_64__)
     char **s = (char**)p.ref_probe;
-    mangle_pointers = !(s[6] > jl_stack_lo &&
-                        s[6] < jl_stack_hi);
+    mangle_pointers = !(s[6] > ptls->stack_lo &&
+                        s[6] < ptls->stack_hi);
 #else
     mangle_pointers = 0;
 #endif
@@ -140,7 +141,7 @@ jl_datatype_t *jl_task_type;
 #define ASM_COPY_STACKS
 #endif
 
-static void NOINLINE save_stack(jl_tls_states_t *ptls, jl_task_t *t)
+static void NOINLINE save_stack(jl_ptls_t ptls, jl_task_t *t)
 {
     if (t->state == done_sym || t->state == failed_sym)
         return;
@@ -163,7 +164,7 @@ static void NOINLINE save_stack(jl_tls_states_t *ptls, jl_task_t *t)
     jl_gc_wb_back(t);
 }
 
-static void NOINLINE restore_stack(jl_tls_states_t *ptls, jl_task_t *t,
+static void NOINLINE restore_stack(jl_ptls_t ptls, jl_task_t *t,
                                    jl_jmp_buf *where, char *p)
 {
     char *_x = (char*)ptls->stackbase - t->ssize;
@@ -185,6 +186,7 @@ static jl_function_t *task_done_hook_func=NULL;
 
 static void JL_NORETURN finish_task(jl_task_t *t, jl_value_t *resultval)
 {
+    jl_ptls_t ptls = jl_get_ptls_states();
     if (t->exception != jl_nothing)
         t->state = failed_sym;
     else
@@ -195,7 +197,7 @@ static void JL_NORETURN finish_task(jl_task_t *t, jl_value_t *resultval)
 #ifdef COPY_STACKS
     t->stkbuf = (void*)(intptr_t)-1;
 #endif
-    if (ti_tid != 0) {
+    if (ptls->tid != 0) {
         // For now, only thread 0 runs the task scheduler.
         // The others return to the thread loop
         jl_switchto(jl_root_task, jl_nothing);
@@ -225,13 +227,15 @@ static void throw_if_exception_set(jl_task_t *t)
 
 static void record_backtrace(void)
 {
-    jl_bt_size = rec_backtrace(jl_bt_data, JL_MAX_BT_SIZE);
+    jl_ptls_t ptls = jl_get_ptls_states();
+    ptls->bt_size = rec_backtrace(ptls->bt_data, JL_MAX_BT_SIZE);
 }
 
 static void NOINLINE JL_NORETURN start_task(void)
 {
+    jl_ptls_t ptls = jl_get_ptls_states();
     // this runs the first time we switch to a task
-    jl_task_t *t = jl_current_task;
+    jl_task_t *t = ptls->current_task;
     jl_value_t *res;
     t->started = 1;
     if (t->exception != NULL && t->exception != jl_nothing) {
@@ -240,14 +244,14 @@ static void NOINLINE JL_NORETURN start_task(void)
     }
     else {
         JL_TRY {
-            if (jl_get_ptls_states()->defer_signal) {
-                jl_get_ptls_states()->defer_signal = 0;
-                jl_sigint_safepoint();
+            if (ptls->defer_signal) {
+                ptls->defer_signal = 0;
+                jl_sigint_safepoint(ptls);
             }
             res = jl_apply(&t->start, 1);
         }
         JL_CATCH {
-            res = jl_exception_in_transit;
+            res = ptls->exception_in_transit;
             t->exception = res;
             jl_gc_wb(t, res);
         }
@@ -260,7 +264,7 @@ static void NOINLINE JL_NORETURN start_task(void)
 #ifdef COPY_STACKS
 void NOINLINE jl_set_base_ctx(char *__stk)
 {
-    jl_tls_states_t *ptls = jl_get_ptls_states();
+    jl_ptls_t ptls = jl_get_ptls_states();
     ptls->stackbase = (char*)(((uintptr_t)__stk + sizeof(*__stk))&-16); // also ensures stackbase is 16-byte aligned
 #ifndef ASM_COPY_STACKS
     if (jl_setjmp(ptls->base_ctx, 1)) {
@@ -281,7 +285,7 @@ JL_DLLEXPORT void julia_init(JL_IMAGE_SEARCH rel)
 #endif
 }
 
-static void ctx_switch(jl_tls_states_t *ptls, jl_task_t *t, jl_jmp_buf *where)
+static void ctx_switch(jl_ptls_t ptls, jl_task_t *t, jl_jmp_buf *where)
 {
     if (t == ptls->current_task)
         return;
@@ -365,7 +369,7 @@ static void ctx_switch(jl_tls_states_t *ptls, jl_task_t *t, jl_jmp_buf *where)
 
 JL_DLLEXPORT jl_value_t *jl_switchto(jl_task_t *t, jl_value_t *arg)
 {
-    jl_tls_states_t *ptls = jl_get_ptls_states();
+    jl_ptls_t ptls = jl_get_ptls_states();
     if (t == ptls->current_task) {
         throw_if_exception_set(t);
         return arg;
@@ -391,7 +395,7 @@ JL_DLLEXPORT jl_value_t *jl_switchto(jl_task_t *t, jl_value_t *arg)
     sig_atomic_t other_defer_signal = ptls->defer_signal;
     ptls->defer_signal = defer_signal;
     if (other_defer_signal && !defer_signal)
-        jl_sigint_safepoint();
+        jl_sigint_safepoint(ptls);
     return val;
 }
 
@@ -495,7 +499,7 @@ static void init_task(jl_task_t *t, char *stack)
 // yield to exception handler
 void JL_NORETURN throw_internal(jl_value_t *e)
 {
-    jl_tls_states_t *ptls = jl_get_ptls_states();
+    jl_ptls_t ptls = jl_get_ptls_states();
     ptls->io_wait = 0;
     if (ptls->safe_restore)
         jl_longjmp(*ptls->safe_restore, 1);
@@ -518,8 +522,9 @@ void JL_NORETURN throw_internal(jl_value_t *e)
 // record backtrace and raise an error
 JL_DLLEXPORT void jl_throw(jl_value_t *e)
 {
+    jl_ptls_t ptls = jl_get_ptls_states();
     assert(e != NULL);
-    if (!jl_safe_restore)
+    if (!ptls->safe_restore)
         record_backtrace();
     throw_internal(e);
 }
@@ -649,6 +654,7 @@ void jl_init_tasks(void)
 // Initialize a root task using the given stack.
 void jl_init_root_task(void *stack, size_t ssize)
 {
+    jl_ptls_t ptls = jl_get_ptls_states();
     jl_current_task = (jl_task_t*)jl_gc_allocobj(sizeof(jl_task_t));
     jl_set_typeof(jl_current_task, jl_task_type);
 #ifdef COPY_STACKS
@@ -672,7 +678,7 @@ void jl_init_root_task(void *stack, size_t ssize)
     jl_current_task->backtrace = jl_nothing;
     jl_current_task->eh = NULL;
     jl_current_task->gcstack = NULL;
-    jl_current_task->tid = ti_tid;
+    jl_current_task->tid = ptls->tid;
 #ifdef JULIA_ENABLE_THREADING
     arraylist_new(&jl_current_task->locks, 0);
 #endif
