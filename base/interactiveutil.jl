@@ -278,7 +278,8 @@ typesof(args...) = Tuple{map(a->(isa(a,Type) ? Type{a} : typeof(a)), args)...}
 gen_call_with_extracted_types(fcn, ex0::Symbol) = Expr(:call, fcn, Meta.quot(ex0))
 function gen_call_with_extracted_types(fcn, ex0)
     if isa(ex0, Expr) &&
-        any(a->(Meta.isexpr(a, :kw) || Meta.isexpr(a, :parameters)), ex0.args)
+          (any(a->(Meta.isexpr(a, :kw) || Meta.isexpr(a, :parameters)), ex0.args) ||
+           ex0.head == :call)
         # keyword args not used in dispatch, so just remove them
         args = filter(a->!(Meta.isexpr(a, :kw) || Meta.isexpr(a, :parameters)), ex0.args)
         return Expr(:call, fcn, esc(args[1]),
