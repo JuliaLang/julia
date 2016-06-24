@@ -159,8 +159,8 @@ versus ``-1 + 0im`` even though ``-1 == -1 + 0im``:
     julia> sqrt(-1)
     ERROR: DomainError:
     sqrt will only return a complex result if called with a complex argument. Try sqrt(complex(x)).
-     in sqrt(::Int64) at ./math.jl:146
-     in eval(::Module, ::Any) at ./boot.jl:237
+     in sqrt(::Int64) at ./math.jl:149
+     in eval(::Module, ::Any) at ./boot.jl:231...
 
     julia> sqrt(-1 + 0im)
     0.0 + 1.0im
@@ -306,7 +306,7 @@ Trying to construct a :const:`NaN` rational value, however, is not:
     ERROR: ArgumentError: invalid rational: zero(Int64)//zero(Int64)
      in Rational{Int64}(::Int64, ::Int64) at ./rational.jl:8
      in //(::Int64, ::Int64) at ./rational.jl:22
-     in eval(::Module, ::Any) at ./boot.jl:237
+     in eval(::Module, ::Any) at ./boot.jl:231...
 
 As usual, the promotion system makes interactions with other numeric
 types effortless:

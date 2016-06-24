@@ -53,10 +53,7 @@ alias :obj:`StackTrace` can be used in place of ``Vector{StackFrame}``. (Example
       in parent() at none:1
       in grandparent() at none:1
       in eval(::Module, ::Any) at boot.jl:231
-      in eval_user_input(::Any, ::Bool) at client.jl:117
-      in eval(::Module, ::Any) at boot.jl:231
-      in eval_user_input(::Any, ::Bool) at client.jl:117
-      in _start() at client.jl:359
+      ...
 
 Note that when calling :func:`stacktrace` you'll typically see a frame with
 ``eval(...) at boot.jl``. When calling :func:`stacktrace` from the REPL you'll also have a few
@@ -132,10 +129,7 @@ helpful in many places, the most obvious application is in error handling and de
     6-element Array{StackFrame,1}:
       in example1() at none:4
       in eval(::Module, ::Any) at boot.jl:231
-      in eval_user_input(::Any, ::Bool) at client.jl:117
-      in eval(::Module, ::Any) at boot.jl:231
-      in eval_user_input(::Any, ::Bool) at client.jl:117
-      in _start() at client.jl:359
+      ...
 
 You may notice that in the example above the first stack frame points points at line 4,
 where :func:`stacktrace` is called, rather than line 2, where `bad_function` is called, and
@@ -165,10 +159,7 @@ returns stack information for the context of the most recent exception:
       in bad_function1() at none:1
       in example2() at none:2
       in eval(::Module, ::Any) at boot.jl:231
-      in eval_user_input(::Any, ::Bool) at client.jl:117
-      in eval(::Module, ::Any) at boot.jl:231
-      in eval_user_input(::Any, ::Bool) at client.jl:117
-      in _start() at client.jl:359
+      ...
 
 Notice that the stack trace now indicates the appropriate line number and the missing frame.
 
@@ -197,10 +188,7 @@ Notice that the stack trace now indicates the appropriate line number and the mi
       in parent1() at none:1
       in grandparent1() at none:3
       in eval(::Module, ::Any) at boot.jl:231
-      in eval_user_input(::Any, ::Bool) at client.jl:117
-      in eval(::Module, ::Any) at boot.jl:231
-      in eval_user_input(::Any, ::Bool) at client.jl:117
-      in _start() at client.jl:359
+      ...
 
 Comparison with :func:`backtrace`
 ---------------------------------
