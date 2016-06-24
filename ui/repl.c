@@ -35,7 +35,7 @@ extern "C" {
 #endif
 
 #if defined(JULIA_ENABLE_THREADING) && !defined(_OS_DARWIN_) && !defined(_OS_WINDOWS_)
-JL_DLLEXPORT JL_CONST_FUNC jl_tls_states_t *jl_get_ptls_states_static(void)
+JL_DLLEXPORT JL_CONST_FUNC jl_ptls_t jl_get_ptls_states_static(void)
 {
     static __attribute__((tls_model("local-exec"))) __thread jl_tls_states_t tls_states;
     return &tls_states;
