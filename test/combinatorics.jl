@@ -17,6 +17,18 @@
 p = shuffle([1:1000;])
 @test isperm(p)
 @test all(invperm(invperm(p)) .== p)
+@test isperm(()) == true
+@test isperm((1,)) == true
+@test isperm((2,)) == false
+@test isperm((1,2)) == true
+@test isperm((2,1)) == true
+@test isperm((2,2)) == false
+@test isperm((1,3)) == false
+@test invperm(()) == ()
+@test invperm((1,)) == (1,)
+@test invperm((1,2)) == (1,2)
+@test invperm((2,1)) == (2,1)
+@test_throws ArgumentError invperm((1,3))
 
 push!(p, 1)
 @test !isperm(p)
