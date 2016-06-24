@@ -431,7 +431,7 @@ The first construct is used when you need the value, but not index, of each elem
 type with fast linear indexing; otherwise, it will be a ``CartesianIndex``::
 
     A = rand(4,3)
-    B = sub(A, 1:3, 2:3)
+    B = view(A, 1:3, 2:3)
     julia> for i in eachindex(B)
                @show i
            end
@@ -619,10 +619,10 @@ library can be implemented in a generic manner.
 
 :obj:`SubArray` is a specialization of :obj:`AbstractArray` that performs
 indexing by reference rather than by copying. A :obj:`SubArray` is created
-with the :func:`sub` function, which is called the same way as :func:`getindex` (with
-an array and a series of index arguments). The result of :func:`sub` looks
+with the :func:`view` function, which is called the same way as :func:`getindex`
+(with an array and a series of index arguments). The result of :func:`view` looks
 the same as the result of :func:`getindex`, except the data is left in place.
-:func:`sub` stores the input index vectors in a :obj:`SubArray` object, which
+:func:`view` stores the input index vectors in a :obj:`SubArray` object, which
 can later be used to index the original array indirectly.
 
 :obj:`StridedVector` and :obj:`StridedMatrix` are convenient aliases defined
@@ -650,7 +650,7 @@ stride parameters.
      0.890947   0.168877   0.32002   0.486136      0.096078  0.172048   0.77672
      0.507762   0.573567   0.220124  0.165816      0.211049  0.433277   0.539476
 
-    julia> b = sub(a, 2:2:8,2:2:4)
+    julia> b = view(a, 2:2:8,2:2:4)
     4×2 SubArray{Float64,2,Array{Float64,2},Tuple{StepRange{Int64,Int64},StepRange{Int64,Int64}},false}:
      0.537192  0.996234
      0.736979  0.228787
