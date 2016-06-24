@@ -311,7 +311,7 @@ macro definition need not come before its inner usage:
     julia> f(3)
     ERROR: UndefVarError: x not defined
      in (::##1#2)(::Int64) at ./none:1
-     in eval(::Module, ::Any) at ./boot.jl:237
+     in eval(::Module, ::Any) at ./boot.jl:231...
 
     julia> x = 1
     1

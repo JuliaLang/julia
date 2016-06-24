@@ -257,7 +257,7 @@ cause a compile-time error:
 
     julia> $a + b
     ERROR: unsupported or misplaced expression $
-     in eval(::Module, ::Any) at ./boot.jl:237
+     in eval(::Module, ::Any) at ./boot.jl:231...
 
 In this example, the tuple ``(1,2,3)`` is interpolated as an
 expression into a conditional test:
@@ -298,9 +298,7 @@ at global scope using :func:`eval`:
 
     julia> eval(ex)
     ERROR: UndefVarError: b not defined
-     in eval(::Module, ::Any) at ./boot.jl:237
-     in eval(::Any) at ./boot.jl:236
-     in eval(::Module, ::Any) at ./boot.jl:237
+     in eval(::Module, ::Any) at ./boot.jl:231...
 
     julia> a = 1; b = 2;
 
@@ -320,7 +318,7 @@ module's environment:
 
     julia> x
     ERROR: UndefVarError: x not defined
-     in eval(::Module, ::Any) at ./boot.jl:237
+     in eval(::Module, ::Any) at ./boot.jl:231...
 
     julia> eval(ex)
     1
@@ -551,7 +549,7 @@ This macro can be used like this:
 
     julia> @assert 1==0
     ERROR: AssertionError: 1 == 0
-     in eval(::Module, ::Any) at ./boot.jl:237
+     in eval(::Module, ::Any) at ./boot.jl:231...
 
 In place of the written syntax, the macro call is expanded at parse time to
 its returned result. This is equivalent to writing::

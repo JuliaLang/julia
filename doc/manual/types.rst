@@ -102,7 +102,7 @@ exception is thrown, otherwise, the left-hand value is returned:
 
     julia> (1+2)::AbstractFloat
     ERROR: TypeError: typeassert: expected AbstractFloat, got Int64
-     in eval(::Module, ::Any) at ./boot.jl:237
+     in eval(::Module, ::Any) at ./boot.jl:231...
 
     julia> (1+2)::Int
     3
@@ -413,7 +413,7 @@ However, the value for ``baz`` must be convertible to :class:`Int`:
     julia> Foo((), 23.5, 1)
     ERROR: InexactError()
      in Foo(::Tuple{}, ::Float64, ::Int64) at ./none:2
-     in eval(::Module, ::Any) at ./boot.jl:237
+     in eval(::Module, ::Any) at ./boot.jl:231...
 
 You may find a list of field names using the ``fieldnames`` function.
 
@@ -767,22 +767,15 @@ each field:
     ERROR: MethodError: Cannot `convert` an object of type Float64 to an object of type Point{Float64}
     This may have arisen from a call to the constructor Point{Float64}(...),
     since type constructors fall back to convert methods.
-    Closest candidates are:
-      convert{T}(::Type{T}, !Matched::T)
-      (!Matched::Type{BoundsError})(::ANY)
-      (!Matched::Type{BoundsError})(::ANY, !Matched::ANY)
-      ...
-     in Point{Float64}(::Float64) at ./sysimg.jl:50
-     in eval(::Module, ::Any) at ./boot.jl:237
+     in Point{Float64}(::Float64) at ./sysimg.jl:60
+     in eval(::Module, ::Any) at ./boot.jl:231...
 
     julia> Point{Float64}(1.0,2.0,3.0)
     ERROR: MethodError: no method matching Point{Float64}(::Float64, ::Float64, ::Float64)
     Closest candidates are:
-      (!Matched::Type{TypeError})(::Any, ::Any, ::Any, !Matched::Any)
-      (!Matched::Type{Expr})(::ANY...)
-      (!Matched::Type{Core.Inference.Generator{I,F}})(::Any, ::Any, ::Any...)
-      ...
-     in eval(::Module, ::Any) at ./boot.jl:237
+      Point{Float64}{T}(::Any, ::Any)
+      Point{Float64}{T}(::Any)
+     in eval(::Module, ::Any) at ./boot.jl:231...
 
 Only one default constructor is generated for parametric types, since
 overriding it is not possible. This constructor accepts any arguments
@@ -816,6 +809,7 @@ isn't the case, the constructor will fail with a :exc:`MethodError`:
 
     julia> Point(1,2.5)
     ERROR: MethodError: no method matching Point{T}(::Int64, ::Float64)
+    ...
 
 Constructor methods to appropriately handle such mixed cases can be
 defined, but that will not be discussed until later on in
@@ -924,11 +918,11 @@ subtypes of :obj:`Real`:
 
     julia> Pointy{AbstractString}
     ERROR: TypeError: Pointy: in T, expected T<:Real, got Type{AbstractString}
-     in eval(::Module, ::Any) at ./boot.jl:237
+     in eval(::Module, ::Any) at ./boot.jl:231...
 
     julia> Pointy{1}
     ERROR: TypeError: Pointy: in T, expected T<:Real, got Int64
-     in eval(::Module, ::Any) at ./boot.jl:237
+     in eval(::Module, ::Any) at ./boot.jl:231...
 
 Type parameters for parametric composite types can be restricted in the
 same manner::
@@ -1393,7 +1387,7 @@ You can safely access the value of a :obj:`Nullable` object using :func:`get`:
 
     julia> get(Nullable{Float64}())
     ERROR: NullException()
-     in get(::Nullable{Float64}) at ./nullable.jl:45
+     in get(::Nullable{Float64}) at ./nullable.jl:62...
 
     julia> get(Nullable(1.0))
     1.0
