@@ -612,3 +612,8 @@ A = TSlowNIndexes(rand(2,2))
 @test @inferred(indices(rand(3,2), 1)) == 1:3
 @test @inferred(indices(rand(3,2), 2)) == 1:2
 @test @inferred(indices(rand(3,2), 3)) == 1:1
+
+#17088
+let M = rand(10,10)
+    @test !issparse([[M] [M];])
+end
