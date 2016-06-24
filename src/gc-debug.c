@@ -164,20 +164,20 @@ static void restore(void)
     }
 }
 
-static void gc_verify_track(void)
+static void gc_verify_track(jl_ptls_t ptls)
 {
     do {
         arraylist_push(&lostval_parents_done, lostval);
         jl_printf(JL_STDERR, "Now looking for %p =======\n", lostval);
         clear_mark(GC_CLEAN);
-        pre_mark();
-        gc_mark_object_list(&to_finalize, 0);
+        pre_mark(ptls);
+        gc_mark_object_list(ptls, &to_finalize, 0);
         for (int i = 0;i < jl_n_threads;i++) {
             jl_ptls_t ptls2 = jl_all_tls_states[i];
-            gc_mark_object_list(&ptls2->finalizers, 0);
+            gc_mark_object_list(ptls, &ptls2->finalizers, 0);
         }
-        gc_mark_object_list(&finalizer_list_marked, 0);
-        visit_mark_stack();
+        gc_mark_object_list(ptls, &finalizer_list_marked, 0);
+        visit_mark_stack(ptls);
         if (lostval_parents.len == 0) {
             jl_printf(JL_STDERR, "Could not find the missing link. We missed a toplevel root. This is odd.\n");
             break;
@@ -209,21 +209,21 @@ static void gc_verify_track(void)
     } while(lostval != NULL);
 }
 
-void gc_verify(void)
+void gc_verify(jl_ptls_t ptls)
 {
     lostval = NULL;
     lostval_parents.len = 0;
     lostval_parents_done.len = 0;
     clear_mark(GC_CLEAN);
     gc_verifying = 1;
-    pre_mark();
-    gc_mark_object_list(&to_finalize, 0);
+    pre_mark(ptls);
+    gc_mark_object_list(ptls, &to_finalize, 0);
     for (int i = 0;i < jl_n_threads;i++) {
         jl_ptls_t ptls2 = jl_all_tls_states[i];
-        gc_mark_object_list(&ptls2->finalizers, 0);
+        gc_mark_object_list(ptls, &ptls2->finalizers, 0);
     }
-    gc_mark_object_list(&finalizer_list_marked, 0);
-    visit_mark_stack();
+    gc_mark_object_list(ptls, &finalizer_list_marked, 0);
+    visit_mark_stack(ptls);
     int clean_len = bits_save[GC_CLEAN].len;
     for(int i = 0; i < clean_len + bits_save[GC_OLD].len; i++) {
         jl_taggedvalue_t *v = (jl_taggedvalue_t*)bits_save[i >= clean_len ? GC_OLD : GC_CLEAN].items[i >= clean_len ? i - clean_len : i];
@@ -243,7 +243,7 @@ void gc_verify(void)
         return;
     }
     restore();
-    gc_verify_track();
+    gc_verify_track(ptls);
     gc_debug_print_status();
     gc_debug_critical_error();
     abort();

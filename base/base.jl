@@ -82,7 +82,8 @@ function finalizer{T}(o::T, f::Ptr{Void})
           Core.getptls(), o, f)
 end
 
-finalize(o::ANY) = ccall(:jl_finalize, Void, (Any,), o)
+finalize(o::ANY) = ccall(:jl_finalize_th, Void, (Ptr{Void}, Any,),
+                         Core.getptls(), o)
 
 gc(full::Bool=true) = ccall(:jl_gc_collect, Void, (Cint,), full)
 gc_enable(on::Bool) = ccall(:jl_gc_enable, Cint, (Cint,), on)!=0
