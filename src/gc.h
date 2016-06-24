@@ -274,9 +274,9 @@ STATIC_INLINE void gc_big_object_link(bigval_t *hdr, bigval_t **list)
     *list = hdr;
 }
 
-void pre_mark(void);
-void gc_mark_object_list(arraylist_t *list, size_t start);
-void visit_mark_stack(void);
+void pre_mark(jl_ptls_t ptls);
+void gc_mark_object_list(jl_ptls_t ptls, arraylist_t *list, size_t start);
+void visit_mark_stack(jl_ptls_t ptls);
 void gc_debug_init(void);
 
 // GC pages
@@ -349,7 +349,7 @@ STATIC_INLINE void gc_time_count_mallocd_array(int bits)
 
 #ifdef GC_VERIFY
 extern jl_value_t *lostval;
-void gc_verify(void);
+void gc_verify(jl_ptls_t ptls);
 void add_lostval_parent(jl_value_t *parent);
 #define verify_val(v) do {                                              \
         if (lostval == (jl_value_t*)(v) && (v) != 0) {                  \
@@ -380,7 +380,7 @@ void add_lostval_parent(jl_value_t *parent);
 #define verify_parent2(ty,obj,slot,arg1,arg2) verify_parent(ty,obj,slot,arg1,arg2)
 extern int gc_verifying;
 #else
-#define gc_verify()
+#define gc_verify(ptls)
 #define verify_val(v)
 #define verify_parent1(ty,obj,slot,arg1)
 #define verify_parent2(ty,obj,slot,arg1,arg2)
