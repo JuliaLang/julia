@@ -1403,10 +1403,10 @@ default value as a second argument to :func:`get`:
 
 .. doctest::
 
-    julia> get(Nullable{Float64}(), 0)
+    julia> get(Nullable{Float64}(), 0.0)
     0.0
 
-    julia> get(Nullable(1.0), 0)
+    julia> get(Nullable(1.0), 0.0)
     1.0
 
 Note that this default value will automatically be converted to the type of
