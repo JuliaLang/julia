@@ -703,7 +703,6 @@ export
     ×,
 
 # sparse
-    full,
     dropzeros,
     dropzeros!,
 

@@ -88,12 +88,6 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
    This returns a ``5×5 Bidiagonal{Float64}``\ , which can now be passed to other linear algebra functions (e.g. eigensolvers) which will use specialized methods for ``Bidiagonal`` types.
 
-.. function:: full(F)
-
-   .. Docstring generated from Julia source
-
-   Reconstruct the matrix ``A`` from the factorization ``F=factorize(A)``\ .
-
 .. function:: Diagonal(A::AbstractMatrix)
 
    .. Docstring generated from Julia source
@@ -533,14 +527,6 @@ Linear algebra functions in Julia are largely implemented by calling functions f
    .. Docstring generated from Julia source
 
    ``qrfact!`` is the same as :func:`qrfact` when ``A`` is a subtype of ``StridedMatrix``\ , but saves space by overwriting the input ``A``\ , instead of creating a copy. An ``InexactError`` exception is thrown if the factorisation produces a number not representable by the element type of ``A``\ , e.g. for integer types.
-
-.. function:: full(QRCompactWYQ[, thin=true]) -> Matrix
-
-   .. Docstring generated from Julia source
-
-   Converts an orthogonal or unitary matrix stored as a ``QRCompactWYQ`` object, i.e. in the compact WY format [Bischof1987]_, to a dense matrix.
-
-   Optionally takes a ``thin`` Boolean argument, which if ``true`` omits the columns that span the rows of ``R`` in the QR factorization that are zero. The resulting matrix is the ``Q`` in a thin QR factorization (sometimes called the reduced QR factorization). If ``false``\ , returns a ``Q`` that spans all rows of ``R`` in its corresponding QR factorization.
 
 .. function:: lqfact!(A) -> LQ
 

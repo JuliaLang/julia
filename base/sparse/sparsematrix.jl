@@ -286,14 +286,6 @@ function convert{Tv}(::Type{Matrix}, S::SparseMatrixCSC{Tv})
     return A
 end
 convert(::Type{Array}, S::SparseMatrixCSC) = convert(Matrix, S)
-full(S::SparseMatrixCSC) = convert(Array, S)
-
-"""
-    full(S)
-
-Convert a sparse matrix or vector `S` into a dense matrix or vector.
-"""
-full
 
 float(S::SparseMatrixCSC) = SparseMatrixCSC(S.m, S.n, copy(S.colptr), copy(S.rowval), float(copy(S.nzval)))
 

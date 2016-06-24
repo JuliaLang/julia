@@ -25,7 +25,6 @@ convert{T}(::Type{UpperTriangular}, A::Diagonal{T}) = UpperTriangular(A)
 convert{T}(::Type{LowerTriangular}, A::Diagonal{T}) = LowerTriangular(A)
 convert(::Type{Matrix}, D::Diagonal) = diagm(D.diag)
 convert(::Type{Array}, D::Diagonal) = convert(Matrix, D)
-full(D::Diagonal) = convert(Array, D)
 
 function similar{T}(D::Diagonal, ::Type{T})
     return Diagonal{T}(similar(D.diag, T))

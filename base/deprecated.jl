@@ -808,4 +808,62 @@ end
 
 const _oldstyle_array_vcat_ = false
 
+# Deprecate full in favor of convert. Please see #17066, #17079, and #17082.
+@deprecate(full(D::Diagonal), convert(Array, D))
+@deprecate(full(A::Bidiagonal), convert(Array, A))
+@deprecate(full(M::Tridiagonal), convert(Array, M))
+@deprecate(full(M::SymTridiagonal), convert(Array, M))
+@deprecate(full(S::SparseMatrixCSC), convert(Array, S))
+@deprecate(full(x::AbstractSparseVector), convert(Array, x))
+@deprecate(full(F::Base.LinAlg.SVD), convert(Array, F))
+@deprecate(full(F::Base.LinAlg.Schur), convert(Array, F))
+@deprecate(full(F::Base.LinAlg.Eigen), convert(Array, F))
+@deprecate(full(F::Base.LinAlg.Hessenberg), convert(Array, F))
+@deprecate(full(A::Base.LinAlg.HessenbergQ), convert(Array, A))
+@deprecate(full(F::Base.LinAlg.LDLt), convert(Array, F))
+@deprecate(full(C::Base.LinAlg.Cholesky), convert(Array, C))
+@deprecate(full(F::Base.LinAlg.CholeskyPivoted), convert(Array, F))
+@deprecate(full(F::Base.LinAlg.LU), convert(Array, F))
+@deprecate(full{T}(F::Base.LinAlg.LU{T,Tridiagonal{T}}), convert(Array, F))
+@deprecate(full(A::Base.LinAlg.LQ), convert(Array, A))
+@deprecate(full(F::Base.LinAlg.QRPivoted), convert(Array, F))
+@deprecate(full(F::Union{Base.LinAlg.QR,Base.LinAlg.QRCompactWY}), convert(Array, F))
+function full(x::AbstractArray)
+    depwarn(string("the no-op `full` fallback is deprecated, and no more specific `full` ",
+        "method for $(typeof(x)) exists. Moreover, `full` is deprecated generally. As a ",
+        "replacement for `full(x)`, consider `convert(Array, x)` or ",
+        "`convert(AbstractArray, x)` as appropriate."))
+    return x
+end
+function full(A::Union{Base.LinAlg.QRPackedQ,Base.LinAlg.QRCompactWYQ}; thin::Bool = true)
+    depwarn(string("`full(x::Union{Base.LinAlg.QRPackedQ,Base.LinAlg.QRCompactWYQ}; thin::Bool = true)` ",
+        "is deprecated. Moreover, `full` is deprecated generally. As a replacement for ",
+        "`full(x)`, consider `convert(Array, x)` or `convert(AbstractArray, x)` as ",
+        "appropriate. The former methods return the thin `Q` factor. To generate a ",
+        "square, unitary form of `Q`, consider `Base.LinAlg.thickQ(x)` [TODO: revise]."))
+    if thin
+        return convert(Array, A)
+    else
+        # TODO: Revise reference to replacement functionality for retrieving unitary (square) Q
+        return Base.LinAlg.thickQ(A)
+    end
+end
+function full(A::Base.LinAlg.LQPackedQ; thin::Bool = true)
+    depwarn(string("`full(x::Union{Base.LinAlg.LQPackedQ}; thin::Bool = true)` ",
+        "is deprecated. Moreover, `full` is deprecated generally. As a replacement for ",
+        "`full(x)`, consider `convert(Array, x)` or `convert(AbstractArray, x)` as ",
+        "appropriate. The former methods return the thin `Q` factor. To generate a ",
+        "square, unitary form of `Q`, consider `Base.LinAlg.thickQ(x)` [TODO: revise]."))
+    if thin
+        return convert(Array, A)
+    else
+        # TODO: Revise reference to replacement functionality for retrieving unitary (square) Q
+        return Base.LinAlg.thickQ(A)
+    end
+end
+# TODO: Replace these two deprecations with depwarns referencing convert(Array, A) and
+# whatever solution for recovering a backingtype-array gains favor
+@deprecate(full(A::Base.LinAlg.AbstractTriangular), convert(Array, A))
+@deprecate(full(A::Union{Symmetric,Hermitian}), convert(Array, A))
+
 # End deprecations scheduled for 0.6
