@@ -27,7 +27,7 @@ void jl_mach_gc_end(void)
         uintptr_t item = (uintptr_t)suspended_threads.items[i];
         int16_t tid = (int16_t)item;
         int8_t gc_state = (int8_t)(item >> 8);
-        jl_tls_states_t *ptls2 = jl_all_tls_states[tid];
+        jl_ptls_t ptls2 = jl_all_tls_states[tid];
         jl_atomic_store_release(&ptls2->gc_state, gc_state);
         thread_resume(pthread_mach_thread_np(ptls2->system_id));
     }
@@ -36,7 +36,7 @@ void jl_mach_gc_end(void)
 
 // Suspend the thread and return `1` if the GC is running.
 // Otherwise return `0`
-static int jl_mach_gc_wait(jl_tls_states_t *ptls2,
+static int jl_mach_gc_wait(jl_ptls_t ptls2,
                            mach_port_t thread, int16_t tid)
 {
     jl_mutex_lock_nogc(&safepoint_lock);
@@ -126,7 +126,7 @@ void jl_throw_in_thread(int tid, mach_port_t thread, jl_value_t *exception)
     x86_thread_state64_t state;
     kern_return_t ret = thread_get_state(thread, x86_THREAD_STATE64, (thread_state_t)&state, &count);
     HANDLE_MACH_ERROR("thread_get_state", ret);
-    jl_tls_states_t *ptls2 = jl_all_tls_states[tid];
+    jl_ptls_t ptls2 = jl_all_tls_states[tid];
 
     ptls2->bt_size = rec_backtrace_ctx(ptls2->bt_data, JL_MAX_BT_SIZE,
                                        (bt_context_t*)&state);
@@ -166,9 +166,9 @@ kern_return_t catch_exception_raise(mach_port_t            exception_port,
 #endif
     int16_t tid;
 #ifdef JULIA_ENABLE_THREADING
-    jl_tls_states_t *ptls2 = NULL;
+    jl_ptls_t ptls2 = NULL;
     for (tid = 0;tid < jl_n_threads;tid++) {
-        jl_tls_states_t *_ptls2 = jl_all_tls_states[tid];
+        jl_ptls_t _ptls2 = jl_all_tls_states[tid];
         if (pthread_mach_thread_np(_ptls2->system_id) == thread) {
             ptls2 = _ptls2;
             break;
@@ -182,7 +182,7 @@ kern_return_t catch_exception_raise(mach_port_t            exception_port,
         return KERN_INVALID_ARGUMENT;
     }
 #else
-    jl_tls_states_t *ptls2 = &jl_tls_states;
+    jl_ptls_t ptls2 = &jl_tls_states;
     tid = 0;
 #endif
     kern_return_t ret = thread_get_state(thread, x86_EXCEPTION_STATE64, (thread_state_t)&exc_state, &exc_count);
@@ -247,7 +247,7 @@ static void attach_exception_port(thread_port_t thread)
 
 static void jl_thread_suspend_and_get_state(int tid, unw_context_t **ctx)
 {
-    jl_tls_states_t *ptls2 = jl_all_tls_states[tid];
+    jl_ptls_t ptls2 = jl_all_tls_states[tid];
     mach_port_t tid_port = pthread_mach_thread_np(ptls2->system_id);
 
     kern_return_t ret = thread_suspend(tid_port);
@@ -267,7 +267,7 @@ static void jl_thread_suspend_and_get_state(int tid, unw_context_t **ctx)
 
 static void jl_thread_resume(int tid, int sig)
 {
-    jl_tls_states_t *ptls2 = jl_all_tls_states[tid];
+    jl_ptls_t ptls2 = jl_all_tls_states[tid];
     mach_port_t thread = pthread_mach_thread_np(ptls2->system_id);
     kern_return_t ret = thread_resume(thread);
     HANDLE_MACH_ERROR("thread_resume", ret);
@@ -277,7 +277,7 @@ static void jl_thread_resume(int tid, int sig)
 // or if SIGINT happens too often.
 static void jl_try_deliver_sigint(void)
 {
-    jl_tls_states_t *ptls2 = jl_all_tls_states[0];
+    jl_ptls_t ptls2 = jl_all_tls_states[0];
     mach_port_t thread = pthread_mach_thread_np(ptls2->system_id);
 
     kern_return_t ret = thread_suspend(thread);

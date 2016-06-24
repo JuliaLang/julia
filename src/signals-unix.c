@@ -48,9 +48,10 @@ static bt_context_t *jl_to_bt_context(void *sigctx)
 
 static void JL_NORETURN jl_throw_in_ctx(jl_value_t *e, void *sigctx)
 {
-    if (!jl_safe_restore)
-        jl_bt_size = rec_backtrace_ctx(jl_bt_data, JL_MAX_BT_SIZE,
-                                       jl_to_bt_context(sigctx));
+    jl_ptls_t ptls = jl_get_ptls_states();
+    if (!ptls->safe_restore)
+        ptls->bt_size = rec_backtrace_ctx(ptls->bt_data, JL_MAX_BT_SIZE,
+                                          jl_to_bt_context(sigctx));
     jl_exception_in_transit = e;
     // TODO throw the error by modifying sigctx for supported platforms
     // This will avoid running the atexit handler on the signal stack
@@ -60,7 +61,7 @@ static void JL_NORETURN jl_throw_in_ctx(jl_value_t *e, void *sigctx)
 
 static pthread_t signals_thread;
 
-static int is_addr_on_stack(jl_tls_states_t *ptls, void *addr)
+static int is_addr_on_stack(jl_ptls_t ptls, void *addr)
 {
 #ifdef COPY_STACKS
     return ((char*)addr > (char*)ptls->stack_lo-3000000 &&
@@ -73,9 +74,11 @@ static int is_addr_on_stack(jl_tls_states_t *ptls, void *addr)
 
 void sigdie_handler(int sig, siginfo_t *info, void *context)
 {
+    jl_ptls_t ptls = jl_get_ptls_states();
     sigset_t sset;
     uv_tty_reset_mode();
-    jl_critical_error(sig, jl_to_bt_context(context), jl_bt_data, &jl_bt_size);
+    jl_critical_error(sig, jl_to_bt_context(context),
+                      ptls->bt_data, &ptls->bt_size);
     sigfillset(&sset);
     sigprocmask(SIG_UNBLOCK, &sset, NULL);
     signal(sig, SIG_DFL);
@@ -103,6 +106,7 @@ static void jl_unblock_signal(int sig)
 
 static void segv_handler(int sig, siginfo_t *info, void *context)
 {
+    jl_ptls_t ptls = jl_get_ptls_states();
     assert(sig == SIGSEGV || sig == SIGBUS);
 
     if (jl_addr_is_safepoint((uintptr_t)info->si_addr)) {
@@ -110,7 +114,7 @@ static void segv_handler(int sig, siginfo_t *info, void *context)
 #ifdef JULIA_ENABLE_THREADING
         jl_set_gc_and_wait();
         // Do not raise sigint on worker thread
-        if (ti_tid != 0)
+        if (ptls->tid != 0)
             return;
 #endif
         if (jl_get_ptls_states()->defer_signal) {
@@ -122,7 +126,7 @@ static void segv_handler(int sig, siginfo_t *info, void *context)
         }
         return;
     }
-    if (jl_safe_restore || is_addr_on_stack(jl_get_ptls_states(), info->si_addr)) { // stack overflow, or restarting jl_
+    if (ptls->safe_restore || is_addr_on_stack(jl_get_ptls_states(), info->si_addr)) { // stack overflow, or restarting jl_
         jl_unblock_signal(sig);
         jl_throw_in_ctx(jl_stackovf_exception, context);
     }
@@ -164,7 +168,7 @@ static pthread_cond_t signal_caught_cond;
 static void jl_thread_suspend_and_get_state(int tid, unw_context_t **ctx)
 {
     pthread_mutex_lock(&in_signal_lock);
-    jl_tls_states_t *ptls2 = jl_all_tls_states[tid];
+    jl_ptls_t ptls2 = jl_all_tls_states[tid];
     jl_atomic_store_release(&ptls2->signal_request, 1);
     pthread_kill(ptls2->system_id, SIGUSR2);
     pthread_cond_wait(&signal_caught_cond, &in_signal_lock);  // wait for thread to acknowledge
@@ -175,7 +179,7 @@ static void jl_thread_suspend_and_get_state(int tid, unw_context_t **ctx)
 static void jl_thread_resume(int tid, int sig)
 {
     (void)sig;
-    jl_tls_states_t *ptls2 = jl_all_tls_states[tid];
+    jl_ptls_t ptls2 = jl_all_tls_states[tid];
     jl_atomic_store_release(&ptls2->signal_request, 1);
     pthread_cond_broadcast(&exit_signal_cond);
     pthread_cond_wait(&signal_caught_cond, &in_signal_lock); // wait for thread to acknowledge
@@ -187,7 +191,7 @@ static void jl_thread_resume(int tid, int sig)
 // or if SIGINT happens too often.
 static void jl_try_deliver_sigint(void)
 {
-    jl_tls_states_t *ptls2 = jl_all_tls_states[0];
+    jl_ptls_t ptls2 = jl_all_tls_states[0];
     jl_safepoint_enable_sigint();
     jl_wake_libuv();
     jl_atomic_store_release(&ptls2->signal_request, 2);
@@ -202,7 +206,7 @@ static void jl_try_deliver_sigint(void)
 //    is reached
 void usr2_handler(int sig, siginfo_t *info, void *ctx)
 {
-    jl_tls_states_t *ptls = jl_get_ptls_states();
+    jl_ptls_t ptls = jl_get_ptls_states();
     sig_atomic_t request = jl_atomic_exchange(&ptls->signal_request, 0);
     if (request == 1) {
         signal_context = jl_to_bt_context(ctx);
@@ -319,7 +323,7 @@ static void *alloc_sigstack(size_t size)
     return (void*)((char*)stackbuff + pagesz);
 }
 
-void jl_install_thread_signal_handler(void)
+void jl_install_thread_signal_handler(jl_ptls_t ptls)
 {
     void *signal_stack = alloc_sigstack(sig_stack_size);
     stack_t ss;
@@ -341,7 +345,7 @@ void jl_install_thread_signal_handler(void)
     }
 #endif
 
-    jl_get_ptls_states()->signal_stack = signal_stack;
+    ptls->signal_stack = signal_stack;
 }
 
 void jl_sigsetset(sigset_t *sset)

@@ -43,7 +43,7 @@ static char *strsignal(int sig)
 
 static void jl_try_throw_sigint(void)
 {
-    jl_tls_states_t *ptls = jl_get_ptls_states();
+    jl_ptls_t ptls = jl_get_ptls_states();
     jl_safepoint_enable_sigint();
     jl_wake_libuv();
     int force = jl_check_force_sigint();
@@ -59,6 +59,7 @@ static void jl_try_throw_sigint(void)
 
 void __cdecl crt_sig_handler(int sig, int num)
 {
+    jl_ptls_t ptls = jl_get_ptls_states();
     CONTEXT Context;
     switch (sig) {
     case SIGFPE:
@@ -85,7 +86,7 @@ void __cdecl crt_sig_handler(int sig, int num)
     default: // SIGSEGV, (SSIGTERM, IGILL)
         memset(&Context, 0, sizeof(Context));
         RtlCaptureContext(&Context);
-        jl_critical_error(sig, &Context, jl_bt_data, &jl_bt_size);
+        jl_critical_error(sig, &Context, ptls->bt_data, &ptls->bt_size);
         raise(sig);
     }
 }
@@ -101,6 +102,7 @@ void restore_signals(void)
 
 void jl_throw_in_ctx(jl_value_t *excpt, CONTEXT *ctxThread, int bt)
 {
+    jl_ptls_t ptls = jl_get_ptls_states();
     assert(excpt != NULL);
 #if defined(_CPU_X86_64_)
     DWORD64 Rsp = (ctxThread->Rsp&(DWORD64)-16) - 8;
@@ -109,7 +111,8 @@ void jl_throw_in_ctx(jl_value_t *excpt, CONTEXT *ctxThread, int bt)
 #else
 #error WIN16 not supported :P
 #endif
-    jl_bt_size = bt ? rec_backtrace_ctx(jl_bt_data, JL_MAX_BT_SIZE, ctxThread) : 0;
+    ptls->bt_size = bt ? rec_backtrace_ctx(ptls->bt_data, JL_MAX_BT_SIZE,
+                                           ctxThread) : 0;
     jl_exception_in_transit = excpt;
 #if defined(_CPU_X86_64_)
     *(DWORD64*)Rsp = 0;
@@ -127,7 +130,7 @@ HANDLE hMainThread = INVALID_HANDLE_VALUE;
 // Try to throw the exception in the master thread.
 static void jl_try_deliver_sigint(void)
 {
-    jl_tls_states_t *ptls2 = jl_all_tls_states[0];
+    jl_ptls_t ptls2 = jl_all_tls_states[0];
     jl_safepoint_enable_sigint();
     jl_wake_libuv();
     if ((DWORD)-1 == SuspendThread(hMainThread)) {
@@ -183,6 +186,7 @@ static BOOL WINAPI sigint_handler(DWORD wsig) //This needs winapi types to guara
 
 static LONG WINAPI _exception_handler(struct _EXCEPTION_POINTERS *ExceptionInfo, int in_ctx)
 {
+    jl_ptls_t ptls = jl_get_ptls_states();
     if (ExceptionInfo->ExceptionRecord->ExceptionFlags == 0) {
         switch (ExceptionInfo->ExceptionRecord->ExceptionCode) {
             case EXCEPTION_INT_DIVIDE_BY_ZERO:
@@ -199,10 +203,10 @@ static LONG WINAPI _exception_handler(struct _EXCEPTION_POINTERS *ExceptionInfo,
 #ifdef JULIA_ENABLE_THREADING
                     jl_set_gc_and_wait();
                     // Do not raise sigint on worker thread
-                    if (ti_tid != 0)
+                    if (ptls->tid != 0)
                         return EXCEPTION_CONTINUE_EXECUTION;
 #endif
-                    if (jl_get_ptls_states()->defer_signal) {
+                    if (ptls->defer_signal) {
                         jl_safepoint_defer_sigint();
                     }
                     else if (jl_safepoint_consume_sigint()) {
@@ -266,7 +270,8 @@ static LONG WINAPI _exception_handler(struct _EXCEPTION_POINTERS *ExceptionInfo,
         jl_safe_printf(" at 0x%Ix -- ", (size_t)ExceptionInfo->ExceptionRecord->ExceptionAddress);
         jl_gdblookup((uintptr_t)ExceptionInfo->ExceptionRecord->ExceptionAddress);
 
-        jl_critical_error(0, ExceptionInfo->ContextRecord, jl_bt_data, &jl_bt_size);
+        jl_critical_error(0, ExceptionInfo->ContextRecord,
+                          ptls->bt_data, &ptls->bt_size);
         static int recursion = 0;
         if (recursion++)
             exit(1);
@@ -409,8 +414,9 @@ void jl_install_default_signal_handlers(void)
     SetUnhandledExceptionFilter(exception_handler);
 }
 
-void jl_install_thread_signal_handler(void)
+void jl_install_thread_signal_handler(jl_ptls_t ptls)
 {
+    (void)ptls;
     // Ensure the stack overflow handler has enough space to collect the backtrace
     ULONG StackSizeInBytes = sig_stack_size;
     if (pSetThreadStackGuarantee) {

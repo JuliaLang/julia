@@ -14,8 +14,7 @@ extern "C" {
 #define PROFILE_JL_THREADING            1
 
 // thread ID
-#define ti_tid (jl_get_ptls_states()->tid)
-extern jl_tls_states_t **jl_all_tls_states;
+extern jl_ptls_t *jl_all_tls_states;
 extern JL_DLLEXPORT int jl_n_threads;  // # threads we're actually using
 
 // thread state

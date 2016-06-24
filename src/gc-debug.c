@@ -139,7 +139,7 @@ static void clear_mark(int bits)
                 for (int j = 0; j < 32; j++) {
                     if ((line >> j) & 1) {
                         jl_gc_pagemeta_t *pg = page_metadata(region->pages[pg_i*32 + j].data + GC_PAGE_OFFSET);
-                        jl_tls_states_t *ptls2 = jl_all_tls_states[pg->thread_n];
+                        jl_ptls_t ptls2 = jl_all_tls_states[pg->thread_n];
                         jl_gc_pool_t *pool = &ptls2->heap.norm_pools[pg->pool_n];
                         pv = (jl_taggedvalue_t*)(pg->data + GC_PAGE_OFFSET);
                         char *lim = (char*)pv + GC_PAGE_SZ - GC_PAGE_OFFSET - pool->osize;
@@ -173,7 +173,7 @@ static void gc_verify_track(void)
         pre_mark();
         gc_mark_object_list(&to_finalize, 0);
         for (int i = 0;i < jl_n_threads;i++) {
-            jl_tls_states_t *ptls2 = jl_all_tls_states[i];
+            jl_ptls_t ptls2 = jl_all_tls_states[i];
             gc_mark_object_list(&ptls2->finalizers, 0);
         }
         gc_mark_object_list(&finalizer_list_marked, 0);
@@ -219,7 +219,7 @@ void gc_verify(void)
     pre_mark();
     gc_mark_object_list(&to_finalize, 0);
     for (int i = 0;i < jl_n_threads;i++) {
-        jl_tls_states_t *ptls2 = jl_all_tls_states[i];
+        jl_ptls_t ptls2 = jl_all_tls_states[i];
         gc_mark_object_list(&ptls2->finalizers, 0);
     }
     gc_mark_object_list(&finalizer_list_marked, 0);
@@ -660,7 +660,7 @@ void gc_time_mark_pause(int64_t t0, int64_t scanned_bytes,
     int64_t last_remset_len = 0;
     int64_t remset_nptr = 0;
     for (int t_i = 0;t_i < jl_n_threads;t_i++) {
-        jl_tls_states_t *ptls2 = jl_all_tls_states[t_i];
+        jl_ptls_t ptls2 = jl_all_tls_states[t_i];
         last_remset_len += ptls2->heap.last_remset->len;
         remset_nptr = ptls2->heap.remset_nptr;
     }
@@ -779,7 +779,7 @@ void gc_stats_all_pool(void)
     size_t nb=0, w, tw=0, no=0,tp=0, nold=0,noldbytes=0, np, nol;
     for (int i = 0; i < JL_GC_N_POOLS; i++) {
         for (int t_i = 0;t_i < jl_n_threads;t_i++) {
-            jl_tls_states_t *ptls2 = jl_all_tls_states[t_i];
+            jl_ptls_t ptls2 = jl_all_tls_states[t_i];
             size_t b = pool_stats(&ptls2->heap.norm_pools[i], &w, &np, &nol);
             nb += b;
             no += (b / ptls2->heap.norm_pools[i].osize);

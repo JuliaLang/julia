@@ -194,7 +194,7 @@ JL_CALLABLE(jl_f_throw)
 
 JL_DLLEXPORT void jl_enter_handler(jl_handler_t *eh)
 {
-    jl_tls_states_t *ptls = jl_get_ptls_states();
+    jl_ptls_t ptls = jl_get_ptls_states();
     jl_task_t *current_task = ptls->current_task;
     // Must have no safepoint
     eh->prev = current_task->eh;
@@ -1583,9 +1583,10 @@ JL_DLLEXPORT size_t jl_static_show_func_sig(JL_STREAM *s, jl_value_t *type)
 
 JL_DLLEXPORT void jl_(void *jl_value)
 {
-    jl_jmp_buf *old_buf = jl_safe_restore;
+    jl_ptls_t ptls = jl_get_ptls_states();
+    jl_jmp_buf *old_buf = ptls->safe_restore;
     jl_jmp_buf buf;
-    jl_safe_restore = &buf;
+    ptls->safe_restore = &buf;
     if (!jl_setjmp(buf, 0)) {
         jl_static_show((JL_STREAM*)STDERR_FILENO, (jl_value_t*)jl_value);
         jl_printf((JL_STREAM*)STDERR_FILENO,"\n");
@@ -1593,7 +1594,7 @@ JL_DLLEXPORT void jl_(void *jl_value)
     else {
         jl_printf((JL_STREAM*)STDERR_FILENO, "\n!!! ERROR in jl_ -- ABORTING !!!\n");
     }
-    jl_safe_restore = old_buf;
+    ptls->safe_restore = old_buf;
 }
 
 JL_DLLEXPORT void jl_breakpoint(jl_value_t *v)

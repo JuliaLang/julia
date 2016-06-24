@@ -26,6 +26,7 @@ static int jl_unw_step(bt_cursor_t *cursor, uintptr_t *ip, uintptr_t *sp);
 
 size_t jl_unw_stepn(bt_cursor_t *cursor, uintptr_t *ip, uintptr_t *sp, size_t maxsize)
 {
+    jl_ptls_t ptls = jl_get_ptls_states();
     volatile size_t n = 0;
     uintptr_t nullsp;
 #if defined(_OS_WINDOWS_) && !defined(_CPU_X86_64_)
@@ -33,10 +34,10 @@ size_t jl_unw_stepn(bt_cursor_t *cursor, uintptr_t *ip, uintptr_t *sp, size_t ma
     jl_in_stackwalk = 1;
 #endif
 #if !defined(_OS_WINDOWS_)
-    jl_jmp_buf *old_buf = jl_safe_restore;
+    jl_jmp_buf *old_buf = ptls->safe_restore;
     jl_jmp_buf buf;
     if (!jl_setjmp(buf, 0)) {
-        jl_safe_restore = &buf;
+        ptls->safe_restore = &buf;
 #endif
         while (1) {
            if (n >= maxsize) {
@@ -57,7 +58,7 @@ size_t jl_unw_stepn(bt_cursor_t *cursor, uintptr_t *ip, uintptr_t *sp, size_t ma
         // reader happy.
         if (n > 0) n -= 1;
     }
-    jl_safe_restore = old_buf;
+    ptls->safe_restore = old_buf;
 #endif
 #if defined(_OS_WINDOWS_) && !defined(_CPU_X86_64_)
     jl_in_stackwalk = 0;
@@ -121,6 +122,7 @@ JL_DLLEXPORT jl_value_t *jl_backtrace_from_here(int returnsp)
 
 JL_DLLEXPORT jl_value_t *jl_get_backtrace(void)
 {
+    jl_ptls_t ptls = jl_get_ptls_states();
     jl_svec_t *tp = NULL;
     jl_array_t *bt = NULL;
     JL_GC_PUSH2(&tp, &bt);
@@ -128,8 +130,8 @@ JL_DLLEXPORT jl_value_t *jl_get_backtrace(void)
         tp = jl_svec2(jl_voidpointer_type, jl_box_long(1));
         array_ptr_void_type = jl_apply_type((jl_value_t*)jl_array_type, tp);
     }
-    bt = jl_alloc_array_1d(array_ptr_void_type, jl_bt_size);
-    memcpy(bt->data, jl_bt_data, jl_bt_size * sizeof(void*));
+    bt = jl_alloc_array_1d(array_ptr_void_type, ptls->bt_size);
+    memcpy(bt->data, ptls->bt_data, ptls->bt_size * sizeof(void*));
     JL_GC_POP();
     return (jl_value_t*)bt;
 }
@@ -369,7 +371,7 @@ size_t rec_backtrace_ctx_dwarf(uintptr_t *data, size_t maxsize,
 
 JL_DLLEXPORT jl_value_t *jl_lookup_code_address(void *ip, int skipC)
 {
-    jl_tls_states_t *ptls = jl_get_ptls_states();
+    jl_ptls_t ptls = jl_get_ptls_states();
     jl_frame_t *frames = NULL;
     int8_t gc_state = jl_gc_safe_enter(ptls);
     int n = jl_getFunctionInfo(&frames, (uintptr_t)ip, skipC, 0);
@@ -432,9 +434,10 @@ JL_DLLEXPORT void jl_gdblookup(uintptr_t ip)
 
 JL_DLLEXPORT void jlbacktrace(void)
 {
-    size_t n = jl_bt_size; // jl_bt_size > 40 ? 40 : jl_bt_size;
+    jl_ptls_t ptls = jl_get_ptls_states();
+    size_t n = ptls->bt_size; // ptls->bt_size > 40 ? 40 : ptls->bt_size;
     for (size_t i=0; i < n; i++)
-        jl_gdblookup(jl_bt_data[i] - 1);
+        jl_gdblookup(ptls->bt_data[i] - 1);
 }
 
 #ifdef __cplusplus

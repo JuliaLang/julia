@@ -32,20 +32,17 @@ typedef void (*tracer_cb)(jl_value_t *tracee);
 void jl_call_tracer(tracer_cb callback, jl_value_t *tracee);
 
 extern size_t jl_page_size;
-#define jl_stack_lo (jl_get_ptls_states()->stack_lo)
-#define jl_stack_hi (jl_get_ptls_states()->stack_hi)
 extern jl_function_t *jl_typeinf_func;
 #if defined(JL_USE_INTEL_JITEVENTS)
 extern unsigned sig_stack_size;
 #endif
-#define jl_safe_restore jl_get_ptls_states()->safe_restore
 
 JL_DLLEXPORT extern int jl_lineno;
 JL_DLLEXPORT extern const char *jl_filename;
 
-JL_DLLEXPORT void *jl_gc_pool_alloc(jl_tls_states_t *ptls, jl_gc_pool_t *p,
+JL_DLLEXPORT void *jl_gc_pool_alloc(jl_ptls_t ptls, jl_gc_pool_t *p,
                                     int osize, int end_offset);
-JL_DLLEXPORT jl_value_t *jl_gc_big_alloc(jl_tls_states_t *ptls, size_t allocsz);
+JL_DLLEXPORT jl_value_t *jl_gc_big_alloc(jl_ptls_t ptls, size_t allocsz);
 int jl_gc_classify_pools(size_t sz, int *osize, int *end_offset);
 
 STATIC_INLINE jl_value_t *newobj(jl_value_t *type, size_t nfields)
@@ -155,7 +152,7 @@ JL_CALLABLE(jl_f_intrinsic_call);
 extern jl_function_t *jl_unprotect_stack_func;
 void jl_install_default_signal_handlers(void);
 void restore_signals(void);
-void jl_install_thread_signal_handler(void);
+void jl_install_thread_signal_handler(jl_ptls_t ptls);
 
 jl_fptr_t jl_get_builtin_fptr(jl_value_t *b);
 
@@ -250,7 +247,7 @@ void jl_init_restored_modules(jl_array_t *init_order);
 void jl_init_signal_async(void);
 void jl_init_debuginfo(void);
 void jl_init_runtime_ccall(void);
-void jl_mk_thread_heap(jl_tls_states_t *ptls);
+void jl_mk_thread_heap(jl_ptls_t ptls);
 
 void _julia_init(JL_IMAGE_SEARCH rel);
 
@@ -309,7 +306,7 @@ void jl_wake_libuv(void);
 jl_get_ptls_states_func jl_get_ptls_states_getter(void);
 static inline void jl_set_gc_and_wait(void)
 {
-    jl_tls_states_t *ptls = jl_get_ptls_states();
+    jl_ptls_t ptls = jl_get_ptls_states();
     // reading own gc state doesn't need atomic ops since no one else
     // should store to it.
     int8_t state = jl_gc_state(ptls);
@@ -376,8 +373,6 @@ typedef unw_cursor_t bt_cursor_t;
 #    define JL_UNW_HAS_FORMAT_IP 1
 #  endif
 #endif
-#define jl_bt_data (jl_get_ptls_states()->bt_data)
-#define jl_bt_size (jl_get_ptls_states()->bt_size)
 size_t rec_backtrace(uintptr_t *data, size_t maxsize);
 size_t rec_backtrace_ctx(uintptr_t *data, size_t maxsize, bt_context_t *ctx);
 #ifdef LIBOSXUNWIND
