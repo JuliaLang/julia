@@ -594,14 +594,14 @@ function:
     :(if a == b
             nothing
         else
-            Base.throw(Base.Main.Base.AssertionError("a == b"))
+            (Base.throw)(Base.Main.Base.AssertionError("a == b"))
         end)
 
     julia> macroexpand(:(@assert a==b "a should equal b!"))
     :(if a == b
             nothing
         else
-            Base.throw(Base.Main.Base.AssertionError("a should equal b!"))
+            (Base.throw)(Base.Main.Base.AssertionError("a should equal b!"))
         end)
 
 There is yet another case that the actual :obj:`@assert` macro handles: what
