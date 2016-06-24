@@ -41,11 +41,13 @@ JL_DLLEXPORT void jl_add_standard_imports(jl_module_t *m)
 
 JL_DLLEXPORT jl_module_t *jl_new_main_module(void)
 {
+    jl_ptls_t ptls = jl_get_ptls_states();
     if (jl_generating_output() && jl_options.incremental)
         jl_error("cannot call workspace() in incremental compile mode");
 
     // switch to a new top-level module
-    if (jl_current_module != jl_main_module && jl_current_module != NULL && jl_main_module != NULL)
+    if (ptls->current_module != jl_main_module &&
+        ptls->current_module != NULL && jl_main_module != NULL)
         jl_error("Main can only be replaced from the top level");
 
     jl_module_t *old_main = jl_main_module;
@@ -54,14 +56,14 @@ JL_DLLEXPORT jl_module_t *jl_new_main_module(void)
     jl_main_module->parent = jl_main_module;
     if (old_main) // don't block continued loading of incremental caches
         jl_main_module->uuid = old_main->uuid;
-    jl_current_module = jl_main_module;
+    ptls->current_module = jl_main_module;
 
     jl_core_module->parent = jl_main_module;
     jl_set_const(jl_main_module, jl_symbol("Core"),
                  (jl_value_t*)jl_core_module);
     jl_set_global(jl_core_module, jl_symbol("Main"),
                   (jl_value_t*)jl_main_module);
-    jl_current_task->current_module = jl_main_module;
+    ptls->current_task->current_module = jl_main_module;
 
     return old_main;
 }
@@ -91,6 +93,7 @@ static void jl_module_load_time_initialize(jl_module_t *m)
 extern void jl_get_system_hooks(void);
 jl_value_t *jl_eval_module_expr(jl_expr_t *ex)
 {
+    jl_ptls_t ptls = jl_get_ptls_states();
     static arraylist_t module_stack;
     static int initialized=0;
     static jl_module_t *outermost = NULL;
@@ -99,7 +102,7 @@ jl_value_t *jl_eval_module_expr(jl_expr_t *ex)
         initialized = 1;
     }
     assert(ex->head == module_sym);
-    jl_module_t *last_module = jl_current_module;
+    jl_module_t *last_module = ptls->current_module;
     if (jl_array_len(ex->args) != 3 || !jl_is_expr(jl_exprarg(ex,2))) {
         jl_error("syntax: malformed module expression");
     }
@@ -108,7 +111,7 @@ jl_value_t *jl_eval_module_expr(jl_expr_t *ex)
     if (!jl_is_symbol(name)) {
         jl_type_error("module", (jl_value_t*)jl_sym_type, (jl_value_t*)name);
     }
-    jl_module_t *parent_module = jl_current_module;
+    jl_module_t *parent_module = ptls->current_module;
     jl_binding_t *b = jl_get_binding_wr(parent_module, name);
     jl_declare_constant(b);
     if (b->value != NULL) {
@@ -145,8 +148,8 @@ jl_value_t *jl_eval_module_expr(jl_expr_t *ex)
 
     jl_value_t *defaultdefs = NULL, *form = NULL;
     JL_GC_PUSH3(&last_module, &defaultdefs, &form);
-    jl_module_t *task_last_m = jl_current_task->current_module;
-    jl_current_task->current_module = jl_current_module = newm;
+    jl_module_t *task_last_m = ptls->current_task->current_module;
+    ptls->current_task->current_module = ptls->current_module = newm;
     jl_module_t *prev_outermost = outermost;
     size_t stackidx = module_stack.len;
     if (outermost == NULL)
@@ -168,15 +171,15 @@ jl_value_t *jl_eval_module_expr(jl_expr_t *ex)
         }
     }
     JL_CATCH {
-        jl_current_module = last_module;
-        jl_current_task->current_module = task_last_m;
+        ptls->current_module = last_module;
+        ptls->current_task->current_module = task_last_m;
         outermost = prev_outermost;
         module_stack.len = stackidx;
         jl_rethrow();
     }
     JL_GC_POP();
-    jl_current_module = last_module;
-    jl_current_task->current_module = task_last_m;
+    ptls->current_module = last_module;
+    ptls->current_task->current_module = task_last_m;
     outermost = prev_outermost;
 
 #if 0
@@ -202,7 +205,7 @@ jl_value_t *jl_eval_module_expr(jl_expr_t *ex)
 
     arraylist_push(&module_stack, newm);
 
-    if (outermost == NULL || jl_current_module == jl_main_module) {
+    if (outermost == NULL || ptls->current_module == jl_main_module) {
         JL_TRY {
             size_t i, l=module_stack.len;
             for(i = stackidx; i < l; i++) {
@@ -317,6 +320,7 @@ static jl_value_t *require_func=NULL;
 
 static jl_module_t *eval_import_path_(jl_array_t *args, int retrying)
 {
+    jl_ptls_t ptls = jl_get_ptls_states();
     // in .A.B.C, first find a binding for A in the chain of module scopes
     // following parent links. then evaluate the rest of the path from there.
     // in A.B, look for A in Main first.
@@ -329,7 +333,7 @@ static jl_module_t *eval_import_path_(jl_array_t *args, int retrying)
         m = jl_main_module;
     }
     else {
-        m = jl_current_module;
+        m = ptls->current_module;
         while (1) {
             var = (jl_sym_t*)jl_array_ptr_ref(args,i);
             if (!jl_is_symbol(var)) jl_type_error("import or using", (jl_value_t*)jl_sym_type, (jl_value_t*)var);
@@ -378,7 +382,7 @@ static jl_module_t *eval_import_path_(jl_array_t *args, int retrying)
         }
         if (retrying && require_func) {
             jl_printf(JL_STDERR, "WARNING: requiring \"%s\" in module \"%s\" did not define a corresponding module.\n", jl_symbol_name(var),
-                      jl_symbol_name(jl_current_module->name));
+                      jl_symbol_name(ptls->current_module->name));
             return NULL;
         }
         else {
@@ -417,6 +421,7 @@ int jl_is_toplevel_only_expr(jl_value_t *e)
 
 jl_value_t *jl_toplevel_eval_flex(jl_value_t *e, int fast, int expanded)
 {
+    jl_ptls_t ptls = jl_get_ptls_states();
     //jl_show(ex);
     //jl_printf(JL_STDOUT, "\n");
     if (!jl_is_expr(e)) {
@@ -444,7 +449,7 @@ jl_value_t *jl_toplevel_eval_flex(jl_value_t *e, int fast, int expanded)
         m = (jl_module_t*)jl_eval_global_var(m, name);
         if (!jl_is_module(m))
             jl_errorf("invalid %s statement: name exists but does not refer to a module", jl_symbol_name(ex->head));
-        jl_module_importall(jl_current_module, m);
+        jl_module_importall(ptls->current_module, m);
         return jl_nothing;
     }
     else if (ex->head == using_sym) {
@@ -455,10 +460,10 @@ jl_value_t *jl_toplevel_eval_flex(jl_value_t *e, int fast, int expanded)
             jl_error("syntax: malformed \"using\" statement");
         jl_module_t *u = (jl_module_t*)jl_eval_global_var(m, name);
         if (jl_is_module(u)) {
-            jl_module_using(jl_current_module, u);
+            jl_module_using(ptls->current_module, u);
         }
         else {
-            jl_module_use(jl_current_module, m, name);
+            jl_module_use(ptls->current_module, m, name);
         }
         return jl_nothing;
     }
@@ -468,7 +473,7 @@ jl_value_t *jl_toplevel_eval_flex(jl_value_t *e, int fast, int expanded)
         jl_sym_t *name = (jl_sym_t*)jl_array_ptr_ref(ex->args, jl_array_len(ex->args)-1);
         if (!jl_is_symbol(name))
             jl_error("syntax: malformed \"import\" statement");
-        jl_module_import(jl_current_module, m, name);
+        jl_module_import(ptls->current_module, m, name);
         return jl_nothing;
     }
     else if (ex->head == export_sym) {
@@ -476,7 +481,7 @@ jl_value_t *jl_toplevel_eval_flex(jl_value_t *e, int fast, int expanded)
             jl_sym_t *name = (jl_sym_t*)jl_array_ptr_ref(ex->args, i);
             if (!jl_is_symbol(name))
                 jl_error("syntax: malformed \"export\" statement");
-            jl_module_export(jl_current_module, name);
+            jl_module_export(ptls->current_module, name);
         }
         return jl_nothing;
     }
@@ -511,10 +516,10 @@ jl_value_t *jl_toplevel_eval_flex(jl_value_t *e, int fast, int expanded)
         thk = (jl_lambda_info_t*)jl_exprarg(ex,0);
         assert(jl_is_lambda_info(thk));
         assert(jl_typeis(thk->code, jl_array_any_type));
-        ewc = jl_eval_with_compiler_p(thk, (jl_array_t*)thk->code, fast, jl_current_module);
+        ewc = jl_eval_with_compiler_p(thk, (jl_array_t*)thk->code, fast, ptls->current_module);
     }
     else {
-        if (head && jl_eval_expr_with_compiler_p((jl_value_t*)ex, fast, jl_current_module)) {
+        if (head && jl_eval_expr_with_compiler_p((jl_value_t*)ex, fast, ptls->current_module)) {
             thk = jl_wrap_expr((jl_value_t*)ex);
             ewc = 1;
         }
@@ -553,7 +558,8 @@ JL_DLLEXPORT jl_value_t *jl_toplevel_eval(jl_value_t *v)
 
 JL_DLLEXPORT jl_value_t *jl_load(const char *fname)
 {
-    if (jl_current_module->istopmod) {
+    jl_ptls_t ptls = jl_get_ptls_states();
+    if (ptls->current_module->istopmod) {
         jl_printf(JL_STDOUT, "%s\r\n", fname);
 #ifdef _OS_WINDOWS_
         uv_run(uv_default_loop(), (uv_run_mode)1);
@@ -632,6 +638,7 @@ void jl_check_static_parameter_conflicts(jl_method_t *m, jl_svec_t *t)
 JL_DLLEXPORT jl_value_t *jl_generic_function_def(jl_sym_t *name, jl_value_t **bp, jl_value_t *bp_owner,
                                                  jl_binding_t *bnd)
 {
+    jl_ptls_t ptls = jl_get_ptls_states();
     jl_value_t *gf=NULL;
 
     assert(name && bp);
@@ -645,7 +652,7 @@ JL_DLLEXPORT jl_value_t *jl_generic_function_def(jl_sym_t *name, jl_value_t **bp
     if (bnd)
         bnd->constp = 1;
     if (*bp == NULL) {
-        jl_module_t *module = (bnd ? bnd->owner : jl_current_module);
+        jl_module_t *module = (bnd ? bnd->owner : ptls->current_module);
         gf = (jl_value_t*)jl_new_generic_function(name, module);
         *bp = gf;
         if (bp_owner) jl_gc_wb(bp_owner, gf);

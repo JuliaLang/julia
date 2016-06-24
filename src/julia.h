@@ -1189,7 +1189,6 @@ extern JL_DLLEXPORT jl_module_t *jl_internal_main_module;
 extern JL_DLLEXPORT jl_module_t *jl_core_module;
 extern JL_DLLEXPORT jl_module_t *jl_base_module;
 extern JL_DLLEXPORT jl_module_t *jl_top_module;
-#define jl_current_module (jl_get_ptls_states()->current_module)
 JL_DLLEXPORT jl_module_t *jl_new_module(jl_sym_t *name);
 // get binding for reading
 JL_DLLEXPORT jl_binding_t *jl_get_binding(jl_module_t *m, jl_sym_t *var);
@@ -1463,11 +1462,6 @@ typedef struct _jl_task_t {
 #endif
 } jl_task_t;
 
-#define jl_current_task (jl_get_ptls_states()->current_task)
-#define jl_root_task (jl_get_ptls_states()->root_task)
-#define jl_exception_in_transit (jl_get_ptls_states()->exception_in_transit)
-#define jl_task_arg_in_transit (jl_get_ptls_states()->task_arg_in_transit)
-
 JL_DLLEXPORT jl_task_t *jl_new_task(jl_function_t *start, size_t ssize);
 JL_DLLEXPORT jl_value_t *jl_switchto(jl_task_t *t, jl_value_t *arg);
 JL_DLLEXPORT void JL_NORETURN jl_throw(jl_value_t *e);
@@ -1477,10 +1471,11 @@ JL_DLLEXPORT void JL_NORETURN jl_rethrow_other(jl_value_t *e);
 #ifdef JULIA_ENABLE_THREADING
 static inline void jl_lock_frame_push(jl_mutex_t *lock)
 {
+    jl_ptls_t ptls = jl_get_ptls_states();
     // For early bootstrap
-    if (__unlikely(!jl_current_task))
+    if (__unlikely(!ptls->current_task))
         return;
-    arraylist_t *locks = &jl_current_task->locks;
+    arraylist_t *locks = &ptls->current_task->locks;
     size_t len = locks->len;
     if (__unlikely(len >= locks->max)) {
         arraylist_grow(locks, 1);
@@ -1492,8 +1487,9 @@ static inline void jl_lock_frame_push(jl_mutex_t *lock)
 }
 static inline void jl_lock_frame_pop(void)
 {
-    if (__likely(jl_current_task)) {
-        jl_current_task->locks.len--;
+    jl_ptls_t ptls = jl_get_ptls_states();
+    if (__likely(ptls->current_task)) {
+        ptls->current_task->locks.len--;
     }
 }
 #else
@@ -1510,7 +1506,7 @@ STATIC_INLINE void jl_eh_restore_state(jl_handler_t *eh)
 {
     jl_ptls_t ptls = jl_get_ptls_states();
     jl_task_t *current_task = ptls->current_task;
-    // `eh` may not be `jl_current_task->eh`. See `jl_pop_handler`
+    // `eh` may not be `ptls->current_task->eh`. See `jl_pop_handler`
     // This function should **NOT** have any safepoint before the ones at the
     // end.
     sig_atomic_t old_defer_signal = ptls->defer_signal;
@@ -1576,7 +1572,7 @@ void jl_longjmp(jmp_buf _Buf,int _Value);
 #define JL_CATCH                                                \
     else                                                        \
         for (i__ca=1, jl_eh_restore_state(&__eh); i__ca; i__ca=0) \
-            if (((jl_exception_in_transit==jl_stackovf_exception) && _resetstkoflw()) || 1)
+            if (((jl_get_ptls_states()->exception_in_transit==jl_stackovf_exception) && _resetstkoflw()) || 1)
 #else
 #define JL_CATCH                                                \
     else                                                        \
@@ -1752,6 +1748,12 @@ typedef struct {
     uint8_t isnull;
     float value;
 } jl_nullable_float32_t;
+
+#define jl_current_module (jl_get_ptls_states()->current_module)
+#define jl_current_task (jl_get_ptls_states()->current_task)
+#define jl_root_task (jl_get_ptls_states()->root_task)
+#define jl_exception_in_transit (jl_get_ptls_states()->exception_in_transit)
+#define jl_task_arg_in_transit (jl_get_ptls_states()->task_arg_in_transit)
 
 #ifdef __cplusplus
 }

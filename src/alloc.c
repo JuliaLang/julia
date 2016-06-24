@@ -576,6 +576,7 @@ JL_DLLEXPORT void jl_method_init_properties(jl_method_t *m)
 
 JL_DLLEXPORT jl_method_t *jl_new_method_uninit(void)
 {
+    jl_ptls_t ptls = jl_get_ptls_states();
     jl_method_t *m =
         (jl_method_t*)newobj((jl_value_t*)jl_method_type,
                              NWORDS(sizeof(jl_method_t)));
@@ -584,7 +585,7 @@ JL_DLLEXPORT jl_method_t *jl_new_method_uninit(void)
     m->tvars = NULL;
     m->ambig = NULL;
     m->roots = NULL;
-    m->module = jl_current_module;
+    m->module = ptls->current_module;
     m->lambda_template = NULL;
     m->name = NULL;
     m->file = empty_sym;
@@ -841,7 +842,8 @@ JL_DLLEXPORT jl_typename_t *jl_new_typename_in(jl_sym_t *name, jl_module_t *modu
 
 JL_DLLEXPORT jl_typename_t *jl_new_typename(jl_sym_t *name)
 {
-    return jl_new_typename_in(name, jl_current_module);
+    jl_ptls_t ptls = jl_get_ptls_states();
+    return jl_new_typename_in(name, ptls->current_module);
 }
 
 jl_datatype_t *jl_new_abstracttype(jl_value_t *name, jl_datatype_t *super,
@@ -986,6 +988,7 @@ JL_DLLEXPORT jl_datatype_t *jl_new_datatype(jl_sym_t *name, jl_datatype_t *super
                                             int abstract, int mutabl,
                                             int ninitialized)
 {
+    jl_ptls_t ptls = jl_get_ptls_states();
     jl_datatype_t *t=NULL;
     jl_typename_t *tn=NULL;
     JL_GC_PUSH2(&t, &tn);
@@ -1032,7 +1035,7 @@ JL_DLLEXPORT jl_datatype_t *jl_new_datatype(jl_sym_t *name, jl_datatype_t *super
         else {
             tn = jl_new_typename((jl_sym_t*)name);
             if (!abstract) {
-                tn->mt = jl_new_method_table(name, jl_current_module);
+                tn->mt = jl_new_method_table(name, ptls->current_module);
                 jl_gc_wb(tn, tn->mt);
             }
         }

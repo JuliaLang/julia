@@ -470,12 +470,13 @@ restart_switch:
 
 static int exec_program(char *program)
 {
+    jl_ptls_t ptls = jl_get_ptls_states();
     int err = 0;
- again: ;
+  again: ;
     JL_TRY {
         if (err) {
             jl_value_t *errs = jl_stderr_obj();
-            jl_value_t *e = jl_exception_in_transit;
+            jl_value_t *e = ptls->exception_in_transit;
             if (errs != NULL) {
                 jl_show(errs, e);
             }
@@ -528,6 +529,7 @@ static void print_profile(void)
 
 static NOINLINE int true_main(int argc, char *argv[])
 {
+    jl_ptls_t ptls = jl_get_ptls_states();
     if (jl_core_module != NULL) {
         jl_array_t *args = (jl_array_t*)jl_get_global(jl_core_module, jl_symbol("ARGS"));
         if (args == NULL) {
@@ -573,7 +575,7 @@ static NOINLINE int true_main(int argc, char *argv[])
             jl_value_t *val = (jl_value_t*)jl_eval_string(line);
             if (jl_exception_occurred()) {
                 jl_printf(JL_STDERR, "error during run:\n");
-                jl_static_show(JL_STDERR, jl_exception_in_transit);
+                jl_static_show(JL_STDERR, ptls->exception_in_transit);
                 jl_exception_clear();
             }
             else if (val) {
@@ -590,7 +592,7 @@ static NOINLINE int true_main(int argc, char *argv[])
                 line = NULL;
             }
             jl_printf(JL_STDERR, "\nparser error:\n");
-            jl_static_show(JL_STDERR, jl_exception_in_transit);
+            jl_static_show(JL_STDERR, ptls->exception_in_transit);
             jl_printf(JL_STDERR, "\n");
             jlbacktrace();
         }

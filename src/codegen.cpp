@@ -690,8 +690,9 @@ static void emit_write_barrier(jl_codectx_t*, Value*, Value*);
 
 static void jl_rethrow_with_add(const char *fmt, ...)
 {
-    if (jl_typeis(jl_exception_in_transit, jl_errorexception_type)) {
-        char *str = jl_string_data(jl_fieldref(jl_exception_in_transit,0));
+    jl_ptls_t ptls = jl_get_ptls_states();
+    if (jl_typeis(ptls->exception_in_transit, jl_errorexception_type)) {
+        char *str = jl_string_data(jl_fieldref(ptls->exception_in_transit,0));
         char buf[1024];
         va_list args;
         va_start(args, fmt);
@@ -3295,7 +3296,7 @@ static jl_cgval_t emit_expr(jl_value_t *expr, jl_codectx_t *ctx)
         Value *val = emit_jlcall(jlnew_func, typ, &args[1], nargs-1, ctx);
         return mark_julia_type(val, true, ty, ctx);
     }
-    else if (head == exc_sym) { // *jl_exception_in_transit
+    else if (head == exc_sym) { // *ptls->exception_in_transit
         return mark_julia_type(builder.CreateLoad(emit_exc_in_transit(ctx),
                                                   /*isvolatile*/true),
                                true, jl_any_type, ctx);
@@ -4009,6 +4010,7 @@ static Function *gen_jlcall_wrapper(jl_lambda_info_t *lam, Function *f, bool sre
 // Compile to LLVM IR, using a specialized signature if applicable.
 static std::unique_ptr<Module> emit_function(jl_lambda_info_t *lam, jl_llvm_functions_t *declarations)
 {
+    jl_ptls_t ptls = jl_get_ptls_states();
     assert(declarations && "Capturing declarations is always required");
 
     // step 1. unpack AST and allocate codegen context for this function
@@ -4025,7 +4027,7 @@ static std::unique_ptr<Module> emit_function(jl_lambda_info_t *lam, jl_llvm_func
     ctx.arrayvars = &arrayvars;
     ctx.labels = &labels;
     ctx.handlers = &handlers;
-    ctx.module = lam->def ? lam->def->module : jl_current_module;
+    ctx.module = lam->def ? lam->def->module : ptls->current_module;
     ctx.linfo = lam;
     ctx.name = jl_symbol_name(lam->def ? lam->def->name : anonymous_sym);
     ctx.funcName = ctx.name;

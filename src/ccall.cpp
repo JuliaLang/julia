@@ -1010,6 +1010,7 @@ static std::string generate_func_sig(
 // ccall(pointer, rettype, (argtypes...), args...)
 static jl_cgval_t emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
 {
+    jl_ptls_t ptls = jl_get_ptls_states();
     JL_NARGSV(ccall, 3);
     jl_value_t *rt=NULL, *at=NULL;
     JL_GC_PUSH2(&rt, &at);
@@ -1069,9 +1070,10 @@ static jl_cgval_t emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
                 }
             }
             if (rt == NULL) {
-                if (jl_exception_in_transit && jl_typeis(jl_exception_in_transit,
-                                                         jl_undefvarerror_type)
-                                            && jl_is_symbol(args[2])) {
+                if (ptls->exception_in_transit &&
+                    jl_typeis(ptls->exception_in_transit,
+                              jl_undefvarerror_type) &&
+                    jl_is_symbol(args[2])) {
                     std::string msg = "ccall return type undefined: " +
                                       std::string(jl_symbol_name((jl_sym_t*)args[2]));
                     emit_error(msg.c_str(), ctx);

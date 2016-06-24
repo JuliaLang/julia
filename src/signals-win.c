@@ -113,7 +113,7 @@ void jl_throw_in_ctx(jl_value_t *excpt, CONTEXT *ctxThread, int bt)
 #endif
     ptls->bt_size = bt ? rec_backtrace_ctx(ptls->bt_data, JL_MAX_BT_SIZE,
                                            ctxThread) : 0;
-    jl_exception_in_transit = excpt;
+    ptls->exception_in_transit = excpt;
 #if defined(_CPU_X86_64_)
     *(DWORD64*)Rsp = 0;
     ctxThread->Rsp = Rsp;
