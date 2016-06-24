@@ -534,7 +534,7 @@ Types
        julia> structinfo(T) = [(fieldoffset(T,i), fieldname(T,i), fieldtype(T,i)) for i = 1:nfields(T)];
 
        julia> structinfo(Base.Filesystem.StatStruct)
-       12-element Array{Tuple{UInt64,Symbol,Type{_}},1}:
+       12-element Array{Tuple{UInt64,Union{Int64,Symbol},Type{_}},1}:
         (0x0000000000000000,:device,UInt64)
         (0x0000000000000008,:inode,UInt64)
         (0x0000000000000010,:mode,UInt64)

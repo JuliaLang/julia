@@ -248,10 +248,10 @@ promotion is to convert numeric arguments to a common type:
     (1.0,2.5,3.0,0.75)
 
     julia> promote(1.5, im)
-    (1.5+0.0im,0.0+1.0im)
+    (1.5 + 0.0im,0.0 + 1.0im)
 
     julia> promote(1 + 2im, 3//4)
-    (1//1+2//1*im,3//4+0//1*im)
+    (1//1 + 2//1*im,3//4 + 0//1*im)
 
 Floating-point values are promoted to the largest of the floating-point
 argument types. Integer values are promoted to the larger of either the
