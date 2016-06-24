@@ -7,41 +7,41 @@ using Base: IndicesStartAt1, IndicesBehavior, indicesbehavior
 export permutedims
 
 # Some day we will want storage-order-aware iteration, so put perm in the parameters
-immutable PermutedDimsArray{T,N,AA<:AbstractArray,perm} <: AbstractArray{T,N}
+immutable PermutedDimsArray{T,N,perm,iperm,AA<:AbstractArray} <: AbstractArray{T,N}
     parent::AA
-    iperm::NTuple{N,Int}
     dims::NTuple{N,Int}
 
     function PermutedDimsArray(data::AA)
         # TODO optimize isperm & invperm for low dimensions?
-        isa(perm, NTuple{N,Int}) || error("perm must be an NTuple{$N,Int}")
-        (length(perm) == N && isperm(perm)) || throw(ArgumentError(string(perm, " is not a valid permutation of dimensions 1:", N)))
-        iperm = invperm(perm)
-        new(data, iperm, genperm(size(data), perm))
+        (isa(perm, NTuple{N,Int}) && isa(iperm, NTuple{N,Int})) || error("perm and iperm must both be NTuple{$N,Int}")
+        isperm(perm) || throw(ArgumentError(string(perm, " is not a valid permutation of dimensions 1:", N)))
+        all(map(d->iperm[perm[d]]==d, 1:N)) || throw(ArgumentError(string(perm, " and ", iperm, " must be inverses")))
+        new(data, genperm(size(data), perm))
     end
 end
 
 function PermutedDimsArray{T,N}(data::AbstractArray{T,N}, perm)
     length(perm) == N || throw(ArgumentError(string(p, " is not a valid permutation of dimensions 1:", N)))
-    PermutedDimsArray{T,N,typeof(data),(perm...,)}(data)
+    iperm = invperm(perm)
+    PermutedDimsArray{T,N,(perm...,),(iperm...,),typeof(data)}(data)
 end
 
 Base.parent(A::PermutedDimsArray) = A.parent
 Base.size(A::PermutedDimsArray) = A.dims
-Base.indices{T,N,AA,perm}(A::PermutedDimsArray{T,N,AA,perm}, d) = indices(parent(A), perm[d])
+Base.indices{T,N,perm}(A::PermutedDimsArray{T,N,perm}, d) = indices(parent(A), perm[d])
 
-@inline function Base.getindex{T,N}(A::PermutedDimsArray{T,N}, I::Vararg{Int,N})
+@inline function Base.getindex{T,N,perm,iperm}(A::PermutedDimsArray{T,N,perm,iperm}, I::Vararg{Int,N})
     @boundscheck checkbounds(A, I...)
-    @inbounds val = getindex(A.parent, genperm(I, A.iperm)...)
+    @inbounds val = getindex(A.parent, genperm(I, iperm)...)
     val
 end
-@inline function Base.setindex!{T,N}(A::PermutedDimsArray{T,N}, val, I::Vararg{Int,N})
+@inline function Base.setindex!{T,N,perm,iperm}(A::PermutedDimsArray{T,N,perm,iperm}, val, I::Vararg{Int,N})
     @boundscheck checkbounds(A, I...)
-    @inbounds setindex!(A.parent, val, genperm(I, A.iperm)...)
+    @inbounds setindex!(A.parent, val, genperm(I, iperm)...)
     val
 end
 
-# Could use ntuple(d->I[perm[d]], Val{N}) once #15276 is solved
+# For some reason this is faster than ntuple(d->I[perm[d]], Val{N}) (#15276?)
 @inline genperm{N}(I::NTuple{N}, perm::Dims{N}) = _genperm((), I, perm...)
 _genperm(out, I) = out
 @inline _genperm(out, I, p, perm...) = _genperm((out..., I[p]), I, perm...)
@@ -69,7 +69,7 @@ function Base.copy!{T,N}(dest::PermutedDimsArray{T,N}, src::AbstractArray{T,N})
 end
 Base.copy!(dest::PermutedDimsArray, src::AbstractArray) = _copy!(dest, src)
 
-function _copy!{T,N,AA,perm}(P::PermutedDimsArray{T,N,AA,perm}, src)
+function _copy!{T,N,perm}(P::PermutedDimsArray{T,N,perm}, src)
     # If dest/src are "close to dense," then it pays to be cache-friendly.
     # Determine the first permuted dimension
     d = 0  # d+1 will hold the first permuted dimension of src
