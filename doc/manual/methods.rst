@@ -96,23 +96,23 @@ Applying it to any other types of arguments will result in a :exc:`MethodError`:
     ERROR: MethodError: no method matching f(::Float64, ::Int64)
     Closest candidates are:
       f(::Float64, !Matched::Float64)
-     in eval(::Module, ::Any) at ./boot.jl:237
+     in eval(::Module, ::Any) at ./boot.jl:231...
 
     julia> f(Float32(2.0), 3.0)
     ERROR: MethodError: no method matching f(::Float32, ::Float64)
     Closest candidates are:
       f(!Matched::Float64, ::Float64)
-     in eval(::Module, ::Any) at ./boot.jl:237
+     in eval(::Module, ::Any) at ./boot.jl:231...
 
     julia> f(2.0, "3.0")
     ERROR: MethodError: no method matching f(::Float64, ::String)
     Closest candidates are:
       f(::Float64, !Matched::Float64)
-     in eval(::Module, ::Any) at ./boot.jl:237
+     in eval(::Module, ::Any) at ./boot.jl:231...
 
     julia> f("2.0", "3.0")
     ERROR: MethodError: no method matching f(::String, ::String)
-     in eval(::Module, ::Any) at ./boot.jl:237
+     in eval(::Module, ::Any) at ./boot.jl:231...
 
 As you can see, the arguments must be precisely of type :obj:`Float64`.
 Other numeric types, such as integers or 32-bit floating-point values,
@@ -180,11 +180,11 @@ function ``f`` remains undefined, and applying it will still result in a
     ERROR: MethodError: no method matching f(::String, ::Int64)
     Closest candidates are:
       f(!Matched::Number, ::Number)
-     in eval(::Module, ::Any) at ./boot.jl:237
+     in eval(::Module, ::Any) at ./boot.jl:231...
 
     julia> f()
     ERROR: MethodError: no method matching f()
-     in eval(::Module, ::Any) at ./boot.jl:237
+     in eval(::Module, ::Any) at ./boot.jl:231...
 
 You can easily see which methods exist for a function by entering the
 function object itself in an interactive session:
@@ -501,7 +501,7 @@ signature:
     ERROR: MethodError: no method matching myappend(::Array{Int64,1}, ::Float64)
     Closest candidates are:
       myappend{T}(::Array{T,1}, !Matched::T)
-     in eval(::Module, ::Any) at ./boot.jl:237
+     in eval(::Module, ::Any) at ./boot.jl:231...
 
     julia> myappend([1.0,2.0,3.0],4.0)
     4-element Array{Float64,1}:
@@ -514,7 +514,7 @@ signature:
     ERROR: MethodError: no method matching myappend(::Array{Float64,1}, ::Int64)
     Closest candidates are:
       myappend{T}(::Array{T,1}, !Matched::T)
-     in eval(::Module, ::Any) at ./boot.jl:237
+     in eval(::Module, ::Any) at ./boot.jl:231...
 
 As you can see, the type of the appended element must match the element
 type of the vector it is appended to, or else a :exc:`MethodError` is raised.
@@ -569,16 +569,18 @@ Function parameters can also be used to constrain the number of arguments that m
 
 .. doctest::
 
-    julia> bar(a,b,x::Vararg{Any,2}) = (a,b,x)
+    julia> bar(a,b,x::Vararg{Any,2}) = (a,b,x);
 
     julia> bar(1,2,3)
-    ERROR: MethodError: `bar` has no matching method bar(::Int, ::Int, ::Int)
+    ERROR: MethodError: no method matching bar(::Int64, ::Int64, ::Int64)
+    ...
 
     julia> bar(1,2,3,4)
     (1,2,(3,4))
 
     julia> bar(1,2,3,4,5)
-    ERROR: MethodError: `bar` has no method matching bar(::Int, ::Int, ::Int, ::Int, ::Int)
+    ERROR: MethodError: no method matching bar(::Int64, ::Int64, ::Int64, ::Int64, ::Int64)
+    ...
 
 More usefully, it is possible to constrain varargs methods by a parameter.  For example::
 

@@ -707,9 +707,11 @@ imply multiplication:
 
     julia> (x-1)(x+1)
     ERROR: MethodError: objects of type Int64 are not callable
+    ...
 
     julia> x(x+1)
     ERROR: MethodError: objects of type Int64 are not callable
+    ...
 
 Both expressions are interpreted as function application: any
 expression that is not a numeric literal, when immediately followed by a
