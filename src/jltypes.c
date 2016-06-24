@@ -2777,6 +2777,21 @@ static int type_eqv_with_ANY(jl_value_t *a, jl_value_t *b)
 
 static int jl_type_morespecific_(jl_value_t *a, jl_value_t *b, int invariant);
 
+jl_datatype_t *jl_fix_vararg_bound(jl_datatype_t *tt, int nfix)
+{
+    assert(jl_is_va_tuple(tt));
+    assert(nfix >= 0);
+    jl_svec_t *tp = tt->parameters;
+    size_t ntp = jl_svec_len(tp);
+    jl_value_t *env[2] = {NULL, NULL};
+    JL_GC_PUSH2(&env[0], &env[1]);
+    env[0] = jl_tparam1(jl_tparam(tt, ntp-1));
+    env[1] = jl_box_long(nfix);
+    jl_datatype_t *ret = (jl_datatype_t*)jl_instantiate_type_with((jl_value_t*)tt, env, 2);
+    JL_GC_POP();
+    return ret;
+}
+
 static int jl_tuple_morespecific(jl_datatype_t *cdt, jl_datatype_t *pdt, int invariant)
 {
     size_t clenr = jl_nparams(cdt);
@@ -2999,6 +3014,93 @@ JL_DLLEXPORT int jl_type_morespecific(jl_value_t *a, jl_value_t *b)
     return jl_type_morespecific_(a, b, 0);
 }
 
+int jl_args_morespecific_(jl_value_t *a, jl_value_t *b)
+{
+    int msp = jl_type_morespecific(a,b);
+    int btv = jl_has_typevars(b);
+    if (btv) {
+        if (jl_type_match_morespecific(a,b) == (jl_value_t*)jl_false) {
+            if (jl_has_typevars(a))
+                return 0;
+            return msp;
+        }
+        if (jl_has_typevars(a)) {
+            type_match_invariance_mask = 0;
+            //int result = jl_type_match_morespecific(b,a) == (jl_value_t*)jl_false);
+            // this rule seems to work better:
+            int result = jl_type_match(b,a) == (jl_value_t*)jl_false;
+            type_match_invariance_mask = 1;
+            if (result)
+                return 1;
+        }
+        int nmsp = jl_type_morespecific(b,a);
+        if (nmsp == msp)
+            return 0;
+    }
+    if (jl_has_typevars((jl_value_t*)a)) {
+        int nmsp = jl_type_morespecific(b,a);
+        if (nmsp && msp)
+            return 1;
+        if (!btv && jl_types_equal(a,b))
+            return 1;
+        if (jl_type_match_morespecific(b,a) != (jl_value_t*)jl_false)
+            return 0;
+    }
+    return msp;
+}
+
+// Called when a is a bound-vararg and b is not a vararg. Sets the
+// vararg length in a to match b, as long as this makes some earlier
+// argument more specific.
+int jl_args_morespecific_fix1(jl_value_t *a, jl_value_t *b, int swap)
+{
+    jl_datatype_t *tta = (jl_datatype_t*)a;
+    jl_datatype_t *ttb = (jl_datatype_t*)b;
+    size_t n = jl_nparams(tta);
+    jl_datatype_t *newtta = jl_fix_vararg_bound(tta, jl_nparams(ttb)-n+1);
+    int changed = 0;
+    for (size_t i = 0; i < n-1; i++) {
+        if (jl_tparam(tta, i) != jl_tparam(newtta, i)) {
+            changed = 1;
+            break;
+        }
+    }
+    if (changed) {
+        JL_GC_PUSH1(&newtta);
+        int ret;
+        if (swap)
+            ret = jl_args_morespecific_(b, (jl_value_t*)newtta);
+        else
+            ret = jl_args_morespecific_((jl_value_t*)newtta, b);
+        JL_GC_POP();
+        return ret;
+    }
+    if (swap)
+        return jl_args_morespecific_(b, a);
+    return jl_args_morespecific_(a, b);
+}
+
+JL_DLLEXPORT int jl_args_morespecific(jl_value_t *a, jl_value_t *b)
+{
+    if (jl_is_tuple_type(a) && jl_is_tuple_type(b)) {
+        jl_datatype_t *tta = (jl_datatype_t*)a;
+        jl_datatype_t *ttb = (jl_datatype_t*)b;
+        size_t alenf, blenf;
+        jl_vararg_kind_t akind, bkind;
+        jl_tuple_lenkind_t alenkind, blenkind;
+        alenf = tuple_vararg_params(tta->parameters, NULL, &akind, &alenkind);
+        blenf = tuple_vararg_params(ttb->parameters, NULL, &bkind, &blenkind);
+        // When one is JL_VARARG_BOUND and the other has fixed length,
+        // allow the argument length to fix the tvar
+        if (akind == JL_VARARG_BOUND && blenkind == JL_TUPLE_FIXED && blenf >= alenf) {
+            return jl_args_morespecific_fix1(a, b, 0);
+        }
+        if (bkind == JL_VARARG_BOUND && alenkind == JL_TUPLE_FIXED && alenf >= blenf) {
+            return jl_args_morespecific_fix1(b, a, 1);
+        }
+    }
+    return jl_args_morespecific_(a, b);
+}
 
 // ----------------------------------------------------------------------------
 

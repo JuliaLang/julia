@@ -1008,41 +1008,6 @@ jl_typemap_entry_t *jl_typemap_insert(union jl_typemap_t *cache, jl_value_t *par
     return newrec;
 }
 
-JL_DLLEXPORT int jl_args_morespecific(jl_value_t *a, jl_value_t *b)
-{
-    int msp = jl_type_morespecific(a,b);
-    int btv = jl_has_typevars(b);
-    if (btv) {
-        if (jl_type_match_morespecific(a,b) == (jl_value_t*)jl_false) {
-            if (jl_has_typevars(a))
-                return 0;
-            return msp;
-        }
-        if (jl_has_typevars(a)) {
-            type_match_invariance_mask = 0;
-            //int result = jl_type_match_morespecific(b,a) == (jl_value_t*)jl_false);
-            // this rule seems to work better:
-            int result = jl_type_match(b,a) == (jl_value_t*)jl_false;
-            type_match_invariance_mask = 1;
-            if (result)
-                return 1;
-        }
-        int nmsp = jl_type_morespecific(b,a);
-        if (nmsp == msp)
-            return 0;
-    }
-    if (jl_has_typevars((jl_value_t*)a)) {
-        int nmsp = jl_type_morespecific(b,a);
-        if (nmsp && msp)
-            return 1;
-        if (!btv && jl_types_equal(a,b))
-            return 1;
-        if (jl_type_match_morespecific(b,a) != (jl_value_t*)jl_false)
-            return 0;
-    }
-    return msp;
-}
-
 static int has_unions(jl_tupletype_t *type)
 {
     int i;
