@@ -52,7 +52,7 @@ static void JL_NORETURN jl_throw_in_ctx(jl_value_t *e, void *sigctx)
     if (!ptls->safe_restore)
         ptls->bt_size = rec_backtrace_ctx(ptls->bt_data, JL_MAX_BT_SIZE,
                                           jl_to_bt_context(sigctx));
-    jl_exception_in_transit = e;
+    ptls->exception_in_transit = e;
     // TODO throw the error by modifying sigctx for supported platforms
     // This will avoid running the atexit handler on the signal stack
     // if no excepiton handler is registered.

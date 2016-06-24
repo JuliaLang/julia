@@ -105,7 +105,7 @@ void jl_gc_setmark(jl_value_t *v);
 void jl_gc_sync_total_bytes(void);
 void jl_gc_track_malloced_array(jl_array_t *a);
 void jl_gc_count_allocd(size_t sz);
-void jl_gc_run_all_finalizers(void);
+void jl_gc_run_all_finalizers(jl_ptls_t ptls);
 void *allocb(size_t sz);
 
 void gc_queue_binding(jl_binding_t *bnd);

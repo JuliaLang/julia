@@ -105,35 +105,39 @@ static value_t julia_to_scm(fl_context_t *fl_ctx, jl_value_t *v);
 
 value_t fl_defined_julia_global(fl_context_t *fl_ctx, value_t *args, uint32_t nargs)
 {
+    jl_ptls_t ptls = jl_get_ptls_states();
     // tells whether a var is defined in and *by* the current module
     argcount(fl_ctx, "defined-julia-global", nargs, 1);
     (void)tosymbol(fl_ctx, args[0], "defined-julia-global");
-    if (jl_current_module == NULL)
+    if (ptls->current_module == NULL)
         return fl_ctx->F;
     jl_sym_t *var = jl_symbol(symbol_name(fl_ctx, args[0]));
     jl_binding_t *b =
-        (jl_binding_t*)ptrhash_get(&jl_current_module->bindings, var);
-    return (b != HT_NOTFOUND && b->owner==jl_current_module) ? fl_ctx->T : fl_ctx->F;
+        (jl_binding_t*)ptrhash_get(&ptls->current_module->bindings, var);
+    return (b != HT_NOTFOUND && b->owner==ptls->current_module) ? fl_ctx->T : fl_ctx->F;
 }
 
 value_t fl_current_julia_module(fl_context_t *fl_ctx, value_t *args, uint32_t nargs)
 {
+    jl_ptls_t ptls = jl_get_ptls_states();
     value_t opaque = cvalue(fl_ctx, jl_ast_ctx(fl_ctx)->jvtype, sizeof(void*));
-    *(jl_value_t**)cv_data((cvalue_t*)ptr(opaque)) = (jl_value_t*)jl_current_module;
+    *(jl_value_t**)cv_data((cvalue_t*)ptr(opaque)) = (jl_value_t*)ptls->current_module;
     return opaque;
 }
 
 value_t fl_current_module_counter(fl_context_t *fl_ctx, value_t *args, uint32_t nargs)
 {
+    jl_ptls_t ptls = jl_get_ptls_states();
     static uint32_t fallback_counter = 0;
-    if (jl_current_module == NULL)
+    if (ptls->current_module == NULL)
         return fixnum(++fallback_counter);
     else
-        return fixnum(jl_module_next_counter(jl_current_module));
+        return fixnum(jl_module_next_counter(ptls->current_module));
 }
 
 value_t fl_invoke_julia_macro(fl_context_t *fl_ctx, value_t *args, uint32_t nargs)
 {
+    jl_ptls_t ptls = jl_get_ptls_states();
     if (nargs < 1)
         argcount(fl_ctx, "invoke-julia-macro", nargs, 1);
     jl_lambda_info_t *mfunc = NULL;
@@ -158,7 +162,7 @@ value_t fl_invoke_julia_macro(fl_context_t *fl_ctx, value_t *args, uint32_t narg
     JL_CATCH {
         JL_GC_POP();
         value_t opaque = cvalue(fl_ctx, jl_ast_ctx(fl_ctx)->jvtype, sizeof(void*));
-        *(jl_value_t**)cv_data((cvalue_t*)ptr(opaque)) = jl_exception_in_transit;
+        *(jl_value_t**)cv_data((cvalue_t*)ptr(opaque)) = ptls->exception_in_transit;
         return fl_list2(fl_ctx, jl_ast_ctx(fl_ctx)->error_sym, opaque);
     }
     // protect result from GC, otherwise it could be freed during future
@@ -172,7 +176,7 @@ value_t fl_invoke_julia_macro(fl_context_t *fl_ctx, value_t *args, uint32_t narg
     fl_gc_handle(fl_ctx, &scm);
     value_t scmresult;
     jl_module_t *defmod = mfunc->def->module;
-    if (defmod == NULL || defmod == jl_current_module) {
+    if (defmod == NULL || defmod == ptls->current_module) {
         scmresult = fl_cons(fl_ctx, scm, fl_ctx->F);
     }
     else {
@@ -232,6 +236,7 @@ static jl_ast_context_list_t *jl_ast_ctx_freed = NULL;
 
 static jl_ast_context_t *jl_ast_ctx_enter(void)
 {
+    jl_ptls_t ptls = jl_get_ptls_states();
     JL_SIGATOMIC_BEGIN();
     JL_LOCK_NOGC(&flisp_lock);
     jl_ast_context_list_t *node;
@@ -239,7 +244,7 @@ static jl_ast_context_t *jl_ast_ctx_enter(void)
     // First check if the current task is using one of the contexts
     for (node = jl_ast_ctx_using;node;(node = node->next)) {
         ctx = jl_ast_context_list_item(node);
-        if (ctx->task == jl_current_task) {
+        if (ctx->task == ptls->current_task) {
             ctx->ref++;
             JL_UNLOCK_NOGC(&flisp_lock);
             return ctx;
@@ -251,7 +256,7 @@ static jl_ast_context_t *jl_ast_ctx_enter(void)
         jl_ast_context_list_insert(&jl_ast_ctx_using, node);
         ctx = jl_ast_context_list_item(node);
         ctx->ref = 1;
-        ctx->task = jl_current_task;
+        ctx->task = ptls->current_task;
         ctx->roots = NULL;
         JL_UNLOCK_NOGC(&flisp_lock);
         return ctx;
@@ -260,7 +265,7 @@ static jl_ast_context_t *jl_ast_ctx_enter(void)
     ctx = (jl_ast_context_t*)calloc(1, sizeof(jl_ast_context_t));
     // ctx->roots is NULL already due to calloc.
     ctx->ref = 1;
-    ctx->task = jl_current_task;
+    ctx->task = ptls->current_task;
     node = &ctx->list;
     jl_ast_context_list_insert(&jl_ast_ctx_using, node);
     JL_UNLOCK_NOGC(&flisp_lock);
@@ -283,10 +288,11 @@ static void jl_ast_ctx_leave(jl_ast_context_t *ctx)
 
 void jl_init_frontend(void)
 {
+    jl_ptls_t ptls = jl_get_ptls_states();
     if (jl_ast_ctx_using || jl_ast_ctx_freed)
         return;
     jl_ast_main_ctx.ref = 1;
-    jl_ast_main_ctx.task = jl_current_task;
+    jl_ast_main_ctx.task = ptls->current_task;
     jl_ast_context_list_insert(&jl_ast_ctx_using, &jl_ast_main_ctx.list);
     jl_init_ast_ctx(&jl_ast_main_ctx);
     // To match the one in jl_ast_ctx_leave
@@ -344,6 +350,7 @@ extern int64_t conv_to_int64(void *data, numerictype_t tag);
 
 static jl_value_t *scm_to_julia_(fl_context_t *fl_ctx, value_t e, int eo)
 {
+    jl_ptls_t ptls = jl_get_ptls_states();
     if (fl_isnumber(fl_ctx, e)) {
         int64_t i64;
         if (isfixnum(e)) {
@@ -444,7 +451,7 @@ static jl_value_t *scm_to_julia_(fl_context_t *fl_ctx, value_t e, int eo)
             if (sym == top_sym) {
                 scmv = scm_to_julia_(fl_ctx,car_(e),0);
                 assert(jl_is_symbol(scmv));
-                temp = jl_module_globalref(jl_base_relative_to(jl_current_module), (jl_sym_t*)scmv);
+                temp = jl_module_globalref(jl_base_relative_to(ptls->current_module), (jl_sym_t*)scmv);
                 JL_GC_POP();
                 return temp;
             }
@@ -644,6 +651,7 @@ JL_DLLEXPORT jl_value_t *jl_parse_string(const char *str, size_t len,
 jl_value_t *jl_parse_eval_all(const char *fname,
                               const char *content, size_t contentlen)
 {
+    jl_ptls_t ptls = jl_get_ptls_states();
     if (in_pure_callback)
         jl_error("cannot use include inside a generated function");
     jl_ast_context_t *ctx = jl_ast_ctx_enter();
@@ -717,7 +725,7 @@ jl_value_t *jl_parse_eval_all(const char *fname,
             jl_rethrow();
         else
             jl_rethrow_other(jl_new_struct(jl_loaderror_type, form, result,
-                                           jl_exception_in_transit));
+                                           ptls->exception_in_transit));
     }
     JL_GC_POP();
     return result;

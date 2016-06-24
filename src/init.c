@@ -216,6 +216,7 @@ static struct uv_shutdown_queue_item *next_shutdown_queue_item(struct uv_shutdow
 
 JL_DLLEXPORT void jl_atexit_hook(int exitcode)
 {
+    jl_ptls_t ptls = jl_get_ptls_states();
     if (exitcode == 0) julia_save();
     jl_print_gc_stats(JL_STDERR);
     if (jl_options.code_coverage)
@@ -230,12 +231,12 @@ JL_DLLEXPORT void jl_atexit_hook(int exitcode)
             }
             JL_CATCH {
                 jl_printf(JL_STDERR, "\natexit hook threw an error: ");
-                jl_static_show(JL_STDERR, jl_exception_in_transit);
+                jl_static_show(JL_STDERR, ptls->exception_in_transit);
             }
         }
     }
 
-    jl_gc_run_all_finalizers();
+    jl_gc_run_all_finalizers(ptls);
 
     uv_loop_t *loop = jl_global_event_loop();
 
@@ -299,7 +300,7 @@ JL_DLLEXPORT void jl_atexit_hook(int exitcode)
             //error handling -- continue cleanup, as much as possible
             uv_unref(item->h);
             jl_printf(JL_STDERR, "error during exit cleanup: close: ");
-            jl_static_show(JL_STDERR, jl_exception_in_transit);
+            jl_static_show(JL_STDERR, ptls->exception_in_transit);
             item = next_shutdown_queue_item(item);
         }
     }
@@ -638,7 +639,7 @@ void _julia_init(JL_IMAGE_SEARCH rel)
         jl_core_module = jl_new_module(jl_symbol("Core"));
         jl_type_type->name->mt->module = jl_core_module;
         jl_top_module = jl_core_module;
-        jl_current_module = jl_core_module;
+        ptls->current_module = jl_core_module;
         jl_init_intrinsic_functions();
         jl_init_primitives();
         jl_get_builtins();
@@ -646,9 +647,9 @@ void _julia_init(JL_IMAGE_SEARCH rel)
         jl_new_main_module();
         jl_internal_main_module = jl_main_module;
 
-        jl_current_module = jl_core_module;
+        ptls->current_module = jl_core_module;
         for (int t = 0;t < jl_n_threads;t++) {
-            jl_all_tls_states[t]->root_task->current_module = jl_current_module;
+            jl_all_tls_states[t]->root_task->current_module = ptls->current_module;
         }
 
         jl_load("boot.jl");
@@ -663,7 +664,7 @@ void _julia_init(JL_IMAGE_SEARCH rel)
         }
         JL_CATCH {
             jl_printf(JL_STDERR, "error during init:\n");
-            jl_static_show(JL_STDERR, jl_exception_in_transit);
+            jl_static_show(JL_STDERR, ptls->exception_in_transit);
             jl_printf(JL_STDERR, "\n");
             jl_exit(1);
         }
@@ -690,9 +691,9 @@ void _julia_init(JL_IMAGE_SEARCH rel)
     if (jl_base_module != NULL) {
         jl_add_standard_imports(jl_main_module);
     }
-    jl_current_module = jl_main_module;
+    ptls->current_module = jl_main_module;
     for (int t = 0;t < jl_n_threads;t++) {
-        jl_all_tls_states[t]->root_task->current_module = jl_current_module;
+        jl_all_tls_states[t]->root_task->current_module = ptls->current_module;
     }
 
     // This needs to be after jl_start_threads
