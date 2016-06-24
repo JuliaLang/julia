@@ -106,7 +106,7 @@ variable assignments:
    julia> expand( :(f() = 1) )
    :(begin
            $(Expr(:method, :f))
-           $(Expr(:method, :f, :((top(svec))((top(apply_type))(Tuple,((top(getfield))(Core,:Typeof))(f)),(top(svec))())), LambdaInfo for anonymous
+           $(Expr(:method, :f, :((Core.svec)((Core.apply_type)(Tuple,(Core.Typeof)(f)),(Core.svec)())), Toplevel LambdaInfo thunk
    :(begin  # none, line 1:
            return 1
        end), false))
