@@ -387,3 +387,34 @@ end
 optstring = sprint(show, Base.JLOptions())
 @test startswith(optstring, "JLOptions(")
 @test endswith(optstring, ")")
+
+# generators and guards
+
+let gen = (x for x in 1:10)
+    @test typeof(gen) <: Generator
+    @test gen.iter == 1:10
+    @test gen.f(first(1:10)) == next(gen, start(gen))[1]
+    for (a,b) in zip(1:10,gen)
+        @test a == b
+    end
+end
+
+let gen = (x * y for x in 1:10, y in 1:10)
+    @test gen == collect(1:10) .* collect(1:10)'
+    @test first(gen) == 1
+    @test collect(gen)[1:10] == collect(1:10)
+end
+
+let gen = Base.Generator(+, 1:10, 1:10, 1:10)
+    @test first(gen) == 3
+    @test collect(gen) == collect(3:3:30)
+end
+
+let gen = (x if x % 2 == 0 for x in 1:10), gen2 = Filter(x->x % 2 == 0, x for x in 1:10)
+    @test collect(gen) == collect(gen2)
+    @test collect(gen) == collect(2:2:10)
+end
+
+let gen = ((x,y) if x % 2 == 0 && y % 2 == 0 for x in 1:10, y in 1:10), gen2 = Filter(x->x[1] % 2 == 0 && x[2] % 2 == 0, (x,y) for x in 1:10, y in 1:10)
+    @test collect(gen) == collect(gen2)
+end
