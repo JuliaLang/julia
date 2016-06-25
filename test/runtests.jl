@@ -15,7 +15,7 @@ display(TextDisplay(myio), MIME"text/plain"(), TestCustomShowType())
 @test @compat String(myio) == "MyTestCustomShowType"
 
 type TestCustomShowType2 end
-@compat show(io::IO, ::MIME"text/plain", ::TestCustomShowType2) = print(io, "MyTestCustomShowType2")
+@compat Base.show(io::IO, ::MIME"text/plain", ::TestCustomShowType2) = print(io, "MyTestCustomShowType2")
 myio = IOBuffer()
 display(TextDisplay(myio), MIME"text/plain"(), TestCustomShowType2())
 @test @compat String(myio) == "MyTestCustomShowType2"
@@ -448,8 +448,9 @@ if VERSION > v"0.3.99"
 end
 
 # Timer
-let c = 0, f, t
+let c = 0, f, g, t
     @compat f(t::Timer) = (c += 1)
+    @compat g(t::Base.Timer) = (c += 1)
     t = Timer(f, 0.0, 0.05)
     sleep(0.05)
     @test c >= 1
@@ -460,6 +461,10 @@ let c = 0, f, t
     val = c
     sleep(0.1)
     @test val == c
+    t = Timer(g, 0.0, 0.05)
+    sleep(0.05)
+    @test c >= 2
+    close(t)
 end
 
 # MathConst -> Irrational

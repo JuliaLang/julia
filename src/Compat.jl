@@ -192,7 +192,7 @@ function rewrite_show(ex)
     if length(argtypes) == 2
         insert!(argtypes, 2, Expr(:(::), :macrocall, MIME"text/plain"))
     end
-    return Expr(:call, :writemime, argtypes...)
+    return Expr(:call, :(Base.writemime), argtypes...)
 end
 
 function rewrite_dict(ex)
@@ -456,7 +456,8 @@ function _compat(ex::Expr)
             rewrite_pairs_to_tuples!(ex)
         elseif VERSION < v"0.4.0-dev+1246" && f == :String
             ex = Expr(:call, :bytestring, ex.args[2:end]...)
-        elseif VERSION < v"0.5.0-dev+4340" && length(ex.args) > 2 && ex.args[1] === :show
+        elseif VERSION < v"0.5.0-dev+4340" && length(ex.args) > 2 &&
+                (macroexpand(ex.args[1]) in (:show, :(Base.show)))
             ex = rewrite_show(ex)
         end
         if VERSION < v"0.5.0-dev+4305"
@@ -490,7 +491,7 @@ function _compat(ex::Expr)
         end
     elseif VERSION < v"0.4.0-dev+5322" && ex.head === :(::) && isa(ex.args[end], Symbol)
         # Replace Base.Timer with Compat.Timer2 in type declarations
-        if ex.args[end] === :Timer || ex.args[end] == :(Base.Timer)
+        if ex.args[end] === :Timer || macroexpand(ex.args[end]) == :(Base.Timer)
             ex.args[end] = :(Compat.Timer2)
         end
     elseif ex.head === :quote && isa(ex.args[1], Symbol)

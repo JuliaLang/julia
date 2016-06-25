@@ -1,6 +1,10 @@
 import Base: eltype, convert, get, isequal, ==, hash, show
 export Nullable, NullException, isnull
 
+# FIXME: v0.3 on linux possibly has strange failure if this line, seemingly a
+# no-op, is excluded
+export eltype
+
 immutable Nullable{T}
     isnull::Bool
     value::T
