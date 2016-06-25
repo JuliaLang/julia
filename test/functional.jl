@@ -437,6 +437,43 @@ let i = 1
     @test i == 1
 end
 
+# generators and guards
+
+let gen = (x for x in 1:10)
+    @test gen.iter == 1:10
+    @test gen.f(first(1:10)) == next(gen, start(gen))[1]
+    for (a,b) in zip(1:10,gen)
+        @test a == b
+    end
+end
+
+let gen = (x * y for x in 1:10, y in 1:10)
+    @test collect(gen) == collect(1:10) .* collect(1:10)'
+    @test first(gen) == 1
+    @test collect(gen)[1:10] == collect(1:10)
+end
+
+let gen = Base.Generator(+, 1:10, 1:10, 1:10)
+    @test first(gen) == 3
+    @test collect(gen) == collect(3:3:30)
+end
+
+let gen = (x for x in 1:10 if x % 2 == 0), gen2 = Filter(x->x % 2 == 0, x for x in 1:10)
+    @test collect(gen) == collect(gen2)
+    @test collect(gen) == collect(2:2:10)
+end
+
+let gen = ((x,y) for x in 1:10, y in 1:10 if x % 2 == 0 && y % 2 == 0),
+    gen2 = Filter(x->x[1] % 2 == 0 && x[2] % 2 == 0, (x,y) for x in 1:10, y in 1:10)
+    @test collect(gen) == collect(gen2)
+end
+
+# generators with nested loops (#4867)
+
+@test [(i,j) for i=1:3 for j=1:i] == [(1,1), (2,1), (2,2), (3,1), (3,2), (3,3)]
+
+@test [(i,j) for i=1:3 for j=1:i if j>1] == [(2,2), (3,2), (3,3)]
+
 # partition(c, n)
 let v = collect(Base.partition([1,2,3,4,5], 1))
     @test all(i->v[i][1] == i, v)
