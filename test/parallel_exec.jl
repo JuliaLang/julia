@@ -294,7 +294,7 @@ copy!(s, sdata(d))
 a = rand(dims)
 @test sdata(a) == a
 
-d = SharedArray(Int, dims; init = D->fill!(D.loc_subarr_1d, myid()))
+d = SharedArray(Int, dims, init = D->fill!(D.loc_subarr_1d, myid()))
 for p in procs(d)
     idxes_in_p = remotecall_fetch(p, d) do D
         parentindexes(D.loc_subarr_1d)[1]
@@ -305,7 +305,7 @@ for p in procs(d)
     @test d[idxl] == p
 end
 
-d = SharedArray(Float64, (2,3))
+d = @inferred(SharedArray(Float64, (2,3)))
 @test isa(d[:,2], Vector{Float64})
 
 ### SharedArrays from a file
@@ -316,7 +316,7 @@ write(fn, 1:30)
 sz = (6,5)
 Atrue = reshape(1:30, sz)
 
-S = SharedArray(fn, Int, sz)
+S = @inferred(SharedArray(fn, Int, sz))
 @test S == Atrue
 @test length(procs(S)) > 1
 @sync begin
@@ -370,16 +370,16 @@ rm(fn); rm(fn2); rm(fn3)
 ### Utility functions
 
 # construct PR #13514
-S = SharedArray{Int}((1,2,3))
+S = @inferred(SharedArray{Int}((1,2,3)))
 @test size(S) == (1,2,3)
 @test typeof(S) <: SharedArray{Int}
-S = SharedArray{Int}(2)
+S = @inferred(SharedArray{Int}(2))
 @test size(S) == (2,)
 @test typeof(S) <: SharedArray{Int}
-S = SharedArray{Int}(1,2)
+S = @inferred(SharedArray{Int}(1,2))
 @test size(S) == (1,2)
 @test typeof(S) <: SharedArray{Int}
-S = SharedArray{Int}(1,2,3)
+S = @inferred(SharedArray{Int}(1,2,3))
 @test size(S) == (1,2,3)
 @test typeof(S) <: SharedArray{Int}
 
@@ -430,8 +430,8 @@ d[2:4] = 7
 d[5,1:2:4,8] = 19
 
 AA = rand(4,2)
-A = convert(SharedArray, AA)
-B = convert(SharedArray, AA')
+A = @inferred(convert(SharedArray, AA))
+B = @inferred(convert(SharedArray, AA'))
 @test B*A == ctranspose(AA)*AA
 
 d=SharedArray(Int64, (10,10); init = D->fill!(D.loc_subarr_1d, myid()), pids=[id_me, id_other])
@@ -455,7 +455,7 @@ map!(x->1, d)
 # Shared arrays of singleton immutables
 @everywhere immutable ShmemFoo end
 for T in [Void, ShmemFoo]
-    s = SharedArray(T, 10)
+    s = @inferred(SharedArray(T, 10))
     @test T() === remotecall_fetch(x->x[3], workers()[1], s)
 end
 
