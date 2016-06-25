@@ -27,9 +27,9 @@ let REF_ID::Int = 1
     next_ref_id() = (id = REF_ID; REF_ID += 1; id)
 end
 
-type RRID
-    whence
-    id
+immutable RRID
+    whence::Int
+    id::Int
 
     RRID() = RRID(myid(),next_ref_id())
     RRID(whence, id) = new(whence,id)
@@ -46,17 +46,16 @@ hash(r::RRID, h::UInt) = hash(r.whence, hash(r.id, h))
 
 # Message header stored separately from body to be able to send back errors if
 # a deserialization error occurs when reading the message body.
-type MsgHeader
+immutable MsgHeader
     response_oid::RRID
     notify_oid::RRID
+    MsgHeader(respond_oid=RRID(0,0), notify_oid=RRID(0,0)) =
+        new(respond_oid, notify_oid)
 end
 
 # Special oid (0,0) uses to indicate a null ID.
 # Used instead of Nullable to decrease wire size of header.
 null_id(id) =  id == RRID(0, 0)
-
-MsgHeader(;response_oid::RRID=RRID(0,0), notify_oid::RRID=RRID(0,0)) =
-    MsgHeader(response_oid, notify_oid)
 
 type CallMsg{Mode} <: AbstractMsg
     f::Function
@@ -831,7 +830,7 @@ end
 function remotecall(f, w::Worker, args...; kwargs...)
     rr = Future(w)
     #println("$(myid()) asking for $rr")
-    send_msg(w, MsgHeader(response_oid=remoteref_id(rr)), CallMsg{:call}(f, args, kwargs))
+    send_msg(w, MsgHeader(remoteref_id(rr)), CallMsg{:call}(f, args, kwargs))
     rr
 end
 
@@ -849,7 +848,7 @@ function remotecall_fetch(f, w::Worker, args...; kwargs...)
     oid = RRID()
     rv = lookup_ref(oid)
     rv.waitingfor = w.id
-    send_msg(w, MsgHeader(response_oid=oid), CallMsg{:call_fetch}(f, args, kwargs))
+    send_msg(w, MsgHeader(oid), CallMsg{:call_fetch}(f, args, kwargs))
     v = take!(rv)
     delete!(PGRP.refs, oid)
     isa(v, RemoteException) ? throw(v) : v
@@ -866,7 +865,7 @@ function remotecall_wait(f, w::Worker, args...; kwargs...)
     rv = lookup_ref(prid)
     rv.waitingfor = w.id
     rr = Future(w)
-    send_msg(w, MsgHeader(response_oid=remoteref_id(rr), notify_oid=prid), CallWaitMsg(f, args, kwargs))
+    send_msg(w, MsgHeader(remoteref_id(rr), prid), CallWaitMsg(f, args, kwargs))
     v = fetch(rv.c)
     delete!(PGRP.refs, prid)
     isa(v, RemoteException) && throw(v)
@@ -978,7 +977,7 @@ function deliver_result(sock::IO, msg, oid, value)
         val = :OK
     end
     try
-        send_msg_now(sock, MsgHeader(response_oid=oid), ResultMsg(val))
+        send_msg_now(sock, MsgHeader(oid), ResultMsg(val))
     catch e
         # terminate connection in case of serialization error
         # otherwise the reading end would hang
@@ -1194,7 +1193,7 @@ function handle_msg(msg::JoinPGRPMsg, msghdr, r_stream, w_stream, version)
 
     set_default_worker_pool(msg.worker_pool)
     send_connection_hdr(controller, false)
-    send_msg_now(controller, MsgHeader(notify_oid=msghdr.notify_oid), JoinCompleteMsg(Sys.CPU_CORES, getpid()))
+    send_msg_now(controller, MsgHeader(RRID(0,0), msghdr.notify_oid), JoinCompleteMsg(Sys.CPU_CORES, getpid()))
 end
 
 function connect_to_peer(manager::ClusterManager, rpid::Int, wconfig::WorkerConfig)
@@ -1543,7 +1542,7 @@ function create_worker(manager, wconfig)
 
     all_locs = map(x -> isa(x, Worker) ? (get(x.config.connect_at, ()), x.id) : ((), x.id, true), join_list)
     send_connection_hdr(w, true)
-    send_msg_now(w, MsgHeader(notify_oid=ntfy_oid), JoinPGRPMsg(w.id, all_locs, PGRP.topology, default_worker_pool()))
+    send_msg_now(w, MsgHeader(RRID(0,0), ntfy_oid), JoinPGRPMsg(w.id, all_locs, PGRP.topology, default_worker_pool()))
 
     @schedule manage(w.manager, w.id, w.config, :register)
     wait(rr_ntfy_join)
