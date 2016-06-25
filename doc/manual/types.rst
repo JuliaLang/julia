@@ -102,7 +102,7 @@ exception is thrown, otherwise, the left-hand value is returned:
 
     julia> (1+2)::AbstractFloat
     ERROR: TypeError: typeassert: expected AbstractFloat, got Int64
-     in eval(::Module, ::Any) at ./boot.jl:231...
+     ...
 
     julia> (1+2)::Int
     3
@@ -413,7 +413,7 @@ However, the value for ``baz`` must be convertible to :class:`Int`:
     julia> Foo((), 23.5, 1)
     ERROR: InexactError()
      in Foo(::Tuple{}, ::Float64, ::Int64) at ./none:2
-     in eval(::Module, ::Any) at ./boot.jl:231...
+     ...
 
 You may find a list of field names using the ``fieldnames`` function.
 
@@ -768,14 +768,14 @@ each field:
     This may have arisen from a call to the constructor Point{Float64}(...),
     since type constructors fall back to convert methods.
      in Point{Float64}(::Float64) at ./sysimg.jl:60
-     in eval(::Module, ::Any) at ./boot.jl:231...
+     ...
 
     julia> Point{Float64}(1.0,2.0,3.0)
     ERROR: MethodError: no method matching Point{Float64}(::Float64, ::Float64, ::Float64)
     Closest candidates are:
       Point{Float64}{T}(::Any, ::Any)
       Point{Float64}{T}(::Any)
-     in eval(::Module, ::Any) at ./boot.jl:231...
+     ...
 
 Only one default constructor is generated for parametric types, since
 overriding it is not possible. This constructor accepts any arguments
@@ -918,11 +918,11 @@ subtypes of :obj:`Real`:
 
     julia> Pointy{AbstractString}
     ERROR: TypeError: Pointy: in T, expected T<:Real, got Type{AbstractString}
-     in eval(::Module, ::Any) at ./boot.jl:231...
+     ...
 
     julia> Pointy{1}
     ERROR: TypeError: Pointy: in T, expected T<:Real, got Int64
-     in eval(::Module, ::Any) at ./boot.jl:231...
+     ...
 
 Type parameters for parametric composite types can be restricted in the
 same manner::

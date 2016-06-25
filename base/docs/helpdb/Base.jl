@@ -5451,7 +5451,7 @@ julia> deleteat!([6, 5, 4, 3, 2, 1], 1:2:5)
 julia> deleteat!([6, 5, 4, 3, 2, 1], (2, 2))
 ERROR: ArgumentError: indices must be unique and sorted
  in deleteat!(::Array{Int64,1}, ::Tuple{Int64,Int64}) at ./array.jl:571
- in eval(::Module, ::Any) at ./boot.jl:231...
+ ...
 ```
 """
 deleteat!(collection, itr)
@@ -8111,7 +8111,7 @@ julia> convert(Int, 3.0)
 julia> convert(Int, 3.5)
 ERROR: InexactError()
  in convert(::Type{Int64}, ::Float64) at ./int.jl:239
- in eval(::Module, ::Any) at ./boot.jl:231...
+ ...
 ```
 
 If `T` is a [`AbstractFloat`](:obj:`AbstractFloat`) or [`Rational`](:obj:`Rational`) type,
