@@ -607,23 +607,25 @@ getindex(x::AbstractSparseVector, ::Colon) = copy(x)
 
 ### show and friends
 
+function show(io::IO, ::MIME"text/plain", x::AbstractSparseVector)
+    println(io, summary(x))
+    show(io, x)
+end
+
 function show(io::IO, x::AbstractSparseVector)
+    # TODO: make this a one-line form
     n = length(x)
     nzind = nonzeroinds(x)
     nzval = nonzeros(x)
     xnnz = length(nzind)
 
-    if get(io, :multiline, false)
-        println(io, summary(x))
-    end
-
     limit::Bool = get(io, :limit, false)
     half_screen_rows = limit ? div(displaysize(io)[1] - 8, 2) : typemax(Int)
     pad = ndigits(n)
     sep = "\n\t"
-    io = IOContext(io, multiline=false)
+    io = IOContext(io)
     if !haskey(io, :compact)
-        io = IOContext(io, compact=true)
+        io = IOContext(io, :compact => true)
     end
     for k = 1:length(nzind)
         if k < half_screen_rows || k > xnnz - half_screen_rows

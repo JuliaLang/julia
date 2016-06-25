@@ -236,25 +236,13 @@ linspace(start::Real, stop::Real, len::Real=50) =
     linspace(promote(AbstractFloat(start), AbstractFloat(stop))..., len)
 
 function show(io::IO, r::LinSpace)
-    if get(io, :multiline, false)
-        # show for linspace, e.g.
-        # linspace(1,3,7)
-        # 7-element LinSpace{Float64}:
-        #   1.0,1.33333,1.66667,2.0,2.33333,2.66667,3.0
-        print(io, summary(r))
-        if !isempty(r)
-            println(io, ":")
-            print_range(io, r)
-        end
-    else
-        print(io, "linspace(")
-        show(io, first(r))
-        print(io, ',')
-        show(io, last(r))
-        print(io, ',')
-        show(io, length(r))
-        print(io, ')')
-    end
+    print(io, "linspace(")
+    show(io, first(r))
+    print(io, ',')
+    show(io, last(r))
+    print(io, ',')
+    show(io, length(r))
+    print(io, ')')
 end
 
 """
@@ -497,9 +485,7 @@ function getindex{T}(r::LinSpace{T}, s::OrdinalRange)
     return linspace(vfirst, vlast, sl)
 end
 
-function show(io::IO, r::Range)
-    print(io, repr(first(r)), ':', repr(step(r)), ':', repr(last(r)))
-end
+show(io::IO, r::Range) = print(io, repr(first(r)), ':', repr(step(r)), ':', repr(last(r)))
 show(io::IO, r::UnitRange) = print(io, repr(first(r)), ':', repr(last(r)))
 
 =={T<:Range}(r::T, s::T) = (first(r) == first(s)) & (step(r) == step(s)) & (last(r) == last(s))

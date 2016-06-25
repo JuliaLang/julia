@@ -268,8 +268,8 @@ for d in (Dict("\n" => "\n", "1" => "\n", "\n" => "2"),
     for cols in (12, 40, 80), rows in (2, 10, 24)
         # Ensure output is limited as requested
         s = IOBuffer()
-        io = Base.IOContext(s, limit=true, displaysize=(rows, cols), multiline=true)
-        Base.show(io, d)
+        io = Base.IOContext(s, limit=true, displaysize=(rows, cols))
+        Base.show(io, MIME("text/plain"), d)
         out = split(takebuf_string(s),'\n')
         for line in out[2:end]
             @test strwidth(line) <= cols
@@ -278,8 +278,8 @@ for d in (Dict("\n" => "\n", "1" => "\n", "\n" => "2"),
 
         for f in (keys, values)
             s = IOBuffer()
-            io = Base.IOContext(s, limit=true, displaysize=(rows, cols), multiline=true)
-            Base.show(io, f(d))
+            io = Base.IOContext(s, limit=true, displaysize=(rows, cols))
+            Base.show(io, MIME("text/plain"), f(d))
             out = split(takebuf_string(s),'\n')
             for line in out[2:end]
                 @test strwidth(line) <= cols
@@ -311,9 +311,9 @@ end
 type Alpha end
 Base.show(io::IO, ::Alpha) = print(io,"α")
 let sbuff = IOBuffer(),
-    io = Base.IOContext(sbuff, limit=true, displaysize=(10, 20), multiline=true)
+    io = Base.IOContext(sbuff, limit=true, displaysize=(10, 20))
 
-    Base.show(io, Dict(Alpha()=>1))
+    Base.show(io, MIME("text/plain"), Dict(Alpha()=>1))
     @test !contains(String(sbuff), "…")
     @test endswith(String(sbuff), "α => 1")
 end
