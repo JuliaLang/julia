@@ -52,8 +52,7 @@ computation with the master process acting as a driver.
 If an `init` function of the type `initfn(S::SharedArray)` is specified, it is called on all
 the participating workers.
 """
-function SharedArray(T::Type, dims::NTuple; init=false, pids=Int[])
-    N = length(dims)
+function SharedArray{T,N}(::Type{T}, dims::Dims{N}; init=false, pids=Int[])
 
     isbits(T) || throw(ArgumentError("type of SharedArray elements must be bits types, got $(T)"))
 
@@ -61,7 +60,7 @@ function SharedArray(T::Type, dims::NTuple; init=false, pids=Int[])
 
     local shm_seg_name = ""
     local s = Array{T}(ntuple(d->0,N))
-    local S = nothing
+    local S
     local shmmem_create_pid
     try
         # On OSX, the shm_seg_name length must be <= 31 characters (including the terminating NULL character)
