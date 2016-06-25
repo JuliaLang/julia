@@ -696,12 +696,15 @@ function _setindex!(h::Dict, v, key, index)
 end
 
 function setindex!{K,V}(h::Dict{K,V}, v0, key0)
-    key = convert(K,key0)
-    if !isequal(key,key0)
+    key = convert(K, key0)
+    if !isequal(key, key0)
         throw(ArgumentError("$key0 is not a valid key for type $K"))
     end
-    v = convert(V, v0)
+    setindex!(h, v0, key)
+end
 
+function setindex!{K,V}(h::Dict{K,V}, v0, key::K)
+    v = convert(V, v0)
     index = ht_keyindex2(h, key)
 
     if index > 0
@@ -719,12 +722,15 @@ function get!{K,V}(h::Dict{K,V}, key0, default)
     if !isequal(key,key0)
         throw(ArgumentError("$key0 is not a valid key for type $K"))
     end
+    get!(h, key, default)
+end
 
+function get!{K, V}(h::Dict{K,V}, key::K, default)
     index = ht_keyindex2(h, key)
 
     index > 0 && return h.vals[index]
 
-    v = convert(V,  default)
+    v = convert(V, default)
     _setindex!(h, v, key, -index)
     return v
 end
@@ -734,7 +740,10 @@ function get!{K,V}(default::Callable, h::Dict{K,V}, key0)
     if !isequal(key,key0)
         throw(ArgumentError("$key0 is not a valid key for type $K"))
     end
+    get!(default, h, key)
+end
 
+function get!{K,V}(default::Callable, h::Dict{K,V}, key::K)
     index = ht_keyindex2(h, key)
 
     index > 0 && return h.vals[index]
