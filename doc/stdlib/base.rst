@@ -367,7 +367,8 @@ All Objects
 
        julia> convert(Int, 3.5)
        ERROR: InexactError()
-        in convert at int.jl:209
+        in convert(::Type{Int64}, ::Float64) at ./int.jl:229
+        in eval(::Module, ::Any) at ./boot.jl:237
 
    If ``T`` is a :obj:`AbstractFloat` or :obj:`Rational` type, then it will return the closest value to ``x`` representable by ``T``\ .
 
