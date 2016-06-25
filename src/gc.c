@@ -782,10 +782,10 @@ static NOINLINE void add_page(jl_gc_pool_t *p)
     p->newpages = fl;
 }
 
-static inline jl_taggedvalue_t *__pool_alloc(jl_gc_pool_t *p, int osize,
+static inline jl_taggedvalue_t *__pool_alloc(jl_tls_states_t *ptls,
+                                             jl_gc_pool_t *p, int osize,
                                              int end_offset)
 {
-    jl_tls_states_t *ptls = jl_get_ptls_states();
 #ifdef MEMDEBUG
     return alloc_big(osize);
 #endif
@@ -844,14 +844,29 @@ static inline jl_taggedvalue_t *__pool_alloc(jl_gc_pool_t *p, int osize,
 // use this variant when osize is statically known
 // and is definitely in sizeclasses
 // GC_POOL_END_OFS uses an integer division
-static inline jl_taggedvalue_t *_pool_alloc(jl_gc_pool_t *p, int osize)
+static inline jl_taggedvalue_t *_pool_alloc(jl_tls_states_t *ptls,
+                                            jl_gc_pool_t *p, int osize)
 {
-    return __pool_alloc(p, osize, GC_POOL_END_OFS(osize));
+    return __pool_alloc(ptls, p, osize, GC_POOL_END_OFS(osize));
 }
 
-static inline jl_taggedvalue_t *pool_alloc(jl_gc_pool_t *p)
+static inline jl_taggedvalue_t *pool_alloc(jl_tls_states_t *ptls,
+                                           jl_gc_pool_t *p)
 {
-    return __pool_alloc(p, p->osize, p->end_offset);
+    return __pool_alloc(ptls, p, p->osize, p->end_offset);
+}
+
+// Size includes the tag!!
+JL_DLLEXPORT void *jl_gc_pool_alloc(jl_tls_states_t *ptls, jl_gc_pool_t *p,
+                                    int osize, int end_offset)
+{
+    return jl_valueof(__pool_alloc(ptls, p, osize, end_offset));
+}
+
+// Size includes the tag!!
+JL_DLLEXPORT jl_value_t *jl_gc_big_alloc(jl_tls_states_t *ptls, size_t allocsz)
+{
+    return jl_valueof(alloc_big(allocsz));
 }
 
 // pools are 16376 bytes large (GC_POOL_SZ - GC_PAGE_OFFSET)
@@ -885,7 +900,6 @@ static const int sizeclasses[JL_GC_N_POOLS] = {
 //    64,   32,  160,   64,   16,   64,  112,  128, bytes lost
 };
 
-
 static inline int szclass(size_t sz)
 {
 #ifdef _P64
@@ -905,6 +919,17 @@ static inline int szclass(size_t sz)
         return 16 - 16376 / 2 / LLT_ALIGN(sz, 16 * 2) + 24 + N;
     assert(sz <= GC_MAX_SZCLASS + sizeof(jl_taggedvalue_t) && sizeclasses[JL_GC_N_POOLS-1] == GC_MAX_SZCLASS + sizeof(jl_taggedvalue_t));
     return     16 - 16376 / 1 / LLT_ALIGN(sz, 16 * 1) + 32 + N;
+}
+
+int jl_gc_classify_pools(size_t sz, int *osize, int *end_offset)
+{
+    if (sz > GC_MAX_SZCLASS)
+        return -1;
+    size_t allocsz = sz + sizeof(jl_taggedvalue_t);
+    int klass = szclass(allocsz);
+    *osize = sizeclasses[klass];
+    *end_offset = GC_POOL_END_OFS(*osize);
+    return (int)(intptr_t)(&((jl_tls_states_t*)0)->heap.norm_pools[klass]);
 }
 
 // sweep phase
@@ -1892,6 +1917,7 @@ JL_DLLEXPORT void jl_gc_collect(int full)
 
 void *allocb(size_t sz)
 {
+    jl_tls_states_t *ptls = jl_get_ptls_states();
     jl_taggedvalue_t *b = NULL;
     size_t allocsz = sz + sizeof(jl_taggedvalue_t);
     if (allocsz < sz)  // overflow in adding offs, size was "negative"
@@ -1901,7 +1927,7 @@ void *allocb(size_t sz)
         b->header = jl_buff_tag;
     }
     else {
-        b = pool_alloc(&jl_thread_heap.norm_pools[szclass(allocsz)]);
+        b = pool_alloc(ptls, &ptls->heap.norm_pools[szclass(allocsz)]);
         b->header = jl_buff_tag;
     }
     return jl_valueof(b);
@@ -1909,40 +1935,48 @@ void *allocb(size_t sz)
 
 JL_DLLEXPORT jl_value_t *jl_gc_allocobj(size_t sz)
 {
+    jl_tls_states_t *ptls = jl_get_ptls_states();
     size_t allocsz = sz + sizeof(jl_taggedvalue_t);
     if (allocsz < sz) // overflow in adding offs, size was "negative"
         jl_throw(jl_memory_exception);
     if (allocsz <= GC_MAX_SZCLASS + sizeof(jl_taggedvalue_t)) {
-        return jl_valueof(pool_alloc(&jl_thread_heap.norm_pools[szclass(allocsz)]));
+        return jl_valueof(pool_alloc(ptls, &ptls->heap.norm_pools[szclass(allocsz)]));
     }
     return jl_valueof(alloc_big(allocsz));
 }
 
 JL_DLLEXPORT jl_value_t *jl_gc_alloc_0w(void)
 {
+    jl_tls_states_t *ptls = jl_get_ptls_states();
     const int sz = sizeof(jl_taggedvalue_t);
-    void *tag = _pool_alloc(&jl_thread_heap.norm_pools[szclass(sz)], sz);
+    void *tag = _pool_alloc(ptls, &ptls->heap.norm_pools[szclass(sz)], sz);
     return jl_valueof(tag);
 }
 
 JL_DLLEXPORT jl_value_t *jl_gc_alloc_1w(void)
 {
-    const int sz = LLT_ALIGN(sizeof(jl_taggedvalue_t) + sizeof(void*), JL_SMALL_BYTE_ALIGNMENT);
-    void *tag = _pool_alloc(&jl_thread_heap.norm_pools[szclass(sz)], sz);
+    jl_tls_states_t *ptls = jl_get_ptls_states();
+    const int sz = LLT_ALIGN(sizeof(jl_taggedvalue_t) + sizeof(void*),
+                             JL_SMALL_BYTE_ALIGNMENT);
+    void *tag = _pool_alloc(ptls, &ptls->heap.norm_pools[szclass(sz)], sz);
     return jl_valueof(tag);
 }
 
 JL_DLLEXPORT jl_value_t *jl_gc_alloc_2w(void)
 {
-    const int sz = LLT_ALIGN(sizeof(jl_taggedvalue_t) + sizeof(void*) * 2, JL_SMALL_BYTE_ALIGNMENT);
-    void *tag = _pool_alloc(&jl_thread_heap.norm_pools[szclass(sz)], sz);
+    jl_tls_states_t *ptls = jl_get_ptls_states();
+    const int sz = LLT_ALIGN(sizeof(jl_taggedvalue_t) + sizeof(void*) * 2,
+                             JL_SMALL_BYTE_ALIGNMENT);
+    void *tag = _pool_alloc(ptls, &ptls->heap.norm_pools[szclass(sz)], sz);
     return jl_valueof(tag);
 }
 
 JL_DLLEXPORT jl_value_t *jl_gc_alloc_3w(void)
 {
-    const int sz = LLT_ALIGN(sizeof(jl_taggedvalue_t) + sizeof(void*) * 3, JL_SMALL_BYTE_ALIGNMENT);
-    void *tag = _pool_alloc(&jl_thread_heap.norm_pools[szclass(sz)], sz);
+    jl_tls_states_t *ptls = jl_get_ptls_states();
+    const int sz = LLT_ALIGN(sizeof(jl_taggedvalue_t) + sizeof(void*) * 3,
+                             JL_SMALL_BYTE_ALIGNMENT);
+    void *tag = _pool_alloc(ptls, &ptls->heap.norm_pools[szclass(sz)], sz);
     return jl_valueof(tag);
 }
 
