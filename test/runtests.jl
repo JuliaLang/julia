@@ -399,7 +399,9 @@ end
 # Cstring
 let s = "foo", w = wstring("foo")
     @test reinterpret(Ptr{Cchar}, Compat.unsafe_convert(Cstring, s)) == pointer(s)
-    @test reinterpret(Ptr{Cwchar_t}, Compat.unsafe_convert(Cwstring, w)) == pointer(w)
+    if VERSION < v"0.5.0-dev+4859"
+        @test reinterpret(Ptr{Cwchar_t}, Compat.unsafe_convert(Cwstring, w)) == pointer(w)
+    end
 end
 
 # fma and muladd
