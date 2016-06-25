@@ -798,12 +798,12 @@ void jl_get_builtin_hooks(void)
 {
     int t;
     for (t = 0; t < jl_n_threads; t++) {
-        jl_tls_states_t *ptls = jl_all_tls_states[t];
-        ptls->root_task->tls = jl_nothing;
-        ptls->root_task->consumers = jl_nothing;
-        ptls->root_task->donenotify = jl_nothing;
-        ptls->root_task->exception = jl_nothing;
-        ptls->root_task->result = jl_nothing;
+        jl_tls_states_t *ptls2 = jl_all_tls_states[t];
+        ptls2->root_task->tls = jl_nothing;
+        ptls2->root_task->consumers = jl_nothing;
+        ptls2->root_task->donenotify = jl_nothing;
+        ptls2->root_task->exception = jl_nothing;
+        ptls2->root_task->result = jl_nothing;
     }
 
     jl_char_type    = (jl_datatype_t*)core("Char");
