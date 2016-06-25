@@ -1288,16 +1288,21 @@ functions in Julia's standard library accept ``Val`` types as
 arguments, and you can also use it to write your own functions.  For
 example:
 
-.. doctest::
+.. testsetup:: value-types
+
+    firstlast(::Type{Val{true}}) = "First";
+    firstlast(::Type{Val{false}}) = "Last";
+
+.. doctest:: value-types
 
     firstlast(::Type{Val{true}}) = "First"
     firstlast(::Type{Val{false}}) = "Last"
 
-    julia> println(firstlast(Val{true}))
-    First
+    julia> firstlast(Val{true})
+    "First"
 
-    julia> println(firstlast(Val{false}))
-    Last
+    julia> firstlast(Val{false})
+    "Last"
 
 For consistency across Julia, the call site should always pass a
 ``Val`` *type* rather than creating an *instance*, i.e., use
