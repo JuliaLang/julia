@@ -5,8 +5,9 @@
 
 Given a function `f` and an iterator `iter`, construct an iterator that yields
 the values of `f` applied to the elements of `iter`.
-The syntax `f(x) for x in iter` is syntax for constructing an instance of this
-type.
+The syntax `f(x) [if cond(x)::Bool] for x in iter` is syntax for constructing an instance of this
+type. The `[if cond(x)::Bool]` expression is optional and acts as a "guard", effectively
+filtering out values where the condition is false.
 """
 immutable Generator{I,F}
     f::F
