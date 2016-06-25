@@ -1536,7 +1536,7 @@ end
 
 show(io::IO, X::AbstractArray) = showarray(io, X)
 
-function showarray(io::IO, X::AbstractArray)
+function showarray(io::IO, X::AbstractArray; header = true)
     repr = !get(io, :multiline, false)
     if repr && ndims(X) == 1
         return show_vector(io, X, "[", "]")
@@ -1549,9 +1549,9 @@ function showarray(io::IO, X::AbstractArray)
         # override usual show method for Vector{Method}: don't abbreviate long lists
         io = IOContext(io, :limit => false)
     end
-    !repr && print(io, summary(X))
+    (!repr && header) && print(io, summary(X))
     if !isempty(X)
-        !repr && println(io, ":")
+        (!repr && header) && println(io, ":")
         if ndims(X) == 0
             if isassigned(X)
                 return show(io, X[])
