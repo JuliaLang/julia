@@ -85,14 +85,14 @@ macro enum(T,syms...)
         let insts = ntuple(i->$(esc(typename))($values[i]), $(length(vals)))
             Base.instances(::Type{$(esc(typename))}) = insts
         end
-        function Base.print(io::IO,x::$(esc(typename)))
+        function Base.print(io::IO, x::$(esc(typename)))
             for (sym, i) in $vals
                 if i == Int32(x)
                     print(io, sym); break
                 end
             end
         end
-        function Base.show(io::IO,x::$(esc(typename)))
+        function Base.show(io::IO, x::$(esc(typename)))
             if get(io, :compact, false)
                 print(io, x)
             else
@@ -101,16 +101,15 @@ macro enum(T,syms...)
                 print(io, " = ", Int(x))
             end
         end
-        function Base.show(io::IO,t::Type{$(esc(typename))})
-            if get(io, :multiline, false)
-                print(io, "Enum ")
-                Base.show_datatype(io, t)
-                print(io, ":")
-                for (sym, i) in $vals
-                    print(io, "\n", sym, " = ", i)
-                end
-            else
-                Base.show_datatype(io, t)
+        function Base.show(io::IO, t::Type{$(esc(typename))})
+            Base.show_datatype(io, t)
+        end
+        function Base.show(io::IO, ::MIME"text/plain", t::Type{$(esc(typename))})
+            print(io, "Enum ")
+            Base.show_datatype(io, t)
+            print(io, ":")
+            for (sym, i) in $vals
+                print(io, "\n", sym, " = ", i)
             end
         end
     end

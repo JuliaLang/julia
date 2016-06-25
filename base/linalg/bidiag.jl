@@ -168,15 +168,12 @@ svdfact(M::Bidiagonal; thin::Bool=true) = svdfact!(copy(M),thin=thin)
 ####################
 
 function show(io::IO, M::Bidiagonal)
-    if get(io, :multiline, false)
-        Base.showarray(io, M)
-    else
-        println(io, summary(M), ":")
-        print(io, " diag:")
-        print_matrix(io, (M.dv)')
-        print(io, M.isupper?"\n super:":"\n sub:")
-        print_matrix(io, (M.ev)')
-    end
+    # TODO: make this readable and one-line
+    println(io, summary(M), ":")
+    print(io, " diag:")
+    print_matrix(io, (M.dv)')
+    print(io, M.isupper?"\n super:":"\n sub:")
+    print_matrix(io, (M.ev)')
 end
 
 size(M::Bidiagonal) = (length(M.dv), length(M.dv))

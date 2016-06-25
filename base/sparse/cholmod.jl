@@ -1093,6 +1093,10 @@ function showfactor(io::IO, F::Factor)
     @printf(io, "nnz: %13d\n", nnz(F))
 end
 
+# getindex not defined for these, so don't use the normal array printer
+show(io::IO, ::MIME"text/plain", FC::FactorComponent) = show(io, FC)
+show(io::IO, ::MIME"text/plain", F::Factor) = show(io, F)
+
 isvalid(A::Dense) = check_dense(A)
 isvalid(A::Sparse) = check_sparse(A)
 isvalid(A::Factor) = check_factor(A)
@@ -1115,6 +1119,7 @@ function size(F::Factor, i::Integer)
     end
     return 1
 end
+size(F::Factor) = (size(F, 1), size(F, 2))
 
 linearindexing(::Dense) = LinearFast()
 

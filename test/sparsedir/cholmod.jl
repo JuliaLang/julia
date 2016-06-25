@@ -591,7 +591,12 @@ Dp = spdiagm(dp)
 sparse(cholfact(sparse(Float64[ 10 1 1 1; 1 10 0 0; 1 0 10 0; 1 0 0 10]))); gc()
 
 # Issue 11747 - Wrong show method defined for FactorComponent
-Base.show(IOBuffer(), MIME"text/plain"(), cholfact(sparse(Float64[ 10 1 1 1; 1 10 0 0; 1 0 10 0; 1 0 0 10]))[:L])
+let v = cholfact(sparse(Float64[ 10 1 1 1; 1 10 0 0; 1 0 10 0; 1 0 0 10]))[:L]
+    for s in (sprint(show, MIME("text/plain"), v), sprint(show, v))
+        @test contains(s, "method: simplicial")
+        @test !contains(s, "#undef")
+    end
+end
 
 # Element promotion and type inference
 @inferred cholfact(As)\ones(Int, size(As, 1))
