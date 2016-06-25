@@ -854,7 +854,7 @@ static jl_cgval_t mark_or_box_ccall_result(Value *result, bool isboxed, jl_value
         int nb = sizeof(void*);
         // TODO: can this be tighter than tbaa_value?
         return mark_julia_type(
-            init_bits_value(emit_allocobj(ctx, nb), runtime_bt, result, tbaa_value),
+            init_bits_value(emit_allocobj(ctx, nb, runtime_bt), result, tbaa_value),
             true, (jl_value_t*)jl_pointer_type, ctx);
     }
     return mark_julia_type(result, isboxed, rt, ctx);
