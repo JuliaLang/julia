@@ -178,7 +178,6 @@ typedef struct {
 extern jl_gc_num_t gc_num;
 extern region_t regions[REGION_COUNT];
 extern bigval_t *big_objects_marked;
-extern arraylist_t finalizer_list;
 extern arraylist_t finalizer_list_marked;
 extern arraylist_t to_finalize;
 extern int64_t lazy_freed_pages;
@@ -217,6 +216,16 @@ STATIC_INLINE int gc_marked(int bits)
 STATIC_INLINE int gc_old(int bits)
 {
     return (bits & GC_OLD) != 0;
+}
+
+STATIC_INLINE uintptr_t gc_ptr_tag(void *v, uintptr_t mask)
+{
+    return ((uintptr_t)v) & mask;
+}
+
+STATIC_INLINE void *gc_ptr_clear_tag(void *v, uintptr_t mask)
+{
+    return (void*)(((uintptr_t)v) & ~mask);
 }
 
 NOINLINE uintptr_t gc_get_stack_ptr(void);
@@ -355,7 +364,7 @@ void add_lostval_parent(jl_value_t *parent);
     } while(0);
 
 #define verify_parent(ty, obj, slot, args...) do {                      \
-        if (*(jl_value_t**)(slot) == lostval &&                         \
+        if (gc_ptr_clear_tag(*(void**)(slot), 3) == (void*)lostval &&   \
             (jl_value_t*)(obj) != lostval) {                            \
             jl_printf(JL_STDOUT, "Found parent %p %p at %s:%d\n",       \
                       (void*)(ty), (void*)(obj), __FILE__, __LINE__);   \

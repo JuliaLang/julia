@@ -238,7 +238,7 @@ void jl_init_restored_modules(jl_array_t *init_order);
 void jl_init_signal_async(void);
 void jl_init_debuginfo(void);
 void jl_init_runtime_ccall(void);
-void jl_mk_thread_heap(jl_thread_heap_t *heap);
+void jl_mk_thread_heap(jl_tls_states_t *ptls);
 
 void _julia_init(JL_IMAGE_SEARCH rel);
 
@@ -296,13 +296,13 @@ void jl_wake_libuv(void);
 jl_get_ptls_states_func jl_get_ptls_states_getter(void);
 static inline void jl_set_gc_and_wait(void)
 {
+    jl_tls_states_t *ptls = jl_get_ptls_states();
     // reading own gc state doesn't need atomic ops since no one else
     // should store to it.
-    int8_t state = jl_gc_state();
-    jl_atomic_store_release(&jl_get_ptls_states()->gc_state,
-                            JL_GC_STATE_WAITING);
+    int8_t state = jl_gc_state(ptls);
+    jl_atomic_store_release(&ptls->gc_state, JL_GC_STATE_WAITING);
     jl_safepoint_wait_gc();
-    jl_atomic_store_release(&jl_get_ptls_states()->gc_state, state);
+    jl_atomic_store_release(&ptls->gc_state, state);
 }
 #endif
 
