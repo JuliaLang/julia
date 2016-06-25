@@ -57,41 +57,77 @@ end
 # Used instead of Nullable to decrease wire size of header.
 null_id(id) =  id == RRID(0, 0)
 
-type CallMsg{Mode} <: AbstractMsg
+immutable CallMsg{Mode} <: AbstractMsg
     f::Function
     args::Tuple
     kwargs::Array
 end
-type CallWaitMsg <: AbstractMsg
+immutable CallWaitMsg <: AbstractMsg
     f::Function
     args::Tuple
     kwargs::Array
 end
-type RemoteDoMsg <: AbstractMsg
+immutable RemoteDoMsg <: AbstractMsg
     f::Function
     args::Tuple
     kwargs::Array
 end
-type ResultMsg <: AbstractMsg
+immutable ResultMsg <: AbstractMsg
     value::Any
 end
 
 
 # Worker initialization messages
-type IdentifySocketMsg <: AbstractMsg
+immutable IdentifySocketMsg <: AbstractMsg
     from_pid::Int
 end
-type IdentifySocketAckMsg <: AbstractMsg
+
+immutable IdentifySocketAckMsg <: AbstractMsg
 end
-type JoinPGRPMsg <: AbstractMsg
+
+immutable JoinPGRPMsg <: AbstractMsg
     self_pid::Int
     other_workers::Array
     topology::Symbol
     worker_pool
 end
-type JoinCompleteMsg <: AbstractMsg
+immutable JoinCompleteMsg <: AbstractMsg
     cpu_cores::Int
     ospid::Int
+end
+
+# Avoiding serializing AbstractMsg containers results in a speedup
+# of approximately 10%. Can be removed once module Serializer
+# has been suitably improved.
+
+# replace  CallMsg{Mode} with specific invocations
+const msgtypes = filter!(x->x!=CallMsg, subtypes(AbstractMsg))
+push!(msgtypes, CallMsg{:call}, CallMsg{:call_fetch})
+
+for (idx, tname) in enumerate(msgtypes)
+    nflds = length(fieldnames(tname))
+    @eval begin
+        function serialize(s::AbstractSerializer, o::$tname)
+            write(s.io, UInt8($idx))
+            for fld in fieldnames($tname)
+                serialize(s, getfield(o, fld))
+            end
+        end
+
+        function deserialize_msg(s::AbstractSerializer, ::Type{$tname})
+            data=Array(Any, $nflds)
+            for i in 1:$nflds
+                data[i] = deserialize(s)
+            end
+            return $tname(data...)
+        end
+    end
+end
+
+function deserialize_msg(s)
+    idx = read(s.io, UInt8)
+    t = msgtypes[idx]
+    return deserialize_msg(s, t)
 end
 
 function send_msg_unknown(s::IO, header, msg)
@@ -106,12 +142,12 @@ function send_msg(s::IO, header, msg)
     send_msg_unknown(s, header, msg)
 end
 
-function send_msg_now(s::IO, msghdr, msg::AbstractMsg)
+function send_msg_now(s::IO, header, msg::AbstractMsg)
     id = worker_id_from_socket(s)
     if id > -1
-        return send_msg_now(worker_from_id(id), msghdr, msg)
+        return send_msg_now(worker_from_id(id), header, msg)
     end
-    send_msg_unknown(s, msghdr, msg)
+    send_msg_unknown(s, header, msg)
 end
 
 abstract ClusterManager
@@ -211,12 +247,12 @@ function set_worker_state(w, state)
     notify(w.c_state; all=true)
 end
 
-function send_msg_now(w::Worker, msghdr, msg)
-    send_msg_(w, msghdr, msg, true)
+function send_msg_now(w::Worker, header, msg)
+    send_msg_(w, header, msg, true)
 end
 
-function send_msg(w::Worker, msghdr, msg)
-    send_msg_(w, msghdr, msg, false)
+function send_msg(w::Worker, header, msg)
+    send_msg_(w, header, msg, false)
 end
 
 function flush_gc_msgs(w::Worker)
@@ -257,8 +293,20 @@ end
 
 # Boundary inserted between messages on the wire, used for recovering
 # from deserialization errors. Picked arbitrarily.
-# A size of 10 bytes indicates ~ ~1e24 possible boundaries, so chance of collision with message contents is trivial.
+# A size of 10 bytes indicates ~ ~1e24 possible boundaries, so chance of collision
+# with message contents is negligible.
 const MSG_BOUNDARY = UInt8[0x79, 0x8e, 0x8e, 0xf5, 0x6e, 0x9b, 0x2e, 0x97, 0xd5, 0x7d]
+
+# Faster serialization/deserialization of MsgHeader and RRID
+function serialize_hdr_raw(io, hdr)
+    write(io, hdr.response_oid.whence, hdr.response_oid.id, hdr.notify_oid.whence, hdr.notify_oid.id)
+end
+
+function deserialize_hdr_raw(io)
+    data = Array(Int, 4)
+    read!(io, data)
+    return MsgHeader(RRID(data[1], data[2]), RRID(data[3], data[4]))
+end
 
 function send_msg_(w::Worker, header, msg, now::Bool)
     check_worker_state(w)
@@ -266,7 +314,7 @@ function send_msg_(w::Worker, header, msg, now::Bool)
     lock(io.lock)
     try
         reset_state(w.w_serializer)
-        serialize(w.w_serializer, header)
+        serialize_hdr_raw(io, header)
         serialize(w.w_serializer, msg)  # io is wrapped in w_serializer
         write(io, MSG_BOUNDARY)
 
@@ -1022,22 +1070,22 @@ function message_handler_loop(r_stream::IO, w_stream::IO, incoming::Bool)
         serializer = ClusterSerializer(r_stream)
 
         # The first message will associate wpid with r_stream
-        msghdr = deserialize(serializer)
-        msg = deserialize(serializer)
+        header = deserialize_hdr_raw(r_stream)
+        msg = deserialize_msg(serializer)
         readbytes!(r_stream, boundary, length(MSG_BOUNDARY))
 
-        handle_msg(msg, msghdr, r_stream, w_stream, version)
+        handle_msg(msg, header, r_stream, w_stream, version)
         wpid = worker_id_from_socket(r_stream)
 
         @assert wpid > 0
 
         while true
             reset_state(serializer)
-            msghdr = deserialize(serializer)
-#            println("msghdr: ", msghdr)
+            header = deserialize_hdr_raw(r_stream)
+            # println("header: ", header)
 
             try
-                msg = deserialize(serializer)
+                msg = deserialize_msg(serializer)
             catch e
                 # Deserialization error; discard bytes in stream until boundary found
                 boundary_idx = 1
@@ -1054,21 +1102,21 @@ function message_handler_loop(r_stream::IO, w_stream::IO, incoming::Bool)
                         boundary_idx = 1
                     end
                 end
- #               println("Deserialization error.")
                 remote_err = RemoteException(myid(), CapturedException(e, catch_backtrace()))
-                if !null_id(msghdr.response_oid)
-                    ref = lookup_ref(msghdr.response_oid)
+                # println("Deserialization error. ", remote_err)
+                if !null_id(header.response_oid)
+                    ref = lookup_ref(header.response_oid)
                     put!(ref, remote_err)
                 end
-                if !null_id(msghdr.notify_oid)
-                    deliver_result(w_stream, :call_fetch, msghdr.notify_oid, remote_err)
+                if !null_id(header.notify_oid)
+                    deliver_result(w_stream, :call_fetch, header.notify_oid, remote_err)
                 end
                 continue
             end
             readbytes!(r_stream, boundary, length(MSG_BOUNDARY))
 
-  #          println("got msg: ", typeof(msg))
-            handle_msg(msg, msghdr, r_stream, w_stream, version)
+            # println("got msg: ", typeof(msg))
+            handle_msg(msg, header, r_stream, w_stream, version)
         end
     catch e
         # println(STDERR, "Process($(myid())) - Exception ", e)
@@ -1135,44 +1183,44 @@ function process_hdr(s, validate_cookie)
     return VersionNumber(strip(String(version)))
 end
 
-function handle_msg(msg::CallMsg{:call}, msghdr, r_stream, w_stream, version)
-    schedule_call(msghdr.response_oid, ()->msg.f(msg.args...; msg.kwargs...))
+function handle_msg(msg::CallMsg{:call}, header, r_stream, w_stream, version)
+    schedule_call(header.response_oid, ()->msg.f(msg.args...; msg.kwargs...))
 end
-function handle_msg(msg::CallMsg{:call_fetch}, msghdr, r_stream, w_stream, version)
+function handle_msg(msg::CallMsg{:call_fetch}, header, r_stream, w_stream, version)
     @schedule begin
         v = run_work_thunk(()->msg.f(msg.args...; msg.kwargs...), false)
-        deliver_result(w_stream, :call_fetch, msghdr.response_oid, v)
+        deliver_result(w_stream, :call_fetch, header.response_oid, v)
     end
 end
 
-function handle_msg(msg::CallWaitMsg, msghdr, r_stream, w_stream, version)
+function handle_msg(msg::CallWaitMsg, header, r_stream, w_stream, version)
     @schedule begin
-        rv = schedule_call(msghdr.response_oid, ()->msg.f(msg.args...; msg.kwargs...))
-        deliver_result(w_stream, :call_wait, msghdr.notify_oid, fetch(rv.c))
+        rv = schedule_call(header.response_oid, ()->msg.f(msg.args...; msg.kwargs...))
+        deliver_result(w_stream, :call_wait, header.notify_oid, fetch(rv.c))
     end
 end
 
-function handle_msg(msg::RemoteDoMsg, msghdr, r_stream, w_stream, version)
+function handle_msg(msg::RemoteDoMsg, header, r_stream, w_stream, version)
     @schedule run_work_thunk(()->msg.f(msg.args...; msg.kwargs...), true)
 end
 
-function handle_msg(msg::ResultMsg, msghdr, r_stream, w_stream, version)
-    put!(lookup_ref(msghdr.response_oid), msg.value)
+function handle_msg(msg::ResultMsg, header, r_stream, w_stream, version)
+    put!(lookup_ref(header.response_oid), msg.value)
 end
 
-function handle_msg(msg::IdentifySocketMsg, msghdr, r_stream, w_stream, version)
+function handle_msg(msg::IdentifySocketMsg, header, r_stream, w_stream, version)
     # register a new peer worker connection
     w=Worker(msg.from_pid, r_stream, w_stream, cluster_manager; version=version)
     send_connection_hdr(w, false)
     send_msg_now(w, MsgHeader(), IdentifySocketAckMsg())
 end
 
-function handle_msg(msg::IdentifySocketAckMsg, msghdr, r_stream, w_stream, version)
+function handle_msg(msg::IdentifySocketAckMsg, header, r_stream, w_stream, version)
     w = map_sock_wrkr[r_stream]
     w.version = version
 end
 
-function handle_msg(msg::JoinPGRPMsg, msghdr, r_stream, w_stream, version)
+function handle_msg(msg::JoinPGRPMsg, header, r_stream, w_stream, version)
     LPROC.id = msg.self_pid
     controller = Worker(1, r_stream, w_stream, cluster_manager; version=version)
     register_worker(LPROC)
@@ -1193,7 +1241,7 @@ function handle_msg(msg::JoinPGRPMsg, msghdr, r_stream, w_stream, version)
 
     set_default_worker_pool(msg.worker_pool)
     send_connection_hdr(controller, false)
-    send_msg_now(controller, MsgHeader(RRID(0,0), msghdr.notify_oid), JoinCompleteMsg(Sys.CPU_CORES, getpid()))
+    send_msg_now(controller, MsgHeader(RRID(0,0), header.notify_oid), JoinCompleteMsg(Sys.CPU_CORES, getpid()))
 end
 
 function connect_to_peer(manager::ClusterManager, rpid::Int, wconfig::WorkerConfig)
@@ -1210,7 +1258,7 @@ function connect_to_peer(manager::ClusterManager, rpid::Int, wconfig::WorkerConf
     end
 end
 
-function handle_msg(msg::JoinCompleteMsg, msghdr, r_stream, w_stream, version)
+function handle_msg(msg::JoinCompleteMsg, header, r_stream, w_stream, version)
     w = map_sock_wrkr[r_stream]
     environ = get(w.config.environ, Dict())
     environ[:cpu_cores] = msg.cpu_cores
@@ -1218,7 +1266,7 @@ function handle_msg(msg::JoinCompleteMsg, msghdr, r_stream, w_stream, version)
     w.config.ospid = msg.ospid
     w.version = version
 
-    ntfy_channel = lookup_ref(msghdr.notify_oid)
+    ntfy_channel = lookup_ref(header.notify_oid)
     put!(ntfy_channel, w.id)
 
     push!(default_worker_pool(), w)
