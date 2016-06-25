@@ -140,7 +140,7 @@ one can extract the underlying :obj:`TypeVar`:
    TypeVar
      name: Symbol S
      lb: Union{}
-     ub: Integer  <: Real
+     ub: Integer <: Real
      bound: Bool true
 
 Here ``ub`` is ``Integer``, as specified in the function definition.
@@ -315,20 +315,17 @@ the type, which is an object of type :obj:`TypeName`:
    TypeName
      name: Symbol Array
      module: Module Core
-     names: SimpleVector
-       length: Int64 0
-     primary: Array{T,N}::DataType  <: DenseArray{T,N}
+     names: empty SimpleVector
+     primary: Array{T,N} <: DenseArray{T,N}
      cache: SimpleVector
-       length: Int64 135
+       ...
      linearcache: SimpleVector
-       length: Int64 60
-     uid: Int64 43
+       ...
+     uid: Int64 47
      mt: MethodTable
        name: Symbol Array
        defs: Void nothing
        cache: Void nothing
-       cache_arg1: Void nothing
-       cache_targ: Void nothing
        max_args: Int64 0
        kwsorter: #undef
        module: Module Core
