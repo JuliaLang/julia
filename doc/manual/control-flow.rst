@@ -126,9 +126,9 @@ This means that new variables defined inside the ``ìf`` clauses can
 be used after the ``if`` block, even if they weren't defined before.
 So, we could have defined the ``test`` function above as
 
-.. doctest::
+.. doctest:: leaky
 
-    julia> function test1(x,y)
+    julia> function test(x,y)
              if x < y
                relation = "less than"
              elseif x == y
@@ -138,16 +138,16 @@ So, we could have defined the ``test`` function above as
              end
              println("x is ", relation, " y.")
            end
-    test1 (generic function with 1 method)
+    test (generic function with 1 method)
 
 The variable ``relation`` is declared inside the ``if`` block, but used
 outside. However, when depending on this behavior, make sure all possible
 code paths define a value for the variable. The following change to
 the above function results in a runtime error
 
-.. doctest::
+.. doctest:: bad-leaky
 
-    julia> function test2(x,y)
+    julia> function test(x,y)
              if x < y
                relation = "less than"
              elseif x == y
@@ -155,14 +155,14 @@ the above function results in a runtime error
              end
              println("x is ", relation, " y.")
            end
-    test2 (generic function with 1 method)
+    test (generic function with 1 method)
 
-    julia> test2(1,2)
+    julia> test(1,2)
     x is less than y.
 
-    julia> test2(2,1)
+    julia> test(2,1)
     ERROR: UndefVarError: relation not defined
-     in test2(::Int64, ::Int64) at ./none:7
+     in test(::Int64, ::Int64) at ./none:7
      ...
 
 ``if`` blocks also return a value, which may seem unintuitive to users
@@ -236,19 +236,19 @@ evaluates to the string ``"not less than"``. The original three-way
 example requires chaining multiple uses of the ternary operator
 together:
 
-.. doctest::
+.. doctest:: ternary-operator
 
-    julia> test4(x, y) = println(x < y ? "x is less than y"    :
+    julia> test(x, y) = println(x < y ? "x is less than y"    :
                                 x > y ? "x is greater than y" : "x is equal to y")
-    test4 (generic function with 1 method)
+    test (generic function with 1 method)
 
-    julia> test4(1, 2)
+    julia> test(1, 2)
     x is less than y
 
-    julia> test4(2, 1)
+    julia> test(2, 1)
     x is greater than y
 
-    julia> test4(1, 1)
+    julia> test(1, 1)
     x is equal to y
 
 To facilitate chaining, the operator associates from right to left.
@@ -682,23 +682,23 @@ Exceptions can be created explicitly with :func:`throw`. For example, a function
 defined only for nonnegative numbers could be written to :func:`throw` a :exc:`DomainError`
 if the argument is negative:
 
-.. doctest::
+.. doctest:: domain-error
 
-    julia> g(x) = x>=0 ? exp(-x) : throw(DomainError())
-    g (generic function with 1 method)
+    julia> f(x) = x>=0 ? exp(-x) : throw(DomainError())
+    f (generic function with 1 method)
 
-    julia> g(1)
+    julia> f(1)
     0.36787944117144233
 
-    julia> g(-1)
+    julia> f(-1)
     ERROR: DomainError:
-     in g(::Int64) at ./none:1
+     in f(::Int64) at ./none:1
      ...
 
 Note that :exc:`DomainError` without parentheses is not an exception, but a type of
 exception. It needs to be called to obtain an :exc:`Exception` object:
 
-.. doctest::
+.. doctest:: throw-function
 
     julia> typeof(DomainError()) <: Exception
     true
@@ -806,19 +806,19 @@ example, a customized square root function can be written to automatically
 call either the real or complex square root method on demand using
 :exc:`Exception`\ s :
 
-.. doctest::
+.. doctest:: try-catch
 
-    julia> h(x) = try
+    julia> f(x) = try
              sqrt(x)
            catch
              sqrt(complex(x, 0))
            end
-    h (generic function with 1 method)
+    f (generic function with 1 method)
 
-    julia> h(1)
+    julia> f(1)
     1.0
 
-    julia> h(-1)
+    julia> f(-1)
     0.0 + 1.0im
 
 It is important to note that in real code computing this function, one would

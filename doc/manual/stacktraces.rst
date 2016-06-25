@@ -52,7 +52,6 @@ alias :obj:`StackTrace` can be used in place of ``Vector{StackFrame}``. (Example
       in child() at none:1
       in parent() at none:1
       in grandparent() at none:1
-      in eval(::Module, ::Any) at boot.jl:231
       ...
 
 Note that when calling :func:`stacktrace` you'll typically see a frame with
@@ -113,21 +112,21 @@ Error handling
 While having easy access to information about the current state of the callstack can be
 helpful in many places, the most obvious application is in error handling and debugging.
 
-.. doctest::
+.. doctest:: error-handling
 
     julia> @noinline bad_function() = undeclared_variable
     bad_function (generic function with 1 method)
 
-    julia> @noinline example1() = try
+    julia> @noinline example() = try
                bad_function()
            catch
                stacktrace()
            end
-    example1 (generic function with 1 method)
+    example (generic function with 1 method)
 
-    julia> example1()
+    julia> example()
     6-element Array{StackFrame,1}:
-      in example1() at none:4
+      in example() at none:4
       in eval(::Module, ::Any) at boot.jl:231
       ...
 
@@ -142,52 +141,50 @@ This can be remedied by calling :func:`catch_stacktrace` instead of :func:`stack
 Instead of returning callstack information for the current context, :func:`catch_stacktrace`
 returns stack information for the context of the most recent exception:
 
-.. doctest::
+.. doctest:: catch-stacktrace
 
-    julia> @noinline bad_function1() = undeclared_variable
-    bad_function1 (generic function with 1 method)
+    julia> @noinline bad_function() = undeclared_variable
+    bad_function (generic function with 1 method)
 
-    julia> @noinline example2() = try
-               bad_function1()
+    julia> @noinline example() = try
+               bad_function()
            catch
                catch_stacktrace()
            end
-    example2 (generic function with 1 method)
+    example (generic function with 1 method)
 
-    julia> example2()
+    julia> example()
     7-element Array{StackFrame,1}:
-      in bad_function1() at none:1
-      in example2() at none:2
-      in eval(::Module, ::Any) at boot.jl:231
+      in bad_function() at none:1
+      in example() at none:2
       ...
 
 Notice that the stack trace now indicates the appropriate line number and the missing frame.
 
-.. doctest::
+.. doctest:: catch-stacktrace-demo
 
-    julia> @noinline child1() = error("Whoops!")
-    child1 (generic function with 1 method)
+    julia> @noinline child() = error("Whoops!")
+    child (generic function with 1 method)
 
-    julia> @noinline parent1() = child1()
-    parent1 (generic function with 1 method)
+    julia> @noinline parent() = child()
+    parent (generic function with 1 method)
 
-    julia> @noinline function grandparent1()
+    julia> @noinline function grandparent()
                try
-                   parent1()
+                   parent()
                catch err
                    println("ERROR: ", err.msg)
                    catch_stacktrace()
                end
            end
-    grandparent1 (generic function with 1 method)
+    grandparent (generic function with 1 method)
 
-    julia> grandparent1()
+    julia> grandparent()
     ERROR: Whoops!
     8-element Array{StackFrame,1}:
-      in child1() at none:1
-      in parent1() at none:1
-      in grandparent1() at none:3
-      in eval(::Module, ::Any) at boot.jl:231
+      in child() at none:1
+      in parent() at none:1
+      in grandparent() at none:3
       ...
 
 Comparison with :func:`backtrace`

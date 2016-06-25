@@ -285,21 +285,21 @@ more specific than the other. In such cases, Julia raises a ``MethodError``
 rather than arbitrarily picking a method. You can avoid method ambiguities
 by specifying an appropriate method for the intersection case:
 
-.. doctest::
+.. doctest:: unambiguous
 
-    julia> h(x::Float64, y::Float64) = 2x + 2y;
+    julia> g(x::Float64, y::Float64) = 2x + 2y;
 
-    julia> h(x::Float64, y) = 2x + y;
+    julia> g(x::Float64, y) = 2x + y;
 
-    julia> h(x, y::Float64) = x + 2y;
+    julia> g(x, y::Float64) = x + 2y;
 
-    julia> h(2.0, 3)
+    julia> g(2.0, 3)
     7.0
 
-    julia> h(2, 3.0)
+    julia> g(2, 3.0)
     8.0
 
-    julia> h(2.0, 3.0)
+    julia> g(2.0, 3.0)
     10.0
 
 It is recommended that the disambiguating method be defined first,
