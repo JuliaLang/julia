@@ -614,6 +614,18 @@ A = TSlowNIndexes(rand(2,2))
 @test @inferred(indices(rand(3,2), 3)) == 1:1
 
 #17088
-let M = rand(10,10)
-    @test !issparse([[M] [M];])
+let
+    n = 10
+    M = rand(n, n)
+    # vector of vectors
+    v = [[M]; [M]] # using vcat
+    @test size(v) == (2,)
+    @test !issparse(v)
+    # matrix of vectors
+    m1 = [[M] [M]] # using hcat
+    m2 = [[M] [M];] # using hvcat
+    @test m1 == m2
+    @test size(m1) == (1,2)
+    @test !issparse(m1)
+    @test !issparse(m2)
 end
