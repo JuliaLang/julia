@@ -381,13 +381,13 @@ JL_DLLEXPORT jl_value_t *jl_switchto(jl_task_t *t, jl_value_t *arg)
     if (in_pure_callback)
         jl_error("task switch not allowed from inside staged function");
     sig_atomic_t defer_signal = ptls->defer_signal;
-    int8_t gc_state = jl_gc_unsafe_enter();
+    int8_t gc_state = jl_gc_unsafe_enter(ptls);
     ptls->task_arg_in_transit = arg;
     ctx_switch(ptls, t, &t->ctx);
     jl_value_t *val = ptls->task_arg_in_transit;
     ptls->task_arg_in_transit = jl_nothing;
     throw_if_exception_set(ptls->current_task);
-    jl_gc_unsafe_leave(gc_state);
+    jl_gc_unsafe_leave(ptls, gc_state);
     sig_atomic_t other_defer_signal = ptls->defer_signal;
     ptls->defer_signal = defer_signal;
     if (other_defer_signal && !defer_signal)
@@ -495,14 +495,15 @@ static void init_task(jl_task_t *t, char *stack)
 // yield to exception handler
 void JL_NORETURN throw_internal(jl_value_t *e)
 {
-    jl_get_ptls_states()->io_wait = 0;
-    if (jl_safe_restore)
-        jl_longjmp(*jl_safe_restore, 1);
-    jl_gc_unsafe_enter();
+    jl_tls_states_t *ptls = jl_get_ptls_states();
+    ptls->io_wait = 0;
+    if (ptls->safe_restore)
+        jl_longjmp(*ptls->safe_restore, 1);
+    jl_gc_unsafe_enter(ptls);
     assert(e != NULL);
-    jl_exception_in_transit = e;
-    if (jl_current_task->eh != NULL) {
-        jl_longjmp(jl_current_task->eh->eh_ctx, 1);
+    ptls->exception_in_transit = e;
+    if (ptls->current_task->eh != NULL) {
+        jl_longjmp(ptls->current_task->eh->eh_ctx, 1);
     }
     else {
         jl_printf(JL_STDERR, "fatal: error thrown and no exception handler available.\n");
