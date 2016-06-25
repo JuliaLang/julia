@@ -30,6 +30,39 @@ extern "C" {
 #include "threading.h"
 
 #ifdef JULIA_ENABLE_THREADING
+#  ifdef _OS_DARWIN_
+// Mac doesn't seem to have static TLS model so the runtime TLS getter
+// registration will only add overhead to TLS access. The `__thread` variables
+// are emulated with `pthread_key_t` so it is actually faster to use it directly.
+static pthread_key_t jl_tls_key;
+
+__attribute__((constructor)) void jl_mac_init_tls(void)
+{
+    pthread_key_create(&jl_tls_key, NULL);
+}
+
+JL_DLLEXPORT JL_CONST_FUNC jl_tls_states_t *(jl_get_ptls_states)(void)
+{
+    void *ptls = pthread_getspecific(jl_tls_key);
+    if (__unlikely(!ptls)) {
+        ptls = calloc(1, sizeof(jl_tls_states_t));
+        pthread_setspecific(jl_tls_key, ptls);
+    }
+    return (jl_tls_states_t*)ptls;
+}
+
+// This is only used after the tls is already initialized on the thread
+static JL_CONST_FUNC jl_tls_states_t *jl_get_ptls_states_fast(void)
+{
+    return (jl_tls_states_t*)pthread_getspecific(jl_tls_key);
+}
+
+jl_get_ptls_states_func jl_get_ptls_states_getter(void)
+{
+    // for codegen
+    return &jl_get_ptls_states_fast;
+}
+#  else
 // fallback provided for embedding
 static JL_CONST_FUNC jl_tls_states_t *jl_get_ptls_states_fallback(void)
 {
@@ -78,6 +111,7 @@ jl_get_ptls_states_func jl_get_ptls_states_getter(void)
     // for codegen
     return jl_tls_states_cb;
 }
+#  endif
 #else
 JL_DLLEXPORT jl_tls_states_t jl_tls_states;
 JL_DLLEXPORT JL_CONST_FUNC jl_tls_states_t *(jl_get_ptls_states)(void)
