@@ -400,7 +400,7 @@ static jl_value_t *eval(jl_value_t *e, interpreter_state *s)
         }
         jl_compute_field_offsets(dt);
         if (para == (jl_value_t*)jl_emptysvec && jl_is_datatype_make_singleton(dt)) {
-            dt->instance = newstruct(dt);
+            dt->instance = jl_gc_alloc(ptls, 0, dt);
             jl_gc_wb(dt, dt->instance);
         }
 

@@ -149,7 +149,7 @@ static void NOINLINE save_stack(jl_ptls_t ptls, jl_task_t *t)
     size_t nb = (char*)ptls->stackbase - frame_addr;
     char *buf;
     if (t->stkbuf == NULL || t->bufsz < nb) {
-        buf = (char*)allocb(nb);
+        buf = (char*)jl_gc_alloc_buf(ptls, nb);
         t->stkbuf = buf;
         t->bufsz = nb;
     }
@@ -544,8 +544,8 @@ JL_DLLEXPORT jl_task_t *jl_new_task(jl_function_t *start, size_t ssize)
 {
     jl_ptls_t ptls = jl_get_ptls_states();
     size_t pagesz = jl_page_size;
-    jl_task_t *t = (jl_task_t*)jl_gc_allocobj(sizeof(jl_task_t));
-    jl_set_typeof(t, jl_task_type);
+    jl_task_t *t = (jl_task_t*)jl_gc_alloc(ptls, sizeof(jl_task_t),
+                                           jl_task_type);
 #ifndef COPY_STACKS
     if (ssize == 0) // unspecified -- pick some default size
         ssize = 1*1024*1024; // 1M (for now)
@@ -575,7 +575,7 @@ JL_DLLEXPORT jl_task_t *jl_new_task(jl_function_t *start, size_t ssize)
     JL_GC_PUSH1(&t);
 
     size_t stkbuf_sz = ssize + pagesz + (pagesz - 1);
-    char *stk = allocb(stkbuf_sz);
+    char *stk = (char*)jl_gc_alloc_buf(ptls, stkbuf_sz);
     t->stkbuf = stk;
     jl_gc_wb_buf(t, t->stkbuf, stkbuf_sz);
     stk = (char*)LLT_ALIGN((uintptr_t)stk, pagesz);
@@ -658,8 +658,8 @@ void jl_init_tasks(void)
 void jl_init_root_task(void *stack, size_t ssize)
 {
     jl_ptls_t ptls = jl_get_ptls_states();
-    ptls->current_task = (jl_task_t*)jl_gc_allocobj(sizeof(jl_task_t));
-    jl_set_typeof(ptls->current_task, jl_task_type);
+    ptls->current_task = (jl_task_t*)jl_gc_alloc(ptls, sizeof(jl_task_t),
+                                                 jl_task_type);
 #ifdef COPY_STACKS
     ptls->current_task->ssize = 0;  // size of saved piece
     ptls->current_task->bufsz = 0;

@@ -32,15 +32,10 @@ extern "C" {
 
 // manipulating mark bits
 
-#define GC_PAGE_LG2 14 // log2(size of a page)
-#define GC_PAGE_SZ (1 << GC_PAGE_LG2) // 16k
-#define GC_PAGE_OFFSET (JL_SMALL_BYTE_ALIGNMENT - (sizeof(jl_taggedvalue_t) % JL_SMALL_BYTE_ALIGNMENT))
-
 // 8G * 32768 = 2^48
 // It's really unlikely that we'll actually allocate that much though...
 #define REGION_COUNT 32768
 
-#define jl_buff_tag ((uintptr_t)0x4eade800)
 #define jl_malloc_tag ((void*)0xdeadaa01)
 #define jl_singleton_tag ((void*)0xdeadaa02)
 
@@ -278,6 +273,7 @@ void pre_mark(jl_ptls_t ptls);
 void gc_mark_object_list(jl_ptls_t ptls, arraylist_t *list, size_t start);
 void visit_mark_stack(jl_ptls_t ptls);
 void gc_debug_init(void);
+void jl_mark_box_caches(jl_ptls_t ptls);
 
 // GC pages
 

@@ -248,7 +248,8 @@ end
 type WeakRef
     value
     WeakRef() = WeakRef(nothing)
-    WeakRef(v::ANY) = ccall(:jl_gc_new_weakref, Ref{WeakRef}, (Any,), v)
+    WeakRef(v::ANY) = ccall(:jl_gc_new_weakref_th, Ref{WeakRef},
+                            (Ptr{Void}, Any), getptls(), v)
 end
 
 TypeVar(n::Symbol) =

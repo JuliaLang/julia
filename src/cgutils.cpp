@@ -1333,28 +1333,25 @@ static Value *emit_array_nd_index(const jl_cgval_t &ainfo, jl_value_t *ex, size_
 
 // --- boxing ---
 
-static Value *emit_allocobj(jl_codectx_t *ctx, size_t static_size);
-static void init_tag(Value *v, Value *jt)
+static Value *emit_allocobj(jl_codectx_t *ctx, size_t static_size, Value *jt);
+static Value *emit_allocobj(jl_codectx_t *ctx, size_t static_size,
+                            const jl_cgval_t &v);
+static Value *init_bits_value(Value *newv, Value *v, MDNode *tbaa)
 {
-    tbaa_decorate(tbaa_tag, builder.CreateStore(jt, emit_typeptr_addr(v)));
-}
-static Value *init_bits_value(Value *newv, Value *jt, Value *v, MDNode *tbaa)
-{
-    init_tag(newv, jt);
+    // newv should already be tagged
     tbaa_decorate(tbaa, builder.CreateAlignedStore(v, builder.CreateBitCast(newv, PointerType::get(v->getType(),0)), sizeof(void*))); // min alignment in julia's gc is pointer-aligned
     return newv;
 }
 static Value *as_value(Type *t, const jl_cgval_t&);
 static Value *init_bits_cgval(Value *newv, const jl_cgval_t& v, MDNode *tbaa, jl_codectx_t *ctx)
 {
-    Value *jt = literal_pointer_val(v.typ);
+    // newv should already be tagged
     if (v.ispointer()) {
-        init_tag(newv, jt);
         builder.CreateMemCpy(newv, data_pointer(v, ctx, T_pint8), jl_datatype_size(v.typ), sizeof(void*));
         return newv;
     }
     else {
-        return init_bits_value(newv, jt, v.V, tbaa);
+        return init_bits_value(newv, v.V, tbaa);
     }
 }
 
@@ -1521,7 +1518,8 @@ static Value *boxed(const jl_cgval_t &vinfo, jl_codectx_t *ctx, bool gcrooted)
         return literal_pointer_val(jb->instance);
     }
     else {
-        box = init_bits_cgval(emit_allocobj(ctx, jl_datatype_size(jt)), vinfo, jb->mutabl ? tbaa_mutab : tbaa_immut, ctx);
+        box = init_bits_cgval(emit_allocobj(ctx, jl_datatype_size(jt), vinfo),
+                              vinfo, jb->mutabl ? tbaa_mutab : tbaa_immut, ctx);
     }
 
     if (gcrooted) {
@@ -1555,23 +1553,33 @@ static void emit_cpointercheck(const jl_cgval_t &x, const std::string &msg, jl_c
 }
 
 // allocation for known size object
-static Value *emit_allocobj(jl_codectx_t *ctx, size_t static_size)
+static Value *emit_allocobj(jl_codectx_t *ctx, size_t static_size, Value *jt)
 {
     int osize;
     int end_offset;
     int offset = jl_gc_classify_pools(static_size, &osize, &end_offset);
     Value *ptls_ptr = builder.CreateBitCast(ctx->ptlsStates, T_pint8);
+    Value *v;
     if (offset < 0) {
         Value *args[] = {ptls_ptr,
                          ConstantInt::get(T_size, static_size + sizeof(void*))};
-        return builder.CreateCall(prepare_call(jlalloc_big_func),
-                                  ArrayRef<Value*>(args, 2));
+        v = builder.CreateCall(prepare_call(jlalloc_big_func),
+                               ArrayRef<Value*>(args, 2));
     }
-    Value *pool_ptr = builder.CreateConstGEP1_32(ptls_ptr, offset);
-    Value *args[] = {ptls_ptr, pool_ptr, ConstantInt::get(T_int32, osize),
-                     ConstantInt::get(T_int32, end_offset)};
-    return builder.CreateCall(prepare_call(jlalloc_pool_func),
-                              ArrayRef<Value*>(args, 4));
+    else {
+        Value *pool_ptr = builder.CreateConstGEP1_32(ptls_ptr, offset);
+        Value *args[] = {ptls_ptr, pool_ptr, ConstantInt::get(T_int32, osize),
+                         ConstantInt::get(T_int32, end_offset)};
+        v = builder.CreateCall(prepare_call(jlalloc_pool_func),
+                               ArrayRef<Value*>(args, 4));
+    }
+    tbaa_decorate(tbaa_tag, builder.CreateStore(jt, emit_typeptr_addr(v)));
+    return v;
+}
+static Value *emit_allocobj(jl_codectx_t *ctx, size_t static_size,
+                            const jl_cgval_t &v)
+{
+    return emit_allocobj(ctx, static_size, literal_pointer_val(v.typ));
 }
 
 // if ptr is NULL this emits a write barrier _back_
@@ -1720,10 +1728,9 @@ static jl_cgval_t emit_new_struct(jl_value_t *ty, size_t nargs, jl_value_t **arg
             f1 = boxed(fval_info, ctx);
             j++;
         }
-        Value *strct = emit_allocobj(ctx, sty->size);
+        Value *strct = emit_allocobj(ctx, sty->size,
+                                     literal_pointer_val((jl_value_t*)ty));
         jl_cgval_t strctinfo = mark_julia_type(strct, true, ty, ctx);
-        tbaa_decorate(tbaa_tag, builder.CreateStore(literal_pointer_val((jl_value_t*)ty),
-                                                    emit_typeptr_addr(strct)));
         if (f1) {
             jl_cgval_t f1info = mark_julia_type(f1, true, jl_any_type, ctx);
             if (!jl_subtype(expr_type(args[1],ctx), jl_field_type(sty,0), 0))
