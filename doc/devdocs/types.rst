@@ -229,7 +229,7 @@ These therefore print identically, but they have very different behavior:
    ERROR: MethodError: no method matching candid(::Array{Int64,1}, ::Float64)
    Closest candidates are:
      candid{T}(::Array{T,N}, !Matched::T)
-    in eval(::Module, ::Any) at ./boot.jl:231...
+    ...
 
    julia> sneaky([1],3.2)
    1

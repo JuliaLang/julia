@@ -291,14 +291,14 @@ such an invalid byte index, an error is thrown:
      in slow_utf8_next(::Array{UInt8,1}, ::UInt8, ::Int64) at ./strings/string.jl:68
      in next at ./strings/string.jl:93 [inlined]
      in getindex(::String, ::Int64) at ./strings/basic.jl:70
-     in eval(::Module, ::Any) at ./boot.jl:231...
+     ...
 
     julia> s[3]
     ERROR: UnicodeError: invalid character index
      in slow_utf8_next(::Array{UInt8,1}, ::UInt8, ::Int64) at ./strings/string.jl:68
      in next at ./strings/string.jl:93 [inlined]
      in getindex(::String, ::Int64) at ./strings/basic.jl:70
-     in eval(::Module, ::Any) at ./boot.jl:231...
+     ...
 
     julia> s[4]
     ' '
@@ -553,7 +553,7 @@ contained in a string:
     Closest candidates are:
       contains(!Matched::Function, ::Any, !Matched::Any)
       contains(::AbstractString, !Matched::AbstractString)
-     in eval(::Module, ::Any) at ./boot.jl:231...
+     ...
 
 The last error is because ``'o'`` is a character literal, and :func:`contains`
 is a generic function that looks for subsequences. To look for an element in a
@@ -875,7 +875,7 @@ error:
 
     julia> "DATA\xff\u2200"
     ERROR: syntax: invalid UTF-8 sequence
-     in eval(::Module, ::Any) at ./boot.jl:231...
+     ...
 
 Also observe the significant distinction between ``\xff`` and ``\uff``:
 the former escape sequence encodes the *byte 255*, whereas the latter

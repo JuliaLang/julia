@@ -122,7 +122,7 @@ Now ``OrderedPair`` objects can only be constructed such that
     julia> OrderedPair(2,1)
     ERROR: out of order
      in OrderedPair(::Int64, ::Int64) at ./none:5
-     in eval(::Module, ::Any) at ./boot.jl:231...
+     ...
 
 You can still reach in and directly change the field values to violate
 this invariant, but messing around with an object's internals uninvited is
@@ -267,7 +267,7 @@ access to an uninitialized reference is an immediate error:
 
     julia> z.xx
     ERROR: UndefRefError: access to undefined reference
-     in eval(::Module, ::Any) at ./boot.jl:231...
+     ...
 
 This avoids the need to continually check for ``null`` values.
 However, not all object fields are references. Julia considers some
@@ -329,7 +329,7 @@ types of the arguments given to the constructor. Here are some examples:
     Closest candidates are:
       Point{T<:Real}{T<:Real}(::T<:Real, !Matched::T<:Real)
       Point{T<:Real}{T}(::Any)
-     in eval(::Module, ::Any) at ./boot.jl:231...
+     ...
 
     ## explicit T ##
 
@@ -339,7 +339,7 @@ types of the arguments given to the constructor. Here are some examples:
     julia> Point{Int64}(1.0,2.5)
     ERROR: InexactError()
      in Point{Int64}(::Float64, ::Float64) at ./none:2
-     in eval(::Module, ::Any) at ./boot.jl:231...
+     ...
 
     julia> Point{Float64}(1.0,2.5)
     Point{Float64}(1.0,2.5)
@@ -428,7 +428,7 @@ However, other similar calls still don't work:
     Closest candidates are:
       Point{T<:Real}{T<:Real}(::T<:Real, !Matched::T<:Real)
       Point{T<:Real}{T}(::Any)
-     in eval(::Module, ::Any) at ./boot.jl:231...
+     ...
 
 For a much more general way of making all such calls work sensibly, see
 :ref:`man-conversion-and-promotion`. At the risk
