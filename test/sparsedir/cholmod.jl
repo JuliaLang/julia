@@ -588,7 +588,10 @@ Dp = spdiagm(dp)
 @test_throws CHOLMOD.CHOLMODException Fs[:PLD]
 
 # Issue 11745 - row and column pointers were not sorted in sparse(Factor)
-sparse(cholfact(sparse(Float64[ 10 1 1 1; 1 10 0 0; 1 0 10 0; 1 0 0 10]))); gc()
+let A = Float64[10 1 1 1; 1 10 0 0; 1 0 10 0; 1 0 0 10]
+    @test sparse(cholfact(sparse(A))) ≈ A
+end
+gc()
 
 # Issue 11747 - Wrong show method defined for FactorComponent
 let v = cholfact(sparse(Float64[ 10 1 1 1; 1 10 0 0; 1 0 10 0; 1 0 0 10]))[:L]
