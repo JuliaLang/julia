@@ -30,7 +30,6 @@ symbol      meaning
 ``[;]``     also vertical concatenation
 ``[  ]``    with space-separated expressions, horizontal concatenation
 ``T{ }``    parametric type instantiation
-``{  }``    construct a heterogeneous array (deprecated in 0.4 in favor of ``Any[]``)
 ``;``       statement separator
 ``,``       separate function arguments or tuple components
 ``?``       3-argument conditional operator (conditional ? if_true : if_false)
