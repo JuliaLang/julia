@@ -418,11 +418,15 @@ Basics
 
 Here is an extraordinarily simple macro:
 
-.. doctest::
+.. testcode::
 
-    julia> macro sayhello()
-               return :( println("Hello, world!") )
-           end
+    macro sayhello()
+        return :( println("Hello, world!") )
+    end
+
+.. testoutput::
+    :hide:
+
     @sayhello (macro with 1 method)
 
 Macros have a dedicated character in Julia's syntax: the ``@`` (at-sign),
