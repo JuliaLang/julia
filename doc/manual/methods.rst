@@ -386,13 +386,6 @@ arguments:
     julia> g(x::Float64, y) = 2x + y;
 
     julia> g(x, y::Float64) = x + 2y;
-    WARNING: New definition
-        g(Any, Float64) at none:1
-    is ambiguous with:
-        g(Float64, Any) at none:1.
-    To fix, define
-        g(Float64, Float64)
-    before the new definition.
 
     julia> g(2.0, 3)
     7.0
@@ -400,23 +393,31 @@ arguments:
     julia> g(2, 3.0)
     8.0
 
-    julia> g(2.0, 3.0)
-    7.0
-
-Here the call ``g(2.0, 3.0)`` could be handled by either the
+But the call ``g(2.0, 3.0)`` could be handled by either the
 ``g(Float64, Any)`` or the ``g(Any, Float64)`` method, and neither is
-more specific than the other. In such cases, Julia warns you about this
-ambiguity, but allows you to proceed, arbitrarily picking a method. You
-should avoid method ambiguities by specifying an appropriate method for
+more specific than the other. In such cases, Julia throws an error,
+instead of arbitrarily picking a method:
+
+.. doctest::
+
+    julia> g(2.0, 3.0)
+    ERROR: MethodError: g(::Float64, ::Float64) is ambiguous. Candidates:
+      g(x::Float64, y) at REPL[9]:1
+      g(x, y::Float64) at REPL[8]:1
+     in eval(::Module, ::Any) at ./boot.jl:234
+     in macro expansion at ./REPL.jl:92 [inlined]
+     in (::Base.REPL.##1#2{Base.REPL.REPLBackend})() at ./event.jl:46
+
+You should avoid method ambiguities by specifying an appropriate method for
 the intersection case:
 
 .. doctest::
 
-    julia> g(x::Float64, y::Float64) = 2x + 2y;
-
     julia> g(x::Float64, y) = 2x + y;
 
     julia> g(x, y::Float64) = x + 2y;
+
+    julia> g(x::Float64, y::Float64) = 2x + 2y;
 
     julia> g(2.0, 3)
     7.0
@@ -426,10 +427,6 @@ the intersection case:
 
     julia> g(2.0, 3.0)
     10.0
-
-To suppress Julia's warning, the disambiguating method must be defined
-first, since otherwise the ambiguity exists, if transiently, until the
-more specific method is defined.
 
 .. _man-parametric-methods:
 
