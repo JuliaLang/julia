@@ -296,6 +296,7 @@ include("LineEdit.jl")
 include("REPLCompletions.jl")
 include("REPL.jl")
 include("client.jl")
+include("FlispREPL.jl")
 
 # misc useful functions & macros
 include("util.jl")

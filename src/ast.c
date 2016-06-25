@@ -608,6 +608,19 @@ JL_DLLEXPORT jl_value_t *jl_parse_input_line(const char *str, size_t len, const 
     return res;
 }
 
+JL_DLLEXPORT jl_value_t *jl_flisp_eval(const char *str, size_t len)
+{
+    jl_ast_context_t *ctx = jl_ast_ctx_enter();
+    fl_context_t *fl_ctx = &ctx->fl;
+    value_t s = cvalue_static_cstrn(fl_ctx, str, len);
+
+    value_t e = fl_applyn(fl_ctx, 1, symbol_value(symbol(fl_ctx, "fl-eval-string")), s);
+
+    jl_value_t *res = e == fl_ctx->FL_EOF ? jl_nothing : scm_to_julia(fl_ctx, e, 0);
+    jl_ast_ctx_leave(ctx);
+    return res;
+}
+
 // this is for parsing one expression out of a string, keeping track of
 // the current position.
 JL_DLLEXPORT jl_value_t *jl_parse_string(const char *str, size_t len,

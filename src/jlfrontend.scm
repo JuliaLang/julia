@@ -218,6 +218,12 @@
   (parser-wrap (lambda ()
                  (julia-expand-macros expr))))
 
+; helper for flisp repl
+(define (fl-eval-string s)
+    (string (trycatch
+                (eval (read (open-input-string s)))
+                (lambda (e) e))))
+
 ; run whole frontend on a string. useful for testing.
 (define (fe str)
   (expand-toplevel-expr (julia-parse str)))
