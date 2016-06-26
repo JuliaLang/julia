@@ -68,3 +68,22 @@ for elty in (Float32,Float64)
         @test round(elty2,A) == fill(round(elty2,x),(10,10,10))
     end
 end
+
+#cmp
+for elty in (Float16,Float32,Float64)
+    @test_throws DomainError cmp(convert(elty, NaN), 1)
+    @test_throws DomainError cmp(1, convert(elty, NaN))
+    @test cmp(convert(elty, 2.), 1) == 1
+    @test cmp(1, convert(elty, 2.)) == -1
+end
+
+for elty in (Int32, UInt32)
+    @test Float32(2.) <= convert(elty,3)
+    @test convert(elty,3) <= Float32(3.)
+end
+
+for elty in (Float16,Float32,Float64, BigFloat)
+    x = convert(elty, 5.)
+    @test float(fill(x,10)) == fill(x,10)
+end
+@test_throws ArgumentError float(AbstractRNG[])

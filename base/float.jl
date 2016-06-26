@@ -711,7 +711,7 @@ float{T<:AbstractFloat}(A::AbstractArray{T}) = A
 
 function float{T}(A::AbstractArray{T})
     if !isleaftype(T)
-        error("`float` not defined on abstractly-typed arrays; please convert to a more specific type")
+        throw(ArgumentError("`float` not defined on abstractly-typed arrays; please convert to a more specific type"))
     end
     convert(AbstractArray{typeof(float(zero(T)))}, A)
 end
@@ -723,7 +723,7 @@ for fn in (:float,:big)
         $fn(r::FloatRange) = FloatRange($fn(r.start), $fn(r.step), r.len, $fn(r.divisor))
         function $fn(r::LinSpace)
             new_len = $fn(r.len)
-            new_len == r.len || error(string(r, ": too long for ", $fn))
+            new_len == r.len || throw(ArgumentError("$(r): too long for ", $fn))
             LinSpace($fn(r.start), $fn(r.stop), new_len, $fn(r.divisor))
         end
     end
