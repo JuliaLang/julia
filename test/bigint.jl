@@ -300,3 +300,14 @@ ndigits(rand(big(-999:999)), big(2)^rand(2:999))
 @test_throws InexactError round(BigInt,Inf)
 @test_throws InexactError floor(BigInt,Inf)
 @test_throws InexactError ceil(BigInt,Inf)
+
+@test bin(big(3)) == "11"
+@test oct(big(9)) == "11"
+@test oct(-big(9)) == "-11"
+@test hex(big(12)) == "c"
+
+@test isqrt(big(4)) == 2
+@test isqrt(big(5)) == 2
+
+@test big(5)^true == big(5)
+@test big(5)^false == one(BigInt)
