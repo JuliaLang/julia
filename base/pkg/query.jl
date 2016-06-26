@@ -66,6 +66,30 @@ function dependencies(avail::Dict, fix::Dict = Dict{String,Fixed}("julia"=>Fixed
     avail, conflicts
 end
 
+function partial_update_mask(instd::Dict{String,Tuple{VersionNumber,Bool}}, avail::Dict{String,Dict{VersionNumber,Available}}, upkgs::Set{String})
+    dont_update = Set{String}()
+    isempty(upkgs) && return dont_update
+    avail_new = deepcopy(avail)
+    for p in upkgs
+        haskey(instd, p) || throw(PkgError("Package $p is not installed"))
+        v = instd[p][1]
+        if haskey(avail, p)
+            for vn in keys(avail[p])
+                vn < v && delete!(avail_new[p], vn)
+            end
+        end
+    end
+    avail_new = dependencies_subset(avail_new, upkgs)
+
+    for p in keys(avail)
+        !haskey(avail_new, p) && push!(dont_update, p)
+    end
+    for (p,_) in instd
+        !haskey(avail_new, p) && !(p in upkgs) && push!(dont_update, p)
+    end
+    return dont_update
+end
+
 typealias PackageState Union{Void,VersionNumber}
 
 function diff(have::Dict, want::Dict, avail::Dict, fixed::Dict)
@@ -324,12 +348,12 @@ end
 # Build a subgraph incuding only the (direct and indirect) dependencies
 # of a given package set
 function dependencies_subset(deps::Dict{String,Dict{VersionNumber,Available}}, pkgs::Set{String})
-    staged = pkgs
-    allpkgs = copy(pkgs)
+    staged::Set{String} = filter(p->p in keys(deps), pkgs)
+    allpkgs = copy(staged)
     while !isempty(staged)
         staged_next = Set{String}()
-        for p in staged, a in values(deps[p]), rp in keys(a.requires)
-            if !(rp in allpkgs)
+        for p in staged, a in values(get(deps, p, Dict{VersionNumber,Available}())), rp in keys(a.requires)
+            if !(rp in allpkgs) && rp ≠ "julia"
                 push!(staged_next, rp)
             end
         end
