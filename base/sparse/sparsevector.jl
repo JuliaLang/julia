@@ -188,7 +188,7 @@ function sparsevec{Tv,Ti<:Integer}(dict::Associative{Ti,Tv}, len::Integer)
     maxk = convert(Ti, len)
     for (k, v) in dict
         if !(1 <= k <= maxk)
-            throw(ArgumentError("all indices must be between 1 and len, $len, but one is out of bounds"))
+            throw(ArgumentError("all indices must be between 1 and len, $len, but at least one is out of bounds"))
         end
         cnt += 1
         @inbounds nzind[cnt] = k
@@ -323,7 +323,7 @@ convert{Tv,TvS,TiS}(::Type{SparseVector{Tv}}, s::SparseVector{TvS,TiS}) =
 function prep_sparsevec_copy_dest!(A::SparseVector, lB, nnzB)
     lA = length(A)
     if lA < lB
-        throw(ArgumentError("length of A, $lA, does not match length of B, $lB"))
+        throw(ArgumentError("length of A, $lA, must be larger than or equal to the length of B, $lB"))
     end
     # If the two vectors have the same length then all the elements in A will be overwritten.
     if length(A) == lB
@@ -359,7 +359,7 @@ function copy!(A::SparseVector, B::SparseMatrixCSC)
 
     ptr = 1
     if length(A.nzind) < length(B.rowval)
-        throw(DimensionMismatch("A has $(length(A.nzind)) non-zero indices, B has $(length(B.rowval)) row values"))
+        throw(DimensionMismatch("A has $(length(A.nzind)) non-zero indices, B has $(length(B.rowval)) row values, but A and B must have the same length"))
     end
     if maximum(B.colptr)-1 > length(B.rowval)
         throw(BoundsError())
