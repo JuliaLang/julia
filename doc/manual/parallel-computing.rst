@@ -860,7 +860,7 @@ If ``io`` is not specified, ``host`` and ``port`` are used to connect.
 For example, a cluster manager may launch a single worker per node, and use that to launch
 additional workers. ``count`` with an integer value ``n`` will launch a total of ``n`` workers,
 while a value of ``:auto`` will launch as many workers as cores on that machine.
-``exename`` is the name of the Julia executable including the full path.
+``exename`` is the name of the ``julia`` executable including the full path.
 ``exeflags`` should be set to the required command line arguments for new workers.
 
 ``tunnel``, ``bind_addr``, ``sshflags`` and ``max_parallel`` are used when a ssh tunnel is
