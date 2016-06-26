@@ -193,7 +193,7 @@ typeintersect
 """
     pointer(array [, index])
 
-Get the native address of an array or string element. Be careful to ensure that a julia
+Get the native address of an array or string element. Be careful to ensure that a Julia
 reference to `a` exists as long as this pointer will be used. This function is "unsafe" like
 `unsafe_convert`.
 
@@ -593,7 +593,7 @@ valtype
     edit(path::AbstractString, [line])
 
 Edit a file or directory optionally providing a line number to edit the file at. Returns to
-the julia prompt when you quit the editor.
+the `julia` prompt when you quit the editor.
 """
 edit(path::AbstractString, line=?)
 
@@ -3083,7 +3083,7 @@ addprocs()
 addprocs(machines; keyword_args...) -> List of process identifiers
 ```
 
-Add processes on remote machines via SSH. Requires julia to be installed in the same
+Add processes on remote machines via SSH. Requires `julia` to be installed in the same
 location on each node, or to be available via a shared file system.
 
 `machines` is a vector of machine specifications.  Worker are started for each specification.
@@ -3113,7 +3113,7 @@ Keyword arguments:
 * `dir`: specifies the working directory on the workers. Defaults to the host's current
          directory (as found by `pwd()`)
 
-* `exename`: name of the julia executable. Defaults to `"\$JULIA_HOME/julia"` or
+* `exename`: name of the `julia` executable. Defaults to `"\$JULIA_HOME/julia"` or
              `"\$JULIA_HOME/julia-debug"` as the case may be.
 
 * `exeflags`: additional flags passed to the worker processes.
@@ -3466,7 +3466,7 @@ Convert `x` to a value of type `T`
 In cases where `convert` would need to take a Julia object and turn it into a `Ptr`, this
 function should be used to define and perform that conversion.
 
-Be careful to ensure that a julia reference to `x` exists as long as the result of this
+Be careful to ensure that a Julia reference to `x` exists as long as the result of this
 function will be used. Accordingly, the argument `x` to this function should never be an
 expression, only a variable name or field reference. For example, `x=a.b.c` is acceptable,
 but `x=[a,b,c]` is not.
@@ -6571,7 +6571,7 @@ error
     less(file::AbstractString, [line])
 
 Show a file using the default pager, optionally providing a starting line number. Returns to
-the julia prompt when you quit the pager.
+the `julia` prompt when you quit the pager.
 """
 less(f::AbstractString, ?)
 
@@ -7470,7 +7470,7 @@ listenany
 """
     getpid() -> Int32
 
-Get julia's process ID.
+Get Julia's process ID.
 """
 getpid
 
@@ -8929,7 +8929,7 @@ redirect_stdout
 """
     redirect_stdout(stream)
 
-Replace `STDOUT` by stream for all C and julia level output to `STDOUT`. Note that `stream`
+Replace `STDOUT` by stream for all C and Julia level output to `STDOUT`. Note that `stream`
 must be a TTY, a `Pipe` or a `TCPSocket`.
 """
 redirect_stdout(stream)

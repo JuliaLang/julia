@@ -10,14 +10,14 @@ If you've been directed to this page, find the symptom that best matches what yo
 
 * `Segfaults when running a script`_
 
-* `Errors during julia startup`_
+* `Errors during Julia startup`_
 
 .. _version info:
 
 Version/Environment info
 ------------------------
 
-No matter the error, we will always need to know what version of julia you are running. When julia first starts up, a header is printed out with a version number and date.  If your version is ``0.2.0`` or higher, please include the output of ``versioninfo()`` in any report you create::
+No matter the error, we will always need to know what version of Julia you are running. When Julia first starts up, a header is printed out with a version number and date.  If your version is ``0.2.0`` or higher, please include the output of ``versioninfo()`` in any report you create::
 
  julia> versioninfo()
  Julia Version 0.3.3-pre+25
@@ -37,9 +37,9 @@ No matter the error, we will always need to know what version of julia you are r
 Segfaults during bootstrap (sysimg.jl)
 --------------------------------------
 
-Segfaults toward the end of the ``make`` process of building julia are a common symptom of something going wrong while julia is preparsing the corpus of code in the ``base/`` folder.  Many factors can contribute toward this process dying unexpectedly, however it is as often as not due to an error in the C-code portion of julia, and as such must typically be debugged with a debug build inside of ``gdb``.  Explicitly:
+Segfaults toward the end of the ``make`` process of building Julia are a common symptom of something going wrong while Julia is preparsing the corpus of code in the ``base/`` folder.  Many factors can contribute toward this process dying unexpectedly, however it is as often as not due to an error in the C-code portion of Julia, and as such must typically be debugged with a debug build inside of ``gdb``.  Explicitly:
 
-Create a debug build of julia::
+Create a debug build of Julia::
 
   $ cd <julia_root>
   $ make debug
@@ -49,7 +49,7 @@ Note that this process will likely fail with the same error as a normal ``make``
   $ cd base/
   $ gdb -x ../contrib/debug_bootstrap.gdb
 
-This will start ``gdb``, attempt to run the bootstrap process using the debug build of julia, and print out a backtrace if (when) it segfaults.  You may need to hit ``<enter>`` a few times to get the full backtrace.  Create a gist_ with the backtrace, the `version info`_, and any other pertinent information you can think of and open a new issue_ on Github with a link to the gist.
+This will start ``gdb``, attempt to run the bootstrap process using the debug build of Julia, and print out a backtrace if (when) it segfaults.  You may need to hit ``<enter>`` a few times to get the full backtrace.  Create a gist_ with the backtrace, the `version info`_, and any other pertinent information you can think of and open a new issue_ on Github with a link to the gist.
 
 
 .. _Segfaults when running a script:
@@ -57,7 +57,7 @@ This will start ``gdb``, attempt to run the bootstrap process using the debug bu
 Segfaults when running a script
 -------------------------------
 
-The procedure is very similar to `Segfaults during bootstrap (sysimg.jl)`_.  Create a debug build of Julia, and run your script inside of a debugged julia process::
+The procedure is very similar to `Segfaults during bootstrap (sysimg.jl)`_.  Create a debug build of Julia, and run your script inside of a debugged Julia process::
 
   $ cd <julia_root>
   $ make debug
@@ -73,12 +73,12 @@ Note that ``gdb`` will sit there, waiting for instructions.  Type ``r`` to run t
 Create a gist_ with the backtrace, the `version info`_, and any other pertinent information you can think of and open a new issue_ on Github with a link to the gist.
 
 
-.. _Errors during julia startup:
+.. _Errors during Julia startup:
 
-Errors during julia startup
+Errors during Julia startup
 ---------------------------
 
-Occasionally errors occur during julia's startup process (especially when using binary distributions, as opposed to compiling from source) such as the following::
+Occasionally errors occur during Julia's startup process (especially when using binary distributions, as opposed to compiling from source) such as the following::
 
   $ julia
   exec: error -5
@@ -101,7 +101,7 @@ Glossary
 
 A few terms have been used as shorthand in this guide:
 
-* ``<julia_root>`` refers to the root directory of the julia source tree; e.g. it should contain folders such as ``base``, ``deps``, ``src``, ``test``, etc.....
+* ``<julia_root>`` refers to the root directory of the Julia source tree; e.g. it should contain folders such as ``base``, ``deps``, ``src``, ``test``, etc.....
 
 .. _gist: https://gist.github.com
 .. _issue: https://github.com/JuliaLang/julia/issues?state=open
