@@ -1185,6 +1185,8 @@ export
 # multiprocessing
     addprocs,
     asyncmap,
+    CachingPool,
+    clear!,
     ClusterManager,
     default_worker_pool,
     fetch,

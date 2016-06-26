@@ -306,7 +306,7 @@ gives a `Broken` `Result`.
 
    .. Docstring generated from Julia source
 
-   For use to indicate a test that should pass but currently intermittently fails. Does not evaluate the expression.
+   For use to indicate a test that should pass but currently intermittently fails. Does not evaluate the expression, which makes it useful for tests of not-yet-implemented functionality.
 
 Creating Custom ``AbstractTestSet`` Types
 -----------------------------------------
