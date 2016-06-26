@@ -497,3 +497,11 @@ let io = IOBuffer()
     showcompact(IOContext(IOContext(io, :compact=>true), :multiline=>true), x)
     @test takebuf_string(io) == "[1,2]"
 end
+
+# PR 17117
+# test show array
+let s  = IOBuffer(Array{UInt8}(0), true, true)
+    io = IOContext(s, multiline=true)
+    Base.showarray(io, [1,2,3], header = false)
+    @test String(resize!(s.data, s.size)) == " 1\n 2\n 3"
+end
