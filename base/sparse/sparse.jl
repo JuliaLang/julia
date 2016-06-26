@@ -2,7 +2,7 @@
 
 module SparseArrays
 
-using Base: ReshapedArray, setindex_shape_check
+using Base: ReshapedArray, setindex_shape_check, to_shape
 using Base.Sort: Forward
 using Base.LinAlg: AbstractTriangular, PosDefException
 
