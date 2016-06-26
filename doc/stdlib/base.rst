@@ -68,7 +68,7 @@ Getting Around
 
    .. Docstring generated from Julia source
 
-   Edit a file or directory optionally providing a line number to edit the file at. Returns to the julia prompt when you quit the editor.
+   Edit a file or directory optionally providing a line number to edit the file at. Returns to the ``julia`` prompt when you quit the editor.
 
 .. function:: edit(function, [types])
 
@@ -86,7 +86,7 @@ Getting Around
 
    .. Docstring generated from Julia source
 
-   Show a file using the default pager, optionally providing a starting line number. Returns to the julia prompt when you quit the pager.
+   Show a file using the default pager, optionally providing a starting line number. Returns to the ``julia`` prompt when you quit the pager.
 
 .. function:: less(function, [types])
 
@@ -884,7 +884,7 @@ System
 
    .. Docstring generated from Julia source
 
-   Get julia's process ID.
+   Get Julia's process ID.
 
 .. function:: time()
 

@@ -163,7 +163,7 @@ General Parallel Computing Support
 
    .. Docstring generated from Julia source
 
-   Add processes on remote machines via SSH. Requires julia to be installed in the same location on each node, or to be available via a shared file system.
+   Add processes on remote machines via SSH. Requires ``julia`` to be installed in the same location on each node, or to be available via a shared file system.
 
    ``machines`` is a vector of machine specifications.  Worker are started for each specification.
 
@@ -187,7 +187,7 @@ General Parallel Computing Support
 
    * ``dir``\ : specifies the working directory on the workers. Defaults to the host's current          directory (as found by ``pwd()``\ )
 
-   * ``exename``\ : name of the julia executable. Defaults to ``"$JULIA_HOME/julia"`` or              ``"$JULIA_HOME/julia-debug"`` as the case may be.
+   * ``exename``\ : name of the ``julia`` executable. Defaults to ``"$JULIA_HOME/julia"`` or              ``"$JULIA_HOME/julia-debug"`` as the case may be.
 
    * ``exeflags``\ : additional flags passed to the worker processes.
 

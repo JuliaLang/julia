@@ -306,7 +306,7 @@ General I/O
 
    .. Docstring generated from Julia source
 
-   Replace ``STDOUT`` by stream for all C and julia level output to ``STDOUT``\ . Note that ``stream`` must be a TTY, a ``Pipe`` or a ``TCPSocket``\ .
+   Replace ``STDOUT`` by stream for all C and Julia level output to ``STDOUT``\ . Note that ``stream`` must be a TTY, a ``Pipe`` or a ``TCPSocket``\ .
 
 .. function:: redirect_stderr([stream])
 

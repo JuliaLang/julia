@@ -45,7 +45,7 @@ To evaluate expressions written in a source file ``file.jl``, write
 ``include("file.jl")``.
 
 To run code in a file non-interactively, you can give it as the first
-argument to the julia command::
+argument to the ``julia`` command::
 
     $ julia script.jl arg1 arg2...
 
