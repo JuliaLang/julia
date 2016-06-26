@@ -2361,6 +2361,7 @@ end
 @test widen(Int32(42)) === Int64(42)
 @test widen(Int8) === Int32
 @test widen(Float32) === Float64
+@test widen(Float16) === Float32
 ## Note: this should change to e.g. Float128 at some point
 @test widen(Float64) === BigFloat
 @test widen(BigInt) === BigInt
@@ -2742,3 +2743,10 @@ testmi(typemin(Int)+1:typemin(Int)+1000, -100:100)
 @test_throws ArgumentError Base.multiplicativeinverse(0)
 testmi(map(UInt32, 0:1000), map(UInt32, 1:100))
 testmi(typemax(UInt32)-UInt32(1000):typemax(UInt32), map(UInt32, 1:100))
+
+@test ndims(1) == 0
+@test size(1,1) == 1
+@test_throws BoundsError size(1,-1)
+@test indices(1) == ()
+@test indices(1,1) == 1:1
+@test_throws BoundsError indices(1,-1)
