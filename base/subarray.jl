@@ -48,7 +48,7 @@ viewindexing(I::Tuple{Vararg{Any}}) = LinearSlow()
 viewindexing(I::Tuple{AbstractArray, Vararg{Any}}) = LinearSlow()
 
 dimlength(r::Range) = length(r)
-dimlength(i::Integer) = i
+dimlength(i::Integer) = Int(i)
 
 # Simple utilities
 size(V::SubArray) = V.dims
@@ -79,10 +79,16 @@ function view{N}(A::AbstractArray, I::Vararg{ViewIndex,N}) # TODO: DEPRECATE FOR
     @boundscheck checkbounds(A, I...)
     unsafe_view(reshape(A, Val{N}), I...)
 end
+
 function unsafe_view{T,N}(A::AbstractArray{T,N}, I::Vararg{ViewIndex,N})
     @_inline_meta
     J = to_indexes(I...)
     SubArray(A, J, map(dimlength, index_shape(A, J...)))
+end
+function unsafe_view{T,N}(V::SubArray{T,N}, I::Vararg{ViewIndex,N})
+    @_inline_meta
+    idxs = reindex(V, V.indexes, to_indexes(I...))
+    SubArray(V.parent, idxs, map(dimlength, (index_shape(V.parent, idxs...))))
 end
 
 # Re-indexing is the heart of a view, transforming A[i, j][x, y] to A[i[x], j[y]]
@@ -167,12 +173,6 @@ function setindex!(V::FastContiguousSubArray, x, i::Real)
     @boundscheck checkbounds(V, i)
     @inbounds V.parent[V.offset1 + to_index(i)] = x
     V
-end
-
-function unsafe_view{T,N}(V::SubArray{T,N}, I::Vararg{ViewIndex,N})
-    @_inline_meta
-    idxs = reindex(V, V.indexes, to_indexes(I...))
-    SubArray(V.parent, idxs, index_shape(V.parent, idxs...))
 end
 
 linearindexing{T<:FastSubArray}(::Type{T}) = LinearFast()
@@ -261,7 +261,9 @@ unsafe_convert{T,N,P,I<:Tuple{Vararg{RangeIndex}}}(::Type{Ptr{T}}, V::SubArray{T
 
 pointer(V::FastSubArray, i::Int) = pointer(V.parent, V.offset1 + V.stride1*i)
 pointer(V::FastContiguousSubArray, i::Int) = pointer(V.parent, V.offset1 + i)
-pointer(V::SubArray, i::Int) = pointer(V, smart_ind2sub(shape(V), i))
+pointer(V::SubArray, i::Int) = _pointer(V, i)
+_pointer{T}(V::SubArray{T,1}, i::Int) = pointer(V, (i,))
+_pointer(V::SubArray, i::Int) = pointer(V, ind2sub(indices(V), i))
 
 function pointer{T,N,P<:Array,I<:Tuple{Vararg{RangeIndex}}}(V::SubArray{T,N,P,I}, is::Tuple{Vararg{Int}})
     index = first_index(V)

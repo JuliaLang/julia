@@ -234,7 +234,7 @@ _trimmedsubarray(A, V, newindexes, index::ViewIndex, indexes...) = _trimmedsubar
 
 trimmedindex(P, d, i::Real) = oftype(i, 1)
 trimmedindex(P, d, i::Colon) = i
-trimmedindex(P, d, i::AbstractVector) = oftype(i, 1:length(i))
+trimmedindex(P, d, i::AbstractArray) = oftype(i, reshape(linearindices(i), indices(i)))
 
 function serialize{T<:AbstractString}(s::AbstractSerializer, ss::SubString{T})
     # avoid saving a copy of the parent string, keeping the type of ss
