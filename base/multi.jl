@@ -1157,7 +1157,7 @@ function handle_msg(msg::JoinCompleteMsg, r_stream, w_stream, version)
     ntfy_channel = lookup_ref(msg.notify_oid)
     put!(ntfy_channel, w.id)
 
-    put!(default_worker_pool(), w)
+    push!(default_worker_pool(), w)
 end
 
 function disable_threaded_libs()
