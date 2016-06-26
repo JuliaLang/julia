@@ -4,7 +4,7 @@
  Interacting With Julia
 ************************
 
-Julia comes with a full-featured interactive command-line REPL (read-eval-print loop) built into the ``julia`` executable.  In addition to allowing quick and easy evaluation of Julia statements, it has a searchable history, tab-completion, many helpful keybindings, and dedicated help and shell modes.  The REPL can be started by simply calling julia with no arguments or double-clicking on the executable::
+Julia comes with a full-featured interactive command-line REPL (read-eval-print loop) built into the ``julia`` executable.  In addition to allowing quick and easy evaluation of Julia statements, it has a searchable history, tab-completion, many helpful keybindings, and dedicated help and shell modes.  The REPL can be started by simply calling ``julia`` with no arguments or double-clicking on the executable::
 
     $ julia
                    _
