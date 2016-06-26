@@ -49,7 +49,7 @@ function front(t::Tuple)
     @_inline_meta
     _front((), t...)
 end
-front(::Tuple{}) = error("Cannot call front on an empty tuple")
+front(::Tuple{}) = throw(ArgumentError("Cannot call front on an empty tuple"))
 _front(out, v) = out
 function _front(out, v, t...)
     @_inline_meta

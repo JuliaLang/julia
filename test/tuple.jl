@@ -6,6 +6,9 @@
 @test length((1,)) === 1
 @test length((1,2)) === 2
 
+@test_throws ArgumentError Base.front(())
+@test_throws ArgumentError first(())
+
 @test endof(()) === 0
 @test endof((1,)) === 1
 @test endof((1,2)) === 2
