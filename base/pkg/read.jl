@@ -216,11 +216,11 @@ function installed(avail::Dict=available())
     return pkgs
 end
 
-function fixed(avail::Dict=available(), inst::Dict=installed(avail),
+function fixed(avail::Dict=available(), inst::Dict=installed(avail), dont_update::Set{String}=Set{String}(),
     julia_version::VersionNumber=VERSION)
     pkgs = Dict{String,Fixed}()
     for (pkg,(ver,fix)) in inst
-        fix || continue
+        (fix || pkg in dont_update) || continue
         ap = get(avail,pkg,Dict{VersionNumber,Available}())
         pkgs[pkg] = Fixed(ver,requires_dict(pkg,ap))
     end
@@ -228,10 +228,10 @@ function fixed(avail::Dict=available(), inst::Dict=installed(avail),
     return pkgs
 end
 
-function free(inst::Dict=installed())
+function free(inst::Dict=installed(), dont_update::Set{String}=Set{String}())
     pkgs = Dict{String,VersionNumber}()
     for (pkg,(ver,fix)) in inst
-        fix && continue
+        (fix || pkg in dont_update) && continue
         pkgs[pkg] = ver
     end
     return pkgs

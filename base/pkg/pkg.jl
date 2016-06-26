@@ -204,7 +204,7 @@ Update the metadata repo – kept in `Pkg.dir("METADATA")` – then update any f
 that can safely be pulled from their origin; then call `Pkg.resolve()` to determine a new
 optimal set of packages versions.
 """
-update() = cd(Entry.update,Dir.getmetabranch())
+update(upkgs::AbstractString...) = cd(Entry.update,Dir.getmetabranch(),Set{String}([upkgs...]))
 
 """
     resolve()
