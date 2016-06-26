@@ -1198,7 +1198,7 @@ A = sprand(Bool, 5,5,0.2)
 A = sparse(ones(5,5))
 @test all(full(sparsevec(A)) .== ones(25))
 @test all(full(sparsevec([1:5;],1)) .== ones(5))
-@test_throws ArgumentError sparsevec([1:5;], [1:4;])
+@test_throws DimensionMismatch sparsevec([1:5;], [1:4;])
 
 #test sparse
 @test sparse(A) == A

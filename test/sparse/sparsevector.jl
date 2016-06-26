@@ -294,7 +294,7 @@ let x1 = SparseVector(8, [2, 5, 6], [12.2, 1.4, 5.0])
     @test x2[9] == 17.8
     @test x2[10] == 0
     x2 = SparseVector(6, [3, 4], [1.2, 3.4])
-    @test_throws BoundsError copy!(x2, x1)
+    @test_throws ArgumentError copy!(x2, x1)
 end
 
 let x1 = sparse([2, 1, 2], [1, 3, 3], [12.2, 1.4, 5.0], 2, 4)
@@ -322,7 +322,7 @@ let x1 = sparse([2, 1, 2], [1, 3, 3], [12.2, 1.4, 5.0], 2, 4)
     @test x2[9] == 17.8
     @test x2[10] == 0
     x2 = SparseVector(6, [3, 4], [1.2, 3.4])
-    @test_throws BoundsError copy!(x2, x1)
+    @test_throws ArgumentError copy!(x2, x1)
 end
 
 let x1 = SparseVector(8, [2, 5, 6], [12.2, 1.4, 5.0])
