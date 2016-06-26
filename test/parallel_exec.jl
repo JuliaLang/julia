@@ -803,6 +803,13 @@ end
 # Test asyncmap
 @test allunique(asyncmap(x->object_id(current_task()), 1:100))
 
+# CachingPool tests
+wp = CachingPool(workers())
+@test [1:100...] == pmap(wp, x->x, 1:100)
+
+clear!(wp)
+@test length(wp.map_obj2ref) == 0
+
 
 # The below block of tests are usually run only on local development systems, since:
 # - tests which print errors
