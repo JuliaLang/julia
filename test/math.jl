@@ -375,6 +375,7 @@ true_i33 = 0.95975362949600785698
 @test_approx_eq besseli(-3,3) true_i33
 @test_approx_eq besseli(3,-3) -true_i33
 @test_approx_eq besseli(-3,-3) -true_i33
+@test_approx_eq besseli(Float32(-3),Complex64(-3,0)) -true_i33
 @test_throws Base.Math.AmosException besseli(1,1000)
 @test_throws DomainError besseli(0.4,-1.0)
 
@@ -454,6 +455,8 @@ y33 = bessely(3,3.)
 @test_throws DomainError bessely(0.4,-1.0)
 @test_throws DomainError bessely(0.4,Float32(-1.0))
 @test_throws DomainError bessely(1,Float32(-1.0))
+@test_throws DomainError bessely(Cint(3),Float32(-3.))
+@test_throws DomainError bessely(Cint(3),Float64(-3.))
 
 @test_throws MethodError bessely(1.2,big(1.0))
 @test_throws MethodError bessely(1,complex(big(1.0)))
@@ -465,6 +468,7 @@ y33 = bessely(3,3.)
 for elty in [Complex64,Complex128]
     z = convert(elty, 1.0 + 1.9im)
     @test_approx_eq besselhx(1.0, 1, z) convert(elty,-0.5949634147786144 - 0.18451272807835967im)
+    @test_approx_eq besselhx(Float32(1.0), 1, z) convert(elty,-0.5949634147786144 - 0.18451272807835967im)
 end
 
 @test_throws MethodError besselh(1,1,big(1.0))
