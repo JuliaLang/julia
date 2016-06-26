@@ -1218,7 +1218,7 @@ io = IOBuffer()
 @test @compat(get(io, :limit, false)) == false
 @test @compat(get(io, :compact, false)) == false
 @test @compat(get(io, :multiline, false)) == false
-
+@test @compat(get(Nullable(1))) == 1
 
 let
     test_str = "test"
