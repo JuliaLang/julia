@@ -5,9 +5,11 @@
 typealias AbstractVector{T} AbstractArray{T,1}
 typealias AbstractMatrix{T} AbstractArray{T,2}
 typealias AbstractVecOrMat{T} Union{AbstractVector{T}, AbstractMatrix{T}}
-typealias RangeIndex Union{Int, Range{Int}, UnitRange{Int}, Colon}
-typealias UnitRangeInteger{T<:Integer} UnitRange{T}
-typealias Indices{N} NTuple{N,UnitRangeInteger}
+typealias RangeIndex Union{Int, Range{Int}, AbstractUnitRange{Int}, Colon}
+typealias Indices{N} NTuple{N,AbstractUnitRange}
+typealias IndicesOne{N} NTuple{N,OneTo}
+typealias DimOrInd Union{Integer, AbstractUnitRange}
+typealias DimsOrInds{N} NTuple{N,DimOrInd}
 
 ## Basic functions ##
 
@@ -30,20 +32,20 @@ Returns the valid range of indices for array `A` along dimension `d`.
 """
 function indices(A::AbstractArray, d)
     @_inline_meta
-    1:size(A,d)
+    OneTo(size(A,d))
 end
 """
     indices(A)
 
 Returns the tuple of valid indices for array `A`.
 """
-indices{T,N}(A::AbstractArray{T,N}) = _indices((), A)
+indices{T,N}(A::AbstractArray{T,N}) = _indices((), A) # faster than ntuple(d->indices(A,d), Val{N})
 _indices{T,N}(out::NTuple{N}, A::AbstractArray{T,N}) = out
 function _indices(out, A::AbstractArray)
     @_inline_meta
     _indices((out..., indices(A, length(out)+1)), A)
 end
-# This simpler implementation suffers from #16327
+# Note: a simpler implementation suffers from #16327
 # function indices{T,N}(A::AbstractArray{T,N})
 #     @_inline_meta
 #     ntuple(d->indices(A, d), Val{N})
@@ -203,15 +205,15 @@ Return `true` if the given `index` is within the bounds of
 arrays can extend this method in order to provide a specialized bounds
 checking implementation.
 """
-checkindex(::Type{Bool}, inds::UnitRange, i) = throw(ArgumentError("unable to check bounds for indices of type $(typeof(i))"))
-checkindex(::Type{Bool}, inds::UnitRange, i::Real) = (first(inds) <= i) & (i <= last(inds))
-checkindex(::Type{Bool}, inds::UnitRange, ::Colon) = true
-function checkindex(::Type{Bool}, inds::UnitRange, r::Range)
+checkindex(::Type{Bool}, inds::AbstractUnitRange, i) = throw(ArgumentError("unable to check bounds for indices of type $(typeof(i))"))
+checkindex(::Type{Bool}, inds::AbstractUnitRange, i::Real) = (first(inds) <= i) & (i <= last(inds))
+checkindex(::Type{Bool}, inds::AbstractUnitRange, ::Colon) = true
+function checkindex(::Type{Bool}, inds::AbstractUnitRange, r::Range)
     @_propagate_inbounds_meta
     isempty(r) | (checkindex(Bool, inds, first(r)) & checkindex(Bool, inds, last(r)))
 end
-checkindex{N}(::Type{Bool}, indx::UnitRange, I::AbstractArray{Bool,N}) = N == 1 && indx == indices1(I)
-function checkindex(::Type{Bool}, inds::UnitRange, I::AbstractArray)
+checkindex{N}(::Type{Bool}, indx::AbstractUnitRange, I::AbstractArray{Bool,N}) = N == 1 && indx == indices1(I)
+function checkindex(::Type{Bool}, inds::AbstractUnitRange, I::AbstractArray)
     @_inline_meta
     b = true
     for i in I
@@ -312,7 +314,6 @@ checkbounds(A::AbstractArray) = checkbounds(A, 1) # 0-d case
 ## Constructors ##
 
 # default arguments to similar()
-typealias SimIdx Union{Integer,UnitRangeInteger}
 """
     similar(array, [element_type=eltype(array)], [dims=size(array)])
 
@@ -351,16 +352,14 @@ different element type it will create a regular `Array` instead:
 See also `allocate_for`.
 """
 similar{T}(a::AbstractArray{T})                          = similar(a, T)
-similar(   a::AbstractArray, T::Type)                    = _similar(indicesbehavior(a), a, T)
+similar(   a::AbstractArray, T::Type)                    = similar(a, T, indices(a))
 similar{T}(a::AbstractArray{T}, dims::Tuple)             = similar(a, T, dims)
-similar{T}(a::AbstractArray{T}, dims::SimIdx...)         = similar(a, T, dims)
-similar(   a::AbstractArray, T::Type, dims::SimIdx...)   = similar(a, T, dims)
-similar(   a::AbstractArray, T::Type, dims::DimsInteger) = similar(a, T, convert(Dims, dims))
+similar{T}(a::AbstractArray{T}, dims::DimOrInd...)       = similar(a, T, dims)
+similar(   a::AbstractArray, T::Type, dims::DimOrInd...) = similar(a, T, dims)
+similar(   a::AbstractArray, T::Type, dims::DimsInteger) = similar(a, T, Dims(dims))
 # similar creates an Array by default
+similar(   a::AbstractArray, T::Type, inds::IndicesOne)  = similar(a, T, map(last, inds))
 similar(   a::AbstractArray, T::Type, dims::Dims)        = Array(T, dims)
-
-_similar(::IndicesStartAt1, a::AbstractArray, T::Type)   = similar(a, T, size(a))
-_similar(::IndicesBehavior, a::AbstractArray, T::Type)   = similar(a, T, indices(a))
 
 """
     allocate_for(storagetype, referencearray, [shape])
@@ -1300,10 +1299,11 @@ function _sub2ind(inds, L, ind, i::Integer, I::Integer...)
 end
 
 nextL(L, l::Integer) = L*l
-nextL(L, r::UnitRange) = L*unsafe_length(r)
+nextL(L, r::AbstractUnitRange) = L*unsafe_length(r)
 offsetin(i, l::Integer) = i-1
-offsetin(i, r::UnitRange) = i-first(r)
+offsetin(i, r::AbstractUnitRange) = i-first(r)
 unsafe_length(r::UnitRange) = r.stop-r.start+1
+unsafe_length(r::OneTo) = length(r)
 
 ind2sub(::Tuple{}, ind::Integer) = (@_inline_meta; ind == 1 ? () : throw(BoundsError()))
 ind2sub(dims::DimsInteger, ind::Integer) = (@_inline_meta; _ind2sub((), dims, ind-1))
@@ -1323,9 +1323,9 @@ function _ind2sub(out, inds, ind)
 end
 
 _lookup(ind, d::Integer) = ind+1
-_lookup(ind, r::UnitRange) = ind+first(r)
+_lookup(ind, r::AbstractUnitRange) = ind+first(r)
 _div(ind, d::Integer) = div(ind, d), 1, d
-_div(ind, r::UnitRange) = (d = unsafe_length(r); (div(ind, d), first(r), d))
+_div(ind, r::AbstractUnitRange) = (d = unsafe_length(r); (div(ind, d), first(r), d))
 
 smart_ind2sub(shape::NTuple{1}, ind) = (ind,)
 smart_ind2sub(shape, ind) = ind2sub(shape, ind)
