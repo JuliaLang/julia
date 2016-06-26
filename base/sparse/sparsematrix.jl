@@ -1763,7 +1763,7 @@ for op in (+, -, min, max, &, |, $)
     @eval begin
         function ($OP){Tv1,Ti1,Tv2,Ti2}(A_1::SparseMatrixCSC{Tv1,Ti1}, A_2::SparseMatrixCSC{Tv2,Ti2})
             if size(A_1,1) != size(A_2,1) || size(A_1,2) != size(A_2,2)
-                throw(DimensionMismatch(""))
+                throw(DimensionMismatch("first input dimensions, $(size(A_1)), must match second input dimensions, $(size(A_2))"))
             end
             Tv = promote_op($op, Tv1, Tv2)
             B =  spzeros(Tv, promote_type(Ti1, Ti2), to_shape(broadcast_indices(A_1, A_2)))
@@ -2071,7 +2071,9 @@ macro _findr(op, A, region, Tv, Ti)
     esc(quote
     N = nnz($A)
     L = length($A)
-    (L == 0) && error("array must be non-empty")
+    if L == 0
+        throw(ArgumentError("array must be non-empty"))
+    end
 
     colptr = $A.colptr; rowval = $A.rowval; nzval = $A.nzval; m = $A.m; n = $A.n
     zval = zero($Tv)
@@ -3243,7 +3245,7 @@ function vcat(X::SparseMatrixCSC...)
 
     for i = 2 : num
         if nX[i] != n
-            throw(DimensionMismatch("All inputs to vcat should have the same number of columns"))
+            throw(DimensionMismatch("all inputs to vcat should have the same number of columns, $n, but input $i has $(nX[i]) columns"))
         end
     end
 
@@ -3300,7 +3302,9 @@ function hcat(X::SparseMatrixCSC...)
     nX = Int[ size(x, 2) for x in X ]
     m = mX[1]
     for i = 2 : num
-        if mX[i] != m; throw(DimensionMismatch("")); end
+        if mX[i] != m
+            throw(DimensionMismatch("all inputs to hcat should have the same number of rows, $m, but input $i has $(mX[i]) rows"))
+        end
     end
     n = sum(nX)
 
@@ -3492,7 +3496,9 @@ end
 
 function spdiagm_internal(B, d)
     ndiags = length(d)
-    if length(B) != ndiags; throw(ArgumentError("first argument should be a tuple of length(d)=$ndiags arrays of diagonals")); end
+    if length(B) != ndiags
+        throw(DimensionMismatch("first argument should be a tuple of length(d)=$ndiags arrays of diagonals, instead has length $(length(B))"))
+    end
     ncoeffs = 0
     for vec in B
         ncoeffs += length(vec)
@@ -3564,7 +3570,9 @@ spdiagm(B::AbstractVector, d::Number=0) = spdiagm((B,), (d,))
 
 ## expand a colptr or rowptr into a dense index vector
 function expandptr{T<:Integer}(V::Vector{T})
-    if V[1] != 1 throw(ArgumentError("first index must be one")) end
+    if V[1] != 1
+        throw(ArgumentError("first index must be one"))
+    end
     res = similar(V, (Int64(V[end]-1),))
     for i in 1:(length(V)-1), j in V[i]:(V[i+1] - 1); res[j] = i end
     res
@@ -3593,7 +3601,7 @@ end
 
 function trace{Tv}(A::SparseMatrixCSC{Tv})
     if size(A,1) != size(A,2)
-        throw(DimensionMismatch("expected square matrix"))
+        throw(DimensionMismatch("matrix is not square"))
     end
     s = zero(Tv)
     for d in SpDiagIterator(A)
@@ -3606,7 +3614,7 @@ diag{Tv}(A::SparseMatrixCSC{Tv}) = Tv[d for d in SpDiagIterator(A)]
 
 function diagm{Tv,Ti}(v::SparseMatrixCSC{Tv,Ti})
     if (size(v,1) != 1 && size(v,2) != 1)
-        throw(DimensionMismatch("input should be nx1 or 1xn"))
+        throw(DimensionMismatch("input should be nx1 or 1xn, not $(size(v))"))
     end
 
     n = length(v)
@@ -3787,7 +3795,9 @@ end
 # This is the function that does the reduction underlying var/std
 function Base.centralize_sumabs2!{S,Tv,Ti}(R::AbstractArray{S}, A::SparseMatrixCSC{Tv,Ti}, means::AbstractArray)
     lsiz = Base.check_reducedims(R,A)
-    size(means) == size(R) || error("size of means must match size of R")
+    if size(means) != size(R)
+        throw(DimensionMismatch("size of means, $(size(means)), must match size of R, $(size(R))"))
+    end
     isempty(R) || fill!(R, zero(S))
     isempty(A) && return R
 
