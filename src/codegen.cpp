@@ -596,6 +596,21 @@ static AllocaInst *emit_static_alloca(Type *lty)
             /*InsertBefore=*/&*builder.GetInsertBlock()->getParent()->getEntryBlock().getFirstInsertionPt());
 }
 
+static Instruction *emit_static_alloca(Type *lty, jl_value_t *tag, jl_codectx_t *ctx)
+{
+    AllocaInst *slot = emit_static_alloca(T_int8, jl_datatype_size(tag) + sizeof(tag), ctx);
+    Instruction *tagptr = CastInst::CreatePointerCast(slot, PointerType::get(T_ppjlvalue, 0));
+    tagptr->insertAfter(slot);
+    Instruction *storetag = new StoreInst(literal_pointer_val(tag), tagptr);
+    storetag->insertAfter(tagptr);
+    Instruction *gep = GetElementPtrInst::CreateInBounds(slot, {ConstantInt::get(T_size, sizeof(tag))});
+    gep->insertAfter(slot);
+    Instruction *cast = CastInst::CreatePointerCast(gep, PointerType::get(lty, 0));
+    cast->insertAfter(gep);
+    return cast;
+}
+
+
 static inline jl_cgval_t ghostValue(jl_value_t *typ)
 {
     if (typ == jl_bottom_type)

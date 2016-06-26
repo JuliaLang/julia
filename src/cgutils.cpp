@@ -1696,8 +1696,12 @@ static jl_cgval_t emit_new_struct(jl_value_t *ty, size_t nargs, jl_value_t **arg
             Value *strct;
             if (init_as_value)
                 strct = UndefValue::get(lt == T_void ? NoopType : lt);
-            else
-                strct = emit_static_alloca(lt);
+            else {
+                if (sty->pointerfree)
+                    strct = emit_static_alloca(lt);
+                else
+                    strct = emit_static_alloca(lt, (jl_value_t*)sty, ctx);
+            }
 
             unsigned idx = 0;
             for (size_t i=0; i < na; i++) {
