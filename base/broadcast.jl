@@ -3,7 +3,7 @@
 module Broadcast
 
 using Base.Cartesian
-using Base: promote_op, promote_eltype, promote_eltype_op, @get!, _msk_end, unsafe_bitgetindex, linearindices, allocate_for, tail, dimlength
+using Base: promote_op, promote_eltype, promote_eltype_op, @get!, _msk_end, unsafe_bitgetindex, linearindices, to_shape, allocate_for, tail, dimlength, OneTo
 import Base: .+, .-, .*, ./, .\, .//, .==, .<, .!=, .<=, .÷, .%, .<<, .>>, .^
 export broadcast, broadcast!, bitbroadcast
 export broadcast_getindex, broadcast_setindex!
@@ -39,6 +39,8 @@ _bcsm(a::Number, b::Number) = a == b || b == 1
 ## Check that all arguments are broadcast compatible with shape
 ## Check that all arguments are broadcast compatible with shape
 # comparing one input against a shape
+check_broadcast_shape(::Tuple{}) = nothing
+check_broadcast_shape(::Tuple{}, A::Union{AbstractArray,Number}) = check_broadcast_shape((), indices(A))
 check_broadcast_shape(shp) = nothing
 check_broadcast_shape(shp, A) = check_broadcast_shape(shp, indices(A))
 check_broadcast_shape(::Tuple{}, ::Tuple{}) = nothing
@@ -217,13 +219,13 @@ end
 
 @inline bitbroadcast(f, As...) = broadcast!(f, allocate_for(BitArray, As, broadcast_shape(As...)), As...)
 
-broadcast_getindex(src::AbstractArray, I::AbstractArray...) = broadcast_getindex!(Array{eltype(src)}(broadcast_shape(I...)), src, I...)
+broadcast_getindex(src::AbstractArray, I::AbstractArray...) = broadcast_getindex!(Array{eltype(src)}(to_shape(broadcast_shape(I...))), src, I...)
 @generated function broadcast_getindex!(dest::AbstractArray, src::AbstractArray, I::AbstractArray...)
     N = length(I)
     Isplat = Expr[:(I[$d]) for d = 1:N]
     quote
         @nexprs $N d->(I_d = I[d])
-        check_broadcast_shape(size(dest), $(Isplat...))  # unnecessary if this function is never called directly
+        check_broadcast_shape(indices(dest), $(Isplat...))  # unnecessary if this function is never called directly
         checkbounds(src, $(Isplat...))
         @nloops $N i dest d->(@nexprs $N k->(j_d_k = size(I_k, d) == 1 ? 1 : i_d)) begin
             @nexprs $N k->(@inbounds J_k = @nref $N I_k d->j_d_k)
@@ -240,22 +242,22 @@ end
         @nexprs $N d->(I_d = I[d])
         checkbounds(A, $(Isplat...))
         shape = broadcast_shape($(Isplat...))
-        @nextract $N shape d->(length(shape) < d ? 1 : shape[d])
+        @nextract $N shape d->(length(shape) < d ? OneTo(1) : shape[d])
         if !isa(x, AbstractArray)
-            @nloops $N i d->(1:shape_d) d->(@nexprs $N k->(j_d_k = size(I_k, d) == 1 ? 1 : i_d)) begin
+            xA = convert(eltype(A), x)
+            @nloops $N i d->shape_d d->(@nexprs $N k->(j_d_k = size(I_k, d) == 1 ? 1 : i_d)) begin
                 @nexprs $N k->(@inbounds J_k = @nref $N I_k d->j_d_k)
-                @inbounds (@nref $N A J) = x
+                @inbounds (@nref $N A J) = xA
             end
         else
             X = x
-            # To call setindex_shape_check, we need to create fake 1-d indexes of the proper size
-            @nexprs $N d->(fakeI_d = 1:shape_d)
-            @ncall $N Base.setindex_shape_check X shape
-            k = 1
-            @nloops $N i d->(1:shape_d) d->(@nexprs $N k->(j_d_k = size(I_k, d) == 1 ? 1 : i_d)) begin
-                @nexprs $N k->(@inbounds J_k = @nref $N I_k d->j_d_k)
-                @inbounds (@nref $N A J) = X[k]
-                k += 1
+            @nexprs $N d->(shapelen_d = dimlength(shape_d))
+            @ncall $N Base.setindex_shape_check X shapelen
+            Xstate = start(X)
+            @inbounds @nloops $N i d->shape_d d->(@nexprs $N k->(j_d_k = size(I_k, d) == 1 ? 1 : i_d)) begin
+                @nexprs $N k->(J_k = @nref $N I_k d->j_d_k)
+                x_el, Xstate = next(X, Xstate)
+                (@nref $N A J) = x_el
             end
         end
         A
@@ -271,22 +273,22 @@ end
 
 eltype_plus(As::AbstractArray...) = promote_eltype_op(+, As...)
 
-.+(As::AbstractArray...) = broadcast!(+, Array{eltype_plus(As...)}(broadcast_shape(As...)), As...)
+.+(As::AbstractArray...) = broadcast!(+, Array{eltype_plus(As...)}(to_shape(broadcast_shape(As...))), As...)
 
 function .-(A::AbstractArray, B::AbstractArray)
-    broadcast!(-, Array{promote_op(-, eltype(A), eltype(B))}(broadcast_shape(A,B)), A, B)
+    broadcast!(-, Array{promote_op(-, eltype(A), eltype(B))}(to_shape(broadcast_shape(A,B))), A, B)
 end
 
 eltype_mul(As::AbstractArray...) = promote_eltype_op(*, As...)
 
-.*(As::AbstractArray...) = broadcast!(*, Array{eltype_mul(As...)}(broadcast_shape(As...)), As...)
+.*(As::AbstractArray...) = broadcast!(*, Array{eltype_mul(As...)}(to_shape(broadcast_shape(As...))), As...)
 
 function ./(A::AbstractArray, B::AbstractArray)
-    broadcast!(/, Array{promote_op(/, eltype(A), eltype(B))}(broadcast_shape(A, B)), A, B)
+    broadcast!(/, Array{promote_op(/, eltype(A), eltype(B))}(to_shape(broadcast_shape(A, B))), A, B)
 end
 
 function .\(A::AbstractArray, B::AbstractArray)
-    broadcast!(\, Array{promote_op(\, eltype(A), eltype(B))}(broadcast_shape(A, B)), A, B)
+    broadcast!(\, Array{promote_op(\, eltype(A), eltype(B))}(to_shape(broadcast_shape(A, B))), A, B)
 end
 
 typealias RatIntT{T<:Integer} Union{Type{Rational{T}},Type{T}}
@@ -296,11 +298,11 @@ type_rdiv{T<:Integer,S<:Integer}(::RatIntT{T}, ::RatIntT{S}) =
 type_rdiv{T<:Integer,S<:Integer}(::CRatIntT{T}, ::CRatIntT{S}) =
     Complex{Rational{promote_type(T,S)}}
 function .//(A::AbstractArray, B::AbstractArray)
-    broadcast!(//, Array{type_rdiv(eltype(A), eltype(B))}(broadcast_shape(A, B)), A, B)
+    broadcast!(//, Array{type_rdiv(eltype(A), eltype(B))}(to_shape(broadcast_shape(A, B))), A, B)
 end
 
 function .^(A::AbstractArray, B::AbstractArray)
-    broadcast!(^, Array{promote_op(^, eltype(A), eltype(B))}(broadcast_shape(A, B)), A, B)
+    broadcast!(^, Array{promote_op(^, eltype(A), eltype(B))}(to_shape(broadcast_shape(A, B))), A, B)
 end
 
 # ## element-wise comparison operators returning BitArray ##
