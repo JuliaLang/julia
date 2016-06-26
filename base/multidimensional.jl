@@ -78,7 +78,7 @@ end
 CartesianRange{N}(index::CartesianIndex{N}) = CartesianRange(one(index), index)
 CartesianRange(::Tuple{}) = CartesianRange{CartesianIndex{0}}(CartesianIndex{0}(()),CartesianIndex{0}(()))
 CartesianRange{N}(sz::NTuple{N,Int}) = CartesianRange(CartesianIndex(sz))
-CartesianRange{N}(rngs::NTuple{N,Union{Int,UnitRange{Int}}}) = CartesianRange(CartesianIndex(map(r->first(r), rngs)), CartesianIndex(map(r->last(r), rngs)))
+CartesianRange{N}(rngs::NTuple{N,Union{Integer,AbstractUnitRange}}) = CartesianRange(CartesianIndex(map(r->first(r), rngs)), CartesianIndex(map(r->last(r), rngs)))
 
 ndims(R::CartesianRange) = length(R.start)
 ndims{I<:CartesianIndex}(::Type{CartesianRange{I}}) = length(I)
