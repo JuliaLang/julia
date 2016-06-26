@@ -1313,11 +1313,6 @@ _lookup(ind, r::AbstractUnitRange) = ind+first(r)
 _div(ind, d::Integer) = div(ind, d), 1, d
 _div(ind, r::AbstractUnitRange) = (d = unsafe_length(r); (div(ind, d), first(r), d))
 
-smart_ind2sub(shape::NTuple{1}, ind) = (ind,)
-smart_ind2sub(shape, ind) = ind2sub(shape, ind)
-smart_sub2ind(shape::NTuple{1}, i) = (i,)
-smart_sub2ind(shape, I...) = (@_inline_meta; sub2ind(shape, I...))
-
 # Vectorized forms
 function sub2ind{N,T<:Integer}(inds::Union{Dims{N},Indices{N}}, I::AbstractVector{T}...)
     I1 = I[1]
