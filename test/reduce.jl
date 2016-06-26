@@ -287,3 +287,10 @@ A = reshape(map(UInt8, 1:100), (10,10))
 @test sum([-0.0]) === -0.0
 @test sum([-0.0, -0.0]) === -0.0
 @test prod([-0.0, -0.0]) === 0.0
+
+#contains
+let A = collect(1:10)
+    @test A ∋ 5
+    @test A ∌ 11
+    @test contains(==,A,6)
+end
