@@ -484,7 +484,6 @@ export
     zeta,
 
 # arrays
-    allocate_for,
     bitbroadcast,
     broadcast!,
     broadcast,

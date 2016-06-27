@@ -7,7 +7,7 @@
 
 module OAs
 
-using Base: DimOrInd, Indices, LinearSlow, LinearFast
+using Base: DimOrInd, DimsOrInds, Indices, LinearSlow, LinearFast
 
 export OffsetArray
 
@@ -46,16 +46,15 @@ Base.indices1{T}(A::OffsetArray{T,0}) = 1:1
 function Base.similar(A::OffsetArray, T::Type, dims::Dims)
     B = similar(parent(A), T, dims)
 end
-function Base.similar(A::AbstractArray, T::Type, inds::Tuple{Vararg{DimOrInd}})
+function Base.similar(A::AbstractArray, T::Type, inds::Tuple{UnitRange,Vararg{UnitRange}})
     B = similar(A, T, map(Base.dimlength, inds))
     OffsetArray(B, map(indsoffset, inds))
 end
 
-Base.allocate_for(f, A::OffsetArray, shape::DimOrInd) = OffsetArray(f(Base.dimlength(shape)), (indsoffset(shape),))
-Base.allocate_for(f, A::OffsetArray, shape::Tuple{Vararg{DimOrInd}}) = OffsetArray(f(map(Base.dimlength, shape)), map(indsoffset, shape))
+Base.similar(f::Union{Function,Type}, shape::Tuple{UnitRange,Vararg{UnitRange}}) = OffsetArray(f(map(Base.dimlength, shape)), map(indsoffset, shape))
 Base.promote_indices(a::OffsetArray, b::OffsetArray) = a
 
-Base.reshape(A::AbstractArray, inds::Indices) = OffsetArray(reshape(A, map(Base.dimlength, inds)), map(indsoffset, inds))
+Base.reshape(A::AbstractArray, inds::Tuple{UnitRange,Vararg{UnitRange}}) = OffsetArray(reshape(A, map(Base.dimlength, inds)), map(indsoffset, inds))
 
 @inline function Base.getindex{T,N}(A::OffsetArray{T,N}, I::Vararg{Int,N})
     @boundscheck checkbounds(A, I...)
@@ -207,10 +206,10 @@ B = similar(A, (3,4))
 @test isa(B, Array{Int,2})
 @test size(B) == (3,4)
 @test indices(B) == (1:3, 1:4)
-B = similar(A, (-3:3,4))
+B = similar(A, (-3:3,1:4))
 @test isa(B, OffsetArray{Int,2})
 @test indices(B) == (-3:3, 1:4)
-B = similar(parent(A), (-3:3,4))
+B = similar(parent(A), (-3:3,1:4))
 @test isa(B, OffsetArray{Int,2})
 @test indices(B) == (-3:3, 1:4)
 

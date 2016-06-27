@@ -326,7 +326,6 @@ different element type it will create a regular `Array` instead:
      2.18425e-314  2.18425e-314  2.18425e-314  2.18425e-314
      2.18425e-314  2.18425e-314  2.18425e-314  2.18425e-314
 
-See also `allocate_for`.
 """
 similar{T}(a::AbstractArray{T})                          = similar(a, T)
 similar(   a::AbstractArray, T::Type)                    = similar(a, T, to_shape(indices(a)))
@@ -347,44 +346,34 @@ to_shape(r::OneTo) = Int(last(r))
 to_shape(r::UnitRange) = convert(UnitRange{Int}, r)
 
 """
-    allocate_for(storagetype, referencearray, [shape])
+    similar(storagetype, indices)
 
 Create an uninitialized mutable array analogous to that specified by
-`storagetype`, but with type and shape specified by the final two
-arguments. The main purpose of this function is to support allocation
-of arrays that may have unconventional indexing (starting at other
-than 1), as determined by `referencearray` and the optional `shape`
-information.
+`storagetype`, but with `indices` specified by the last
+argument. `storagetype` might be a type or a function.
 
     **Examples**:
 
-    allocate_for(Array{Int}, A)
+    similar(Array{Int}, indices(A))
 
 creates an array that "acts like" an `Array{Int}` (and might indeed be
 backed by one), but which is indexed identically to `A`. If `A` has
-conventional indexing, this will likely just call
+conventional indexing, this will be identical to
 `Array{Int}(size(A))`, but if `A` has unconventional indexing then the
 indices of the result will match `A`.
 
-    allocate_for(BitArray, A, (indices(A, 2),))
+    similar(BitArray, (indices(A, 2),))
 
 would create a 1-dimensional logical array whose indices match those
 of the columns of `A`.
 
-The main purpose of the `referencearray` argument is to select a
-particular array type supporting unconventional indexing (as it is
-possible that several different ones will be simultaneously in use).
+    similar(dims->zeros(Int, dims), indices(A))
 
-See also `similar`.
+would create an array of `Int`, initialized to zero, matching the
+indices of `A`.
 """
-allocate_for(f, a, shape::Union{DimOrInd,DimsOrInds}) = f(to_shape(shape))
-allocate_for(f, a) = allocate_for(f, a, indices(a))
-# allocate_for when passed multiple arrays. Necessary for broadcast, etc.
-function allocate_for(f, as::Tuple, shape::Union{DimOrInd,DimsOrInds})
-    @_inline_meta
-    a = promote_indices(as...)
-    allocate_for(f, a, shape)
-end
+similar(f, shape::Tuple) = f(to_shape(shape))
+similar(f, dims::DimOrInd...) = similar(f, dims)
 
 promote_indices(a) = a
 function promote_indices(a, b, c...)
