@@ -143,3 +143,6 @@ end
 
 #  #9939 (and #9897)
 @test rationalize(Float16(0.1)) == 1//10
+
+# issue #17148
+@test rem(Float16(1.2), Float16(one(1.2))) == 0.20019531f0
