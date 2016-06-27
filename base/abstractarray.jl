@@ -162,29 +162,6 @@ immutable IndicesSlow1D <: IndicesPerformance end  # indices(A) is better than i
 indicesperformance(A::AbstractArray) = indicesperformance(typeof(A))
 indicesperformance{T<:AbstractArray}(::Type{T}) = IndicesFast1D()
 
-"""
-    shape(A)
-
-Returns a tuple specifying the "shape" of array `A`. For arrays with
-conventional indexing (indices start at 1), this is equivalent to
-`size(A)`; otherwise it is equivalent to `indices(A)`.
-"""
-shape(a) = shape(indicesbehavior(a), a)
-"""
-    shape(A, d)
-
-Specifies the "shape" of the array `A` along dimension `d`. For arrays
-with conventional indexing (starting at 1), this is equivalent to
-`size(A, d)`; for arrays with unconventional indexing (indexing may
-start at something different from 1), it is equivalent to `indices(A,
-d)`.
-"""
-shape(a, d) = shape(indicesbehavior(a), a, d)
-shape(::IndicesStartAt1, a) = size(a)
-shape(::IndicesStartAt1, a, d) = size(a, d)
-shape(::IndicesBehavior, a) = indices(a)
-shape(::IndicesBehavior, a, d) = indices(a, d)
-
 ## Bounds checking ##
 @generated function trailingsize{T,N,n}(A::AbstractArray{T,N}, ::Type{Val{n}})
     (isa(n, Int) && isa(N, Int)) || error("Must have concrete type")
@@ -352,14 +329,22 @@ different element type it will create a regular `Array` instead:
 See also `allocate_for`.
 """
 similar{T}(a::AbstractArray{T})                          = similar(a, T)
-similar(   a::AbstractArray, T::Type)                    = similar(a, T, indices(a))
-similar{T}(a::AbstractArray{T}, dims::Tuple)             = similar(a, T, dims)
-similar{T}(a::AbstractArray{T}, dims::DimOrInd...)       = similar(a, T, dims)
-similar(   a::AbstractArray, T::Type, dims::DimOrInd...) = similar(a, T, dims)
-similar(   a::AbstractArray, T::Type, dims::DimsInteger) = similar(a, T, Dims(dims))
+similar(   a::AbstractArray, T::Type)                    = similar(a, T, to_shape(indices(a)))
+similar{T}(a::AbstractArray{T}, dims::Tuple)             = similar(a, T, to_shape(dims))
+similar{T}(a::AbstractArray{T}, dims::DimOrInd...)       = similar(a, T, to_shape(dims))
+similar(   a::AbstractArray, T::Type, dims::DimOrInd...) = similar(a, T, to_shape(dims))
+similar(   a::AbstractArray, T::Type, dims)              = similar(a, T, to_shape(dims))
 # similar creates an Array by default
-similar(   a::AbstractArray, T::Type, inds::IndicesOne)  = similar(a, T, map(last, inds))
-similar(   a::AbstractArray, T::Type, dims::Dims)        = Array(T, dims)
+similar(   a::AbstractArray, T::Type, dims::Dims)        = Array{T}(dims)
+
+to_shape(::Tuple{}) = ()
+to_shape(dims::Dims) = dims
+to_shape(dims::DimsOrInds) = map(to_shape, dims)
+# each dimension
+to_shape(i::Int) = i
+to_shape(i::Integer) = Int(i)
+to_shape(r::OneTo) = Int(last(r))
+to_shape(r::UnitRange) = convert(UnitRange{Int}, r)
 
 """
     allocate_for(storagetype, referencearray, [shape])
@@ -381,7 +366,7 @@ conventional indexing, this will likely just call
 `Array{Int}(size(A))`, but if `A` has unconventional indexing then the
 indices of the result will match `A`.
 
-    allocate_for(BitArray, A, (shape(A, 2),))
+    allocate_for(BitArray, A, (indices(A, 2),))
 
 would create a 1-dimensional logical array whose indices match those
 of the columns of `A`.
@@ -392,10 +377,10 @@ possible that several different ones will be simultaneously in use).
 
 See also `similar`.
 """
-allocate_for(f, a, shape::Union{SimIdx,Tuple{Vararg{SimIdx}}}) = f(shape)
-allocate_for(f, a) = allocate_for(f, a, shape(a))
+allocate_for(f, a, shape::Union{DimOrInd,DimsOrInds}) = f(to_shape(shape))
+allocate_for(f, a) = allocate_for(f, a, indices(a))
 # allocate_for when passed multiple arrays. Necessary for broadcast, etc.
-function allocate_for(f, as::Tuple, shape::Union{SimIdx,Tuple{Vararg{SimIdx}}})
+function allocate_for(f, as::Tuple, shape::Union{DimOrInd,DimsOrInds})
     @_inline_meta
     a = promote_indices(as...)
     allocate_for(f, a, shape)
@@ -1406,7 +1391,7 @@ function mapslices(f, A::AbstractArray, dims::AbstractVector)
         return map(f,A)
     end
 
-    dimsA = [shape(A)...]
+    dimsA = [indices(A)...]
     ndimsA = ndims(A)
     alldims = [1:ndimsA;]
 
@@ -1431,7 +1416,7 @@ function mapslices(f, A::AbstractArray, dims::AbstractVector)
     if eltype(Rsize) == Int
         Rsize[dims] = [size(r1)..., ntuple(d->1, nextra)...]
     else
-        Rsize[dims] = [indices(r1)..., ntuple(d->1:1, nextra)...]
+        Rsize[dims] = [indices(r1)..., ntuple(d->OneTo(1), nextra)...]
     end
     R = similar(r1, tuple(Rsize...,))
 
