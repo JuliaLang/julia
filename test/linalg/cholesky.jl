@@ -55,7 +55,7 @@ for eltya in (Float32, Float64, Complex64, Complex128, BigFloat, Int)
     @test @inferred(logdet(capd)) ≈ log(det(capd)) # logdet is less likely to overflow
 
     apos = apd[1,1]            # test chol(x::Number), needs x>0
-    @test cholfact(apos).factors ≈ √apos
+    @test all(x -> x ≈ √apos, cholfact(apos).factors)
     @test_throws ArgumentError chol(-one(eltya))
 
     if eltya <: Real

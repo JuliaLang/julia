@@ -151,7 +151,7 @@ lua   = factorize(a)
 l,u,p = lua[:L], lua[:U], lua[:p]
 @test l*u ≈ a[p,:]
 @test l[invperm(p),:]*u ≈ a
-@test a ≈ * inv(lua) eye(n)
+@test a*inv(lua) ≈ eye(n)
 let Bs = b
     for atype in ("Array", "SubArray")
         if atype == "Array"

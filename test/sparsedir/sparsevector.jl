@@ -711,20 +711,20 @@ let A = randn(9, 16), x = sprand(16, 0.7)
     xf = full(x)
     for α in [0.0, 1.0, 2.0], β in [0.0, 0.5, 1.0]
         y = rand(9)
-        rr = α * A * xf + β * y
+        rr = α*A*xf + β*y
         @test is(A_mul_B!(α, A, x, β, y), y)
         @test y ≈ rr
     end
-    y = A * x
+    y = A*x
     @test isa(y, Vector{Float64})
-    @test A ≈ * x A * xf
+    @test A*x ≈ A*xf
 end
 
 let A = randn(16, 9), x = sprand(16, 0.7)
     xf = full(x)
     for α in [0.0, 1.0, 2.0], β in [0.0, 0.5, 1.0]
         y = rand(9)
-        rr = α * A'xf + β * y
+        rr = α*A'xf + β*y
         @test is(At_mul_B!(α, A, x, β, y), y)
         @test y ≈ rr
     end
@@ -740,13 +740,13 @@ let A = sprandn(9, 16, 0.5), x = sprand(16, 0.7)
     xf = full(x)
     for α in [0.0, 1.0, 2.0], β in [0.0, 0.5, 1.0]
         y = rand(9)
-        rr = α * Af * xf + β * y
+        rr = α*Af*xf + β*y
         @test is(A_mul_B!(α, A, x, β, y), y)
         @test y ≈ rr
     end
     y = SparseArrays.densemv(A, x)
     @test isa(y, Vector{Float64})
-    @test y ≈ Af * xf
+    @test y ≈ Af*xf
 end
 
 let A = sprandn(16, 9, 0.5), x = sprand(16, 0.7)
@@ -754,7 +754,7 @@ let A = sprandn(16, 9, 0.5), x = sprand(16, 0.7)
     xf = full(x)
     for α in [0.0, 1.0, 2.0], β in [0.0, 0.5, 1.0]
         y = rand(9)
-        rr = α * Af'xf + β * y
+        rr = α*Af'xf + β*y
         @test is(At_mul_B!(α, A, x, β, y), y)
         @test y ≈ rr
     end
@@ -781,7 +781,7 @@ let A = sprandn(9, 16, 0.5), x = sprand(16, 0.7), x2 = sprand(9, 0.7)
     xf = full(x)
     x2f = full(x2)
 
-    y = A * x
+    y = A*x
     @test isa(y, SparseVector{Float64,Int})
     @test all(nonzeros(y) .!= 0.0)
     @test full(y) ≈ Af * xf
@@ -799,7 +799,7 @@ let A = complex(sprandn(7, 8, 0.5), sprandn(7, 8, 0.5)),
     xf = full(x)
     x2f = full(x2)
 
-    y = A * x
+    y = A*x
     @test isa(y, SparseVector{Complex128,Int})
     @test full(y) ≈ Af * xf
 

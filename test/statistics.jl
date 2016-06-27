@@ -82,10 +82,10 @@ end
 @test isnan(var(Int[]; mean=2))
 @test isnan(var(Int[]; mean=2, corrected=false))
 # reduction across dimensions
-@test var(Int[], 1) ≈ [NaN]
-@test var(Int[], 1; corrected=false) ≈ [NaN]
-@test var(Int[], 1; mean=[2]) ≈ [NaN]
-@test var(Int[], 1; mean=[2], corrected=false) ≈ [NaN]
+@test isequal(var(Int[], 1), [NaN])
+@test isequal(var(Int[], 1; corrected=false), [NaN])
+@test isequal(var(Int[], 1; mean=[2]), [NaN])
+@test isequal(var(Int[], 1; mean=[2], corrected=false), [NaN])
 
 # edge case: one-element vector
 # iterable
@@ -99,7 +99,7 @@ end
 @test var([1]; mean=2) === Inf
 @test var([1]; mean=2, corrected=false) === 1.0
 # reduction across dimensions
-@test @inferred(var([1], 1)) ≈ [NaN]
+@test isequal(@inferred(var([1], 1)), [NaN])
 @test var([1], 1; corrected=false) ≈ [0.0]
 @test var([1], 1; mean=[2]) ≈ [Inf]
 @test var([1], 1; mean=[2], corrected=false) ≈ [1.0]
@@ -209,7 +209,7 @@ for vd in [1, 2], zm in [true, false], cr in [true, false]
     C = zm ? Base.covm(x1, 0, Y, 0, vd, cr) :
              cov(x1, Y, vd, cr)
     @test size(C) == (1, k)
-    @test C ≈ Cxy[1,:]
+    @test vec(C) ≈ Cxy[1,:]
     @inferred cov(x1, Y, vd, cr)
 
     if vd == 1
@@ -218,7 +218,7 @@ for vd in [1, 2], zm in [true, false], cr in [true, false]
     C = zm ? Base.covm(X, 0, y1, 0, vd, cr) :
              cov(X, y1, vd, cr)
     @test size(C) == (k, 1)
-    @test C ≈ Cxy[:,1]
+    @test vec(C) ≈ Cxy[:,1]
     @inferred cov(X, y1, vd, cr)
 
     @test cov(X, Y) == Base.covm(X, mean(X, 1), Y, mean(Y, 1))
@@ -287,7 +287,7 @@ for vd in [1, 2], zm in [true, false]
     end
     C = zm ? Base.corm(x1, 0, Y, 0, vd) : cor(x1, Y, vd)
     @test size(C) == (1, k)
-    @test C ≈ Cxy[1,:]
+    @test vec(C) ≈ Cxy[1,:]
     @inferred cor(x1, Y, vd)
 
     if vd == 1
@@ -295,7 +295,7 @@ for vd in [1, 2], zm in [true, false]
     end
     C = zm ? Base.corm(X, 0, y1, 0, vd) : cor(X, y1, vd)
     @test size(C) == (k, 1)
-    @test C ≈ Cxy[:,1]
+    @test vec(C) ≈ Cxy[:,1]
     @inferred cor(X, y1, vd)
 
     @test cor(X, Y) == Base.corm(X, mean(X, 1), Y, mean(Y, 1))

@@ -93,10 +93,10 @@ for elty in (Float32, Float64, Complex64, Complex128, Int)
     end
     @test det(T) ≈ det(F)
 
-    @test T ≈ * Base.LinAlg.UnitUpperTriangular(eye(n)) F*eye(n)
-    @test T ≈ * Base.LinAlg.UnitLowerTriangular(eye(n)) F*eye(n)
-    @test T ≈ * UpperTriangular(eye(n)) F*eye(n)
-    @test T ≈ * LowerTriangular(eye(n)) F*eye(n)
+    @test T*Base.LinAlg.UnitUpperTriangular(eye(n)) ≈ F*eye(n)
+    @test T*Base.LinAlg.UnitLowerTriangular(eye(n)) ≈ F*eye(n)
+    @test T*UpperTriangular(eye(n)) ≈ F*eye(n)
+    @test T*LowerTriangular(eye(n)) ≈ F*eye(n)
 
     # symmetric tridiagonal
     if elty <: Real

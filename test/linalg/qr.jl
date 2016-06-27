@@ -89,7 +89,7 @@ debug && println("(Automatic) Fat (pivoted) QR decomposition")
                 @test q'*full(q, thin=false) ≈ eye(n1)
                 @test q*full(q, thin=false)' ≈ eye(n1)
                 @test (UpperTriangular(eye(eltya,size(q,2)))*q')*full(q, thin=false) ≈ eye(n1)
-                @test q*r ≈ isa(qrpa,QRPivoted) ? a[1:n1,p] : a[1:n1,:]
+                @test q*r ≈ (isa(qrpa,QRPivoted) ? a[1:n1,p] : a[1:n1,:])
                 @test q*r[:,invperm(p)] ≈ a[1:n1,:]
                 @test q*r*qrpa[:P].' ≈ a[1:n1,:]
                 @test_approx_eq_eps a[1:n1,:]*(qrpa\b[1:n1]) b[1:n1] 5000ε
@@ -122,7 +122,7 @@ debug && println("(Automatic) Thin (pivoted) QR decomposition")
 debug && println("Matmul with QR factorizations")
         if eltya != Int
             qrpa = factorize(a[:,1:n1])
-            q,r  = qrpa[:Q], qrpa[:R]
+            q, r = qrpa[:Q], qrpa[:R]
             @test A_mul_B!(full(q, thin=false)',q) ≈ eye(n)
             @test_throws DimensionMismatch A_mul_B!(eye(eltya,n+1),q)
             @test A_mul_Bc!(full(q, thin=false),q) ≈ eye(n)
@@ -131,8 +131,8 @@ debug && println("Matmul with QR factorizations")
             @test_throws DimensionMismatch Base.LinAlg.A_mul_B!(q,zeros(eltya,n1+1))
             @test_throws DimensionMismatch Base.LinAlg.Ac_mul_B!(q,zeros(eltya,n1+1))
 
-            qra   = qrfact(a[:,1:n1], Val{false})
-            q,r   = qra[:Q], qra[:R]
+            qra = qrfact(a[:,1:n1], Val{false})
+            q, r = qra[:Q], qra[:R]
             @test A_mul_B!(full(q, thin=false)',q) ≈ eye(n)
             @test_throws DimensionMismatch A_mul_B!(eye(eltya,n+1),q)
             @test A_mul_Bc!(full(q, thin=false),q) ≈ eye(n)

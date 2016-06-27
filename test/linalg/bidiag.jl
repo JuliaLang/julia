@@ -176,9 +176,9 @@ for relty in (Int, Float32, Float64, BigFloat), elty in (relty, Complex{relty})
         if relty <: AbstractFloat
             d1, v1 = eig(T)
             d2, v2 = eig(map(elty<:Complex ? Complex128 : Float64,Tfull))
-            @test isupper?d1:reverse(d1) ≈ d2
+            @test (isupper ? d1 : reverse(d1)) ≈ d2
             if elty <: Real
-                Test.test_approx_eq_modphase(v1, isupper?v2:v2[:,n:-1:1])
+                Test.test_approx_eq_modphase(v1, isupper ? v2 : v2[:,n:-1:1])
             end
         end
 

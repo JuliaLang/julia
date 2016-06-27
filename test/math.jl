@@ -346,10 +346,10 @@ end
 @test besselj1(2) ≈ besselj1(2.0)
 @test bessely0(2) ≈ bessely0(2.0)
 @test bessely1(2) ≈ bessely1(2.0)
-@test besselj0(2.0 ≈ + im) besselj(0, 2.0 + im)
-@test besselj1(2.0 ≈ + im) besselj(1, 2.0 + im)
-@test bessely0(2.0 ≈ + im) bessely(0, 2.0 + im)
-@test bessely1(2.0 ≈ + im) bessely(1, 2.0 + im)
+@test besselj0(2.0 + im) ≈ besselj(0, 2.0 + im)
+@test besselj1(2.0 + im) ≈ besselj(1, 2.0 + im)
+@test bessely0(2.0 + im) ≈ bessely(0, 2.0 + im)
+@test bessely1(2.0 + im) ≈ bessely(1, 2.0 + im)
 
 @test_throws MethodError besselj(1.2,big(1.0))
 @test_throws MethodError besselj(1,complex(big(1.0)))
@@ -594,11 +594,12 @@ end
 @test zeta(2) ≈ pi^2/6
 @test zeta(Complex64(2)) ≈ zeta(2)
 @test zeta(4) ≈ pi^4/90
-@test zeta(one(Float32)) ≈ Float32(zeta(one(Float64)))
 @test zeta(1,Float16(2.)) ≈ zeta(1,2.)
 @test zeta(1.,Float16(2.)) ≈ zeta(1,2.)
 @test zeta(Float16(1.),Float16(2.)) ≈ zeta(1,2.)
 @test isnan(zeta(NaN))
+@test isnan(zeta(1.0e0))
+@test isnan(zeta(1.0f0))
 @test isnan(zeta(complex(0,Inf)))
 @test isnan(zeta(complex(-Inf,0)))
 
