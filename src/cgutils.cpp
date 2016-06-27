@@ -59,7 +59,11 @@ static Value *stringConstPtr(const std::string &txt)
                                                            (const unsigned char*)pooledtxt.data(),
                                                            pooledtxt.size())),
                                     ssno.str());
+#ifdef LLVM39
+            gv->setUnnamedAddr(GlobalValue::UnnamedAddr::Global);
+#else
             gv->setUnnamedAddr(true);
+#endif
             pooledval->second = gv;
             jl_ExecutionEngine->addGlobalMapping(gv, (void*)(uintptr_t)pooledtxt.data());
         }
