@@ -2082,6 +2082,12 @@ for f in (trunc, round, floor, ceil)
 
 @test isa(convert(Float64, big(1)//2), Float64)
 
+# issue 16513
+@test convert(Rational{Int32}, pi) == 1068966896 // 340262731
+@test convert(Rational{Int64}, pi) == 2646693125139304345 // 842468587426513207
+@test convert(Rational{Int128}, pi) == 60728338969805745700507212595448411044 // 19330430665609526556707216376512714945
+@test_throws ArgumentError convert(Rational{BigInt}, pi)
+
 # issue 5935
 @test rationalize(Int8,  nextfloat(0.1)) == 1//10
 @test rationalize(Int64, nextfloat(0.1)) == 300239975158034//3002399751580339
