@@ -328,8 +328,13 @@ eltype(::Type{Any}) = Any
 eltype(t::DataType) = eltype(supertype(t))
 eltype(x) = eltype(typeof(x))
 
-# function pipelining
+# function pipelining, composition & negation
+
 |>(x, f) = f(x)
+
+∘(f, g) = (x...)->f(g(x...))
+
+!(f::Function) = (x...)->!f(x...)
 
 # array shape rules
 
@@ -672,6 +677,7 @@ export
     ∪,
     √,
     ∛,
+    ∘,
     colon,
     hcat,
     vcat,
@@ -685,6 +691,6 @@ import ..this_module: !, !=, $, %, .%, ÷, .÷, &, *, +, -, .!=, .+, .-, .*, ./,
     .>=, .\, .^, /, //, <, <:, <<, <=, ==, >, >=, >>, .>>, .<<, >>>,
     <|, |>, \, ^, |, ~, !==, ===, >:, colon, hcat, vcat, hvcat, getindex, setindex!,
     transpose, ctranspose,
-    ≥, ≤, ≠, .≥, .≤, .≠, ⋅, ×, ∈, ∉, ∋, ∌, ⊆, ⊈, ⊊, ∩, ∪, √, ∛
+    ≥, ≤, ≠, .≥, .≤, .≠, ⋅, ×, ∈, ∉, ∋, ∌, ⊆, ⊈, ⊊, ∩, ∪, √, ∛, ∘
 
 end
