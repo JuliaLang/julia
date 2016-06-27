@@ -1295,6 +1295,9 @@ if VERSION < v"0.5.0-dev+4612"
     unsafe_wrap(::Type{Array}, p::Ptr, dims, own::Bool=false) = pointer_to_array(p, dims, own)
     unsafe_string(p::Ptr{UInt8}) = bytestring(p)
     unsafe_string(p::Ptr{UInt8}, len) = bytestring(p, len)
+    if Cstring != Ptr{UInt8}
+        unsafe_string(p::Cstring) = unsafe_string(Ptr{UInt8}(p))
+    end
 end
 
 if !isdefined(Base, :allunique)

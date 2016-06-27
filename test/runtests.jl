@@ -1225,10 +1225,14 @@ let
     ptr = pointer(test_str.data)
     wrapped_str = unsafe_wrap(Compat.String, ptr)
     new_str = unsafe_string(ptr)
+    cstr = convert(Cstring, ptr)
+    new_str2 = unsafe_string(cstr)
     @test wrapped_str == "test"
     @test new_str == "test"
+    @test new_str2 == "test"
     @test ptr == pointer(wrapped_str)  # Test proper pointer aliasing behavior
     @test ptr ≠ pointer(new_str)
+    @test ptr ≠ pointer(new_str2)
     x = [1, 2]
     @test unsafe_wrap(Array, pointer(x), 2) == [1, 2]
 end
