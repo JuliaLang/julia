@@ -61,13 +61,14 @@ show(io::IO, st::StatStruct) = print(io, "StatStruct(mode=$(oct(filemode(st),6))
 
 # stat & lstat functions
 
-const stat_buf = Array{UInt8}(ccall(:jl_sizeof_stat, Int32, ()))
+const stat_buf_sz = Int(ccall(:jl_sizeof_stat, Int32, ()))
 macro stat_call(sym, arg1type, arg)
     quote
-        fill!(stat_buf,0)
-        r = ccall($(Expr(:quote,sym)), Int32, ($arg1type, Ptr{UInt8}), $(esc(arg)), stat_buf)
+        buf = Array{UInt8}(stat_buf_sz)
+        fill!(buf, 0)
+        r = ccall($(Expr(:quote,sym)), Int32, ($arg1type, Ptr{UInt8}), $(esc(arg)), buf)
         r==0 || r==Base.UV_ENOENT || r==Base.UV_ENOTDIR || throw(UVError("stat",r))
-        st = StatStruct(stat_buf)
+        st = StatStruct(buf)
         if ispath(st) != (r==0)
             error("stat returned zero type for a valid path")
         end
