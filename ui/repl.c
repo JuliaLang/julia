@@ -109,7 +109,10 @@ static NOINLINE int true_main(int argc, char *argv[])
         (jl_function_t*)jl_get_global(jl_base_module, jl_symbol("_start")) : NULL;
 
     if (start_client) {
-        jl_apply(&start_client, 1);
+        jl_value_t *args[2];
+        args[0] = start_client;
+        args[1] = jl_nothing;
+        jl_apply(args, 2);
         return 0;
     }
 

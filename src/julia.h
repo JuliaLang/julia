@@ -1359,6 +1359,7 @@ JL_DLLEXPORT void jl_untrace_linfo(jl_lambda_info_t *linfo);
 JL_DLLEXPORT void jl_register_linfo_tracer(void (*callback)(jl_lambda_info_t *tracee));
 JL_DLLEXPORT void jl_register_method_tracer(void (*callback)(jl_lambda_info_t *tracee));
 JL_DLLEXPORT void jl_register_newmeth_tracer(void (*callback)(jl_method_t *tracee));
+JL_DLLEXPORT jl_value_t *jl_register_lowering_hook(jl_value_t*);
 
 // AST access
 JL_DLLEXPORT int jl_is_rest_arg(jl_value_t *ex);

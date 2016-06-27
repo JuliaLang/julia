@@ -144,21 +144,22 @@ value_t fl_invoke_julia_macro(fl_context_t *fl_ctx, value_t *args, uint32_t narg
     jl_lambda_info_t *mfunc = NULL;
     jl_value_t **margs;
     // Reserve one more slot for the result
-    JL_GC_PUSHARGS(margs, nargs + 1);
+    JL_GC_PUSHARGS(margs, nargs + 2);
     int i;
-    for(i=1; i < nargs; i++) margs[i] = scm_to_julia(fl_ctx, args[i], 1);
+    margs[1] = jl_nothing;
+    for(i=1; i < nargs; i++) margs[i+1] = scm_to_julia(fl_ctx, args[i], 1);
     jl_value_t *result = NULL;
 
     JL_TRY {
         margs[0] = scm_to_julia(fl_ctx, args[0], 1);
         margs[0] = jl_toplevel_eval(margs[0]);
-        mfunc = jl_method_lookup(jl_gf_mtable(margs[0]), margs, nargs, 1);
+        mfunc = jl_method_lookup(jl_gf_mtable(margs[0]), margs, nargs+1, 1);
         if (mfunc == NULL) {
             JL_GC_POP();
-            jl_method_error((jl_function_t*)margs[0], margs, nargs);
+            jl_method_error((jl_function_t*)margs[0], margs, nargs+1);
             // unreachable
         }
-        margs[nargs] = result = jl_call_method_internal(mfunc, margs, nargs);
+        margs[nargs+1] = result = jl_call_method_internal(mfunc, margs, nargs+1);
     }
     JL_CATCH {
         JL_GC_POP();
@@ -650,6 +651,25 @@ JL_DLLEXPORT jl_value_t *jl_parse_string(const char *str, size_t len,
     return result;
 }
 
+jl_value_t *jl_lowering_hook;
+jl_value_t *jl_register_lowering_hook(jl_value_t* v)
+{
+    jl_value_t *prev = jl_lowering_hook;
+    jl_lowering_hook = v;
+    return prev;
+}
+
+static jl_value_t* call_lowering_hook(jl_value_t* expr)
+{
+    if (jl_lowering_hook != jl_nothing) {
+        jl_value_t *params[2];
+        params[0] = jl_lowering_hook;
+        params[1] = expr;
+        expr = jl_apply(params, 2);
+    }
+    return expr;
+}
+
 // parse and eval a whole file, possibly reading from a string (`content`)
 jl_value_t *jl_parse_eval_all(const char *fname,
                               const char *content, size_t contentlen)
@@ -702,6 +722,7 @@ jl_value_t *jl_parse_eval_all(const char *fname,
                 expansion = fl_applyn(fl_ctx, 1, symbol_value(symbol(fl_ctx, "jl-expand-to-thunk")), car_(ast));
             }
             form = scm_to_julia(fl_ctx, expansion, 0);
+            form = call_lowering_hook(form);
             jl_sym_t *head = NULL;
             if (jl_is_expr(form)) head = ((jl_expr_t*)form)->head;
             JL_SIGATOMIC_END();
@@ -785,7 +806,11 @@ jl_value_t *jl_call_scm_on_ast(const char *funcname, jl_value_t *expr)
 JL_DLLEXPORT jl_value_t *jl_expand(jl_value_t *expr)
 {
     JL_TIMING(LOWERING);
-    return jl_call_scm_on_ast("jl-expand-to-thunk", expr);
+    JL_GC_PUSH1(&expr);
+    expr = jl_call_scm_on_ast("jl-expand-to-thunk", expr);
+    expr = call_lowering_hook(expr);
+    JL_GC_POP();
+    return expr;
 }
 
 JL_DLLEXPORT jl_value_t *jl_macroexpand(jl_value_t *expr)

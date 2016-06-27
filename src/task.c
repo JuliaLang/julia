@@ -210,8 +210,8 @@ static void JL_NORETURN finish_task(jl_task_t *t, jl_value_t *resultval)
                                                             jl_symbol("task_done_hook"));
     }
     if (task_done_hook_func != NULL) {
-        jl_value_t *args[2] = {task_done_hook_func, (jl_value_t*)t};
-        jl_apply(args, 2);
+        jl_value_t *args[3] = {task_done_hook_func, jl_nothing, (jl_value_t*)t};
+        jl_apply(args, 3);
     }
     gc_debug_critical_error();
     abort();
@@ -250,7 +250,10 @@ static void NOINLINE JL_NORETURN start_task(void)
                 jl_sigint_safepoint(ptls);
             }
             JL_TIMING(ROOT);
-            res = jl_apply(&t->start, 1);
+            jl_value_t *args[2];
+            args[0] = t->start;
+            args[1] = jl_nothing;
+            res = jl_apply(args, 2);
         }
         JL_CATCH {
             res = ptls->exception_in_transit;

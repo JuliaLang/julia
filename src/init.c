@@ -228,10 +228,12 @@ JL_DLLEXPORT void jl_atexit_hook(int exitcode)
     if (jl_options.malloc_log)
         jl_write_malloc_log();
     if (jl_base_module) {
-        jl_value_t *f = jl_get_global(jl_base_module, jl_symbol("_atexit"));
-        if (f != NULL) {
+        jl_value_t *args[2];
+        args[0] = jl_get_global(jl_base_module, jl_symbol("_atexit"));
+        args[1] = jl_nothing;
+        if (args[0] != NULL) {
             JL_TRY {
-                jl_apply(&f, 1);
+                jl_apply(args, 2);
             }
             JL_CATCH {
                 jl_printf(JL_STDERR, "\natexit hook threw an error: ");
@@ -653,20 +655,23 @@ void _julia_init(JL_IMAGE_SEARCH rel)
         jl_error("cannot generate code-coverage or track allocation information while generating a .o or .bc output file");
     }
 
+    jl_register_lowering_hook(jl_nothing);
+
     jl_init_codegen();
 
     jl_start_threads();
 
     jl_an_empty_vec_any = (jl_value_t*)jl_alloc_vec_any(0);
     jl_init_serializer();
-
+    
+    jl_core_module = NULL;
     if (!jl_options.image_file) {
         jl_core_module = jl_new_module(jl_symbol("Core"));
         jl_type_type->name->mt->module = jl_core_module;
         jl_top_module = jl_core_module;
         ptls->current_module = jl_core_module;
-        jl_init_intrinsic_functions();
         jl_init_primitives();
+        jl_init_intrinsic_functions();
         jl_get_builtins();
 
         jl_new_main_module();

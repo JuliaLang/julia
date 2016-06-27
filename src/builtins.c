@@ -29,6 +29,8 @@
 extern "C" {
 #endif
 
+#define JL_ADJUST do { nargs--; args++; } while(0)
+
 // exceptions -----------------------------------------------------------------
 
 JL_DLLEXPORT void JL_NORETURN jl_error(const char *str)
@@ -187,6 +189,8 @@ JL_DLLEXPORT jl_value_t *jl_get_keyword_sorter(jl_value_t *f)
 
 JL_CALLABLE(jl_f_throw)
 {
+    JL_ADJUST;
+
     JL_NARGS(throw, 1, 1);
     jl_throw(args[0]);
     return jl_nothing;
@@ -325,6 +329,8 @@ JL_DLLEXPORT int jl_egal(jl_value_t *a, jl_value_t *b)
 
 JL_CALLABLE(jl_f_is)
 {
+    JL_ADJUST;
+
     JL_NARGS(is, 2, 2);
     if (args[0] == args[1])
         return jl_true;
@@ -333,12 +339,16 @@ JL_CALLABLE(jl_f_is)
 
 JL_CALLABLE(jl_f_typeof)
 {
+    JL_ADJUST;
+
     JL_NARGS(typeof, 1, 1);
     return jl_typeof(args[0]);
 }
 
 JL_CALLABLE(jl_f_sizeof)
 {
+    JL_ADJUST;
+
     JL_NARGS(sizeof, 1, 1);
     jl_value_t *x = args[0];
     if (jl_is_datatype(x)) {
@@ -367,6 +377,8 @@ JL_CALLABLE(jl_f_sizeof)
 
 JL_CALLABLE(jl_f_issubtype)
 {
+    JL_ADJUST;
+
     JL_NARGS(subtype, 2, 2);
     if (!jl_is_typevar(args[0]))
         JL_TYPECHK(subtype, type, args[0]);
@@ -377,6 +389,8 @@ JL_CALLABLE(jl_f_issubtype)
 
 JL_CALLABLE(jl_f_isa)
 {
+    JL_ADJUST;
+
     JL_NARGS(isa, 2, 2);
     JL_TYPECHK(isa, type, args[1]);
     return (jl_subtype(args[0],args[1],1) ? jl_true : jl_false);
@@ -390,6 +404,8 @@ JL_DLLEXPORT void jl_typeassert(jl_value_t *x, jl_value_t *t)
 
 JL_CALLABLE(jl_f_typeassert)
 {
+    JL_ADJUST;
+
     JL_NARGS(typeassert, 2, 2);
     JL_TYPECHK(typeassert, type, args[1]);
     if (!jl_subtype(args[0],args[1],1))
@@ -398,22 +414,24 @@ JL_CALLABLE(jl_f_typeassert)
 }
 
 // perform f(args...) on stack
-JL_DLLEXPORT jl_value_t *jl_apply_2va(jl_value_t *f, jl_value_t **args, uint32_t nargs)
+JL_DLLEXPORT jl_value_t *jl_apply_2va(jl_value_t *f, jl_value_t *ctx, jl_value_t **args, uint32_t nargs)
 {
     nargs++;
     int onstack = (nargs < jl_page_size/sizeof(jl_value_t*));
     jl_value_t **newargs;
-    JL_GC_PUSHARGS(newargs, onstack ? nargs : 1);
+    JL_GC_PUSHARGS(newargs, onstack ? nargs+1 : 2);
     jl_svec_t *arg_heap = NULL;
     newargs[0] = f;  // make sure f is rooted
+    newargs[1] = ctx;
     if (!onstack) {
         arg_heap = jl_alloc_svec(nargs);
         newargs[0] = (jl_value_t*)arg_heap;
         newargs = jl_svec_data(arg_heap);
         newargs[0] = f;
+        newargs[1] = ctx;
     }
-    memcpy(&newargs[1], args, (nargs-1)*sizeof(jl_value_t*));
-    jl_value_t *ret = jl_apply_generic(newargs, nargs);
+    memcpy(&newargs[2], args, (nargs-1)*sizeof(jl_value_t*));
+    jl_value_t *ret = jl_apply_generic(newargs, nargs+1);
     JL_GC_POP();
     return ret;
 }
@@ -422,6 +440,8 @@ static jl_function_t *jl_append_any_func;
 
 JL_CALLABLE(jl_f__apply)
 {
+    JL_ADJUST;
+
     JL_NARGSV(apply, 1);
     jl_function_t *f = args[0];
     if (nargs == 2) {
@@ -440,7 +460,7 @@ JL_CALLABLE(jl_f__apply)
             }
         }
     }
-    size_t n=0, i, j;
+    size_t n=1, i, j;
     for(i=1; i < nargs; i++) {
         if (jl_is_svec(args[i])) {
             n += jl_svec_len(args[i]);
@@ -462,12 +482,16 @@ JL_CALLABLE(jl_f__apply)
             }
             jl_array_t *argarr = NULL;
             JL_GC_PUSH2(&argarr, &f);
-            args[0] = jl_append_any_func;
-            argarr = (jl_array_t*)jl_apply(args, nargs);
+            jl_value_t *ctx = args[-1];
+            args[-1] = jl_append_any_func;
+            args[0] = ctx;
+            argarr = (jl_array_t*)jl_apply(&args[-1], nargs+1);
             assert(jl_typeis(argarr, jl_array_any_type));
-            jl_array_grow_beg(argarr, 1);
+            jl_array_grow_beg(argarr, 2);
             jl_array_ptr_set(argarr, 0, f);
+            jl_array_ptr_set(argarr, 1, ctx);
             args[0] = f;
+            args[-1] = ctx;
             jl_value_t *result = jl_apply(jl_array_ptr_data(argarr), jl_array_len(argarr));
             JL_GC_POP();
             return result;
@@ -489,7 +513,8 @@ JL_CALLABLE(jl_f__apply)
     //          since they are allocated before `arg_heap`. Otherwise,
     //          we need to add write barrier for !onstack
     newargs[0] = f;
-    n = 1;
+    newargs[1] = args[-1];
+    n = 2;
     for(i=1; i < nargs; i++) {
         jl_value_t *ai = args[i];
         if (jl_is_svec(ai)) {
@@ -594,6 +619,8 @@ JL_CALLABLE(jl_f_isdefined)
 {
     jl_ptls_t ptls = jl_get_ptls_states();
     jl_module_t *m = ptls->current_module;
+    JL_ADJUST;
+
     jl_sym_t *s=NULL;
     JL_NARGSV(isdefined, 1);
     if (jl_is_array(args[0])) {
@@ -639,6 +666,8 @@ JL_CALLABLE(jl_f_isdefined)
 
 JL_CALLABLE(jl_f_tuple)
 {
+    JL_ADJUST;
+
     size_t i;
     if (nargs == 0) return (jl_value_t*)jl_emptytuple;
     jl_datatype_t *tt;
@@ -656,11 +685,13 @@ JL_CALLABLE(jl_f_tuple)
         tt = jl_inst_concrete_tupletype(types);
         JL_GC_POP();
     }
-    return jl_new_structv(tt, args, nargs);
+    return jl_new_structv(tt, &args[-1], nargs+1);
 }
 
 JL_CALLABLE(jl_f_svec)
 {
+    JL_ADJUST;
+
     size_t i;
     if (nargs == 0) return (jl_value_t*)jl_emptysvec;
     jl_svec_t *t = jl_alloc_svec_uninit(nargs);
@@ -674,6 +705,8 @@ JL_CALLABLE(jl_f_svec)
 
 JL_CALLABLE(jl_f_getfield)
 {
+    JL_ADJUST;
+
     JL_NARGS(getfield, 2, 2);
     jl_value_t *v = args[0];
     jl_value_t *vt = (jl_value_t*)jl_typeof(v);
@@ -703,6 +736,8 @@ JL_CALLABLE(jl_f_getfield)
 
 JL_CALLABLE(jl_f_setfield)
 {
+    JL_ADJUST;
+
     JL_NARGS(setfield!, 3, 3);
     jl_value_t *v = args[0];
     jl_value_t *vt = (jl_value_t*)jl_typeof(v);
@@ -733,6 +768,8 @@ JL_CALLABLE(jl_f_setfield)
 
 JL_CALLABLE(jl_f_fieldtype)
 {
+    JL_ADJUST;
+
     JL_NARGS(fieldtype, 2, 2);
     jl_datatype_t *st = (jl_datatype_t*)args[0];
     if (st == jl_module_type)
@@ -754,6 +791,8 @@ JL_CALLABLE(jl_f_fieldtype)
 
 JL_CALLABLE(jl_f_nfields)
 {
+    JL_ADJUST;
+
     JL_NARGS(nfields, 1, 1);
     jl_value_t *x = args[0];
     if (!jl_is_datatype(x))
@@ -963,6 +1002,8 @@ JL_DLLEXPORT void jl_show(jl_value_t *stream, jl_value_t *v)
 
 JL_CALLABLE(jl_f_apply_type)
 {
+    JL_ADJUST;
+
     JL_NARGSV(apply_type, 1);
     if (!jl_is_datatype(args[0]) && !jl_is_typector(args[0])) {
         jl_type_error("Type{...} expression", (jl_value_t*)jl_type_type, args[0]);
@@ -980,6 +1021,8 @@ static void jl_check_type_tuple(jl_value_t *t, jl_sym_t *name, const char *ctx)
 
 JL_CALLABLE(jl_f_applicable)
 {
+    JL_ADJUST;
+
     JL_NARGSV(applicable, 1);
     return jl_method_lookup(jl_gf_mtable(args[0]), args, nargs, 1) != NULL ?
         jl_true : jl_false;
@@ -987,6 +1030,8 @@ JL_CALLABLE(jl_f_applicable)
 
 JL_CALLABLE(jl_f_invoke)
 {
+    JL_ADJUST;
+
     JL_NARGSV(invoke, 2);
     jl_value_t *argtypes = args[1];
     JL_GC_PUSH1(&argtypes);
@@ -1189,7 +1234,7 @@ void jl_init_primitives(void)
     add_builtin("QuoteNode", (jl_value_t*)jl_quotenode_type);
     add_builtin("NewvarNode", (jl_value_t*)jl_newvarnode_type);
     add_builtin("GlobalRef", (jl_value_t*)jl_globalref_type);
-
+    add_builtin("#context", (jl_value_t*)jl_nothing);
 #ifdef _P64
     add_builtin("Int", (jl_value_t*)jl_int64_type);
 #else

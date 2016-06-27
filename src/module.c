@@ -35,6 +35,8 @@ JL_DLLEXPORT jl_module_t *jl_new_module(jl_sym_t *name)
     }
     // export own name, so "using Foo" makes "Foo" itself visible
     jl_set_const(m, name, (jl_value_t*)m);
+    if (jl_core_module)
+        jl_set_const(m, jl_symbol("#context"), jl_get_binding_or_error(jl_core_module, jl_symbol("#context"))->value);
     jl_module_export(m, name);
     JL_GC_POP();
     return m;

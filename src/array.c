@@ -419,6 +419,8 @@ JL_DLLEXPORT size_t jl_array_len_(jl_array_t *a)
 
 JL_CALLABLE(jl_f_arraysize)
 {
+    nargs--;
+    args++;
     JL_NARGS(arraysize, 2, 2);
     JL_TYPECHK(arraysize, array, args[0]);
     jl_array_t *a = (jl_array_t*)args[0];
@@ -474,6 +476,8 @@ static size_t array_nd_index(jl_array_t *a, jl_value_t **args, size_t nidxs,
 
 JL_CALLABLE(jl_f_arrayref)
 {
+    nargs--;
+    args++;
     JL_NARGSV(arrayref, 2);
     JL_TYPECHK(arrayref, array, args[0]);
     jl_array_t *a = (jl_array_t*)args[0];
@@ -536,6 +540,8 @@ JL_DLLEXPORT void jl_arrayset(jl_array_t *a, jl_value_t *rhs, size_t i)
 
 JL_CALLABLE(jl_f_arrayset)
 {
+    nargs--;
+    args++;
     JL_NARGSV(arrayset, 3);
     JL_TYPECHK(arrayset, array, args[0]);
     jl_array_t *a = (jl_array_t*)args[0];

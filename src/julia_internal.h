@@ -46,6 +46,7 @@ extern jl_methtable_t *jl_type_type_mt;
 extern int in_pure_callback;
 typedef void (*tracer_cb)(jl_value_t *tracee);
 void jl_call_tracer(tracer_cb callback, jl_value_t *tracee);
+extern jl_value_t *jl_lowering_hook;
 
 extern size_t jl_page_size;
 extern jl_function_t *jl_typeinf_func;
@@ -202,7 +203,7 @@ STATIC_INLINE jl_value_t *jl_call_method_internal(jl_lambda_info_t *meth, jl_val
 
 jl_tupletype_t *jl_argtype_with_function(jl_function_t *f, jl_tupletype_t *types);
 
-JL_DLLEXPORT jl_value_t *jl_apply_2va(jl_value_t *f, jl_value_t **args, uint32_t nargs);
+JL_DLLEXPORT jl_value_t *jl_apply_2va(jl_value_t *f, jl_value_t *ctx, jl_value_t **args, uint32_t nargs);
 
 void jl_gc_setmark(jl_ptls_t ptls, jl_value_t *v);
 void jl_gc_sync_total_bytes(void);

@@ -59,11 +59,13 @@ JL_DLLEXPORT jl_value_t *jl_interpret_toplevel_expr_in(jl_module_t *m, jl_value_
 static jl_value_t *do_call(jl_value_t **args, size_t nargs, interpreter_state *s)
 {
     jl_value_t **argv;
-    JL_GC_PUSHARGS(argv, nargs);
+    JL_GC_PUSHARGS(argv, nargs+1);
     size_t i;
-    for(i=0; i < nargs; i++)
-        argv[i] = eval(args[i], s);
-    jl_value_t *result = jl_apply_generic(argv, nargs);
+    argv[0] = eval(args[0], s);
+    argv[1] = jl_nothing;
+    for(i=1; i < nargs; i++)
+        argv[i+1] = eval(args[i], s);
+    jl_value_t *result = jl_apply_generic(argv, nargs+1);
     JL_GC_POP();
     return result;
 }

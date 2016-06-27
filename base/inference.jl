@@ -730,6 +730,23 @@ end
 
 
 #### recursing into expression ####
+function current_context(sv)
+    spec = sv.linfo.specTypes
+    ctx = Void
+    if length(spec.parameters) != 0
+        ctx = spec.parameters[2]
+    end
+    return ctx
+end
+
+function _methods_by_ftype_with_context(argtypes::ANY, lim, sv)
+    ctx = current_context(sv)
+    return _methods_by_ftype(Tuple{argtypes.parameters[1], ctx, argtypes.parameters[2:end]...}, lim)
+end
+
+function with_context(tt::ANY, sv)
+    Tuple{tt.parameters[1], current_context(sv), tt.parameters[2:end]...}
+end
 
 function abstract_call_gf_by_type(f::ANY, argtype::ANY, sv)
     tm = _topmod(sv)
@@ -742,7 +759,7 @@ function abstract_call_gf_by_type(f::ANY, argtype::ANY, sv)
     # here I picked 4.
     argtype = limit_tuple_type(argtype)
     argtypes = argtype.parameters
-    applicable = _methods_by_ftype(argtype, 4)
+    applicable = _methods_by_ftype_with_context(argtype, 4, sv)
     rettype = Bottom
     if is(applicable, false)
         # this means too many methods matched
@@ -949,7 +966,7 @@ function pure_eval_call(f::ANY, argtypes::ANY, atype, vtypes, sv)
         end
     end
 
-    meth = _methods_by_ftype(atype, 1)
+    meth = _methods_by_ftype_with_context(atype, 1, sv)
     if meth === false || length(meth) != 1
         return false
     end
@@ -1447,8 +1464,8 @@ function typeinf_edge(method::Method, atypes::ANY, sparams::SimpleVector, needtr
                 skip = false
             elseif method.name == :getindex || method.name == :next || method.name == :indexed_next
                 argtypes = atypes.parameters
-                if length(argtypes)>2 && argtypes[3] ⊑ Int
-                    at2 = widenconst(argtypes[2])
+                if length(argtypes)>3 && argtypes[4] ⊑ Int
+                    at2 = widenconst(argtypes[3])
                     if (at2 <: Tuple ||
                         (isa(at2, DataType) && isdefined(Main, :Base) && isdefined(Main.Base, :Pair) &&
                          (at2::DataType).name === Main.Base.Pair.name))
@@ -1465,6 +1482,9 @@ function typeinf_edge(method::Method, atypes::ANY, sparams::SimpleVector, needtr
     if isa(code, LambdaInfo) && code.code !== nothing
         # reuse the existing code object
         linfo = code
+        if linfo.inferred
+            return (code, code.rettype, true)
+        end
         @assert typeseq(linfo.specTypes, atypes) && !code.inferred
     elseif method.isstaged
         if !isleaftype(atypes)
@@ -1634,6 +1654,7 @@ function typeinf_loop(frame)
         println("WARNING: An error occurred during inference. Type inference is now partially disabled.")
         println(ex)
         ccall(:jlbacktrace, Void, ())
+        ccall(:abort,Void,())
     end
     ccall(:jl_typeinf_end, Void, ())
     nothing
@@ -1856,6 +1877,7 @@ function finish(me::InferenceState)
             gt[i] = Union{}
         end
     end
+
     type_annotate!(me.linfo, me.stmt_types, me, me.nargs)
 
     # run optimization passes on fulltree
@@ -2381,7 +2403,7 @@ function inlineable(f::ANY, ft::ANY, e::Expr, atypes::Vector{Any}, sv::Inference
             function splitunion(atypes::Vector{Any}, i::Int)
                 if i == 0
                     local sig = argtypes_to_type(atypes)
-                    local li = ccall(:jl_get_spec_lambda, Any, (Any,), sig)
+                    local li = ccall(:jl_get_spec_lambda, Any, (Any,), with_context(sig,sv))
                     li === nothing && return false
                     local stmt = []
                     push!(stmt, Expr(:(=), linfo_var, li))
@@ -2449,7 +2471,7 @@ function inlineable(f::ANY, ft::ANY, e::Expr, atypes::Vector{Any}, sv::Inference
                 return (ret_var, stmts)
             end
         else
-            local cache_linfo = ccall(:jl_get_spec_lambda, Any, (Any,), atype_unlimited)
+            local cache_linfo = ccall(:jl_get_spec_lambda, Any, (Any,), with_context(atype_unlimited, sv))
             cache_linfo === nothing && return NF
             e.head = :invoke
             unshift!(e.args, cache_linfo)
@@ -2466,6 +2488,10 @@ function inlineable(f::ANY, ft::ANY, e::Expr, atypes::Vector{Any}, sv::Inference
     else
         atype = atype_unlimited
     end
+    atype = with_context(atype, sv)
+    ctx_arg = sv.linfo.nargs == 0 ? nothing : SlotNumber(2)
+    argexprs = Any[argexprs[1], ctx_arg, argexprs[2:end]...]
+
     meth = _methods_by_ftype(atype, 1)
     if meth === false || length(meth) != 1
         return invoke_NF()

@@ -291,10 +291,18 @@
          (cons (car e)
                (map (lambda (x) (replace-vars x renames))
                     (cdr e))))))
-
+(define (add-context-arg argl)
+  (if (and (length> argl 1) (eq? (decl-var (cadr argl)) (symbol "#context")))
+      argl
+      (cons (car argl) (cons (symbol "#context") (cdr argl)))))
+(define (method-def-expr- name sparams argl body isstaged (rett 'Any))
+  ;(princ "ARGL " argl "\n")
+  (let ((new-argl (cons (car argl) (cons (symbol "#context") (cdr argl)))))
+;    (princ "NEW " new-argl "\n")
+    (method-def-expr-- name sparams argl body isstaged rett)))
 ;; construct the (method ...) expression for one primitive method definition,
 ;; assuming optional and keyword args are already handled
-(define (method-def-expr- name sparams argl body isstaged (rett 'Any))
+(define (method-def-expr-- name sparams argl body isstaged (rett 'Any))
   (if
    (any kwarg? argl)
    ;; has optional positional args
@@ -432,7 +440,7 @@
       `(block
         ;; call with no keyword args
         ,(method-def-expr-
-          name positional-sparams (append pargl vararg)
+          name positional-sparams (add-context-arg (append pargl vararg))
           `(block
             ,@lno
             ,@(if (not ordered-defaults)
@@ -451,7 +459,7 @@
         ;; call with keyword args pre-sorted - original method code goes here
         ,(method-def-expr-
           mangled sparams
-          `((|::| ,mangled (call (core typeof) ,mangled)) ,@vars ,@restkw
+          (add-context-arg `((|::| ,mangled (call (core typeof) ,mangled)) ,@vars ,@restkw
             ;; strip type off function self argument if not needed for a static param.
             ;; then it is ok for cl-convert to move this definition above the original def.
             ,(if (decl? (car not-optional))
@@ -461,7 +469,7 @@
                      (car not-optional)
                      (decl-var (car not-optional)))
                  (car not-optional))
-            ,@(cdr not-optional) ,@vararg)
+            ,@(cdr not-optional) ,@vararg))
           `(block
             ,@lno
             ,@stmts) isstaged rett)
@@ -473,10 +481,10 @@
            (lambda (s) (let ((name (if (symbol? s) s (cadr s))))
                          (expr-contains-eq name (cons 'list argl))))
            positional-sparams)
-          `((|::|
+          (add-context-arg `((|::|
              ;; if there are optional positional args, we need to be able to reference the function name
              ,(if (any kwarg? pargl) (gensy) UNUSED)
-             (call (core kwftype) ,ftype)) (:: ,kw (core AnyVector)) ,@pargl ,@vararg)
+             (call (core kwftype) ,ftype)) (:: ,kw (core AnyVector)) ,@pargl ,@vararg))
           `(block
             ;; initialize keyword args to their defaults, or set a flag telling
             ;; whether this keyword needs to be set.
@@ -582,11 +590,11 @@
                            ;; then add only one next argument
                            `(block
                              ,@prologue
-                             (call ,(arg-name (car req)) ,@(map arg-name (cdr passed)) ,(car vals)))
+                             (call ,(arg-name (car req)) ,@(map arg-name (cddr passed)) ,(car vals)))
                            ;; otherwise add all
                            `(block
                              ,@prologue
-                             (call ,(arg-name (car req)) ,@(map arg-name (cdr passed)) ,@vals)))))
+                             (call ,(arg-name (car req)) ,@(map arg-name (cddr passed)) ,@vals)))))
                  (method-def-expr- name sp passed body #f)))
              (iota (length opt)))
       ,(method-def-expr- name sparams overall-argl body isstaged rett))))
@@ -624,7 +632,7 @@
         (begin (check-kw-args (cdar argl))
                (keywords-method-def-expr name sparams argl body isstaged rett))
         ;; no keywords
-        (method-def-expr- name sparams argl body isstaged rett))))
+        (method-def-expr- name sparams (add-context-arg argl) body isstaged rett))))
 
 (define (struct-def-expr name params super fields mut)
   (receive
@@ -3502,15 +3510,17 @@ f(x) = yt(x)
 ;; expander entry point
 
 (define (julia-expand1 ex)
-  (renumber-slots-and-labels
+  (let ((a (renumber-slots-and-labels
    (linearize
     (closure-convert
      (analyze-variables!
-      (resolve-scopes ex))))))
+      (resolve-scopes
+       ex)))))))
+    a))
 
 (define julia-expand0 expand-forms)
 
 (define (julia-expand ex)
-  (julia-expand1
-   (julia-expand0
-    (julia-expand-macros ex))))
+   (julia-expand1
+    (julia-expand0
+     (julia-expand-macros ex))))

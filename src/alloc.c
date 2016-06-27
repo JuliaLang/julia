@@ -242,10 +242,10 @@ JL_DLLEXPORT jl_value_t *jl_new_structv(jl_datatype_t *type, jl_value_t **args,
     if (type->instance != NULL) return type->instance;
     size_t nf = jl_datatype_nfields(type);
     jl_value_t *jv = jl_gc_alloc(ptls, type->size, type);
-    for(size_t i=0; i < na; i++) {
-        jl_set_nth_field(jv, i, args[i]);
+    for(size_t i=1; i < na; i++) {
+        jl_set_nth_field(jv, i-1, args[i]);
     }
-    for(size_t i=na; i < nf; i++) {
+    for(size_t i=na-1; i < nf; i++) {
         if (jl_field_isptr(type, i)) {
             *(jl_value_t**)((char*)jl_data_ptr(jv)+jl_field_offset(type,i)) = NULL;
         }
@@ -1332,6 +1332,8 @@ jl_expr_t *jl_exprn(jl_sym_t *head, size_t n)
 
 JL_CALLABLE(jl_f__expr)
 {
+    args++;
+    nargs--;
     jl_ptls_t ptls = jl_get_ptls_states();
     JL_NARGSV(Expr, 1);
     JL_TYPECHK(Expr, symbol, args[0]);

@@ -137,8 +137,10 @@ JL_DLLEXPORT jl_value_t *jl_call0(jl_function_t *f)
 {
     jl_value_t *v;
     JL_TRY {
-        JL_GC_PUSH1(&f);
-        v = jl_apply(&f, 1);
+        jl_value_t **argv;
+        JL_GC_PUSHARGS(argv, 2);
+        argv[0] = f; argv[1] = jl_nothing;
+        v = jl_apply(argv, 2);
         JL_GC_POP();
         jl_exception_clear();
     }
@@ -153,9 +155,9 @@ JL_DLLEXPORT jl_value_t *jl_call1(jl_function_t *f, jl_value_t *a)
     jl_value_t *v;
     JL_TRY {
         jl_value_t **argv;
-        JL_GC_PUSHARGS(argv, 2);
-        argv[0] = f; argv[1] = a;
-        v = jl_apply(argv, 2);
+        JL_GC_PUSHARGS(argv, 3);
+        argv[0] = f; argv[1] = jl_nothing; argv[2] = a;
+        v = jl_apply(argv, 3);
         JL_GC_POP();
         jl_exception_clear();
     }
@@ -170,9 +172,9 @@ JL_DLLEXPORT jl_value_t *jl_call2(jl_function_t *f, jl_value_t *a, jl_value_t *b
     jl_value_t *v;
     JL_TRY {
         jl_value_t **argv;
-        JL_GC_PUSHARGS(argv, 3);
-        argv[0] = f; argv[1] = a; argv[2] = b;
-        v = jl_apply(argv, 3);
+        JL_GC_PUSHARGS(argv, 4);
+        argv[0] = f; argv[1] = jl_nothing; argv[2] = a; argv[3] = b;
+        v = jl_apply(argv, 4);
         JL_GC_POP();
         jl_exception_clear();
     }
@@ -188,9 +190,9 @@ JL_DLLEXPORT jl_value_t *jl_call3(jl_function_t *f, jl_value_t *a,
     jl_value_t *v;
     JL_TRY {
         jl_value_t **argv;
-        JL_GC_PUSHARGS(argv, 4);
-        argv[0] = f; argv[1] = a; argv[2] = b; argv[3] = c;
-        v = jl_apply(argv, 4);
+        JL_GC_PUSHARGS(argv, 5);
+        argv[0] = f; argv[1] = jl_nothing; argv[2] = a; argv[3] = b; argv[4] = c;
+        v = jl_apply(argv, 5);
         JL_GC_POP();
         jl_exception_clear();
     }

@@ -123,8 +123,8 @@ end
 
 map(f::Function, a::Array{Any,1}) = Any[ f(a[i]) for i=1:length(a) ]
 
-function precompile(f::ANY, args::Tuple)
-    ccall(:jl_compile_hint, Cint, (Any,), Tuple{Core.Typeof(f), args...}) != 0
+function precompile(f::ANY, args::Tuple, ctx = Void)
+    ccall(:jl_compile_hint, Cint, (Any,), Tuple{Core.Typeof(f), ctx, args...}) != 0
 end
 
 function precompile(argt::Type)

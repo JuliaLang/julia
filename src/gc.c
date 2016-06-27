@@ -103,9 +103,9 @@ static void schedule_finalization(void *o, void *f)
 static void run_finalizer(jl_ptls_t ptls, jl_value_t *o, jl_value_t *ff)
 {
     assert(!jl_typeis(ff, jl_voidpointer_type));
-    jl_value_t *args[2] = {ff,o};
+    jl_value_t *args[3] = {ff,jl_nothing,o};
     JL_TRY {
-        jl_apply(args, 2);
+        jl_apply(args, 3);
     }
     JL_CATCH {
         jl_printf(JL_STDERR, "error in running finalizer: ");
