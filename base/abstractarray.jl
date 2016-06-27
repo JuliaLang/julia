@@ -628,6 +628,7 @@ next(A::AbstractArray,i) = (@_propagate_inbounds_meta; (idx, s) = next(i[1], i[2
 done(A::AbstractArray,i) = (@_propagate_inbounds_meta; done(i[1], i[2]))
 
 # eachindex iterates over all indices. LinearSlow definitions are later.
+eachindex(A::AbstractVector) = (@_inline_meta(); indices1(A))
 eachindex(A::AbstractArray) = (@_inline_meta(); eachindex(linearindexing(A), A))
 
 function eachindex(A::AbstractArray, B::AbstractArray)
