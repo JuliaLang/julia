@@ -10,9 +10,6 @@ using Base: LinearFast, LinearSlow, AbstractCartesianIndex, fill_to_length, tail
 
 export CartesianIndex, CartesianRange
 
-# Traits for linear indexing
-linearindexing{A<:BitArray}(::Type{A}) = LinearFast()
-
 # CartesianIndex
 immutable CartesianIndex{N} <: AbstractCartesianIndex{N}
     I::NTuple{N,Int}
@@ -178,18 +175,18 @@ index_lengths_dim(A, dim, ::Colon) = (trailingsize(A, dim),)
 # whose length is equal to the dimension we're to process next. This
 # allows us to dispatch, which is important for the type-stability of
 # the lines involving Colon as the final index.
-index_shape(A::AbstractVector, I::Colon) = shape(A)
+index_shape(A::AbstractVector, I::Colon) = indices(A)
 index_shape(A::AbstractArray,  I::Colon) = (length(A),)
 @inline index_shape(A::AbstractArray, I...) = index_shape_dim(A, (true,), I...)
 @inline index_shape_dim(A, dim, ::Colon) = (trailingsize(A, length(dim)),)
-@inline index_shape_dim{T,N}(A::AbstractArray{T,N}, dim::NTuple{N}, ::Colon) = (shape(A, N),)
+@inline index_shape_dim{T,N}(A::AbstractArray{T,N}, dim::NTuple{N}, ::Colon) = (indices(A, N),)
 @inline index_shape_dim(A, dim, I::Real...) = ()
-@inline index_shape_dim(A, dim, ::Colon, i, I...) = (shape(A, length(dim)), index_shape_dim(A, (dim...,true), i, I...)...)
+@inline index_shape_dim(A, dim, ::Colon, i, I...) = (indices(A, length(dim)), index_shape_dim(A, (dim...,true), i, I...)...)
 @inline index_shape_dim(A, dim, ::Real, I...) = (index_shape_dim(A, (dim...,true), I...)...)
 @inline index_shape_dim{N}(A, dim, ::CartesianIndex{N}, I...) = (index_shape_dim(A, (dim...,ntuple(d->true,Val{N})...), I...)...)
-@inline index_shape_dim(A, dim, i::AbstractArray, I...) = (shape(i)..., index_shape_dim(A, (dim...,true), I...)...)
+@inline index_shape_dim(A, dim, i::AbstractArray, I...) = (indices(i)..., index_shape_dim(A, (dim...,true), I...)...)
 @inline index_shape_dim(A, dim, i::AbstractArray{Bool}, I...) = (sum(i), index_shape_dim(A, (dim...,true), I...)...)
-@inline index_shape_dim{N}(A, dim, i::AbstractArray{CartesianIndex{N}}, I...) = (shape(i)..., index_shape_dim(A, (dim...,ntuple(d->true,Val{N})...), I...)...)
+@inline index_shape_dim{N}(A, dim, i::AbstractArray{CartesianIndex{N}}, I...) = (indices(i)..., index_shape_dim(A, (dim...,ntuple(d->true,Val{N})...), I...)...)
 
 @inline decolon(A::AbstractVector, ::Colon) = (indices(A,1),)
 @inline decolon(A::AbstractArray,  ::Colon) = (1:length(A),)
@@ -291,8 +288,6 @@ end
     end
 end
 
-dimlength(r::Range) = length(r)
-dimlength(i::Integer) = i
 @noinline throw_checksize_error(A, sz) = throw(DimensionMismatch("output array is the wrong size; expected $sz, got $(size(A))"))
 
 ## setindex! ##
@@ -787,7 +782,7 @@ If `dim` is specified, returns unique regions of the array `itr` along `dim`.
 @generated function unique{T,N}(A::AbstractArray{T,N}, dim::Int)
     quote
         1 <= dim <= $N || return copy(A)
-        hashes = allocate_for(inds->zeros(UInt, inds), A, shape(A, dim))
+        hashes = allocate_for(inds->zeros(UInt, inds), A, indices(A, dim))
 
         # Compute hash for each row
         k = 0
@@ -796,7 +791,7 @@ If `dim` is specified, returns unique regions of the array `itr` along `dim`.
         end
 
         # Collect index of first row for each hash
-        uniquerow = allocate_for(Array{Int}, A, shape(A, dim))
+        uniquerow = allocate_for(Array{Int}, A, indices(A, dim))
         firstrow = Dict{Prehashed,Int}()
         for k = indices(A, dim)
             uniquerow[k] = get!(firstrow, Prehashed(hashes[k]), k)
@@ -804,7 +799,7 @@ If `dim` is specified, returns unique regions of the array `itr` along `dim`.
         uniquerows = collect(values(firstrow))
 
         # Check for collisions
-        collided = allocate_for(falses, A, shape(A, dim))
+        collided = allocate_for(falses, A, indices(A, dim))
         @inbounds begin
             @nloops $N i A d->(if d == dim
                 k = i_d
@@ -819,7 +814,7 @@ If `dim` is specified, returns unique regions of the array `itr` along `dim`.
         end
 
         if any(collided)
-            nowcollided = allocate_for(BitArray, A, shape(A, dim))
+            nowcollided = allocate_for(BitArray, A, indices(A, dim))
             while any(collided)
                 # Collect index of first row for each collided hash
                 empty!(firstrow)

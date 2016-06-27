@@ -28,6 +28,7 @@ export
 # Types
     AbstractChannel,
     AbstractMatrix,
+    AbstractUnitRange,
     AbstractVector,
     AbstractVecOrMat,
     Array,
@@ -583,7 +584,6 @@ export
     searchsortedlast,
     select!,
     select,
-    shape,
     shuffle,
     shuffle!,
     size,

@@ -387,7 +387,7 @@ function promote_shape(a::AbstractArray, b::AbstractArray)
             throw(DimensionMismatch("dimensions must match"))
         end
     end
-    return shape(a)
+    return indices(a)
 end
 
 function throw_setindex_mismatch(X, I)

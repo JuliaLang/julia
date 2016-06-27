@@ -2,7 +2,7 @@
 
 module Sort
 
-using Base: Order, copymutable, linearindices, allocate_for, shape, linearindexing, viewindexing, LinearFast
+using Base: Order, copymutable, linearindices, allocate_for, linearindexing, viewindexing, LinearFast
 
 import
     Base.sort,
@@ -447,7 +447,7 @@ function sortperm(v::AbstractVector;
                   by=identity,
                   rev::Bool=false,
                   order::Ordering=Forward)
-    p = Base.allocate_for(Vector{Int}, v, shape(v, 1))
+    p = Base.allocate_for(Vector{Int}, v, indices(v, 1))
     for (i,ind) in zip(eachindex(p), indices(v, 1))
         p[i] = ind
     end
@@ -507,7 +507,7 @@ end
 function sortrows(A::AbstractMatrix; kws...)
     inds = indices(A,1)
     T = slicetypeof(A, inds, :)
-    rows = allocate_for(Vector{T}, A, shape(A, 1))
+    rows = allocate_for(Vector{T}, A, indices(A, 1))
     for i in inds
         rows[i] = view(A, i, :)
     end
@@ -518,7 +518,7 @@ end
 function sortcols(A::AbstractMatrix; kws...)
     inds = indices(A,2)
     T = slicetypeof(A, :, inds)
-    cols = allocate_for(Vector{T}, A, shape(A, 2))
+    cols = allocate_for(Vector{T}, A, indices(A, 2))
     for i in inds
         cols[i] = view(A, :, i)
     end
@@ -532,7 +532,7 @@ function slicetypeof{T,N}(A::AbstractArray{T,N}, i1, i2)
     SubArray{T,1,typeof(A),typeof(I),fast}
 end
 slice_dummy(::Colon) = Colon()
-slice_dummy{T}(::UnitRange{T}) = one(T)
+slice_dummy{T}(::AbstractUnitRange{T}) = one(T)
 
 ## fast clever sorting for floats ##
 
