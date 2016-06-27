@@ -859,6 +859,9 @@ bool jl_dylib_DI_for_fptr(size_t pointer, const llvm::object::ObjectFile **obj, 
             if (saddr)
                 *saddr = (void*)(uintptr_t)pSymbol->Address;
         }
+        else if (saddr) {
+            *saddr = NULL;
+        }
 
         // If we didn't find the filename before in the debug
         // info, use the dll name
@@ -1113,6 +1116,14 @@ static int jl_getDylibFunctionInfo(jl_frame_t **frames, size_t pointer, int skip
         if (!saddr && unw_get_proc_info_by_ip(unw_local_addr_space,
                                               pointer, &pip, NULL) == 0)
             saddr = (void*)pip.start_ip;
+#endif
+#if defined(_OS_WINDOWS_) && defined(_CPU_X86_64_)
+        if (!saddr) {
+            DWORD64 ImageBase;
+            PRUNTIME_FUNCTION fn = RtlLookupFunctionEntry(pointer, &ImageBase, NULL);
+            if (fn)
+                saddr = (void*)(ImageBase + fn->BeginAddress);
+        }
 #endif
         if (saddr) {
             for (size_t i = 0; i < sysimg_fvars_n; i++) {
