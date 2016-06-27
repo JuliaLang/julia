@@ -1269,7 +1269,12 @@ function tmerge(typea::ANY, typeb::ANY)
         if isa(typea, DataType) && isa(typeb, DataType) && length(typea.parameters) == length(typeb.parameters) && !isvatuple(typea) && !isvatuple(typeb)
             return typejoin(typea, typeb)
         end
-        return Tuple
+        if isa(typea, Union) || isa(typeb, Union) || (isa(typea,DataType) && length(typea.parameters)>3) ||
+            (isa(typeb,DataType) && length(typeb.parameters)>3)
+            # widen tuples faster (see #6704), but not too much, to make sure we can infer
+            # e.g. (t::Union{Tuple{Bool},Tuple{Bool,Int}})[1]
+            return Tuple
+        end
     end
     u = Union{typea, typeb}
     if length(u.types) > MAX_TYPEUNION_LEN || type_too_complex(u, 0)
