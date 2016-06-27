@@ -406,11 +406,11 @@ endif # LLVM_VER
 LLVM_PATCH_PREV:=
 LLVM_PATCH_LIST:=
 define LLVM_PATCH
-$$(LLVM_SRC_DIR)/$1.patch-applied: $(LLVM_SRC_DIR)/configure | $$(SRCDIR)/patches/$1.patch $(LLVM_PATCH_PREV)
+$$(LLVM_SRC_DIR)/$1.patch-applied: $$(LLVM_SRC_DIR)/configure | $$(SRCDIR)/patches/$1.patch $$(LLVM_PATCH_PREV)
 	cd $$(LLVM_SRC_DIR) && patch -p1 < $$(SRCDIR)/patches/$1.patch
 	echo 1 > $$@
 LLVM_PATCH_PREV := $$(LLVM_SRC_DIR)/$1.patch-applied
-LLVM_PATCH_LIST += $(LLVM_PATCH_PREV)
+LLVM_PATCH_LIST += $$(LLVM_PATCH_PREV)
 endef
 ifeq ($(LLVM_VER),3.3)
 $(eval $(call LLVM_PATCH,llvm-3.3))
