@@ -84,6 +84,8 @@ Breaking changes
     If a reshaped copy is needed, use `copy(reshape(a))` or `copy!` to a new array of
     the desired shape ([#4211]).
 
+  * `mapslices` will always pass a view, so passing mutating functions will mutate the underlying array ([#16260])
+
   * Local variables and arguments are represented in lowered code as numbered `Slot`
     objects instead of as symbols ([#15609]).
 

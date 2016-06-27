@@ -32,8 +32,10 @@ end
 @test median([1.,-1.,Inf,-Inf]) == 0.0
 @test isnan(median([-Inf,Inf]))
 
-@test all(median([2 3 1 -1; 7 4 5 -4], 2) .== [1.5, 4.5])
-@test all(median([2 3 1 -1; 7 4 5 -4], 1) .== [4.5 3.5 3.0 -2.5])
+X = [2 3 1 -1; 7 4 5 -4]
+@test all(median(X, 2) .== [1.5, 4.5])
+@test all(median(X, 1) .== [4.5 3.5 3.0 -2.5])
+@test X == [2 3 1 -1; 7 4 5 -4] # issue #17153
 
 @test_throws ArgumentError median([])
 @test isnan(median([NaN]))
@@ -43,6 +45,7 @@ end
 
 @test median!([1 2 3 4]) == 2.5
 @test median!([1 2; 3 4]) == 2.5
+
 
 @test invoke(median, (AbstractVector,), 1:10) == median(1:10) == 5.5
 

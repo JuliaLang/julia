@@ -490,9 +490,10 @@ function median!{T}(v::AbstractVector{T})
     end
 end
 median!{T}(v::AbstractArray{T}) = median!(vec(v))
-
 median{T}(v::AbstractArray{T}) = median!(copy!(Array(T, length(v)), v))
-median{T}(v::AbstractArray{T}, region) = mapslices(median!, v, region)
+
+median!{T}(v::AbstractArray{T}, region) = mapslices(median!, v, region)
+median{T}(v::AbstractArray{T}, region) = median!(copy(v), region)
 
 # for now, use the R/S definition of quantile; may want variants later
 # see ?quantile in R -- this is type 7
