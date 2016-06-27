@@ -43,6 +43,10 @@ end
 ==(T::TypeVar, S::Type) = false
 ==(T::Type, S::TypeVar) = false
 
+for op in (<, >, <=, >=, (==))
+    @eval promote_op{Op<:$(typeof(op))}(::Op, ::Any, ::Any) = ($(Expr(:meta, :pure)); Bool)
+end
+
 ## comparison fallbacks ##
 
 !=(x,y) = !(x==y)

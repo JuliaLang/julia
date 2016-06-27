@@ -222,9 +222,10 @@ minmax(x::Real, y::Real) = minmax(promote(x, y)...)
 # for the multiplication of two types,
 #   promote_op{R<:MyType,S<:MyType}(::typeof(*), ::Type{R}, ::Type{S}) = MyType{multype(R,S)}
 promote_op(::Any)    = (@_pure_meta; Bottom)
-promote_op(::Any, T) = (@_pure_meta; T)
+promote_op(::Any, ::Any) = (@_pure_meta; Any)
+promote_op(::Any, ::Any, ::Any) = (@_pure_meta; Any)
 promote_op{T}(::Type{T}, ::Any) = (@_pure_meta; T)
-promote_op{R,S}(::Any, ::Type{R}, ::Type{S}) = (@_pure_meta; promote_type(R, S))
+promote_op{Op<:typeof(convert),T}(::Op, ::Type{T}, ::Any) = (@_pure_meta, T)
 promote_op(op, T, S, U, V...) = (@_pure_meta; promote_op(op, T, promote_op(op, S, U, V...)))
 
 ## catch-alls to prevent infinite recursion when definitions are missing ##

@@ -2750,20 +2750,19 @@ let types = (Base.BitInteger_types..., BigInt, Bool,
              Complex{Int}, Complex{UInt}, Complex32, Complex64, Complex128)
     for S in types
         for op in (+, -)
-            @test Base.promote_op(op, S) === typeof(op(one(S)))
-            @inferred Base.promote_op(op, S)
-            @inferred op(one(S))
+            T = @inferred Base.promote_op(op, S)
+            t = @inferred op(one(S))
+            @test T === typeof(t)
         end
     end
 
-    @test Base.promote_op(!, Bool) === Bool
-    @inferred Base.promote_op(!, Bool)
+    @test @inferred(Base.promote_op(!, Bool)) === Bool
 
-    for S in types, T in types
-        for op in (+, -, *, /, ^, (==))
-            @test Base.promote_op(op, S, T) === typeof(op(one(S), one(T)))
-            @inferred Base.promote_op(op, S, T)
-            @inferred op(one(S), one(T))
+    for R in types, S in types
+        for op in (+, -, *, /, ^)
+            T = @inferred Base.promote_op(op, R, S)
+            t = @inferred op(one(R), one(S))
+            @test T === typeof(t)
         end
     end
 end
@@ -2772,26 +2771,24 @@ let types = (Base.BitInteger_types..., BigInt, Bool,
              Rational{Int}, Rational{BigInt},
              Float16, Float32, Float64, BigFloat)
     for S in types, T in types
-        for op in (<, >, <=, >=)
-            @test Base.promote_op(op, S, T) === typeof(op(one(S), one(T)))
-            @inferred Base.promote_op(op, S, T)
-            @inferred op(one(S), one(T))
+        for op in (<, >, <=, >=, (==))
+            @test @inferred(Base.promote_op(op, S, T)) === Bool
         end
     end
 end
 
 let types = (Base.BitInteger_types..., BigInt, Bool)
     for S in types
-        @test Base.promote_op(~, S) === typeof(~one(S))
-        @inferred Base.promote_op(~, S)
-        @inferred ~one(S)
+        T = @inferred Base.promote_op(~, S)
+        t = @inferred ~one(S)
+        @test T === typeof(t)
     end
 
     for S in types, T in types
         for op in (&, |, <<, >>, (>>>), %, ÷)
-            @test Base.promote_op(op, S, T) === typeof(op(one(S), one(T)))
-            @inferred Base.promote_op(op, S, T)
-            @inferred op(one(S), one(T))
+            T = @inferred Base.promote_op(op, S, T)
+            t = @inferred op(one(S), one(T))
+            @test T === typeof(t)
         end
     end
 end
