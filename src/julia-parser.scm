@@ -1511,21 +1511,29 @@
             (else
              (error "missing separator in array expression")))))))
 
+(define (parse-generator s first)
+  (let ((iters (parse-comma-separated-iters s)))
+    (let ((iters (if (eq? (peek-token s) 'if)
+                     (begin (take-token s)
+                            (list `(filter ,(parse-cond s) ,@iters)))
+                     iters)))
+      (if (eq? (peek-token s) 'for)
+          (begin (take-token s)
+                 `(flatten (generator ,(parse-generator s first) ,@iters)))
+          `(generator ,first ,@iters)))))
+
 (define (parse-comprehension s first closer)
-  (let ((r (parse-comma-separated-iters s)))
+  (let ((gen (parse-generator s first)))
     (if (not (eqv? (require-token s) closer))
         (error (string "expected \"" closer "\""))
         (take-token s))
-    `(comprehension ,first ,@r)))
+    `(comprehension ,gen)))
 
 (define (parse-dict-comprehension s first closer)
   (let ((c (parse-comprehension s first closer)))
-    (if (dict-literal? (cadr c))
+    (if (dict-literal? (cadr (cadr c)))
         `(dict_comprehension ,@(cdr c))
         (error "invalid dict comprehension"))))
-
-(define (parse-generator s first)
-  `(generator ,first ,@(parse-comma-separated-iters s)))
 
 (define (parse-matrix s first closer gotnewline)
   (define (fix head v) (cons head (reverse v)))
