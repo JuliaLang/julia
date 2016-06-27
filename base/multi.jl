@@ -326,10 +326,11 @@ end
 type ProcessGroup
     name::AbstractString
     workers::Array{Any,1}
+    worker_is_idle::Condition
     refs::Dict                  # global references
     topology::Symbol
 
-    ProcessGroup(w::Array{Any,1}) = new("pg-default", w, Dict(), :all_to_all)
+    ProcessGroup(w::Array{Any,1}) = new("pg-default", w, Condition(), Dict(), :all_to_all)
 end
 const PGRP = ProcessGroup([])
 
@@ -382,6 +383,21 @@ function workers()
        allp
     else
        filter(x -> x != 1, allp)
+    end
+end
+
+function idleworker()
+    if nprocs() == 1
+        return 1
+    end
+    while true
+        busy_workers = Int[rv.waitingfor for (id,rv) in PGRP.refs]
+        for w in PGRP.workers
+            if w.id != 1 && !(w.id in busy_workers)
+                return w.id
+            end
+        end
+        wait(PGRP.worker_is_idle)
     end
 end
 
@@ -832,6 +848,8 @@ function remotecall_fetch(f, w::Worker, args...; kwargs...)
     send_msg(w, CallMsg{:call_fetch}(f, args, kwargs, oid))
     v = take!(rv)
     delete!(PGRP.refs, oid)
+    rv.waitingfor = 0
+    notify(PGRP.worker_is_idle)
     isa(v, RemoteException) ? throw(v) : v
 end
 
@@ -849,6 +867,8 @@ function remotecall_wait(f, w::Worker, args...; kwargs...)
     send_msg(w, CallWaitMsg(f, args, kwargs, remoteref_id(rr), prid))
     v = fetch(rv.c)
     delete!(PGRP.refs, prid)
+    rv.waitingfor = 0
+    notify(PGRP.worker_is_idle)
     isa(v, RemoteException) && throw(v)
     rr
 end
