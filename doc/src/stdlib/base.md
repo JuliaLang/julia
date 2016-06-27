@@ -122,6 +122,7 @@ Base.method_exists
 Core.applicable
 Core.invoke
 Base.:(|>)
+Base.:(∘)
 ```
 
 ## Syntax
