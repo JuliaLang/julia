@@ -154,7 +154,7 @@ end
 
 for func in (:div,:fld,:cld,:rem,:mod,:atan2,:hypot)
     @eval begin
-        $func(a::Float16,b::Float16) = Float16($func(Float32(a),Float32(a)))
+        $func(a::Float16,b::Float16) = Float16($func(Float32(a),Float32(b)))
     end
 end
 
