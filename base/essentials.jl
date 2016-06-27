@@ -171,7 +171,7 @@ start(v::SimpleVector) = 1
 next(v::SimpleVector,i) = (v[i],i+1)
 done(v::SimpleVector,i) = (i > v.length)
 isempty(v::SimpleVector) = (v.length == 0)
-indices(v::SimpleVector, d) = d == 1 ? (1:length(v)) : (1:1)
+indices(v::SimpleVector, d) = d == 1 ? OneTo(length(v)) : OneTo(1)
 linearindices(v::SimpleVector) = indices(v, 1)
 
 function ==(v1::SimpleVector, v2::SimpleVector)

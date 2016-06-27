@@ -3,7 +3,7 @@
 module Broadcast
 
 using Base.Cartesian
-using Base: promote_op, promote_eltype, promote_eltype_op, @get!, _msk_end, unsafe_bitgetindex, shape, linearindices, allocate_for, tail, dimlength
+using Base: promote_op, promote_eltype, promote_eltype_op, @get!, _msk_end, unsafe_bitgetindex, linearindices, allocate_for, tail, dimlength
 import Base: .+, .-, .*, ./, .\, .//, .==, .<, .!=, .<=, .÷, .%, .<<, .>>, .^
 export broadcast, broadcast!, bitbroadcast
 export broadcast_getindex, broadcast_setindex!
@@ -13,8 +13,8 @@ export broadcast_getindex, broadcast_setindex!
 ## Calculate the broadcast shape of the arguments, or error if incompatible
 # array inputs
 broadcast_shape() = ()
-broadcast_shape(A) = shape(A)
-@inline broadcast_shape(A, B...) = broadcast_shape((), shape(A), map(shape, B)...)
+broadcast_shape(A) = indices(A)
+@inline broadcast_shape(A, B...) = broadcast_shape((), indices(A), map(indices, B)...)
 # shape inputs
 broadcast_shape(shape::Tuple) = shape
 @inline broadcast_shape(shape::Tuple, shape1::Tuple, shapes::Tuple...) = broadcast_shape(_bcs((), shape, shape1), shapes...)
@@ -40,7 +40,7 @@ _bcsm(a::Number, b::Number) = a == b || b == 1
 ## Check that all arguments are broadcast compatible with shape
 # comparing one input against a shape
 check_broadcast_shape(shp) = nothing
-check_broadcast_shape(shp, A) = check_broadcast_shape(shp, shape(A))
+check_broadcast_shape(shp, A) = check_broadcast_shape(shp, indices(A))
 check_broadcast_shape(::Tuple{}, ::Tuple{}) = nothing
 check_broadcast_shape(shp, ::Tuple{}) = nothing
 check_broadcast_shape(::Tuple{}, Ashp::Tuple) = throw(DimensionMismatch("cannot broadcast array to have fewer dimensions"))
@@ -133,7 +133,7 @@ end
 end
 
 @inline function broadcast!{nargs}(f, B::AbstractArray, As::Vararg{Any,nargs})
-    check_broadcast_shape(shape(B), As...)
+    check_broadcast_shape(indices(B), As...)
     sz = size(B)
     mapindex = map(x->newindexer(sz, x), As)
     _broadcast!(f, B, mapindex, As, Val{nargs})
@@ -363,7 +363,7 @@ for (f, scalarf) in ((:.==, :(==)),
                                               :((A,ind)->A), :((B,ind)->B[ind])),
                                              (:AbstractArray, :Any, :A,
                                               :((A,ind)->A[ind]), :((B,ind)->B)))
-        shape = :(shape($active))
+        shape = :(indices($active))
         @eval begin
             function ($f)(A::$sigA, B::$sigB)
                 P = allocate_for(BitArray, $active, $shape)
