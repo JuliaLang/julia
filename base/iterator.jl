@@ -134,7 +134,7 @@ function advance_filter(pred, itr, st)
         end
         s=t
     end
-    v, (true,)
+    v, (true, v, s)
 end
 
 done(f::Filter, s) = s[1]
@@ -498,7 +498,7 @@ function start(f::Flatten)
     return s, inner, s2
 end
 
-function next(f::Flatten, state)
+@inline function next(f::Flatten, state)
     s, inner, s2 = state
     val, s2 = next(inner, s2)
     while done(inner, s2) && !done(f.it, s)
