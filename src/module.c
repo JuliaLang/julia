@@ -555,9 +555,8 @@ JL_DLLEXPORT jl_value_t *jl_module_names(jl_module_t *m, int all, int imported)
 {
     jl_array_t *a = jl_alloc_array_1d(jl_array_symbol_type, 0);
     JL_GC_PUSH1(&a);
-    size_t i;
     void **table = m->bindings.table;
-    for(i=1; i < m->bindings.size; i+=2) {
+    for (size_t i = 1; i < m->bindings.size; i += 2) {
         if (table[i] != HT_NOTFOUND) {
             jl_binding_t *b = (jl_binding_t*)table[i];
             int hidden = jl_symbol_name(b->name)[0]=='#';
