@@ -25,10 +25,10 @@ for eltyA in (Float64, Complex{Float64})
         end
 
         @inferred A\B
-        @test_approx_eq A\B[:,1] full(A)\B[:,1]
-        @test_approx_eq A\B full(A)\B
+        @test A\B[:,1] ≈ full(A)\B[:,1]
+        @test A\B ≈ full(A)\B
         @test_throws DimensionMismatch A\B[1:m-1,:]
-        @test_approx_eq A[1:9,:]*(A[1:9,:]\ones(eltyB, 9)) ones(9) # Underdetermined system
+        @test A[1:9,:]*(A[1:9,:]\ones(eltyB, 9)) ≈ ones(9) # Underdetermined system
 
         if eltyA == eltyB # promotions not defined for unexported methods
             @test qrfact(sparse(eye(eltyA, 5)))\ones(eltyA, 5) == ones(5)
@@ -46,7 +46,7 @@ for eltyA in (Float64, Complex{Float64})
             @test_throws DimensionMismatch SPQR.solve(SPQR.RTX_EQUALS_B, F, CHOLMOD.Dense(B))
             @test_throws DimensionMismatch SPQR.qmult(SPQR.QX, F, CHOLMOD.Dense(B'))
             @test_throws DimensionMismatch SPQR.qmult(SPQR.XQ, F, CHOLMOD.Dense(B))
-            @test_approx_eq A\B SPQR.backslash(SPQR.ORDERING_DEFAULT, SPQR.DEFAULT_TOL, CHOLMOD.Sparse(A), CHOLMOD.Dense(B))
+            @test A\B ≈ SPQR.backslash(SPQR.ORDERING_DEFAULT, SPQR.DEFAULT_TOL, CHOLMOD.Sparse(A), CHOLMOD.Dense(B))
             @test_throws DimensionMismatch SPQR.backslash(SPQR.ORDERING_DEFAULT, SPQR.DEFAULT_TOL, CHOLMOD.Sparse(A), CHOLMOD.Dense(B[1:m-1,:]))
         end
     end

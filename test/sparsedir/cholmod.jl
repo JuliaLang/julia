@@ -95,8 +95,8 @@ A = CHOLMOD.Sparse(48, 48,
     -833333.333333,-1.25e6,2.5e8,2.39928529451e6,9.61679848804e8,275828.470683,
     -5.57173510779e7,1.09411960038e7,2.08333333333e6,1.0e8,-2.5e6,
     140838.195984,-1.09779731332e8,5.31278103775e8], 1)
-@test_approx_eq CHOLMOD.norm_sparse(A, 0) 3.570948074697437e9
-@test_approx_eq CHOLMOD.norm_sparse(A, 1) 3.570948074697437e9
+@test CHOLMOD.norm_sparse(A, 0) ≈ 3.570948074697437e9
+@test CHOLMOD.norm_sparse(A, 1) ≈ 3.570948074697437e9
 @test_throws ArgumentError CHOLMOD.norm_sparse(A, 2)
 @test CHOLMOD.isvalid(A)
 
@@ -105,14 +105,14 @@ chma = ldltfact(A)                      # LDL' form
 @test CHOLMOD.isvalid(chma)
 @test unsafe_load(chma.p).is_ll == 0    # check that it is in fact an LDLt
 x = chma\B
-@test_approx_eq x ones(size(x))
+@test x ≈ ones(size(x))
 @test nnz(ldltfact(A, perm=1:size(A,1))) > nnz(chma)
 
 chma = cholfact(A)                      # LL' form
 @test CHOLMOD.isvalid(chma)
 @test unsafe_load(chma.p).is_ll == 1    # check that it is in fact an LLt
 x = chma\B
-@test_approx_eq x ones(size(x))
+@test x ≈ ones(size(x))
 @test nnz(chma) == 489
 @test nnz(cholfact(A, perm=1:size(A,1))) > nnz(chma)
 
@@ -155,21 +155,21 @@ let # Issue 9160
             cmB = CHOLMOD.Sparse(B)
 
             # Ac_mul_B
-            @test_approx_eq sparse(cmA'*cmB) A'*B
+            @test sparse(cmA'*cmB) ≈ A'*B
 
             # A_mul_Bc
-            @test_approx_eq sparse(cmA*cmB') A*B'
+            @test sparse(cmA*cmB') ≈ A*B'
 
             # A_mul_Ac
-            @test_approx_eq sparse(cmA*cmA') A*A'
+            @test sparse(cmA*cmA') ≈ A*A'
 
             # Ac_mul_A
-            @test_approx_eq sparse(cmA'*cmA) A'*A
+            @test sparse(cmA'*cmA) ≈ A'*A
 
             # A_mul_Ac for symmetric A
             A = 0.5*(A + A')
             cmA = CHOLMOD.Sparse(A)
-            @test_approx_eq sparse(cmA*cmA') A*A'
+            @test sparse(cmA*cmA') ≈ A*A'
         end
     end
 end
@@ -278,12 +278,12 @@ for elty in (Float64, Complex{Float64})
     @test_throws BoundsError ADense[6, 1]
     @test_throws BoundsError ADense[1, 6]
     @test copy(ADense) == ADense
-    @test_approx_eq CHOLMOD.norm_dense(ADense, 1) norm(A, 1)
-    @test_approx_eq CHOLMOD.norm_dense(ADense, 0) norm(A, Inf)
+    @test CHOLMOD.norm_dense(ADense, 1) ≈ norm(A, 1)
+    @test CHOLMOD.norm_dense(ADense, 0) ≈ norm(A, Inf)
     @test_throws ArgumentError CHOLMOD.norm_dense(ADense, 2)
     @test_throws ArgumentError CHOLMOD.norm_dense(ADense, 3)
 
-    @test_approx_eq CHOLMOD.norm_dense(bDense, 2) norm(b)
+    @test CHOLMOD.norm_dense(bDense, 2) ≈ norm(b)
     @test CHOLMOD.check_dense(bDense)
 
     AA = CHOLMOD.eye(3)
@@ -338,18 +338,18 @@ for elty in (Float64, Complex{Float64})
     @test copy(A1Sparse) == A1Sparse
     @test size(A1Sparse, 3) == 1
     if elty <: Real # multiplication only defined for real matrices in CHOLMOD
-        @test_approx_eq A1Sparse*A2Sparse A1*A2
+        @test A1Sparse*A2Sparse ≈ A1*A2
         @test_throws DimensionMismatch CHOLMOD.Sparse(A1[:,1:4])*A2Sparse
-        @test_approx_eq A1Sparse'A2Sparse A1'A2
-        @test_approx_eq A1Sparse*A2Sparse' A1*A2'
+        @test A1Sparse'A2Sparse ≈ A1'A2
+        @test A1Sparse*A2Sparse' ≈ A1*A2'
 
-        @test_approx_eq A1Sparse*A1Sparse A1*A1
-        @test_approx_eq A1Sparse'A1Sparse A1'A1
-        @test_approx_eq A1Sparse*A1Sparse' A1*A1'
+        @test A1Sparse*A1Sparse ≈ A1*A1
+        @test A1Sparse'A1Sparse ≈ A1'A1
+        @test A1Sparse*A1Sparse' ≈ A1*A1'
 
-        @test_approx_eq A1pdSparse*A1pdSparse A1pd*A1pd
-        @test_approx_eq A1pdSparse'A1pdSparse A1pd'A1pd
-        @test_approx_eq A1pdSparse*A1pdSparse' A1pd*A1pd'
+        @test A1pdSparse*A1pdSparse ≈ A1pd*A1pd
+        @test A1pdSparse'A1pdSparse ≈ A1pd'A1pd
+        @test A1pdSparse*A1pdSparse' ≈ A1pd*A1pd'
 
         @test_throws DimensionMismatch A1Sparse*CHOLMOD.eye(4, 5, elty)
     end
@@ -369,19 +369,19 @@ for elty in (Float64, Complex{Float64})
     show(tmp, F)
     @test tmp.size > 0
     @test isa(CHOLMOD.Sparse(F), CHOLMOD.Sparse{elty})
-    @test_approx_eq F\CHOLMOD.Sparse(sparse(ones(elty, 5))) A1pd\ones(5)
+    @test F\CHOLMOD.Sparse(sparse(ones(elty, 5))) ≈ A1pd\ones(5)
     @test_throws DimensionMismatch F\CHOLMOD.Dense(ones(elty, 4))
     @test_throws DimensionMismatch F\CHOLMOD.Sparse(sparse(ones(elty, 4)))
-    @test_approx_eq F'\ones(elty, 5) full(A1pd)'\ones(5)
-    @test_approx_eq F'\sparse(ones(elty, 5)) full(A1pd)'\ones(5)
-    @test_approx_eq logdet(F) logdet(full(A1pd))
+    @test F'\ones(elty, 5) ≈ full(A1pd)'\ones(5)
+    @test F'\sparse(ones(elty, 5)) ≈ full(A1pd)'\ones(5)
+    @test logdet(F) ≈ logdet(full(A1pd))
     @test det(F) == exp(logdet(F))
     let # to test supernodal, we must use a larger matrix
         Ftmp = sprandn(100,100,0.1)
         Ftmp = Ftmp'Ftmp + I
-        @test_approx_eq logdet(cholfact(Ftmp)) logdet(full(Ftmp))
+        @test logdet(cholfact(Ftmp)) ≈ logdet(full(Ftmp))
     end
-    @test_approx_eq logdet(ldltfact(A1pd)) logdet(full(A1pd))
+    @test logdet(ldltfact(A1pd)) ≈ logdet(full(A1pd))
     @test isposdef(A1pd)
     @test !isposdef(A1)
     @test !isposdef(A1 + A1' |> t -> t - 2eigmax(full(t))*I)
@@ -414,22 +414,22 @@ for elty in (Float64, Complex{Float64})
     CHOLMOD.change_factor!(elty, false, false, true, true, F)
     @test unsafe_load(F.p).is_ll == 0
     CHOLMOD.change_factor!(elty, true, false, true, true, F)
-    @test_approx_eq CHOLMOD.Sparse(cholfact!(copy(F), A1pd)) CHOLMOD.Sparse(F) # surprisingly, this can cause small ulp size changes so we cannot test exact equality
+    @test CHOLMOD.Sparse(cholfact!(copy(F), A1pd)) ≈ CHOLMOD.Sparse(F) # surprisingly, this can cause small ulp size changes so we cannot test exact equality
     @test size(F, 2) == 5
     @test size(F, 3) == 1
     @test_throws ArgumentError size(F, 0)
 
     F = cholfact(A1pdSparse, shift=2)
     @test isa(CHOLMOD.Sparse(F), CHOLMOD.Sparse{elty})
-    @test_approx_eq CHOLMOD.Sparse(cholfact!(copy(F), A1pd, shift=2.0)) CHOLMOD.Sparse(F) # surprisingly, this can cause small ulp size changes so we cannot test exact equality
+    @test CHOLMOD.Sparse(cholfact!(copy(F), A1pd, shift=2.0)) ≈ CHOLMOD.Sparse(F) # surprisingly, this can cause small ulp size changes so we cannot test exact equality
 
     F = ldltfact(A1pd)
     @test isa(CHOLMOD.Sparse(F), CHOLMOD.Sparse{elty})
-    @test_approx_eq CHOLMOD.Sparse(ldltfact!(copy(F), A1pd)) CHOLMOD.Sparse(F) # surprisingly, this can cause small ulp size changes so we cannot test exact equality
+    @test CHOLMOD.Sparse(ldltfact!(copy(F), A1pd)) ≈ CHOLMOD.Sparse(F) # surprisingly, this can cause small ulp size changes so we cannot test exact equality
 
     F = ldltfact(A1pdSparse, shift=2)
     @test isa(CHOLMOD.Sparse(F), CHOLMOD.Sparse{elty})
-    @test_approx_eq CHOLMOD.Sparse(ldltfact!(copy(F), A1pd, shift=2.0)) CHOLMOD.Sparse(F) # surprisingly, this can cause small ulp size changes so we cannot test exact equality
+    @test CHOLMOD.Sparse(ldltfact!(copy(F), A1pd, shift=2.0)) ≈ CHOLMOD.Sparse(F) # surprisingly, this can cause small ulp size changes so we cannot test exact equality
 
     @test isa(CHOLMOD.factor_to_sparse!(F), CHOLMOD.Sparse)
     @test_throws CHOLMOD.CHOLMODException CHOLMOD.factor_to_sparse!(F)
@@ -461,9 +461,9 @@ for elty in (Float64, Complex{Float64})
 
 
     if elty <: Real
-        @test_approx_eq CHOLMOD.ssmult(A1Sparse, A2Sparse, 0, true, true) A1*A2
-        @test_approx_eq CHOLMOD.aat(A1Sparse, [0:size(A1,2)-1;], 1) A1*A1'
-        @test_approx_eq CHOLMOD.aat(A1Sparse, [0:1;], 1) A1[:,1:2]*A1[:,1:2]'
+        @test CHOLMOD.ssmult(A1Sparse, A2Sparse, 0, true, true) ≈ A1*A2
+        @test CHOLMOD.aat(A1Sparse, [0:size(A1,2)-1;], 1) ≈ A1*A1'
+        @test CHOLMOD.aat(A1Sparse, [0:1;], 1) ≈ A1[:,1:2]*A1[:,1:2]'
         @test CHOLMOD.copy(A1Sparse, 0, 1) == A1Sparse
     end
 
@@ -480,19 +480,19 @@ D_f = float([4 0 0; 0 1 0; 0 0 9])
 # cholfact, no permutation
 Fs = cholfact(As, perm=[1:3;])
 @test Fs[:p] == [1:3;]
-@test_approx_eq sparse(Fs[:L]) Lf
-@test_approx_eq sparse(Fs) As
+@test sparse(Fs[:L]) ≈ Lf
+@test sparse(Fs) ≈ As
 b = rand(3)
-@test_approx_eq Fs\b Af\b
-@test_approx_eq Fs[:UP]\(Fs[:PtL]\b) Af\b
-@test_approx_eq Fs[:L]\b Lf\b
-@test_approx_eq Fs[:U]\b Lf'\b
-@test_approx_eq Fs[:L]'\b Lf'\b
-@test_approx_eq Fs[:U]'\b Lf\b
-@test_approx_eq Fs[:PtL]\b Lf\b
-@test_approx_eq Fs[:UP]\b Lf'\b
-@test_approx_eq Fs[:PtL]'\b Lf'\b
-@test_approx_eq Fs[:UP]'\b Lf\b
+@test Fs\b ≈ Af\b
+@test Fs[:UP]\(Fs[:PtL]\b) ≈ Af\b
+@test Fs[:L]\b ≈ Lf\b
+@test Fs[:U]\b ≈ Lf'\b
+@test Fs[:L]'\b ≈ Lf'\b
+@test Fs[:U]'\b ≈ Lf\b
+@test Fs[:PtL]\b ≈ Lf\b
+@test Fs[:UP]\b ≈ Lf'\b
+@test Fs[:PtL]'\b ≈ Lf'\b
+@test Fs[:UP]'\b ≈ Lf\b
 @test_throws CHOLMOD.CHOLMODException Fs[:D]
 @test_throws CHOLMOD.CHOLMODException Fs[:LD]
 @test_throws CHOLMOD.CHOLMODException Fs[:DU]
@@ -506,19 +506,19 @@ Fs = cholfact(As, perm=p)
 @test Fs[:p] == p
 Afp = Af[p,p]
 Lfp = cholfact(Afp)[:L]
-@test_approx_eq sparse(Fs[:L]) Lfp
-@test_approx_eq sparse(Fs) As
+@test sparse(Fs[:L]) ≈ Lfp
+@test sparse(Fs) ≈ As
 b = rand(3)
-@test_approx_eq Fs\b Af\b
-@test_approx_eq Fs[:UP]\(Fs[:PtL]\b) Af\b
-@test_approx_eq Fs[:L]\b Lfp\b
-@test_approx_eq Fs[:U]'\b Lfp\b
-@test_approx_eq Fs[:U]\b Lfp'\b
-@test_approx_eq Fs[:L]'\b Lfp'\b
-@test_approx_eq Fs[:PtL]\b Lfp\b[p]
-@test_approx_eq Fs[:UP]\b (Lfp'\b)[p_inv]
-@test_approx_eq Fs[:PtL]'\b (Lfp'\b)[p_inv]
-@test_approx_eq Fs[:UP]'\b Lfp\b[p]
+@test Fs\b ≈ Af\b
+@test Fs[:UP]\(Fs[:PtL]\b) ≈ Af\b
+@test Fs[:L]\b ≈ Lfp\b
+@test Fs[:U]'\b ≈ Lfp\b
+@test Fs[:U]\b ≈ Lfp'\b
+@test Fs[:L]'\b ≈ Lfp'\b
+@test Fs[:PtL]\b ≈ Lfp\b[p]
+@test Fs[:UP]\b ≈ (Lfp'\b)[p_inv]
+@test Fs[:PtL]'\b ≈ (Lfp'\b)[p_inv]
+@test Fs[:UP]'\b ≈ Lfp\b[p]
 @test_throws CHOLMOD.CHOLMODException Fs[:PL]
 @test_throws CHOLMOD.CHOLMODException Fs[:UPt]
 @test_throws CHOLMOD.CHOLMODException Fs[:D]
@@ -530,60 +530,60 @@ b = rand(3)
 # ldltfact, no permutation
 Fs = ldltfact(As, perm=[1:3;])
 @test Fs[:p] == [1:3;]
-@test_approx_eq sparse(Fs[:LD]) LDf
-@test_approx_eq sparse(Fs) As
+@test sparse(Fs[:LD]) ≈ LDf
+@test sparse(Fs) ≈ As
 b = rand(3)
-@test_approx_eq Fs\b Af\b
-@test_approx_eq Fs[:UP]\(Fs[:PtLD]\b) Af\b
-@test_approx_eq Fs[:DUP]\(Fs[:PtL]\b) Af\b
-@test_approx_eq Fs[:L]\b L_f\b
-@test_approx_eq Fs[:U]\b L_f'\b
-@test_approx_eq Fs[:L]'\b L_f'\b
-@test_approx_eq Fs[:U]'\b L_f\b
-@test_approx_eq Fs[:PtL]\b L_f\b
-@test_approx_eq Fs[:UP]\b L_f'\b
-@test_approx_eq Fs[:PtL]'\b L_f'\b
-@test_approx_eq Fs[:UP]'\b L_f\b
-@test_approx_eq Fs[:D]\b D_f\b
-@test_approx_eq Fs[:D]'\b D_f\b
-@test_approx_eq Fs[:LD]\b D_f\(L_f\b)
-@test_approx_eq Fs[:DU]'\b D_f\(L_f\b)
-@test_approx_eq Fs[:LD]'\b L_f'\(D_f\b)
-@test_approx_eq Fs[:DU]\b L_f'\(D_f\b)
-@test_approx_eq Fs[:PtLD]\b D_f\(L_f\b)
-@test_approx_eq Fs[:DUP]'\b D_f\(L_f\b)
-@test_approx_eq Fs[:PtLD]'\b L_f'\(D_f\b)
-@test_approx_eq Fs[:DUP]\b L_f'\(D_f\b)
+@test Fs\b ≈ Af\b
+@test Fs[:UP]\(Fs[:PtLD]\b) ≈ Af\b
+@test Fs[:DUP]\(Fs[:PtL]\b) ≈ Af\b
+@test Fs[:L]\b ≈ L_f\b
+@test Fs[:U]\b ≈ L_f'\b
+@test Fs[:L]'\b ≈ L_f'\b
+@test Fs[:U]'\b ≈ L_f\b
+@test Fs[:PtL]\b ≈ L_f\b
+@test Fs[:UP]\b ≈ L_f'\b
+@test Fs[:PtL]'\b ≈ L_f'\b
+@test Fs[:UP]'\b ≈ L_f\b
+@test Fs[:D]\b ≈ D_f\b
+@test Fs[:D]'\b ≈ D_f\b
+@test Fs[:LD]\b ≈ D_f\(L_f\b)
+@test Fs[:DU]'\b ≈ D_f\(L_f\b)
+@test Fs[:LD]'\b ≈ L_f'\(D_f\b)
+@test Fs[:DU]\b ≈ L_f'\(D_f\b)
+@test Fs[:PtLD]\b ≈ D_f\(L_f\b)
+@test Fs[:DUP]'\b ≈ D_f\(L_f\b)
+@test Fs[:PtLD]'\b ≈ L_f'\(D_f\b)
+@test Fs[:DUP]\b ≈ L_f'\(D_f\b)
 
 # ldltfact, with permutation
 Fs = ldltfact(As, perm=p)
 @test Fs[:p] == p
-@test_approx_eq sparse(Fs) As
+@test sparse(Fs) ≈ As
 b = rand(3)
 Asp = As[p,p]
 LDp = sparse(ldltfact(Asp, perm=[1,2,3])[:LD])
 # LDp = sparse(Fs[:LD])
 Lp, dp = Base.SparseArrays.CHOLMOD.getLd!(copy(LDp))
 Dp = spdiagm(dp)
-@test_approx_eq Fs\b Af\b
-@test_approx_eq Fs[:UP]\(Fs[:PtLD]\b) Af\b
-@test_approx_eq Fs[:DUP]\(Fs[:PtL]\b) Af\b
-@test_approx_eq Fs[:L]\b Lp\b
-@test_approx_eq Fs[:U]\b Lp'\b
-@test_approx_eq Fs[:L]'\b Lp'\b
-@test_approx_eq Fs[:U]'\b Lp\b
-@test_approx_eq Fs[:PtL]\b Lp\b[p]
-@test_approx_eq Fs[:UP]\b (Lp'\b)[p_inv]
-@test_approx_eq Fs[:PtL]'\b (Lp'\b)[p_inv]
-@test_approx_eq Fs[:UP]'\b Lp\b[p]
-@test_approx_eq Fs[:LD]\b Dp\(Lp\b)
-@test_approx_eq Fs[:DU]'\b Dp\(Lp\b)
-@test_approx_eq Fs[:LD]'\b Lp'\(Dp\b)
-@test_approx_eq Fs[:DU]\b Lp'\(Dp\b)
-@test_approx_eq Fs[:PtLD]\b Dp\(Lp\b[p])
-@test_approx_eq Fs[:DUP]'\b Dp\(Lp\b[p])
-@test_approx_eq Fs[:PtLD]'\b (Lp'\(Dp\b))[p_inv]
-@test_approx_eq Fs[:DUP]\b (Lp'\(Dp\b))[p_inv]
+@test Fs\b ≈ Af\b
+@test Fs[:UP]\(Fs[:PtLD]\b) ≈ Af\b
+@test Fs[:DUP]\(Fs[:PtL]\b) ≈ Af\b
+@test Fs[:L]\b ≈ Lp\b
+@test Fs[:U]\b ≈ Lp'\b
+@test Fs[:L]'\b ≈ Lp'\b
+@test Fs[:U]'\b ≈ Lp\b
+@test Fs[:PtL]\b ≈ Lp\b[p]
+@test Fs[:UP]\b ≈ (Lp'\b)[p_inv]
+@test Fs[:PtL]'\b ≈ (Lp'\b)[p_inv]
+@test Fs[:UP]'\b ≈ Lp\b[p]
+@test Fs[:LD]\b ≈ Dp\(Lp\b)
+@test Fs[:DU]'\b ≈ Dp\(Lp\b)
+@test Fs[:LD]'\b ≈ Lp'\(Dp\b)
+@test Fs[:DU]\b ≈ Lp'\(Dp\b)
+@test Fs[:PtLD]\b ≈ Dp\(Lp\b[p])
+@test Fs[:DUP]'\b ≈ Dp\(Lp\b[p])
+@test Fs[:PtLD]'\b ≈ (Lp'\(Dp\b))[p_inv]
+@test Fs[:DUP]\b ≈ (Lp'\(Dp\b))[p_inv]
 @test_throws CHOLMOD.CHOLMODException Fs[:DUPt]
 @test_throws CHOLMOD.CHOLMODException Fs[:PLD]
 
@@ -636,11 +636,11 @@ Fnew = deserialize(b)
 # test \ for Factor and StridedVecOrMat
 let x = rand(5)
     A = cholfact(sparse(diagm(x.\1)))
-    @test_approx_eq A\view(ones(10),1:2:10) x
-    @test_approx_eq A\view(eye(5,5),:,:) diagm(x)
+    @test A\view(ones(10),1:2:10) ≈ x
+    @test A\view(eye(5,5),:,:) ≈ diagm(x)
 end
 
 # Real factorization and complex rhs
 A = sprandn(5,5,0.4) |> t -> t't + I
 B = complex(randn(5,2), randn(5,2))
-@test_approx_eq cholfact(A)\B A\B
+@test cholfact(A)\B ≈ A\B

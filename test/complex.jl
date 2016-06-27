@@ -69,67 +69,67 @@ for T in (Float32, Float64)
     y = Complex{T}(1//2 + 1//5*im)
     yi = 4
     # Test random values
-    @test_approx_eq x^y big(x)^big(y)
-    @test_approx_eq x^yi big(x)^yi
-    @test_approx_eq x^true big(x)^true
-    @test_approx_eq x^false big(x)^false
-    @test_approx_eq x^1 big(x)^1
-    @test_approx_eq abs(x) abs(big(x))
-    @test_approx_eq abs2(x) abs2(big(x))
-    @test_approx_eq acos(x) acos(big(x))
-    @test_approx_eq acosh(1+x) acosh(1+big(x))
-    @test_approx_eq angle(x) angle(big(x))
-    @test_approx_eq asin(x) asin(big(x))
-    @test_approx_eq asinh(x) asinh(big(x))
-    @test_approx_eq atan(x) atan(big(x))
-    @test_approx_eq atanh(x) atanh(big(x))
-    @test_approx_eq cis(real(x)) cis(real(big(x)))
-    @test_approx_eq cis(x) cis(big(x))
-    @test_approx_eq cos(x) cos(big(x))
-    @test_approx_eq cosh(x) cosh(big(x))
-    @test_approx_eq exp(x) exp(big(x))
-    @test_approx_eq exp10(x) exp10(big(x))
-    @test_approx_eq exp2(x) exp2(big(x))
+    @test x^y ≈ big(x)^big(y)
+    @test x^yi ≈ big(x)^yi
+    @test x^true ≈ big(x)^true
+    @test x^false ≈ big(x)^false
+    @test x^1 ≈ big(x)^1
+    @test abs(x) ≈ abs(big(x))
+    @test abs2(x) ≈ abs2(big(x))
+    @test acos(x) ≈ acos(big(x))
+    @test acosh(1+x) ≈ acosh(1+big(x))
+    @test angle(x) ≈ angle(big(x))
+    @test asin(x) ≈ asin(big(x))
+    @test asinh(x) ≈ asinh(big(x))
+    @test atan(x) ≈ atan(big(x))
+    @test atanh(x) ≈ atanh(big(x))
+    @test cis(real(x)) ≈ cis(real(big(x)))
+    @test cis(x) ≈ cis(big(x))
+    @test cos(x) ≈ cos(big(x))
+    @test cosh(x) ≈ cosh(big(x))
+    @test exp(x) ≈ exp(big(x))
+    @test exp10(x) ≈ exp10(big(x))
+    @test exp2(x) ≈ exp2(big(x))
     @test_approx_eq_eps expm1(x) expm1(big(x)) eps(T)
-    @test_approx_eq log(x) log(big(x))
-    @test_approx_eq log10(x) log10(big(x))
-    @test_approx_eq log1p(x) log1p(big(x))
-    @test_approx_eq log2(x) log2(big(x))
-    @test_approx_eq sin(x) sin(big(x))
-    @test_approx_eq sinh(x) sinh(big(x))
-    @test_approx_eq sqrt(x) sqrt(big(x))
-    @test_approx_eq tan(x) tan(big(x))
-    @test_approx_eq tanh(x) tanh(big(x))
+    @test log(x) ≈ log(big(x))
+    @test log10(x) ≈ log10(big(x))
+    @test log1p(x) ≈ log1p(big(x))
+    @test log2(x) ≈ log2(big(x))
+    @test sin(x) ≈ sin(big(x))
+    @test sinh(x) ≈ sinh(big(x))
+    @test sqrt(x) ≈ sqrt(big(x))
+    @test tan(x) ≈ tan(big(x))
+    @test tanh(x) ≈ tanh(big(x))
     # Test inverses
-    @test_approx_eq acos(cos(x)) x
-    @test_approx_eq acosh(cosh(x)) x
-    @test_approx_eq asin(sin(x)) x
-    @test_approx_eq asinh(sinh(x)) x
-    @test_approx_eq atan(tan(x)) x
-    @test_approx_eq atanh(tanh(x)) x
-    @test_approx_eq cos(acos(x)) x
-    @test_approx_eq cosh(acosh(1+x)) 1+x
-    @test_approx_eq exp(log(x)) x
-    @test_approx_eq exp10(log10(x)) x
-    @test_approx_eq exp2(log2(x)) x
-    @test_approx_eq expm1(log1p(x)) x
-    @test_approx_eq log(exp(x)) x
-    @test_approx_eq log10(exp10(x)) x
-    @test_approx_eq log1p(expm1(x)) x
-    @test_approx_eq log2(exp2(x)) x
-    @test_approx_eq sin(asin(x)) x
-    @test_approx_eq sinh(asinh(x)) x
-    @test_approx_eq sqrt(x)^2 x
-    @test_approx_eq sqrt(x^2) x
-    @test_approx_eq tan(atan(x)) x
-    @test_approx_eq tanh(atanh(x)) x
+    @test acos(cos(x)) ≈ x
+    @test acosh(cosh(x)) ≈ x
+    @test asin(sin(x)) ≈ x
+    @test asinh(sinh(x)) ≈ x
+    @test atan(tan(x)) ≈ x
+    @test atanh(tanh(x)) ≈ x
+    @test cos(acos(x)) ≈ x
+    @test cosh(acosh(1+x)) ≈ 1+x
+    @test exp(log(x)) ≈ x
+    @test exp10(log10(x)) ≈ x
+    @test exp2(log2(x)) ≈ x
+    @test expm1(log1p(x)) ≈ x
+    @test log(exp(x)) ≈ x
+    @test log10(exp10(x)) ≈ x
+    @test log1p(expm1(x)) ≈ x
+    @test log2(exp2(x)) ≈ x
+    @test sin(asin(x)) ≈ x
+    @test sinh(asinh(x)) ≈ x
+    @test sqrt(x)^2 ≈ x
+    @test sqrt(x^2) ≈ x
+    @test tan(atan(x)) ≈ x
+    @test tanh(atanh(x)) ≈ x
     # Test some properties
-    @test_approx_eq cosh(x) (exp(x)+exp(-x))/2
-    @test_approx_eq cosh(x)^2-sinh(x)^2 1
-    @test_approx_eq sin(x)^2+cos(x)^2 1
-    @test_approx_eq sinh(x) (exp(x)-exp(-x))/2
-    @test_approx_eq tan(x) sin(x)/cos(x)
-    @test_approx_eq tanh(x) sinh(x)/cosh(x)
+    @test cosh(x) ≈ (exp(x)+exp(-x))/2
+    @test cosh(x)^2-sinh(x)^2 ≈ 1
+    @test sin(x)^2+cos(x)^2 ≈ 1
+    @test sinh(x) ≈ (exp(x)-exp(-x))/2
+    @test tan(x) ≈ sin(x)/cos(x)
+    @test tanh(x) ≈ sinh(x)/cosh(x)
 end
 
 #isimag and isinf
@@ -295,15 +295,15 @@ end
 @test isequal(expm1(complex( 1e-20, 0.0)), complex(expm1( 1e-20), 0.0))
 @test isequal(expm1(complex(-1e-20, 0.0)), complex(expm1(-1e-20), 0.0))
 
-@test_approx_eq expm1(complex( 1e-20, 1e-10)) complex( 5e-21, 1e-10)
-@test_approx_eq expm1(complex( 1e-20,-1e-10)) complex( 5e-21,-1e-10)
-@test_approx_eq expm1(complex(-1e-20, 1e-10)) complex(-1.5e-20, 1e-10)
-@test_approx_eq expm1(complex(-1e-20,-1e-10)) complex(-1.5e-20,-1e-10)
+@test expm1(complex( 1e-20, 1e-10)) ≈ complex( 5e-21, 1e-10)
+@test expm1(complex( 1e-20,-1e-10)) ≈ complex( 5e-21,-1e-10)
+@test expm1(complex(-1e-20, 1e-10)) ≈ complex(-1.5e-20, 1e-10)
+@test expm1(complex(-1e-20,-1e-10)) ≈ complex(-1.5e-20,-1e-10)
 
-@test_approx_eq expm1(complex( 10.0, 10.0)) exp(complex( 10.0, 10.0))-1
-@test_approx_eq expm1(complex( 10.0,-10.0)) exp(complex( 10.0,-10.0))-1
-@test_approx_eq expm1(complex(-10.0, 10.0)) exp(complex(-10.0, 10.0))-1
-@test_approx_eq expm1(complex(-10.0,-10.0)) exp(complex(-10.0,-10.0))-1
+@test expm1(complex( 10.0, 10.0)) ≈ exp(complex( 10.0, 10.0))-1
+@test expm1(complex( 10.0,-10.0)) ≈ exp(complex( 10.0,-10.0))-1
+@test expm1(complex(-10.0, 10.0)) ≈ exp(complex(-10.0, 10.0))-1
+@test expm1(complex(-10.0,-10.0)) ≈ exp(complex(-10.0,-10.0))-1
 
 # log1p:
 @test isequal(log1p(complex(Inf, 3)), complex(Inf, +0.))
@@ -320,10 +320,10 @@ end
 @test isequal(log1p(complex(1, -Inf)), complex(Inf, -pi/2))
 import Base.Math.@horner
 for z in (1e-10+1e-9im, 1e-10-1e-9im, -1e-10+1e-9im, -1e-10-1e-9im)
-    @test_approx_eq log1p(z) @horner(z, 0, 1, -0.5, 1/3, -0.25, 0.2)
+    @test log1p(z) ≈ @horner(z, 0, 1, -0.5, 1/3, -0.25, 0.2)
 end
 for z in (15+4im, 0.2+3im, 0.08-0.9im)
-    @test_approx_eq log1p(z) log(1+z)
+    @test log1p(z) ≈ log(1+z)
 end
 
 
@@ -351,8 +351,8 @@ end
 @test isequal(complex(-0.0,-0.0)^complex(-0.0, 0.0), complex(1.0, 0.0))
 @test isequal(complex(-0.0,-0.0)^complex(-0.0,-0.0), complex(1.0, 0.0))
 
-@test_approx_eq complex(0.0,1.0)^complex(2.0,0) complex(-1.0, 0.0)
-@test_approx_eq complex(1.0,2.0)^complex(3.0,0) complex(-11.0, -2.0)
+@test complex(0.0,1.0)^complex(2.0,0) ≈ complex(-1.0, 0.0)
+@test complex(1.0,2.0)^complex(3.0,0) ≈ complex(-11.0, -2.0)
 
 @test isequal(complex(0.0,0.0)^false, complex(1.0,0.0))
 @test isequal(complex(0.0,0.0)^0, complex(1.0,0.0))
@@ -864,22 +864,22 @@ for T in (Float16, Float32, Float64)
 end
 
 # cis
-@test_approx_eq cis(0.0+1.0im) 0.367879441171442321595523770161460867445811131031767834507836+0.0im
-@test_approx_eq cis(1.0+0.0im) 0.54030230586813971740093660744297660373231042061+0.84147098480789650665250232163029899962256306079im
-@test_approx_eq cis(pi) -1.0+0.0im
-@test_approx_eq cis(pi/2) 0.0+1.0im
+@test cis(0.0+1.0im) ≈ 0.367879441171442321595523770161460867445811131031767834507836+0.0im
+@test cis(1.0+0.0im) ≈ 0.54030230586813971740093660744297660373231042061+0.84147098480789650665250232163029899962256306079im
+@test cis(pi) ≈ -1.0+0.0im
+@test cis(pi/2) ≈ 0.0+1.0im
 
 # exp2
 @test exp2(0.0+0.0im) == 1.0+0.0im
 @test exp2(1.0+0.0im) == 2.0+0.0im
 #wolframalpha
-@test_approx_eq exp2(1.0+3.0im) -0.9739888359315627962096198412+1.74681016354974281701922im
+@test exp2(1.0+3.0im) ≈ -0.9739888359315627962096198412+1.74681016354974281701922im
 
 # exp10
 @test exp10(0.0+0.0im) == 1.0+0.0im
 @test exp10(1.0+0.0im) == 10.0+0.0im
 #wolframalpha
-@test_approx_eq exp10(1.0+2.0im) -1.0701348355877020772086517528518239460495529361-9.9425756941378968736161937190915602112878340717im
+@test exp10(1.0+2.0im) ≈ -1.0701348355877020772086517528518239460495529361-9.9425756941378968736161937190915602112878340717im
 
 # round #8291
 @test round(Complex(1.125, 0.875), 2) == Complex(1.12, 0.88)

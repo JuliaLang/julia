@@ -38,7 +38,7 @@ end
 #num2hex
 for elty in (Float16,Float32,Float64)
     x = rand(elty)
-    @test_approx_eq hex2num(num2hex(x)) x
+    @test hex2num(num2hex(x)) ≈ x
 end
 
 #round
