@@ -479,7 +479,9 @@ flatten(itr) = Flatten(itr)
 
 eltype{I}(::Type{Flatten{I}}) = eltype(eltype(I))
 iteratorsize{I}(::Type{Flatten{I}}) = SizeUnknown()
-iteratoreltype{I}(::Type{Flatten{I}}) = iteratoreltype(eltype(I))
+iteratoreltype{I}(::Type{Flatten{I}}) = _flatteneltype(I, iteratoreltype(I))
+_flatteneltype(I, ::HasEltype) = iteratoreltype(eltype(I))
+_flatteneltype(I, et) = EltypeUnknown()
 
 function start(f::Flatten)
     local inner, s2

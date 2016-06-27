@@ -376,6 +376,8 @@ import Base.flatten
 @test eltype(flatten(UnitRange{Int8}[1:2, 3:4])) == Int8
 @test_throws ArgumentError collect(flatten(Any[]))
 
+@test Base.iteratoreltype(Base.Flatten((i for i=1:2) for j=1:1)) == Base.EltypeUnknown()
+
 # foreach
 let
     a = []
