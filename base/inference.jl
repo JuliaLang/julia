@@ -284,6 +284,15 @@ add_tfunc(lt_float, 2, 2, cmp_tfunc)
 add_tfunc(le_float, 2, 2, cmp_tfunc)
 add_tfunc(fpiseq, 2, 2, cmp_tfunc)
 add_tfunc(fpislt, 2, 2, cmp_tfunc)
+
+chk_tfunc = (x,y) -> Tuple{widenconst(x),Bool}
+add_tfunc(checked_sadd_int, 2, 2, chk_tfunc)
+add_tfunc(checked_uadd_int, 2, 2, chk_tfunc)
+add_tfunc(checked_ssub_int, 2, 2, chk_tfunc)
+add_tfunc(checked_usub_int, 2, 2, chk_tfunc)
+add_tfunc(checked_smul_int, 2, 2, chk_tfunc)
+add_tfunc(checked_umul_int, 2, 2, chk_tfunc)
+
 add_tfunc(Core.Intrinsics.ccall, 3, IInf,
     function(fptr::ANY, rt::ANY, at::ANY, a...)
         if !isType(rt)
