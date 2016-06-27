@@ -1414,6 +1414,7 @@ export
     @enum,
     @label,
     @goto,
+    @view,
 
 # SparseArrays module re-exports
     SparseArrays,
