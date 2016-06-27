@@ -2,7 +2,7 @@
 
 module Sort
 
-using Base: Order, copymutable, linearindices, allocate_for, linearindexing, viewindexing, LinearFast
+using Base: Order, copymutable, linearindices, linearindexing, viewindexing, LinearFast
 
 import
     Base.sort,
@@ -447,7 +447,7 @@ function sortperm(v::AbstractVector;
                   by=identity,
                   rev::Bool=false,
                   order::Ordering=Forward)
-    p = Base.allocate_for(Vector{Int}, v, indices(v, 1))
+    p = similar(Vector{Int}, indices(v, 1))
     for (i,ind) in zip(eachindex(p), indices(v, 1))
         p[i] = ind
     end
@@ -507,7 +507,7 @@ end
 function sortrows(A::AbstractMatrix; kws...)
     inds = indices(A,1)
     T = slicetypeof(A, inds, :)
-    rows = allocate_for(Vector{T}, A, indices(A, 1))
+    rows = similar(Vector{T}, indices(A, 1))
     for i in inds
         rows[i] = view(A, i, :)
     end
@@ -518,7 +518,7 @@ end
 function sortcols(A::AbstractMatrix; kws...)
     inds = indices(A,2)
     T = slicetypeof(A, :, inds)
-    cols = allocate_for(Vector{T}, A, indices(A, 2))
+    cols = similar(Vector{T}, indices(A, 2))
     for i in inds
         cols[i] = view(A, :, i)
     end

@@ -3,7 +3,7 @@
 module Broadcast
 
 using Base.Cartesian
-using Base: promote_op, promote_eltype, promote_eltype_op, @get!, _msk_end, unsafe_bitgetindex, linearindices, to_shape, allocate_for, tail, dimlength, OneTo
+using Base: promote_op, promote_eltype, promote_eltype_op, @get!, _msk_end, unsafe_bitgetindex, linearindices, to_shape, tail, dimlength, OneTo
 import Base: .+, .-, .*, ./, .\, .//, .==, .<, .!=, .<=, .÷, .%, .<<, .>>, .^
 export broadcast, broadcast!, bitbroadcast
 export broadcast_getindex, broadcast_setindex!
@@ -181,7 +181,7 @@ function broadcast_t(f, ::Type{Any}, As...)
     shp = broadcast_shape(As...)
     iter = CartesianRange(shp)
     if isempty(iter)
-        return allocate_for(Array{Union{}}, As, shp)
+        return similar(Array{Union{}}, shp)
     end
     nargs = length(As)
     sz = size(iter)
@@ -189,12 +189,12 @@ function broadcast_t(f, ::Type{Any}, As...)
     st = start(iter)
     I, st = next(iter, st)
     val = f([ As[i][newindex(I, indexmaps[i])] for i=1:nargs ]...)
-    B = allocate_for(Array{typeof(val)}, As, shp)
+    B = similar(Array{typeof(val)}, shp)
     B[I] = val
     return _broadcast!(f, B, indexmaps, As, Val{nargs}, iter, st, 1)
 end
 
-@inline broadcast_t(f, T, As...) = broadcast!(f, allocate_for(Array{T}, As, broadcast_shape(As...)), As...)
+@inline broadcast_t(f, T, As...) = broadcast!(f, similar(Array{T}, broadcast_shape(As...)), As...)
 
 @inline broadcast(f, As...) = broadcast_t(f, promote_eltype_op(f, As...), As...)
 
@@ -217,7 +217,7 @@ function broadcast(f, As...)
 end
 =#
 
-@inline bitbroadcast(f, As...) = broadcast!(f, allocate_for(BitArray, As, broadcast_shape(As...)), As...)
+@inline bitbroadcast(f, As...) = broadcast!(f, similar(BitArray, broadcast_shape(As...)), As...)
 
 broadcast_getindex(src::AbstractArray, I::AbstractArray...) = broadcast_getindex!(Array{eltype(src)}(to_shape(broadcast_shape(I...))), src, I...)
 @generated function broadcast_getindex!(dest::AbstractArray, src::AbstractArray, I::AbstractArray...)
@@ -368,7 +368,7 @@ for (f, scalarf) in ((:.==, :(==)),
         shape = :(indices($active))
         @eval begin
             function ($f)(A::$sigA, B::$sigB)
-                P = allocate_for(BitArray, $active, $shape)
+                P = similar(BitArray, $shape)
                 F = parent(P)
                 l = length(F)
                 l == 0 && return F
