@@ -1526,6 +1526,26 @@
 (define (syntactic-op-to-call e)
   `(call ,(car e) ,(expand-forms (cadr e)) ,(expand-forms (caddr e))))
 
+;; wrap `expr` in a function appropriate for consuming values from given ranges
+(define (func-for-generator-ranges expr range-exprs)
+  (let* ((vars    (map cadr range-exprs))
+         (argname (if (and (length= vars 1) (symbol? (car vars)))
+                      (car vars)
+                      (gensy)))
+         (splat (cond ((eq? argname (car vars))  '())
+                      ((length= vars 1)
+                       `(,@(map (lambda (v) `(local ,v)) (lhs-vars (car vars)))
+                         (= ,(car vars) ,argname)))
+                      (else
+                       `(,@(map (lambda (v) `(local ,v)) (lhs-vars `(tuple ,@vars)))
+                         (= (tuple ,@vars) ,argname))))))
+    (if (and (null? splat)
+             (length= expr 3) (eq? (car expr) 'call)
+             (eq? (caddr expr) argname)
+             (not (expr-contains-eq argname (cadr expr))))
+        (cadr expr)  ;; eta reduce `x->f(x)` => `f`
+        `(-> ,argname (block ,@splat ,expr)))))
+
 ;; table mapping expression head to a function expanding that form
 (define expand-table
   (table
@@ -1960,52 +1980,60 @@
 
    'generator
    (lambda (e)
-     (let ((expr   (cadr e))
-           (vars   (map cadr  (cddr e)))
-           (ranges (map caddr (cddr e))))
-       (let* ((argname (if (and (length= vars 1) (symbol? (car vars)))
-                           (car vars)
-                           (gensy)))
-              (splat (cond ((eq? argname (car vars))  '())
-                           ((length= vars 1)
-                            `(,@(map (lambda (v) `(local ,v)) (lhs-vars (car vars)))
-                              (= ,(car vars) ,argname)))
-                           (else
-                            `(,@(map (lambda (v) `(local ,v)) (lhs-vars `(tuple ,@vars)))
-                              (= (tuple ,@vars) ,argname))))))
-         (expand-forms
-          `(call (top Generator)
-                 ,(if (and (null? splat)
-                           (length= expr 3) (eq? (car expr) 'call)
-                           (eq? (caddr expr) argname)
-                           (not (expr-contains-eq argname (cadr expr))))
-                      (cadr expr)  ;; eta reduce `x->f(x)` => `f`
-                      `(-> ,argname (block ,@splat ,expr)))
-                 ,(if (length= ranges 1)
+     (let* ((expr  (cadr e))
+            (filt? (eq? (car (caddr e)) 'filter))
+            (range-exprs (if filt? (cddr (caddr e)) (cddr e)))
+            (ranges (map caddr range-exprs))
+            (iter (if (length= ranges 1)
                       (car ranges)
-                      `(call (top product) ,@ranges)))))))
+                      `(call (top product) ,@ranges)))
+            (iter (if filt?
+                      `(call (top Filter)
+                             ,(func-for-generator-ranges (cadr (caddr e)) range-exprs)
+                             ,iter)
+                      iter)))
+       (expand-forms
+        `(call (top Generator)
+               ,(func-for-generator-ranges expr range-exprs)
+               ,iter))))
+
+   'flatten
+   (lambda (e) `(call (top Flatten) ,(expand-forms (cadr e))))
 
    'comprehension
    (lambda (e)
-     (if (any (lambda (x) (eq? x ':)) (cddr e))
-         (error "comprehension syntax with `:` ranges has been removed"))
-     (expand-forms `(call (top collect) (generator ,(cadr e) ,@(cddr e)))))
+     (if (length> e 2)
+         ;; backwards compat for macros that generate :comprehension exprs
+         (expand-forms `(comprehension (generator ,@(cdr e))))
+         (begin (if (and (eq? (caadr e) 'generator)
+                         (any (lambda (x) (eq? x ':)) (cddr (cadr e))))
+                    (error "comprehension syntax with `:` ranges has been removed"))
+                (expand-forms `(call (top collect) ,(cadr e))))))
 
    'typed_comprehension
    (lambda (e)
-     (if (any (lambda (x) (eq? x ':)) (cdddr e))
-         (error "comprehension syntax with `:` ranges has been removed"))
-     (expand-forms (lower-comprehension (cadr e) (caddr e) (cdddr e))))
+     (expand-forms
+      (or (and (eq? (caaddr e) 'generator)
+               (let ((ranges (cddr (caddr e))))
+                 (if (any (lambda (x) (eq? x ':)) ranges)
+                     (error "comprehension syntax with `:` ranges has been removed"))
+                 (and (every (lambda (x) (and (pair? x) (eq? (car x) '=)
+                                              (pair? (caddr x)) (eq? (car (caddr x)) ':)))
+                             ranges)
+                      ;; TODO: this is a hack to lower simple comprehensions to loops very
+                      ;; early, to greatly reduce the # of functions and load on the compiler
+                      (lower-comprehension (cadr e) (cadr (caddr e)) ranges))))
+          `(call (top collect) ,(cadr e) ,(caddr e)))))
 
    'dict_comprehension
    (lambda (e)
      (syntax-deprecation #f "[a=>b for (a,b) in c]" "Dict(a=>b for (a,b) in c)")
-     (expand-forms `(call (top Dict) (generator ,(cadr e) ,@(cddr e)))))
+     (expand-forms `(call (top Dict) ,(cadr e))))
 
    'typed_dict_comprehension
    (lambda (e) (expand-forms
                 `(call (call (core apply_type) (top Dict) ,@(cdr (cadr e)))
-                       (generator ,(caddr e) ,@(cdddr e)))))))
+                       ,(caddr e))))))
 
 (define (lower-comprehension atype expr ranges)
   (let ((result    (make-ssavalue))
