@@ -439,17 +439,7 @@ end
 # the results at the end of the tests
 record(ts::DefaultTestSet, t::AbstractTestSet) = push!(ts.results, t)
 
-# Called at the end of a @testset, behaviour depends on whether
-# this is a child of another testset, or the "root" testset
-function finish(ts::DefaultTestSet)
-    # If we are a nested test set, do not print a full summary
-    # now - let the parent test set do the printing
-    if get_testset_depth() != 0
-        # Attach this test set to the parent test set
-        parent_ts = get_testset()
-        record(parent_ts, ts)
-        return
-    end
+function print_test_results(ts::DefaultTestSet, depth_pad=0)
     # Calculate the overall number for each type so each of
     # the test result types are aligned
     passes, fails, errors, broken, c_passes, c_fails, c_errors, c_broken = get_test_counts(ts)
@@ -492,11 +482,25 @@ function finish(ts::DefaultTestSet)
     end
     println()
     # Recursively print a summary at every level
-    print_counts(ts, 0, align, pass_width, fail_width, error_width, broken_width, total_width)
-    # Finally throw an error as we are the outermost test set
-    if total != total_pass
-        throw(TestSetException(total_pass,total_fail,total_error, total_broken))
+    print_counts(ts, depth_pad, align, pass_width, fail_width, error_width, broken_width, total_width)
+end
+
+# Called at the end of a @testset, behaviour depends on whether
+# this is a child of another testset, or the "root" testset
+function finish(ts::DefaultTestSet)
+    # If we are a nested test set, do not print a full summary
+    # now - let the parent test set do the printing
+    if get_testset_depth() != 0
+        # Attach this test set to the parent test set
+        parent_ts = get_testset()
+        record(parent_ts, ts)
+        return
     end
+    # Finally throw an error as we are the outermost test set
+    #print_test_results(ts)
+    #=if total != total_pass
+        throw(TestSetException(total_pass,total_fail,total_error, total_broken))
+    end=#
 
     # return the testset so it is returned from the @testset macro
     ts
@@ -550,7 +554,6 @@ function print_counts(ts::DefaultTestSet, depth, align,
     # through and child test sets
     passes, fails, errors, broken, c_passes, c_fails, c_errors, c_broken = get_test_counts(ts)
     subtotal = passes + fails + errors + broken + c_passes + c_fails + c_errors + c_broken
-
     # Print test set header, with an alignment that ensures all
     # the test results appear above each other
     print(rpad(string(lpad("  ",depth), ts.description), align, " "), " | ")
