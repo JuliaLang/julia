@@ -381,3 +381,100 @@ function binomial{T<:Integer}(n::T, k::T)
     end
     convert(T, copysign(x, sgn))
 end
+
+
+
+# safe functions
+
+if Checked.BrokenSignedInt != Union{}
+function safe_add{T<:Checked.BrokenSignedInt}(x::T, y::T)
+    r = x + y
+    # x and y have the same sign, and the result has a different sign
+    (x<0) == (y<0) != (r<0) && return Nullable{T}()
+    Nullable{T}(r)
+end
+end
+if Checked.BrokenUnsignedInt != Union{}
+function safe_add{T<:Checked.BrokenUnsignedInt}(x::T, y::T)
+    # x + y > typemax(T)
+    # Note: ~y == -y-1
+    x > ~y && return Nullable{T}()
+    Nullable{T}(x + y)
+end
+end
+
+if Checked.BrokenSignedIntMul != Union{} && Checked.BrokenSignedIntMul != Int128
+function safe_mul{T<:Checked.BrokenSignedIntMul}(x::T, y::T)
+    r = widemul(x, y)
+    r % T != r && return Nullable{T}()
+    Nullable{T}(r % T)
+end
+end
+if Checked.BrokenUnsignedIntMul != Union{} && Checked.BrokenUnsignedIntMul != UInt128
+function safe_mul{T<:Checked.BrokenUnsignedIntMul}(x::T, y::T)
+    r = widemul(x, y)
+    r % T != r && return Nullable{T}()
+    Nullable{T}(r % T)
+end
+end
+if Int128 <: Checked.BrokenSignedIntMul
+    # Avoid BigInt
+    function safe_mul{T<:Int128}(x::T, y::T)
+        if y > 0
+            # x * y > typemax(T)
+            # x * y < typemin(T)
+            x > fld(typemax(T), y) && return Nullable{T}()
+            x < cld(typemin(T), y) && return Nullable{T}()
+        elseif y < 0
+            # x * y > typemax(T)
+            # x * y < typemin(T)
+            x < cld(typemax(T), y) && return Nullable{T}()
+            # y == -1 can overflow fld
+            y != -1 && x > fld(typemin(T), y) && return Nullable{T}()
+        end
+        Nullable{T}(x * y)
+    end
+end
+if UInt128 <: Checked.BrokenUnsignedIntMul
+    # Avoid BigInt
+    function safe_mul{T<:UInt128}(x::T, y::T)
+        # x * y > typemax(T)
+        y > 0 && x > fld(typemax(T), y) && return Nullable{T}()
+        Nullable{T}(x * y)
+    end
+end
+
+
+
+for I in [Int8,Int16,Int32,Int64,Int128,
+          UInt8,UInt16,UInt32,UInt64,UInt128]
+
+    s = I <: Signed ? 's' : 'u'
+    b = sizeof(I) << 3
+    r = b == 8 ? "[2 x i8]" : "{ i$b, i8 }" # LLVM return type
+    ops = []
+    if !(I <: Checked.BrokenSignedInt || I <: Checked.BrokenUnsignedInt)
+        push!(ops,:add)
+    end
+    if !(I <: Checked.BrokenSignedIntMul || I <: Checked.BrokenUnsignedIntMul)
+        push!(ops,:mul)
+    end
+
+    for op in ops
+        f = symbol(:safe_,op)
+        @eval @inline function $f(x::$I, y::$I)
+            x,n = Base.llvmcall((
+            $"declare { i$b, i1 } @llvm.$(s)$(op).with.overflow.i$b(i$b, i$b)",
+            $"""
+            %xo = call { i$b, i1 } @llvm.$(s)$(op).with.overflow.i$b(i$b %0, i$b %1)
+            %x  = extractvalue { i$b, i1 } %xo, 0
+            %o1 = extractvalue { i$b, i1 } %xo, 1
+            %o8 = zext i1 %o1 to i8
+            %rx = insertvalue $r undef, i$b %x, 0
+            %r  = insertvalue $r %rx, i8 %o8, 1
+            ret $r %r"""),
+            Tuple{$I,Bool},Tuple{$I,$I},x,y)
+            Nullable(x,n)
+        end
+    end
+end
