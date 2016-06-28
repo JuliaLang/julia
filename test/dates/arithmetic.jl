@@ -387,7 +387,7 @@ t4 = [DateTime(2009,1,1,0,0,1), DateTime(2009,1,2,0,1), DateTime(2009,1,3,1)]
 # Array{TimeType}, Array{TimeType}
 @test t2 - t1 == [Day(1) Day(31) Day(365); Day(365) Day(28) Day(1)]
 @test t4 - t3 == [Millisecond(1000), Millisecond(60000), Millisecond(3600000)]
-@test (Date(2009,1,1):Week(1):Date(2009,1,21)) - (Date(2009,1,1):Day(1):Date(2009,1,3)) == [0d, 6d, 12d]
-@test (DateTime(2009,1,1,1,1,1):Second(1):DateTime(2009,1,1,1,1,3)) - (DateTime(2009,1,1,1,1):Second(1):DateTime(2009,1,1,1,1,2)) == [1s, 1s, 1s]
+@test (Date(2009,1,1):Week(1):Date(2009,1,21)) - (Date(2009,1,1):Day(1):Date(2009,1,3)) == [Dates.Day(0), Dates.Day(6), Dates.Day(12)]
+@test (DateTime(2009,1,1,1,1,1):Second(1):DateTime(2009,1,1,1,1,3)) - (DateTime(2009,1,1,1,1):Second(1):DateTime(2009,1,1,1,1,2)) == [Dates.Second(1), Dates.Second(1), Dates.Second(1)]
 
 end
