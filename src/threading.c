@@ -30,14 +30,82 @@ extern "C" {
 #include "threading.h"
 
 #ifdef JULIA_ENABLE_THREADING
+#  if defined(_OS_DARWIN_)
+// Mac doesn't seem to have static TLS model so the runtime TLS getter
+// registration will only add overhead to TLS access. The `__thread` variables
+// are emulated with `pthread_key_t` so it is actually faster to use it directly.
+static pthread_key_t jl_tls_key;
+
+__attribute__((constructor)) void jl_mac_init_tls(void)
+{
+    pthread_key_create(&jl_tls_key, NULL);
+}
+
+JL_DLLEXPORT JL_CONST_FUNC jl_tls_states_t *(jl_get_ptls_states)(void)
+{
+    void *ptls = pthread_getspecific(jl_tls_key);
+    if (__unlikely(!ptls)) {
+        ptls = calloc(1, sizeof(jl_tls_states_t));
+        pthread_setspecific(jl_tls_key, ptls);
+    }
+    return (jl_tls_states_t*)ptls;
+}
+
+// This is only used after the tls is already initialized on the thread
+static JL_CONST_FUNC jl_tls_states_t *jl_get_ptls_states_fast(void)
+{
+    return (jl_tls_states_t*)pthread_getspecific(jl_tls_key);
+}
+
+jl_get_ptls_states_func jl_get_ptls_states_getter(void)
+{
+    // for codegen
+    return &jl_get_ptls_states_fast;
+}
+#  elif defined(_OS_WINDOWS_)
+// Apparently windows doesn't have a static TLS model (or one that can be
+// reliably used from a shared library) either..... Use `TLSAlloc` instead.
+
+static DWORD jl_tls_key;
+
+// Put this here for now. We can move this out later if we find more use for it.
+BOOLEAN WINAPI DllMain(IN HINSTANCE hDllHandle, IN DWORD nReason,
+                       IN LPVOID Reserved)
+{
+    switch (nReason) {
+    case DLL_PROCESS_ATTACH:
+        jl_tls_key = TlsAlloc();
+        assert(jl_tls_key != TLS_OUT_OF_INDEXES);
+        // Fall through
+    case DLL_THREAD_ATTACH:
+        TlsSetValue(jl_tls_key, calloc(1, sizeof(jl_tls_states_t)));
+        break;
+    case DLL_THREAD_DETACH:
+        free(TlsGetValue(jl_tls_key));
+        TlsSetValue(jl_tls_key, NULL);
+        break;
+    case DLL_PROCESS_DETACH:
+        free(TlsGetValue(jl_tls_key));
+        TlsFree(jl_tls_key);
+        break;
+    }
+}
+
+JL_DLLEXPORT JL_CONST_FUNC jl_tls_states_t *(jl_get_ptls_states)(void)
+{
+    return TlsGetValue(jl_tls_key);
+}
+
+jl_get_ptls_states_func jl_get_ptls_states_getter(void)
+{
+    // for codegen
+    return &jl_get_ptls_states;
+}
+#  else
 // fallback provided for embedding
 static JL_CONST_FUNC jl_tls_states_t *jl_get_ptls_states_fallback(void)
 {
-#  if !defined(_COMPILER_MICROSOFT_)
     static __thread jl_tls_states_t tls_states;
-#  else
-    static __declspec(thread) jl_tls_states_t tls_states;
-#  endif
     return &tls_states;
 }
 static jl_tls_states_t *jl_get_ptls_states_init(void);
@@ -78,6 +146,7 @@ jl_get_ptls_states_func jl_get_ptls_states_getter(void)
     // for codegen
     return jl_tls_states_cb;
 }
+#  endif
 #else
 JL_DLLEXPORT jl_tls_states_t jl_tls_states;
 JL_DLLEXPORT JL_CONST_FUNC jl_tls_states_t *(jl_get_ptls_states)(void)
