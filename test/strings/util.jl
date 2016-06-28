@@ -1,6 +1,6 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
-@test "util" begin
+@testset "util" begin
 # padding (lpad and rpad)
 @test lpad("foo", 3) == "foo"
 @test rpad("foo", 3) == "foo"
