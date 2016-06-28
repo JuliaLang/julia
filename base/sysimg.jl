@@ -119,6 +119,10 @@ include("arraymath.jl")
 include("simdloop.jl")
 importall .SimdLoop
 
+# The polyhedral optimizer Polly
+include("polly.jl")
+importall .Polly
+
 # map-reduce operators
 include("reduce.jl")
 
