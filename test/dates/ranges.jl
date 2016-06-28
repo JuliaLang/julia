@@ -420,6 +420,8 @@ testlengths(100000)
 # Custom definition to override default step of DateTime ranges
 @test typeof(step(Dates.DateTime(2000):Dates.DateTime(2001))) == Dates.Day
 
+a = Dates.Date(2013,1,1)
+b = Dates.Date(2013,2,1)
 d = Dates.Date(2020,1,1)
 @test length(a:Dates.Year(1):d) == 8
 @test first(a:Dates.Year(1):d) == a
@@ -434,6 +436,8 @@ d = Dates.Date(2020,1,1)
 @test first(a:Dates.Day(365):d) == a
 @test last(a:Dates.Day(365):d) == Dates.Date(2019,12,31)
 
+a = Dates.Date(2013,1,1)
+b = Dates.Date(2013,2,1)
 @test length(a:Dates.Year(1):Dates.Date(2020,2,1)) == 8
 @test length(a:Dates.Year(1):Dates.Date(2020,6,1)) == 8
 @test length(a:Dates.Year(1):Dates.Date(2020,11,1)) == 8
