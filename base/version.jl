@@ -123,8 +123,8 @@ function ident_cmp(A::Tuple{Vararg{Union{Int,String}}},
        c = ident_cmp(a,b)
        (c != 0) && return c
     end
-    done(A,i) && !done(B,j) ? -1 :
-    !done(A,i) && done(B,j) ? +1 : 0
+    done(A,i) && !done(B,j) ? +1 :
+    !done(A,i) && done(B,j) ? -1 : 0
 end
 
 function ==(a::VersionNumber, b::VersionNumber)
