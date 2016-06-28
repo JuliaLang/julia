@@ -13,7 +13,7 @@ immutable Generator{I,F}
     iter::I
 end
 
-Generator(f, c1, c...) = Generator(a->f(a...), zip(c1, c...))
+Generator(f, I1, I2, Is...) = Generator(a->f(a...), zip(I1, I2, Is...))
 
 Generator{T,I}(::Type{T}, iter::I) = Generator{I,Type{T}}(T, iter)
 
