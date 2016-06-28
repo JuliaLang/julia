@@ -43,6 +43,8 @@ module CompletionFoo
     const a=x->x
     test6()=[a, a]
 
+    kwtest(; x=1, y=2, w...) = pass
+
     array = [1, 1]
     varfloat = 0.1
 
@@ -324,6 +326,12 @@ c, r, res = test_complete(s)
 @test !res
 @test length(c) == 2
 #################################################################
+
+s = "CompletionFoo.kwtest( "
+c, r, res = test_complete(s)
+@test !res
+@test length(c) == 1
+@test contains(c[1], "x, y, w...")
 
 # Test of inference based getfield completion
 s = "\"\"."
