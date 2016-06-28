@@ -4,7 +4,7 @@ debug = false
 using Base.Test
 
 # Check that non-floats are correctly promoted
-@test_approx_eq [1 0 0; 0 1 0]\[1,1] [1;1;0]
+@test [1 0 0; 0 1 0]\[1,1] ≈ [1;1;0]
 
 using Base.LinAlg: BlasComplex, BlasFloat, BlasReal
 
@@ -69,24 +69,24 @@ debug && println("Test nullspace")
 
 debug && println("Test pinv")
     pinva15 = pinv(a[:,1:n1])
-    @test_approx_eq a[:,1:n1]*pinva15*a[:,1:n1] a[:,1:n1]
-    @test_approx_eq pinva15*a[:,1:n1]*pinva15 pinva15
+    @test a[:,1:n1]*pinva15*a[:,1:n1] ≈ a[:,1:n1]
+    @test pinva15*a[:,1:n1]*pinva15 ≈ pinva15
 
     @test size(pinv(ones(eltya,0,0))) == (0,0)
 
 debug && println("Lyapunov/Sylvester")
     let
         x = lyap(a, a2)
-        @test_approx_eq -a2 a*x + x*a'
+        @test -a2 ≈ a*x + x*a'
         x2 = sylvester(a[1:3, 1:3], a[4:n, 4:n], a2[1:3,4:n])
-        @test_approx_eq -a2[1:3, 4:n] a[1:3, 1:3]*x2 + x2*a[4:n, 4:n]
+        @test -a2[1:3, 4:n] ≈ a[1:3, 1:3]*x2 + x2*a[4:n, 4:n]
     end
 
 debug && println("Matrix square root")
     asq = sqrtm(a)
-    @test_approx_eq asq*asq a
+    @test asq*asq ≈ a
     asymsq = sqrtm(asym)
-    @test_approx_eq asymsq*asymsq asym
+    @test asymsq*asymsq ≈ asym
 
 debug && println("Numbers")
     α = rand(eltya)
@@ -146,7 +146,7 @@ for elty in (Int32, Int64, Float32, Float64, Complex64, Complex128)
         x = convert(Vector{elty}, complex([1:3;], [1:3;]))
         g = convert(Vector{elty}, complex(ones(3), ones(3)))
     end
-    @test_approx_eq gradient(x) g
+    @test gradient(x) ≈ g
     @test gradient(ones(elty,1)) == zeros(elty,1)
 end
 
@@ -160,25 +160,25 @@ for elty in (Float32, Float64, BigFloat, Complex{Float32}, Complex{Float64}, Com
     ## Vector
     x = ones(elty,10)
     xs = view(x,1:2:10)
-    @test_approx_eq norm(x, -Inf) 1
-    @test_approx_eq norm(x, -1) 1/10
-    @test_approx_eq norm(x, 0) 10
-    @test_approx_eq norm(x, 1) 10
-    @test_approx_eq norm(x, 2) sqrt(10)
-    @test_approx_eq norm(x, 3) cbrt(10)
-    @test_approx_eq norm(x, Inf) 1
+    @test norm(x, -Inf) ≈ 1
+    @test norm(x, -1) ≈ 1/10
+    @test norm(x, 0) ≈ 10
+    @test norm(x, 1) ≈ 10
+    @test norm(x, 2) ≈ sqrt(10)
+    @test norm(x, 3) ≈ cbrt(10)
+    @test norm(x, Inf) ≈ 1
     if elty <: Base.LinAlg.BlasFloat
-        @test_approx_eq norm(x, 1:4) 2
+        @test norm(x, 1:4) ≈ 2
         @test_throws BoundsError norm(x,-1:4)
         @test_throws BoundsError norm(x,1:11)
     end
-    @test_approx_eq norm(xs, -Inf) 1
-    @test_approx_eq norm(xs, -1) 1/5
-    @test_approx_eq norm(xs, 0) 5
-    @test_approx_eq norm(xs, 1) 5
-    @test_approx_eq norm(xs, 2) sqrt(5)
-    @test_approx_eq norm(xs, 3) cbrt(5)
-    @test_approx_eq norm(xs, Inf) 1
+    @test norm(xs, -Inf) ≈ 1
+    @test norm(xs, -1) ≈ 1/5
+    @test norm(xs, 0) ≈ 5
+    @test norm(xs, 1) ≈ 5
+    @test norm(xs, 2) ≈ sqrt(5)
+    @test norm(xs, 3) ≈ cbrt(5)
+    @test norm(xs, Inf) ≈ 1
 
     # Issue #12552:
     if real(elty) <: AbstractFloat
@@ -208,19 +208,19 @@ for elty in (Float32, Float64, BigFloat, Complex{Float32}, Complex{Float64}, Com
             elty <: Complex ? convert(elty, complex(randn(),randn())) :
             convert(elty, randn())
         # Absolute homogeneity
-        @test_approx_eq norm(α*x,-Inf) abs(α)*norm(x,-Inf)
-        @test_approx_eq norm(α*x,-1) abs(α)*norm(x,-1)
-        @test_approx_eq norm(α*x,1) abs(α)*norm(x,1)
-        @test_approx_eq norm(α*x) abs(α)*norm(x) # two is default
-        @test_approx_eq norm(α*x,3) abs(α)*norm(x,3)
-        @test_approx_eq norm(α*x,Inf) abs(α)*norm(x,Inf)
+        @test norm(α*x,-Inf) ≈ abs(α)*norm(x,-Inf)
+        @test norm(α*x,-1) ≈ abs(α)*norm(x,-1)
+        @test norm(α*x,1) ≈ abs(α)*norm(x,1)
+        @test norm(α*x) ≈ abs(α)*norm(x) # two is default
+        @test norm(α*x,3) ≈ abs(α)*norm(x,3)
+        @test norm(α*x,Inf) ≈ abs(α)*norm(x,Inf)
 
-        @test_approx_eq norm(α*xs,-Inf) abs(α)*norm(xs,-Inf)
-        @test_approx_eq norm(α*xs,-1) abs(α)*norm(xs,-1)
-        @test_approx_eq norm(α*xs,1) abs(α)*norm(xs,1)
-        @test_approx_eq norm(α*xs) abs(α)*norm(xs) # two is default
-        @test_approx_eq norm(α*xs,3) abs(α)*norm(xs,3)
-        @test_approx_eq norm(α*xs,Inf) abs(α)*norm(xs,Inf)
+        @test norm(α*xs,-Inf) ≈ abs(α)*norm(xs,-Inf)
+        @test norm(α*xs,-1) ≈ abs(α)*norm(xs,-1)
+        @test norm(α*xs,1) ≈ abs(α)*norm(xs,1)
+        @test norm(α*xs) ≈ abs(α)*norm(xs) # two is default
+        @test norm(α*xs,3) ≈ abs(α)*norm(xs,3)
+        @test norm(α*xs,Inf) ≈ abs(α)*norm(xs,Inf)
 
         # Triangle inequality
         @test norm(x + y,1) <= norm(x,1) + norm(y,1)
@@ -234,23 +234,23 @@ for elty in (Float32, Float64, BigFloat, Complex{Float32}, Complex{Float64}, Com
         @test norm(xs + ys,Inf) <= norm(xs,Inf) + norm(ys,Inf)
 
         # Against vectorized versions
-        @test_approx_eq norm(x,-Inf) minimum(abs(x))
-        @test_approx_eq norm(x,-1) inv(sum(1./abs(x)))
-        @test_approx_eq norm(x,0) sum(x .!= 0)
-        @test_approx_eq norm(x,1) sum(abs(x))
-        @test_approx_eq norm(x) sqrt(sum(abs2(x)))
-        @test_approx_eq norm(x,3) cbrt(sum(abs(x).^3.))
-        @test_approx_eq norm(x,Inf) maximum(abs(x))
+        @test norm(x,-Inf) ≈ minimum(abs(x))
+        @test norm(x,-1) ≈ inv(sum(1./abs(x)))
+        @test norm(x,0) ≈ sum(x .!= 0)
+        @test norm(x,1) ≈ sum(abs(x))
+        @test norm(x) ≈ sqrt(sum(abs2(x)))
+        @test norm(x,3) ≈ cbrt(sum(abs(x).^3.))
+        @test norm(x,Inf) ≈ maximum(abs(x))
     end
     ## Matrix (Operator)
         A = ones(elty,10,10)
         As = view(A,1:5,1:5)
-        @test_approx_eq norm(A, 1) 10
-        elty <: Union{BigFloat,Complex{BigFloat},BigInt} || @test_approx_eq norm(A, 2) 10
-        @test_approx_eq norm(A, Inf) 10
-        @test_approx_eq norm(As, 1) 5
-        elty <: Union{BigFloat,Complex{BigFloat},BigInt} || @test_approx_eq norm(As, 2) 5
-        @test_approx_eq norm(As, Inf) 5
+        @test norm(A, 1) ≈ 10
+        elty <: Union{BigFloat,Complex{BigFloat},BigInt} || @test norm(A, 2) ≈ 10
+        @test norm(A, Inf) ≈ 10
+        @test norm(As, 1) ≈ 5
+        elty <: Union{BigFloat,Complex{BigFloat},BigInt} || @test norm(As, 2) ≈ 5
+        @test norm(As, Inf) ≈ 5
 
     for i = 1:10
         A = elty <: Integer ? convert(Matrix{elty}, rand(1:10, mmat, nmat)) :
@@ -266,13 +266,13 @@ for elty in (Float32, Float64, BigFloat, Complex{Float32}, Complex{Float64}, Com
             convert(elty, randn())
 
         # Absolute homogeneity
-        @test_approx_eq norm(α*A,1) abs(α)*norm(A,1)
-        elty <: Union{BigFloat,Complex{BigFloat},BigInt} || @test_approx_eq norm(α*A) abs(α)*norm(A) # two is default
-        @test_approx_eq norm(α*A,Inf) abs(α)*norm(A,Inf)
+        @test norm(α*A,1) ≈ abs(α)*norm(A,1)
+        elty <: Union{BigFloat,Complex{BigFloat},BigInt} || @test norm(α*A) ≈ abs(α)*norm(A) # two is default
+        @test norm(α*A,Inf) ≈ abs(α)*norm(A,Inf)
 
-        @test_approx_eq norm(α*As,1) abs(α)*norm(As,1)
-        elty <: Union{BigFloat,Complex{BigFloat},BigInt} || @test_approx_eq norm(α*As) abs(α)*norm(As) # two is default
-        @test_approx_eq norm(α*As,Inf) abs(α)*norm(As,Inf)
+        @test norm(α*As,1) ≈ abs(α)*norm(As,1)
+        elty <: Union{BigFloat,Complex{BigFloat},BigInt} || @test norm(α*As) ≈ abs(α)*norm(As) # two is default
+        @test norm(α*As,Inf) ≈ abs(α)*norm(As,Inf)
 
         # Triangle inequality
         @test norm(A + B,1) <= norm(A,1) + norm(B,1)
@@ -305,8 +305,8 @@ end
 @test norm(Any[Inf],-2) == norm(Any[Inf],-1) == norm(Any[Inf],1) == norm(Any[Inf],1.5) == norm(Any[Inf],2) == norm(Any[Inf],Inf) == Inf
 
 # overflow/underflow in norms:
-@test_approx_eq norm(Float64[1e-300, 1], -3)*1e300 1
-@test_approx_eq norm(Float64[1e300, 1], 3)*1e-300 1
+@test norm(Float64[1e-300, 1], -3)*1e300 ≈ 1
+@test norm(Float64[1e300, 1], 3)*1e-300 ≈ 1
 
 ## Issue related tests
 # issue #1447
@@ -314,7 +314,7 @@ let
     A = [1.+0.0im 0; 0 1]
     B = pinv(A)
     for i = 1:4
-        @test_approx_eq A[i] B[i]
+        @test A[i] ≈ B[i]
     end
 end
 
@@ -322,15 +322,15 @@ end
 let
     A = [1 2 0 0; 0 1 0 0; 0 0 0 0; 0 0 0 0]
     Asq = sqrtm(A)
-    @test_approx_eq Asq*Asq A
+    @test Asq*Asq ≈ A
     A2 = view(A, 1:2, 1:2)
     A2sq = sqrtm(A2)
-    @test_approx_eq A2sq*A2sq A2
+    @test A2sq*A2sq ≈ A2
 end
 
 let
     N = 3
-    @test_approx_eq log(det(eye(N))) logdet(eye(N))
+    @test log(det(eye(N))) ≈ logdet(eye(N))
 end
 
 # issue #2637
@@ -367,7 +367,7 @@ for elty in (Float32, Float64, Complex64, Complex128)
     eA1 = convert(Matrix{elty}, [147.866622446369 127.781085523181  127.781085523182;
                                  183.765138646367 183.765138646366  163.679601723179;
                                  71.797032399996  91.8825693231832 111.968106246371]')
-    @test_approx_eq expm(A1) eA1
+    @test expm(A1) ≈ eA1
 
     A2  = convert(Matrix{elty},
                   [29.87942128909879    0.7815750847907159 -2.289519314033932;
@@ -377,13 +377,13 @@ for elty in (Float32, Float64, Complex64, Complex128)
                   [  5496313853692458.0 -18231880972009236.0 -30475770808580460.0;
                    -18231880972009252.0  60605228702221920.0 101291842930249760.0;
                    -30475770808580480.0 101291842930249728.0 169294411240851968.0])
-    @test_approx_eq expm(A2) eA2
+    @test expm(A2) ≈ eA2
 
     A3  = convert(Matrix{elty}, [-131 19 18;-390 56 54;-387 57 52])
     eA3 = convert(Matrix{elty}, [-1.50964415879218 -5.6325707998812  -4.934938326092;
                                  0.367879439109187 1.47151775849686  1.10363831732856;
                                  0.135335281175235 0.406005843524598 0.541341126763207]')
-    @test_approx_eq expm(A3) eA3
+    @test expm(A3) ≈ eA3
 
     A4 = convert(Matrix{elty}, [0.25 0.25; 0 0])
     eA4 = convert(Matrix{elty}, [1.2840254166877416 0.2840254166877415; 0 1])
@@ -394,7 +394,7 @@ for elty in (Float32, Float64, Complex64, Complex128)
     @test expm(A5) ≈ eA5
 
     # Hessenberg
-    @test_approx_eq hessfact(A1)[:H] convert(Matrix{elty},
+    @test hessfact(A1)[:H] ≈ convert(Matrix{elty},
                                              [4.000000000000000  -1.414213562373094  -1.414213562373095
                                               -1.414213562373095   4.999999999999996  -0.000000000000000
                                               0  -0.000000000000002   3.000000000000000])
@@ -406,21 +406,21 @@ for elty in (Float64, Complex{Float64})
                                  1/3 1/4 1/5 1/6;
                                  1/4 1/5 1/6 1/7;
                                  1/5 1/6 1/7 1/8])
-    @test_approx_eq expm(logm(A4)) A4
+    @test expm(logm(A4)) ≈ A4
 
     A5  = convert(Matrix{elty}, [1 1 0 1; 0 1 1 0; 0 0 1 1; 1 0 0 1])
-    @test_approx_eq expm(logm(A5)) A5
+    @test expm(logm(A5)) ≈ A5
 
     A6  = convert(Matrix{elty}, [-5 2 0 0 ; 1/2 -7 3 0; 0 1/3 -9 4; 0 0 1/4 -11])
-    @test_approx_eq expm(logm(A6)) A6
+    @test expm(logm(A6)) ≈ A6
 
     A7  = convert(Matrix{elty}, [1 0 0 1e-8; 0 1 0 0; 0 0 1 0; 0 0 0 1])
-    @test_approx_eq expm(logm(A7)) A7
+    @test expm(logm(A7)) ≈ A7
 
 end
 
 A8 = 100 * [-1+1im 0 0 1e-8; 0 1 0 0; 0 0 1 0; 0 0 0 1];
-@test_approx_eq expm(logm(A8)) A8
+@test expm(logm(A8)) ≈ A8
 
 # issue 5116
 A9  = [0 10 0 0; -1 0 0 0; 0 0 0 0; -2 0 0 0]
@@ -428,7 +428,7 @@ eA9 = [-0.999786072879326  -0.065407069689389   0.0   0.0
        0.006540706968939  -0.999786072879326   0.0   0.0
        0.0                 0.0                 1.0   0.0
        0.013081413937878  -3.999572145758650   0.0   1.0]
-@test_approx_eq expm(A9) eA9
+@test expm(A9) ≈ eA9
 
 # issue 5116
 A10  = [ 0. 0. 0. 0. ; 0. 0. -im 0.; 0. im 0. 0.; 0. 0. 0. 0.]
@@ -436,7 +436,7 @@ eA10 = [ 1.0+0.0im   0.0+0.0im                 0.0+0.0im                0.0+0.0i
         0.0+0.0im   1.543080634815244+0.0im   0.0-1.175201193643801im  0.0+0.0im
         0.0+0.0im   0.0+1.175201193643801im   1.543080634815243+0.0im  0.0+0.0im
         0.0+0.0im   0.0+0.0im                 0.0+0.0im                1.0+0.0im]
-@test_approx_eq expm(A10) eA10
+@test expm(A10) ≈ eA10
 
 for elty in (Float64, Complex{Float64})
     A11  = convert(Matrix{elty}, [1 2 3; 4 7 1; 2 1 4])
@@ -511,25 +511,25 @@ for elty in (Float32, Float64, Complex64, Complex128)
 
     # Vector rhs
     x = a[:,1:2]\b[:,1]
-    @test_approx_eq ((a[:,1:2]*x-b[:,1])'*(a[:,1:2]*x-b[:,1]))[1] convert(elty, 2.546616541353384)
+    @test ((a[:,1:2]*x-b[:,1])'*(a[:,1:2]*x-b[:,1]))[1] ≈ convert(elty, 2.546616541353384)
 
     # Matrix rhs
     x = a[:,1:2]\b
-    @test_approx_eq det((a[:,1:2]*x-b)'*(a[:,1:2]*x-b)) convert(elty, 4.437969924812031)
+    @test det((a[:,1:2]*x-b)'*(a[:,1:2]*x-b)) ≈ convert(elty, 4.437969924812031)
 
     # Rank deficient
     x = a\b
-    @test_approx_eq det((a*x-b)'*(a*x-b)) convert(elty, 4.437969924812031)
+    @test det((a*x-b)'*(a*x-b)) ≈ convert(elty, 4.437969924812031)
 
     # Underdetermined minimum norm
     x = convert(Matrix{elty}, [1 0 0; 0 1 -1]) \ convert(Vector{elty}, [1,1])
-    @test_approx_eq x convert(Vector{elty}, [1, 0.5, -0.5])
+    @test x ≈ convert(Vector{elty}, [1, 0.5, -0.5])
 
     # symmetric, positive definite
-    @test_approx_eq inv(convert(Matrix{elty}, [6. 2; 2 1])) convert(Matrix{elty}, [0.5 -1; -1 3])
+    @test inv(convert(Matrix{elty}, [6. 2; 2 1])) ≈ convert(Matrix{elty}, [0.5 -1; -1 3])
 
     # symmetric, indefinite
-    @test_approx_eq inv(convert(Matrix{elty}, [1. 2; 2 1])) convert(Matrix{elty}, [-1. 2; 2 -1]/3)
+    @test inv(convert(Matrix{elty}, [1. 2; 2 1])) ≈ convert(Matrix{elty}, [-1. 2; 2 -1]/3)
 end
 
 # test ops on Numbers

@@ -1346,7 +1346,7 @@ end
 
 # PR #11080
 let x = fill(0.9, 1000)
-    @test_approx_eq prod(x) cumprod(x)[end]
+    @test prod(x) ≈ cumprod(x)[end]
 end
 
 #binary ops on bool arrays

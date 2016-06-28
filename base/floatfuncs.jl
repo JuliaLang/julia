@@ -31,6 +31,9 @@ num2hex(x::Float32) = hex(box(UInt32,unbox(Float32,x)),8)
 num2hex(x::Float64) = hex(box(UInt64,unbox(Float64,x)),16)
 
 function hex2num(s::AbstractString)
+    if length(s) <= 4
+        return box(Float16,unbox(UInt16,parse(UInt16,s,16)))
+    end
     if length(s) <= 8
         return box(Float32,unbox(UInt32,parse(UInt32,s,16)))
     end

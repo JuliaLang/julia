@@ -76,7 +76,7 @@ module MyArray15367
 
     A = MyArray(rand(4,5))
     b = rand(5)
-    @test_approx_eq A*b A.data*b
+    @test A*b ≈ A.data*b
 end
 
 let
@@ -268,7 +268,7 @@ let AA = [1+2im 3+4im; 5+6im 7+8im], BB = [2+7im 4+1im; 3+8im 6+5im]
             if n1 != n2
                 @test_throws DimensionMismatch d(1:n1, 1:n2)
             else
-                @test_approx_eq d(1:n1, 1:n2) vecnorm(1:n1)^2
+                @test d(1:n1, 1:n2) ≈ vecnorm(1:n1)^2
             end
         end
     end

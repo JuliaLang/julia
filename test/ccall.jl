@@ -123,8 +123,8 @@ let
     @test a2.x == a.x && a2.y == a.y
     @test !(a2 === x)
 
-    @test_approx_eq x.x a.x + 1*b
-    @test_approx_eq x.y a.y - 2*b
+    @test x.x ≈ a.x + 1*b
+    @test x.y ≈ a.y - 2*b
 end
 
 let
@@ -283,7 +283,7 @@ let
 
     x = ccall((:test_11, libccalltest), Struct11, (Struct11,Float32), a, b)
 
-    @test_approx_eq x.x a.x + b*1 - b*2im
+    @test x.x ≈ a.x + b*1 - b*2im
 end
 
 type Struct12
@@ -297,8 +297,8 @@ let
 
     x = ccall((:test_12, libccalltest), Struct12, (Struct12,Float32), a, b)
 
-    @test_approx_eq x.x a.x + b*1 - b*2im
-    @test_approx_eq x.y a.y + b*3 - b*4im
+    @test x.x ≈ a.x + b*1 - b*2im
+    @test x.y ≈ a.y + b*3 - b*4im
 end
 
 type Struct13
@@ -311,7 +311,7 @@ let
 
     x = ccall((:test_13, libccalltest), Struct13, (Struct13,Float64), a, b)
 
-    @test_approx_eq x.x a.x + b*1 - b*2im
+    @test x.x ≈ a.x + b*1 - b*2im
 end
 
 type Struct14
@@ -325,8 +325,8 @@ let
 
     x = ccall((:test_14, libccalltest), Struct14, (Struct14,Float32), a, b)
 
-    @test_approx_eq x.x a.x + b*1
-    @test_approx_eq x.y a.y - b*2
+    @test x.x ≈ a.x + b*1
+    @test x.y ≈ a.y - b*2
 end
 
 type Struct15
@@ -340,8 +340,8 @@ let
 
     x = ccall((:test_15, libccalltest), Struct15, (Struct15,Float64), a, b)
 
-    @test_approx_eq x.x a.x + b*1
-    @test_approx_eq x.y a.y - b*2
+    @test x.x ≈ a.x + b*1
+    @test x.y ≈ a.y - b*2
 end
 
 type Struct16
@@ -360,12 +360,12 @@ let
 
     x = ccall((:test_16, libccalltest), Struct16, (Struct16,Float32), a, b)
 
-    @test_approx_eq x.x a.x + b*1
-    @test_approx_eq x.y a.y - b*2
-    @test_approx_eq x.z a.z + b*3
-    @test_approx_eq x.a a.a - b*4
-    @test_approx_eq x.b a.b + b*5
-    @test_approx_eq x.c a.c - b*6
+    @test x.x ≈ a.x + b*1
+    @test x.y ≈ a.y - b*2
+    @test x.z ≈ a.z + b*3
+    @test x.a ≈ a.a - b*4
+    @test x.b ≈ a.b + b*5
+    @test x.c ≈ a.c - b*6
 end
 
 let

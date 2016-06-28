@@ -451,8 +451,8 @@ end
 r = -0.004532318104333742:1.2597349521122731e-5:0.008065031416788989
 @test length(r[1:end-1]) == length(r) - 1
 @test isa(r[1:2:end],Range) && length(r[1:2:end]) == div(length(r)+1, 2)
-@test_approx_eq r[3:5][2] r[4]
-@test_approx_eq r[5:-2:1][2] r[3]
+@test r[3:5][2] ≈ r[4]
+@test r[5:-2:1][2] ≈ r[3]
 @test_throws BoundsError r[0:10]
 @test_throws BoundsError r[1:10000]
 
@@ -489,7 +489,7 @@ end
 for f in (mean, median)
     for n = 2:5
         @test f(2:n) == f([2:n;])
-        @test_approx_eq f(2:0.1:n) f([2:0.1:n;])
+        @test f(2:0.1:n) ≈ f([2:0.1:n;])
     end
 end
 

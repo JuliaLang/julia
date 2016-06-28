@@ -33,8 +33,8 @@ for elty in (Float32, Float64, Complex64, Complex128)
                 @test A_mul_B!(G,eye(elty,10,10)) == [G[i,j] for i=1:10,j=1:10]
 
                 # test transposes
-                @test_approx_eq ctranspose(G)*G*eye(10) eye(elty, 10)
-                @test_approx_eq ctranspose(R)*(R*eye(10)) eye(elty, 10)
+                @test ctranspose(G)*G*eye(10) ≈ eye(elty, 10)
+                @test ctranspose(R)*(R*eye(10)) ≈ eye(elty, 10)
                 @test_throws ErrorException transpose(G)
                 @test_throws ErrorException transpose(R)
             end
@@ -44,13 +44,13 @@ for elty in (Float32, Float64, Complex64, Complex128)
         G, _ = givens(one(elty),zero(elty),11,12)
         @test_throws DimensionMismatch A_mul_B!(G, A)
         @test_throws DimensionMismatch A_mul_Bc!(A,G)
-        @test_approx_eq abs(A) abs(hessfact(Ac)[:H])
-        @test_approx_eq norm(R*eye(elty, 10)) one(elty)
+        @test abs(A) ≈ abs(hessfact(Ac)[:H])
+        @test norm(R*eye(elty, 10)) ≈ one(elty)
 
         G, _ = givens(one(elty),zero(elty),9,10)
-        @test_approx_eq ctranspose(G*eye(elty,10))*(G*eye(elty,10)) eye(elty, 10)
+        @test ctranspose(G*eye(elty,10))*(G*eye(elty,10)) ≈ eye(elty, 10)
         K, _ = givens(zero(elty),one(elty),9,10)
-        @test_approx_eq ctranspose(K*eye(elty,10))*(K*eye(elty,10)) eye(elty, 10)
+        @test ctranspose(K*eye(elty,10))*(K*eye(elty,10)) ≈ eye(elty, 10)
 
         # test that Givens * work for vectors
         if Atype == "Array"

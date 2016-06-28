@@ -92,16 +92,16 @@ let a=[1.0:n;]
        for type2 in Spectypes
            B = convert(type1,A)
            C = convert(type2,A)
-           @test_approx_eq full(B + C) full(A + A)
-           @test_approx_eq full(B - C) full(A - A)
+           @test full(B + C) ≈ full(A + A)
+           @test full(B - C) ≈ full(A - A)
        end
    end
    B = SymTridiagonal(a, ones(n-1))
    for Spectype in [Diagonal, Bidiagonal, Tridiagonal, Matrix]
-       @test_approx_eq full(B + convert(Spectype,A)) full(B + A)
-       @test_approx_eq full(convert(Spectype,A) + B) full(B + A)
-       @test_approx_eq full(B - convert(Spectype,A)) full(B - A)
-       @test_approx_eq full(convert(Spectype,A) - B) full(A - B)
+       @test full(B + convert(Spectype,A)) ≈ full(B + A)
+       @test full(convert(Spectype,A) + B) ≈ full(B + A)
+       @test full(B - convert(Spectype,A)) ≈ full(B - A)
+       @test full(convert(Spectype,A) - B) ≈ full(A - B)
    end
 
    C = rand(n,n)

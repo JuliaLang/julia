@@ -159,8 +159,8 @@ ratio = [1,1/2,1/3,1/4,1/5]
 @test r1./r2 == ratio
 m = [1:2;]'
 @test m.*r2 == [1:5 2:2:10]
-@test_approx_eq m./r2 [ratio 2ratio]
-@test_approx_eq m./[r2;] [ratio 2ratio]
+@test m./r2 ≈ [ratio 2ratio]
+@test m./[r2;] ≈ [ratio 2ratio]
 
 @test @inferred([0,1.2].+reshape([0,-2],1,1,2)) == reshape([0 -2; 1.2 -0.8],2,1,2)
 rt = Base.return_types(.+, Tuple{Array{Float64, 3}, Array{Int, 1}})

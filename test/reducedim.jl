@@ -21,61 +21,61 @@ for region in Any[
     (1, 2, 3), (1, 3, 4), (2, 3, 4), (1, 2, 3, 4)]
     # println("region = $region")
     r = fill(NaN, Base.reduced_dims(size(Areduc), region))
-    @test_approx_eq sum!(r, Areduc) safe_sum(Areduc, region)
-    @test_approx_eq prod!(r, Areduc) safe_prod(Areduc, region)
-    @test_approx_eq maximum!(r, Areduc) safe_maximum(Areduc, region)
-    @test_approx_eq minimum!(r, Areduc) safe_minimum(Areduc, region)
-    @test_approx_eq sumabs!(r, Areduc) safe_sumabs(Areduc, region)
-    @test_approx_eq sumabs2!(r, Areduc) safe_sumabs2(Areduc, region)
-    @test_approx_eq maxabs!(r, Areduc) safe_maxabs(Areduc, region)
-    @test_approx_eq minabs!(r, Areduc) safe_minabs(Areduc, region)
+    @test sum!(r, Areduc) ≈ safe_sum(Areduc, region)
+    @test prod!(r, Areduc) ≈ safe_prod(Areduc, region)
+    @test maximum!(r, Areduc) ≈ safe_maximum(Areduc, region)
+    @test minimum!(r, Areduc) ≈ safe_minimum(Areduc, region)
+    @test sumabs!(r, Areduc) ≈ safe_sumabs(Areduc, region)
+    @test sumabs2!(r, Areduc) ≈ safe_sumabs2(Areduc, region)
+    @test maxabs!(r, Areduc) ≈ safe_maxabs(Areduc, region)
+    @test minabs!(r, Areduc) ≈ safe_minabs(Areduc, region)
 
     # With init=false
     r2 = similar(r)
     fill!(r, 1)
-    @test_approx_eq sum!(r, Areduc, init=false) safe_sum(Areduc, region)+1
+    @test sum!(r, Areduc, init=false) ≈ safe_sum(Areduc, region)+1
     fill!(r, 2.2)
-    @test_approx_eq prod!(r, Areduc, init=false) safe_prod(Areduc, region)*2.2
+    @test prod!(r, Areduc, init=false) ≈ safe_prod(Areduc, region)*2.2
     fill!(r, 1.8)
-    @test_approx_eq maximum!(r, Areduc, init=false) fill!(r2, 1.8)
+    @test maximum!(r, Areduc, init=false) ≈ fill!(r2, 1.8)
     fill!(r, -0.2)
-    @test_approx_eq minimum!(r, Areduc, init=false) fill!(r2, -0.2)
+    @test minimum!(r, Areduc, init=false) ≈ fill!(r2, -0.2)
     fill!(r, 8.1)
-    @test_approx_eq sumabs!(r, Areduc, init=false) safe_sumabs(Areduc, region)+8.1
+    @test sumabs!(r, Areduc, init=false) ≈ safe_sumabs(Areduc, region)+8.1
     fill!(r, 8.1)
-    @test_approx_eq sumabs2!(r, Areduc, init=false) safe_sumabs2(Areduc, region)+8.1
+    @test sumabs2!(r, Areduc, init=false) ≈ safe_sumabs2(Areduc, region)+8.1
     fill!(r, 1.5)
-    @test_approx_eq maxabs!(r, Areduc, init=false) fill!(r2, 1.5)
+    @test maxabs!(r, Areduc, init=false) ≈ fill!(r2, 1.5)
     fill!(r, -1.5)
-    @test_approx_eq minabs!(r, Areduc, init=false) fill!(r2, -1.5)
+    @test minabs!(r, Areduc, init=false) ≈ fill!(r2, -1.5)
 
-    @test_approx_eq sum(Areduc, region) safe_sum(Areduc, region)
-    @test_approx_eq prod(Areduc, region) safe_prod(Areduc, region)
-    @test_approx_eq maximum(Areduc, region) safe_maximum(Areduc, region)
-    @test_approx_eq minimum(Areduc, region) safe_minimum(Areduc, region)
-    @test_approx_eq sumabs(Areduc, region) safe_sumabs(Areduc, region)
-    @test_approx_eq sumabs2(Areduc, region) safe_sumabs2(Areduc, region)
-    @test_approx_eq maxabs(Areduc, region) safe_maxabs(Areduc, region)
-    @test_approx_eq minabs(Areduc, region) safe_minabs(Areduc, region)
+    @test sum(Areduc, region) ≈ safe_sum(Areduc, region)
+    @test prod(Areduc, region) ≈ safe_prod(Areduc, region)
+    @test maximum(Areduc, region) ≈ safe_maximum(Areduc, region)
+    @test minimum(Areduc, region) ≈ safe_minimum(Areduc, region)
+    @test sumabs(Areduc, region) ≈ safe_sumabs(Areduc, region)
+    @test sumabs2(Areduc, region) ≈ safe_sumabs2(Areduc, region)
+    @test maxabs(Areduc, region) ≈ safe_maxabs(Areduc, region)
+    @test minabs(Areduc, region) ≈ safe_minabs(Areduc, region)
 end
 
 # Test reduction along first dimension; this is special-cased for
 # size(A, 1) >= 16
 Breduc = rand(64, 3)
 r = fill(NaN, Base.reduced_dims(size(Breduc), 1))
-@test_approx_eq sum!(r, Breduc) safe_sum(Breduc, 1)
-@test_approx_eq sumabs!(r, Breduc) safe_sumabs(Breduc, 1)
-@test_approx_eq sumabs2!(r, Breduc) safe_sumabs2(Breduc, 1)
-@test_approx_eq sum(Breduc, 1) safe_sum(Breduc, 1)
-@test_approx_eq sumabs(Breduc, 1) safe_sumabs(Breduc, 1)
-@test_approx_eq sumabs2(Breduc, 1) safe_sumabs2(Breduc, 1)
+@test sum!(r, Breduc) ≈ safe_sum(Breduc, 1)
+@test sumabs!(r, Breduc) ≈ safe_sumabs(Breduc, 1)
+@test sumabs2!(r, Breduc) ≈ safe_sumabs2(Breduc, 1)
+@test sum(Breduc, 1) ≈ safe_sum(Breduc, 1)
+@test sumabs(Breduc, 1) ≈ safe_sumabs(Breduc, 1)
+@test sumabs2(Breduc, 1) ≈ safe_sumabs2(Breduc, 1)
 
 fill!(r, 4.2)
-@test_approx_eq sum!(r, Breduc, init=false) safe_sum(Breduc, 1)+4.2
+@test sum!(r, Breduc, init=false) ≈ safe_sum(Breduc, 1)+4.2
 fill!(r, -6.3)
-@test_approx_eq sumabs!(r, Breduc, init=false) safe_sumabs(Breduc, 1)-6.3
+@test sumabs!(r, Breduc, init=false) ≈ safe_sumabs(Breduc, 1)-6.3
 fill!(r, -1.1)
-@test_approx_eq sumabs2!(r, Breduc, init=false) safe_sumabs2(Breduc, 1)-1.1
+@test sumabs2!(r, Breduc, init=false) ≈ safe_sumabs2(Breduc, 1)-1.1
 
 # Small arrays with init=false
 A = reshape(1:15, 3, 5)
@@ -110,7 +110,7 @@ A = reshape(1:6, 3, 2)
 @test reducedim((a,b) -> a|b, [true false; false false], 1, false) == [true false]
 R = reducedim((a,b) -> a+b, [1 2; 3 4], 2, 0.0)
 @test eltype(R) == Float64
-@test_approx_eq R [3,7]
+@test R ≈ [3,7]
 @test reducedim((a,b) -> a+b, [1 2; 3 4], 1, 0) == [4 6]
 
 # inferred return types

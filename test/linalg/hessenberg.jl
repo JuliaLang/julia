@@ -27,11 +27,11 @@ let n = 10
             @test size(H[:Q], 2) == size(A, 2)
             @test size(H[:Q]) == size(A)
             @test_throws KeyError H[:Z]
-            @test_approx_eq full(H) A
-            @test_approx_eq (H[:Q] * H[:H]) * H[:Q]' A
-            @test_approx_eq (H[:Q]' * A) * H[:Q]     H[:H]
+            @test full(H) ≈ A
+            @test (H[:Q] * H[:H]) * H[:Q]' ≈ A
+            @test (H[:Q]' *A) * H[:Q] ≈ H[:H]
             #getindex for HessenbergQ
-            @test_approx_eq H[:Q][1,1] full(H[:Q])[1,1]
+            @test H[:Q][1,1] ≈ full(H[:Q])[1,1]
         end
     end
 end

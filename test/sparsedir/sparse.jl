@@ -103,10 +103,10 @@ end
 # sparse matrix * BitArray
 A = sprand(5,5,0.2)
 B = trues(5)
-@test_approx_eq A*B full(A)*B
+@test A*B ≈ full(A)*B
 B = trues(5,5)
-@test_approx_eq A*B full(A)*B
-@test_approx_eq B*A B*full(A)
+@test A*B ≈ full(A)*B
+@test B*A ≈ B*full(A)
 
 # complex matrix-vector multiplication and left-division
 if Base.USE_GPL_LIBS
@@ -362,10 +362,10 @@ pA = sparse(rand(3, 7))
 for arr in (se33, sA, pA)
     for f in (sum, prod, minimum, maximum, var)
         farr = full(arr)
-        @test_approx_eq f(arr) f(farr)
-        @test_approx_eq f(arr, 1) f(farr, 1)
-        @test_approx_eq f(arr, 2) f(farr, 2)
-        @test_approx_eq f(arr, (1, 2)) [f(farr)]
+        @test f(arr) ≈ f(farr)
+        @test f(arr, 1) ≈ f(farr, 1)
+        @test f(arr, 2) ≈ f(farr, 2)
+        @test f(arr, (1, 2)) ≈ [f(farr)]
         @test isequal(f(arr, 3), f(farr, 3))
     end
 end
@@ -373,15 +373,15 @@ end
 for f in (sum, prod, minimum, maximum)
     # Test with a map function that maps to non-zero
     for arr in (se33, sA, pA)
-        @test_approx_eq f(x->x+1, arr) f(arr+1)
+        @test f(x->x+1, arr) ≈ f(arr+1)
     end
 
     # case where f(0) would throw
-    @test_approx_eq f(x->sqrt(x-1), pA+1) f(sqrt(pA))
+    @test f(x->sqrt(x-1), pA+1) ≈ f(sqrt(pA))
     # these actually throw due to #10533
-    # @test_approx_eq f(x->sqrt(x-1), pA+1, 1) f(sqrt(pA), 1)
-    # @test_approx_eq f(x->sqrt(x-1), pA+1, 2) f(sqrt(pA), 2)
-    # @test_approx_eq f(x->sqrt(x-1), pA+1, 3) f(pA)
+    # @test f(x->sqrt(x-1), pA+1, 1) ≈ f(sqrt(pA), 1)
+    # @test f(x->sqrt(x-1), pA+1, 2) ≈ f(sqrt(pA), 2)
+    # @test f(x->sqrt(x-1), pA+1, 3) ≈ f(pA)
 end
 
 # empty cases
@@ -909,8 +909,8 @@ end
 # explicit zeros
 if Base.USE_GPL_LIBS
 a = SparseMatrixCSC(2, 2, [1, 3, 5], [1, 2, 1, 2], [1.0, 0.0, 0.0, 1.0])
-@test_approx_eq lufact(a)\[2.0, 3.0] [2.0, 3.0]
-@test_approx_eq cholfact(a)\[2.0, 3.0] [2.0, 3.0]
+@test lufact(a)\[2.0, 3.0] ≈ [2.0, 3.0]
+@test cholfact(a)\[2.0, 3.0] ≈ [2.0, 3.0]
 end
 
 # issue #9917
@@ -1288,15 +1288,15 @@ end
 Ac = sprandn(10,10,.1) + im* sprandn(10,10,.1)
 Ar = sprandn(10,10,.1)
 Ai = ceil(Int,Ar*100)
-@test_approx_eq norm(Ac,1)     norm(full(Ac),1)
-@test_approx_eq norm(Ac,Inf)   norm(full(Ac),Inf)
-@test_approx_eq vecnorm(Ac)    vecnorm(full(Ac))
-@test_approx_eq norm(Ar,1)     norm(full(Ar),1)
-@test_approx_eq norm(Ar,Inf)   norm(full(Ar),Inf)
-@test_approx_eq vecnorm(Ar)    vecnorm(full(Ar))
-@test_approx_eq norm(Ai,1)     norm(full(Ai),1)
-@test_approx_eq norm(Ai,Inf)   norm(full(Ai),Inf)
-@test_approx_eq vecnorm(Ai)    vecnorm(full(Ai))
+@test norm(Ac,1) ≈ norm(full(Ac),1)
+@test norm(Ac,Inf) ≈ norm(full(Ac),Inf)
+@test vecnorm(Ac) ≈ vecnorm(full(Ac))
+@test norm(Ar,1) ≈ norm(full(Ar),1)
+@test norm(Ar,Inf) ≈ norm(full(Ar),Inf)
+@test vecnorm(Ar) ≈ vecnorm(full(Ar))
+@test norm(Ai,1) ≈ norm(full(Ai),1)
+@test norm(Ai,Inf) ≈ norm(full(Ai),Inf)
+@test vecnorm(Ai) ≈ vecnorm(full(Ai))
 
 # test sparse matrix cond
 A = sparse(reshape([1.0],1,1))

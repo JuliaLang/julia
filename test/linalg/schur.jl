@@ -34,11 +34,11 @@ for eltya in (Float32, Float64, Complex64, Complex128, Int)
     debug && println("Schur")
         d,v = eig(a)
         f   = schurfact(a)
-        @test_approx_eq f[:vectors]*f[:Schur]*f[:vectors]' a
-        @test_approx_eq sort(real(f[:values])) sort(real(d))
-        @test_approx_eq sort(imag(f[:values])) sort(imag(d))
+        @test f[:vectors]*f[:Schur]*f[:vectors]' ≈ a
+        @test sort(real(f[:values])) ≈ sort(real(d))
+        @test sort(imag(f[:values])) ≈ sort(imag(d))
         @test istriu(f[:Schur]) || eltype(a)<:Real
-        @test_approx_eq full(f) a
+        @test full(f) ≈ a
         @test_throws KeyError f[:A]
 
     debug && println("Reorder Schur")
@@ -48,8 +48,8 @@ for eltya in (Float32, Float64, Complex64, Complex128, Int)
         S = schurfact(ordschura)
         select = bitrand(n)
         O = ordschur(S, select)
-        sum(select) != 0 && @test_approx_eq S[:values][find(select)] O[:values][1:sum(select)]
-        @test_approx_eq O[:vectors]*O[:Schur]*O[:vectors]' ordschura
+        sum(select) != 0 && @test S[:values][find(select)] ≈ O[:values][1:sum(select)]
+        @test O[:vectors]*O[:Schur]*O[:vectors]' ≈ ordschura
         @test_throws KeyError f[:A]
         Snew = Base.LinAlg.Schur(S.T, S.Z, S.values)
         SchurNew = ordschur!(copy(Snew), select)
@@ -65,8 +65,8 @@ for eltya in (Float32, Float64, Complex64, Complex128, Int)
             a2_sf = view(a, n1+1:n2, n1+1:n2)
         end
         f = schurfact(a1_sf, a2_sf)
-        @test_approx_eq f[:Q]*f[:S]*f[:Z]' a1_sf
-        @test_approx_eq f[:Q]*f[:T]*f[:Z]' a2_sf
+        @test f[:Q]*f[:S]*f[:Z]' ≈ a1_sf
+        @test f[:Q]*f[:T]*f[:Z]' ≈ a2_sf
         @test istriu(f[:S]) || eltype(a)<:Real
         @test istriu(f[:T]) || eltype(a)<:Real
         @test_throws KeyError f[:A]
@@ -77,10 +77,10 @@ for eltya in (Float32, Float64, Complex64, Complex128, Int)
         m = sum(select)
         S = ordschur(NS, select)
         # Make sure that the new factorization stil factors matrix
-        @test_approx_eq S[:Q]*S[:S]*S[:Z]' a1_sf
-        @test_approx_eq S[:Q]*S[:T]*S[:Z]' a2_sf
+        @test S[:Q]*S[:S]*S[:Z]' ≈ a1_sf
+        @test S[:Q]*S[:T]*S[:Z]' ≈ a2_sf
         # Make sure that we have sorted it correctly
-        @test_approx_eq NS[:values][find(select)] S[:values][1:m]
+        @test NS[:values][find(select)] ≈ S[:values][1:m]
 
         Snew = Base.LinAlg.GeneralizedSchur(NS.S, NS.T, NS.alpha, NS.beta, NS.Q, NS.Z)
         SchurNew = ordschur!(copy(Snew), select)

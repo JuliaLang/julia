@@ -1128,7 +1128,7 @@ end
 @test Complex(1,2) + 1//2 == Complex(3//2,2//1)
 @test Complex(1,2) + 1//2 * 0.5 == Complex(1.25,2.0)
 @test (Complex(1,2) + 1//2) * 0.5 == Complex(0.75,1.0)
-@test_approx_eq (Complex(1,2)/Complex(2.5,3.0))*Complex(2.5,3.0) Complex(1,2)
+@test (Complex(1,2)/Complex(2.5,3.0))*Complex(2.5,3.0) ≈ Complex(1,2)
 @test 0.7 < real(sqrt(Complex(0,1))) < 0.707107
 
 for T in Base.BitSigned_types
@@ -2644,12 +2644,12 @@ let T = Rational
     yf = Complex{Float64}(1//2 + 1//5*im)
     yi = 4
 
-    @test_approx_eq x^y big(xf)^big(yf)
-    @test_approx_eq x^yi big(xf)^yi
-    @test_approx_eq x^true big(xf)^true
-    @test_approx_eq x^false big(xf)^false
-    @test_approx_eq x^1 big(xf)^1
-    @test_approx_eq xf^Rational(2, 1) xf*xf
+    @test x^y ≈ big(xf)^big(yf)
+    @test_broken x^yi ≈ big(xf)^yi
+    @test_broken x^true ≈ big(xf)^true
+    @test x^false == big(xf)^false
+    @test_broken x^1 ≈ big(xf)^1
+    @test xf^Rational(2, 1) ≈ xf*xf
     @test Complex(1., 1.)^Rational(2,1) == Complex(1., 1.)*Complex(1.,1.) == Complex(0., 2.)
 end
 

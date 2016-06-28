@@ -54,10 +54,10 @@ for eltya in (Float32, Float64, Complex64, Complex128, Int)
 
     debug && println("(Automatic) Bunch-Kaufman factor of indefinite matrix")
                 bc1 = factorize(asym)
-                @test_approx_eq inv(bc1) * asym eye(n)
-                @test_approx_eq_eps asym * (bc1\b) b 1000ε
+                @test inv(bc1)*asym ≈ eye(n)
+                @test_approx_eq_eps asym*(bc1\b) b 1000ε
                 for rook in (false, true)
-                    @test_approx_eq inv(bkfact(a.' + a, :U, true, rook)) * (a.' + a) eye(n)
+                    @test inv(bkfact(a.'+a, :U, true, rook))*(a.'+a) ≈ eye(n)
                     @test size(bc1) == size(bc1.LD)
                     @test size(bc1,1) == size(bc1.LD,1)
                     @test size(bc1,2) == size(bc1.LD,2)
@@ -69,7 +69,7 @@ for eltya in (Float32, Float64, Complex64, Complex128, Int)
     debug && println("Bunch-Kaufman factors of a pos-def matrix")
                 for rook in (false, true)
                     bc2 = bkfact(apd, :U, issymmetric(apd), rook)
-                    @test_approx_eq inv(bc2) * apd eye(n)
+                    @test inv(bc2)*apd ≈ eye(n)
                     @test_approx_eq_eps apd * (bc2\b) b 150000ε
                     @test ishermitian(bc2) == !issymmetric(bc2)
                 end
