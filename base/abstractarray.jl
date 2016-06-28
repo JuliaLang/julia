@@ -1052,6 +1052,39 @@ function cat_t(catdims, typeC::Type, X...)
     return C
 end
 
+function cat_t(catdim::Integer, typeC::Type, X...)
+    nargs = length(X)
+    ndimsX = Int[isa(a,AbstractArray) ? ndims(a) : 0 for a in X]
+    ndimsC = max(maximum(ndimsX), catdim)
+
+    dimsC = Int[d <= ndimsX[1] ? size(X[1],d) : 1 for d=1:ndimsC]
+    for i = 2:nargs
+        for d = 1:ndimsC
+            currentdim = (d <= ndimsX[i] ? size(X[i],d) : 1)
+            if d == catdim
+                dimsC[d] += currentdim
+            elseif dimsC[d] != currentdim
+                throw(DimensionMismatch(string("mismatch in dimension ",d,
+                                               " (expected ",dimsC[d],
+                                               " got ",currentdim,")")))
+            end
+        end
+    end
+
+    C = similar(isa(X[1],AbstractArray) ? full(X[1]) : [X[1]], typeC, tuple(dimsC...))
+
+    offset = 0
+    catind = [ 1:dimsC[d] for d = 1:ndimsC ]
+    for i=1:nargs
+        Xi = X[i]
+        sz = isa(Xi,AbstractArray) ? size(Xi, catdim)::Int : 1
+        catind[catdim] = offset + (1:sz)
+        C[catind...] = Xi
+        offset += sz
+    end
+    return C
+end
+
 vcat(X...) = cat(1, X...)
 hcat(X...) = cat(2, X...)
 
