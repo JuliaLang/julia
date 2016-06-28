@@ -1,7 +1,7 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
+@testset "qr" begin
 debug = false
-using Base.Test
 
 using Base.LinAlg: BlasComplex, BlasFloat, BlasReal, QRPivoted
 
@@ -180,3 +180,5 @@ B = rand(7,2)
 
 # Issue 16520
 @test_throws DimensionMismatch ones(3,2)\(1:5)
+
+end

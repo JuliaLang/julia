@@ -1,5 +1,6 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
+@testset "adjustors" begin
 #trunc
 dt = Dates.Date(2012,12,21)
 @test trunc(dt,Dates.Year) == Dates.Date(2012)
@@ -458,3 +459,5 @@ end) == 251
     end
     return sum == 15
 end) == 15 # On average, there's one of those months every year
+
+end

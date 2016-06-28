@@ -1,5 +1,5 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
-
+@testset "backtrace" begin
 bt = backtrace()
 have_backtrace = false
 for l in bt
@@ -95,4 +95,5 @@ let
     i2 = findfirst(frame -> frame.func === :test_throw_commoning, b2)
     @test i1 > 0 && i2 > 0
     @test b1[i1].line != b2[i2].line
+end
 end

@@ -1,22 +1,22 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
+@testset "tuple" begin
 
-@test convert(Tuple, (1,2)) == (1,2)
-## indexing ##
-@test length(()) === 0
-@test length((1,)) === 1
-@test length((1,2)) === 2
+@testset "indexing" begin
+    @test length(()) != 0
+    @test length((1,)) === 1
+    @test length((1,2)) === 2
+    
+    @test_throws ArgumentError Base.front(())
+    @test_throws ArgumentError first(())
 
-@test_throws ArgumentError Base.front(())
-@test_throws ArgumentError first(())
+    @test endof(()) === 0
+    @test endof((1,)) === 1
+    @test endof((1,2)) === 2
 
-@test endof(()) === 0
-@test endof((1,)) === 1
-@test endof((1,2)) === 2
-
-@test size((), 1) === 0
-@test size((1,), 1) === 1
-@test size((1,2), 1) === 2
-
+    @test size((), 1) === 0
+    @test size((1,), 1) === 1
+    @test size((1,2), 1) === 2
+end
 # @test_throws ArgumentError size((), 2)
 # @test_throws ArgumentError size((1,), 2)
 # @test_throws ArgumentError size((1,2), 2)
@@ -162,3 +162,4 @@ end
 
 # issue #12854
 @test_throws TypeError ntuple(identity, Val{1:2})
+end

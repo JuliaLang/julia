@@ -1,7 +1,6 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
-using Base.Test
-
+@testset "serialize" begin
 # Check that serializer hasn't gone out-of-frame
 @test Serializer.sertag(Symbol) == 2
 @test Serializer.sertag(()) == 46
@@ -411,4 +410,5 @@ let
     serialize(f, :β)
     seek(f,0)
     @test deserialize(f) === :β
+end
 end

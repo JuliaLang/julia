@@ -1,5 +1,6 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
+@testset "spawn" begin
 ##################################
 # Cross Plaform tests for spawn. #
 ##################################
@@ -373,3 +374,5 @@ end
 @test_throws ArgumentError reduce(&, Base.AbstractCmd[])
 @test_throws ArgumentError reduce(&, Base.Cmd[])
 @test reduce(&, [`echo abc`, `echo def`, `echo hij`]) == `echo abc` & `echo def` & `echo hij`
+
+end

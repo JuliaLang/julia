@@ -1,5 +1,6 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
+@testset "search" begin
 # some test strings
 astr = "Hello, world.\n"
 u8str = "∀ ε > 0, ∃ δ > 0: |x-y| < δ ⇒ |f(x)-f(y)| < ε"
@@ -373,3 +374,5 @@ end
 # string searchindex with a two-char UTF-8 (4 byte) string literal
 @test rsearchindex("\U1f596\U1f596", "\U1f596\U1f596") == 1
 @test rsearchindex("\U1f596\U1f596", "\U1f596\U1f596", endof("\U1f596\U1f596\U1f596")) == 1
+
+end

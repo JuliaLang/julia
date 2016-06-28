@@ -1,7 +1,7 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
+@testset "schur" begin
 debug = false
-using Base.Test
 
 using Base.LinAlg: BlasComplex, BlasFloat, BlasReal, QRPivoted
 
@@ -96,4 +96,5 @@ for eltya in (Float32, Float64, Complex64, Complex128, Int)
         @test NS[:S] ≈ sS
         @test NS[:Z] ≈ sZ
     end
+end
 end

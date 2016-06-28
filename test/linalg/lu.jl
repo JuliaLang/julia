@@ -1,8 +1,7 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
+@testset "lu" begin
 debug = false
-
-using Base.Test
 import Base.LinAlg.BlasInt, Base.LinAlg.BlasFloat
 
 n = 10
@@ -188,3 +187,5 @@ end
 
 @test @inferred(logdet(Complex64[1.0f0 0.5f0; 0.5f0 -1.0f0])) === 0.22314355f0 + 3.1415927f0im
 @test_throws DomainError logdet([1 1; 1 -1])
+
+end

@@ -1,5 +1,6 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
+@testset "conversions" begin
 # Test conversion to and from unix
 @test Dates.unix2datetime(Dates.datetime2unix(DateTime(2000,1,1))) == DateTime(2000,1,1)
 @test Dates.value(Dates.DateTime(1970)) == Dates.UNIXEPOCH
@@ -102,3 +103,5 @@ b = Dates.Date(2000)
 @test convert(Date,730120) == b
 @test convert(Date,730120.0) == b
 @test convert(Date,Int32(730120)) == b
+
+end

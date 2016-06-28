@@ -1,5 +1,6 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
+@testset "priorityqueue" begin
 using Base.Collections
 
 # Test dequeing in sorted order.
@@ -107,3 +108,5 @@ for priority in values(priorities)
     heappush!(xs, priority)
 end
 @test issorted([heappop!(xs) for _ in length(priorities)])
+
+end

@@ -1,6 +1,6 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
-# fft
+@testset "fft" begin
 a = rand(8) + im*rand(8)
 @test norm(ifft(fft(a)) - a) < 1e-8
 
@@ -326,4 +326,5 @@ for x in (randn(10),randn(10,12))
     end
     # note: inference doesn't work for plan_fft_ since the
     #       algorithm steps are included in the CTPlan type
+end
 end

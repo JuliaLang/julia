@@ -1,6 +1,6 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
-using Base.Test
+@testset "subarray" begin
 # import Base: ViewIndex, dimsizeexpr, rangetype, merge_indexes, first_index, stride1expr, tailsize
 using Base.Cartesian
 
@@ -490,4 +490,5 @@ u = (1,2:3)
 # test macro hygiene
 let size=(x,y)-> error("should not happen")
     @test X[1:end,2,2] == @view X[1:end,2,2]
+end
 end

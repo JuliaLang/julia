@@ -1,7 +1,6 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
-# Tests that do not really go anywhere else
-
+@testset "misc" begin
 # Test info
 @test contains(sprint(io->info(io,"test")), "INFO:")
 @test contains(sprint(io->info(io,"test")), "INFO: test")
@@ -387,3 +386,5 @@ end
 optstring = sprint(show, Base.JLOptions())
 @test startswith(optstring, "JLOptions(")
 @test endswith(optstring, ")")
+
+end

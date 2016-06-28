@@ -1,5 +1,6 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
+@testset "sysinfo" begin
 # We can't guarantee that these are correct, but we can at least check
 # that they run
 @test length(Base.Sys.cpu_info()) > 0
@@ -37,3 +38,5 @@ key = randstring(25)
 @test !haskey(ENV,key)
 @test_throws KeyError ENV[key]
 @test get(ENV,key,"default") == "default"
+
+end

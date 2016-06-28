@@ -1,5 +1,6 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
+@testset "dict" begin
 # Pair
 p = Pair(1,2)
 @test p == (1=>2)
@@ -549,4 +550,5 @@ let badKeys = UInt16[0xb800,0xa501,0xcdff,0x6303,0xe40a,0xcf0e,0xf3df,0xae99,0x9
             @test d2[MyInt(badKeys[i])] == i
         end
     end
+end
 end

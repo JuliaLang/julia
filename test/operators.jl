@@ -1,5 +1,6 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
+@testset "operators" begin
 @test ifelse(true, 1, 2) == 1
 @test ifelse(false, 1, 2) == 2
 
@@ -54,4 +55,5 @@ let xs = [[i:i+4;] for i in 1:10]
     for n in 2:10
         @test max(xs[1:n]...) == [n:n+4;]
     end
+end
 end

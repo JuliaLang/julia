@@ -3,8 +3,8 @@
 module TestBroadcastInternals
 
 using Base.Broadcast: broadcast_shape, check_broadcast_shape, newindex, _bcs, _bcsm
-using Base.Test
 
+@testset "broadcast" begin
 @test @inferred(_bcs((), (3,5), (3,5))) == (3,5)
 @test @inferred(_bcs((), (3,1), (3,5))) == (3,5)
 @test @inferred(_bcs((), (3,),  (3,5))) == (3,5)
@@ -195,4 +195,6 @@ end
 # issue 16164
 let a = broadcast(Float32, [3, 4, 5])
     @test eltype(a) == Float32
+end
+
 end

@@ -1,5 +1,6 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
+@testset "functional" begin
 # tests related to functional programming functions and styles
 
 # map -- array.jl
@@ -478,4 +479,5 @@ let s = "Monkey 🙈🙊🙊"
     @test tf(3) == "Mon|key| 🙈🙊|🙊"
     @test tf(2) == "Mo|nk|ey| 🙈|🙊🙊"
     @test tf(1) == "M|o|n|k|e|y| |🙈|🙊|🙊"
+end
 end

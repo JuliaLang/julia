@@ -1,5 +1,6 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
+@testset "socket" begin
 @test ip"127.0.0.1" == IPv4(127,0,0,1)
 @test ip"192.0" == IPv4(192,0,0,0)
 @test ip"192.0xFFF" == IPv4(192,0,15,255)
@@ -317,3 +318,4 @@ let
     @test test_connect(addr)
 end
 
+end

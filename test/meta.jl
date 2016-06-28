@@ -1,10 +1,7 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
-# test meta-expressions that annotate blocks of code
-
+@testset "meta" begin
 module MetaTest
-
-using Base.Test
 
 function f(x)
     y = x+5
@@ -106,7 +103,6 @@ end
 # tests to fully cover functions in base/meta.jl
 module MetaJLtest
 
-using Base.Test
 using Base.Meta
 
 @test isexpr(:(1+1),Set([:call]))
@@ -118,4 +114,5 @@ show_sexpr(ioB,:(1+1))
 
 show_sexpr(ioB,QuoteNode(1),1)
 
+end
 end

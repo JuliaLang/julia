@@ -1,5 +1,6 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
+@testset "periods" begin
 # Period testing
 @test -Dates.Year(1) == Dates.Year(-1)
 @test Dates.Year(1) > Dates.Year(0)
@@ -380,3 +381,5 @@ cpa = [1y+1s 1m+1s 1w+1s 1d+1s; 1h+1s 1mi+1s 2m+1s 1s+1ms]
 
 @test [1y+1s 1m+1s; 1w+1s 1d+1s] + [1y+1h 1y+1mi; 1y+1s 1y+1ms] == [2y+1h+1s 1y+1m+1mi+1s; 1y+1w+2s 1y+1d+1s+1ms]
 @test [1y+1s 1m+1s; 1w+1s 1d+1s] - [1y+1h 1y+1mi; 1y+1s 1y+1ms] == [1s-1h 1m+1s-1y-1mi; 1w-1y 1d+1s-1y-1ms]
+
+end

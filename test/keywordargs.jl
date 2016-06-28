@@ -1,5 +1,6 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
+@testset "kwargs" begin
 # simple keyword args case
 kwf1(ones; tens=0, hundreds=0) = ones + 10*tens + 100*hundreds
 @test kwf1(2) == 2
@@ -198,3 +199,5 @@ end
 @test ((a=1,b=2)->(a,b))() == (1,2)
 @test ((a=1,b=2)->(a,b))(5) == (5,2)
 @test ((a=1,b=2)->(a,b))(5,6) == (5,6)
+
+end

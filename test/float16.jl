@@ -1,7 +1,6 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
-using Base.Test
-
+@testset "float16" begin
 f = Float16(2.)
 g = Float16(1.)
 
@@ -146,3 +145,4 @@ end
 
 # issue #17148
 @test rem(Float16(1.2), Float16(one(1.2))) == 0.20019531f0
+end

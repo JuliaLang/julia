@@ -1,5 +1,6 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
+@testset "sorting" begin
 using Base.Order: Forward
 
 @test sort([2,3,1]) == [1,2,3]
@@ -348,3 +349,5 @@ end
 
 # issue #12833 - type stability of sort
 @test Base.return_types(sort, (Vector{Int},)) == [Vector{Int}]
+
+end

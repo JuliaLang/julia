@@ -1,5 +1,6 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
+@testset "read" begin
 mktempdir() do dir
 
 tasks = []
@@ -488,3 +489,5 @@ close(f2)
 rm(f)
 
 end # mktempdir() do dir
+
+end

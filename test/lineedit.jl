@@ -1,8 +1,19 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
+@testset "lineedit" begin
+
 using Base.LineEdit
 isdefined(:TestHelpers) || include(joinpath(dirname(@__FILE__), "TestHelpers.jl"))
 using TestHelpers
+
+function run_test(d,buf)
+    global a_foo, b_foo, a_bar, b_bar
+    a_foo = b_foo = a_bar = b_bar = 0
+    while !eof(buf)
+        LineEdit.match_input(d, nothing, buf)(nothing,nothing)
+    end
+end
+
 
 a_foo = 0
 
@@ -25,14 +36,6 @@ const bar_keymap = Dict(
 )
 
 test1_dict = LineEdit.keymap([foo_keymap])
-
-function run_test(d,buf)
-    global a_foo, a_bar, b_bar
-    a_foo = a_bar = b_bar = 0
-    while !eof(buf)
-        LineEdit.match_input(d, nothing, buf)(nothing,nothing)
-    end
-end
 
 run_test(test1_dict,IOBuffer("aa"))
 @test a_foo == 2
@@ -399,4 +402,5 @@ let
     s = LineEdit.refresh_multi_line(termbuf, term, buf,
         Base.LineEdit.InputAreaState(0,0), "julia> ", indent = 7)
     @test s == Base.LineEdit.InputAreaState(3,1)
+end
 end

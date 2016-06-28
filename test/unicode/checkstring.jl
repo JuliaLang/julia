@@ -1,5 +1,6 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
+@testset "checkstring" begin
 # 11575
 # Test invalid sequences
 
@@ -173,3 +174,5 @@ end
 @test_throws BoundsError Base.checkstring(b"abcdef", 3, 0)
 @test_throws BoundsError Base.checkstring(b"abcdef", 3, 7)
 @test_throws ArgumentError Base.checkstring(b"abcdef", 3, 1)
+
+end

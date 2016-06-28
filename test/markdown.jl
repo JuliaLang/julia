@@ -1,5 +1,6 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
+@test "markdown" begin
 using Base.Markdown
 import Base.Markdown: MD, Paragraph, Header, Italic, Bold, LineBreak, plain, term, html, rst, Table, Code, LaTeX, Footnote
 import Base: show
@@ -462,4 +463,5 @@ let t_1 = "`code` ``math`` ```code``` ````math```` `````code`````",
         "`",
         LaTeX("math at end of string"),
     ]))
+end
 end

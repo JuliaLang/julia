@@ -2,6 +2,7 @@
 
 import Base.LinAlg, Base.LinAlg.BlasReal, Base.LinAlg.BlasComplex
 
+@testset "blas" begin
 srand(100)
 # syr2k! and her2k!
 for elty in (Float32, Float64, Complex64, Complex128)
@@ -294,4 +295,6 @@ for elty in [Float32, Float64, Complex64, Complex128]
         @test all(Base.LinAlg.copytri!(ans, 'L') .== BLAS.gemm('T', 'N', L4, L4))
         @test_throws DimensionMismatch BLAS.syrk!('L','N',one(elty),eye(elty,5),one(elty),eye(elty,6))
     end
+end
+
 end

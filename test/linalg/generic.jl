@@ -1,7 +1,7 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
+@testset "generic" begin
 import Base: *
-using Base.Test
 
 # A custom Quaternion type with minimal defined interface and methods.
 # Used to test scale and scale! methods to show non-commutativity.
@@ -282,3 +282,5 @@ end
 @test det([true false; false true]) == det(eye(Int, 2))
 
 @test_throws ArgumentError Base.LinAlg.char_uplo(:Z)
+
+end

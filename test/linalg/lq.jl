@@ -1,7 +1,7 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
+@testset "lq" begin
 debug = false
-using Base.Test
 
 using Base.LinAlg: BlasComplex, BlasFloat, BlasReal
 
@@ -87,4 +87,5 @@ debug && println("Matmul with LQ factorizations")
         @test_throws DimensionMismatch A_mul_Bc!(eye(eltya,n+1),q)
         @test_throws BoundsError size(q,-1)
     end
+end
 end

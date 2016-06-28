@@ -1,5 +1,6 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
+@testset "show" begin
 replstr(x) = sprint((io,x) -> show(IOContext(io, multiline=true, limit=true), MIME("text/plain"), x), x)
 
 @test replstr(Array{Any}(2)) == "2-element Array{Any,1}:\n #undef\n #undef"
@@ -504,4 +505,5 @@ let s  = IOBuffer(Array{UInt8}(0), true, true)
     io = IOContext(s, multiline=true)
     Base.showarray(io, [1,2,3], header = false)
     @test String(resize!(s.data, s.size)) == " 1\n 2\n 3"
+end
 end

@@ -1,7 +1,7 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
+@testset "hessenberg" begin
 debug = false
-using Base.Test
 
 using Base.LinAlg: BlasComplex, BlasFloat, BlasReal, QRPivoted
 
@@ -34,4 +34,5 @@ let n = 10
             @test H[:Q][1,1] ≈ full(H[:Q])[1,1]
         end
     end
+end
 end

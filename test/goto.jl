@@ -1,7 +1,6 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
-# Basic goto tests
-
+@testset "goto" begin
 function goto_test1()
     @goto a
     return false
@@ -125,3 +124,5 @@ function f15561()
     @label crater
 end
 @test f15561() === nothing
+
+end

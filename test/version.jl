@@ -1,5 +1,6 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
+@testset "version" begin
 # parsing tests
 @test v"2" == VersionNumber(2)
 @test v"3.2" == VersionNumber(3, 2)
@@ -240,3 +241,5 @@ io = IOBuffer()
 @test VersionNumber(true, 0x2, Int128(3), (GenericString("rc"), 0x1)) == v"1.2.3-rc.1"
 @test VersionNumber(true, 0x2, Int128(3), (GenericString("rc"), 0x1)) == v"1.2.3-rc.1"
 @test VersionNumber(true, 0x2, Int128(3), (), (GenericString("sp"), 0x2)) == v"1.2.3+sp.2"
+
+end
