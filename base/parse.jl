@@ -128,12 +128,16 @@ function tryparse_internal{T<:Integer}(::Type{T}, s::AbstractString, startpos::I
     return Nullable{T}(n)
 end
 
-function tryparse_internal(::Type{Bool}, sbuff::AbstractString, startpos::Int, endpos::Int, base::Integer, raise::Bool)
+function tryparse_internal(::Type{Bool}, sbuff::Union{String,SubString},
+        startpos::Int, endpos::Int, base::Integer, raise::Bool)
     len = endpos-startpos+1
     p = pointer(sbuff)+startpos-1
-    (len == 4) && (0 == ccall(:memcmp, Int32, (Ptr{UInt8}, Ptr{UInt8}, UInt), p, "true", 4)) && (return Nullable(true))
-    (len == 5) && (0 == ccall(:memcmp, Int32, (Ptr{UInt8}, Ptr{UInt8}, UInt), p, "false", 5)) && (return Nullable(false))
-    raise && throw(ArgumentError("invalid Bool representation: $(repr(SubString(s,startpos,endpos)))"))
+    (len == 4) && (0 == ccall(:memcmp, Int32, (Ptr{UInt8}, Ptr{UInt8}, UInt),
+        p, "true", 4)) && (return Nullable(true))
+    (len == 5) && (0 == ccall(:memcmp, Int32, (Ptr{UInt8}, Ptr{UInt8}, UInt),
+        p, "false", 5)) && (return Nullable(false))
+    raise && throw(ArgumentError("invalid Bool representation: " *
+        repr(SubString(sbuff, startpos, endpos))))
     Nullable{Bool}()
 end
 
