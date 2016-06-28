@@ -478,8 +478,13 @@ Put differently, the elements of the argument iterator are concatenated. Example
 flatten(itr) = Flatten(itr)
 
 eltype{I}(::Type{Flatten{I}}) = eltype(eltype(I))
-iteratorsize{I}(::Type{Flatten{I}}) = SizeUnknown()
 iteratoreltype{I}(::Type{Flatten{I}}) = iteratoreltype(eltype(I))
+
+flatten_iteratorsize{T<:Tuple}(::Union{HasShape, HasLength}, b::Type{T}) = HasLength()
+flatten_iteratorsize(a, b) = SizeUnknown()
+flatten_length{T<:Tuple}(f, ::Type{T}) = isleaftype(T) ? nfields(T)*length(f.it) : throw(ArgumentError("Cannot compute length of a tuple-type which is not a leaf-type"))
+length{I}(f::Flatten{I}) = flatten_length(f, eltype(I))
+iteratorsize{I}(::Type{Flatten{I}}) = isleaftype(eltype(I)) ? flatten_iteratorsize(iteratorsize(I), eltype(I)) : SizeUnknown()# eltype is always defined
 
 function start(f::Flatten)
     local inner, s2
