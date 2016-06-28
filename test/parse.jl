@@ -537,3 +537,6 @@ end
 @test get(tryparse(Bool, "false")) === get(Nullable{Bool}(false))
 @test_throws ArgumentError parse(Int, "2", 1)
 @test_throws ArgumentError parse(Int, "2", 63)
+
+# error throwing branch from #10560
+@test_throws ArgumentError Base.tryparse_internal(Bool, "foo", 1, 2, 10, true)
