@@ -140,7 +140,80 @@ end
     B
 end
 
-@inline broadcast(f, As...) = broadcast!(f, allocate_for(Array{promote_eltype_op(f, As...)}, As, broadcast_shape(As...)), As...)
+# broadcast with computed element type
+
+@generated function _broadcast!{M,AT,nargs}(f, B::AbstractArray, indexmaps::M, As::AT, ::Type{Val{nargs}}, iter, st, count)
+    quote
+        $(Expr(:meta, :noinline))
+        # destructure the indexmaps and As tuples
+        @nexprs $nargs i->(A_i = As[i])
+        @nexprs $nargs i->(imap_i = indexmaps[i])
+        while !done(iter, st)
+            I, st = next(iter, st)
+            # reverse-broadcast the indices
+            @nexprs $nargs i->(I_i = newindex(I, imap_i))
+            # extract array values
+            @nexprs $nargs i->(@inbounds val_i = A_i[I_i])
+            # call the function
+            V = @ncall $nargs f val
+            S = typeof(V)
+            # store the result
+            if S <: eltype(B)
+                @inbounds B[I] = V
+            else
+                R = typejoin(eltype(B), S)
+                new = similar(B, R)
+                for II in take(iter, count)
+                    new[II] = B[II]
+                end
+                new[I] = V
+                return _broadcast!(f, new, indexmaps, As, Val{nargs}, iter, st, count+1)
+            end
+            count += 1
+        end
+        return B
+    end
+end
+
+function broadcast_t(f, ::Type{Any}, As...)
+    shp = broadcast_shape(As...)
+    iter = CartesianRange(shp)
+    if isempty(iter)
+        return allocate_for(Array{Union{}}, As, shp)
+    end
+    nargs = length(As)
+    sz = size(iter)
+    indexmaps = map(x->newindexer(sz, x), As)
+    st = start(iter)
+    I, st = next(iter, st)
+    val = f([ As[i][newindex(I, indexmaps[i])] for i=1:nargs ]...)
+    B = allocate_for(Array{typeof(val)}, As, shp)
+    B[I] = val
+    return _broadcast!(f, B, indexmaps, As, Val{nargs}, iter, st, 1)
+end
+
+@inline broadcast_t(f, T, As...) = broadcast!(f, allocate_for(Array{T}, As, broadcast_shape(As...)), As...)
+
+@inline broadcast(f, As...) = broadcast_t(f, promote_eltype_op(f, As...), As...)
+
+# alternate, more compact implementation; unfortunately slower.
+# also the `collect` machinery doesn't yet support arbitrary index bases.
+#=
+@generated function _broadcast{nargs}(f, indexmaps, As, ::Type{Val{nargs}}, iter)
+    quote
+        collect((@ncall $nargs f i->As[i][newindex(I, indexmaps[i])]) for I in iter)
+    end
+end
+
+function broadcast(f, As...)
+    shp = broadcast_shape(As...)
+    iter = CartesianRange(shp)
+    sz = size(iter)
+    indexmaps = map(x->newindexer(sz, x), As)
+    naT = Val{nfields(As)}
+    _broadcast(f, indexmaps, As, naT, iter)
+end
+=#
 
 @inline bitbroadcast(f, As...) = broadcast!(f, allocate_for(BitArray, As, broadcast_shape(As...)), As...)
 

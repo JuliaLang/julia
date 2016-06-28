@@ -196,3 +196,7 @@ end
 let a = broadcast(Float32, [3, 4, 5])
     @test eltype(a) == Float32
 end
+
+# issue #4883
+@test isa(broadcast(tuple, [1 2 3], ["a", "b", "c"]), Matrix{Tuple{Int,String}})
+@test isa(broadcast((x,y)->(x==1?1.0:x,y), [1 2 3], ["a", "b", "c"]), Matrix{Tuple{Real,String}})
