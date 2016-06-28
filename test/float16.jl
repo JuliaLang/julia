@@ -33,7 +33,7 @@ g = Float16(1.)
 @test_throws InexactError convert(UInt128, Float16(3.5))
 @test_throws InexactError convert(UInt128, Float16(-1))
 
-@test_approx_eq Float16(0.5f0)^2 Float16(0.5f0^2)
+@test Float16(0.5f0)^2 ≈ Float16(0.5f0^2)
 @test round(Int,Float16(0.5f0)) == round(Int,0.5f0)
 @test trunc(Int,Float16(0.9f0)) === trunc(Int,0.9f0) === 0
 @test floor(Int,Float16(0.9f0)) === floor(Int,0.9f0) === 0
@@ -49,8 +49,8 @@ g = Float16(1.)
 @test floor(Float16(1)) === Float16(1)
 @test ceil(Float16(0.1)) == ceil(0.1)
 @test ceil(Float16(0.9)) == ceil(0.9)
-@test_approx_eq fma(Float16(0.1),Float16(0.9),Float16(0.5)) fma(0.1,0.9,0.5)
-@test_approx_eq muladd(Float16(0.1),Float16(0.9),Float16(0.5)) muladd(0.1,0.9,0.5)
+@test fma(Float16(0.1),Float16(0.9),Float16(0.5)) ≈ fma(0.1,0.9,0.5)
+@test muladd(Float16(0.1),Float16(0.9),Float16(0.5)) ≈ muladd(0.1,0.9,0.5)
 @test convert(Int128,Float16(-1.0)) == Int128(-1)
 @test convert(UInt128,Float16(5.0)) == UInt128(5)
 
@@ -72,7 +72,7 @@ g = Float16(1.)
 @test f*2. === 4.
 @test f/2. === 1.
 
-@test_approx_eq sin(f) sin(2f0)
+@test sin(f) ≈ sin(2f0)
 
 @test isnan(NaN16)
 @test isnan(-NaN16)

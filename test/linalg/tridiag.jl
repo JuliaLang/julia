@@ -82,21 +82,21 @@ for elty in (Float32, Float64, Complex64, Complex128, Int)
         end
 
         # tridiagonal linear algebra
-        @test_approx_eq T*vv F*vv
+        @test T*vv ≈ F*vv
         invFv = F\vv
-        @test_approx_eq T\vv invFv
-        # @test_approx_eq Base.solve(T,v) invFv
-        # @test_approx_eq Base.solve(T, B) F\B
+        @test T\vv ≈ invFv
+        # @test Base.solve(T,v) ≈ invFv
+        # @test Base.solve(T, B) ≈ F\B
         Tlu = factorize(T)
         x = Tlu\vv
-        @test_approx_eq x invFv
+        @test x ≈ invFv
     end
-    @test_approx_eq det(T) det(F)
+    @test det(T) ≈ det(F)
 
-    @test_approx_eq T * Base.LinAlg.UnitUpperTriangular(eye(n)) F*eye(n)
-    @test_approx_eq T * Base.LinAlg.UnitLowerTriangular(eye(n)) F*eye(n)
-    @test_approx_eq T * UpperTriangular(eye(n)) F*eye(n)
-    @test_approx_eq T * LowerTriangular(eye(n)) F*eye(n)
+    @test T*Base.LinAlg.UnitUpperTriangular(eye(n)) ≈ F*eye(n)
+    @test T*Base.LinAlg.UnitLowerTriangular(eye(n)) ≈ F*eye(n)
+    @test T*UpperTriangular(eye(n)) ≈ F*eye(n)
+    @test T*LowerTriangular(eye(n)) ≈ F*eye(n)
 
     # symmetric tridiagonal
     if elty <: Real
@@ -118,8 +118,8 @@ for elty in (Float32, Float64, Complex64, Complex128, Int)
             end
             invFsv = Fs\vv
             x = Ts\vv
-            @test_approx_eq x invFsv
-            @test_approx_eq full(full(Tldlt)) Fs
+            @test x ≈ invFsv
+            @test full(full(Tldlt)) ≈ Fs
         end
 
         # similar
@@ -134,8 +134,8 @@ for elty in (Float32, Float64, Complex64, Complex128, Int)
         @inferred eig(Ts, 2:4)
         @inferred eig(Ts, 1.0, 2.0)
         D, Vecs = eig(Fs)
-        @test_approx_eq DT D
-        @test_approx_eq abs(VT'Vecs) eye(elty, n)
+        @test DT ≈ D
+        @test abs(VT'Vecs) ≈ eye(elty, n)
         @test eigvecs(Ts) == eigvecs(Fs)
         #call to LAPACK.stein here
         Test.test_approx_eq_modphase(eigvecs(Ts,eigvals(Ts)),eigvecs(Fs))
@@ -154,14 +154,14 @@ for elty in (Float32, Float64, Complex64, Complex128, Int)
     # The determinant of the identity matrix should always be 1.
     for i = 1:10
         A = eye(elty, i)
-        @test_approx_eq det(A) one(elty)
+        @test det(A) ≈ one(elty)
     end
 
     # The determinant of a Householder reflection matrix should always be -1.
     for i = 1:10
         A = eye(elty, 10)
         A[i, i] = -one(elty)
-        @test_approx_eq det(A) -one(elty)
+        @test det(A) ≈ -one(elty)
     end
 
     # The determinant of a rotation matrix should always be 1.
@@ -169,7 +169,7 @@ for elty in (Float32, Float64, Complex64, Complex128, Int)
         for theta = convert(Vector{elty}, pi ./ [1:4;])
             R = [cos(theta) -sin(theta);
                  sin(theta) cos(theta)]
-            @test_approx_eq convert(elty, det(R)) one(elty)
+            @test convert(elty, det(R)) ≈ one(elty)
         end
 
     # issue #1490
@@ -289,10 +289,10 @@ let n = 12 #Size of matrix problem to test
         @test B - A == A - B
 
         debug && println("Multiplication with strided vector")
-        @test_approx_eq A*ones(n) full(A)*ones(n)
+        @test A*ones(n) ≈ full(A)*ones(n)
 
         debug && println("Multiplication with strided matrix")
-        @test_approx_eq A*ones(n, 2) full(A)*ones(n, 2)
+        @test A*ones(n, 2) ≈ full(A)*ones(n, 2)
 
         debug && println("Eigensystems")
         if elty <: Real
@@ -302,7 +302,7 @@ let n = 12 #Size of matrix problem to test
             evecs = LAPACK.stein!(a, b, w)
 
             (e, v) = eig(SymTridiagonal(a, b))
-            @test_approx_eq e w
+            @test e ≈ w
             test_approx_eq_vecs(v, evecs)
 
             debug && println("stein! call using iblock and isplit")
@@ -314,13 +314,13 @@ let n = 12 #Size of matrix problem to test
             F = eigfact(SymTridiagonal(a, b),1:2)
             fF = eigfact(Symmetric(full(SymTridiagonal(a, b))),1:2)
             Test.test_approx_eq_modphase(F[:vectors], fF[:vectors])
-            @test_approx_eq F[:values] fF[:values]
+            @test F[:values] ≈ fF[:values]
 
             debug && println("stegr! call with value range")
             F = eigfact(SymTridiagonal(a, b),0.0,1.0)
             fF = eigfact(Symmetric(full(SymTridiagonal(a, b))),0.0,1.0)
             Test.test_approx_eq_modphase(F[:vectors], fF[:vectors])
-            @test_approx_eq F[:values] fF[:values]
+            @test F[:values] ≈ fF[:values]
         end
 
         debug && println("Binary operations")
@@ -335,12 +335,12 @@ let n = 12 #Size of matrix problem to test
         fB = map(elty <: Complex ? Complex128 : Float64, full(B))
 
         for op in (+, -, *)
-            @test_approx_eq full(op(A, B)) op(fA, fB)
+            @test full(op(A, B)) ≈ op(fA, fB)
         end
         α = rand(elty)
-        @test_approx_eq full(α*A) α*full(A)
-        @test_approx_eq full(A*α) full(A)*α
-        @test_approx_eq full(A/α) full(A)/α
+        @test full(α*A) ≈ α*full(A)
+        @test full(A*α) ≈ full(A)*α
+        @test full(A/α) ≈ full(A)/α
 
         debug && println("A_mul_B!")
         @test_throws DimensionMismatch A_mul_B!(zeros(elty,n,n),B,ones(elty,n+1,n))
@@ -411,22 +411,22 @@ let n = 12 #Size of matrix problem to test
         end
 
         debug && println("Multiplication with strided vector")
-        @test_approx_eq A*ones(n) full(A)*ones(n)
+        @test A*ones(n) ≈ full(A)*ones(n)
 
         debug && println("Multiplication with strided matrix")
-        @test_approx_eq A*ones(n, 2) full(A)*ones(n, 2)
+        @test A*ones(n, 2) ≈ full(A)*ones(n, 2)
 
 
         B = Tridiagonal(a, b, c)
         fB = map(elty <: Complex ? Complex128 : Float64, full(B))
 
         for op in (+, -, *)
-            @test_approx_eq full(op(A, B)) op(fA, fB)
+            @test full(op(A, B)) ≈ op(fA, fB)
         end
         α = rand(elty)
-        @test_approx_eq full(α*A) α*full(A)
-        @test_approx_eq full(A*α) full(A)*α
-        @test_approx_eq full(A/α) full(A)/α
+        @test full(α*A) ≈ α*full(A)
+        @test full(A*α) ≈ full(A)*α
+        @test full(A/α) ≈ full(A)/α
 
         @test_throws ArgumentError convert(SymTridiagonal{elty},A)
 

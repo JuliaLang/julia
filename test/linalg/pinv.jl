@@ -269,23 +269,23 @@ for eltya in (Float32, Float64, Complex64, Complex128)
     debug && println("\n\n<<<<<", eltya, ">>>>>")
     debug && println("\n--- zero constant ---")
     a = pinv(zero(eltya))
-    @test_approx_eq a 0.0
+    @test a ≈ 0.0
 end
 
 for eltya in (Float32, Float64, Complex64, Complex128)
     debug && println("\n\n<<<<<", eltya, ">>>>>")
     debug && println("\n--- zero vector ---")
     a = pinv([zero(eltya); zero(eltya)])
-    @test_approx_eq a[1] 0.0
-    @test_approx_eq a[2] 0.0
+    @test a[1] ≈ 0.0
+    @test a[2] ≈ 0.0
 end
 
 for eltya in (Float32, Float64, Complex64, Complex128)
     debug && println("\n\n<<<<<", eltya, ">>>>>")
     debug && println("\n--- zero Diagonal matrix ---")
     a = pinv(Diagonal([zero(eltya); zero(eltya)]))
-    @test_approx_eq a.diag[1] 0.0
-    @test_approx_eq a.diag[2] 0.0
+    @test a.diag[1] ≈ 0.0
+    @test a.diag[2] ≈ 0.0
 end
 
 # test sub-normal matrices
@@ -293,35 +293,35 @@ for eltya in (Float32, Float64)
     debug && println("\n\n<<<<<", eltya, ">>>>>")
     debug && println("\n--- sub-normal constant ---")
     a = pinv(realmin(eltya)/100)
-    @test_approx_eq a 0.0
+    @test a ≈ 0.0
     debug && println("\n\n<<<<<Complex{", eltya, "}>>>>>")
     debug && println("\n--- sub-normal constant ---")
     a = pinv(realmin(eltya)/100*(1+1im))
-    @test_approx_eq a 0.0
+    @test a ≈ 0.0
 end
 
 for eltya in (Float32, Float64)
     debug && println("\n\n<<<<<", eltya, ">>>>>")
     debug && println("\n--- sub-normal vector ---")
     a = pinv([realmin(eltya); realmin(eltya)]/100)
-    @test_approx_eq a[1] 0.0
-    @test_approx_eq a[2] 0.0
+    @test a[1] ≈ 0.0
+    @test a[2] ≈ 0.0
     debug && println("\n\n<<<<<Complex{", eltya, "}>>>>>")
     debug && println("\n--- sub-normal vector ---")
     a = pinv([realmin(eltya); realmin(eltya)]/100*(1+1im))
-    @test_approx_eq a[1] 0.0
-    @test_approx_eq a[2] 0.0
+    @test a[1] ≈ 0.0
+    @test a[2] ≈ 0.0
 end
 
 for eltya in (Float32, Float64)
     debug && println("\n\n<<<<<", eltya, ">>>>>")
     debug && println("\n--- sub-normal Diagonal matrix ---")
     a = pinv(Diagonal([realmin(eltya); realmin(eltya)]/100))
-    @test_approx_eq a.diag[1] 0.0
-    @test_approx_eq a.diag[2] 0.0
+    @test a.diag[1] ≈ 0.0
+    @test a.diag[2] ≈ 0.0
     debug && println("\n\n<<<<<Complex{", eltya, "}>>>>>")
     debug && println("\n--- sub-normal Diagonal matrix ---")
     a = pinv(Diagonal([realmin(eltya); realmin(eltya)]/100*(1+1im)))
-    @test_approx_eq a.diag[1] 0.0
-    @test_approx_eq a.diag[2] 0.0
+    @test a.diag[1] ≈ 0.0
+    @test a.diag[2] ≈ 0.0
 end

@@ -8,21 +8,21 @@ setprecision(53) do
 end
 x = BigFloat(12)
 y = BigFloat(x)
-@test_approx_eq x y
+@test x ≈ y
 y = BigFloat(0xc)
-@test_approx_eq x y
+@test x ≈ y
 y = BigFloat(12.)
-@test_approx_eq x y
+@test x ≈ y
 y = BigFloat(BigInt(12))
-@test_approx_eq x y
+@test x ≈ y
 y = BigFloat(BigFloat(12))
-@test_approx_eq x y
+@test x ≈ y
 y = parse(BigFloat,"12")
-@test_approx_eq x y
+@test x ≈ y
 y = BigFloat(Float32(12.))
-@test_approx_eq x y
+@test x ≈ y
 y = BigFloat(12//1)
-@test_approx_eq x y
+@test x ≈ y
 
 # +
 x = BigFloat(12)
@@ -422,12 +422,12 @@ end
 
 # bessel functions
 setprecision(53) do
-    @test_approx_eq besselj(4, BigFloat(2)) besselj(4, 2.)
-    @test_approx_eq besselj0(BigFloat(2))  besselj0(2.)
-    @test_approx_eq besselj1(BigFloat(2))  besselj1(2.)
-    @test_approx_eq bessely(4, BigFloat(2))  bessely(4, 2.)
-    @test_approx_eq bessely0(BigFloat(2))  bessely0(2.)
-    @test_approx_eq bessely1(BigFloat(2))  bessely1(2.)
+    @test besselj(4, BigFloat(2)) ≈ besselj(4, 2.)
+    @test besselj0(BigFloat(2)) ≈ besselj0(2.)
+    @test besselj1(BigFloat(2)) ≈ besselj1(2.)
+    @test bessely(4, BigFloat(2)) ≈ bessely(4, 2.)
+    @test bessely0(BigFloat(2)) ≈ bessely0(2.)
+    @test bessely1(BigFloat(2)) ≈ bessely1(2.)
 end
 
 # trigonometric functions
@@ -436,7 +436,7 @@ setprecision(53) do
             :cosh,:sinh,:tanh,:sech,:csch,:coth,:asinh),
         j in (-1., -0.5, -0.25, .25, .5, 1.)
         @eval begin
-            @test_approx_eq ($f)(BigFloat($j)) ($f)($j)
+            @test ($f)(BigFloat($j)) ≈ ($f)($j)
         end
     end
     for f in (:acos,:asin,:acosh,:atanh),
@@ -449,11 +449,11 @@ setprecision(53) do
               :sech,:csch,:coth,:acosh,:asinh),
         j in (1., 1.5, 1.9)
         @eval begin
-            @test_approx_eq ($f)(BigFloat($j)) ($f)($j)
+            @test ($f)(BigFloat($j)) ≈ ($f)($j)
         end
     end
     for j in (.25, .5)
-        @test_approx_eq atanh(BigFloat(j)) atanh(j)
+        @test atanh(BigFloat(j)) ≈ atanh(j)
     end
 end
 

@@ -83,34 +83,34 @@ for (f,fi,pf,pfi) in ((fft,ifft,plan_fft,plan_ifft),
     psfft!n_m4 = view(psfft!n_b,3:6,9:12); plan_fft!(psfft!n_m4)*psfft!n_m4
 
     for i = 1:length(m4)
-        @test_approx_eq fft_m4[i] true_fft_m4[i]
-        @test_approx_eq fftd2_m4[i] true_fftd2_m4[i]
-        @test_approx_eq ifft_fft_m4[i] m4[i]
-        @test_approx_eq fftn_m4[i] true_fftn_m4[i]
-        @test_approx_eq ifftn_fftn_m4[i] m4[i]
+        @test fft_m4[i] ≈ true_fft_m4[i]
+        @test fftd2_m4[i] ≈ true_fftd2_m4[i]
+        @test ifft_fft_m4[i] ≈ m4[i]
+        @test fftn_m4[i] ≈ true_fftn_m4[i]
+        @test ifftn_fftn_m4[i] ≈ m4[i]
 
-        @test_approx_eq fft!_m4[i] true_fft_m4[i]
-        @test_approx_eq fft!d2_m4[i] true_fftd2_m4[i]
-        @test_approx_eq ifft!_fft_m4[i] m4[i]
-        @test_approx_eq fft!n_m4[i] true_fftn_m4[i]
-        @test_approx_eq ifft!n_fftn_m4[i] m4[i]
+        @test fft!_m4[i] ≈ true_fft_m4[i]
+        @test fft!d2_m4[i] ≈ true_fftd2_m4[i]
+        @test ifft!_fft_m4[i] ≈ m4[i]
+        @test fft!n_m4[i] ≈ true_fftn_m4[i]
+        @test ifft!n_fftn_m4[i] ≈ m4[i]
 
-        @test_approx_eq pfft_m4[i] true_fft_m4[i]
-        @test_approx_eq pfftd2_m4[i] true_fftd2_m4[i]
-        @test_approx_eq pifft_fft_m4[i] m4[i]
-        @test_approx_eq pfftn_m4[i] true_fftn_m4[i]
-        @test_approx_eq pifftn_fftn_m4[i] m4[i]
+        @test pfft_m4[i] ≈ true_fft_m4[i]
+        @test pfftd2_m4[i] ≈ true_fftd2_m4[i]
+        @test pifft_fft_m4[i] ≈ m4[i]
+        @test pfftn_m4[i] ≈ true_fftn_m4[i]
+        @test pifftn_fftn_m4[i] ≈ m4[i]
 
-        @test_approx_eq pfft!_m4[i] true_fft_m4[i]
-        @test_approx_eq pfft!d2_m4[i] true_fftd2_m4[i]
-        @test_approx_eq pifft!_fft_m4[i] m4[i]
-        @test_approx_eq pfft!n_m4[i] true_fftn_m4[i]
-        @test_approx_eq pifft!n_fftn_m4[i] m4[i]
+        @test pfft!_m4[i] ≈ true_fft_m4[i]
+        @test pfft!d2_m4[i] ≈ true_fftd2_m4[i]
+        @test pifft!_fft_m4[i] ≈ m4[i]
+        @test pfft!n_m4[i] ≈ true_fftn_m4[i]
+        @test pifft!n_fftn_m4[i] ≈ m4[i]
 
-        @test_approx_eq sfftn_m4[i] true_fftn_m4[i]
-        @test_approx_eq sfft!n_m4[i] true_fftn_m4[i]
-        @test_approx_eq psfftn_m4[i] true_fftn_m4[i]
-        @test_approx_eq psfft!n_m4[i] true_fftn_m4[i]
+        @test sfftn_m4[i] ≈ true_fftn_m4[i]
+        @test sfft!n_m4[i] ≈ true_fftn_m4[i]
+        @test psfftn_m4[i] ≈ true_fftn_m4[i]
+        @test psfft!n_m4[i] ≈ true_fftn_m4[i]
     end
 
     ifft!(sfft!n_m4)
@@ -146,17 +146,17 @@ for (f,fi,pf,pfi) in ((fft,ifft,plan_fft,plan_ifft),
         @test isa(pifft!d3_fftd3_m3d, Array{Complex64,3})
 
         for i = 1:length(m3d)
-            @test_approx_eq fftd3_m3d[i] true_fftd3_m3d[i]
-            @test_approx_eq ifftd3_fftd3_m3d[i] m3d[i]
-            @test_approx_eq ifft3_fft3_m3d[i] m3d[i]
+            @test fftd3_m3d[i] ≈ true_fftd3_m3d[i]
+            @test ifftd3_fftd3_m3d[i] ≈ m3d[i]
+            @test ifft3_fft3_m3d[i] ≈ m3d[i]
 
-            @test_approx_eq fft!d3_m3d[i] true_fftd3_m3d[i]
-            @test_approx_eq ifft!d3_fftd3_m3d[i] m3d[i]
+            @test fft!d3_m3d[i] ≈ true_fftd3_m3d[i]
+            @test ifft!d3_fftd3_m3d[i] ≈ m3d[i]
 
-            @test_approx_eq pfftd3_m3d[i] true_fftd3_m3d[i]
-            @test_approx_eq pifftd3_fftd3_m3d[i] m3d[i]
-            @test_approx_eq pfft!d3_m3d[i] true_fftd3_m3d[i]
-        @test_approx_eq pifft!d3_fftd3_m3d[i] m3d[i]
+            @test pfftd3_m3d[i] ≈ true_fftd3_m3d[i]
+            @test pifftd3_fftd3_m3d[i] ≈ m3d[i]
+            @test pfft!d3_m3d[i] ≈ true_fftd3_m3d[i]
+        @test pifft!d3_fftd3_m3d[i] ≈ m3d[i]
         end
 
     end  # if fftw_vendor() != :mkl
@@ -175,16 +175,16 @@ for (f,fi,pf,pfi) in ((fft,ifft,plan_fft,plan_ifft),
     psrfftn_m4 = plan_rfft(sm4)*sm4
 
     for i = 1:3, j = 1:4
-        @test_approx_eq rfft_m4[i,j] true_fft_m4[i,j]
-        @test_approx_eq rfftd2_m4[j,i] true_fftd2_m4[j,i]
-        @test_approx_eq rfftn_m4[i,j] true_fftn_m4[i,j]
+        @test rfft_m4[i,j] ≈ true_fft_m4[i,j]
+        @test rfftd2_m4[j,i] ≈ true_fftd2_m4[j,i]
+        @test rfftn_m4[i,j] ≈ true_fftn_m4[i,j]
 
-        @test_approx_eq prfft_m4[i,j] true_fft_m4[i,j]
-        @test_approx_eq prfftd2_m4[j,i] true_fftd2_m4[j,i]
-        @test_approx_eq prfftn_m4[i,j] true_fftn_m4[i,j]
+        @test prfft_m4[i,j] ≈ true_fft_m4[i,j]
+        @test prfftd2_m4[j,i] ≈ true_fftd2_m4[j,i]
+        @test prfftn_m4[i,j] ≈ true_fftn_m4[i,j]
 
-        @test_approx_eq srfftn_m4[i,j] true_fftn_m4[i,j]
-        @test_approx_eq psrfftn_m4[i,j] true_fftn_m4[i,j]
+        @test srfftn_m4[i,j] ≈ true_fftn_m4[i,j]
+        @test psrfftn_m4[i,j] ≈ true_fftn_m4[i,j]
     end
 
     irfft_rfft_m4 = irfft(rfft_m4,size(m4,1),1)
@@ -196,13 +196,13 @@ for (f,fi,pf,pfi) in ((fft,ifft,plan_fft,plan_ifft),
     pirfftn_rfftn_m4 = plan_irfft(rfftn_m4,size(m4,1))*rfftn_m4
 
     for i = 1:length(m4)
-        @test_approx_eq irfft_rfft_m4[i] m4[i]
-        @test_approx_eq irfft_rfftd2_m4[i] m4[i]
-        @test_approx_eq irfftn_rfftn_m4[i] m4[i]
+        @test irfft_rfft_m4[i] ≈ m4[i]
+        @test irfft_rfftd2_m4[i] ≈ m4[i]
+        @test irfftn_rfftn_m4[i] ≈ m4[i]
 
-        @test_approx_eq pirfft_rfft_m4[i] m4[i]
-        @test_approx_eq pirfft_rfftd2_m4[i] m4[i]
-        @test_approx_eq pirfftn_rfftn_m4[i] m4[i]
+        @test pirfft_rfft_m4[i] ≈ m4[i]
+        @test pirfft_rfftd2_m4[i] ≈ m4[i]
+        @test pirfftn_rfftn_m4[i] ≈ m4[i]
     end
 
     if Base.fftw_vendor() != :mkl
@@ -213,9 +213,9 @@ for (f,fi,pf,pfi) in ((fft,ifft,plan_fft,plan_ifft),
         irfft_rfftd3_m3d = irfft(rfftd3_m3d,size(m3d,3),3)
         irfftn_rfftn_m3d = irfft(rfftn_m3d,size(m3d,1))
         for i = 1:length(m3d)
-            @test_approx_eq rfftd3_m3d[i] true_fftd3_m3d[i]
-            @test_approx_eq irfft_rfftd3_m3d[i] m3d[i]
-            @test_approx_eq irfftn_rfftn_m3d[i] m3d[i]
+            @test rfftd3_m3d[i] ≈ true_fftd3_m3d[i]
+            @test irfft_rfftd3_m3d[i] ≈ m3d[i]
+            @test irfftn_rfftn_m3d[i] ≈ m3d[i]
         end
 
         fftn_m3d = fft(m3d)
@@ -223,7 +223,7 @@ for (f,fi,pf,pfi) in ((fft,ifft,plan_fft,plan_ifft),
         rfftn_m3d = rfft(m3d)
         @test size(rfftn_m3d) == (3,3,2)
         for i = 1:3, j = 1:3, k = 1:2
-            @test_approx_eq rfftn_m3d[i,j,k] fftn_m3d[i,j,k]
+            @test rfftn_m3d[i,j,k] ≈ fftn_m3d[i,j,k]
         end
 
     end # !mkl

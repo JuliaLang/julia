@@ -40,8 +40,8 @@ for elty in (Int, Rational{BigInt}, Float32, Float64, BigFloat, Complex{Float32}
 
     debug && println("element type: $elty")
 
-    @test_approx_eq logdet(A) log(det(A))
-    @test_approx_eq logabsdet(A)[1] log(abs(det(A)))
+    @test logdet(A) ≈ log(det(A))
+    @test logabsdet(A)[1] ≈ log(abs(det(A)))
     @test logabsdet(convert(Matrix{elty}, -eye(n)))[2] == -1
     if elty <: Real
         @test logabsdet(A)[2] == sign(det(A))
@@ -77,23 +77,23 @@ y = [3; 7; 10]
 # check (UnitRange, Array)
 x = 1:12
 y = [5.5; 6.3; 7.6; 8.8; 10.9; 11.79; 13.48; 15.02; 17.77; 20.81; 22.0; 22.99]
-@test_approx_eq [linreg(x,y)...] [2.5559090909090867, 1.6960139860139862]
-@test_approx_eq [linreg(view(x,1:6),view(y,1:6))...] [3.8366666666666642,1.3271428571428574]
+@test [linreg(x,y)...] ≈ [2.5559090909090867, 1.6960139860139862]
+@test [linreg(view(x,1:6),view(y,1:6))...] ≈ [3.8366666666666642,1.3271428571428574]
 
 # check (LinSpace, UnitRange)
 x = linspace(1.0, 12.0, 100)
 y = -100:-1
-@test_approx_eq [linreg(x, y)...] [-109.0, 9.0]
+@test [linreg(x, y)...] ≈ [-109.0, 9.0]
 
 # check (UnitRange, UnitRange)
 x = 1:12
 y = 12:-1:1
-@test_approx_eq [linreg(x, y)...] [13.0, -1.0]
+@test [linreg(x, y)...] ≈ [13.0, -1.0]
 
 # check (LinSpace, LinSpace)
 x = linspace(-5, 10, 100)
 y = linspace(50, 200, 100)
-@test_approx_eq [linreg(x, y)...] [100.0, 10.0]
+@test [linreg(x, y)...] ≈ [100.0, 10.0]
 
 # check (Array, Array)
 # Anscombe's quartet (https://en.wikipedia.org/wiki/Anscombe%27s_quartet)
