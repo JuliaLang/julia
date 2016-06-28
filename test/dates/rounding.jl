@@ -111,33 +111,12 @@ dt = Dates.DateTime(-1, 12, 29, 19, 19, 19, 19)
 @test ceil(dt, Dates.Second(2)) == DateTime(-1, 12, 29, 19, 19, 20)
 
 # Test rounding for dates that should not need rounding
-dt = Dates.DateTime(2016, 1, 1)
-@test floor(dt, Dates.Year) == dt
-@test floor(dt, Dates.Month) == dt
-@test floor(dt, Dates.Day) == dt
-@test floor(dt, Dates.Hour) == dt
-@test floor(dt, Dates.Minute) == dt
-@test floor(dt, Dates.Second) == dt
-@test ceil(dt, Dates.Year) == dt
-@test ceil(dt, Dates.Month) == dt
-@test ceil(dt, Dates.Day) == dt
-@test ceil(dt, Dates.Hour) == dt
-@test ceil(dt, Dates.Minute) == dt
-@test ceil(dt, Dates.Second) == dt
-
-dt = Dates.DateTime(-2016, 1, 1)
-@test floor(dt, Dates.Year) == dt
-@test floor(dt, Dates.Month) == dt
-@test floor(dt, Dates.Day) == dt
-@test floor(dt, Dates.Hour) == dt
-@test floor(dt, Dates.Minute) == dt
-@test floor(dt, Dates.Second) == dt
-@test ceil(dt, Dates.Year) == dt
-@test ceil(dt, Dates.Month) == dt
-@test ceil(dt, Dates.Day) == dt
-@test ceil(dt, Dates.Hour) == dt
-@test ceil(dt, Dates.Minute) == dt
-@test ceil(dt, Dates.Second) == dt
+for dt in [Dates.DateTime(2016, 1, 1), Dates.DateTime(-2016, 1, 1)]
+    for p in [Dates.Year, Dates.Month, Dates.Day, Dates.Hour, Dates.Minute, Dates.Second]
+        @test floor(dt, p) == dt
+        @test ceil(dt, p) == dt
+    end
+end
 
 # Test available RoundingModes
 dt = Dates.DateTime(2016, 2, 28, 12)
@@ -148,3 +127,13 @@ dt = Dates.DateTime(2016, 2, 28, 12)
 @test_throws DomainError round(dt, Dates.Day, RoundNearestTiesAway)
 @test_throws DomainError round(dt, Dates.Day, RoundToZero)
 @test round(dt, Dates.Day) == round(dt, Dates.Day, RoundNearestTiesUp)
+
+# Test rounding to invalid resolutions
+dt = Dates.DateTime(2016, 2, 28, 12, 15)
+for p in [Dates.Year, Dates.Month, Dates.Week, Dates.Day, Dates.Hour]
+    for v in [-1, 0]
+        @test_throws DomainError floor(dt, p(v))
+        @test_throws DomainError ceil(dt, p(v))
+        @test_throws DomainError round(dt, p(v))
+    end
+end

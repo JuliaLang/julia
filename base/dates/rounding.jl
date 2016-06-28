@@ -38,11 +38,13 @@ Takes the given `DateTime` and returns the number of milliseconds since the roun
 datetime2epochms(dt::DateTime) = value(dt) - DATETIMEEPOCH
 
 function Base.floor(dt::Date, p::Year)
+    value(p) < 1 && throw(DomainError())
     years = year(dt)
     return Date(years - mod(years, value(p)))
 end
 
 function Base.floor(dt::Date, p::Month)
+    value(p) < 1 && throw(DomainError())
     y, m = yearmonth(dt)
     months_since_epoch = y * 12 + m - 1
     month_offset = months_since_epoch - mod(months_since_epoch, value(p))
@@ -52,12 +54,14 @@ function Base.floor(dt::Date, p::Month)
 end
 
 function Base.floor(dt::Date, p::Week)
+    value(p) < 1 && throw(DomainError())
     days = value(dt) - WEEKEPOCH
     days = days - mod(days, value(Day(p)))
     return Date(UTD(WEEKEPOCH + Int64(days)))
 end
 
 function Base.floor(dt::Date, p::Day)
+    value(p) < 1 && throw(DomainError())
     days = date2epochdays(dt)
     return epochdays2date(days - mod(days, value(p)))
 end
@@ -65,6 +69,7 @@ end
 Base.floor(dt::DateTime, p::DatePeriod) = DateTime(Base.floor(Date(dt), p))
 
 function Base.floor(dt::DateTime, p::TimePeriod)
+    value(p) < 1 && throw(DomainError())
     milliseconds = datetime2epochms(dt)
     return epochms2datetime(milliseconds - mod(milliseconds, value(Millisecond(p))))
 end
