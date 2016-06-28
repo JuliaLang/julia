@@ -528,3 +528,12 @@ let err = try
     end
     @test err.line == 7
 end
+
+# issue #17065
+@test parse(Int, "2") === 2
+@test parse(Bool, "true") === true
+@test parse(Bool, "false") === false
+@test get(tryparse(Bool, "true")) === get(Nullable{Bool}(true))
+@test get(tryparse(Bool, "false")) === get(Nullable{Bool}(false))
+@test_throws ArgumentError parse(Int, "2", 1)
+@test_throws ArgumentError parse(Int, "2", 63)

@@ -83,6 +83,10 @@ function tryparse_internal(::Type{BigInt}, s::AbstractString, startpos::Int, end
     bstr = startpos == start(s) && endpos == endof(s) ? String(s) : String(SubString(s,startpos,endpos))
 
     sgn, base, i = Base.parseint_preamble(true,base,bstr,start(bstr),endof(bstr))
+    if !(2 <= base <= 62)
+        raise && throw(ArgumentError("invalid base: base must be 2 ≤ base ≤ 62, got $base"))
+        return _n
+    end
     if i == 0
         raise && throw(ArgumentError("premature end of integer: $(repr(bstr))"))
         return _n

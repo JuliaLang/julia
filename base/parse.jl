@@ -54,23 +54,18 @@ function parseint_preamble(signed::Bool, base::Int, s::AbstractString, startpos:
     return sgn, base, j
 end
 
-function tryparse_internal(::Type{Bool}, sbuff::String, startpos::Int, endpos::Int, raise::Bool)
-    len = endpos-startpos+1
-    p = pointer(sbuff)+startpos-1
-    (len == 4) && (0 == ccall(:memcmp, Int32, (Ptr{UInt8}, Ptr{UInt8}, UInt), p, "true", 4)) && (return Nullable(true))
-    (len == 5) && (0 == ccall(:memcmp, Int32, (Ptr{UInt8}, Ptr{UInt8}, UInt), p, "false", 5)) && (return Nullable(false))
-    raise && throw(ArgumentError("invalid Bool representation: $(repr(SubString(s,startpos,endpos)))"))
-    Nullable{Bool}()
-end
-
 safe_add{T<:Integer}(n1::T, n2::T) = ((n2 > 0) ? (n1 > (typemax(T) - n2)) : (n1 < (typemin(T) - n2))) ? Nullable{T}() : Nullable{T}(n1 + n2)
 safe_mul{T<:Integer}(n1::T, n2::T) = ((n2 >   0) ? ((n1 > div(typemax(T),n2)) || (n1 < div(typemin(T),n2))) :
                                       (n2 <  -1) ? ((n1 > div(typemin(T),n2)) || (n1 < div(typemax(T),n2))) :
                                       ((n2 == -1) && n1 == typemin(T))) ? Nullable{T}() : Nullable{T}(n1 * n2)
 
-function tryparse_internal{T<:Integer}(::Type{T}, s::AbstractString, startpos::Int, endpos::Int, base::Int, a::Int, raise::Bool)
+function tryparse_internal{T<:Integer}(::Type{T}, s::AbstractString, startpos::Int, endpos::Int, base::Integer, raise::Bool)
     _n = Nullable{T}()
     sgn, base, i = parseint_preamble(T<:Signed, base, s, startpos, endpos)
+    if !(2 <= base <= 62)
+        raise && throw(ArgumentError("invalid base: base must be 2 ≤ base ≤ 62, got $base"))
+        return _n
+    end
     if i == 0
         raise && throw(ArgumentError("premature end of integer: $(repr(SubString(s,startpos,endpos)))"))
         return _n
@@ -84,6 +79,7 @@ function tryparse_internal{T<:Integer}(::Type{T}, s::AbstractString, startpos::I
     base = convert(T,base)
     m::T = div(typemax(T)-base+1,base)
     n::T = 0
+    a::Int = base <= 36 ? 10 : 36
     while n <= m
         d::T = '0' <= c <= '9' ? c-'0'    :
                'A' <= c <= 'Z' ? c-'A'+10 :
@@ -131,19 +127,23 @@ function tryparse_internal{T<:Integer}(::Type{T}, s::AbstractString, startpos::I
     end
     return Nullable{T}(n)
 end
-tryparse_internal{T<:Integer}(::Type{T}, s::AbstractString, base::Int, raise::Bool) =
-    tryparse_internal(T,s,start(s),endof(s),base,raise)
-tryparse_internal{T<:Integer}(::Type{T}, s::AbstractString, startpos::Int, endpos::Int, base::Int, raise::Bool) =
-    tryparse_internal(T, s, startpos, endpos, base, base <= 36 ? 10 : 36, raise)
-tryparse{T<:Integer}(::Type{T}, s::AbstractString, base::Int) =
-    2 <= base <= 62 ? tryparse_internal(T,s,Int(base),false) : throw(ArgumentError("invalid base: base must be 2 ≤ base ≤ 62, got $base"))
-tryparse{T<:Integer}(::Type{T}, s::AbstractString) = tryparse_internal(T,s,0,false)
 
-function parse{T<:Integer}(::Type{T}, s::AbstractString, base::Integer)
-    (2 <= base <= 62) || throw(ArgumentError("invalid base: base must be 2 ≤ base ≤ 62, got $base"))
-    get(tryparse_internal(T, s, base, true))
+function tryparse_internal(::Type{Bool}, sbuff::AbstractString, startpos::Int, endpos::Int, base::Integer, raise::Bool)
+    len = endpos-startpos+1
+    p = pointer(sbuff)+startpos-1
+    (len == 4) && (0 == ccall(:memcmp, Int32, (Ptr{UInt8}, Ptr{UInt8}, UInt), p, "true", 4)) && (return Nullable(true))
+    (len == 5) && (0 == ccall(:memcmp, Int32, (Ptr{UInt8}, Ptr{UInt8}, UInt), p, "false", 5)) && (return Nullable(false))
+    raise && throw(ArgumentError("invalid Bool representation: $(repr(SubString(s,startpos,endpos)))"))
+    Nullable{Bool}()
 end
-parse{T<:Integer}(::Type{T}, s::AbstractString) = get(tryparse_internal(T, s, 0, true))
+
+function tryparse{T<:Integer}(::Type{T}, s::AbstractString, base::Integer=0)
+    return tryparse_internal(T, s, start(s), endof(s), base, false)
+end
+
+function parse{T<:Integer}(::Type{T}, s::AbstractString, base::Integer=0)
+    return get(tryparse_internal(T, s, start(s), endof(s), base, true))
+end
 
 ## string to float functions ##
 

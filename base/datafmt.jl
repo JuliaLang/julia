@@ -328,7 +328,7 @@ function dlm_fill(T::DataType, offarr::Vector{Vector{Int}}, dims::NTuple{2,Integ
 end
 
 function colval(sbuff::String, startpos::Int, endpos::Int, cells::Array{Bool,2}, row::Int, col::Int)
-    n = tryparse_internal(Bool, sbuff, startpos, endpos, false)
+    n = tryparse_internal(Bool, sbuff, startpos, endpos, 0, false)
     isnull(n) || (cells[row, col] = get(n))
     isnull(n)
 end
@@ -360,7 +360,7 @@ function colval(sbuff::String, startpos::Int, endpos::Int, cells::Array{Any,2}, 
         isnull(ni64) || (cells[row, col] = get(ni64); return false)
 
         # check Bool
-        nb = tryparse_internal(Bool, sbuff, startpos, endpos, false)
+        nb = tryparse_internal(Bool, sbuff, startpos, endpos, 0, false)
         isnull(nb) || (cells[row, col] = get(nb); return false)
 
         # check float64
