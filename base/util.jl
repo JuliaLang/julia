@@ -307,7 +307,8 @@ function julia_cmd(julia=joinpath(JULIA_HOME, julia_exename()))
               else
                   "yes"
               end
-    `$julia -C$cpu_target -J$image_file --compile=$compile --depwarn=$depwarn`
+    precompiled = opts.use_precompiled == 1 ? "yes" : "no"
+    `$julia -C$cpu_target -J$image_file --compile=$compile --depwarn=$depwarn --precompiled=$precompiled`
 end
 
 julia_exename() = ccall(:jl_is_debugbuild,Cint,())==0 ? "julia" : "julia-debug"
