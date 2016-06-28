@@ -1,6 +1,6 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
-@test "path" begin
+@testset "path" begin
 for S in (String, GenericString)
     dir = pwd()
     sep = Base.Filesystem.path_separator
