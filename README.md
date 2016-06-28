@@ -194,6 +194,8 @@ Currently, the `@compat` macro supports the following syntaxes:
 
 * `write(::IO, ::Ptr, len)` is now `unsafe_write` [#14766](https://github.com/JuliaLang/julia/pull/14766).
 
+* `slice` is now `view`[#16972](https://github.com/JuliaLang/julia/pull/16972) do `import Compat.view` and then use `view` normally without the `@compat` macro. 
+
 ## New macros
 
 * `@static` has been added [#16219](https://github.com/JuliaLang/julia/pull/16219).

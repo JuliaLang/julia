@@ -1276,6 +1276,10 @@ else
     end
 end
 
+if !isdefined(Base, :view)
+    const view = slice 
+end
+
 if !isdefined(Base, :pointer_to_string)
 
     function pointer_to_string(p::Ptr{UInt8}, len::Integer, own::Bool=false)
