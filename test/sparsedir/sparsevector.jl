@@ -687,10 +687,10 @@ let x = sprand(16, 0.5), x2 = sprand(16, 0.4)
     let dv = dot(xf, xf2)
         @test dot(x, x) == sumabs2(x)
         @test dot(x2, x2) == sumabs2(x2)
-        @test_approx_eq dot(x, x2) dv
-        @test_approx_eq dot(x2, x) dv
-        @test_approx_eq dot(full(x), x2) dv
-        @test_approx_eq dot(x, full(x2)) dv
+        @test dot(x, x2) ≈ dv
+        @test dot(x2, x) ≈ dv
+        @test dot(full(x), x2) ≈ dv
+        @test dot(x, full(x2)) ≈ dv
     end
 end
 
@@ -698,8 +698,8 @@ let x = complex(sprand(32, 0.6), sprand(32, 0.6)),
     y = complex(sprand(32, 0.6), sprand(32, 0.6))
     xf = full(x)::Vector{Complex128}
     yf = full(y)::Vector{Complex128}
-    @test_approx_eq dot(x, x) dot(xf, xf)
-    @test_approx_eq dot(x, y) dot(xf, yf)
+    @test dot(x, x) ≈ dot(xf, xf)
+    @test dot(x, y) ≈ dot(xf, yf)
 end
 
 
@@ -711,26 +711,26 @@ let A = randn(9, 16), x = sprand(16, 0.7)
     xf = full(x)
     for α in [0.0, 1.0, 2.0], β in [0.0, 0.5, 1.0]
         y = rand(9)
-        rr = α * A * xf + β * y
+        rr = α*A*xf + β*y
         @test is(A_mul_B!(α, A, x, β, y), y)
-        @test_approx_eq y rr
+        @test y ≈ rr
     end
-    y = A * x
+    y = A*x
     @test isa(y, Vector{Float64})
-    @test_approx_eq A * x A * xf
+    @test A*x ≈ A*xf
 end
 
 let A = randn(16, 9), x = sprand(16, 0.7)
     xf = full(x)
     for α in [0.0, 1.0, 2.0], β in [0.0, 0.5, 1.0]
         y = rand(9)
-        rr = α * A'xf + β * y
+        rr = α*A'xf + β*y
         @test is(At_mul_B!(α, A, x, β, y), y)
-        @test_approx_eq y rr
+        @test y ≈ rr
     end
     y = At_mul_B(A, x)
     @test isa(y, Vector{Float64})
-    @test_approx_eq y At_mul_B(A, xf)
+    @test y ≈ At_mul_B(A, xf)
 end
 
 ## sparse A * sparse x -> dense y
@@ -740,13 +740,13 @@ let A = sprandn(9, 16, 0.5), x = sprand(16, 0.7)
     xf = full(x)
     for α in [0.0, 1.0, 2.0], β in [0.0, 0.5, 1.0]
         y = rand(9)
-        rr = α * Af * xf + β * y
+        rr = α*Af*xf + β*y
         @test is(A_mul_B!(α, A, x, β, y), y)
-        @test_approx_eq y rr
+        @test y ≈ rr
     end
     y = SparseArrays.densemv(A, x)
     @test isa(y, Vector{Float64})
-    @test_approx_eq y Af * xf
+    @test y ≈ Af*xf
 end
 
 let A = sprandn(16, 9, 0.5), x = sprand(16, 0.7)
@@ -754,13 +754,13 @@ let A = sprandn(16, 9, 0.5), x = sprand(16, 0.7)
     xf = full(x)
     for α in [0.0, 1.0, 2.0], β in [0.0, 0.5, 1.0]
         y = rand(9)
-        rr = α * Af'xf + β * y
+        rr = α*Af'xf + β*y
         @test is(At_mul_B!(α, A, x, β, y), y)
-        @test_approx_eq y rr
+        @test y ≈ rr
     end
     y = SparseArrays.densemv(A, x; trans='T')
     @test isa(y, Vector{Float64})
-    @test_approx_eq y At_mul_B(Af, xf)
+    @test y ≈ At_mul_B(Af, xf)
 end
 
 let A = complex(sprandn(7, 8, 0.5), sprandn(7, 8, 0.5)),
@@ -769,9 +769,9 @@ let A = complex(sprandn(7, 8, 0.5), sprandn(7, 8, 0.5)),
     Af = full(A)
     xf = full(x)
     x2f = full(x2)
-    @test_approx_eq SparseArrays.densemv(A, x; trans='N') Af * xf
-    @test_approx_eq SparseArrays.densemv(A, x2; trans='T') Af.' * x2f
-    @test_approx_eq SparseArrays.densemv(A, x2; trans='C') Af'x2f
+    @test SparseArrays.densemv(A, x; trans='N') ≈ Af * xf
+    @test SparseArrays.densemv(A, x2; trans='T') ≈ Af.' * x2f
+    @test SparseArrays.densemv(A, x2; trans='C') ≈ Af'x2f
 end
 
 ## sparse A * sparse x -> sparse y
@@ -781,15 +781,15 @@ let A = sprandn(9, 16, 0.5), x = sprand(16, 0.7), x2 = sprand(9, 0.7)
     xf = full(x)
     x2f = full(x2)
 
-    y = A * x
+    y = A*x
     @test isa(y, SparseVector{Float64,Int})
     @test all(nonzeros(y) .!= 0.0)
-    @test_approx_eq full(y) Af * xf
+    @test full(y) ≈ Af * xf
 
     y = At_mul_B(A, x2)
     @test isa(y, SparseVector{Float64,Int})
     @test all(nonzeros(y) .!= 0.0)
-    @test_approx_eq full(y) Af'x2f
+    @test full(y) ≈ Af'x2f
 end
 
 let A = complex(sprandn(7, 8, 0.5), sprandn(7, 8, 0.5)),
@@ -799,17 +799,17 @@ let A = complex(sprandn(7, 8, 0.5), sprandn(7, 8, 0.5)),
     xf = full(x)
     x2f = full(x2)
 
-    y = A * x
+    y = A*x
     @test isa(y, SparseVector{Complex128,Int})
-    @test_approx_eq full(y) Af * xf
+    @test full(y) ≈ Af * xf
 
     y = At_mul_B(A, x2)
     @test isa(y, SparseVector{Complex128,Int})
-    @test_approx_eq full(y) Af.' * x2f
+    @test full(y) ≈ Af.' * x2f
 
     y = Ac_mul_B(A, x2)
     @test isa(y, SparseVector{Complex128,Int})
-    @test_approx_eq full(y) Af'x2f
+    @test full(y) ≈ Af'x2f
 end
 
 # left-division operations involving triangular matrices and sparse vectors (#14005)

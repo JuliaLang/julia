@@ -50,37 +50,37 @@ for eltya in (Float32, Float64, Complex64, Complex128, BigFloat, Int)
     for i=1:n, j=1:n
         @test E[i,j] <= (n+1)ε/(1-(n+1)ε)*real(sqrt(apd[i,i]*apd[j,j]))
     end
-    @test_approx_eq apd * inv(capd) eye(n)
+    @test apd*inv(capd) ≈ eye(n)
     @test abs((det(capd) - det(apd))/det(capd)) <= ε*κ*n # Ad hoc, but statistically verified, revisit
-    @test_approx_eq @inferred(logdet(capd)) log(det(capd)) # logdet is less likely to overflow
+    @test @inferred(logdet(capd)) ≈ log(det(capd)) # logdet is less likely to overflow
 
     apos = apd[1,1]            # test chol(x::Number), needs x>0
-    @test_approx_eq cholfact(apos).factors √apos
+    @test all(x -> x ≈ √apos, cholfact(apos).factors)
     @test_throws ArgumentError chol(-one(eltya))
 
     if eltya <: Real
         capds = cholfact(apds)
-        @test_approx_eq inv(capds)*apds eye(n)
+        @test inv(capds)*apds ≈ eye(n)
         @test abs((det(capds) - det(apd))/det(capds)) <= ε*κ*n
     end
 
     # test chol of 2x2 Strang matrix
     S = convert(AbstractMatrix{eltya},full(SymTridiagonal([2,2],[-1])))
     U = Bidiagonal([2,sqrt(eltya(3))],[-1],true) / sqrt(eltya(2))
-    @test_approx_eq full(chol(S)) full(U)
+    @test full(chol(S)) ≈ full(U)
 
     #lower Cholesky factor
     lapd = cholfact(apd, :L)
-    @test_approx_eq full(lapd) apd
+    @test full(lapd) ≈ apd
     l = lapd[:L]
-    @test_approx_eq l*l' apd
+    @test l*l' ≈ apd
     @test triu(capd.factors) ≈ lapd[:U]
     @test tril(lapd.factors) ≈ capd[:L]
     if eltya <: Real
         capds = cholfact(apds)
         lapds = cholfact(apds, :L)
         ls = lapds[:L]
-        @test_approx_eq ls*ls' apd
+        @test ls*ls' ≈ apd
         @test triu(capds.factors) ≈ lapds[:U]
         @test tril(lapds.factors) ≈ capds[:L]
     end
@@ -93,7 +93,7 @@ for eltya in (Float32, Float64, Complex64, Complex128, BigFloat, Int)
         @test rank(cpapd) == n
         @test all(diff(diag(real(cpapd.factors))).<=0.) # diagonal should be non-increasing
         if isreal(apd)
-            @test_approx_eq apd * inv(cpapd) eye(n)
+            @test apd*inv(cpapd) ≈ eye(n)
         end
         @test full(cpapd) ≈ apd
         #getindex
@@ -167,8 +167,8 @@ for elty in (Float32, Float64, Complex{Float32}, Complex{Float64})
         A = randn(5,5)
     end
     A = convert(Matrix{elty}, A'A)
-    @test_approx_eq full(cholfact(A)[:L]) full(invoke(Base.LinAlg._chol!, Tuple{AbstractMatrix, Type{LowerTriangular}}, copy(A), LowerTriangular))
-    @test_approx_eq full(cholfact(A)[:U]) full(invoke(Base.LinAlg._chol!, Tuple{AbstractMatrix, Type{UpperTriangular}}, copy(A), UpperTriangular))
+    @test full(cholfact(A)[:L]) ≈ full(invoke(Base.LinAlg._chol!, Tuple{AbstractMatrix, Type{LowerTriangular}}, copy(A), LowerTriangular))
+    @test full(cholfact(A)[:U]) ≈ full(invoke(Base.LinAlg._chol!, Tuple{AbstractMatrix, Type{UpperTriangular}}, copy(A), UpperTriangular))
 end
 
 # Test up- and downdates

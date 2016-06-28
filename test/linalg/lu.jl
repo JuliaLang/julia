@@ -36,7 +36,7 @@ for eltya in (Float32, Float64, Complex64, Complex128, BigFloat, Int)
     if eltya <: BlasFloat
         num = rand(eltya)
         @test lu(num) == (one(eltya),num,1)
-        @test_approx_eq full(lufact(num)) eltya[num]
+        @test full(lufact(num)) ≈ eltya[num]
     end
     for eltyb in (Float32, Float64, Complex64, Complex128, Int)
         b = eltyb == Int ? rand(1:5, n, 2) : convert(Matrix{eltyb}, eltyb <: Complex ? complex(breal, bimg) : breal)
@@ -68,7 +68,7 @@ debug && println("(Automatic) Square LU decomposition")
                 @test norm(a'*(lua'\a') - a', 1) < ε*κ*n^2
                 @test norm(a*(lua\c) - c, 1) < ε*κ*n # c is a vector
                 @test norm(a'*(lua'\c) - c, 1) < ε*κ*n # c is a vector
-                @test_approx_eq full(lua) a
+                @test full(lua) ≈ a
                 if eltya <: Real && eltyb <: Real
                     @test norm(a.'*(lua.'\b) - b,1) < ε*κ*n*2 # Two because the right hand side has two columns
                     @test norm(a.'*(lua.'\c) - c,1) < ε*κ*n
@@ -126,11 +126,11 @@ debug && println("Tridiagonal LU")
 
 debug && println("Thin LU")
         lua   = @inferred lufact(a[:,1:n1])
-        @test_approx_eq lua[:L]*lua[:U] lua[:P]*a[:,1:n1]
+        @test lua[:L]*lua[:U] ≈ lua[:P]*a[:,1:n1]
 
 debug && println("Fat LU")
         lua   = lufact(a[1:n1,:])
-        @test_approx_eq lua[:L]*lua[:U] lua[:P]*a[1:n1,:]
+        @test lua[:L]*lua[:U] ≈ lua[:P]*a[1:n1,:]
     end
 end
 
@@ -149,9 +149,9 @@ b = rand(1:10,n,2)
 @inferred lufact(a)
 lua   = factorize(a)
 l,u,p = lua[:L], lua[:U], lua[:p]
-@test_approx_eq l*u a[p,:]
-@test_approx_eq l[invperm(p),:]*u a
-@test_approx_eq a * inv(lua) eye(n)
+@test l*u ≈ a[p,:]
+@test l[invperm(p),:]*u ≈ a
+@test a*inv(lua) ≈ eye(n)
 let Bs = b
     for atype in ("Array", "SubArray")
         if atype == "Array"
@@ -162,7 +162,7 @@ let Bs = b
         @test a*(lua\b) ≈ b
     end
 end
-@test_approx_eq @inferred(det(a)) det(Array{Float64}(a))
+@test @inferred(det(a)) ≈ det(Array{Float64}(a))
 ## Hilbert Matrix (very ill conditioned)
 ## Testing Rational{BigInt} and BigFloat version
 nHilbert = 50
@@ -181,7 +181,7 @@ for elty in (Float32, Float64, Complex64, Complex128)
                                -0.5     -0.5       0.1     1.0])
     F = eigfact(A, permute=false, scale=false)
     eig(A, permute=false, scale=false)
-    @test_approx_eq F[:vectors]*Diagonal(F[:values])/F[:vectors] A
+    @test F[:vectors]*Diagonal(F[:values])/F[:vectors] ≈ A
     F = eigfact(A)
     # @test norm(F[:vectors]*Diagonal(F[:values])/F[:vectors] - A) > 0.01
 end

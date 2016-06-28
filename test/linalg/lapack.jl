@@ -20,11 +20,11 @@ let # syevr
         A = convert(Array{elty, 2}, A)
         Asym = A'A
         vals, Z = LAPACK.syevr!('V', copy(Asym))
-        @test_approx_eq Z * (Diagonal(vals) * Z') Asym
+        @test Z*(Diagonal(vals)*Z') ≈ Asym
         @test all(vals .> 0.0)
-        @test_approx_eq LAPACK.syevr!('N','V','U',copy(Asym),0.0,1.0,4,5,-1.0)[1] vals[vals .< 1.0]
-        @test_approx_eq LAPACK.syevr!('N','I','U',copy(Asym),0.0,1.0,4,5,-1.0)[1] vals[4:5]
-        @test_approx_eq vals LAPACK.syev!('N','U',copy(Asym))
+        @test LAPACK.syevr!('N','V','U',copy(Asym),0.0,1.0,4,5,-1.0)[1] ≈ vals[vals .< 1.0]
+        @test LAPACK.syevr!('N','I','U',copy(Asym),0.0,1.0,4,5,-1.0)[1] ≈ vals[4:5]
+        @test vals ≈ LAPACK.syev!('N','U',copy(Asym))
 
         @test_throws DimensionMismatch LAPACK.sygvd!(1,'V','U',copy(Asym),ones(elty,6,6))
     end
@@ -36,7 +36,7 @@ let # Test gglse
         c = convert(Array{elty, 1}, [2, 1, 6, 3, 1])
         B = convert(Array{elty, 2}, [1 1 1 -1; 1 -1 1 1; 1 1 -1 1])
         d = convert(Array{elty, 1}, [1, 3, -1])
-        @test_approx_eq LAPACK.gglse!(A, c, B, d)[1] convert(Array{elty}, [0.5, -0.5, 1.5, 0.5])
+        @test LAPACK.gglse!(A, c, B, d)[1] ≈ convert(Array{elty}, [0.5, -0.5, 1.5, 0.5])
     end
 end
 
@@ -46,7 +46,7 @@ let # gebrd, bdsqr & throw for bdsdc
         d, e = convert(Vector{elty}, randn(n)), convert(Vector{elty}, randn(n - 1))
         U, Vt, C = eye(elty, n), eye(elty, n), eye(elty, n)
         s, _ = LAPACK.bdsqr!('U', copy(d), copy(e), Vt, U, C)
-        @test_approx_eq full(Bidiagonal(d, e, true)) U*Diagonal(s)*Vt
+        @test full(Bidiagonal(d, e, true)) ≈ U*Diagonal(s)*Vt
 
         @test_throws ArgumentError LAPACK.bdsqr!('A', d, e, Vt, U, C)
         @test_throws DimensionMismatch LAPACK.bdsqr!('U', d, [e; 1], Vt, U, C)
@@ -67,7 +67,7 @@ end
 
 let # Issue #7886
     x, r = LAPACK.gelsy!([0 1; 0 2; 0 3.], [2, 4, 6.])
-    @test_approx_eq x [0,2]
+    @test x ≈ [0,2]
     @test r == 1
 end
 
@@ -77,7 +77,7 @@ for elty in (Float32, Float64, Complex64, Complex128)
     B = copy(A)
     C,T = LAPACK.geqrt!(A,zeros(elty,10,10))
     D,S = LAPACK.geqrt3!(A,zeros(elty,10,10))
-    @test_approx_eq C D
+    @test C ≈ D
 end
 
 #gbtrf and gbtrs
@@ -133,7 +133,7 @@ for elty in (Float32, Float64, Complex64, Complex128)
     B = rand(elty,10,10)
     C, j = LAPACK.gelsd!(copy(A),copy(B))
     D, k = LAPACK.gelsy!(copy(A),copy(B))
-    @test_approx_eq C D
+    @test C ≈ D
     @test_throws DimensionMismatch LAPACK.gelsd!(A,rand(elty,12,10))
     @test_throws DimensionMismatch LAPACK.gelsy!(A,rand(elty,12,10))
 end
@@ -151,9 +151,9 @@ for elty in (Float32, Float64, Complex64, Complex128)
     A = rand(elty,10,5)
     U,S,V = svd(A)
     lU,lS,lVt = LAPACK.gesvd!('S','S',A)
-    @test_approx_eq U lU
-    @test_approx_eq S lS
-    @test_approx_eq V' lVt
+    @test U ≈ lU
+    @test S ≈ lS
+    @test V' ≈ lVt
     B = rand(elty,10,10)
     # xggsvd3 replaced xggsvd in LAPACK 3.6.0
     if LAPACK.laver() < (3, 6, 0)
@@ -192,7 +192,7 @@ for elty in (Float32, Float64, Complex64, Complex128)
     A = rand(elty,10,10)
     X = rand(elty,10)
     B,Y,z = LAPACK.gels!('N',copy(A),copy(X))
-    @test_approx_eq A\X Y
+    @test A\X ≈ Y
 end
 
 #getrf/getri
@@ -201,7 +201,7 @@ for elty in (Float32, Float64, Complex64, Complex128)
     iA = inv(A)
     A, ipiv = LAPACK.getrf!(A)
     A = LAPACK.getri!(A, ipiv)
-    @test_approx_eq A iA
+    @test A ≈ iA
 end
 
 #geev - complex is easier for now
@@ -209,8 +209,8 @@ for elty in (Complex64, Complex128)
     A = rand(elty,10,10)
     Aw, Avl, Avr = LAPACK.geev!('N','V',copy(A))
     fA = eigfact(A)
-    @test_approx_eq fA[:values] Aw
-    @test_approx_eq fA[:vectors] Avr
+    @test fA[:values] ≈ Aw
+    @test fA[:vectors] ≈ Avr
 end
 
 #gtsv
@@ -221,7 +221,7 @@ for elty in (Float32, Float64, Complex64, Complex128)
     b  = rand(elty,10)
     c = Tridiagonal(dl,d,du) \ b
     b = LAPACK.gtsv!(dl,d,du,b)
-    @test_approx_eq b c
+    @test b ≈ c
     @test_throws DimensionMismatch LAPACK.gtsv!(zeros(elty,11),d,du,b)
     @test_throws DimensionMismatch LAPACK.gtsv!(dl,d,zeros(elty,11),b)
     @test_throws DimensionMismatch LAPACK.gtsv!(dl,d,du,zeros(elty,11))
@@ -244,7 +244,7 @@ for elty in (Float32, Float64, Complex64, Complex128)
     c = copy(b)
     dl,d,du,du2,ipiv = LAPACK.gttrf!(dl,d,du)
     c = LAPACK.gttrs!('N',dl,d,du,du2,ipiv,c)
-    @test_approx_eq A\b c
+    @test A\b ≈ c
 end
 
 #orglq and friends errors
@@ -321,7 +321,7 @@ for elty in (Float32, Float64, Complex64, Complex128)
     A = A + A.' #symmetric!
     B = copy(A)
     B,ipiv = LAPACK.sytrf!('U',B)
-    @test_approx_eq triu(inv(A)) triu(LAPACK.sytri!('U',B,ipiv))
+    @test triu(inv(A)) ≈ triu(LAPACK.sytri!('U',B,ipiv))
     @test_throws DimensionMismatch LAPACK.sytrs!('U',B,ipiv,rand(elty,11,5))
     @test LAPACK.sytrf!('U',zeros(elty,0,0)) == (zeros(elty,0,0),zeros(BlasInt,0))
 end
@@ -331,7 +331,7 @@ for elty in (Float32, Float64, Complex64, Complex128)
     A = A + A.' #symmetric!
     B = copy(A)
     B,ipiv = LAPACK.sytrf_rook!('U',B)
-    @test_approx_eq triu(inv(A)) triu(LAPACK.sytri_rook!('U',B,ipiv))
+    @test triu(inv(A)) ≈ triu(LAPACK.sytri_rook!('U',B,ipiv))
     @test_throws DimensionMismatch LAPACK.sytrs_rook!('U',B,ipiv,rand(elty,11,5))
     @test LAPACK.sytrf_rook!('U',zeros(elty,0,0)) == (zeros(elty,0,0),zeros(BlasInt,0))
     A = rand(elty,10,10)
@@ -339,7 +339,7 @@ for elty in (Float32, Float64, Complex64, Complex128)
     b = rand(elty,10)
     c = A \ b
     b,A = LAPACK.sysv_rook!('U',A,b)
-    @test_approx_eq b c
+    @test b ≈ c
     @test_throws DimensionMismatch LAPACK.sysv_rook!('U',A,rand(elty,11))
 end
 
@@ -369,7 +369,7 @@ for elty in (Float32, Float64, Complex64, Complex128)
     A = rand(elty,10,10)
     A = triu(A)
     B = copy(A)
-    @test_approx_eq inv(A) LAPACK.trtri!('U','N',B)
+    @test inv(A) ≈ LAPACK.trtri!('U','N',B)
     @test_throws DimensionMismatch LAPACK.trtrs!('U','N','N',B,zeros(elty,11,10))
 end
 
@@ -390,7 +390,7 @@ for elty in (Float32, Float64, Complex64, Complex128)
     b = rand(elty,10)
     c = A \ b
     b,A = LAPACK.sysv!('U',A,b)
-    @test_approx_eq b c
+    @test b ≈ c
     @test_throws DimensionMismatch LAPACK.sysv!('U',A,rand(elty,11))
 end
 
@@ -401,14 +401,14 @@ for elty in (Complex64, Complex128)
     b = rand(elty,10)
     c = A \ b
     b,A = LAPACK.hesv!('U',A,b)
-    @test_approx_eq b c
+    @test b ≈ c
     @test_throws DimensionMismatch LAPACK.hesv!('U',A,rand(elty,11))
     A = rand(elty,10,10)
     A = A + A' #hermitian!
     b = rand(elty,10)
     c = A \ b
     b,A = LAPACK.hesv_rook!('U',A,b)
-    @test_approx_eq b c
+    @test b ≈ c
     @test_throws DimensionMismatch LAPACK.hesv_rook!('U',A,rand(elty,11))
 end
 
@@ -422,7 +422,7 @@ for elty in (Float32, Float64, Complex64, Complex128)
     end
     B = rand(elty,10,10)
     C = copy(B)
-    @test_approx_eq A\B LAPACK.ptsv!(dv,ev,C)
+    @test A\B ≈ LAPACK.ptsv!(dv,ev,C)
     @test_throws DimensionMismatch LAPACK.ptsv!(dv,ones(elty,10),C)
     @test_throws DimensionMismatch LAPACK.ptsv!(dv,ev,ones(elty,11,11))
 end
@@ -440,11 +440,11 @@ for elty in (Float32, Float64, Complex64, Complex128)
     B = rand(elty,10,10)
     C = copy(B)
     if elty <: Complex
-        @test_approx_eq A\B LAPACK.pttrs!('U',dv,ev,C)
+        @test A\B ≈ LAPACK.pttrs!('U',dv,ev,C)
         @test_throws DimensionMismatch LAPACK.pttrs!('U',dv,ones(elty,10),C)
         @test_throws DimensionMismatch LAPACK.pttrs!('U',dv,ev,rand(elty,11,11))
     else
-        @test_approx_eq A\B LAPACK.pttrs!(dv,ev,C)
+        @test A\B ≈ LAPACK.pttrs!(dv,ev,C)
         @test_throws DimensionMismatch LAPACK.pttrs!(dv,ones(elty,10),C)
         @test_throws DimensionMismatch LAPACK.pttrs!(dv,ev,rand(elty,11,11))
     end
@@ -463,7 +463,7 @@ for elty in (Float32, Float64, Complex64, Complex128)
     D = copy(A)
     C = copy(B)
     D,C = LAPACK.posv!('U',D,C)
-    @test_approx_eq A\B C
+    @test A\B ≈ C
     @test_throws DimensionMismatch LAPACK.posv!('U',D,ones(elty,12,12))
     @test_throws DimensionMismatch LAPACK.potrs!('U',D,ones(elty,12,12))
 
@@ -477,7 +477,7 @@ for elty in (Float32, Float64, Complex64, Complex128)
     C = copy(A)
     D = copy(B)
     X, rcond, f, b, r = LAPACK.gesvx!(C,D)
-    @test_approx_eq X A\B
+    @test X ≈ A\B
 end
 
 #gees, gges error throwing
@@ -520,8 +520,8 @@ for elty in (Float32, Float64, Complex64, Complex128)
         Base.LinAlg.LAPACK.trsen!('N',c,Array{LinAlg.BlasInt}([0,1,0,0]),T,Q)
         @test d[1] ≈ T[2,2]
         @test d[2] ≈ T[1,1]
-        if (c == 'V')
-            @test  Q * T * Q' ≈ A
+        if c == 'V'
+            @test  Q*T*Q' ≈ A
         end
     end
 end
@@ -534,8 +534,8 @@ for elty in (Float32, Float64, Complex64, Complex128)
         Base.LinAlg.LAPACK.trexc!(c,LinAlg.BlasInt(1),LinAlg.BlasInt(2),T,Q)
         @test d[1] ≈ T[2,2]
         @test d[2] ≈ T[1,1]
-        if (c == 'V')
-            @test  Q * T * Q' ≈ A
+        if c == 'V'
+            @test Q*T*Q' ≈ A
         end
     end
 end
@@ -551,16 +551,16 @@ for elty in (Float32, Float64, Complex{Float32}, Complex{Float64})
         if elty <: Real
             FJulia  = Base.LinAlg.generic_lufact!(copy(A))
             FLAPACK = Base.LinAlg.LAPACK.getrf!(copy(A))
-            @test_approx_eq FJulia.factors FLAPACK[1]
-            @test_approx_eq FJulia.ipiv FLAPACK[2]
-            @test_approx_eq FJulia.info FLAPACK[3]
+            @test FJulia.factors ≈ FLAPACK[1]
+            @test FJulia.ipiv ≈ FLAPACK[2]
+            @test FJulia.info ≈ FLAPACK[3]
         end
 
         ## QR
         FJulia  = LinAlg.qrfactUnblocked!(copy(A))
         FLAPACK = Base.LinAlg.LAPACK.geqrf!(copy(A))
-        @test_approx_eq FJulia.factors FLAPACK[1]
-        @test_approx_eq FJulia.τ FLAPACK[2]
+        @test FJulia.factors ≈ FLAPACK[1]
+        @test FJulia.τ ≈ FLAPACK[2]
     end
 end
 

@@ -149,10 +149,10 @@ for relty in (Int, Float32, Float64, BigFloat), elty in (relty, Complex{relty})
             @test_throws DimensionMismatch Base.LinAlg.naivesub!(T,ones(elty,n+1))
             @test norm(x-tx,Inf) <= 4*condT*max(eps()*norm(tx,Inf), eps(promty)*norm(x,Inf))
             debug && println("Generic Mat-vec ops")
-            @test_approx_eq T*b Tfull*b
-            @test_approx_eq T'*b Tfull'*b
+            @test T*b ≈ Tfull*b
+            @test T'*b ≈ Tfull'*b
             if relty != BigFloat # not supported by pivoted QR
-                @test_approx_eq T/b' Tfull/b'
+                @test T/b' ≈ Tfull/b'
             end
         end
 
@@ -176,19 +176,19 @@ for relty in (Int, Float32, Float64, BigFloat), elty in (relty, Complex{relty})
         if relty <: AbstractFloat
             d1, v1 = eig(T)
             d2, v2 = eig(map(elty<:Complex ? Complex128 : Float64,Tfull))
-            @test_approx_eq isupper?d1:reverse(d1) d2
+            @test (isupper ? d1 : reverse(d1)) ≈ d2
             if elty <: Real
-                Test.test_approx_eq_modphase(v1, isupper?v2:v2[:,n:-1:1])
+                Test.test_approx_eq_modphase(v1, isupper ? v2 : v2[:,n:-1:1])
             end
         end
 
         debug && println("Singular systems")
         if (elty <: BlasReal)
-            @test_approx_eq full(svdfact(T)) full(svdfact!(copy(Tfull)))
-            @test_approx_eq svdvals(Tfull) svdvals(T)
+            @test full(svdfact(T)) ≈ full(svdfact!(copy(Tfull)))
+            @test svdvals(Tfull) ≈ svdvals(T)
             u1, d1, v1 = svd(Tfull)
             u2, d2, v2 = svd(T)
-            @test_approx_eq d1 d2
+            @test d1 ≈ d2
             if elty <: Real
                 Test.test_approx_eq_modphase(u1, u2)
                 Test.test_approx_eq_modphase(v1, v2)
@@ -208,12 +208,12 @@ for relty in (Int, Float32, Float64, BigFloat), elty in (relty, Complex{relty})
             T2 = Bidiagonal(dv, ev, isupper2)
             Tfull2 = full(T2)
             for op in (+, -, *)
-                @test_approx_eq full(op(T, T2)) op(Tfull, Tfull2)
+                @test full(op(T, T2)) ≈ op(Tfull, Tfull2)
             end
         end
 
         debug && println("Inverse")
-        @test_approx_eq inv(T)*Tfull eye(elty,n)
+        @test inv(T)*Tfull ≈ eye(elty,n)
     end
 
     @test Matrix{Complex{Float64}}(BD) == BD

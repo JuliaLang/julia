@@ -21,7 +21,7 @@ si = [zeros(3) ones(3)]
 b = [0.003279216306360201,0.016396081531801006,0.03279216306360201,0.03279216306360201,0.016396081531801006,0.003279216306360201]
 a = [1.0,-2.4744161749781606,2.8110063119115782,-1.703772240915465,0.5444326948885326,-0.07231566910295834]
 si = [0.9967207836936347,-1.4940914728163142,1.2841226760316475,-0.4524417279474106,0.07559488540931815]
-@test_approx_eq filt(b, a, ones(10), si) ones(10) # Shouldn't affect DC offset
+@test filt(b, a, ones(10), si) ≈ ones(10) # Shouldn't affect DC offset
 
 @test_throws ArgumentError filt!([1, 2], [1], [1], [1])
 @test xcorr([1, 2], [3, 4]) == [4, 11, 6]
@@ -36,8 +36,8 @@ si = [0.9967207836936347,-1.4940914728163142,1.2841226760316475,-0.4524417279474
 # Convolution
 a = [1., 2., 1., 2.]
 b = [1., 2., 3.]
-@test_approx_eq conv(a, b) [1., 4., 8., 10., 7., 6.]
-@test_approx_eq conv(complex(a, ones(4)), complex(b)) complex([1., 4., 8., 10., 7., 6.], [1., 3., 6., 6., 5., 3.])
+@test conv(a, b) ≈ [1., 4., 8., 10., 7., 6.]
+@test conv(complex(a, ones(4)), complex(b)) ≈ complex([1., 4., 8., 10., 7., 6.], [1., 3., 6., 6., 5., 3.])
 
 # Discrete cosine transform (DCT) tests
 
@@ -91,37 +91,37 @@ if Base.fftw_vendor() != :mkl
     psYdct! = copy(Y); psXdct! = view(psYdct!,3:5,9:12); plan_dct!(psXdct!)*(psXdct!)
 
     for i = 1:length(X)
-        @test_approx_eq Xdct[i] true_Xdct[i]
-        @test_approx_eq Xdct![i] true_Xdct[i]
-        @test_approx_eq Xdct_1[i] true_Xdct_1[i]
-        @test_approx_eq Xdct!_1[i] true_Xdct_1[i]
-        @test_approx_eq Xdct_2[i] true_Xdct_2[i]
-        @test_approx_eq Xdct!_2[i] true_Xdct_2[i]
+        @test Xdct[i] ≈ true_Xdct[i]
+        @test Xdct![i] ≈ true_Xdct[i]
+        @test Xdct_1[i] ≈ true_Xdct_1[i]
+        @test Xdct!_1[i] ≈ true_Xdct_1[i]
+        @test Xdct_2[i] ≈ true_Xdct_2[i]
+        @test Xdct!_2[i] ≈ true_Xdct_2[i]
 
-        @test_approx_eq pXdct[i] true_Xdct[i]
-        @test_approx_eq pXdct![i] true_Xdct[i]
-        @test_approx_eq pXdct_1[i] true_Xdct_1[i]
-        @test_approx_eq pXdct!_1[i] true_Xdct_1[i]
-        @test_approx_eq pXdct_2[i] true_Xdct_2[i]
-        @test_approx_eq pXdct!_2[i] true_Xdct_2[i]
+        @test pXdct[i] ≈ true_Xdct[i]
+        @test pXdct![i] ≈ true_Xdct[i]
+        @test pXdct_1[i] ≈ true_Xdct_1[i]
+        @test pXdct!_1[i] ≈ true_Xdct_1[i]
+        @test pXdct_2[i] ≈ true_Xdct_2[i]
+        @test pXdct!_2[i] ≈ true_Xdct_2[i]
 
-        @test_approx_eq Xidct[i] X[i]
-        @test_approx_eq Xidct![i] X[i]
-        @test_approx_eq Xidct_1[i] X[i]
-        @test_approx_eq Xidct!_1[i] X[i]
-        @test_approx_eq Xidct_2[i] X[i]
-        @test_approx_eq Xidct!_2[i] X[i]
+        @test Xidct[i] ≈ X[i]
+        @test Xidct![i] ≈ X[i]
+        @test Xidct_1[i] ≈ X[i]
+        @test Xidct!_1[i] ≈ X[i]
+        @test Xidct_2[i] ≈ X[i]
+        @test Xidct!_2[i] ≈ X[i]
 
-        @test_approx_eq pXidct[i] X[i]
-        @test_approx_eq pXidct![i] X[i]
-        @test_approx_eq pXidct_1[i] X[i]
-        @test_approx_eq pXidct!_1[i] X[i]
-        @test_approx_eq pXidct_2[i] X[i]
-        @test_approx_eq pXidct!_2[i] X[i]
+        @test pXidct[i] ≈ X[i]
+        @test pXidct![i] ≈ X[i]
+        @test pXidct_1[i] ≈ X[i]
+        @test pXidct!_1[i] ≈ X[i]
+        @test pXidct_2[i] ≈ X[i]
+        @test pXidct!_2[i] ≈ X[i]
 
-        @test_approx_eq sXdct[i] true_Xdct[i]
-        @test_approx_eq psXdct[i] true_Xdct[i]
-        @test_approx_eq sXdct![i] true_Xdct[i]
-        @test_approx_eq psXdct![i] true_Xdct[i]
+        @test sXdct[i] ≈ true_Xdct[i]
+        @test psXdct[i] ≈ true_Xdct[i]
+        @test sXdct![i] ≈ true_Xdct[i]
+        @test psXdct![i] ≈ true_Xdct[i]
     end
 end # fftw_vendor() != :mkl

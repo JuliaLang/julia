@@ -76,34 +76,34 @@ for T in (Float32, Float64)
     y = T(1//2)
     yi = 4
     # Test random values
-    @test_approx_eq x^y big(x)^big(y)
-    @test_approx_eq x^yi big(x)^yi
-    @test_approx_eq acos(x) acos(big(x))
-    @test_approx_eq acosh(1+x) acosh(big(1+x))
-    @test_approx_eq asin(x) asin(big(x))
-    @test_approx_eq asinh(x) asinh(big(x))
-    @test_approx_eq atan(x) atan(big(x))
-    @test_approx_eq atan2(x,y) atan2(big(x),big(y))
-    @test_approx_eq atanh(x) atanh(big(x))
-    @test_approx_eq cbrt(x) cbrt(big(x))
-    @test_approx_eq cos(x) cos(big(x))
-    @test_approx_eq cosh(x) cosh(big(x))
-    @test_approx_eq exp(x) exp(big(x))
-    @test_approx_eq exp10(x) exp10(big(x))
-    @test_approx_eq exp2(x) exp2(big(x))
-    @test_approx_eq expm1(x) expm1(big(x))
-    @test_approx_eq hypot(x,y) hypot(big(x),big(y))
-    @test_approx_eq hypot(x,x,y) hypot(hypot(big(x),big(x)),big(y))
-    @test_approx_eq hypot(x,x,y,y) hypot(hypot(big(x),big(x)),hypot(big(y),big(y)))
-    @test_approx_eq log(x) log(big(x))
-    @test_approx_eq log10(x) log10(big(x))
-    @test_approx_eq log1p(x) log1p(big(x))
-    @test_approx_eq log2(x) log2(big(x))
-    @test_approx_eq sin(x) sin(big(x))
-    @test_approx_eq sinh(x) sinh(big(x))
-    @test_approx_eq sqrt(x) sqrt(big(x))
-    @test_approx_eq tan(x) tan(big(x))
-    @test_approx_eq tanh(x) tanh(big(x))
+    @test x^y ≈ big(x)^big(y)
+    @test x^yi ≈ big(x)^yi
+    @test acos(x) ≈ acos(big(x))
+    @test acosh(1+x) ≈ acosh(big(1+x))
+    @test asin(x) ≈ asin(big(x))
+    @test asinh(x) ≈ asinh(big(x))
+    @test atan(x) ≈ atan(big(x))
+    @test atan2(x,y) ≈ atan2(big(x),big(y))
+    @test atanh(x) ≈ atanh(big(x))
+    @test cbrt(x) ≈ cbrt(big(x))
+    @test cos(x) ≈ cos(big(x))
+    @test cosh(x) ≈ cosh(big(x))
+    @test exp(x) ≈ exp(big(x))
+    @test exp10(x) ≈ exp10(big(x))
+    @test exp2(x) ≈ exp2(big(x))
+    @test expm1(x) ≈ expm1(big(x))
+    @test hypot(x,y) ≈ hypot(big(x),big(y))
+    @test hypot(x,x,y) ≈ hypot(hypot(big(x),big(x)),big(y))
+    @test hypot(x,x,y,y) ≈ hypot(hypot(big(x),big(x)),hypot(big(y),big(y)))
+    @test log(x) ≈ log(big(x))
+    @test log10(x) ≈ log10(big(x))
+    @test log1p(x) ≈ log1p(big(x))
+    @test log2(x) ≈ log2(big(x))
+    @test sin(x) ≈ sin(big(x))
+    @test sinh(x) ≈ sinh(big(x))
+    @test sqrt(x) ≈ sqrt(big(x))
+    @test tan(x) ≈ tan(big(x))
+    @test tanh(x) ≈ tanh(big(x))
     # Test special values
     @test isequal(T(1//4)^T(1//2), T(1//2))
     @test isequal(T(1//4)^2, T(1//16))
@@ -142,39 +142,39 @@ for T in (Float32, Float64)
     @test isequal(tan(T(0)), T(0))
     @test_approx_eq_eps tan(T(pi)/4) T(1) eps(T)
     # Test inverses
-    @test_approx_eq acos(cos(x)) x
-    @test_approx_eq acosh(cosh(x)) x
-    @test_approx_eq asin(sin(x)) x
-    @test_approx_eq cbrt(x)^3 x
-    @test_approx_eq cbrt(x^3) x
-    @test_approx_eq asinh(sinh(x)) x
-    @test_approx_eq atan(tan(x)) x
-    @test_approx_eq atan2(x,y) atan(x/y)
-    @test_approx_eq atanh(tanh(x)) x
-    @test_approx_eq cos(acos(x)) x
-    @test_approx_eq cosh(acosh(1+x)) 1+x
-    @test_approx_eq exp(log(x)) x
-    @test_approx_eq exp10(log10(x)) x
-    @test_approx_eq exp2(log2(x)) x
-    @test_approx_eq expm1(log1p(x)) x
-    @test_approx_eq log(exp(x)) x
-    @test_approx_eq log10(exp10(x)) x
-    @test_approx_eq log1p(expm1(x)) x
-    @test_approx_eq log2(exp2(x)) x
-    @test_approx_eq sin(asin(x)) x
-    @test_approx_eq sinh(asinh(x)) x
-    @test_approx_eq sqrt(x)^2 x
-    @test_approx_eq sqrt(x^2) x
-    @test_approx_eq tan(atan(x)) x
-    @test_approx_eq tanh(atanh(x)) x
+    @test acos(cos(x)) ≈ x
+    @test acosh(cosh(x)) ≈ x
+    @test asin(sin(x)) ≈ x
+    @test cbrt(x)^3 ≈ x
+    @test cbrt(x^3) ≈ x
+    @test asinh(sinh(x)) ≈ x
+    @test atan(tan(x)) ≈ x
+    @test atan2(x,y) ≈ atan(x/y)
+    @test atanh(tanh(x)) ≈ x
+    @test cos(acos(x)) ≈ x
+    @test cosh(acosh(1+x)) ≈ 1+x
+    @test exp(log(x)) ≈ x
+    @test exp10(log10(x)) ≈ x
+    @test exp2(log2(x)) ≈ x
+    @test expm1(log1p(x)) ≈ x
+    @test log(exp(x)) ≈ x
+    @test log10(exp10(x)) ≈ x
+    @test log1p(expm1(x)) ≈ x
+    @test log2(exp2(x)) ≈ x
+    @test sin(asin(x)) ≈ x
+    @test sinh(asinh(x)) ≈ x
+    @test sqrt(x)^2 ≈ x
+    @test sqrt(x^2) ≈ x
+    @test tan(atan(x)) ≈ x
+    @test tanh(atanh(x)) ≈ x
     # Test some properties
-    @test_approx_eq cosh(x) (exp(x)+exp(-x))/2
-    @test_approx_eq cosh(x)^2-sinh(x)^2 1
-    @test_approx_eq hypot(x,y) sqrt(x^2+y^2)
-    @test_approx_eq sin(x)^2+cos(x)^2 1
-    @test_approx_eq sinh(x) (exp(x)-exp(-x))/2
-    @test_approx_eq tan(x) sin(x)/cos(x)
-    @test_approx_eq tanh(x) sinh(x)/cosh(x)
+    @test cosh(x) ≈ (exp(x)+exp(-x))/2
+    @test cosh(x)^2-sinh(x)^2 ≈ 1
+    @test hypot(x,y) ≈ sqrt(x^2+y^2)
+    @test sin(x)^2+cos(x)^2 ≈ 1
+    @test sinh(x) ≈ (exp(x)-exp(-x))/2
+    @test tan(x) ≈ sin(x)/cos(x)
+    @test tanh(x) ≈ sinh(x)/cosh(x)
 
     #Edge cases
     @test isinf(log(zero(T)))
@@ -189,17 +189,17 @@ for T in (Float32, Float64)
     @test hypot(T(Inf), T(NaN)) === T(Inf)
     @test isnan(hypot(T(x), T(NaN)))
 end
-@test_approx_eq exp10(5) exp10(5.0)
-@test_approx_eq exp2(Float16(2.)) exp2(2.)
+@test exp10(5) ≈ exp10(5.0)
+@test exp2(Float16(2.)) ≈ exp2(2.)
 @test log(e) == 1
 
 for T in (Int, Float64, BigFloat)
-    @test_approx_eq deg2rad(T(180)) 1pi
-    @test_approx_eq deg2rad(T[45, 60]) [pi/T(4), pi/T(3)]
-    @test_approx_eq rad2deg([pi/T(4), pi/T(3)]) [45, 60]
-    @test_approx_eq rad2deg(T(1)*pi) 180
-    @test_approx_eq rad2deg(T(1)) rad2deg(true)
-    @test_approx_eq deg2rad(T(1)) deg2rad(true)
+    @test deg2rad(T(180)) ≈ 1pi
+    @test deg2rad(T[45, 60]) ≈ [pi/T(4), pi/T(3)]
+    @test rad2deg([pi/T(4), pi/T(3)]) ≈ [45, 60]
+    @test rad2deg(T(1)*pi) ≈ 180
+    @test rad2deg(T(1)) ≈ rad2deg(true)
+    @test deg2rad(T(1)) ≈ deg2rad(true)
 end
 
 # degree-based trig functions
@@ -274,23 +274,23 @@ for T = (Float32,Float64,BigFloat)
 end
 
 # error functions
-@test_approx_eq erf(Float16(1)) 0.84270079294971486934
-@test_approx_eq erf(1) 0.84270079294971486934
-@test_approx_eq erfc(1) 0.15729920705028513066
-@test_approx_eq erfc(Float16(1)) 0.15729920705028513066
-@test_approx_eq erfcx(1) 0.42758357615580700442
-@test_approx_eq erfcx(Float32(1)) 0.42758357615580700442
-@test_approx_eq erfcx(Complex64(1)) 0.42758357615580700442
-@test_approx_eq erfi(1) 1.6504257587975428760
-@test_approx_eq erfinv(0.84270079294971486934) 1
-@test_approx_eq erfcinv(0.15729920705028513066) 1
-@test_approx_eq dawson(1) 0.53807950691276841914
+@test erf(Float16(1)) ≈ 0.84270079294971486934
+@test erf(1) ≈ 0.84270079294971486934
+@test erfc(1) ≈ 0.15729920705028513066
+@test erfc(Float16(1)) ≈ 0.15729920705028513066
+@test erfcx(1) ≈ 0.42758357615580700442
+@test erfcx(Float32(1)) ≈ 0.42758357615580700442
+@test erfcx(Complex64(1)) ≈ 0.42758357615580700442
+@test erfi(1) ≈ 1.6504257587975428760
+@test erfinv(0.84270079294971486934) ≈ 1
+@test erfcinv(0.15729920705028513066) ≈ 1
+@test dawson(1) ≈ 0.53807950691276841914
 
-@test_approx_eq erf(1+2im) -0.53664356577856503399-5.0491437034470346695im
-@test_approx_eq erfc(1+2im) 1.5366435657785650340+5.0491437034470346695im
-@test_approx_eq erfcx(1+2im) 0.14023958136627794370-0.22221344017989910261im
-@test_approx_eq erfi(1+2im) -0.011259006028815025076+1.0036063427256517509im
-@test_approx_eq dawson(1+2im) -13.388927316482919244-11.828715103889593303im
+@test erf(1+2im) ≈ -0.53664356577856503399-5.0491437034470346695im
+@test erfc(1+2im) ≈ 1.5366435657785650340+5.0491437034470346695im
+@test erfcx(1+2im) ≈ 0.14023958136627794370-0.22221344017989910261im
+@test erfi(1+2im) ≈ -0.011259006028815025076+1.0036063427256517509im
+@test dawson(1+2im) ≈ -13.388927316482919244-11.828715103889593303im
 
 for elty in [Float32,Float64]
     for x in logspace(-200, -0.01)
@@ -316,40 +316,40 @@ end
 @test erfcinv(one(Int)) == erfcinv(1.0)
 
 # airy
-@test_approx_eq airy(1.8) airyai(1.8)
-@test_approx_eq airyprime(1.8) -0.0685247801186109345638
-@test_approx_eq airyaiprime(1.8) airyprime(1.8)
-@test_approx_eq airybi(1.8) 2.595869356743906290060
-@test_approx_eq airybiprime(1.8) 2.98554005084659907283
+@test airy(1.8) ≈ airyai(1.8)
+@test airyprime(1.8) ≈ -0.0685247801186109345638
+@test airyaiprime(1.8) ≈ airyprime(1.8)
+@test airybi(1.8) ≈ 2.595869356743906290060
+@test airybiprime(1.8) ≈ 2.98554005084659907283
 @test_throws Base.Math.AmosException airy(200im)
 @test_throws Base.Math.AmosException airybi(200)
 @test_throws ArgumentError airy(5,one(Complex128))
 z = 1.8 + 1.0im
 for elty in [Complex64,Complex128]
-    @test_approx_eq airy(convert(elty,1.8)) 0.0470362168668458052247
+    @test airy(convert(elty,1.8)) ≈ 0.0470362168668458052247
     z = convert(elty,z)
-    @test_approx_eq airyx(z) airyx(0,z)
-    @test_approx_eq airyx(0, z) airy(0, z) * exp(2/3 * z * sqrt(z))
-    @test_approx_eq airyx(1, z) airy(1, z) * exp(2/3 * z * sqrt(z))
-    @test_approx_eq airyx(2, z) airy(2, z) * exp(-abs(real(2/3 * z * sqrt(z))))
-    @test_approx_eq airyx(3, z) airy(3, z) * exp(-abs(real(2/3 * z * sqrt(z))))
+    @test airyx(z) ≈ airyx(0,z)
+    @test airyx(0, z) ≈ airy(0, z) * exp(2/3 * z * sqrt(z))
+    @test airyx(1, z) ≈ airy(1, z) * exp(2/3 * z * sqrt(z))
+    @test airyx(2, z) ≈ airy(2, z) * exp(-abs(real(2/3 * z * sqrt(z))))
+    @test airyx(3, z) ≈ airy(3, z) * exp(-abs(real(2/3 * z * sqrt(z))))
     @test_throws ArgumentError airyx(5,z)
 end
 @test_throws MethodError airy(complex(big(1.0)))
 
 # bessely0, bessely1, besselj0, besselj1
-@test_approx_eq besselj0(Float32(2.0)) besselj0(Float64(2.0))
-@test_approx_eq besselj1(Float32(2.0)) besselj1(Float64(2.0))
-@test_approx_eq bessely0(Float32(2.0)) bessely0(Float64(2.0))
-@test_approx_eq bessely1(Float32(2.0)) bessely1(Float64(2.0))
-@test_approx_eq besselj0(2) besselj0(2.0)
-@test_approx_eq besselj1(2) besselj1(2.0)
-@test_approx_eq bessely0(2) bessely0(2.0)
-@test_approx_eq bessely1(2) bessely1(2.0)
-@test_approx_eq besselj0(2.0 + im) besselj(0, 2.0 + im)
-@test_approx_eq besselj1(2.0 + im) besselj(1, 2.0 + im)
-@test_approx_eq bessely0(2.0 + im) bessely(0, 2.0 + im)
-@test_approx_eq bessely1(2.0 + im) bessely(1, 2.0 + im)
+@test besselj0(Float32(2.0)) ≈ besselj0(Float64(2.0))
+@test besselj1(Float32(2.0)) ≈ besselj1(Float64(2.0))
+@test bessely0(Float32(2.0)) ≈ bessely0(Float64(2.0))
+@test bessely1(Float32(2.0)) ≈ bessely1(Float64(2.0))
+@test besselj0(2) ≈ besselj0(2.0)
+@test besselj1(2) ≈ besselj1(2.0)
+@test bessely0(2) ≈ bessely0(2.0)
+@test bessely1(2) ≈ bessely1(2.0)
+@test besselj0(2.0 + im) ≈ besselj(0, 2.0 + im)
+@test besselj1(2.0 + im) ≈ besselj(1, 2.0 + im)
+@test bessely0(2.0 + im) ≈ bessely(0, 2.0 + im)
+@test bessely1(2.0 + im) ≈ bessely(1, 2.0 + im)
 
 @test_throws MethodError besselj(1.2,big(1.0))
 @test_throws MethodError besselj(1,complex(big(1.0)))
@@ -358,10 +358,10 @@ end
 
 # besselh
 true_h133 = 0.30906272225525164362 - 0.53854161610503161800im
-@test_approx_eq besselh(3,1,3) true_h133
-@test_approx_eq besselh(-3,1,3) -true_h133
-@test_approx_eq besselh(3,2,3) conj(true_h133)
-@test_approx_eq besselh(-3,2,3) -conj(true_h133)
+@test besselh(3,1,3) ≈ true_h133
+@test besselh(-3,1,3) ≈ -true_h133
+@test besselh(3,2,3) ≈ conj(true_h133)
+@test besselh(-3,2,3) ≈ -conj(true_h133)
 @test_throws Base.Math.AmosException besselh(1,0)
 
 @test_throws MethodError besselh(1,big(1.0))
@@ -371,11 +371,11 @@ true_h133 = 0.30906272225525164362 - 0.53854161610503161800im
 
 # besseli
 true_i33 = 0.95975362949600785698
-@test_approx_eq besseli(3,3) true_i33
-@test_approx_eq besseli(-3,3) true_i33
-@test_approx_eq besseli(3,-3) -true_i33
-@test_approx_eq besseli(-3,-3) -true_i33
-@test_approx_eq besseli(Float32(-3),Complex64(-3,0)) -true_i33
+@test besseli(3,3) ≈ true_i33
+@test besseli(-3,3) ≈ true_i33
+@test besseli(3,-3) ≈ -true_i33
+@test besseli(-3,-3) ≈ -true_i33
+@test besseli(Float32(-3),Complex64(-3,0)) ≈ -true_i33
 @test_throws Base.Math.AmosException besseli(1,1000)
 @test_throws DomainError besseli(0.4,-1.0)
 
@@ -414,24 +414,24 @@ j43 = besselj(4,3.)
 @test besselj(4,complex(3f0)) ≈ j43
 @test besselj(4,complex(3)) ≈ j43
 
-@test_approx_eq j33 0.30906272225525164362
-@test_approx_eq j43 0.13203418392461221033
+@test j33 ≈ 0.30906272225525164362
+@test j43 ≈ 0.13203418392461221033
 @test_throws DomainError    besselj(0.1, -0.4)
-@test_approx_eq besselj(0.1, complex(-0.4)) 0.820421842809028916 + 0.266571215948350899im
-@test_approx_eq besselj(3.2, 1.3+0.6im) 0.01135309305831220201 + 0.03927719044393515275im
-@test_approx_eq besselj(1, 3im) 3.953370217402609396im
-@test_approx_eq besselj(1.0,3im) besselj(1,3im)
+@test besselj(0.1, complex(-0.4)) ≈ 0.820421842809028916 + 0.266571215948350899im
+@test besselj(3.2, 1.3+0.6im) ≈ 0.01135309305831220201 + 0.03927719044393515275im
+@test besselj(1, 3im) ≈ 3.953370217402609396im
+@test besselj(1.0,3im) ≈ besselj(1,3im)
 @test_throws Base.Math.AmosException besselj(20,1000im)
 @test_throws MethodError besselj(big(1.0),3im)
 
 # besselk
 true_k33 = 0.12217037575718356792
-@test_approx_eq besselk(3,3) true_k33
-@test_approx_eq besselk(-3,3) true_k33
+@test besselk(3,3) ≈ true_k33
+@test besselk(-3,3) ≈ true_k33
 true_k3m3 = -0.1221703757571835679 - 3.0151549516807985776im
 @test_throws DomainError besselk(3,-3)
-@test_approx_eq besselk(3,complex(-3)) true_k3m3
-@test_approx_eq besselk(-3,complex(-3)) true_k3m3
+@test besselk(3,complex(-3)) ≈ true_k3m3
+@test besselk(-3,complex(-3)) ≈ true_k3m3
 @test_throws Base.Math.AmosException besselk(200,0.01)
 # issue #6564
 @test besselk(1.0,0.0) == Inf
@@ -446,11 +446,11 @@ true_k3m3 = -0.1221703757571835679 - 3.0151549516807985776im
 y33 = bessely(3,3.)
 @test bessely(3,3) == y33
 @test bessely(3.,3.) == y33
-@test_approx_eq bessely(3,Float32(3.)) y33
-@test_approx_eq bessely(-3,3) -y33
-@test_approx_eq y33 -0.53854161610503161800
+@test bessely(3,Float32(3.)) ≈ y33
+@test bessely(-3,3) ≈ -y33
+@test y33 ≈ -0.53854161610503161800
 @test_throws DomainError bessely(3,-3)
-@test_approx_eq bessely(3,complex(-3)) 0.53854161610503161800 - 0.61812544451050328724im
+@test bessely(3,complex(-3)) ≈ 0.53854161610503161800 - 0.61812544451050328724im
 @test_throws Base.Math.AmosException bessely(200.5,0.1)
 @test_throws DomainError bessely(0.4,-1.0)
 @test_throws DomainError bessely(0.4,Float32(-1.0))
@@ -467,8 +467,8 @@ y33 = bessely(3,3.)
 #besselhx
 for elty in [Complex64,Complex128]
     z = convert(elty, 1.0 + 1.9im)
-    @test_approx_eq besselhx(1.0, 1, z) convert(elty,-0.5949634147786144 - 0.18451272807835967im)
-    @test_approx_eq besselhx(Float32(1.0), 1, z) convert(elty,-0.5949634147786144 - 0.18451272807835967im)
+    @test besselhx(1.0, 1, z) ≈ convert(elty,-0.5949634147786144 - 0.18451272807835967im)
+    @test besselhx(Float32(1.0), 1, z) ≈ convert(elty,-0.5949634147786144 - 0.18451272807835967im)
 end
 
 @test_throws MethodError besselh(1,1,big(1.0))
@@ -478,19 +478,19 @@ end
 
 # issue #6653
 for f in (besselj,bessely,besseli,besselk,hankelh1,hankelh2)
-    @test_approx_eq f(0,1) f(0,Complex128(1))
-    @test_approx_eq f(0,1) f(0,Complex64(1))
+    @test f(0,1) ≈ f(0,Complex128(1))
+    @test f(0,1) ≈ f(0,Complex64(1))
 end
 
 # scaled bessel[ijky] and hankelh[12]
 for x in (1.0, 0.0, -1.0), y in (1.0, 0.0, -1.0), nu in (1.0, 0.0, -1.0)
     z = Complex128(x + y * im)
-    z == zero(z) || @test_approx_eq hankelh1x(nu, z) hankelh1(nu, z) * exp(-z * im)
-    z == zero(z) || @test_approx_eq hankelh2x(nu, z) hankelh2(nu, z) * exp(z * im)
-    (nu < 0 && z == zero(z)) || @test_approx_eq besselix(nu, z) besseli(nu, z) * exp(-abs(real(z)))
-    (nu < 0 && z == zero(z)) || @test_approx_eq besseljx(nu, z) besselj(nu, z) * exp(-abs(imag(z)))
-    z == zero(z) || @test_approx_eq besselkx(nu, z) besselk(nu, z) * exp(z)
-    z == zero(z) || @test_approx_eq besselyx(nu, z) bessely(nu, z) * exp(-abs(imag(z)))
+    z == zero(z) || @test hankelh1x(nu, z) ≈ hankelh1(nu, z) * exp(-z * im)
+    z == zero(z) || @test hankelh2x(nu, z) ≈ hankelh2(nu, z) * exp(z * im)
+    (nu < 0 && z == zero(z)) || @test besselix(nu, z) ≈ besseli(nu, z) * exp(-abs(real(z)))
+    (nu < 0 && z == zero(z)) || @test besseljx(nu, z) ≈ besselj(nu, z) * exp(-abs(imag(z)))
+    z == zero(z) || @test besselkx(nu, z) ≈ besselk(nu, z) * exp(z)
+    z == zero(z) || @test besselyx(nu, z) ≈ bessely(nu, z) * exp(-abs(imag(z)))
 end
 @test_throws Base.Math.AmosException hankelh1x(1, 0)
 @test_throws Base.Math.AmosException hankelh2x(1, 0)
@@ -504,12 +504,12 @@ end
 @test_throws DomainError besselyx(0.4,-1.0)
 
 # beta, lbeta
-@test_approx_eq beta(3/2,7/2) 5π/128
-@test_approx_eq beta(3,5) 1/105
-@test_approx_eq lbeta(5,4) log(beta(5,4))
-@test_approx_eq beta(5,4) beta(4,5)
+@test beta(3/2,7/2) ≈ 5π/128
+@test beta(3,5) ≈ 1/105
+@test lbeta(5,4) ≈ log(beta(5,4))
+@test beta(5,4) ≈ beta(4,5)
 @test beta(-1/2, 3) ≈ beta(-1/2 + 0im, 3 + 0im) ≈ -16/3
-@test_approx_eq lbeta(-1/2, 3) log(16/3)
+@test lbeta(-1/2, 3) ≈ log(16/3)
 @test beta(Float32(5),Float32(4)) == beta(Float32(4),Float32(5))
 @test beta(3,5) ≈ beta(3+0im,5+0im)
 @test(beta(3.2+0.1im,5.3+0.3im) ≈ exp(lbeta(3.2+0.1im,5.3+0.3im)) ≈
@@ -520,16 +520,16 @@ end
 if Base.Math.libm == "libopenlibm"
     @test gamma(Float64[1:25;]) == gamma(1:25)
 else
-    @test_approx_eq gamma(Float64[1:25;]) gamma(1:25)
+    @test gamma(Float64[1:25;]) ≈ gamma(1:25)
 end
 for elty in (Float32, Float64)
-    @test_approx_eq gamma(convert(elty,1/2)) convert(elty,sqrt(π))
-    @test_approx_eq gamma(convert(elty,-1/2)) convert(elty,-2sqrt(π))
-    @test_approx_eq lgamma(convert(elty,-1/2)) convert(elty,log(abs(gamma(-1/2))))
+    @test gamma(convert(elty,1/2)) ≈ convert(elty,sqrt(π))
+    @test gamma(convert(elty,-1/2)) ≈ convert(elty,-2sqrt(π))
+    @test lgamma(convert(elty,-1/2)) ≈ convert(elty,log(abs(gamma(-1/2))))
 end
-@test_approx_eq lgamma(1.4+3.7im) -3.7094025330996841898 + 2.4568090502768651184im
-@test_approx_eq lgamma(1.4+3.7im) log(gamma(1.4+3.7im))
-@test_approx_eq lgamma(-4.2+0im) lgamma(-4.2)-pi*im
+@test lgamma(1.4+3.7im) ≈ -3.7094025330996841898 + 2.4568090502768651184im
+@test lgamma(1.4+3.7im) ≈ log(gamma(1.4+3.7im))
+@test lgamma(-4.2+0im) ≈ lgamma(-4.2)-pi*im
 @test factorial(3.0) == gamma(4.0) == factorial(3)
 for x in (3.2, 2+1im, 3//2, 3.2+0.1im)
     @test factorial(x) == gamma(1+x)
@@ -540,38 +540,38 @@ end
 # digamma
 for elty in (Float32, Float64)
 
-    @test_approx_eq digamma(convert(elty, 9)) convert(elty, 2.140641477955609996536345)
-    @test_approx_eq digamma(convert(elty, 2.5)) convert(elty, 0.7031566406452431872257)
-    @test_approx_eq digamma(convert(elty, 0.1)) convert(elty, -10.42375494041107679516822)
-    @test_approx_eq digamma(convert(elty, 7e-4)) convert(elty, -1429.147493371120205005198)
-    @test_approx_eq digamma(convert(elty, 7e-5)) convert(elty, -14286.29138623969227538398)
-    @test_approx_eq digamma(convert(elty, 7e-6)) convert(elty, -142857.7200612932791081972)
-    @test_approx_eq digamma(convert(elty, 2e-6)) convert(elty, -500000.5772123750382073831)
-    @test_approx_eq digamma(convert(elty, 1e-6)) convert(elty, -1000000.577214019968668068)
-    @test_approx_eq digamma(convert(elty, 7e-7)) convert(elty, -1428572.005785942019703646)
-    @test_approx_eq digamma(convert(elty, -0.5)) convert(elty, .03648997397857652055902367)
-    @test_approx_eq digamma(convert(elty, -1.1)) convert(elty,  10.15416395914385769902271)
+    @test digamma(convert(elty, 9)) ≈ convert(elty, 2.140641477955609996536345)
+    @test digamma(convert(elty, 2.5)) ≈ convert(elty, 0.7031566406452431872257)
+    @test digamma(convert(elty, 0.1)) ≈ convert(elty, -10.42375494041107679516822)
+    @test digamma(convert(elty, 7e-4)) ≈ convert(elty, -1429.147493371120205005198)
+    @test digamma(convert(elty, 7e-5)) ≈ convert(elty, -14286.29138623969227538398)
+    @test digamma(convert(elty, 7e-6)) ≈ convert(elty, -142857.7200612932791081972)
+    @test digamma(convert(elty, 2e-6)) ≈ convert(elty, -500000.5772123750382073831)
+    @test digamma(convert(elty, 1e-6)) ≈ convert(elty, -1000000.577214019968668068)
+    @test digamma(convert(elty, 7e-7)) ≈ convert(elty, -1428572.005785942019703646)
+    @test digamma(convert(elty, -0.5)) ≈ convert(elty, .03648997397857652055902367)
+    @test digamma(convert(elty, -1.1)) ≈ convert(elty,  10.15416395914385769902271)
 
-    @test_approx_eq digamma(convert(elty, 0.1)) convert(elty, -10.42375494041108)
-    @test_approx_eq digamma(convert(elty, 1/2)) convert(elty, -γ - log(4))
-    @test_approx_eq digamma(convert(elty, 1)) convert(elty, -γ)
-    @test_approx_eq digamma(convert(elty, 2)) convert(elty, 1 - γ)
-    @test_approx_eq digamma(convert(elty, 3)) convert(elty, 3/2 - γ)
-    @test_approx_eq digamma(convert(elty, 4)) convert(elty, 11/6 - γ)
-    @test_approx_eq digamma(convert(elty, 5)) convert(elty, 25/12 - γ)
-    @test_approx_eq digamma(convert(elty, 10)) convert(elty, 7129/2520 - γ)
+    @test digamma(convert(elty, 0.1)) ≈ convert(elty, -10.42375494041108)
+    @test digamma(convert(elty, 1/2)) ≈ convert(elty, -γ - log(4))
+    @test digamma(convert(elty, 1)) ≈ convert(elty, -γ)
+    @test digamma(convert(elty, 2)) ≈ convert(elty, 1 - γ)
+    @test digamma(convert(elty, 3)) ≈ convert(elty, 3/2 - γ)
+    @test digamma(convert(elty, 4)) ≈ convert(elty, 11/6 - γ)
+    @test digamma(convert(elty, 5)) ≈ convert(elty, 25/12 - γ)
+    @test digamma(convert(elty, 10)) ≈ convert(elty, 7129/2520 - γ)
 end
 
 # trigamma
 for elty in (Float32, Float64)
-    @test_approx_eq trigamma(convert(elty, 0.1)) convert(elty, 101.433299150792758817)
-    @test_approx_eq trigamma(convert(elty, 1/2)) convert(elty, π^2/2)
-    @test_approx_eq trigamma(convert(elty, 1)) convert(elty, π^2/6)
-    @test_approx_eq trigamma(convert(elty, 2)) convert(elty, π^2/6 - 1)
-    @test_approx_eq trigamma(convert(elty, 3)) convert(elty, π^2/6 - 5/4)
-    @test_approx_eq trigamma(convert(elty, 4)) convert(elty, π^2/6 - 49/36)
-    @test_approx_eq trigamma(convert(elty, 5)) convert(elty, π^2/6 - 205/144)
-    @test_approx_eq trigamma(convert(elty, 10)) convert(elty, π^2/6 - 9778141/6350400)
+    @test trigamma(convert(elty, 0.1)) ≈ convert(elty, 101.433299150792758817)
+    @test trigamma(convert(elty, 1/2)) ≈ convert(elty, π^2/2)
+    @test trigamma(convert(elty, 1)) ≈ convert(elty, π^2/6)
+    @test trigamma(convert(elty, 2)) ≈ convert(elty, π^2/6 - 1)
+    @test trigamma(convert(elty, 3)) ≈ convert(elty, π^2/6 - 5/4)
+    @test trigamma(convert(elty, 4)) ≈ convert(elty, π^2/6 - 49/36)
+    @test trigamma(convert(elty, 5)) ≈ convert(elty, π^2/6 - 205/144)
+    @test trigamma(convert(elty, 10)) ≈ convert(elty, π^2/6 - 9778141/6350400)
 end
 
 # invdigamma
@@ -582,36 +582,37 @@ for elty in (Float32, Float64)
 end
 @test abs(invdigamma(2)) == abs(invdigamma(2.))
 
-@test_approx_eq polygamma(20, 7.) -4.644616027240543262561198814998587152547
-@test_approx_eq polygamma(20, Float16(7.)) -4.644616027240543262561198814998587152547
+@test polygamma(20, 7.) ≈ -4.644616027240543262561198814998587152547
+@test polygamma(20, Float16(7.)) ≈ -4.644616027240543262561198814998587152547
 
 # eta, zeta
-@test_approx_eq eta(1) log(2)
-@test_approx_eq eta(2) pi^2/12
-@test_approx_eq eta(Float32(2)) eta(2)
-@test_approx_eq eta(Complex64(2)) eta(2)
-@test_approx_eq zeta(0) -0.5
-@test_approx_eq zeta(2) pi^2/6
-@test_approx_eq zeta(Complex64(2)) zeta(2)
-@test_approx_eq zeta(4) pi^4/90
-@test_approx_eq zeta(one(Float32)) Float32(zeta(one(Float64)))
-@test_approx_eq zeta(1,Float16(2.)) zeta(1,2.)
-@test_approx_eq zeta(1.,Float16(2.)) zeta(1,2.)
-@test_approx_eq zeta(Float16(1.),Float16(2.)) zeta(1,2.)
+@test eta(1) ≈ log(2)
+@test eta(2) ≈ pi^2/12
+@test eta(Float32(2)) ≈ eta(2)
+@test eta(Complex64(2)) ≈ eta(2)
+@test zeta(0) ≈ -0.5
+@test zeta(2) ≈ pi^2/6
+@test zeta(Complex64(2)) ≈ zeta(2)
+@test zeta(4) ≈ pi^4/90
+@test zeta(1,Float16(2.)) ≈ zeta(1,2.)
+@test zeta(1.,Float16(2.)) ≈ zeta(1,2.)
+@test zeta(Float16(1.),Float16(2.)) ≈ zeta(1,2.)
 @test isnan(zeta(NaN))
+@test isnan(zeta(1.0e0))
+@test isnan(zeta(1.0f0))
 @test isnan(zeta(complex(0,Inf)))
 @test isnan(zeta(complex(-Inf,0)))
 
 # quadgk
-@test_approx_eq quadgk(cos, 0,0.7,1)[1] sin(1)
-@test_approx_eq quadgk(x -> exp(im*x), 0,0.7,1)[1] (exp(1im)-1)/im
-@test_approx_eq quadgk(x -> exp(im*x), 0,1im)[1] -1im*expm1(-1)
+@test quadgk(cos, 0,0.7,1)[1] ≈ sin(1)
+@test quadgk(x -> exp(im*x), 0,0.7,1)[1] ≈ (exp(1im)-1)/im
+@test quadgk(x -> exp(im*x), 0,1im)[1] ≈ -1im*expm1(-1)
 @test_approx_eq_eps quadgk(cos, 0,BigFloat(1),order=40)[1] sin(BigFloat(1)) 1000*eps(BigFloat)
-@test_approx_eq quadgk(x -> exp(-x), 0,0.7,Inf)[1] 1.0
-@test_approx_eq quadgk(x -> exp(x), -Inf,0)[1] 1.0
-@test_approx_eq quadgk(x -> exp(-x^2), -Inf,Inf)[1] sqrt(pi)
-@test_approx_eq quadgk(x -> [exp(-x), exp(-2x)], 0, Inf)[1] [1,0.5]
-@test_approx_eq quadgk(cos, 0,0.7,1, norm=abs)[1] sin(1)
+@test quadgk(x -> exp(-x), 0,0.7,Inf)[1] ≈ 1.0
+@test quadgk(x -> exp(x), -Inf,0)[1] ≈ 1.0
+@test quadgk(x -> exp(-x^2), -Inf,Inf)[1] ≈ sqrt(pi)
+@test quadgk(x -> [exp(-x), exp(-2x)], 0, Inf)[1] ≈ [1,0.5]
+@test quadgk(cos, 0,0.7,1, norm=abs)[1] ≈ sin(1)
 
 # Ensure subnormal flags functions don't segfault
 @test any(set_zero_subnormals(true) .== [false,true])
@@ -663,7 +664,7 @@ end
 @test isa([trigamma(x) for x in [1.0]], Vector{Float64})
 @test isa([polygamma(3,x) for x in [1.0]], Vector{Float64})
 @test zeta(2 + 1im, -1.1) ≅ zeta(2 + 1im, -1.1+0im) ≅ -64.580137707692178058665068045847533319237536295165484548 + 73.992688148809018073371913557697318846844796582012921247im
-@test_approx_eq polygamma(3,5) polygamma(3,5.)
+@test polygamma(3,5) ≈ polygamma(3,5.)
 
 @test zeta(-3.0, 7.0) ≅ -52919/120
 @test zeta(-3.0, -7.0) ≅ 94081/120
@@ -713,26 +714,26 @@ c = 3
 @test 1e-13 > errc(zeta(2 + 99.69im, 1.3), 0.41617652544777996034143623540420694985469543821307918291931-0.74199610821536326325073784018327392143031681111201859489991im)
 
 for z in (1.234, 1.234 + 5.678im, [1.234, 5.678])
-    @test_approx_eq cis(z) exp(im*z)
+    @test cis(z) ≈ exp(im*z)
 end
 
 # modf
 for elty in (Float16, Float32, Float64)
-    @test_approx_eq modf( convert(elty,1.2) )[1] convert(elty,0.2)
-    @test_approx_eq modf( convert(elty,1.2) )[2] convert(elty,1.0)
-    @test_approx_eq modf( convert(elty,1.0) )[1] convert(elty,0.0)
-    @test_approx_eq modf( convert(elty,1.0) )[2] convert(elty,1.0)
+    @test modf(convert(elty,1.2))[1] ≈ convert(elty,0.2)
+    @test modf(convert(elty,1.2))[2] ≈ convert(elty,1.0)
+    @test modf(convert(elty,1.0))[1] ≈ convert(elty,0.0)
+    @test modf(convert(elty,1.0))[2] ≈ convert(elty,1.0)
 end
 
 # frexp
 for elty in (Float32, Float64)
-    @test frexp( convert(elty,0.5) ) == (convert(elty,0.5),0)
-    @test frexp( convert(elty,4.0) ) == (convert(elty,0.5),3)
-    @test_approx_eq frexp( convert(elty,10.5) )[1] convert(elty,0.65625)
-    @test frexp( convert(elty,10.5) )[2] == 4
-    @test_approx_eq frexp( [ convert(elty,4.0) convert(elty,10.5) ] )[1][1] convert(elty,0.5)
-    @test_approx_eq frexp( [ convert(elty,4.0) convert(elty,10.5) ] )[1][2] convert(elty,0.65625)
-    @test frexp( [ convert(elty,4.0) convert(elty,10.5) ] )[2] == [ 3 4 ]
+    @test frexp(convert(elty,0.5)) == (convert(elty,0.5),0)
+    @test frexp(convert(elty,4.0)) == (convert(elty,0.5),3)
+    @test frexp(convert(elty,10.5))[1] ≈ convert(elty,0.65625)
+    @test frexp(convert(elty,10.5) )[2] == 4
+    @test frexp([convert(elty,4.0) convert(elty,10.5)])[1][1] ≈ convert(elty,0.5)
+    @test frexp([convert(elty,4.0) convert(elty,10.5)])[1][2] ≈ convert(elty,0.65625)
+    @test frexp([convert(elty,4.0) convert(elty,10.5)])[2] == [3 4]
 end
 
 # log/log1p
