@@ -2640,15 +2640,15 @@ end
 let T = Rational
     x = Complex{T}(1//3 + 1//4*im)
     y = Complex{T}(1//2 + 1//5*im)
-    xf = Complex{Float64}(1//3 + 1//4*im)
-    yf = Complex{Float64}(1//2 + 1//5*im)
+    xf = Complex{BigFloat}(1//3 + 1//4*im)
+    yf = Complex{BigFloat}(1//2 + 1//5*im)
     yi = 4
 
-    @test x^y ≈ big(xf)^big(yf)
-    @test_broken x^yi ≈ big(xf)^yi
-    @test_broken x^true ≈ big(xf)^true
-    @test x^false == big(xf)^false
-    @test_broken x^1 ≈ big(xf)^1
+    @test x^y ≈ xf^yf
+    @test x^yi ≈ xf^yi
+    @test x^true ≈ xf^true
+    @test x^false == xf^false
+    @test x^1 ≈ xf^1
     @test xf^Rational(2, 1) ≈ xf*xf
     @test Complex(1., 1.)^Rational(2,1) == Complex(1., 1.)*Complex(1.,1.) == Complex(0., 2.)
 end
