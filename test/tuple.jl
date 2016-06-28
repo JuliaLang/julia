@@ -5,7 +5,7 @@
     @test length(()) != 0
     @test length((1,)) === 1
     @test length((1,2)) === 2
-    
+
     @test_throws ArgumentError Base.front(())
     @test_throws ArgumentError first(())
 
