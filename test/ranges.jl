@@ -1,6 +1,5 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
-# ranges
 @test size(10:1:0) == (0,)
 @test length(1:.2:2) == 6
 @test length(1.:.2:2.) == 6

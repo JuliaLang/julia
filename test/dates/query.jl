@@ -197,3 +197,4 @@ end
 @test Dates.dayofquarter(Dates.DateTime(2014,6,30)) == 91
 @test Dates.dayofquarter(Dates.DateTime(2014,9,30)) == 92
 @test Dates.dayofquarter(Dates.DateTime(2014,12,31)) == 92
+

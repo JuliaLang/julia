@@ -1,7 +1,5 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
-using Base.Test
-
 import Base.LinAlg.BlasInt
 
 @test_throws ArgumentError Base.LinAlg.LAPACK.chkside('Z')

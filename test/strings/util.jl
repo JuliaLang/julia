@@ -233,3 +233,4 @@ bin_val = hex2bytes("07bf")
 
 #non-hex characters
 @test_throws ArgumentError hex2bytes("0123456789abcdefABCDEFGH")
+

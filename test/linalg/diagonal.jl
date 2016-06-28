@@ -1,6 +1,5 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
-using Base.Test
 import Base.LinAlg: BlasFloat, BlasComplex, SingularException
 
 debug = false
@@ -283,3 +282,4 @@ end
 # Diagonal and Q
 Q = qrfact(randn(5,5))[:Q]
 @test D*Q' == Array(D)*Q'
+

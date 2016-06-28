@@ -1,6 +1,10 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
 using Base.Test
+# import Base: ViewIndex, dimsizeexpr, rangetype, merge_indexes, first_index, stride1expr, tailsize
+using Base.Cartesian
+
+print_underestimates = false
 
 ######## Utilities ###########
 

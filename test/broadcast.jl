@@ -1,7 +1,6 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
 module TestBroadcastInternals
-
 using Base.Broadcast: broadcast_indices, check_broadcast_indices,
                       check_broadcast_shape, newindex, _bcs, _bcsm
 using Base: Test, OneTo

@@ -351,3 +351,4 @@ end
 
 # issue #11675
 @test repr(Nullable()) == "Nullable{Union{}}()"
+

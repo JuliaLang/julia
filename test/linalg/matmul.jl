@@ -1,7 +1,5 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
-using Base.Test
-
 ## Test Julia fallbacks to BLAS routines
 
 # matrices with zero dimensions
@@ -389,3 +387,15 @@ let
         @test_throws DimensionMismatch A_mul_B!(full43, full43, tri44)
     end
 end
+
+# Ensure that matrix multiplication with a narrower output type than input type does not
+# produce allocation in the inner loop (#14722), by ensuring allocation does not change
+# with the size of the input.
+C1 = Array(Float32, 5, 5)
+A1 = rand(Float64, 5, 5)
+B1 = rand(Float64, 5, 5)
+C2 = Array(Float32, 6, 6)
+A2 = rand(Float64, 6, 6)
+B2 = rand(Float64, 6, 6)
+A_mul_B!(C1, A1, B1)
+@test @allocated(A_mul_B!(C1, A1, B1)) == @allocated(A_mul_B!(C2, A2, B2))

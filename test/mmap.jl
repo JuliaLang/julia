@@ -291,3 +291,4 @@ open(file, "r+") do s
     finalize(A); A = nothing; gc()
 end
 rm(file)
+

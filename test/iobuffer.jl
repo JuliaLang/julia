@@ -213,3 +213,4 @@ let bstream = BufferStream()
 end
 
 @test flush(IOBuffer()) === nothing # should be a no-op
+

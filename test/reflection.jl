@@ -56,7 +56,6 @@ end # module ReflectionTest
 # code_warntype
 module WarnType
 using Base.Test
-
 function warntype_hastag(f, types, tag)
     iob = IOBuffer()
     code_warntype(iob, f, types)

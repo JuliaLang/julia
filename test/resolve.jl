@@ -531,3 +531,4 @@ reqs_data = Any[
 ]
 want = resolve_tst(deps_data, reqs_data)
 @test want == Dict("A"=>v"1", "B"=>v"2", "C"=>v"2", "D"=>v"2", "E"=>v"2")
+

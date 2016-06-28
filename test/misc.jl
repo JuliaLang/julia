@@ -1,7 +1,5 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
-# Tests that do not really go anywhere else
-
 # Test info
 @test contains(sprint(io->info(io,"test")), "INFO:")
 @test contains(sprint(io->info(io,"test")), "INFO: test")

@@ -93,8 +93,8 @@ end
 @test isabspath("C:.") == false
 @test isabspath("α:/") == false
 @test isabspath(".:/") == false
-#@test isabspath("_:/") == false # FIXME?
-#@test isabspath("AB:/") == false # FIXME?
+@test isabspath("_:/") == false # FIXME?
+@test isabspath("AB:/") == false # FIXME?
 @test isabspath("\\\\") == is_windows()
 if is_unix()
     @test isabspath(expanduser("~")) == true
@@ -188,3 +188,4 @@ test_relpath()
 # Test type stability
 @test isa(joinpath("a", "b"), String)
 @test isa(joinpath(abspath("a"), "b"), String)
+

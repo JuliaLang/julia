@@ -86,4 +86,3 @@ if !zmq_found
 end
 
 include(joinpath(dir, "clustermanager/0mq/ZMQCM.jl"))
-

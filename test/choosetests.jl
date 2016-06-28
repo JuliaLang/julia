@@ -83,7 +83,10 @@ function choosetests(choices = [])
     net_required_for = ["socket", "parallel", "libgit2"]
     net_on = true
     try
-        getipaddr()
+        ipa = getipaddr()
+        if ipa == ip"127.0.0.1"
+            net_on = false
+        end
     catch
         warn("Networking unavailable: Skipping tests [" * join(net_required_for, ", ") * "]")
         net_on = false

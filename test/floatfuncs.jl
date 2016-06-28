@@ -1,9 +1,6 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
-using Base.Test
-
-# test the basic floating point functions
-
+@testset "floatfuncs" begin
 # flipsign
 
 for elty in (Float32,Float64)
@@ -67,4 +64,5 @@ for elty in (Float32,Float64)
         @test round(elty2,A,RoundDown) == fill(floor(elty2,x),(10,10,10))
         @test round(elty2,A) == fill(round(elty2,x),(10,10,10))
     end
+end
 end

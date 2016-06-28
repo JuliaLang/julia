@@ -238,3 +238,4 @@ nullstr = Cstring(C_NULL)
 @test C_NULL == nullstr
 @test cstring != C_NULL
 @test C_NULL != cstring
+

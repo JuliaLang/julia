@@ -121,15 +121,9 @@ body.args = ast.code
 @test popmeta!(body, :test) == (true, [42])
 @test popmeta!(body, :nonexistent) == (false, [])
 
-end
-
-
 # tests to fully cover functions in base/meta.jl
-module MetaJLtest
-
-using Base.Test
-using Base.Meta
-
+import Base.Meta.isexpr
+import Base.Meta.show_sexpr
 @test isexpr(:(1+1),Set([:call]))
 @test isexpr(:(1+1),Vector([:call]))
 @test isexpr(1,:call)==false

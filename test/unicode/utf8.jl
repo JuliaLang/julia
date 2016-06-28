@@ -41,3 +41,4 @@ end
 
 ## Specifically check UTF-8 string whose lead byte is same as a surrogate
 @test convert(String, b"\xed\x9f\xbf") == "\ud7ff"
+

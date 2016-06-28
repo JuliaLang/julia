@@ -1,7 +1,5 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
-# Tests for /base/stacktraces.jl
-
 let
     @noinline child() = stacktrace()
     @noinline parent() = child()

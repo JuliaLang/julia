@@ -1,7 +1,5 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
-using Base.Test
-
 srand(101)
 debug = false #Turn on for more debugging info
 
