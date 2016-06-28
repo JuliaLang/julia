@@ -3,15 +3,6 @@
 Main.Core.eval(Main.Core, :(baremodule Inference
 using Core.Intrinsics
 import Core: print, println, show, write, unsafe_write, STDOUT, STDERR
-if false # show that the IO system is already (relatively) operational
-    print("HELLO")
-    println(" WORLD")
-    show("αβγ :)"); println()
-    println(STDERR, "TEST")
-    println(STDERR, STDERR)
-    println(STDERR, 'a')
-    println(STDERR, 'α')
-end
 
 ccall(:jl_set_istopmod, Void, (Bool,), false)
 

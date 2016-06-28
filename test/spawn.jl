@@ -53,26 +53,22 @@ if valgrind_off
     @test_throws Base.UVError run(`foo_is_not_a_valid_command`)
 end
 
-if false
-    prefixer(prefix, sleep) = `perl -nle '$|=1; print "'$prefix' ", $_; sleep '$sleep';'`
-    @test success(pipeline(`perl -le '$|=1; for(0..2){ print; sleep 1 }'`,
+prefixer(prefix, sleep) = `perl -nle '$|=1; print "'$prefix' ", $_; sleep '$sleep';'`
+@test success(pipeline(`perl -le '$|=1; for(0..2){ print; sleep 1 }'`,
                        prefixer("A",2) & prefixer("B",2)))
-    @test success(pipeline(`perl -le '$|=1; for(0..2){ print; sleep 1 }'`,
+@test success(pipeline(`perl -le '$|=1; for(0..2){ print; sleep 1 }'`,
                        prefixer("X",3) & prefixer("Y",3) & prefixer("Z",3),
                        prefixer("A",2) & prefixer("B",2)))
-end
 
 @test  success(`true`)
 @test !success(`false`)
 @test success(pipeline(`true`, `true`))
-if false
-    @test  success(ignorestatus(`false`))
-    @test  success(pipeline(ignorestatus(`false`), `true`))
-    @test !success(pipeline(ignorestatus(`false`), `false`))
-    @test !success(ignorestatus(`false`) & `false`)
-    @test  success(ignorestatus(pipeline(`false`, `false`)))
-    @test  success(ignorestatus(`false` & `false`))
-end
+@test_broken  success(ignorestatus(`false`))
+@test_broken  success(pipeline(ignorestatus(`false`), `true`))
+@test !success(pipeline(ignorestatus(`false`), `false`))
+@test !success(ignorestatus(`false`) & `false`)
+@test_broken  success(ignorestatus(pipeline(`false`, `false`)))
+@test_broken  success(ignorestatus(`false` & `false`))
 
 # STDIN Redirection
 file = tempname()

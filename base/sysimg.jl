@@ -27,16 +27,6 @@ if false
     show(io::IO, x::ANY) = Core.show(io, x)
     print(io::IO, a::ANY...) = Core.print(io, a...)
     println(io::IO, x::ANY...) = Core.println(io, x...)
-    if false # show that the IO system now (relatively) operational
-        print("HELLO")
-        println(" WORLD")
-        show("αβγ :)"); println()
-        println(STDERR, "TEST")
-        println(STDERR, STDERR)
-        println(STDERR, 'a')
-        println(STDERR, 'α')
-        show(STDOUT, 'α')
-    end
 end
 
 ## Load essential files and libraries
