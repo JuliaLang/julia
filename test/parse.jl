@@ -1,5 +1,6 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
+@testset "parse" begin
 function parseall(str)
     pos = start(str)
     exs = []
@@ -537,3 +538,4 @@ end
 @test get(tryparse(Bool, "false")) === get(Nullable{Bool}(false))
 @test_throws ArgumentError parse(Int, "2", 1)
 @test_throws ArgumentError parse(Int, "2", 63)
+end

@@ -1,10 +1,9 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
-# Checked integer arithmetic
-
 import Base: checked_abs, checked_neg, checked_add, checked_sub, checked_mul,
              checked_div, checked_rem, checked_fld, checked_mod, checked_cld
 
+@testset "checked" begin
 # checked operations
 
 for T in (Int8, Int16, Int32, Int64, Int128)
@@ -253,3 +252,4 @@ end
 
 @test checked_mul(UInt128(3), UInt128(4)) === UInt128(12)
 @test_throws OverflowError checked_mul(UInt128(2)^127, UInt128(2))
+end

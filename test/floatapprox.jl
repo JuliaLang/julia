@@ -1,5 +1,6 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
+@testset "floatapprox" begin
 # Floating point numbers - basic tests
 @test 4.00000000000001 ≈ 4.0
 @test 5.0 ≈ 4.999999999999993
@@ -59,3 +60,5 @@
 @test [0,1] ≈ [1e-9, 1]
 @test [0,Inf] ≈ [0,Inf]
 @test [0,Inf] ≉ [0,-Inf]
+
+end

@@ -1,5 +1,6 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
+@testset "abstractarray" begin
 # Bounds checking
 A = rand(3,3,3)
 @test checkbounds(Bool, A, 1, 1, 1) == true
@@ -628,4 +629,6 @@ let
     @test size(m1) == (1,2)
     @test !issparse(m1)
     @test !issparse(m2)
+end
+
 end

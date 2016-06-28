@@ -1,5 +1,6 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
+@testset "grisu" begin
 using Base.Grisu
 
 function trimrep(buffer)
@@ -1751,3 +1752,5 @@ len,point,neg = Grisu.grisu(1.0, Grisu.FIXED, 0, buffer)
 @test 1 >= len-1
 @test "1" == unsafe_string(pointer(buffer))
 @test !neg
+
+end

@@ -1,5 +1,6 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
+@testset "random" begin
 # Issue #6573
 srand(0); rand(); x = rand(384);
 @test find(x .== rand()) == []
@@ -443,4 +444,5 @@ let seed = rand(UInt32, 10)
     @test r.seed == seed && r.seed !== seed
     resize!(seed, 4)
     @test r.seed != seed
+end
 end

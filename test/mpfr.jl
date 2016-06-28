@@ -1,5 +1,6 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
+@testset "mpfr" begin
 import Base.MPFR
 # constructors
 setprecision(53) do
@@ -873,3 +874,5 @@ let b = IOBuffer()
 end
 
 @test isnan(sqrt(BigFloat(NaN)))
+
+end

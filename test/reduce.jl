@@ -1,5 +1,6 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
+@testset "reduce" begin
 # fold(l|r) & mapfold(l|r)
 @test foldl(-, 1:5) == -13
 @test foldl(-, 10, 1:5) == -5
@@ -293,4 +294,5 @@ let A = collect(1:10)
     @test A ∋ 5
     @test A ∌ 11
     @test contains(==,A,6)
+end
 end

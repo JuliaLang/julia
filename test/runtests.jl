@@ -60,35 +60,26 @@ cd(dirname(@__FILE__)) do
             end
         end
     end
-    o_ts = Base.Test.DefaultTestSet("Overall") 
-    Base.Test.push_testset(o_ts)
-    for res in results
-        @show get(task_local_storage(), :__BASETESTNEXT__, Base.Test.AbstractTestSet[])
-        Base.Test.push_testset(res[2][1])
-        push!(o_ts.results, res[2][1])
-        Base.Test.pop_testset()
-        @show get(task_local_storage(), :__BASETESTNEXT__, Base.Test.AbstractTestSet[])
-    end
-    Base.Test.print_test_results(o_ts,1)
-    for res in results
-        println("Tests for $(res[1]) took $(res[2][2]) seconds, of which $(res[2][4]) were spent in gc ($(100*res[2][4]/res[2][2]) % ), and allocated $(res[2][3]) bytes.")
-    end
-    #=errors = filter(x->isa(x[2], Exception), results)
-    if length(errors) > 0
-        for err in errors
-            println("Exception running test $(err[1]) :")
-            showerror(STDERR, err[2])
-            println()
-        end
-        error("Some tests exited with errors.")
-    end=#
 
     # Free up memory =)
     n > 1 && rmprocs(workers(), waitfor=5.0)
 
     for t in node1_tests
         n > 1 && print("\tFrom worker 1:\t")
-        runtests(t)
+        test, resp = runtests(t)
+        push!(results, (test, resp))
+    end
+
+    o_ts = Base.Test.DefaultTestSet("Overall")
+    Base.Test.push_testset(o_ts)
+    for res in results
+        Base.Test.push_testset(res[2][1])
+        push!(o_ts.results, res[2][1])
+        Base.Test.pop_testset()
+    end
+    Base.Test.print_test_results(o_ts,1)
+    for res in results
+        println("Tests for $(res[1]) took $(res[2][2]) seconds, of which $(res[2][4]) were spent in gc ($(100*res[2][4]/res[2][2]) % ), and allocated $(res[2][3]) bytes.")
     end
 
     println("    \033[32;1mSUCCESS\033[0m")

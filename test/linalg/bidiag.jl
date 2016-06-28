@@ -1,6 +1,6 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
-using Base.Test
+@testset "bidiag" begin
 import Base.LinAlg: BlasReal, BlasFloat
 
 debug = false
@@ -281,4 +281,5 @@ let #fill!
             @test full(fill!(x, 0)) == fill!(full(x), 0)
         end
     end
+end
 end

@@ -1,5 +1,6 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
+@test "path" begin
 for S in (String, GenericString)
     dir = pwd()
     sep = Base.Filesystem.path_separator
@@ -188,3 +189,5 @@ test_relpath()
 # Test type stability
 @test isa(joinpath("a", "b"), String)
 @test isa(joinpath(abspath("a"), "b"), String)
+
+end

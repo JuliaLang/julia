@@ -1,6 +1,6 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
-# UTF16
+@testset "UTF16" begin
 u8 = "\U10ffff\U1d565\U1d7f6\U00066\U2008a"
 u16 = utf16(u8)
 @test sizeof(u16) == 18
@@ -20,4 +20,4 @@ u16 = utf16(u8)
 @test convert(UTF16String, Int16[[0x65, 0x66] [0x67, 0x68]]) == "efgh"
 @test map(lowercase, utf16("TEST\U1f596")) == "test\U1f596"
 @test typeof(Base.unsafe_convert(Ptr{UInt16}, utf16("test"))) == Ptr{UInt16}
-
+end

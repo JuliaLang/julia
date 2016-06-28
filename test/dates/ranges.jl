@@ -1,5 +1,6 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
+@testset "ranges" begin
 function test_all_combos()
     for T in (Dates.Date,Dates.DateTime)
         f1 = T(2014); l1 = T(2013,12,31)
@@ -498,4 +499,5 @@ lastdaysofmonth = [Dates.Date(2014,i,Dates.daysinmonth(2014,i)) for i=1:12]
 let d = Dates.Day(1)
     @test (Dates.Date(2000):d:Dates.Date(2001))+d == (Dates.Date(2000)+d:d:Dates.Date(2001)+d)
     @test (Dates.Date(2000):d:Dates.Date(2001))-d == (Dates.Date(2000)-d:d:Dates.Date(2001)-d)
+end
 end

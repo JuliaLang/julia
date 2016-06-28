@@ -1,5 +1,6 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
+@testset "dsp" begin
 # Filter
 b = [1., 2., 3., 4.]
 x = [1., 1., 0., 1., 1., 0., 0., 0.]
@@ -125,3 +126,4 @@ if Base.fftw_vendor() != :mkl
         @test psXdct![i] ≈ true_Xdct[i]
     end
 end # fftw_vendor() != :mkl
+end

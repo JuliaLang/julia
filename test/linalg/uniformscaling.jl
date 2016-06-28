@@ -1,7 +1,6 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
-using Base.Test
-
+@testset "uniformscaling" begin
 srand(123)
 
 # Uniform scaling
@@ -120,4 +119,5 @@ let AA = randn(2, 2)
             @test λ\I === UniformScaling(1/λ)
         end
     end
+end
 end

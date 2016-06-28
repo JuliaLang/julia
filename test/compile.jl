@@ -1,7 +1,6 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
-using Base.Test
-
+@testset "compile" begin
 function redirected_stderr()
     rd, wr = redirect_stderr()
     @async readstring(rd) # make sure the kernel isn't being forced to buffer the output
@@ -232,4 +231,5 @@ let module_name = string("a",randstring())
     @test typeof(eval(Symbol(module_name))) == Module
     deleteat!(LOAD_PATH,1)
     rm(file_name)
+end
 end

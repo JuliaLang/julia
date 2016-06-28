@@ -1,5 +1,6 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
+@testset "mmap" begin
 file = tempname()
 write(file, "Hello World\n")
 t = "Hello World".data
@@ -291,3 +292,5 @@ open(file, "r+") do s
     finalize(A); A = nothing; gc()
 end
 rm(file)
+
+end

@@ -1,5 +1,6 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
+@testset "basic" begin
 # constructors
 let d = [0x61,0x62,0x63,0x21]
     @test String(d) == "abc!"
@@ -477,3 +478,5 @@ foobaz(ch) = reinterpret(Char, typemax(UInt32))
 @test typeof(ascii(GenericString("Hello, world"))) == String
 @test_throws ArgumentError ascii("Hello, ∀")
 @test_throws ArgumentError ascii(GenericString("Hello, ∀"))
+
+end

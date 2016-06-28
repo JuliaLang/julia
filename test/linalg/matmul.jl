@@ -1,7 +1,6 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
-using Base.Test
-
+@testset "matmul" begin
 ## Test Julia fallbacks to BLAS routines
 
 # matrices with zero dimensions
@@ -400,3 +399,5 @@ A2 = rand(Float64, 6, 6)
 B2 = rand(Float64, 6, 6)
 A_mul_B!(C1, A1, B1)
 @test @allocated(A_mul_B!(C1, A1, B1)) == @allocated(A_mul_B!(C2, A2, B2))
+
+end

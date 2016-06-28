@@ -1,5 +1,6 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
+@testset "bigint" begin
 a = parse(BigInt,"123456789012345678901234567890")
 b = parse(BigInt,"123456789012345678901234567891")
 
@@ -311,3 +312,4 @@ ndigits(rand(big(-999:999)), big(2)^rand(2:999))
 
 @test big(5)^true == big(5)
 @test big(5)^false == one(BigInt)
+end

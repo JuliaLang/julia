@@ -1,7 +1,7 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
+@testset "bunchkaufman" begin
 debug = false
-using Base.Test
 
 using Base.LinAlg: BlasComplex, BlasFloat, BlasReal, QRPivoted
 
@@ -112,4 +112,5 @@ let
     v6 = rand(Complex128, 6)
     v5 = view(v6, 1:5)
     @test F\v5 == F\v6[1:5]
+end
 end

@@ -1,5 +1,6 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
+@testset "io" begin
 # Test string/show representation of Date
 @test string(Dates.Date(1,1,1)) == "0001-01-01" # January 1st, 1 AD/CE
 @test sprint(show, Dates.Date(1,1,1)) == "0001-01-01"
@@ -358,4 +359,5 @@ let
     # Ensure that the default behaviour has been restored
     @test DateTime(ds, format) == dt
     @test DateTime(ds, escaped_format) == dt
+end
 end

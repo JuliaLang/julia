@@ -1,5 +1,6 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
+@testset "pollfd" begin
 # This script does the following
 # Sets up n unix pipes
 # For the odd pipes, a byte is written to the write end at intervals specified in intvls
@@ -114,4 +115,5 @@ let a = []
     Timer(t->push!(a,1), 0.01, 0)
     sleep(0.2)
     @test a == [1]
+end
 end

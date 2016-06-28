@@ -1,5 +1,6 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
+@testset "arithmetic" begin
 # DateTime arithmetic
 a = Dates.DateTime(2013,1,1,0,0,0,1)
 b = Dates.DateTime(2013,1,1,0,0,0,0)
@@ -388,3 +389,5 @@ t4 = [DateTime(2009,1,1,0,0,1), DateTime(2009,1,2,0,1), DateTime(2009,1,3,1)]
 @test t4 - t3 == [Millisecond(1000), Millisecond(60000), Millisecond(3600000)]
 @test (Date(2009,1,1):Week(1):Date(2009,1,21)) - (Date(2009,1,1):Day(1):Date(2009,1,3)) == [0d, 6d, 12d]
 @test (DateTime(2009,1,1,1,1,1):Second(1):DateTime(2009,1,1,1,1,3)) - (DateTime(2009,1,1,1,1):Second(1):DateTime(2009,1,1,1,1,2)) == [1s, 1s, 1s]
+
+end

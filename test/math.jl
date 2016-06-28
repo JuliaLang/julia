@@ -175,7 +175,7 @@ end
             @test tan(atan(x)) ≈ x
             @test tanh(atanh(x)) ≈ x
         end
-        @testset "Relations between functions" begin 
+        @testset "Relations between functions" begin
             @test cosh(x) ≈ (exp(x)+exp(-x))/2
             @test cosh(x)^2-sinh(x)^2 ≈ 1
             @test hypot(x,y) ≈ sqrt(x^2+y^2)
@@ -358,8 +358,8 @@ end
 end
 
 @testset "bessel functions" begin
-    bessel_funcs = [(bessely0, bessely1, bessely), (besselj0, besselj1, besselj)] 
-    @testset "$z, $o" for (z, o, f) in bessel_funcs 
+    bessel_funcs = [(bessely0, bessely1, bessely), (besselj0, besselj1, besselj)]
+    @testset "$z, $o" for (z, o, f) in bessel_funcs
         @test z(Float32(2.0)) ≈ z(Float64(2.0))
         @test o(Float32(2.0)) ≈ o(Float64(2.0))
         @test z(2) ≈ z(2.0)
@@ -730,7 +730,7 @@ end
     @test zeta(3.2, 0) ≅ 1.166773370984467020452550350896512026772734054324169010977
     @test zeta(-3.2+0.1im, 0.0) ≅ zeta(-3.2+0.1im, 0.0+0im) ≅ 0.0070547946138977701155565365569392198424378109226519905493 + 0.00076891821792430587745535285452496914239014050562476729610im
     @test zeta(-3.2, 0.0) ≅ zeta(-3.2, 0.0+0im) ≅ 0.007011972077091051091698102914884052994997144629191121056378
-    
+
     @test 1e-14 > err(eta(1+1e-9), 0.693147180719814213126976796937244130533478392539154928250926)
     @test 1e-14 > err(eta(1+5e-3), 0.693945708117842473436705502427198307157819636785324430166786)
     @test 1e-13 > err(eta(1+7.1e-3), 0.694280602623782381522315484518617968911346216413679911124758)
@@ -836,7 +836,7 @@ end
     end
 end
 
-@testset "vectorization of 2-arg functions" begin 
+@testset "vectorization of 2-arg functions" begin
     binary_math_functions = [
         copysign, flipsign, log, atan2, hypot, max, min,
         airy, airyx, besselh, hankelh1, hankelh2, hankelh1x, hankelh2x,

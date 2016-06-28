@@ -1,7 +1,7 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
+@testset "eigen" begin
 debug = false
-using Base.Test
 
 using Base.LinAlg: BlasComplex, BlasFloat, BlasReal, QRPivoted
 
@@ -106,4 +106,5 @@ let aa = rand(200, 200)
         f = eigfact(a)
         @test a ≈ f[:vectors] * Diagonal(f[:values]) / f[:vectors]
     end
+end
 end

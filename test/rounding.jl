@@ -1,7 +1,7 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
+@testset "rounding" begin
 # Small sanity tests to ensure changing the rounding of float functions work
-using Base.Test
 
 ## Float64 checks
 # a + b returns a number exactly between prevfloat(1.) and 1., so its
@@ -137,3 +137,5 @@ end
 badness = 1//0
 @test_throws DivideError round(Int64,badness,RoundNearestTiesAway)
 @test_throws DivideError round(Int64,badness,RoundNearestTiesUp)
+
+end

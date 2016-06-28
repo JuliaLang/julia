@@ -1,5 +1,6 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
+@testset "iobuffer" begin
 ioslength(io::IOBuffer) = (io.seekable ? io.size : nb_available(io))
 
 let io = IOBuffer()
@@ -213,3 +214,5 @@ let bstream = BufferStream()
 end
 
 @test flush(IOBuffer()) === nothing # should be a no-op
+
+end

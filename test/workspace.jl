@@ -1,5 +1,6 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
+@testset "workspace" begin
 script = """
 # Issue #11948
 f(x) = x+1
@@ -15,3 +16,5 @@ show(io, Pair)
 """
 exename = Base.julia_cmd()
 run(`$exename --startup-file=no -e $script`)
+
+end

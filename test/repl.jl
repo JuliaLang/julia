@@ -1,6 +1,6 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
-# REPL tests
+@testset "repl" begin
 isdefined(:TestHelpers) || include(joinpath(dirname(@__FILE__), "TestHelpers.jl"))
 using TestHelpers
 import Base: REPL, LineEdit
@@ -487,3 +487,5 @@ if !is_windows() || Sys.windows_version() >= Sys.WINDOWS_VISTA_VER
     @test readstring(outs) == "1\n"
 end
 end # let exename
+
+end

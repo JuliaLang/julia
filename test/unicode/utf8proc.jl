@@ -1,5 +1,6 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
+@testset "UTF8proc" begin
 # normalize_string (Unicode normalization etc.):
 @test normalize_string("\u006e\u0303", :NFC) == "\u00f1"
 @test "\u006e\u0303" == normalize_string("\u00f1", :NFD)
@@ -298,4 +299,5 @@ let str = ascii("This is a test")
     show(io, g)
     check = "length-14 GraphemeIterator{String} for \"$str\""
     @test takebuf_string(io) == check
+end
 end

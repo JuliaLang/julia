@@ -1,5 +1,6 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
+@testset "combinatorics" begin
 @test binomial(5,-1) == 0
 @test binomial(5,10) == 0
 @test binomial(5,3) == 10
@@ -61,4 +62,5 @@ end
 if Int === Int32
     @test factorial(Int32(12)) === Int32(479001600)
     @test_throws OverflowError factorial(Int32(13))
+end
 end

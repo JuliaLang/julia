@@ -1,5 +1,6 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
+@testset "copy" begin
 mainres = ([4, 5, 3],
            [1, 5, 3])
 bitres = ([true, true, false],
@@ -107,4 +108,5 @@ let x = BigFloat[1:1000;], y, z, v
     @test y == x
     # Check that the setprecision indeed does something
     @test z != x
+end
 end

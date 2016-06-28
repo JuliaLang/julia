@@ -1,5 +1,6 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
+@testset "complex" begin
 @test reim(2 + 3im) == (2, 3)
 
 for T in (Int64, Float64)
@@ -913,4 +914,5 @@ end
 let x = 1+im
     @inferred sin(x)
     @inferred cos(x)
+end
 end

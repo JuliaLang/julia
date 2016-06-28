@@ -1,5 +1,6 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
+@testset "staged" begin
 @generated function staged_t1(a,b)
     if a == Int
         return :(a+b)
@@ -204,4 +205,5 @@ let
     bar() = return 1
     decorate(bar)
     @test in(typeof(bar), decorated)
+end
 end

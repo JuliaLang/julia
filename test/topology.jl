@@ -1,5 +1,6 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
+@testset "topology" begin
 include("testdefs.jl")
 addprocs(4; topology="master_slave")
 @test_throws RemoteException remotecall_fetch(()->remotecall_fetch(myid, 3), 2)
@@ -85,3 +86,4 @@ for p1 in workers()
 end
 
 remove_workers_and_test()
+end

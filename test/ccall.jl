@@ -2,6 +2,7 @@
 
 import Base.copy, Base.==
 
+@testset "ccall" begin
 const libccalltest = "libccalltest"
 
 const verbose = false
@@ -712,4 +713,6 @@ elseif Sys.ARCH === :aarch64
                                   VecElement(Float32(v1_22 - v2_22))))
         @test res === expected
     end
+end
+
 end

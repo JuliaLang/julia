@@ -1,6 +1,6 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
-using Base.Test
+@testset "threads" begin
 using Base.Threads
 
 # threading constructs
@@ -342,4 +342,5 @@ let async = Base.AsyncCondition(), t
     @test !isopen(async)
     @test_throws EOFError wait(t)
     @test_throws EOFError wait(async)
+end
 end

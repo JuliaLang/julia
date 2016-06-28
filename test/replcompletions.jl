@@ -1,5 +1,6 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
+@testset "replcompletions" begin
 using Base.REPLCompletions
 
 module CompletionFoo
@@ -661,3 +662,5 @@ c, r, res = test_complete(s)
 s = "CompletionFoo.tuple."
 c, r, res = test_complete(s)
 @test isempty(c)
+
+end

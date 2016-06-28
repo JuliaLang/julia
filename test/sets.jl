@@ -1,7 +1,6 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
-# Set tests
-
+@testset "sets" begin
 # Construction, collect
 @test is(typeof(Set([1,2,3])), Set{Int})
 @test is(typeof(Set{Int}([3])), Set{Int})
@@ -246,3 +245,5 @@ end
 @test pop!(Set(1:2), 2, nothing) == 2
 
 @test length(Set(['x',120])) == 2
+
+end

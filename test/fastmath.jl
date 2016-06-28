@@ -1,6 +1,6 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
-# fast math
+@testset "fastmath" begin
 
 # check expansions
 
@@ -201,4 +201,5 @@ let a = ones(2,2), b = ones(2,2)
     # test fallthrough for unsupported ops
     local c = 0
     @test Bool((@fastmath c |= 1))
+end
 end

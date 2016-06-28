@@ -2,6 +2,7 @@
 
 import Base.Docs: meta, @var, DocStr, parsedoc
 
+@testset "docs" begin
 # Test helpers.
 function docstrings_equal(d1, d2)
     io1 = IOBuffer()
@@ -880,4 +881,5 @@ for (line, expr) in Pair[
     "r\"...\""     => :(r"..."),
     ]
     @test Docs.helpmode(line) == :(Base.Docs.@repl($expr))
+end
 end
