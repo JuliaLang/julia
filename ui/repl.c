@@ -34,14 +34,10 @@
 extern "C" {
 #endif
 
-#if defined(JULIA_ENABLE_THREADING) && !defined(_OS_DARWIN_)
+#if defined(JULIA_ENABLE_THREADING) && !defined(_OS_DARWIN_) && !defined(_OS_WINDOWS_)
 static JL_CONST_FUNC jl_tls_states_t *jl_get_ptls_states_static(void)
 {
-#  if !defined(_COMPILER_MICROSOFT_)
     static __attribute__((tls_model("local-exec"))) __thread jl_tls_states_t tls_states;
-#  else
-    static __declspec(thread) jl_tls_states_t tls_states;
-#  endif
     return &tls_states;
 }
 #endif
@@ -660,7 +656,7 @@ int wmain(int argc, wchar_t *argv[], wchar_t *envp[])
         argv[i] = (wchar_t*)arg;
     }
 #endif
-#if defined(JULIA_ENABLE_THREADING) && !defined(_OS_DARWIN_)
+#if defined(JULIA_ENABLE_THREADING) && !defined(_OS_DARWIN_) && !defined(_OS_WINDOWS_)
     // We need to make sure this function is called before any reference to
     // TLS variables. Since the compiler is free to move calls to
     // `jl_get_ptls_states()` around, we should avoid referencing TLS

@@ -366,7 +366,7 @@ STATIC_INLINE int8_t jl_gc_state_set(jl_tls_states_t *ptls,
 }
 #else // ifndef JULIA_ENABLE_THREADING
 typedef jl_tls_states_t *(*jl_get_ptls_states_func)(void);
-#ifndef _OS_DARWIN_
+#if !defined(_OS_DARWIN_) && !defined(_OS_WINDOWS_)
 JL_DLLEXPORT void jl_set_ptls_states_getter(jl_get_ptls_states_func f);
 #endif
 // Make sure jl_gc_state() is always a rvalue
