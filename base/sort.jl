@@ -492,7 +492,7 @@ function sort(A::AbstractArray, dim::Integer;
     else
         Av = A[:]
         sort_chunks!(Av, size(A,1), alg, order)
-        reshape(Av, A)
+        reshape(Av, indices(A))
     end
 end
 

@@ -211,8 +211,8 @@ function flipdim{T}(A::Array{T}, d::Integer)
 end
 
 function rotl90(A::AbstractMatrix)
-    B = similar_transpose(A)
-    ind2 = indices(A,2)
+    ind1, ind2 = indices(A)
+    B = similar(A, (ind2,ind1))
     n = first(ind2)+last(ind2)
     for i=indices(A,1), j=ind2
         B[n-j,i] = A[i,j]
@@ -220,8 +220,8 @@ function rotl90(A::AbstractMatrix)
     return B
 end
 function rotr90(A::AbstractMatrix)
-    B = similar_transpose(A)
-    ind1 = indices(A,1)
+    ind1, ind2 = indices(A)
+    B = similar(A, (ind2,ind1))
     m = first(ind1)+last(ind1)
     for i=ind1, j=indices(A,2)
         B[j,m-i] = A[i,j]
@@ -245,10 +245,6 @@ function rotl90(A::AbstractMatrix, k::Integer)
 end
 rotr90(A::AbstractMatrix, k::Integer) = rotl90(A,-k)
 rot180(A::AbstractMatrix, k::Integer) = mod(k, 2) == 1 ? rot180(A) : copy(A)
-
-similar_transpose(A::AbstractMatrix) = similar_transpose(indicesbehavior(A), A)
-similar_transpose(::IndicesStartAt1, A::AbstractMatrix) = similar(A, (size(A,2), size(A,1)))
-similar_transpose(::IndicesBehavior, A::AbstractMatrix) = similar(A, (indices(A,2), indices(A,1)))
 
 ## Transpose ##
 transpose!(B::AbstractMatrix, A::AbstractMatrix) = transpose_f!(transpose, B, A)
@@ -315,11 +311,13 @@ function ccopy!(B, A)
 end
 
 function transpose(A::AbstractMatrix)
-    B = similar_transpose(A)
+    ind1, ind2 = indices(A)
+    B = similar(A, (ind2, ind1))
     transpose!(B, A)
 end
 function ctranspose(A::AbstractMatrix)
-    B = similar_transpose(A)
+    ind1, ind2 = indices(A)
+    B = similar(A, (ind2, ind1))
     ctranspose!(B, A)
 end
 ctranspose{T<:Real}(A::AbstractVecOrMat{T}) = transpose(A)
