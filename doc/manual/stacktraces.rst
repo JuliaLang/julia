@@ -32,9 +32,9 @@ alias :obj:`StackTrace` can be used in place of ``Vector{StackFrame}``. (Example
     julia> example()
     6-element Array{StackFrame,1}:
       in example() at none:1
-      in eval(::Module, ::Any) at boot.jl:231
+      in eval(::Module, ::Any) at boot.jl:234
       in eval_user_input(::Any, ::Bool) at client.jl:117
-      in eval(::Module, ::Any) at boot.jl:231
+      in eval(::Module, ::Any) at boot.jl:234
       in eval_user_input(::Any, ::Bool) at client.jl:117
       in _start() at client.jl:359
 
@@ -64,7 +64,7 @@ extra frames in the stack from ``REPL.jl``, usually looking something like this:
     julia> example()
     5-element Array{StackFrame,1}:
       in example() at REPL[1]:1
-      in eval(::Module, ::Any) at boot.jl:231
+      in eval(::Module, ::Any) at boot.jl:234
       in eval_user_input(::Any, ::Base.REPL.REPLBackend) at REPL.jl:62
       in macro expansion at REPL.jl:92 [inlined]
       in (::Base.REPL.##1#2{Base.REPL.REPLBackend})() at event.jl:46
@@ -77,7 +77,7 @@ Each :obj:`StackFrame` contains the function name, file name, line number, lambd
 .. doctest::
 
     julia> top_frame = stacktrace()[1]
-     in eval(::Module, ::Any) at boot.jl:231
+     in eval(::Module, ::Any) at boot.jl:234
 
     julia> top_frame.func
     :eval
@@ -86,7 +86,7 @@ Each :obj:`StackFrame` contains the function name, file name, line number, lambd
     Symbol("./boot.jl")
 
     julia> top_frame.line
-    231
+    234
 
     julia> top_frame.linfo
     Nullable{LambdaInfo}(LambdaInfo for eval(::Module, ::Any)
@@ -127,7 +127,7 @@ helpful in many places, the most obvious application is in error handling and de
     julia> example()
     6-element Array{StackFrame,1}:
       in example() at none:4
-      in eval(::Module, ::Any) at boot.jl:231
+      in eval(::Module, ::Any) at boot.jl:234
       ...
 
 You may notice that in the example above the first stack frame points points at line 4,
