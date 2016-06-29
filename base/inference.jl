@@ -72,11 +72,13 @@ type InferenceState
     fixedpoint::Bool
     typegotoredo::Bool
     inworkq::Bool
+    # optimization
     optimize::Bool
+    inlining::Bool
     needtree::Bool
     inferred::Bool
 
-    function InferenceState(linfo::LambdaInfo, optimize::Bool, needtree::Bool)
+    function InferenceState(linfo::LambdaInfo, optimize::Bool, inlining::Bool, needtree::Bool)
         @assert isa(linfo.code,Array{Any,1})
         nslots = length(linfo.slotnames)
         nl = label_counter(linfo.code)+1
@@ -161,7 +163,7 @@ type InferenceState
             ssavalue_uses, ssavalue_init,
             ObjectIdDict(), #Dict{InferenceState, Vector{LineNum}}(),
             Vector{Tuple{InferenceState, Vector{LineNum}}}(),
-            false, false, false, optimize, needtree, false)
+            false, false, false, optimize, inlining, needtree, false)
         push!(active, frame)
         nactive[] += 1
         return frame
@@ -1408,6 +1410,8 @@ function unshare_linfo!(li::LambdaInfo)
     return li
 end
 
+inlining_enabled() = (JLOptions().can_inline == 1)
+
 #### entry points for inferring a LambdaInfo given a type signature ####
 function typeinf_edge(method::Method, atypes::ANY, sparams::SimpleVector, needtree::Bool, optimize::Bool, cached::Bool, caller)
     local code = nothing
@@ -1510,7 +1514,7 @@ function typeinf_edge(method::Method, atypes::ANY, sparams::SimpleVector, needtr
     else
         # inference not started yet, make a new frame for a new lambda
         linfo.inInference = true
-        frame = InferenceState(unshare_linfo!(linfo::LambdaInfo), optimize, needtree)
+        frame = InferenceState(unshare_linfo!(linfo::LambdaInfo), optimize, inlining_enabled(), needtree)
     end
     frame = frame::InferenceState
 
@@ -1571,7 +1575,7 @@ function typeinf_ext(linfo::LambdaInfo)
     else
         # toplevel lambda - infer directly
         linfo.inInference = true
-        frame = InferenceState(linfo, true, true)
+        frame = InferenceState(linfo, true, inlining_enabled(), true)
         typeinf_loop(frame)
         @assert frame.inferred # TODO: deal with this better
         return linfo
@@ -1921,10 +1925,8 @@ function finish(me::InferenceState)
         # if we start to create `SSAValue` in type inference when not
         # optimizing and use unoptimized IR in codegen.
         gotoifnot_elim_pass!(me.linfo, me)
-        if JLOptions().can_inline == 1
-            inlining_pass!(me.linfo, me)
-            inbounds_meta_elim_pass!(me.linfo.code)
-        end
+        inlining_pass!(me.linfo, me)
+        inbounds_meta_elim_pass!(me.linfo.code)
         alloc_elim_pass!(me.linfo, me)
         getfield_elim_pass!(me.linfo, me)
         reindex_labels!(me.linfo, me)
@@ -2322,28 +2324,30 @@ function inlineable(f::ANY, ft::ANY, e::Expr, atypes::Vector{Any}, sv::Inference
         end
     end
     topmod = _topmod(sv)
-    if istopfunction(topmod, f, :isbits) && length(atypes)==2 && isType(atypes[2]) &&
-        effect_free(argexprs[2],sv,true) && isleaftype(atypes[2].parameters[1])
-        return (isbits(atypes[2].parameters[1]),())
-    end
     # special-case inliners for known pure functions that compute types
-    if isType(e.typ) && !has_typevars(e.typ.parameters[1],true)
-        if (is(f, apply_type) || is(f, fieldtype) || is(f, typeof) ||
-            istopfunction(topmod, f, :typejoin) ||
-            istopfunction(topmod, f, :promote_type))
-            # XXX: compute effect_free for the actual arguments
-            if length(argexprs) < 2 || effect_free(argexprs[2], sv, true)
-                return (e.typ.parameters[1],())
-            else
-                return (e.typ.parameters[1], Any[argexprs[2]])
+    if sv.inlining
+        if isType(e.typ) && !has_typevars(e.typ.parameters[1],true)
+            if (is(f, apply_type) || is(f, fieldtype) || is(f, typeof) ||
+                istopfunction(topmod, f, :typejoin) ||
+                istopfunction(topmod, f, :promote_type))
+                # XXX: compute effect_free for the actual arguments
+                if length(argexprs) < 2 || effect_free(argexprs[2], sv, true)
+                    return (e.typ.parameters[1],())
+                else
+                    return (e.typ.parameters[1], Any[argexprs[2]])
+                end
             end
         end
-    end
-    if is(f, Core.kwfunc) && length(argexprs) == 2 && isa(e.typ, Const)
-        if effect_free(argexprs[2], sv, true)
-            return (e.typ.val, ())
-        else
-            return (e.typ.val, Any[argexprs[2]])
+        if istopfunction(topmod, f, :isbits) && length(atypes)==2 && isType(atypes[2]) &&
+            effect_free(argexprs[2],sv,true) && isleaftype(atypes[2].parameters[1])
+            return (isbits(atypes[2].parameters[1]),())
+        end
+        if is(f, Core.kwfunc) && length(argexprs) == 2 && isa(e.typ, Const)
+            if effect_free(argexprs[2], sv, true)
+                return (e.typ.val, ())
+            else
+                return (e.typ.val, Any[argexprs[2]])
+            end
         end
     end
     if isa(f, IntrinsicFunction) || ft ⊑ IntrinsicFunction ||
@@ -2352,11 +2356,6 @@ function inlineable(f::ANY, ft::ANY, e::Expr, atypes::Vector{Any}, sv::Inference
     end
 
     atype_unlimited = argtypes_to_type(atypes)
-    if length(atype_unlimited.parameters) - 1 > MAX_TUPLETYPE_LEN
-        atype = limit_tuple_type(atype_unlimited)
-    else
-        atype = atype_unlimited
-    end
     function invoke_NF()
         # converts a :call to :invoke
         cache_linfo = ccall(:jl_get_spec_lambda, Any, (Any,), atype_unlimited)
@@ -2365,6 +2364,15 @@ function inlineable(f::ANY, ft::ANY, e::Expr, atypes::Vector{Any}, sv::Inference
             unshift!(e.args, cache_linfo)
         end
         return NF
+    end
+    if !sv.inlining
+        return invoke_NF()
+    end
+
+    if length(atype_unlimited.parameters) - 1 > MAX_TUPLETYPE_LEN
+        atype = limit_tuple_type(atype_unlimited)
+    else
+        atype = atype_unlimited
     end
     meth = _methods_by_ftype(atype, 1)
     if meth === false || length(meth) != 1
@@ -2943,7 +2951,7 @@ function inlining_pass(e::Expr, sv, linfo)
         end
     end
 
-    if isdefined(Main, :Base) &&
+    if sv.inlining && isdefined(Main, :Base) &&
         ((isdefined(Main.Base, :^) && is(f, Main.Base.:^)) ||
          (isdefined(Main.Base, :.^) && is(f, Main.Base.:.^)))
         if length(e.args) == 3 && isa(e.args[3],Union{Int32,Int64})
