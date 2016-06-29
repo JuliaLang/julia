@@ -56,7 +56,6 @@ notifications:
           - http://julia.mit.edu:8000/travis-hook
 before_install:
     - make check-whitespace
-    - JULIA_SYSIMG_BUILD_FLAGS="--output-ji ../usr/lib/julia/sys.ji"
     - if [ `uname` = "Linux" ]; then
         contrib/travis_fastfail.sh || exit 1;
         mkdir -p $HOME/bin;
@@ -93,7 +92,7 @@ script:
     - make -C moreutils mispipe
     - make $BUILDOPTS -C base version_git.jl.phony
     - moreutils/mispipe "make $BUILDOPTS NO_GIT=1 -C deps" bar > deps.log || cat deps.log
-    - make $BUILDOPTS NO_GIT=1 JULIA_SYSIMG_BUILD_FLAGS="$JULIA_SYSIMG_BUILD_FLAGS" prefix=/tmp/julia install | moreutils/ts -s "%.s"
+    - make $BUILDOPTS NO_GIT=1 prefix=/tmp/julia install | moreutils/ts -s "%.s"
     - make $BUILDOPTS NO_GIT=1 build-stats
     - du -sk /tmp/julia/*
     - if [ `uname` = "Darwin" ]; then
@@ -102,8 +101,8 @@ script:
         done;
       fi
     - cd .. && mv julia julia2
-    - cp /tmp/julia/lib/julia/sys.ji local.ji && /tmp/julia/bin/julia -J local.ji -e 'true' &&
-        /tmp/julia/bin/julia-debug -J local.ji -e 'true' && rm local.ji
+    - /tmp/julia/bin/julia --precompiled=no -e 'true' &&
+      /tmp/julia/bin/julia-debug --precompiled=no -e 'true'
     - /tmp/julia/bin/julia -e 'versioninfo()'
     - export JULIA_CPU_CORES=2 && export JULIA_TEST_MAXRSS_MB=600 && cd /tmp/julia/share/julia/test &&
         /tmp/julia/bin/julia --check-bounds=yes runtests.jl $TESTSTORUN &&
