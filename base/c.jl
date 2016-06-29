@@ -46,17 +46,6 @@ if !is_windows()
     end
 end
 
-# C NUL-terminated string pointers; these can be used in ccall
-# instead of Ptr{Cchar} and Ptr{Cwchar_t}, respectively, to enforce
-# a check for embedded NUL chars in the string (to avoid silent truncation).
-if Int === Int64
-    bitstype 64 Cstring
-    bitstype 64 Cwstring
-else
-    bitstype 32 Cstring
-    bitstype 32 Cwstring
-end
-
 # construction from typed pointers
 convert{T<:Union{Int8,UInt8}}(::Type{Cstring}, p::Ptr{T}) = box(Cstring, p)
 convert(::Type{Cwstring}, p::Ptr{Cwchar_t}) = box(Cwstring, p)
@@ -80,7 +69,11 @@ unsafe_wrap(::Type{String}, p::Cstring, len::Integer, own::Bool=false) =
 unsafe_string(s::Cstring) = unsafe_string(convert(Ptr{UInt8}, s))
 
 # convert strings to String etc. to pass as pointers
-cconvert(::Type{Cstring}, s::AbstractString) = String(s)
+cconvert(::Type{Cstring}, s::String) =
+    ccall(:jl_array_cconvert_cstring, Ref{Vector{UInt8}},
+          (Vector{UInt8},), s.data)
+cconvert(::Type{Cstring}, s::AbstractString) =
+    cconvert(Cstring, String(s)::String)
 
 function cconvert(::Type{Cwstring}, s::AbstractString)
     v = transcode(Cwchar_t, String(s).data)
@@ -88,12 +81,15 @@ function cconvert(::Type{Cwstring}, s::AbstractString)
     return v
 end
 
+eltype(::Type{Cstring}) = UInt8
+eltype(::Type{Cwstring}) = Cwchar_t
+
 containsnul(p::Ptr, len) =
     C_NULL != ccall(:memchr, Ptr{Cchar}, (Ptr{Cchar}, Cint, Csize_t), p, 0, len)
 containsnul(s::String) = containsnul(unsafe_convert(Ptr{Cchar}, s), sizeof(s))
 containsnul(s::AbstractString) = '\0' in s
 
-function unsafe_convert(::Type{Cstring}, s::String)
+function unsafe_convert(::Type{Cstring}, s::Vector{UInt8})
     p = unsafe_convert(Ptr{Cchar}, s)
     containsnul(p, sizeof(s)) &&
         throw(ArgumentError("embedded NULs are not allowed in C strings: $(repr(s))"))

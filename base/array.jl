@@ -36,6 +36,8 @@ end
 ## copy ##
 
 function unsafe_copy!{T}(dest::Ptr{T}, src::Ptr{T}, n)
+    # Do not use this to copy data between pointer arrays.
+    # It can't be made safe no matter how carefully you checked.
     ccall(:memmove, Ptr{Void}, (Ptr{Void}, Ptr{Void}, UInt),
           dest, src, n*sizeof(T))
     return dest
@@ -45,9 +47,8 @@ function unsafe_copy!{T}(dest::Array{T}, doffs, src::Array{T}, soffs, n)
     if isbits(T)
         unsafe_copy!(pointer(dest, doffs), pointer(src, soffs), n)
     else
-        for i=0:n-1
-            @inbounds arrayset(dest, src[i+soffs], i+doffs)
-        end
+        ccall(:jl_array_ptr_copy, Void, (Any, Ptr{Void}, Any, Ptr{Void}, Int),
+              dest, pointer(dest, doffs), src, pointer(src, soffs), n)
     end
     return dest
 end
@@ -63,11 +64,7 @@ end
 
 copy!{T}(dest::Array{T}, src::Array{T}) = copy!(dest, 1, src, 1, length(src))
 
-function copy(a::Array)
-    b = similar(a)
-    ccall(:memcpy, Ptr{Void}, (Ptr{Void}, Ptr{Void}, UInt), b, a, sizeof(a))
-    return b
-end
+copy{T<:Array}(a::T) = ccall(:jl_array_copy, Ref{T}, (Any,), a)
 
 function reinterpret{T,S}(::Type{T}, a::Array{S,1})
     nel = Int(div(length(a)*sizeof(S),sizeof(T)))
@@ -389,66 +386,13 @@ setindex!{T, N}(A::Array{T, N}, x::Number, ::Vararg{Colon, N}) = fill!(A, x)
 
 # efficiently grow an array
 
-function _growat!(a::Vector, i::Integer, delta::Integer)
-    n = length(a)
-    if i < div(n,2)
-        _growat_beg!(a, i, delta)
-    else
-        _growat_end!(a, i, delta)
-    end
-    return a
-end
-
-function _growat_beg!(a::Vector, i::Integer, delta::Integer)
-    ccall(:jl_array_grow_beg, Void, (Any, UInt), a, delta)
-    if i > 1
-        ccall(:memmove, Ptr{Void}, (Ptr{Void}, Ptr{Void}, Csize_t),
-              pointer(a, 1), pointer(a, 1+delta), (i-1)*elsize(a))
-    end
-    return a
-end
-
-function _growat_end!(a::Vector, i::Integer, delta::Integer)
-    ccall(:jl_array_grow_end, Void, (Any, UInt), a, delta)
-    n = length(a)
-    if n >= i+delta
-        ccall(:memmove, Ptr{Void}, (Ptr{Void}, Ptr{Void}, Csize_t),
-              pointer(a, i+delta), pointer(a, i), (n-i-delta+1)*elsize(a))
-    end
-    return a
-end
+_growat!(a::Vector, i::Integer, delta::Integer) =
+    ccall(:jl_array_grow_at, Void, (Any, Int, UInt), a, i - 1, delta)
 
 # efficiently delete part of an array
 
-function _deleteat!(a::Vector, i::Integer, delta::Integer)
-    n = length(a)
-    last = i+delta-1
-    if i-1 < n-last
-        _deleteat_beg!(a, i, delta)
-    else
-        _deleteat_end!(a, i, delta)
-    end
-    return a
-end
-
-function _deleteat_beg!(a::Vector, i::Integer, delta::Integer)
-    if i > 1
-        ccall(:memmove, Ptr{Void}, (Ptr{Void}, Ptr{Void}, Csize_t),
-              pointer(a, 1+delta), pointer(a, 1), (i-1)*elsize(a))
-    end
-    ccall(:jl_array_del_beg, Void, (Any, UInt), a, delta)
-    return a
-end
-
-function _deleteat_end!(a::Vector, i::Integer, delta::Integer)
-    n = length(a)
-    if n >= i+delta
-        ccall(:memmove, Ptr{Void}, (Ptr{Void}, Ptr{Void}, Csize_t),
-              pointer(a, i), pointer(a, i+delta), (n-i-delta+1)*elsize(a))
-    end
-    ccall(:jl_array_del_end, Void, (Any, UInt), a, delta)
-    return a
-end
+_deleteat!(a::Vector, i::Integer, delta::Integer) =
+    ccall(:jl_array_del_at, Void, (Any, Int, UInt), a, i - 1, delta)
 
 ## Dequeue functionality ##
 
@@ -528,34 +472,20 @@ function shift!(a::Vector)
 end
 
 function insert!{T}(a::Array{T,1}, i::Integer, item)
-    if !(1 <= i <= length(a)+1)
-        throw(BoundsError())
-    end
-    if i == length(a)+1
-        return push!(a, item)
-    end
-    item = convert(T, item)
+    # Throw convert error before changing the shape of the array
+    _item = convert(T, item)
     _growat!(a, i, 1)
-    a[i] = item
+    # _growat! already did bound check
+    @inbounds a[i] = _item
     return a
 end
 
-function deleteat!(a::Vector, i::Integer)
-    if !(1 <= i <= length(a))
-        throw(BoundsError())
-    end
-    return _deleteat!(a, i, 1)
-end
+deleteat!(a::Vector, i::Integer) = (_deleteat!(a, i, 1); a)
 
 function deleteat!{T<:Integer}(a::Vector, r::UnitRange{T})
     n = length(a)
-    isempty(r) && return a
-    f = first(r)
-    l = last(r)
-    if !(1 <= f && l <= n)
-        throw(BoundsError())
-    end
-    return _deleteat!(a, f, length(r))
+    isempty(r) || _deleteat!(a, first(r), length(r))
+    return a
 end
 
 function deleteat!(a::Vector, inds)
@@ -622,18 +552,9 @@ function splice!{T<:Integer}(a::Vector, r::UnitRange{T}, ins=_default_splice)
 
     if m < d
         delta = d - m
-        if f-1 < n-l
-            _deleteat_beg!(a, f, delta)
-        else
-            _deleteat_end!(a, l-delta+1, delta)
-        end
+        _deleteat!(a, (f - 1 < n - l) ? f : (l - delta + 1), delta)
     elseif m > d
-        delta = m - d
-        if f-1 < n-l
-            _growat_beg!(a, f, delta)
-        else
-            _growat_end!(a, l+1, delta)
-        end
+        _growat!(a, (f - 1 < n - l) ? f : (l + 1), m - d)
     end
 
     k = 1
@@ -693,17 +614,22 @@ function vcat{T}(arrays::Vector{T}...)
     end
     arr = Array{T}(n)
     ptr = pointer(arr)
-    offset = 0
     if isbits(T)
-        elsz = sizeof(T)
+        elsz = Core.sizeof(T)
     else
         elsz = Core.sizeof(Ptr{Void})
     end
     for a in arrays
-        nba = length(a)*elsz
-        ccall(:memcpy, Ptr{Void}, (Ptr{Void}, Ptr{Void}, UInt),
-              ptr+offset, a, nba)
-        offset += nba
+        na = length(a)
+        nba = na * elsz
+        if isbits(T)
+            ccall(:memcpy, Ptr{Void}, (Ptr{Void}, Ptr{Void}, UInt),
+                  ptr, a, nba)
+        else
+            ccall(:jl_array_ptr_copy, Void, (Any, Ptr{Void}, Any, Ptr{Void}, Int),
+                  arr, ptr, a, pointer(a), na)
+        end
+        ptr += nba
     end
     return arr
 end

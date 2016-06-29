@@ -171,7 +171,7 @@ function _require_from_serialized(node::Int, mod::Symbol, path_to_try::String, t
         end
     elseif node == myid()
         myid() == 1 && recompile_stale(mod, path_to_try)
-        restored = ccall(:jl_restore_incremental, Any, (Ptr{UInt8},), path_to_try)
+        restored = ccall(:jl_restore_incremental, Any, (Cstring,), path_to_try)
     else
         content = remotecall_fetch(open, node, read, path_to_try)
         restored = _include_from_serialized(content)
@@ -378,8 +378,8 @@ end
 # remote/parallel load
 
 include_string(txt::String, fname::String) =
-    ccall(:jl_load_file_string, Any, (Ptr{UInt8},Csize_t,Ptr{UInt8},Csize_t),
-          txt, sizeof(txt), fname, sizeof(fname))
+    ccall(:jl_load_file_string, Any, (Ptr{UInt8},Csize_t,Cstring),
+          txt, sizeof(txt), fname)
 
 include_string(txt::AbstractString, fname::AbstractString="string") =
     include_string(String(txt), String(fname))

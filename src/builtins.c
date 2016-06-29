@@ -801,12 +801,19 @@ JL_DLLEXPORT jl_nullable_float64_t jl_try_substrtod(char *str, size_t offset, si
     char *p;
     char *bstr = str+offset;
     char *pend = bstr+len;
+    char *tofree = NULL;
     int err = 0;
 
     errno = 0;
     if (!(*pend == '\0' || isspace((unsigned char)*pend) || *pend == ',')) {
         // confusing data outside substring. must copy.
-        char *newstr = (char*)malloc(len+1);
+        char *newstr;
+        if (len + 1 < jl_page_size) {
+            newstr = (char*)alloca(len + 1);
+        }
+        else {
+            newstr = tofree = (char*)malloc(len + 1);
+        }
         memcpy(newstr, bstr, len);
         newstr[len] = 0;
         bstr = newstr;
@@ -826,8 +833,8 @@ JL_DLLEXPORT jl_nullable_float64_t jl_try_substrtod(char *str, size_t offset, si
         err = substr_isspace(p, pend) ? 0 : 1;
     }
 
-    if (bstr != str+offset)
-        free(bstr);
+    if (__unlikely(tofree))
+        free(tofree);
 
     jl_nullable_float64_t ret = {(uint8_t)err, out};
     return ret;
@@ -853,12 +860,19 @@ JL_DLLEXPORT jl_nullable_float32_t jl_try_substrtof(char *str, size_t offset, si
     char *p;
     char *bstr = str+offset;
     char *pend = bstr+len;
+    char *tofree = NULL;
     int err = 0;
 
     errno = 0;
     if (!(*pend == '\0' || isspace((unsigned char)*pend) || *pend == ',')) {
         // confusing data outside substring. must copy.
-        char *newstr = (char*)malloc(len+1);
+        char *newstr;
+        if (len + 1 < jl_page_size) {
+            newstr = (char*)alloca(len + 1);
+        }
+        else {
+            newstr = tofree = (char*)malloc(len + 1);
+        }
         memcpy(newstr, bstr, len);
         newstr[len] = 0;
         bstr = newstr;
@@ -882,8 +896,8 @@ JL_DLLEXPORT jl_nullable_float32_t jl_try_substrtof(char *str, size_t offset, si
         err = substr_isspace(p, pend) ? 0 : 1;
     }
 
-    if (bstr != str+offset)
-        free(bstr);
+    if (__unlikely(tofree))
+        free(tofree);
 
     jl_nullable_float32_t ret = {(uint8_t)err, out};
     return ret;
