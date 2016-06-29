@@ -279,32 +279,19 @@ end
 # Since bounds-checking is performance-critical and uses
 # indices, it's worth optimizing these implementations thoroughly
 indices(S::SubArray, d::Integer) = 1 <= d <= ndims(S) ? indices(S)[d] : (d > ndims(S) ? OneTo(1) : error("dimension $d out of range"))
-indices(S::SubArray) = (@_inline_meta; _indices(indicesbehavior(parent(S)), S))
-_indices(::IndicesStartAt1, S::SubArray) = (@_inline_meta; map(s->OneTo(s), size(S)))
-_indices(::IndicesBehavior, S::SubArray) = (@_inline_meta; _indices((), 1, S, S.indexes...))
+indices(S::SubArray) = (@_inline_meta; _indices((), 1, S, S.indexes...))
 _indices(out::Tuple, dim, S::SubArray) = out
 _indices(out::Tuple, dim, S::SubArray, i1, I...) = (@_inline_meta; _indices((out..., OneTo(length(i1))), dim+1, S, I...))
 _indices(out::Tuple, dim, S::SubArray, ::Real, I...) = (@_inline_meta; _indices(out, dim+1, S, I...))
 _indices(out::Tuple, dim, S::SubArray, ::Colon, I...) = (@_inline_meta; _indices((out..., indices(parent(S), dim)), dim+1, S, I...))
 indices1{T}(S::SubArray{T,0}) = OneTo(1)
-indices1(S::SubArray) = (@_inline_meta; _indices1(indicesbehavior(parent(S)), S))
-_indices1(::IndicesStartAt1, S::SubArray) = OneTo(S.dims[1])
-_indices1(::IndicesBehavior, S::SubArray) = (@_inline_meta; _indices1(S, 1, S.indexes...))
+indices1(S::SubArray) = (@_inline_meta; _indices1(S, 1, S.indexes...))
 _indices1(S::SubArray, dim, i1, I...) = (@_inline_meta; OneTo(length(i1)))
 _indices1(S::SubArray, dim, i1::Real, I...) = (@_inline_meta; _indices1(S, dim+1, I...))
 _indices1(S::SubArray, dim, i1::Colon, I...) = (@_inline_meta; indices(parent(S), dim))
 
 # Moreover, incides(S) is fast but indices(S, d) is slower
 indicesperformance{T<:SubArray}(::Type{T}) = IndicesSlow1D()
-
-indicesbehavior(S::SubArray) = _indicesbehavior(indicesbehavior(parent(S)), S)
-_indicesbehavior(::IndicesStartAt1, S::SubArray) = IndicesStartAt1()
-_indicesbehavior(::IndicesBehavior, S::SubArray) = (@_inline_meta; _indicesbehavior(keepcolon((), S.indexes...), S))
-keepcolon(out) = out
-keepcolon(out, ::Colon, I...) = (@_inline_meta; (Colon(),))
-keepcolon(out, i1, I...) = (@_inline_meta; keepcolon(out, I...))
-_indicesbehavior(::Tuple{}, S::SubArray) = IndicesStartAt1()
-_indicesbehavior(::Tuple{Colon}, S::SubArray) = indicesbehavior(parent(S))
 
 ## Compatability
 # deprecate?

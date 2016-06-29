@@ -36,24 +36,20 @@ start(R::ReshapedArrayIterator) = start(R.iter)
 end
 length(R::ReshapedArrayIterator) = length(R.iter)
 
-reshape(parent::AbstractArray, ref::AbstractArray) = reshape(indicesbehavior(ref), parent, ref)
-reshape(::IndicesStartAt1, parent::AbstractArray, ref::AbstractArray) = reshape(parent, size(ref))
-reshape(::IndicesBehavior, parent::AbstractArray, ref::AbstractArray) = reshape(parent, indices(ref))
-
-reshape(parent::AbstractArray, dims::Dims) = _reshape(parent, dims)
-reshape(parent::AbstractArray, len::Integer) = reshape(parent, (Int(len),))
-reshape(parent::AbstractArray, dims::Int...) = reshape(parent, dims)
+reshape(parent::AbstractArray, shp::Tuple)        = _reshape(parent, to_shape(shp))
+reshape(parent::AbstractArray, dims::DimOrInd...) = reshape(parent, dims)
 
 reshape{T,N}(parent::AbstractArray{T,N}, ndims::Type{Val{N}}) = parent
 function reshape{T,AN,N}(parent::AbstractArray{T,AN}, ndims::Type{Val{N}})
-    reshape(parent, rdims((), size(parent), Val{N}))
+    reshape(parent, rdims((), indices(parent), Val{N}))
 end
-# Move elements from sz to out until out reaches the desired dimensionality N,
-# either filling with 1 or collapsing the product of trailing dims into the last element
-@pure rdims{N}(out::NTuple{N}, sz::Tuple{}, ::Type{Val{N}}) = out
-@pure rdims{N}(out::NTuple{N}, sz::Tuple{Any, Vararg{Any}}, ::Type{Val{N}}) = (front(out)..., last(out) * prod(sz))
-@pure rdims{N}(out::Tuple, sz::Tuple{}, ::Type{Val{N}}) = rdims((out..., 1), (), Val{N})
-@pure rdims{N}(out::Tuple, sz::Tuple{Any, Vararg{Any}}, ::Type{Val{N}}) = rdims((out..., first(sz)), tail(sz), Val{N})
+# Move elements from inds to out until out reaches the desired
+# dimensionality N, either filling with OneTo(1) or collapsing the
+# product of trailing dims into the last element
+@pure rdims{N}(out::NTuple{N}, inds::Tuple{}, ::Type{Val{N}}) = out
+@pure rdims{N}(out::NTuple{N}, inds::Tuple{Any, Vararg{Any}}, ::Type{Val{N}}) = (front(out)..., length(last(out)) * prod(map(length, inds)))
+@pure rdims{N}(out::Tuple, inds::Tuple{}, ::Type{Val{N}}) = rdims((out..., OneTo(1)), (), Val{N})
+@pure rdims{N}(out::Tuple, inds::Tuple{Any, Vararg{Any}}, ::Type{Val{N}}) = rdims((out..., first(inds)), tail(inds), Val{N})
 
 function _reshape(parent::AbstractArray, dims::Dims)
     prod(dims) == length(parent) || throw(DimensionMismatch("parent has $(length(parent)) elements, which is incompatible with size $dims"))

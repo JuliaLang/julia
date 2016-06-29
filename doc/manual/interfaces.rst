@@ -166,9 +166,8 @@ Methods to implement                                                            
 :func:`similar(A, dims::NTuple{Int}) <similar>`                       ``similar(A, eltype(A), dims)``              Return a mutable array with the same element type and size `dims`
 :func:`similar(A, ::Type{S}, dims::NTuple{Int}) <similar>`            ``Array{S}(dims)``                           Return a mutable array with the specified element type and size
 **Non-traditional indices**                                           **Default definition**                       **Brief description**
-:func:`Base.indicesbehavior(::Type) <indicesbehavior>`                ``Base.IndicesStartAt1()``                   Trait with values ``IndicesStartAt1()``, ``IndicesUnitRange()``, ``IndicesList()``
-:func:`indices(A, d) <indices>`                                       ``1:size(A, d)``                             Return the range of valid indices along dimension ``d``
-:func:`Base.similar(A, ::Type{S}, inds::NTuple{Ind}) <similar>`       ``similar(A, S, map(Base.dimlength, inds))`` Return a mutable array with the specified indices ``inds`` (see below for discussion of ``Ind``)
+:func:`indices(A, d) <indices>`                                       ``OneTo(size(A, d))``                        Return the ``AbstractUnitRange`` of valid indices along dimension ``d``
+:func:`Base.similar(A, ::Type{S}, inds::NTuple{Ind}) <similar>`       ``similar(A, S, map(Base.dimlength, inds))`` Return a mutable array with the specified indices ``inds`` (see below)
 ===================================================================== ============================================ =======================================================================================
 
 If a type is defined as a subtype of ``AbstractArray``, it inherits a very large set of rich behaviors including iteration and multidimensional indexing built on top of single-element access.  See the :ref:`arrays manual page <man-arrays>` and :ref:`standard library section <stdlib-arrays>` for more supported methods.
@@ -290,9 +289,9 @@ In addition to all the iterable and indexable methods from above, these types ca
 
 If you are defining an array type that allows non-traditional indexing
 (indices that start at something other than 1), you should specialize
-``indices`` and ``indicesbehavior``.  You should also specialize
-``similar`` so that the ``dims`` argument (ordinarily a ``Dims``
-size-tuple) can be a mixture of ``Integer`` and ``UnitRange`` objects;
-the ``Integer`` entries imply that the indexing starts from 1, whereas
-the dimensions encoded with ``UnitRange`` may have arbitrary starting
-index.
+``indices``.  You should also specialize ``similar`` so that the
+``dims`` argument (ordinarily a ``Dims`` size-tuple) can accept
+``AbstractUnitRange`` objects, perhaps range-types ``Ind`` of your own
+design.  For example, if indexing always starts with 0 for your
+arrays, you likely want to define a ``ZeroTo`` range type.  Otherwise,
+you can use standard ``UnitRange``.
