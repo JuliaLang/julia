@@ -105,7 +105,8 @@
 #include <llvm/ExecutionEngine/JITMemoryManager.h>
 #include <llvm/ExecutionEngine/Interpreter.h>
 #endif
-#if defined(_CPU_ARM_) || defined(_CPU_AARCH64_)
+#if defined(_CPU_ARM_) || defined(_CPU_AARCH64_) ||             \
+    (defined(LLVM37) && defined(JULIA_ENABLE_THREADING))
 #  include <llvm/IR/InlineAsm.h>
 #endif
 #if defined(USE_POLLY)
@@ -3451,6 +3452,31 @@ static void finalize_gc_frame(Function *F)
         ptlsStates->setCalledFunction(getter);
         ptlsStates->setAttributes(jltls_states_func->getAttributes());
     }
+    else if (jl_tls_offset != -1) {
+#ifdef LLVM37
+        // Replace the function call with inline assembly if we know
+        // how to generate it.
+        const char *asm_str = nullptr;
+#  if defined(_CPU_X86_64_)
+        asm_str = "movq %fs:0, $0";
+#  elif defined(_CPU_X86_)
+        asm_str = "movl %gs:0, $0";
+#  elif defined(_CPU_AARCH64_)
+        asm_str = "mrs $0, tpidr_el0";
+#  endif
+        assert(asm_str && "Cannot emit thread pointer for this architecture.");
+        static auto offset = ConstantInt::getSigned(T_size, jl_tls_offset);
+        static auto tp = InlineAsm::get(FunctionType::get(T_pint8, false),
+                                        asm_str, "=r", false);
+        Value *tls = CallInst::Create(tp, "thread_ptr", ptlsStates);
+        tls = GetElementPtrInst::Create(T_int8, tls, {offset},
+                                        "ptls_i8", ptlsStates);
+        tls = new BitCastInst(tls, PointerType::get(T_ppjlvalue, 0),
+                              "ptls", ptlsStates);
+        ptlsStates->replaceAllUsesWith(tls);
+        ptlsStates->eraseFromParent();
+#endif
+    }
 #else
     ptlsStates->replaceAllUsesWith(prepare_global(jltls_states_var, M));
     ptlsStates->eraseFromParent();
@@ -5138,6 +5164,8 @@ static void init_julia_llvm_env(Module *m)
     // In non-imaging mode, (i.e. the code will not be saved to disk), we
     // use the address of the actual getter function directly
     // (`jl_tls_states_cb` returned by `jl_get_ptls_states_getter()`)
+    // (Alternatively if we know how to generate the tls address directly
+    // we will inline the assembly, see `finalize_gc_frame(Function*)`)
     // In imaging mode, we emit the function address as a load of a static
     // variable to be filled (in `dump.c`) at initialization time of the sysimg.
     // This way we can by pass the extra indirection in `jl_get_ptls_states`

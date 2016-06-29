@@ -249,6 +249,7 @@ void _julia_init(JL_IMAGE_SEARCH rel);
 
 void jl_set_base_ctx(char *__stk);
 
+extern size_t jl_tls_offset;
 void jl_init_threading(void);
 void jl_start_threads(void);
 void jl_shutdown_threading(void);
