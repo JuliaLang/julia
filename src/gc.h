@@ -230,7 +230,7 @@ STATIC_INLINE void *gc_ptr_clear_tag(void *v, uintptr_t mask)
 
 NOINLINE uintptr_t gc_get_stack_ptr(void);
 
-STATIC_INLINE region_t *find_region(void *ptr, int maybe)
+STATIC_INLINE region_t *find_region(void *ptr)
 {
     // on 64bit systems we could probably use a single region and remove this loop
     for (int i = 0; i < REGION_COUNT && regions[i].pages; i++) {
@@ -241,7 +241,6 @@ STATIC_INLINE region_t *find_region(void *ptr, int maybe)
             return region;
         }
     }
-    (void)maybe;
     return NULL;
 }
 
@@ -254,7 +253,7 @@ STATIC_INLINE jl_gc_pagemeta_t *page_metadata_(void *data, region_t *r)
 
 STATIC_INLINE jl_gc_pagemeta_t *page_metadata(void *data)
 {
-    return page_metadata_(data, find_region(data, 0));
+    return page_metadata_(data, find_region(data));
 }
 
 STATIC_INLINE void gc_big_object_unlink(const bigval_t *hdr)
