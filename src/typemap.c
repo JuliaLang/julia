@@ -798,11 +798,11 @@ jl_typemap_entry_t *jl_typemap_level_assoc_exact(jl_typemap_level_t *cache, jl_v
             if (ml) return ml;
         }
     }
-    if (jl_typeof(cache->linear) != (jl_value_t*)jl_nothing) {
+    if (cache->linear != (jl_typemap_entry_t*)jl_nothing) {
         jl_typemap_entry_t *ml = jl_typemap_entry_assoc_exact(cache->linear, args, n);
         if (ml) return ml;
     }
-    if (jl_typeof(cache->any.unknown) != (jl_value_t*)jl_nothing)
+    if (cache->any.unknown != jl_nothing)
         return jl_typemap_assoc_exact(cache->any, args, n, offs+1);
     return NULL;
 }
