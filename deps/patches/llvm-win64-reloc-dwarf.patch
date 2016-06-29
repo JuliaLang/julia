@@ -1,18 +1,20 @@
-diff -rpu llvm-3.8.0/include/llvm/MC/MCStreamer.h llvm-3.8.0-reloc/include/llvm/MC/MCStreamer.h
---- llvm-3.8.0/include/llvm/MC/MCStreamer.h 2016-01-12 08:38:15.000000000 -0500
-+++ llvm-3.8.0-reloc/include/llvm/MC/MCStreamer.h   2016-05-23 18:54:01.830143100 -0400
-@@ -456,7 +456,7 @@ public:
+diff --git a/include/llvm/MC/MCStreamer.h b/include/llvm/MC/MCStreamer.h
+index 6b9b8a1..0113664 100644
+--- a/include/llvm/MC/MCStreamer.h
++++ b/include/llvm/MC/MCStreamer.h
+@@ -452,7 +452,7 @@ public:
    /// \brief Emits a COFF section relative relocation.
    ///
    /// \param Symbol - Symbol the section relative relocation should point to.
 -  virtual void EmitCOFFSecRel32(MCSymbol const *Symbol);
 +  virtual void EmitCOFFSecRel32(MCSymbol const *Symbol, uint64_t Offset);
-
+ 
    /// \brief Emit an ELF .size directive.
    ///
-diff -rpu llvm-3.8.0/include/llvm/MC/MCWinCOFFStreamer.h llvm-3.8.0-reloc/include/llvm/MC/MCWinCOFFStreamer.h
---- llvm-3.8.0/include/llvm/MC/MCWinCOFFStreamer.h  2015-11-17 05:00:43.000000000 -0500
-+++ llvm-3.8.0-reloc/include/llvm/MC/MCWinCOFFStreamer.h    2016-05-23 18:54:01.845722400 -0400
+diff --git a/include/llvm/MC/MCWinCOFFStreamer.h b/include/llvm/MC/MCWinCOFFStreamer.h
+index 6fbc754..500b1c0 100644
+--- a/include/llvm/MC/MCWinCOFFStreamer.h
++++ b/include/llvm/MC/MCWinCOFFStreamer.h
 @@ -52,7 +52,7 @@ public:
    void EndCOFFSymbolDef() override;
    void EmitCOFFSafeSEH(MCSymbol const *Symbol) override;
@@ -22,10 +24,11 @@ diff -rpu llvm-3.8.0/include/llvm/MC/MCWinCOFFStreamer.h llvm-3.8.0-reloc/includ
    void EmitCommonSymbol(MCSymbol *Symbol, uint64_t Size,
                          unsigned ByteAlignment) override;
    void EmitLocalCommonSymbol(MCSymbol *Symbol, uint64_t Size,
-diff -rpu llvm-3.8.0/lib/CodeGen/AsmPrinter/AsmPrinter.cpp llvm-3.8.0-reloc/lib/CodeGen/AsmPrinter/AsmPrinter.cpp
---- llvm-3.8.0/lib/CodeGen/AsmPrinter/AsmPrinter.cpp    2016-01-12 20:18:13.000000000 -0500
-+++ llvm-3.8.0-reloc/lib/CodeGen/AsmPrinter/AsmPrinter.cpp  2016-05-23 18:54:01.845722400 -0400
-@@ -1729,7 +1729,7 @@ void AsmPrinter::EmitLabelPlusOffset(con
+diff --git a/lib/CodeGen/AsmPrinter/AsmPrinter.cpp b/lib/CodeGen/AsmPrinter/AsmPrinter.cpp
+index 125047e..3483412 100644
+--- a/lib/CodeGen/AsmPrinter/AsmPrinter.cpp
++++ b/lib/CodeGen/AsmPrinter/AsmPrinter.cpp
+@@ -1598,7 +1598,7 @@ void AsmPrinter::EmitLabelPlusOffset(const MCSymbol *Label, uint64_t Offset,
                                       unsigned Size,
                                       bool IsSectionRelative) const {
    if (MAI->needsDwarfSectionOffsetDirective() && IsSectionRelative) {
@@ -33,11 +36,12 @@ diff -rpu llvm-3.8.0/lib/CodeGen/AsmPrinter/AsmPrinter.cpp llvm-3.8.0-reloc/lib/
 +    OutStreamer->EmitCOFFSecRel32(Label, Offset);
      return;
    }
-
-diff -rpu llvm-3.8.0/lib/CodeGen/AsmPrinter/AsmPrinterDwarf.cpp llvm-3.8.0-reloc/lib/CodeGen/AsmPrinter/AsmPrinterDwarf.cpp
---- llvm-3.8.0/lib/CodeGen/AsmPrinter/AsmPrinterDwarf.cpp   2015-11-17 19:34:10.000000000 -0500
-+++ llvm-3.8.0-reloc/lib/CodeGen/AsmPrinter/AsmPrinterDwarf.cpp 2016-05-23 20:17:42.105695800 -0400
-@@ -150,7 +150,7 @@ void AsmPrinter::emitDwarfSymbolReferenc
+ 
+diff --git a/lib/CodeGen/AsmPrinter/AsmPrinterDwarf.cpp b/lib/CodeGen/AsmPrinter/AsmPrinterDwarf.cpp
+index ad180b6..6bd7dfb 100644
+--- a/lib/CodeGen/AsmPrinter/AsmPrinterDwarf.cpp
++++ b/lib/CodeGen/AsmPrinter/AsmPrinterDwarf.cpp
+@@ -162,7 +162,7 @@ void AsmPrinter::emitDwarfSymbolReference(const MCSymbol *Label,
    if (!ForceOffset) {
      // On COFF targets, we have to emit the special .secrel32 directive.
      if (MAI->needsDwarfSectionOffsetDirective()) {
@@ -45,11 +49,12 @@ diff -rpu llvm-3.8.0/lib/CodeGen/AsmPrinter/AsmPrinterDwarf.cpp llvm-3.8.0-reloc
 +      OutStreamer->EmitCOFFSecRel32(Label, /*offset*/0);
        return;
      }
-
-diff -rpu llvm-3.8.0/lib/CodeGen/AsmPrinter/DIE.cpp llvm-3.8.0-reloc/lib/CodeGen/AsmPrinter/DIE.cpp
---- llvm-3.8.0/lib/CodeGen/AsmPrinter/DIE.cpp   2016-01-07 09:28:20.000000000 -0500
-+++ llvm-3.8.0-reloc/lib/CodeGen/AsmPrinter/DIE.cpp 2016-05-23 19:08:35.434799900 -0400
-@@ -487,7 +487,7 @@ void DIEEntry::EmitValue(const AsmPrinte
+ 
+diff --git a/lib/CodeGen/AsmPrinter/DIE.cpp b/lib/CodeGen/AsmPrinter/DIE.cpp
+index 46dbc76..70b2014 100644
+--- a/lib/CodeGen/AsmPrinter/DIE.cpp
++++ b/lib/CodeGen/AsmPrinter/DIE.cpp
+@@ -457,7 +457,7 @@ void DIEEntry::EmitValue(const AsmPrinter *AP, dwarf::Form Form) const {
      Addr += CU->getDebugInfoOffset();
      if (AP->MAI->doesDwarfUseRelocationsAcrossSections())
        AP->EmitLabelPlusOffset(CU->getSectionSym(), Addr,
@@ -58,10 +63,11 @@ diff -rpu llvm-3.8.0/lib/CodeGen/AsmPrinter/DIE.cpp llvm-3.8.0-reloc/lib/CodeGen
      else
        AP->OutStreamer->EmitIntValue(Addr, DIEEntry::getRefAddrSize(AP));
    } else
-diff -rpu llvm-3.8.0/lib/CodeGen/AsmPrinter/WinCodeViewLineTables.cpp llvm-3.8.0-reloc/lib/CodeGen/AsmPrinter/WinCodeViewLineTables.cpp
---- llvm-3.8.0/lib/CodeGen/AsmPrinter/WinCodeViewLineTables.cpp 2016-01-12 20:05:23.000000000 -0500
-+++ llvm-3.8.0-reloc/lib/CodeGen/AsmPrinter/WinCodeViewLineTables.cpp   2016-05-23 21:19:31.454460900 -0400
-@@ -231,7 +231,7 @@ void WinCodeViewLineTables::emitDebugInf
+diff --git a/lib/CodeGen/AsmPrinter/WinCodeViewLineTables.cpp b/lib/CodeGen/AsmPrinter/WinCodeViewLineTables.cpp
+index 6610ac7..3b2188a 100644
+--- a/lib/CodeGen/AsmPrinter/WinCodeViewLineTables.cpp
++++ b/lib/CodeGen/AsmPrinter/WinCodeViewLineTables.cpp
+@@ -221,7 +221,7 @@ void WinCodeViewLineTables::emitDebugInfoForFunction(const Function *GV) {
      // code is located and what's its size:
      EmitLabelDiff(*Asm->OutStreamer, Fn, FI.End);
      Asm->OutStreamer->EmitFill(12, 0);
@@ -70,19 +76,20 @@ diff -rpu llvm-3.8.0/lib/CodeGen/AsmPrinter/WinCodeViewLineTables.cpp llvm-3.8.0
      Asm->OutStreamer->EmitCOFFSectionIndex(Fn);
      Asm->EmitInt8(0);
      // Emit the function display name as a null-terminated string.
-@@ -272,7 +272,7 @@ void WinCodeViewLineTables::emitDebugInf
+@@ -262,7 +262,7 @@ void WinCodeViewLineTables::emitDebugInfoForFunction(const Function *GV) {
    Asm->OutStreamer->EmitLabel(LineTableBegin);
-
+ 
    // Identify the function this subsection is for.
 -  Asm->OutStreamer->EmitCOFFSecRel32(Fn);
 +  Asm->OutStreamer->EmitCOFFSecRel32(Fn, /*offset*/0);
    Asm->OutStreamer->EmitCOFFSectionIndex(Fn);
    // Insert flags after a 16-bit section index.
    Asm->EmitInt16(COFF::DEBUG_LINE_TABLES_HAVE_COLUMN_RECORDS);
-diff -rpu llvm-3.8.0/lib/MC/MCAsmStreamer.cpp llvm-3.8.0-reloc/lib/MC/MCAsmStreamer.cpp
---- llvm-3.8.0/lib/MC/MCAsmStreamer.cpp 2015-11-12 08:33:00.000000000 -0500
-+++ llvm-3.8.0-reloc/lib/MC/MCAsmStreamer.cpp   2016-05-23 18:54:01.859727900 -0400
-@@ -143,7 +143,7 @@ public:
+diff --git a/lib/MC/MCAsmStreamer.cpp b/lib/MC/MCAsmStreamer.cpp
+index 227c937..c2f3e6e 100644
+--- a/lib/MC/MCAsmStreamer.cpp
++++ b/lib/MC/MCAsmStreamer.cpp
+@@ -138,7 +138,7 @@ public:
    void EndCOFFSymbolDef() override;
    void EmitCOFFSafeSEH(MCSymbol const *Symbol) override;
    void EmitCOFFSectionIndex(MCSymbol const *Symbol) override;
@@ -91,55 +98,58 @@ diff -rpu llvm-3.8.0/lib/MC/MCAsmStreamer.cpp llvm-3.8.0-reloc/lib/MC/MCAsmStrea
    void emitELFSize(MCSymbolELF *Symbol, const MCExpr *Value) override;
    void EmitCommonSymbol(MCSymbol *Symbol, uint64_t Size,
                          unsigned ByteAlignment) override;
-@@ -525,7 +525,7 @@ void MCAsmStreamer::EmitCOFFSectionIndex
+@@ -514,7 +514,7 @@ void MCAsmStreamer::EmitCOFFSectionIndex(MCSymbol const *Symbol) {
    EmitEOL();
  }
-
+ 
 -void MCAsmStreamer::EmitCOFFSecRel32(MCSymbol const *Symbol) {
 +void MCAsmStreamer::EmitCOFFSecRel32(MCSymbol const *Symbol, uint64_t Offset) {
    OS << "\t.secrel32\t";
    Symbol->print(OS, MAI);
    EmitEOL();
-diff -rpu llvm-3.8.0/lib/MC/MCParser/COFFAsmParser.cpp llvm-3.8.0-reloc/lib/MC/MCParser/COFFAsmParser.cpp
---- llvm-3.8.0/lib/MC/MCParser/COFFAsmParser.cpp    2015-11-18 01:02:15.000000000 -0500
-+++ llvm-3.8.0-reloc/lib/MC/MCParser/COFFAsmParser.cpp  2016-05-23 18:54:15.937859600 -0400
-@@ -450,7 +450,7 @@ bool COFFAsmParser::ParseDirectiveSecRel
+diff --git a/lib/MC/MCParser/COFFAsmParser.cpp b/lib/MC/MCParser/COFFAsmParser.cpp
+index f09bce0..39a9ad7 100644
+--- a/lib/MC/MCParser/COFFAsmParser.cpp
++++ b/lib/MC/MCParser/COFFAsmParser.cpp
+@@ -451,7 +451,7 @@ bool COFFAsmParser::ParseDirectiveSecRel32(StringRef, SMLoc) {
    MCSymbol *Symbol = getContext().getOrCreateSymbol(SymbolID);
-
+ 
    Lex();
 -  getStreamer().EmitCOFFSecRel32(Symbol);
 +  getStreamer().EmitCOFFSecRel32(Symbol, /*Offset=*/0);
    return false;
  }
-
-diff -rpu llvm-3.8.0/lib/MC/MCStreamer.cpp llvm-3.8.0-reloc/lib/MC/MCStreamer.cpp
---- llvm-3.8.0/lib/MC/MCStreamer.cpp    2015-11-04 18:59:18.000000000 -0500
-+++ llvm-3.8.0-reloc/lib/MC/MCStreamer.cpp  2016-05-23 18:54:15.953281800 -0400
-@@ -119,7 +119,7 @@ void MCStreamer::EmitSymbolValue(const M
+ 
+diff --git a/lib/MC/MCStreamer.cpp b/lib/MC/MCStreamer.cpp
+index 7fbbbd9..c9e8958 100644
+--- a/lib/MC/MCStreamer.cpp
++++ b/lib/MC/MCStreamer.cpp
+@@ -120,7 +120,7 @@ void MCStreamer::EmitSymbolValue(const MCSymbol *Sym, unsigned Size,
    if (!IsSectionRelative)
      EmitValueImpl(MCSymbolRefExpr::create(Sym, getContext()), Size);
    else
 -    EmitCOFFSecRel32(Sym);
 +    EmitCOFFSecRel32(Sym, /*Offset=*/0);
  }
-
+ 
  void MCStreamer::EmitGPRel64Value(const MCExpr *Value) {
-@@ -570,7 +570,7 @@ void MCStreamer::EmitCOFFSafeSEH(MCSymbo
+@@ -562,7 +562,7 @@ void MCStreamer::EmitCOFFSafeSEH(MCSymbol const *Symbol) {
  void MCStreamer::EmitCOFFSectionIndex(MCSymbol const *Symbol) {
  }
-
+ 
 -void MCStreamer::EmitCOFFSecRel32(MCSymbol const *Symbol) {
 +void MCStreamer::EmitCOFFSecRel32(MCSymbol const *Symbol, uint64_t Offset) {
  }
-
+ 
  /// EmitRawText - If this file is backed by an assembly streamer, this dumps
-diff -rpu llvm-3.8.0/lib/MC/WinCOFFStreamer.cpp llvm-3.8.0-reloc/lib/MC/WinCOFFStreamer.cpp
---- llvm-3.8.0/lib/MC/WinCOFFStreamer.cpp   2015-11-17 05:00:43.000000000 -0500
-+++ llvm-3.8.0-reloc/lib/MC/WinCOFFStreamer.cpp 2016-06-25 22:00:26.530421900 -0400
-@@ -199,14 +199,21 @@ void MCWinCOFFStreamer::EmitCOFFSectionI
+diff --git a/lib/MC/WinCOFFStreamer.cpp b/lib/MC/WinCOFFStreamer.cpp
+index 36dd691..d6c91db 100644
+--- a/lib/MC/WinCOFFStreamer.cpp
++++ b/lib/MC/WinCOFFStreamer.cpp
+@@ -192,11 +192,18 @@ void MCWinCOFFStreamer::EmitCOFFSectionIndex(MCSymbol const *Symbol) {
    DF->getContents().resize(DF->getContents().size() + 2, 0);
  }
-
+ 
 -void MCWinCOFFStreamer::EmitCOFFSecRel32(MCSymbol const *Symbol) {
 +void MCWinCOFFStreamer::EmitCOFFSecRel32(MCSymbol const *Symbol, uint64_t Offset) {
    MCDataFragment *DF = getOrCreateDataFragment();
@@ -157,7 +167,4 @@ diff -rpu llvm-3.8.0/lib/MC/WinCOFFStreamer.cpp llvm-3.8.0-reloc/lib/MC/WinCOFFS
 +  // Emit 4 bytes (zeros) to the object file.
    DF->getContents().resize(DF->getContents().size() + 4, 0);
  }
-
- void MCWinCOFFStreamer::EmitCommonSymbol(MCSymbol *Symbol, uint64_t Size,
-                                          unsigned ByteAlignment) {
-   assert((!Symbol->isInSection() ||
+ 
