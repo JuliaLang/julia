@@ -334,7 +334,6 @@ eltype(x) = eltype(typeof(x))
 
 """
     ∘(f, g)
-    f ∘ g
 
 Creates a composition of two functions (or functor objects), such that
 `(f ∘ g)(x...) == f(g(x...))`. The `∘` symbol can be accessed at the REPL using
@@ -349,7 +348,7 @@ be specialized to create any functionally-equivalent callable object.
     !(f::Function)
 
 Returns a new function which applies boolean not to the output of `f`, equal to
-`(x...) -> !f(x...)`. 
+`(x...) -> !f(x...)`.
 """
 !(f::Function) = (x...)->!f(x...)
 
