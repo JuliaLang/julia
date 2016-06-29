@@ -6608,7 +6608,7 @@ Convolution of two vectors. Uses FFT algorithm.
 conv
 
 """
-    unsafe_store!(p::Ptr{T},x,i::Integer)
+    unsafe_store!(p::Ptr{T}, x, [i::Integer=1])
 
 Store a value of type `T` to the address of the ith element (1-indexed) starting at `p`.
 This is equivalent to the C expression `p[i-1] = x`.
@@ -8184,7 +8184,7 @@ throw this exception.
 ProcessExitedException
 
 """
-    unsafe_load(p::Ptr{T},i::Integer)
+    unsafe_load(p::Ptr{T}, [i::Integer=1])
 
 Load a value of type `T` from the address of the ith element (1-indexed) starting at `p`.
 This is equivalent to the C expression `p[i-1]`.
