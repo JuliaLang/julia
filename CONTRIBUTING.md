@@ -178,6 +178,7 @@ Make sure that [Travis](http://www.travis-ci.org) greenlights the pull request w
  - use lower case with underscores for method names
  - it is generally preferred to use ASCII operators and identifiers over
    Unicode equivalents whenever possible
+ - in docstring refer to the language as "Julia" and the executable as "`julia`"
 
 #### General Formatting Guidelines For C code contributions
 

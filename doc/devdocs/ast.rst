@@ -229,7 +229,7 @@ There is generally a different expression head for each visually distinct
 syntactic form.
 Examples will be given in s-expression syntax. Each parenthesized list corresponds
 to an Expr, where the first element is the head.
-For example ``(call f x)`` corresponds to ``Expr(:call, :f, :x)`` in julia.
+For example ``(call f x)`` corresponds to ``Expr(:call, :f, :x)`` in Julia.
 
 Calls
 ~~~~~

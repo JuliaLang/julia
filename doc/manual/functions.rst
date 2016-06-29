@@ -389,9 +389,11 @@ be a tuple:
     (1,2,(3,4))
 
 Also, the function that arguments are spliced into need not be a varargs
-function (although it often is)::
+function (although it often is):
 
-    baz(a,b) = a + b
+.. doctest::
+
+    julia> baz(a,b) = a + b;
 
     julia> args = [1,2]
     2-element Array{Int64,1}:
@@ -408,7 +410,10 @@ function (although it often is)::
      3
 
     julia> baz(args...)
-    no method baz(Int64,Int64,Int64)
+    ERROR: MethodError: no method matching baz(::Int64, ::Int64, ::Int64)
+    Closest candidates are:
+      baz(::Any, ::Any)
+    ...
 
 As you can see, if the wrong number of elements are in the spliced
 container, then the function call will fail, just as it would if too
@@ -617,8 +622,8 @@ convenient for data processing, but in other languages vectorization is also
 often required for performance: if loops are slow, the "vectorized" version of a
 function can call fast library code written in a low-level language.   In Julia,
 vectorized functions are *not* required for performance, and indeed it is often
-beneficial to write your own loops (:ref:`man-performance-tips`:), but they can
-still be convenient.  Therefore, *any* Julia function ``f`` can be applied
+beneficial to write your own loops (see :ref:`man-performance-tips`), but they
+can still be convenient.  Therefore, *any* Julia function ``f`` can be applied
 elementwise to any array (or other collection) with the syntax ``f.(A)``.
 
 Of course, you can omit the dot if you write a specialized "vector" method
@@ -629,7 +634,7 @@ which functions you want to vectorize.
 More generally, ``f.(args...)`` is actually equivalent to
 ``broadcast(f, args...)``, which allows you to operate on multiple
 arrays (even of different shapes), or a mix of arrays and scalars
-(:ref:`man-broadcasting`:).   For example, if you have ``f(x,y) = 3x + 4y``,
+(see :ref:`man-broadcasting`).  For example, if you have ``f(x,y) = 3x + 4y``,
 then ``f.(pi,A)`` will return a new array consisting of ``f(pi,a)`` for each
 ``a`` in ``A``, and ``f.(vector1,vector2)`` will return a new vector
 consisting of ``f(vector1[i],vector2[i])`` for each index ``i``
