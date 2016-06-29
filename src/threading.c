@@ -89,11 +89,12 @@ BOOLEAN WINAPI DllMain(IN HINSTANCE hDllHandle, IN DWORD nReason,
         TlsFree(jl_tls_key);
         break;
     }
+    return TRUE;
 }
 
 JL_DLLEXPORT JL_CONST_FUNC jl_tls_states_t *(jl_get_ptls_states)(void)
 {
-    return TlsGetValue(jl_tls_key);
+    return (jl_tls_states_t*)TlsGetValue(jl_tls_key);
 }
 
 jl_get_ptls_states_func jl_get_ptls_states_getter(void)
