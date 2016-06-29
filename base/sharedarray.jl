@@ -435,6 +435,11 @@ similar(S::SharedArray, T::Type) = similar(S.s, T, size(S))
 similar(S::SharedArray, dims::Dims) = similar(S.s, eltype(S), dims)
 similar(S::SharedArray) = similar(S.s, eltype(S), size(S))
 
+similar{T,N}(::Type{SharedArray{T,N}}, U::Type, dims::Dims) = similar(Array{T,N}, U, dims)
+similar{T,N}(::Type{SharedArray{T,N}}, U::Type) = similar(Array{T,N}, U, ())
+similar{T,N}(::Type{SharedArray{T,N}}, dims::Dims) = similar(Array{T,N}, dims)
+similar{T,N}(::Type{SharedArray{T,N}}) = similar(Array{T,N}, ())
+
 reduce(f, S::SharedArray) =
     mapreduce(fetch, f,
               Any[ @spawnat p reduce(f, S.loc_subarr_1d) for p in procs(S) ])

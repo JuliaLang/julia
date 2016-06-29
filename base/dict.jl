@@ -352,7 +352,8 @@ type ObjectIdDict <: Associative{Any,Any}
     ObjectIdDict(o::ObjectIdDict) = new(copy(o.ht))
 end
 
-similar(d::ObjectIdDict) = ObjectIdDict()
+similar(::ObjectIdDict) = ObjectIdDict()
+similar(::Type{ObjectIdDict}) = ObjectIdDict()
 
 function setindex!(t::ObjectIdDict, v::ANY, k::ANY)
     t.ht = ccall(:jl_eqtable_put, Array{Any,1}, (Any, Any, Any), t.ht, k, v)
@@ -497,8 +498,10 @@ function grow_to!{K,V}(dest::Associative{K,V}, itr, st = start(itr))
     return dest
 end
 
-similar{K,V}(d::Dict{K,V}) = Dict{K,V}()
-similar{K,V}(d::Dict, ::Type{Pair{K,V}}) = Dict{K,V}()
+similar{K,V}(::Dict{K,V}) = Dict{K,V}()
+similar{K,V}(::Dict, ::Type{Pair{K,V}}) = Dict{K,V}()
+similar{K,V}(::Type{Dict{K,V}}) = Dict{K,V}()
+similar{K,V}(::Type{Dict}, ::Type{Pair{K,V}}) = Dict{K,V}()
 
 # conversion between Dict types
 function convert{K,V}(::Type{Dict{K,V}},d::Associative)
