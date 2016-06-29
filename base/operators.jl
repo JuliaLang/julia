@@ -332,8 +332,25 @@ eltype(x) = eltype(typeof(x))
 
 |>(x, f) = f(x)
 
+"""
+    ∘(f, g)
+    f ∘ g
+
+Creates a composition of two functions (or functor objects), such that
+`(f ∘ g)(x...) == f(g(x...))`. The `∘` symbol can be accessed at the REPL using
+`\\circ`.
+
+By default, an anonymous function `(x...) -> f(g(x...))` is returned, but this may
+be specialized to create any functionally-equivalent callable object.
+"""
 ∘(f, g) = (x...)->f(g(x...))
 
+"""
+    !(f::Function)
+
+Returns a new function which applies boolean not to the output of `f`, equal to
+`(x...) -> !f(x...)`. 
+"""
 !(f::Function) = (x...)->!f(x...)
 
 # array shape rules
