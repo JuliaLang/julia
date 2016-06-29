@@ -2341,7 +2341,7 @@ static jl_value_t *inst_tuple_w_(jl_value_t *t, jl_value_t **env, size_t n,
     // Instantiate NTuple{3,Int}
     // Note this does not instantiate Tuple{Vararg{Int,3}}; that's done in
     // jl_apply_tuple_type_v_
-    if (jl_is_va_tuple(tt) && ntp == 1 && n == 2) {
+    if (jl_is_va_tuple(tt) && ntp == 1) {
         // If this is a Tuple{Vararg{T,N}} with known N, expand it to
         // a fixed-length tuple
         jl_value_t *T=NULL, *N=NULL;
@@ -2787,7 +2787,7 @@ jl_datatype_t *jl_fix_vararg_bound(jl_datatype_t *tt, int nfix)
     JL_GC_PUSH2(&env[0], &env[1]);
     env[0] = jl_tparam1(jl_tparam(tt, ntp-1));
     env[1] = jl_box_long(nfix);
-    jl_datatype_t *ret = (jl_datatype_t*)jl_instantiate_type_with((jl_value_t*)tt, env, 2);
+    jl_datatype_t *ret = (jl_datatype_t*)jl_instantiate_type_with((jl_value_t*)tt, env, 1);
     JL_GC_POP();
     return ret;
 }
