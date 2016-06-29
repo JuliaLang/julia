@@ -473,6 +473,7 @@ static inline int gc_setmark_pool_(jl_taggedvalue_t *o, int mark_mode,
 #ifdef MEMDEBUG
     return gc_setmark_big(o, mark_mode);
 #endif
+    assert(r != NULL);
     if (gc_verifying) {
         o->bits.gc = mark_mode;
         return mark_mode;

@@ -242,12 +242,12 @@ STATIC_INLINE region_t *find_region(void *ptr, int maybe)
         }
     }
     (void)maybe;
-    assert(maybe && "find_region failed");
     return NULL;
 }
 
 STATIC_INLINE jl_gc_pagemeta_t *page_metadata_(void *data, region_t *r)
 {
+    assert(r != NULL);
     int pg_idx = page_index(r, (char*)data - GC_PAGE_OFFSET);
     return &r->meta[pg_idx];
 }
