@@ -434,7 +434,7 @@ static inline int gc_setmark_big(jl_taggedvalue_t *o, int mark_mode)
         o->bits.gc = mark_mode;
         return 0;
     }
-    assert(find_region(o, 1) == NULL);
+    assert(find_region(o) == NULL);
     bigval_t *hdr = bigval_header(o);
     int bits = o->bits.gc;
     if (mark_reset_age && !gc_marked(bits)) {
@@ -513,7 +513,7 @@ static inline int gc_setmark_pool_(jl_taggedvalue_t *o, int mark_mode,
 
 static inline int gc_setmark_pool(jl_taggedvalue_t *o, int mark_mode)
 {
-    return gc_setmark_pool_(o, mark_mode, find_region(o, 0));
+    return gc_setmark_pool_(o, mark_mode, find_region(o));
 }
 
 static inline int gc_setmark(jl_value_t *v, int sz)
@@ -533,7 +533,7 @@ inline void gc_setmark_buf(void *o, int mark_mode, size_t minsz)
     // where the size estimate is a little off so we do a pool lookup to make
     // sure.
     if (minsz <= GC_MAX_SZCLASS) {
-        region_t *r = find_region(buf, 1);
+        region_t *r = find_region(buf);
         if (r) {
             gc_setmark_pool_(buf, mark_mode, r);
             return;
