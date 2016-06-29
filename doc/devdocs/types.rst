@@ -91,7 +91,7 @@ Let's look at these types a little more closely:
    Array{T,N}
 
    julia> dump(Array)
-   Array{T,N}::DataType  <: DenseArray{T,N}
+   Array{T,N} <: DenseArray{T,N}
 
 This indicates that :obj:`Array` is a shorthand for ``Array{T,N}``.  If
 you type this at the REPL prompt---on its own, not while defining
@@ -108,7 +108,7 @@ parameters:
    TypeVar
      name: Symbol T
      lb: Union{}
-     ub: Any::DataType  <: Any
+     ub: Any
      bound: Bool false
 
 A :obj:`TypeVar` is one of Julia's built-in types---it's defined in
@@ -173,7 +173,7 @@ parameters. For example:
    TypeVar
      name: Symbol T
      lb: Union{}
-     ub: Any <: Any
+     ub: Any
      bound: Bool false
 
    julia> dump(p3[2].parameters[1])
