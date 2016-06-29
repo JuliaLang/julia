@@ -11,6 +11,10 @@ typealias IndicesOne{N} NTuple{N,OneTo}
 typealias DimOrInd Union{Integer, AbstractUnitRange}
 typealias DimsOrInds{N} NTuple{N,DimOrInd}
 
+macro _inline_pure_meta()
+    Expr(:meta, :inline, :pure)
+end
+
 ## Basic functions ##
 
 vect() = Array{Any}(0)
@@ -30,27 +34,19 @@ size{N}(x, d1::Integer, d2::Integer, dx::Vararg{Integer, N}) = (size(x, d1), siz
 
 Returns the valid range of indices for array `A` along dimension `d`.
 """
-function indices(A::AbstractArray, d)
-    @_inline_meta
-    OneTo(size(A,d))
-end
+indices{T,N}(A::AbstractArray{T,N}, d) = d <= N ? indices(A)[d] : OneTo(1)
 """
     indices(A)
 
 Returns the tuple of valid indices for array `A`.
 """
-indices{T,N}(A::AbstractArray{T,N}) = _indices((), A) # faster than ntuple(d->indices(A,d), Val{N})
-_indices{T,N}(out::NTuple{N}, A::AbstractArray{T,N}) = out
-function _indices(out, A::AbstractArray)
-    @_inline_meta
-    _indices((out..., indices(A, length(out)+1)), A)
+function indices{T,N}(A::AbstractArray{T,N})
+    @_inline_pure_meta
+    map(s->OneTo(s), size(A))
 end
-# Note: a simpler implementation suffers from #16327
-# function indices{T,N}(A::AbstractArray{T,N})
-#     @_inline_meta
-#     ntuple(d->indices(A, d), Val{N})
-# end
+
 indices1(A) = (@_inline_meta; indices(A, 1))
+
 """
     linearindices(A)
 
@@ -1241,21 +1237,21 @@ unsafe_length(r::UnitRange) = r.stop-r.start+1
 unsafe_length(r::OneTo) = length(r)
 
 ind2sub(::Tuple{}, ind::Integer) = (@_inline_meta; ind == 1 ? () : throw(BoundsError()))
-ind2sub(dims::DimsInteger, ind::Integer) = (@_inline_meta; _ind2sub((), dims, ind-1))
-ind2sub(inds::Indices, ind::Integer) = (@_inline_meta; _ind2sub((), inds, ind-1))
+ind2sub(dims::DimsInteger, ind::Integer) = (@_inline_meta; _ind2sub(dims, ind-1))
+ind2sub(inds::Indices, ind::Integer)     = (@_inline_meta; _ind2sub(inds, ind-1))
 ind2sub(inds::Indices{1}, ind::Integer) = throw(ArgumentError("Linear indexing is not defined for one-dimensional arrays"))
 ind2sub(inds::Tuple{OneTo}, ind::Integer) = (ind,)
 
-_ind2sub(::Tuple{}, ::Tuple{}, ind) = (ind+1,)
-function _ind2sub(out, indslast::NTuple{1}, ind)
+_ind2sub(::Tuple{}, ind) = (ind+1,)
+function _ind2sub(indslast::NTuple{1}, ind)
     @_inline_meta
-    (out..., _lookup(ind, indslast[1]))
+    (_lookup(ind, indslast[1]),)
 end
-function _ind2sub(out, inds, ind)
+function _ind2sub(inds, ind)
     @_inline_meta
     r1 = inds[1]
     indnext, f, l = _div(ind, r1)
-    _ind2sub((out..., ind-l*indnext+f), tail(inds), indnext)
+    (ind-l*indnext+f, _ind2sub(tail(inds), indnext)...)
 end
 
 _lookup(ind, d::Integer) = ind+1
