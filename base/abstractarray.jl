@@ -315,6 +315,7 @@ checkbounds(A::AbstractArray) = checkbounds(A, 1) # 0-d case
 typealias SimIdx Union{Integer,UnitRangeInteger}
 """
     similar(array, [element_type=eltype(array)], [dims=size(array)])
+    similar(array_type, [element_type=eltype(array)], [dims=size(array)])
 
 Create an uninitialized mutable array with the given element type and size, based upon the
 given source array. The second and third arguments are both optional, defaulting to the
@@ -361,6 +362,14 @@ similar(   a::AbstractArray, T::Type, dims::Dims)        = Array(T, dims)
 
 _similar(::IndicesStartAt1, a::AbstractArray, T::Type)   = similar(a, T, size(a))
 _similar(::IndicesBehavior, a::AbstractArray, T::Type)   = similar(a, T, indices(a))
+
+# similar creates an Array by default
+similar{CT<:AbstractArray}(::Type{CT})                           = similar(CT())
+similar{CT<:AbstractArray}(::Type{CT}, dims::Tuple)              = similar(CT(), dims)
+similar{CT<:AbstractArray}(::Type{CT}, dims::SimIdx...)          = similar(CT(), dims...)
+similar{CT<:AbstractArray}(::Type{CT}, U::Type)                  = similar(CT(), U)
+similar{CT<:AbstractArray}(::Type{CT}, U::Type, dims::Tuple)     = similar(CT(), U, dims)
+similar{CT<:AbstractArray}(::Type{CT}, U::Type, dims::SimIdx...) = similar(CT(), U, dims...)
 
 """
     allocate_for(storagetype, referencearray, [shape])

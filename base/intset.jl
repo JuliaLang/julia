@@ -10,7 +10,8 @@ end
 IntSet(itr) = (s=IntSet(); for a in itr; push!(s,a); end; s)
 
 eltype(::Type{IntSet}) = Int64
-similar(s::IntSet) = IntSet()
+similar(::IntSet) = IntSet()
+similar(::Type{IntSet}) = IntSet()
 
 function show(io::IO, s::IntSet)
     print(io, "IntSet([")

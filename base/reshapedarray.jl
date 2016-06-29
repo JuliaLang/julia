@@ -90,8 +90,11 @@ size(A::ReshapedArray) = A.dims
 size(A::ReshapedArray, d) = d <= ndims(A) ? A.dims[d] : 1
 similar(A::ReshapedArray, eltype::Type) = similar(parent(A), eltype, size(A))
 similar(A::ReshapedArray, eltype::Type, dims::Dims) = similar(parent(A), eltype, dims)
+similar{CT<:ReshapedArray}(::Type{CT}, eltype::Type) = similar(parenttype(CT), eltype, ())
+similar{CT<:ReshapedArray}(::Type{CT}, eltype::Type, dims::Dims) = similar(parenttype(CT), eltype, dims)
 linearindexing{R<:ReshapedArrayLF}(::Type{R}) = LinearFast()
 parent(A::ReshapedArray) = A.parent
+parenttype{T,N,P,MI}(::Type{ReshapedArray{T,N,P,MI}}) = P
 parentindexes(A::ReshapedArray) = map(s->1:s, size(parent(A)))
 reinterpret{T}(::Type{T}, A::ReshapedArray, dims::Dims) = reinterpret(T, parent(A), dims)
 

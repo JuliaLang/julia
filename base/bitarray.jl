@@ -367,6 +367,12 @@ similar(B::BitArray, T::Type{Bool}, dims::Dims) = BitArray(dims)
 # (this triggers conversions like float(bitvector) etc.)
 similar(B::BitArray, T::Type, dims::Dims) = Array{T}(dims)
 
+similar(::Type{BitArray}) = BitArray(())
+similar(::Type{BitArray}, dims::Int...) = BitArray(dims)
+similar(::Type{BitArray}, dims::Dims) = BitArray(dims...)
+similar(::Type{BitArray}, T::Type{Bool}, dims::Dims) = BitArray(dims)
+similar(::Type{BitArray}, T::Type, dims::Dims) = Array{T}(dims)
+
 function fill!(B::BitArray, x)
     y = convert(Bool, x)
     isempty(B) && return B

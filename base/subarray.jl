@@ -52,6 +52,7 @@ size(V::SubArray) = V.dims
 length(V::SubArray) = prod(V.dims)
 
 similar(V::SubArray, T::Type, dims::Dims) = similar(V.parent, T, dims)
+similar{T,N,P,I,L}(::Type{SubArray{T,N,P,I,L}}, U::Type, dims::Dims) = similar(P, T, dims)
 
 parent(V::SubArray) = V.parent
 parentindexes(V::SubArray) = V.indexes
