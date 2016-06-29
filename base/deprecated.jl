@@ -788,19 +788,6 @@ function symperm{Tv,Ti}(A::SparseMatrixCSC{Tv,Ti}, pinv::Vector{Ti})
         "Pkg.add(\"SuiteSparse\") to install SuiteSparse on Julia v0.5."))
 end
 
-# needs to be a macro so that we can use ::@mime(s) in type declarations
-eval(Multimedia, quote
-export @MIME
-macro MIME(s)
-    Base.warn_once("@MIME(\"\") is deprecated, use MIME\"\" instead.")
-    if isa(s,AbstractString)
-        :(MIME{$(Expr(:quote, Symbol(s)))})
-    else
-        :(MIME{Symbol($s)})
-    end
-end
-end)
-
 # During the 0.5 development cycle, do not add any deprecations below this line
 # To be deprecated in 0.6
 
