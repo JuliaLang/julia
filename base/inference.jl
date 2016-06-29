@@ -9,6 +9,7 @@ const MAX_TUPLETYPE_LEN  = 15
 const MAX_TUPLE_DEPTH = 4
 
 const MAX_TUPLE_SPLAT = 16
+const MAX_UNION_SPLITTING = 6
 
 # alloc_elim_pass! relies on `Slot_AssignedOnce | Slot_UsedUndef` being
 # SSA. This should be true now but can break if we start to track conditional
@@ -2359,6 +2360,16 @@ function inline_as_constant(val::ANY, argexprs, sv)
     return (QuoteNode(val), stmts)
 end
 
+function countunionsplit(atypes::Vector{Any})
+    nu = 1
+    for ti in atypes
+        if isa(ti, Union)
+            nu *= length((ti::Union).types)
+        end
+    end
+    return nu
+end
+
 # inline functions whose bodies are "inline_worthy"
 # where the function body doesn't contain any argument more than once.
 # static parameters are ok if all the static parameter values are leaf types,
@@ -2416,10 +2427,96 @@ function inlineable(f::ANY, ft::ANY, e::Expr, atypes::Vector{Any}, sv::Inference
     atype_unlimited = argtypes_to_type(atypes)
     function invoke_NF()
         # converts a :call to :invoke
-        cache_linfo = ccall(:jl_get_spec_lambda, Any, (Any,), atype_unlimited)
-        if cache_linfo !== nothing
+        local nu = countunionsplit(atypes)
+        nu > MAX_UNION_SPLITTING && return NF
+
+        if nu > 1
+            local ex = copy(e)
+            local linfo_var = add_slot!(enclosing, LambdaInfo, false)
+            local spec_hit = nothing
+            local spec_miss = nothing
+            local error_label = nothing
+            function splitunion(atypes::Vector{Any}, i::Int)
+                if i == 0
+                    local sig = argtypes_to_type(atypes)
+                    local li = ccall(:jl_get_spec_lambda, Any, (Any,), sig)
+                    li === nothing && return false
+                    local stmt = []
+                    push!(stmt, Expr(:(=), linfo_var, li))
+                    spec_hit === nothing && (spec_hit = genlabel(sv))
+                    push!(stmt, GotoNode(spec_hit.label))
+                    return stmt
+                else
+                    local ti = atypes[i]
+                    if isa(ti, Union)
+                        local all = false
+                        local stmts = []
+                        local aei = ex.args[i]
+                        if !effect_free(aei, sv, false)
+                            aei = newvar!(sv, ti)
+                            push!(stmts, Expr(:(=), aei, ex.args[i]))
+                            ex.args[i] = aei
+                        end
+                        for ty in (ti::Union).types
+                            atypes[i] = ty
+                            local match = splitunion(atypes, i - 1)
+                            if match !== false
+                                after = genlabel(sv)
+                                unshift!(match, Expr(:gotoifnot, Expr(:call, GlobalRef(Core, :isa), aei, ty), after.label))
+                                append!(stmts, match)
+                                push!(stmts, after)
+                            else
+                                all = false
+                            end
+                        end
+                        if all
+                            error_label === nothing && (error_label = genlabel(sv))
+                            push!(stmts, GotoNode(error_label.label))
+                        else
+                            spec_miss === nothing && (spec_miss = genlabel(sv))
+                            push!(stmts, GotoNode(spec_miss.label))
+                        end
+                        atypes[i] = ti
+                        return isempty(stmts) ? false : stmts
+                    else
+                        return splitunion(atypes, i - 1)
+                    end
+                end
+            end
+            local stmts = splitunion(atypes, length(atypes))
+            if stmts !== false && spec_hit !== nothing
+                stmts = stmts::Array{Any,1}
+                if error_label !== nothing
+                    push!(stmts, error_label)
+                    push!(stmts, Expr(:call, GlobalRef(_topmod(sv.mod), :error), "error in type inference due to #265"))
+                end
+                local ret_var, merge
+                if spec_miss !== nothing
+                    ret_var = add_slot!(enclosing, ex.typ, false)
+                    merge = genlabel(sv)
+                    push!(stmts, spec_miss)
+                    push!(stmts, Expr(:(=), ret_var, ex))
+                    push!(stmts, GotoNode(merge.label))
+                else
+                    ret_var = newvar!(sv, ex.typ)
+                end
+                push!(stmts, spec_hit)
+                ex = copy(ex)
+                ex.head = :invoke
+                unshift!(ex.args, linfo_var)
+                push!(stmts, Expr(:(=), ret_var, ex))
+                if spec_miss !== nothing
+                    push!(stmts, merge)
+                end
+                #println(stmts)
+                return (ret_var, stmts)
+            end
+        else
+            local cache_linfo = ccall(:jl_get_spec_lambda, Any, (Any,), atype_unlimited)
+            cache_linfo === nothing && return NF
             e.head = :invoke
             unshift!(e.args, cache_linfo)
+            return e
         end
         return NF
     end
