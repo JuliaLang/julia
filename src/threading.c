@@ -18,6 +18,7 @@ TODO:
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <inttypes.h>
 
 #include "julia.h"
 #include "julia_internal.h"
@@ -89,11 +90,12 @@ BOOLEAN WINAPI DllMain(IN HINSTANCE hDllHandle, IN DWORD nReason,
         TlsFree(jl_tls_key);
         break;
     }
+    return 1; // success
 }
 
 JL_DLLEXPORT JL_CONST_FUNC jl_tls_states_t *(jl_get_ptls_states)(void)
 {
-    return TlsGetValue(jl_tls_key);
+    return (jl_tls_states_t*)TlsGetValue(jl_tls_key);
 }
 
 jl_get_ptls_states_func jl_get_ptls_states_getter(void)
@@ -545,7 +547,7 @@ JL_DLLEXPORT void jl_threading_profile(void)
     if (!fork_ns) return;
 
     printf("\nti profile:\n");
-    printf("prep: %g (%llu)\n", NS_TO_SECS(prep_ns), (unsigned long long)prep_ns);
+    printf("prep: %g (%" PRIu64 ")\n", NS_TO_SECS(prep_ns), prep_ns);
 
     uint64_t min, max, avg;
     ti_timings(fork_ns, &min, &max, &avg);
