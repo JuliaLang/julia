@@ -184,6 +184,9 @@ function ``f`` remains undefined, and applying it will still result in a
 
     julia> f()
     ERROR: MethodError: no method matching f()
+    Closest candidates are:
+      f(!Matched::Float64, !Matched::Float64)
+      f(!Matched::Number, !Matched::Number)
      ...
 
 You can easily see which methods exist for a function by entering the
@@ -239,9 +242,9 @@ Julia language. Core operations typically have dozens of methods:
     +(x::Float32, y::Float32) at float.jl:206
     +(x::Float64, y::Float64) at float.jl:207
     +(x::Bool, z::Complex{Bool}) at complex.jl:137
-    +(x::Bool, y::Bool) at bool.jl:36
-    +(x::Bool) at bool.jl:33
-    +{T<:AbstractFloat}(x::Bool, y::T) at bool.jl:43
+    +(x::Bool, y::Bool) at bool.jl:48
+    +(x::Bool) at bool.jl:45
+    +{T<:AbstractFloat}(x::Bool, y::T) at bool.jl:55
     +(x::Bool, z::Complex) at complex.jl:144
     +(x::Bool, A::AbstractArray{Bool,N<:Any}) at arraymath.jl:105
     +(x::Char, y::Integer) at char.jl:40
