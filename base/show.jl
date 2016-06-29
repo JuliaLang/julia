@@ -561,6 +561,15 @@ show_unquoted(io::IO, ex::LabelNode, ::Int, ::Int)      = print(io, ex.label, ":
 show_unquoted(io::IO, ex::GotoNode, ::Int, ::Int)       = print(io, "goto ", ex.label)
 show_unquoted(io::IO, ex::GlobalRef, ::Int, ::Int)      = print(io, ex.mod, '.', ex.name)
 
+function show_unquoted(io::IO, ex::LambdaInfo, ::Int, ::Int)
+    if isdefined(ex, :specTypes)
+        print(io, "LambdaInfo for ")
+        show_lambda_types(io, ex.specTypes.parameters)
+    else
+        show(io, ex)
+    end
+end
+
 function show_unquoted(io::IO, ex::Slot, ::Int, ::Int)
     typ = isa(ex,TypedSlot) ? ex.typ : Any
     slotid = ex.id

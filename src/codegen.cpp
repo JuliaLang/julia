@@ -2704,38 +2704,39 @@ static jl_cgval_t emit_invoke(jl_expr_t *ex, jl_codectx_t *ctx)
     size_t arglen = jl_array_dim0(ex->args);
     size_t nargs = arglen - 1;
     assert(arglen >= 2);
-    jl_lambda_info_t *li = (jl_lambda_info_t*)args[0];
-    assert(jl_is_lambda_info(li));
 
-    if (li->jlcall_api == 2) {
-        assert(li->constval);
-        return mark_julia_const(li->constval);
-    }
-    else if (li->functionObjectsDecls.functionObject == NULL) {
-        assert(!li->inCompile);
-        if (li->code == jl_nothing && !li->inInference && li->inferred) {
-            // XXX: it was inferred in the past, so it's almost valid to re-infer it now
-            jl_type_infer(li, 0);
+    jl_cgval_t lival = emit_expr(args[0], ctx);
+    if (lival.constant) {
+        jl_lambda_info_t *li = (jl_lambda_info_t*)lival.constant;
+        assert(jl_is_lambda_info(li));
+        if (li->jlcall_api == 2) {
+            assert(li->constval);
+            return mark_julia_const(li->constval);
         }
-        if (!li->inInference && li->inferred && li->code != jl_nothing) {
-            jl_compile_linfo(li);
+        if (li->functionObjectsDecls.functionObject == NULL) {
+            assert(!li->inCompile);
+            if (li->code == jl_nothing && !li->inInference && li->inferred) {
+                // XXX: it was inferred in the past, so it's almost valid to re-infer it now
+                jl_type_infer(li, 0);
+            }
+            if (!li->inInference && li->inferred && li->code != jl_nothing) {
+                jl_compile_linfo(li);
+            }
+        }
+        Value *theFptr = (Value*)li->functionObjectsDecls.functionObject;
+        if (theFptr && li->jlcall_api == 0) {
+            jl_cgval_t fval = emit_expr(args[1], ctx);
+            jl_cgval_t result = emit_call_function_object(li, fval, theFptr, &args[1], nargs - 1, (jl_value_t*)ex, ctx);
+            if (result.typ == jl_bottom_type)
+                CreateTrap(builder);
+            return result;
         }
     }
-    Value *theFptr = (Value*)li->functionObjectsDecls.functionObject;
-    jl_cgval_t result;
-    if (theFptr && li->jlcall_api == 0) {
-        jl_cgval_t fval = emit_expr(args[1], ctx);
-        result = emit_call_function_object(li, fval, theFptr, &args[1], nargs - 1, (jl_value_t*)ex, ctx);
-    }
-    else {
-        result = mark_julia_type(emit_jlcall(prepare_call(jlinvoke_func), literal_pointer_val((jl_value_t*)li),
-                                             &args[1], nargs, ctx),
-                                 true, expr_type((jl_value_t*)ex, ctx), ctx);
-    }
-
-    if (result.typ == jl_bottom_type) {
+    jl_cgval_t result = mark_julia_type(emit_jlcall(prepare_call(jlinvoke_func), boxed(lival, ctx, false),
+                                                    &args[1], nargs, ctx),
+                                        true, expr_type((jl_value_t*)ex, ctx), ctx);
+    if (result.typ == jl_bottom_type)
         CreateTrap(builder);
-    }
     return result;
 }
 

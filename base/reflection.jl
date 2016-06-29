@@ -192,7 +192,7 @@ function _methods_by_ftype(t::ANY, lim)
     if 1 < nu <= 64
         return _methods(Any[tp...], length(tp), lim, [])
     end
-    # TODO: the following can return incorrect answers that the above branch would have corrected
+    # XXX: the following can return incorrect answers that the above branch would have corrected
     return ccall(:jl_matching_methods, Any, (Any,Cint,Cint), t, lim, 0)
 end
 function _methods(t::Array,i,lim::Integer,matching::Array{Any,1})
@@ -206,7 +206,7 @@ function _methods(t::Array,i,lim::Integer,matching::Array{Any,1})
             for ty in (ti::Union).types
                 t[i] = ty
                 if _methods(t,i-1,lim,matching) === false
-                    t[i] = ty
+                    t[i] = ti
                     return false
                 end
             end
