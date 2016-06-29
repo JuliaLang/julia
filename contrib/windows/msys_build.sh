@@ -166,7 +166,6 @@ for lib in SUITESPARSE ARPACK BLAS LAPACK FFTW \
 done
 echo 'override LIBLAPACK = $(LIBBLAS)' >> Make.user
 echo 'override LIBLAPACKNAME = $(LIBBLASNAME)' >> Make.user
-echo 'JULIA_SYSIMG_BUILD_FLAGS=--output-ji ../usr/lib/julia/sys.ji' >> Make.user
 
 # Remaining dependencies:
 # libuv since its static lib is no longer included in the binaries
