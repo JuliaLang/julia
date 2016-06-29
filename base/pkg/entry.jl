@@ -295,18 +295,42 @@ function pin(pkg::AbstractString, head::AbstractString)
     should_resolve = true
     with(GitRepo, pkg) do repo
         id = if isempty(head) # get HEAD commit
-            LibGit2.head_oid(repo)
-        else
             # no need to resolve, branch will be from HEAD
             should_resolve = false
+            LibGit2.head_oid(repo)
+        else
             LibGit2.revparseid(repo, head)
         end
         commit = LibGit2.get(LibGit2.GitCommit, repo, id)
-        branch = "pinned.$(string(id)[1:8]).tmp"
-        info("Creating $pkg branch $branch")
         try
-            ref = LibGit2.create_branch(repo, branch, commit)
-            finalize(ref)
+            # note: changing the following naming scheme requires a corresponding change in Read.ispinned()
+            branch = "pinned.$(string(id)[1:8]).tmp"
+            if LibGit2.isattached(repo) && LibGit2.branch(repo) == branch
+                info("Package $pkg is already pinned" * (isempty(head) ? "" : " to the selected commit"))
+                should_resolve = false
+                return
+            end
+            ref = LibGit2.lookup_branch(repo, branch)
+            try
+                if ref !== nothing
+                    if LibGit2.revparseid(repo, branch) != id
+                        throw(PkgError("Package $pkg: existing branch $branch has been edited and doesn't correspond to its original commit"))
+                    end
+                    info("Package $pkg: checking out existing branch $branch")
+                else
+                    info("Creating $pkg branch $branch")
+                    ref = LibGit2.create_branch(repo, branch, commit)
+                end
+
+                # checkout selected branch
+                with(LibGit2.peel(LibGit2.GitTree, ref)) do btree
+                    LibGit2.checkout_tree(repo, btree)
+                end
+                # switch head to the branch
+                LibGit2.head!(repo, ref)
+            finally
+                finalize(ref)
+            end
         finally
             finalize(commit)
         end
@@ -384,6 +408,8 @@ function update(branch::AbstractString)
             if LibGit2.isattached(repo)
                 if LibGit2.isdirty(repo)
                     warn("Package $pkg: skipping update (dirty)...")
+                elseif Read.ispinned(repo)
+                    info("Package $pkg: skipping update (pinned)...")
                 else
                     prev_sha = string(LibGit2.head_oid(repo))
                     success = true

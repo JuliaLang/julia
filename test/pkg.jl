@@ -184,7 +184,7 @@ temp_pkg_dir() do
 
         Pkg.pin("Example", v"0.4.0")
         @test Pkg.update() == nothing
-        Pkg.installed()["Example"] == v"0.4.0"
+        @test Pkg.installed()["Example"] == v"0.4.0"
 
         # bug identified in #16850, Base.url \ vs / for non-Base methods
         include(Pkg.dir("Example","src","Example.jl"))
