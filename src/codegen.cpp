@@ -2642,7 +2642,6 @@ static jl_cgval_t emit_call_function_object(jl_lambda_info_t *li, const jl_cgval
             idx++;
         }
         for(size_t i=0; i < nargs+1; i++) {
-            Type *at = cft->getParamType(idx);
             jl_value_t *jt = jl_nth_slot_type(li->specTypes,i);
             bool isboxed;
             Type *et = julia_type_to_llvm(jt, &isboxed);
@@ -2651,6 +2650,8 @@ static jl_cgval_t emit_call_function_object(jl_lambda_info_t *li, const jl_cgval
                 if (i>0) emit_expr(args[i], ctx);
                 continue;
             }
+            assert(idx < nfargs);
+            Type *at = cft->getParamType(idx);
             if (isboxed) {
                 assert(at == T_pjlvalue && et == T_pjlvalue);
                 jl_cgval_t origval = i==0 ? theF : emit_expr(args[i], ctx);
