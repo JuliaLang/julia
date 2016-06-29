@@ -584,10 +584,7 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
        julia> eig([1.0 0.0 0.0; 0.0 3.0 0.0; 0.0 0.0 18.0])
        ([1.0,3.0,18.0],
-       3×3 Array{Float64,2}:
-        1.0  0.0  0.0
-        0.0  1.0  0.0
-        0.0  0.0  1.0)
+       [1.0 0.0 0.0; 0.0 1.0 0.0; 0.0 0.0 1.0])
 
    ``eig`` is a wrapper around :func:`eigfact`\ , extracting all parts of the factorization to a tuple; where possible, using :func:`eigfact` is recommended.
 
