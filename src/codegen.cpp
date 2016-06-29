@@ -2406,9 +2406,9 @@ static bool emit_builtin_call(jl_cgval_t *ret, jl_value_t *f, jl_value_t **args,
                             Value *own_ptr;
                             if (jl_is_long(ndp)) {
                                 own_ptr = tbaa_decorate(tbaa_const, builder.CreateLoad(
-                                    builder.CreateBitCast(
+                                    emit_bitcast(
                                         builder.CreateConstGEP1_32(
-                                            builder.CreateBitCast(aryv, T_pint8),
+                                            emit_bitcast(aryv, T_pint8),
                                             jl_array_data_owner_offset(nd)),
                                         T_ppjlvalue)));
                             }
@@ -2567,7 +2567,7 @@ static bool emit_builtin_call(jl_cgval_t *ret, jl_value_t *f, jl_value_t **args,
                 Value *types_len = emit_datatype_nfields(tyv);
                 Value *idx = emit_unbox(T_size, emit_expr(args[2], ctx), (jl_value_t*)jl_long_type);
                 emit_bounds_check(ty, (jl_value_t*)jl_datatype_type, idx, types_len, ctx);
-                Value *fieldtyp = tbaa_decorate(tbaa_const, builder.CreateLoad(builder.CreateGEP(builder.CreateBitCast(types_svec, T_ppjlvalue), idx)));
+                Value *fieldtyp = tbaa_decorate(tbaa_const, builder.CreateLoad(builder.CreateGEP(emit_bitcast(types_svec, T_ppjlvalue), idx)));
                 *ret = mark_julia_type(fieldtyp, true, expr_type(expr, ctx), ctx);
                 JL_GC_POP();
                 return true;
@@ -2879,7 +2879,7 @@ static Value *global_binding_pointer(jl_module_t *m, jl_sym_t *s,
             PHINode *p = builder.CreatePHI(T_pjlvalue, 2);
             p->addIncoming(cachedval, currentbb);
             p->addIncoming(bval, not_found);
-            return julia_binding_gv(builder.CreateBitCast(p, T_ppjlvalue));
+            return julia_binding_gv(emit_bitcast(p, T_ppjlvalue));
         }
         if (b->deprecated) cg_bdw(b, ctx);
     }
@@ -2907,7 +2907,7 @@ static jl_cgval_t emit_sparam(size_t i, jl_codectx_t *ctx)
     }
     assert(ctx->spvals_ptr != NULL);
     Value *bp = builder.CreateConstInBoundsGEP1_32(LLVM37_param(T_pjlvalue)
-            builder.CreateBitCast(ctx->spvals_ptr, T_ppjlvalue),
+            emit_bitcast(ctx->spvals_ptr, T_ppjlvalue),
             i + sizeof(jl_svec_t) / sizeof(jl_value_t*));
     return mark_julia_type(tbaa_decorate(tbaa_const, builder.CreateLoad(bp)), true, jl_any_type, ctx);
 }
@@ -3654,7 +3654,7 @@ static Function *gen_cfun_wrapper(jl_function_t *ff, jl_value_t *jlrettype, jl_t
         if (jlfunc_sret) {
             // fuse the two sret together, or emit an alloca to hold it
             if (sret)
-                result = builder.CreateBitCast(sretPtr, theFptr->getFunctionType()->getParamType(0));
+                result = emit_bitcast(sretPtr, theFptr->getFunctionType()->getParamType(0));
             else
                 result = builder.CreateAlloca(theFptr->getFunctionType()->getParamType(0)->getContainedType(0));
             args.push_back(result);
@@ -3732,7 +3732,7 @@ static Function *gen_cfun_wrapper(jl_function_t *ff, jl_value_t *jlrettype, jl_t
                                                literal_pointer_val((jl_value_t*)jargty));
                     tbaa_decorate(jl_is_mutable(jargty) ? tbaa_mutab : tbaa_immut,
                                   builder.CreateAlignedStore(val,
-                                                             builder.CreateBitCast(mem, val->getType()->getPointerTo()),
+                                                             emit_bitcast(mem, val->getType()->getPointerTo()),
                                                              16)); // julia's gc gives 16-byte aligned addresses
                     inputarg = mark_julia_type(mem, true, jargty, &ctx);
                 }
