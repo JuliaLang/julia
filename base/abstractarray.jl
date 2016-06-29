@@ -146,15 +146,6 @@ linearindexing(A::AbstractArray, B::AbstractArray...) = linearindexing(linearind
 linearindexing(::LinearFast, ::LinearFast) = LinearFast()
 linearindexing(::LinearIndexing, ::LinearIndexing) = LinearSlow()
 
-abstract IndicesBehavior
-immutable IndicesStartAt1  <: IndicesBehavior end   # indices 1:size(A,d)
-immutable IndicesUnitRange <: IndicesBehavior end   # arb UnitRange indices
-immutable IndicesList      <: IndicesBehavior end   # indices like (:cat, :dog, :mouse)
-
-indicesbehavior(A::AbstractArray) = indicesbehavior(typeof(A))
-indicesbehavior{T<:AbstractArray}(::Type{T}) = IndicesStartAt1()
-indicesbehavior(::Number) = IndicesStartAt1()
-
 abstract IndicesPerformance
 immutable IndicesFast1D <: IndicesPerformance end  # indices(A, d) is fast
 immutable IndicesSlow1D <: IndicesPerformance end  # indices(A) is better than indices(A,d)
@@ -374,26 +365,6 @@ indices of `A`.
 """
 similar(f, shape::Tuple) = f(to_shape(shape))
 similar(f, dims::DimOrInd...) = similar(f, dims)
-
-promote_indices(a) = a
-function promote_indices(a, b, c...)
-    @_inline_meta
-    promote_indices(promote_indices(a, b), c...)
-end
-# overload this to return true for your type, e.g.,
-#   promote_indices(a::OffsetArray, b::OffsetArray) = a
-promote_indices(a::AbstractArray, b::AbstractArray) = _promote_indices(indicesbehavior(a), indicesbehavior(b), a, b)
-_promote_indices(::IndicesStartAt1, ::IndicesStartAt1, a, b) = a
-_promote_indices(::IndicesBehavior, ::IndicesBehavior, a, b) = throw(ArgumentError("types $(typeof(a)) and $(typeof(b)) do not have promote_indices defined"))
-promote_indices(a::Number, b::AbstractArray) = b
-promote_indices(a::AbstractArray, b::Number) = a
-
-# Strip off the index-changing container---this assumes that `parent`
-# performs such an operation. TODO: since few things in Base need this, it
-# would be great to find a way to eliminate this function.
-normalize_indices(A) = normalize_indices(indicesbehavior(A), A)
-normalize_indices(::IndicesStartAt1, A) = A
-normalize_indices(::IndicesBehavior, A) = parent(A)
 
 ## from general iterable to any array
 
@@ -1230,37 +1201,25 @@ end
 # fallbacks
 function sub2ind(A::AbstractArray, I...)
     @_inline_meta
-    sub2ind(indicesbehavior(A), A, I...)
-end
-function sub2ind(::IndicesStartAt1, A::AbstractArray, I...)
-    @_inline_meta
-    sub2ind(size(A), I...)
-end
-function sub2ind(::IndicesBehavior, A::AbstractArray, I...)
-    @_inline_meta
     sub2ind(indices(A), I...)
 end
 function ind2sub(A::AbstractArray, ind)
     @_inline_meta
-    ind2sub(indicesbehavior(A), A, ind)
-end
-function ind2sub(::IndicesStartAt1, A::AbstractArray, ind)
-    @_inline_meta
-    ind2sub(size(A), ind)
-end
-function ind2sub(::IndicesBehavior, A::AbstractArray, ind)
-    @_inline_meta
     ind2sub(indices(A), ind)
 end
 
+# 0-dimensional arrays and indexing with []
 sub2ind(::Tuple{}) = 1
 sub2ind(::DimsInteger) = 1
 sub2ind(::Indices) = 1
 sub2ind(::Tuple{}, I::Integer...) = (@_inline_meta; _sub2ind((), 1, 1, I...))
+# Generic cases
 sub2ind(dims::DimsInteger, I::Integer...) = (@_inline_meta; _sub2ind(dims, 1, 1, I...))
 sub2ind(inds::Indices, I::Integer...) = (@_inline_meta; _sub2ind(inds, 1, 1, I...))
-# In 1d, there's a question of whether we're doing cartesian indexing or linear indexing. Support only the former.
+# In 1d, there's a question of whether we're doing cartesian indexing
+# or linear indexing. Support only the former.
 sub2ind(inds::Indices{1}, I::Integer...) = throw(ArgumentError("Linear indexing is not defined for one-dimensional arrays"))
+sub2ind(inds::Tuple{OneTo}, I::Integer...) = (@_inline_meta; _sub2ind(inds, 1, 1, I...)) # only OneTo is safe
 
 _sub2ind(::Any, L, ind) = ind
 function _sub2ind(::Tuple{}, L, ind, i::Integer, I::Integer...)
@@ -1284,6 +1243,7 @@ ind2sub(::Tuple{}, ind::Integer) = (@_inline_meta; ind == 1 ? () : throw(BoundsE
 ind2sub(dims::DimsInteger, ind::Integer) = (@_inline_meta; _ind2sub((), dims, ind-1))
 ind2sub(inds::Indices, ind::Integer) = (@_inline_meta; _ind2sub((), inds, ind-1))
 ind2sub(inds::Indices{1}, ind::Integer) = throw(ArgumentError("Linear indexing is not defined for one-dimensional arrays"))
+ind2sub(inds::Tuple{OneTo}, ind::Integer) = (@_inline_meta; _ind2sub((), inds, ind-1))
 
 _ind2sub(::Tuple{}, ::Tuple{}, ind) = (ind+1,)
 function _ind2sub(out, indslast::NTuple{1}, ind)
