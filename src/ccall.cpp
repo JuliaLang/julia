@@ -166,7 +166,7 @@ Value *llvm_type_rewrite(Value *v, Type *from_type, Type *target_type,
 
     // simple integer and float widening & conversion cases
     if (from_type->getPrimitiveSizeInBits() > 0 && target_type->getPrimitiveSizeInBits() == from_type->getPrimitiveSizeInBits()) {
-        return builder.CreateBitCast(v, target_type);
+        return emit_bitcast(v, target_type);
     }
     if (target_type->isFloatingPointTy() && from_type->isFloatingPointTy()) {
         if (target_type->getPrimitiveSizeInBits() > from_type->getPrimitiveSizeInBits())
@@ -274,7 +274,7 @@ static Value *julia_to_native(Type *to, bool toboxed, jl_value_t *jlto, const jl
                 ai->setAlignment(16);
                 prepare_call(
                     builder.CreateMemCpy(ai, data_pointer(jvinfo, ctx, T_pint8), nbytes, sizeof(void*))->getCalledValue()); // minimum gc-alignment in julia is pointer size
-                return builder.CreateBitCast(ai, to);
+                return emit_bitcast(ai, to);
             }
         }
         // emit maybe copy
@@ -293,7 +293,7 @@ static Value *julia_to_native(Type *to, bool toboxed, jl_value_t *jlto, const jl
         AllocaInst *ai = builder.CreateAlloca(T_int8, nbytes);
         ai->setAlignment(16);
         prepare_call(builder.CreateMemCpy(ai, data_pointer(jvinfo, ctx, T_pint8), nbytes, sizeof(void*))->getCalledValue()); // minimum gc-alignment in julia is pointer size
-        Value *p2 = builder.CreateBitCast(ai, to);
+        Value *p2 = emit_bitcast(ai, to);
         builder.CreateBr(afterBB);
         builder.SetInsertPoint(afterBB);
         PHINode *p = builder.CreatePHI(to, 2);
@@ -1189,7 +1189,7 @@ static jl_cgval_t emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
         assert(!(jl_is_expr(argi) && ((jl_expr_t*)argi)->head == amp_sym));
         jl_cgval_t ary = emit_expr(argi, ctx);
         JL_GC_POP();
-        return mark_or_box_ccall_result(builder.CreateBitCast(emit_arrayptr(ary, ctx), lrt),
+        return mark_or_box_ccall_result(emit_bitcast(emit_arrayptr(ary, ctx), lrt),
                                         retboxed, args[2], rt, static_rt, ctx);
     }
     if (fptr == (void(*)(void))&jl_value_ptr ||
@@ -1226,7 +1226,7 @@ static jl_cgval_t emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
             ary = emit_unbox(largty, emit_expr(argi, ctx), tti);
         }
         JL_GC_POP();
-        return mark_or_box_ccall_result(builder.CreateBitCast(ary, lrt),
+        return mark_or_box_ccall_result(emit_bitcast(ary, lrt),
                                         retboxed, args[2], rt, static_rt, ctx);
     }
     if (JL_CPU_WAKE_NOOP &&
@@ -1266,7 +1266,7 @@ static jl_cgval_t emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
         assert(nargt == 0);
         JL_GC_POP();
         return mark_or_box_ccall_result(
-            builder.CreateBitCast(ctx->ptlsStates, lrt),
+            emit_bitcast(ctx->ptlsStates, lrt),
             retboxed, args[2], rt, static_rt, ctx);
     }
     if (fptr == &jl_sigatomic_begin ||
@@ -1355,7 +1355,7 @@ static jl_cgval_t emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
                     emit_expr(args[6], ctx);
                     emit_expr(args[8], ctx);
                     JL_GC_POP();
-                    return mark_or_box_ccall_result(builder.CreateBitCast(llvmf, lrt),
+                    return mark_or_box_ccall_result(emit_bitcast(llvmf, lrt),
                                                     retboxed, args[2], rt, static_rt, ctx);
                 }
                 JL_CATCH {
@@ -1415,7 +1415,7 @@ static jl_cgval_t emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
             // XXX: result needs a GC root here if result->getType() == T_pjlvalue
             result = sret_val.V;
         }
-        argvals[0] = builder.CreateBitCast(result, fargt_sig.at(0));
+        argvals[0] = emit_bitcast(result, fargt_sig.at(0));
         sretboxed = sret_val.isboxed;
     }
 
@@ -1595,7 +1595,7 @@ static jl_cgval_t emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
             assert(newst.typ != NULL && "Type was not concrete");
             assert(newst.isboxed);
             // copy the data from the return value to the new struct
-            tbaa_decorate(newst.tbaa, builder.CreateAlignedStore(result, builder.CreateBitCast(newst.V, prt->getPointerTo()), 16)); // julia gc is aligned 16
+            tbaa_decorate(newst.tbaa, builder.CreateAlignedStore(result, emit_bitcast(newst.V, prt->getPointerTo()), 16)); // julia gc is aligned 16
             return newst;
         }
         else if (jlrt != prt) {
