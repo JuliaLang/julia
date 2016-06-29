@@ -3,13 +3,14 @@
 #include "llvm-version.h"
 #include "platform.h"
 #include "options.h"
-#if defined(_OS_WINDOWS_) && !defined(LLVM38)
-// trick pre-llvm38 into skipping the generation of _chkstk calls
+#if defined(_OS_WINDOWS_) && !defined(LLVM39)
+// trick pre-llvm39 into skipping the generation of _chkstk calls
 //   since it has some codegen issues associated with them:
 //   (a) assumed to be within 32-bit offset
 //   (b) bad asm is generated for certain code patterns:
 //       see https://github.com/JuliaLang/julia/pull/11644#issuecomment-112276813
 // also, use ELF because RuntimeDyld COFF I686 support didn't exist
+// also, use ELF because RuntimeDyld COFF X86_64 doesn't seem to work (fails to generate function pointers)?
 #define FORCE_ELF
 #endif
 #if defined(_CPU_X86_)
@@ -413,6 +414,9 @@ static Function *jlgetnthfieldchecked_func;
 //static Function *jlsetnthfield_func;
 #ifdef _OS_WINDOWS_
 static Function *resetstkoflw_func;
+#if defined(_CPU_X86_64_)
+static Function *juliapersonality_func;
+#endif
 #endif
 static Function *diff_gc_total_bytes_func;
 static Function *jlarray_data_owner_func;
@@ -5410,6 +5414,11 @@ static void init_julia_llvm_env(Module *m)
     resetstkoflw_func = Function::Create(FunctionType::get(T_int32, false),
             Function::ExternalLinkage, "_resetstkoflw", m);
     add_named_global(resetstkoflw_func, &_resetstkoflw);
+#if defined(_CPU_X86_64_)
+    juliapersonality_func = Function::Create(FunctionType::get(T_int32, true),
+            Function::ExternalLinkage, "__julia_personality", m);
+    add_named_global(juliapersonality_func, &__julia_personality);
+#endif
 #ifndef FORCE_ELF
 #if defined(_CPU_X86_64_)
 #if defined(_COMPILER_MINGW_)

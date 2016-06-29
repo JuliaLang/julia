@@ -278,8 +278,7 @@ static LONG WINAPI exception_handler(struct _EXCEPTION_POINTERS *ExceptionInfo)
 }
 
 #if defined(_CPU_X86_64_)
-EXCEPTION_DISPOSITION _seh_exception_handler(PEXCEPTION_RECORD ExceptionRecord, void *EstablisherFrame, PCONTEXT ContextRecord, void *DispatcherContext)
-{
+JL_DLLEXPORT EXCEPTION_DISPOSITION __julia_personality(PEXCEPTION_RECORD ExceptionRecord, void *EstablisherFrame, PCONTEXT ContextRecord, void *DispatcherContext) {
     EXCEPTION_POINTERS ExceptionInfo;
     ExceptionInfo.ExceptionRecord = ExceptionRecord;
     ExceptionInfo.ContextRecord = ContextRecord;
