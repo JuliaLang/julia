@@ -14,9 +14,9 @@ jl_gc_pagemeta_t *jl_gc_page_metadata(void *data)
     return page_metadata(data);
 }
 
-region_t *jl_gc_find_region(void *ptr, int maybe)
+region_t *jl_gc_find_region(void *ptr)
 {
-    return find_region(ptr, maybe);
+    return find_region(ptr);
 }
 
 // Find the memory block in the pool that owns the byte pointed to by p.
@@ -26,7 +26,7 @@ region_t *jl_gc_find_region(void *ptr, int maybe)
 // the end of the page.
 JL_DLLEXPORT jl_taggedvalue_t *jl_gc_find_taggedvalue_pool(char *p, size_t *osize_p)
 {
-    region_t *r = find_region(p, 1);
+    region_t *r = find_region(p);
     // Not in the pool
     if (!r)
         return NULL;
