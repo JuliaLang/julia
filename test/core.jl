@@ -4451,3 +4451,8 @@ end
 let g = f16340(1)
     @test isa(typeof(g).name.mt.defs.tvars, TypeVar)
 end
+
+# issue #17147
+f17147(::Tuple) = 1
+f17147{N}(::Vararg{Tuple,N}) = 2
+@test f17147((), ()) == 2
