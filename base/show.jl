@@ -127,15 +127,16 @@ end
 
 # Check if a particular symbol is exported from a standard library module
 function is_exported_from_stdlib(name::Symbol, mod::Module)
-    if (mod === Base || mod === Core) && isexported(mod, name)
-        return true
+    !isdefined(mod, name) && return false
+    orig = getfield(mod, name)
+    while !(mod === Base || mod === Core)
+        parent = module_parent(mod)
+        if mod === Main || mod === parent || parent === Main
+            return false
+        end
+        mod = parent
     end
-    parent = module_parent(mod)
-    if parent !== mod && isdefined(mod, name) && isdefined(parent, name) &&
-       getfield(mod, name) === getfield(parent, name)
-        return is_exported_from_stdlib(name, parent)
-    end
-    return false
+    return isexported(mod, name) && isdefined(mod, name) && getfield(mod, name) === orig
 end
 
 function show(io::IO, f::Function)
