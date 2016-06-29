@@ -61,10 +61,12 @@ for elty in (Float32, Float64, Complex64, Complex128)
         G, r = givens(x[2], x[4], 2, 4)
         @test (G*x)[2] ≈ r
         @test abs((G*x)[4]) < eps(real(elty))
+        @inferred givens(x[2], x[4], 2, 4)
 
         G, r = givens(x, 2, 4)
         @test (G*x)[2] ≈ r
         @test abs((G*x)[4]) < eps(real(elty))
+        @inferred givens(x, 2, 4)
 
         G, r = givens(x, 4, 2)
         @test (G*x)[4] ≈ r
