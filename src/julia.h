@@ -985,6 +985,14 @@ JL_DLLEXPORT const char *jl_typename_str(jl_value_t *v);
 JL_DLLEXPORT const char *jl_typeof_str(jl_value_t *v);
 JL_DLLEXPORT int jl_type_morespecific(jl_value_t *a, jl_value_t *b);
 
+#ifdef NDEBUG
+STATIC_INLINE int jl_is_leaf_type_(jl_value_t *v)
+{
+    return jl_is_datatype(v) && ((jl_datatype_t*)v)->isleaftype;
+}
+#define jl_is_leaf_type(v) jl_is_leaf_type_(v)
+#endif
+
 // type constructors
 JL_DLLEXPORT jl_typename_t *jl_new_typename(jl_sym_t *name);
 JL_DLLEXPORT jl_tvar_t *jl_new_typevar(jl_sym_t *name,jl_value_t *lb,jl_value_t *ub);
@@ -1307,7 +1315,7 @@ JL_DLLEXPORT jl_value_t *jl_parse_string(const char *str, size_t len,
                                          int pos0, int greedy);
 JL_DLLEXPORT int jl_parse_depwarn(int warn);
 JL_DLLEXPORT jl_value_t *jl_load_file_string(const char *text, size_t len,
-                                             char *filename, size_t namelen);
+                                             char *filename);
 JL_DLLEXPORT jl_value_t *jl_expand(jl_value_t *expr);
 JL_DLLEXPORT jl_value_t *jl_eval_string(const char *str);
 
@@ -1342,7 +1350,7 @@ JL_DLLEXPORT const char *jl_lookup_soname(const char *pfx, size_t n);
 // compiler
 JL_DLLEXPORT jl_value_t *jl_toplevel_eval(jl_value_t *v);
 JL_DLLEXPORT jl_value_t *jl_toplevel_eval_in(jl_module_t *m, jl_value_t *ex);
-JL_DLLEXPORT jl_value_t *jl_load(const char *fname, size_t len);
+JL_DLLEXPORT jl_value_t *jl_load(const char *fname);
 JL_DLLEXPORT jl_value_t *jl_interpret_toplevel_expr_in(jl_module_t *m, jl_value_t *e,
                                                        jl_lambda_info_t *lam);
 JL_DLLEXPORT jl_module_t *jl_base_relative_to(jl_module_t *m);

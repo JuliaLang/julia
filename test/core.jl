@@ -3823,6 +3823,27 @@ let ary = Vector{Any}(10)
         ccall(:jl_array_grow_beg, Void, (Any, Csize_t), ary, 4)
         check_undef_and_fill(ary, 1:(2n + 4))
     end
+
+    ary = Vector{Any}(100)
+    ccall(:jl_array_grow_end, Void, (Any, Csize_t), ary, 10000)
+    ary[:] = 1:length(ary)
+    ccall(:jl_array_del_beg, Void, (Any, Csize_t), ary, 10000)
+    # grow on the back until a buffer reallocation happens
+    cur_ptr = pointer(ary)
+    while cur_ptr == pointer(ary)
+        len = length(ary)
+        ccall(:jl_array_grow_end, Void, (Any, Csize_t), ary, 10)
+        for i in (len + 1):(len + 10)
+            @test !isdefined(ary, i)
+        end
+    end
+
+    ary = Vector{Any}(100)
+    ary[:] = 1:length(ary)
+    ccall(:jl_array_grow_at, Void, (Any, Csize_t, Csize_t), ary, 50, 10)
+    for i in 51:60
+        @test !isdefined(ary, i)
+    end
 end
 
 # check if we can run multiple finalizers at the same time
@@ -3889,6 +3910,104 @@ let
     arrayset_unknown_dim(Int, 2)
     arrayset_unknown_dim(Int, 3)
 end
+
+module TestSharedArrayResize
+using Base.Test
+# Attempting to change the shape of a shared array should unshare it and
+# not modify the original data
+function test_shared_array_resize{T}(::Type{T})
+    len = 100
+    a = Vector{T}(len)
+    function test_unshare(f)
+        a′ = reshape(reshape(a, (len ÷ 2, 2)), len)
+        a[:] = 1:length(a)
+        # The operation should fail on the owner shared array
+        # and has no side effect.
+        @test_throws ErrorException f(a)
+        @test a == [1:len;]
+        @test a′ == [1:len;]
+        @test pointer(a) == pointer(a′)
+        # The operation should pass on the non-owner shared array
+        # and should unshare the arrays with no effect on the original one.
+        f(a′)
+        @test a == [1:len;]
+        @test pointer(a) != pointer(a′)
+    end
+
+    test_unshare(a->ccall(:jl_array_del_end, Void, (Any, Csize_t), a, 0))
+    test_unshare(a->ccall(:jl_array_del_end, Void, (Any, Csize_t), a, 1))
+    test_unshare(a->ccall(:jl_array_del_beg, Void, (Any, Csize_t), a, 0))
+    test_unshare(a->ccall(:jl_array_del_beg, Void, (Any, Csize_t), a, 1))
+    test_unshare(a->deleteat!(a, 10))
+    test_unshare(a->deleteat!(a, 90))
+    test_unshare(a->ccall(:jl_array_grow_end, Void, (Any, Csize_t), a, 0))
+    test_unshare(a->ccall(:jl_array_grow_end, Void, (Any, Csize_t), a, 1))
+    test_unshare(a->ccall(:jl_array_grow_beg, Void, (Any, Csize_t), a, 0))
+    test_unshare(a->ccall(:jl_array_grow_beg, Void, (Any, Csize_t), a, 1))
+    test_unshare(a->insert!(a, 10, 10))
+    test_unshare(a->insert!(a, 90, 90))
+end
+test_shared_array_resize(Int)
+test_shared_array_resize(Any)
+end
+
+module TestArrayNUL
+using Base.Test
+function check_nul(a::Vector{UInt8})
+    b = ccall(:jl_array_cconvert_cstring,
+              Ref{Vector{UInt8}}, (Vector{UInt8},), a)
+    @test unsafe_load(pointer(b), length(b) + 1) == 0x0
+    return b === a
+end
+
+a = UInt8[]
+b = "aaa"
+c = [0x2, 0x1, 0x3]
+
+@test check_nul(a)
+@test check_nul(b.data)
+@test check_nul(c)
+d = [0x2, 0x1, 0x3]
+@test check_nul(d)
+push!(d, 0x3)
+@test check_nul(d)
+push!(d, 0x3)
+@test check_nul(d)
+ccall(:jl_array_del_end, Void, (Any, UInt), d, 2)
+@test check_nul(d)
+ccall(:jl_array_grow_end, Void, (Any, UInt), d, 1)
+@test check_nul(d)
+ccall(:jl_array_grow_end, Void, (Any, UInt), d, 1)
+@test check_nul(d)
+ccall(:jl_array_grow_end, Void, (Any, UInt), d, 10)
+@test check_nul(d)
+ccall(:jl_array_del_beg, Void, (Any, UInt), d, 8)
+@test check_nul(d)
+ccall(:jl_array_grow_beg, Void, (Any, UInt), d, 8)
+@test check_nul(d)
+ccall(:jl_array_grow_beg, Void, (Any, UInt), d, 8)
+@test check_nul(d)
+f = unsafe_wrap(Array, pointer(d), length(d))
+@test !check_nul(f)
+f = unsafe_wrap(Array, ccall(:malloc, Ptr{UInt8}, (Csize_t,), 10), 10, true)
+@test !check_nul(f)
+g = reinterpret(UInt8, UInt16[0x1, 0x2])
+@test !check_nul(g)
+@test check_nul(copy(g))
+end
+
+# Copy of `#undef`
+copy!(Vector{Any}(10), Vector{Any}(10))
+function test_copy_alias{T}(::Type{T})
+    ary = T[1:100;]
+    unsafe_copy!(ary, 1, ary, 11, 90)
+    @test ary == [11:100; 91:100]
+    ary = T[1:100;]
+    unsafe_copy!(ary, 11, ary, 1, 90)
+    @test ary == [1:10; 1:90]
+end
+test_copy_alias(Int)
+test_copy_alias(Any)
 
 # issue #15370
 @test isdefined(Core, :Box)

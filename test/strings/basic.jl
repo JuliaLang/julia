@@ -235,10 +235,10 @@ for T in [BigInt, Int8, UInt8, Int16, UInt16, Int32, UInt32, Int64, UInt64, Int1
     @test isnull(tryparse(T, "1\0"))
 end
 let s = normalize_string("tést",:NFKC)
-    @test unsafe_string(Base.unsafe_convert(Cstring, s)) == s
+    @test unsafe_string(Base.unsafe_convert(Cstring, Base.cconvert(Cstring, s))) == s
     @test unsafe_string(convert(Cstring, Symbol(s))) == s
 end
-@test_throws ArgumentError Base.unsafe_convert(Cstring, "ba\0d")
+@test_throws ArgumentError Base.unsafe_convert(Cstring, Base.cconvert(Cstring, "ba\0d"))
 
 cstrdup(s) = @static is_windows() ? ccall(:_strdup, Cstring, (Cstring,), s) : ccall(:strdup, Cstring, (Cstring,), s)
 let p = cstrdup("hello")
