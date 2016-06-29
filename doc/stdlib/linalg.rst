@@ -322,7 +322,7 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
    .. Docstring generated from Julia source
 
-   Compute the Cholesky factorization of a sparse positive definite matrix ``A``\ . ``A`` must be a ``SparseMatrixCSC``\ , ``Symmetric{SparseMatrixCSC}``\ , or ``Hermitian{SparseMatrixCSC}``\ . A fill-reducing permutation is used. ``F = cholfact(A)`` is most frequently used to solve systems of equations with ``F\b``\ , but also the methods ``diag``\ , ``det``\ , ``logdet`` are defined for ``F``\ . You can also extract individual factors from ``F``\ , using ``F[:L]``\ . However, since pivoting is on by default, the factorization is internally represented as ``A == P'*L*L'*P`` with a permutation matrix ``P``\ ; using just ``L`` without accounting for ``P`` will give incorrect answers. To include the effects of permutation, it's typically preferable to extact "combined" factors like ``PtL = F[:PtL]`` (the equivalent of ``P'*L``\ ) and ``LtP = F[:UP]`` (the equivalent of ``L'*P``\ ).
+   Compute the Cholesky factorization of a sparse positive definite matrix ``A``\ . ``A`` must be a ``SparseMatrixCSC``\ , ``Symmetric{SparseMatrixCSC}``\ , or ``Hermitian{SparseMatrixCSC}``\ . Note that even if ``A`` doesn't have the type tag, it must still be symmetric or Hermitian. A fill-reducing permutation is used. ``F = cholfact(A)`` is most frequently used to solve systems of equations with ``F\b``\ , but also the methods ``diag``\ , ``det``\ , ``logdet`` are defined for ``F``\ . You can also extract individual factors from ``F``\ , using ``F[:L]``\ . However, since pivoting is on by default, the factorization is internally represented as ``A == P'*L*L'*P`` with a permutation matrix ``P``\ ; using just ``L`` without accounting for ``P`` will give incorrect answers. To include the effects of permutation, it's typically preferable to extact "combined" factors like ``PtL = F[:PtL]`` (the equivalent of ``P'*L``\ ) and ``LtP = F[:UP]`` (the equivalent of ``L'*P``\ ).
 
    Setting optional ``shift`` keyword argument computes the factorization of ``A+shift*I`` instead of ``A``\ . If the ``perm`` argument is nonempty, it should be a permutation of ``1:size(A,1)`` giving the ordering to use (instead of CHOLMOD's default AMD ordering).
 
@@ -336,7 +336,7 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
    .. Docstring generated from Julia source
 
-   Compute the Cholesky (:math:`LL'`\ ) factorization of ``A``\ , reusing the symbolic factorization ``F``\ . ``A`` must be a ``SparseMatrixCSC``\ , ``Symmetric{SparseMatrixCSC}``\ , or ``Hermitian{SparseMatrixCSC}``\ .
+   Compute the Cholesky (:math:`LL'`\ ) factorization of ``A``\ , reusing the symbolic factorization ``F``\ . ``A`` must be a ``SparseMatrixCSC``\ , ``Symmetric{SparseMatrixCSC}``\ , or ``Hermitian{SparseMatrixCSC}``\ . Note that even if ``A`` doesn't have the type tag, it must still be symmetric or Hermitian.
 
    ** Note **
 
@@ -392,7 +392,7 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
    .. Docstring generated from Julia source
 
-   Compute the :math:`LDL'` factorization of a sparse matrix ``A``\ . ``A`` must be a ``SparseMatrixCSC``\ , ``Symmetric{SparseMatrixCSC}``\ , or ``Hermitian{SparseMatrixCSC}``\ . Note that even if ``A`` doesn't have the type tag, its structure must still be symmetric/Hermitian. A fill-reducing permutation is used. ``F = ldltfact(A)`` is most frequently used to solve systems of equations ``A*x = b`` with ``F\b``\ . The returned factorization object ``F`` also supports the methods ``diag``\ , ``det``\ , and ``logdet``\ . You can extract individual factors from ``F`` using ``F[:L]``\ . However, since pivoting is on by default, the factorization is internally represented as ``A == P'*L*D*L'*P`` with a permutation matrix ``P``\ ; using just ``L`` without accounting for ``P`` will give incorrect answers. To include the effects of permutation, it's typically preferable to extact "combined" factors like ``PtL = F[:PtL]`` (the equivalent of ``P'*L``\ ) and ``LtP = F[:UP]`` (the equivalent of ``L'*P``\ ). The complete list of supported factors is ``:L, :PtL, :D, :UP, :U, :LD, :DU, :PtLD, :DUP``\ .
+   Compute the :math:`LDL'` factorization of a sparse matrix ``A``\ . ``A`` must be a ``SparseMatrixCSC``\ , ``Symmetric{SparseMatrixCSC}``\ , or ``Hermitian{SparseMatrixCSC}``\ . Note that even if ``A`` doesn't have the type tag, it must still be symmetric or Hermitian. A fill-reducing permutation is used. ``F = ldltfact(A)`` is most frequently used to solve systems of equations ``A*x = b`` with ``F\b``\ . The returned factorization object ``F`` also supports the methods ``diag``\ , ``det``\ , and ``logdet``\ . You can extract individual factors from ``F`` using ``F[:L]``\ . However, since pivoting is on by default, the factorization is internally represented as ``A == P'*L*D*L'*P`` with a permutation matrix ``P``\ ; using just ``L`` without accounting for ``P`` will give incorrect answers. To include the effects of permutation, it is typically preferable to extact "combined" factors like ``PtL = F[:PtL]`` (the equivalent of ``P'*L``\ ) and ``LtP = F[:UP]`` (the equivalent of ``L'*P``\ ). The complete list of supported factors is ``:L, :PtL, :D, :UP, :U, :LD, :DU, :PtLD, :DUP``\ .
 
    Setting optional ``shift`` keyword argument computes the factorization of ``A+shift*I`` instead of ``A``\ . If the ``perm`` argument is nonempty, it should be a permutation of ``1:size(A,1)`` giving the ordering to use (instead of CHOLMOD's default AMD ordering).
 
@@ -406,7 +406,7 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
    .. Docstring generated from Julia source
 
-   Compute the :math:`LDL'` factorization of ``A``\ , reusing the symbolic factorization ``F``\ . ``A`` must be a ``SparseMatrixCSC``\ , ``Symmetric{SparseMatrixCSC}``\ , or ``Hermitian{SparseMatrixCSC}``\ .
+   Compute the :math:`LDL'` factorization of ``A``\ , reusing the symbolic factorization ``F``\ . ``A`` must be a ``SparseMatrixCSC``\ , ``Symmetric{SparseMatrixCSC}``\ , or ``Hermitian{SparseMatrixCSC}``\ . Note that even if ``A`` doesn't have the type tag, it must still be symmetric or Hermitian.
 
    ** Note **
 
@@ -546,13 +546,13 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
    .. Docstring generated from Julia source
 
-   Compute the LQ factorization of ``A``\ , using the input matrix as a workspace. See also :func:`lq\ .
+   Compute the LQ factorization of ``A``\ , using the input matrix as a workspace. See also :func:`lq`\ .
 
 .. function:: lqfact(A) -> LQ
 
    .. Docstring generated from Julia source
 
-   Compute the LQ factorization of ``A``\ . See also :func:`lq\ .
+   Compute the LQ factorization of ``A``\ . See also :func:`lq`\ .
 
 .. function:: lq(A; [thin=true]) -> L, Q
 
