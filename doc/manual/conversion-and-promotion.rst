@@ -153,8 +153,8 @@ to one and zero:
 
 The method signatures for conversion methods are often quite a bit more
 involved than this example, especially for parametric types. The example
-above is meant to be pedagogical, and is not the actual julia behaviour.
-This is the actual implementation in julia::
+above is meant to be pedagogical, and is not the actual Julia behaviour.
+This is the actual implementation in Julia::
 
     convert{T<:Real}(::Type{T}, z::Complex) = (imag(z)==0 ? convert(T,real(z)) :
                                                throw(InexactError()))

@@ -12,11 +12,11 @@ Within ``gdb``, any ``jl_value_t*`` object ``obj`` can be displayed using
 
    (gdb) call jl_(obj)
 
-The object will be displayed in the julia session, not in the gdb session.
+The object will be displayed in the ``julia`` session, not in the gdb session.
 This is a useful way to discover the types and values of objects being
 manipulated by Julia's C code.
 
-Similarly, if you're debugging some of julia's internals (e.g.,
+Similarly, if you're debugging some of Julia's internals (e.g.,
 ``inference.jl``), you can print ``obj`` using
 ::
 
@@ -44,11 +44,11 @@ Useful Julia functions for Inspecting those variables
 -----------------------------------------------------
 
 - ``jl_gdblookup($rip)`` :: For looking up the current function and line. (use ``$eip`` on i686 platforms)
-- ``jlbacktrace()`` :: For dumping the current julia backtrace stack to stderr. Only usable after ``record_backtrace()`` has been called.
+- ``jlbacktrace()`` :: For dumping the current Julia backtrace stack to stderr. Only usable after ``record_backtrace()`` has been called.
 - ``jl_dump_llvm_value(Value*)`` :: For invoking ``Value->dump()`` in gdb, where it doesn't work natively. For example, ``f->linfo->functionObject``, ``f->linfo->specFunctionObject``, and ``to_function(f->linfo)``.
 - ``Type->dump()`` :: only works in lldb. Note: add something like ``;1`` to prevent lldb from printing its prompt over the output
 - ``jl_eval_string("expr")`` :: for invoking side-effects to modify the current state or to lookup symbols
-- ``jl_typeof(jl_value_t*)`` :: for extracting the type tag of a julia value (in gdb, call ``macro define jl_typeof jl_typeof`` first, or pick something short like ``ty`` for the first arg to define a shorthand)
+- ``jl_typeof(jl_value_t*)`` :: for extracting the type tag of a Julia value (in gdb, call ``macro define jl_typeof jl_typeof`` first, or pick something short like ``ty`` for the first arg to define a shorthand)
 
 
 Inserting breakpoints for inspection from gdb
@@ -101,7 +101,7 @@ Dealing with signals
 Julia requires a few signal to function property. The profiler uses ``SIGUSR2``
 for sampling and the garbage collector uses ``SIGSEGV`` for threads
 synchronization. If you are debugging some code that uses the profiler or
-multiple julia threads, you may want to let the debugger ignore these signals
+multiple threads, you may want to let the debugger ignore these signals
 since they can be triggered very often during normal operations. The command to
 do this in GDB is (replace ``SIGSEGV`` with ``SIGUSRS`` or other signals you
 want to ignore)::
@@ -116,7 +116,7 @@ If you are debugging a segfault with threaded code, you can set a breakpoint on
 ``jl_critical_error`` (``sigdie_handler`` should also work on Linux and BSD) in
 order to only catch the actual segfault rather than the GC synchronization points.
 
-Debugging during julia's build process (bootstrap)
+Debugging during Julia's build process (bootstrap)
 --------------------------------------------------
 
 Errors that occur during ``make`` need special handling. Julia is built in two stages, constructing

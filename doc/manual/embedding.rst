@@ -18,15 +18,15 @@ We start with a simple C program that initializes Julia and calls some Julia cod
 
   int main(int argc, char *argv[])
   {
-      /* required: setup the julia context */
+      /* required: setup the Julia context */
       jl_init(NULL);
 
-      /* run julia commands */
+      /* run Julia commands */
       jl_eval_string("print(sqrt(2.0))");
 
-      /* strongly recommended: notify julia that the
+      /* strongly recommended: notify Julia that the
            program is about to terminate. this allows
-           julia time to cleanup pending write requests
+           Julia time to cleanup pending write requests
            and run all finalizers
       */
       jl_atexit_hook(0);

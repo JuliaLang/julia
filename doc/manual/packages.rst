@@ -466,7 +466,7 @@ are several possible approaches, here is one that is widely used:
   run the tests:
 
   + From Julia, run :func:`Pkg.test("Foo") <Pkg.test>`: this will run your
-    tests in a separate (new) julia process.
+    tests in a separate (new) ``julia`` process.
   + From Julia, ``include("runtests.jl")`` from the package's ``test/`` folder
     (it's possible the file has a different name, look for one that runs all
     the tests): this allows you to run the tests repeatedly in the same session
