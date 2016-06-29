@@ -343,6 +343,8 @@ typedef struct {
 uint64_t jl_getUnwindInfo(uint64_t dwBase);
 #ifdef _OS_WINDOWS_
 #include <dbghelp.h>
+JL_DLLEXPORT EXCEPTION_DISPOSITION __julia_personality(
+        PEXCEPTION_RECORD ExceptionRecord, void *EstablisherFrame, PCONTEXT ContextRecord, void *DispatcherContext);
 extern HANDLE hMainThread;
 typedef CONTEXT bt_context_t;
 #if defined(_CPU_X86_64_)
