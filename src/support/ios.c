@@ -892,7 +892,10 @@ ios_t *ios_file(ios_t *s, const char *fname, int rd, int wr, int create, int tru
     fd = _wopen(fname_w, flags | O_BINARY | O_NOINHERIT, _S_IREAD | _S_IWRITE);
     set_io_wait_begin(0);
 #else
-    fd = open_cloexec(fname, flags, S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP | S_IROTH | S_IWOTH /* 0666 */);
+    // The mode of the created file is (mode & ~umask), which resolves with
+    // default umask to u=rw,g=r,o=r
+    fd = open_cloexec(fname, flags,
+                      S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP | S_IROTH | S_IWOTH);
 #endif
     s = ios_fd(s, fd, 1, 1);
     if (fd == -1)
