@@ -170,7 +170,7 @@ function givensAlgorithm{T<:AbstractFloat}(f::Complex{T}, g::Complex{T})
 
         if f == 0
             cs = zero(T)
-            r = hypot(real(g), imag(g))
+            r = complex(hypot(real(g), imag(g)))
         # do complex/real division explicitly with two real divisions
             d = hypot(real(gs), imag(gs))
             sn = complex(real(gs)/d, -imag(gs)/d)
