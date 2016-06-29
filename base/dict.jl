@@ -49,91 +49,34 @@ function _truncate_at_width_or_chars(str, width, chars="", truncmark="…")
 end
 
 function show{K,V}(io::IO, t::Associative{K,V})
-    recur_io = IOContext(io, SHOWN_SET=t, multiline=false)
+    recur_io = IOContext(io, :SHOWN_SET => t)
     limit::Bool = get(io, :limit, false)
-    compact = !get(io, :multiline, false)
     if !haskey(io, :compact)
-        recur_io = IOContext(recur_io, compact=true)
-    end
-    if compact
-        # show in a Julia-syntax-like form: Dict(k=>v, ...)
-        if isempty(t)
-            print(io, typeof(t), "()")
-        else
-            if isleaftype(K) && isleaftype(V)
-                print(io, typeof(t).name)
-            else
-                print(io, typeof(t))
-            end
-            print(io, '(')
-            if !show_circular(io, t)
-                first = true
-                n = 0
-                for pair in t
-                    first || print(io, ',')
-                    first = false
-                    show(recur_io, pair)
-                    n+=1
-                    limit && n >= 10 && (print(io, "…"); break)
-                end
-            end
-            print(io, ')')
-        end
-        return
+        recur_io = IOContext(recur_io, :compact => true)
     end
 
-    # Otherwise show more descriptively, with one line per key/value pair
-    print(io, summary(t))
-    isempty(t) && return
-    print(io, ":\n  ")
-    show_circular(io, t) && return
-    if limit
-        sz = displaysize(io)
-        rows, cols = sz[1] - 3, sz[2]
-        rows < 2   && (print(io, " …"); return)
-        cols < 12  && (cols = 12) # Minimum widths of 2 for key, 4 for value
-        cols -= 6 # Subtract the widths of prefix "  " separator " => "
-        rows -= 2 # Subtract the summary and final ⋮ continuation lines
-
-        # determine max key width to align the output, caching the strings
-        ks = Array{AbstractString}(min(rows, length(t)))
-        vs = Array{AbstractString}(min(rows, length(t)))
-        keylen = 0
-        vallen = 0
-        for (i, (k, v)) in enumerate(t)
-            i > rows && break
-            ks[i] = sprint(0, show, k, env=recur_io)
-            vs[i] = sprint(0, show, v, env=recur_io)
-            keylen = clamp(length(ks[i]), keylen, cols)
-            vallen = clamp(length(vs[i]), vallen, cols)
-        end
-        if keylen > max(div(cols, 2), cols - vallen)
-            keylen = max(cld(cols, 3), cols - vallen)
-        end
+    # show in a Julia-syntax-like form: Dict(k=>v, ...)
+    if isempty(t)
+        print(io, typeof(t), "()")
     else
-        rows = cols = 0
-    end
-
-    first = true
-    for (i, (k, v)) in enumerate(t)
-        first || print(io, "\n  ")
-        first = false
-        limit && i > rows && (print(io, rpad("⋮", keylen), " => ⋮"); break)
-
-        if limit
-            key = rpad(_truncate_at_width_or_chars(ks[i], keylen, "\r\n"), keylen)
+        if isleaftype(K) && isleaftype(V)
+            print(io, typeof(t).name)
         else
-            key = sprint(0, show, k, env=recur_io)
+            print(io, typeof(t))
         end
-        print(recur_io, key)
-        print(io, " => ")
-
-        if limit
-            val = _truncate_at_width_or_chars(vs[i], cols - keylen, "\r\n")
-            print(io, val)
-        else
-            show(recur_io, v)
+        print(io, '(')
+        if !show_circular(io, t)
+            first = true
+            n = 0
+            for pair in t
+                first || print(io, ',')
+                first = false
+                show(recur_io, pair)
+                n+=1
+                limit && n >= 10 && (print(io, "…"); break)
+            end
         end
+        print(io, ')')
     end
 end
 
@@ -147,38 +90,7 @@ end
 summary{T<:Union{KeyIterator,ValueIterator}}(iter::T) =
     string(T.name, " for a ", summary(iter.dict))
 
-function show(io::IO, iter::Union{KeyIterator,ValueIterator})
-    if !get(io, :multiline, false)
-        return show(io, collect(iter))
-    end
-    print(io, summary(iter))
-    isempty(iter) && return
-    print(io, ". ", isa(iter,KeyIterator) ? "Keys" : "Values", ":")
-    limit::Bool = get(io, :limit, false)
-    if limit
-        sz = displaysize(io)
-        rows, cols = sz[1] - 3, sz[2]
-        rows < 2 && (print(io, " …"); return)
-        cols < 4 && (cols = 4)
-        cols -= 2 # For prefix "  "
-        rows -= 2 # For summary and final ⋮ continuation lines
-    else
-        rows = cols = 0
-    end
-
-    for (i, v) in enumerate(iter)
-        print(io, "\n  ")
-        limit && i >= rows && (print(io, "⋮"); break)
-
-        if limit
-            str = sprint(0, show, v, env=io)
-            str = _truncate_at_width_or_chars(str, cols, "\r\n")
-            print(io, str)
-        else
-            show(io, v)
-        end
-    end
-end
+show(io::IO, iter::Union{KeyIterator,ValueIterator}) = show(io, collect(iter))
 
 length(v::Union{KeyIterator,ValueIterator}) = length(v.dict)
 isempty(v::Union{KeyIterator,ValueIterator}) = isempty(v.dict)

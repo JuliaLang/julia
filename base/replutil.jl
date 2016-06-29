@@ -3,6 +3,139 @@
 # fallback text/plain representation of any type:
 show(io::IO, ::MIME"text/plain", x) = show(io, x)
 
+# multiline show functions for types defined before multimedia.jl:
+function show(io::IO, ::MIME"text/plain", iter::Union{KeyIterator,ValueIterator})
+    print(io, summary(iter))
+    isempty(iter) && return
+    print(io, ". ", isa(iter,KeyIterator) ? "Keys" : "Values", ":")
+    limit::Bool = get(io, :limit, false)
+    if limit
+        sz = displaysize(io)
+        rows, cols = sz[1] - 3, sz[2]
+        rows < 2 && (print(io, " …"); return)
+        cols < 4 && (cols = 4)
+        cols -= 2 # For prefix "  "
+        rows -= 2 # For summary and final ⋮ continuation lines
+    else
+        rows = cols = 0
+    end
+
+    for (i, v) in enumerate(iter)
+        print(io, "\n  ")
+        limit && i >= rows && (print(io, "⋮"); break)
+
+        if limit
+            str = sprint(0, show, v, env=io)
+            str = _truncate_at_width_or_chars(str, cols, "\r\n")
+            print(io, str)
+        else
+            show(io, v)
+        end
+    end
+end
+
+function show{K,V}(io::IO, ::MIME"text/plain", t::Associative{K,V})
+    # show more descriptively, with one line per key/value pair
+    recur_io = IOContext(io, :SHOWN_SET => t)
+    limit::Bool = get(io, :limit, false)
+    if !haskey(io, :compact)
+        recur_io = IOContext(recur_io, compact=true)
+    end
+
+    print(io, summary(t))
+    isempty(t) && return
+    print(io, ":\n  ")
+    show_circular(io, t) && return
+    if limit
+        sz = displaysize(io)
+        rows, cols = sz[1] - 3, sz[2]
+        rows < 2   && (print(io, " …"); return)
+        cols < 12  && (cols = 12) # Minimum widths of 2 for key, 4 for value
+        cols -= 6 # Subtract the widths of prefix "  " separator " => "
+        rows -= 2 # Subtract the summary and final ⋮ continuation lines
+
+        # determine max key width to align the output, caching the strings
+        ks = Array{AbstractString}(min(rows, length(t)))
+        vs = Array{AbstractString}(min(rows, length(t)))
+        keylen = 0
+        vallen = 0
+        for (i, (k, v)) in enumerate(t)
+            i > rows && break
+            ks[i] = sprint(0, show, k, env=recur_io)
+            vs[i] = sprint(0, show, v, env=recur_io)
+            keylen = clamp(length(ks[i]), keylen, cols)
+            vallen = clamp(length(vs[i]), vallen, cols)
+        end
+        if keylen > max(div(cols, 2), cols - vallen)
+            keylen = max(cld(cols, 3), cols - vallen)
+        end
+    else
+        rows = cols = 0
+    end
+
+    first = true
+    for (i, (k, v)) in enumerate(t)
+        first || print(io, "\n  ")
+        first = false
+        limit && i > rows && (print(io, rpad("⋮", keylen), " => ⋮"); break)
+
+        if limit
+            key = rpad(_truncate_at_width_or_chars(ks[i], keylen, "\r\n"), keylen)
+        else
+            key = sprint(0, show, k, env=recur_io)
+        end
+        print(recur_io, key)
+        print(io, " => ")
+
+        if limit
+            val = _truncate_at_width_or_chars(vs[i], cols - keylen, "\r\n")
+            print(io, val)
+        else
+            show(recur_io, v)
+        end
+    end
+end
+
+function show(io::IO, ::MIME"text/plain", f::Function)
+    ft = typeof(f)
+    mt = ft.name.mt
+    if isa(f, Core.Builtin)
+        print(io, mt.name, " (built-in function)")
+    else
+        name = mt.name
+        isself = isdefined(ft.name.module, name) &&
+                 ft == typeof(getfield(ft.name.module, name))
+        n = length(mt)
+        m = n==1 ? "method" : "methods"
+        ns = isself ? string(name) : string("(::", name, ")")
+        what = startswith(ns, '@') ? "macro" : "generic function"
+        print(io, ns, " (", what, " with $n $m)")
+    end
+end
+
+function show(io::IO, ::MIME"text/plain", r::LinSpace)
+    # show for linspace, e.g.
+    # linspace(1,3,7)
+    # 7-element LinSpace{Float64}:
+    #   1.0,1.33333,1.66667,2.0,2.33333,2.66667,3.0
+    print(io, summary(r))
+    if !isempty(r)
+        println(io, ":")
+        print_range(io, r)
+    end
+end
+
+function show(io::IO, ::MIME"text/plain", t::Task)
+    show(io, t)
+    if t.state == :failed
+        println(io)
+        showerror(io, CapturedException(t.result, t.backtrace))
+    end
+end
+
+show(io::IO, ::MIME"text/plain", X::AbstractArray) = showarray(io, X, false)
+show(io::IO, ::MIME"text/plain", r::Range) = show(io, r) # always use the compact form for printing ranges
+
 
 # showing exception objects as descriptive error messages
 

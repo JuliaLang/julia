@@ -178,7 +178,7 @@ str = takebuf_string(io)
 show(io, S)
 str = takebuf_string(io)
 @test str == "[1 3; 2 4]"
-show(IOContext(io, multiline=true), A)
+show(io, MIME("text/plain"), A)
 strs = split(strip(takebuf_string(io)), '\n')
 @test strs[2] == " 1  3"
 @test strs[3] == " 2  4"
@@ -188,7 +188,7 @@ str = takebuf_string(io)
 show(io, parent(v))
 @test str == takebuf_string(io)
 function cmp_showf(printfunc, io, A)
-    ioc = IOContext(io, limit=true, multiline=true, compact=true)
+    ioc = IOContext(io, limit=true, compact=true)
     printfunc(ioc, A)
     str1 = takebuf_string(io)
     printfunc(ioc, parent(A))

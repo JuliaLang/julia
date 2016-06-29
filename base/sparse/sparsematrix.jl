@@ -76,9 +76,17 @@ convenient iterating over a sparse matrix :
 """
 nzrange(S::SparseMatrixCSC, col::Integer) = S.colptr[col]:(S.colptr[col+1]-1)
 
+function Base.show(io::IO, ::MIME"text/plain", S::SparseMatrixCSC)
+    print(io, S.m, "×", S.n, " sparse matrix with ", nnz(S), " ", eltype(S), " nonzero entries")
+    if nnz(S) != 0
+        print(io, ":")
+        show(io, S)
+    end
+end
+
 function Base.show(io::IO, S::SparseMatrixCSC)
-    if get(io, :multiline, false) || (nnz(S) == 0)
-        print(io, S.m, "×", S.n, " sparse matrix with ", nnz(S), " ", eltype(S), " nonzero entries", nnz(S) == 0 ? "" : ":")
+    if nnz(S) == 0
+        return show(io, MIME("text/plain"), S)
     end
 
     limit::Bool = get(io, :limit, false)
@@ -91,9 +99,9 @@ function Base.show(io::IO, S::SparseMatrixCSC)
     pad = ndigits(max(S.m,S.n))
     k = 0
     sep = "\n\t"
-    io = IOContext(io, multiline=false)
+    io = IOContext(io)
     if !haskey(io, :compact)
-        io = IOContext(io, compact=true)
+        io = IOContext(io, :compact => true)
     end
     for col = 1:S.n, k = S.colptr[col] : (S.colptr[col+1]-1)
         if k < half_screen_rows || k > nnz(S)-half_screen_rows
