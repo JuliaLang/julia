@@ -25,6 +25,9 @@
 #define MAP_ANONYMOUS MAP_ANON
 #endif
 #endif
+#ifdef JL_ASAN_ENABLED
+#include <sanitizer/asan_interface.h>
+#endif
 
 #ifdef __cplusplus
 extern "C" {
@@ -440,6 +443,50 @@ static void gc_stats_big_obj(void);
 
 // For debugging
 void gc_count_pool(void);
+
+
+// Poisoning
+
+// current approach: poison the entire page, unpoison all tags, and unpoison/poison values
+// when allocating/freeing them.
+
+// TODO: poison the tags as well to prevent us from mis-using them from within Julia.
+//       this is messy because the tags are multipurpose, and used all over the place.
+
+// TODO: redzone the values to capture OOB usage
+
+#ifdef JL_ASAN_ENABLED
+#define gc_poison(addr, size)   __asan_poison_memory_region((addr), (size))
+#define gc_unpoison(addr, size) __asan_unpoison_memory_region((addr), (size))
+#else
+#define gc_poison(addr, size)   ((void)(addr), (void)(size))
+#define gc_unpoison(addr, size) ((void)(addr), (void)(size))
+#endif
+
+STATIC_INLINE void gc_unpoison_tag(jl_taggedvalue_t *v)
+{
+    gc_unpoison(v, sizeof(jl_taggedvalue_t));
+}
+
+STATIC_INLINE void gc_poison_value(jl_taggedvalue_t *v, size_t osize)
+{
+    gc_poison(v+1, osize-sizeof(jl_taggedvalue_t));
+}
+
+STATIC_INLINE void gc_unpoison_value(jl_taggedvalue_t *v, size_t osize)
+{
+    gc_unpoison(v+1, osize-sizeof(jl_taggedvalue_t));
+}
+
+STATIC_INLINE void gc_poison_page(jl_gc_pagemeta_t *pg)
+{
+    jl_taggedvalue_t *beg = (jl_taggedvalue_t*)(pg->data + GC_PAGE_OFFSET);
+    gc_poison(beg, GC_PAGE_SZ - GC_PAGE_OFFSET);
+
+    jl_taggedvalue_t *end = (jl_taggedvalue_t*)(pg->data + GC_PAGE_SZ - GC_PAGE_OFFSET);
+    for (jl_taggedvalue_t* v = beg; v <= end ; v = (jl_taggedvalue_t*)((char*)v + pg->osize))
+        gc_unpoison_tag(v);
+}
 
 #ifdef __cplusplus
 }

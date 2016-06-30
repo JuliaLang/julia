@@ -54,9 +54,6 @@ static int endswith_extension(const char *path)
 extern char *julia_home;
 
 #define JL_RTLD(flags, FLAG) (flags & JL_RTLD_ ## FLAG ? RTLD_ ## FLAG : 0)
-#if __has_feature(address_sanitizer)
-#      define SANITIZE_ADDRESS
-#endif
 
 static void JL_NORETURN jl_dlerror(const char *fmt, const char *sym)
 {
@@ -93,7 +90,7 @@ JL_DLLEXPORT void *jl_dlopen(const char *filename, unsigned flags)
 #ifdef RTLD_NOLOAD
                   | JL_RTLD(flags, NOLOAD)
 #endif
-#if defined(RTLD_DEEPBIND) && !defined(SANITIZE_ADDRESS)
+#if defined(RTLD_DEEPBIND) && !defined(JL_ASAN_ENABLED)
                   | JL_RTLD(flags, DEEPBIND)
 #endif
 #ifdef RTLD_FIRST

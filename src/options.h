@@ -109,20 +109,6 @@
 #define MACHINE_EXCLUSIVE_NAME          "JULIA_EXCLUSIVE"
 #define DEFAULT_MACHINE_EXCLUSIVE       0
 
-// sanitizer defaults ---------------------------------------------------------
-
-// Automatically enable MEMDEBUG and KEEP_BODIES for the sanitizers
-#if defined(__has_feature)
-#  if __has_feature(address_sanitizer) || __has_feature(memory_sanitizer)
-#  define MEMDEBUG
-#  define KEEP_BODIES
-#  endif
-// Memory sanitizer needs TLS, which llvm only supports for the small memory model
-#  if __has_feature(memory_sanitizer)
-   // todo: fix the llvm MemoryManager to work with small memory model
-#  endif
-#endif
-
 // Automatic Instrumenting Profiler
 //#define ENABLE_TIMINGS
 

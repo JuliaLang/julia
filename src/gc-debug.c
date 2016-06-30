@@ -367,7 +367,12 @@ static void gc_scrub_range(char *stack_lo, char *stack_hi)
         // (especially on 32bit where it's more likely to have pointer-like
         //  bit patterns)
         *ages &= ~(1 << (obj_id % 8));
+#ifdef JL_ASAN_ENABLED
+        gc_poison_value(tag, osize);
+        memset(tag, 0xff, sizeof(jl_taggedvalue_t));
+#else
         memset(tag, 0xff, osize);
+#endif
         // set mark to GC_MARKED (young and marked)
         tag->bits.gc = GC_MARKED;
     }

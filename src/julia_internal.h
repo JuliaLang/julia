@@ -16,6 +16,10 @@
 #define __has_feature(x) 0
 #endif
 
+#if __has_feature(address_sanitizer) || defined(__SANITIZE_ADDRESS__)
+#define JL_ASAN_ENABLED
+#endif
+
 #ifdef __cplusplus
 extern "C" {
 #endif

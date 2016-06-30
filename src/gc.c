@@ -779,6 +779,7 @@ static inline jl_taggedvalue_t *reset_page(const jl_gc_pool_t *p, jl_gc_pagemeta
     memset(pg->ages, 0, GC_PAGE_SZ / 8 / p->osize + 1);
     jl_taggedvalue_t *beg = (jl_taggedvalue_t*)(pg->data + GC_PAGE_OFFSET);
     jl_taggedvalue_t *next = (jl_taggedvalue_t*)pg->data;
+    gc_poison_page(pg);
     next->next = fl;
     pg->has_young = 0;
     pg->has_marked = 0;
@@ -841,6 +842,7 @@ JL_DLLEXPORT jl_value_t *jl_gc_pool_alloc(jl_ptls_t ptls, int pool_offset,
             pg->nfree = 0;
             pg->has_young = 1;
         }
+        gc_unpoison_value(v, osize);
         return jl_valueof(v);
     }
     // if the freelist is empty we reuse empty but not freed pages
@@ -865,6 +867,7 @@ JL_DLLEXPORT jl_value_t *jl_gc_pool_alloc(jl_ptls_t ptls, int pool_offset,
         next = (jl_taggedvalue_t*)((char*)v + osize);
     }
     p->newpages = next;
+    gc_unpoison_value(v, osize);
     return jl_valueof(v);
 }
 
@@ -908,6 +911,7 @@ static jl_taggedvalue_t **sweep_page(jl_gc_pool_t *p, jl_gc_pagemeta_t *pg, jl_t
         }
         else {
             jl_gc_free_page(data);
+            gc_poison_page(pg);
         }
         nfree = (GC_PAGE_SZ - GC_PAGE_OFFSET) / osize;
         goto done;
@@ -941,6 +945,7 @@ static jl_taggedvalue_t **sweep_page(jl_gc_pool_t *p, jl_gc_pagemeta_t *pg, jl_t
             int bits = v->bits.gc;
             if (!gc_marked(bits)) {
                 *pfl = v;
+                gc_poison_value(v, osize);
                 pfl = &v->next;
                 pfl_begin = pfl_begin ? pfl_begin : pfl;
                 pg_nfree++;
