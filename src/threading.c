@@ -45,6 +45,19 @@ extern "C" {
 #include "threadgroup.h"
 #include "threading.h"
 
+// The tls_states buffer:
+//
+// On platforms that do not use ELF (i.e. where `__thread` is emulated with
+// lower level API) (Mac, Windows), we use the platform runtime API to create
+// TLS variable directly.
+// This is functionally equivalent to using `__thread` but can be
+// more efficient since we can have better control over the creation and
+// initialization of the TLS buffer.
+//
+// On platforms that use ELF (Linux, FreeBSD), we use a `__thread` variable
+// as the fallback in the shared object. For better efficiency, we also
+// create a `__thread` variable in the main executable using a static TLS
+// model.
 #ifdef JULIA_ENABLE_THREADING
 #  if defined(_OS_DARWIN_)
 // Mac doesn't seem to have static TLS model so the runtime TLS getter
@@ -119,12 +132,43 @@ jl_get_ptls_states_func jl_get_ptls_states_getter(void)
     return &jl_get_ptls_states;
 }
 #  else
+// We use the faster static version in the main executable to replace
+// the slower version in the shared object. The code in different libraries
+// or executables, however, have to agree on which version to use.
+// The general solution is to add one more indirection in the C entry point
+// (see `jl_get_ptls_states_wrapper`).
+//
+// When `ifunc` is availabe, we can use it to trick the linker to use the
+// real address (`jl_get_ptls_states_static`) directly as the symbol address.
+// (see `jl_get_ptls_states_resolve`).
+//
+// However, since the detection of the static version in `ifunc`
+// is not guaranteed to be reliable, we still need to fallback to the wrapper
+// version as the symbol address if we didn't find the static version in `ifunc`.
+#if defined(__GLIBC__) && (defined(_CPU_X86_64_) || defined(_CPU_X86_) || \
+                           defined(_CPU_AARCH64_) || defined(_CPU_ARM_))
+// Only enable this on architectures that are tested.
+// For example, GCC doesn't seem to support the `ifunc` attribute on power yet.
+#  if __GLIBC_PREREQ(2, 12)
+#    define JL_TLS_USE_IFUNC
+#  endif
+#endif
+// Disable ifunc on clang <= 3.8 since it is not supported
+#if defined(JL_TLS_USE_IFUNC) && defined(__clang__)
+#  if __clang_major__ < 3 || (__clang_major__ == 3 && __clang_minor__ <= 8)
+#    undef JL_TLS_USE_IFUNC
+#  endif
+#endif
 // fallback provided for embedding
 static JL_CONST_FUNC jl_tls_states_t *jl_get_ptls_states_fallback(void)
 {
     static __thread jl_tls_states_t tls_states;
     return &tls_states;
 }
+#ifdef JL_TLS_USE_IFUNC
+JL_DLLEXPORT JL_CONST_FUNC __attribute__((weak))
+jl_tls_states_t *jl_get_ptls_states_static(void);
+#endif
 static jl_tls_states_t *jl_get_ptls_states_init(void);
 static jl_get_ptls_states_func jl_tls_states_cb = jl_get_ptls_states_init;
 static jl_tls_states_t *jl_get_ptls_states_init(void)
@@ -137,18 +181,26 @@ static jl_tls_states_t *jl_get_ptls_states_init(void)
     // This is clearly not thread safe but should be fine since we
     // make sure the tls states callback is finalized before adding
     // multiple threads
-    jl_tls_states_cb = jl_get_ptls_states_fallback;
-    return jl_get_ptls_states_fallback();
+    jl_get_ptls_states_func cb = jl_get_ptls_states_fallback;
+#ifdef JL_TLS_USE_IFUNC
+    if (jl_get_ptls_states_static)
+        cb = jl_get_ptls_states_static;
+#endif
+    jl_tls_states_cb = cb;
+    return cb();
 }
-JL_DLLEXPORT JL_CONST_FUNC jl_tls_states_t *(jl_get_ptls_states)(void)
+
+static JL_CONST_FUNC jl_tls_states_t *jl_get_ptls_states_wrapper(void)
 {
     return (*jl_tls_states_cb)();
 }
+
 JL_DLLEXPORT void jl_set_ptls_states_getter(jl_get_ptls_states_func f)
 {
+    if (f == jl_tls_states_cb || !f)
+        return;
     // only allow setting this once
-    if (f && f != jl_get_ptls_states_init &&
-        jl_tls_states_cb == jl_get_ptls_states_init) {
+    if (jl_tls_states_cb == jl_get_ptls_states_init) {
         jl_tls_states_cb = f;
     }
     else {
@@ -156,6 +208,30 @@ JL_DLLEXPORT void jl_set_ptls_states_getter(jl_get_ptls_states_func f)
         exit(1);
     }
 }
+
+#ifdef JL_TLS_USE_IFUNC
+static jl_get_ptls_states_func jl_get_ptls_states_resolve(void)
+{
+    if (jl_tls_states_cb != jl_get_ptls_states_init)
+        return jl_tls_states_cb;
+    // If we can't find the static version, return the wrapper instead
+    // of the slow version so that we won't resolve to the slow version
+    // due to issues in the relocation order.
+    // This may not be necessary once `ifunc` support in glibc is more mature.
+    if (!jl_get_ptls_states_static)
+        return jl_get_ptls_states_wrapper;
+    jl_tls_states_cb = jl_get_ptls_states_static;
+    return jl_tls_states_cb;
+}
+
+JL_DLLEXPORT JL_CONST_FUNC jl_tls_states_t *(jl_get_ptls_states)(void)
+    __attribute__((ifunc ("jl_get_ptls_states_resolve")));
+#else // JL_TLS_USE_IFUNC
+JL_DLLEXPORT JL_CONST_FUNC jl_tls_states_t *(jl_get_ptls_states)(void)
+{
+    return jl_get_ptls_states_wrapper();
+}
+#endif // JL_TLS_USE_IFUNC
 jl_get_ptls_states_func jl_get_ptls_states_getter(void)
 {
     if (jl_tls_states_cb == jl_get_ptls_states_init)

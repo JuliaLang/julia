@@ -1235,7 +1235,15 @@ static jl_cgval_t emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
         emit_signal_fence();
         return ghostValue(jl_void_type);
     }
-    if (fptr == (void(*)(void))&jl_get_ptls_states ||
+#ifdef _OS_LINUX_
+    // directly access the address of a ifunc can cause linker issue on
+    // some configurations (e.g. AArch64 + -Bsymbolic-functions).
+    static const auto ptls_getter = jl_dlsym_e(jl_dlopen(nullptr, 0),
+                                               "jl_get_ptls_states");
+#else
+    static const auto ptls_getter = &jl_get_ptls_states;
+#endif
+    if (fptr == (void(*)(void))(uintptr_t)ptls_getter ||
         ((!f_lib || (intptr_t)f_lib == 2) && f_name &&
          strcmp(f_name, "jl_get_ptls_states") == 0)) {
         assert(lrt == T_pint8);

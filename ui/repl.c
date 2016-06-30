@@ -35,10 +35,16 @@ extern "C" {
 #endif
 
 #if defined(JULIA_ENABLE_THREADING) && !defined(_OS_DARWIN_) && !defined(_OS_WINDOWS_)
-static JL_CONST_FUNC jl_tls_states_t *jl_get_ptls_states_static(void)
+JL_DLLEXPORT JL_CONST_FUNC jl_tls_states_t *jl_get_ptls_states_static(void)
 {
     static __attribute__((tls_model("local-exec"))) __thread jl_tls_states_t tls_states;
     return &tls_states;
+}
+__attribute__((constructor)) void jl_register_ptls_states_getter(void)
+{
+    // We need to make sure this function is called before any reference to
+    // TLS variables.
+    jl_set_ptls_states_getter(jl_get_ptls_states_static);
 }
 #endif
 
@@ -655,14 +661,6 @@ int wmain(int argc, wchar_t *argv[], wchar_t *envp[])
         if (!WideCharToMultiByte(CP_UTF8, 0, warg, -1, arg, len, NULL, NULL)) return 1;
         argv[i] = (wchar_t*)arg;
     }
-#endif
-#if defined(JULIA_ENABLE_THREADING) && !defined(_OS_DARWIN_) && !defined(_OS_WINDOWS_)
-    // We need to make sure this function is called before any reference to
-    // TLS variables. Since the compiler is free to move calls to
-    // `jl_get_ptls_states()` around, we should avoid referencing TLS
-    // variables in this function. (Mark `true_main` as noinline for this
-    // reason).
-    jl_set_ptls_states_getter(jl_get_ptls_states_static);
 #endif
     libsupport_init();
     parse_opts(&argc, (char***)&argv);
