@@ -693,7 +693,6 @@ static int lookup_pointer(DIContext *context, jl_frame_t **frames,
         free(*frames);
         *frames = new_frames;
     }
-    jl_lambda_info_t *outer_linfo = (*frames)[n_frames-1].linfo;
     for (int i = 0; i < n_frames; i++) {
         bool inlined_frame = i != n_frames - 1;
         DILineInfo info;
@@ -714,7 +713,7 @@ static int lookup_pointer(DIContext *context, jl_frame_t **frames,
         if (inlined_frame) {
             frame->inlined = 1;
             frame->fromC = fromC;
-            if (outer_linfo) {
+            if (jl_lambda_info_t *outer_linfo = (*frames)[n_frames-1].linfo) {
                 std::size_t semi_pos = func_name.find(';');
                 if (semi_pos != std::string::npos) {
                     func_name = func_name.substr(0, semi_pos);
