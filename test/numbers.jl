@@ -2756,3 +2756,14 @@ testmi(typemax(UInt32)-UInt32(1000):typemax(UInt32), map(UInt32, 1:100))
 @test indices(1) == ()
 @test indices(1,1) == 1:1
 @test_throws BoundsError indices(1,-1)
+
+# PR #16995
+let types = (Base.BitInteger_types..., BigInt, Bool,
+             Rational{Int}, Rational{BigInt},
+             Float16, Float32, Float64, BigFloat)
+    for S in types, T in types
+        for op in (<, >, <=, >=, (==))
+            @inferred op(one(S), one(T))
+        end
+    end
+end
