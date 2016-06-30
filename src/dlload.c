@@ -54,10 +54,8 @@ static int endswith_extension(const char *path)
 extern char *julia_home;
 
 #define JL_RTLD(flags, FLAG) (flags & JL_RTLD_ ## FLAG ? RTLD_ ## FLAG : 0)
-#ifdef __has_feature
-#   if __has_feature(address_sanitizer)
+#if __has_feature(address_sanitizer)
 #      define SANITIZE_ADDRESS
-#   endif
 #endif
 
 static void JL_NORETURN jl_dlerror(const char *fmt, const char *sym)

@@ -12,6 +12,10 @@
 #define sleep(x) Sleep(1000*x)
 #endif
 
+#ifndef __has_feature
+#define __has_feature(x) 0
+#endif
+
 #ifdef __cplusplus
 extern "C" {
 #endif

@@ -989,10 +989,8 @@ void *jl_function_ptr(jl_function_t *f, jl_value_t *rt, jl_value_t *argt)
 // it generally helps to have define KEEP_BODIES if you plan on using this
 extern "C" JL_DLLEXPORT
 void *jl_function_ptr_by_llvm_name(char *name) {
-#ifdef __has_feature
 #if __has_feature(memory_sanitizer)
     __msan_unpoison_string(name);
-#endif
 #endif
     return (void*)(intptr_t)jl_ExecutionEngine->FindFunctionNamed(name);
 }
