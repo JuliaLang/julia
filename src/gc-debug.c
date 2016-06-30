@@ -144,8 +144,12 @@ static void clear_mark(int bits)
                         pv = (jl_taggedvalue_t*)(pg->data + GC_PAGE_OFFSET);
                         char *lim = (char*)pv + GC_PAGE_SZ - GC_PAGE_OFFSET - pool->osize;
                         while ((char*)pv <= lim) {
+                            int poisoned = gc_ispoisoned_tag(pv);
+                            gc_unpoison_tag(pv);
                             if (!gc_verifying) arraylist_push(&bits_save[pv->bits.gc], pv);
                             pv->bits.gc = bits;
+                            if (poisoned)
+                                gc_poison_tag(pv);
                             pv = (jl_taggedvalue_t*)((char*)pv + pool->osize);
                         }
                     }
@@ -159,7 +163,12 @@ static void restore(void)
 {
     for(int b = 0; b < 4; b++) {
         for(int i = 0; i < bits_save[b].len; i++) {
-            ((jl_taggedvalue_t*)bits_save[b].items[i])->bits.gc = b;
+            jl_taggedvalue_t *v = (jl_taggedvalue_t*)bits_save[b].items[i];
+            int poisoned = gc_ispoisoned_tag(v);
+            gc_unpoison_tag(v);
+            v->bits.gc = b;
+            if (poisoned)
+                gc_poison_tag(v);
         }
     }
 }
@@ -227,6 +236,8 @@ void gc_verify(jl_ptls_t ptls)
     int clean_len = bits_save[GC_CLEAN].len;
     for(int i = 0; i < clean_len + bits_save[GC_OLD].len; i++) {
         jl_taggedvalue_t *v = (jl_taggedvalue_t*)bits_save[i >= clean_len ? GC_OLD : GC_CLEAN].items[i >= clean_len ? i - clean_len : i];
+        int poisoned = gc_ispoisoned_tag(v);
+        gc_unpoison_tag(v);
         if (gc_marked(v->bits.gc)) {
             jl_printf(JL_STDERR, "Error. Early free of %p type :", v);
             jl_(jl_typeof(jl_valueof(v)));
@@ -236,6 +247,8 @@ void gc_verify(jl_ptls_t ptls)
             lostval = jl_valueof(v);
             break;
         }
+        if (poisoned)
+            gc_poison_tag(v);
     }
     if (lostval == NULL) {
         gc_verifying = 0;
@@ -353,8 +366,13 @@ static void gc_scrub_range(char *stack_lo, char *stack_hi)
         char *p = *stack_p;
         size_t osize;
         jl_taggedvalue_t *tag = jl_gc_find_taggedvalue_pool(p, &osize);
-        if (osize <= sizeof(jl_taggedvalue_t) || !tag || gc_marked(tag->bits.gc))
+        int poisoned = gc_ispoisoned_tag(tag);
+        gc_unpoison_tag(tag);
+        if (osize <= sizeof(jl_taggedvalue_t) || !tag || gc_marked(tag->bits.gc)) {
+            if (poisoned)
+                gc_poison_tag(tag);
             continue;
+        }
         jl_gc_pagemeta_t *pg = page_metadata(tag);
         // Make sure the sweep rebuild the freelist
         pg->has_marked = 1;
@@ -369,12 +387,12 @@ static void gc_scrub_range(char *stack_lo, char *stack_hi)
         *ages &= ~(1 << (obj_id % 8));
 #ifdef JL_ASAN_ENABLED
         gc_poison_value(tag, osize);
-        memset(tag, 0xff, sizeof(jl_taggedvalue_t));
 #else
         memset(tag, 0xff, osize);
 #endif
         // set mark to GC_MARKED (young and marked)
         tag->bits.gc = GC_MARKED;
+        gc_poison_tag(tag);
     }
 }
 

@@ -458,14 +458,26 @@ void gc_count_pool(void);
 #ifdef JL_ASAN_ENABLED
 #define gc_poison(addr, size)   __asan_poison_memory_region((addr), (size))
 #define gc_unpoison(addr, size) __asan_unpoison_memory_region((addr), (size))
+#define gc_ispoisoned(addr)     __asan_address_is_poisoned((addr))
 #else
 #define gc_poison(addr, size)   ((void)(addr), (void)(size))
 #define gc_unpoison(addr, size) ((void)(addr), (void)(size))
+#define gc_ispoisoned(addr)     0
 #endif
+
+STATIC_INLINE void gc_poison_tag(jl_taggedvalue_t *v)
+{
+    gc_poison(v, sizeof(jl_taggedvalue_t));
+}
 
 STATIC_INLINE void gc_unpoison_tag(jl_taggedvalue_t *v)
 {
     gc_unpoison(v, sizeof(jl_taggedvalue_t));
+}
+
+STATIC_INLINE int gc_ispoisoned_tag(jl_taggedvalue_t *v)
+{
+    return gc_ispoisoned(v);
 }
 
 STATIC_INLINE void gc_poison_value(jl_taggedvalue_t *v, size_t osize)
@@ -483,9 +495,9 @@ STATIC_INLINE void gc_poison_page(jl_gc_pagemeta_t *pg)
     jl_taggedvalue_t *beg = (jl_taggedvalue_t*)(pg->data + GC_PAGE_OFFSET);
     gc_poison(beg, GC_PAGE_SZ - GC_PAGE_OFFSET);
 
-    jl_taggedvalue_t *end = (jl_taggedvalue_t*)(pg->data + GC_PAGE_SZ - GC_PAGE_OFFSET);
-    for (jl_taggedvalue_t* v = beg; v <= end ; v = (jl_taggedvalue_t*)((char*)v + pg->osize))
-        gc_unpoison_tag(v);
+    // jl_taggedvalue_t *end = (jl_taggedvalue_t*)(pg->data + GC_PAGE_SZ - GC_PAGE_OFFSET);
+    // for (jl_taggedvalue_t* v = beg; v <= end ; v = (jl_taggedvalue_t*)((char*)v + pg->osize))
+    //     gc_unpoison_tag(v);
 }
 
 #ifdef __cplusplus

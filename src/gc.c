@@ -779,12 +779,14 @@ static inline jl_taggedvalue_t *reset_page(const jl_gc_pool_t *p, jl_gc_pagemeta
     memset(pg->ages, 0, GC_PAGE_SZ / 8 / p->osize + 1);
     jl_taggedvalue_t *beg = (jl_taggedvalue_t*)(pg->data + GC_PAGE_OFFSET);
     jl_taggedvalue_t *next = (jl_taggedvalue_t*)pg->data;
-    gc_poison_page(pg);
+    gc_unpoison_tag(end);
     next->next = fl;
+    gc_poison_tag(end);
     pg->has_young = 0;
     pg->has_marked = 0;
     pg->fl_begin_offset = -1;
     pg->fl_end_offset = -1;
+    gc_poison_page(pg);
     return beg;
 }
 
@@ -832,6 +834,7 @@ JL_DLLEXPORT jl_value_t *jl_gc_pool_alloc(jl_ptls_t ptls, int pool_offset,
     // first try to use the freelist
     jl_taggedvalue_t *v = p->freelist;
     if (v) {
+        gc_unpoison_tag(v);
         jl_taggedvalue_t *next = v->next;
         p->freelist = next;
         if (__unlikely(gc_page_data(v) != gc_page_data(next))) {
@@ -865,8 +868,10 @@ JL_DLLEXPORT jl_value_t *jl_gc_pool_alloc(jl_ptls_t ptls, int pool_offset,
         if (!v)
             v = add_page(p);
         next = (jl_taggedvalue_t*)((char*)v + osize);
+        gc_unpoison_tag(p->newpages);
     }
     p->newpages = next;
+    gc_unpoison_tag(v);
     gc_unpoison_value(v, osize);
     return jl_valueof(v);
 }
@@ -906,7 +911,11 @@ static jl_taggedvalue_t **sweep_page(jl_gc_pool_t *p, jl_gc_pagemeta_t *pg, jl_t
         if (!sweep_full && lazy_freed_pages <= default_collect_interval / GC_PAGE_SZ) {
             jl_taggedvalue_t *begin = reset_page(p, pg, p->newpages);
             p->newpages = begin;
+            poisoned = gc_ispoisoned_tag(begin);
+            gc_unpoison_tag(begin);
             begin->next = (jl_taggedvalue_t*)0;
+            if (poisoned)
+                gc_poison_tag(begin);
             lazy_freed_pages++;
         }
         else {
@@ -924,6 +933,7 @@ static jl_taggedvalue_t **sweep_page(jl_gc_pool_t *p, jl_gc_pagemeta_t *pg, jl_t
             // the position of the freelist begin/end in this page
             // is stored in its metadata
             if (pg->fl_begin_offset != (uint16_t)-1) {
+                gc_unpoison_tag(pfl); // WTF
                 *pfl = page_pfl_beg(pg);
                 pfl = (jl_taggedvalue_t**)page_pfl_end(pg);
             }
@@ -942,8 +952,11 @@ static jl_taggedvalue_t **sweep_page(jl_gc_pool_t *p, jl_gc_pagemeta_t *pg, jl_t
         jl_taggedvalue_t **pfl_begin = NULL;
         uint8_t msk = 1; // mask for the age bit in the current age byte
         while ((char*)v <= lim) {
+            int poisoned = gc_ispoisoned_tag(v);
+            gc_unpoison_tag(v);
             int bits = v->bits.gc;
             if (!gc_marked(bits)) {
+                gc_unpoison_tag(pfl);   // WTF
                 *pfl = v;
                 gc_poison_value(v, osize);
                 pfl = &v->next;
@@ -969,6 +982,8 @@ static jl_taggedvalue_t **sweep_page(jl_gc_pool_t *p, jl_gc_pagemeta_t *pg, jl_t
                 *ages |= msk;
                 freedall = 0;
             }
+            if (poisoned)
+                gc_poison_tag(v);
             v = (jl_taggedvalue_t*)((char*)v + osize);
             msk <<= 1;
             if (!msk) {
@@ -1094,7 +1109,11 @@ static void gc_sweep_pool(int sweep_full)
     // null out terminal pointers of free lists
     for (int t_i = 0;t_i < jl_n_threads;t_i++) {
         for (int i = 0; i < JL_GC_N_POOLS; i++) {
+            int poisoned = gc_ispoisoned_tag(pfl[t_i * JL_GC_N_POOLS + i]); // WTF
+            gc_unpoison_tag(pfl[t_i * JL_GC_N_POOLS + i]);  // WTF
             *pfl[t_i * JL_GC_N_POOLS + i] = NULL;
+            if (poisoned)
+                gc_poison_tag(pfl[t_i * JL_GC_N_POOLS + i]);    // WTF
         }
     }
 
