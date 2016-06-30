@@ -2424,18 +2424,30 @@ function inlineable(f::ANY, ft::ANY, e::Expr, atypes::Vector{Any}, sv::Inference
         return NF
     end
 
-    atype_unlimited = argtypes_to_type(atypes)
+    local atype_unlimited = argtypes_to_type(atypes)
     function invoke_NF()
         # converts a :call to :invoke
         local nu = countunionsplit(atypes)
         nu > MAX_UNION_SPLITTING && return NF
 
         if nu > 1
-            local ex = copy(e)
-            local linfo_var = add_slot!(enclosing, LambdaInfo, false)
             local spec_hit = nothing
             local spec_miss = nothing
             local error_label = nothing
+            local linfo_var = add_slot!(enclosing, LambdaInfo, false)
+            local ex = copy(e)
+            local stmts = []
+            for i = 1:length(atypes); local i
+                local ti = atypes[i]
+                if isa(ti, Union)
+                    aei = ex.args[i]
+                    if !effect_free(aei, sv, false)
+                        newvar = newvar!(sv, ti)
+                        push!(stmts, Expr(:(=), newvar, aei))
+                        ex.args[i] = newvar
+                    end
+                end
+            end
             function splitunion(atypes::Vector{Any}, i::Int)
                 if i == 0
                     local sig = argtypes_to_type(atypes)
@@ -2449,15 +2461,10 @@ function inlineable(f::ANY, ft::ANY, e::Expr, atypes::Vector{Any}, sv::Inference
                 else
                     local ti = atypes[i]
                     if isa(ti, Union)
-                        local all = false
+                        local all = true
                         local stmts = []
                         local aei = ex.args[i]
-                        if !effect_free(aei, sv, false)
-                            aei = newvar!(sv, ti)
-                            push!(stmts, Expr(:(=), aei, ex.args[i]))
-                            ex.args[i] = aei
-                        end
-                        for ty in (ti::Union).types
+                        for ty in (ti::Union).types; local ty
                             atypes[i] = ty
                             local match = splitunion(atypes, i - 1)
                             if match !== false
@@ -2483,9 +2490,9 @@ function inlineable(f::ANY, ft::ANY, e::Expr, atypes::Vector{Any}, sv::Inference
                     end
                 end
             end
-            local stmts = splitunion(atypes, length(atypes))
-            if stmts !== false && spec_hit !== nothing
-                stmts = stmts::Array{Any,1}
+            local match = splitunion(atypes, length(atypes))
+            if match !== false && spec_hit !== nothing
+                append!(stmts, match)
                 if error_label !== nothing
                     push!(stmts, error_label)
                     push!(stmts, Expr(:call, GlobalRef(_topmod(sv.mod), :error), "error in type inference due to #265"))
