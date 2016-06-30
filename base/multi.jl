@@ -1072,12 +1072,11 @@ function message_handler_loop(r_stream::IO, w_stream::IO, incoming::Bool)
         # The first message will associate wpid with r_stream
         header = deserialize_hdr_raw(r_stream)
         msg = deserialize_msg(serializer)
-        readbytes!(r_stream, boundary, length(MSG_BOUNDARY))
-
         handle_msg(msg, header, r_stream, w_stream, version)
         wpid = worker_id_from_socket(r_stream)
-
         @assert wpid > 0
+
+        readbytes!(r_stream, boundary, length(MSG_BOUNDARY))
 
         while true
             reset_state(serializer)
@@ -1119,9 +1118,10 @@ function message_handler_loop(r_stream::IO, w_stream::IO, incoming::Bool)
             handle_msg(msg, header, r_stream, w_stream, version)
         end
     catch e
-        # println(STDERR, "Process($(myid())) - Exception ", e)
+        # Check again as it may have been set in a message handler but not propagated to the calling block above
+        wpid = worker_id_from_socket(r_stream)
         if (wpid < 1)
-            println(STDERR, e)
+            println(STDERR, e, CapturedException(e, catch_backtrace()))
             println(STDERR, "Process($(myid())) - Unknown remote, closing connection.")
         else
             werr = worker_from_id(wpid)
