@@ -100,6 +100,20 @@ function isfixed(pkg::AbstractString, prepo::LibGit2.GitRepo, avail::Dict=availa
     return res
 end
 
+function ispinned(pkg::AbstractString)
+    ispath(pkg,".git") || return false
+    LibGit2.with(LibGit2.GitRepo, pkg) do repo
+        return ispinned(repo)
+    end
+end
+
+function ispinned(prepo::LibGit2.GitRepo)
+    LibGit2.isattached(prepo) || return false
+    br = LibGit2.branch(prepo)
+    # note: regex is based on the naming scheme used in Entry.pin()
+    return ismatch(r"^pinned\.[0-9a-f]{8}\.tmp$", br)
+end
+
 function installed_version(pkg::AbstractString, prepo::LibGit2.GitRepo, avail::Dict=available(pkg))
     ispath(pkg,".git") || return typemin(VersionNumber)
 
