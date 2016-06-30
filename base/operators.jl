@@ -381,38 +381,7 @@ end
 Returns a new function which applies boolean not to the output of `f`,
 equivalent to `(x...) -> !f(x...)`.
 """
-function !(f::Function)
-    # Avoids splatting penalty. TODO: remove when that is fixed.
-    # Chose to implement up to length 16 (current setting of MAX_TUPLE_SPLAT)
-    negated() = !(f())
-    negated(x1) = !(f(x1))
-    negated(x1,x2) = !(f(x1,x2))
-    negated(x1,x2,x3) = !(f(x1,x2,x3))
-    negated(x1,x2,x3,x4) = !(f(x1,x2,x3,x4))
-    negated(x1,x2,x3,x4,x5) = !(f(x1,x2,x3,x4,x5))
-    negated(x1,x2,x3,x4,x5,x6) = !(f(x1,x2,x3,x4,x5,x6))
-    negated(x1,x2,x3,x4,x5,x6,x7) = !(f(x1,x2,x3,x4,x5,x6,x7))
-    negated(x1,x2,x3,x4,x5,x6,x7,x8) = !(f(x1,x2,x3,x4,x5,x6,x7,x8))
-    negated(x1,x2,x3,x4,x5,x6,x7,x8,x9) = !(f(x1,x2,x3,x4,x5,x6,x7,x8,x9))
-    negated(x1,x2,x3,x4,x5,x6,x7,x8,x9,x10) =
-        !(f(x1,x2,x3,x4,x5,x6,x7,x8,x9,x10))
-    negated(x1,x2,x3,x4,x5,x6,x7,x8,x9,x10,x11) =
-        !(f(x1,x2,x3,x4,x5,x6,x7,x8,x9,x10,x11))
-    negated(x1,x2,x3,x4,x5,x6,x7,x8,x9,x10,x11,x12) =
-        !(f(x1,x2,x3,x4,x5,x6,x7,x8,x9,x10,x11,x12))
-    negated(x1,x2,x3,x4,x5,x6,x7,x8,x9,x10,x11,x12,x13) =
-        !(f(x1,x2,x3,x4,x5,x6,x7,x8,x9,x10,x11,x12,x13))
-    negated(x1,x2,x3,x4,x5,x6,x7,x8,x9,x10,x11,x12,x13,x14) =
-        !(f(x1,x2,x3,x4,x5,x6,x7,x8,x9,x10,x11,x12,x13,x14))
-    negated(x1,x2,x3,x4,x5,x6,x7,x8,x9,x10,x11,x12,x13,x14,x15) =
-        !(f(x1,x2,x3,x4,x5,x6,x7,x8,x9,x10,x11,x12,x13,x14,x15))
-    negated(x1,x2,x3,x4,x5,x6,x7,x8,x9,x10,x11,x12,x13,x14,x15,x16) =
-        !(f(x1,x2,x3,x4,x5,x6,x7,x8,x9,x10,x11,x12,x13,x14,x15,x16))
-
-    negated(xs...) = !(f(xs...))
-
-    return negated # This name is remembered and visible at the REPL
-end
+!(f::Function) = (!) ∘ f
 
 # array shape rules
 
