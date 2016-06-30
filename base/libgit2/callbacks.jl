@@ -119,7 +119,7 @@ function credentials_callback(cred::Ptr{Ptr{Void}}, url_ptr::Cstring,
                 keydefpath # use cached value
             else
                 keydefpath = if keydefpath === nothing
-                    homedir()*"/.ssh/id_rsa"
+                    joinpath(homedir(),".ssh","id_rsa")
                 end
                 prompt("Private key location for '$schema$username@$host'", default=keydefpath)
             end
