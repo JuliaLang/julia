@@ -66,14 +66,16 @@ type BigFloat <: AbstractFloat
     sign::Cint
     exp::Clong
     d::Ptr{Limb}
+
     function BigFloat()
-        N = precision(BigFloat)
+        prec = precision(BigFloat)
         z = new(zero(Clong), zero(Cint), zero(Clong), C_NULL)
-        ccall((:mpfr_init2,:libmpfr), Void, (Ptr{BigFloat}, Clong), &z, N)
+        ccall((:mpfr_init2,:libmpfr), Void, (Ptr{BigFloat}, Clong), &z, prec)
         finalizer(z, cglobal((:mpfr_clear, :libmpfr)))
         return z
     end
-    # Not recommended for general use
+
+    # Not recommended for general use:
     function BigFloat(prec::Clong, sign::Cint, exp::Clong, d::Ptr{Void})
         new(prec, sign, exp, d)
     end
@@ -117,6 +119,27 @@ end
 
 convert(::Type{Rational}, x::BigFloat) = convert(Rational{BigInt}, x)
 convert(::Type{AbstractFloat}, x::BigInt) = BigFloat(x)
+
+# generic constructor with arbitrary precision:
+function BigFloat(x, prec::Int)
+    setprecision(BigFloat, prec) do
+        BigFloat(x)
+    end
+end
+
+function BigFloat(x, prec::Int, rounding::RoundingMode)
+    setrounding(BigFloat, rounding) do
+        BigFloat(x, prec)
+    end
+end
+
+function BigFloat(x, rounding::RoundingMode)
+    BigFloat(x, precision(BigFloat), rounding)
+end
+
+
+BigFloat(x::String) = parse(BigFloat, x)
+
 
 ## BigFloat -> Integer
 function unsafe_cast(::Type{Int64}, x::BigFloat, ri::Cint)
