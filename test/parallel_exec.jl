@@ -1027,9 +1027,17 @@ f_myid = ()->myid()
 @test wrkr2 == remotecall_fetch((f, p)->remotecall_fetch(f, p), wrkr1, f_myid, wrkr2)
 
 # Deserialization error recovery test
+# locally defined module, but unavailable on workers
+module LocalFoo
+    global foo=1
+end
+
 let
+    @test_throws RemoteException remotecall_fetch(()->LocalFoo.foo, 2)
+
     bad_thunk = ()->NonexistantModule.f()
     @test_throws RemoteException remotecall_fetch(bad_thunk, 2)
+
     # Test that the stream is still usable
     @test remotecall_fetch(()->:test,2) == :test
     ref = remotecall(bad_thunk, 2)
