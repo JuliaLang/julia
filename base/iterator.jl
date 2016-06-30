@@ -38,6 +38,7 @@ iteratoreltype{I}(::Type{Enumerate{I}}) = iteratoreltype(I)
 abstract AbstractZipIterator
 
 zip_iteratorsize(a, b) = and_iteratorsize(a,b) # as `and_iteratorsize` but inherit `Union{HasLength,IsInfinite}` of the shorter iterator
+zip_iteratorsize(::IsScalar, ::IsInfinite) = HasLength()
 zip_iteratorsize(::HasLength, ::IsInfinite) = HasLength()
 zip_iteratorsize(::HasShape, ::IsInfinite) = HasLength()
 zip_iteratorsize(a::IsInfinite, b) = zip_iteratorsize(b,a)
@@ -308,20 +309,16 @@ iteratoreltype{O}(::Type{Repeated{O}}) = HasEltype()
 abstract AbstractProdIterator
 
 length(p::AbstractProdIterator) = prod(size(p))
-size(p::AbstractProdIterator) = _prod_size(p.a, p.b, iteratorsize(p.a), iteratorsize(p.b))
+size(p::AbstractProdIterator) = _prod_size(p.a, p.b)
 ndims(p::AbstractProdIterator) = length(size(p))
 
 # generic methods to handle size of Prod* types
+_prod_size(a, ::IsScalar)  = (1,)
 _prod_size(a, ::HasShape)  = size(a)
 _prod_size(a, ::HasLength) = (length(a), )
-_prod_size(a, A) =
+_prod_size(a, ::IteratorSize) =
     throw(ArgumentError("Cannot compute size for object of type $(typeof(a))"))
-_prod_size(a, b, ::HasLength, ::HasLength)  = (length(a),  length(b))
-_prod_size(a, b, ::HasLength, ::HasShape)   = (length(a),  size(b)...)
-_prod_size(a, b, ::HasShape,  ::HasLength)  = (size(a)..., length(b))
-_prod_size(a, b, ::HasShape,  ::HasShape)   = (size(a)..., size(b)...)
-_prod_size(a, b, A, B) =
-    throw(ArgumentError("Cannot construct size for objects of types $(typeof(a)) and $(typeof(b))"))
+_prod_size(a, b) = (_prod_size(a, iteratorsize(a))..., _prod_size(b, iteratorsize(b))...)
 
 # one iterator
 immutable Prod1{I} <: AbstractProdIterator
@@ -413,6 +410,9 @@ iteratorsize{I1,I2}(::Type{Prod{I1,I2}}) = prod_iteratorsize(iteratorsize(I1),it
     ((x[1][1],x[1][2]...), x[2])
 end
 
+prod_iteratorsize(::IsScalar, ::IsScalar) = IsScalar()
+prod_iteratorsize(::IsScalar, isz::Union{HasLength,HasShape}) = isz
+prod_iteratorsize(isz::Union{HasLength,HasShape}, ::IsScalar) = isz
 prod_iteratorsize(::Union{HasLength,HasShape}, ::Union{HasLength,HasShape}) = HasShape()
 # products can have an infinite iterator
 prod_iteratorsize(::IsInfinite, ::IsInfinite) = IsInfinite()
@@ -534,6 +534,7 @@ type PartitionIterator{T}
 end
 
 eltype{T}(::Type{PartitionIterator{T}}) = Vector{eltype(T)}
+iteratorsize{T<:PartitionIterator}(::Type{T}) = HasLength()
 
 function length(itr::PartitionIterator)
     l = length(itr.c)

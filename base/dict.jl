@@ -98,6 +98,7 @@ _tt1{A,B}(::Type{Pair{A,B}}) = A
 _tt2{A,B}(::Type{Pair{A,B}}) = B
 eltype{D}(::Type{KeyIterator{D}}) = _tt1(eltype(D))
 eltype{D}(::Type{ValueIterator{D}}) = _tt2(eltype(D))
+iteratorsize{T<:Union{KeyIterator,ValueIterator}}(::Type{T}) = HasLength()
 
 start(v::Union{KeyIterator,ValueIterator}) = start(v.dict)
 done(v::Union{KeyIterator,ValueIterator}, state) = done(v.dict, state)
@@ -184,6 +185,7 @@ function filter(f, d::Associative)
 end
 
 eltype{K,V}(::Type{Associative{K,V}}) = Pair{K,V}
+iteratorsize{T<:Union{Associative,AbstractSet}}(::Type{T}) = HasLength()
 
 function isequal(l::Associative, r::Associative)
     l === r && return true

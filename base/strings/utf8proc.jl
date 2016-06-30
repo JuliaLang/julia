@@ -3,7 +3,7 @@
 # Various Unicode functionality from the utf8proc library
 module UTF8proc
 
-import Base: show, ==, hash, string, Symbol, isless, length, eltype, start, next, done, convert, isvalid, lowercase, uppercase
+import Base: show, ==, hash, string, Symbol, isless, length, eltype, iteratorsize, start, next, done, convert, isvalid, lowercase, uppercase
 
 export isgraphemebreak
 
@@ -190,6 +190,7 @@ end
 graphemes(s::AbstractString) = GraphemeIterator{typeof(s)}(s)
 
 eltype{S}(::Type{GraphemeIterator{S}}) = SubString{S}
+iteratorsize{T<:GraphemeIterator}(::Type{T}) = Base.HasLength()
 
 function length(g::GraphemeIterator)
     c0 = Char(0x00ad) # soft hyphen (grapheme break always allowed after this)

@@ -29,16 +29,19 @@ end
 
 abstract IteratorSize
 immutable SizeUnknown <: IteratorSize end
+immutable IsScalar <: IteratorSize end
 immutable HasLength <: IteratorSize end
 immutable HasShape <: IteratorSize end
 immutable IsInfinite <: IteratorSize end
 
 iteratorsize(x) = iteratorsize(typeof(x))
-iteratorsize(::Type) = HasLength()  # HasLength is the default
+iteratorsize(::Type) = IsScalar()  # IsScalar is the default
 
 and_iteratorsize{T}(isz::T, ::T) = isz
 and_iteratorsize(::HasLength, ::HasShape) = HasLength()
 and_iteratorsize(::HasShape, ::HasLength) = HasLength()
+and_iteratorsize(::IsScalar, ::Union{HasLength,HasShape}) = IsScalar()
+and_iteratorsize(::Union{HasLength,HasShape}, ::IsScalar) = IsScalar()
 and_iteratorsize(a, b) = SizeUnknown()
 
 abstract IteratorEltype
