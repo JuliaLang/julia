@@ -35,17 +35,9 @@ function //(x::Rational, y::Rational)
     checked_mul(xn,yd)//checked_mul(xd,yn)
 end
 
-//(x::Complex,  y::Real    ) = complex(real(x)//y,imag(x)//y)
-function //(x::Number, y::Complex)
-    xr = complex(Rational(real(x)),Rational(imag(x)))
-    yr = complex(Rational(real(y)),Rational(imag(y)))
-    xr // yr
-end
-function //{Ra<:Rational,Rb<:Rational}(x::Complex{Ra}, y::Complex{Rb})
-    xy = x*y'
-    yy = real(y*y')
-    complex(real(xy)//yy, imag(xy)//yy)
-end
+//(x::Complex,  y::Real) = complex(real(x)//y,imag(x)//y)
+//(x::Number, y::Complex) = x*y'//abs2(y)
+
 
 //(X::AbstractArray, y::Number) = X .// y
 .//(X::AbstractArray, y::Number) = reshape([ x // y for x in X ], size(X))
@@ -196,7 +188,7 @@ function *(x::Rational, y::Rational)
     checked_mul(xn,yn) // checked_mul(xd,yd)
 end
 /(x::Rational, y::Rational) = x//y
-/(x::Rational, z::Complex ) = inv(z/x)
+/{T<:Union{Integer,Rational}}(x::Rational, y::Complex{T}) = x//y
 
 fma(x::Rational, y::Rational, z::Rational) = x*y+z
 
