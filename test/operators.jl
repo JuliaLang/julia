@@ -56,5 +56,5 @@ let xs = [[i:i+4;] for i in 1:10]
     end
 end
 
-@test ((x -> x+1) ∘ (x _> 2x))(5) == 11
+@test ((x -> x+1) ∘ (x -> 2x))(5) == 11
 @test (!isless)(1,2) == false
