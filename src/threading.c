@@ -22,6 +22,21 @@ TODO:
 #include "julia.h"
 #include "julia_internal.h"
 
+#ifdef _OS_LINUX_
+#  if defined(_CPU_X86_64_) || defined(_CPU_X86_)
+#    define JL_ELF_TLS_VARIANT 2
+#    define JL_ELF_TLS_INIT_SIZE 0
+#  endif
+#  if defined(_CPU_AARCH64_)
+#    define JL_ELF_TLS_VARIANT 1
+#    define JL_ELF_TLS_INIT_SIZE 16
+#  endif
+#endif
+
+#ifdef JL_ELF_TLS_VARIANT
+#  include <link.h>
+#endif
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -335,10 +350,106 @@ void ti_threadfun(void *arg)
 void ti_reset_timings(void);
 #endif
 
+size_t jl_tls_offset = -1;
+
+#ifdef JL_ELF_TLS_VARIANT
+// Optimize TLS access in codegen if the TLS buffer is using a IE or LE model.
+// To detect such case, we find the size of the TLS segment in the main
+// executable and the TIB pointer and then see if the TLS pointer on the
+// current thread is in the right range.
+// This can in principle be extended to the case where the TLS buffer is
+// in the shared library but is part of the static buffer but that seems harder
+// to detect.
+#  if JL_ELF_TLS_VARIANT == 1
+// In Variant 1, the static TLS buffer comes after a fixed size TIB.
+// The alignment needs to be applied to the original size.
+static inline size_t jl_add_tls_size(size_t orig_size, size_t size, size_t align)
+{
+    return LLT_ALIGN(orig_size, align) + size;
+}
+static inline ssize_t jl_check_tls_bound(void *tp, void *ptls, size_t tls_size)
+{
+    ssize_t offset = (char*)ptls - (char*)tp;
+    if (offset < JL_ELF_TLS_INIT_SIZE ||
+        (size_t)offset + sizeof(jl_tls_states_t) > tls_size)
+        return -1;
+    return offset;
+}
+#  elif JL_ELF_TLS_VARIANT == 2
+// In Variant 2, the static TLS buffer comes before a unknown size TIB.
+// The alignment needs to be applied to the new size.
+static inline size_t jl_add_tls_size(size_t orig_size, size_t size, size_t align)
+{
+    return LLT_ALIGN(orig_size + size, align);
+}
+static inline ssize_t jl_check_tls_bound(void *tp, void *ptls, size_t tls_size)
+{
+    ssize_t offset = (char*)tp - (char*)ptls;
+    if (offset < sizeof(jl_tls_states_t) || offset > tls_size)
+        return -1;
+    return -offset;
+}
+#  else
+#    error "Unknown static TLS variant"
+#  endif
+
+// Find the size of the TLS segment in the main executable
+typedef struct {
+    size_t total_size;
+} check_tls_cb_t;
+
+static int check_tls_cb(struct dl_phdr_info *info, size_t size, void *_data)
+{
+    check_tls_cb_t *data = (check_tls_cb_t*)_data;
+    const ElfW(Phdr) *phdr = info->dlpi_phdr;
+    unsigned phnum = info->dlpi_phnum;
+    size_t total_size = JL_ELF_TLS_INIT_SIZE;
+
+    for (unsigned i = 0; i < phnum; i++) {
+        const ElfW(Phdr) *seg = &phdr[i];
+        if (seg->p_type != PT_TLS)
+            continue;
+        // There should be only one TLS segment
+        // Variant II
+        total_size = jl_add_tls_size(total_size, seg->p_memsz, seg->p_align);
+    }
+    data->total_size = total_size;
+    // only run once (on the main executable)
+    return 1;
+}
+
+static void jl_check_tls(void)
+{
+    jl_tls_states_t *ptls = jl_get_ptls_states();
+    check_tls_cb_t data = {0};
+    dl_iterate_phdr(check_tls_cb, &data);
+    if (data.total_size == 0)
+        return;
+    void *tp; // Thread pointer
+#if defined(_CPU_X86_64_)
+    asm("movq %%fs:0, %0" : "=r"(tp));
+#elif defined(_CPU_X86_)
+    asm("movl %%gs:0, %0" : "=r"(tp));
+#elif defined(_CPU_AARCH64_)
+    asm("mrs %0, tpidr_el0" : "=r"(tp));
+#else
+#  error "Cannot emit thread pointer for this architecture."
+#endif
+    size_t offset = jl_check_tls_bound(tp, ptls, data.total_size);
+    if (offset == -1)
+        return;
+    jl_tls_offset = offset;
+}
+#endif
+
 // interface to Julia; sets up to make the runtime thread-safe
 void jl_init_threading(void)
 {
     char *cp;
+
+#ifdef JL_ELF_TLS_VARIANT
+    jl_check_tls();
+#endif
 
     // how many threads available, usable
     int max_threads = jl_cpu_cores();
