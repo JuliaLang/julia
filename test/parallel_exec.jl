@@ -1025,3 +1025,13 @@ f_myid = ()->myid()
 @test wrkr1 == remotecall_fetch(f_myid, wrkr1)
 @test wrkr2 == remotecall_fetch(f_myid, wrkr2)
 @test wrkr2 == remotecall_fetch((f, p)->remotecall_fetch(f, p), wrkr1, f_myid, wrkr2)
+
+# Deserialization error recovery test
+let
+    bad_thunk = ()->NonexistantModule.f()
+    @test_throws RemoteException remotecall_fetch(bad_thunk, 2)
+    # Test that the stream is still usable
+    @test remotecall_fetch(()->:test,2) == :test
+    ref = remotecall(bad_thunk, 2)
+    @test_throws RemoteException fetch(ref)
+end
