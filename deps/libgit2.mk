@@ -7,9 +7,24 @@ $(eval $(call git-external,libgit2,LIBGIT2,CMakeLists.txt,build/libgit2.$(SHLIB_
 LIBGIT2_OBJ_SOURCE := $(BUILDDIR)/$(LIBGIT2_SRC_DIR)/libgit2.$(SHLIB_EXT)
 LIBGIT2_OBJ_TARGET := $(build_shlibdir)/libgit2.$(SHLIB_EXT)
 
-LIBGIT2_OPTS := $(CMAKE_COMMON) -DUSE_OPENSSL=OFF -DTHREADSAFE=ON -DCMAKE_PREFIX_PATH=$(build_prefix) -DCMAKE_INSTALL_RPATH=$(build_prefix) -DCMAKE_INSTALL_RPATH_USE_LINK_PATH=TRUE -DCMAKE_BUILD_TYPE=RelWithDebInfo
+LIBGIT2_OPTS := $(CMAKE_COMMON) -DCMAKE_BUILD_TYPE=Release -DTHREADSAFE=ON -DCMAKE_PREFIX_PATH=$(build_prefix)
+ifeq ($(OS),WINNT)
+LIBGIT2_OPTS += -DWIN32=ON -DMINGW=ON
+ifneq ($(ARCH),x86_64)
+LIBGIT2_OPTS += -DCMAKE_C_FLAGS="-mincoming-stack-boundary=2"
+endif
+ifeq ($(BUILD_OS),WINNT)
+LIBGIT2_OPTS += -G"MSYS Makefiles"
+else
+LIBGIT2_OPTS += -DBUILD_CLAR=OFF -DDLLTOOL=`which $(CROSS_COMPILE)dlltool`
+LIBGIT2_OPTS += -DCMAKE_FIND_ROOT_PATH=/usr/$(XC_HOST) -DCMAKE_FIND_ROOT_PATH_MODE_INCLUDE=ONLY
+endif
+else
+LIBGIT2_OPTS += -DUSE_OPENSSL=OFF -DCMAKE_INSTALL_RPATH=$(build_prefix) -DCMAKE_INSTALL_RPATH_USE_LINK_PATH=TRUE
+endif
 
 $(BUILDDIR)/$(LIBGIT2_SRC_DIR)/Makefile: $(SRCDIR)/srccache/$(LIBGIT2_SRC_DIR)/CMakeLists.txt
+	-cd $(SRCDIR)/srccache/$(LIBGIT2_SRC_DIR) && patch -p0 -f < $(SRCDIR)/patches/libgit2-ssh.patch
 	mkdir -p $(dir $@)
 	cd $(dir $@) && \
 	$(CMAKE) $(dir $<) $(LIBGIT2_OPTS)
@@ -23,7 +38,11 @@ ifeq ($(OS),$(BUILD_OS))
 endif
 	echo 1 > $@
 $(LIBGIT2_OBJ_TARGET): $(LIBGIT2_OBJ_SOURCE) | $(build_shlibdir)
+ifeq ($(OS),WINNT)
+	cp $< $@
+else
 	$(call make-install,$(LIBGIT2_SRC_DIR),)
+endif
 	touch -c $@
 
 clean-libgit2:

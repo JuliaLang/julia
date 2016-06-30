@@ -362,13 +362,6 @@ endif
 		done \
 	done
 
-	# Copy in libssl and libcrypto if they exist
-ifeq ($(OS),Linux)
-	-$(INSTALL_M) $(build_libdir)/libssl*.so* $(DESTDIR)$(private_libdir)
-	-$(INSTALL_M) $(build_libdir)/libcrypto*.so* $(DESTDIR)$(private_libdir)
-endif
-endif
-
 ifeq ($(USE_SYSTEM_LIBUV),0)
 ifeq ($(OS),WINNT)
 	$(INSTALL_F) $(build_includedir)/tree.h $(DESTDIR)$(includedir)/julia
