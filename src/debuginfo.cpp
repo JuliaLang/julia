@@ -480,8 +480,8 @@ public:
             else
                 SectionAddrCheck = SectionLoadAddr;
             create_PRUNTIME_FUNCTION(
-                   (uint8_t*)(intptr_t)Addr, (size_t)Size, sName,
-                   (uint8_t*)(intptr_t)SectionLoadAddr, (size_t)SectionSize, UnwindData);
+                   (uint8_t*)(uintptr_t)Addr, (size_t)Size, sName,
+                   (uint8_t*)(uintptr_t)SectionLoadAddr, (size_t)SectionSize, UnwindData);
 #endif
             StringMap<jl_lambda_info_t*>::iterator linfo_it = linfo_in_flight.find(sName);
             jl_lambda_info_t *linfo = NULL;
@@ -556,8 +556,8 @@ public:
             else
                 SectionAddrCheck = SectionLoadAddr;
             create_PRUNTIME_FUNCTION(
-                   (uint8_t*)(intptr_t)Addr, (size_t)Size, sName,
-                   (uint8_t*)(intptr_t)SectionLoadAddr, (size_t)SectionSize, UnwindData);
+                   (uint8_t*)(uintptr_t)Addr, (size_t)Size, sName,
+                   (uint8_t*)(uintptr_t)SectionLoadAddr, (size_t)SectionSize, UnwindData);
 #endif
             StringMap<jl_lambda_info_t*>::iterator linfo_it = linfo_in_flight.find(sName);
             jl_lambda_info_t *linfo = NULL;
@@ -1253,7 +1253,7 @@ int jl_getFunctionInfo(jl_frame_t **frames_out, size_t pointer, int skipC, int n
 // Without MCJIT we use the FuncInfo structure containing address maps
     std::map<size_t, FuncInfo, revcomp> &info = jl_jit_events->getMap();
     std::map<size_t, FuncInfo, revcomp>::iterator it = info.lower_bound(pointer);
-    if (it != info.end() && (intptr_t)(*it).first + (*it).second.lengthAdr >= pointer) {
+    if (it != info.end() && (uintptr_t)(*it).first + (*it).second.lengthAdr >= pointer) {
         // We do this to hide the jlcall wrappers when getting julia backtraces,
         // but it is still good to have them for regular lookup of C frames.
         if (skipC && (*it).second.lines.empty()) {
@@ -1325,6 +1325,21 @@ int jl_getFunctionInfo(jl_frame_t **frames_out, size_t pointer, int skipC, int n
     uv_rwlock_rdunlock(&threadsafe);
 #endif // USE_MCJIT
     return jl_getDylibFunctionInfo(frames_out, pointer, skipC, noInline);
+}
+
+extern "C" jl_lambda_info_t *jl_gdblookuplinfo(void *p)
+{
+#ifndef USE_MCJIT
+    std::map<size_t, FuncInfo, revcomp> &info = jl_jit_events->getMap();
+    std::map<size_t, FuncInfo, revcomp>::iterator it = info.lower_bound((size_t)p);
+    jl_lambda_info_t *li = NULL;
+    if (it != info.end() && (uintptr_t)(*it).first + (*it).second.lengthAdr >= (uintptr_t)p)
+        li = (*it).second.linfo;
+    uv_rwlock_rdunlock(&threadsafe);
+    return li;
+#else
+    return jl_jit_events->lookupLinfo((size_t)p);
+#endif
 }
 
 #if defined(LLVM37) && (defined(_OS_LINUX_) || (defined(_OS_DARWIN_) && defined(LLVM_SHLIB)))
@@ -1742,7 +1757,7 @@ uint64_t jl_getUnwindInfo(uint64_t dwAddr)
     std::map<size_t, ObjectInfo, revcomp>::iterator it = objmap.lower_bound(dwAddr);
     uint64_t ipstart = 0; // ip of the start of the section (if found)
     if (it != objmap.end() && dwAddr < it->first + it->second.SectionSize) {
-        ipstart = (uint64_t)(intptr_t)(*it).first;
+        ipstart = (uint64_t)(uintptr_t)(*it).first;
     }
     uv_rwlock_rdunlock(&threadsafe);
     return ipstart;
@@ -1755,8 +1770,8 @@ uint64_t jl_getUnwindInfo(uint64_t dwAddr)
     std::map<size_t, FuncInfo, revcomp> &info = jl_jit_events->getMap();
     std::map<size_t, FuncInfo, revcomp>::iterator it = info.lower_bound(dwAddr);
     uint64_t ipstart = 0; // ip of the first instruction in the function (if found)
-    if (it != info.end() && (intptr_t)(*it).first + (*it).second.lengthAdr > dwAddr) {
-        ipstart = (uint64_t)(intptr_t)(*it).first;
+    if (it != info.end() && (uintptr_t)(*it).first + (*it).second.lengthAdr > dwAddr) {
+        ipstart = (uint64_t)(uintptr_t)(*it).first;
     }
     uv_rwlock_rdunlock(&threadsafe);
     return ipstart;
