@@ -407,6 +407,7 @@ JL_DLLEXPORT jl_lambda_info_t *jl_new_lambda_info_uninit(void)
     li->inInference = 0;
     li->inCompile = 0;
     li->def = NULL;
+    li->constval = NULL;
     li->pure = 0;
     li->inlineable = 0;
     return li;
@@ -525,6 +526,7 @@ static jl_lambda_info_t *jl_copy_lambda(jl_lambda_info_t *linfo)
     new_linfo->isva = linfo->isva;
     new_linfo->rettype = linfo->rettype;
     new_linfo->def = linfo->def;
+    new_linfo->constval = linfo->constval;
     return new_linfo;
 }
 

@@ -891,7 +891,10 @@ static void jl_serialize_value_(ios_t *s, jl_value_t *v)
     else if (jl_is_lambda_info(v)) {
         writetag(s, jl_lambda_info_type);
         jl_lambda_info_t *li = (jl_lambda_info_t*)v;
-        jl_serialize_value(s, li->code);
+        if (li->jlcall_api == 2)
+            jl_serialize_value(s, jl_nothing);
+        else
+            jl_serialize_value(s, li->code);
         jl_serialize_value(s, li->slotnames);
         jl_serialize_value(s, li->slottypes);
         jl_serialize_value(s, li->slotflags);
@@ -906,12 +909,12 @@ static void jl_serialize_value_(ios_t *s, jl_value_t *v)
         write_int8(s, li->isva);
         write_int32(s, li->nargs);
         jl_serialize_value(s, (jl_value_t*)li->def);
+        jl_serialize_value(s, li->constval);
         jl_serialize_fptr(s, li->fptr);
         // save functionObject pointers
         write_int32(s, li->functionID);
         write_int32(s, li->specFunctionID);
-        if (li->functionID)
-            write_int8(s, li->jlcall_api);
+        write_int8(s, li->jlcall_api);
     }
     else if (jl_typeis(v, jl_module_type)) {
         jl_serialize_module(s, (jl_module_t*)v);
@@ -1541,6 +1544,8 @@ static jl_value_t *jl_deserialize_value_(ios_t *s, jl_value_t *vtag, jl_value_t 
         li->nargs = read_int32(s);
         li->def = (jl_method_t*)jl_deserialize_value(s, (jl_value_t**)&li->def);
         if (li->def) jl_gc_wb(li, li->def);
+        li->constval = jl_deserialize_value(s, &li->constval);
+        if (li->constval) jl_gc_wb(li, li->constval);
         li->fptr = NULL;
         li->functionObjectsDecls.functionObject = NULL;
         li->functionObjectsDecls.specFunctionObject = NULL;
@@ -1553,7 +1558,7 @@ static jl_value_t *jl_deserialize_value_(ios_t *s, jl_value_t *vtag, jl_value_t 
         func_llvm = read_int32(s);
         cfunc_llvm = read_int32(s);
         jl_delayed_fptrs(li, func_llvm, cfunc_llvm);
-        li->jlcall_api = func_llvm ? read_int8(s) : 0;
+        li->jlcall_api = read_int8(s);
         li->compile_traced = 0;
         return (jl_value_t*)li;
     }
