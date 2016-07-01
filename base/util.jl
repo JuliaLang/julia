@@ -10,6 +10,7 @@ time_ns() = ccall(:jl_hrtime, UInt64, ())
 # This type must be kept in sync with the C struct in src/gc.h
 immutable GC_Num
     allocd      ::Int64 # GC internal
+    deferred_alloc::Int64
     freed       ::Int64 # GC internal
     malloc      ::UInt64
     realloc     ::UInt64
