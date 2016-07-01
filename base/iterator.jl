@@ -134,7 +134,7 @@ function advance_filter(pred, itr, st)
         end
         s=t
     end
-    v, (true,)
+    v, (true, v, s)
 end
 
 done(f::Filter, s) = s[1]
@@ -479,7 +479,9 @@ flatten(itr) = Flatten(itr)
 
 eltype{I}(::Type{Flatten{I}}) = eltype(eltype(I))
 iteratorsize{I}(::Type{Flatten{I}}) = SizeUnknown()
-iteratoreltype{I}(::Type{Flatten{I}}) = iteratoreltype(eltype(I))
+iteratoreltype{I}(::Type{Flatten{I}}) = _flatteneltype(I, iteratoreltype(I))
+_flatteneltype(I, ::HasEltype) = iteratoreltype(eltype(I))
+_flatteneltype(I, et) = EltypeUnknown()
 
 function start(f::Flatten)
     local inner, s2
@@ -496,7 +498,7 @@ function start(f::Flatten)
     return s, inner, s2
 end
 
-function next(f::Flatten, state)
+@inline function next(f::Flatten, state)
     s, inner, s2 = state
     val, s2 = next(inner, s2)
     while done(inner, s2) && !done(f.it, s)

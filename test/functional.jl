@@ -66,6 +66,8 @@ end
 # typed `collect`
 @test collect(Float64, Filter(isodd, [1,2,3,4]))[1] === 1.0
 
+@test isa(collect(Any, [1,2]), Vector{Any})
+
 # enumerate (issue #6284)
 let b = IOBuffer("1\n2\n3\n"), a = []
     for (i,x) in enumerate(eachline(b))
@@ -373,6 +375,8 @@ import Base.flatten
 @test collect(flatten(Any[2:1])) == Any[]
 @test eltype(flatten(UnitRange{Int8}[1:2, 3:4])) == Int8
 @test_throws ArgumentError collect(flatten(Any[]))
+
+@test Base.iteratoreltype(Base.Flatten((i for i=1:2) for j=1:1)) == Base.EltypeUnknown()
 
 # foreach
 let
