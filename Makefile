@@ -361,6 +361,7 @@ endif
 			fi \
 		done \
 	done
+endif
 
 ifeq ($(USE_SYSTEM_LIBUV),0)
 ifeq ($(OS),WINNT)
