@@ -555,25 +555,27 @@ static void jl_serialize_datatype(ios_t *s, jl_datatype_t *dt)
         return;
     }
 
-    size_t nf = jl_datatype_nfields(dt);
-    write_uint16(s, nf);
     write_int32(s, dt->size);
     int has_instance = !!(dt->instance != NULL);
-    write_uint8(s, dt->abstract | (dt->mutabl<<1) | (dt->pointerfree<<2) | (has_instance<<3) |
+    int has_layout = !!(dt->layout != NULL);
+    write_uint8(s, dt->abstract | (dt->mutabl<<1) | (has_layout<<2) | (has_instance<<3) |
             (dt->hastypevars<<4) | (dt->haswildcard<<5) | (dt->isleaftype<<6));
     write_int32(s, dt->depth);
-    write_int8(s, dt->fielddesc_type);
     if (!dt->abstract) {
         write_uint16(s, dt->ninitialized);
         if (mode != MODE_MODULE && mode != MODE_MODULE_POSTWORK) {
             write_int32(s, dt->uid);
         }
     }
-    if (nf > 0) {
-        write_int32(s, dt->alignment);
-        write_int8(s, dt->haspadding);
-        size_t fieldsize = jl_fielddesc_size(dt->fielddesc_type);
-        ios_write(s, jl_datatype_fields(dt), nf * fieldsize);
+    if (has_layout) {
+        size_t nf = dt->layout->nfields;
+        write_uint16(s, nf);
+        write_int8(s, dt->layout->fielddesc_type);
+        write_int32(s, dt->layout->alignment);
+        write_int8(s, dt->layout->haspadding);
+        write_int8(s, dt->layout->pointerfree);
+        size_t fieldsize = jl_fielddesc_size(dt->layout->fielddesc_type);
+        ios_write(s, (char*)(&dt->layout[1]), nf * fieldsize);
     }
 
     if (has_instance)
@@ -581,9 +583,7 @@ static void jl_serialize_datatype(ios_t *s, jl_datatype_t *dt)
     jl_serialize_value(s, dt->name);
     jl_serialize_value(s, dt->parameters);
     jl_serialize_value(s, dt->super);
-
-    if (nf > 0)
-        jl_serialize_value(s, dt->types);
+    jl_serialize_value(s, dt->types);
 }
 
 static void jl_serialize_module(ios_t *s, jl_module_t *m)
@@ -1177,11 +1177,9 @@ static jl_value_t *jl_deserialize_datatype(ios_t *s, int pos, jl_value_t **loc)
         backref_list.items[pos] = dtv;
         return dtv;
     }
-    uint16_t nf = read_uint16(s);
     size_t size = read_int32(s);
     uint8_t flags = read_uint8(s);
     uint8_t depth = read_int32(s);
-    uint8_t fielddesc_type = read_int8(s);
     jl_datatype_t *dt = NULL;
     if (tag == 2)
         dt = jl_int32_type;
@@ -1192,7 +1190,7 @@ static jl_value_t *jl_deserialize_datatype(ios_t *s, int pos, jl_value_t **loc)
     else if (tag == 8)
         dt = jl_uint8_type;
     else if (tag == 0 || tag == 5)
-        dt = jl_new_uninitialized_datatype(nf, fielddesc_type);
+        dt = jl_new_uninitialized_datatype();
     else
         assert(0);
     assert(tree_literal_values==NULL && mode != MODE_AST);
@@ -1203,7 +1201,8 @@ static jl_value_t *jl_deserialize_datatype(ios_t *s, int pos, jl_value_t **loc)
     dt->ditype = NULL;
     dt->abstract = flags&1;
     dt->mutabl = (flags>>1)&1;
-    dt->pointerfree = (flags>>2)&1;
+    int has_layout = (flags>>2)&1;
+    int has_instance = (flags>>3)&1;
     dt->hastypevars = (flags>>4)&1;
     dt->haswildcard = (flags>>5)&1;
     dt->isleaftype = (flags>>6)&1;
@@ -1212,6 +1211,7 @@ static jl_value_t *jl_deserialize_datatype(ios_t *s, int pos, jl_value_t **loc)
     dt->parameters = NULL;
     dt->name = NULL;
     dt->super = NULL;
+    dt->layout = NULL;
     if (!dt->abstract) {
         dt->ninitialized = read_uint16(s);
         dt->uid = mode != MODE_MODULE && mode != MODE_MODULE_POSTWORK ? read_int32(s) : 0;
@@ -1221,18 +1221,19 @@ static jl_value_t *jl_deserialize_datatype(ios_t *s, int pos, jl_value_t **loc)
         dt->uid = 0;
     }
 
-    if (nf > 0) {
-        dt->alignment = read_int32(s);
-        dt->haspadding = read_int8(s);
-        size_t fieldsize = jl_fielddesc_size(fielddesc_type);
-        ios_read(s, jl_datatype_fields(dt), nf * fieldsize);
-    }
-    else {
-        dt->alignment = dt->size;
-        dt->haspadding = 0;
-        if (dt->alignment > MAX_ALIGN)
-            dt->alignment = MAX_ALIGN;
-        dt->types = jl_emptysvec;
+    if (has_layout) {
+        uint16_t nf = read_uint16(s);
+        uint8_t fielddesc_type = read_int8(s);
+        size_t fielddesc_size = nf > 0 ? jl_fielddesc_size(fielddesc_type) : 0;
+        struct _jl_datatype_layout_t *layout = (struct _jl_datatype_layout_t*)malloc(
+                sizeof(struct _jl_datatype_layout_t) + nf * fielddesc_size);
+        layout->nfields = nf;
+        layout->fielddesc_type = fielddesc_type;
+        layout->alignment = read_int32(s);
+        layout->haspadding = read_int8(s);
+        layout->pointerfree = read_int8(s);
+        ios_read(s, (char*)&layout[1], nf * fielddesc_size);
+        dt->layout = layout;
     }
 
     if (tag == 5) {
@@ -1243,7 +1244,6 @@ static jl_value_t *jl_deserialize_datatype(ios_t *s, int pos, jl_value_t **loc)
         dt->uid = -1; // mark that this type needs a new uid
     }
 
-    int has_instance = (flags >> 3) & 1;
     if (has_instance) {
         assert(mode != MODE_MODULE_POSTWORK); // there shouldn't be an instance on a type with uid = 0
         dt->instance = jl_deserialize_value(s, &dt->instance);
@@ -1255,11 +1255,9 @@ static jl_value_t *jl_deserialize_datatype(ios_t *s, int pos, jl_value_t **loc)
     jl_gc_wb(dt, dt->parameters);
     dt->super = (jl_datatype_t*)jl_deserialize_value(s, (jl_value_t**)&dt->super);
     jl_gc_wb(dt, dt->super);
+    dt->types = (jl_svec_t*)jl_deserialize_value(s, (jl_value_t**)&dt->types);
+    jl_gc_wb(dt, dt->types);
 
-    if (nf > 0) {
-        dt->types = (jl_svec_t*)jl_deserialize_value(s, (jl_value_t**)&dt->types);
-        jl_gc_wb(dt, dt->types);
-    }
     return (jl_value_t*)dt;
 }
 

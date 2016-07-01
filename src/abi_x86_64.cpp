@@ -107,25 +107,25 @@ struct Classification {
         // make sure other half knows about it too:
         accum.addField(offset+16, ComplexX87);
     } */
-void classifyType(Classification& accum, jl_value_t *ty, uint64_t offset)
+void classifyType(Classification& accum, jl_datatype_t *dt, uint64_t offset)
 {
     // Floating point types
-    if (ty == (jl_value_t*)jl_float64_type || ty == (jl_value_t*)jl_float32_type) {
+    if (dt == jl_float64_type || dt == jl_float32_type) {
         accum.addField(offset, Sse);
     }
     // Misc types
-    else if (!jl_is_datatype(ty) || jl_is_cpointer_type(ty) || jl_is_array_type(ty) || jl_is_abstracttype(ty)) {
+    else if (jl_is_cpointer_type((jl_value_t*)dt)) {
         accum.addField(offset, Integer); // passed as a pointer
     }
     // Ghost
-    else if (jl_datatype_size(ty) == 0) {
+    else if (jl_datatype_size(dt) == 0) {
     }
     // BitsTypes and not float, write as Integers
-    else if (jl_is_bitstype(ty)) {
-        if (jl_datatype_size(ty) <= 8) {
-            accum.addField(offset,Integer);
+    else if (jl_is_bitstype(dt)) {
+        if (jl_datatype_size(dt) <= 8) {
+            accum.addField(offset, Integer);
         }
-        else if (jl_datatype_size(ty) <= 16) {
+        else if (jl_datatype_size(dt) <= 16) {
             // Int128 or other 128bit wide INTEGER types
             accum.addField(offset, Integer);
             accum.addField(offset+8, Integer);
@@ -135,15 +135,17 @@ void classifyType(Classification& accum, jl_value_t *ty, uint64_t offset)
         }
     }
     // struct types that map to SIMD registers
-    else if (is_native_simd_type(ty)) {
+    else if (is_native_simd_type(dt)) {
         accum.addField(offset, Sse);
     }
     // Other struct types
-    else if (jl_datatype_size(ty) <= 16) {
+    else if (jl_datatype_size(dt) <= 16) {
         size_t i;
-        for (i = 0; i < jl_datatype_nfields(ty); ++i) {
-            classifyType(accum, jl_field_type((jl_datatype_t*)ty,i),
-                         offset + jl_field_offset((jl_datatype_t*)ty,i));
+        for (i = 0; i < jl_datatype_nfields(dt); ++i) {
+            jl_value_t *ty = jl_field_type(dt, i);
+            if (!jl_is_datatype(ty) || ((jl_datatype_t*)ty)->layout == NULL || jl_is_array_type(ty))
+                ty = (jl_value_t*)jl_voidpointer_type;
+            classifyType(accum, (jl_datatype_t*)ty, offset + jl_field_offset(dt, i));
         }
     }
     else {
@@ -151,16 +153,16 @@ void classifyType(Classification& accum, jl_value_t *ty, uint64_t offset)
     }
 }
 
-Classification classify(jl_value_t *ty)
+Classification classify(jl_datatype_t *dt)
 {
     Classification cl;
-    classifyType(cl, ty, 0);
+    classifyType(cl, dt, 0);
     return cl;
 }
 
-bool use_sret(AbiState *state,jl_value_t *ty)
+bool use_sret(AbiState *state, jl_datatype_t *dt)
 {
-    int sret = classify(ty).isMemory;
+    int sret = classify(dt).isMemory;
     if (sret) {
         assert(state->int_regs>0 && "No int regs available when determining sret-ness?");
         state->int_regs--;
@@ -168,9 +170,9 @@ bool use_sret(AbiState *state,jl_value_t *ty)
     return sret;
 }
 
-void needPassByRef(AbiState *state, jl_value_t *ty, bool *byRef, bool *inReg)
+void needPassByRef(AbiState *state, jl_datatype_t *dt, bool *byRef, bool *inReg)
 {
-    Classification cl = classify(ty);
+    Classification cl = classify(dt);
     if (cl.isMemory) {
         *byRef = true;
         return;
@@ -189,7 +191,7 @@ void needPassByRef(AbiState *state, jl_value_t *ty, bool *byRef, bool *inReg)
         state->int_regs -= wanted.int_regs;
         state->sse_regs -= wanted.sse_regs;
     }
-    else if (jl_is_structtype(ty)) {
+    else if (jl_is_structtype(dt)) {
         // spill to memory even though we would ordinarily pass
         // it in registers
         *byRef = true;
@@ -198,21 +200,18 @@ void needPassByRef(AbiState *state, jl_value_t *ty, bool *byRef, bool *inReg)
 
 // Called on behalf of ccall to determine preferred LLVM representation
 // for an argument or return value.
-Type *preferred_llvm_type(jl_value_t *ty, bool isret)
+Type *preferred_llvm_type(jl_datatype_t *dt, bool isret)
 {
     (void) isret;
     // no need to rewrite these types (they are returned as pointers anyways)
-    if (!jl_is_datatype(ty) || jl_is_abstracttype(ty) || jl_is_cpointer_type(ty) || jl_is_array_type(ty))
+    if (is_native_simd_type(dt))
         return NULL;
 
-    if (is_native_simd_type(ty))
-        return NULL;
-
-    int size = jl_datatype_size(ty);
+    int size = jl_datatype_size(dt);
     if (size > 16 || size == 0)
         return NULL;
 
-    Classification cl = classify(ty);
+    Classification cl = classify(dt);
     if (cl.isMemory)
         return NULL;
 

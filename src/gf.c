@@ -331,7 +331,7 @@ static int very_general_type(jl_value_t *t)
 
 jl_value_t *jl_nth_slot_type(jl_tupletype_t *sig, size_t i)
 {
-    size_t len = jl_datatype_nfields(sig);
+    size_t len = jl_field_count(sig);
     if (len == 0)
         return NULL;
     if (i < len-1)

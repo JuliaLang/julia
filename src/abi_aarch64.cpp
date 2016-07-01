@@ -20,7 +20,9 @@ static Type *get_llvm_vectype(jl_datatype_t *dt)
 {
     // Assume jl_is_datatype(dt) && !jl_is_abstracttype(dt)
     // `!dt->mutabl && dt->pointerfree && !dt->haspadding && dt->nfields > 0`
-    size_t nfields = dt->nfields;
+    if (dt->layout == NULL)
+        return nullptr;
+    size_t nfields = dt->layout->nfields;
     assert(nfields > 0);
     if (nfields < 2)
         return nullptr;
@@ -48,7 +50,7 @@ static Type *get_llvm_vectype(jl_datatype_t *dt)
     // `ft0` should be a `VecElement` type and the true element type
     // should be a `bitstype`
     if (ft0->name != jl_vecelement_typename ||
-        ((jl_datatype_t*)jl_field_type(ft0, 0))->nfields)
+        ((jl_datatype_t*)jl_field_type(ft0, 0))->layout->nfields)
         return nullptr;
     for (size_t i = 1; i < nfields; i++) {
         if (jl_field_type(dt, i) != (jl_value_t*)ft0) {
@@ -87,9 +89,9 @@ static Type *get_llvm_fptype(jl_datatype_t *dt)
 static Type *get_llvm_fp_or_vectype(jl_datatype_t *dt)
 {
     // Assume jl_is_datatype(dt) && !jl_is_abstracttype(dt)
-    if (dt->mutabl || !dt->pointerfree || dt->haspadding)
+    if (dt->mutabl || !dt->layout->pointerfree || dt->layout->haspadding)
         return nullptr;
-    return dt->nfields ? get_llvm_vectype(dt) : get_llvm_fptype(dt);
+    return dt->layout->nfields ? get_llvm_vectype(dt) : get_llvm_fptype(dt);
 }
 
 struct ElementType {
@@ -179,7 +181,7 @@ static Type *isHFAorHVA(jl_datatype_t *dt, size_t &nele)
     // uniquely addressable members.
     // Maximum HFA and HVA size is 64 bytes (4 x fp128 or 16bytes vector)
     size_t dsz = dt->size;
-    if (dsz > 64 || !dt->pointerfree || dt->haspadding)
+    if (dsz > 64 || !dt->layout || !dt->layout->pointerfree || dt->layout->haspadding)
         return NULL;
     nele = 0;
     ElementType eltype;
@@ -188,10 +190,8 @@ static Type *isHFAorHVA(jl_datatype_t *dt, size_t &nele)
     return NULL;
 }
 
-void needPassByRef(AbiState*, jl_value_t *ty, bool *byRef, bool*)
+void needPassByRef(AbiState*, jl_datatype_t *dt, bool *byRef, bool*)
 {
-    // Assume jl_is_datatype(ty) && !jl_is_abstracttype(ty)
-    jl_datatype_t *dt = (jl_datatype_t*)ty;
     // B.2
     //   If the argument type is an HFA or an HVA, then the argument is used
     //   unmodified.
@@ -227,12 +227,9 @@ bool need_private_copy(jl_value_t*, bool)
 // If the argument has to be passed on stack, we need to use sret.
 //
 // All the out parameters should be default to `false`.
-static Type *classify_arg(jl_value_t *ty, bool *fpreg, bool *onstack,
+static Type *classify_arg(jl_datatype_t *dt, bool *fpreg, bool *onstack,
                           size_t *rewrite_len)
 {
-    // Assume jl_is_datatype(ty) && !jl_is_abstracttype(ty)
-    jl_datatype_t *dt = (jl_datatype_t*)ty;
-
     // Based on section 5.4 C of the Procedure Call Standard
     // C.1
     //   If the argument is a Half-, Single-, Double- or Quad- precision
@@ -354,10 +351,8 @@ static Type *classify_arg(jl_value_t *ty, bool *fpreg, bool *onstack,
     // <handled by C.10 above>
 }
 
-bool use_sret(AbiState*, jl_value_t *ty)
+bool use_sret(AbiState*, jl_datatype_t *dt)
 {
-    // Assume (jl_is_datatype(ty) && !jl_is_abstracttype(ty) &&
-    //         !jl_is_array_type(ty))
     // Section 5.5
     // If the type, T, of the result of a function is such that
     //
@@ -370,21 +365,18 @@ bool use_sret(AbiState*, jl_value_t *ty)
     bool fpreg = false;
     bool onstack = false;
     size_t rewrite_len = 0;
-    classify_arg(ty, &fpreg, &onstack, &rewrite_len);
+    classify_arg(dt, &fpreg, &onstack, &rewrite_len);
     return onstack;
 }
 
-Type *preferred_llvm_type(jl_value_t *ty, bool)
+Type *preferred_llvm_type(jl_datatype_t *dt, bool)
 {
-    if (!jl_is_datatype(ty) || jl_is_abstracttype(ty) || jl_is_array_type(ty))
-        return NULL;
-    jl_datatype_t *dt = (jl_datatype_t*)ty;
     if (Type *fptype = get_llvm_fp_or_vectype(dt))
         return fptype;
     bool fpreg = false;
     bool onstack = false;
     size_t rewrite_len = 0;
-    if (Type *rewrite_ty = classify_arg(ty, &fpreg, &onstack, &rewrite_len))
+    if (Type *rewrite_ty = classify_arg(dt, &fpreg, &onstack, &rewrite_len))
         return ArrayType::get(rewrite_ty, rewrite_len);
     return NULL;
 }

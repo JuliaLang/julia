@@ -40,52 +40,44 @@
 typedef bool AbiState;
 AbiState default_abi_state = 0;
 
-inline bool is_complex64(jl_value_t *ty)
+inline bool is_complex64(jl_datatype_t *dt)
 {
-    return jl_complex_type != NULL && jl_is_datatype(ty) &&
-        ((jl_datatype_t*)ty)->name == jl_complex_type->name &&
-        jl_tparam0(ty) == (jl_value_t*)jl_float32_type;
+    return jl_complex_type != NULL && jl_is_datatype(dt) &&
+        ((jl_datatype_t*)dt)->name == jl_complex_type->name &&
+        jl_tparam0(dt) == (jl_value_t*)jl_float32_type;
 }
 
-inline bool is_complex128(jl_value_t *ty)
+inline bool is_complex128(jl_datatype_t *dt)
 {
-    return jl_complex_type != NULL && jl_is_datatype(ty) &&
-        ((jl_datatype_t*)ty)->name == jl_complex_type->name &&
-        jl_tparam0(ty) == (jl_value_t*)jl_float64_type;
+    return jl_complex_type != NULL && jl_is_datatype(dt) &&
+        ((jl_datatype_t*)dt)->name == jl_complex_type->name &&
+        jl_tparam0(dt) == (jl_value_t*)jl_float64_type;
 }
 
-bool use_sret(AbiState *state, jl_value_t *ty)
+bool use_sret(AbiState *state, jl_datatype_t *dt)
 {
-    // Assume (jl_is_datatype(ty) && !jl_is_abstracttype(ty) &&
-    //         !jl_is_array_type(ty))
-    if (jl_is_cpointer_type(ty))
-        return false;
-    size_t size = jl_datatype_size(ty);
+    size_t size = jl_datatype_size(dt);
     if (size == 0)
         return false;
-    if (is_complex64(ty) || (jl_is_bitstype(ty) && size <= 8))
+    if (is_complex64(dt) || (jl_is_bitstype(dt) && size <= 8))
         return false;
     return true;
 }
 
-void needPassByRef(AbiState *state, jl_value_t *ty, bool *byRef, bool *inReg)
+void needPassByRef(AbiState *state, jl_datatype_t *dt, bool *byRef, bool *inReg)
 {
-    if (!jl_is_datatype(ty) || jl_is_abstracttype(ty) || jl_is_cpointer_type(ty) || jl_is_array_type(ty))
-        return;
-    size_t size = jl_datatype_size(ty);
-    if (is_complex64(ty) || is_complex128(ty) || (jl_is_bitstype(ty) && size <= 8))
+    size_t size = jl_datatype_size(dt);
+    if (is_complex64(dt) || is_complex128(dt) || (jl_is_bitstype(dt) && size <= 8))
         return;
     *byRef = true;
 }
 
-Type *preferred_llvm_type(jl_value_t *ty, bool isret)
+Type *preferred_llvm_type(jl_datatype_t *dt, bool isret)
 {
     if (!isret)
         return NULL;
-    if (!jl_is_datatype(ty) || jl_is_abstracttype(ty) || jl_is_cpointer_type(ty) || jl_is_array_type(ty))
-        return NULL;
     // special case Complex{Float32} as a return type
-    if (is_complex64(ty))
+    if (is_complex64(dt))
         return T_int64;
     return NULL;
 }

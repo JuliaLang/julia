@@ -1307,7 +1307,7 @@ static int push_root(jl_ptls_t ptls, jl_value_t *v, int d, int bits)
         bits = gc_setmark(ptls, v, sizeof(jl_weakref_t));
         goto ret;
     }
-    if ((jl_is_datatype(vt) && ((jl_datatype_t*)vt)->pointerfree)) {
+    if ((jl_is_datatype(vt) && ((jl_datatype_t*)vt)->layout->pointerfree)) {
         int sz = jl_datatype_size(vt);
         bits = gc_setmark(ptls, v, sz);
         goto ret;
@@ -1405,16 +1405,7 @@ static int push_root(jl_ptls_t ptls, jl_value_t *v, int d, int bits)
     // this check should not be needed but it helps catching corruptions early
     else if (jl_typeof(vt) == (jl_value_t*)jl_datatype_type) {
         jl_datatype_t *dt = (jl_datatype_t*)vt;
-        size_t dtsz;
-        if (dt == jl_datatype_type) {
-            size_t fieldsize =
-                jl_fielddesc_size(((jl_datatype_t*)v)->fielddesc_type);
-            dtsz = NWORDS(sizeof(jl_datatype_t) +
-                          jl_datatype_nfields(v) * fieldsize) * sizeof(void*);
-        }
-        else {
-            dtsz = jl_datatype_size(dt);
-        }
+        size_t dtsz = jl_datatype_size(dt);
         bits = gc_setmark(ptls, v, dtsz);
         if (d >= MAX_MARK_DEPTH)
             goto queue_the_root;

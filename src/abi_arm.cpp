@@ -24,7 +24,7 @@ namespace {
 typedef bool AbiState;
 AbiState default_abi_state = 0;
 
-void needPassByRef(AbiState *state,jl_value_t *ty, bool *byRef, bool *inReg)
+void needPassByRef(AbiState *state, jl_datatype_t *dt, bool *byRef, bool *inReg)
 {
     return;
 }
@@ -87,7 +87,7 @@ static size_t isLegalHA(jl_datatype_t *dt, Type *&base)
     if (jl_is_structtype(dt)) {
         // Fast path checks before descending the type hierarchy
         // (4 x 128b vector == 64B max size)
-        if (dt->size > 64 || !dt->pointerfree || dt->haspadding)
+        if (dt->size > 64 || !dt->layout->pointerfree || dt->layout->haspadding)
             return 0;
 
         base = NULL;
@@ -148,12 +148,9 @@ static void classify_cprc(jl_datatype_t *dt, bool *vfp)
     }
 }
 
-static void classify_return_arg(jl_value_t *ty, bool *reg,
+static void classify_return_arg(jl_datatype_t *dt, bool *reg,
                                 bool *onstack, bool *need_rewrite)
 {
-    // Assume jl_is_datatype(ty) && !jl_is_abstracttype(ty)
-    jl_datatype_t *dt = (jl_datatype_t*)ty;
-
     // Based on section 5.4 of the Procedure Call Standard
 
     // VFP standard variant: see 6.1.2.2
@@ -204,15 +201,12 @@ static void classify_return_arg(jl_value_t *ty, bool *reg,
         *onstack = true;
 }
 
-bool use_sret(AbiState *state, jl_value_t *ty)
+bool use_sret(AbiState *state, jl_datatype_t *dt)
 {
-    // Assume (jl_is_datatype(ty) && !jl_is_abstracttype(ty) &&
-    //         !jl_is_array_type(ty))
-
     bool reg = false;
     bool onstack = false;
     bool need_rewrite = false;
-    classify_return_arg(ty, &reg, &onstack, &need_rewrite);
+    classify_return_arg(dt, &reg, &onstack, &need_rewrite);
 
     return onstack;
 }
@@ -228,12 +222,9 @@ bool use_sret(AbiState *state, jl_value_t *ty)
 // If the argument has to be passed on stack, we need to use sret.
 //
 // All the out parameters should be default to `false`.
-static void classify_arg(jl_value_t *ty, bool *reg,
+static void classify_arg(jl_datatype_t *dt, bool *reg,
                          bool *onstack, bool *need_rewrite)
 {
-    // Assume jl_is_datatype(ty) && !jl_is_abstracttype(ty)
-    jl_datatype_t *dt = (jl_datatype_t*)ty;
-
     // Based on section 5.5 of the Procedure Call Standard
 
     // C.1.cp
@@ -253,12 +244,8 @@ static void classify_arg(jl_value_t *ty, bool *reg,
     *need_rewrite = true;
 }
 
-Type *preferred_llvm_type(jl_value_t *ty, bool isret)
+Type *preferred_llvm_type(jl_datatype_t *dt, bool isret)
 {
-    if (!jl_is_datatype(ty) || jl_is_abstracttype(ty) || jl_is_array_type(ty))
-        return NULL;
-    jl_datatype_t *dt = (jl_datatype_t*)ty;
-
     if (Type *fptype = get_llvm_fptype(dt))
         return fptype;
 
@@ -266,9 +253,9 @@ Type *preferred_llvm_type(jl_value_t *ty, bool isret)
     bool onstack = false;
     bool need_rewrite = false;
     if (isret)
-        classify_return_arg(ty, &reg, &onstack, &need_rewrite);
+        classify_return_arg(dt, &reg, &onstack, &need_rewrite);
     else
-        classify_arg(ty, &reg, &onstack, &need_rewrite);
+        classify_arg(dt, &reg, &onstack, &need_rewrite);
 
     if (!need_rewrite)
         return NULL;
@@ -288,7 +275,7 @@ Type *preferred_llvm_type(jl_value_t *ty, bool isret)
     //   For a Composite Type, the alignment of the copy will have 4-byte
     //   alignment if its natural alignment is <= 4 and 8-byte alignment if
     //   its natural alignment is >= 8
-    size_t align = dt->alignment;
+    size_t align = dt->layout->alignment;
     if (align < 4)
         align = 4;
     if (align > 8)

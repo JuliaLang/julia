@@ -45,7 +45,7 @@ AbiState default_abi_state = 0;
 // count the homogeneous floating agregate size (saturating at max count of 8)
 static unsigned isHFA(jl_datatype_t *ty, jl_datatype_t **ty0, bool *hva)
 {
-    size_t i, l = ty->nfields;
+    size_t i, l = ty->layout->nfields;
     // handle homogeneous float aggregates
     if (l == 0) {
         if (ty != jl_float64_type && ty != jl_float32_type)
@@ -84,7 +84,7 @@ static unsigned isHFA(jl_datatype_t *ty, jl_datatype_t **ty0, bool *hva)
     int n = 0;
     for (i = 0; i < l; i++) {
         jl_datatype_t *fld = (jl_datatype_t*)jl_field_type(ty, i);
-        if (!jl_is_datatype(fld))
+        if (!jl_is_datatype(fld) || ((jl_datatype_t*)fld)->layout == NULL)
             return 9;
         n += isHFA((jl_datatype_t*)fld, ty0, hva);
         if (n > 8)
@@ -93,10 +93,8 @@ static unsigned isHFA(jl_datatype_t *ty, jl_datatype_t **ty0, bool *hva)
     return n;
 }
 
-bool use_sret(AbiState *state, jl_value_t *ty)
+bool use_sret(AbiState *state, jl_datatype_t *dt)
 {
-    // Assume jl_is_datatype(ty) && !jl_is_abstracttype(ty)
-    jl_datatype_t *dt = (jl_datatype_t*)ty;
     jl_datatype_t *ty0 = NULL;
     bool hva = false;
     if (dt->size > 16 && isHFA(dt, &ty0, &hva) > 8)
@@ -104,23 +102,17 @@ bool use_sret(AbiState *state, jl_value_t *ty)
     return false;
 }
 
-void needPassByRef(AbiState *state, jl_value_t *ty, bool *byRef, bool *inReg)
+void needPassByRef(AbiState *state, jl_datatype_t *dt, bool *byRef, bool *inReg)
 {
-    if (!jl_is_datatype(ty) || jl_is_abstracttype(ty) || jl_is_cpointer_type(ty) || jl_is_array_type(ty))
-        return;
-    jl_datatype_t *dt = (jl_datatype_t*)ty;
     jl_datatype_t *ty0 = NULL;
     bool hva = false;
     if (dt->size > 64 && isHFA(dt, &ty0, &hva) > 8)
         *byRef = true;
 }
 
-Type *preferred_llvm_type(jl_value_t *ty, bool isret)
+Type *preferred_llvm_type(jl_datatype_t *dt, bool isret)
 {
     // Arguments are either scalar or passed by value
-    if (!jl_is_datatype(ty) || jl_is_abstracttype(ty) || jl_is_cpointer_type(ty) || jl_is_array_type(ty))
-        return NULL;
-    jl_datatype_t *dt = (jl_datatype_t*)ty;
     size_t size = dt->size;
     // don't need to change bitstypes
     if (!dt->nfields)
@@ -150,7 +142,7 @@ Type *preferred_llvm_type(jl_value_t *ty, bool isret)
     // rewrite integer-sized (non-HFA) struct to an array
     // the bitsize of the integer gives the desired alignment
     if (size > 8) {
-        if (dt->alignment <= 8) {
+        if (dt->layout->alignment <= 8) {
             return ArrayType::get(T_int64, (size + 7) / 8);
         }
         else {

@@ -115,11 +115,19 @@ static DIType julia_type_to_di(jl_value_t *jt, DIBuilder *dbuilder, bool isboxed
     if (jl_is_bitstype(jt)) {
         uint64_t SizeInBits = 8*jdt->size;
     #ifdef LLVM37
-        llvm::DIType *t = dbuilder->createBasicType(jl_symbol_name(jdt->name->name),SizeInBits,8*jdt->alignment,llvm::dwarf::DW_ATE_unsigned);
+        llvm::DIType *t = dbuilder->createBasicType(
+                jl_symbol_name(jdt->name->name),
+                SizeInBits,
+                8 * jdt->layout->alignment,
+                llvm::dwarf::DW_ATE_unsigned);
         jdt->ditype = t;
         return t;
     #else
-        DIType t = dbuilder->createBasicType(jl_symbol_name(jdt->name->name),SizeInBits,8*jdt->alignment,llvm::dwarf::DW_ATE_unsigned);
+        DIType t = dbuilder->createBasicType(
+                jl_symbol_name(jdt->name->name),
+                SizeInBits,
+                8 * jdt->layout->alignment,
+                llvm::dwarf::DW_ATE_unsigned);
         MDNode *M = t;
         jdt->ditype = M;
         return t;
@@ -138,8 +146,8 @@ static DIType julia_type_to_di(jl_value_t *jt, DIBuilder *dbuilder, bool isboxed
             jl_symbol_name(jdt->name->name),      // Name
             NULL,                       // File
             0,                          // LineNumber
-            8*jdt->size,                // SizeInBits
-            8*jdt->alignment,           // AlignmentInBits
+            8 * jdt->size,              // SizeInBits
+            8 * jdt->layout->alignment, // AlignmentInBits
             0,                          // Flags
             NULL,                       // DerivedFrom
             DINodeArray(),              // Elements
@@ -415,8 +423,8 @@ static Type *julia_struct_to_llvm(jl_value_t *jt, bool *isboxed)
                 *jl_ExecutionEngine->getDataLayout();
 #endif
             unsigned llvm_alignment = DL.getABITypeAlignment((Type*)jst->struct_decl);
-            unsigned julia_alignment = jst->alignment;
-            assert(llvm_alignment==julia_alignment);
+            unsigned julia_alignment = jst->layout->alignment;
+            assert(llvm_alignment == julia_alignment);
 #endif
         }
         return (Type*)jst->struct_decl;
@@ -511,6 +519,7 @@ static Value *emit_typeof(Value *tt)
             T_pjlvalue);
     return tt;
 }
+
 static jl_cgval_t emit_typeof(const jl_cgval_t &p, jl_codectx_t *ctx)
 {
     // given p, compute its type
@@ -523,6 +532,7 @@ static jl_cgval_t emit_typeof(const jl_cgval_t &p, jl_codectx_t *ctx)
         aty = (jl_value_t*)jl_typeof(jl_tparam0(aty));
     return mark_julia_const(aty);
 }
+
 static Value *emit_typeof_boxed(const jl_cgval_t &p, jl_codectx_t *ctx)
 {
     return boxed(emit_typeof(p, ctx), ctx);
@@ -540,12 +550,13 @@ static Value *emit_datatype_types(Value *dt)
 
 static Value *emit_datatype_nfields(Value *dt)
 {
-    Value *nf = tbaa_decorate(tbaa_const, builder.
-        CreateLoad(builder.
-                   CreateBitCast(builder.
-                                 CreateGEP(builder.CreateBitCast(dt, T_pint8),
-                                           ConstantInt::get(T_size, offsetof(jl_datatype_t, nfields))),
-                                 T_pint32)));
+    Value *nf = tbaa_decorate(tbaa_const, builder.CreateLoad(
+        tbaa_decorate(tbaa_const, builder.CreateLoad(
+            builder.CreateBitCast(
+                builder.CreateGEP(
+                    builder.CreateBitCast(dt, T_pint8),
+                    ConstantInt::get(T_size, offsetof(jl_datatype_t, types))),
+                T_pint32->getPointerTo())))));
 #ifdef _P64
     nf = builder.CreateSExt(nf, T_int64);
 #endif
@@ -827,7 +838,7 @@ static Value *emit_bounds_check(const jl_cgval_t &ainfo, jl_value_t *ty, Value *
 // Parameter ptr should be the pointer argument for the LoadInst or StoreInst.
 // It is currently unused, but might be used in the future for a more precise answer.
 static unsigned julia_alignment(Value* /*ptr*/, jl_value_t *jltype, unsigned alignment) {
-    if (!alignment && ((jl_datatype_t*)jltype)->alignment > MAX_ALIGN) {
+    if (!alignment && ((jl_datatype_t*)jltype)->layout->alignment > MAX_ALIGN) {
         // Type's natural alignment exceeds strictest alignment promised in heap, so return the heap alignment.
         return MAX_ALIGN;
     }
@@ -862,7 +873,7 @@ static jl_cgval_t typed_load(Value *ptr, Value *idx_0based, jl_value_t *jltype,
     //    elt = data;
     //}
     //else {
-        Instruction *load = builder.CreateAlignedLoad(data, julia_alignment(data, jltype, alignment), false);
+        Instruction *load = builder.CreateAlignedLoad(data, isboxed ? alignment : julia_alignment(data, jltype, alignment), false);
         if (tbaa) {
             elt = tbaa_decorate(tbaa, load);
         }
@@ -881,12 +892,13 @@ static void typed_store(Value *ptr, Value *idx_0based, const jl_cgval_t &rhs,
                         Value *parent,  // for the write barrier, NULL if no barrier needed
                         unsigned alignment = 0, bool root_box = true) // if the value to store needs a box, should we root it ?
 {
-    Type *elty = julia_type_to_llvm(jltype);
+    bool isboxed;
+    Type *elty = julia_type_to_llvm(jltype, &isboxed);
     assert(elty != NULL);
     if (type_is_ghost(elty))
         return;
     Value *r;
-    if (jl_isbits(jltype) && ((jl_datatype_t*)jltype)->size > 0) {
+    if (!isboxed) {
         r = emit_unbox(elty, rhs, jltype);
     }
     else {
@@ -898,7 +910,7 @@ static void typed_store(Value *ptr, Value *idx_0based, const jl_cgval_t &rhs,
         data = builder.CreateBitCast(ptr, PointerType::get(elty, 0));
     else
         data = ptr;
-    Instruction *store = builder.CreateAlignedStore(r, builder.CreateGEP(data, idx_0based), julia_alignment(r, jltype, alignment));
+    Instruction *store = builder.CreateAlignedStore(r, builder.CreateGEP(data, idx_0based), isboxed ? alignment : julia_alignment(r, jltype, alignment));
     if (tbaa)
         tbaa_decorate(tbaa, store);
 }

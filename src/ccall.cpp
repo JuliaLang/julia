@@ -313,7 +313,7 @@ static Value *julia_to_native(Type *to, bool toboxed, jl_value_t *jlto, const jl
     else {
         prepare_call(builder.CreateMemCpy(slot, data_pointer(jvinfo, ctx, slot->getType()),
                     (uint64_t)jl_datatype_size(ety),
-                    (uint64_t)((jl_datatype_t*)ety)->alignment)->getCalledValue());
+                    (uint64_t)((jl_datatype_t*)ety)->layout->alignment)->getCalledValue());
         mark_gc_use(jvinfo);
     }
     return slot;
@@ -888,20 +888,24 @@ static std::string generate_func_sig(
         *prt = *lrt = T_void;
     }
     else {
-        *prt = sret ? NULL : preferred_llvm_type(rt, true);
-        if (*prt == NULL)
-            *prt = *lrt;
-
-        if (jl_is_datatype(rt) && !jl_is_abstracttype(rt) &&
-            !jl_is_array_type(rt) && use_sret(&abi, rt)) {
+        if (!jl_is_datatype(rt) || ((jl_datatype_t*)rt)->layout == NULL || jl_is_cpointer_type(rt) || jl_is_array_type(rt)) {
+            *prt = *lrt; // passed as pointer
+        }
+        else if (use_sret(&abi, (jl_datatype_t*)rt)) {
             paramattrs.push_back(AttrBuilder());
             paramattrs[0].clear();
 #if !defined(_OS_WINDOWS_) || defined(LLVM35) // llvm used to use the old mingw ABI, skipping this marking works around that difference
             paramattrs[0].addAttribute(Attribute::StructRet);
 #endif
             paramattrs[0].addAttribute(Attribute::NoAlias);
-            fargt_sig.push_back(PointerType::get(*prt, 0));
+            fargt_sig.push_back(PointerType::get(*lrt, 0));
             sret = 1;
+            *prt = *lrt;
+        }
+        else {
+            *prt = preferred_llvm_type((jl_datatype_t*)rt, true);
+            if (*prt == NULL)
+                *prt = *lrt;
         }
     }
 
@@ -954,13 +958,21 @@ static std::string generate_func_sig(
         // Whether or not to pass this in registers
         bool inReg = false;
 
-        if (jl_is_datatype(tti) && !jl_is_abstracttype(tti)) {
-            needPassByRef(&abi, tti, &byRef, &inReg);
-        }
+        Type *pat;
+        if (!jl_is_datatype(tti) || ((jl_datatype_t*)tti)->layout == NULL || jl_is_array_type(tti))
+            tti = (jl_value_t*)jl_voidpointer_type; // passed as pointer
 
-        Type *pat = byRef ? PointerType::get(t, 0) : preferred_llvm_type(tti, false);
-        if (pat == NULL) {
+        needPassByRef(&abi, (jl_datatype_t*)tti, &byRef, &inReg);
+        if (jl_is_cpointer_type(tti)) {
             pat = t;
+        }
+        else if (byRef) {
+            pat = PointerType::get(t, 0);
+        }
+        else {
+            pat = preferred_llvm_type((jl_datatype_t*)tti, false);
+            if (pat == NULL)
+                pat = t;
         }
 
         byRefList.push_back(byRef);
