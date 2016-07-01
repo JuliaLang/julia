@@ -50,9 +50,9 @@ angle(z::Real) = atan2(zero(z), z)
 
 widemul(x::Number, y::Number) = widen(x)*widen(y)
 
-start(x::Number) = 0  # see #16687
-next(x::Number, state) = (x, state+1)
-done(x::Number, state) = state == 1
+start(x::Number) = false
+next(x::Number, state) = (x, true)
+done(x::Number, state) = state
 isempty(x::Number) = false
 in(x::Number, y::Number) = x == y
 
