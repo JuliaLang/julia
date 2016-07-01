@@ -461,7 +461,7 @@ int jl_typemap_intersection_visitor(union jl_typemap_t map, int offs,
     if (jl_typeof(map.unknown) == (jl_value_t*)jl_typemap_level_type) {
         jl_typemap_level_t *cache = map.node;
         jl_value_t *ty = NULL;
-        size_t l = jl_datatype_nfields(closure->type);
+        size_t l = jl_field_count(closure->type);
         if (closure->va && l <= offs + 1) {
             ty = closure->va;
         }
@@ -535,13 +535,13 @@ int sigs_eq(jl_value_t *a, jl_value_t *b, int useenv)
 */
 static jl_typemap_entry_t *jl_typemap_assoc_by_type_(jl_typemap_entry_t *ml, jl_tupletype_t *types, int8_t inexact, jl_svec_t **penv)
 {
-    size_t n = jl_datatype_nfields(types);
+    size_t n = jl_field_count(types);
     while (ml != (void*)jl_nothing) {
-        size_t lensig = jl_datatype_nfields(ml->sig);
+        size_t lensig = jl_field_count(ml->sig);
         if (lensig == n || (ml->va && lensig <= n+1)) {
             int resetenv = 0, ismatch = 1;
             if (ml->simplesig != (void*)jl_nothing) {
-                size_t lensimplesig = jl_datatype_nfields(ml->simplesig);
+                size_t lensimplesig = jl_field_count(ml->simplesig);
                 int isva = lensimplesig > 0 && jl_is_vararg_type(jl_tparam(ml->simplesig, lensimplesig - 1));
                 if (lensig == n || (isva && lensimplesig <= n + 1))
                     ismatch = sig_match_by_type_simple(jl_svec_data(types->parameters), n,
@@ -644,7 +644,7 @@ jl_typemap_entry_t *jl_typemap_assoc_by_type(union jl_typemap_t ml_or_cache, jl_
         jl_typemap_level_t *cache = ml_or_cache.node;
         // called object is the primary key for constructors, otherwise first argument
         jl_value_t *ty = NULL;
-        size_t l = jl_datatype_nfields(types);
+        size_t l = jl_field_count(types);
         int isva = 0;
         // compute the type at offset `offs` into `types`, which may be a Vararg
         if (l <= offs + 1) {
@@ -712,7 +712,7 @@ jl_typemap_entry_t *jl_typemap_entry_assoc_exact(jl_typemap_entry_t *ml, jl_valu
     // some manually-unrolled common special cases
     while (ml->simplesig == (void*)jl_nothing && ml->guardsigs == jl_emptysvec && ml->isleafsig) {
         // use a tight loop for a long as possible
-        if (n == jl_datatype_nfields(ml->sig) && jl_typeof(args[0]) == jl_tparam(ml->sig, 0)) {
+        if (n == jl_field_count(ml->sig) && jl_typeof(args[0]) == jl_tparam(ml->sig, 0)) {
             if (n == 1)
                 return ml;
             if (n == 2) {
@@ -735,10 +735,10 @@ jl_typemap_entry_t *jl_typemap_entry_assoc_exact(jl_typemap_entry_t *ml, jl_valu
     }
 
     while (ml != (void*)jl_nothing) {
-        size_t lensig = jl_datatype_nfields(ml->sig);
+        size_t lensig = jl_field_count(ml->sig);
         if (lensig == n || (ml->va && lensig <= n+1)) {
             if (ml->simplesig != (void*)jl_nothing) {
-                size_t lensimplesig = jl_datatype_nfields(ml->simplesig);
+                size_t lensimplesig = jl_field_count(ml->simplesig);
                 int isva = lensimplesig > 0 && jl_is_vararg_type(jl_tparam(ml->simplesig, lensimplesig - 1));
                 if (lensig == n || (isva && lensimplesig <= n + 1)) {
                     if (!sig_match_simple(args, n, jl_svec_data(ml->simplesig->parameters), isva, lensimplesig))
@@ -901,7 +901,7 @@ static int jl_typemap_array_insert_(jl_array_t **cache, jl_value_t *key, jl_type
 static void jl_typemap_level_insert_(jl_typemap_level_t *cache, jl_typemap_entry_t *newrec, int8_t offs,
         const struct jl_typemap_info *tparams)
 {
-    size_t l = jl_datatype_nfields(newrec->sig);
+    size_t l = jl_field_count(newrec->sig);
     // compute the type at offset `offs` into `sig`, which may be a Vararg
     jl_value_t *t1 = NULL;
     int isva = 0;
@@ -991,7 +991,7 @@ jl_typemap_entry_t *jl_typemap_insert(union jl_typemap_t *cache, jl_value_t *par
     newrec->isleafsig = newrec->issimplesig && !newrec->va; // entirely leaf types don't need to be sorted
     JL_GC_PUSH1(&newrec);
     size_t i, l;
-    for (i = 0, l = jl_datatype_nfields(type); i < l && newrec->issimplesig; i++) {
+    for (i = 0, l = jl_field_count(type); i < l && newrec->issimplesig; i++) {
         jl_value_t *decl = jl_field_type(type, i);
         if (decl == (jl_value_t*)jl_datatype_type)
             newrec->isleafsig = 0; // Type{} may have a higher priority than DataType

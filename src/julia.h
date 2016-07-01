@@ -305,23 +305,37 @@ typedef struct {
     jl_svec_t *types;
 } jl_uniontype_t;
 
+// in little-endian, isptr is always the first bit, avoiding the need for a branch in computing isptr
 typedef struct {
-    uint8_t offset;   // offset relative to data start, excluding type tag
-    uint8_t size:7;
     uint8_t isptr:1;
+    uint8_t size:7;
+    uint8_t offset;   // offset relative to data start, excluding type tag
 } jl_fielddesc8_t;
 
 typedef struct {
-    uint16_t offset;   // offset relative to data start, excluding type tag
-    uint16_t size:15;
     uint16_t isptr:1;
+    uint16_t size:15;
+    uint16_t offset;   // offset relative to data start, excluding type tag
 } jl_fielddesc16_t;
 
 typedef struct {
-    uint32_t offset;   // offset relative to data start, excluding type tag
-    uint32_t size:31;
     uint32_t isptr:1;
+    uint32_t size:31;
+    uint32_t offset;   // offset relative to data start, excluding type tag
 } jl_fielddesc32_t;
+
+struct _jl_datatype_layout_t {
+    uint32_t nfields;
+    uint32_t alignment : 28;  // strictest alignment over all fields
+    uint32_t haspadding : 1;  // has internal undefined bytes
+    uint32_t pointerfree : 1; // has any julia gc pointers
+    uint32_t fielddesc_type : 2; // 0 -> 8, 1 -> 16, 2 -> 32
+    // union {
+    //     jl_fielddesc8_t field8[];
+    //     jl_fielddesc16_t field16[];
+    //     jl_fielddesc32_t field32[];
+    // };
+};
 
 typedef struct _jl_datatype_t {
     JL_DATA_TYPE
@@ -330,30 +344,19 @@ typedef struct _jl_datatype_t {
     jl_svec_t *parameters;
     jl_svec_t *types;
     jl_value_t *instance;  // for singletons
-    int32_t size;
+    const struct _jl_datatype_layout_t *layout;
+    int32_t size; // TODO: move to _jl_datatype_layout_t
+    int32_t ninitialized;
+    uint32_t uid;
     uint8_t abstract;
     uint8_t mutabl;
-    uint8_t pointerfree;
-    int32_t ninitialized;
     // memoized properties
+    void *struct_decl;  //llvm::Type*
+    void *ditype; // llvm::MDNode* to be used as llvm::DIType(ditype)
     int32_t depth;
     int8_t hastypevars; // bound
     int8_t haswildcard; // unbound
     int8_t isleaftype;
-    // hidden fields:
-    uint32_t nfields;
-    uint32_t alignment : 29;  // strictest alignment over all fields
-    uint32_t haspadding : 1;  // has internal undefined bytes
-    uint32_t fielddesc_type : 2; // 0 -> 8, 1 -> 16, 2 -> 32
-    uint32_t uid;
-    void *struct_decl;  //llvm::Type*
-    void *ditype; // llvm::MDNode* to be used as llvm::DIType(ditype)
-    // Last field needs to be pointer size aligned
-    // union {
-    //     jl_fielddesc8_t field8[];
-    //     jl_fielddesc16_t field16[];
-    //     jl_fielddesc32_t field32[];
-    // };
 } jl_datatype_t;
 
 typedef struct {
@@ -770,8 +773,9 @@ STATIC_INLINE void jl_array_uint8_set(void *a, size_t i, uint8_t x)
 // struct type info
 #define jl_field_name(st,i)    (jl_sym_t*)jl_svecref(((jl_datatype_t*)st)->name->names, (i))
 #define jl_field_type(st,i)    jl_svecref(((jl_datatype_t*)st)->types, (i))
+#define jl_field_count(st)     jl_svec_len(((jl_datatype_t*)st)->types)
 #define jl_datatype_size(t)    (((jl_datatype_t*)t)->size)
-#define jl_datatype_nfields(t) (((jl_datatype_t*)(t))->nfields)
+#define jl_datatype_nfields(t) (((jl_datatype_t*)(t))->layout->nfields)
 
 // inline version with strong type check to detect typos in a `->name` chain
 STATIC_INLINE char *jl_symbol_name_(jl_sym_t *s)
@@ -780,40 +784,32 @@ STATIC_INLINE char *jl_symbol_name_(jl_sym_t *s)
 }
 #define jl_symbol_name(s) jl_symbol_name_(s)
 
-#define jl_datatype_fields(d) ((char*)(d) + sizeof(jl_datatype_t))
+#define jl_dt_layout_fields(d) ((const char*)(d) + sizeof(struct _jl_datatype_layout_t))
 
-#define DEFINE_FIELD_ACCESSORS(f)                                       \
-    static inline uint32_t jl_field_##f(jl_datatype_t *st, int i)       \
-    {                                                                   \
-        assert(i >= 0 && (size_t)i < jl_datatype_nfields(st));          \
-        if (st->fielddesc_type == 0) {                                  \
-            return ((jl_fielddesc8_t*)jl_datatype_fields(st))[i].f;     \
-        }                                                               \
-        else if (st->fielddesc_type == 1) {                             \
-            return ((jl_fielddesc16_t*)jl_datatype_fields(st))[i].f;    \
-        }                                                               \
-        else {                                                          \
-            return ((jl_fielddesc32_t*)jl_datatype_fields(st))[i].f;    \
-        }                                                               \
-    }                                                                   \
-    static inline void jl_field_set##f(jl_datatype_t *st, int i,        \
-                                       uint32_t val)                    \
-    {                                                                   \
-        assert(i >= 0 && (size_t)i < jl_datatype_nfields(st));          \
-        if (st->fielddesc_type == 0) {                                  \
-            ((jl_fielddesc8_t*)jl_datatype_fields(st))[i].f = val;      \
-        }                                                               \
-        else if (st->fielddesc_type == 1) {                             \
-            ((jl_fielddesc16_t*)jl_datatype_fields(st))[i].f = val;     \
-        }                                                               \
-        else {                                                          \
-            ((jl_fielddesc32_t*)jl_datatype_fields(st))[i].f = val;     \
-        }                                                               \
-    }
+#define DEFINE_FIELD_ACCESSORS(f)                                             \
+    static inline uint32_t jl_field_##f(jl_datatype_t *st, int i)             \
+    {                                                                         \
+        const struct _jl_datatype_layout_t *ly = st->layout;                  \
+        assert(i >= 0 && (size_t)i < ly->nfields);                            \
+        if (ly->fielddesc_type == 0) {                                        \
+            return ((const jl_fielddesc8_t*)jl_dt_layout_fields(ly))[i].f;    \
+        }                                                                     \
+        else if (ly->fielddesc_type == 1) {                                   \
+            return ((const jl_fielddesc16_t*)jl_dt_layout_fields(ly))[i].f;   \
+        }                                                                     \
+        else {                                                                \
+            return ((const jl_fielddesc32_t*)jl_dt_layout_fields(ly))[i].f;   \
+        }                                                                     \
+    }                                                                         \
 
 DEFINE_FIELD_ACCESSORS(offset)
 DEFINE_FIELD_ACCESSORS(size)
-DEFINE_FIELD_ACCESSORS(isptr)
+static inline int jl_field_isptr(jl_datatype_t *st, int i)
+{
+    const struct _jl_datatype_layout_t *ly = st->layout;
+    assert(i >= 0 && (size_t)i < ly->nfields);
+    return ((const jl_fielddesc8_t*)(jl_dt_layout_fields(ly) + (i << (ly->fielddesc_type + 1))))->isptr;
+}
 
 static inline uint32_t jl_fielddesc_size(int8_t fielddesc_type)
 {
@@ -836,7 +832,6 @@ static inline uint32_t jl_fielddesc_size(int8_t fielddesc_type)
 #define jl_is_svec(v)        jl_typeis(v,jl_simplevector_type)
 #define jl_is_simplevector(v) jl_is_svec(v)
 #define jl_is_datatype(v)    jl_typeis(v,jl_datatype_type)
-#define jl_is_pointerfree(t) (((jl_datatype_t*)t)->pointerfree)
 #define jl_is_mutable(t)     (((jl_datatype_t*)t)->mutabl)
 #define jl_is_mutable_datatype(t) (jl_is_datatype(t) && (((jl_datatype_t*)t)->mutabl))
 #define jl_is_immutable(t)   (!((jl_datatype_t*)t)->mutabl)
@@ -881,23 +876,23 @@ static inline uint32_t jl_fielddesc_size(int8_t fielddesc_type)
 STATIC_INLINE int jl_is_bitstype(void *v)
 {
     return (jl_is_datatype(v) && jl_is_immutable(v) &&
+            ((jl_datatype_t*)(v))->layout &&
             jl_datatype_nfields(v) == 0 &&
-            !((jl_datatype_t*)(v))->abstract &&
             ((jl_datatype_t*)(v))->size > 0);
 }
 
 STATIC_INLINE int jl_is_structtype(void *v)
 {
     return (jl_is_datatype(v) &&
-            (jl_datatype_nfields(v) > 0 ||
+            (jl_field_count(v) > 0 ||
              ((jl_datatype_t*)(v))->size == 0) &&
             !((jl_datatype_t*)(v))->abstract);
 }
 
 STATIC_INLINE int jl_isbits(void *t)   // corresponding to isbits() in julia
 {
-    return (jl_is_datatype(t) && !((jl_datatype_t*)t)->mutabl &&
-            ((jl_datatype_t*)t)->pointerfree && !((jl_datatype_t*)t)->abstract);
+    return (jl_is_datatype(t) && ((jl_datatype_t*)t)->layout &&
+            !((jl_datatype_t*)t)->mutabl && ((jl_datatype_t*)t)->layout->pointerfree);
 }
 
 STATIC_INLINE int jl_is_datatype_singleton(jl_datatype_t *d)
@@ -1000,8 +995,6 @@ JL_DLLEXPORT jl_tvar_t *jl_new_typevar(jl_sym_t *name,jl_value_t *lb,jl_value_t 
 JL_DLLEXPORT jl_value_t *jl_apply_type(jl_value_t *tc, jl_svec_t *params);
 JL_DLLEXPORT jl_tupletype_t *jl_apply_tuple_type(jl_svec_t *params);
 JL_DLLEXPORT jl_tupletype_t *jl_apply_tuple_type_v(jl_value_t **p, size_t np);
-JL_DLLEXPORT jl_datatype_t *jl_new_uninitialized_datatype(size_t nfields,
-                                                          int8_t fielddesc_type);
 JL_DLLEXPORT jl_datatype_t *jl_new_datatype(jl_sym_t *name, jl_datatype_t *super,
                                             jl_svec_t *parameters,
                                             jl_svec_t *fnames, jl_svec_t *ftypes,

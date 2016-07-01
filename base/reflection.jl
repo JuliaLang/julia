@@ -82,14 +82,36 @@ isconst(m::Module, s::Symbol) =
 # return an integer such that object_id(x)==object_id(y) if is(x,y)
 object_id(x::ANY) = ccall(:jl_object_id, UInt, (Any,), x)
 
+immutable DataTypeLayout
+    nfields::UInt32
+    alignment::UInt32
+    # alignment : 28;
+    # haspadding : 1;
+    # pointerfree : 1;
+    # fielddesc_type : 2;
+end
+
+
 # type predicates
+datatype_alignment(dt::DataType) = dt.layout == C_NULL ? throw(UndefRefError()) :
+    Int(unsafe_load(convert(Ptr{DataTypeLayout}, dt.layout)).alignment & 0x0FFFFFFF)
+
+datatype_haspadding(dt::DataType) = dt.layout == C_NULL ? throw(UndefRefError()) :
+    (unsafe_load(convert(Ptr{DataTypeLayout}, dt.layout)).alignment >> 28) & 1 == 1
+
+datatype_pointerfree(dt::DataType) = dt.layout == C_NULL ? throw(UndefRefError()) :
+    (unsafe_load(convert(Ptr{DataTypeLayout}, dt.layout)).alignment >> 29) & 1 == 1
+
+datatype_fielddesc_type(dt::DataType) = dt.layout == C_NULL ? throw(UndefRefError()) :
+    (unsafe_load(convert(Ptr{DataTypeLayout}, dt.layout)).alignment >> 30) & 3
+
 isimmutable(x::ANY) = (@_pure_meta; (isa(x,Tuple) || !typeof(x).mutable))
 isstructtype(t::DataType) = (@_pure_meta; nfields(t) != 0 || (t.size==0 && !t.abstract))
 isstructtype(x) = (@_pure_meta; false)
-isbits(t::DataType) = (@_pure_meta; !t.mutable & t.pointerfree & isleaftype(t))
+isbits(t::DataType) = (@_pure_meta; !t.mutable & (t.layout != C_NULL) && datatype_pointerfree(t))
 isbits(t::Type) = (@_pure_meta; false)
 isbits(x) = (@_pure_meta; isbits(typeof(x)))
-isleaftype(t::ANY) = (@_pure_meta; ccall(:jl_is_leaf_type, Int32, (Any,), t) != 0)
+isleaftype(t::ANY) = (@_pure_meta; isa(t, DataType) && t.isleaftype)
 
 typeintersect(a::ANY,b::ANY) = (@_pure_meta; ccall(:jl_type_intersection, Any, (Any,Any), a, b))
 typeseq(a::ANY,b::ANY) = (@_pure_meta; a<:b && b<:a)

@@ -2,7 +2,7 @@
 
 module Serializer
 
-import Base: GMP, Bottom, unsafe_convert, uncompressed_ast
+import Base: GMP, Bottom, unsafe_convert, uncompressed_ast, datatype_pointerfree
 import Core: svec
 using Base: ViewIndex, index_lengths
 
@@ -90,7 +90,7 @@ end
 
 # cycle handling
 function serialize_cycle(s::AbstractSerializer, x)
-    if !isimmutable(x) && !typeof(x).pointerfree
+    if !isimmutable(x) && !datatype_pointerfree(typeof(x))
         offs = get(s.table, x, -1)
         if offs != -1
             writetag(s.io, BACKREF_TAG)
@@ -530,7 +530,7 @@ function deserialize(s::AbstractSerializer)
 end
 
 function deserialize_cycle(s::AbstractSerializer, x::ANY)
-    if !isimmutable(x) && !typeof(x).pointerfree
+    if !isimmutable(x) && !datatype_pointerfree(typeof(x))
         s.table[s.counter] = x
         s.counter += 1
     end
