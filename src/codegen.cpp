@@ -2094,7 +2094,7 @@ static bool emit_builtin_call(jl_cgval_t *ret, jl_value_t *f, jl_value_t **args,
         if (rt1) {
             rt2 = static_eval(args[2], ctx, true);
             if (rt2) {
-                *ret = mark_julia_type(ConstantInt::get(T_int1, jl_egal(rt1, rt2)), false, jl_bool_type, ctx);
+                *ret = mark_julia_type(ConstantInt::get(T_int8, jl_egal(rt1, rt2)), false, jl_bool_type, ctx);
                 JL_GC_POP();
                 return true;
             }
@@ -2111,7 +2111,7 @@ static bool emit_builtin_call(jl_cgval_t *ret, jl_value_t *f, jl_value_t **args,
         Value *ans = emit_f_is(v1, v2, ctx);
         mark_gc_use(v1);
         mark_gc_use(v2);
-        *ret = mark_julia_type(ans, false, jl_bool_type, ctx);
+        *ret = mark_julia_type(builder.CreateZExt(ans,T_int8), false, jl_bool_type, ctx);
         JL_GC_POP();
         return true;
     }
@@ -2174,24 +2174,24 @@ static bool emit_builtin_call(jl_cgval_t *ret, jl_value_t *f, jl_value_t **args,
             jl_value_t *tp0 = jl_tparam0(ty);
             if (jl_subtype(arg, tp0, 0)) {
                 emit_expr(args[1], ctx);  // TODO remove if no side effects
-                *ret = mark_julia_type(ConstantInt::get(T_int1, 1), false, jl_bool_type, ctx);
+                *ret = mark_julia_type(ConstantInt::get(T_int8, 1), false, jl_bool_type, ctx);
                 JL_GC_POP();
                 return true;
             }
             if (!jl_subtype(tp0, (jl_value_t*)jl_type_type, 0)) {
                 if (jl_is_leaf_type(arg)) {
                     emit_expr(args[1], ctx);  // TODO remove if no side effects
-                    *ret = mark_julia_type(ConstantInt::get(T_int1, 0), false, jl_bool_type, ctx);
+                    *ret = mark_julia_type(ConstantInt::get(T_int8, 0), false, jl_bool_type, ctx);
                     JL_GC_POP();
                     return true;
                 }
                 if (jl_is_leaf_type(tp0)) {
                     jl_cgval_t arg1 = emit_expr(args[1], ctx);
-                    *ret = mark_julia_type(
-                            builder.CreateICmpEQ(emit_typeof_boxed(arg1,ctx),
-                                                 literal_pointer_val(tp0)),
-                            false,
-                            jl_bool_type, ctx);
+                    *ret = mark_julia_type(builder.CreateZExt(builder.CreateICmpEQ(emit_typeof_boxed(arg1,ctx),
+                                                                                   literal_pointer_val(tp0)),
+                                                              T_int8),
+                                           false,
+                                           jl_bool_type, ctx);
                     JL_GC_POP();
                     return true;
                 }
@@ -2206,7 +2206,7 @@ static bool emit_builtin_call(jl_cgval_t *ret, jl_value_t *f, jl_value_t **args,
             jl_is_type_type(rt2) && !jl_is_typevar(jl_tparam0(rt2))) {
             int issub = jl_subtype(jl_tparam0(rt1), jl_tparam0(rt2), 0);
             // TODO: emit args[1] and args[2] in case of side effects?
-            *ret = mark_julia_type(ConstantInt::get(T_int1, issub), false, jl_bool_type, ctx);
+            *ret = mark_julia_type(ConstantInt::get(T_int8, issub), false, jl_bool_type, ctx);
             JL_GC_POP();
             return true;
         }
@@ -3050,9 +3050,9 @@ static Value *emit_condition(const jl_cgval_t &condV, const std::string &msg,
                              jl_codectx_t *ctx)
 {
     if (condV.typ == (jl_value_t*)jl_bool_type) {
-        Value *cond = emit_unbox(T_int1, condV, (jl_value_t*)jl_bool_type);
-        assert(cond->getType() == T_int1);
-        return builder.CreateXor(cond, ConstantInt::get(T_int1,1));
+        Value *cond = emit_unbox(T_int8, condV, (jl_value_t*)jl_bool_type);
+        assert(cond->getType() == T_int8);
+        return builder.CreateXor(builder.CreateTrunc(cond,T_int1), ConstantInt::get(T_int1,1));
     }
     emit_typecheck(condV, (jl_value_t*)jl_bool_type, msg, ctx);
     if (condV.isboxed) {

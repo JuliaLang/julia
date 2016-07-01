@@ -113,7 +113,7 @@ static DIType julia_type_to_di(jl_value_t *jt, DIBuilder *dbuilder, bool isboxed
 #endif
     }
     if (jl_is_bitstype(jt)) {
-        uint64_t SizeInBits = jdt == jl_bool_type ? 1 : 8*jdt->size;
+        uint64_t SizeInBits = 8*jdt->size;
     #ifdef LLVM37
         llvm::DIType *t = dbuilder->createBasicType(jl_symbol_name(jdt->name->name),SizeInBits,8*jdt->alignment,llvm::dwarf::DW_ATE_unsigned);
         jdt->ditype = t;
@@ -301,7 +301,7 @@ JL_DLLEXPORT Type *julia_type_to_llvm(jl_value_t *jt, bool *isboxed)
 {
     // this function converts a Julia Type into the equivalent LLVM type
     if (isboxed) *isboxed = false;
-    if (jt == (jl_value_t*)jl_bool_type) return T_int1;
+    if (jt == (jl_value_t*)jl_bool_type) return T_int8;
     if (jt == (jl_value_t*)jl_bottom_type) return T_void;
     if (!jl_is_leaf_type(jt)) {
         if (isboxed) *isboxed = true;
@@ -849,11 +849,6 @@ static jl_cgval_t typed_load(Value *ptr, Value *idx_0based, jl_value_t *jltype,
     assert(elty != NULL);
     if (type_is_ghost(elty))
         return ghostValue(jltype);
-    bool isbool=false;
-    if (elty == T_int1) {
-        elty = T_int8;
-        isbool = true;
-    }
     Value *data;
     if (ptr->getType()->getContainedType(0) != elty)
         data = builder.CreatePointerCast(ptr, PointerType::get(elty, 0));
@@ -878,8 +873,6 @@ static jl_cgval_t typed_load(Value *ptr, Value *idx_0based, jl_value_t *jltype,
             null_pointer_check(elt, ctx);
         }
     //}
-    if (isbool)
-        return mark_julia_type(builder.CreateTrunc(elt, T_int1), false, jltype, ctx);
     return mark_julia_type(elt, isboxed, jltype, ctx);
 }
 
@@ -892,9 +885,6 @@ static void typed_store(Value *ptr, Value *idx_0based, const jl_cgval_t &rhs,
     assert(elty != NULL);
     if (type_is_ghost(elty))
         return;
-    if (elty == T_int1) {
-        elty = T_int8;
-    }
     Value *r;
     if (jl_isbits(jltype) && ((jl_datatype_t*)jltype)->size > 0) {
         r = emit_unbox(elty, rhs, jltype);
@@ -1065,9 +1055,6 @@ static bool emit_getfield_unknownidx(jl_cgval_t *ret, const jl_cgval_t &strct, V
         if (sizeof(void*) != sizeof(int))
             idx0 = builder.CreateTrunc(idx0, T_int32); // llvm3.3 requires this, harmless elsewhere
         Value *fld = builder.CreateExtractElement(strct.V, idx0);
-        if (jt == (jl_value_t*)jl_bool_type) {
-            fld = builder.CreateTrunc(fld, T_int1);
-        }
         *ret = mark_julia_type(fld, false, jt, ctx);
         return true;
     }
@@ -1127,9 +1114,6 @@ static jl_cgval_t emit_getfield_knownidx(const jl_cgval_t &strct, unsigned idx, 
             // VecElement types are unwrapped in LLVM.
             assert( strct.V->getType()->isSingleValueType() );
             fldv = strct.V;
-        }
-        if (jfty == (jl_value_t*)jl_bool_type) {
-            fldv = builder.CreateTrunc(fldv, T_int1);
         }
         assert(!jl_field_isptr(jt, idx));
         return mark_julia_type(fldv, false, jfty, ctx);
@@ -1480,7 +1464,8 @@ static Value *boxed(const jl_cgval_t &vinfo, jl_codectx_t *ctx, bool gcrooted)
     Type *t = julia_type_to_llvm(vinfo.typ);
     assert(!type_is_ghost(t)); // should have been handled by isghost above!
 
-
+    if (jt == (jl_value_t*)jl_bool_type)
+        return julia_bool(builder.CreateTrunc(as_value(t,vinfo), T_int1));
     if (t == T_int1)
         return julia_bool(as_value(t,vinfo));
 
@@ -1703,8 +1688,6 @@ static jl_cgval_t emit_new_struct(jl_value_t *ty, size_t nargs, jl_value_t **arg
                         // and use memcpy instead
                         dest = builder.CreateConstInBoundsGEP2_32(LLVM37_param(lt) strct, 0, i);
                     }
-                    if (fty == T_int1)
-                        fty = T_int8;
                     fval = emit_unbox(fty, fval_info, jtype, dest);
 
                     if (init_as_value) {
