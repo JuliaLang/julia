@@ -1441,6 +1441,7 @@ static jl_value_t *jl_deserialize_value_(ios_t *s, jl_value_t *vtag, jl_value_t 
         if (usetable)
             arraylist_push(&backref_list, m);
         m->specializations.unknown = jl_deserialize_value(s, (jl_value_t**)&m->specializations);
+        m->tfunc.unknown = jl_nothing;
         jl_gc_wb(m, m->specializations.unknown);
         m->name = (jl_sym_t*)jl_deserialize_value(s, NULL);
         jl_gc_wb(m, m->name);
