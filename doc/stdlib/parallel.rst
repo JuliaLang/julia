@@ -177,6 +177,7 @@ General Parallel Computing Support
    * ``sshflags``\ : specifies additional ssh options, e.g. ``sshflags=`-i /home/foo/bar.pem```
    * ``max_parallel``\ : specifies the maximum number of workers connected to in parallel at a host.                 Defaults to 10.
    * ``dir``\ : specifies the working directory on the workers. Defaults to the host's current        directory (as found by ``pwd()``\ )
+   * ``enable_threaded_blas``\ : if ``true`` then  BLAS will run on multiple threads in added                          processes. Default is ``false``\ .
    * ``exename``\ : name of the ``julia`` executable. Defaults to ``"$JULIA_HOME/julia"`` or            ``"$JULIA_HOME/julia-debug"`` as the case may be.
    * ``exeflags``\ : additional flags passed to the worker processes.
    * ``topology``\ : Specifies how the workers connect to each other. Sending a message           between unconnected workers results in an error.

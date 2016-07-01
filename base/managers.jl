@@ -79,6 +79,9 @@ Keyword arguments:
 * `dir`: specifies the working directory on the workers. Defaults to the host's current
          directory (as found by `pwd()`)
 
+ * `enable_threaded_blas`: if `true` then  BLAS will run on multiple threads in added
+                           processes. Default is `false`.
+
 * `exename`: name of the `julia` executable. Defaults to `"\$JULIA_HOME/julia"` or
              `"\$JULIA_HOME/julia-debug"` as the case may be.
 

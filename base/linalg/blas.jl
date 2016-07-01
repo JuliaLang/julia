@@ -112,6 +112,32 @@ function set_num_threads(n::Integer)
     return nothing
 end
 
+type MKLNotImplementedException <: Exception end
+
+"""
+    get_num_threads(n)
+
+Set the number of threads the BLAS library should use. Does not work for MKL;
+raises MKLNotImplementedException.
+"""
+function get_num_threads()
+    blas = BLAS.vendor()
+    if blas == :openblas
+        return ccall((:openblas_get_num_threads, Base.libblas_name), Cint, ())
+    elseif blas == :openblas64
+        return ccall((:openblas_get_num_threads64_, Base.libblas_name), Cint, ())
+    elseif blas == :mkl
+        raise(MKLNotImplementedException())
+    end
+
+    # OSX BLAS looks at an environment variable
+    @static if is_apple()
+        return ENV["VECLIB_MAXIMUM_THREADS"]
+    end
+
+    return nothing
+end
+
 function check()
     blas = vendor()
     if blas == :openblas || blas == :openblas64

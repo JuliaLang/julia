@@ -1093,3 +1093,36 @@ let
     ref = remotecall(bad_thunk, 2)
     @test_throws RemoteException fetch(ref)
 end
+
+# Test addprocs enable_threaded_blas parameter
+function check_remote_num_threads(processes_added, num_threads)
+    for proc_id in processes_added
+        remote_thread_count = remotecall_fetch(BLAS.get_num_threads, proc_id)
+        @test remote_thread_count == num_threads
+    end
+end
+
+try
+    BLAS.set_num_threads(4)
+    @test BLAS.get_num_threads() == 4
+    processes_added = addprocs(2)
+
+    @test BLAS.get_num_threads() == 4
+    # Threading disabled in children by default
+    check_remote_num_threads(processes_added, 1)
+
+    rmprocs(processes_added)
+
+    BLAS.set_num_threads(4)
+    @test BLAS.get_num_threads() == 4
+    processes_added = addprocs(2, enable_threaded_blas=true)
+    # Master thread default is 4
+    @test BLAS.get_num_threads() == 4
+    # Remote thread default is 2
+    check_remote_num_threads(processes_added, 2)
+    rmprocs(processes_added)
+catch err
+    if !isa(err, BLAS.MKLNotImplementedException)
+        rethrow(err)
+    end
+end
