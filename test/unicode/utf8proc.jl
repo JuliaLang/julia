@@ -75,7 +75,7 @@ end
 @test normalize_string("\U1e9b\U0323", :NFKD) == "s\U0323\U0307"
 @test normalize_string("\U1e9b\U0323", :NFKC) == "\U1e69"
 
-#issue #5939  uft8proc/libmojibake character predicates
+#issue #5939  uft8proc character predicates
 let
     alower=['a', 'd', 'j', 'y', 'z']
     ulower=['α', 'β', 'γ', 'δ', 'ф', 'я']
