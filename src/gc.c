@@ -44,7 +44,7 @@ static jl_mutex_t finalizers_lock;
  * finalizers in unmanaged (GC safe) mode.
  */
 
-jl_gc_num_t gc_num = {0,0,0,0,0,0,0,0,0,0,0,0,0};
+jl_gc_num_t gc_num = {0,0,0,0,0,0,0,0,0,0,0,0,0,0};
 static size_t last_long_collect_interval;
 
 region_t regions[REGION_COUNT];
@@ -703,6 +703,13 @@ void jl_gc_count_allocd(size_t sz)
 {
     // This is **NOT** a GC safe point.
     gc_num.allocd += sz;
+}
+
+void jl_gc_reset_alloc_count(void)
+{
+    live_bytes += (gc_num.deferred_alloc + (gc_num.allocd + gc_num.interval));
+    gc_num.allocd = -(int64_t)gc_num.interval;
+    gc_num.deferred_alloc = 0;
 }
 
 static size_t array_nbytes(jl_array_t *a)
@@ -1658,7 +1665,10 @@ JL_DLLEXPORT int jl_gc_enable(int on)
     ptls->disable_gc = (on == 0);
     if (on && !prev) {
         // disable -> enable
-        jl_atomic_fetch_add(&jl_gc_disable_counter, -1);
+        if (jl_atomic_fetch_add(&jl_gc_disable_counter, -1) == 1) {
+            gc_num.allocd += gc_num.deferred_alloc;
+            gc_num.deferred_alloc = 0;
+        }
     }
     else if (prev && !on) {
         // enable -> disable
@@ -1878,8 +1888,11 @@ static void _jl_gc_collect(int full, char *stack_hi)
 JL_DLLEXPORT void jl_gc_collect(int full)
 {
     jl_tls_states_t *ptls = jl_get_ptls_states();
-    if (jl_gc_disable_counter)
+    if (jl_gc_disable_counter) {
+        gc_num.deferred_alloc += (gc_num.allocd + gc_num.interval);
+        gc_num.allocd = -(int64_t)gc_num.interval;
         return;
+    }
     char *stack_hi = (char*)gc_get_stack_ptr();
     gc_debug_print();
 

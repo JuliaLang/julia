@@ -66,6 +66,7 @@ typedef struct {
 // This struct must be kept in sync with the Julia type of the same name in base/util.jl
 typedef struct {
     int64_t     allocd;
+    int64_t     deferred_alloc;
     int64_t     freed;
     uint64_t    malloc;
     uint64_t    realloc;

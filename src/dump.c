@@ -119,8 +119,7 @@ static DUMP_MODES mode = (DUMP_MODES) 0;
 
 static jl_value_t *jl_idtable_type=NULL;
 
-// queue of types to cache
-static jl_array_t *datatype_list=NULL; // (only used in MODE_SYSTEM_IMAGE)
+static arraylist_t builtin_types;
 
 #define write_uint8(s, n) ios_putc((n), (s))
 #define read_uint8(s) ((uint8_t)ios_getc(s))
@@ -333,30 +332,6 @@ static void jl_serialize_gv_syms(ios_t *s, jl_sym_t *v)
     if (v->right) jl_serialize_gv_syms(s, v->right);
 }
 
-static void jl_serialize_gv_svec(ios_t *s, jl_svec_t *svec)
-{
-    size_t i, l = jl_svec_len(svec);
-    for (i = 0; i < l; i++) {
-        jl_value_t *v = jl_svecref(svec, i);
-        if (v) {
-            void *bp = ptrhash_get(&backref_table, v);
-            if (bp == HT_NOTFOUND) {
-                int32_t gv = jl_get_llvm_gv((jl_value_t*)v);
-                if (gv != 0) {
-                    jl_serialize_value(s, v);
-                    write_int32(s, gv);
-                }
-            }
-        }
-    }
-}
-
-static void jl_serialize_gv_tn(ios_t *s, jl_typename_t *tn)
-{
-    jl_serialize_gv_svec(s, tn->cache);
-    jl_serialize_gv_svec(s, tn->linearcache);
-}
-
 static void jl_serialize_gv_others(ios_t *s)
 {
     // ensures all objects referenced in the code have
@@ -388,15 +363,6 @@ static void jl_serialize_gv_others(ios_t *s)
         }
     }
     jl_serialize_gv_syms(s, jl_get_root_symbol());
-    jl_serialize_gv_tn(s, jl_array_type->name);
-    jl_serialize_gv_tn(s, jl_ref_type->name);
-    jl_serialize_gv_tn(s, jl_pointer_type->name);
-    jl_serialize_gv_tn(s, jl_type_type->name);
-    jl_serialize_gv_tn(s, jl_simplevector_type->name);
-    jl_serialize_gv_tn(s, jl_abstractarray_type->name);
-    jl_serialize_gv_tn(s, jl_densearray_type->name);
-    jl_serialize_gv_tn(s, jl_tuple_typename);
-    jl_serialize_gv_tn(s, jl_vararg_type->name);
     jl_serialize_value(s, NULL); // signal the end of this list
 }
 
@@ -1294,18 +1260,6 @@ static jl_value_t *jl_deserialize_datatype(ios_t *s, int pos, jl_value_t **loc)
         dt->types = (jl_svec_t*)jl_deserialize_value(s, (jl_value_t**)&dt->types);
         jl_gc_wb(dt, dt->types);
     }
-    if (datatype_list) {
-        if (dt->name == jl_array_type->name || dt->name == jl_ref_type->name ||
-            dt->name == jl_pointer_type->name || dt->name == jl_type_type->name ||
-            dt->name == jl_simplevector_type->name || dt->name == jl_abstractarray_type->name ||
-            dt->name == jl_densearray_type->name || dt->name == jl_tuple_typename ||
-            dt->name == jl_vararg_type->name) {
-            // builtin types are not serialized, so their caches aren't
-            // explicitly saved. so we reconstruct the caches of builtin
-            // parametric types here.
-            jl_array_ptr_1d_push(datatype_list, (jl_value_t*)dt);
-        }
-    }
     return (jl_value_t*)dt;
 }
 
@@ -1952,8 +1906,13 @@ static void jl_save_system_image_to_stream(ios_t *f)
     jl_serialize_value(f, jl_typeinf_func);
     jl_serialize_value(f, jl_type_type->name->mt);
 
-    // ensure everything in deser_tag is reassociated with its GlobalValue
     intptr_t i=2;
+    for(i=0; i < builtin_types.len; i++) {
+        jl_serialize_value(f, ((jl_datatype_t*)builtin_types.items[i])->name->cache);
+        jl_serialize_value(f, ((jl_datatype_t*)builtin_types.items[i])->name->linearcache);
+    }
+
+    // ensure everything in deser_tag is reassociated with its GlobalValue
     for (i=2; i < 255; i++) {
         jl_serialize_gv(f, deser_tag[i]);
     }
@@ -2031,8 +1990,6 @@ static void jl_restore_system_image_from_stream(ios_t *f)
     mode = MODE_SYSTEM_IMAGE;
     arraylist_new(&backref_list, 250000);
 
-    datatype_list = jl_alloc_vec_any(0);
-
     jl_main_module = (jl_module_t*)jl_deserialize_value(f, NULL);
     jl_top_module = (jl_module_t*)jl_deserialize_value(f, NULL);
     jl_internal_main_module = jl_main_module;
@@ -2041,6 +1998,15 @@ static void jl_restore_system_image_from_stream(ios_t *f)
     jl_type_type->name->mt = jl_typector_type->name->mt = jl_uniontype_type->name->mt = jl_datatype_type->name->mt =
         jl_type_type_mt;
 
+    intptr_t i;
+    for(i=0; i < builtin_types.len; i++) {
+        jl_typename_t *tn = ((jl_datatype_t*)builtin_types.items[i])->name;
+        tn->cache = (jl_svec_t*)jl_deserialize_value(f, NULL); jl_gc_wb(tn, tn->cache);
+        tn->linearcache = (jl_svec_t*)jl_deserialize_value(f, NULL); jl_gc_wb(tn, tn->linearcache);
+        jl_resort_type_cache(tn->cache);
+        jl_resort_type_cache(tn->linearcache);
+    }
+
     jl_core_module = (jl_module_t*)jl_get_global(jl_main_module,
                                                  jl_symbol("Core"));
     jl_base_module = (jl_module_t*)jl_get_global(jl_main_module,
@@ -2048,7 +2014,6 @@ static void jl_restore_system_image_from_stream(ios_t *f)
     jl_current_module = jl_base_module; // run start_image in Base
 
     // ensure everything in deser_tag is reassociated with its GlobalValue
-    intptr_t i;
     for (i = 2; i < 255; i++) {
         jl_deserialize_gv(f, deser_tag[i]);
     }
@@ -2062,13 +2027,6 @@ static void jl_restore_system_image_from_stream(ios_t *f)
     jl_set_t_uid_ctr(uid_ctr);
     jl_set_gs_ctr(gs_ctr);
 
-    // cache builtin parametric types
-    for (int i = 0; i < jl_array_len(datatype_list); i++) {
-        jl_value_t *v = jl_array_ptr_ref(datatype_list, i);
-        jl_cache_type_((jl_datatype_t*)v);
-    }
-    datatype_list = NULL;
-
     jl_get_builtins();
     jl_get_builtin_hooks();
     if (jl_base_module) {
@@ -2080,6 +2038,7 @@ static void jl_restore_system_image_from_stream(ios_t *f)
     //jl_printf(JL_STDERR, "backref_list.len = %d\n", backref_list.len);
     arraylist_free(&backref_list);
 
+    jl_gc_reset_alloc_count();
     jl_gc_enable(en);
     mode = last_mode;
     jl_update_all_fptrs();
@@ -2547,6 +2506,16 @@ void jl_init_serializer(void)
         i += 1;
     }
     assert(i <= 256);
+
+    arraylist_new(&builtin_types, 0);
+    arraylist_push(&builtin_types, jl_array_type);
+    arraylist_push(&builtin_types, jl_ref_type);
+    arraylist_push(&builtin_types, jl_pointer_type);
+    arraylist_push(&builtin_types, jl_type_type);
+    arraylist_push(&builtin_types, jl_abstractarray_type);
+    arraylist_push(&builtin_types, jl_densearray_type);
+    arraylist_push(&builtin_types, jl_tuple_type);
+    arraylist_push(&builtin_types, jl_vararg_type);
 }
 
 #ifdef __cplusplus
