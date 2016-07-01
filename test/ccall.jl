@@ -575,6 +575,13 @@ foo13031(x,y,z) = z
 foo13031p = cfunction(foo13031, Cint, (Ref{Tuple{}},Ref{Tuple{}},Cint))
 ccall(foo13031p, Cint, (Ref{Tuple{}},Ref{Tuple{}},Cint), (), (), 8)
 
+# issue 17219
+function ccall_reassigned_ptr(ptr::Ptr{Void})
+    ptr = Libdl.dlsym(Libdl.dlopen(libccalltest), "test_echo_p")
+    ccall(ptr, Any, (Any,), "foo")
+end
+@test ccall_reassigned_ptr(C_NULL) == "foo"
+
 # @threadcall functionality
 threadcall_test_func(x) =
     @threadcall((:testUcharX, libccalltest), Int32, (UInt8,), x % UInt8)
