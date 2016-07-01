@@ -1232,7 +1232,6 @@ jl_lambda_info_t *jl_compile_for_dispatch(jl_lambda_info_t *li)
             jl_compile_linfo(li);
         }
     }
-    jl_generate_fptr(li);
     return li;
 }
 

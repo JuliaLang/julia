@@ -86,8 +86,11 @@ jl_lambda_info_t *jl_get_unspecialized(jl_lambda_info_t *method);
 STATIC_INLINE jl_value_t *jl_call_method_internal(jl_lambda_info_t *meth, jl_value_t **args, uint32_t nargs)
 {
     jl_lambda_info_t *mfptr = meth;
-    if (__unlikely(mfptr->fptr == NULL))
+    if (__unlikely(mfptr->fptr == NULL)) {
         mfptr = jl_compile_for_dispatch(mfptr);
+        if (!mfptr->fptr)
+            jl_generate_fptr(mfptr);
+    }
     if (mfptr->jlcall_api == 0)
         return mfptr->fptr(args[0], &args[1], nargs-1);
     else if (mfptr->jlcall_api == 1)
