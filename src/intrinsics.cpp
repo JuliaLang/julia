@@ -151,9 +151,9 @@ static Constant *julia_const_to_llvm(jl_value_t *e, bool nested=false)
         return NULL;
 
     if (e == jl_true)
-        return ConstantInt::get(T_int1, 1);
+        return ConstantInt::get(T_int8, 1);
     if (e == jl_false)
-        return ConstantInt::get(T_int1, 0);
+        return ConstantInt::get(T_int8, 0);
 
     if (jl_is_cpointer_type(jt))
         return ConstantExpr::getIntToPtr(ConstantInt::get(T_size, jl_unbox_long(e)), julia_type_to_llvm((jl_value_t*)bt));
@@ -412,8 +412,6 @@ static Type *staticeval_bitstype(jl_value_t *bt)
 static int get_bitstype_nbits(jl_value_t *bt)
 {
     assert(jl_is_bitstype(bt));
-    if (bt == (jl_value_t*)jl_bool_type)
-        return 1;
     return jl_datatype_size(bt)*8;
 }
 
@@ -1127,10 +1125,16 @@ static jl_cgval_t emit_intrinsic(intrinsic f, jl_value_t **args, size_t nargs,
         }
         jl_value_t *newtyp = NULL;
         // TODO: compare the type validity of x,y,z before emitting the intrinsic
-        Value *r = emit_untyped_intrinsic(f, x, y, z, nargs, ctx, (jl_datatype_t**)&newtyp);
+        Value *r;
+        if (f == not_int && xinfo.typ == (jl_value_t*)jl_bool_type)
+            r = builder.CreateXor(x, ConstantInt::get(T_int8, 1, true));
+        else
+            r = emit_untyped_intrinsic(f, x, y, z, nargs, ctx, (jl_datatype_t**)&newtyp);
         if (!newtyp && r->getType() != x->getType())
             // cast back to the exact original type (e.g. float vs. int) before remarking as a julia type
             r = builder.CreateBitCast(r, x->getType());
+        if (r->getType() == T_int1)
+            r = builder.CreateZExt(r, T_int8);
         return mark_julia_type(r, false, newtyp ? newtyp : xinfo.typ, ctx);
     }
 #endif
@@ -1139,7 +1143,7 @@ static jl_cgval_t emit_intrinsic(intrinsic f, jl_value_t **args, size_t nargs,
 }
 
 static Value *emit_untyped_intrinsic(intrinsic f, Value *x, Value *y, Value *z, size_t nargs,
-                                       jl_codectx_t *ctx, jl_datatype_t **newtyp)
+                                     jl_codectx_t *ctx, jl_datatype_t **newtyp)
 {
     Type *t = x->getType();
     Value *fy;
