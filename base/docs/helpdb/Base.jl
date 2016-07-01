@@ -3643,14 +3643,14 @@ readdlm(source, delim::Char, eol::Char)
 """
     readdlm(source, delim::Char, T::Type; options...)
 
-The end of line delimiter is taken as `n`.
+The end of line delimiter is taken as `\\n`.
 """
 readdlm(source, delim::Char, T::Type)
 
 """
     readdlm(source, delim::Char; options...)
 
-The end of line delimiter is taken as `n`. If all data is numeric, the result will be a
+The end of line delimiter is taken as `\\n`. If all data is numeric, the result will be a
 numeric array. If some elements cannot be parsed as numbers, a heterogeneous array of
 numbers and strings is returned.
 """
@@ -3660,7 +3660,7 @@ readdlm(source, delim::Char)
     readdlm(source, T::Type; options...)
 
 The columns are assumed to be separated by one or more whitespaces. The end of line
-delimiter is taken as `n`.
+delimiter is taken as `\\n`.
 """
 readdlm(source, T::Type)
 
@@ -3668,7 +3668,7 @@ readdlm(source, T::Type)
     readdlm(source; options...)
 
 The columns are assumed to be separated by one or more whitespaces. The end of line
-delimiter is taken as `n`. If all data is numeric, the result will be a numeric array. If
+delimiter is taken as `\\n`. If all data is numeric, the result will be a numeric array. If
 some elements cannot be parsed as numbers, a heterogeneous array of numbers and strings
 is returned.
 """
