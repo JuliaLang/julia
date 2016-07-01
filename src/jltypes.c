@@ -2380,10 +2380,12 @@ static jl_value_t *inst_tuple_w_(jl_value_t *t, jl_value_t **env, size_t n,
     int i;
     for(i=0; i < ntp; i++) {
         jl_value_t *elt = jl_svecref(tp, i);
-        iparams[i] = (jl_value_t*)inst_type_w_(elt, env, n, stack, 0);
+        jl_value_t *pi = (jl_value_t*)inst_type_w_(elt, env, n, stack, 0);
+        if (jl_is_typevar(pi) && !((jl_tvar_t*)pi)->bound)
+            pi = ((jl_tvar_t*)pi)->ub;
+        iparams[i] = pi;
         if (ip_heap)
-            jl_gc_wb(ip_heap, iparams[i]);
-        jl_value_t *pi = iparams[i];
+            jl_gc_wb(ip_heap, pi);
         check_tuple_parameter(pi, i, ntp);
         if (cacheable && !jl_is_leaf_type(pi)) {
             cacheable = 0;
