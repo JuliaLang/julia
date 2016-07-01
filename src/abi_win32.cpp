@@ -40,10 +40,8 @@
 typedef bool AbiState;
 AbiState default_abi_state = 0;
 
-bool use_sret(AbiState *state, jl_value_t *ty)
+bool use_sret(AbiState *state, jl_datatype_t *dt)
 {
-    // Assume jl_is_datatype(ty) && !jl_is_abstracttype(ty)
-    jl_datatype_t *dt = (jl_datatype_t*)ty;
     // Use sret if the size of the argument is not one of 1, 2, 4, 8 bytes
     // This covers the special case of Complex64
     size_t size = dt->size;
@@ -52,22 +50,17 @@ bool use_sret(AbiState *state, jl_value_t *ty)
     return true;
 }
 
-void needPassByRef(AbiState *state, jl_value_t *ty, bool *byRef, bool *inReg)
+void needPassByRef(AbiState *state, jl_datatype_t *dt, bool *byRef, bool *inReg)
 {
-    // Assume jl_is_datatype(ty) && !jl_is_abstracttype(ty)
-    jl_datatype_t *dt = (jl_datatype_t*)ty;
     // Use pass by reference for all structs
-    *byRef = dt->nfields > 0;
+    *byRef = dt->layout->nfields > 0;
 }
 
-Type *preferred_llvm_type(jl_value_t *ty, bool isret)
+Type *preferred_llvm_type(jl_datatype_t *dt, bool isret)
 {
     // Arguments are either scalar or passed by value
-    if (!isret || !jl_is_datatype(ty) || jl_is_abstracttype(ty))
-        return NULL;
-    jl_datatype_t *dt = (jl_datatype_t*)ty;
     // rewrite integer sized (non-sret) struct to the corresponding integer
-    if (!dt->nfields)
+    if (!dt->layout->nfields)
         return NULL;
     return Type::getIntNTy(jl_LLVMContext, dt->size * 8);
 }

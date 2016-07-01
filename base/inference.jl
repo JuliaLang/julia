@@ -2387,7 +2387,7 @@ function inlineable(f::ANY, ft::ANY, e::Expr, atypes::Vector{Any}, sv::Inference
     end
     if length(atypes)==3 && is(f,unbox)
         at3 = widenconst(atypes[3])
-        if isa(at3,DataType) && !at3.mutable && at3.pointerfree
+        if isa(at3,DataType) && !at3.mutable && at3.layout != C_NULL && datatype_pointerfree(at3)
             # remove redundant unbox
             return (e.args[3],())
         end
