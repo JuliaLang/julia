@@ -1901,6 +1901,21 @@ static int typekey_compare(jl_datatype_t *tt, jl_value_t **key, size_t n)
     return 0;
 }
 
+static int dt_compare(const void *ap, const void *bp)
+{
+    jl_datatype_t *a = *(jl_datatype_t**)ap;
+    jl_datatype_t *b = *(jl_datatype_t**)bp;
+    if (a == b) return 0;
+    if (b == NULL) return -1;
+    if (a == NULL) return 1;
+    return typekey_compare(b, jl_svec_data(a->parameters), jl_svec_len(a->parameters));
+}
+
+void jl_resort_type_cache(jl_svec_t *c)
+{
+    qsort(jl_svec_data(c), jl_svec_len(c), sizeof(jl_value_t*), dt_compare);
+}
+
 static int typekey_eq(jl_datatype_t *tt, jl_value_t **key, size_t n)
 {
     size_t j;
