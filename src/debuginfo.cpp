@@ -713,7 +713,7 @@ static int lookup_pointer(DIContext *context, jl_frame_t **frames,
         if (inlined_frame) {
             frame->inlined = 1;
             frame->fromC = fromC;
-            if (jl_lambda_info_t *outer_linfo = (*frames)[n_frames-1].linfo) {
+            if ((*frames)[n_frames-1].linfo) {
                 std::size_t semi_pos = func_name.find(';');
                 if (semi_pos != std::string::npos) {
                     func_name = func_name.substr(0, semi_pos);
