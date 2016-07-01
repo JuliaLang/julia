@@ -643,6 +643,8 @@ built-in :exc:`Exception`\ s listed below all interrupt the normal flow of contr
 +------------------------------+
 | :exc:`SystemError`           |
 +------------------------------+
+| :exc:`TimeoutException`      |
++------------------------------+
 | :exc:`TypeError`             |
 +------------------------------+
 | :exc:`UndefRefError`         |
