@@ -2756,3 +2756,9 @@ testmi(typemax(UInt32)-UInt32(1000):typemax(UInt32), map(UInt32, 1:100))
 @test indices(1) == ()
 @test indices(1,1) == 1:1
 @test_throws BoundsError indices(1,-1)
+
+# issue #15920
+@test Rational(0, 1) / Complex(3, 2) == 0
+
+# issue #16282
+@test_throws MethodError 3 // 4.5im
