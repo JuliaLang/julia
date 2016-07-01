@@ -313,7 +313,7 @@ static Value *julia_to_native(Type *to, bool toboxed, jl_value_t *jlto, const jl
     else {
         prepare_call(builder.CreateMemCpy(slot, data_pointer(jvinfo, ctx, slot->getType()),
                     (uint64_t)jl_datatype_size(ety),
-                    (uint64_t)((jl_datatype_t*)ety)->alignment)->getCalledValue());
+                    (uint64_t)((jl_datatype_t*)ety)->layout->alignment)->getCalledValue());
         mark_gc_use(jvinfo);
     }
     return slot;
