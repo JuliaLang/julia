@@ -129,8 +129,10 @@ STATIC_INLINE void jl_gc_wb_buf(void *parent, void *bufptr, size_t minsz) // par
 void gc_debug_print_status(void);
 void gc_debug_critical_error(void);
 void jl_print_gc_stats(JL_STREAM *s);
+void jl_gc_reset_alloc_count(void);
 int jl_assign_type_uid(void);
 jl_value_t *jl_cache_type_(jl_datatype_t *type);
+void jl_resort_type_cache(jl_svec_t *c);
 int  jl_get_t_uid_ctr(void);
 void jl_set_t_uid_ctr(int i);
 uint32_t jl_get_gs_ctr(void);
