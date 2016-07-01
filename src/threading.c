@@ -352,7 +352,7 @@ void ti_threadfun(void *arg)
 void ti_reset_timings(void);
 #endif
 
-size_t jl_tls_offset = -1;
+ssize_t jl_tls_offset = -1;
 
 #ifdef JL_ELF_TLS_VARIANT
 // Optimize TLS access in codegen if the TLS buffer is using a IE or LE model.
@@ -437,7 +437,7 @@ static void jl_check_tls(void)
 #else
 #  error "Cannot emit thread pointer for this architecture."
 #endif
-    size_t offset = jl_check_tls_bound(tp, ptls, data.total_size);
+    ssize_t offset = jl_check_tls_bound(tp, ptls, data.total_size);
     if (offset == -1)
         return;
     jl_tls_offset = offset;
