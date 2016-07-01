@@ -264,7 +264,8 @@ for rel in (:<,:<=,:cmp)
                 end
                 return ($rel)(xc,yc)
             else
-                return xc > 0 ? ($rel)(xb,yb) : ($rel)(yb,xb)
+                xf, yf = xc > 0 ? (xb,yb) : (yb,xb)
+                return ($rel)(xf, yf)::Bool
             end
         end
     end
