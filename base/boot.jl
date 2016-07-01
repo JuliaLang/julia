@@ -271,7 +271,9 @@ Void() = nothing
 
 immutable VecElement{T}
     value::T
+    VecElement(value::T) = new(value) # disable converting constructor in Core
 end
+VecElement{T}(arg::T) = VecElement{T}(arg)
 
 Expr(args::ANY...) = _expr(args...)
 
