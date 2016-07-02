@@ -104,7 +104,7 @@ function first_utf8_byte(ch::Char)
 end
 
 function reverseind(s::String, i::Integer)
-    j = lastidx(s) + 1 - i
+    j = length(s.data) + 1 - i
     d = s.data
     while is_valid_continuation(d[j])
         j -= 1
@@ -115,8 +115,6 @@ end
 ## overload methods for efficiency ##
 
 sizeof(s::String) = sizeof(s.data)
-
-lastidx(s::String) = length(s.data)
 
 isvalid(s::String, i::Integer) =
     (1 <= i <= endof(s.data)) && !is_valid_continuation(s.data[i])
