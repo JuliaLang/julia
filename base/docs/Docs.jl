@@ -229,6 +229,8 @@ function doc!(b::Binding, str::DocStr, sig::ANY = Union{})
         push!(m.order, sig)
     end
     m.docs[sig] = str
+    str.data[:binding] = b
+    str.data[:typesig] = sig
     return b
 end
 
@@ -436,7 +438,6 @@ Build a `Dict` expression containing metadata captured from the expression `expr
 
 Fields that may be included in the returned `Dict`:
 
-- `:source`:     Source code for the given `expr`.
 - `:path`:       String representing the file where `expr` is defined.
 - `:linenumber`: Linenumber where `expr` is defined.
 - `:module`:     Module where the docstring is defined.
@@ -444,8 +445,6 @@ Fields that may be included in the returned `Dict`:
 """
 function metadata(expr)
     args = []
-    # Source code for the object being documented.
-    push!(args, :($(Pair)(:source, $(quot(expr)))))
     # Filename and linenumber of the docstring.
     push!(args, :($(Pair)(:path, $(Base).@__FILE__)))
     push!(args, :($(Pair)(:linenumber, $(unsafe_load(cglobal(:jl_lineno, Cint))))))
