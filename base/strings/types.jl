@@ -118,12 +118,11 @@ reverse(s::RevString) = s.string
 
 ## reverse an index i so that reverse(s)[i] == s[reverseind(s,i)]
 
+reverseind(s::AbstractString, i) = chr2ind(s, length(s) + 1 - ind2chr(reverse(s), i))
 reverseind(s::Union{DirectIndexString,SubString{DirectIndexString}}, i::Integer) = length(s) + 1 - i
 reverseind(s::RevString, i::Integer) = endof(s) - i + 1
-lastidx(s::AbstractString) = nextind(s, endof(s)) - 1
-lastidx(s::DirectIndexString) = length(s)
-reverseind(s::SubString, i::Integer) =
-    reverseind(s.string, lastidx(s.string)-s.offset-s.endof+i) - s.offset
+reverseind(s::SubString{String}, i::Integer) =
+    reverseind(s.string, nextind(s.string, endof(s.string))-s.offset-s.endof+i-1) - s.offset
 
 ## efficient representation of repeated strings ##
 
