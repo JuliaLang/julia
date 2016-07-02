@@ -160,11 +160,10 @@ jl_lambda_info_t *jl_compile_for_dispatch(jl_lambda_info_t *li);
 JL_DLLEXPORT void jl_set_lambda_code_null(jl_lambda_info_t *li);
 
 // invoke (compiling if necessary) the jlcall function pointer for a method
-jl_lambda_info_t *jl_get_unspecialized(jl_lambda_info_t *method);
 STATIC_INLINE jl_value_t *jl_call_method_internal(jl_lambda_info_t *meth, jl_value_t **args, uint32_t nargs)
 {
     jl_lambda_info_t *mfptr = meth;
-    if (__unlikely(mfptr->fptr == NULL)) {
+    if (__unlikely(mfptr->fptr == NULL && mfptr->jlcall_api != 2)) {
         mfptr = jl_compile_for_dispatch(mfptr);
         if (!mfptr->fptr)
             jl_generate_fptr(mfptr);
@@ -173,8 +172,10 @@ STATIC_INLINE jl_value_t *jl_call_method_internal(jl_lambda_info_t *meth, jl_val
         return mfptr->fptr(args[0], &args[1], nargs-1);
     else if (mfptr->jlcall_api == 1)
         return ((jl_fptr_sparam_t)mfptr->fptr)(meth->sparam_vals, args[0], &args[1], nargs-1);
-    else
+    else if (mfptr->jlcall_api == 2)
         return meth->constval;
+    else
+        abort();
 }
 
 jl_tupletype_t *jl_argtype_with_function(jl_function_t *f, jl_tupletype_t *types);

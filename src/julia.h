@@ -228,6 +228,10 @@ typedef struct _jl_method_t {
     // 0 = no, 1 = yes, 2 = not yet known
     uint8_t needs_sparam_vals_ducttape;
     uint8_t traced;
+
+// hidden fields:
+    // lock for modifications to the method
+    jl_mutex_t writelock;
 } jl_method_t;
 
 // This holds data for a single executable function body:
@@ -437,6 +441,7 @@ typedef struct _jl_methtable_t {
 #ifdef JL_GF_PROFILE
     int ncalls;
 #endif
+    jl_mutex_t writelock;
 } jl_methtable_t;
 
 typedef struct {

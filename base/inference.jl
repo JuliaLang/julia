@@ -1560,6 +1560,9 @@ end
 function typeinf_ext(linfo::LambdaInfo)
     if isdefined(linfo, :def)
         # method lambda - infer this specialization via the method cache
+        if linfo.inferred && linfo.code !== nothing
+            return linfo
+        end
         (code, _t, inferred) = typeinf_edge(linfo.def, linfo.specTypes, linfo.sparam_vals, true, true, true, linfo)
         if inferred && code.inferred && linfo !== code
             # This case occurs when the IR for a function has been deleted.
@@ -1574,12 +1577,12 @@ function typeinf_ext(linfo::LambdaInfo)
             linfo.pure = code.pure
             linfo.inlineable = code.inlineable
             ccall(:jl_set_lambda_rettype, Void, (Any, Any), linfo, code.rettype)
-            linfo.inferred = true
-            linfo.inInference = false
             if code.jlcall_api == 2
                 linfo.constval = code.constval
                 linfo.jlcall_api = 2
             end
+            linfo.inferred = true
+            linfo.inInference = false
         end
         return code
     else
@@ -1946,6 +1949,7 @@ function finish(me::InferenceState)
     widen_all_consts!(me.linfo)
 
     ispure = me.linfo.pure
+    ccall(:jl_set_lambda_rettype, Void, (Any, Any), me.linfo, widenconst(me.bestguess))
 
     if (isa(me.bestguess,Const) && me.bestguess.val !== nothing) ||
         (isType(me.bestguess) && !has_typevars(me.bestguess.parameters[1],true))
@@ -1994,7 +1998,6 @@ function finish(me::InferenceState)
         me.linfo.inlineable = false
     end
 
-    ccall(:jl_set_lambda_rettype, Void, (Any, Any), me.linfo, widenconst(me.bestguess))
     me.linfo.inferred = true
     me.linfo.inInference = false
     # finalize and record the linfo result

@@ -600,6 +600,7 @@ JL_DLLEXPORT jl_method_t *jl_new_method_uninit(void)
     m->isstaged = 0;
     m->needs_sparam_vals_ducttape = 2;
     m->traced = 0;
+    JL_MUTEX_INIT(&m->writelock);
     return m;
 }
 
@@ -827,6 +828,7 @@ JL_DLLEXPORT jl_methtable_t *jl_new_method_table(jl_sym_t *name, jl_module_t *mo
 #ifdef JL_GF_PROFILE
     mt->ncalls = 0;
 #endif
+    JL_MUTEX_INIT(&mt->writelock);
     return mt;
 }
 
