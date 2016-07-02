@@ -880,7 +880,8 @@ static std::string generate_func_sig(Type **lrt, Type **prt, int &sret,
         if (*prt == NULL)
             *prt = *lrt;
 
-        if (jl_is_datatype(rt) && !jl_is_abstracttype(rt) && use_sret(&abi, rt)) {
+        if (jl_is_datatype(rt) && !jl_is_abstracttype(rt) &&
+            !jl_is_array_type(rt) && use_sret(&abi, rt)) {
             paramattrs.push_back(AttrBuilder());
             paramattrs[0].clear();
 #if !defined(_OS_WINDOWS_) || defined(LLVM35)
