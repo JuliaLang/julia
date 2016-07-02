@@ -1469,6 +1469,7 @@ static jl_value_t *jl_deserialize_value_(ios_t *s, jl_value_t *vtag, jl_value_t 
         jl_gc_wb(m, m->invokes.unknown);
         m->needs_sparam_vals_ducttape = read_int8(s);
         m->traced = 0;
+        JL_MUTEX_INIT(&m->writelock);
         return (jl_value_t*)m;
     }
     else if (vtag == (jl_value_t*)jl_lambda_info_type) {
@@ -2086,7 +2087,8 @@ JL_DLLEXPORT void jl_restore_system_image_data(const char *buf, size_t len)
 
 JL_DLLEXPORT jl_array_t *jl_compress_ast(jl_lambda_info_t *li, jl_array_t *ast)
 {
-    JL_LOCK(&dump_lock); // Might GC
+    JL_LOCK(&li->def->writelock); // protect the roots array (Might GC)
+    JL_LOCK(&dump_lock); // protect global structures in this file (Might GC)
     assert(jl_is_lambda_info(li));
     assert(jl_is_array(ast));
     DUMP_MODES last_mode = mode;
@@ -2117,12 +2119,14 @@ JL_DLLEXPORT jl_array_t *jl_compress_ast(jl_lambda_info_t *li, jl_array_t *ast)
     jl_gc_enable(en);
     mode = last_mode;
     JL_UNLOCK(&dump_lock); // Might GC
+    JL_UNLOCK(&li->def->writelock); // Might GC
     JL_GC_POP();
     return v;
 }
 
 JL_DLLEXPORT jl_array_t *jl_uncompress_ast(jl_lambda_info_t *li, jl_array_t *data)
 {
+    JL_LOCK(&li->def->writelock); // protect the roots array (Might GC)
     JL_LOCK(&dump_lock); // Might GC
     assert(jl_is_lambda_info(li));
     assert(jl_is_array(data));
@@ -2144,6 +2148,7 @@ JL_DLLEXPORT jl_array_t *jl_uncompress_ast(jl_lambda_info_t *li, jl_array_t *dat
     tree_enclosing_module = NULL;
     mode = last_mode;
     JL_UNLOCK(&dump_lock); // Might GC
+    JL_UNLOCK(&li->def->writelock); // Might GC
     JL_GC_POP();
     return v;
 }
