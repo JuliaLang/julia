@@ -24,7 +24,9 @@ LIBGIT2_OPTS += -DUSE_OPENSSL=OFF -DCMAKE_INSTALL_RPATH=$(build_prefix) -DCMAKE_
 endif
 
 $(BUILDDIR)/$(LIBGIT2_SRC_DIR)/Makefile: $(SRCDIR)/srccache/$(LIBGIT2_SRC_DIR)/CMakeLists.txt
+ifeq ($(OS),WINNT)
 	-cd $(SRCDIR)/srccache/$(LIBGIT2_SRC_DIR) && patch -p0 -f < $(SRCDIR)/patches/libgit2-ssh.patch
+endif
 	mkdir -p $(dir $@)
 	cd $(dir $@) && \
 	$(CMAKE) $(dir $<) $(LIBGIT2_OPTS)
