@@ -133,7 +133,7 @@ function BigFloat(x, prec::Int, rounding::RoundingMode)
     end
 end
 
-function BigFloat(x, rounding::RoundingMode)
+function BigFloat(x::Union{Integer, AbstractFloat, String}, rounding::RoundingMode)
     BigFloat(x, precision(BigFloat), rounding)
 end
 
