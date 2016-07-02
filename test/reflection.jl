@@ -38,7 +38,15 @@ test_code_reflections(test_ast_reflection, code_lowered)
 test_code_reflections(test_ast_reflection, code_typed)
 test_code_reflections(test_bin_reflection, code_llvm)
 test_code_reflections(test_bin_reflection, code_native)
+
+# Issue #16326
+let OLDSTDOUT = STDOUT
+    redirect_stdout(open(tempname(),"w"))
+    @test try @code_native map(y->abs(y), rand(3)); true; catch false; end
+    redirect_stdout(OLDSTDOUT)
 end
+
+end # module ReflectionTest
 
 # code_warntype
 module WarnType
