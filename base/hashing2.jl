@@ -96,7 +96,7 @@ Special values:
 decompose(x::Integer) = x, 0, 1
 decompose(x::Rational) = num(x), 0, den(x)
 
-function decompose(x::Float16)
+function decompose(x::Float16)::NTuple{3,Int}
     isnan(x) && return 0, 0, 0
     isinf(x) && return ifelse(x < 0, -1, 1), 0, 0
     n = reinterpret(UInt16, x)
@@ -104,10 +104,10 @@ function decompose(x::Float16)
     e = (n & 0x7c00 >> 10) % Int
     s |= Int16(e != 0) << 10
     d = ifelse(signbit(x), -1, 1)
-    Int(s), Int(e - 25 + (e == 0)), d
+    s, e - 25 + (e == 0), d
 end
 
-function decompose(x::Float32)
+function decompose(x::Float32)::NTuple{3,Int}
     isnan(x) && return 0, 0, 0
     isinf(x) && return ifelse(x < 0, -1, 1), 0, 0
     n = reinterpret(UInt32, x)
@@ -115,10 +115,10 @@ function decompose(x::Float32)
     e = (n & 0x7f800000 >> 23) % Int
     s |= Int32(e != 0) << 23
     d = ifelse(signbit(x), -1, 1)
-    Int(s), Int(e - 150 + (e == 0)), d
+    s, e - 150 + (e == 0), d
 end
 
-function decompose(x::Float64)
+function decompose(x::Float64)::Tuple{Int64, Int, Int}
     isnan(x) && return 0, 0, 0
     isinf(x) && return ifelse(x < 0, -1, 1), 0, 0
     n = reinterpret(UInt64, x)
@@ -126,19 +126,19 @@ function decompose(x::Float64)
     e = (n & 0x7ff0000000000000 >> 52) % Int
     s |= Int64(e != 0) << 52
     d = ifelse(signbit(x), -1, 1)
-    s, Int(e - 1075 + (e == 0)), d
+    s, e - 1075 + (e == 0), d
 end
 
-function decompose(x::BigFloat)
-    isnan(x) && return big(0), 0, 0
-    isinf(x) && return big(x.sign), 0, 0
-    x == 0 && return big(0), 0, Int(x.sign)
+function decompose(x::BigFloat)::Tuple{BigInt, Int, Int}
+    isnan(x) && return 0, 0, 0
+    isinf(x) && return x.sign, 0, 0
+    x == 0 && return 0, 0, x.sign
     s = BigInt()
     s.size = cld(x.prec, 8*sizeof(GMP.Limb)) # limbs
     b = s.size * sizeof(GMP.Limb)            # bytes
     ccall((:__gmpz_realloc2, :libgmp), Void, (Ptr{BigInt}, Culong), &s, 8b) # bits
     ccall(:memcpy, Ptr{Void}, (Ptr{Void}, Ptr{Void}, Csize_t), s.d, x.d, b) # bytes
-    s, Int(x.exp - 8b), Int(x.sign)
+    s, x.exp - 8b, x.sign
 end
 
 ## streamlined hashing for smallish rational types ##
