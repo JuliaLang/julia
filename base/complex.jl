@@ -26,17 +26,6 @@ promote_rule{T<:Real,S<:Real}(::Type{Complex{T}}, ::Type{S}) =
 promote_rule{T<:Real,S<:Real}(::Type{Complex{T}}, ::Type{Complex{S}}) =
     Complex{promote_type(T,S)}
 
-promote_op{T<:Real,S<:Real}(op, ::Type{Complex{T}}, ::Type{Complex{S}}) =
-    Complex{promote_op(op,T,S)}
-promote_op{T<:Real,S<:Real}(op, ::Type{Complex{T}}, ::Type{S}) =
-    Complex{promote_op(op,T,S)}
-promote_op{T<:Real,S<:Real}(op, ::Type{T}, ::Type{Complex{S}}) =
-    Complex{promote_op(op,T,S)}
-promote_op{T<:Integer,S<:Integer}(::typeof(^), ::Type{T}, ::Type{Complex{S}}) =
-    Complex{Float64}
-promote_op{T<:Integer,S<:Integer}(::typeof(.^), ::Type{T}, ::Type{Complex{S}}) =
-    Complex{Float64}
-
 widen{T}(::Type{Complex{T}}) = Complex{widen(T)}
 
 real(z::Complex) = z.re
@@ -461,7 +450,7 @@ function ^{T<:AbstractFloat}(z::Complex{T}, p::Complex{T})
     if p==2 #square
         zr, zi = reim(z)
         x = (zr-zi)*(zr+zi)
-        y = 2zr*zi
+        y = T(2)*zr*zi
         if isnan(x)
             if isinf(y)
                 x = copysign(zero(T),zr)

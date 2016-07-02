@@ -42,6 +42,7 @@ Base.typemin(::Type{FieldValue}) = (x=typemin(Int); y=typemin(VersionWeight); Fi
 
 Base.:-(a::FieldValue, b::FieldValue) = FieldValue(a.l0-b.l0, a.l1-b.l1, a.l2-b.l2, a.l3-b.l3, a.l4-b.l4)
 Base.:+(a::FieldValue, b::FieldValue) = FieldValue(a.l0+b.l0, a.l1+b.l1, a.l2+b.l2, a.l3+b.l3, a.l4+b.l4)
+Base.promote_op(::Union{typeof(+), typeof(-)}, ::Type{FieldValue}, ::Type{FieldValue}) = FieldValue
 
 function Base.isless(a::FieldValue, b::FieldValue)
     a.l0 < b.l0 && return true
