@@ -92,7 +92,7 @@ symbols, an ``Error`` object is returned and an exception is thrown::
      in do_test at test.jl:191
 
 If we expect that evaluating an expression *should* throw an exception,
-then we can use :func:`@test_throws` to check this occurs::
+then we can use :func:`@test_throws` to check that this occurs::
 
     julia> @test_throws MethodError foo(:cat)
     Test Passed
@@ -140,7 +140,7 @@ We can put our tests for the ``foo(x)`` function in a test set::
     Test Summary: | Pass  Total
     Foo Tests     |    3      3
 
-Test sets can all also be nested::
+Test sets can also be nested::
 
     julia> @testset "Foo Tests" begin
                @testset "Animals" begin
@@ -183,7 +183,7 @@ the details for the failed test sets will be shown::
     Foo Tests     |    3     1      4
       Animals     |    2            2
       Arrays      |    1     1      2
-    ERROR: Some tests did not pass: 3 passed, 1 failed, 0 errored.
+    ERROR: Some tests did not pass: 3 passed, 1 failed, 0 errored, 0 broken.
      in finish at test.jl:362
 
 
@@ -236,19 +236,19 @@ writing new tests.
 
    .. Docstring generated from Julia source
 
-   Test two floating point numbers ``a`` and ``b`` for equality taking in account small numerical errors.
+   Test two floating point numbers ``a`` and ``b`` for equality taking into account small numerical errors.
 
 .. function:: @test_approx_eq_eps(a, b, tol)
 
    .. Docstring generated from Julia source
 
-   Test two floating point numbers ``a`` and ``b`` for equality taking in account a margin of tolerance given by ``tol``\ .
+   Test two floating point numbers ``a`` and ``b`` for equality taking into account a margin of tolerance given by ``tol``\ .
 
 .. function:: @inferred f(x)
 
    .. Docstring generated from Julia source
 
-   Tests that the call expression ``f(x)`` returns a value of the same type inferred by the compiler. It's useful to check for type stability.
+   Tests that the call expression ``f(x)`` returns a value of the same type inferred by the compiler. It is useful to check for type stability.
 
    ``f(x)`` can be any call expression. Returns the result of ``f(x)`` if the types match, and an ``Error`` ``Result`` if it finds different types.
 
@@ -296,17 +296,17 @@ and alerts the user via an ``Error`` if the test succeeds.
 
    .. Docstring generated from Julia source
 
-   For use to indicate a test that should pass but currently consistently fails. Tests that the expression ``ex`` evaluates to ``false`` or causes an exception. Returns a ``Broken`` ``Result`` if it does, and an ``Error`` ``Result`` if it is ``true``\ .
+   Indicates a test that should pass but currently consistently fails. Tests that the expression ``ex`` evaluates to ``false`` or causes an exception. Returns a ``Broken`` ``Result`` if it does, or an ``Error`` ``Result`` if the exception evaluates to ``true``\ .
 
-:func:`@test_skip` is also available for use to skip a test without
-evaluation in the case of intermittent failures. This test will not run but
-gives a `Broken` `Result`.
+:func:`@test_skip` is also available to skip a test without evaluation, but
+counting the skipped test in the test set reporting. The test will not run but
+gives a ``Broken`` ``Result``.
 
 .. function:: @test_skip ex
 
    .. Docstring generated from Julia source
 
-   For use to indicate a test that should pass but currently intermittently fails. Does not evaluate the expression, which makes it useful for tests of not-yet-implemented functionality.
+   Marks a test that should not be executed but should be included in test summary reporting as ``Broken``\ . This can be useful for tests that intermittently fail, or tests of not-yet-implemented functionality.
 
 Creating Custom ``AbstractTestSet`` Types
 -----------------------------------------
@@ -347,7 +347,7 @@ they are executed, but any result accumulation is the responsibility of the
 
 ``Base.Test`` also makes sure that nested ``@testset`` invocations use the same
 ``AbstractTestSet`` subtype as their parent unless it is set explicitly. It does
-not propagate any properties of the testset option inheritance behavior can be
+not propagate any properties of the testset. Option inheritance behavior can be
 implemented by packages using the stack infrastructure that ``Base.Test``
 provides.
 
