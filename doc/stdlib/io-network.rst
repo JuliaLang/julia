@@ -588,25 +588,25 @@ Text I/O
 
    .. Docstring generated from Julia source
 
-   The end of line delimiter is taken as ``n``\ .
+   The end of line delimiter is taken as ``\n``\ .
 
 .. function:: readdlm(source, delim::Char; options...)
 
    .. Docstring generated from Julia source
 
-   The end of line delimiter is taken as ``n``\ . If all data is numeric, the result will be a numeric array. If some elements cannot be parsed as numbers, a heterogeneous array of numbers and strings is returned.
+   The end of line delimiter is taken as ``\n``\ . If all data is numeric, the result will be a numeric array. If some elements cannot be parsed as numbers, a heterogeneous array of numbers and strings is returned.
 
 .. function:: readdlm(source, T::Type; options...)
 
    .. Docstring generated from Julia source
 
-   The columns are assumed to be separated by one or more whitespaces. The end of line delimiter is taken as ``n``\ .
+   The columns are assumed to be separated by one or more whitespaces. The end of line delimiter is taken as ``\n``\ .
 
 .. function:: readdlm(source; options...)
 
    .. Docstring generated from Julia source
 
-   The columns are assumed to be separated by one or more whitespaces. The end of line delimiter is taken as ``n``\ . If all data is numeric, the result will be a numeric array. If some elements cannot be parsed as numbers, a heterogeneous array of numbers and strings is returned.
+   The columns are assumed to be separated by one or more whitespaces. The end of line delimiter is taken as ``\n``\ . If all data is numeric, the result will be a numeric array. If some elements cannot be parsed as numbers, a heterogeneous array of numbers and strings is returned.
 
 .. function:: writedlm(f, A, delim='\\t')
 
