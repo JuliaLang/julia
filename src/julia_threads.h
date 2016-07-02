@@ -477,8 +477,15 @@ static inline void jl_mutex_unlock(jl_mutex_t *lock)
     JL_SIGATOMIC_END();
 }
 
+static inline void jl_mutex_init(jl_mutex_t *lock)
+{
+    lock->owner = 0;
+    lock->count = 0;
+}
+
 // Locks
 #ifdef JULIA_ENABLE_THREADING
+#define JL_MUTEX_INIT(m) jl_mutex_init(m)
 #define JL_LOCK(m) jl_mutex_lock(m)
 #define JL_UNLOCK(m) jl_mutex_unlock(m)
 #define JL_LOCK_NOGC(m) jl_mutex_lock_nogc(m)
@@ -488,6 +495,7 @@ static inline void jl_mutex_check_type(jl_mutex_t *m)
 {
     (void)m;
 }
+#define JL_MUTEX_INIT(m) jl_mutex_check_type(m)
 #define JL_LOCK(m) do {                                   \
         JL_SIGATOMIC_BEGIN();                             \
         jl_gc_enable_finalizers(jl_get_ptls_states(), 0); \
