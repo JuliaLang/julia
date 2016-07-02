@@ -1190,7 +1190,6 @@ randexp(dims::Int...) = randexp!(Array{Float64}(dims))
 randexp(rng::AbstractRNG, dims::Dims) = randexp!(rng, Array{Float64}(dims))
 randexp(rng::AbstractRNG, dims::Int...) = randexp!(rng, Array{Float64}(dims))
 
-
 ## random UUID generation
 
 immutable UUID
