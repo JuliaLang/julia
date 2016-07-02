@@ -126,7 +126,7 @@ Getting Around
 
    Loads a source files, in the context of the ``Main`` module, on every active node, searching standard locations for files. ``require`` is considered a top-level operation, so it sets the current ``include`` path but does not use it to search for files (see help for ``include``\ ). This function is typically used to load library code, and is implicitly called by ``using`` to load packages.
 
-   When searching for files, ``require`` first looks for package code under ``Pkg.dir()``\ , then tries paths in the global array ``LOAD_PATH``\ .
+   When searching for files, ``require`` first looks for package code under ``Pkg.dir()``\ , then tries paths in the global array ``LOAD_PATH``\ .``require`` is case-sensitive  on all platforms including those with case-insensitive filesystems like macOS and Windows.
 
 .. function:: Base.compilecache(module::String)
 
@@ -1427,4 +1427,3 @@ Internals
    .. Docstring generated from Julia source
 
    Compile the given function ``f`` for the argument tuple (of types) ``args``\ , but do not execute it.
-
