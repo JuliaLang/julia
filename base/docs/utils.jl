@@ -150,12 +150,8 @@ repl(str::AbstractString) = :(apropos($str))
 repl(other) = :(@doc $(esc(other)))
 
 function _repl(x)
-    docs = :(@doc $(esc(x)))
-    if isexpr(x, :call)
-        # Handles function call syntax where each argument is an atom (symbol, number, etc.)
-        t = Base.gen_call_with_extracted_types(doc, x)
-        (isexpr(t, :call, 3) && t.args[1] === doc) && (docs = t)
-    end
+    docs = (isexpr(x, :call) && !any(isexpr(x, :(::)) for x in x.args)) ?
+        Base.gen_call_with_extracted_types(doc, x) : :(@doc $(esc(x)))
     if isfield(x)
         quote
             if isa($(esc(x.args[1])), DataType)
