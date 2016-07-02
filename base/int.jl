@@ -305,8 +305,6 @@ promote_rule{T<:BitSigned64}(::Type{UInt64}, ::Type{T}) = UInt64
 promote_rule{T<:Union{UInt32, UInt64}}(::Type{T}, ::Type{Int128}) = Int128
 promote_rule{T<:BitSigned}(::Type{UInt128}, ::Type{T}) = UInt128
 
-promote_op{R<:Integer,S<:Integer}(op, ::Type{R}, ::Type{S}) = typeof(op(one(R), one(S)))
-
 ## traits ##
 
 typemin(::Type{Int8  }) = Int8(-128)

@@ -2762,3 +2762,53 @@ testmi(typemax(UInt32)-UInt32(1000):typemax(UInt32), map(UInt32, 1:100))
 
 # issue #16282
 @test_throws MethodError 3 // 4.5im
+
+# PR #16995
+let types = (Base.BitInteger_types..., BigInt, Bool,
+             Rational{Int}, Rational{BigInt},
+             Float16, Float32, Float64, BigFloat,
+             Complex{Int}, Complex{UInt}, Complex32, Complex64, Complex128)
+    for S in types
+        for op in (+, -)
+            T = @inferred Base.promote_op(op, S)
+            t = @inferred op(one(S))
+            @test T === typeof(t)
+        end
+    end
+
+    @test @inferred(Base.promote_op(!, Bool)) === Bool
+
+    for R in types, S in types
+        for op in (+, -, *, /, ^)
+            T = @inferred Base.promote_op(op, R, S)
+            t = @inferred op(one(R), one(S))
+            @test T === typeof(t)
+        end
+    end
+end
+
+let types = (Base.BitInteger_types..., BigInt, Bool,
+             Rational{Int}, Rational{BigInt},
+             Float16, Float32, Float64, BigFloat)
+    for S in types, T in types
+        for op in (<, >, <=, >=, (==))
+            @test @inferred(Base.promote_op(op, S, T)) === Bool
+        end
+    end
+end
+
+let types = (Base.BitInteger_types..., BigInt, Bool)
+    for S in types
+        T = @inferred Base.promote_op(~, S)
+        t = @inferred ~one(S)
+        @test T === typeof(t)
+    end
+
+    for S in types, T in types
+        for op in (&, |, <<, >>, (>>>), %, ÷)
+            T = @inferred Base.promote_op(op, S, T)
+            t = @inferred op(one(S), one(T))
+            @test T === typeof(t)
+        end
+    end
+end
