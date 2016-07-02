@@ -516,13 +516,13 @@ end
 let err = try
     include_string("module A
 
-       function broken()
+        function broken()
 
-           x[1] = some_func(
+            x[1] = some_func(
 
-       end
+        end
 
-       end")
+        end")
     catch e
         e
     end

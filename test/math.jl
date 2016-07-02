@@ -47,7 +47,6 @@ for T in (Float16,Float32,Float64)
                   (prevfloat(realmin(T)), nextfloat(one(T),-2)),
                   (nextfloat(zero(T),3), T(0.75)),
                   (nextfloat(zero(T)), T(0.5))]
-
         n = Int(log2(a/b))
         @test frexp(a) == (b,n)
         @test ldexp(b,n) == a
@@ -539,7 +538,6 @@ end
 
 # digamma
 for elty in (Float32, Float64)
-
     @test digamma(convert(elty, 9)) ≈ convert(elty, 2.140641477955609996536345)
     @test digamma(convert(elty, 2.5)) ≈ convert(elty, 0.7031566406452431872257)
     @test digamma(convert(elty, 0.1)) ≈ convert(elty, -10.42375494041107679516822)
