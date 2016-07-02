@@ -361,6 +361,9 @@ let
     @test S*T == [z z; 0 0]
 end
 
+# similar issue for Array{Real}
+@test Real[1 2] * Real[1.5; 2.0] == [5.5]
+
 # Matrix exponential
 for elty in (Float32, Float64, Complex64, Complex128)
     A1  = convert(Matrix{elty}, [4 2 0; 1 4 1; 1 1 4])
