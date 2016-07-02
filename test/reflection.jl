@@ -40,8 +40,9 @@ test_code_reflections(test_bin_reflection, code_llvm)
 test_code_reflections(test_bin_reflection, code_native)
 
 # Issue #16326
-let OLDSTDOUT = STDOUT
-    redirect_stdout(open(tempname(),"w"))
+mktemp() do f, io
+    OLDSTDOUT = STDOUT
+    redirect_stdout(io)
     @test try @code_native map(y->abs(y), rand(3)); true; catch false; end
     redirect_stdout(OLDSTDOUT)
 end
