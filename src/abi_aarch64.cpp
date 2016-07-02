@@ -356,7 +356,8 @@ static Type *classify_arg(jl_value_t *ty, bool *fpreg, bool *onstack,
 
 bool use_sret(AbiState*, jl_value_t *ty)
 {
-    // Assume jl_is_datatype(ty) && !jl_is_abstracttype(ty)
+    // Assume (jl_is_datatype(ty) && !jl_is_abstracttype(ty) &&
+    //         !jl_is_array_type(ty))
     // Section 5.5
     // If the type, T, of the result of a function is such that
     //
@@ -375,7 +376,7 @@ bool use_sret(AbiState*, jl_value_t *ty)
 
 Type *preferred_llvm_type(jl_value_t *ty, bool)
 {
-    if (!jl_is_datatype(ty) || jl_is_abstracttype(ty))
+    if (!jl_is_datatype(ty) || jl_is_abstracttype(ty) || jl_is_array_type(ty))
         return NULL;
     jl_datatype_t *dt = (jl_datatype_t*)ty;
     if (Type *fptype = get_llvm_fp_or_vectype(dt))
