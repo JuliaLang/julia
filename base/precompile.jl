@@ -477,3 +477,7 @@ precompile(Base.set_valid_processes, (Array{Int, 1}, ))
 sprint(Markdown.term, @doc mean)
 sprint(Docs.repl_search, "mean")
 sprint(Docs.repl_corrections, "meen")
+
+# Speed up repl completions
+Base.REPLCompletions.completions("IOBuffer().",11)
+Base.REPLCompletions.completions("max([1],",8)
