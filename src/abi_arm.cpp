@@ -206,7 +206,8 @@ static void classify_return_arg(jl_value_t *ty, bool *reg,
 
 bool use_sret(AbiState *state, jl_value_t *ty)
 {
-    // Assume jl_is_datatype(ty) && !jl_is_abstracttype(ty)
+    // Assume (jl_is_datatype(ty) && !jl_is_abstracttype(ty) &&
+    //         !jl_is_array_type(ty))
 
     bool reg = false;
     bool onstack = false;
@@ -254,7 +255,7 @@ static void classify_arg(jl_value_t *ty, bool *reg,
 
 Type *preferred_llvm_type(jl_value_t *ty, bool isret)
 {
-    if (!jl_is_datatype(ty) || jl_is_abstracttype(ty))
+    if (!jl_is_datatype(ty) || jl_is_abstracttype(ty) || jl_is_array_type(ty))
         return NULL;
     jl_datatype_t *dt = (jl_datatype_t*)ty;
 

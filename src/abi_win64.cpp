@@ -46,7 +46,9 @@ const AbiState default_abi_state = {};
 
 bool use_sret(AbiState *state, jl_value_t *ty)
 {
-    if(!jl_is_datatype(ty) || jl_is_abstracttype(ty) || jl_is_cpointer_type(ty) || jl_is_array_type(ty))
+    // Assume (jl_is_datatype(ty) && !jl_is_abstracttype(ty) &&
+    //         !jl_is_array_type(ty))
+    if (jl_is_cpointer_type(ty))
         return false;
     size_t size = jl_datatype_size(ty);
     if (size <= 8 || is_native_simd_type(ty))

@@ -849,3 +849,14 @@ else
 warn("ccall: no VecReg tests run for this platform")
 
 end
+
+# Special calling convention for `Array`
+function f17204(a)
+    b = similar(a)
+    for i in eachindex(a)
+        b[i] = a[i] + 10
+    end
+    return b
+end
+@test ccall(cfunction(f17204, Vector{Any}, Tuple{Vector{Any}}),
+            Vector{Any}, (Vector{Any},), Any[1:10;]) == Any[11:20;]
