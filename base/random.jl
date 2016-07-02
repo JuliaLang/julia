@@ -3,7 +3,7 @@
 module Random
 
 using Base.dSFMT
-using Base.GMP: GMP_VERSION, Limb
+using Base.GMP: Limb, MPZ
 import Base: copymutable, copy, copy!, ==
 
 export srand,
@@ -491,23 +491,12 @@ for (T, U) in [(UInt8, UInt32), (UInt16, UInt32),
     end
 end
 
-if GMP_VERSION.major >= 6
-    immutable RangeGeneratorBigInt <: RangeGenerator
-        a::BigInt             # first
-        m::BigInt             # range length - 1
-        nlimbs::Int           # number of limbs in generated BigInt's
-        mask::Limb            # applied to the highest limb
-    end
-
-else
-    immutable RangeGeneratorBigInt <: RangeGenerator
-        a::BigInt             # first
-        m::BigInt             # range length - 1
-        limbs::Vector{Limb}   # buffer to be copied into generated BigInt's
-        mask::Limb            # applied to the highest limb
-
-        RangeGeneratorBigInt(a, m, nlimbs, mask) = new(a, m, Array{Limb}(nlimbs), mask)
-    end
+immutable RangeGeneratorBigInt <: RangeGenerator
+    a::BigInt         # first
+    m::BigInt         # range length - 1
+    nlimbs::Int       # number of limbs in generated BigInt's (z ∈ [0, m])
+    nlimbsmax::Int    # max number of limbs for z+a
+    mask::Limb        # applied to the highest limb
 end
 
 
@@ -518,7 +507,8 @@ function RangeGenerator(r::UnitRange{BigInt})
     nlimbs, highbits = divrem(nd, 8*sizeof(Limb))
     highbits > 0 && (nlimbs += 1)
     mask = highbits == 0 ? ~zero(Limb) : one(Limb)<<highbits - one(Limb)
-    return RangeGeneratorBigInt(first(r), m, nlimbs, mask)
+    nlimbsmax = max(nlimbs, abs(last(r).size), abs(first(r).size))
+    return RangeGeneratorBigInt(first(r), m, nlimbs, nlimbsmax, mask)
 end
 
 
@@ -548,36 +538,26 @@ function rand{T<:Integer, U<:Unsigned}(rng::AbstractRNG, g::RangeGeneratorInt{T,
     (unsigned(g.a) + rem_knuth(x, g.k)) % T
 end
 
-if GMP_VERSION.major >= 6
-    # mpz_limbs_write and mpz_limbs_finish are available only in GMP version 6
-    function rand(rng::AbstractRNG, g::RangeGeneratorBigInt)
-        x = BigInt()
-        while true
-            # note: on CRAY computers, the second argument may be of type Cint (48 bits) and not Clong
-            xd = ccall((:__gmpz_limbs_write, :libgmp), Ptr{Limb}, (Ptr{BigInt}, Clong), &x, g.nlimbs)
-            limbs = unsafe_wrap(Array, xd, g.nlimbs)
-            rand!(rng, limbs)
-            limbs[end] &= g.mask
-            ccall((:__gmpz_limbs_finish, :libgmp), Void, (Ptr{BigInt}, Clong), &x, g.nlimbs)
-            x <= g.m && break
-        end
-        ccall((:__gmpz_add, :libgmp), Void, (Ptr{BigInt}, Ptr{BigInt}, Ptr{BigInt}), &x, &x, &g.a)
-        return x
+rand(rng::AbstractRNG, g::RangeGeneratorBigInt) = Base.GMP.@withtmp begin
+    x = T.Z
+    ccall((:__gmpz_realloc2, :libgmp), Void, (Ptr{MPZ}, Culong), &x,
+          g.nlimbsmax*8*sizeof(Limb))
+    limbs = unsafe_wrap(Array, x.d, g.nlimbs)
+    while true
+        rand!(rng, limbs)
+        @inbounds limbs[end] &= g.mask
+        ccall((:__gmpn_cmp, :libgmp), Cint, (Ptr{Limb}, Ptr{Limb}, Clong),
+              x.d, pointer(g.m.d), g.nlimbs) <= 0 && break
     end
-else
-    function rand(rng::AbstractRNG, g::RangeGeneratorBigInt)
-        x = BigInt()
-        while true
-            rand!(rng, g.limbs)
-            g.limbs[end] &= g.mask
-            ccall((:__gmpz_import, :libgmp), Void,
-                  (Ptr{BigInt}, Csize_t, Cint, Csize_t, Cint, Csize_t, Ptr{Limb}),
-                  &x, length(g.limbs), -1, sizeof(Limb), 0, 0, g.limbs)
-            x <= g.m && break
-        end
-        ccall((:__gmpz_add, :libgmp), Void, (Ptr{BigInt}, Ptr{BigInt}, Ptr{BigInt}), &x, &x, &g.a)
-        return x
+    # adjust x.size (normally done by mpz_limbs_finish, in GMP version >= 6)
+    x.size = g.nlimbs
+    while x.size > 0
+        @inbounds limbs[x.size] != 0 && break
+        x.size -= 1
     end
+    ccall((:__gmpz_add, :libgmp), Void, (Ptr{MPZ}, Ptr{MPZ}, Ptr{MPZ}),
+          &x, &x, &T.W(g.a))
+    return BigInt(x)
 end
 
 rand{T<:Union{Signed,Unsigned,BigInt,Bool}}(rng::AbstractRNG, r::UnitRange{T}) = rand(rng, RangeGenerator(r))

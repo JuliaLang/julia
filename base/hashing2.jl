@@ -16,11 +16,11 @@ end
 function hash_integer(n::BigInt, h::UInt)
     s = n.size
     s == 0 && return hash_integer(0, h)
-    p = convert(Ptr{UInt}, n.d)
-    b = unsafe_load(p)
+    p = n.d
+    @inbounds b = p[1]
     h = hash_uint(ifelse(s < 0, -b, b) $ h) $ h
-    for k = 2:abs(s)
-        h = hash_uint(unsafe_load(p, k) $ h) $ h
+    @inbounds for k = 2:abs(s)
+        h = hash_uint(p[k] $ h) $ h
     end
     return h
 end
@@ -133,11 +133,11 @@ function decompose(x::BigFloat)
     isnan(x) && return big(0), 0, 0
     isinf(x) && return big(x.sign), 0, 0
     x == 0 && return big(0), 0, Int(x.sign)
-    s = BigInt()
-    s.size = cld(x.prec, 8*sizeof(GMP.Limb)) # limbs
-    b = s.size * sizeof(GMP.Limb)            # bytes
-    ccall((:__gmpz_realloc2, :libgmp), Void, (Ptr{BigInt}, Culong), &s, 8b) # bits
-    ccall(:memcpy, Ptr{Void}, (Ptr{Void}, Ptr{Void}, Csize_t), s.d, x.d, b) # bytes
+
+    siz = cld(x.prec, 8*sizeof(GMP.Limb)) # limbs
+    b = siz * sizeof(GMP.Limb)            # bytes
+    s = BigInt(siz, Vector{GMP.Limb}(siz))
+    ccall(:memcpy, Ptr{Void}, (Ptr{Void}, Ptr{Void}, Csize_t), pointer(s.d), x.d, b) # bytes
     s, Int(x.exp - 8b), Int(x.sign)
 end
 
