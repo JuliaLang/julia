@@ -321,7 +321,7 @@ end
 function lreplace!(ex::Expr, r::LReplace)
     # Curly-brace notation, which acts like parentheses
     if ex.head == :curly && length(ex.args) == 2 && isa(ex.args[1], Symbol) && endswith(string(ex.args[1]), "_")
-        excurly = Base.Cartesian.exprresolve(lreplace!(ex.args[2], r))
+        excurly = exprresolve(lreplace!(ex.args[2], r))
         if isa(excurly, Number)
             return Symbol(ex.args[1],excurly)
         else
@@ -369,8 +369,8 @@ exprresolve_arith(arg) = false, 0
 
 exprresolve_conditional(b::Bool) = true, b
 function exprresolve_conditional(ex::Expr)
-    if ex.head == :comparison && isa(ex.args[1], Number) && isa(ex.args[3], Number)
-        return true, exprresolve_cond_dict[ex.args[2]](ex.args[1], ex.args[3])
+    if ex.head == :call && ex.args[1] ∈ keys(exprresolve_cond_dict) && isa(ex.args[2], Number) && isa(ex.args[3], Number)
+        return true, exprresolve_cond_dict[ex.args[1]](ex.args[2], ex.args[3])
     end
     false, false
 end
