@@ -12,6 +12,8 @@ static Instruction *tbaa_decorate(MDNode *md, Instruction *load_or_store)
 
 static GlobalVariable *prepare_global(GlobalVariable *G, Module *M)
 {
+    if (G->getParent() == M)
+        return G;
     GlobalValue *local = M->getNamedValue(G->getName());
     if (!local) {
         local = global_proto(G, M);
