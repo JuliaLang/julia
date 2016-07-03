@@ -2,7 +2,7 @@
 
 #@testset "libgit2" begin
 
-const LIBGIT2_VER = v"0.23.0"
+const LIBGIT2_VER = v"0.24.0"
 
 #########
 # TESTS #
@@ -11,6 +11,12 @@ const LIBGIT2_VER = v"0.23.0"
 #@testset "Check library verison" begin
     v = LibGit2.version()
     @test  v.major == LIBGIT2_VER.major && v.minor >= LIBGIT2_VER.minor
+#end
+
+#@testset "Check library features" begin
+    f = LibGit2.features()
+    @test findfirst(f, LibGit2.Consts.FEATURE_SSH) > 0
+    @test findfirst(f, LibGit2.Consts.FEATURE_HTTPS) > 0
 #end
 
 #@testset "OID" begin
