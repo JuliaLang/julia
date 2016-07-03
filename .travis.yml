@@ -102,7 +102,7 @@ script:
       fi
     - cd .. && mv julia julia2
     - /tmp/julia/bin/julia --precompiled=no -e 'true' &&
-      /tmp/julia/bin/julia-debug --precompiled=no -e 'true'
+        /tmp/julia/bin/julia-debug --precompiled=no -e 'true'
     - /tmp/julia/bin/julia -e 'versioninfo()'
     - export JULIA_CPU_CORES=2 && export JULIA_TEST_MAXRSS_MB=600 && cd /tmp/julia/share/julia/test &&
         /tmp/julia/bin/julia --check-bounds=yes runtests.jl $TESTSTORUN &&

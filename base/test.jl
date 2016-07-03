@@ -197,7 +197,7 @@ end
 Indicates a test that should pass but currently consistently fails.
 Tests that the expression `ex` evaluates to `false` or causes an
 exception. Returns a `Broken` `Result` if it does, or an `Error` `Result`
-if the exception evaluates to `true`.
+if the expression evaluates to `true`.
 """
 macro test_broken(ex)
     orig_ex = Expr(:inert, ex)

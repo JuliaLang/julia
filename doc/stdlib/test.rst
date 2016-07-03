@@ -296,7 +296,7 @@ and alerts the user via an ``Error`` if the test succeeds.
 
    .. Docstring generated from Julia source
 
-   Indicates a test that should pass but currently consistently fails. Tests that the expression ``ex`` evaluates to ``false`` or causes an exception. Returns a ``Broken`` ``Result`` if it does, or an ``Error`` ``Result`` if the exception evaluates to ``true``\ .
+   Indicates a test that should pass but currently consistently fails. Tests that the expression ``ex`` evaluates to ``false`` or causes an exception. Returns a ``Broken`` ``Result`` if it does, or an ``Error`` ``Result`` if the expression evaluates to ``true``\ .
 
 :func:`@test_skip` is also available to skip a test without evaluation, but
 counting the skipped test in the test set reporting. The test will not run but

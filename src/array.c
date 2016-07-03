@@ -956,16 +956,15 @@ static NOINLINE ssize_t jl_array_ptr_copy_backward(jl_value_t *owner,
 }
 
 // Unsafe, assume inbounds and that dest and src have the same eltype
-// `doffs` and `soffs` are zero based.
 JL_DLLEXPORT void jl_array_ptr_copy(jl_array_t *dest, void **dest_p,
                                     jl_array_t *src, void **src_p, ssize_t n)
 {
     assert(dest->flags.ptrarray && src->flags.ptrarray);
     jl_value_t *owner = jl_array_owner(dest);
-    // Destination is old and doesn't refer any young object
+    // Destination is old and doesn't refer to any young object
     if (__unlikely(jl_astaggedvalue(owner)->bits.gc == GC_OLD_MARKED)) {
         jl_value_t *src_owner = jl_array_owner(src);
-        // Source is young or might refer young objects
+        // Source is young or might refer to young objects
         if (!(jl_astaggedvalue(src_owner)->bits.gc & GC_OLD)) {
             ssize_t done;
             if (dest_p < src_p || dest_p > src_p + n) {
