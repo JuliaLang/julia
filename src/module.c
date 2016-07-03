@@ -18,8 +18,9 @@ jl_module_t *jl_top_module=NULL;
 
 JL_DLLEXPORT jl_module_t *jl_new_module(jl_sym_t *name)
 {
-    jl_module_t *m = (jl_module_t*)jl_gc_allocobj(sizeof(jl_module_t));
-    jl_set_typeof(m, jl_module_type);
+    jl_ptls_t ptls = jl_get_ptls_states();
+    jl_module_t *m = (jl_module_t*)jl_gc_alloc(ptls, sizeof(jl_module_t),
+                                               jl_module_type);
     JL_GC_PUSH1(&m);
     assert(jl_is_symbol(name));
     m->name = name;
@@ -57,9 +58,10 @@ JL_DLLEXPORT jl_value_t *jl_f_new_module(jl_sym_t *name, uint8_t std_imports)
 
 JL_DLLEXPORT void jl_set_istopmod(uint8_t isprimary)
 {
-    jl_current_module->istopmod = 1;
+    jl_ptls_t ptls = jl_get_ptls_states();
+    ptls->current_module->istopmod = 1;
     if (isprimary)
-        jl_top_module = jl_current_module;
+        jl_top_module = ptls->current_module;
 }
 
 JL_DLLEXPORT uint8_t jl_istopmod(jl_module_t *mod)
@@ -69,8 +71,9 @@ JL_DLLEXPORT uint8_t jl_istopmod(jl_module_t *mod)
 
 static jl_binding_t *new_binding(jl_sym_t *name)
 {
+    jl_ptls_t ptls = jl_get_ptls_states();
     assert(jl_is_symbol(name));
-    jl_binding_t *b = (jl_binding_t*)allocb(sizeof(jl_binding_t));
+    jl_binding_t *b = (jl_binding_t*)jl_gc_alloc_buf(ptls, sizeof(jl_binding_t));
     b->name = name;
     b->value = NULL;
     b->owner = NULL;
@@ -449,7 +452,8 @@ JL_DLLEXPORT void jl_set_const(jl_module_t *m, jl_sym_t *var, jl_value_t *val)
 
 JL_DLLEXPORT int jl_is_const(jl_module_t *m, jl_sym_t *var)
 {
-    if (m == NULL) m = jl_current_module;
+    jl_ptls_t ptls = jl_get_ptls_states();
+    if (m == NULL) m = ptls->current_module;
     jl_binding_t *b = jl_get_binding(m, var);
     return b && b->constp;
 }
@@ -529,13 +533,15 @@ JL_DLLEXPORT void jl_declare_constant(jl_binding_t *b)
 
 JL_DLLEXPORT jl_value_t *jl_get_current_module(void)
 {
-    return (jl_value_t*)jl_current_module;
+    jl_ptls_t ptls = jl_get_ptls_states();
+    return (jl_value_t*)ptls->current_module;
 }
 
 JL_DLLEXPORT void jl_set_current_module(jl_value_t *m)
 {
+    jl_ptls_t ptls = jl_get_ptls_states();
     assert(jl_typeis(m, jl_module_type));
-    jl_current_module = (jl_module_t*)m;
+    ptls->current_module = (jl_module_t*)m;
 }
 
 JL_DLLEXPORT jl_value_t *jl_module_usings(jl_module_t *m)
@@ -587,6 +593,7 @@ jl_function_t *jl_module_get_initializer(jl_module_t *m)
 
 JL_DLLEXPORT void jl_module_run_initializer(jl_module_t *m)
 {
+    jl_ptls_t ptls = jl_get_ptls_states();
     jl_function_t *f = jl_module_get_initializer(m);
     if (f == NULL)
         return;
@@ -599,7 +606,7 @@ JL_DLLEXPORT void jl_module_run_initializer(jl_module_t *m)
         }
         else {
             jl_rethrow_other(jl_new_struct(jl_initerror_type, m->name,
-                                           jl_exception_in_transit));
+                                           ptls->exception_in_transit));
         }
     }
 }

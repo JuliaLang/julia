@@ -69,13 +69,15 @@ JL_DLLEXPORT jl_value_t *jl_eval_string(const char *str)
 
 JL_DLLEXPORT jl_value_t *jl_exception_occurred(void)
 {
-    return jl_exception_in_transit == jl_nothing ? NULL :
-        jl_exception_in_transit;
+    jl_ptls_t ptls = jl_get_ptls_states();
+    return ptls->exception_in_transit == jl_nothing ? NULL :
+        ptls->exception_in_transit;
 }
 
 JL_DLLEXPORT void jl_exception_clear(void)
 {
-    jl_exception_in_transit = jl_nothing;
+    jl_ptls_t ptls = jl_get_ptls_states();
+    ptls->exception_in_transit = jl_nothing;
 }
 
 // get the name of a type as a string
@@ -229,7 +231,8 @@ JL_DLLEXPORT void jl_sigatomic_begin(void)
 
 JL_DLLEXPORT void jl_sigatomic_end(void)
 {
-    if (jl_get_ptls_states()->defer_signal == 0)
+    jl_ptls_t ptls = jl_get_ptls_states();
+    if (ptls->defer_signal == 0)
         jl_error("sigatomic_end called in non-sigatomic region");
     JL_SIGATOMIC_END();
 }
@@ -326,31 +329,31 @@ JL_DLLEXPORT jl_value_t *(jl_typeof)(jl_value_t *v)
 
 JL_DLLEXPORT int8_t (jl_gc_unsafe_enter)(void)
 {
-    jl_tls_states_t *ptls = jl_get_ptls_states();
+    jl_ptls_t ptls = jl_get_ptls_states();
     return jl_gc_unsafe_enter(ptls);
 }
 
 JL_DLLEXPORT void (jl_gc_unsafe_leave)(int8_t state)
 {
-    jl_tls_states_t *ptls = jl_get_ptls_states();
+    jl_ptls_t ptls = jl_get_ptls_states();
     jl_gc_unsafe_leave(ptls, state);
 }
 
 JL_DLLEXPORT int8_t (jl_gc_safe_enter)(void)
 {
-    jl_tls_states_t *ptls = jl_get_ptls_states();
+    jl_ptls_t ptls = jl_get_ptls_states();
     return jl_gc_safe_enter(ptls);
 }
 
 JL_DLLEXPORT void (jl_gc_safe_leave)(int8_t state)
 {
-    jl_tls_states_t *ptls = jl_get_ptls_states();
+    jl_ptls_t ptls = jl_get_ptls_states();
     jl_gc_safe_leave(ptls, state);
 }
 
 JL_DLLEXPORT void (jl_gc_safepoint)(void)
 {
-    jl_tls_states_t *ptls = jl_get_ptls_states();
+    jl_ptls_t ptls = jl_get_ptls_states();
     jl_gc_safepoint_(ptls);
 }
 

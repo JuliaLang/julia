@@ -32,15 +32,10 @@ extern "C" {
 
 // manipulating mark bits
 
-#define GC_PAGE_LG2 14 // log2(size of a page)
-#define GC_PAGE_SZ (1 << GC_PAGE_LG2) // 16k
-#define GC_PAGE_OFFSET (JL_SMALL_BYTE_ALIGNMENT - (sizeof(jl_taggedvalue_t) % JL_SMALL_BYTE_ALIGNMENT))
-
 // 8G * 32768 = 2^48
 // It's really unlikely that we'll actually allocate that much though...
 #define REGION_COUNT 32768
 
-#define jl_buff_tag ((uintptr_t)0x4eade800)
 #define jl_malloc_tag ((void*)0xdeadaa01)
 #define jl_singleton_tag ((void*)0xdeadaa02)
 
@@ -147,7 +142,7 @@ typedef struct {
     uint16_t osize; // size of each object in this page
     uint16_t fl_begin_offset; // offset of first free object in this page
     uint16_t fl_end_offset;   // offset of last free object in this page
-    uint16_t thread_n;        // index (into jl_thread_heap) of heap that owns this page
+    uint16_t thread_n;        // thread id of the heap that owns this page
     char *data;
     uint8_t *ages;
 } jl_gc_pagemeta_t;
@@ -274,12 +269,11 @@ STATIC_INLINE void gc_big_object_link(bigval_t *hdr, bigval_t **list)
     *list = hdr;
 }
 
-void pre_mark(void);
-void gc_mark_object_list(arraylist_t *list, size_t start);
-void visit_mark_stack(void);
+void pre_mark(jl_ptls_t ptls);
+void gc_mark_object_list(jl_ptls_t ptls, arraylist_t *list, size_t start);
+void visit_mark_stack(jl_ptls_t ptls);
 void gc_debug_init(void);
-
-#define jl_thread_heap (jl_get_ptls_states()->heap)
+void jl_mark_box_caches(jl_ptls_t ptls);
 
 // GC pages
 
@@ -351,7 +345,7 @@ STATIC_INLINE void gc_time_count_mallocd_array(int bits)
 
 #ifdef GC_VERIFY
 extern jl_value_t *lostval;
-void gc_verify(void);
+void gc_verify(jl_ptls_t ptls);
 void add_lostval_parent(jl_value_t *parent);
 #define verify_val(v) do {                                              \
         if (lostval == (jl_value_t*)(v) && (v) != 0) {                  \
@@ -382,7 +376,7 @@ void add_lostval_parent(jl_value_t *parent);
 #define verify_parent2(ty,obj,slot,arg1,arg2) verify_parent(ty,obj,slot,arg1,arg2)
 extern int gc_verifying;
 #else
-#define gc_verify()
+#define gc_verify(ptls)
 #define verify_val(v)
 #define verify_parent1(ty,obj,slot,arg1)
 #define verify_parent2(ty,obj,slot,arg1,arg2)

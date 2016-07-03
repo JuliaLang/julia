@@ -87,6 +87,7 @@ size_t jl_page_size;
 
 void jl_init_stack_limits(int ismaster)
 {
+    jl_ptls_t ptls = jl_get_ptls_states();
 #ifdef _OS_WINDOWS_
     (void)ismaster;
 #  ifdef _COMPILER_MICROSOFT_
@@ -104,8 +105,8 @@ void jl_init_stack_limits(int ismaster)
 #    endif
 #  endif
     // https://en.wikipedia.org/wiki/Win32_Thread_Information_Block
-    jl_stack_hi = (char*)tib[1]; // Stack Base / Bottom of stack (high address)
-    jl_stack_lo = (char*)tib[2]; // Stack Limit / Ceiling of stack (low address)
+    ptls->stack_hi = (char*)tib[1]; // Stack Base / Bottom of stack (high address)
+    ptls->stack_lo = (char*)tib[2]; // Stack Limit / Ceiling of stack (low address)
 #else
 #  ifdef JULIA_ENABLE_THREADING
     // Only use pthread_*_np functions to get stack address for non-master
@@ -119,8 +120,8 @@ void jl_init_stack_limits(int ismaster)
         size_t stacksize;
         pthread_attr_getstack(&attr, &stackaddr, &stacksize);
         pthread_attr_destroy(&attr);
-        jl_stack_lo = (char*)stackaddr;
-        jl_stack_hi = (char*)stackaddr + stacksize;
+        ptls->stack_lo = (char*)stackaddr;
+        ptls->stack_hi = (char*)stackaddr + stacksize;
         return;
 #    elif defined(_OS_DARWIN_)
         extern void *pthread_get_stackaddr_np(pthread_t thread);
@@ -128,8 +129,8 @@ void jl_init_stack_limits(int ismaster)
         pthread_t thread = pthread_self();
         void *stackaddr = pthread_get_stackaddr_np(thread);
         size_t stacksize = pthread_get_stacksize_np(thread);
-        jl_stack_lo = (char*)stackaddr;
-        jl_stack_hi = (char*)stackaddr + stacksize;
+        ptls->stack_lo = (char*)stackaddr;
+        ptls->stack_hi = (char*)stackaddr + stacksize;
         return;
 #    elif defined(_OS_FREEBSD_)
         pthread_attr_t attr;
@@ -139,8 +140,8 @@ void jl_init_stack_limits(int ismaster)
         size_t stacksize;
         pthread_attr_getstack(&attr, &stackaddr, &stacksize);
         pthread_attr_destroy(&attr);
-        jl_stack_lo = (char*)stackaddr;
-        jl_stack_hi = (char*)stackaddr + stacksize;
+        ptls->stack_lo = (char*)stackaddr;
+        ptls->stack_hi = (char*)stackaddr + stacksize;
         return;
 #    else
 #      warning "Getting stack size for thread is not supported."
@@ -152,8 +153,8 @@ void jl_init_stack_limits(int ismaster)
     struct rlimit rl;
     getrlimit(RLIMIT_STACK, &rl);
     size_t stack_size = rl.rlim_cur;
-    jl_stack_hi = (char*)&stack_size;
-    jl_stack_lo = jl_stack_hi - stack_size;
+    ptls->stack_hi = (char*)&stack_size;
+    ptls->stack_lo = ptls->stack_hi - stack_size;
 #endif
 }
 
@@ -215,6 +216,7 @@ static struct uv_shutdown_queue_item *next_shutdown_queue_item(struct uv_shutdow
 
 JL_DLLEXPORT void jl_atexit_hook(int exitcode)
 {
+    jl_ptls_t ptls = jl_get_ptls_states();
     if (exitcode == 0) julia_save();
     jl_print_gc_stats(JL_STDERR);
     if (jl_options.code_coverage)
@@ -229,12 +231,12 @@ JL_DLLEXPORT void jl_atexit_hook(int exitcode)
             }
             JL_CATCH {
                 jl_printf(JL_STDERR, "\natexit hook threw an error: ");
-                jl_static_show(JL_STDERR, jl_exception_in_transit);
+                jl_static_show(JL_STDERR, ptls->exception_in_transit);
             }
         }
     }
 
-    jl_gc_run_all_finalizers();
+    jl_gc_run_all_finalizers(ptls);
 
     uv_loop_t *loop = jl_global_event_loop();
 
@@ -298,7 +300,7 @@ JL_DLLEXPORT void jl_atexit_hook(int exitcode)
             //error handling -- continue cleanup, as much as possible
             uv_unref(item->h);
             jl_printf(JL_STDERR, "error during exit cleanup: close: ");
-            jl_static_show(JL_STDERR, jl_exception_in_transit);
+            jl_static_show(JL_STDERR, ptls->exception_in_transit);
             item = next_shutdown_queue_item(item);
         }
     }
@@ -525,7 +527,8 @@ static void jl_resolve_sysimg_location(JL_IMAGE_SEARCH rel)
 
 static void jl_set_io_wait(int v)
 {
-    jl_get_ptls_states()->io_wait = v;
+    jl_ptls_t ptls = jl_get_ptls_states();
+    ptls->io_wait = v;
 }
 
 void _julia_init(JL_IMAGE_SEARCH rel)
@@ -534,6 +537,7 @@ void _julia_init(JL_IMAGE_SEARCH rel)
     // Make sure we finalize the tls callback before starting any threads.
     jl_get_ptls_states_getter();
 #endif
+    jl_ptls_t ptls = jl_get_ptls_states();
     jl_safepoint_init();
     libsupport_init();
     ios_set_io_wait_func = jl_set_io_wait;
@@ -614,7 +618,7 @@ void _julia_init(JL_IMAGE_SEARCH rel)
     jl_init_frontend();
     jl_init_types();
     jl_init_tasks();
-    jl_init_root_task(jl_stack_lo, jl_stack_hi-jl_stack_lo);
+    jl_init_root_task(ptls->stack_lo, ptls->stack_hi-ptls->stack_lo);
 
     init_stdio();
     // libuv stdio cleanup depends on jl_init_tasks() because JL_TRY is used in jl_atexit_hook()
@@ -635,7 +639,7 @@ void _julia_init(JL_IMAGE_SEARCH rel)
         jl_core_module = jl_new_module(jl_symbol("Core"));
         jl_type_type->name->mt->module = jl_core_module;
         jl_top_module = jl_core_module;
-        jl_current_module = jl_core_module;
+        ptls->current_module = jl_core_module;
         jl_init_intrinsic_functions();
         jl_init_primitives();
         jl_get_builtins();
@@ -643,9 +647,9 @@ void _julia_init(JL_IMAGE_SEARCH rel)
         jl_new_main_module();
         jl_internal_main_module = jl_main_module;
 
-        jl_current_module = jl_core_module;
+        ptls->current_module = jl_core_module;
         for (int t = 0;t < jl_n_threads;t++) {
-            jl_all_tls_states[t]->root_task->current_module = jl_current_module;
+            jl_all_tls_states[t]->root_task->current_module = ptls->current_module;
         }
 
         jl_load("boot.jl");
@@ -660,7 +664,7 @@ void _julia_init(JL_IMAGE_SEARCH rel)
         }
         JL_CATCH {
             jl_printf(JL_STDERR, "error during init:\n");
-            jl_static_show(JL_STDERR, jl_exception_in_transit);
+            jl_static_show(JL_STDERR, ptls->exception_in_transit);
             jl_printf(JL_STDERR, "\n");
             jl_exit(1);
         }
@@ -687,9 +691,9 @@ void _julia_init(JL_IMAGE_SEARCH rel)
     if (jl_base_module != NULL) {
         jl_add_standard_imports(jl_main_module);
     }
-    jl_current_module = jl_main_module;
+    ptls->current_module = jl_main_module;
     for (int t = 0;t < jl_n_threads;t++) {
-        jl_all_tls_states[t]->root_task->current_module = jl_current_module;
+        jl_all_tls_states[t]->root_task->current_module = ptls->current_module;
     }
 
     // This needs to be after jl_start_threads
@@ -793,7 +797,7 @@ void jl_get_builtin_hooks(void)
 {
     int t;
     for (t = 0; t < jl_n_threads; t++) {
-        jl_tls_states_t *ptls2 = jl_all_tls_states[t];
+        jl_ptls_t ptls2 = jl_all_tls_states[t];
         ptls2->root_task->tls = jl_nothing;
         ptls2->root_task->consumers = jl_nothing;
         ptls2->root_task->donenotify = jl_nothing;

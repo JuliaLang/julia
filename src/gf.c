@@ -82,6 +82,7 @@ JL_DLLEXPORT void jl_register_linfo_tracer(void (*callback)(jl_lambda_info_t *tr
 
 void jl_call_tracer(tracer_cb callback, jl_value_t *tracee)
 {
+    jl_ptls_t ptls = jl_get_ptls_states();
     int last_in = in_pure_callback;
     JL_TRY {
         in_pure_callback = 1;
@@ -91,7 +92,7 @@ void jl_call_tracer(tracer_cb callback, jl_value_t *tracee)
     JL_CATCH {
         in_pure_callback = last_in;
         jl_printf(JL_STDERR, "WARNING: tracer callback function threw an error:\n");
-        jl_static_show(JL_STDERR, jl_exception_in_transit);
+        jl_static_show(JL_STDERR, ptls->exception_in_transit);
         jl_printf(JL_STDERR, "\n");
         jlbacktrace();
     }
@@ -1087,6 +1088,7 @@ void jl_method_table_insert(jl_methtable_t *mt, jl_method_t *method, jl_tupletyp
 
 void JL_NORETURN jl_method_error_bare(jl_function_t *f, jl_value_t *args)
 {
+    jl_ptls_t ptls = jl_get_ptls_states();
     jl_value_t *fargs[3] = {
         (jl_value_t*)jl_methoderror_type,
         (jl_value_t*)f,
@@ -1099,8 +1101,8 @@ void JL_NORETURN jl_method_error_bare(jl_function_t *f, jl_value_t *args)
         jl_printf((JL_STREAM*)STDERR_FILENO, "A method error occurred before the base MethodError type was defined. Aborting...\n");
         jl_static_show((JL_STREAM*)STDERR_FILENO,(jl_value_t*)f); jl_printf((JL_STREAM*)STDERR_FILENO,"\n");
         jl_static_show((JL_STREAM*)STDERR_FILENO,args); jl_printf((JL_STREAM*)STDERR_FILENO,"\n");
-        jl_bt_size = rec_backtrace(jl_bt_data, JL_MAX_BT_SIZE);
-        jl_critical_error(0, NULL, jl_bt_data, &jl_bt_size);
+        ptls->bt_size = rec_backtrace(ptls->bt_data, JL_MAX_BT_SIZE);
+        jl_critical_error(0, NULL, ptls->bt_data, &ptls->bt_size);
         abort();
     }
     // not reached

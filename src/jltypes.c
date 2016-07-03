@@ -311,6 +311,7 @@ static jl_svec_t *jl_compute_type_union(jl_value_t **types, size_t ntypes)
 
 static jl_value_t *jl_type_union_v(jl_value_t **ts, size_t n)
 {
+    jl_ptls_t ptls = jl_get_ptls_states();
     if (n == 0) return (jl_value_t*)jl_bottom_type;
     size_t i;
     for(i=0; i < n; i++) {
@@ -323,7 +324,9 @@ static jl_value_t *jl_type_union_v(jl_value_t **ts, size_t n)
     if (jl_svec_len(types) == 0) return (jl_value_t*)jl_bottom_type;
     if (jl_svec_len(types) == 1) return jl_svecref(types, 0);
     JL_GC_PUSH1(&types);
-    jl_uniontype_t *tu = (jl_uniontype_t*)newobj((jl_value_t*)jl_uniontype_type,NWORDS(sizeof(jl_uniontype_t)));
+    jl_uniontype_t *tu =
+        (jl_uniontype_t*)jl_gc_alloc(ptls, sizeof(jl_uniontype_t),
+                                     jl_uniontype_type);
     tu->types = types;
     jl_gc_wb(tu, types);
     JL_GC_POP();
@@ -2129,6 +2132,7 @@ static jl_value_t *inst_datatype(jl_datatype_t *dt, jl_svec_t *p, jl_value_t **i
                                  int cacheable, jl_typestack_t *stack,
                                  jl_value_t **env, size_t n)
 {
+    jl_ptls_t ptls = jl_get_ptls_states();
     jl_typestack_t top;
     jl_typename_t *tn = dt->name;
     jl_value_t *tc = tn->primary;
@@ -2245,7 +2249,7 @@ static jl_value_t *inst_datatype(jl_datatype_t *dt, jl_svec_t *p, jl_value_t **i
         ndt->pointerfree = dt->pointerfree;
         ndt->types = jl_emptysvec;
         if (jl_is_datatype_make_singleton(ndt)) {
-            ndt->instance = newstruct(ndt);
+            ndt->instance = jl_gc_alloc(ptls, 0, ndt);
             jl_gc_wb(ndt, ndt->instance);
         }
     }
@@ -2266,7 +2270,7 @@ static jl_value_t *inst_datatype(jl_datatype_t *dt, jl_svec_t *p, jl_value_t **i
             if (cacheable) {
                 jl_compute_field_offsets(ndt);
                 if (jl_is_datatype_make_singleton(ndt)) {
-                    ndt->instance = newstruct(ndt);
+                    ndt->instance = jl_gc_alloc(ptls, 0, ndt);
                     jl_gc_wb(ndt, ndt->instance);
                 }
             }
@@ -2511,6 +2515,7 @@ jl_datatype_t *jl_wrap_Type(jl_value_t *t)
 
 void jl_reinstantiate_inner_types(jl_datatype_t *t) // can throw!
 {
+    jl_ptls_t ptls = jl_get_ptls_states();
     inside_typedef = 0;
     assert(jl_is_datatype(t));
     jl_typestack_t top;
@@ -2550,7 +2555,7 @@ void jl_reinstantiate_inner_types(jl_datatype_t *t) // can throw!
             if (ndt->uid) { // cacheable
                 jl_compute_field_offsets(ndt);
                 if (jl_is_datatype_make_singleton(ndt)) {
-                    ndt->instance = newstruct(ndt);
+                    ndt->instance = jl_gc_alloc(ptls, 0, ndt);
                     jl_gc_wb(ndt, ndt->instance);
                 }
             }
@@ -3432,7 +3437,9 @@ jl_value_t *jl_type_match_morespecific(jl_value_t *a, jl_value_t *b)
 JL_DLLEXPORT jl_tvar_t *jl_new_typevar_(jl_sym_t *name, jl_value_t *lb,
                                         jl_value_t *ub, jl_value_t *b)
 {
-    jl_tvar_t *tv = (jl_tvar_t*)newobj((jl_value_t*)jl_tvar_type, 4);
+    jl_ptls_t ptls = jl_get_ptls_states();
+    jl_tvar_t *tv = (jl_tvar_t*)jl_gc_alloc(ptls, sizeof(jl_tvar_t),
+                                            jl_tvar_type);
     tv->name = name;
     tv->lb = lb;
     tv->ub = ub;
@@ -3456,6 +3463,7 @@ extern void jl_init_int32_int64_cache(void);
 
 void jl_init_types(void)
 {
+    jl_ptls_t ptls = jl_get_ptls_states();
     arraylist_new(&partial_inst, 0);
     // create base objects
     jl_datatype_type = jl_new_uninitialized_datatype(11, 1);
@@ -3465,15 +3473,16 @@ void jl_init_types(void)
     jl_symbol_type = jl_sym_type;
     jl_simplevector_type = jl_new_uninitialized_datatype(1, 1);
     jl_methtable_type = jl_new_uninitialized_datatype(6, 1);
-    jl_nothing = jl_gc_alloc_0w();
+    jl_nothing = jl_gc_alloc(ptls, 0, NULL);
 
-    jl_emptysvec = (jl_svec_t*)newobj((jl_value_t*)jl_simplevector_type, 1);
+    jl_emptysvec = (jl_svec_t*)jl_gc_alloc(ptls, sizeof(void*),
+                                           jl_simplevector_type);
     jl_svec_set_len_unsafe(jl_emptysvec, 0);
 
     jl_any_type = jl_new_abstracttype((jl_value_t*)jl_symbol("Any"), NULL, jl_emptysvec);
     jl_any_type->super = jl_any_type;
     jl_type_type = jl_new_abstracttype((jl_value_t*)jl_symbol("Type"), jl_any_type, jl_emptysvec);
-    jl_type_type_mt = jl_new_method_table(jl_type_type->name->name, jl_current_module);
+    jl_type_type_mt = jl_new_method_table(jl_type_type->name->name, ptls->current_module);
     jl_type_type->name->mt = jl_type_type_mt;
 
     // initialize them. lots of cycles.
@@ -3510,7 +3519,7 @@ void jl_init_types(void)
 
     jl_typename_type->name = jl_new_typename(jl_symbol("TypeName"));
     jl_typename_type->name->primary = (jl_value_t*)jl_typename_type;
-    jl_typename_type->name->mt = jl_new_method_table(jl_typename_type->name->name, jl_current_module);
+    jl_typename_type->name->mt = jl_new_method_table(jl_typename_type->name->name, ptls->current_module);
     jl_typename_type->super = jl_any_type;
     jl_typename_type->parameters = jl_emptysvec;
     jl_typename_type->name->names = jl_svec(8, jl_symbol("name"), jl_symbol("module"),
@@ -3531,7 +3540,7 @@ void jl_init_types(void)
 
     jl_methtable_type->name = jl_new_typename(jl_symbol("MethodTable"));
     jl_methtable_type->name->primary = (jl_value_t*)jl_methtable_type;
-    jl_methtable_type->name->mt = jl_new_method_table(jl_methtable_type->name->name, jl_current_module);
+    jl_methtable_type->name->mt = jl_new_method_table(jl_methtable_type->name->name, ptls->current_module);
     jl_methtable_type->super = jl_any_type;
     jl_methtable_type->parameters = jl_emptysvec;
     jl_methtable_type->name->names = jl_svec(6, jl_symbol("name"), jl_symbol("defs"),
@@ -3550,7 +3559,7 @@ void jl_init_types(void)
 
     jl_sym_type->name = jl_new_typename(jl_symbol("Symbol"));
     jl_sym_type->name->primary = (jl_value_t*)jl_sym_type;
-    jl_sym_type->name->mt = jl_new_method_table(jl_sym_type->name->name, jl_current_module);
+    jl_sym_type->name->mt = jl_new_method_table(jl_sym_type->name->name, ptls->current_module);
     jl_sym_type->super = jl_any_type;
     jl_sym_type->parameters = jl_emptysvec;
     jl_sym_type->name->names = jl_emptysvec;
@@ -3567,7 +3576,7 @@ void jl_init_types(void)
 
     jl_simplevector_type->name = jl_new_typename(jl_symbol("SimpleVector"));
     jl_simplevector_type->name->primary = (jl_value_t*)jl_simplevector_type;
-    jl_simplevector_type->name->mt = jl_new_method_table(jl_simplevector_type->name->name, jl_current_module);
+    jl_simplevector_type->name->mt = jl_new_method_table(jl_simplevector_type->name->name, ptls->current_module);
     jl_simplevector_type->super = jl_any_type;
     jl_simplevector_type->parameters = jl_emptysvec;
     jl_simplevector_type->name->names = jl_svec(1, jl_symbol("length"));
@@ -3627,7 +3636,7 @@ void jl_init_types(void)
 
     jl_tupletype_t *empty_tuple_type = jl_apply_tuple_type(jl_emptysvec);
     empty_tuple_type->uid = jl_assign_type_uid();
-    jl_emptytuple = newstruct(empty_tuple_type);
+    jl_emptytuple = jl_gc_alloc(ptls, 0, empty_tuple_type);
     empty_tuple_type->instance = jl_emptytuple;
 
     // non-primitive definitions follow
