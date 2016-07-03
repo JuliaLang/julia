@@ -140,6 +140,14 @@ Tasks
    * ``Channel()`` - equivalent to ``Channel{Any}(32)``
    * ``Channel(sz::Int)`` equivalent to ``Channel{Any}(sz)``
 
+.. function:: @timeout(t, ex, [msg])
+
+   .. Docstring generated from Julia source
+
+   Set a timeout of ``t`` seconds on the execution time of expression ``ex``\ . Throws ``TimeoutException`` with optional error message ``msg`` if the timeout is triggered.
+
+   Be aware that the exception raised by the timeout will not abort the evaluation of ``ex``\ .
+
 General Parallel Computing Support
 ----------------------------------
 
