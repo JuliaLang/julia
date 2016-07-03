@@ -532,29 +532,37 @@ ExecutionEngine *jl_ExecutionEngine;
 #endif
 
 // MSVC's link.exe requires each function declaration to have a Comdat section
-// rather than litter the code with conditionals,
+// So rather than litter the code with conditionals,
 // all global values that get emitted call this function
 // and it decides whether the definition needs a Comdat section and adds the appropriate declaration
 // TODO: consider moving this into jl_add_to_shadow or jl_dump_shadow? the JIT doesn't care, so most calls are now no-ops
 template<class T> // for GlobalObject's
 static T *addComdat(T *G)
 {
-#if defined(_OS_WINDOWS_) && defined(_COMPILER_MICROSOFT_)
+#if defined(_OS_WINDOWS_) && defined(LLVM35)
     if (imaging_mode && !G->isDeclaration()) {
-#ifdef LLVM35
         // Add comdat information to make MSVC link.exe happy
+        // it's valid to emit this for ld.exe too,
+        // but makes it very slow to link for no benefit
         if (G->getParent() == shadow_output) {
+#if defined(_COMPILER_MICROSOFT_)
             Comdat *jl_Comdat = G->getParent()->getOrInsertComdat(G->getName());
             // ELF only supports Comdat::Any
             jl_Comdat->setSelectionKind(Comdat::NoDuplicates);
             G->setComdat(jl_Comdat);
+#endif
+#if defined(_CPU_X86_64_)
+            // Add unwind exception personalities to functions to handle async exceptions
+            assert(!juliapersonality_func || juliapersonality_func->getParent() == shadow_output);
+            if (Function *F = dyn_cast<Function>(G))
+                F->setPersonalityFn(juliapersonality_func);
+#endif
         }
         // add __declspec(dllexport) to everything marked for export
         if (G->getLinkage() == GlobalValue::ExternalLinkage)
             G->setDLLStorageClass(GlobalValue::DLLExportStorageClass);
         else
             G->setDLLStorageClass(GlobalValue::DefaultStorageClass);
-#endif
     }
 #endif
     return G;
