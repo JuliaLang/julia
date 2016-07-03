@@ -637,7 +637,7 @@ ISX86:=0
 endif
 
 # If we are running on powerpc64 or ppc64, set certain options automatically
-ifneq (,$(filter $(ARCH), powerpc64 ppc64))
+ifneq (,$(filter $(ARCH), powerpc64 ppc64le))
 JCFLAGS += -fsigned-char
 
 override LLVM_VER:=3.8.0
