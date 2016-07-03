@@ -45,8 +45,8 @@ isnot(x,y) = !is(x,y)
 @test !(Type{Rational{Int}} <: Type{Rational})
 @test Tuple{} <: Tuple{Vararg}
 @test Tuple{} <: NTuple{TypeVar(:N,true)}
-@test Type{Tuple{}} <: Type{Tuple{Vararg}}
-@test Type{Tuple{}} <: Type{NTuple{TypeVar(:N,true)}}
+@test !(Type{Tuple{}} <: Type{Tuple{Vararg}})
+@test !(Type{Tuple{}} <: Type{NTuple{TypeVar(:N,true)}})
 let T = TypeVar(:T,true)
     @testintersect(Array{Bottom},AbstractArray{T}, Bottom, isnot)
     @testintersect(Tuple{Type{Ptr{UInt8}},Ptr{Bottom}},
@@ -306,6 +306,9 @@ nttest1{n}(x::NTuple{n,Int}) = n
 @test !(NTuple{TypeVar(:T),Int32} <: Tuple{Int32,Vararg{Int32}})
 @test Tuple{Vararg{Int32}} <: NTuple{TypeVar(:T),Int32}
 @test Tuple{Int32,Vararg{Int32}} <: NTuple{TypeVar(:T),Int32}
+
+# #17198
+@test_throws MethodError convert(Tuple{Int}, (1.0, 2.0, 3.0))
 
 # type declarations
 
