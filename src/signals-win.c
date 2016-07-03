@@ -95,7 +95,8 @@ void restore_signals(void)
     // turn on ctrl-c handler
     SetConsoleCtrlHandler(NULL, 0);
     // see if SetThreadStackGuarantee exists
-    pSetThreadStackGuarantee = (BOOL (*)(PULONG)) jl_dlsym_e(jl_kernel32_handle, "SetThreadStackGuarantee");
+    pSetThreadStackGuarantee = (BOOL (*)(PULONG)) jl_dlsym_e(jl_kernel32_handle,
+        "SetThreadStackGuarantee");
 }
 
 void jl_throw_in_ctx(jl_value_t *excpt, CONTEXT *ctxThread, int bt)
@@ -186,10 +187,12 @@ static LONG WINAPI _exception_handler(struct _EXCEPTION_POINTERS *ExceptionInfo,
         switch (ExceptionInfo->ExceptionRecord->ExceptionCode) {
             case EXCEPTION_INT_DIVIDE_BY_ZERO:
                 fpreset();
-                jl_throw_in_ctx(jl_diverror_exception, ExceptionInfo->ContextRecord,in_ctx);
+                jl_throw_in_ctx(jl_diverror_exception,
+                    ExceptionInfo->ContextRecord,in_ctx);
                 return EXCEPTION_CONTINUE_EXECUTION;
             case EXCEPTION_STACK_OVERFLOW:
-                jl_throw_in_ctx(jl_stackovf_exception, ExceptionInfo->ContextRecord,in_ctx&&pSetThreadStackGuarantee);
+                jl_throw_in_ctx(jl_stackovf_exception,
+                    ExceptionInfo->ContextRecord,in_ctx&&pSetThreadStackGuarantee);
                 return EXCEPTION_CONTINUE_EXECUTION;
             case EXCEPTION_ACCESS_VIOLATION:
                 if (jl_addr_is_safepoint(ExceptionInfo->ExceptionRecord->ExceptionInformation[1])) {
@@ -210,7 +213,8 @@ static LONG WINAPI _exception_handler(struct _EXCEPTION_POINTERS *ExceptionInfo,
                     return EXCEPTION_CONTINUE_EXECUTION;
                 }
                 if (ExceptionInfo->ExceptionRecord->ExceptionInformation[0] == 1) { // writing to read-only memory (e.g. mmap)
-                    jl_throw_in_ctx(jl_readonlymemory_exception, ExceptionInfo->ContextRecord,in_ctx);
+                    jl_throw_in_ctx(jl_readonlymemory_exception,
+                        ExceptionInfo->ContextRecord,in_ctx);
                     return EXCEPTION_CONTINUE_EXECUTION;
                 }
         }
@@ -278,7 +282,12 @@ static LONG WINAPI exception_handler(struct _EXCEPTION_POINTERS *ExceptionInfo)
 }
 
 #if defined(_CPU_X86_64_)
-JL_DLLEXPORT EXCEPTION_DISPOSITION __julia_personality(PEXCEPTION_RECORD ExceptionRecord, void *EstablisherFrame, PCONTEXT ContextRecord, void *DispatcherContext) {
+JL_DLLEXPORT EXCEPTION_DISPOSITION __julia_personality(
+        PEXCEPTION_RECORD ExceptionRecord,
+        void *EstablisherFrame,
+        PCONTEXT ContextRecord,
+        void *DispatcherContext)
+{
     EXCEPTION_POINTERS ExceptionInfo;
     ExceptionInfo.ExceptionRecord = ExceptionRecord;
     ExceptionInfo.ContextRecord = ContextRecord;
