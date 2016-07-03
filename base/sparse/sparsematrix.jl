@@ -1308,12 +1308,12 @@ end
 """
 Helper macro for the unary broadcast definitions below. Takes parent method `fp` and a set
 of desired child methods `fcs`, and builds an expression defining each of the child methods
-such that `fc(A::SparseMatrixCSC) = fp(fc, A)`.
+such that `broadcast(::typeof(fc), A::SparseMatrixCSC) = fp(fc, A)`.
 """
 macro _enumerate_childmethods(fp, fcs...)
     fcexps = Expr(:block)
     for fc in fcs
-        push!(fcexps.args, :( $(esc(fc))(A::SparseMatrixCSC) = $(esc(fp))($(esc(fc)), A) ) )
+        push!(fcexps.args, :( broadcast(::typeof($(esc(fc))), A::SparseMatrixCSC) = $(esc(fp))($(esc(fc)), A) ) )
     end
     return fcexps
 end
@@ -1352,10 +1352,10 @@ end
     sin, sinh, sind, asin, asinh, asind,
     tan, tanh, tand, atan, atanh, atand,
     sinpi, cosc, ceil, floor, trunc, round)
-real(A::SparseMatrixCSC) = copy(A)
-imag{Tv,Ti}(A::SparseMatrixCSC{Tv,Ti}) = spzeros(Tv, Ti, A.m, A.n)
-real{TTv}(A::SparseMatrixCSC{Complex{TTv}}) = _broadcast_unary_nz2z_z2z_T(real, A, TTv)
-imag{TTv}(A::SparseMatrixCSC{Complex{TTv}}) = _broadcast_unary_nz2z_z2z_T(imag, A, TTv)
+broadcast(::typeof(real), A::SparseMatrixCSC) = copy(A)
+broadcast{Tv,Ti}(::typeof(imag), A::SparseMatrixCSC{Tv,Ti}) = spzeros(Tv, Ti, A.m, A.n)
+broadcast{TTv}(::typeof(real), A::SparseMatrixCSC{Complex{TTv}}) = _broadcast_unary_nz2z_z2z_T(real, A, TTv)
+broadcast{TTv}(::typeof(imag), A::SparseMatrixCSC{Complex{TTv}}) = _broadcast_unary_nz2z_z2z_T(imag, A, TTv)
 ceil{To}(::Type{To}, A::SparseMatrixCSC) = _broadcast_unary_nz2z_z2z_T(ceil, A, To)
 floor{To}(::Type{To}, A::SparseMatrixCSC) = _broadcast_unary_nz2z_z2z_T(floor, A, To)
 trunc{To}(::Type{To}, A::SparseMatrixCSC) = _broadcast_unary_nz2z_z2z_T(trunc, A, To)
@@ -1382,10 +1382,10 @@ function _broadcast_unary_nz2nz_z2z{Tv}(f::Function, A::SparseMatrixCSC{Tv})
 end
 @_enumerate_childmethods(_broadcast_unary_nz2nz_z2z,
     log1p, expm1, abs, abs2, conj)
-abs2{TTv}(A::SparseMatrixCSC{Complex{TTv}}) = _broadcast_unary_nz2nz_z2z_T(abs2, A, TTv)
-abs{TTv}(A::SparseMatrixCSC{Complex{TTv}}) = _broadcast_unary_nz2nz_z2z_T(abs, A, TTv)
-abs{TTv<:Integer}(A::SparseMatrixCSC{Complex{TTv}}) = _broadcast_unary_nz2nz_z2z_T(abs, A, Float64)
-abs{TTv<:BigInt}(A::SparseMatrixCSC{Complex{TTv}}) = _broadcast_unary_nz2nz_z2z_T(abs, A, BigFloat)
+broadcast{TTv}(::typeof(abs2), A::SparseMatrixCSC{Complex{TTv}}) = _broadcast_unary_nz2nz_z2z_T(abs2, A, TTv)
+broadcast{TTv}(::typeof(abs), A::SparseMatrixCSC{Complex{TTv}}) = _broadcast_unary_nz2nz_z2z_T(abs, A, TTv)
+broadcast{TTv<:Integer}(::typeof(abs), A::SparseMatrixCSC{Complex{TTv}}) = _broadcast_unary_nz2nz_z2z_T(abs, A, Float64)
+broadcast{TTv<:BigInt}(::typeof(abs), A::SparseMatrixCSC{Complex{TTv}}) = _broadcast_unary_nz2nz_z2z_T(abs, A, BigFloat)
 function conj!(A::SparseMatrixCSC)
     @inbounds @simd for k in 1:nnz(A)
         A.nzval[k] = conj(A.nzval[k])
@@ -1718,7 +1718,7 @@ end # macro
 (.^)(A::SparseMatrixCSC, B::Number) =
     B==0 ? sparse(ones(typeof(one(eltype(A)).^B), A.m, A.n)) :
            SparseMatrixCSC(A.m, A.n, copy(A.colptr), copy(A.rowval), A.nzval .^ B)
-(.^)(::Irrational{:e}, B::SparseMatrixCSC) = exp(B)
+(.^)(::Irrational{:e}, B::SparseMatrixCSC) = exp.(B)
 (.^)(A::Number, B::SparseMatrixCSC) = (.^)(A, full(B))
 (.^)(A::SparseMatrixCSC, B::Array) = (.^)(full(A), B)
 (.^)(A::Array, B::SparseMatrixCSC) = (.^)(A, full(B))
