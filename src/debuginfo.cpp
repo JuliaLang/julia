@@ -128,9 +128,6 @@ void jl_add_linfo_in_flight(StringRef name, jl_lambda_info_t *linfo, const DataL
 }
 
 #if defined(_OS_WINDOWS_)
-#if defined(_CPU_X86_64_)
-extern "C" EXCEPTION_DISPOSITION _seh_exception_handler(PEXCEPTION_RECORD ExceptionRecord,void *EstablisherFrame, PCONTEXT ContextRecord, void *DispatcherContext);
-#endif
 static void create_PRUNTIME_FUNCTION(uint8_t *Code, size_t Size, StringRef fnname,
         uint8_t *Section, size_t Allocated, uint8_t *UnwindData)
 {
@@ -143,7 +140,7 @@ static void create_PRUNTIME_FUNCTION(uint8_t *Code, size_t Size, StringRef fnnam
     if (!catchjmp[0]) {
         catchjmp[0] = 0x48;
         catchjmp[1] = 0xb8; // mov RAX, QWORD PTR [...]
-        *(uint64_t*)(&catchjmp[2]) = (uint64_t)&_seh_exception_handler;
+        *(uint64_t*)(&catchjmp[2]) = (uint64_t)&__julia_personality;
         catchjmp[10] = 0xff;
         catchjmp[11] = 0xe0; // jmp RAX
         UnwindData[0] = 0x09; // version info, UNW_FLAG_EHANDLER
@@ -421,9 +418,9 @@ public:
         assert(SectionAddrCheck);
         assert(SectionLoadOffset != 1);
         catchjmp[SectionLoadOffset] = 0x48;
-        catchjmp[SectionLoadOffset + 1] = 0xb8; // mov RAX, QWORD PTR [&_seh_exception_handle]
+        catchjmp[SectionLoadOffset + 1] = 0xb8; // mov RAX, QWORD PTR [&__julia_personality]
         *(uint64_t*)(&catchjmp[SectionLoadOffset + 2]) =
-            (uint64_t)&_seh_exception_handler;
+            (uint64_t)&__julia_personality;
         catchjmp[SectionLoadOffset + 10] = 0xff;
         catchjmp[SectionLoadOffset + 11] = 0xe0; // jmp RAX
         UnwindData[SectionLoadOffset] = 0x09; // version info, UNW_FLAG_EHANDLER
