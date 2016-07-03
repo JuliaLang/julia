@@ -33,7 +33,7 @@ function choosetests(choices = [])
         "markdown", "base64", "serialize", "misc", "threads",
         "enums", "cmdlineargs", "i18n", "workspace", "libdl", "int",
         "checked", "intset", "floatfuncs", "compile", "parallel", "inline",
-        "boundscheck", "error", "ambiguous", "offsetarray"
+        "boundscheck", "error", "ambiguous", "offsetarray", "cartesian"
     ]
 
     if Base.USE_GPL_LIBS
