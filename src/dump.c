@@ -1311,6 +1311,7 @@ static jl_value_t *jl_deserialize_value(ios_t *s, jl_value_t **loc)
 
 static jl_value_t *jl_deserialize_value_(ios_t *s, jl_value_t *vtag, jl_value_t **loc)
 {
+    jl_ptls_t ptls = jl_get_ptls_states();
     int usetable = (mode != MODE_AST);
 
     size_t i;
@@ -1422,7 +1423,8 @@ static jl_value_t *jl_deserialize_value_(ios_t *s, jl_value_t *vtag, jl_value_t 
         return (jl_value_t*)e;
     }
     else if (vtag == (jl_value_t*)jl_tvar_type) {
-        jl_tvar_t *tv = (jl_tvar_t*)newobj((jl_value_t*)jl_tvar_type, NWORDS(sizeof(jl_tvar_t)));
+        jl_tvar_t *tv = (jl_tvar_t*)jl_gc_alloc(ptls, sizeof(jl_tvar_t),
+                                                jl_tvar_type);
         if (usetable)
             arraylist_push(&backref_list, tv);
         tv->name = (jl_sym_t*)jl_deserialize_value(s, NULL);
@@ -1436,8 +1438,8 @@ static jl_value_t *jl_deserialize_value_(ios_t *s, jl_value_t *vtag, jl_value_t 
     }
     else if (vtag == (jl_value_t*)jl_method_type) {
         jl_method_t *m =
-            (jl_method_t*)newobj((jl_value_t*)jl_method_type,
-                                 NWORDS(sizeof(jl_method_t)));
+            (jl_method_t*)jl_gc_alloc(ptls, sizeof(jl_method_t),
+                                      jl_method_type);
         if (usetable)
             arraylist_push(&backref_list, m);
         m->specializations.unknown = jl_deserialize_value(s, (jl_value_t**)&m->specializations);
@@ -1473,8 +1475,8 @@ static jl_value_t *jl_deserialize_value_(ios_t *s, jl_value_t *vtag, jl_value_t 
     }
     else if (vtag == (jl_value_t*)jl_lambda_info_type) {
         jl_lambda_info_t *li =
-            (jl_lambda_info_t*)newobj((jl_value_t*)jl_lambda_info_type,
-                                      NWORDS(sizeof(jl_lambda_info_t)));
+            (jl_lambda_info_t*)jl_gc_alloc(ptls, sizeof(jl_lambda_info_t),
+                                           jl_lambda_info_type);
         if (usetable)
             arraylist_push(&backref_list, li);
         li->code = jl_deserialize_value(s, &li->code); jl_gc_wb(li, li->code);
@@ -1606,7 +1608,7 @@ static jl_value_t *jl_deserialize_value_(ios_t *s, jl_value_t *vtag, jl_value_t 
     }
     else if (vtag == (jl_value_t*)jl_datatype_type || vtag == (jl_value_t*)SmallDataType_tag) {
         int32_t sz = (vtag == (jl_value_t*)SmallDataType_tag ? read_uint8(s) : read_int32(s));
-        jl_value_t *v = jl_gc_allocobj(sz);
+        jl_value_t *v = jl_gc_alloc(ptls, sz, NULL);
         int pos = backref_list.len;
         if (usetable)
             arraylist_push(&backref_list, v);
@@ -1666,7 +1668,7 @@ static jl_value_t *jl_deserialize_value_(ios_t *s, jl_value_t *vtag, jl_value_t 
             backref_list.items[pos] = dt->instance;
             return dt->instance;
         }
-        jl_value_t *v = (jl_value_t*)jl_gc_alloc_0w();
+        jl_value_t *v = (jl_value_t*)jl_gc_alloc(ptls, 0, NULL);
         if (usetable) {
             uintptr_t pos = backref_list.len;
             arraylist_push(&backref_list, (void*)v);
@@ -1796,7 +1798,9 @@ static void jl_finalize_serializer(ios_t *f) {
 }
 
 void jl_typemap_rehash(union jl_typemap_t ml, int8_t offs);
-static void jl_reinit_item(ios_t *f, jl_value_t *v, int how, arraylist_t *tracee_list) {
+static void jl_reinit_item(ios_t *f, jl_value_t *v, int how, arraylist_t *tracee_list)
+{
+    jl_ptls_t ptls = jl_get_ptls_states();
     JL_TRY {
         switch (how) {
             case 1: { // rehash ObjectIdDict
@@ -1846,11 +1850,13 @@ static void jl_reinit_item(ios_t *f, jl_value_t *v, int how, arraylist_t *tracee
         jl_printf(JL_STDERR, "WARNING: error while reinitializing value ");
         jl_static_show(JL_STDERR, v);
         jl_printf(JL_STDERR, ":\n");
-        jl_static_show(JL_STDERR, jl_exception_in_transit);
+        jl_static_show(JL_STDERR, ptls->exception_in_transit);
         jl_printf(JL_STDERR, "\n");
     }
 }
-static jl_array_t *jl_finalize_deserializer(ios_t *f, arraylist_t *tracee_list) {
+
+static jl_array_t *jl_finalize_deserializer(ios_t *f, arraylist_t *tracee_list)
+{
     jl_array_t *init_order = NULL;
     if (mode != MODE_MODULE)
         init_order = (jl_array_t*)jl_deserialize_value(f, NULL);
@@ -1984,6 +1990,7 @@ JL_DLLEXPORT void jl_preload_sysimg_so(const char *fname)
 
 static void jl_restore_system_image_from_stream(ios_t *f)
 {
+    jl_ptls_t ptls = jl_get_ptls_states();
     JL_LOCK(&dump_lock); // Might GC
     int en = jl_gc_enable(0);
     DUMP_MODES last_mode = mode;
@@ -2011,7 +2018,7 @@ static void jl_restore_system_image_from_stream(ios_t *f)
                                                  jl_symbol("Core"));
     jl_base_module = (jl_module_t*)jl_get_global(jl_main_module,
                                                  jl_symbol("Base"));
-    jl_current_module = jl_base_module; // run start_image in Base
+    ptls->current_module = jl_base_module; // run start_image in Base
 
     // ensure everything in deser_tag is reassociated with its GlobalValue
     for (i = 2; i < 255; i++) {
@@ -2284,14 +2291,14 @@ static void jl_recache_types(void)
         }
         assert(dt);
         if (t != dt) {
-            jl_set_typeof(dt, (jl_value_t*)(intptr_t)0x10); // invalidate the old value to help catch errors
+            jl_set_typeof(dt, (void*)(intptr_t)0x10); // invalidate the old value to help catch errors
             if ((jl_value_t*)dt == o) {
                 if (loc) *loc = (jl_value_t*)t;
                 if (offs > 0) backref_list.items[offs] = t;
             }
         }
         if (t->instance != v) {
-            jl_set_typeof(v, (jl_value_t*)(intptr_t)0x20); // invalidate the old value to help catch errors
+            jl_set_typeof(v, (void*)(intptr_t)0x20); // invalidate the old value to help catch errors
             if (v == o) {
                 *loc = t->instance;
                 if (offs > 0) backref_list.items[offs] = t->instance;
@@ -2392,6 +2399,7 @@ JL_DLLEXPORT jl_value_t *jl_restore_incremental(const char *fname)
 
 void jl_init_serializer(void)
 {
+    jl_ptls_t ptls = jl_get_ptls_states();
     htable_new(&ser_tag, 0);
     htable_new(&common_symbol_tag, 0);
     htable_new(&fptr_to_id, sizeof(id_to_fptrs)/sizeof(*id_to_fptrs));
@@ -2474,7 +2482,7 @@ void jl_init_serializer(void)
                      jl_gotonode_type->name, jl_quotenode_type->name,
                      jl_globalref_type->name,
 
-                     jl_root_task,
+                     ptls->root_task,
 
                      NULL };
 

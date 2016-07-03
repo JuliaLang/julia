@@ -136,7 +136,7 @@ JL_DLLEXPORT void *jl_uv_write_handle(uv_write_t *req) { return req->handle; }
 
 JL_DLLEXPORT int jl_run_once(uv_loop_t *loop)
 {
-    jl_tls_states_t *ptls = jl_get_ptls_states();
+    jl_ptls_t ptls = jl_get_ptls_states();
     if (loop) {
         loop->stop_flag = 0;
         jl_gc_safepoint_(ptls);
@@ -147,7 +147,7 @@ JL_DLLEXPORT int jl_run_once(uv_loop_t *loop)
 
 JL_DLLEXPORT void jl_run_event_loop(uv_loop_t *loop)
 {
-    jl_tls_states_t *ptls = jl_get_ptls_states();
+    jl_ptls_t ptls = jl_get_ptls_states();
     if (loop) {
         loop->stop_flag = 0;
         jl_gc_safepoint_(ptls);
@@ -157,7 +157,7 @@ JL_DLLEXPORT void jl_run_event_loop(uv_loop_t *loop)
 
 JL_DLLEXPORT int jl_process_events(uv_loop_t *loop)
 {
-    jl_tls_states_t *ptls = jl_get_ptls_states();
+    jl_ptls_t ptls = jl_get_ptls_states();
     if (loop) {
         loop->stop_flag = 0;
         jl_gc_safepoint_(ptls);
@@ -351,7 +351,8 @@ JL_DLLEXPORT int jl_fs_chown(char *path, int uid, int gid)
 JL_DLLEXPORT int jl_fs_write(int handle, const char *data, size_t len,
                              int64_t offset)
 {
-    if (jl_safe_restore)
+    jl_ptls_t ptls = jl_get_ptls_states();
+    if (ptls->safe_restore)
         return write(handle, data, len);
     uv_fs_t req;
     uv_buf_t buf[1];

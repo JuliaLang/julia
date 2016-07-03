@@ -826,8 +826,10 @@ static void jl_typemap_list_insert_sorted(jl_typemap_entry_t **pml, jl_value_t *
 
 static jl_typemap_level_t *jl_new_typemap_level(void)
 {
-    jl_typemap_level_t *cache = (jl_typemap_level_t*)jl_gc_allocobj(sizeof(jl_typemap_level_t));
-    jl_set_typeof(cache, jl_typemap_level_type);
+    jl_ptls_t ptls = jl_get_ptls_states();
+    jl_typemap_level_t *cache =
+        (jl_typemap_level_t*)jl_gc_alloc(ptls, sizeof(jl_typemap_level_t),
+                                         jl_typemap_level_type);
     cache->key = NULL;
     cache->linear = (jl_typemap_entry_t*)jl_nothing;
     cache->any.unknown = jl_nothing;
@@ -942,6 +944,7 @@ jl_typemap_entry_t *jl_typemap_insert(union jl_typemap_t *cache, jl_value_t *par
                                       const struct jl_typemap_info *tparams,
                                       jl_value_t **overwritten)
 {
+    jl_ptls_t ptls = jl_get_ptls_states();
     assert(jl_is_tuple_type(type));
     if (!simpletype) {
         simpletype = (jl_tupletype_t*)jl_nothing;
@@ -973,8 +976,9 @@ jl_typemap_entry_t *jl_typemap_insert(union jl_typemap_t *cache, jl_value_t *par
     if (overwritten != NULL)
         *overwritten = NULL;
 
-    jl_typemap_entry_t *newrec = (jl_typemap_entry_t*)jl_gc_allocobj(sizeof(jl_typemap_entry_t));
-    jl_set_typeof(newrec, jl_typemap_entry_type);
+    jl_typemap_entry_t *newrec =
+        (jl_typemap_entry_t*)jl_gc_alloc(ptls, sizeof(jl_typemap_entry_t),
+                                         jl_typemap_entry_type);
     newrec->sig = type;
     newrec->simplesig = simpletype;
     newrec->tvars = tvars;

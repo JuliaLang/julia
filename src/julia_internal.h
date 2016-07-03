@@ -32,46 +32,124 @@ typedef void (*tracer_cb)(jl_value_t *tracee);
 void jl_call_tracer(tracer_cb callback, jl_value_t *tracee);
 
 extern size_t jl_page_size;
-#define jl_stack_lo (jl_get_ptls_states()->stack_lo)
-#define jl_stack_hi (jl_get_ptls_states()->stack_hi)
 extern jl_function_t *jl_typeinf_func;
 #if defined(JL_USE_INTEL_JITEVENTS)
 extern unsigned sig_stack_size;
 #endif
-#define jl_safe_restore jl_get_ptls_states()->safe_restore
 
 JL_DLLEXPORT extern int jl_lineno;
 JL_DLLEXPORT extern const char *jl_filename;
 
-JL_DLLEXPORT void *jl_gc_pool_alloc(jl_tls_states_t *ptls, jl_gc_pool_t *p,
-                                    int osize, int end_offset);
-JL_DLLEXPORT jl_value_t *jl_gc_big_alloc(jl_tls_states_t *ptls, size_t allocsz);
+JL_DLLEXPORT jl_value_t *jl_gc_pool_alloc(jl_ptls_t ptls, jl_gc_pool_t *p,
+                                          int osize, int end_offset);
+JL_DLLEXPORT jl_value_t *jl_gc_big_alloc(jl_ptls_t ptls, size_t allocsz);
 int jl_gc_classify_pools(size_t sz, int *osize, int *end_offset);
 
-STATIC_INLINE jl_value_t *newobj(jl_value_t *type, size_t nfields)
+// pools are 16376 bytes large (GC_POOL_SZ - GC_PAGE_OFFSET)
+static const int jl_gc_sizeclasses[JL_GC_N_POOLS] = {
+#ifdef _P64
+    8,
+#else
+    4, 8, 12,
+#endif
+
+    // 16 pools at 16-byte spacing
+    16, 32, 48, 64, 80, 96, 112, 128,
+    144, 160, 176, 192, 208, 224, 240, 256,
+
+    // the following tables are computed for maximum packing efficiency via the formula:
+    // sz=(div(2^14-8,rng)÷16)*16; hcat(sz, (2^14-8)÷sz, 2^14-(2^14-8)÷sz.*sz)'
+
+    // rng = 60:-4:32 (8 pools)
+    272, 288, 304, 336, 368, 400, 448, 496,
+//   60,  56,  53,  48,  44,  40,  36,  33, /pool
+//   64, 256, 272, 256, 192, 384, 256,  16, bytes lost
+
+    // rng = 30:-2:16 (8 pools)
+    544, 576, 624, 672, 736, 816, 896, 1008,
+//   30,  28,  26,  24,  22,  20,  18,  16, /pool
+//   64, 256, 160, 256, 192,  64, 256, 256, bytes lost
+
+    // rng = 15:-1:8 (8 pools)
+    1088, 1168, 1248, 1360, 1488, 1632, 1808, 2032
+//    15,   14,   13,   12,   11,   10,    9,    8, /pool
+//    64,   32,  160,   64,   16,   64,  112,  128, bytes lost
+};
+
+STATIC_INLINE int JL_CONST_FUNC jl_gc_szclass(size_t sz)
 {
-    jl_value_t *jv = NULL;
-    switch (nfields) {
-    case 0:
-        jv = (jl_value_t*)jl_gc_alloc_0w(); break;
-    case 1:
-        jv = (jl_value_t*)jl_gc_alloc_1w(); break;
-    case 2:
-        jv = (jl_value_t*)jl_gc_alloc_2w(); break;
-    case 3:
-        jv = (jl_value_t*)jl_gc_alloc_3w(); break;
-    default:
-        jv = (jl_value_t*)jl_gc_allocobj(nfields * sizeof(void*));
-    }
-    jl_set_typeof(jv, type);
-    return jv;
+#ifdef _P64
+    if (sz <=    8)
+        return 0;
+    const int N = 0;
+#else
+    if (sz <=   12)
+        return (sz + 3) / 4 - 1;
+    const int N = 2;
+#endif
+    if (sz <=  256)
+        return (sz + 15) / 16 + N;
+    if (sz <=  496)
+        return 16 - 16376 / 4 / LLT_ALIGN(sz, 16 * 4) + 16 + N;
+    if (sz <= 1008)
+        return 16 - 16376 / 2 / LLT_ALIGN(sz, 16 * 2) + 24 + N;
+    return     16 - 16376 / 1 / LLT_ALIGN(sz, 16 * 1) + 32 + N;
 }
 
-STATIC_INLINE jl_value_t *newstruct(jl_datatype_t *type)
+#ifdef __GNUC__
+#  define jl_is_constexpr(e) __builtin_constant_p(e)
+#else
+#  define jl_is_constexpr(e) (0)
+#endif
+#define JL_SMALL_BYTE_ALIGNMENT 16
+#define JL_CACHE_BYTE_ALIGNMENT 64
+#define GC_POOL_END_OFS(osize) ((((GC_PAGE_SZ - GC_PAGE_OFFSET)/(osize)) - 1)*(osize) + GC_PAGE_OFFSET)
+#define GC_PAGE_LG2 14 // log2(size of a page)
+#define GC_PAGE_SZ (1 << GC_PAGE_LG2) // 16k
+#define GC_PAGE_OFFSET (JL_SMALL_BYTE_ALIGNMENT - (sizeof(jl_taggedvalue_t) % JL_SMALL_BYTE_ALIGNMENT))
+#define GC_MAX_SZCLASS (2032-sizeof(void*))
+
+STATIC_INLINE jl_value_t *jl_gc_alloc_(jl_ptls_t ptls, size_t sz, void *ty)
 {
-    jl_value_t *jv = (jl_value_t*)jl_gc_allocobj(type->size);
-    jl_set_typeof(jv, type);
-    return jv;
+    const size_t allocsz = sz + sizeof(jl_taggedvalue_t);
+    if (allocsz < sz) // overflow in adding offs, size was "negative"
+        jl_throw(jl_memory_exception);
+    jl_value_t *v;
+    if (allocsz <= GC_MAX_SZCLASS + sizeof(jl_taggedvalue_t)) {
+        int pool_id = jl_gc_szclass(allocsz);
+        jl_gc_pool_t *p = &ptls->heap.norm_pools[pool_id];
+        int osize;
+        int endoff;
+        if (jl_is_constexpr(allocsz)) {
+            osize = jl_gc_sizeclasses[pool_id];
+            endoff = GC_POOL_END_OFS(osize);
+        }
+        else {
+            osize = p->osize;
+            endoff = p->end_offset;
+        }
+        v = jl_gc_pool_alloc(ptls, p, osize, endoff);
+    }
+    else {
+        v = jl_gc_big_alloc(ptls, allocsz);
+    }
+    jl_set_typeof(v, ty);
+    return v;
+}
+JL_DLLEXPORT jl_value_t *jl_gc_alloc(jl_ptls_t ptls, size_t sz, void *ty);
+// On GCC, only inline when sz is constant
+#ifdef __GNUC__
+#  define jl_gc_alloc(ptls, sz, ty)                             \
+    (__builtin_constant_p(sz) ? jl_gc_alloc_(ptls, sz, ty) :    \
+     (jl_gc_alloc)(ptls, sz, ty))
+#else
+#  define jl_gc_alloc(ptls, sz) jl_gc_alloc_(ptls, sz, ty)
+#endif
+
+#define jl_buff_tag ((uintptr_t)0x4eade800)
+STATIC_INLINE void *jl_gc_alloc_buf(jl_ptls_t ptls, size_t sz)
+{
+    return jl_gc_alloc(ptls, sz, (void*)jl_buff_tag);
 }
 
 jl_lambda_info_t *jl_type_infer(jl_lambda_info_t *li, int force);
@@ -103,16 +181,14 @@ jl_tupletype_t *jl_argtype_with_function(jl_function_t *f, jl_tupletype_t *types
 
 JL_DLLEXPORT jl_value_t *jl_apply_2va(jl_value_t *f, jl_value_t **args, uint32_t nargs);
 
-#define GC_MAX_SZCLASS (2032-sizeof(void*))
-void jl_gc_setmark(jl_value_t *v);
+void jl_gc_setmark(jl_ptls_t ptls, jl_value_t *v);
 void jl_gc_sync_total_bytes(void);
-void jl_gc_track_malloced_array(jl_array_t *a);
+void jl_gc_track_malloced_array(jl_ptls_t ptls, jl_array_t *a);
 void jl_gc_count_allocd(size_t sz);
-void jl_gc_run_all_finalizers(void);
-void *allocb(size_t sz);
+void jl_gc_run_all_finalizers(jl_ptls_t ptls);
 
 void gc_queue_binding(jl_binding_t *bnd);
-void gc_setmark_buf(void *buf, int, size_t);
+void gc_setmark_buf(jl_ptls_t ptls, void *buf, int, size_t);
 
 STATIC_INLINE void jl_gc_wb_binding(jl_binding_t *bnd, void *val) // val isa jl_value_t*
 {
@@ -125,7 +201,8 @@ STATIC_INLINE void jl_gc_wb_buf(void *parent, void *bufptr, size_t minsz) // par
 {
     // if parent is marked and buf is not
     if (__unlikely(jl_astaggedvalue(parent)->bits.gc & 1)) {
-        gc_setmark_buf(bufptr, 3, minsz);
+        jl_ptls_t ptls = jl_get_ptls_states();
+        gc_setmark_buf(ptls, bufptr, 3, minsz);
     }
 }
 
@@ -155,7 +232,7 @@ JL_CALLABLE(jl_f_intrinsic_call);
 extern jl_function_t *jl_unprotect_stack_func;
 void jl_install_default_signal_handlers(void);
 void restore_signals(void);
-void jl_install_thread_signal_handler(void);
+void jl_install_thread_signal_handler(jl_ptls_t ptls);
 
 jl_fptr_t jl_get_builtin_fptr(jl_value_t *b);
 
@@ -250,7 +327,7 @@ void jl_init_restored_modules(jl_array_t *init_order);
 void jl_init_signal_async(void);
 void jl_init_debuginfo(void);
 void jl_init_runtime_ccall(void);
-void jl_mk_thread_heap(jl_tls_states_t *ptls);
+void jl_mk_thread_heap(jl_ptls_t ptls);
 
 void _julia_init(JL_IMAGE_SEARCH rel);
 
@@ -309,7 +386,7 @@ void jl_wake_libuv(void);
 jl_get_ptls_states_func jl_get_ptls_states_getter(void);
 static inline void jl_set_gc_and_wait(void)
 {
-    jl_tls_states_t *ptls = jl_get_ptls_states();
+    jl_ptls_t ptls = jl_get_ptls_states();
     // reading own gc state doesn't need atomic ops since no one else
     // should store to it.
     int8_t state = jl_gc_state(ptls);
@@ -376,8 +453,6 @@ typedef unw_cursor_t bt_cursor_t;
 #    define JL_UNW_HAS_FORMAT_IP 1
 #  endif
 #endif
-#define jl_bt_data (jl_get_ptls_states()->bt_data)
-#define jl_bt_size (jl_get_ptls_states()->bt_size)
 size_t rec_backtrace(uintptr_t *data, size_t maxsize);
 size_t rec_backtrace_ctx(uintptr_t *data, size_t maxsize, bt_context_t *ctx);
 #ifdef LIBOSXUNWIND
@@ -589,10 +664,6 @@ STATIC_INLINE void jl_free_aligned(void *p)
     free(p);
 }
 #endif
-
-#define JL_SMALL_BYTE_ALIGNMENT 16
-#define JL_CACHE_BYTE_ALIGNMENT 64
-
 
 // -- typemap.c -- //
 
