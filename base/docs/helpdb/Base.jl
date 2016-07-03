@@ -1489,7 +1489,9 @@ This function is typically used to load library code, and is implicitly called b
 load packages.
 
 When searching for files, `require` first looks for package code under `Pkg.dir()`, then tries
-paths in the global array `LOAD_PATH`.
+paths in the global array `LOAD_PATH`. `require` is case-sensitive  on all
+platforms including those with case-insensitive filesystems like macOS and
+Windows.
 """
 require
 
