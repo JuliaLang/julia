@@ -17,12 +17,6 @@ function len(a,b,c)
     return i-1
 end
 Base.length{T<:TimeType}(r::StepRange{T}) = isempty(r) ? 0 : len(r.start,r.stop,r.step) + 1
-# Period ranges hook into Int64 overflow detection
-Base.length{P<:Period}(r::StepRange{P}) = length(StepRange(value(r.start),value(r.step),value(r.stop)))
-
-# Used to calculate the last valid date in the range given the start, stop, and step
-# last = stop - steprem(start,stop,step)
-Base.steprem{T<:TimeType}(a::T,b::T,c) = b - (a + c*len(a,b,c))
 
 import Base.in
 function in{T<:TimeType}(x::T, r::StepRange{T})

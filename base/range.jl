@@ -12,55 +12,27 @@ abstract Range{T} <: AbstractArray{T,1}
 abstract OrdinalRange{T,S} <: Range{T}
 
 immutable StepRange{T,S} <: OrdinalRange{T,S}
-    start::T
+    min::T
     step::S
-    stop::T
+    max::T
 
     function StepRange(start::T, step::S, stop::T)
-        new(start, step, steprange_last(start,step,stop))
+        @_inline_meta
+        z = zero(step)
+        steprange_check(start, step, stop, z)
+        return new(step < z ? stop : start, step, step < z ? start : stop)
     end
 end
 
 # to make StepRange constructor inlineable, so optimizer can see `step` value
-function steprange_last{T}(start::T, step, stop)
-    if isa(start,AbstractFloat) || isa(step,AbstractFloat)
+function steprange_check{T}(start::T, step, stop, z)
+    @_noinline_meta
+    if isa(start, AbstractFloat) || isa(step, AbstractFloat)
         throw(ArgumentError("StepRange should not be used with floating point"))
     end
-    z = zero(step)
     step == z && throw(ArgumentError("step cannot be zero"))
-
-    if stop == start
-        last = stop
-    else
-        if (step > z) != (stop > start)
-            # empty range has a special representation where stop = start-1
-            # this is needed to avoid the wrap-around that can happen computing
-            # start - step, which leads to a range that looks very large instead
-            # of empty.
-            if step > z
-                last = start - one(stop-start)
-            else
-                last = start + one(stop-start)
-            end
-        else
-            diff = stop - start
-            if T<:Signed && (diff > zero(diff)) != (stop > start)
-                # handle overflowed subtraction with unsigned rem
-                if diff > zero(diff)
-                    remain = -convert(T, unsigned(-diff) % step)
-                else
-                    remain = convert(T, unsigned(diff) % step)
-                end
-            else
-                remain = steprem(start,stop,step)
-            end
-            last = stop - remain
-        end
-    end
-    last
+    nothing
 end
-
-steprem(start,stop,step) = (stop-start) % step
 
 StepRange{T,S}(start::T, step::S, stop::T) = StepRange{T,S}(start, step, stop)
 
@@ -308,8 +280,7 @@ logspace(start::Real, stop::Real, n::Integer=50) = 10.^linspace(start, stop, n)
 
 size(r::Range) = (length(r),)
 
-isempty(r::StepRange) =
-    (r.start != r.stop) & ((r.step > zero(r.step)) != (r.stop > r.start))
+isempty(r::StepRange) = r.min > r.max
 isempty(r::UnitRange) = r.start > r.stop
 isempty(r::FloatRange) = length(r) == 0
 isempty(r::LinSpace) = length(r) == 0
@@ -320,8 +291,8 @@ step(r::FloatRange) = r.step/r.divisor
 step{T}(r::LinSpace{T}) = ifelse(r.len <= 0, convert(T,NaN), (r.stop-r.start)/r.divisor)
 
 function length(r::StepRange)
-    n = Integer(div(r.stop+r.step - r.start, r.step))
-    isempty(r) ? zero(n) : n
+    n = Integer(div(r.max - r.min + abs(r.step), abs(r.step)))
+    return isempty(r) ? zero(n) : n
 end
 length(r::UnitRange) = Integer(r.stop - r.start + 1)
 length(r::FloatRange) = Integer(r.len)
@@ -329,12 +300,10 @@ length(r::LinSpace) = Integer(r.len + signbit(r.len - 1))
 
 function length{T<:Union{Int,UInt,Int64,UInt64}}(r::StepRange{T})
     isempty(r) && return zero(T)
-    if r.step > 1
-        return checked_add(convert(T, div(unsigned(r.stop - r.start), r.step)), one(T))
-    elseif r.step < -1
-        return checked_add(convert(T, div(unsigned(r.start - r.stop), -r.step)), one(T))
+    if abs(r.step) > 1
+        return checked_add(convert(T, div(unsigned(r.max - r.min), abs(r.step))), one(T))
     else
-        checked_add(div(checked_sub(r.stop, r.start), r.step), one(T))
+        checked_add(div(checked_sub(r.max, r.min), abs(r.step)), one(T))
     end
 end
 
@@ -352,17 +321,32 @@ let smallint = (Int === Int64 ?
 
     function length{T <: smallint}(r::StepRange{T})
         isempty(r) && return Int(0)
-        div(Int(r.stop)+Int(r.step) - Int(r.start), Int(r.step))
+        div(Int(r.max) + abs(Int(r.step)) - Int(r.min), abs(Int(r.step)))
     end
 
     length{T <: smallint}(r::UnitRange{T}) = Int(r.stop) - Int(r.start) + 1
 end
 
 first{T}(r::OrdinalRange{T}) = convert(T, r.start)
+first{T}(r::StepRange{T}) = (r.step < 0 ? r.max : r.min)
 first{T}(r::FloatRange{T}) = convert(T, r.start/r.divisor)
 first{T}(r::LinSpace{T}) = convert(T, (r.len-1)*r.start/r.divisor)
 
-last{T}(r::StepRange{T}) = r.stop
+function last{T}(r::StepRange{T})
+    if isempty(r)
+        return first(r) - one(r.step)
+    else
+        # compute `first(r) + (length(r) - 1) * r.step` without overflow
+        diff = r.max - r.min
+        if T<:Signed && diff < zero(diff)
+            # handle overflowed subtraction with unsigned rem
+            remain = convert(T, unsigned(diff) % r.step)
+        else
+            remain = diff % r.step
+        end
+        return r.step < 0 ? r.min + remain : r.max - remain
+    end
+end
 last(r::UnitRange) = r.stop
 last{T}(r::FloatRange{T}) = convert(T, (r.start + (r.len-1)*r.step)/r.divisor)
 last{T}(r::LinSpace{T}) = convert(T, (r.len-1)*r.stop/r.divisor)
@@ -391,11 +375,9 @@ done(r::LinSpace, i::Int) = length(r) < i
 next{T}(r::LinSpace{T}, i::Int) =
     (convert(T, ((r.len-i)*r.start + (i-1)*r.stop)/r.divisor), i+1)
 
-start(r::StepRange) = oftype(r.start + r.step, r.start)
-next{T}(r::StepRange{T}, i) = (convert(T,i), i+r.step)
-done{T,S}(r::StepRange{T,S}, i) = isempty(r) | (i < min(r.start, r.stop)) | (i > max(r.start, r.stop))
-done{T,S}(r::StepRange{T,S}, i::Integer) =
-    isempty(r) | (i == oftype(i, r.stop) + r.step)
+start(r::StepRange) = oftype(r.min + r.step, first(r))
+next{T}(r::StepRange{T}, i) = (convert(T, i), i + r.step)
+done{T,S}(r::StepRange{T,S}, i) = (i > r.max) | (i < r.min)
 
 start{T}(r::UnitRange{T}) = oftype(r.start + one(T), r.start)
 next{T}(r::UnitRange{T}, i) = (convert(T, i), i + one(T))
@@ -408,7 +390,7 @@ let smallint = (Int === Int64 ?
                 Union{Int8,UInt8,Int16,UInt16})
     global start
     global next
-    start{T<:smallint}(r::StepRange{T}) = convert(Int, r.start)
+    start{T<:smallint}(r::StepRange{T}) = convert(Int, first(r))
     next{T<:smallint}(r::StepRange{T}, i) = (i % T, i + r.step)
     start{T<:smallint}(r::UnitRange{T}) = convert(Int, r.start)
     next{T<:smallint}(r::UnitRange{T}, i) = (i % T, i + 1)
@@ -420,29 +402,32 @@ function getindex{T}(v::UnitRange{T}, i::Integer)
     @_inline_meta
     ret = convert(T, first(v) + i - 1)
     @boundscheck ((i > 0) & (ret <= v.stop) & (ret >= v.start)) || throw_boundserror(v, i)
-    ret
+    return ret
 end
 
 function getindex{T}(v::Range{T}, i::Integer)
     @_inline_meta
+    # @boundscheck ((i >= 1) & (i <= length(v))) | throw_boundserror(v, i)
     ret = convert(T, first(v) + (i - 1)*step(v))
-    ok = ifelse(step(v) > zero(step(v)),
-                (ret <= v.stop) & (ret >= v.start),
-                (ret <= v.start) & (ret >= v.stop))
-    @boundscheck ((i > 0) & ok) || throw_boundserror(v, i)
-    ret
+    @boundscheck begin
+        ok = ifelse(step(v) > zero(step(v)),
+                (ret <= last(v)) & (ret >= first(v)),
+                (ret <= first(v)) & (ret >= last(v)))
+        ((i > 0) & ok) || throw_boundserror(v, i)
+    end
+    return ret
 end
 
 function getindex{T}(r::FloatRange{T}, i::Integer)
     @_inline_meta
     @boundscheck checkbounds(r, i)
-    convert(T, (r.start + (i-1)*r.step)/r.divisor)
+    return convert(T, (r.start + (i-1)*r.step)/r.divisor)
 end
 
 function getindex{T}(r::LinSpace{T}, i::Integer)
     @_inline_meta
     @boundscheck checkbounds(r, i)
-    convert(T, ((r.len-i)*r.start + (i-1)*r.stop)/r.divisor)
+    return convert(T, ((r.len-i)*r.start + (i-1)*r.stop)/r.divisor)
 end
 
 getindex(r::Range, ::Colon) = copy(r)
@@ -450,28 +435,28 @@ getindex(r::Range, ::Colon) = copy(r)
 function getindex{T<:Integer}(r::UnitRange, s::UnitRange{T})
     @_inline_meta
     @boundscheck checkbounds(r, s)
-    st = oftype(r.start, r.start + s.start-1)
-    range(st, length(s))
+    st = oftype(r.start, r.start + s.start - 1)
+    return range(st, length(s))
 end
 
 function getindex{T<:Integer}(r::UnitRange, s::StepRange{T})
     @_inline_meta
     @boundscheck checkbounds(r, s)
-    st = oftype(r.start, r.start + s.start-1)
-    range(st, step(s), length(s))
+    st = oftype(r.start, r.start + first(s) - 1)
+    return range(st, step(s), length(s))
 end
 
 function getindex{T<:Integer}(r::StepRange, s::Range{T})
     @_inline_meta
     @boundscheck checkbounds(r, s)
-    st = oftype(r.start, r.start + (first(s)-1)*step(r))
-    range(st, step(r)*step(s), length(s))
+    st = oftype(r.min, first(r) + (first(s) - 1) * step(r))
+    return range(st, step(r) * step(s), length(s))
 end
 
 function getindex(r::FloatRange, s::OrdinalRange)
     @_inline_meta
     @boundscheck checkbounds(r, s)
-    FloatRange(r.start + (first(s)-1)*r.step, step(s)*r.step, length(s), r.divisor)
+    return FloatRange(r.start + (first(s)-1)*r.step, step(s)*r.step, length(s), r.divisor)
 end
 
 function getindex{T}(r::LinSpace{T}, s::OrdinalRange)
@@ -517,7 +502,7 @@ intersect{T<:Integer}(i::Integer, r::UnitRange{T}) =
 intersect{T<:Integer}(r::UnitRange{T}, i::Integer) = intersect(i, r)
 
 function intersect{T1<:Integer, T2<:Integer}(r::UnitRange{T1}, s::StepRange{T2})
-    if isempty(s)
+    return if isempty(s)
         range(first(r), 0)
     elseif step(s) == 0
         intersect(first(s), r)
@@ -536,7 +521,7 @@ function intersect{T1<:Integer, T2<:Integer}(r::UnitRange{T1}, s::StepRange{T2})
 end
 
 function intersect{T1<:Integer, T2<:Integer}(r::StepRange{T1}, s::UnitRange{T2})
-    if step(r) < 0
+    return if step(r) < 0
         reverse(intersect(s, reverse(r)))
     else
         intersect(s, r)
@@ -585,7 +570,7 @@ function intersect(r::StepRange, s::StepRange)
     # Determine where in the sequence to start and stop.
     m = max(start1 + mod(b - start1, a), start2 + mod(b - start2, a))
     n = min(stop1 - mod(stop1 - b, a), stop2 - mod(stop2 - b, a))
-    m:a:n
+    return m:a:n
 end
 
 function intersect(r1::Range, r2::Range, r3::Range, r::Range...)
@@ -593,7 +578,7 @@ function intersect(r1::Range, r2::Range, r3::Range, r::Range...)
     for t in r
         i = intersect(i, t)
     end
-    i
+    return i
 end
 
 # findin (the index of intersection)
@@ -615,22 +600,22 @@ function _findin{T1<:Integer, T2<:Integer}(r::Range{T1}, span::UnitRange{T2})
         ifirst = fr >= fspan ? 1 : length(r)+1
         ilast = fr <= lspan ? length(r) : 0
     end
-    ifirst, ilast
+    return (ifirst, ilast)
 end
 
 function findin{T1<:Integer, T2<:Integer}(r::UnitRange{T1}, span::UnitRange{T2})
     ifirst, ilast = _findin(r, span)
-    ifirst:ilast
+    return ifirst:ilast
 end
 
 function findin{T1<:Integer, T2<:Integer}(r::Range{T1}, span::UnitRange{T2})
     ifirst, ilast = _findin(r, span)
-    ifirst:1:ilast
+    return ifirst:1:ilast
 end
 
 ## linear operations on ranges ##
 
--(r::OrdinalRange) = range(-r.start, -step(r), length(r))
+-(r::OrdinalRange) = range(-first(r), -step(r), length(r))
 -(r::FloatRange)   = FloatRange(-r.start, -r.step, r.len, r.divisor)
 -(r::LinSpace)     = LinSpace(-r.start, -r.stop, r.len, r.divisor)
 
@@ -640,7 +625,7 @@ end
 .+(x::Real, r::FloatRange) = FloatRange(r.divisor*x + r.start, r.step, r.len, r.divisor)
 function .+{T}(x::Real, r::LinSpace{T})
     x2 = x * r.divisor / (r.len - 1)
-    LinSpace(x2 + r.start, x2 + r.stop, r.len, r.divisor)
+    return LinSpace(x2 + r.start, x2 + r.stop, r.len, r.divisor)
 end
 .+(r::Range, x::Real)      = x + r
 #.+(r::FloatRange, x::Real) = x + r
@@ -649,25 +634,25 @@ end
 .-(x::Real, r::FloatRange) = FloatRange(r.divisor*x - r.start, -r.step, r.len, r.divisor)
 function .-(x::Real, r::LinSpace)
     x2 = x * r.divisor / (r.len - 1)
-    LinSpace(x2 - r.start, x2 - r.stop, r.len, r.divisor)
+    return LinSpace(x2 - r.start, x2 - r.stop, r.len, r.divisor)
 end
-.-(r::UnitRange, x::Real)  = range(r.start-x, length(r))
-.-(r::StepRange , x::Real) = range(r.start-x, r.step, length(r))
-.-(r::FloatRange, x::Real) = FloatRange(r.start - r.divisor*x, r.step, r.len, r.divisor)
+.-(r::UnitRange, x::Real)  = range(first(r) - x, length(r))
+.-(r::StepRange , x::Real) = range(first(r) - x, r.step, length(r))
+.-(r::FloatRange, x::Real) = FloatRange(first(r) - r.divisor * x, r.step, r.len, r.divisor)
 function .-(r::LinSpace, x::Real)
     x2 = x * r.divisor / (r.len - 1)
-    LinSpace(r.start - x2, r.stop - x2, r.len, r.divisor)
+    return LinSpace(r.start - x2, r.stop - x2, r.len, r.divisor)
 end
 
-.*(x::Real, r::OrdinalRange) = range(x*r.start, x*step(r), length(r))
-.*(x::Real, r::FloatRange)   = FloatRange(x*r.start, x*r.step, r.len, r.divisor)
+.*(x::Real, r::OrdinalRange) = range(x * first(r), x * step(r), length(r))
+.*(x::Real, r::FloatRange)   = FloatRange(x * r.start, x * r.step, r.len, r.divisor)
 .*(x::Real, r::LinSpace)     = LinSpace(x * r.start, x * r.stop, r.len, r.divisor)
 .*(r::Range, x::Real)        = x .* r
 .*(r::FloatRange, x::Real)   = x .* r
 .*(r::LinSpace, x::Real)     = x .* r
 
-./(r::OrdinalRange, x::Real) = range(r.start/x, step(r)/x, length(r))
-./(r::FloatRange, x::Real)   = FloatRange(r.start/x, r.step/x, r.len, r.divisor)
+./(r::OrdinalRange, x::Real) = range(first(r) / x, step(r) / x, length(r))
+./(r::FloatRange, x::Real)   = FloatRange(r.start / x, r.step / x, r.len, r.divisor)
 ./(r::LinSpace, x::Real)     = LinSpace(r.start / x, r.stop / x, r.len, r.divisor)
 
 promote_rule{T1,T2}(::Type{UnitRange{T1}},::Type{UnitRange{T2}}) =
@@ -809,3 +794,14 @@ end
 in{T<:Integer}(x::Integer, r::UnitRange{T}) = (first(r) <= x) & (x <= last(r))
 in{T<:Integer}(x, r::Range{T}) = isinteger(x) && !isempty(r) && x>=minimum(r) && x<=maximum(r) && (mod(convert(T,x),step(r))-mod(first(r),step(r)) == 0)
 in(x::Char, r::Range{Char}) = !isempty(r) && x >= minimum(r) && x <= maximum(r) && (mod(Int(x) - Int(first(r)), step(r)) == 0)
+
+## range conversions ##
+
+map{T<:Real}(::Type{T}, r::StepRange) = T(first(r)) : T(r.step) : T(last(r))
+map{T<:Real}(::Type{T}, r::UnitRange) = T(r.start) : T(last(r))
+map{T<:AbstractFloat}(::Type{T}, r::FloatRange) = FloatRange(T(r.start), T(r.step), r.len, T(r.divisor))
+function map{T<:AbstractFloat}(::Type{T}, r::LinSpace)
+    new_len = T(r.len)
+    new_len == r.len || error("$r: too long for $T")
+    LinSpace(T(r.start), T(r.stop), new_len, T(r.divisor))
+end
