@@ -3548,7 +3548,7 @@ static Function *gen_cfun_wrapper(jl_function_t *ff, jl_value_t *jlrettype, jl_t
     Type *fargt_vasig;
     std::vector<bool> inRegList(0);
     std::vector<bool> byRefList(0);
-    attr_type attrs;
+    AttributeSet attrs;
     Type *prt = NULL;
     int sret = 0;
     size_t nargs = jl_nparams(argt);
