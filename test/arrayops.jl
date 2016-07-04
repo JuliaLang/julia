@@ -843,6 +843,12 @@ let
     n3a = mapslices(x-> ones(1,6), c, [2,3])
     @test size(n1a) == (1,6,4) && size(n2a) == (1,3,6)  && size(n3a) == (2,1,6)
     @test size(n1) == (6,1,4) && size(n2) == (6,3,1)  && size(n3) == (2,6,1)
+
+    # mutating functions
+    o = ones(3, 4)
+    m = mapslices(x->fill!(x, 0), o, 2)
+    @test m == zeros(3, 4)
+    @test o == ones(3, 4)
 end
 
 

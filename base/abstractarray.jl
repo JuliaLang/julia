@@ -1417,7 +1417,8 @@ function mapslices(f, A::AbstractArray, dims::AbstractVector)
         idx[d] = Colon()
     end
 
-    r1 = f(view(A, idx...))
+    Aslice = A[idx...]
+    r1 = f(Aslice)
 
     # determine result size and allocate
     Rsize = copy(dimsA)
@@ -1449,7 +1450,8 @@ function mapslices(f, A::AbstractArray, dims::AbstractVector)
             for i in 1:nidx
                 idx[otherdims[i]] = ridx[otherdims[i]] = I.I[i]
             end
-            R[ridx...] = f(view(A, idx...))
+            _unsafe_getindex!(Aslice, A, idx...)
+            R[ridx...] = f(Aslice)
         end
     end
 
