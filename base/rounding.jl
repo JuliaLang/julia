@@ -10,16 +10,66 @@ export
     get_zero_subnormals, set_zero_subnormals
 
 ## rounding modes ##
+"""
+    RoundingMode
+
+A type which controls rounding behavior. Currently supported rounding modes are:
+
+- [`RoundNearest`](:obj:`RoundNearest`) (default)
+- [`RoundNearestTiesAway`](:obj:`RoundNearestTiesAway`)
+- [`RoundNearestTiesUp`](:obj:`RoundNearestTiesUp`)
+- [`RoundToZero`](:obj:`RoundToZero`)
+- [`RoundFromZero`](:obj:`RoundFromZero`) (`BigFloat` only)
+- [`RoundUp`](:obj:`RoundUp`)
+- [`RoundDown`](:obj:`RoundDown`)
+"""
 immutable RoundingMode{T} end
 
+"""
+    RoundNearest
+
+The default rounding mode. Rounds to the nearest integer, with ties (fractional values of
+0.5) being rounded to the nearest even integer.
+"""
 const RoundNearest = RoundingMode{:Nearest}()
+
+"""
+    RoundToZero
+
+[`round`](:func:`round`) using this rounding mode is an alias for [`trunc`](:func:`trunc`).
+"""
 const RoundToZero = RoundingMode{:ToZero}()
+
+"""
+    RoundUp
+
+[`round`](:func:`round`) using this rounding mode is an alias for [`ceil`](:func:`ceil`).
+"""
 const RoundUp = RoundingMode{:Up}()
+
+"""
+    RoundDown
+
+[`round`](:func:`round`) using this rounding mode is an alias for [`floor`](:func:`floor`).
+"""
 const RoundDown = RoundingMode{:Down}()
+
 const RoundFromZero = RoundingMode{:FromZero}() # mpfr only
-# C-style round behaviour
+
+"""
+    RoundNearestTiesAway
+
+Rounds to nearest integer, with ties rounded away from zero (C/C++
+[`round`](:func:`round`) behaviour).
+"""
 const RoundNearestTiesAway = RoundingMode{:NearestTiesAway}()
-# Java-style round behaviour
+
+"""
+    RoundNearestTiesUp
+
+Rounds to nearest integer, with ties rounded toward positive infinity (Java/JavaScript
+[`round`](:func:`round`) behaviour).
+"""
 const RoundNearestTiesUp = RoundingMode{:NearestTiesUp}()
 
 to_fenv(::RoundingMode{:Nearest}) = JL_FE_TONEAREST

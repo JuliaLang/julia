@@ -52,7 +52,7 @@ end
     round([T,] x, [digits, [base]], [r::RoundingMode])
 
 `round(x)` rounds `x` to an integer value according to the default rounding mode (see
-[`rounding`](:func:`rounding`)), returning a value of the same type as `x`. By default
+[`RoundingMode`](:obj:`RoundingMode`)), returning a value of the same type as `x`. By default
 ([`RoundNearest`](:obj:`RoundNearest`)), this will round to the nearest integer, with ties
 (fractional values of 0.5) being rounded to the even integer.
 
