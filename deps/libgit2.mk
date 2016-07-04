@@ -1,7 +1,7 @@
 ## libgit2
 
-LIBGIT2_GIT_URL := git://github.com/wildart/libgit2.git
-LIBGIT2_TAR_URL = https://api.github.com/repos/wildart/libgit2/tarball/$1
+LIBGIT2_GIT_URL := git://github.com/libgit2/libgit2.git
+LIBGIT2_TAR_URL = https://api.github.com/repos/libgit2/libgit2/tarball/$1
 $(eval $(call git-external,libgit2,LIBGIT2,CMakeLists.txt,build/libgit2.$(SHLIB_EXT),$(SRCDIR)/srccache))
 
 LIBGIT2_OBJ_SOURCE := $(BUILDDIR)/$(LIBGIT2_SRC_DIR)/libgit2.$(SHLIB_EXT)
@@ -20,27 +20,32 @@ LIBGIT2_OPTS += -DBUILD_CLAR=OFF -DDLLTOOL=`which $(CROSS_COMPILE)dlltool`
 LIBGIT2_OPTS += -DCMAKE_FIND_ROOT_PATH=/usr/$(XC_HOST) -DCMAKE_FIND_ROOT_PATH_MODE_INCLUDE=ONLY
 endif
 else
-LIBGIT2_OPTS += -DUSE_OPENSSL=OFF -DCMAKE_INSTALL_RPATH=$(build_prefix) -DCMAKE_INSTALL_RPATH_USE_LINK_PATH=TRUE
+LIBGIT2_OPTS += -DUSE_OPENSSL=OFF -DUSE_CUSTOM_TLS=ON -DCMAKE_INSTALL_RPATH=$(build_prefix) -DCMAKE_INSTALL_RPATH_USE_LINK_PATH=TRUE
 endif
 
 $(BUILDDIR)/$(LIBGIT2_SRC_DIR)/Makefile: $(SRCDIR)/srccache/$(LIBGIT2_SRC_DIR)/CMakeLists.txt
 ifeq ($(OS),WINNT)
 	-cd $(SRCDIR)/srccache/$(LIBGIT2_SRC_DIR) && patch -p0 -f < $(SRCDIR)/patches/libgit2-ssh.patch
+else
+	-cd $(SRCDIR)/srccache/$(LIBGIT2_SRC_DIR) && patch -p1 -f < $(SRCDIR)/patches/libgit2-custom-tls.patch
 endif
 	mkdir -p $(dir $@)
 	cd $(dir $@) && \
 	$(CMAKE) $(dir $<) $(LIBGIT2_OPTS)
 	touch -c $@
+
 $(LIBGIT2_OBJ_SOURCE): $(BUILDDIR)/$(LIBGIT2_SRC_DIR)/Makefile
 	$(MAKE) -C $(dir $<)
 	touch -c $@
+
 $(BUILDDIR)/$(LIBGIT2_SRC_DIR)/checked: $(LIBGIT2_OBJ_SOURCE)
 ifeq ($(OS),$(BUILD_OS))
 	$(MAKE) -C $(dir $@) test
 endif
 	echo 1 > $@
+
 $(LIBGIT2_OBJ_TARGET): $(LIBGIT2_OBJ_SOURCE) | $(build_shlibdir)
-ifeq ($(OS),WINNT)
+ifeq ($(BUILD_OS),WINNT)
 	cp $< $@
 else
 	$(call make-install,$(LIBGIT2_SRC_DIR),)
