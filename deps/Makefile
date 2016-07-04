@@ -177,7 +177,7 @@ STAGE1_DEPS += libssh2
 endif
 
 ifeq ($(USE_SYSTEM_LIBGIT2), 0)
-STAGE1_DEPS += libgit2
+STAGE2_DEPS += libgit2
 endif
 
 ifeq ($(USE_SYSTEM_MPFR), 0)
@@ -199,7 +199,7 @@ STAGE2_DEPS += utf8proc
 endif
 
 ifeq ($(USE_SYSTEM_MBEDTLSSTREAM), 0)
-STAGE2_DEPS += mbedtlsstream
+STAGE3_DEPS += mbedtlsstream
 endif
 
 # Only compile standalone LAPACK if we are not using OpenBLAS.
