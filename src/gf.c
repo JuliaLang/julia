@@ -221,8 +221,7 @@ JL_DLLEXPORT void jl_set_lambda_rettype(jl_lambda_info_t *li, jl_value_t *rettyp
     jl_gc_wb(li, rettype);
     li->functionObjectsDecls.functionObject = NULL;
     li->functionObjectsDecls.specFunctionObject = NULL;
-    li->jlcall_api = 0;
-    li->constval = jl_nothing;
+    li->constval = NULL;
 }
 
 JL_DLLEXPORT void jl_set_lambda_code_null(jl_lambda_info_t *li)
@@ -1239,11 +1238,21 @@ jl_lambda_info_t *jl_compile_for_dispatch(jl_lambda_info_t *li)
         // copy fptr from the template method definition
         jl_method_t *def = li->def;
         if (def && !def->isstaged) {
-            li->fptr = def->lambda_template->fptr;
-            li->jlcall_api = def->lambda_template->jlcall_api;
-            li->constval = def->lambda_template->constval;
-            if (li->fptr != NULL || li->jlcall_api == 2)
+            if (def->lambda_template->jlcall_api == 2) {
+                li->functionObjectsDecls.functionObject = NULL;
+                li->functionObjectsDecls.specFunctionObject = NULL;
+                li->jlcall_api = 2;
+                li->constval = def->lambda_template->constval;
+                jl_gc_wb(li, li->constval);
                 return li;
+            }
+            if (def->lambda_template->fptr) {
+                li->functionObjectsDecls.functionObject = NULL;
+                li->functionObjectsDecls.specFunctionObject = NULL;
+                li->fptr = def->lambda_template->fptr;
+                li->jlcall_api = def->lambda_template->jlcall_api;
+                return li;
+            }
         }
         if (jl_options.compile_enabled == JL_OPTIONS_COMPILE_OFF) {
             jl_printf(JL_STDERR, "code missing for ");
@@ -1590,6 +1599,9 @@ static void _compile_all_deq(jl_array_t *found)
                 templ->jlcall_api = linfo->jlcall_api;
                 templ->constval = linfo->constval;
                 if (templ->constval) jl_gc_wb(templ, templ->constval);
+                templ->rettype = linfo->rettype;
+                jl_gc_wb(templ, templ->rettype);
+                templ->fptr = NULL;
             }
         }
     }
