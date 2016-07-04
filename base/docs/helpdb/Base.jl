@@ -4083,7 +4083,7 @@ rand
 
 Convert an integer to a string in the given base, optionally specifying a number of digits to pad to.
 """
-base(base, n, pad)
+base
 
 """
     BoundsError([a],[i])
