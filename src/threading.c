@@ -148,8 +148,7 @@ jl_get_ptls_states_func jl_get_ptls_states_getter(void)
 #if defined(__GLIBC__) && (defined(_CPU_X86_64_) || defined(_CPU_X86_) || \
                            ((defined(_CPU_AARCH64_) || defined(_CPU_ARM_) || \
                              defined(_CPU_PPC64_) || defined(_CPU_PPC_)) && \
-                            (__GNUC__ >= 5 || __GNUC_MINOR__ >= 9)))
-// Skip the `__GNUC__ >= 4` check since we require GCC 4.7+
+                            __GNUC__ >= 5))
 // Only enable this on architectures that are tested.
 // For example, GCC doesn't seem to support the `ifunc` attribute on power yet.
 #  if __GLIBC_PREREQ(2, 12)
