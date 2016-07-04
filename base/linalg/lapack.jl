@@ -177,6 +177,88 @@ of pivots returned from `gbtrf!`. Returns the vector or matrix `X`, overwriting 
 """
 gbtrs!(trans::Char, kl::Integer, ku::Integer, m::Integer, AB::StridedMatrix, ipiv::StridedVector{BlasInt}, B::StridedVecOrMat)
 
+
+# (PB) Symmetric (Hermitian) positive definite banded matrices, Cholesky decomposition and solver
+for (pbtrf, pbtrs, elty) in
+    ((:dpbtrf_,:dpbtrs_,:Float64),
+     (:spbtrf_,:spbtrs_,:Float32),
+     (:zpbtrf_,:zpbtrs_,:Complex128),
+     (:cpbtrf_,:cpbtrs_,:Complex64))
+    @eval begin
+        # SUBROUTINE DPBTRF( UPLO, N, KD, AB, LDAB, INFO )
+        # *     .. Scalar Arguments ..
+        #       CHARACTER          UPLO
+        #       INTEGER            INFO, KD, LDAB, N
+        # *     ..
+        # *     .. Array Arguments ..
+        #       DOUBLE PRECISION   AB( LDAB, * )
+        function pbtrf!(uplo::Char, kd::Integer, AB::StridedMatrix{$elty})
+            chkuplo(uplo)
+            chkstride1(AB)
+            n    = size(AB, 2)
+            info = Ref{BlasInt}()
+            ccall((@blasfunc($pbtrf), liblapack), Void,
+                  (Ptr{UInt8}, Ptr{BlasInt}, Ptr{BlasInt},
+                   Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt}),
+                   &uplo, &n, &kd, AB, &max(1,stride(AB,2)), info)
+            chkargsok(info[])
+            chkposdef(info[])
+            AB
+        end
+
+        #SUBROUTINE DPBTRS( UPLO, N, KD, NRHS, AB, LDAB, B, LDB, INFO )
+        # *     .. Scalar Arguments ..
+        #     CHARACTER          UPLO
+        #     INTEGER            INFO, KD, LDAB, LDB, N, NRHS
+        # *     ..
+        # *     .. Array Arguments ..
+        #     DOUBLE PRECISION   AB( LDAB, * ), B( LDB, * )
+        function pbtrs!(uplo::Char, kd::Integer,
+                        AB::StridedMatrix{$elty}, B::StridedVecOrMat{$elty})
+            chkuplo(uplo)
+            chkstride1(AB, B)
+            info = Ref{BlasInt}()
+            n    = size(AB,2)
+            if n != size(B,1)
+                throw(DimensionMismatch("Matrix AB has dimensions $(size(AB)), but right hand side matrix B has dimensions $(size(B))"))
+            end
+            ccall((@blasfunc($pbtrs), liblapack), Void,
+                  (Ptr{UInt8}, Ptr{BlasInt}, Ptr{BlasInt},  Ptr{BlasInt},
+                   Ptr{$elty}, Ptr{BlasInt}, Ptr{$elty},   Ptr{BlasInt},
+                   Ptr{BlasInt}),
+                  &uplo, &n, &kd, &size(B,2), AB,  &max(1,stride(AB,2)),
+                  B, &max(1,stride(B,2)), info)
+            chklapackerror(info[])
+            B
+        end
+    end
+end
+
+"""
+    pbtrf!(uplo, kd, AB)
+
+Compute the Cholesky factorization of a symmetric or Hermitian positive definite banded
+matrix `AB`. If `uplo = U` the upper Cholesky decomposition
+of `AB` is computed. If `uplo = L` the lower Cholesky decomposition of `AB`
+is computed. `AB` is overwritten by its Cholesky decomposition.
+`kd` is the number of superdiagonals of the matrix `AB` (or equivalently:
+the number of its subdiagonals).
+"""
+pbtrf!(uplo::Char, kd::Integer, AB::StridedMatrix)
+
+"""
+    pbtrs!(uplo, kd, AB, B)
+
+Finds the solution to `AB * X = B` where `AB` is a symmetric or Hermitian
+positive definite banded matrix whose Cholesky decomposition was computed by
+`pbtrf!`. If `uplo = U` the upper Cholesky decomposition of `A` was
+computed. If `uplo = L` the lower Cholesky decomposition of `A` was
+computed. `kd` is the number of superdiagonals of the matrix `AB`
+(or equivalently: the number of its subdiagonals).
+`B` is overwritten with the solution `X`.
+"""
+pbtrs!(uplo::Char, kd::Integer, AB::StridedMatrix, B::StridedVecOrMat)
+
 ## (GE) general matrices: balancing and back-transforming
 for (gebal, gebak, elty, relty) in
     ((:dgebal_, :dgebak_, :Float64, :Float64),
