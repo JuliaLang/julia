@@ -878,11 +878,6 @@ extern "C" void jl_compile_linfo(jl_lambda_info_t *li)
 
     // success. add the result to the execution engine now
     jl_finalize_module(std::move(m), !toplevel);
-    if (!toplevel) {
-        li->functionID = jl_assign_functionID(f, 0);
-        if (specf)
-            li->specFunctionID = jl_assign_functionID(specf, 1);
-    }
     // mark the pointer calling convention
     li->jlcall_api = (f->getFunctionType() == jl_func_sig ? 0 : 1);
 

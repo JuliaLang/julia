@@ -405,8 +405,6 @@ JL_DLLEXPORT jl_lambda_info_t *jl_new_lambda_info_uninit(void)
     li->compile_traced = 0;
     li->functionObjectsDecls.functionObject = NULL;
     li->functionObjectsDecls.specFunctionObject = NULL;
-    li->functionID = 0;
-    li->specFunctionID = 0;
     li->specTypes = NULL;
     li->unspecialized_ducttape = NULL;
     li->inferred = 0;

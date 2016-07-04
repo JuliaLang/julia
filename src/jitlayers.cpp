@@ -1140,13 +1140,14 @@ void jl_dump_native(const char *bc_fname, const char *obj_fname, const char *sys
     imaging_mode = false;
 }
 
-static int32_t jl_assign_functionID(Function *functionObject, int specsig)
+extern "C" int32_t jl_assign_functionID(void *function)
 {
     // give the function an index in the constant lookup table
-    if (!imaging_mode)
+    assert(imaging_mode);
+    if (function == NULL)
         return 0;
     jl_sysimg_fvars.push_back(ConstantExpr::getBitCast(
-                shadow_output->getNamedValue(functionObject->getName()),
+                shadow_output->getNamedValue(((Function*)function)->getName()),
                 T_pvoidfunc));
     return jl_sysimg_fvars.size();
 }

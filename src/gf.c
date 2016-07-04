@@ -221,8 +221,6 @@ JL_DLLEXPORT void jl_set_lambda_rettype(jl_lambda_info_t *li, jl_value_t *rettyp
     jl_gc_wb(li, rettype);
     li->functionObjectsDecls.functionObject = NULL;
     li->functionObjectsDecls.specFunctionObject = NULL;
-    li->functionID = 0;
-    li->specFunctionID = 0;
     li->jlcall_api = 0;
     li->constval = jl_nothing;
 }
@@ -1579,21 +1577,19 @@ static void _compile_all_deq(jl_array_t *found)
         // this is necessary because many intrinsics try to call static_eval and thus are not compilable unspecialized
         int complete = _compile_all_union(ml->sig, ml->tvars);
         if (complete) {
-            if (!templ->functionID)
-                // indicate that this method doesn't need a functionID because it was fully covered above
-                templ->functionID = -1;
+            if (templ->fptr == NULL)
+                // indicate that this method doesn't need to be compiled, because it was fully covered above
+                templ->fptr = (jl_fptr_t)(uintptr_t)-1;
         }
         else {
             jl_compile_linfo(linfo);
-            assert(linfo->functionID > 0);
+            assert(linfo->functionObjectsDecls.functionObject != NULL || linfo->jlcall_api == 2);
             if (linfo != templ) {
                 // copy the function pointer back to the lambda_template
                 templ->functionObjectsDecls = linfo->functionObjectsDecls;
-                templ->functionID = linfo->functionID;
-                templ->specFunctionID = linfo->specFunctionID;
                 templ->jlcall_api = linfo->jlcall_api;
                 templ->constval = linfo->constval;
-                jl_gc_wb(templ, linfo);
+                if (templ->constval) jl_gc_wb(templ, templ->constval);
             }
         }
     }
@@ -1606,7 +1602,9 @@ static int _compile_all_enq(jl_typemap_entry_t *ml, void *env)
     jl_array_t *found = (jl_array_t*)env;
     // method definition -- compile template field
     jl_method_t *m = ml->func.method;
-    if (m->lambda_template->functionID == 0 && m->lambda_template->jlcall_api != 2) {
+    if (m->lambda_template->functionObjectsDecls.functionObject == NULL &&
+        m->lambda_template->jlcall_api != 2 &&
+        m->lambda_template->fptr == NULL) {
         // found a lambda that still needs to be compiled
         jl_array_ptr_1d_push(found, (jl_value_t*)ml);
     }
@@ -1663,7 +1661,9 @@ static void jl_compile_all_defs(void)
 
 static int _precompile_enq_tfunc(jl_typemap_entry_t *l, void *closure)
 {
-    if (jl_is_lambda_info(l->func.value) && !l->func.linfo->functionID)
+    if (jl_is_lambda_info(l->func.value) &&
+            l->func.linfo->functionObjectsDecls.functionObject == NULL &&
+            l->func.linfo->jlcall_api != 2)
         jl_array_ptr_1d_push((jl_array_t*)closure, (jl_value_t*)l->sig);
     return 1;
 }

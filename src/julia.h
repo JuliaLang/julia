@@ -268,8 +268,6 @@ typedef struct _jl_lambda_info_t {
     // with the same name as the generated functions for this linfo, suitable
     // for referencing in LLVM IR
     jl_llvm_functions_t functionObjectsDecls;
-    int32_t functionID; // index that this function will have in the codegen table
-    int32_t specFunctionID; // index that this specFunction will have in the codegen table
 } jl_lambda_info_t;
 
 // all values are callable as Functions
