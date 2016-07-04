@@ -530,8 +530,9 @@ function __init__()
         ccall((:git_libgit2_shutdown, :libgit2), Cint, ())
     end
 
-    # Look for OpenSSL env variable for CA bundle
-    @static if is_unix()
+    # Look for OpenSSL env variable for CA bundle (linux only)
+    # windows and macOS are use their security backends
+    @static if is_linux()
         cert_loc = if "SSL_CERT_DIR" in keys(ENV)
             ENV["SSL_CERT_DIR"]
         elseif "SSL_CERT_FILE" in keys(ENV)
