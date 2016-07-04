@@ -1264,12 +1264,11 @@ factorization `F`. `A` must be a `SparseMatrixCSC`, `Symmetric{SparseMatrixCSC}`
 or `Hermitian{SparseMatrixCSC}`. Note that even if `A` doesn't
 have the type tag, it must still be symmetric or Hermitian.
 
-** Note **
-
-This method uses the CHOLMOD library from SuiteSparse, which only supports
-doubles or complex doubles. Input matrices not of those element types will be
-converted to `SparseMatrixCSC{Float64}` or `SparseMatrixCSC{Complex128}` as
-appropriate.
+!!! note
+    This method uses the CHOLMOD library from SuiteSparse, which only supports
+    doubles or complex doubles. Input matrices not of those element types will
+    be converted to `SparseMatrixCSC{Float64}` or `SparseMatrixCSC{Complex128}`
+    as appropriate.
 """
 cholfact!{T<:Real}(F::Factor, A::Union{SparseMatrixCSC{T},
         SparseMatrixCSC{Complex{T}},
@@ -1319,15 +1318,14 @@ Setting optional `shift` keyword argument computes the factorization of
 it should be a permutation of `1:size(A,1)` giving the ordering to use
 (instead of CHOLMOD's default AMD ordering).
 
-** Note **
+!!! note
+    This method uses the CHOLMOD library from SuiteSparse, which only supports
+    doubles or complex doubles. Input matrices not of those element types will
+    be converted to `SparseMatrixCSC{Float64}` or `SparseMatrixCSC{Complex128}`
+    as appropriate.
 
-This method uses the CHOLMOD library from SuiteSparse, which only supports
-doubles or complex doubles. Input matrices not of those element types will be
-converted to `SparseMatrixCSC{Float64}` or `SparseMatrixCSC{Complex128}` as
-appropriate.
-
-Many other functions from CHOLMOD are wrapped but not exported from the
-`Base.SparseArrays.CHOLMOD` module.
+    Many other functions from CHOLMOD are wrapped but not exported from the
+    `Base.SparseArrays.CHOLMOD` module.
 """
 cholfact{T<:Real}(A::Union{SparseMatrixCSC{T}, SparseMatrixCSC{Complex{T}},
     Symmetric{T,SparseMatrixCSC{T,SuiteSparse_long}},
@@ -1361,12 +1359,11 @@ Compute the ``LDL'`` factorization of `A`, reusing the symbolic factorization `F
 `Hermitian{SparseMatrixCSC}`. Note that even if `A` doesn't
 have the type tag, it must still be symmetric or Hermitian.
 
-** Note **
-
-This method uses the CHOLMOD library from SuiteSparse, which only supports
-doubles or complex doubles. Input matrices not of those element types will be
-converted to `SparseMatrixCSC{Float64}` or `SparseMatrixCSC{Complex128}` as
-appropriate.
+!!! note
+    This method uses the CHOLMOD library from SuiteSparse, which only supports
+    doubles or complex doubles. Input matrices not of those element types will
+    be converted to `SparseMatrixCSC{Float64}` or `SparseMatrixCSC{Complex128}`
+    as appropriate.
 """
 ldltfact!{T<:Real}(F::Factor, A::Union{SparseMatrixCSC{T},
     SparseMatrixCSC{Complex{T}},
@@ -1417,15 +1414,14 @@ Setting optional `shift` keyword argument computes the factorization of
 it should be a permutation of `1:size(A,1)` giving the ordering to use
 (instead of CHOLMOD's default AMD ordering).
 
-** Note **
+!!! note
+    This method uses the CHOLMOD library from SuiteSparse, which only supports
+    doubles or complex doubles. Input matrices not of those element types will
+    be converted to `SparseMatrixCSC{Float64}` or `SparseMatrixCSC{Complex128}`
+    as appropriate.
 
-This method uses the CHOLMOD library from SuiteSparse, which only supports
-doubles or complex doubles. Input matrices not of those element types will be
-converted to `SparseMatrixCSC{Float64}` or `SparseMatrixCSC{Complex128}` as
-appropriate.
-
-Many other functions from CHOLMOD are wrapped but not exported from the
-`Base.SparseArrays.CHOLMOD` module.
+    Many other functions from CHOLMOD are wrapped but not exported from the
+    `Base.SparseArrays.CHOLMOD` module.
 """
 ldltfact{T<:Real}(A::Union{SparseMatrixCSC{T},SparseMatrixCSC{Complex{T}},
     Symmetric{T,SparseMatrixCSC{T,SuiteSparse_long}},

@@ -993,23 +993,23 @@ Mathematical Functions
        julia> round(pi, 3, 2)
        3.125
 
-   **note**
+   .. note::
+      Rounding to specified digits in bases other than 2 can be inexact when operating on binary floating point numbers. For example, the ``Float64`` value represented by ``1.15`` is actually *less* than 1.15, yet will be rounded to 1.2.
 
-   Rounding to specified digits in bases other than 2 can be inexact when operating on binary floating point numbers. For example, the ``Float64`` value represented by ``1.15`` is actually *less* than 1.15, yet will be rounded to 1.2.
+      .. doctest::
 
-   .. doctest::
+          julia> x = 1.15
+          1.15
 
-       julia> x = 1.15
-       1.15
+          julia> @sprintf "%.20f" x
+          "1.14999999999999991118"
 
-       julia> @sprintf "%.20f" x
-       "1.14999999999999991118"
+          julia> x < 115//100
+          true
 
-       julia> x < 115//100
-       true
+          julia> round(x, 1)
+          1.2
 
-       julia> round(x, 1)
-       1.2
 
 .. data:: RoundingMode
 
@@ -1375,9 +1375,9 @@ Mathematical Functions
        julia> gcdx(240, 46)
        (2,-9,47)
 
-   **note**
+   .. note::
+      Bézout coefficients are *not* uniquely defined. ``gcdx`` returns the minimal Bézout coefficients that are computed by the extended Euclid algorithm. (Ref: D. Knuth, TAoCP, 2/e, p. 325, Algorithm X.) These coefficients ``u`` and ``v`` are minimal in the sense that :math:`|u| < |\frac y d` and :math:`|v| < |\frac x d`\ . Furthermore, the signs of ``u`` and ``v`` are chosen so that ``d`` is positive.
 
-   Bézout coefficients are *not* uniquely defined. ``gcdx`` returns the minimal Bézout coefficients that are computed by the extended Euclid algorithm. (Ref: D. Knuth, TAoCP, 2/e, p. 325, Algorithm X.) These coefficients ``u`` and ``v`` are minimal in the sense that :math:`|u| < |\frac y d` and :math:`|v| < |\frac x d`\ . Furthermore, the signs of ``u`` and ``v`` are chosen so that ``d`` is positive.
 
 .. function:: ispow2(n) -> Bool
 

@@ -50,30 +50,29 @@ The following keyword arguments are supported:
 iterations `niter` and the number of matrix vector multiplications `nmult`, as well as the
 final residual vector `resid`.
 
-**note**
+!!! note
+    The `sigma` and `which` keywords interact: the description of eigenvalues
+    searched for by `which` do _not_ necessarily refer to the eigenvalues of
+    `A`, but rather the linear operator constructed by the specification of the
+    iteration mode implied by `sigma`.
 
-The `sigma` and `which` keywords interact: the description of eigenvalues searched for by
-`which` do _not_ necessarily refer to the eigenvalues of `A`, but rather the linear operator
-constructed by the specification of the iteration mode implied by `sigma`.
+    | `sigma`         | iteration mode                   | `which` refers to eigenvalues of |
+    |:----------------|:---------------------------------|:---------------------------------|
+    | `nothing`       | ordinary (forward)               | ``A``                            |
+    | real or complex | inverse with level shift `sigma` | ``(A - \\sigma I )^{-1}``        |
 
-| `sigma`         | iteration mode                   | `which` refers to eigenvalues of |
-|:----------------|:---------------------------------|:---------------------------------|
-| `nothing`       | ordinary (forward)               | ``A``                            |
-| real or complex | inverse with level shift `sigma` | ``(A - \\sigma I )^{-1}``        |
+!!! note
+    Although `tol` has a default value, the best choice depends strongly on the
+    matrix `A`. We recommend that users _always_ specify a value for `tol`
+    which suits their specific needs.
 
-**note**
+    For details of how the errors in the computed eigenvalues are estimated, see:
 
-Although `tol` has a default value, the best choice depends strongly on the
-matrix `A`. We recommend that users _always_ specify a value for `tol` which
-suits their specific needs.
-
-For details of how the errors in the computed eigenvalues are estimated, see:
-
-* B. N. Parlett, "The Symmetric Eigenvalue Problem", SIAM: Philadelphia, 2/e
-  (1998), Ch. 13.2, "Accessing Accuracy in Lanczos Problems", pp. 290-292 ff.
-* R. B. Lehoucq and D. C. Sorensen, "Deflation Techniques for an Implicitly
-  Restarted Arnoldi Iteration", SIAM Journal on Matrix Analysis and
-  Applications (1996), 17(4), 789–821.  doi:10.1137/S0895479895281484
+    * B. N. Parlett, "The Symmetric Eigenvalue Problem", SIAM: Philadelphia, 2/e
+      (1998), Ch. 13.2, "Accessing Accuracy in Lanczos Problems", pp. 290-292 ff.
+    * R. B. Lehoucq and D. C. Sorensen, "Deflation Techniques for an Implicitly
+      Restarted Arnoldi Iteration", SIAM Journal on Matrix Analysis and
+      Applications (1996), 17(4), 789–821.  doi:10.1137/S0895479895281484
 """
 eigs(A; kwargs...) = eigs(A, I; kwargs...)
 eigs{T<:BlasFloat}(A::AbstractMatrix{T}, ::UniformScaling; kwargs...) = _eigs(A, I; kwargs...)

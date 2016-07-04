@@ -326,11 +326,11 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
    Setting optional ``shift`` keyword argument computes the factorization of ``A+shift*I`` instead of ``A``\ . If the ``perm`` argument is nonempty, it should be a permutation of ``1:size(A,1)`` giving the ordering to use (instead of CHOLMOD's default AMD ordering).
 
-   ** Note **
+   .. note::
+      This method uses the CHOLMOD library from SuiteSparse, which only supports doubles or complex doubles. Input matrices not of those element types will be converted to ``SparseMatrixCSC{Float64}`` or ``SparseMatrixCSC{Complex128}`` as appropriate.
 
-   This method uses the CHOLMOD library from SuiteSparse, which only supports doubles or complex doubles. Input matrices not of those element types will be converted to ``SparseMatrixCSC{Float64}`` or ``SparseMatrixCSC{Complex128}`` as appropriate.
+      Many other functions from CHOLMOD are wrapped but not exported from the ``Base.SparseArrays.CHOLMOD`` module.
 
-   Many other functions from CHOLMOD are wrapped but not exported from the ``Base.SparseArrays.CHOLMOD`` module.
 
 .. function:: cholfact!(F::Factor, A; shift = 0.0) -> CHOLMOD.Factor
 
@@ -338,9 +338,9 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
    Compute the Cholesky (:math:`LL'`\ ) factorization of ``A``\ , reusing the symbolic factorization ``F``\ . ``A`` must be a ``SparseMatrixCSC``\ , ``Symmetric{SparseMatrixCSC}``\ , or ``Hermitian{SparseMatrixCSC}``\ . Note that even if ``A`` doesn't have the type tag, it must still be symmetric or Hermitian.
 
-   ** Note **
+   .. note::
+      This method uses the CHOLMOD library from SuiteSparse, which only supports doubles or complex doubles. Input matrices not of those element types will be converted to ``SparseMatrixCSC{Float64}`` or ``SparseMatrixCSC{Complex128}`` as appropriate.
 
-   This method uses the CHOLMOD library from SuiteSparse, which only supports doubles or complex doubles. Input matrices not of those element types will be converted to ``SparseMatrixCSC{Float64}`` or ``SparseMatrixCSC{Complex128}`` as appropriate.
 
 .. function:: cholfact!(A, uplo::Symbol, Val{false}) -> Cholesky
 
@@ -396,11 +396,11 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
    Setting optional ``shift`` keyword argument computes the factorization of ``A+shift*I`` instead of ``A``\ . If the ``perm`` argument is nonempty, it should be a permutation of ``1:size(A,1)`` giving the ordering to use (instead of CHOLMOD's default AMD ordering).
 
-   ** Note **
+   .. note::
+      This method uses the CHOLMOD library from SuiteSparse, which only supports doubles or complex doubles. Input matrices not of those element types will be converted to ``SparseMatrixCSC{Float64}`` or ``SparseMatrixCSC{Complex128}`` as appropriate.
 
-   This method uses the CHOLMOD library from SuiteSparse, which only supports doubles or complex doubles. Input matrices not of those element types will be converted to ``SparseMatrixCSC{Float64}`` or ``SparseMatrixCSC{Complex128}`` as appropriate.
+      Many other functions from CHOLMOD are wrapped but not exported from the ``Base.SparseArrays.CHOLMOD`` module.
 
-   Many other functions from CHOLMOD are wrapped but not exported from the ``Base.SparseArrays.CHOLMOD`` module.
 
 .. function:: ldltfact!(F::Factor, A; shift = 0.0) -> CHOLMOD.Factor
 
@@ -408,9 +408,9 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
    Compute the :math:`LDL'` factorization of ``A``\ , reusing the symbolic factorization ``F``\ . ``A`` must be a ``SparseMatrixCSC``\ , ``Symmetric{SparseMatrixCSC}``\ , or ``Hermitian{SparseMatrixCSC}``\ . Note that even if ``A`` doesn't have the type tag, it must still be symmetric or Hermitian.
 
-   ** Note **
+   .. note::
+      This method uses the CHOLMOD library from SuiteSparse, which only supports doubles or complex doubles. Input matrices not of those element types will be converted to ``SparseMatrixCSC{Float64}`` or ``SparseMatrixCSC{Complex128}`` as appropriate.
 
-   This method uses the CHOLMOD library from SuiteSparse, which only supports doubles or complex doubles. Input matrices not of those element types will be converted to ``SparseMatrixCSC{Float64}`` or ``SparseMatrixCSC{Complex128}`` as appropriate.
 
 .. function:: ldltfact!(::SymTridiagonal) -> LDLt
 
@@ -498,29 +498,29 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
    Multiplication with respect to either thin or full ``Q`` is allowed, i.e. both ``F[:Q]*F[:R]`` and ``F[:Q]*A`` are supported. A ``Q`` matrix can be converted into a regular matrix with :func:`full` which has a named argument ``thin``\ .
 
-   **note**
+   .. note::
+      ``qrfact`` returns multiple types because LAPACK uses several representations that minimize the memory storage requirements of products of Householder elementary reflectors, so that the ``Q`` and ``R`` matrices can be stored compactly rather as two separate dense matrices.
 
-   ``qrfact`` returns multiple types because LAPACK uses several representations that minimize the memory storage requirements of products of Householder elementary reflectors, so that the ``Q`` and ``R`` matrices can be stored compactly rather as two separate dense matrices.
+      The data contained in ``QR`` or ``QRPivoted`` can be used to construct the ``QRPackedQ`` type, which is a compact representation of the rotation matrix:
 
-   The data contained in ``QR`` or ``QRPivoted`` can be used to construct the ``QRPackedQ`` type, which is a compact representation of the rotation matrix:
+      .. math::
 
-   .. math::
+          Q = \prod_{i=1}^{\min(m,n)} (I - \tau_i v_i v_i^T)
 
-       Q = \prod_{i=1}^{\min(m,n)} (I - \tau_i v_i v_i^T)
+      where :math:`\tau_i` is the scale factor and :math:`v_i` is the projection vector associated with the :math:`i^{th}` Householder elementary reflector.
 
-   where :math:`\tau_i` is the scale factor and :math:`v_i` is the projection vector associated with the :math:`i^{th}` Householder elementary reflector.
+      The data contained in ``QRCompactWY`` can be used to construct the ``QRCompactWYQ`` type, which is a compact representation of the rotation matrix
 
-   The data contained in ``QRCompactWY`` can be used to construct the ``QRCompactWYQ`` type, which is a compact representation of the rotation matrix
+      .. math::
 
-   .. math::
+          Q = I + Y T Y^T
 
-       Q = I + Y T Y^T
+      where ``Y`` is :math:`m \times r` lower trapezoidal and ``T`` is :math:`r \times r` upper triangular. The *compact WY* representation [Schreiber1989]_ is not to be confused with the older, *WY* representation [Bischof1987]_. (The LAPACK documentation uses ``V`` in lieu of ``Y``\ .)
 
-   where ``Y`` is :math:`m \times r` lower trapezoidal and ``T`` is :math:`r \times r` upper triangular. The *compact WY* representation [Schreiber1989]_ is not to be confused with the older, *WY* representation [Bischof1987]_. (The LAPACK documentation uses ``V`` in lieu of ``Y``\ .)
+      .. [Bischof1987] C Bischof and C Van Loan, "The WY representation for products of Householder matrices", SIAM J Sci Stat Comput 8 (1987), s2-s13. `doi:10.1137/0908009 <http://dx.doi.org/10.1137/0908009>`_
 
-   .. [Bischof1987] C Bischof and C Van Loan, "The WY representation for products of Householder matrices", SIAM J Sci Stat Comput 8 (1987), s2-s13. `doi:10.1137/0908009 <http://dx.doi.org/10.1137/0908009>`_
+      .. [Schreiber1989] R Schreiber and C Van Loan, "A storage-efficient WY representation for products of Householder transformations", SIAM J Sci Stat Comput 10 (1989), 53-57. `doi:10.1137/0910005 <http://dx.doi.org/10.1137/0910005>`_
 
-   .. [Schreiber1989] R Schreiber and C Van Loan, "A storage-efficient WY representation for products of Householder transformations", SIAM J Sci Stat Comput 10 (1989), 53-57. `doi:10.1137/0910005 <http://dx.doi.org/10.1137/0910005>`_
 
 .. function:: qrfact(A) -> SPQR.Factorization
 
@@ -1337,26 +1337,26 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
    ``eigs`` returns the ``nev`` requested eigenvalues in ``d``\ , the corresponding Ritz vectors ``v`` (only if ``ritzvec=true``\ ), the number of converged eigenvalues ``nconv``\ , the number of iterations ``niter`` and the number of matrix vector multiplications ``nmult``\ , as well as the final residual vector ``resid``\ .
 
-   **note**
+   .. note::
+      The ``sigma`` and ``which`` keywords interact: the description of eigenvalues searched for by ``which`` do _not_ necessarily refer to the eigenvalues of ``A``\ , but rather the linear operator constructed by the specification of the iteration mode implied by ``sigma``\ .
 
-   The ``sigma`` and ``which`` keywords interact: the description of eigenvalues searched for by ``which`` do _not_ necessarily refer to the eigenvalues of ``A``\ , but rather the linear operator constructed by the specification of the iteration mode implied by ``sigma``\ .
+      +-----------------+------------------------------------+------------------------------------+
+      | ``sigma``       | iteration mode                     | ``which`` refers to eigenvalues of |
+      +=================+====================================+====================================+
+      | ``nothing``     | ordinary (forward)                 | :math:`A`                          |
+      +-----------------+------------------------------------+------------------------------------+
+      | real or complex | inverse with level shift ``sigma`` | :math:`(A - \sigma I )^{-1}`       |
+      +-----------------+------------------------------------+------------------------------------+
 
-   +-----------------+------------------------------------+------------------------------------+
-   | ``sigma``       | iteration mode                     | ``which`` refers to eigenvalues of |
-   +=================+====================================+====================================+
-   | ``nothing``     | ordinary (forward)                 | :math:`A`                          |
-   +-----------------+------------------------------------+------------------------------------+
-   | real or complex | inverse with level shift ``sigma`` | :math:`(A - \sigma I )^{-1}`       |
-   +-----------------+------------------------------------+------------------------------------+
 
-   **note**
+   .. note::
+      Although ``tol`` has a default value, the best choice depends strongly on the matrix ``A``\ . We recommend that users _always_ specify a value for ``tol`` which suits their specific needs.
 
-   Although ``tol`` has a default value, the best choice depends strongly on the matrix ``A``\ . We recommend that users _always_ specify a value for ``tol`` which suits their specific needs.
+      For details of how the errors in the computed eigenvalues are estimated, see:
 
-   For details of how the errors in the computed eigenvalues are estimated, see:
+      * B. N. Parlett, "The Symmetric Eigenvalue Problem", SIAM: Philadelphia, 2/e   (1998), Ch. 13.2, "Accessing Accuracy in Lanczos Problems", pp. 290-292 ff.
+      * R. B. Lehoucq and D. C. Sorensen, "Deflation Techniques for an Implicitly   Restarted Arnoldi Iteration", SIAM Journal on Matrix Analysis and   Applications (1996), 17(4), 789–821.  doi:10.1137/S0895479895281484
 
-   * B. N. Parlett, "The Symmetric Eigenvalue Problem", SIAM: Philadelphia, 2/e   (1998), Ch. 13.2, "Accessing Accuracy in Lanczos Problems", pp. 290-292 ff.
-   * R. B. Lehoucq and D. C. Sorensen, "Deflation Techniques for an Implicitly   Restarted Arnoldi Iteration", SIAM Journal on Matrix Analysis and   Applications (1996), 17(4), 789–821.  doi:10.1137/S0895479895281484
 
 .. function:: eigs(A, B; nev=6, ncv=max(20,2*nev+1), which="LM", tol=0.0, maxiter=300, sigma=nothing, ritzvec=true, v0=zeros((0,))) -> (d,[v,],nconv,niter,nmult,resid)
 
