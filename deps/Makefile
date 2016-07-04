@@ -198,8 +198,10 @@ ifeq ($(USE_SYSTEM_UTF8PROC), 0)
 STAGE2_DEPS += utf8proc
 endif
 
+ifeq ($(OS), Linux)
 ifeq ($(USE_SYSTEM_MBEDTLSSTREAM), 0)
 STAGE3_DEPS += mbedtlsstream
+endif
 endif
 
 # Only compile standalone LAPACK if we are not using OpenBLAS.

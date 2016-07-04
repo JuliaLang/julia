@@ -8,6 +8,9 @@ HTTPPARSER_OBJ_TARGET := $(build_shlibdir)/libhttp_parser.$(SHLIB_EXT)
 HTTPPARSER_OBJ_SOURCE := $(BUILDDIR)/$(HTTPPARSER_SRC_DIR)/libhttp_parser.$(SHLIB_EXT)
 
 $(HTTPPARSER_OBJ_SOURCE): $(BUILDDIR)/$(HTTPPARSER_SRC_DIR)/Makefile
+ifeq ($(OS),WINNT)
+	-cd $(BUILDDIR)/$(HTTPPARSER_SRC_DIR) && patch -p1 -f < $(SRCDIR)/patches/http_parser-win.patch
+endif
 	$(MAKE) -C $(dir $<) library $(MAKE_COMMON)
 	touch -c $@
 
@@ -19,6 +22,9 @@ endif
 
 $(HTTPPARSER_OBJ_TARGET): $(HTTPPARSER_OBJ_SOURCE)
 	$(call make-install,$(HTTPPARSER_SRC_DIR), library PREFIX=$(build_staging)/$(HTTPPARSER_SRC_DIR)$(build_prefix))
+ifeq ($(OS),WINNT)
+	cp $(build_libdir)/libhttp_parser.*.$(SHLIB_EXT) $(HTTPPARSER_OBJ_TARGET)
+endif
 	touch -c $(HTTPPARSER_OBJ_TARGET)
 
 clean-http_parser:
