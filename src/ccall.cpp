@@ -1062,6 +1062,11 @@ static jl_cgval_t emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
                     rt = (jl_value_t*)jl_any_type;
                     static_rt = true;
                 }
+                else if (jl_is_typevar(jl_tparam0(rtt_)) && jl_is_abstract_ref_type(((jl_tvar_t*)jl_tparam0(rtt_))->ub)) {
+                    // `Ref{T}` used as return type just returns T (from a jl_value_t*)
+                    rt = (jl_value_t*)jl_any_type;
+                    static_rt = true;
+                }
             }
             if (rt == NULL) {
                 if (jl_is_expr(args[2])) {
@@ -1078,6 +1083,13 @@ static jl_cgval_t emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
                             static_eval(jl_exprarg(rtexpr, 1), ctx, true, false) == (jl_value_t*)jl_pointer_type) {
                         // substitute Ptr{Void} for statically-unknown pointer type
                         rt = (jl_value_t*)jl_voidpointer_type;
+                    }
+                    else if (rtexpr->head == call_sym && jl_expr_nargs(rtexpr) == 3 &&
+                            static_eval(jl_exprarg(rtexpr, 0), ctx, true, false) == jl_builtin_apply_type &&
+                            static_eval(jl_exprarg(rtexpr, 1), ctx, true, false) == (jl_value_t*)jl_ref_type) {
+                        // `Ref{T}` used as return type just returns T (from a jl_value_t*)
+                        rt = (jl_value_t*)jl_any_type;
+                        static_rt = true;
                     }
                 }
             }
