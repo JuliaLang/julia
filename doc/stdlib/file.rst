@@ -65,9 +65,9 @@
 
    Creates a symbolic link to ``target`` with the name ``link``\ .
 
-   **note**
+   .. note::
+      This function raises an error under operating systems that do not support soft symbolic links, such as Windows XP.
 
-   This function raises an error under operating systems that do not support soft symbolic links, such as Windows XP.
 
 .. function:: readlink(path) -> AbstractString
 
