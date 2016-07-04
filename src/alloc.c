@@ -119,7 +119,7 @@ static jl_value_t *jl_new_bits_internal(jl_value_t *dt, void *data, size_t *len)
     size_t nb = jl_datatype_size(bt);
     if (nb == 0)
         return jl_new_struct_uninit(bt);
-    *len = LLT_ALIGN(*len, bt->alignment);
+    *len = LLT_ALIGN(*len, bt->layout->alignment);
     data = (char*)data + (*len);
     *len += nb;
     if (bt == jl_uint8_type)   return jl_box_uint8(*(uint8_t*)data);
@@ -860,31 +860,85 @@ jl_datatype_t *jl_new_abstracttype(jl_value_t *name, jl_datatype_t *super,
                                    jl_svec_t *parameters)
 {
     jl_datatype_t *dt = jl_new_datatype((jl_sym_t*)name, super, parameters, jl_emptysvec, jl_emptysvec, 1, 0, 0);
-    dt->pointerfree = 0;
     return dt;
 }
 
-JL_DLLEXPORT jl_datatype_t *jl_new_uninitialized_datatype(size_t nfields, int8_t fielddesc_type)
+jl_datatype_t *jl_new_uninitialized_datatype()
 {
     jl_ptls_t ptls = jl_get_ptls_states();
-    // fielddesc_type is specified manually for builtin types
-    // and is (will be) calculated automatically for user defined types.
-    uint32_t fielddesc_size = jl_fielddesc_size(fielddesc_type);
-    jl_datatype_t *t =
-        (jl_datatype_t*)jl_gc_alloc(ptls, (sizeof(jl_datatype_t) +
-                                           nfields * fielddesc_size),
-                                    jl_datatype_type);
-    // fielddesc_type should only be assigned here. It can cause data
-    // corruption otherwise.
-    t->fielddesc_type = fielddesc_type;
-    t->nfields = nfields;
-    t->haspadding = 0;
-    t->pointerfree = 0;
+    jl_datatype_t *t = (jl_datatype_t*)jl_gc_alloc(ptls, sizeof(jl_datatype_t), jl_datatype_type);
     t->depth = 0;
     t->hastypevars = 0;
     t->haswildcard = 0;
     t->isleaftype = 1;
+    t->layout = NULL;
     return t;
+}
+
+static struct _jl_datatype_layout_t *jl_get_layout(
+        uint32_t nfields,
+        uint32_t alignment,
+        int haspadding,
+        jl_fielddesc32_t desc[])
+{
+    // compute the smallest fielddesc type that can hold the layout description
+    int fielddesc_type = 0;
+    if (nfields > 0) {
+        uint32_t max_size = 0;
+        uint32_t max_offset = desc[nfields - 1].offset;
+        for (size_t i = 0; i < nfields; i++) {
+            if (desc[i].size > max_size)
+                max_size = desc[i].size;
+        }
+        jl_fielddesc8_t maxdesc8 = { 0, max_size, max_offset };
+        jl_fielddesc16_t maxdesc16 = { 0, max_size, max_offset };
+        jl_fielddesc32_t maxdesc32 = { 0, max_size, max_offset };
+        if (maxdesc8.size != max_size || maxdesc8.offset != max_offset) {
+            fielddesc_type = 1;
+            if (maxdesc16.size != max_size || maxdesc16.offset != max_offset) {
+                fielddesc_type = 2;
+                if (maxdesc32.size != max_size || maxdesc32.offset != max_offset) {
+                    assert(0); // should have been verified by caller
+                }
+            }
+        }
+    }
+
+    // allocate a new descriptor
+    uint32_t fielddesc_size = jl_fielddesc_size(fielddesc_type);
+    struct _jl_datatype_layout_t *flddesc = (struct _jl_datatype_layout_t*)malloc(
+            sizeof(struct _jl_datatype_layout_t) + nfields * fielddesc_size);
+    flddesc->nfields = nfields;
+    flddesc->alignment = alignment;
+    flddesc->haspadding = haspadding;
+    flddesc->fielddesc_type = fielddesc_type;
+
+    // fill out the fields of the new descriptor
+    jl_fielddesc8_t* desc8 = (jl_fielddesc8_t*)jl_dt_layout_fields(flddesc);
+    jl_fielddesc16_t* desc16 = (jl_fielddesc16_t*)jl_dt_layout_fields(flddesc);
+    jl_fielddesc32_t* desc32 = (jl_fielddesc32_t*)jl_dt_layout_fields(flddesc);
+    int ptrfree = 1;
+    for (size_t i = 0; i < nfields; i++) {
+        if (fielddesc_type == 0) {
+            desc8[i].offset = desc[i].offset;
+            desc8[i].size = desc[i].size;
+            desc8[i].isptr = desc[i].isptr;
+        }
+        else if (fielddesc_type == 1) {
+            desc16[i].offset = desc[i].offset;
+            desc16[i].size = desc[i].size;
+            desc16[i].isptr = desc[i].isptr;
+        }
+        else {
+            desc32[i].offset = desc[i].offset;
+            desc32[i].size = desc[i].size;
+            desc32[i].isptr = desc[i].isptr;
+        }
+        if (desc[i].isptr)
+            ptrfree = 0;
+    }
+    flddesc->pointerfree = ptrfree;
+    return flddesc;
 }
 
 // Determine if homogeneous tuple with fields of type t will have
@@ -931,65 +985,63 @@ unsigned jl_special_vector_alignment(size_t nfields, jl_value_t *t) {
 void jl_compute_field_offsets(jl_datatype_t *st)
 {
     size_t sz = 0, alignm = 1;
-    int ptrfree = 1;
     int homogeneous = 1;
     jl_value_t *lastty = NULL;
 
-    assert(0 <= st->fielddesc_type && st->fielddesc_type <= 2);
-
-    uint64_t max_offset = (((uint64_t)1) <<
-                           (1 << (3 + st->fielddesc_type))) - 1;
+    uint64_t max_offset = (((uint64_t)1) << 32) - 1;
     uint64_t max_size = max_offset >> 1;
 
-    for(size_t i=0; i < jl_datatype_nfields(st); i++) {
+    uint32_t nfields = jl_svec_len(st->types);
+    jl_fielddesc32_t desc[nfields];
+    int haspadding = 0;
+
+    for (size_t i = 0; i < nfields; i++) {
         jl_value_t *ty = jl_field_type(st, i);
         size_t fsz, al;
-        if (jl_isbits(ty) && jl_is_leaf_type(ty)) {
+        if (jl_isbits(ty) && jl_is_leaf_type(ty) && ((jl_datatype_t*)ty)->layout) {
             fsz = jl_datatype_size(ty);
             // Should never happen
             if (__unlikely(fsz > max_size))
                 jl_throw(jl_overflow_exception);
-            al = ((jl_datatype_t*)ty)->alignment;
-            jl_field_setisptr(st, i, 0);
-            if (((jl_datatype_t*)ty)->haspadding)
-                st->haspadding = 1;
+            al = ((jl_datatype_t*)ty)->layout->alignment;
+            desc[i].isptr = 0;
+            if (((jl_datatype_t*)ty)->layout->haspadding)
+                haspadding = 1;
         }
         else {
             fsz = sizeof(void*);
             if (fsz > MAX_ALIGN)
                 fsz = MAX_ALIGN;
             al = fsz;
-            jl_field_setisptr(st, i, 1);
-            ptrfree = 0;
+            desc[i].isptr = 1;
         }
         if (al != 0) {
             size_t alsz = LLT_ALIGN(sz, al);
             if (sz & (al - 1))
-                st->haspadding = 1;
+                haspadding = 1;
             sz = alsz;
             if (al > alignm)
                 alignm = al;
         }
         homogeneous &= lastty==NULL || lastty==ty;
         lastty = ty;
-        jl_field_setoffset(st, i, sz);
-        jl_field_setsize(st, i, fsz);
+        desc[i].offset = sz;
+        desc[i].size = fsz;
         if (__unlikely(max_offset - sz < fsz))
             jl_throw(jl_overflow_exception);
         sz += fsz;
     }
     if (homogeneous && lastty!=NULL && jl_is_tuple_type(st)) {
         // Some tuples become LLVM vectors with stronger alignment than what was calculated above.
-        unsigned al = jl_special_vector_alignment(jl_datatype_nfields(st), lastty);
+        unsigned al = jl_special_vector_alignment(nfields, lastty);
         assert(al % alignm == 0);
         if (al)
             alignm = al;
     }
-    st->alignment = alignm;
     st->size = LLT_ALIGN(sz, alignm);
     if (st->size > sz)
-        st->haspadding = 1;
-    st->pointerfree = ptrfree && !st->abstract;
+        haspadding = 1;
+    st->layout = jl_get_layout(nfields, alignm, haspadding, desc);
 }
 
 extern int jl_boot_file_loaded;
@@ -1018,7 +1070,7 @@ JL_DLLEXPORT jl_datatype_t *jl_new_datatype(jl_sym_t *name, jl_datatype_t *super
             t = jl_uint8_type;
     }
     if (t == NULL)
-        t = jl_new_uninitialized_datatype(jl_svec_len(fnames), 2); // TODO
+        t = jl_new_uninitialized_datatype();
     else
         tn = t->name;
     // init before possibly calling jl_new_typename
@@ -1030,14 +1082,11 @@ JL_DLLEXPORT jl_datatype_t *jl_new_datatype(jl_sym_t *name, jl_datatype_t *super
     if (ftypes != NULL) jl_gc_wb(t, t->types);
     t->abstract = abstract;
     t->mutabl = mutabl;
-    t->pointerfree = 0;
     t->ninitialized = ninitialized;
     t->instance = NULL;
     t->struct_decl = NULL;
     t->ditype = NULL;
     t->size = 0;
-    t->alignment = 1;
-    t->haspadding = 0;
 
     if (tn == NULL) {
         t->name = NULL;
@@ -1068,7 +1117,7 @@ JL_DLLEXPORT jl_datatype_t *jl_new_datatype(jl_sym_t *name, jl_datatype_t *super
     }
     else {
         t->uid = jl_assign_type_uid();
-        if (t->types != NULL)
+        if (t->types != NULL && t->isleaftype)
             jl_compute_field_offsets(t);
     }
     JL_GC_POP();
@@ -1080,11 +1129,10 @@ JL_DLLEXPORT jl_datatype_t *jl_new_bitstype(jl_value_t *name, jl_datatype_t *sup
 {
     jl_datatype_t *bt = jl_new_datatype((jl_sym_t*)name, super, parameters,
                                         jl_emptysvec, jl_emptysvec, 0, 0, 0);
-    bt->size = nbits/8;
-    bt->alignment = bt->size;
-    if (bt->alignment > MAX_ALIGN)
-        bt->alignment = MAX_ALIGN;
-    bt->pointerfree = 1;
+    uint32_t nbytes = (nbits + 7) / 8;
+    uint32_t alignm = nbytes > MAX_ALIGN ? MAX_ALIGN : nbytes;
+    bt->size = nbytes;
+    bt->layout = jl_get_layout(0, alignm, 0, NULL);
     return bt;
 }
 

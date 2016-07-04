@@ -532,7 +532,7 @@ static jl_cgval_t generic_unbox(jl_value_t *targ, jl_value_t *x, jl_codectx_t *c
             // always fixed size
             nb = jl_datatype_size(bt);
             llvmt = staticeval_bitstype(bt);
-            alignment = ((jl_datatype_t*)bt)->alignment;
+            alignment = ((jl_datatype_t*)bt)->layout->alignment;
         }
         else {
             bt = v.typ;
@@ -544,7 +544,7 @@ static jl_cgval_t generic_unbox(jl_value_t *targ, jl_value_t *x, jl_codectx_t *c
             }
             nb = jl_datatype_size(bt);
             llvmt = staticeval_bitstype(bt);
-            alignment = ((jl_datatype_t*)bt)->alignment;
+            alignment = ((jl_datatype_t*)bt)->layout->alignment;
         }
         Value *runtime_bt = boxed(bt_value, ctx);
         // XXX: emit type validity check on runtime_bt (bitstype of size nb)
@@ -775,7 +775,7 @@ static jl_cgval_t emit_pointerref(jl_value_t *e, jl_value_t *i, jl_codectx_t *ct
         Value *strct = emit_allocobj(ctx, size,
                                      literal_pointer_val((jl_value_t*)ety));
         im1 = builder.CreateMul(im1, ConstantInt::get(T_size,
-                    LLT_ALIGN(size, ((jl_datatype_t*)ety)->alignment)));
+                    LLT_ALIGN(size, ((jl_datatype_t*)ety)->layout->alignment)));
         thePtr = builder.CreateGEP(builder.CreateBitCast(thePtr, T_pint8), im1);
         prepare_call(builder.CreateMemCpy(builder.CreateBitCast(strct, T_pint8),
                              thePtr, size, 1)->getCalledValue());
@@ -834,7 +834,7 @@ static jl_cgval_t emit_pointerset(jl_value_t *e, jl_value_t *x, jl_value_t *i, j
         assert(jl_is_datatype(ety));
         uint64_t size = ((jl_datatype_t*)ety)->size;
         im1 = builder.CreateMul(im1, ConstantInt::get(T_size,
-                    LLT_ALIGN(size, ((jl_datatype_t*)ety)->alignment)));
+                    LLT_ALIGN(size, ((jl_datatype_t*)ety)->layout->alignment)));
         prepare_call(builder.CreateMemCpy(builder.CreateGEP(builder.CreateBitCast(thePtr, T_pint8), im1),
                              data_pointer(val, ctx, T_pint8), size, 1)->getCalledValue());
     }

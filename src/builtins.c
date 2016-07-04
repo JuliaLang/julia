@@ -282,7 +282,7 @@ static int NOINLINE compare_fields(jl_value_t *a, jl_value_t *b, jl_datatype_t *
         }
         else {
             jl_datatype_t *ft = (jl_datatype_t*)jl_field_type(dt, f);
-            if (!ft->haspadding) {
+            if (!ft->layout->haspadding) {
                 eq = bits_equal(ao, bo, jl_field_size(dt, f));
             }
             else {
@@ -739,7 +739,7 @@ JL_CALLABLE(jl_f_fieldtype)
     int field_index;
     if (jl_is_long(args[1])) {
         field_index = jl_unbox_long(args[1]) - 1;
-        if (field_index < 0 || field_index >= jl_datatype_nfields(st))
+        if (field_index < 0 || field_index >= jl_field_count(st))
             jl_bounds_error(args[0], args[1]);
     }
     else {
@@ -755,7 +755,7 @@ JL_CALLABLE(jl_f_nfields)
     jl_value_t *x = args[0];
     if (!jl_is_datatype(x))
         x = jl_typeof(x);
-    return jl_box_long(jl_datatype_nfields(x));
+    return jl_box_long(jl_field_count(x));
 }
 
 // conversion -----------------------------------------------------------------
@@ -1084,7 +1084,7 @@ static uintptr_t jl_object_id_(jl_value_t *tv, jl_value_t *v)
         else {
             jl_datatype_t *fieldtype = (jl_datatype_t*)jl_field_type(dt, f);
             assert(jl_is_datatype(fieldtype) && !fieldtype->abstract && !fieldtype->mutabl);
-            if (fieldtype->haspadding)
+            if (fieldtype->layout->haspadding)
                 u = jl_object_id_((jl_value_t*)fieldtype, (jl_value_t*)vo);
             else
                 u = bits_hash(vo, jl_field_size(dt, f));
