@@ -621,115 +621,359 @@ function sparse(B::Bidiagonal)
     return sparse([1:m;1:m-1],[1:m;2:m],[B.dv;B.ev], Int(m), Int(m)) # upper bidiagonal
 end
 
-## Transposition methods
+## Transposition and permutation methods
 
-# qftranspose! is the parent method on which the others are built.
 """
-    qftranspose!{Tv,Ti}(C::SparseMatrixCSC{Tv,Ti}, A::SparseMatrixCSC{Tv,Ti}, q::AbstractVector, f)
+    halfperm!{Tv,Ti,Tq<:Integer}(X::SparseMatrixCSC{Tv,Ti}, A::SparseMatrixCSC{Tv,Ti},
+        q::AbstractVector{Tq}, f::Function = identity)
 
-Column-permute and transpose `A` (`(AQ)^T`), applying `f` to each element of `A` in the
-  process, and store the result in preallocated `C`. Permutation vector `q` defines the
-  column-permutation `Q`. The number of columns of `C` (`C.n`) must match the number of
-  rows of `A` (`A.m`). The number of rows of `C` (`C.m`) must match the number of columns
-  of `A` (`A.n`). The length of `C`'s internal row-index (`length(C.rowval)`) and
-  entry-value (`length(C.nzval)`) arrays must be at least the number of allocated entries
-  in `A` (`nnz(A)`). The length of the permutation vector `q` (`length(q)`) must match the
-  number of columns of `A` (`A.n`).
+Column-permute and transpose `A`, simultaneously applying `f` to each entry of `A`, storing
+the result `(f(A)Q)^T` (`map(f, transpose(A[:,q]))`) in `X`.
 
-This method implements the HALFPERM algorithm described in F. Gustavson, "Two fast
-  algorithms for sparse matrices: multiplication and permuted transposition," ACM TOMS
-  4(3), 250-269 (1978). The algorithm runs in `O(A.m, A.n, nnz(A))` time and requires no
-  space beyond that passed in.
+`X`'s dimensions must match those of `transpose(A)` (`X.m == A.n` and `X.n == A.m`), and `X`
+must have enough storage to accommodate all allocated entries in `A` (`length(X.rowval) >= nnz(A)`
+and  `length(X.nzval) >= nnz(A)`). Column-permutation `q`'s length must match `A`'s column
+count (`length(q) == A.n`).
+
+This method is the parent of several methods performing transposition and permutation
+operations on `SparseMatrixCSC`s. As this method performs no argument checking, prefer
+the safer child methods (`[c]transpose[!]`, `permute[!]`) to direct use.
+
+This method implements the `HALFPERM` algorithm described in F. Gustavson, "Two fast
+algorithms for sparse matrices: multiplication and permuted transposition," ACM TOMS 4(3),
+250-269 (1978). The algorithm runs in `O(A.m, A.n, nnz(A))` time and requires no space
+beyond that passed in.
 """
-function qftranspose!{Tv,Ti}(C::SparseMatrixCSC{Tv,Ti}, A::SparseMatrixCSC{Tv,Ti}, q::AbstractVector, f)
-    # Attach source matrix
-    Am, An = A.m, A.n
-    Acolptr = A.colptr
-    Arowval = A.rowval
-    Anzval = A.nzval
-    Annz = Acolptr[end]-1
-
-    # Attach destination matrix
-    Cm, Cn = C.m, C.n
-    Ccolptr = C.colptr
-    Crowval = C.rowval
-    Cnzval = C.nzval
-
-    # Check compatibility of source and destination
-    if !(Cm == An)
-        throw(DimensionMismatch("the number of rows of the first argument, C.m = $(Cm),"
-            * "must match the number of columns of the second argument, A.n = $(An)") )
-    elseif !(Cn == Am)
-        throw(DimensionMismatch("the number of columns of the first argument, C.n = $(Cn),"
-            * "must match the number of rows of the second argument, A.m = $(Am)") )
-    elseif !(length(q) == A.n)
-        throw(DimensionMismatch("the length of the permtuation vector, length(q) = "
-            * "$(length(q)), must match the number of columns of the second argument,"
-            * "A.n = $(An)") )
-    elseif !(length(Crowval) >= Annz)
-        throw(ArgumentError("the first argument's row-index array's length,"
-            * "length(C.rowval) = $(length(Crowval)), must be at least the number of"
-            * "allocated entries in the second argument, nnz(A) = $(Annz)") )
-    elseif !(length(Cnzval) >= Annz)
-        throw(ArgumentError("the first argument's entry-value array's length,"
-            * "length(C.nzval) = $(length(Cnzval)), must be at least the number of"
-            * "allocated entries in the second argument, nnz(A) = $(Annz)") )
+function halfperm!{Tv,Ti,Tq<:Integer}(X::SparseMatrixCSC{Tv,Ti}, A::SparseMatrixCSC{Tv,Ti},
+        q::AbstractVector{Tq}, f::Function = identity)
+    _computecolptrs_halfperm!(X, A)
+    _distributevals_halfperm!(X, A, q, f)
+    return X
+end
+"""
+Helper method for `halfperm!`. Computes `transpose(A[:,q])`'s column pointers, storing them
+shifted one position forward in `X.colptr`; `_distributevals_halfperm!` fixes this shift.
+"""
+function _computecolptrs_halfperm!{Tv,Ti}(X::SparseMatrixCSC{Tv,Ti}, A::SparseMatrixCSC{Tv,Ti})
+    # Compute `transpose(A[:,q])`'s column counts. Store shifted forward one position in X.colptr.
+    fill!(X.colptr, 0)
+    @inbounds for k in 1:nnz(A)
+        X.colptr[A.rowval[k] + 1] += 1
     end
-
-    # Compute the column counts of C and store them shifted forward by one in Ccolptr
-    Ccolptr[1:end] = 0
-    @inbounds for k in 1:Annz
-        Ccolptr[Arowval[k]+1] += 1
-    end
-
-    # From these column counts, compute C's column pointers
-    # and store them shifted forward by one in Ccolptr
+    # Compute `transpose(A[:,q])`'s column pointers. Store shifted forward one position in X.colptr.
+    X.colptr[1] = 1
     countsum = 1
-    @inbounds for k in 2:(Cn+1)
-        overwritten = Ccolptr[k]
-        Ccolptr[k] = countsum
+    @inbounds for k in 2:(A.m + 1)
+        overwritten = X.colptr[k]
+        X.colptr[k] = countsum
         countsum += overwritten
     end
-
-    # Distribution-sort the row indices and nonzero values into Crowval and Cnzval,
-    # tracking write positions in Ccolptr
-    @inbounds for Aj in 1:An
-        qAj = q[Aj]
-        for Ak in Acolptr[qAj]:(Acolptr[qAj+1]-1)
-            Ai = Arowval[Ak]
-            Ck = Ccolptr[Ai+1]
-            Crowval[Ck] = qAj
-            Cnzval[Ck] = f(Anzval[Ak])
-            Ccolptr[Ai+1] += 1
+end
+"""
+Helper method for `halfperm!`. With `transpose(A[:,q])`'s column pointers shifted one
+position forward in `X.colptr`, computes `map(f, transpose(A[:,q]))` by appropriately
+distributing `A.rowval` and `f`-transformed `A.nzval` into `X.rowval` and `X.nzval`
+respectively. Simultaneously fixes the one-position-forward shift in `X.colptr`.
+"""
+function _distributevals_halfperm!{Tv,Ti,Tq<:Integer}(X::SparseMatrixCSC{Tv,Ti},
+        A::SparseMatrixCSC{Tv,Ti}, q::AbstractVector{Tq}, f::Function)
+    @inbounds for Xi in 1:A.n
+        Aj = q[Xi]
+        for Ak in nzrange(A, Aj)
+            Ai = A.rowval[Ak]
+            Xk = X.colptr[Ai + 1]
+            X.rowval[Xk] = Xi
+            X.nzval[Xk] = f(A.nzval[Ak])
+            X.colptr[Ai + 1] += 1
         end
     end
-
-    # Tracking write positions in Ccolptr as in the last block fixes the colptr shift,
-    # but the first colptr remains incorrect
-    Ccolptr[1] = 1
-
-    C
+    return # kill potential type instability
 end
-transpose!{Tv,Ti}(C::SparseMatrixCSC{Tv,Ti}, A::SparseMatrixCSC{Tv,Ti}) = qftranspose!(C, A, 1:A.n, identity)
-ctranspose!{Tv,Ti}(C::SparseMatrixCSC{Tv,Ti}, A::SparseMatrixCSC{Tv,Ti}) = qftranspose!(C, A, 1:A.n, conj)
-"See `qftranspose!`" ftranspose!{Tv,Ti}(C::SparseMatrixCSC{Tv,Ti}, A::SparseMatrixCSC{Tv,Ti}, f) = qftranspose!(C, A, 1:A.n, f)
+
+function ftranspose!{Tv,Ti}(X::SparseMatrixCSC{Tv,Ti}, A::SparseMatrixCSC{Tv,Ti}, f::Function)
+    # Check compatibility of source argument A and destination argument X
+    if X.n != A.m
+        throw(DimensionMismatch(string("destination argument `X`'s column count, ",
+            "`X.n (= $(X.n))`, must match source argument `A`'s row count, `A.m (= $(A.m))`")))
+    elseif X.m != A.n
+        throw(DimensionMismatch(string("destination argument `X`'s row count,
+            `X.m (= $(X.m))`, must match source argument `A`'s column count, `A.n (= $(A.n))`")))
+    elseif length(X.rowval) < nnz(A)
+        throw(ArgumentError(string("the length of destination argument `X`'s `rowval` ",
+            "array, `length(X.rowval) (= $(length(X.rowval)))`, must be greater than or ",
+            "equal to source argument `A`'s allocated entry count, `nnz(A) (= $(nnz(A)))`")))
+    elseif length(X.nzval) < nnz(A)
+        throw(ArgumentError(string("the length of destination argument `X`'s `nzval` ",
+            "array, `length(X.nzval) (= $(length(X.nzval)))`, must be greater than or ",
+            "equal to source argument `A`'s allocated entry count, `nnz(A) (= $(nnz(A)))`")))
+    end
+    halfperm!(X, A, 1:A.n, f)
+end
+transpose!{Tv,Ti}(X::SparseMatrixCSC{Tv,Ti}, A::SparseMatrixCSC{Tv,Ti}) = ftranspose!(X, A, identity)
+ctranspose!{Tv,Ti}(X::SparseMatrixCSC{Tv,Ti}, A::SparseMatrixCSC{Tv,Ti}) = ftranspose!(X, A, conj)
+
+function ftranspose{Tv,Ti}(A::SparseMatrixCSC{Tv,Ti}, f::Function)
+    X = SparseMatrixCSC(A.n, A.m, Vector{Ti}(A.m+1), Vector{Ti}(nnz(A)), Vector{Tv}(nnz(A)))
+    halfperm!(X, A, 1:A.n, f)
+end
+transpose{Tv,Ti}(A::SparseMatrixCSC{Tv,Ti}) = ftranspose(A, identity)
+ctranspose{Tv,Ti}(A::SparseMatrixCSC{Tv,Ti}) = ftranspose(A, conj)
 
 """
-    qftranspose{Tv,Ti}(A::SparseMatrixCSC{Tv,Ti}, q::AbstractVector, f)
+    unchecked_noalias_permute!{Tv,Ti,Tp<:Integer,Tq<:Integer}(X::SparseMatrixCSC{Tv,Ti},
+        A::SparseMatrixCSC{Tv,Ti}, p::AbstractVector{Tp}, q::AbstractVector{Tq},
+        C::SparseMatrixCSC{Tv,Ti})
 
-Return-allocating version of `qftranspose!`. See `qftranspose!` for documentation.
+See [`permute!`](:func:`Base.SparseArrays.permute!`) for basic usage. Parent of `permute[!]`
+methods operating on `SparseMatrixCSC`s that assume none of `X`, `A`, and `C` alias each
+other. As this method performs no argument checking, prefer the safer child methods
+(`permute[!]`) to direct use.
+
+This method consists of two major steps: (1) Column-permute (`Q`,`I[:,q]`) and transpose `A`
+to generate intermediate result `(AQ)^T` (`transpose(A[:,q])`) in `C`. (2) Column-permute
+(`P^T`, I[:,p]) and transpose intermediate result `(AQ)^T` to generate result
+`((AQ)^T P^T)^T = PAQ` (`A[p,q]`) in `X`.
+
+The first step is a call to `halfperm!`, and the second is a variant on `halfperm!` that
+avoids an unnecessary length-`nnz(A)` array-sweep and associated recomputation of column
+pointers. See [`halfperm!`](:func:Base.SparseArrays.halfperm!) for additional algorithmic
+information.
+
+See also: [`unchecked_aliasing_permute!`](:func:`Base.SparseArrays.unchecked_aliasing_permute!`)
 """
-function qftranspose{Tv,Ti}(A::SparseMatrixCSC{Tv,Ti}, q::AbstractVector, f)
-    Cm, Cn, Cnnz = A.n, A.m, nnz(A)
-    Ccolptr = zeros(Ti, Cn+1)
-    Crowval = Array{Ti}(Cnnz)
-    Cnzval = Array{Tv}(Cnnz)
-    qftranspose!(SparseMatrixCSC(Cm, Cn, Ccolptr, Crowval, Cnzval), A, q, f)
+function unchecked_noalias_permute!{Tv,Ti,Tp<:Integer,Tq<:Integer}(X::SparseMatrixCSC{Tv,Ti},
+        A::SparseMatrixCSC{Tv,Ti}, p::AbstractVector{Tp}, q::AbstractVector{Tq},
+        C::SparseMatrixCSC{Tv,Ti})
+    halfperm!(C, A, q)
+    _computecolptrs_permute!(X, A, q, X.colptr)
+    _distributevals_halfperm!(X, C, p, identity)
+    return X
 end
-transpose{Tv,Ti}(A::SparseMatrixCSC{Tv,Ti}) = qftranspose(A, 1:A.n, identity)
-ctranspose{Tv,Ti}(A::SparseMatrixCSC{Tv,Ti}) = qftranspose(A, 1:A.n, conj)
-"See `qftranspose`" ftranspose{Tv,Ti}(A::SparseMatrixCSC{Tv,Ti}, f) = qftranspose(A, 1:A.n, f)
+"""
+    unchecked_aliasing_permute!{Tv,Ti,Tp<:Integer,Tq<:Integer}(
+        A::SparseMatrixCSC{Tv,Ti}, p::AbstractVector{Tp}, q::AbstractVector{Tq},
+        C::SparseMatrixCSC{Tv,Ti}, workcolptr::Vector{Ti})
 
+See [`permute!`](:func:`Base.SparseArrays.permute!`) for basic usage. Parent of `permute!`
+methods operating on `SparseMatrixCSC`s where the source and destination matrices are the
+same. See [`unchecked_noalias_permute!`](:func:`Base.SparseArrays.unchecked_noalias_permute`)
+for additional information; these methods are identical but for this method's requirement of
+the additional `workcolptr`, `length(workcolptr) >= A.n + 1`, which enables efficient
+handling of the source-destination aliasing.
+"""
+function unchecked_aliasing_permute!{Tv,Ti,Tp<:Integer,Tq<:Integer}(
+        A::SparseMatrixCSC{Tv,Ti}, p::AbstractVector{Tp}, q::AbstractVector{Tq},
+        C::SparseMatrixCSC{Tv,Ti}, workcolptr::Vector{Ti})
+    halfperm!(C, A, q)
+    _computecolptrs_permute!(A, A, q, workcolptr)
+    _distributevals_halfperm!(A, C, p, identity)
+    return A
+end
+"""
+Helper method for `unchecked_noalias_permute!` and `unchecked_aliasing_permute!`.
+Computes `PAQ`'s column pointers, storing them shifted one position forward in `X.colptr`;
+`_distributevals_halfperm!` fixes this shift. Saves some work relative to
+`_computecolptrs_halfperm!` as described in `uncheckednoalias_permute!`'s documentation.
+"""
+function _computecolptrs_permute!{Tv,Ti,Tq<:Integer}(X::SparseMatrixCSC{Tv,Ti},
+        A::SparseMatrixCSC{Tv,Ti}, q::AbstractVector{Tq}, workcolptr::Vector{Ti})
+    # Compute `A[p,q]`'s column counts. Store shifted forward one position in workcolptr.
+    @inbounds for k in 1:A.n
+        workcolptr[k+1] = A.colptr[q[k] + 1] - A.colptr[q[k]]
+    end
+    # Compute `A[p,q]`'s column pointers. Store shifted forward one position in X.colptr.
+    X.colptr[1] = 1
+    countsum = 1
+    @inbounds for k in 2:(X.n + 1)
+        overwritten = workcolptr[k]
+        X.colptr[k] = countsum
+        countsum += overwritten
+    end
+end
+
+"""
+Helper method for `permute` and `permute!` methods operating on `SparseMatrixCSC`s.
+Checks compatibility of source argument `A`, row-permutation argument `p`, and
+column-permutation argument `q`.
+"""
+function _checkargs_sourcecompatperms_permute!{Tv,Ti,Tp<:Integer,Tq<:Integer}(
+        A::SparseMatrixCSC{Tv,Ti}, p::AbstractVector{Tp}, q::AbstractVector{Tq})
+     if length(q) != A.n
+         throw(DimensionMismatch(string("the length of column-permutation argument `q`, ",
+             "`length(q) (= $(length(q)))`, must match source argument `A`'s column ",
+             "count, `A.n (= $(A.n))`")))
+     elseif length(p) != A.m
+         throw(DimensionMismatch(string("the length of row-permutation argument `p`, ",
+             "`length(p) (= $(length(p)))`, must match source argument `A`'s row count, ",
+             "`A.m (= $(A.m))`")))
+     end
+end
+"""
+Helper method for `permute` and `permute!` methods operating on `SparseMatrixCSC`s.
+Checks whether row- and column- permutation arguments `p` and `q` are valid permutations.
+"""
+function _checkargs_permutationsvalid_permute!{Ti<:Integer,Tp<:Integer,Tq<:Integer}(
+        p::AbstractVector{Tp}, pcheckspace::Vector{Ti},
+        q::AbstractVector{Tq}, qcheckspace::Vector{Ti})
+    if !_ispermutationvalid_permute!(p, pcheckspace)
+        throw(ArgumentError("row-permutation argument `p` must be a valid permutation"))
+    elseif !_ispermutationvalid_permute!(q, qcheckspace)
+        throw(ArgumentError("column-permutation argument `q` must be a valid permutation"))
+    end
+end
+function _ispermutationvalid_permute!{Ti<:Integer,Tp<:Integer}(perm::AbstractVector{Tp},
+        checkspace::Vector{Ti})
+    n = length(perm)
+    checkspace[1:n] = 0
+    for k in perm
+        (0 < k <= n) && ((checkspace[k] $= 1) == 1) || return false
+    end
+    return true
+end
+"""
+Helper method for `permute` and `permute!` methods operating on `SparseMatrixCSC`s.
+Checks compatibility of source argument `A` and destination argument `X`.
+"""
+function _checkargs_sourcecompatdest_permute!{Tv,Ti}(A::SparseMatrixCSC{Tv,Ti},
+        X::SparseMatrixCSC{Tv,Ti})
+    if X.m != A.m
+        throw(DimensionMismatch(string("destination argument `X`'s row count, ",
+            "`X.m (= $(X.m))`, must match source argument `A`'s row count, `A.m (= $(A.m))`")))
+    elseif X.n != A.n
+        throw(DimensionMismatch(string("destination argument `X`'s column count, ",
+            "`X.n (= $(X.n))`, must match source argument `A`'s column count, `A.n (= $(A.n))`")))
+    elseif length(X.rowval) < nnz(A)
+        throw(ArgumentError(string("the length of destination argument `X`'s `rowval` ",
+            "array, `length(X.rowval) (= $(length(X.rowval)))`, must be greater than or ",
+            "equal to source argument `A`'s allocated entry count, `nnz(A) (= $(nnz(A)))`")))
+    elseif length(X.nzval) < nnz(A)
+        throw(ArgumentError(string("the length of destination argument `X`'s `nzval` ",
+            "array, `length(X.nzval) (= $(length(X.nzval)))`, must be greater than or ",
+            "equal to source argument `A`'s allocated entry count, `nnz(A) (= $(nnz(A)))`")))
+    end
+end
+"""
+Helper method for `permute` and `permute!` methods operating on `SparseMatrixCSC`s.
+Checks compatibility of source argument `A` and intermediate result argument `C`.
+"""
+function _checkargs_sourcecompatworkmat_permute!{Tv,Ti}(A::SparseMatrixCSC{Tv,Ti},
+        C::SparseMatrixCSC{Tv,Ti})
+    if C.n != A.m
+        throw(DimensionMismatch(string("intermediate result argument `C`'s column count, ",
+            "`C.n (= $(C.n))`, must match source argument `A`'s row count, `A.m (= $(A.m))`")))
+    elseif C.m != A.n
+        throw(DimensionMismatch(string("intermediate result argument `C`'s row count, ",
+            "`C.m (= $(C.m))`, must match source argument `A`'s column count, `A.n (= $(A.n))`")))
+    elseif length(C.rowval) < nnz(A)
+        throw(ArgumentError(string("the length of intermediate result argument `C`'s ",
+            "`rowval` array, `length(C.rowval) (= $(length(C.rowval)))`, must be greater than ",
+            "or equal to source argument `A`'s allocated entry count, `nnz(A) (= $(nnz(A)))`")))
+    elseif length(C.nzval) < nnz(A)
+        throw(ArgumentError(string("the length of intermediate result argument `C`'s ",
+            "`rowval` array, `length(C.nzval) (= $(length(C.nzval)))`, must be greater than ",
+            "or equal to source argument `A`'s allocated entry count, `nnz(A)` (= $(nnz(A)))")))
+    end
+end
+"""
+Helper method for `permute` and `permute!` methods operating on `SparseMatrixCSC`s.
+Checks compatibility of source argument `A` and workspace argument `workcolptr`.
+"""
+function _checkargs_sourcecompatworkcolptr_permute!{Tv,Ti}(A::SparseMatrixCSC{Tv,Ti},
+        workcolptr::Vector{Ti})
+    if length(workcolptr) <= A.n
+        throw(DimensionMismatch(string("argument `workcolptr`'s length, ",
+            "`length(workcolptr) (= $(length(workcolptr)))`, must exceed source argument ",
+            "`A`'s column count, `A.n (= $(A.n))`")))
+    end
+end
+"""
+    permute!{Tv,Ti,Tp<:Integer,Tq<:Integer}(X::SparseMatrixCSC{Tv,Ti}, A::SparseMatrixCSC{Tv,Ti},
+        p::AbstractVector{Tp}, q::AbstractVector{Tq}[, C::SparseMatrixCSC{Tv,Ti}])
+
+Bilaterally permute `A`, storing result `PAQ` (`A[p,q]`) in `X`. Stores intermediate result
+`(AQ)^T` (`transpose(A[:,q])`) in optional argument `C` if present. Requires that none of
+`X`, `A`, and, if present, `C` alias each other; to store result `PAQ` back into `A`, use
+the following method lacking `X`:
+
+    permute!{Tv,Ti,Tp<:Integer,Tq<:Integer}(A::SparseMatrixCSC{Tv,Ti}, p::AbstractVector{Tp},
+        q::AbstractVector{Tq}[, C::SparseMatrixCSC{Tv,Ti}[, workcolptr::Vector{Ti}]])
+
+`X`'s dimensions must match those of `A` (`X.m == A.m` and `X.n == A.n`), and `X` must
+have enough storage to accommodate all allocated entries in `A` (`length(X.rowval) >= nnz(A)`
+and `length(X.nzval) >= nnz(A)`). Column-permutation `q`'s length must match `A`'s column
+count (`length(q) == A.n`). Row-permutation `p`'s length must match `A`'s row count
+(`length(p) == A.m`).
+
+`C`'s dimensions must match those of `transpose(A)` (`C.m == A.n` and `C.n == A.m`), and `C`
+must have enough storage to accommodate all allocated entries in `A` (`length(C.rowval)` >= nnz(A)`
+and `length(C.nzval) >= nnz(A)`).
+
+For additional (algorithmic) information, and for versions of these methods that forgo
+argument checking, see (unexported) parent methods [`unchecked_noalias_permute!`](:func:`Base.SparseArrays.unchecked_noalias_permute!`)
+and [`unchecked_aliasing_permute!`](:func:`Base.SparseArrays.unchecked_aliasing_permute!`).
+
+See also: [`permute`](:func:`Base.SparseArrays.permute`)
+"""
+function permute!{Tv,Ti,Tp<:Integer,Tq<:Integer}(X::SparseMatrixCSC{Tv,Ti},
+        A::SparseMatrixCSC{Tv,Ti}, p::AbstractVector{Tp}, q::AbstractVector{Tq})
+    _checkargs_sourcecompatdest_permute!(A, X)
+    _checkargs_sourcecompatperms_permute!(A, p, q)
+    C = SparseMatrixCSC(A.n, A.m, Vector{Ti}(A.m + 1), Vector{Ti}(nnz(A)), Vector{Tv}(nnz(A)))
+    _checkargs_permutationsvalid_permute!(p, C.colptr, q, X.colptr)
+    unchecked_noalias_permute!(X, A, p, q, C)
+end
+function permute!{Tv,Ti,Tp<:Integer,Tq<:Integer}(X::SparseMatrixCSC{Tv,Ti},
+        A::SparseMatrixCSC{Tv,Ti}, p::AbstractVector{Tp}, q::AbstractVector{Tq},
+        C::SparseMatrixCSC{Tv,Ti})
+    _checkargs_sourcecompatdest_permute!(A, X)
+    _checkargs_sourcecompatperms_permute!(A, p, q)
+    _checkargs_sourcecompatworkmat_permute!(A, C)
+    _checkargs_permutationsvalid_permute!(p, C.colptr, q, X.colptr)
+    unchecked_noalias_permute!(X, A, p, q, C)
+end
+function permute!{Tv,Ti,Tp<:Integer,Tq<:Integer}(A::SparseMatrixCSC{Tv,Ti},
+        p::AbstractVector{Tp}, q::AbstractVector{Tq})
+    _checkargs_sourcecompatperms_permute!(A, p, q)
+    C = SparseMatrixCSC(A.n, A.m, Vector{Ti}(A.m + 1), Vector{Ti}(nnz(A)), Vector{Tv}(nnz(A)))
+    workcolptr = Vector{Ti}(A.n + 1)
+    _checkargs_permutationsvalid_permute!(p, C.colptr, q, workcolptr)
+    unchecked_aliasing_permute!(A, p, q, C, workcolptr)
+end
+function permute!{Tv,Ti,Tp<:Integer,Tq<:Integer}(A::SparseMatrixCSC{Tv,Ti},
+        p::AbstractVector{Tp}, q::AbstractVector{Tq}, C::SparseMatrixCSC{Tv,Ti})
+    _checkargs_sourcecompatperms_permute!(A, p, q)
+    _checkargs_sourcecompatworkmat_permute!(A, C)
+    workcolptr = Vector{Ti}(A.n + 1)
+    _checkargs_permutationsvalid_permute!(p, C.colptr, q, workcolptr)
+    unchecked_aliasing_permute!(A, p, q, C, workcolptr)
+end
+function permute!{Tv,Ti,Tp<:Integer,Tq<:Integer}(A::SparseMatrixCSC{Tv,Ti},
+        p::AbstractVector{Tp}, q::AbstractVector{Tq}, C::SparseMatrixCSC{Tv,Ti},
+        workcolptr::Vector{Ti})
+    _checkargs_sourcecompatperms_permute!(A, p, q)
+    _checkargs_sourcecompatworkmat_permute!(A, C)
+    _checkargs_sourcecompatworkcolptr_permute!(A, workcolptr)
+    _checkargs_permutationsvalid_permute!(p, C.colptr, q, workcolptr)
+    unchecked_aliasing_permute!(A, p, q, C, workcolptr)
+end
+"""
+    permute{Tv,Ti,Tp<:Integer,Tq<:Integer}(A::SparseMatrixCSC{Tv,Ti}, p::AbstractVector{Tp},
+        q::AbstractVector{Tq})
+
+Bilaterally permute `A`, returning `PAQ` (`A[p,q]`). Column-permutation `q`'s length must
+match `A`'s column count (`length(q) == A.n`). Row-permutation `p`'s length must match `A`'s
+row count (`length(p) == A.m`).
+
+For expert drivers and additional information, see [`permute!`](:func:`Base.SparseArrays.permute!`).
+"""
+function permute{Tv,Ti,Tp<:Integer,Tq<:Integer}(A::SparseMatrixCSC{Tv,Ti},
+        p::AbstractVector{Tp}, q::AbstractVector{Tq})
+    _checkargs_sourcecompatperms_permute!(A, p, q)
+    X = SparseMatrixCSC(A.m, A.n, Vector{Ti}(A.n + 1), Vector{Ti}(nnz(A)), Vector{Tv}(nnz(A)))
+    C = SparseMatrixCSC(A.n, A.m, Vector{Ti}(A.m + 1), Vector{Ti}(nnz(A)), Vector{Tv}(nnz(A)))
+    _checkargs_permutationsvalid_permute!(p, C.colptr, q, X.colptr)
+    unchecked_noalias_permute!(X, A, p, q, C)
+end
 
 ## fkeep! and children tril!, triu!, droptol!, dropzeros[!]
 
