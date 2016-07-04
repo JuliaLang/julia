@@ -30,6 +30,16 @@ function term(io::IO, md::BlockQuote, columns)
     end
 end
 
+function term(io::IO, md::Admonition, columns)
+    print(io, " "^margin, "| ")
+    with_output_format(:bold, print, io, isempty(md.title) ? md.category : md.title)
+    println(io, "\n", " "^margin, "|")
+    s = sprint(io -> term(io, md.content, columns - 10))
+    for line in split(rstrip(s), "\n")
+        println(io, " "^margin, "|", line)
+    end
+end
+
 function term(io::IO, md::List, columns)
     for (i, point) in enumerate(md.items)
         print(io, " "^2margin, md.ordered ? "$i. " : "•  ")

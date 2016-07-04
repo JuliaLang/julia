@@ -368,6 +368,7 @@ stripmd(x::AbstractString) = x  # base case
 stripmd(x::Void) = " "
 stripmd(x::Vector) = string(map(stripmd, x)...)
 stripmd(x::Markdown.BlockQuote) = "$(stripmd(x.content))"
+stripmd(x::Markdown.Admonition) = "$(stripmd(x.content))"
 stripmd(x::Markdown.Bold) = "$(stripmd(x.text))"
 stripmd(x::Markdown.Code) = "$(stripmd(x.code))"
 stripmd{N}(x::Markdown.Header{N}) = stripmd(x.text)

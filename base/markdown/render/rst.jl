@@ -52,6 +52,16 @@ function rst(io::IO, q::BlockQuote)
     println(io)
 end
 
+function rst(io::IO, md::Admonition)
+    s = sprint(buf -> rst(buf, md.content))
+    title = md.title == ucfirst(md.category) ? "" : md.title
+    println(io, ".. ", md.category, "::", isempty(title) ? "" : " $title")
+    for line in split(rstrip(s), "\n")
+        println(io, isempty(line) ? "" : "   ", line)
+    end
+    println(io)
+end
+
 function rst(io::IO, md::HorizontalRule)
     println(io, "–" ^ 5)
 end

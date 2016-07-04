@@ -58,6 +58,16 @@ function latex(io::IO, md::BlockQuote)
     end
 end
 
+function latex(io::IO, md::Admonition)
+    wrapblock(io, "quote") do
+        wrapinline(io, "textbf") do
+            print(io, md.category)
+        end
+        println(io, "\n\n", md.title, "\n")
+        latex(io, md.content)
+    end
+end
+
 function latex(io::IO, md::List)
     env = md.ordered ? "enumerate" : "itemize"
     wrapblock(io, env) do
