@@ -183,7 +183,7 @@ let exename = `$(Base.julia_cmd()) --precompiled=yes`
     @test readchomp(`$exename -E "Bool(Base.JLOptions().can_inline)"`) == "true"
     @test readchomp(`$exename --inline=yes -E "Bool(Base.JLOptions().can_inline)"`) == "true"
     @test readchomp(`$exename --inline=no -E "Bool(Base.JLOptions().can_inline)"`) == "false"
-    # --inline takes yes/no as arugment
+    # --inline takes yes/no as argument
     @test !success(`$exename --inline=false`)
 
     # --fast-math
@@ -196,7 +196,7 @@ let exename = `$(Base.julia_cmd()) --precompiled=yes`
         @test parse(Int,readchomp(`$exename --math-mode=fast -E "Int(Base.JLOptions().fast_math)"`)) == JL_OPTIONS_FAST_MATH_ON
     end
 
-    # --worker takes default / custom as arugment (default/custom arguments tested in test/parallel.jl, test/examples.jl)
+    # --worker takes default / custom as argument (default/custom arguments tested in test/parallel.jl, test/examples.jl)
     @test !success(`$exename --worker=true`)
 
     escape(str) = replace(str, "\\", "\\\\")

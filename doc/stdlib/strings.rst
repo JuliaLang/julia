@@ -80,7 +80,7 @@
 
    .. Docstring generated from Julia source
 
-   Convert a string to ``String`` type and check that it contains only ASCII data, otherwise throwing an ``ArugmentError`` indicating the position of the first non-ASCII byte.
+   Convert a string to ``String`` type and check that it contains only ASCII data, otherwise throwing an ``ArgumentError`` indicating the position of the first non-ASCII byte.
 
 .. function:: @r_str -> Regex
 
@@ -500,4 +500,3 @@
    .. Docstring generated from Julia source
 
    Create a string from the address of a NUL-terminated UTF-32 string. A copy is made; the pointer can be safely freed. If ``length`` is specified, the string does not have to be NUL-terminated.
-
