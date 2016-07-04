@@ -876,10 +876,12 @@ extern "C" void jl_compile_linfo(jl_lambda_info_t *li)
         jl_add_linfo_in_flight((specf ? specf : f)->getName(), li, DL);
     }
 
-    // success. add the result to the execution engine now
-    jl_finalize_module(std::move(m), !toplevel);
     // mark the pointer calling convention
     li->jlcall_api = (f->getFunctionType() == jl_func_sig ? 0 : 1);
+    li->fptr = NULL;
+
+    // success. add the result to the execution engine now
+    jl_finalize_module(std::move(m), !toplevel);
 
     // if not inlineable, code won't be needed again
     if (JL_DELETE_NON_INLINEABLE &&
