@@ -1101,12 +1101,14 @@ end
 function dump(io::IO, x::Symbol, n::Int, indent)
     print(io, typeof(x), " ", x)
     isempty(indent) && println(io)
+    nothing
 end
 
 # Types
 function dump(io::IO, x::Union, n::Int, indent)
     print(io, x)
     isempty(indent) && println(io)
+    nothing
 end
 
 function dump(io::IO, x::DataType, n::Int, indent)
@@ -1169,6 +1171,7 @@ function dumptype(io::IO, x::ANY, n::Int, indent)
         end
     end
     isempty(indent) && println(io)
+    nothing
 end
 
 # For abstract types, use _dumptype only if it's a form that will be called
