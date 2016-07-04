@@ -702,11 +702,15 @@ void _julia_init(JL_IMAGE_SEARCH rel)
 
     jl_gc_enable(1);
 
-    if (jl_options.image_file && (!jl_generating_output() || jl_options.incremental)) {
-        jl_array_t *temp = jl_module_init_order;
-        JL_GC_PUSH1(&temp);
+    if (jl_options.image_file && (!jl_generating_output() || jl_options.incremental) && jl_module_init_order) {
+        jl_array_t *init_order = jl_module_init_order;
+        JL_GC_PUSH1(&init_order);
         jl_module_init_order = NULL;
-        jl_init_restored_modules(temp);
+        int i, l = jl_array_len(init_order);
+        for (i = 0; i < l; i++) {
+            jl_value_t *mod = jl_array_ptr_ref(init_order, i);
+            jl_module_run_initializer((jl_module_t*)mod);
+        }
         JL_GC_POP();
     }
 
@@ -742,7 +746,7 @@ static void julia_save(void)
     int i, l = jl_array_len(worklist);
     for (i = 0; i < l; i++) {
         jl_value_t *m = jl_arrayref(worklist, i);
-        if (jl_module_get_initializer((jl_module_t*)m)) {
+        if (jl_get_global((jl_module_t*)m, jl_symbol("__init__"))) {
             jl_array_ptr_1d_push(jl_module_init_order, m);
         }
     }

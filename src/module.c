@@ -583,34 +583,6 @@ JL_DLLEXPORT jl_sym_t *jl_module_name(jl_module_t *m) { return m->name; }
 JL_DLLEXPORT jl_module_t *jl_module_parent(jl_module_t *m) { return m->parent; }
 JL_DLLEXPORT uint64_t jl_module_uuid(jl_module_t *m) { return m->uuid; }
 
-jl_function_t *jl_module_get_initializer(jl_module_t *m)
-{
-    jl_value_t *f = jl_get_global(m, jl_symbol("__init__"));
-    if (f == NULL /*|| !jl_is_function(f)*/)
-        return NULL;
-    return (jl_function_t*)f;
-}
-
-JL_DLLEXPORT void jl_module_run_initializer(jl_module_t *m)
-{
-    jl_ptls_t ptls = jl_get_ptls_states();
-    jl_function_t *f = jl_module_get_initializer(m);
-    if (f == NULL)
-        return;
-    JL_TRY {
-        jl_apply(&f, 1);
-    }
-    JL_CATCH {
-        if (jl_initerror_type == NULL) {
-            jl_rethrow();
-        }
-        else {
-            jl_rethrow_other(jl_new_struct(jl_initerror_type, m->name,
-                                           ptls->exception_in_transit));
-        }
-    }
-}
-
 int jl_is_submodule(jl_module_t *child, jl_module_t *parent)
 {
     while (1) {

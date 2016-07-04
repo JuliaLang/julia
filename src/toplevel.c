@@ -68,6 +68,32 @@ JL_DLLEXPORT jl_module_t *jl_new_main_module(void)
     return old_main;
 }
 
+static jl_function_t *jl_module_get_initializer(jl_module_t *m)
+{
+    return (jl_function_t*)jl_get_global(m, jl_symbol("__init__"));
+}
+
+void jl_module_run_initializer(jl_module_t *m)
+{
+    jl_ptls_t ptls = jl_get_ptls_states();
+    jl_function_t *f = jl_module_get_initializer(m);
+    if (f == NULL)
+        return;
+    JL_TRY {
+        jl_apply(&f, 1);
+    }
+    JL_CATCH {
+        if (jl_initerror_type == NULL) {
+            jl_rethrow();
+        }
+        else {
+            jl_rethrow_other(jl_new_struct(jl_initerror_type, m->name,
+                                           ptls->exception_in_transit));
+        }
+    }
+}
+
+
 // load time init procedure: in build mode, only record order
 static void jl_module_load_time_initialize(jl_module_t *m)
 {
@@ -77,7 +103,7 @@ static void jl_module_load_time_initialize(jl_module_t *m)
             jl_module_init_order = jl_alloc_vec_any(0);
         jl_array_ptr_1d_push(jl_module_init_order, (jl_value_t*)m);
         jl_function_t *f = jl_module_get_initializer(m);
-        if (f) {
+        if (f !=  NULL) {
             jl_value_t *tt = jl_is_type(f) ? (jl_value_t*)jl_wrap_Type(f) : jl_typeof(f);
             JL_GC_PUSH1(&tt);
             tt = (jl_value_t*)jl_apply_tuple_type_v(&tt, 1);
