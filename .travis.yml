@@ -11,7 +11,7 @@ matrix:
             - ubuntu-toolchain-r-test
             - kalakris-cmake
           packages:
-            - cmake:i386
+            - cmake
             - bar
             - time
             - binutils
