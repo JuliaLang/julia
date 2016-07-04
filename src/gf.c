@@ -1807,6 +1807,7 @@ STATIC_INLINE int sig_match_fast(jl_value_t **args, jl_value_t **sig, size_t i, 
 jl_typemap_entry_t *call_cache[N_CALL_CACHE];
 static uint8_t pick_which[N_CALL_CACHE];
 #ifdef JL_GF_PROFILE
+size_t ncalls;
 void call_cache_stats() {
     int pick_which_stat[4] = {0, 0, 0, 0};
     int i, count = 0;
@@ -1830,7 +1831,7 @@ void call_cache_stats() {
 JL_DLLEXPORT jl_value_t *jl_apply_generic(jl_value_t **args, uint32_t nargs)
 {
 #ifdef JL_GF_PROFILE
-    mt->ncalls++;
+    ncalls++;
 #endif
 #ifdef JL_TRACE
     int traceen = trace_en; //&& ((char*)&mt < jl_stack_hi-6000000);
