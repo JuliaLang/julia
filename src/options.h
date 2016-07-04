@@ -81,8 +81,7 @@
 // sites). this generally prints too much output to be useful.
 //#define JL_TRACE
 
-// count generic (not inlined or specialized) calls to each function. recorded
-// in the `ncalls` field of jl_methtable_t.
+// profile generic (not inlined or specialized) calls to each function
 //#define JL_GF_PROFILE
 
 
