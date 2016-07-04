@@ -507,10 +507,20 @@ end
 function set_ssl_cert_locations(cert_loc)
     cert_file = isfile(cert_loc) ? cert_loc : Cstring(C_NULL)
     cert_dir  = isdir(cert_loc) ? cert_loc : Cstring(C_NULL)
-    cert_file == C_NULL && cert_dir == C_NULL && return
-    ccall((:git_libgit2_opts, :libgit2), Cint,
-          (Cint, Cstring, Cstring),
-          Cint(Consts.SET_SSL_CERT_LOCATIONS), cert_file, cert_dir)
+
+    # load certs
+    err = ccall((:mbedtls_stream_init, :libmbedtlsstream), Cint,
+                (Cstring, Cstring), cert_file, cert_dir)
+    err < 0 && throw(ErrorException("error initializing mbedTLS stream"))
+
+    # setup tls stream
+    mbedtls_stream_cb = cglobal((:mbedtls_stream_new, :libmbedtlsstream))
+    ccall((:git_stream_register_tls, :libgit2), Cint, (Ptr{Void},), mbedtls_stream_cb)
+
+    # cleanup on shutdown
+    atexit() do
+        ccall((:mbedtls_stream_shutdown, :libmbedtlsstream), Cint, ())
+    end
 end
 
 function __init__()
