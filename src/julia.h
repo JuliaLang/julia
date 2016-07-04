@@ -438,9 +438,6 @@ typedef struct _jl_methtable_t {
     intptr_t max_args;  // max # of non-vararg arguments in a signature
     jl_value_t *kwsorter;  // keyword argument sorter function
     jl_module_t *module; // used for incremental serialization to locate original binding
-#ifdef JL_GF_PROFILE
-    int ncalls;
-#endif
     jl_mutex_t writelock;
 } jl_methtable_t;
 
