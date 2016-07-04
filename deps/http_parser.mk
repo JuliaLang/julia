@@ -2,7 +2,7 @@
 
 HTTPPARSER_GIT_URL := git://github.com/nodejs/http-parser.git
 HTTPPARSER_TAR_URL = https://api.github.com/repos/nodejs/http-parser/tarball/$1
-$(eval $(call git-external,http_parser,HTTPPARSER,Makefile,libhttp_parser.$(SHLIB_EXT),$(SRCDIR)/srccache))
+$(eval $(call git-external,http_parser,HTTPPARSER,Makefile,libhttp_parser.$(SHLIB_EXT),$(BUILDDIR)))
 
 HTTPPARSER_OBJ_TARGET := $(build_shlibdir)/libhttp_parser.$(SHLIB_EXT)
 HTTPPARSER_OBJ_SOURCE := $(BUILDDIR)/$(HTTPPARSER_SRC_DIR)/libhttp_parser.$(SHLIB_EXT)

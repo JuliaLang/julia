@@ -164,7 +164,7 @@ ifeq ($(USE_SYSTEM_GMP), 0)
 STAGE1_DEPS += gmp
 endif
 
-ifeq ($(USE_SYSTEM_HTTP_PARSER), 0)
+ifeq ($(USE_SYSTEM_HTTPPARSER), 0)
 STAGE1_DEPS += http_parser
 endif
 
