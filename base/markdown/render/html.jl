@@ -88,6 +88,15 @@ function html(io::IO, md::BlockQuote)
     end
 end
 
+function html(io::IO, md::Admonition)
+    withtag(io, :div, :class => "admonition $(md.category)") do
+        withtag(io, :p, :class => "admonition-title") do
+            print(io, md.title)
+        end
+        html(io, md.content)
+    end
+end
+
 function html(io::IO, md::List)
     withtag(io, md.ordered ? :ol : :ul) do
         for item in md.items
