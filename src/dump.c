@@ -556,10 +556,10 @@ static void jl_serialize_datatype(ios_t *s, jl_datatype_t *dt)
     }
 
     write_int32(s, dt->size);
-    int has_instance = !!(dt->instance != NULL);
-    int has_layout = !!(dt->layout != NULL);
+    int has_instance = (dt->instance != NULL);
+    int has_layout = (dt->layout != NULL);
     write_uint8(s, dt->abstract | (dt->mutabl<<1) | (has_layout<<2) | (has_instance<<3) |
-            (dt->hastypevars<<4) | (dt->haswildcard<<5) | (dt->isleaftype<<6));
+        (dt->hastypevars<<4) | (dt->haswildcard<<5) | (dt->isleaftype<<6));
     write_int32(s, dt->depth);
     if (!dt->abstract) {
         write_uint16(s, dt->ninitialized);
