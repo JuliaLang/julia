@@ -287,7 +287,7 @@ General Number Functions and Constants
        julia> Float32(1/3, RoundUp)
        0.33333334f0
 
-   See ``rounding`` for available rounding modes.
+   See :obj:`RoundingMode` for available rounding modes.
 
 .. function:: Float64(x [, mode::RoundingMode])
 
@@ -303,7 +303,7 @@ General Number Functions and Constants
        julia> Float64(pi, RoundUp)
        3.1415926535897936
 
-   See ``rounding`` for available rounding modes.
+   See :obj:`RoundingMode` for available rounding modes.
 
 .. function:: BigInt(x)
 
@@ -335,7 +335,7 @@ General Number Functions and Constants
 
    Get the current floating point rounding mode for type ``T``\ , controlling the rounding of basic arithmetic functions (:func:`+`\ , :func:`-`\ , :func:`*`\ , :func:`/` and :func:`sqrt`\ ) and type conversion.
 
-   Valid modes are ``RoundNearest``\ , ``RoundToZero``\ , ``RoundUp``\ , ``RoundDown``\ , and ``RoundFromZero`` (``BigFloat`` only).
+   See :obj:`RoundingMode` for available modes.
 
 .. function:: setrounding(T, mode)
 
@@ -343,7 +343,7 @@ General Number Functions and Constants
 
    Set the rounding mode of floating point type ``T``\ , controlling the rounding of basic arithmetic functions (:func:`+`\ , :func:`-`\ , :func:`*`\ , :func:`/` and :func:`sqrt`\ ) and type conversion.
 
-   Note that this may affect other types, for instance changing the rounding mode of ``Float64`` will change the rounding mode of ``Float32``\ . See ``rounding`` for available modes
+   Note that this may affect other types, for instance changing the rounding mode of ``Float64`` will change the rounding mode of ``Float32``\ . See :obj:`RoundingMode` for available modes.
 
 .. function:: setrounding(f::Function, T, mode)
 
@@ -358,7 +358,7 @@ General Number Functions and Constants
        f()
        setrounding(T, old)
 
-   See ``rounding`` for available rounding modes.
+   See :obj:`RoundingMode` for available rounding modes.
 
 .. function:: get_zero_subnormals() -> Bool
 

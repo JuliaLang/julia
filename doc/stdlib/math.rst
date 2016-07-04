@@ -966,7 +966,7 @@ Mathematical Functions
 
    .. Docstring generated from Julia source
 
-   ``round(x)`` rounds ``x`` to an integer value according to the default rounding mode (see :func:`rounding`\ ), returning a value of the same type as ``x``\ . By default (:obj:`RoundNearest`\ ), this will round to the nearest integer, with ties (fractional values of 0.5) being rounded to the even integer.
+   ``round(x)`` rounds ``x`` to an integer value according to the default rounding mode (see :obj:`RoundingMode`\ ), returning a value of the same type as ``x``\ . By default (:obj:`RoundNearest`\ ), this will round to the nearest integer, with ties (fractional values of 0.5) being rounded to the even integer.
 
    .. doctest::
 
@@ -1011,43 +1011,55 @@ Mathematical Functions
           1.2
 
 
-.. data:: RoundingMode
+.. type:: RoundingMode
+
+   .. Docstring generated from Julia source
 
    A type which controls rounding behavior. Currently supported rounding modes are:
 
-   - :obj:`RoundNearest` (default)
-   - :obj:`RoundNearestTiesAway`
-   - :obj:`RoundNearestTiesUp`
-   - :obj:`RoundToZero`
-   - :obj:`RoundUp`
-   - :obj:`RoundDown`
+   * :obj:`RoundNearest` (default)
+   * :obj:`RoundNearestTiesAway`
+   * :obj:`RoundNearestTiesUp`
+   * :obj:`RoundToZero`
+   * :obj:`RoundFromZero` (``BigFloat`` only)
+   * :obj:`RoundUp`
+   * :obj:`RoundDown`
 
-.. data:: RoundNearest
+.. variable:: RoundNearest
 
-   The default rounding mode. Rounds to the nearest integer, with ties
-   (fractional values of 0.5) being rounded to the nearest even integer.
+   .. Docstring generated from Julia source
 
-.. data:: RoundNearestTiesAway
+   The default rounding mode. Rounds to the nearest integer, with ties (fractional values of 0.5) being rounded to the nearest even integer.
 
-   Rounds to nearest integer, with ties rounded away from zero (C/C++
-   :func:`round` behaviour).
+.. variable:: RoundNearestTiesAway
 
-.. data:: RoundNearestTiesUp
+   .. Docstring generated from Julia source
 
-   Rounds to nearest integer, with ties rounded toward positive infinity
-   (Java/JavaScript :func:`round` behaviour).
+   Rounds to nearest integer, with ties rounded away from zero (C/C++ :func:`round` behaviour).
 
-.. data:: RoundToZero
+.. variable:: RoundNearestTiesUp
 
-   :func:`round` using this rounding mode is an alias for :func:`trunc`.
+   .. Docstring generated from Julia source
 
-.. data:: RoundUp
+   Rounds to nearest integer, with ties rounded toward positive infinity (Java/JavaScript :func:`round` behaviour).
 
-   :func:`round` using this rounding mode is an alias for :func:`ceil`.
+.. variable:: RoundToZero
 
-.. data:: RoundDown
+   .. Docstring generated from Julia source
 
-   :func:`round` using this rounding mode is an alias for :func:`floor`.
+   :func:`round` using this rounding mode is an alias for :func:`trunc`\ .
+
+.. variable:: RoundUp
+
+   .. Docstring generated from Julia source
+
+   :func:`round` using this rounding mode is an alias for :func:`ceil`\ .
+
+.. variable:: RoundDown
+
+   .. Docstring generated from Julia source
+
+   :func:`round` using this rounding mode is an alias for :func:`floor`\ .
 
 .. function:: round(z, RoundingModeReal, RoundingModeImaginary)
 
