@@ -878,25 +878,9 @@ function cat(catdims, Xin::_SparseConcatGroup...)
     T = promote_eltype(Xin...)
     Base.cat_t(catdims, T, X...)
 end
-function hcat(Xin::_SparseConcatGroup...)
-    X = SparseMatrixCSC[issparse(x) ? x : sparse(x) for x in Xin]
-    hcat(X...)
-end
-function vcat(Xin::_SparseConcatGroup...)
-    X = SparseMatrixCSC[issparse(x) ? x : sparse(x) for x in Xin]
-    vcat(X...)
-end
-function hvcat(rows::Tuple{Vararg{Int}}, X::_SparseConcatGroup...)
-    nbr = length(rows)  # number of block rows
-
-    tmp_rows = Array{SparseMatrixCSC}(nbr)
-    k = 0
-    @inbounds for i = 1 : nbr
-        tmp_rows[i] = hcat(X[(1 : rows[i]) + k]...)
-        k += rows[i]
-    end
-    vcat(tmp_rows...)
-end
+hcat(Xin::_SparseConcatGroup...) = typed_hcat(SparseMatrixCSC, Xin...)
+vcat(Xin::_SparseConcatGroup...) = typed_vcat(SparseMatrixCSC, Xin...)
+hvcat(rows::Tuple{Vararg{Int}}, X::_SparseConcatGroup...) = typed_hvcat(SparseMatrixCSC, rows, X...)
 
 # Concatenations strictly involving un/annotated dense matrices/vectors should yield dense arrays
 cat(catdims, xs::_DenseConcatGroup...) = Base.cat_t(catdims, promote_eltype(xs...), xs...)

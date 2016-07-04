@@ -3235,7 +3235,10 @@ dropstored!(A::SparseMatrixCSC, ::Colon) = dropstored!(A, :, :)
 
 # Sparse concatenation
 
-function vcat(X::SparseMatrixCSC...)
+promote_indtype() = Base.Bottom
+promote_indtype{Tv,Ti}(X::SparseMatrixCSC{Tv,Ti}, Xs::SparseMatrixCSC...) = promote_type(Ti, promote_indtype(Xs...))
+
+function typed_vcat{Tv,Ti}(::Type{SparseMatrixCSC{Tv,Ti}}, X::SparseMatrixCSC...)
     num = length(X)
     mX = Int[ size(x, 1) for x in X ]
     nX = Int[ size(x, 2) for x in X ]
@@ -3246,13 +3249,6 @@ function vcat(X::SparseMatrixCSC...)
         if nX[i] != n
             throw(DimensionMismatch("All inputs to vcat should have the same number of columns"))
         end
-    end
-
-    Tv = eltype(X[1].nzval)
-    Ti = eltype(X[1].rowval)
-    for i = 2:length(X)
-        Tv = promote_type(Tv, eltype(X[i].nzval))
-        Ti = promote_type(Ti, eltype(X[i].rowval))
     end
 
     nnzX = Int[ nnz(x) for x in X ]
@@ -3295,7 +3291,7 @@ end
 end
 
 
-function hcat(X::SparseMatrixCSC...)
+function typed_hcat{Tv,Ti}(::Type{SparseMatrixCSC{Tv,Ti}}, X::SparseMatrixCSC...)
     num = length(X)
     mX = Int[ size(x, 1) for x in X ]
     nX = Int[ size(x, 2) for x in X ]
@@ -3304,9 +3300,6 @@ function hcat(X::SparseMatrixCSC...)
         if mX[i] != m; throw(DimensionMismatch("")); end
     end
     n = sum(nX)
-
-    Tv = promote_type(map(x->eltype(x.nzval), X)...)
-    Ti = promote_type(map(x->eltype(x.rowval), X)...)
 
     colptr = Array{Ti}(n + 1)
     nnzX = Int[ nnz(x) for x in X ]
@@ -3331,6 +3324,42 @@ function hcat(X::SparseMatrixCSC...)
     end
 
     SparseMatrixCSC(m, n, colptr, rowval, nzval)
+end
+
+for d in (:h, :v)
+    let cat_name = Symbol(d, :cat), typed_cat_name = Symbol(:typed_, cat_name)
+        @eval begin
+            $(cat_name)(Xin::Union{Vector, Matrix, SparseMatrixCSC}...) = $(typed_cat_name)(SparseMatrixCSC, Xin...)
+
+            $(typed_cat_name){T<:SparseMatrixCSC}(::Type{T}) = T(0, 0)
+            $(typed_cat_name){T<:SparseMatrixCSC}(::Type{T}, A::AbstractVecOrMat...) =
+                $(typed_cat_name)(T, map(hcat, A)...)
+            $(typed_cat_name){T<:SparseMatrixCSC}(::Type{T}, A::AbstractMatrix...) =
+                $(typed_cat_name)(T, map(SparseMatrixCSC, A)...)
+            $(typed_cat_name)(::Type{SparseMatrixCSC}, X::SparseMatrixCSC...) =
+                $(typed_cat_name)(SparseMatrixCSC{promote_eltype(X...)}, X...)
+            $(typed_cat_name){Tv}(::Type{SparseMatrixCSC{Tv}}, X::SparseMatrixCSC...) =
+                $(typed_cat_name)(SparseMatrixCSC{Tv,promote_indtype(X...)}, X...)
+        end
+    end
+end
+
+typed_vcat{T<:SparseMatrixCSC}(::Type{T}, A::AbstractVector...) = typed_vcat(T, map(hcat, A)...)
+
+# hvcat(rows::Tuple{Vararg{Int}}, X::Union{Vector, Matrix, SparseMatrixCSC}...) = typed_hvcat(SparseMatrixCSC, rows, X...)
+typed_hvcat{T<:SparseMatrixCSC}(::Type{T}, rows::Tuple{Vararg{Int}}) = T(length(rows),0)
+typed_hvcat{T<:SparseMatrixCSC}(::Type{T}, rows::Tuple{Vararg{Int}}, X::AbstractMatrix...) =
+    invoke(typed_hvcat, (Type{T}, Tuple{Vararg{Int}}, Vararg{AbstractVecOrMat}), T, rows, X...)
+function typed_hvcat{T<:SparseMatrixCSC}(::Type{T}, rows::Tuple{Vararg{Int}}, X::AbstractVecOrMat...)
+    nbr = length(rows)  # number of block rows
+
+    tmp_rows = Array{T}(nbr)
+    k = 0
+    @inbounds for i = 1 : nbr
+        tmp_rows[i] = typed_hcat(T, X[(1 : rows[i]) + k]...)
+        k += rows[i]
+    end
+    typed_vcat(T, tmp_rows...)
 end
 
 """
