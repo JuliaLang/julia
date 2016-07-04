@@ -40,7 +40,7 @@ Data Formats
 
    .. Docstring generated from Julia source
 
-   Convert an integer to a string in the given base, optionally specifying a number of digits to pad to. The base can be specified as either an integer, or as a ``UInt8`` array of character values to use as digit symbols.
+   Convert an integer to a string in the given base, optionally specifying a number of digits to pad to.
 
 .. function:: digits([T], n, [base], [pad])
 
