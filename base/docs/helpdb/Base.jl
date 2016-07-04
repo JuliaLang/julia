@@ -8262,7 +8262,7 @@ filt!
     ascii(s::AbstractString)
 
 Convert a string to `String` type and check that it contains only ASCII data, otherwise
-throwing an `ArugmentError` indicating the position of the first non-ASCII byte.
+throwing an `ArgumentError` indicating the position of the first non-ASCII byte.
 """
 ascii(s)
 
