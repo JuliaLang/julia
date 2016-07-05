@@ -62,7 +62,6 @@ end
 Airy function derivative ``\\operatorname{Ai}'(x)``.
 """
 airyprime(z) = airy(1,z)
-@vectorize_1arg Number airyprime
 
 """
     airyai(x)
@@ -70,7 +69,6 @@ airyprime(z) = airy(1,z)
 Airy function ``\\operatorname{Ai}(x)``.
 """
 airyai(z) = airy(0,z)
-@vectorize_1arg Number airyai
 
 """
     airyaiprime(x)
@@ -78,7 +76,6 @@ airyai(z) = airy(0,z)
 Airy function derivative ``\\operatorname{Ai}'(x)``.
 """
 airyaiprime(z) = airy(1,z)
-@vectorize_1arg Number airyaiprime
 
 """
     airybi(x)
@@ -86,7 +83,6 @@ airyaiprime(z) = airy(1,z)
 Airy function ``\\operatorname{Bi}(x)``.
 """
 airybi(z) = airy(2,z)
-@vectorize_1arg Number airybi
 
 """
     airybiprime(x)
@@ -94,7 +90,6 @@ airybi(z) = airy(2,z)
 Airy function derivative ``\\operatorname{Bi}'(x)``.
 """
 airybiprime(z) = airy(3,z)
-@vectorize_1arg Number airybiprime
 
 function airyx(k::Integer, z::Complex128)
     id = Int32(k==1 || k==3)
@@ -117,8 +112,6 @@ for afn in (:airy,:airyx)
         $afn(k::Integer, x::AbstractFloat) = real($afn(k, complex(x)))
 
         $afn(z) = $afn(0,z)
-        @vectorize_1arg Number $afn
-        @vectorize_2arg Number $afn
     end
 end
 """
@@ -151,7 +144,6 @@ for jy in ("j","y"), nu in (0,1)
     @eval begin
         $bjynu(x::Real) = $bjynu(float(x))
         $bjynu(x::Complex) = $(Symbol("bessel",jy))($nu,x)
-        @vectorize_1arg Number $bjynu
     end
 end
 
@@ -459,7 +451,6 @@ for f in ("i", "ix", "j", "jx", "k", "kx", "y", "yx")
         end
         $bfn{T<:AbstractFloat}(k::T, z::Complex{T}) = throw(MethodError($bfn,(k,z)))
         $bfn(nu::Float32, x::Complex64) = Complex64($bfn(Float64(nu), Complex128(x)))
-        @vectorize_2arg Number $bfn
     end
 end
 
@@ -477,7 +468,6 @@ for bfn in (:besselh, :besselhx)
 
         $bfn{T<:AbstractFloat}(nu::T, k::Integer, z::Complex{T}) = throw(MethodError($bfn,(nu,k,z)))
         $bfn(nu::Float32, k::Integer, x::Complex64) = Complex64($bfn(Float64(nu), k, Complex128(x)))
-        @vectorize_2arg Number $bfn
     end
 end
 
@@ -487,7 +477,6 @@ end
 Bessel function of the third kind of order `nu`, ``H^{(1)}_\\nu(x)``.
 """
 hankelh1(nu, z) = besselh(nu, 1, z)
-@vectorize_2arg Number hankelh1
 
 """
     hankelh2(nu, x)
@@ -495,7 +484,6 @@ hankelh1(nu, z) = besselh(nu, 1, z)
 Bessel function of the third kind of order `nu`, ``H^{(2)}_\\nu(x)``.
 """
 hankelh2(nu, z) = besselh(nu, 2, z)
-@vectorize_2arg Number hankelh2
 
 """
     hankelh1x(nu, x)
@@ -503,7 +491,6 @@ hankelh2(nu, z) = besselh(nu, 2, z)
 Scaled Bessel function of the third kind of order `nu`, ``H^{(1)}_\\nu(x) e^{-x i}``.
 """
 hankelh1x(nu, z) = besselhx(nu, 1, z)
-@vectorize_2arg Number hankelh1x
 
 """
     hankelh2x(nu, x)
@@ -511,4 +498,3 @@ hankelh1x(nu, z) = besselhx(nu, 1, z)
 Scaled Bessel function of the third kind of order `nu`, ``H^{(2)}_\\nu(x) e^{x i}``.
 """
 hankelh2x(nu, z) = besselhx(nu, 2, z)
-@vectorize_2arg Number hankelh2x
