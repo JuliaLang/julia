@@ -890,6 +890,7 @@ for f in (
         :airyprime, :airyai, :airyaiprime, :airybi, :airybiprime, :airy, :airyx, :besselj0, :besselj1, :bessely0, :bessely1, # base/special/bessel.jl
         :cbrt, :sinh, :cosh, :tanh, :atan, :asinh, :exp, :erf, :erfc, :exp2, :expm1, :exp10, :sin, :cos, :tan, :asin, :acos, :acosh, :atanh, #=:log,=# :log2, :log10, :lgamma, #=:log1p,=# :sqrt, # base/math.jl
         :abs, :abs2, :angle, :isnan, :isinf, :isfinite, # base/floatfuncs.jl
+        :acos_fast, :acosh_fast, :angle_fast, :asin_fast, :asinh_fast, :atan_fast, :atanh_fast, :cbrt_fast, :cis_fast, :cos_fast, :cosh_fast, :exp10_fast, :exp2_fast, :exp_fast, :expm1_fast, :lgamma_fast, :log10_fast, :log1p_fast, :log2_fast, :log_fast, :sin_fast, :sinh_fast, :sqrt_fast, :tan_fast, :tanh_fast, # base/fastmath.jl
         )
     @eval @dep_vectorize_1arg Number $f
 end
@@ -908,6 +909,7 @@ for f in (
         :polygamma, :zeta, :beta, :lbeta, # base/special/gamma.jl
         :airy, :airyx, :besseli, :besselix, :besselj, :besseljx, :besselk, :besselkx, :bessely, :besselyx, :besselh, :besselhx, :hankelh1, :hankelh2, :hankelh1x, :hankelh2x, # base/special/bessel.jl
         :log, :hypot, :atan2, # base/math.jl
+        :pow_fast, :atan2_fast, :hypot_fast, :max_fast, :min_fast, :minmax_fast, # base/fastmath.jl
     )
     @eval @dep_vectorize_2arg Number $f
 end
