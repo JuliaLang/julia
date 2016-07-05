@@ -97,7 +97,6 @@ static int mangle_pointers;
 
 static void _probe_arch(void)
 {
-    jl_ptls_t ptls = jl_get_ptls_states();
     struct _probe_data p;
     memset(p.probe_env, 0, sizeof(jl_jmp_buf));
     memset(p.probe_sameAR, 0, sizeof(jl_jmp_buf));
@@ -112,10 +111,12 @@ static void _probe_arch(void)
     boundlow(&p);
 
 #if defined(__linux__) && defined(__i386__)
+    jl_ptls_t ptls = jl_get_ptls_states();
     char **s = (char**)p.ref_probe;
     mangle_pointers = !(s[4] > ptls->stack_lo &&
                         s[4] < ptls->stack_hi);
 #elif defined(__linux__) && defined(__x86_64__)
+    jl_ptls_t ptls = jl_get_ptls_states();
     char **s = (char**)p.ref_probe;
     mangle_pointers = !(s[6] > ptls->stack_lo &&
                         s[6] < ptls->stack_hi);
