@@ -303,6 +303,7 @@ jl_value_t *jl_nth_slot_type(jl_tupletype_t *sig, size_t i);
 void jl_compute_field_offsets(jl_datatype_t *st);
 jl_array_t *jl_new_array_for_deserialization(jl_value_t *atype, uint32_t ndims, size_t *dims,
                                              int isunboxed, int elsz);
+void jl_module_run_initializer(jl_module_t *m);
 extern jl_array_t *jl_module_init_order;
 extern union jl_typemap_t jl_cfunction_list;
 
@@ -325,7 +326,6 @@ void jl_init_stack_limits(int ismaster);
 void jl_init_root_task(void *stack, size_t ssize);
 void jl_init_serializer(void);
 void jl_gc_init(void);
-void jl_init_restored_modules(jl_array_t *init_order);
 void jl_init_signal_async(void);
 void jl_init_debuginfo(void);
 void jl_init_runtime_ccall(void);
@@ -400,6 +400,7 @@ static inline void jl_set_gc_and_wait(void)
 
 void jl_dump_native(const char *bc_fname, const char *obj_fname, const char *sysimg_data, size_t sysimg_len);
 int32_t jl_get_llvm_gv(jl_value_t *p);
+int32_t jl_assign_functionID(/*llvm::Function*/void *function);
 // the first argument to jl_idtable_rehash is used to return a value
 // make sure it is rooted if it is used after the function returns
 void jl_idtable_rehash(jl_array_t **pa, size_t newsz);
@@ -408,7 +409,6 @@ JL_DLLEXPORT jl_methtable_t *jl_new_method_table(jl_sym_t *name, jl_module_t *mo
 jl_lambda_info_t *jl_get_specialization1(jl_tupletype_t *types);
 int jl_has_call_ambiguities(jl_tupletype_t *types, jl_method_t *m);
 
-jl_function_t *jl_module_get_initializer(jl_module_t *m);
 uint32_t jl_module_next_counter(jl_module_t *m);
 void jl_fptr_to_llvm(jl_fptr_t fptr, jl_lambda_info_t *lam, int specsig);
 jl_tupletype_t *arg_type_tuple(jl_value_t **args, size_t nargs);

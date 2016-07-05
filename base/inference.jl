@@ -1145,6 +1145,8 @@ function abstract_eval(e::ANY, vtypes::VarTable, sv::InferenceState)
         t = abstract_eval(e.args[1], vtypes, sv)
     elseif is(e.head,:inert)
         return abstract_eval_constant(e.args[1])
+    elseif is(e.head,:invoke)
+        error("type inference data-flow error: tried to double infer a function")
     else
         t = Any
     end
@@ -1480,7 +1482,7 @@ function typeinf_edge(method::Method, atypes::ANY, sparams::SimpleVector, needtr
     if isa(code, LambdaInfo) && code.code !== nothing
         # reuse the existing code object
         linfo = code
-        @assert typeseq(linfo.specTypes, atypes)
+        @assert typeseq(linfo.specTypes, atypes) && !code.inferred
     elseif method.isstaged
         if !isleaftype(atypes)
             # don't call staged functions on abstract types.
