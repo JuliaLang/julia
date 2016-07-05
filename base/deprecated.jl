@@ -891,6 +891,7 @@ for f in (
         :cbrt, :sinh, :cosh, :tanh, :atan, :asinh, :exp, :erf, :erfc, :exp2, :expm1, :exp10, :sin, :cos, :tan, :asin, :acos, :acosh, :atanh, #=:log,=# :log2, :log10, :lgamma, #=:log1p,=# :sqrt, # base/math.jl
         :abs, :abs2, :angle, :isnan, :isinf, :isfinite, # base/floatfuncs.jl
         :acos_fast, :acosh_fast, :angle_fast, :asin_fast, :asinh_fast, :atan_fast, :atanh_fast, :cbrt_fast, :cis_fast, :cos_fast, :cosh_fast, :exp10_fast, :exp2_fast, :exp_fast, :expm1_fast, :lgamma_fast, :log10_fast, :log1p_fast, :log2_fast, :log_fast, :sin_fast, :sinh_fast, :sqrt_fast, :tan_fast, :tanh_fast, # base/fastmath.jl
+        :cis, # base/complex.jl
         )
     @eval @dep_vectorize_1arg Number $f
 end
@@ -903,6 +904,9 @@ for f in (
         )
     @eval @dep_vectorize_1arg Real $f
 end
+# base/complex.jl
+@dep_vectorize_1arg Complex round
+@dep_vectorize_1arg Complex float
 
 # Deprecate @vectorize_2arg-vectorized functions from...
 for f in (
