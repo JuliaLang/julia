@@ -377,7 +377,7 @@ for f in (sum, prod, minimum, maximum)
     end
 
     # case where f(0) would throw
-    @test f(x->sqrt(x-1), pA+1) ≈ f(sqrt(pA))
+    @test f(x->sqrt(x-1), pA+1) ≈ f(sqrt.(pA))
     # these actually throw due to #10533
     # @test f(x->sqrt(x-1), pA+1, 1) ≈ f(sqrt(pA), 1)
     # @test f(x->sqrt(x-1), pA+1, 2) ≈ f(sqrt(pA), 2)
@@ -1486,8 +1486,11 @@ let
     @test min(A13024, B13024) == sparse([1,2,5], [1,2,5], fill(true,3))
     @test typeof(min(A13024, B13024)) == SparseMatrixCSC{Bool,Int}
 
-    for op in (+, -, &, |, $, max, min)
+    for op in (+, -, &, |, $)
         @test op(A13024, B13024) == op(full(A13024), full(B13024))
+    end
+    for op in (max, min)
+        @test op(A13024, B13024) == op.(full(A13024), full(B13024))
     end
 end
 

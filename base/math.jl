@@ -146,8 +146,6 @@ julia> deg2rad(90)
 deg2rad(z::AbstractFloat) = z * (oftype(z, pi) / 180)
 rad2deg(z::Real) = rad2deg(float(z))
 deg2rad(z::Real) = deg2rad(float(z))
-@vectorize_1arg Real rad2deg
-@vectorize_1arg Real deg2rad
 
 log{T<:Number}(b::T, x::T) = log(x)/log(b)
 
@@ -165,7 +163,6 @@ julia> log(4,2)
 ```
 """
 log(b::Number, x::Number) = log(promote(b,x)...)
-@vectorize_2arg Number log
 
 # type specific math functions
 
@@ -178,7 +175,6 @@ for f in (:cbrt, :sinh, :cosh, :tanh, :atan, :asinh, :exp, :erf, :erfc, :exp2, :
         ($f)(x::Float64) = ccall(($(string(f)),libm), Float64, (Float64,), x)
         ($f)(x::Float32) = ccall(($(string(f,"f")),libm), Float32, (Float32,), x)
         ($f)(x::Real) = ($f)(float(x))
-        @vectorize_1arg Number $f
     end
 end
 
@@ -230,7 +226,6 @@ end
 exp10(x::Float64) = 10.0^x
 exp10(x::Float32) = 10.0f0^x
 exp10(x::Integer) = exp10(float(x))
-@vectorize_1arg Number exp10
 
 # utility for converting NaN return to DomainError
 @inline nan_dom_err(f, x) = isnan(f) & !isnan(x) ? throw(DomainError()) : f
@@ -242,7 +237,6 @@ for f in (:sin, :cos, :tan, :asin, :acos, :acosh, :atanh, :log, :log2, :log10,
         ($f)(x::Float64) = nan_dom_err(ccall(($(string(f)),libm), Float64, (Float64,), x), x)
         ($f)(x::Float32) = nan_dom_err(ccall(($(string(f,"f")),libm), Float32, (Float32,), x), x)
         ($f)(x::Real) = ($f)(float(x))
-        @vectorize_1arg Number $f
     end
 end
 
@@ -256,7 +250,6 @@ Return ``\\sqrt{x}``. Throws `DomainError` for negative `Real` arguments. Use co
 negative arguments instead.  The prefix operator `√` is equivalent to `sqrt`.
 """
 sqrt(x::Real) = sqrt(float(x))
-@vectorize_1arg Number sqrt
 
 """
     hypot(x, y)
@@ -288,7 +281,6 @@ function hypot{T<:Number}(x::T, y::T)
         return rr
     end
 end
-@vectorize_2arg Number hypot
 
 """
     hypot(x...)
@@ -308,16 +300,13 @@ atan2{T<:AbstractFloat}(y::T, x::T) = Base.no_op_err("atan2", T)
 
 atan2(y::Float64, x::Float64) = ccall((:atan2,libm), Float64, (Float64, Float64,), y, x)
 atan2(y::Float32, x::Float32) = ccall((:atan2f,libm), Float32, (Float32, Float32), y, x)
-@vectorize_2arg Number atan2
 
 max{T<:AbstractFloat}(x::T, y::T) = ifelse((y > x) | (signbit(y) < signbit(x)),
                                     ifelse(isnan(y), x, y), ifelse(isnan(x), y, x))
 
-@vectorize_2arg Real max
 
 min{T<:AbstractFloat}(x::T, y::T) = ifelse((y < x) | (signbit(y) > signbit(x)),
                                     ifelse(isnan(y), x, y), ifelse(isnan(x), y, x))
-@vectorize_2arg Real min
 
 minmax{T<:AbstractFloat}(x::T, y::T) = ifelse(isnan(x-y), ifelse(isnan(x), (y, y), (x, x)),
                                        ifelse((y < x) | (signbit(y) > signbit(x)), (y, x),
@@ -332,7 +321,6 @@ Compute ``x \\times 2^n``.
 """
 ldexp(x::Float64,e::Integer) = ccall((:scalbn,libm),  Float64, (Float64,Int32), x, Int32(e))
 ldexp(x::Float32,e::Integer) = ccall((:scalbnf,libm), Float32, (Float32,Int32), x, Int32(e))
-# TODO: vectorize ldexp
 
 """
     exponent(x) -> Int
@@ -353,7 +341,6 @@ function exponent{T<:AbstractFloat}(x::T)
     end
     k - exponent_bias(T)
 end
-@vectorize_1arg Real exponent
 
 """
     significand(x)
@@ -386,7 +373,6 @@ function significand{T<:AbstractFloat}(x::T)
     xu = (xu & ~exponent_mask(T)) | exponent_one(T)
     reinterpret(T,xu)
 end
-@vectorize_1arg Real significand
 
 """
     frexp(val)

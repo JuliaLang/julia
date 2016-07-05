@@ -55,7 +55,7 @@ fz = float(z)
 @test sum(sin, [3]) == sin(3.0)
 a = sum(sin, z)
 @test a ≈ sum(sin, fz)
-@test a ≈ sum(sin(fz))
+@test a ≈ sum(sin.(fz))
 
 z = [-4, -3, 2, 5]
 fz = float(z)

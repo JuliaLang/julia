@@ -888,6 +888,7 @@ for f in (
         :gamma, :lfact, :digamma, :trigamma, :zeta, :eta,# base/special/gamma.jl
         :erfcx, :erfi, :dawson, # base/special/erf.jl
         :airyprime, :airyai, :airyaiprime, :airybi, :airybiprime, :airy, :airyx, :besselj0, :besselj1, :bessely0, :bessely1, # base/special/bessel.jl
+        :cbrt, :sinh, :cosh, :tanh, :atan, :asinh, :exp, :erf, :erfc, :exp2, :expm1, :exp10, :sin, :cos, :tan, :asin, :acos, :acosh, :atanh, #=:log,=# :log2, :log10, :lgamma, #=:log1p,=# :sqrt, # base/math.jl
         )
     @eval @dep_vectorize_1arg Number $f
 end
@@ -895,6 +896,7 @@ for f in (
         :sind, :cosd, :tand, :asind, :acosd, :atand, :asecd, :acscd, :acotd, # base/special/trig.jl
         :invdigamma, # base/special/gamma.jl
         :erfinc, :erfcinv, # base/special/erf.jl
+        :rad2deg, :deg2rad, :exponent, :significand, # base/math.jl
         )
     @eval @dep_vectorize_1arg Real $f
 end
@@ -903,8 +905,14 @@ end
 for f in (
         :polygamma, :zeta, :beta, :lbeta, # base/special/gamma.jl
         :airy, :airyx, :besseli, :besselix, :besselj, :besseljx, :besselk, :besselkx, :bessely, :besselyx, :besselh, :besselhx, :hankelh1, :hankelh2, :hankelh1x, :hankelh2x, # base/special/bessel.jl
+        :log, :hypot, :atan2, # base/math.jl
     )
     @eval @dep_vectorize_2arg Number $f
+end
+for f in (
+        :max, :min, # base/math.jl
+    )
+    @eval @dep_vectorize_2arg Real $f
 end
 
 # End deprecations scheduled for 0.6

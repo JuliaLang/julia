@@ -220,7 +220,7 @@ let A = [sqrt(i)+j for i = 1:3, j=1:4]
     @test atan2.(log.(A), sum(A,1)) == broadcast(atan2, broadcast(log, A), sum(A, 1))
 end
 let x = sin.(1:10)
-    @test atan2.((x->x+1).(x), (x->x+2).(x)) == atan2(x+1, x+2) == atan2(x.+1, x.+2)
+    @test atan2.((x->x+1).(x), (x->x+2).(x)) == broadcast(atan2, x+1, x+2) == broadcast(atan2, x.+1, x.+2)
     @test sin.(atan2.([x+1,x+2]...)) == sin.(atan2.(x+1,x+2))
     @test sin.(atan2.(x, 3.7)) == broadcast(x -> sin(atan2(x,3.7)), x)
     @test atan2.(x, 3.7) == broadcast(x -> atan2(x,3.7), x) == broadcast(atan2, x, 3.7)
@@ -235,7 +235,7 @@ end
 let x = sin.(1:10), a = [x]
     @test cos.(x) == cos.(a...)
     @test atan2.(x,x) == atan2.(a..., a...) == atan2.([x, x]...)
-    @test atan2.(x, cos.(x)) == atan2.(a..., cos.(x)) == atan2(x, cos.(a...)) == atan2(a..., cos.(a...))
+    @test atan2.(x, cos.(x)) == atan2.(a..., cos.(x)) == broadcast(atan2, x, cos.(a...)) == broadcast(atan2, a..., cos.(a...))
     @test ((args...)->cos(args[1])).(x) == cos.(x) == ((y,args...)->cos(y)).(x)
 end
 @test atan2.(3,4) == atan2(3,4) == (() -> atan2(3,4)).()

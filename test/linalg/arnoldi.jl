@@ -193,7 +193,7 @@ end
 
 debug && println("complex svds")
 let # complex svds test
-    A = sparse([1, 1, 2, 3, 4], [2, 1, 1, 3, 1], exp(im*[2.0:2:10;]))
+    A = sparse([1, 1, 2, 3, 4], [2, 1, 1, 3, 1], exp.(im*[2.0:2:10;]))
     S1 = svds(A, nsv = 2)
     S2 = svd(full(A))
 
