@@ -51,10 +51,10 @@ end
 """
     round([T,] x, [digits, [base]], [r::RoundingMode])
 
-`round(x)` rounds `x` to an integer value according to the default rounding mode (see
-[`RoundingMode`](:obj:`RoundingMode`)), returning a value of the same type as `x`. By default
-([`RoundNearest`](:obj:`RoundNearest`)), this will round to the nearest integer, with ties
-(fractional values of 0.5) being rounded to the even integer.
+Rounds `x` to an integer value according to the provided
+[`RoundingMode`](:obj:`RoundingMode`), returning a value of the same type as `x`. By default
+uses [`RoundNearest`](:obj:`RoundNearest`), which rounds to the nearest integer, with ties
+(fractional values of 0.5) being rounded to the nearest even integer.
 
 ```jldoctest
 julia> round(1.7)
