@@ -991,7 +991,7 @@ void jl_compute_field_offsets(jl_datatype_t *st)
     uint64_t max_size = max_offset >> 1;
 
     uint32_t nfields = jl_svec_len(st->types);
-    jl_fielddesc32_t desc[nfields];
+    jl_fielddesc32_t* desc = (jl_fielddesc32_t*) alloca(nfields * sizeof(jl_fielddesc32_t));
     int haspadding = 0;
 
     for (size_t i = 0; i < nfields; i++) {
