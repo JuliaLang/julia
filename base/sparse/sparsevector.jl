@@ -886,12 +886,13 @@ end
 ### Unary Map
 
 # zero-preserving functions (z->z, nz->nz)
-for op in [:-, :abs, :abs2, :conj]
+for op in [:abs, :abs2, :conj]
     @eval begin
         $(op)(x::AbstractSparseVector) =
-            SparseVector(length(x), copy(nonzeroinds(x)), $(op)(nonzeros(x)))
+            SparseVector(length(x), copy(nonzeroinds(x)), $(op).(nonzeros(x)))
     end
 end
+-(x::AbstractSparseVector) = SparseVector(length(x), copy(nonzeroinds(x)), -(nonzeros(x)))
 
 # functions f, such that
 #   f(x) can be zero or non-zero when x != 0

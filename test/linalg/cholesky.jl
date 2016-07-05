@@ -46,11 +46,11 @@ for eltya in (Float32, Float64, Complex64, Complex128, BigFloat, Int)
     #these tests were failing on 64-bit linux when inside the inner loop
     #for eltya = Complex64 and eltyb = Int. The E[i,j] had NaN32 elements
     #but only with srand(1234321) set before the loops.
-    E = abs(apd - r'*r)
+    E = abs.(apd - r'*r)
     for i=1:n, j=1:n
         @test E[i,j] <= (n+1)ε/(1-(n+1)ε)*real(sqrt(apd[i,i]*apd[j,j]))
     end
-    E = abs(apd - full(capd))
+    E = abs.(apd - full(capd))
     for i=1:n, j=1:n
         @test E[i,j] <= (n+1)ε/(1-(n+1)ε)*real(sqrt(apd[i,i]*apd[j,j]))
     end
@@ -230,7 +230,7 @@ let apd = [5.8525753f0 + 0.0f0im -0.79540455f0 + 0.7066077f0im 0.98274714f0 + 1.
         -1.0568488936791578 - 0.06025820467086475im 0.12696236014017806 - 0.09853584666755086im]
     cholfact(apd, :L, Val{true}) \ b
     r = factorize(apd)[:U]
-    E = abs(apd - r'*r)
+    E = abs.(apd - r'*r)
     ε = eps(abs(float(one(Complex64))))
     n = 10
     for i=1:n, j=1:n

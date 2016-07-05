@@ -275,7 +275,7 @@ for n in [0:10; 100; 101; 1000; 1001]
         # test float sorting with NaNs
         s = sort(v, alg=alg, rev=rev)
         @test issorted(s, rev=rev)
-        @test reinterpret(UInt64,v[isnan(v)]) == reinterpret(UInt64,s[isnan(s)])
+        @test reinterpret(UInt64,v[isnan.(v)]) == reinterpret(UInt64,s[isnan.(s)])
 
         # test float permutation with NaNs
         p = sortperm(v, alg=alg, rev=rev)

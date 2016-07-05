@@ -73,7 +73,7 @@ for eltya in (Float32, Float64, Complex64, Complex128, Int)
     debug && println("Reorder Generalized Schur")
         NS = schurfact(a1_sf, a2_sf)
         # Currently just testing with selecting gen eig values < 1
-        select = abs2(NS[:values]) .< 1
+        select = abs2.(NS[:values]) .< 1
         m = sum(select)
         S = ordschur(NS, select)
         # Make sure that the new factorization stil factors matrix
