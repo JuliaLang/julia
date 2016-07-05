@@ -472,7 +472,7 @@ static int module_in_worklist(jl_module_t *mod)
     return 0;
 }
 
-static int jl_prune_tcache(jl_typemap_entry_t *ml, void *closure)
+static int jl_prune_specializations(jl_typemap_entry_t *ml, void *closure)
 {
     jl_value_t *ret = ml->func.value;
     if (jl_is_lambda_info(ret) &&
@@ -858,7 +858,7 @@ static void jl_serialize_value_(jl_serializer_state *s, jl_value_t *v)
             // go through the t-func cache, replacing ASTs with just return
             // types for abstract argument types. these ASTs are generally
             // not needed (e.g. they don't get inlined).
-            jl_typemap_visitor(*tf, jl_prune_tcache, NULL);
+            jl_typemap_visitor(*tf, jl_prune_specializations, NULL);
         }
         jl_serialize_value(s, tf->unknown);
         jl_serialize_value(s, (jl_value_t*)m->name);
@@ -1900,6 +1900,20 @@ static void jl_init_restored_modules(jl_array_t *init_order)
 
 // --- entry points ---
 
+// remove cached types not referenced in the stream
+static void jl_prune_type_cache(jl_svec_t *cache)
+{
+    size_t l = jl_svec_len(cache), ins = 0, i;
+    for(i=0; i < l; i++) {
+        jl_value_t *ti = jl_svecref(cache, i);
+        if (ti == NULL) break;
+        if (ptrhash_get(&backref_table, ti) != HT_NOTFOUND || jl_get_llvm_gv(ti) != 0)
+            jl_svecset(cache, ins++, ti);
+    }
+    if (i > ins)
+        memset(&jl_svec_data(cache)[ins], 0, (i-ins)*sizeof(jl_value_t*));
+}
+
 static void jl_save_system_image_to_stream(ios_t *f)
 {
     jl_gc_collect(1); // full
@@ -1931,6 +1945,10 @@ static void jl_save_system_image_to_stream(ios_t *f)
     jl_serialize_value(&s, jl_top_module);
     jl_serialize_value(&s, jl_typeinf_func);
     jl_serialize_value(&s, jl_type_type->name->mt);
+
+    jl_prune_type_cache(jl_tuple_typename->cache);
+    jl_prune_type_cache(jl_tuple_typename->linearcache);
+    jl_prune_type_cache(jl_type_type->name->cache);
 
     intptr_t i;
     for (i = 0; i < builtin_types.len; i++) {
