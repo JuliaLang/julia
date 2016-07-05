@@ -661,3 +661,61 @@ c, r, res = test_complete(s)
 s = "CompletionFoo.tuple."
 c, r, res = test_complete(s)
 @test isempty(c)
+
+# test Dicts
+test_dict = Dict("abc"=>1, "abcd"=>10, :bar=>2, :bar2=>9, Base=>3, contains=>4, `ls`=>5,
+      66=>7, 67=>8, ("q",3)=>11, "α"=>12, :α=>13)
+s="test_dict[\"ab"
+c,r = test_complete(s)
+@test c == Any["\"abc\"","\"abcd\""]
+s="test_dict[\"abcd"
+c,r = test_complete(s)
+@test c == Any["\"abcd\"]"]
+s="test_dict[ \"abcd"  # leading whitespace
+c,r = test_complete(s)
+@test c == Any["\"abcd\"]"]
+s="test_dict[\"abcd]"  # trailing close bracket
+c,r = completions(s,endof(s)-1)
+@test c == Any["\"abcd\""]
+s="test_dict[:b"
+c,r = test_complete(s)
+@test c == Any[":bar",":bar2"]
+s="test_dict[:bar2"
+c,r = test_complete(s)
+@test c == Any[":bar2]"]
+s="test_dict[Ba"
+c,r = test_complete(s)
+@test c == Any["Base]"]
+s="test_dict[co"
+c,r = test_complete(s)
+@test c == Any["contains]"]
+s="test_dict[`l"
+c,r = test_complete(s)
+@test c == Any["`ls`]"]
+s="test_dict[6"
+c,r = test_complete(s)
+@test c == Any["66","67"]
+s="test_dict[66"
+c,r = test_complete(s)
+@test c == Any["66]"]
+s="test_dict[("
+c,r = test_complete(s)
+@test c == Any["(\"q\",3)]"]
+s="test_dict[\"\\alp"
+c,r = test_complete(s)
+@test c == String["\\alpha"]
+s="test_dict[\"\\alpha"
+c,r = test_complete(s)
+@test c == String["α"]
+s="test_dict[\"α"
+c,r = test_complete(s)
+@test c == Any["\"α\"]"]
+s="test_dict[:\\alp"
+c,r = test_complete(s)
+@test c == String["\\alpha"]
+s="test_dict[:\\alpha"
+c,r = test_complete(s)
+@test c == String["α"]
+s="test_dict[:α"
+c,r = test_complete(s)
+@test c == Any[":α]"]

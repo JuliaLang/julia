@@ -386,12 +386,51 @@ function bslash_completions(string, pos)
     return (false, (String[], 0:-1, false))
 end
 
+function dict_identifier_key(str,tag)
+    if tag === :string
+        str_close = str*"\""
+    elseif tag === :cmd
+        str_close = str*"`"
+    else
+        str_close = str
+    end
+
+    frange, end_of_indentifier = find_start_brace(str_close, c_start='[', c_end=']')
+    isempty(frange) && return (nothing, nothing, nothing)
+    identifier = Symbol(str[frange[1]:end_of_indentifier])
+    isdefined(Main,identifier) || return (nothing, nothing, nothing)
+    begin_of_key = findnext(x->!in(x,whitespace_chars), str, end_of_indentifier+2)
+    begin_of_key==0 && return (identifier, nothing, nothing)
+    partial_key = str[begin_of_key:end]
+    main_id = getfield(Main,identifier)
+    typeof(main_id) <: Associative && length(main_id)<1e6 || return (identifier, nothing, nothing)
+    main_id, partial_key, begin_of_key
+end
+
 function completions(string, pos)
     # First parse everything up to the current position
     partial = string[1:pos]
     inc_tag = Base.syntax_deprecation_warnings(false) do
         Base.incomplete_tag(parse(partial, raise=false))
     end
+
+    # if completing a key in a Dict
+    identifier, partial_key, loc = dict_identifier_key(partial,inc_tag)
+    if identifier != nothing
+        if partial_key != nothing
+            matches = []
+            for key in keys(identifier)
+                rkey = repr(key)
+                startswith(rkey,partial_key) && push!(matches,rkey)
+            end
+            length(matches)==1 && (length(string) <= pos || string[pos+1] != ']') && (matches[1]*="]")
+            length(matches)>0 && return sort(matches), loc:pos, true
+        else
+            return String[], 0:-1, false
+        end
+    end
+
+    # otherwise...
     if inc_tag in [:cmd, :string]
         m = match(r"[\t\n\r\"'`@\$><=;|&\{]| (?!\\)", reverse(partial))
         startpos = nextind(partial, reverseind(partial, m.offset))
@@ -413,7 +452,7 @@ function completions(string, pos)
     # Make sure that only bslash_completions is working on strings
     inc_tag==:string && return String[], 0:-1, false
 
-     if inc_tag == :other && should_method_complete(partial)
+    if inc_tag == :other && should_method_complete(partial)
         frange, method_name_end = find_start_brace(partial)
         ex = Base.syntax_deprecation_warnings(false) do
             parse(partial[frange] * ")", raise=false)
@@ -484,7 +523,7 @@ function completions(string, pos)
                 elseif c==']'
                     c_start='['; c_end=']'
                 end
-                frange, end_off_indentifier = find_start_brace(string[1:prevind(string, i)], c_start=c_start, c_end=c_end)
+                frange, end_of_indentifier = find_start_brace(string[1:prevind(string, i)], c_start=c_start, c_end=c_end)
                 startpos = start(frange)
                 i = prevind(string, startpos)
             elseif c in ["\'\"\`"...]
