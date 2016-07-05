@@ -477,3 +477,7 @@ foobaz(ch) = reinterpret(Char, typemax(UInt32))
 @test typeof(ascii(GenericString("Hello, world"))) == String
 @test_throws ArgumentError ascii("Hello, ∀")
 @test_throws ArgumentError ascii(GenericString("Hello, ∀"))
+
+# issue #17271: endof() doesn't throw an error even with invalid strings
+@test endof(String(b"\x90")) == 0
+@test endof(String(b"\xce")) == 1
