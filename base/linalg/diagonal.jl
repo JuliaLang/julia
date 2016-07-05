@@ -285,7 +285,7 @@ function pinv{T}(D::Diagonal{T})
 end
 function pinv{T}(D::Diagonal{T}, tol::Real)
     Di = similar(D.diag, typeof(inv(zero(T))))
-    if( !isempty(D.diag) ) maxabsD = maximum(abs(D.diag)) end
+    if( !isempty(D.diag) ) maxabsD = maximum(abs.(D.diag)) end
     for i = 1:length(D.diag)
         if( abs(D.diag[i]) > tol*maxabsD && isfinite(inv(D.diag[i])) )
             Di[i]=inv(D.diag[i])
@@ -303,10 +303,10 @@ eigvecs(D::Diagonal) = eye(D)
 eigfact(D::Diagonal) = Eigen(eigvals(D), eigvecs(D))
 
 #Singular system
-svdvals{T<:Number}(D::Diagonal{T}) = sort(abs(D.diag), rev = true)
+svdvals{T<:Number}(D::Diagonal{T}) = sort(abs.(D.diag), rev = true)
 svdvals(D::Diagonal) = [svdvals(v) for v in D.diag]
 function svd{T<:Number}(D::Diagonal{T})
-    S   = abs(D.diag)
+    S   = abs.(D.diag)
     piv = sortperm(S, rev = true)
     U   = full(Diagonal(D.diag ./ S))
     Up  = hcat([U[:,i] for i = 1:length(D.diag)][piv]...)

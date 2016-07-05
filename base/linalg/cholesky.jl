@@ -426,7 +426,7 @@ function det(C::Cholesky)
     dd
 end
 
-det(C::CholeskyPivoted) = C.rank < size(C.factors, 1) ? real(zero(eltype(C))) : prod(abs2(diag(C.factors)))
+det(C::CholeskyPivoted) = C.rank < size(C.factors, 1) ? real(zero(eltype(C))) : prod(abs2.(diag(C.factors)))
 
 function logdet(C::Cholesky)
     dd = zero(eltype(C))

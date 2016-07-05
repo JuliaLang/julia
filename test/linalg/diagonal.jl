@@ -28,7 +28,7 @@ for relty in (Float32, Float64, BigFloat), elty in (relty, Complex{relty})
     @test typeof(convert(AbstractMatrix{Complex64},D))   == Diagonal{Complex64}
 
     @test full(real(D)) == real(DM)
-    @test full(abs(D)) == abs(DM)
+    @test full(abs.(D)) == abs.(DM)
     @test full(imag(D)) == imag(DM)
 
     @test parent(D) == d
@@ -55,7 +55,7 @@ for relty in (Float32, Float64, BigFloat), elty in (relty, Complex{relty})
         for func in (expm,)
             @test_approx_eq_eps func(D) func(DM) n^3*eps(relty)
         end
-        @test_approx_eq_eps logm(Diagonal(abs(D.diag))) logm(abs(DM)) n^3*eps(relty)
+        @test_approx_eq_eps logm(Diagonal(abs.(D.diag))) logm(abs.(DM)) n^3*eps(relty)
     end
     if elty <: BlasComplex
         for func in (logdet, sqrtm)

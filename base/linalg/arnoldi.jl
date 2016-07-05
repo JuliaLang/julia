@@ -382,7 +382,7 @@ function _svds(X; nsv::Int = 6, ritzvec::Bool = true, tol::Float64 = 0.0, maxite
     end
     ex    = eigs(SVDOperator(X), I; ritzvec = ritzvec, nev = ncv, tol = tol, maxiter = maxiter, v0=padv0)
     ind   = [1:2:ncv;]
-    sval  = abs(ex[1][ind])
+    sval  = abs.(ex[1][ind])
 
     if ritzvec
         # calculating singular vectors

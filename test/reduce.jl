@@ -65,15 +65,15 @@ b = complex(randn(32), randn(32))
 @test sumabs([Int8(-2)]) === Int32(2)
 @test sumabs(z) === 14
 @test sumabs(fz) === 14.0
-@test sumabs(a) ≈ sum(abs(a))
-@test sumabs(b) ≈ sum(abs(b))
+@test sumabs(a) ≈ sum(abs.(a))
+@test sumabs(b) ≈ sum(abs.(b))
 
 @test sumabs2(Float64[]) === 0.0
 @test sumabs2([Int8(-2)]) === Int32(4)
 @test sumabs2(z) === 54
 @test sumabs2(fz) === 54.0
-@test sumabs2(a) ≈ sum(abs2(a))
-@test sumabs2(b) ≈ sum(abs2(b))
+@test sumabs2(a) ≈ sum(abs2.(a))
+@test sumabs2(b) ≈ sum(abs2.(b))
 
 # check variants of summation for type-stability and other issues (#6069)
 sum2(itr) = invoke(sum, Tuple{Any}, itr)

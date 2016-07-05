@@ -559,8 +559,8 @@ let x = spv_x1, x2 = x2 = spv_x2
     @test exact_equal(-x, SparseVector(8, [2, 5, 6], [-1.25, 0.75, -3.5]))
 
     # abs and abs2
-    @test exact_equal(abs(x), SparseVector(8, [2, 5, 6], abs([1.25, -0.75, 3.5])))
-    @test exact_equal(abs2(x), SparseVector(8, [2, 5, 6], abs2([1.25, -0.75, 3.5])))
+    @test exact_equal(abs(x), SparseVector(8, [2, 5, 6], abs.([1.25, -0.75, 3.5])))
+    @test exact_equal(abs2(x), SparseVector(8, [2, 5, 6], abs2.([1.25, -0.75, 3.5])))
 
     # plus and minus
     xa = SparseVector(8, [1,2,5,6,7], [3.25,5.25,-0.75,-2.0,-6.0])

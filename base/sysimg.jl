@@ -294,13 +294,14 @@ include("client.jl")
 # misc useful functions & macros
 include("util.jl")
 
+include("broadcast.jl")
+importall .Broadcast
+
 # dense linear algebra
 include("linalg/linalg.jl")
 importall .LinAlg
 const ⋅ = dot
 const × = cross
-include("broadcast.jl")
-importall .Broadcast
 
 # statistics
 include("statistics.jl")
