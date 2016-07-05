@@ -143,7 +143,7 @@ JL_DLLEXPORT jl_value_t *jl_gc_alloc(jl_ptls_t ptls, size_t sz, void *ty);
     (__builtin_constant_p(sz) ? jl_gc_alloc_(ptls, sz, ty) :    \
      (jl_gc_alloc)(ptls, sz, ty))
 #else
-#  define jl_gc_alloc(ptls, sz) jl_gc_alloc_(ptls, sz, ty)
+#  define jl_gc_alloc(ptls, sz, ty) jl_gc_alloc_(ptls, sz, ty)
 #endif
 
 #define jl_buff_tag ((uintptr_t)0x4eade800)
