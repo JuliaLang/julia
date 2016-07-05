@@ -1228,6 +1228,9 @@ a[1,CartesianIndex{2}(3,4)] = -2
 @test a[CartesianIndex{1}(2),3,CartesianIndex{1}(4)] == 44
 a[CartesianIndex{1}(2),3,CartesianIndex{1}(3)] = -3
 @test a[CartesianIndex{1}(2),3,CartesianIndex{1}(3)] == -3
+@test a[:, :, CartesianIndex((1,))] == a[:,:,1]
+@test a[CartesianIndex((1,)), [1,2], :] == a[1,[1,2],:]
+@test a[CartesianIndex((2,)), 3:4, :] == a[2,3:4,:]
 
 a = view(zeros(3, 4, 5), :, :, :)
 a[CartesianIndex{3}(2,3,3)] = -1

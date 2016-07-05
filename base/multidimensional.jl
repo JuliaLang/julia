@@ -27,10 +27,11 @@ CartesianIndex{N}(index::NTuple{N,Integer}) = CartesianIndex{N}(index)
 (::Type{CartesianIndex{N}}){N}(index::Integer...) = CartesianIndex{N}(index)
 (::Type{CartesianIndex{N}}){N}() = CartesianIndex{N}(())
 # Un-nest passed CartesianIndexes
-CartesianIndex(index::Union{Integer, CartesianIndex}...) = CartesianIndex(_flatten((), index...))
-_flatten(out) = out
-@inline _flatten(out, i::Integer, I...)        = _flatten((out..., i), I...)
-@inline _flatten(out, i::CartesianIndex, I...) = _flatten((out..., i.I...), I...)
+CartesianIndex(index::Union{Integer, CartesianIndex}...) = CartesianIndex(flatten(index))
+Base.@pure flatten(I) = (_flatten(I...)...,)
+Base.@pure _flatten() = ()
+Base.@pure _flatten(i, I...)                 = (i, _flatten(I...)...)
+Base.@pure _flatten(i::CartesianIndex, I...) = (i.I..., _flatten(I...)...)
 CartesianIndex(index::Tuple{Vararg{Union{Integer, CartesianIndex}}}) = CartesianIndex(index...)
 
 # length
@@ -374,10 +375,10 @@ end
 end
 
 @propagate_inbounds function _getindex{T,N}(l::LinearIndexing, A::AbstractArray{T,N}, I::Union{Real,AbstractArray,Colon,CartesianIndex}...)
-    getindex(A, IteratorsMD._flatten((), I...)...)
+    getindex(A, IteratorsMD.flatten(I)...)
 end
 @propagate_inbounds function _setindex!{T,N}(l::LinearIndexing, A::AbstractArray{T,N}, v, I::Union{Real,AbstractArray,Colon,CartesianIndex}...)
-    setindex!(A, v, IteratorsMD._flatten((), I...)...)
+    setindex!(A, v, IteratorsMD.flatten(I)...)
 end
 
 ##
