@@ -884,6 +884,7 @@ end
 # Deprecate @vectorize_1arg-vectorized functions from...
 for f in (
         :sinpi, :cospi, :sinc, :cosc, # base/special/trig.jl
+        :log, :log1p, # base/special/log.jl
         )
     @eval @dep_vectorize_1arg Number $f
 end

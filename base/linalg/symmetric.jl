@@ -243,12 +243,12 @@ end
 #Matrix-valued functions
 function expm(A::Symmetric)
     F = eigfact(A)
-    return Symmetric((F.vectors * Diagonal(exp(F.values))) * F.vectors')
+    return Symmetric((F.vectors * Diagonal(exp.(F.values))) * F.vectors')
 end
 function expm{T}(A::Hermitian{T})
     n = checksquare(A)
     F = eigfact(A)
-    retmat = (F.vectors * Diagonal(exp(F.values))) * F.vectors'
+    retmat = (F.vectors * Diagonal(exp.(F.values))) * F.vectors'
     if T <: Real
         return real(Hermitian(retmat))
     else
@@ -266,9 +266,9 @@ for (funm, func) in ([:logm,:log], [:sqrtm,:sqrt])
         function ($funm)(A::Symmetric)
             F = eigfact(A)
             if isposdef(F)
-                retmat = (F.vectors * Diagonal(($func)(F.values))) * F.vectors'
+                retmat = (F.vectors * Diagonal(($func).(F.values))) * F.vectors'
             else
-                retmat = (F.vectors * Diagonal(($func)(complex(F.values)))) * F.vectors'
+                retmat = (F.vectors * Diagonal(($func).(complex(F.values)))) * F.vectors'
             end
             return Symmetric(retmat)
         end
@@ -277,7 +277,7 @@ for (funm, func) in ([:logm,:log], [:sqrtm,:sqrt])
             n = checksquare(A)
             F = eigfact(A)
             if isposdef(F)
-                retmat = (F.vectors * Diagonal(($func)(F.values))) * F.vectors'
+                retmat = (F.vectors * Diagonal(($func).(F.values))) * F.vectors'
                 if T <: Real
                     return Hermitian(retmat)
                 else
@@ -287,7 +287,7 @@ for (funm, func) in ([:logm,:log], [:sqrtm,:sqrt])
                     return Hermitian(retmat)
                 end
             else
-                retmat = (F.vectors * Diagonal(($func)(complex(F.values)))) * F.vectors'
+                retmat = (F.vectors * Diagonal(($func).(complex(F.values)))) * F.vectors'
                 return retmat
             end
         end
