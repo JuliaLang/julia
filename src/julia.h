@@ -268,8 +268,6 @@ typedef struct _jl_lambda_info_t {
     // with the same name as the generated functions for this linfo, suitable
     // for referencing in LLVM IR
     jl_llvm_functions_t functionObjectsDecls;
-    int32_t functionID; // index that this function will have in the codegen table
-    int32_t specFunctionID; // index that this specFunction will have in the codegen table
 } jl_lambda_info_t;
 
 // all values are callable as Functions
@@ -1215,7 +1213,6 @@ STATIC_INLINE jl_function_t *jl_get_function(jl_module_t *m, const char *name)
 {
     return (jl_function_t*)jl_get_global(m, jl_symbol(name));
 }
-JL_DLLEXPORT void jl_module_run_initializer(jl_module_t *m);
 int jl_is_submodule(jl_module_t *child, jl_module_t *parent);
 
 // eq hash tables

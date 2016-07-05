@@ -878,8 +878,8 @@ static void jl_serialize_value_(ios_t *s, jl_value_t *v)
         jl_serialize_value(s, li->constval);
         jl_serialize_fptr(s, li->fptr);
         // save functionObject pointers
-        write_int32(s, li->functionID);
-        write_int32(s, li->specFunctionID);
+        write_int32(s, jl_assign_functionID(li->functionObjectsDecls.functionObject));
+        write_int32(s, jl_assign_functionID(li->functionObjectsDecls.specFunctionObject));
         write_int8(s, li->jlcall_api);
     }
     else if (jl_typeis(v, jl_module_type)) {
@@ -1507,8 +1507,6 @@ static jl_value_t *jl_deserialize_value_(ios_t *s, jl_value_t *vtag, jl_value_t 
         li->inInference = 0;
         li->inCompile = 0;
         li->fptr = jl_deserialize_fptr(s);
-        li->functionID = 0;
-        li->specFunctionID = 0;
         int32_t cfunc_llvm, func_llvm;
         func_llvm = read_int32(s);
         cfunc_llvm = read_int32(s);
@@ -1869,14 +1867,21 @@ static jl_array_t *jl_finalize_deserializer(ios_t *f, arraylist_t *tracee_list)
     return init_order;
 }
 
-void jl_init_restored_modules(jl_array_t *init_order)
+static void jl_init_restored_modules(jl_array_t *init_order)
 {
     if (!init_order)
         return;
-    int i;
-    for(i=0; i < jl_array_len(init_order); i++) {
+    int i, l = jl_array_len(init_order);
+    for (i = 0; i < l; i++) {
         jl_value_t *mod = jl_array_ptr_ref(init_order, i);
-        jl_module_run_initializer((jl_module_t*)mod);
+        if (!jl_generating_output() || jl_options.incremental) {
+            jl_module_run_initializer((jl_module_t*)mod);
+        }
+        else {
+            if (jl_module_init_order == NULL)
+                jl_module_init_order = jl_alloc_vec_any(0);
+            jl_array_ptr_1d_push(jl_module_init_order, mod);
+        }
     }
 }
 
