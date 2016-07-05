@@ -887,6 +887,7 @@ for f in (
         :log, :log1p, # base/special/log.jl
         :gamma, :lfact, :digamma, :trigamma, :zeta, :eta,# base/special/gamma.jl
         :erfcx, :erfi, :dawson, # base/special/erf.jl
+        :airyprime, :airyai, :airyaiprime, :airybi, :airybiprime, :airy, :airyx, :besselj0, :besselj1, :bessely0, :bessely1, # base/special/bessel.jl
         )
     @eval @dep_vectorize_1arg Number $f
 end
@@ -901,6 +902,7 @@ end
 # Deprecate @vectorize_2arg-vectorized functions from...
 for f in (
         :polygamma, :zeta, :beta, :lbeta, # base/special/gamma.jl
+        :airy, :airyx, :besseli, :besselix, :besselj, :besseljx, :besselk, :besselkx, :bessely, :besselyx, :besselh, :besselhx, :hankelh1, :hankelh2, :hankelh1x, :hankelh2x, # base/special/bessel.jl
     )
     @eval @dep_vectorize_2arg Number $f
 end
