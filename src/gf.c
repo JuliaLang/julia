@@ -1294,7 +1294,8 @@ jl_lambda_info_t *jl_compile_for_dispatch(jl_lambda_info_t *li)
             }
         }
     }
-    assert(!li->inInference && !li->inCompile && li->code != jl_nothing || li->jlcall_api == 2);
+    assert(!li->inInference && !li->inCompile &&
+           (li->code != jl_nothing || li->jlcall_api == 2));
     if (li->functionObjectsDecls.functionObject == NULL) { // check again, because jl_type_infer may have compiled it
         jl_compile_linfo(li);
     }

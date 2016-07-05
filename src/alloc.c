@@ -860,7 +860,7 @@ jl_datatype_t *jl_new_abstracttype(jl_value_t *name, jl_datatype_t *super,
     return dt;
 }
 
-jl_datatype_t *jl_new_uninitialized_datatype()
+jl_datatype_t *jl_new_uninitialized_datatype(void)
 {
     jl_ptls_t ptls = jl_get_ptls_states();
     jl_datatype_t *t = (jl_datatype_t*)jl_gc_alloc(ptls, sizeof(jl_datatype_t), jl_datatype_type);
