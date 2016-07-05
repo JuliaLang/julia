@@ -362,17 +362,6 @@ Returns `true` if `path` is a regular file, `false` otherwise.
 isfile
 
 """
-    symlink(target, link)
-
-Creates a symbolic link to `target` with the name `link`.
-
-!!! note
-    This function raises an error under operating systems that do not support
-    soft symbolic links, such as Windows XP.
-"""
-symlink
-
-"""
     task_local_storage(symbol)
 
 Look up the value of a symbol in the current task's task-local storage.
@@ -2318,64 +2307,6 @@ Mmap.Anonymous
 For matrices or vectors ``A`` and ``B``, calculates ``A / Bᴴ``.
 """
 A_rdiv_Bc
-
-"""
-    round([T,] x, [digits, [base]], [r::RoundingMode])
-
-`round(x)` rounds `x` to an integer value according to the default rounding mode (see
-[`rounding`](:func:`rounding`)), returning a value of the same type as `x`. By default
-([`RoundNearest`](:obj:`RoundNearest`)), this will round to the nearest integer, with ties
-(fractional values of 0.5) being rounded to the even integer.
-
-```jldoctest
-julia> round(1.7)
-2.0
-
-julia> round(1.5)
-2.0
-
-julia> round(2.5)
-2.0
-```
-
-The optional [`RoundingMode`](:obj:`RoundingMode`) argument will change how the number gets
-rounded.
-
-`round(T, x, [r::RoundingMode])` converts the result to type `T`, throwing an
-[`InexactError`](:exc:`InexactError`) if the value is not representable.
-
-`round(x, digits)` rounds to the specified number of digits after the decimal place (or
-before if negative). `round(x, digits, base)` rounds using a base other than 10.
-
-```jldoctest
-julia> round(pi, 2)
-3.14
-
-julia> round(pi, 3, 2)
-3.125
-```
-
-!!! note
-    Rounding to specified digits in bases other than 2 can be inexact when
-    operating on binary floating point numbers. For example, the `Float64`
-    value represented by `1.15` is actually *less* than 1.15, yet will be
-    rounded to 1.2.
-
-    ```jldoctest
-    julia> x = 1.15
-    1.15
-
-    julia> @sprintf "%.20f" x
-    "1.14999999999999991118"
-
-    julia> x < 115//100
-    true
-
-    julia> round(x, 1)
-    1.2
-    ```
-"""
-round(T::Type, x)
 
 """
     round(z, RoundingModeReal, RoundingModeImaginary)
@@ -4414,33 +4345,6 @@ Bitwise not.
 Bessel function of the third kind of order `nu`, ``H^{(1)}_\\nu(x)``.
 """
 hankelh1
-
-"""
-    gcdx(x,y)
-
-Computes the greatest common (positive) divisor of `x` and `y` and their Bézout
-coefficients, i.e. the integer coefficients `u` and `v` that satisfy
-``ux+vy = d = gcd(x,y)``.
-
-```jldoctest
-julia> gcdx(12, 42)
-(6,-3,1)
-```
-
-```jldoctest
-julia> gcdx(240, 46)
-(2,-9,47)
-```
-
-!!! note
-    Bézout coefficients are *not* uniquely defined. `gcdx` returns the minimal
-    Bézout coefficients that are computed by the extended Euclid algorithm.
-    (Ref: D. Knuth, TAoCP, 2/e, p. 325, Algorithm X.) These coefficients `u`
-    and `v` are minimal in the sense that ``|u| < |\\frac y d`` and ``|v| <
-    |\\frac x d``. Furthermore, the signs of `u` and `v` are chosen so that `d`
-    is positive.
-"""
-gcdx
 
 """
     rem(x, y)
@@ -8625,73 +8529,6 @@ eigvecs
 Converts the endianness of a value from Network byte order (big-endian) to that used by the Host.
 """
 ntoh
-
-"""
-    qrfact(A [,pivot=Val{false}]) -> F
-
-Computes the QR factorization of `A`. The return type of `F` depends on the element type of
-`A` and whether pivoting is specified (with `pivot==Val{true}`).
-
-| Return type   | `eltype(A)`     | `pivot`      | Relationship between `F` and `A` |
-|:--------------|:----------------|:-------------|:---------------------------------|
-| `QR`          | not `BlasFloat` | either       | `A==F[:Q]*F[:R]`                 |
-| `QRCompactWY` | `BlasFloat`     | `Val{false}` | `A==F[:Q]*F[:R]`                 |
-| `QRPivoted`   | `BlasFloat`     | `Val{true}`  | `A[:,F[:p]]==F[:Q]*F[:R]`        |
-
-`BlasFloat` refers to any of: `Float32`, `Float64`, `Complex64` or `Complex128`.
-
-The individual components of the factorization `F` can be accessed by indexing:
-
-| Component | Description                               | `QR`            | `QRCompactWY`      | `QRPivoted`     |
-|:----------|:------------------------------------------|:----------------|:-------------------|:----------------|
-| `F[:Q]`   | `Q` (orthogonal/unitary) part of `QR`     | ✓ (`QRPackedQ`) | ✓ (`QRCompactWYQ`) | ✓ (`QRPackedQ`) |
-| `F[:R]`   | `R` (upper right triangular) part of `QR` | ✓               | ✓                  | ✓               |
-| `F[:p]`   | pivot `Vector`                            |                 |                    | ✓               |
-| `F[:P]`   | (pivot) permutation `Matrix`              |                 |                    | ✓               |
-
-The following functions are available for the `QR` objects: `size`, `\\`. When `A` is
-rectangular, `\\` will return a least squares solution and if the solution is not unique,
-the one with smallest norm is returned.
-
-Multiplication with respect to either thin or full `Q` is allowed, i.e. both `F[:Q]*F[:R]`
-and `F[:Q]*A` are supported. A `Q` matrix can be converted into a regular matrix with
-[`full`](:func:`full`) which has a named argument `thin`.
-
-!!! note
-    `qrfact` returns multiple types because LAPACK uses several representations
-    that minimize the memory storage requirements of products of Householder
-    elementary reflectors, so that the `Q` and `R` matrices can be stored
-    compactly rather as two separate dense matrices.
-
-    The data contained in `QR` or `QRPivoted` can be used to construct the
-    `QRPackedQ` type, which is a compact representation of the rotation matrix:
-
-    ```math
-    Q = \\prod_{i=1}^{\\min(m,n)} (I - \\tau_i v_i v_i^T)
-    ```
-
-    where ``\\tau_i`` is the scale factor and ``v_i`` is the projection vector
-    associated with the ``i^{th}`` Householder elementary reflector.
-
-    The data contained in `QRCompactWY` can be used to construct the
-    `QRCompactWYQ` type, which is a compact representation of the rotation
-    matrix
-
-    ```math
-    Q = I + Y T Y^T
-    ```
-
-    where `Y` is ``m \\times r`` lower trapezoidal and `T` is ``r \\times r``
-    upper triangular. The *compact WY* representation [^Schreiber1989] is not
-    to be confused with the older, *WY* representation [^Bischof1987]. (The
-    LAPACK documentation uses `V` in lieu of `Y`.)
-
-    [^Bischof1987]: C Bischof and C Van Loan, "The WY representation for products of Householder matrices", SIAM J Sci Stat Comput 8 (1987), s2-s13. [doi:10.1137/0908009](http://dx.doi.org/10.1137/0908009)
-
-    [^Schreiber1989]: R Schreiber and C Van Loan, "A storage-efficient WY representation for products of Householder transformations", SIAM J Sci Stat Comput 10 (1989), 53-57. [doi:10.1137/0910005](http://dx.doi.org/10.1137/0910005)
-"""
-qrfact(A,?)
-
 
 """
     qrfact(A) -> SPQR.Factorization
