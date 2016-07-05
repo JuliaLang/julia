@@ -32,6 +32,15 @@ New language features
     packages, but now Julia provides an API for writing generic
     algorithms for arbitrary indexing schemes ([#16260]).
 
+New architectures
+-----------------
+
+  This release greatly improves support for ARM, and introduces support for Power.
+
+  * [ARM](https://github.com/JuliaLang/julia/issues?utf8=%E2%9C%93&q=label%3Aarm) ([#14194], [#14519], [#16645], [#16621])
+
+  * [Power](https://github.com/JuliaLang/julia/issues?utf8=%E2%9C%93&q=label%3Apower) ([#16455], [#16404])
+
 Language changes
 ----------------
 
@@ -255,10 +264,12 @@ Deprecated or removed
 [#13824]: https://github.com/JuliaLang/julia/issues/13824
 [#13897]: https://github.com/JuliaLang/julia/issues/13897
 [#14114]: https://github.com/JuliaLang/julia/issues/14114
+[#14194]: https://github.com/JuliaLang/julia/issues/14194
 [#14243]: https://github.com/JuliaLang/julia/issues/14243
 [#14413]: https://github.com/JuliaLang/julia/issues/14413
 [#14424]: https://github.com/JuliaLang/julia/issues/14424
 [#14469]: https://github.com/JuliaLang/julia/issues/14469
+[#14519]: https://github.com/JuliaLang/julia/issues/14519
 [#14759]: https://github.com/JuliaLang/julia/issues/14759
 [#14798]: https://github.com/JuliaLang/julia/issues/14798
 [#15032]: https://github.com/JuliaLang/julia/issues/15032
@@ -278,7 +289,11 @@ Deprecated or removed
 [#16260]: https://github.com/JuliaLang/julia/issues/16260
 [#16362]: https://github.com/JuliaLang/julia/issues/16362
 [#16403]: https://github.com/JuliaLang/julia/issues/16403
+[#16404]: https://github.com/JuliaLang/julia/issues/16404
+[#16455]: https://github.com/JuliaLang/julia/issues/16455
 [#16481]: https://github.com/JuliaLang/julia/issues/16481
+[#16621]: https://github.com/JuliaLang/julia/issues/16621
+[#16645]: https://github.com/JuliaLang/julia/issues/16645
 [#16731]: https://github.com/JuliaLang/julia/issues/16731
 [#16972]: https://github.com/JuliaLang/julia/issues/16972
 [#17266]: https://github.com/JuliaLang/julia/issues/17266
