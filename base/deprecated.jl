@@ -885,13 +885,22 @@ end
 for f in (
         :sinpi, :cospi, :sinc, :cosc, # base/special/trig.jl
         :log, :log1p, # base/special/log.jl
+        :gamma, :lfact, :digamma, :trigamma, :zeta, :eta,# base/special/gamma.jl
         )
     @eval @dep_vectorize_1arg Number $f
 end
 for f in (
         :sind, :cosd, :tand, :asind, :acosd, :atand, :asecd, :acscd, :acotd, # base/special/trig.jl
+        :invdigamma, # base/special/gamma.jl
         )
     @eval @dep_vectorize_1arg Real $f
+end
+
+# Deprecate @vectorize_2arg-vectorized functions from...
+for f in (
+        :polygamma, :zeta, :beta, :lbeta, # base/special/gamma.jl
+    )
+    @eval @dep_vectorize_2arg Number $f
 end
 
 # End deprecations scheduled for 0.6
