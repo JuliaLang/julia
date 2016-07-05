@@ -543,9 +543,9 @@ end
 
 # gamma, lgamma (complex argument)
 if Base.Math.libm == "libopenlibm"
-    @test gamma(Float64[1:25;]) == gamma(1:25)
+    @test gamma.(Float64[1:25;]) == gamma.(1:25)
 else
-    @test gamma(Float64[1:25;]) ≈ gamma(1:25)
+    @test gamma.(Float64[1:25;]) ≈ gamma.(1:25)
 end
 for elty in (Float32, Float64)
     @test gamma(convert(elty,1/2)) ≈ convert(elty,sqrt(π))
@@ -815,9 +815,9 @@ binary_math_functions = [
 for f in binary_math_functions
     x = y = 2
     v = [f(x,y)]
-    @test f([x],y) == v
-    @test f(x,[y]) == v
-    @test f([x],[y]) == v
+    @test f.([x],y) == v
+    @test f.(x,[y]) == v
+    @test f.([x],[y]) == v
 end
 
 # #3024, #12822
