@@ -196,11 +196,11 @@ end
 TAA = rand(2,2)
 TAA = (TAA + TAA.')/2.
 STAA = Symmetric(TAA)
-@test full(atanh(STAA)) == atanh(TAA)
-@test full(asinh(STAA)) == asinh(TAA)
-@test full(acosh(STAA+Symmetric(ones(TAA)))) == acosh(TAA+ones(TAA))
-@test full(acsch(STAA+Symmetric(ones(TAA)))) == acsch(TAA+ones(TAA))
-@test full(acoth(STAA+Symmetric(ones(TAA)))) == acoth(TAA+ones(TAA))
+@test full(atanh.(STAA)) == atanh.(TAA)
+@test full(asinh.(STAA)) == asinh.(TAA)
+@test full(acosh.(STAA+Symmetric(ones(TAA)))) == acosh.(TAA+ones(TAA))
+@test full(acsch.(STAA+Symmetric(ones(TAA)))) == acsch.(TAA+ones(TAA))
+@test full(acoth.(STAA+Symmetric(ones(TAA)))) == acoth.(TAA+ones(TAA))
 
 # check exp2(::Integer) matches exp2(::Float)
 for ii in -2048:2048
@@ -220,8 +220,8 @@ end
 
 for T in (Int, Float64, BigFloat)
     @test deg2rad(T(180)) ≈ 1pi
-    @test deg2rad(T[45, 60]) ≈ [pi/T(4), pi/T(3)]
-    @test rad2deg([pi/T(4), pi/T(3)]) ≈ [45, 60]
+    @test deg2rad.(T[45, 60]) ≈ [pi/T(4), pi/T(3)]
+    @test rad2deg.([pi/T(4), pi/T(3)]) ≈ [45, 60]
     @test rad2deg(T(1)*pi) ≈ 180
     @test rad2deg(T(1)) ≈ rad2deg(true)
     @test deg2rad(T(1)) ≈ deg2rad(true)

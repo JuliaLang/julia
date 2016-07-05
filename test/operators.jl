@@ -52,6 +52,6 @@ p = 1=>:foo
 # issue #13144: max() with 4 or more array arguments
 let xs = [[i:i+4;] for i in 1:10]
     for n in 2:10
-        @test max(xs[1:n]...) == [n:n+4;]
+        @test max.(xs[1:n]...) == [n:n+4;]
     end
 end

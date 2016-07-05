@@ -247,9 +247,9 @@ for (funm, func) in ([:expm,:exp], [:sqrtm,:sqrt], [:logm,:log])
     end
 end
 
-expm(D::Diagonal) = Diagonal(exp(D.diag))
+expm(D::Diagonal) = Diagonal(exp.(D.diag))
 logm(D::Diagonal) = Diagonal(log.(D.diag))
-sqrtm(D::Diagonal) = Diagonal(sqrt(D.diag))
+sqrtm(D::Diagonal) = Diagonal(sqrt.(D.diag))
 
 #Linear solver
 function A_ldiv_B!(D::Diagonal, B::StridedVecOrMat)
