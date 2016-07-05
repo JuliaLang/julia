@@ -960,10 +960,11 @@ for (gemm, elty) in
 #               error("gemm!: BLAS module requires contiguous matrix columns")
 #           end  # should this be checked on every call?
             m = size(A, transA == 'N' ? 1 : 2)
-            k = size(A, transA == 'N' ? 2 : 1)
+            ka = size(A, transA == 'N' ? 2 : 1)
+            kb = size(B, transB == 'N' ? 1 : 2)
             n = size(B, transB == 'N' ? 2 : 1)
-            if m != size(C,1) || n != size(C,2)
-                throw(DimensionMismatch("A has size ($m,$k), B has size ($k,$n), C has size $(size(C))"))
+            if ka != kb || m != size(C,1) || n != size(C,2)
+                throw(DimensionMismatch("A has size ($m,$ka), B has size ($kb,$n), C has size $(size(C))"))
             end
             ccall((@blasfunc($gemm), libblas), Void,
                 (Ptr{UInt8}, Ptr{UInt8}, Ptr{BlasInt}, Ptr{BlasInt},
@@ -971,7 +972,7 @@ for (gemm, elty) in
                  Ptr{$elty}, Ptr{BlasInt}, Ptr{$elty}, Ptr{$elty},
                  Ptr{BlasInt}),
                  &transA, &transB, &m, &n,
-                 &k, &alpha, A, &max(1,stride(A,2)),
+                 &ka, &alpha, A, &max(1,stride(A,2)),
                  B, &max(1,stride(B,2)), &beta, C,
                  &max(1,stride(C,2)))
             C
