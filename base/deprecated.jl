@@ -886,12 +886,14 @@ for f in (
         :sinpi, :cospi, :sinc, :cosc, # base/special/trig.jl
         :log, :log1p, # base/special/log.jl
         :gamma, :lfact, :digamma, :trigamma, :zeta, :eta,# base/special/gamma.jl
+        :erfcx, :erfi, :dawson, # base/special/erf.jl
         )
     @eval @dep_vectorize_1arg Number $f
 end
 for f in (
         :sind, :cosd, :tand, :asind, :acosd, :atand, :asecd, :acscd, :acotd, # base/special/trig.jl
         :invdigamma, # base/special/gamma.jl
+        :erfinc, :erfcinv, # base/special/erf.jl
         )
     @eval @dep_vectorize_1arg Real $f
 end
