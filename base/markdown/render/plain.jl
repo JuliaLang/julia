@@ -49,6 +49,16 @@ function plain(io::IO, q::BlockQuote)
     println(io)
 end
 
+function plain(io::IO, md::Admonition)
+    s = sprint(buf -> plain(buf, md.content))
+    title = md.title == ucfirst(md.category) ? "" : " \"$(md.title)\""
+    println(io, "!!! ", md.category, title)
+    for line in split(rstrip(s), "\n")
+        println(io, isempty(line) ? "" : "    ", line)
+    end
+    println(io)
+end
+
 function plain(io::IO, md::HorizontalRule)
     println(io, "-" ^ 3)
 end

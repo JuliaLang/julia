@@ -463,3 +463,219 @@ let t_1 = "`code` ``math`` ```code``` ````math```` `````code`````",
         LaTeX("math at end of string"),
     ]))
 end
+
+# Admonitions.
+
+let t_1 =
+        """
+        # Foo
+
+        !!! note
+
+        !!! warning "custom title"
+
+        ## Bar
+
+        !!! danger ""
+
+        !!!
+        """,
+    t_2 =
+        """
+        !!! note
+            foo bar baz
+
+        !!! warning "custom title"
+            - foo
+            - bar
+            - baz
+
+            foo bar baz
+
+        !!! danger ""
+
+            ```
+            foo
+            ```
+
+                bar
+
+            # baz
+        """,
+    m_1 = Markdown.parse(t_1),
+    m_2 = Markdown.parse(t_2)
+
+    # Content Tests.
+
+    @test isa(m_1.content[2], Markdown.Admonition)
+    @test m_1.content[2].category == "note"
+    @test m_1.content[2].title == "Note"
+    @test m_1.content[2].content == []
+
+    @test isa(m_1.content[3], Markdown.Admonition)
+    @test m_1.content[3].category == "warning"
+    @test m_1.content[3].title == "custom title"
+    @test m_1.content[3].content == []
+
+    @test isa(m_1.content[5], Markdown.Admonition)
+    @test m_1.content[5].category == "danger"
+    @test m_1.content[5].title == ""
+    @test m_1.content[5].content == []
+
+    @test isa(m_1.content[6], Markdown.Paragraph)
+
+    @test isa(m_2.content[1], Markdown.Admonition)
+    @test m_2.content[1].category == "note"
+    @test m_2.content[1].title == "Note"
+    @test isa(m_2.content[1].content[1], Markdown.Paragraph)
+
+    @test isa(m_2.content[2], Markdown.Admonition)
+    @test m_2.content[2].category == "warning"
+    @test m_2.content[2].title == "custom title"
+    @test isa(m_2.content[2].content[1], Markdown.List)
+    @test isa(m_2.content[2].content[2], Markdown.Paragraph)
+
+    @test isa(m_2.content[3], Markdown.Admonition)
+    @test m_2.content[3].category == "danger"
+    @test m_2.content[3].title == ""
+    @test isa(m_2.content[3].content[1], Markdown.Code)
+    @test isa(m_2.content[3].content[2], Markdown.Code)
+    @test isa(m_2.content[3].content[3], Markdown.Header{1})
+
+    # Rendering Tests.
+
+    let out = Markdown.plain(m_1),
+        expected =
+            """
+            # Foo
+
+            !!! note
+            \n\n
+            !!! warning "custom title"
+            \n\n
+            ## Bar
+
+            !!! danger ""
+            \n\n
+            !!!
+            """
+        @test out == expected
+    end
+    let out = Markdown.rst(m_1),
+        expected =
+            """
+            Foo
+            ***
+            \n
+            .. note::
+            \n\n
+            .. warning:: custom title
+            \n\n
+            Bar
+            ===
+            \n
+            .. danger::
+            \n\n
+            !!!
+            """
+        @test out == expected
+    end
+    let out = Markdown.latex(m_1),
+        expected =
+            """
+            \\section{Foo}
+            \\begin{quote}
+            \\textbf{note}
+
+            Note
+
+            \\end{quote}
+            \\begin{quote}
+            \\textbf{warning}
+
+            custom title
+
+            \\end{quote}
+            \\subsection{Bar}
+            \\begin{quote}
+            \\textbf{danger}
+            \n\n
+            \\end{quote}
+            !!!
+            """
+        @test out == expected
+    end
+    let out = Markdown.html(m_1),
+        expected =
+            """
+            <h1>Foo</h1>
+            <div class="admonition note"><p class="admonition-title">Note</p></div>
+            <div class="admonition warning"><p class="admonition-title">custom title</p></div>
+            <h2>Bar</h2>
+            <div class="admonition danger"><p class="admonition-title"></p></div>
+            <p>&#33;&#33;&#33;</p>
+            """
+        @test out == expected
+    end
+
+    let out = Markdown.plain(m_2),
+        expected =
+            """
+            !!! note
+                foo bar baz
+
+
+            !!! warning "custom title"
+                  * foo
+                  * bar
+                  * baz
+
+                foo bar baz
+
+
+            !!! danger ""
+                ```
+                foo
+                ```
+
+                ```
+                bar
+                ```
+
+                # baz
+
+            """
+        @test out == expected
+    end
+    let out = Markdown.rst(m_2),
+        expected =
+            """
+            .. note::
+               foo bar baz
+
+
+            .. warning:: custom title
+               * foo
+               * bar
+               * baz
+
+               foo bar baz
+
+
+            .. danger::
+               .. code-block:: julia
+
+                   foo
+
+               .. code-block:: julia
+
+                   bar
+
+               baz
+               ***
+
+            """
+        @test out == expected
+    end
+end
+

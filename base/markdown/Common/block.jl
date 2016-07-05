@@ -150,6 +150,64 @@ function blockquote(stream::IO, block::MD)
     end
 end
 
+# -----------
+# Admonitions
+# -----------
+
+type Admonition
+    category::String
+    title::String
+    content::Vector
+end
+
+@breaking true ->
+function admonition(stream::IO, block::MD)
+    withstream(stream) do
+        # Admonition syntax:
+        #
+        # !!! category "optional explicit title within double quotes"
+        #     Any number of other indented markdown elements.
+        #
+        #     This is the second paragraph.
+        #
+        startswith(stream, "!!! ") || return false
+        # Extract the category of admonition and its title:
+        category, title =
+            let untitled = r"^([a-z]+)$",          # !!! <CATEGORY_NAME>
+                titled   = r"^([a-z]+) \"(.*)\"$", # !!! <CATEGORY_NAME> "<TITLE>"
+                line     = strip(readline(stream))
+                if ismatch(untitled, line)
+                    m = match(untitled, line)
+                    # When no title is provided we use CATEGORY_NAME, capitalising it.
+                    m.captures[1], ucfirst(m.captures[1])
+                elseif ismatch(titled, line)
+                    m = match(titled, line)
+                    # To have a blank TITLE provide an explicit empty string as TITLE.
+                    m.captures[1], m.captures[2]
+                else
+                    # Admonition header is invalid so we give up parsing here and move
+                    # on to the next parser.
+                    return false
+                end
+            end
+        # Consume the following indented (4 spaces) block.
+        buffer = IOBuffer()
+        while !eof(stream)
+            if startswith(stream, "    ")
+                write(buffer, readline(stream))
+            elseif blankline(stream)
+                write(buffer, '\n')
+            else
+                break
+            end
+        end
+        # Parse the nested block as markdown and create a new Admonition block.
+        nested = parse(takebuf_string(buffer), flavor = config(block))
+        push!(block, Admonition(category, title, nested.content))
+        return true
+    end
+end
+
 # –––––
 # Lists
 # –––––
