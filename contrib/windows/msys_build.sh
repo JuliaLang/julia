@@ -172,8 +172,8 @@ echo 'JULIA_SYSIMG_BUILD_FLAGS=--output-ji ../usr/lib/julia/sys.ji' >> Make.user
 # libuv since its static lib is no longer included in the binaries
 # openlibm since we need it as a static library to work properly
 # utf8proc since its headers are not in the binary download
-echo 'override STAGE1_DEPS = libuv' >> Make.user
-echo 'override STAGE2_DEPS = utf8proc' >> Make.user
+echo 'override STAGE1_DEPS = libuv http_parser mbedtls libssh2' >> Make.user
+echo 'override STAGE2_DEPS = utf8proc libgit2' >> Make.user
 echo 'override STAGE3_DEPS = ' >> Make.user
 
 if [ -n "$USEMSVC" ]; then
