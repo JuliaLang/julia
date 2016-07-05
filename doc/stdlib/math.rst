@@ -966,7 +966,7 @@ Mathematical Functions
 
    .. Docstring generated from Julia source
 
-   Rounds ``x`` to an integer value according to the provided :obj:`RoundingMode`\ , returning a value of the same type as ``x``\ . By default uses :obj:`RoundNearest`\ , which rounds to the nearest integer, with ties (fractional values of 0.5) being rounded to the nearest even integer.
+   Rounds ``x`` to an integer value according to the provided :obj:`RoundingMode`\ , returning a value of the same type as ``x``\ . When not specifying a rounding mode the global mode will be used (see :func:`rounding`\ ), which by default is round to the nearest integer (:obj:`RoundNearest` mode), with ties (fractional values of 0.5) being rounded to the nearest even integer.
 
    .. doctest::
 
@@ -1015,7 +1015,9 @@ Mathematical Functions
 
    .. Docstring generated from Julia source
 
-   A type which controls rounding behavior. Currently supported rounding modes are:
+   A type used for controlling the rounding mode of floating point operations (via :func:`rounding`\ /:func:`setrounding` functions), or as optional arguments for rounding to the nearest integer (via the :func:`round` function).
+
+   Currently supported rounding modes are:
 
    * :obj:`RoundNearest` (default)
    * :obj:`RoundNearestTiesAway`
