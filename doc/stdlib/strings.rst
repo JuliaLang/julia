@@ -500,3 +500,4 @@
    .. Docstring generated from Julia source
 
    Create a string from the address of a NUL-terminated UTF-32 string. A copy is made; the pointer can be safely freed. If ``length`` is specified, the string does not have to be NUL-terminated.
+
