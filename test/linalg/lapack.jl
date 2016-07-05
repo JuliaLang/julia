@@ -178,7 +178,7 @@ end
 
 #gebal/gebak
 for elty in (Float32, Float64, Complex64, Complex128)
-    A = rand(elty,10,10) * Diagonal(exp10(linspace(-10,10,10)))
+    A = rand(elty,10,10) * Diagonal(exp10.(linspace(-10,10,10)))
     B = copy(A)
     ilo, ihi, scale = LAPACK.gebal!('S',B)
     Bvs = eigvecs(B)
