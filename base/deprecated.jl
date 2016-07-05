@@ -889,6 +889,7 @@ for f in (
         :erfcx, :erfi, :dawson, # base/special/erf.jl
         :airyprime, :airyai, :airyaiprime, :airybi, :airybiprime, :airy, :airyx, :besselj0, :besselj1, :bessely0, :bessely1, # base/special/bessel.jl
         :cbrt, :sinh, :cosh, :tanh, :atan, :asinh, :exp, :erf, :erfc, :exp2, :expm1, :exp10, :sin, :cos, :tan, :asin, :acos, :acosh, :atanh, #=:log,=# :log2, :log10, :lgamma, #=:log1p,=# :sqrt, # base/math.jl
+        :abs, :abs2, :angle, :isnan, :isinf, :isfinite, # base/floatfuncs.jl
         )
     @eval @dep_vectorize_1arg Number $f
 end
@@ -897,6 +898,7 @@ for f in (
         :invdigamma, # base/special/gamma.jl
         :erfinc, :erfcinv, # base/special/erf.jl
         :rad2deg, :deg2rad, :exponent, :significand, # base/math.jl
+        :trunc, :floor, :ceil, :round, # base/floatfuncs.jl
         )
     @eval @dep_vectorize_1arg Real $f
 end
@@ -911,6 +913,7 @@ for f in (
 end
 for f in (
         :max, :min, # base/math.jl
+        :copysign, :flipsign, # base/floatfuncs.jl
     )
     @eval @dep_vectorize_2arg Real $f
 end

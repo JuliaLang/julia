@@ -234,13 +234,13 @@ for elty in (Float32, Float64, BigFloat, Complex{Float32}, Complex{Float64}, Com
         @test norm(xs + ys,Inf) <= norm(xs,Inf) + norm(ys,Inf)
 
         # Against vectorized versions
-        @test norm(x,-Inf) ≈ minimum(abs(x))
-        @test norm(x,-1) ≈ inv(sum(1./abs(x)))
+        @test norm(x,-Inf) ≈ minimum(abs.(x))
+        @test norm(x,-1) ≈ inv(sum(1./abs.(x)))
         @test norm(x,0) ≈ sum(x .!= 0)
-        @test norm(x,1) ≈ sum(abs(x))
-        @test norm(x) ≈ sqrt(sum(abs2(x)))
-        @test norm(x,3) ≈ cbrt(sum(abs(x).^3.))
-        @test norm(x,Inf) ≈ maximum(abs(x))
+        @test norm(x,1) ≈ sum(abs.(x))
+        @test norm(x) ≈ sqrt(sum(abs2.(x)))
+        @test norm(x,3) ≈ cbrt(sum(abs.(x).^3.))
+        @test norm(x,Inf) ≈ maximum(abs.(x))
     end
     ## Matrix (Operator)
         A = ones(elty,10,10)

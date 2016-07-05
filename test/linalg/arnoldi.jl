@@ -201,13 +201,13 @@ let # complex svds test
     @test S1[1][:S] ≈ S2[2][1:2]
 
     ## left singular vectors
-    s1_left = abs(S1[1][:U][:,1:2])
-    s2_left = abs(S2[1][:,1:2])
+    s1_left = abs.(S1[1][:U][:,1:2])
+    s2_left = abs.(S2[1][:,1:2])
     @test s1_left ≈ s2_left
 
     ## right singular vectors
-    s1_right = abs(S1[1][:Vt][:,1:2])
-    s2_right = abs(S2[3][:,1:2])
+    s1_right = abs.(S1[1][:Vt][:,1:2])
+    s2_right = abs.(S2[3][:,1:2])
     @test s1_right ≈ s2_right
 
     ## test passing guess for Krylov vectors
