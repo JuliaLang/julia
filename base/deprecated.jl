@@ -865,4 +865,32 @@ for f in (:sin, :sinh, :sind, :asin, :asinh, :asind,
     @eval @deprecate $f(A::SparseMatrixCSC) $f.(A)
 end
 
+# For deprecating vectorized functions in favor of compact broadcast syntax
+macro dep_vectorize_1arg(S, f)
+    :( @deprecate $(esc(f)){T<:$(esc(S))}(x::AbstractArray{T}) $(esc(f)).(x) )
+end
+macro dep_vectorize_2arg(S, f)
+    S = esc(S)
+    f = esc(f)
+    T1 = esc(:T1)
+    T2 = esc(:T2)
+    quote
+        @deprecate $f{T<:$S}(x::$S, y::AbstractArray{T}) $f.(x,y)
+        @deprecate $f{T<:$S}(x::AbstractArray{T}, y::$S) $f.(x,y)
+        @deprecate $f{T1<:$S,T2<:$S}(x::AbstractArray{T1}, y::AbstractArray{T2}) $f.(x,y)
+    end
+end
+
+# Deprecate @vectorize_1arg-vectorized functions from...
+for f in (
+        :sinpi, :cospi, :sinc, :cosc, # base/special/trig.jl
+        )
+    @eval @dep_vectorize_1arg Number $f
+end
+for f in (
+        :sind, :cosd, :tand, :asind, :acosd, :atand, :asecd, :acscd, :acotd, # base/special/trig.jl
+        )
+    @eval @dep_vectorize_1arg Real $f
+end
+
 # End deprecations scheduled for 0.6
