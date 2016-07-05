@@ -13,7 +13,12 @@ export
 """
     RoundingMode
 
-A type which controls rounding behavior. Currently supported rounding modes are:
+A type used for controlling the rounding mode of floating point operations (via
+[`rounding`](:func:`rounding`)/[`setrounding`](:func:`setrounding`) functions), or as
+optional arguments for rounding to the nearest integer (via the [`round`](:func:`round`)
+function).
+
+Currently supported rounding modes are:
 
 - [`RoundNearest`](:obj:`RoundNearest`) (default)
 - [`RoundNearestTiesAway`](:obj:`RoundNearestTiesAway`)
