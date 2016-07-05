@@ -86,7 +86,7 @@ static Value *FP(Value *v)
 {
     if (v->getType()->isFloatingPointTy())
         return v;
-    return builder.CreateBitCast(v, FT(v->getType()));
+    return emit_bitcast(v, FT(v->getType()));
 }
 
 // convert float type to same-size int type
@@ -129,7 +129,7 @@ static Value *JL_INT(Value *v)
         return v;
     if (t->isPointerTy())
         return builder.CreatePtrToInt(v, JL_INTT(t));
-    return builder.CreateBitCast(v, JL_INTT(t));
+    return emit_bitcast(v, JL_INTT(t));
 }
 
 static Value *uint_cnvt(Type *to, Value *x)
@@ -302,7 +302,7 @@ static Value *emit_unbox(Type *to, const jl_cgval_t &x, jl_value_t *jt, Value *d
     Value *p = x.constant ? literal_pointer_val(x.constant) : x.V;
     Type *ptype = (to == T_int1 ? T_pint8 : to->getPointerTo());
     if (p->getType() != ptype)
-        p = builder.CreateBitCast(p, ptype);
+        p = emit_bitcast(p, ptype);
 
     Value *unboxed = NULL;
     if (to == T_int1)
@@ -500,7 +500,7 @@ static jl_cgval_t generic_box(jl_value_t *targ, jl_value_t *x, jl_codectx_t *ctx
         else if (!vxt->isPointerTy() && llvmt->isPointerTy())
             vx = builder.CreateIntToPtr(vx, llvmt);
         else
-            vx = builder.CreateBitCast(vx, llvmt);
+            vx = emit_bitcast(vx, llvmt);
     }
 
     if (jl_is_leaf_type(bt))
@@ -603,7 +603,7 @@ static jl_cgval_t generic_unbox(jl_value_t *targ, jl_value_t *x, jl_codectx_t *c
         else if (!vxt->isPointerTy() && llvmt->isPointerTy())
             vx = builder.CreateIntToPtr(vx, llvmt);
         else
-            vx = builder.CreateBitCast(vx, llvmt);
+            vx = emit_bitcast(vx, llvmt);
     }
 
     return mark_julia_type(vx, false, bt, ctx);
@@ -762,7 +762,7 @@ static jl_cgval_t emit_pointerref(jl_value_t *e, jl_value_t *i, jl_codectx_t *ct
         if (ety == (jl_value_t*)jl_any_type)
             return mark_julia_type(
                     builder.CreateLoad(builder.CreateGEP(
-                        builder.CreateBitCast(thePtr, T_ppjlvalue),
+                        emit_bitcast(thePtr, T_ppjlvalue),
                         im1)),
                     true,
                     ety, ctx);
@@ -776,8 +776,8 @@ static jl_cgval_t emit_pointerref(jl_value_t *e, jl_value_t *i, jl_codectx_t *ct
                                      literal_pointer_val((jl_value_t*)ety));
         im1 = builder.CreateMul(im1, ConstantInt::get(T_size,
                     LLT_ALIGN(size, ((jl_datatype_t*)ety)->layout->alignment)));
-        thePtr = builder.CreateGEP(builder.CreateBitCast(thePtr, T_pint8), im1);
-        prepare_call(builder.CreateMemCpy(builder.CreateBitCast(strct, T_pint8),
+        thePtr = builder.CreateGEP(emit_bitcast(thePtr, T_pint8), im1);
+        prepare_call(builder.CreateMemCpy(emit_bitcast(strct, T_pint8),
                              thePtr, size, 1)->getCalledValue());
         return mark_julia_type(strct, true, ety, ctx);
     }
@@ -835,7 +835,7 @@ static jl_cgval_t emit_pointerset(jl_value_t *e, jl_value_t *x, jl_value_t *i, j
         uint64_t size = ((jl_datatype_t*)ety)->size;
         im1 = builder.CreateMul(im1, ConstantInt::get(T_size,
                     LLT_ALIGN(size, ((jl_datatype_t*)ety)->layout->alignment)));
-        prepare_call(builder.CreateMemCpy(builder.CreateGEP(builder.CreateBitCast(thePtr, T_pint8), im1),
+        prepare_call(builder.CreateMemCpy(builder.CreateGEP(emit_bitcast(thePtr, T_pint8), im1),
                              data_pointer(val, ctx, T_pint8), size, 1)->getCalledValue());
     }
     else {
@@ -1131,7 +1131,7 @@ static jl_cgval_t emit_intrinsic(intrinsic f, jl_value_t **args, size_t nargs,
             r = emit_untyped_intrinsic(f, x, y, z, nargs, ctx, (jl_datatype_t**)&newtyp);
         if (!newtyp && r->getType() != x->getType())
             // cast back to the exact original type (e.g. float vs. int) before remarking as a julia type
-            r = builder.CreateBitCast(r, x->getType());
+            r = emit_bitcast(r, x->getType());
         if (r->getType() == T_int1)
             r = builder.CreateZExt(r, T_int8);
         return mark_julia_type(r, false, newtyp ? newtyp : xinfo.typ, ctx);
@@ -1424,11 +1424,11 @@ static Value *emit_untyped_intrinsic(intrinsic f, Value *x, Value *y, Value *z, 
                                   x);
 #else
         Type *intt = JL_INTT(x->getType());
-        Value *bits = builder.CreateBitCast(FP(x), intt);
+        Value *bits = emit_bitcast(FP(x), intt);
         Value *absbits =
             builder.CreateAnd(bits,
                               ConstantInt::get(intt, APInt::getSignedMaxValue(((IntegerType*)intt)->getBitWidth())));
-        return builder.CreateBitCast(absbits, x->getType());
+        return emit_bitcast(absbits, x->getType());
 #endif
     }
     case copysign_float:
@@ -1436,8 +1436,8 @@ static Value *emit_untyped_intrinsic(intrinsic f, Value *x, Value *y, Value *z, 
         x = FP(x);
         fy = FP(y);
         Type *intt = JL_INTT(x->getType());
-        Value *bits = builder.CreateBitCast(x, intt);
-        Value *sbits = builder.CreateBitCast(fy, intt);
+        Value *bits = emit_bitcast(x, intt);
+        Value *sbits = emit_bitcast(fy, intt);
         unsigned nb = ((IntegerType*)intt)->getBitWidth();
         APInt notsignbit = APInt::getSignedMaxValue(nb);
         APInt signbit0(nb, 0); signbit0.setBit(nb-1);
@@ -1448,7 +1448,7 @@ static Value *emit_untyped_intrinsic(intrinsic f, Value *x, Value *y, Value *z, 
                              builder.CreateAnd(sbits,
                                                ConstantInt::get(intt,
                                                                 signbit0)));
-        return builder.CreateBitCast(rbits, x->getType());
+        return emit_bitcast(rbits, x->getType());
     }
     case flipsign_int:
     {
