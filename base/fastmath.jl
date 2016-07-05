@@ -343,7 +343,6 @@ for f in (:acos, :acosh, :angle, :asin, :asinh, :atan, :atanh, :cbrt,
     f_fast = fast_op[f]
     @eval begin
         $f_fast(x) = $f(x)
-        @vectorize_1arg Number $f_fast
     end
 end
 
@@ -356,7 +355,6 @@ for f in (:^, :atan2, :hypot, :max, :min, :minmax)
         $f_fast(x::Number, y::Number) = $f_fast(promote(x, y)...)
         # fall-back implementation that applies after promotion
         $f_fast{T<:Number}(x::T, y::T) = $f(x, y)
-        @vectorize_2arg Number $f_fast
     end
 end
 
