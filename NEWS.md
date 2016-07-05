@@ -93,7 +93,9 @@ Breaking changes
     If a reshaped copy is needed, use `copy(reshape(a))` or `copy!` to a new array of
     the desired shape ([#4211]).
 
-  * `mapslices` will always pass a view, so passing mutating functions will mutate the underlying array ([#16260])
+  * `mapslices` now re-uses temporary storage. Recipient functions
+    that expect input slices to be persistent should copy data to
+    other storage ([#17266]).
 
   * Local variables and arguments are represented in lowered code as numbered `Slot`
     objects instead of as symbols ([#15609]).
@@ -294,3 +296,4 @@ Deprecated or removed
 [#16645]: https://github.com/JuliaLang/julia/issues/16645
 [#16731]: https://github.com/JuliaLang/julia/issues/16731
 [#16972]: https://github.com/JuliaLang/julia/issues/16972
+[#17266]: https://github.com/JuliaLang/julia/issues/17266
