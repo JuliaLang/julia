@@ -75,7 +75,7 @@ issuing the command::
 
 If you further add the following to your ``.juliarc.jl`` file ::
 
-    isinteractive() && isfile("_init.jl") && require("_init.jl")
+    isfile("_init.jl") && include(joinpath(pwd(), "_init.jl"))
 
 then calling ``julia`` from that directory will run the initialization
 code without the additional command line argument.

@@ -282,7 +282,7 @@ The function ``count_heads`` simply adds together ``n`` random bits.
 Here is how we can perform some trials on two machines, and add together the
 results::
 
-    require("count_heads")
+    @everywhere include("count_heads.jl")
 
     a = @spawn count_heads(100000000)
     b = @spawn count_heads(100000000)
