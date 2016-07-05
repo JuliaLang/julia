@@ -231,9 +231,9 @@ ctranspose(D::Diagonal) = conj(D)
 diag(D::Diagonal) = D.diag
 trace(D::Diagonal) = sum(D.diag)
 det(D::Diagonal) = prod(D.diag)
-logdet{T<:Real}(D::Diagonal{T}) = sum(log(D.diag))
+logdet{T<:Real}(D::Diagonal{T}) = sum(log.(D.diag))
 function logdet{T<:Complex}(D::Diagonal{T}) #Make sure branch cut is correct
-    x = sum(log(D.diag))
+    x = sum(log.(D.diag))
     -pi<imag(x)<pi ? x : real(x)+(mod2pi(imag(x)+pi)-pi)*im
 end
 # identity matrices via eye(Diagonal{type},n)
@@ -246,6 +246,10 @@ for (funm, func) in ([:expm,:exp], [:sqrtm,:sqrt], [:logm,:log])
         ($funm)(D::Diagonal) = Diagonal(($func)(D.diag))
     end
 end
+
+expm(D::Diagonal) = Diagonal(exp(D.diag))
+logm(D::Diagonal) = Diagonal(log.(D.diag))
+sqrtm(D::Diagonal) = Diagonal(sqrt(D.diag))
 
 #Linear solver
 function A_ldiv_B!(D::Diagonal, B::StridedVecOrMat)
