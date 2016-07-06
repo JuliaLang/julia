@@ -70,11 +70,6 @@ The following components of Julia's standard library have separate licenses:
 - base/linalg/cholmod.jl (see [SUITESPARSE](http://faculty.cse.tamu.edu/davis/suitesparse.html))
 
 
-Julia builds the following libraries by default, but does not use them itself:
-
-- [RMATH](http://www.r-project.org/Licenses/)
-
-
 Julia's build process uses the following external tools:
 
 - [PATCHELF](http://hydra.nixos.org/build/1524660/download/1/README)

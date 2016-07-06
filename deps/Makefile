@@ -18,7 +18,7 @@ include $(SRCDIR)/llvm-ver.make
 # if you are adding a new target, it can help to copy an similar, existing target
 #
 # autoconf configure-driven scripts: llvm pcre arpack fftw unwind gmp mpfr patchelf libuv git
-# custom Makefile rules: openlibm Rmath-julia dsfmt suitesparse-wrapper suitesparse lapack openblas utf8proc objconv osxunwind
+# custom Makefile rules: openlibm dsfmt suitesparse-wrapper suitesparse lapack openblas utf8proc objconv osxunwind
 # entirely custom: virtualenv
 # CMake libs: libgit2
 #
@@ -87,13 +87,11 @@ MAKE_COMMON := DESTDIR="" prefix=$(build_prefix) bindir=$(build_depsbindir) libd
 # prevent installing libs into usr/lib64 on opensuse
 unexport CONFIG_SITE
 
-ifeq ($(USE_GPL_LIBS), 1)
-STAGE1_DEPS :=
-STAGE2_DEPS := Rmath-julia
-STAGE3_DEPS := suitesparse-wrapper
-else
 STAGE1_DEPS :=
 STAGE2_DEPS :=
+ifeq ($(USE_GPL_LIBS), 1)
+STAGE3_DEPS := suitesparse-wrapper
+else
 STAGE3_DEPS :=
 endif
 
@@ -215,7 +213,7 @@ install: $(addprefix install-, $(DEP_LIBS))
 cleanall: $(addprefix clean-, $(DEP_LIBS))
 distcleanall: $(addprefix distclean-, $(DEP_LIBS))
 	rm -rf $(build_prefix)
-getall: get-llvm get-libuv get-pcre get-openlibm get-openspecfun get-dsfmt get-Rmath-julia get-openblas get-lapack get-fftw get-suitesparse get-arpack get-unwind get-osxunwind get-gmp get-mpfr get-patchelf get-utf8proc get-virtualenv get-objconv get-libgit2
+getall: get-llvm get-libuv get-pcre get-openlibm get-openspecfun get-dsfmt get-openblas get-lapack get-fftw get-suitesparse get-arpack get-unwind get-osxunwind get-gmp get-mpfr get-patchelf get-utf8proc get-virtualenv get-objconv get-libgit2
 
 ## PATHS ##
 # sort is used to remove potential duplicates
@@ -252,7 +250,6 @@ include $(SRCDIR)/pcre.mk
 include $(SRCDIR)/openlibm.mk
 include $(SRCDIR)/openspecfun.mk
 include $(SRCDIR)/dsfmt.mk
-include $(SRCDIR)/rmath-julia.mk
 include $(SRCDIR)/objconv.mk
 include $(SRCDIR)/blas.mk
 include $(SRCDIR)/arpack.mk

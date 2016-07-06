@@ -286,7 +286,6 @@ Julia uses the following external libraries, which are automatically downloaded 
 - **[libgit2]** (>= 0.21)    — Git linkable library, used by Julia's package manager
 - **[utf8proc]** (>= 1.3)    — a library for processing UTF-8 encoded Unicode strings
 - **[libosxunwind]**         — clone of [libunwind], a library that determines the call-chain of a program
-- **[Rmath-julia]**          — library for commonly used statistical functions from the R project.
 
 For a longer overview of Julia's dependencies, see these [slides](https://github.com/tkelman/BAJUtalk-Dec2014/blob/master/BAJUtalkDec2014.pdf?raw=true).
 
@@ -323,7 +322,6 @@ For a longer overview of Julia's dependencies, see these [slides](https://github
 [utf8proc]:     http://julialang.org/utf8proc/
 [libosxunwind]: https://github.com/JuliaLang/libosxunwind
 [libunwind]:    http://www.nongnu.org/libunwind
-[Rmath-julia]:  https://github.com/JuliaLang/Rmath-julia
 [openssl]:      https://www.openssl.org
 
 <a name="System-Provided-Libraries">

@@ -12,7 +12,7 @@ separated most of the notes by OS.
 Note that while the code for Julia is
 [MIT-licensed, with a few exceptions](https://github.com/JuliaLang/julia/blob/master/LICENSE.md),
 the distribution created by the techniques described herein will be
-GPL licensed, as various dependent libraries such as `FFTW`, `Rmath`,
+GPL licensed, as various dependent libraries such as `FFTW`,
 `SuiteSparse`, and `git` are GPL licensed. We do hope to have a
 non-GPL distribution of Julia in the future.
 
@@ -161,19 +161,6 @@ Finally, OpenBLAS includes its own optimized version of LAPACK. If you
 set `USE_SYSTEM_BLAS=1` and `USE_SYSTEM_LAPACK=1`, you should also set
 `LIBLAPACK=-l$(YOURBLAS)` and `LIBLAPACKNAME=lib$(YOURBLAS)`. Else, the
 reference LAPACK will be used and performance will typically be much lower.
-
-Notes on Rmath
-==============
-
-Rmath is a library from R, which includes basic statistical
-functions. Julia uses a patched version of Rmath, which uses DSFMT as
-its underlying generator, and faster normal random number
-generators. If the stock Rmath provided by various linux distributions
-is used, the underlying random streams will not be the same for
-different RNGs in Base and Distributions.jl.
-
-It is highly recommended that the patched Rmath provided by Julia is
-used.
 
 Compilation scripts
 ===================
