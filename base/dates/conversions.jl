@@ -46,9 +46,6 @@ See `convert(Int64,dt::Date)` for inverse.
 """
 Base.convert{R<:Real}(::Type{Date}, x::R) = Date(UTD(x))
 
-@vectorize_1arg DateTime Date
-@vectorize_1arg Date DateTime
-
 ### External Conversions
 const UNIXEPOCH = value(DateTime(1970)) #Rata Die milliseconds for 1970-01-01T00:00:00
 
@@ -132,10 +129,3 @@ Takes the given `DateTime` and returns the number of Julian calendar days since 
 epoch `-4713-11-24T12:00:00` as a `Float64`.
 """
 datetime2julian(dt::DateTime) = (value(dt) - JULIANEPOCH)/86400000.0
-
-@vectorize_1arg Real unix2datetime
-@vectorize_1arg DateTime datetime2unix
-@vectorize_1arg Real rata2datetime
-@vectorize_1arg DateTime datetime2rata
-@vectorize_1arg Real julian2datetime
-@vectorize_1arg DateTime datetime2julian
