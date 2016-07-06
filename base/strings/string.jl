@@ -36,8 +36,7 @@ const utf8_trailing = [
 function endof(s::String)
     d = s.data
     i = length(d)
-    i == 0 && return i
-    while is_valid_continuation(d[i])
+    @inbounds while i > 0 && is_valid_continuation(d[i])
         i -= 1
     end
     i
