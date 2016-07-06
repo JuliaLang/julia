@@ -17,7 +17,7 @@ include $(SRCDIR)/llvm-ver.make
 # additionally all targets should be listed in the getall target for easier off-line compilation
 # if you are adding a new target, it can help to copy an similar, existing target
 #
-# autoconf configure-driven scripts: llvm pcre arpack fftw unwind gmp mpfr patchelf libuv git
+# autoconf configure-driven scripts: llvm pcre arpack fftw unwind gmp mpfr patchelf libuv
 # custom Makefile rules: openlibm dsfmt suitesparse-wrapper suitesparse lapack openblas utf8proc objconv osxunwind
 # entirely custom: virtualenv
 # CMake libs: libgit2
@@ -260,7 +260,6 @@ include $(SRCDIR)/unwind.mk
 include $(SRCDIR)/gmp.mk
 include $(SRCDIR)/mpfr.mk
 include $(SRCDIR)/patchelf.mk
-include $(SRCDIR)/git.mk
 include $(SRCDIR)/libgit2.mk
 include $(SRCDIR)/virtualenv.mk
 

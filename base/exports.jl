@@ -7,7 +7,6 @@ export
     Meta,
     Operators,
     Pkg,
-    Git,
     LibGit2,
     StackTraces,
     Profile,

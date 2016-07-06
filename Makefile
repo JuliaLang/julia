@@ -426,12 +426,6 @@ distclean dist-clean:
 dist:
 	@echo \'dist\' target is deprecated: use \'binary-dist\' instead.
 
-ifeq ($(ARCH),x86_64)
-GITCONFIG := $(BUILDROOT)/julia-$(JULIA_COMMIT)/Git/mingw64/etc/gitconfig
-else
-GITCONFIG := $(BUILDROOT)/julia-$(JULIA_COMMIT)/Git/mingw32/etc/gitconfig
-endif
-
 binary-dist: distclean
 ifeq ($(USE_SYSTEM_BLAS),0)
 ifeq ($(ISX86),1)
@@ -468,11 +462,7 @@ endif
 
 ifeq ($(OS), WINNT)
 	[ ! -d $(JULIAHOME)/dist-extras ] || ( cd $(JULIAHOME)/dist-extras && \
-		cp 7z.exe 7z.dll libexpat-1.dll zlib1.dll libgfortran-3.dll libquadmath-0.dll libstdc++-6.dll libgcc_s_s*-1.dll libssp-0.dll $(BUILDROOT)/julia-$(JULIA_COMMIT)/bin && \
-	    mkdir $(BUILDROOT)/julia-$(JULIA_COMMIT)/Git && \
-	    7z x PortableGit.7z -o"$(BUILDROOT)/julia-$(JULIA_COMMIT)/Git" && \
-	    echo "[core] eol = lf" >> "$(GITCONFIG)" && \
-	    sed -i "s/\bautocrlf = true$$/autocrlf = input/" "$(GITCONFIG)" )
+		cp 7z.exe 7z.dll libexpat-1.dll zlib1.dll libgfortran-3.dll libquadmath-0.dll libstdc++-6.dll libgcc_s_s*-1.dll libssp-0.dll $(BUILDROOT)/julia-$(JULIA_COMMIT)/bin )
 	cd $(BUILDROOT)/julia-$(JULIA_COMMIT)/bin && rm -f llvm* llc.exe lli.exe opt.exe LTO.dll bugpoint.exe macho-dump.exe
 
 	# create file listing for uninstall. note: must have Windows path separators and line endings.
@@ -605,8 +595,7 @@ ifneq (,$(filter $(ARCH), i386 i486 i586 i686))
 	$(JLDOWNLOAD) https://juliacache.s3.amazonaws.com/mingw32-libssp0-5.3.0-1.1.noarch.rpm && \
 	for i in *.rpm; do 7z x -y $$i; done && \
 	for i in *.cpio; do 7z x -y $$i; done && \
-	cp usr/i686-w64-mingw32/sys-root/mingw/bin/*.dll . && \
-	$(JLDOWNLOAD) PortableGit.7z https://github.com/git-for-windows/git/releases/download/v2.6.1.windows.1/PortableGit-2.6.1-32-bit.7z.exe
+	cp usr/i686-w64-mingw32/sys-root/mingw/bin/*.dll .
 else ifeq ($(ARCH),x86_64)
 	cd $(JULIAHOME)/dist-extras && \
 	$(JLDOWNLOAD) 7z920-x64.msi http://downloads.sourceforge.net/sevenzip/7z920-x64.msi && \
@@ -622,8 +611,7 @@ else ifeq ($(ARCH),x86_64)
 	$(JLDOWNLOAD) https://juliacache.s3.amazonaws.com/mingw64-libssp0-5.3.0-1.1.noarch.rpm && \
 	for i in *.rpm; do 7z x -y $$i; done && \
 	for i in *.cpio; do 7z x -y $$i; done && \
-	cp usr/x86_64-w64-mingw32/sys-root/mingw/bin/*.dll . && \
-	$(JLDOWNLOAD) PortableGit.7z https://github.com/git-for-windows/git/releases/download/v2.6.1.windows.1/PortableGit-2.6.1-64-bit.7z.exe
+	cp usr/x86_64-w64-mingw32/sys-root/mingw/bin/*.dll .
 else
 	$(error no win-extras target for ARCH=$(ARCH))
 endif
