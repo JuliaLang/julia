@@ -328,7 +328,7 @@ typedef struct {
     uint32_t offset;   // offset relative to data start, excluding type tag
 } jl_fielddesc32_t;
 
-struct _jl_datatype_layout_t {
+typedef struct {
     uint32_t nfields;
     uint32_t alignment : 28;  // strictest alignment over all fields
     uint32_t haspadding : 1;  // has internal undefined bytes
@@ -339,7 +339,7 @@ struct _jl_datatype_layout_t {
     //     jl_fielddesc16_t field16[];
     //     jl_fielddesc32_t field32[];
     // };
-};
+} jl_datatype_layout_t;
 
 typedef struct _jl_datatype_t {
     JL_DATA_TYPE
@@ -348,7 +348,7 @@ typedef struct _jl_datatype_t {
     jl_svec_t *parameters;
     jl_svec_t *types;
     jl_value_t *instance;  // for singletons
-    const struct _jl_datatype_layout_t *layout;
+    const jl_datatype_layout_t *layout;
     int32_t size; // TODO: move to _jl_datatype_layout_t
     int32_t ninitialized;
     uint32_t uid;
@@ -790,12 +790,12 @@ STATIC_INLINE char *jl_symbol_name_(jl_sym_t *s)
 }
 #define jl_symbol_name(s) jl_symbol_name_(s)
 
-#define jl_dt_layout_fields(d) ((const char*)(d) + sizeof(struct _jl_datatype_layout_t))
+#define jl_dt_layout_fields(d) ((const char*)(d) + sizeof(jl_datatype_layout_t))
 
 #define DEFINE_FIELD_ACCESSORS(f)                                             \
     static inline uint32_t jl_field_##f(jl_datatype_t *st, int i)             \
     {                                                                         \
-        const struct _jl_datatype_layout_t *ly = st->layout;                  \
+        const jl_datatype_layout_t *ly = st->layout;                          \
         assert(i >= 0 && (size_t)i < ly->nfields);                            \
         if (ly->fielddesc_type == 0) {                                        \
             return ((const jl_fielddesc8_t*)jl_dt_layout_fields(ly))[i].f;    \
@@ -812,7 +812,7 @@ DEFINE_FIELD_ACCESSORS(offset)
 DEFINE_FIELD_ACCESSORS(size)
 static inline int jl_field_isptr(jl_datatype_t *st, int i)
 {
-    const struct _jl_datatype_layout_t *ly = st->layout;
+    const jl_datatype_layout_t *ly = st->layout;
     assert(i >= 0 && (size_t)i < ly->nfields);
     return ((const jl_fielddesc8_t*)(jl_dt_layout_fields(ly) + (i << (ly->fielddesc_type + 1))))->isptr;
 }

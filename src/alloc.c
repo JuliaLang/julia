@@ -645,16 +645,12 @@ jl_method_t *jl_new_method(jl_lambda_info_t *definition, jl_sym_t *name, jl_tupl
 
 // symbols --------------------------------------------------------------------
 
-static jl_mutex_t symbol_table_lock;
-
 static jl_sym_t *volatile symtab = NULL;
 
 static uintptr_t hash_symbol(const char *str, size_t len)
 {
     return memhash(str, len) ^ ~(uintptr_t)0/3*2;
 }
-
-#define SYM_POOL_SIZE 524288
 
 static size_t symbol_nbytes(size_t len)
 {
@@ -666,23 +662,7 @@ static jl_sym_t *mk_symbol(const char *str, size_t len)
     jl_sym_t *sym;
     size_t nb = symbol_nbytes(len);
 
-    if (nb >= SYM_POOL_SIZE) {
-        jl_exceptionf(jl_argumenterror_type, "Symbol length exceeds maximum length");
-    }
-
-    jl_taggedvalue_t *tag;
-#ifdef MEMDEBUG
-    tag = (jl_taggedvalue_t*)malloc(nb);
-#else
-    static char *sym_pool = NULL;
-    static char *pool_ptr = NULL;
-    if (sym_pool == NULL || pool_ptr+nb > sym_pool+SYM_POOL_SIZE) {
-        sym_pool = (char*)malloc(SYM_POOL_SIZE);
-        pool_ptr = sym_pool;
-    }
-    tag = (jl_taggedvalue_t*)pool_ptr;
-    pool_ptr += nb;
-#endif
+    jl_taggedvalue_t *tag = (jl_taggedvalue_t*)jl_gc_perm_alloc_nolock(nb);
     sym = (jl_sym_t*)jl_valueof(tag);
     // set to old marked since we don't need write barrier on it.
     tag->header = ((uintptr_t)jl_sym_type) | GC_OLD_MARKED;
@@ -726,15 +706,15 @@ static jl_sym_t *_jl_symbol(const char *str, size_t len)
     jl_sym_t *volatile *slot;
     jl_sym_t *node = symtab_lookup(&symtab, str, len, &slot);
     if (node == NULL) {
-        JL_LOCK(&symbol_table_lock); // Might GC
+        JL_LOCK_NOGC(&gc_perm_lock);
         // Someone might have updated it, check and look up again
         if (*slot != NULL && (node = symtab_lookup(slot, str, len, &slot))) {
-            JL_UNLOCK(&symbol_table_lock); // Might GC
+            JL_UNLOCK_NOGC(&gc_perm_lock);
             return node;
         }
         node = mk_symbol(str, len);
         jl_atomic_store_release(slot, node);
-        JL_UNLOCK(&symbol_table_lock); // Might GC
+        JL_UNLOCK_NOGC(&gc_perm_lock);
     }
     return node;
 }
@@ -778,8 +758,6 @@ JL_DLLEXPORT jl_sym_t *jl_gensym(void)
 JL_DLLEXPORT jl_sym_t *jl_tagged_gensym(const char *str, int32_t len)
 {
     char gs_name[14];
-    if (symbol_nbytes(len) >= SYM_POOL_SIZE)
-        jl_exceptionf(jl_argumenterror_type, "Symbol length exceeds maximum");
     if (memchr(str, 0, len))
         jl_exceptionf(jl_argumenterror_type, "Symbol name may not contain \\0");
     char *name = (char*) (len >= 256 ? malloc(sizeof(gs_name)+len+3) :
@@ -872,7 +850,7 @@ jl_datatype_t *jl_new_uninitialized_datatype(void)
     return t;
 }
 
-static struct _jl_datatype_layout_t *jl_get_layout(
+static jl_datatype_layout_t *jl_get_layout(
         uint32_t nfields,
         uint32_t alignment,
         int haspadding,
@@ -903,8 +881,8 @@ static struct _jl_datatype_layout_t *jl_get_layout(
 
     // allocate a new descriptor
     uint32_t fielddesc_size = jl_fielddesc_size(fielddesc_type);
-    struct _jl_datatype_layout_t *flddesc = (struct _jl_datatype_layout_t*)malloc(
-            sizeof(struct _jl_datatype_layout_t) + nfields * fielddesc_size);
+    jl_datatype_layout_t *flddesc = (jl_datatype_layout_t*)jl_gc_perm_alloc(
+            sizeof(jl_datatype_layout_t) + nfields * fielddesc_size);
     flddesc->nfields = nfields;
     flddesc->alignment = alignment;
     flddesc->haspadding = haspadding;

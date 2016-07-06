@@ -1204,8 +1204,8 @@ static jl_value_t *jl_deserialize_datatype(ios_t *s, int pos, jl_value_t **loc)
         uint16_t nf = read_uint16(s);
         uint8_t fielddesc_type = read_int8(s);
         size_t fielddesc_size = nf > 0 ? jl_fielddesc_size(fielddesc_type) : 0;
-        struct _jl_datatype_layout_t *layout = (struct _jl_datatype_layout_t*)malloc(
-                sizeof(struct _jl_datatype_layout_t) + nf * fielddesc_size);
+        jl_datatype_layout_t *layout = (jl_datatype_layout_t*)jl_gc_perm_alloc(
+                sizeof(jl_datatype_layout_t) + nf * fielddesc_size);
         layout->nfields = nf;
         layout->fielddesc_type = fielddesc_type;
         layout->alignment = read_int32(s);
