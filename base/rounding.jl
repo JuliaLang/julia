@@ -96,13 +96,49 @@ function from_fenv(r::Integer)
     end
 end
 
+"""
+    setrounding(T, mode)
+
+Set the rounding mode of floating point type `T`, controlling the rounding of basic
+arithmetic functions ([`+`](:func:`+`), [`-`](:func:`-`), [`*`](:func:`*`), [`/`](:func:`/`)
+and [`sqrt`](:func:`sqrt`)) and type conversion.
+
+Note that this may affect other types, for instance changing the rounding mode of `Float64`
+will change the rounding mode of `Float32`. See [`RoundingMode`](:obj:`RoundingMode`) for
+available modes.
+"""
+setrounding(T::Type, mode)
+
+"""
+    rounding(T)
+
+Get the current floating point rounding mode for type `T`, controlling the rounding of basic
+arithmetic functions ([`+`](:func:`+`), [`-`](:func:`-`), [`*`](:func:`*`), [`/`](:func:`/`)
+and [`sqrt`](:func:`sqrt`)) and type conversion.
+
+See [`RoundingMode`](:obj:`RoundingMode`) for available modes.
+"""
+:rounding
+
 setrounding_raw{T<:Union{Float32,Float64}}(::Type{T},i::Integer) = ccall(:fesetround, Int32, (Int32,), i)
 rounding_raw{T<:Union{Float32,Float64}}(::Type{T}) = ccall(:fegetround, Int32, ())
 
 setrounding{T<:Union{Float32,Float64}}(::Type{T},r::RoundingMode) = setrounding_raw(T,to_fenv(r))
 rounding{T<:Union{Float32,Float64}}(::Type{T}) = from_fenv(rounding_raw(T))
 
+"""
+    setrounding(f::Function, T, mode)
 
+Change the rounding mode of floating point type `T` for the duration of `f`. It is logically
+equivalent to:
+
+    old = rounding(T)
+    setrounding(T, mode)
+    f()
+    setrounding(T, old)
+
+See [`RoundingMode`](:obj:`RoundingMode`) for available rounding modes.
+"""
 function setrounding{T}(f::Function, ::Type{T}, rounding::RoundingMode)
     old_rounding_raw = rounding_raw(T)
     setrounding(T,rounding)
