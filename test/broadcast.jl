@@ -212,6 +212,22 @@ let a = sin.([1, 2])
     @test a ≈ [0.8414709848078965, 0.9092974268256817]
 end
 
+# PR #17300: loop fusion
+@test (x->x+1).((x->x+2).((x->x+3).(1:10))) == collect(7:16)
+let A = [sqrt(i)+j for i = 1:3, j=1:4]
+    @test atan2.(log.(A), sum(A,1)) == broadcast(atan2, broadcast(log, A), sum(A, 1))
+end
+let x = sin.(1:10)
+    @test atan2.((x->x+1).(x), (x->x+2).(x)) == atan2(x+1, x+2) == atan2(x.+1, x.+2)
+end
+# Use side effects to check for loop fusion.  Note that, due to #8450,
+# a broadcasted function is currently called twice on the first element.
+let g = Int[]
+    f17300(x) = begin; push!(g, x); x+1; end
+    f17300.(f17300.(f17300.(1:3)))
+    @test g == [1,2,3, 1,2,3, 2,3,4, 3,4,5]
+end
+
 # PR 16988
 @test Base.promote_op(+, Bool) === Int
 @test isa(broadcast(+, [true]), Array{Int,1})
