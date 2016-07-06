@@ -1220,6 +1220,7 @@ sub2ind(inds::Indices, I::Integer...) = (@_inline_meta; _sub2ind(inds, 1, 1, I..
 # or linear indexing. Support only the former.
 sub2ind(inds::Indices{1}, I::Integer...) = throw(ArgumentError("Linear indexing is not defined for one-dimensional arrays"))
 sub2ind(inds::Tuple{OneTo}, I::Integer...) = (@_inline_meta; _sub2ind(inds, 1, 1, I...)) # only OneTo is safe
+sub2ind(inds::Tuple{OneTo}, i::Integer)    = i
 
 _sub2ind(::Any, L, ind) = ind
 function _sub2ind(::Tuple{}, L, ind, i::Integer, I::Integer...)
@@ -1243,7 +1244,7 @@ ind2sub(::Tuple{}, ind::Integer) = (@_inline_meta; ind == 1 ? () : throw(BoundsE
 ind2sub(dims::DimsInteger, ind::Integer) = (@_inline_meta; _ind2sub((), dims, ind-1))
 ind2sub(inds::Indices, ind::Integer) = (@_inline_meta; _ind2sub((), inds, ind-1))
 ind2sub(inds::Indices{1}, ind::Integer) = throw(ArgumentError("Linear indexing is not defined for one-dimensional arrays"))
-ind2sub(inds::Tuple{OneTo}, ind::Integer) = (@_inline_meta; _ind2sub((), inds, ind-1))
+ind2sub(inds::Tuple{OneTo}, ind::Integer) = (ind,)
 
 _ind2sub(::Tuple{}, ::Tuple{}, ind) = (ind+1,)
 function _ind2sub(out, indslast::NTuple{1}, ind)
