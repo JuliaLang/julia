@@ -275,10 +275,15 @@ function unsafe_write(to::AbstractIOBuffer, p::Ptr{UInt8}, nb::UInt)
     ensureroom(to, nb)
     ptr = (to.append ? to.size+1 : to.ptr)
     written = min(nb, length(to.data) - ptr + 1)
-    for i = 0:written - 1
-        @inbounds to.data[ptr + i] = unsafe_load(p + i)
+    towrite = written
+    d = to.data
+    while towrite > 0
+        @inbounds d[ptr] = unsafe_load(p)
+        ptr += 1
+        p += 1
+        towrite -= 1
     end
-    to.size = max(to.size, ptr - 1 + written)
+    to.size = max(to.size, ptr - 1)
     if !to.append
         to.ptr += written
     end
