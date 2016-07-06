@@ -99,11 +99,11 @@ function convert(::Type{Float32}, x::Int128)
 end
 
 #convert(::Type{Float16}, x::Float32) = box(Float16,fptrunc(Float16,x))
-convert(::Type{Float16}, x::Float64) = convert(Float16, convert(Float32,x))
+#convert(::Type{Float16}, x::Float64) = convert(Float16, convert(Float32,x))
 convert(::Type{Float32}, x::Float64) = box(Float32,fptrunc(Float32,unbox(Float64,x)))
 
 #convert(::Type{Float32}, x::Float16) = box(Float32,fpext(Float32,x))
-convert(::Type{Float64}, x::Float16) = convert(Float64, convert(Float32,x))
+#convert(::Type{Float64}, x::Float16) = convert(Float64, convert(Float32,x))
 convert(::Type{Float64}, x::Float32) = box(Float64,fpext(Float64,unbox(Float32,x)))
 
 convert(::Type{AbstractFloat}, x::Bool)    = convert(Float64, x)

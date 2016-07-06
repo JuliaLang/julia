@@ -1,102 +1,29 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
+import Base.llvmcall
+# Implement conversion to and from Float16 with llvm intrinsics
+convert(::Type{Float32}, val::Float16) =
+    llvmcall(("""declare float @llvm.convert.from.fp16.f32(i16)""",
+              """%2 = call float @llvm.convert.from.fp16.f32(i16 %0)
+                 ret float %2"""),
+              Float32, Tuple{Float16}, val)
 
-function convert(::Type{Float32}, val::Float16)
-    ival::UInt32 = reinterpret(UInt16, val)
-    sign::UInt32 = (ival & 0x8000) >> 15
-    exp::UInt32  = (ival & 0x7c00) >> 10
-    sig::UInt32  = (ival & 0x3ff) >> 0
-    ret::UInt32
+convert(::Type{Float64}, val::Float16) =
+    llvmcall(("""declare double @llvm.convert.from.fp16.f64(i16)""",
+              """%2 = call double @llvm.convert.from.fp16.f64(i16 %0)
+                 ret double %2"""),
+              Float64, Tuple{Float16}, val)
 
-    if exp == 0
-        if sig == 0
-            sign = sign << 31
-            ret = sign | exp | sig
-        else
-            n_bit = 1
-            bit = 0x0200
-            while (bit & sig) == 0
-                n_bit = n_bit + 1
-                bit = bit >> 1
-            end
-            sign = sign << 31
-            exp = (-14 - n_bit + 127) << 23
-            sig = ((sig & (~bit)) << n_bit) << (23 - 10)
-            ret = sign | exp | sig
-        end
-    elseif exp == 0x1f
-        if sig == 0  # Inf
-            if sign == 0
-                ret = 0x7f800000
-            else
-                ret = 0xff800000
-            end
-        else  # NaN
-            ret = 0x7fc00000 | (sign<<31)
-        end
-    else
-        sign = sign << 31
-        exp  = (exp - 15 + 127) << 23
-        sig  = sig << (23 - 10)
-        ret = sign | exp | sig
-    end
-    return reinterpret(Float32, ret)
-end
+convert(::Type{Float16}, val::Float32) =
+    llvmcall(("""declare i16 @llvm.convert.to.fp16.f32(float)""",
+              """%2 = call i16 @llvm.convert.to.fp16.f32(float %0)
+                 ret i16 %2"""),
+              Float16, Tuple{Float32}, val)
 
-# Float32 -> Float16 algorithm from:
-#   "Fast Half Float Conversion" by Jeroen van der Zijp
-#   ftp://ftp.fox-toolkit.org/pub/fasthalffloatconversion.pdf
-
-const basetable = Array{UInt16}(512)
-const shifttable = Array{UInt8}(512)
-
-for i = 0:255
-    e = i - 127
-    if e < -24  # Very small numbers map to zero
-        basetable[i|0x000+1] = 0x0000
-        basetable[i|0x100+1] = 0x8000
-        shifttable[i|0x000+1] = 24
-        shifttable[i|0x100+1] = 24
-    elseif e < -14  # Small numbers map to denorms
-        basetable[i|0x000+1] = (0x0400>>(-e-14))
-        basetable[i|0x100+1] = (0x0400>>(-e-14)) | 0x8000
-        shifttable[i|0x000+1] = -e-1
-        shifttable[i|0x100+1] = -e-1
-    elseif e <= 15  # Normal numbers just lose precision
-        basetable[i|0x000+1] = ((e+15)<<10)
-        basetable[i|0x100+1] = ((e+15)<<10) | 0x8000
-        shifttable[i|0x000+1] = 13
-        shifttable[i|0x100+1] = 13
-    elseif e < 128  # Large numbers map to Infinity
-        basetable[i|0x000+1] = 0x7C00
-        basetable[i|0x100+1] = 0xFC00
-        shifttable[i|0x000+1] = 24
-        shifttable[i|0x100+1] = 24
-    else  # Infinity and NaN's stay Infinity and NaN's
-        basetable[i|0x000+1] = 0x7C00
-        basetable[i|0x100+1] = 0xFC00
-        shifttable[i|0x000+1] = 13
-        shifttable[i|0x100+1] = 13
-    end
-end
-
-function convert(::Type{Float16}, val::Float32)
-    f = reinterpret(UInt32, val)
-    i = (f >> 23) & 0x1ff + 1
-    sh = shifttable[i]
-    f &= 0x007fffff
-    h::UInt16 = basetable[i] + (f >> sh)
-    # round
-    # NOTE: we maybe should ignore NaNs here, but the payload is
-    # getting truncated anyway so "rounding" it might not matter
-    nextbit = (f >> (sh-1)) & 1
-    if nextbit != 0
-        if h&1 == 1 ||  # round halfway to even
-            (f & ((1<<(sh-1))-1)) != 0  # check lower bits
-            h += 1
-        end
-    end
-    reinterpret(Float16, h)
-end
+convert(::Type{Float16}, val::Float64) =
+    llvmcall(("""declare i16 @llvm.convert.to.fp16.f64(double)""",
+              """%2 = call i16 @llvm.convert.to.fp16.f64(double %0)
+                 ret i16 %2"""),
+              Float16, Tuple{Float64}, val)
 
 convert(::Type{Bool},    x::Float16) = x==0 ? false : x==1 ? true : throw(InexactError())
 convert(::Type{Int128},  x::Float16) = convert(Int128, Float32(x))
