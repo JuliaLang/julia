@@ -911,6 +911,7 @@ end
 for f in (
         :year, :month, :day, :week, :dayofmonth, :yearmonth, :monthday, :yearmonthday, # base/dates/accessors.jl
         :firstdayofweek, :lastdayofweek, :firstdayofmonth, :lastdayofmonth, :firstdayofyear, :lastdayofyear, :firstdayofquarter, :lastdayofquarter, # base/dates/adjusters.jl
+        :dayname, :dayabbr, :dayofweek, :dayofweekofmonth, :daysofweekinmonth, :monthname, :monthabbr, :daysinmonth, :isleapyear, :dayofyear, :daysinyear, :quarterofyear, :dayofquarter, # base/dates/query.jl
     )
     @eval @dep_vectorize_1arg Dates.TimeType $f
 end
