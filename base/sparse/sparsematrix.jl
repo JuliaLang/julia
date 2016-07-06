@@ -1666,13 +1666,7 @@ broadcast_zpreserving{Tv,Ti}(f::Function, A_1::Union{Array,BitArray,Number}, A_2
 
 ## Binary arithmetic and boolean operators
 
-for (op, pro) in ((+,   :eltype_plus),
-                  (-,   :eltype_plus),
-                  (min, :promote_eltype),
-                  (max, :promote_eltype),
-                  (&,   :promote_eltype),
-                  (|,   :promote_eltype),
-                  ($,   :promote_eltype))
+for op in (+, -, min, max, &, |, $)
     body = gen_broadcast_body_sparse(op, true)
     OP = Symbol(string(op))
     @eval begin
@@ -1680,7 +1674,7 @@ for (op, pro) in ((+,   :eltype_plus),
             if size(A_1,1) != size(A_2,1) || size(A_1,2) != size(A_2,2)
                 throw(DimensionMismatch(""))
             end
-            Tv = ($pro)(A_1, A_2)
+            Tv = promote_op($op, Tv1, Tv2)
             B =  spzeros(Tv, promote_type(Ti1, Ti2), to_shape(broadcast_shape(A_1, A_2)))
             $body
             B
@@ -1723,10 +1717,10 @@ end # macro
 (.^)(A::Array, B::SparseMatrixCSC) = (.^)(A, full(B))
 
 .+{Tv1,Ti1,Tv2,Ti2}(A_1::SparseMatrixCSC{Tv1,Ti1}, A_2::SparseMatrixCSC{Tv2,Ti2}) =
-   broadcast!(+, spzeros(eltype_plus(A_1, A_2), promote_type(Ti1, Ti2), to_shape(broadcast_shape(A_1, A_2))), A_1, A_2)
+    broadcast!(+, spzeros(promote_op(+, Tv1, Tv2), promote_type(Ti1, Ti2), to_shape(broadcast_shape(A_1, A_2))), A_1, A_2)
 
 function .-{Tva,Tia,Tvb,Tib}(A::SparseMatrixCSC{Tva,Tia}, B::SparseMatrixCSC{Tvb,Tib})
-    broadcast!(-, spzeros(eltype_plus(A, B), promote_type(Tia, Tib), to_shape(broadcast_shape(A, B))), A, B)
+    broadcast!(-, spzeros(promote_op(-, Tva, Tvb), promote_type(Tia, Tib), to_shape(broadcast_shape(A, B))), A, B)
 end
 
 ## element-wise comparison operators returning SparseMatrixCSC ##
