@@ -32,10 +32,12 @@ JL_DLLEXPORT jl_value_t *jl_reinterpret(jl_value_t *ty, jl_value_t *v)
 }
 
 // run time version of pointerref intrinsic (warning: i is not rooted)
-JL_DLLEXPORT jl_value_t *jl_pointerref(jl_value_t *p, jl_value_t *i)
+JL_DLLEXPORT jl_value_t *jl_pointerref(jl_value_t *p, jl_value_t *i, jl_value_t *align)
 {
     JL_TYPECHK(pointerref, pointer, p);
-    JL_TYPECHK(pointerref, long, i);
+    JL_TYPECHK(pointerref, long, i)
+    JL_TYPECHK(pointerref, long, align);
+    // TODO: alignment
     jl_value_t *ety = jl_tparam0(jl_typeof(p));
     if (ety == (jl_value_t*)jl_any_type) {
         jl_value_t **pp = (jl_value_t**)(jl_unbox_long(p) + (jl_unbox_long(i)-1)*sizeof(void*));
@@ -51,10 +53,12 @@ JL_DLLEXPORT jl_value_t *jl_pointerref(jl_value_t *p, jl_value_t *i)
 }
 
 // run time version of pointerset intrinsic (warning: x is not gc-rooted)
-JL_DLLEXPORT jl_value_t *jl_pointerset(jl_value_t *p, jl_value_t *x, jl_value_t *i)
+JL_DLLEXPORT jl_value_t *jl_pointerset(jl_value_t *p, jl_value_t *x, jl_value_t *i, jl_value_t *align)
 {
     JL_TYPECHK(pointerset, pointer, p);
     JL_TYPECHK(pointerset, long, i);
+    JL_TYPECHK(pointerref, long, align);
+    // TODO: alignment
     jl_value_t *ety = jl_tparam0(jl_typeof(p));
     if (ety == (jl_value_t*)jl_any_type) {
         jl_value_t **pp = (jl_value_t**)(jl_unbox_long(p) + (jl_unbox_long(i)-1)*sizeof(void*));
