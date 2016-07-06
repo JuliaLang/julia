@@ -279,16 +279,16 @@ end
 # Since bounds-checking is performance-critical and uses
 # indices, it's worth optimizing these implementations thoroughly
 indices(S::SubArray, d::Integer) = 1 <= d <= ndims(S) ? indices(S)[d] : (d > ndims(S) ? OneTo(1) : error("dimension $d out of range"))
-indices(S::SubArray) = (@_inline_meta; _indices((), 1, S, S.indexes...))
-_indices(out::Tuple, dim, S::SubArray) = out
-_indices(out::Tuple, dim, S::SubArray, i1, I...) = (@_inline_meta; _indices((out..., OneTo(length(i1))), dim+1, S, I...))
-_indices(out::Tuple, dim, S::SubArray, ::Real, I...) = (@_inline_meta; _indices(out, dim+1, S, I...))
-_indices(out::Tuple, dim, S::SubArray, ::Colon, I...) = (@_inline_meta; _indices((out..., indices(parent(S), dim)), dim+1, S, I...))
+indices(S::SubArray) = (@_inline_meta; _indices_sub(S, 1, S.indexes...))
+_indices_sub(S::SubArray, dim::Int) = ()
+_indices_sub(S::SubArray, dim::Int, ::Real, I...) = (@_inline_meta; _indices_sub(S, dim+1, I...))
+_indices_sub(S::SubArray, dim::Int, ::Colon, I...) = (@_inline_meta; (indices(parent(S), dim), _indices_sub(S, dim+1, I...)...))
+_indices_sub(S::SubArray, dim::Int, i1::AbstractArray, I...) = (@_inline_meta; (indices(i1)..., _indices_sub(S, dim+1, I...)...))
 indices1{T}(S::SubArray{T,0}) = OneTo(1)
 indices1(S::SubArray) = (@_inline_meta; _indices1(S, 1, S.indexes...))
-_indices1(S::SubArray, dim, i1, I...) = (@_inline_meta; OneTo(length(i1)))
 _indices1(S::SubArray, dim, i1::Real, I...) = (@_inline_meta; _indices1(S, dim+1, I...))
 _indices1(S::SubArray, dim, i1::Colon, I...) = (@_inline_meta; indices(parent(S), dim))
+_indices1(S::SubArray, dim, i1::AbstractArray, I...) = (@_inline_meta; indices1(i1))
 
 # Moreover, incides(S) is fast but indices(S, d) is slower
 indicesperformance{T<:SubArray}(::Type{T}) = IndicesSlow1D()
