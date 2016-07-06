@@ -213,3 +213,8 @@ end
 @test Base.promote_op(+, Bool) === Int
 @test isa(broadcast(+, true), Array{Int,0})
 @test Base.promote_op(Float64, Bool) === Float64
+
+# issue #17304
+let foo = [[1,2,3],[4,5,6],[7,8,9]]
+    @test max.(foo...) == broadcast(max, foo...) == [7,8,9]
+end

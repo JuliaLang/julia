@@ -1562,13 +1562,13 @@
 
    '|.|
    (lambda (e) ; e = (|.| f x)
-     (let ((f (expand-forms (cadr e)))
-           (x (expand-forms (caddr e))))
+     (let ((f (cadr e))
+           (x (caddr e)))
        (if (or (eq? (car x) 'quote) (eq? (car x) 'inert) (eq? (car x) '$))
-         `(call (core getfield) ,f ,x)
+         `(call (core getfield) ,(expand-forms f) ,(expand-forms x))
          ; otherwise, came from f.(args...) --> broadcast(f, args...),
-         ; where x = (call (top tuple) args...) at this point:
-         `(call broadcast ,f ,@(cddr x)))))
+         ; where x = (tuple args...) at this point:
+         (expand-forms `(call broadcast ,f ,@(cdr x))))))
 
    '|<:| syntactic-op-to-call
    '|>:| syntactic-op-to-call
