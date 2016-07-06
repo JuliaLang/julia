@@ -2283,16 +2283,6 @@ For matrices or vectors ``A`` and ``B``, calculates ``A / Bᴴ``.
 A_rdiv_Bc
 
 """
-    round(z, RoundingModeReal, RoundingModeImaginary)
-
-Returns the nearest integral value of the same type as the complex-valued `z` to `z`,
-breaking ties using the specified [`RoundingMode`](:obj:`RoundingMode`)s. The first
-[`RoundingMode`](:obj:`RoundingMode`) is used for rounding the real components while the
-second is used for rounding the imaginary components.
-"""
-round(z::Real, ::Type{RoundingMode}, ::Type{RoundingMode})
-
-"""
     strwidth(s)
 
 Gives the number of columns needed to print a string.
