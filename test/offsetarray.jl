@@ -24,7 +24,6 @@ OffsetArray{T,N}(A::AbstractArray{T,N}, offsets::Vararg{Int,N}) = OffsetArray(A,
 (::Type{OffsetArray{T}}){T,N}(inds::Indices{N}) = OffsetArray{T,N}(inds)
 
 Base.linearindexing{T<:OffsetArray}(::Type{T}) = Base.linearindexing(parenttype(T))
-Base.indicesbehavior{T<:OffsetArray}(::Type{T}) = Base.IndicesUnitRange()
 parenttype{T,N,AA}(::Type{OffsetArray{T,N,AA}}) = AA
 parenttype(A::OffsetArray) = parenttype(typeof(A))
 
@@ -52,7 +51,6 @@ function Base.similar(A::AbstractArray, T::Type, inds::Tuple{UnitRange,Vararg{Un
 end
 
 Base.similar(f::Union{Function,Type}, shape::Tuple{UnitRange,Vararg{UnitRange}}) = OffsetArray(f(map(Base.dimlength, shape)), map(indsoffset, shape))
-Base.promote_indices(a::OffsetArray, b::OffsetArray) = a
 
 Base.reshape(A::AbstractArray, inds::Tuple{UnitRange,Vararg{UnitRange}}) = OffsetArray(reshape(A, map(Base.dimlength, inds)), map(indsoffset, inds))
 
@@ -99,6 +97,7 @@ end
 
 using OAs
 
+let
 # Basics
 A0 = [1 3; 2 4]
 A = OffsetArray(A0, (-1,2))                   # LinearFast
@@ -133,26 +132,30 @@ S = OffsetArray(view(A0, 1:2, 1:2), (-1,2))  # LinearSlow
 @test eachindex(A) == 1:4
 @test eachindex(S) == CartesianRange((0:1,3:4))
 
-# slice
+# view
 S = view(A, :, 3)
 @test S == OffsetArray([1,2], (A.offsets[1],))
 @test S[0] == 1
 @test S[1] == 2
 @test_throws BoundsError S[2]
+@test indices(S) === (0:1,)
 S = view(A, 0, :)
 @test S == OffsetArray([1,3], (A.offsets[2],))
 @test S[3] == 1
 @test S[4] == 3
 @test_throws BoundsError S[1]
+@test indices(S) === (3:4,)
 S = view(A, 0:0, 4)
 @test S == [3]
 @test S[1] == 3
 @test_throws BoundsError S[0]
+@test indices(S) === (Base.OneTo(1),)
 S = view(A, 1, 3:4)
 @test S == [2,4]
 @test S[1] == 2
 @test S[2] == 4
 @test_throws BoundsError S[3]
+@test indices(S) === (Base.OneTo(2),)
 S = view(A, :, :)
 @test S == A
 @test S[0,3] == S[1] == 1
@@ -160,6 +163,7 @@ S = view(A, :, :)
 @test S[0,4] == S[3] == 3
 @test S[1,4] == S[4] == 4
 @test_throws BoundsError S[1,1]
+@test indices(S) === (0:1, 3:4)
 
 # iteration
 for (a,d) in zip(A, A0)
@@ -201,29 +205,33 @@ cmp_showf(Base.print_matrix, io, OffsetArray(rand(10^3,10^3), (10,-9))) # neithe
 B = similar(A, Float32)
 @test isa(B, OffsetArray{Float32,2})
 @test size(B) == size(A)
-@test indices(B) == indices(A)
+@test indices(B) === indices(A)
 B = similar(A, (3,4))
 @test isa(B, Array{Int,2})
 @test size(B) == (3,4)
-@test indices(B) == (1:3, 1:4)
+@test indices(B) === (Base.OneTo(3), Base.OneTo(4))
 B = similar(A, (-3:3,1:4))
 @test isa(B, OffsetArray{Int,2})
-@test indices(B) == (-3:3, 1:4)
+@test indices(B) === (-3:3, 1:4)
 B = similar(parent(A), (-3:3,1:4))
 @test isa(B, OffsetArray{Int,2})
-@test indices(B) == (-3:3, 1:4)
+@test indices(B) === (-3:3, 1:4)
 
 # Indexing with OffsetArray indices
 i1 = OffsetArray([2,1], (-5,))
 i1 = OffsetArray([2,1], -5)
 b = A0[i1, 1]
-@test indices(b) == (-4:-3,)
+@test indices(b) === (-4:-3,)
 @test b[-4] == 2
 @test b[-3] == 1
 b = A0[1,i1]
-@test indices(b) == (-4:-3,)
+@test indices(b) === (-4:-3,)
 @test b[-4] == 3
 @test b[-3] == 1
+v = view(A0, i1, 1)
+@test indices(v) === (-4:-3,)
+v = view(A0, 1:1, i1)
+@test indices(v) === (Base.OneTo(1), -4:-3)
 
 # logical indexing
 @test A[A .> 2] == [3,4]
@@ -354,3 +362,4 @@ v = OffsetArray(rand(8), (-2,))
 @test 2*A == OffsetArray(2*parent(A), A.offsets)
 @test A+A == OffsetArray(parent(A)+parent(A), A.offsets)
 @test A.*A == OffsetArray(parent(A).*parent(A), A.offsets)
+end
