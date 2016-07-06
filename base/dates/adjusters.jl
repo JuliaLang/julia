@@ -42,9 +42,6 @@ function lastdayofweek end
 lastdayofweek(dt::Date) = Date(UTD(value(dt) + (7 - dayofweek(dt))))
 lastdayofweek(dt::DateTime) = DateTime(lastdayofweek(Date(dt)))
 
-@vectorize_1arg TimeType firstdayofweek
-@vectorize_1arg TimeType lastdayofweek
-
 """
     firstdayofmonth(dt::TimeType) -> TimeType
 
@@ -68,9 +65,6 @@ function lastdayofmonth(dt::Date)
 end
 lastdayofmonth(dt::DateTime) = DateTime(lastdayofmonth(Date(dt)))
 
-@vectorize_1arg TimeType firstdayofmonth
-@vectorize_1arg TimeType lastdayofmonth
-
 """
     firstdayofyear(dt::TimeType) -> TimeType
 
@@ -93,9 +87,6 @@ function lastdayofyear(dt::Date)
     return Date(UTD(value(dt) + daysinyear(y) - dayofyear(y, m, d)))
 end
 lastdayofyear(dt::DateTime) = DateTime(lastdayofyear(Date(dt)))
-
-@vectorize_1arg TimeType firstdayofyear
-@vectorize_1arg TimeType lastdayofyear
 
 """
     firstdayofquarter(dt::TimeType) -> TimeType
@@ -124,9 +115,6 @@ function lastdayofquarter(dt::Date)
     return Date(y, mm, d)
 end
 lastdayofquarter(dt::DateTime) = DateTime(lastdayofquarter(Date(dt)))
-
-@vectorize_1arg TimeType firstdayofquarter
-@vectorize_1arg TimeType lastdayofquarter
 
 # Temporal Adjusters
 immutable DateFunction

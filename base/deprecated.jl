@@ -909,6 +909,7 @@ end
 @dep_vectorize_1arg Complex float
 for f in (
         :year, :month, :day, :week, :dayofmonth, :yearmonth, :monthday, :yearmonthday, # base/dates/accessors.jl
+        :firstdayofweek, :lastdayofweek, :firstdayofmonth, :lastdayofmonth, :firstdayofyear, :lastdayofyear, :firstdayofquarter, :lastdayofquarter, # base/dates/adjusters.jl
     )
     @eval @dep_vectorize_1arg Dates.TimeType $f
 end
