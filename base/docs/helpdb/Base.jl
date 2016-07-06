@@ -5194,17 +5194,6 @@ Determine whether a stream is read-only.
 isreadonly
 
 """
-    rounding(T)
-
-Get the current floating point rounding mode for type `T`, controlling the rounding of basic
-arithmetic functions ([`+`](:func:`+`), [`-`](:func:`-`), [`*`](:func:`*`), [`/`](:func:`/`)
-and [`sqrt`](:func:`sqrt`)) and type conversion.
-
-See [`RoundingMode`](:obj:`RoundingMode`) for available modes.
-"""
-rounding
-
-"""
     code_llvm(f, types)
 
 Prints the LLVM bitcodes generated for running the method matching the given generic
@@ -5382,34 +5371,6 @@ the results need to be used judiciously. See [Manual](:ref:`man-code-warntype`) 
 information.
 """
 code_warntype
-
-"""
-    setrounding(T, mode)
-
-Set the rounding mode of floating point type `T`, controlling the rounding of basic
-arithmetic functions ([`+`](:func:`+`), [`-`](:func:`-`), [`*`](:func:`*`), [`/`](:func:`/`)
-and [`sqrt`](:func:`sqrt`)) and type conversion.
-
-Note that this may affect other types, for instance changing the rounding mode of `Float64`
-will change the rounding mode of `Float32`. See [`RoundingMode`](:obj:`RoundingMode`) for
-available modes.
-"""
-setrounding(T, mode)
-
-"""
-    setrounding(f::Function, T, mode)
-
-Change the rounding mode of floating point type `T` for the duration of `f`. It is logically
-equivalent to:
-
-    old = rounding(T)
-    setrounding(T, mode)
-    f()
-    setrounding(T, old)
-
-See [`RoundingMode`](:obj:`RoundingMode`) for available rounding modes.
-"""
-setrounding(f::Function, T, mode)
 
 """
     Mmap.sync!(array)
