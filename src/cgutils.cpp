@@ -1727,13 +1727,12 @@ static jl_cgval_t emit_new_struct(jl_value_t *ty, size_t nargs, jl_value_t **arg
                     if (init_as_value) {
                         if (lt->isVectorTy())
                             strct = builder.CreateInsertElement(strct, fval, ConstantInt::get(T_int32,idx));
+                        else if (jl_is_vecelement_type(ty))
+                            strct = fval;  // VecElement type comes unwrapped in LLVM.
                         else if (lt->isAggregateType())
                             strct = builder.CreateInsertValue(strct, fval, ArrayRef<unsigned>(&idx,1));
-                        else {
-                            // Must be a VecElement type, which comes unwrapped in LLVM.
-                            assert(jl_is_vecelement_type(ty));
-                            strct = fval;
-                        }
+                        else
+                            assert(false);
                     }
                 }
                 idx++;

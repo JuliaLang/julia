@@ -63,3 +63,5 @@ a = Vector{Gr{2,Float64}}(2)
 a[2] = Gr(1.0, Bunch((VecElement(2.0), VecElement(3.0))), 4.0)
 a[1] = Gr(5.0, Bunch((VecElement(6.0), VecElement(7.0))), 8.0)
 @test a[2] == Gr(1.0, Bunch((VecElement(2.0), VecElement(3.0))), 4.0)
+
+@test isa(VecElement((1,2)), VecElement{Tuple{Int,Int}})
