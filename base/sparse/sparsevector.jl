@@ -774,11 +774,14 @@ complex(x::AbstractSparseVector) =
 
 # Without the first of these methods, horizontal concatenations of SparseVectors fall
 # back to the horizontal concatenation method that ensures that combinations of
-# sparse/special/dense matrix/vector types concatenate to SparseMatrixCSCs, instead
-# of _absspvec_hcat below. The <:Integer qualifications are necessary for correct dispatch.
-hcat{Tv,Ti<:Integer}(X::SparseVector{Tv,Ti}...) = _absspvec_hcat(X...)
-hcat{Tv,Ti<:Integer}(X::AbstractSparseVector{Tv,Ti}...) = _absspvec_hcat(X...)
-function _absspvec_hcat{Tv,Ti}(X::AbstractSparseVector{Tv,Ti}...)
+# sparse/special/dense matrix/vector types concatenate to SparseMatrixCSCs.
+# The <:Integer qualifications are necessary for correct dispatch.
+hcat{Tv,Ti<:Integer}(X::SparseVector{Tv,Ti}...) = typed_hcat(SparseMatrixCSC, X...)
+hcat{Tv,Ti<:Integer}(X::AbstractSparseVector{Tv,Ti}...) = typed_hcat(SparseMatrixCSC, X...)
+
+promote_indtype{Tv,Ti}(X::SparseVector{Tv,Ti}, Xs::SparseVector...) = promote_type(Ti, promote_indtype(Xs...))
+
+function typed_hcat{Tv,Ti<:Integer}(::Type{SparseMatrixCSC{Tv,Ti}}, X::AbstractSparseVector...)
     # check sizes
     n = length(X)
     m = length(X[1])
@@ -806,14 +809,22 @@ function _absspvec_hcat{Tv,Ti}(X::AbstractSparseVector{Tv,Ti}...)
     colptr[n+1] = roff
     SparseMatrixCSC{Tv,Ti}(m, n, colptr, nzrow, nzval)
 end
+typed_hcat(::Type{SparseMatrixCSC}, X::AbstractSparseVector...) =
+    typed_hcat(SparseMatrixCSC{promote_eltype(X...)}, X...)
+typed_hcat{Tv}(::Type{SparseMatrixCSC{Tv}}, X::AbstractSparseVector...) =
+    typed_hcat(SparseMatrixCSC{Tv,promote_indtype(X...)}, X...)
+typed_hcat{T<:SparseMatrixCSC}(::Type{T}, Xin::AbstractVector...) =
+    typed_hcat(T, map(sparse, Xin)...)
 
 # Without the first of these methods, vertical concatenations of SparseVectors fall
 # back to the vertical concatenation method that ensures that combinations of
-# sparse/special/dense matrix/vector types concatenate to SparseMatrixCSCs, instead
-# of _absspvec_vcat below. The <:Integer qualifications are necessary for correct dispatch.
-vcat{Tv,Ti<:Integer}(X::SparseVector{Tv,Ti}...) = _absspvec_vcat(X...)
-vcat{Tv,Ti<:Integer}(X::AbstractSparseVector{Tv,Ti}...) = _absspvec_vcat(X...)
-function _absspvec_vcat{Tv,Ti}(X::AbstractSparseVector{Tv,Ti}...)
+# sparse/special/dense matrix/vector types concatenate to SparseMatrixCSCs.
+# The <:Integer qualifications are necessary for correct dispatch.
+vcat{Tv,Ti<:Integer}(X::SparseVector{Tv,Ti}...) = typed_vcat(SparseVector, X...)
+vcat{Tv,Ti<:Integer}(X::AbstractSparseVector{Tv,Ti}...) = typed_vcat(SparseVector, X...)
+
+typed_vcat{T<:SparseVector}(::Type{T}) = T(0)
+function typed_vcat{Tv,Ti<:Integer}(::Type{SparseVector{Tv,Ti}}, X::AbstractSparseVector...)
     # check sizes
     n = length(X)
     tnnz = 0
@@ -840,9 +851,18 @@ function _absspvec_vcat{Tv,Ti}(X::AbstractSparseVector{Tv,Ti}...)
     end
     SparseVector(len, rnzind, rnzval)
 end
+typed_vcat(::Type{SparseVector}, X::AbstractSparseVector...) =
+    typed_vcat(SparseVector{promote_eltype(X...)}, X...)
+typed_vcat{Tv}(::Type{SparseVector{Tv}}, X::AbstractSparseVector...) =
+    typed_vcat(SparseVector{Tv,promote_indtype(X...)}, X...)
+typed_vcat{T<:SparseVector}(::Type{T}, Xin::AbstractVector...) =
+    typed_vcat(T, map(sparse, Xin)...)
 
-hcat(Xin::Union{Vector, AbstractSparseVector}...) = hcat(map(sparse, Xin)...)
-vcat(Xin::Union{Vector, AbstractSparseVector}...) = vcat(map(sparse, Xin)...)
+
+hcat(Xin::Union{Vector, AbstractSparseVector, SparseMatrixCSC}...) = typed_hcat(SparseMatrixCSC, Xin...)
+vcat(Xin::Union{Vector, AbstractSparseVector}...) = typed_vcat(SparseVector, Xin...)
+vcat(Xin::AbstractSparseVector...) = typed_vcat(SparseVector, Xin...)
+vcat(Xin::Union{AbstractSparseVector, SparseMatrixCSC}...) = typed_vcat(SparseMatrixCSC, Xin...)
 
 
 ### Concatenation of un/annotated sparse/special/dense vectors/matrices
