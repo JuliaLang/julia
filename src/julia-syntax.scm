@@ -1546,6 +1546,72 @@
         (cadr expr)  ;; eta reduce `x->f(x)` => `f`
         `(-> ,argname (block ,@splat ,expr)))))
 
+(define (getfield-field? x) ; whether x from (|.| f x) is a getfield call
+  (or (eq? (car x) 'quote) (eq? (car x) 'inert) (eq? (car x) '$)))
+
+;; fuse nested calls to f.(args...) into a single broadcast call
+(define (expand-fuse-broadcast f args)
+  (define (fuse? e) (and (pair? e) (eq? (car e) 'fuse)))
+  (define (anyfuse? exprs)
+    (if (null? exprs) #f (if (fuse? (car exprs)) #t (anyfuse? (cdr exprs)))))
+  (define (to-lambda f args) ; convert f to anonymous function with hygienic tuple args
+    (define (hygienic f) ; rename args of f == (-> (tuple args...) body)
+      (let* ((oldargs (cdadr f))
+             (newargs (map (lambda (arg) (gensy)) oldargs))
+             (renames (map cons oldargs newargs)))
+        `(-> (tuple ,@newargs) ,(replace-vars (caddr f) renames))))
+    (if (and (pair? f) (eq? (car f) '->))
+        (if (pair? (cadr f))
+            (hygienic f) ; f is already anon function, nothing to do but hygienicize
+            (hygienic `(-> (tuple ,(cadr f)) ,(caddr f)))) ; canonicalize single arg to tuple
+        (let ((genargs (map (lambda (e) (gensy)) args))) ; formal parameters
+          `(-> ,(cons 'tuple genargs) (call ,f ,@genargs)))))
+  (define (from-lambda f) ; convert (-> (tuple args...) (call func args...)) back to func
+    (if (and (pair? f) (eq? (car f) '->) (pair? (cadr f)) (eq? (caadr f) 'tuple)
+             (pair? (caddr f)) (eq? (caaddr f) 'call) (equal? (cdadr f) (cdr (cdaddr f))))
+        (car (cdaddr f))
+        f))
+  (define (fuse-args oldargs) ; replace (fuse f args) with args in oldargs list
+    (define (fargs newargs oldargs)
+      (if (null? oldargs)
+          newargs
+          (fargs (if (fuse? (car oldargs))
+                     (append (reverse (caddar oldargs)) newargs)
+                     (cons (car oldargs) newargs))
+                 (cdr oldargs))))
+    (reverse (fargs '() oldargs)))
+  (define (fuse-funcs f args) ; for (fuse g a) in args, merge/inline g into f
+    ; any argument A of f that is (fuse g a) gets replaced by let A=(body of g):
+    (define (fuse-lets fargs args lets)
+      (if (null? args)
+          lets
+          (if (fuse? (car args))
+              (fuse-lets (cdr fargs) (cdr args) (cons (list '= (car fargs) (caddr (cadar args))) lets))
+              (fuse-lets (cdr fargs) (cdr args) lets))))
+    (let ((fargs (cdadr f))
+          (fbody (caddr f)))
+      `(->
+        (tuple ,@(fuse-args (map (lambda (oldarg arg) (if (fuse? arg)
+                                                 `(fuse _ ,(cdadr (cadr arg)))
+                                                 oldarg))
+                                 fargs args)))
+        (let ,fbody ,@(reverse (fuse-lets fargs args '()))))))
+  (define (make-fuse f args) ; check for nested (fuse f args) exprs and combine
+    (define (expand-fuse e)
+      (if (and (pair? e) (eq? (car e) '|.|))
+          (let ((f (cadr e))
+                (x (caddr e)))
+            (if (getfield-field? x)
+                `(call (core getfield) ,(expand-forms f) ,(expand-forms x))
+                (make-fuse f (cdr x))))
+          (expand-forms e)))
+    (let ((args_ (map expand-fuse args)))
+      (if (anyfuse? args_)
+          `(fuse ,(fuse-funcs (to-lambda f args) args_) ,(fuse-args args_))
+          `(fuse ,(to-lambda f args) ,args_))))
+  (let ((e (make-fuse f args))) ; an expression '(fuse func args)
+    `(call broadcast ,(expand-forms (from-lambda (cadr e))) ,@(caddr e))))
+
 ;; table mapping expression head to a function expanding that form
 (define expand-table
   (table
@@ -1584,11 +1650,11 @@
    (lambda (e) ; e = (|.| f x)
      (let ((f (cadr e))
            (x (caddr e)))
-       (if (or (eq? (car x) 'quote) (eq? (car x) 'inert) (eq? (car x) '$))
-         `(call (core getfield) ,(expand-forms f) ,(expand-forms x))
-         ; otherwise, came from f.(args...) --> broadcast(f, args...),
-         ; where x = (tuple args...) at this point:
-         (expand-forms `(call broadcast ,f ,@(cdr x))))))
+       (if (getfield-field? x)
+           `(call (core getfield) ,(expand-forms f) ,(expand-forms x))
+          ; otherwise, came from f.(args...) --> broadcast(f, args...),
+          ; where we want to fuse with any nested broadcast calls.
+          (expand-fuse-broadcast f (cdr x)))))
 
    '|<:| syntactic-op-to-call
    '|>:| syntactic-op-to-call
