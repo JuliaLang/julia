@@ -10,11 +10,7 @@
 
 #TODO:
 # - Windows:
-#   - Add a test whether coreutils are available and skip tests if not
-if is_windows()
-    oldpath = ENV["PATH"]
-    ENV["PATH"] = joinpath(JULIA_HOME, "..", "Git", "usr", "bin") * ";" * oldpath
-end
+#   - fix coreutils dependent tests using busybox-w32, skip tests for no-gpl build
 
 valgrind_off = ccall(:jl_running_on_valgrind, Cint, ()) == 0
 
@@ -345,10 +341,6 @@ end
 
 # make sure Cmd is nestable
 @test string(Cmd(Cmd(`ls`, detach=true))) == "`ls`"
-
-if is_windows()
-    ENV["PATH"] = oldpath
-end
 
 # equality tests for Cmd
 @test Base.Cmd(``) == Base.Cmd(``)
