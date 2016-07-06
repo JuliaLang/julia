@@ -901,6 +901,7 @@ for f in (
         :erfinc, :erfcinv, # base/special/erf.jl
         :rad2deg, :deg2rad, :exponent, :significand, # base/math.jl
         :trunc, :floor, :ceil, :round, # base/floatfuncs.jl
+        :unix2datetime, :rata2datetime, :julian2datetime, # base/dates/conversions.jl
         )
     @eval @dep_vectorize_1arg Real $f
 end
@@ -915,9 +916,11 @@ for f in (
 end
 for f in (
     :hour, :minute, :second, :millisecond, # base/dates/accessors.jl
+    :Date, :datetime2unix, :datetime2rata, :datetime2julian, # base/dates/conversions.jl
     )
     @eval @dep_vectorize_1arg Dates.DateTime $f
 end
+@dep_vectorize_1arg Dates.Date Datetime # base/dates/conversions.jl
 
 # Deprecate @vectorize_2arg-vectorized functions from...
 for f in (
