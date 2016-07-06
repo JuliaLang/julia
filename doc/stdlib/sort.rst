@@ -1,4 +1,3 @@
-
 .. currentmodule:: Base
 
 *******************************
@@ -45,7 +44,7 @@ Instead of directly sorting an array, you can compute a permutation of the array
 
 .. testsetup::
 
-   srand(1)
+   srand(1);
 
 .. doctest::
 
@@ -119,101 +118,109 @@ Sorting Functions
 
 .. function:: sort!(v, [alg=<algorithm>,] [by=<transform>,] [lt=<comparison>,] [rev=false])
 
-   Sort the vector ``v`` in place. ``QuickSort`` is used by default for numeric arrays
-   while ``MergeSort`` is used for other arrays. You can specify an algorithm to use via
-   the ``alg`` keyword (see `Sorting Algorithms`_ for available algorithms). The ``by``
-   keyword lets you provide a function that will be applied to each element before
-   comparison; the ``lt`` keyword allows providing a custom "less than" function; use
-   ``rev=true`` to reverse the sorting order. These options are independent and can be
-   used together in all possible combinations: if both ``by`` and ``lt`` are specified,
-   the ``lt`` function is applied to the result of the ``by`` function; ``rev=true``
-   reverses whatever ordering specified via the ``by`` and ``lt`` keywords.
+   .. Docstring generated from Julia source
+
+   Sort the vector ``v`` in place. ``QuickSort`` is used by default for numeric arrays while ``MergeSort`` is used for other arrays. You can specify an algorithm to use via the ``alg`` keyword (see Sorting Algorithms for available algorithms). The ``by`` keyword lets you provide a function that will be applied to each element before comparison; the ``lt`` keyword allows providing a custom "less than" function; use ``rev=true`` to reverse the sorting order. These options are independent and can be used together in all possible combinations: if both ``by`` and ``lt`` are specified, the ``lt`` function is applied to the result of the ``by`` function; ``rev=true`` reverses whatever ordering specified via the ``by`` and ``lt`` keywords.
 
 .. function:: sort(v, [alg=<algorithm>,] [by=<transform>,] [lt=<comparison>,] [rev=false])
+
+   .. Docstring generated from Julia source
 
    Variant of ``sort!`` that returns a sorted copy of ``v`` leaving ``v`` itself unmodified.
 
 .. function:: sort(A, dim, [alg=<algorithm>,] [by=<transform>,] [lt=<comparison>,] [rev=false])
 
+   .. Docstring generated from Julia source
+
    Sort a multidimensional array ``A`` along the given dimension.
 
 .. function:: sortperm(v, [alg=<algorithm>,] [by=<transform>,] [lt=<comparison>,] [rev=false])
 
-   Return a permutation vector of indices of ``v`` that puts it in sorted order.
-   Specify ``alg`` to choose a particular sorting algorithm (see `Sorting Algorithms`_).
-   ``MergeSort`` is used by default, and since it is stable, the resulting permutation
-   will be the lexicographically first one that puts the input array into sorted order –
-   i.e. indices of equal elements appear in ascending order. If you choose a non-stable
-   sorting algorithm such as ``QuickSort``, a different permutation that puts the array
-   into order may be returned. The order is specified using the same keywords as ``sort!``.
+   .. Docstring generated from Julia source
 
-   See also :func:`sortperm!`
+   Return a permutation vector of indices of ``v`` that puts it in sorted order. Specify ``alg`` to choose a particular sorting algorithm (see Sorting Algorithms). ``MergeSort`` is used by default, and since it is stable, the resulting permutation will be the lexicographically first one that puts the input array into sorted order – i.e. indices of equal elements appear in ascending order. If you choose a non-stable sorting algorithm such as ``QuickSort``\ , a different permutation that puts the array into order may be returned. The order is specified using the same keywords as ``sort!``\ .
+
+   See also :func:`sortperm!`\ .
 
 .. function:: sortperm!(ix, v, [alg=<algorithm>,] [by=<transform>,] [lt=<comparison>,] [rev=false,] [initialized=false])
 
-   Like ``sortperm``, but accepts a preallocated index vector ``ix``.  If ``initialized`` is ``false``
-   (the default), ix is initialized to contain the values ``1:length(v)``.
+   .. Docstring generated from Julia source
 
-   See also :func:`sortperm`
+   Like ``sortperm``\ , but accepts a preallocated index vector ``ix``\ .  If ``initialized`` is ``false`` (the default), ix is initialized to contain the values ``1:length(v)``\ .
+
+   See also :func:`sortperm`\ .
 
 .. function:: sortrows(A, [alg=<algorithm>,] [by=<transform>,] [lt=<comparison>,] [rev=false])
+
+   .. Docstring generated from Julia source
 
    Sort the rows of matrix ``A`` lexicographically.
 
 .. function:: sortcols(A, [alg=<algorithm>,] [by=<transform>,] [lt=<comparison>,] [rev=false])
 
-   Sort the columns of matrix ``A`` lexicographically.
+   .. Docstring generated from Julia source
 
+   Sort the columns of matrix ``A`` lexicographically.
 
 Order-Related Functions
 -----------------------
 
 .. function:: issorted(v, [by=<transform>,] [lt=<comparison>,] [rev=false])
 
-   Test whether a vector is in sorted order. The ``by``, ``lt`` and ``rev``
-   keywords modify what order is considered to be sorted just as they do for ``sort``.
+   .. Docstring generated from Julia source
+
+   Test whether a vector is in sorted order. The ``by``\ , ``lt`` and ``rev`` keywords modify what order is considered to be sorted just as they do for ``sort``\ .
 
 .. function:: searchsorted(a, x, [by=<transform>,] [lt=<comparison>,] [rev=false])
 
-   Returns the range of indices of ``a`` which compare as equal to ``x`` according to the
-   order specified by the ``by``, ``lt`` and ``rev`` keywords, assuming that ``a`` is
-   already sorted in that order. Returns an empty range located at the insertion point if
-   ``a`` does not contain values equal to ``x``.
+   .. Docstring generated from Julia source
+
+   Returns the range of indices of ``a`` which compare as equal to ``x`` according to the order specified by the ``by``\ , ``lt`` and ``rev`` keywords, assuming that ``a`` is already sorted in that order. Returns an empty range located at the insertion point if ``a`` does not contain values equal to ``x``\ .
 
 .. function:: searchsortedfirst(a, x, [by=<transform>,] [lt=<comparison>,] [rev=false])
 
-   Returns the index of the first value in ``a`` greater than or equal to ``x``,
-   according to the specified order. Returns ``length(a)+1`` if ``x`` is greater
-   than all values in ``a``.
+   .. Docstring generated from Julia source
+
+   Returns the index of the first value in ``a`` greater than or equal to ``x``\ , according to the specified order. Returns ``length(a)+1`` if ``x`` is greater than all values in ``a``\ .
 
 .. function:: searchsortedlast(a, x, [by=<transform>,] [lt=<comparison>,] [rev=false])
 
-   Returns the index of the last value in ``a`` less than or equal to ``x``,
-   according to the specified order. Returns ``0`` if ``x`` is less than all
-   values in ``a``.
+   .. Docstring generated from Julia source
+
+   Returns the index of the last value in ``a`` less than or equal to ``x``\ , according to the specified order. Returns ``0`` if ``x`` is less than all values in ``a``\ .
 
 .. function:: select!(v, k, [by=<transform>,] [lt=<comparison>,] [rev=false])
 
-   Partially sort the vector ``v`` in place, according to the order specified by ``by``,
-   ``lt`` and ``rev`` so that the value at index ``k`` (or range of adjacent values if
-   ``k`` is a range) occurs at the position where it would appear if the array were
-   fully sorted via a non-stable algorithm. If ``k`` is a single index, that value
-   is returned; if ``k`` is a range, an array of values at those indices is returned.
-   Note that ``select!`` does not fully sort the input array.
+   .. Docstring generated from Julia source
+
+   Partially sort the vector ``v`` in place, according to the order specified by ``by``\ , ``lt`` and ``rev`` so that the value at index ``k`` (or range of adjacent values if ``k`` is a range) occurs at the position where it would appear if the array were fully sorted via a non-stable algorithm. If ``k`` is a single index, that value is returned; if ``k`` is a range, an array of values at those indices is returned. Note that ``select!`` does not fully sort the input array.
 
 .. function:: select(v, k, [by=<transform>,] [lt=<comparison>,] [rev=false])
 
-   Variant of ``select!`` which copies ``v`` before partially sorting it, thereby
-   returning the same thing as ``select!`` but leaving ``v`` unmodified.
+   .. Docstring generated from Julia source
 
+   Variant of ``select!`` which copies ``v`` before partially sorting it, thereby returning the same thing as ``select!`` but leaving ``v`` unmodified.
+
+.. function:: selectperm(v, k, [alg=<algorithm>,] [by=<transform>,] [lt=<comparison>,] [rev=false])
+
+   .. Docstring generated from Julia source
+
+   Return a partial permutation of the vector ``v``\ , according to the order specified by ``by``\ , ``lt`` and ``rev``\ , so that ``v[output]`` returns the first ``k`` (or range of adjacent values if ``k`` is a range) values of a fully sorted version of ``v``\ . If ``k`` is a single index (Integer), an array of the first ``k`` indices is returned; if ``k`` is a range, an array of those indices is returned. Note that the handling of integer values for ``k`` is different from ``select`` in that it returns a vector of ``k`` elements instead of just the ``k`` th element. Also note that this is equivalent to, but more efficient than, calling ``sortperm(...)[k]``
+
+.. function:: selectperm!(ix, v, k, [alg=<algorithm>,] [by=<transform>,] [lt=<comparison>,] [rev=false,] [initialized=false])
+
+   .. Docstring generated from Julia source
+
+   Like ``selectperm``\ , but accepts a preallocated index vector ``ix``\ . If ``initialized`` is ``false`` (the default), ix is initialized to contain the values ``1:length(ix)``\ .
 
 Sorting Algorithms
 ------------------
 
-There are currently three sorting algorithms available in base Julia:
+There are currently four sorting algorithms available in base Julia:
 
 - ``InsertionSort``
 - ``QuickSort``
+- ``PartialQuickSort(k)``
 - ``MergeSort``
 
 ``InsertionSort`` is an O(n^2) stable sorting algorithm. It is efficient
@@ -225,9 +232,25 @@ equal will not remain in the same order in which they originally
 appeared in the array to be sorted. ``QuickSort`` is the default
 algorithm for numeric values, including integers and floats.
 
+``PartialQuickSort(k)`` is similar to ``QuickSort``, but the output array
+is only sorted up to index ``k`` if ``k`` is an integer, or in the range
+of ``k`` if ``k`` is an ``OrdinalRange``. For example::
+
+    x = rand(1:500, 100)
+    k = 50
+    k2 = 50:100
+    s = sort(x; alg=QuickSort)
+    ps = sort(x; alg=PartialQuickSort(k))
+    qs = sort(x; alg=PartialQuickSort(k2))
+    map(issorted, (s, ps, qs))             # => (true, false, false)
+    map(x->issorted(x[1:k]), (s, ps, qs))  # => (true, true, false)
+    map(x->issorted(x[k2]), (s, ps, qs))   # => (true, false, true)
+    s[1:k] == ps[1:k]                      # => true
+    s[k2] == qs[k2]                        # => true
+
 ``MergeSort`` is an O(n log n) stable sorting algorithm but is not
 in-place – it requires a temporary array of half the size of the
-input array – and is typically not quite as fast as ``QuickSort``.
+input array – and is typically not quite as fast as ``QuickSort``.
 It is the default algorithm for non-numeric data.
 
 The default sorting algorithms are chosen on the basis that they are

@@ -1,4 +1,3 @@
-
 .. _stdlib-index:
 
 ############################
@@ -22,9 +21,10 @@
    punctuation
    sort
    pkg
-   collections
+   dates
    test
    c
    libc
    libdl
    profile
+   simd-types

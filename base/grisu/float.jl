@@ -1,3 +1,33 @@
+# This file is a part of Julia, but is derived from
+# https://github.com/floitsch/double-conversion which has the following license
+#
+# Copyright 2006-2014, the V8 project authors. All rights reserved.
+# Redistribution and use in source and binary forms, with or without
+# modification, are permitted provided that the following conditions are
+# met:
+#
+#     * Redistributions of source code must retain the above copyright
+#       notice, this list of conditions and the following disclaimer.
+#     * Redistributions in binary form must reproduce the above
+#       copyright notice, this list of conditions and the following
+#       disclaimer in the documentation and/or other materials provided
+#       with the distribution.
+#     * Neither the name of Google Inc. nor the names of its
+#       contributors may be used to endorse or promote products derived
+#       from this software without specific prior written permission.
+#
+# THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
+# "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+# LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
+# A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT
+# OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
+# SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
+# LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
+# DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
+# THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+# (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+# OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
 immutable Float
     s::UInt64
     e::Int32
@@ -6,7 +36,7 @@ end
 
 Float() = Float(0,0,0)
 Float(x,y) = Float(x,y,Int32(0))
-Float(d::FloatingPoint) = Float(_significand(d), _exponent(d))
+Float(d::AbstractFloat) = Float(_significand(d), _exponent(d))
 
 # Consts
 const Float10MSBits = 0xFFC0000000000000 # used normalize(Float)
@@ -15,7 +45,7 @@ const FloatSignificandSize = Int32(64)
 
 function normalize(v::Float)
     f = v.s
-    e = v.e
+    e::Int32 = v.e
     while (f & Float10MSBits) == 0
         f <<= 10
         e -= 10
@@ -74,18 +104,18 @@ SignificandMask(::Type{Float16}) = 0x03ff
 HiddenBit(::Type{Float16}) = 0x0400
 uint_t(d::Float16) = reinterpret(UInt16,d)
 
-function _exponent{T<:FloatingPoint}(d::T)
+function _exponent{T<:AbstractFloat}(d::T)
   isdenormal(d) && return DenormalExponent(T)
   biased_e::Int32 = Int32((uint_t(d) & ExponentMask(T)) >> PhysicalSignificandSize(T))
   return Int32(biased_e - ExponentBias(T))
 end
-function _significand{T<:FloatingPoint}(d::T)
+function _significand{T<:AbstractFloat}(d::T)
   s = uint_t(d) & SignificandMask(T)
   return !isdenormal(d) ? s + HiddenBit(T) : s
 end
-isdenormal{T<:FloatingPoint}(d::T) = (uint_t(d) & ExponentMask(T)) == 0
+isdenormal{T<:AbstractFloat}(d::T) = (uint_t(d) & ExponentMask(T)) == 0
 
-function normalizedbound(f::FloatingPoint)
+function normalizedbound(f::AbstractFloat)
     v = Float(_significand(f),_exponent(f))
     m_plus = normalize(Float((v.s << 1) + 1, v.e - 1))
     if lowerboundaryiscloser(f)
@@ -95,7 +125,7 @@ function normalizedbound(f::FloatingPoint)
     end
     return Float(m_minus.s << (m_minus.e - m_plus.e), m_plus.e), m_plus
 end
-function lowerboundaryiscloser{T<:FloatingPoint}(f::T)
+function lowerboundaryiscloser{T<:AbstractFloat}(f::T)
     physical_significand_is_zero = (uint_t(f) & SignificandMask(T)) == 0
     return physical_significand_is_zero && (_exponent(f) != DenormalExponent(T))
 end

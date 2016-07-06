@@ -1,3 +1,33 @@
+# This file is a part of Julia, but is derived from
+# https://github.com/floitsch/double-conversion which has the following license
+#
+# Copyright 2006-2014, the V8 project authors. All rights reserved.
+# Redistribution and use in source and binary forms, with or without
+# modification, are permitted provided that the following conditions are
+# met:
+#
+#     * Redistributions of source code must retain the above copyright
+#       notice, this list of conditions and the following disclaimer.
+#     * Redistributions in binary form must reproduce the above
+#       copyright notice, this list of conditions and the following
+#       disclaimer in the documentation and/or other materials provided
+#       with the distribution.
+#     * Neither the name of Google Inc. nor the names of its
+#       contributors may be used to endorse or promote products derived
+#       from this software without specific prior written permission.
+#
+# THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
+# "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+# LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
+# A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT
+# OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
+# SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
+# LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
+# DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
+# THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+# (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+# OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
 function normalizedexponent(significand, exponent::Int32)
     significand = UInt64(significand)
     while (significand & HiddenBit(Float64)) == 0
@@ -140,6 +170,9 @@ function init3!(
         Bignums.shiftleft!(plus,exponent)
         Bignums.assignuint16!(minus,UInt16(1))
         Bignums.shiftleft!(minus,exponent)
+    else
+        Bignums.zero!(plus)
+        Bignums.zero!(minus)
     end
     return
 end
@@ -156,6 +189,9 @@ function init1!(
         Bignums.shiftleft!(num,1)
         Bignums.assignuint16!(plus,UInt16(1))
         Bignums.assignuint16!(minus,UInt16(1))
+    else
+        Bignums.zero!(plus)
+        Bignums.zero!(minus)
     end
     return
 end
@@ -168,6 +204,9 @@ function init2!(
     if need_boundary_deltas
         Bignums.assignbignum!(plus,power_ten)
         Bignums.assignbignum!(minus,power_ten)
+    else
+        Bignums.zero!(plus)
+        Bignums.zero!(minus)
     end
     Bignums.multiplybyuint64!(num,UInt64(significand))
     Bignums.assignuint16!(den,UInt16(1))

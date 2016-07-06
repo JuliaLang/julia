@@ -18,10 +18,10 @@ command line::
                    _
        _       _ _(_)_     |  A fresh approach to technical computing
       (_)     | (_) (_)    |  Documentation: http://docs.julialang.org
-       _ _   _| |_  __ _   |  Type "help()" to list help topics
+       _ _   _| |_  __ _   |  Type "?help" for help.
       | | | | | | |/ _` |  |
-      | | |_| | | | (_| |  |  Version 0.3.0-prerelease+3690 (2014-06-16 05:11 UTC)
-     _/ |\__'_|_|_|\__'_|  |  Commit 1b73f04* (0 days old master)
+      | | |_| | | | (_| |  |  Version 0.5.0-dev+2440 (2016-02-01 02:22 UTC)
+     _/ |\__'_|_|_|\__'_|  |  Commit 2bb94d6 (11 days old master)
     |__/                   |  x86_64-apple-darwin13.1.0
 
     julia> 1 + 2
@@ -45,27 +45,34 @@ To evaluate expressions written in a source file ``file.jl``, write
 ``include("file.jl")``.
 
 To run code in a file non-interactively, you can give it as the first
-argument to the julia command::
+argument to the ``julia`` command::
 
     $ julia script.jl arg1 arg2...
 
-As the example implies, the following command-line arguments to julia
+As the example implies, the following command-line arguments to ``julia``
 are taken as command-line arguments to the program ``script.jl``, passed
-in the global constant ``ARGS``. ``ARGS`` is also set when script code
-is given using the ``-e`` option on the command line (see the ``julia``
-help output below). For example, to just print the arguments given to a
-script, you could do this::
+in the global constant ``ARGS``. The name of the script itself is passed
+in as the global ``PROGRAM_FILE``. Note that ``ARGS`` is also set when script
+code is given using the ``-e`` option on the command line (see the ``julia``
+help output below) but ``PROGRAM_FILE`` will be empty. For example, to just
+print the arguments given to a script, you could do this::
 
-    $ julia -e 'for x in ARGS; println(x); end' foo bar
+    $ julia -e 'println(PROGRAM_FILE); for x in ARGS; println(x); end' foo bar
+
     foo
     bar
 
 Or you could put that code into a script and run it::
 
-    $ echo 'for x in ARGS; println(x); end' > script.jl
+    $ echo 'println(PROGRAM_FILE); for x in ARGS; println(x); end' > script.jl
     $ julia script.jl foo bar
+    script.jl
     foo
     bar
+
+The ``--`` delimiter can be used to separate command-line args to the scriptfile from args to Julia::
+
+    $ julia --color=yes -O -- foo.jl arg1 arg2..
 
 Julia can be started in parallel mode with either the ``-p`` or the
 ``--machinefile`` options. ``-p n`` will launch an additional ``n`` worker
@@ -80,7 +87,7 @@ specifies the ip-address and port that other workers should use to
 connect to this worker.
 
 
-If you have code that you want executed whenever julia is run, you can
+If you have code that you want executed whenever Julia is run, you can
 put it in ``~/.juliarc.jl``:
 
 .. raw:: latex
@@ -100,50 +107,53 @@ put it in ``~/.juliarc.jl``:
     \end{CJK*}
 
 There are various ways to run Julia code and provide options, similar to
-those available for the ``perl`` and ``ruby`` programs::
+those available for the ``perl`` and ``ruby`` programs:
 
-    julia [options] [program] [args...]
+.. code-block:: none
+
+    julia [switches] -- [programfile] [args...]
      -v, --version             Display version information
      -h, --help                Print this message
-     -q, --quiet               Quiet startup without banner
-     -H, --home <dir>          Set location of julia executable
+
+     -J, --sysimage <file>     Start up with the given system image file
+     --precompiled={yes|no}    Use precompiled code from system image if available
+     --compilecache={yes|no}   Enable/disable incremental precompilation of modules
+     -H, --home <dir>          Set location of `julia` executable
+     --startup-file={yes|no}   Load ~/.juliarc.jl
+     --handle-signals={yes|no} Enable or disable Julia's default signal handlers
 
      -e, --eval <expr>         Evaluate <expr>
      -E, --print <expr>        Evaluate and show <expr>
-     -P, --post-boot <expr>    Evaluate <expr>, but don't disable interactive mode
      -L, --load <file>         Load <file> immediately on all processors
-     -J, --sysimage <file>     Start up with the given system image file
-     -C, --cpu-target <target> Limit usage of cpu features up to <target>
 
      -p, --procs {N|auto}      Integer value N launches N additional local worker processes
-                               'auto' launches as many workers as the number of local cores
+                               "auto" launches as many workers as the number of local cores
      --machinefile <file>      Run processes on hosts listed in <file>
 
-     -i                        Force isinteractive() to be true
+     -i                        Interactive mode; REPL runs and isinteractive() is true
+     -q, --quiet               Quiet startup (no banner)
      --color={yes|no}          Enable or disable color text
-
      --history-file={yes|no}   Load or save history
-     --no-history-file         Don't load history file (deprecated, use --history-file=no)
-     --startup-file={yes|no}   Load ~/.juliarc.jl
-     -f, --no-startup          Don't load ~/.juliarc   (deprecated, use --startup-file=no)
-     -F                        Load ~/.juliarc         (deprecated, use --startup-file=yes)
 
-     --compile={yes|no|all}    Enable or disable compiler, or request exhaustive compilation
+     --compile={yes|no|all|min}Enable or disable JIT compiler, or request exhaustive compilation
+     -C, --cpu-target <target> Limit usage of cpu features up to <target>
+     -O, --optimize={0,1,2,3}  Set the optimization level (default 2 if unspecified or 3 if specified as -O)
+     --inline={yes|no}         Control whether inlining is permitted (overrides functions declared as @inline)
+     --check-bounds={yes|no}   Emit bounds checks always or never (ignoring declarations)
+     --math-mode={ieee,fast}   Disallow or enable unsafe floating point optimizations (overrides @fastmath declaration)
+
+     --depwarn={yes|no|error}  Enable or disable syntax and method deprecation warnings ("error" turns warnings into errors)
+
+     --output-o name           Generate an object file (including system image data)
+     --output-ji name          Generate a system image data file (.ji)
+     --output-bc name          Generate LLVM bitcode (.bc)
+     --output-incremental=no   Generate an incremental output file (rather than complete)
 
      --code-coverage={none|user|all}, --code-coverage
-                              Count executions of source lines (omitting setting is equivalent to 'user')
+                               Count executions of source lines (omitting setting is equivalent to "user")
+     --track-allocation={none|user|all}, --track-allocation
+                               Count bytes allocated by each source line
 
-    --track-allocation={none|user|all}, --track-allocation
-                              Count bytes allocated by each source line
-
-    -O, --optimize
-                              Run time-intensive code optimizations
-    --check-bounds={yes|no}   Emit bounds checks always or never (ignoring declarations)
-    --dump-bitcode={yes|no}   Dump bitcode for the system image (used with --build)
-    --depwarn={yes|no}        Enable or disable syntax and method deprecation warnings
-    --inline={yes|no}         Control whether inlining is permitted (overrides functions declared as @inline)
-    --math-mode={ieee|user}   Always use IEEE semantics for math (ignoring declarations),
-                              or adhere to declarations in source code
 
 Resources
 ---------
@@ -153,8 +163,12 @@ help new users get started with Julia:
 
 - `Julia and IJulia cheatsheet <http://math.mit.edu/~stevenj/Julia-cheatsheet.pdf>`_
 - `Learn Julia in a few minutes <http://learnxinyminutes.com/docs/julia/>`_
+- `Learn Julia the Hard Way <https://github.com/chrisvoncsefalvay/learn-julia-the-hard-way>`_
+- `Julia by Example <http://samuelcolvin.github.io/JuliaByExample/>`_
+- `Hands-on Julia <https://github.com/dpsanders/hands_on_julia>`_
 - `Tutorial for Homer Reid's numerical analysis class <http://homerreid.dyndns.org/teaching/18.330/JuliaProgramming.shtml>`_
 - `An introductory presentation <https://raw.githubusercontent.com/ViralBShah/julia-presentations/master/Fifth-Elephant-2013/Fifth-Elephant-2013.pdf>`_
-- `Videos from the Julia tutorial at MIT <http://julialang.org/blog/2013/03/julia-tutorial-MIT/>`_
+- `Videos from the Julia tutorial at MIT <http://julialang.org/blog/2013/03/julia-tutorial-MIT>`_
 - `Forio Julia Tutorials <http://forio.com/labs/julia-studio/tutorials/>`_
+- `YouTube videos from the JuliaCons <https://www.youtube.com/user/JuliaLanguage/playlists>`_
 

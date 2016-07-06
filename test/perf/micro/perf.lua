@@ -1,49 +1,50 @@
 
-local ffi = require 'ffi'
-local bit = require 'bit'
-local gsl = require 'gsl'
+if jit.arch ~= 'x64' then
+    print('WARNING: please use BIT=64 for optimal OpenBLAS performance')
+end
 
-local min, max, abs, sqrt, random, floor = math.min, math.max, math.abs, math.sqrt, math.random, math.floor
+local ffi     = require 'ffi'
+local bit     = require 'bit'
+local time    = require 'time'
+local alg     = require 'sci.alg'
+local prng    = require 'sci.prng'
+local stat    = require 'sci.stat'
+local dist    = require 'sci.dist'
+local complex = require 'sci.complex'
+
+local min, sqrt, random, abs = math.min, math.sqrt, math.random, math.abs
 local cabs = complex.abs
 local rshift = bit.rshift
 local format = string.format
+local nowutc = time.nowutc
+local rng = prng.std()
+local vec, mat, join = alg.vec, alg.mat, alg.join
+local sum, trace = alg.sum, alg.trace
+local var, mean = stat.var, stat.mean
 
-local gettime
-do
-    ffi.cdef[[
-         struct timeval {
-            long tv_sec;
-            long tv_usec;
-         };
-
-         int gettimeofday(struct timeval * tp, void *tzp);
-       ]]
-
-    local tv = ffi.new('struct timeval[1]')
-
-    gettime = function()
-      ffi.C.gettimeofday(tv, nil)
-      return tv[0].tv_sec, tv[0].tv_usec
-    end
-end
-
--- return the elapsed time in ms
+--------------------------------------------------------------------------------
 local function elapsed(f)
-    local s0, us0 = gettime()
-    f()
-    local s1, us1 = gettime()
-    return tonumber(s1 - s0) * 1000 + tonumber(us1 - us0) / 1000
+    local t0 = nowutc()
+    local val1, val2 = f()
+    local t1 = nowutc()
+    return (t1 - t0):tomilliseconds(), val1, val2
 end
 
-local function timeit(f, name)
-    local t = nil
-    for k = 1, 5 do
-        local tx = elapsed(f)
-        t = t and min(t, tx) or tx
+local function timeit(f, name, check)
+    local t, k, s = 1/0, 0, nowutc()
+    while true do
+        k = k + 1
+        local tx, val1, val2 = elapsed(f)
+        t = min(t, tx)
+        if check then 
+            check(val1, val2)
+        end
+        if k > 5 and (nowutc() - s):toseconds() >= 2 then break end
     end
-    print(format("lua,%s,%g", name, t))
+    io.write(format('lua,%s,%g\n', name, t))
 end
 
+--------------------------------------------------------------------------------
 local function fib(n)
     if n < 2 then
         return n
@@ -52,23 +53,21 @@ local function fib(n)
     end
 end
 
-assert(fib(20) == 6765)
-timeit(|| fib(20), "fib")
+timeit(function() return fib(20) end, 'fib', function(x) assert(x == 6765) end)
 
 local function parseint()
-    local r = rng.new('rand')
     local lmt = 2^32 - 1
     local n, m
     for i = 1, 1000 do
-        n = r:getint(lmt)
+        n = random(lmt) -- Between 0 and 2^32 - 1, i.e. uint32_t.
         local s = format('0x%x', tonumber(n))
         m = tonumber(s)
     end
-    assert(m == n)
-    return n
+    assert(n == m) -- Done here to be even with Julia benchmark.
+    return n, m
 end
 
-timeit(parseint, "parse_int")
+timeit(parseint, 'parse_int')
 
 local function mandel(z)
     local c = z
@@ -81,28 +80,18 @@ local function mandel(z)
     end
     return maxiter
 end
-function mandelperf()
-    local a, re, im, z
-    a = ffi.new("double[?]", 546)
-    r = 0
-    for r = -20, 5 do
-        re = r*0.1
-        for i=-10, 10 do
-            im = i*0.1
-            a[r*21+i+430] = mandel(re + 1i * im)
+local function mandelperf()
+    local a = mat(26, 21)
+    for r=1,26 do -- Lua's for i=l,u,c doesn't match Julia's for i=l:c:u.
+        for c=1,21 do
+            local re, im = (r - 21)*0.1, (c - 11)*0.1
+            a[{r, c}] = mandel(re + im*1i)
         end
     end
     return a
 end
 
-do
-    local a = mandelperf()
-    local sum = 0
-    for i = 0, 545 do sum = sum + a[i] end
-    assert(sum == 14791)
-end
-
-timeit(mandelperf, "mandel")
+timeit(mandelperf, 'mandel', function(a) assert(sum(a) == 14791) end)
 
 local function qsort(a, lo, hi)
     local i, j = lo, hi
@@ -124,122 +113,84 @@ end
 
 local function sortperf()
     local n = 5000
-    local r = rng.new('rand')
-    local v = iter.ilist(|| r:get(), n)
-    qsort(v, 1, n)
+    local v = ffi.new('double[?]', n+1)
+    for i=1,n do
+        v[i] = rng:sample()
+    end
+    return qsort(v, 1, n)
 end
 
-
+timeit(sortperf, 'quicksort', function(x)
+    for i=2,5000 do
+        assert(x[i-1] <= x[i])
+    end
+end
+)
 
 local function pisum()
-    local sum
+    local s
     for j = 1, 500 do
-        sum = 0
+        s = 0
         for k = 1, 10000 do
-            sum = sum + 1 / (k*k)
+            s = s + 1 / (k*k)
         end
     end
-    return sum
+    return s
 end
 
-local function stat(v)
-    local p, q = 0, 0
-    local n = #v
-    for k = 1, n do
-        local x = v[k]
-        p = p + x
-        q = q + x*x
+timeit(pisum, 'pi_sum', function(x) 
+    assert(abs(x - 1.644834071848065) < 1e-12)
+end)
+
+local function rand(r, c)
+    local x = mat(r, c)
+    for i=1,#x do 
+        x[i] = rng:sample()
     end
-    return sqrt((n*(n*q-p*p))/((n-1)*p*p))
+    return x
+end
+
+local function randn(r, c)
+    local x = mat(r, c)
+    for i=1,#x do 
+        x[i] = dist.normal(0, 1):sample(rng) 
+    end
+    return x
 end
 
 local function randmatstat(t)
     local n = 5
-    local A = iter.ilist(|| matrix.alloc(n, n), 4)
-
-    local P = matrix.alloc(n, 4*n)
-    local Q = matrix.alloc(2*n, 2*n)
-
-    local PtP1 = matrix.alloc(4*n, 4*n)
-    local PtP2 = matrix.alloc(4*n, 4*n)
-    local QtQ1 = matrix.alloc(2*n, 2*n)
-    local QtQ2 = matrix.alloc(2*n, 2*n)
-
-    local get, set = A[1].get, A[1].set
-
-    local r = rng.new('rand')
-    local randn = || rnd.gaussian(r, 1)
-
-    local function hstackf(i, j)
-        local k, r = math.divmod(j - 1, n)
-        return get(A[k + 1], i, r + 1)
+    local v, w = vec(t), vec(t)
+    for i=1,t do
+        local a, b, c, d = randn(n, n), randn(n, n), randn(n, n), randn(n, n)
+        local P = join(a..b..c..d)
+        local Q = join(a..b, c..d)
+        v[i] = trace((P[]`**P[])^^4)
+        w[i] = trace((Q[]`**Q[])^^4)
     end
-
-    local function vstackf(i, j)
-        local ik, ir = math.divmod(i - 1, n)
-        local jk, jr = math.divmod(j - 1, n)
-        return get(A[2*ik + jk + 1], ir + 1, jr + 1)
-    end
-
-    local Tr, NT = gsl.CblasTrans, gsl.CblasNoTrans
-
-    local v, w = {}, {}
-
-    for i = 1, t do
-        matrix.fset(A[1], randn)
-        matrix.fset(A[2], randn)
-        matrix.fset(A[3], randn)
-        matrix.fset(A[4], randn)
-
-        matrix.fset(P, hstackf)
-        matrix.fset(Q, vstackf)
-
-        gsl.gsl_blas_dgemm(Tr, NT, 1.0, P, P, 0.0, PtP1)
-        gsl.gsl_blas_dgemm(NT, NT, 1.0, PtP1, PtP1, 0.0, PtP2)
-        gsl.gsl_blas_dgemm(NT, NT, 1.0, PtP2, PtP2, 0.0, PtP1)
-
-        local vi = 0
-        for j = 1, n do vi = vi + get(PtP1, j, j) end
-        v[i] = vi
-
-        gsl.gsl_blas_dgemm(Tr, NT, 1.0, Q, Q, 0.0, QtQ1)
-        gsl.gsl_blas_dgemm(NT, NT, 1.0, QtQ1, QtQ1, 0.0, QtQ2)
-        gsl.gsl_blas_dgemm(NT, NT, 1.0, QtQ2, QtQ2, 0.0, QtQ1)
-
-        local wi = 0
-        for j = 1, 2*n do wi = wi + get(QtQ1, j, j) end
-        w[i] = wi
-    end
-
-    return stat(v), stat(w)
+    return sqrt(var(v))/mean(v), sqrt(var(w))/mean(w)
 end
 
-do
-    local s1, s2 = randmatstat(1000)
-    assert( 0.5 < s1 and s1 < 1.0
-        and 0.5 < s2 and s2 < 1.0 )
-end
+timeit(function() return randmatstat(1000) end, 'rand_mat_stat', 
+    function(s1, s2)
+        assert( 0.5 < s1 and s1 < 1.0 and 0.5 < s2 and s2 < 1.0 )
+    end)
 
 local function randmatmult(n)
-    local r = rng.new('rand')
-    --local rand = || r:get()
-    local rand = random
-    local a = matrix.new(n, n, rand)
-    local b = matrix.new(n, n, rand)
-    return a*b
+    local a, b = rand(n, n), rand(n, n)
+    return a[]**b[]
 end
 
-local function printfd(n)
-    local f = io.open("/dev/null","w")
-    for i = 1, n do
-        f:write(format("%d %d\n", i, i+1))
+timeit(function() return randmatmult(1000) end, 'rand_mat_mul')
+
+if jit.os ~= 'Windows' then
+    local function printfd(n)
+        local f = io.open('/dev/null','w')
+        for i = 1, n do
+            f:write(format('%d %d\n', i, i+1))
+        end
+        f:close()
     end
-    f:close()
+
+    timeit(function() return printfd(100000) end, 'printfd')
 end
-
-
-timeit(sortperf, "quicksort")
-timeit(pisum, "pi_sum")
-timeit(|| randmatstat(1000), "rand_mat_stat")
-timeit(|| randmatmult(1000), "rand_mat_mul")
--- timeit(|| printfd(100000), "printfd")

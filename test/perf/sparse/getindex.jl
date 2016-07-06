@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 ## getindex
 const rep = 20
 const reps = rep^2
@@ -40,7 +42,7 @@ function sparse_getindex_perf()
     ## using uint32 (works up to 10^9)
     uus = []
     for u in us
-        push!(uus, SparseMatrixCSC(u.m, u.n, UInt32(u.colptr), UInt32(u.rowval), u.nzval))
+        push!(uus, SparseMatrixCSC(u.m, u.n, map(UInt32,u.colptr), map(UInt32,u.rowval), u.nzval))
     end
 
     # test performance with matrices in us, uus and ts for
@@ -55,7 +57,7 @@ function sparse_getindex_perf()
     intinds = nothing
     logicalinds = nothing # needs to be generated for a specific matrix size.
     rangeinds = 121:237
-    orderedinds = [rangeinds]
+    orderedinds = collect(rangeinds)
     disorderedinds = orderedinds[randperm(length(orderedinds))]
 
     inds = [(intinds, "integers"), (logicalinds, "logical array"), (rangeinds, "a range"),
@@ -93,7 +95,7 @@ function sparse_getindex_perf()
                     c = counters[sz]
                     if indstr=="logical array"
                         # make a logical array of the right size
-                        ind = sprandbool(size(m,1)..., 1e-5)
+                        ind = sprand(Bool, size(m,1)..., 1e-5)
                     end
                     if nargs==2
                         @timeit fun(m, ind)  "sparse_getindex_$s1$c" "Sparse matrix with $ms, $funstr with $indstr"
@@ -118,7 +120,7 @@ function sparse_getindex_perf()
                         continue # logical indexing with medium size sparse matrix takes too long
                     end
                     # make a logical array of the right size
-                    ind = sprandbool(size(m)..., 1e-5)
+                    ind = sprand(Bool, size(m)..., 1e-5)
                     c = counters[sz]
                     @timeit one_arg_indexing(m, ind) "sparse_getindex_$s1$c" "$s2 with $ms, linear indexing with $indstr"
                     counters[sz] += 1

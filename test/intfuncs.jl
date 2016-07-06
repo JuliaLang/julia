@@ -1,24 +1,35 @@
-@test gcd(3, 5) == 1
-@test gcd(3, 15) == 3
-@test gcd(0, 15) == 15
-@test gcd(3, -15) == 3
-@test gcd(-3, -15) == 3
-@test gcd(0, 0) == 0
+# This file is a part of Julia. License is MIT: http://julialang.org/license
 
-@test gcd(2, 4, 6) == 2
+# Int32 and Int64 take different code paths -- test both
+for T in (Int32, Int64)
+    @test gcd(T(3), T(5)) === T(1)
+    @test gcd(T(3), T(15)) === T(3)
+    @test gcd(T(0), T(15)) === T(15)
+    @test gcd(T(3), T(-15)) === T(3)
+    @test gcd(T(-3), T(-15)) === T(3)
+    @test gcd(T(0), T(0)) === T(0)
 
-@test typeof(gcd(Int32(3), Int32(15))) == Int32
+    @test gcd(T(2), T(4), T(6)) === T(2)
 
-@test lcm(2, 3) == 6
-@test lcm(4, 6) == 12
-@test lcm(3, 0) == 0
-@test lcm(0, 0) == 0
-@test lcm(4, -6) == 12
-@test lcm(-4, -6) == 12
+    @test gcd(typemax(T), T(1)) === T(1)
+    @test gcd(-typemax(T), T(1)) === T(1)
+    @test gcd(typemin(T), T(1)) === T(1)
+    @test_throws OverflowError gcd(typemin(T), typemin(T))
 
-@test lcm(2, 4, 6) == 12
+    @test lcm(T(2), T(3)) === T(6)
+    @test lcm(T(4), T(6)) === T(12)
+    @test lcm(T(3), T(0)) === T(0)
+    @test lcm(T(0), T(0)) === T(0)
+    @test lcm(T(4), T(-6)) === T(12)
+    @test lcm(T(-4), T(-6)) === T(12)
 
-@test typeof(lcm(Int32(2), Int32(3))) == Int32
+    @test lcm(T(2), T(4), T(6)) === T(12)
+
+    @test lcm(typemax(T), T(1)) === typemax(T)
+    @test lcm(-typemax(T), T(1)) === typemax(T)
+    @test_throws OverflowError lcm(typemin(T), T(1))
+    @test_throws OverflowError lcm(typemin(T), typemin(T))
+end
 
 @test gcdx(5, 12) == (1, 5, -2)
 @test gcdx(5, -12) == (1, 5, 2)
@@ -31,7 +42,14 @@
 
 @test powermod(2, 3, 5) == 3
 @test powermod(2, 3, -5) == -2
-@test_throws DomainError powermod(2, -3, 5)
+
+@test powermod(2, 0, 5) == 1
+@test powermod(2, 0, -5) == -4
+
+@test powermod(2, -1, 5) == 3
+@test powermod(2, -2, 5) == 4
+@test powermod(2, -1, -5) == -2
+@test powermod(2, -2, -5) == -1
 
 @test nextpow2(3) == 4
 @test nextpow(2, 3) == 4
@@ -61,6 +79,10 @@
 
 @test ndigits(146, -3) == 5
 
+let n = rand(Int)
+    @test ndigits(n) == ndigits(big(n)) == ndigits(n, 10)
+end
+
 @test bin(3) == "11"
 @test bin(3, 2) == "11"
 @test bin(3, 3) == "011"
@@ -89,6 +111,8 @@
 @test leading_zeros(Int32(1)) == 31
 @test leading_zeros(UInt32(Int64(2) ^ 32 - 2)) == 0
 
+@test count_zeros(Int64(1)) == 63
+
 @test isqrt(4) == 2
 @test isqrt(5) == 2
 # issue #4884
@@ -115,3 +139,6 @@ let ptr = Ptr{Void}(typemax(UInt))
         @test typeof(Ptr{Float64}(T(ptr))) == Ptr{Float64}
     end
 end
+
+# issue #15911
+@inferred string(1)

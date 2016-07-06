@@ -1,18 +1,20 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 using Base.Grisu
 
 function trimrep(buffer)
-  len = length(bytestring(pointer(buffer)))
+  len = length(unsafe_string(pointer(buffer)))
   ind = len
   for i = len:-1:1
     buffer[i] != 0x30 && break
     ind -= 1
   end
   buffer[ind+1] = 0
-  return bytestring(pointer(buffer))
+  return unsafe_string(pointer(buffer))
 end
 
 const bufsize = 500
-buffer = Array(UInt8,bufsize);
+buffer = Array{UInt8}(bufsize);
 fill!(buffer,0);
 bignums = [Grisu.Bignums.Bignum(),Grisu.Bignums.Bignum(),Grisu.Bignums.Bignum(),Grisu.Bignums.Bignum()]
 
@@ -448,547 +450,547 @@ fill!(buffer,0);
 
 #fastfixedtoa
 status,len,point = Grisu.fastfixedtoa(1.0, 0,1, buffer)
-@test "1" == bytestring(pointer(buffer))
+@test "1" == unsafe_string(pointer(buffer))
 @test 1 == point
 fill!(buffer,0);
 
 status,len,point = Grisu.fastfixedtoa(1.0, 0,15, buffer)
-@test "1" == bytestring(pointer(buffer))
+@test "1" == unsafe_string(pointer(buffer))
 @test 1 == point
 fill!(buffer,0);
 
 status,len,point = Grisu.fastfixedtoa(1.0, 0,0, buffer)
-@test "1" == bytestring(pointer(buffer))
+@test "1" == unsafe_string(pointer(buffer))
 @test 1 == point
 fill!(buffer,0);
 
 status,len,point = Grisu.fastfixedtoa(0xFFFFFFFF, 0,5, buffer)
-@test "4294967295" == bytestring(pointer(buffer))
+@test "4294967295" == unsafe_string(pointer(buffer))
 @test 10 == point
 fill!(buffer,0);
 
 status,len,point = Grisu.fastfixedtoa(4294967296.0, 0,5, buffer)
-@test "4294967296" == bytestring(pointer(buffer)) #todo
+@test "4294967296" == unsafe_string(pointer(buffer)) #todo
 @test 10 == point
 fill!(buffer,0);
 
 status,len,point = Grisu.fastfixedtoa(1e21, 0,5, buffer)
-@test "1" == bytestring(pointer(buffer)) #todo extra '0's
+@test "1" == unsafe_string(pointer(buffer)) #todo extra '0's
 @test 22 == point
 fill!(buffer,0);
 
 status,len,point = Grisu.fastfixedtoa(999999999999999868928.00, 0,2, buffer)
-@test "999999999999999868928" == bytestring(pointer(buffer)) #todo extra '0'
+@test "999999999999999868928" == unsafe_string(pointer(buffer)) #todo extra '0'
 @test 21 == point
 fill!(buffer,0);
 
 status,len,point = Grisu.fastfixedtoa(6.9999999999999989514240000e+21, 0,5, buffer)
-@test "6999999999999998951424" == bytestring(pointer(buffer)) #todo short several '9's
+@test "6999999999999998951424" == unsafe_string(pointer(buffer)) #todo short several '9's
 @test 22 == point
 fill!(buffer,0);
 
 status,len,point = Grisu.fastfixedtoa(1.5, 0,5, buffer)
-@test "15" == bytestring(pointer(buffer))
+@test "15" == unsafe_string(pointer(buffer))
 @test 1 == point
 fill!(buffer,0);
 
 status,len,point = Grisu.fastfixedtoa(1.55, 0,5, buffer)
-@test "155" == bytestring(pointer(buffer))
+@test "155" == unsafe_string(pointer(buffer))
 @test 1 == point
 fill!(buffer,0);
 
 status,len,point = Grisu.fastfixedtoa(1.55, 0,1, buffer)
-@test "16" == bytestring(pointer(buffer))
+@test "16" == unsafe_string(pointer(buffer))
 @test 1 == point
 fill!(buffer,0);
 
 status,len,point = Grisu.fastfixedtoa(1.00000001, 0,15, buffer)
-@test "100000001" == bytestring(pointer(buffer))
+@test "100000001" == unsafe_string(pointer(buffer))
 @test 1 == point
 fill!(buffer,0);
 
 status,len,point = Grisu.fastfixedtoa(0.1, 0,10, buffer)
-@test "1" == bytestring(pointer(buffer))
+@test "1" == unsafe_string(pointer(buffer))
 @test 0 == point
 fill!(buffer,0);
 
 status,len,point = Grisu.fastfixedtoa(0.01, 0,10, buffer)
-@test "1" == bytestring(pointer(buffer))
+@test "1" == unsafe_string(pointer(buffer))
 @test -1 == point
 fill!(buffer,0);
 
 status,len,point = Grisu.fastfixedtoa(0.001, 0,10, buffer)
-@test "1" == bytestring(pointer(buffer))
+@test "1" == unsafe_string(pointer(buffer))
 @test -2 == point
 fill!(buffer,0);
 
 status,len,point = Grisu.fastfixedtoa(0.0001, 0,10, buffer) #todo
-@test "1" == bytestring(pointer(buffer))
+@test "1" == unsafe_string(pointer(buffer))
 @test -3 == point
 fill!(buffer,0);
 
 status,len,point = Grisu.fastfixedtoa(0.00001, 0,10, buffer) #todo
-@test "1" == bytestring(pointer(buffer))
+@test "1" == unsafe_string(pointer(buffer))
 @test -4 == point
 fill!(buffer,0);
 
 status,len,point = Grisu.fastfixedtoa(0.000001, 0,10, buffer)
-@test "1" == bytestring(pointer(buffer))
+@test "1" == unsafe_string(pointer(buffer))
 @test -5 == point
 fill!(buffer,0);
 
 status,len,point = Grisu.fastfixedtoa(0.0000001, 0,10, buffer)
-@test "1" == bytestring(pointer(buffer))
+@test "1" == unsafe_string(pointer(buffer))
 @test -6 == point
 fill!(buffer,0);
 
 status,len,point = Grisu.fastfixedtoa(0.00000001, 0,10, buffer)
-@test "1" == bytestring(pointer(buffer))
+@test "1" == unsafe_string(pointer(buffer))
 @test -7 == point
 fill!(buffer,0);
 
 status,len,point = Grisu.fastfixedtoa(0.000000001, 0,10, buffer)
-@test "1" == bytestring(pointer(buffer))
+@test "1" == unsafe_string(pointer(buffer))
 @test -8 == point
 fill!(buffer,0);
 
 status,len,point = Grisu.fastfixedtoa(0.0000000001, 0,15, buffer)
-@test "1" == bytestring(pointer(buffer))
+@test "1" == unsafe_string(pointer(buffer))
 @test -9 == point
 fill!(buffer,0);
 
 status,len,point = Grisu.fastfixedtoa(0.00000000001, 0,15, buffer)
-@test "1" == bytestring(pointer(buffer))
+@test "1" == unsafe_string(pointer(buffer))
 @test -10 == point
 fill!(buffer,0);
 
 status,len,point = Grisu.fastfixedtoa(0.000000000001, 0,15, buffer)
-@test "1" == bytestring(pointer(buffer))
+@test "1" == unsafe_string(pointer(buffer))
 @test -11 == point
 fill!(buffer,0);
 
 status,len,point = Grisu.fastfixedtoa(0.0000000000001, 0,15, buffer)
-@test "1" == bytestring(pointer(buffer))
+@test "1" == unsafe_string(pointer(buffer))
 @test -12 == point
 fill!(buffer,0);
 
 status,len,point = Grisu.fastfixedtoa(0.00000000000001, 0,15, buffer)
-@test "1" == bytestring(pointer(buffer))
+@test "1" == unsafe_string(pointer(buffer))
 @test -13 == point
 fill!(buffer,0);
 
 status,len,point = Grisu.fastfixedtoa(0.000000000000001, 0,20, buffer)
-@test "1" == bytestring(pointer(buffer))
+@test "1" == unsafe_string(pointer(buffer))
 @test -14 == point
 fill!(buffer,0);
 
 status,len,point = Grisu.fastfixedtoa(0.0000000000000001, 0,20, buffer)
-@test "1" == bytestring(pointer(buffer))
+@test "1" == unsafe_string(pointer(buffer))
 @test -15 == point
 fill!(buffer,0);
 
 status,len,point = Grisu.fastfixedtoa(0.00000000000000001, 0,20, buffer)
-@test "1" == bytestring(pointer(buffer))
+@test "1" == unsafe_string(pointer(buffer))
 @test -16 == point
 fill!(buffer,0);
 
 status,len,point = Grisu.fastfixedtoa(0.000000000000000001, 0,20, buffer)
-@test "1" == bytestring(pointer(buffer))
+@test "1" == unsafe_string(pointer(buffer))
 @test -17 == point
 fill!(buffer,0);
 
 status,len,point = Grisu.fastfixedtoa(0.0000000000000000001, 0,20, buffer)
-@test "1" == bytestring(pointer(buffer))
+@test "1" == unsafe_string(pointer(buffer))
 @test -18 == point
 fill!(buffer,0);
 
 status,len,point = Grisu.fastfixedtoa(0.00000000000000000001, 0,20, buffer)
-@test "1" == bytestring(pointer(buffer))
+@test "1" == unsafe_string(pointer(buffer))
 @test -19 == point
 fill!(buffer,0);
 
 status,len,point = Grisu.fastfixedtoa(0.10000000004, 0,10, buffer)
-@test "1" == bytestring(pointer(buffer))
+@test "1" == unsafe_string(pointer(buffer))
 @test 0 == point
 fill!(buffer,0);
 
 status,len,point = Grisu.fastfixedtoa(0.01000000004, 0,10, buffer)
-@test "1" == bytestring(pointer(buffer))
+@test "1" == unsafe_string(pointer(buffer))
 @test -1 == point
 fill!(buffer,0);
 
 status,len,point = Grisu.fastfixedtoa(0.00100000004, 0,10, buffer)
-@test "1" == bytestring(pointer(buffer))
+@test "1" == unsafe_string(pointer(buffer))
 @test -2 == point
 fill!(buffer,0);
 
 status,len,point = Grisu.fastfixedtoa(0.00010000004, 0,10, buffer) #todo
-@test "1" == bytestring(pointer(buffer))
+@test "1" == unsafe_string(pointer(buffer))
 @test -3 == point
 fill!(buffer,0);
 
 status,len,point = Grisu.fastfixedtoa(0.00001000004, 0,10, buffer)
-@test "1" == bytestring(pointer(buffer))
+@test "1" == unsafe_string(pointer(buffer))
 @test -4 == point
 fill!(buffer,0);
 
 status,len,point = Grisu.fastfixedtoa(0.00000100004, 0,10, buffer)
-@test "1" == bytestring(pointer(buffer))
+@test "1" == unsafe_string(pointer(buffer))
 @test -5 == point
 fill!(buffer,0);
 
 status,len,point = Grisu.fastfixedtoa(0.00000010004, 0,10, buffer)
-@test "1" == bytestring(pointer(buffer))
+@test "1" == unsafe_string(pointer(buffer))
 @test -6 == point
 fill!(buffer,0);
 
 status,len,point = Grisu.fastfixedtoa(0.00000001004, 0,10, buffer)
-@test "1" == bytestring(pointer(buffer))
+@test "1" == unsafe_string(pointer(buffer))
 @test -7 == point
 fill!(buffer,0);
 
 status,len,point = Grisu.fastfixedtoa(0.00000000104, 0,10, buffer)
-@test "1" == bytestring(pointer(buffer))
+@test "1" == unsafe_string(pointer(buffer))
 @test -8 == point
 fill!(buffer,0);
 
 status,len,point = Grisu.fastfixedtoa(0.0000000001000004, 0,15, buffer)
-@test "1" == bytestring(pointer(buffer))
+@test "1" == unsafe_string(pointer(buffer))
 @test -9 == point
 fill!(buffer,0);
 
 status,len,point = Grisu.fastfixedtoa(0.0000000000100004, 0,15, buffer)
-@test "1" == bytestring(pointer(buffer))
+@test "1" == unsafe_string(pointer(buffer))
 @test -10 == point
 fill!(buffer,0);
 
 status,len,point = Grisu.fastfixedtoa(0.0000000000010004, 0,15, buffer)
-@test "1" == bytestring(pointer(buffer))
+@test "1" == unsafe_string(pointer(buffer))
 @test -11 == point
 fill!(buffer,0);
 
 status,len,point = Grisu.fastfixedtoa(0.0000000000001004, 0,15, buffer)
-@test "1" == bytestring(pointer(buffer))
+@test "1" == unsafe_string(pointer(buffer))
 @test -12 == point
 fill!(buffer,0);
 
 status,len,point = Grisu.fastfixedtoa(0.0000000000000104, 0,15, buffer)
-@test "1" == bytestring(pointer(buffer))
+@test "1" == unsafe_string(pointer(buffer))
 @test -13 == point
 fill!(buffer,0);
 
 status,len,point = Grisu.fastfixedtoa(0.000000000000001000004, 0,20, buffer)
-@test "1" == bytestring(pointer(buffer))
+@test "1" == unsafe_string(pointer(buffer))
 @test -14 == point
 fill!(buffer,0);
 
 status,len,point = Grisu.fastfixedtoa(0.000000000000000100004, 0,20, buffer)
-@test "1" == bytestring(pointer(buffer))
+@test "1" == unsafe_string(pointer(buffer))
 @test -15 == point
 fill!(buffer,0);
 
 status,len,point = Grisu.fastfixedtoa(0.000000000000000010004, 0,20, buffer)
-@test "1" == bytestring(pointer(buffer))
+@test "1" == unsafe_string(pointer(buffer))
 @test -16 == point
 fill!(buffer,0);
 
 status,len,point = Grisu.fastfixedtoa(0.000000000000000001004, 0,20, buffer)
-@test "1" == bytestring(pointer(buffer))
+@test "1" == unsafe_string(pointer(buffer))
 @test -17 == point
 fill!(buffer,0);
 
 status,len,point = Grisu.fastfixedtoa(0.000000000000000000104, 0,20, buffer)
-@test "1" == bytestring(pointer(buffer))
+@test "1" == unsafe_string(pointer(buffer))
 @test -18 == point
 fill!(buffer,0);
 
 status,len,point = Grisu.fastfixedtoa(0.000000000000000000014, 0,20, buffer)
-@test "1" == bytestring(pointer(buffer))
+@test "1" == unsafe_string(pointer(buffer))
 @test -19 == point
 fill!(buffer,0);
 
 status,len,point = Grisu.fastfixedtoa(0.10000000006, 0,10, buffer)
-@test "1000000001" == bytestring(pointer(buffer))
+@test "1000000001" == unsafe_string(pointer(buffer))
 @test 0 == point
 fill!(buffer,0);
 
 status,len,point = Grisu.fastfixedtoa(0.01000000006, 0,10, buffer)
-@test "100000001" == bytestring(pointer(buffer))
+@test "100000001" == unsafe_string(pointer(buffer))
 @test -1 == point
 fill!(buffer,0);
 
 status,len,point = Grisu.fastfixedtoa(0.00100000006, 0,10, buffer)
-@test "10000001" == bytestring(pointer(buffer))
+@test "10000001" == unsafe_string(pointer(buffer))
 @test -2 == point
 fill!(buffer,0);
 
 status,len,point = Grisu.fastfixedtoa(0.00010000006, 0,10, buffer)
-@test "1000001" == bytestring(pointer(buffer))
+@test "1000001" == unsafe_string(pointer(buffer))
 @test -3 == point
 fill!(buffer,0);
 
 status,len,point = Grisu.fastfixedtoa(0.00001000006, 0,10, buffer)
-@test "100001" == bytestring(pointer(buffer))
+@test "100001" == unsafe_string(pointer(buffer))
 @test -4 == point
 fill!(buffer,0);
 
 status,len,point = Grisu.fastfixedtoa(0.00000100006, 0,10, buffer)
-@test "10001" == bytestring(pointer(buffer))
+@test "10001" == unsafe_string(pointer(buffer))
 @test -5 == point
 fill!(buffer,0);
 
 status,len,point = Grisu.fastfixedtoa(0.00000010006, 0,10, buffer)
-@test "1001" == bytestring(pointer(buffer))
+@test "1001" == unsafe_string(pointer(buffer))
 @test -6 == point
 fill!(buffer,0);
 
 status,len,point = Grisu.fastfixedtoa(0.00000001006, 0,10, buffer)
-@test "101" == bytestring(pointer(buffer))
+@test "101" == unsafe_string(pointer(buffer))
 @test -7 == point
 fill!(buffer,0);
 
 status,len,point = Grisu.fastfixedtoa(0.00000000106, 0,10, buffer)
-@test "11" == bytestring(pointer(buffer))
+@test "11" == unsafe_string(pointer(buffer))
 @test -8 == point
 fill!(buffer,0);
 
 status,len,point = Grisu.fastfixedtoa(0.0000000001000006, 0,15, buffer)
-@test "100001" == bytestring(pointer(buffer))
+@test "100001" == unsafe_string(pointer(buffer))
 @test -9 == point
 fill!(buffer,0);
 
 status,len,point = Grisu.fastfixedtoa(0.0000000000100006, 0,15, buffer)
-@test "10001" == bytestring(pointer(buffer))
+@test "10001" == unsafe_string(pointer(buffer))
 @test -10 == point
 fill!(buffer,0);
 
 status,len,point = Grisu.fastfixedtoa(0.0000000000010006, 0,15, buffer)
-@test "1001" == bytestring(pointer(buffer))
+@test "1001" == unsafe_string(pointer(buffer))
 @test -11 == point
 fill!(buffer,0);
 
 status,len,point = Grisu.fastfixedtoa(0.0000000000001006, 0,15, buffer)
-@test "101" == bytestring(pointer(buffer))
+@test "101" == unsafe_string(pointer(buffer))
 @test -12 == point
 fill!(buffer,0);
 
 status,len,point = Grisu.fastfixedtoa(0.0000000000000106, 0,15, buffer)
-@test "11" == bytestring(pointer(buffer))
+@test "11" == unsafe_string(pointer(buffer))
 @test -13 == point
 fill!(buffer,0);
 
 status,len,point = Grisu.fastfixedtoa(0.000000000000001000006, 0,20, buffer)
-@test "100001" == bytestring(pointer(buffer))
+@test "100001" == unsafe_string(pointer(buffer))
 @test -14 == point
 fill!(buffer,0);
 
 status,len,point = Grisu.fastfixedtoa(0.000000000000000100006, 0,20, buffer)
-@test "10001" == bytestring(pointer(buffer))
+@test "10001" == unsafe_string(pointer(buffer))
 @test -15 == point
 fill!(buffer,0);
 
 status,len,point = Grisu.fastfixedtoa(0.000000000000000010006, 0,20, buffer)
-@test "1001" == bytestring(pointer(buffer))
+@test "1001" == unsafe_string(pointer(buffer))
 @test -16 == point
 fill!(buffer,0);
 
 status,len,point = Grisu.fastfixedtoa(0.000000000000000001006, 0,20, buffer)
-@test "101" == bytestring(pointer(buffer))
+@test "101" == unsafe_string(pointer(buffer))
 @test -17 == point
 fill!(buffer,0);
 
 status,len,point = Grisu.fastfixedtoa(0.000000000000000000106, 0,20, buffer)
-@test "11" == bytestring(pointer(buffer))
+@test "11" == unsafe_string(pointer(buffer))
 @test -18 == point
 fill!(buffer,0);
 
 status,len,point = Grisu.fastfixedtoa(0.000000000000000000016, 0,20, buffer)
-@test "2" == bytestring(pointer(buffer))
+@test "2" == unsafe_string(pointer(buffer))
 @test -19 == point
 fill!(buffer,0);
 
 status,len,point = Grisu.fastfixedtoa(0.6, 0,0, buffer)
-@test "1" == bytestring(pointer(buffer))
+@test "1" == unsafe_string(pointer(buffer))
 @test 1 == point
 fill!(buffer,0);
 
 status,len,point = Grisu.fastfixedtoa(0.96, 0,1, buffer)
-@test "1" == bytestring(pointer(buffer))
+@test "1" == unsafe_string(pointer(buffer))
 @test 1 == point
 fill!(buffer,0);
 
 status,len,point = Grisu.fastfixedtoa(0.996, 0,2, buffer)
-@test "1" == bytestring(pointer(buffer))
+@test "1" == unsafe_string(pointer(buffer))
 @test 1 == point
 fill!(buffer,0);
 
 status,len,point = Grisu.fastfixedtoa(0.9996, 0,3, buffer)
-@test "1" == bytestring(pointer(buffer))
+@test "1" == unsafe_string(pointer(buffer))
 @test 1 == point
 fill!(buffer,0);
 
 status,len,point = Grisu.fastfixedtoa(0.99996, 0,4, buffer)
-@test "1" == bytestring(pointer(buffer))
+@test "1" == unsafe_string(pointer(buffer))
 @test 1 == point
 fill!(buffer,0);
 
 status,len,point = Grisu.fastfixedtoa(0.999996, 0,5, buffer)
-@test "1" == bytestring(pointer(buffer))
+@test "1" == unsafe_string(pointer(buffer))
 @test 1 == point
 fill!(buffer,0);
 
 status,len,point = Grisu.fastfixedtoa(0.9999996, 0,6, buffer)
-@test "1" == bytestring(pointer(buffer))
+@test "1" == unsafe_string(pointer(buffer))
 @test 1 == point
 fill!(buffer,0);
 
 status,len,point = Grisu.fastfixedtoa(0.99999996, 0,7, buffer)
-@test "1" == bytestring(pointer(buffer))
+@test "1" == unsafe_string(pointer(buffer))
 @test 1 == point
 fill!(buffer,0);
 
 status,len,point = Grisu.fastfixedtoa(0.999999996, 0,8, buffer)
-@test "1" == bytestring(pointer(buffer))
+@test "1" == unsafe_string(pointer(buffer))
 @test 1 == point
 fill!(buffer,0);
 
 status,len,point = Grisu.fastfixedtoa(0.9999999996, 0,9, buffer)
-@test "1" == bytestring(pointer(buffer))
+@test "1" == unsafe_string(pointer(buffer))
 @test 1 == point
 fill!(buffer,0);
 
 status,len,point = Grisu.fastfixedtoa(0.99999999996, 0,10, buffer)
-@test "1" == bytestring(pointer(buffer))
+@test "1" == unsafe_string(pointer(buffer))
 @test 1 == point
 fill!(buffer,0);
 
 status,len,point = Grisu.fastfixedtoa(0.999999999996, 0,11, buffer)
-@test "1" == bytestring(pointer(buffer))
+@test "1" == unsafe_string(pointer(buffer))
 @test 1 == point
 fill!(buffer,0);
 
 status,len,point = Grisu.fastfixedtoa(0.9999999999996, 0,12, buffer)
-@test "1" == bytestring(pointer(buffer))
+@test "1" == unsafe_string(pointer(buffer))
 @test 1 == point
 fill!(buffer,0);
 
 status,len,point = Grisu.fastfixedtoa(0.99999999999996, 0,13, buffer)
-@test "1" == bytestring(pointer(buffer))
+@test "1" == unsafe_string(pointer(buffer))
 @test 1 == point
 fill!(buffer,0);
 
 status,len,point = Grisu.fastfixedtoa(0.999999999999996, 0,14, buffer)
-@test "1" == bytestring(pointer(buffer))
+@test "1" == unsafe_string(pointer(buffer))
 @test 1 == point
 fill!(buffer,0);
 
 status,len,point = Grisu.fastfixedtoa(0.9999999999999996, 0,15, buffer)
-@test "1" == bytestring(pointer(buffer))
+@test "1" == unsafe_string(pointer(buffer))
 @test 1 == point
 fill!(buffer,0);
 
 status,len,point = Grisu.fastfixedtoa(0.00999999999999996, 0,16, buffer)
-@test "1" == bytestring(pointer(buffer))
+@test "1" == unsafe_string(pointer(buffer))
 @test -1 == point
 fill!(buffer,0);
 
 status,len,point = Grisu.fastfixedtoa(0.000999999999999996, 0,17, buffer)
-@test "1" == bytestring(pointer(buffer))
+@test "1" == unsafe_string(pointer(buffer))
 @test -2 == point
 fill!(buffer,0);
 
 status,len,point = Grisu.fastfixedtoa(0.0000999999999999996, 0,18, buffer)
-@test "1" == bytestring(pointer(buffer))
+@test "1" == unsafe_string(pointer(buffer))
 @test -3 == point
 fill!(buffer,0);
 
 status,len,point = Grisu.fastfixedtoa(0.00000999999999999996, 0,19, buffer)
-@test "1" == bytestring(pointer(buffer))
+@test "1" == unsafe_string(pointer(buffer))
 @test -4 == point
 fill!(buffer,0);
 
 status,len,point = Grisu.fastfixedtoa(0.000000999999999999996, 0,20, buffer)
-@test "1" == bytestring(pointer(buffer))
+@test "1" == unsafe_string(pointer(buffer))
 @test -5 == point
 fill!(buffer,0);
 
 status,len,point = Grisu.fastfixedtoa(323423.234234, 0,10, buffer)
-@test "323423234234" == bytestring(pointer(buffer))
+@test "323423234234" == unsafe_string(pointer(buffer))
 @test 6 == point
 fill!(buffer,0);
 
 status,len,point = Grisu.fastfixedtoa(12345678.901234, 0,4, buffer)
-@test "123456789012" == bytestring(pointer(buffer))
+@test "123456789012" == unsafe_string(pointer(buffer))
 @test 8 == point
 fill!(buffer,0);
 
 status,len,point = Grisu.fastfixedtoa(98765.432109, 0,5, buffer)
-@test "9876543211" == bytestring(pointer(buffer))
+@test "9876543211" == unsafe_string(pointer(buffer))
 @test 5 == point
 fill!(buffer,0);
 
 status,len,point = Grisu.fastfixedtoa(42, 0,20, buffer)
-@test "42" == bytestring(pointer(buffer))
+@test "42" == unsafe_string(pointer(buffer))
 @test 2 == point
 fill!(buffer,0);
 
 status,len,point = Grisu.fastfixedtoa(0.5, 0,0, buffer)
-@test "1" == bytestring(pointer(buffer))
+@test "1" == unsafe_string(pointer(buffer))
 @test 1 == point
 fill!(buffer,0);
 
 status,len,point = Grisu.fastfixedtoa(1e-23, 0,10, buffer)
-@test "" == bytestring(pointer(buffer))
+@test "" == unsafe_string(pointer(buffer))
 @test -10 == point
 fill!(buffer,0);
 
 status,len,point = Grisu.fastfixedtoa(1e-123, 0,2, buffer)
-@test "" == bytestring(pointer(buffer))
+@test "" == unsafe_string(pointer(buffer))
 @test -2 == point
 fill!(buffer,0);
 
 status,len,point = Grisu.fastfixedtoa(1e-123, 0,0, buffer)
-@test "" == bytestring(pointer(buffer))
+@test "" == unsafe_string(pointer(buffer))
 @test 0 == point
 fill!(buffer,0);
 
 status,len,point = Grisu.fastfixedtoa(1e-23, 0,20, buffer)
-@test "" == bytestring(pointer(buffer))
+@test "" == unsafe_string(pointer(buffer))
 @test -20 == point
 fill!(buffer,0);
 
 status,len,point = Grisu.fastfixedtoa(1e-21, 0,20, buffer)
-@test "" == bytestring(pointer(buffer))
+@test "" == unsafe_string(pointer(buffer))
 @test -20 == point
 fill!(buffer,0);
 
 status,len,point = Grisu.fastfixedtoa(1e-22, 0,20, buffer)
-@test "" == bytestring(pointer(buffer))
+@test "" == unsafe_string(pointer(buffer))
 @test -20 == point
 fill!(buffer,0);
 
 status,len,point = Grisu.fastfixedtoa(6e-21, 0,20, buffer)
-@test "1" == bytestring(pointer(buffer))
+@test "1" == unsafe_string(pointer(buffer))
 @test -19 == point
 fill!(buffer,0);
 
 status,len,point = Grisu.fastfixedtoa(9.1193616301674545152000000e+19, 0,0,buffer)
-@test "91193616301674545152" == bytestring(pointer(buffer))
+@test "91193616301674545152" == unsafe_string(pointer(buffer))
 @test 20 == point
 fill!(buffer,0);
 
 status,len,point = Grisu.fastfixedtoa(4.8184662102767651659096515e-04, 0,19,buffer)
-@test "4818466210276765" == bytestring(pointer(buffer))
+@test "4818466210276765" == unsafe_string(pointer(buffer))
 @test -3 == point
 fill!(buffer,0);
 
 status,len,point = Grisu.fastfixedtoa(1.9023164229540652612705182e-23, 0,8,buffer)
-@test "" == bytestring(pointer(buffer))
+@test "" == unsafe_string(pointer(buffer))
 @test -8 == point
 fill!(buffer,0);
 
 status,len,point = Grisu.fastfixedtoa(1000000000000000128.0, 0,0,buffer)
-@test "1000000000000000128" == bytestring(pointer(buffer))
+@test "1000000000000000128" == unsafe_string(pointer(buffer))
 @test 19 == point
 fill!(buffer,0);
 
@@ -1066,13 +1068,13 @@ fill!(buffer,0);
 map(x->Grisu.Bignums.zero!(x),bignums)
 
 status,len,point = Grisu.bignumdtoa(4294967272.0, Grisu.SHORTEST, 0, buffer,bignums)
-@test "4294967272" == bytestring(pointer(buffer))
+@test "4294967272" == unsafe_string(pointer(buffer))
 @test 10 == point
 fill!(buffer,0);
 map(x->Grisu.Bignums.zero!(x),bignums)
 
 status,len,point = Grisu.bignumdtoa(4294967272.0, Grisu.FIXED, 5, buffer,bignums)
-@test "429496727200000" == bytestring(pointer(buffer))
+@test "429496727200000" == unsafe_string(pointer(buffer))
 @test 10 == point
 fill!(buffer,0);
 map(x->Grisu.Bignums.zero!(x),bignums)
@@ -1306,310 +1308,310 @@ if status
 end
 
 status,len,point = Grisu.fastfixedtoa(Float16(1.0), 0,1, buffer)
-@test "1" == bytestring(pointer(buffer))
+@test "1" == unsafe_string(pointer(buffer))
 @test 1 == point
 fill!(buffer,0);
 
 status,len,point = Grisu.fastfixedtoa(Float16(1.0), 0,15, buffer)
-@test "1" == bytestring(pointer(buffer))
+@test "1" == unsafe_string(pointer(buffer))
 @test 1 == point
 fill!(buffer,0);
 
 status,len,point = Grisu.fastfixedtoa(Float16(1.0), 0,0, buffer)
-@test "1" == bytestring(pointer(buffer))
+@test "1" == unsafe_string(pointer(buffer))
 @test 1 == point
 fill!(buffer,0);
 
 status,len,point = Grisu.fastfixedtoa(Float16(1.5), 0,5, buffer)
-@test "15" == bytestring(pointer(buffer))
+@test "15" == unsafe_string(pointer(buffer))
 @test 1 == point
 fill!(buffer,0);
 
 status,len,point = Grisu.fastfixedtoa(Float16(1.55), 0,5, buffer)
-@test "15498" == bytestring(pointer(buffer)) #todo
+@test "15498" == unsafe_string(pointer(buffer)) #todo
 @test 1 == point
 fill!(buffer,0);
 
 status,len,point = Grisu.fastfixedtoa(Float16(1.55), 0,1, buffer)
-@test "15" == bytestring(pointer(buffer))
+@test "15" == unsafe_string(pointer(buffer))
 @test 1 == point
 fill!(buffer,0);
 
 status,len,point = Grisu.fastfixedtoa(Float16(1.00000001), 0,15, buffer)
-@test "1" == bytestring(pointer(buffer))
+@test "1" == unsafe_string(pointer(buffer))
 @test 1 == point
 fill!(buffer,0);
 
 status,len,point = Grisu.fastfixedtoa(Float16(0.1), 0,10, buffer)
-@test "999755859" == bytestring(pointer(buffer))
+@test "999755859" == unsafe_string(pointer(buffer))
 @test -1 == point
 fill!(buffer,0);
 
 status,len,point = Grisu.fastfixedtoa(Float16(0.01), 0,10, buffer)
-@test "100021362" == bytestring(pointer(buffer))
+@test "100021362" == unsafe_string(pointer(buffer))
 @test -1 == point
 fill!(buffer,0);
 
 status,len,point = Grisu.fastfixedtoa(Float16(0.001), 0,10, buffer)
-@test "10004044" == bytestring(pointer(buffer))
+@test "10004044" == unsafe_string(pointer(buffer))
 @test -2 == point
 fill!(buffer,0);
 
 status,len,point = Grisu.fastfixedtoa(Float16(0.0001), 0,10, buffer) #todo
-@test "1000166" == bytestring(pointer(buffer))
+@test "1000166" == unsafe_string(pointer(buffer))
 @test -3 == point
 fill!(buffer,0);
 
 status,len,point = Grisu.fastfixedtoa(Float16(0.00001), 0,10, buffer) #todo
-@test "100136" == bytestring(pointer(buffer))
+@test "100136" == unsafe_string(pointer(buffer))
 @test -4 == point
 fill!(buffer,0);
 
 status,len,point = Grisu.fastfixedtoa(Float16(0.000001), 0,10, buffer)
-@test "10133" == bytestring(pointer(buffer))
+@test "10133" == unsafe_string(pointer(buffer))
 @test -5 == point
 fill!(buffer,0);
 
 status,len,point = Grisu.fastfixedtoa(Float16(0.0000001), 0,10, buffer)
-@test "1192" == bytestring(pointer(buffer))
+@test "1192" == unsafe_string(pointer(buffer))
 @test -6 == point
 fill!(buffer,0);
 
 status,len,point = Grisu.fastfixedtoa(Float16(0.6), 0,0, buffer)
-@test "1" == bytestring(pointer(buffer))
+@test "1" == unsafe_string(pointer(buffer))
 @test 1 == point
 fill!(buffer,0);
 
 status,len,point = Grisu.fastfixedtoa(Float16(0.96), 0,1, buffer)
-@test "1" == bytestring(pointer(buffer))
+@test "1" == unsafe_string(pointer(buffer))
 @test 1 == point
 fill!(buffer,0);
 
 status,len,point = Grisu.fastfixedtoa(Float16(0.996), 0,2, buffer)
-@test "1" == bytestring(pointer(buffer))
+@test "1" == unsafe_string(pointer(buffer))
 @test 1 == point
 fill!(buffer,0);
 
 status,len,point = Grisu.fastfixedtoa(Float16(0.9996), 0,3, buffer)
-@test "1" == bytestring(pointer(buffer))
+@test "1" == unsafe_string(pointer(buffer))
 @test 1 == point
 fill!(buffer,0);
 
 status,len,point = Grisu.fastfixedtoa(Float16(0.99996), 0,4, buffer)
-@test "1" == bytestring(pointer(buffer))
+@test "1" == unsafe_string(pointer(buffer))
 @test 1 == point
 fill!(buffer,0);
 
 status,len,point = Grisu.fastfixedtoa(Float16(0.999996), 0,5, buffer)
-@test "1" == bytestring(pointer(buffer))
+@test "1" == unsafe_string(pointer(buffer))
 @test 1 == point
 fill!(buffer,0);
 
 status,len,point = Grisu.fastfixedtoa(Float16(0.9999996), 0,6, buffer)
-@test "1" == bytestring(pointer(buffer))
+@test "1" == unsafe_string(pointer(buffer))
 @test 1 == point
 fill!(buffer,0);
 
 status,len,point = Grisu.fastfixedtoa(Float16(0.99999996), 0,7, buffer)
-@test "1" == bytestring(pointer(buffer))
+@test "1" == unsafe_string(pointer(buffer))
 @test 1 == point
 fill!(buffer,0);
 
 status,len,point = Grisu.fastfixedtoa(Float16(42), 0,20, buffer)
-@test "42" == bytestring(pointer(buffer))
+@test "42" == unsafe_string(pointer(buffer))
 @test 2 == point
 fill!(buffer,0);
 
 status,len,point = Grisu.fastfixedtoa(Float16(0.5), 0,0, buffer)
-@test "1" == bytestring(pointer(buffer))
+@test "1" == unsafe_string(pointer(buffer))
 @test 1 == point
 fill!(buffer,0);
 
 #dtoa
-len,point,neg,buffer = Grisu.grisu(0.0, Grisu.SHORTEST, 0, buffer)
-@test "0" == bytestring(pointer(buffer))
+len,point,neg = Grisu.grisu(0.0, Grisu.SHORTEST, 0, buffer)
+@test "0" == unsafe_string(pointer(buffer))
 @test 1 == point
 fill!(buffer,0);
 
-len,point,neg,buffer = Grisu.grisu(Float32(0.0), Grisu.SHORTEST, 0, buffer)
-@test "0" == bytestring(pointer(buffer))
+len,point,neg = Grisu.grisu(Float32(0.0), Grisu.SHORTEST, 0, buffer)
+@test "0" == unsafe_string(pointer(buffer))
 @test 1 == point
 fill!(buffer,0);
 
-len,point,neg,buffer = Grisu.grisu(0.0, Grisu.FIXED, 2, buffer)
+len,point,neg = Grisu.grisu(0.0, Grisu.FIXED, 2, buffer)
 @test 1 >= len-1
-@test "0" == bytestring(pointer(buffer))
+@test "0" == unsafe_string(pointer(buffer))
 @test 1 == point
 fill!(buffer,0);
 
-len,point,neg,buffer = Grisu.grisu(0.0, Grisu.PRECISION, 3, buffer)
+len,point,neg = Grisu.grisu(0.0, Grisu.PRECISION, 3, buffer)
 @test 1 >= len-1
-@test "0" == bytestring(pointer(buffer))
+@test "0" == unsafe_string(pointer(buffer))
 @test 1 == point
 fill!(buffer,0);
 
-len,point,neg,buffer = Grisu.grisu(1.0, Grisu.SHORTEST, 0, buffer)
-@test "1" == bytestring(pointer(buffer))
+len,point,neg = Grisu.grisu(1.0, Grisu.SHORTEST, 0, buffer)
+@test "1" == unsafe_string(pointer(buffer))
 @test 1 == point
 fill!(buffer,0);
 
-len,point,neg,buffer = Grisu.grisu(Float32(1.0), Grisu.SHORTEST, 0, buffer)
-@test "1" == bytestring(pointer(buffer))
+len,point,neg = Grisu.grisu(Float32(1.0), Grisu.SHORTEST, 0, buffer)
+@test "1" == unsafe_string(pointer(buffer))
 @test 1 == point
 fill!(buffer,0);
 
-len,point,neg,buffer = Grisu.grisu(1.0, Grisu.FIXED, 3, buffer)
+len,point,neg = Grisu.grisu(1.0, Grisu.FIXED, 3, buffer)
 @test 3 >= len-1-point
 @test "1" == trimrep(buffer)
 @test 1 == point
 fill!(buffer,0);
 
-len,point,neg,buffer = Grisu.grisu(1.0, Grisu.PRECISION, 3, buffer)
+len,point,neg = Grisu.grisu(1.0, Grisu.PRECISION, 3, buffer)
 @test 3 >= len-1
 @test "1" == trimrep(buffer)
 @test 1 == point
 fill!(buffer,0);
 
-len,point,neg,buffer = Grisu.grisu(1.5, Grisu.SHORTEST, 0, buffer)
-@test "15" == bytestring(pointer(buffer))
+len,point,neg = Grisu.grisu(1.5, Grisu.SHORTEST, 0, buffer)
+@test "15" == unsafe_string(pointer(buffer))
 @test 1 == point
 fill!(buffer,0);
 
-len,point,neg,buffer = Grisu.grisu(Float32(1.5), Grisu.SHORTEST, 0, buffer)
-@test "15" == bytestring(pointer(buffer))
+len,point,neg = Grisu.grisu(Float32(1.5), Grisu.SHORTEST, 0, buffer)
+@test "15" == unsafe_string(pointer(buffer))
 @test 1 == point
 fill!(buffer,0);
 
-len,point,neg,buffer = Grisu.grisu(1.5, Grisu.FIXED, 10, buffer)
+len,point,neg = Grisu.grisu(1.5, Grisu.FIXED, 10, buffer)
 @test 10 >= len-1-point
 @test "15" == trimrep(buffer)
 @test 1 == point
 fill!(buffer,0);
 
-len,point,neg,buffer = Grisu.grisu(1.5, Grisu.PRECISION, 10, buffer)
+len,point,neg = Grisu.grisu(1.5, Grisu.PRECISION, 10, buffer)
 @test 10 >= len-1
 @test "15" == trimrep(buffer)
 @test 1 == point
 fill!(buffer,0);
 
 min_double = 5e-324
-len,point,neg,buffer = Grisu.grisu(min_double, Grisu.SHORTEST, 0, buffer)
-@test "5" == bytestring(pointer(buffer))
+len,point,neg = Grisu.grisu(min_double, Grisu.SHORTEST, 0, buffer)
+@test "5" == unsafe_string(pointer(buffer))
 @test -323 == point
 fill!(buffer,0);
 
 min_float = 1e-45
-len,point,neg,buffer = Grisu.grisu(Float32(min_float), Grisu.SHORTEST, 0, buffer)
-@test "1" == bytestring(pointer(buffer))
+len,point,neg = Grisu.grisu(Float32(min_float), Grisu.SHORTEST, 0, buffer)
+@test "1" == unsafe_string(pointer(buffer))
 @test -44 == point
 fill!(buffer,0);
 
-len,point,neg,buffer = Grisu.grisu(min_double, Grisu.FIXED, 5, buffer)
+len,point,neg = Grisu.grisu(min_double, Grisu.FIXED, 5, buffer)
 @test 5 >= len-1-point
 @test "" == trimrep(buffer)
 @test -5 == point
 fill!(buffer,0);
 
-len,point,neg,buffer = Grisu.grisu(min_double, Grisu.PRECISION, 5, buffer)
+len,point,neg = Grisu.grisu(min_double, Grisu.PRECISION, 5, buffer)
 @test 5 >= len-1
 @test "49407" == trimrep(buffer)
 @test -323 == point
 fill!(buffer,0);
 
 max_double = 1.7976931348623157e308
-len,point,neg,buffer = Grisu.grisu(max_double, Grisu.SHORTEST, 0, buffer)
-@test "17976931348623157" == bytestring(pointer(buffer))
+len,point,neg = Grisu.grisu(max_double, Grisu.SHORTEST, 0, buffer)
+@test "17976931348623157" == unsafe_string(pointer(buffer))
 @test 309 == point
 fill!(buffer,0);
 
 max_float = 3.4028234e38
-len,point,neg,buffer = Grisu.grisu(Float32(max_float), Grisu.SHORTEST, 0,buffer)
-@test "34028235" == bytestring(pointer(buffer))
+len,point,neg = Grisu.grisu(Float32(max_float), Grisu.SHORTEST, 0, buffer)
+@test "34028235" == unsafe_string(pointer(buffer))
 @test 39 == point
 fill!(buffer,0);
 
-len,point,neg,buffer = Grisu.grisu(max_double, Grisu.PRECISION, 7, buffer)
+len,point,neg = Grisu.grisu(max_double, Grisu.PRECISION, 7, buffer)
 @test 7 >= len-1
 @test "1797693" == trimrep(buffer)
 @test 309 == point
 fill!(buffer,0);
 
-len,point,neg,buffer = Grisu.grisu(4294967272.0, Grisu.SHORTEST, 0, buffer)
-@test "4294967272" == bytestring(pointer(buffer))
+len,point,neg = Grisu.grisu(4294967272.0, Grisu.SHORTEST, 0, buffer)
+@test "4294967272" == unsafe_string(pointer(buffer))
 @test 10 == point
 fill!(buffer,0);
 
-len,point,neg,buffer = Grisu.grisu(Float32(4294967272.0), Grisu.SHORTEST, 0, buffer)
-@test "42949673" == bytestring(pointer(buffer))
+len,point,neg = Grisu.grisu(Float32(4294967272.0), Grisu.SHORTEST, 0, buffer)
+@test "42949673" == unsafe_string(pointer(buffer))
 @test 10 == point
 fill!(buffer,0);
 
-len,point,neg,buffer = Grisu.grisu(4294967272.0, Grisu.FIXED, 5, buffer)
+len,point,neg = Grisu.grisu(4294967272.0, Grisu.FIXED, 5, buffer)
 @test 5 >= len-1-point
 @test "4294967272" == trimrep(buffer)
 @test 10 == point
 fill!(buffer,0);
 
-len,point,neg,buffer = Grisu.grisu(4294967272.0, Grisu.PRECISION, 14,buffer)
+len,point,neg = Grisu.grisu(4294967272.0, Grisu.PRECISION, 14, buffer)
 @test 14 >= len-1
 @test "4294967272" == trimrep(buffer)
 @test 10 == point
 fill!(buffer,0);
 
-len,point,neg,buffer = Grisu.grisu(4.1855804968213567e298, Grisu.SHORTEST, 0,buffer)
-@test "4185580496821357" == bytestring(pointer(buffer))
+len,point,neg = Grisu.grisu(4.1855804968213567e298, Grisu.SHORTEST, 0, buffer)
+@test "4185580496821357" == unsafe_string(pointer(buffer))
 @test 299 == point
 fill!(buffer,0);
 
-len,point,neg,buffer = Grisu.grisu(4.1855804968213567e298, Grisu.PRECISION, 20,buffer)
+len,point,neg = Grisu.grisu(4.1855804968213567e298, Grisu.PRECISION, 20, buffer)
 @test 20 >= len-1
 @test "41855804968213567225" == trimrep(buffer)
 @test 299 == point
 fill!(buffer,0);
 
-len,point,neg,buffer = Grisu.grisu(5.5626846462680035e-309, Grisu.SHORTEST, 0,buffer)
-@test "5562684646268003" == bytestring(pointer(buffer))
+len,point,neg = Grisu.grisu(5.5626846462680035e-309, Grisu.SHORTEST, 0, buffer)
+@test "5562684646268003" == unsafe_string(pointer(buffer))
 @test -308 == point
 fill!(buffer,0);
 
-len,point,neg,buffer = Grisu.grisu(5.5626846462680035e-309, Grisu.PRECISION, 1,buffer)
+len,point,neg = Grisu.grisu(5.5626846462680035e-309, Grisu.PRECISION, 1, buffer)
 @test 1 >= len-1
 @test "6" == trimrep(buffer)
 @test -308 == point
 fill!(buffer,0);
 
-len,point,neg,buffer = Grisu.grisu(-2147483648.0, Grisu.SHORTEST, 0,buffer)
+len,point,neg = Grisu.grisu(-2147483648.0, Grisu.SHORTEST, 0, buffer)
 @test 1 == neg
-@test "2147483648" == bytestring(pointer(buffer))
+@test "2147483648" == unsafe_string(pointer(buffer))
 @test 10 == point
 fill!(buffer,0);
 
-len,point,neg,buffer = Grisu.grisu(Float32(-2147483648.), Grisu.SHORTEST, 0,buffer)
+len,point,neg = Grisu.grisu(Float32(-2147483648.), Grisu.SHORTEST, 0, buffer)
 @test 1 == neg
-@test "21474836" == bytestring(pointer(buffer))
+@test "21474836" == unsafe_string(pointer(buffer))
 @test 10 == point
 fill!(buffer,0);
 
 
-len,point,neg,buffer = Grisu.grisu(-2147483648.0, Grisu.FIXED, 2, buffer)
+len,point,neg = Grisu.grisu(-2147483648.0, Grisu.FIXED, 2, buffer)
 @test 2 >= len-1-point
 @test "2147483648" == trimrep(buffer)
 @test 10 == point
 fill!(buffer,0);
 
-len,point,neg,buffer = Grisu.grisu(-2147483648.0, Grisu.PRECISION, 5,buffer)
+len,point,neg = Grisu.grisu(-2147483648.0, Grisu.PRECISION, 5, buffer)
 @test 5 >= len-1
 @test "21475" == trimrep(buffer)
 @test 10 == point
 fill!(buffer,0);
 
-len,point,neg,buffer = Grisu.grisu(-3.5844466002796428e+298, Grisu.SHORTEST, 0,buffer)
+len,point,neg = Grisu.grisu(-3.5844466002796428e+298, Grisu.SHORTEST, 0, buffer)
 @test 1 == neg
-@test "35844466002796428" == bytestring(pointer(buffer))
+@test "35844466002796428" == unsafe_string(pointer(buffer))
 @test 299 == point
 fill!(buffer,0);
 
-len,point,neg,buffer = Grisu.grisu(-3.5844466002796428e+298, Grisu.PRECISION, 10,buffer)
+len,point,neg = Grisu.grisu(-3.5844466002796428e+298, Grisu.PRECISION, 10, buffer)
 @test 1 == neg
 @test 10 >= len-1
 @test "35844466" == trimrep(buffer)
@@ -1617,135 +1619,135 @@ len,point,neg,buffer = Grisu.grisu(-3.5844466002796428e+298, Grisu.PRECISION, 10
 fill!(buffer,0);
 
 v = reinterpret(Float64,0x0010000000000000)
-len,point,neg,buffer = Grisu.grisu(v, Grisu.SHORTEST, 0, buffer)
-@test "22250738585072014" == bytestring(pointer(buffer))
+len,point,neg = Grisu.grisu(v, Grisu.SHORTEST, 0, buffer)
+@test "22250738585072014" == unsafe_string(pointer(buffer))
 @test -307 == point
 fill!(buffer,0);
 
 f = reinterpret(Float32,0x00800000)
-len,point,neg,buffer = Grisu.grisu(f, Grisu.SHORTEST, 0, buffer)
-@test "11754944" == bytestring(pointer(buffer))
+len,point,neg = Grisu.grisu(f, Grisu.SHORTEST, 0, buffer)
+@test "11754944" == unsafe_string(pointer(buffer))
 @test -37 == point
 fill!(buffer,0);
 
-len,point,neg,buffer = Grisu.grisu(v, Grisu.PRECISION, 20, buffer)
+len,point,neg = Grisu.grisu(v, Grisu.PRECISION, 20, buffer)
 @test 20 >= len-1
 @test "22250738585072013831" == trimrep(buffer)
 @test -307 == point
 fill!(buffer,0);
 
 v = reinterpret(Float64,0x000FFFFFFFFFFFFF)
-len,point,neg,buffer = Grisu.grisu(v, Grisu.SHORTEST, 0, buffer)
-@test "2225073858507201" == bytestring(pointer(buffer))
+len,point,neg = Grisu.grisu(v, Grisu.SHORTEST, 0, buffer)
+@test "2225073858507201" == unsafe_string(pointer(buffer))
 @test -307 == point
 fill!(buffer,0);
 
 f = reinterpret(Float32,0x007FFFFF)
-len,point,neg,buffer = Grisu.grisu(f, Grisu.SHORTEST, 0, buffer)
-@test "11754942" == bytestring(pointer(buffer))
+len,point,neg = Grisu.grisu(f, Grisu.SHORTEST, 0, buffer)
+@test "11754942" == unsafe_string(pointer(buffer))
 @test -37 == point
 fill!(buffer,0);
 
-len,point,neg,buffer = Grisu.grisu(v, Grisu.PRECISION, 20, buffer)
+len,point,neg = Grisu.grisu(v, Grisu.PRECISION, 20, buffer)
 @test 20 >= len-1
 @test "2225073858507200889" == trimrep(buffer)
 @test -307 == point
 fill!(buffer,0);
 
-len,point,neg,buffer = Grisu.grisu(4128420500802942e-24, Grisu.SHORTEST, 0,buffer)
+len,point,neg = Grisu.grisu(4128420500802942e-24, Grisu.SHORTEST, 0, buffer)
 @test 0 == neg
-@test "4128420500802942" == bytestring(pointer(buffer))
+@test "4128420500802942" == unsafe_string(pointer(buffer))
 @test -8 == point
 fill!(buffer,0);
 
 v = -3.9292015898194142585311918e-10
-len,point,neg,buffer = Grisu.grisu(v, Grisu.SHORTEST, 0, buffer)
-@test "39292015898194143" == bytestring(pointer(buffer))
+len,point,neg = Grisu.grisu(v, Grisu.SHORTEST, 0, buffer)
+@test "39292015898194143" == unsafe_string(pointer(buffer))
 fill!(buffer,0);
 
 f = Float32(-3.9292015898194142585311918e-10)
-len,point,neg,buffer = Grisu.grisu(f, Grisu.SHORTEST, 0, buffer)
-@test "39292017" == bytestring(pointer(buffer))
+len,point,neg = Grisu.grisu(f, Grisu.SHORTEST, 0, buffer)
+@test "39292017" == unsafe_string(pointer(buffer))
 fill!(buffer,0);
 
 v = 4194304.0
-len,point,neg,buffer = Grisu.grisu(v, Grisu.FIXED, 5, buffer)
+len,point,neg = Grisu.grisu(v, Grisu.FIXED, 5, buffer)
 @test 5 >= len-1-point
 @test "4194304" == trimrep(buffer)
 fill!(buffer,0);
 
 v = 3.3161339052167390562200598e-237
-len,point,neg,buffer = Grisu.grisu(v, Grisu.PRECISION, 19, buffer)
+len,point,neg = Grisu.grisu(v, Grisu.PRECISION, 19, buffer)
 @test 19 >= len-1
 @test "3316133905216739056" == trimrep(buffer)
 @test -236 == point
 fill!(buffer,0);
 
-len,point,neg,buffer = Grisu.grisu(0.0, Grisu.SHORTEST, 0, buffer)
+len,point,neg = Grisu.grisu(0.0, Grisu.SHORTEST, 0, buffer)
 @test !neg
 
-len,point,neg,buffer = Grisu.grisu(-0.0, Grisu.SHORTEST, 0, buffer)
+len,point,neg = Grisu.grisu(-0.0, Grisu.SHORTEST, 0, buffer)
 @test neg
 
-len,point,neg,buffer = Grisu.grisu(1.0, Grisu.SHORTEST, 0, buffer)
+len,point,neg = Grisu.grisu(1.0, Grisu.SHORTEST, 0, buffer)
 @test !neg
 
-len,point,neg,buffer = Grisu.grisu(-1.0, Grisu.SHORTEST, 0, buffer)
+len,point,neg = Grisu.grisu(-1.0, Grisu.SHORTEST, 0, buffer)
 @test neg
 
-len,point,neg,buffer = Grisu.grisu(Float32(0.0), Grisu.SHORTEST, 0, buffer)
+len,point,neg = Grisu.grisu(Float32(0.0), Grisu.SHORTEST, 0, buffer)
 @test !neg
 
-len,point,neg,buffer = Grisu.grisu(-Float32(0.0), Grisu.SHORTEST, 0, buffer)
+len,point,neg = Grisu.grisu(-Float32(0.0), Grisu.SHORTEST, 0, buffer)
 @test neg
 
-len,point,neg,buffer = Grisu.grisu(Float32(1.0), Grisu.SHORTEST, 0, buffer)
+len,point,neg = Grisu.grisu(Float32(1.0), Grisu.SHORTEST, 0, buffer)
 @test !neg
 
-len,point,neg,buffer = Grisu.grisu(-Float32(1.0), Grisu.SHORTEST, 0, buffer)
+len,point,neg = Grisu.grisu(-Float32(1.0), Grisu.SHORTEST, 0, buffer)
 @test neg
 
-len,point,neg,buffer = Grisu.grisu(0.0, Grisu.PRECISION, 1, buffer)
+len,point,neg = Grisu.grisu(0.0, Grisu.PRECISION, 1, buffer)
 @test !neg
 
-len,point,neg,buffer = Grisu.grisu(-0.0, Grisu.PRECISION, 1, buffer)
+len,point,neg = Grisu.grisu(-0.0, Grisu.PRECISION, 1, buffer)
 @test neg
 
-len,point,neg,buffer = Grisu.grisu(1.0, Grisu.PRECISION, 1, buffer)
+len,point,neg = Grisu.grisu(1.0, Grisu.PRECISION, 1, buffer)
 @test !neg
 
-len,point,neg,buffer = Grisu.grisu(-1.0, Grisu.PRECISION, 1, buffer)
+len,point,neg = Grisu.grisu(-1.0, Grisu.PRECISION, 1, buffer)
 @test neg
 
-len,point,neg,buffer = Grisu.grisu(0.0, Grisu.FIXED, 1, buffer)
+len,point,neg = Grisu.grisu(0.0, Grisu.FIXED, 1, buffer)
 @test !neg
 
-len,point,neg,buffer = Grisu.grisu(-0.0, Grisu.FIXED, 1, buffer)
+len,point,neg = Grisu.grisu(-0.0, Grisu.FIXED, 1, buffer)
 @test neg
 
-len,point,neg,buffer = Grisu.grisu(1.0, Grisu.FIXED, 1, buffer)
+len,point,neg = Grisu.grisu(1.0, Grisu.FIXED, 1, buffer)
 @test !neg
 
-len,point,neg,buffer = Grisu.grisu(-1.0, Grisu.FIXED, 1, buffer)
+len,point,neg = Grisu.grisu(-1.0, Grisu.FIXED, 1, buffer)
 @test neg
 
 
-len,point,neg,buffer = Grisu.grisu(0.0, Grisu.PRECISION, 0, buffer)
+len,point,neg = Grisu.grisu(0.0, Grisu.PRECISION, 0, buffer)
 @test 0 >= len-1
-@test "" == bytestring(pointer(buffer))
+@test "" == unsafe_string(pointer(buffer))
 @test !neg
 
-len,point,neg,buffer = Grisu.grisu(1.0, Grisu.PRECISION, 0, buffer)
+len,point,neg = Grisu.grisu(1.0, Grisu.PRECISION, 0, buffer)
 @test 0 >= len-1
-@test "" == bytestring(pointer(buffer))
+@test "" == unsafe_string(pointer(buffer))
 @test !neg
 
-len,point,neg,buffer = Grisu.grisu(0.0, Grisu.FIXED, 0, buffer)
+len,point,neg = Grisu.grisu(0.0, Grisu.FIXED, 0, buffer)
 @test 1 >= len-1
-@test "0" == bytestring(pointer(buffer))
+@test "0" == unsafe_string(pointer(buffer))
 @test !neg
 
-len,point,neg,buffer = Grisu.grisu(1.0, Grisu.FIXED, 0, buffer)
+len,point,neg = Grisu.grisu(1.0, Grisu.FIXED, 0, buffer)
 @test 1 >= len-1
-@test "1" == bytestring(pointer(buffer))
+@test "1" == unsafe_string(pointer(buffer))
 @test !neg

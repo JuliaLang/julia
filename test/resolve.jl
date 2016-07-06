@@ -1,7 +1,10 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 using Base.Pkg.Types
 using Base.Pkg.Query
 using Base.Pkg.Resolve
 using Base.Pkg.Resolve.VersionWeights
+import Base.Pkg.PkgError
 
 # Check that VersionWeight keeps the same ordering as VersionNumber
 
@@ -56,14 +59,14 @@ end
 # auxiliary functions
 
 function deps_from_data(deps_data)
-    deps = Dict{ByteString,Dict{VersionNumber,Available}}()
+    deps = Dict{String,Dict{VersionNumber,Available}}()
     for d in deps_data
         p = d[1]; vn = d[2]; r = d[3:end]
         if !haskey(deps, p)
             deps[p] = Dict{VersionNumber,Available}()
         end
         if !haskey(deps[p], vn)
-            deps[p][vn] = Available("$(p)_$(vn)_sha1", Dict{ByteString,VersionSet}())
+            deps[p][vn] = Available("$(p)_$(vn)_sha1", Dict{String,VersionSet}())
         end
         isempty(r) && continue
         rp = r[1]
@@ -77,7 +80,7 @@ function deps_from_data(deps_data)
     deps
 end
 function reqs_from_data(reqs_data)
-    reqs = Dict{ByteString,VersionSet}()
+    reqs = Dict{String,VersionSet}()
     for r in reqs_data
         p = r[1]
         reqs[p] = VersionSet(VersionNumber[r[2:end]...])
@@ -88,7 +91,7 @@ function sanity_tst(deps_data, expected_result; pkgs=[])
     deps = deps_from_data(deps_data)
     #println("deps=$deps")
     #println()
-    result = sanity_check(deps, Set(ByteString[pkgs...]))
+    result = sanity_check(deps, Set(String[pkgs...]))
     length(result) == length(expected_result) || return false
     for (p, vn, pp) in result
         in((p, vn), expected_result) || return  false
@@ -207,7 +210,7 @@ reqs_data = Any[
     ["A", v"1", v"2"],
     ["C", v"2"]
 ]
-@test_throws ErrorException resolve_tst(deps_data, reqs_data)
+@test_throws PkgError resolve_tst(deps_data, reqs_data)
 
 
 ## DEPENDENCY SCHEME 4: TWO PACKAGES, DAG, WITH TRIVIAL INCONSISTENCY
@@ -254,7 +257,7 @@ want = resolve_tst(deps_data, reqs_data)
 reqs_data = Any[
     ["A", v"2"]
 ]
-@test_throws ErrorException resolve_tst(deps_data, reqs_data)
+@test_throws PkgError resolve_tst(deps_data, reqs_data)
 
 
 ## DEPENDENCY SCHEME 6: TWO PACKAGES, CYCLIC, TOTALLY INCONSISTENT
@@ -272,13 +275,13 @@ deps_data = Any[
 reqs_data = Any[
     ["A"]
 ]
-@test_throws ErrorException resolve_tst(deps_data, reqs_data)
+@test_throws PkgError resolve_tst(deps_data, reqs_data)
 
 # require B (impossible)
 reqs_data = Any[
     ["B"]
 ]
-@test_throws ErrorException resolve_tst(deps_data, reqs_data)
+@test_throws PkgError resolve_tst(deps_data, reqs_data)
 
 
 ## DEPENDENCY SCHEME 7: THREE PACKAGES, CYCLIC, WITH INCONSISTENCY
@@ -312,7 +315,7 @@ want = resolve_tst(deps_data, reqs_data)
 reqs_data = Any[
     ["C", v"1", v"2"]
 ]
-@test_throws ErrorException resolve_tst(deps_data, reqs_data)
+@test_throws PkgError resolve_tst(deps_data, reqs_data)
 
 
 ## DEPENDENCY SCHEME 8: THREE PACKAGES, CYCLIC, TOTALLY INCONSISTENT
@@ -333,19 +336,19 @@ deps_data = Any[
 reqs_data = Any[
     ["A"]
 ]
-@test_throws ErrorException resolve_tst(deps_data, reqs_data)
+@test_throws PkgError resolve_tst(deps_data, reqs_data)
 
 # require B (impossible)
 reqs_data = Any[
     ["B"]
 ]
-@test_throws ErrorException resolve_tst(deps_data, reqs_data)
+@test_throws PkgError resolve_tst(deps_data, reqs_data)
 
 # require C (impossible)
 reqs_data = Any[
     ["C"]
 ]
-@test_throws ErrorException resolve_tst(deps_data, reqs_data)
+@test_throws PkgError resolve_tst(deps_data, reqs_data)
 
 ## DEPENDENCY SCHEME 9: SIX PACKAGES, DAG
 deps_data = Any[

@@ -1,13 +1,15 @@
-function Base.parse(stream::IOBuffer; greedy::Bool = true, raise::Bool = true)
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
+function Base.parse(stream::IO; greedy::Bool = true, raise::Bool = true)
     pos = position(stream)
-    ex, Δ = Base.parse(readall(stream), 1, greedy = greedy, raise = raise)
+    ex, Δ = Base.parse(readstring(stream), 1, greedy = greedy, raise = raise)
     seek(stream, pos + Δ - 1)
     return ex
 end
 
 function interpinner(stream::IO, greedy = false)
     startswith(stream, '$') || return
-    (eof(stream) || peek(stream) in whitespace) && return
+    (eof(stream) || Char(peek(stream)) in whitespace) && return
     try
         return Base.parse(stream::IOBuffer, greedy = greedy)
     catch e
@@ -37,7 +39,7 @@ end
 
 toexpr(x) = x
 
-toexpr(xs::Vector{Any}) = Expr(:cell1d, map(toexpr, xs)...)
+toexpr(xs::Vector{Any}) = Expr(:call, GlobalRef(Base,:vector_any), map(toexpr, xs)...)
 
 function deftoexpr(T)
     @eval function toexpr(md::$T)

@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 # Grigoriadis Khachiyan Matrix Games.
 #
 # Example run: gk(10000, [0.1])
@@ -40,7 +42,6 @@ end
 ############ GK Algorithm starts ##################
 #@profile begin
 function gk(n, myeps)
-
     A = myunifskew(n)
 
     g = length(myeps)
@@ -180,6 +181,5 @@ function gk(n, myeps)
     #print("Epsilon-Time-Iteration tradeoff \n")
     #print(out)
     #print("\n \n")
-
 end
 #end # @profile begin

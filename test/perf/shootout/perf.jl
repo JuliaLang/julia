@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 include("../perfutil.jl")
 
 #If running from .. directory, include "shootout/" path to data file

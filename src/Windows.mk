@@ -46,7 +46,7 @@ LIB = $(LIB);C:\Program Files\llvm\lib\Debug
 LIB = $(LIB);C:\Program Files\llvm\lib\Release
 !endif
 
-CFLAGS = $(CFLAGS) -DCOPY_STACKS -D_CRT_SECURE_NO_WARNINGS
+CFLAGS = $(CFLAGS) -D_CRT_SECURE_NO_WARNINGS
 CFLAGS = $(CFLAGS) -DJL_SYSTEM_IMAGE_PATH=\"../lib/julia/sys.ji\" -DLIBRARY_EXPORTS
 
 LIBWINDOWS = \

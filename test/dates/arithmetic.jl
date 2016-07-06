@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 # DateTime arithmetic
 a = Dates.DateTime(2013,1,1,0,0,0,1)
 b = Dates.DateTime(2013,1,1,0,0,0,0)
@@ -328,3 +330,61 @@ dt2 = dt + Dates.Year(1)
 @test Dates.minute(dt2) == 30
 @test Dates.second(dt2) == 45
 @test Dates.millisecond(dt2) == 500
+
+t1 = [Date(2009,1,1) Date(2009,1,2) Date(2009,1,3); Date(2009,2,1) Date(2009,2,2) Date(2009,2,3)]
+t2 = [Date(2009,1,2) Date(2009,2,2) Date(2010,1,3); Date(2010,2,1) Date(2009,3,2) Date(2009,2,4)]
+t3 = [DateTime(2009,1,1), DateTime(2009,1,2), DateTime(2009,1,3)]
+t4 = [DateTime(2009,1,1,0,0,1), DateTime(2009,1,2,0,1), DateTime(2009,1,3,1)]
+
+# TimeType, Array{TimeType}
+@test Date(2010,1,1) .- t1 == [Day(365) Day(364) Day(363); Day(334) Day(333) Day(332)]
+@test t1 .- Date(2010,1,1) == [Day(-365) Day(-364) Day(-363); Day(-334) Day(-333) Day(-332)]
+@test DateTime(2009,1,1) .- t3 == [Millisecond(0), Millisecond(-86400000), Millisecond(-172800000)]
+@test t3 .- DateTime(2009,1,1) == [Millisecond(0), Millisecond(86400000), Millisecond(172800000)]
+@test Date(2010,1,1) - t1 == [Day(365) Day(364) Day(363); Day(334) Day(333) Day(332)]
+@test t1 - Date(2010,1,1) == [Day(-365) Day(-364) Day(-363); Day(-334) Day(-333) Day(-332)]
+@test DateTime(2009,1,1) - t3 == [Millisecond(0), Millisecond(-86400000), Millisecond(-172800000)]
+@test t3 - DateTime(2009,1,1) == [Millisecond(0), Millisecond(86400000), Millisecond(172800000)]
+
+# GeneralPeriod, Array{TimeType}
+@test Day(1) .+ t1 == [Date(2009,1,2) Date(2009,1,3) Date(2009,1,4); Date(2009,2,2) Date(2009,2,3) Date(2009,2,4)]
+@test Hour(1) .+ t3 == [DateTime(2009,1,1,1), DateTime(2009,1,2,1), DateTime(2009,1,3,1)]
+@test t1 .+ Day(1) == [Date(2009,1,2) Date(2009,1,3) Date(2009,1,4); Date(2009,2,2) Date(2009,2,3) Date(2009,2,4)]
+@test t3 .+ Hour(1) == [DateTime(2009,1,1,1), DateTime(2009,1,2,1), DateTime(2009,1,3,1)]
+@test Day(1) + t1 == [Date(2009,1,2) Date(2009,1,3) Date(2009,1,4); Date(2009,2,2) Date(2009,2,3) Date(2009,2,4)]
+@test Hour(1) + t3 == [DateTime(2009,1,1,1), DateTime(2009,1,2,1), DateTime(2009,1,3,1)]
+@test t1 + Day(1) == [Date(2009,1,2) Date(2009,1,3) Date(2009,1,4); Date(2009,2,2) Date(2009,2,3) Date(2009,2,4)]
+@test t3 + Hour(1) == [DateTime(2009,1,1,1), DateTime(2009,1,2,1), DateTime(2009,1,3,1)]
+
+@test (Month(1) + Day(1)) .+ t1 == [Date(2009,2,2) Date(2009,2,3) Date(2009,2,4); Date(2009,3,2) Date(2009,3,3) Date(2009,3,4)]
+@test (Hour(1) + Minute(1)) .+ t3 == [DateTime(2009,1,1,1,1), DateTime(2009,1,2,1,1), DateTime(2009,1,3,1,1)]
+@test t1 .+ (Month(1) + Day(1)) == [Date(2009,2,2) Date(2009,2,3) Date(2009,2,4); Date(2009,3,2) Date(2009,3,3) Date(2009,3,4)]
+@test t3 .+ (Hour(1) + Minute(1)) == [DateTime(2009,1,1,1,1), DateTime(2009,1,2,1,1), DateTime(2009,1,3,1,1)]
+@test (Month(1) + Day(1)) + t1 == [Date(2009,2,2) Date(2009,2,3) Date(2009,2,4); Date(2009,3,2) Date(2009,3,3) Date(2009,3,4)]
+@test (Hour(1) + Minute(1)) + t3 == [DateTime(2009,1,1,1,1), DateTime(2009,1,2,1,1), DateTime(2009,1,3,1,1)]
+@test t1 + (Month(1) + Day(1)) == [Date(2009,2,2) Date(2009,2,3) Date(2009,2,4); Date(2009,3,2) Date(2009,3,3) Date(2009,3,4)]
+@test t3 + (Hour(1) + Minute(1)) == [DateTime(2009,1,1,1,1), DateTime(2009,1,2,1,1), DateTime(2009,1,3,1,1)]
+
+@test Day(1) .- t1 == [Date(2008,12,31) Date(2009,1,1) Date(2009,1,2); Date(2009,1,31) Date(2009,2,1) Date(2009,2,2)]
+@test Hour(1) .- t3 == [DateTime(2008,12,31,23), DateTime(2009,1,1,23), DateTime(2009,1,2,23)]
+@test t1 .- Day(1) == [Date(2008,12,31) Date(2009,1,1) Date(2009,1,2); Date(2009,1,31) Date(2009,2,1) Date(2009,2,2)]
+@test t3 .- Hour(1) == [DateTime(2008,12,31,23), DateTime(2009,1,1,23), DateTime(2009,1,2,23)]
+@test Day(1) - t1 == [Date(2008,12,31) Date(2009,1,1) Date(2009,1,2); Date(2009,1,31) Date(2009,2,1) Date(2009,2,2)]
+@test Hour(1) - t3 == [DateTime(2008,12,31,23), DateTime(2009,1,1,23), DateTime(2009,1,2,23)]
+@test t1 - Day(1) == [Date(2008,12,31) Date(2009,1,1) Date(2009,1,2); Date(2009,1,31) Date(2009,2,1) Date(2009,2,2)]
+@test t3 - Hour(1) == [DateTime(2008,12,31,23), DateTime(2009,1,1,23), DateTime(2009,1,2,23)]
+
+@test (Month(1) + Day(1)) .- t1 == [Date(2008,11,30) Date(2008,12,1) Date(2008,12,2); Date(2008,12,31) Date(2009,1,1) Date(2009,1,2)]
+@test (Hour(1) + Minute(1)) .- t3 == [DateTime(2008,12,31,22,59), DateTime(2009,1,1,22,59), DateTime(2009,1,2,22,59)]
+@test t1 .- (Month(1) + Day(1)) == [Date(2008,11,30) Date(2008,12,1) Date(2008,12,2); Date(2008,12,31) Date(2009,1,1) Date(2009,1,2)]
+@test t3 .- (Hour(1) + Minute(1)) == [DateTime(2008,12,31,22,59), DateTime(2009,1,1,22,59), DateTime(2009,1,2,22,59)]
+@test (Month(1) + Day(1)) - t1 == [Date(2008,11,30) Date(2008,12,1) Date(2008,12,2); Date(2008,12,31) Date(2009,1,1) Date(2009,1,2)]
+@test (Hour(1) + Minute(1)) - t3 == [DateTime(2008,12,31,22,59), DateTime(2009,1,1,22,59), DateTime(2009,1,2,22,59)]
+@test t1 - (Month(1) + Day(1)) == [Date(2008,11,30) Date(2008,12,1) Date(2008,12,2); Date(2008,12,31) Date(2009,1,1) Date(2009,1,2)]
+@test t3 - (Hour(1) + Minute(1)) == [DateTime(2008,12,31,22,59), DateTime(2009,1,1,22,59), DateTime(2009,1,2,22,59)]
+
+# Array{TimeType}, Array{TimeType}
+@test t2 - t1 == [Day(1) Day(31) Day(365); Day(365) Day(28) Day(1)]
+@test t4 - t3 == [Millisecond(1000), Millisecond(60000), Millisecond(3600000)]
+@test (Date(2009,1,1):Week(1):Date(2009,1,21)) - (Date(2009,1,1):Day(1):Date(2009,1,3)) == [0d, 6d, 12d]
+@test (DateTime(2009,1,1,1,1,1):Second(1):DateTime(2009,1,1,1,1,3)) - (DateTime(2009,1,1,1,1):Second(1):DateTime(2009,1,1,1,1,2)) == [1s, 1s, 1s]

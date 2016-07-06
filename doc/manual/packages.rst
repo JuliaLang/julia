@@ -11,6 +11,10 @@ It can also install external libraries using your operating system's standard sy
 The list of registered Julia packages can be found at `<http://pkg.julialang.org>`_.
 All package manager commands are found in the :mod:`Pkg <Base.Pkg>` module, included in Julia's :mod:`Base` install.
 
+First we'll go over the mechanics of the ``Pkg`` family of commands and then we'll provide some guidance on how
+to get your package registered. Be sure to read the section below on package naming conventions, tagging versions
+and the importance of a ``REQUIRE`` file for when you're ready to add your code to the curated METADATA repository.
+
 Package Status
 --------------
 
@@ -38,7 +42,7 @@ Packages can be in more complicated states, indicated by annotations to the righ
 For programmatic usage, :func:`Pkg.installed` returns a dictionary, mapping installed package names to the version of that package which is installed::
 
     julia> Pkg.installed()
-    Dict{ASCIIString,VersionNumber} with 4 entries:
+    Dict{String,VersionNumber} with 4 entries:
     "Distributions"     => v"0.2.8"
     "Stats"             => v"0.2.6"
     "UTF16"             => v"0.2.0"
@@ -124,11 +128,13 @@ When you decide that you don't want to have a package around any more, you can u
 
 Once again, this is equivalent to editing the ``REQUIRE`` file to remove the line with each package name on it then running :func:`Pkg.resolve` to update the set of installed packages to match.
 While :func:`Pkg.add` and :func:`Pkg.rm` are convenient for adding and removing requirements for a single package, when you want to add or remove multiple packages, you can call :func:`Pkg.edit` to manually change the contents of ``REQUIRE`` and then update your packages accordingly.
-:func:`Pkg.edit` does not roll back the contents of ``REQUIRE`` if :func:`Pkg.resolve` fails – rather, you have to run :func:`Pkg.edit` again to fix the files contents yourself.
+:func:`Pkg.edit` does not roll back the contents of ``REQUIRE`` if :func:`Pkg.resolve` fails – rather, you have to run :func:`Pkg.edit` again to fix the files contents yourself.
 
-Because the package manager uses git internally to manage the package git repositories, users may run into protocol issues (if behind a firewall, for example), when running :func:`Pkg.add`. The following command can be run from the command line to tell git to use 'https' instead of the 'git' protocol when cloning repositories::
+Because the package manager uses git internally to manage the package git repositories, users may run into protocol issues (if behind a firewall, for example), when running :func:`Pkg.add`. By default, all GitHub-hosted packages wil be accessed via 'https'; this default can be modified by calling :func:`Pkg.setprotocol!`.  The following command can be run from the command line in order to tell git to use 'https' instead of the 'git' protocol when cloning all repositories, wherever they are hosted::
 
     git config --global url."https://".insteadOf git://
+
+However, this change will be system-wide and thus the use of :func:`Pkg.setprotocol!` is preferable.
 
 Offline Installation of Packages
 --------------------------------
@@ -139,9 +145,9 @@ same operating system and environment.
 
 :func:`Pkg.add` does the following within the package root directory:
 
-1. Adds the name of the package to ``INSTALLED``.
+1. Adds the name of the package to ``REQUIRE``.
 2. Downloads the package to ``.cache``, then copies the package to the package root directory.
-3. Recursively performs step 2 against all the packages listed in the package's ``REQUIRES`` file.
+3. Recursively performs step 2 against all the packages listed in the package's ``REQUIRE`` file.
 4. Runs :func:`Pkg.build`
 
 .. warning::
@@ -196,8 +202,8 @@ If the branch cannot be fast-forwarded, it is assumed that you're working on it 
 Finally, the update process recomputes an optimal set of package versions to have installed to satisfy your top-level requirements and the requirements of "fixed" packages.
 A package is considered fixed if it is one of the following:
 
-1. **Unregistered:** the package is not in ``METADATA`` – you installed it with :func:`Pkg.clone`.
-2. **Checked out:** the package repo is on a development branch.
+1. **Unregistered:** the package is not in ``METADATA`` – you installed it with :func:`Pkg.clone`.
+2. **Checked out:** the package repo is on a development branch.
 3. **Dirty:** changes have been made to files in the repo.
 
 If any of these are the case, the package manager cannot freely change the installed version of the package, so its requirements must be satisfied by whatever other package versions it picks.
@@ -234,7 +240,7 @@ In such cases, you can do :func:`Pkg.checkout(pkg) <Pkg.checkout>` to checkout t
      - NumericExtensions             0.2.17
      - Stats                         0.2.7
 
-Immediately after installing ``Distributions`` with :func:`Pkg.add` it is on the current most recent registered version – ``0.2.9`` at the time of writing this.
+Immediately after installing ``Distributions`` with :func:`Pkg.add` it is on the current most recent registered version – ``0.2.9`` at the time of writing this.
 Then after running :func:`Pkg.checkout("Distributions") <Pkg.checkout>`, you can see from the output of :func:`Pkg.status` that ``Distributions`` is on an unregistered version greater than ``0.2.9``, indicated by the "pseudo-version" number ``0.2.9+``.
 
 When you checkout an unregistered version of a package, the copy of the ``REQUIRE`` file in the package repo takes precedence over any requirements registered in ``METADATA``, so it is important that developers keep this file accurate and up-to-date, reflecting the actual requirements of the current version of the package.
@@ -268,7 +274,7 @@ If you want to pin a package at a specific version so that calling :func:`Pkg.up
      - NumericExtensions             0.2.17
      - Stats                         0.2.7              pinned.47c198b1.tmp
 
-After this, the ``Stats`` package will remain pinned at version ``0.2.7`` – or more specifically, at commit ``47c198b1``, but since versions are permanently associated a given git hash, this is the same thing.
+After this, the ``Stats`` package will remain pinned at version ``0.2.7`` – or more specifically, at commit ``47c198b1``, but since versions are permanently associated a given git hash, this is the same thing.
 :func:`Pkg.pin` works by creating a throw-away branch for the commit you want to pin the package at and then checking that branch out.
 By default, it pins a package at the current commit, but you can choose a different version by passing a second argument::
 
@@ -347,6 +353,7 @@ where ``USERNAME`` is your actual GitHub user name.
 Once you do this, the package manager knows your GitHub user name and can configure things accordingly.
 You should also `upload <https://github.com/settings/ssh>`_ your public SSH key to GitHub and set up an `SSH agent <http://linux.die.net/man/1/ssh-agent>`_ on your development machine so that you can push changes with minimal hassle.
 In the future, we will make this system extensible and support other common git hosting options like `BitBucket <https://bitbucket.org>`_ and allow developers to choose their favorite.
+Since the package development functions has been moved to the `PkgDev <https://github.com/JuliaLang/PkgDev.jl>`_ package, you need to run ``Pkg.add("PkgDev"); import PkgDev`` to access the functions starting with ``PkgDev.`` in the document below.
 
 Making changes to an existing package
 -------------------------------------
@@ -366,8 +373,35 @@ want to make (this is your *commit message*), and then hit "Propose
 file change."  Your changes will be submitted for consideration by the
 package owner(s) and collaborators.
 
+For larger documentation changes---and especially ones that you expect
+to have to update in response to feedback---you might find it easier
+to use the procedure for code changes described below.
+
 Code changes
 ~~~~~~~~~~~~
+
+Executive summary
+^^^^^^^^^^^^^^^^^
+
+Here we assume you've already set up git on your local machine and
+have a GitHub account (see above).  Let's imagine you're fixing a bug
+in the Images package::
+
+  Pkg.checkout("Images")           # check out the master branch
+  <here, make sure your bug is still a bug and hasn't been fixed already>
+  cd(Pkg.dir("Images"))
+  ;git checkout -b myfixes         # create a branch for your changes
+  <edit code>                      # be sure to add a test for your bug
+  Pkg.test("Images")               # make sure everything works now
+  ;git commit -a -m "Fix foo by calling bar"   # write a descriptive message
+  using PkgDev
+  PkgDev.submit("Images")
+
+The last line will present you with a link to submit a pull request
+to incorporate your changes.
+
+Detailed description
+^^^^^^^^^^^^^^^^^^^^
 
 If you want to fix a bug or add new functionality, you want to be able
 to test your changes before you submit them for consideration. You
@@ -382,7 +416,7 @@ changes to a publicly-visible location, your own online *fork* of
 the package (hosted on your own personal GitHub account).
 
 Let's assume you already have the ``Foo`` package installed.  In the
-description below, anything starting with ``Pkg.`` is meant to be
+description below, anything starting with ``Pkg.`` or ``PkgDev.`` is meant to be
 typed at the Julia prompt; anything starting with ``git`` is meant to
 be typed in :ref:`julia's shell mode <man-shell-mode>` (or using the
 shell that comes with your operating system).  Within Julia, you can
@@ -432,26 +466,27 @@ are several possible approaches, here is one that is widely used:
   run the tests:
 
   + From Julia, run :func:`Pkg.test("Foo") <Pkg.test>`: this will run your
-    tests in a separate (new) julia process.
+    tests in a separate (new) ``julia`` process.
   + From Julia, ``include("runtests.jl")`` from the package's ``test/`` folder
     (it's possible the file has a different name, look for one that runs all
     the tests): this allows you to run the tests repeatedly in the same session
     without reloading all the package code; for packages that take a while to
     load, this can be much faster. With this approach, you do have to do some
     extra work to make :ref:`changes in the package code <man-workflow-tips>`.
-  + From the shell, run ``julia runtests.jl`` from within the package's
-    ``test/`` folder.
+  + From the shell, run ``julia ../test/runtests.jl`` from within the package's
+    ``src/`` folder.
 
 
 - Commit your changes: see `<http://git-scm.com/book/en/v2/Git-Basics-Recording-Changes-to-the-Repository>`_.
 
 - Submit your changes: From the Julia prompt, type
-  :func:`Pkg.submit("Foo") <Pkg.submit>`. This will push your changes to your
+  :func:`PkgDev.submit("Foo") <PkgDev.submit>`. This will push your changes to your
   GitHub fork, creating it if it doesn't already exist. (If you encounter an
   error, :ref:`make sure you've set up your SSH keys <man-pkg-dev-setup>`.)
   Julia will then give you a hyperlink; open that link, edit the message, and
   then click "submit." At that point, the package owner will be notified of
-  your changes and may initiate discussion.
+  your changes and may initiate discussion. (If you are comfortable with git,
+  you can also do these steps manually from the shell.)
 
 - The package owner may suggest additional improvements. To respond to those
   suggestions, you can easily update the pull request (this only works for
@@ -566,78 +601,130 @@ going to have to do a *force push*:
   it with ``git remote add myfork
   https://github.com/myaccount/Foo.jl.git``, where the URL comes from
   the "clone URL" on your GitHub fork's page.
-- Force-push to your fork with ``git push myfork +fixbar``. The `+`
+- Force-push to your fork with ``git push myfork +fixbar``. The ``+``
   indicates that this should replace the ``fixbar`` branch found at
   ``myfork``.
-
 
 Creating a new Package
 ----------------------
 
-Guidelines for Naming a Package
+REQUIRE speaks for itself
+~~~~~~~~~~~~~~~~~~~~~~~~~
+
+You should have a ``REQUIRE`` file in your package repository, with a bare minimum directive of what Julia
+version you expect your users to be running for the package to work. Putting a floor on what Julia
+version your package supports is done by simply adding ``julia 0.x`` in this file. While this line is
+partly informational, it also has the consequence of whether ``Pkg.update()`` will update code found
+in ``.julia`` version directories. It will not update code found in version directories beneath the
+floor of what's specified in your ``REQUIRE``.
+
+As the development version ``0.y`` matures, you may find yourself using it more frequently, and wanting your
+package to support it. Be warned, the development branch of Julia is the land of breakage, and you can expect
+things to break. When you go about fixing whatever broke your package in the development ``0.y`` branch, you
+will likely find that you just broke your package on the stable version.
+
+There is a mechanism found in the `Compat <https://github.com/JuliaLang/Compat.jl>`_ package that will enable
+you to support both the stable version and breaking changes found in the development version. Should you decide
+to use this solution, you will need to add ``Compat`` to your ``REQUIRE`` file. In this case, you will still
+have ``julia 0.x`` in your ``REQUIRE``. The ``x`` is the floor version of what your package supports.
+
+You might also have no interest in supporting the development version of Julia. Just as you can add a floor
+to the version you expect your users to be on, you can set an upper bound. In this case, you would put
+``julia 0.x 0.y-`` in your ``REQUIRE`` file.  The ``-`` at the end of the version number means pre-release
+versions of that specific version from the very first commit. By setting it as the ceiling, you mean the code
+supports everything up to but not including the ceiling version.
+
+Another scenario is that you are writing the bulk of the code for your package with Julia ``0.y`` and do
+not want to support the current stable version of Julia. If you choose to do this, simply add ``julia 0.y-``
+to your ``REQUIRE``. Just remember to change the ``julia 0.y-`` to ``julia 0.y`` in your ``REQUIRE`` file once
+``0.y`` is officially released. If you don't edit the dash cruft you are suggesting that you support both the
+development and stable versions of the same version number! That would be madness.  See the
+`Requirements Specification <#man-package-requirements>`_ for the full format of ``REQUIRE``.
+
+Guidelines for naming a package
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 Package names should be sensible to most Julia users, *even to those who are
-not domain experts*.
+not domain experts*. When you submit your package to METADATA, you can expect
+a little back and forth about the package name with collaborators, especially if it's
+ambiguous or can be confused with something other than what it is. During this
+bike-shedding, it's not uncommon to get a range of *different* name suggestions.
+These are only suggestions though, with the intent being to keep a tidy namespace in
+the curated METADATA repository. Since this repository belongs to the entire
+community, there will likely be a few collaborators who care your package name.
+Here are some guidelines to follow in naming your package:
 
 1. Avoid jargon. In particular, avoid acronyms unless there is minimal
    possibility of confusion.
 
-  * It's ok to say ``USA`` if you're talking about the USA.
+   * It's ok to say ``USA`` if you're talking about the USA.
 
-  * It's not ok to say ``PMA``, even if you're talking about positive mental
-    attitude.
+   * It's not ok to say ``PMA``, even if you're talking about positive mental
+     attitude.
 
-2. Packages that provide most of their functionality in association with a new
+2. Avoid using ``Julia`` in your package name.
+
+   * It is usually clear from context and to your users that the package is a
+     Julia package.
+
+   * Having Julia in the name can imply that the package is connected to, or
+     endorsed by, contributors to the Julia language itself.
+
+3. Packages that provide most of their functionality in association with a new
    type should have pluralized names.
 
-  * ``DataFrames`` provides the ``DataFrame`` type.
+   * ``DataFrames`` provides the ``DataFrame`` type.
 
-  * ``BloomFilters`` provides the ``BloomFilter`` type.
+   * ``BloomFilters`` provides the ``BloomFilter`` type.
 
-  * In contrast, ``JuliaParser`` provides no new type, but instead new
-    functionality in the ``JuliaParser.parse()`` function.
+   * In contrast, ``JuliaParser`` provides no new type, but instead new
+     functionality in the ``JuliaParser.parse()`` function.
 
-3. Err on the side of clarity, even if clarity seems long-winded to you.
+4. Err on the side of clarity, even if clarity seems long-winded to you.
 
-  * ``RandomMatrices`` is a less ambiguous name than ``RndMat`` or ``RMT``,
-    even though the latter are shorter.
+   * ``RandomMatrices`` is a less ambiguous name than ``RndMat`` or ``RMT``,
+     even though the latter are shorter.
 
-4. A less systematic name may suit a package that implements one of several
+5. A less systematic name may suit a package that implements one of several
    possible approaches to its domain.
 
-  * Julia does not have a single comprehensive plotting package. Instead,
-    ``Gadfly``, ``PyPlot``, ``Winston`` and other packages each implement a
-    unique approach based on a particular design philosophy.
+   * Julia does not have a single comprehensive plotting package. Instead,
+     ``Gadfly``, ``PyPlot``, ``Winston`` and other packages each implement a
+     unique approach based on a particular design philosophy.
 
-  * In contrast, ``SortingAlgorithms`` provides a consistent interface to use
-    many well-established sorting algorithms.
+   * In contrast, ``SortingAlgorithms`` provides a consistent interface to use
+     many well-established sorting algorithms.
 
-5. Packages that wrap external libraries or programs should be named after
+6. Packages that wrap external libraries or programs should be named after
    those libraries or programs.
 
-  * ``CPLEX.jl`` wraps the ``CPLEX`` library, which can be identified easily in
-    a web search.
+   * ``CPLEX.jl`` wraps the ``CPLEX`` library, which can be identified easily in
+     a web search.
 
-  * ``MATLAB.jl`` provides an interface to call the MATLAB engine from within Julia.
+   * ``MATLAB.jl`` provides an interface to call the MATLAB engine from within Julia.
 
 Generating the package
 ~~~~~~~~~~~~~~~~~~~~~~
 
-Suppose you want to create a new Julia package called ``FooBar``.
-To get started, do :func:`Pkg.generate(pkg,license) <Pkg.generate>` where ``pkg`` is the new package name and ``license`` is the name of a license that the package generator knows about::
+Suppose you want to create a new Julia package called ``FooBar``.  To get started, do
+:func:`PkgDev.generate(pkg,license) <PkgDev.generate>` where ``pkg`` is the new package name and ``license`` is the
+name of a license that the package generator knows about::
 
-    julia> Pkg.generate("FooBar","MIT")
+    julia> PkgDev.generate("FooBar","MIT")
     INFO: Initializing FooBar repo: /Users/stefan/.julia/v0.4/FooBar
     INFO: Origin: git://github.com/StefanKarpinski/FooBar.jl.git
     INFO: Generating LICENSE.md
     INFO: Generating README.md
     INFO: Generating src/FooBar.jl
     INFO: Generating test/runtests.jl
+    INFO: Generating REQUIRE
     INFO: Generating .travis.yml
+    INFO: Generating appveyor.yml
+    INFO: Generating .gitignore
     INFO: Committing FooBar generated files
 
-This creates the directory ``~/.julia/v0.4/FooBar``, initializes it as a git repository, generates a bunch of files that all packages should have, and commits them to the repository::
+This creates the directory ``~/.julia/v0.4/FooBar``, initializes it as a git repository, generates a bunch of files
+that all packages should have, and commits them to the repository::
 
     $ cd ~/.julia/v0.4/FooBar && git show --stat
 
@@ -654,28 +741,34 @@ This creates the directory ``~/.julia/v0.4/FooBar``, initializes it as a git rep
 
         Julia Version 0.3.0-prerelease+3217 [5fcfb13*]
 
-     .travis.yml      | 16 +++++++++++++
+     .gitignore       |  2 ++
+     .travis.yml      | 13 +++++++++++++
      LICENSE.md       | 22 +++++++++++++++++++++++
      README.md        |  3 +++
+     REQUIRE          |  1 +
+     appveyor.yml     | 34 ++++++++++++++++++++++++++++++++++
      src/FooBar.jl    |  5 +++++
      test/runtests.jl |  5 +++++
-     5 files changed, 51 insertions(+)
+     8 files changed, 85 insertions(+)
 
-At the moment, the package manager knows about the MIT "Expat" License, indicated by ``"MIT"``, the Simplified BSD License, indicated by ``"BSD"``, and version 2.0 of the Apache Software License, indicated by ``"ASL"``.
-If you want to use a different license, you can ask us to add it to the package generator, or just pick one of these three and then modify the ``~/.julia/v0.4/PACKAGE/LICENSE.md`` file after it has been generated.
+At the moment, the package manager knows about the MIT "Expat" License, indicated by ``"MIT"``, the Simplified BSD License,
+indicated by ``"BSD"``, and version 2.0 of the Apache Software License, indicated by ``"ASL"``.  If you want to use a
+different license, you can ask us to add it to the package generator, or just pick one of these three and then modify the
+``~/.julia/v0.4/PACKAGE/LICENSE.md`` file after it has been generated.
 
-If you created a GitHub account and configured git to know about it, :func:`Pkg.generate` will set an appropriate origin URL for you.
-It will also automatically generate a ``.travis.yml`` file for using the `Travis <https://travis-ci.org>`_ automated testing service.
-You will have to enable testing on the Travis website for your package repository, but once you've done that, it will already have working tests.
+If you created a GitHub account and configured git to know about it, :func:`PkgDev.generate` will set an appropriate origin URL
+for you.  It will also automatically generate a ``.travis.yml`` file for using the `Travis <https://travis-ci.org>`_ automated
+testing service, and an ``appveyor.yml`` file for using `AppVeyor <http://appveyor.com>`_.  You will have to enable testing on
+the Travis and AppVeyor websites for your package repository, but once you've done that, it will already have working tests.
 Of course, all the default testing does is verify that ``using FooBar`` in Julia works.
 
 Making Your Package Available
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-Once you've made some commits and you're happy with how ``FooBar`` is working, you may want to get some other people to try it out.
-First you'll need to create the remote repository and push your code to it;
-we don't yet automatically do this for you, but we will in the future and it's not too hard to figure out [3]_.
-Once you've done this, letting people try out your code is as simple as sending them the URL of the published repo – in this case::
+Once you've made some commits and you're happy with how ``FooBar`` is working, you may want to get some other people to try
+it out.  First you'll need to create the remote repository and push your code to it; we don't yet automatically do this for you,
+but we will in the future and it's not too hard to figure out [3]_.  Once you've done this, letting people try out your code is
+as simple as sending them the URL of the published repo – in this case::
 
     git://github.com/StefanKarpinski/FooBar.jl.git
 
@@ -687,12 +780,13 @@ People you send this URL to can use :func:`Pkg.clone` to install the package and
 
 .. [3] Installing and using GitHub's `"hub" tool <https://github.com/github/hub>`_ is highly recommended. It allows you to do things like run ``hub create`` in the package repo and have it automatically created via GitHub's API.
 
-Publishing Your Package
-~~~~~~~~~~~~~~~~~~~~~~~
+Tagging and Publishing Your Package
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-Once you've decided that ``FooBar`` is ready to be registered as an official package, you can add it to your local copy of ``METADATA`` using :func:`Pkg.register`::
+Once you've decided that ``FooBar`` is ready to be registered as an official package, you can add it to your local copy
+of ``METADATA`` using :func:`PkgDev.register`::
 
-    julia> Pkg.register("FooBar")
+    julia> PkgDev.register("FooBar")
     INFO: Registering FooBar at git://github.com/StefanKarpinski/FooBar.jl.git
     INFO: Committing METADATA for FooBar
 
@@ -714,12 +808,11 @@ This creates a commit in the ``~/.julia/v0.4/METADATA`` repo::
     @@ -0,0 +1 @@
     +git://github.com/StefanKarpinski/FooBar.jl.git
 
-This commit is only locally visible, however.  In order to make it visible to
-the world, you need to merge your local ``METADATA`` upstream into the official
-repo.  The :func:`Pkg.publish` command will fork the ``METADATA`` repository on
-GitHub, push your changes to your fork, and open a pull request::
+This commit is only locally visible, however.  To make it visible to the Julia community, you need to merge your
+local ``METADATA`` upstream into the official repo.  The :func:`PkgDev.publish` command will fork the ``METADATA`` repository
+on GitHub, push your changes to your fork, and open a pull request::
 
-    julia> Pkg.publish()
+    julia> PkgDev.publish()
     INFO: Validating METADATA
     INFO: No new package versions to publish
     INFO: Submitting METADATA changes
@@ -731,64 +824,25 @@ GitHub, push your changes to your fork, and open a pull request::
 
 .. tip::
 
-    If :func:`Pkg.publish` fails with error::
+    If :func:`PkgDev.publish` fails with error::
 
         ERROR: key not found: "token"
 
     then you may have encountered an issue from using the GitHub API on
     multiple systems. The solution is to delete the "Julia Package Manager"
     personal access token `from your Github account
-    <https://github.com/settings/applications>`_ and try again.
+    <https://github.com/settings/tokens>`_ and try again.
 
-    Other failures may require you to circumvent :func:`Pkg.publish` by
+    Other failures may require you to circumvent :func:`PkgDev.publish` by
     `creating a pull request on GitHub
     <https://help.github.com/articles/creating-a-pull-request>`_.
     See: :ref:`man-manual-publish` below.
 
-Once the package URL for ``FooBar`` is registered in the official ``METADATA`` repo, people know where to clone the package from, but there still aren't any registered versions available.
-This means that :func:`Pkg.add("FooBar") <Pkg.add>` won't work yet since it only installs official versions.
-:func:`Pkg.clone("FooBar") <Pkg.clone>` without having to specify a URL for it.
-Moreover, when they run :func:`Pkg.update`, they will get the latest version of ``FooBar`` that you've pushed to the repo.
-This is a good way to have people test out your packages as you work on them, before they're ready for an official release.
+Once the package URL for ``FooBar`` is registered in the official ``METADATA`` repo, people know where
+to clone the package from, but there still aren't any registered versions available. You can tag and
+register it with the :func:`PkgDev.tag` command::
 
-.. _man-manual-publish:
-
-Publishing METADATA manually
-============================
-
-If :func:`Pkg.publish` fails you can follow these instructions to
-manually publish your package.
-
-By "forking" the main METADATA repository, you can create a
-personal copy (of METADATA.jl) under your GitHub account. Once
-that copy exists, you can push your local changes to your copy
-(just like any other GitHub project).
-
-
-1. go to `<https://github.com/JuliaLang/METADATA.jl/fork>`_ and create your own
-fork.
-
-2. add your fork as a remote repository for the METADATA
-repository on your local computer (in the terminal where USERNAME is
-your github username)::
-
-    cd ~/.julia/v0.4/METADATA
-    git remote add USERNAME https://github.com/USERNAME/METADATA.jl.git
-
-3. push your changes to your fork::
-
-    git push USERNAME metadata-v2
-
-4. If all of that works, then go back to the GitHub page for your
-fork, and click the "pull request" link.
-
-
-Tagging Package Versions
-------------------------
-
-Once you are ready to make an official version your package---or release a new version of an established package---you can tag and register it with the :func:`Pkg.tag` command::
-
-    julia> Pkg.tag("FooBar")
+    julia> PkgDev.tag("FooBar")
     INFO: Tagging FooBar v0.0.1
     INFO: Committing METADATA for FooBar
 
@@ -814,20 +868,21 @@ It also creates a new version entry in your local ``METADATA`` repo for ``FooBar
     @@ -0,0 +1 @@
     +84b8e266dae6de30ab9703150b3bf771ec7b6285
 
-If there is a ``REQUIRE`` file in your package repo, it will be copied into the appropriate spot in ``METADATA`` when you tag a version.
-Package developers should make sure that the ``REQUIRE`` file in their package correctly reflects the requirements of their package, which will automatically flow into the official metadata if you're using :func:`Pkg.tag`.
-See the `Requirements Specification <#man-package-requirements>`_ for the full format of ``REQUIRE``.
+The :func:`PkgDev.tag` command takes an optional second argument that is either an explicit version number object
+like ``v"0.0.1"`` or one of the symbols ``:patch``, ``:minor`` or ``:major``.  These increment the patch, minor
+or major version number of your package intelligently.
 
-The :func:`Pkg.tag` command takes an optional second argument that is either an explicit version number object like ``v"0.0.1"`` or one of the symbols ``:patch``, ``:minor`` or ``:major``.
-These increment the patch, minor or major version number of your package intelligently.
+Adding a tagged version of your package will expedite the official registration into METADATA.jl by collaborators. It is
+strongly recommended that you complete this process, regardless if your package is completely ready for an official release.
 
-As with :func:`Pkg.register`, these changes to ``METADATA`` aren't
-available to anyone else until they've been included upstream.  Again,
-use the :func:`Pkg.publish` command, which first makes sure that
-individual package repos have been tagged, pushes them if they haven't
-already been, and then opens a pull request to ``METADATA``::
+As a general rule, packages should be tagged ``0.0.1`` first. Since Julia itself hasn't achieved ``1.0`` status, it's best to
+be conservative in your package's tagged versions.
 
-    julia> Pkg.publish()
+As with :func:`PkgDev.register`, these changes to ``METADATA`` aren't available to anyone else until they've been included upstream.
+Again, use the :func:`PkgDev.publish` command, which first makes sure that individual package repos have been tagged, pushes them
+if they haven't already been, and then opens a pull request to ``METADATA``::
+
+    julia> PkgDev.publish()
     INFO: Validating METADATA
     INFO: Pushing FooBar permanent tags: v0.0.1
     INFO: Submitting METADATA changes
@@ -836,6 +891,38 @@ already been, and then opens a pull request to ``METADATA``::
     INFO: To create a pull-request open:
 
       https://github.com/StefanKarpinski/METADATA.jl/compare/pull-request/3ef4f5c4
+
+.. _man-manual-publish:
+
+Publishing METADATA manually
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+If :func:`PkgDev.publish` fails you can follow these instructions to
+manually publish your package.
+
+By "forking" the main METADATA repository, you can create a
+personal copy (of METADATA.jl) under your GitHub account. Once
+that copy exists, you can push your local changes to your copy
+(just like any other GitHub project).
+
+
+1. go to `<https://github.com/JuliaLang/METADATA.jl/fork>`_ and create your own
+fork.
+
+2. add your fork as a remote repository for the METADATA
+repository on your local computer (in the terminal where USERNAME is
+your github username)::
+
+    cd ~/.julia/v0.4/METADATA
+    git remote add USERNAME https://github.com/USERNAME/METADATA.jl.git
+
+3. push your changes to your fork::
+
+    git push USERNAME metadata-v2
+
+4. If all of that works, then go back to the GitHub page for your
+fork, and click the "pull request" link.
+
 
 Fixing Package Requirements
 ---------------------------
@@ -877,7 +964,7 @@ For example, the line::
     Distributions 0.1
 
 is satisfied by any version of ``Distributions`` greater than or equal to ``0.1.0``.
-Suffixing a version with `-` allows any pre-release versions as well. For example::
+Suffixing a version with ``-`` allows any pre-release versions as well. For example::
 
     Distributions 0.1-
 
@@ -903,14 +990,19 @@ For example::
     @osx Homebrew
 
 will require the ``Homebrew`` package only on systems where the operating system is OS X.
-The system conditions that are currently supported are::
+The system conditions that are currently supported are (hierarchically):
 
-    @windows
-    @unix
-    @osx
-    @linux
+* ``@unix``
 
-The ``@unix`` condition is satisfied on all UNIX systems, including OS X, Linux and FreeBSD.
+  * ``@linux``
+
+  * ``@bsd``
+
+    * ``@osx``
+
+* ``@windows``
+
+The ``@unix`` condition is satisfied on all UNIX systems, including Linux and BSD.
 Negated system conditionals are also supported by adding a ``!`` after the leading ``@``.
 Examples::
 

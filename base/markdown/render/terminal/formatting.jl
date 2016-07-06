@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 # Styles
 
 const text_formats = Dict(
@@ -56,12 +58,12 @@ words(s) = split(s, " ")
 lines(s) = split(s, "\n")
 
 # This could really be more efficient
-function wrapped_lines(s::String; width = 80, i = 0)
+function wrapped_lines(s::AbstractString; width = 80, i = 0)
     if ismatch(r"\n", s)
         return vcat(map(s->wrapped_lines(s, width = width, i = i), split(s, "\n"))...)
     end
     ws = words(s)
-    lines = String[ws[1]]
+    lines = AbstractString[ws[1]]
     i += ws[1] |> ansi_length
     for word in ws[2:end]
         word_length = ansi_length(word)

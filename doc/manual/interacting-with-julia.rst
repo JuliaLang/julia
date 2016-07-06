@@ -4,7 +4,7 @@
  Interacting With Julia
 ************************
 
-Julia comes with a full-featured interactive command-line REPL (read-eval-print loop) built into the ``julia`` executable.  In addition to allowing quick and easy evaluation of Julia statements, it has a searchable history, tab-completion, many helpful keybindings, and dedicated help and shell modes.  The REPL can be started by simply calling julia with no arguments or double-clicking on the executable::
+Julia comes with a full-featured interactive command-line REPL (read-eval-print loop) built into the ``julia`` executable.  In addition to allowing quick and easy evaluation of Julia statements, it has a searchable history, tab-completion, many helpful keybindings, and dedicated help and shell modes.  The REPL can be started by simply calling ``julia`` with no arguments or double-clicking on the executable::
 
     $ julia
                    _
@@ -57,7 +57,7 @@ When the cursor is at the beginning of the line, the prompt can be changed to a 
 In addition to function names, complete function calls may be entered to see which method is called for the given argument(s).  Macros, types and variables can also be queried::
 
     help> string(1)
-    string(x::Union(Int16,Int128,Int8,Int32,Int64)) at string.jl:1553
+    string(x::Union{Int16,Int128,Int8,Int32,Int64}) at string.jl:1553
 
     help> @printf
     Base.@printf([io::IOStream], "%Fmt", args...)
@@ -69,7 +69,7 @@ In addition to function names, complete function calls may be entered to see whi
     help> AbstractString
     DataType   : AbstractString
       supertype: Any
-      subtypes : {DirectIndexString,GenericString,RepString,RevString{T<:AbstractString},RopeString,SubString{T<:AbstractString},UTF16String,UTF8String}
+      subtypes : Any[DirectIndexString,RepString,RevString{T<:AbstractString},SubString{T<:AbstractString},String]
 
 Help mode can be exited by pressing backspace at the beginning of the line.
 
@@ -106,6 +106,8 @@ The Julia REPL makes great use of key bindings.  Several control-key bindings we
 | ``^D``                 | Exit (when buffer is empty)                        |
 +------------------------+----------------------------------------------------+
 | ``^C``                 | Interrupt or cancel                                |
++------------------------+----------------------------------------------------+
+| ``^L``                 | Clear console screen                               |
 +------------------------+----------------------------------------------------+
 | Return/Enter, ``^J``   | New line, executing if it is complete              |
 +------------------------+----------------------------------------------------+
@@ -161,13 +163,11 @@ The Julia REPL makes great use of key bindings.  Several control-key bindings we
 +------------------------+----------------------------------------------------+
 | ``^T``                 | Transpose the characters about the cursor          |
 +------------------------+----------------------------------------------------+
-| Delete, ``^D``         | Forward delete one character (when buffer has text)|
-+------------------------+----------------------------------------------------+
 
 Customizing keybindings
 ~~~~~~~~~~~~~~~~~~~~~~~
 
-Julia's REPL keybindings may be fully customized to a user's preferences by passing a dictionary to ``REPL.setup_interface()``. The keys of this dictionary may be characters or strings. The key ``'*'`` refers to the default action. Control plus character ``x`` bindings are indicated with ``"^x"``. Meta plus ``x`` can be written ``"\\Mx"``. The values of the custom keymap must be ``nothing`` (indicating that the input should be ignored) or functions that accept the signature ``(PromptState, AbstractREPL, Char)``. For example, to bind the up and down arrow keys to move through history without prefix search, one could put the following code in ``.juliarc.jl``::
+Julia's REPL keybindings may be fully customized to a user's preferences by passing a dictionary to ``REPL.setup_interface()``. The keys of this dictionary may be characters or strings. The key ``'*'`` refers to the default action. Control plus character ``x`` bindings are indicated with ``"^x"``. Meta plus ``x`` can be written ``"\\Mx"``. The values of the custom keymap must be ``nothing`` (indicating that the input should be ignored) or functions that accept the signature ``(PromptState, AbstractREPL, Char)``. The ``REPL.setup_interface()`` function must be called before the REPL is initialized, by registering the operation with ``atreplinit()``. For example, to bind the up and down arrow keys to move through history without prefix search, one could put the following code in ``.juliarc.jl``::
 
     import Base: LineEdit, REPL
 
@@ -178,7 +178,11 @@ Julia's REPL keybindings may be fully customized to a user's preferences by pass
       "\e[B" => (s,o...)->(LineEdit.edit_move_up(s) || LineEdit.history_next(s, LineEdit.mode(s).hist))
     )
 
-    Base.active_repl.interface = REPL.setup_interface(Base.active_repl; extra_repl_keymap = mykeys)
+    function customize_keys(repl)
+      repl.interface = REPL.setup_interface(repl; extra_repl_keymap = mykeys)
+    end
+
+    atreplinit(customize_keys)
 
 Users should refer to ``base/LineEdit.jl`` to discover the available actions on key input.
 
@@ -209,7 +213,7 @@ and get a list of LaTeX matches as well::
 
     julia> e\^1[TAB] = [1 0]
     julia> e¹ = [1 0]
-    1x2 Array{Int64,2}:
+    1×2 Array{Int64,2}:
      1  0
 
     julia> \sqrt[TAB]2     # √ is equivalent to the sqrt() function
@@ -225,3 +229,26 @@ and get a list of LaTeX matches as well::
     \hbar             \hermitconjmatrix  \hkswarow          \hookrightarrow    \hspace
 
 A full list of tab-completions can be found in the :ref:`man-unicode-input` section of the manual.
+
+
+Customizing Colors
+~~~~~~~~~~~~~~~~~~
+
+The colors used by Julia and the REPL can be customized, as well. To change the color of the Julia
+prompt you can add something like the following to your ``juliarc.jl`` file::
+
+    Base.active_repl.prompt_color = Base.text_colors[:cyan]
+
+The available color keys in ``Base.text_colors`` are ``:black``, ``:red``, ``:green``, ``:yellow``,
+``:blue``, ``:magenta``, ``:cyan``, ``:white``, ``:normal``, and ``:bold``. Similarly, you can
+change the colors for the help and shell prompts and input and answer text by setting the
+appropriate member of ``Base.active_repl`` (respectively, ``help_color``, ``shell_color``,
+``input_color``, and ``answer_color``). For the latter two, be sure that the ``envcolors`` member
+is also set to false.
+
+You can also customize the color used to render warning and informational messages by
+setting the appropriate environment variable. For instance, to render warning messages in yellow and
+informational messages in cyan you can add the following to your ``juliarc.jl`` file::
+
+    ENV["JULIA_WARN_COLOR"] = :yellow
+    ENV["JULIA_INFO_COLOR"] = :cyan

@@ -1,4 +1,14 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 # fast math
+
+# check expansions
+
+@test macroexpand(:(@fastmath 1+2)) == :(Base.FastMath.add_fast(1,2))
+@test macroexpand(:(@fastmath +)) == :(Base.FastMath.add_fast)
+@test macroexpand(:(@fastmath min(1))) == :(Base.FastMath.min_fast(1))
+@test macroexpand(:(@fastmath min)) == :(Base.FastMath.min_fast)
+@test macroexpand(:(@fastmath x.min)) == :(x.min)
 
 # basic arithmetic
 
@@ -93,9 +103,9 @@ for T in (Complex64, Complex128, Complex{BigFloat})
 end
 
 
-
 # math functions
 
+# real arithmetic
 for T in (Float32, Float64, BigFloat)
     half = 1/convert(T, 2)
     third = 1/convert(T, 3)
@@ -130,35 +140,54 @@ for T in (Float32, Float64, BigFloat)
     end
 end
 
-for T in (Float32, Float64, BigFloat)
-    CT = Complex{T}
-    half = (1+1im)/convert(T, 2) # complex
-    third = 1/convert(T, 3)      # real
-
-    @test isapprox((@fastmath third^3), third^3)
-
-    @test isapprox((@fastmath half/third), half/third)
-    @test isapprox((@fastmath half^3), half^3)
-    @test isapprox((@fastmath cis(third)), cis(third))
-end
-
+# complex arithmetic
 for T in (Complex64, Complex128, Complex{BigFloat})
-    half = (1+1im)/convert(T, 2)
-    third = (1-1im)/convert(T, 3)
+    half = (1+1im)/T(2)
+    third = (1-1im)/T(3)
+
+    # some of these functions promote their result to double
+    # precision, but we want to check equality at precision T
+    rtol = Base.rtoldefault(real(T))
 
     for f in (:+, :-, :abs, :abs2, :conj, :inv, :sign,
-              :acos, :acosh, :asin, :asinh, :atan, :atanh, :cos,
+              :acos, :acosh, :asin, :asinh, :atan, :atanh, :cis, :cos,
               :cosh, :exp10, :exp2, :exp, :expm1, :log10, :log1p,
               :log2, :log, :sin, :sinh, :sqrt, :tan, :tanh)
-        @test isapprox((@eval @fastmath $f($half)), (@eval $f($half)))
-        @test isapprox((@eval @fastmath $f($third)), (@eval $f($third)))
+        @test isapprox((@eval @fastmath $f($half)), (@eval $f($half)), rtol=rtol)
+        @test isapprox((@eval @fastmath $f($third)), (@eval $f($third)), rtol=rtol)
     end
     for f in (:+, :-, :*, :/, :(==), :!=, :^)
         @test isapprox((@eval @fastmath $f($half, $third)),
-                       (@eval $f($half, $third)))
+                       (@eval $f($half, $third)), rtol=rtol)
         @test isapprox((@eval @fastmath $f($third, $half)),
-                       (@eval $f($third, $half)))
+                       (@eval $f($third, $half)), rtol=rtol)
     end
+end
+
+# mixed real/complex arithmetic
+for T in (Float32, Float64, BigFloat)
+    CT = Complex{T}
+    half = 1/T(2)
+    third = 1/T(3)
+    chalf = (1+1im)/CT(2)
+    cthird = (1-1im)/CT(3)
+
+    for f in (:+, :-, :*, :/, :(==), :!=, :^)
+        @test isapprox((@eval @fastmath $f($chalf, $third)),
+                       (@eval $f($chalf, $third)))
+        @test isapprox((@eval @fastmath $f($half, $cthird)),
+                       (@eval $f($half, $cthird)))
+        @test isapprox((@eval @fastmath $f($cthird, $half)),
+                       (@eval $f($cthird, $half)))
+        @test isapprox((@eval @fastmath $f($third, $chalf)),
+                       (@eval $f($third, $chalf)))
+    end
+
+    @test isapprox((@fastmath third^3), third^3)
+
+    @test isapprox((@fastmath chalf/third), chalf/third)
+    @test isapprox((@fastmath chalf^3), chalf^3)
+    @test isapprox((@fastmath cis(third)), cis(third))
 end
 
 # issue #10544
@@ -170,6 +199,6 @@ let a = ones(2,2), b = ones(2,2)
     @test isapprox((@fastmath a[1,2] ^= 2.0), b[1,2] ^= 2.0)
 
     # test fallthrough for unsupported ops
-    c = 0
+    local c = 0
     @test Bool((@fastmath c |= 1))
 end

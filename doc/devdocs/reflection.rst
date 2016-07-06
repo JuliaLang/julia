@@ -15,17 +15,17 @@ an array of :obj:`Symbol` elements representing the exported bindings.
 .. rubric:: DataType fields
 
 The names of :obj:`DataType` fields may be interrogated
-using :func:`names`. For example, given the following type, ``names(Point)`` returns an arrays of :obj:`Symbol`
+using :func:`fieldnames`. For example, given the following type, ``fieldnames(Point)`` returns an arrays of :obj:`Symbol`
 elements representing the field names:
 
 .. doctest::
 
     julia> type Point
-            x::Int
-	        y
-	       end
+               x::Int
+               y
+           end
 
-    julia> names(Point)
+    julia> fieldnames(Point)
     2-element Array{Symbol,1}:
      :x
      :y
@@ -34,8 +34,8 @@ The type of each field in a ``Point`` object is stored in the ``types`` field of
 
 .. doctest::
 
-	julia> Point.types
-	(Int,Any)
+    julia> Point.types
+    svec(Int64,Any)
 
 While ``x`` is annotated as an ``Int``, ``y`` was unannotated in the type definition, therefore ``y`` defaults to the ``Any`` type.
 
@@ -43,26 +43,26 @@ Types are themselves represented as a structure called :obj:`DataType`:
 
 .. doctest::
 
-	julia> typeof(Point)
-	DataType
+    julia> typeof(Point)
+    DataType
 
-Note that ``names(DataType)`` gives the names for each field of :obj:`DataType` itself, and
+Note that ``fieldnames(DataType)`` gives the names for each field of :obj:`DataType` itself, and
 one of these fields is the ``types`` field observed in the example above.
 
 .. rubric:: Subtypes
 
 The *direct* subtypes of any :obj:`DataType` may be listed using
-:func:`subtypes`. For example, the abstract :obj:`DataType` :obj:`FloatingPoint`
+:func:`subtypes`. For example, the abstract :obj:`DataType` :obj:`AbstractFloat`
 has four (concrete) subtypes:
 
 .. doctest::
 
-	julia> subtypes(FloatingPoint)
-	4-element Array{Any,1}:
-	 BigFloat
-	 Float16
-	 Float32
-	 Float64
+    julia> subtypes(AbstractFloat)
+    4-element Array{Any,1}:
+     BigFloat
+     Float16
+     Float32
+     Float64
 
 Any abstract subtype will also be included in this list, but further subtypes
 thereof will not; recursive application of :func:`subtypes` may be used to inspect
@@ -70,12 +70,12 @@ the full type tree.
 
 .. rubric:: DataType layout
 
-The internal representation of a DataType is critically important when interfacing with
+The internal representation of a :obj:`DataType` is critically important when interfacing with
 C code and several functions are available to inspect these details.
 :func:`isbits(T::DataType) <isbits>` returns true if ``T`` is
 stored with C-compatible alignment.
-:func:`fieldoffsets(T::DataType) <fieldoffsets>` returns the (byte) offset for each
-field relative to the start of the type.
+:func:`fieldoffset(T::DataType, i::Integer) <fieldoffset>` returns the (byte) offset for
+field `i` relative to the start of the type.
 
 .. rubric:: Function methods
 
@@ -92,7 +92,7 @@ the macro will be evaluated and the result will be passed instead!). For example
 .. doctest::
 
    julia> macroexpand( :(@edit println("")) )
-   :(Base.edit(println,Base.typesof("")))
+   :(Base.edit(println,(Base.typesof)("")))
 
 The functions :func:`Base.Meta.show_sexpr` and :func:`dump` are used to display S-expr style views
 and depth-nested detail views for any expression.
@@ -104,14 +104,9 @@ variable assignments:
 .. doctest::
 
    julia> expand( :(f() = 1) )
-   :($(Expr(:method, :f,
-            :((top(tuple))((top(tuple))(),(top(tuple))())),
-            AST(:($(Expr(:lambda, Any[], Any[Any[],Any[],Any[]],
-                :(begin
-                    return 1
-                  end)
-            )))),
-            false)))
+   :($(Expr(:method, :f, :((top(svec))((top(apply_type))(Tuple),(top(svec))())), AST(:($(Expr(:lambda, Any[], Any[Any[],Any[],0,Any[]], :(begin  # none, line 1:
+           return 1
+       end))))), false)))
 
 .. rubric:: Intermediate and compiled representations
 

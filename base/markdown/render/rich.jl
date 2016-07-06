@@ -1,9 +1,11 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 function tohtml(io::IO, m::MIME"text/html", x)
-    writemime(io, m, x)
+    show(io, m, x)
 end
 
 function tohtml(io::IO, m::MIME"text/plain", x)
-    htmlesc(io, sprint(writemime, m, x))
+    htmlesc(io, sprint(show, m, x))
 end
 
 function tohtml(io::IO, m::MIME"image/png", img)
@@ -13,14 +15,14 @@ function tohtml(io::IO, m::MIME"image/png", img)
 end
 
 function tohtml(m::MIME"image/svg+xml", img)
-    writemime(io, m, img)
+    show(io, m, img)
 end
 
 # Display infrastructure
 
 function bestmime(val)
     for mime in ("text/html", "image/svg+xml", "image/png", "text/plain")
-        mimewritable(mime, val) && return MIME(symbol(mime))
+        mimewritable(mime, val) && return MIME(Symbol(mime))
     end
     error("Cannot render $val to Markdown.")
 end

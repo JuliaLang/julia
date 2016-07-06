@@ -19,6 +19,7 @@
 
 #include <cstdio>
 #include <cstring>
+#include <iomanip>
 #include <iostream>
 #include <map>
 #include <set>
@@ -29,7 +30,6 @@
 #include <llvm/Object/ObjectFile.h>
 #include <llvm/Support/MachO.h>
 #include <llvm/Support/COFF.h>
-#include <llvm/MC/MCDisassembler.h>
 #include <llvm/MC/MCInst.h>
 #include <llvm/MC/MCStreamer.h>
 #include <llvm/MC/MCSubtargetInfo.h>
@@ -45,11 +45,18 @@
 #include <llvm/MC/MCInstrAnalysis.h>
 #include <llvm/MC/MCSymbol.h>
 #ifdef LLVM35
-#include <llvm/AsmParser/Parser.h>
-#include <llvm/MC/MCExternalSymbolizer.h>
+#  include <llvm/AsmParser/Parser.h>
+#  ifdef LLVM39
+#    include <llvm/MC/MCDisassembler/MCDisassembler.h>
+#    include <llvm/MC/MCDisassembler/MCExternalSymbolizer.h>
+#  else
+#    include <llvm/MC/MCExternalSymbolizer.h>
+#    include <llvm/MC/MCDisassembler.h>
+#  endif
 #else
-#include <llvm/Assembly/Parser.h>
-#include <llvm/ADT/OwningPtr.h>
+#  include <llvm/Assembly/Parser.h>
+#  include <llvm/ADT/OwningPtr.h>
+#  include <llvm/MC/MCDisassembler.h>
 #endif
 #include <llvm/ADT/Triple.h>
 #include <llvm/Support/MemoryBuffer.h>
@@ -64,32 +71,23 @@
 #include <llvm/Support/system_error.h>
 #endif
 #include <llvm/ExecutionEngine/JITEventListener.h>
-#ifdef LLVM33
 #include <llvm/IR/LLVMContext.h>
-#else
-#include <llvm/LLVMContext.h>
-#endif
-#ifdef LLVM37
-#include <llvm/DebugInfo/DWARF/DIContext.h>
-#else
 #include <llvm/DebugInfo/DIContext.h>
+#ifdef LLVM37
+#include "llvm/DebugInfo/DWARF/DWARFContext.h"
 #endif
 #ifdef LLVM35
 #include <llvm/IR/DebugInfo.h>
-#elif defined(LLVM32)
-#include <llvm/DebugInfo.h>
 #else
-#include <llvm/Analysis/DebugInfo.h>
-#endif
-#ifndef LLVM37
-#define format_hex(v, d) format("%#0" #d "x", v)
+#include <llvm/DebugInfo.h>
 #endif
 
 #include "julia.h"
+#include "julia_internal.h"
 
 using namespace llvm;
 
-extern DLLEXPORT LLVMContext &jl_LLVMContext;
+extern JL_DLLEXPORT LLVMContext &jl_LLVMContext;
 
 namespace {
 #ifdef LLVM36
@@ -140,7 +138,8 @@ public:
     void insertAddress(uint64_t addr);
     // void createSymbol(const char *name, uint64_t addr);
     void createSymbols();
-    const char *lookupSymbol(uint64_t addr);
+    const char *lookupSymbolName(uint64_t addr);
+    MCSymbol *lookupSymbol(uint64_t addr);
     void setIP(uint64_t addr);
     uint64_t getIP() const;
 };
@@ -171,30 +170,37 @@ void SymbolTable::createSymbols()
         uint64_t addr = isymb->first - ip;
         std::ostringstream name;
         name << "L" << addr;
+#ifdef LLVM37
+        MCSymbol *symb = Ctx.getOrCreateSymbol(StringRef(name.str()));
+        assert(symb->isUndefined());
+#else
         MCSymbol *symb = Ctx.GetOrCreateSymbol(StringRef(name.str()));
         symb->setVariableValue(MCConstantExpr::Create(addr, Ctx));
+#endif
         isymb->second = symb;
     }
 }
-const char *SymbolTable::lookupSymbol(uint64_t addr)
+const char *SymbolTable::lookupSymbolName(uint64_t addr)
 {
     if (!Table.count(addr)) return NULL;
     MCSymbol *symb = Table[addr];
     TempName = symb->getName().str();
     return TempName.c_str();
 }
+MCSymbol *SymbolTable::lookupSymbol(uint64_t addr)
+{
+    if (!Table.count(addr)) return NULL;
+    return Table[addr];
+}
 
-const char *SymbolLookup(void *DisInfo,
-                         uint64_t ReferenceValue,
-                         uint64_t *ReferenceType,
-                         uint64_t ReferencePC,
-                         const char **ReferenceName)
+static const char *SymbolLookup(void *DisInfo, uint64_t ReferenceValue, uint64_t *ReferenceType,
+                                uint64_t ReferencePC, const char **ReferenceName)
 {
     SymbolTable *SymTab = (SymbolTable*)DisInfo;
     if (SymTab->getPass() != 0) {
         if (*ReferenceType == LLVMDisassembler_ReferenceType_In_Branch) {
             uint64_t addr = ReferenceValue + SymTab->getIP();
-            const char *symbolName = SymTab->lookupSymbol(addr);
+            const char *symbolName = SymTab->lookupSymbolName(addr);
             *ReferenceType = LLVMDisassembler_ReferenceType_InOut_None;
             *ReferenceName = NULL;
             return symbolName;
@@ -205,12 +211,8 @@ const char *SymbolLookup(void *DisInfo,
     return NULL;
 }
 
-extern "C" void jl_getFunctionInfo
-  (const char **name, size_t *line, const char **filename, uintptr_t pointer,
-   int *fromC, int skipC);
-int OpInfoLookup(void *DisInfo, uint64_t PC,
-                 uint64_t Offset, uint64_t Size,
-                 int TagType, void *TagBuf)
+static int OpInfoLookup(void *DisInfo, uint64_t PC, uint64_t Offset, uint64_t Size,
+                        int TagType, void *TagBuf)
 {
     SymbolTable *SymTab = (SymbolTable*)DisInfo;
     PC += SymTab->getIP() - (uint64_t)(uintptr_t)SymTab->getMemoryObject().data(); // add offset from MemoryObject base
@@ -231,11 +233,11 @@ int OpInfoLookup(void *DisInfo, uint64_t PC,
     default: return 0;          // Cannot handle input address size
     }
     int skipC = 0;
-    const char *name;
-    size_t line;
-    const char *filename;
-    int fromC;
-    jl_getFunctionInfo(&name, &line, &filename, pointer, &fromC, skipC);
+    jl_frame_t *frame = NULL;
+    jl_getFunctionInfo(&frame, pointer, skipC, 1);
+    char *name = frame->func_name;
+    free(frame->file_name);
+    free(frame);
     if (!name)
         return 0;               // Did not find symbolic information
     // Describe the symbol
@@ -247,20 +249,47 @@ int OpInfoLookup(void *DisInfo, uint64_t PC,
 }
 } // namespace
 
-extern "C"
-void jl_dump_asm_internal(uintptr_t Fptr, size_t Fsize, size_t slide,
+#ifndef USE_MCJIT
+static void print_source_line(raw_ostream &stream, DebugLoc Loc)
+{
+    MDNode *inlinedAt = Loc.getInlinedAt(jl_LLVMContext);
+    if (inlinedAt != NULL) {
+        DebugLoc inlineloc = DebugLoc::getFromDILocation(inlinedAt);
+        stream << "Source line: " << inlineloc.getLine() << "\n";
+
+        DILexicalBlockFile innerscope = DILexicalBlockFile(Loc.getScope(jl_LLVMContext));
+        stream << "Source line: [inline] " << innerscope.getFilename().str().c_str() << ':' << Loc.getLine() << "\n";
+    }
+    else {
+        stream << "Source line: " << Loc.getLine() << "\n";
+    }
+}
+#endif
+
+extern "C" {
+JL_DLLEXPORT LLVMDisasmContextRef jl_LLVMCreateDisasm(const char *TripleName, void *DisInfo, int TagType, LLVMOpInfoCallback GetOpInfo, LLVMSymbolLookupCallback SymbolLookUp)
+{
+    return LLVMCreateDisasm(TripleName, DisInfo, TagType, GetOpInfo, SymbolLookUp);
+}
+
+JL_DLLEXPORT size_t jl_LLVMDisasmInstruction(LLVMDisasmContextRef DC, uint8_t *Bytes, uint64_t BytesSize, uint64_t PC, char *OutString, size_t OutStringSize)
+{
+    return LLVMDisasmInstruction(DC, Bytes, BytesSize, PC, OutString, OutStringSize);
+}
+
+void jl_dump_asm_internal(uintptr_t Fptr, size_t Fsize, int64_t slide,
 #ifndef USE_MCJIT
                           std::vector<JITEvent_EmittedFunctionDetails::LineStart> lineinfo,
-#else
-                          const object::ObjectFile *objectfile,
 #endif
-                          formatted_raw_ostream &stream)
+                          DIContext *di_ctx,
+#ifdef LLVM37
+                          raw_ostream &rstream
+#else
+                          formatted_raw_ostream &stream
+#endif
+                          )
 {
-    // Initialize targets and assembly printers/parsers.
-    // Avoids hard-coded targets - will generally be only host CPU anyway.
-    llvm::InitializeNativeTargetAsmParser();
-    llvm::InitializeNativeTargetDisassembler();
-
+    // GC safe
     // Get the host information
     std::string TripleName;
     if (TripleName.empty())
@@ -268,11 +297,17 @@ void jl_dump_asm_internal(uintptr_t Fptr, size_t Fsize, size_t slide,
     Triple TheTriple(Triple::normalize(TripleName));
 
     std::string MCPU = sys::getHostCPUName();
+#ifdef _CPU_ARM_
+    // The Raspberry Pi CPU is misdetected by LLVM (at least of version
+    // 3.6); correct this.
+    if (MCPU == "arm1176jz-s")
+        MCPU = "arm1176jzf-s";
+#endif
     SubtargetFeatures Features;
     Features.getDefaultSubtargetFeatures(TheTriple);
 
     std::string err;
-    const Target* TheTarget = TargetRegistry::lookupTarget(TripleName, err);
+    const Target *TheTarget = TargetRegistry::lookupTarget(TripleName, err);
 
     // Set up required helpers and streamer
 #ifdef LLVM35
@@ -308,7 +343,14 @@ void jl_dump_asm_internal(uintptr_t Fptr, size_t Fsize, size_t slide,
 #else
     MCContext Ctx(*MAI, *MRI, MOFI.get(), &SrcMgr);
 #endif
+#ifdef LLVM39
+    MOFI->InitMCObjectFileInfo(TheTriple, /* PIC */ false,
+                               CodeModel::Default, Ctx);
+#elif defined(LLVM37)
+    MOFI->InitMCObjectFileInfo(TheTriple, Reloc::Default, CodeModel::Default, Ctx);
+#else
     MOFI->InitMCObjectFileInfo(TripleName, Reloc::Default, CodeModel::Default, Ctx);
+#endif
 
     // Set up Subtarget and Disassembler
 #ifdef LLVM35
@@ -321,7 +363,8 @@ void jl_dump_asm_internal(uintptr_t Fptr, size_t Fsize, size_t slide,
     OwningPtr<MCDisassembler> DisAsm(TheTarget->createMCDisassembler(*STI));
 #endif
     if (!DisAsm) {
-        jl_printf(JL_STDERR, "error: no disassembler for target", TripleName.c_str(), "\n");
+        jl_printf(JL_STDERR, "ERROR: no disassembler for target %s\n",
+                  TripleName.c_str());
         return;
     }
 
@@ -339,10 +382,10 @@ void jl_dump_asm_internal(uintptr_t Fptr, size_t Fsize, size_t slide,
         MCIA(TheTarget->createMCInstrAnalysis(MCII.get()));
 #endif
 #ifdef LLVM37
-    MCInstPrinter* IP =
+    MCInstPrinter *IP =
         TheTarget->createMCInstPrinter(TheTriple, OutputAsmVariant, *MAI, *MCII, *MRI);
 #else
-    MCInstPrinter* IP =
+    MCInstPrinter *IP =
         TheTarget->createMCInstPrinter(OutputAsmVariant, *MAI, *MCII, *MRI, *STI);
 #endif
     MCCodeEmitter *CE = 0;
@@ -360,13 +403,22 @@ void jl_dump_asm_internal(uintptr_t Fptr, size_t Fsize, size_t slide,
 #endif
     }
 
+#ifdef LLVM37
+    // createAsmStreamer expects a unique_ptr to a formatted stream, which means
+    // it will destruct the stream when it is done. We cannot have this, so we
+    // start out with a raw stream, and create formatted stream from it here.
+    // LLVM will desctruct the formatted stream, and we keep the raw stream.
+    auto ustream = llvm::make_unique<formatted_raw_ostream>(rstream);
+    Streamer.reset(TheTarget->createAsmStreamer(Ctx, std::move(ustream), /*asmverbose*/true,
+#else
     Streamer.reset(TheTarget->createAsmStreamer(Ctx, stream, /*asmverbose*/true,
-#ifndef LLVM35
-                                           /*useLoc*/ true,
-                                           /*useCFI*/ true,
 #endif
-                                           /*useDwarfDirectory*/ true,
-                                           IP, CE, MAB, ShowInst));
+#ifndef LLVM35
+                                                /*useLoc*/ true,
+                                                /*useCFI*/ true,
+#endif
+                                                /*useDwarfDirectory*/ true,
+                                                IP, CE, MAB, ShowInst));
 #ifdef LLVM36
     Streamer->InitSections(true);
 #else
@@ -381,18 +433,13 @@ void jl_dump_asm_internal(uintptr_t Fptr, size_t Fsize, size_t slide,
 #endif
     SymbolTable DisInfo(Ctx, memoryObject);
 
-#ifdef USE_MCJIT
-    if (!objectfile) return;
-#ifdef LLVM36
-    DIContext *di_ctx = DIContext::getDWARFContext(*objectfile);
-#else
-    DIContext *di_ctx = DIContext::getDWARFContext(const_cast<object::ObjectFile*>(objectfile));
-#endif
-    if (di_ctx == NULL) return;
-    DILineInfoTable lineinfo = di_ctx->getLineInfoForAddressRange(Fptr-slide, Fsize);
-#else
+#ifndef USE_MCJIT
     typedef std::vector<JITEvent_EmittedFunctionDetails::LineStart> LInfoVec;
 #endif
+
+    DILineInfoTable di_lineinfo;
+    if (di_ctx)
+         di_lineinfo = di_ctx->getLineInfoForAddressRange(Fptr+slide, Fsize);
 
     // Take two passes: In the first pass we record all branch labels,
     // in the second we actually perform the output
@@ -415,46 +462,59 @@ void jl_dump_asm_internal(uintptr_t Fptr, size_t Fsize, size_t slide,
                         &DisInfo)));
 #elif defined LLVM34
             OwningPtr<MCRelocationInfo> relinfo(new MCRelocationInfo(Ctx));
-            DisAsm->setupForSymbolicDisassembly(
-                    OpInfoLookup, SymbolLookup, &DisInfo, &Ctx,
-                    relinfo);
+            DisAsm->setupForSymbolicDisassembly(OpInfoLookup, SymbolLookup, &DisInfo, &Ctx,
+                                                relinfo);
 #else
-            DisAsm->setupForSymbolicDisassembly(
-                    OpInfoLookup, SymbolLookup, &DisInfo, &Ctx);
+            DisAsm->setupForSymbolicDisassembly(OpInfoLookup, SymbolLookup, &DisInfo, &Ctx);
 #endif
         }
-
 
         uint64_t nextLineAddr = -1;
-#ifdef USE_MCJIT
-        // Set up the line info
-        DILineInfoTable::iterator lineIter = lineinfo.begin();
-        DILineInfoTable::iterator lineEnd = lineinfo.end();
-
-        if (lineIter != lineEnd) {
-            nextLineAddr = lineIter->first;
-            if (pass != 0) {
-#ifdef LLVM35
-                stream << "Filename: " << lineIter->second.FileName << "\n";
-#else
-                stream << "Filename: " << lineIter->second.getFileName() << "\n";
-#endif
-            }
-        }
-#else
-        // Set up the line info
+        DILineInfoTable::iterator di_lineIter = di_lineinfo.begin();
+        DILineInfoTable::iterator di_lineEnd = di_lineinfo.end();
+#ifndef USE_MCJIT
         LInfoVec::iterator lineIter = lineinfo.begin();
         LInfoVec::iterator lineEnd  = lineinfo.end();
-
-        if (lineIter != lineEnd) {
-            nextLineAddr = (*lineIter).Address;
-            DISubprogram debugscope = DISubprogram((*lineIter).Loc.getScope(jl_LLVMContext));
-            if (pass != 0) {
-                stream << "Filename: " << debugscope.getFilename() << "\n";
-                stream << "Source line: " << (*lineIter).Loc.getLine() << "\n";
-            }
-        }
 #endif
+        if (pass != 0) {
+            if (di_ctx) {
+                // Set up the line info
+                if (di_lineIter != di_lineEnd) {
+#ifdef LLVM37
+                    std::ostringstream buf;
+                    buf << "Filename: " << di_lineIter->second.FileName << "\n";
+                    Streamer->EmitRawText(buf.str());
+#elif defined LLVM35
+                    stream << "Filename: " << di_lineIter->second.FileName << "\n";
+#else
+                    stream << "Filename: " << di_lineIter->second.getFileName() << "\n";
+#endif
+                    nextLineAddr = di_lineIter->first;
+                }
+            }
+#ifndef USE_MCJIT
+            else {
+            // Set up the line info
+                if (lineIter != lineEnd) {
+                    DebugLoc Loc = (*lineIter).Loc;
+                    MDNode *outer = Loc.getInlinedAt(jl_LLVMContext);
+                    StringRef FileName;
+                    if (!outer) {
+                        DISubprogram debugscope = DISubprogram(Loc.getScope(jl_LLVMContext));
+                        FileName = debugscope.getFilename();
+                    }
+                    else {
+                        DebugLoc inlineloc = DebugLoc::getFromDILocation(outer);
+                        DILexicalBlockFile debugscope = DILexicalBlockFile(inlineloc.getScope(jl_LLVMContext));
+                        FileName = debugscope.getFilename();
+                    }
+                    stream << "Filename: " << FileName << "\n";
+                    print_source_line(stream, (*lineIter).Loc);
+                    nextLineAddr = (*lineIter).Address;
+                }
+            }
+#endif
+        }
 
         uint64_t Index = 0;
         uint64_t insSize = 0;
@@ -462,74 +522,85 @@ void jl_dump_asm_internal(uintptr_t Fptr, size_t Fsize, size_t slide,
         // Do the disassembly
         for (Index = 0; Index < Fsize; Index += insSize) {
 
-            if (nextLineAddr != (uint64_t)-1 && Index + Fptr - slide == nextLineAddr) {
-#ifdef USE_MCJIT
-#ifdef LLVM35
-                if (pass != 0)
-                    stream << "Source line: " << lineIter->second.Line << "\n";
+            if (nextLineAddr != (uint64_t)-1 && Index + Fptr + slide == nextLineAddr) {
+                if (di_ctx) {
+#ifdef LLVM37
+                    std::ostringstream buf;
+                    buf << "Source line: " << di_lineIter->second.Line << "\n";
+                    Streamer->EmitRawText(buf.str());
+#elif defined LLVM35
+                    stream << "Source line: " << di_lineIter->second.Line << "\n";
 #else
-                if (pass != 0)
-                    stream << "Source line: " << lineIter->second.getLine() << "\n";
+                    stream << "Source line: " << di_lineIter->second.getLine() << "\n";
 #endif
-                nextLineAddr = (++lineIter)->first;
-#else
-                if (pass != 0)
-                    stream << "Source line: " << (*lineIter).Loc.getLine() << "\n";
-                nextLineAddr = (*++lineIter).Address;
+                    nextLineAddr = (++di_lineIter)->first;
+                }
+#ifndef USE_MCJIT
+                else {
+                    print_source_line(stream, (*lineIter).Loc);
+                    nextLineAddr = (*++lineIter).Address;
+                }
 #endif
             }
+
             DisInfo.setIP(Fptr+Index);
             if (pass != 0) {
                 // Uncomment this to output addresses for all instructions
                 // stream << Index << ": ";
-                const char *symbolName = DisInfo.lookupSymbol(Fptr+Index);
+#ifdef LLVM37
+                MCSymbol *symbol = DisInfo.lookupSymbol(Fptr+Index);
+                if (symbol)
+                    Streamer->EmitLabel(symbol);
+                    // emitInstructionAnnot
+#else
+                const char *symbolName = DisInfo.lookupSymbolName(Fptr+Index);
                 if (symbolName)
                     stream << symbolName << ":";
+#endif
             }
 
             MCInst Inst;
             MCDisassembler::DecodeStatus S;
-#if defined(_CPU_PPC64_) && BYTE_ORDER == LITTLE_ENDIAN
-            // llvm doesn't know that POWER8 can have little-endian instruction order
-            unsigned char byte_swap_buf[4];
-            assert(memoryObject.size() >= 4);
-            byte_swap_buf[3] = memoryObject[Index+0];
-            byte_swap_buf[2] = memoryObject[Index+1];
-            byte_swap_buf[1] = memoryObject[Index+2];
-            byte_swap_buf[0] = memoryObject[Index+3];
-            FuncMCView view = FuncMCView(byte_swap_buf, 4);
-#else
             FuncMCView view = memoryObject.slice(Index);
-#endif
             S = DisAsm->getInstruction(Inst, insSize, view, 0,
                                       /*REMOVE*/ nulls(), nulls());
             switch (S) {
             case MCDisassembler::Fail:
-                if (pass != 0)
-#if defined(_CPU_PPC_) || defined(_CPU_PPC64_)
-                    stream << "\t.long " << format_hex(*(uint32_t*)(Fptr+Index), 10) << "\n";
-#else
-                    SrcMgr.PrintMessage(SMLoc::getFromPointer((const char*)(Fptr + Index)),
-                                        SourceMgr::DK_Warning,
-                                        "invalid instruction encoding");
-#endif
                 if (insSize == 0) // skip illegible bytes
-#if defined(_CPU_PPC_) || defined(_CPU_PPC64_)
+#if defined(_CPU_PPC_) || defined(_CPU_PPC64_) || defined(_CPU_ARM_) || defined(_CPU_AARCH64_)
                     insSize = 4; // instructions are always 4 bytes
 #else
                     insSize = 1; // attempt to slide 1 byte forward
 #endif
+                if (pass != 0) {
+                    std::ostringstream buf;
+                    if (insSize == 4)
+                        buf << "\t.long\t0x" << std::hex
+                            << std::setfill('0') << std::setw(8)
+                            << *(uint32_t*)(Fptr+Index) << "\n";
+                    else
+                        for (uint64_t i=0; i<insSize; ++i)
+                            buf << "\t.byte\t0x" << std::hex
+                                << std::setfill('0') << std::setw(2)
+                                << (int)*(uint8_t*)(Fptr+Index+i) << "\n";
+#ifdef LLVM37
+                    Streamer->EmitRawText(buf.str());
+#else
+                    stream << buf.str();
+#endif
+                }
                 break;
 
             case MCDisassembler::SoftFail:
-                if (pass != 0)
-#if defined(_CPU_PPC_) || defined(_CPU_PPC64_)
-                    stream << "potentially undefined instruction encoding:\n";
+                if (pass != 0) {
+#ifdef LLVM37
+                    std::ostringstream buf;
+                    buf << "potentially undefined instruction encoding:\n";
+                    Streamer->EmitRawText(buf.str());
 #else
-                    SrcMgr.PrintMessage(SMLoc::getFromPointer((const char*)(Fptr + Index)),
-                                        SourceMgr::DK_Warning,
-                                        "potentially undefined instruction encoding");
+                    stream << "potentially undefined instruction encoding:\n";
 #endif
+                }
                 // Fall through
 
             case MCDisassembler::Success:
@@ -561,4 +632,5 @@ void jl_dump_asm_internal(uintptr_t Fptr, size_t Fsize, size_t slide,
         if (pass == 0)
             DisInfo.createSymbols();
     }
+}
 }

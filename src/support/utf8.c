@@ -21,7 +21,7 @@
 #include <wctype.h>
 
 #include "utf8proc.h"
-#undef DLLEXPORT /* avoid conflicting definition */
+#undef JL_DLLEXPORT /* avoid conflicting definition */
 
 #include "dtypes.h"
 
@@ -76,18 +76,6 @@ size_t u8_charlen(uint32_t ch)
     else if (ch < 0x110000)
         return 4;
     return 0;
-}
-
-size_t u8_codingsize(uint32_t *wcstr, size_t n)
-{
-    size_t i, c=0;
-
-    for(i=0; i < n; i++) {
-        size_t cl = u8_charlen(wcstr[i]);
-        if (cl == 0) cl = 3;  // invalid: encoded as replacement char
-        c += cl;
-    }
-    return c;
 }
 
 /* conversions without error checking
@@ -235,33 +223,16 @@ size_t u8_offset(const char *s, size_t charnum)
 /* byte offset => charnum */
 size_t u8_charnum(const char *s, size_t offset)
 {
-    size_t charnum = 0, i=0;
-
-    while (i < offset) {
-        if (s[i++] & 0x80) {
-            (void)(isutf(s[++i]) || isutf(s[++i]) || ++i);
-        }
-        charnum++;
+    size_t charnum = 0;
+    if (offset) {
+       do {
+          // Simply not count continuation bytes
+          // Since we are not doing validation anyway, we can just
+          // assume this is a valid UTF-8 string
+          charnum += ((*(unsigned char *)s++ & 0xc0) != 0x80);
+       } while (--offset);
     }
     return charnum;
-}
-
-/* number of characters in NUL-terminated string */
-size_t u8_strlen(const char *s)
-{
-    size_t count = 0;
-    size_t i = 0, lasti;
-
-    while (1) {
-        lasti = i;
-        while (s[i] > 0)
-            i++;
-        count += (i-lasti);
-        if (s[i++]==0) break;
-        (void)(isutf(s[++i]) || isutf(s[++i]) || ++i);
-        count++;
-    }
-    return count;
 }
 
 size_t u8_strwidth(const char *s)
@@ -397,36 +368,6 @@ size_t u8_read_escape_sequence(const char *str, size_t ssz, uint32_t *dest)
     return i;
 }
 
-/* convert a string with literal \uxxxx or \Uxxxxxxxx characters to UTF-8
-   example: u8_unescape(mybuf, 256, "hello\\u220e")
-   note the double backslash is needed if called on a C string literal */
-size_t u8_unescape(char *buf, size_t sz, const char *src)
-{
-    size_t c=0, amt;
-    uint32_t ch = 0;
-    char temp[4];
-
-    while (*src && c < sz) {
-        if (*src == '\\') {
-            src++;
-            amt = u8_read_escape_sequence(src, 1000, &ch);
-        }
-        else {
-            ch = (uint32_t)*src;
-            amt = 1;
-        }
-        src += amt;
-        amt = u8_wc_toutf8(temp, ch);
-        if (amt > sz-c)
-            break;
-        memcpy(&buf[c], temp, amt);
-        c += amt;
-    }
-    if (c < sz)
-        buf[c] = '\0';
-    return c;
-}
-
 static inline int buf_put2c(char *buf, const char *src)
 {
     buf[0] = src[0];
@@ -506,24 +447,6 @@ size_t u8_escape(char *buf, size_t sz, const char *src, size_t *pi, size_t end,
     return (buf-start);
 }
 
-char *u8_strchr(const char *s, uint32_t ch, size_t *charn)
-{
-    size_t i = 0, lasti=0;
-    uint32_t c;
-
-    *charn = 0;
-    while (s[i]) {
-        c = u8_nextchar(s, &i);
-        if (c == ch) {
-            /* it's const for us, but not necessarily the caller */
-            return (char*)&s[lasti];
-        }
-        lasti = i;
-        (*charn)++;
-    }
-    return NULL;
-}
-
 char *u8_memchr(const char *s, uint32_t ch, size_t sz, size_t *charn)
 {
     size_t i = 0, lasti=0;
@@ -574,27 +497,6 @@ char *u8_memrchr(const char *s, uint32_t ch, size_t sz)
     return NULL;
 }
 
-int u8_is_locale_utf8(const char *locale)
-{
-    if (locale == NULL) return 0;
-
-    /* this code based on libutf8 */
-    const char *cp = locale;
-
-    for (; *cp != '\0' && *cp != '@' && *cp != '+' && *cp != ',' && *cp != ';'; cp++) {
-        if (*cp == '.') {
-            const char *encoding = ++cp;
-            for (; *cp != '\0' && *cp != '@' && *cp != '+' && *cp != ',' && *cp != ';'; cp++)
-                ;
-            if ((cp-encoding == 5 && !strncmp(encoding, "UTF-8", 5))
-                || (cp-encoding == 4 && !strncmp(encoding, "utf8", 4)))
-                return 1; /* it's UTF-8 */
-            break;
-        }
-    }
-    return 0;
-}
-
 size_t u8_vprintf(const char *fmt, va_list ap)
 {
     size_t cnt, sz=0, nc, needfree=0;
@@ -632,113 +534,64 @@ size_t u8_printf(const char *fmt, ...)
     return cnt;
 }
 
-/* based on the valid_utf8 routine from the PCRE library by Philip Hazel
+/* Rewritten completely, original code not based on anything else
 
    length is in bytes, since without knowing whether the string is valid
    it's hard to know how many characters there are! */
-int u8_isvalid(const char *str, size_t length)
+int u8_isvalid(const char *str, size_t len)
 {
-    const unsigned char *p, *pend = (unsigned char*)str + length;
-    unsigned char c;
-    int ret = 1; /* ASCII */
-    int ab;
+    const unsigned char *pnt;   // Current pointer in string
+    const unsigned char *pend;  // End of string
+    unsigned char       byt;    // Current byte
 
-    for (p = (unsigned char*)str; p < pend; p++) {
-        c = *p;
-        if (c < 128)
-            continue;
-        ret = 2; /* non-ASCII UTF-8 */
-        if ((c & 0xc0) != 0xc0)
+    // Empty strings can be considered valid ASCII
+    if (!len) return 1;
+    pnt = (unsigned char *)str;
+    pend = (unsigned char *)str + len;
+    // First scan for non-ASCII characters as fast as possible
+    do {
+        if (*pnt++ & 0x80) goto chkutf8;
+    } while (pnt < pend);
+    return 1;
+
+    // Check validity of UTF-8 sequences
+chkutf8:
+    if (pnt == pend) return 0;    // Last byte can't be > 127
+    byt = pnt[-1];
+    // Must be between 0xc2 and 0xf4 inclusive to be valid
+    if (((uint32_t)byt - 0xc2) > (0xf4-0xc2)) return 0;
+    if (byt < 0xe0) {               // 2-byte sequence
+        // Must have valid continuation character
+        if ((*pnt++ & 0xc0) != 0x80) return 0;
+    } else if (byt < 0xf0) {        // 3-byte sequence
+        if ((pnt + 1 >= pend)
+              || (*pnt & 0xc0) != 0x80
+              || (pnt[1] & 0xc0) != 0x80)
             return 0;
-        ab = trailingBytesForUTF8[c];
-        if (length < ab)
+        // Check for surrogate chars
+        if (byt == 0xed && *pnt > 0x9f) return 0;
+        pnt += 2;
+    } else {                        // 4-byte sequence
+        // Must have 3 valid continuation characters
+        if ((pnt + 2 >= pend)
+              || (*pnt & 0xc0) != 0x80
+              || (pnt[1] & 0xc0) != 0x80
+              || (pnt[2] & 0xc0) != 0x80)
             return 0;
-        length -= ab;
-
-        p++;
-        /* Check top bits in the second byte */
-        if ((*p & 0xc0) != 0x80)
-            return 0;
-
-        /* Check for overlong sequences for each different length */
-        switch (ab) {
-            /* Check for xx00 000x */
-        case 1:
-            if ((c & 0x3e) == 0) return 0;
-            continue;   /* We know there aren't any more bytes to check */
-
-            /* Check for 1110 0000, xx0x xxxx */
-        case 2:
-            if (c == 0xe0 && (*p & 0x20) == 0) return 0;
-            break;
-
-            /* Check for 1111 0000, xx00 xxxx */
-        case 3:
-            if (c == 0xf0 && (*p & 0x30) == 0) return 0;
-            break;
-
-            /* Check for 1111 1000, xx00 0xxx */
-        case 4:
-            if (c == 0xf8 && (*p & 0x38) == 0) return 0;
-            break;
-
-            /* Check for leading 0xfe or 0xff,
-               and then for 1111 1100, xx00 00xx */
-        case 5:
-            if (c == 0xfe || c == 0xff ||
-                (c == 0xfc && (*p & 0x3c) == 0)) return 0;
-            break;
+        // Make sure in correct range (0x10000 - 0x10ffff)
+        if (byt == 0xf0) {
+            if (*pnt < 0x90) return 0;
+        } else if (byt == 0xf4) {
+            if (*pnt > 0x8f) return 0;
         }
-
-        /* Check for valid bytes after the 2nd, if any; all must start 10 */
-        while (--ab > 0) {
-            if ((*(++p) & 0xc0) != 0x80) return 0;
-        }
+        pnt += 3;
     }
-
-    return ret;
-}
-
-int u8_reverse(char *dest, char *src, size_t len)
-{
-    size_t si=0, di=len;
-    unsigned char c;
-
-    dest[di] = '\0';
-    while (si < len) {
-        c = (unsigned char)src[si];
-        if ((~c) & 0x80) {
-            di--;
-            dest[di] = c;
-            si++;
-        }
-        else {
-            switch (c>>4) {
-            case 0xC:
-            case 0xD:
-                di -= 2;
-                *((int16_t*)&dest[di]) = *((int16_t*)&src[si]);
-                si += 2;
-                break;
-            case 0xE:
-                di -= 3;
-                dest[di] = src[si];
-                *((int16_t*)&dest[di+1]) = *((int16_t*)&src[si+1]);
-                si += 3;
-                break;
-            case 0xF:
-                di -= 4;
-                *((int32_t*)&dest[di]) = *((int32_t*)&src[si]);
-                si += 4;
-                break;
-            default:
-                return 1;
-            }
-        }
+    // Find next non-ASCII characters as fast as possible
+    while (pnt < pend) {
+        if (*pnt++ & 0x80) goto chkutf8;
     }
-    return 0;
+    return 2;   // Valid UTF-8
 }
-
 #ifdef __cplusplus
 }
 #endif

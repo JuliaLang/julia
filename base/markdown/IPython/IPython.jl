@@ -1,11 +1,13 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 type LaTeX
-    formula::UTF8String
+    formula::String
 end
 
 @trigger '$' ->
 function tex(stream::IO, md::MD)
     result = parse_inline_wrapper(stream, "\$", rep = true)
-    return result == nothing ? nothing : LaTeX(result)
+    return result === nothing ? nothing : LaTeX(result)
 end
 
 function blocktex(stream::IO, md::MD)
@@ -20,7 +22,13 @@ function blocktex(stream::IO, md::MD)
     end
 end
 
-writemime(io::IO, ::MIME"text/plain", tex::LaTeX) =
+show(io::IO, tex::LaTeX) =
+    print(io, '$', tex.formula, '$')
+
+latex(io::IO, tex::LaTeX) =
+    println(io, "\$\$", tex.formula, "\$\$")
+
+latexinline(io::IO, tex::LaTeX) =
     print(io, '$', tex.formula, '$')
 
 term(io::IO, tex::LaTeX, cols) = println_with_format(:magenta, io, tex.formula)

@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 function sum_reduce(x, istart, iend)
     s = zero(eltype(x))
     @simd for i = istart:iend

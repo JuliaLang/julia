@@ -1,5 +1,7 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 # ––––––––––
-# Paragraphs
+# Paragraphs
 # ––––––––––
 
 type Paragraph
@@ -13,10 +15,14 @@ function paragraph(stream::IO, md::MD)
     p = Paragraph()
     push!(md, p)
     skipwhitespace(stream)
+    prev_char = '\n'
     while !eof(stream)
         char = read(stream, Char)
         if char == '\n' || char == '\r'
-            if blankline(stream) || parse(stream, md, breaking = true)
+            char == '\r' && Char(peek(stream)) == '\n' && read(stream, Char)
+            if prev_char == '\\'
+                write(buffer, '\n')
+            elseif blankline(stream) || parse(stream, md, breaking = true)
                 break
             else
                 write(buffer, ' ')
@@ -24,6 +30,7 @@ function paragraph(stream::IO, md::MD)
         else
             write(buffer, char)
         end
+        prev_char = char
     end
     p.content = parseinline(seek(buffer, 0), md)
     return true
@@ -86,12 +93,12 @@ function setextheader(stream::IO, md::MD)
 end
 
 # ––––
-# Code
+# Code
 # ––––
 
 type Code
-    language::UTF8String
-    code::UTF8String
+    language::String
+    code::String
 end
 
 Code(code) = Code("", code)
@@ -115,7 +122,7 @@ function indentcode(stream::IO, block::MD)
 end
 
 # ––––––
-# Quotes
+# Quotes
 # ––––––
 
 type BlockQuote
@@ -143,9 +150,67 @@ function blockquote(stream::IO, block::MD)
     end
 end
 
-# –––––
-# Lists
-# –––––
+# -----------
+# Admonitions
+# -----------
+
+type Admonition
+    category::String
+    title::String
+    content::Vector
+end
+
+@breaking true ->
+function admonition(stream::IO, block::MD)
+    withstream(stream) do
+        # Admonition syntax:
+        #
+        # !!! category "optional explicit title within double quotes"
+        #     Any number of other indented markdown elements.
+        #
+        #     This is the second paragraph.
+        #
+        startswith(stream, "!!! ") || return false
+        # Extract the category of admonition and its title:
+        category, title =
+            let untitled = r"^([a-z]+)$",          # !!! <CATEGORY_NAME>
+                titled   = r"^([a-z]+) \"(.*)\"$", # !!! <CATEGORY_NAME> "<TITLE>"
+                line     = strip(readline(stream))
+                if ismatch(untitled, line)
+                    m = match(untitled, line)
+                    # When no title is provided we use CATEGORY_NAME, capitalising it.
+                    m.captures[1], ucfirst(m.captures[1])
+                elseif ismatch(titled, line)
+                    m = match(titled, line)
+                    # To have a blank TITLE provide an explicit empty string as TITLE.
+                    m.captures[1], m.captures[2]
+                else
+                    # Admonition header is invalid so we give up parsing here and move
+                    # on to the next parser.
+                    return false
+                end
+            end
+        # Consume the following indented (4 spaces) block.
+        buffer = IOBuffer()
+        while !eof(stream)
+            if startswith(stream, "    ")
+                write(buffer, readline(stream))
+            elseif blankline(stream)
+                write(buffer, '\n')
+            else
+                break
+            end
+        end
+        # Parse the nested block as markdown and create a new Admonition block.
+        nested = parse(takebuf_string(buffer), flavor = config(block))
+        push!(block, Admonition(category, title, nested.content))
+        return true
+    end
+end
+
+# –––––
+# Lists
+# –––––
 
 type List
     items::Vector{Any}
@@ -166,7 +231,7 @@ function list(stream::IO, block::MD)
     withstream(stream) do
         eatindent(stream) || return false
         b = startswith(stream, num_or_bullets)
-        (b == nothing || b == "") && return false
+        (b === nothing || b == "") && return false
         ordered = !(b[1] in bullets)
         if ordered
             b = b[end - 1] == '.' ? r"^\d+\. " : r"^\d+\) "
@@ -191,7 +256,7 @@ function list(stream::IO, block::MD)
                 c = read(stream, Char)
                 if c == '\n'
                     eof(stream) && break
-                    next = peek(stream)
+                    next = Char(peek(stream)) # ok since we only compare with ASCII
                     if next == '\n'
                         break
                     else
@@ -208,9 +273,9 @@ function list(stream::IO, block::MD)
     end
 end
 
-# ––––––––––––––
+# ––––––––––––––
 # HorizontalRule
-# ––––––––––––––
+# ––––––––––––––
 
 type HorizontalRule
 end

@@ -1,12 +1,12 @@
-.. _man-embedding:
-
 .. highlight:: c
+
+.. _man-embedding:
 
 **************************
  Embedding Julia
 **************************
 
-As we have seen (:ref:`man-calling-c-and-fortran-code`) Julia has a simple and efficient way to call functions written in C. But there are situations where the opposite is needed: calling Julia function from C code. This can be used to integrate Julia code into a larger C/C++ project, without the need to rewrite everything in C/C++. Julia has a C API to make this possible. As almost all programming languages have some way to call C functions, the Julia C API can also be used to build further language bridges (e.g. calling Julia from Python or C#).
+As we have seen in :ref:`man-calling-c-and-fortran-code`, Julia has a simple and efficient way to call functions written in C. But there are situations where the opposite is needed: calling Julia function from C code. This can be used to integrate Julia code into a larger C/C++ project, without the need to rewrite everything in C/C++. Julia has a C API to make this possible. As almost all programming languages have some way to call C functions, the Julia C API can also be used to build further language bridges (e.g. calling Julia from Python or C#).
 
 
 High-Level Embedding
@@ -18,32 +18,43 @@ We start with a simple C program that initializes Julia and calls some Julia cod
 
   int main(int argc, char *argv[])
   {
-      /* required: setup the julia context */
+      /* required: setup the Julia context */
       jl_init(NULL);
 
-      /* run julia commands */
+      /* run Julia commands */
       jl_eval_string("print(sqrt(2.0))");
 
-      /* strongly recommended: notify julia that the
+      /* strongly recommended: notify Julia that the
            program is about to terminate. this allows
-           julia time to cleanup pending write requests
+           Julia time to cleanup pending write requests
            and run all finalizers
       */
-      jl_atexit_hook();
+      jl_atexit_hook(0);
       return 0;
   }
 
-In order to build this program you have to put the path to the Julia header into the include path and link against ``libjulia``. For instance, when Julia is installed to ``$JULIA_DIR``, one can compile the above test program ``test.c`` with gcc using::
+In order to build this program you have to put the path to the Julia header into the include path and link against ``libjulia``. For instance, when Julia is installed to ``$JULIA_DIR``, one can compile the above test program ``test.c`` with ``gcc`` using::
 
-    gcc -o test -I$JULIA_DIR/include/julia -L$JULIA_DIR/usr/lib -ljulia test.c
+    gcc -o test -fPIC -I$JULIA_DIR/include/julia -L$JULIA_DIR/lib test.c -ljulia $JULIA_DIR/lib/julia/libstdc++.so.6
 
-Alternatively, look at the ``embedding.c`` program in the julia source tree in the ``examples/`` folder. The file ``ui/repl.c`` program is another simple example of how to set ``jl_compileropts`` options while linking against libjulia.
+Then if the environment variable ``JULIA_HOME`` is set to ``$JULIA_DIR/bin``, the output ``test`` program can be executed.
+
+Alternatively, look at the ``embedding.c`` program in the Julia source tree in the ``examples/`` folder. The file ``ui/repl.c`` program is another simple example of how to set ``jl_options`` options while linking against ``libjulia``.
 
 The first thing that has to be done before calling any other Julia C function is to initialize Julia. This is done by calling ``jl_init``, which takes as argument a C string (``const char*``) to the location where Julia is installed. When the argument is ``NULL``, Julia tries to determine the install location automatically.
 
 The second statement in the test program evaluates a Julia statement using a call to ``jl_eval_string``.
 
 Before the program terminates, it is strongly recommended to call ``jl_atexit_hook``.  The above example program calls this before returning from ``main``.
+
+.. note::
+
+ Currently, dynamically linking with the ``libjulia`` shared library requires passing the ``RTLD_GLOBAL`` option. In Python, this looks like::
+
+   >>> julia=CDLL('./libjulia.dylib',RTLD_GLOBAL)
+   >>> julia.jl_init.argtypes = [c_char_p]
+   >>> julia.jl_init('.')
+   250593296
 
 Using julia-config to automatically determine build parameters
 --------------------------------------------------------------
@@ -64,7 +75,7 @@ now **JULIA_INIT_DIR** which is defined by *julia-config.jl*.::
   {
      jl_init(JULIA_INIT_DIR);
      (void)jl_eval_string("println(sqrt(2.0))");
-     jl_atexit_hook();
+     jl_atexit_hook(0);
      return 0;
   }
 
@@ -78,8 +89,8 @@ combination of 3 flags::
     /usr/local/julia/share/julia/julia-config.jl
     Usage: julia-config [--cflags|--ldflags|--ldlibs]
 
-If the above example source is saved in the file *embed_exmaple.c*, then the following command will compile it into a running program on Linux and Windows (MSYS2 environment),
-or if on OS/X, then substitute clang for gcc.::
+If the above example source is saved in the file *embed_example.c*, then the following command will compile it into a running program on Linux and Windows (MSYS2 environment),
+or if on OS/X, then substitute ``clang`` for ``gcc``.::
 
     /usr/local/julia/share/julia/julia-config.jl --cflags --ldflags --ldlibs | xargs gcc embed_example.c
 
@@ -113,7 +124,7 @@ Real applications will not just need to execute expressions, but also return the
         printf("sqrt(2.0) in C: %e \n", ret_unboxed);
     }
 
-In order to check whether ``ret`` is of a specific Julia type, we can use the ``jl_is_...`` functions. By typing ``typeof(sqrt(2.0))`` into the Julia shell we can see that the return type is ``Float64`` (``double`` in C). To convert the boxed Julia value into a C double the ``jl_unbox_float64`` function is used in the above code snippet.
+In order to check whether ``ret`` is of a specific Julia type, we can use the ``jl_is_...`` functions. By typing ``typeof(sqrt(2.0))`` into the Julia shell we can see that the return type is :obj:`Float64` (``double`` in C). To convert the boxed Julia value into a C double the ``jl_unbox_float64`` function is used in the above code snippet.
 
 Corresponding ``jl_box_...`` functions are used to convert the other way::
 
@@ -163,11 +174,11 @@ Several Julia values can be pushed at once using the ``JL_GC_PUSH2`` , ``JL_GC_P
     // Do something with args (e.g. call jl_... functions)
     JL_GC_POP();
 
-The garbage collector also operates under the assumption that it is aware of every old-generation object pointing to a young-generation one. Any time a pointer is updated breaking that assumption, it must be signaled to the collector with the ``gc_wb`` (write barrier) function like so::
+The garbage collector also operates under the assumption that it is aware of every old-generation object pointing to a young-generation one. Any time a pointer is updated breaking that assumption, it must be signaled to the collector with the ``jl_gc_wb`` (write barrier) function like so::
 
     jl_value_t *parent = some_old_value, *child = some_young_value;
     ((some_specific_type*)parent)->field = child;
-    gc_wb(parent, child);
+    jl_gc_wb(parent, child);
 
 It is in general impossible to predict which values will be old at runtime, so the write barrier must be inserted after all explicit stores. One notable exception is if the ``parent`` object was just allocated and garbage collection was not run since then. Remember that most ``jl_...`` functions can sometimes invoke garbage collection.
 
@@ -177,7 +188,7 @@ The write barrier is also necessary for arrays of pointers when updating their d
     void **data = (void**)jl_array_data(some_array);
     jl_value_t *some_value = ...;
     data[0] = some_value;
-    gc_wb(some_array, some_value);
+    jl_gc_wb(some_array, some_value);
 
 
 Manipulating the Garbage Collector
@@ -185,11 +196,12 @@ Manipulating the Garbage Collector
 
 There are some functions to control the GC. In normal use cases, these should not be necessary.
 
-========================= ==============================================================================
-``void jl_gc_collect()``   Force a GC run
-``void jl_gc_disable()``   Disable the GC
-``void jl_gc_enable()``    Enable the GC
-========================= ==============================================================================
+======================= =====================================================
+``jl_gc_collect()``      Force a GC run
+``jl_gc_enable(0)``      Disable the GC, return previous state as int
+``jl_gc_enable(1)``      Enable the GC,  return previous state as int
+``jl_gc_is_enabled()``   Return current state as int
+======================= =====================================================
 
 Working with Arrays
 ========================
@@ -277,7 +289,7 @@ This call will appear to do nothing. However, it is possible to check whether an
     if (jl_exception_occurred())
         printf("%s \n", jl_typeof_str(jl_exception_occurred()));
 
-If you are using the Julia C API from a language that supports exceptions (e.g. Python, C#, C++), it makes sense to wrap each call into libjulia with a function that checks whether an exception was thrown, and then rethrows the exception in the host language.
+If you are using the Julia C API from a language that supports exceptions (e.g. Python, C#, C++), it makes sense to wrap each call into ``libjulia`` with a function that checks whether an exception was thrown, and then rethrows the exception in the host language.
 
 
 Throwing Julia Exceptions
@@ -289,7 +301,7 @@ When writing Julia callable functions, it might be necessary to validate argumen
         jl_type_error(function_name, (jl_value_t*)jl_float64_type, val);
     }
 
-General exceptions can be raised using the funtions::
+General exceptions can be raised using the functions::
 
     void jl_error(const char *str);
     void jl_errorf(const char *fmt, ...);

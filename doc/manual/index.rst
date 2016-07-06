@@ -22,7 +22,9 @@
    methods
    constructors
    conversion-and-promotion
+   interfaces
    modules
+   documentation
    metaprogramming
    arrays
    linear-algebra
@@ -32,10 +34,14 @@
    interacting-with-julia
    running-external-programs
    calling-c-and-fortran-code
+   handling-operating-system-variation
+   interacting-with-julia
    embedding
    packages
    profile
+   stacktraces
    performance-tips
+   workflow-tips
    style-guide
    faq
    noteworthy-differences

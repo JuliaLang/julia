@@ -111,14 +111,14 @@
 <!-- General types -->
          <keywords region="mlStdFunc">
             <word name="Array"/>
-            <word name="String"/>
+            <word name="AbstractString"/>
             <word name="Bool"/>
             <word name="Number"/>
             <word name="Int"/>
             <word name="Integer"/>
             <word name="Real"/>
             <word name="Complex"/>
-            <word name="FloatingPoint"/>
+            <word name="AbstractFloat"/>
             <word name="Float64"/>
             <word name="Float32"/>
             <word name="Int8"/>
@@ -141,7 +141,7 @@
             <word name="Type"/>
             <word name="IO"/>
             <word name="Any"/>
-            <word name="ASCIIString"/>
+            <word name="String"/>
             <word name="Union"/>
             <word name="Dict"/>
             <word name="Function"/>

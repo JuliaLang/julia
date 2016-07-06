@@ -6,9 +6,6 @@
 function perf()
 
 	warning off;
-	if exist('OCTAVE_VERSION') == 0
-    	maxNumCompThreads(1);
-	end
 	
 	f = fib(20);
 	assert(f == 6765)
@@ -95,8 +92,8 @@ end
 function n = parseintperf(t)
     for i = 1:t
         n = randi([0,2^32-1],1,'uint32');
-        s = dec2hex(n);
-        m = hex2dec(s);
+        s = sprintf('%08X',n);
+        m = sscanf(s,'%X');
         assert(m == n);
     end
 end
@@ -122,14 +119,14 @@ function n = mandel(z)
 end
 
 function M = mandelperf(ignore)
-  M = zeros(length(-2.0:.1:0.5), length(-1:.1:1));
-  count = 1;
-  for r = -2:0.1:0.5
-    for i = -1:.1:1
-      M(count) = mandel(complex(r,i));
-      count = count + 1;
+    x=-2.0:.1:0.5;
+    y=-1:.1:1;
+    M=zeros(length(y),length(x));
+    for r=1:size(M,1) 
+        for c=1:size(M,2)
+           M(r,c) = mandel(x(c)+y(r)*i);
+        end
     end
-  end
 end
 
 %% numeric vector quicksort %%

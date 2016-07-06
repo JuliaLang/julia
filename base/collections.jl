@@ -1,6 +1,8 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 module Collections
 
-import Base: setindex!, done, get, hash, haskey, isempty, length, next, getindex, start
+import Base: setindex!, done, get, hash, haskey, isempty, length, next, getindex, start, copymutable
 import ..Order: Forward, Ordering, lt
 
 export
@@ -15,6 +17,24 @@ export
     peek
 
 
+# Some algorithms that can be defined only after infrastructure is in place
+Base.append!(a::Vector, iter) = _append!(a, Base.iteratorsize(iter), iter)
+
+function _append!(a, ::Base.HasLength, iter)
+    n = length(a)
+    resize!(a, n+length(iter))
+    @inbounds for (i,item) in zip(n+1:length(a), iter)
+        a[i] = item
+    end
+    a
+end
+
+function _append!(a, ::Base.IteratorSize, iter)
+    for item in iter
+        push!(a, item)
+    end
+    a
+end
 
 # Heap operations on flat arrays
 # ------------------------------
@@ -59,8 +79,12 @@ end
 
 percolate_up!{T}(xs::AbstractArray{T}, i::Integer, o::Ordering) = percolate_up!(xs, i, xs[i], o)
 
+"""
+    heappop!(v, [ord])
 
-# Binary min-heap pop.
+Given a binary heap-ordered array, remove and return the lowest ordered element.
+For efficiency, this function does not check that the array is indeed heap-ordered.
+"""
 function heappop!(xs::AbstractArray, o::Ordering=Forward)
     x = xs[1]
     y = pop!(xs)
@@ -70,8 +94,12 @@ function heappop!(xs::AbstractArray, o::Ordering=Forward)
     x
 end
 
+"""
+    heappush!(v, x, [ord])
 
-# Binary min-heap push.
+Given a binary heap-ordered array, push a new element `x`, preserving the heap property.
+For efficiency, this function does not check that the array is indeed heap-ordered.
+"""
 function heappush!(xs::AbstractArray, x, o::Ordering=Forward)
     push!(xs, x)
     percolate_up!(xs, length(xs), x, o)
@@ -80,6 +108,11 @@ end
 
 
 # Turn an arbitrary array into a binary min-heap in linear time.
+"""
+    heapify!(v, [ord])
+
+In-place [`heapify`](:func:`heapify`).
+"""
 function heapify!(xs::AbstractArray, o::Ordering=Forward)
     for i in heapparent(length(xs)):-1:1
         percolate_down!(xs, i, o)
@@ -87,10 +120,18 @@ function heapify!(xs::AbstractArray, o::Ordering=Forward)
     xs
 end
 
-heapify(xs::AbstractArray, o::Ordering=Forward) = heapify!(copy(xs), o)
+"""
+    heapify(v, [ord])
 
+Returns a new vector in binary heap order, optionally using the given ordering.
+"""
+heapify(xs::AbstractArray, o::Ordering=Forward) = heapify!(copymutable(xs), o)
 
-# Is an arbitrary array heap ordered?
+"""
+    isheap(v, [ord])
+
+Return `true` if an array is heap-ordered according to the given order.
+"""
 function isheap(xs::AbstractArray, o::Ordering=Forward)
     for i in 1:div(length(xs), 2)
         if lt(o, xs[heapleft(i)], xs[i]) ||
@@ -105,9 +146,18 @@ end
 # PriorityQueue
 # -------------
 
-# A PriorityQueue that acts like a Dict, mapping values to their priorities,
-# with the addition of a dequeue! function to remove the lowest priority
-# element.
+"""
+    PriorityQueue(K, V, [ord])
+
+Construct a new [`PriorityQueue`](:obj:`PriorityQueue`), with keys of type
+`K` and values/priorites of type `V`.
+If an order is not given, the priority queue is min-ordered using
+the default comparison for `V`.
+
+A `PriorityQueue` acts like a `Dict`, mapping values to their
+priorities, with the addition of a `dequeue!` function to remove the
+lowest priority element.
+"""
 type PriorityQueue{K,V,O<:Ordering} <: Associative{K,V}
     # Binary heap of (element, priority) pairs.
     xs::Array{Pair{K,V}, 1}
@@ -117,7 +167,7 @@ type PriorityQueue{K,V,O<:Ordering} <: Associative{K,V}
     index::Dict{K, Int}
 
     function PriorityQueue(o::O)
-        new(Array(Pair{K,V}, 0), o, Dict{K, Int}())
+        new(Array{Pair{K,V}}(0), o, Dict{K, Int}())
     end
 
     PriorityQueue() = PriorityQueue{K,V,O}(Forward)
@@ -132,7 +182,7 @@ type PriorityQueue{K,V,O<:Ordering} <: Associative{K,V}
     end
 
     function PriorityQueue(itr, o::O)
-        xs = Array(Pair{K,V}, length(itr))
+        xs = Array{Pair{K,V}}(length(itr))
         index = Dict{K, Int}()
         for (i, (k, v)) in enumerate(itr)
             xs[i] = Pair{K,V}(k, v)
@@ -161,13 +211,19 @@ PriorityQueue{K,V}(ks::AbstractArray{K}, vs::AbstractArray{V},
 
 PriorityQueue{K,V}(kvs::Associative{K,V}, o::Ordering=Forward) = PriorityQueue{K,V,typeof(o)}(kvs, o)
 
-PriorityQueue{K,V}(a::AbstractArray{(K,V)}, o::Ordering=Forward) = PriorityQueue{K,V,typeof(o)}(a, o)
+PriorityQueue{K,V}(a::AbstractArray{Tuple{K,V}}, o::Ordering=Forward) = PriorityQueue{K,V,typeof(o)}(a, o)
 
 length(pq::PriorityQueue) = length(pq.xs)
 isempty(pq::PriorityQueue) = isempty(pq.xs)
 haskey(pq::PriorityQueue, key) = haskey(pq.index, key)
-peek(pq::PriorityQueue) = (kv = pq.xs[1]; (kv.first, kv.second))
 
+"""
+    peek(pq)
+
+Return the lowest priority key from a priority queue without removing that
+key from the queue.
+"""
+peek(pq::PriorityQueue) = pq.xs[1]
 
 function percolate_down!(pq::PriorityQueue, i::Integer)
     x = pq.xs[i]
@@ -244,7 +300,11 @@ function setindex!{K,V}(pq::PriorityQueue{K, V}, value, key)
     value
 end
 
+"""
+    enqueue!(pq, k, v)
 
+Insert the a key `k` into a priority queue `pq` with priority `v`.
+"""
 function enqueue!{K,V}(pq::PriorityQueue{K,V}, key, value)
     if haskey(pq, key)
         throw(ArgumentError("PriorityQueue keys must be unique"))
@@ -255,7 +315,11 @@ function enqueue!{K,V}(pq::PriorityQueue{K,V}, key, value)
     pq
 end
 
+"""
+    dequeue!(pq)
 
+Remove and return the lowest priority key from a priority queue.
+"""
 function dequeue!(pq::PriorityQueue)
     x = pq.xs[1]
     y = pop!(pq.xs)
@@ -275,17 +339,14 @@ function dequeue!(pq::PriorityQueue, key)
     key
 end
 
-
 # Unordered iteration through key value pairs in a PriorityQueue
 start(pq::PriorityQueue) = start(pq.index)
 
 done(pq::PriorityQueue, i) = done(pq.index, i)
 
-function next(pq::PriorityQueue, i)
+function next{K,V}(pq::PriorityQueue{K,V}, i)
     (k, idx), i = next(pq.index, i)
-    return ((k, pq.xs[idx].second), i)
+    return (pq.xs[idx], i)
 end
 
-
 end # module Collections
-

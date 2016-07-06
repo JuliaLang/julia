@@ -1,13 +1,19 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 using Base.Markdown
-import Base.Markdown: MD, Paragraph, Header, Italic, Bold, plain, term, html, Table, Code
-import Base: writemime
+import Base.Markdown: MD, Paragraph, Header, Italic, Bold, LineBreak, plain, term, html, rst, Table, Code, LaTeX, Footnote
+import Base: show
 
 # Basics
 # Equality is checked by making sure the HTML output is
-# the same – the structure itself may be different.
+# the same – the structure itself may be different.
 
 @test md"foo" == MD(Paragraph("foo"))
 @test md"foo *bar* baz" == MD(Paragraph(["foo ", Italic("bar"), " baz"]))
+@test md"""foo
+bar""" == MD(Paragraph(["foo bar"]))
+@test md"""foo\
+bar""" == MD(Paragraph(["foo", LineBreak(), "bar"]))
 
 @test md"#no title" == MD(Paragraph(["#no title"]))
 @test md"# title" == MD(Header{1}("title"))
@@ -32,8 +38,26 @@ h2
 foo
 ```
 """ == MD(Code("julia", "foo"))
-@test md"``code```more code``" == MD(Any[Paragraph(Any[Code("","code```more code")])])
-@test md"``code``````more code``" == MD(Any[Paragraph(Any[Code("","code``````more code")])])
+
+@test md"foo ``bar`` baz" == MD(Paragraph(["foo ", LaTeX("bar"), " baz"]))
+
+@test md"""
+```math
+...
+```
+""" == MD(LaTeX("..."))
+
+code_in_code = md"""
+````
+```
+````
+"""
+@test code_in_code == MD(Code("```"))
+@test plain(code_in_code) == "````\n```\n````\n"
+
+@test md"A footnote [^foo]." == MD(Paragraph(["A footnote ", Footnote("foo", nothing), "."]))
+
+@test md"[^foo]: footnote" == MD(Paragraph([Footnote("foo", Any[" footnote"])]))
 
 @test md"""
 * one
@@ -58,7 +82,30 @@ foo
 @test md"""Hello
 
 ---
-World""" |> plain == "Hello\n\n–––\n\nWorld\n"
+World""" |> plain == "Hello\n\n---\n\nWorld\n"
+@test md"[*a*](b)" |> plain == "[*a*](b)\n"
+@test md"""
+> foo
+>
+>   * bar
+>
+> ```
+> baz
+> ```""" |> plain == """> foo\n>\n>   * bar\n>\n> ```\n> baz\n> ```\n\n"""
+
+# Terminal (markdown) output
+
+# multiple whitespace is ignored
+@test sprint(term, md"a  b") == "  a b\n"
+@test sprint(term, md"- a
+        not code") == "    •  a not code\n"
+@test sprint(term, md"[x](https://julialang.org)") == "  x\n"
+@test sprint(term, md"![x](https://julialang.org)") == "  (Image: x)\n"
+
+# enumeration is normalized
+@test sprint(term, md"""
+    1. a
+    3. b""") == "    1. a\n    2. b\n"
 
 # HTML output
 
@@ -114,6 +161,110 @@ Some **bolded**
 """
 @test latex(book) == "\\section{Title}\nSome discussion\n\\begin{quote}\nA quote\n\\end{quote}\n\\subsection{Section \\emph{important}}\nSome \\textbf{bolded}\n\\begin{itemize}\n\\item list1\n\\item list2\n\\end{itemize}\n"
 
+# mime output
+
+let out =
+    """
+    # Title
+
+    Some discussion
+
+    > A quote
+
+
+    ## Section *important*
+
+    Some **bolded**
+
+      * list1
+      * list2
+    """
+    @test sprint(io -> show(io, "text/plain", book)) == out
+    @test sprint(io -> show(io, "text/markdown", book)) == out
+end
+let out =
+    """
+    <div class="markdown"><h1>Title</h1>
+    <p>Some discussion</p>
+    <blockquote>
+    <p>A quote</p>
+    </blockquote>
+    <h2>Section <em>important</em></h2>
+    <p>Some <strong>bolded</strong></p>
+    <ul>
+    <li>list1</li>
+    <li>list2</li>
+    </ul>
+    </div>"""
+    @test sprint(io -> show(io, "text/html", book)) == out
+end
+let out =
+    """
+    \\section{Title}
+    Some discussion
+    \\begin{quote}
+    A quote
+    \\end{quote}
+    \\subsection{Section \\emph{important}}
+    Some \\textbf{bolded}
+    \\begin{itemize}
+    \\item list1
+    \\item list2
+    \\end{itemize}
+    """
+    @test sprint(io -> show(io, "text/latex", book)) == out
+end
+let out =
+    """
+    Title
+    *****
+
+
+    Some discussion
+
+        A quote
+
+
+    Section *important*
+    ===================
+
+
+    Some **bolded**
+
+    * list1
+    * list2
+    """
+    @test sprint(io -> show(io, "text/rst", book)) == out
+end
+
+# rst rendering
+
+for (input, output) in (
+        md"foo *bar* baz"     => "foo *bar* baz\n",
+        md"something ***"     => "something ***\n",
+        md"# h1## "           => "h1##\n****\n\n",
+        md"## h2 ### "        => "h2\n==\n\n",
+        md"###### h6"         => "h6\n..\n\n",
+        md"####### h7"        => "####### h7\n",
+        md"   >"              => "    \n\n",
+        md"1. Hello"          => "1. Hello\n",
+        md"* World"           => "* World\n",
+        md"``x + y``"         => ":math:`x + y`\n",
+        md"# title *blah*"    => "title *blah*\n************\n\n",
+        md"## title *blah*"   => "title *blah*\n============\n\n",
+        md"[`x`](:func:`x`)"  => ":func:`x`\n",
+        md"[`x`](:obj:`x`)"   => ":obj:`x`\n",
+        md"[`x`](:ref:`x`)"   => ":ref:`x`\n",
+        md"[`x`](:exc:`x`)"   => ":exc:`x`\n",
+        md"[`x`](:class:`x`)" => ":class:`x`\n",
+        md"[`x`](:const:`x`)" => ":const:`x`\n",
+        md"[`x`](:data:`x`)"  => ":data:`x`\n",
+        md"[`x`](:???:`x`)"   => "```x`` <:???:`x`>`_\n",
+        md"[x](y)"            => "`x <y>`_\n",
+    )
+    @test rst(input) == output
+end
+
 # Interpolation / Custom types
 
 type Reference
@@ -122,21 +273,20 @@ end
 
 ref(x) = Reference(x)
 
-ref(fft)
+ref(mean)
 
-writemime(io::IO, m::MIME"text/plain", r::Reference) =
+show(io::IO, m::MIME"text/plain", r::Reference) =
     print(io, "$(r.ref) (see Julia docs)")
 
-fft_ref = md"Behaves like $(ref(fft))"
-@test plain(fft_ref) == "Behaves like fft (see Julia docs)\n"
-@test html(fft_ref) == "<p>Behaves like fft &#40;see Julia docs&#41;</p>\n"
+mean_ref = md"Behaves like $(ref(mean))"
+@test plain(mean_ref) == "Behaves like mean (see Julia docs)\n"
+@test html(mean_ref) == "<p>Behaves like mean &#40;see Julia docs&#41;</p>\n"
 
-writemime(io::IO, m::MIME"text/html", r::Reference) =
+show(io::IO, m::MIME"text/html", r::Reference) =
     Markdown.withtag(io, :a, :href=>"test") do
         Markdown.htmlesc(io, Markdown.plaininline(r))
     end
-@test html(fft_ref) == "<p>Behaves like <a href=\"test\">fft &#40;see Julia docs&#41;</a></p>\n"
-
+@test html(mean_ref) == "<p>Behaves like <a href=\"test\">mean &#40;see Julia docs&#41;</a></p>\n"
 
 @test md"""
 ````julia
@@ -166,8 +316,366 @@ no|table
 no error
 """ == MD([Paragraph(Any["no|table no error"])])
 
-t = """a   |   b
-:-- | --:
-1   |   2
-"""
-@test plain(Markdown.parse(t)) == t
+let t = """a   |   b
+    :-- | --:
+    1   |   2
+    """
+    @test Markdown.parse(t) == MD(Table(Any[Any["a", "b"], Any["1", "2"]], [:l, :r]))
+end
+
+let text =
+    """
+    | a   |   b |
+    |:--- | ---:|
+    | 1   |   2 |
+    """,
+    table = Markdown.parse(text)
+    @test text == Markdown.plain(table)
+end
+let text =
+    """
+    | Markdown | Table |  Test |
+    |:-------- |:-----:| -----:|
+    | foo      | `bar` | *baz* |
+    | `bar`    |  baz  | *foo* |
+    """,
+    table = Markdown.parse(text)
+    @test text == Markdown.plain(table)
+end
+
+# LaTeX extension
+
+let in_dollars =
+    """
+    We have \$x^2 < x\$ whenever:
+
+    \$|x| < 1\$
+
+    etc.
+    """,
+    in_backticks =
+    """
+    We have ``x^2 < x`` whenever:
+
+    ```math
+    |x| < 1
+    ```
+
+    etc.
+    """,
+    out_plain =
+    """
+    We have \$x^2 < x\$ whenever:
+
+    \$\$
+    |x| < 1
+    \$\$
+
+    etc.
+    """,
+    out_rst =
+    """
+    We have :math:`x^2 < x` whenever:
+
+    .. math::
+
+        |x| < 1
+
+    etc.
+    """,
+    out_latex =
+    """
+    We have \$x^2 < x\$ whenever:
+    \$\$|x| < 1\$\$
+    etc.
+    """,
+    dollars   = Markdown.parse(in_dollars),
+    backticks = Markdown.parse(in_backticks),
+    latex_doc = MD(
+        Any[Paragraph(Any["We have ", LaTeX("x^2 < x"), " whenever:"]),
+            LaTeX("|x| < 1"),
+            Paragraph(Any["etc."])
+    ])
+
+    @test out_plain == Markdown.plain(dollars)
+    @test out_plain == Markdown.plain(backticks)
+
+    @test out_rst   == Markdown.rst(dollars)
+    @test out_rst   == Markdown.rst(backticks)
+
+    @test out_latex == Markdown.latex(dollars)
+    @test out_latex == Markdown.latex(backticks)
+
+    @test latex_doc == dollars
+    @test latex_doc == backticks
+end
+
+# Nested backticks for inline code and math.
+
+let t_1 = "`code` ``math`` ```code``` ````math```` `````code`````",
+    t_2 = "`` `math` `` ``` `code` ``code`` ``` ```` `math` ``math`` ```math``` ````",
+    t_3 = "`` ` `` ``` `` ` `` ` ` ```",
+    t_4 = """`code
+    over several
+    lines` ``math
+    over several
+    lines`` ``math with
+    ` some extra ` ` backticks`
+    ``""",
+    t_5 = "``code at end of string`",
+    t_6 = "```math at end of string``"
+    @test Markdown.parse(t_1) == MD(Paragraph([
+        Code("code"),
+        " ",
+        LaTeX("math"),
+        " ",
+        Code("code"),
+        " ",
+        LaTeX("math"),
+        " ",
+        Code("code"),
+    ]))
+    @test Markdown.parse(t_2) == MD(Paragraph([
+        LaTeX("`math`"),
+        " ",
+        Code("`code` ``code``"),
+        " ",
+        LaTeX("`math` ``math`` ```math```"),
+    ]))
+    @test Markdown.parse(t_3) == MD(Paragraph([
+        LaTeX("`"),
+        " ",
+        Code("`` ` `` ` `"),
+    ]))
+    @test Markdown.parse(t_4) == MD(Paragraph([
+        Code("code over several lines"),
+        " ",
+        LaTeX("math over several lines"),
+        " ",
+        LaTeX("math with ` some extra ` ` backticks`")
+    ]))
+    @test Markdown.parse(t_5) == MD(Paragraph([
+        "`",
+        Code("code at end of string"),
+    ]))
+    @test Markdown.parse(t_6) == MD(Paragraph([
+        "`",
+        LaTeX("math at end of string"),
+    ]))
+end
+
+# Admonitions.
+
+let t_1 =
+        """
+        # Foo
+
+        !!! note
+
+        !!! warning "custom title"
+
+        ## Bar
+
+        !!! danger ""
+
+        !!!
+        """,
+    t_2 =
+        """
+        !!! note
+            foo bar baz
+
+        !!! warning "custom title"
+            - foo
+            - bar
+            - baz
+
+            foo bar baz
+
+        !!! danger ""
+
+            ```
+            foo
+            ```
+
+                bar
+
+            # baz
+        """,
+    m_1 = Markdown.parse(t_1),
+    m_2 = Markdown.parse(t_2)
+
+    # Content Tests.
+
+    @test isa(m_1.content[2], Markdown.Admonition)
+    @test m_1.content[2].category == "note"
+    @test m_1.content[2].title == "Note"
+    @test m_1.content[2].content == []
+
+    @test isa(m_1.content[3], Markdown.Admonition)
+    @test m_1.content[3].category == "warning"
+    @test m_1.content[3].title == "custom title"
+    @test m_1.content[3].content == []
+
+    @test isa(m_1.content[5], Markdown.Admonition)
+    @test m_1.content[5].category == "danger"
+    @test m_1.content[5].title == ""
+    @test m_1.content[5].content == []
+
+    @test isa(m_1.content[6], Markdown.Paragraph)
+
+    @test isa(m_2.content[1], Markdown.Admonition)
+    @test m_2.content[1].category == "note"
+    @test m_2.content[1].title == "Note"
+    @test isa(m_2.content[1].content[1], Markdown.Paragraph)
+
+    @test isa(m_2.content[2], Markdown.Admonition)
+    @test m_2.content[2].category == "warning"
+    @test m_2.content[2].title == "custom title"
+    @test isa(m_2.content[2].content[1], Markdown.List)
+    @test isa(m_2.content[2].content[2], Markdown.Paragraph)
+
+    @test isa(m_2.content[3], Markdown.Admonition)
+    @test m_2.content[3].category == "danger"
+    @test m_2.content[3].title == ""
+    @test isa(m_2.content[3].content[1], Markdown.Code)
+    @test isa(m_2.content[3].content[2], Markdown.Code)
+    @test isa(m_2.content[3].content[3], Markdown.Header{1})
+
+    # Rendering Tests.
+
+    let out = Markdown.plain(m_1),
+        expected =
+            """
+            # Foo
+
+            !!! note
+            \n\n
+            !!! warning "custom title"
+            \n\n
+            ## Bar
+
+            !!! danger ""
+            \n\n
+            !!!
+            """
+        @test out == expected
+    end
+    let out = Markdown.rst(m_1),
+        expected =
+            """
+            Foo
+            ***
+            \n
+            .. note::
+            \n\n
+            .. warning:: custom title
+            \n\n
+            Bar
+            ===
+            \n
+            .. danger::
+            \n\n
+            !!!
+            """
+        @test out == expected
+    end
+    let out = Markdown.latex(m_1),
+        expected =
+            """
+            \\section{Foo}
+            \\begin{quote}
+            \\textbf{note}
+
+            Note
+
+            \\end{quote}
+            \\begin{quote}
+            \\textbf{warning}
+
+            custom title
+
+            \\end{quote}
+            \\subsection{Bar}
+            \\begin{quote}
+            \\textbf{danger}
+            \n\n
+            \\end{quote}
+            !!!
+            """
+        @test out == expected
+    end
+    let out = Markdown.html(m_1),
+        expected =
+            """
+            <h1>Foo</h1>
+            <div class="admonition note"><p class="admonition-title">Note</p></div>
+            <div class="admonition warning"><p class="admonition-title">custom title</p></div>
+            <h2>Bar</h2>
+            <div class="admonition danger"><p class="admonition-title"></p></div>
+            <p>&#33;&#33;&#33;</p>
+            """
+        @test out == expected
+    end
+
+    let out = Markdown.plain(m_2),
+        expected =
+            """
+            !!! note
+                foo bar baz
+
+
+            !!! warning "custom title"
+                  * foo
+                  * bar
+                  * baz
+
+                foo bar baz
+
+
+            !!! danger ""
+                ```
+                foo
+                ```
+
+                ```
+                bar
+                ```
+
+                # baz
+
+            """
+        @test out == expected
+    end
+    let out = Markdown.rst(m_2),
+        expected =
+            """
+            .. note::
+               foo bar baz
+
+
+            .. warning:: custom title
+               * foo
+               * bar
+               * baz
+
+               foo bar baz
+
+
+            .. danger::
+               .. code-block:: julia
+
+                   foo
+
+               .. code-block:: julia
+
+                   bar
+
+               baz
+               ***
+
+            """
+        @test out == expected
+    end
+end
+

@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 # test meta-expressions that annotate blocks of code
 
 module MetaTest
@@ -32,15 +34,16 @@ h_noinlined() = g_noinlined()
 
 function foundfunc(bt, funcname)
     for b in bt
-        lkup = Profile.lookup(b)
-        if lkup.func == funcname
-            return true
+        for lkup in StackTraces.lookup(b)
+            if lkup.func == funcname
+                return true
+            end
         end
     end
     false
 end
-@test !foundfunc(h_inlined(), "g_inlined")
-@test foundfunc(h_noinlined(), "g_noinlined")
+@test !foundfunc(h_inlined(), :g_inlined)
+@test foundfunc(h_noinlined(), :g_noinlined)
 
 using Base.pushmeta!, Base.popmeta!
 
@@ -54,15 +57,48 @@ _attach(val, ex) = pushmeta!(ex, :test, val)
     false
 end
 
-asts = code_lowered(dummy, ())
+asts = code_lowered(dummy, Tuple{})
 @test length(asts) == 1
 ast = asts[1]
 
 body = Expr(:block)
-body.args = ast.args[3].args
+body.args = Base.uncompressed_ast(ast)
 
 @test popmeta!(body, :test) == (true, [42])
 @test popmeta!(body, :nonexistent) == (false, [])
+
+# Simple popmeta!() tests
+ex1 = quote
+    $(Expr(:meta, :foo))
+    x*x+1
+end
+@test popmeta!(ex1, :foo)[1]
+@test !popmeta!(ex1, :foo)[1]
+@test !popmeta!(ex1, :bar)[1]
+@test !(popmeta!(:(x*x+1), :foo)[1])
+
+# Find and pop meta information from general ast locations
+multi_meta = quote
+    $(Expr(:meta, :foo1))
+    y = x
+    $(Expr(:meta, :foo2, :foo3))
+    begin
+        $(Expr(:meta, :foo4, Expr(:foo5, 1, 2)))
+    end
+    x*x+1
+end
+@test popmeta!(deepcopy(multi_meta), :foo1) == (true, [])
+@test popmeta!(deepcopy(multi_meta), :foo2) == (true, [])
+@test popmeta!(deepcopy(multi_meta), :foo3) == (true, [])
+@test popmeta!(deepcopy(multi_meta), :foo4) == (true, [])
+@test popmeta!(deepcopy(multi_meta), :foo5) == (true, [1,2])
+@test popmeta!(deepcopy(multi_meta), :bar)  == (false, [])
+
+# Test that popmeta!() removes meta blocks entirely when they become empty.
+for m in [:foo1, :foo2, :foo3, :foo4, :foo5]
+    @test popmeta!(multi_meta, m)[1]
+end
+@test Base.findmeta(multi_meta.args)[1] == 0
 
 end
 

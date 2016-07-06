@@ -11,13 +11,13 @@ comes when one asks what a character is. The characters that English
 speakers are familiar with are the letters ``A``, ``B``, ``C``, etc.,
 together with numerals and common punctuation symbols. These characters
 are standardized together with a mapping to integer values between 0 and
-127 by the `ASCII <http://en.wikipedia.org/wiki/ASCII>`_ standard. There
+127 by the `ASCII <https://en.wikipedia.org/wiki/ASCII>`_ standard. There
 are, of course, many other characters used in non-English languages,
 including variants of the ASCII characters with accents and other
 modifications, related scripts such as Cyrillic and Greek, and scripts
 completely unrelated to ASCII and English, including Arabic, Chinese,
 Hebrew, Hindi, Japanese, and Korean. The
-`Unicode <http://en.wikipedia.org/wiki/Unicode>`_ standard tackles the
+`Unicode <https://en.wikipedia.org/wiki/Unicode>`_ standard tackles the
 complexities of what exactly a character is, and is generally accepted
 as the definitive standard addressing this problem. Depending on your
 needs, you can either ignore these complexities entirely and just
@@ -53,9 +53,9 @@ There are a few noteworthy high-level features about Julia's strings:
    efficiently and simply for variable-width encodings of Unicode
    strings.
 -  Julia supports the full range of
-   `Unicode <http://en.wikipedia.org/wiki/Unicode>`_ characters: literal
-   strings are always `ASCII <http://en.wikipedia.org/wiki/ASCII>`_ or
-   `UTF-8 <http://en.wikipedia.org/wiki/UTF-8>`_ but other encodings for
+   `Unicode <https://en.wikipedia.org/wiki/Unicode>`_ characters: literal
+   strings are always `ASCII <https://en.wikipedia.org/wiki/ASCII>`_ or
+   `UTF-8 <https://en.wikipedia.org/wiki/UTF-8>`_ but other encodings for
    strings from external sources can be supported.
 
 .. _man-characters:
@@ -66,7 +66,7 @@ Characters
 A :obj:`Char` value represents a single character: it is just a 32-bit
 bitstype with a special literal representation and appropriate arithmetic
 behaviors, whose numeric value is interpreted as a `Unicode code
-point <http://en.wikipedia.org/wiki/Code_point>`_. Here is how :obj:`Char`
+point <https://en.wikipedia.org/wiki/Code_point>`_. Here is how :obj:`Char`
 values are input and shown:
 
 .. doctest::
@@ -82,7 +82,7 @@ easily:
 
 .. doctest::
 
-    julia> int('x')
+    julia> Int('x')
     120
 
     julia> typeof(ans)
@@ -99,14 +99,14 @@ convert an integer value back to a :obj:`Char` just as easily:
 Not all integer values are valid Unicode code points, but for
 performance, the :func:`Char` conversion does not check that every character
 value is valid. If you want to check that each converted value is a
-valid code point, use the :func:`is_valid_char` function:
+valid code point, use the :func:`isvalid` function:
 
 .. doctest::
 
     julia> Char(0x110000)
     '\U110000'
 
-    julia> is_valid_char(0x110000)
+    julia> isvalid(Char, 0x110000)
     false
 
 As of this writing, the valid Unicode code points are ``U+00`` through
@@ -137,7 +137,7 @@ Julia uses your system's locale and language settings to determine which
 characters can be printed as-is and which must be output using the
 generic, escaped ``\u`` or ``\U`` input forms. In addition to these
 Unicode escape forms, all of `C's traditional escaped input
-forms <http://en.wikipedia.org/wiki/C_syntax#Backslash_escapes>`_ can
+forms <https://en.wikipedia.org/wiki/C_syntax#Backslash_escapes>`_ can
 also be used:
 
 .. doctest::
@@ -224,26 +224,16 @@ a normal value:
     julia> str[end-1]
     '.'
 
-    julia> str[end/2]
+    julia> str[end÷2]
     ' '
-
-    julia> str[end/3]
-    ERROR: InexactError()
-     in getindex at string.jl:59
-
-    julia> str[end/4]
-    ERROR: InexactError()
-     in getindex at string.jl:59
 
 Using an index less than 1 or greater than ``end`` raises an error::
 
     julia> str[0]
-    ERROR: BoundsError()
-     in getindex at /Users/sabae/src/julia/usr/lib/julia/sys.dylib (repeats 2 times)
+    ERROR: BoundsError: attempt to access 14-element Array{UInt8,1} at index [0]
 
     julia> str[end+1]
-    ERROR: BoundsError()
-     in getindex at /Users/sabae/src/julia/usr/lib/julia/sys.dylib (repeats 2 times)
+    ERROR: BoundsError: attempt to access 14-element Array{UInt8,1} at index [15]
 
 You can also extract a substring using range indexing:
 
@@ -285,9 +275,9 @@ special characters depends on your terminal's locale settings and its
 support for Unicode. Non-ASCII string literals are encoded using the
 UTF-8 encoding. UTF-8 is a variable-width encoding, meaning that not all
 characters are encoded in the same number of bytes. In UTF-8, ASCII
-characters — i.e. those with code points less than 0x80 (128) — are
+characters — i.e. those with code points less than 0x80 (128) — are
 encoded as they are in ASCII, using a single byte, while code points
-0x80 and above are encoded using multiple bytes — up to four per
+0x80 and above are encoded using multiple bytes — up to four per
 character. This means that not every byte index into a UTF-8 string is
 necessarily a valid index for a character. If you index into a string at
 such an invalid byte index, an error is thrown:
@@ -298,14 +288,14 @@ such an invalid byte index, an error is thrown:
     '∀'
 
     julia> s[2]
-    ERROR: invalid UTF-8 character index
-     in next at ./utf8.jl:68
-     in getindex at string.jl:57
+    ERROR: UnicodeError: invalid character index
+     in next at ./unicode/utf8.jl:65
+     in getindex at strings/basic.jl:37
 
     julia> s[3]
-    ERROR: invalid UTF-8 character index
-     in next at ./utf8.jl:68
-     in getindex at string.jl:57
+    ERROR: UnicodeError: invalid character index
+     in next at ./unicode/utf8.jl:65
+     in getindex at strings/basic.jl:37
 
     julia> s[4]
     ' '
@@ -363,9 +353,7 @@ UTF-8 is not the only encoding that Julia supports, and adding support
 for new encodings is quite easy.  In particular, Julia also provides
 :obj:`UTF16String` and :obj:`UTF32String` types, constructed by
 :func:`utf16` and :func:`utf32` respectively, for UTF-16 and
-UTF-32 encodings.  It also provides aliases :obj:`WString` and
-:func:`wstring` for either UTF-16 or UTF-32 strings, depending on the
-size of ``Cwchar_t``. Additional discussion of other encodings and how to
+UTF-32 encodings. Additional discussion of other encodings and how to
 implement support for them is beyond the scope of this document for
 the time being. For further discussion of UTF-8 encoding issues, see
 the section below on `byte array literals <#Byte+Array+Literals>`_,
@@ -447,6 +435,55 @@ backslash:
     julia> print("I have \$100 in my account.\n")
     I have $100 in my account.
 
+Triple-Quoted String Literals
+-----------------------------
+
+When strings are created using triple-quotes (``"""..."""``) they have some
+special behavior that can be useful for creating longer blocks of text. First,
+if the opening ``"""`` is followed by a newline, the newline is stripped from
+the resulting string.
+
+::
+
+    """hello"""
+
+is equivalent to
+
+::
+
+    """
+    hello"""
+
+but
+
+::
+
+    """
+
+    hello"""
+
+will contain a literal newline at the beginning. Trailing whitespace is left
+unaltered. They can contain ``"`` symbols without escaping. Triple-quoted strings
+are also dedented to the level of the least-indented line. This is useful for
+defining strings within code that is indented. For example:
+
+.. doctest::
+
+    julia> str = """
+               Hello,
+               world.
+             """
+    "  Hello,\n  world.\n"
+
+In this case the final (empty) line before the closing ``"""`` sets the
+indentation level.
+
+Note that line breaks in literal strings, whether single- or triple-quoted,
+result in a newline (LF) character ``\n`` in the string, even if your
+editor uses a carriage return ``\r`` (CR) or CRLF combination to end lines.
+To include a CR in a string, use an explicit escape ``\r``; for example,
+you can enter the literal string ``"a CRLF line ending\r\n"``.
+
 Common Operations
 -----------------
 
@@ -510,7 +547,10 @@ contained in a string:
     false
 
     julia> contains("Xylophon", 'o')
-    ERROR: `contains` has no method matching contains(::ASCIIString, ::Char)
+    ERROR: MethodError: `contains` has no method matching contains(::String, ::Char)
+    Closest candidates are:
+      contains(!Matched::Function, ::Any, !Matched::Any)
+      contains(::AbstractString, !Matched::AbstractString)
 
 The last error is because ``'o'`` is a character literal, and :func:`contains`
 is a generic function that looks for subsequences. To look for an element in a
@@ -553,11 +593,15 @@ quite what is needed. For these kinds of situations, Julia provides
 :ref:`non-standard string literals <man-non-standard-string-literals2>`.
 A non-standard string literal looks like
 a regular double-quoted string literal, but is immediately prefixed by
-an identifier, and doesn't behave quite like a normal string literal. Regular
+an identifier, and doesn't behave quite like a normal string literal. The
+convention is that non-standard literals with uppercase prefixes produce
+actual string objects, while those with lowercase prefixes produce
+non-string objects like byte arrays or compiled regular expressions. Regular
 expressions, byte array literals and version number literals, as described
 below, are some examples of non-standard string literals. Other examples are
 given in the :ref:`metaprogramming <man-non-standard-string-literals2>`
 section.
+
 
 Regular Expressions
 -------------------
@@ -579,7 +623,7 @@ any options turned on just uses ``r"..."``:
     r"^\s*(?:#|$)"
 
     julia> typeof(ans)
-    Regex (constructor with 3 methods)
+    Regex
 
 To check if a regex matches a string, use :func:`ismatch`:
 
@@ -611,9 +655,9 @@ normal value and you can test for it programmatically::
 
     m = match(r"^\s*(?:#|$)", line)
     if m == nothing
-      println("not a comment")
+        println("not a comment")
     else
-      println("blank or comment")
+        println("blank or comment")
     end
 
 If a regular expression does match, the value returned by :func:`match` is a
@@ -633,26 +677,28 @@ which to start the search. For example:
 
 .. doctest::
 
-   julia> m = match(r"[0-9]","aaaa1aaaa2aaaa3",1)
-   RegexMatch("1")
+    julia> m = match(r"[0-9]","aaaa1aaaa2aaaa3",1)
+    RegexMatch("1")
 
-   julia> m = match(r"[0-9]","aaaa1aaaa2aaaa3",6)
-   RegexMatch("2")
+    julia> m = match(r"[0-9]","aaaa1aaaa2aaaa3",6)
+    RegexMatch("2")
 
-   julia> m = match(r"[0-9]","aaaa1aaaa2aaaa3",11)
-   RegexMatch("3")
+    julia> m = match(r"[0-9]","aaaa1aaaa2aaaa3",11)
+    RegexMatch("3")
 
 You can extract the following info from a :obj:`RegexMatch` object:
 
 -  the entire substring matched: ``m.match``
--  the captured substrings as a tuple of strings: ``m.captures``
+-  the captured substrings as an array of strings: ``m.captures``
 -  the offset at which the whole match begins: ``m.offset``
 -  the offsets of the captured substrings as a vector: ``m.offsets``
 
 For when a capture doesn't match, instead of a substring, ``m.captures``
 contains ``nothing`` in that position, and ``m.offsets`` has a zero
 offset (recall that indices in Julia are 1-based, so a zero offset into
-a string is invalid). Here's is a pair of somewhat contrived examples::
+a string is invalid). Here is a pair of somewhat contrived examples:
+
+.. doctest::
 
     julia> m = match(r"(a|b)(c)?(d)", "acd")
     RegexMatch("acd", 1="a", 2="c", 3="d")
@@ -661,7 +707,7 @@ a string is invalid). Here's is a pair of somewhat contrived examples::
     "acd"
 
     julia> m.captures
-    3-element Array{Union(SubString{UTF8String},Void),1}:
+    3-element Array{Union{SubString{String},Void},1}:
      "a"
      "c"
      "d"
@@ -682,7 +728,7 @@ a string is invalid). Here's is a pair of somewhat contrived examples::
     "ad"
 
     julia> m.captures
-    3-element Array{Union(SubString{UTF8String},Void),1}:
+    3-element Array{Union{SubString{String},Void},1}:
      "a"
      nothing
      "d"
@@ -696,11 +742,42 @@ a string is invalid). Here's is a pair of somewhat contrived examples::
      0
      2
 
-It is convenient to have captures returned as a tuple so that one can
-use tuple destructuring syntax to bind them to local variables::
+It is convenient to have captures returned as an array so that one can
+use destructuring syntax to bind them to local variables::
 
     julia> first, second, third = m.captures; first
     "a"
+
+Captures can also be accessed by indexing the :obj:`RegexMatch` object
+with the number or name of the capture group:
+
+.. doctest::
+
+    julia> m=match(r"(?<hour>\d+):(?<minute>\d+)","12:45")
+    RegexMatch("12:45", hour="12", minute="45")
+    julia> m[:minute]
+    "45"
+    julia> m[2]
+    "45"
+
+Captures can be referenced in a substitution string when using :func:`replace`
+by using ``\n`` to refer to the nth capture group and prefixing the
+subsitution string with ``s``. Capture group 0 refers to the entire match object.
+Named capture groups can be referenced in the substitution with ``g<groupname>``.
+For example:
+
+.. doctest::
+
+    julia> replace("first second", r"(\w+) (?<agroup>\w+)", s"\g<agroup> \1")
+    "second first"
+
+Numbered capture groups can also be referenced as ``\g<n>`` for disambiguation,
+as in:
+
+.. doctest::
+
+    julia> replace("a", r".", s"\g<0>1")
+    "a1"
 
 You can modify the behavior of regular expressions by some combination
 of the flags ``i``, ``m``, ``s``, and ``x`` after the closing double
@@ -755,11 +832,8 @@ Byte Array Literals
 
 Another useful non-standard string literal is the byte-array string
 literal: ``b"..."``. This form lets you use string notation to express
-literal byte arrays — i.e. arrays of ``UInt8`` values. The convention is
-that non-standard literals with uppercase prefixes produce actual string
-objects, while those with lowercase prefixes produce non-string objects
-like byte arrays or compiled regular expressions. The rules for byte
-array literals are the following:
+literal byte arrays — i.e. arrays of ``UInt8`` values. The rules for
+byte array literals are the following:
 
 -  ASCII characters and ASCII escapes produce a single byte.
 -  ``\x`` and octal escape sequences produce the *byte* corresponding to
@@ -872,9 +946,9 @@ would only run with stable ``0.2`` versions, and exclude such versions as
 ``0.2`` versions, the lower bound check should be modified like this: ``v"0.2-"
 <= VERSION``.
 
-Another non-standard version specification extension allows to use a trailing
+Another non-standard version specification extension allows one to use a trailing
 ``+`` to express an upper limit on build versions, e.g.  ``VERSION >
-"v"0.2-rc1+"`` can be used to mean any version above ``0.2-rc1`` and any of its
+v"0.2-rc1+"`` can be used to mean any version above ``0.2-rc1`` and any of its
 builds: it will return ``false`` for version ``v"0.2-rc1+win64"`` and ``true``
 for ``v"0.2-rc2"``.
 

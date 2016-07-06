@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 module Math
 
 export sin, cos, tan, sinh, cosh, tanh, asin, acos, atan,
@@ -11,24 +13,24 @@ export sin, cos, tan, sinh, cosh, tanh, asin, acos, atan,
        cbrt, sqrt, erf, erfc, erfcx, erfi, dawson,
        significand,
        lgamma, hypot, gamma, lfact, max, min, minmax, ldexp, frexp,
-       clamp, modf, ^, mod2pi,
+       clamp, clamp!, modf, ^, mod2pi,
        airy, airyai, airyprime, airyaiprime, airybi, airybiprime, airyx,
        besselj0, besselj1, besselj, besseljx,
        bessely0, bessely1, bessely, besselyx,
        hankelh1, hankelh2, hankelh1x, hankelh2x,
-       besseli, besselix, besselk, besselkx, besselh,
+       besseli, besselix, besselk, besselkx, besselh, besselhx,
        beta, lbeta, eta, zeta, polygamma, invdigamma, digamma, trigamma,
        erfinv, erfcinv, @evalpoly
 
 import Base: log, exp, sin, cos, tan, sinh, cosh, tanh, asin,
              acos, atan, asinh, acosh, atanh, sqrt, log2, log10,
-             max, min, minmax, ^, exp2,
+             max, min, minmax, ^, exp2, muladd,
              exp10, expm1, log1p,
              sign_mask, exponent_mask, exponent_one, exponent_half,
              significand_mask, significand_bits, exponent_bits, exponent_bias
 
 
-import Core.Intrinsics: nan_dom_err, sqrt_llvm, box, unbox, powi_llvm
+import Core.Intrinsics: sqrt_llvm, box, unbox, powi_llvm
 
 # non-type specific math functions
 
@@ -40,9 +42,16 @@ clamp{X,L,H}(x::X, lo::L, hi::H) =
 
 clamp{T}(x::AbstractArray{T,1}, lo, hi) = [clamp(xx, lo, hi) for xx in x]
 clamp{T}(x::AbstractArray{T,2}, lo, hi) =
-    [clamp(x[i,j], lo, hi) for i in 1:size(x,1), j in 1:size(x,2)]
+    [clamp(x[i,j], lo, hi) for i in indices(x,1), j in indices(x,2)]
 clamp{T}(x::AbstractArray{T}, lo, hi) =
     reshape([clamp(xx, lo, hi) for xx in x], size(x))
+
+function clamp!{T}(x::AbstractArray{T}, lo, hi)
+    @inbounds for i in eachindex(x)
+        x[i] = clamp(x[i], lo, hi)
+    end
+    x
+end
 
 # evaluate p[1] + x * (p[2] + x * (....)), i.e. a polynomial via Horner's rule
 macro horner(x, p...)
@@ -62,10 +71,10 @@ macro evalpoly(z, p...)
     b = :($(esc(p[end-1])))
     as = []
     for i = length(p)-2:-1:1
-        ai = symbol("a", i)
+        ai = Symbol("a", i)
         push!(as, :($ai = $a))
         a = :(muladd(r, $ai, $b))
-        b = :(muladd(-s, $ai, $(esc(p[i]))))
+        b = :($(esc(p[i])) - s * $ai) # see issue #15985 on fused mul-subtract
     end
     ai = :a0
     push!(as, :($ai = $a))
@@ -73,23 +82,25 @@ macro evalpoly(z, p...)
              :(x = real(tt)),
              :(y = imag(tt)),
              :(r = x + x),
-             :(s = x*x + y*y),
+             :(s = muladd(x, x, y*y)),
              as...,
              :(muladd($ai, tt, $b)))
-    R = Expr(:macrocall, symbol("@horner"), :tt, map(esc, p)...)
+    R = Expr(:macrocall, Symbol("@horner"), :tt, map(esc, p)...)
     :(let tt = $(esc(z))
           isa(tt, Complex) ? $C : $R
       end)
 end
 
-rad2deg(z::Real) = oftype(z, 57.29577951308232*z)
-deg2rad(z::Real) = oftype(z, 0.017453292519943295*z)
-rad2deg(z::Integer) = rad2deg(float(z))
-deg2rad(z::Integer) = deg2rad(float(z))
+rad2deg(z::AbstractFloat) = z * (180 / oftype(z, pi))
+deg2rad(z::AbstractFloat) = z * (oftype(z, pi) / 180)
+rad2deg(z::Real) = rad2deg(float(z))
+deg2rad(z::Real) = deg2rad(float(z))
 @vectorize_1arg Real rad2deg
 @vectorize_1arg Real deg2rad
 
-log(b,x) = log(x)./log(b)
+log{T<:Number}(b::T, x::T) = log(x)/log(b)
+log(b::Number, x::Number) = log(promote(b,x)...)
+@vectorize_2arg Number log
 
 # type specific math functions
 
@@ -107,10 +118,10 @@ for f in (:cbrt, :sinh, :cosh, :tanh, :atan, :asinh, :exp, :erf, :erfc, :exp2, :
 end
 
 # fallback definitions to prevent infinite loop from $f(x::Real) def above
-cbrt(x::FloatingPoint) = x^(1//3)
-exp2(x::FloatingPoint) = 2^x
+cbrt(x::AbstractFloat) = x^(1//3)
+exp2(x::AbstractFloat) = 2^x
 for f in (:sinh, :cosh, :tanh, :atan, :asinh, :exp, :erf, :erfc, :expm1)
-    @eval ($f)(x::FloatingPoint) = error("not implemented for ", typeof(x))
+    @eval ($f)(x::AbstractFloat) = error("not implemented for ", typeof(x))
 end
 
 # TODO: GNU libc has exp10 as an extension; should openlibm?
@@ -118,6 +129,9 @@ exp10(x::Float64) = 10.0^x
 exp10(x::Float32) = 10.0f0^x
 exp10(x::Integer) = exp10(float(x))
 @vectorize_1arg Number exp10
+
+# utility for converting NaN return to DomainError
+@inline nan_dom_err(f, x) = isnan(f) & !isnan(x) ? throw(DomainError()) : f
 
 # functions that return NaN on non-NaN argument for domain error
 for f in (:sin, :cos, :tan, :asin, :acos, :acosh, :atanh, :log, :log2, :log10,
@@ -135,47 +149,62 @@ sqrt(x::Float32) = box(Float32,sqrt_llvm(unbox(Float32,x)))
 sqrt(x::Real) = sqrt(float(x))
 @vectorize_1arg Number sqrt
 
-hypot(x::Real, y::Real) = hypot(promote(float(x), float(y))...)
-function hypot{T<:FloatingPoint}(x::T, y::T)
-    x = abs(x)
-    y = abs(y)
-    if x < y
-        x, y = y, x
+"""
+    hypot(x, y)
+
+Compute the hypotenuse ``\\sqrt{x^2+y^2}`` avoiding overflow and underflow.
+"""
+hypot(x::Number, y::Number) = hypot(promote(x, y)...)
+function hypot{T<:Number}(x::T, y::T)
+    ax = abs(x)
+    ay = abs(y)
+    if ax < ay
+        ax, ay = ay, ax
     end
-    if x == 0
-        r = y/one(x)
+    if ax == 0
+        r = ay / one(ax)
     else
-        r = y/x
-        if isnan(r)
-            isinf(x) && return x
-            isinf(y) && return y
-            return r
-        end
+        r = ay / ax
     end
-    x * sqrt(one(r)+r*r)
+
+    rr = ax * sqrt(1 + r * r)
+
+    # Use type of rr to make sure that return type is the same for
+    # all branches
+    if isnan(r)
+        isinf(ax) && return oftype(rr, Inf)
+        isinf(ay) && return oftype(rr, Inf)
+        return oftype(rr, r)
+    else
+        return rr
+    end
 end
+@vectorize_2arg Number hypot
+
+"""
+    hypot(x...)
+
+Compute the hypotenuse ``\\sqrt{\\sum x_i^2}`` avoiding overflow and underflow.
+"""
+hypot(x::Number...) = vecnorm(x)
 
 atan2(y::Real, x::Real) = atan2(promote(float(y),float(x))...)
-atan2{T<:FloatingPoint}(y::T, x::T) = Base.no_op_err("atan2", T)
+atan2{T<:AbstractFloat}(y::T, x::T) = Base.no_op_err("atan2", T)
 
-for f in (:atan2, :hypot)
-    @eval begin
-        ($f)(y::Float64, x::Float64) = ccall(($(string(f)),libm), Float64, (Float64, Float64,), y, x)
-        ($f)(y::Float32, x::Float32) = ccall(($(string(f,"f")),libm), Float32, (Float32, Float32), y, x)
-        @vectorize_2arg Number $f
-    end
-end
+atan2(y::Float64, x::Float64) = ccall((:atan2,libm), Float64, (Float64, Float64,), y, x)
+atan2(y::Float32, x::Float32) = ccall((:atan2f,libm), Float32, (Float32, Float32), y, x)
+@vectorize_2arg Number atan2
 
-max{T<:FloatingPoint}(x::T, y::T) = ifelse((y > x) | (signbit(y) < signbit(x)),
+max{T<:AbstractFloat}(x::T, y::T) = ifelse((y > x) | (signbit(y) < signbit(x)),
                                     ifelse(isnan(y), x, y), ifelse(isnan(x), y, x))
 
 @vectorize_2arg Real max
 
-min{T<:FloatingPoint}(x::T, y::T) = ifelse((y < x) | (signbit(y) > signbit(x)),
+min{T<:AbstractFloat}(x::T, y::T) = ifelse((y < x) | (signbit(y) > signbit(x)),
                                     ifelse(isnan(y), x, y), ifelse(isnan(x), y, x))
 @vectorize_2arg Real min
 
-minmax{T<:FloatingPoint}(x::T, y::T) = ifelse(isnan(x-y), ifelse(isnan(x), (y, y), (x, x)),
+minmax{T<:AbstractFloat}(x::T, y::T) = ifelse(isnan(x-y), ifelse(isnan(x), (y, y), (x, x)),
                                        ifelse((y < x) | (signbit(y) > signbit(x)), (y, x),
                                        ifelse((y > x) | (signbit(y) < signbit(x)), (x, y),
                                        ifelse(x == x, (x, x), (y, y)))))
@@ -184,7 +213,7 @@ ldexp(x::Float64,e::Integer) = ccall((:scalbn,libm),  Float64, (Float64,Int32), 
 ldexp(x::Float32,e::Integer) = ccall((:scalbnf,libm), Float32, (Float32,Int32), x, Int32(e))
 # TODO: vectorize ldexp
 
-function exponent{T<:FloatingPoint}(x::T)
+function exponent{T<:AbstractFloat}(x::T)
     xu = reinterpret(Unsigned,x)
     xe = xu & exponent_mask(T)
     k = Int(xe >> significand_bits(T))
@@ -200,7 +229,7 @@ function exponent{T<:FloatingPoint}(x::T)
 end
 @vectorize_1arg Real exponent
 
-function significand{T<:FloatingPoint}(x::T)
+function significand{T<:AbstractFloat}(x::T)
     xu = reinterpret(Unsigned,x)
     xe = xu & exponent_mask(T)
     if xe == 0 # x is subnormal
@@ -218,7 +247,7 @@ function significand{T<:FloatingPoint}(x::T)
 end
 @vectorize_1arg Real significand
 
-function frexp{T<:FloatingPoint}(x::T)
+function frexp{T<:AbstractFloat}(x::T)
     xu = reinterpret(Unsigned,x)
     xe = xu & exponent_mask(T)
     k = Int(xe >> significand_bits(T))
@@ -238,13 +267,13 @@ function frexp{T<:FloatingPoint}(x::T)
     reinterpret(T,xu), k
 end
 
-function frexp{T<:FloatingPoint}(A::Array{T})
-    f = similar(A)
-    e = Array(Int, size(A))
-    for i = 1:length(A)
-        f[i], e[i] = frexp(A[i])
+function frexp{T<:AbstractFloat}(A::Array{T})
+    F = similar(A)
+    E = Array{Int}(size(A))
+    for (iF, iE, iA) in zip(eachindex(F), eachindex(E), eachindex(A))
+        F[iF], E[iE] = frexp(A[iA])
     end
-    return (f, e)
+    return (F, E)
 end
 
 modf(x) = rem(x,one(x)), trunc(x)
@@ -324,6 +353,15 @@ const pi3o2_l  = 1.8369701987210297e-16 # convert(Float64, pi * BigFloat(3/2) - 
 const pi4o2_h  = 6.283185307179586      # convert(Float64, pi * BigFloat(2))
 const pi4o2_l  = 2.4492935982947064e-16 # convert(Float64, pi * BigFloat(2) - pi4o2_h)
 
+"""
+    mod2pi(x)
+
+Modulus after division by `2π`, returning in the range ``[0,2π)``.
+
+This function computes a floating point representation of the modulus after division by
+numerically exact `2π`, and is therefore not exactly the same as `mod(x,2π)`, which would
+compute the modulus of `x` relative to division by the floating-point number `2π`.
+"""
 function mod2pi(x::Float64) # or modtau(x)
 # with r = mod2pi(x)
 # a) 0 <= r < 2π  (note: boundary open or closed - a bit fuzzy, due to rem_pio2 implementation)
@@ -368,11 +406,17 @@ function mod2pi(x::Int64)
   mod2pi(fx)
 end
 
-# More special functions
+# generic fallback; for number types, promotion.jl does promotion
+muladd(x,y,z) = x*y+z
 
+# More special functions
 include("special/trig.jl")
 include("special/bessel.jl")
 include("special/erf.jl")
 include("special/gamma.jl")
+
+module JuliaLibm
+include("special/log.jl")
+end
 
 end # module

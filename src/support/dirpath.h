@@ -1,10 +1,12 @@
+// This file is a part of Julia. License is MIT: http://julialang.org/license
+
 #ifndef DIRPATH_H
 #define DIRPATH_H
 
 #ifdef _OS_WINDOWS_
 #define PATHSEPSTRING "\\"
 #define PATHLISTSEPSTRING ";"
-#ifdef _MSC_VER
+#if defined(_MSC_VER) || defined(_COMPILER_CLANG_)
 #define PATH_MAX MAX_PATH
 #endif
 #else

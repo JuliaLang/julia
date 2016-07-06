@@ -1,3 +1,5 @@
+// This file is a part of Julia. License is MIT: http://julialang.org/license
+
 #ifndef UTILS_H
 #define UTILS_H
 
@@ -5,7 +7,7 @@
 extern "C" {
 #endif
 
-DLLEXPORT char *uint2str(char *dest, size_t len, uint64_t num, uint32_t base);
+JL_DLLEXPORT char *uint2str(char *dest, size_t len, uint64_t num, uint32_t base);
 int str2int(char *str, size_t len, int64_t *res, uint32_t base);
 int isdigit_base(char c, int base);
 
@@ -34,18 +36,18 @@ int cmp_eq(void *a, numerictype_t atag, void *b, numerictype_t btag,
 #endif
 
 #if (!defined(__INTEL_COMPILER) || defined(__clang__)) && (defined(__i386__) || defined(__x86_64__))
-STATIC_INLINE u_int16_t ByteSwap16(u_int16_t x)
+STATIC_INLINE uint16_t ByteSwap16(uint16_t x)
 {
   __asm("xchgb %b0,%h0" :
-        LEGACY_REGS (x)	:
+        LEGACY_REGS (x) :
         "0" (x));
     return x;
 }
 #define bswap_16(x) ByteSwap16(x)
 
-STATIC_INLINE u_int32_t ByteSwap32(u_int32_t x)
+STATIC_INLINE uint32_t ByteSwap32(uint32_t x)
 {
- __asm("bswap	%0":
+ __asm("bswap   %0":
       "=r" (x)     :
       "0" (x));
   return x;
@@ -53,17 +55,17 @@ STATIC_INLINE u_int32_t ByteSwap32(u_int32_t x)
 
 #define bswap_32(x) ByteSwap32(x)
 
-STATIC_INLINE u_int64_t ByteSwap64(u_int64_t x)
+STATIC_INLINE uint64_t ByteSwap64(uint64_t x)
 {
 #ifdef __x86_64__
-  __asm("bswap	%0":
+  __asm("bswap  %0":
         "=r" (x)     :
         "0" (x));
   return x;
 #else
-  register union { __extension__ u_int64_t __ll;
-          u_int32_t __l[2]; } __x;
-  asm("xchgl	%0,%1":
+  register union { __extension__ uint64_t __ll;
+          uint32_t __l[2]; } __x;
+  asm("xchgl    %0,%1":
       "=r"(__x.__l[0]),"=r"(__x.__l[1]):
       "0"(bswap_32((unsigned long)x)),"1"(bswap_32((unsigned long)(x>>32))));
   return __x.__ll;
@@ -83,11 +85,11 @@ STATIC_INLINE u_int64_t ByteSwap64(u_int64_t x)
       (((x) & 0x0000ff00) <<  8) | (((x) & 0x000000ff) << 24))
 #endif
 
-STATIC_INLINE u_int64_t ByteSwap64(u_int64_t x)
+STATIC_INLINE uint64_t ByteSwap64(uint64_t x)
 {
     union {
-        u_int64_t ll;
-        u_int32_t l[2];
+        uint64_t ll;
+        uint32_t l[2];
     } w, r;
     w.ll = x;
     r.l[0] = bswap_32 (w.l[1]);

@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 module Terminals
 
 export
@@ -20,33 +22,29 @@ export
     getY,
     hascolor,
     pos,
-    raw!,
-    writepos
+    raw!
 
 import Base:
+    check_open, # stream.jl
+    displaysize,
     flush,
+    pipe_reader,
+    pipe_writer,
     read,
-    readuntil,
-    size,
-    start_reading,
-    stop_reading,
-    write,
-    writemime,
-    reseteof,
-    eof
+    readuntil
 
 ## TextTerminal ##
 
-abstract TextTerminal <: Base.IO
+abstract TextTerminal <: Base.AbstractPipe
 
 # INTERFACE
-size(::TextTerminal) = error("Unimplemented")
-writepos(t::TextTerminal, x, y, s::Array{UInt8,1}) = error("Unimplemented")
+pipe_reader(::TextTerminal) = error("Unimplemented")
+pipe_writer(::TextTerminal) = error("Unimplemented")
+displaysize(::TextTerminal) = error("Unimplemented")
 cmove(t::TextTerminal, x, y) = error("Unimplemented")
 getX(t::TextTerminal) = error("Unimplemented")
 getY(t::TextTerminal) = error("Unimplemented")
 pos(t::TextTerminal) = (getX(t), getY(t))
-reseteof(t::TextTerminal) = nothing
 
 # Relative moves (Absolute position fallbacks)
 cmove_up(t::TextTerminal, n) = cmove(getX(t), max(1, getY(t)-n))
@@ -73,20 +71,8 @@ cmove_col(t::TextTerminal, c) = cmove(c, getY(t))
 hascolor(::TextTerminal) = false
 
 # Utility Functions
-function writepos{T}(t::TextTerminal, x, y, b::Array{T})
-    if isbits(T)
-        writepos(t, x, y, reinterpret(UInt8, b))
-    else
-        cmove(t, x, y)
-        invoke(write, (IO, Array), s, a)
-    end
-end
-function writepos(t::TextTerminal, x, y, args...)
-    cmove(t, x, y)
-    write(t, args...)
-end
-width(t::TextTerminal) = size(t)[2]
-height(t::TextTerminal) = size(t)[1]
+width(t::TextTerminal) = displaysize(t)[2]
+height(t::TextTerminal) = displaysize(t)[1]
 
 # For terminals with buffers
 flush(t::TextTerminal) = nothing
@@ -105,18 +91,19 @@ disable_bracketed_paste(t::TextTerminal) = nothing
 
 abstract UnixTerminal <: TextTerminal
 
+pipe_reader(t::UnixTerminal) = t.in_stream
+pipe_writer(t::UnixTerminal) = t.out_stream
+
 type TerminalBuffer <: UnixTerminal
     out_stream::Base.IO
 end
 
 type TTYTerminal <: UnixTerminal
-    term_type::ASCIIString
+    term_type::String
     in_stream::Base.TTY
     out_stream::Base.TTY
     err_stream::Base.TTY
 end
-
-reseteof(t::TTYTerminal) = reseteof(t.in_stream)
 
 const CSI = "\x1b["
 
@@ -128,13 +115,10 @@ cmove_line_up(t::UnixTerminal, n) = (cmove_up(t, n); cmove_col(t, 0))
 cmove_line_down(t::UnixTerminal, n) = (cmove_down(t, n); cmove_col(t, 0))
 cmove_col(t::UnixTerminal, n) = write(t.out_stream, "$(CSI)$(n)G")
 
-@windows_only begin
-    ispty(s::Base.TTY) = s.ispty
-    ispty(s) = false
-end
-@windows ? begin
+if is_windows()
     function raw!(t::TTYTerminal,raw::Bool)
-        if ispty(t.in_stream)
+        check_open(t.in_stream)
+        if Base.ispty(t.in_stream)
             run(if raw
                     `stty raw -echo onlcr -ocrnl opost`
                 else
@@ -147,56 +131,36 @@ end
                  t.in_stream.handle, raw) != -1
         end
     end
-end : begin
-    raw!(t::TTYTerminal, raw::Bool) = ccall(:uv_tty_set_mode,
-                                         Int32, (Ptr{Void},Int32),
-                                         t.in_stream.handle, raw) != -1
+else
+    function raw!(t::TTYTerminal, raw::Bool)
+        check_open(t.in_stream)
+        ccall(:jl_tty_set_mode, Int32, (Ptr{Void},Int32), t.in_stream.handle, raw) != -1
+    end
 end
 enable_bracketed_paste(t::UnixTerminal) = write(t.out_stream, "$(CSI)?2004h")
 disable_bracketed_paste(t::UnixTerminal) = write(t.out_stream, "$(CSI)?2004l")
 end_keypad_transmit_mode(t::UnixTerminal) = # tput rmkx
     write(t.out_stream, "$(CSI)?1l\x1b>")
 
-let s = zeros(Int32, 2)
-    function Base.size(t::TTYTerminal)
-        @windows_only if ispty(t.out_stream)
-            try
-                h,w = map(x->parse(Int,x),split(readall(open(`stty size`, "r", t.out_stream)[1])))
-                w > 0 || (w = 80)
-                h > 0 || (h = 24)
-                return h,w
-            catch
-                return 24,80
-            end
-        end
-        Base.uv_error("size (TTY)", ccall(:uv_tty_get_winsize,
-                                          Int32, (Ptr{Void}, Ptr{Int32}, Ptr{Int32}),
-                                          t.out_stream.handle, pointer(s,1), pointer(s,2)) != 0)
-        w,h = s[1],s[2]
-        w > 0 || (w = 80)
-        h > 0 || (h = 24)
-        (Int(h),Int(w))
-    end
+function Base.displaysize(t::UnixTerminal)
+    return displaysize(t.out_stream)
 end
 
 clear(t::UnixTerminal) = write(t.out_stream, "\x1b[H\x1b[2J")
 clear_line(t::UnixTerminal) = write(t.out_stream, "\x1b[0G\x1b[0K")
 #beep(t::UnixTerminal) = write(t.err_stream,"\x7")
 
-write{T,N}(t::UnixTerminal, a::Array{T,N}) = write(t.out_stream, a)
-write(t::UnixTerminal, p::Ptr{UInt8}) = write(t.out_stream, p)
-write(t::UnixTerminal, p::Ptr{UInt8}, x::Integer) = write(t.out_stream, p, x)
-write(t::UnixTerminal, x::UInt8) = write(t.out_stream, x)
-read{T,N}(t::UnixTerminal, x::Array{T,N}) = read(t.in_stream, x)
-readuntil(t::UnixTerminal, s::AbstractString) = readuntil(t.in_stream, s)
-readuntil(t::UnixTerminal, c::Char) = readuntil(t.in_stream, c)
-readuntil(t::UnixTerminal, s) = readuntil(t.in_stream, s)
-read(t::UnixTerminal, ::Type{UInt8}) = read(t.in_stream, UInt8)
-start_reading(t::UnixTerminal) = start_reading(t.in_stream)
-stop_reading(t::UnixTerminal) = stop_reading(t.in_stream)
-eof(t::UnixTerminal) = eof(t.in_stream)
-
-@unix_only hascolor(t::TTYTerminal) = (startswith(t.term_type, "xterm") || success(`tput setaf 0`))
-@windows_only hascolor(t::TTYTerminal) = true
+if is_windows()
+    hascolor(t::TTYTerminal) = true
+else
+    function hascolor(t::TTYTerminal)
+        startswith(t.term_type, "xterm") && return true
+        try
+            return success(`tput setaf 0`)
+        catch
+            return false
+        end
+    end
+end
 
 end # module

@@ -45,8 +45,8 @@ the language will not treat variables differently based on their names).
     julia> customary_phrase = "Hello world!"
     "Hello world!"
 
-    julia> UniversalDeclarationOfHumanRightsStart = "人人生而自由，在尊严和权力上一律平等。"
-    "人人生而自由，在尊严和权力上一律平等。"
+    julia> UniversalDeclarationOfHumanRightsStart = "人人生而自由，在尊严和权利上一律平等。"
+    "人人生而自由，在尊严和权利上一律平等。"
 
 .. raw:: latex
 
@@ -84,7 +84,7 @@ Julia will even let you redefine built-in constants and functions if needed:
     π = 3.1415926535897...
 
     julia> pi = 3
-    Warning: imported binding for pi overwritten in module Main
+    WARNING: imported binding for pi overwritten in module Main
     3
 
     julia> pi
@@ -94,7 +94,7 @@ Julia will even let you redefine built-in constants and functions if needed:
     10.0
 
     julia> sqrt = 4
-    Warning: imported binding for sqrt overwritten in module Main
+    WARNING: imported binding for sqrt overwritten in module Main
     4
 
 However, this is obviously not recommended to avoid potential confusion.
@@ -142,7 +142,7 @@ adopt the following conventions:
 - Names of variables are in lower case.
 - Word separation can be indicated by underscores (``'_'``), but use of
   underscores is discouraged unless the name would be hard to read otherwise.
-- Names of ``Type``\ s begin with a capital letter and word separation is
+- Names of ``Type``\ s and ``Module``\ s begin with a capital letter and word separation is
   shown with upper camel case instead of underscores.
 - Names of ``function``\ s and ``macro``\s are in lower case, without
   underscores.

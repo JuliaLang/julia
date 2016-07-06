@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 function convert(::Type{Float32}, val::Float16)
     ival::UInt32 = reinterpret(UInt16, val)
     sign::UInt32 = (ival & 0x8000) >> 15
@@ -44,8 +46,8 @@ end
 #   "Fast Half Float Conversion" by Jeroen van der Zijp
 #   ftp://ftp.fox-toolkit.org/pub/fasthalffloatconversion.pdf
 
-const basetable = Array(UInt16, 512)
-const shifttable = Array(UInt8, 512)
+const basetable = Array{UInt16}(512)
+const shifttable = Array{UInt8}(512)
 
 for i = 0:255
     e = i - 127
@@ -96,7 +98,7 @@ function convert(::Type{Float16}, val::Float32)
     reinterpret(Float16, h)
 end
 
-convert(::Type{Bool},    x::Float16) = (x!=0)
+convert(::Type{Bool},    x::Float16) = x==0 ? false : x==1 ? true : throw(InexactError())
 convert(::Type{Int128},  x::Float16) = convert(Int128, Float32(x))
 convert(::Type{UInt128}, x::Float16) = convert(UInt128, Float32(x))
 
@@ -105,7 +107,7 @@ convert{T<:Integer}(::Type{T}, x::Float16) = convert(T, Float32(x))
 round{T<:Integer}(::Type{T}, x::Float16) = round(T, Float32(x))
 trunc{T<:Integer}(::Type{T}, x::Float16) = trunc(T, Float32(x))
 floor{T<:Integer}(::Type{T}, x::Float16) = floor(T, Float32(x))
-ceil {T<:Integer}(::Type{T}, x::Float16) = ceil(T, Float32(x))
+ceil{ T<:Integer}(::Type{T}, x::Float16) = ceil(T, Float32(x))
 
 round(x::Float16) = Float16(round(Float32(x)))
 trunc(x::Float16) = Float16(trunc(Float32(x)))
@@ -143,7 +145,7 @@ for op in (:<,:<=,:isless)
     @eval ($op)(a::Float16, b::Float16) = ($op)(Float32(a), Float32(b))
 end
 for func in (:sin,:cos,:tan,:asin,:acos,:atan,:sinh,:cosh,:tanh,:asinh,:acosh,
-             :atanh,:exp,:log,:log2,:log10,:sqrt,:lgamma,:log1p)
+             :atanh,:exp,:log,:log2,:log10,:sqrt,:lgamma,:log1p,:erf,:erfc)
     @eval begin
         $func(a::Float16) = Float16($func(Float32(a)))
         $func(a::Complex32) = Complex32($func(Complex64(a)))
@@ -152,7 +154,7 @@ end
 
 for func in (:div,:fld,:cld,:rem,:mod,:atan2,:hypot)
     @eval begin
-        $func(a::Float16,b::Float16) = Float16($func(Float32(a),Float32(a)))
+        $func(a::Float16,b::Float16) = Float16($func(Float32(a),Float32(b)))
     end
 end
 
@@ -163,6 +165,7 @@ ldexp(a::Float16, b::Integer) = Float16(ldexp(Float32(a), b))
 rationalize{T<:Integer}(::Type{T}, x::Float16; tol::Real=eps(x)) = rationalize(T, Float32(x); tol=tol)
 
 reinterpret(::Type{Unsigned}, x::Float16) = reinterpret(UInt16,x)
+reinterpret(::Type{Signed}, x::Float16) = reinterpret(Int16,x)
 
 sign_mask(::Type{Float16}) =        0x8000
 exponent_mask(::Type{Float16}) =    0x7c00

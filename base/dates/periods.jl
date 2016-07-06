@@ -1,18 +1,39 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 #Period types
 value(x::Period) = x.value
 
 # The default constructors for Periods work well in almost all cases
 # P(x) = new((convert(Int64,x))
 # The following definitions are for Period-specific safety
-for p in (:Year,:Month,:Week,:Day,:Hour,:Minute,:Second,:Millisecond)
+for period in (:Year, :Month, :Week, :Day, :Hour, :Minute, :Second, :Millisecond)
+    period_str = string(period)
+    accessor_str = lowercase(period_str)
     # Convenience method for show()
-    @eval _units(x::$p) = $(" " * lowercase(string(p))) * (abs(value(x)) == 1 ? "" : "s")
+    @eval _units(x::$period) = " " * $accessor_str * (abs(value(x)) == 1 ? "" : "s")
     # periodisless
-    @eval periodisless(x::$p,y::$p) = value(x) < value(y)
+    @eval periodisless(x::$period,y::$period) = value(x) < value(y)
     # AbstractString parsing (mainly for IO code)
-    @eval $p(x::AbstractString) = $p(Base.parse(Int64,x))
+    @eval $period(x::AbstractString) = $period(Base.parse(Int64,x))
     # Period accessors
-    @eval $p(x::TimeType) = $p($(symbol(lowercase(string(p))))(x))
+    typ_str = period in (:Hour, :Minute, :Second, :Millisecond) ? "DateTime" : "TimeType"
+    description = typ_str == "TimeType" ? "`Date` or `DateTime`" : "`$typ_str`"
+    reference = period == :Week ? " For details see [`$accessor_str(::$typ_str)`](:func:`$accessor_str`)." : ""
+    @eval begin
+        @doc """
+            $($period_str)(dt::$($typ_str)) -> $($period_str)
+
+        The $($accessor_str) part of a $($description) as a `$($period_str)`.$($reference)
+        """ ->
+        $period(dt::$(Symbol(typ_str))) = $period($(Symbol(accessor_str))(dt))
+
+        @doc """
+            $($period_str)(v)
+
+        Construct a `$($period_str)` object with the given `v` value. Input must be
+        losslessly convertible to an `Int64`.
+        """ $period(v)
+    end
 end
 # Now we're safe to define Period-Number conversions
 # Anything an Int64 can convert to, a Period can convert to
@@ -22,55 +43,64 @@ Base.convert{T<:Period}(::Type{T},x::Real) = T(x)
 #Print/show/traits
 Base.string{P<:Period}(x::P) = string(value(x),_units(x))
 Base.show(io::IO,x::Period) = print(io,string(x))
-Base.zero{P<:Period}(::Union(Type{P},P)) = P(0)
-Base.one{P<:Period}(::Union(Type{P},P)) = P(1)
+Base.zero{P<:Period}(::Union{Type{P},P}) = P(0)
+Base.one{P<:Period}(::Union{Type{P},P}) = P(1)
 Base.typemin{P<:Period}(::Type{P}) = P(typemin(Int64))
 Base.typemax{P<:Period}(::Type{P}) = P(typemax(Int64))
 
 # Default values (as used by TimeTypes)
-default{T<:DatePeriod}(p::Union(T,Type{T})) = one(p)
-default{T<:TimePeriod}(p::Union(T,Type{T})) = zero(p)
+"""
+    default(p::Period) -> Period
+
+Returns a sensible "default" value for the input Period by returning `one(p)` for Year,
+Month, and Day, and `zero(p)` for Hour, Minute, Second, and Millisecond.
+"""
+function default end
+
+default{T<:DatePeriod}(p::Union{T,Type{T}}) = one(p)
+default{T<:TimePeriod}(p::Union{T,Type{T}}) = zero(p)
 
 (-){P<:Period}(x::P) = P(-value(x))
 Base.isless{P<:Period}(x::P,y::P) = isless(value(x),value(y))
 =={P<:Period}(x::P,y::P) = value(x) == value(y)
 
 # Period Arithmetic, grouped by dimensionality:
-import Base: div, mod, rem, gcd, lcm, +, -, *, /, %, .+, .-, .*, .%
+import Base: div, fld, mod, rem, gcd, lcm, +, -, *, /, %, .+, .-, .*, .%
 for op in (:+,:-,:lcm,:gcd)
     @eval ($op){P<:Period}(x::P,y::P) = P(($op)(value(x),value(y)))
 end
-for op in (:.+, :.-)
-    op_ = symbol(string(op)[2:end])
-    @eval begin
-        ($op){P<:Period}(x::P,Y::StridedArray{P}) = ($op)(Y,x)
-        ($op_){P<:Period}(x::P,Y::StridedArray{P}) = ($op)(Y,x)
-        ($op_){P<:Period}(Y::StridedArray{P},x::P) = ($op)(Y,x)
-    end
-end
-for op in (:/,:%,:div,:mod)
+
+for op in (:/,:div,:fld)
     @eval begin
         ($op){P<:Period}(x::P,y::P) = ($op)(value(x),value(y))
         ($op){P<:Period}(x::P,y::Real) = P(($op)(value(x),Int64(y)))
     end
 end
+
+for op in (:rem,:mod)
+    @eval begin
+        ($op){P<:Period}(x::P,y::P) = P(($op)(value(x),value(y)))
+        ($op){P<:Period}(x::P,y::Real) = P(($op)(value(x),Int64(y)))
+    end
+end
+
 /{P<:Period}(X::StridedArray{P}, y::P) = X ./ y
 %{P<:Period}(X::StridedArray{P}, y::P) = X .% y
 *{P<:Period}(x::P,y::Real) = P(value(x) * Int64(y))
 *(y::Real,x::Period) = x * y
 .*{P<:Period}(y::Real, X::StridedArray{P}) = X .* y
-for (op,Ty,Tz) in ((:.+,:P,:P),(:.-,:P,:P), (:.*,Real,:P),
+for (op,Ty,Tz) in ((:.*,Real,:P),
                    (:./,:P,Float64), (:./,Real,:P),
-                   (:.%,:P,Int64), (:.%,Integer,:P),
                    (:div,:P,Int64), (:div,Integer,:P),
-                   (:mod,:P,Int64), (:mod,Integer,:P))
+                   (:.%,:P,:P),
+                   (:mod,:P,:P))
     sop = string(op)
-    op_ = sop[1] == '.' ? symbol(sop[2:end]) : op
+    op_ = sop[1] == '.' ? Symbol(sop[2:end]) : op
     @eval begin
         function ($op){P<:Period}(X::StridedArray{P},y::$Ty)
             Z = similar(X, $Tz)
-            for i = 1:length(X)
-                @inbounds Z[i] = ($op_)(X[i],y)
+            for (Idst, Isrc) in zip(eachindex(Z), eachindex(X))
+                @inbounds Z[Idst] = ($op_)(X[Isrc],y)
             end
             return Z
         end
@@ -80,9 +110,6 @@ end
 # intfuncs
 Base.gcdx{T<:Period}(a::T,b::T) = ((g,x,y)=gcdx(value(a),value(b)); return T(g),x,y)
 Base.abs{T<:Period}(a::T) = T(abs(value(a)))
-
-# Like Base.steprem in range.jl, but returns the correct type for Periods
-Base.steprem(start::Period,stop::Period,step::Period) = (stop-start) % value(step)
 
 periodisless(::Period,::Year)        = true
 periodisless(::Period,::Month)       = true
@@ -117,6 +144,15 @@ coarserperiod(::Type{Month}) = (Year,12)
 # Stores multiple periods in greatest to least order by type, not values,
 # canonicalized to eliminate zero periods, merge equal period types,
 # and convert more-precise periods to less-precise periods when possible
+"""
+    CompoundPeriod
+
+A `CompoundPeriod` is useful for expressing time periods that are not a fixed multiple of
+smaller periods. For example, \"a year and a  day\" is not a fixed number of days, but can
+be expressed using a `CompoundPeriod`. In fact, a `CompoundPeriod` is automatically
+generated by addition of different period types, e.g. `Year(1) + Day(1)` produces a
+`CompoundPeriod` result.
+"""
 type CompoundPeriod <: AbstractTime
     periods::Array{Period,1}
     function CompoundPeriod(p::Vector{Period})
@@ -146,7 +182,7 @@ type CompoundPeriod <: AbstractTime
             p = Period[]
             n = 0
         end
-        # canonicalize Period values so that 0 < ms < 1000 etcetera.
+        # canonicalize Periods by pushing "overflow" into a coarser period.
         if n > 0
             pc = sizehint!(Period[], n)
             P = typeof(p[n])
@@ -158,7 +194,7 @@ type CompoundPeriod <: AbstractTime
                     v += value(p[i])
                     i -= 1
                 end
-                v0 = f == 1 ? v : mod(v, f)
+                v0 = f == 1 ? v : rem(v, f)
                 v0 != 0 && push!(pc, P(v0))
                 if v != v0
                     P = Pc
@@ -171,12 +207,92 @@ type CompoundPeriod <: AbstractTime
                     break
                 end
             end
-            return new(reverse!(pc))
+            p = reverse!(pc)
+            n = length(p)
         else
             return new(resize!(p, n))
         end
+        # reduce the amount of mixed positive/negative Periods.
+        if n > 0
+            pc = sizehint!(Period[], n)
+            i = n
+            while i > 0
+                j = i
+
+                # Determine sign of the largest period in this group which
+                # can be converted into via coarserperiod.
+                last = Union{}
+                current = typeof(p[i])
+                while i > 0 && current != last
+                    if typeof(p[i]) == current
+                        i -= 1
+                    end
+                    last, current = current, coarserperiod(current)[1]
+                end
+                s = sign(value(p[i + 1]))
+
+                # Adjust all the periods in the group based upon the
+                # largest period sign.
+                P = typeof(p[j])
+                v = 0
+                while j > i
+                    Pc, f = coarserperiod(P)
+                    if j > 0 && typeof(p[j]) == P
+                        v += value(p[j])
+                        j -= 1
+                    end
+                    v0 = f == 1 ? v : mod(v, f * s)
+                    v0 != 0 && push!(pc, P(v0))
+                    if v != v0
+                        P = Pc
+                        v = div(v - v0, f)
+                    elseif j > 0
+                        P = typeof(p[j])
+                        v = 0
+                    else
+                        break
+                    end
+                end
+            end
+            p = reverse!(pc)
+        end
+        return new(p)
     end
 end
+
+"""
+    CompoundPeriod(periods) -> CompoundPeriod
+
+Construct a `CompoundPeriod` from a `Vector` of `Period`s. The constructor will
+automatically simplify the periods into a canonical form according to the following rules:
+
+* All `Period`s of the same type will be added together
+* Any `Period` large enough be partially representable by a coarser `Period` will be broken
+  into multiple `Period`s (eg. `Hour(30)` becomes `Day(1) + Hour(6)`)
+* `Period`s with opposite signs will be combined when possible
+  (eg. `Hour(1) - Day(1)` becomes `-Hour(23)`)
+
+Due to the canonicalization, `CompoundPeriod` is also useful for converting time periods
+into more human-comprehensible forms.
+
+# Examples
+```julia
+julia> Dates.CompoundPeriod([Dates.Hour(12), Dates.Hour(13)])
+1 day, 1 hour
+
+julia> Dates.CompoundPeriod([Dates.Hour(-1), Dates.Minute(1)])
+-59 minutes
+
+julia> Dates.CompoundPeriod([Dates.Month(1), Dates.Week(-2)])
+1 month, -2 weeks
+
+julia> Dates.CompoundPeriod(Dates.Minute(50000)))
+4 weeks, 6 days, 17 hours, 20 minutes
+```
+"""
+CompoundPeriod{P<:Period}(p::Vector{P}) = CompoundPeriod(Array{Period}(p))
+
+
 Base.convert(::Type{CompoundPeriod}, x::Period) = CompoundPeriod(Period[x])
 function Base.string(x::CompoundPeriod)
     if isempty(x.periods)
@@ -190,6 +306,7 @@ function Base.string(x::CompoundPeriod)
     end
 end
 Base.show(io::IO,x::CompoundPeriod) = print(io,string(x))
+
 # E.g. Year(1) + Day(1)
 (+)(x::Period,y::Period) = CompoundPeriod(Period[x,y])
 (+)(x::CompoundPeriod,y::Period) = CompoundPeriod(vcat(x.periods,y))
@@ -199,7 +316,30 @@ Base.show(io::IO,x::CompoundPeriod) = print(io,string(x))
 (-)(x::Period,y::Period) = CompoundPeriod(Period[x,-y])
 (-)(x::CompoundPeriod,y::Period) = CompoundPeriod(vcat(x.periods,-y))
 (-)(x::CompoundPeriod) = CompoundPeriod(-x.periods)
-(-)(y::Union(Period,CompoundPeriod),x::CompoundPeriod) = (-x) + y
+(-)(y::Union{Period,CompoundPeriod},x::CompoundPeriod) = (-x) + y
+
+GeneralPeriod = Union{Period,CompoundPeriod}
+(+)(x::GeneralPeriod) = x
+(+){P<:GeneralPeriod}(x::StridedArray{P}) = x
+
+for op in (:.+, :.-)
+    op_ = Symbol(string(op)[2:end])
+    @eval begin
+        function ($op){P<:GeneralPeriod}(X::StridedArray{P},y::GeneralPeriod)
+            Z = similar(X, CompoundPeriod)
+            for (Idst, Isrc) in zip(eachindex(Z), eachindex(X))
+                @inbounds Z[Idst] = ($op_)(X[Isrc],y)
+            end
+            return Z
+        end
+        ($op){P<:GeneralPeriod}(x::GeneralPeriod,Y::StridedArray{P}) = ($op)(Y,x) |> ($op_)
+        ($op_){P<:GeneralPeriod}(x::GeneralPeriod,Y::StridedArray{P}) = ($op)(Y,x) |> ($op_)
+        ($op_){P<:GeneralPeriod}(Y::StridedArray{P},x::GeneralPeriod) = ($op)(Y,x)
+        ($op_){P<:GeneralPeriod, Q<:GeneralPeriod}(X::StridedArray{P}, Y::StridedArray{Q}) =
+            reshape(CompoundPeriod[($op_)(x,y) for (x,y) in zip(X, Y)], promote_shape(size(X),size(Y)))
+    end
+end
+
 (==)(x::CompoundPeriod, y::Period) = x == CompoundPeriod(y)
 (==)(y::Period, x::CompoundPeriod) = x == y
 (==)(x::CompoundPeriod, y::CompoundPeriod) = x.periods == y.periods
@@ -218,9 +358,17 @@ function (+)(x::TimeType,y::CompoundPeriod)
 end
 (+)(x::CompoundPeriod,y::TimeType) = y + x
 
+function (-)(x::TimeType,y::CompoundPeriod)
+    for p in y.periods
+        x -= p
+    end
+    return x
+end
+(-)(x::CompoundPeriod,y::TimeType) = y - x
+
 # Fixed-value Periods (periods corresponding to a well-defined time interval,
 # as opposed to variable calendar intervals like Year).
-typealias FixedPeriod Union(Week,Day,Hour,Minute,Second,Millisecond)
+typealias FixedPeriod Union{Week,Day,Hour,Minute,Second,Millisecond}
 
 # like div but throw an error if remainder is nonzero
 function divexact(x,y)
@@ -257,7 +405,7 @@ end
 Base.isless{T<:FixedPeriod,S<:FixedPeriod}(x::T,y::S) = isless(promote(x,y)...)
 
 # other periods with fixed conversions but which aren't fixed time periods
-typealias OtherPeriod Union(Month,Year)
+typealias OtherPeriod Union{Month,Year}
 let vmax = typemax(Int64) ÷ 12, vmin = typemin(Int64) ÷ 12
     @eval function Base.convert(::Type{Month}, x::Year)
         $vmin ≤ value(x) ≤ $vmax || throw(InexactError())

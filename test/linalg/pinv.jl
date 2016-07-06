@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 #
 #  Test the pseudo-inverse
 #
@@ -7,7 +9,7 @@ debug = false
 using Base.Test
 
 function hilb(T::Type, n::Integer)
-    a=Array(T,n,n)
+    a=Array{T}(n,n)
     for i=1:n
         for j=1:n
             a[j,i]=one(T)/(i+j-one(T))
@@ -18,7 +20,7 @@ end
 hilb(n::Integer) = hilb(Float64,n)
 
 function hilb(T::Type, m::Integer, n::Integer)
-    a=Array(T,m,n)
+    a=Array{T}(m,n)
     for i=1:n
         for j=1:m
             a[j,i]=one(T)/(i+j-one(T))
@@ -65,7 +67,7 @@ tridiag(m::Integer, n::Integer) = tridiag(Float64, m::Integer, n::Integer)
 
 function randn_float64(m::Integer, n::Integer)
     a=randn(m,n)
-    b=Array(Float64,m,n)
+    b=Array{Float64}(m,n)
     for i=1:n
         for j=1:m
             b[j,i]=convert(Float64,a[j,i]);
@@ -76,7 +78,7 @@ end
 
 function randn_float32(m::Integer, n::Integer)
     a=randn(m,n)
-    b=Array(Float32,m,n)
+    b=Array{Float32}(m,n)
     for i=1:n
         for j=1:m
             b[j,i]=convert(Float32,a[j,i]);
@@ -86,11 +88,9 @@ function randn_float32(m::Integer, n::Integer)
 end
 
 
-
-
 function test_pinv(a,m,n,tol1,tol2,tol3)
     debug && println("=== julia/matlab pinv, default tol=eps(1.0)*max(size(a)) ===")
-    apinv = pinv(a);
+    apinv = @inferred pinv(a)
 
     @test_approx_eq_eps vecnorm(a*apinv*a - a)/vecnorm(a) 0 tol1
     x0 = randn(n); b = a*x0; x = apinv*b;
@@ -269,23 +269,23 @@ for eltya in (Float32, Float64, Complex64, Complex128)
     debug && println("\n\n<<<<<", eltya, ">>>>>")
     debug && println("\n--- zero constant ---")
     a = pinv(zero(eltya))
-    @test_approx_eq a 0.0
+    @test a ≈ 0.0
 end
 
 for eltya in (Float32, Float64, Complex64, Complex128)
     debug && println("\n\n<<<<<", eltya, ">>>>>")
     debug && println("\n--- zero vector ---")
     a = pinv([zero(eltya); zero(eltya)])
-    @test_approx_eq a[1] 0.0
-    @test_approx_eq a[2] 0.0
+    @test a[1] ≈ 0.0
+    @test a[2] ≈ 0.0
 end
 
 for eltya in (Float32, Float64, Complex64, Complex128)
     debug && println("\n\n<<<<<", eltya, ">>>>>")
     debug && println("\n--- zero Diagonal matrix ---")
     a = pinv(Diagonal([zero(eltya); zero(eltya)]))
-    @test_approx_eq a.diag[1] 0.0
-    @test_approx_eq a.diag[2] 0.0
+    @test a.diag[1] ≈ 0.0
+    @test a.diag[2] ≈ 0.0
 end
 
 # test sub-normal matrices
@@ -293,36 +293,35 @@ for eltya in (Float32, Float64)
     debug && println("\n\n<<<<<", eltya, ">>>>>")
     debug && println("\n--- sub-normal constant ---")
     a = pinv(realmin(eltya)/100)
-    @test_approx_eq a 0.0
+    @test a ≈ 0.0
     debug && println("\n\n<<<<<Complex{", eltya, "}>>>>>")
     debug && println("\n--- sub-normal constant ---")
     a = pinv(realmin(eltya)/100*(1+1im))
-    @test_approx_eq a 0.0
+    @test a ≈ 0.0
 end
 
 for eltya in (Float32, Float64)
     debug && println("\n\n<<<<<", eltya, ">>>>>")
     debug && println("\n--- sub-normal vector ---")
     a = pinv([realmin(eltya); realmin(eltya)]/100)
-    @test_approx_eq a[1] 0.0
-    @test_approx_eq a[2] 0.0
+    @test a[1] ≈ 0.0
+    @test a[2] ≈ 0.0
     debug && println("\n\n<<<<<Complex{", eltya, "}>>>>>")
     debug && println("\n--- sub-normal vector ---")
     a = pinv([realmin(eltya); realmin(eltya)]/100*(1+1im))
-    @test_approx_eq a[1] 0.0
-    @test_approx_eq a[2] 0.0
+    @test a[1] ≈ 0.0
+    @test a[2] ≈ 0.0
 end
 
 for eltya in (Float32, Float64)
     debug && println("\n\n<<<<<", eltya, ">>>>>")
     debug && println("\n--- sub-normal Diagonal matrix ---")
     a = pinv(Diagonal([realmin(eltya); realmin(eltya)]/100))
-    @test_approx_eq a.diag[1] 0.0
-    @test_approx_eq a.diag[2] 0.0
+    @test a.diag[1] ≈ 0.0
+    @test a.diag[2] ≈ 0.0
     debug && println("\n\n<<<<<Complex{", eltya, "}>>>>>")
     debug && println("\n--- sub-normal Diagonal matrix ---")
     a = pinv(Diagonal([realmin(eltya); realmin(eltya)]/100*(1+1im)))
-    @test_approx_eq a.diag[1] 0.0
-    @test_approx_eq a.diag[2] 0.0
+    @test a.diag[1] ≈ 0.0
+    @test a.diag[2] ≈ 0.0
 end
-

@@ -1,3 +1,5 @@
+// This file is a part of Julia. License is MIT: http://julialang.org/license
+
 /*
   bit vector primitives
 */
@@ -17,12 +19,12 @@
 extern "C" {
 #endif
 
-u_int32_t *bitvector_resize(u_int32_t *b, uint64_t oldsz, uint64_t newsz,
+uint32_t *bitvector_resize(uint32_t *b, uint64_t oldsz, uint64_t newsz,
                             int initzero)
 {
-    u_int32_t *p;
+    uint32_t *p;
     size_t sz = ((newsz+31)>>5) * sizeof(uint32_t);
-    p = (u_int32_t*)LLT_REALLOC(b, sz);
+    p = (uint32_t*)LLT_REALLOC(b, sz);
     if (p == NULL) return NULL;
     if (initzero && newsz>oldsz) {
         size_t osz = ((oldsz+31)>>5) * sizeof(uint32_t);
@@ -31,17 +33,17 @@ u_int32_t *bitvector_resize(u_int32_t *b, uint64_t oldsz, uint64_t newsz,
     return p;
 }
 
-u_int32_t *bitvector_new(u_int64_t n, int initzero)
+uint32_t *bitvector_new(uint64_t n, int initzero)
 {
     return bitvector_resize(NULL, 0, n, initzero);
 }
 
-size_t bitvector_nwords(u_int64_t nbits)
+size_t bitvector_nwords(uint64_t nbits)
 {
     return ((nbits+31)>>5);
 }
 
-void bitvector_set(u_int32_t *b, u_int64_t n, u_int32_t c)
+void bitvector_set(uint32_t *b, uint64_t n, uint32_t c)
 {
     if (c)
         b[n>>5] |= (1<<(n&31));
@@ -49,19 +51,19 @@ void bitvector_set(u_int32_t *b, u_int64_t n, u_int32_t c)
         b[n>>5] &= ~(1<<(n&31));
 }
 
-u_int32_t bitvector_get(u_int32_t *b, u_int64_t n)
+uint32_t bitvector_get(uint32_t *b, uint64_t n)
 {
     return b[n>>5] & (1<<(n&31));
 }
 
 // a mask with n set lo or hi bits
-#define lomask(n) (u_int32_t)((((u_int32_t)1)<<(n))-1)
-#define ONES32 ((u_int32_t)0xffffffff)
+#define lomask(n) (uint32_t)((((uint32_t)1)<<(n))-1)
+#define ONES32 ((uint32_t)0xffffffff)
 
 #if defined(__INTEL_COMPILER) && !defined(__clang__)
 #define count_bits(b) _popcnt32(b)
 #else
-STATIC_INLINE u_int32_t count_bits(u_int32_t b)
+STATIC_INLINE uint32_t count_bits(uint32_t b)
 {
     b = b - ((b>>1)&0x55555555);
     b = ((b>>2)&0x33333333) + (b&0x33333333);
@@ -132,11 +134,11 @@ uint64_t bitvector_next(uint32_t *b, uint64_t n0, uint64_t n)
     return i + (n-nb);
 }
 
-u_int64_t bitvector_count(u_int32_t *b, u_int64_t offs, u_int64_t nbits)
+uint64_t bitvector_count(uint32_t *b, uint64_t offs, uint64_t nbits)
 {
     size_t i, nw;
-    u_int32_t ntail;
-    u_int64_t ans;
+    uint32_t ntail;
+    uint64_t ans;
 
     if (nbits == 0) return 0;
     nw = (offs+nbits+31)>>5;
@@ -159,11 +161,11 @@ u_int64_t bitvector_count(u_int32_t *b, u_int64_t offs, u_int64_t nbits)
     return ans;
 }
 
-u_int32_t bitvector_any1(u_int32_t *b, u_int64_t offs, u_int64_t nbits)
+uint32_t bitvector_any1(uint32_t *b, uint64_t offs, uint64_t nbits)
 {
-    index_t i;
-    u_int32_t nw, tail;
-    u_int32_t mask;
+    size_t i;
+    uint32_t nw, tail;
+    uint32_t mask;
 
     if (nbits == 0) return 0;
     nw = (offs+nbits+31)>>5;

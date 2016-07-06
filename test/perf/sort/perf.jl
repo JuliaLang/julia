@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 import Base.Sort: QuickSort, MergeSort, InsertionSort
 
 Pkg.add("SortingAlgorithms")
@@ -17,7 +19,7 @@ if codespeed
         for size in [2^6,2^16]
             for s in sorts
                 if s == InsertionSort && size != 2^6; continue; end
-                data = Array(T, size)
+                data = Array{T}(size)
                 gc()
 
                 ## Random
@@ -27,7 +29,7 @@ if codespeed
 
                 name = "$(typename)_$(size)_$(string(s)[1:end-5])_append"
                 desc = "$(string(s)) run on $(size) $(typename) elements pre-sorted 10 random elements appended"
-                @timeit_init(sort!(data, alg=s), begin data[end-9:end]=randfn!(Array(T,10)) end, name, "")
+                @timeit_init(sort!(data, alg=s), begin data[end-9:end]=randfn!(Array{T}(10)) end, name, "")
             end
         end
     end
@@ -42,7 +44,7 @@ else
                 if s == RadixSort && T == AbstractString continue end      #Radix sort not implemented
                 if s == InsertionSort && logsize >=14 continue end #Too slow
                 println(s, s==RadixSort, s, typename, typename==AbstractString, logsize)
-                data = Array(T, size)
+                data = Array{T}(size)
                 gc()
 
                 ## Random
@@ -71,7 +73,7 @@ else
 
                 ## Sorted with 10 unsorted values appended
                 name = "$(typename)_$(logsize)_$(string(s)[1:end-5])_append"
-                @timeit_init(sort!(data, alg=s), begin data[end-9:end]=randfn!(Array(T,10)) end, name, "")
+                @timeit_init(sort!(data, alg=s), begin data[end-9:end]=randfn!(Array{T}(10)) end, name, "")
 
                 ## Random data with 4 unique values
                 name = "$(typename)_$(logsize)_$(string(s)[1:end-5])_4unique"

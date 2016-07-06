@@ -1,3 +1,5 @@
+// This file is a part of Julia. License is MIT: http://julialang.org/license
+
 #include <julia.h>
 #include <stdio.h>
 #include <math.h>
@@ -97,6 +99,7 @@ int main()
         }
     }
 
-    jl_atexit_hook();
-    return 0;
+    int ret = 0;
+    jl_atexit_hook(ret);
+    return ret;
 }

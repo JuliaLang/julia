@@ -25,9 +25,9 @@ works, it's easy to write code that's nearly as fast as C.
 
 Julia features optional typing, multiple dispatch, and good
 performance, achieved using type inference and `just-in-time (JIT)
-compilation <http://en.wikipedia.org/wiki/Just-in-time_compilation>`_,
+compilation <https://en.wikipedia.org/wiki/Just-in-time_compilation>`_,
 implemented using `LLVM
-<http://en.wikipedia.org/wiki/Low_Level_Virtual_Machine>`_. It is
+<https://en.wikipedia.org/wiki/Low_Level_Virtual_Machine>`_. It is
 multi-paradigm, combining features of imperative, functional, and
 object-oriented programming. Julia provides ease and expressiveness
 for high-level numerical computing, in the same way as languages such
@@ -35,11 +35,11 @@ as R, MATLAB, and Python, but also supports general programming. To
 achieve this, Julia builds upon the lineage of
 mathematical programming languages, but also borrows much from popular
 dynamic languages, including `Lisp
-<http://en.wikipedia.org/wiki/Lisp_(programming_language)>`_, `Perl
-<http://en.wikipedia.org/wiki/Perl_(programming_language)>`_, `Python
-<http://en.wikipedia.org/wiki/Python_(programming_language)>`_, `Lua
-<http://en.wikipedia.org/wiki/Lua_(programming_language)>`_, and `Ruby
-<http://en.wikipedia.org/wiki/Ruby_(programming_language)>`_.
+<https://en.wikipedia.org/wiki/Lisp_(programming_language)>`_, `Perl
+<https://en.wikipedia.org/wiki/Perl_(programming_language)>`_, `Python
+<https://en.wikipedia.org/wiki/Python_(programming_language)>`_, `Lua
+<https://en.wikipedia.org/wiki/Lua_(programming_language)>`_, and `Ruby
+<https://en.wikipedia.org/wiki/Ruby_(programming_language)>`_.
 
 The most significant departures of Julia from typical dynamic languages
 are:
@@ -51,7 +51,7 @@ are:
    that can also optionally be used to make type declarations
 -  The ability to define function behavior across many combinations of
    argument types via `multiple
-   dispatch <http://en.wikipedia.org/wiki/Multiple_dispatch>`_
+   dispatch <https://en.wikipedia.org/wiki/Multiple_dispatch>`_
 -  Automatic generation of efficient, specialized code for different
    argument types
 -  Good performance, approaching that of statically-compiled languages
@@ -98,13 +98,13 @@ advantages of Julia over comparable systems include:
 -  No need to vectorize code for performance; devectorized code is fast
 -  Designed for parallelism and distributed computation
 -  Lightweight "green" threading
-   (`coroutines <http://en.wikipedia.org/wiki/Coroutine>`_)
+   (`coroutines <https://en.wikipedia.org/wiki/Coroutine>`_)
 -  Unobtrusive yet powerful type system
 -  Elegant and extensible conversions and promotions for numeric and
    other types
 -  Efficient support for
-   `Unicode <http://en.wikipedia.org/wiki/Unicode>`_, including but not
-   limited to `UTF-8 <http://en.wikipedia.org/wiki/UTF-8>`_
+   `Unicode <https://en.wikipedia.org/wiki/Unicode>`_, including but not
+   limited to `UTF-8 <https://en.wikipedia.org/wiki/UTF-8>`_
 -  Call C functions directly (no wrappers or special APIs needed)
 -  Powerful shell-like capabilities for managing other processes
 -  Lisp-like macros and other metaprogramming facilities

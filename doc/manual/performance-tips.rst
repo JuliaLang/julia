@@ -64,11 +64,11 @@ The following example illustrates good working style::
     f (generic function with 1 method)
 
     julia> @time f(1)
-    elapsed time: 0.008217942 seconds (93784 bytes allocated)
+    elapsed time: 0.004710563 seconds (93504 bytes allocated)
     0.5
 
     julia> @time f(10^6)
-    elapsed time: 0.063418472 seconds (32002136 bytes allocated)
+    elapsed time: 0.04123202 seconds (32002136 bytes allocated)
     2.5000025e11
 
 On the first call (``@time f(1)``), ``f`` gets compiled.  (If you've
@@ -87,10 +87,14 @@ seriously and follow the advice below.
 
 As a teaser, note that an improved version of this function allocates
 no memory (except to pass back the result back to the REPL) and has
-thirty-fold faster execution::
+an order of magnitude faster execution after the first call::
+
+    julia> @time f_improved(1)   # first call
+    elapsed time: 0.003702172 seconds (78944 bytes allocated)
+    0.5
 
     julia> @time f_improved(10^6)
-    elapsed time: 0.00253829 seconds (112 bytes allocated)
+    elapsed time: 0.004313644 seconds (112 bytes allocated)
     2.5000025e11
 
 Below you'll learn how to spot the problem with ``f`` and how to fix it.
@@ -162,6 +166,10 @@ that can be manipulated efficiently.
 
 See also the discussion under :ref:`man-parametric-types`.
 
+
+
+
+
 Type declarations
 -----------------
 
@@ -172,26 +180,312 @@ arguments, local variables, and expressions.
 However, there are a few specific instances where declarations are
 helpful.
 
-Declare specific types for fields of composite types
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+.. _man-abstract-fields:
 
-Given a user-defined type like the following::
+Avoid fields with abstract type
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-    type Foo
-        field
+Types can be declared without specifying the types of their fields:
+
+.. doctest::
+
+    julia> type MyAmbiguousType
+               a
+           end
+
+This allows ``a`` to be of any type. This can often be useful, but it
+does have a downside: for objects of type ``MyAmbiguousType``, the
+compiler will not be able to generate high-performance code.  The
+reason is that the compiler uses the types of objects, not their
+values, to determine how to build code. Unfortunately, very little can
+be inferred about an object of type ``MyAmbiguousType``:
+
+.. doctest::
+
+    julia> b = MyAmbiguousType("Hello")
+    MyAmbiguousType("Hello")
+
+    julia> c = MyAmbiguousType(17)
+    MyAmbiguousType(17)
+
+    julia> typeof(b)
+    MyAmbiguousType
+
+    julia> typeof(c)
+    MyAmbiguousType
+
+``b`` and ``c`` have the same type, yet their underlying
+representation of data in memory is very different. Even if you stored
+just numeric values in field ``a``, the fact that the memory
+representation of a ``UInt8`` differs from a ``Float64`` also means
+that the CPU needs to handle them using two different kinds of
+instructions.  Since the required information is not available in the
+type, such decisions have to be made at run-time. This slows
+performance.
+
+You can do better by declaring the type of ``a``. Here, we are focused
+on the case where ``a`` might be any one of several types, in which
+case the natural solution is to use parameters. For example:
+
+.. doctest::
+
+    julia> type MyType{T<:AbstractFloat}
+             a::T
+           end
+
+This is a better choice than
+
+.. doctest::
+
+    julia> type MyStillAmbiguousType
+             a::AbstractFloat
+           end
+
+because the first version specifies the type of ``a`` from the type of
+the wrapper object.  For example:
+
+.. doctest::
+
+    julia> m = MyType(3.2)
+    MyType{Float64}(3.2)
+
+    julia> t = MyStillAmbiguousType(3.2)
+    MyStillAmbiguousType(3.2)
+
+    julia> typeof(m)
+    MyType{Float64}
+
+    julia> typeof(t)
+    MyStillAmbiguousType
+
+The type of field ``a`` can be readily determined from the type of
+``m``, but not from the type of ``t``.  Indeed, in ``t`` it's possible
+to change the type of field ``a``:
+
+.. doctest::
+
+    julia> typeof(t.a)
+    Float64
+
+    julia> t.a = 4.5f0
+    4.5f0
+
+    julia> typeof(t.a)
+    Float32
+
+In contrast, once ``m`` is constructed, the type of ``m.a`` cannot
+change:
+
+.. doctest::
+
+    julia> m.a = 4.5f0
+    4.5
+
+    julia> typeof(m.a)
+    Float64
+
+The fact that the type of ``m.a`` is known from ``m``'s type---coupled
+with the fact that its type cannot change mid-function---allows the
+compiler to generate highly-optimized code for objects like ``m`` but
+not for objects like ``t``.
+
+Of course, all of this is true only if we construct ``m`` with a
+concrete type.  We can break this by explicitly constructing it with
+an abstract type:
+
+.. doctest::
+
+    julia> m = MyType{AbstractFloat}(3.2)
+    MyType{AbstractFloat}(3.2)
+
+    julia> typeof(m.a)
+    Float64
+
+    julia> m.a = 4.5f0
+    4.5f0
+
+    julia> typeof(m.a)
+    Float32
+
+For all practical purposes, such objects behave identically to those
+of ``MyStillAmbiguousType``.
+
+It's quite instructive to compare the sheer amount code generated for
+a simple function
+::
+
+    func(m::MyType) = m.a+1
+
+using
+::
+
+    code_llvm(func,(MyType{Float64},))
+    code_llvm(func,(MyType{AbstractFloat},))
+    code_llvm(func,(MyType,))
+
+For reasons of length the results are not shown here, but you may wish
+to try this yourself. Because the type is fully-specified in the first
+case, the compiler doesn't need to generate any code to resolve the
+type at run-time.  This results in shorter and faster code.
+
+
+.. _man-abstract-container-type:
+
+Avoid fields with abstract containers
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+The same best practices also work for container types:
+
+.. doctest::
+
+    julia> type MySimpleContainer{A<:AbstractVector}
+             a::A
+           end
+
+    julia> type MyAmbiguousContainer{T}
+             a::AbstractVector{T}
+           end
+
+For example:
+
+.. doctest::
+
+    julia> c = MySimpleContainer(1:3);
+
+    julia> typeof(c)
+    MySimpleContainer{UnitRange{Int64}}
+
+    julia> c = MySimpleContainer([1:3;]);
+
+    julia> typeof(c)
+    MySimpleContainer{Array{Int64,1}}
+
+    julia> b = MyAmbiguousContainer(1:3);
+
+    julia> typeof(b)
+    MyAmbiguousContainer{Int64}
+
+    julia> b = MyAmbiguousContainer([1:3;]);
+
+    julia> typeof(b)
+    MyAmbiguousContainer{Int64}
+
+For ``MySimpleContainer``, the object is fully-specified by its type
+and parameters, so the compiler can generate optimized functions. In
+most instances, this will probably suffice.
+
+While the compiler can now do its job perfectly well, there are cases
+where *you* might wish that your code could do different things
+depending on the *element type* of ``a``.  Usually the best way to
+achieve this is to wrap your specific operation (here, ``foo``) in a
+separate function::
+
+    function sumfoo(c::MySimpleContainer)
+        s = 0
+    for x in c.a
+        s += foo(x)
+    end
+    s
     end
 
-the compiler will not generally know the type of ``foo.field``, since it
-might be modified at any time to refer to a value of a different type.
-It will help to declare the most specific type possible, such as
-``field::Float64`` or ``field::Array{Int64,1}``.
+    foo(x::Integer) = x
+    foo(x::AbstractFloat) = round(x)
+
+This keeps things simple, while allowing the compiler to generate
+optimized code in all cases.
+
+However, there are cases where you may need to declare different
+versions of the outer function for different element types of
+``a``. You could do it like this::
+
+    function myfun{T<:AbstractFloat}(c::MySimpleContainer{Vector{T}})
+        ...
+    end
+    function myfun{T<:Integer}(c::MySimpleContainer{Vector{T}})
+        ...
+    end
+
+This works fine for ``Vector{T}``, but we'd also have to write
+explicit versions for ``UnitRange{T}`` or other abstract types. To
+prevent such tedium, you can use two parameters in the declaration of
+``MyContainer``::
+
+    type MyContainer{T, A<:AbstractVector}
+        a::A
+    end
+    MyContainer(v::AbstractVector) = MyContainer{eltype(v), typeof(v)}(v)
+
+    julia> b = MyContainer(1.3:5);
+
+    julia> typeof(b)
+    MyContainer{Float64,UnitRange{Float64}}
+
+Note the somewhat surprising fact that ``T`` doesn't appear in the
+declaration of field ``a``, a point that we'll return to in a moment.
+With this approach, one can write functions such as::
+
+    function myfunc{T<:Integer, A<:AbstractArray}(c::MyContainer{T,A})
+        return c.a[1]+1
+    end
+    # Note: because we can only define MyContainer for
+    # A<:AbstractArray, and any unspecified parameters are arbitrary,
+    # the previous could have been written more succinctly as
+    #     function myfunc{T<:Integer}(c::MyContainer{T})
+
+    function myfunc{T<:AbstractFloat}(c::MyContainer{T})
+        return c.a[1]+2
+    end
+
+    function myfunc{T<:Integer}(c::MyContainer{T,Vector{T}})
+        return c.a[1]+3
+    end
+
+    julia> myfunc(MyContainer(1:3))
+    2
+
+    julia> myfunc(MyContainer(1.0:3))
+    3.0
+
+    julia> myfunc(MyContainer([1:3]))
+    4
+
+As you can see, with this approach it's possible to specialize on both
+the element type ``T`` and the array type ``A``.
+
+However, there's one remaining hole: we haven't enforced that ``A``
+has element type ``T``, so it's perfectly possible to construct an
+object like this::
+
+  julia> b = MyContainer{Int64, UnitRange{Float64}}(1.3:5);
+
+  julia> typeof(b)
+  MyContainer{Int64,UnitRange{Float64}}
+
+To prevent this, we can add an inner constructor::
+
+    type MyBetterContainer{T<:Real, A<:AbstractVector}
+        a::A
+
+        MyBetterContainer(v::AbstractVector{T}) = new(v)
+    end
+    MyBetterContainer(v::AbstractVector) = MyBetterContainer{eltype(v),typeof(v)}(v)
+
+
+    julia> b = MyBetterContainer(1.3:5);
+
+    julia> typeof(b)
+    MyBetterContainer{Float64,UnitRange{Float64}}
+
+    julia> b = MyBetterContainer{Int64, UnitRange{Float64}}(1.3:5);
+    ERROR: no method MyBetterContainer(UnitRange{Float64},)
+
+The inner constructor requires that the element type of ``A`` be ``T``.
 
 Annotate values taken from untyped locations
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 It is often convenient to work with data structures that may contain
-values of any type, such as the original ``Foo`` type above, or cell
-arrays (arrays of type ``Array{Any}``). But, if you're using one of
+values of any type (arrays of type ``Array{Any}``). But, if you're using one of
 these structures and happen to know the type of an element, it helps to
 share this knowledge with the compiler::
 
@@ -292,8 +586,10 @@ loop. There are several possible fixes:
 -  Declare the type of ``x``: ``x::Float64 = 1``
 -  Use an explicit conversion: ``x = one(T)``
 
-Separate kernel functions
--------------------------
+.. _man-performance-kernel-functions:
+
+Separate kernel functions (aka, function barriers)
+--------------------------------------------------
 
 Many functions follow a pattern of performing some set-up work, and then
 running many iterations to perform a core computation. Where possible,
@@ -342,6 +638,152 @@ Functions like ``strange_twos`` occur when dealing with data of
 uncertain type, for example data loaded from an input file that might
 contain either integers, floats, strings, or something else.
 
+.. _man-performance-val:
+
+Types with values-as-parameters
+-------------------------------
+
+Let's say you want to create an ``N``-dimensional array that
+has size 3 along each axis.  Such arrays can be created like this:
+
+.. doctest::
+
+    A = fill(5.0, (3, 3))
+
+This approach works very well: the compiler can figure out that ``A``
+is an ``Array{Float64,2}`` because it knows the type of the fill value
+(``5.0::Float64``) and the dimensionality (``(3, 3)::NTuple{2,Int}``).
+This implies that the compiler can generate very efficient code for
+any future usage of ``A`` in the same function.
+
+But now let's say you want to write a function that creates a
+3×3×... array in arbitrary dimensions; you might be tempted to write a
+function
+
+.. doctest::
+
+    function array3(fillval, N)
+        fill(fillval, ntuple(d->3, N))
+    end
+
+This works, but (as you can verify for yourself using ``@code_warntype
+array3(5.0, 2)``) the problem is that the output type cannot be
+inferred: the argument ``N`` is a *value* of type ``Int``, and
+type-inference does not (and cannot) predict its value in
+advance. This means that code using the output of this function has to
+be conservative, checking the type on each access of ``A``; such code
+will be very slow.
+
+Now, one very good way to solve such problems is by using the
+:ref:`function-barrier technique
+<man-performance-kernel-functions>`. However, in some cases you might
+want to eliminate the type-instability altogether.  In such cases, one
+approach is to pass the dimensionality as a parameter, for example
+through ``Val{T}`` (see :ref:`man-val-trick`):
+
+.. doctest::
+
+    function array3{N}(fillval, ::Type{Val{N}})
+        fill(fillval, ntuple(d->3, Val{N}))
+    end
+
+Julia has a specialized version of ``ntuple`` that accepts a
+``Val{::Int}`` as the second parameter; by passing ``N`` as a
+type-parameter, you make its "value" known to the compiler.
+Consequently, this version of ``array3`` allows the compiler to
+predict the return type.
+
+However, making use of such techniques can be surprisingly subtle. For
+example, it would be of no help if you called ``array3`` from a
+function like this:
+
+.. doctest::
+
+    function call_array3(fillval, n)
+        A = array3(fillval, Val{n})
+    end
+
+Here, you've created the same problem all over again: the compiler
+can't guess the type of ``n``, so it doesn't know the type of
+``Val{n}``.  Attempting to use ``Val``, but doing so incorrectly, can
+easily make performance *worse* in many situations.  (Only in
+situations where you're effectively combining ``Val`` with the
+function-barrier trick, to make the kernel function more efficient,
+should code like the above be used.)
+
+An example of correct usage of ``Val`` would be:
+
+.. doctest::
+
+    function filter3{T,N}(A::AbstractArray{T,N})
+        kernel = array3(1, Val{N})
+        filter(A, kernel)
+    end
+
+In this example, ``N`` is passed as a parameter, so its "value" is
+known to the compiler.  Essentially, ``Val{T}`` works only when ``T``
+is either hard-coded (``Val{3}``) or already specified in the
+type-domain.
+
+The dangers of abusing multiple dispatch (aka, more on types with values-as-parameters)
+---------------------------------------------------------------------------------------
+
+Once one learns to appreciate multiple dispatch, there's an
+understandable tendency to go crazy and try to use it for everything.
+For example, you might imagine using it to store information, e.g.
+::
+
+    immutable Car{Make,Model}
+        year::Int
+        ...more fields...
+    end
+
+and then dispatch on objects like ``Car{:Honda,:Accord}(year, args...)``.
+
+This might be worthwhile when the following are true:
+
+- You require CPU-intensive processing on each ``Car``, and it becomes
+  vastly more efficient if you know the ``Make`` and ``Model`` at
+  compile time.
+
+- You have homogenous lists of the same type of ``Car`` to
+  process, so that you can store them all in an
+  ``Array{Car{:Honda,:Accord},N}``.
+
+When the latter holds, a function processing such a homogenous array
+can be productively specialized: Julia knows the type of each element
+in advance (all objects in the container have the same concrete type),
+so Julia can "look up" the correct method calls when the function is
+being compiled (obviating the need to check at run-time) and thereby
+emit efficient code for processing the whole list.
+
+When these do not hold, then it's likely that you'll get no benefit;
+worse, the resulting "combinatorial explosion of types" will be
+counterproductive.  If ``items[i+1]`` has a different type than
+``item[i]``, Julia has to look up the type at run-time, search for the
+appropriate method in method tables, decide (via type intersection)
+which one matches, determine whether it has been JIT-compiled yet (and
+do so if not), and then make the call. In essence, you're asking the
+full type- system and JIT-compilation machinery to basically execute
+the equivalent of a switch statement or dictionary lookup in your own
+code.
+
+Some run-time benchmarks comparing (1) type dispatch, (2) dictionary
+lookup, and (3) a "switch" statement can be found `on the mailing list
+<https://groups.google.com/d/msg/julia-users/jUMu9A3QKQQ/qjgVWr7vAwAJ>`_.
+
+Perhaps even worse than the run-time impact is the compile-time
+impact: Julia will compile specialized functions for each different
+``Car{Make, Model}``; if you have hundreds or thousands of such types,
+then every function that accepts such an object as a parameter (from a
+custom ``get_year`` function you might write yourself, to the generic
+``push!`` function in the standard library) will have hundreds or
+thousands of variants compiled for it.  Each of these increases the
+size of the cache of compiled code, the length of internal lists of
+methods, etc.  Excess enthusiasm for values-as-parameters can easily
+waste enormous resources.
+
+
 Access arrays in memory order, along columns
 --------------------------------------------
 
@@ -353,7 +795,7 @@ that the array is ordered ``[1 3 2 4]``, not ``[1 2 3 4]``):
 .. doctest::
 
     julia> x = [1 2; 3 4]
-    2x2 Array{Int64,2}:
+    2×2 Array{Int64,2}:
      1  2
      3  4
 
@@ -384,7 +826,7 @@ adapted accordingly). We could conceivably do this in at least four ways
 
     function copy_cols{T}(x::Vector{T})
         n = size(x, 1)
-        out = Array(eltype(x), n, n)
+        out = Array{T}(n, n)
         for i=1:n
             out[:, i] = x
         end
@@ -393,7 +835,7 @@ adapted accordingly). We could conceivably do this in at least four ways
 
     function copy_rows{T}(x::Vector{T})
         n = size(x, 1)
-        out = Array(eltype(x), n, n)
+        out = Array{T}(n, n)
         for i=1:n
             out[i, :] = x
         end
@@ -402,7 +844,7 @@ adapted accordingly). We could conceivably do this in at least four ways
 
     function copy_col_row{T}(x::Vector{T})
         n = size(x, 1)
-        out = Array(T, n, n)
+        out = Array{T}(n, n)
         for col=1:n, row=1:n
             out[row, col] = x[row]
         end
@@ -411,7 +853,7 @@ adapted accordingly). We could conceivably do this in at least four ways
 
     function copy_row_col{T}(x::Vector{T})
         n = size(x, 1)
-        out = Array(T, n, n)
+        out = Array{T}(n, n)
         for row=1:n, col=1:n
             out[row, col] = x[col]
         end
@@ -425,7 +867,7 @@ by ``1`` input vector::
 
     julia> fmt(f) = println(rpad(string(f)*": ", 14, ' '), @elapsed f(x))
 
-    julia> map(fmt, {copy_cols, copy_rows, copy_col_row, copy_row_col});
+    julia> map(fmt, Any[copy_cols, copy_rows, copy_col_row, copy_row_col]);
     copy_cols:    0.331706323
     copy_rows:    1.799009911
     copy_col_row: 0.415630047
@@ -477,7 +919,7 @@ with
     end
 
     function loopinc_prealloc()
-        ret = Array(Int, 3)
+        ret = Array{Int}(3)
         y = 0
         for i = 1:10^7
             xinc!(ret, i)
@@ -527,6 +969,32 @@ be harder to read. Consider::
 versus::
 
     println(file, f(a), f(b))
+
+
+Optimize network I/O during parallel execution
+----------------------------------------------
+
+When executing a remote function in parallel::
+
+    responses = Vector{Any}(nworkers())
+    @sync begin
+        for (idx, pid) in enumerate(workers())
+            @async responses[idx] = remotecall_fetch(pid, foo, args...)
+        end
+    end
+
+is faster than::
+
+    refs = Vector{Any}(nworkers())
+    for (idx, pid) in enumerate(workers())
+        refs[idx] = @spawnat pid foo(args...)
+    end
+    responses = [fetch(r) for r in refs]
+
+The former results in a single network round-trip to every worker, while the
+latter results in two network calls - first by the ``@spawnat`` and the
+second due to the ``fetch`` (or even a ``wait``). The ``fetch``/``wait``
+is also being executed serially resulting in an overall poorer performance.
 
 
 Fix deprecation warnings
@@ -677,7 +1145,7 @@ evaluates the L2-norm of the result::
 
     function main()
         n = 2000
-        u = Array(Float64, n)
+        u = Array{Float64}(n)
         init!(u)
         du = similar(u)
 
@@ -731,6 +1199,63 @@ resulting speedup depend very much on the hardware. You can examine
 the change in generated code by using Julia's :func:`code_native`
 function.
 
+Treat Subnormal Numbers as Zeros
+--------------------------------
+
+Subnormal numbers, formerly called `denormal numbers <https://en.wikipedia.org/wiki/Denormal_number>`_,
+are useful in many contexts, but incur a performance penalty on some hardware.
+A call :func:`set_zero_subnormals(true) <set_zero_subnormals>`
+grants permission for floating-point operations to treat subnormal
+inputs or outputs as zeros, which may improve performance on some hardware.
+A call :func:`set_zero_subnormals(false) <set_zero_subnormals>`
+enforces strict IEEE behavior for subnormal numbers.
+
+Below is an example where subnormals noticeably impact performance on some hardware::
+
+    function timestep{T}( b::Vector{T}, a::Vector{T}, Δt::T )
+        @assert length(a)==length(b)
+        n = length(b)
+        b[1] = 1                            # Boundary condition
+        for i=2:n-1
+            b[i] = a[i] + (a[i-1] - T(2)*a[i] + a[i+1]) * Δt
+        end
+        b[n] = 0                            # Boundary condition
+    end
+
+    function heatflow{T}( a::Vector{T}, nstep::Integer )
+        b = similar(a)
+        for t=1:div(nstep,2)                # Assume nstep is even
+            timestep(b,a,T(0.1))
+            timestep(a,b,T(0.1))
+        end
+    end
+
+    heatflow(zeros(Float32,10),2)           # Force compilation
+    for trial=1:6
+        a = zeros(Float32,1000)
+        set_zero_subnormals(iseven(trial))  # Odd trials use strict IEEE arithmetic
+        @time heatflow(a,1000)
+    end
+
+This example generates many subnormal numbers because the values in ``a`` become
+an exponentially decreasing curve, which slowly flattens out over time.
+
+Treating subnormals as zeros should be used with caution, because doing so
+breaks some identities, such as ``x-y==0`` implies ``x==y``::
+
+    julia> x=3f-38; y=2f-38;
+
+    julia> set_zero_subnormals(false); (x-y,x==y)
+    (1.0000001f-38,false)
+
+    julia> set_zero_subnormals(true); (x-y,x==y)
+    (0.0f0,false)
+
+In some applications, an alternative to zeroing subnormal numbers is
+to inject a tiny bit of noise.  For example, instead of
+initializing ``a`` with zeros, initialize it with::
+
+     a = rand(Float32,1000) * 1.f-9
 
 .. _man-code-warntype:
 
@@ -753,7 +1278,7 @@ example::
       x::Float64
       y::UNION(INT64,FLOAT64)
       _var0::Float64
-      _var3::(Int64,)
+      _var3::Tuple{Int64}
       _var4::UNION(INT64,FLOAT64)
       _var1::Float64
       _var2::Float64
@@ -785,7 +1310,7 @@ the above example, such output is shown in all-caps.
 
 The top part of the output summarizes the type information for the different
 variables internal to the function. You can see that ``y``, one of the
-variables you created, is a ``Union(Int64,Float64)``, due to the
+variables you created, is a ``Union{Int64,Float64}``, due to the
 type-instability of ``pos``.  There is another variable, ``_var4``, which you
 can see also has the same type.
 
@@ -820,13 +1345,13 @@ best tools to contain the "damage" from type instability.
 The following examples may help you interpret expressions marked as
 containing non-leaf types:
 
-- Function body ending in ``end::Union(T1,T2))``
+- Function body ending in ``end::Union{T1,T2})``
 
   + Interpretation: function with unstable return type
 
   + Suggestion: make the return value type-stable, even if you have to annotate it
 
-- ``f(x::T)::Union(T1,T2)``
+- ``f(x::T)::Union{T1,T2}``
 
   + Interpretation: call to a type-unstable function
 

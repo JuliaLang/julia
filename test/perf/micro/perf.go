@@ -1,23 +1,46 @@
-//The go.matrix and GoStats packages must be installed
-//To install the go.matrix package, run:
-//    go get github.com/skelterjohn/go.matrix
-//    go install github.com/skelterjohn/go.matrix
-//To install the GoStats package, run:
-//    go get github.com/GaryBoone/GoStats/stats
-//    go install github.com/GaryBoone/GoStats/stats
-
+// Implementation of the Julia benchmark suite in Go.
+//
+// Three gonum packages must be installed, and then an additional environmental
+// variable must be set to use the BLAS installation.
+// To install the gonum packages, run:
+// 		go get github.com/gonum/blas
+//		go get github.com/gonum/matrix/mat64
+//		go get github.com/gonum/stat
+// The cgo ldflags must then be set to use the BLAS implementation. As an example,
+// download OpenBLAS to ~/software
+//		git clone https://github.com/xianyi/OpenBLAS
+// 		cd OpenBLAS
+//		make
+// Then edit the enivorment variable to have
+// 		export CGO_LDFLAGS="-L/$HOME/software/OpenBLAS -lopenblas"
 package main
 
 import (
+	"errors"
 	"fmt"
-	matrix "github.com/skelterjohn/go.matrix"
-	stats "github.com/GaryBoone/GoStats/stats"
+	"log"
 	"math"
 	"math/cmplx"
 	"math/rand"
 	"strconv"
-	"time"
+	"testing"
+
+	"github.com/gonum/blas/blas64"
+	"github.com/gonum/blas/cgo"
+	"github.com/gonum/matrix/mat64"
+	"github.com/gonum/stat"
 )
+
+func init() {
+	// Use the BLAS implementation specified in CGO_LDFLAGS. This line can be
+	// commented out to use the native Go BLAS implementation found in
+	// github.com/gonum/blas/native.
+	blas64.Use(cgo.Implementation{})
+
+	// These are here so that toggling the BLAS implementation does not make imports unused
+	_ = cgo.Implementation{}
+	_ = blas64.General{}
+}
 
 // fibonacci
 
@@ -57,67 +80,74 @@ func qsort_kernel(a []float64, lo, hi int) []float64 {
 	return a
 }
 
+var rnd = rand.New(rand.NewSource(1))
+
 // randmatstat
 
 func randmatstat(t int) (float64, float64) {
 	n := 5
-	var v stats.Stats
-	var w stats.Stats
-	for i :=0; i<t; i++ {
-		a := matrix.Zeros(n, n)
-		b := matrix.Zeros(n, n)
-		c := matrix.Zeros(n, n)
-		d := matrix.Zeros(n, n)
-		for j := 0; j < n; j++ {
-			for k := 0; k < n; k++ {
-				a.Set(j, k, rand.NormFloat64())
-				b.Set(j, k, rand.NormFloat64())
-				c.Set(j, k, rand.NormFloat64())
-				d.Set(j, k, rand.NormFloat64())
-			}
+	v := make([]float64, t)
+	w := make([]float64, t)
+	ad := make([]float64, n*n)
+	bd := make([]float64, n*n)
+	cd := make([]float64, n*n)
+	dd := make([]float64, n*n)
+	P := mat64.NewDense(n, 4*n, nil)
+	Q := mat64.NewDense(2*n, 2*n, nil)
+	pTmp := mat64.NewDense(4*n, 4*n, nil)
+	qTmp := mat64.NewDense(2*n, 2*n, nil)
+	for i := 0; i < t; i++ {
+		for i := range ad {
+			ad[i] = rnd.NormFloat64()
+			bd[i] = rnd.NormFloat64()
+			cd[i] = rnd.NormFloat64()
+			dd[i] = rnd.NormFloat64()
 		}
-		P := matrix.Zeros(n, 4*n)
-		for j := 0; j < n; j++ {
-			for k := 0; k < n; k++ {
-				P.Set(j,     k, a.Get(j, k))
-				P.Set(j,   n+k, b.Get(j, k))
-				P.Set(j, 2*n+k, c.Get(j, k))
-				P.Set(j, 3*n+k, d.Get(j, k))
-			}
-		}
-		Q := matrix.Zeros(2*n, 2*n)
-		for j := 0; j < n; j++ {
-			for k := 0; k < n; k++ {
-				Q.Set(j,     k, a.Get(j, k))
-				Q.Set(j,   n+k, b.Get(j, k))
-				Q.Set(n+j,   k, c.Get(j, k))
-				Q.Set(n+j, n+k, d.Get(j, k))
-			}
-		}
-        	P = matrix.Product(matrix.Transpose(P), P)
-        	P = matrix.Product(P, P)
-        	P = matrix.Product(P, P)
-        	Q = matrix.Product(matrix.Transpose(Q), Q)
-        	Q = matrix.Product(Q, Q)
-        	Q = matrix.Product(Q, Q)
-        	v.Update(P.Trace())
-        	w.Update(Q.Trace())
+		a := mat64.NewDense(n, n, ad)
+		b := mat64.NewDense(n, n, bd)
+		c := mat64.NewDense(n, n, cd)
+		d := mat64.NewDense(n, n, dd)
+		P.Copy(a)
+		P.View(0, n, n, n).(*mat64.Dense).Copy(b)
+		P.View(0, 2*n, n, n).(*mat64.Dense).Copy(c)
+		P.View(0, 3*n, n, n).(*mat64.Dense).Copy(d)
+
+		Q.Copy(a)
+		Q.View(0, n, n, n).(*mat64.Dense).Copy(b)
+		Q.View(n, 0, n, n).(*mat64.Dense).Copy(c)
+		Q.View(n, n, n, n).(*mat64.Dense).Copy(d)
+
+		pTmp.Mul(P.T(), P)
+		pTmp.Pow(pTmp, 4)
+
+		qTmp.Mul(Q.T(), Q)
+		qTmp.Pow(qTmp, 4)
+
+		v[i] = mat64.Trace(pTmp)
+		w[i] = mat64.Trace(qTmp)
 	}
-	return v.PopulationStandardDeviation()/float64(v.Count())/v.Mean(), w.PopulationStandardDeviation()/float64(w.Count())/w.Mean()
+	mv, stdv := stat.MeanStdDev(v, nil)
+	mw, stdw := stat.MeanStdDev(v, nil)
+	return stdv / mv, stdw / mw
 }
 
 // randmatmul
 
-func randmatmul(n int) matrix.MatrixRO {
-	a := matrix.Zeros(n, n)
-	b := matrix.Zeros(n, n)
-	for i := 0; i < n; i++ {
-		for k := 0; k < n; k++ {
-			a.Set(i, k, rand.Float64())
-			b.Set(i, k, rand.Float64())
-		}
+func randmatmul(n int) *mat64.Dense {
+	aData := make([]float64, n*n)
+	for i := range aData {
+		aData[i] = rnd.Float64()
 	}
-	return matrix.Product(a, b)
+	a := mat64.NewDense(n, n, aData)
+
+	bData := make([]float64, n*n)
+	for i := range bData {
+		bData[i] = rnd.Float64()
+	}
+	b := mat64.NewDense(n, n, bData)
+	var c mat64.Dense
+	c.Mul(a, b)
+	return &c
 }
 
 // mandelbrot
@@ -134,11 +164,15 @@ func mandel(z complex128) int {
 	return maxiter
 }
 
+// mandelperf
+
 func mandelperf() int {
 	mandel_sum := 0
-	for re := -20; re <= 5; re += 1 {
-		for im := -10; im <= 10; im += 1 {
-			m := mandel(complex(float64(re)/10, float64(im)/10))
+	// These loops are constructed as such because mandel is very sensitive to
+	// its input and this avoids very small floating point issues.
+	for re := -20.0; re <= 5; re += 1 {
+		for im := -10.0; im <= 10; im += 1 {
+			m := mandel(complex(re/10, im/10))
 			mandel_sum += m
 		}
 	}
@@ -151,8 +185,8 @@ func pisum() float64 {
 	var sum float64
 	for i := 0; i < 500; i++ {
 		sum = 0.0
-		for k := 1; k <= 10000; k++ {
-			sum += 1.0 / float64(k*k)
+		for k := 1.0; k <= 10000; k += 1 {
+			sum += 1.0 / (k * k)
 		}
 	}
 	return sum
@@ -164,104 +198,116 @@ func print_perf(name string, time float64) {
 
 // run tests
 
-func assert(b bool) {
-	if b != true {
-		panic("assert failed")
+func assert(b *testing.B, t bool) {
+	if t != true {
+		b.Fatal("assert failed")
 	}
 }
 
 func main() {
-	assert(fib(20) == 6765)
-	tmin := float64(math.MaxFloat64)
-	for i := 0; i < 5; i++ {
-		t := time.Now()
-		_ = fib(20)
-		d := float64(time.Since(t).Seconds())
-		if d < tmin {
-			tmin = d
+	for _, bm := range benchmarks {
+		seconds, err := runBenchmarkFor(bm.fn)
+		if err != nil {
+			log.Fatalf("%s %s", bm.name, err)
 		}
+		print_perf(bm.name, seconds)
 	}
-	print_perf("fib", tmin)
+}
 
-	tmin = float64(math.MaxFloat64)
-	for i := 0; i < 5; i++ {
-		t := time.Now()
-		for k := 0; k < 1000; k++ {
-			n := rand.Uint32()
-			s := fmt.Sprintf("%x", n)
-			m, _ := strconv.ParseUint(s, 16, 32)
-			assert(uint32(m) == n)
-		}
-		d := float64(time.Since(t).Seconds())
-		if d < tmin {
-			tmin = d
-		}
+func runBenchmarkFor(fn func(*testing.B)) (seconds float64, err error) {
+	bm := testing.Benchmark(fn)
+	if (bm == testing.BenchmarkResult{}) {
+		return 0, errors.New("failed")
 	}
-	print_perf("parse_int", tmin)
+	return bm.T.Seconds() / float64(bm.N), nil
+}
 
-	assert(mandelperf() == 14791)
-	tmin = float64(math.MaxFloat64)
-	for i := 0; i < 5; i++ {
-		t := time.Now()
-		_ = mandelperf()
-		d := float64(time.Since(t).Seconds())
-		if d < tmin {
-			tmin = d
-		}
-	}
-	print_perf("mandel", tmin)
+var benchmarks = []struct {
+	name string
+	fn   func(*testing.B)
+}{
+	{
+		name: "fib",
+		fn: func(b *testing.B) {
+			for i := 0; i < b.N; i++ {
+				if fib(20) != 6765 {
+					b.Fatal("unexpected value for fib(20)")
+				}
+			}
+		},
+	},
 
-	tmin = float64(math.MaxFloat64)
-	for i := 0; i < 5; i++ {
-		lst := make([]float64, 5000)
-		for k := 0; k < len(lst); k++ {
-			lst[k] = rand.Float64()
-		}
-		t := time.Now()
-		qsort_kernel(lst, 0, len(lst)-1)
-		d := float64(time.Since(t).Seconds())
-		if d < tmin {
-			tmin = d
-		}
-	}
-	print_perf("quicksort", tmin)
+	{
+		name: "parse_int",
+		fn: func(b *testing.B) {
+			for i := 0; i < b.N; i++ {
+				for k := 0; k < 1000; k++ {
+					n := rnd.Uint32()
+					m, _ := strconv.ParseUint(strconv.FormatUint(uint64(n), 16), 16, 32)
+					if uint32(m) != n {
+						b.Fatal("incorrect value for m")
+					}
+				}
+			}
+		},
+	},
 
-	assert(math.Abs(pisum()-1.644834071848065) < 1e-6)
-	tmin = float64(math.MaxFloat64)
-	for i := 0; i < 5; i++ {
-		t := time.Now()
-		pisum()
-		d := float64(time.Since(t).Seconds())
-		if d < tmin {
-			tmin = d
-		}
-	}
-	print_perf("pi_sum", tmin)
+	{
+		name: "mandel",
+		fn: func(b *testing.B) {
+			for i := 0; i < b.N; i++ {
+				if mandelperf() != 14791 {
+					b.Fatal("unexpected value for mandelperf")
+				}
+			}
+		},
+	},
 
-	tmin = float64(math.MaxFloat64)
-	for i := 0; i < 5; i++ {
-		t := time.Now()
-		c1, c2 := randmatstat(1000)
-		//assert(0.5 < c1) //XXX Why does this assertion fail?
-		assert(c1 < 1.0)
-		//assert(0.5 < c2) //XXX Why does this assertion fail?
-		assert(c2 < 1.0)
-		d := float64(time.Since(t).Seconds())
-		if d < tmin {
-			tmin = d
-		}
-	}
-	print_perf("rand_mat_stat", tmin)
+	{
+		name: "quicksort",
+		fn: func(b *testing.B) {
+			lst := make([]float64, 5000)
+			b.ResetTimer()
+			for i := 0; i < b.N; i++ {
+				for k := range lst {
+					lst[k] = rnd.Float64()
+				}
+				qsort_kernel(lst, 0, len(lst)-1)
+			}
+		},
+	},
 
-	tmin = float64(math.MaxFloat64)
-	for i := 0; i < 5; i++ {
-		t := time.Now()
-		c := randmatmul(1000)
-		assert(c.Get(0, 0) >= 0)
-		d := float64(time.Since(t).Seconds())
-		if d < tmin {
-			tmin = d
-		}
-	}
-	print_perf("rand_mat_mul", tmin)
+	{
+		name: "pi_sum",
+		fn: func(b *testing.B) {
+			for i := 0; i < b.N; i++ {
+				if math.Abs(pisum()-1.644834071848065) >= 1e-6 {
+					b.Fatal("pi_sum out of range")
+				}
+			}
+		},
+	},
+
+	{
+		name: "rand_mat_stat",
+		fn: func(b *testing.B) {
+			for i := 0; i < b.N; i++ {
+				c1, c2 := randmatstat(1000)
+				assert(b, 0.5 < c1)
+				assert(b, c1 < 1.0)
+				assert(b, 0.5 < c2)
+				assert(b, c2 < 1.0)
+			}
+		},
+	},
+
+	{
+		name: "rand_mat_mul",
+		fn: func(b *testing.B) {
+			for i := 0; i < b.N; i++ {
+				c := randmatmul(1000)
+				assert(b, c.At(0, 0) >= 0)
+			}
+		},
+	},
 }

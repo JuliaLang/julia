@@ -39,7 +39,6 @@
     RCSID("$NetBSD: _setjmp.S,v 1.8 2005/10/05 20:18:12 christos Exp $")
 #endif
 */
-#include "../../deps/openlibm/i387/bsd_asm.h"
 
 /*
  * C library -- _setjmp, _longjmp
@@ -51,15 +50,8 @@
  * The previous signal state is NOT restored.
  */
 
-#ifndef _MSC_VER
-.intel_syntax
-ENTRY(jl_setjmp)
-#else
-.586
-.model small,C
-.code
-jl_setjmp proc
-#endif
+#define CNAME jl_setjmp
+#include "ENTRY.i387.h"
     mov    eax,DWORD PTR [esp+4]
     mov    edx,DWORD PTR [esp+0]
     mov    DWORD PTR [eax+0],ebp  /* rta */
@@ -70,7 +62,4 @@ jl_setjmp proc
     mov    DWORD PTR [eax+20],edx
     xor    eax,eax
     ret
-#ifdef _MSC_VER
-jl_setjmp endp
-#endif
-END(jl_setjmp)
+#include "END.h"

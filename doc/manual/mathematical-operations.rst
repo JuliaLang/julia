@@ -15,7 +15,7 @@ Arithmetic Operators
 --------------------
 
 The following `arithmetic operators
-<http://en.wikipedia.org/wiki/Arithmetic#Arithmetic_operations>`_
+<https://en.wikipedia.org/wiki/Arithmetic#Arithmetic_operations>`_
 are supported on all primitive numeric types:
 
 ==========  ============== ======================================
@@ -57,14 +57,15 @@ Here are some simple examples using arithmetic operators:
     julia> 3*2/12
     0.5
 
-(By convention, we tend to space less tightly binding operators less
-tightly, but there are no syntactic constraints.)
+(By convention, we tend to space operators more tightly if they get applied before
+other nearby operators. For instance, we would generally write ``-x + 2`` to reflect
+that first ``x`` gets negated, and then ``2`` is added to that result.)
 
 Bitwise Operators
 -----------------
 
 The following `bitwise
-operators <http://en.wikipedia.org/wiki/Bitwise_operation#Bitwise_operators>`_
+operators <https://en.wikipedia.org/wiki/Bitwise_operation#Bitwise_operators>`_
 are supported on all primitive integer types:
 
 ===========  =========================================================================
@@ -74,8 +75,8 @@ Expression   Name
 ``x & y``    bitwise and
 ``x | y``    bitwise or
 ``x $ y``    bitwise xor (exclusive or)
-``x >>> y``  `logical shift <http://en.wikipedia.org/wiki/Logical_shift>`_ right
-``x >> y``   `arithmetic shift <http://en.wikipedia.org/wiki/Arithmetic_shift>`_ right
+``x >>> y``  `logical shift <https://en.wikipedia.org/wiki/Logical_shift>`_ right
+``x >> y``   `arithmetic shift <https://en.wikipedia.org/wiki/Arithmetic_shift>`_ right
 ``x << y``   logical/arithmetic shift left
 ===========  =========================================================================
 
@@ -197,7 +198,7 @@ Here are some simple examples:
 
 Integers are compared in the standard manner — by comparison of bits.
 Floating-point numbers are compared according to the `IEEE 754
-standard <http://en.wikipedia.org/wiki/IEEE_754-2008>`_:
+standard <https://en.wikipedia.org/wiki/IEEE_754-2008>`_:
 
 -  Finite numbers are ordered in the usual manner.
 -  Positive zero is equal but not greater than negative zero.
@@ -271,14 +272,14 @@ that Julia does them correctly.
 For other types, :func:`isequal` defaults to calling :func:`==`, so if you want to
 define equality for your own types then you only need to add a :func:`==`
 method.  If you define your own equality function, you should probably
-define a corresponding :func:`hash` method to ensure that `isequal(x,y)`
-implies `hash(x) == hash(y)`.
+define a corresponding :func:`hash` method to ensure that ``isequal(x,y)``
+implies ``hash(x) == hash(y)``.
 
 Chaining comparisons
 ~~~~~~~~~~~~~~~~~~~~
 
 Unlike most languages, with the `notable exception of
-Python <http://en.wikipedia.org/wiki/Python_syntax_and_semantics#Comparison_operators>`_,
+Python <https://en.wikipedia.org/wiki/Python_syntax_and_semantics#Comparison_operators>`_,
 comparisons can be arbitrarily chained:
 
 .. doctest::
@@ -293,19 +294,22 @@ work on arrays. For example, ``0 .< A .< 1`` gives a boolean array whose
 entries are true where the corresponding elements of ``A`` are between 0
 and 1.
 
-The operator :obj:`.<` is intended for array objects; the operation
+The operator :obj:`.\< <Base..\<>` is intended for array objects; the operation
 ``A .< B`` is valid only if ``A`` and ``B`` have the same dimensions.  The
 operator returns an array with boolean entries and with the same dimensions
 as ``A`` and ``B``.  Such operators are called *elementwise*; Julia offers a
-suite of elementwise operators: :obj:`.*`, :obj:`.+`, etc.  Some of the elementwise
+suite of elementwise operators: :obj:`.* <Base..*>`, :obj:`.+ <Base..+>`, etc.  Some of the elementwise
 operators can take a scalar operand such as the example ``0 .< A .< 1`` in
 the preceding paragraph.
 This notation means that the scalar operand should be replicated for each entry of
 the array.
 
-Note the evaluation behavior of chained comparisons::
+Note the evaluation behavior of chained comparisons:
 
-    v(x) = (println(x); x)
+.. doctest::
+
+    julia> v(x) = (println(x); x)
+    v (generic function with 1 method)
 
     julia> v(1) < v(2) <= v(3)
     2
@@ -350,13 +354,87 @@ Assignments       ``= += -= *= /= //= \= ^= ÷= %= |= &= $= <<= >>= >>>=`` and `
 .. _man-elementary-functions:
 
 Elementary Functions
---------------------
+~~~~~~~~~~~~~~~~~~~~
 
 Julia provides a comprehensive collection of mathematical functions and
 operators. These mathematical operations are defined over as broad a
 class of numerical values as permit sensible definitions, including
 integers, floating-point numbers, rationals, and complexes, wherever
 such definitions make sense.
+
+Moreover, these functions (like any Julia function) can be applied
+in "vectorized" fashion to arrays and other collections with the
+syntax ``f.(A)``, e.g. ``sin.(A)`` will compute the elementwise
+sine of each element of an array ``A``.  See :ref:`man-dot-vectorizing`:.
+
+.. _man-numerical-conversions:
+
+Numerical Conversions
+---------------------
+
+Julia supports three forms of numerical conversion, which differ in their
+handling of inexact conversions.
+
+- The notation ``T(x)`` or ``convert(T,x)`` converts ``x`` to a value of type ``T``.
+
+  -  If ``T`` is a floating-point type, the result is the nearest representable
+     value, which could be positive or negative infinity.
+
+  -  If ``T`` is an integer type, an ``InexactError`` is raised if ``x``
+     is not representable by ``T``.
+
+
+- ``x % T`` converts an integer ``x`` to a value of integer type ``T``
+  congruent to ``x`` modulo ``2^n``, where ``n`` is the number of bits in ``T``.
+  In other words, the binary representation is truncated to fit.
+
+- The :ref:`man-rounding-functions` take a type ``T`` as an optional argument.
+  For example, ``round(Int,x)`` is a shorthand for ``Int(round(x))``.
+
+The following examples show the different forms.
+
+.. doctest::
+
+    julia> Int8(127)
+    127
+
+    julia> Int8(128)
+    ERROR: InexactError()
+     in call at ./essentials.jl:58
+     in eval at ./boot.jl:263
+
+    julia> Int8(127.0)
+    127
+
+    julia> Int8(3.14)
+    ERROR: InexactError()
+     in call at ./essentials.jl:58
+     in eval at ./boot.jl:263
+
+    julia> Int8(128.0)
+    ERROR: InexactError()
+     in call at ./essentials.jl:58
+     in eval at ./boot.jl:263
+
+    julia> 127 % Int8
+    127
+
+    julia> 128 % Int8
+    -128
+
+    julia> round(Int8,127.4)
+    127
+
+    julia> round(Int8,127.6)
+    ERROR: InexactError()
+     in trunc at ./float.jl:357
+     in round at ./float.jl:177
+     in eval at ./boot.jl:263
+
+See :ref:`man-conversion-and-promotion` for how to define your own
+conversions and promotions.
+
+.. _man-rounding-functions:
 
 Rounding functions
 ~~~~~~~~~~~~~~~~~~
@@ -385,11 +463,12 @@ Function                     Description
 :func:`cld(x,y) <cld>`       ceiling division; quotient rounded towards ``+Inf``
 :func:`rem(x,y) <rem>`       remainder; satisfies ``x == div(x,y)*y + rem(x,y)``; sign matches ``x``
 :func:`mod(x,y) <mod>`       modulus; satisfies ``x == fld(x,y)*y + mod(x,y)``; sign matches ``y``
+:func:`mod1(x,y) <mod1>`     ``mod()`` with offset 1; returns ``r∈(0,y]`` for ``y>0`` or ``r∈[y,0)`` for ``y<0``, where ``mod(r, y) == mod(x, y)``
 :func:`mod2pi(x) <mod2pi>`   modulus with respect to 2pi;  ``0 <= mod2pi(x)  < 2pi``
 :func:`divrem(x,y) <divrem>` returns ``(div(x,y),rem(x,y))``
 :func:`fldmod(x,y) <fldmod>` returns ``(fld(x,y),mod(x,y))``
-:func:`gcd(x,y...) <gcd>`    greatest common divisor of ``x``, ``y``,...; sign matches ``x``
-:func:`lcm(x,y...) <lcm>`    least common multiple of ``x``, ``y``,...; sign matches ``x``
+:func:`gcd(x,y...) <gcd>`    greatest positive common divisor of ``x``, ``y``,...
+:func:`lcm(x,y...) <lcm>`    least positive common multiple of ``x``, ``y``,...
 ============================ =======================================================================
 
 Sign and absolute value functions
@@ -446,8 +525,8 @@ All the standard trigonometric and hyperbolic functions are also defined::
     sinc   cosc   atan2
 
 These are all single-argument functions, with the exception of
-`atan2 <http://en.wikipedia.org/wiki/Atan2>`_, which gives the angle
-in `radians <http://en.wikipedia.org/wiki/Radian>`_ between the *x*-axis
+`atan2 <https://en.wikipedia.org/wiki/Atan2>`_, which gives the angle
+in `radians <https://en.wikipedia.org/wiki/Radian>`_ between the *x*-axis
 and the point specified by its arguments, interpreted as *x* and *y*
 coordinates.
 
@@ -468,46 +547,44 @@ Special functions
 =================================================== ==============================================================================
 Function                                            Description
 =================================================== ==============================================================================
-:func:`erf(x) <erf>`                                `error function <http://en.wikipedia.org/wiki/Error_function>`_ at ``x``
+:func:`erf(x) <erf>`                                `error function <https://en.wikipedia.org/wiki/Error_function>`_ at ``x``
 :func:`erfc(x) <erfc>`                              complementary error function, i.e. the accurate version of ``1-erf(x)`` for large ``x``
 :func:`erfinv(x) <erfinv>`                          inverse function to :func:`erf`
 :func:`erfcinv(x) <erfinvc>`                        inverse function to :func:`erfc`
 :func:`erfi(x) <erfi>`                              imaginary error function defined as ``-im * erf(x * im)``, where :const:`im` is the imaginary unit
 :func:`erfcx(x) <erfcx>`                            scaled complementary error function, i.e. accurate ``exp(x^2) * erfc(x)`` for large ``x``
 :func:`dawson(x) <dawson>`                          scaled imaginary error function, a.k.a. Dawson function, i.e. accurate ``exp(-x^2) * erfi(x) * sqrt(pi) / 2`` for large ``x``
-:func:`gamma(x) <gamma>`                            `gamma function <http://en.wikipedia.org/wiki/Gamma_function>`_ at ``x``
+:func:`gamma(x) <gamma>`                            `gamma function <https://en.wikipedia.org/wiki/Gamma_function>`_ at ``x``
 :func:`lgamma(x) <lgamma>`                          accurate ``log(gamma(x))`` for large ``x``
 :func:`lfact(x) <lfact>`                            accurate ``log(factorial(x))`` for large ``x``; same as ``lgamma(x+1)`` for ``x > 1``, zero otherwise
-:func:`digamma(x) <digamma>`                        `digamma function <http://en.wikipedia.org/wiki/Digamma_function>`_ (i.e. the derivative of :func:`lgamma`) at ``x``
-:func:`beta(x,y) <beta>`                            `beta function <http://en.wikipedia.org/wiki/Beta_function>`_ at ``x,y``
+:func:`digamma(x) <digamma>`                        `digamma function <https://en.wikipedia.org/wiki/Digamma_function>`_ (i.e. the derivative of :func:`lgamma`) at ``x``
+:func:`beta(x,y) <beta>`                            `beta function <https://en.wikipedia.org/wiki/Beta_function>`_ at ``x,y``
 :func:`lbeta(x,y) <lbeta>`                          accurate ``log(beta(x,y))`` for large ``x`` or ``y``
-:func:`eta(x) <eta>`                                `Dirichlet eta function <http://en.wikipedia.org/wiki/Dirichlet_eta_function>`_ at ``x``
-:func:`zeta(x) <zeta>`                              `Riemann zeta function <http://en.wikipedia.org/wiki/Riemann_zeta_function>`_ at ``x``
-|airylist|                                          `Airy Ai function <http://en.wikipedia.org/wiki/Airy_function>`_ at ``z``
+:func:`eta(x) <eta>`                                `Dirichlet eta function <https://en.wikipedia.org/wiki/Dirichlet_eta_function>`_ at ``x``
+:func:`zeta(x) <zeta>`                              `Riemann zeta function <https://en.wikipedia.org/wiki/Riemann_zeta_function>`_ at ``x``
+|airylist|                                          `Airy Ai function <https://en.wikipedia.org/wiki/Airy_function>`_ at ``z``
 |airyprimelist|                                     derivative of the Airy Ai function at ``z``
-:func:`airybi(z) <airybi>`, ``airy(2,z)``           `Airy Bi function <http://en.wikipedia.org/wiki/Airy_function>`_ at ``z``
+:func:`airybi(z) <airybi>`, ``airy(2,z)``           `Airy Bi function <https://en.wikipedia.org/wiki/Airy_function>`_ at ``z``
 :func:`airybiprime(z) <airybiprime>`, ``airy(3,z)`` derivative of the Airy Bi function at ``z``
 :func:`airyx(z) <airyx>`, ``airyx(k,z)``            scaled Airy AI function and ``k`` th derivatives at ``z``
-:func:`besselj(nu,z) <besselj>`                     `Bessel function <http://en.wikipedia.org/wiki/Bessel_function>`_ of the first kind of order ``nu`` at ``z``
+:func:`besselj(nu,z) <besselj>`                     `Bessel function <https://en.wikipedia.org/wiki/Bessel_function>`_ of the first kind of order ``nu`` at ``z``
 :func:`besselj0(z) <besselj0>`                      ``besselj(0,z)``
 :func:`besselj1(z) <besselj1>`                      ``besselj(1,z)``
 :func:`besseljx(nu,z) <besseljx>`                   scaled Bessel function of the first kind of order ``nu`` at ``z``
-:func:`bessely(nu,z) <bessely>`                     `Bessel function <http://en.wikipedia.org/wiki/Bessel_function>`_ of the second kind of order ``nu`` at ``z``
+:func:`bessely(nu,z) <bessely>`                     `Bessel function <https://en.wikipedia.org/wiki/Bessel_function>`_ of the second kind of order ``nu`` at ``z``
 :func:`bessely0(z) <bessely0>`                      ``bessely(0,z)``
 :func:`bessely1(z) <bessely0>`                      ``bessely(1,z)``
 :func:`besselyx(nu,z) <besselyx>`                   scaled Bessel function of the second kind of order ``nu`` at ``z``
-:func:`besselh(nu,k,z) <besselh>`                   `Bessel function <http://en.wikipedia.org/wiki/Bessel_function>`_ of the third kind (a.k.a. Hankel function) of order ``nu`` at ``z``; ``k`` must be either ``1`` or ``2``
+:func:`besselh(nu,k,z) <besselh>`                   `Bessel function <https://en.wikipedia.org/wiki/Bessel_function>`_ of the third kind (a.k.a. Hankel function) of order ``nu`` at ``z``; ``k`` must be either ``1`` or ``2``
 :func:`hankelh1(nu,z) <hankelh1>`                   ``besselh(nu, 1, z)``
 :func:`hankelh1x(nu,z) <hankelh1x>`                 scaled ``besselh(nu, 1, z)``
 :func:`hankelh2(nu,z) <hankelh2>`                   ``besselh(nu, 2, z)``
 :func:`hankelh2x(nu,z) <hankelh2x>`                 scaled ``besselh(nu, 2, z)``
-:func:`besseli(nu,z) <besseli>`                     modified `Bessel function <http://en.wikipedia.org/wiki/Bessel_function>`_ of the first kind of order ``nu`` at ``z``
+:func:`besseli(nu,z) <besseli>`                     modified `Bessel function <https://en.wikipedia.org/wiki/Bessel_function>`_ of the first kind of order ``nu`` at ``z``
 :func:`besselix(nu,z) <besselix>`                   scaled modified Bessel function of the first kind of order ``nu`` at ``z``
-:func:`besselk(nu,z) <besselk>`                     modified `Bessel function <http://en.wikipedia.org/wiki/Bessel_function>`_ of the second kind of order ``nu`` at ``z``
+:func:`besselk(nu,z) <besselk>`                     modified `Bessel function <https://en.wikipedia.org/wiki/Bessel_function>`_ of the second kind of order ``nu`` at ``z``
 :func:`besselkx(nu,z) <besselkx>`                   scaled modified Bessel function of the second kind of order ``nu`` at ``z``
 =================================================== ==============================================================================
 
 .. |airylist| replace:: :func:`airy(z) <airy>`, :func:`airyai(z) <airyai>`, ``airy(0,z)``
 .. |airyprimelist| replace:: :func:`airyprime(z) <airyprime>`, :func:`airyaiprime(z) <airyaiprime>`, ``airy(1,z)``
-
-

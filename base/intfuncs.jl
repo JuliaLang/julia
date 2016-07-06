@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 ## number-theoretic functions ##
 
 function gcd{T<:Integer}(a::T, b::T)
@@ -6,19 +8,19 @@ function gcd{T<:Integer}(a::T, b::T)
         b = rem(a, b)
         a = t
     end
-    abs(a)
+    checked_abs(a)
 end
 
 # binary GCD (aka Stein's) algorithm
 # about 1.7x (2.1x) faster for random Int64s (Int128s)
-function gcd{T<:Union(Int64,UInt64,Int128,UInt128)}(a::T, b::T)
+function gcd{T<:Union{Int64,UInt64,Int128,UInt128}}(a::T, b::T)
     a == 0 && return abs(b)
     b == 0 && return abs(a)
     za = trailing_zeros(a)
     zb = trailing_zeros(b)
     k = min(za, zb)
-    u = abs(a >> za)
-    v = abs(b >> zb)
+    u = unsigned(abs(a >> za))
+    v = unsigned(abs(b >> zb))
     while u != v
         if u > v
             u, v = v, u
@@ -26,11 +28,14 @@ function gcd{T<:Union(Int64,UInt64,Int128,UInt128)}(a::T, b::T)
         v -= u
         v >>= trailing_zeros(v)
     end
-    u << k
+    r = u << k
+    # T(r) would throw InexactError; we want OverflowError instead
+    r > typemax(T) && throw(OverflowError())
+    r % T
 end
 
 # explicit a==0 test is to handle case of lcm(0,0) correctly
-lcm{T<:Integer}(a::T, b::T) = a == 0 ? a : abs(a * div(b, gcd(b,a)))
+lcm{T<:Integer}(a::T, b::T) = a == 0 ? a : checked_abs(a * div(b, gcd(b,a)))
 
 gcd(a::Integer) = a
 lcm(a::Integer) = a
@@ -43,6 +48,31 @@ gcd{T<:Integer}(abc::AbstractArray{T}) = reduce(gcd,abc)
 lcm{T<:Integer}(abc::AbstractArray{T}) = reduce(lcm,abc)
 
 # return (gcd(a,b),x,y) such that ax+by == gcd(a,b)
+"""
+    gcdx(x,y)
+
+Computes the greatest common (positive) divisor of `x` and `y` and their Bézout
+coefficients, i.e. the integer coefficients `u` and `v` that satisfy
+``ux+vy = d = gcd(x,y)``.
+
+```jldoctest
+julia> gcdx(12, 42)
+(6,-3,1)
+```
+
+```jldoctest
+julia> gcdx(240, 46)
+(2,-9,47)
+```
+
+!!! note
+    Bézout coefficients are *not* uniquely defined. `gcdx` returns the minimal
+    Bézout coefficients that are computed by the extended Euclid algorithm.
+    (Ref: D. Knuth, TAoCP, 2/e, p. 325, Algorithm X.) These coefficients `u`
+    and `v` are minimal in the sense that ``|u| < |\\frac y d`` and ``|v| <
+    |\\frac x d``. Furthermore, the signs of `u` and `v` are chosen so that `d`
+    is positive.
+"""
 function gcdx{T<:Integer}(a::T, b::T)
     s0, s1 = one(T), zero(T)
     t0, t1 = s1, s0
@@ -68,8 +98,8 @@ end
 # ^ for any x supporting *
 to_power_type(x::Number) = oftype(x*x, x)
 to_power_type(x) = x
-function power_by_squaring(x, p::Integer)
-    x = to_power_type(x)
+function power_by_squaring(x_, p::Integer)
+    x = to_power_type(x_)
     if p == 1
         return copy(x)
     elseif p == 0
@@ -106,11 +136,11 @@ end
 ^(x, p::Integer)          = power_by_squaring(x,p)
 
 # b^p mod m
-function powermod{T}(b::Integer, p::Integer, m::T)
-    p < 0 && throw(DomainError())
-    b = oftype(m,mod(b,m))  # this also checks for divide by zero
-    p == 0 && return mod(one(b),m)
+function powermod{T<:Integer}(x::Integer, p::Integer, m::T)
+    p < 0 && return powermod(invmod(x, m), -p, m)
+    p == 0 && return mod(one(m),m)
     (m == 1 || m == -1) && return zero(m)
+    b = oftype(m,mod(x,m))  # this also checks for divide by zero
 
     t = prevpow2(p)
     local r::T
@@ -127,14 +157,17 @@ function powermod{T}(b::Integer, p::Integer, m::T)
     return r
 end
 
+# optimization: promote the modulus m to BigInt only once (cf. widemul in generic powermod above)
+powermod(x::Integer, p::Integer, m::Union{Int128,UInt128}) = oftype(m, powermod(x, p, big(m)))
+
 # smallest power of 2 >= x
-nextpow2(x::Unsigned) = one(x)<<((sizeof(x)<<3)-leading_zeros(x-1))
+nextpow2(x::Unsigned) = one(x)<<((sizeof(x)<<3)-leading_zeros(x-one(x)))
 nextpow2(x::Integer) = reinterpret(typeof(x),x < 0 ? -nextpow2(unsigned(-x)) : nextpow2(unsigned(x)))
 
-prevpow2(x::Unsigned) = (one(x)>>(x==0)) << ((sizeof(x)<<3)-leading_zeros(x)-1)
+prevpow2(x::Unsigned) = one(x) << unsigned((sizeof(x)<<3)-leading_zeros(x)-1)
 prevpow2(x::Integer) = reinterpret(typeof(x),x < 0 ? -prevpow2(unsigned(-x)) : prevpow2(unsigned(x)))
 
-ispow2(x::Integer) = count_ones(x)==1
+ispow2(x::Integer) = x > 0 && count_ones(x) == 1
 
 # smallest a^n >= x, with integer n
 function nextpow(a::Real, x::Real)
@@ -161,7 +194,7 @@ const powers_of_ten = [
     0x000000e8d4a51000, 0x000009184e72a000, 0x00005af3107a4000, 0x00038d7ea4c68000,
     0x002386f26fc10000, 0x016345785d8a0000, 0x0de0b6b3a7640000, 0x8ac7230489e80000,
 ]
-function ndigits0z(x::Union(UInt8,UInt16,UInt32,UInt64))
+function ndigits0z(x::Union{UInt8,UInt16,UInt32,UInt64})
     lz = (sizeof(x)<<3)-leading_zeros(x)
     nd = (1233*lz)>>12+1
     nd -= x < powers_of_ten[nd]
@@ -176,9 +209,9 @@ function ndigits0z(x::UInt128)
 end
 ndigits0z(x::Integer) = ndigits0z(unsigned(abs(x)))
 
-const ndigits_max_mul = WORD_SIZE==32 ? 69000000 : 290000000000000000
+const ndigits_max_mul = Core.sizeof(Int) == 4 ? 69000000 : 290000000000000000
 
-function ndigits0znb(n::Int, b::Int)
+function ndigits0znb(n::Signed, b::Int)
     d = 0
     while n != 0
         n = cld(n,b)
@@ -220,45 +253,47 @@ ndigits(x::Integer) = ndigits(unsigned(abs(x)))
 
 ## integer to string functions ##
 
+string(x::Union{Int8,Int16,Int32,Int64,Int128}) = dec(x)
+
 function bin(x::Unsigned, pad::Int, neg::Bool)
     i = neg + max(pad,sizeof(x)<<3-leading_zeros(x))
-    a = Array(UInt8,i)
+    a = Array{UInt8}(i)
     while i > neg
         a[i] = '0'+(x&0x1)
         x >>= 1
         i -= 1
     end
     if neg; a[1]='-'; end
-    ASCIIString(a)
+    String(a)
 end
 
 function oct(x::Unsigned, pad::Int, neg::Bool)
     i = neg + max(pad,div((sizeof(x)<<3)-leading_zeros(x)+2,3))
-    a = Array(UInt8,i)
+    a = Array{UInt8}(i)
     while i > neg
         a[i] = '0'+(x&0x7)
         x >>= 3
         i -= 1
     end
     if neg; a[1]='-'; end
-    ASCIIString(a)
+    String(a)
 end
 
 function dec(x::Unsigned, pad::Int, neg::Bool)
     i = neg + max(pad,ndigits0z(x))
-    a = Array(UInt8,i)
+    a = Array{UInt8}(i)
     while i > neg
         a[i] = '0'+rem(x,10)
         x = oftype(x,div(x,10))
         i -= 1
     end
     if neg; a[1]='-'; end
-    ASCIIString(a)
+    String(a)
 end
 
 function hex(x::Unsigned, pad::Int, neg::Bool)
     i = neg + max(pad,(sizeof(x)<<1)-(leading_zeros(x)>>2))
-    a = Array(UInt8,i)
+    a = Array{UInt8}(i)
     while i > neg
         d = x & 0xf
         a[i] = '0'+d+39*(d>9)
@@ -266,7 +301,7 @@ function hex(x::Unsigned, pad::Int, neg::Bool)
         i -= 1
     end
     if neg; a[1]='-'; end
-    ASCIIString(a)
+    String(a)
 end
 
 num2hex(n::Integer) = hex(n, sizeof(n)*2)
@@ -278,14 +313,14 @@ function base(b::Int, x::Unsigned, pad::Int, neg::Bool)
     2 <= b <= 62 || throw(ArgumentError("base must be 2 ≤ base ≤ 62, got $b"))
     digits = b <= 36 ? base36digits : base62digits
     i = neg + max(pad,ndigits0z(x,b))
-    a = Array(UInt8,i)
+    a = Array{UInt8}(i)
     while i > neg
         a[i] = digits[1+rem(x,b)]
         x = div(x,b)
         i -= 1
     end
     if neg; a[1]='-'; end
-    ASCIIString(a)
+    String(a)
 end
 base(b::Integer, n::Integer, pad::Integer=1) = base(Int(b), unsigned(abs(n)), pad, n<0)
 
@@ -300,23 +335,23 @@ for sym in (:bin, :oct, :dec, :hex)
     end
 end
 
-bits(x::Union(Bool,Int8,UInt8))           = bin(reinterpret(UInt8,x),8)
-bits(x::Union(Int16,UInt16,Float16))      = bin(reinterpret(UInt16,x),16)
-bits(x::Union(Char,Int32,UInt32,Float32)) = bin(reinterpret(UInt32,x),32)
-bits(x::Union(Int64,UInt64,Float64))      = bin(reinterpret(UInt64,x),64)
-bits(x::Union(Int128,UInt128))            = bin(reinterpret(UInt128,x),128)
+bits(x::Union{Bool,Int8,UInt8})           = bin(reinterpret(UInt8,x),8)
+bits(x::Union{Int16,UInt16,Float16})      = bin(reinterpret(UInt16,x),16)
+bits(x::Union{Char,Int32,UInt32,Float32}) = bin(reinterpret(UInt32,x),32)
+bits(x::Union{Int64,UInt64,Float64})      = bin(reinterpret(UInt64,x),64)
+bits(x::Union{Int128,UInt128})            = bin(reinterpret(UInt128,x),128)
 
-function digits{T<:Integer}(n::Integer, base::T=10, pad::Integer=1)
+digits{T<:Integer}(n::Integer, base::T=10, pad::Integer=1) = digits(T, n, base, pad)
+
+function digits{T<:Integer}(::Type{T}, n::Integer, base::Integer=10, pad::Integer=1)
     2 <= base || throw(ArgumentError("base must be ≥ 2, got $base"))
-    m = max(pad,ndigits0z(n,base))
-    a = zeros(T,m)
-    digits!(a, n, base)
-    return a
+    digits!(zeros(T, max(pad, ndigits0z(n,base))), n, base)
 end
 
-function digits!{T<:Integer}(a::AbstractArray{T,1}, n::Integer, base::T=10)
+function digits!{T<:Integer}(a::AbstractArray{T,1}, n::Integer, base::Integer=10)
     2 <= base || throw(ArgumentError("base must be ≥ 2, got $base"))
-    for i = 1:length(a)
+    base - 1 <= typemax(T) || throw(ArgumentError("type $T too small for base $base"))
+    for i in eachindex(a)
         a[i] = rem(n, base)
         n = div(n, base)
     end
@@ -325,7 +360,7 @@ end
 
 isqrt(x::Integer) = oftype(x, trunc(sqrt(x)))
 
-function isqrt(x::Union(Int64,UInt64,Int128,UInt128))
+function isqrt(x::Union{Int64,UInt64,Int128,UInt128})
     x==0 && return x
     s = oftype(x, trunc(sqrt(x)))
     # fix with a Newton iteration, since conversion to float discards

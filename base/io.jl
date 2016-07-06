@@ -1,11 +1,114 @@
-## core stream types ##
+# This file is a part of Julia. License is MIT: http://julialang.org/license
 
-# the first argument to any IO MUST be a POINTER (to a JL_STREAM) or using show on it will cause memory corruption
+# Generic IO stubs -- all subtypes should implement these (if meaningful)
 
-# Generic IO functions
+lock(::IO) = nothing
+unlock(::IO) = nothing
+reseteof(x::IO) = nothing
+
+const SZ_UNBUFFERED_IO = 65536
+buffer_writes(x::IO, bufsize=SZ_UNBUFFERED_IO) = nothing
+
+function isopen end
+function close end
+function flush end
+function wait_connected end
+function wait_readnb end
+function wait_readbyte end
+function wait_close end
+function nb_available end
+function readavailable end
+function isreadable end
+function iswritable end
+function copy end
+function eof end
+
+read(s::IO, ::Type{UInt8}) = error(typeof(s)," does not support byte I/O")
+write(s::IO, x::UInt8) = error(typeof(s)," does not support byte I/O")
+
+"""
+    unsafe_write(io, ref, nbytes)
+
+Copy nbytes from ref (converted to a pointer) into the IO stream object.
+
+It is recommended that subtypes `T<:IO` override the following method signature
+to provide more efficient implementations:
+`unsafe_write(s::T, p::Ptr{UInt8}, n::UInt)`
+"""
+function unsafe_write(s::IO, p::Ptr{UInt8}, n::UInt)
+    local written::Int = 0
+    for i = 1:n
+        written += write(s, unsafe_load(p, i))
+    end
+    return written
+end
+
+"""
+    unsafe_read(io, ref, nbytes)
+
+Copy nbytes from the IO stream object into ref (converted to a pointer).
+
+It is recommended that subtypes `T<:IO` override the following method signature
+to provide more efficient implementations:
+`unsafe_read(s::T, p::Ptr{UInt8}, n::UInt)`
+"""
+function unsafe_read(s::IO, p::Ptr{UInt8}, n::UInt)
+    for i = 1:n
+        unsafe_store!(p, read(s, UInt8)::UInt8, i)
+    end
+    nothing
+end
+
+
+# Generic wrappers around other IO objects
+abstract AbstractPipe <: IO
+function pipe_reader end
+function pipe_writer end
+
+write(io::AbstractPipe, byte::UInt8) = write(pipe_writer(io), byte)
+unsafe_write(io::AbstractPipe, p::Ptr{UInt8}, nb::UInt) = unsafe_write(pipe_writer(io), p, nb)
+buffer_writes(io::AbstractPipe, args...) = buffer_writes(pipe_writer(io), args...)
+flush(io::AbstractPipe) = flush(pipe_writer(io))
+
+read(io::AbstractPipe, byte::Type{UInt8}) = read(pipe_reader(io), byte)
+unsafe_read(io::AbstractPipe, p::Ptr{UInt8}, nb::UInt) = unsafe_read(pipe_reader(io), p, nb)
+read(io::AbstractPipe) = read(pipe_reader(io))
+readuntil{T<:AbstractPipe}(io::T, args...) = readuntil(pipe_reader(io), args...)
+readavailable(io::AbstractPipe) = readavailable(pipe_reader(io))
+
+isreadable(io::AbstractPipe) = isreadable(pipe_reader(io))
+iswritable(io::AbstractPipe) = iswritable(pipe_writer(io))
+isopen(io::AbstractPipe) = isopen(pipe_writer(io)) || isopen(pipe_reader(io))
+close(io::AbstractPipe) = (close(pipe_writer(io)); close(pipe_reader(io)))
+wait_readnb(io::AbstractPipe, nb::Int) = wait_readnb(pipe_reader(io), nb)
+wait_readbyte(io::AbstractPipe, byte::UInt8) = wait_readbyte(pipe_reader(io), byte)
+wait_close(io::AbstractPipe) = (wait_close(pipe_writer(io)); wait_close(pipe_reader(io)))
+nb_available(io::AbstractPipe) = nb_available(pipe_reader(io))
+eof(io::AbstractPipe) = eof(pipe_reader(io))
+reseteof(io::AbstractPipe) = reseteof(pipe_reader(io))
+
+
+# Exception-safe wrappers (io = open(); try f(io) finally close(io))
+
+write(filename::AbstractString, args...) = open(io->write(io, args...), filename, "w")
+
+read(filename::AbstractString, args...) = open(io->read(io, args...), filename)
+read!(filename::AbstractString, a) = open(io->read!(io, a), filename)
+readstring(filename::AbstractString) = open(readstring, filename)
+readuntil(filename::AbstractString, args...) = open(io->readuntil(io, args...), filename)
+readline(filename::AbstractString) = open(readline, filename)
+readlines(filename::AbstractString) = open(readlines, filename)
+
 
 ## byte-order mark, ntoh & hton ##
 
+"""
+    ENDIAN_BOM
+
+The 32-bit byte-order-mark indicates the native byte order of the host machine.
+Little-endian machines will contain the value `0x04030201`. Big-endian machines will contain
+the value `0x01020304`.
+"""
 const ENDIAN_BOM = reinterpret(UInt32,UInt8[1:4;])[1]
 
 if ENDIAN_BOM == 0x01020304
@@ -26,107 +129,113 @@ isreadonly(s) = isreadable(s) && !iswritable(s)
 
 ## binary I/O ##
 
-# all subtypes should implement this
-write(s::IO, x::UInt8) = error(typeof(s)," does not support byte I/O")
-
 write(io::IO, x) = throw(MethodError(write, (io, x)))
-write(io::IO, xs...) = for x in xs write(io, x) end
-
-if ENDIAN_BOM == 0x01020304
-    function write(s::IO, x::Integer)
-        sz = sizeof(x)
-        for n = sz:-1:1
-            write(s, (x>>>((n-1)<<3))%UInt8)
-        end
-        sz
+function write(io::IO, xs...)
+    local written::Int = 0
+    for x in xs
+        written += write(io, x)
     end
-else
-    function write(s::IO, x::Integer)
-        sz = sizeof(x)
-        for n = 1:sz
-            write(s, (x>>>((n-1)<<3))%UInt8)
-        end
-        sz
-    end
+    return written
 end
 
-write(s::IO, x::Bool)    = write(s, UInt8(x))
-write(s::IO, x::Float16) = write(s, reinterpret(Int16,x))
-write(s::IO, x::Float32) = write(s, reinterpret(Int32,x))
-write(s::IO, x::Float64) = write(s, reinterpret(Int64,x))
+@noinline unsafe_write{T}(s::IO, p::Ref{T}, n::Integer) = unsafe_write(s, unsafe_convert(Ref{T}, p)::Ptr, n) # mark noinline to ensure ref is gc-rooted somewhere (by the caller)
+unsafe_write(s::IO, p::Ptr, n::Integer) = unsafe_write(s, convert(Ptr{UInt8}, p), convert(UInt, n))
+write{T}(s::IO, x::Ref{T}) = unsafe_write(s, x, Core.sizeof(T))
+write(s::IO, x::Int8) = write(s, reinterpret(UInt8, x))
+function write(s::IO, x::Union{Int16,UInt16,Int32,UInt32,Int64,UInt64,Int128,UInt128,Float16,Float32,Float64})
+    return write(s, Ref(x))
+end
 
-function write(s::IO, a::AbstractArray)
+write(s::IO, x::Bool) = write(s, UInt8(x))
+write(to::IO, p::Ptr) = write(to, convert(UInt, p))
+
+function write(s::IO, A::AbstractArray)
     nb = 0
-    for i = 1:length(a)
-        nb += write(s, a[i])
+    for a in A
+        nb += write(s, a)
     end
-    nb
+    return nb
 end
+
+@noinline function write(s::IO, a::Array{UInt8}) # mark noinline to ensure the array is gc-rooted somewhere (by the caller)
+    return unsafe_write(s, pointer(a), sizeof(a))
+end
+
+@noinline function write{T}(s::IO, a::Array{T}) # mark noinline to ensure the array is gc-rooted somewhere (by the caller)
+    if isbits(T)
+        return unsafe_write(s, pointer(a), sizeof(a))
+    else
+        nb = 0
+        for b in a
+            nb += write(s, b)
+        end
+        return nb
+    end
+end
+
 
 function write(s::IO, ch::Char)
     c = reinterpret(UInt32, ch)
     if c < 0x80
-        write(s, c%UInt8)
-        return 1
+        return write(s, c%UInt8)
     elseif c < 0x800
-        write(s, (( c >> 6          ) | 0xC0)%UInt8)
-        write(s, (( c        & 0x3F ) | 0x80)%UInt8)
-        return 2
+        return (write(s, (( c >> 6          ) | 0xC0)%UInt8)) +
+               (write(s, (( c        & 0x3F ) | 0x80)%UInt8))
     elseif c < 0x10000
-        write(s, (( c >> 12         ) | 0xE0)%UInt8)
-        write(s, (((c >> 6)  & 0x3F ) | 0x80)%UInt8)
-        write(s, (( c        & 0x3F ) | 0x80)%UInt8)
-        return 3
+        return (write(s, (( c >> 12         ) | 0xE0)%UInt8)) +
+               (write(s, (((c >> 6)  & 0x3F ) | 0x80)%UInt8)) +
+               (write(s, (( c        & 0x3F ) | 0x80)%UInt8))
     elseif c < 0x110000
-        write(s, (( c >> 18         ) | 0xF0)%UInt8)
-        write(s, (((c >> 12) & 0x3F ) | 0x80)%UInt8)
-        write(s, (((c >> 6)  & 0x3F ) | 0x80)%UInt8)
-        write(s, (( c        & 0x3F ) | 0x80)%UInt8)
-        return 4
+        return (write(s, (( c >> 18         ) | 0xF0)%UInt8)) +
+               (write(s, (((c >> 12) & 0x3F ) | 0x80)%UInt8)) +
+               (write(s, (((c >> 6)  & 0x3F ) | 0x80)%UInt8)) +
+               (write(s, (( c        & 0x3F ) | 0x80)%UInt8))
     else
         return write(s, '\ufffd')
     end
 end
 
-function write(s::IO, p::Ptr, n::Integer)
-    for i=1:n
-        write(s, unsafe_load(p, i))
-    end
-    n
-end
-
 function write(io::IO, s::Symbol)
     pname = unsafe_convert(Ptr{UInt8}, s)
-    write(io, pname, Int(ccall(:strlen, Csize_t, (Ptr{UInt8},), pname)))
+    return unsafe_write(io, pname, Int(ccall(:strlen, Csize_t, (Cstring,), pname)))
 end
 
-# all subtypes should implement this
-read(s::IO, ::Type{UInt8}) = error(typeof(s)," does not support byte I/O")
-
-read(s::IO, ::Type{Int8}) = reinterpret(Int8, read(s,UInt8))
-
-function read{T <: Integer}(s::IO, ::Type{T})
-    x = zero(T)
-    for n = 1:sizeof(x)
-        x |= (convert(T,read(s,UInt8))<<((n-1)<<3))
+function write(to::IO, from::IO)
+    while !eof(from)
+        write(to, readavailable(from))
     end
-    return x
+end
+
+@noinline unsafe_read{T}(s::IO, p::Ref{T}, n::Integer) = unsafe_read(s, unsafe_convert(Ref{T}, p)::Ptr, n) # mark noinline to ensure ref is gc-rooted somewhere (by the caller)
+unsafe_read(s::IO, p::Ptr, n::Integer) = unsafe_read(s, convert(Ptr{UInt8}, p), convert(UInt, n))
+read{T}(s::IO, x::Ref{T}) = (unsafe_read(s, x, Core.sizeof(T)); x)
+
+read(s::IO, ::Type{Int8}) = reinterpret(Int8, read(s, UInt8))
+function read(s::IO, T::Union{Type{Int16},Type{UInt16},Type{Int32},Type{UInt32},Type{Int64},Type{UInt64},Type{Int128},Type{UInt128},Type{Float16},Type{Float32},Type{Float64}})
+    return read(s, Ref{T}(0))[]::T
 end
 
 read(s::IO, ::Type{Bool})    = (read(s,UInt8)!=0)
-read(s::IO, ::Type{Float16}) = box(Float16,unbox(Int16,read(s,Int16)))
-read(s::IO, ::Type{Float32}) = box(Float32,unbox(Int32,read(s,Int32)))
-read(s::IO, ::Type{Float64}) = box(Float64,unbox(Int64,read(s,Int64)))
+read{T}(s::IO, ::Type{Ptr{T}}) = convert(Ptr{T}, read(s, UInt))
 
 read{T}(s::IO, t::Type{T}, d1::Int, dims::Int...) = read(s, t, tuple(d1,dims...))
 read{T}(s::IO, t::Type{T}, d1::Integer, dims::Integer...) =
-    read(s, t, convert((Int...),tuple(d1,dims...)))
+    read(s, t, convert(Tuple{Vararg{Int}},tuple(d1,dims...)))
 
-read{T}(s::IO, ::Type{T}, dims::Dims) = read!(s, Array(T, dims))
+read{T}(s::IO, ::Type{T}, dims::Dims) = read!(s, Array{T}(dims))
 
-function read!{T}(s::IO, a::Array{T})
-    for i = 1:length(a)
-        a[i] = read(s, T)
+@noinline function read!(s::IO, a::Array{UInt8}) # mark noinline to ensure the array is gc-rooted somewhere (by the caller)
+    unsafe_read(s, pointer(a), sizeof(a))
+    return a
+end
+
+@noinline function read!{T}(s::IO, a::Array{T}) # mark noinline to ensure the array is gc-rooted somewhere (by the caller)
+    if isbits(T)
+        unsafe_read(s, pointer(a), sizeof(a))
+    else
+        for i in eachindex(a)
+            a[i] = read(s, T)
+        end
     end
     return a
 end
@@ -147,14 +256,12 @@ function read(s::IO, ::Type{Char})
     end
     c += ch
     c -= Base.utf8_offset[trailing+1]
-    Char(c)
+    return Char(c)
 end
 
 function readuntil(s::IO, delim::Char)
     if delim < Char(0x80)
-        data = readuntil(s, delim%UInt8)
-        enc = byte_string_classify(data)
-        return (enc==1) ? ASCIIString(data) : UTF8String(data)
+        return String(readuntil(s, delim % UInt8))
     end
     out = IOBuffer()
     while !eof(s)
@@ -164,7 +271,7 @@ function readuntil(s::IO, delim::Char)
             break
         end
     end
-    takebuf_string(out)
+    return takebuf_string(out)
 end
 
 function readuntil{T}(s::IO, delim::T)
@@ -176,7 +283,7 @@ function readuntil{T}(s::IO, delim::T)
             break
         end
     end
-    out
+    return out
 end
 
 # based on code by Glen Hertz
@@ -189,7 +296,7 @@ function readuntil(s::IO, t::AbstractString)
         warn("readuntil(IO,AbstractString) will perform poorly with a long string")
     end
     out = IOBuffer()
-    m = Array(Char, l)  # last part of stream to match
+    m = Array{Char}(l)  # last part of stream to match
     t = collect(t)
     i = 0
     while !eof(s)
@@ -212,9 +319,9 @@ function readuntil(s::IO, t::AbstractString)
     return takebuf_string(out)
 end
 
-
+readline() = readline(STDIN)
 readline(s::IO) = readuntil(s, '\n')
-readchomp(x) = chomp!(readall(x))
+readchomp(x) = chomp!(readstring(x))
 
 # read up to nb bytes into nb, returning # bytes read
 function readbytes!(s::IO, b::AbstractArray{UInt8}, nb=length(b))
@@ -236,17 +343,15 @@ function readbytes!(s::IO, b::AbstractArray{UInt8}, nb=length(b))
 end
 
 # read up to nb bytes from s, returning a Vector{UInt8} of bytes read.
-function readbytes(s::IO, nb=typemax(Int))
-    b = Array(UInt8, nb == typemax(Int) ? 1024 : nb)
+function read(s::IO, nb=typemax(Int))
+    # Let readbytes! grow the array progressively by default
+    # instead of taking of risk of over-allocating
+    b = Array{UInt8}(nb == typemax(Int) ? 1024 : nb)
     nr = readbytes!(s, b, nb)
-    resize!(b, nr)
+    return resize!(b, nr)
 end
 
-function readall(s::IO)
-    b = readbytes(s)
-    return is_valid_ascii(b) ? ASCIIString(b) : UTF8String(b)
-end
-readall(filename::AbstractString) = open(readall, filename)
+readstring(s::IO) = String(read(s))
 
 ## high-level iterator interfaces ##
 
@@ -257,6 +362,10 @@ type EachLine
     EachLine(stream, ondone) = new(stream, ondone)
 end
 eachline(stream::IO) = EachLine(stream)
+function eachline(filename::AbstractString)
+    s = open(filename)
+    EachLine(s, ()->close(s))
+end
 
 start(itr::EachLine) = nothing
 function done(itr::EachLine, nada)
@@ -267,14 +376,15 @@ function done(itr::EachLine, nada)
     true
 end
 next(itr::EachLine, nada) = (readline(itr.stream), nothing)
-eltype(::Type{EachLine}) = ByteString
+eltype(::Type{EachLine}) = String
 
 readlines(s=STDIN) = collect(eachline(s))
 
-# IOStream Marking
+iteratorsize(::Type{EachLine}) = SizeUnknown()
 
+# IOStream Marking
 # Note that these functions expect that io.mark exists for
-# the concrete IO type.  This may not be true for IO types
+# the concrete IO type. This may not be true for IO types
 # not in base.
 
 function mark(io::IO)
@@ -296,3 +406,7 @@ function reset{T<:IO}(io::T)
 end
 
 ismarked(io::IO) = io.mark >= 0
+
+# Make sure all IO streams support flush, even if only as a no-op,
+# to make it easier to write generic I/O code.
+flush(io::IO) = nothing

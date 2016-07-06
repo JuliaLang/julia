@@ -1,4 +1,6 @@
-type Set{T}
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
+type Set{T} <: AbstractSet{T}
     dict::Dict{T,Void}
 
     Set() = new(Dict{T,Void}())
@@ -9,6 +11,7 @@ Set(itr) = Set{eltype(itr)}(itr)
 
 eltype{T}(::Type{Set{T}}) = T
 similar{T}(s::Set{T}) = Set{T}()
+similar(s::Set, T::Type) = Set{T}()
 
 function show(io::IO, s::Set)
     print(io,"Set")
@@ -26,8 +29,8 @@ length(s::Set)  = length(s.dict)
 in(x, s::Set) = haskey(s.dict, x)
 push!(s::Set, x) = (s.dict[x] = nothing; s)
 pop!(s::Set, x) = (pop!(s.dict, x); x)
-pop!(s::Set, x, deflt) = pop!(s.dict, x, deflt) == deflt ? deflt : x
-pop!(s::Set) = (val = s.dict.keys[start(s.dict)]; delete!(s.dict, val); val)
+pop!(s::Set, x, deflt) = x in s ? pop!(s, x) : deflt
+pop!(s::Set) = (idx = start(s.dict); val = s.dict.keys[idx]; _delete!(s.dict, idx); val)
 delete!(s::Set, x) = (delete!(s.dict, x); s)
 
 copy(s::Set) = union!(similar(s), s)
@@ -86,7 +89,7 @@ end
 setdiff!(s::Set, xs) = (for x=xs; delete!(s,x); end; s)
 
 ==(l::Set, r::Set) = (length(l) == length(r)) && (l <= r)
-< (l::Set, r::Set) = (length(l) < length(r)) && (l <= r)
+<( l::Set, r::Set) = (length(l) < length(r)) && (l <= r)
 <=(l::Set, r::Set) = issubset(l, r)
 
 function issubset(l, r)
@@ -101,8 +104,14 @@ const ⊆ = issubset
 ⊊(l::Set, r::Set) = <(l, r)
 ⊈(l::Set, r::Set) = !⊆(l, r)
 
+"""
+    unique(itr)
+
+Returns an array containing one value from `itr` for each unique value,
+as determined by `isequal`.
+"""
 function unique(C)
-    out = Array(eltype(C),0)
+    out = Vector{eltype(C)}()
     seen = Set{eltype(C)}()
     for x in C
         if !in(x, seen)
@@ -112,6 +121,46 @@ function unique(C)
     end
     out
 end
+
+"""
+    unique(f, itr)
+
+Returns an array containing one value from `itr` for each unique value produced by `f`
+applied to elements of `itr`.
+"""
+function unique(f::Callable, C)
+    out = Vector{eltype(C)}()
+    seen = Set()
+    for x in C
+        y = f(x)
+        if !in(y, seen)
+            push!(seen, y)
+            push!(out, x)
+        end
+    end
+    out
+end
+
+"""
+    allunique(itr)
+
+Return `true` if all values from `itr` are distinct when compared with `isequal`.
+"""
+function allunique(C)
+    seen = Set{eltype(C)}()
+    for x in C
+        if in(x, seen)
+            return false
+        else
+            push!(seen, x)
+        end
+    end
+    true
+end
+
+allunique(::Set) = true
+
+allunique{T}(r::Range{T}) = (step(r) != zero(T)) || (length(r) <= one(T))
 
 function filter(f, s::Set)
     u = similar(s)
@@ -129,4 +178,13 @@ function filter!(f, s::Set)
         end
     end
     return s
+end
+
+const hashs_seed = UInt === UInt64 ? 0x852ada37cfe8e0ce : 0xcfe8e0ce
+function hash(s::Set, h::UInt)
+    h = hash(hashs_seed, h)
+    for x in s
+        h $= hash(x)
+    end
+    return h
 end

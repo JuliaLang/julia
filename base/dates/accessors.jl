@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 # Convert # of Rata Die days to proleptic Gregorian calendar y,m,d,w
 # Reference: http://mysite.verizon.net/aesir_research/date/date0.htm
 function yearmonthday(days)
@@ -52,6 +54,7 @@ second(dt::DateTime) = mod(fld(value(dt),1000),60)
 millisecond(dt::DateTime) = mod(value(dt),1000)
 
 dayofmonth(dt::TimeType) = day(dt)
+
 yearmonth(dt::TimeType) = yearmonth(days(dt))
 monthday(dt::TimeType) = monthday(days(dt))
 yearmonthday(dt::TimeType) = yearmonthday(days(dt))
@@ -69,3 +72,68 @@ yearmonthday(dt::TimeType) = yearmonthday(days(dt))
 @vectorize_1arg TimeType yearmonth
 @vectorize_1arg TimeType monthday
 @vectorize_1arg TimeType yearmonthday
+
+
+# Documentation for exported accessors
+for func in (:year, :month)
+    name = string(func)
+    @eval begin
+        @doc """
+            $($name)(dt::TimeType) -> Int64
+
+        The $($name) of a `Date` or `DateTime` as an `Int64`.
+        """ $func(dt::TimeType)
+    end
+end
+
+"""
+    week(dt::TimeType) -> Int64
+
+Return the [ISO week date](https://en.wikipedia.org/wiki/ISO_week_date) of a `Date` or
+`DateTime` as an `Int64`. Note that the first week of a year is the week that contains the
+first Thursday of the year which can result in dates prior to January 4th being in the last
+week of the previous year. For example `week(Date(2005,1,1))` is the 53rd week of 2004.
+"""
+week(dt::TimeType)
+
+for func in (:day, :dayofmonth)
+    name = string(func)
+    @eval begin
+        @doc """
+            $($name)(dt::TimeType) -> Int64
+
+        The day of month of a `Date` or `DateTime` as an `Int64`.
+        """ $func(dt::TimeType)
+    end
+end
+
+"""
+    hour(dt::DateTime) -> Int64
+
+The hour of day of a `DateTime` as an `Int64`.
+"""
+hour(dt::DateTime)
+
+for func in (:minute, :second, :millisecond)
+    name = string(func)
+    @eval begin
+        @doc """
+            $($name)(dt::DateTime) -> Int64
+
+        The $($name) of a `DateTime` as an `Int64`.
+        """ $func(dt::DateTime)
+    end
+end
+
+for parts in (["year", "month"], ["month", "day"], ["year", "month", "day"])
+    name = join(parts)
+    func = Symbol(name)
+    @eval begin
+        @doc """
+            $($name)(dt::TimeType) -> ($(join(repeated(Int64, length($parts)), ", ")))
+
+        Simultaneously return the $(join($parts, ", ", " and ")) parts of a `Date` or
+        `DateTime`.
+        """ $func(dt::TimeType)
+    end
+end

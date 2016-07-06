@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 dir = joinpath(JULIA_HOME, Base.DOCDIR, "examples")
 
 include(joinpath(dir, "bubblesort.jl"))
@@ -34,17 +36,38 @@ include(joinpath(dir, "queens.jl"))
 # Different cluster managers do not play well together. Since
 # the test infrastructure already uses LocalManager, we will test the simple
 # cluster manager example through a new Julia session.
-@unix_only begin
+if is_unix()
     script = joinpath(dir, "clustermanager/simple/test_simple.jl")
-    cmd = `$(joinpath(JULIA_HOME,Base.julia_exename())) $script`
-
-    (strm, proc) = open(cmd)
-    wait(proc)
-    if !success(proc) && ccall(:jl_running_on_valgrind,Cint,()) == 0
-        println(readall(strm))
+    cmd = `$(Base.julia_cmd()) $script`
+    if !success(pipeline(cmd; stdout=STDOUT, stderr=STDERR)) && ccall(:jl_running_on_valgrind,Cint,()) == 0
         error("UnixDomainCM failed test, cmd : $cmd")
     end
 end
+
+dc_path = joinpath(dir, "dictchannel.jl")
+myid() == 1 || include(dc_path)
+
+# Run the remote on pid 1, since runtests may terminate workers
+# at any time depending on memory usage
+remotecall_fetch(1, dc_path) do f
+    include(f)
+    nothing
+end
+dc=RemoteChannel(()->DictChannel(), 1)
+@test typeof(dc) == RemoteChannel{DictChannel}
+
+@test isready(dc) == false
+put!(dc, 1, 2)
+put!(dc, "Hello", "World")
+@test isready(dc) == true
+@test isready(dc, 1) == true
+@test isready(dc, "Hello") == true
+@test isready(dc, 2) == false
+@test fetch(dc, 1) == 2
+@test fetch(dc, "Hello") == "World"
+@test take!(dc, 1) == 2
+@test isready(dc, 1) == false
+
 
 # At least make sure code loads
 include(joinpath(dir, "wordcount.jl"))

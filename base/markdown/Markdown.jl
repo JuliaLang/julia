@@ -1,8 +1,9 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 module Markdown
 
-import Base: writemime
-
-typealias String AbstractString
+import Base: show, ==
+import Core: @doc_str
 
 include("parse/config.jl")
 include("parse/util.jl")
@@ -16,22 +17,23 @@ include("Julia/Julia.jl")
 include("render/plain.jl")
 include("render/html.jl")
 include("render/latex.jl")
+include("render/rst.jl")
 
 include("render/terminal/render.jl")
 
 export readme, license, @md_str, @doc_str
 
-parse(markdown::String; flavor = julia) = parse(IOBuffer(markdown), flavor = flavor)
-parse_file(file::String; flavor = julia) = parse(readall(file), flavor = flavor)
+parse(markdown::AbstractString; flavor = julia) = parse(IOBuffer(markdown), flavor = flavor)
+parse_file(file::AbstractString; flavor = julia) = parse(readstring(file), flavor = flavor)
 
-readme(pkg::String; flavor = github) = parse_file(Pkg.dir(pkg, "README.md"), flavor = flavor)
+readme(pkg::AbstractString; flavor = github) = parse_file(Pkg.dir(pkg, "README.md"), flavor = flavor)
 readme(pkg::Module; flavor = github) = readme(string(pkg), flavor = flavor)
 
-license(pkg::String; flavor = github) = parse_file(Pkg.dir(pkg, "LICENSE.md"), flavor = flavor)
+license(pkg::AbstractString; flavor = github) = parse_file(Pkg.dir(pkg, "LICENSE.md"), flavor = flavor)
 license(pkg::Module; flavor = github) = license(string(pkg), flavor = flavor)
 
 function mdexpr(s, flavor = :julia)
-    md = parse(s, flavor = symbol(flavor))
+    md = parse(s, flavor = Symbol(flavor))
     esc(toexpr(md))
 end
 
@@ -49,8 +51,11 @@ macro md_str(s, t...)
     mdexpr(s, t...)
 end
 
-macro doc_str(s, t...)
-    docexpr(s, t...)
+doc_str(md, file, mod) = (md.meta[:path] = file; md.meta[:module] = mod; md)
+doc_str(md::AbstractString, file, mod) = doc_str(parse(md), file, mod)
+
+macro doc_str(s::AbstractString, t...)
+    :($(doc_str)($(mdexpr(s, t...)), $(Base).@__FILE__, $(current_module)()))
 end
 
 function Base.display(d::Base.REPL.REPLDisplay, md::Vector{MD})

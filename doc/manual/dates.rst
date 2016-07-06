@@ -1,6 +1,6 @@
 .. _man-dates:
 
-.. currentmodule:: Base.Dates
+.. currentmodule:: Dates
 
 *************************************
  Date and DateTime
@@ -8,9 +8,9 @@
 
 The :mod:`Dates` module provides two types for working with dates: :class:`Date` and :class:`DateTime`, representing day and millisecond precision, respectively; both are subtypes of the abstract :class:`TimeType`. The motivation for distinct types is simple: some operations are much simpler, both in terms of code and mental reasoning, when the complexities of greater precision don't have to be dealt with. For example, since the :class:`Date` type only resolves to the precision of a single date (i.e. no hours, minutes, or seconds), normal considerations for time zones, daylight savings/summer time, and leap seconds are unnecessary and avoided.
 
-Both :class:`Date` and :class:`DateTime` are basically immutable ``Int64`` wrappers. The single ``instant`` field of either type is actually a ``UTInstant{P}`` type, which represents a continuously increasing machine timeline based on the UT second [1]_. The :class:`DateTime` type is *timezone-unaware* (in Python parlance) or is analogous to a *LocalDateTime* in Java 8. Additional time zone functionality can be added through the `Timezones.jl package <https://github.com/quinnj/Timezones.jl/>`_, which compiles the `Olsen Time Zone Database <http://www.iana.org/time-zones>`_. Both :class:`Date` and :class:`DateTime` are based on the ISO 8601 standard, which follows the proleptic Gregorian calendar. One note is that the ISO 8601 standard is particular about BC/BCE dates. In general, the last day of the BC/BCE era, 1-12-31 BC/BCE, was followed by 1-1-1 AD/CE, thus no year zero exists. The ISO standard, however, states that 1 BC/BCE is year zero, so ``0000-12-31`` is the day before ``0001-01-01``, and year ``-0001`` (yes, negative one for the year) is 2 BC/BCE, year ``-0002`` is 3 BC/BCE, etc.
+Both :class:`Date` and :class:`DateTime` are basically immutable ``Int64`` wrappers. The single ``instant`` field of either type is actually a ``UTInstant{P}`` type, which represents a continuously increasing machine timeline based on the UT second [1]_. The :class:`DateTime` type is *timezone-unaware* (in Python parlance) or is analogous to a *LocalDateTime* in Java 8. Additional time zone functionality can be added through the `TimeZones.jl package <https://github.com/JuliaTime/TimeZones.jl/>`_, which compiles the `IANA time zone database <http://www.iana.org/time-zones>`_. Both :class:`Date` and :class:`DateTime` are based on the ISO 8601 standard, which follows the proleptic Gregorian calendar. One note is that the ISO 8601 standard is particular about BC/BCE dates. In general, the last day of the BC/BCE era, 1-12-31 BC/BCE, was followed by 1-1-1 AD/CE, thus no year zero exists. The ISO standard, however, states that 1 BC/BCE is year zero, so ``0000-12-31`` is the day before ``0001-01-01``, and year ``-0001`` (yes, negative one for the year) is 2 BC/BCE, year ``-0002`` is 3 BC/BCE, etc.
 
-.. [1] The notion of the UT second is actually quite fundamental. There are basically two different notions of time generally accepted, one based on the physical rotation of the earth (one full rotation = 1 day), the other based on the SI second (a fixed, constant value). These are radically different! Think about it, a "UT second", as defined relative to the rotation of the earth, may have a different absolute length depending on the day! Anyway, the fact that :class:`Date` and :class:`DateTime` are based on UT seconds is a simplifying, yet honest assumption so that things like leap seconds and all their complexity can be avoided. This basis of time is formally called `UT <http://en.wikipedia.org/wiki/Universal_Time>`_ or UT1. Basing types on the UT second basically means that every minute has 60 seconds and every day has 24 hours and leads to more natural calculations when working with calendar dates.
+.. [1] The notion of the UT second is actually quite fundamental. There are basically two different notions of time generally accepted, one based on the physical rotation of the earth (one full rotation = 1 day), the other based on the SI second (a fixed, constant value). These are radically different! Think about it, a "UT second", as defined relative to the rotation of the earth, may have a different absolute length depending on the day! Anyway, the fact that :class:`Date` and :class:`DateTime` are based on UT seconds is a simplifying, yet honest assumption so that things like leap seconds and all their complexity can be avoided. This basis of time is formally called `UT <https://en.wikipedia.org/wiki/Universal_Time>`_ or UT1. Basing types on the UT second basically means that every minute has 60 seconds and every day has 24 hours and leads to more natural calculations when working with calendar dates.
 
 Constructors
 ------------
@@ -58,11 +58,12 @@ Delimited slots are marked by specifying the delimiter the parser should expect 
 
 Fixed-width slots are specified by repeating the period character the number of times corresponding to the width with no delimiter between characters. So ``"yyyymmdd"`` would correspond to a date string like ``"20140716"``. The parser distinguishes a fixed-width slot by the absence of a delimiter, noting the transition ``"yyyymm"`` from one period character to the next.
 
-Support for text-form month parsing is also supported through the ``u`` and ``U`` characters, for abbreviated and full-length month names, respectively. By default, only English month names are supported, so ``u`` corresponds to "Jan", "Feb", "Mar", etc. And ``U`` corresponds to "January", "February", "March", etc. Similar to other name=>value mapping functions :func:`dayname` and :func:`monthname`, custom locales can be loaded by passing in the ``locale=>Dict{UTF8String,Int}`` mapping to the :const:`MONTHTOVALUEABBR` and :const:`MONTHTOVALUE` dicts for abbreviated and full-name month names, respectively.
+Support for text-form month parsing is also supported through the ``u`` and ``U`` characters, for abbreviated and full-length month names, respectively. By default, only English month names are supported, so ``u`` corresponds to "Jan", "Feb", "Mar", etc. And ``U`` corresponds to "January", "February", "March", etc. Similar to other name=>value mapping functions :func:`dayname` and :func:`monthname`, custom locales can be loaded by passing in the ``locale=>Dict{String,Int}`` mapping to the :const:`MONTHTOVALUEABBR` and :const:`MONTHTOVALUE` dicts for abbreviated and full-name month names, respectively.
 
 One note on parsing performance: using the ``Date(date_string,format_string)`` function is fine if only called a few times. If there are many similarly formatted date strings to parse however, it is much more efficient to first create a :class:`Dates.DateFormat`, and pass it instead of a raw format string.
 
 ::
+
   julia> df = Dates.DateFormat("y-m-d");
 
   julia> dt = Date("2015-01-01",df)
@@ -232,7 +233,7 @@ The :func:`dayname` and :func:`monthname` methods can also take an optional ``lo
   julia> Dates.dayname(t;locale="french")
   "Vendredi"
 
-Similarly for the :func:`monthname` function, a mapping of ``locale=>Dict{Int,UTF8String}`` should be loaded in :const:`VALUETOMONTH`.
+Similarly for the :func:`monthname` function, a mapping of ``locale=>Dict{Int,String}`` should be loaded in :const:`VALUETOMONTH`.
 
 TimeType-Period Arithmetic
 --------------------------

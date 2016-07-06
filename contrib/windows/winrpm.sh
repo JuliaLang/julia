@@ -1,14 +1,20 @@
 #!/bin/sh
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 # build-time mini version of WinRPM, usage:
-# ./winrpm.sh http://download.opensuse.org/repositories/windows:/mingw:/win64/openSUSE_13.1/ mingw64-zlib1
+# ./winrpm.sh http://download.opensuse.org/repositories/windows:/mingw:/win64/openSUSE_13.2/ mingw64-zlib1
 # depends on curl, xmllint, gunzip, sort -V, sha256sum, and p7zip
 
 set -e
 url=$1
 toinstall=$2
-# run in dist-extras
-mkdir -p $(dirname "$0")/../../dist-extras
-cd $(dirname "$0")/../../dist-extras
+
+for i in curl xmllint gunzip sort sha256sum 7z; do
+  if [ -z "$(which $i 2>/dev/null)" ]; then
+    echo "error: this script requires having $i installed" >&2
+    exit 1
+  fi
+done
 
 # there is a curl --retry flag but it wasn't working here for some reason
 retry_curl() {
@@ -16,7 +22,7 @@ retry_curl() {
     curl -fLsS $1 && return
     #sleep 2
   done
-  echo "failed to download $1" >&2
+  echo "error: failed to download $1" >&2
   exit 1
 }
 
@@ -73,22 +79,74 @@ rpm_select() {
     [@ver='$maxver'][@rel='$maxrel']][1]" -
 }
 
+for i in $toinstall; do
+  # fail if no available candidates for requested packages
+  if [ -z "$(rpm_select $i)" ]; then
+    exit 1
+  fi
+done
+
+# outputs package and dll names, e.g. mingw64(zlib1.dll)
+rpm_requires() {
+  for i in $(rpm_select $1 | \
+      $xp "/package/format/requires/entry/@name" - 2>/dev/null); do
+    eval $i
+    echo $name
+  done
+}
+
+# outputs package name, warns if multiple providers with different names
+rpm_provides() {
+  providers=$(echo $primary | $xp "//*[$loc'package'][./*[$loc'format'] \
+    /*[$loc'provides']/*[$loc'entry'][@name='$1']]/*[$loc'name']" - | \
+    sed -e 's|<name>||g' -e 's|</name>|\n|g' | sort -u)
+  if [ $(echo $providers | wc -w) -gt 1 ]; then
+    echo "warning: found multiple providers $providers for $1, adding all" >&2
+  fi
+  echo $providers
+}
+
+newpkgs=$toinstall
+allrequires=""
+while [ -n "$newpkgs" ]; do
+  newrequires=""
+  for i in $newpkgs; do
+    for j in $(rpm_requires $i); do
+      # leading and trailing spaces to ensure word match
+      case " $allrequires $newrequires " in
+        *" $j "*) # already on list
+          ;;
+        *)
+          newrequires="$newrequires $j";;
+      esac
+    done
+  done
+  allrequires="$allrequires $newrequires"
+  newpkgs=""
+  for i in $newrequires; do
+    provides="$(rpm_provides $i)"
+    case " $toinstall $newpkgs " in
+      *" $provides "*) # already on list
+        ;;
+      *)
+        newpkgs="$newpkgs $provides";;
+    esac
+  done
+  toinstall="$toinstall $newpkgs"
+done
+
 mkdir -p noarch
 for i in $toinstall; do
   pkgi=$(rpm_select $i)
-  # fail if no available candidates for requested packages
-  if [ -z "$pkgi" ]; then
-    exit 1
-  fi
   checksum=$(echo $pkgi | $xp "/package/checksum/text()" -)
   eval $(echo $pkgi | $xp "/package/location/@href" -)
   echo "downloading $href"
-  ../deps/jldownload $href $url/$href
+  $(dirname "$0")/../../deps/tools/jldownload $href $url/$href
   echo "$checksum *$href" | sha256sum -c
   7z x -y $href
   cpiofile=$(basename $href | sed 's/.rpm$/.cpio/')
   rm $href
-  7z e -y $cpiofile
+  7z x -y $cpiofile
   rm $cpiofile
 done
 rmdir --ignore-fail-on-non-empty noarch

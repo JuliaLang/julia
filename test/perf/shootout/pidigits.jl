@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 function pidigits(N::Int, printOut::Bool)
     """
     See http://shootout.alioth.debian.org/u64q/performance.php?test=pidigits#about

@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 using Base.Test
 
 include("../perfutil.jl")
@@ -136,11 +138,11 @@ end
 
 ## printfd ##
 
-@unix_only begin
+if is_unix()
     function printfd(n)
-        open("/dev/null","w") do io
+        open("/dev/null", "w") do io
             for i = 1:n
-                @printf(io,"%d %d\n",i,i+1)
+                @printf(io, "%d %d\n", i, i + 1)
             end
         end
     end

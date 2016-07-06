@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 module PkgToMaxSumInterface
 
 using ...Types, ...Query, ..VersionWeights
@@ -10,10 +12,10 @@ export Interface, compute_output_dict, greedysolver,
 type Interface
     # requirements and dependencies, in external representation
     reqs::Requires
-    deps::Dict{ByteString,Dict{VersionNumber,Available}}
+    deps::Dict{String,Dict{VersionNumber,Available}}
 
     # packages list
-    pkgs::Vector{ByteString}
+    pkgs::Vector{String}
 
     # number of packages
     np::Int
@@ -22,7 +24,7 @@ type Interface
     spp::Vector{Int}
 
     # pakage dict: associates an index to each package name
-    pdict::Dict{ByteString,Int}
+    pdict::Dict{String,Int}
 
     # package versions: for each package, keep the list of the
     #                   possible version numbers; this defines a
@@ -40,18 +42,17 @@ type Interface
     #                   higher the weight, the more favored the version)
     vweight::Vector{Vector{VersionWeight}}
 
-    function Interface(reqs::Requires, deps::Dict{ByteString,Dict{VersionNumber,Available}})
-
+    function Interface(reqs::Requires, deps::Dict{String,Dict{VersionNumber,Available}})
         # generate pkgs
-        pkgs = sort!(ByteString[Set{ByteString}(keys(deps))...])
+        pkgs = sort!(String[Set{String}(keys(deps))...])
 
         np = length(pkgs)
 
         # generate pdict
-        pdict = (ByteString=>Int)[ pkgs[i] => i for i = 1:np ]
+        pdict = Dict{String,Int}(pkgs[i] => i for i = 1:np)
 
         # generate spp and pvers
-        spp = Array(Int, np)
+        spp = Array{Int}(np)
 
         pvers = [ VersionNumber[] for i = 1:np ]
 
@@ -81,11 +82,11 @@ type Interface
         end
 
         ## generate wveights:
-        vweight = Array(Vector{VersionWeight}, np)
+        vweight = Array{Vector{VersionWeight}}(np)
         for p0 = 1:np
             pvers0 = pvers[p0]
             spp0 = spp[p0]
-            vweight0 = vweight[p0] = Array(VersionWeight, spp0)
+            vweight0 = vweight[p0] = Array{VersionWeight}(spp0)
             for v0 = 1:spp0-1
                 vweight0[v0] = VersionWeight(pvers0[v0])
             end
@@ -98,13 +99,12 @@ end
 
 # The output format is a Dict which associates a VersionNumber to each installed package name
 function compute_output_dict(sol::Vector{Int}, interface::Interface)
-
     pkgs = interface.pkgs
     np = interface.np
     pvers = interface.pvers
     spp = interface.spp
 
-    want = Dict{ByteString,VersionNumber}()
+    want = Dict{String,VersionNumber}()
     for p0 = 1:np
         p = pkgs[p0]
         s = sol[p0]
@@ -146,11 +146,11 @@ function greedysolver(interface::Interface)
 
     # we start from required packages and explore the graph
     # following dependencies
-    staged = Set{ByteString}(keys(reqs))
+    staged = Set{String}(keys(reqs))
     seen = copy(staged)
 
     while !isempty(staged)
-        staged_next = Set{ByteString}()
+        staged_next = Set{String}()
         for p in staged
             p0 = pdict[p]
             @assert sol[p0] < spp[p0]
@@ -194,7 +194,6 @@ end
 # verifies that the solution fulfills all hard constraints
 # (requirements and dependencies)
 function verify_solution(sol::Vector{Int}, interface::Interface)
-
     reqs = interface.reqs
     deps = interface.deps
     spp = interface.spp
@@ -242,7 +241,7 @@ function enforce_optimality!(sol::Vector{Int}, interface::Interface)
 
     # prepare some useful structures
     # pdeps[p0][v0] has all dependencies of package p0 version v0
-    pdeps = [ Array(Requires, spp[p0]-1) for p0 = 1:np ]
+    pdeps = [ Array{Requires}(spp[p0]-1) for p0 = 1:np ]
     # prevdeps[p1][p0][v0] is the VersionSet of package p1 which package p0 version v0
     # depends upon
     prevdeps = [ Dict{Int,Dict{Int,VersionSet}}() for p0 = 1:np ]
@@ -300,7 +299,7 @@ function enforce_optimality!(sol::Vector{Int}, interface::Interface)
             # dependency of another package
             for (p1,d) in prevdeps[p0]
                 vs = get(d, sol[p1], nothing)
-                if vs == nothing
+                if vs === nothing
                     continue
                 end
                 vn = pvers[p0][s0+1]

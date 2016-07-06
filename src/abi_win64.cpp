@@ -37,39 +37,33 @@
 //
 //===----------------------------------------------------------------------===//
 
+#include "abi_x86_vec.h"
 
 struct AbiState {
 };
 
 const AbiState default_abi_state = {};
 
-
-bool use_sret(AbiState *state, jl_value_t *ty)
+bool use_sret(AbiState *state, jl_datatype_t *dt)
 {
-    if(!jl_is_datatype(ty) || jl_is_abstracttype(ty) || jl_is_cpointer_type(ty) || jl_is_array_type(ty))
-        return false;
-    size_t size = jl_datatype_size(ty);
-    if (size <= 8)
+    size_t size = jl_datatype_size(dt);
+    if (size <= 8 || is_native_simd_type(dt))
         return false;
     return true;
 }
 
-void needPassByRef(AbiState *state, jl_value_t *ty, bool *byRef, bool *inReg, bool *byRefAttr)
+void needPassByRef(AbiState *state, jl_datatype_t *dt, bool *byRef, bool *inReg)
 {
-    if(!jl_is_datatype(ty) || jl_is_abstracttype(ty) || jl_is_cpointer_type(ty) || jl_is_array_type(ty))
-        return;
-    size_t size = jl_datatype_size(ty);
+    size_t size = jl_datatype_size(dt);
     if (size > 8)
-        *byRefAttr = *byRef = true;
+        *byRef = true;
 }
 
-Type *preferred_llvm_type(jl_value_t *ty, bool isret)
+Type *preferred_llvm_type(jl_datatype_t *dt, bool isret)
 {
-    if (!jl_is_datatype(ty) || jl_is_abstracttype(ty) || jl_is_cpointer_type(ty) || jl_is_array_type(ty))
-        return NULL;
-    size_t size = jl_datatype_size(ty);
-    if (size > 0 && size <= 8 && !jl_is_bitstype(ty))
-        return Type::getIntNTy(getGlobalContext(), size*8);
+    size_t size = jl_datatype_size(dt);
+    if (size > 0 && size <= 8 && !jl_is_bitstype(dt))
+        return Type::getIntNTy(jl_LLVMContext, size*8);
     return NULL;
 }
 

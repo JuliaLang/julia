@@ -53,24 +53,12 @@ and can be passed around like any value:
     julia> g(2,3)
     5
 
-There are two other ways that functions can be applied: using special
-operator syntax for certain function names (see `Operators Are
-Functions <#operators-are-functions>`_ below), or with the :func:`apply`
-function:
+As with variables, Unicode can also be used for function names:
 
 .. doctest::
 
-    julia> apply(f,2,3)
-    5
-
-:func:`apply` applies its first argument — a function object —
-to its remaining arguments.
-
-As with variables, Unicode can also be used for function names::
-
     julia> ∑(x,y) = x + y
     ∑ (generic function with 1 method)
-
 
 Argument Passing Behavior
 -------------------------
@@ -148,10 +136,10 @@ Operators Are Functions
 -----------------------
 
 In Julia, most operators are just functions with support for special
-syntax. The exceptions are operators with special evaluation semantics
+syntax. (The exceptions are operators with special evaluation semantics
 like ``&&`` and ``||``. These operators cannot be functions since
 :ref:`short-circuit evaluation <man-short-circuit-evaluation>` requires that
-their operands are not evaluated before evaluation of the operator.
+their operands are not evaluated before evaluation of the operator.)
 Accordingly, you can also apply them using parenthesized argument lists,
 just as you would any other function:
 
@@ -195,6 +183,7 @@ Expression          Calls
 ``1:n``             :func:`colon`
 ``A[i]``            :func:`getindex`
 ``A[i]=x``          :func:`setindex!`
+``A(x)``            :func:`call`
 =================== ==================
 
 These functions are included in the ``Base.Operators`` module even
@@ -206,8 +195,8 @@ Anonymous Functions
 -------------------
 
 Functions in Julia are `first-class objects
-<http://en.wikipedia.org/wiki/First-class_citizen>`_: they can be assigned to
-variables, called using the standard function call syntax from the
+<https://en.wikipedia.org/wiki/First-class_citizen>`_: they can be assigned to
+variables, and called using the standard function call syntax from the
 variable they have been assigned to. They can be used as arguments, and
 they can be returned as values. They can also be created anonymously,
 without being given a name, using either of these syntaxes:
@@ -215,16 +204,19 @@ without being given a name, using either of these syntaxes:
 .. doctest::
 
     julia> x -> x^2 + 2x - 1
-    (anonymous function)
+    #1 (generic function with 1 method)
 
     julia> function (x)
                x^2 + 2x - 1
            end
-    (anonymous function)
+    #2 (generic function with 1 method)
 
-This creates an unnamed function taking one argument *x* and returning the
-value of the polynomial *x*\ ^2 + 2\ *x* - 1 at that value. The primary
-use for anonymous functions is passing them to functions which take
+This creates a function taking one argument *x* and returning the
+value of the polynomial *x*\ ^2 + 2\ *x* - 1 at that value.
+Notice that the result is a generic function, but with a
+compiler-generated name based on consecutive numbering.
+
+The primary use for anonymous functions is passing them to functions which take
 other functions as arguments. A classic example is :func:`map`,
 which applies a function to each value of an array and returns a new
 array containing the resulting values:
@@ -304,6 +296,8 @@ You can also return multiple values via an explicit usage of the
 
 This has the exact same effect as the previous definition of ``foo``.
 
+.. _man-varargs-functions:
+
 Varargs Functions
 -----------------
 
@@ -338,6 +332,8 @@ the zero or more values passed to ``bar`` after its first two arguments:
 
 In all these cases, ``x`` is bound to a tuple of the trailing values
 passed to ``bar``.
+
+It is possible to constrain the number of values passed as a variable argument; this will be discussed later in :ref:`man-vararg-fixedlen`.
 
 On the flip side, it is often handy to "splice" the values contained in
 an iterable collection into a function call as individual arguments. To
@@ -393,9 +389,11 @@ be a tuple:
     (1,2,(3,4))
 
 Also, the function that arguments are spliced into need not be a varargs
-function (although it often is)::
+function (although it often is):
 
-    baz(a,b) = a + b
+.. doctest::
+
+    julia> baz(a,b) = a + b;
 
     julia> args = [1,2]
     2-element Array{Int64,1}:
@@ -412,7 +410,10 @@ function (although it often is)::
      3
 
     julia> baz(args...)
-    no method baz(Int64,Int64,Int64)
+    ERROR: MethodError: no method matching baz(::Int64, ::Int64, ::Int64)
+    Closest candidates are:
+      baz(::Any, ::Any)
+    ...
 
 As you can see, if the wrong number of elements are in the spliced
 container, then the function call will fail, just as it would if too
@@ -431,8 +432,8 @@ expressed concisely as::
         ###
     end
 
-With this definition, the function can be called with either one or two
-arguments, and ``10`` is automatically passed when a second argument is not
+With this definition, the function can be called with either two or three
+arguments, and ``10`` is automatically passed when a third argument is not
 specified:
 
 .. doctest::
@@ -448,7 +449,7 @@ specified:
 
 Optional arguments are actually just a convenient syntax for writing
 multiple method definitions with different numbers of arguments
-(see :ref:`man-methods`).
+(see :ref:`man-note-on-optional-and-keyword-arguments`).
 
 
 Keyword Arguments
@@ -485,25 +486,32 @@ Keyword argument default values are evaluated only when necessary
 left-to-right order. Therefore default expressions may refer to
 prior keyword arguments.
 
-Extra keyword arguments can be collected using ``...``, as in varargs
-functions::
+The types of keyword arguments can be made explicit as follows::
 
-    function f(x; y=0, args...)
+    function f(;x::Int64=1)
         ###
     end
 
-Inside ``f``, ``args`` will be a collection of ``(key,value)`` tuples,
+Extra keyword arguments can be collected using ``...``, as in varargs
+functions::
+
+    function f(x; y=0, kwargs...)
+        ###
+    end
+
+Inside ``f``, ``kwargs`` will be a collection of ``(key,value)`` tuples,
 where each ``key`` is a symbol. Such collections can be passed as keyword
-arguments using a semicolon in a call, e.g. ``f(x, z=1; args...)``.
+arguments using a semicolon in a call, e.g. ``f(x, z=1; kwargs...)``.
 Dictionaries can also be used for this purpose.
 
-In addition, one can also pass ``(key,value)`` tuples, or any iterable
+One can also pass ``(key,value)`` tuples, or any iterable
 expression (such as a ``=>`` pair) that can be assigned to such a
 tuple, explicitly after a semicolon.  For example, ``plot(x, y;
 (:width,2))`` and ``plot(x, y; :width => 2)`` are equivalent to
 ``plot(x, y, width=2)``.  This is useful in situations where the
 keyword name is computed at runtime.
 
+.. _man-evaluation-scope-default-values:
 
 Evaluation Scope of Default Values
 ----------------------------------
@@ -521,7 +529,7 @@ are evaluated. For example, given this definition::
 the ``b`` in ``a=b`` refers to a ``b`` in an outer scope, not the
 subsequent argument ``b``. However, if ``a`` and ``b`` were keyword
 arguments instead, then both would be created in the same scope and
-the ``b`` in ``a=b`` would refer the the subsequent argument ``b``
+the ``b`` in ``a=b`` would refer to the subsequent argument ``b``
 (shadowing any ``b`` in an outer scope), which would result in an
 undefined variable error (since the default expressions are evaluated
 left-to-right, and ``b`` has not been assigned yet).
@@ -590,16 +598,47 @@ This is accomplished by the following definition::
         end
     end
 
-In contrast to the :func:`map` example, here ``io`` is initialized by the
-*result* of ``open("outfile", "w")``.  The stream is then passed to
-your anonymous function, which performs the writing; finally, the
-:func:`open` function ensures that the stream is closed after your
-function exits.  The ``try/finally`` construct will be described in
-:ref:`man-control-flow`.
+Here, :func:`open` first opens the file for writing and then passes
+the resulting output stream to the anonymous function you defined
+in the ``do ... end`` block. After your function exits, :func:`open`
+will make sure that the stream is properly closed, regardless of
+whether your function exited normally or threw an exception.
+(The ``try/finally`` construct will be described in
+:ref:`man-control-flow`.)
 
 With the ``do`` block syntax, it helps to check the documentation or
 implementation to know how the arguments of the user function are
 initialized.
+
+.. _man-dot-vectorizing:
+
+Dot Syntax for Vectorizing Functions
+------------------------------------
+
+In technical-computing languages, it is common to have "vectorized" versions of
+functions, which simply apply a given function ``f(x)`` to each element of an
+array ``A`` to yield a new array via ``f(A)``.   This kind of syntax is
+convenient for data processing, but in other languages vectorization is also
+often required for performance: if loops are slow, the "vectorized" version of a
+function can call fast library code written in a low-level language.   In Julia,
+vectorized functions are *not* required for performance, and indeed it is often
+beneficial to write your own loops (see :ref:`man-performance-tips`), but they
+can still be convenient.  Therefore, *any* Julia function ``f`` can be applied
+elementwise to any array (or other collection) with the syntax ``f.(A)``.
+
+Of course, you can omit the dot if you write a specialized "vector" method
+of ``f``, e.g. via ``f(A::AbstractArray) = map(f, A)``, and this is just
+as efficient as ``f.(A)``.   But that approach requires you to decide in advance
+which functions you want to vectorize.
+
+More generally, ``f.(args...)`` is actually equivalent to
+``broadcast(f, args...)``, which allows you to operate on multiple
+arrays (even of different shapes), or a mix of arrays and scalars
+(see :ref:`man-broadcasting`).  For example, if you have ``f(x,y) = 3x + 4y``,
+then ``f.(pi,A)`` will return a new array consisting of ``f(pi,a)`` for each
+``a`` in ``A``, and ``f.(vector1,vector2)`` will return a new vector
+consisting of ``f(vector1[i],vector2[i])`` for each index ``i``
+(throwing an exception if the vectors have different length).
 
 Further Reading
 ---------------

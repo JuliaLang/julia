@@ -29,10 +29,10 @@ pregenerate the `base/version_git.jl` file with:
 Julia has lots of build dependencies where we use patched versions that has not
 yet been included by the popular package managers. These dependencies will usually
 be automatically downloaded when you build, but if you want to be able to build
-Julia on a computer without internet access you should create a source-dist archive
-with the special make target
+Julia on a computer without internet access you should create a full-source-dist
+archive with the special make target
 
-    make source-dist
+    make full-source-dist
 
 that creates a julia-version-commit.tar.gz archive with all required dependencies.
 
@@ -66,10 +66,10 @@ The full list of CPU targets supported by LLVM can be obtained by running
 Linux
 -----
 
-On Linux, `make dist` creates a tarball that contains a fully functional Julia
-installation. If you wish to create a distribution package such as a
-`.deb`, or `.rpm`, some extra effort is needed. See the
-[julia-debian](http://github.com/staticfloat/julia-debian) repository
+On Linux, `make binary-dist` creates a tarball that contains a fully
+functional Julia installation. If you wish to create a distribution
+package such as a `.deb`, or `.rpm`, some extra effort is needed. See the
+[julia-debian](https://github.com/staticfloat/julia-debian) repository
 for an example of what metadata is needed for creating `.deb` packages
 for Debian and Ubuntu-based systems. See the
 [Fedora package](https://admin.fedoraproject.org/pkgdb/package/julia/)
@@ -118,7 +118,7 @@ is to cross-compile from a Linux distribution such as Ubuntu. In-depth
 compilation instructions [are
 available](https://github.com/JuliaLang/julia/blob/master/README.windows.md).
 However the important steps for redistribution are to ensure to `make
-win-extras` in between `make` and `make dist`.  After that process is
+win-extras` in between `make` and `make binary-dist`.  After that process is
 completed, the `.zip` file created in the head Julia directory will
 hold a completely self-contained Julia.
 

@@ -59,16 +59,30 @@ I passed an argument ``x`` to a function, modified it inside that function, but 
 Suppose you call a function like this::
 
 	julia> x = 10
-	julia> function change_value!(y) # Create a new function
+        10
+
+	julia> function change_value!(y)
 	           y = 17
 	       end
+        change_value! (generic function with 1 method)
+
 	julia> change_value!(x)
+        17
+
 	julia> x # x is unchanged!
 	10
 
-In Julia, any function (including ``change_value!()``) can't change the binding of a local variable. If ``x`` (in the calling scope) is bound to a immutable object (like a real number), you can't modify the object; likewise, if x is bound in the calling scope to a Dict, you can't change it to be bound to an ASCIIString.
+In Julia, the binding of a variable ``x`` cannot be changed by passing
+``x`` as an argument to a function. When calling ``change_value!(x)``
+in the above example, ``y`` is a newly created variable, bound
+initially to the value of ``x``, i.e. ``10``; then ``y`` is rebound to
+the constant ``17``, while the variable ``x`` of the outer scope is
+left untouched.
 
-But here is a thing you should pay attention to: suppose ``x`` is bound to an Array (or any other mutable type). You cannot "unbind" ``x`` from this Array. But, since an Array is a *mutable* type, you can change its content. For example::
+But here is a thing you should pay attention to: suppose ``x`` is
+bound to an object of type ``Array`` (or any other *mutable* type).
+From within the function, you cannot "unbind" ``x`` from this Array,
+but you can change its content. For example::
 
 	julia> x = [1,2,3]
 	3-element Array{Int64,1}:
@@ -76,17 +90,26 @@ But here is a thing you should pay attention to: suppose ``x`` is bound to an Ar
 	2
 	3
 
-	julia> function change_array!(A) # Create a new function
+	julia> function change_array!(A)
 	           A[1] = 5
 	       end
+        change_array! (generic function with 1 method)
+
 	julia> change_array!(x)
+        5
+
 	julia> x
 	3-element Array{Int64,1}:
 	5
 	2
 	3
 
-Here we created a function ``change_array!()``, that assigns ``5`` to the first element of the Array. We passed ``x`` (which was previously bound to an Array) to the function. Notice that, after the function call, ``x`` is still bound to the same Array, but the content of that Array changed.
+Here we created a function ``change_array!()``, that assigns ``5`` to
+the first element of the passed array (bound to ``x`` at the call
+site, and bound to ``A`` within the function). Notice that, after the
+function call, ``x`` is still bound to the same array, but the content
+of that array changed: the variables ``A`` and ``x`` were distinct
+bindings refering to the same mutable ``Array`` object.
 
 
 Can I use ``using`` or ``import`` inside a function?
@@ -128,8 +151,8 @@ inside a specific function or set of functions, you have two options:
 What does the ``...`` operator do?
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-The two uses of the `...` operator: slurping and splatting
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+The two uses of the ``...`` operator: slurping and splatting
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 Many newcomers to Julia find the use of ``...`` operator confusing. Part of
 what makes the ``...`` operator confusing is that it means two different things
@@ -286,7 +309,7 @@ generation of efficient code. If you can't count on the results of integer
 operations being integers, it's impossible to generate fast, simple code the
 way C and Fortran compilers do.
 
-A variation on this approach, which avoids the appearance of type instability is to merge the ``Int`` and :class:`BigInt` types into a single hybrid integer type, that internally changes representation when a result no longer fits into the size of a machine integer. While this superficially avoids type-instability at the level of Julia code, it just sweeps the problem under the rug by foisting all of the same difficulties onto the C code implementing this hybrid integer type. This approach *can* be made to work and can even be made quite fast in many cases, but has several drawbacks. One problem is that the in-memory representation of integers and arrays of integers no longer match the natural representation used by C, Fortran and other languages with native machine integers. Thus, to interoperate with those languages, we would ultimately need to introduce native integer types anyway. Any unbounded representation of integers cannot have a fixed number of bits, and thus cannot be stored inline in an array with fixed-size slots – large integer values will always require separate heap-allocated storage. And of course, no matter how clever a hybrid integer implementation one uses, there are always performance traps – situations where performance degrades unexpectedly. Complex representation, lack of interoperability with C and Fortran, the inability to represent integer arrays without additional heap storage, and unpredictable performance characteristics make even the cleverest hybrid integer implementations a poor choice for high-performance numerical work.
+A variation on this approach, which avoids the appearance of type instability is to merge the ``Int`` and :class:`BigInt` types into a single hybrid integer type, that internally changes representation when a result no longer fits into the size of a machine integer. While this superficially avoids type-instability at the level of Julia code, it just sweeps the problem under the rug by foisting all of the same difficulties onto the C code implementing this hybrid integer type. This approach *can* be made to work and can even be made quite fast in many cases, but has several drawbacks. One problem is that the in-memory representation of integers and arrays of integers no longer match the natural representation used by C, Fortran and other languages with native machine integers. Thus, to interoperate with those languages, we would ultimately need to introduce native integer types anyway. Any unbounded representation of integers cannot have a fixed number of bits, and thus cannot be stored inline in an array with fixed-size slots – large integer values will always require separate heap-allocated storage. And of course, no matter how clever a hybrid integer implementation one uses, there are always performance traps – situations where performance degrades unexpectedly. Complex representation, lack of interoperability with C and Fortran, the inability to represent integer arrays without additional heap storage, and unpredictable performance characteristics make even the cleverest hybrid integer implementations a poor choice for high-performance numerical work.
 
 An alternative to using hybrid integers or promoting to BigInts is to use
 saturating integer arithmetic, where adding to the largest integer value
@@ -317,7 +340,7 @@ value. This is precisely what Matlab™ does::
 
      -9223372036854775808
 
-At first blush, this seems reasonable enough since 9223372036854775807 is much closer to 9223372036854775808 than -9223372036854775808 is and integers are still represented with a fixed size in a natural way that is compatible with C and Fortran. Saturated integer arithmetic, however, is deeply problematic. The first and most obvious issue is that this is not the way machine integer arithmetic works, so implementing saturated operations requires emitting instructions after each machine integer operation to check for underflow or overflow and replace the result with :func:`typemin(Int) <typemin>` or :func:`typemax(Int) <typemax>` as appropriate. This alone expands each integer operation from a single, fast instruction into half a dozen instructions, probably including branches. Ouch. But it gets worse – saturating integer arithmetic isn't associative. Consider this Matlab computation::
+At first blush, this seems reasonable enough since 9223372036854775807 is much closer to 9223372036854775808 than -9223372036854775808 is and integers are still represented with a fixed size in a natural way that is compatible with C and Fortran. Saturated integer arithmetic, however, is deeply problematic. The first and most obvious issue is that this is not the way machine integer arithmetic works, so implementing saturated operations requires emitting instructions after each machine integer operation to check for underflow or overflow and replace the result with :func:`typemin(Int) <typemin>` or :func:`typemax(Int) <typemax>` as appropriate. This alone expands each integer operation from a single, fast instruction into half a dozen instructions, probably including branches. Ouch. But it gets worse – saturating integer arithmetic isn't associative. Consider this Matlab computation::
 
     >> n = int64(2)^62
     4611686018427387904
@@ -447,306 +470,32 @@ in the future, we could consider defaulting to checked integer arithmetic in
 Julia, but for now, we have to live with the possibility of overflow.
 
 
-.. _man-abstract-fields:
 
-How do "abstract" or ambiguous fields in types interact with the compiler?
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-Types can be declared without specifying the types of their fields:
-
-.. doctest::
-
-    julia> type MyAmbiguousType
-               a
-           end
-
-This allows ``a`` to be of any type. This can often be useful, but it
-does have a downside: for objects of type ``MyAmbiguousType``, the
-compiler will not be able to generate high-performance code.  The
-reason is that the compiler uses the types of objects, not their
-values, to determine how to build code. Unfortunately, very little can
-be inferred about an object of type ``MyAmbiguousType``:
-
-.. doctest::
-
-    julia> b = MyAmbiguousType("Hello")
-    MyAmbiguousType("Hello")
-
-    julia> c = MyAmbiguousType(17)
-    MyAmbiguousType(17)
-
-    julia> typeof(b)
-    MyAmbiguousType (constructor with 1 method)
-
-    julia> typeof(c)
-    MyAmbiguousType (constructor with 1 method)
-
-``b`` and ``c`` have the same type, yet their underlying
-representation of data in memory is very different. Even if you stored
-just numeric values in field ``a``, the fact that the memory
-representation of a ``UInt8`` differs from a ``Float64`` also means
-that the CPU needs to handle them using two different kinds of
-instructions.  Since the required information is not available in the
-type, such decisions have to be made at run-time. This slows
-performance.
-
-You can do better by declaring the type of ``a``. Here, we are focused
-on the case where ``a`` might be any one of several types, in which
-case the natural solution is to use parameters. For example:
-
-.. doctest::
-
-    julia> type MyType{T<:FloatingPoint}
-             a::T
-           end
-
-This is a better choice than
-
-.. doctest::
-
-    julia> type MyStillAmbiguousType
-             a::FloatingPoint
-           end
-
-because the first version specifies the type of ``a`` from the type of
-the wrapper object.  For example:
-
-.. doctest::
-
-    julia> m = MyType(3.2)
-    MyType{Float64}(3.2)
-
-    julia> t = MyStillAmbiguousType(3.2)
-    MyStillAmbiguousType(3.2)
-
-    julia> typeof(m)
-    MyType{Float64} (constructor with 1 method)
-
-    julia> typeof(t)
-    MyStillAmbiguousType (constructor with 2 methods)
-
-The type of field ``a`` can be readily determined from the type of
-``m``, but not from the type of ``t``.  Indeed, in ``t`` it's possible
-to change the type of field ``a``:
-
-.. doctest::
-
-    julia> typeof(t.a)
-    Float64
-
-    julia> t.a = 4.5f0
-    4.5f0
-
-    julia> typeof(t.a)
-    Float32
-
-In contrast, once ``m`` is constructed, the type of ``m.a`` cannot
-change:
-
-.. doctest::
-
-    julia> m.a = 4.5f0
-    4.5
-
-    julia> typeof(m.a)
-    Float64
-
-The fact that the type of ``m.a`` is known from ``m``'s type---coupled
-with the fact that its type cannot change mid-function---allows the
-compiler to generate highly-optimized code for objects like ``m`` but
-not for objects like ``t``.
-
-Of course, all of this is true only if we construct ``m`` with a
-concrete type.  We can break this by explicitly constructing it with
-an abstract type:
-
-.. doctest::
-
-    julia> m = MyType{FloatingPoint}(3.2)
-    MyType{FloatingPoint}(3.2)
-
-    julia> typeof(m.a)
-    Float64
-
-    julia> m.a = 4.5f0
-    4.5f0
-
-    julia> typeof(m.a)
-    Float32
-
-For all practical purposes, such objects behave identically to those
-of ``MyStillAmbiguousType``.
-
-It's quite instructive to compare the sheer amount code generated for
-a simple function
-::
-
-    func(m::MyType) = m.a+1
-
-using
-::
-
-    code_llvm(func,(MyType{Float64},))
-    code_llvm(func,(MyType{FloatingPoint},))
-    code_llvm(func,(MyType,))
-
-For reasons of length the results are not shown here, but you may wish
-to try this yourself. Because the type is fully-specified in the first
-case, the compiler doesn't need to generate any code to resolve the
-type at run-time.  This results in shorter and faster code.
-
-
-.. _man-abstract-container-type:
-
-How should I declare "abstract container type" fields?
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-The same best practices that apply in the `previous section
-<#man-abstract-fields>`_ also work for container types:
-
-.. doctest::
-
-    julia> type MySimpleContainer{A<:AbstractVector}
-             a::A
-           end
-
-    julia> type MyAmbiguousContainer{T}
-             a::AbstractVector{T}
-           end
-
-For example:
-
-.. doctest::
-
-    julia> c = MySimpleContainer(1:3);
-
-    julia> typeof(c)
-    MySimpleContainer{UnitRange{Int64}} (constructor with 1 method)
-
-    julia> c = MySimpleContainer([1:3]);
-
-    julia> typeof(c)
-    MySimpleContainer{Array{Int64,1}} (constructor with 1 method)
-
-    julia> b = MyAmbiguousContainer(1:3);
-
-    julia> typeof(b)
-    MyAmbiguousContainer{Int64} (constructor with 1 method)
-
-    julia> b = MyAmbiguousContainer([1:3]);
-
-    julia> typeof(b)
-    MyAmbiguousContainer{Int64} (constructor with 1 method)
-
-For ``MySimpleContainer``, the object is fully-specified by its type
-and parameters, so the compiler can generate optimized functions. In
-most instances, this will probably suffice.
-
-While the compiler can now do its job perfectly well, there are cases
-where *you* might wish that your code could do different things
-depending on the *element type* of ``a``.  Usually the best way to
-achieve this is to wrap your specific operation (here, ``foo``) in a
-separate function::
-
-    function sumfoo(c::MySimpleContainer)
-        s = 0
-	for x in c.a
-	    s += foo(x)
-	end
-	s
-    end
-
-    foo(x::Integer) = x
-    foo(x::FloatingPoint) = round(x)
-
-This keeps things simple, while allowing the compiler to generate
-optimized code in all cases.
-
-However, there are cases where you may need to declare different
-versions of the outer function for different element types of
-``a``. You could do it like this::
-
-    function myfun{T<:FloatingPoint}(c::MySimpleContainer{Vector{T}})
-        ...
-    end
-    function myfun{T<:Integer}(c::MySimpleContainer{Vector{T}})
-        ...
-    end
-
-This works fine for ``Vector{T}``, but we'd also have to write
-explicit versions for ``UnitRange{T}`` or other abstract types. To
-prevent such tedium, you can use two parameters in the declaration of
-``MyContainer``::
-
-    type MyContainer{T, A<:AbstractVector}
-        a::A
-    end
-    MyContainer(v::AbstractVector) = MyContainer{eltype(v), typeof(v)}(v)
-
-    julia> b = MyContainer(1.3:5);
-
-    julia> typeof(b)
-    MyContainer{Float64,UnitRange{Float64}}
-
-Note the somewhat surprising fact that ``T`` doesn't appear in the
-declaration of field ``a``, a point that we'll return to in a moment.
-With this approach, one can write functions such as::
-
-    function myfunc{T<:Integer, A<:AbstractArray}(c::MyContainer{T,A})
-        return c.a[1]+1
-    end
-    # Note: because we can only define MyContainer for
-    # A<:AbstractArray, and any unspecified parameters are arbitrary,
-    # the previous could have been written more succinctly as
-    #     function myfunc{T<:Integer}(c::MyContainer{T})
-
-    function myfunc{T<:FloatingPoint}(c::MyContainer{T})
-        return c.a[1]+2
-    end
-
-    function myfunc{T<:Integer}(c::MyContainer{T,Vector{T}})
-        return c.a[1]+3
-    end
-
-    julia> myfunc(MyContainer(1:3))
-    2
-
-    julia> myfunc(MyContainer(1.0:3))
-    3.0
-
-    julia> myfunc(MyContainer([1:3]))
-    4
-
-As you can see, with this approach it's possible to specialize on both
-the element type ``T`` and the array type ``A``.
-
-However, there's one remaining hole: we haven't enforced that ``A``
-has element type ``T``, so it's perfectly possible to construct an
-object like this::
-
-  julia> b = MyContainer{Int64, UnitRange{Float64}}(1.3:5);
-
-  julia> typeof(b)
-  MyContainer{Int64,UnitRange{Float64}}
-
-To prevent this, we can add an inner constructor::
-
-    type MyBetterContainer{T<:Real, A<:AbstractVector}
-        a::A
-
-        MyBetterContainer(v::AbstractVector{T}) = new(v)
-    end
-    MyBetterContainer(v::AbstractVector) = MyBetterContainer{eltype(v),typeof(v)}(v)
-
-
-    julia> b = MyBetterContainer(1.3:5);
-
-    julia> typeof(b)
-    MyBetterContainer{Float64,UnitRange{Float64}}
-
-    julia> b = MyBetterContainer{Int64, UnitRange{Float64}}(1.3:5);
-    ERROR: no method MyBetterContainer(UnitRange{Float64},)
-
-The inner constructor requires that the element type of ``A`` be ``T``.
+.. _faq-packages:
+
+Packages and Modules
+--------------------
+
+What is the difference between "using" and "importall"?
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+There is only one difference, and on the surface (syntax-wise) it may seem very minor.
+The difference between ``using`` and ``importall`` is that with ``using`` you need to say
+``function Foo.bar(..`` to extend module Foo's function bar with a new method, but with
+``importall`` or ``import Foo.bar``, you only need to say ``function bar(...`` and it
+automatically extends module Foo's function bar.
+
+If you use ``importall``, then ``function Foo.bar(...`` and ``function bar(...`` become
+equivalent. If you use ``using``, then they are different.
+
+The reason this is important enough to have been given separate syntax is that you don't
+want to accidentally extend a function that you didn't know existed, because that could
+easily cause a bug. This is most likely to happen with a method that takes a common type
+like a string or integer, because both you and the other module could define a method to
+handle such a common type. If you use ``importall``, then you'll replace the other module's
+implementation of ``bar(s::AbstractString)`` with your new implementation, which could easily do
+something completely different (and break all/many future usages of the other functions
+in module Foo that depend on calling bar).
 
 .. _man-nothing:
 
@@ -778,7 +527,7 @@ really be thought of as nothing but rather a tuple of zero values.
 
 In code written for Julia prior to version 0.4 you may occasionally see ``None``,
 which is quite different. It is the empty (or "bottom") type, a type with no values
-and no subtypes (except itself). This is now written as ``Union()`` (an empty union
+and no subtypes (except itself). This is now written as ``Union{}`` (an empty union
 type). You will generally not need to use this type.
 
 Memory
@@ -787,13 +536,13 @@ Memory
 Why does ``x += y`` allocate memory when ``x`` and ``y`` are arrays?
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-In julia, ``x += y`` gets replaced during parsing by ``x = x + y``.
+In Julia, ``x += y`` gets replaced during parsing by ``x = x + y``.
 For arrays, this has the consequence that, rather than storing the
 result in the same location in memory as ``x``, it allocates a new
 array to store the result.
 
 While this behavior might surprise some, the choice is deliberate. The
-main reason is the presence of ``immutable`` objects within julia,
+main reason is the presence of ``immutable`` objects within Julia,
 which cannot change their value once created.  Indeed, a number is an
 immutable object; the statements ``x = 5; x += 1`` do not modify the
 meaning of ``5``, they modify the value bound to ``x``. For an
@@ -845,36 +594,35 @@ is fully asynchronous.
 The following::
 
     @sync for i in 1:3
-        @async print(i, " Foo ", " Bar ")
+        @async write(STDOUT, string(i), " Foo ", " Bar ")
     end
 
 results in::
+
     123 Foo  Foo  Foo  Bar  Bar  Bar
 
-This is happening because, while ``print(i, " Foo ", " Bar ")`` is synchronous,
-internally, the writing of each argument yields to other tasks while waiting for
-that part of the I/O to complete.
+This is happening because, while the ``write`` call is synchronous, the writing of
+each argument yields to other tasks while waiting for that part of the I/O to complete.
 
-``println`` to asynchronous streams like STDOUT, TcpSockets, "locks" the stream
-during a call. Consequently changing ``print`` to ``println`` in the above example
-results in::
+``print`` and ``println`` "lock" the stream during a call. Consequently changing ``write`` to
+``println`` in the above example results in::
 
     1 Foo  Bar
     2 Foo  Bar
     3 Foo  Bar
 
-For other functions and streams, etc, you could lock your writes with a ``ReentrantLock``
-like this::
+You can lock your writes with a ``ReentrantLock`` like this::
 
     l = ReentrantLock()
     @sync for i in 1:3
         @async begin
             lock(l)
             try
-                print(i, " Foo ", " Bar ")
+                write(STDOUT, string(i), " Foo ", " Bar ")
             finally
                 unlock(l)
             end
+        end
     end
 
 

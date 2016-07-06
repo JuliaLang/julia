@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 # raytracer.jl
 # This is a translation from Java/C++ of the raytracer located at
 #   http://www.ffconsultancy.com/languages/ray_tracer/
@@ -14,6 +16,7 @@ immutable Vec
     y::Float64
     z::Float64
 end
+import Base: +, -, *
 +(a::Vec, b::Vec) = Vec(a.x+b.x, a.y+b.y, a.z+b.z)
 -(a::Vec, b::Vec) = Vec(a.x-b.x, a.y-b.y, a.z-b.z)
 *(a::Float64, b::Vec) = Vec(a*b.x, a*b.y, a*b.z)

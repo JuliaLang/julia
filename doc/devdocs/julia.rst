@@ -11,10 +11,16 @@
 
    init
    eval
+   ast
+   types
    object
+   functions
+   callconv
    cartesian
    meta
    subarrays
    sysimg
    llvm
    stdio
+   promote-op
+   boundscheck

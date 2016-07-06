@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 # simple keyword args case
 kwf1(ones; tens=0, hundreds=0) = ones + 10*tens + 100*hundreds
 @test kwf1(2) == 2
@@ -7,7 +9,7 @@ kwf1(ones; tens=0, hundreds=0) = ones + 10*tens + 100*hundreds
 @test kwf1(3, tens=7, hundreds=2) == 273
 
 @test_throws MethodError kwf1()             # no method, too few args
-@test_throws ErrorException kwf1(1, z=0)    # unsupported keyword
+@test_throws MethodError kwf1(1, z=0)    # unsupported keyword
 @test_throws MethodError kwf1(1, 2)         # no method, too many positional args
 
 # keyword args plus varargs
@@ -16,7 +18,7 @@ kwf2(x, rest...; y=1) = (x, y, rest)
 @test isequal(kwf2(0,1,2), (0, 1, (1,2)))
 @test isequal(kwf2(0,1,2,y=88), (0, 88, (1,2)))
 @test isequal(kwf2(0,y=88,1,2), (0, 88, (1,2)))
-@test_throws ErrorException kwf2(0, z=1)
+@test_throws MethodError kwf2(0, z=1)
 @test_throws MethodError kwf2(y=1)
 
 # keyword arg with declared type
@@ -183,3 +185,16 @@ let
     @test kwf1(0; p, q) == 310
     @test kwf1(0; q, hundreds=4) == 410
 end
+
+# with anonymous functions, issue #2773
+let f = (x;a=1,b=2)->(x, a, b)
+    @test f(0) === (0, 1, 2)
+    @test f(1,a=10,b=20) === (1,10,20)
+    @test f(0,b=88) === (0, 1, 88)
+    @test_throws MethodError f(0,z=1)
+end
+@test ((a=2)->10a)(3) == 30
+@test ((a=2)->10a)() == 20
+@test ((a=1,b=2)->(a,b))() == (1,2)
+@test ((a=1,b=2)->(a,b))(5) == (5,2)
+@test ((a=1,b=2)->(a,b))(5,6) == (5,6)

@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 include("../perfutil.jl")
 
 abstract List{T}
@@ -23,7 +25,7 @@ gc()
 
 # issue #1211
 include("ziggurat.jl")
-a = Array(Float64, 1000000)
+a = Array{Float64}(1000000)
 @timeit randn_zig!(a) "randn_zig" "Ziggurat gaussian number generator"
 
 # issue #950
@@ -100,9 +102,7 @@ d = randn(len)
 
 @timeit (for n in 1:10; a = arith_vectorized(b,c,d); end) "vectorize" "Vectorized arithmetic"
 
-open("random.csv","w") do io
-    writecsv(io, rand(100000,4))
-end
+writecsv("random.csv", rand(100000,4))
 
 function parsecsv()
     for line in EachLine(open("random.csv"))

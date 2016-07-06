@@ -13,6 +13,7 @@
  Manual
 ########
 
+.. NOTE: keep this list in sync with manual/index.rst
 .. toctree::
    :maxdepth: 1
 
@@ -30,6 +31,7 @@
    manual/methods
    manual/constructors
    manual/conversion-and-promotion
+   manual/interfaces
    manual/modules
    manual/documentation
    manual/metaprogramming
@@ -40,10 +42,12 @@
    manual/dates
    manual/running-external-programs
    manual/calling-c-and-fortran-code
+   manual/handling-operating-system-variation
    manual/interacting-with-julia
    manual/embedding
    manual/packages
    manual/profile
+   manual/stacktraces
    manual/performance-tips
    manual/workflow-tips
    manual/style-guide
@@ -57,6 +61,7 @@
  Standard Library
 ##################
 
+.. NOTE: keep this list in sync with stdlib/index.rst
 .. toctree::
    :maxdepth: 1
 
@@ -77,7 +82,11 @@
    stdlib/dates
    stdlib/test
    stdlib/c
+   stdlib/libc
+   stdlib/libdl
    stdlib/profile
+   stdlib/stacktraces
+   stdlib/simd-types
 
 .. _devdocs:
 

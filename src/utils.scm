@@ -15,6 +15,9 @@
         ((memq (car s1) s2) (diff (cdr s1) s2))
         (else               (cons (car s1) (diff (cdr s1) s2)))))
 
+(define (intersect s1 s2)
+  (filter (lambda (x) (memq x s2)) s1))
+
 (define (has-dups lst)
   (if (null? lst)
       #f
@@ -45,16 +48,18 @@
                 (cdr expr)))))
 
 ;; find all subexprs satisfying `p`, applying `key` to each one
-(define (expr-find-all p expr key)
-  (let ((found (if (p expr)
-                   (list (key expr))
-                   '())))
-    (if (or (atom? expr) (quoted? expr))
-        found
-        (apply nconc
-               found
-               (map (lambda (x) (expr-find-all p x key))
-                    (cdr expr))))))
+(define (expr-find-all p expr key (filt (lambda (x) #t)))
+  (if (filt expr)
+      (let ((found (if (p expr)
+                       (list (key expr))
+                       '())))
+        (if (or (atom? expr) (quoted? expr))
+            found
+            (apply nconc
+                   found
+                   (map (lambda (x) (expr-find-all p x key filt))
+                        (cdr expr)))))
+      '()))
 
 (define (butlast lst)
   (if (or (null? lst) (null? (cdr lst)))
@@ -66,20 +71,16 @@
       (car lst)
       (last (cdr lst))))
 
-(define *gensyms* '())
-(define *current-gensyms* '())
-(define *gensy-counter* 1)
-(define (gensy)
-  (if (null? *current-gensyms*)
-      (let ((g (symbol (string "#s" *gensy-counter*))))
-        (set! *gensy-counter* (+ *gensy-counter* 1))
-        (set! *gensyms* (cons g *gensyms*))
-        g)
-      (begin0 (car *current-gensyms*)
-              (set! *current-gensyms* (cdr *current-gensyms*)))))
-(define (named-gensy name)
-  (let ((g (symbol (string "#" *gensy-counter* "#" name))))
-    (set! *gensy-counter* (+ *gensy-counter* 1))
-    g))
-(define (reset-gensyms)
-  (set! *current-gensyms* *gensyms*))
+(define (take-while f xs)
+  (cond ((null? xs) '())
+        ((f (car xs)) (cons (car xs) (take-while f (cdr xs))))
+        (else '())))
+
+(define (without alst remove)
+  (cond ((null? alst)               '())
+        ((null? remove)             alst)
+        ((memq (caar alst) remove)  (without (cdr alst) remove))
+        (else                       (cons (car alst)
+                                          (without (cdr alst) remove)))))
+
+(define (caddddr x) (car (cdr (cdr (cdr (cdr x))))))

@@ -1,3 +1,6 @@
+# This file is a part of Julia. Except for the *_kernel functions (see below),
+# license is MIT: http://julialang.org/license
+
 immutable DoubleFloat64
     hi::Float64
     lo::Float64
@@ -6,7 +9,7 @@ immutable DoubleFloat32
     hi::Float64
 end
 
-# kernel_* functions are only valid for |x| < pi/4 = 0.7854
+# *_kernel functions are only valid for |x| < pi/4 = 0.7854
 # translated from openlibm code: k_sin.c, k_cos.c, k_sinf.c, k_cosf.c
 # which are made available under the following licence:
 
@@ -96,7 +99,7 @@ mulpi_ext(x::Rational) = mulpi_ext(float(x))
 mulpi_ext(x::Real) = pi*x # Fallback
 
 
-function sinpi{T<:FloatingPoint}(x::T)
+function sinpi{T<:AbstractFloat}(x::T)
     if !isfinite(x)
         isnan(x) && return x
         throw(DomainError())
@@ -154,7 +157,7 @@ function sinpi{T<:Real}(x::T)
     end
 end
 
-function cospi{T<:FloatingPoint}(x::T)
+function cospi{T<:AbstractFloat}(x::T)
     if !isfinite(x)
         isnan(x) && return x
         throw(DomainError())
@@ -206,32 +209,71 @@ end
 sinpi(x::Integer) = x >= 0 ? zero(float(x)) : -zero(float(x))
 cospi(x::Integer) = isodd(x) ? -one(float(x)) : one(float(x))
 
-function sinpi(z::Complex)
+function sinpi{T}(z::Complex{T})
+    F = float(T)
     zr, zi = reim(z)
-    if !isfinite(zi) && zr == 0 return complex(zr, zi) end
-    if isnan(zr) && !isfinite(zi) return complex(zr, zi) end
-    if !isfinite(zr) && zi == 0 return complex(oftype(zr, NaN), zi) end
-    if !isfinite(zr) && isfinite(zi) return complex(oftype(zr, NaN), oftype(zi, NaN)) end
-    if !isfinite(zr) && !isfinite(zi) return complex(zr, oftype(zi, NaN)) end
-    pizi = pi*zi
-    complex(sinpi(zr)*cosh(pizi), cospi(zr)*sinh(pizi))
+    if isinteger(zr)
+        # zr = ...,-2,-1,0,1,2,...
+        # sin(pi*zr) == ±0
+        # cos(pi*zr) == ±1
+        # cosh(pi*zi) > 0
+        s = copysign(zero(F),zr)
+        c_pos = isa(zr,Integer) ? iseven(zr) : isinteger(zr/2)
+        sh = sinh(pi*zi)
+        Complex(s, c_pos ? sh : -sh)
+    elseif isinteger(2*zr)
+        # zr = ...,-1.5,-0.5,0.5,1.5,2.5,...
+        # sin(pi*zr) == ±1
+        # cos(pi*zr) == +0
+        # sign(sinh(pi*zi)) == sign(zi)
+        s_pos = isinteger((2*zr-1)/4)
+        ch = cosh(pi*zi)
+        Complex(s_pos ? ch : -ch, isnan(zi) ? zero(F) : copysign(zero(F),zi))
+    elseif !isfinite(zr)
+        if zi == 0 || isinf(zi)
+            Complex(F(NaN), F(zi))
+        else
+            Complex(F(NaN), F(NaN))
+        end
+    else
+        pizi = pi*zi
+        Complex(sinpi(zr)*cosh(pizi), cospi(zr)*sinh(pizi))
+    end
 end
 
-function cospi(z::Complex)
+function cospi{T}(z::Complex{T})
+    F = float(T)
     zr, zi = reim(z)
-    if !isfinite(zi) && zr == 0
-        return complex(isnan(zi) ? zi : oftype(zi, Inf),
-                       isnan(zi) ? zr : zr*-sign(zi))
+    if isinteger(zr)
+        # zr = ...,-2,-1,0,1,2,...
+        # sin(pi*zr) == ±0
+        # cos(pi*zr) == ±1
+        # sign(sinh(pi*zi)) == sign(zi)
+        # cosh(pi*zi) > 0
+        s = copysign(zero(F),zr)
+        c_pos = isa(zr,Integer) ? iseven(zr) : isinteger(zr/2)
+        ch = cosh(pi*zi)
+        Complex(c_pos ? ch : -ch, isnan(zi) ? s : -flipsign(s,zi))
+    elseif isinteger(2*zr)
+        # zr = ...,-1.5,-0.5,0.5,1.5,2.5,...
+        # sin(pi*zr) == ±1
+        # cos(pi*zr) == +0
+        # sign(sinh(pi*zi)) == sign(zi)
+        s_pos = isinteger((2*zr-1)/4)
+        sh = sinh(pi*zi)
+        Complex(zero(F), s_pos ? -sh : sh)
+    elseif !isfinite(zr)
+        if zi == 0
+            Complex(F(NaN), isnan(zr) ? zero(F) : -flipsign(F(zi),zr))
+        elseif isinf(zi)
+            Complex(F(Inf), F(NaN))
+        else
+            Complex(F(NaN), F(NaN))
+        end
+    else
+        pizi = pi*zi
+        Complex(cospi(zr)*cosh(pizi), -sinpi(zr)*sinh(pizi))
     end
-    if !isfinite(zr) && isinf(zi)
-        return complex(oftype(zr, Inf), oftype(zi, NaN))
-    end
-    if isinf(zr)
-        return complex(oftype(zr, NaN), zi==0 ? -copysign(zi, zr) : oftype(zi, NaN))
-    end
-    if isnan(zr) && zi==0 return complex(zr, abs(zi)) end
-    pizi = pi*zi
-    complex(cospi(zr)*cosh(pizi), -sinpi(zr)*sinh(pizi))
 end
 @vectorize_1arg Number sinpi
 @vectorize_1arg Number cospi
@@ -240,10 +282,13 @@ end
 sinc(x::Number) = x==0 ? one(x)  : oftype(x,sinpi(x)/(pi*x))
 sinc(x::Integer) = x==0 ? one(x) : zero(x)
 sinc{T<:Integer}(x::Complex{T}) = sinc(float(x))
+sinc(x::Real) = x==0 ? one(x) : isinf(x) ? zero(x) : sinpi(x)/(pi*x)
 @vectorize_1arg Number sinc
+
 cosc(x::Number) = x==0 ? zero(x) : oftype(x,(cospi(x)-sinpi(x)/(pi*x))/x)
 cosc(x::Integer) = cosc(float(x))
 cosc{T<:Integer}(x::Complex{T}) = cosc(float(x))
+cosc(x::Real) = x==0 || isinf(x) ? zero(x) : (cospi(x)-sinpi(x)/(pi*x))/x
 @vectorize_1arg Number cosc
 
 for (finv, f) in ((:sec, :cos), (:csc, :sin), (:cot, :tan),

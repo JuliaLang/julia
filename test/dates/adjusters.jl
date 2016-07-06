@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 #trunc
 dt = Dates.Date(2012,12,21)
 @test trunc(dt,Dates.Year) == Dates.Date(2012)
@@ -181,6 +183,17 @@ end
 @test Dates.lastdayofquarter(Dates.DateTime(2014,8,2)) == Dates.DateTime(2014,9,30)
 @test Dates.lastdayofquarter(Dates.DateTime(2014,12,2)) == Dates.DateTime(2014,12,31)
 
+firstday = Dates.Date(2014,1,1)
+lastday = Dates.Date(2014,12,31)
+for i = 0:364
+    dt = firstday + Dates.Day(i)
+
+    @test Dates.firstdayofyear(dt) == firstday
+    @test Dates.firstdayofyear(DateTime(dt)) == DateTime(firstday)
+
+    @test Dates.lastdayofyear(dt) == lastday
+    @test Dates.lastdayofyear(DateTime(dt)) == DateTime(lastday)
+end
 
 # Adjusters
 # Adjuster Constructors
@@ -303,7 +316,9 @@ januarymondays2014 = [Dates.Date(2014,1,6),Dates.Date(2014,1,13),Dates.Date(2014
 @test Dates.recur(Dates.ismonday,startdate:stopdate) == januarymondays2014
 @test Dates.recur(x->!Dates.ismonday(x),startdate,stopdate;negate=true) == januarymondays2014
 
-@test_throws ArgumentError Dates.recur((x,y)->x+y,Dates.Date(2013):Dates.Date(2014))
+@test_throws MethodError Dates.recur((x,y)->x+y,Dates.Date(2013):Dates.Date(2014))
+@test_throws MethodError Dates.DateFunction((x,y)->x+y, false, Date(0))
+@test_throws ArgumentError Dates.DateFunction((dt)->2, false, Date(0))
 @test length(Dates.recur(x->true,Dates.Date(2013):Dates.Date(2013,2))) == 32
 @test length(Dates.recur(x->true,Dates.Date(2013):Dates.Date(2013,1,1))) == 1
 @test length(Dates.recur(x->true,Dates.Date(2013):Dates.Date(2013,1,2))) == 2
@@ -434,7 +449,7 @@ end) == 251
 
 # From those goofy email forwards claiming a "special, lucky month"
 # that has 5 Fridays, 5 Saturdays, and 5 Sundays and that it only
-# occurs every 823 years.....
+# occurs every 823 years
 @test length(Dates.recur(Date(2000):Dates.Month(1):Date(2016)) do dt
     sum = 0
     for i = 1:7

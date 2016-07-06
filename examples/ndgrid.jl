@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 ndgrid(v::AbstractVector) = copy(v)
 
 function ndgrid{T}(v1::AbstractVector{T}, v2::AbstractVector{T})
@@ -16,7 +18,7 @@ end
 function ndgrid{T}(vs::AbstractVector{T}...)
     n = length(vs)
     sz = map(length, vs)
-    out = ntuple(n, i->Array(T, sz))
+    out = ntuple(i->Array{T}(sz), n)
     s = 1
     for i=1:n
         a = out[i]::Array

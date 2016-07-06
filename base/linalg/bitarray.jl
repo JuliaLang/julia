@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 function dot(x::BitVector, y::BitVector)
     # simplest way to mimic Array dot behavior
     length(x) == length(y) || throw(DimensionMismatch())
@@ -67,11 +69,11 @@ end
 ## diff and gradient
 
 # TODO: this could be improved (is it worth it?)
-gradient(F::BitVector) = gradient(bitunpack(F))
-gradient(F::BitVector, h::Real) = gradient(bitunpack(F), h)
-gradient(F::Vector, h::BitVector) = gradient(F, bitunpack(h))
-gradient(F::BitVector, h::Vector) = gradient(bitunpack(F), h)
-gradient(F::BitVector, h::BitVector) = gradient(bitunpack(F), bitunpack(h))
+gradient(F::BitVector) = gradient(Array(F))
+gradient(F::BitVector, h::Real) = gradient(Array(F), h)
+gradient(F::Vector, h::BitVector) = gradient(F, Array(h))
+gradient(F::BitVector, h::Vector) = gradient(Array(F), h)
+gradient(F::BitVector, h::BitVector) = gradient(Array(F), Array(h))
 
 ## diag and related
 
@@ -84,7 +86,7 @@ function diag(B::BitMatrix)
     v
 end
 
-function diagm(v::Union(BitVector,BitMatrix))
+function diagm(v::Union{BitVector,BitMatrix})
     isa(v, BitMatrix) && size(v,1)==1 || size(v,2)==1 || throw(DimensionMismatch())
     n = length(v)
     a = falses(n, n)
@@ -132,8 +134,8 @@ end
 
 ## Structure query functions
 
-issym(A::BitMatrix) = size(A, 1)==size(A, 2) && countnz(A - A.')==0
-ishermitian(A::BitMatrix) = issym(A)
+issymmetric(A::BitMatrix) = size(A, 1)==size(A, 2) && countnz(A - A.')==0
+ishermitian(A::BitMatrix) = issymmetric(A)
 
 function nonzero_chunks(chunks::Vector{UInt64}, pos0::Int, pos1::Int)
     k0, l0 = Base.get_chunks_id(pos0)
@@ -206,6 +208,6 @@ function findmin(a::BitArray)
     l = Base._mod64(length(a)-1) + 1
     @inbounds k = trailing_ones(ac[end] & Base._msk_end(l))
     ti += k
-    k==l || return (false, ri)
+    k==l || return (false, ti)
     return m, mi
 end
