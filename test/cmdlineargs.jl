@@ -246,13 +246,11 @@ let exename = `$(Base.julia_cmd()) --precompiled=yes`
     @test readchomp(`$exename -e 'println(ARGS);' ''`) == "String[\"\"]"
 
     # issue #12679
-    extrapath = is_windows() ? joinpath(JULIA_HOME, "..", "Git", "usr", "bin") * ";" : ""
-    withenv("PATH" => extrapath * ENV["PATH"]) do
-        @test readchomp(pipeline(ignorestatus(`$exename --startup-file=no --compile=yes -ioo`),stderr=`cat`)) == "ERROR: unknown option `-o`"
-        @test readchomp(pipeline(ignorestatus(`$exename --startup-file=no -p`),stderr=`cat`)) == "ERROR: option `-p/--procs` is missing an argument"
-        @test readchomp(pipeline(ignorestatus(`$exename --startup-file=no --inline`),stderr=`cat`)) == "ERROR: option `--inline` is missing an argument"
-        @test readchomp(pipeline(ignorestatus(`$exename --startup-file=no -e "@show ARGS" -now -- julia RUN.jl`),stderr=`cat`)) == "ERROR: unknown option `-n`"
-    end
+    # TODO fix this on windows via busybox-w32
+    @test readchomp(pipeline(ignorestatus(`$exename --startup-file=no --compile=yes -ioo`),stderr=`cat`)) == "ERROR: unknown option `-o`"
+    @test readchomp(pipeline(ignorestatus(`$exename --startup-file=no -p`),stderr=`cat`)) == "ERROR: option `-p/--procs` is missing an argument"
+    @test readchomp(pipeline(ignorestatus(`$exename --startup-file=no --inline`),stderr=`cat`)) == "ERROR: option `--inline` is missing an argument"
+    @test readchomp(pipeline(ignorestatus(`$exename --startup-file=no -e "@show ARGS" -now -- julia RUN.jl`),stderr=`cat`)) == "ERROR: unknown option `-n`"
 
     # --compilecache={yes|no}
     @test readchomp(`$exename -E "Bool(Base.JLOptions().use_compilecache)"`) == "true"

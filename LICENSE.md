@@ -81,7 +81,6 @@ Julia's build process uses the following external tools:
 Julia bundles the following external programs and libraries on some platforms:
 
 - [7-Zip](http://www.7-zip.org/license.txt)
-- [GIT](http://git-scm.com/about/free-and-open-source)
 - [ZLIB](http://zlib.net/zlib_license.html)
 - [LIBEXPAT](http://expat.cvs.sourceforge.net/viewvc/expat/expat/README)
 - [OPENSSL](https://github.com/openssl/openssl/blob/master/LICENSE)
