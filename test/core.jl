@@ -3342,8 +3342,6 @@ typealias PossiblyInvalidUnion{T} Union{T,Int}
 @test_throws TypeError PossiblyInvalidUnion{1}
 
 # issue #12569
-@test_throws ArgumentError Symbol("x"^10_000_000)
-@test_throws ArgumentError gensym("x"^10_000_000)
 @test Symbol("x") === Symbol("x")
 @test split(string(gensym("abc")),'#')[3] == "abc"
 
