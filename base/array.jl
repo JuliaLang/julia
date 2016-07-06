@@ -254,6 +254,24 @@ else
 end
 _default_eltype{I,T}(::Type{Generator{I,Type{T}}}) = T
 
+_array_for(T, itr, ::HasLength) = Array(T, Int(length(itr)::Integer))
+_array_for(T, itr, ::HasShape) = Array(T, convert(Dims,size(itr)))
+
+function collect(itr::Generator)
+    isz = iteratorsize(itr.iter)
+    et = _default_eltype(typeof(itr))
+    if isa(isz, SizeUnknown)
+        return grow_to!(Array(et, 0), itr)
+    else
+        st = start(itr)
+        if done(itr,st)
+            return _array_for(et, itr.iter, isz)
+        end
+        v1, st = next(itr, st)
+        collect_to_with_first!(_array_for(typeof(v1), itr.iter, isz), v1, itr, st)
+    end
+end
+
 _collect(c, itr, ::EltypeUnknown, isz::SizeUnknown) =
     grow_to!(_similar_for(c, _default_eltype(typeof(itr)), itr, isz), itr)
 
