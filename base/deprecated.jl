@@ -907,6 +907,16 @@ end
 # base/complex.jl
 @dep_vectorize_1arg Complex round
 @dep_vectorize_1arg Complex float
+for f in (
+        :year, :month, :day, :week, :dayofmonth, :yearmonth, :monthday, :yearmonthday, # base/dates/accessors.jl
+    )
+    @eval @dep_vectorize_1arg Dates.TimeType $f
+end
+for f in (
+    :hour, :minute, :second, :millisecond, # base/dates/accessors.jl
+    )
+    @eval @dep_vectorize_1arg Dates.DateTime $f
+end
 
 # Deprecate @vectorize_2arg-vectorized functions from...
 for f in (
