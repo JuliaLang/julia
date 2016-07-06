@@ -8856,19 +8856,17 @@ vecnorm
 """
     isvalid(value) -> Bool
 
-Returns `true` if the given value is valid for its type, which currently can be one of
-`Char`, `String`, `UTF16String`, or `UTF32String`.
+Returns `true` if the given value is valid for its type, which currently can be either
+`Char` or `String`.
 """
 isvalid(value)
 
 """
     isvalid(T, value) -> Bool
 
-Returns `true` if the given value is valid for that type. Types currently can be `Char`,
-`String`, `UTF16String`, or `UTF32String` Values for `Char` can be of
-type `Char` or `UInt32` Values for `String` can be of that type, or
-`Vector{UInt8}` Values for `UTF16String` can be `UTF16String` or `Vector{UInt16}` Values for
-`UTF32String` can be `UTF32String`, `Vector{Char}` or `Vector{UInt32}`
+Returns `true` if the given value is valid for that type. Types currently can
+be either `Char` or `String`. Values for `Char` can be of type `Char` or `UInt32`.
+Values for `String` can be of that type, or `Vector{UInt8}`.
 """
 isvalid(T,value)
 
