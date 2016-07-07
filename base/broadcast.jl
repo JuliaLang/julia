@@ -10,6 +10,11 @@ export broadcast_getindex, broadcast_setindex!
 
 ## Broadcasting utilities ##
 
+# fallback routines for broadcasting with no arguments or with scalars
+# to just produce a scalar result:
+broadcast(f) = f()
+broadcast(f, x::Number...) = f(x...)
+
 ## Calculate the broadcast shape of the arguments, or error if incompatible
 # array inputs
 broadcast_shape() = ()
