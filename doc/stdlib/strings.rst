@@ -60,7 +60,7 @@
 
    .. Docstring generated from Julia source
 
-   Convert string data between Unicode encodings.   ``src`` is either a ``String`` or an ``Vector{UIntXX}`` of UTF-XX code units, where ``XX`` is 8, 16, or 32. ``T`` indicates the encoding of the return value: ``String`` to return a (UTF-8 encoded) ``String`` or ``UIntXX`` to return a ``Vector{UIntXX}`` of UTF-``XX`` data.
+   Convert string data between Unicode encodings.   ``src`` is either a ``String`` or a ``Vector{UIntXX}`` of UTF-XX code units, where ``XX`` is 8, 16, or 32. ``T`` indicates the encoding of the return value: ``String`` to return a (UTF-8 encoded) ``String`` or ``UIntXX`` to return a ``Vector{UIntXX}`` of UTF-``XX`` data.
 
 .. function:: unsafe_string(p::Ptr{UInt8}, [length::Integer])
 
