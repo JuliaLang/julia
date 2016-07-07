@@ -174,6 +174,8 @@ STATIC_INLINE jl_value_t *jl_call_method_internal(jl_lambda_info_t *meth, jl_val
         return ((jl_fptr_sparam_t)mfptr->fptr)(meth->sparam_vals, args[0], &args[1], nargs-1);
     else if (mfptr->jlcall_api == 2)
         return meth->constval;
+    else if (mfptr->jlcall_api == 3)
+        return ((jl_fptr_linfo_t)mfptr->fptr)(mfptr, &args[0], nargs, meth->sparam_vals);
     else
         abort();
 }
