@@ -489,7 +489,7 @@ Base.done{N}(::GenericIterator{N}, i) = i > N ? true : false
 Base.iteratorsize{N}(::Type{GenericIterator{N}}) = Base.SizeUnknown()
 
 function test_map(::Type{TestAbstractArray})
-    empty_pool = WorkerPool()
+    empty_pool = WorkerPool([myid()])
     pmap_fallback = (f, c...) -> pmap(empty_pool, f, c...)
 
     for mapf in [map, asyncmap, pmap_fallback]
