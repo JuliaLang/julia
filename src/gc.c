@@ -2031,6 +2031,61 @@ JL_DLLEXPORT void *jl_gc_managed_realloc(void *d, size_t sz, size_t oldsz,
     return b;
 }
 
+// Perm gen allocator
+// 2M pool
+#define GC_PERM_POOL_SIZE (2 * 1024 * 1024)
+// 20k limit for pool allocation. At most 1% fragmentation
+#define GC_PERM_POOL_LIMIT (20 * 1024)
+jl_mutex_t gc_perm_lock = {0, 0};
+static char *gc_perm_pool = NULL;
+static size_t gc_perm_size = 0;
+
+// **NOT** a safepoint
+void *jl_gc_perm_alloc_nolock(size_t sz)
+{
+    // The caller should have acquired `gc_perm_lock`
+#ifndef MEMDEBUG
+    if (__unlikely(sz > GC_PERM_POOL_LIMIT))
+#endif
+        return malloc(sz);
+    sz = LLT_ALIGN(sz, JL_SMALL_BYTE_ALIGNMENT);
+    if (__unlikely(sz > gc_perm_size)) {
+#ifdef _OS_WINDOWS_
+        void *pool = VirtualAlloc(NULL,
+                                  GC_PERM_POOL_SIZE + JL_SMALL_BYTE_ALIGNMENT,
+                                  MEM_COMMIT, PAGE_READWRITE);
+        if (__unlikely(pool == NULL))
+            return NULL;
+        pool = (void*)LLT_ALIGN((uintptr_t)pool, JL_SMALL_BYTE_ALIGNMENT);
+#else
+        void *pool = mmap(0, GC_PERM_POOL_SIZE, PROT_READ | PROT_WRITE,
+                          MAP_NORESERVE | MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+        if (__unlikely(pool == MAP_FAILED))
+            return NULL;
+#endif
+        gc_perm_pool = (char*)pool;
+        gc_perm_size = GC_PERM_POOL_SIZE;
+    }
+    assert(((uintptr_t)gc_perm_pool) % JL_SMALL_BYTE_ALIGNMENT == 0);
+    void *p = gc_perm_pool;
+    gc_perm_size -= sz;
+    gc_perm_pool += sz;
+    return p;
+}
+
+// **NOT** a safepoint
+void *jl_gc_perm_alloc(size_t sz)
+{
+#ifndef MEMDEBUG
+    if (__unlikely(sz > GC_PERM_POOL_LIMIT))
+#endif
+        return malloc(sz);
+    JL_LOCK_NOGC(&gc_perm_lock);
+    void *p = jl_gc_perm_alloc_nolock(sz);
+    JL_UNLOCK_NOGC(&gc_perm_lock);
+    return p;
+}
+
 JL_DLLEXPORT void jl_gc_add_finalizer(jl_value_t *v, jl_function_t *f)
 {
     jl_ptls_t ptls = jl_get_ptls_states();
