@@ -1694,7 +1694,14 @@ static jl_cgval_t emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
 
         PointerType *funcptype = PointerType::get(functype,0);
         if (imaging_mode) {
-            llvmf = emit_plt(functype, attrs, cc, f_lib, f_name);
+#if defined(_CPU_ARM_) || defined(_CPU_PPC_) || defined(_CPU_PPC64_)
+            // ARM, PPC, PPC64 (as of LLVM 3.9) doesn't support `musttail`
+            // for vararg functions.
+            if (functype)
+                llvmf = runtime_sym_lookup(funcptype, f_lib, f_name, ctx->f);
+            else
+#endif
+                llvmf = emit_plt(functype, attrs, cc, f_lib, f_name);
         }
         else {
             void *symaddr = jl_dlsym_e(jl_get_library(f_lib), f_name);
