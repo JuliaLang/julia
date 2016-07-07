@@ -128,22 +128,30 @@ function cwstring(s::AbstractString)
 end
 end
 
-# transcoding between data in UTF-8 and UTF-16 for Windows APIs
+# transcoding between data in UTF-8 and UTF-16 for Windows APIs,
+# and also UTF-32 for APIs using Cwchar_t on other platforms.
+
 """
     transcode(T, src)
 
 Convert string data between Unicode encodings. `src` is either a
 `String` or an `Vector{UIntXX}` of UTF-XX code units, where
-`XX` is 8 or 16. `T` indicates the encoding of the return value:
+`XX` is 8, 16, or 32. `T` indicates the encoding of the return value:
 `String` to return a (UTF-8 encoded) `String` or `UIntXX`
-to return a `Vector{UIntXX}` of the UTF-`XX` data.
+to return a `Vector{UIntXX}` of UTF-`XX` data.
 """
 function transcode end
 
 transcode{T<:Union{UInt8,UInt16}}(::Type{T}, src::Vector{T}) = src
-transcode(::Type{Int32}, src::Vector{UInt32}) = reinterpret(Int32, src)
 transcode(T, src::String) = transcode(T, src.data)
 transcode(::Type{String}, src) = String(transcode(UInt8, src))
+
+transcode(::Type{Int32}, src::Vector{UInt32}) = reinterpret(Int32, src)
+transcode{T<:Union{Int32,UInt32}}(::Type{T}, src::String) = T[T(c) for c in src]
+transcode{T<:Union{Int32,UInt32}}(::Type{T}, src) = transcode(T, transcode(String, src))
+transcode{S<:Union{Int32,UInt32}}(T, src::Vector{S}) = transcode(T, transcode(String, src))
+transcode{S<:Union{Int32,UInt32}}(::Type{String}, src::Vector{S}) = string(map(Char, src)...)
+transcode(::Type{UInt16}, src::Vector) = transcode(UInt16, transcode(UInt8, src))
 
 function transcode(::Type{UInt16}, src::Vector{UInt8})
     dst = UInt16[]

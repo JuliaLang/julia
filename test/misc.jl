@@ -376,7 +376,7 @@ for (X,Y,Z) in ((V16,V16,V16), (I16,V16,I16), (V16,I16,V16), (V16,V16,I16), (I16
 end
 
 let s = "abcα🐨\0x\0"
-    for T in (UInt8, UInt16)
+    for T in (UInt8, UInt16, UInt32, Int32)
         @test transcode(T, s) == transcode(T, s.data)
         @test transcode(String, transcode(T, s)) == s
     end
