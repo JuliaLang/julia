@@ -1431,6 +1431,12 @@ let
     @test eltype(m) == Int32
 end
 
+let
+    m = sprand(10, 20, 0.1)
+    fm = full(m)
+    @test svdvals(m) ≈ svdvals(fm)
+end
+
 # 16073
 @inferred sprand(1, 1, 1.0)
 @inferred sprand(1, 1, 1.0, rand, Float64)

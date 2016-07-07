@@ -1,6 +1,6 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
-import Base.LinAlg: checksquare
+import Base.LinAlg: checksquare, svdvals
 
 ## Functions to switch to 0-based indexing to call external sparse solvers
 
@@ -923,6 +923,11 @@ function factorize{Ti}(A::Hermitian{Complex{Float64}, SparseMatrixCSC{Complex{Fl
         isa(e, PosDefException) || rethrow(e)
         return ldltfact(A)
     end
+end
+
+function svdvals(A::SparseMatrixCSC)
+    Asvd, nconv, niter, nmult, resid = svds(A; nsv=min(size(A)...), ritzvec=false)
+    return Asvd[:S]
 end
 
 chol(A::SparseMatrixCSC) = error("Use cholfact() instead of chol() for sparse matrices.")
