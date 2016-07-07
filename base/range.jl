@@ -661,7 +661,7 @@ end
 -(r::FloatRange)   = FloatRange(-r.start, -r.step, r.len, r.divisor)
 -(r::LinSpace)     = LinSpace(-r.start, -r.stop, r.len, r.divisor)
 
-.+(x::Real, r::AbstractUnitRange)  = range(x + first(r), length(r))
+.+(x::Real, r::AbstractUnitRange) = range(x + first(r), length(r))
 .+(x::Real, r::Range) = (x+first(r)):step(r):(x+last(r))
 #.+(x::Real, r::StepRange)  = range(x + r.start, r.step, length(r))
 .+(x::Real, r::FloatRange) = FloatRange(r.divisor*x + r.start, r.step, r.len, r.divisor)
@@ -678,7 +678,7 @@ function .-(x::Real, r::LinSpace)
     x2 = x * r.divisor / (r.len - 1)
     LinSpace(x2 - r.start, x2 - r.stop, r.len, r.divisor)
 end
-.-(r::AbstractUnitRange, x::Real)  = range(first(r)-x, length(r))
+.-(r::AbstractUnitRange, x::Real) = range(first(r)-x, length(r))
 .-(r::StepRange , x::Real) = range(r.start-x, r.step, length(r))
 .-(r::FloatRange, x::Real) = FloatRange(r.start - r.divisor*x, r.step, r.len, r.divisor)
 function .-(r::LinSpace, x::Real)
