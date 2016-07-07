@@ -83,7 +83,8 @@ static Type *get_llvm_fptype(jl_datatype_t *dt)
     default:
         return nullptr;
     }
-    return jl_is_floattype((jl_value_t*)dt) ? lltype : nullptr;
+    return ((jl_floatingpoint_type && jl_is_floattype((jl_value_t*)dt)) ?
+            lltype : nullptr);
 }
 
 static Type *get_llvm_fp_or_vectype(jl_datatype_t *dt)
