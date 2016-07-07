@@ -150,7 +150,11 @@ transcode(::Type{Int32}, src::Vector{UInt32}) = reinterpret(Int32, src)
 transcode{T<:Union{Int32,UInt32}}(::Type{T}, src::String) = T[T(c) for c in src]
 transcode{T<:Union{Int32,UInt32}}(::Type{T}, src) = transcode(T, transcode(String, src))
 transcode{S<:Union{Int32,UInt32}}(T, src::Vector{S}) = transcode(T, transcode(String, src))
-transcode{S<:Union{Int32,UInt32}}(::Type{String}, src::Vector{S}) = string(map(Char, src)...)
+function transcode{S<:Union{Int32,UInt32}}(::Type{String}, src::Vector{S})
+    buf = IOBuffer()
+    for c in src; print(buf, Char(c)); end
+    takebuf_string(buf)
+end
 transcode(::Type{UInt16}, src::Vector) = transcode(UInt16, transcode(UInt8, src))
 
 function transcode(::Type{UInt16}, src::Vector{UInt8})
