@@ -4,10 +4,136 @@
 
 // --- the ccall, cglobal, and llvm intrinsics ---
 
-static StringMap<GlobalVariable*> libMapGV;
-static StringMap<GlobalVariable*> symMapGV;
+// Map from symbol name (in a certain library) to its GV in sysimg and the
+// DL handle address in the current session.
+typedef StringMap<std::pair<GlobalVariable*,void*>> SymMapGV;
+static StringMap<std::pair<GlobalVariable*,SymMapGV>> libMapGV;
+#ifdef _OS_WINDOWS_
+static SymMapGV symMapExe;
+static SymMapGV symMapDl;
+#endif
+static SymMapGV symMapDefault;
 
-static Value *runtime_sym_lookup(PointerType *funcptype, const char *f_lib, const char *f_name, jl_codectx_t *ctx)
+template<typename Func>
+struct LazyModule {
+    Func func;
+    Module *m;
+    template<typename Func2>
+    LazyModule(Func2 &&func)
+        : func(std::forward<Func2>(func)),
+          m(nullptr)
+    {}
+    Module *get()
+    {
+        if (!m)
+            m = func();
+        return m;
+    }
+    Module &operator*()
+    {
+        return *get();
+    }
+};
+
+template<typename Func>
+static LazyModule<typename std::remove_reference<Func>::type>
+lazyModule(Func &&func)
+{
+    return LazyModule<typename std::remove_reference<Func>::type>(
+        std::forward<Func>(func));
+}
+
+// Find or create the GVs for the library and symbol lookup.
+// Return `runtime_lib` (whether the library name is a string)
+// Optionally return the symbol address in the current session
+// when `symaddr != nullptr`.
+// The `lib` and `sym` GV returned may not be in the current module.
+template<typename MT>
+static bool runtime_sym_gvs(const char *f_lib, const char *f_name, MT &&M,
+                            GlobalVariable *&lib, GlobalVariable *&sym,
+                            void **symaddr=nullptr)
+{
+    void *libsym = NULL;
+    bool runtime_lib = false;
+    GlobalVariable *libptrgv;
+    SymMapGV *symMap;
+#ifdef _OS_WINDOWS_
+    if ((intptr_t)f_lib == 1) {
+        libptrgv = jlexe_var;
+        libsym = jl_exe_handle;
+        symMap = &symMapExe;
+    }
+    else if ((intptr_t)f_lib == 2) {
+        libptrgv = jldll_var;
+        libsym = jl_dl_handle;
+        symMap = &symMapDl;
+    }
+    else
+#endif
+    if (f_lib == NULL) {
+        libptrgv = jlRTLD_DEFAULT_var;
+        libsym = jl_RTLD_DEFAULT_handle;
+        symMap = &symMapDefault;
+    }
+    else {
+        std::string name = "ccalllib_";
+        name += f_lib;
+        runtime_lib = true;
+        auto iter = libMapGV.find(f_lib);
+        if (iter == libMapGV.end()) {
+            libptrgv = new GlobalVariable(*M, T_pint8, false,
+                                          GlobalVariable::ExternalLinkage,
+                                          NULL, name);
+            auto &libgv = libMapGV[f_lib];
+            libgv = std::make_pair(global_proto(libptrgv), SymMapGV());
+            symMap = &libgv.second;
+            libsym = jl_get_library(f_lib);
+            assert(libsym != NULL);
+            *(void**)jl_emit_and_add_to_shadow(libptrgv) = libsym;
+        }
+        else {
+            libptrgv = iter->second.first;
+            symMap = &iter->second.second;
+        }
+    }
+    if (libsym == NULL) {
+        libsym = *(void**)jl_get_global(libptrgv);
+    }
+    assert(libsym != NULL);
+
+    GlobalVariable *llvmgv;
+    auto sym_iter = symMap->find(f_name);
+    if (sym_iter == symMap->end()) {
+        // MCJIT forces this to have external linkage eventually, so we would clobber
+        // the symbol of the actual function.
+        std::string name = "ccall_";
+        name += f_name;
+        name += "_";
+        name += std::to_string(globalUnique++);
+        llvmgv = new GlobalVariable(*M, T_pvoidfunc, false,
+                                    GlobalVariable::ExternalLinkage, NULL, name);
+        llvmgv = global_proto(llvmgv);
+        void *addr = jl_dlsym_e(libsym, f_name);
+        (*symMap)[f_name] = std::make_pair(llvmgv, addr);
+        if (symaddr)
+            *symaddr = addr;
+        *(void**)jl_emit_and_add_to_shadow(llvmgv) = addr;
+    }
+    else {
+        if (symaddr)
+            *symaddr = sym_iter->second.second;
+        llvmgv = sym_iter->second.first;
+    }
+
+    lib = libptrgv;
+    sym = llvmgv;
+    return runtime_lib;
+}
+
+static Value *runtime_sym_lookup(PointerType *funcptype, const char *f_lib,
+                                 const char *f_name, Function *f,
+                                 GlobalVariable *libptrgv,
+                                 GlobalVariable *llvmgv, bool runtime_lib)
 {
     // in pseudo-code, this function emits the following:
     //   global HMODULE *libptrgv
@@ -16,70 +142,13 @@ static Value *runtime_sym_lookup(PointerType *funcptype, const char *f_lib, cons
     //       *llvmgv = jl_load_and_lookup(f_lib, f_name, libptrgv);
     //   }
     //   return (*llvmgv)
-    void *libsym = NULL;
-    bool runtime_lib = false;
-    GlobalVariable *libptrgv;
-#ifdef _OS_WINDOWS_
-    if ((intptr_t)f_lib == 1) {
-        libptrgv = prepare_global(jlexe_var);
-        libsym = jl_exe_handle;
-    }
-    else if ((intptr_t)f_lib == 2) {
-        libptrgv = prepare_global(jldll_var);
-        libsym = jl_dl_handle;
-    }
-    else
-#endif
-    if (f_lib == NULL) {
-        libptrgv = prepare_global(jlRTLD_DEFAULT_var);
-        libsym = jl_RTLD_DEFAULT_handle;
-    }
-    else {
-        std::string name = "ccalllib_";
-        name += f_lib;
-        runtime_lib = true;
-        libptrgv = libMapGV[f_lib];
-        if (libptrgv == NULL) {
-            libptrgv = new GlobalVariable(*jl_Module, T_pint8,
-               false, GlobalVariable::ExternalLinkage,
-               NULL, name);
-            libMapGV[f_lib] = global_proto(libptrgv);
-            libsym = jl_get_library(f_lib);
-            assert(libsym != NULL);
-            *(void**)jl_emit_and_add_to_shadow(libptrgv) = libsym;
-        }
-        else {
-            libptrgv = prepare_global(libptrgv);
-        }
-    }
-    if (libsym == NULL) {
-        libsym = *(void**)jl_get_global(libptrgv);
-    }
-    assert(libsym != NULL);
-
-    GlobalVariable *llvmgv = symMapGV[f_name];
-    if (llvmgv == NULL) {
-        // MCJIT forces this to have external linkage eventually, so we would clobber
-        // the symbol of the actual function.
-        std::string name = "ccall_";
-        name += f_name;
-        llvmgv = new GlobalVariable(*jl_Module, T_pvoidfunc,
-           false, GlobalVariable::ExternalLinkage,
-           NULL, name);
-        symMapGV[f_name] = global_proto(llvmgv);
-        *(void**)jl_emit_and_add_to_shadow(llvmgv) = jl_dlsym_e(libsym, f_name);
-    }
-    else {
-        llvmgv = prepare_global(llvmgv);
-    }
-
-    BasicBlock *dlsym_lookup = BasicBlock::Create(jl_LLVMContext, "dlsym"),
-               *ccall_bb = BasicBlock::Create(jl_LLVMContext, "ccall");
+    BasicBlock *dlsym_lookup = BasicBlock::Create(jl_LLVMContext, "dlsym");
+    BasicBlock *ccall_bb = BasicBlock::Create(jl_LLVMContext, "ccall");
     Constant *initnul = ConstantPointerNull::get((PointerType*)T_pvoidfunc);
     builder.CreateCondBr(builder.CreateICmpNE(builder.CreateLoad(llvmgv), initnul), ccall_bb, dlsym_lookup);
 
-    assert(ctx->f->getParent() != NULL);
-    ctx->f->getBasicBlockList().push_back(dlsym_lookup);
+    assert(f->getParent() != NULL);
+    f->getBasicBlockList().push_back(dlsym_lookup);
     builder.SetInsertPoint(dlsym_lookup);
     Value *libname;
     if (runtime_lib) {
@@ -96,10 +165,126 @@ static Value *runtime_sym_lookup(PointerType *funcptype, const char *f_lib, cons
     builder.CreateStore(llvmf, llvmgv);
     builder.CreateBr(ccall_bb);
 
-    ctx->f->getBasicBlockList().push_back(ccall_bb);
+    f->getBasicBlockList().push_back(ccall_bb);
     builder.SetInsertPoint(ccall_bb);
     llvmf = builder.CreateLoad(llvmgv);
     return builder.CreatePointerCast(llvmf,funcptype);
+}
+
+static Value *runtime_sym_lookup(PointerType *funcptype, const char *f_lib,
+                                 const char *f_name, Function *f)
+{
+    GlobalVariable *libptrgv;
+    GlobalVariable *llvmgv;
+    bool runtime_lib = runtime_sym_gvs(f_lib, f_name, f->getParent(),
+                                       libptrgv, llvmgv);
+    libptrgv = prepare_global(libptrgv);
+    llvmgv = prepare_global(llvmgv);
+    return runtime_sym_lookup(funcptype, f_lib, f_name, f, libptrgv, llvmgv,
+                              runtime_lib);
+}
+
+// Map from distinct callee's to it's GOT entry.
+// In principle the attribute, function type and calling convention
+// don't need to be part of the key but it seems impossible to forward
+// all the arguments without writing assembly directly.
+// This doesn't matter too much in reality since a single function is usually
+// not called with multiple signatures.
+static DenseMap<AttributeSet,
+                std::map<std::tuple<GlobalVariable*,FunctionType*,
+                                    CallingConv::ID>,GlobalVariable*>> allPltMap;
+
+// Emit a "PLT" entry that will be lazily initialized
+// when being called the first time.
+static Value *emit_plt(FunctionType *functype, const AttributeSet &attrs,
+                       CallingConv::ID cc, const char *f_lib, const char *f_name)
+{
+    assert(imaging_mode);
+    GlobalVariable *libptrgv;
+    GlobalVariable *llvmgv;
+    void *symaddr;
+    auto LM = lazyModule([&] {
+            Module *m = new Module(f_name, jl_LLVMContext);
+            jl_setup_module(m);
+            return m;
+        });
+    bool runtime_lib = runtime_sym_gvs(f_lib, f_name, LM,
+                                       libptrgv, llvmgv, &symaddr);
+    PointerType *funcptype = PointerType::get(functype, 0);
+
+    auto &pltMap = allPltMap[attrs];
+    auto key = std::make_tuple(llvmgv, functype, cc);
+    auto &slot = pltMap[key];
+    GlobalVariable *got;
+    if (!slot) {
+        Module *M = LM.get();
+        libptrgv = prepare_global(libptrgv, M);
+        llvmgv = prepare_global(llvmgv, M);
+        BasicBlock *old = builder.GetInsertBlock();
+        DebugLoc olddl = builder.getCurrentDebugLocation();
+        DebugLoc noDbg;
+        builder.SetCurrentDebugLocation(noDbg);
+        std::stringstream funcName;
+        funcName << "jlplt_" << f_name << "_" << globalUnique++;
+        auto fname = funcName.str();
+        Function *plt = Function::Create(functype,
+                                         GlobalVariable::ExternalLinkage,
+                                         fname, M);
+        plt->setAttributes(attrs);
+        if (cc != CallingConv::C)
+            plt->setCallingConv(cc);
+        funcName << "_got";
+        auto gname = funcName.str();
+        got = new GlobalVariable(*M, T_pvoidfunc, false,
+                                 GlobalVariable::ExternalLinkage,
+                                 nullptr, gname);
+        slot = global_proto(got);
+        *(void**)jl_emit_and_add_to_shadow(got) = symaddr;
+        BasicBlock *b0 = BasicBlock::Create(jl_LLVMContext, "top", plt);
+        builder.SetInsertPoint(b0);
+        Value *ptr = runtime_sym_lookup(funcptype, f_lib, f_name, plt, libptrgv,
+                                        llvmgv, runtime_lib);
+        builder.CreateStore(builder.CreateBitCast(ptr, T_pvoidfunc), got);
+        SmallVector<Value*, 16> args;
+        for (auto &arg: plt->args())
+            args.push_back(&arg);
+        CallInst *ret = builder.CreateCall(ptr, ArrayRef<Value*>(args));
+        ret->setAttributes(attrs);
+        if (cc != CallingConv::C)
+            ret->setCallingConv(cc);
+        // NoReturn function can trigger LLVM verifier error when declared as
+        // MustTail since other passes might replace the `ret` with
+        // `unreachable` (LLVM should probably accept `unreachable`).
+        if (attrs.hasAttribute(AttributeSet::FunctionIndex,
+                               Attribute::NoReturn)) {
+            builder.CreateUnreachable();
+        }
+        else {
+            ret->setTailCallKind(CallInst::TCK_MustTail);
+            if (functype->getReturnType() == T_void) {
+                builder.CreateRetVoid();
+            }
+            else {
+                builder.CreateRet(ret);
+            }
+        }
+        builder.SetInsertPoint(old);
+        builder.SetCurrentDebugLocation(olddl);
+        jl_finalize_module(std::unique_ptr<Module>(M), true);
+        auto shadowgot =
+            cast<GlobalVariable>(shadow_output->getNamedValue(gname));
+        auto shadowplt = cast<Function>(shadow_output->getNamedValue(fname));
+        shadowgot->setInitializer(ConstantExpr::getBitCast(shadowplt,
+                                                           T_pvoidfunc));
+        got = prepare_global(shadowgot);
+    }
+    else {
+        // `runtime_sym_gvs` shouldn't have created anything in a new module
+        // if it returns a GV that already exists.
+        assert(!LM.m);
+        got = prepare_global(slot);
+    }
+    return builder.CreateBitCast(builder.CreateLoad(got), funcptype);
 }
 
 // --- ABI Implementations ---
@@ -399,8 +584,6 @@ static native_sym_arg_t interpret_symbol_arg(jl_value_t *arg, jl_codectx_t *ctx,
 }
 
 
-typedef AttributeSet attr_type;
-
 static jl_value_t* try_eval(jl_value_t *ex, jl_codectx_t *ctx, const char *failure, bool compiletime=false)
 {
     jl_value_t *constant = NULL;
@@ -457,7 +640,7 @@ static jl_cgval_t emit_cglobal(jl_value_t **args, size_t nargs, jl_codectx_t *ct
     }
     else {
         if (imaging_mode) {
-            res = runtime_sym_lookup((PointerType*)lrt, sym.f_lib, sym.f_name, ctx);
+            res = runtime_sym_lookup((PointerType*)lrt, sym.f_lib, sym.f_name, ctx->f);
         }
         else {
             void *symaddr = jl_dlsym_e(jl_get_library(sym.f_lib), sym.f_name);
@@ -860,8 +1043,6 @@ static jl_cgval_t mark_or_box_ccall_result(Value *result, bool isboxed, jl_value
     return mark_julia_type(result, isboxed, rt, ctx);
 }
 
-typedef AttributeSet attr_type;
-
 static std::string generate_func_sig(
         Type **lrt, // input parameter of the llvm return type (from julia_struct_to_llvm)
         Type **prt, // out parameter of the llvm return type for the function signature
@@ -872,7 +1053,7 @@ static std::string generate_func_sig(
         Type *&fargt_vasig, // ABI coercion type for vararg list
         std::vector<bool> &inRegList, // vector of "inreg" parameters (vararg is the last item, if applicable)
         std::vector<bool> &byRefList, // vector of "byref" parameters (vararg is the last item, if applicable)
-        attr_type &attributes, // vector of function call site attributes (vararg is the last item, if applicable)
+        AttributeSet &attributes, // vector of function call site attributes (vararg is the last item, if applicable)
         jl_value_t *rt, // julia return type
         jl_svec_t *tt, // tuple of julia argument types
         size_t nargs) // number of actual arguments (can be different from the size of tt when varargs)
@@ -1396,7 +1577,7 @@ static jl_cgval_t emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
     Type *fargt_vasig = NULL;
     std::vector<bool> inRegList(0);
     std::vector<bool> byRefList(0);
-    attr_type attrs;
+    AttributeSet attrs;
     Type *prt = NULL;
     int sret = 0;
     std::string err_msg = generate_func_sig(&lrt, &prt, sret, fargt, fargt_isboxed, fargt_sig, fargt_vasig,
@@ -1513,7 +1694,7 @@ static jl_cgval_t emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
 
         PointerType *funcptype = PointerType::get(functype,0);
         if (imaging_mode) {
-            llvmf = runtime_sym_lookup(funcptype, f_lib, f_name, ctx);
+            llvmf = emit_plt(functype, attrs, cc, f_lib, f_name);
         }
         else {
             void *symaddr = jl_dlsym_e(jl_get_library(f_lib), f_name);
