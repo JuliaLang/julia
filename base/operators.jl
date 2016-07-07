@@ -335,9 +335,9 @@ eltype(x) = eltype(typeof(x))
 """
     ∘(f, g)
 
-Creates a composition of two functions (or functor objects), such that
-`(f ∘ g)(x...) == f(g(x...))`. The `∘` symbol can be accessed at the REPL using
-`\\circ`.
+Creates a composition of two functions (or callable objects) `f` and `g`, such
+that `(f ∘ g)(x...) == f(g(x...))`. The `∘` symbol can be accessed at the REPL 
+using `\\circ`.
 
 By default, a function equivalent to `(x...) -> f(g(x...))` is returned, but
 this may be specialized to create any functionally-equivalent, callable object.
