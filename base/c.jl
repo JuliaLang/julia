@@ -130,18 +130,20 @@ end
 
 # transcoding between data in UTF-8 and UTF-16 for Windows APIs
 """
-    Base.transcode(T,src::Vector{U})
+    transcode(T, src)
 
-Transcodes unicode data `src` to a different encoding, where `U` and `T` are the integers
-denoting the input and output code units. Currently supported are UTF-8 and UTF-16, which
-are denoted by integers `UInt8` and `UInt16`, respectively.
-
-NULs are handled like any other character (i.e. the output will be NUL-terminated if and
-only if the `src` is).
+Convert string data between Unicode encodings.   `src` is either a
+`String` or an `Vector{UIntXX}` of UTF-XX code units, where
+`XX` is 8 or 16. `T` indicates the encoding of the return value:
+`String` to return a (UTF-8 encoded) `String` or `UIntXX`
+to return a `Vector{UIntXX}` of the UTF-`XX` data.
 """
 function transcode end
+
 transcode{T<:Union{UInt8,UInt16}}(::Type{T}, src::Vector{T}) = src
 transcode(::Type{Int32}, src::Vector{UInt32}) = reinterpret(Int32, src)
+transcode(T, src::String) = transcode(T, src.data)
+transcode(::Type{String}, src) = String(transcode(UInt8, src))
 
 function transcode(::Type{UInt16}, src::Vector{UInt8})
     dst = UInt16[]
