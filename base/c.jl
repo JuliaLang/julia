@@ -132,7 +132,7 @@ end
 """
     transcode(T, src)
 
-Convert string data between Unicode encodings.   `src` is either a
+Convert string data between Unicode encodings. `src` is either a
 `String` or an `Vector{UIntXX}` of UTF-XX code units, where
 `XX` is 8 or 16. `T` indicates the encoding of the return value:
 `String` to return a (UTF-8 encoded) `String` or `UIntXX`
