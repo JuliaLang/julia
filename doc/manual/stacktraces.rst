@@ -264,7 +264,7 @@ by passing them into :func:`StackTraces.lookup`:
 
     julia> frame = StackTraces.lookup(pointer)
     1-element Array{StackFrame,1}:
-      in jl_backtrace_from_here at stackwalk.c:104
+      in jl_backtrace_from_here at stackwalk.c:105
 
     julia> println("The top frame is from $(frame[1].func)!")
     The top frame is from jl_backtrace_from_here!

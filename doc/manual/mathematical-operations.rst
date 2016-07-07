@@ -400,7 +400,7 @@ The following examples show the different forms.
 
     julia> Int8(128)
     ERROR: InexactError()
-     in Int8(::Int64) at ./sysimg.jl:63
+     in Int8(::Int64) at ./sysimg.jl:53
      ...
 
     julia> Int8(127.0)
@@ -408,12 +408,12 @@ The following examples show the different forms.
 
     julia> Int8(3.14)
     ERROR: InexactError()
-     in Int8(::Float64) at ./sysimg.jl:63
+     in Int8(::Float64) at ./sysimg.jl:53
      ...
 
     julia> Int8(128.0)
     ERROR: InexactError()
-     in Int8(::Float64) at ./sysimg.jl:63
+     in Int8(::Float64) at ./sysimg.jl:53
      ...
 
     julia> 127 % Int8

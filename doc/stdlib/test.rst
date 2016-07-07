@@ -265,10 +265,10 @@ writing new tests.
        julia> @code_warntype f(1,2,3)
        ...
        Body:
-         begin  # none, line 1:
-             unless (Base.slt_int)(1,b::Int64)::Bool goto 4
+         begin
+             unless (Base.slt_int)(1,b::Int64)::Bool goto 3
              return 1
-             4:
+             3:
              return 1.0
          end::UNION{FLOAT64,INT64}
 

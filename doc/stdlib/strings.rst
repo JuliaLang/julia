@@ -472,3 +472,4 @@
    .. Docstring generated from Julia source
 
    General unescaping of traditional C and Unicode escape sequences. Reverse of :func:`escape_string`\ . See also :func:`unescape_string`\ .
+

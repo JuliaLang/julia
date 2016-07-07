@@ -288,15 +288,15 @@ such an invalid byte index, an error is thrown:
 
     julia> s[2]
     ERROR: UnicodeError: invalid character index
-     in slow_utf8_next(::Array{UInt8,1}, ::UInt8, ::Int64) at ./strings/string.jl:68
-     in next at ./strings/string.jl:93 [inlined]
+     in slow_utf8_next(::Array{UInt8,1}, ::UInt8, ::Int64) at ./strings/string.jl:69
+     in next at ./strings/string.jl:94 [inlined]
      in getindex(::String, ::Int64) at ./strings/basic.jl:70
      ...
 
     julia> s[3]
     ERROR: UnicodeError: invalid character index
-     in slow_utf8_next(::Array{UInt8,1}, ::UInt8, ::Int64) at ./strings/string.jl:68
-     in next at ./strings/string.jl:93 [inlined]
+     in slow_utf8_next(::Array{UInt8,1}, ::UInt8, ::Int64) at ./strings/string.jl:69
+     in next at ./strings/string.jl:94 [inlined]
      in getindex(::String, ::Int64) at ./strings/basic.jl:70
      ...
 
