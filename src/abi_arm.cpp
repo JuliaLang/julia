@@ -54,7 +54,8 @@ static Type *get_llvm_fptype(jl_datatype_t *dt)
     default:
         return NULL;
     }
-    return jl_is_floattype((jl_value_t*)dt) ? lltype : NULL;
+    return ((jl_floatingpoint_type && jl_is_floattype((jl_value_t*)dt)) ?
+            lltype : NULL);
 }
 
 static size_t isLegalHA(jl_datatype_t *dt, Type *&base);
