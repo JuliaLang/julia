@@ -58,7 +58,7 @@ the result.
 The argument `A` should *not* be a matrix.  Rather, instead of matrices it should be a
 factorization object (e.g. produced by [`factorize`](:func:`factorize`) or [`cholfact`](:func:`cholfact`)).
 The reason for this is that factorization itself is both expensive and typically allocates memory
-(although it can also be done in-place via, e.g., [`lufact`](:func:`lufact`)),
+(although it can also be done in-place via, e.g., [`lufact!`](:func:`lufact!`)),
 and performance-critical situations requiring `A_ldiv_B!` usually also require fine-grained
 control over the factorization of `A`.
 """
