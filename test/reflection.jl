@@ -140,7 +140,7 @@ end
 i10165(::DataType) = 0
 i10165{T,n}(::Type{AbstractArray{T,n}}) = 1
 @test i10165(AbstractArray{Int}) == 0
-@test which(i10165, Tuple{Type{AbstractArray{Int}},}).sig == Tuple{typeof(i10165),DataType}
+@test which(i10165, Tuple{Type{AbstractArray{Int}},}).sig == Tuple{typeof(i10165),Any,DataType}
 
 # fullname
 @test fullname(Base) == (:Base,)
@@ -269,7 +269,7 @@ let ex = :(a + b)
 end
 foo13825{T,N}(::Array{T,N}, ::Array, ::Vector) = nothing
 @test startswith(string(first(methods(foo13825))),
-                 "foo13825{T,N}(::Array{T,N}, ::Array, ::Array{T<:Any,1})")
+                 "foo13825{T,N}(::Any, ::Array{T,N}, ::Array, ::Array{T<:Any,1})")
 
 type TLayout
     x::Int8
@@ -326,7 +326,9 @@ end
 definitely_not_in_sysimg() = nothing
 for (f,t) in ((definitely_not_in_sysimg,Tuple{}),
         (Base.throw_boundserror,Tuple{UnitRange{Int64},Int64}))
-    t = Base.tt_cons(Core.Typeof(f), Base.to_tuple_type(t))
+    t = Base.to_tuple_type(t)
+    t = Base.tt_cons(Void, t)   # add the context
+    t = Base.tt_cons(Core.Typeof(f), t)
     llvmf = ccall(:jl_get_llvmf, Ptr{Void}, (Any, Bool, Bool), t, false, true)
     @test llvmf != C_NULL
     @test ccall(:jl_get_llvm_fptr, Ptr{Void}, (Ptr{Void},), llvmf) != C_NULL
