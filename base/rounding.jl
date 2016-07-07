@@ -10,16 +10,71 @@ export
     get_zero_subnormals, set_zero_subnormals
 
 ## rounding modes ##
+"""
+    RoundingMode
+
+A type used for controlling the rounding mode of floating point operations (via
+[`rounding`](:func:`rounding`)/[`setrounding`](:func:`setrounding`) functions), or as
+optional arguments for rounding to the nearest integer (via the [`round`](:func:`round`)
+function).
+
+Currently supported rounding modes are:
+
+- [`RoundNearest`](:obj:`RoundNearest`) (default)
+- [`RoundNearestTiesAway`](:obj:`RoundNearestTiesAway`)
+- [`RoundNearestTiesUp`](:obj:`RoundNearestTiesUp`)
+- [`RoundToZero`](:obj:`RoundToZero`)
+- [`RoundFromZero`](:obj:`RoundFromZero`) (`BigFloat` only)
+- [`RoundUp`](:obj:`RoundUp`)
+- [`RoundDown`](:obj:`RoundDown`)
+"""
 immutable RoundingMode{T} end
 
+"""
+    RoundNearest
+
+The default rounding mode. Rounds to the nearest integer, with ties (fractional values of
+0.5) being rounded to the nearest even integer.
+"""
 const RoundNearest = RoundingMode{:Nearest}()
+
+"""
+    RoundToZero
+
+[`round`](:func:`round`) using this rounding mode is an alias for [`trunc`](:func:`trunc`).
+"""
 const RoundToZero = RoundingMode{:ToZero}()
+
+"""
+    RoundUp
+
+[`round`](:func:`round`) using this rounding mode is an alias for [`ceil`](:func:`ceil`).
+"""
 const RoundUp = RoundingMode{:Up}()
+
+"""
+    RoundDown
+
+[`round`](:func:`round`) using this rounding mode is an alias for [`floor`](:func:`floor`).
+"""
 const RoundDown = RoundingMode{:Down}()
+
 const RoundFromZero = RoundingMode{:FromZero}() # mpfr only
-# C-style round behaviour
+
+"""
+    RoundNearestTiesAway
+
+Rounds to nearest integer, with ties rounded away from zero (C/C++
+[`round`](:func:`round`) behaviour).
+"""
 const RoundNearestTiesAway = RoundingMode{:NearestTiesAway}()
-# Java-style round behaviour
+
+"""
+    RoundNearestTiesUp
+
+Rounds to nearest integer, with ties rounded toward positive infinity (Java/JavaScript
+[`round`](:func:`round`) behaviour).
+"""
 const RoundNearestTiesUp = RoundingMode{:NearestTiesUp}()
 
 to_fenv(::RoundingMode{:Nearest}) = JL_FE_TONEAREST
@@ -41,13 +96,49 @@ function from_fenv(r::Integer)
     end
 end
 
+"""
+    setrounding(T, mode)
+
+Set the rounding mode of floating point type `T`, controlling the rounding of basic
+arithmetic functions ([`+`](:func:`+`), [`-`](:func:`-`), [`*`](:func:`*`), [`/`](:func:`/`)
+and [`sqrt`](:func:`sqrt`)) and type conversion.
+
+Note that this may affect other types, for instance changing the rounding mode of `Float64`
+will change the rounding mode of `Float32`. See [`RoundingMode`](:obj:`RoundingMode`) for
+available modes.
+"""
+setrounding(T::Type, mode)
+
+"""
+    rounding(T)
+
+Get the current floating point rounding mode for type `T`, controlling the rounding of basic
+arithmetic functions ([`+`](:func:`+`), [`-`](:func:`-`), [`*`](:func:`*`), [`/`](:func:`/`)
+and [`sqrt`](:func:`sqrt`)) and type conversion.
+
+See [`RoundingMode`](:obj:`RoundingMode`) for available modes.
+"""
+:rounding
+
 setrounding_raw{T<:Union{Float32,Float64}}(::Type{T},i::Integer) = ccall(:fesetround, Int32, (Int32,), i)
 rounding_raw{T<:Union{Float32,Float64}}(::Type{T}) = ccall(:fegetround, Int32, ())
 
 setrounding{T<:Union{Float32,Float64}}(::Type{T},r::RoundingMode) = setrounding_raw(T,to_fenv(r))
 rounding{T<:Union{Float32,Float64}}(::Type{T}) = from_fenv(rounding_raw(T))
 
+"""
+    setrounding(f::Function, T, mode)
 
+Change the rounding mode of floating point type `T` for the duration of `f`. It is logically
+equivalent to:
+
+    old = rounding(T)
+    setrounding(T, mode)
+    f()
+    setrounding(T, old)
+
+See [`RoundingMode`](:obj:`RoundingMode`) for available rounding modes.
+"""
 function setrounding{T}(f::Function, ::Type{T}, rounding::RoundingMode)
     old_rounding_raw = rounding_raw(T)
     setrounding(T,rounding)
