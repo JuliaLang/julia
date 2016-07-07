@@ -662,7 +662,7 @@ JITEventListener *CreateJuliaJITEventListener()
 static int lookup_pointer(DIContext *context, jl_frame_t **frames,
                           size_t pointer, int demangle, int noInline)
 {
-    // This function is not allowed to reference any TLS variables if noInline
+    // This function is not allowed to reference any TLS variables
     // since it can be called from an unmanaged thread on OSX.
     if (!context) {
         if (demangle && (*frames)[0].func_name != NULL) {
@@ -689,7 +689,7 @@ static int lookup_pointer(DIContext *context, jl_frame_t **frames,
         n_frames = 1;
     if (n_frames > 1) {
         jl_frame_t *new_frames = (jl_frame_t*)calloc(sizeof(jl_frame_t), n_frames);
-        memcpy(&new_frames[n_frames-1], *frames, sizeof(jl_frame_t));
+        memcpy(&new_frames[n_frames - 1], *frames, sizeof(jl_frame_t));
         free(*frames);
         *frames = new_frames;
     }
@@ -1277,50 +1277,61 @@ int jl_getFunctionInfo(jl_frame_t **frames_out, size_t pointer, int skipC, int n
         std::vector<JITEvent_EmittedFunctionDetails::LineStart>::iterator vit =
             (*it).second.lines.begin();
         JITEvent_EmittedFunctionDetails::LineStart prev = *vit;
+        LLVMContext &Ctx = (*it).second.func->getContext();
 
-        if ((*it).second.func) {
-            DISubprogram debugscope =
-                DISubprogram(prev.Loc.getScope((*it).second.func->getContext()));
-            jl_copy_str(&frames[0].file_name, debugscope.getFilename().str().c_str());
-            // the DISubprogram has the un-mangled name, so use that if
-            // available. However, if the scope need not be the current
-            // subprogram.
-            if (debugscope.getName().data() != NULL) {
-                jl_copy_str(&frames[0].func_name, debugscope.getName().str().c_str());
-            }
-            else {
-                char *oldname = frames[0].func_name;
-                frames[0].func_name = jl_demangle(frames[0].func_name);
-                free(oldname);
-            }
+        DISubprogram debugscope(prev.Loc.getScope(Ctx));
+        jl_copy_str(&frames[0].file_name, debugscope.getFilename().str().c_str());
+        // the DISubprogram has the un-mangled name, so use that if
+        // available. However, if the scope need not be the current
+        // subprogram.
+        if (debugscope.getName().data() != NULL) {
+            jl_copy_str(&frames[0].func_name, debugscope.getName().str().c_str());
+        }
+        else {
+            char *oldname = frames[0].func_name;
+            frames[0].func_name = jl_demangle(frames[0].func_name);
+            free(oldname);
         }
 
-        vit++;
-
+        // find nearest line info
+        ++vit;
         while (vit != (*it).second.lines.end()) {
             if (pointer <= (*vit).Address) {
-                frames[0].line = prev.Loc.getLine();
                 break;
             }
             prev = *vit;
-            vit++;
-        }
-        if (frames[0].line == -1) {
-            frames[0].line = prev.Loc.getLine();
+            ++vit;
         }
 
-        DILexicalBlockFile locscope = DILexicalBlockFile(prev.Loc.getScope((*it).second.func->getContext()));
-        jl_copy_str(&frames[0].file_name, locscope.getFilename().str().c_str());
+        // read out inlining and line number information
+        int n_frames = 1;
+        if (!noInline) {
+            MDNode *inlinedAt = prev.Loc.getInlinedAt(Ctx);
+            while (inlinedAt != NULL) {
+                DebugLoc inlineloc = DebugLoc::getFromDILocation(inlinedAt);
+                inlinedAt = inlineloc.getInlinedAt(Ctx);
+                n_frames++;
+            }
+            if (n_frames > 1) {
+                frames = (jl_frame_t*)calloc(sizeof(jl_frame_t), n_frames);
+                memcpy(&frames[n_frames - 1], *frames_out, sizeof(jl_frame_t));
+                free(*frames_out);
+                *frames_out = frames;
+            }
+        }
+        DebugLoc inlineloc = prev.Loc;
+        for (int i = 0; i < n_frames; i++) {
+            frames[i].inlined = i != n_frames - 1;
+            frames[i].line = inlineloc.getLine();
+            DISubprogram locscope(inlineloc.getScope(Ctx));
+            jl_copy_str(&frames[i].file_name, locscope.getFilename().str().c_str());
+            jl_copy_str(&frames[i].func_name, locscope.getName().str().c_str());
+            MDNode *inlinedAt = inlineloc.getInlinedAt(Ctx);
+            inlineloc = DebugLoc::getFromDILocation(inlinedAt);
+        }
 
-        /*MDNode *inlinedAt = skipInline ? NULL : prev.Loc.getInlinedAt((*it).second.func->getContext());
-        if ((!skipInline) && (inlinedAt != NULL)) {
-            DebugLoc inlineloc = DebugLoc::getFromDILocation(inlinedAt);
-            DILexicalBlockFile inlinescope = DILexicalBlockFile(inlineloc.getScope((*it).second.func->getContext()));
-            jl_copy_str(&frames, inlinescope.getFilename().str().c_str());
-            *inlinedat_line = inlineloc.getLine();
-            }*/
         uv_rwlock_rdunlock(&threadsafe);
-        return 1;
+        return n_frames;
     }
     uv_rwlock_rdunlock(&threadsafe);
 #endif // USE_MCJIT

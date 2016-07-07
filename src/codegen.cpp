@@ -4248,14 +4248,13 @@ static std::unique_ptr<Module> emit_function(jl_lambda_info_t *lam, jl_llvm_func
         (jl_options.malloc_log    == JL_LOG_USER && in_user_code);
     StringRef filename = "<missing>";
     StringRef dbgFuncName = ctx.name;
-    int lno = -1;
+    int toplineno = -1;
     if (lam->def) {
-        lno = lam->def->line;
+        toplineno = lam->def->line;
         if (lam->def->file != empty_sym)
             filename = jl_symbol_name(lam->def->file);
     }
     ctx.file = filename;
-    int toplineno = lno;
 
     DIBuilder dbuilder(*M);
     ctx.dbuilder = &dbuilder;
@@ -4267,15 +4266,17 @@ static std::unique_ptr<Module> emit_function(jl_lambda_info_t *lam, jl_llvm_func
 #else
     DIFile topfile;
     DISubprogram SP;
+    std::vector<DebugLoc> DI_loc_stack;
+    std::vector<DISubprogram> DI_sp_stack;
 #endif
 
     BasicBlock *b0 = BasicBlock::Create(jl_LLVMContext, "top", f);
     builder.SetInsertPoint(b0);
 
     // jl_printf(JL_STDERR, "\n*** compiling %s at %s:%d\n\n",
-    //           jl_symbol_name(lam->name), filename.c_str(), lno);
+    //           jl_symbol_name(lam->name), filename.c_str(), toplineno);
 
-    DebugLoc noDbg;
+    DebugLoc noDbg, topdebugloc;
     ctx.debug_enabled = true;
     if (dbgFuncName.empty()) {
         // special value: if function name is empty, disable debug info
@@ -4348,8 +4349,7 @@ static std::unique_ptr<Module> emit_function(jl_lambda_info_t *lam, jl_llvm_func
         #else
                                     f);             // Function
         #endif
-        // set initial line number
-        builder.SetCurrentDebugLocation(DebugLoc::get(lno, 0, (MDNode*)SP, NULL));
+        topdebugloc = DebugLoc::get(toplineno, 0, SP, NULL);
         #ifdef LLVM38
         f->setSubprogram(SP);
         #endif
@@ -4357,9 +4357,7 @@ static std::unique_ptr<Module> emit_function(jl_lambda_info_t *lam, jl_llvm_func
         assert(SP.Verify() && SP.describes(f) && SP.getFunction() == f);
         #endif
     }
-    else {
-        builder.SetCurrentDebugLocation(noDbg);
-    }
+    builder.SetCurrentDebugLocation(noDbg);
 
     if (ctx.debug_enabled) {
         const bool AlwaysPreserve = true;
@@ -4519,7 +4517,7 @@ static std::unique_ptr<Module> emit_function(jl_lambda_info_t *lam, jl_llvm_func
                         assert((Metadata*)varinfo.dinfo->getType() != jl_pvalue_dillvmt);
                         ctx.dbuilder->insertDeclare(lv, varinfo.dinfo, ctx.dbuilder->createExpression(),
 #ifdef LLVM37
-                                                    builder.getCurrentDebugLocation(),
+                                                    topdebugloc,
 #endif
                                 builder.GetInsertBlock());
                     }
@@ -4547,7 +4545,7 @@ static std::unique_ptr<Module> emit_function(jl_lambda_info_t *lam, jl_llvm_func
                 }
                 ctx.dbuilder->insertDeclare(av, varinfo.dinfo, expr,
 #ifdef LLVM37
-                                            builder.getCurrentDebugLocation(),
+                                            topdebugloc,
 #endif
                                 builder.GetInsertBlock());
             }
@@ -4606,7 +4604,7 @@ static std::unique_ptr<Module> emit_function(jl_lambda_info_t *lam, jl_llvm_func
                             addr.push_back(llvm::dwarf::DW_OP_deref);
                         ctx.dbuilder->insertDeclare(pargArray, vi.dinfo, ctx.dbuilder->createExpression(addr),
 #ifdef LLVM37
-                                        builder.getCurrentDebugLocation(),
+                                        topdebugloc,
 #endif
                                         builder.GetInsertBlock());
                     }
@@ -4638,7 +4636,7 @@ static std::unique_ptr<Module> emit_function(jl_lambda_info_t *lam, jl_llvm_func
                         }
                         ctx.dbuilder->insertDeclare(parg, vi.dinfo, ctx.dbuilder->createExpression(addr),
 #ifdef LLVM37
-                                                    builder.getCurrentDebugLocation(),
+                                                    topdebugloc,
 #endif
                                                     builder.GetInsertBlock());
                     }
@@ -4718,11 +4716,14 @@ static std::unique_ptr<Module> emit_function(jl_lambda_info_t *lam, jl_llvm_func
     }
 
     // step 13. compile body statements
+    if (ctx.debug_enabled)
+        // set initial line number
+        builder.SetCurrentDebugLocation(topdebugloc);
     bool prevlabel = false;
-    lno = -1;
+    int lno = -1;
     int prevlno = -1;
-    for(i=0; i < stmtslen; i++) {
-        jl_value_t *stmt = jl_array_ptr_ref(stmts,i);
+    for (i = 0; i < stmtslen; i++) {
+        jl_value_t *stmt = jl_array_ptr_ref(stmts, i);
         if (jl_is_linenode(stmt) ||
             (jl_is_expr(stmt) && ((jl_expr_t*)stmt)->head == line_sym)) {
 
@@ -4733,23 +4734,30 @@ static std::unique_ptr<Module> emit_function(jl_lambda_info_t *lam, jl_llvm_func
                 lno = jl_unbox_long(jl_exprarg(stmt,0));
             }
             MDNode *inlinedAt = NULL;
-#ifdef LLVM37
             if (DI_loc_stack.size() > 0) {
+#ifdef LLVM37
                 inlinedAt = DI_loc_stack.back();
-            }
+#else
+                inlinedAt = DI_loc_stack.back().getAsMDNode(jl_LLVMContext);
 #endif
-            if (ctx.debug_enabled) builder.SetCurrentDebugLocation(DebugLoc::get(lno, 0, (MDNode*)SP, inlinedAt));
+            }
+            if (ctx.debug_enabled)
+                builder.SetCurrentDebugLocation(DebugLoc::get(lno, 0, SP, inlinedAt));
         }
         else if (ctx.debug_enabled && jl_is_expr(stmt) && ((jl_expr_t*)stmt)->head == meta_sym && jl_array_len(((jl_expr_t*)stmt)->args) >= 1) {
-#ifdef LLVM37
             jl_expr_t *stmt_e = (jl_expr_t*)stmt;
             jl_value_t *meta_arg = jl_exprarg(stmt_e, 0);
             if (meta_arg == (jl_value_t*)jl_symbol("push_loc")) {
                 std::string new_filename = "<missing>";
                 assert(jl_array_len(stmt_e->args) > 1);
                 jl_sym_t *filesym = (jl_sym_t*)jl_exprarg(stmt_e, 1);
-                new_filename = jl_symbol_name(filesym);
+                if (filesym != empty_sym)
+                    new_filename = jl_symbol_name(filesym);
+#ifdef LLVM37
                 DIFile *new_file = dbuilder.createFile(new_filename, ".");
+#else
+                DIFile new_file = dbuilder.createFile(new_filename, ".");
+#endif
                 DI_sp_stack.push_back(SP);
                 DI_loc_stack.push_back(builder.getCurrentDebugLocation());
                 std::string inl_name;
@@ -4760,8 +4768,10 @@ static std::unique_ptr<Module> emit_function(jl_lambda_info_t *lam, jl_llvm_func
                         jl_value_t *arg = jl_exprarg(stmt_e, ii);
                         if (jl_is_symbol(arg))
                             inl_name = jl_symbol_name((jl_sym_t*)arg);
-                        else if (jl_is_long(arg))
-                            inlined_func_lineno = jl_unbox_long(arg);
+                        else if (jl_is_int32(arg))
+                            inlined_func_lineno = jl_unbox_int32(arg);
+                        else if (jl_is_int64(arg))
+                            inlined_func_lineno = jl_unbox_int64(arg);
                     }
                 }
                 else {
@@ -4779,7 +4789,13 @@ static std::unique_ptr<Module> emit_function(jl_lambda_info_t *lam, jl_llvm_func
                                              0,
                                              true,
                                              nullptr);
-                builder.SetCurrentDebugLocation(DebugLoc::get(inlined_func_lineno, 0, (MDNode*)SP, builder.getCurrentDebugLocation()));
+                MDNode *inlinedAt = NULL;
+#ifdef LLVM37
+                inlinedAt = builder.getCurrentDebugLocation();
+#else
+                inlinedAt = builder.getCurrentDebugLocation().getAsMDNode(jl_LLVMContext);
+#endif
+                builder.SetCurrentDebugLocation(DebugLoc::get(inlined_func_lineno, 0, SP, inlinedAt));
             }
             else if (meta_arg == (jl_value_t*)jl_symbol("pop_loc")) {
                 SP = DI_sp_stack.back();
@@ -4787,10 +4803,8 @@ static std::unique_ptr<Module> emit_function(jl_lambda_info_t *lam, jl_llvm_func
                 builder.SetCurrentDebugLocation(DI_loc_stack.back());
                 DI_loc_stack.pop_back();
             }
-#endif
         }
 
-        DebugLoc loc;
         if (do_coverage)
             coverageVisitLine(filename, lno);
         if (jl_is_labelnode(stmt)) {
