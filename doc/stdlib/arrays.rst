@@ -43,18 +43,6 @@ Basic functions
 
    Returns the valid range of indices for array ``A`` along dimension ``d``\ .
 
-.. function:: shape(A)
-
-   .. Docstring generated from Julia source
-
-   Returns a tuple specifying the "shape" of array ``A``\ . For arrays with conventional indexing (indices start at 1), this is equivalent to ``size(A)``\ ; otherwise it is equivalent to ``indices(A)``\ .
-
-.. function:: shape(A, d)
-
-   .. Docstring generated from Julia source
-
-   Specifies the "shape" of the array ``A`` along dimension ``d``\ . For arrays with conventional indexing (starting at 1), this is equivalent to ``size(A, d)``\ ; for arrays with unconventional indexing (indexing may start at something different from 1), it is equivalent to ``indices(A, d)``\ .
-
 .. function:: length(A) -> Integer
 
    .. Docstring generated from Julia source
@@ -283,31 +271,31 @@ Constructors
         2.18425e-314  2.18425e-314  2.18425e-314  2.18425e-314
         2.18425e-314  2.18425e-314  2.18425e-314  2.18425e-314
 
-   See also ``allocate_for``\ .
-
-.. function:: allocate_for(storagetype, referencearray, [shape])
+.. function:: similar(storagetype, indices)
 
    .. Docstring generated from Julia source
 
-   Create an uninitialized mutable array analogous to that specified by ``storagetype``\ , but with type and shape specified by the final two arguments. The main purpose of this function is to support allocation of arrays that may have unconventional indexing (starting at other than 1), as determined by ``referencearray`` and the optional ``shape`` information.
+   Create an uninitialized mutable array analogous to that specified by ``storagetype``\ , but with ``indices`` specified by the last argument. ``storagetype`` might be a type or a function.
 
    .. code-block:: julia
 
        **Examples**:
 
-       allocate_for(Array{Int}, A)
+       similar(Array{Int}, indices(A))
 
-   creates an array that "acts like" an ``Array{Int}`` (and might indeed be backed by one), but which is indexed identically to ``A``\ . If ``A`` has conventional indexing, this will likely just call ``Array{Int}(size(A))``\ , but if ``A`` has unconventional indexing then the indices of the result will match ``A``\ .
+   creates an array that "acts like" an ``Array{Int}`` (and might indeed be backed by one), but which is indexed identically to ``A``\ . If ``A`` has conventional indexing, this will be identical to ``Array{Int}(size(A))``\ , but if ``A`` has unconventional indexing then the indices of the result will match ``A``\ .
 
    .. code-block:: julia
 
-       allocate_for(BitArray, A, (shape(A, 2),))
+       similar(BitArray, (indices(A, 2),))
 
    would create a 1-dimensional logical array whose indices match those of the columns of ``A``\ .
 
-   The main purpose of the ``referencearray`` argument is to select a particular array type supporting unconventional indexing (as it is possible that several different ones will be simultaneously in use).
+   .. code-block:: julia
 
-   See also ``similar``\ .
+       similar(dims->zeros(Int, dims), indices(A))
+
+   would create an array of ``Int``\ , initialized to zero, matching the indices of ``A``\ .
 
 .. function:: reinterpret(type, A)
 
