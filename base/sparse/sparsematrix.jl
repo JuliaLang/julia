@@ -251,7 +251,7 @@ end
 
 similar(S::SparseMatrixCSC, Tv::Type=eltype(S)) = SparseMatrixCSC(S.m, S.n, copy(S.colptr), copy(S.rowval), Array{Tv}(length(S.nzval)))
 similar{Tv,Ti,TvNew,TiNew}(S::SparseMatrixCSC{Tv,Ti}, ::Type{TvNew}, ::Type{TiNew}) = SparseMatrixCSC(S.m, S.n, convert(Array{TiNew},S.colptr), convert(Array{TiNew}, S.rowval), Array{TvNew}(length(S.nzval)))
-similar{Tv}(S::SparseMatrixCSC, ::Type{Tv}, d::Dims) = spzeros(Tv, d...)
+@inline similar{Tv}(S::SparseMatrixCSC, ::Type{Tv}, d::Dims) = spzeros(Tv, d...)
 
 function convert{Tv,Ti,TvS,TiS}(::Type{SparseMatrixCSC{Tv,Ti}}, S::SparseMatrixCSC{TvS,TiS})
     if Tv == TvS && Ti == TiS
@@ -1239,7 +1239,8 @@ function spzeros(Tv::Type, Ti::Type, m::Integer, n::Integer)
     ((m < 0) || (n < 0)) && throw(ArgumentError("invalid Array dimensions"))
     SparseMatrixCSC(m, n, ones(Ti, n+1), Array{Ti}(0), Array{Tv}(0))
 end
-
+# de-splatting variant
+spzeros(Tv::Type, Ti::Type, sz::Tuple{Integer,Integer}) = spzeros(Tv, Ti, sz[1], sz[2])
 
 speye(n::Integer) = speye(Float64, n)
 speye(T::Type, n::Integer) = speye(T, n, n)
@@ -1647,16 +1648,16 @@ end
 
 
 broadcast{Tv1,Ti1,Tv2,Ti2}(f::Function, A_1::SparseMatrixCSC{Tv1,Ti1}, A_2::SparseMatrixCSC{Tv2,Ti2}) =
-                 broadcast!(f, spzeros(promote_type(Tv1, Tv2), promote_type(Ti1, Ti2), to_shape(broadcast_shape(A_1, A_2))...), A_1, A_2)
+                 broadcast!(f, spzeros(promote_type(Tv1, Tv2), promote_type(Ti1, Ti2), to_shape(broadcast_shape(A_1, A_2))), A_1, A_2)
 
-broadcast_zpreserving!(args...) = broadcast!(args...)
-broadcast_zpreserving(args...) = broadcast(args...)
+@inline broadcast_zpreserving!(args...) = broadcast!(args...)
+@inline broadcast_zpreserving(args...) = broadcast(args...)
 broadcast_zpreserving{Tv1,Ti1,Tv2,Ti2}(f::Function, A_1::SparseMatrixCSC{Tv1,Ti1}, A_2::SparseMatrixCSC{Tv2,Ti2}) =
-                 broadcast_zpreserving!(f, spzeros(promote_type(Tv1, Tv2), promote_type(Ti1, Ti2), to_shape(broadcast_shape(A_1, A_2))...), A_1, A_2)
+                 broadcast_zpreserving!(f, spzeros(promote_type(Tv1, Tv2), promote_type(Ti1, Ti2), to_shape(broadcast_shape(A_1, A_2))), A_1, A_2)
 broadcast_zpreserving{Tv,Ti}(f::Function, A_1::SparseMatrixCSC{Tv,Ti}, A_2::Union{Array,BitArray,Number}) =
-                 broadcast_zpreserving!(f, spzeros(promote_eltype(A_1, A_2), Ti, to_shape(broadcast_shape(A_1, A_2))...), A_1, A_2)
+                 broadcast_zpreserving!(f, spzeros(promote_eltype(A_1, A_2), Ti, to_shape(broadcast_shape(A_1, A_2))), A_1, A_2)
 broadcast_zpreserving{Tv,Ti}(f::Function, A_1::Union{Array,BitArray,Number}, A_2::SparseMatrixCSC{Tv,Ti}) =
-                 broadcast_zpreserving!(f, spzeros(promote_eltype(A_1, A_2), Ti, to_shape(broadcast_shape(A_1, A_2))...), A_1, A_2)
+                 broadcast_zpreserving!(f, spzeros(promote_eltype(A_1, A_2), Ti, to_shape(broadcast_shape(A_1, A_2))), A_1, A_2)
 
 
 ## Binary arithmetic and boolean operators
@@ -1676,7 +1677,7 @@ for (op, pro) in ((+,   :eltype_plus),
                 throw(DimensionMismatch(""))
             end
             Tv = ($pro)(A_1, A_2)
-            B =  spzeros(Tv, promote_type(Ti1, Ti2), to_shape(broadcast_shape(A_1, A_2))...)
+            B =  spzeros(Tv, promote_type(Ti1, Ti2), to_shape(broadcast_shape(A_1, A_2)))
             $body
             B
         end
@@ -1718,15 +1719,15 @@ end # macro
 (.^)(A::Array, B::SparseMatrixCSC) = (.^)(A, full(B))
 
 .+{Tv1,Ti1,Tv2,Ti2}(A_1::SparseMatrixCSC{Tv1,Ti1}, A_2::SparseMatrixCSC{Tv2,Ti2}) =
-   broadcast!(+, spzeros(eltype_plus(A_1, A_2), promote_type(Ti1, Ti2), to_shape(broadcast_shape(A_1, A_2))...), A_1, A_2)
+   broadcast!(+, spzeros(eltype_plus(A_1, A_2), promote_type(Ti1, Ti2), to_shape(broadcast_shape(A_1, A_2))), A_1, A_2)
 
 function .-{Tva,Tia,Tvb,Tib}(A::SparseMatrixCSC{Tva,Tia}, B::SparseMatrixCSC{Tvb,Tib})
-    broadcast!(-, spzeros(eltype_plus(A, B), promote_type(Tia, Tib), to_shape(broadcast_shape(A, B))...), A, B)
+    broadcast!(-, spzeros(eltype_plus(A, B), promote_type(Tia, Tib), to_shape(broadcast_shape(A, B))), A, B)
 end
 
 ## element-wise comparison operators returning SparseMatrixCSC ##
-.<{Tv1,Ti1,Tv2,Ti2}(A_1::SparseMatrixCSC{Tv1,Ti1}, A_2::SparseMatrixCSC{Tv2,Ti2}) = broadcast!(<, spzeros( Bool, promote_type(Ti1, Ti2), to_shape(broadcast_shape(A_1, A_2))...), A_1, A_2)
-.!={Tv1,Ti1,Tv2,Ti2}(A_1::SparseMatrixCSC{Tv1,Ti1}, A_2::SparseMatrixCSC{Tv2,Ti2}) = broadcast!(!=, spzeros( Bool, promote_type(Ti1, Ti2), to_shape(broadcast_shape(A_1, A_2))...), A_1, A_2)
+.<{Tv1,Ti1,Tv2,Ti2}(A_1::SparseMatrixCSC{Tv1,Ti1}, A_2::SparseMatrixCSC{Tv2,Ti2}) = broadcast!(<, spzeros( Bool, promote_type(Ti1, Ti2), to_shape(broadcast_shape(A_1, A_2))), A_1, A_2)
+.!={Tv1,Ti1,Tv2,Ti2}(A_1::SparseMatrixCSC{Tv1,Ti1}, A_2::SparseMatrixCSC{Tv2,Ti2}) = broadcast!(!=, spzeros( Bool, promote_type(Ti1, Ti2), to_shape(broadcast_shape(A_1, A_2))), A_1, A_2)
 
 ## full equality
 function ==(A1::SparseMatrixCSC, A2::SparseMatrixCSC)
