@@ -54,9 +54,8 @@ There are a few noteworthy high-level features about Julia's strings:
    strings.
 -  Julia supports the full range of
    `Unicode <https://en.wikipedia.org/wiki/Unicode>`_ characters: literal
-   strings are always `ASCII <https://en.wikipedia.org/wiki/ASCII>`_ or
-   `UTF-8 <https://en.wikipedia.org/wiki/UTF-8>`_ but other encodings for
-   strings from external sources can be supported.
+   strings are always `UTF-8 <https://en.wikipedia.org/wiki/UTF-8>`_ but
+   other encodings for strings from external sources can be supported.
 
 .. _man-characters:
 
@@ -272,8 +271,8 @@ string literals:
 
 Whether these Unicode characters are displayed as escapes or shown as
 special characters depends on your terminal's locale settings and its
-support for Unicode. Non-ASCII string literals are encoded using the
-UTF-8 encoding. UTF-8 is a variable-width encoding, meaning that not all
+support for Unicode. String literals are encoded using the UTF-8
+encoding. UTF-8 is a variable-width encoding, meaning that not all
 characters are encoded in the same number of bytes. In UTF-8, ASCII
 characters — i.e. those with code points less than 0x80 (128) — are
 encoded as they are in ASCII, using a single byte, while code points
@@ -317,11 +316,11 @@ inefficient and verbose way to iterate through the characters of ``s``:
 .. doctest::
 
     julia> for i = 1:endof(s)
-             try
-               println(s[i])
-             catch
-               # ignore the index error
-             end
+               try
+                   println(s[i])
+               catch
+                   # ignore the index error
+               end
            end
     ∀
     <BLANKLINE>
@@ -339,7 +338,7 @@ exception handling required:
 .. doctest::
 
     julia> for c in s
-             println(c)
+               println(c)
            end
     ∀
     <BLANKLINE>
@@ -350,10 +349,12 @@ exception handling required:
     y
 
 Julia uses UTF-8 encoding by default, and support for new encodings can
-be added by packages. Additional discussion of other encodings and how
-to implement support for them is beyond the scope of this document for
-the time being. For further discussion of UTF-8 encoding issues, see
-the section below on `byte array literals <#Byte+Array+Literals>`_,
+be added by packages. For example, the `LegacyStrings.jl
+<https://github.com/JuliaArchive/LegacyStrings.jl>`_ package implements
+``UTF16String`` and ``UTF32String`` types. Additional discussion of other
+encodings and how to implement support for them is beyond the scope of this
+document for the time being. For further discussion of UTF-8 encoding issues,
+see the section below on `byte array literals <#Byte+Array+Literals>`_,
 which goes into some greater detail.
 
 .. _man-string-interpolation:
@@ -903,10 +904,9 @@ encodings.
 
 If this is all extremely confusing, try reading `"The Absolute Minimum
 Every Software Developer Absolutely, Positively Must Know About Unicode
-and Character
-Sets" <http://www.joelonsoftware.com/articles/Unicode.html>`_. It's an
-excellent introduction to Unicode and UTF-8, and may help alleviate some
-confusion regarding the matter.
+and Character Sets" <http://www.joelonsoftware.com/articles/Unicode.html>`_.
+It's an excellent introduction to Unicode and UTF-8, and may help alleviate
+some confusion regarding the matter.
 
 .. _man-version-number-literals:
 
