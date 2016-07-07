@@ -767,7 +767,7 @@ each field:
     ERROR: MethodError: Cannot `convert` an object of type Float64 to an object of type Point{Float64}
     This may have arisen from a call to the constructor Point{Float64}(...),
     since type constructors fall back to convert methods.
-     in Point{Float64}(::Float64) at ./sysimg.jl:63
+     in Point{Float64}(::Float64) at ./sysimg.jl:53
      ...
 
     julia> Point{Float64}(1.0,2.0,3.0)
