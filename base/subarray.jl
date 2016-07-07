@@ -283,11 +283,12 @@ _indices_sub(S::SubArray, dim::Int) = ()
 _indices_sub(S::SubArray, dim::Int, ::Real, I...) = (@_inline_meta; _indices_sub(S, dim+1, I...))
 _indices_sub(S::SubArray, dim::Int, ::Colon, I...) = (@_inline_meta; (indices(parent(S), dim), _indices_sub(S, dim+1, I...)...))
 _indices_sub(S::SubArray, dim::Int, i1::AbstractArray, I...) = (@_inline_meta; (indices(i1)..., _indices_sub(S, dim+1, I...)...))
-indices1{T}(S::SubArray{T,0}) = OneTo(1)
 indices1(S::SubArray) = (@_inline_meta; _indices1(S, 1, S.indexes...))
+_indices1(S::SubArray, dim) = OneTo(1)
 _indices1(S::SubArray, dim, i1::Real, I...) = (@_inline_meta; _indices1(S, dim+1, I...))
 _indices1(S::SubArray, dim, i1::Colon, I...) = (@_inline_meta; indices(parent(S), dim))
 _indices1(S::SubArray, dim, i1::AbstractArray, I...) = (@_inline_meta; indices1(i1))
+_indices1{T}(S::SubArray, dim, i1::AbstractArray{T,0}, I...) = (@_inline_meta; _indices1(S, dim+1, I...))
 
 ## Compatability
 # deprecate?

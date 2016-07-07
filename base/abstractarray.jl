@@ -45,7 +45,8 @@ function indices{T,N}(A::AbstractArray{T,N})
     map(s->OneTo(s), size(A))
 end
 
-indices1(A) = (@_inline_meta; indices(A, 1))
+indices1{T}(A::AbstractArray{T,0}) = OneTo(1)
+indices1{T}(A::AbstractArray{T})   = indices(A)[1]
 
 """
     linearindices(A)
