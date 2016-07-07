@@ -1040,6 +1040,7 @@ function dump(io::IO, x::SimpleVector, n::Int, indent)
             end
         end
     end
+    isempty(indent) && println(io)
     nothing
 end
 
@@ -1065,6 +1066,7 @@ function dump(io::IO, x::ANY, n::Int, indent)
     else
         !isa(x,Function) && print(io, " ", x)
     end
+    isempty(indent) && println(io)
     nothing
 end
 
@@ -1102,12 +1104,21 @@ function dump(io::IO, x::Array, n::Int, indent)
             end
         end
     end
+    isempty(indent) && println(io)
     nothing
 end
-dump(io::IO, x::Symbol, n::Int, indent) = print(io, typeof(x), " ", x)
+function dump(io::IO, x::Symbol, n::Int, indent)
+    print(io, typeof(x), " ", x)
+    isempty(indent) && println(io)
+    nothing
+end
 
 # Types
-dump(io::IO, x::Union, n::Int, indent) = print(io, x)
+function dump(io::IO, x::Union, n::Int, indent)
+    print(io, x)
+    isempty(indent) && println(io)
+    nothing
+end
 
 function dump(io::IO, x::DataType, n::Int, indent)
     print(io, x)
@@ -1124,6 +1135,7 @@ function dump(io::IO, x::DataType, n::Int, indent)
             end
         end
     end
+    isempty(indent) && println(io)
     nothing
 end
 
@@ -1167,6 +1179,8 @@ function dumptype(io::IO, x::ANY, n::Int, indent)
             end
         end
     end
+    isempty(indent) && println(io)
+    nothing
 end
 
 # For abstract types, use _dumptype only if it's a form that will be called

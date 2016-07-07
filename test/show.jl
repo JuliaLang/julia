@@ -500,3 +500,9 @@ let s  = IOBuffer(Array{UInt8}(0), true, true)
     Base.showarray(s, [1,2,3], false, header = false)
     @test String(resize!(s.data, s.size)) == " 1\n 2\n 3"
 end
+
+# The `dump` function should alway have a trailing newline
+let io = IOBuffer()
+    dump(io, :(x = 1))
+    @test takebuf_string(io)[end] == '\n'
+end
