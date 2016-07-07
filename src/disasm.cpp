@@ -128,10 +128,11 @@ class SymbolTable {
     MCContext& Ctx;
     const FuncMCView &MemObj;
     int Pass;
+    int64_t slide;
     uint64_t ip; // virtual instruction pointer of the current instruction
 public:
-    SymbolTable(MCContext &Ctx, const FuncMCView &MemObj):
-        Ctx(Ctx), MemObj(MemObj), ip(0) {}
+    SymbolTable(MCContext &Ctx, intptr_t slide, const FuncMCView &MemObj):
+        Ctx(Ctx), MemObj(MemObj), slide(slide), ip(0) {}
     const FuncMCView &getMemoryObject() const { return MemObj; }
     void setPass(int Pass) { this->Pass = Pass; }
     int getPass() const { return Pass; }
@@ -142,6 +143,7 @@ public:
     MCSymbol *lookupSymbol(uint64_t addr);
     void setIP(uint64_t addr);
     uint64_t getIP() const;
+    int64_t getSlide() const;
 };
 void SymbolTable::setIP(uint64_t addr)
 {
@@ -150,6 +152,10 @@ void SymbolTable::setIP(uint64_t addr)
 uint64_t SymbolTable::getIP() const
 {
     return ip;
+}
+int64_t SymbolTable::getSlide() const
+{
+    return slide;
 }
 // Insert an address
 void SymbolTable::insertAddress(uint64_t addr)
@@ -232,9 +238,12 @@ static int OpInfoLookup(void *DisInfo, uint64_t PC, uint64_t Offset, uint64_t Si
     case 8: { uint64_t val; std::memcpy(&val, bytes, 8); pointer = val; break; }
     default: return 0;          // Cannot handle input address size
     }
-    int skipC = 0;
     jl_frame_t *frame = NULL;
-    jl_getFunctionInfo(&frame, pointer, skipC, 1);
+    jl_getFunctionInfo(&frame,
+            pointer - SymTab->getSlide(), // TODO: This is wrong for PCrel addresses, now that we are getting the unrelocated binary.
+                                          //       Try looking up addresses in the DIContext first?
+            /*skipC*/0,
+            /*noInline*/1/* the entry pointer shouldn't have inlining */);
     char *name = frame->func_name;
     free(frame->file_name);
     free(frame);
@@ -248,23 +257,6 @@ static int OpInfoLookup(void *DisInfo, uint64_t PC, uint64_t Offset, uint64_t Si
     return 1;                        // Success
 }
 } // namespace
-
-#ifndef USE_MCJIT
-static void print_source_line(raw_ostream &stream, DebugLoc Loc)
-{
-    MDNode *inlinedAt = Loc.getInlinedAt(jl_LLVMContext);
-    if (inlinedAt != NULL) {
-        DebugLoc inlineloc = DebugLoc::getFromDILocation(inlinedAt);
-        stream << "Source line: " << inlineloc.getLine() << "\n";
-
-        DILexicalBlockFile innerscope = DILexicalBlockFile(Loc.getScope(jl_LLVMContext));
-        stream << "Source line: [inline] " << innerscope.getFilename().str().c_str() << ':' << Loc.getLine() << "\n";
-    }
-    else {
-        stream << "Source line: " << Loc.getLine() << "\n";
-    }
-}
-#endif
 
 extern "C" {
 JL_DLLEXPORT LLVMDisasmContextRef jl_LLVMCreateDisasm(const char *TripleName, void *DisInfo, int TagType, LLVMOpInfoCallback GetOpInfo, LLVMSymbolLookupCallback SymbolLookUp)
@@ -431,7 +423,7 @@ void jl_dump_asm_internal(uintptr_t Fptr, size_t Fsize, int64_t slide,
 #else
     FuncMCView memoryObject((const uint8_t*)Fptr, Fsize);
 #endif
-    SymbolTable DisInfo(Ctx, memoryObject);
+    SymbolTable DisInfo(Ctx, slide, memoryObject);
 
 #ifndef USE_MCJIT
     typedef std::vector<JITEvent_EmittedFunctionDetails::LineStart> LInfoVec;
@@ -489,6 +481,12 @@ void jl_dump_asm_internal(uintptr_t Fptr, size_t Fsize, int64_t slide,
 #else
                     stream << "Filename: " << di_lineIter->second.getFileName() << "\n";
 #endif
+#ifdef LLVM35
+                    if (di_lineIter->second.Line <= 0)
+#else
+                    if (di_lineIter->second.getLine() <= 0)
+#endif
+                        ++di_lineIter;
                     nextLineAddr = di_lineIter->first;
                 }
             }
@@ -498,19 +496,18 @@ void jl_dump_asm_internal(uintptr_t Fptr, size_t Fsize, int64_t slide,
                 if (lineIter != lineEnd) {
                     DebugLoc Loc = (*lineIter).Loc;
                     MDNode *outer = Loc.getInlinedAt(jl_LLVMContext);
+                    while (outer) {
+                        Loc = DebugLoc::getFromDILocation(outer);
+                        outer = Loc.getInlinedAt(jl_LLVMContext);
+                    }
                     StringRef FileName;
-                    if (!outer) {
-                        DISubprogram debugscope = DISubprogram(Loc.getScope(jl_LLVMContext));
-                        FileName = debugscope.getFilename();
-                    }
-                    else {
-                        DebugLoc inlineloc = DebugLoc::getFromDILocation(outer);
-                        DILexicalBlockFile debugscope = DILexicalBlockFile(inlineloc.getScope(jl_LLVMContext));
-                        FileName = debugscope.getFilename();
-                    }
-                    stream << "Filename: " << FileName << "\n";
-                    print_source_line(stream, (*lineIter).Loc);
+                    DISubprogram debugscope = DISubprogram(Loc.getScope(jl_LLVMContext));
+                    stream << "Filename: " << debugscope.getFilename() << "\n";
+                    if (Loc.getLine() > 0)
+                        stream << "Source line: " << Loc.getLine() << "\n";
+#if defined(LLVM35)
                     nextLineAddr = (*lineIter).Address;
+#endif
                 }
             }
 #endif
@@ -528,7 +525,7 @@ void jl_dump_asm_internal(uintptr_t Fptr, size_t Fsize, int64_t slide,
                     std::ostringstream buf;
                     buf << "Source line: " << di_lineIter->second.Line << "\n";
                     Streamer->EmitRawText(buf.str());
-#elif defined LLVM35
+#elif defined(LLVM35)
                     stream << "Source line: " << di_lineIter->second.Line << "\n";
 #else
                     stream << "Source line: " << di_lineIter->second.getLine() << "\n";
@@ -537,7 +534,13 @@ void jl_dump_asm_internal(uintptr_t Fptr, size_t Fsize, int64_t slide,
                 }
 #ifndef USE_MCJIT
                 else {
-                    print_source_line(stream, (*lineIter).Loc);
+                    DebugLoc Loc = (*lineIter).Loc;
+                    MDNode *outer = Loc.getInlinedAt(jl_LLVMContext);
+                    while (outer) {
+                        Loc = DebugLoc::getFromDILocation(outer);
+                        outer = Loc.getInlinedAt(jl_LLVMContext);
+                    }
+                    stream << "Source line: " << Loc.getLine() << "\n";
                     nextLineAddr = (*++lineIter).Address;
                 }
 #endif

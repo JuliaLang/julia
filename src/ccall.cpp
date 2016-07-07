@@ -194,6 +194,7 @@ static DenseMap<AttributeSet,
                 std::map<std::tuple<GlobalVariable*,FunctionType*,
                                     CallingConv::ID>,GlobalVariable*>> allPltMap;
 
+#ifdef LLVM37 // needed for musttail
 // Emit a "PLT" entry that will be lazily initialized
 // when being called the first time.
 static Value *emit_plt(FunctionType *functype, const AttributeSet &attrs,
@@ -246,8 +247,8 @@ static Value *emit_plt(FunctionType *functype, const AttributeSet &attrs,
                                         llvmgv, runtime_lib);
         builder.CreateStore(builder.CreateBitCast(ptr, T_pvoidfunc), got);
         SmallVector<Value*, 16> args;
-        for (auto &arg: plt->args())
-            args.push_back(&arg);
+        for (Function::arg_iterator arg = plt->arg_begin(), arg_e = plt->arg_end(); arg != arg_e; ++arg)
+            args.push_back(&*arg);
         CallInst *ret = builder.CreateCall(ptr, ArrayRef<Value*>(args));
         ret->setAttributes(attrs);
         if (cc != CallingConv::C)
@@ -286,6 +287,7 @@ static Value *emit_plt(FunctionType *functype, const AttributeSet &attrs,
     }
     return builder.CreateBitCast(builder.CreateLoad(got), funcptype);
 }
+#endif
 
 // --- ABI Implementations ---
 // Partially based on the LDC ABI implementations licensed under the BSD 3-clause license
@@ -1694,14 +1696,16 @@ static jl_cgval_t emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
 
         PointerType *funcptype = PointerType::get(functype,0);
         if (imaging_mode) {
-#if defined(_CPU_ARM_) || defined(_CPU_PPC_) || defined(_CPU_PPC64_)
-            // ARM, PPC, PPC64 (as of LLVM 3.9) doesn't support `musttail`
-            // for vararg functions.
-            if (functype)
+#ifdef LLVM37
+            // ARM, PPC, PPC64 (as of LLVM 3.9) doesn't support `musttail` for vararg functions.
+            // And musttail can't proceed unreachable, but is required for vararg (https://llvm.org/bugs/show_bug.cgi?id=23766)
+            if (functype->isVarArg())
                 llvmf = runtime_sym_lookup(funcptype, f_lib, f_name, ctx->f);
             else
-#endif
                 llvmf = emit_plt(functype, attrs, cc, f_lib, f_name);
+#else
+            llvmf = runtime_sym_lookup(funcptype, f_lib, f_name, ctx->f);
+#endif
         }
         else {
             void *symaddr = jl_dlsym_e(jl_get_library(f_lib), f_name);
