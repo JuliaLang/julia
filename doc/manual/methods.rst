@@ -242,11 +242,11 @@ Julia language. Core operations typically have dozens of methods:
     +(a::Float16, b::Float16) at float16.jl:136
     +(x::Float32, y::Float32) at float.jl:206
     +(x::Float64, y::Float64) at float.jl:207
-    +(x::Bool, z::Complex{Bool}) at complex.jl:137
+    +(x::Bool, z::Complex{Bool}) at complex.jl:126
     +(x::Bool, y::Bool) at bool.jl:48
     +(x::Bool) at bool.jl:45
     +{T<:AbstractFloat}(x::Bool, y::T) at bool.jl:55
-    +(x::Bool, z::Complex) at complex.jl:144
+    +(x::Bool, z::Complex) at complex.jl:133
     +(x::Bool, A::AbstractArray{Bool,N<:Any}) at arraymath.jl:105
     +(x::Char, y::Integer) at char.jl:40
     +{T<:Union{Int128,Int16,Int32,Int64,Int8,UInt128,UInt16,UInt32,UInt64,UInt8}}(x::T, y::T) at int.jl:32

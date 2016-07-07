@@ -329,6 +329,8 @@ the type, which is an object of type :obj:`TypeName`:
        max_args: Int64 0
        kwsorter: #undef
        module: Module Core
+       : Int64 0
+       : Int64 0
 
 In this case, the relevant field is ``primary``, which holds a
 reference to the "primary" instance of the type::
