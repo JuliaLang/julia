@@ -198,8 +198,8 @@ let a = broadcast(Float32, [3, 4, 5])
 end
 
 # broadcasting scalars:
-@test sin.(1) == broadcast(sin, 1) == sin(1)
-@test (()->1234).() == broadcast(()->1234) == 1234
+@test sin.(1) === broadcast(sin, 1) === sin(1)
+@test (()->1234).() === broadcast(()->1234) === 1234
 
 # issue #4883
 @test isa(broadcast(tuple, [1 2 3], ["a", "b", "c"]), Matrix{Tuple{Int,String}})
