@@ -750,6 +750,14 @@ end
 
 #Rounding complex numbers
 #Requires two different RoundingModes for the real and imaginary components
+"""
+    round(z, RoundingModeReal, RoundingModeImaginary)
+
+Returns the nearest integral value of the same type as the complex-valued `z` to `z`,
+breaking ties using the specified [`RoundingMode`](:obj:`RoundingMode`)s. The first
+[`RoundingMode`](:obj:`RoundingMode`) is used for rounding the real components while the
+second is used for rounding the imaginary components.
+"""
 function round{T<:AbstractFloat, MR, MI}(z::Complex{T}, ::RoundingMode{MR}, ::RoundingMode{MI})
     Complex(round(real(z), RoundingMode{MR}()),
             round(imag(z), RoundingMode{MI}()))
