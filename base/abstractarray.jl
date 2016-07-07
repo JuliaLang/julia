@@ -1504,6 +1504,7 @@ end
 
 map!{F}(f::F, dest::AbstractArray, As::AbstractArray...) = map_n!(f, dest, As)
 
+map(f) = f()
 map(f, iters...) = collect(Generator(f, iters...))
 
 # multi-item push!, unshift! (built on top of type-specific 1-item version)
