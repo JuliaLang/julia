@@ -47,7 +47,21 @@ isready(pool::AbstractWorkerPool) = isready(pool.channel)
 
 put!(pool::AbstractWorkerPool, w::Int) = (put!(pool.channel, w); pool)
 
-workers(pool::AbstractWorkerPool) = collect(pool.workers)
+function workers(pool::AbstractWorkerPool)
+    if length(pool) == 0 && pool === default_worker_pool()
+        return [1]
+    else
+        return collect(pool.workers)
+    end
+end
+
+function nworkers(pool::AbstractWorkerPool)
+    if length(pool) == 0 && pool === default_worker_pool()
+        return 1
+    else
+        return length(pool.workers)
+    end
+end
 
 function take!(pool::AbstractWorkerPool)
     # Find an active worker
