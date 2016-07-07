@@ -1,18 +1,18 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
 # Name functions
-jan = Dates.DateTime(2013,1,1) #Tuesday
-feb = Dates.DateTime(2013,2,2) #Saturday
-mar = Dates.DateTime(2013,3,3) #Sunday
-apr = Dates.DateTime(2013,4,4) #Thursday
-may = Dates.DateTime(2013,5,5) #Sunday
-jun = Dates.DateTime(2013,6,7) #Friday
-jul = Dates.DateTime(2013,7,7) #Sunday
-aug = Dates.DateTime(2013,8,8) #Thursday
-sep = Dates.DateTime(2013,9,9) #Monday
-oct = Dates.DateTime(2013,10,10) #Thursday
-nov = Dates.DateTime(2013,11,11) #Monday
-dec = Dates.DateTime(2013,12,11) #Wednesday
+Jan = Dates.DateTime(2013,1,1) #Tuesday
+Feb = Dates.DateTime(2013,2,2) #Saturday
+Mar = Dates.DateTime(2013,3,3) #Sunday
+Apr = Dates.DateTime(2013,4,4) #Thursday
+May = Dates.DateTime(2013,5,5) #Sunday
+Jun = Dates.DateTime(2013,6,7) #Friday
+Jul = Dates.DateTime(2013,7,7) #Sunday
+Aug = Dates.DateTime(2013,8,8) #Thursday
+Sep = Dates.DateTime(2013,9,9) #Monday
+Oct = Dates.DateTime(2013,10,10) #Thursday
+Nov = Dates.DateTime(2013,11,11) #Monday
+Dec = Dates.DateTime(2013,12,11) #Wednesday
 monthnames = ["January","February","March","April",
                 "May","June","July","August","September",
                 "October","November","December"]
@@ -21,7 +21,7 @@ daysofweek = [Dates.Tue,Dates.Sat,Dates.Sun,Dates.Thu,Dates.Sun,Dates.Fri,
 dows = ["Tuesday","Saturday","Sunday","Thursday","Sunday","Friday",
         "Sunday","Thursday","Monday","Thursday","Monday","Wednesday"]
 daysinmonth = [31,28,31,30,31,30,31,31,30,31,30,31]
-for (i,dt) in enumerate([jan,feb,mar,apr,may,jun,jul,aug,sep,oct,nov,dec])
+for (i,dt) in enumerate([Jan,Feb,Mar,Apr,May,Jun,Jul,Aug,Sep,Oct,Nov,Dec])
     @test Dates.month(dt) == i
     @test Dates.monthname(dt) == monthnames[i]
     @test Dates.monthname(i) == monthnames[i]
@@ -39,29 +39,29 @@ end
 const french_daysofweek = Dict(1=>"Lundi",2=>"Mardi",3=>"Mercredi",4=>"Jeudi",
                                5=>"Vendredi",6=>"Samedi",7=>"Dimanche")
 Dates.VALUETODAYOFWEEK["french"] = french_daysofweek
-@test Dates.dayname(nov;locale="french") == "Lundi"
-@test Dates.dayname(jan;locale="french") == "Mardi"
-@test Dates.dayname(dec;locale="french") == "Mercredi"
-@test Dates.dayname(apr;locale="french") == "Jeudi"
-@test Dates.dayname(jun;locale="french") == "Vendredi"
-@test Dates.dayname(feb;locale="french") == "Samedi"
-@test Dates.dayname(may;locale="french") == "Dimanche"
+@test Dates.dayname(Nov;locale="french") == "Lundi"
+@test Dates.dayname(Jan;locale="french") == "Mardi"
+@test Dates.dayname(Dec;locale="french") == "Mercredi"
+@test Dates.dayname(Apr;locale="french") == "Jeudi"
+@test Dates.dayname(Jun;locale="french") == "Vendredi"
+@test Dates.dayname(Feb;locale="french") == "Samedi"
+@test Dates.dayname(May;locale="french") == "Dimanche"
 
 const french_months = Dict(1=>"janvier",2=>"février",3=>"mars",4=>"avril",5=>"mai",6=>"juin",
                            7=>"juillet",8=>"août",9=>"septembre",10=>"octobre",11=>"novembre",12=>"décembre")
 Dates.VALUETOMONTH["french"] = french_months
-@test Dates.monthname(jan;locale="french") == "janvier"
-@test Dates.monthname(feb;locale="french") == "février"
-@test Dates.monthname(mar;locale="french") == "mars"
-@test Dates.monthname(apr;locale="french") == "avril"
-@test Dates.monthname(may;locale="french") == "mai"
-@test Dates.monthname(jun;locale="french") == "juin"
-@test Dates.monthname(jul;locale="french") == "juillet"
-@test Dates.monthname(aug;locale="french") == "août"
-@test Dates.monthname(sep;locale="french") == "septembre"
-@test Dates.monthname(oct;locale="french") == "octobre"
-@test Dates.monthname(nov;locale="french") == "novembre"
-@test Dates.monthname(dec;locale="french") == "décembre"
+@test Dates.monthname(Jan;locale="french") == "janvier"
+@test Dates.monthname(Feb;locale="french") == "février"
+@test Dates.monthname(Mar;locale="french") == "mars"
+@test Dates.monthname(Apr;locale="french") == "avril"
+@test Dates.monthname(May;locale="french") == "mai"
+@test Dates.monthname(Jun;locale="french") == "juin"
+@test Dates.monthname(Jul;locale="french") == "juillet"
+@test Dates.monthname(Aug;locale="french") == "août"
+@test Dates.monthname(Sep;locale="french") == "septembre"
+@test Dates.monthname(Oct;locale="french") == "octobre"
+@test Dates.monthname(Nov;locale="french") == "novembre"
+@test Dates.monthname(Dec;locale="french") == "décembre"
 
 @test Dates.isleapyear(Dates.DateTime(1900)) == false
 @test Dates.isleapyear(Dates.DateTime(2000)) == true

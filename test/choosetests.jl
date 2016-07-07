@@ -16,8 +16,8 @@ Upon return, `tests` is a vector of fully-expanded test names, and
 function choosetests(choices = [])
     testnames = [
         "linalg", "subarray", "core", "inference", "keywordargs", "numbers",
-        "printf", "char", "string", "triplequote", "unicode",
-        "dates", "dict", "hashing", "iobuffer", "staged", "offsetarray",
+        "printf", "char", "strings", "triplequote", "unicode",
+        "dates", "dict", "hashing", "iobuffer", "staged",
         "arrayops", "tuple", "reduce", "reducedim", "random", "abstractarray",
         "intfuncs", "simdloop", "vecelement", "blas", "sparse",
         "bitarray", "copy", "math", "fastmath", "functional",
@@ -60,6 +60,57 @@ function choosetests(choices = [])
         tests = testnames
     end
 
+    datestests = ["dates/accessors", "dates/adjusters", "dates/query",
+                  "dates/periods", "dates/ranges", "dates/types",
+                  "dates/io", "dates/arithmetic", "dates/conversions"]
+    if "dates" in skip_tests
+        filter!(x -> (x != "dates" && !(x in datestests)), tests)
+    elseif "dates" in tests
+        # specifically selected case
+        filter!(x -> x != "dates", tests)
+        prepend!(tests, datestests)
+    end
+
+    unicodetests = ["unicode/UnicodeError", "unicode/utf8proc", "unicode/utf8"]
+    if "unicode" in skip_tests
+        filter!(x -> (x != "unicode" && !(x in unicodetests)), tests)
+    elseif "unicode" in tests
+        # specifically selected case
+        filter!(x -> x != "unicode", tests)
+        prepend!(tests, unicodetests)
+    end
+
+    stringtests = ["strings/basic", "strings/search", "strings/util",
+                   "strings/io", "strings/types"]
+    if "strings" in skip_tests
+        filter!(x -> (x != "strings" && !(x in stringtests)), tests)
+    elseif "strings" in tests
+        # specifically selected case
+        filter!(x -> x != "strings", tests)
+        prepend!(tests, stringtests)
+    end
+
+
+    sparsetests = ["sparse/sparse", "sparse/sparsevector"]
+    if Base.USE_GPL_LIBS
+        append!(sparsetests, ["sparse/umfpack", "sparse/cholmod", "sparse/spqr"])
+    end
+    if "sparse" in skip_tests
+        filter!(x -> (x != "sparse" && !(x in sparsetests)), tests)
+    elseif "sparse" in tests
+        # specifically selected case
+        filter!(x -> x != "sparse", tests)
+        prepend!(tests, sparsetests)
+    end
+
+    #do subarray before sparse but after linalg
+    if "subarray" in skip_tests
+        filter!(x -> x != "subarray", tests)
+    elseif "subarray" in tests
+        filter!(x -> x != "subarray", tests)
+        prepend!(tests, ["subarray"])
+    end
+
     linalgtests = ["linalg/triangular", "linalg/qr", "linalg/dense",
                    "linalg/matmul", "linalg/schur", "linalg/special",
                    "linalg/eigen", "linalg/bunchkaufman", "linalg/svd",
@@ -84,9 +135,6 @@ function choosetests(choices = [])
     net_on = true
     try
         ipa = getipaddr()
-        if ipa == ip"127.0.0.1"
-            net_on = false
-        end
     catch
         warn("Networking unavailable: Skipping tests [" * join(net_required_for, ", ") * "]")
         net_on = false

@@ -121,9 +121,13 @@ body.args = ast.code
 @test popmeta!(body, :test) == (true, [42])
 @test popmeta!(body, :nonexistent) == (false, [])
 
+end
+
+module MetaJLtest
+
+using Base.Meta
+using Base.Test
 # tests to fully cover functions in base/meta.jl
-import Base.Meta.isexpr
-import Base.Meta.show_sexpr
 @test isexpr(:(1+1),Set([:call]))
 @test isexpr(:(1+1),Vector([:call]))
 @test isexpr(1,:call)==false
@@ -132,5 +136,4 @@ ioB = IOBuffer()
 show_sexpr(ioB,:(1+1))
 
 show_sexpr(ioB,QuoteNode(1),1)
-
 end

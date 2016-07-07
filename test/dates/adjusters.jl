@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: http://Julialang.org/license
 
 #trunc
 dt = Dates.Date(2012,12,21)
@@ -15,70 +15,70 @@ dt = Dates.DateTime(2012,12,21,16,30,20,200)
 @test trunc(dt,Dates.Millisecond) == Dates.DateTime(2012,12,21,16,30,20,200)
 
 # Date functions
-jan = Dates.DateTime(2013,1,1) #Tuesday
-feb = Dates.DateTime(2013,2,2) #Saturday
-mar = Dates.DateTime(2013,3,3) #Sunday
-apr = Dates.DateTime(2013,4,4) #Thursday
-may = Dates.DateTime(2013,5,5) #Sunday
-jun = Dates.DateTime(2013,6,7) #Friday
-jul = Dates.DateTime(2013,7,7) #Sunday
-aug = Dates.DateTime(2013,8,8) #Thursday
-sep = Dates.DateTime(2013,9,9) #Monday
-oct = Dates.DateTime(2013,10,10) #Thursday
-nov = Dates.DateTime(2013,11,11) #Monday
-dec = Dates.DateTime(2013,12,11) #Wednesday
+Jan = Dates.DateTime(2013,1,1) #Tuesday
+Feb = Dates.DateTime(2013,2,2) #Saturday
+Mar = Dates.DateTime(2013,3,3) #Sunday
+Apr = Dates.DateTime(2013,4,4) #Thursday
+May = Dates.DateTime(2013,5,5) #Sunday
+Jun = Dates.DateTime(2013,6,7) #Friday
+Jul = Dates.DateTime(2013,7,7) #Sunday
+Aug = Dates.DateTime(2013,8,8) #Thursday
+Sep = Dates.DateTime(2013,9,9) #Monday
+Oct = Dates.DateTime(2013,10,10) #Thursday
+Nov = Dates.DateTime(2013,11,11) #Monday
+Dec = Dates.DateTime(2013,12,11) #Wednesday
 
-@test Dates.lastdayofmonth(jan) == Dates.DateTime(2013,1,31)
-@test Dates.lastdayofmonth(feb) == Dates.DateTime(2013,2,28)
-@test Dates.lastdayofmonth(mar) == Dates.DateTime(2013,3,31)
-@test Dates.lastdayofmonth(apr) == Dates.DateTime(2013,4,30)
-@test Dates.lastdayofmonth(may) == Dates.DateTime(2013,5,31)
-@test Dates.lastdayofmonth(jun) == Dates.DateTime(2013,6,30)
-@test Dates.lastdayofmonth(jul) == Dates.DateTime(2013,7,31)
-@test Dates.lastdayofmonth(aug) == Dates.DateTime(2013,8,31)
-@test Dates.lastdayofmonth(sep) == Dates.DateTime(2013,9,30)
-@test Dates.lastdayofmonth(oct) == Dates.DateTime(2013,10,31)
-@test Dates.lastdayofmonth(nov) == Dates.DateTime(2013,11,30)
-@test Dates.lastdayofmonth(dec) == Dates.DateTime(2013,12,31)
+@test Dates.lastdayofmonth(Jan) == Dates.DateTime(2013,1,31)
+@test Dates.lastdayofmonth(Feb) == Dates.DateTime(2013,2,28)
+@test Dates.lastdayofmonth(Mar) == Dates.DateTime(2013,3,31)
+@test Dates.lastdayofmonth(Apr) == Dates.DateTime(2013,4,30)
+@test Dates.lastdayofmonth(May) == Dates.DateTime(2013,5,31)
+@test Dates.lastdayofmonth(Jun) == Dates.DateTime(2013,6,30)
+@test Dates.lastdayofmonth(Jul) == Dates.DateTime(2013,7,31)
+@test Dates.lastdayofmonth(Aug) == Dates.DateTime(2013,8,31)
+@test Dates.lastdayofmonth(Sep) == Dates.DateTime(2013,9,30)
+@test Dates.lastdayofmonth(Oct) == Dates.DateTime(2013,10,31)
+@test Dates.lastdayofmonth(Nov) == Dates.DateTime(2013,11,30)
+@test Dates.lastdayofmonth(Dec) == Dates.DateTime(2013,12,31)
 
-@test Dates.lastdayofmonth(Date(jan)) == Dates.Date(2013,1,31)
-@test Dates.lastdayofmonth(Date(feb)) == Dates.Date(2013,2,28)
-@test Dates.lastdayofmonth(Date(mar)) == Dates.Date(2013,3,31)
-@test Dates.lastdayofmonth(Date(apr)) == Dates.Date(2013,4,30)
-@test Dates.lastdayofmonth(Date(may)) == Dates.Date(2013,5,31)
-@test Dates.lastdayofmonth(Date(jun)) == Dates.Date(2013,6,30)
-@test Dates.lastdayofmonth(Date(jul)) == Dates.Date(2013,7,31)
-@test Dates.lastdayofmonth(Date(aug)) == Dates.Date(2013,8,31)
-@test Dates.lastdayofmonth(Date(sep)) == Dates.Date(2013,9,30)
-@test Dates.lastdayofmonth(Date(oct)) == Dates.Date(2013,10,31)
-@test Dates.lastdayofmonth(Date(nov)) == Dates.Date(2013,11,30)
-@test Dates.lastdayofmonth(Date(dec)) == Dates.Date(2013,12,31)
+@test Dates.lastdayofmonth(Date(Jan)) == Dates.Date(2013,1,31)
+@test Dates.lastdayofmonth(Date(Feb)) == Dates.Date(2013,2,28)
+@test Dates.lastdayofmonth(Date(Mar)) == Dates.Date(2013,3,31)
+@test Dates.lastdayofmonth(Date(Apr)) == Dates.Date(2013,4,30)
+@test Dates.lastdayofmonth(Date(May)) == Dates.Date(2013,5,31)
+@test Dates.lastdayofmonth(Date(Jun)) == Dates.Date(2013,6,30)
+@test Dates.lastdayofmonth(Date(Jul)) == Dates.Date(2013,7,31)
+@test Dates.lastdayofmonth(Date(Aug)) == Dates.Date(2013,8,31)
+@test Dates.lastdayofmonth(Date(Sep)) == Dates.Date(2013,9,30)
+@test Dates.lastdayofmonth(Date(Oct)) == Dates.Date(2013,10,31)
+@test Dates.lastdayofmonth(Date(Nov)) == Dates.Date(2013,11,30)
+@test Dates.lastdayofmonth(Date(Dec)) == Dates.Date(2013,12,31)
 
-@test Dates.firstdayofmonth(jan) == Dates.DateTime(2013,1,1)
-@test Dates.firstdayofmonth(feb) == Dates.DateTime(2013,2,1)
-@test Dates.firstdayofmonth(mar) == Dates.DateTime(2013,3,1)
-@test Dates.firstdayofmonth(apr) == Dates.DateTime(2013,4,1)
-@test Dates.firstdayofmonth(may) == Dates.DateTime(2013,5,1)
-@test Dates.firstdayofmonth(jun) == Dates.DateTime(2013,6,1)
-@test Dates.firstdayofmonth(jul) == Dates.DateTime(2013,7,1)
-@test Dates.firstdayofmonth(aug) == Dates.DateTime(2013,8,1)
-@test Dates.firstdayofmonth(sep) == Dates.DateTime(2013,9,1)
-@test Dates.firstdayofmonth(oct) == Dates.DateTime(2013,10,1)
-@test Dates.firstdayofmonth(nov) == Dates.DateTime(2013,11,1)
-@test Dates.firstdayofmonth(dec) == Dates.DateTime(2013,12,1)
+@test Dates.firstdayofmonth(Jan) == Dates.DateTime(2013,1,1)
+@test Dates.firstdayofmonth(Feb) == Dates.DateTime(2013,2,1)
+@test Dates.firstdayofmonth(Mar) == Dates.DateTime(2013,3,1)
+@test Dates.firstdayofmonth(Apr) == Dates.DateTime(2013,4,1)
+@test Dates.firstdayofmonth(May) == Dates.DateTime(2013,5,1)
+@test Dates.firstdayofmonth(Jun) == Dates.DateTime(2013,6,1)
+@test Dates.firstdayofmonth(Jul) == Dates.DateTime(2013,7,1)
+@test Dates.firstdayofmonth(Aug) == Dates.DateTime(2013,8,1)
+@test Dates.firstdayofmonth(Sep) == Dates.DateTime(2013,9,1)
+@test Dates.firstdayofmonth(Oct) == Dates.DateTime(2013,10,1)
+@test Dates.firstdayofmonth(Nov) == Dates.DateTime(2013,11,1)
+@test Dates.firstdayofmonth(Dec) == Dates.DateTime(2013,12,1)
 
-@test Dates.firstdayofmonth(Date(jan)) == Dates.Date(2013,1,1)
-@test Dates.firstdayofmonth(Date(feb)) == Dates.Date(2013,2,1)
-@test Dates.firstdayofmonth(Date(mar)) == Dates.Date(2013,3,1)
-@test Dates.firstdayofmonth(Date(apr)) == Dates.Date(2013,4,1)
-@test Dates.firstdayofmonth(Date(may)) == Dates.Date(2013,5,1)
-@test Dates.firstdayofmonth(Date(jun)) == Dates.Date(2013,6,1)
-@test Dates.firstdayofmonth(Date(jul)) == Dates.Date(2013,7,1)
-@test Dates.firstdayofmonth(Date(aug)) == Dates.Date(2013,8,1)
-@test Dates.firstdayofmonth(Date(sep)) == Dates.Date(2013,9,1)
-@test Dates.firstdayofmonth(Date(oct)) == Dates.Date(2013,10,1)
-@test Dates.firstdayofmonth(Date(nov)) == Dates.Date(2013,11,1)
-@test Dates.firstdayofmonth(Date(dec)) == Dates.Date(2013,12,1)
+@test Dates.firstdayofmonth(Date(Jan)) == Dates.Date(2013,1,1)
+@test Dates.firstdayofmonth(Date(Feb)) == Dates.Date(2013,2,1)
+@test Dates.firstdayofmonth(Date(Mar)) == Dates.Date(2013,3,1)
+@test Dates.firstdayofmonth(Date(Apr)) == Dates.Date(2013,4,1)
+@test Dates.firstdayofmonth(Date(May)) == Dates.Date(2013,5,1)
+@test Dates.firstdayofmonth(Date(Jun)) == Dates.Date(2013,6,1)
+@test Dates.firstdayofmonth(Date(Jul)) == Dates.Date(2013,7,1)
+@test Dates.firstdayofmonth(Date(Aug)) == Dates.Date(2013,8,1)
+@test Dates.firstdayofmonth(Date(Sep)) == Dates.Date(2013,9,1)
+@test Dates.firstdayofmonth(Date(Oct)) == Dates.Date(2013,10,1)
+@test Dates.firstdayofmonth(Date(Nov)) == Dates.Date(2013,11,1)
+@test Dates.firstdayofmonth(Date(Dec)) == Dates.Date(2013,12,1)
 
 # Test first day of week; 2014-01-06 is a Monday = 1st day of week
 a = Dates.Date(2014,1,6)
@@ -311,10 +311,10 @@ stopdate = Dates.Date(2014,2,1)
 @test length(Dates.recur(x->true,startdate:stopdate)) == 32
 @test length(Dates.recur(x->true,stopdate:Dates.Day(-1):startdate)) == 32
 
-januarymondays2014 = [Dates.Date(2014,1,6),Dates.Date(2014,1,13),Dates.Date(2014,1,20),Dates.Date(2014,1,27)]
-@test Dates.recur(Dates.ismonday,startdate,stopdate) == januarymondays2014
-@test Dates.recur(Dates.ismonday,startdate:stopdate) == januarymondays2014
-@test Dates.recur(x->!Dates.ismonday(x),startdate,stopdate;negate=true) == januarymondays2014
+Januarymondays2014 = [Dates.Date(2014,1,6),Dates.Date(2014,1,13),Dates.Date(2014,1,20),Dates.Date(2014,1,27)]
+@test Dates.recur(Dates.ismonday,startdate,stopdate) == Januarymondays2014
+@test Dates.recur(Dates.ismonday,startdate:stopdate) == Januarymondays2014
+@test Dates.recur(x->!Dates.ismonday(x),startdate,stopdate;negate=true) == Januarymondays2014
 
 @test_throws MethodError Dates.recur((x,y)->x+y,Dates.Date(2013):Dates.Date(2014))
 @test_throws MethodError Dates.DateFunction((x,y)->x+y, false, Date(0))
@@ -387,7 +387,7 @@ isthanksgiving(dt) = Dates.dayofweek(dt) == Dates.Thu &&
     Dates.month(dt) == Dates.Nov && Dates.dayofweekofmonth(dt) == 4
 
 function easter(y)
-    # Butcher's Algorithm: http://www.smart.net/~mmontes/butcher.html
+    # Butcher's Algorithm: http://www.sMart.net/~mmontes/butcher.html
     a=y%19
     b=div(y,100)
     c=y%100

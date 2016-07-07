@@ -503,7 +503,7 @@ function finish(ts::DefaultTestSet)
         # Attach this test set to the parent test set
         parent_ts = get_testset()
         record(parent_ts, ts)
-        return
+        return ts
     end
     # Finally throw an error as we are the outermost test set
     #print_test_results(ts)
