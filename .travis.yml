@@ -69,7 +69,7 @@ before_install:
         ln -s /usr/bin/gcc-5 $HOME/bin/x86_64-linux-gnu-gcc;
         ln -s /usr/bin/g++-5 $HOME/bin/x86_64-linux-gnu-g++;
         gcc --version;
-        BUILDOPTS="-j3 VERBOSE=1 FORCE_ASSERTIONS=1 LLVM_ASSERTIONS=1";
+        BUILDOPTS="VERBOSE=1 FORCE_ASSERTIONS=1 LLVM_ASSERTIONS=1";
         echo "override ARCH=$ARCH" >> Make.user;
         TESTSTORUN="all";
       elif [ `uname` = "Darwin" ]; then
