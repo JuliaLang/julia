@@ -142,13 +142,6 @@ linearindexing(A::AbstractArray, B::AbstractArray...) = linearindexing(linearind
 linearindexing(::LinearFast, ::LinearFast) = LinearFast()
 linearindexing(::LinearIndexing, ::LinearIndexing) = LinearSlow()
 
-abstract IndicesPerformance
-immutable IndicesFast1D <: IndicesPerformance end  # indices(A, d) is fast
-immutable IndicesSlow1D <: IndicesPerformance end  # indices(A) is better than indices(A,d)
-
-indicesperformance(A::AbstractArray) = indicesperformance(typeof(A))
-indicesperformance{T<:AbstractArray}(::Type{T}) = IndicesFast1D()
-
 ## Bounds checking ##
 @generated function trailingsize{T,N,n}(A::AbstractArray{T,N}, ::Type{Val{n}})
     (isa(n, Int) && isa(N, Int)) || error("Must have concrete type")
@@ -187,7 +180,8 @@ function checkindex(::Type{Bool}, inds::AbstractUnitRange, I::AbstractArray)
 end
 
 # check all indices/dimensions
-# To make extension easier, avoid specializing checkbounds on index types
+# To make extension easier, avoid specializations of checkbounds on index types
+# (That said, typically one does not need to specialize this function.)
 """
     checkbounds(Bool, array, indexes...)
 
@@ -197,15 +191,12 @@ behaviors.
 """
 function checkbounds(::Type{Bool}, A::AbstractArray, I...)
     @_inline_meta
-    _checkbounds(Bool, indicesperformance(A), A, I...)
+    _chkbounds(A, I...)
 end
-function _checkbounds(::Type{Bool}, ::IndicesSlow1D, A::AbstractArray, I...)
-    @_inline_meta
-    checkbounds_indices(indices(A), I)
-end
-_checkbounds(::Type{Bool}, ::IndicesSlow1D, A::AbstractArray, I::AbstractArray{Bool}) = _chkbnds(A, (true,), I)
+_chkbounds(A::AbstractArray, i::Integer) = (@_inline_meta; checkindex(Bool, linearindices(A), i))
+_chkbounds(A::AbstractArray, I::AbstractArray{Bool}) = (@_inline_meta; checkbounds_logical(A, I))
+_chkbounds(A::AbstractArray, I...) = (@_inline_meta; checkbounds_indices(indices(A), I))
 
-# Bounds-checking for arrays for which indices(A) is faster than indices(A, d)
 checkbounds_indices(::Tuple{},  ::Tuple{})    = true
 checkbounds_indices(::Tuple{}, I::Tuple{Any}) = (@_inline_meta; checkindex(Bool, 1:1, I[1]))
 checkbounds_indices(::Tuple{}, I::Tuple)      = (@_inline_meta; checkindex(Bool, 1:1, I[1]) & checkbounds_indices((), tail(I)))
@@ -213,52 +204,11 @@ checkbounds_indices(inds::Tuple{Any}, I::Tuple{Any}) = (@_inline_meta; checkinde
 checkbounds_indices(inds::Tuple, I::Tuple{Any}) = (@_inline_meta; checkindex(Bool, 1:prod(map(dimlength, inds)), I[1]))
 checkbounds_indices(inds::Tuple, I::Tuple) = (@_inline_meta; checkindex(Bool, inds[1], I[1]) & checkbounds_indices(tail(inds), tail(I)))
 
-# Bounds-checking for arrays for which indices(A, d) is fast
-function _checkbounds(::Type{Bool}, ::IndicesFast1D, A::AbstractArray, I...)
-    @_inline_meta
-    # checked::NTuple{M} means we have checked dimensions 1:M-1, now
-    # need to check dimension M. checked[M] indicates whether all the
-    # previous ones are in-bounds.
-    # By growing checked, it allows us to test whether we've processed
-    # the same number of dimensions as the array, even while
-    # supporting CartesianIndex
-    _chkbnds(A, (true,), I...)
-end
-checkbounds(::Type{Bool}, A::AbstractArray) = checkbounds(Bool, A, 1) # 0-d case
 # Single logical array indexing:
-_chkbnds(A::AbstractArray, ::NTuple{1,Bool}, I::AbstractArray{Bool}) = indices(A) == indices(I)
-_chkbnds(A::AbstractArray, ::NTuple{1,Bool}, I::AbstractVector{Bool}) = length(A) == length(I)
-_chkbnds(A::AbstractVector, ::NTuple{1,Bool}, I::AbstractArray{Bool}) = length(A) == length(I)
-_chkbnds(A::AbstractVector, ::NTuple{1,Bool}, I::AbstractVector{Bool}) = indices(A) == indices(I)
-# Linear indexing:
-function _chkbnds(A::AbstractVector, ::NTuple{1,Bool}, I)
-    @_inline_meta
-    checkindex(Bool, indices1(A), I)
-end
-function _chkbnds(A::AbstractArray, ::NTuple{1,Bool}, I)
-    @_inline_meta
-    checkindex(Bool, 1:length(A), I)
-end
-# When all indices have been checked:
-_chkbnds{M}(A, checked::NTuple{M,Bool}) = checked[M]
-# When the number of indices matches the array dimensionality:
-function _chkbnds{T,N}(A::AbstractArray{T,N}, checked::NTuple{N,Bool}, I1)
-    @_inline_meta
-    checked[N] & checkindex(Bool, indices(A, N), I1)
-end
-# When the last checked dimension is not equal to the array dimensionality:
-# TODO: for #14770 (deprecating partial linear indexing), change to 1:trailingsize(...) to 1:1
-function _chkbnds{T,N,M}(A::AbstractArray{T,N}, checked::NTuple{M,Bool}, I1)
-    @_inline_meta
-    checked[M] & checkindex(Bool, 1:trailingsize(A, Val{M}), I1)
-end
-# Checking an interior dimension:
-function _chkbnds{T,N,M}(A::AbstractArray{T,N}, checked::NTuple{M,Bool}, I1, I...)
-    @_inline_meta
-    # grow checked by one
-    newchecked = (checked..., checked[M] & checkindex(Bool, indices(A, M), I1))
-    _chkbnds(A, newchecked, I...)
-end
+checkbounds_logical(A::AbstractArray, I::AbstractArray{Bool})   = indices(A) == indices(I)
+checkbounds_logical(A::AbstractArray, I::AbstractVector{Bool})  = length(A) == length(I)
+checkbounds_logical(A::AbstractVector, I::AbstractArray{Bool})  = length(A) == length(I)
+checkbounds_logical(A::AbstractVector, I::AbstractVector{Bool}) = indices(A) == indices(I)
 
 throw_boundserror(A, I) = (@_noinline_meta; throw(BoundsError(A, I)))
 

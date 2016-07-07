@@ -25,7 +25,7 @@ end
 
 Base.parent(A::PermutedDimsArray) = A.parent
 Base.size(A::PermutedDimsArray) = A.dims
-Base.indices{T,N,perm}(A::PermutedDimsArray{T,N,perm}, d) = indices(parent(A), perm[d])
+Base.indices{T,N,perm}(A::PermutedDimsArray{T,N,perm}) = genperm(indices(parent(A)), perm)
 
 @inline function Base.getindex{T,N,perm,iperm}(A::PermutedDimsArray{T,N,perm,iperm}, I::Vararg{Int,N})
     @boundscheck checkbounds(A, I...)
