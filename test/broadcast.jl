@@ -219,6 +219,7 @@ let A = [sqrt(i)+j for i = 1:3, j=1:4]
 end
 let x = sin.(1:10)
     @test atan2.((x->x+1).(x), (x->x+2).(x)) == atan2(x+1, x+2) == atan2(x.+1, x.+2)
+    @test sin.(atan2.([x+1,x+2]...)) == sin.(atan2.(x+1,x+2))
 end
 # Use side effects to check for loop fusion.  Note that, due to #17314,
 # a broadcasted function is currently called twice on the first element.
