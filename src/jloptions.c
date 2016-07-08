@@ -91,7 +91,7 @@ JL_DLLEXPORT void jl_parse_opts(int *argcp, char ***argvp)
            opt_use_compilecache,
            opt_incremental
     };
-    static const char const* shortopts = "+vhqFfH:e:E:P:L:J:C:ip:O:";
+    static const char* const shortopts = "+vhqFfH:e:E:P:L:J:C:ip:O:";
     static const struct option longopts[] = {
         // exposed command line options
         // NOTE: This set of required arguments need to be kept in sync
@@ -165,7 +165,7 @@ restart_switch:
         case '?':
         case ':':
             if (optopt) {
-                for (struct option *o = longopts; o->val; o++) {
+                for (const struct option *o = longopts; o->val; o++) {
                     if (optopt == o->val) {
                         if (o->has_arg == optional_argument) {
                             c = o->val;
