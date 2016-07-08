@@ -125,7 +125,7 @@ function getdict(data::Vector{UInt})
 end
 
 """
-    newdata, newdict = flatten(btdata, lidict)
+    flatten(btdata, lidict) -> (newdata, newdict)
 
 Produces "flattened" backtrace data. Individual instruction pointers
 sometimes correspond to a multi-frame backtrace due to inlining; in
