@@ -1677,9 +1677,18 @@ typedef struct {
     const char *outputo;
     const char *outputji;
     int8_t incremental;
+    int8_t image_file_specified;
 } jl_options_t;
 
 extern JL_DLLEXPORT jl_options_t jl_options;
+
+// Parse an argc/argv pair to extract general julia options, passing back out
+// any arguments that should be passed on to the script.
+JL_DLLEXPORT void jl_parse_opts(int *argcp, char ***argvp);
+
+// Set julia-level ARGS array according to the arguments provided in
+// argc/argv
+JL_DLLEXPORT void jl_set_ARGS(int argc, char **argv);
 
 JL_DLLEXPORT int jl_generating_output(void);
 

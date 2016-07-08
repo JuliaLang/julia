@@ -10,9 +10,6 @@ override CXXFLAGS += $(JCXXFLAGS)
 override CPPFLAGS += $(JCPPFLAGS)
 
 SRCS := repl
-ifeq ($(USEMSVC), 1)
-SRCS += getopt
-endif
 
 HEADERS := $(addprefix $(JULIAHOME)/src/,julia.h julia_threads.h julia_internal.h options.h) \
 	$(BUILDDIR)/../src/julia_version.h $(wildcard $(JULIAHOME)/src/support/*.h) $(LIBUV_INC)/uv.h

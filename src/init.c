@@ -80,6 +80,7 @@ jl_options_t jl_options = { 0,    // quiet
                             NULL, // outputo
                             NULL, // outputji
                             0, // incremental
+                            0 // image_file_specified
 };
 
 int jl_boot_file_loaded = 0;
