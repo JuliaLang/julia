@@ -121,11 +121,50 @@ end
 
 function getdict(data::Vector{UInt})
     uip = unique(data)
-    Dict{UInt, StackFrame}(map(uip) do ip
-        lk = lookup(ip)
-        # TODO handle inlined frames
-        ip => first(lk)
-    end)
+    Dict{UInt, Vector{StackFrame}}(ip=>lookup(ip) for ip in uip)
+end
+
+"""
+    newdata, newdict = flatten(btdata, lidict)
+
+Produces "flattened" backtrace data. Individual instruction pointers
+sometimes correspond to a multi-frame backtrace due to inlining; in
+such cases, this function inserts fake instruction pointers for the
+inlined calls, and returns a dictionary that is a 1-to-1 mapping
+between instruction pointers and a single StackFrame.
+"""
+function flatten(data::Vector{UInt}, lidict::Dict{UInt,Vector{StackFrame}})
+    # Makes fake instruction pointers, counting down from typemax(UInt)
+    newip = typemax(UInt)
+    taken = Set(keys(lidict))  # make sure we don't pick one that's already used
+    newdict = Dict{UInt,StackFrame}()
+    newmap  = Dict{UInt,Vector{UInt}}()
+    for (ip, trace) in lidict
+        if length(trace) == 1
+            newdict[ip] = trace[1]
+        else
+            newm = UInt[]
+            for sf in trace
+                while newip ∈ taken && newip > 0
+                    newip -= 1
+                end
+                newip == 0 && error("all possible instruction pointers used")
+                push!(newm, newip)
+                newdict[newip] = sf
+                newip -= 1
+            end
+            newmap[ip] = newm
+        end
+    end
+    newdata = UInt[]
+    for ip in data
+        if haskey(newmap, ip)
+            append!(newdata, newmap[ip])
+        else
+            push!(newdata, ip)
+        end
+    end
+    newdata, newdict
 end
 
 """
@@ -253,7 +292,7 @@ function parse_flat(iplist, n, lidict, C::Bool)
     lilist, n
 end
 
-function flat{T<:Unsigned}(io::IO, data::Vector{T}, lidict::Dict, C::Bool, combine::Bool, cols::Integer, sortedby)
+function flat{T<:Unsigned}(io::IO, data::Vector{T}, lidict::Dict{T,StackFrame}, C::Bool, combine::Bool, cols::Integer, sortedby)
     if !C
         data = purgeC(data, lidict)
     end
@@ -264,6 +303,11 @@ function flat{T<:Unsigned}(io::IO, data::Vector{T}, lidict::Dict, C::Bool, combi
     end
     lilist, n = parse_flat(iplist, n, lidict, C)
     print_flat(io, lilist, n, combine, cols, sortedby)
+end
+
+function flat{T<:Unsigned}(io::IO, data::Vector{T}, lidict::Dict{T,Vector{StackFrame}}, C::Bool, combine::Bool, cols::Integer, sortedby)
+    newdata, newdict = flatten(data, lidict)
+    flat(io, newdata, newdict, C, combine, cols, sortedby)
 end
 
 function print_flat(io::IO, lilist::Vector{StackFrame}, n::Vector{Int}, combine::Bool, cols::Integer, sortedby)
@@ -476,7 +520,7 @@ function tree{T<:Unsigned}(io::IO, bt::Vector{Vector{T}}, counts::Vector{Int}, l
     end
 end
 
-function tree{T<:Unsigned}(io::IO, data::Vector{T}, lidict::Dict, C::Bool, combine::Bool, cols::Integer, maxdepth)
+function tree{T<:Unsigned}(io::IO, data::Vector{T}, lidict::Dict{T,StackFrame}, C::Bool, combine::Bool, cols::Integer, maxdepth)
     if !C
         data = purgeC(data, lidict)
     end
@@ -489,6 +533,11 @@ function tree{T<:Unsigned}(io::IO, data::Vector{T}, lidict::Dict, C::Bool, combi
     len = Int[length(x) for x in bt]
     keep = len .> 0
     tree(io, bt[keep], counts[keep], lidict, level, combine, cols, maxdepth)
+end
+
+function tree{T<:Unsigned}(io::IO, data::Vector{T}, lidict::Dict{T,Vector{StackFrame}}, C::Bool, combine::Bool, cols::Integer, maxdepth)
+    newdata, newdict = flatten(data, lidict)
+    tree(io, newdata, newdict, C, combine, cols, maxdepth)
 end
 
 function callersf(matchfunc::Function, bt::Vector{UInt}, lidict)
