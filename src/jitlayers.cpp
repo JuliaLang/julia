@@ -312,6 +312,29 @@ void NotifyDebugger(jit_code_entry *JITCodeEntry)
 }
 // ------------------------ END OF TEMPORARY COPY FROM LLVM -----------------
 
+// Resolve compiler-rt functions in the shared library that we created from compiler-rt
+static uint64_t resolve_compiler_rt(const char *name)
+{
+    static void *compiler_rt_hdl = jl_load_dynamic_library_e("libcompiler-rt",
+                                                             JL_RTLD_LOCAL | JL_RTLD_LAZY);
+    static const char *const prefix = "__";
+    if (!compiler_rt_hdl) {
+        jl_printf(JL_STDERR, "WARNING: Unable to load compiler-rt\n");
+        return 0;
+    }
+    if (strncmp(name, prefix, strlen(prefix)) != 0)
+        return 0;
+#if defined(_OS_DARWIN_)
+    // jl_dlsym_e expects an unmangled 'C' symbol name,
+    // so iff we are on Darwin we strip the leading '_' off.
+    static const char *const mangled_prefix = "___";
+    if (strncmp(name, mangled_prefix, strlen(mangled_prefix)) == 0) {
+        ++name;
+    }
+#endif
+    return (uintptr_t)jl_dlsym_e(compiler_rt_hdl, name);
+}
+
 #if defined(_OS_LINUX_)
 // Resolve non-lock free atomic functions in the libatomic library.
 // This is the library that provides support for c11/c++11 atomic operations.
@@ -548,6 +571,8 @@ void JuliaOJIT::addModule(std::unique_ptr<Module> M)
                         if (uint64_t addr = resolve_atomic(Name.c_str()))
                             return JL_SymbolInfo(addr, JITSymbolFlags::Exported);
 #endif
+                        if (uint64_t addr = resolve_compiler_rt(Name.c_str()))
+                            return JL_SymbolInfo(addr, JITSymbolFlags::Exported);
                         // Return failure code
                         return JL_SymbolInfo(nullptr);
                       },
