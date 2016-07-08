@@ -101,8 +101,6 @@ function length(s::AbstractString)
     end
 end
 
-transpose(s::AbstractString) = s
-
 ## string comparison functions ##
 
 function cmp(a::AbstractString, b::AbstractString)

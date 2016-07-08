@@ -210,7 +210,7 @@ let i18n_data = ["Origin (English)", "Name (English)", "Origin (Native)", "Name 
         "Yugoslavia (Cyrillic)", "Djordje Balasevic", "Југославија", "Ђорђе Балашевић",
         "Yugoslavia (Latin)", "Djordje Balasevic", "Jugoslavija", "Đorđe Balašević"]
 
-    i18n_arr = transpose(reshape(i18n_data, 4, Int(floor(length(i18n_data)/4))))
+    i18n_arr = permutedims(reshape(i18n_data, 4, Int(floor(length(i18n_data)/4))), [2, 1])
     i18n_buff = PipeBuffer()
     writedlm(i18n_buff, i18n_arr, ',')
     @test i18n_arr == readcsv(i18n_buff)

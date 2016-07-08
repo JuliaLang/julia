@@ -402,7 +402,7 @@ foobaz(ch) = reinterpret(Char, typemax(UInt32))
 
 @test "a".*["b","c"] == ["ab","ac"]
 @test ["b","c"].*"a" == ["ba","ca"]
-@test ["a","b"].*["c","d"]' == ["ac" "ad"; "bc" "bd"]
+@test ["a","b"].*["c" "d"] == ["ac" "ad"; "bc" "bd"]
 
 # Make sure NULL pointers are handled consistently by String
 @test_throws ArgumentError unsafe_string(Ptr{UInt8}(0))
