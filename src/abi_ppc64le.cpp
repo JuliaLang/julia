@@ -115,7 +115,7 @@ Type *preferred_llvm_type(jl_datatype_t *dt, bool isret)
     // Arguments are either scalar or passed by value
     size_t size = dt->size;
     // don't need to change bitstypes
-    if (!dt->nfields)
+    if (!jl_datatype_nfields(dt))
         return NULL;
     // legalize this into [n x f32/f64]
     jl_datatype_t *ty0 = NULL;
@@ -135,7 +135,7 @@ Type *preferred_llvm_type(jl_datatype_t *dt, bool isret)
             assert(jl_is_bitstype(elemty));
 
             Type *ety = julia_type_to_llvm(elemty);
-            Type *vty = VectorType::get(ety, ty0->nfields);
+            Type *vty = VectorType::get(ety, jl_datatype_nfields(ty0));
             return ArrayType::get(vty, hfa);
         }
     }
