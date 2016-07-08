@@ -32,8 +32,6 @@ in(x::Char, y::Char) = x == y
 ==(x::Char, y::Char) = UInt32(x) == UInt32(y)
 isless(x::Char, y::Char) = UInt32(x) < UInt32(y)
 
-transpose(c::Char) = c
-
 const hashchar_seed = 0xd4d64234
 hash(x::Char, h::UInt) = hash_uint64(((UInt64(x)+hashchar_seed)<<32) $ UInt64(h))
 
