@@ -497,8 +497,8 @@ let
         @test I == imag.(S)
         @test real.(sparse(R)) == R
         @test nnz(imag.(sparse(R))) == 0
-        @test abs.(S) == abs(D)
-        @test abs2.(S) == abs2(D)
+        @test abs.(S) == abs.(D)
+        @test abs2.(S) == abs2.(D)
     end
 end
 
@@ -1062,19 +1062,6 @@ end
 @test_throws BoundsError sparse([])[1] = 1
 x = speye(100)
 @test_throws BoundsError x[-10:10]
-
-for T in (Int, Float16, Float32, Float64, BigInt, BigFloat)
-    let R=rand(T[1:100;],2,2), I=rand(T[1:100;],2,2)
-        D = R + I*im
-        S = sparse(D)
-        @test R == real.(S)
-        @test I == imag.(S)
-        @test real.(sparse(R)) == R
-        @test nnz(imag.(sparse(R))) == 0
-        @test abs.(S) == abs.(D)
-        @test abs2.(S) == abs2.(D)
-    end
-end
 
 # issue #10407
 @test maximum(spzeros(5, 5)) == 0.0
