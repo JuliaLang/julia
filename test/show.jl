@@ -501,7 +501,7 @@ let s  = IOBuffer(Array{UInt8}(0), true, true)
     @test String(resize!(s.data, s.size)) == " 1\n 2\n 3"
 end
 
-# The `dump` function should alway have a trailing newline
+# The `dump` function should always have a trailing newline
 let io = IOBuffer()
     dump(io, :(x = 1))
     @test takebuf_string(io)[end] == '\n'
