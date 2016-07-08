@@ -39,7 +39,11 @@ SRCS := \
 	jltypes gf typemap ast builtins module interpreter \
 	alloc dlload sys init task array dump toplevel jl_uv jlapi signal-handling \
 	simplevector APInt-C runtime_intrinsics runtime_ccall \
-	threadgroup threading stackwalk gc gc-debug gc-pages safepoint
+	threadgroup threading stackwalk gc gc-debug gc-pages safepoint jloptions
+
+ifeq ($(USEMSVC), 1)
+SRCS += getopt
+endif
 
 LLVMLINK :=
 

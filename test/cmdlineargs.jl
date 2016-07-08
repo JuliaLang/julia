@@ -273,7 +273,10 @@ let exename = `$(Base.julia_cmd()) --precompiled=yes`
 end
 
 # Make sure `julia --lisp` doesn't break
-run(pipeline(DevNull, `$(Base.julia_cmd()) --lisp`, DevNull))
+run(pipeline(DevNull, `$(joinpath(JULIA_HOME, Base.julia_exename())) --lisp`, DevNull))
+
+# Test that `julia [some other option] --lisp` is disallowed
+@test_throws ErrorException run(pipeline(DevNull, pipeline(`$(joinpath(JULIA_HOME, Base.julia_exename())) -Cnative --lisp`, stderr=DevNull), DevNull))
 
 # --precompiled={yes|no}
 let exename = `$(Base.julia_cmd())`
