@@ -138,24 +138,22 @@ Convert string data between Unicode encodings. `src` is either a
 `String` or an `Vector{UIntXX}` of UTF-XX code units, where
 `XX` is 8, 16, or 32. `T` indicates the encoding of the return value:
 `String` to return a (UTF-8 encoded) `String` or `UIntXX`
-to return a `Vector{UIntXX}` of UTF-`XX` data.
+to return a `Vector{UIntXX}` of UTF-`XX` data.   Only conversion
+to or from UTF-8 is currently supported.
 """
 function transcode end
 
-transcode{T<:Union{UInt8,UInt16}}(::Type{T}, src::Vector{T}) = src
-transcode(T, src::String) = transcode(T, src.data)
-transcode(::Type{String}, src) = String(transcode(UInt8, src))
-
-transcode(::Type{Int32}, src::Vector{UInt32}) = reinterpret(Int32, src)
+transcode{T<:Union{UInt8,UInt16,UInt32,Int32}}(::Type{T}, src::Vector{T}) = src
 transcode{T<:Union{Int32,UInt32}}(::Type{T}, src::String) = T[T(c) for c in src]
-transcode{T<:Union{Int32,UInt32}}(::Type{T}, src) = transcode(T, transcode(String, src))
-transcode{S<:Union{Int32,UInt32}}(T, src::Vector{S}) = transcode(T, transcode(String, src))
-function transcode{S<:Union{Int32,UInt32}}(::Type{String}, src::Vector{S})
+transcode{T<:Union{Int32,UInt32}}(::Type{T}, src::Vector{UInt8}) = transcode(T, String(src))
+function transcode{S<:Union{Int32,UInt32}}(::Type{UInt8}, src::Vector{S})
     buf = IOBuffer()
     for c in src; print(buf, Char(c)); end
-    takebuf_string(buf)
+    takebuf_array(buf)
 end
-transcode(::Type{UInt16}, src::Vector) = transcode(UInt16, transcode(UInt8, src))
+transcode(::Type{String}, src::String) = src
+transcode(T, src::String) = transcode(T, src.data)
+transcode(::Type{String}, src) = String(transcode(UInt8, src))
 
 function transcode(::Type{UInt16}, src::Vector{UInt8})
     dst = UInt16[]
