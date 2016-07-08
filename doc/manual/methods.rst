@@ -235,9 +235,10 @@ values is perhaps the single most powerful and central feature of the
 Julia language. Core operations typically have dozens of methods:
 
 .. doctest::
+   :options: +SKIP
 
     julia> methods(+)
-    # 166 methods for generic function "+":...
+    # 166 methods for generic function "+":
     +(a::Float16, b::Float16) at float16.jl:136
     +(x::Float32, y::Float32) at float.jl:206
     +(x::Float64, y::Float64) at float.jl:207
@@ -248,6 +249,13 @@ Julia language. Core operations typically have dozens of methods:
     +(x::Bool, z::Complex) at complex.jl:144
     +(x::Bool, A::AbstractArray{Bool,N<:Any}) at arraymath.jl:105
     +(x::Char, y::Integer) at char.jl:40
+    +{T<:Union{Int128,Int16,Int32,Int64,Int8,UInt128,UInt16,UInt32,UInt64,UInt8}}(x::T, y::T) at int.jl:32
+    +(z::Complex, w::Complex) at complex.jl:115
+    +(z::Complex, x::Bool) at complex.jl:134
+    +(x::Real, z::Complex{Bool}) at complex.jl:140
+    +(x::Real, z::Complex) at complex.jl:152
+    +(z::Complex, x::Real) at complex.jl:153
+    +(x::Rational, y::Rational) at rational.jl:179
     ...
     +(a, b, c, xs...) at operators.jl:119
 
