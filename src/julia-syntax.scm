@@ -1554,17 +1554,22 @@
   (define (fuse? e) (and (pair? e) (eq? (car e) 'fuse)))
   (define (anyfuse? exprs)
     (if (null? exprs) #f (if (fuse? (car exprs)) #t (anyfuse? (cdr exprs)))))
+  (define (...? e) (and (pair? e) (eq? (car e) '...)))
   (define (to-lambda f args) ; convert f to anonymous function with hygienic tuple args
+    (define (genarg arg) (if (...? arg) (list '... (gensy)) (gensy)))
     (define (hygienic f) ; rename args of f == (-> (tuple args...) body)
       (let* ((oldargs (cdadr f))
-             (newargs (map (lambda (arg) (gensy)) oldargs))
-             (renames (map cons oldargs newargs)))
+             (newargs (map genarg oldargs))
+             (renames (map (lambda (oldarg newarg) (if (...? oldarg)
+                                                       (cons (cadr oldarg) (cadr newarg))
+                                                       (cons oldarg newarg)))
+                           oldargs newargs)))
         `(-> (tuple ,@newargs) ,(replace-vars (caddr f) renames))))
     (if (and (pair? f) (eq? (car f) '->))
         (if (pair? (cadr f))
             (hygienic f) ; f is already anon function, nothing to do but hygienicize
             (hygienic `(-> (tuple ,(cadr f)) ,(caddr f)))) ; canonicalize single arg to tuple
-        (let ((genargs (map (lambda (e) (gensy)) args))) ; formal parameters
+        (let ((genargs (map genarg args))) ; formal parameters
           `(-> ,(cons 'tuple genargs) (call ,f ,@genargs)))))
   (define (from-lambda f) ; convert (-> (tuple args...) (call func args...)) back to func
     (if (and (pair? f) (eq? (car f) '->) (pair? (cadr f)) (eq? (caadr f) 'tuple)
@@ -1597,20 +1602,16 @@
                                  fargs args)))
         (let ,fbody ,@(reverse (fuse-lets fargs args '()))))))
   (define (make-fuse f args) ; check for nested (fuse f args) exprs and combine
-    (define (expand-fuse e)
-      (if (and (pair? e) (eq? (car e) '|.|))
-          (let ((f (cadr e))
-                (x (caddr e)))
-            (if (getfield-field? x)
-                `(call (core getfield) ,(expand-forms f) ,(expand-forms x))
-                (make-fuse f (cdr x))))
-          (expand-forms e)))
-    (let ((args_ (map expand-fuse args)))
+    (define (dot-to-fuse e) ; convert e == (. f (tuple args)) to (fuse f args)
+      (if (and (pair? e) (eq? (car e) '|.|) (not (getfield-field? (caddr e))))
+          (make-fuse (cadr e) (cdaddr e))
+          e))
+    (let ((args_ (map dot-to-fuse args)))
       (if (anyfuse? args_)
           `(fuse ,(fuse-funcs (to-lambda f args) args_) ,(fuse-args args_))
           `(fuse ,(to-lambda f args) ,args_))))
   (let ((e (make-fuse f args))) ; an expression '(fuse func args)
-    `(call broadcast ,(expand-forms (from-lambda (cadr e))) ,@(caddr e))))
+    (expand-forms `(call broadcast ,(from-lambda (cadr e)) ,@(caddr e)))))
 
 ;; table mapping expression head to a function expanding that form
 (define expand-table
