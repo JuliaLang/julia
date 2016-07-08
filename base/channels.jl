@@ -51,7 +51,6 @@ function fetch(c::Channel)
 end
 
 function take!(c::Channel)
-    !isopen(c) && !isready(c) && throw(closed_exception())
     wait(c)
     v = shift!(c.data)
     notify(c.cond_put, nothing, false, false) # notify only one, since only one slot has become available for a put!.
@@ -64,6 +63,7 @@ isready(c::Channel) = n_avail(c) > 0
 
 function wait(c::Channel)
     while !isready(c)
+        !isopen(c) && throw(closed_exception())
         wait(c.cond_take)
     end
     nothing

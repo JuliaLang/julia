@@ -538,6 +538,24 @@ function testcpt()
 end
 testcpt()
 
+# Test multiple "for" loops waiting on the same channel which
+# is closed after adding a few elements.
+c=Channel()
+results=[]
+@sync begin
+    for i in 1:20
+        @async for i in c
+            push!(results, i)
+        end
+    end
+    sleep(1.0)
+    for i in 1:5
+        put!(c,i)
+    end
+    close(c)
+end
+@test sum(results) == 15
+
 @test_throws ArgumentError sleep(-1)
 @test_throws ArgumentError timedwait(()->false, 0.1, pollint=-0.5)
 
