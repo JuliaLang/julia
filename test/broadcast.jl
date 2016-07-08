@@ -220,7 +220,7 @@ end
 let x = sin.(1:10)
     @test atan2.((x->x+1).(x), (x->x+2).(x)) == atan2(x+1, x+2) == atan2(x.+1, x.+2)
 end
-# Use side effects to check for loop fusion.  Note that, due to #8450,
+# Use side effects to check for loop fusion.  Note that, due to #17314,
 # a broadcasted function is currently called twice on the first element.
 let g = Int[]
     f17300(x) = begin; push!(g, x); x+1; end
