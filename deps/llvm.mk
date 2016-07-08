@@ -533,6 +533,9 @@ else
 	$(call   make-install,llvm-$(LLVM_VER)/build_$(LLVM_BUILDTYPE),\
 	                      $(LLVM_MFLAGS) PATH="$(llvm_python_workaround):$$PATH")
 endif # LLVM_USE_CMAKE
+ifeq ($(BUILD_COMPILER-RT),1)
+	$(CC) $(LDFLAGS) -shared $(fPIC) -o $(build_libdir)/libcompiler-rt.$(SHLIB_EXT) -nostdlib -Wl,--whole-archive -L$(build_libdir)/clang/$(LLVM_VER)/lib/$(call patsubst,%inux,linux,$(OS)) -lclang_rt.builtins-$(call patsubst,i%86,i386,$(ARCH))
+endif
 	touch -c $@
 
 reinstall-llvm:
