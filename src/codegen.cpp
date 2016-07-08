@@ -1395,7 +1395,7 @@ const jl_value_t *jl_dump_function_asm(void *f, int raw_mc)
 #ifndef USE_MCJIT
             context,
 #endif
-            objcontext,
+            object, objcontext,
 #ifdef LLVM37
             stream
 #else
