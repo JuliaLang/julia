@@ -47,6 +47,8 @@ end
 
 isassigned{N}(B::BitArray{N}, i::Int) = 1 <= i <= length(B)
 
+linearindexing{A<:BitArray}(::Type{A}) = LinearFast()
+
 ## aux functions ##
 
 const _msk64 = ~UInt64(0)
