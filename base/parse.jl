@@ -59,9 +59,9 @@ safe_mul{T<:Integer}(n1::T, n2::T) = ((n2 >   0) ? ((n1 > div(typemax(T),n2)) ||
                                       (n2 <  -1) ? ((n1 > div(typemin(T),n2)) || (n1 < div(typemax(T),n2))) :
                                       ((n2 == -1) && n1 == typemin(T))) ? Nullable{T}() : Nullable{T}(n1 * n2)
 
-function tryparse_internal{T<:Integer}(::Type{T}, s::AbstractString, startpos::Int, endpos::Int, base::Integer, raise::Bool)
+function tryparse_internal{T<:Integer}(::Type{T}, s::AbstractString, startpos::Int, endpos::Int, base_::Integer, raise::Bool)
     _n = Nullable{T}()
-    sgn, base, i = parseint_preamble(T<:Signed, base, s, startpos, endpos)
+    sgn, base, i = parseint_preamble(T<:Signed, Int(base_), s, startpos, endpos)
     if !(2 <= base <= 62)
         raise && throw(ArgumentError("invalid base: base must be 2 ≤ base ≤ 62, got $base"))
         return _n
