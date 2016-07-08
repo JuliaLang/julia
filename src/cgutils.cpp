@@ -821,7 +821,7 @@ static LoadInst *build_load(Value *ptr, jl_value_t *jltype)
     return builder.CreateAlignedLoad(ptr, julia_alignment(ptr, jltype, 0));
 }
 
-static Value *emit_unbox(Type *to, const jl_cgval_t &x, jl_value_t *jt, Value* dest = NULL, bool volatile_store = false);
+static Value *emit_unbox(Type *to, const jl_cgval_t &x, jl_value_t *jt, Value* dest = NULL, bool volatile_store = false, bool needsroot = true);
 
 static jl_cgval_t typed_load(Value *ptr, Value *idx_0based, jl_value_t *jltype,
                              jl_codectx_t *ctx, MDNode *tbaa, unsigned alignment = 0)
@@ -869,7 +869,11 @@ static void typed_store(Value *ptr, Value *idx_0based, const jl_cgval_t &rhs,
     assert(elty != NULL);
     if (type_is_ghost(elty))
         return;
-    Value *r;
+    Value *r, *data;
+    if (ptr->getType()->getContainedType(0) != elty)
+        data = emit_bitcast(ptr, PointerType::get(elty, 0));
+    else
+        data = ptr;
     Value *addr = builder.CreateGEP(data, idx_0based);
     if (!isboxed) {
         emit_unbox(elty, rhs, jltype, addr);
@@ -878,11 +882,6 @@ static void typed_store(Value *ptr, Value *idx_0based, const jl_cgval_t &rhs,
     }
     r = boxed(rhs, ctx, root_box);
     if (parent != NULL) emit_write_barrier(ctx, parent, r);
-    Value *data;
-    if (ptr->getType()->getContainedType(0) != elty)
-        data = emit_bitcast(ptr, PointerType::get(elty, 0));
-    else
-        data = ptr;
     Instruction *store = builder.CreateAlignedStore(r, addr, isboxed ? alignment : julia_alignment(r, jltype, alignment));
     if (tbaa)
         tbaa_decorate(tbaa, store);
@@ -1697,7 +1696,7 @@ static jl_cgval_t emit_new_struct(jl_value_t *ty, size_t nargs, jl_value_t **arg
             if (init_as_value)
                 strct = UndefValue::get(lt == T_void ? NoopType : lt);
             else {
-                if (sty->pointerfree)
+                if (sty->layout->pointerfree)
                     strct = emit_static_alloca(lt);
                 else
                     strct = emit_static_alloca(lt, (jl_value_t*)sty, ctx);
@@ -1758,8 +1757,11 @@ static jl_cgval_t emit_new_struct(jl_value_t *ty, size_t nargs, jl_value_t **arg
             tbaa_decorate(tbaa_tag, builder.CreateStore(literal_pointer_val((jl_value_t*)ty),
                                                         emit_typeptr_addr(strct)));
         } else {
-            strct = emit_static_alloca(lt);
-            strctinfo = mark_julia_slot(strct, ty, tbaa_stack, ctx, true);
+            if (sty->layout->pointerfree)
+                strct = emit_static_alloca(lt);
+            else
+                strct = emit_static_alloca(lt, (jl_value_t*)sty, ctx);
+            strctinfo = mark_julia_slot(strct, ty, tbaa_stack, ctx, !sty->layout->pointerfree);
         }
         if (f1) {
             jl_cgval_t f1info = mark_julia_type(f1, true, jl_any_type, ctx);

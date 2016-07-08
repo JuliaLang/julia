@@ -3469,7 +3469,7 @@ jl_value_t *jl_type_match(jl_value_t *a, jl_value_t *b)
     return jl_type_match_(a, b, 0);
 }
 
-jl_value_t *jl_type_match_morespecific(jl_value_t *a, jl_value_t *b)
+JL_DLLEXPORT jl_value_t *jl_type_match_morespecific(jl_value_t *a, jl_value_t *b)
 {
     return jl_type_match_(a, b, 1);
 }
@@ -3649,7 +3649,7 @@ void jl_init_types(void)
                                         jl_type_type, jl_emptysvec,
                                         jl_svec(1, jl_symbol("types")),
                                         jl_svec(1, jl_simplevector_type),
-                                        0, 0, 1);
+                                        0, 1, 1);
 
     jl_bottom_type = (jl_value_t*)jl_new_struct(jl_uniontype_type, jl_emptysvec);
 

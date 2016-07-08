@@ -327,19 +327,22 @@ typedef struct {
 // in little-endian, isptr is always the first bit, avoiding the need for a branch in computing isptr
 typedef struct {
     uint8_t isptr:1;
-    uint8_t size:7;
+    uint8_t hasptr:1;
+    uint8_t size:6;
     uint8_t offset;   // offset relative to data start, excluding type tag
 } jl_fielddesc8_t;
 
 typedef struct {
     uint16_t isptr:1;
-    uint16_t size:15;
+    uint16_t hasptr:1;
+    uint16_t size:14;
     uint16_t offset;   // offset relative to data start, excluding type tag
 } jl_fielddesc16_t;
 
 typedef struct {
     uint32_t isptr:1;
-    uint32_t size:31;
+    uint32_t hasptr:1;
+    uint32_t size:30;
     uint32_t offset;   // offset relative to data start, excluding type tag
 } jl_fielddesc32_t;
 
@@ -801,6 +804,13 @@ static inline int jl_field_isptr(jl_datatype_t *st, int i)
     const jl_datatype_layout_t *ly = st->layout;
     assert(i >= 0 && (size_t)i < ly->nfields);
     return ((const jl_fielddesc8_t*)(jl_dt_layout_fields(ly) + (i << (ly->fielddesc_type + 1))))->isptr;
+}
+
+static inline int jl_field_hasptr(jl_datatype_t *st, int i)
+{
+    const struct _jl_datatype_layout_t *ly = st->layout;
+    assert(i >= 0 && (size_t)i < ly->nfields);
+    return ((const jl_fielddesc8_t*)(jl_dt_layout_fields(ly) + (i << (ly->fielddesc_type + 1))))->hasptr;
 }
 
 static inline uint32_t jl_fielddesc_size(int8_t fielddesc_type)
@@ -1754,7 +1764,8 @@ typedef struct {
 
 static inline int jl_is_vt(void* t)
 {
-    return ((jl_datatype_t*)t)->super == jl_valuetype_type;
+    //return ((jl_datatype_t*)t)->super == jl_valuetype_type;
+    return jl_is_datatype(t) && !((jl_datatype_t*)t)->mutabl && ((jl_datatype_t*)t)->layout && !((jl_datatype_t*)t)->layout->pointerfree;
 }
 
 #ifdef __cplusplus

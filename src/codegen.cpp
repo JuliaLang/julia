@@ -598,13 +598,34 @@ static AllocaInst *emit_static_alloca(Type *lty)
 
 static Instruction *emit_static_alloca(Type *lty, jl_value_t *tag, jl_codectx_t *ctx)
 {
+    auto prevBlock = builder.GetInsertBlock();
+    auto prevPoint = builder.GetInsertPoint();
+    auto prevDbg = builder.getCurrentDebugLocation();
     AllocaInst *slot = emit_static_alloca(T_int8, jl_datatype_size(tag) + sizeof(tag), ctx);
-    Instruction *tagptr = CastInst::CreatePointerCast(slot, PointerType::get(T_ppjlvalue, 0));
+    Instruction *tagptr = CastInst::CreatePointerCast(slot, PointerType::get(T_pjlvalue, 0));
     tagptr->insertAfter(slot);
-    Instruction *storetag = new StoreInst(literal_pointer_val(tag), tagptr);
+    Instruction *storetag = new StoreInst(V_null, tagptr);
     storetag->insertAfter(tagptr);
+    builder.SetInsertPoint(storetag);
+    Value *tag_val = literal_pointer_val(tag);
+    storetag->setOperand(0, tag_val);
+    builder.SetInsertPoint(prevBlock, prevPoint);
+    builder.SetCurrentDebugLocation(prevDbg);
     Instruction *gep = GetElementPtrInst::CreateInBounds(slot, {ConstantInt::get(T_size, sizeof(tag))});
     gep->insertAfter(slot);
+    
+    Type *argsT[2] = {gep->getType(), T_int32};
+    Function *memset = Intrinsic::getDeclaration(jl_Module, Intrinsic::memset, makeArrayRef(argsT));
+    Value *args[5] = {
+        gep, // dest
+        ConstantInt::get(T_int8, 0), // val
+        ConstantInt::get(T_int32, jl_datatype_size(tag)), // len
+        ConstantInt::get(T_int32, 0), // align
+        ConstantInt::get(T_int1, 0)}; // volatile
+    CallInst *zeroing = CallInst::Create(memset, makeArrayRef(args));
+    zeroing->setMetadata(llvm::LLVMContext::MD_tbaa, tbaa_gcframe);
+    zeroing->insertAfter(gep);
+    
     Instruction *cast = CastInst::CreatePointerCast(gep, PointerType::get(lty, 0));
     cast->insertAfter(gep);
     return cast;
@@ -630,7 +651,12 @@ static inline jl_cgval_t mark_julia_slot(Value *v, jl_value_t *typ, MDNode *tbaa
     jl_cgval_t tagval(v, NULL, false, typ);
     tagval.tbaa = tbaa;
     tagval.isimmutable = true;
-    if (needsroot && !((jl_datatype_t*)typ)->pointerfree) {
+    jl_datatype_t *jt = (jl_datatype_t*)typ;
+    if (needsroot && jt->layout && !jt->layout->pointerfree) {
+        if (!isa<CastInst>(v)) {
+            v->dump();
+            abort();
+        }
         Value *froot = emit_local_root(ctx, typ, v->getType());
         builder.CreateStore(v, froot);
     }
@@ -640,17 +666,22 @@ static inline jl_cgval_t mark_julia_slot(Value *v, jl_value_t *typ, MDNode *tbaa
 static inline jl_cgval_t mark_julia_type(Value *v, bool isboxed, jl_value_t *typ, jl_codectx_t *ctx, bool needsroot = true)
 {
     Type *T = julia_type_to_llvm(typ);
+    jl_datatype_t *jt = (jl_datatype_t*)typ;
     if (type_is_ghost(T)) {
         return ghostValue(typ);
     }
     if (v && T->isAggregateType() && !isboxed) {
         assert(v->getType() != T_pjlvalue);
-        assert(!jl_is_vt(typ));
+        Value *loc;
         // eagerly put this back onto the stack
         // llvm mem2reg pass will remove this if unneeded
-        Value *loc = emit_static_alloca(T);
+        if (jt->layout->pointerfree || !needsroot) {
+            loc = emit_static_alloca(T);
+        } else {
+            loc = emit_static_alloca(T, typ, ctx);
+        }
         builder.CreateStore(v, loc);
-        return mark_julia_slot(loc, typ, tbaa_stack, ctx);
+        return mark_julia_slot(loc, typ, tbaa_stack, ctx, needsroot);
     }
     Value *froot = NULL;
     if (needsroot && isboxed) {
@@ -770,8 +801,14 @@ static Value *alloc_local(int s, jl_codectx_t *ctx)
         return NULL;
     }
     // CreateAlloca is OK here because alloc_local is only called during prologue setup
-    Value *lv = builder.CreateAlloca(vtype, 0, jl_symbol_name(slot_symbol(s,ctx)));
-    vi.value = mark_julia_slot(lv, jt, tbaa_stack, ctx);
+    bool needsroot = !((jl_datatype_t*)jt)->layout->pointerfree;
+    Value *lv;
+    if (needsroot) {
+        lv = emit_static_alloca(vtype, jt, ctx);
+    } else {
+        lv = emit_static_alloca(vtype);
+    }
+    vi.value = mark_julia_slot(lv, jt, tbaa_stack, ctx, needsroot);
     // slot is not immutable if there are multiple assignments
     vi.value.isimmutable &= (vi.isSA && s >= ctx->nargs);
     assert(vi.value.isboxed == false);
@@ -3160,9 +3197,14 @@ static void emit_assignment(jl_value_t *l, jl_value_t *r, jl_codectx_t *ctx)
         if (!slot.isboxed && !slot.isimmutable) { // emit a copy of values stored in mutable slots
             Type *vtype = julia_type_to_llvm(slot.typ);
             assert(vtype != T_pjlvalue);
-            Value *dest = emit_static_alloca(vtype);
+            Value *dest;
+            bool needsroot = !((jl_datatype_t*)slot.typ)->layout->pointerfree;
+            if (needsroot)
+                dest = emit_static_alloca(vtype, slot.typ, ctx);
+            else
+                dest = emit_static_alloca(vtype);
             emit_unbox(vtype, slot, slot.typ, dest);
-            slot = mark_julia_slot(dest, slot.typ, tbaa_stack, ctx);
+            slot = mark_julia_slot(dest, slot.typ, tbaa_stack, ctx, needsroot);
         }
         if (slot.isboxed && slot.isimmutable) {
             // see if inference had a better type for the ssavalue than the expression (after inlining getfield on a Tuple)
@@ -3955,6 +3997,7 @@ static Function *gen_jlcall_wrapper(jl_method_instance_t *lam, Function *f, bool
     else
         funcName << fname;
 
+    jl_value_t *jlretty = lam->rettype;
     Function *w = Function::Create(jl_func_sig, GlobalVariable::ExternalLinkage,
                                    funcName.str(), M);
     jl_init_function(w);
@@ -3984,7 +4027,12 @@ static Function *gen_jlcall_wrapper(jl_method_instance_t *lam, Function *f, bool
     unsigned idx = 0;
     Value *result;
     if (sret) {
-        result = builder.CreateAlloca(f->getFunctionType()->getParamType(0)->getContainedType(0));
+        bool ret_needsroot = !((jl_datatype_t*)jlretty)->layout->pointerfree;
+        Type *llvm_retty = f->getFunctionType()->getParamType(0)->getContainedType(0);
+        if (ret_needsroot)
+            result = emit_static_alloca(llvm_retty, jlretty, &ctx);
+        else
+            result = emit_static_alloca(llvm_retty);//builder.CreateAlloca();
         args[idx] = result;
         idx++;
     }
@@ -4014,11 +4062,10 @@ static Function *gen_jlcall_wrapper(jl_method_instance_t *lam, Function *f, bool
     CallInst *call = builder.CreateCall(prepare_call(f), ArrayRef<Value*>(&args[0], nfargs));
     call->setAttributes(f->getAttributes());
 
-    jl_value_t *jlretty = lam->rettype;
     bool retboxed;
     (void)julia_type_to_llvm(jlretty, &retboxed);
     if (sret) { assert(!retboxed); }
-    jl_cgval_t retval = sret ? mark_julia_slot(result, jlretty, tbaa_stack, &ctx) : mark_julia_type(call, retboxed, jlretty, &ctx, /*needsroot*/ false);
+    jl_cgval_t retval = sret ? mark_julia_slot(result, jlretty, tbaa_stack, &ctx, true) : mark_julia_type(call, retboxed, jlretty, &ctx, /*needsroot*/ false);
     builder.CreateRet(boxed(retval, &ctx, false)); // no gcroot needed since this on the return path
 
     return w;
@@ -4557,7 +4604,7 @@ static std::unique_ptr<Module> emit_function(jl_method_instance_t *lam, jl_code_
                     theArg = ghostValue(argType);
                 }
                 else if (llvmArgType->isAggregateType()) {
-                    theArg = mark_julia_slot(&*AI++, argType, tbaa_const, &ctx); // this argument is by-pointer
+                    theArg = mark_julia_slot(&*AI++, argType, tbaa_const, &ctx, /* needsroot */false); // this argument is by-pointer
                     theArg.isimmutable = true;
                 }
                 else {
@@ -4980,7 +5027,8 @@ static std::unique_ptr<Module> emit_function(jl_method_instance_t *lam, jl_code_
             }
             else if (!type_is_ghost(retty)) {
                 retval = emit_unbox(retty, retvalinfo, jlrettype,
-                                    ctx.sret ? &*ctx.f->arg_begin() : NULL);
+                                    ctx.sret ? &*ctx.f->arg_begin() : NULL, false,
+                                    false);
             }
             else { // undef return type
                 retval = NULL;

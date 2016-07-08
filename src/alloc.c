@@ -890,9 +890,9 @@ static jl_datatype_layout_t *jl_get_layout(uint32_t nfields,
             if (desc[i].size > max_size)
                 max_size = desc[i].size;
         }
-        jl_fielddesc8_t maxdesc8 = { 0, max_size, max_offset };
-        jl_fielddesc16_t maxdesc16 = { 0, max_size, max_offset };
-        jl_fielddesc32_t maxdesc32 = { 0, max_size, max_offset };
+        jl_fielddesc8_t maxdesc8 = { 0, 0, max_size, max_offset };
+        jl_fielddesc16_t maxdesc16 = { 0, 0, max_size, max_offset };
+        jl_fielddesc32_t maxdesc32 = { 0, 0, max_size, max_offset };
         if (maxdesc8.size != max_size || maxdesc8.offset != max_offset) {
             fielddesc_type = 1;
             if (maxdesc16.size != max_size || maxdesc16.offset != max_offset) {
@@ -923,18 +923,21 @@ static jl_datatype_layout_t *jl_get_layout(uint32_t nfields,
             desc8[i].offset = desc[i].offset;
             desc8[i].size = desc[i].size;
             desc8[i].isptr = desc[i].isptr;
+            desc8[i].hasptr = desc[i].hasptr;
         }
         else if (fielddesc_type == 1) {
             desc16[i].offset = desc[i].offset;
             desc16[i].size = desc[i].size;
             desc16[i].isptr = desc[i].isptr;
+            desc16[i].hasptr = desc[i].hasptr;
         }
         else {
             desc32[i].offset = desc[i].offset;
             desc32[i].size = desc[i].size;
             desc32[i].isptr = desc[i].isptr;
+            desc32[i].hasptr = desc[i].hasptr;
         }
-        if (desc[i].isptr)
+        if (desc[i].isptr || desc[i].hasptr)
             ptrfree = 0;
     }
     flddesc->pointerfree = ptrfree;
@@ -1010,6 +1013,7 @@ void jl_compute_field_offsets(jl_datatype_t *st)
                 jl_throw(jl_overflow_exception);
             al = ((jl_datatype_t*)ty)->layout->alignment;
             desc[i].isptr = 0;
+            desc[i].hasptr = !((jl_datatype_t*)ty)->layout->pointerfree;
             if (((jl_datatype_t*)ty)->layout->haspadding)
                 haspadding = 1;
         }
@@ -1019,6 +1023,7 @@ void jl_compute_field_offsets(jl_datatype_t *st)
                 fsz = MAX_ALIGN;
             al = fsz;
             desc[i].isptr = 1;
+            desc[i].hasptr = 0;
         }
         if (al != 0) {
             size_t alsz = LLT_ALIGN(sz, al);

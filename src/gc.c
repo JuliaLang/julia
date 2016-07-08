@@ -524,13 +524,19 @@ static inline int gc_setmark_pool(jl_ptls_t ptls, jl_taggedvalue_t *o,
     return gc_setmark_pool_(ptls, o, mark_mode, find_region(o));
 }
 
-static inline int gc_setmark(jl_ptls_t ptls, jl_value_t *v, int sz)
+static inline int gc_setmark(jl_ptls_t ptls, jl_value_t *v, int sz, int onstack)
 {
     jl_taggedvalue_t *o = jl_astaggedvalue(v);
-    if (sz <= GC_MAX_SZCLASS)
-        return gc_setmark_pool(ptls, o, GC_MARKED);
-    else
-        return gc_setmark_big(ptls, o, GC_MARKED);
+    if (onstack) {
+        o->bits.gc = GC_MARKED;
+        return GC_MARKED;
+    }
+    else {
+        if (sz <= GC_MAX_SZCLASS)
+            return gc_setmark_pool(ptls, o, GC_MARKED);
+        else
+            return gc_setmark_big(ptls, o, GC_MARKED);
+    }
 }
 
 inline void gc_setmark_buf(jl_ptls_t ptls, void *o, int mark_mode, size_t minsz)
@@ -1170,7 +1176,7 @@ void gc_queue_binding(jl_binding_t *bnd)
     arraylist_push(&ptls->heap.rem_bindings, bnd);
 }
 
-static int push_root(jl_ptls_t ptls, jl_value_t *v, int d, int);
+static int push_root(jl_ptls_t ptls, jl_value_t *v, int d, int, int);
 #ifdef JL_DEBUG_BUILD
 static void *volatile gc_findval; // for usage from gdb, for finding the gc-root for a value
 #endif
@@ -1186,7 +1192,7 @@ static inline int gc_push_root(jl_ptls_t ptls, void *v, int d) // v isa jl_value
     verify_val(v);
     int bits = o->bits.gc;
     if (!gc_marked(bits))
-        return !gc_old(push_root(ptls, (jl_value_t*)v, d, bits));
+        return !gc_old(push_root(ptls, (jl_value_t*)v, d, bits, 0));
     return !gc_old(bits);
 }
 
@@ -1236,9 +1242,12 @@ NOINLINE static int gc_mark_module(jl_ptls_t ptls, jl_module_t *m, int d)
     return refyoung;
 }
 
-static void gc_mark_stack(jl_ptls_t ptls, jl_value_t *ta, jl_gcframe_t *s,
+static void gc_mark_stack(jl_ptls_t ptls, jl_ptls_t owner_ptls,
+                          jl_value_t *ta, jl_gcframe_t *s,
                           intptr_t offset, int d)
 {
+    char *stackhi = owner_ptls->stack_hi,
+         *stacklo = owner_ptls->stack_lo;
     while (s != NULL) {
         s = (jl_gcframe_t*)((char*)s + offset);
         jl_value_t ***rts = (jl_value_t***)(((void**)s)+2);
@@ -1253,9 +1262,20 @@ static void gc_mark_stack(jl_ptls_t ptls, jl_value_t *ta, jl_gcframe_t *s,
         }
         else {
             for(size_t i=0; i < nr; i++) {
+                jl_value_t *root = rts[i];
                 if (rts[i] != NULL) {
                     verify_parent2("task", ta, &rts[i], "stack(%d)", (int)i);
-                    gc_push_root(ptls, rts[i], d);
+                    char *relocated_ptr = (char*)root + offset;
+                    if (stacklo <= relocated_ptr && relocated_ptr <= stackhi) {
+                        printf("Got stack object : %p %p\n", relocated_ptr, root);
+                        jl_(jl_typeof(root));
+                        printf("\n");
+                        if (jl_typeof(root)) // TODO zero the pointer to the alloca instead
+                            push_root(ptls, root, d, 0, 1);
+                    }
+                    else {
+                        gc_push_root(ptls, root, d);
+                    }
                 }
             }
         }
@@ -1282,7 +1302,7 @@ static void gc_mark_task_stack(jl_ptls_t ptls, jl_task_t *ta, int d)
 #endif
     }
     if (ta == ptls2->current_task) {
-        gc_mark_stack(ptls, (jl_value_t*)ta, ptls2->pgcstack, 0, d);
+        gc_mark_stack(ptls, ptls2, (jl_value_t*)ta, ptls2->pgcstack, 0, d);
     }
     else if (stkbuf) {
         intptr_t offset;
@@ -1291,7 +1311,7 @@ static void gc_mark_task_stack(jl_ptls_t ptls, jl_task_t *ta, int d)
 #else
         offset = 0;
 #endif
-        gc_mark_stack(ptls, (jl_value_t*)ta, ta->gcstack, offset, d);
+        gc_mark_stack(ptls, ptls2, (jl_value_t*)ta, ta->gcstack, offset, d);
     }
 }
 
@@ -1331,24 +1351,45 @@ static jl_value_t *lookforme = NULL;
 JL_DLLEXPORT void jl_gc_lookfor(jl_value_t *v) { lookforme = v; }
 */
 
+static inline int scan_datatype(jl_ptls_t ptls, jl_datatype_t *dt, char *v, int d, int *nptr)
+{
+    int refyoung = 0;
+    int nf = (int)jl_datatype_nfields(dt);
+    jl_datatype_t **types = jl_svec_data(dt->types);
+    for(int i=0; i < nf; i++) {
+        if (jl_field_isptr(dt, i)) {
+            *nptr++;
+            jl_value_t **slot = (jl_value_t**)(v + jl_field_offset(dt, i));
+            jl_value_t *fld = *slot;
+            if (fld) {
+                verify_parent2("object", v, slot, "field(%d)", i);
+                refyoung |= gc_push_root(ptls, fld, d);
+            }
+        } else if(jl_field_hasptr(dt, i)) {
+            refyoung |= scan_datatype(ptls, types[i], v + jl_field_offset(dt, i),
+                                      d, nptr);
+        }
+    }
+    return refyoung;
+}
+
 #define MAX_MARK_DEPTH 400
 // mark v and recurse on its children (or store them on the mark stack when recursion depth becomes too high)
 // it does so assuming the gc bits of v are "bits" and returns the new bits of v
 // if v becomes GC_OLD_MARKED and some of its children are GC_MARKED (young),
 // v is added to the remset
-static int push_root(jl_ptls_t ptls, jl_value_t *v, int d, int bits)
+static int push_root(jl_ptls_t ptls, jl_value_t *v, int d, int bits, int onstack)
 {
     assert(v != NULL);
     jl_value_t *vt = jl_typeof(v);
     int refyoung = 0, nptr = 0;
-
     if (vt == (jl_value_t*)jl_weakref_type) {
-        bits = gc_setmark(ptls, v, sizeof(jl_weakref_t));
+        bits = gc_setmark(ptls, v, sizeof(jl_weakref_t), onstack);
         goto ret;
     }
     if ((jl_is_datatype(vt) && ((jl_datatype_t*)vt)->layout->pointerfree)) {
         int sz = jl_datatype_size(vt);
-        bits = gc_setmark(ptls, v, sz);
+        bits = gc_setmark(ptls, v, sz, onstack);
         goto ret;
     }
     d++;
@@ -1356,7 +1397,7 @@ static int push_root(jl_ptls_t ptls, jl_value_t *v, int d, int bits)
     // some values have special representations
     if (vt == (jl_value_t*)jl_simplevector_type) {
         size_t l = jl_svec_len(v);
-        bits = gc_setmark(ptls, v, l * sizeof(void*) + sizeof(jl_svec_t));
+        bits = gc_setmark(ptls, v, l * sizeof(void*) + sizeof(jl_svec_t), onstack);
         if (d >= MAX_MARK_DEPTH)
             goto queue_the_root;
         jl_value_t **data = jl_svec_data(v);
@@ -1423,14 +1464,16 @@ static int push_root(jl_ptls_t ptls, jl_value_t *v, int d, int bits)
     }
     else if (vt == (jl_value_t*)jl_module_type) {
         // should increase nptr here
-        bits = gc_setmark(ptls, v, sizeof(jl_module_t));
+        assert(!onstack);
+        bits = gc_setmark(ptls, v, sizeof(jl_module_t), 0);
         if (d >= MAX_MARK_DEPTH)
             goto queue_the_root;
         refyoung |= gc_mark_module(ptls, (jl_module_t*)v, d);
     }
     else if (vt == (jl_value_t*)jl_task_type) {
         // ditto nptr
-        bits = gc_setmark(ptls, v, sizeof(jl_task_t));
+        assert(!onstack);
+        bits = gc_setmark(ptls, v, sizeof(jl_task_t), 0);
         if (d >= MAX_MARK_DEPTH)
             goto queue_the_root;
         gc_mark_task(ptls, (jl_task_t*)v, d);
@@ -1445,30 +1488,10 @@ static int push_root(jl_ptls_t ptls, jl_value_t *v, int d, int bits)
     else if (jl_typeof(vt) == (jl_value_t*)jl_datatype_type) {
         jl_datatype_t *dt = (jl_datatype_t*)vt;
         size_t dtsz = jl_datatype_size(dt);
-        bits = gc_setmark(ptls, v, dtsz);
+        bits = gc_setmark(ptls, v, dtsz, onstack);
         if (d >= MAX_MARK_DEPTH)
             goto queue_the_root;
-
-        int nf = (int)jl_datatype_nfields(dt);
-        // TODO check if there is a perf improvement for objects with a lot of fields
-        // int fdsz = sizeof(void*)*nf;
-        // void** children = alloca(fdsz);
-        // int ci = 0;
-        for(int i=0; i < nf; i++) {
-            if (jl_field_isptr(dt, i)) {
-                nptr++;
-                jl_value_t **slot = (jl_value_t**)((char*)v +
-                                                   jl_field_offset(dt, i));
-                jl_value_t *fld = *slot;
-                if (fld) {
-                    verify_parent2("object", v, slot, "field(%d)", i);
-                    //children[ci++] = fld;
-                    refyoung |= gc_push_root(ptls, fld, d);
-                }
-            }
-        }
-        //while(ci)
-        //  refyoung |= gc_push_root(ptls, children[--ci], d);
+        refyoung |= scan_datatype(ptls, dt, (char*)v, d, &nptr);
     }
     else {
         jl_printf(JL_STDOUT, "GC error (probable corruption) :\n");
@@ -1491,16 +1514,18 @@ ret:
 queue_the_root:
     if (mark_sp >= mark_stack_size)
         grow_mark_stack();
-    mark_stack[mark_sp++] = (jl_value_t*)v;
+    mark_stack[mark_sp++] = (jl_value_t*)((uintptr_t)v | onstack);
     return bits;
 }
 
 void visit_mark_stack(jl_ptls_t ptls)
 {
     while (mark_sp > 0 && !should_timeout()) {
-        jl_value_t *v = mark_stack[--mark_sp];
+        uintptr_t ptr = mark_stack[--mark_sp];
+        int onstack = ptr & 1;
+        jl_value_t *v = (jl_value_t*)(ptr & (uintptr_t)-2);
         assert(jl_astaggedvalue(v)->bits.gc);
-        push_root(ptls, v, 0, jl_astaggedvalue(v)->bits.gc);
+        push_root(ptls, v, 0, jl_astaggedvalue(v)->bits.gc, onstack);
     }
     assert(!mark_sp);
 }
@@ -1684,7 +1709,7 @@ static void _jl_gc_collect(jl_ptls_t ptls, int full)
 
         for (int i = 0; i < ptls2->heap.last_remset->len; i++) {
             jl_value_t *item = (jl_value_t*)ptls2->heap.last_remset->items[i];
-            push_root(ptls, item, 0, GC_OLD_MARKED);
+            push_root(ptls, item, 0, GC_OLD_MARKED, 0);
         }
     }
 
