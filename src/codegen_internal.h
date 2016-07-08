@@ -12,6 +12,7 @@ void jl_dump_asm_internal(uintptr_t Fptr, size_t Fsize, int64_t slide,
 #ifndef USE_MCJIT
                           std::vector<JITEvent_EmittedFunctionDetails::LineStart> lineinfo,
 #endif
+                          const object::ObjectFile *object,
                           llvm::DIContext *context,
 #ifdef LLVM37
                           raw_ostream &rstream
