@@ -190,13 +190,22 @@ Return `true` if the specified `indexes` are in bounds for the given `array`. Su
 `AbstractArray` should specialize this method if they need to provide custom bounds checking
 behaviors.
 """
+function checkbounds(::Type{Bool}, A::AbstractArray, i::Integer)
+    @_inline_meta
+    checkindex(Bool, linearindices(A), i)
+end
+function checkbounds{T}(::Type{Bool}, A::Union{Array{T,1},Range{T}}, i::Integer)
+    @_inline_meta
+    (1 <= i) & (i <= length(A))
+end
+function checkbounds(::Type{Bool}, A::AbstractArray, I::AbstractArray{Bool})
+    @_inline_meta
+    checkbounds_logical(A, I)
+end
 function checkbounds(::Type{Bool}, A::AbstractArray, I...)
     @_inline_meta
-    _chkbounds(A, I...)
+    checkbounds_indices(indices(A), I)
 end
-_chkbounds(A::AbstractArray, i::Integer) = (@_inline_meta; checkindex(Bool, linearindices(A), i))
-_chkbounds(A::AbstractArray, I::AbstractArray{Bool}) = (@_inline_meta; checkbounds_logical(A, I))
-_chkbounds(A::AbstractArray, I...) = (@_inline_meta; checkbounds_indices(indices(A), I))
 
 checkbounds_indices(::Tuple{},  ::Tuple{})    = true
 checkbounds_indices(::Tuple{}, I::Tuple{Any}) = (@_inline_meta; checkindex(Bool, 1:1, I[1]))
