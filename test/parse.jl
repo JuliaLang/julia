@@ -514,6 +514,14 @@ end
 # to be removed post 0.5
 #@test_throws MethodError eval(parse("(Any=>Any)[x=>y for (x,y) in zip([1,2,3],[4,5,6])]"))
 
+# make sure base can be any Integer
+for T in (Int, BigInt)
+    let n = parse(T, "123", Int8(10))
+        @test n == 123
+        @test isa(n, T)
+    end
+end
+
 # issue #16720
 let err = try
     include_string("module A
