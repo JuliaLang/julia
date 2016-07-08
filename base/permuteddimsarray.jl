@@ -2,8 +2,6 @@
 
 module PermutedDimsArrays
 
-using Base: IndicesStartAt1, IndicesBehavior, indicesbehavior
-
 export permutedims
 
 # Some day we will want storage-order-aware iteration, so put perm in the parameters
@@ -27,7 +25,7 @@ end
 
 Base.parent(A::PermutedDimsArray) = A.parent
 Base.size(A::PermutedDimsArray) = A.dims
-Base.indices{T,N,perm}(A::PermutedDimsArray{T,N,perm}, d) = indices(parent(A), perm[d])
+Base.indices{T,N,perm}(A::PermutedDimsArray{T,N,perm}) = genperm(indices(parent(A)), perm)
 
 @inline function Base.getindex{T,N,perm,iperm}(A::PermutedDimsArray{T,N,perm,iperm}, I::Vararg{Int,N})
     @boundscheck checkbounds(A, I...)
@@ -47,13 +45,9 @@ _genperm(out, I) = out
 @inline genperm(I, perm::AbstractVector{Int}) = genperm(I, (perm...,))
 
 function Base.permutedims{T,N}(A::AbstractArray{T,N}, perm)
-    dest = similar_permute(A, perm)
+    dest = similar(A, genperm(indices(A), perm))
     permutedims!(dest, A, perm)
 end
-
-similar_permute(A::AbstractArray, perm) = similar_permute(indicesbehavior(A), A, perm)
-similar_permute{T,N}(::IndicesStartAt1, A::AbstractArray{T,N}, perm) = similar(A, genperm(size(A), perm))
-similar_permute{T,N}(::IndicesBehavior, A::AbstractArray{T,N}, perm) = similar(A, genperm(indices(A), perm))
 
 function Base.permutedims!(dest, src::AbstractArray, perm)
     Base.checkdims_perm(dest, src, perm)

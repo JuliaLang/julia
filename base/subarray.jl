@@ -18,7 +18,7 @@ immutable SubArray{T,N,P,I,L} <: AbstractArray{T,N}
 end
 # Compute the linear indexability of the indices, and combine it with the linear indexing of the parent
 function SubArray(parent::AbstractArray, indexes::Tuple, dims::Tuple)
-    SubArray(linearindexing(viewindexing(indexes), linearindexing(parent)), parent, indexes, convert(Dims, dims))
+    SubArray(linearindexing(viewindexing(indexes), linearindexing(parent)), parent, indexes, map(dimlength, dims))
 end
 function SubArray{P, I, N}(::LinearSlow, parent::P, indexes::I, dims::NTuple{N, Int})
     SubArray{eltype(P), N, P, I, false}(parent, indexes, dims, 0, 0)
@@ -47,6 +47,9 @@ viewindexing(I::Tuple{Vararg{Any}}) = LinearSlow()
 # Of course, all other array types are slow
 viewindexing(I::Tuple{AbstractArray, Vararg{Any}}) = LinearSlow()
 
+dimlength(r::Range) = length(r)
+dimlength(i::Integer) = Int(i)
+
 # Simple utilities
 size(V::SubArray) = V.dims
 length(V::SubArray) = prod(V.dims)
@@ -57,7 +60,7 @@ parent(V::SubArray) = V.parent
 parentindexes(V::SubArray) = V.indexes
 
 parent(a::AbstractArray) = a
-parentindexes(a::AbstractArray) = ntuple(i->1:size(a,i), ndims(a))
+parentindexes(a::AbstractArray) = ntuple(i->OneTo(size(a,i)), ndims(a))
 
 ## SubArray creation
 # Drops singleton dimensions (those indexed with a scalar)
@@ -76,10 +79,16 @@ function view{N}(A::AbstractArray, I::Vararg{ViewIndex,N}) # TODO: DEPRECATE FOR
     @boundscheck checkbounds(A, I...)
     unsafe_view(reshape(A, Val{N}), I...)
 end
+
 function unsafe_view{T,N}(A::AbstractArray{T,N}, I::Vararg{ViewIndex,N})
     @_inline_meta
     J = to_indexes(I...)
     SubArray(A, J, map(dimlength, index_shape(A, J...)))
+end
+function unsafe_view{T,N}(V::SubArray{T,N}, I::Vararg{ViewIndex,N})
+    @_inline_meta
+    idxs = reindex(V, V.indexes, to_indexes(I...))
+    SubArray(V.parent, idxs, map(dimlength, (index_shape(V.parent, idxs...))))
 end
 
 # Re-indexing is the heart of a view, transforming A[i, j][x, y] to A[i[x], j[y]]
@@ -164,12 +173,6 @@ function setindex!(V::FastContiguousSubArray, x, i::Real)
     @boundscheck checkbounds(V, i)
     @inbounds V.parent[V.offset1 + to_index(i)] = x
     V
-end
-
-function unsafe_view{T,N}(V::SubArray{T,N}, I::Vararg{ViewIndex,N})
-    @_inline_meta
-    idxs = reindex(V, V.indexes, to_indexes(I...))
-    SubArray(V.parent, idxs, index_shape(V.parent, idxs...))
 end
 
 linearindexing{T<:FastSubArray}(::Type{T}) = LinearFast()
@@ -258,7 +261,9 @@ unsafe_convert{T,N,P,I<:Tuple{Vararg{RangeIndex}}}(::Type{Ptr{T}}, V::SubArray{T
 
 pointer(V::FastSubArray, i::Int) = pointer(V.parent, V.offset1 + V.stride1*i)
 pointer(V::FastContiguousSubArray, i::Int) = pointer(V.parent, V.offset1 + i)
-pointer(V::SubArray, i::Int) = pointer(V, smart_ind2sub(shape(V), i))
+pointer(V::SubArray, i::Int) = _pointer(V, i)
+_pointer{T}(V::SubArray{T,1}, i::Int) = pointer(V, (i,))
+_pointer(V::SubArray, i::Int) = pointer(V, ind2sub(indices(V), i))
 
 function pointer{T,N,P<:Array,I<:Tuple{Vararg{RangeIndex}}}(V::SubArray{T,N,P,I}, is::Tuple{Vararg{Int}})
     index = first_index(V)
@@ -273,33 +278,17 @@ end
 # they are taken from the range/vector
 # Since bounds-checking is performance-critical and uses
 # indices, it's worth optimizing these implementations thoroughly
-indices(S::SubArray, d::Integer) = 1 <= d <= ndims(S) ? indices(S)[d] : (d > ndims(S) ? (1:1) : error("dimension $d out of range"))
-indices(S::SubArray) = (@_inline_meta; _indices(indicesbehavior(parent(S)), S))
-_indices(::IndicesStartAt1, S::SubArray) = (@_inline_meta; map(s->1:s, size(S)))
-_indices(::IndicesBehavior, S::SubArray) = (@_inline_meta; _indices((), 1, S, S.indexes...))
-_indices(out::Tuple, dim, S::SubArray) = out
-_indices(out::Tuple, dim, S::SubArray, i1, I...) = (@_inline_meta; _indices((out..., 1:length(i1)), dim+1, S, I...))
-_indices(out::Tuple, dim, S::SubArray, ::Real, I...) = (@_inline_meta; _indices(out, dim+1, S, I...))
-_indices(out::Tuple, dim, S::SubArray, ::Colon, I...) = (@_inline_meta; _indices((out..., indices(parent(S), dim)), dim+1, S, I...))
-indices1{T}(S::SubArray{T,0}) = 1:1
-indices1(S::SubArray) = (@_inline_meta; _indices1(indicesbehavior(parent(S)), S))
-_indices1(::IndicesStartAt1, S::SubArray) = 1:S.dims[1]
-_indices1(::IndicesBehavior, S::SubArray) = (@_inline_meta; _indices1(S, 1, S.indexes...))
-_indices1(S::SubArray, dim, i1, I...) = (@_inline_meta; 1:length(i1))
+indices(S::SubArray) = (@_inline_meta; _indices_sub(S, 1, S.indexes...))
+_indices_sub(S::SubArray, dim::Int) = ()
+_indices_sub(S::SubArray, dim::Int, ::Real, I...) = (@_inline_meta; _indices_sub(S, dim+1, I...))
+_indices_sub(S::SubArray, dim::Int, ::Colon, I...) = (@_inline_meta; (indices(parent(S), dim), _indices_sub(S, dim+1, I...)...))
+_indices_sub(S::SubArray, dim::Int, i1::AbstractArray, I...) = (@_inline_meta; (indices(i1)..., _indices_sub(S, dim+1, I...)...))
+indices1(S::SubArray) = (@_inline_meta; _indices1(S, 1, S.indexes...))
+_indices1(S::SubArray, dim) = OneTo(1)
 _indices1(S::SubArray, dim, i1::Real, I...) = (@_inline_meta; _indices1(S, dim+1, I...))
 _indices1(S::SubArray, dim, i1::Colon, I...) = (@_inline_meta; indices(parent(S), dim))
-
-# Moreover, incides(S) is fast but indices(S, d) is slower
-indicesperformance{T<:SubArray}(::Type{T}) = IndicesSlow1D()
-
-indicesbehavior(S::SubArray) = _indicesbehavior(indicesbehavior(parent(S)), S)
-_indicesbehavior(::IndicesStartAt1, S::SubArray) = IndicesStartAt1()
-_indicesbehavior(::IndicesBehavior, S::SubArray) = (@_inline_meta; _indicesbehavior(keepcolon((), S.indexes...), S))
-keepcolon(out) = out
-keepcolon(out, ::Colon, I...) = (@_inline_meta; (Colon(),))
-keepcolon(out, i1, I...) = (@_inline_meta; keepcolon(out, I...))
-_indicesbehavior(::Tuple{}, S::SubArray) = IndicesStartAt1()
-_indicesbehavior(::Tuple{Colon}, S::SubArray) = indicesbehavior(parent(S))
+_indices1(S::SubArray, dim, i1::AbstractArray, I...) = (@_inline_meta; indices1(i1))
+_indices1{T}(S::SubArray, dim, i1::AbstractArray{T,0}, I...) = (@_inline_meta; _indices1(S, dim+1, I...))
 
 ## Compatability
 # deprecate?

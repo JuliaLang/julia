@@ -28,6 +28,7 @@ export
 # Types
     AbstractChannel,
     AbstractMatrix,
+    AbstractUnitRange,
     AbstractVector,
     AbstractVecOrMat,
     Array,
@@ -485,7 +486,6 @@ export
     zeta,
 
 # arrays
-    allocate_for,
     bitbroadcast,
     broadcast!,
     broadcast,
@@ -585,7 +585,6 @@ export
     searchsortedlast,
     select!,
     select,
-    shape,
     shuffle,
     shuffle!,
     size,

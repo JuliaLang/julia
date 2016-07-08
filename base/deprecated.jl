@@ -766,6 +766,12 @@ function first(::Colon)
     1
 end
 
+# Not exported, but may be useful just in case
+function Broadcast.check_broadcast_shape(sz::Dims, As::Union{AbstractArray,Number}...)
+    depwarn("check_broadcast_shape(size(A), B...) should be replaced with check_broadcast_shape(indices(A), B...)", :check_broadcast_shape)
+    Broadcast.check_broadcast_shape(map(OneTo, sz), As...)
+end
+
 @deprecate slice view
 @deprecate sub view
 

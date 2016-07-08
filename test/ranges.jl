@@ -736,3 +736,33 @@ let r = 1:3, a = [1,2,3]
     @test convert(Array{Int,1}, r) == a
     @test convert(Array{Float64,1}, r) == a
 end
+
+# OneTo
+r = Base.OneTo(-5)
+@test isempty(r)
+@test length(r) == 0
+@test size(r) == (0,)
+r = Base.OneTo(3)
+@test !isempty(r)
+@test length(r) == 3
+@test size(r) == (3,)
+@test step(r) == 1
+@test first(r) == 1
+@test last(r) == 3
+@test minimum(r) == 1
+@test maximum(r) == 3
+@test r[2] == 2
+@test_throws BoundsError r[4]
+@test_throws BoundsError r[0]
+@test r+1 === 2:4
+@test 2*r === 2:2:6
+k = 0
+for i in r
+    @test i == (k+=1)
+end
+@test intersect(r, Base.OneTo(2)) == Base.OneTo(2)
+@test intersect(r, 0:5) == 1:3
+io = IOBuffer()
+show(io, r)
+str = takebuf_string(io)
+@test str == "Base.OneTo(3)"
