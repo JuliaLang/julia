@@ -2482,11 +2482,11 @@ getindex{T<:Integer}(A::SparseMatrixCSC, I::AbstractVector{T}, J::AbstractVector
 getindex{T<:Integer}(A::SparseMatrixCSC, I::AbstractVector{Bool}, J::AbstractVector{T}) = A[find(I),J]
 
 ## setindex!
-function setindex!{T,Ti}(A::SparseMatrixCSC{T,Ti}, v, i0::Integer, i1::Integer)
-    i0 = convert(Ti, i0)
-    i1 = convert(Ti, i1)
+function setindex!{Tv,Ti}(A::SparseMatrixCSC{Tv,Ti}, v, i::Integer, j::Integer)
+    setindex!(A, convert(Tv, v), convert(Ti, i), convert(Ti, j))
+end
+function setindex!{Tv,Ti<:Integer}(A::SparseMatrixCSC{Tv,Ti}, v::Tv, i0::Ti, i1::Ti)
     if !(1 <= i0 <= A.m && 1 <= i1 <= A.n); throw(BoundsError()); end
-    v = convert(T, v)
     r1 = Int(A.colptr[i1])
     r2 = Int(A.colptr[i1+1]-1)
     if v == 0 #either do nothing or delete entry if it exists
