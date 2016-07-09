@@ -299,7 +299,7 @@ Create an uninitialized mutable array analogous to that specified by
 `storagetype`, but with `indices` specified by the last
 argument. `storagetype` might be a type or a function.
 
-    **Examples**:
+**Examples**:
 
     similar(Array{Int}, indices(A))
 
