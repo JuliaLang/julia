@@ -821,7 +821,7 @@ public:
 // llvmcall(ir, (rettypes...), (argtypes...), args...)
 static jl_cgval_t emit_llvmcall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
 {
-    JL_NARGSV(llvmcall, 3)
+    JL_NARGSV(llvmcall, 3);
     jl_value_t *rt = NULL, *at = NULL, *ir = NULL, *decl = NULL;
     jl_svec_t *stt = NULL;
     JL_GC_PUSH5(&ir, &rt, &at, &stt, &decl);
@@ -1009,6 +1009,7 @@ static jl_cgval_t emit_llvmcall(jl_value_t **args, size_t nargs, jl_codectx_t *c
         f->setLinkage(GlobalValue::LinkOnceODRLinkage);
 
     // the actual call
+    builder.CreateCall(prepare_call(gcroot_flush_func));
     CallInst *inst = builder.CreateCall(f, ArrayRef<Value*>(&argvals[0], nargt));
     if (isString)
         ctx->to_inline.push_back(inst);
@@ -1440,6 +1441,7 @@ static jl_cgval_t emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
         assert(!isVa);
         assert(nargt == 0);
         JL_GC_POP();
+        builder.CreateCall(prepare_call(gcroot_flush_func));
         emit_signal_fence();
         builder.CreateLoad(ctx->signalPage, true);
         emit_signal_fence();
@@ -1471,6 +1473,7 @@ static jl_cgval_t emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
         assert(!isVa);
         assert(nargt == 0);
         JL_GC_POP();
+        builder.CreateCall(prepare_call(gcroot_flush_func));
         Value *pdefer_sig = emit_defer_signal(ctx);
         Value *defer_sig = builder.CreateLoad(pdefer_sig);
         defer_sig = builder.CreateAdd(defer_sig,
@@ -1486,6 +1489,7 @@ static jl_cgval_t emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
         assert(!isVa);
         assert(nargt == 0);
         JL_GC_POP();
+        builder.CreateCall(prepare_call(gcroot_flush_func));
         Value *pdefer_sig = emit_defer_signal(ctx);
         Value *defer_sig = builder.CreateLoad(pdefer_sig);
         emit_signal_fence();
