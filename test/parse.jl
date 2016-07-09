@@ -548,5 +548,10 @@ end
 @test_throws ArgumentError parse(Int, "2", 1)
 @test_throws ArgumentError parse(Int, "2", 63)
 
+# issue #17333: tryparse should still throw on invalid base
+for T in (Int32, BigInt), base in (0,1,100)
+    @test_throws ArgumentError tryparse(T, "0", base)
+end
+
 # error throwing branch from #10560
 @test_throws ArgumentError Base.tryparse_internal(Bool, "foo", 1, 2, 10, true)
