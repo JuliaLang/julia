@@ -52,8 +52,15 @@ function unsafe_copy!{T}(dest::Array{T}, doffs, src::Array{T}, soffs, n)
     if isbits(T)
         unsafe_copy!(pointer(dest, doffs), pointer(src, soffs), n)
     else
-        ccall(:jl_array_ptr_copy, Void, (Any, Ptr{Void}, Any, Ptr{Void}, Int),
-              dest, pointer(dest, doffs), src, pointer(src, soffs), n)
+        # TODO check the proper ptrarray flag and write a fast path for the other case
+        if !is_stored_unboxed(T)
+            ccall(:jl_array_ptr_copy, Void, (Any, Ptr{Void}, Any, Ptr{Void}, Int),
+                  dest, pointer(dest, doffs), src, pointer(src, soffs), n)
+        else
+            for i = 0:n-1
+                dest[i+doffs] = src[i+soffs]
+            end
+        end
     end
     return dest
 end
