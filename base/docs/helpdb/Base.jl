@@ -484,8 +484,13 @@ promote_type
 Returns a tuple of subscripts into an array with dimensions `dims`,
 corresponding to the linear index `index`.
 
-**Example**: `i, j, ... = ind2sub(size(A), indmax(A))` provides the
-indices of the maximum element
+**Example**:
+
+```
+i, j, ... = ind2sub(size(A), indmax(A))
+```
+
+provides the indices of the maximum element.
 """
 ind2sub(dims::Tuple, index::Int)
 

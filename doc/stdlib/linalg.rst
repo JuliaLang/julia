@@ -1338,7 +1338,7 @@ Linear algebra functions in Julia are largely implemented by calling functions f
    ``eigs`` returns the ``nev`` requested eigenvalues in ``d``\ , the corresponding Ritz vectors ``v`` (only if ``ritzvec=true``\ ), the number of converged eigenvalues ``nconv``\ , the number of iterations ``niter`` and the number of matrix vector multiplications ``nmult``\ , as well as the final residual vector ``resid``\ .
 
    .. note::
-      The ``sigma`` and ``which`` keywords interact: the description of eigenvalues searched for by ``which`` do _not_ necessarily refer to the eigenvalues of ``A``\ , but rather the linear operator constructed by the specification of the iteration mode implied by ``sigma``\ .
+      The ``sigma`` and ``which`` keywords interact: the description of eigenvalues searched for by ``which`` do *not* necessarily refer to the eigenvalues of ``A``\ , but rather the linear operator constructed by the specification of the iteration mode implied by ``sigma``\ .
 
       +-----------------+------------------------------------+------------------------------------+
       | ``sigma``       | iteration mode                     | ``which`` refers to eigenvalues of |
@@ -1403,17 +1403,17 @@ Linear algebra functions in Julia are largely implemented by calling functions f
        X = sprand(10, 5, 0.2)
        eigs(X, nsv = 2, tol = 1e-3)
 
-   **Note**
+   .. note::
+      The ``sigma`` and ``which`` keywords interact: the description of eigenvalues searched for by ``which`` do *not* necessarily refer to the eigenvalue problem :math:`Av = Bv\lambda`\ , but rather the linear operator constructed by the specification of the iteration mode implied by ``sigma``\ .
 
-   The ``sigma`` and ``which`` keywords interact: the description of eigenvalues searched for by ``which`` do _not_ necessarily refer to the eigenvalue problem :math:`Av = Bv\lambda`\ , but rather the linear operator constructed by the specification of the iteration mode implied by ``sigma``\ .
+      +-----------------+------------------------------------+--------------------------------------+
+      | ``sigma``       | iteration mode                     | ``which`` refers to the problem      |
+      +=================+====================================+======================================+
+      | ``nothing``     | ordinary (forward)                 | :math:`Av = Bv\lambda`               |
+      +-----------------+------------------------------------+--------------------------------------+
+      | real or complex | inverse with level shift ``sigma`` | :math:`(A - \sigma B )^{-1}B = v\nu` |
+      +-----------------+------------------------------------+--------------------------------------+
 
-   +-----------------+------------------------------------+--------------------------------------+
-   | ``sigma``       | iteration mode                     | ``which`` refers to the problem      |
-   +=================+====================================+======================================+
-   | ``nothing``     | ordinary (forward)                 | :math:`Av = Bv\lambda`               |
-   +-----------------+------------------------------------+--------------------------------------+
-   | real or complex | inverse with level shift ``sigma`` | :math:`(A - \sigma B )^{-1}B = v\nu` |
-   +-----------------+------------------------------------+--------------------------------------+
 
 .. function:: svds(A; nsv=6, ritzvec=true, tol=0.0, maxiter=1000, ncv=2*nsv, u0=zeros((0,)), v0=zeros((0,))) -> (SVD([left_sv,] s, [right_sv,]), nconv, niter, nmult, resid)
 
@@ -1479,7 +1479,7 @@ according to the usual Julia convention.
 
    Compute ``A  B`` in-place and store the result in ``Y``\ , returning the result. If only two arguments are passed, then ``A_ldiv_B!(A, B)`` overwrites ``B`` with the result.
 
-   The argument ``A`` should *not* be a matrix.  Rather, instead of matrices it should be a factorization object (e.g. produced by :func:`factorize` or :func:`cholfact`\ ). The reason for this is that factorization itself is both expensive and typically allocates memory (although it can also be done in-place via, e.g., :func:`lufact`\ ), and performance-critical situations requiring ``A_ldiv_B!`` usually also require fine-grained control over the factorization of ``A``\ .
+   The argument ``A`` should *not* be a matrix.  Rather, instead of matrices it should be a factorization object (e.g. produced by :func:`factorize` or :func:`cholfact`\ ). The reason for this is that factorization itself is both expensive and typically allocates memory (although it can also be done in-place via, e.g., :func:`lufact!`\ ), and performance-critical situations requiring ``A_ldiv_B!`` usually also require fine-grained control over the factorization of ``A``\ .
 
 .. function:: A_ldiv_Bc(A, B)
 
@@ -2525,3 +2525,4 @@ set of functions in future releases.
    Solves the Sylvester matrix equation ``A * X +/- X * B = scale*C`` where ``A`` and ``B`` are both quasi-upper triangular. If ``transa = N``\ , ``A`` is not modified. If ``transa = T``\ , ``A`` is transposed. If ``transa = C``\ , ``A`` is conjugate transposed. Similarly for ``transb`` and ``B``\ . If ``isgn = 1``\ , the equation ``A * X + X * B = scale * C`` is solved. If ``isgn = -1``\ , the equation ``A * X - X * B = scale * C`` is solved.
 
    Returns ``X`` (overwriting ``C``\ ) and ``scale``\ .
+
