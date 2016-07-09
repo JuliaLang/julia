@@ -133,7 +133,8 @@ typedef struct {
       3 = has a pointer to the Array that owns the data
     */
     uint16_t how:2;
-    uint16_t ndims:10;
+    uint16_t ndims:9;
+    uint16_t hasptr:1;
     uint16_t pooled:1;
     uint16_t ptrarray:1;  // representation is pointer array
     uint16_t isshared:1;  // data is shared by multiple Arrays
@@ -959,7 +960,8 @@ STATIC_INLINE int jl_is_tuple_type(void *t)
 STATIC_INLINE int jl_is_vecelement_type(jl_value_t* t)
 {
     return (jl_is_datatype(t) &&
-            ((jl_datatype_t*)(t))->name == jl_vecelement_typename);
+            ((jl_datatype_t*)(t))->name == jl_vecelement_typename &&
+            jl_isbits(jl_tparam0(t)));
 }
 
 STATIC_INLINE int jl_is_type_type(jl_value_t *v)
@@ -1159,7 +1161,9 @@ JL_DLLEXPORT jl_value_t *jl_cstr_to_string(const char *str);
 JL_DLLEXPORT jl_value_t *jl_array_to_string(jl_array_t *a);
 JL_DLLEXPORT jl_array_t *jl_alloc_vec_any(size_t n);
 JL_DLLEXPORT jl_value_t *jl_arrayref(jl_array_t *a, size_t i);  // 0-indexed
+JL_DLLEXPORT jl_value_t *jl_arrayref_nothrow(jl_array_t *a, size_t i);  // 0-indexed
 JL_DLLEXPORT void jl_arrayset(jl_array_t *a, jl_value_t *v, size_t i);  // 0-indexed
+JL_DLLEXPORT void jl_arrayset_nothrow(jl_array_t *a, jl_value_t *v, size_t i);  // 0-indexed
 JL_DLLEXPORT void jl_arrayunset(jl_array_t *a, size_t i);  // 0-indexed
 JL_DLLEXPORT void jl_array_grow_end(jl_array_t *a, size_t inc);
 JL_DLLEXPORT void jl_array_del_end(jl_array_t *a, size_t dec);

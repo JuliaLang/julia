@@ -999,7 +999,7 @@ static bool emit_getfield_unknownidx(jl_cgval_t *ret, const jl_cgval_t &strct, V
                 // just compute the pointer and let user load it when necessary
                 Type *fty = julia_type_to_llvm(jt);
                 Value *addr = builder.CreateGEP(builder.CreatePointerCast(ptr, PointerType::get(fty,0)), idx);
-                *ret = mark_julia_slot(addr, jt, strct.tbaa, ctx);
+                *ret = mark_julia_slot(addr, jt, strct.tbaa, ctx, false);
                 ret->gcroot = strct.gcroot;
                 ret->isimmutable = strct.isimmutable;
                 return true;
@@ -1093,7 +1093,7 @@ static jl_cgval_t emit_getfield_knownidx(const jl_cgval_t &strct, unsigned idx, 
 
             //            return typed_load(addr, ConstantInt::get(T_size, 0), jfty, ctx, strct.tbaa, 0);
         } else {
-            jl_cgval_t fieldval = mark_julia_slot(addr, jfty, strct.tbaa, ctx);
+            jl_cgval_t fieldval = mark_julia_slot(addr, jfty, strct.tbaa, ctx, false);
             fieldval.isimmutable = strct.isimmutable;
             fieldval.gcroot = strct.gcroot;
             return fieldval;

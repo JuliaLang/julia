@@ -1265,13 +1265,13 @@ static void gc_mark_stack(jl_ptls_t ptls, jl_ptls_t owner_ptls,
                 jl_value_t *root = rts[i];
                 if (rts[i] != NULL) {
                     verify_parent2("task", ta, &rts[i], "stack(%d)", (int)i);
-                    char *relocated_ptr = (char*)root + offset;
-                    if (stacklo <= relocated_ptr && relocated_ptr <= stackhi) {
-                        printf("Got stack object : %p %p\n", relocated_ptr, root);
-                        jl_(jl_typeof(root));
-                        printf("\n");
-                        if (jl_typeof(root)) // TODO zero the pointer to the alloca instead
-                            push_root(ptls, root, d, 0, 1);
+                    jl_value_t *relocated = (jl_value_t*)((char*)root + offset);
+                    if (stacklo <= root && root <= stackhi) {
+                        /*printf("Got stack object : %p %p\n", relocated, root);
+                        jl_(jl_typeof(relocated));
+                        printf("\n");*/
+                        if (jl_typeof(relocated)) // TODO zero the pointer to the alloca instead
+                            push_root(ptls, relocated, d, 0, 1);
                     }
                     else {
                         gc_push_root(ptls, root, d);
@@ -1440,7 +1440,7 @@ static int push_root(jl_ptls_t ptls, jl_value_t *v, int d, int bits, int onstack
             gc_setmark_buf(ptls, (char*)a->data - a->offset*a->elsize,
                            o->bits.gc, array_nbytes(a));
         }
-        if (a->flags.ptrarray && a->data!=NULL) {
+        if (a->flags.hasptr && a->data!=NULL) {
             size_t l = jl_array_len(a);
             if (l > 100000 && d > MAX_MARK_DEPTH-10) {
                 // don't mark long arrays at high depth, to try to avoid
@@ -1450,14 +1450,24 @@ static int push_root(jl_ptls_t ptls, jl_value_t *v, int d, int bits, int onstack
             else {
                 nptr += l;
                 void *data = a->data;
-                for (size_t i=0; i < l; i++) {
-                    jl_value_t *elt = ((jl_value_t**)data)[i];
-                    if (elt != NULL) {
-                        verify_parent2("array", v, &((jl_value_t**)data)[i], "elem(%d)", (int)i);
-                        refyoung |= gc_push_root(ptls, elt, d);
+                if (a->flags.ptrarray) {
+                    for (size_t i=0; i < l; i++) {
+                        jl_value_t *elt = ((jl_value_t**)data)[i];
+                        if (elt != NULL) {
+                            verify_parent2("array", v, &((jl_value_t**)data)[i], "elem(%d)", (int)i);
+                            refyoung |= gc_push_root(ptls, elt, d);
+                        }
                     }
-                    // try to split large array marking (incremental mark TODO)
-                    // if (should_timeout() && l > 1000) goto queue_the_root;
+                }
+                else {
+                    jl_datatype_t *dt = jl_tparam0(vt);
+                    size_t elsize = a->elsize;
+                    assert(jl_is_datatype(dt) && !dt->mutabl && !dt->layout->pointerfree);
+                    char *v = data;
+                    for (size_t i=0; i < l; i++) {
+                        refyoung |= scan_datatype(ptls, dt, v, d, &nptr);
+                        v += elsize;
+                    }
                 }
             }
         }
@@ -1815,6 +1825,7 @@ static void _jl_gc_collect(jl_ptls_t ptls, int full)
         gc_num.interval = default_collect_interval / 2;
         sweep_full = gc_sweep_always_full;
     }
+    sweep_full = 1;
     if (sweep_full)
         perm_scanned_bytes = 0;
     scanned_bytes = 0;

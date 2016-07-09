@@ -26,8 +26,10 @@ end
 
 asize_from(a::Array, n) = n > ndims(a) ? () : (arraysize(a,n), asize_from(a, n+1)...)
 
+is_stored_unboxed(T) = isleaftype(T) && !T.mutable
+
 length(a::Array) = arraylen(a)
-elsize{T}(a::Array{T}) = isbits(T) ? sizeof(T) : sizeof(Ptr)
+elsize{T}(a::Array{T}) = is_stored_unboxed(T) ? sizeof(T) : sizeof(Ptr)
 sizeof(a::Array) = elsize(a) * length(a)
 
 function isassigned{T}(a::Array{T}, i::Int...)

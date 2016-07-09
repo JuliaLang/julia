@@ -53,7 +53,7 @@ size_t jl_arr_xtralloc_limit = 0;
 #define MAXINTVAL (((size_t)-1)>>1)
 
 static jl_array_t *_new_array_(jl_value_t *atype, uint32_t ndims, size_t *dims,
-                               int isunboxed, int elsz)
+                               int isunboxed, int elsz, int hasptr)
 {
     jl_ptls_t ptls = jl_get_ptls_states();
     size_t i, tot, nel=1;
@@ -96,7 +96,7 @@ static jl_array_t *_new_array_(jl_value_t *atype, uint32_t ndims, size_t *dims,
         // No allocation or safepoint allowed after this
         a->flags.how = 0;
         data = (char*)a + doffs;
-        if (tot > 0 && !isunboxed) {
+        if (tot > 0 && hasptr) {
             memset(data, 0, tot);
         }
     }
@@ -109,7 +109,7 @@ static jl_array_t *_new_array_(jl_value_t *atype, uint32_t ndims, size_t *dims,
         // No allocation or safepoint allowed after this
         a->flags.how = 2;
         jl_gc_track_malloced_array(ptls, a);
-        if (!isunboxed)
+        if (hasptr)
             memset(data, 0, tot);
     }
     a->flags.pooled = tsz <= GC_MAX_SZCLASS;
@@ -122,6 +122,7 @@ static jl_array_t *_new_array_(jl_value_t *atype, uint32_t ndims, size_t *dims,
 #endif
     a->flags.ndims = ndims;
     a->flags.ptrarray = !isunboxed;
+    a->flags.hasptr = hasptr;
     a->elsize = elsz;
     a->flags.isshared = 0;
     a->flags.isaligned = 1;
@@ -146,13 +147,14 @@ static inline jl_array_t *_new_array(jl_value_t *atype, uint32_t ndims, size_t *
     isunboxed = store_unboxed(el_type);
     if (isunboxed)
         elsz = jl_datatype_size(el_type);
-    return _new_array_(atype, ndims, dims, isunboxed, elsz);
+    int hasptr = !isunboxed || !((jl_datatype_t*)el_type)->layout->pointerfree;
+    return _new_array_(atype, ndims, dims, isunboxed, elsz, hasptr);
 }
 
 jl_array_t *jl_new_array_for_deserialization(jl_value_t *atype, uint32_t ndims, size_t *dims,
                                              int isunboxed, int elsz)
 {
-    return _new_array_(atype, ndims, dims, isunboxed, elsz);
+    return _new_array_(atype, ndims, dims, isunboxed, elsz, 0);
 }
 
 #ifndef NDEBUG
@@ -193,10 +195,12 @@ JL_DLLEXPORT jl_array_t *jl_reshape_array(jl_value_t *atype, jl_array_t *data,
     if (!data->flags.ptrarray) {
         a->elsize = jl_datatype_size(el_type);
         a->flags.ptrarray = 0;
+        a->flags.hasptr = data->flags.hasptr;
     }
     else {
         a->elsize = sizeof(void*);
         a->flags.ptrarray = 1;
+        a->flags.hasptr = 1;
     }
 
     // if data is itself a shared wrapper,
@@ -261,6 +265,8 @@ JL_DLLEXPORT jl_array_t *jl_ptr_to_array_1d(jl_value_t *atype, void *data,
 #endif
     a->elsize = elsz;
     a->flags.ptrarray = !isunboxed;
+    int hasptr = !isunboxed || !((jl_datatype_t*)el_type)->layout->pointerfree;
+    a->flags.hasptr = hasptr;
     a->flags.ndims = 1;
     a->flags.isshared = 1;
     a->flags.isaligned = 0;  // TODO: allow passing memalign'd buffers
@@ -315,6 +321,8 @@ JL_DLLEXPORT jl_array_t *jl_ptr_to_array(jl_value_t *atype, void *data,
     a->length = nel;
 #endif
     a->elsize = elsz;
+    int hasptr = !isunboxed || !((jl_datatype_t*)el_type)->layout->pointerfree;
+    a->flags.hasptr = hasptr;
     a->flags.ptrarray = !isunboxed;
     a->flags.ndims = ndims;
     a->offset = 0;
@@ -432,7 +440,7 @@ JL_CALLABLE(jl_f_arraysize)
     return jl_box_long((&a->nrows)[dno-1]);
 }
 
-JL_DLLEXPORT jl_value_t *jl_arrayref(jl_array_t *a, size_t i)
+JL_DLLEXPORT jl_value_t *jl_arrayref_nothrow(jl_array_t *a, size_t i)
 {
     assert(i < jl_array_len(a));
     jl_value_t *elt;
@@ -442,11 +450,17 @@ JL_DLLEXPORT jl_value_t *jl_arrayref(jl_array_t *a, size_t i)
     }
     else {
         elt = ((jl_value_t**)a->data)[i];
-        if (elt == NULL) {
-            jl_throw(jl_undefref_exception);
-        }
     }
     return elt;
+}
+
+JL_DLLEXPORT jl_value_t *jl_arrayref(jl_array_t *a, size_t i)
+{
+    jl_value_t *e = jl_arrayref_nothrow(a, i);
+    if (e == NULL) {
+        jl_throw(jl_undefref_exception);
+    }
+    return e;
 }
 
 static size_t array_nd_index(jl_array_t *a, jl_value_t **args, size_t nidxs,
@@ -525,21 +539,27 @@ int jl_array_isdefined(jl_value_t **args0, int nargs)
     return 1;
 }
 
-JL_DLLEXPORT void jl_arrayset(jl_array_t *a, jl_value_t *rhs, size_t i)
+JL_DLLEXPORT void jl_arrayset_nothrow(jl_array_t *a, jl_value_t *rhs, size_t i)
 {
     assert(i < jl_array_len(a));
-    jl_value_t *el_type = jl_tparam0(jl_typeof(a));
-    if (el_type != (jl_value_t*)jl_any_type) {
-        if (!jl_subtype(rhs, el_type, 1))
-            jl_type_error("arrayset", el_type, rhs);
-    }
     if (!a->flags.ptrarray) {
+        assert(rhs);
         jl_assign_bits(&((char*)a->data)[i*a->elsize], rhs);
     }
     else {
         ((jl_value_t**)a->data)[i] = rhs;
         jl_gc_wb(jl_array_owner(a), rhs);
     }
+}
+
+JL_DLLEXPORT void jl_arrayset(jl_array_t *a, jl_value_t *rhs, size_t i)
+{
+    jl_value_t *el_type = jl_tparam0(jl_typeof(a));
+    if (el_type != (jl_value_t*)jl_any_type) {
+        if (!jl_subtype(rhs, el_type, 1))
+            jl_type_error("arrayset", el_type, rhs);
+    }
+    jl_arrayset_nothrow(a, rhs, i);
 }
 
 JL_CALLABLE(jl_f_arrayset)
@@ -717,7 +737,7 @@ STATIC_INLINE void jl_array_grow_at_beg(jl_array_t *a, size_t idx, size_t inc,
 #endif
     a->nrows = newnrows;
     a->data = newdata;
-    if (a->flags.ptrarray) {
+    if (a->flags.hasptr) {
         memset(newdata + idx * elsz, 0, nbinc);
     }
 }
@@ -768,7 +788,7 @@ STATIC_INLINE void jl_array_grow_at_end(jl_array_t *a, size_t idx,
     a->length = newnrows;
 #endif
     a->nrows = newnrows;
-    if (a->flags.ptrarray) {
+    if (a->flags.hasptr) {
         memset(data + idx * elsz, 0, inc * elsz);
     }
 }
@@ -925,7 +945,8 @@ JL_DLLEXPORT jl_array_t *jl_array_copy(jl_array_t *ary)
 {
     size_t elsz = ary->elsize;
     jl_array_t *new_ary = _new_array_(jl_typeof(ary), jl_array_ndims(ary),
-                                      &ary->nrows, !ary->flags.ptrarray, elsz);
+                                      &ary->nrows, !ary->flags.ptrarray, elsz,
+                                      ary->flags.hasptr);
     memcpy(new_ary->data, ary->data, jl_array_len(ary) * elsz);
     return new_ary;
 }

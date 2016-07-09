@@ -1104,8 +1104,8 @@ static jl_cgval_t emit_intrinsic(intrinsic f, jl_value_t **args, size_t nargs,
             if (type_is_ghost(llt1))
                 return x;
             ifelse_result = builder.CreateSelect(isfalse,
-                    emit_unbox(llt1, y, t1),
-                    emit_unbox(llt1, x, t1));
+                                                 emit_unbox(llt1, y, t1, NULL, false, false),
+                                                 emit_unbox(llt1, x, t1, NULL, false, false));
         }
         else {
             ifelse_result = builder.CreateSelect(isfalse,

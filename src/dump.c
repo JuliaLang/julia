@@ -840,13 +840,13 @@ static void jl_serialize_value_(jl_serializer_state *s, jl_value_t *v)
         for (i=0; i < ar->flags.ndims; i++)
             jl_serialize_value(s, jl_box_long(jl_array_dim(ar,i)));
         jl_serialize_value(s, jl_typeof(ar));
-        if (!ar->flags.ptrarray) {
+        if (!ar->flags.hasptr) {
             size_t tot = jl_array_len(ar) * ar->elsize;
             ios_write(s->s, (char*)jl_array_data(ar), tot);
         }
         else {
             for(i=0; i < jl_array_len(ar); i++) {
-                jl_serialize_value(s, jl_array_ptr_ref(v, i));
+                jl_serialize_value(s, jl_arrayref_nothrow(v, i));
             }
         }
     }
@@ -1437,7 +1437,7 @@ static jl_value_t *jl_deserialize_value_(jl_serializer_state *s, jl_value_t *vta
     else if (vtag == (jl_value_t*)jl_array_type ||
              vtag == (jl_value_t*)Array1d_tag) {
         int16_t ndims;
-        int isunboxed, elsize;
+        int isunboxed, elsize, hasptr;
         if (vtag == (jl_value_t*)Array1d_tag) {
             ndims = 1;
             elsize = read_uint8(s->s);
@@ -1460,16 +1460,17 @@ static jl_value_t *jl_deserialize_value_(jl_serializer_state *s, jl_value_t *vta
         if (usetable)
             backref_list.items[pos] = a;
         jl_value_t *aty = jl_deserialize_value(s, &jl_astaggedvalue(a)->type);
+        hasptr = a->flags.ptrarray || isunboxed && jl_is_datatype(jl_tparam0(aty)) && !((jl_datatype_t*)jl_tparam0(aty))->layout->pointerfree;
+        a->flags.hasptr = hasptr;
         jl_set_typeof(a, aty);
-        if (!a->flags.ptrarray) {
+        if (!hasptr) {
             size_t tot = jl_array_len(a) * a->elsize;
             ios_read(s->s, (char*)jl_array_data(a), tot);
         }
         else {
             jl_value_t **data = (jl_value_t**)jl_array_data(a);
             for(i=0; i < jl_array_len(a); i++) {
-                data[i] = jl_deserialize_value(s, &data[i]);
-                if (data[i]) jl_gc_wb(a, data[i]);
+                jl_arrayset_nothrow(a, jl_deserialize_value(s, NULL), i);
             }
         }
         return (jl_value_t*)a;
