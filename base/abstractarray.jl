@@ -45,8 +45,11 @@ function indices{T,N}(A::AbstractArray{T,N})
     map(s->OneTo(s), size(A))
 end
 
+# Performance optimization: get rid of a branch on `d` in `indices(A,
+# d)` for d=1. 1d arrays are heavily used, and the first dimension
+# comes up in other applications.
 indices1{T}(A::AbstractArray{T,0}) = OneTo(1)
-indices1{T}(A::AbstractArray{T})   = indices(A)[1]
+indices1{T}(A::AbstractArray{T})   = (@_inline_meta; indices(A)[1])
 
 """
     linearindices(A)
@@ -60,8 +63,8 @@ is `indices(A, 1)`.
 Calling this function is the "safe" way to write algorithms that
 exploit linear indexing.
 """
-linearindices(A) = 1:length(A)
-linearindices(A::AbstractVector) = indices1(A)
+linearindices(A)                 = (@_inline_meta; 1:length(A))
+linearindices(A::AbstractVector) = (@_inline_meta; indices1(A))
 eltype{T}(::Type{AbstractArray{T}}) = T
 eltype{T,N}(::Type{AbstractArray{T,N}}) = T
 elsize{T}(::AbstractArray{T}) = sizeof(T)
