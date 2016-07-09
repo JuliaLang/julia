@@ -391,6 +391,7 @@ static Function *gcroot_func;
 static Function *gcstore_func;
 static Function *gckill_func;
 static Function *jlcall_frame_func;
+static Function *gcroot_flush_func;
 
 static std::vector<Type *> two_pvalue_llvmt;
 static std::vector<Type *> three_pvalue_llvmt;
@@ -3386,6 +3387,7 @@ static void finalize_gc_frame(Function *F)
     M->getOrInsertFunction(gckill_func->getName(), gckill_func->getFunctionType());
     M->getOrInsertFunction(gcstore_func->getName(), gcstore_func->getFunctionType());
     M->getOrInsertFunction(jlcall_frame_func->getName(), jlcall_frame_func->getFunctionType());
+    M->getOrInsertFunction(gcroot_flush_func->getName(), gcroot_flush_func->getFunctionType());
     Function *jl_get_ptls_states = M->getFunction("jl_get_ptls_states");
 
     CallInst *ptlsStates = NULL;
@@ -3456,6 +3458,7 @@ void finalize_gc_frame(Module *m)
     m->getFunction("julia.gc_root_kill")->eraseFromParent();
     m->getFunction("julia.gc_store")->eraseFromParent();
     m->getFunction("julia.jlcall_frame_decl")->eraseFromParent();
+    m->getFunction("julia.gcroot_flush")->eraseFromParent();
 }
 
 static Function *gen_cfun_wrapper(jl_function_t *ff, jl_value_t *jlrettype, jl_tupletype_t *argt,
@@ -5594,6 +5597,11 @@ static void init_julia_llvm_env(Module *m)
                      Function::ExternalLinkage,
                      "julia.jlcall_frame_decl", m);
     add_named_global(jlcall_frame_func, (void*)NULL, /*dllimport*/false);
+
+    gcroot_flush_func = Function::Create(FunctionType::get(T_void, false),
+                                         Function::ExternalLinkage,
+                                         "julia.gcroot_flush", m);
+    add_named_global(gcroot_flush_func, (void*)NULL, /*dllimport*/false);
 
     // set up optimization passes
 #ifdef LLVM37
