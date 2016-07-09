@@ -69,8 +69,8 @@ julia> gcdx(240, 46)
     Bézout coefficients are *not* uniquely defined. `gcdx` returns the minimal
     Bézout coefficients that are computed by the extended Euclid algorithm.
     (Ref: D. Knuth, TAoCP, 2/e, p. 325, Algorithm X.) These coefficients `u`
-    and `v` are minimal in the sense that ``|u| < |\\frac y d`` and ``|v| <
-    |\\frac x d``. Furthermore, the signs of `u` and `v` are chosen so that `d`
+    and `v` are minimal in the sense that ``|u| < |\\frac y d|`` and ``|v| <
+    |\\frac x d|``. Furthermore, the signs of `u` and `v` are chosen so that `d`
     is positive.
 """
 function gcdx{T<:Integer}(a::T, b::T)
