@@ -146,16 +146,41 @@ end  # IteratorsMD
 using .IteratorsMD
 
 ## Bounds-checking with CartesianIndex
-# Ambiguity with linear indexing:
-@inline _chkbnds(A::AbstractVector, checked::NTuple{1,Bool}, I::CartesianIndex) = _chkbnds(A, checked, I.I...)
-@inline _chkbnds(A::AbstractArray, checked::NTuple{1,Bool}, I::CartesianIndex) = _chkbnds(A, checked, I.I...)
-# Generic bounds checking
-@inline _chkbnds{T,N}(A::AbstractArray{T,N}, checked::NTuple{N,Bool}, I1::CartesianIndex, I...) = _chkbnds(A, checked, I1.I..., I...)
-@inline _chkbnds{T,N,M}(A::AbstractArray{T,N}, checked::NTuple{M,Bool}, I1::CartesianIndex, I...) = _chkbnds(A, checked, I1.I..., I...)
+@inline checkbounds_indices(::Tuple{},   I::Tuple{CartesianIndex,Vararg{Any}}) =
+    checkbounds_indices((), (I[1].I..., tail(I)...))
+@inline checkbounds_indices(inds::Tuple{Any}, I::Tuple{CartesianIndex,Vararg{Any}}) =
+    checkbounds_indices(inds, (I[1].I..., tail(I)...))
+@inline checkbounds_indices(inds::Tuple, I::Tuple{CartesianIndex,Vararg{Any}}) =
+    checkbounds_indices(inds, (I[1].I..., tail(I)...))
 
-@inline checkbounds_indices(::Tuple{},   I::Tuple{CartesianIndex,Vararg{Any}}) = checkbounds_indices((),   (I[1].I..., tail(I)...))
-@inline checkbounds_indices(inds::Tuple{Any}, I::Tuple{CartesianIndex,Vararg{Any}}) = checkbounds_indices(inds, (I[1].I..., tail(I)...))
-@inline checkbounds_indices(inds::Tuple, I::Tuple{CartesianIndex,Vararg{Any}}) = checkbounds_indices(inds, (I[1].I..., tail(I)...))
+# Support indexing with an array of CartesianIndex{N}s
+# Here we try to consume N of the indices (if there are that many available)
+# The first two simply handle ambiguities
+@inline function checkbounds_indices{N}(::Tuple{}, I::Tuple{AbstractArray{CartesianIndex{N}},Vararg{Any}})
+    checkindex(Bool, (), I[1]) & checkbounds_indices((), tail(I))
+end
+@inline function checkbounds_indices{N}(inds::Tuple{Any}, I::Tuple{AbstractArray{CartesianIndex{N}},Vararg{Any}})
+    checkindex(Bool, inds, I[1]) & checkbounds_indices((), tail(I))
+end
+@inline function checkbounds_indices{N}(inds::Tuple, I::Tuple{AbstractArray{CartesianIndex{N}},Vararg{Any}})
+    inds1, indsrest = split(inds, Val{N})
+    checkindex(Bool, inds1, I[1]) & checkbounds_indices(indsrest, tail(I))
+end
+
+@inline split{N}(inds, V::Type{Val{N}}) = _split((), inds, V)
+@inline _split(out, indsrest, V) = _split((out..., indsrest[1]), tail(indsrest), V)
+# exit either when we've exhausted the input tuple or when it has length N
+@inline _split{N}(out::NTuple{N}, ::Tuple{}, ::Type{Val{N}}) = out, ()  # ambig.
+@inline _split{N}(out,            ::Tuple{}, ::Type{Val{N}}) = out, ()
+@inline _split{N}(out::NTuple{N},  indsrest, ::Type{Val{N}}) = out, indsrest
+
+function checkindex{N}(::Type{Bool}, inds::Tuple, I::AbstractArray{CartesianIndex{N}})
+    b = true
+    for i in I
+        b &= checkbounds_indices(inds, (i,))
+    end
+    b
+end
 
 # Recursively compute the lengths of a list of indices, without dropping scalars
 # These need to be inlined for more than 3 indexes
