@@ -1281,9 +1281,8 @@ int jl_getFunctionInfo(jl_frame_t **frames_out, size_t pointer, int skipC, int n
 
         DISubprogram debugscope(prev.Loc.getScope(Ctx));
         jl_copy_str(&frames[0].file_name, debugscope.getFilename().str().c_str());
-        // the DISubprogram has the un-mangled name, so use that if
-        // available. However, if the scope need not be the current
-        // subprogram.
+        // The DISubprogram has the un-mangled name, so use that if
+        // available. However, the scope need not be the current subprogram.
         if (debugscope.getName().data() != NULL) {
             jl_copy_str(&frames[0].func_name, debugscope.getName().str().c_str());
         }

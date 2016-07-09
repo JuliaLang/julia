@@ -1697,8 +1697,8 @@ static jl_cgval_t emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
         PointerType *funcptype = PointerType::get(functype,0);
         if (imaging_mode) {
 #ifdef LLVM37
-            // ARM, PPC, PPC64 (as of LLVM 3.9) doesn't support `musttail` for vararg functions.
-            // And musttail can't proceed unreachable, but is required for vararg (https://llvm.org/bugs/show_bug.cgi?id=23766)
+            // ARM, PPC, PPC64 (as of LLVM 3.9) don't support `musttail` for vararg functions.
+            // And musttail can't precede unreachable, but is required for vararg (https://llvm.org/bugs/show_bug.cgi?id=23766)
             if (functype->isVarArg())
                 llvmf = runtime_sym_lookup(funcptype, f_lib, f_name, ctx->f);
             else
