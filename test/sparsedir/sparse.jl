@@ -578,6 +578,14 @@ let a = spzeros(Int, 10, 10)
     @test countnz(a) == 19
     @test a[:,2] == 2*sparse(ones(Int,10))
 
+    # Zero-assignment behavior of setindex!(A, v, i, j)
+    a[1,3] = 0
+    @test nnz(a) == 19
+    @test countnz(a) == 18
+    a[2,1] = 0
+    @test nnz(a) == 19
+    @test countnz(a) == 18
+
     a[1,:] = 1:10
     @test a[1,:] == sparse([1:10;])
     a[:,2] = 1:10
@@ -1397,6 +1405,7 @@ let
     x = UpperTriangular(A)*ones(n)
     @test UpperTriangular(A)\x ≈ ones(n)
     A[2,2] = 0
+    dropzeros!(A)
     @test_throws LinAlg.SingularException LowerTriangular(A)\ones(n)
     @test_throws LinAlg.SingularException UpperTriangular(A)\ones(n)
 end

@@ -2483,32 +2483,25 @@ getindex{T<:Integer}(A::SparseMatrixCSC, I::AbstractVector{Bool}, J::AbstractVec
 function setindex!{Tv,Ti}(A::SparseMatrixCSC{Tv,Ti}, v, i::Integer, j::Integer)
     setindex!(A, convert(Tv, v), convert(Ti, i), convert(Ti, j))
 end
-function setindex!{Tv,Ti<:Integer}(A::SparseMatrixCSC{Tv,Ti}, v::Tv, i0::Ti, i1::Ti)
-    if !(1 <= i0 <= A.m && 1 <= i1 <= A.n); throw(BoundsError()); end
-    r1 = Int(A.colptr[i1])
-    r2 = Int(A.colptr[i1+1]-1)
-    if v == 0 #either do nothing or delete entry if it exists
-        if r1 <= r2
-            r1 = searchsortedfirst(A.rowval, i0, r1, r2, Forward)
-            if (r1 <= r2) && (A.rowval[r1] == i0)
-                deleteat!(A.rowval, r1)
-                deleteat!(A.nzval, r1)
-                @simd for j = (i1+1):(A.n+1)
-                    @inbounds A.colptr[j] -= 1
-                end
-            end
-        end
+function setindex!{Tv,Ti<:Integer}(A::SparseMatrixCSC{Tv,Ti}, v::Tv, i::Ti, j::Ti)
+    if !((1 <= i <= A.m) & (1 <= j <= A.n))
+        throw(BoundsError(A, (i,j)))
+    end
+    coljfirstk = Int(A.colptr[j])
+    coljlastk = Int(A.colptr[j+1] - 1)
+    searchk = searchsortedfirst(A.rowval, i, coljfirstk, coljlastk, Base.Order.Forward)
+    if searchk <= coljlastk && A.rowval[searchk] == i
+        # Column j contains entry A[i,j]. Update and return
+        A.nzval[searchk] = v
         return A
     end
-    i = (r1 > r2) ? r1 : searchsortedfirst(A.rowval, i0, r1, r2, Forward)
-
-    if (i <= r2) && (A.rowval[i] == i0)
-        A.nzval[i] = v
-    else
-        insert!(A.rowval, i, i0)
-        insert!(A.nzval, i, v)
-        @simd for j = (i1+1):(A.n+1)
-            @inbounds A.colptr[j] += 1
+    # Column j does not contain entry A[i,j]. If v is nonzero, insert entry A[i,j] = v
+    # and return. If to the contrary v is zero, then simply return.
+    if v != 0
+        insert!(A.rowval, searchk, i)
+        insert!(A.nzval, searchk, v)
+        @simd for m in (j + 1):(A.n + 1)
+            @inbounds A.colptr[m] += 1
         end
     end
     return A
