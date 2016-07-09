@@ -830,12 +830,12 @@ static void jl_serialize_value_(jl_serializer_state *s, jl_value_t *v)
         jl_array_t *ar = (jl_array_t*)v;
         if (ar->flags.ndims == 1 && ar->elsize < 128) {
             writetag(s->s, (jl_value_t*)Array1d_tag);
-            write_uint8(s->s, (ar->flags.ptrarray<<7) | (ar->elsize & 0x7f));
+            write_uint8(s->s, (ar->flags.ptrarray<<7) | (ar->flags.hasptr<<6) | (ar->elsize & 0x3f));
         }
         else {
             writetag(s->s, (jl_value_t*)jl_array_type);
             write_uint16(s->s, ar->flags.ndims);
-            write_uint16(s->s, (ar->flags.ptrarray<<15) | (ar->elsize & 0x7fff));
+            write_uint16(s->s, (ar->flags.ptrarray<<15) | (ar->flags.hasptr<<14) | (ar->elsize & 0x3fff));
         }
         for (i=0; i < ar->flags.ndims; i++)
             jl_serialize_value(s, jl_box_long(jl_array_dim(ar,i)));
@@ -1442,13 +1442,15 @@ static jl_value_t *jl_deserialize_value_(jl_serializer_state *s, jl_value_t *vta
             ndims = 1;
             elsize = read_uint8(s->s);
             isunboxed = !(elsize>>7);
-            elsize = elsize&0x7f;
+            hasptr = (elsize>>6)&1;
+            elsize = elsize&0x3f;
         }
         else {
             ndims = read_uint16(s->s);
             elsize = read_uint16(s->s);
             isunboxed = !(elsize>>15);
-            elsize = elsize&0x7fff;
+            hasptr = (elsize>>14)&1;
+            elsize = elsize&0x3fff;
         }
         uintptr_t pos = backref_list.len;
         if (usetable)
@@ -1457,11 +1459,10 @@ static jl_value_t *jl_deserialize_value_(jl_serializer_state *s, jl_value_t *vta
         for(i=0; i < ndims; i++)
             dims[i] = jl_unbox_long(jl_deserialize_value(s, NULL));
         jl_array_t *a = jl_new_array_for_deserialization((jl_value_t*)NULL, ndims, dims, isunboxed, elsize);
+        a->flags.hasptr = hasptr;
         if (usetable)
             backref_list.items[pos] = a;
         jl_value_t *aty = jl_deserialize_value(s, &jl_astaggedvalue(a)->type);
-        hasptr = a->flags.ptrarray || isunboxed && jl_is_datatype(jl_tparam0(aty)) && !((jl_datatype_t*)jl_tparam0(aty))->layout->pointerfree;
-        a->flags.hasptr = hasptr;
         jl_set_typeof(a, aty);
         if (!hasptr) {
             size_t tot = jl_array_len(a) * a->elsize;
