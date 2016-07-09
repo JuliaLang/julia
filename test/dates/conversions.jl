@@ -28,6 +28,7 @@
 @test string(Dates.unix2datetime(915148801.00)) == string("1999-01-01T00:00:01")
 @test string(Dates.unix2datetime(915148801.25)) == string("1999-01-01T00:00:01.25")
 
+# Test conversion to and from Rata Die
 @test Date(Dates.rata2datetime(734869)) == Dates.Date(2013,1,1)
 @test Dates.datetime2rata(Dates.rata2datetime(734869)) == 734869
 
