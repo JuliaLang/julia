@@ -1672,6 +1672,26 @@ static bool might_need_root(jl_value_t *ex)
             !jl_is_globalref(ex));
 }
 
+static void emit_ptr_fields_clear(jl_datatype_t *sty, Value *strct, MDNode *tbaa, int start)
+{
+    size_t nf = jl_datatype_nfields(sty);
+    for(size_t i=start; i < nf; i++) {
+        if (jl_field_isptr(sty, i)) {
+            tbaa_decorate(tbaa, builder.CreateStore(
+                    V_null,
+                    builder.CreatePointerCast(
+                        builder.CreateGEP(emit_bitcast(strct, T_pint8),
+                           ConstantInt::get(T_size, jl_field_offset(sty,i))),
+                        T_ppjlvalue)));
+        } else if (jl_field_hasptr(sty,i)) {
+            emit_ptr_fields_clear((jl_datatype_t*)jl_field_type(sty,i),
+                                  builder.CreateGEP(emit_bitcast(strct, T_pint8),
+                                                    ConstantInt::get(T_size, jl_field_offset(sty,i))),
+                                  tbaa, 0);
+        }
+    }
+}
+
 static jl_cgval_t emit_new_struct(jl_value_t *ty, size_t nargs, jl_value_t **args, jl_codectx_t *ctx)
 {
     assert(jl_is_datatype(ty));
@@ -1769,16 +1789,7 @@ static jl_cgval_t emit_new_struct(jl_value_t *ty, size_t nargs, jl_value_t **arg
                 emit_typecheck(f1info, jl_field_type(sty,0), "new", ctx);
             emit_setfield(sty, strctinfo, 0, f1info, ctx, false, false);
         }
-        for(size_t i=j; i < nf; i++) {
-            if (jl_field_isptr(sty, i)) {
-                tbaa_decorate(strctinfo.tbaa, builder.CreateStore(
-                        V_null,
-                        builder.CreatePointerCast(
-                            builder.CreateGEP(emit_bitcast(strct, T_pint8),
-                                ConstantInt::get(T_size, jl_field_offset(sty,i))),
-                            T_ppjlvalue)));
-            }
-        }
+        emit_ptr_fields_clear(sty, strct, strctinfo.tbaa, j);
         bool need_wb = false;
         // TODO: verify that nargs <= nf (currently handled by front-end)
         for(size_t i=j+1; i < nargs; i++) {
