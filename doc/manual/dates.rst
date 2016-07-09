@@ -367,4 +367,95 @@ Periods are a human view of discrete, sometimes irregular durations of time. Con
   3 years
 
 
+Rounding
+--------
+
+:class:`Date` and :class:`DateTime` values can be rounded to a specified resolution (e.g.,
+1 month or 15 minutes) with :func:`floor`, :func:`ceil`, or :func:`round`:
+
+.. doctest::
+
+    julia> floor(Date(1985, 8, 16), Dates.Month)
+    1985-08-01
+
+    julia> ceil(DateTime(2013, 2, 13, 0, 31, 20), Dates.Minute(15))
+    2013-02-13T00:45:00
+
+    julia> round(DateTime(2016, 8, 6, 20, 15), Dates.Day)
+    2016-08-07T00:00:00
+
+Unlike the numeric :func:`round` method, which breaks ties toward the even number by
+default, the :class:`TimeType` :func:`round` method uses the ``RoundNearestTiesUp``
+rounding mode. (It's difficult to guess what breaking ties to nearest "even"
+:class:`TimeType` would entail.) Further details on the available ``RoundingMode`` s can
+be found in the
+`API reference <http://docs.julialang.org/en/latest/stdlib/dates/#rounding-functions>`_.
+
+Rounding should generally behave as expected, but there are a few cases in which the
+expected behaviour is not obvious.
+
+Rounding Epoch
+~~~~~~~~~~~~~~
+
+In many cases, the resolution specified for rounding (e.g., ``Dates.Second(30)``) divides
+evenly into the next largest period (in this case, ``Dates.Minute(1)``). But rounding
+behaviour in cases in which this is not true may lead to confusion. What is the expected
+result of rounding a :class:`DateTime` to the nearest 10 hours?
+
+.. doctest::
+
+    julia> round(DateTime(2016, 7, 17, 11, 55), Dates.Hour(10))
+    2016-07-17T12:00:00
+
+That may seem confusing, given that the hour (12) is not divisible by 10. The reason that
+``2016-07-17T12:00:00`` was chosen is that it is 17,676,660 hours after
+``0000-01-01T00:00:00``, and 17,676,660 is divisible by 10.
+
+As Julia :class:`Date` and :class:`DateTime` values are represented according to the ISO
+8601 standard, ``0000-01-01T00:00:00`` was chosen as base (or "rounding epoch") from
+which to begin the count of days (and milliseconds) used in rounding calculations. (Note
+that this differs slightly from Julia's internal representation of :class:`Date` s using
+Rata Die notation; but since the ISO 8601 standard is most visible to the end user,
+``0000-01-01T00:00:00`` was chosen as the rounding epoch instead of the
+``0000-12-31T00:00:00`` used internally to minimize confusion.)
+
+The only exception to the use of ``0000-01-01T00:00:00`` as the rounding epoch is when
+rounding to weeks. Rounding to the nearest week will always return a Monday (the first day
+of the week as specified by ISO 8601). For this reason, we use ``0000-01-03T00:00:00``
+(the first day of the first week of year 0000, as defined by ISO 8601) as the base when
+rounding to a number of weeks.
+
+Here is a related case in which the expected behaviour is not necessarily obvious: What
+happens when we round to the nearest ``P(2)``, where ``P`` is a :class:`Period` type? In
+some cases (specifically, when ``P <: Dates.TimePeriod``) the answer is clear:
+
+.. doctest::
+
+    julia> round(DateTime(2016, 7, 17, 8, 55, 30), Dates.Hour(2))
+    2016-07-17T08:00:00
+
+    julia> round(DateTime(2016, 7, 17, 8, 55, 30), Dates.Minute(2))
+    2016-07-17T08:56:00
+
+This seems obvious, because two of each of these periods still divides evenly into the
+next larger order period. But in the case of two months (which still divides evenly into
+one year), the answer may be surprising:
+
+.. doctest::
+
+    julia> round(DateTime(2016, 7, 17, 8, 55, 30), Dates.Month(2))
+    2016-07-01T00:00:00
+
+Why round to the first day in July, even though it is month 7 (an odd number)? The key is
+that months are 1-indexed (the first month is assigned 1), unlike hours, minutes, seconds,
+and milliseconds (the first of which are assigned 0).
+
+This means that rounding a :class:`DateTime` to an even multiple of seconds, minutes,
+hours, or years (because the ISO 8601 specification includes a year zero) will result in
+a :class:`DateTime` with an even value in that field, while rounding a :class:`DateTime`
+to an even multiple of months will result in the months field having an odd value. Because
+both months and years may contain an irregular number of days, whether rounding to an even
+number of days will result in an even value in the days field is uncertain.
+
+
 See the `API reference <http://docs.julialang.org/en/latest/stdlib/dates/>`_ for additional information on methods exported from the :mod:`Dates` module.

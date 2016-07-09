@@ -216,6 +216,9 @@ Library improvements
   * Prime number related functions have been moved from `Base` to the
     [Primes.jl package](https://github.com/JuliaMath/Primes.jl) ([#16481]).
 
+  * `Date` and `DateTime` values can now be rounded to a specified resolution (e.g., 1 month or
+    15 minutes) with `floor`, `ceil`, and `round` ([#17037]).
+
 Deprecated or removed
 ---------------------
 
@@ -307,3 +310,4 @@ Deprecated or removed
 [#16731]: https://github.com/JuliaLang/julia/issues/16731
 [#16972]: https://github.com/JuliaLang/julia/issues/16972
 [#17266]: https://github.com/JuliaLang/julia/issues/17266
+[#17037]: https://github.com/JuliaLang/julia/issues/17037

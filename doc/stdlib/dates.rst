@@ -575,6 +575,103 @@ Periods
 
    Returns a sensible "default" value for the input Period by returning ``one(p)`` for Year, Month, and Day, and ``zero(p)`` for Hour, Minute, Second, and Millisecond.
 
+Rounding Functions
+~~~~~~~~~~~~~~~~~~
+
+``Date`` and ``DateTime`` values can be rounded to a specified resolution (e.g., 1 month
+or 15 minutes) with ``floor``, ``ceil``, or ``round``.
+
+.. function:: floor(dt::TimeType, p::Period) -> TimeType
+
+   .. Docstring generated from Julia source
+
+   Returns the nearest ``Date`` or ``DateTime`` less than or equal to ``dt`` at resolution ``p``\ .
+
+   For convenience, ``p`` may be a type instead of a value: ``floor(dt, Dates.Hour)`` is a shortcut for ``floor(dt, Dates.Hour(1))``\ .
+
+   .. doctest::
+
+       julia> floor(Date(1985, 8, 16), Dates.Month)
+       1985-08-01
+
+       julia> floor(DateTime(2013, 2, 13, 0, 31, 20), Dates.Minute(15))
+       2013-02-13T00:30:00
+
+       julia> floor(DateTime(2016, 8, 6, 12, 0, 0), Dates.Day)
+       2016-08-06T00:00:00
+
+.. function:: ceil(dt::TimeType, p::Period) -> TimeType
+
+   .. Docstring generated from Julia source
+
+   Returns the nearest ``Date`` or ``DateTime`` greater than or equal to ``dt`` at resolution ``p``\ .
+
+   For convenience, ``p`` may be a type instead of a value: ``ceil(dt, Dates.Hour)`` is a shortcut for ``ceil(dt, Dates.Hour(1))``\ .
+
+   .. doctest::
+
+       julia> ceil(Date(1985, 8, 16), Dates.Month)
+       1985-09-01
+
+       julia> ceil(DateTime(2013, 2, 13, 0, 31, 20), Dates.Minute(15))
+       2013-02-13T00:45:00
+
+       julia> ceil(DateTime(2016, 8, 6, 12, 0, 0), Dates.Day)
+       2016-08-07T00:00:00
+
+.. function:: round(dt::TimeType, p::Period, [r::RoundingMode]) -> TimeType
+
+   .. Docstring generated from Julia source
+
+   Returns the ``Date`` or ``DateTime`` nearest to ``dt`` at resolution ``p``\ . By default (``RoundNearestTiesUp``\ ), ties (e.g., rounding 9:30 to the nearest hour) will be rounded up.
+
+   For convenience, ``p`` may be a type instead of a value: ``round(dt, Dates.Hour)`` is a shortcut for ``round(dt, Dates.Hour(1))``\ .
+
+   .. doctest::
+
+       julia> round(Date(1985, 8, 16), Dates.Month)
+       1985-08-01
+
+       julia> round(DateTime(2013, 2, 13, 0, 31, 20), Dates.Minute(15))
+       2013-02-13T00:30:00
+
+       julia> round(DateTime(2016, 8, 6, 12, 0, 0), Dates.Day)
+       2016-08-07T00:00:00
+
+   Valid rounding modes for ``round(::TimeType, ::Period, ::RoundingMode)`` are ``RoundNearestTiesUp`` (default), ``RoundDown`` (``floor``\ ), and ``RoundUp`` (``ceil``\ ).
+
+The following functions are not exported:
+
+.. function:: floorceil(dt::TimeType, p::Period) -> (TimeType, TimeType)
+
+   .. Docstring generated from Julia source
+
+   Simultaneously return the ``floor`` and ``ceil`` of a ``Date`` or ``DateTime`` at resolution ``p``\ . More efficient than calling both ``floor`` and ``ceil`` individually.
+
+.. function:: epochdays2date(days) -> Date
+
+   .. Docstring generated from Julia source
+
+   Takes the number of days since the rounding epoch (``0000-01-01T00:00:00``\ ) and returns the corresponding ``Date``\ .
+
+.. function:: epochms2datetime(milliseconds) -> DateTime
+
+   .. Docstring generated from Julia source
+
+   Takes the number of milliseconds since the rounding epoch (``0000-01-01T00:00:00``\ ) and returns the corresponding ``DateTime``\ .
+
+.. function:: date2epochdays(dt::Date) -> Int64
+
+   .. Docstring generated from Julia source
+
+   Takes the given ``Date`` and returns the number of days since the rounding epoch (``0000-01-01T00:00:00``\ ) as an ``Int64``\ .
+
+.. function:: datetime2epochms(dt::DateTime) -> Int64
+
+   .. Docstring generated from Julia source
+
+   Takes the given ``DateTime`` and returns the number of milliseconds since the rounding epoch (``0000-01-01T00:00:00``\ ) as an ``Int64``\ .
+
 Conversion Functions
 ~~~~~~~~~~~~~~~~~~~~
 

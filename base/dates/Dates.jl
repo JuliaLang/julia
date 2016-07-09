@@ -12,6 +12,7 @@ include("arithmetic.jl")
 include("conversions.jl")
 include("ranges.jl")
 include("adjusters.jl")
+include("rounding.jl")
 include("io.jl")
 
 export Period, DatePeriod, TimePeriod,
