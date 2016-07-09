@@ -13,6 +13,7 @@ include("dates/arithmetic.jl")
 include("dates/conversions.jl")
 include("dates/ranges.jl")
 include("dates/adjusters.jl")
+include("dates/rounding.jl")
 include("dates/io.jl")
 
 end
