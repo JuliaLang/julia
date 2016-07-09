@@ -506,3 +506,6 @@ let io = IOBuffer()
     dump(io, :(x = 1))
     @test takebuf_string(io)[end] == '\n'
 end
+
+# issue #17338
+@test repr(Core.svec(1,2)) == "svec(1,2)"
