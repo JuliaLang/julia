@@ -14,7 +14,7 @@ BUILD_LLVM_CLANG := 1
 endif
 
 ifeq ($(BUILD_LLVM_CLANG), 1)
-BUILD_COMPILER-RT := 1
+BUILD_COMPILER_RT := 1
 # build requirement
 endif
 
@@ -75,11 +75,11 @@ LLVM_CLANG_TAR:=
 LLVM_LIBCXX_TAR:=
 endif # BUILD_LLVM_CLANG
 
-ifeq ($(BUILD_COMPILER-RT), 1)
+ifeq ($(BUILD_COMPILER_RT), 1)
 LLVM_COMPILER_RT_TAR:=$(SRCDIR)/srccache/compiler-rt-$(LLVM_TAR_EXT)
 else
 LLVM_COMPILER_RT_TAR:=
-endif # BUILD_COMPILER-RT
+endif # BUILD_COMPILER_RT
 
 ifeq ($(BUILD_CUSTOM_LIBCXX),1)
 LLVM_LIBCXX_TAR:=$(SRCDIR)/srccache/libcxx-$(LLVM_TAR_EXT)
@@ -216,7 +216,7 @@ LLVM_FLAGS += LDFLAGS="$(LLVM_LDFLAGS)"
 LLVM_MFLAGS += LDFLAGS="$(LLVM_LDFLAGS)"
 endif
 
-ifeq ($(BUILD_COMPILER-RT),1)
+ifeq ($(BUILD_COMPILER_RT),1)
 ifneq ($(BUILD_LLVM_CLANG),1)
 # block default building of Clang
 LLVM_MFLAGS += OPTIONAL_PARALLEL_DIRS=compiler-rt
@@ -394,12 +394,12 @@ ifneq ($(LLVM_GIT_VER_CLANG),)
 		git checkout $(LLVM_GIT_VER_CLANG))
 endif # LLVM_GIT_VER_CLANG
 endif # BUILD_LLVM_CLANG
-ifeq ($(BUILD_COMPILER-RT),1)
+ifeq ($(BUILD_COMPILER_RT),1)
 	([ ! -d $(LLVM_SRC_DIR)/projects/compiler-rt ] && \
 		git clone $(LLVM_GIT_URL_COMPILER_RT) $(LLVM_SRC_DIR)/projects/compiler-rt  ) || \
 		(cd $(LLVM_SRC_DIR)/projects/compiler-rt  && \
 		git pull --ff-only)
-endif # BUILD_COMPILER-RT
+endif # BUILD_COMPILER_RT
 ifeq ($(BUILD_LLDB),1)
 	([ ! -d $(LLVM_SRC_DIR)/tools/lldb ] && \
 		git clone $(LLVM_GIT_URL_LLDB) $(LLVM_SRC_DIR)/tools/lldb  ) || \
@@ -475,7 +475,7 @@ endif # LLVM_VER
 ifeq ($(LLVM_VER),3.7.1)
 ifeq ($(BUILD_LLDB),1)
 $(eval $(call LLVM_PATCH,lldb-3.7.1))
-ifeq ($(BUILD_COMPILER-RT),1)
+ifeq ($(BUILD_COMPILER_RT),1)
 $(eval $(call LLVM_PATCH,compiler-rt-3.7.1))
 endif
 endif
@@ -533,7 +533,7 @@ else
 	$(call   make-install,llvm-$(LLVM_VER)/build_$(LLVM_BUILDTYPE),\
 	                      $(LLVM_MFLAGS) PATH="$(llvm_python_workaround):$$PATH")
 endif # LLVM_USE_CMAKE
-ifeq ($(BUILD_COMPILER-RT),1)
+ifeq ($(BUILD_COMPILER_RT),1)
 	$(CC) $(LDFLAGS) -shared $(fPIC) -o $(build_libdir)/libcompiler-rt.$(SHLIB_EXT) -nostdlib -Wl,--whole-archive -L$(build_libdir)/clang/$(LLVM_VER)/lib/$(call patsubst,%inux,linux,$(OS)) -lclang_rt.builtins-$(call patsubst,i%86,i386,$(ARCH))
 endif
 	touch -c $@
