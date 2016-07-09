@@ -475,9 +475,9 @@ endif # LLVM_VER
 ifeq ($(LLVM_VER),3.7.1)
 ifeq ($(BUILD_LLDB),1)
 $(eval $(call LLVM_PATCH,lldb-3.7.1))
+endif
 ifeq ($(BUILD_COMPILER_RT),1)
 $(eval $(call LLVM_PATCH,compiler-rt-3.7.1))
-endif
 endif
 endif
 
