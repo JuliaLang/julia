@@ -104,7 +104,8 @@ If you want to edit an existing docstring signature, you **first** have to chang
 edit the helpdb.jl or inline method docstrings.  The existing signatures in the `doc/stdlib/*.rst` files are pattern matched to base docstrings and the new content overwrites the content in `doc/stdlib/`.
 The signature definitions **must** be in sync or else the pattern match will fail and documentation will be lost in the result.
 To add entirely new methods to the `stdlib` documentation, first add the signature in the appropriate `doc/stdlib/*.rst` file before writing the docstring, rebuilding Julia, and re-running `doc/genstdlib.jl`.
-Pattern matching requires that multiline method signatures' inter-line character alignment in `doc/stdlib/*.rst` match that in the corresponding docstring. For example, docstring
+Pattern matching requires that multiline method signatures' inter-line character alignment in `doc/stdlib/*.rst` match that in the corresponding docstring. In the following example,
+
 ```julia
 """
     foo(bar, baz,
@@ -113,12 +114,25 @@ Pattern matching requires that multiline method signatures' inter-line character
 Foo `bar`, `baz`, `qux`, and `quux`.
 """
 ```
-will only match entries in `doc/stdlib/*.rst` of the form
-```rst
-.. function:: foo(bar, baz,
-..............    qux, quux)
+
+will only match entries in `doc/stdlib/*.rst` beginning with
+
 ```
-where `.` in the preceding snippet's second line is wildcard, and their number preceding indent-`    qux, quux)` matches the character count of `.. function:: `.
+.. function:: foo(bar, baz,
+                  qux, quux)
+```
+
+Note that the second line of the signature is indented by four spaces relative to `foo(bar, baz,`
+in the first line of the signature. This leading indent matches the indent used in the
+docstring exactly. If it did not match, such as in the following example,
+
+```
+.. function:: foo(bar, baz,
+                 qux, quux)
+```
+
+where three spaces instead of four are used then running `genstdlib.jl` will print a warning
+and not update the docstring.
 
 It is encouraged to write all new docstrings in Markdown markup.  If you need to write a more complicated docstring that contains cross-references or citations it can be written in a restructured text codeblock.
 Many of the existing docstrings are currently restructured text codeblocks and these will be transitioned to Markdown over time.  RST codeblocks are delineated with the triple-quote (\`\`\`rst  \`\`\`) Makdown codeblock syntax.
