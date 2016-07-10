@@ -218,3 +218,7 @@ JL_DLLEXPORT extern LLVMContext jl_LLVMContext;
 #else
 JL_DLLEXPORT extern LLVMContext &jl_LLVMContext;
 #endif
+
+extern MDNode *tbaa_const;
+
+Pass *createLowerPTLSPass(bool imaging_mode, MDNode *tbaa_const);
