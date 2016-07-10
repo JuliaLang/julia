@@ -761,7 +761,7 @@ public:
     {
         Function *F = dyn_cast<Function>(V);
         if (F) {
-            if (F->isIntrinsic()) {
+            if (isIntrinsicFunction(F)) {
                 return destModule->getOrInsertFunction(F->getName(),F->getFunctionType());
             }
             if (F->isDeclaration() || F->getParent() != destModule) {
