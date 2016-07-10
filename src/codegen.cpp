@@ -240,7 +240,7 @@ static Type *T_pppint8;
 static Type *T_void;
 
 // type-based alias analysis nodes.  Indentation of comments indicates hierarchy.
-static MDNode *tbaa_gcframe;    // GC frame
+MDNode *tbaa_gcframe;           // GC frame
 // LLVM should have enough info for alias analysis of non-gcframe stack slot
 // this is mainly a place holder for `jl_cgval_t::tbaa`
 static MDNode *tbaa_stack;      // stack slot
@@ -1102,7 +1102,6 @@ void *jl_get_llvmf(jl_tupletype_t *tt, bool getwrapper, bool getdeclarations)
         Function *f, *specf;
         jl_llvm_functions_t declarations;
         std::unique_ptr<Module> m = emit_function(temp ? temp : linfo, &declarations);
-        finalize_gc_frame(m.get());
         jl_globalPM->run(*m.get());
         f = (llvm::Function*)declarations.functionObject;
         specf = (llvm::Function*)declarations.specFunctionObject;
@@ -3402,17 +3401,6 @@ static void allocate_gc_frame(BasicBlock *b0, jl_codectx_t *ctx)
     int nthfield = offsetof(jl_tls_states_t, safepoint) / sizeof(void*);
     ctx->signalPage = emit_nthptr_recast(ctx->ptlsStates, nthfield, tbaa_const,
                                          PointerType::get(T_psize, 0));
-}
-
-void jl_codegen_finalize_temp_arg(Function *F, MDNode *tbaa_gcframe);
-void finalize_gc_frame(Module *m)
-{
-    for (Module::iterator I = m->begin(), E = m->end(); I != E; ++I) {
-        Function *F = &*I;
-        if (F->isDeclaration())
-            continue;
-        jl_codegen_finalize_temp_arg(F, tbaa_gcframe);
-    }
 }
 
 static Function *gen_cfun_wrapper(jl_function_t *ff, jl_value_t *jlrettype, jl_tupletype_t *argt,

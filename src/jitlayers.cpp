@@ -97,6 +97,7 @@ void addOptimizationPasses(legacy::PassManager *PM)
 void addOptimizationPasses(PassManager *PM)
 #endif
 {
+    PM->add(createLowerGCFramePass(tbaa_gcframe));
 #ifdef JL_DEBUG_BUILD
     PM->add(createVerifierPass());
 #endif
@@ -481,7 +482,7 @@ void JuliaOJIT::addModule(std::unique_ptr<Module> M)
         if (F->isDeclaration()) {
             if (F->use_empty())
                 F->eraseFromParent();
-            else if (!(F->isIntrinsic() ||
+            else if (!(isIntrinsicFunction(F) ||
                        findUnmangledSymbol(F->getName()) ||
                        SectionMemoryManager::getSymbolAddressInProcess(
                            F->getName()))) {
@@ -742,7 +743,7 @@ static void jl_finalize_function(const std::string &F, Module *collector)
             if (!F->isDeclaration()) {
                 module_for_fname.erase(F->getName());
             }
-            else if (!F->isIntrinsic()) {
+            else if (!isIntrinsicFunction(F)) {
                 to_finalize.push_back(F->getName().str());
             }
         }
@@ -784,7 +785,6 @@ void jl_finalize_function(Function *F, Module *collector)
 // and will add it to the execution engine when required (by jl_finalize_function)
 void jl_finalize_module(Module *m, bool shadow)
 {
-    finalize_gc_frame(m);
 #if !defined(USE_ORCJIT)
     jl_globalPM->run(*m);
 #endif
