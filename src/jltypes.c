@@ -2157,28 +2157,22 @@ static jl_value_t *inst_datatype(jl_datatype_t *dt, jl_svec_t *p, jl_value_t **i
             if (nt < 0)
                 jl_errorf("apply_type: Vararg length N is negative: %zd", nt);
             va = jl_tparam0(va);
-            if (nt == 0 || jl_is_leaf_type(va)) {
+            if (nt == 0 || !jl_has_typevars(va)) {
                 if (ntp == 1)
                     return jl_tupletype_fill(nt, va);
                 size_t i, l;
+                p = jl_alloc_svec(ntp - 1 + nt);
                 for (i = 0, l = ntp - 1; i < l; i++) {
-                    if (!jl_is_leaf_type(iparams[i]))
-                        break;
+                    jl_svecset(p, i, iparams[i]);
                 }
-                if (i == l) {
-                    p = jl_alloc_svec(ntp - 1 + nt);
-                    for (i = 0, l = ntp - 1; i < l; i++) {
-                        jl_svecset(p, i, iparams[i]);
-                    }
-                    l = ntp - 1 + nt;
-                    for (; i < l; i++) {
-                        jl_svecset(p, i, va);
-                    }
-                    JL_GC_PUSH1(&p);
-                    jl_value_t *ndt = (jl_value_t*)jl_apply_tuple_type(p);
-                    JL_GC_POP();
-                    return ndt;
+                l = ntp - 1 + nt;
+                for (; i < l; i++) {
+                    jl_svecset(p, i, va);
                 }
+                JL_GC_PUSH1(&p);
+                jl_value_t *ndt = (jl_value_t*)jl_apply_tuple_type(p);
+                JL_GC_POP();
+                return ndt;
             }
         }
     }
