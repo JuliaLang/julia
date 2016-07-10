@@ -102,7 +102,7 @@ function html(io::IO, md::List)
         for item in md.items
             println(io)
             withtag(io, :li) do
-                htmlinline(io, item)
+                html(io, item)
             end
         end
         println(io)

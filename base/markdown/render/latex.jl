@@ -71,10 +71,10 @@ end
 function latex(io::IO, md::List)
     env = md.ordered ? "enumerate" : "itemize"
     wrapblock(io, env) do
-        for item in md.items
+        for (n, item) in enumerate(md.items)
             print(io, "\\item ")
-            latexinline(io, item)
-            println(io)
+            latex(io, item)
+            n < length(md.items) && println(io)
         end
     end
 end

@@ -36,7 +36,11 @@ end
 function plain(io::IO, list::List)
     for (i, item) in enumerate(list.items)
         print(io, list.ordered ? "$i. " : "  * ")
-        plaininline(io, item)
+        lines = split(rstrip(sprint(buf -> plain(buf, item))), "\n")
+        for (n, line) in enumerate(lines)
+            print(io, (n == 1 || isempty(line)) ? "" : "    ", line)
+            n < length(lines) && println(io)
+        end
         println(io)
     end
 end
