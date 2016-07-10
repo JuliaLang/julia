@@ -3006,7 +3006,9 @@ Keyword arguments:
 
 * `sshflags`: specifies additional ssh options, e.g.
 
-    sshflags=`-i /home/foo/bar.pem`
+  ```
+  sshflags=`-i /home/foo/bar.pem`
+  ```
 
 * `max_parallel`: specifies the maximum number of workers connected to in parallel at a host.
                   Defaults to 10.

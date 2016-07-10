@@ -25,7 +25,9 @@ Create a new entry in the IO Dictionary for the key => value pair
  - use `(key => value) in dict` to see if this particular combination is in the properties set
  - use `get(dict, key, default)` to retrieve the most recent value for a particular key
 
-    IOContext(io::IO, context::IOContext)
+```
+IOContext(io::IO, context::IOContext)
+```
 
 Create a IOContext that wraps an alternate IO but inherits the keyword arguments from the context
 """
