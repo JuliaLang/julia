@@ -1,5 +1,8 @@
 // This file is a part of Julia. License is MIT: http://julialang.org/license
 
+#define DEBUG_TYPE "lower_gcroot"
+#undef DEBUG
+
 #include "llvm-version.h"
 #include <llvm/ADT/SmallBitVector.h>
 #include <llvm/IR/Value.h>
@@ -28,6 +31,8 @@
 #endif
 
 using namespace llvm;
+
+namespace {
 
 #ifndef NDEBUG
 static struct {
@@ -66,22 +71,6 @@ struct liveness {
         //     impossible (this would be strange)
     };
 };
-
-#ifndef NDEBUG // llvm assertions build
-// gdb debugging code for inspecting the bb_uses map
-void jl_dump_bb_uses(std::map<BasicBlock*, std::map<frame_register, liveness::id> > &bb_uses)
-{
-    for (std::map<BasicBlock*, std::map<frame_register, liveness::id> >::iterator
-            live_reg = bb_uses.begin(), e = bb_uses.end(); live_reg != e; ++live_reg) {
-        BasicBlock *bb = live_reg->first;
-        errs() << '\n' << bb << '\n';
-        for (std::map<frame_register, liveness::id>::iterator
-                regs = live_reg->second.begin(), regse = live_reg->second.end(); regs != regse; ++regs) {
-            errs() << regs->second << " #" << regs->first.second << ' ' << regs->first.first << '\n';
-        }
-    }
-}
-#endif
 
 static void tbaa_decorate_gcframe(Instruction *inst,
                                   std::set<Instruction*> &visited,
@@ -924,16 +913,28 @@ void JuliaGCAllocator::allocate_frame()
 #endif
 }
 
-void jl_codegen_finalize_temp_arg(Function *F, MDNode *tbaa)
+struct LowerGCFrame: public FunctionPass {
+    static char ID;
+    LowerGCFrame(MDNode *_tbaa_gcframe=nullptr)
+        : FunctionPass(ID),
+          tbaa_gcframe(_tbaa_gcframe)
+    {}
+
+private:
+    MDNode *tbaa_gcframe; // One `LLVMContext` only
+    bool runOnFunction(Function &F) override;
+};
+
+bool LowerGCFrame::runOnFunction(Function &F)
 {
-    Module *M = F->getParent();
+    Module *M = F.getParent();
 
     Function *ptls_getter = M->getFunction("jl_get_ptls_states");
     if (!ptls_getter)
-        return;
+        return true;
 
     CallInst *ptlsStates = NULL;
-    for (auto I = F->getEntryBlock().begin(), E = F->getEntryBlock().end();
+    for (auto I = F.getEntryBlock().begin(), E = F.getEntryBlock().end();
          I != E; ++I) {
         if (CallInst *callInst = dyn_cast<CallInst>(&*I)) {
             if (callInst->getCalledValue() == ptls_getter) {
@@ -943,12 +944,41 @@ void jl_codegen_finalize_temp_arg(Function *F, MDNode *tbaa)
         }
     }
     if (!ptlsStates)
-        return;
+        return true;
 
     FunctionType *functype = ptls_getter->getFunctionType();
     auto T_ppjlvalue =
         cast<PointerType>(functype->getReturnType())->getElementType();
     auto T_pjlvalue = cast<PointerType>(T_ppjlvalue)->getElementType();
-    JuliaGCAllocator allocator(ptlsStates, T_pjlvalue, tbaa);
+    JuliaGCAllocator allocator(ptlsStates, T_pjlvalue, tbaa_gcframe);
     allocator.allocate_frame();
+    return true;
+}
+
+char LowerGCFrame::ID = 0;
+
+static RegisterPass<LowerGCFrame> X("LowerGCFrame", "Lower GCFrame Pass",
+                                    false /* Only looks at CFG */,
+                                    false /* Analysis Pass */);
+}
+
+#ifndef NDEBUG // llvm assertions build
+// gdb debugging code for inspecting the bb_uses map
+void jl_dump_bb_uses(std::map<BasicBlock*, std::map<frame_register, liveness::id> > &bb_uses)
+{
+    for (std::map<BasicBlock*, std::map<frame_register, liveness::id> >::iterator
+            live_reg = bb_uses.begin(), e = bb_uses.end(); live_reg != e; ++live_reg) {
+        BasicBlock *bb = live_reg->first;
+        errs() << '\n' << bb << '\n';
+        for (std::map<frame_register, liveness::id>::iterator
+                regs = live_reg->second.begin(), regse = live_reg->second.end(); regs != regse; ++regs) {
+            errs() << regs->second << " #" << regs->first.second << ' ' << regs->first.first << '\n';
+        }
+    }
+}
+#endif
+
+Pass *createLowerGCFramePass(MDNode *tbaa_gcframe)
+{
+    return new LowerGCFrame(tbaa_gcframe);
 }
