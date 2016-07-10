@@ -76,11 +76,16 @@ function A_ldiv_B!{T}(S::LDLt{T,SymTridiagonal{T}}, B::AbstractVecOrMat{T})
     return B
 end
 
-## reconstruct the original matrix, which is tridiagonal
-function full(F::LDLt)
+# Conversion methods
+function convert(::Type{SymTridiagonal}, F::LDLt)
     e = copy(F.data.ev)
     d = copy(F.data.dv)
     e .*= d[1:end-1]
     d[2:end] += e .* F.data.ev
     SymTridiagonal(d, e)
 end
+convert(::Type{AbstractMatrix}, F::LDLt) = convert(SymTridiagonal, F)
+convert(::Type{AbstractArray}, F::LDLt) = convert(AbstractMatrix, F)
+convert(::Type{Matrix}, F::LDLt) = convert(Array, convert(AbstractArray, F))
+convert(::Type{Array}, F::LDLt) = convert(Matrix, F)
+full(F::LDLt) = convert(Array, F)

@@ -46,8 +46,15 @@ function lq(A::Union{Number, AbstractMatrix}; thin::Bool=true)
 end
 
 copy(A::LQ) = LQ(copy(A.factors), copy(A.τ))
+
 convert{T}(::Type{LQ{T}},A::LQ) = LQ(convert(AbstractMatrix{T}, A.factors), convert(Vector{T}, A.τ))
 convert{T}(::Type{Factorization{T}}, A::LQ) = convert(LQ{T}, A)
+convert(::Type{AbstractMatrix}, A::LQ) = A[:L]*A[:Q]
+convert(::Type{AbstractArray}, A::LQ) = convert(AbstractMatrix, A)
+convert(::Type{Matrix}, A::LQ) = convert(Array, convert(AbstractArray, A))
+convert(::Type{Array}, A::LQ) = convert(Matrix, A)
+full(A::LQ) = convert(Array, A)
+
 ctranspose{T}(A::LQ{T}) = QR{T,typeof(A.factors)}(A.factors', A.τ)
 
 function getindex(A::LQ, d::Symbol)
@@ -73,6 +80,21 @@ getq(A::LQ) = LQPackedQ(A.factors, A.τ)
 
 convert{T}(::Type{LQPackedQ{T}}, Q::LQPackedQ) = LQPackedQ(convert(AbstractMatrix{T}, Q.factors), convert(Vector{T}, Q.τ))
 convert{T}(::Type{AbstractMatrix{T}}, Q::LQPackedQ) = convert(LQPackedQ{T}, Q)
+convert(::Type{Matrix}, A::LQPackedQ) = LAPACK.orglq!(copy(A.factors),A.τ)
+convert(::Type{Array}, A::LQPackedQ) = convert(Matrix, A)
+function full{T}(A::LQPackedQ{T}; thin::Bool = true)
+    #= We construct the full eye here, even though it seems inefficient, because
+    every element in the output matrix is a function of all the elements of
+    the input matrix. The eye is modified by the elementary reflectors held
+    in A, so this is not just an indexing operation. Note that in general
+    explicitly constructing Q, rather than using the ldiv or mult methods,
+    may be a wasteful allocation. =#
+    if thin
+        convert(Array, A)
+    else
+        A_mul_B!(A, eye(T, size(A.factors,2), size(A.factors,1)))
+    end
+end
 
 size(A::LQ, dim::Integer) = size(A.factors, dim)
 size(A::LQ) = size(A.factors)
@@ -87,23 +109,6 @@ function size(A::LQPackedQ, dim::Integer)
 end
 
 size(A::LQPackedQ) = size(A.factors)
-
-full(A::LQ) = A[:L]*A[:Q]
-#=
-We construct the full eye here, even though it seems ineffecient, because
-every element in the output matrix is a function of all the elements of
-the input matrix. The eye is modified by the elementary reflectors held
-in A, so this is not just an indexing operation. Note that in general
-explicitly constructing Q, rather than using the ldiv or mult methods,
-may be a wasteful allocation.
-=#
-function full{T}(A::LQPackedQ{T}; thin::Bool=true)
-    if thin
-        LAPACK.orglq!(copy(A.factors),A.τ)
-    else
-        A_mul_B!(A, eye(T, size(A.factors,2), size(A.factors,1)))
-    end
-end
 
 ## Multiplication by LQ
 A_mul_B!{T<:BlasFloat}(A::LQ{T}, B::StridedVecOrMat{T}) = A[:L]*LAPACK.ormlq!('L','N',A.factors,A.τ,B)

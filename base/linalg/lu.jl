@@ -329,41 +329,6 @@ function getindex{T}(F::Base.LinAlg.LU{T,Tridiagonal{T}}, d::Symbol)
     throw(KeyError(d))
 end
 
-function full{T}(F::Base.LinAlg.LU{T,Tridiagonal{T}})
-    n = size(F, 1)
-
-    dl     = copy(F.factors.dl)
-    d      = copy(F.factors.d)
-    du     = copy(F.factors.du)
-    du2    = copy(F.factors.du2)
-
-    for i = n - 1:-1:1
-        li         = dl[i]
-        dl[i]      = li*d[i]
-        d[i + 1]  += li*du[i]
-        if i < n - 1
-            du[i + 1] += li*du2[i]
-        end
-
-        if F.ipiv[i] != i
-            tmp   = dl[i]
-            dl[i] = d[i]
-            d[i]  = tmp
-
-            tmp      = d[i + 1]
-            d[i + 1] = du[i]
-            du[i]    = tmp
-
-            if i < n - 1
-                tmp       = du[i + 1]
-                du[i + 1] = du2[i]
-                du2[i]    = tmp
-            end
-        end
-    end
-    return Tridiagonal(dl, d, du)
-end
-
 # See dgtts2.f
 function A_ldiv_B!{T}(A::LU{T,Tridiagonal{T}}, B::AbstractVecOrMat)
     n = size(A,1)
@@ -467,5 +432,49 @@ end
 
 /(B::AbstractMatrix,A::LU) = At_ldiv_Bt(A,B).'
 
-## reconstruct the original matrix
-full(F::LU) = (F[:L] * F[:U])[invperm(F[:p]),:]
+# Conversions
+convert(::Type{AbstractMatrix}, F::LU) = (F[:L] * F[:U])[invperm(F[:p]),:]
+convert(::Type{AbstractArray}, F::LU) = convert(AbstractMatrix, F)
+convert(::Type{Matrix}, F::LU) = convert(Array, convert(AbstractArray, F))
+convert(::Type{Array}, F::LU) = convert(Matrix, F)
+full(F::LU) = convert(Array, F)
+
+function convert{T}(::Type{Tridiagonal}, F::Base.LinAlg.LU{T,Tridiagonal{T}})
+    n = size(F, 1)
+
+    dl     = copy(F.factors.dl)
+    d      = copy(F.factors.d)
+    du     = copy(F.factors.du)
+    du2    = copy(F.factors.du2)
+
+    for i = n - 1:-1:1
+        li         = dl[i]
+        dl[i]      = li*d[i]
+        d[i + 1]  += li*du[i]
+        if i < n - 1
+            du[i + 1] += li*du2[i]
+        end
+
+        if F.ipiv[i] != i
+            tmp   = dl[i]
+            dl[i] = d[i]
+            d[i]  = tmp
+
+            tmp      = d[i + 1]
+            d[i + 1] = du[i]
+            du[i]    = tmp
+
+            if i < n - 1
+                tmp       = du[i + 1]
+                du[i + 1] = du2[i]
+                du2[i]    = tmp
+            end
+        end
+    end
+    return Tridiagonal(dl, d, du)
+end
+convert{T}(::Type{AbstractMatrix}, F::Base.LinAlg.LU{T,Tridiagonal{T}}) = convert(Tridiagonal, F)
+convert{T}(::Type{AbstractArray}, F::Base.LinAlg.LU{T,Tridiagonal{T}}) = convert(AbstractMatrix, F)
+convert{T}(::Type{Matrix}, F::Base.LinAlg.LU{T,Tridiagonal{T}}) = convert(Array, convert(AbstractArray, F))
+convert{T}(::Type{Array}, F::Base.LinAlg.LU{T,Tridiagonal{T}}) = convert(Matrix, F)
+full{T}(F::Base.LinAlg.LU{T,Tridiagonal{T}}) = convert(Array, F)
