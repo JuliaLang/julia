@@ -2,7 +2,11 @@
 
 # Method and method table pretty-printing
 
-function argtype_decl(env, n, t) # -> (argname, argtype)
+function argtype_decl(env, n, sig, i, nargs, isva) # -> (argname, argtype)
+    t = sig.parameters[i]
+    if i == nargs && isva && !isvarargtype(t)
+        t = Vararg{t,length(sig.parameters)-nargs+1}
+    end
     if isa(n,Expr)
         n = n.args[1]  # handle n::T in arg list
     end
@@ -30,26 +34,6 @@ function argtype_decl(env, n, t) # -> (argname, argtype)
     return s, string_with_env(env, t)
 end
 
-function argtype_decl_vararg(env, n, t)
-    if isa(n, Expr)
-        s = string(n.args[1])
-        if n.args[2].head == :...
-            # x... or x::T... declaration
-            if t.parameters[1] === Any
-                return string(s, "..."), ""
-            else
-                return s, string_with_env(env, t.parameters[1]) * "..."
-            end
-        elseif t == String
-            return s, "String"
-        end
-    end
-    # x::Vararg, x::Vararg{T}, or x::Vararg{T,N} declaration
-    s, length(n.args[2].args) < 4 ?
-       string_with_env(env, "Vararg{", t.parameters[1], "}") :
-       string_with_env(env, "Vararg{", t.parameters[1], ",", t.parameters[2], "}")
-end
-
 function arg_decl_parts(m::Method)
     tv = m.tvars
     if !isa(tv,SimpleVector)
@@ -61,9 +45,8 @@ function arg_decl_parts(m::Method)
     file, line = "", 0
     if li !== nothing
         argnames = li.slotnames[1:li.nargs]
-        s = Symbol("?")
-        decls = Any[argtype_decl(:tvar_env => tv, get(argnames, i, s), m.sig.parameters[i])
-                    for i = 1:length(m.sig.parameters)]
+        decls = Any[argtype_decl(:tvar_env => tv, argnames[i], m.sig, i, li.nargs, li.isva)
+                    for i = 1:li.nargs]
         if isdefined(li, :def)
             file, line = li.def.file, li.def.line
         end
