@@ -37,105 +37,35 @@ static struct {
 } jl_gc_frame_stats = {0};
 #endif
 
-class JuliaGCAllocator {
-public:
-    JuliaGCAllocator(CallInst *ptlsStates, Type *T_pjlvalue, MDNode *tbaa) :
-        F(*ptlsStates->getParent()->getParent()),
-        M(*F.getParent()),
-        T_int1(Type::getInt1Ty(F.getContext())),
-        T_int8(Type::getInt8Ty(F.getContext())),
-        T_int32(Type::getInt32Ty(F.getContext())),
-        T_int64(Type::getInt64Ty(F.getContext())),
-        V_null(Constant::getNullValue(T_pjlvalue)),
-        ptlsStates(ptlsStates),
-        gcframe(new AllocaInst(T_pjlvalue, ConstantInt::get(T_int32, 0))),
-        gcroot_func(M.getFunction("julia.gc_root_decl")),
-        gckill_func(M.getFunction("julia.gc_root_kill")),
-        gc_store_func(M.getFunction("julia.gc_store")),
-        jlcall_frame_func(M.getFunction("julia.jlcall_frame_decl")),
-        gcroot_flush_func(M.getFunction("julia.gcroot_flush")),
-        tbaa_gcframe(tbaa)
-    {
-/* Algorithm sketch:
- *  Compute liveness for each basic block
- *    liveness computed at the basic-block level for <inst, arg-offset> pairs
- *  Propagate liveness from each basic block to its predecessors
- *  Allocate argument slot for each jlcall frame
- */
-#ifdef JL_DEBUG_BUILD
-        gcframe->setName("gcrootframe");
-#endif
-        gcframe->insertAfter(ptlsStates);
-        assert(gcroot_func && gckill_func && jlcall_frame_func && gc_store_func);
-    }
-
-private:
-Function &F;
-Module &M;
-Type *const T_int1;
-Type *const T_int8;
-Type *const T_int32;
-Type *const T_int64;
-Value *const V_null;
-CallInst *const ptlsStates;
-AllocaInst *const gcframe;
-Function *const gcroot_func;
-Function *const gckill_func;
-Function *const gc_store_func;
-Function *const jlcall_frame_func;
-Function *const gcroot_flush_func;
-MDNode *const tbaa_gcframe;
-
 typedef std::pair<CallInst*, unsigned> frame_register;
-class liveness {
-public:
+struct liveness {
     typedef unsigned id;
     enum {
-        assign = 1<<0, // an assignment to a gcroot exists in the basic-block (potentially no live-in from the predecessor basic-blocks)
-        kill   = 1<<1, // a use of a gcroot exists in the basic-block (potentially a "kill" and no live-out to the successor basic-blocks)
-        live   = 1<<2  // the gcroot is live over the entire basic-block (the assign/kill are not dominating of entry/exit)
-            // live | kill | assign == a usage and assignment exist, but it is also live on exit, the entry liveness depends on whether a store or use is encountered first
-            // live | kill == a usage exists, but the value must be live for the entire basic-block since it is not the terminal usage in the domination tree
-            // kill | assign == a usage and definition exist in domination order, so the actual lifetime is only a subset of the basic-block
-            // live | assign == impossible (this would be strange)
+        // an assignment to a gcroot exists in the basic-block
+        // (potentially no live-in from the predecessor basic-blocks)
+        assign = 1<<0,
+        // a use of a gcroot exists in the basic-block
+        // (potentially a "kill" and no live-out to the successor basic-blocks)
+        kill   = 1<<1,
+        // the gcroot is live over the entire basic-block
+        // (the assign/kill are not dominating of entry/exit)
+        live   = 1<<2
+
+        // live | kill | assign:
+        //     a usage and assignment exist, but it is also live on exit,
+        //     the entry liveness depends on whether a store or use is
+        //     encountered first
+        // live | kill:
+        //     a usage exists,
+        //     but the value must be live for the entire basic-block
+        //     since it is not the terminal usage in the domination tree
+        // kill | assign:
+        //     a usage and definition exist in domination order,
+        //     so the actual lifetime is only a subset of the basic-block
+        // live | assign:
+        //     impossible (this would be strange)
     };
 };
-
-    void tbaa_decorate_gcframe(Instruction *inst, std::set<Instruction*> &visited)
-    {
-        if (visited.find(inst) != visited.end())
-            return;
-        visited.insert(inst);
-#ifdef LLVM35
-        Value::user_iterator I = inst->user_begin(), E = inst->user_end();
-#else
-        Value::use_iterator I = inst->use_begin(), E = inst->use_end();
-#endif
-        for (;I != E;++I) {
-            Instruction *user = dyn_cast<Instruction>(*I);
-            if (!user) {
-                continue;
-            } else if (isa<GetElementPtrInst>(user)) {
-                if (__likely(user->getOperand(0) == inst)) {
-                    tbaa_decorate_gcframe(user, visited);
-                }
-            } else if (isa<StoreInst>(user)) {
-                if (user->getOperand(1) == inst) {
-                    user->setMetadata(llvm::LLVMContext::MD_tbaa, tbaa_gcframe);
-                }
-            } else if (isa<LoadInst>(user)) {
-                user->setMetadata(llvm::LLVMContext::MD_tbaa, tbaa_gcframe);
-            } else if (isa<BitCastInst>(user)) {
-                tbaa_decorate_gcframe(user, visited);
-            }
-        }
-    }
-
-    void tbaa_decorate_gcframe(Instruction *inst)
-    {
-        std::set<Instruction*> visited;
-        tbaa_decorate_gcframe(inst, visited);
-    }
 
 #ifndef NDEBUG // llvm assertions build
 // gdb debugging code for inspecting the bb_uses map
@@ -153,7 +83,106 @@ void jl_dump_bb_uses(std::map<BasicBlock*, std::map<frame_register, liveness::id
 }
 #endif
 
-Instruction *get_pgcstack(Instruction *ptlsStates)
+static void tbaa_decorate_gcframe(Instruction *inst,
+                                  std::set<Instruction*> &visited,
+                                  MDNode *tbaa_gcframe)
+{
+    if (visited.find(inst) != visited.end())
+        return;
+    visited.insert(inst);
+#ifdef LLVM35
+    Value::user_iterator I = inst->user_begin(), E = inst->user_end();
+#else
+    Value::use_iterator I = inst->use_begin(), E = inst->use_end();
+#endif
+    for (;I != E;++I) {
+        Instruction *user = dyn_cast<Instruction>(*I);
+        if (!user) {
+            continue;
+        } else if (isa<GetElementPtrInst>(user)) {
+            if (__likely(user->getOperand(0) == inst)) {
+                tbaa_decorate_gcframe(user, visited, tbaa_gcframe);
+            }
+        } else if (isa<StoreInst>(user)) {
+            if (user->getOperand(1) == inst) {
+                user->setMetadata(llvm::LLVMContext::MD_tbaa, tbaa_gcframe);
+            }
+        } else if (isa<LoadInst>(user)) {
+            user->setMetadata(llvm::LLVMContext::MD_tbaa, tbaa_gcframe);
+        } else if (isa<BitCastInst>(user)) {
+            tbaa_decorate_gcframe(user, visited, tbaa_gcframe);
+        }
+    }
+}
+
+static void tbaa_decorate_gcframe(Instruction *inst, MDNode *tbaa_gcframe)
+{
+    std::set<Instruction*> visited;
+    tbaa_decorate_gcframe(inst, visited, tbaa_gcframe);
+}
+
+class JuliaGCAllocator {
+public:
+    JuliaGCAllocator(CallInst *ptlsStates, Type *T_pjlvalue, MDNode *tbaa) :
+        F(*ptlsStates->getParent()->getParent()),
+        M(*F.getParent()),
+        T_int1(Type::getInt1Ty(F.getContext())),
+        T_int8(Type::getInt8Ty(F.getContext())),
+        T_int32(Type::getInt32Ty(F.getContext())),
+        T_int64(Type::getInt64Ty(F.getContext())),
+        V_null(Constant::getNullValue(T_pjlvalue)),
+        ptlsStates(ptlsStates),
+        gcframe(new AllocaInst(T_pjlvalue, ConstantInt::get(T_int32, 0))),
+        gcroot_func(M.getFunction("julia.gc_root_decl")),
+        gckill_func(M.getFunction("julia.gc_root_kill")),
+        jlcall_frame_func(M.getFunction("julia.jlcall_frame_decl")),
+        gcroot_flush_func(M.getFunction("julia.gcroot_flush")),
+        tbaa_gcframe(tbaa)
+    {
+/* Algorithm sketch:
+ *  Compute liveness for each basic block
+ *    liveness computed at the basic-block level for <inst, arg-offset> pairs
+ *  Propagate liveness from each basic block to its predecessors
+ *  Allocate argument slot for each jlcall frame
+ */
+#ifdef JL_DEBUG_BUILD
+        gcframe->setName("gcrootframe");
+#endif
+        gcframe->insertAfter(ptlsStates);
+    }
+
+private:
+    Function &F;
+    Module &M;
+    Type *const T_int1;
+    Type *const T_int8;
+    Type *const T_int32;
+    Type *const T_int64;
+    Value *const V_null;
+    CallInst *const ptlsStates;
+    AllocaInst *const gcframe;
+    Function *const gcroot_func;
+    Function *const gckill_func;
+    Function *const jlcall_frame_func;
+    Function *const gcroot_flush_func;
+    MDNode *const tbaa_gcframe;
+
+    Instruction *get_pgcstack(Instruction *ptlsStates);
+    frame_register get_gcroot(Value *ptr);
+    void collapseRedundantRoots();
+    bool record_usage(CallInst *callInst,
+        std::map<BasicBlock*, std::map<frame_register, liveness::id> > &bb_uses,
+        std::map<BasicBlock*, SmallBitVector> &regs_used,
+        unsigned &offset, bool commit=true);
+    unsigned find_space_for(CallInst *callInst,
+        std::map<BasicBlock*, std::map<frame_register, liveness::id> > &bb_uses,
+        std::map<BasicBlock*, SmallBitVector> &regs_used);
+    void rearrangeRoots();
+public:
+    void allocate_frame();
+};
+
+Instruction *JuliaGCAllocator::get_pgcstack(Instruction *ptlsStates)
 {
     Constant *offset = ConstantInt::getSigned(T_int32, offsetof(jl_tls_states_t, pgcstack) / sizeof(void*));
     return GetElementPtrInst::Create(
@@ -163,7 +192,7 @@ Instruction *get_pgcstack(Instruction *ptlsStates)
             "jl_pgcstack");
 }
 
-frame_register get_gcroot(Value *ptr)
+frame_register JuliaGCAllocator::get_gcroot(Value *ptr)
 {
     frame_register frame;
     frame.first = dyn_cast<CallInst>(ptr);
@@ -173,7 +202,7 @@ frame_register get_gcroot(Value *ptr)
         if (GetElementPtrInst *gepInst = dyn_cast<GetElementPtrInst>(ptr)) {
             if (gepInst->getNumIndices() == 1) {
                 frame.first = dyn_cast<CallInst>(gepInst->getPointerOperand());
-                if (frame.first && frame.first->getCalledFunction() == jlcall_frame_func)
+                if (frame.first && frame.first->getCalledValue() == jlcall_frame_func)
                     frame.second = cast<ConstantInt>(gepInst->idx_begin()->get())->getZExtValue();
                 else
                     frame.first = NULL;
@@ -183,12 +212,12 @@ frame_register get_gcroot(Value *ptr)
     return frame;
 }
 
-void collapseRedundantRoots()
+void JuliaGCAllocator::collapseRedundantRoots()
 {
     for (BasicBlock::iterator I = gcframe->getParent()->begin(), E(gcframe); I != E; ) {
         CallInst* callInst = dyn_cast<CallInst>(&*I);
         ++I;
-        if (callInst && callInst->getCalledFunction() == gcroot_func) {
+        if (callInst && callInst->getCalledValue() == gcroot_func) {
             // see if a root is only used briefly for `store -> load -> store other` pattern or `store, store other`
             // such that the first store can be trivially replaced with just "other" and delete the chain
             // or if is used for store, but the value is never needed
@@ -290,7 +319,7 @@ void collapseRedundantRoots()
                         frame_register gcroot_other_gep = get_gcroot(theOther->getPointerOperand());
                         CallInst *gcroot_other = gcroot_other_gep.first;
                         // it could be a gcroot...
-                        if (gcroot_other && gcroot_other->getCalledFunction() == gcroot_func && theStore != NULL) {
+                        if (gcroot_other && gcroot_other->getCalledValue() == gcroot_func && theStore != NULL) {
                             // need to make sure there aren't any other uses of gcroot_other (including gckill)
                             // between the initial store and the replacement store
                             // TODO: do this better once we have liveness information for locals?
@@ -339,7 +368,7 @@ void collapseRedundantRoots()
                             }
                         }
                         // ...or it could be a jlcall frame
-                        else if (gcroot_other && gcroot_other->getCalledFunction() == jlcall_frame_func) {
+                        else if (gcroot_other && gcroot_other->getCalledValue() == jlcall_frame_func) {
                             // jlcall_frame_func slots are effectively SSA,
                             // so it's always safe to merge an earlier store into it
                             // but do need to update liveness information for this slot
@@ -386,10 +415,10 @@ void collapseRedundantRoots()
     }
 }
 
-bool record_usage(CallInst *callInst,
+bool JuliaGCAllocator::record_usage(CallInst *callInst,
         std::map<BasicBlock*, std::map<frame_register, liveness::id> > &bb_uses,
         std::map<BasicBlock*, SmallBitVector> &regs_used,
-        unsigned &offset, bool commit=true)
+        unsigned &offset, bool commit)
 {
 /* record-usage(inst, bb-uses, regs-used, offset, commit=true)
  *     for (arg-offset, operand) in enumerate(arguments(inst))
@@ -447,7 +476,7 @@ bool record_usage(CallInst *callInst,
     return true;
 }
 
-unsigned find_space_for(CallInst *callInst,
+unsigned JuliaGCAllocator::find_space_for(CallInst *callInst,
         std::map<BasicBlock*, std::map<frame_register, liveness::id> > &bb_uses,
         std::map<BasicBlock*, SmallBitVector> &regs_used)
 {
@@ -463,7 +492,7 @@ unsigned find_space_for(CallInst *callInst,
     return n;
 }
 
-void rearrangeRoots()
+void JuliaGCAllocator::rearrangeRoots()
 {
     for (auto BB = F.begin(), E(F.end()); BB != E; BB++) {
         auto terminst = BB->getTerminator();
@@ -481,14 +510,14 @@ void rearrangeRoots()
             if (LoadInst *loadInst = dyn_cast<LoadInst>(inst)) {
                 CallInst *loadAddr =
                     dyn_cast<CallInst>(loadInst->getPointerOperand());
-                if (loadAddr && loadAddr->getCalledFunction() == gcroot_func)
+                if (loadAddr && loadAddr->getCalledValue() == gcroot_func)
                     break;
                 continue;
             }
             if (StoreInst *storeInst = dyn_cast<StoreInst>(inst)) {
                 CallInst *storeAddr =
                     dyn_cast<CallInst>(storeInst->getPointerOperand());
-                if (storeAddr && storeAddr->getCalledFunction() == gcroot_func)
+                if (storeAddr && storeAddr->getCalledValue() == gcroot_func)
                     toRemove.push_back(storeInst);
                 continue;
             }
@@ -505,8 +534,7 @@ void rearrangeRoots()
     }
 }
 
-public:
-void allocate_frame()
+void JuliaGCAllocator::allocate_frame()
 {
     Instruction *last_gcframe_inst = gcframe;
     collapseRedundantRoots();
@@ -524,7 +552,7 @@ void allocate_frame()
     for (BasicBlock::iterator I = gcframe->getParent()->begin(), E(gcframe); I != E; ) {
         CallInst* callInst = dyn_cast<CallInst>(&*I);
         ++I;
-        if (callInst && callInst->getCalledFunction() == jlcall_frame_func) {
+        if (callInst && callInst->getCalledValue() == jlcall_frame_func) {
             BasicBlock *bb = NULL;
             unsigned arg_n = cast<ConstantInt>(callInst->getArgOperand(0))->getZExtValue();
             frames.push(std::make_pair(arg_n, callInst));
@@ -579,7 +607,7 @@ void allocate_frame()
             if (StoreInst *storeInst = dyn_cast<StoreInst>(i)) {
                 frame_register def = get_gcroot(storeInst->getPointerOperand());
                 if (CallInst *callInst = def.first) {
-                    if (callInst->getCalledFunction() == jlcall_frame_func) {
+                    if (callInst->getCalledValue() == jlcall_frame_func) {
                         std::map<frame_register, liveness::id>::iterator inuse_reg = inuse_list.find(def);
                         if (inuse_reg != inuse_list.end() && inuse_reg->second == liveness::kill) {
                             inuse_reg->second |= liveness::assign;
@@ -653,7 +681,7 @@ void allocate_frame()
             if (StoreInst *storeInst = dyn_cast<StoreInst>(&*i)) {
                 frame_register def = get_gcroot(storeInst->getPointerOperand());
                 if (CallInst *callInst = def.first) {
-                    if (callInst->getCalledFunction() == jlcall_frame_func) {
+                    if (callInst->getCalledValue() == jlcall_frame_func) {
                         std::map<frame_register, liveness::id>::iterator inuse_reg = inuse_list.find(def);
                         if (inuse_reg != inuse_list.end() && (inuse_reg->second & liveness::live)) {
                             inuse_reg->second |= liveness::assign;
@@ -710,7 +738,7 @@ void allocate_frame()
             ++i;
             // delete the now unused gckill information
             if (CallInst* callInst = dyn_cast<CallInst>(inst)) {
-                Value *callee = callInst->getCalledFunction();
+                Value *callee = callInst->getCalledValue();
                 if (callee == gckill_func || callee == gcroot_flush_func) {
                     callInst->eraseFromParent();
                 }
@@ -719,7 +747,7 @@ void allocate_frame()
             else if (StoreInst *storeInst = dyn_cast<StoreInst>(inst)) {
                 frame_register def = get_gcroot(storeInst->getPointerOperand());
                 if (CallInst *gcroot = def.first) {
-                    if (gcroot->getCalledFunction() == jlcall_frame_func) {
+                    if (gcroot->getCalledValue() == jlcall_frame_func) {
                         std::map<frame_register, liveness::id> &inuse_list = bb_uses[storeInst->getParent()];
                         std::map<frame_register, liveness::id>::iterator inuse_reg = inuse_list.find(def);
                         if (inuse_reg == inuse_list.end())
@@ -746,7 +774,7 @@ void allocate_frame()
         // finalize all of the jlcall frames by replacing all of the frames with the appropriate gep(tempslot)
         for (std::map<CallInst*, unsigned>::iterator frame = frame_offsets.begin(), framee = frame_offsets.end(); frame != framee; ++frame) {
             CallInst *gcroot = frame->first;
-            tbaa_decorate_gcframe(gcroot);
+            tbaa_decorate_gcframe(gcroot, tbaa_gcframe);
             Value* offset[1] = {ConstantInt::get(T_int32, frame->second)};
             GetElementPtrInst *gep = GetElementPtrInst::Create(LLVM37_param(NULL) tempSlot, makeArrayRef(offset));
             gep->insertAfter(last_gcframe_inst);
@@ -773,7 +801,7 @@ void allocate_frame()
         Instruction* inst = &*I;
         ++I;
         if (CallInst* callInst = dyn_cast<CallInst>(inst)) {
-            if (callInst->getCalledFunction() == gcroot_func) {
+            if (callInst->getCalledValue() == gcroot_func) {
                 unsigned offset = 2 + argSpaceSize++;
                 Instruction *argTempi = GetElementPtrInst::Create(LLVM37_param(NULL) gcframe, ArrayRef<Value*>(ConstantInt::get(T_int32, offset)));
                 argTempi->insertAfter(last_gcframe_inst);
@@ -806,7 +834,7 @@ void allocate_frame()
                     }
                 }
 #endif
-                tbaa_decorate_gcframe(callInst);
+                tbaa_decorate_gcframe(callInst, tbaa_gcframe);
                 callInst->replaceAllUsesWith(argTempi);
                 argTempi->takeName(callInst);
                 callInst->eraseFromParent();
@@ -896,11 +924,31 @@ void allocate_frame()
 #endif
 }
 
-};
-
-void jl_codegen_finalize_temp_arg(CallInst *ptlsStates, Type *T_pjlvalue,
-                                  MDNode *tbaa)
+void jl_codegen_finalize_temp_arg(Function *F, MDNode *tbaa)
 {
+    Module *M = F->getParent();
+
+    Function *ptls_getter = M->getFunction("jl_get_ptls_states");
+    if (!ptls_getter)
+        return;
+
+    CallInst *ptlsStates = NULL;
+    for (auto I = F->getEntryBlock().begin(), E = F->getEntryBlock().end();
+         I != E; ++I) {
+        if (CallInst *callInst = dyn_cast<CallInst>(&*I)) {
+            if (callInst->getCalledValue() == ptls_getter) {
+                ptlsStates = callInst;
+                break;
+            }
+        }
+    }
+    if (!ptlsStates)
+        return;
+
+    FunctionType *functype = ptls_getter->getFunctionType();
+    auto T_ppjlvalue =
+        cast<PointerType>(functype->getReturnType())->getElementType();
+    auto T_pjlvalue = cast<PointerType>(T_ppjlvalue)->getElementType();
     JuliaGCAllocator allocator(ptlsStates, T_pjlvalue, tbaa);
     allocator.allocate_frame();
 }

@@ -40,7 +40,7 @@ SRCS := \
 	alloc dlload sys init task array dump toplevel jl_uv \
 	simplevector APInt-C runtime_intrinsics runtime_ccall \
 	threadgroup threading stackwalk gc gc-debug gc-pages \
-   	jlapi signal-handling safepoint jloptions timing
+	jlapi signal-handling safepoint jloptions timing
 
 ifeq ($(USEMSVC), 1)
 SRCS += getopt
@@ -49,7 +49,7 @@ endif
 LLVMLINK :=
 
 ifeq ($(JULIACODEGEN),LLVM)
-SRCS += codegen jitlayers disasm debuginfo llvm-simdloop llvm-gcroot cgmemmgr
+SRCS += codegen jitlayers disasm debuginfo llvm-simdloop llvm-ptls llvm-gcroot cgmemmgr
 FLAGS += -I$(shell $(LLVM_CONFIG_HOST) --includedir)
 LLVM_LIBS := all
 ifeq ($(USE_POLLY),1)
