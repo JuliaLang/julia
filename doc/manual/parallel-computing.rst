@@ -113,9 +113,9 @@ required to move ``r`` to the process doing the addition. In this
 case, :obj:`@spawn` is smart enough to perform the computation on the
 process that owns ``r``, so the :func:`fetch` will be a no-op.
 
-(It is worth noting that :obj:`@spawn` is not built-in but defined in Julia
-as a :ref:`macro <man-macros>`. It is possible to define your
-own such constructs.)
+(It's worth noting that :obj:`@spawn` is not a built-in but is defined in
+Julia as a :ref:`macro <man-macros>`. It is possible to define such constructs
+of your own.)
 
 .. _man-parallel-computing-code-availability:
 
