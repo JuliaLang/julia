@@ -38,8 +38,13 @@ end
 
 function rst(io::IO, list::List)
     for (i, item) in enumerate(list.items)
-        print(io, list.ordered ? "$i. " : "* ")
-        rstinline(io, item)
+        bullet = list.ordered ? "$i. " : "* "
+        print(io, bullet)
+        lines = split(rstrip(sprint(buf -> rst(buf, item))), '\n')
+        for (n, line) in enumerate(lines)
+            print(io, (n == 1 || isempty(line)) ? "" : " "^length(bullet), line)
+            n < length(lines) && println(io)
+        end
         println(io)
     end
 end
