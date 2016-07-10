@@ -38,7 +38,7 @@ end
 
 function rst(io::IO, list::List)
     for (i, item) in enumerate(list.items)
-        bullet = list.ordered ? "$i. " : "* "
+        bullet = isordered(list) ? "$(i + list.ordered - 1). " : "* "
         print(io, bullet)
         lines = split(rstrip(sprint(buf -> rst(buf, item))), '\n')
         for (n, line) in enumerate(lines)

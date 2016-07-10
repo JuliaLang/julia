@@ -98,7 +98,8 @@ function html(io::IO, md::Admonition)
 end
 
 function html(io::IO, md::List)
-    withtag(io, md.ordered ? :ol : :ul) do
+    maybe_attr = md.ordered > 1 ? Any[:start => string(md.ordered)] : []
+    withtag(io, isordered(md) ? :ol : :ul, maybe_attr...) do
         for item in md.items
             println(io)
             withtag(io, :li) do

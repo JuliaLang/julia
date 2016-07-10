@@ -214,14 +214,16 @@ end
 
 type List
     items::Vector{Any}
-    ordered::Bool
+    ordered::Int # `-1` is unordered, `>= 0` is ordered.
 
-    List(x::AbstractVector, b::Bool) = new(x, b)
-    List(x::AbstractVector) = new(x, false)
-    List(b::Bool) = new(Any[], b)
+    List(x::AbstractVector, b::Integer) = new(x, b)
+    List(x::AbstractVector) = new(x, -1)
+    List(b::Integer) = new(Any[], b)
 end
 
 List(xs...) = List(vcat(xs...))
+
+isordered(list::List) = list.ordered >= 0
 
 const BULLETS = r"^ {0,3}(\*|\+|•|-)( |$)"
 const NUM_OR_BULLETS = r"^ {0,3}(\*|•|\+|-|\d+(\.|\)))( |$)"
@@ -246,9 +248,8 @@ function list(stream::IO, block::MD)
                 return false
             end
 
-        # Initialise the empty list object: either ordered or unordered. TODO: replace
-        # `Bool` field with `Int` to allow ordered lists to begin from a specific number.
-        list = List(initial >= 0)
+        # Initialise the empty list object: either ordered or unordered.
+        list = List(initial)
 
         buffer = IOBuffer() # For capturing nested text for recursive parsing.
         newline = false     # For checking if we have two consecutive newlines: end of list.

@@ -849,3 +849,69 @@ let text =
     end
 end
 
+# Ordered list starting number.
+
+let text =
+        """
+        42. foo
+        43. bar
+
+
+        1. foo
+        2. bar
+
+
+        - foo
+        - bar
+        """,
+    md = Markdown.parse(text)
+
+    @test md.content[1].ordered == 42
+    @test md.content[2].ordered == 1
+    @test md.content[3].ordered == -1
+
+    let expected =
+            """
+            <ol start="42">
+            <li><p>foo</p>
+            </li>
+            <li><p>bar</p>
+            </li>
+            </ol>
+            <ol>
+            <li><p>foo</p>
+            </li>
+            <li><p>bar</p>
+            </li>
+            </ol>
+            <ul>
+            <li><p>foo</p>
+            </li>
+            <li><p>bar</p>
+            </li>
+            </ul>
+            """
+        @test expected == Markdown.html(md)
+    end
+
+    let expected =
+            """
+            \\begin{itemize}
+            \\item[42. ] foo
+
+            \\item[43. ] bar
+            \\end{itemize}
+            \\begin{itemize}
+            \\item[1. ] foo
+
+            \\item[2. ] bar
+            \\end{itemize}
+            \\begin{itemize}
+            \\item foo
+
+            \\item bar
+            \\end{itemize}
+            """
+        @test expected == Markdown.latex(md)
+    end
+end
