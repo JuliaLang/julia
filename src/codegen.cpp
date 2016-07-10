@@ -555,7 +555,22 @@ static jl_cgval_t emit_checked_var(Value *bp, jl_sym_t *name, jl_codectx_t *ctx,
 static Value *emit_condition(jl_value_t *cond, const std::string &msg, jl_codectx_t *ctx);
 static void allocate_gc_frame(BasicBlock *b0, jl_codectx_t *ctx);
 static GlobalVariable *prepare_global(GlobalVariable *G, Module *M = jl_builderModule);
+static llvm::Value *prepare_call(llvm::Value *Callee);
 
+template<typename T> static void push_gc_use(T &&vec, const jl_cgval_t &v)
+{
+    if (v.gcroot) {
+        vec.push_back(v.gcroot);
+    }
+}
+
+template<typename T> static void mark_gc_uses(T &&vec)
+{
+    auto f = prepare_call(gckill_func);
+    for (auto &v: vec) {
+        builder.CreateCall(f, v);
+    }
+}
 
 // --- convenience functions for tagging llvm values with julia types ---
 
@@ -1800,6 +1815,9 @@ static Value *emit_local_root(jl_codectx_t *ctx, jl_varinfo_t *vi)
 
 
 // Marks a use (and thus a potential kill) of a gcroot
+// Note that if the operation that needs the root has terminating control flow
+// (e.g. `unreachable`, `noreturn` functions) the use needs to be marked before
+// the operation as well as after it.
 static void mark_gc_use(const jl_cgval_t &v)
 {
     if (v.gcroot)
@@ -2608,6 +2626,7 @@ static jl_cgval_t emit_call_function_object(jl_lambda_info_t *li, const jl_cgval
             argvals[idx] = result;
             idx++;
         }
+        SmallVector<Value*, 16> gc_uses;
         for(size_t i=0; i < nargs+1; i++) {
             jl_value_t *jt = jl_nth_slot_type(li->specTypes,i);
             bool isboxed;
@@ -2630,7 +2649,7 @@ static jl_cgval_t emit_call_function_object(jl_lambda_info_t *li, const jl_cgval
                 jl_cgval_t arg = i==0 ? theF : emit_expr(args[i], ctx);
                 assert(arg.ispointer());
                 argvals[idx] = data_pointer(arg, ctx, at);
-                mark_gc_use(arg); // TODO: must be after the jlcall
+                push_gc_use(gc_uses, arg);
             }
             else {
                 assert(at == et);
@@ -2642,8 +2661,10 @@ static jl_cgval_t emit_call_function_object(jl_lambda_info_t *li, const jl_cgval
             idx++;
         }
         assert(idx == nfargs);
+        mark_gc_uses(gc_uses);
         CallInst *call = builder.CreateCall(prepare_call(cf), ArrayRef<Value*>(&argvals[0], nfargs));
         call->setAttributes(cf->getAttributes());
+        mark_gc_uses(gc_uses);
         return sret ? mark_julia_slot(result, jlretty, tbaa_stack) : mark_julia_type(call, retboxed, jlretty, ctx);
     }
     return mark_julia_type(emit_jlcall(theFptr, boxed(theF,ctx), &args[1], nargs, ctx), true,
