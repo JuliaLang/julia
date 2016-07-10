@@ -1216,7 +1216,6 @@ export
     TextDisplay,
     istextmime,
     MIME,
-    @MIME,
     @MIME_str,
     reprmime,
     stringmime,
