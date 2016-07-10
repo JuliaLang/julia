@@ -1556,20 +1556,12 @@
     (if (null? exprs) #f (if (fuse? (car exprs)) #t (anyfuse? (cdr exprs)))))
   (define (to-lambda f args) ; convert f to anonymous function with hygienic tuple args
     (define (genarg arg) (if (vararg? arg) (list '... (gensy)) (gensy)))
-    (define (hygienic f) ; rename args of f == (-> (tuple args...) body)
-      (let* ((oldargs (cdadr f))
-             (newargs (map genarg oldargs))
-             (renames (map (lambda (oldarg newarg) (if (vararg? oldarg)
-                                                       (cons (cadr oldarg) (cadr newarg))
-                                                       (cons oldarg newarg)))
-                           oldargs newargs)))
-        `(-> (tuple ,@newargs) ,(replace-vars (caddr f) renames))))
-    (if (and (pair? f) (eq? (car f) '->))
-        (if (pair? (cadr f))
-            (hygienic f) ; f is already anon function, nothing to do but hygienicize
-            (hygienic `(-> (tuple ,(cadr f)) ,(caddr f)))) ; canonicalize single arg to tuple
-        (let ((genargs (map genarg args))) ; formal parameters
-          `(-> ,(cons 'tuple genargs) (call ,f ,@genargs)))))
+    ; to do: optimize the case where f is already an anonymous function, in which
+    ; case we only need to hygienicize the arguments?   But it is quite tricky
+    ; to fully handle splatted args, typed args, keywords, etcetera.  And probably
+    ; the extra function call is harmless because it will get inlined anyway.
+    (let ((genargs (map genarg args))) ; construct formal parameters
+      `(-> ,(cons 'tuple genargs) (call ,f ,@genargs))))
   (define (from-lambda f) ; convert (-> (tuple args...) (call func args...)) back to func
     (if (and (pair? f) (eq? (car f) '->) (pair? (cadr f)) (eq? (caadr f) 'tuple)
              (pair? (caddr f)) (eq? (caaddr f) 'call) (equal? (cdadr f) (cdr (cdaddr f))))
