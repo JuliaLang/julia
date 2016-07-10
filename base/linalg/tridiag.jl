@@ -36,7 +36,6 @@ function SymTridiagonal(A::AbstractMatrix)
     end
 end
 
-full{T}(M::SymTridiagonal{T}) = convert(Matrix{T}, M)
 convert{T}(::Type{SymTridiagonal{T}}, S::SymTridiagonal) =
     SymTridiagonal(convert(Vector{T}, S.dv), convert(Vector{T}, S.ev))
 convert{T}(::Type{AbstractMatrix{T}}, S::SymTridiagonal) =
@@ -55,6 +54,8 @@ function convert{T}(::Type{Matrix{T}}, M::SymTridiagonal{T})
     return Mf
 end
 convert{T}(::Type{Matrix}, M::SymTridiagonal{T}) = convert(Matrix{T}, M)
+convert(::Type{Array}, M::SymTridiagonal) = convert(Matrix, M)
+full(M::SymTridiagonal) = convert(Array, M)
 
 size(A::SymTridiagonal) = (length(A.dv), length(A.dv))
 function size(A::SymTridiagonal, d::Integer)
@@ -365,7 +366,6 @@ function size(M::Tridiagonal, d::Integer)
     end
 end
 
-full{T}(M::Tridiagonal{T}) = convert(Matrix{T}, M)
 function convert{T}(::Type{Matrix{T}}, M::Tridiagonal{T})
     A = zeros(T, size(M))
     for i = 1:length(M.d)
@@ -378,6 +378,8 @@ function convert{T}(::Type{Matrix{T}}, M::Tridiagonal{T})
     A
 end
 convert{T}(::Type{Matrix}, M::Tridiagonal{T}) = convert(Matrix{T}, M)
+convert(::Type{Array}, M::Tridiagonal) = convert(Matrix, M)
+full(M::Tridiagonal) = convert(Array, M)
 function similar{T}(M::Tridiagonal, ::Type{T})
     Tridiagonal{T}(similar(M.dl, T), similar(M.d, T), similar(M.du, T), similar(M.du2, T))
 end

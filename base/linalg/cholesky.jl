@@ -324,11 +324,20 @@ convert{T}(::Type{CholeskyPivoted{T}},C::CholeskyPivoted) =
     CholeskyPivoted(AbstractMatrix{T}(C.factors),C.uplo,C.piv,C.rank,C.tol,C.info)
 convert{T}(::Type{Factorization{T}}, C::CholeskyPivoted) = convert(CholeskyPivoted{T}, C)
 
-full{T,S}(C::Cholesky{T,S}) = C.uplo == 'U' ? C[:U]'C[:U] : C[:L]*C[:L]'
-function full(F::CholeskyPivoted)
+convert(::Type{AbstractMatrix}, C::Cholesky) = C.uplo == 'U' ? C[:U]'C[:U] : C[:L]*C[:L]'
+convert(::Type{AbstractArray}, C::Cholesky) = convert(AbstractMatrix, C)
+convert(::Type{Matrix}, C::Cholesky) = convert(Array, convert(AbstractArray, C))
+convert(::Type{Array}, C::Cholesky) = convert(Matrix, C)
+full(C::Cholesky) = convert(Array, C)
+
+function convert(::Type{AbstractMatrix}, F::CholeskyPivoted)
     ip = invperm(F[:p])
-    return (F[:L] * F[:U])[ip,ip]
+    (F[:L] * F[:U])[ip,ip]
 end
+convert(::Type{AbstractArray}, F::CholeskyPivoted) = convert(AbstractMatrix, F)
+convert(::Type{Matrix}, F::CholeskyPivoted) = convert(Array, convert(AbstractArray, F))
+convert(::Type{Array}, F::CholeskyPivoted) = convert(Matrix, F)
+full(F::CholeskyPivoted) = convert(Array, F)
 
 copy(C::Cholesky) = Cholesky(copy(C.factors), C.uplo)
 copy(C::CholeskyPivoted) = CholeskyPivoted(copy(C.factors), C.uplo, C.piv, C.rank, C.tol, C.info)

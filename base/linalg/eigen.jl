@@ -182,5 +182,11 @@ end
 
 eigvecs(A::AbstractMatrix, B::AbstractMatrix) = eigvecs(eigfact(A, B))
 
+# Conversion methods
+
 ## Can we determine the source/result is Real?  This is not stored in the type Eigen
-full(F::Eigen) = F.vectors * Diagonal(F.values) / F.vectors
+convert(::Type{AbstractMatrix}, F::Eigen) = F.vectors * Diagonal(F.values) / F.vectors
+convert(::Type{AbstractArray}, F::Eigen) = convert(AbstractMatrix, F)
+convert(::Type{Matrix}, F::Eigen) = convert(Array, convert(AbstractArray, F))
+convert(::Type{Array}, F::Eigen) = convert(Matrix, F)
+full(F::Eigen) = convert(Array, F)

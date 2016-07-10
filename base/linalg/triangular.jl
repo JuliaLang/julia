@@ -48,7 +48,8 @@ imag(A::LowerTriangular) = LowerTriangular(imag(A.data))
 imag(A::UnitLowerTriangular) = LowerTriangular(tril!(imag(A.data),-1))
 imag(A::UnitUpperTriangular) = UpperTriangular(triu!(imag(A.data),1))
 
-full(A::AbstractTriangular) = convert(Matrix, A)
+convert(::Type{Array}, A::AbstractTriangular) = convert(Matrix, A)
+full(A::AbstractTriangular) = convert(Array, A)
 parent(A::AbstractTriangular) = A.data
 
 # then handle all methods that requires specific handling of upper/lower and unit diagonal

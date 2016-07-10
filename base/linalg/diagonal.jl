@@ -23,6 +23,9 @@ convert{T}(::Type{Diagonal{T}}, D::Diagonal) = Diagonal{T}(convert(Vector{T}, D.
 convert{T}(::Type{AbstractMatrix{T}}, D::Diagonal) = convert(Diagonal{T}, D)
 convert{T}(::Type{UpperTriangular}, A::Diagonal{T}) = UpperTriangular(A)
 convert{T}(::Type{LowerTriangular}, A::Diagonal{T}) = LowerTriangular(A)
+convert(::Type{Matrix}, D::Diagonal) = diagm(D.diag)
+convert(::Type{Array}, D::Diagonal) = convert(Matrix, D)
+full(D::Diagonal) = convert(Array, D)
 
 function similar{T}(D::Diagonal, ::Type{T})
     return Diagonal{T}(similar(D.diag, T))
@@ -38,8 +41,6 @@ function size(D::Diagonal,d::Integer)
     end
     return d<=2 ? length(D.diag) : 1
 end
-
-full(D::Diagonal) = diagm(D.diag)
 
 @inline function getindex(D::Diagonal, i::Int, j::Int)
     @boundscheck checkbounds(D, i, j)
