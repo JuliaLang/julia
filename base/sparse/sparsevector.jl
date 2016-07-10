@@ -664,20 +664,23 @@ convert{TvD,Tv,Ti}(::Type{SparseMatrixCSC{TvD}}, x::AbstractSparseVector{Tv,Ti})
 convert{Tv,Ti}(::Type{SparseMatrixCSC}, x::AbstractSparseVector{Tv,Ti}) =
     convert(SparseMatrixCSC{Tv,Ti}, x)
 
-
-### Array manipulation
-
-function full{Tv}(x::AbstractSparseVector{Tv})
+function convert{Tv}(::Type{Vector}, x::AbstractSparseVector{Tv})
     n = length(x)
-    n == 0 && return Array{Tv}(0)
+    n == 0 && return Vector{Tv}(0)
     nzind = nonzeroinds(x)
     nzval = nonzeros(x)
     r = zeros(Tv, n)
-    for i = 1:length(nzind)
-        r[nzind[i]] = nzval[i]
+    for k in 1:nnz(x)
+        i = nzind[k]
+        v = nzval[k]
+        r[i] = v
     end
     return r
 end
+convert(::Type{Array}, x::AbstractSparseVector) = convert(Vector, x)
+full(x::AbstractSparseVector) = convert(Array, x)
+
+### Array manipulation
 
 vec(x::AbstractSparseVector) = x
 copy(x::AbstractSparseVector) =

@@ -234,13 +234,23 @@ function qr!(v::AbstractVector)
     __normalize!(v, nrm), nrm
 end
 
-
-convert{T}(::Type{QR{T}},A::QR) = QR(convert(AbstractMatrix{T}, A.factors), convert(Vector{T}, A.τ))
+# Conversions
+convert{T}(::Type{QR{T}}, A::QR) = QR(convert(AbstractMatrix{T}, A.factors), convert(Vector{T}, A.τ))
 convert{T}(::Type{Factorization{T}}, A::QR) = convert(QR{T}, A)
-convert{T}(::Type{QRCompactWY{T}},A::QRCompactWY) = QRCompactWY(convert(AbstractMatrix{T}, A.factors), convert(AbstractMatrix{T}, A.T))
+convert{T}(::Type{QRCompactWY{T}}, A::QRCompactWY) = QRCompactWY(convert(AbstractMatrix{T}, A.factors), convert(AbstractMatrix{T}, A.T))
 convert{T}(::Type{Factorization{T}}, A::QRCompactWY) = convert(QRCompactWY{T}, A)
-convert{T}(::Type{QRPivoted{T}},A::QRPivoted) = QRPivoted(convert(AbstractMatrix{T}, A.factors), convert(Vector{T}, A.τ), A.jpvt)
+convert(::Type{AbstractMatrix}, F::Union{QR,QRCompactWY}) = F[:Q] * F[:R]
+convert(::Type{AbstractArray}, F::Union{QR,QRCompactWY}) = convert(AbstractMatrix, F)
+convert(::Type{Matrix}, F::Union{QR,QRCompactWY}) = convert(Array, convert(AbstractArray, F))
+convert(::Type{Array}, F::Union{QR,QRCompactWY}) = convert(Matrix, F)
+full(F::Union{QR,QRCompactWY}) = convert(Array, F)
+convert{T}(::Type{QRPivoted{T}}, A::QRPivoted) = QRPivoted(convert(AbstractMatrix{T}, A.factors), convert(Vector{T}, A.τ), A.jpvt)
 convert{T}(::Type{Factorization{T}}, A::QRPivoted) = convert(QRPivoted{T}, A)
+convert(::Type{AbstractMatrix}, F::QRPivoted) = (F[:Q] * F[:R])[:,invperm(F[:p])]
+convert(::Type{AbstractArray}, F::QRPivoted) = convert(AbstractMatrix, F)
+convert(::Type{Matrix}, F::QRPivoted) = convert(Array, convert(AbstractArray, F))
+convert(::Type{Array}, F::QRPivoted) = convert(Matrix, F)
+full(F::QRPivoted) = convert(Array, F)
 
 function getindex(A::QR, d::Symbol)
     m, n = size(A)
@@ -283,11 +293,6 @@ function getindex{T}(A::QRPivoted{T}, d::Symbol)
     end
 end
 
-## reconstruct the original matrix
-full(F::QR) = F[:Q] * F[:R]
-full(F::QRCompactWY) = F[:Q] * F[:R]
-full(F::QRPivoted) = (F[:Q] * F[:R])[:,invperm(F[:p])]
-
 # Type-stable interface to get Q
 getq(A::QRCompactWY) = QRCompactWYQ(A.factors,A.T)
 getq(A::Union{QR, QRPivoted}) = QRPackedQ(A.factors,A.τ)
@@ -310,13 +315,21 @@ convert{T}(::Type{QRPackedQ{T}}, Q::QRPackedQ) = QRPackedQ(convert(AbstractMatri
 convert{T}(::Type{AbstractMatrix{T}}, Q::QRPackedQ) = convert(QRPackedQ{T}, Q)
 convert{S}(::Type{QRCompactWYQ{S}}, Q::QRCompactWYQ) = QRCompactWYQ(convert(AbstractMatrix{S}, Q.factors), convert(AbstractMatrix{S}, Q.T))
 convert{S}(::Type{AbstractMatrix{S}}, Q::QRCompactWYQ) = convert(QRCompactWYQ{S}, Q)
+convert{T}(::Type{Matrix}, A::Union{QRPackedQ{T},QRCompactWYQ{T}}) = A_mul_B!(A, eye(T, size(A.factors, 1), minimum(size(A.factors))))
+convert(::Type{Array}, A::Union{QRPackedQ,QRCompactWYQ}) = convert(Matrix, A)
+function full{T}(A::Union{QRPackedQ{T},QRCompactWYQ{T}}; thin::Bool = true)
+    if thin
+        convert(Array, A)
+    else
+        A_mul_B!(A, eye(T, size(A.factors, 1)))
+    end
+end
 
 size(A::Union{QR,QRCompactWY,QRPivoted}, dim::Integer) = size(A.factors, dim)
 size(A::Union{QR,QRCompactWY,QRPivoted}) = size(A.factors)
 size(A::Union{QRPackedQ,QRCompactWYQ}, dim::Integer) = 0 < dim ? (dim <= 2 ? size(A.factors, 1) : 1) : throw(BoundsError())
 size(A::Union{QRPackedQ,QRCompactWYQ}) = size(A, 1), size(A, 2)
 
-full{T}(A::Union{QRPackedQ{T},QRCompactWYQ{T}}; thin::Bool=true) = A_mul_B!(A, thin ? eye(T, size(A.factors,1), minimum(size(A.factors))) : eye(T, size(A.factors,1)))
 
 function getindex(A::Union{QRPackedQ,QRCompactWYQ}, i::Integer, j::Integer)
     x = zeros(eltype(A), size(A, 1))

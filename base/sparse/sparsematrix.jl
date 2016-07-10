@@ -284,8 +284,22 @@ function convert{Tv,Ti}(::Type{SparseMatrixCSC{Tv,Ti}}, M::AbstractMatrix)
                              m, n)
 end
 convert{T}(::Type{AbstractMatrix{T}}, A::SparseMatrixCSC) = convert(SparseMatrixCSC{T}, A)
-convert(::Type{Matrix}, S::SparseMatrixCSC) = full(S)
 convert(::Type{SparseMatrixCSC}, M::Matrix) = sparse(M)
+
+function convert{Tv}(::Type{Matrix}, S::SparseMatrixCSC{Tv})
+    # Handle cases where zero(Tv) is not defined but the array is dense.
+    A = length(S) == nnz(S) ? Array{Tv}(S.m, S.n) : zeros(Tv, S.m, S.n)
+    for Sj in 1:S.n
+        for Sk in nzrange(S, Sj)
+            Si = S.rowval[Sk]
+            Sv = S.nzval[Sk]
+            A[Si, Sj] = Sv
+        end
+    end
+    return A
+end
+convert(::Type{Array}, S::SparseMatrixCSC) = convert(Matrix, S)
+full(S::SparseMatrixCSC) = convert(Array, S)
 
 """
     full(S)
@@ -293,16 +307,6 @@ convert(::Type{SparseMatrixCSC}, M::Matrix) = sparse(M)
 Convert a sparse matrix or vector `S` into a dense matrix or vector.
 """
 full
-
-function full{Tv}(S::SparseMatrixCSC{Tv})
-    # Handle cases where zero(Tv) is not defined but the array is dense.
-    # (Should we really worry about this?)
-    A = length(S) == nnz(S) ? Array{Tv}(S.m, S.n) : zeros(Tv, S.m, S.n)
-    for col = 1 : S.n, k = S.colptr[col] : (S.colptr[col+1]-1)
-        A[S.rowval[k], col] = S.nzval[k]
-    end
-    return A
-end
 
 float(S::SparseMatrixCSC) = SparseMatrixCSC(S.m, S.n, copy(S.colptr), copy(S.rowval), float(copy(S.nzval)))
 

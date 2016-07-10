@@ -80,8 +80,11 @@ function similar{T}(A::Hermitian, ::Type{T})
     return Hermitian(B)
 end
 
-full(A::Symmetric) = copytri!(copy(A.data), A.uplo)
-full(A::Hermitian) = copytri!(copy(A.data), A.uplo, true)
+# Conversion
+convert(::Type{Matrix}, A::Symmetric) = copytri!(convert(Matrix, copy(A.data)), A.uplo)
+convert(::Type{Matrix}, A::Hermitian) = copytri!(convert(Matrix, copy(A.data)), A.uplo, true)
+convert(::Type{Array}, A::Union{Symmetric,Hermitian}) = convert(Matrix, A)
+full(A::Union{Symmetric,Hermitian}) = convert(Array, A)
 parent(A::HermOrSym) = A.data
 convert{T,S<:AbstractMatrix}(::Type{Symmetric{T,S}},A::Symmetric{T,S}) = A
 convert{T,S<:AbstractMatrix}(::Type{Symmetric{T,S}},A::Symmetric) = Symmetric{T,S}(convert(S,A.data),A.uplo)
@@ -89,6 +92,7 @@ convert{T}(::Type{AbstractMatrix{T}}, A::Symmetric) = Symmetric(convert(Abstract
 convert{T,S<:AbstractMatrix}(::Type{Hermitian{T,S}},A::Hermitian{T,S}) = A
 convert{T,S<:AbstractMatrix}(::Type{Hermitian{T,S}},A::Hermitian) = Hermitian{T,S}(convert(S,A.data),A.uplo)
 convert{T}(::Type{AbstractMatrix{T}}, A::Hermitian) = Hermitian(convert(AbstractMatrix{T}, A.data), Symbol(A.uplo))
+
 copy{T,S}(A::Symmetric{T,S}) = (B = copy(A.data); Symmetric{T,typeof(B)}(B,A.uplo))
 copy{T,S}(A::Hermitian{T,S}) = (B = copy(A.data); Hermitian{T,typeof(B)}(B,A.uplo))
 ishermitian(A::Hermitian) = true
