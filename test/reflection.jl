@@ -443,8 +443,10 @@ ccall(:jl_register_newmeth_tracer, Void, (Ptr{Void},), C_NULL)
 for i = 1:100; @eval fLargeTable(::Val{$i}, ::Any) = 1; end
 for i = 1:100; @eval fLargeTable(::Any, ::Val{$i}) = 2; end
 fLargeTable(::Any...) = 3
+@test length(methods(fLargeTable, Tuple{})) == 1
 fLargeTable(::Complex, ::Complex) = 4
 fLargeTable(::Union{Complex64, Complex128}...) = 5
+@test length(methods(fLargeTable, Tuple{})) == 1
 fLargeTable() = 4
 @test length(methods(fLargeTable)) == 204
 @test length(methods(fLargeTable, Tuple{})) == 1
