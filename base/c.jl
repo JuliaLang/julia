@@ -110,8 +110,17 @@ end
 # symbols are guaranteed not to contain embedded NUL
 convert(::Type{Cstring}, s::Symbol) = Cstring(unsafe_convert(Ptr{Cchar}, s))
 
-# FIXME: this should be handled by implicit conversion to Cwstring, but good luck with that
 if is_windows()
+"""
+    Base.cwstring(s)
+
+Converts a string `s` to a NUL-terminated `Vector{Cwchar_t}`, suitable for passing to C
+functions expecting a `Ptr{Cwchar_t}`. The main advantage of using this over the implicit
+conversion provided by `Cwstring` is if the function is called multiple times with the
+same argument.
+
+This is only available on Windows.
+"""
 function cwstring(s::AbstractString)
     bytes = String(s).data
     0 in bytes && throw(ArgumentError("embedded NULs are not allowed in C strings: $(repr(s))"))
@@ -120,7 +129,17 @@ end
 end
 
 # transcoding between data in UTF-8 and UTF-16 for Windows APIs
+"""
+    Base.transcode(T,src::Vector{U})
 
+Transcodes unicode data `src` to a different encoding, where `U` and `T` are the integers
+denoting the input and output code units. Currently supported are UTF-8 and UTF-16, which
+are denoted by integers `UInt8` and `UInt16`, respectively.
+
+NULs are handled like any other character (i.e. the output will be NUL-terminated if and
+only if the `src` is).
+"""
+function transcode end
 transcode{T<:Union{UInt8,UInt16}}(::Type{T}, src::Vector{T}) = src
 transcode(::Type{Int32}, src::Vector{UInt32}) = reinterpret(Int32, src)
 
