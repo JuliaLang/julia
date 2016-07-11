@@ -220,6 +220,7 @@ end
 let x = sin.(1:10)
     @test atan2.((x->x+1).(x), (x->x+2).(x)) == atan2(x+1, x+2) == atan2(x.+1, x.+2)
     @test sin.(atan2.([x+1,x+2]...)) == sin.(atan2.(x+1,x+2))
+    @test atan2.(x, 3.7) == broadcast(x -> atan2(x,3.7), x) == broadcast(atan2, x, 3.7)
 end
 # Use side effects to check for loop fusion.  Note that, due to #17314,
 # a broadcasted function is currently called twice on the first element.
@@ -227,6 +228,13 @@ let g = Int[]
     f17300(x) = begin; push!(g, x); x+1; end
     f17300.(f17300.(f17300.(1:3)))
     @test g == [1,2,3, 1,2,3, 2,3,4, 3,4,5]
+end
+# fusion with splatted args:
+let x = sin.(1:10), a = [x]
+    @test cos.(x) == cos.(a...)
+    @test atan2.(x,x) == atan2.(a..., a...) == atan2.([x, x]...)
+    @test atan2.(x, cos.(x)) == atan2.(a..., cos.(x)) == atan2(x, cos.(a...)) == atan2(a..., cos.(a...))
+    @test ((args...)->cos(args[1])).(x) == cos.(x) == ((y,args...)->cos(y)).(x)
 end
 
 # PR 16988
