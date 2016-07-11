@@ -209,6 +209,15 @@ A package is considered fixed if it is one of the following:
 If any of these are the case, the package manager cannot freely change the installed version of the package, so its requirements must be satisfied by whatever other package versions it picks.
 The combination of top-level requirements in ``~/.julia/v0.4/REQUIRE`` and the requirement of fixed packages are used to determine what should be installed.
 
+You can also update only a subset of the installed packages, by providing arguments to the `Pkg.update` function. In that case, only the packages provided as arguments and their dependencies will be updated::
+
+    julia> Pkg.update("Example")
+    INFO: Updating METADATA...
+    INFO: Computing changes...
+    INFO: Upgrading Example: v0.4.0 => 0.4.1
+
+This partial update process still computes the new set of package versions according to top-level requirements and "fixed" packages, but it additionally considers all other packages except those explicitly provided, and their dependencies, as fixed.
+
 Checkout, Pin and Free
 ----------------------
 
