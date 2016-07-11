@@ -141,6 +141,14 @@ simd_index{I<:CartesianIndex{0}}(iter::CartesianRange{I}, ::CartesianIndex, I1::
     CartesianIndex((I1+iter.start[1], Ilast.I...))
 end
 
+# Split out the first N elements of a tuple
+@inline split{N}(t, V::Type{Val{N}}) = _split((), t, V)
+@inline _split(tN, trest, V) = _split((tN..., trest[1]), tail(trest), V)
+# exit either when we've exhausted the input tuple or when tN has length N
+@inline _split{N}(tN::NTuple{N}, ::Tuple{}, ::Type{Val{N}}) = tN, ()  # ambig.
+@inline _split{N}(tN,            ::Tuple{}, ::Type{Val{N}}) = tN, ()
+@inline _split{N}(tN::NTuple{N},  trest,    ::Type{Val{N}}) = tN, trest
+
 end  # IteratorsMD
 
 using .IteratorsMD
@@ -163,16 +171,9 @@ end
     checkindex(Bool, inds, I[1]) & checkbounds_indices((), tail(I))
 end
 @inline function checkbounds_indices{N}(inds::Tuple, I::Tuple{AbstractArray{CartesianIndex{N}},Vararg{Any}})
-    inds1, indsrest = split(inds, Val{N})
+    inds1, indsrest = IteratorsMD.split(inds, Val{N})
     checkindex(Bool, inds1, I[1]) & checkbounds_indices(indsrest, tail(I))
 end
-
-@inline split{N}(inds, V::Type{Val{N}}) = _split((), inds, V)
-@inline _split(out, indsrest, V) = _split((out..., indsrest[1]), tail(indsrest), V)
-# exit either when we've exhausted the input tuple or when it has length N
-@inline _split{N}(out::NTuple{N}, ::Tuple{}, ::Type{Val{N}}) = out, ()  # ambig.
-@inline _split{N}(out,            ::Tuple{}, ::Type{Val{N}}) = out, ()
-@inline _split{N}(out::NTuple{N},  indsrest, ::Type{Val{N}}) = out, indsrest
 
 function checkindex{N}(::Type{Bool}, inds::Tuple, I::AbstractArray{CartesianIndex{N}})
     b = true
