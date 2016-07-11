@@ -397,7 +397,7 @@ if VERSION < v"0.4.0-dev+3732"
         calltypes[k] = v
     end
 elseif VERSION < v"0.5.0-dev+3831"
-    Base.Symbol(args...) = symbol(args...)
+    Base.Symbol(args...) = symbol(args...)::Symbol
 end
 
 if VERSION < v"0.5.0-dev+2396"
