@@ -198,11 +198,14 @@ Pin `pkg` at registered version `version`.
 pin(pkg::AbstractString, ver::VersionNumber) = cd(Entry.pin,pkg,ver)
 
 """
-    update()
+    update(pkgs...)
 
 Update the metadata repo – kept in `Pkg.dir("METADATA")` – then update any fixed packages
 that can safely be pulled from their origin; then call `Pkg.resolve()` to determine a new
 optimal set of packages versions.
+
+Without arguments, updates all installed packages. When one or more package names are provided as
+arguments, only those packages and their dependencies are updated.
 """
 update(upkgs::AbstractString...) = cd(Entry.update,Dir.getmetabranch(),Set{String}([upkgs...]))
 
