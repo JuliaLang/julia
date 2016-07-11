@@ -803,7 +803,7 @@ static jl_cgval_t emit_runtime_pointerset(jl_value_t *e, jl_value_t *x, jl_value
 #ifdef LLVM37
     builder.CreateCall(prepare_call(jlpset_func), { boxed(parg, ctx), xarg, iarg, alignarg });
 #else
-    builder.CreateCall3(prepare_call(jlpset_func), boxed(parg, ctx), xarg, iarg, alignarg);
+    builder.CreateCall4(prepare_call(jlpset_func), boxed(parg, ctx), xarg, iarg, alignarg);
 #endif
     return parg;
 }
