@@ -1246,7 +1246,12 @@
                       (loop (require-token s)
                             (if (or var? (not var))
                                 catch-block
-                                `(block ,loc ,var ,@(cdr catch-block)))
+                                `(block ,loc ,var
+                                        ,@(if (and (length= catch-block 2)
+                                                   (pair? (cadr catch-block))
+                                                   (eq? (caadr catch-block) 'line))
+                                              '()
+                                              (cdr catch-block))))
                             (if var? var 'false)
                             finalb)))))
              ((and (eq? nxt 'finally)
