@@ -693,7 +693,7 @@ let ex
     try
         remotecall_fetch(id_other) do
             @eval module AModuleLocalToOther
-                foo() = error("A.error")
+                foo() = throw(ErrorException("A.error"))
                 foo()
             end
         end
