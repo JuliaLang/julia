@@ -117,11 +117,17 @@ function pushmeta!(ex::Expr, sym::Symbol, args::Any...)
     else
         tag = Expr(sym, args...)
     end
-    idx, exargs = findmeta(ex)
+
+    inner = ex
+    while inner.head == :macrocall
+        inner = inner.args[end]::Expr
+    end
+
+    idx, exargs = findmeta(inner)
     if idx != 0
         push!(exargs[idx].args, tag)
     else
-        body::Expr = ex.args[2]
+        body::Expr = inner.args[2]
         unshift!(body.args, Expr(:meta, tag))
     end
     ex
