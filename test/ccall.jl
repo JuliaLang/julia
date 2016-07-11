@@ -785,7 +785,7 @@ elseif Sys.ARCH === :aarch64
         @test res === expected
     end
 
-elseif Sys.ARCH === :powerpc64le
+elseif Sys.ARCH === :powerpc64le || Sys.ARCH === :ppc64le
 @test_huge 1 "_ppc64" (1, (2.0, 3.0, 4.0, 5.0),)
 @test_huge 2 "_ppc64" ((1.0, 2.0, 3.0, 4.0), (11, 12))
 @test_huge 3 "_ppc64" ((1, 2, 3, 4), (11.0, 12.0, 13.0, 14.0))
