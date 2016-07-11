@@ -139,7 +139,7 @@ Convert string data between Unicode encodings. `src` is either a
 `XX` is 8, 16, or 32. `T` indicates the encoding of the return value:
 `String` to return a (UTF-8 encoded) `String` or `UIntXX`
 to return a `Vector{UIntXX}` of UTF-`XX` data.   (The alias `Cwchar_t`
-also be used as the integer type for converting `wchar_t*` strings
+can also be used as the integer type, for converting `wchar_t*` strings
 used by external C libraries.)
 
 The `transcode` function succeeds as long as the input data can be
