@@ -233,13 +233,23 @@ end
 showerror(io::IO, ::DivideError) = print(io, "DivideError: integer division error")
 showerror(io::IO, ::StackOverflowError) = print(io, "StackOverflowError:")
 showerror(io::IO, ::UndefRefError) = print(io, "UndefRefError: access to undefined reference")
-showerror(io::IO, ex::UndefVarError) = print(io, "UndefVarError: $(ex.var) not defined")
 showerror(io::IO, ::EOFError) = print(io, "EOFError: read end of file")
 showerror(io::IO, ex::ErrorException) = print(io, ex.msg)
 showerror(io::IO, ex::KeyError) = print(io, "KeyError: key $(repr(ex.key)) not found")
 showerror(io::IO, ex::InterruptException) = print(io, "InterruptException:")
 showerror(io::IO, ex::ArgumentError) = print(io, "ArgumentError: $(ex.msg)")
 showerror(io::IO, ex::AssertionError) = print(io, "AssertionError: $(ex.msg)")
+
+function showerror(io::IO, ex::UndefVarError)
+    if ex.var in [:UTF16String, :UTF32String, :WString, :utf16, :utf32, :wstring]
+        return showerror(io, ErrorException("""
+        `$(ex.var)` has been moved to the package LegacyStrings.jl:
+        Run Pkg.add("LegacyStrings") to install LegacyStrings on Julia v0.5-;
+        Then do `using LegacyStrings` to get `$(ex.var)`.
+        """))
+    end
+    print(io, "UndefVarError: $(ex.var) not defined")
+end
 
 function showerror(io::IO, ex::MethodError)
     # ex.args is a tuple type if it was thrown from `invoke` and is

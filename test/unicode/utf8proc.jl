@@ -234,7 +234,7 @@ let grphtest = (("b\u0300lahβlahb\u0302láh", ["b\u0300","l","a","h",
                                                 "\U1d4c1\u0300"]),
                 ("x",["x"]),
                 ("abc",["a","b","c"]))
-    for T in (String,utf16,utf32)
+    for T in (String,GenericString)
         for nf in (:NFC, :NFD)
             for (s, g) in grphtest
                 s_ = T(normalize_string(s, nf))
