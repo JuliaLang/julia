@@ -96,32 +96,6 @@ Get the step size of a [`Range`](:obj:`Range`) object.
 step
 
 """
-    utf32(s)
-
-Create a UTF-32 string from a byte array, array of `Char` or `UInt32`, or any other string
-type. (Conversions of byte arrays check for a byte-order marker in the first four bytes, and
-do not include it in the resulting string.)
-
-Note that the resulting `UTF32String` data is terminated by the NUL codepoint (32-bit zero),
-which is not treated as a character in the string (so that it is mostly invisible in Julia);
-this allows the string to be passed directly to external functions requiring NUL-terminated
-data. This NUL is appended automatically by the `utf32(s)` conversion function. If you have
-a `Char` or `UInt32` array `A` that is already NUL-terminated UTF-32 data, then you can
-instead use `UTF32String(A)` to construct the string without making a copy of the data and
-treating the NUL as a terminator rather than as part of the string.
-"""
-utf32(s)
-
-"""
-    utf32(::Union{Ptr{Char},Ptr{UInt32},Ptr{Int32}} [, length])
-
-Create a string from the address of a NUL-terminated UTF-32 string. A copy is made; the
-pointer can be safely freed. If `length` is specified, the string does not have to be
-NUL-terminated.
-"""
-utf32(::Union{Ptr{Char},Ptr{UInt32},Ptr{Int32}}, length=?)
-
-"""
     takebuf_array(b::IOBuffer)
 
 Obtain the contents of an `IOBuffer` as an array, without copying. Afterwards, the
@@ -3609,32 +3583,6 @@ filesize
 Compute ``\\sin(\\pi x) / (\\pi x)`` if ``x \\neq 0``, and ``1`` if ``x = 0``.
 """
 sinc
-
-"""
-    utf16(s)
-
-Create a UTF-16 string from a byte array, array of `UInt16`, or any other string type. (Data
-must be valid UTF-16. Conversions of byte arrays check for a byte-order marker in the first
-two bytes, and do not include it in the resulting string.)
-
-Note that the resulting `UTF16String` data is terminated by the NUL codepoint (16-bit zero),
-which is not treated as a character in the string (so that it is mostly invisible in Julia);
-this allows the string to be passed directly to external functions requiring NUL-terminated
-data. This NUL is appended automatically by the `utf16(s)` conversion function. If you have
-a `UInt16` array `A` that is already NUL-terminated valid UTF-16 data, then you can instead
-use `UTF16String(A)` to construct the string without making a copy of the data and treating
-the NUL as a terminator rather than as part of the string.
-"""
-utf16(s)
-
-"""
-    utf16(::Union{Ptr{UInt16},Ptr{Int16}} [, length])
-
-Create a string from the address of a NUL-terminated UTF-16 string. A copy is made; the
-pointer can be safely freed. If `length` is specified, the string does not have to be
-NUL-terminated.
-"""
-utf16(::Union{Ptr{UInt16},Ptr{Int16}}, length=?)
 
 """
     median(v[, region])
@@ -8859,19 +8807,17 @@ vecnorm
 """
     isvalid(value) -> Bool
 
-Returns `true` if the given value is valid for its type, which currently can be one of
-`Char`, `String`, `UTF16String`, or `UTF32String`.
+Returns `true` if the given value is valid for its type, which currently can be either
+`Char` or `String`.
 """
 isvalid(value)
 
 """
     isvalid(T, value) -> Bool
 
-Returns `true` if the given value is valid for that type. Types currently can be `Char`,
-`String`, `UTF16String`, or `UTF32String` Values for `Char` can be of
-type `Char` or `UInt32` Values for `String` can be of that type, or
-`Vector{UInt8}` Values for `UTF16String` can be `UTF16String` or `Vector{UInt16}` Values for
-`UTF32String` can be `UTF32String`, `Vector{Char}` or `Vector{UInt32}`
+Returns `true` if the given value is valid for that type. Types currently can
+be either `Char` or `String`. Values for `Char` can be of type `Char` or `UInt32`.
+Values for `String` can be of that type, or `Vector{UInt8}`.
 """
 isvalid(T,value)
 
