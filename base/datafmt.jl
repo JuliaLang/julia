@@ -289,16 +289,24 @@ end
 const valid_opts = [:header, :has_header, :use_mmap, :quotes, :comments, :dims, :comment_char, :skipstart, :skipblanks]
 const valid_opt_types = [Bool, Bool, Bool, Bool, Bool, NTuple{2,Integer}, Char, Integer, Bool]
 const deprecated_opts = Dict(:has_header => :header)
+
 function val_opts(opts)
     d = Dict{Symbol,Union{Bool,NTuple{2,Integer},Char,Integer}}()
     for (opt_name, opt_val) in opts
-        !in(opt_name, valid_opts) && throw(ArgumentError("unknown option $opt_name"))
+        if opt_name == :ignore_invalid_chars
+            Base.depwarn("the ignore_invalid_chars option is no longer supported and will be ignored", :val_opts)
+            continue
+        end
+        in(opt_name, valid_opts) ||
+            throw(ArgumentError("unknown option $opt_name"))
         opt_typ = valid_opt_types[findfirst(valid_opts, opt_name)]
-        !isa(opt_val, opt_typ) && throw(ArgumentError("$opt_name should be of type $opt_typ, got $(typeof(opt_val))"))
+        isa(opt_val, opt_typ) ||
+            throw(ArgumentError("$opt_name should be of type $opt_typ, got $(typeof(opt_val))"))
         d[opt_name] = opt_val
-        haskey(deprecated_opts, opt_name) && warn("$opt_name is deprecated, use $(deprecated_opts[opt_name]) instead")
+        haskey(deprecated_opts, opt_name) &&
+            Base.depwarn("$opt_name is deprecated, use $(deprecated_opts[opt_name]) instead", :val_opts)
     end
-    d
+    return d
 end
 
 function dlm_fill(T::DataType, offarr::Vector{Vector{Int}}, dims::NTuple{2,Integer}, has_header::Bool, sbuff::String, auto::Bool, eol::Char)
