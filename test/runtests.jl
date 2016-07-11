@@ -285,7 +285,7 @@ end
 # Test unsafe_convert
 type A; end
 x = "abc"
-@test @compat String(Compat.unsafe_convert(Ptr{UInt8}, x)) == x
+@test @compat String(unsafe_string(Compat.unsafe_convert(Ptr{UInt8}, x))) == x
 Compat.unsafe_convert(::Ptr{A}, x) = x
 @test Compat.unsafe_convert(pointer([A()]), 1) == 1
 
@@ -398,36 +398,40 @@ let A = [1.0 2.0; 3.0 4.0]
 end
 
 # Cstring
-let s = "foo", w = wstring("foo")
-    @test reinterpret(Ptr{Cchar}, Compat.unsafe_convert(Cstring, s)) == pointer(s)
+let s = "foo"
+    @test reinterpret(Ptr{Cchar}, Compat.unsafe_convert(Cstring, s.data)) == pointer(s)
     if VERSION < v"0.5.0-dev+4859"
-        @test reinterpret(Ptr{Cwchar_t}, Compat.unsafe_convert(Cwstring, w)) == pointer(w)
+        let w = wstring("foo")
+            @test reinterpret(Ptr{Cwchar_t}, Compat.unsafe_convert(Cwstring, w)) == pointer(w)
+        end
     end
 end
 
 # fma and muladd
 @test fma(3,4,5) == 3*4+5 == muladd(3,4,5)
 
-# is_valid_utf32
-s = utf32("abc")
-@test isvalid(s)
-s = utf32(UInt32[65,0x110000])
-@test !isvalid(s)
-
-# isvalid
-let s = "abcdef", u8 = "abcdef\uff", u16 = utf16(u8), u32 = utf32(u8),
-    bad32 = utf32(UInt32[65,0x110000]), badch = Char[0x110000][1]
-
-    @test !isvalid(bad32)
-    @test !isvalid(badch)
+if VERSION < v"0.5.0-dev+5271"
+    # is_valid_utf32
+    s = utf32("abc")
     @test isvalid(s)
-    @test isvalid(u8)
-    @test isvalid(u16)
-    @test isvalid(u32)
-    @test isvalid(Compat.ASCIIString, s)
-    @test isvalid(Compat.UTF8String,  u8)
-    @test isvalid(UTF16String, u16)
-    @test isvalid(UTF32String, u32)
+    s = utf32(UInt32[65,0x110000])
+    @test !isvalid(s)
+
+    # isvalid
+    let s = "abcdef", u8 = "abcdef\uff", u16 = utf16(u8), u32 = utf32(u8),
+        bad32 = utf32(UInt32[65,0x110000]), badch = Char[0x110000][1]
+
+        @test !isvalid(bad32)
+        @test !isvalid(badch)
+        @test isvalid(s)
+        @test isvalid(u8)
+        @test isvalid(u16)
+        @test isvalid(u32)
+        @test isvalid(Compat.ASCIIString, s)
+        @test isvalid(Compat.UTF8String,  u8)
+        @test isvalid(UTF16String, u16)
+        @test isvalid(UTF32String, u32)
+    end
 end
 
 if VERSION < v"0.5.0-dev+907"
@@ -1190,8 +1194,8 @@ let io = IOBuffer(), s = "hello"
     @test @compat String(s.data) == s
     write(io, s)
     @test @compat String(io) == s
-    @test @compat String(pointer(s.data)) == s
-    @test @compat String(pointer(s.data),length(s.data)) == s
+    @test unsafe_string(pointer(s.data)) == s
+    @test unsafe_string(pointer(s.data),length(s.data)) == s
     @test string(s, s, s) == "hellohellohello"
     @test @compat(String(s)) == s
     @test String == @compat(Union{Compat.UTF8String,Compat.ASCIIString})
@@ -1246,5 +1250,5 @@ end
 
 # Add test for Base.view
 let a = rand(10,10)
-    @test view(a, :, 1) == a[:,1] 
+    @test view(a, :, 1) == a[:,1]
 end
