@@ -164,8 +164,20 @@ ifeq ($(USE_SYSTEM_GMP), 0)
 STAGE1_DEPS += gmp
 endif
 
+ifeq ($(USE_SYSTEM_HTTPPARSER), 0)
+STAGE1_DEPS += http_parser
+endif
+
+ifeq ($(USE_SYSTEM_MBEDTLS), 0)
+STAGE1_DEPS += mbedtls
+endif
+
+ifeq ($(USE_SYSTEM_LIBSSH2), 0)
+STAGE1_DEPS += libssh2
+endif
+
 ifeq ($(USE_SYSTEM_LIBGIT2), 0)
-STAGE1_DEPS += libgit2
+STAGE2_DEPS += libgit2
 endif
 
 ifeq ($(USE_SYSTEM_MPFR), 0)
@@ -184,6 +196,10 @@ endif
 
 ifeq ($(USE_SYSTEM_UTF8PROC), 0)
 STAGE2_DEPS += utf8proc
+endif
+
+ifeq ($(OS), Linux)
+STAGE3_DEPS += mbedtlsstream
 endif
 
 # Only compile standalone LAPACK if we are not using OpenBLAS.
@@ -215,7 +231,7 @@ install: $(addprefix install-, $(DEP_LIBS))
 cleanall: $(addprefix clean-, $(DEP_LIBS))
 distcleanall: $(addprefix distclean-, $(DEP_LIBS))
 	rm -rf $(build_prefix)
-getall: get-llvm get-libuv get-pcre get-openlibm get-openspecfun get-dsfmt get-Rmath-julia get-openblas get-lapack get-fftw get-suitesparse get-arpack get-unwind get-osxunwind get-gmp get-mpfr get-patchelf get-utf8proc get-virtualenv get-objconv get-libgit2
+getall: get-llvm get-libuv get-pcre get-openlibm get-openspecfun get-dsfmt get-Rmath-julia get-openblas get-lapack get-fftw get-suitesparse get-arpack get-unwind get-osxunwind get-gmp get-mpfr get-patchelf get-utf8proc get-virtualenv get-objconv get-http_parser get-mbedtls get-libssh2 get-libgit2 get-mbedtlsstream
 
 ## PATHS ##
 # sort is used to remove potential duplicates
@@ -264,7 +280,11 @@ include $(SRCDIR)/gmp.mk
 include $(SRCDIR)/mpfr.mk
 include $(SRCDIR)/patchelf.mk
 include $(SRCDIR)/git.mk
+include $(SRCDIR)/http_parser.mk
+include $(SRCDIR)/mbedtls.mk
+include $(SRCDIR)/libssh2.mk
 include $(SRCDIR)/libgit2.mk
+include $(SRCDIR)/mbedtlsstream.mk
 include $(SRCDIR)/virtualenv.mk
 
 ## phony targets ##

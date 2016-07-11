@@ -1,0 +1,27 @@
+diff --git include/mbedtls/config.h include/mbedtls/config.h
+index 0efee04..787cd8c 100644
+--- include/mbedtls/config.h
++++ include/mbedtls/config.h
+@@ -2434,19 +2434,19 @@
+ 
+ /* MPI / BIGNUM options */
+ //#define MBEDTLS_MPI_WINDOW_SIZE            6 /**< Maximum windows size used. */
+-//#define MBEDTLS_MPI_MAX_SIZE            1024 /**< Maximum number of bytes for usable MPIs. */
++#define MBEDTLS_MPI_MAX_SIZE            2048 /**< Maximum number of bytes for usable MPIs. */
+ 
+ /* CTR_DRBG options */
+ //#define MBEDTLS_CTR_DRBG_ENTROPY_LEN               48 /**< Amount of entropy used per seed by default (48 with SHA-512, 32 with SHA-256) */
+ //#define MBEDTLS_CTR_DRBG_RESEED_INTERVAL        10000 /**< Interval before reseed is performed by default */
+ //#define MBEDTLS_CTR_DRBG_MAX_INPUT                256 /**< Maximum number of additional input bytes */
+-//#define MBEDTLS_CTR_DRBG_MAX_REQUEST             1024 /**< Maximum number of requested bytes per call */
++#define MBEDTLS_CTR_DRBG_MAX_REQUEST             2048 /**< Maximum number of requested bytes per call */
+ //#define MBEDTLS_CTR_DRBG_MAX_SEED_INPUT           384 /**< Maximum size of (re)seed buffer */
+ 
+ /* HMAC_DRBG options */
+ //#define MBEDTLS_HMAC_DRBG_RESEED_INTERVAL   10000 /**< Interval before reseed is performed by default */
+ //#define MBEDTLS_HMAC_DRBG_MAX_INPUT           256 /**< Maximum number of additional input bytes */
+-//#define MBEDTLS_HMAC_DRBG_MAX_REQUEST        1024 /**< Maximum number of requested bytes per call */
++#define MBEDTLS_HMAC_DRBG_MAX_REQUEST        2048 /**< Maximum number of requested bytes per call */
+ //#define MBEDTLS_HMAC_DRBG_MAX_SEED_INPUT      384 /**< Maximum size of (re)seed buffer */
+ 
+ /* ECP options */

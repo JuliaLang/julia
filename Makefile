@@ -271,6 +271,15 @@ endif
 ifeq ($(USE_SYSTEM_MPFR),0)
 JL_PRIVATE_LIBS += mpfr
 endif
+ifeq ($(USE_SYSTEM_HTTPPARSER),0)
+JL_PRIVATE_LIBS += http_parser
+endif
+ifeq ($(USE_SYSTEM_MBEDTLS),0)
+JL_PRIVATE_LIBS += mbedtls mbedcrypto mbedx509
+endif
+ifeq ($(USE_SYSTEM_LIBSSH2),0)
+JL_PRIVATE_LIBS += ssh2
+endif
 ifeq ($(USE_SYSTEM_LIBGIT2),0)
 JL_PRIVATE_LIBS += git2
 endif
@@ -352,12 +361,6 @@ endif
 			fi \
 		done \
 	done
-
-	# Copy in libssl and libcrypto if they exist
-ifeq ($(OS),Linux)
-	-$(INSTALL_M) $(build_libdir)/libssl*.so* $(DESTDIR)$(private_libdir)
-	-$(INSTALL_M) $(build_libdir)/libcrypto*.so* $(DESTDIR)$(private_libdir)
-endif
 endif
 
 ifeq ($(USE_SYSTEM_LIBUV),0)

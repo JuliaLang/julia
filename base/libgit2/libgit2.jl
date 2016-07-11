@@ -507,10 +507,20 @@ end
 function set_ssl_cert_locations(cert_loc)
     cert_file = isfile(cert_loc) ? cert_loc : Cstring(C_NULL)
     cert_dir  = isdir(cert_loc) ? cert_loc : Cstring(C_NULL)
-    cert_file == C_NULL && cert_dir == C_NULL && return
-    ccall((:git_libgit2_opts, :libgit2), Cint,
-          (Cint, Cstring, Cstring),
-          Cint(Consts.SET_SSL_CERT_LOCATIONS), cert_file, cert_dir)
+
+    # load certs
+    err = ccall((:mbedtls_stream_init, :libmbedtlsstream), Cint,
+                (Cstring, Cstring), cert_file, cert_dir)
+    err < 0 && throw(ErrorException("error initializing mbedTLS stream"))
+
+    # setup tls stream
+    mbedtls_stream_cb = cglobal((:mbedtls_stream_new, :libmbedtlsstream))
+    ccall((:git_stream_register_tls, :libgit2), Cint, (Ptr{Void},), mbedtls_stream_cb)
+
+    # cleanup on shutdown
+    atexit() do
+        ccall((:mbedtls_stream_shutdown, :libmbedtlsstream), Cint, ())
+    end
 end
 
 function __init__()
@@ -520,16 +530,19 @@ function __init__()
         ccall((:git_libgit2_shutdown, :libgit2), Cint, ())
     end
 
-    # Look for OpenSSL env variable for CA bundle
-    cert_loc = if "SSL_CERT_DIR" in keys(ENV)
-        ENV["SSL_CERT_DIR"]
-    elseif "SSL_CERT_FILE" in keys(ENV)
-        ENV["SSL_CERT_FILE"]
-    else
-        # If we have a bundled ca cert file, point libgit2 at that so SSL connections work.
-        abspath(ccall(:jl_get_julia_home, Any, ()),Base.DATAROOTDIR,"julia","cert.pem")
+    # Look for OpenSSL env variable for CA bundle (linux only)
+    # windows and macOS are use their security backends
+    @static if is_linux()
+        cert_loc = if "SSL_CERT_DIR" in keys(ENV)
+            ENV["SSL_CERT_DIR"]
+        elseif "SSL_CERT_FILE" in keys(ENV)
+            ENV["SSL_CERT_FILE"]
+        else
+            # If we have a bundled ca cert file, point libgit2 at that so SSL connections work.
+            abspath(ccall(:jl_get_julia_home, Any, ()),Base.DATAROOTDIR,"julia","cert.pem")
+        end
+        set_ssl_cert_locations(cert_loc)
     end
-    set_ssl_cert_locations(cert_loc)
 end
 
 
