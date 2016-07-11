@@ -169,4 +169,13 @@ let ms = methods(g16493, (Complex, Any))
     @test first(ms).sig == Tuple{typeof(g16493), Complex{TypeVar(:T, Any, true)}, Any}
 end
 
+# issue #17350
+module Ambig6
+immutable ScaleMinMax{To,From} end
+map1{To<:Union{Float32,Float64},From<:Real}(mapi::ScaleMinMax{To,From}, val::From) = 1
+map1{To<:Union{Float32,Float64},From<:Real}(mapi::ScaleMinMax{To,From}, val::Union{Real,Complex}) = 2
+end
+
+@test isempty(detect_ambiguities(Ambig6))
+
 nothing
