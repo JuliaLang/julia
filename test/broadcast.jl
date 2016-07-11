@@ -223,7 +223,7 @@ let x = sin.(1:10)
     @test atan2.(x, 3.7) == broadcast(x -> atan2(x,3.7), x) == broadcast(atan2, x, 3.7)
 end
 # Use side effects to check for loop fusion.  Note that, due to #17314,
-# a broadcasted function is currently called twice on the first element.
+# a broadcasted function is currently called an extra time with an argument 1.
 let g = Int[]
     f17300(x) = begin; push!(g, x); x+1; end
     f17300.(f17300.(f17300.(1:3)))
