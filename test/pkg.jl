@@ -398,4 +398,77 @@ temp_pkg_dir() do
         @test contains(msg, "$package is not an installed package")
         @test !contains(msg, "signal (15)")
     end
+
+    # partial Pkg.update
+    begin
+        nothingtodomsg = "INFO: No packages to install, update or remove\n"
+
+        ret, out, err = @grab_outputs begin
+            Pkg.rm("Example")
+            Pkg.add("Example")
+        end
+        @test ret === nothing && out == ""
+        @test contains(err, "INFO: Installing Example v")
+
+        ret, out, err = @grab_outputs Pkg.update("Example")
+        @test ret === nothing && out == ""
+        @test contains(err, nothingtodomsg)
+
+        ret, out, err = @grab_outputs begin
+            Pkg.rm("Example")
+            Pkg.add("Example", v"0", v"0.4.1-") # force version to be < 0.4.1
+        end
+        @test ret === nothing && out == ""
+        @test contains(err, "INFO: Installing Example v0.4.0")
+
+        ret, out, err = @grab_outputs Pkg.update("Example")
+        @test ret === nothing && out == ""
+        @test ismatch(r"INFO: Package Example was set to version 0\.4\.0, but a higher version \d+\.\d+\.\d+\S* exists.\n", err)
+        @test contains(err, "The update is prevented by explicit requirements constraints. Edit your REQUIRE file to change this.\n")
+        @test contains(err, nothingtodomsg)
+
+        ret, out, err = @grab_outputs begin
+            Pkg.rm("Example")
+            Pkg.add("Example")
+            Pkg.pin("Example", v"0.4.0")
+        end
+        @test ret === nothing && out == ""
+        @test contains(err, "INFO: Installing Example")
+
+        ret, out, err = @grab_outputs Pkg.update("Example")
+        @test ret === nothing && out == ""
+        @test contains(err, "INFO: Package Example: skipping update (pinned)...\n")
+        @test ismatch(r"INFO: Package Example was set to version 0\.4\.0, but a higher version \d+\.\d+\.\d+\S* exists.\n", err)
+        @test contains(err, "The package is fixed. You can try using `Pkg.free(\"Example\")` to update it.")
+        @test contains(err, nothingtodomsg)
+
+        metadata_dir = Pkg.dir("METADATA")
+        const old_commit = "313bfaafa301e82d40574a778720e893c559a7e2"
+
+        # Force a METADATA rollback to an old version, so that we will install some
+        # outdated versions of some packages and then update some of those
+        # (note that the following Pkg.update calls will update METADATA to the
+        # latest version even though they don't update all packages)
+        LibGit2.with(LibGit2.GitRepo, metadata_dir) do repo
+            LibGit2.reset!(repo, LibGit2.Oid(old_commit), LibGit2.Consts.RESET_HARD)
+        end
+
+        ret, out, err = @grab_outputs Pkg.add("Colors")
+        @test ret === nothing && out == ""
+        @test contains(err, "INFO: Installing Colors v0.6.4")
+        @test contains(err, "INFO: Installing ColorTypes v0.2.2")
+        @test contains(err, "INFO: Installing FixedPointNumbers v0.1.3")
+        @test contains(err, "INFO: Installing Compat v0.7.18")
+        @test contains(err, "INFO: Installing Reexport v0.0.3")
+
+        ret, out, err = @grab_outputs Pkg.update("ColorTypes")
+        @test ismatch(r"INFO: Upgrading ColorTypes: v0\.2\.2 => v\d+\.\d+\.\d+", err)
+        @test ismatch(r"INFO: Upgrading Compat: v0\.7\.18 => v\d+\.\d+\.\d+", err)
+        @test !contains(err, "INFO: Upgrading Colors: ")
+        @test Pkg.installed("Colors") == v"0.6.4"
+
+        ret, out, err = @grab_outputs Pkg.update("FixedPointNumbers")
+        @test ret === nothing && out == ""
+        @test contains(err, nothingtodomsg)
+    end
 end
