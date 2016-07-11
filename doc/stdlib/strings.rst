@@ -60,7 +60,11 @@
 
    .. Docstring generated from Julia source
 
-   Convert string data between Unicode encodings. ``src`` is either a ``String`` or an ``Vector{UIntXX}`` of UTF-XX code units, where ``XX`` is 8, 16, or 32. ``T`` indicates the encoding of the return value: ``String`` to return a (UTF-8 encoded) ``String`` or ``UIntXX`` to return a ``Vector{UIntXX}`` of UTF-``XX`` data.   Only conversion to or from UTF-8 is currently supported.
+   Convert string data between Unicode encodings. ``src`` is either a ``String`` or a ``Vector{UIntXX}`` of UTF-XX code units, where ``XX`` is 8, 16, or 32. ``T`` indicates the encoding of the return value: ``String`` to return a (UTF-8 encoded) ``String`` or ``UIntXX`` to return a ``Vector{UIntXX}`` of UTF-``XX`` data.   (The alias ``Cwchar_t`` also be used as the integer type for converting ``wchar_t*`` strings used by external C libraries.)
+
+   The ``transcode`` function succeeds as long as the input data can be reasonably represented in the target encoding; it always succeeds for conversions between UTF-XX encodings, even for invalid Unicode data.
+
+   Only conversion to/from UTF-8 is currently supported.
 
 .. function:: unsafe_string(p::Ptr{UInt8}, [length::Integer])
 
