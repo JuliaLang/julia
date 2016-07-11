@@ -278,17 +278,11 @@ end
 # they are taken from the range/vector
 # Since bounds-checking is performance-critical and uses
 # indices, it's worth optimizing these implementations thoroughly
-indices(S::SubArray) = (@_inline_meta; _indices_sub(S, 1, S.indexes...))
-_indices_sub(S::SubArray, dim::Int) = ()
-_indices_sub(S::SubArray, dim::Int, ::Real, I...) = (@_inline_meta; _indices_sub(S, dim+1, I...))
-_indices_sub(S::SubArray, dim::Int, ::Colon, I...) = (@_inline_meta; (indices(parent(S), dim), _indices_sub(S, dim+1, I...)...))
-_indices_sub(S::SubArray, dim::Int, i1::AbstractArray, I...) = (@_inline_meta; (indices(i1)..., _indices_sub(S, dim+1, I...)...))
-indices1(S::SubArray) = (@_inline_meta; _indices1(S, 1, S.indexes...))
-_indices1(S::SubArray, dim) = OneTo(1)
-_indices1(S::SubArray, dim, i1::Real, I...) = (@_inline_meta; _indices1(S, dim+1, I...))
-_indices1(S::SubArray, dim, i1::Colon, I...) = (@_inline_meta; indices(parent(S), dim))
-_indices1(S::SubArray, dim, i1::AbstractArray, I...) = (@_inline_meta; indices1(i1))
-_indices1{T}(S::SubArray, dim, i1::AbstractArray{T,0}, I...) = (@_inline_meta; _indices1(S, dim+1, I...))
+indices(S::SubArray) = (@_inline_pure_meta; _indices_sub(S, indices(S.parent), S.indexes...))
+_indices_sub(S::SubArray, pinds) = ()
+_indices_sub(S::SubArray, pinds, ::Real, I...) = _indices_sub(S, tail(pinds), I...)
+_indices_sub(S::SubArray, pinds, ::Colon, I...) = (pinds[1], _indices_sub(S, tail(pinds), I...)...)
+_indices_sub(S::SubArray, pinds, i1::AbstractArray, I...) = (unsafe_indices(i1)..., _indices_sub(S, tail(pinds), I...)...)
 
 ## Compatability
 # deprecate?
