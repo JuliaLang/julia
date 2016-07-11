@@ -33,8 +33,6 @@ const utf8_trailing = [
 
 ## required core functionality ##
 
-is_valid_continuation(c) = ((c & 0xc0) == 0x80)
-
 function endof(s::String)
     d = s.data
     i = length(d)
