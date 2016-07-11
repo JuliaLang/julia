@@ -196,6 +196,10 @@ let a = broadcast(Float32, [3, 4, 5])
     @test eltype(a) == Float32
 end
 
+# broadcasting scalars:
+@test sin.(1) === broadcast(sin, 1) === sin(1)
+@test (()->1234).() === broadcast(()->1234) === 1234
+
 # issue #4883
 @test isa(broadcast(tuple, [1 2 3], ["a", "b", "c"]), Matrix{Tuple{Int,String}})
 @test isa(broadcast((x,y)->(x==1?1.0:x,y), [1 2 3], ["a", "b", "c"]), Matrix{Tuple{Real,String}})
@@ -210,7 +214,7 @@ end
 
 # PR 16988
 @test Base.promote_op(+, Bool) === Int
-@test isa(broadcast(+, true), Array{Int,0})
+@test isa(broadcast(+, [true]), Array{Int,1})
 @test Base.promote_op(Float64, Bool) === Float64
 
 # issue #17304
