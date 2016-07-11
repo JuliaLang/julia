@@ -74,13 +74,15 @@ julia> Hlower = Hermitian(A, :L)
 ```
 
 Note that `Hupper` will not be equal to `Hlower` unless `A` is itself Hermitian (e.g. if `A == A'`).
+
+All non-real parts of the diagonal will be ignored.
+
+```julia
+Hermitian(fill(complex(1,1), 1, 1)) == fill(1, 1, 1)
+```
 """
 function Hermitian(A::AbstractMatrix, uplo::Symbol=:U)
     n = checksquare(A)
-    for i=1:n
-        isreal(A[i, i]) || throw(ArgumentError(
-            "Cannot construct Hermitian from matrix with nonreal diagonals"))
-    end
     Hermitian{eltype(A),typeof(A)}(A, char_uplo(uplo))
 end
 
@@ -113,13 +115,21 @@ size(A::HermOrSym, d) = size(A.data, d)
 size(A::HermOrSym) = size(A.data)
 @inline function getindex(A::Symmetric, i::Integer, j::Integer)
     @boundscheck checkbounds(A, i, j)
-    @inbounds r = (A.uplo == 'U') == (i < j) ? A.data[i, j] : A.data[j, i]
-    r
+    @inbounds if (A.uplo == 'U') == (i < j)
+        return A.data[i, j]
+    else
+        return A.data[j, i]
+    end
 end
 @inline function getindex(A::Hermitian, i::Integer, j::Integer)
     @boundscheck checkbounds(A, i, j)
-    @inbounds r = (A.uplo == 'U') == (i < j) ? A.data[i, j] : conj(A.data[j, i])
-    r
+    @inbounds if (A.uplo == 'U') == (i < j)
+        return A.data[i, j]
+    elseif i == j
+        return eltype(A)(real(A.data[i, j]))
+    else
+        return conj(A.data[j, i])
+    end
 end
 
 function setindex!(A::Symmetric, v, i::Integer, j::Integer)
@@ -153,8 +163,15 @@ similar(A::Union{Symmetric,Hermitian}, ::Type{T}, dims::Dims{N}) where {T,N} = s
 
 # Conversion
 convert(::Type{Matrix}, A::Symmetric) = copytri!(convert(Matrix, copy(A.data)), A.uplo)
-convert(::Type{Matrix}, A::Hermitian) = copytri!(convert(Matrix, copy(A.data)), A.uplo, true)
+function convert(::Type{Matrix}, A::Hermitian)
+    B = copytri!(convert(Matrix, copy(A.data)), A.uplo, true)
+    for i = 1:size(A, 1)
+        B[i,i] = real(B[i,i])
+    end
+    return B
+end
 convert(::Type{Array}, A::Union{Symmetric,Hermitian}) = convert(Matrix, A)
+
 parent(A::HermOrSym) = A.data
 convert(::Type{Symmetric{T,S}},A::Symmetric{T,S}) where {T,S<:AbstractMatrix} = A
 convert(::Type{Symmetric{T,S}},A::Symmetric) where {T,S<:AbstractMatrix} = Symmetric{T,S}(convert(S,A.data),A.uplo)

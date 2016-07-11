@@ -692,6 +692,14 @@ end
     @test F\b ≈ ones(m + n)
 end
 
+@testset "Test that imaginary parts in Hermitian{T,SparseMatrixCSC{T}} are ignored" begin
+    A = sparse([1,2,3,4,1], [1,2,3,4,2], [complex(2.0,1),2,2,2,1])
+    Fs = cholfact(Hermitian(A))
+    Fd = cholfact(Hermitian(Array(A)))
+    @test sparse(Fs) ≈ Hermitian(A)
+    @test Fs\ones(4) ≈ Fd\ones(4)
+end
+
 @testset "\\ '\\ and .'\\" begin
     # Test that \ and '\ and .'\ work for Symmetric and Hermitian. This is just
     # a dispatch exercise so it doesn't matter that the complex matrix has
