@@ -1266,10 +1266,14 @@ if isdefined(Core, :String) && isdefined(Core, :AbstractString)
     typealias ASCIIString Core.String
 else
     typealias String Base.ByteString
+    if VERSION >= v"0.4.0-dev+5243"
+        @compat (::Type{Base.ByteString})(io::Base.AbstractIOBuffer) = bytestring(io)
+    elseif VERSION >= v"0.4.0-dev+1246"
+        @compat (::Type{Base.ByteString})(io::IOBuffer) = bytestring(io)
+    end
     if VERSION >= v"0.4.0-dev+1246"
         @compat (::Type{Base.ByteString})(s::Cstring) = bytestring(s)
         @compat (::Type{Base.ByteString})(v::Vector{UInt8}) = bytestring(v)
-        @compat (::Type{Base.ByteString})(io::Base.AbstractIOBuffer) = bytestring(io)
         @compat (::Type{Base.ByteString})(p::Union{Ptr{Int8},Ptr{UInt8}}) = bytestring(p)
         @compat (::Type{Base.ByteString})(p::Union{Ptr{Int8},Ptr{UInt8}}, len::Integer) = bytestring(p, len)
         @compat (::Type{Base.ByteString})(s::AbstractString) = bytestring(s)
