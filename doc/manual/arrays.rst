@@ -185,7 +185,7 @@ and its left and right neighbor along a 1-d grid. :
 
 .. doctest:: array-rand
 
-    julia> const x = rand(8)
+    julia> x = rand(8)
     8-element Array{Float64,1}:
      0.843025
      0.869052
@@ -205,16 +205,11 @@ and its left and right neighbor along a 1-d grid. :
      0.8446
      0.656511
 
-.. note:: In the above example, ``x`` is declared as constant because type
-  inference in Julia does not work as well on non-constant global
-  variables.
+The resulting array type depends on the types of the computed elements.
+In order to control the type explicitly, a type can be prepended to the comprehension.
+For example, we could have requested the result in single precision by writing::
 
-The resulting array type is inferred from the expression; in order to control
-the type explicitly, the type can be prepended to the comprehension. For example,
-in the above example we could have avoided declaring ``x`` as constant, and ensured
-that the result is of type ``Float64`` by writing::
-
-    Float64[ 0.25*x[i-1] + 0.5*x[i] + 0.25*x[i+1] for i=2:length(x)-1 ]
+    Float32[ 0.25*x[i-1] + 0.5*x[i] + 0.25*x[i+1] for i=2:length(x)-1 ]
 
 .. _man-generator-expressions:
 
@@ -247,6 +242,31 @@ parentheses lets us add a third argument to ``map``:
     2×2 Array{Tuple{Float64,Int64},2}:
      (0.5,1)       (0.333333,3)
      (0.333333,2)  (0.25,4)
+
+Ranges in generators and comprehensions can depend on previous ranges by writing
+multiple ``for`` keywords:
+
+.. doctest::
+
+    julia> [(i,j) for i=1:3 for j=1:i]
+    6-element Array{Tuple{Int64,Int64},1}:
+     (1,1)
+     (2,1)
+     (2,2)
+     (3,1)
+     (3,2)
+     (3,3)
+
+In such cases, the result is always 1-d.
+
+Generated values can be filtered using the ``if`` keyword:
+
+.. doctest::
+
+    julia> [(i,j) for i=1:3 for j=1:i if i+j == 4]
+    2-element Array{Tuple{Int64,Int64},1}:
+     (2,2)
+     (3,1)
 
 .. _man-array-indexing:
 
