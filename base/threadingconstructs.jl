@@ -2,9 +2,19 @@
 
 export threadid, nthreads, @threads
 
+"""
+`threadid()`
+
+Get the ID number of the current thread of execution. The master thread has ID `0`.
+"""
 threadid() = Int(ccall(:jl_threadid, Int16, ())+1)
 
 # Inclusive upper bound on threadid()
+"""
+`nthreads()`
+
+Get the number of threads available to the Julia process. This is the exclsuive upper bound on `threadid()`.
+"""
 nthreads() = Int(unsafe_load(cglobal(:jl_n_threads, Cint)))
 
 function _threadsfor(iter,lbody)
@@ -46,7 +56,12 @@ function _threadsfor(iter,lbody)
         ccall(:jl_threading_run, Void, (Any,), Core.svec($fun))
     end
 end
+"""
+`@threads`
 
+A macro to parallelize a for-loop to run with multiple threads. This spawns `nthreads()` number of threads, splits the iteration space amongst them, and iterates in parallel. A barrier is placed at the end of the loop which waits for all the threads to finish execution, and the loop returns.
+
+"""
 macro threads(args...)
     na = length(args)
     if na != 1
