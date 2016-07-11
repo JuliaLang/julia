@@ -98,7 +98,7 @@ let
 end
 
 _d = Dict("a"=>0)
-@test isa([k for k in filter(x->length(x)==1, collect(keys(_d)))], Vector{Any})
+@test isa([k for k in filter(x->length(x)==1, collect(keys(_d)))], Vector{String})
 
 let
     d = Dict(((1, 2), (3, 4)))
