@@ -450,6 +450,8 @@ add_method_to_glob_fn!()
 @test (try error(); catch 0; end) === 0
 @test (try error(); catch false; end) === false  # false and true are Bool literals, not variables
 @test (try error(); catch true; end) === true
+f16517() = try error(); catch 0; end
+@test f16517() === 0
 
 # issue #16671
 @test parse("1.") === 1.0
