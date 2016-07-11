@@ -177,7 +177,7 @@ ifeq ($(OS), WINNT)
 $(build_sysconfdir)/julia/juliarc.jl: $(JULIAHOME)/contrib/windows/juliarc.jl
 endif
 
-$(build_private_libdir)/%.$(SHLIB_EXT): $(build_private_libdir)/%.o $(wildcard $(CRT_OBJ_TARGET))
+$(build_private_libdir)/%.$(SHLIB_EXT): $(build_private_libdir)/%.o
 	@$(call PRINT_LINK, $(CXX) $(LDFLAGS) -shared $(fPIC) -L$(build_private_libdir) -L$(build_libdir) -L$(build_shlibdir) -o $@ $< \
 		$(if $(findstring -debug.$(SHLIB_EXT),$(notdir $@)),-ljulia-debug,-ljulia) \
 		$$([ $(OS) = WINNT ] && echo '' -lssp) \
