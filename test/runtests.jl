@@ -399,7 +399,8 @@ end
 
 # Cstring
 let s = "foo"
-    @test reinterpret(Ptr{Cchar}, Compat.unsafe_convert(Cstring, s.data)) == pointer(s)
+    # note: need cconvert in 0.5 because of JuliaLang/julia#16893
+    @test reinterpret(Ptr{Cchar}, Compat.unsafe_convert(Cstring, VERSION < v"0.4" ? s : Base.cconvert(Cstring, s))) == pointer(s)
     if VERSION < v"0.5.0-dev+4859"
         let w = wstring("foo")
             @test reinterpret(Ptr{Cwchar_t}, Compat.unsafe_convert(Cwstring, w)) == pointer(w)
