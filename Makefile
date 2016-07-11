@@ -239,7 +239,7 @@ JL_LIBS := julia julia-debug
 # private libraries, that are installed in $(prefix)/lib/julia
 JL_PRIVATE_LIBS := ccalltest
 ifeq ($(USE_GPL_LIBS), 1)
-JL_PRIVATE_LIBS += suitesparse_wrapper Rmath-julia
+JL_PRIVATE_LIBS += suitesparse_wrapper
 endif
 ifeq ($(USE_SYSTEM_FFTW),0)
 ifeq ($(USE_GPL_LIBS), 1)
