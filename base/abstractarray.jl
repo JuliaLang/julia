@@ -51,6 +51,9 @@ end
 indices1{T}(A::AbstractArray{T,0}) = OneTo(1)
 indices1{T}(A::AbstractArray{T})   = (@_inline_meta; indices(A)[1])
 
+unsafe_indices(A) = indices(A)
+unsafe_indices(r::Range) = (OneTo(unsafe_length(r)),) # Ranges use checked_sub for size
+
 """
     linearindices(A)
 
@@ -248,6 +251,7 @@ Throw an error if the specified `indexes` are not in bounds for the given `array
 function checkbounds(A::AbstractArray, I...)
     @_inline_meta
     checkbounds(Bool, A, I...) || throw_boundserror(A, I)
+    nothing
 end
 checkbounds(A::AbstractArray) = checkbounds(A, 1) # 0-d case
 
@@ -1211,8 +1215,6 @@ nextL(L, l::Integer) = L*l
 nextL(L, r::AbstractUnitRange) = L*unsafe_length(r)
 offsetin(i, l::Integer) = i-1
 offsetin(i, r::AbstractUnitRange) = i-first(r)
-unsafe_length(r::UnitRange) = r.stop-r.start+1
-unsafe_length(r::OneTo) = length(r)
 
 ind2sub(::Tuple{}, ind::Integer) = (@_inline_meta; ind == 1 ? () : throw(BoundsError()))
 ind2sub(dims::DimsInteger, ind::Integer) = (@_inline_meta; _ind2sub(dims, ind-1))
