@@ -10,8 +10,12 @@ elseif Base.JLOptions().code_coverage == 2
     cov_flag = `--code-coverage=all`
 end
 
-# Test a `remote` invocation when no workers are present
+# Test a few "remote" invocations when no workers are present
 @test remote(myid)() == 1
+@test pmap(identity, 1:100) == [1:100...]
+@test 100 == @parallel (+) for i in 1:100
+        1
+    end
 
 addprocs(4; exeflags=`$cov_flag $inline_flag --check-bounds=yes --depwarn=error`)
 
@@ -538,6 +542,24 @@ function testcpt()
 end
 testcpt()
 
+# Test multiple "for" loops waiting on the same channel which
+# is closed after adding a few elements.
+c=Channel()
+results=[]
+@sync begin
+    for i in 1:20
+        @async for i in c
+            push!(results, i)
+        end
+    end
+    sleep(1.0)
+    for i in 1:5
+        put!(c,i)
+    end
+    close(c)
+end
+@test sum(results) == 15
+
 @test_throws ArgumentError sleep(-1)
 @test_throws ArgumentError timedwait(()->false, 0.1, pollint=-0.5)
 
@@ -801,7 +823,7 @@ end
 @test [1:100...] == pmap(x->x, Base.Generator(x->(sleep(0.0001); x), 1:100))
 
 # Test asyncmap
-@test allunique(asyncmap(x->object_id(current_task()), 1:100))
+@test allunique(asyncmap(x->(sleep(1.0);object_id(current_task())), 1:10))
 
 # CachingPool tests
 wp = CachingPool(workers())
