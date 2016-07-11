@@ -533,9 +533,6 @@ else
 	$(call   make-install,llvm-$(LLVM_VER)/build_$(LLVM_BUILDTYPE),\
 	                      $(LLVM_MFLAGS) PATH="$(llvm_python_workaround):$$PATH")
 endif # LLVM_USE_CMAKE
-ifeq ($(BUILD_COMPILER_RT),1)
-	$(CC) $(LDFLAGS) -shared $(fPIC) -o $(build_shlibdir)/libcompiler-rt.$(SHLIB_EXT) -nostdlib -Wl,--whole-archive -L$(build_libdir)/clang/$(LLVM_VER)/lib/$(call patsubst,%inux,linux,$(OS)) -lclang_rt.builtins-$(call patsubst,i%86,i386,$(ARCH))
-endif
 	touch -c $@
 
 reinstall-llvm:
@@ -549,6 +546,24 @@ distclean-llvm:
 	-rm -rf $(LLVM_TAR) $(LLVM_CLANG_TAR) \
 		$(LLVM_COMPILER_RT_TAR) $(LLVM_LIBCXX_TAR) $(LLVM_LLDB_TAR) \
 		$(LLVM_SRC_DIR) $(LLVM_BUILDDIR_withtype)
+
+# COMPILER-RT
+ifeq ($(BUILD_COMPILER_RT),1)
+CRT_OS := $(call patsubst,%inux,linux,$(OS))
+CRT_ARCH := $(call patsubst,i%86,i386,$(ARCH))
+CRT_BUILD_DIR := $(LLVM_BUILDDIR_withtype)/lib/clang/$(LLVM_VER)/lib/$(CRT_OS)
+CRT_STATIC_NAME := clang_rt.builtins-$(CRT_ARCH)
+CRT_OBJ_TARGET := $(build_shlibdir)/libcompiler-rt.$(SHLIB_EXT)
+
+$(CRT_BUILD_DIR)/lib$(CRT_STATIC_NAME): | $(LLVM_OBJ_TARGET)
+	touch -c $@
+
+$(CRT_OBJ_TARGET): $(CRT_BUILD_DIR)/lib$(CRT_STATIC_NAME)
+	$(CC) $(LDFLAGS) -shared $(fPIC) -o $@ -nostdlib -Wl,--whole-archive -L$(CRT_BUILD_DIR) -l$(CRT_STATIC_NAME)
+	touch -c $@
+
+install-compiler_rt: $(CRT_OBJ_TARGET)
+endif
 
 ifneq ($(LLVM_VER),svn)
 get-llvm: $(LLVM_TAR) $(LLVM_CLANG_TAR) $(LLVM_COMPILER_RT_TAR) $(LLVM_LIBCXX_TAR) $(LLVM_LLDB_TAR)
