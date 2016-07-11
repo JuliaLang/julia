@@ -173,29 +173,21 @@ General Parallel Computing Support
 
    Keyword arguments:
 
-   * ``tunnel``\ : if ``true`` then SSH tunneling will be used to connect to the worker from the             master process. Default is ``false``\ .
-
+   * ``tunnel``\ : if ``true`` then SSH tunneling will be used to connect to the worker from the           master process. Default is ``false``\ .
    * ``sshflags``\ : specifies additional ssh options, e.g.
 
-   .. code-block:: julia
+     .. code-block:: julia
 
-       sshflags=`-i /home/foo/bar.pem`
-
-   * ``max_parallel``\ : specifies the maximum number of workers connected to in parallel at a host.                   Defaults to 10.
-
-   * ``dir``\ : specifies the working directory on the workers. Defaults to the host's current          directory (as found by ``pwd()``\ )
-
-   * ``exename``\ : name of the ``julia`` executable. Defaults to ``"$JULIA_HOME/julia"`` or              ``"$JULIA_HOME/julia-debug"`` as the case may be.
-
+         sshflags=`-i /home/foo/bar.pem`
+   * ``max_parallel``\ : specifies the maximum number of workers connected to in parallel at a host.                 Defaults to 10.
+   * ``dir``\ : specifies the working directory on the workers. Defaults to the host's current        directory (as found by ``pwd()``\ )
+   * ``exename``\ : name of the ``julia`` executable. Defaults to ``"$JULIA_HOME/julia"`` or            ``"$JULIA_HOME/julia-debug"`` as the case may be.
    * ``exeflags``\ : additional flags passed to the worker processes.
+   * ``topology``\ : Specifies how the workers connect to each other. Sending a message           between unconnected workers results in an error.
 
-   * ``topology``\ : Specifies how the workers connect to each other. Sending a message             between unconnected workers results in an error.
-
-   * ``topology=:all_to_all``  :  All processes are connected to each other.                       This is the default.
-
-   * ``topology=:master_slave``  :  Only the driver process, i.e. pid 1 connects to the                         workers. The workers do not connect to each other.
-
-   * ``topology=:custom``  :  The ``launch`` method of the cluster manager specifes the                   connection topology via fields ``ident`` and ``connect_idents`` in                   ``WorkerConfig``\ . A worker with a cluster manager identity ``ident``                   will connect to all workers specified in ``connect_idents``\ .
+     * ``topology=:all_to_all``  :  All processes are connected to each other.                   This is the default.
+     * ``topology=:master_slave``  :  Only the driver process, i.e. pid 1 connects to the                     workers. The workers do not connect to each other.
+     * ``topology=:custom``  :  The ``launch`` method of the cluster manager specifes the               connection topology via fields ``ident`` and ``connect_idents`` in               ``WorkerConfig``\ . A worker with a cluster manager identity ``ident``               will connect to all workers specified in ``connect_idents``\ .
 
    Environment variables :
 
@@ -335,8 +327,8 @@ General Parallel Computing Support
    * ``Future`` : Wait for a value to become available for the specified future.
    * ``Channel``\ : Wait for a value to be appended to the channel.
    * ``Condition``\ : Wait for ``notify`` on a condition.
-   * ``Process``\ : Wait for a process or process chain to exit. The ``exitcode`` field of a process   can be used to determine success or failure.
-   * ``Task``\ : Wait for a ``Task`` to finish, returning its result value. If the task fails with an   exception, the exception is propagated (re-thrown in the task that called ``wait``\ ).
+   * ``Process``\ : Wait for a process or process chain to exit. The ``exitcode`` field of a process can be used to determine success or failure.
+   * ``Task``\ : Wait for a ``Task`` to finish, returning its result value. If the task fails with an exception, the exception is propagated (re-thrown in the task that called ``wait``\ ).
    * ``RawFD``\ : Wait for changes on a file descriptor (see ``poll_fd`` for keyword arguments and return code)
 
    If no argument is passed, the task blocks for an undefined period. A task can only be restarted by an explicit call to ``schedule`` or ``yieldto``\ .
@@ -349,8 +341,8 @@ General Parallel Computing Support
 
    Waits and fetches a value from ``x`` depending on the type of ``x``\ . Does not remove the item fetched:
 
-   * ``Future``\ : Wait for and get the value of a Future. The fetched value is cached locally.   Further calls to ``fetch`` on the same reference return the cached value. If the remote value   is an exception, throws a ``RemoteException`` which captures the remote exception and backtrace.
-   * ``RemoteChannel``\ : Wait for and get the value of a remote reference. Exceptions raised are   same as for a ``Future`` .
+   * ``Future``\ : Wait for and get the value of a Future. The fetched value is cached locally. Further calls to ``fetch`` on the same reference return the cached value. If the remote value is an exception, throws a ``RemoteException`` which captures the remote exception and backtrace.
+   * ``RemoteChannel``\ : Wait for and get the value of a remote reference. Exceptions raised are same as for a ``Future`` .
    * ``Channel`` : Wait for and get the first available item from the channel.
 
 .. function:: remotecall_wait(func, id, args...; kwargs...)
@@ -614,9 +606,8 @@ Shared Arrays
 
    Construct a ``SharedArray`` backed by the file ``filename``\ , with element type ``T`` (must be a ``bitstype``\ ) and size ``dims``\ , across the processes specified by ``pids`` - all of which have to be on the same host. This file is mmapped into the host memory, with the following consequences:
 
-   * The array data must be represented in binary format (e.g., an ASCII   format like CSV cannot be supported)
-
-   * Any changes you make to the array values (e.g., ``A[3] = 0``\ ) will   also change the values on disk
+   * The array data must be represented in binary format (e.g., an ASCII format like CSV cannot be supported)
+   * Any changes you make to the array values (e.g., ``A[3] = 0``\ ) will also change the values on disk
 
    If ``pids`` is left unspecified, the shared array will be mapped across all processes on the current host, including the master. But, ``localindexes`` and ``indexpids`` will only refer to worker processes. This facilitates work distribution code to use workers for actual computation with the master process acting as a driver.
 
@@ -812,7 +803,7 @@ between processes. It is possible for Cluster Managers to provide a different tr
    Implemented by cluster managers. It is called on the master process, during a worker's lifetime, with appropriate ``op`` values:
 
    * with ``:register``\ /``:deregister`` when a worker is added / removed from the Julia worker pool.
-   * with ``:interrupt`` when ``interrupt(workers)`` is called. The :class:`ClusterManager`   should signal the appropriate worker with an interrupt signal.
+   * with ``:interrupt`` when ``interrupt(workers)`` is called. The :class:`ClusterManager` should signal the appropriate worker with an interrupt signal.
    * with ``:finalize`` for cleanup purposes.
 
 .. function:: kill(manager::FooManager, pid::Int, config::WorkerConfig)
