@@ -143,6 +143,9 @@ Library improvements
     * Package-development functions like `Pkg.tag` and `Pkg.publish`
       have been moved to an external [PkgDev] package ([#13387]).
 
+    * Updating only a subset of the packages is now supported,
+      e.g. `Pkg.update("Example")` ([#17132])
+
   * The `Base.Test` module now has a `@testset` feature to bundle
     tests together and delay throwing an error until the end ([#13062]).
 
