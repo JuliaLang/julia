@@ -134,7 +134,13 @@ Basic functions
 
    Returns a tuple of subscripts into an array with dimensions ``dims``\ , corresponding to the linear index ``index``\ .
 
-   **Example**: ``i, j, ... = ind2sub(size(A), indmax(A))`` provides the indices of the maximum element
+   **Example**:
+
+   .. code-block:: julia
+
+       i, j, ... = ind2sub(size(A), indmax(A))
+
+   provides the indices of the maximum element.
 
 .. function:: ind2sub(a, index) -> subscripts
 
@@ -277,9 +283,9 @@ Constructors
 
    Create an uninitialized mutable array analogous to that specified by ``storagetype``\ , but with ``indices`` specified by the last argument. ``storagetype`` might be a type or a function.
 
-   .. code-block:: julia
+   **Examples**:
 
-       **Examples**:
+   .. code-block:: julia
 
        similar(Array{Int}, indices(A))
 
@@ -1045,7 +1051,7 @@ dense counterparts. The following functions are specific to sparse arrays.
    For an in-place version and algorithmic information, see :func:`Base.SparseArrays.dropzeros!`\ .
 
 .. function:: permute{Tv,Ti,Tp<:Integer,Tq<:Integer}(A::SparseMatrixCSC{Tv,Ti}, p::AbstractVector{Tp},
-..............    q::AbstractVector{Tq})
+                  q::AbstractVector{Tq})
 
    .. Docstring generated from Julia source
 
@@ -1054,7 +1060,7 @@ dense counterparts. The following functions are specific to sparse arrays.
    For expert drivers and additional information, see :func:`Base.SparseArrays.permute!`\ .
 
 .. function:: permute!{Tv,Ti,Tp<:Integer,Tq<:Integer}(X::SparseMatrixCSC{Tv,Ti}, A::SparseMatrixCSC{Tv,Ti},
-..............    p::AbstractVector{Tp}, q::AbstractVector{Tq}[, C::SparseMatrixCSC{Tv,Ti}])
+                  p::AbstractVector{Tp}, q::AbstractVector{Tq}[, C::SparseMatrixCSC{Tv,Ti}])
 
    .. Docstring generated from Julia source
 
