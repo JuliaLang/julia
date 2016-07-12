@@ -5,7 +5,7 @@ export threadid, nthreads, @threads
 """
 `threadid()`
 
-Get the ID number of the current thread of execution. The master thread has ID `0`.
+Get the ID number of the current thread of execution. The master thread has ID `1`.
 """
 threadid() = Int(ccall(:jl_threadid, Int16, ())+1)
 
@@ -13,7 +13,7 @@ threadid() = Int(ccall(:jl_threadid, Int16, ())+1)
 """
 `nthreads()`
 
-Get the number of threads available to the Julia process. This is the exclsuive upper bound on `threadid()`.
+Get the number of threads available to the Julia process. This is the inclusive upper bound on `threadid()`.
 """
 nthreads() = Int(unsafe_load(cglobal(:jl_n_threads, Cint)))
 
