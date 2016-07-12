@@ -3954,7 +3954,7 @@ void jl_init_types(void)
                         jl_svec(2, jl_symbol("parameters"),
                                 jl_symbol("body")),
                         jl_svec(2, jl_simplevector_type, jl_any_type),
-                        0, 0, 2);
+                        0, 1, 2);
 
     // all kinds of types share a method table
     jl_typector_type->name->mt = jl_uniontype_type->name->mt = jl_datatype_type->name->mt =
