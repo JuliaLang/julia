@@ -209,7 +209,6 @@ whos(IOBuffer(), Tmp14173) # warm up
 @test @allocated(whos(IOBuffer(), Tmp14173)) < 10000
 
 ## test conversion from UTF-8 to UTF-16 (for Windows APIs)
-import Base.Libc: transcode
 
 # empty arrays
 @test transcode(UInt16, UInt8[]) == UInt16[]
@@ -373,6 +372,13 @@ for (X,Y,Z) in ((V16,V16,V16), (I16,V16,I16), (V16,I16,V16), (V16,V16,I16), (I16
                 @test transcode(UInt16, abc8) == abc16
             end
         end
+    end
+end
+
+let s = "abcα🐨\0x\0"
+    for T in (UInt8, UInt16, UInt32, Int32)
+        @test transcode(T, s) == transcode(T, s.data)
+        @test transcode(String, transcode(T, s)) == s
     end
 end
 
