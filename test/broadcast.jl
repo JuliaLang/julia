@@ -238,6 +238,14 @@ let x = sin.(1:10), a = [x]
     @test ((args...)->cos(args[1])).(x) == cos.(x) == ((y,args...)->cos(y)).(x)
 end
 @test atan2.(3,4) == atan2(3,4) == (() -> atan2(3,4)).()
+# fusion with keyword args:
+let x = [1:4;]
+    f17300kw(x; y=0) = x + y
+    @test f17300kw.(x) == x
+    @test f17300kw.(x, y=1) == f17300kw.(x; y=1) == f17300kw.(x; [(:y,1)]...) == x .+ 1
+    @test f17300kw.(sin.(x), y=1) == f17300kw.(sin.(x); y=1) == sin.(x) .+ 1
+    @test sin.(f17300kw.(x, y=1)) == sin.(f17300kw.(x; y=1)) == sin.(x .+ 1)
+end
 
 # PR 16988
 @test Base.promote_op(+, Bool) === Int
