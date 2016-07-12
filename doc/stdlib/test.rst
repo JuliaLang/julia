@@ -263,24 +263,19 @@ writing new tests.
        Int64
 
        julia> @code_warntype f(1,2,3)
-       Variables:
-         #self#::#f
-         a::Int64
-         b::Int64
-         c::Int64
-
+       ...
        Body:
-         begin  # REPL[2], line 1:
-             unless (Base.slt_int)(1,b::Int64)::Bool goto 4
+         begin
+             unless (Base.slt_int)(1,b::Int64)::Bool goto 3
              return 1
-             4:
+             3:
              return 1.0
-         end::Union{Float64,Int64}
+         end::UNION{FLOAT64,INT64}
 
        julia> @inferred f(1,2,3)
        ERROR: return type Int64 does not match inferred return type Union{Float64,Int64}
         in error(::String) at ./error.jl:21
-        in eval(::Module, ::Any) at ./boot.jl:226
+        ...
 
        julia> @inferred max(1,2)
        2

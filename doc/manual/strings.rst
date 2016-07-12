@@ -288,13 +288,17 @@ such an invalid byte index, an error is thrown:
 
     julia> s[2]
     ERROR: UnicodeError: invalid character index
-     in next at ./unicode/utf8.jl:65
-     in getindex at strings/basic.jl:37
+     in slow_utf8_next(::Array{UInt8,1}, ::UInt8, ::Int64) at ./strings/string.jl:69
+     in next at ./strings/string.jl:94 [inlined]
+     in getindex(::String, ::Int64) at ./strings/basic.jl:70
+     ...
 
     julia> s[3]
     ERROR: UnicodeError: invalid character index
-     in next at ./unicode/utf8.jl:65
-     in getindex at strings/basic.jl:37
+     in slow_utf8_next(::Array{UInt8,1}, ::UInt8, ::Int64) at ./strings/string.jl:69
+     in next at ./strings/string.jl:94 [inlined]
+     in getindex(::String, ::Int64) at ./strings/basic.jl:70
+     ...
 
     julia> s[4]
     ' '
@@ -545,10 +549,11 @@ contained in a string:
     false
 
     julia> contains("Xylophon", 'o')
-    ERROR: MethodError: `contains` has no method matching contains(::String, ::Char)
+    ERROR: MethodError: no method matching contains(::String, ::Char)
     Closest candidates are:
       contains(!Matched::Function, ::Any, !Matched::Any)
       contains(::AbstractString, !Matched::AbstractString)
+     ...
 
 The last error is because ``'o'`` is a character literal, and :func:`contains`
 is a generic function that looks for subsequences. To look for an element in a
@@ -870,6 +875,7 @@ error:
 
     julia> "DATA\xff\u2200"
     ERROR: syntax: invalid UTF-8 sequence
+     ...
 
 Also observe the significant distinction between ``\xff`` and ``\uff``:
 the former escape sequence encodes the *byte 255*, whereas the latter

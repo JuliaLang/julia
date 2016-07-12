@@ -100,11 +100,7 @@ requested conversion:
     ERROR: MethodError: Cannot `convert` an object of type String to an object of type AbstractFloat
     This may have arisen from a call to the constructor AbstractFloat(...),
     since type constructors fall back to convert methods.
-    Closest candidates are:
-      convert(::Type{AbstractFloat}, ::Bool)
-      convert(::Type{AbstractFloat}, ::Int8)
-      convert(::Type{AbstractFloat}, ::Int16)
-      ...
+     ...
 
 Some languages consider parsing strings as numbers or formatting
 numbers as strings to be conversions (many dynamic languages will even
@@ -146,7 +142,8 @@ to one and zero:
 
     julia> convert(Bool, 1im)
     ERROR: InexactError()
-     in convert at complex.jl:18
+     in convert(::Type{Bool}, ::Complex{Int64}) at ./complex.jl:18
+     ...
 
     julia> convert(Bool, 0im)
     false
@@ -161,7 +158,8 @@ This is the actual implementation in Julia::
 
     julia> convert(Bool, 1im)
     ERROR: InexactError()
-     in convert at complex.jl:18
+     in convert(::Type{Bool}, ::Complex{Int64}) at ./complex.jl:18
+     ...
 
 
 Case Study: Rational Conversions
