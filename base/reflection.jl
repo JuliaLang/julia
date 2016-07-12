@@ -532,14 +532,14 @@ function function_module(f, types::ANY; ctx=Void)
     first(m).module
 end
 
-function method_exists(f::ANY, t::ANY)
+function method_exists(f::ANY, tt::ANY; ctx=Void)
     ft = isa(f,Type) ? Type{f} : typeof(f)
     tt = to_tuple_type(tt)
     if ctx !== Bottom
         tt = tt_cons(ctx, tt)
     end
     tt = tt_cons(ft, tt)
-    return ccall(:jl_method_exists, Cint, (Any, Any), typeof(f).name.mt, t) != 0
+    return ccall(:jl_method_exists, Cint, (Any, Any), ft.name.mt, tt) != 0
 end
 
 function isambiguous(m1::Method, m2::Method)
