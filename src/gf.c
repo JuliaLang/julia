@@ -2015,7 +2015,6 @@ JL_DLLEXPORT jl_value_t *jl_apply_generic(jl_value_t **args, uint32_t nargs)
             if (error_en)
                 show_call(F, args, nargs);
 #endif
-            JL_GC_POP();
             jl_method_error((jl_function_t*)args[0], args, nargs);
             // unreachable
         }
