@@ -305,6 +305,9 @@ promote_rule{T<:BitSigned64}(::Type{UInt64}, ::Type{T}) = UInt64
 promote_rule{T<:Union{UInt32, UInt64}}(::Type{T}, ::Type{Int128}) = Int128
 promote_rule{T<:BitSigned}(::Type{UInt128}, ::Type{T}) = UInt128
 
+_default_type(T::Type{Unsigned}) = UInt
+_default_type(T::Union{Type{Integer},Type{Signed}}) = Int
+
 ## traits ##
 
 typemin(::Type{Int8  }) = Int8(-128)
