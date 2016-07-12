@@ -1554,14 +1554,16 @@
   (define (fuse? e) (and (pair? e) (eq? (car e) 'fuse)))
   (define (anyfuse? exprs)
     (if (null? exprs) #f (if (fuse? (car exprs)) #t (anyfuse? (cdr exprs)))))
-  (define (to-lambda f args) ; convert f to anonymous function with hygienic tuple args
+  (define (to-lambda f args kwargs) ; convert f to anonymous function with hygienic tuple args
     (define (genarg arg) (if (vararg? arg) (list '... (gensy)) (gensy)))
-    ; to do: optimize the case where f is already an anonymous function, in which
-    ; case we only need to hygienicize the arguments?   But it is quite tricky
-    ; to fully handle splatted args, typed args, keywords, etcetera.  And probably
-    ; the extra function call is harmless because it will get inlined anyway.
-    (let ((genargs (map genarg args))) ; construct formal parameters
-      `(-> ,(cons 'tuple genargs) (call ,f ,@genargs))))
+    ; (To do: optimize the case where f is already an anonymous function, in which
+    ;  case we only need to hygienicize the arguments?   But it is quite tricky
+    ;  to fully handle splatted args, typed args, keywords, etcetera.  And probably
+    ;  the extra function call is harmless because it will get inlined anyway.)
+    (let ((genargs (map genarg args))) ; hygienic formal parameters
+      (if (null? kwargs)
+          `(-> ,(cons 'tuple genargs) (call ,f ,@genargs)) ; no keyword args
+          `(-> ,(cons 'tuple genargs) (call ,f (parameters ,@kwargs) ,@genargs)))))
   (define (from-lambda f) ; convert (-> (tuple args...) (call func args...)) back to func
     (if (and (pair? f) (eq? (car f) '->) (pair? (cadr f)) (eq? (caadr f) 'tuple)
              (pair? (caddr f)) (eq? (caaddr f) 'call) (equal? (cdadr f) (cdr (cdaddr f))))
@@ -1593,14 +1595,27 @@
                                  fargs args)))
         (let ,fbody ,@(reverse (fuse-lets fargs args '()))))))
   (define (make-fuse f args) ; check for nested (fuse f args) exprs and combine
+    (define (split-kwargs args) ; return (cons keyword-args positional-args) extracted from args
+      (define (sk args kwargs pargs)
+        (if (null? args)
+            (cons kwargs pargs)
+            (if (kwarg? (car args))
+                (sk (cdr args) (cons (car args) kwargs) pargs)
+                (sk (cdr args) kwargs (cons (car args) pargs)))))
+      (if (has-parameters? args)
+          (sk (reverse (cdr args)) (cdar args) '())
+          (sk (reverse args) '() '())))
     (define (dot-to-fuse e) ; convert e == (. f (tuple args)) to (fuse f args)
       (if (and (pair? e) (eq? (car e) '|.|) (not (getfield-field? (caddr e))))
           (make-fuse (cadr e) (cdaddr e))
           e))
-    (let ((args_ (map dot-to-fuse args)))
+    (let* ((kws.args (split-kwargs args))
+           (kws (car kws.args))
+           (args (cdr kws.args)) ; fusing occurs on positional args only
+           (args_ (map dot-to-fuse args)))
       (if (anyfuse? args_)
-          `(fuse ,(fuse-funcs (to-lambda f args) args_) ,(fuse-args args_))
-          `(fuse ,(to-lambda f args) ,args_))))
+          `(fuse ,(fuse-funcs (to-lambda f args kws) args_) ,(fuse-args args_))
+          `(fuse ,(to-lambda f args kws) ,args_))))
   ; given e == (fuse lambda args), compress the argument list by removing (pure)
   ; duplicates in args, inlining literals, and moving any varargs to the end:
   (define (compress-fuse e)
