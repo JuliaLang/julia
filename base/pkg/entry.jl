@@ -591,7 +591,7 @@ function build!(pkgs::Vector, errs::Dict, seen::Set=Set())
             end
         end
     """
-    io, pobj = open(pipeline(detach(`$(Base.julia_cmd())
+    io, pobj = open(pipeline(detach(`$(Base.julia_cmd()) -O0
                                     --compilecache=$(Bool(Base.JLOptions().use_compilecache) ? "yes" : "no")
                                     --history-file=no
                                     --color=$(Base.have_color ? "yes" : "no")
