@@ -5,17 +5,16 @@ using Base.Test
 ######## Utilities ###########
 
 # Generate an array similar to A[indx1, indx2, ...], but only call
-# getindex with scalar-valued indexes. This will be safe even after
-# getindex starts calling sub/slice.
+# getindex with scalar-valued indexes. This will be safe even if
+# `getindex` someday calls `view`.
 
-# The "nodrop" variant is similar to current getindex/sub, except it
-# doesn't drop any dimensions (not even trailing ones)
+# The "nodrop" variant does not drop any dimensions (not even trailing ones)
 function Agen_nodrop(A::AbstractArray, I...)
     irep = replace_colon(A, I)
     _Agen(A, irep...)
 end
 
-# This does the same thing as slice
+# This drops scalar dimensions
 function Agen_slice(A::AbstractArray, I...)
     irep = replace_colon(A, I)
     B = _Agen(A, irep...)
@@ -179,9 +178,9 @@ function runsubarraytests(A::Array, I...)
 end
 
 function runsubarraytests(A::ANY, I...)
-    # When A was created with sub, we have to check bounds, since some
+    # When A was created with view, we have to check bounds, since some
     # of the "residual" dimensions have size 1. It's possible that we
-    # need dedicated tests for sub.
+    # need dedicated tests for view.
     for d = 1:length(I)-1
         if !isa(I[d], Colon) && any(I[d] .> size(A,d))
             return nothing
@@ -203,20 +202,7 @@ function runsubarraytests(A::ANY, I...)
             Cdim += 1
         end
     end
-    # sub
     local S
-    try
-        S = view(A, I...)
-    catch err
-        @show typeof(A)
-        @show A.indexes
-        @show I
-        rethrow(err)
-    end
-    test_linear(S, C)
-    test_cartesian(S, C)
-    test_mixed(S, C)
-    # slice
     try
         S = view(A, I...)
     catch err
@@ -324,7 +310,7 @@ x11289 = randn(5,5)
 
 ####### "Classical" tests #######
 
-# sub
+# Tests where non-trailing dimensions are preserved
 A = copy(reshape(1:120, 3, 5, 8))
 sA = view(A, 2:2, 1:5, :)
 @test strides(sA) == (1, 3, 15)
@@ -372,7 +358,7 @@ sA = view(A, 1:2, 3, [1 3; 4 2])
 @test ndims(sA) == 3
 @test indices(sA) === (Base.OneTo(2), Base.OneTo(2), Base.OneTo(2))
 
-# sub logical indexing #4763
+# logical indexing #4763
 A = view([1:10;], 5:8)
 @test A[A.<7] == [5, 6]
 @test Base.unsafe_getindex(A, A.<7) == [5, 6]
@@ -381,7 +367,7 @@ sB = view(B, 2:3, 2:3)
 @test sB[sB.>8] == [10, 11]
 @test Base.unsafe_getindex(sB, sB.>8) == [10, 11]
 
-# slice
+# Tests where dimensions are dropped
 A = copy(reshape(1:120, 3, 5, 8))
 sA = view(A, 2, :, 1:8)
 @test parent(sA) == A
