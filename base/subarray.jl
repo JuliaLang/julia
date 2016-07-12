@@ -313,7 +313,7 @@ should transform to
 """
 function replace_ref_end!(ex,withex=nothing)
     if isa(ex,Symbol) && ex == :end
-        withex == nothing && error("Invalid use of end")
+        withex === nothing && error("Invalid use of end")
         return withex
     elseif isa(ex,Expr)
         if ex.head == :ref

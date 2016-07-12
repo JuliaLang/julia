@@ -40,7 +40,7 @@ require(f::AbstractString, fs::AbstractString...) = (require(f); for x in fs req
 
 function require(name::String)
     path = find_in_node1_path(name)
-    path == nothing && error("$name not found")
+    path === nothing && error("$name not found")
 
     if myid() == 1 && toplevel_load
         refs = Any[ @spawnat p _require(path) for p in filter(x->x!=1, procs()) ]
@@ -85,7 +85,7 @@ end
 
 function include_from_node1(path::AbstractString)
     prev = source_path(nothing)
-    path = (prev == nothing) ? abspath(path) : joinpath(dirname(prev),path)
+    path = (prev === nothing) ? abspath(path) : joinpath(dirname(prev),path)
     tls = task_local_storage()
     tls[:SOURCE_PATH] = path
     local result
@@ -99,7 +99,7 @@ function include_from_node1(path::AbstractString)
             result = include_string(remotecall_fetch(readstring, 1, path), path)
         end
     finally
-        if prev == nothing
+        if prev === nothing
             delete!(tls, :SOURCE_PATH)
         else
             tls[:SOURCE_PATH] = prev
@@ -122,7 +122,7 @@ function reload_path(path::AbstractString)
         had || delete!(package_list, path)
         rethrow(e)
     finally
-        if prev != nothing
+        if prev !== nothing
             tls[:SOURCE_PATH] = prev
         end
     end

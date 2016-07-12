@@ -288,7 +288,7 @@ create_serialization_stream() do s # user-defined type array
     r = deserialize(s)
     @test r.storage[:v] == 2
     @test r.state == :done
-    @test r.exception == nothing
+    @test r.exception === nothing
 end
 
 immutable MyErrorTypeTest <: Exception end

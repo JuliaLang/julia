@@ -187,7 +187,7 @@ let gf_err2
     @test_throws ErrorException gf_err2(code_llvm)
     @test_throws ErrorException gf_err2(code_native)
     @test gf_err_ref[] == 6
-    @test gf_err2(code_lowered) == nothing
+    @test gf_err2(code_lowered) === nothing
 end
 
 # issue #15043
