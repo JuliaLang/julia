@@ -997,6 +997,79 @@ Keyword argument ``topology`` to ``addprocs`` is used to specify how the workers
 Currently sending a message between unconnected workers results in an error. This behaviour, as also the
 functionality and interface should be considered experimental in nature and may change in future releases.
 
+Multi-threading (Experimental)
+-------------------------------
+In addition to tasks, remote calls and remote references, Julia from v0.5 will natively support multi-threading. 
+
+### Setup 
+First, load the threading module into your workspace::
+
+    using Base.Threads
+
+By default, Julia starts up with a single thread of execution. This can be verified by 
+using the command :obj:`nthreads()`::
+
+    julia> nthreads()
+    1
+
+The number of threads Julia starts up with is controlled by an environment variable 
+called `JULIA_NUM_THREADS`. Now, let's start up Julia with 4 threads.::
+    export JULIA_NUM_THREADS=4
+
+Let's verify there are 4 threads at our disposal::
+
+    julia> using Base.Threads
+    julia> nthreads()
+    4
+
+But we are currently on the master thread. To check, we use the command :obj:`threadid()`::
+    julia> threadid()
+    1
+
+### `@threads`
+
+Let's work a simple example using our native threads. Let us create an array of zeros.::
+
+    julia> a = zeros(10)
+    10-element Array{Float64,1}:
+     0.0
+     0.0
+     0.0
+     0.0
+     0.0
+     0.0
+     0.0
+     0.0
+     0.0
+     0.0
+
+Let us operate on this array simultaneously using 4 threads. We'll have each thread write 
+its thread ID into each location. 
+
+Julia supports parallel loops using the :obj:`@threads` macro. This macro is affixed in front 
+of a `for` loop to indicate to Julia that the loop is a multi-threaded region. ::
+
+    @threads for i = 1:10
+        a[i] = threadid()
+    end
+
+The iteration space is split amongst the threads, after which each thread writes its thread ID to its assigned locations.::
+
+    julia> a
+    10-element Array{Float64,1}:
+     1.0
+     1.0
+     1.0
+     2.0
+     2.0
+     2.0
+     3.0
+     3.0
+     4.0
+     4.0
+
+Note that :obj:`@threads` does not have an optional reduction parameter like :obj:`@parallel`. 
+
 .. rubric:: Footnotes
 
 .. [#mpi2rma] In this context, MPI refers to the MPI-1 standard. Beginning with MPI-2, the MPI standards committee introduced a new set of communication mechanisms, collectively referred to as Remote Memory Access (RMA). The motivation for adding RMA to the MPI standard was to facilitate one-sided communication patterns. For additional information on the latest MPI standard, see http://www.mpi-forum.org/docs.
