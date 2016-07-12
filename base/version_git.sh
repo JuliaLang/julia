@@ -73,7 +73,7 @@ fork_master_timestamp=$(git show -s $(git merge-base HEAD $(echo $origin)master)
 
 # Check for errrors and emit default value for missing numbers.
 if [ -z "$build_number" ]; then
-    build_number="0"
+    build_number="-1"
 fi
 if [ -z "$fork_master_distance" ]; then
     fork_master_distance="-1"
