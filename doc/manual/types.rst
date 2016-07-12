@@ -657,7 +657,7 @@ However, ``Point`` itself is also a valid type object:
     Point{T}
 
 Here the ``T`` is the dummy type symbol used in the original declaration
-of ``Point``. What does ``Point`` by itself mean? It is an abstract type
+of ``Point``. What does ``Point`` by itself mean? It is a type
 that contains all the specific instances ``Point{Float64}``,
 ``Point{AbstractString}``, etc.:
 
