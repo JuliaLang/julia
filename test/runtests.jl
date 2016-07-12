@@ -1147,6 +1147,9 @@ using Compat.Threads
     @test true
 end
 
+# Issue #223
+@test 1 == threadid() <= nthreads()
+
 @test @compat(Symbol("foo")) === :foo
 @test @compat(Symbol("foo", "bar")) === :foobar
 @test @compat(Symbol("a_", 2)) === :a_2

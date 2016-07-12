@@ -1078,7 +1078,9 @@ if !isdefined(Base, :Threads)
         macro threads(expr)
             return esc(expr)
         end
-        export @threads
+        threadid() = 1
+        nthreads() = 1
+        export @threads, threadid, nthreads
     end
     export Threads
 end
@@ -1281,7 +1283,7 @@ else
 end
 
 if !isdefined(Base, :view)
-    const view = slice 
+    const view = slice
 end
 
 if !isdefined(Base, :pointer_to_string)
