@@ -204,27 +204,27 @@ end
 
 # check_new_version
 import Base.check_new_version
-@test check_new_version([v"1", v"2"], v"3") == nothing
+@test check_new_version([v"1", v"2"], v"3") === nothing
 @test_throws AssertionError check_new_version([v"2", v"1"], v"3")
 @test_throws ErrorException check_new_version([v"1", v"2"], v"2")
-@test check_new_version(VersionNumber[], v"0") == nothing
-@test check_new_version(VersionNumber[], v"0.0.1") == nothing
+@test check_new_version(VersionNumber[], v"0") === nothing
+@test check_new_version(VersionNumber[], v"0.0.1") === nothing
 @test_throws ErrorException check_new_version(VersionNumber[], v"0.0.2")
-@test check_new_version(VersionNumber[], v"0.1") == nothing
+@test check_new_version(VersionNumber[], v"0.1") === nothing
 @test_throws ErrorException check_new_version(VersionNumber[], v"0.2")
-@test check_new_version(VersionNumber[], v"1") == nothing
+@test check_new_version(VersionNumber[], v"1") === nothing
 @test_throws ErrorException check_new_version(VersionNumber[], v"2")
 @test_throws ErrorException check_new_version(VersionNumber[v"1", v"2", v"3"], v"2")
 @test_throws ErrorException check_new_version([v"1", v"2"], v"4")
 @test_throws ErrorException check_new_version([v"1", v"2"], v"2-rc")
-@test check_new_version([v"1", v"2"], v"2.0.1") == nothing
-@test check_new_version([v"1", v"2"], v"2.1") == nothing
-@test check_new_version([v"1", v"2"], v"3") == nothing
+@test check_new_version([v"1", v"2"], v"2.0.1") === nothing
+@test check_new_version([v"1", v"2"], v"2.1") === nothing
+@test check_new_version([v"1", v"2"], v"3") === nothing
 
 # banner
 import Base.banner
 io = IOBuffer()
-@test banner(io) == nothing
+@test banner(io) === nothing
 @test length(takebuf_string(io)) > 50
 
 # julia_version.h version test

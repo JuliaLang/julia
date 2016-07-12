@@ -659,7 +659,7 @@ the interactive prompt. Other than not printing, it is a completely
 normal value and you can test for it programmatically::
 
     m = match(r"^\s*(?:#|$)", line)
-    if m == nothing
+    if m === nothing
         println("not a comment")
     else
         println("blank or comment")

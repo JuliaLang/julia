@@ -77,7 +77,7 @@ function credentials_callback(cred::Ptr{Ptr{Void}}, url_ptr::Cstring,
     try
         # use ssh key or ssh-agent
         if isset(allowed_types, Cuint(Consts.CREDTYPE_SSH_KEY))
-            creds == nothing && (creds = SSHCredentials())
+            creds === nothing && (creds = SSHCredentials())
             credid = "ssh://$host"
 
             # first try ssh-agent if credentials support its usage
@@ -172,7 +172,7 @@ function credentials_callback(cred::Ptr{Ptr{Void}}, url_ptr::Cstring,
         end
 
         if isset(allowed_types, Cuint(Consts.CREDTYPE_USERPASS_PLAINTEXT))
-            creds == nothing && (creds = UserPasswordCredentials())
+            creds === nothing && (creds = UserPasswordCredentials())
             credid = "$schema$host"
 
             username = creds[:user, credid]
