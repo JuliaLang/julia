@@ -56,7 +56,7 @@ macro grab_outputs(ex)
 end
 
 # Test basic operations: adding or removing a package, status, free
-#Also test for the existence of REQUIRE and META_Branch
+# Also test for the existence of REQUIRE and META_BRANCH
 temp_pkg_dir() do
     @test isfile(joinpath(Pkg.dir(),"REQUIRE"))
     @test isfile(joinpath(Pkg.dir(),"META_BRANCH"))
@@ -219,69 +219,69 @@ temp_pkg_dir() do
     # Various pin/free/re-pin/change-pin patterns (issue #17176)
     begin
         ret, out, err = @grab_outputs Pkg.free("Example")
-        @test ret == nothing && out == ""
+        @test ret === nothing && out == ""
         @test contains(err, "INFO: Freeing Example")
 
         ret, out, err = @grab_outputs Pkg.pin("Example")
-        @test ret == nothing && out == ""
+        @test ret === nothing && out == ""
         @test ismatch(r"INFO: Creating Example branch pinned\.[0-9a-f]{8}\.tmp", err)
         @test !contains(err, "INFO: No packages to install, update or remove")
         branchid = replace(err, r".*pinned\.([0-9a-f]{8})\.tmp.*"s, s"\1")
         vers = Pkg.installed("Example")
 
         ret, out, err = @grab_outputs Pkg.free("Example")
-        @test ret == nothing && out == ""
+        @test ret === nothing && out == ""
         @test contains(err, "INFO: Freeing Example")
 
         ret, out, err = @grab_outputs Pkg.pin("Example", v"0.4.0")
-        @test ret == nothing && out == ""
+        @test ret === nothing && out == ""
         @test contains(err, "INFO: Creating Example branch pinned.b1990792.tmp")
         @test contains(err, "INFO: No packages to install, update or remove")
         @test Pkg.installed("Example") == v"0.4.0"
 
         ret, out, err = @grab_outputs Pkg.pin("Example", v"0.4.0")
-        @test ret == nothing && out == ""
+        @test ret === nothing && out == ""
         @test contains(err, "INFO: Package Example is already pinned to the selected commit")
         @test !contains(err, "INFO: No packages to install, update or remove")
         @test Pkg.installed("Example") == v"0.4.0"
 
         ret, out, err = @grab_outputs Pkg.pin("Example")
-        @test ret == nothing && out == ""
+        @test ret === nothing && out == ""
         @test contains(err, "INFO: Package Example is already pinned")
         @test !contains(err, "INFO: No packages to install, update or remove")
         @test Pkg.installed("Example") == v"0.4.0"
 
         ret, out, err = @grab_outputs Pkg.update()
-        @test ret == nothing && out == ""
+        @test ret === nothing && out == ""
         @test contains(err, "INFO: Package Example: skipping update (pinned)...")
         @test Pkg.installed("Example") == v"0.4.0"
 
         ret, out, err = @grab_outputs Pkg.pin("Example", v"0.3.1")
-        @test ret == nothing && out == ""
+        @test ret === nothing && out == ""
         @test contains(err, "INFO: Creating Example branch pinned.d1ef7b00.tmp")
         @test contains(err, "INFO: No packages to install, update or remove")
         @test Pkg.installed("Example") == v"0.3.1"
 
         ret, out, err = @grab_outputs Pkg.pin("Example", v"0.4.0")
-        @test ret == nothing && out == ""
+        @test ret === nothing && out == ""
         @test contains(err, "INFO: Package Example: checking out existing branch pinned.b1990792.tmp")
         @test contains(err, "INFO: No packages to install, update or remove")
         @test Pkg.installed("Example") == v"0.4.0"
 
         ret, out, err = @grab_outputs Pkg.free("Example")
-        @test ret == nothing && out == ""
+        @test ret === nothing && out == ""
         @test contains(err, "INFO: Freeing Example")
         @test contains(err, "INFO: No packages to install, update or remove")
         @test Pkg.installed("Example") == vers
 
         ret, out, err = @grab_outputs Pkg.pin("Example")
-        @test ret == nothing && out == ""
+        @test ret === nothing && out == ""
         @test contains(err, "INFO: Package Example: checking out existing branch pinned.$branchid.tmp")
         @test !contains(err, "INFO: No packages to install, update or remove")
         @test Pkg.installed("Example") == vers
 
         ret, out, err = @grab_outputs Pkg.free("Example")
-        @test ret == nothing && out == ""
+        @test ret === nothing && out == ""
         @test contains(err, "INFO: Freeing Example")
         @test Pkg.installed("Example") == vers
     end
