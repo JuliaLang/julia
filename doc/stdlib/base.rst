@@ -367,7 +367,8 @@ All Objects
 
        julia> convert(Int, 3.5)
        ERROR: InexactError()
-        in convert at int.jl:209
+        in convert(::Type{Int64}, ::Float64) at ./int.jl:239
+        ...
 
    If ``T`` is a :obj:`AbstractFloat` or :obj:`Rational` type, then it will return the closest value to ``x`` representable by ``T``\ .
 
@@ -533,7 +534,7 @@ Types
        julia> structinfo(T) = [(fieldoffset(T,i), fieldname(T,i), fieldtype(T,i)) for i = 1:nfields(T)];
 
        julia> structinfo(Base.Filesystem.StatStruct)
-       12-element Array{Tuple{UInt64,Symbol,Type{_}},1}:
+       12-element Array{Tuple{UInt64,Union{Int64,Symbol},Type{_}},1}:
         (0x0000000000000000,:device,UInt64)
         (0x0000000000000008,:inode,UInt64)
         (0x0000000000000010,:mode,UInt64)

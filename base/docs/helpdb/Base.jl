@@ -5450,7 +5450,8 @@ julia> deleteat!([6, 5, 4, 3, 2, 1], 1:2:5)
 
 julia> deleteat!([6, 5, 4, 3, 2, 1], (2, 2))
 ERROR: ArgumentError: indices must be unique and sorted
- in deleteat! at array.jl:543
+ in deleteat!(::Array{Int64,1}, ::Tuple{Int64,Int64}) at ./array.jl:511
+ ...
 ```
 """
 deleteat!(collection, itr)
@@ -8109,7 +8110,8 @@ julia> convert(Int, 3.0)
 
 julia> convert(Int, 3.5)
 ERROR: InexactError()
- in convert at int.jl:209
+ in convert(::Type{Int64}, ::Float64) at ./int.jl:239
+ ...
 ```
 
 If `T` is a [`AbstractFloat`](:obj:`AbstractFloat`) or [`Rational`](:obj:`Rational`) type,
@@ -9125,10 +9127,7 @@ on the `permute` and `scale` keyword arguments. The eigenvectors are returned co
 ```jldoctest
 julia> eig([1.0 0.0 0.0; 0.0 3.0 0.0; 0.0 0.0 18.0])
 ([1.0,3.0,18.0],
-3×3 Array{Float64,2}:
- 1.0  0.0  0.0
- 0.0  1.0  0.0
- 0.0  0.0  1.0)
+[1.0 0.0 0.0; 0.0 1.0 0.0; 0.0 0.0 1.0])
 ```
 
 `eig` is a wrapper around [`eigfact`](:func:`eigfact`), extracting all parts of the

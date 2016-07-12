@@ -92,7 +92,7 @@ the macro will be evaluated and the result will be passed instead!). For example
 .. doctest::
 
    julia> macroexpand( :(@edit println("")) )
-   :(Base.edit(println,(Base.typesof)("")))
+   :((Base.edit)(println,(Base.typesof)("")))
 
 The functions :func:`Base.Meta.show_sexpr` and :func:`dump` are used to display S-expr style views
 and depth-nested detail views for any expression.
@@ -104,9 +104,14 @@ variable assignments:
 .. doctest::
 
    julia> expand( :(f() = 1) )
-   :($(Expr(:method, :f, :((top(svec))((top(apply_type))(Tuple),(top(svec))())), AST(:($(Expr(:lambda, Any[], Any[Any[],Any[],0,Any[]], :(begin  # none, line 1:
+   :(begin
+           $(Expr(:method, :f))
+           $(Expr(:method, :f, :((Core.svec)((Core.apply_type)(Tuple,(Core.Typeof)(f)),(Core.svec)())), Toplevel LambdaInfo thunk
+   :(begin  # none, line 1:
            return 1
-       end))))), false)))
+       end), false))
+           return f
+       end)
 
 .. rubric:: Intermediate and compiled representations
 
