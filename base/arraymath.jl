@@ -50,37 +50,21 @@ end
 @pure promote_array_type{S<:Integer, P}(F, ::Type{S}, ::Type{Bool}, ::Type{P}) = P
 
 for f in (:+, :-, :div, :mod, :&, :|, :$)
-    @eval begin
-        function ($f){S,T}(A::Range{S}, B::Range{T})
-            F = similar(A, promote_op($f,S,T), promote_shape(size(A),size(B)))
-            for (iF, iA, iB) in zip(eachindex(F), eachindex(A), eachindex(B))
-                @inbounds F[iF] = ($f)(A[iA], B[iB])
-            end
-            return F
-        end
-        function ($f){S,T}(A::AbstractArray{S}, B::Range{T})
-            F = similar(A, promote_op($f,S,T), promote_shape(A,B))
-            for (iF, iA, iB) in zip(eachindex(F), eachindex(A), eachindex(B))
-                @inbounds F[iF] = ($f)(A[iA], B[iB])
-            end
-            return F
-        end
-        function ($f){S,T}(A::Range{S}, B::AbstractArray{T})
-            F = similar(B, promote_op($f,S,T), promote_shape(A,B))
-            for (iF, iA, iB) in zip(eachindex(F), eachindex(A), eachindex(B))
-                @inbounds F[iF] = ($f)(A[iA], B[iB])
-            end
-            return F
-        end
-        function ($f){S,T}(A::AbstractArray{S}, B::AbstractArray{T})
-            F = similar(A, promote_op($f,S,T), promote_shape(A,B))
-            for (iF, iA, iB) in zip(eachindex(F), eachindex(A), eachindex(B))
-                @inbounds F[iF] = ($f)(A[iA], B[iB])
-            end
-            return F
-        end
-    end
+    @eval ($f){S,T}(A::AbstractArray{S}, B::AbstractArray{T}) =
+        _elementwise($f, A, B, promote_eltype_op($f, A, B))
 end
+function _elementwise{S,T}(op, A::AbstractArray{S}, B::AbstractArray{T}, ::Type{Any})
+    promote_shape(A,B) # check size compatibility
+    return broadcast(op, A, B)
+end
+function _elementwise{S,T,R}(op, A::AbstractArray{S}, B::AbstractArray{T}, ::Type{R})
+    F = similar(A, R, promote_shape(A,B))
+    for (iF, iA, iB) in zip(eachindex(F), eachindex(A), eachindex(B))
+        @inbounds F[iF] = op(A[iA], B[iB])
+    end
+    return F
+end
+
 for f in (:.+, :.-, :.*, :./, :.\, :.^, :.÷, :.%, :.<<, :.>>, :div, :mod, :rem, :&, :|, :$)
     @eval begin
         function ($f){T}(A::Number, B::AbstractArray{T})
