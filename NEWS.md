@@ -132,6 +132,9 @@ Library improvements
       `String(s)`, `unsafe_string(ptr)` (formerly `bytestring(ptr)`), and
       `unsafe_wrap(String, ptr)` (formerly `pointer_to_string`) ([#16731]).
 
+    * A `transcode(T, src)` function is now exported for converting data
+      between UTF-xx Unicode encodings ([#17323]).
+
   * Most of the combinatorics functions have been moved from `Base`
     to the [Combinatorics.jl package](https://github.com/JuliaLang/Combinatorics.jl) ([#13897]).
 
@@ -334,4 +337,5 @@ Deprecated or removed
 [#17075]: https://github.com/JuliaLang/julia/issues/17075
 [#17266]: https://github.com/JuliaLang/julia/issues/17266
 [#17300]: https://github.com/JuliaLang/julia/issues/17300
+[#17323]: https://github.com/JuliaLang/julia/issues/17323
 [#17374]: https://github.com/JuliaLang/julia/issues/17374
