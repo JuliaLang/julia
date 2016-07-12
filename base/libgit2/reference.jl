@@ -192,24 +192,24 @@ end
 
 function Base.start(bi::GitBranchIter)
     ref_ptr_ptr = Ref{Ptr{Void}}(C_NULL)
-    btype = Cint[0]
+    btype = Ref{Cint}()
     err = ccall((:git_branch_next, :libgit2), Cint,
                  (Ptr{Ptr{Void}}, Ptr{Cint}, Ptr{Void}),
                   ref_ptr_ptr, btype, bi.ptr)
     err != Int(Error.GIT_OK) && return (nothing, -1, true)
-    return (GitReference(ref_ptr_ptr[]), btype[1], false)
+    return (GitReference(ref_ptr_ptr[]), btype[], false)
 end
 
 Base.done(bi::GitBranchIter, state) = Bool(state[3])
 
 function Base.next(bi::GitBranchIter, state)
     ref_ptr_ptr = Ref{Ptr{Void}}(C_NULL)
-    btype = Cint[0]
+    btype = Ref{Cint}()
     err = ccall((:git_branch_next, :libgit2), Cint,
                  (Ptr{Ptr{Void}}, Ptr{Cint}, Ptr{Void}),
                   ref_ptr_ptr, btype, bi.ptr)
     err != Int(Error.GIT_OK) && return (state[1:2], (nothing, -1, true))
-    return (state[1:2], (GitReference(ref_ptr_ptr[]), btype[1], false))
+    return (state[1:2], (GitReference(ref_ptr_ptr[]), btype[], false))
 end
 
 Base.iteratorsize(::Type{GitBranchIter}) = Base.SizeUnknown()
