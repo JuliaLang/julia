@@ -1668,3 +1668,22 @@ let A = zeros(3,3)
     @test size(A[:,UInt(1):UInt(2)]) == (3,2)
     @test size(similar(A, UInt(3), 0x3)) == size(similar(A, (UInt(3), 0x3))) == (3,3)
 end
+
+# issue 17254
+module AutoRetType
+
+using Base.Test
+
+immutable Foo end
+for op in (:+, :*, :÷, :%, :<<, :>>, :-, :/, :\, ://, :^)
+    @eval import Base.$(op)
+    @eval $(op)(::Foo, ::Foo) = Foo()
+end
+A = fill(Foo(), 10, 10)
+@test typeof(A+A) == Matrix{Foo}
+@test typeof(A-A) == Matrix{Foo}
+for op in (:.+, :.*, :.÷, :.%, :.<<, :.>>, :.-, :./, :.\, :.//, :.^)
+    @eval @test typeof($(op)(A,A)) == Matrix{Foo}
+end
+
+end
