@@ -1033,8 +1033,9 @@ JL_CALLABLE(jl_f_invoke)
     JL_ADJUST;
 
     JL_NARGSV(invoke, 2);
+    jl_value_t *ctx = args[-1]; // for now, just copy the context of invoke
     jl_value_t *argtypes = args[1];
-    JL_GC_PUSH1(&argtypes);
+    JL_GC_PUSH2(&ctx, &argtypes);
     if (jl_is_tuple(args[1])) {
         // TODO: maybe deprecation warning, better checking
         argtypes = (jl_value_t*)jl_apply_tuple_type_v((jl_value_t**)jl_data_ptr(argtypes),
@@ -1045,8 +1046,20 @@ JL_CALLABLE(jl_f_invoke)
     }
     if (!jl_tuple_subtype(&args[2], nargs-2, (jl_datatype_t*)argtypes, 1))
         jl_error("invoke: argument type error");
-    args[1] = args[0];  // move function directly in front of arguments
-    jl_value_t *res = jl_gf_invoke((jl_tupletype_t*)argtypes, &args[1], nargs-1);
+
+    // TODO: invoke in an arbitrary context (in which case the check below will make sense)
+    if (ctx != jl_bottom_type) {
+        jl_svec_t *tt = ((jl_tupletype_t*)argtypes)->parameters;
+        size_t ntypes = jl_svec_len(tt);
+        jl_svec_t *tt_ctx = jl_alloc_svec(ntypes+1);
+        jl_svecset(tt_ctx, 0, ctx);
+        for (size_t i = 0; i < ntypes; ++i)
+            jl_svecset(tt_ctx, i+1, jl_svecref(tt, i));
+        argtypes = (jl_value_t*)jl_apply_tuple_type(tt_ctx);
+    }
+
+    args[1] = ctx;  // pass in the context
+    jl_value_t *res = jl_gf_invoke((jl_tupletype_t*)argtypes, &args[0], nargs);
     JL_GC_POP();
     return res;
 }
