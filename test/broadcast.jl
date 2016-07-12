@@ -224,12 +224,11 @@ let x = sin.(1:10)
     @test sin.(atan2.(x, 3.7)) == broadcast(x -> sin(atan2(x,3.7)), x)
     @test atan2.(x, 3.7) == broadcast(x -> atan2(x,3.7), x) == broadcast(atan2, x, 3.7)
 end
-# Use side effects to check for loop fusion.  Note that, due to #17314,
-# a broadcasted function is currently called an extra time with an argument 1.
+# Use side effects to check for loop fusion.
 let g = Int[]
-    f17300(x) = begin; push!(g, x); x+1; end
+    f17300(x) = begin; push!(g, x); x+2; end
     f17300.(f17300.(f17300.(1:3)))
-    @test g == [1,2,3, 1,2,3, 2,3,4, 3,4,5]
+    @test g == [1,3,5, 2,4,6, 3,5,7]
 end
 # fusion with splatted args:
 let x = sin.(1:10), a = [x]
@@ -293,4 +292,16 @@ end
 # issue #17304
 let foo = [[1,2,3],[4,5,6],[7,8,9]]
     @test max.(foo...) == broadcast(max, foo...) == [7,8,9]
+end
+
+# Issue 17314
+@test broadcast(x->log(log(log(x))), [1000]) == [log(log(log(1000)))]
+let f17314 = x -> x < 0 ? false : x
+    @test eltype(broadcast(f17314, 1:3)) === Int
+    @test eltype(broadcast(f17314, -1:1)) === Integer
+    @test eltype(broadcast(f17314, Int[])) === Union{}
+end
+let io = IOBuffer()
+    broadcast(x->print(io,x), 1:5) # broadcast with side effects
+    @test takebuf_array(io) == [0x31,0x32,0x33,0x34,0x35]
 end

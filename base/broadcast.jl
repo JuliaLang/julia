@@ -3,7 +3,7 @@
 module Broadcast
 
 using Base.Cartesian
-using Base: promote_op, promote_eltype, promote_eltype_op, @get!, _msk_end, unsafe_bitgetindex, linearindices, tail, OneTo, to_shape
+using Base: promote_eltype_op, @get!, _msk_end, unsafe_bitgetindex, linearindices, tail, OneTo, to_shape
 import Base: .+, .-, .*, ./, .\, .//, .==, .<, .!=, .<=, .÷, .%, .<<, .>>, .^
 export broadcast, broadcast!, bitbroadcast, dotview
 export broadcast_getindex, broadcast_setindex!
@@ -299,7 +299,7 @@ end
 ## elementwise operators ##
 
 for op in (:÷, :%, :<<, :>>, :-, :/, :\, ://, :^)
-    @eval $(Symbol(:., op))(A::AbstractArray, B::AbstractArray) = broadcast($(op), A, B)
+    @eval $(Symbol(:., op))(A::AbstractArray, B::AbstractArray) = broadcast($op, A, B)
 end
 .+(As::AbstractArray...) = broadcast(+, As...)
 .*(As::AbstractArray...) = broadcast(*, As...)
