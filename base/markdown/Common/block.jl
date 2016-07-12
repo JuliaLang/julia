@@ -214,64 +214,83 @@ end
 
 type List
     items::Vector{Any}
-    ordered::Bool
+    ordered::Int # `-1` is unordered, `>= 0` is ordered.
 
-    List(x::AbstractVector, b::Bool) = new(x, b)
-    List(x::AbstractVector) = new(x, false)
-    List(b::Bool) = new(Any[], b)
+    List(x::AbstractVector, b::Integer) = new(x, b)
+    List(x::AbstractVector) = new(x, -1)
+    List(b::Integer) = new(Any[], b)
 end
 
 List(xs...) = List(vcat(xs...))
 
-const bullets = "*•+-"
-const num_or_bullets = r"^(\*|•|\+|-|\d+(\.|\))) "
+isordered(list::List) = list.ordered >= 0
 
-# Todo: ordered lists, inline formatting
+const BULLETS = r"^ {0,3}(\*|\+|•|-)( |$)"
+const NUM_OR_BULLETS = r"^ {0,3}(\*|•|\+|-|\d+(\.|\)))( |$)"
+
 function list(stream::IO, block::MD)
     withstream(stream) do
-        eatindent(stream) || return false
-        b = startswith(stream, num_or_bullets)
-        (b === nothing || b == "") && return false
-        ordered = !(b[1] in bullets)
-        if ordered
-            b = b[end - 1] == '.' ? r"^\d+\. " : r"^\d+\) "
-            # TODO start value
-        end
-        the_list = List(ordered)
-
-        buffer = IOBuffer()
-        fresh_line = false
-        while !eof(stream)
-            if fresh_line
-                sp = startswith(stream, r"^ {0,3}")
-                if !(startswith(stream, b) in [false, ""])
-                    push!(the_list.items, parseinline(takebuf_string(buffer), block))
-                    buffer = IOBuffer()
-                else
-                    # TODO write a newline here, and deal with nested
-                    write(buffer, ' ', sp)
-                end
-                fresh_line = false
+        bullet = startswith(stream, NUM_OR_BULLETS; eat = false)
+        indent = isempty(bullet) ? (return false) : length(bullet)
+        # Calculate the starting number and regex to use for bullet matching.
+        initial, regex =
+            if ismatch(BULLETS, bullet)
+                # An unordered list. Use `-1` to flag the list as unordered.
+                -1, BULLETS
+            elseif ismatch(r"^ {0,3}\d+(\.|\))( |$)", bullet)
+                # An ordered list. Either with `1. ` or `1) ` style numbering.
+                r = contains(bullet, ".") ? r"^ {0,3}(\d+)\.( |$)" : r"^ {0,3}(\d+)\)( |$)"
+                Base.parse(Int, match(r, bullet).captures[1]), r
             else
-                c = read(stream, Char)
-                if c == '\n'
-                    eof(stream) && break
-                    next = Char(peek(stream)) # ok since we only compare with ASCII
-                    if next == '\n'
+                # Failed to match any bullets. This branch shouldn't actually be needed
+                # since the `NUM_OR_BULLETS` regex should cover this, but we include it
+                # simply for thoroughness.
+                return false
+            end
+
+        # Initialise the empty list object: either ordered or unordered.
+        list = List(initial)
+
+        buffer = IOBuffer() # For capturing nested text for recursive parsing.
+        newline = false     # For checking if we have two consecutive newlines: end of list.
+        count = 0           # Count of list items. Used to check if we need to push remaining
+                            # content in `buffer` after leaving the `while` loop.
+        while !eof(stream)
+            if startswith(stream, "\n")
+                if newline
+                    # Double newline ends the current list.
+                    pushitem!(list, buffer)
+                    break
+                else
+                    newline = true
+                    println(buffer)
+                end
+            else
+                newline = false
+                if startswith(stream, " "^indent)
+                    # Indented text that is part of the current list item.
+                    print(buffer, readline(stream))
+                else
+                    matched = startswith(stream, regex)
+                    if isempty(matched)
+                        # Unindented text meaning we have left the current list.
+                        pushitem!(list, buffer)
                         break
                     else
-                        fresh_line = true
+                        # Start of a new list item.
+                        count += 1
+                        count > 1 && pushitem!(list, buffer)
+                        print(buffer, readline(stream))
                     end
-                else
-                    write(buffer, c)
                 end
             end
         end
-        push!(the_list.items, parseinline(takebuf_string(buffer), block))
-        push!(block, the_list)
+        count == length(list.items) || pushitem!(list, buffer)
+        push!(block, list)
         return true
     end
 end
+pushitem!(list, buffer) = push!(list.items, parse(takebuf_string(buffer)).content)
 
 # ––––––––––––––
 # HorizontalRule
