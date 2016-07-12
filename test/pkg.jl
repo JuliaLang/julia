@@ -67,7 +67,7 @@ temp_pkg_dir() do
     @test !isempty(Pkg.available())
 
     @test_throws PkgError Pkg.installed("MyFakePackage")
-    @test Pkg.installed("Example") == nothing
+    @test Pkg.installed("Example") === nothing
 
     # check that versioninfo(io, true) doesn't error and produces some output
     # (done here since it calls Pkg.status which might error or clone metadata)
@@ -97,7 +97,7 @@ temp_pkg_dir() do
     end
 
     Pkg.setprotocol!("")
-    @test Pkg.Cache.rewrite_url_to == nothing
+    @test Pkg.Cache.rewrite_url_to === nothing
     Pkg.setprotocol!("https")
     Pkg.add("Example")
     @test [keys(Pkg.installed())...] == ["Example"]
@@ -395,7 +395,7 @@ temp_pkg_dir() do
     # issue #15948
     let package = "Example"
         Pkg.rm(package)  # Remove package if installed
-        @test Pkg.installed(package) == nothing  # Registered with METADATA but not installed
+        @test Pkg.installed(package) === nothing  # Registered with METADATA but not installed
         msg = readstring(ignorestatus(`$(Base.julia_cmd()) -f -e "redirect_stderr(STDOUT); Pkg.build(\"$package\")"`))
         @test contains(msg, "$package is not an installed package")
         @test !contains(msg, "signal (15)")

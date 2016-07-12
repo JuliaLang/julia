@@ -239,7 +239,7 @@ function start_worker(zid, cookie)
         #println("worker recv data from $from_zid")
 
         streams = get(manager.map_zmq_julia, from_zid, nothing)
-        if streams == nothing
+        if streams === nothing
             # First time..
             (r_s, w_s) = setup_connection(from_zid, REMOTE_INITIATED)
             Base.process_messages(r_s, w_s)
