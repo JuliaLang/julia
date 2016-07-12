@@ -66,6 +66,86 @@ function dependencies(avail::Dict, fix::Dict = Dict{String,Fixed}("julia"=>Fixed
     avail, conflicts
 end
 
+function partial_update_mask(instd::Dict{String,Tuple{VersionNumber,Bool}}, avail::Dict{String,Dict{VersionNumber,Available}}, upkgs::Set{String})
+    dont_update = Set{String}()
+    isempty(upkgs) && return dont_update
+    avail_new = deepcopy(avail)
+    for p in upkgs
+        haskey(instd, p) || throw(PkgError("Package $p is not installed"))
+        v = instd[p][1]
+        if haskey(avail, p)
+            for vn in keys(avail[p])
+                vn < v && delete!(avail_new[p], vn)
+            end
+        end
+    end
+    avail_new = dependencies_subset(avail_new, upkgs)
+
+    for p in keys(avail)
+        !haskey(avail_new, p) && push!(dont_update, p)
+    end
+    for (p,_) in instd
+        !haskey(avail_new, p) && !(p in upkgs) && push!(dont_update, p)
+    end
+    return dont_update
+end
+
+# Try to produce some helpful message in case of a partial update which does not go all the way
+# (Does not do a full analysis, it only checks requirements and direct dependents.)
+function check_partial_updates(reqs::Requires, deps::Dict{String,Dict{VersionNumber,Available}}, want::Dict{String,VersionNumber}, fixed::Dict{String,Fixed}, upkgs::Set{String})
+    for p in upkgs
+        if !haskey(want, p)
+            if !haskey(fixed, p)
+                warn("Something went wrong with the update of package $p, please submit a bug report")
+                continue
+            end
+            v = fixed[p].version
+        else
+            v = want[p]
+            if haskey(fixed, p) && v != fixed[p].version
+                warn("Something went wrong with the update of package $p, please submit a bug report")
+                continue
+            end
+        end
+        haskey(deps, p) || continue
+        vers = sort!(collect(keys(deps[p])))
+        higher_vers = vers[vers .> v]
+        isempty(higher_vers) && continue # package p has been set to the highest available version
+
+        # Determine if there are packages which depend on `p` and somehow prevent its update to
+        # the latest version
+        blocking_parents = Set{String}()
+        for (p1,d1) in deps
+            p1 in upkgs && continue # package `p1` is among the ones to be updated, skip the check
+            haskey(fixed, p1) || continue # if package `p1` is not fixed, it can't be blocking
+            r1 = fixed[p1].requires # get `p1` requirements
+            haskey(r1, p) || continue # check if package `p1` requires `p`
+            vs1 = r1[p] # get the versions of `p` allowed by `p1` requirements
+            any(hv in vs1 for hv in higher_vers) && continue # package `p1` would allow some of the higher versions,
+                                                             # therefore it's not responsible for blocking `p`
+            push!(blocking_parents, p1) # package `p1` is blocking the update of `p`
+        end
+
+        # Determine if the update of `p` is prevented by explicit user-provided requirements
+        blocking_reqs = (haskey(reqs, p) && all(hv ∉ reqs[p] for hv in higher_vers))
+
+        # Determine if the update of `p` is prevented by it being fixed (e.g. it's dirty, or pinned...)
+        isfixed = haskey(fixed, p)
+
+        msg = "Package $p was set to version $v, but a higher version $(vers[end]) exists.\n"
+        if isfixed
+            msg *= "      The package is fixed. You can try using `Pkg.free(\"$p\")` to update it."
+        elseif blocking_reqs
+            msg *= "      The update is prevented by explicit requirements constraints. Edit your REQUIRE file to change this."
+        elseif !isempty(blocking_parents)
+            msg *= string("      To install the latest version, you could try updating these packages as well: ", join(blocking_parents, ", ", " and "), ".")
+        else
+            msg *= "      To install the latest version, you could try doing a full update with `Pkg.update()`."
+        end
+        info(msg)
+    end
+end
+
 typealias PackageState Union{Void,VersionNumber}
 
 function diff(have::Dict, want::Dict, avail::Dict, fixed::Dict)
@@ -324,12 +404,12 @@ end
 # Build a subgraph incuding only the (direct and indirect) dependencies
 # of a given package set
 function dependencies_subset(deps::Dict{String,Dict{VersionNumber,Available}}, pkgs::Set{String})
-    staged = pkgs
-    allpkgs = copy(pkgs)
+    staged::Set{String} = filter(p->p in keys(deps), pkgs)
+    allpkgs = copy(staged)
     while !isempty(staged)
         staged_next = Set{String}()
-        for p in staged, a in values(deps[p]), rp in keys(a.requires)
-            if !(rp in allpkgs)
+        for p in staged, a in values(get(deps, p, Dict{VersionNumber,Available}())), rp in keys(a.requires)
+            if !(rp in allpkgs) && rp ≠ "julia"
                 push!(staged_next, rp)
             end
         end
