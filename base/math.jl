@@ -278,16 +278,16 @@ end
 
 modf(x) = rem(x,one(x)), trunc(x)
 
-const _modff_temp = Float32[0]
+const _modff_temp = Ref{Float32}()
 function modf(x::Float32)
     f = ccall((:modff,libm), Float32, (Float32,Ptr{Float32}), x, _modff_temp)
-    f, _modff_temp[1]
+    f, _modff_temp[]
 end
 
-const _modf_temp = Float64[0]
+const _modf_temp = Ref{Float64}()
 function modf(x::Float64)
     f = ccall((:modf,libm), Float64, (Float64,Ptr{Float64}), x, _modf_temp)
-    f, _modf_temp[1]
+    f, _modf_temp[]
 end
 
 ^(x::Float64, y::Float64) = nan_dom_err(ccall((:pow,libm),  Float64, (Float64,Float64), x, y), x+y)
