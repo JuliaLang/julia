@@ -1623,6 +1623,7 @@ void jl_gc_sync_total_bytes(void) {last_gc_total_bytes = jl_gc_total_bytes();}
 // Only one thread should be running in this function
 static void _jl_gc_collect(jl_ptls_t ptls, int full, char *stack_hi)
 {
+    JL_TIMING(GC);
     uint64_t t0 = jl_hrtime();
     int64_t last_perm_scanned_bytes = perm_scanned_bytes;
     assert(mark_sp == 0);

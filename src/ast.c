@@ -137,6 +137,7 @@ value_t fl_current_module_counter(fl_context_t *fl_ctx, value_t *args, uint32_t 
 
 value_t fl_invoke_julia_macro(fl_context_t *fl_ctx, value_t *args, uint32_t nargs)
 {
+    JL_TIMING(MACRO_INVOCATION);
     jl_ptls_t ptls = jl_get_ptls_states();
     if (nargs < 1)
         argcount(fl_ctx, "invoke-julia-macro", nargs, 1);
@@ -605,6 +606,7 @@ static value_t julia_to_scm_(fl_context_t *fl_ctx, jl_value_t *v)
 // this is used to parse a line of repl input
 JL_DLLEXPORT jl_value_t *jl_parse_input_line(const char *str, size_t len, const char *filename, size_t filename_len)
 {
+    JL_TIMING(PARSING);
     jl_ast_context_t *ctx = jl_ast_ctx_enter();
     fl_context_t *fl_ctx = &ctx->fl;
     value_t s = cvalue_static_cstrn(fl_ctx, str, len);
@@ -620,6 +622,7 @@ JL_DLLEXPORT jl_value_t *jl_parse_input_line(const char *str, size_t len, const 
 JL_DLLEXPORT jl_value_t *jl_parse_string(const char *str, size_t len,
                                          int pos0, int greedy)
 {
+    JL_TIMING(PARSING);
     if (pos0 < 0 || pos0 > len) {
         jl_array_t *buf = jl_pchar_to_array(str, len);
         JL_GC_PUSH1(&buf);
@@ -661,12 +664,14 @@ jl_value_t *jl_parse_eval_all(const char *fname,
     f = cvalue_static_cstrn(fl_ctx, fname, len);
     fl_gc_handle(fl_ctx, &f);
     if (content != NULL) {
+        JL_TIMING(PARSING);
         value_t t = cvalue_static_cstrn(fl_ctx, content, contentlen);
         fl_gc_handle(fl_ctx, &t);
         ast = fl_applyn(fl_ctx, 2, symbol_value(symbol(fl_ctx, "jl-parse-string-stream")), t, f);
         fl_free_gc_handles(fl_ctx, 1);
     }
     else {
+        JL_TIMING(PARSING);
         assert(memchr(fname, 0, len) == NULL); // was checked already in jl_load
         ast = fl_applyn(fl_ctx, 1, symbol_value(symbol(fl_ctx, "jl-parse-file")), f);
     }
@@ -691,7 +696,11 @@ jl_value_t *jl_parse_eval_all(const char *fname,
         assert(iscons(ast) && car_(ast) == symbol(fl_ctx,"toplevel"));
         ast = cdr_(ast);
         while (iscons(ast)) {
-            value_t expansion = fl_applyn(fl_ctx, 1, symbol_value(symbol(fl_ctx, "jl-expand-to-thunk")), car_(ast));
+            value_t expansion;
+            {
+                JL_TIMING(LOWERING);
+                expansion = fl_applyn(fl_ctx, 1, symbol_value(symbol(fl_ctx, "jl-expand-to-thunk")), car_(ast));
+            }
             form = scm_to_julia(fl_ctx, expansion, 0);
             jl_sym_t *head = NULL;
             if (jl_is_expr(form)) head = ((jl_expr_t*)form)->head;
@@ -760,7 +769,7 @@ static int jl_parse_deperror(fl_context_t *fl_ctx, int err)
 }
 
 // returns either an expression or a thunk
-jl_value_t *jl_call_scm_on_ast(char *funcname, jl_value_t *expr)
+jl_value_t *jl_call_scm_on_ast(const char *funcname, jl_value_t *expr)
 {
     jl_ast_context_t *ctx = jl_ast_ctx_enter();
     fl_context_t *fl_ctx = &ctx->fl;
@@ -775,11 +784,13 @@ jl_value_t *jl_call_scm_on_ast(char *funcname, jl_value_t *expr)
 
 JL_DLLEXPORT jl_value_t *jl_expand(jl_value_t *expr)
 {
+    JL_TIMING(LOWERING);
     return jl_call_scm_on_ast("jl-expand-to-thunk", expr);
 }
 
 JL_DLLEXPORT jl_value_t *jl_macroexpand(jl_value_t *expr)
 {
+    JL_TIMING(LOWERING);
     return jl_call_scm_on_ast("jl-macroexpand", expr);
 }
 

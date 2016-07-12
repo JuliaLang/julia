@@ -215,6 +215,9 @@ static struct uv_shutdown_queue_item *next_shutdown_queue_item(struct uv_shutdow
     return rv;
 }
 
+void jl_init_timing(void);
+void jl_destroy_timing(void);
+
 JL_DLLEXPORT void jl_atexit_hook(int exitcode)
 {
     jl_ptls_t ptls = jl_get_ptls_states();
@@ -308,6 +311,11 @@ JL_DLLEXPORT void jl_atexit_hook(int exitcode)
     // force libuv to spin until everything has finished closing
     loop->stop_flag = 0;
     while (uv_run(loop,UV_RUN_DEFAULT)) {}
+
+    jl_destroy_timing();
+#ifdef ENABLE_TIMINGS
+    jl_print_timings();
+#endif
 }
 
 void jl_get_builtin_hooks(void);
@@ -534,6 +542,7 @@ static void jl_set_io_wait(int v)
 
 void _julia_init(JL_IMAGE_SEARCH rel)
 {
+    jl_init_timing();
 #ifdef JULIA_ENABLE_THREADING
     // Make sure we finalize the tls callback before starting any threads.
     jl_get_ptls_states_getter();
@@ -620,6 +629,10 @@ void _julia_init(JL_IMAGE_SEARCH rel)
     jl_init_types();
     jl_init_tasks();
     jl_init_root_task(ptls->stack_lo, ptls->stack_hi-ptls->stack_lo);
+
+#ifdef ENABLE_TIMINGS
+    jl_root_task->timing_stack = jl_root_timing;
+#endif
 
     init_stdio();
     // libuv stdio cleanup depends on jl_init_tasks() because JL_TRY is used in jl_atexit_hook()
@@ -787,12 +800,12 @@ static void julia_save(void)
     JL_GC_POP();
 }
 
-static jl_value_t *core(char *name)
+static jl_value_t *core(const char *name)
 {
     return jl_get_global(jl_core_module, jl_symbol(name));
 }
 
-static jl_value_t *basemod(char *name)
+static jl_value_t *basemod(const char *name)
 {
     return jl_get_global(jl_base_module, jl_symbol(name));
 }

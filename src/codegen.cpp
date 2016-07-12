@@ -815,6 +815,7 @@ void jl_add_linfo_in_flight(StringRef name, jl_lambda_info_t *linfo, const DataL
 // objective: assign li->functionObject
 extern "C" void jl_compile_linfo(jl_lambda_info_t *li)
 {
+    JL_TIMING(CODEGEN);
     if (li->jlcall_api == 2) {
         // delete code for functions reduced to a constant
         jl_set_lambda_code_null(li);
@@ -987,6 +988,7 @@ static void jl_finalize_module(std::unique_ptr<Module> uniquem, bool shadow)
 extern void jl_callback_triggered_linfos(void);
 static uint64_t getAddressForFunction(llvm::Function *llvmf)
 {
+    JL_TIMING(LLVM_EMIT);
 #ifdef JL_DEBUG_BUILD
     llvm::raw_fd_ostream out(1,false);
 #endif
