@@ -202,11 +202,7 @@ try_include(path::AbstractString) = isfile(path) && include(path)
 function process_options(opts::JLOptions)
     if !isempty(ARGS)
         idxs = find(x -> x == "--", ARGS)
-        if length(idxs) > 1
-            println(STDERR, "julia: redundant option terminator `--`")
-            exit(1)
-        end
-        deleteat!(ARGS, idxs)
+        length(idxs) > 0 && deleteat!(ARGS, idxs[1])
     end
     repl                  = true
     startup               = (opts.startupfile != 2)

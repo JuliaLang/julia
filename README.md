@@ -53,7 +53,7 @@ developers may find the notes in [CONTRIBUTING](https://github.com/JuliaLang/jul
 - **FreeBSD**
 - **Windows**
 
-All systems are supported with both x86/64 (64-bit) and x86 (32-bit) architectures. Experimental and early support for [ARM](https://github.com/JuliaLang/julia/blob/master/README.arm.md) is available too.
+All systems are supported with both x86/64 (64-bit) and x86 (32-bit) architectures. Experimental and early support for [ARM](https://github.com/JuliaLang/julia/blob/master/README.arm.md) and Power is available too.
 
 <a name="Source-Download-and-Compilation"/>
 ## Source Download and Compilation
@@ -280,7 +280,7 @@ Julia uses the following external libraries, which are automatically downloaded 
 - **[SuiteSparse]** (>= 4.1) — library of linear algebra routines for sparse matrices.
 - **[ARPACK]**               — collection of subroutines designed to solve large, sparse eigenvalue problems.
 - **[FFTW]** (>= 3.3)        — library for computing fast Fourier transforms very quickly and efficiently.
-- **[PCRE]** (>= 10.00)      — Perl-compatible regular expressions library.
+- **[PCRE2]** (>= 10.00)     — Perl-compatible regular expressions library.
 - **[GMP]** (>= 5.0)         — GNU multiple precision arithmetic library, needed for `BigInt` support.
 - **[MPFR]** (>= 3.0)        — GNU multiple precision floating point library, needed for arbitrary precision floating point (`BigFloat`) support.
 - **[libgit2]** (>= 0.21)    — Git linkable library, used by Julia's package manager
@@ -311,7 +311,7 @@ For a longer overview of Julia's dependencies, see these [slides](https://github
 [AMOS]:         http://netlib.org/amos
 [ARPACK]:       http://forge.scilab.org/index.php/p/arpack-ng
 [FFTW]:         http://www.fftw.org
-[PCRE]:         http://www.pcre.org
+[PCRE2]:        http://www.pcre.org
 [LLVM]:         http://www.llvm.org
 [FemtoLisp]:    https://github.com/JeffBezanson/femtolisp
 [GMP]:          http://gmplib.org
