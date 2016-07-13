@@ -140,6 +140,7 @@ Currently, the `@compat` macro supports the following syntaxes:
 * `walkdir`, returns an iterator that walks the directory tree of a directory. ([#13707](https://github.com/JuliaLang/julia/pull/13707))
 
 * `allunique`, checks whether all elements in an iterable appear only once ([#15914](https://github.com/JuliaLang/julia/pull/15914)).
+* `Base.promote_eltype_op` is available as `Compat.promote_eltype_op`; however, in Julia 0.3, results may be inaccurate.
 
 ## Renamed functions
 
@@ -196,7 +197,7 @@ Currently, the `@compat` macro supports the following syntaxes:
 
 * `write(::IO, ::Ptr, len)` is now `unsafe_write` [#14766](https://github.com/JuliaLang/julia/pull/14766).
 
-* `slice` is now `view`[#16972](https://github.com/JuliaLang/julia/pull/16972) do `import Compat.view` and then use `view` normally without the `@compat` macro. 
+* `slice` is now `view`[#16972](https://github.com/JuliaLang/julia/pull/16972) do `import Compat.view` and then use `view` normally without the `@compat` macro.
 
 ## New macros
 
