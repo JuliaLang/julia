@@ -26,7 +26,7 @@ JL_DLLEXPORT jl_module_t *jl_new_module(jl_sym_t *name)
     m->name = name;
     m->parent = NULL;
     m->istopmod = 0;
-    m->uuid = uv_now(uv_default_loop());
+    m->uuid = jl_hrtime();
     m->counter = 0;
     htable_new(&m->bindings, 0);
     arraylist_new(&m->usings, 0);
