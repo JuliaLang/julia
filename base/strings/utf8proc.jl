@@ -184,6 +184,12 @@ end
 isgraphemebreak(c1::Char, c2::Char) =
     ccall(:utf8proc_grapheme_break, Bool, (UInt32, UInt32), c1, c2)
 
+# Stateful grapheme break required by Unicode-9 rules: the string
+# must be processed in sequence, with state initialized to Ref{Int32}(0).
+# Requires utf8proc v2.0 or later.
+isgraphemebreak(c1::Char, c2::Char, state::Ref{Int32}) =
+    ccall(:utf8proc_grapheme_break_stateful, Bool, (UInt32, UInt32, Ref{Int32}), c1, c2, state)
+
 immutable GraphemeIterator{S<:AbstractString}
     s::S # original string (for generation of SubStrings)
 end
@@ -194,28 +200,30 @@ eltype{S}(::Type{GraphemeIterator{S}}) = SubString{S}
 function length(g::GraphemeIterator)
     c0 = Char(0x00ad) # soft hyphen (grapheme break always allowed after this)
     n = 0
+    state = Ref{Int32}(0)
     for c in g.s
-        n += isgraphemebreak(c0, c)
+        n += isgraphemebreak(c0, c, state)
         c0 = c
     end
     return n
 end
 
-start(g::GraphemeIterator) = start(g.s)
-done(g::GraphemeIterator, i) = done(g.s, i)
+start(g::GraphemeIterator) = (start(g.s), Ref{Int32}(0))
+done(g::GraphemeIterator, i) = done(g.s, i[1])
 
-function next(g::GraphemeIterator, i)
+function next(g::GraphemeIterator, i_)
     s = g.s
+    i, state = i_
     j = i
     c0, k = next(s, i)
     while !done(s, k) # loop until next grapheme is s[i:j]
         c, ℓ = next(s, k)
-        isgraphemebreak(c0, c) && break
+        isgraphemebreak(c0, c, state) && break
         j = k
         k = ℓ
         c0 = c
     end
-    return (SubString(s, i, j), k)
+    return (SubString(s, i, j), (k, state))
 end
 
 ==(g1::GraphemeIterator, g2::GraphemeIterator) = g1.s == g2.s
