@@ -2942,7 +2942,7 @@ function setindex!{Tv,Ti,T<:Real}(A::SparseMatrixCSC{Tv,Ti}, x, I::AbstractVecto
 
     colptrA = A.colptr; rowvalA = A.rowval; nzvalA = A.nzval; szA = size(A)
     colptrB = colptrA; rowvalB = rowvalA; nzvalB = nzvalA
-    nadd = ndel = 0
+    nadd = 0
     bidx = aidx = 1
 
     S = issorted(I) ? (1:n) : sortperm(I)
@@ -2968,8 +2968,8 @@ function setindex!{Tv,Ti,T<:Real}(A::SparseMatrixCSC{Tv,Ti}, x, I::AbstractVecto
             r2 = Int(colptrA[col+1] - 1)
 
             # copy from last position till current column
-            if (nadd > 0) || (ndel > 0)
-                colptrB[(lastcol+1):col] = colptrA[(lastcol+1):col] .+ (nadd - ndel)
+            if (nadd > 0)
+                colptrB[(lastcol+1):col] = colptrA[(lastcol+1):col] .+ nadd
                 copylen = r1 - aidx
                 if copylen > 0
                     copy!(rowvalB, bidx, rowvalA, aidx, copylen)
@@ -2986,7 +2986,7 @@ function setindex!{Tv,Ti,T<:Real}(A::SparseMatrixCSC{Tv,Ti}, x, I::AbstractVecto
         if r1 <= r2
             copylen = searchsortedfirst(rowvalA, row, r1, r2, Forward) - r1
             if (copylen > 0)
-                if (nadd > 0) || (ndel > 0)
+                if (nadd > 0)
                     copy!(rowvalB, bidx, rowvalA, r1, copylen)
                     copy!(nzvalB, bidx, nzvalA, r1, copylen)
                 end
@@ -2996,13 +2996,14 @@ function setindex!{Tv,Ti,T<:Real}(A::SparseMatrixCSC{Tv,Ti}, x, I::AbstractVecto
             end
         end
 
-        # 0: no change, 1: update, 2: delete, 3: add new
-        mode = ((r1 <= r2) && (rowvalA[r1] == row)) ? ((v == 0) ? 2 : 1) : ((v == 0) ? 0 : 3)
+        # 0: no change, 1: update, 2: add new
+        mode = ((r1 <= r2) && (rowvalA[r1] == row)) ? 1 : ((v == 0) ? 0 : 2)
 
-        if (mode > 1) && (nadd == 0) && (ndel == 0)
+        if (mode > 1) && (nadd == 0)
             # copy storage to take changes
             colptrA = copy(colptrB)
             memreq = (x == 0) ? 0 : n
+            # see comment/TODO for same statement in preceding logical setindex! method
             rowvalA = copy(rowvalB)
             nzvalA = copy(nzvalB)
             resize!(rowvalB, length(rowvalA)+memreq)
@@ -3015,10 +3016,6 @@ function setindex!{Tv,Ti,T<:Real}(A::SparseMatrixCSC{Tv,Ti}, x, I::AbstractVecto
             aidx += 1
             r1 += 1
         elseif mode == 2
-            r1 += 1
-            aidx += 1
-            ndel += 1
-        elseif mode == 3
             rowvalB[bidx] = row
             nzvalB[bidx] = v
             bidx += 1
@@ -3027,8 +3024,8 @@ function setindex!{Tv,Ti,T<:Real}(A::SparseMatrixCSC{Tv,Ti}, x, I::AbstractVecto
     end
 
     # copy the rest
-    @inbounds if (nadd > 0) || (ndel > 0)
-        colptrB[(lastcol+1):end] = colptrA[(lastcol+1):end] .+ (nadd - ndel)
+    @inbounds if (nadd > 0)
+        colptrB[(lastcol+1):end] = colptrA[(lastcol+1):end] .+ nadd
         r1 = colptrA[end]-1
         copylen = r1 - aidx + 1
         if copylen > 0
