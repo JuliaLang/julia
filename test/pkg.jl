@@ -141,6 +141,11 @@ temp_pkg_dir() do
     @test endswith(str, string(Pkg.installed("Example")))
     @test isempty(Pkg.dependents("Example"))
 
+    Pkg.checkout("Example", "test-branch") #17364
+    LibGit2.with(LibGit2.GitRepo, Pkg.dir("Example")) do repo
+        @test LibGit2.head_oid(repo) == LibGit2.Oid("ba3888212e30a7974ac6803a89e64c7098f4865e")
+    end
+
     # adding a package with unsatisfiable julia version requirements (REPL.jl) errors
     try
         Pkg.add("REPL")
