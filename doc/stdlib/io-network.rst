@@ -574,8 +574,6 @@ Text I/O
 
    If ``use_mmap`` is ``true``\ , the file specified by ``source`` is memory mapped for potential speedups. Default is ``true`` except on Windows. On Windows, you may want to specify ``true`` if the file is large, and is only read once and not written to.
 
-   If ``ignore_invalid_chars`` is ``true``\ , bytes in ``source`` with invalid character encoding will be ignored. Otherwise an error is thrown indicating the offending character position.
-
    If ``quotes`` is ``true``\ , columns enclosed within double-quote (") characters are allowed to contain new lines and column delimiters. Double-quote characters within a quoted field must be escaped with another double-quote.  Specifying ``dims`` as a tuple of the expected rows and columns (including header, if any) may speed up reading of large files.  If ``comments`` is ``true``\ , lines beginning with ``comment_char`` and text following ``comment_char`` in any line are ignored.
 
 .. function:: readdlm(source, delim::Char, eol::Char; options...)
