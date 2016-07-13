@@ -201,10 +201,17 @@ function branch!(repo::GitRepo, branch_name::AbstractString,
     # try to lookup branch first
     branch_ref = force ? nothing : lookup_branch(repo, branch_name)
     if branch_ref === nothing
+        branch_rmt_ref = isempty(track) ? nothing : lookup_branch(repo, "$track/$branch_name", true)
         # if commit is empty get head commit oid
         commit_id = if isempty(commit)
-             with(head(repo)) do head_ref
-                with(peel(GitCommit, head_ref)) do hrc
+            if branch_rmt_ref === nothing
+                with(head(repo)) do head_ref
+                    with(peel(GitCommit, head_ref)) do hrc
+                        Oid(hrc)
+                    end
+                end
+            else
+                with(peel(GitCommit, branch_rmt_ref)) do hrc
                     Oid(hrc)
                 end
             end
@@ -218,6 +225,7 @@ function branch!(repo::GitRepo, branch_name::AbstractString,
         finally
             finalize(cmt)
         end
+        branch_rmt_ref !== nothing && finalize(branch_rmt_ref)
     end
     try
         #TODO: what if branch tracks other then "origin" remote
