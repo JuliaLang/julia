@@ -20,7 +20,7 @@ matrix:
             - gcc-5-multilib
             - g++-5-multilib
             - make:i386
-            - libssl-dev:i386s
+            - libssl-dev:i386
             - gfortran-5
             - gfortran-5-multilib
     - os: linux
