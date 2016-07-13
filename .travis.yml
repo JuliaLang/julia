@@ -3,25 +3,6 @@ sudo: false
 matrix:
   include:
     - os: linux
-      env: ARCH="i686"
-      compiler: "g++-5 -m32"
-      addons:
-        apt:
-          sources:
-            - ubuntu-toolchain-r-test
-          packages:
-            - bar
-            - time
-            - binutils
-            - gcc-5
-            - g++-5
-            - gcc-5-multilib
-            - g++-5-multilib
-            - make:i386
-            - libssl-dev:i386
-            - gfortran-5
-            - gfortran-5-multilib
-    - os: linux
       env: ARCH="x86_64"
       compiler: "g++-5 -m64"
       addons:
@@ -33,8 +14,6 @@ matrix:
             - time
             - g++-5
             - gfortran-5
-    - os: osx
-      env: ARCH="x86_64"
 cache:
   directories:
     - $TRAVIS_BUILD_DIR/deps/srccache
