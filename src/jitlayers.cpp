@@ -1,13 +1,101 @@
 // This file is a part of Julia. License is MIT: http://julialang.org/license
 
+#include "llvm-version.h"
+#include "platform.h"
+#include "options.h"
 #include <iostream>
-#include <llvm/ExecutionEngine/SectionMemoryManager.h>
+#include <sstream>
+
+// analysis passes
+#include <llvm/Analysis/Passes.h>
+#ifdef LLVM38
+#include <llvm/Analysis/BasicAliasAnalysis.h>
+#include <llvm/Analysis/TypeBasedAliasAnalysis.h>
+#endif
+#ifdef LLVM37
+#include <llvm/Analysis/TargetTransformInfo.h>
+#include <llvm/Analysis/TargetLibraryInfo.h>
+#endif
+#ifdef LLVM35
+#include <llvm/IR/Verifier.h>
+#else
+#include <llvm/Analysis/Verifier.h>
+#endif
+#if defined(USE_POLLY)
+#include <polly/RegisterPasses.h>
+#endif
+
+#include <llvm/Transforms/Scalar.h>
+#include <llvm/Transforms/Utils/BasicBlockUtils.h>
+#include <llvm/Transforms/Instrumentation.h>
+#include <llvm/Transforms/Vectorize.h>
+#ifdef LLVM39
+#include <llvm/Transforms/Scalar/GVN.h>
+#endif
+
+namespace llvm {
+    extern Pass *createLowerSimdLoopPass();
+}
+
+#include <llvm/Bitcode/ReaderWriter.h>
+#ifdef LLVM35
+#include <llvm/Bitcode/BitcodeWriterPass.h>
+#endif
+
+#include <llvm/Transforms/Utils/Cloning.h>
+#include <llvm/ExecutionEngine/JITEventListener.h>
+
+// target support
+#include <llvm/ADT/Triple.h>
+#include <llvm/Support/TargetRegistry.h>
+#ifndef LLVM37
+#include <llvm/Target/TargetLibraryInfo.h>
+#endif
+#include <llvm/IR/DataLayout.h>
+#include <llvm/Support/DynamicLibrary.h>
+
+
+#include <llvm/Support/raw_ostream.h>
+#include <llvm/Support/FormattedStream.h>
+
+using namespace llvm;
+
+#include "julia.h"
+#include "julia_internal.h"
+#include "jitlayers.h"
+#ifdef USE_MCJIT
+RTDyldMemoryManager* createRTDyldMemoryManager(void);
+#endif
+
+static Type *T_void;
+static IntegerType *T_uint32;
+static IntegerType *T_uint64;
+static IntegerType *T_size;
+static Type *T_psize;
+static Type *T_pvoidfunc;
+static Type *T_pjlvalue;
+void jl_init_jit(Type *T_pjlvalue_)
+{
+    T_void = Type::getVoidTy(jl_LLVMContext);
+    T_uint32 = Type::getInt32Ty(jl_LLVMContext);
+    T_uint64 = Type::getInt64Ty(jl_LLVMContext);
+    if (sizeof(size_t) == 8)
+        T_size = T_uint64;
+    else
+        T_size = T_uint32;
+    T_psize = PointerType::get(T_size, 0);
+    T_pvoidfunc = FunctionType::get(T_void, /*isVarArg*/false)->getPointerTo();
+    T_pjlvalue = T_pjlvalue_;
+}
 
 // Except for parts of this file which were copied from LLVM, under the UIUC license (marked below).
 
 // this defines the set of optimization passes defined for Julia at various optimization levels
-template <class T>
-static void addOptimizationPasses(T *PM)
+#ifdef LLVM37
+void addOptimizationPasses(legacy::PassManager *PM)
+#else
+void addOptimizationPasses(PassManager *PM)
+#endif
 {
 #ifdef JL_DEBUG_BUILD
     PM->add(createVerifierPass());
@@ -214,320 +302,290 @@ static uint64_t resolve_atomic(const char *name)
 }
 #endif
 
-// A simplified model of the LLVM ExecutionEngine that implements only the methods that Julia needs
-// but tries to roughly match the API anyways so that compatibility is easier
-class JuliaOJIT {
-    // Custom object emission notification handler for the JuliaOJIT
-    // TODO: hook up RegisterJITEventListener, instead of hard-coding the GDB and JuliaListener targets
-    class DebugObjectRegistrar {
-    public:
-        DebugObjectRegistrar(JuliaOJIT &JIT)
-            : JuliaListener(CreateJuliaJITEventListener()),
-              JIT(JIT) {}
+// Custom object emission notification handler for the JuliaOJIT
+extern JITEventListener *CreateJuliaJITEventListener();
+JuliaOJIT::DebugObjectRegistrar::DebugObjectRegistrar(JuliaOJIT &JIT)
+    : JuliaListener(CreateJuliaJITEventListener()),
+      JIT(JIT) {}
 
-        template <typename ObjSetT, typename LoadResult>
-        void operator()(ObjectLinkingLayerBase::ObjSetHandleT H, const ObjSetT &Objects,
-                        const LoadResult &LOS)
-        {
+JL_DLLEXPORT void ORCNotifyObjectEmitted(JITEventListener *Listener,
+                                         const object::ObjectFile &obj,
+                                         const object::ObjectFile &debugObj,
+                                         const RuntimeDyld::LoadedObjectInfo &L,
+                                         RTDyldMemoryManager *memmgr);
+
+// TODO: hook up RegisterJITEventListener, instead of hard-coding the GDB and JuliaListener targets
+template <typename ObjSetT, typename LoadResult>
+void JuliaOJIT::DebugObjectRegistrar::operator()(ObjectLinkingLayerBase::ObjSetHandleT H, const ObjSetT &Objects,
+                const LoadResult &LOS)
+{
 #ifndef LLVM38
-            notifyObjectLoaded(JIT.MemMgr, H);
+    notifyObjectLoaded(JIT.MemMgr, H);
 #endif
-            auto oit = Objects.begin();
-            auto lit = LOS.begin();
-            for (; oit != Objects.end(); ++oit, ++lit) {
+    auto oit = Objects.begin();
+    auto lit = LOS.begin();
+    for (; oit != Objects.end(); ++oit, ++lit) {
 #ifdef LLVM39
-                const auto &Object = (*oit)->getBinary();
+        const auto &Object = (*oit)->getBinary();
 #else
-                auto &Object = *oit;
+        auto &Object = *oit;
 #endif
-                auto &LO = *lit;
+        auto &LO = *lit;
 
-                OwningBinary<object::ObjectFile> SavedObject = LO->getObjectForDebug(*Object);
+        OwningBinary<object::ObjectFile> SavedObject = LO->getObjectForDebug(*Object);
 
-                // If the debug object is unavailable, save (a copy of) the original object
-                // for our backtraces
-                if (!SavedObject.getBinary()) {
-                    // This is unfortunate, but there doesn't seem to be a way to take
-                    // ownership of the original buffer
-                    auto NewBuffer = MemoryBuffer::getMemBufferCopy(Object->getData(), Object->getFileName());
-                    auto NewObj = ObjectFile::createObjectFile(NewBuffer->getMemBufferRef());
-                    assert(NewObj);
-                    SavedObject = OwningBinary<object::ObjectFile>(std::move(*NewObj),std::move(NewBuffer));
-                }
-                else {
-                    NotifyGDB(SavedObject);
-                }
-
-                SavedObjects.push_back(std::move(SavedObject));
-
-                ORCNotifyObjectEmitted(JuliaListener.get(),
-                        *Object,
-                        *SavedObjects.back().getBinary(),
-                        *LO, JIT.MemMgr);
-
-                // record all of the exported symbols defined in this object
-                // in the primary hash table for the enclosing JIT
-                for (auto &Symbol : Object->symbols()) {
-                    auto Flags = Symbol.getFlags();
-                    if (Flags & object::BasicSymbolRef::SF_Undefined)
-                        continue;
-                    if (!(Flags & object::BasicSymbolRef::SF_Exported))
-                        continue;
-                    auto NameOrError = Symbol.getName();
-                    assert(NameOrError);
-                    auto Name = NameOrError.get();
-                    orc::JITSymbol Sym = JIT.CompileLayer.findSymbolIn(H, Name, true);
-                    assert(Sym);
-                    // note: calling getAddress here eagerly finalizes H
-                    // as an alternative, we could store the JITSymbol instead
-                    // (which would present a lazy-initializer functor interface instead)
-                    JIT.LocalSymbolTable[Name] = (void*)(uintptr_t)Sym.getAddress();
-                }
-            }
+        // If the debug object is unavailable, save (a copy of) the original object
+        // for our backtraces
+        if (!SavedObject.getBinary()) {
+            // This is unfortunate, but there doesn't seem to be a way to take
+            // ownership of the original buffer
+            auto NewBuffer = MemoryBuffer::getMemBufferCopy(Object->getData(), Object->getFileName());
+            auto NewObj = ObjectFile::createObjectFile(NewBuffer->getMemBufferRef());
+            assert(NewObj);
+            SavedObject = OwningBinary<object::ObjectFile>(std::move(*NewObj),std::move(NewBuffer));
+        }
+        else {
+            NotifyGDB(SavedObject);
         }
 
-    private:
-        void NotifyGDB(OwningBinary<object::ObjectFile> &DebugObj)
-        {
-            const char *Buffer = DebugObj.getBinary()->getMemoryBufferRef().getBufferStart();
-            size_t      Size = DebugObj.getBinary()->getMemoryBufferRef().getBufferSize();
+        SavedObjects.push_back(std::move(SavedObject));
 
-            assert(Buffer && "Attempt to register a null object with a debugger.");
-            jit_code_entry *JITCodeEntry = new jit_code_entry();
+        ORCNotifyObjectEmitted(JuliaListener.get(),
+                *Object,
+                *SavedObjects.back().getBinary(),
+                *LO, JIT.MemMgr);
 
-            if (!JITCodeEntry) {
-                jl_printf(JL_STDERR, "WARNING: Allocation failed when registering a JIT entry!\n");
-            }
-            else {
-                JITCodeEntry->symfile_addr = Buffer;
-                JITCodeEntry->symfile_size = Size;
-
-                NotifyDebugger(JITCodeEntry);
-            }
+        // record all of the exported symbols defined in this object
+        // in the primary hash table for the enclosing JIT
+        for (auto &Symbol : Object->symbols()) {
+            auto Flags = Symbol.getFlags();
+            if (Flags & object::BasicSymbolRef::SF_Undefined)
+                continue;
+            if (!(Flags & object::BasicSymbolRef::SF_Exported))
+                continue;
+            auto NameOrError = Symbol.getName();
+            assert(NameOrError);
+            auto Name = NameOrError.get();
+            orc::JITSymbol Sym = JIT.CompileLayer.findSymbolIn(H, Name, true);
+            assert(Sym);
+            // note: calling getAddress here eagerly finalizes H
+            // as an alternative, we could store the JITSymbol instead
+            // (which would present a lazy-initializer functor interface instead)
+            JIT.LocalSymbolTable[Name] = (void*)(uintptr_t)Sym.getAddress();
         }
+    }
+}
 
-        std::vector<OwningBinary<object::ObjectFile>> SavedObjects;
-        std::unique_ptr<JITEventListener> JuliaListener;
-        JuliaOJIT &JIT;
-    };
+void JuliaOJIT::DebugObjectRegistrar::NotifyGDB(OwningBinary<object::ObjectFile> &DebugObj)
+{
+    const char *Buffer = DebugObj.getBinary()->getMemoryBufferRef().getBufferStart();
+    size_t      Size = DebugObj.getBinary()->getMemoryBufferRef().getBufferSize();
 
-public:
-    typedef orc::ObjectLinkingLayer<DebugObjectRegistrar> ObjLayerT;
-    typedef orc::IRCompileLayer<ObjLayerT> CompileLayerT;
-    typedef CompileLayerT::ModuleSetHandleT ModuleHandleT;
-    typedef StringMap<void*> SymbolTableT;
-    typedef object::OwningBinary<object::ObjectFile> OwningObj;
+    assert(Buffer && "Attempt to register a null object with a debugger.");
+    jit_code_entry *JITCodeEntry = new jit_code_entry();
 
-    JuliaOJIT(TargetMachine &TM)
-      : TM(TM),
-        DL(TM.createDataLayout()),
-        ObjStream(ObjBufferSV),
-        MemMgr(createRTDyldMemoryManager()),
-        ObjectLayer(DebugObjectRegistrar(*this)),
-        CompileLayer(
-                ObjectLayer,
-                [this](Module &M) {
-                    JL_TIMING(LLVM_OPT);
-                    PM.run(M);
-                    std::unique_ptr<MemoryBuffer> ObjBuffer(
-                        new ObjectMemoryBuffer(std::move(ObjBufferSV)));
-                    auto Obj = object::ObjectFile::createObjectFile(ObjBuffer->getMemBufferRef());
+    if (!JITCodeEntry) {
+        jl_printf(JL_STDERR, "WARNING: Allocation failed when registering a JIT entry!\n");
+    }
+    else {
+        JITCodeEntry->symfile_addr = Buffer;
+        JITCodeEntry->symfile_size = Size;
 
-                    if (!Obj) {
-                        M.dump();
+        NotifyDebugger(JITCodeEntry);
+    }
+}
+
+JuliaOJIT::JuliaOJIT(TargetMachine &TM)
+  : TM(TM),
+    DL(TM.createDataLayout()),
+    ObjStream(ObjBufferSV),
+    MemMgr(createRTDyldMemoryManager()),
+    ObjectLayer(DebugObjectRegistrar(*this)),
+    CompileLayer(
+            ObjectLayer,
+            [this](Module &M) {
+                JL_TIMING(LLVM_OPT);
+                PM.run(M);
+                std::unique_ptr<MemoryBuffer> ObjBuffer(
+                    new ObjectMemoryBuffer(std::move(ObjBufferSV)));
+                auto Obj = object::ObjectFile::createObjectFile(ObjBuffer->getMemBufferRef());
+
+                if (!Obj) {
+                    M.dump();
 #ifdef LLVM39
-                        std::string Buf;
-                        raw_string_ostream OS(Buf);
-                        logAllUnhandledErrors(Obj.takeError(), OS, "");
-                        OS.flush();
-                        llvm::report_fatal_error("FATAL: Unable to compile LLVM Module: '" + Buf + "'\n"
-                            "The module's content was printed above. Please file a bug report");
+                    std::string Buf;
+                    raw_string_ostream OS(Buf);
+                    logAllUnhandledErrors(Obj.takeError(), OS, "");
+                    OS.flush();
+                    llvm::report_fatal_error("FATAL: Unable to compile LLVM Module: '" + Buf + "'\n"
+                        "The module's content was printed above. Please file a bug report");
 #else
-                        llvm::report_fatal_error("FATAL: Unable to compile LLVM Module.\n"
-                            "The module's content was printed above. Please file a bug report");
+                    llvm::report_fatal_error("FATAL: Unable to compile LLVM Module.\n"
+                        "The module's content was printed above. Please file a bug report");
 #endif
-                    }
-
-                    return OwningObj(std::move(*Obj), std::move(ObjBuffer));
                 }
-            )
-        {
-            addOptimizationPasses(&PM);
-            if (TM.addPassesToEmitMC(PM, Ctx, ObjStream))
-                llvm_unreachable("Target does not support MC emission.");
 
-            // Make sure SectionMemoryManager::getSymbolAddressInProcess can resolve
-            // symbols in the program as well. The nullptr argument to the function
-            // tells DynamicLibrary to load the program, not a library.
-            std::string *ErrorStr = nullptr;
-            if (sys::DynamicLibrary::LoadLibraryPermanently(nullptr, ErrorStr))
-                report_fatal_error("FATAL: unable to dlopen self\n" + *ErrorStr);
-        }
+                return OwningObj(std::move(*Obj), std::move(ObjBuffer));
+            }
+        )
+{
+    addOptimizationPasses(&PM);
+    if (TM.addPassesToEmitMC(PM, Ctx, ObjStream))
+        llvm_unreachable("Target does not support MC emission.");
 
-    void addGlobalMapping(StringRef Name, uint64_t Addr)
-    {
-        bool successful = GlobalSymbolTable.insert(std::make_pair(Name, (void*)Addr)).second;
-        (void)successful;
-        assert(successful);
-    }
+    // Make sure SectionMemoryManager::getSymbolAddressInProcess can resolve
+    // symbols in the program as well. The nullptr argument to the function
+    // tells DynamicLibrary to load the program, not a library.
+    std::string *ErrorStr = nullptr;
+    if (sys::DynamicLibrary::LoadLibraryPermanently(nullptr, ErrorStr))
+        report_fatal_error("FATAL: unable to dlopen self\n" + *ErrorStr);
+}
 
-    void addGlobalMapping(const GlobalValue *GV, void *Addr)
-    {
-        addGlobalMapping(getMangledName(GV), (uintptr_t)Addr);
-    }
+void JuliaOJIT::addGlobalMapping(StringRef Name, uint64_t Addr)
+{
+    bool successful = GlobalSymbolTable.insert(std::make_pair(Name, (void*)Addr)).second;
+    (void)successful;
+    assert(successful);
+}
 
-    void *getPointerToGlobalIfAvailable(StringRef S)
-    {
-        SymbolTableT::const_iterator pos = GlobalSymbolTable.find(S);
-        if (pos != GlobalSymbolTable.end())
-            return pos->second;
-        return nullptr;
-    }
+void JuliaOJIT::addGlobalMapping(const GlobalValue *GV, void *Addr)
+{
+    addGlobalMapping(getMangledName(GV), (uintptr_t)Addr);
+}
 
-    void *getPointerToGlobalIfAvailable(const GlobalValue *GV)
-    {
-        return getPointerToGlobalIfAvailable(getMangledName(GV));
-    }
+void *JuliaOJIT::getPointerToGlobalIfAvailable(StringRef S)
+{
+    SymbolTableT::const_iterator pos = GlobalSymbolTable.find(S);
+    if (pos != GlobalSymbolTable.end())
+        return pos->second;
+    return nullptr;
+}
+
+void *JuliaOJIT::getPointerToGlobalIfAvailable(const GlobalValue *GV)
+{
+    return getPointerToGlobalIfAvailable(getMangledName(GV));
+}
 
 
-    void addModule(std::unique_ptr<Module> M)
-    {
+void JuliaOJIT::addModule(std::unique_ptr<Module> M)
+{
 #ifndef NDEBUG
-        // validate the relocations for M
-        for (Module::iterator I = M->begin(), E = M->end(); I != E; ) {
-            Function *F = &*I;
-            ++I;
-            if (F->isDeclaration()) {
-                if (F->use_empty())
-                    F->eraseFromParent();
-                else if (!(F->isIntrinsic() ||
-                           findUnmangledSymbol(F->getName()) ||
-                           SectionMemoryManager::getSymbolAddressInProcess(
-                               F->getName()))) {
-                    std::cerr << "FATAL ERROR: "
-                              << "Symbol \"" << F->getName().str() << "\""
-                              << "not found";
-                    abort();
-                }
+    // validate the relocations for M
+    for (Module::iterator I = M->begin(), E = M->end(); I != E; ) {
+        Function *F = &*I;
+        ++I;
+        if (F->isDeclaration()) {
+            if (F->use_empty())
+                F->eraseFromParent();
+            else if (!(F->isIntrinsic() ||
+                       findUnmangledSymbol(F->getName()) ||
+                       SectionMemoryManager::getSymbolAddressInProcess(
+                           F->getName()))) {
+                std::cerr << "FATAL ERROR: "
+                          << "Symbol \"" << F->getName().str() << "\""
+                          << "not found";
+                abort();
             }
         }
+    }
 #endif
-        JL_TIMING(LLVM_MODULE_FINISH);
-        // We need a memory manager to allocate memory and resolve symbols for this
-        // new module. Create one that resolves symbols by looking back into the JIT.
-        auto Resolver = orc::createLambdaResolver(
-                          [&](const std::string &Name) {
-                            // TODO: consider moving the FunctionMover resolver here
-                            // Step 0: ObjectLinkingLayer has checked whether it is in the current module
-                            // Step 1: See if it's something known to the ExecutionEngine
-                            if (auto Sym = findSymbol(Name, true))
-                              return RuntimeDyld::SymbolInfo(Sym.getAddress(),
-                                                             Sym.getFlags());
-                            // Step 2: Search the program symbols
-                            if (uint64_t addr = SectionMemoryManager::getSymbolAddressInProcess(Name))
-                                return RuntimeDyld::SymbolInfo(addr, JITSymbolFlags::Exported);
+    JL_TIMING(LLVM_MODULE_FINISH);
+    // We need a memory manager to allocate memory and resolve symbols for this
+    // new module. Create one that resolves symbols by looking back into the JIT.
+    auto Resolver = orc::createLambdaResolver(
+                      [&](const std::string &Name) {
+                        // TODO: consider moving the FunctionMover resolver here
+                        // Step 0: ObjectLinkingLayer has checked whether it is in the current module
+                        // Step 1: See if it's something known to the ExecutionEngine
+                        if (auto Sym = findSymbol(Name, true))
+                          return RuntimeDyld::SymbolInfo(Sym.getAddress(),
+                                                         Sym.getFlags());
+                        // Step 2: Search the program symbols
+                        if (uint64_t addr = SectionMemoryManager::getSymbolAddressInProcess(Name))
+                            return RuntimeDyld::SymbolInfo(addr, JITSymbolFlags::Exported);
 #ifdef _OS_LINUX_
-                            if (uint64_t addr = resolve_atomic(Name.c_str()))
-                                return RuntimeDyld::SymbolInfo(addr, JITSymbolFlags::Exported);
+                        if (uint64_t addr = resolve_atomic(Name.c_str()))
+                            return RuntimeDyld::SymbolInfo(addr, JITSymbolFlags::Exported);
 #endif
-                            // Return failure code
-                            return RuntimeDyld::SymbolInfo(nullptr);
-                          },
-                          [](const std::string &S) { return nullptr; }
-                        );
-        SmallVector<std::unique_ptr<Module>,1> Ms;
-        Ms.push_back(std::move(M));
-        auto modset = CompileLayer.addModuleSet(std::move(Ms), MemMgr,
-                                                std::move(Resolver));
-        // Force LLVM to emit the module so that we can register the symbols
-        // in our lookup table.
-        CompileLayer.emitAndFinalize(modset);
+                        // Return failure code
+                        return RuntimeDyld::SymbolInfo(nullptr);
+                      },
+                      [](const std::string &S) { return nullptr; }
+                    );
+    SmallVector<std::unique_ptr<Module>,1> Ms;
+    Ms.push_back(std::move(M));
+    auto modset = CompileLayer.addModuleSet(std::move(Ms), MemMgr,
+                                            std::move(Resolver));
+    // Force LLVM to emit the module so that we can register the symbols
+    // in our lookup table.
+    CompileLayer.emitAndFinalize(modset);
+}
+
+void JuliaOJIT::removeModule(ModuleHandleT H)
+{
+    CompileLayer.removeModuleSet(H);
+}
+
+orc::JITSymbol JuliaOJIT::findSymbol(const std::string &Name, bool ExportedSymbolsOnly)
+{
+    void *Addr = nullptr;
+    if (ExportedSymbolsOnly) {
+        // Step 1: Check against list of known external globals
+        Addr = getPointerToGlobalIfAvailable(Name);
     }
+    // Step 2: Search all previously emitted symbols
+    if (Addr == nullptr)
+        Addr = LocalSymbolTable[Name];
+    return orc::JITSymbol((uintptr_t)Addr, JITSymbolFlags::Exported);
+}
 
-    void removeModule(ModuleHandleT H)
-    {
-        CompileLayer.removeModuleSet(H);
-    }
+orc::JITSymbol JuliaOJIT::findUnmangledSymbol(const std::string Name)
+{
+    return findSymbol(getMangledName(Name), true);
+}
 
-    orc::JITSymbol findSymbol(const std::string &Name, bool ExportedSymbolsOnly)
-    {
-        void *Addr = nullptr;
-        if (ExportedSymbolsOnly) {
-            // Step 1: Check against list of known external globals
-            Addr = getPointerToGlobalIfAvailable(Name);
-        }
-        // Step 2: Search all previously emitted symbols
-        if (Addr == nullptr)
-            Addr = LocalSymbolTable[Name];
-        return orc::JITSymbol((uintptr_t)Addr, JITSymbolFlags::Exported);
-    }
+uint64_t JuliaOJIT::getGlobalValueAddress(const std::string &Name)
+{
+    return findSymbol(getMangledName(Name), false).getAddress();
+}
 
-    orc::JITSymbol findUnmangledSymbol(const std::string Name)
-    {
-        return findSymbol(getMangledName(Name), true);
-    }
+uint64_t JuliaOJIT::getFunctionAddress(const std::string &Name)
+{
+    return findSymbol(getMangledName(Name), false).getAddress();
+}
 
-    uint64_t getGlobalValueAddress(const std::string &Name)
-    {
-        return findSymbol(getMangledName(Name), false).getAddress();
-    }
+Function *JuliaOJIT::FindFunctionNamed(const std::string &Name)
+{
+    return shadow_output->getFunction(Name);
+}
 
-    uint64_t getFunctionAddress(const std::string &Name)
-    {
-        return findSymbol(getMangledName(Name), false).getAddress();
-    }
+void JuliaOJIT::RegisterJITEventListener(JITEventListener *L)
+{
+    // TODO
+}
 
-    Function *FindFunctionNamed(const std::string &Name)
-    {
-        return shadow_output->getFunction(Name);
-    }
+const DataLayout& JuliaOJIT::getDataLayout() const
+{
+    return DL;
+}
 
-    void RegisterJITEventListener(JITEventListener *L)
-    {
-        // TODO
-    }
+const Triple& JuliaOJIT::getTargetTriple() const
+{
+    return TM.getTargetTriple();
+}
 
-    const DataLayout& getDataLayout() const
-    {
-        return DL;
-    }
+std::string JuliaOJIT::getMangledName(const std::string &Name)
+{
+    SmallString<128> FullName;
+    Mangler::getNameWithPrefix(FullName, Name, DL);
+    return FullName.str();
+}
 
-    const Triple& getTargetTriple() const
-    {
-        return TM.getTargetTriple();
-    }
+std::string JuliaOJIT::getMangledName(const GlobalValue *GV)
+{
+    return getMangledName(GV->getName());
+}
 
-private:
-    std::string getMangledName(const std::string &Name)
-    {
-        SmallString<128> FullName;
-        Mangler::getNameWithPrefix(FullName, Name, DL);
-        return FullName.str();
-    }
-
-    std::string getMangledName(const GlobalValue *GV)
-    {
-        return getMangledName(GV->getName());
-    }
-
-    TargetMachine &TM;
-    const DataLayout DL;
-    // Should be big enough that in the common case, The
-    // object fits in its entirety
-    SmallVector<char, 4096> ObjBufferSV;
-    raw_svector_ostream ObjStream;
-    legacy::PassManager PM;
-    MCContext *Ctx;
-    RTDyldMemoryManager *MemMgr;
-    ObjLayerT ObjectLayer;
-    CompileLayerT CompileLayer;
-    SymbolTableT GlobalSymbolTable;
-    SymbolTableT LocalSymbolTable;
-};
-
-#endif
-
-#ifdef USE_ORCJIT
 JuliaOJIT *jl_ExecutionEngine;
 #else
 ExecutionEngine *jl_ExecutionEngine;
@@ -667,7 +725,7 @@ static void jl_merge_module(Module *dest, std::unique_ptr<Module> src)
 // (which aliases the engine module), so this is unneeded
 #ifdef USE_MCJIT
 static StringMap<Module*> module_for_fname;
-static void jl_finalize_function(const std::string &F, Module *collector = NULL)
+static void jl_finalize_function(const std::string &F, Module *collector)
 {
     std::unique_ptr<Module> m(module_for_fname.lookup(F));
     if (m) {
@@ -712,68 +770,44 @@ static void jl_finalize_function(const std::string &F, Module *collector = NULL)
         }
     }
 }
-static void jl_finalize_function(Function *F, Module *collector = NULL)
+void jl_finalize_function(Function *F, Module *collector)
 {
     jl_finalize_function(F->getName().str(), collector);
 }
 #endif
 
-// Connect Modules via prototypes, each owned by module `M`
-static GlobalVariable *global_proto(GlobalVariable *G, Module *M = NULL)
+// this takes ownership of a module after code emission is complete
+// and will add it to the execution engine when required (by jl_finalize_function)
+void jl_finalize_module(Module *m, bool shadow)
 {
-    // Copy the GlobalVariable, but without the initializer, so it becomes a declaration
-    GlobalVariable *proto = new GlobalVariable(G->getType()->getElementType(),
-            G->isConstant(), GlobalVariable::ExternalLinkage,
-            NULL, G->getName(),  G->getThreadLocalMode());
-    proto->copyAttributesFrom(G);
-#ifdef LLVM35
-    // DLLImport only needs to be set for the shadow module
-    // it just gets annoying in the JIT
-    proto->setDLLStorageClass(GlobalValue::DefaultStorageClass);
+    finalize_gc_frame(m);
+#if !defined(USE_ORCJIT)
+    jl_globalPM->run(*m);
 #endif
-    if (M)
-        M->getGlobalList().push_back(proto);
-    return proto;
-}
-
-static Function *function_proto(Function *F, Module *M = NULL)
-{
-    // Copy the declaration characteristics of the Function (not the body)
-    Function *NewF = Function::Create(F->getFunctionType(),
-                                      Function::ExternalLinkage,
-                                      F->getName(), M);
-    // FunctionType does not include any attributes. Copy them over manually
-    // as codegen may make decisions based on the presence of certain attributes
-    NewF->copyAttributesFrom(F);
-
-#ifdef LLVM37
-    // Declarations are not allowed to have personality routines, but
-    // copyAttributesFrom sets them anyway, so clear them again manually
-    NewF->setPersonalityFn(nullptr);
+#ifdef USE_MCJIT
+    // record the function names that are part of this Module
+    // so it can be added to the JIT when needed
+    for (Module::iterator I = m->begin(), E = m->end(); I != E; ++I) {
+        Function *F = &*I;
+        if (!F->isDeclaration())
+            module_for_fname[F->getName()] = m;
+    }
 #endif
-
-#ifdef LLVM35
-    // DLLImport only needs to be set for the shadow module
-    // it just gets annoying in the JIT
-    NewF->setDLLStorageClass(GlobalValue::DefaultStorageClass);
+#if defined(USE_ORCJIT) || defined(USE_MCJIT)
+    // in the newer JITs, the shadow module is separate from the execution module
+    if (shadow)
 #endif
-
-    return NewF;
+        jl_add_to_shadow(m);
 }
 
 // helper function for adding a DLLImport (dlsym) address to the execution engine
 // (for values created locally or in the sysimage, jl_emit_and_add_to_shadow is generally preferable)
-template<typename T>
 #ifdef LLVM35
-static inline void add_named_global(GlobalObject *gv, T *_addr, bool dllimport = true)
+void add_named_global(GlobalObject *gv, void *addr, bool dllimport)
 #else
-static inline void add_named_global(GlobalValue *gv, T *_addr, bool dllimport = true)
+void add_named_global(GlobalValue *gv, void *addr, bool dllimport)
 #endif
 {
-    // cast through integer to avoid c++ pedantic warning about casting between
-    // data and code pointers
-    void *addr = (void*)(uintptr_t)_addr;
-
 #ifdef _OS_WINDOWS_
     // setting JL_DLLEXPORT correctly only matters when building a binary
     // (global_proto will strip this from the JIT)
@@ -799,7 +833,6 @@ static inline void add_named_global(GlobalValue *gv, T *_addr, bool dllimport = 
 
 static std::vector<Constant*> jl_sysimg_gvars;
 static std::vector<Constant*> jl_sysimg_fvars;
-typedef struct {Value *gv; int32_t index;} jl_value_llvm; // uses 1-based indexing
 static std::map<void*, jl_value_llvm> jl_value_to_llvm;
 
 // global variables to pointers are pretty common,
@@ -812,7 +845,7 @@ static std::map<void*, jl_value_llvm> jl_value_to_llvm;
 //
 // then add a global mapping to the current value (usually from calloc'd space)
 // to the execution engine to make it valid for the current session (with the current value)
-static void* jl_emit_and_add_to_shadow(GlobalVariable *gv, void *gvarinit = NULL)
+void* jl_emit_and_add_to_shadow(GlobalVariable *gv, void *gvarinit)
 {
     PointerType *T = cast<PointerType>(gv->getType()->getElementType()); // pointer is the only supported type here
 
@@ -846,12 +879,11 @@ static void* jl_emit_and_add_to_shadow(GlobalVariable *gv, void *gvarinit = NULL
 #endif
 }
 
-#ifdef JULIA_ENABLE_THREADING
 // Emit a slot in the system image to be filled at sysimg init time.
 // Returns the global var. Fill `idx` with 1-base index in the sysimg gv.
 // Use as an optimization for runtime constant addresses to have one less
 // load. (Used only by threading).
-static GlobalVariable *jl_emit_sysimg_slot(Module *m, Type *typ, const char *name,
+GlobalVariable *jl_emit_sysimg_slot(Module *m, Type *typ, const char *name,
                                            uintptr_t init, size_t &idx)
 {
     assert(imaging_mode);
@@ -874,9 +906,8 @@ static GlobalVariable *jl_emit_sysimg_slot(Module *m, Type *typ, const char *nam
     idx = jl_sysimg_gvars.size();
     return gv;
 }
-#endif
 
-static void* jl_get_global(GlobalVariable *gv)
+void* jl_get_global(GlobalVariable *gv)
 {
 #if defined(USE_MCJIT) || defined(USE_ORCJIT)
     void *p = (void*)(intptr_t)jl_ExecutionEngine->getPointerToGlobalIfAvailable(gv);
@@ -890,7 +921,7 @@ static void* jl_get_global(GlobalVariable *gv)
 
 // clones the contents of the module `m` to the shadow_output collector
 // in the old JIT, this is equivalent to also adding it to the execution engine
-static void jl_add_to_shadow(Module *m)
+void jl_add_to_shadow(Module *m)
 {
 #if defined(USE_MCJIT) || defined(USE_ORCJIT)
 #ifndef KEEP_BODIES
@@ -966,10 +997,10 @@ static void jl_gen_llvm_globaldata(llvm::Module *mod, ValueToValueMapTy &VMap,
 
         jl_cpuid((int32_t*)info, 1);
         addComdat(new GlobalVariable(*mod,
-                                     T_int64,
+                                     T_uint64,
                                      true,
                                      GlobalVariable::ExternalLinkage,
-                                     ConstantInt::get(T_int64,((uint64_t)info[2])|(((uint64_t)info[3])<<32)),
+                                     ConstantInt::get(T_uint64,((uint64_t)info[2])|(((uint64_t)info[3])<<32)),
                                      "jl_sysimg_cpu_cpuid"));
     }
 #endif
@@ -996,13 +1027,14 @@ void jl_dump_native(const char *bc_fname, const char *obj_fname, const char *sys
     // it uses the large code model and we may potentially
     // want less optimizations there.
     Triple TheTriple = Triple(jl_TargetMachine->getTargetTriple());
-#if defined(_OS_WINDOWS_) && defined(FORCE_ELF)
+    // make sure to emit the native object format, even if FORCE_ELF was set in codegen
+#if defined(_OS_WINDOWS_)
 #ifdef LLVM35
     TheTriple.setObjectFormat(Triple::COFF);
 #else
     TheTriple.setEnvironment(Triple::UnknownEnvironment);
 #endif
-#elif defined(_OS_DARWIN_) && defined(FORCE_ELF)
+#elif defined(_OS_DARWIN_)
 #ifdef LLVM35
     TheTriple.setObjectFormat(Triple::MachO);
 #else
@@ -1030,7 +1062,7 @@ void jl_dump_native(const char *bc_fname, const char *obj_fname, const char *sys
         CodeGenOpt::Aggressive // -O3 TODO: respect command -O0 flag?
         ));
 
-#ifdef LLVM38
+#ifdef LLVM37
     legacy::PassManager PM;
 #else
     PassManager PM;
@@ -1162,4 +1194,23 @@ extern "C" int32_t jl_get_llvm_gv(jl_value_t *p)
     if (it == jl_value_to_llvm.end())
         return 0;
     return it->second.index;
+}
+
+GlobalVariable *jl_get_global_for(const char *cname, void *addr, Module *M)
+{
+    // emit a GlobalVariable for a jl_value_t named "cname"
+    std::map<void*, jl_value_llvm>::iterator it;
+    // first see if there already is a GlobalVariable for this address
+    it = jl_value_to_llvm.find(addr);
+    if (it != jl_value_to_llvm.end())
+        return prepare_global((llvm::GlobalVariable*)it->second.gv, M);
+
+    std::stringstream gvname;
+    gvname << cname << globalUnique++;
+    // no existing GlobalVariable, create one and store it
+    GlobalVariable *gv = new GlobalVariable(*M, T_pjlvalue,
+                           false, GlobalVariable::ExternalLinkage,
+                           NULL, gvname.str());
+    *(void**)jl_emit_and_add_to_shadow(gv, addr) = addr;
+    return gv;
 }
