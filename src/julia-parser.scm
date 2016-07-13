@@ -198,8 +198,8 @@
                                     (loop newop (peek-char port)))
                              str))
                        str))))
-        (if (equal? str "--")
-            (error "invalid operator \"--\""))
+        (if (or (equal? str "--") (equal? str ".!"))
+            (error (string "invalid operator \"" str "\"")))
         (string->symbol str))))
 
 (define (accum-digits c pred port lz)
