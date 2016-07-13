@@ -103,7 +103,7 @@ macro irrational(sym, val, def)
             c = BigFloat()
             ccall(($(string("mpfr_const_", def)), :libmpfr),
                   Cint, (Ptr{BigFloat}, Int32),
-                  &c, MPFR.ROUNDING_MODE[end])
+                  &c, MPFR.ROUNDING_MODE[])
             return c
         end
     end : quote
