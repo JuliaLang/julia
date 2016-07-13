@@ -271,9 +271,6 @@ end
 
 ## elementwise operators ##
 
-# should this be deprecated? Only use in Base is in sparsematrix.jl
-eltype_plus(As::AbstractArray...) = promote_eltype_op(+, As...)
-
 for op in (:÷, :%, :<<, :>>, :-, :/, :\, ://, :^)
     @eval $(Symbol(:., op))(A::AbstractArray, B::AbstractArray) = broadcast($(op), A, B)
 end
