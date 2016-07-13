@@ -2836,7 +2836,7 @@ function setindex!{Tv,Ti}(A::SparseMatrixCSC{Tv,Ti}, x, I::AbstractMatrix{Bool})
 
     colptrA = A.colptr; rowvalA = A.rowval; nzvalA = A.nzval
     colptrB = colptrA; rowvalB = rowvalA; nzvalB = nzvalA
-    nadd = ndel = 0
+    nadd = 0
     bidx = xidx = 1
     r1 = r2 = 0
 
@@ -2852,7 +2852,7 @@ function setindex!{Tv,Ti}(A::SparseMatrixCSC{Tv,Ti}, x, I::AbstractMatrix{Bool})
                 if r1 <= r2
                     copylen = searchsortedfirst(rowvalA, row, r1, r2, Forward) - r1
                     if (copylen > 0)
-                        if (nadd > 0) || (ndel > 0)
+                        if (nadd > 0)
                             copy!(rowvalB, bidx, rowvalA, r1, copylen)
                             copy!(nzvalB, bidx, nzvalA, r1, copylen)
                         end
@@ -2861,13 +2861,17 @@ function setindex!{Tv,Ti}(A::SparseMatrixCSC{Tv,Ti}, x, I::AbstractMatrix{Bool})
                     end
                 end
 
-                # 0: no change, 1: update, 2: delete, 3: add new
-                mode = ((r1 <= r2) && (rowvalA[r1] == row)) ? ((v == 0) ? 2 : 1) : ((v == 0) ? 0 : 3)
+                # 0: no change, 1: update, 2: add new
+                mode = ((r1 <= r2) && (rowvalA[r1] == row)) ? 1 : ((v == 0) ? 0 : 2)
 
-                if (mode > 1) && (nadd == 0) && (ndel == 0)
+                if (mode > 1) && (nadd == 0)
                     # copy storage to take changes
                     colptrA = copy(colptrB)
                     memreq = (x == 0) ? 0 : n
+                    # this x == 0 check and approach doesn't jive with use of v above
+                    # and may not make sense generally, as scalar x == 0 probably
+                    # means this section should never be called. also may not be generic.
+                    # TODO: clean this up, maybe separate scalar and array X cases
                     rowvalA = copy(rowvalB)
                     nzvalA = copy(nzvalB)
                     resize!(rowvalB, length(rowvalA)+memreq)
@@ -2879,9 +2883,6 @@ function setindex!{Tv,Ti}(A::SparseMatrixCSC{Tv,Ti}, x, I::AbstractMatrix{Bool})
                     bidx += 1
                     r1 += 1
                 elseif mode == 2
-                    r1 += 1
-                    ndel += 1
-                elseif mode == 3
                     rowvalB[bidx] = row
                     nzvalB[bidx] = v
                     bidx += 1
@@ -2891,7 +2892,7 @@ function setindex!{Tv,Ti}(A::SparseMatrixCSC{Tv,Ti}, x, I::AbstractMatrix{Bool})
             end # if I[row, col]
         end # for row in 1:A.m
 
-        if ((nadd != 0) || (ndel != 0))
+        if (nadd != 0)
             l = r2-r1+1
             if l > 0
                 copy!(rowvalB, bidx, rowvalA, r1, l)
@@ -2901,7 +2902,7 @@ function setindex!{Tv,Ti}(A::SparseMatrixCSC{Tv,Ti}, x, I::AbstractMatrix{Bool})
             colptrB[col+1] = bidx
 
             if (xidx > n) && (length(colptrB) > (col+1))
-                diff = nadd - ndel
+                diff = nadd
                 colptrB[(col+2):end] = colptrA[(col+2):end] .+ diff
                 r1 = colptrA[col+1]
                 r2 = colptrA[end]-1
@@ -2918,7 +2919,7 @@ function setindex!{Tv,Ti}(A::SparseMatrixCSC{Tv,Ti}, x, I::AbstractMatrix{Bool})
         (xidx > n) && break
     end # for col in 1:A.n
 
-    if (nadd != 0) || (ndel != 0)
+    if (nadd != 0)
         n = length(nzvalB)
         if n > (bidx-1)
             deleteat!(nzvalB, bidx:n)
