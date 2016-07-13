@@ -2525,23 +2525,64 @@ setindex!(A::SparseMatrixCSC, x, ::Colon, ::Colon) = setindex!(A, x, 1:size(A, 1
 setindex!(A::SparseMatrixCSC, x, ::Colon, j::Union{Integer, AbstractVector}) = setindex!(A, x, 1:size(A, 1), j)
 setindex!(A::SparseMatrixCSC, x, i::Union{Integer, AbstractVector}, ::Colon) = setindex!(A, x, i, 1:size(A, 2))
 
-setindex!{Tv,T<:Integer}(A::SparseMatrixCSC{Tv}, x::Number, I::AbstractVector{T}, J::AbstractVector{T}) =
-    (0 == x) ? spdelete!(A, I, J) : spset!(A, convert(Tv,x), I, J)
-
-function spset!{Tv,Ti<:Integer}(A::SparseMatrixCSC{Tv}, x::Tv, I::AbstractVector{Ti}, J::AbstractVector{Ti})
-    !issorted(I) && (I = sort(I))
-    !issorted(J) && (J = sort(J))
-
-    m, n = size(A)
-    lenI = length(I)
-
-    if (!isempty(I) && (I[1] < 1 || I[end] > m)) || (!isempty(J) && (J[1] < 1 || J[end] > n))
+function setindex!{TvA,TiI<:Integer,TiJ<:Integer}(A::SparseMatrixCSC{TvA}, x::Number,
+        I::AbstractVector{TiI}, J::AbstractVector{TiJ})
+    if isempty(I) || isempty(J); return A; end
+    if !issorted(I); I = sort(I); end
+    if !issorted(J); J = sort(J); end
+    if (I[1] < 1 || I[end] > A.m) || (J[1] < 1 || J[end] > A.n)
         throw(BoundsError(A, (I, J)))
     end
-
-    if isempty(I) || isempty(J)
-        return A
+    if x == 0
+        _spsetz_setindex!(A, I, J)
+    else
+        _spsetnz_setindex!(A, convert(TvA, x), I, J)
     end
+end
+"""
+Helper method for immediately preceding setindex! method. For all (i,j) such that i in I and
+j in J, assigns zero to A[i,j] if A[i,j] is a presently-stored entry, and otherwise does nothing.
+"""
+function _spsetz_setindex!{TvA,TiI<:Integer,TiJ<:Integer}(A::SparseMatrixCSC{TvA},
+        I::AbstractVector{TiI}, J::AbstractVector{TiJ})
+    lengthI = length(I)
+    for j in J
+        coljAfirstk = A.colptr[j]
+        coljAlastk = A.colptr[j+1] - 1
+        coljAfirstk > coljAlastk && continue
+        kA = coljAfirstk
+        kI = 1
+        entrykArow = A.rowval[kA]
+        entrykIrow = I[kI]
+        while true
+            if entrykArow < entrykIrow
+                kA += 1
+                kA > coljAlastk && break
+                entrykArow = A.rowval[kA]
+            elseif entrykArow > entrykIrow
+                kI += 1
+                kI > lengthI && break
+                entrykIrow = I[kI]
+            else # entrykArow == entrykIrow
+                A.nzval[kA] = 0
+                kA += 1
+                kI += 1
+                (kA > coljAlastk || kI > lengthI) && break
+                entrykArow = A.rowval[kA]
+                entrykIrow = I[kI]
+            end
+        end
+    end
+end
+"""
+Helper method for immediately preceding setindex! method. For all (i,j) such that i in I
+and j in J, assigns x to A[i,j] if A[i,j] is a presently-stored entry, and allocates and
+assigns x to A[i,j] if A[i,j] is not presently stored.
+"""
+function _spsetnz_setindex!{Tv,TiI<:Integer,TiJ<:Integer}(A::SparseMatrixCSC{Tv}, x::Tv,
+        I::AbstractVector{TiI}, J::AbstractVector{TiJ})
+    m, n = size(A)
+    lenI = length(I)
 
     nnzA = nnz(A) + lenI * length(J)
 
@@ -2637,66 +2678,6 @@ function spset!{Tv,Ti<:Integer}(A::SparseMatrixCSC{Tv}, x::Tv, I::AbstractVector
     end
 
     if nadd > 0
-        A.colptr[n+1] = rowidx
-        deleteat!(rowvalA, rowidx:nnzA)
-        deleteat!(nzvalA, rowidx:nnzA)
-    end
-    return A
-end
-
-function spdelete!{Tv,Ti<:Integer}(A::SparseMatrixCSC{Tv}, I::AbstractVector{Ti}, J::AbstractVector{Ti})
-    m, n = size(A)
-    nnzA = nnz(A)
-    (nnzA == 0) && (return A)
-
-    !issorted(I) && (I = sort(I))
-    !issorted(J) && (J = sort(J))
-
-    if (!isempty(I) && (I[1] < 1 || I[end] > m)) || (!isempty(J) && (J[1] < 1 || J[end] > n))
-        throw(BoundsError(A, (I, J)))
-    end
-
-    if isempty(I) || isempty(J)
-        return A
-    end
-
-    rowval = rowvalA = A.rowval
-    nzval = nzvalA = A.nzval
-    rowidx = 1
-    ndel = 0
-    @inbounds for col in 1:n
-        rrange = nzrange(A, col)
-        if ndel > 0
-            A.colptr[col] = A.colptr[col] - ndel
-        end
-
-        if isempty(rrange) || !(col in J)
-            nincl = length(rrange)
-            if(ndel > 0) && !isempty(rrange)
-                copy!(rowvalA, rowidx, rowval, rrange[1], nincl)
-                copy!(nzvalA, rowidx, nzval, rrange[1], nincl)
-            end
-            rowidx += nincl
-        else
-            for ridx in rrange
-                if rowval[ridx] in I
-                    if ndel == 0
-                        rowval = copy(rowvalA)
-                        nzval = copy(nzvalA)
-                    end
-                    ndel += 1
-                else
-                    if ndel > 0
-                        rowvalA[rowidx] = rowval[ridx]
-                        nzvalA[rowidx] = nzval[ridx]
-                    end
-                    rowidx += 1
-                end
-            end
-        end
-    end
-
-    if ndel > 0
         A.colptr[n+1] = rowidx
         deleteat!(rowvalA, rowidx:nnzA)
         deleteat!(nzvalA, rowidx:nnzA)
