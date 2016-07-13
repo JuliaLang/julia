@@ -709,15 +709,21 @@ let S = sprand(50, 30, 0.5, x->round(Int,rand(x)*100)), I = sprand(Bool, 50, 30,
 
     sumS1 = sum(S)
     sumFI = sum(S[FI])
+    nnzS1 = nnz(S)
     S[FI] = 0
-    @test sum(S[FI]) == 0
     sumS2 = sum(S)
+    cnzS2 = countnz(S)
+    @test sum(S[FI]) == 0
+    @test nnz(S) == nnzS1
     @test (sum(S) + sumFI) == sumS1
 
     S[FI] = 10
+    nnzS3 = nnz(S)
     @test sum(S) == sumS2 + 10*sum(FI)
     S[FI] = 0
     @test sum(S) == sumS2
+    @test nnz(S) == nnzS3
+    @test countnz(S) == cnzS2
 
     S[FI] = [1:sum(FI);]
     @test sum(S) == sumS2 + sum(1:sum(FI))
