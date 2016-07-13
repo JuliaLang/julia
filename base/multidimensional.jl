@@ -156,10 +156,10 @@ using .IteratorsMD
 ## Bounds-checking with CartesianIndex
 @inline checkbounds_indices(::Tuple{},   I::Tuple{CartesianIndex,Vararg{Any}}) =
     checkbounds_indices((), (I[1].I..., tail(I)...))
-@inline checkbounds_indices(inds::Tuple{Any}, I::Tuple{CartesianIndex,Vararg{Any}}) =
-    checkbounds_indices(inds, (I[1].I..., tail(I)...))
-@inline checkbounds_indices(inds::Tuple, I::Tuple{CartesianIndex,Vararg{Any}}) =
-    checkbounds_indices(inds, (I[1].I..., tail(I)...))
+@inline checkbounds_indices(IA::Tuple{Any}, I::Tuple{CartesianIndex,Vararg{Any}}) =
+    checkbounds_indices(IA, (I[1].I..., tail(I)...))
+@inline checkbounds_indices(IA::Tuple, I::Tuple{CartesianIndex,Vararg{Any}}) =
+    checkbounds_indices(IA, (I[1].I..., tail(I)...))
 
 # Support indexing with an array of CartesianIndex{N}s
 # Here we try to consume N of the indices (if there are that many available)
@@ -167,12 +167,12 @@ using .IteratorsMD
 @inline function checkbounds_indices{N}(::Tuple{}, I::Tuple{AbstractArray{CartesianIndex{N}},Vararg{Any}})
     checkindex(Bool, (), I[1]) & checkbounds_indices((), tail(I))
 end
-@inline function checkbounds_indices{N}(inds::Tuple{Any}, I::Tuple{AbstractArray{CartesianIndex{N}},Vararg{Any}})
-    checkindex(Bool, inds, I[1]) & checkbounds_indices((), tail(I))
+@inline function checkbounds_indices{N}(IA::Tuple{Any}, I::Tuple{AbstractArray{CartesianIndex{N}},Vararg{Any}})
+    checkindex(Bool, IA, I[1]) & checkbounds_indices((), tail(I))
 end
-@inline function checkbounds_indices{N}(inds::Tuple, I::Tuple{AbstractArray{CartesianIndex{N}},Vararg{Any}})
-    inds1, indsrest = IteratorsMD.split(inds, Val{N})
-    checkindex(Bool, inds1, I[1]) & checkbounds_indices(indsrest, tail(I))
+@inline function checkbounds_indices{N}(IA::Tuple, I::Tuple{AbstractArray{CartesianIndex{N}},Vararg{Any}})
+    IA1, IArest = IteratorsMD.split(IA, Val{N})
+    checkindex(Bool, IA1, I[1]) & checkbounds_indices(IArest, tail(I))
 end
 
 function checkindex{N}(::Type{Bool}, inds::Tuple, I::AbstractArray{CartesianIndex{N}})
