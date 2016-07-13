@@ -6,16 +6,29 @@
 
 valgrind_off = ccall(:jl_running_on_valgrind, Cint, ()) == 0
 
-# use busybox-w32 on windows
-yes = is_unix() ? `perl -le 'while (1) {print STDOUT "y"}'` : `busybox yes`
-echo = is_unix() ? `echo` : `busybox echo`
-sortcmd = is_unix() ? `sort` : `busybox sort`
-printf = is_unix() ? `printf` : `busybox printf`
-truecmd = is_unix() ? `true` : `busybox true`
-falsecmd = is_unix() ? `false` : `busybox false`
-catcmd = is_unix() ? `cat` : `busybox cat`
-shcmd = is_unix() ? `sh` : `busybox sh`
-sleepcmd = is_unix() ? `sleep` : `busybox sleep`
+yes = `perl -le 'while (1) {print STDOUT "y"}'`
+echo = `echo`
+sortcmd = `sort`
+printf = `printf`
+truecmd = `true`
+falsecmd = `false`
+catcmd = `cat`
+shcmd = `sh`
+sleepcmd = `sleep`
+if is_windows()
+    try # use busybox-w32 on windows
+        success(`busybox`)
+        yes = `busybox yes`
+        echo = `busybox echo`
+        sortcmd = `busybox sort`
+        printf = `busybox printf`
+        truecmd = `busybox true`
+        falsecmd = `busybox false`
+        catcmd = `busybox cat`
+        shcmd = `busybox sh`
+        sleepcmd = `busybox sleep`
+    end
+end
 
 #### Examples used in the manual ####
 
@@ -302,12 +315,15 @@ end
 let fname = tempname()
     write(fname, "test\n")
     code = """
-    for line in eachline(STDIN)
-        if is_unix()
-            run(pipeline(`echo asdf`,`cat`))
-        else
-            run(pipeline(`busybox echo asdf`,`busybox cat`))
+    cmd = pipeline(`echo asdf`,`cat`)
+    if is_windows()
+        try
+            success(`busybox`)
+            cmd = pipeline(`busybox echo asdf`,`busybox cat`)
         end
+    end
+    for line in eachline(STDIN)
+        run(cmd)
     end
     """
     @test success(pipeline(`$catcmd $fname`, `$exename -e $code`))
