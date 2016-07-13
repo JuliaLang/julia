@@ -460,31 +460,30 @@ mktempdir() do dir
             head = LibGit2.head(repo)
             ht = LibGit2.peel(LibGit2.GitTree, head)
             try
-                # get tree entry by filename
                 @test isnull(LibGit2.lookup(ht, "no such name"))
                 tfte = get(LibGit2.lookup(ht, test_file))
+
+                # get tree entry by filename
+                @test isnull(LibGit2.GitTreeEntry(ht, "no such name"))
+                @test LibGit2.filename(tfte) == test_file
+                @test LibGit2.filemode(tfte) == Cint(LibGit2.Consts.FILEMODE_BLOB)
+
+                tfoid = LibGit2.oid(tfte)
+
+                @test isnull(LibGit2.GitTreeEntry(ht, LibGit2.Oid()))
+                tfte2 = LibGit2.GitTreeEntry(ht, tfoid)
                 try
-                    @test LibGit2.filename(tfte) == test_file
-                    @test LibGit2.filemode(tfte) == Cint(LibGit2.Consts.FILEMODE_BLOB)
+                    @test !isnull(tfte2)
+                    @test LibGit2.filename(get(tfte2)) == test_file
 
-                    @test isnull(LibGit2.GitTreeEntry(ht, LibGit2.Oid()))
-                    tfoid = LibGit2.oid(tfte)
-                    tfte2 = LibGit2.GitTreeEntry(ht, tfoid)
-                    try
-                        @test !isnull(tfte2)
-                        @test LibGit2.filename(get(tfte2)) == test_file
-
-                        tfcontent = LibGit2.with(LibGit2.object(repo, get(tfte2))) do obj
-                            LibGit2.with(LibGit2.peel(LibGit2.GitBlob, obj)) do blob
-                                unsafe_string(convert(Cstring, LibGit2.content(blob)))
-                            end
+                    tfcontent = LibGit2.with(LibGit2.object(repo, get(tfte2))) do obj
+                        LibGit2.with(LibGit2.peel(LibGit2.GitBlob, obj)) do blob
+                            unsafe_string(convert(Cstring, LibGit2.content(blob)))
                         end
-                        @test startswith(tfcontent, commit_msg1)
-                    finally
-                        finalize(tfte2)
                     end
+                    @test startswith(tfcontent, commit_msg1)
                 finally
-                    finalize(tfte)
+                    finalize(tfte2)
                 end
 
                 entrs = LibGit2.treewalk(addfile, ht, String[])[]
