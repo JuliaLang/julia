@@ -577,6 +577,7 @@ let a = spzeros(Int, 10, 10)
     a[:,2] = 2
     @test countnz(a) == 19
     @test a[:,2] == 2*sparse(ones(Int,10))
+    b = copy(a)
 
     # Zero-assignment behavior of setindex!(A, v, i, j)
     a[1,3] = 0
@@ -585,6 +586,24 @@ let a = spzeros(Int, 10, 10)
     a[2,1] = 0
     @test nnz(a) == 19
     @test countnz(a) == 18
+
+    # Zero-assignment behavior of setindex!(A, v, I, J)
+    a[1,:] = 0
+    @test nnz(a) == 19
+    @test countnz(a) == 9
+    a[2,:] = 0
+    @test nnz(a) == 19
+    @test countnz(a) == 8
+    a[:,1] = 0
+    @test nnz(a) == 19
+    @test countnz(a) == 8
+    a[:,2] = 0
+    @test nnz(a) == 19
+    @test countnz(a) == 0
+    a = copy(b)
+    a[:,:] = 0
+    @test nnz(a) == 19
+    @test countnz(a) == 0
 
     a[1,:] = 1:10
     @test a[1,:] == sparse([1:10;])
