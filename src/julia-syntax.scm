@@ -832,7 +832,7 @@
   (receive
    (params bounds) (sparam-name-bounds params '() '())
    `(block
-     (const ,name)
+     (global ,name) (const ,name)
      (scope-block
       (block
        ,@(map (lambda (v) `(local ,v)) params)
@@ -843,7 +843,7 @@
   (receive
    (params bounds) (sparam-name-bounds params '() '())
    `(block
-     (const ,name)
+     (global ,name) (const ,name)
      (scope-block
       (block
        ,@(map (lambda (v) `(local ,v)) params)
@@ -3235,7 +3235,9 @@ f(x) = yt(x)
 
             ;; top level expressions returning values
             ((abstract_type bits_type composite_type thunk toplevel module)
-             (if tail (emit-return e) (emit e)))
+	     (emit e)
+             (if tail (emit-return '(null)))
+	     '(null))
 
             ;; other top level expressions and metadata
             ((import importall using export line meta inbounds boundscheck simdloop)
