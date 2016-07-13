@@ -1052,10 +1052,12 @@ JL_CALLABLE(jl_f_invoke)
         jl_svec_t *tt = ((jl_tupletype_t*)argtypes)->parameters;
         size_t ntypes = jl_svec_len(tt);
         jl_svec_t *tt_ctx = jl_alloc_svec(ntypes+1);
+        JL_GC_PUSH1(&tt_ctx);
         jl_svecset(tt_ctx, 0, ctx);
         for (size_t i = 0; i < ntypes; ++i)
             jl_svecset(tt_ctx, i+1, jl_svecref(tt, i));
         argtypes = (jl_value_t*)jl_apply_tuple_type(tt_ctx);
+        JL_GC_POP();
     }
 
     args[1] = ctx;  // pass in the context
