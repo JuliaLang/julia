@@ -37,7 +37,7 @@ $(SRCDIR)/srccache/$(MBEDTLS_SRC)/CMakeLists.txt: $(SRCDIR)/srccache/$(MBEDTLS_S
 	touch -c $@
 
 $(BUILDDIR)/mbedtls-$(MBEDTLS_VER)/Makefile: $(SRCDIR)/srccache/$(MBEDTLS_SRC)/CMakeLists.txt
-	-cd $(SRCDIR)/srccache/$(MBEDTLS_SRC) && patch -p0 -f < $(SRCDIR)/patches/mbedtls.patch
+	-cd $(SRCDIR)/srccache/$(MBEDTLS_SRC) && patch -p0 -f < $(SRCDIR)/patches/mbedtls-config.patch
 	mkdir -p $(dir $@)
 	cd $(dir $@) && \
 	$(CMAKE) $(dir $<) $(MBEDTLS_OPTS)
