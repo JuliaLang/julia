@@ -19,7 +19,7 @@ end
 function filename(te::GitTreeEntry)
     str = ccall((:git_tree_entry_name, :libgit2), Cstring, (Ptr{Void},), te.ptr)
     str == C_NULL && throw(Error.GitError(Error.Tree,
-                                          LibGit2.Error.ENOTFOUND, "not found"))
+                                          LibGit2.Error.ENOTFOUND, "filename not found"))
     return unsafe_string(str)
 end
 
@@ -41,7 +41,7 @@ end
 function oid(te::GitTreeEntry)
     oid_ptr = ccall((:git_tree_entry_id, :libgit2), Ptr{Oid}, (Ptr{Void},), te.ptr)
     oid_ptr == C_NULL && throw(Error.GitError(Error.Tree,
-                                              LibGit2.Error.ENOTFOUND, "not found"))
+                                              LibGit2.Error.ENOTFOUND, "oid not found"))
     return Oid(oid_ptr)
 end
 
