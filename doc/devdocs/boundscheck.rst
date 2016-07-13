@@ -59,3 +59,52 @@ instance, the default ``getindex`` methods have the chain
 To override the "one layer of inlining" rule, a function may be marked with
 ``@propagate_inbounds`` to propagate an inbounds context (or out of bounds
 context) through one additional layer of inlining.
+
+The bounds checking call hierarchy
+----------------------------------
+
+The overall hierarchy is:
+
+|   ``checkbounds(A, I...)`` which calls
+|     ``checkbounds(Bool, A, I...)`` which calls either of:
+|       ``checkbounds_logical(A, I)``  when ``I`` is a single logical array
+|       ``checkbounds_indices(indices(A), I)`` otherwise
+|
+
+Here ``A`` is the array, and ``I`` contains the "requested" indices.
+``indices(A)`` returns a tuple of "permitted" indices of ``A``.
+
+``checkbounds(A, I...)`` throws an error if the indices are invalid,
+whereas ``checkbounds(Bool, A, I...)`` returns ``false`` in that
+circumstance.  ``checkbounds_indices`` discards any information about
+the array other than its ``indices`` tuple, and performs a pure
+indices-vs-indices comparison: this allows relatively few compiled
+methods to serve a huge variety of array types. Indices are specified
+as tuples, and are usually compared in a 1-1 fashion with individual
+dimensions handled by calling another important function,
+``checkindex``: typically,
+::
+
+   checkbounds_indices((IA1, IA...), (I1, I...)) = checkindex(Bool, IA1, I1) &
+                                                   checkbounds_indices(IA, I)
+
+so ``checkindex`` checks a single dimension.  All of these functions,
+including the unexported ``checkbounds_indices`` and
+``checkbounds_logical``, have docstrings accessible with ``?`` .
+
+If you have to customize bounds checking for a specific array type,
+you should specialize ``checkbounds(Bool, A, I...)``. However, in most
+cases you should be able to rely on ``checkbounds_indices`` as long as
+you supply useful ``indices`` for your array type.
+
+If you have novel index types, first consider specializing
+``checkindex``, which handles a single index for a particular
+dimension of an array.  If you have a custom multidimensional index
+type (similar to ``CartesianIndex``), then you may have to consider
+specializing ``checkbounds_indices``.
+
+Note this hierarchy has been designed to reduce the likelihood of
+method ambiguities.  We try to make ``checkbounds`` the place to
+specialize on array type, and try to avoid specializations on index
+types; conversely, ``checkindex`` is intended to be specialized only
+on index type (especially, the last argument).

@@ -616,19 +616,21 @@ Indexing, Assignment, and Concatenation
 
    Check two array shapes for compatibility, allowing trailing singleton dimensions, and return whichever shape has more dimensions.
 
-.. function:: checkbounds(array, indexes...)
+.. function:: checkbounds(A, I...)
 
    .. Docstring generated from Julia source
 
-   Throw an error if the specified ``indexes`` are not in bounds for the given ``array``\ .
+   Throw an error if the specified indices ``I`` are not in bounds for the given array ``A``\ .
 
-.. function:: checkbounds(Bool, array, indexes...)
+.. function:: checkbounds(Bool, A, I...)
 
    .. Docstring generated from Julia source
 
-   Return ``true`` if the specified ``indexes`` are in bounds for the given ``array``\ . Subtypes of ``AbstractArray`` should specialize this method if they need to provide custom bounds checking behaviors.
+   Return ``true`` if the specified indices ``I`` are in bounds for the given array ``A``\ . Subtypes of ``AbstractArray`` should specialize this method if they need to provide custom bounds checking behaviors; however, in many cases one can rely on ``A``\ 's indices and ``checkindex``\ .
 
-.. function:: checkindex(Bool, inds::UnitRange, index)
+   See also ``checkindex``\ .
+
+.. function:: checkindex(Bool, inds::AbstractUnitRange, index)
 
    .. Docstring generated from Julia source
 
