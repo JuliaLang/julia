@@ -2766,16 +2766,16 @@ function setindex!{Tv,Ti,T<:Integer}(A::SparseMatrixCSC{Tv,Ti}, B::SparseMatrixC
             rowA = rowvalS[ptrA]
             rowB = I[rowvalB[ptrB]]
             if rowA < rowB
-                if ~I_asgn[rowA]
-                    rowvalA[ptrS] = rowA
-                    nzvalA[ptrS] = nzvalS[ptrA]
-                    ptrS += 1
-                end
+                rowvalA[ptrS] = rowA
+                nzvalA[ptrS] = I_asgn[rowA] ? zero(Tv) : nzvalS[ptrA]
+                ptrS += 1
                 ptrA += 1
             elseif rowB < rowA
-                rowvalA[ptrS] = rowB
-                nzvalA[ptrS] = nzvalB[ptrB]
-                ptrS += 1
+                if nzvalB[ptrB] != zero(Tv)
+                    rowvalA[ptrS] = rowB
+                    nzvalA[ptrS] = nzvalB[ptrB]
+                    ptrS += 1
+                end
                 ptrB += 1
             else
                 rowvalA[ptrS] = rowB
@@ -2788,19 +2788,19 @@ function setindex!{Tv,Ti,T<:Integer}(A::SparseMatrixCSC{Tv,Ti}, B::SparseMatrixC
 
         while ptrA < stopA
             rowA = rowvalS[ptrA]
-            if ~I_asgn[rowA]
-                rowvalA[ptrS] = rowA
-                nzvalA[ptrS] = nzvalS[ptrA]
-                ptrS += 1
-            end
+            rowvalA[ptrS] = rowA
+            nzvalA[ptrS] = I_asgn[rowA] ? zero(Tv) : nzvalS[ptrA]
+            ptrS += 1
             ptrA += 1
         end
 
         while ptrB < stopB
             rowB = I[rowvalB[ptrB]]
-            rowvalA[ptrS] = rowB
-            nzvalA[ptrS] = nzvalB[ptrB]
-            ptrS += 1
+            if nzvalB[ptrB] != zero(Tv)
+                rowvalA[ptrS] = rowB
+                nzvalA[ptrS] = nzvalB[ptrB]
+                ptrS += 1
+            end
             ptrB += 1
         end
 

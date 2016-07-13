@@ -605,6 +605,22 @@ let a = spzeros(Int, 10, 10)
     @test nnz(a) == 19
     @test countnz(a) == 0
 
+    # Zero-assignment behavior of setindex!(A, B::SparseMatrixCSC, I, J)
+    a = copy(b)
+    a[1:2,:] = spzeros(2, 10)
+    @test nnz(a) == 19
+    @test countnz(a) == 8
+    a[1:2,1:3] = sparse([1 0 1; 0 0 1])
+    @test nnz(a) == 20
+    @test countnz(a) == 11
+    a = copy(b)
+    a[1:2,:] = let c = sparse(ones(2,10)); fill!(c.nzval, 0); c; end
+    @test nnz(a) == 19
+    @test countnz(a) == 8
+    a[1:2,1:3] = let c = sparse(ones(2,3)); c[1,2] = c[2,1] = c[2,2] = 0; c; end
+    @test nnz(a) == 20
+    @test countnz(a) == 11
+
     a[1,:] = 1:10
     @test a[1,:] == sparse([1:10;])
     a[:,2] = 1:10
