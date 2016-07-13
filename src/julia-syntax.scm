@@ -295,14 +295,9 @@
   (if (and (length> argl 1) (eq? (decl-var (cadr argl)) (symbol "#context")))
       argl
       (cons (car argl) (cons (symbol "#context") (cdr argl)))))
-(define (method-def-expr- name sparams argl body isstaged (rett 'Any))
-  ;(princ "ARGL " argl "\n")
-  (let ((new-argl (cons (car argl) (cons (symbol "#context") (cdr argl)))))
-;    (princ "NEW " new-argl "\n")
-    (method-def-expr-- name sparams argl body isstaged rett)))
 ;; construct the (method ...) expression for one primitive method definition,
 ;; assuming optional and keyword args are already handled
-(define (method-def-expr-- name sparams argl body isstaged (rett 'Any))
+(define (method-def-expr- name sparams argl body isstaged (rett 'Any))
   (if
    (any kwarg? argl)
    ;; has optional positional args
