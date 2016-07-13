@@ -1,7 +1,7 @@
 ## libssh2
 
-LIBSSH2_GIT_URL := git://github.com/wildart/libssh2.git
-LIBSSH2_TAR_URL = https://api.github.com/repos/wildart/libssh2/tarball/$1
+LIBSSH2_GIT_URL := git://github.com/libssh2/libssh2.git
+LIBSSH2_TAR_URL = https://api.github.com/repos/libssh2/libssh2/tarball/$1
 $(eval $(call git-external,libssh2,LIBSSH2,CMakeLists.txt,build/libssh2.$(SHLIB_EXT),$(SRCDIR)/srccache))
 
 LIBSSH2_OBJ_SOURCE := $(BUILDDIR)/$(LIBSSH2_SRC_DIR)/src/libssh2.$(SHLIB_EXT)
@@ -22,6 +22,7 @@ LIBSSH2_OPTS += -DCRYPTO_BACKEND=mbedTLS -DENABLE_ZLIB_COMPRESSION=ON
 endif
 
 $(BUILDDIR)/$(LIBSSH2_SRC_DIR)/Makefile: $(SRCDIR)/srccache/$(LIBSSH2_SRC_DIR)/CMakeLists.txt $(MBEDTLS_OBJ_TARGET)
+	-cd $(SRCDIR)/srccache/$(LIBSSH2_SRC_DIR) && patch -p1 -f < $(SRCDIR)/patches/libssh2-mbedtls.patch
 	mkdir -p $(dir $@)
 	cd $(dir $@) && \
 	$(CMAKE) $(dir $<) $(LIBSSH2_OPTS)
