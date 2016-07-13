@@ -135,6 +135,8 @@ Library improvements
     * A `transcode(T, src)` function is now exported for converting data
       between UTF-xx Unicode encodings ([#17323]).
 
+    * Support for Unicode 9 ([#17402]).
+
   * Most of the combinatorics functions have been moved from `Base`
     to the [Combinatorics.jl package](https://github.com/JuliaLang/Combinatorics.jl) ([#13897]).
 
@@ -335,7 +337,9 @@ Deprecated or removed
 [#16972]: https://github.com/JuliaLang/julia/issues/16972
 [#17037]: https://github.com/JuliaLang/julia/issues/17037
 [#17075]: https://github.com/JuliaLang/julia/issues/17075
+[#17132]: https://github.com/JuliaLang/julia/issues/17132
 [#17266]: https://github.com/JuliaLang/julia/issues/17266
 [#17300]: https://github.com/JuliaLang/julia/issues/17300
 [#17323]: https://github.com/JuliaLang/julia/issues/17323
 [#17374]: https://github.com/JuliaLang/julia/issues/17374
+[#17402]: https://github.com/JuliaLang/julia/issues/17402
