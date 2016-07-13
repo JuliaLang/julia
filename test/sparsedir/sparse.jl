@@ -699,6 +699,20 @@ let A = speye(Int, 5), I=1:10, X=reshape([trues(10); falses(15)],5,5)
     @test A[I] == A[X] == [1,0,0,0,0,0,1,0,0,0]
     A[I] = [1:10;]
     @test A[I] == A[X] == collect(1:10)
+    A[I] = zeros(Int, 10)
+    @test nnz(A) == 13
+    @test countnz(A) == 3
+    @test A[I] == A[X] == zeros(Int, 10)
+    c = collect(11:20); c[1] = c[3] = 0
+    A[I] = c
+    @test nnz(A) == 13
+    @test countnz(A) == 11
+    @test A[I] == A[X] == c
+    A = speye(Int, 5)
+    A[I] = c
+    @test nnz(A) == 12
+    @test countnz(A) == 11
+    @test A[I] == A[X] == c
 end
 
 let S = sprand(50, 30, 0.5, x->round(Int,rand(x)*100)), I = sprand(Bool, 50, 30, 0.2)
