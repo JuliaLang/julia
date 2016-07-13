@@ -1012,21 +1012,17 @@ JL_CALLABLE(jl_f_invoke)
 
 // hashing --------------------------------------------------------------------
 
-#ifdef _P64
-#define bitmix(a,b) int64hash((a)^bswap_64(b))
-#define hash64(a)   int64hash(a)
-#else
-#define bitmix(a,b) int64to32hash((((uint64_t)a)<<32)|((uint64_t)b))
-#define hash64(a)   int64to32hash(a)
-#endif
-
 static uintptr_t bits_hash(void *b, size_t sz)
 {
     switch (sz) {
     case 1:  return int32hash(*(int8_t*)b);
     case 2:  return int32hash(*(int16_t*)b);
     case 4:  return int32hash(*(int32_t*)b);
-    case 8:  return hash64(*(int64_t*)b);
+#ifdef _P64
+    case 8:  return int64hash(*(int64_t*)b);
+#else
+    case 8:  return int64to32hash(*(int64_t*)b);
+#endif
     default:
 #ifdef _P64
         return memhash((char*)b, sz);
@@ -1057,17 +1053,10 @@ static uintptr_t jl_object_id_(jl_value_t *tv, jl_value_t *v)
     jl_datatype_t *dt = (jl_datatype_t*)tv;
     if (dt == jl_datatype_type) {
         jl_datatype_t *dtv = (jl_datatype_t*)v;
-        uintptr_t h = 0xda1ada1a;
-        // has_typevars always returns 0 on name->primary, so that type
-        // can exist in the cache. however, interpreter.c mutates its
-        // typevars' `bound` fields to 0, corrupting the cache. this is
-        // avoided simply by hashing name->primary specially here.
-        if (jl_egal(dtv->name->primary, v))
-            return bitmix(bitmix(h, dtv->name->uid), 0xaa5566aa);
-        return bitmix(bitmix(h, dtv->name->uid), hash_svec(dtv->parameters));
+        return bitmix(~dtv->name->hash, hash_svec(dtv->parameters));
     }
     if (dt == jl_typename_type)
-        return bitmix(((jl_typename_t*)v)->uid, 0xa1ada1ad);
+        return ((jl_typename_t*)v)->hash;
     if (dt->mutabl) return inthash((uintptr_t)v);
     size_t sz = jl_datatype_size(tv);
     uintptr_t h = jl_object_id(tv);
