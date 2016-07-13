@@ -246,7 +246,13 @@ let exename = `$(Base.julia_cmd()) --precompiled=yes`
     @test readchomp(`$exename -e 'println(ARGS);' ''`) == "String[\"\"]"
 
     # issue #12679
-    catcmd = is_unix() ? `cat` : `busybox cat`
+    catcmd = `cat`
+    if is_windows()
+        try # use busybox-w32 on windows
+            success(`busybox`)
+            catcmd = `busybox cat`
+        end
+    end
     @test readchomp(pipeline(ignorestatus(`$exename --startup-file=no --compile=yes -ioo`),stderr=catcmd)) == "ERROR: unknown option `-o`"
     @test readchomp(pipeline(ignorestatus(`$exename --startup-file=no -p`),stderr=catcmd)) == "ERROR: option `-p/--procs` is missing an argument"
     @test readchomp(pipeline(ignorestatus(`$exename --startup-file=no --inline`),stderr=catcmd)) == "ERROR: option `--inline` is missing an argument"
