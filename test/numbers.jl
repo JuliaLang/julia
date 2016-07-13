@@ -2798,19 +2798,15 @@ let types = (Base.BitInteger_types..., BigInt, Bool,
                 else
                     t = @inferred op(one(R), one(S))
                 end
-            elseif R === Complex{Float16} || S === Complex{Float16}
+            elseif (R === Complex{Float16} || S === Complex{Float16}) &&
+                    ((R === Bool && op in (+, *, /, ^)) ||
+                    (S === Bool && op in (+, *)) ||
+                    (S in (R, Rational{Int}) && op === ^))
                 # broken, fixme then remove this branch too
-                if (R === Bool && op in (+, *, /, ^)) ||
-                        (S === Bool && op in (+, *)) ||
-                        (S in (R, Rational{Int}) && op === ^)
-                    @test_throws ErrorException @inferred(Base.promote_op(op, R, S))
-                    T = Base.promote_op(op, R, S)
-                    @test_throws ErrorException @inferred(op(one(R), one(S)))
-                    t = op(one(R), one(S))
-                else
-                    T = @inferred Base.promote_op(op, R, S)
-                    t = @inferred op(one(R), one(S))
-                end
+                @test_throws ErrorException @inferred(Base.promote_op(op, R, S))
+                T = Base.promote_op(op, R, S)
+                @test_throws ErrorException @inferred(op(one(R), one(S)))
+                t = op(one(R), one(S))
             else
                 T = @inferred Base.promote_op(op, R, S)
                 t = @inferred op(one(R), one(S))
