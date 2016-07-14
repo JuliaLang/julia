@@ -7,12 +7,8 @@ else
 endif
 MBEDTLS_URL = https://tls.mbed.org/download/$(MBEDTLS_SRC).tgz
 
-MBEDTLS_OBJ_SOURCE := $(BUILDDIR)/mbedtls-$(MBEDTLS_VER)/library/libmbedtls.$(SHLIB_EXT) \
-			$(BUILDDIR)/mbedtls-$(MBEDTLS_VER)/library/libmbedx509.$(SHLIB_EXT) \
-			$(BUILDDIR)/mbedtls-$(MBEDTLS_VER)/library/libmbedcrypto.$(SHLIB_EXT)
-MBEDTLS_OBJ_TARGET := $(build_shlibdir)/libmbedtls.$(SHLIB_EXT) \
-			$(build_shlibdir)/libmbedx509.$(SHLIB_EXT) \
-			$(build_shlibdir)/libmbedcrypto.$(SHLIB_EXT)
+MBEDTLS_OBJ_SOURCE := $(BUILDDIR)/mbedtls-$(MBEDTLS_VER)/library/libmbedcrypto.$(SHLIB_EXT)
+MBEDTLS_OBJ_TARGET := $(build_shlibdir)/libmbedcrypto.$(SHLIB_EXT)
 
 MBEDTLS_OPTS := $(CMAKE_COMMON) -DUSE_SHARED_MBEDTLS_LIBRARY=ON \
 		-DENABLE_PROGRAMS=OFF -DCMAKE_BUILD_TYPE=Release \
