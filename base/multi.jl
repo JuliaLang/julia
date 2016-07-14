@@ -260,15 +260,18 @@ function flush_gc_msgs(w::Worker)
         return
     end
     w.gcflag = false
-    msgs = copy(w.add_msgs)
+    new_array = Any[]
+    msgs = w.add_msgs
+    w.add_msgs = new_array
     if !isempty(msgs)
-        empty!(w.add_msgs)
         remote_do(add_clients, w, msgs)
     end
 
-    msgs = copy(w.del_msgs)
+    # del_msgs gets populated by finalizers, so be very careful here about ordering of allocations
+    new_array = Any[]
+    msgs = w.del_msgs
+    w.del_msgs = new_array
     if !isempty(msgs)
-        empty!(w.del_msgs)
         #print("sending delete of $msgs\n")
         remote_do(del_clients, w, msgs)
     end
