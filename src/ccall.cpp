@@ -184,111 +184,6 @@ static Value *runtime_sym_lookup(PointerType *funcptype, const char *f_lib,
                               runtime_lib);
 }
 
-// Map from distinct callee's to it's GOT entry.
-// In principle the attribute, function type and calling convention
-// don't need to be part of the key but it seems impossible to forward
-// all the arguments without writing assembly directly.
-// This doesn't matter too much in reality since a single function is usually
-// not called with multiple signatures.
-static DenseMap<AttributeSet,
-                std::map<std::tuple<GlobalVariable*,FunctionType*,
-                                    CallingConv::ID>,GlobalVariable*>> allPltMap;
-
-#ifdef LLVM37 // needed for musttail
-// Emit a "PLT" entry that will be lazily initialized
-// when being called the first time.
-static Value *emit_plt(FunctionType *functype, const AttributeSet &attrs,
-                       CallingConv::ID cc, const char *f_lib, const char *f_name)
-{
-    assert(imaging_mode);
-    GlobalVariable *libptrgv;
-    GlobalVariable *llvmgv;
-    void *symaddr;
-    auto LM = lazyModule([&] {
-            Module *m = new Module(f_name, jl_LLVMContext);
-            jl_setup_module(m);
-            return m;
-        });
-    bool runtime_lib = runtime_sym_gvs(f_lib, f_name, LM,
-                                       libptrgv, llvmgv, &symaddr);
-    PointerType *funcptype = PointerType::get(functype, 0);
-
-    auto &pltMap = allPltMap[attrs];
-    auto key = std::make_tuple(llvmgv, functype, cc);
-    auto &slot = pltMap[key];
-    GlobalVariable *got;
-    if (!slot) {
-        Module *M = LM.get();
-        libptrgv = prepare_global(libptrgv, M);
-        llvmgv = prepare_global(llvmgv, M);
-        BasicBlock *old = builder.GetInsertBlock();
-        DebugLoc olddl = builder.getCurrentDebugLocation();
-        DebugLoc noDbg;
-        builder.SetCurrentDebugLocation(noDbg);
-        std::stringstream funcName;
-        funcName << "jlplt_" << f_name << "_" << globalUnique++;
-        auto fname = funcName.str();
-        Function *plt = Function::Create(functype,
-                                         GlobalVariable::ExternalLinkage,
-                                         fname, M);
-        plt->setAttributes(attrs);
-        if (cc != CallingConv::C)
-            plt->setCallingConv(cc);
-        funcName << "_got";
-        auto gname = funcName.str();
-        got = new GlobalVariable(*M, T_pvoidfunc, false,
-                                 GlobalVariable::ExternalLinkage,
-                                 nullptr, gname);
-        slot = global_proto(got);
-        *(void**)jl_emit_and_add_to_shadow(got) = symaddr;
-        BasicBlock *b0 = BasicBlock::Create(jl_LLVMContext, "top", plt);
-        builder.SetInsertPoint(b0);
-        Value *ptr = runtime_sym_lookup(funcptype, f_lib, f_name, plt, libptrgv,
-                                        llvmgv, runtime_lib);
-        builder.CreateStore(builder.CreateBitCast(ptr, T_pvoidfunc), got);
-        SmallVector<Value*, 16> args;
-        for (Function::arg_iterator arg = plt->arg_begin(), arg_e = plt->arg_end(); arg != arg_e; ++arg)
-            args.push_back(&*arg);
-        CallInst *ret = builder.CreateCall(ptr, ArrayRef<Value*>(args));
-        ret->setAttributes(attrs);
-        if (cc != CallingConv::C)
-            ret->setCallingConv(cc);
-        // NoReturn function can trigger LLVM verifier error when declared as
-        // MustTail since other passes might replace the `ret` with
-        // `unreachable` (LLVM should probably accept `unreachable`).
-        if (attrs.hasAttribute(AttributeSet::FunctionIndex,
-                               Attribute::NoReturn)) {
-            builder.CreateUnreachable();
-        }
-        else {
-            ret->setTailCallKind(CallInst::TCK_MustTail);
-            if (functype->getReturnType() == T_void) {
-                builder.CreateRetVoid();
-            }
-            else {
-                builder.CreateRet(ret);
-            }
-        }
-        builder.SetInsertPoint(old);
-        builder.SetCurrentDebugLocation(olddl);
-        jl_finalize_module(std::unique_ptr<Module>(M), true);
-        auto shadowgot =
-            cast<GlobalVariable>(shadow_output->getNamedValue(gname));
-        auto shadowplt = cast<Function>(shadow_output->getNamedValue(fname));
-        shadowgot->setInitializer(ConstantExpr::getBitCast(shadowplt,
-                                                           T_pvoidfunc));
-        got = prepare_global(shadowgot);
-    }
-    else {
-        // `runtime_sym_gvs` shouldn't have created anything in a new module
-        // if it returns a GV that already exists.
-        assert(!LM.m);
-        got = prepare_global(slot);
-    }
-    return builder.CreateBitCast(builder.CreateLoad(got), funcptype);
-}
-#endif
-
 // --- ABI Implementations ---
 // Partially based on the LDC ABI implementations licensed under the BSD 3-clause license
 
@@ -1696,16 +1591,7 @@ static jl_cgval_t emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
 
         PointerType *funcptype = PointerType::get(functype,0);
         if (imaging_mode) {
-#ifdef LLVM37
-            // ARM, PPC, PPC64 (as of LLVM 3.9) don't support `musttail` for vararg functions.
-            // And musttail can't precede unreachable, but is required for vararg (https://llvm.org/bugs/show_bug.cgi?id=23766)
-            if (functype->isVarArg())
-                llvmf = runtime_sym_lookup(funcptype, f_lib, f_name, ctx->f);
-            else
-                llvmf = emit_plt(functype, attrs, cc, f_lib, f_name);
-#else
             llvmf = runtime_sym_lookup(funcptype, f_lib, f_name, ctx->f);
-#endif
         }
         else {
             void *symaddr = jl_dlsym_e(jl_get_library(f_lib), f_name);
