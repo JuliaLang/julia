@@ -67,8 +67,8 @@ The overall hierarchy is:
 
 |   ``checkbounds(A, I...)`` which calls
 |     ``checkbounds(Bool, A, I...)`` which calls either of:
-|       ``checkbounds_logical(A, I)``  when ``I`` is a single logical array
-|       ``checkbounds_indices(indices(A), I)`` otherwise
+|       ``checkbounds_logical(Bool, A, I)``  when ``I`` is a single logical array
+|       ``checkbounds_indices(Bool, indices(A), I)`` otherwise
 |
 
 Here ``A`` is the array, and ``I`` contains the "requested" indices.
@@ -85,8 +85,8 @@ dimensions handled by calling another important function,
 ``checkindex``: typically,
 ::
 
-   checkbounds_indices((IA1, IA...), (I1, I...)) = checkindex(Bool, IA1, I1) &
-                                                   checkbounds_indices(IA, I)
+   checkbounds_indices(Bool, (IA1, IA...), (I1, I...)) = checkindex(Bool, IA1, I1) &
+                                                         checkbounds_indices(Bool, IA, I)
 
 so ``checkindex`` checks a single dimension.  All of these functions,
 including the unexported ``checkbounds_indices`` and
