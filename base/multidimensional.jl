@@ -154,31 +154,31 @@ end  # IteratorsMD
 using .IteratorsMD
 
 ## Bounds-checking with CartesianIndex
-@inline checkbounds_indices(::Tuple{},   I::Tuple{CartesianIndex,Vararg{Any}}) =
-    checkbounds_indices((), (I[1].I..., tail(I)...))
-@inline checkbounds_indices(IA::Tuple{Any}, I::Tuple{CartesianIndex,Vararg{Any}}) =
-    checkbounds_indices(IA, (I[1].I..., tail(I)...))
-@inline checkbounds_indices(IA::Tuple, I::Tuple{CartesianIndex,Vararg{Any}}) =
-    checkbounds_indices(IA, (I[1].I..., tail(I)...))
+@inline checkbounds_indices(::Type{Bool}, ::Tuple{},   I::Tuple{CartesianIndex,Vararg{Any}}) =
+    checkbounds_indices(Bool, (), (I[1].I..., tail(I)...))
+@inline checkbounds_indices(::Type{Bool}, IA::Tuple{Any}, I::Tuple{CartesianIndex,Vararg{Any}}) =
+    checkbounds_indices(Bool, IA, (I[1].I..., tail(I)...))
+@inline checkbounds_indices(::Type{Bool}, IA::Tuple, I::Tuple{CartesianIndex,Vararg{Any}}) =
+    checkbounds_indices(Bool, IA, (I[1].I..., tail(I)...))
 
 # Support indexing with an array of CartesianIndex{N}s
 # Here we try to consume N of the indices (if there are that many available)
 # The first two simply handle ambiguities
-@inline function checkbounds_indices{N}(::Tuple{}, I::Tuple{AbstractArray{CartesianIndex{N}},Vararg{Any}})
-    checkindex(Bool, (), I[1]) & checkbounds_indices((), tail(I))
+@inline function checkbounds_indices{N}(::Type{Bool}, ::Tuple{}, I::Tuple{AbstractArray{CartesianIndex{N}},Vararg{Any}})
+    checkindex(Bool, (), I[1]) & checkbounds_indices(Bool, (), tail(I))
 end
-@inline function checkbounds_indices{N}(IA::Tuple{Any}, I::Tuple{AbstractArray{CartesianIndex{N}},Vararg{Any}})
-    checkindex(Bool, IA, I[1]) & checkbounds_indices((), tail(I))
+@inline function checkbounds_indices{N}(::Type{Bool}, IA::Tuple{Any}, I::Tuple{AbstractArray{CartesianIndex{N}},Vararg{Any}})
+    checkindex(Bool, IA, I[1]) & checkbounds_indices(Bool, (), tail(I))
 end
-@inline function checkbounds_indices{N}(IA::Tuple, I::Tuple{AbstractArray{CartesianIndex{N}},Vararg{Any}})
+@inline function checkbounds_indices{N}(::Type{Bool}, IA::Tuple, I::Tuple{AbstractArray{CartesianIndex{N}},Vararg{Any}})
     IA1, IArest = IteratorsMD.split(IA, Val{N})
-    checkindex(Bool, IA1, I[1]) & checkbounds_indices(IArest, tail(I))
+    checkindex(Bool, IA1, I[1]) & checkbounds_indices(Bool, IArest, tail(I))
 end
 
 function checkindex{N}(::Type{Bool}, inds::Tuple, I::AbstractArray{CartesianIndex{N}})
     b = true
     for i in I
-        b &= checkbounds_indices(inds, (i,))
+        b &= checkbounds_indices(Bool, inds, (i,))
     end
     b
 end
