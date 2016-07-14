@@ -196,6 +196,10 @@ Library improvements
     * All `sparse` methods now retain provided numerical zeros as structural nonzeros; to
       drop numerical zeros, use `dropzeros!` ([#14798], [#15242]).
 
+    * `setindex!` methods for sparse matrices and vectors no longer purge allocated entries
+      on zero assignment. To drop stored entries from sparse matrices and vectors, use
+      `Base.SparseArrays.dropstored!` ([#17404]).
+
   * New `foreach` function for calling a function on every element of a collection when
     the results are not needed ([#13774]).
 
@@ -343,3 +347,4 @@ Deprecated or removed
 [#17323]: https://github.com/JuliaLang/julia/issues/17323
 [#17374]: https://github.com/JuliaLang/julia/issues/17374
 [#17402]: https://github.com/JuliaLang/julia/issues/17402
+[#17404]: https://github.com/JuliaLang/julia/issues/17404
