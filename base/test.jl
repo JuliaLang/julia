@@ -266,7 +266,7 @@ function do_test(result::ExecutionResult, orig_expr)
         value = result.value
         testres = if isa(value, Bool)
             # a true value Passes
-            value ? Pass(:test, orig_expr, result.data, value) :
+            value ? Pass(:test, nothing, nothing, value) :
                     Fail(:test, orig_expr, result.data, value)
         else
             # If the result is non-Boolean, this counts as an Error
@@ -319,7 +319,7 @@ function do_test_throws(result::ExecutionResult, orig_expr, extype)
     if isa(result, Threw)
         # Check that the right type of exception was thrown
         if isa(result.exception, extype)
-            testres = Pass(:test_throws, orig_expr, extype, result.exception)
+            testres = Pass(:test_throws, nothing, nothing, result.exception)
         else
             testres = Fail(:test_throws_wrong, orig_expr, extype, result.exception)
         end

@@ -607,13 +607,6 @@ mktempdir() do dir
     end
 
     @testset "Credentials" begin
-        creds = LibGit2.EmptyCredentials()
-        @test LibGit2.checkused!(creds)
-        @test LibGit2.reset!(creds) === nothing
-        @test creds[:user] === nothing
-        @test creds[:pass] === nothing
-        @test creds[:pubkey, "localhost"] === nothing
-
         creds_user = "USER"
         creds_pass = "PASS"
         creds = LibGit2.UserPasswordCredentials(creds_user, creds_pass)

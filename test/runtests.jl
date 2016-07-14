@@ -19,21 +19,6 @@ function move_to_node1(t)
 end
 # Base.compile only works from node 1, so compile test is handled specially
 move_to_node1("compile")
-move_to_node1("enums")
-move_to_node1("docs")
-move_to_node1("test")
-move_to_node1("dates/periods")
-move_to_node1("unicode/utf8proc")
-move_to_node1("strings/basic")
-move_to_node1("strings/types")
-move_to_node1("core")
-move_to_node1("int")
-move_to_node1("broadcast")
-move_to_node1("loading")
-move_to_node1("reflection")
-move_to_node1("subarray")
-move_to_node1("mmap")
-move_to_node1("inference")
 # In a constrained memory environment, run the parallel test after all other tests
 # since it starts a lot of workers and can easily exceed the maximum memory
 max_worker_rss != typemax(Csize_t) && move_to_node1("parallel")
@@ -60,7 +45,7 @@ cd(dirname(@__FILE__)) do
                         resp = [e]
                     end
                     push!(results, (test, resp))
-                    if (isa(resp, Integer) && (resp > max_worker_rss)) || isa(resp, Exception)
+                    if (isa(resp[end], Integer) && (resp[end] > max_worker_rss)) || isa(resp, Exception)
                         if n > 1
                             rmprocs(p, waitfor=0.5)
                             p = addprocs(1; exeflags=`--check-bounds=yes --startup-file=no --depwarn=error`)[1]
@@ -86,7 +71,6 @@ cd(dirname(@__FILE__)) do
         end
         push!(results, (t, resp))
     end
-    println("Done running tests")
     o_ts = Base.Test.DefaultTestSet("Overall")
     Base.Test.push_testset(o_ts)
     for res in results
@@ -96,13 +80,25 @@ cd(dirname(@__FILE__)) do
              Base.Test.push_testset(res[2][1])
              Base.Test.record(o_ts, res[2][1])
              Base.Test.pop_testset()
+        elseif isa(res[2][1], Tuple{Int,Int})
+             fake = Base.Test.DefaultTestSet(res[1])
+             [Base.Test.record(fake, Base.Test.Pass(:test, nothing, nothing, nothing)) for i in 1:res[2][1][1]]
+             [Base.Test.record(fake, Base.Test.Broken(:test, nothing)) for i in 1:res[2][1][2]]
+             Base.Test.push_testset(fake)
+             Base.Test.record(o_ts, fake)
+             Base.Test.pop_testset()
         end
     end
     println()
     Base.Test.print_test_results(o_ts,1)
     for res in results
         if !isa(res[2][1], Exception)
-            println("Tests for $(res[1]) took $(res[2][2]) seconds, of which $(res[2][4]) were spent in gc ($(100*res[2][4]/res[2][2]) % ), and allocated $(res[2][3]) bytes.")
+            rss_str = @sprintf("%7.2f",res[2][6]/2^20)
+            time_str = @sprintf("%7f",res[2][2])
+            gc_str = @sprintf("%7f",res[2][5].total_time/10^9)
+            percent_str = @sprintf("%7.2f",100*res[2][5].total_time/(10^9*res[2][2]))
+            alloc_str = @sprintf("%7.2f",res[2][3]/2^20)
+            println("Tests for $(res[1]):\n\ttook $time_str seconds, of which $gc_str were spent in gc ($percent_str % ),\n\tallocated $alloc_str MB,\n\twith rss $rss_str MB")
         else
             o_ts.anynonpass = true
         end

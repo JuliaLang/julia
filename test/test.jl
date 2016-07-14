@@ -32,13 +32,13 @@ a[1,1,1,1,1] = 10
 
 # Test printing of Pass results
 # Pass - constant
-@test contains(sprint(show, @test true), "Expression: true")
+#@test contains(sprint(show, @test true), "Expression: true")
 # Pass - expression
-@test contains(sprint(show, @test 10 == 2*5), "Evaluated: 10 == 10")
-@test contains(sprint(show, @test !false), "Expression: !false")
+#@test contains(sprint(show, @test 10 == 2*5), "Evaluated: 10 == 10")
+#@test contains(sprint(show, @test !false), "Expression: !false")
 # Pass - exception
-@test contains(sprint(show, @test_throws ErrorException error()),
-                "Thrown: ErrorException")
+#@test contains(sprint(show, @test_throws ErrorException error()),
+#                "Thrown: ErrorException")
 
 # Test printing of Fail results
 type NoThrowTestSet <: Base.Test.AbstractTestSet

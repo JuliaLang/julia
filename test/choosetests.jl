@@ -61,7 +61,7 @@ function choosetests(choices = [])
     end
 
     datestests = ["dates/accessors", "dates/adjusters", "dates/query",
-                  "dates/periods", "dates/ranges", "dates/types",
+                  "dates/periods", "dates/ranges", "dates/rounding", "dates/types",
                   "dates/io", "dates/arithmetic", "dates/conversions"]
     if "dates" in skip_tests
         filter!(x -> (x != "dates" && !(x in datestests)), tests)
