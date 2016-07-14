@@ -55,6 +55,8 @@ The names in :mod:`Base.Libdl` are not exported and need to be called e.g. as ``
 
 .. data:: dlext
 
+   .. Docstring generated from Julia source
+
    File extension for dynamic libraries (e.g. dll, dylib, so) on the current platform.
 
 .. function:: find_library(names, locations)

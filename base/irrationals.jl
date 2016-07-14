@@ -131,10 +131,44 @@ big(x::Irrational) = convert(BigFloat,x)
 @irrational φ        1.61803398874989484820  (1+sqrt(big(5)))/2
 
 # aliases
+"""
+    pi
+    π
+
+The constant pi.
+"""
 const pi = π
+
+"""
+    e
+    eu
+
+The constant e.
+"""
 const eu = e
+
+"""
+    γ
+    eulergamma
+
+Euler's constant.
+"""
 const eulergamma = γ
+
+"""
+    φ
+    golden
+
+The golden ratio.
+"""
 const golden = φ
+
+"""
+    catalan
+
+Catalan's constant.
+"""
+catalan
 
 # special behaviors
 

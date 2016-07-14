@@ -17,6 +17,8 @@ Dates and Time Types
           Second
           Millisecond
 
+   .. Docstring generated from Julia source
+
    ``Period`` types represent discrete, human representations of time.
 
 .. type:: CompoundPeriod
@@ -27,21 +29,31 @@ Dates and Time Types
 
 .. data:: Instant
 
+   .. Docstring generated from Julia source
+
    ``Instant`` types represent integer-based, machine representations of time as continuous timelines starting from an epoch.
 
 .. data:: UTInstant{T}
+
+   .. Docstring generated from Julia source
 
    The ``UTInstant`` represents a machine timeline based on UT time (1 day = one revolution of the earth). The ``T`` is a ``Period`` parameter that indicates the resolution or precision of the instant.
 
 .. data:: TimeType
 
-   ``TimeType`` types wrap ``Instant`` machine instances to provide human representations of the machine instant. Both ``DateTime`` and ``Date`` are subtypes of ``TimeType``.
+   .. Docstring generated from Julia source
+
+   ``TimeType`` types wrap ``Instant`` machine instances to provide human representations of the machine instant. Both ``DateTime`` and ``Date`` are subtypes of ``TimeType``\ .
 
 .. data:: DateTime
+
+   .. Docstring generated from Julia source
 
    ``DateTime`` wraps a ``UTInstant{Millisecond}`` and interprets it according to the proleptic Gregorian calendar.
 
 .. data:: Date
+
+   .. Docstring generated from Julia source
 
    ``Date`` wraps a ``UTInstant{Day}`` and interprets it according to the proleptic Gregorian calendar.
 
@@ -538,6 +550,8 @@ Periods
           Minute(v)
           Second(v)
           Millisecond(v)
+
+   .. Docstring generated from Julia source
 
    Construct a ``Period`` type with the given ``v`` value. Input must be losslessly convertible to an ``Int64``\ .
 

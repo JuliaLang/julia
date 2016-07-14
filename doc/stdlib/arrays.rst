@@ -1080,3 +1080,4 @@ dense counterparts. The following functions are specific to sparse arrays.
    For additional (algorithmic) information, and for versions of these methods that forgo argument checking, see (unexported) parent methods :func:`Base.SparseArrays.unchecked_noalias_permute!` and :func:`Base.SparseArrays.unchecked_aliasing_permute!`\ .
 
    See also: :func:`Base.SparseArrays.permute`
+

@@ -170,54 +170,78 @@ General Number Functions and Constants
 .. data:: pi
           π
 
-   The constant pi
+   .. Docstring generated from Julia source
+
+   The constant pi.
 
 .. data:: im
 
-   The imaginary unit
+   .. Docstring generated from Julia source
+
+   The imaginary unit.
 
 .. data:: e
           eu
 
-   The constant e
+   .. Docstring generated from Julia source
+
+   The constant e.
 
 .. data:: catalan
 
-   Catalan's constant
+   .. Docstring generated from Julia source
+
+   Catalan's constant.
 
 .. data:: γ
           eulergamma
 
-   Euler's constant
+   .. Docstring generated from Julia source
+
+   Euler's constant.
 
 .. data:: φ
           golden
 
-   The golden ratio
+   .. Docstring generated from Julia source
+
+   The golden ratio.
 
 .. data:: Inf
 
-   Positive infinity of type ``Float64``
+   .. Docstring generated from Julia source
+
+   Positive infinity of type ``Float64``\ .
 
 .. data:: Inf32
 
-   Positive infinity of type ``Float32``
+   .. Docstring generated from Julia source
+
+   Positive infinity of type ``Float32``\ .
 
 .. data:: Inf16
 
-   Positive infinity of type ``Float16``
+   .. Docstring generated from Julia source
+
+   Positive infinity of type ``Float16``\ .
 
 .. data:: NaN
 
-   A not-a-number value of type ``Float64``
+   .. Docstring generated from Julia source
+
+   A not-a-number value of type ``Float64``\ .
 
 .. data:: NaN32
 
-   A not-a-number value of type ``Float32``
+   .. Docstring generated from Julia source
+
+   A not-a-number value of type ``Float32``\ .
 
 .. data:: NaN16
 
-   A not-a-number value of type ``Float16``
+   .. Docstring generated from Julia source
+
+   A not-a-number value of type ``Float16``\ .
 
 .. function:: issubnormal(f) -> Bool
 

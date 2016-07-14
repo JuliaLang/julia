@@ -658,6 +658,13 @@ kw"immutable"
 kw"@__LINE__"
 
 """
+    ans
+
+A variable referring to the last computed value, automatically set at the interactive prompt.
+"""
+kw"ans"
+
+"""
     nothing
 
 The singleton instance of type `Void`, used by convention when there is no value to return
@@ -672,5 +679,17 @@ Equivalent to `Any` for dispatch purposes, but signals the compiler to skip code
 generation specialization for that field.
 """
 ANY
+
+"""
+    DevNull
+
+Used in a stream redirect to discard all data written to it. Essentially equivalent to
+/dev/null on Unix or NUL on Windows. Usage:
+
+```julia
+run(pipeline(`cat test.txt`, DevNull))
+```
+"""
+DevNull
 
 end
