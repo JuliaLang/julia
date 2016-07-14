@@ -700,8 +700,9 @@ function test!(pkg::AbstractString,
             try
                 color = Base.have_color? "--color=yes" : "--color=no"
                 codecov = coverage? ["--code-coverage=user", "--inline=no"] : ["--code-coverage=none"]
+                compilecache = "--compilecache=" * (Bool(Base.JLOptions().use_compilecache) ? "yes" : "no")
                 julia_exe = Base.julia_cmd()
-                run(`$julia_exe --check-bounds=yes $codecov $color $test_path`)
+                run(`$julia_exe --check-bounds=yes $codecov $color $compilecache $test_path`)
                 info("$pkg tests passed")
             catch err
                 warnbanner(err, label="[ ERROR: $pkg ]")
