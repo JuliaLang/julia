@@ -141,21 +141,47 @@ simd_index{I<:CartesianIndex{0}}(iter::CartesianRange{I}, ::CartesianIndex, I1::
     CartesianIndex((I1+iter.start[1], Ilast.I...))
 end
 
+# Split out the first N elements of a tuple
+@inline split{N}(t, V::Type{Val{N}}) = _split((), t, V)
+@inline _split(tN, trest, V) = _split((tN..., trest[1]), tail(trest), V)
+# exit either when we've exhausted the input tuple or when tN has length N
+@inline _split{N}(tN::NTuple{N}, ::Tuple{}, ::Type{Val{N}}) = tN, ()  # ambig.
+@inline _split{N}(tN,            ::Tuple{}, ::Type{Val{N}}) = tN, ()
+@inline _split{N}(tN::NTuple{N},  trest,    ::Type{Val{N}}) = tN, trest
+
 end  # IteratorsMD
 
 using .IteratorsMD
 
 ## Bounds-checking with CartesianIndex
-# Ambiguity with linear indexing:
-@inline _chkbnds(A::AbstractVector, checked::NTuple{1,Bool}, I::CartesianIndex) = _chkbnds(A, checked, I.I...)
-@inline _chkbnds(A::AbstractArray, checked::NTuple{1,Bool}, I::CartesianIndex) = _chkbnds(A, checked, I.I...)
-# Generic bounds checking
-@inline _chkbnds{T,N}(A::AbstractArray{T,N}, checked::NTuple{N,Bool}, I1::CartesianIndex, I...) = _chkbnds(A, checked, I1.I..., I...)
-@inline _chkbnds{T,N,M}(A::AbstractArray{T,N}, checked::NTuple{M,Bool}, I1::CartesianIndex, I...) = _chkbnds(A, checked, I1.I..., I...)
+@inline checkbounds_indices(::Type{Bool}, ::Tuple{},   I::Tuple{CartesianIndex,Vararg{Any}}) =
+    checkbounds_indices(Bool, (), (I[1].I..., tail(I)...))
+@inline checkbounds_indices(::Type{Bool}, IA::Tuple{Any}, I::Tuple{CartesianIndex,Vararg{Any}}) =
+    checkbounds_indices(Bool, IA, (I[1].I..., tail(I)...))
+@inline checkbounds_indices(::Type{Bool}, IA::Tuple, I::Tuple{CartesianIndex,Vararg{Any}}) =
+    checkbounds_indices(Bool, IA, (I[1].I..., tail(I)...))
 
-@inline checkbounds_indices(::Tuple{},   I::Tuple{CartesianIndex,Vararg{Any}}) = checkbounds_indices((),   (I[1].I..., tail(I)...))
-@inline checkbounds_indices(inds::Tuple{Any}, I::Tuple{CartesianIndex,Vararg{Any}}) = checkbounds_indices(inds, (I[1].I..., tail(I)...))
-@inline checkbounds_indices(inds::Tuple, I::Tuple{CartesianIndex,Vararg{Any}}) = checkbounds_indices(inds, (I[1].I..., tail(I)...))
+# Support indexing with an array of CartesianIndex{N}s
+# Here we try to consume N of the indices (if there are that many available)
+# The first two simply handle ambiguities
+@inline function checkbounds_indices{N}(::Type{Bool}, ::Tuple{}, I::Tuple{AbstractArray{CartesianIndex{N}},Vararg{Any}})
+    checkindex(Bool, (), I[1]) & checkbounds_indices(Bool, (), tail(I))
+end
+@inline function checkbounds_indices{N}(::Type{Bool}, IA::Tuple{Any}, I::Tuple{AbstractArray{CartesianIndex{N}},Vararg{Any}})
+    checkindex(Bool, IA, I[1]) & checkbounds_indices(Bool, (), tail(I))
+end
+@inline function checkbounds_indices{N}(::Type{Bool}, IA::Tuple, I::Tuple{AbstractArray{CartesianIndex{N}},Vararg{Any}})
+    IA1, IArest = IteratorsMD.split(IA, Val{N})
+    checkindex(Bool, IA1, I[1]) & checkbounds_indices(Bool, IArest, tail(I))
+end
+
+function checkindex{N}(::Type{Bool}, inds::Tuple, I::AbstractArray{CartesianIndex{N}})
+    b = true
+    for i in I
+        b &= checkbounds_indices(Bool, inds, (i,))
+    end
+    b
+end
 
 # Recursively compute the lengths of a list of indices, without dropping scalars
 # These need to be inlined for more than 3 indexes

@@ -326,12 +326,17 @@ step(r::AbstractUnitRange) = 1
 step(r::FloatRange) = r.step/r.divisor
 step{T}(r::LinSpace{T}) = ifelse(r.len <= 0, convert(T,NaN), (r.stop-r.start)/r.divisor)
 
-function length(r::StepRange)
+unsafe_length(r::Range) = length(r)  # generic fallback
+
+function unsafe_length(r::StepRange)
     n = Integer(div(r.stop+r.step - r.start, r.step))
     isempty(r) ? zero(n) : n
 end
-length(r::AbstractUnitRange) = Integer(last(r) - first(r) + 1)
-length(r::OneTo) = r.stop
+length(r::StepRange) = unsafe_length(r)
+unsafe_length(r::AbstractUnitRange) = Integer(last(r) - first(r) + 1)
+unsafe_length(r::OneTo) = r.stop
+length(r::AbstractUnitRange) = unsafe_length(r)
+length(r::OneTo) = unsafe_length(r)
 length(r::FloatRange) = Integer(r.len)
 length(r::LinSpace) = Integer(r.len + signbit(r.len - 1))
 
