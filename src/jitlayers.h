@@ -92,14 +92,27 @@ static inline Function *function_proto(Function *F, Module *M = NULL)
     Function *NewF = Function::Create(F->getFunctionType(),
                                       Function::ExternalLinkage,
                                       F->getName(), M);
-    // FunctionType does not include any attributes. Copy them over manually
-    // as codegen may make decisions based on the presence of certain attributes
-    NewF->copyAttributesFrom(F);
+
+    // Declarations are not allowed to have personality routines, but
+    // copyAttributesFrom sets them anyway. Temporarily unset the personlity
+    // routine from `F`, since copying it and then resetting is more expensive
+    // as well as introducing an extra use from this unowned function, which
+    // can cause crashes in the LLVMContext's global destructor.
+#ifdef LLVM37
+    llvm::Constant *OldPersonalityFn = nullptr;
+    if (F->hasPersonalityFn()) {
+        OldPersonalityFn = F->getPersonalityFn();
+        F->setPersonalityFn(nullptr);
+    }
+#endif
+
+     // FunctionType does not include any attributes. Copy them over manually
+     // as codegen may make decisions based on the presence of certain attributes
+     NewF->copyAttributesFrom(F);
 
 #ifdef LLVM37
-    // Declarations are not allowed to have personality routines, but
-    // copyAttributesFrom sets them anyway, so clear them again manually
-    NewF->setPersonalityFn(nullptr);
+    if (OldPersonalityFn)
+        F->setPersonalityFn(OldPersonalityFn);
 #endif
 
 #ifdef LLVM35
