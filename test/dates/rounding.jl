@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: http://julialang.org/license
+
 # Test conversion to and from the rounding epoch (ISO 8601 year 0000)
 @test Dates.epochdays2date(-1) == Dates.Date(-1, 12, 31)
 @test Dates.epochdays2date(0) == Dates.Date(0, 1, 1)
