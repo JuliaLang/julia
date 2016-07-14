@@ -2,6 +2,10 @@
 
 ## types ##
 
+typealias Dims{N} NTuple{N,Int}
+typealias DimsInteger{N} NTuple{N,Integer}
+typealias Indices{N} NTuple{N,AbstractUnitRange}
+
 const (<:) = issubtype
 
 supertype(T::DataType) = T.super
@@ -373,20 +377,24 @@ function promote_shape(a::Dims, b::Dims)
 end
 
 function promote_shape(a::AbstractArray, b::AbstractArray)
-    if ndims(a) < ndims(b)
+    promote_shape(indices(a), indices(b))
+end
+
+function promote_shape(a::Indices, b::Indices)
+    if length(a) < length(b)
         return promote_shape(b, a)
     end
-    for i=1:ndims(b)
-        if indices(a, i) != indices(b, i)
+    for i=1:length(b)
+        if a[i] != b[i]
             throw(DimensionMismatch("dimensions must match"))
         end
     end
-    for i=ndims(b)+1:ndims(a)
-        if indices(a, i) != 1:1
+    for i=length(b)+1:length(a)
+        if a[i] != 1:1
             throw(DimensionMismatch("dimensions must match"))
         end
     end
-    return indices(a)
+    return a
 end
 
 function throw_setindex_mismatch(X, I)
@@ -407,12 +415,12 @@ function setindex_shape_check(X::AbstractArray, I::Integer...)
     lj = length(I)
     i = j = 1
     while true
-        ii = size(X,i)
+        ii = unsafe_length(indices(X,i))
         jj = I[j]
         if i == li || j == lj
             while i < li
                 i += 1
-                ii *= size(X,i)
+                ii *= unsafe_length(indices(X,i))
             end
             while j < lj
                 j += 1
@@ -452,7 +460,7 @@ function setindex_shape_check{T}(X::AbstractArray{T,2}, i::Integer, j::Integer)
     if length(X) != i*j
         throw_setindex_mismatch(X, (i,j))
     end
-    sx1 = size(X,1)
+    sx1 = unsafe_length(indices(X,1))
     if !(i == 1 || i == sx1 || sx1 == 1)
         throw_setindex_mismatch(X, (i,j))
     end
