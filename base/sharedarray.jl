@@ -1,4 +1,5 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
+
 import .Serializer: serialize_cycle, serialize_type, writetag, UNDEFREF_TAG
 
 type SharedArray{T,N} <: DenseArray{T,N}

@@ -389,7 +389,7 @@ default, the :class:`TimeType` :func:`round` method uses the ``RoundNearestTiesU
 rounding mode. (It's difficult to guess what breaking ties to nearest "even"
 :class:`TimeType` would entail.) Further details on the available ``RoundingMode`` s can
 be found in the
-`API reference <http://docs.julialang.org/en/latest/stdlib/dates/#rounding-functions>`_.
+`API reference <http://docs.julialang.org/en/latest/stdlib/dates/>`_.
 
 Rounding should generally behave as expected, but there are a few cases in which the
 expected behaviour is not obvious.

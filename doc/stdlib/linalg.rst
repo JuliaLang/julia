@@ -1473,7 +1473,7 @@ according to the usual Julia convention.
 
    .. Docstring generated from Julia source
 
-   Compute ``A  B`` in-place and store the result in ``Y``\ , returning the result. If only two arguments are passed, then ``A_ldiv_B!(A, B)`` overwrites ``B`` with the result.
+   Compute ``A \ B`` in-place and store the result in ``Y``\ , returning the result. If only two arguments are passed, then ``A_ldiv_B!(A, B)`` overwrites ``B`` with the result.
 
    The argument ``A`` should *not* be a matrix.  Rather, instead of matrices it should be a factorization object (e.g. produced by :func:`factorize` or :func:`cholfact`\ ). The reason for this is that factorization itself is both expensive and typically allocates memory (although it can also be done in-place via, e.g., :func:`lufact!`\ ), and performance-critical situations requiring ``A_ldiv_B!`` usually also require fine-grained control over the factorization of ``A``\ .
 

@@ -223,7 +223,7 @@ int wmain(int argc, wchar_t *argv[], wchar_t *envp[])
     }
 #endif
     libsupport_init();
-    if (argc >= 2 && strcmp(argv[1],"--lisp") == 0) {
+    if (argc >= 2 && strcmp((char*)argv[1],"--lisp") == 0) {
         jl_lisp_prompt();
         return 0;
     }
