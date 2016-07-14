@@ -3,7 +3,7 @@ module GenStdLib
 import Base.Docs: Binding, DocStr
 
 # Constants.
-const DOCSTRING_DIRECTIVE = r"^(.. (function|type|variable):: ).*"
+const DOCSTRING_DIRECTIVE = r"^(.. (function|type|variable|data):: ).*"
 
 # Types.
 
