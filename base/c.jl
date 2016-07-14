@@ -143,8 +143,8 @@ function transcode end
 transcode{T<:Union{UInt8,UInt16}}(::Type{T}, src::Vector{T}) = src
 transcode(::Type{Int32}, src::Vector{UInt32}) = reinterpret(Int32, src)
 
-function transcode(::Type{UInt16}, src::Vector{UInt8})
-    dst = UInt16[]
+function transcode(T::Union{Type{UInt16},Type{Int32}}, src::Vector{UInt8})
+    dst = T[]
     i, n = 1, length(src)
     n > 0 || return dst
     sizehint!(dst, 2n)
@@ -157,24 +157,24 @@ function transcode(::Type{UInt16}, src::Vector{UInt8})
                 push!(dst, a)
                 a = b; continue
             elseif a < 0xe0 # 2-byte UTF-8
-                push!(dst, 0x3080 $ (UInt16(a) << 6) $ b)
+                push!(dst, 0x3080 $ (T(a) << 6) $ b)
             elseif i < n # 3/4-byte character
                 c = src[i += 1]
                 if -64 <= (c % Int8) # invalid UTF-8 (non-continuation)
                     push!(dst, a, b)
                     a = c; continue
                 elseif a < 0xf0 # 3-byte UTF-8
-                    push!(dst, 0x2080 $ (UInt16(a) << 12) $ (UInt16(b) << 6) $ c)
+                    push!(dst, 0x2080 $ (T(a) << 12) $ (T(b) << 6) $ c)
                 elseif i < n
                     d = src[i += 1]
                     if -64 <= (d % Int8) # invalid UTF-8 (non-continuation)
                         push!(dst, a, b, c)
                         a = d; continue
                     elseif a == 0xf0 && b < 0x90 # overlong encoding
-                        push!(dst, 0x2080 $ (UInt16(b) << 12) $ (UInt16(c) << 6) $ d)
+                        push!(dst, 0x2080 $ (T(b) << 12) $ (T(c) << 6) $ d)
                     else # 4-byte UTF-8
-                        push!(dst, 0xe5b8 + (UInt16(a) << 8) + (UInt16(b) << 2) + (c >> 4),
-                                   0xdc80 $ (UInt16(c & 0xf) << 6) $ d)
+                        push!(dst, 0xe5b8 + (T(a) << 8) + (T(b) << 2) + (c >> 4),
+                                   0xdc80 $ (T(c & 0xf) << 6) $ d)
                     end
                 else # too short
                     push!(dst, a, b, c)
@@ -193,6 +193,7 @@ function transcode(::Type{UInt16}, src::Vector{UInt8})
     return dst
 end
 
+# Pobably this method also needs a fix
 function transcode(::Type{UInt8}, src::Vector{UInt16})
     dst = UInt8[]
     i, n = 1, length(src)
