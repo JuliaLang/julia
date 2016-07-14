@@ -1,0 +1,207 @@
+#include <llvm/IR/LLVMContext.h>
+#include <llvm/IR/Constants.h>
+#include <llvm/IR/Module.h>
+#include <llvm/IR/Value.h>
+
+#include <llvm/ExecutionEngine/SectionMemoryManager.h>
+#if defined(USE_ORCJIT)
+#include "llvm/ExecutionEngine/Orc/CompileUtils.h"
+#include "llvm/ExecutionEngine/Orc/IRCompileLayer.h"
+#include "llvm/ExecutionEngine/Orc/LambdaResolver.h"
+#include "llvm/ExecutionEngine/Orc/LazyEmittingLayer.h"
+#include "llvm/ExecutionEngine/Orc/ObjectLinkingLayer.h"
+#include "llvm/ExecutionEngine/ObjectMemoryBuffer.h"
+#elif defined(USE_MCJIT)
+#include <llvm/ExecutionEngine/MCJIT.h>
+#include <llvm/ADT/DenseMapInfo.h>
+#include <llvm/Object/ObjectFile.h>
+#else
+#include <llvm/ExecutionEngine/JIT.h>
+#include <llvm/ExecutionEngine/JITMemoryManager.h>
+#include <llvm/ExecutionEngine/Interpreter.h>
+#include <llvm/ExecutionEngine/ExecutionEngine.h>
+#include <llvm/ExecutionEngine/JITEventListener.h>
+#endif
+
+#ifdef LLVM37
+#include "llvm/IR/LegacyPassManager.h"
+extern legacy::PassManager *jl_globalPM;
+#else
+#include <llvm/PassManager.h>
+extern PassManager *jl_globalPM;
+#endif
+
+#ifdef LLVM35
+#include <llvm/Target/TargetMachine.h>
+#else
+#endif
+
+extern "C" {
+    extern int globalUnique;
+}
+extern TargetMachine *jl_TargetMachine;
+extern Module *shadow_output;
+extern bool imaging_mode;
+#if defined(_OS_WINDOWS_) && defined(_CPU_X86_64_)
+extern Function *juliapersonality_func;
+#endif
+
+
+#ifdef JULIA_ENABLE_THREADING
+extern size_t jltls_states_func_idx;
+#endif
+
+typedef struct {Value *gv; int32_t index;} jl_value_llvm; // uses 1-based indexing
+
+#ifdef LLVM37
+void addOptimizationPasses(legacy::PassManager *PM);
+#else
+void addOptimizationPasses(PassManager *PM);
+#endif
+void* jl_emit_and_add_to_shadow(GlobalVariable *gv, void *gvarinit = NULL);
+GlobalVariable *jl_emit_sysimg_slot(Module *m, Type *typ, const char *name,
+                                           uintptr_t init, size_t &idx);
+void* jl_get_global(GlobalVariable *gv);
+GlobalVariable *jl_get_global_for(const char *cname, void *addr, Module *M);
+void jl_add_to_shadow(Module *m);
+void finalize_gc_frame(Module *m);
+void jl_finalize_function(Function *F, Module *collector = NULL);
+void jl_finalize_module(Module *m, bool shadow);
+
+// Connect Modules via prototypes, each owned by module `M`
+static inline GlobalVariable *global_proto(GlobalVariable *G, Module *M = NULL)
+{
+    // Copy the GlobalVariable, but without the initializer, so it becomes a declaration
+    GlobalVariable *proto = new GlobalVariable(G->getType()->getElementType(),
+            G->isConstant(), GlobalVariable::ExternalLinkage,
+            NULL, G->getName(),  G->getThreadLocalMode());
+    proto->copyAttributesFrom(G);
+#ifdef LLVM35
+    // DLLImport only needs to be set for the shadow module
+    // it just gets annoying in the JIT
+    proto->setDLLStorageClass(GlobalValue::DefaultStorageClass);
+#endif
+    if (M)
+        M->getGlobalList().push_back(proto);
+    return proto;
+}
+
+static inline Function *function_proto(Function *F, Module *M = NULL)
+{
+    // Copy the declaration characteristics of the Function (not the body)
+    Function *NewF = Function::Create(F->getFunctionType(),
+                                      Function::ExternalLinkage,
+                                      F->getName(), M);
+    // FunctionType does not include any attributes. Copy them over manually
+    // as codegen may make decisions based on the presence of certain attributes
+    NewF->copyAttributesFrom(F);
+
+#ifdef LLVM37
+    // Declarations are not allowed to have personality routines, but
+    // copyAttributesFrom sets them anyway, so clear them again manually
+    NewF->setPersonalityFn(nullptr);
+#endif
+
+#ifdef LLVM35
+    // DLLImport only needs to be set for the shadow module
+    // it just gets annoying in the JIT
+    NewF->setDLLStorageClass(GlobalValue::DefaultStorageClass);
+#endif
+
+    return NewF;
+}
+
+static inline GlobalVariable *prepare_global(GlobalVariable *G, Module *M)
+{
+    if (G->getParent() == M)
+        return G;
+    GlobalValue *local = M->getNamedValue(G->getName());
+    if (!local) {
+        local = global_proto(G, M);
+    }
+    return cast<GlobalVariable>(local);
+}
+
+#ifdef LLVM35
+void add_named_global(GlobalObject *gv, void *addr, bool dllimport);
+template<typename T>
+static inline void add_named_global(GlobalObject *gv, T *addr, bool dllimport = true)
+#else
+void add_named_global(GlobalValue *gv, void *addr, bool dllimport);
+template<typename T>
+static inline void add_named_global(GlobalValue *gv, T *addr, bool dllimport = true)
+#endif
+{
+    // cast through integer to avoid c++ pedantic warning about casting between
+    // data and code pointers
+    add_named_global(gv, (void*)(uintptr_t)addr, dllimport);
+}
+
+void jl_init_jit(Type *T_pjlvalue_);
+#ifdef USE_ORCJIT
+class JuliaOJIT {
+    // Custom object emission notification handler for the JuliaOJIT
+    // TODO: hook up RegisterJITEventListener, instead of hard-coding the GDB and JuliaListener targets
+    class DebugObjectRegistrar {
+    public:
+        DebugObjectRegistrar(JuliaOJIT &JIT);
+        template <typename ObjSetT, typename LoadResult>
+        void operator()(orc::ObjectLinkingLayerBase::ObjSetHandleT H, const ObjSetT &Objects,
+                        const LoadResult &LOS);
+    private:
+        void NotifyGDB(object::OwningBinary<object::ObjectFile> &DebugObj);
+        std::vector<object::OwningBinary<object::ObjectFile>> SavedObjects;
+        std::unique_ptr<JITEventListener> JuliaListener;
+        JuliaOJIT &JIT;
+    };
+
+public:
+    typedef orc::ObjectLinkingLayer<DebugObjectRegistrar> ObjLayerT;
+    typedef orc::IRCompileLayer<ObjLayerT> CompileLayerT;
+    typedef CompileLayerT::ModuleSetHandleT ModuleHandleT;
+    typedef StringMap<void*> SymbolTableT;
+    typedef object::OwningBinary<object::ObjectFile> OwningObj;
+
+    JuliaOJIT(TargetMachine &TM);
+
+    void addGlobalMapping(StringRef Name, uint64_t Addr);
+    void addGlobalMapping(const GlobalValue *GV, void *Addr);
+    void *getPointerToGlobalIfAvailable(StringRef S);
+    void *getPointerToGlobalIfAvailable(const GlobalValue *GV);
+    void addModule(std::unique_ptr<Module> M);
+    void removeModule(ModuleHandleT H);
+    orc::JITSymbol findSymbol(const std::string &Name, bool ExportedSymbolsOnly);
+    orc::JITSymbol findUnmangledSymbol(const std::string Name);
+    uint64_t getGlobalValueAddress(const std::string &Name);
+    uint64_t getFunctionAddress(const std::string &Name);
+    Function *FindFunctionNamed(const std::string &Name);
+    void RegisterJITEventListener(JITEventListener *L);
+    const DataLayout& getDataLayout() const;
+    const Triple& getTargetTriple() const;
+private:
+    std::string getMangledName(const std::string &Name);
+    std::string getMangledName(const GlobalValue *GV);
+
+    TargetMachine &TM;
+    const DataLayout DL;
+    // Should be big enough that in the common case, The
+    // object fits in its entirety
+    SmallVector<char, 4096> ObjBufferSV;
+    raw_svector_ostream ObjStream;
+    legacy::PassManager PM;
+    MCContext *Ctx;
+    RTDyldMemoryManager *MemMgr;
+    ObjLayerT ObjectLayer;
+    CompileLayerT CompileLayer;
+    SymbolTableT GlobalSymbolTable;
+    SymbolTableT LocalSymbolTable;
+};
+extern JuliaOJIT *jl_ExecutionEngine;
+#else
+extern ExecutionEngine *jl_ExecutionEngine;
+#endif
+#ifdef LLVM39
+JL_DLLEXPORT extern LLVMContext jl_LLVMContext;
+#else
+JL_DLLEXPORT extern LLVMContext &jl_LLVMContext;
+#endif

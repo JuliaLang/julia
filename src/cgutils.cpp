@@ -1,24 +1,11 @@
 // This file is a part of Julia. License is MIT: http://julialang.org/license
 
-#include <iostream>
-
 // utility procedures used in code generation
 
 static Instruction *tbaa_decorate(MDNode *md, Instruction *load_or_store)
 {
     load_or_store->setMetadata( llvm::LLVMContext::MD_tbaa, md );
     return load_or_store;
-}
-
-static GlobalVariable *prepare_global(GlobalVariable *G, Module *M)
-{
-    if (G->getParent() == M)
-        return G;
-    GlobalValue *local = M->getNamedValue(G->getName());
-    if (!local) {
-        local = global_proto(G, M);
-    }
-    return cast<GlobalVariable>(local);
 }
 
 static llvm::Value *prepare_call(llvm::Value *Callee)
@@ -189,20 +176,7 @@ static Value *literal_static_pointer_val(const void *p, Type *t)
 static Value *julia_gv(const char *cname, void *addr)
 {
     // emit a GlobalVariable for a jl_value_t named "cname"
-    std::map<void*, jl_value_llvm>::iterator it;
-    // first see if there already is a GlobalVariable for this address
-    it = jl_value_to_llvm.find(addr);
-    if (it != jl_value_to_llvm.end())
-        return tbaa_decorate(tbaa_const, builder.CreateLoad(prepare_global((llvm::GlobalVariable*)it->second.gv)));
-
-    std::stringstream gvname;
-    gvname << cname << globalUnique++;
-    // no existing GlobalVariable, create one and store it
-    GlobalVariable *gv = new GlobalVariable(*jl_builderModule, T_pjlvalue,
-                           false, GlobalVariable::ExternalLinkage,
-                           NULL, gvname.str());
-    addComdat(gv);
-    *(void**)jl_emit_and_add_to_shadow(gv, addr) = addr;
+    GlobalVariable *gv = jl_get_global_for(cname, addr, jl_builderModule);
     return tbaa_decorate(tbaa_const, builder.CreateLoad(gv));
 }
 
