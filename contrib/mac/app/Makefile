@@ -31,13 +31,10 @@ $(DMG_NAME): dmg/$(APP_NAME)
 	sudo hdiutil create $(DMG_NAME) -size 500m -ov -volname "$(VOL_NAME)" -imagekey zlib-level=9 -srcfolder dmg
 
 dmg/$(APP_NAME): julia.icns
-	make -C ../../../deps install-git
 	make -C ../../.. binary-dist
 	tar zxf ../../../julia-*.tar.gz
 	mv julia-* julia
 	-mkdir -p ./julia/libexec ./julia/share
-	-cp -a $(build_libexecdir)/git* ./julia/libexec
-	-cp -a $(build_datarootdir)/git* ./julia/share
 	rm -f julia/lib/*.{a,la}
 	-mkdir dmg
 	platypus -a Julia -p /bin/bash -V $(JULIA_VERSION) -R -u "The Julia Project" -i julia.icns -Q julia.icns -o "None" -I org.julialang.julia -x -f julia script ./dmg/$(APP_NAME)
