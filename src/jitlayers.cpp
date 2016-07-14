@@ -198,6 +198,19 @@ void NotifyDebugger(jit_code_entry *JITCodeEntry)
 }
 // ------------------------ END OF TEMPORARY COPY FROM LLVM -----------------
 
+// Resolve compiler-rt functions in the shared library that we created from compiler-rt
+static uint64_t resolve_compiler_rt(const char *name)
+{
+    static void *compiler_rt_hdl = jl_load_dynamic_library_e("libcompiler-rt",
+                                                             JL_RTLD_LOCAL);
+    static const char *const prefix = "__";
+    if (!compiler_rt_hdl)
+        return 0;
+    if (strncmp(name, prefix, strlen(prefix) != 0))
+        return 0;
+    return (uintptr_t)jl_dlsym_e(compiler_rt_hdl, name);
+}
+
 #ifdef _OS_LINUX_
 // Resolve non-lock free atomic functions in the libatomic library.
 // This is the library that provides support for c11/c++11 atomic operations.
@@ -430,6 +443,8 @@ public:
                             if (uint64_t addr = resolve_atomic(Name.c_str()))
                                 return RuntimeDyld::SymbolInfo(addr, JITSymbolFlags::Exported);
 #endif
+                            if (uint64_t addr = resolve_compiler_rt(Name.c_str()))
+                                return RuntimeDyld::SymbolInfo(addr, JITSymbolFlags::Exported);
                             // Return failure code
                             return RuntimeDyld::SymbolInfo(nullptr);
                           },

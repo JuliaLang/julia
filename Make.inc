@@ -42,6 +42,9 @@ USE_SYSTEM_PATCHELF:=0
 # Link to the LLVM shared library
 USE_LLVM_SHLIB := 1
 
+# Use the builtins from compiler-rt
+BUILD_COMPILER_RT := 1
+
 ## Settings for various Intel tools
 # Set to 1 to use MKL
 USE_INTEL_MKL ?= 0

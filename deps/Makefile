@@ -209,7 +209,7 @@ get: $(addprefix get-, $(DEP_LIBS))
 configure: $(addprefix configure-, $(DEP_LIBS))
 compile: $(addprefix compile-, $(DEP_LIBS))
 check: $(addprefix check-, $(DEP_LIBS))
-install: $(addprefix install-, $(DEP_LIBS))
+install: $(addprefix install-, $(DEP_LIBS)) install-compiler_rt
 cleanall: $(addprefix clean-, $(DEP_LIBS))
 distcleanall: $(addprefix distclean-, $(DEP_LIBS))
 	rm -rf $(build_prefix)
@@ -267,4 +267,4 @@ include $(SRCDIR)/virtualenv.mk
 
 .PHONY: default compile install cleanall distcleanall \
 	get-* configure-* compile-* check-* install-* \
-	clean-* distclean-* reinstall-* update-llvm
+	clean-* distclean-* reinstall-* update-llvm install-compiler_rt
