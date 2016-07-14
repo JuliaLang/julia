@@ -2,6 +2,19 @@
 
 abstract AbstractTime
 
+"""
+    Period
+    Year
+    Month
+    Week
+    Day
+    Hour
+    Minute
+    Second
+    Millisecond
+
+`Period` types represent discrete, human representations of time.
+"""
 abstract Period     <: AbstractTime
 abstract DatePeriod <: Period
 abstract TimePeriod <: Period
@@ -19,10 +32,36 @@ for T in (:Hour,:Minute,:Second,:Millisecond)
     end
 end
 
-# Instant types represent different monotonically increasing timelines
+"""
+    Year(v)
+    Month(v)
+    Week(v)
+    Day(v)
+    Hour(v)
+    Minute(v)
+    Second(v)
+    Millisecond(v)
+
+Construct a `Period` type with the given `v` value. Input must be losslessly convertible
+to an `Int64`.
+"""
+Period(v)
+
+"""
+    Instant
+
+`Instant` types represent integer-based, machine representations of time as continuous
+timelines starting from an epoch.
+"""
 abstract Instant <: AbstractTime
 
-# UTInstant is based on UT seconds, or 1/86400th of a turn of the earth
+"""
+    UTInstant{T}
+
+The `UTInstant` represents a machine timeline based on UT time (1 day = one revolution of
+the earth). The `T` is a `Period` parameter that indicates the resolution or precision of
+the instant.
+"""
 immutable UTInstant{P<:Period} <: Instant
     periods::P
 end
@@ -43,16 +82,30 @@ immutable ISOCalendar <: Calendar end
 abstract TimeZone
 immutable UTC <: TimeZone end
 
-# TimeTypes wrap Instants to provide human representations of time
+"""
+    TimeType
+
+`TimeType` types wrap `Instant` machine instances to provide human representations of the
+machine instant. Both `DateTime` and `Date` are subtypes of `TimeType`.
+"""
 abstract TimeType <: AbstractTime
 
-# DateTime is a millisecond precision UTInstant interpreted by ISOCalendar
+"""
+    DateTime
+
+`DateTime` wraps a `UTInstant{Millisecond}` and interprets it according to the proleptic
+Gregorian calendar.
+"""
 immutable DateTime <: TimeType
     instant::UTInstant{Millisecond}
     DateTime(instant::UTInstant{Millisecond}) = new(instant)
 end
 
-# DateTime is a day precision UTInstant interpreted by ISOCalendar
+"""
+    Date
+
+`Date` wraps a `UTInstant{Day}` and interprets it according to the proleptic Gregorian calendar.
+"""
 immutable Date <: TimeType
     instant::UTInstant{Day}
     Date(instant::UTInstant{Day}) = new(instant)

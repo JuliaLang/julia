@@ -7,6 +7,11 @@ end
 Complex(x::Real, y::Real) = Complex(promote(x,y)...)
 Complex(x::Real) = Complex(x, zero(x))
 
+"""
+    im
+
+The imaginary unit.
+"""
 const im = Complex(false,true)
 
 typealias Complex128 Complex{Float64}

@@ -161,93 +161,127 @@
 
 .. data:: Ptr{T}
 
-   A memory address referring to data of type ``T``.
-   However, there is no guarantee that the memory is actually valid,
-   or that it actually represents data of the specified type.
+   .. Docstring generated from Julia source
+
+   A memory address referring to data of type ``T``\ .  However, there is no guarantee that the memory is actually valid, or that it actually represents data of the specified type.
 
 .. data:: Ref{T}
 
-   An object that safely references data of type ``T``.
-   This type is guaranteed to point to valid, Julia-allocated memory
-   of the correct type. The underlying data is protected from freeing by
-   the garbage collector as long as the ``Ref`` itself is referenced.
+   .. Docstring generated from Julia source
 
-   When passed as a ``ccall`` argument (either as a ``Ptr`` or ``Ref`` type),
-   a ``Ref`` object will be converted to a native pointer to the data it references.
+   An object that safely references data of type ``T``\ . This type is guaranteed to point to valid, Julia-allocated memory of the correct type. The underlying data is protected from freeing by the garbage collector as long as the ``Ref`` itself is referenced.
 
-   There is no invalid (NULL) ``Ref``.
+   When passed as a ``ccall`` argument (either as a ``Ptr`` or ``Ref`` type), a ``Ref`` object will be converted to a native pointer to the data it references.
+
+   There is no invalid (NULL) ``Ref``\ .
 
 .. data:: Cchar
 
-   Equivalent to the native ``char`` c-type
+   .. Docstring generated from Julia source
+
+   Equivalent to the native ``char`` c-type.
 
 .. data:: Cuchar
 
-   Equivalent to the native ``unsigned char`` c-type (UInt8)
+   .. Docstring generated from Julia source
+
+   Equivalent to the native ``unsigned char`` c-type (``UInt8``\ ).
 
 .. data:: Cshort
 
-   Equivalent to the native ``signed short`` c-type (Int16)
+   .. Docstring generated from Julia source
+
+   Equivalent to the native ``signed short`` c-type (``Int16``\ ).
 
 .. data:: Cushort
 
-   Equivalent to the native ``unsigned short`` c-type (UInt16)
+   .. Docstring generated from Julia source
+
+   Equivalent to the native ``unsigned short`` c-type (``UInt16``\ ).
 
 .. data:: Cint
 
-   Equivalent to the native ``signed int`` c-type (Int32)
+   .. Docstring generated from Julia source
+
+   Equivalent to the native ``signed int`` c-type (``Int32``\ ).
 
 .. data:: Cuint
 
-   Equivalent to the native ``unsigned int`` c-type (UInt32)
+   .. Docstring generated from Julia source
+
+   Equivalent to the native ``unsigned int`` c-type (``UInt32``\ ).
 
 .. data:: Clong
 
-   Equivalent to the native ``signed long`` c-type
+   .. Docstring generated from Julia source
+
+   Equivalent to the native ``signed long`` c-type.
 
 .. data:: Culong
 
-   Equivalent to the native ``unsigned long`` c-type
+   .. Docstring generated from Julia source
+
+   Equivalent to the native ``unsigned long`` c-type.
 
 .. data:: Clonglong
 
-   Equivalent to the native ``signed long long`` c-type (Int64)
+   .. Docstring generated from Julia source
+
+   Equivalent to the native ``signed long long`` c-type (``Int64``\ ).
 
 .. data:: Culonglong
 
-   Equivalent to the native ``unsigned long long`` c-type (UInt64)
+   .. Docstring generated from Julia source
+
+   Equivalent to the native ``unsigned long long`` c-type (``UInt64``\ ).
 
 .. data:: Cintmax_t
 
-   Equivalent to the native ``intmax_t`` c-type (Int64)
+   .. Docstring generated from Julia source
+
+   Equivalent to the native ``intmax_t`` c-type (``Int64``\ ).
 
 .. data:: Cuintmax_t
 
-   Equivalent to the native ``uintmax_t`` c-type (UInt64)
+   .. Docstring generated from Julia source
+
+   Equivalent to the native ``uintmax_t`` c-type (``UInt64``\ ).
 
 .. data:: Csize_t
 
-   Equivalent to the native ``size_t`` c-type (UInt)
+   .. Docstring generated from Julia source
+
+   Equivalent to the native ``size_t`` c-type (``UInt``\ ).
 
 .. data:: Cssize_t
 
-   Equivalent to the native ``ssize_t`` c-type
+   .. Docstring generated from Julia source
+
+   Equivalent to the native ``ssize_t`` c-type.
 
 .. data:: Cptrdiff_t
 
-   Equivalent to the native ``ptrdiff_t`` c-type (Int)
+   .. Docstring generated from Julia source
+
+   Equivalent to the native ``ptrdiff_t`` c-type (``Int``\ ).
 
 .. data:: Cwchar_t
 
-   Equivalent to the native ``wchar_t`` c-type (Int32)
+   .. Docstring generated from Julia source
+
+   Equivalent to the native ``wchar_t`` c-type (``Int32``\ ).
 
 .. data:: Cfloat
 
-   Equivalent to the native ``float`` c-type (Float32)
+   .. Docstring generated from Julia source
+
+   Equivalent to the native ``float`` c-type (``Float32``\ ).
 
 .. data:: Cdouble
 
-   Equivalent to the native ``double`` c-type (Float64)
+   .. Docstring generated from Julia source
+
+   Equivalent to the native ``double`` c-type (``Float64``\ ).
 
 ****************
  LLVM Interface
