@@ -2965,7 +2965,8 @@ function inlining_pass(e::Expr, sv, linfo)
     # by the interpreter and inlining might put in something it can't handle,
     # like another ccall (or try to move the variables out into the function)
     if is_known_call(e, Core.Intrinsics.ccall, sv)
-        i0 = 5
+        # 4 is rewrite to 2 below to handle the callee.
+        i0 = 4
         isccall = true
     elseif is_known_call(e, Core.Intrinsics.llvmcall, sv)
         i0 = 5
@@ -2975,20 +2976,23 @@ function inlining_pass(e::Expr, sv, linfo)
         isccall = false
     end
     has_stmts = false # needed to preserve order-of-execution
-    for i=length(eargs):-1:i0
+    for _i=length(eargs):-1:i0
+        i = (isccall && _i == 4) ? 2 : _i
         ei = eargs[i]
         if isa(ei,Expr)
+            ei = ei::Expr
             if ei.head === :&
-                argloc = (ei::Expr).args
+                argloc = ei.args
                 i = 1
                 ei = argloc[1]
                 if !isa(ei,Expr)
                     continue
                 end
+                ei = ei::Expr
             else
                 argloc = eargs
             end
-            res = inlining_pass(ei::Expr, sv, linfo)
+            res = inlining_pass(ei, sv, linfo)
             res1 = res[1]
             if has_stmts && !effect_free(res1, sv, false)
                 restype = exprtype(res1,sv)
