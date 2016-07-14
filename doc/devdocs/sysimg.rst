@@ -26,10 +26,9 @@ This will include a ``build_sysimg()`` function:
 
 .. function:: build_sysimg(sysimg_path=default_sysimg_path, cpu_target="native", userimg_path=nothing; force=false)
 
-   Rebuild the system image. Store it in ``sysimg_path``, which defaults to a file named ``sys.ji`` that sits in the same folder as ``libjulia.{so,dylib}``, except on Windows where it defaults to ``JULIA_HOME/../lib/julia/sys.ji``.
-   Use the cpu instruction set given by ``cpu_target``.  Valid CPU targets are the same as for the ``-C`` option to ``julia``, or the ``-march`` option to ``gcc``.  Defaults to ``native``, which means to use all CPU instructions available on the current processor.
-   Include the user image file given by ``userimg_path``, which should contain directives such as ``using MyPackage`` to include that package in the new system image.
-   New system image will not replace an older image unless ``force`` is set to true.
+   .. Docstring generated from Julia source
+
+   Rebuild the system image. Store it in ``sysimg_path``\ , which defaults to a file named ``sys.ji`` that sits in the same folder as ``libjulia.{so,dylib}``\ , except on Windows where it defaults to ``JULIA_HOME/../lib/julia/sys.ji``\ .  Use the cpu instruction set given by ``cpu_target``\ . Valid CPU targets are the same as for the ``-C`` option to ``julia``\ , or the ``-march`` option to ``gcc``\ .  Defaults to ``native``\ , which means to use all CPU instructions available on the current processor. Include the user image file given by ``userimg_path``\ , which should contain directives such as ``using MyPackage`` to include that package in the new system image. New system image will not replace an older image unless ``force`` is set to true.
 
 Note that this file can also be run as a script itself, with command line arguments taking the place of arguments passed to the ``build_sysimg`` function.  For example, to build a system image in ``/tmp/sys.{so,dll,dylib}``, with the ``core2`` CPU instruction set, a user image of ``~/userimg.jl`` and ``force`` set to ``true``, one would execute:
 ::
