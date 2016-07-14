@@ -36,6 +36,11 @@ New language features
     packages, but now Julia provides an API for writing generic
     algorithms for arbitrary indexing schemes ([#16260]).
 
+  * Many more operators now support `.` prefixes (e.g. `.≤`) ([#17393]).  However,
+    users are discouraged from overloading these, since they are mainly parsed
+    in order to implement backwards compatibility with planned automatic
+    broadcasting of dot operators in Julia 0.6 ([#16285]).
+
 New architectures
 -----------------
 
@@ -324,6 +329,7 @@ Deprecated or removed
 [#16107]: https://github.com/JuliaLang/julia/issues/16107
 [#16219]: https://github.com/JuliaLang/julia/issues/16219
 [#16260]: https://github.com/JuliaLang/julia/issues/16260
+[#16285]: https://github.com/JuliaLang/julia/issues/16285
 [#16362]: https://github.com/JuliaLang/julia/issues/16362
 [#16403]: https://github.com/JuliaLang/julia/issues/16403
 [#16404]: https://github.com/JuliaLang/julia/issues/16404
@@ -342,4 +348,5 @@ Deprecated or removed
 [#17300]: https://github.com/JuliaLang/julia/issues/17300
 [#17323]: https://github.com/JuliaLang/julia/issues/17323
 [#17374]: https://github.com/JuliaLang/julia/issues/17374
+[#17393]: https://github.com/JuliaLang/julia/issues/17393
 [#17402]: https://github.com/JuliaLang/julia/issues/17402
