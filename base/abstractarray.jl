@@ -6,8 +6,6 @@ typealias AbstractVector{T} AbstractArray{T,1}
 typealias AbstractMatrix{T} AbstractArray{T,2}
 typealias AbstractVecOrMat{T} Union{AbstractVector{T}, AbstractMatrix{T}}
 typealias RangeIndex Union{Int, Range{Int}, AbstractUnitRange{Int}, Colon}
-typealias Indices{N} NTuple{N,AbstractUnitRange}
-typealias IndicesOne{N} NTuple{N,OneTo}
 typealias DimOrInd Union{Integer, AbstractUnitRange}
 typealias DimsOrInds{N} NTuple{N,DimOrInd}
 
@@ -29,6 +27,7 @@ end
 
 size{T,N}(t::AbstractArray{T,N}, d) = d <= N ? size(t)[d] : 1
 size{N}(x, d1::Integer, d2::Integer, dx::Vararg{Integer, N}) = (size(x, d1), size(x, d2), ntuple(k->size(x, dx[k]), Val{N})...)
+
 """
     indices(A, d)
 
@@ -74,7 +73,7 @@ elsize{T}(::AbstractArray{T}) = sizeof(T)
 ndims{T,N}(::AbstractArray{T,N}) = N
 ndims{T,N}(::Type{AbstractArray{T,N}}) = N
 ndims{T<:AbstractArray}(::Type{T}) = ndims(supertype(T))
-length(t::AbstractArray) = prod(size(t))::Int
+length(t::AbstractArray) = prod(map(length, indices(t)))
 endof(a::AbstractArray) = length(a)
 first(a::AbstractArray) = a[first(eachindex(a))]
 
@@ -125,13 +124,20 @@ function isassigned(a::AbstractArray, i::Int...)
 end
 
 # used to compute "end" for last index
-function trailingsize(A, n)
-    s = 1
-    for i=n:ndims(A)
-        s *= size(A,i)
-    end
-    return s
+function trailingsize(A::AbstractArray, n)
+    n > ndims(A) && return 1
+    trailingsize(indices(A)[n:end])
 end
+function trailingsize(inds::Indices)
+    @_inline_meta
+    _trailingsize(1, inds...)
+end
+function _trailingsize(sz::Integer, ind, inds...)
+    @_inline_meta
+    _trailingsize(sz*unsafe_length(ind), inds...)
+end
+_trailingsize(sz) = sz
+
 
 ## Traits for array types ##
 
@@ -230,7 +236,7 @@ function checkbounds_indices(::Type{Bool}, IA::Tuple{Any}, I::Tuple{Any})
 end
 function checkbounds_indices(::Type{Bool}, IA::Tuple, I::Tuple{Any})
     @_inline_meta
-    checkindex(Bool, 1:prod(map(dimlength, IA)), I[1])  # linear indexing
+    checkindex(Bool, OneTo(trailingsize(IA)), I[1])  # linear indexing
 end
 
 """
@@ -267,9 +273,10 @@ throw_boundserror(A, I) = (@_noinline_meta; throw(BoundsError(A, I)))
 @generated function trailingsize{T,N,n}(A::AbstractArray{T,N}, ::Type{Val{n}})
     (isa(n, Int) && isa(N, Int)) || error("Must have concrete type")
     n > N && return 1
-    ex = :(size(A, $n))
+    inds = indices(A)
+    ex = :(unsafe_length(inds[$n]))
     for m = n+1:N
-        ex = :($ex * size(A, $m))
+        ex = :($ex * unsafe_length(inds[$m]))
     end
     Expr(:block, Expr(:meta, :inline), ex)
 end
