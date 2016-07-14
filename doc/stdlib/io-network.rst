@@ -7,19 +7,19 @@
 General I/O
 -----------
 
-.. variable:: STDOUT
+.. data:: STDOUT
 
    .. Docstring generated from Julia source
 
    Global variable referring to the standard out stream.
 
-.. variable:: STDERR
+.. data:: STDERR
 
    .. Docstring generated from Julia source
 
    Global variable referring to the standard error stream.
 
-.. variable:: STDIN
+.. data:: STDIN
 
    .. Docstring generated from Julia source
 
@@ -1012,7 +1012,7 @@ Network I/O
 
    Converts the endianness of a value from that used by the Host to Little-endian.
 
-.. variable:: ENDIAN_BOM
+.. data:: ENDIAN_BOM
 
    .. Docstring generated from Julia source
 
