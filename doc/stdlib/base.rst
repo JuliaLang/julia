@@ -966,7 +966,7 @@ System
 
    A singleton of this type provides a hash table interface to environment variables.
 
-.. variable:: ENV
+.. data:: ENV
 
    .. Docstring generated from Julia source
 

@@ -904,37 +904,37 @@ Mathematical Functions
    * :obj:`RoundUp`
    * :obj:`RoundDown`
 
-.. variable:: RoundNearest
+.. data:: RoundNearest
 
    .. Docstring generated from Julia source
 
    The default rounding mode. Rounds to the nearest integer, with ties (fractional values of 0.5) being rounded to the nearest even integer.
 
-.. variable:: RoundNearestTiesAway
+.. data:: RoundNearestTiesAway
 
    .. Docstring generated from Julia source
 
    Rounds to nearest integer, with ties rounded away from zero (C/C++ :func:`round` behaviour).
 
-.. variable:: RoundNearestTiesUp
+.. data:: RoundNearestTiesUp
 
    .. Docstring generated from Julia source
 
    Rounds to nearest integer, with ties rounded toward positive infinity (Java/JavaScript :func:`round` behaviour).
 
-.. variable:: RoundToZero
+.. data:: RoundToZero
 
    .. Docstring generated from Julia source
 
    :func:`round` using this rounding mode is an alias for :func:`trunc`\ .
 
-.. variable:: RoundUp
+.. data:: RoundUp
 
    .. Docstring generated from Julia source
 
    :func:`round` using this rounding mode is an alias for :func:`ceil`\ .
 
-.. variable:: RoundDown
+.. data:: RoundDown
 
    .. Docstring generated from Julia source
 
