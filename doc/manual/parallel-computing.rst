@@ -1013,7 +1013,8 @@ using the command :obj:`Threads.nthreads()`::
     1
 
 The number of threads Julia starts up with is controlled by an environment variable 
-called ``JULIA_NUM_THREADS``. Now, let's start up Julia with 4 threads::
+called ``JULIA_NUM_THREADS``. (Note that if you're using a C shell, you should use the keyword 
+``set`` instead of ``export``). Now, let's start up Julia with 4 threads::
 
     export JULIA_NUM_THREADS=4
 
