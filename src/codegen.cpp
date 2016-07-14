@@ -22,89 +22,69 @@
 #define __STDC_CONSTANT_MACROS
 #endif
 
-#include <llvm/ExecutionEngine/ExecutionEngine.h>
-#include <llvm/ExecutionEngine/JITEventListener.h>
-#include <llvm/IR/IntrinsicInst.h>
-#ifdef LLVM38
-#include <llvm/Analysis/BasicAliasAnalysis.h>
-#include <llvm/Analysis/TypeBasedAliasAnalysis.h>
-#endif
-#ifdef LLVM37
-#include "llvm/IR/LegacyPassManager.h"
-#else
-#include <llvm/PassManager.h>
-#endif
+#include <setjmp.h>
+#include <string>
+#include <sstream>
+#include <fstream>
+#include <map>
+#include <vector>
+#include <set>
+#include <cstdio>
+#include <cassert>
+#include <iostream>
+
+// target machine computation
 #include <llvm/Target/TargetSubtargetInfo.h>
 #include <llvm/Support/TargetRegistry.h>
-#include <llvm/Analysis/Passes.h>
-#include <llvm/Bitcode/ReaderWriter.h>
-#ifdef LLVM35
-#include <llvm/Bitcode/BitcodeWriterPass.h>
-#endif
-#ifdef LLVM37
-#include <llvm/Analysis/TargetTransformInfo.h>
-#include <llvm/Analysis/TargetLibraryInfo.h>
-#include <llvm/Object/SymbolSize.h>
-#else
+#ifndef LLVM37
 #include <llvm/Target/TargetLibraryInfo.h>
 #endif
+#include <llvm/Target/TargetOptions.h>
+#include <llvm/Support/Host.h>
+#include <llvm/Support/TargetSelect.h>
+#ifdef LLVM37
+#include <llvm/Analysis/TargetLibraryInfo.h>
+#endif
+
+#ifdef LLVM37
+#include <llvm/Object/SymbolSize.h>
+#endif
+
+// IR building
+#include <llvm/IR/IntrinsicInst.h>
 #ifdef LLVM35
-#include <llvm/IR/Verifier.h>
 #include <llvm/Object/ObjectFile.h>
 #include <llvm/IR/DIBuilder.h>
-#include <llvm/Target/TargetMachine.h>
 #include <llvm/AsmParser/Parser.h>
 #else
 #include <llvm/Assembly/Parser.h>
-#include <llvm/Analysis/Verifier.h>
 #endif
 #include <llvm/DebugInfo/DIContext.h>
 #include <llvm/IR/DerivedTypes.h>
-#include <llvm/IR/LLVMContext.h>
-#include <llvm/IR/Module.h>
 #include <llvm/IR/Intrinsics.h>
 #include <llvm/IR/Attributes.h>
 #include <llvm/IR/IRBuilder.h>
 #include <llvm/IR/MDBuilder.h>
-#include <llvm/IR/Value.h>
 #ifndef LLVM35
 #include <llvm/DebugInfo.h>
 #include <llvm/DIBuilder.h>
 #endif
-#include <llvm/Target/TargetOptions.h>
-#include <llvm/Transforms/Scalar.h>
-#include <llvm/Transforms/Utils/BasicBlockUtils.h>
-#include <llvm/Transforms/Instrumentation.h>
-#include <llvm/Transforms/Vectorize.h>
-#ifdef LLVM39
-#include <llvm/Transforms/Scalar/GVN.h>
-#endif
-#include <llvm/Support/Host.h>
-#include <llvm/Support/TargetSelect.h>
+
+// support
 #include <llvm/Support/raw_ostream.h>
 #include <llvm/Support/FormattedStream.h>
-#include <llvm/Support/DynamicLibrary.h>
-#include <llvm/Support/PrettyStackTrace.h>
-#include <llvm/Support/SourceMgr.h>
-#include <llvm/Support/CommandLine.h>
-#include <llvm/Transforms/Utils/Cloning.h>
-
-#if defined(USE_ORCJIT)
-#include "llvm/ExecutionEngine/Orc/CompileUtils.h"
-#include "llvm/ExecutionEngine/Orc/IRCompileLayer.h"
-#include "llvm/ExecutionEngine/Orc/LambdaResolver.h"
-#include "llvm/ExecutionEngine/Orc/LazyEmittingLayer.h"
-#include "llvm/ExecutionEngine/Orc/ObjectLinkingLayer.h"
-#include "llvm/ExecutionEngine/ObjectMemoryBuffer.h"
-#elif defined(USE_MCJIT)
-#include <llvm/ExecutionEngine/MCJIT.h>
-#include <llvm/ADT/DenseMapInfo.h>
-#include <llvm/Object/ObjectFile.h>
+#include <llvm/Support/SourceMgr.h> // for llvmcall
+#include <llvm/Transforms/Utils/Cloning.h> // for llvmcall inlining
+#ifdef LLVM35
+#include <llvm/IR/Verifier.h> // for llvmcall validation
 #else
-#include <llvm/ExecutionEngine/JIT.h>
-#include <llvm/ExecutionEngine/JITMemoryManager.h>
-#include <llvm/ExecutionEngine/Interpreter.h>
+#include <llvm/Analysis/Verifier.h>
 #endif
+
+// for configuration options
+#include <llvm/Support/PrettyStackTrace.h>
+#include <llvm/Support/CommandLine.h>
+
 #if defined(_CPU_ARM_) || defined(_CPU_AARCH64_) ||             \
     (defined(LLVM37) && defined(JULIA_ENABLE_THREADING))
 #  include <llvm/IR/InlineAsm.h>
@@ -115,6 +95,9 @@
 #endif
 
 using namespace llvm;
+namespace llvm {
+    extern bool annotateSimdLoop(BasicBlock *latch);
+}
 
 #if defined(_OS_WINDOWS_) && !defined(NOMINMAX)
 #define NOMINMAX
@@ -122,25 +105,16 @@ using namespace llvm;
 
 #include "julia.h"
 #include "julia_internal.h"
+#include "jitlayers.h"
 #include "codegen_internal.h"
-
-#include <setjmp.h>
-
-#include <string>
-#include <sstream>
-#include <fstream>
-#include <map>
-#include <vector>
-#include <set>
-#include <cstdio>
-#include <cassert>
 
 // LLVM version compatibility macros
 #ifdef LLVM37
-using namespace llvm::legacy;
+legacy::PassManager *jl_globalPM;
 #define LLVM37_param(x) (x),
 #else
 #define LLVM37_param(x)
+PassManager *jl_globalPM;
 #endif
 
 #ifndef LLVM35
@@ -204,27 +178,17 @@ JL_DLLEXPORT LLVMContext &jl_LLVMContext = getGlobalContext();
 #endif
 static IRBuilder<> builder(jl_LLVMContext);
 static bool nested_compile = false;
-static TargetMachine *jl_TargetMachine;
+TargetMachine *jl_TargetMachine;
 
 extern JITEventListener *CreateJuliaJITEventListener();
 
-namespace llvm {
-    extern Pass *createLowerSimdLoopPass();
-    extern bool annotateSimdLoop(BasicBlock *latch);
-}
-
 // for image reloading
-static bool imaging_mode = false;
+bool imaging_mode = false;
 
-static Module *shadow_output;
+Module *shadow_output;
 #define jl_Module ctx->f->getParent()
 #define jl_builderModule builder.GetInsertBlock()->getParent()->getParent()
 static MDBuilder *mbuilder;
-#ifdef LLVM38
-static legacy::PassManager *PM;
-#else
-static PassManager *PM;
-#endif
 
 #ifdef LLVM37
 // No DataLayout pass needed anymore.
@@ -349,7 +313,7 @@ static GlobalVariable *jltls_states_var;
 #else
 // Imaging mode only
 static GlobalVariable *jltls_states_func_ptr = NULL;
-static size_t jltls_states_func_idx = 0;
+size_t jltls_states_func_idx = 0;
 #endif
 
 // important functions
@@ -416,7 +380,7 @@ static Function *jlgetnthfieldchecked_func;
 #ifdef _OS_WINDOWS_
 static Function *resetstkoflw_func;
 #if defined(_CPU_X86_64_)
-static Function *juliapersonality_func;
+Function *juliapersonality_func;
 #endif
 #endif
 static Function *diff_gc_total_bytes_func;
@@ -438,8 +402,6 @@ static std::map<jl_fptr_t, Function*> builtin_func_map;
 extern "C" {
     int globalUnique = 0;
 }
-
-#include "jitlayers.cpp"
 
 // metadata tracking for a llvm Value* during codegen
 struct jl_cgval_t {
@@ -591,7 +553,6 @@ static Value *global_binding_pointer(jl_module_t *m, jl_sym_t *s,
 static jl_cgval_t emit_checked_var(Value *bp, jl_sym_t *name, jl_codectx_t *ctx, bool isvol, MDNode *tbaa);
 static Value *emit_condition(jl_value_t *cond, const std::string &msg, jl_codectx_t *ctx);
 static void allocate_gc_frame(BasicBlock *b0, jl_codectx_t *ctx);
-static void jl_finalize_module(std::unique_ptr<Module> m, bool shadow);
 static GlobalVariable *prepare_global(GlobalVariable *G, Module *M = jl_builderModule);
 
 
@@ -883,7 +844,7 @@ extern "C" void jl_compile_linfo(jl_lambda_info_t *li)
     li->fptr = NULL;
 
     // success. add the result to the execution engine now
-    jl_finalize_module(std::move(m), !toplevel);
+    jl_finalize_module(m.release(), !toplevel);
 
     // if not inlineable, code won't be needed again
     if (JL_DELETE_NON_INLINEABLE &&
@@ -955,32 +916,6 @@ static void jl_setup_module(Module *m)
 #elif defined(LLVM36)
     m->setDataLayout(jl_ExecutionEngine->getDataLayout());
 #endif
-}
-
-// this takes ownership of a module after code emission is complete
-// and will add it to the execution engine when required (by jl_finalize_function)
-static void finalize_gc_frame(Module *m);
-static void jl_finalize_module(std::unique_ptr<Module> uniquem, bool shadow)
-{
-    Module *m = uniquem.release(); // unique_ptr won't be able track what we do with this (the invariant is recovered by jl_finalize_function)
-    finalize_gc_frame(m);
-#if !defined(USE_ORCJIT)
-    PM->run(*m);
-#endif
-#ifdef USE_MCJIT
-    // record the function names that are part of this Module
-    // so it can be added to the JIT when needed
-    for (Module::iterator I = m->begin(), E = m->end(); I != E; ++I) {
-        Function *F = &*I;
-        if (!F->isDeclaration())
-            module_for_fname[F->getName()] = m;
-    }
-#endif
-#if defined(USE_ORCJIT) || defined(USE_MCJIT)
-    // in the newer JITs, the shadow module is separate from the execution module
-    if (shadow)
-#endif
-        jl_add_to_shadow(m);
 }
 
 // this ensures that llvmf has been emitted to the execution engine,
@@ -1147,7 +1082,7 @@ void *jl_get_llvmf(jl_tupletype_t *tt, bool getwrapper, bool getdeclarations)
         jl_llvm_functions_t declarations;
         std::unique_ptr<Module> m = emit_function(temp ? temp : linfo, &declarations);
         finalize_gc_frame(m.get());
-        PM->run(*m.get());
+        jl_globalPM->run(*m.get());
         f = (llvm::Function*)declarations.functionObject;
         specf = (llvm::Function*)declarations.specFunctionObject;
         // swap declarations for definitions and destroy declarations
@@ -3506,7 +3441,7 @@ static void finalize_gc_frame(Function *F)
 #endif
 }
 
-static void finalize_gc_frame(Module *m)
+void finalize_gc_frame(Module *m)
 {
     for (Module::iterator I = m->begin(), E = m->end(); I != E; ++I) {
         Function *F = &*I;
@@ -3589,7 +3524,6 @@ static Function *gen_cfun_wrapper(jl_function_t *ff, jl_value_t *jlrettype, jl_t
     Function *cw = Function::Create(FunctionType::get(sret ? T_void : prt, fargt_sig, false),
             GlobalVariable::ExternalLinkage,
             funcName.str(), M);
-    addComdat(cw);
     cw->setAttributes(attrs);
 #ifdef LLVM37
     cw->addFnAttr("no-frame-pointer-elim", "true");
@@ -3839,7 +3773,7 @@ static Function *gen_cfun_wrapper(jl_function_t *ff, jl_value_t *jlrettype, jl_t
     else
         builder.CreateRet(r);
 
-    jl_finalize_module(std::unique_ptr<Module>(M), true);
+    jl_finalize_module(M, true);
 
     return cw_proto;
 }
@@ -3946,7 +3880,6 @@ static Function *gen_jlcall_wrapper(jl_lambda_info_t *lam, Function *f, bool sre
 
     Function *w = Function::Create(jl_func_sig, GlobalVariable::ExternalLinkage,
                                    funcName.str(), M);
-    addComdat(w);
 #ifdef LLVM37
     w->addFnAttr("no-frame-pointer-elim", "true");
 #endif
@@ -4181,7 +4114,6 @@ static std::unique_ptr<Module> emit_function(jl_lambda_info_t *lam, jl_llvm_func
             f->addAttribute(1, Attribute::StructRet);
             f->addAttribute(1, Attribute::NoAlias);
         }
-        addComdat(f);
 #ifdef LLVM37
         f->addFnAttr("no-frame-pointer-elim", "true");
 #endif
@@ -4193,7 +4125,6 @@ static std::unique_ptr<Module> emit_function(jl_lambda_info_t *lam, jl_llvm_func
         f = Function::Create(needsparams ? jl_func_sig_sparams : jl_func_sig,
                              GlobalVariable::ExternalLinkage,
                              funcName.str(), M);
-        addComdat(f);
 #ifdef LLVM37
         f->addFnAttr("no-frame-pointer-elim", "true");
 #endif
@@ -5135,6 +5066,7 @@ static void init_julia_llvm_env(Module *m)
     four_pvalue_llvmt.push_back(T_pjlvalue);
     four_pvalue_llvmt.push_back(T_pjlvalue);
     V_null = Constant::getNullValue(T_pjlvalue);
+    jl_init_jit(T_pjlvalue);
 
     std::vector<Type*> ftargs(0);
     ftargs.push_back(T_pjlvalue);  // linfo->sparam_vals
@@ -5674,20 +5606,20 @@ static void init_julia_llvm_env(Module *m)
     jl_data_layout = new DataLayout(*jl_ExecutionEngine->getDataLayout());
 #endif
 
-#ifdef LLVM38
-    PM = new legacy::PassManager();
+#ifdef LLVM37
+    jl_globalPM = new legacy::PassManager();
 #else
-    PM = new PassManager();
+    jl_globalPM = new PassManager();
 #endif
 #ifndef LLVM37
-    PM->add(new TargetLibraryInfo(Triple(jl_TargetMachine->getTargetTriple())));
+    jl_globalPM->add(new TargetLibraryInfo(Triple(jl_TargetMachine->getTargetTriple())));
 #else
-    PM->add(new TargetLibraryInfoWrapperPass(Triple(jl_TargetMachine->getTargetTriple())));
+    jl_globalPM->add(new TargetLibraryInfoWrapperPass(Triple(jl_TargetMachine->getTargetTriple())));
 #endif
 #ifndef LLVM37
-    PM->add(jl_data_layout);
+    jl_globalPM->add(jl_data_layout);
 #endif
-    addOptimizationPasses(PM);
+    addOptimizationPasses(jl_globalPM);
 }
 
 // Helper to figure out what features to set for the LLVM target

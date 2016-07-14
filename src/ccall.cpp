@@ -271,7 +271,7 @@ static Value *emit_plt(FunctionType *functype, const AttributeSet &attrs,
         }
         builder.SetInsertPoint(old);
         builder.SetCurrentDebugLocation(olddl);
-        jl_finalize_module(std::unique_ptr<Module>(M), true);
+        jl_finalize_module(M, true);
         auto shadowgot =
             cast<GlobalVariable>(shadow_output->getNamedValue(gname));
         auto shadowplt = cast<Function>(shadow_output->getNamedValue(fname));
