@@ -3134,8 +3134,9 @@ immutable Foo11874
 end
 
 function bar11874(x)
-   y::Foo11874
-   y=x
+   local y::Foo11874
+   y = x
+   nothing
 end
 
 Base.convert(::Type{Foo11874},x::Int) = float(x)
