@@ -755,6 +755,60 @@ let S = sprand(50, 30, 0.5, x->round(Int,rand(x)*100))
     @test sum(S) == (sumS1 - sumS2 + sum(J))
 end
 
+
+## dropstored! tests
+let A = spzeros(Int, 10, 10)
+    # Introduce nonzeros in row and column two
+    A[1,:] = 1
+    A[:,2] = 2
+    @test nnz(A) == 19
+
+    # Test argument bounds checking for dropstored!(A, i, j)
+    @test_throws BoundsError Base.SparseArrays.dropstored!(A, 0, 1)
+    @test_throws BoundsError Base.SparseArrays.dropstored!(A, 1, 0)
+    @test_throws BoundsError Base.SparseArrays.dropstored!(A, 1, 11)
+    @test_throws BoundsError Base.SparseArrays.dropstored!(A, 11, 1)
+
+    # Test argument bounds checking for dropstored!(A, I, J)
+    @test_throws BoundsError Base.SparseArrays.dropstored!(A, 0:1, 1:1)
+    @test_throws BoundsError Base.SparseArrays.dropstored!(A, 1:1, 0:1)
+    @test_throws BoundsError Base.SparseArrays.dropstored!(A, 10:11, 1:1)
+    @test_throws BoundsError Base.SparseArrays.dropstored!(A, 1:1, 10:11)
+
+    # Test behavior of dropstored!(A, i, j)
+    # --> Test dropping a single stored entry
+    Base.SparseArrays.dropstored!(A, 1, 2)
+    @test nnz(A) == 18
+    # --> Test dropping a single nonstored entry
+    Base.SparseArrays.dropstored!(A, 2, 1)
+    @test nnz(A) == 18
+
+    # Test behavior of dropstored!(A, I, J) and derivs.
+    # --> Test dropping a single row including stored and nonstored entries
+    Base.SparseArrays.dropstored!(A, 1, :)
+    @test nnz(A) == 9
+    # --> Test dropping a single column including stored and nonstored entries
+    Base.SparseArrays.dropstored!(A, :, 2)
+    @test nnz(A) == 0
+    # --> Introduce nonzeros in rows one and two and columns two and three
+    A[1:2,:] = 1
+    A[:,2:3] = 2
+    @test nnz(A) == 36
+    # --> Test dropping multiple rows containing stored and nonstored entries
+    Base.SparseArrays.dropstored!(A, 1:3, :)
+    @test nnz(A) == 14
+    # --> Test dropping multiple columns containing stored and nonstored entries
+    Base.SparseArrays.dropstored!(A, :, 2:4)
+    @test nnz(A) == 0
+    # --> Introduce nonzeros in every other row
+    A[1:2:9, :] = 1
+    @test nnz(A) == 50
+    # --> Test dropping a block of the matrix towards the upper left
+    Base.SparseArrays.dropstored!(A, 2:5, 2:5)
+    @test nnz(A) == 42
+end
+
+
 #Issue 7507
 @test (i7507=sparsevec(Dict{Int64, Float64}(), 10))==spzeros(10)
 
