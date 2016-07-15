@@ -2,9 +2,6 @@
 
 ## 1-dimensional ranges ##
 
-typealias Dims{N} NTuple{N,Int}
-typealias DimsInteger{N} NTuple{N,Integer}
-
 abstract Range{T} <: AbstractArray{T,1}
 
 ## ordinal ranges
@@ -715,6 +712,7 @@ convert{T<:Real}(::Type{OneTo{T}}, r::OneTo) = OneTo{T}(r.stop)
 promote_rule{T1,UR<:AbstractUnitRange}(::Type{UnitRange{T1}}, ::Type{UR}) =
     UnitRange{promote_type(T1,eltype(UR))}
 convert{T<:Real}(::Type{UnitRange{T}}, r::AbstractUnitRange) = UnitRange{T}(first(r), last(r))
+convert(::Type{UnitRange}, r::AbstractUnitRange) = UnitRange(first(r), last(r))
 
 promote_rule{T1a,T1b,T2a,T2b}(::Type{StepRange{T1a,T1b}},::Type{StepRange{T2a,T2b}}) =
     StepRange{promote_type(T1a,T2a),promote_type(T1b,T2b)}

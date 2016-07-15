@@ -25,3 +25,4 @@
    promote-op
    boundscheck
    locks
+   offset-arrays

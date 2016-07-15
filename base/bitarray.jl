@@ -8,8 +8,7 @@ type BitArray{N} <: DenseArray{Bool, N}
     chunks::Vector{UInt64}
     len::Int
     dims::NTuple{N,Int}
-    function BitArray(dims::Int...)
-        length(dims) == N || throw(ArgumentError("number of dimensions must be $N, got $(length(dims))"))
+    function BitArray(dims::Vararg{Int,N})
         n = 1
         i = 1
         for d in dims
