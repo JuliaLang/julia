@@ -1337,19 +1337,31 @@ Reflection
 
    Get the name of field ``i`` of a ``DataType``\ .
 
+.. function:: Base.datatype_module(t::DataType) -> Module
+
+   .. Docstring generated from Julia source
+
+   Determine the module containing the definition of a ``DataType``\ .
+
 .. function:: isconst([m::Module], s::Symbol) -> Bool
 
    .. Docstring generated from Julia source
 
    Determine whether a global is declared ``const`` in a given ``Module``\ . The default ``Module`` argument is ``current_module()``\ .
 
-.. function:: function_name(f::Function) -> Symbol
+.. function:: Base.function_name(f::Function) -> Symbol
 
    .. Docstring generated from Julia source
 
    Get the name of a generic ``Function`` as a symbol, or ``:anonymous``\ .
 
-.. function:: function_module(f::Function, types) -> Module
+.. function:: Base.function_module(f::Function) -> Module
+
+   .. Docstring generated from Julia source
+
+   Determine the module containing the (first) definition of a generic function.
+
+.. function:: Base.function_module(f::Function, types) -> Module
 
    .. Docstring generated from Julia source
 
@@ -1467,4 +1479,3 @@ Internals
    .. Docstring generated from Julia source
 
    Compile the given function ``f`` for the argument tuple (of types) ``args``\ , but do not execute it.
-

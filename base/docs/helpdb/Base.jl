@@ -2295,13 +2295,6 @@ Gives the number of columns needed to print a string.
 strwidth
 
 """
-    function_module(f::Function, types) -> Module
-
-Determine the module containing a given definition of a generic function.
-"""
-function_module
-
-"""
     hex(n, [pad])
 
 Convert an integer to a hexadecimal string, optionally specifying a number of digits to pad to.
@@ -2949,13 +2942,6 @@ julia> Float64(pi, RoundUp)
 See [`RoundingMode`](:obj:`RoundingMode`) for available rounding modes.
 """
 Float64
-
-"""
-    function_name(f::Function) -> Symbol
-
-Get the name of a generic `Function` as a symbol, or `:anonymous`.
-"""
-function_name
 
 """
 ```
