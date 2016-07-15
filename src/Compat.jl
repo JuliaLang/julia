@@ -1092,7 +1092,6 @@ if !isdefined(Base, :Threads)
 end
 
 if !isdefined(Base, :normalize)
-
     function normalize!(v::AbstractVector, p::Real=2)
         nrm = norm(v, p)
         __normalize!(v, nrm)
@@ -1125,7 +1124,6 @@ if !isdefined(Base, :normalize)
     end
 
     export normalize, normalize! 
-    
 end
 
 if !isdefined(Base, :AsyncCondition)
