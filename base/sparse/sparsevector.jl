@@ -197,12 +197,7 @@ function setindex!{Tv,Ti<:Integer}(x::SparseVector{Tv,Ti}, v::Tv, i::Ti)
     m = length(nzind)
     k = searchsortedfirst(nzind, i)
     if 1 <= k <= m && nzind[k] == i  # i found
-        if v == 0
-            deleteat!(nzind, k)
-            deleteat!(nzval, k)
-        else
-            nzval[k] = v
-        end
+        nzval[k] = v
     else  # i not found
         if v != 0
             insert!(nzind, k, i)
