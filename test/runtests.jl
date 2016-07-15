@@ -1242,6 +1242,8 @@ let
     @test ptr == pointer(wrapped_str)  # Test proper pointer aliasing behavior
     @test ptr ≠ pointer(new_str)
     @test ptr ≠ pointer(new_str2)
+    @test unsafe_string(convert(Ptr{Int8}, ptr)) == "test"
+    @test unsafe_wrap(Compat.String, convert(Ptr{Int8}, ptr)) == "test"
     x = [1, 2]
     @test unsafe_wrap(Array, pointer(x), 2) == [1, 2]
 end
