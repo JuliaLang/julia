@@ -13,6 +13,7 @@ srand(0); rand(); x = rand(384);
 @test(typeof(rand(false:true)) === Bool)
 @test(typeof(rand(Char)) === Char)
 @test length(randn(4, 5)) == 20
+@test length(randn(Complex128, 4, 5)) == 20
 @test length(bitrand(4, 5)) == 20
 
 @test rand(MersenneTwister()) == 0.8236475079774124
@@ -59,6 +60,14 @@ A = zeros(2, 2)
 randn!(MersenneTwister(42), A)
 @test A == [-0.5560268761463861  0.027155338009193845;
             -0.444383357109696  -0.29948409035891055]
+
+# complex randn
+const SQRT_HALF = 0.7071067811865475
+@test randn(MersenneTwister(42), Complex128) == SQRT_HALF*Complex(-0.5560268761463861,-0.444383357109696)
+A = zeros(Complex128, 2, 2)
+randn!(MersenneTwister(42), A)
+@test A == SQRT_HALF*[Complex128(-0.5560268761463861,-0.444383357109696)    Complex128(1.7778610980573246,-1.14490153172882);
+            Complex128(0.027155338009193845,-0.29948409035891055) Complex128(-0.46860588216767457,0.15614346264074028)]
 
 for T in (Int8, UInt8, Int16, UInt16, Int32, UInt32, Int64, UInt64, Int128, UInt128, BigInt,
           Float16, Float32, Float64, Rational{Int})
@@ -310,6 +319,12 @@ for rng in ([], [MersenneTwister()], [RandomDevice()])
         f!(rng..., Array{Float64}(2, 3)) ::Array{Float64, 2}
     end
 
+    randn(rng..., Complex128)                ::Complex128
+    randn(rng..., Complex128, 5)             ::Vector{Complex128}
+    randn(rng..., Complex128, 2, 3)          ::Array{Complex128, 2}
+    randn!(rng..., Array{Complex128}(5))     ::Array{Complex128}
+    randn!(rng..., Array{Complex128}(2, 3))  ::Array{Complex128, 2}
+
     bitrand(rng..., 5)             ::BitArray{1}
     bitrand(rng..., 2, 3)          ::BitArray{2}
     rand!(rng..., BitArray(5))     ::BitArray{1}
@@ -361,6 +376,8 @@ let mta = MersenneTwister(42), mtb = MersenneTwister(42)
     @test rand(mta,10) == rand(mtb,10)
     @test randn(mta) == randn(mtb)
     @test randn(mta,10) == randn(mtb,10)
+    @test randn(mta,Complex128) == randn(mtb,Complex128)
+    @test randn(mta,Complex128,10) == randn(mtb,Complex128,10)
     @test randexp(mta) == randexp(mtb)
     @test randexp(mta,10) == randexp(mtb,10)
     @test rand(mta,1:100) == rand(mtb,1:100)

@@ -1157,6 +1157,25 @@ randn(dims::Integer...) = randn!(Array{Float64}(dims...))
 randn(rng::AbstractRNG, dims::Dims) = randn!(rng, Array{Float64}(dims))
 randn(rng::AbstractRNG, dims::Integer...) = randn!(rng, Array{Float64}(dims...))
 
+## Circularly-polarized complex normally distributed random numbers.
+const SQRT_HALF = 0.7071067811865475
+@inline function randn(rng::AbstractRNG, T::Type{Complex{Float64}})
+    Complex(SQRT_HALF * randn(rng), SQRT_HALF * randn(rng))
+end
+function randn!(rng::AbstractRNG, A::AbstractArray{Complex{Float64}})
+    for i in eachindex(A)
+        @inbounds A[i] = randn(rng, Complex{Float64})
+    end
+    A
+end
+
+randn!(A::AbstractArray{Complex{Float64}}) = randn!(GLOBAL_RNG, A)
+randn(T::Type{Complex{Float64}}) = randn(GLOBAL_RNG, T)
+randn(rng::AbstractRNG, T::Type{Complex{Float64}}, dims::Dims) = randn!(rng, Array{T}(dims))
+randn(rng::AbstractRNG, T::Type{Complex{Float64}}, dims::Int...) = randn!(rng, Array{T}(dims))
+randn(T::Type{Complex{Float64}}, dims::Dims) = randn!(GLOBAL_RNG, Array{T}(dims))
+randn(T::Type{Complex{Float64}}, dims::Int...) = randn!(GLOBAL_RNG, Array{T}(dims))
+
 @inline function randexp(rng::AbstractRNG=GLOBAL_RNG)
     @inbounds begin
         ri = rand_ui52(rng)
