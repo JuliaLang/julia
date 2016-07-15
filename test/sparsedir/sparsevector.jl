@@ -201,13 +201,16 @@ end
 
 let xc = copy(spv_x1)
     xc[5] = 0.0
-    @test exact_equal(xc, SparseVector(8, [2, 6], [1.25, 3.5]))
+    @test exact_equal(xc, SparseVector(8, [2, 5, 6], [1.25, 0.0, 3.5]))
 
     xc[6] = 0.0
-    @test exact_equal(xc, SparseVector(8, [2], [1.25]))
+    @test exact_equal(xc, SparseVector(8, [2, 5, 6], [1.25, 0.0, 0.0]))
 
     xc[2] = 0.0
-    @test exact_equal(xc, SparseVector(8, Int[], Float64[]))
+    @test exact_equal(xc, SparseVector(8, [2, 5, 6], [0.0, 0.0, 0.0]))
+
+    xc[1] = 0.0
+    @test exact_equal(xc, SparseVector(8, [2, 5, 6], [0.0, 0.0, 0.0]))
 end
 
 
