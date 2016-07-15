@@ -3038,6 +3038,109 @@ function setindex!{Tv,Ti,T<:Real}(A::SparseMatrixCSC{Tv,Ti}, x, I::AbstractVecto
     A
 end
 
+## dropstored! methods
+"""
+    dropstored!(A::SparseMatrixCSC, i::Integer, j::Integer)
+
+Drop entry `A[i,j]` from `A` if `A[i,j]` is stored, and otherwise do nothing.
+"""
+function dropstored!(A::SparseMatrixCSC, i::Integer, j::Integer)
+    if !((1 <= i <= A.m) & (1 <= j <= A.n))
+        throw(BoundsError(A, (i,j)))
+    end
+    coljfirstk = Int(A.colptr[j])
+    coljlastk = Int(A.colptr[j+1] - 1)
+    searchk = searchsortedfirst(A.rowval, i, coljfirstk, coljlastk, Base.Order.Forward)
+    if searchk <= coljlastk && A.rowval[searchk] == i
+        # Entry A[i,j] is stored. Drop and return.
+        deleteat!(A.rowval, searchk)
+        deleteat!(A.nzval, searchk)
+        @simd for m in j:(A.n + 1)
+            @inbounds A.colptr[m] -= 1
+        end
+    end
+    return A
+end
+"""
+    dropstored!(A::SparseMatrix, I::AbstractVector{<:Integer}, J::AbstractVector{<:Integer})
+
+For each `(i,j)` where `i in I` and `j in J`, drop entry `A[i,j]` from `A` if `A[i,j]` is
+stored and otherwise do nothing. Derivative forms:
+
+    dropstored!(A::SparseMatrixCSC, i::Integer, J::AbstractVector{<:Integer})
+    dropstored!(A::SparseMatrixCSC, I::AbstractVector{<:Integer}, j::Integer)
+"""
+function dropstored!{TiI<:Integer,TiJ<:Integer}(A::SparseMatrixCSC,
+        I::AbstractVector{TiI}, J::AbstractVector{TiJ})
+    m, n = size(A)
+    nnzA = nnz(A)
+    (nnzA == 0) && (return A)
+
+    !issorted(I) && (I = sort(I))
+    !issorted(J) && (J = sort(J))
+
+    if (!isempty(I) && (I[1] < 1 || I[end] > m)) || (!isempty(J) && (J[1] < 1 || J[end] > n))
+        throw(BoundsError(A, (I, J)))
+    end
+
+    if isempty(I) || isempty(J)
+        return A
+    end
+
+    rowval = rowvalA = A.rowval
+    nzval = nzvalA = A.nzval
+    rowidx = 1
+    ndel = 0
+    @inbounds for col in 1:n
+        rrange = nzrange(A, col)
+        if ndel > 0
+            A.colptr[col] = A.colptr[col] - ndel
+        end
+
+        if isempty(rrange) || !(col in J)
+            nincl = length(rrange)
+            if(ndel > 0) && !isempty(rrange)
+                copy!(rowvalA, rowidx, rowval, rrange[1], nincl)
+                copy!(nzvalA, rowidx, nzval, rrange[1], nincl)
+            end
+            rowidx += nincl
+        else
+            for ridx in rrange
+                if rowval[ridx] in I
+                    if ndel == 0
+                        rowval = copy(rowvalA)
+                        nzval = copy(nzvalA)
+                    end
+                    ndel += 1
+                else
+                    if ndel > 0
+                        rowvalA[rowidx] = rowval[ridx]
+                        nzvalA[rowidx] = nzval[ridx]
+                    end
+                    rowidx += 1
+                end
+            end
+        end
+    end
+
+    if ndel > 0
+        A.colptr[n+1] = rowidx
+        deleteat!(rowvalA, rowidx:nnzA)
+        deleteat!(nzvalA, rowidx:nnzA)
+    end
+    return A
+end
+dropstored!{T<:Integer}(A::SparseMatrixCSC, i::Integer, J::AbstractVector{T}) = dropstored!(A, [i], J)
+dropstored!{T<:Integer}(A::SparseMatrixCSC, I::AbstractVector{T}, j::Integer) = dropstored!(A, I, [j])
+dropstored!(A::SparseMatrixCSC, ::Colon, j::Union{Integer,AbstractVector}) = dropstored!(A, 1:size(A,1), j)
+dropstored!(A::SparseMatrixCSC, i::Union{Integer,AbstractVector}, ::Colon) = dropstored!(A, i, 1:size(A,2))
+dropstored!(A::SparseMatrixCSC, ::Colon, ::Colon) = dropstored!(A, 1:size(A,1), 1:size(A,2))
+dropstored!(A::SparseMatrixCSC, ::Colon) = dropstored!(A, :, :)
+# TODO: Several of the preceding methods are optimization candidates.
+# TODO: Implement linear indexing methods for dropstored! ?
+# TODO: Implement logical indexing methods for dropstored! ?
+
+
 # Sparse concatenation
 
 function vcat(X::SparseMatrixCSC...)
