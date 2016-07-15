@@ -492,6 +492,12 @@ function _compat(ex::Expr)
                 ex = Expr(:stagedfunction, f.args...)
             end
         end
+        if VERSION < v"0.5.0-dev+2129" && f === symbol("@boundscheck") && length(ex.args) == 2
+            # Handle 0.5 single argument @boundscheck syntax. (0.4 has a two
+            # arguments and a very diffferent meaning).  `nothing` is included
+            # so we have a consistent return type.
+            ex = :($(ex.args[2]); nothing)
+        end
     elseif VERSION < v"0.4.0-dev+5322" && ex.head === :(::) && isa(ex.args[end], Symbol)
         # Replace Base.Timer with Compat.Timer2 in type declarations
         if istopsymbol(ex.args[end], :Base, :Timer)

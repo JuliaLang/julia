@@ -80,6 +80,8 @@ Currently, the `@compat` macro supports the following syntaxes:
 
 * `@compat import Base.show` and `@compat function show(args...)` for handling the deprecation of `writemime` in Julia 0.5 ([#16563]). See https://github.com/JuliaLang/Compat.jl/pull/219.
 
+* `@compat @boundscheck checkbounds(...)` rewrites to unconditionally call `checkbounds(...)` in 0.4.  The 0.4-style two-argument form of `@boundscheck` is left unchanged.
+
 ## Type Aliases
 
 * `String` has undergone multiple changes: in Julia 0.3 it was an abstract type and then got renamed to `AbstractString` in 0.4; in 0.5, `ASCIIString` and `ByteString` were deprecated, and `UTF8String` was renamed to the (now concrete) type `String`.

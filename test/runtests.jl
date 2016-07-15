@@ -1258,3 +1258,12 @@ end
 let a = rand(10,10)
     @test view(a, :, 1) == a[:,1]
 end
+
+# 0.5 style single argument `@boundscheck`
+@inline function do_boundscheck()
+    # A bit ugly since `@boundscheck` returns `nothing`.
+    checked = false
+    @compat @boundscheck (checked = true;)
+    checked
+end
+@test do_boundscheck() == true
