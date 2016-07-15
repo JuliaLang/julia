@@ -23,7 +23,7 @@ FooBase_module = :FooBase4b3a94a1a081a8cb
     $Foo_module = 232
     $FooBase_module = 9134
 end
-using ConflictingBindings
+using .ConflictingBindings
 
 # this environment variable would affect some error messages being tested below
 # so we disable it for the tests below
@@ -379,7 +379,7 @@ let module_name = string("a",randstring())
     code = """module $(module_name)\nend\n"""
     write(file_name, code)
     reload(module_name)
-    @test typeof(eval(Symbol(module_name))) == Module
+    @test isa(eval(Main, Symbol(module_name)), Module)
     deleteat!(LOAD_PATH,1)
     rm(file_name)
 end

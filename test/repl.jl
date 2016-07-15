@@ -1,7 +1,11 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
+const curmod = current_module()
+const curmod_name = fullname(curmod)
+const curmod_prefix = "$(["$m." for m in curmod_name]...)"
+
 # REPL tests
-isdefined(:TestHelpers) || include(joinpath(dirname(@__FILE__), "TestHelpers.jl"))
+isdefined(Main, :TestHelpers) || eval(Main, :(include(joinpath(dirname(@__FILE__), "TestHelpers.jl"))))
 using TestHelpers
 import Base: REPL, LineEdit
 
@@ -38,12 +42,15 @@ if !is_windows() || Sys.windows_version() >= Sys.WINDOWS_VISTA_VER
         Base.REPL.run_repl(repl)
     end
 
-    sendrepl(cmd) = write(stdin_write,"inc || wait(b); r = $cmd; notify(c); r\r")
+    sendrepl(cmd) = begin
+        write(stdin_write,"$(curmod_prefix)inc || wait($(curmod_prefix)b); r = $cmd; notify($(curmod_prefix)c); r\r")
+    end
 
     inc = false
     b = Condition()
     c = Condition()
     sendrepl("\"Hello REPL\"")
+
     inc=true
     begin
         notify(b)
@@ -412,13 +419,12 @@ begin
     end
 
     c = Condition()
-
-    sendrepl2(cmd) = write(stdin_write,"$cmd\n notify(c)\n")
+    sendrepl2(cmd) = write(stdin_write,"$cmd\n notify($(curmod_prefix)c)\n")
 
     # Test removal of prefix in single statement paste
     sendrepl2("\e[200~julia> A = 2\e[201~\n")
     wait(c)
-    @test A == 2
+    @test Main.A == 2
 
     # Test removal of prefix in multiple statement paste
     sendrepl2("""\e[200~
@@ -431,10 +437,10 @@ begin
                     julia> A = 3\e[201~
              """)
     wait(c)
-    @test A == 3
-    @test foo(4)
-    @test T17599(3).a == 3
-    @test !foo(2)
+    @test Main.A == 3
+    @test Main.foo(4)
+    @test Main.T17599(3).a == 3
+    @test !Main.foo(2)
 
     sendrepl2("""\e[200~
             julia> goo(x) = x + 1
@@ -444,13 +450,13 @@ begin
             4\e[201~
              """)
     wait(c)
-    @test A == 4
-    @test goo(4) == 5
+    @test Main.A == 4
+    @test Main.goo(4) == 5
 
     # Test prefix removal only active in bracket paste mode
     sendrepl2("julia = 4\n julia> 3 && (A = 1)\n")
     wait(c)
-    @test A == 1
+    @test Main.A == 1
 
     # Close repl
     write(stdin_write, '\x04')

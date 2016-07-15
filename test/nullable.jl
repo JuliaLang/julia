@@ -104,10 +104,13 @@ for (i, T) in enumerate(types)
 end
 
 module NullableTestEnum
-    io = IOBuffer()
-    @enum TestEnum a b
-    show(io, Nullable(a))
-    Base.Test.@test takebuf_string(io) == "Nullable{NullableTestEnum.TestEnum}(a)"
+const curmod = current_module()
+const curmod_name = fullname(curmod)
+const curmod_prefix = "$(["$m." for m in curmod_name]...)"
+io = IOBuffer()
+@enum TestEnum a b
+show(io, Nullable(a))
+Base.Test.@test takebuf_string(io) == "Nullable{$(curmod_prefix)TestEnum}(a)"
 end
 
 # showcompact(io::IO, x::Nullable)

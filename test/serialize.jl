@@ -279,19 +279,22 @@ create_serialization_stream() do s # Base generic function
 end
 
 # Anonymous Functions
-create_serialization_stream() do s
-    local g() = :magic_token_anon_fun_test
-    serialize(s, g)
-    serialize(s, g)
+main_ex = quote
+    $create_serialization_stream() do s
+        local g() = :magic_token_anon_fun_test
+        serialize(s, g)
+        serialize(s, g)
 
-    seekstart(s)
-    local g2 = deserialize(s)
-    @test g2 !== g
-    @test g2() == :magic_token_anon_fun_test
-    @test g2() == :magic_token_anon_fun_test
-    @test deserialize(s) === g2
+        seekstart(s)
+        local g2 = deserialize(s)
+        $Test.@test g2 !== g
+        $Test.@test g2() == :magic_token_anon_fun_test
+        $Test.@test g2() == :magic_token_anon_fun_test
+        $Test.@test deserialize(s) === g2
+    end
 end
-
+# This needs to be run on `Main` since the serializer treats it differently.
+eval(Main, main_ex)
 
 # Task
 create_serialization_stream() do s # user-defined type array
