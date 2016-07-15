@@ -211,6 +211,28 @@ setindex!{Tv, Ti<:Integer}(x::SparseVector{Tv,Ti}, v, i::Integer) =
     setindex!(x, convert(Tv, v), convert(Ti, i))
 
 
+### dropstored!
+"""
+    dropstored!(x::SparseVector, i::Integer)
+
+Drop entry `x[i]` from `x` if `x[i]` is stored and otherwise do nothing.
+"""
+function dropstored!(x::SparseVector, i::Integer)
+    if !(1 <= i <= x.n)
+        throw(BoundsError(x, i))
+    end
+    searchk = searchsortedfirst(x.nzind, i)
+    if searchk <= length(x.nzind) && x.nzind[searchk] == i
+        # Entry x[i] is stored. Drop and return.
+        deleteat!(x.nzind, searchk)
+        deleteat!(x.nzval, searchk)
+    end
+    return x
+end
+# TODO: Implement linear collection indexing methods for dropstored! ?
+# TODO: Implement logical indexing methods for dropstored! ?
+
+
 ### Conversion
 
 # convert SparseMatrixCSC to SparseVector

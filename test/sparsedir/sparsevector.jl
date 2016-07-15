@@ -213,6 +213,18 @@ let xc = copy(spv_x1)
     @test exact_equal(xc, SparseVector(8, [2, 5, 6], [0.0, 0.0, 0.0]))
 end
 
+## dropstored! tests
+let x = SparseVector(10, [2, 7, 9], [2.0, 7.0, 9.0])
+    # Test argument bounds checking for dropstored!(x, i)
+    @test_throws BoundsError Base.SparseArrays.dropstored!(x, 0)
+    @test_throws BoundsError Base.SparseArrays.dropstored!(x, 11)
+    # Test behavior of dropstored!(x, i)
+    # --> Test dropping a single stored entry
+    @test Base.SparseArrays.dropstored!(x, 2) == SparseVector(10, [7, 9], [7.0, 9.0])
+    # --> Test dropping a single nonstored entry
+    @test Base.SparseArrays.dropstored!(x, 5) == SparseVector(10, [7, 9], [7.0, 9.0])
+end
+
 
 ### Array manipulation
 
