@@ -2,13 +2,44 @@
 
 ## floating point traits ##
 
+"""
+    Inf16
+
+Positive infinity of type `Float16`.
+"""
 const Inf16 = box(Float16,unbox(UInt16,0x7c00))
+"""
+    NaN16
+
+A not-a-number value of type `Float16`.
+"""
 const NaN16 = box(Float16,unbox(UInt16,0x7e00))
+"""
+    Inf32
+
+Positive infinity of type `Float32`.
+"""
 const Inf32 = box(Float32,unbox(UInt32,0x7f800000))
+"""
+    NaN32
+
+A not-a-number value of type `Float32`.
+"""
 const NaN32 = box(Float32,unbox(UInt32,0x7fc00000))
 const Inf64 = box(Float64,unbox(UInt64,0x7ff0000000000000))
 const NaN64 = box(Float64,unbox(UInt64,0x7ff8000000000000))
+
+"""
+    Inf
+
+Positive infinity of type `Float64`.
+"""
 const Inf = Inf64
+"""
+    NaN
+
+A not-a-number value of type `Float64`.
+"""
 const NaN = NaN64
 
 ## conversions to floating-point ##

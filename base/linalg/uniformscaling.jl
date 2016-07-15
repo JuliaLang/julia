@@ -7,6 +7,11 @@ immutable UniformScaling{T<:Number}
     λ::T
 end
 
+"""
+    I
+
+An object of type `UniformScaling`, representing an identity matrix of any size.
+"""
 const I = UniformScaling(1)
 
 eltype{T}(::Type{UniformScaling{T}}) = T

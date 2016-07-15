@@ -1894,7 +1894,9 @@ for ``Float64``, ``Float32``, ``Complex128``, and ``Complex64`` arrays.
 
 .. data:: I
 
-   An object of type ``UniformScaling``, representing an identity matrix of any size.
+   .. Docstring generated from Julia source
+
+   An object of type ``UniformScaling``\ , representing an identity matrix of any size.
 
 LAPACK Functions
 ----------------

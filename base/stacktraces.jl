@@ -11,7 +11,40 @@ export StackTrace, StackFrame, stacktrace, catch_stacktrace
 """
     StackFrame
 
-Stack information representing execution context.
+Stack information representing execution context, with the following fields:
+
+- `func::Symbol`
+
+  The name of the function containing the execution context.
+
+- `outer_linfo::Nullable{LambdaInfo}`
+
+  The LambdaInfo containing the execution context (if it could be found).
+
+- `file::Symbol`
+
+  The path to the file containing the execution context.
+
+- `line::Int`
+
+  The line number in the file containing the execution context.
+
+- `inlined_file::Symbol`
+
+  The path to the file containing the context for inlined code.
+
+- `inlined_line::Int`
+
+  The line number in the file containing the context for inlined code.
+
+- `from_c::Bool`
+
+  True if the code is from C.
+
+- `pointer::Int64`
+
+  Representation of the pointer to the execution context as returned by `backtrace`.
+
 """
 immutable StackFrame # this type should be kept platform-agnostic so that profiles can be dumped on one machine and read on another
     "the name of the function containing the execution context"

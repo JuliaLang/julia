@@ -3,7 +3,7 @@ module GenStdLib
 import Base.Docs: Binding, DocStr
 
 # Constants.
-const DOCSTRING_DIRECTIVE = r"^(.. (function|type|variable):: ).*"
+const DOCSTRING_DIRECTIVE = r"^(.. (function|type|data):: ).*"
 
 # Types.
 
@@ -199,5 +199,9 @@ end
 validdocstr(other) = false
 
 end
+
+# The docstring for `build_sysimg` is defined is this file and included within the
+# `devdocs/sysimg.rst` file, so we include it here to make it visible to the docsystem.
+include(joinpath("..", "contrib", "build_sysimg.jl"))
 
 GenStdLib.translate(["manual", "stdlib", "devdocs"])

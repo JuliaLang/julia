@@ -10,36 +10,40 @@
 
 .. data:: StackFrame
 
-    Stack information representing execution context, with the following fields:
+   .. Docstring generated from Julia source
 
-    ``func::Symbol``
-        the name of the function containing the execution context
+   Stack information representing execution context, with the following fields:
 
-    ``outer_linfo::Nullable{LambdaInfo}``
-        the LambdaInfo containing the execution context (if it could be found)
+   * ``func::Symbol``
 
-    ``file::Symbol``
-        the path to the file containing the execution context
+     The name of the function containing the execution context.
+   * ``outer_linfo::Nullable{LambdaInfo}``
 
-    ``line::Int``
-        the line number in the file containing the execution context
+     The LambdaInfo containing the execution context (if it could be found).
+   * ``file::Symbol``
 
-    ``inlined_file::Symbol``
-        the path to the file containing the context for inlined code
+     The path to the file containing the execution context.
+   * ``line::Int``
 
-    ``inlined_line::Int``
-        the line number in the file containing the context for inlined code
+     The line number in the file containing the execution context.
+   * ``inlined_file::Symbol``
 
-    ``from_c::Bool``
-        true if the code is from C
+     The path to the file containing the context for inlined code.
+   * ``inlined_line::Int``
 
-    ``pointer::Int64``
-        representation of the pointer to the execution context as returned by ``backtrace``
+     The line number in the file containing the context for inlined code.
+   * ``from_c::Bool``
+
+     True if the code is from C.
+   * ``pointer::Int64``
+
+     Representation of the pointer to the execution context as returned by ``backtrace``\ .
 
 .. data:: StackTrace
 
-    An alias for ``Vector{StackFrame}`` provided for convenience; returned by calls to
-    ``stacktrace`` and ``catch_stacktrace``.
+   .. Docstring generated from Julia source
+
+   An alias for ``Vector{StackFrame}`` provided for convenience; returned by calls to ``stacktrace`` and ``catch_stacktrace``\ .
 
 .. function:: stacktrace([trace::Vector{Ptr{Void}},] [c_funcs::Bool=false]) -> StackTrace
 

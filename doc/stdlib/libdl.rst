@@ -22,14 +22,14 @@ The names in :mod:`Base.Libdl` are not exported and need to be called e.g. as ``
 
    Similar to :func:`dlopen`\ , except returns a ``NULL`` pointer instead of raising errors.
 
-.. variable:: RTLD_DEEPBIND
-              RTLD_FIRST
-              RTLD_GLOBAL
-              RTLD_LAZY
-              RTLD_LOCAL
-              RTLD_NODELETE
-              RTLD_NOLOAD
-              RTLD_NOW
+.. data:: RTLD_DEEPBIND
+          RTLD_FIRST
+          RTLD_GLOBAL
+          RTLD_LAZY
+          RTLD_LOCAL
+          RTLD_NODELETE
+          RTLD_NOLOAD
+          RTLD_NOW
 
    .. Docstring generated from Julia source
 
@@ -55,6 +55,8 @@ The names in :mod:`Base.Libdl` are not exported and need to be called e.g. as ``
 
 .. data:: dlext
 
+   .. Docstring generated from Julia source
+
    File extension for dynamic libraries (e.g. dll, dylib, so) on the current platform.
 
 .. function:: find_library(names, locations)
@@ -63,7 +65,7 @@ The names in :mod:`Base.Libdl` are not exported and need to be called e.g. as ``
 
    Searches for the first library in ``names`` in the paths in the ``locations`` list, ``DL_LOAD_PATH``\ , or system library paths (in that order) which can successfully be dlopen'd. On success, the return value will be one of the names (potentially prefixed by one of the paths in locations). This string can be assigned to a ``global const`` and used as the library name in future ``ccall``\ 's. On failure, it returns the empty string.
 
-.. variable:: DL_LOAD_PATH
+.. data:: DL_LOAD_PATH
 
    .. Docstring generated from Julia source
 
