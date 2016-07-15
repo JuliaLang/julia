@@ -368,25 +368,6 @@ function corzm(x::AbstractMatrix, vardim::Int=1)
     c = unscaled_covzm(x, vardim)
     return cov2cor!(c, sqrt!(diag(c)))
 end
-function corzm(x::AbstractVector, y::AbstractVector)
-    n = length(x)
-    length(y) == n || throw(DimensionMismatch("inconsistent lengths"))
-    x1 = x[1]
-    y1 = y[1]
-    xx = abs2(x1)
-    yy = abs2(y1)
-    xy = x1 * conj(y1)
-    i = 1
-    while i < n
-        i += 1
-        @inbounds xi = x[i]
-        @inbounds yi = y[i]
-        xx += abs2(xi)
-        yy += abs2(yi)
-        xy += xi * conj(yi)
-    end
-    return xy / (sqrt(xx) * sqrt(yy))
-end
 corzm(x::AbstractVector, y::AbstractMatrix, vardim::Int=1) =
     cov2cor!(unscaled_covzm(x, y, vardim), sqrt(sumabs2(x)), sqrt!(sumabs2(y, vardim)))
 corzm(x::AbstractMatrix, y::AbstractVector, vardim::Int=1) =
@@ -398,7 +379,27 @@ corzm(x::AbstractMatrix, y::AbstractMatrix, vardim::Int=1) =
 
 corm{T}(x::AbstractVector{T}, xmean) = one(real(T))
 corm(x::AbstractMatrix, xmean, vardim::Int=1) = corzm(x .- xmean, vardim)
-corm(x::AbstractVector, xmean, y::AbstractVector, ymean) = corzm(x .- xmean, y .- ymean)
+function corm(x::AbstractVector, mx::Number, y::AbstractVector, my::Number)
+    n = length(x)
+    length(y) == n || throw(DimensionMismatch("inconsistent lengths"))
+    n > 0 || throw(ArgumentError("correlation only defined for non-empty vectors"))
+
+    @inbounds begin
+        # Initialize the accumulators
+        xx = zero(sqrt(x[1] * x[1]))
+        yy = zero(sqrt(y[1] * y[1]))
+        xy = zero(xx * yy)
+
+        @simd for i = 1:n
+            xi = x[i] - mx
+            yi = y[i] - my
+            xx += abs2(xi)
+            yy += abs2(yi)
+            xy += xi * yi'
+        end
+    end
+    return clamp(xy / max(xx, yy) / sqrt(min(xx, yy) / max(xx, yy)), -1, 1)
+end
 corm(x::AbstractVecOrMat, xmean, y::AbstractVecOrMat, ymean, vardim::Int=1) =
     corzm(x .- xmean, y .- ymean, vardim)
 
