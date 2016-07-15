@@ -1091,6 +1091,77 @@ if !isdefined(Base, :Threads)
     export Threads
 end
 
+if !isdefined(Base, :normalize)
+    @doc """
+        normalize!(v, [p=2])
+
+    Normalize the vector `v` in-place with respect to the `p`-norm.
+
+    Inputs:
+
+    - `v::AbstractVector` - vector to be normalized
+    - `p::Real` - The `p`-norm to normalize with respect to. Default: 2
+
+    Output:
+
+    - `v` - A unit vector being the input vector, rescaled to have norm 1.
+            The input vector is modified in-place.
+
+    See also:
+    `normalize`, `qr`
+    """ -> 
+    function normalize!(v::AbstractVector, p::Real=2)
+        nrm = norm(v, p)
+        __normalize!(v, nrm)
+    end
+
+    @inline function __normalize!(v::AbstractVector, nrm::AbstractFloat)
+        #The largest positive floating point number whose inverse is less than
+        #infinity
+        δ = inv(prevfloat(typemax(nrm)))
+        if nrm ≥ δ #Safe to multiply with inverse
+            invnrm = inv(nrm)
+            scale!(v, invnrm)
+        else # scale elements to avoid overflow
+            εδ = eps(one(nrm))/δ
+            scale!(v, εδ)
+            scale!(v, inv(nrm*εδ))
+        end
+        v
+    end
+
+    @doc """
+        normalize(v, [p=2])
+
+    Normalize the vector `v` with respect to the `p`-norm.
+
+    Inputs:
+
+    - `v::AbstractVector` - vector to be normalized
+    - `p::Real` - The `p`-norm to normalize with respect to. Default: 2
+
+    Output:
+
+    - `v` - A unit vector being a copy of the input vector, scaled to have norm 1
+
+    See also:
+    `normalize!`, `qr`
+    """ ->
+    function normalize(v::AbstractVector, p::Real = 2)
+        nrm = norm(v, p)
+        if !isempty(v)
+            vv = copy_oftype(v, typeof(v[1]/nrm))
+            return __normalize!(vv, nrm)
+        else
+            T = typeof(zero(eltype(v))/nrm)
+            return T[]
+        end
+    end
+
+    export normalize, normalize! 
+    
+end
+
 if !isdefined(Base, :AsyncCondition)
     const AsyncCondition = Base.SingleAsyncWork
 else

@@ -142,6 +142,8 @@ Currently, the `@compat` macro supports the following syntaxes:
 * `allunique`, checks whether all elements in an iterable appear only once ([#15914](https://github.com/JuliaLang/julia/pull/15914)).
 * `Base.promote_eltype_op` is available as `Compat.promote_eltype_op`; however, in Julia 0.3, results may be inaccurate.
 
+* `normalize` and `normalize!`, normalizes a vector with respect to the p-norm ([#13681](https://github.com/JuliaLang/julia/pull/13681))
+
 ## Renamed functions
 
 * `pointer_to_array` and `pointer_to_string` have been replaced with `unsafe_wrap(Array, ...)` and `unsafe_wrap(String, ...)` respectively.
