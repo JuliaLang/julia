@@ -7,13 +7,12 @@ export permutedims
 # Some day we will want storage-order-aware iteration, so put perm in the parameters
 immutable PermutedDimsArray{T,N,perm,iperm,AA<:AbstractArray} <: AbstractArray{T,N}
     parent::AA
-    dims::NTuple{N,Int}
 
     function PermutedDimsArray(data::AA)
         (isa(perm, NTuple{N,Int}) && isa(iperm, NTuple{N,Int})) || error("perm and iperm must both be NTuple{$N,Int}")
         isperm(perm) || throw(ArgumentError(string(perm, " is not a valid permutation of dimensions 1:", N)))
         all(map(d->iperm[perm[d]]==d, 1:N)) || throw(ArgumentError(string(perm, " and ", iperm, " must be inverses")))
-        new(data, genperm(size(data), perm))
+        new(data)
     end
 end
 
@@ -24,7 +23,7 @@ function PermutedDimsArray{T,N}(data::AbstractArray{T,N}, perm)
 end
 
 Base.parent(A::PermutedDimsArray) = A.parent
-Base.size(A::PermutedDimsArray) = A.dims
+Base.size{T,N,perm}(A::PermutedDimsArray{T,N,perm})    = genperm(size(parent(A)),    perm)
 Base.indices{T,N,perm}(A::PermutedDimsArray{T,N,perm}) = genperm(indices(parent(A)), perm)
 
 @inline function Base.getindex{T,N,perm,iperm}(A::PermutedDimsArray{T,N,perm,iperm}, I::Vararg{Int,N})

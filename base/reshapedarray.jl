@@ -52,7 +52,8 @@ end
 @pure rdims{N}(out::Tuple, inds::Tuple{Any, Vararg{Any}}, ::Type{Val{N}}) = rdims((out..., first(inds)), tail(inds), Val{N})
 
 function _reshape(parent::AbstractArray, dims::Dims)
-    prod(dims) == length(parent) || throw(DimensionMismatch("parent has $(length(parent)) elements, which is incompatible with size $dims"))
+    n = unsafe_length(parent)
+    prod(dims) == n || throw(DimensionMismatch("parent has $n elements, which is incompatible with size $dims"))
     __reshape((parent, linearindexing(parent)), dims)
 end
 _reshape(R::ReshapedArray, dims::Dims) = _reshape(R.parent, dims)

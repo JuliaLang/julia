@@ -6,8 +6,6 @@ typealias AbstractVector{T} AbstractArray{T,1}
 typealias AbstractMatrix{T} AbstractArray{T,2}
 typealias AbstractVecOrMat{T} Union{AbstractVector{T}, AbstractMatrix{T}}
 typealias RangeIndex Union{Int, Range{Int}, AbstractUnitRange{Int}, Colon}
-typealias Indices{N} NTuple{N,AbstractUnitRange}
-typealias IndicesOne{N} NTuple{N,OneTo}
 typealias DimOrInd Union{Integer, AbstractUnitRange}
 typealias DimsOrInds{N} NTuple{N,DimOrInd}
 
@@ -29,6 +27,7 @@ end
 
 size{T,N}(t::AbstractArray{T,N}, d) = d <= N ? size(t)[d] : 1
 size{N}(x, d1::Integer, d2::Integer, dx::Vararg{Integer, N}) = (size(x, d1), size(x, d2), ntuple(k->size(x, dx[k]), Val{N})...)
+
 """
     indices(A, d)
 
@@ -66,7 +65,7 @@ is `indices(A, 1)`.
 Calling this function is the "safe" way to write algorithms that
 exploit linear indexing.
 """
-linearindices(A)                 = (@_inline_meta; 1:length(A))
+linearindices(A)                 = (@_inline_meta; OneTo(unsafe_length(A)))
 linearindices(A::AbstractVector) = (@_inline_meta; indices1(A))
 eltype{T}(::Type{AbstractArray{T}}) = T
 eltype{T,N}(::Type{AbstractArray{T,N}}) = T
@@ -74,7 +73,8 @@ elsize{T}(::AbstractArray{T}) = sizeof(T)
 ndims{T,N}(::AbstractArray{T,N}) = N
 ndims{T,N}(::Type{AbstractArray{T,N}}) = N
 ndims{T<:AbstractArray}(::Type{T}) = ndims(supertype(T))
-length(t::AbstractArray) = prod(size(t))::Int
+length(t::AbstractArray) = prod(size(t))
+unsafe_length(A::AbstractArray) = prod(map(unsafe_length, indices(A)))  # internal method
 endof(a::AbstractArray) = length(a)
 first(a::AbstractArray) = a[first(eachindex(a))]
 
@@ -131,6 +131,10 @@ function trailingsize(A, n)
         s *= size(A,i)
     end
     return s
+end
+function trailingsize(inds::Indices)
+    @_inline_meta
+    prod(map(unsafe_length, inds))
 end
 
 ## Traits for array types ##
@@ -230,7 +234,7 @@ function checkbounds_indices(::Type{Bool}, IA::Tuple{Any}, I::Tuple{Any})
 end
 function checkbounds_indices(::Type{Bool}, IA::Tuple, I::Tuple{Any})
     @_inline_meta
-    checkindex(Bool, 1:prod(map(dimlength, IA)), I[1])  # linear indexing
+    checkindex(Bool, OneTo(trailingsize(IA)), I[1])  # linear indexing
 end
 
 """
@@ -263,16 +267,6 @@ function checkbounds_logical(A, I::AbstractVector{Bool})
 end
 
 throw_boundserror(A, I) = (@_noinline_meta; throw(BoundsError(A, I)))
-
-@generated function trailingsize{T,N,n}(A::AbstractArray{T,N}, ::Type{Val{n}})
-    (isa(n, Int) && isa(N, Int)) || error("Must have concrete type")
-    n > N && return 1
-    ex = :(size(A, $n))
-    for m = n+1:N
-        ex = :($ex * size(A, $m))
-    end
-    Expr(:block, Expr(:meta, :inline), ex)
-end
 
 # check along a single dimension
 """
@@ -357,7 +351,7 @@ to_shape(dims::DimsOrInds) = map(to_shape, dims)
 to_shape(i::Int) = i
 to_shape(i::Integer) = Int(i)
 to_shape(r::OneTo) = Int(last(r))
-to_shape(r::UnitRange) = convert(UnitRange{Int}, r)
+to_shape(r::AbstractUnitRange) = r
 
 """
     similar(storagetype, indices)
@@ -492,7 +486,7 @@ function copy!(::LinearIndexing, dest::AbstractArray, ::LinearSlow, src::Abstrac
 end
 
 function copy!(dest::AbstractArray, dstart::Integer, src::AbstractArray)
-    copy!(dest, dstart, src, first(linearindices(src)), length(src))
+    copy!(dest, dstart, src, first(linearindices(src)), unsafe_length(src))
 end
 
 function copy!(dest::AbstractArray, dstart::Integer, src::AbstractArray, sstart::Integer)
@@ -618,7 +612,7 @@ function _maxlength(A, B, C...)
     max(length(A), _maxlength(B, C...))
 end
 
-isempty(a::AbstractArray) = (length(a) == 0)
+isempty(a::AbstractArray) = (unsafe_length(a) == 0)
 
 ## Conversions ##
 

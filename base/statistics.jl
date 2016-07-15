@@ -96,10 +96,9 @@ function centralize_sumabs2!{S,T,N}(R::AbstractArray{S}, A::AbstractArray{T,N}, 
     lsiz = check_reducedims(R,A)
     isempty(R) || fill!(R, zero(S))
     isempty(A) && return R
-    sizA1 = size(A, 1)
 
     if has_fast_linear_indexing(A) && lsiz > 16
-        nslices = div(length(A), lsiz)
+        nslices = div(unsafe_length(A), lsiz)
         ibase = first(linearindices(A))-1
         for i = 1:nslices
             @inbounds R[i] = centralize_sumabs2(A, means[i], ibase+1, ibase+lsiz)
@@ -107,21 +106,21 @@ function centralize_sumabs2!{S,T,N}(R::AbstractArray{S}, A::AbstractArray{T,N}, 
         end
         return R
     end
-    IRmax = dims_tail(map(last, indices(R)), A)
-    if size(R, 1) == 1 && sizA1 > 1
-        i1 = first(indices(A, 1))
-        @inbounds for IA in CartesianRange(tail(indices(A)))
-            IR = min(IA, IRmax)
-            r = R[i1,IR]
-            m = means[i1,IR]
+    indsAt, indsRt = safe_tail(indices(A)), safe_tail(indices(R)) # handle d=1 manually
+    imap = Broadcast.newindexer(indsAt, indsRt)
+    if reducedim1(R, A)
+        @inbounds for IA in CartesianRange(indsAt)
+            IR = Broadcast.newindex(IA, imap)
+            r = R[1,IR]
+            m = means[1,IR]
             @simd for i in indices(A, 1)
                 r += abs2(A[i,IA] - m)
             end
-            R[i1,IR] = r
+            R[1,IR] = r
         end
     else
-        @inbounds for IA in CartesianRange(tail(indices(A)))
-            IR = min(IA, IRmax)
+        @inbounds for IA in CartesianRange(indsAt)
+            IR = Broadcast.newindex(IA, imap)
             @simd for i in indices(A, 1)
                 R[i,IR] += abs2(A[i,IA] - means[i,IR])
             end

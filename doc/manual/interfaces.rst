@@ -166,8 +166,9 @@ Methods to implement                                                            
 :func:`similar(A, dims::NTuple{Int}) <similar>`                       ``similar(A, eltype(A), dims)``              Return a mutable array with the same element type and size `dims`
 :func:`similar(A, ::Type{S}, dims::NTuple{Int}) <similar>`            ``Array{S}(dims)``                           Return a mutable array with the specified element type and size
 **Non-traditional indices**                                           **Default definition**                       **Brief description**
-:func:`indices(A, d) <indices>`                                       ``OneTo(size(A, d))``                        Return the ``AbstractUnitRange`` of valid indices along dimension ``d``
-:func:`Base.similar(A, ::Type{S}, inds::NTuple{Ind}) <similar>`       ``similar(A, S, map(Base.dimlength, inds))`` Return a mutable array with the specified indices ``inds`` (see below)
+:func:`indices(A) <indices>`                                          ``map(OneTo, size(A))``                      Return the ``AbstractUnitRange`` of valid indices
+:func:`Base.similar(A, ::Type{S}, inds::NTuple{Ind}) <similar>`       ``similar(A, S, Base.to_shape(inds))``       Return a mutable array with the specified indices ``inds`` (see below)
+:func:`Base.similar(T::Union{Type,Function}, inds) <similar>`         ``T(Base.to_shape(inds))``                   Return an array similar to ``T`` with the specified indices ``inds`` (see below)
 ===================================================================== ============================================ =======================================================================================
 
 If a type is defined as a subtype of ``AbstractArray``, it inherits a very large set of rich behaviors including iteration and multidimensional indexing built on top of single-element access.  See the :ref:`arrays manual page <man-arrays>` and :ref:`standard library section <stdlib-arrays>` for more supported methods.
@@ -292,6 +293,4 @@ If you are defining an array type that allows non-traditional indexing
 ``indices``.  You should also specialize ``similar`` so that the
 ``dims`` argument (ordinarily a ``Dims`` size-tuple) can accept
 ``AbstractUnitRange`` objects, perhaps range-types ``Ind`` of your own
-design.  For example, if indexing always starts with 0 for your
-arrays, you likely want to define a ``ZeroTo`` range type.  Otherwise,
-you can use standard ``UnitRange``.
+design.  For more information, see :ref:`devdocs-offsetarrays`.
