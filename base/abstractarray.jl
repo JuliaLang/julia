@@ -342,7 +342,7 @@ similar{T}(a::AbstractArray{T}, dims::DimOrInd...)       = similar(a, T, to_shap
 similar(   a::AbstractArray, T::Type, dims::DimOrInd...) = similar(a, T, to_shape(dims))
 similar(   a::AbstractArray, T::Type, dims)              = similar(a, T, to_shape(dims))
 # similar creates an Array by default
-similar(   a::AbstractArray, T::Type, dims::Dims)        = Array{T,nfields(dims)}(dims)
+similar{N}(a::AbstractArray, T::Type, dims::Dims{N})     = Array{T,N}(dims)
 
 to_shape(::Tuple{}) = ()
 to_shape(dims::Dims) = dims
