@@ -118,15 +118,13 @@ end
 
 ## Constructors ##
 
-similar(a::Array, T::Type, dims::Dims) = Array{T,nfields(dims)}(dims)
-similar{T}(a::Array{T,1})              = Array{T,1}(size(a,1))
-similar{T}(a::Array{T,2})              = Array{T,2}(size(a,1), size(a,2))
-similar{T}(a::Array{T,1}, dims::Dims)  = Array{T,nfields(dims)}(dims)
-similar{T}(a::Array{T,1}, m::Int)      = Array{T,1}(m)
-similar{T}(a::Array{T,1}, S::Type)     = Array{S,1}(size(a,1))
-similar{T}(a::Array{T,2}, dims::Dims)  = Array{T,nfields(dims)}(dims)
-similar{T}(a::Array{T,2}, m::Int)      = Array{T,1}(m)
-similar{T}(a::Array{T,2}, S::Type)     = Array{S,2}(size(a,1), size(a,2))
+similar{T}(a::Array{T,1})                    = Array{T,1}(size(a,1))
+similar{T}(a::Array{T,2})                    = Array{T,2}(size(a,1), size(a,2))
+similar{T}(a::Array{T,1}, S::Type)           = Array{S,1}(size(a,1))
+similar{T}(a::Array{T,2}, S::Type)           = Array{S,2}(size(a,1), size(a,2))
+similar{T}(a::Array{T}, m::Int)              = Array{T,1}(m)
+similar{N}(a::Array, T::Type, dims::Dims{N}) = Array{T,N}(dims)
+similar{T,N}(a::Array{T}, dims::Dims{N})     = Array{T,N}(dims)
 
 # T[x...] constructs Array{T,1}
 function getindex(T::Type, vals...)

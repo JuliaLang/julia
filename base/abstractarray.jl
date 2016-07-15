@@ -156,7 +156,7 @@ similar{T}(a::AbstractArray{T}, dims::Integer...)        = similar(a, T, dims)
 similar(   a::AbstractArray, T::Type, dims::Integer...)  = similar(a, T, dims)
 # similar creates an Array by default
 similar(   a::AbstractArray, T::Type, dims::DimsInteger) = similar(a, T, convert(Dims, dims))
-similar(   a::AbstractArray, T::Type, dims::Dims)        = Array{T,nfields(dims)}(dims)
+similar{N}(a::AbstractArray, T::Type, dims::Dims{N})     = Array{T,N}(dims)
 
 ## from general iterable to any array
 
