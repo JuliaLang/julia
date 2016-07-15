@@ -999,20 +999,20 @@ functionality and interface should be considered experimental in nature and may 
 
 Multi-threading (Experimental)
 -------------------------------
-In addition to tasks, remote calls and remote references, Julia from v0.5 will natively support 
-multi-threading. Note that this section is experimental and the interfaces may change in the 
+In addition to tasks, remote calls and remote references, Julia from v0.5 will natively support
+multi-threading. Note that this section is experimental and the interfaces may change in the
 future.
 
-Setup 
+Setup
 =====
 
-By default, Julia starts up with a single thread of execution. This can be verified by 
+By default, Julia starts up with a single thread of execution. This can be verified by
 using the command :obj:`Threads.nthreads()`::
 
     julia> Threads.nthreads()
     1
 
-The number of threads Julia starts up with is controlled by an environment variable 
+The number of threads Julia starts up with is controlled by an environment variable
 called ``JULIA_NUM_THREADS``. Now, let's start up Julia with 4 threads::
 
     export JULIA_NUM_THREADS=4
@@ -1050,10 +1050,10 @@ Let's work a simple example using our native threads. Let us create an array of 
      0.0
      0.0
 
-Let us operate on this array simultaneously using 4 threads. We'll have each thread write 
-its thread ID into each location. 
+Let us operate on this array simultaneously using 4 threads. We'll have each thread write
+its thread ID into each location.
 
-Julia supports parallel loops using the :obj:`Threads.@threads` macro. This macro is affixed in front 
+Julia supports parallel loops using the :obj:`Threads.@threads` macro. This macro is affixed in front
 of a ``for`` loop to indicate to Julia that the loop is a multi-threaded region. ::
 
     Threads.@threads for i = 1:10
@@ -1075,7 +1075,7 @@ The iteration space is split amongst the threads, after which each thread writes
      4.0
      4.0
 
-Note that :obj:`Threads.@threads` does not have an optional reduction parameter like :obj:`@parallel`. 
+Note that :obj:`Threads.@threads` does not have an optional reduction parameter like :obj:`@parallel`.
 
 .. rubric:: Footnotes
 
