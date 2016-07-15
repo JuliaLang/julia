@@ -482,16 +482,16 @@ function sort(A::AbstractArray, dim::Integer;
               order::Ordering=Forward,
               initialized::Bool=false)
     order = ord(lt,by,rev,order)
+    n = length(indices(A, dim))
     if dim != 1
         pdims = (dim, setdiff(1:ndims(A), dim)...)  # put the selected dimension first
-        Ap = permutedims(A, pdims)    # note Ap is an Array, no matter what A is
-        n = size(Ap, 1)
+        Ap = permutedims(A, pdims)
         Av = vec(Ap)
         sort_chunks!(Av, n, alg, order)
         ipermutedims(Ap, pdims)
     else
         Av = A[:]
-        sort_chunks!(Av, size(A,1), alg, order)
+        sort_chunks!(Av, n, alg, order)
         reshape(Av, indices(A))
     end
 end
