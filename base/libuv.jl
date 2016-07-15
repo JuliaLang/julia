@@ -70,7 +70,7 @@ show(io::IO, e::UVError) = print(io, e.prefix*": "*struverror(e)*" ("*uverrornam
 
 ## event loop ##
 
-eventloop() = global uv_eventloop::Ptr{Void}
+eventloop() = uv_eventloop::Ptr{Void}
 #mkNewEventLoop() = ccall(:jl_new_event_loop,Ptr{Void},()) # this would probably be fine, but is nowhere supported
 
 function run_event_loop()

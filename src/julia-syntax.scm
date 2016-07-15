@@ -1321,16 +1321,11 @@
 (define (remove-argument-side-effects e)
   (let ((a '()))
     (cond
-     ((and (decl? e) (symbol? (cadr e)))
-      (cons (cadr e) (list e)))
      ((not (pair? e))
       (cons e '()))
      (else
       (cons (map (lambda (x)
                    (cond
-                    ((and (decl? x) (symbol? (cadr x)))
-                     (set! a (cons x a))
-                     (cadr x))
                     ((not (effect-free? x))
                      (let ((g (make-ssavalue)))
                        (if (or (eq? (car x) '...) (eq? (car x) '&))
@@ -1943,9 +1938,9 @@
 
    '|::|
    (lambda (e)
-     (if (length= e 2)
+     (if (not (length= e 3))
          (error "invalid \"::\" syntax"))
-     (if (and (length= e 3) (not (symbol-like? (cadr e))))
+     (if (not (symbol-like? (cadr e)))
          `(call (core typeassert)
                 ,(expand-forms (cadr e)) ,(expand-forms (caddr e)))
          (map expand-forms e)))
@@ -2915,10 +2910,13 @@ f(x) = yt(x)
           ;; remaining `decl` expressions are only type assertions if the
           ;; argument is global or a non-symbol.
           ((decl)
-           (if (or (assq (cadr e) (car  (lam:vinfo lam)))
-                   (assq (cadr e) (cadr (lam:vinfo lam))))
-               '(null)
-               (cl-convert `(call (core typeassert) ,@(cdr e)) fname lam namemap toplevel interp)))
+           (cond ((not (symbol? (cadr e)))
+                  (cl-convert `(call (core typeassert) ,@(cdr e)) fname lam namemap toplevel interp))
+                 ((or (assq (cadr e) (car  (lam:vinfo lam)))
+                      (assq (cadr e) (cadr (lam:vinfo lam))))
+                  '(null))
+                 (else (syntax-deprecation #f (string "global " (deparse `(|::| ,@(cdr e)))) "typeassert")
+                       (cl-convert `(call (core typeassert) ,@(cdr e)) fname lam namemap toplevel interp))))
           ;; `with-static-parameters` expressions can be removed now; used only by analyze-vars
           ((with-static-parameters)
            (cl-convert (cadr e) fname lam namemap toplevel interp))
