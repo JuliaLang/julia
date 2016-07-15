@@ -1,5 +1,9 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
+const curmod = current_module()
+const curmod_name = fullname(curmod)
+const curmod_prefix = "$(["$m." for m in curmod_name]...)"
+
 replstr(x) = sprint((io,x) -> show(IOContext(io, limit=true), MIME("text/plain"), x), x)
 
 @test replstr(Array{Any}(2)) == "2-element Array{Any,1}:\n #undef\n #undef"
@@ -10,7 +14,7 @@ replstr(x) = sprint((io,x) -> show(IOContext(io, limit=true), MIME("text/plain")
 immutable T5589
     names::Vector{String}
 end
-@test replstr(T5589(Array{String,1}(100))) == "T5589(String[#undef,#undef,#undef,#undef,#undef,#undef,#undef,#undef,#undef,#undef  …  #undef,#undef,#undef,#undef,#undef,#undef,#undef,#undef,#undef,#undef])"
+@test replstr(T5589(Array{String,1}(100))) == "$(curmod_prefix)T5589(String[#undef,#undef,#undef,#undef,#undef,#undef,#undef,#undef,#undef,#undef  …  #undef,#undef,#undef,#undef,#undef,#undef,#undef,#undef,#undef,#undef])"
 
 @test replstr(parse("type X end")) == ":(type X # none, line 1:\n    end)"
 @test replstr(parse("immutable X end")) == ":(immutable X # none, line 1:\n    end)"
@@ -352,8 +356,8 @@ let
     @test sprint(show, B)  == "\n\t[1, 1]  =  #undef\n\t[2, 2]  =  #undef\n\t[3, 3]  =  #undef"
     @test sprint(print, B) == "\n\t[1, 1]  =  #undef\n\t[2, 2]  =  #undef\n\t[3, 3]  =  #undef"
     B[1,2] = T12960()
-    @test sprint(show, B)  == "\n\t[1, 1]  =  #undef\n\t[1, 2]  =  T12960()\n\t[2, 2]  =  #undef\n\t[3, 3]  =  #undef"
-    @test sprint(print, B) == "\n\t[1, 1]  =  #undef\n\t[1, 2]  =  T12960()\n\t[2, 2]  =  #undef\n\t[3, 3]  =  #undef"
+    @test sprint(show, B)  == "\n\t[1, 1]  =  #undef\n\t[1, 2]  =  $(curmod_prefix)T12960()\n\t[2, 2]  =  #undef\n\t[3, 3]  =  #undef"
+    @test sprint(print, B) == "\n\t[1, 1]  =  #undef\n\t[1, 2]  =  $(curmod_prefix)T12960()\n\t[2, 2]  =  #undef\n\t[3, 3]  =  #undef"
 end
 
 # issue #13127
@@ -363,7 +367,7 @@ function f13127()
     show(buf, f)
     takebuf_string(buf)
 end
-@test f13127() == "f"
+@test f13127() == "$(curmod_prefix)f"
 
 let a = Pair(1.0,2.0)
     @test sprint(show,a) == "1.0=>2.0"
