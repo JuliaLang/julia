@@ -917,7 +917,7 @@ macro inferred(ex)
     args = gensym()
     kwargs = gensym()
 
-    # Need to only consturct a call with a kwargs if there are actually kwargs, since
+    # Need to only construct a call with a kwargs if there are actually kwargs, since
     # the inferred type depends on the presence/absence of kwargs
     if any(a->(Meta.isexpr(a, :kw) || Meta.isexpr(a, :parameters)), ex.args)
         typecall = :($(ex.args[1])($(args)...; $(kwargs)...))
