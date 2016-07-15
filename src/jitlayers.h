@@ -94,7 +94,7 @@ static inline Function *function_proto(Function *F, Module *M = NULL)
                                       F->getName(), M);
 
     // Declarations are not allowed to have personality routines, but
-    // copyAttributesFrom sets them anyway. Temporarily unset the personlity
+    // copyAttributesFrom sets them anyway. Temporarily unset the personality
     // routine from `F`, since copying it and then resetting is more expensive
     // as well as introducing an extra use from this unowned function, which
     // can cause crashes in the LLVMContext's global destructor.
