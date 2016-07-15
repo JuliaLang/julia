@@ -70,6 +70,13 @@ end
 fieldnames(t::DataType) = Symbol[fieldname(t, n) for n in 1:nfields(t)]
 fieldnames{T<:Tuple}(t::Type{T}) = Int[n for n in 1:nfields(t)]
 
+"""
+    Base.datatype_module(t::DataType) -> Module
+
+Determine the module containing the definition of a `DataType`.
+"""
+datatype_module(t::DataType) = t.name.module
+
 isconst(s::Symbol) = ccall(:jl_is_const, Int32, (Ptr{Void}, Any), C_NULL, s) != 0
 
 isconst(m::Module, s::Symbol) =
@@ -169,9 +176,6 @@ function _subtypes(m::Module, x::DataType, sts=Set(), visited=Set())
 end
 subtypes(m::Module, x::DataType) = sort(collect(_subtypes(m, x)), by=string)
 subtypes(x::DataType) = subtypes(Main, x)
-
-# function reflection
-function_name(f::Function) = typeof(f).name.mt.name
 
 function to_tuple_type(t::ANY)
     @_pure_meta
@@ -429,6 +433,14 @@ function which_module(m::Module, s::Symbol)
     binding_module(m, s)
 end
 
+# function reflection
+"""
+    Base.function_name(f::Function) -> Symbol
+
+Get the name of a generic `Function` as a symbol, or `:anonymous`.
+"""
+function_name(f::Function) = typeof(f).name.mt.name
+
 functionloc(m::LambdaInfo) = functionloc(m.def)
 function functionloc(m::Method)
     ln = m.line
@@ -455,6 +467,19 @@ function functionloc(f)
     functionloc(first(mt))
 end
 
+"""
+    Base.function_module(f::Function) -> Module
+
+Determine the module containing the (first) definition of a generic
+function.
+"""
+function_module(f::Function) = datatype_module(typeof(f))
+
+"""
+    Base.function_module(f::Function, types) -> Module
+
+Determine the module containing a given definition of a generic function.
+"""
 function function_module(f, types::ANY)
     m = methods(f, types)
     if isempty(m)

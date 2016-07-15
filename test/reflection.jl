@@ -163,19 +163,22 @@ not_const = 1
 
 module TestMod7648
 using Base.Test
-export a9475, c7648, foo7648
+export a9475, foo9475, c7648, foo7648, foo7648_nomethods, Foo7648
 
 const c7648 = 8
 d7648 = 9
 const f7648 = 10
 foo7648(x) = x
+function foo7648_nomethods end
+type Foo7648 end
 
     module TestModSub9475
     using Base.Test
     using ..TestMod7648
-    export a9475
+    export a9475, foo9475
     a9475 = 5
     b9475 = 7
+    foo9475(x) = x
     let
         @test Base.binding_module(:a9475) == current_module()
         @test Base.binding_module(:c7648) == TestMod7648
@@ -199,8 +202,10 @@ let
     @test Base.binding_module(TestMod7648, :d7648) == TestMod7648
     @test Base.binding_module(TestMod7648, :a9475) == TestMod7648.TestModSub9475
     @test Base.binding_module(TestMod7648.TestModSub9475, :b9475) == TestMod7648.TestModSub9475
-    @test Set(names(TestMod7648)) == Set([:TestMod7648, :a9475, :c7648, :foo7648])
-    @test Set(names(TestMod7648, true)) == Set([:TestMod7648, :TestModSub9475, :a9475, :c7648, :d7648, :f7648, :foo7648, Symbol("#foo7648"), :eval, Symbol("#eval")])
+    @test Set(names(TestMod7648))==Set([:TestMod7648, :a9475, :foo9475, :c7648, :foo7648, :foo7648_nomethods, :Foo7648])
+    @test Set(names(TestMod7648, true)) == Set([:TestMod7648, :TestModSub9475, :a9475, :foo9475, :c7648, :d7648, :f7648,
+                                                :foo7648, Symbol("#foo7648"), :foo7648_nomethods, Symbol("#foo7648_nomethods"),
+                                                :Foo7648, :eval, Symbol("#eval")])
     @test isconst(TestMod7648, :c7648)
     @test !isconst(TestMod7648, :d7648)
 end
@@ -211,6 +216,11 @@ let
     @test Base.binding_module(:c7648) == TestMod7648
     @test Base.function_name(foo7648) == :foo7648
     @test Base.function_module(foo7648, (Any,)) == TestMod7648
+    @test Base.function_module(foo7648) == TestMod7648
+    @test Base.function_module(foo7648_nomethods) == TestMod7648
+    @test Base.function_module(foo9475, (Any,)) == TestMod7648.TestModSub9475
+    @test Base.function_module(foo9475) == TestMod7648.TestModSub9475
+    @test Base.datatype_module(Foo7648) == TestMod7648
     @test basename(functionloc(foo7648, (Any,))[1]) == "reflection.jl"
     @test first(methods(TestMod7648.TestModSub9475.foo7648)) == @which foo7648(5)
     @test TestMod7648 == @which foo7648
