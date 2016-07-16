@@ -124,8 +124,8 @@ for f in (:sinh, :cosh, :tanh, :atan, :asinh, :exp, :erf, :erfc, :expm1)
     @eval ($f)(x::AbstractFloat) = error("not implemented for ", typeof(x))
 end
 
-# functions with special cases for integer arguements
-@inline function exp2(x::Integer)
+# functions with special cases for integer arguments
+@inline function exp2(x::Base.BitInteger)
     if x > 1023
         Inf64
     elseif x < -1074
