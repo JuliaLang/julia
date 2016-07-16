@@ -364,7 +364,6 @@ ifeq ($(OS),Linux)
 	-$(INSTALL_M) $(build_libdir)/libssl*.so* $(DESTDIR)$(private_libdir)
 	-$(INSTALL_M) $(build_libdir)/libcrypto*.so* $(DESTDIR)$(private_libdir)
 endif
-
 endif
 
 ifeq ($(USE_SYSTEM_LIBUV),0)
