@@ -520,16 +520,19 @@ function __init__()
         ccall((:git_libgit2_shutdown, :libgit2), Cint, ())
     end
 
-    # Look for OpenSSL env variable for CA bundle
-    cert_loc = if "SSL_CERT_DIR" in keys(ENV)
-        ENV["SSL_CERT_DIR"]
-    elseif "SSL_CERT_FILE" in keys(ENV)
-        ENV["SSL_CERT_FILE"]
-    else
-        # If we have a bundled ca cert file, point libgit2 at that so SSL connections work.
-        abspath(ccall(:jl_get_julia_home, Any, ()),Base.DATAROOTDIR,"julia","cert.pem")
+    # Look for OpenSSL env variable for CA bundle (linux only)
+    # windows and macOS use the OS native security backends
+    @static if is_linux()
+        cert_loc = if "SSL_CERT_DIR" in keys(ENV)
+            ENV["SSL_CERT_DIR"]
+        elseif "SSL_CERT_FILE" in keys(ENV)
+            ENV["SSL_CERT_FILE"]
+        else
+            # If we have a bundled ca cert file, point libgit2 at that so SSL connections work.
+            abspath(ccall(:jl_get_julia_home, Any, ()),Base.DATAROOTDIR,"julia","cert.pem")
+        end
+        set_ssl_cert_locations(cert_loc)
     end
-    set_ssl_cert_locations(cert_loc)
 end
 
 

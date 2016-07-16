@@ -20,9 +20,9 @@ include $(SRCDIR)/llvm-ver.make
 # autoconf configure-driven scripts: llvm pcre arpack fftw unwind gmp mpfr patchelf libuv
 # custom Makefile rules: openlibm dsfmt suitesparse-wrapper suitesparse lapack openblas utf8proc objconv osxunwind
 # entirely custom: virtualenv
-# CMake libs: libgit2
+# CMake libs: libgit2 libssh2 mbedtls
 #
-# downloaded from git: llvm-svn, libuv, libopenlibm, utf8proc, openspecfun, libgit2
+# downloaded from git: llvm-svn, libuv, libopenlibm, utf8proc, openspecfun, libgit2, libssh2
 #
 # there are rules in this file with the . replaced by a %
 # this is some magic Makefile trick that tells make
@@ -46,7 +46,7 @@ CONFIGURE_COMMON += F77="$(FC)" CC="$(CC) $(DEPS_CFLAGS)" CXX="$(CXX) $(DEPS_CXX
 CMAKE_CC_ARG := $(CC_ARG) $(DEPS_CFLAGS)
 CMAKE_CXX_ARG := $(CXX_ARG) $(DEPS_CXXFLAGS)
 
-CMAKE_COMMON := -DCMAKE_INSTALL_PREFIX:PATH=$(build_prefix)
+CMAKE_COMMON := -DCMAKE_INSTALL_PREFIX:PATH=$(build_prefix) -DCMAKE_PREFIX_PATH=$(build_prefix)
 ifneq ($(VERBOSE), 0)
 CMAKE_COMMON += -DCMAKE_VERBOSE_MAKEFILE=ON
 endif
@@ -162,8 +162,16 @@ ifeq ($(USE_SYSTEM_GMP), 0)
 STAGE1_DEPS += gmp
 endif
 
+ifeq ($(USE_SYSTEM_MBEDTLS), 0)
+STAGE1_DEPS += mbedtls
+endif
+
+ifeq ($(USE_SYSTEM_LIBSSH2), 0)
+STAGE2_DEPS += libssh2
+endif
+
 ifeq ($(USE_SYSTEM_LIBGIT2), 0)
-STAGE1_DEPS += libgit2
+STAGE3_DEPS += libgit2
 endif
 
 ifeq ($(USE_SYSTEM_MPFR), 0)
@@ -213,7 +221,7 @@ install: $(addprefix install-, $(DEP_LIBS))
 cleanall: $(addprefix clean-, $(DEP_LIBS))
 distcleanall: $(addprefix distclean-, $(DEP_LIBS))
 	rm -rf $(build_prefix)
-getall: get-llvm get-libuv get-pcre get-openlibm get-openspecfun get-dsfmt get-openblas get-lapack get-fftw get-suitesparse get-arpack get-unwind get-osxunwind get-gmp get-mpfr get-patchelf get-utf8proc get-virtualenv get-objconv get-libgit2
+getall: get-llvm get-libuv get-pcre get-openlibm get-openspecfun get-dsfmt get-openblas get-lapack get-fftw get-suitesparse get-arpack get-unwind get-osxunwind get-gmp get-mpfr get-patchelf get-utf8proc get-virtualenv get-objconv get-mbedtls get-libssh2 get-libgit2
 
 ## PATHS ##
 # sort is used to remove potential duplicates
@@ -260,6 +268,8 @@ include $(SRCDIR)/unwind.mk
 include $(SRCDIR)/gmp.mk
 include $(SRCDIR)/mpfr.mk
 include $(SRCDIR)/patchelf.mk
+include $(SRCDIR)/mbedtls.mk
+include $(SRCDIR)/libssh2.mk
 include $(SRCDIR)/libgit2.mk
 include $(SRCDIR)/virtualenv.mk
 

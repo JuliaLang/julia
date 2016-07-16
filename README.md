@@ -282,7 +282,9 @@ Julia uses the following external libraries, which are automatically downloaded 
 - **[PCRE]** (>= 10.00)      — Perl-compatible regular expressions library.
 - **[GMP]** (>= 5.0)         — GNU multiple precision arithmetic library, needed for `BigInt` support.
 - **[MPFR]** (>= 3.0)        — GNU multiple precision floating point library, needed for arbitrary precision floating point (`BigFloat`) support.
-- **[libgit2]** (>= 0.21)    — Git linkable library, used by Julia's package manager
+- **[libgit2]** (>= 0.24)    — Git linkable library, used by Julia's package manager
+- **[libssh2]** (>= 1.7)     — library for SSH transport, used by libgit2 for packages with SSH remotes
+- **[mbedtls]** (>= 2.2)     — library used for cryptography and transport layer security, used by libssh2
 - **[utf8proc]** (>= 2.0)    — a library for processing UTF-8 encoded Unicode strings
 - **[libosxunwind]**         — clone of [libunwind], a library that determines the call-chain of a program
 
@@ -321,6 +323,8 @@ For a longer overview of Julia's dependencies, see these [slides](https://github
 [libosxunwind]: https://github.com/JuliaLang/libosxunwind
 [libunwind]:    http://www.nongnu.org/libunwind
 [openssl]:      https://www.openssl.org
+[libssh2]:      https://www.libssh2.org
+[mbedtls]:      https://tls.mbed.org/
 
 <a name="System-Provided-Libraries">
 ### System Provided Libraries
