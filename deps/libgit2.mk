@@ -7,7 +7,7 @@ $(eval $(call git-external,libgit2,LIBGIT2,CMakeLists.txt,build/libgit2.$(SHLIB_
 LIBGIT2_OBJ_SOURCE := $(BUILDDIR)/$(LIBGIT2_SRC_DIR)/libgit2.$(SHLIB_EXT)
 LIBGIT2_OBJ_TARGET := $(build_shlibdir)/libgit2.$(SHLIB_EXT)
 
-LIBGIT2_OPTS := $(CMAKE_COMMON) -DCMAKE_BUILD_TYPE=Release -DTHREADSAFE=ON -DCMAKE_PREFIX_PATH=$(build_prefix)
+LIBGIT2_OPTS := $(CMAKE_COMMON) -DCMAKE_BUILD_TYPE=Release -DTHREADSAFE=ON
 ifeq ($(OS),WINNT)
 LIBGIT2_OPTS += -DWIN32=ON -DMINGW=ON
 ifneq ($(ARCH),x86_64)
@@ -61,7 +61,7 @@ endif
 	touch -c $@
 
 clean-libgit2:
-	-rm -rf $(BUILDDIR)/$(LIBGIT2_SRC_DIR)
+	-$(MAKE) -C $(BUILDDIR)/$(LIBGIT2_SRC_DIR) clean
 	-rm -f $(LIBGIT2_OBJ_TARGET)
 
 get-libgit2: $(LIBGIT2_SRC_FILE)
