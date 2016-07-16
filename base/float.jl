@@ -519,9 +519,9 @@ exponent_one(::Type{Float32}) =     0x3f80_0000
 exponent_half(::Type{Float32}) =    0x3f00_0000
 significand_mask(::Type{Float32}) = 0x007f_ffff
 
-significand_bits{T<:AbstractFloat}(::Type{T}) = trailing_ones(significand_mask(T))
-exponent_bits{T<:AbstractFloat}(::Type{T}) = sizeof(T)*8 - significand_bits(T) - 1
-exponent_bias{T<:AbstractFloat}(::Type{T}) = Int(exponent_one(T) >> significand_bits(T))
+@pure significand_bits{T<:AbstractFloat}(::Type{T}) = trailing_ones(significand_mask(T))
+@pure exponent_bits{T<:AbstractFloat}(::Type{T}) = sizeof(T)*8 - significand_bits(T) - 1
+@pure exponent_bias{T<:AbstractFloat}(::Type{T}) = Int(exponent_one(T) >> significand_bits(T))
 
 ## Array operations on floating point numbers ##
 
