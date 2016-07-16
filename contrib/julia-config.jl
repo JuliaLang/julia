@@ -8,6 +8,8 @@ const options =
     "--ldlibs"
 ];
 
+threadingOn() = ccall(:jl_threading_enabled, Cint, ()) != 0
+
 function imagePath()
     opts = Base.JLOptions()
     unsafe_string(opts.image_file)
@@ -57,10 +59,11 @@ end
 function cflags()
     arg1 = replace(initDir(),"\\","\\\\\\\\")
     arg2 = replace(includeDir(),"\\","\\\\")
+    threading_def = threadingOn() ? "-DJULIA_ENABLE_THREADING=1 " : ""
     if is_unix()
-        return """-fPIC -DJULIA_INIT_DIR=\\"$arg1\\" -I$arg2"""
+        return """$(threading_def)-fPIC -DJULIA_INIT_DIR=\\"$arg1\\" -I$arg2"""
     else
-        return """-DJULIA_INIT_DIR=\\"$arg1\\" -I$arg2"""
+        return """$(threading_def)-DJULIA_INIT_DIR=\\"$arg1\\" -I$arg2"""
     end
 end
 
