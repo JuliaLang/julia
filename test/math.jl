@@ -199,7 +199,7 @@ for ii in -2048:2048
     @test(exp2(Int32(ii)) == expected)
     @test(exp2(Int64(ii)) == expected)
     @test(exp2(Int128(ii)) == expected)
-    if ii>=0
+    if ii >= 0
         @test(exp2(UInt16(ii)) == expected)
         @test(exp2(UInt32(ii)) == expected)
         @test(exp2(UInt64(ii)) == expected)
@@ -207,8 +207,6 @@ for ii in -2048:2048
     end
 end
 
-@test(exp2(false) == exp2(float(false)))
-@test(exp2(true) == exp2(float(true)))
 
 for T in (Int, Float64, BigFloat)
     @test deg2rad(T(180)) ≈ 1pi
