@@ -267,7 +267,7 @@ function showerror(io::IO, ex::MethodError)
     name = ft.name.mt.name
     f_is_function = false
     kwargs = Any[]
-    if startswith(string(ft.name), "#kw#")
+    if startswith(string(ft.name.name), "#kw#")
         f = ex.args[2]
         ft = typeof(f)
         name = ft.name.mt.name
