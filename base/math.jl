@@ -126,7 +126,7 @@ end
 
 #functions with special cases for integer arguements
 @inline function exp2(x::Integer)
-	if x > 1023
+    if x > 1023
         Inf64
     elseif x < -1074
         Float64(0.0)
@@ -139,7 +139,6 @@ end
         reinterpret(Float64, (exponent_bias(Float64) + Int64(x)) << significand_bits(Float64))
     end
 end
-
 
 # TODO: GNU libc has exp10 as an extension; should openlibm?
 exp10(x::Float64) = 10.0^x
