@@ -1,9 +1,9 @@
 ## mbedtls
 
 ifeq ($(USE_GPL_LIBS), 1)
-	MBEDTLS_SRC = mbedtls-$(MBEDTLS_VER)-gpl
+MBEDTLS_SRC = mbedtls-$(MBEDTLS_VER)-gpl
 else
-	MBEDTLS_SRC = mbedtls-$(MBEDTLS_VER)-apache
+MBEDTLS_SRC = mbedtls-$(MBEDTLS_VER)-apache
 endif
 MBEDTLS_URL = https://tls.mbed.org/download/$(MBEDTLS_SRC).tgz
 
