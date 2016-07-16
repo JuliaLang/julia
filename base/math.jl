@@ -124,18 +124,18 @@ for f in (:sinh, :cosh, :tanh, :atan, :asinh, :exp, :erf, :erfc, :expm1)
     @eval ($f)(x::AbstractFloat) = error("not implemented for ", typeof(x))
 end
 
-#functions with special cases for integer arguements
+# functions with special cases for integer arguements
 @inline function exp2(x::Integer)
     if x > 1023
         Inf64
     elseif x < -1074
         Float64(0.0)
     elseif x <= -1023
-        #Result will be a subnormal number
+        # Result will be a subnormal number
         reinterpret(Float64, Int64(1) << (x + 1074))
     else
-        #If x is a Int128, and is outside the range of Int64, then it is not -123<x<=1023
-        #We will cast everything to Int64 to avoid errors incase of Int128
+        # If x is a Int128, and is outside the range of Int64, then it is not -1023<x<=1023
+        # We will cast everything to Int64 to avoid errors in case of Int128
         reinterpret(Float64, (exponent_bias(Float64) + Int64(x)) << significand_bits(Float64))
     end
 end
