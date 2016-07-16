@@ -18,6 +18,9 @@
 #       zero argument or result as insignificant.
 # arcp: Allow Reciprocal - Allow optimizations to use the reciprocal
 #       of an argument rather than perform division.
+# fast: Fast - Allow algebraically equivalent transformations that may
+#       dramatically change results in floating point (e.g.
+#       reassociate). This flag implies all the others.
 
 module FastMath
 
