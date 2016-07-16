@@ -192,24 +192,23 @@ end
 @test exp2(Float16(2.)) ≈ exp2(2.)
 @test log(e) == 1
 
-@testset "check exp2(::Int) matches exp2(::Float)" begin
-    for ii in -2048:2048
-		expected = exp2(float(ii))
-        @test(exp2(Int16(ii)) == expected)
-        @test(exp2(Int32(ii)) == expected)
-        @test(exp2(Int64(ii)) == expected)
-        @test(exp2(Int128(ii)) == expected)
-		if ii>=0
-			@test(exp2(UInt16(ii)) == expected)
-			@test(exp2(UInt32(ii)) == expected)
-			@test(exp2(UInt64(ii)) == expected)
-			@test(exp2(UInt128(ii)) == expected)
-		end
+# check exp2(::Integer) matches exp2(::Float)"
+for ii in -2048:2048
+	expected = exp2(float(ii))
+	@test(exp2(Int16(ii)) == expected)
+	@test(exp2(Int32(ii)) == expected)
+	@test(exp2(Int64(ii)) == expected)
+	@test(exp2(Int128(ii)) == expected)
+	if ii>=0
+		@test(exp2(UInt16(ii)) == expected)
+		@test(exp2(UInt32(ii)) == expected)
+		@test(exp2(UInt64(ii)) == expected)
+		@test(exp2(UInt128(ii)) == expected)
 	end
-
-    @test(exp2(false) == exp2(float(false)))
-    @test(exp2(true) == exp2(float(true)))
 end
+
+@test(exp2(false) == exp2(float(false)))
+@test(exp2(true) == exp2(float(true)))
 
 for T in (Int, Float64, BigFloat)
     @test deg2rad(T(180)) ≈ 1pi
