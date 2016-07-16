@@ -333,7 +333,7 @@
 
    ``strings`` can be any iterable over elements ``x`` which are convertible to strings via ``print(io::IOBuffer, x)``\ .
 
-.. function:: chop(string)
+.. function:: chop(string, i)
 
    .. Docstring generated from Julia source
 
