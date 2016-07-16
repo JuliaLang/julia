@@ -2360,13 +2360,15 @@ function inlineable(f::ANY, ft::ANY, e::Expr, atypes::Vector{Any}, sv::Inference
             local linfo_var = add_slot!(enclosing, LambdaInfo, false)
             local ex = copy(e)
             local stmts = []
-            for i = 1:length(atypes); local i
+            local arg_hoisted = false
+            for i = length(atypes):-1:1; local i
                 local ti = atypes[i]
-                if isa(ti, Union)
+                if arg_hoisted || isa(ti, Union)
                     aei = ex.args[i]
                     if !effect_free(aei, sv, false)
+                        arg_hoisted = true
                         newvar = newvar!(sv, ti)
-                        push!(stmts, Expr(:(=), newvar, aei))
+                        insert!(stmts, 1, Expr(:(=), newvar, aei))
                         ex.args[i] = newvar
                     end
                 end

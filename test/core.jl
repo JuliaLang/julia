@@ -4462,3 +4462,20 @@ end
 f17147(::Tuple) = 1
 f17147{N}(::Vararg{Tuple,N}) = 2
 @test f17147((), ()) == 2
+
+# issue #17449, argument evaluation order
+@noinline f17449(x, y) = nothing
+@noinline function g17449(r)
+    r[] = :g
+    return 1
+end
+@noinline function k17449(r, v)
+    r[] = :k
+    return v ? 1 : 1.0
+end
+function h17449(v)
+    r = Ref(:h)
+    f17449(g17449(r), k17449(r, v))
+    return r[]
+end
+@test h17449(true) === :k
