@@ -95,14 +95,31 @@ m_error = try method_c6(1, x=1) catch e; e; end
 showerror(buf, m_error)
 error_out1 = takebuf_string(buf)
 
+module TestKWError
+method_c6_in_module(; x=1) = x
+method_c6_in_module(a; y=1) = y
+end
+m_error = try TestKWError.method_c6_in_module(y=1) catch e; e; end
+showerror(buf, m_error)
+error_out2 = takebuf_string(buf)
+m_error = try TestKWError.method_c6_in_module(1, x=1) catch e; e; end
+showerror(buf, m_error)
+error_out3 = takebuf_string(buf)
+
 if Base.have_color
     @test contains(error_out, "method_c6(; x)\e[1m\e[31m got an unsupported keyword argument \"y\"\e[0m")
     @test contains(error_out, "method_c6(\e[1m\e[31m::Any\e[0m; y)")
     @test contains(error_out1, "method_c6(::Any; y)\e[1m\e[31m got an unsupported keyword argument \"x\"\e[0m")
+    @test contains(error_out2, "method_c6_in_module(; x)\e[1m\e[31m got an unsupported keyword argument \"y\"\e[0m")
+    @test contains(error_out2, "method_c6_in_module(\e[1m\e[31m::Any\e[0m; y)")
+    @test contains(error_out3, "method_c6_in_module(::Any; y)\e[1m\e[31m got an unsupported keyword argument \"x\"\e[0m")
 else
     @test contains(error_out, "method_c6(; x) got an unsupported keyword argument \"y\"")
     @test contains(error_out, "method_c6(!Matched::Any; y)")
     @test contains(error_out1, "method_c6(::Any; y) got an unsupported keyword argument \"x\"")
+    @test contains(error_out2, "method_c6_in_module(; x) got an unsupported keyword argument \"y\"")
+    @test contains(error_out2, "method_c6_in_module(!Matched::Any; y)")
+    @test contains(error_out3, "method_c6_in_module(::Any; y) got an unsupported keyword argument \"x\"")
 end
 
 method_c7(a, b; kargs...) = a
