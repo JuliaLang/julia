@@ -51,7 +51,7 @@ value_t fl_skipws(fl_context_t *fl_ctx, value_t *args, uint32_t nargs)
     return skipped;
 }
 
-static int is_wc_cat_id_start(uint32_t wc, utf8proc_propval_t cat)
+static int is_wc_cat_id_start(uint32_t wc, utf8proc_category_t cat)
 {
     return (cat == UTF8PROC_CATEGORY_LU || cat == UTF8PROC_CATEGORY_LL ||
             cat == UTF8PROC_CATEGORY_LT || cat == UTF8PROC_CATEGORY_LM ||
@@ -110,8 +110,7 @@ JL_DLLEXPORT int jl_id_start_char(uint32_t wc)
         return 1;
     if (wc < 0xA1 || wc > 0x10ffff)
         return 0;
-    const utf8proc_property_t *prop = utf8proc_get_property(wc);
-    return is_wc_cat_id_start(wc, prop->category);
+    return is_wc_cat_id_start(wc, utf8proc_category((utf8proc_int32_t) wc));
 }
 
 JL_DLLEXPORT int jl_id_char(uint32_t wc)
@@ -121,8 +120,7 @@ JL_DLLEXPORT int jl_id_char(uint32_t wc)
         return 1;
     if (wc < 0xA1 || wc > 0x10ffff)
         return 0;
-    const utf8proc_property_t *prop = utf8proc_get_property(wc);
-    utf8proc_propval_t cat = prop->category;
+    utf8proc_category_t cat = utf8proc_category((utf8proc_int32_t) wc);
     if (is_wc_cat_id_start(wc, cat)) return 1;
     if (cat == UTF8PROC_CATEGORY_MN || cat == UTF8PROC_CATEGORY_MC ||
         cat == UTF8PROC_CATEGORY_ND || cat == UTF8PROC_CATEGORY_PC ||
