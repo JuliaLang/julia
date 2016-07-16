@@ -51,7 +51,11 @@ module CompletionFoo
     const tuple = (1, 2)
 
     test_y_array=[CompletionFoo.Test_y(rand()) for i in 1:10]
+    test_dict = Dict("abc"=>1, "abcd"=>10, :bar=>2, :bar2=>9, Base=>3,
+                     contains=>4, `ls`=>5, 66=>7, 67=>8, ("q",3)=>11,
+                     "α"=>12, :α=>13)
 end
+test_repl_comp_dict = CompletionFoo.test_dict
 
 function temp_pkg_dir(fn::Function)
     # Used in tests below to setup and teardown a sandboxed package directory
@@ -663,59 +667,61 @@ c, r, res = test_complete(s)
 @test isempty(c)
 
 # test Dicts
-test_dict = Dict("abc"=>1, "abcd"=>10, :bar=>2, :bar2=>9, Base=>3, contains=>4, `ls`=>5,
-      66=>7, 67=>8, ("q",3)=>11, "α"=>12, :α=>13)
-s="test_dict[\"ab"
-c,r = test_complete(s)
-@test c == Any["\"abc\"","\"abcd\""]
-s="test_dict[\"abcd"
-c,r = test_complete(s)
-@test c == Any["\"abcd\"]"]
-s="test_dict[ \"abcd"  # leading whitespace
-c,r = test_complete(s)
-@test c == Any["\"abcd\"]"]
-s="test_dict[\"abcd]"  # trailing close bracket
-c,r = completions(s,endof(s)-1)
-@test c == Any["\"abcd\""]
-s="test_dict[:b"
-c,r = test_complete(s)
-@test c == Any[":bar",":bar2"]
-s="test_dict[:bar2"
-c,r = test_complete(s)
-@test c == Any[":bar2]"]
-s="test_dict[Ba"
-c,r = test_complete(s)
-@test c == Any["Base]"]
-s="test_dict[co"
-c,r = test_complete(s)
-@test c == Any["contains]"]
-s="test_dict[`l"
-c,r = test_complete(s)
-@test c == Any["`ls`]"]
-s="test_dict[6"
-c,r = test_complete(s)
-@test c == Any["66","67"]
-s="test_dict[66"
-c,r = test_complete(s)
-@test c == Any["66]"]
-s="test_dict[("
-c,r = test_complete(s)
-@test c == Any["(\"q\",3)]"]
-s="test_dict[\"\\alp"
-c,r = test_complete(s)
-@test c == String["\\alpha"]
-s="test_dict[\"\\alpha"
-c,r = test_complete(s)
-@test c == String["α"]
-s="test_dict[\"α"
-c,r = test_complete(s)
-@test c == Any["\"α\"]"]
-s="test_dict[:\\alp"
-c,r = test_complete(s)
-@test c == String["\\alpha"]
-s="test_dict[:\\alpha"
-c,r = test_complete(s)
-@test c == String["α"]
-s="test_dict[:α"
-c,r = test_complete(s)
-@test c == Any[":α]"]
+function test_dict_completion(dict_name)
+    s = "$dict_name[\"ab"
+    c, r = test_complete(s)
+    @test c == Any["\"abc\"", "\"abcd\""]
+    s = "$dict_name[\"abcd"
+    c, r = test_complete(s)
+    @test c == Any["\"abcd\"]"]
+    s = "$dict_name[ \"abcd"  # leading whitespace
+    c, r = test_complete(s)
+    @test c == Any["\"abcd\"]"]
+    s = "$dict_name[\"abcd]"  # trailing close bracket
+    c, r = completions(s, endof(s) - 1)
+    @test c == Any["\"abcd\""]
+    s = "$dict_name[:b"
+    c, r = test_complete(s)
+    @test c == Any[":bar", ":bar2"]
+    s = "$dict_name[:bar2"
+    c, r = test_complete(s)
+    @test c == Any[":bar2]"]
+    s = "$dict_name[Ba"
+    c, r = test_complete(s)
+    @test c == Any["Base]"]
+    s = "$dict_name[co"
+    c, r = test_complete(s)
+    @test c == Any["contains]"]
+    s = "$dict_name[`l"
+    c, r = test_complete(s)
+    @test c == Any["`ls`]"]
+    s = "$dict_name[6"
+    c, r = test_complete(s)
+    @test c == Any["66", "67"]
+    s = "$dict_name[66"
+    c, r = test_complete(s)
+    @test c == Any["66]"]
+    s = "$dict_name[("
+    c, r = test_complete(s)
+    @test c == Any["(\"q\",3)]"]
+    s = "$dict_name[\"\\alp"
+    c, r = test_complete(s)
+    @test c == String["\\alpha"]
+    s = "$dict_name[\"\\alpha"
+    c, r = test_complete(s)
+    @test c == String["α"]
+    s = "$dict_name[\"α"
+    c, r = test_complete(s)
+    @test c == Any["\"α\"]"]
+    s = "$dict_name[:\\alp"
+    c, r = test_complete(s)
+    @test c == String["\\alpha"]
+    s = "$dict_name[:\\alpha"
+    c, r = test_complete(s)
+    @test c == String["α"]
+    s = "$dict_name[:α"
+    c, r = test_complete(s)
+    @test c == Any[":α]"]
+end
+test_dict_completion("CompletionFoo.test_dict")
+test_dict_completion("test_repl_comp_dict")
