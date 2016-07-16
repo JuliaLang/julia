@@ -20,9 +20,9 @@ include $(SRCDIR)/llvm-ver.make
 # autoconf configure-driven scripts: llvm pcre arpack fftw unwind gmp mpfr patchelf libuv
 # custom Makefile rules: openlibm dsfmt suitesparse-wrapper suitesparse lapack openblas utf8proc objconv osxunwind
 # entirely custom: virtualenv
-# CMake libs: libgit2
+# CMake libs: libgit2 libssh2 mbedtls
 #
-# downloaded from git: llvm-svn, libuv, libopenlibm, utf8proc, openspecfun, libgit2
+# downloaded from git: llvm-svn, libuv, libopenlibm, utf8proc, openspecfun, libgit2, libssh2
 #
 # there are rules in this file with the . replaced by a %
 # this is some magic Makefile trick that tells make
@@ -46,7 +46,7 @@ CONFIGURE_COMMON += F77="$(FC)" CC="$(CC) $(DEPS_CFLAGS)" CXX="$(CXX) $(DEPS_CXX
 CMAKE_CC_ARG := $(CC_ARG) $(DEPS_CFLAGS)
 CMAKE_CXX_ARG := $(CXX_ARG) $(DEPS_CXXFLAGS)
 
-CMAKE_COMMON := -DCMAKE_INSTALL_PREFIX:PATH=$(build_prefix)
+CMAKE_COMMON := -DCMAKE_INSTALL_PREFIX:PATH=$(build_prefix) -DCMAKE_PREFIX_PATH=$(build_prefix)
 ifneq ($(VERBOSE), 0)
 CMAKE_COMMON += -DCMAKE_VERBOSE_MAKEFILE=ON
 endif

@@ -58,14 +58,13 @@ endif
 	touch -c $(MBEDTLS_OBJ_TARGET)
 
 clean-mbedtls:
-	-rm -rf $(BUILDDIR)/mbedtls-$(MBEDTLS_VER)
+	-$(MAKE) -C $(BUILDDIR)/mbedtls-$(MBEDTLS_VER) clean
 	-rm -f $(MBEDTLS_OBJ_TARGET)
 
 distclean-mbedtls:
-	-rm -rf $(SRCDIR)/srccache/$(MBEDTLS_SRC).tgz
-	-rm -rf $(SRCDIR)/srccache/$(MBEDTLS_SRC)
-	-rm -rf $(BUILDDIR)/mbedtls-$(MBEDTLS_VER)
-
+	-rm -rf $(SRCDIR)/srccache/$(MBEDTLS_SRC).tgz \
+		$(SRCDIR)/srccache/$(MBEDTLS_SRC) \
+		$(BUILDDIR)/mbedtls-$(MBEDTLS_VER)
 
 get-mbedtls: $(SRCDIR)/srccache/$(MBEDTLS_SRC).tgz
 configure-mbedtls: $(BUILDDIR)/mbedtls-$(MBEDTLS_VER)/Makefile

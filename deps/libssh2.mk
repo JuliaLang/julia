@@ -8,7 +8,6 @@ LIBSSH2_OBJ_SOURCE := $(BUILDDIR)/$(LIBSSH2_SRC_DIR)/src/libssh2.$(SHLIB_EXT)
 LIBSSH2_OBJ_TARGET := $(build_shlibdir)/libssh2.$(SHLIB_EXT)
 
 LIBSSH2_OPTS := $(CMAKE_COMMON) -DBUILD_SHARED_LIBS=ON -DBUILD_EXAMPLES=OFF \
-				-DCMAKE_PREFIX_PATH=$(build_prefix) \
 				-DCMAKE_INSTALL_RPATH=$(build_prefix) -DCMAKE_INSTALL_RPATH_USE_LINK_PATH=TRUE \
 				-DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_LIBDIR=lib
 
@@ -39,7 +38,7 @@ endif
 	echo 1 > $@
 
 $(LIBSSH2_OBJ_TARGET): $(LIBSSH2_OBJ_SOURCE) | $(build_shlibdir)
-ifeq ($(OS),WINNT)
+ifeq ($(BUILD_OS),WINNT)
 	$(MAKE) -C $(BUILDDIR)/$(LIBSSH2_SRC_DIR) install
 else
 	$(call make-install,$(LIBSSH2_SRC_DIR),)
@@ -47,7 +46,7 @@ endif
 	touch -c $(LIBSSH2_OBJ_TARGET)
 
 clean-libssh2:
-	-rm -rf $(BUILDDIR)/$(LIBSSH2_SRC_DIR)
+	-$(MAKE) -C $(BUILDDIR)/$(LIBSSH2_SRC_DIR) clean
 	-rm -f $(LIBSSH2_OBJ_TARGET)
 
 get-libssh2: $(LIBSSH2_SRC_FILE)
