@@ -185,8 +185,17 @@ end
 
 extrapath = is_windows() ? joinpath(JULIA_HOME,"..","Git","usr","bin")*";" : ""
 @compat withenv("PATH" => extrapath * ENV["PATH"]) do
-    @test readstring(pipeline(`echo hello`, `sort`)) == "hello\n"
-    @test success(pipeline(`true`, `true`))
+    cmd1 = pipeline(`echo hello`, `sort`)
+    cmd2 = pipeline(`true`, `true`)
+    if is_windows()
+        try # use busybox-w32
+            success(`busybox`)
+            cmd1 = pipeline(`busybox echo hello`, `busybox sort`)
+            cmd2 = pipeline(`busybox true`, `busybox true`)
+        end
+    end
+    @test readstring(cmd1) == "hello\n"
+    @test success(cmd2)
 end
 
 let convert_funcs_and_types =
