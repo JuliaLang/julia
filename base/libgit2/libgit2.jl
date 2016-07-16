@@ -511,7 +511,6 @@ function set_ssl_cert_locations(cert_loc)
     ccall((:git_libgit2_opts, :libgit2), Cint,
           (Cint, Cstring, Cstring),
           Cint(Consts.SET_SSL_CERT_LOCATIONS), cert_file, cert_dir)
-
 end
 
 function __init__()
@@ -522,7 +521,7 @@ function __init__()
     end
 
     # Look for OpenSSL env variable for CA bundle (linux only)
-    # windows and macOS are use their security backends
+    # windows and macOS use the OS native security backends
     @static if is_linux()
         cert_loc = if "SSL_CERT_DIR" in keys(ENV)
             ENV["SSL_CERT_DIR"]
