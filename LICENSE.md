@@ -50,7 +50,6 @@ Julia's standard library uses the following external libraries, which have
 their own licenses:
 
 - [ARPACK](http://www.caam.rice.edu/software/ARPACK/RiceBSD.txt#LICENSE) [BSD-3]
-- [ATLAS](http://math-atlas.sourceforge.net/faq.html#license) [BSD-3]
 - [DSFMT](http://www.math.sci.hiroshima-u.ac.jp/~m-mat/MT/SFMT/LICENSE.txt) [BSD-3]
 - [OPENLIBM](https://github.com/JuliaLang/openlibm/blob/master/LICENSE.md) [MIT, BSD-2, ISC]
 - [OPENSPECFUN](https://github.com/JuliaLang/openspecfun) [MIT, public domain]
@@ -58,6 +57,8 @@ their own licenses:
 - [FFTW](http://fftw.org/doc/License-and-Copyright.html) [GPL2+]
 - [GMP](http://gmplib.org/manual/Copying.html#Copying) [LGPL3+ or GPL2+]
 - [LIBGIT2](https://github.com/libgit2/libgit2/blob/development/COPYING) [GPL2+ with unlimited linking exception]
+- [LIBSSH2](https://github.com/libssh2/libssh2/blob/master/COPYING) [BSD-3]
+- [MBEDTLS](https://tls.mbed.org/how-to-get) [either GPLv2 or Apache 2.0]
 - [MPFR](http://www.mpfr.org/mpfr-current/mpfr.html#Copying) [LGPL3+]
 - [OPENBLAS](https://raw.github.com/xianyi/OpenBLAS/master/LICENSE) [BSD-3]
 - [LAPACK](http://netlib.org/lapack/LICENSE.txt) [BSD-3]
@@ -86,4 +87,5 @@ Julia bundles the following external programs and libraries on some platforms:
 - [LIBEXPAT](http://expat.cvs.sourceforge.net/viewvc/expat/expat/README)
 - [OPENSSL](https://github.com/openssl/openssl/blob/master/LICENSE)
 
-On some platforms, distributions of Julia contain SSL certificate authority certificates, released under the [Mozilla Public License](https://en.wikipedia.org/wiki/Mozilla_Public_License).
+On some platforms, distributions of Julia contain SSL certificate authority certificates,
+released under the [Mozilla Public License](https://en.wikipedia.org/wiki/Mozilla_Public_License).
