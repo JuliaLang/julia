@@ -4643,6 +4643,8 @@ static std::unique_ptr<Module> emit_function(jl_lambda_info_t *lam, jl_llvm_func
     if (ctx.debug_enabled)
         // set initial line number
         builder.SetCurrentDebugLocation(topdebugloc);
+    if (do_coverage)
+        coverageVisitLine(ctx.file, toplineno);
     bool prevlabel = false;
     int lno = -1;
     int prevlno = -1;
