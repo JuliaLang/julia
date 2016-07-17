@@ -244,8 +244,8 @@ begin
     hp = REPL.REPLHistoryProvider(Dict{Symbol,Any}(:julia => repl_mode,
                                                    :shell => shell_mode,
                                                    :help  => help_mode))
-
-    REPL.hist_from_file(hp, IOBuffer(fakehistory))
+    hp.history_file = IOBuffer(fakehistory)
+    REPL.hist_from_file(hp)
     REPL.history_reset_state(hp)
 
     histp.hp = repl_mode.hist = shell_mode.hist = help_mode.hist = hp

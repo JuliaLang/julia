@@ -300,6 +300,7 @@ end
 type REPLHistoryProvider <: HistoryProvider
     history::Array{String,1}
     history_file
+    attempted_history_file_load::Bool
     start_idx::Int
     cur_idx::Int
     last_idx::Int
@@ -309,7 +310,7 @@ type REPLHistoryProvider <: HistoryProvider
     modes::Array{Symbol,1}
 end
 REPLHistoryProvider(mode_mapping) =
-    REPLHistoryProvider(String[], nothing, 0, 0, -1, IOBuffer(),
+    REPLHistoryProvider(String[], nothing, false, 0, 0, -1, IOBuffer(),
                         nothing, mode_mapping, UInt8[])
 
 const invalid_history_message = """
@@ -331,8 +332,14 @@ function hist_getline(file)
     return ""
 end
 
-function hist_from_file(hp, file)
-    hp.history_file = file
+type InvalidHistoryFile <: Exception
+    s::String
+end
+InvalidHistoryFile(s...) = InvalidHistoryFile(string(s...))
+
+function hist_from_file(hp)
+    @assert hp.history_file !== nothing
+    file = hp.history_file
     seek(file, 0)
     countlines = 0
     while true
@@ -341,7 +348,7 @@ function hist_from_file(hp, file)
         isempty(line) && break
         countlines += 1
         line[1] != '#' &&
-            error(invalid_history_message, repr(line[1]), " at line ", countlines)
+            throw(InvalidHistoryFile(invalid_history_message, repr(line[1]), " at line ", countlines))
         while !isempty(line)
             m = match(r"^#\s*(\w+)\s*:\s*(.*?)\s*$", line)
             m === nothing && break
@@ -354,15 +361,15 @@ function hist_from_file(hp, file)
         isempty(line) && break
         # Make sure starts with tab
         line[1] == ' '  &&
-            error(munged_history_message, countlines)
+            throw(InvalidHistoryFile(munged_history_message, countlines))
         line[1] != '\t' &&
-            error(invalid_history_message, repr(line[1]), " at line ", countlines)
+            throw(InvalidHistoryFile(invalid_history_message, repr(line[1]), " at line ", countlines))
         lines = String[]
         while !isempty(line)
             push!(lines, chomp(line[2:end]))
             eof(file) && break
             ch = Char(Base.peek(file))
-            ch == ' '  && error(munged_history_message, countlines)
+            ch == ' '  && throw(InvalidHistoryFile(munged_history_message, countlines))
             ch != '\t' && break
             line = hist_getline(file)
             countlines += 1
@@ -381,6 +388,23 @@ function mode_idx(hist::REPLHistoryProvider, mode)
         isequal(v, mode) && (c = k)
     end
     return c
+end
+
+function lazy_load_history_file(hist::REPLHistoryProvider)
+    if hist.history_file === nothing || hist.attempted_history_file_load
+        return
+    end
+    hist.attempted_history_file_load = true
+    try
+        hist_from_file(hist)
+    catch e
+        if !isa(e, InvalidHistoryFile)
+            rethrow(e)
+        end
+        warn(e.s)
+    end
+    history_reset_state(hist)
+    return
 end
 
 function add_history(hist::REPLHistoryProvider, s)
@@ -404,6 +428,7 @@ function add_history(hist::REPLHistoryProvider, s)
 end
 
 function history_move(s::Union{LineEdit.MIState,LineEdit.PrefixSearchState}, hist::REPLHistoryProvider, idx::Int, save_idx::Int = hist.cur_idx)
+    lazy_load_history_file(hist)
     max_idx = length(hist.history) + 1
     @assert 1 <= hist.cur_idx <= max_idx
     (1 <= idx <= max_idx) || return :none
@@ -456,6 +481,7 @@ end
 
 function history_prev(s::LineEdit.MIState, hist::REPLHistoryProvider,
         save_idx::Int = hist.cur_idx)
+    lazy_load_history_file(hist)
     hist.last_idx = -1
     m = history_move(s, hist, hist.cur_idx-1, save_idx)
     if m === :ok
@@ -474,6 +500,7 @@ end
 
 function history_next(s::LineEdit.MIState, hist::REPLHistoryProvider,
         save_idx::Int = hist.cur_idx)
+    lazy_load_history_file(hist)
     cur_idx = hist.cur_idx
     max_idx = length(hist.history) + 1
     if cur_idx == max_idx && 0 < hist.last_idx
@@ -498,6 +525,7 @@ function history_move_prefix(s::LineEdit.PrefixSearchState,
                              prefix::AbstractString,
                              backwards::Bool,
                              cur_idx = hist.cur_idx)
+    lazy_load_history_file(hist)
     cur_response = String(LineEdit.buffer(s))
     # when searching forward, start at last_idx
     if !backwards && hist.last_idx > 0
@@ -535,7 +563,7 @@ history_prev_prefix(s::LineEdit.PrefixSearchState, hist::REPLHistoryProvider, pr
 
 function history_search(hist::REPLHistoryProvider, query_buffer::IOBuffer, response_buffer::IOBuffer,
                         backwards::Bool=false, skip_current::Bool=false)
-
+    lazy_load_history_file(hist)
     qpos = position(query_buffer)
     qpos > 0 || return true
     searchdata = beforecursor(query_buffer)
@@ -743,11 +771,14 @@ function setup_interface(repl::LineEditREPL; hascolor = repl.hascolor, extra_rep
     hp = REPLHistoryProvider(Dict{Symbol,Any}(:julia => julia_prompt,
                                               :shell => shell_mode,
                                               :help  => help_mode))
+
+    # The history from the history file will later be loaded into the
+    # history provider lazily to improve startup time.
     if repl.history_file
         try
             f = open(find_hist_file(), true, true, true, false, false)
             finalizer(replc, replc->close(f))
-            hist_from_file(hp, f)
+            hp.history_file = f
         catch e
             print_response(repl, e, catch_backtrace(), true, Base.have_color)
             println(outstream(repl))
@@ -755,7 +786,7 @@ function setup_interface(repl::LineEditREPL; hascolor = repl.hascolor, extra_rep
             repl.history_file = false
         end
     end
-    history_reset_state(hp)
+
     julia_prompt.hist = hp
     shell_mode.hist = hp
     help_mode.hist = hp
