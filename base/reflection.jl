@@ -160,7 +160,7 @@ function _subtypes(m::Module, x::DataType, sts=Set(), visited=Set())
     push!(visited, m)
     for s in names(m,true)
         if isdefined(m,s)
-            t = eval(m,s)
+            t = getfield(m, s)
             if isa(t, DataType) && t.name.name == s && supertype(t).name == x.name
                 ti = typeintersect(t, x)
                 ti != Bottom && push!(sts, ti)
