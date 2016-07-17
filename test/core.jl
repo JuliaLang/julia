@@ -4424,3 +4424,11 @@ function h17449(v)
     return r[]
 end
 @test h17449(true) === :k
+
+# make sure lowering agrees on sp order
+function captsp{T, S}(x::T, y::S)
+    subf(x2::Int) = T
+    subf(x2::UInt) = S
+    return subf(Int(1)), subf(UInt(1))
+end
+@test captsp(1, 2.0) == (Int, Float64)
