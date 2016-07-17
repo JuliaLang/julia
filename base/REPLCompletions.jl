@@ -397,14 +397,20 @@ function dict_identifier_key(str,tag)
 
     frange, end_of_indentifier = find_start_brace(str_close, c_start='[', c_end=']')
     isempty(frange) && return (nothing, nothing, nothing)
-    identifier = Symbol(str[frange[1]:end_of_indentifier])
-    isdefined(Main,identifier) || return (nothing, nothing, nothing)
+    obj = Main
+    for name in split(str[frange[1]:end_of_indentifier], '.')
+        Base.isidentifier(name) || return (nothing, nothing, nothing)
+        sym = Symbol(name)
+        isdefined(obj, sym) || return (nothing, nothing, nothing)
+        obj = getfield(obj, sym)
+        # Avoid `isdefined(::Array, ::Symbol)`
+        isa(obj, Array) && return (nothing, nothing, nothing)
+    end
     begin_of_key = findnext(x->!in(x,whitespace_chars), str, end_of_indentifier+2)
-    begin_of_key==0 && return (identifier, nothing, nothing)
+    begin_of_key==0 && return (true, nothing, nothing)
     partial_key = str[begin_of_key:end]
-    main_id = getfield(Main,identifier)
-    typeof(main_id) <: Associative && length(main_id)<1e6 || return (identifier, nothing, nothing)
-    main_id, partial_key, begin_of_key
+    (isa(obj, Associative) && length(obj) < 1e6) || return (true, nothing, nothing)
+    return (obj, partial_key, begin_of_key)
 end
 
 function completions(string, pos)
@@ -416,8 +422,8 @@ function completions(string, pos)
 
     # if completing a key in a Dict
     identifier, partial_key, loc = dict_identifier_key(partial,inc_tag)
-    if identifier != nothing
-        if partial_key != nothing
+    if identifier !== nothing
+        if partial_key !== nothing
             matches = []
             for key in keys(identifier)
                 rkey = repr(key)
