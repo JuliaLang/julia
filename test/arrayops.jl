@@ -1218,27 +1218,37 @@ a = ones(5,0)
 b = view(a, :, :)
 @test mdsum(b) == 0
 
-a = copy(reshape(1:60, 3, 4, 5))
-@test a[CartesianIndex{3}(2,3,4)] == 44
-a[CartesianIndex{3}(2,3,3)] = -1
-@test a[CartesianIndex{3}(2,3,3)] == -1
-@test a[2,CartesianIndex{2}(3,4)] == 44
-a[1,CartesianIndex{2}(3,4)] = -2
-@test a[1,CartesianIndex{2}(3,4)] == -2
-@test a[CartesianIndex{1}(2),3,CartesianIndex{1}(4)] == 44
-a[CartesianIndex{1}(2),3,CartesianIndex{1}(3)] = -3
-@test a[CartesianIndex{1}(2),3,CartesianIndex{1}(3)] == -3
-@test a[:, :, CartesianIndex((1,))] == a[:,:,1]
-@test a[CartesianIndex((1,)), [1,2], :] == a[1,[1,2],:]
-@test a[CartesianIndex((2,)), 3:4, :] == a[2,3:4,:]
+for a in (copy(reshape(1:60, 3, 4, 5)),
+          view(copy(reshape(1:60, 3, 4, 5)), 1:3, :, :))
+    @test a[CartesianIndex{3}(2,3,4)] == 44
+    a[CartesianIndex{3}(2,3,3)] = -1
+    @test a[CartesianIndex{3}(2,3,3)] == -1
+    @test a[2,CartesianIndex{2}(3,4)] == 44
+    a[1,CartesianIndex{2}(3,4)] = -2
+    @test a[1,CartesianIndex{2}(3,4)] == -2
+    @test a[CartesianIndex{1}(2),3,CartesianIndex{1}(4)] == 44
+    a[CartesianIndex{1}(2),3,CartesianIndex{1}(3)] = -3
+    @test a[CartesianIndex{1}(2),3,CartesianIndex{1}(3)] == -3
+    @test a[:, :, CartesianIndex((1,))] == a[:,:,1]
+    @test a[CartesianIndex((1,)), [1,2], :] == a[1,[1,2],:]
+    @test a[CartesianIndex((2,)), 3:4, :] == a[2,3:4,:]
+    @test a[[CartesianIndex(1,3),CartesianIndex(2,4)],3:3] == reshape([a[1,3,3]; a[2,4,3]], 2, 1)
+    @test_throws BoundsError a[[CartesianIndex(1,5),CartesianIndex(2,4)],3:3]
+    @test_throws BoundsError a[1:4, [CartesianIndex(1,3),CartesianIndex(2,4)]]
+end
 
-a = view(zeros(3, 4, 5), :, :, :)
-a[CartesianIndex{3}(2,3,3)] = -1
-@test a[CartesianIndex{3}(2,3,3)] == -1
-a[1,CartesianIndex{2}(3,4)] = -2
-@test a[1,CartesianIndex{2}(3,4)] == -2
-a[CartesianIndex{1}(2),3,CartesianIndex{1}(3)] = -3
-@test a[CartesianIndex{1}(2),3,CartesianIndex{1}(3)] == -3
+for a in (view(zeros(3, 4, 5), :, :, :),
+          view(zeros(3, 4, 5), 1:3, :, :))
+    a[CartesianIndex{3}(2,3,3)] = -1
+    @test a[CartesianIndex{3}(2,3,3)] == -1
+    a[1,CartesianIndex{2}(3,4)] = -2
+    @test a[1,CartesianIndex{2}(3,4)] == -2
+    a[CartesianIndex{1}(2),3,CartesianIndex{1}(3)] = -3
+    @test a[CartesianIndex{1}(2),3,CartesianIndex{1}(3)] == -3
+    a[[CartesianIndex(1,3),CartesianIndex(2,4)],3:3] = -4
+    @test a[1,3,3] == -4
+    @test a[2,4,3] == -4
+end
 
 I1 = CartesianIndex((2,3,0))
 I2 = CartesianIndex((-1,5,2))

@@ -43,6 +43,10 @@ first(t::Tuple) = t[1]
 eltype(::Type{Tuple{}}) = Bottom
 eltype{T}(::Type{Tuple{Vararg{T}}}) = T
 
+# version of tail that doesn't throw on empty tuples (used in array indexing)
+safe_tail(t::Tuple) = tail(t)
+safe_tail(t::Tuple{}) = ()
+
 # front (the converse of tail: it skips the last entry)
 
 function front(t::Tuple)

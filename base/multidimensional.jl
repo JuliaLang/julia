@@ -186,6 +186,18 @@ function checkindex{N}(::Type{Bool}, inds::Tuple, I::AbstractArray{CartesianInde
     b
 end
 
+# combined dimensionality of all indices, including CartesianIndex and
+# AbstractArray{CartesianIndex}
+# rather than returning N, it returns an NTuple{N,Bool} so the result is inferrable
+@inline index_ndims(i1, I...) = (true, index_ndims(I...)...)
+@inline function index_ndims{N}(i1::CartesianIndex{N}, I...)
+    (map(x->true, i1.I)..., index_ndims(I...)...)
+end
+@inline function index_ndims{N}(i1::AbstractArray{CartesianIndex{N}}, I...)
+    (ntuple(x->true, Val{N})..., index_ndims(I...)...)
+end
+index_ndims() = ()
+
 # Recursively compute the lengths of a list of indices, without dropping scalars
 # These need to be inlined for more than 3 indexes
 index_lengths(A::AbstractArray, I::Colon) = (length(A),)
@@ -205,36 +217,40 @@ index_shape(A::AbstractArray,  I::Colon)    = (linearindices(A),)
 @inline index_shape(A::AbstractArray, I...) = index_shape_dim(indices(A), I...)
 @inline index_shape_dim(inds::Tuple{Any}, ::Colon)          = inds
 @inline index_shape_dim(inds,             ::Colon)          = (OneTo(trailingsize(inds)),)
-@inline index_shape_dim(inds,             ::Colon, i, I...) =
-    (inds[1], index_shape_dim(tail(inds), i, I...)...)
-@inline index_shape_dim(inds,  ::Real...)             = ()
-@inline index_shape_dim(inds,  ::Real, I...)          = index_shape_dim(tail(inds), I...)
-@inline index_shape_dim(inds, i::AbstractArray, I...) =
-    (indices(i)..., index_shape_dim(tail(inds), I...)...)
-@inline index_shape_dim(inds, i::AbstractArray{Bool}, I...) =
-    (OneTo(sum(i)), index_shape_dim(tail(inds), I...)...)
-@inline function index_shape_dim{N}(inds, ::CartesianIndex{N}, I...)
-    indsN, indstail = IterationMD.split(inds, Val{N})
-    index_shape_dim(indstail, I...)
+@inline function index_shape_dim(inds,    ::Colon, i, I...)
+    inds1, indstail = IteratorsMD.split(inds, Val{1})
+    (inds1..., index_shape_dim(indstail, i, I...)...)
 end
-@inline function index_shape_dim{N}(A, i::AbstractArray{CartesianIndex{N}}, I...)
-    indsN, indstail = IterationMD.split(inds, Val{N})
+@inline index_shape_dim(inds,  ::Real...)             = ()
+@inline index_shape_dim(inds,  ::Real, I...)          = index_shape_dim(safe_tail(inds), I...)
+@inline index_shape_dim(inds, i::AbstractArray, I...) =
+    (indices(i)..., index_shape_dim(safe_tail(inds), I...)...)
+@inline index_shape_dim(inds, i::AbstractArray{Bool}, I...) =
+    (OneTo(sum(i)), index_shape_dim(safe_tail(inds), I...)...)
+# single CartesianIndex version not needed because of call to flatten in _getindex...
+# ...but array of CartesianIndex is not covered
+@inline function index_shape_dim{N}(inds, i::AbstractArray{CartesianIndex{N}}, I...)
+    indsN, indstail = IteratorsMD.split(inds, Val{N})
     (indices(i)..., index_shape_dim(indstail, I...)...)
 end
 
 # Convert Colon indices into explicit indices
 @inline decolon(A::AbstractArray, ::Colon) = (linearindices(A),)
-@inline decolon(A::AbstractArray, I...)    = decolon_dim(indices(A), I...)
+@inline decolon(A::AbstractArray, I...) = decolon_dim(indices(A), I...)
 @inline decolon_dim(inds)  = ()
 @inline decolon_dim(inds::Tuple{Any}, ::Colon)       = inds
 @inline decolon_dim(inds,             ::Colon)       = (OneTo(trailingsize(inds)),)
-@inline decolon_dim(inds,             ::Colon, I...) =
-    (inds[1], decolon_dim(tail(inds), I...)...)
-@inline decolon_dim(inds, i1, I...) = (i1, decolon_dim(tail(inds), I...)...)
+@inline function decolon_dim(inds,    ::Colon, I...)
+    inds1, indstail = IteratorsMD.split(inds, Val{1})
+    (maybe_oneto(inds1...), decolon_dim(indstail, I...)...)
+end
+@inline decolon_dim(inds, i1, I...) = (i1, decolon_dim(safe_tail(inds), I...)...)
 @inline function decolon_dim{N}(inds, i1::AbstractArray{CartesianIndex{N}}, I...)
-    indsN, indstail = IterationMD.split(inds, Val{N})
+    indsN, indstail = IteratorsMD.split(inds, Val{N})
     (i1, decolon_dim(indstail, I...)...)
 end
+maybe_oneto(i) = i
+maybe_oneto() = OneTo(1)
 
 ### From abstractarray.jl: Internal multidimensional indexing definitions ###
 # These are not defined on directly on getindex to avoid
@@ -248,16 +264,18 @@ end
 # Explicitly allow linear indexing with one non-scalar index
 @inline function _getindex(l::LinearIndexing, A::AbstractArray, i::Union{Real, AbstractArray, Colon})
     @boundscheck checkbounds(A, i)
-    _unsafe_getindex(l, _maybe_linearize(l, A), i)
+    _unsafe_getindex(l, _maybe_reshape(l, A, (i,)), i)
 end
 # But we can speed up LinearSlow arrays by reshaping them to vectors:
-_maybe_linearize(::LinearFast, A::AbstractArray) = A
-_maybe_linearize(::LinearSlow, A::AbstractVector) = A
-_maybe_linearize(::LinearSlow, A::AbstractArray) = reshape(A, length(A))
+_maybe_reshape(::LinearFast, A::AbstractArray, i) = A
+_maybe_reshape(::LinearSlow, A::AbstractVector, i) = A
+@inline _maybe_reshape(::LinearSlow, A::AbstractArray, i) = _maybe_reshape(LinearSlow(), index_ndims(i...), A)
+@inline _maybe_reshape{T,N}(::LinearIndexing, ::NTuple{N}, A::AbstractArray{T,N}) = A
+@inline _maybe_reshape{N}(::LinearIndexing, ::NTuple{N}, A) = reshape(A, Val{N})
 
 @inline function _getindex{N}(l::LinearIndexing, A::AbstractArray, I::Vararg{Union{Real, AbstractArray, Colon},N}) # TODO: DEPRECATE FOR #14770
     @boundscheck checkbounds(A, I...)
-    _unsafe_getindex(l, reshape(A, Val{N}), I...)
+    _unsafe_getindex(l, _maybe_reshape(l, A, I), I...)
 end
 
 @generated function _unsafe_getindex(::LinearIndexing, A::AbstractArray, I::Union{Real, AbstractArray, Colon}...)
@@ -340,12 +358,12 @@ _iterable(v) = repeated(v)
 end
 @inline function _setindex!(l::LinearIndexing, A::AbstractArray, x, j::Union{Real,AbstractArray,Colon})
     @boundscheck checkbounds(A, j)
-    _unsafe_setindex!(l, _maybe_linearize(l, A), x, j)
+    _unsafe_setindex!(l, _maybe_reshape(l, A, (j,)), x, j)
     A
 end
 @inline function _setindex!{N}(l::LinearIndexing, A::AbstractArray, x, J::Vararg{Union{Real, AbstractArray, Colon},N}) # TODO: DEPRECATE FOR #14770
     @boundscheck checkbounds(A, J...)
-    _unsafe_setindex!(l, reshape(A, Val{N}), x, J...)
+    _unsafe_setindex!(l, _maybe_reshape(l, A, J), x, J...)
     A
 end
 

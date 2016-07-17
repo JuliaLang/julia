@@ -358,9 +358,6 @@ function findmax{T}(A::AbstractArray{T}, region)
             zeros(Int, reduced_dims0(A, region)), A)
 end
 
-safe_tail(t::Tuple) = tail(t)
-safe_tail(t::Tuple{}) = ()
-
 function reducedim1(R, A)
     iR1 = indices(R, 1)
     iR1 == 1:1 && iR1 != indices(A, 1)
