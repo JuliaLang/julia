@@ -19,6 +19,10 @@ else
 LIBSSH2_OPTS += -DCRYPTO_BACKEND=mbedTLS -DENABLE_ZLIB_COMPRESSION=ON
 endif
 
+ifeq ($(OS),Linux)
+LIBSSH2_OPTS += -DCMAKE_INSTALL_RPATH="\$$ORIGIN"
+endif
+
 $(BUILDDIR)/$(LIBSSH2_SRC_DIR)/Makefile: $(SRCDIR)/srccache/$(LIBSSH2_SRC_DIR)/CMakeLists.txt $(MBEDTLS_OBJ_TARGET)
 	-cd $(SRCDIR)/srccache/$(LIBSSH2_SRC_DIR) && patch -p1 -f < $(SRCDIR)/patches/libssh2-mbedtls.patch
 	mkdir -p $(dir $@)
