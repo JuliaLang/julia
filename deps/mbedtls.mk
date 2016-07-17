@@ -11,8 +11,7 @@ MBEDTLS_OBJ_SOURCE := $(BUILDDIR)/mbedtls-$(MBEDTLS_VER)/library/libmbedcrypto.$
 MBEDTLS_OBJ_TARGET := $(build_shlibdir)/libmbedcrypto.$(SHLIB_EXT)
 
 MBEDTLS_OPTS := $(CMAKE_COMMON) -DUSE_SHARED_MBEDTLS_LIBRARY=ON \
-		-DENABLE_PROGRAMS=OFF -DCMAKE_BUILD_TYPE=Release \
-		-DCMAKE_INSTALL_RPATH=$(build_prefix) -DCMAKE_INSTALL_RPATH_USE_LINK_PATH=TRUE
+		-DENABLE_PROGRAMS=OFF -DCMAKE_BUILD_TYPE=Release
 
 ifeq ($(OS),WINNT)
 MBEDTLS_OPTS += -DENABLE_ZLIB_SUPPORT=OFF
@@ -55,6 +54,12 @@ ifeq ($(OS), WINNT)
 else
 	$(call make-install,mbedtls-$(MBEDTLS_VER),)
 endif
+	$(INSTALL_NAME_CMD)libmbedx509.$(SHLIB_EXT) $(build_shlibdir)/libmbedx509.$(SHLIB_EXT)
+	$(INSTALL_NAME_CMD)libmbedtls.$(SHLIB_EXT) $(build_shlibdir)/libmbedtls.$(SHLIB_EXT)
+	$(INSTALL_NAME_CHANGE_CMD) libmbedx509.0.dylib @rpath/libmbedx509.$(SHLIB_EXT) $(build_shlibdir)/libmbedtls.$(SHLIB_EXT)
+	$(INSTALL_NAME_CHANGE_CMD) libmbedcrypto.0.dylib @rpath/libmbedcrypto.$(SHLIB_EXT) $(build_shlibdir)/libmbedtls.$(SHLIB_EXT)
+	$(INSTALL_NAME_CHANGE_CMD) libmbedcrypto.0.dylib @rpath/libmbedcrypto.$(SHLIB_EXT) $(build_shlibdir)/libmbedx509.$(SHLIB_EXT)
+	$(INSTALL_NAME_CMD)libmbedcrypto.$(SHLIB_EXT) $@
 	touch -c $(MBEDTLS_OBJ_TARGET)
 
 clean-mbedtls:
