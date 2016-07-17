@@ -2838,7 +2838,7 @@ f(x) = yt(x)
                                        (if lam2 (lam:sp lam2) '())
                                        (map (lambda (methdef) (lam:sp (cadddr methdef)))
                                             alldefs))))
-                        (capt-sp (intersect cvs sps))
+                        (capt-sp (simple-sort (intersect cvs sps)))
                         (capt-vars (diff cvs capt-sp))
                         (method-sp (map (lambda (s) (make-ssavalue)) capt-sp))
                         (typedef  ;; expression to define the type
