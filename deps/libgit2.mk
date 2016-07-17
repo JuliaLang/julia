@@ -21,6 +21,10 @@ LIBGIT2_OPTS += -DCMAKE_FIND_ROOT_PATH=/usr/$(XC_HOST) -DCMAKE_FIND_ROOT_PATH_MO
 endif
 endif
 
+ifeq ($(OS),Linux)
+LIBGIT2_OPTS += -DCMAKE_INSTALL_RPATH="\$$ORIGIN"
+endif
+
 $(BUILDDIR)/$(LIBGIT2_SRC_DIR)/Makefile: $(SRCDIR)/srccache/$(LIBGIT2_SRC_DIR)/CMakeLists.txt $(LIBSSH2_OBJ_TARGET)
 ifeq ($(OS),Linux)
 	-cd $(SRCDIR)/srccache/$(LIBGIT2_SRC_DIR) && patch -p1 -f < $(SRCDIR)/patches/libgit2-require-openssl.patch
