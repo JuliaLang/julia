@@ -57,7 +57,7 @@ function complete_symbol(sym, ffunc)
         # We will exclude the results that the user does not want, as well
         # as excluding Main.Main.Main, etc., because that's most likely not what
         # the user wants
-        p = s->(ffunc(mod, s) && s != module_name(mod))
+        p = s->(!Base.isdeprecated(mod, s) && s != module_name(mod) && ffunc(mod, s))
         # Looking for a binding in a module
         if mod == context_module
             # Also look in modules we got through `using`
