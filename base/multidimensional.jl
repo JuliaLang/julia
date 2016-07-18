@@ -460,6 +460,7 @@ for (f, fmod, op) = ((:cummin, :_cummin!, :min), (:cummax, :_cummax!, :max))
     end
 
     @eval function ($f)(A::AbstractArray, axis::Integer)
+        axis > 0 || throw(ArgumentError("axis must be a positive integer"))
         res = similar(A)
         axis > ndims(A) && return copy!(res, A)
         inds = indices(A)
@@ -499,6 +500,7 @@ cumsum!(B, A, axis::Integer) = cumop!(+, B, A, axis)
 cumprod!(B, A, axis::Integer) = cumop!(*, B, A, axis)
 
 function cumop!(op, B, A, axis::Integer)
+    axis > 0 || throw(ArgumentError("axis must be a positive integer"))
     inds_t = indices(A)
     indices(B) == inds_t || throw(DimensionMismatch("shape of B must match A"))
     axis > ndims(A) && return copy!(B, A)
