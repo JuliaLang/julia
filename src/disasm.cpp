@@ -142,10 +142,12 @@ public:
     void createSymbols();
     const char *lookupSymbolName(uint64_t addr, bool LocalOnly);
     MCSymbol *lookupSymbol(uint64_t addr);
+    StringRef getSymbolNameAt(uint64_t offset) const;
+    const char *lookupLocalPC(size_t addr);
     void setIP(uint64_t addr);
     uint64_t getIP() const;
-    StringRef getSymbolNameAt(uint64_t offset) const;
 };
+
 void SymbolTable::setIP(uint64_t addr)
 {
     ip = addr;
@@ -154,6 +156,19 @@ uint64_t SymbolTable::getIP() const
 {
     return ip;
 }
+
+const char *SymbolTable::lookupLocalPC(size_t addr) {
+    jl_frame_t *frame = NULL;
+    jl_getFunctionInfo(&frame,
+            addr,
+            /*skipC*/0,
+            /*noInline*/1/* the entry pointer shouldn't have inlining */);
+    char *name = frame->func_name; // TODO: free me
+    free(frame->file_name);
+    free(frame);
+    return name;
+}
+
 StringRef SymbolTable::getSymbolNameAt(uint64_t offset) const
 {
     if (object == NULL) return StringRef();
@@ -218,34 +233,47 @@ void SymbolTable::insertAddress(uint64_t addr)
 // Create symbols for all addresses
 void SymbolTable::createSymbols()
 {
+    uint64_t Fptr = (uint64_t)MemObj.data();
+    uint64_t Fsize = MemObj.size();
     for (TableType::iterator isymb = Table.begin(), esymb = Table.end();
          isymb != esymb; ++isymb) {
-        uint64_t addr = isymb->first - ip;
         std::ostringstream name;
-        name << "L" << addr;
+        uint64_t rel = isymb->first - ip;
+        uint64_t addr = isymb->first;
+        if (Fptr <= addr && addr < Fptr + Fsize) {
+            name << "L" << rel;
+        }
+        else {
+            const char *global = lookupLocalPC(addr);
+            if (!global)
+                continue;
+            name << global;
+        }
+
 #ifdef LLVM37
         MCSymbol *symb = Ctx.getOrCreateSymbol(StringRef(name.str()));
         assert(symb->isUndefined());
 #else
         MCSymbol *symb = Ctx.GetOrCreateSymbol(StringRef(name.str()));
-        symb->setVariableValue(MCConstantExpr::Create(addr, Ctx));
+        symb->setVariableValue(MCConstantExpr::Create(rel, Ctx));
 #endif
         isymb->second = symb;
     }
 }
+
 const char *SymbolTable::lookupSymbolName(uint64_t addr, bool LocalOnly)
 {
     TempName = std::string();
     TableType::iterator Sym = Table.find(addr);
-    if (Sym != Table.end()) {
-        MCSymbol *symb = Table[addr];
-        TempName = symb->getName().str();
+    if (Sym != Table.end() && Sym->second) {
+        TempName = Sym->second->getName().str();
     }
     else if (!LocalOnly) {
         TempName = getSymbolNameAt(addr + slide).str();
     }
     return TempName.empty() ? NULL : TempName.c_str();
 }
+
 MCSymbol *SymbolTable::lookupSymbol(uint64_t addr)
 {
     if (!Table.count(addr)) return NULL;
@@ -304,14 +332,7 @@ static int OpInfoLookup(void *DisInfo, uint64_t PC, uint64_t Offset, uint64_t Si
     case 8: { uint64_t val; std::memcpy(&val, bytes, 8); pointer = val; break; }
     default: return 0;          // Cannot handle input address size
     }
-    jl_frame_t *frame = NULL;
-    jl_getFunctionInfo(&frame,
-            pointer,
-            /*skipC*/0,
-            /*noInline*/1/* the entry pointer shouldn't have inlining */);
-    char *name = frame->func_name; // TODO: free me
-    free(frame->file_name);
-    free(frame);
+    const char *name = SymTab->lookupLocalPC(pointer);
     if (!name)
         return 0;               // Did not find symbolic information
     // Describe the symbol
@@ -667,7 +688,7 @@ void jl_dump_asm_internal(uintptr_t Fptr, size_t Fsize, int64_t slide,
             case MCDisassembler::Success:
                 if (pass == 0) {
                     // Pass 0: Record all branch targets
-                    if (MCIA && MCIA->isBranch(Inst)) {
+                    if (MCIA && (MCIA->isBranch(Inst) || MCIA->isCall(Inst))) {
                         uint64_t addr;
 #ifdef LLVM34
                         if (MCIA->evaluateBranch(Inst, Fptr+Index, insSize, addr))
