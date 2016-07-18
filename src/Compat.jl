@@ -1112,6 +1112,9 @@ if !isdefined(Base, :normalize)
         v
     end
 
+    copy_oftype{T,N}(A::AbstractArray{T,N}, ::Type{T}) = copy(A)
+    copy_oftype{T,N,S}(A::AbstractArray{T,N}, ::Type{S}) = convert(AbstractArray{S,N}, A)
+
     function normalize(v::AbstractVector, p::Real = 2)
         nrm = norm(v, p)
         if !isempty(v)
