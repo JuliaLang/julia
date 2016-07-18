@@ -65,7 +65,7 @@ is `indices(A, 1)`.
 Calling this function is the "safe" way to write algorithms that
 exploit linear indexing.
 """
-linearindices(A)                 = (@_inline_meta; OneTo(unsafe_length(A)))
+linearindices(A)                 = (@_inline_meta; OneTo(_length(A)))
 linearindices(A::AbstractVector) = (@_inline_meta; indices1(A))
 eltype{T}(::Type{AbstractArray{T}}) = T
 eltype{T,N}(::Type{AbstractArray{T,N}}) = T
@@ -74,7 +74,7 @@ ndims{T,N}(::AbstractArray{T,N}) = N
 ndims{T,N}(::Type{AbstractArray{T,N}}) = N
 ndims{T<:AbstractArray}(::Type{T}) = ndims(supertype(T))
 length(t::AbstractArray) = prod(size(t))
-unsafe_length(A::AbstractArray) = prod(map(unsafe_length, indices(A)))  # internal method
+_length(A::AbstractArray) = prod(map(unsafe_length, indices(A))) # circumvent missing size
 endof(a::AbstractArray) = length(a)
 first(a::AbstractArray) = a[first(eachindex(a))]
 
@@ -486,7 +486,7 @@ function copy!(::LinearIndexing, dest::AbstractArray, ::LinearSlow, src::Abstrac
 end
 
 function copy!(dest::AbstractArray, dstart::Integer, src::AbstractArray)
-    copy!(dest, dstart, src, first(linearindices(src)), unsafe_length(src))
+    copy!(dest, dstart, src, first(linearindices(src)), _length(src))
 end
 
 function copy!(dest::AbstractArray, dstart::Integer, src::AbstractArray, sstart::Integer)
@@ -612,7 +612,7 @@ function _maxlength(A, B, C...)
     max(length(A), _maxlength(B, C...))
 end
 
-isempty(a::AbstractArray) = (unsafe_length(a) == 0)
+isempty(a::AbstractArray) = (_length(a) == 0)
 
 ## Conversions ##
 

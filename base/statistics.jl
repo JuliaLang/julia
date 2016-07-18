@@ -98,7 +98,7 @@ function centralize_sumabs2!{S,T,N}(R::AbstractArray{S}, A::AbstractArray{T,N}, 
     isempty(A) && return R
 
     if has_fast_linear_indexing(A) && lsiz > 16
-        nslices = div(unsafe_length(A), lsiz)
+        nslices = div(_length(A), lsiz)
         ibase = first(linearindices(A))-1
         for i = 1:nslices
             @inbounds R[i] = centralize_sumabs2(A, means[i], ibase+1, ibase+lsiz)
