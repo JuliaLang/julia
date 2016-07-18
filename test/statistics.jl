@@ -358,7 +358,7 @@ let a = rand(10,10)
     x = var(a, 2)
     @test b == a
     x = std(a, 1)
-    @test b == a 
+    @test b == a
     x = std(a, 2)
-    @test b == a 
+    @test b == a
 end
