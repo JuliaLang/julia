@@ -7,7 +7,7 @@ print(io::IO, s::Symbol) = (write(io,s); nothing)
 
 IOContext provides a mechanism for passing output configuration settings among `show` methods.
 
-In short, it is an immutable dictionary that is a subclass of IO. It supports standard
+In short, it is an immutable dictionary that is a subclass of `IO`. It supports standard
 dictionary operations such as `getindex`, and can also be used as an I/O stream.
 """
 immutable IOContext{IO_t <: IO} <: AbstractPipe
@@ -43,14 +43,14 @@ IOContext(io::IO, context::IO) = IOContext(io)
 """
     IOContext(io::IO, context::IOContext)
 
-Create a IOContext that wraps an alternate IO but inherits the properties of `context`.
+Create an `IOContext` that wraps an alternate `IO` but inherits the properties of `context`.
 """
 IOContext(io::IO, context::IOContext) = IOContext(io, context.dict)
 
 """
     IOContext(io::IO, KV::Pair)
 
-Create an `IOContext` that wraps a given stream, adding the specified key=>value pair to
+Create an `IOContext` that wraps a given stream, adding the specified `key=>value` pair to
 the properties of that stream (note that `io` can itself be an `IOContext`).
 
  - use `(key => value) in dict` to see if this particular combination is in the properties set

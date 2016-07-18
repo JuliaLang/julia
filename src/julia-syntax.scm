@@ -2523,7 +2523,7 @@ f(x) = yt(x)
                   (return (null)))))))
 
 
-;; better versions of above, but they gets handled wrong in many places
+;; better versions of above, but they get handled wrong in many places
 ;; need to fix that in order to handle #265 fully (and use the definitions)
 
 ;; template for generating a closure type with parameters
