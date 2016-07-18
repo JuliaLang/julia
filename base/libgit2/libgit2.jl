@@ -310,8 +310,13 @@ end
 
 """ git reset [<committish>] [--] <pathspecs>... """
 function reset!(repo::GitRepo, committish::AbstractString, pathspecs::AbstractString...)
-    target_obj = isempty(committish) ? Nullable{GitAnyObject}() :
-                                       Nullable(revparse(repo, committish))
+    target_obj = Nullable{GitAnyObject}()
+    if !isempty(committish)
+        obj = revparse(repo, committish)
+        if obj !== nothing
+            target_obj = Nullable(obj)
+        end
+    end
     try
         reset!(repo, target_obj, pathspecs...)
     finally
