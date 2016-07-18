@@ -795,7 +795,10 @@ public:
                 GV->isConstant(),
                 GlobalVariable::ExternalLinkage,
                 NULL,
-                GV->getName());
+                GV->getName(),
+                NULL,
+                GV->getThreadLocalMode(),
+                GV->getType()->getPointerAddressSpace());
             newGV->copyAttributesFrom(GV);
             newGV->setComdat(nullptr);
             if (GV->isDeclaration())
