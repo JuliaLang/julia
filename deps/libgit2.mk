@@ -19,8 +19,10 @@ else
 LIBGIT2_OPTS += -DBUILD_CLAR=OFF -DDLLTOOL=`which $(CROSS_COMPILE)dlltool`
 LIBGIT2_OPTS += -DCMAKE_FIND_ROOT_PATH=/usr/$(XC_HOST) -DCMAKE_FIND_ROOT_PATH_MODE_INCLUDE=ONLY
 endif
-else
-LIBGIT2_OPTS += -DCMAKE_INSTALL_RPATH=$(build_prefix) -DCMAKE_INSTALL_RPATH_USE_LINK_PATH=TRUE
+endif
+
+ifeq ($(OS),Linux)
+LIBGIT2_OPTS += -DCMAKE_INSTALL_RPATH="\$$ORIGIN"
 endif
 
 $(BUILDDIR)/$(LIBGIT2_SRC_DIR)/Makefile: $(SRCDIR)/srccache/$(LIBGIT2_SRC_DIR)/CMakeLists.txt $(LIBSSH2_OBJ_TARGET)
@@ -49,6 +51,7 @@ ifeq ($(BUILD_OS),WINNT)
 else
 	$(call make-install,$(LIBGIT2_SRC_DIR),)
 endif
+	$(INSTALL_NAME_CMD)libgit2.$(SHLIB_EXT) $@
 ifeq ($(OS),Linux)
 	@# If we're on linux, copy over libssl and libcrypto for libgit2
 	-LIBGIT_LIBS=$$(ldd "$@" | tail -n +2 | awk '{print $$(NF-1)}'); \
