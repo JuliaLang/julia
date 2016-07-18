@@ -8,7 +8,6 @@ LIBSSH2_OBJ_SOURCE := $(BUILDDIR)/$(LIBSSH2_SRC_DIR)/src/libssh2.$(SHLIB_EXT)
 LIBSSH2_OBJ_TARGET := $(build_shlibdir)/libssh2.$(SHLIB_EXT)
 
 LIBSSH2_OPTS := $(CMAKE_COMMON) -DBUILD_SHARED_LIBS=ON -DBUILD_EXAMPLES=OFF \
-				-DCMAKE_INSTALL_RPATH=$(build_prefix) -DCMAKE_INSTALL_RPATH_USE_LINK_PATH=TRUE \
 				-DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_LIBDIR=lib
 
 ifeq ($(OS),WINNT)
@@ -18,6 +17,10 @@ LIBSSH2_OPTS += -G"MSYS Makefiles"
 endif
 else
 LIBSSH2_OPTS += -DCRYPTO_BACKEND=mbedTLS -DENABLE_ZLIB_COMPRESSION=ON
+endif
+
+ifeq ($(OS),Linux)
+LIBSSH2_OPTS += -DCMAKE_INSTALL_RPATH="\$$ORIGIN"
 endif
 
 $(BUILDDIR)/$(LIBSSH2_SRC_DIR)/Makefile: $(SRCDIR)/srccache/$(LIBSSH2_SRC_DIR)/CMakeLists.txt $(MBEDTLS_OBJ_TARGET)
@@ -43,6 +46,7 @@ ifeq ($(BUILD_OS),WINNT)
 else
 	$(call make-install,$(LIBSSH2_SRC_DIR),)
 endif
+	$(INSTALL_NAME_CMD)libssh2.$(SHLIB_EXT) $@
 	touch -c $(LIBSSH2_OBJ_TARGET)
 
 clean-libssh2:
