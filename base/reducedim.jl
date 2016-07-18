@@ -166,9 +166,6 @@ function check_reducedims(R, A)
         Ri, Ai = indices(R, i), indices(A, i)
         sRi, sAi = length(Ri), length(Ai)
         if sRi == 1
-            if Ri != Ai
-                Ri == 1:1 || throw(DimensionMismatch("reduction along dimension $i must use indices 1:1; got $(convert(UnitRange, Ri)) for reducing $(convert(UnitRange, Ai))"))
-            end
             if sAi > 1
                 if had_nonreduc
                     lsiz = 0  # to reduce along i, but some previous dimensions were non-reducing
@@ -199,20 +196,21 @@ function _mapreducedim!{T,N}(f, op, R::AbstractArray, A::AbstractArray{T,N})
         return R
     end
     indsAt, indsRt = safe_tail(indices(A)), safe_tail(indices(R)) # handle d=1 manually
-    imap = Broadcast.newindexer(indsAt, indsRt)
+    keep, Idefault = Broadcast.newindexer(indsAt, indsRt)
     if reducedim1(R, A)
         # keep the accumulator as a local variable when reducing along the first dimension
+        i1 = first(indices1(R))
         @inbounds for IA in CartesianRange(indsAt)
-            IR = Broadcast.newindex(IA, imap)
-            r = R[1,IR]
+            IR = Broadcast.newindex(IA, keep, Idefault)
+            r = R[i1,IR]
             @simd for i in indices(A, 1)
                 r = op(r, f(A[i, IA]))
             end
-            R[1,IR] = r
+            R[i1,IR] = r
         end
     else
         @inbounds for IA in CartesianRange(indsAt)
-            IR = Broadcast.newindex(IA, imap)
+            IR = Broadcast.newindex(IA, keep, Idefault)
             @simd for i in indices(A, 1)
                 R[i,IR] = op(R[i,IR], f(A[i,IA]))
             end
@@ -279,13 +277,14 @@ function findminmax!{T,N}(f, Rval, Rind, A::AbstractArray{T,N})
     # If we're reducing along dimension 1, for efficiency we can make use of a temporary.
     # Otherwise, keep the result in Rval/Rind so that we traverse A in storage order.
     indsAt, indsRt = safe_tail(indices(A)), safe_tail(indices(Rval))
-    imap = Broadcast.newindexer(indsAt, indsRt)
+    keep, Idefault = Broadcast.newindexer(indsAt, indsRt)
     k = 0
     if reducedim1(Rval, A)
+        i1 = first(indices1(Rval))
         @inbounds for IA in CartesianRange(indsAt)
-            IR = Broadcast.newindex(IA, imap)
-            tmpRv = Rval[1,IR]
-            tmpRi = Rind[1,IR]
+            IR = Broadcast.newindex(IA, keep, Idefault)
+            tmpRv = Rval[i1,IR]
+            tmpRi = Rind[i1,IR]
             for i in indices(A,1)
                 k += 1
                 tmpAv = A[i,IA]
@@ -294,12 +293,12 @@ function findminmax!{T,N}(f, Rval, Rind, A::AbstractArray{T,N})
                     tmpRi = k
                 end
             end
-            Rval[1,IR] = tmpRv
-            Rind[1,IR] = tmpRi
+            Rval[i1,IR] = tmpRv
+            Rind[i1,IR] = tmpRi
         end
     else
         @inbounds for IA in CartesianRange(indsAt)
-            IR = Broadcast.newindex(IA, imap)
+            IR = Broadcast.newindex(IA, keep, Idefault)
             for i in indices(A, 1)
                 k += 1
                 tmpAv = A[i,IA]
@@ -358,7 +357,4 @@ function findmax{T}(A::AbstractArray{T}, region)
             zeros(Int, reduced_dims0(A, region)), A)
 end
 
-function reducedim1(R, A)
-    iR1 = indices(R, 1)
-    iR1 == 1:1 && iR1 != indices(A, 1)
-end
+reducedim1(R, A) = length(indices1(R)) == 1
