@@ -670,7 +670,7 @@ function summarysize(obj::Module, seen, excl)
     haskey(seen, obj) ? (return 0) : (seen[obj] = true)
     size::Int = Core.sizeof(obj)
     for binding in names(obj, true)
-        if isdefined(obj, binding)
+        if isdefined(obj, binding) && !isdeprecated(obj, binding)
             value = getfield(obj, binding)
             if !isa(value, Module) || module_parent(value) === obj
                 size += summarysize(value, seen, excl)::Int

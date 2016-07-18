@@ -986,6 +986,7 @@ function detect_ambiguities(mods...; imported::Bool=false)
     ambs = Set{Tuple{Method,Method}}()
     for mod in mods
         for n in names(mod, true, imported)
+            Base.isdeprecated(mod, n) && continue
             if !isdefined(mod, n)
                 println("Skipping ", mod, '.', n)  # typically stale exports
                 continue
@@ -1005,7 +1006,7 @@ function detect_ambiguities(mods...; imported::Bool=false)
             end
         end
     end
-    collect(ambs)
+    return collect(ambs)
 end
 
 """
