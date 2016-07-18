@@ -53,6 +53,7 @@ public:
         gckill_func(M.getFunction("julia.gc_root_kill")),
         gc_store_func(M.getFunction("julia.gc_store")),
         jlcall_frame_func(M.getFunction("julia.jlcall_frame_decl")),
+        gcroot_flush_func(M.getFunction("julia.gcroot_flush")),
         tbaa_gcframe(tbaa)
     {
 /* Algorithm sketch:
@@ -82,7 +83,8 @@ Function *const gcroot_func;
 Function *const gckill_func;
 Function *const gc_store_func;
 Function *const jlcall_frame_func;
-MDNode *tbaa_gcframe;
+Function *const gcroot_flush_func;
+MDNode *const tbaa_gcframe;
 
 typedef std::pair<CallInst*, unsigned> frame_register;
 class liveness {
@@ -461,11 +463,54 @@ unsigned find_space_for(CallInst *callInst,
     return n;
 }
 
+void rearrangeRoots()
+{
+    for (auto BB = F.begin(), E(F.end()); BB != E; BB++) {
+        auto terminst = BB->getTerminator();
+        if (!isa<ReturnInst>(terminst) && !isa<UnreachableInst>(terminst))
+            continue;
+        SmallVector<StoreInst*, 16> toRemove;
+        for (auto I = BB->rbegin(), E(BB->rend()); I != E; ++I) {
+            // Only handle the simplest case for now, give up if there's a call
+            // or load from the GC frame.
+            // (Assume we don't have loads that can alias GC frame
+            // unless the source address is a `julia.gc_root_decl`)
+            Instruction *inst = &*I;
+            if (isa<CallInst>(inst))
+                break;
+            if (LoadInst *loadInst = dyn_cast<LoadInst>(inst)) {
+                CallInst *loadAddr =
+                    dyn_cast<CallInst>(loadInst->getPointerOperand());
+                if (loadAddr && loadAddr->getCalledFunction() == gcroot_func)
+                    break;
+                continue;
+            }
+            if (StoreInst *storeInst = dyn_cast<StoreInst>(inst)) {
+                CallInst *storeAddr =
+                    dyn_cast<CallInst>(storeInst->getPointerOperand());
+                if (storeAddr && storeAddr->getCalledFunction() == gcroot_func)
+                    toRemove.push_back(storeInst);
+                continue;
+            }
+        }
+        for (auto inst: toRemove) {
+            CallInst *decl = cast<CallInst>(inst->getPointerOperand());
+            inst->eraseFromParent();
+            // TODO removing unused slot should probably be handled later
+            // when we allocate the frame
+            if (decl->use_empty()) {
+                decl->eraseFromParent();
+            }
+        }
+    }
+}
+
 public:
 void allocate_frame()
 {
     Instruction *last_gcframe_inst = gcframe;
     collapseRedundantRoots();
+    rearrangeRoots();
 
 /* # initialize the kill BasicBlock of all jlcall-frames
  * bb-uses : map<BB, map< pair<inst, arg-offset>, assign|live|kill > >
@@ -665,7 +710,8 @@ void allocate_frame()
             ++i;
             // delete the now unused gckill information
             if (CallInst* callInst = dyn_cast<CallInst>(inst)) {
-                if (callInst->getCalledFunction() == gckill_func) {
+                Value *callee = callInst->getCalledFunction();
+                if (callee == gckill_func || callee == gcroot_flush_func) {
                     callInst->eraseFromParent();
                 }
             }
