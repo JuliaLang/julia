@@ -343,3 +343,12 @@ let async = Base.AsyncCondition(), t
     @test_throws EOFError wait(t)
     @test_throws EOFError wait(async)
 end
+
+# Compare the two ways of checking if threading is enabled.
+# `jl_tls_states` should only be defined on non-threading build.
+if ccall(:jl_threading_enabled, Cint, ()) == 0
+    @test nthreads() == 1
+    cglobal(:jl_tls_states) != C_NULL
+else
+    @test_throws ErrorException cglobal(:jl_tls_states)
+end
