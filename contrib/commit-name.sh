@@ -32,7 +32,11 @@ else
         nb=$(expr $nb + 5578)
     fi
     if [ -n "$pre" ]; then
-        echo "$ver+$nb"
+        if [ $major = 0 -a $minor -le 5 ]; then
+            echo "$ver+$nb"
+        else
+            echo "$ver.$nb"
+        fi
     else
         echo $ver
     fi
