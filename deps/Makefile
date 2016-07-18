@@ -50,7 +50,8 @@ CMAKE_COMMON := -DCMAKE_INSTALL_PREFIX:PATH=$(build_prefix) -DCMAKE_PREFIX_PATH=
 ifneq ($(VERBOSE), 0)
 CMAKE_COMMON += -DCMAKE_VERBOSE_MAKEFILE=ON
 endif
-CMAKE_COMMON += -DCMAKE_C_COMPILER="$(CC_BASE)"
+# The call to which here is to work around https://cmake.org/Bug/view.php?id=14366
+CMAKE_COMMON += -DCMAKE_C_COMPILER="$$(which $(CC_BASE))"
 ifneq ($(strip $(CMAKE_CC_ARG)),)
 CMAKE_COMMON += -DCMAKE_C_COMPILER_ARG1="$(CMAKE_CC_ARG)"
 endif
@@ -62,7 +63,7 @@ endif
 ifeq ($(OS),WINNT)
 CMAKE_COMMON += -DCMAKE_SYSTEM_NAME=Windows
 ifneq ($(BUILD_OS),WINNT)
-CMAKE_COMMON += -DCMAKE_RC_COMPILER=`which $(CROSS_COMPILE)windres`
+CMAKE_COMMON += -DCMAKE_RC_COMPILER="$$(which $(CROSS_COMPILE)windres)"
 endif
 endif
 
