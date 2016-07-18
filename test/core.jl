@@ -4479,12 +4479,3 @@ function h17449(v)
     return r[]
 end
 @test h17449(true) === :k
-
-# PR #17393
-for op in (:.==, :.&, :.|, :.≤)
-    @test parse("a $op b") == Expr(:call, op, :a, :b)
-end
-for op in (:.=, :.+=)
-    @test parse("a $op b") == Expr(op, :a, :b)
-end
-
