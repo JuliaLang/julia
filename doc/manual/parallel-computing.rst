@@ -1019,8 +1019,8 @@ called ``JULIA_NUM_THREADS``. Now, let's start up Julia with 4 threads::
 
 (The above command works on bourne shells on Linux and OSX. Note that if you're using
 a C shell on these platforms, you should use the keyword ``set`` instead of ``export``.
-If you're on Windows, start up the command line in location of ``julia.exe`` and use ``set``
-of ``export``.)
+If you're on Windows, start up the command line in the location of ``julia.exe`` and
+use ``set`` instead of ``export``.)
 
 Let's verify there are 4 threads at our disposal. ::
 
