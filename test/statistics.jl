@@ -341,3 +341,24 @@ let v = varm([1.0+2.0im], 0; corrected = false)
     @test v ≈ 5
     @test isa(v, Float64)
 end
+
+# Issue #17153 and PR #17154
+let a = rand(10,10)
+    b = deepcopy(a)
+    x = median(a, 1)
+    @test b == a
+    x = median(a, 2)
+    @test b == a
+    x = mean(a, 1)
+    @test b == a
+    x = mean(a, 2)
+    @test b == a
+    x = var(a, 1)
+    @test b == a
+    x = var(a, 2)
+    @test b == a
+    x = std(a, 1)
+    @test b == a
+    x = std(a, 2)
+    @test b == a
+end
