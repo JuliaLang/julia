@@ -253,6 +253,8 @@ maybe_oneto(i) = i
 maybe_oneto() = OneTo(1)
 
 ### From abstractarray.jl: Internal multidimensional indexing definitions ###
+getindex(x::Number, i::CartesianIndex{0}) = x
+
 # These are not defined on directly on getindex to avoid
 # ambiguities for AbstractArray subtypes. See the note in abstractarray.jl
 
