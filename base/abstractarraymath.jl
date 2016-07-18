@@ -11,7 +11,7 @@ transpose(a::AbstractArray) = error("transpose not implemented for $(typeof(a)).
 
 ## Constructors ##
 
-vec(a::AbstractArray) = reshape(a,unsafe_length(a))
+vec(a::AbstractArray) = reshape(a,_length(a))
 vec(a::AbstractVector) = a
 
 _sub(::Tuple{}, ::Tuple{}) = ()
