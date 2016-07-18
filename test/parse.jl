@@ -1,5 +1,7 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
+# tests for parser and syntax lowering
+
 function parseall(str)
     pos = start(str)
     exs = []
@@ -562,4 +564,19 @@ for op in (:.==, :.&, :.|, :.≤)
 end
 for op in (:.=, :.+=)
     @test parse("a $op b") == Expr(op, :a, :b)
+end
+
+# issue #17489
+let m_error, error_out, filename = Base.source_path()
+    m_error = try @eval method_c6(a::(:A)) = 1; catch e; e; end
+    error_out = sprint(showerror, m_error)
+    @test startswith(error_out, "ArgumentError: invalid type for argument a in method definition for method_c6 at $filename:")
+
+    m_error = try @eval method_c6(::(:A)) = 2; catch e; e; end
+    error_out = sprint(showerror, m_error)
+    @test startswith(error_out, "ArgumentError: invalid type for argument number 1 in method definition for method_c6 at $filename:")
+
+    m_error = try @eval method_c6(A; B) = 3; catch e; e; end
+    error_out = sprint(showerror, m_error)
+    @test error_out == "syntax: keyword argument \"B\" needs a default value"
 end
