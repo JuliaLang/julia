@@ -55,7 +55,7 @@ static const int jl_gc_sizeclasses[JL_GC_N_POOLS] = {
 #ifdef _P64
     8,
 #elif defined(_CPU_ARM_) || defined(_CPU_PPC_)
-    // ARM and PowerPC has max alignment of 8,
+    // ARM and PowerPC have max alignment of 8,
     // make sure allocation of size 8 has that alignment.
     4, 8,
 #else

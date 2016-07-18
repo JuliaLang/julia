@@ -404,13 +404,13 @@ General I/O
 
    IOContext provides a mechanism for passing output configuration settings among ``show`` methods.
 
-   In short, it is an immutable dictionary that is a subclass of IO. It supports standard dictionary operations such as ``getindex``\ , and can also be used as an I/O stream.
+   In short, it is an immutable dictionary that is a subclass of ``IO``\ . It supports standard dictionary operations such as ``getindex``\ , and can also be used as an I/O stream.
 
 .. function:: IOContext(io::IO, KV::Pair)
 
    .. Docstring generated from Julia source
 
-   Create an ``IOContext`` that wraps a given stream, adding the specified key=>value pair to the properties of that stream (note that ``io`` can itself be an ``IOContext``\ ).
+   Create an ``IOContext`` that wraps a given stream, adding the specified ``key=>value`` pair to the properties of that stream (note that ``io`` can itself be an ``IOContext``\ ).
 
    * use ``(key => value) in dict`` to see if this particular combination is in the properties set
    * use ``get(dict, key, default)`` to retrieve the most recent value for a particular key
@@ -425,7 +425,7 @@ General I/O
 
    .. Docstring generated from Julia source
 
-   Create a IOContext that wraps an alternate IO but inherits the properties of ``context``\ .
+   Create an ``IOContext`` that wraps an alternate ``IO`` but inherits the properties of ``context``\ .
 
 .. function:: IOContext(io::IO; properties...)
 
