@@ -120,8 +120,8 @@ using :func:`convert`:
 .. doctest:: foo-func
 
     julia> function foo()
-             x::Int8 = 100
-             x
+               x::Int8 = 100
+               x
            end
     foo (generic function with 1 method)
 
@@ -247,7 +247,7 @@ An important use of abstract types is to provide default implementations for
 concrete types. To give a simple example, consider::
 
     function myplus(x,y)
-     x+y
+        x+y
     end
 
 The first thing to note is that the above argument declarations are equivalent
@@ -262,7 +262,7 @@ arguments based on the generic function given above, i.e., it implicitly
 defines and compiles::
 
     function myplus(x::Int,y::Int)
-     x+y
+        x+y
     end
 
 and finally, it invokes this specific method.
@@ -374,9 +374,9 @@ operator:
 .. doctest::
 
     julia> type Foo
-             bar
-             baz::Int
-             qux::Float64
+               bar
+               baz::Int
+               qux::Float64
            end
 
 Fields with no type annotation default to :obj:`Any`, and can accordingly
@@ -473,8 +473,8 @@ It is also possible to define *immutable* composite types by using
 the keyword ``immutable`` instead of ``type``::
 
     immutable Complex
-      real::Float64
-      imag::Float64
+        real::Float64
+        imag::Float64
     end
 
 Such types behave much like other composite types, except that instances
@@ -616,16 +616,16 @@ Parametric Composite Types
 
     abstract Pointy{T}
     type Point{T} <: Pointy{T}
-      x::T
-      y::T
+        x::T
+        y::T
     end
 
 Type parameters are introduced immediately after the type name,
 surrounded by curly braces::
 
     type Point{T}
-      x::T
-      y::T
+        x::T
+        y::T
     end
 
 This declaration defines a new parametric type, ``Point{T}``, holding
@@ -849,8 +849,8 @@ example, have declared ``Point{T}`` to be a subtype of ``Pointy{T}`` as
 follows::
 
     type Point{T} <: Pointy{T}
-      x::T
-      y::T
+        x::T
+        y::T
     end
 
 Given such a declaration, for each choice of ``T``, we have ``Point{T}``
@@ -879,7 +879,7 @@ Consider if we create a point-like implementation that only requires a
 single coordinate because the point is on the diagonal line *x = y*::
 
     type DiagPoint{T} <: Pointy{T}
-      x::T
+        x::T
     end
 
 Now both ``Point{Float64}`` and ``DiagPoint{Float64}`` are
@@ -924,8 +924,8 @@ Type parameters for parametric composite types can be restricted in the
 same manner::
 
     type Point{T<:Real} <: Pointy{T}
-      x::T
-      y::T
+        x::T
+        y::T
     end
 
 To give a real-world example of how all this parametric type
@@ -934,8 +934,8 @@ machinery can be useful, here is the actual definition of Julia's
 for simplicity), representing an exact ratio of integers::
 
     immutable Rational{T<:Integer} <: Real
-      num::T
-      den::T
+        num::T
+        den::T
     end
 
 It only makes sense to take ratios of integer values, so the parameter
@@ -954,8 +954,8 @@ of one field. For example, a 2-element tuple type resembles the following
 immutable type::
 
     immutable Tuple2{A,B}
-      a::A
-      b::B
+        a::A
+        b::B
     end
 
 However, there are three key differences:
