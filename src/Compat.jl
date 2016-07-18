@@ -1322,4 +1322,26 @@ if !isdefined(Base, :allunique)
     export allunique
 end
 
+if !isdefined(Base, :promote_eltype_op)
+    if isdefined(Base, :promote_op)
+        promote_eltype_op(::Any) = Union{}
+        promote_eltype_op{T}(op, ::AbstractArray{T}) = Base.promote_op(op, T)
+        promote_eltype_op{T}(op, ::T               ) = Base.promote_op(op, T)
+        promote_eltype_op{R,S}(op, ::AbstractArray{R}, ::AbstractArray{S}) = Base.promote_op(op, R, S)
+        promote_eltype_op{R,S}(op, ::AbstractArray{R}, ::S) = Base.promote_op(op, R, S)
+        promote_eltype_op{R,S}(op, ::R, ::AbstractArray{S}) = Base.promote_op(op, R, S)
+        promote_eltype_op(op, A, B, C, D...) = Base.promote_op(op, eltype(A), promote_eltype_op(op, B, C, D...))
+    else
+        promote_eltype_op(::Any) = Union{}
+        promote_eltype_op{T}(op, ::AbstractArray{T}) = T
+        promote_eltype_op{T}(op, ::T               ) = T
+        promote_eltype_op{R,S}(op, ::AbstractArray{R}, ::AbstractArray{S}) = Base.promote_type(R, S)
+        promote_eltype_op{R,S}(op, ::AbstractArray{R}, ::S) = Base.promote_type(R, S)
+        promote_eltype_op{R,S}(op, ::R, ::AbstractArray{S}) = Base.promote_type(R, S)
+        promote_eltype_op(op, A, B, C, D...) = Base.promote_type(eltype(A), promote_eltype_op(op, B, C, D...))
+    end
+else
+    import Base.promote_eltype_op
+end
+
 end # module

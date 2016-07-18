@@ -1268,6 +1268,7 @@ let a = rand(10,10)
     @test view(a, :, 1) == a[:,1]
 end
 
+
 # 0.5 style single argument `@boundscheck`
 @inline function do_boundscheck()
     # A bit ugly since `@boundscheck` returns `nothing`.
@@ -1276,3 +1277,6 @@ end
     checked
 end
 @test do_boundscheck() == true
+
+@test Compat.promote_eltype_op(@functorize(+), ones(2,2), 1) === Float64
+@test Compat.promote_eltype_op(@functorize(*), ones(Int, 2), zeros(Int16,2)) === Int
