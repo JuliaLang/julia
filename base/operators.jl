@@ -447,16 +447,16 @@ function setindex_shape_check(X::AbstractArray, I::Integer...)
 end
 
 setindex_shape_check(X::AbstractArray) =
-    (unsafe_length(X)==1 || throw_setindex_mismatch(X,()))
+    (_length(X)==1 || throw_setindex_mismatch(X,()))
 
 setindex_shape_check(X::AbstractArray, i::Integer) =
-    (unsafe_length(X)==i || throw_setindex_mismatch(X, (i,)))
+    (_length(X)==i || throw_setindex_mismatch(X, (i,)))
 
 setindex_shape_check{T}(X::AbstractArray{T,1}, i::Integer) =
-    (unsafe_length(X)==i || throw_setindex_mismatch(X, (i,)))
+    (_length(X)==i || throw_setindex_mismatch(X, (i,)))
 
 setindex_shape_check{T}(X::AbstractArray{T,1}, i::Integer, j::Integer) =
-    (unsafe_length(X)==i*j || throw_setindex_mismatch(X, (i,j)))
+    (_length(X)==i*j || throw_setindex_mismatch(X, (i,j)))
 
 function setindex_shape_check{T}(X::AbstractArray{T,2}, i::Integer, j::Integer)
     if length(X) != i*j
