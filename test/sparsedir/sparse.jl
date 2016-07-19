@@ -577,6 +577,49 @@ let a = spzeros(Int, 10, 10)
     a[:,2] = 2
     @test countnz(a) == 19
     @test a[:,2] == 2*sparse(ones(Int,10))
+    b = copy(a)
+
+    # Zero-assignment behavior of setindex!(A, v, i, j)
+    a[1,3] = 0
+    @test nnz(a) == 19
+    @test countnz(a) == 18
+    a[2,1] = 0
+    @test nnz(a) == 19
+    @test countnz(a) == 18
+
+    # Zero-assignment behavior of setindex!(A, v, I, J)
+    a[1,:] = 0
+    @test nnz(a) == 19
+    @test countnz(a) == 9
+    a[2,:] = 0
+    @test nnz(a) == 19
+    @test countnz(a) == 8
+    a[:,1] = 0
+    @test nnz(a) == 19
+    @test countnz(a) == 8
+    a[:,2] = 0
+    @test nnz(a) == 19
+    @test countnz(a) == 0
+    a = copy(b)
+    a[:,:] = 0
+    @test nnz(a) == 19
+    @test countnz(a) == 0
+
+    # Zero-assignment behavior of setindex!(A, B::SparseMatrixCSC, I, J)
+    a = copy(b)
+    a[1:2,:] = spzeros(2, 10)
+    @test nnz(a) == 19
+    @test countnz(a) == 8
+    a[1:2,1:3] = sparse([1 0 1; 0 0 1])
+    @test nnz(a) == 20
+    @test countnz(a) == 11
+    a = copy(b)
+    a[1:2,:] = let c = sparse(ones(2,10)); fill!(c.nzval, 0); c; end
+    @test nnz(a) == 19
+    @test countnz(a) == 8
+    a[1:2,1:3] = let c = sparse(ones(2,3)); c[1,2] = c[2,1] = c[2,2] = 0; c; end
+    @test nnz(a) == 20
+    @test countnz(a) == 11
 
     a[1,:] = 1:10
     @test a[1,:] == sparse([1:10;])
@@ -656,6 +699,20 @@ let A = speye(Int, 5), I=1:10, X=reshape([trues(10); falses(15)],5,5)
     @test A[I] == A[X] == [1,0,0,0,0,0,1,0,0,0]
     A[I] = [1:10;]
     @test A[I] == A[X] == collect(1:10)
+    A[I] = zeros(Int, 10)
+    @test nnz(A) == 13
+    @test countnz(A) == 3
+    @test A[I] == A[X] == zeros(Int, 10)
+    c = collect(11:20); c[1] = c[3] = 0
+    A[I] = c
+    @test nnz(A) == 13
+    @test countnz(A) == 11
+    @test A[I] == A[X] == c
+    A = speye(Int, 5)
+    A[I] = c
+    @test nnz(A) == 12
+    @test countnz(A) == 11
+    @test A[I] == A[X] == c
 end
 
 let S = sprand(50, 30, 0.5, x->round(Int,rand(x)*100)), I = sprand(Bool, 50, 30, 0.2)
@@ -666,15 +723,21 @@ let S = sprand(50, 30, 0.5, x->round(Int,rand(x)*100)), I = sprand(Bool, 50, 30,
 
     sumS1 = sum(S)
     sumFI = sum(S[FI])
+    nnzS1 = nnz(S)
     S[FI] = 0
-    @test sum(S[FI]) == 0
     sumS2 = sum(S)
+    cnzS2 = countnz(S)
+    @test sum(S[FI]) == 0
+    @test nnz(S) == nnzS1
     @test (sum(S) + sumFI) == sumS1
 
     S[FI] = 10
+    nnzS3 = nnz(S)
     @test sum(S) == sumS2 + 10*sum(FI)
     S[FI] = 0
     @test sum(S) == sumS2
+    @test nnz(S) == nnzS3
+    @test countnz(S) == cnzS2
 
     S[FI] = [1:sum(FI);]
     @test sum(S) == sumS2 + sum(1:sum(FI))
@@ -691,6 +754,60 @@ let S = sprand(50, 30, 0.5, x->round(Int,rand(x)*100))
     S[I] = J
     @test sum(S) == (sumS1 - sumS2 + sum(J))
 end
+
+
+## dropstored! tests
+let A = spzeros(Int, 10, 10)
+    # Introduce nonzeros in row and column two
+    A[1,:] = 1
+    A[:,2] = 2
+    @test nnz(A) == 19
+
+    # Test argument bounds checking for dropstored!(A, i, j)
+    @test_throws BoundsError Base.SparseArrays.dropstored!(A, 0, 1)
+    @test_throws BoundsError Base.SparseArrays.dropstored!(A, 1, 0)
+    @test_throws BoundsError Base.SparseArrays.dropstored!(A, 1, 11)
+    @test_throws BoundsError Base.SparseArrays.dropstored!(A, 11, 1)
+
+    # Test argument bounds checking for dropstored!(A, I, J)
+    @test_throws BoundsError Base.SparseArrays.dropstored!(A, 0:1, 1:1)
+    @test_throws BoundsError Base.SparseArrays.dropstored!(A, 1:1, 0:1)
+    @test_throws BoundsError Base.SparseArrays.dropstored!(A, 10:11, 1:1)
+    @test_throws BoundsError Base.SparseArrays.dropstored!(A, 1:1, 10:11)
+
+    # Test behavior of dropstored!(A, i, j)
+    # --> Test dropping a single stored entry
+    Base.SparseArrays.dropstored!(A, 1, 2)
+    @test nnz(A) == 18
+    # --> Test dropping a single nonstored entry
+    Base.SparseArrays.dropstored!(A, 2, 1)
+    @test nnz(A) == 18
+
+    # Test behavior of dropstored!(A, I, J) and derivs.
+    # --> Test dropping a single row including stored and nonstored entries
+    Base.SparseArrays.dropstored!(A, 1, :)
+    @test nnz(A) == 9
+    # --> Test dropping a single column including stored and nonstored entries
+    Base.SparseArrays.dropstored!(A, :, 2)
+    @test nnz(A) == 0
+    # --> Introduce nonzeros in rows one and two and columns two and three
+    A[1:2,:] = 1
+    A[:,2:3] = 2
+    @test nnz(A) == 36
+    # --> Test dropping multiple rows containing stored and nonstored entries
+    Base.SparseArrays.dropstored!(A, 1:3, :)
+    @test nnz(A) == 14
+    # --> Test dropping multiple columns containing stored and nonstored entries
+    Base.SparseArrays.dropstored!(A, :, 2:4)
+    @test nnz(A) == 0
+    # --> Introduce nonzeros in every other row
+    A[1:2:9, :] = 1
+    @test nnz(A) == 50
+    # --> Test dropping a block of the matrix towards the upper left
+    Base.SparseArrays.dropstored!(A, 2:5, 2:5)
+    @test nnz(A) == 42
+end
+
 
 #Issue 7507
 @test (i7507=sparsevec(Dict{Int64, Float64}(), 10))==spzeros(10)
@@ -1397,6 +1514,7 @@ let
     x = UpperTriangular(A)*ones(n)
     @test UpperTriangular(A)\x ≈ ones(n)
     A[2,2] = 0
+    dropzeros!(A)
     @test_throws LinAlg.SingularException LowerTriangular(A)\ones(n)
     @test_throws LinAlg.SingularException UpperTriangular(A)\ones(n)
 end
