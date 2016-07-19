@@ -8,7 +8,7 @@ data = Any["", "test", lorem, so_many_as]
 
 # Descriptions of the data, the SHA functions we'll run on the data, etc...
 data_desc = ["the empty string", "the string \"test\"", "lorem ipsum", "one million a's"]
-sha_types =Dict(sha1 => SHA.SHA1_CTX,
+sha_types = @compat Dict(sha1 => SHA.SHA1_CTX,
             sha2_224 => SHA.SHA2_224_CTX, sha2_256 => SHA.SHA2_256_CTX, sha2_384 => SHA.SHA2_384_CTX, sha2_512 => SHA.SHA2_512_CTX,
             sha3_224 => SHA.SHA3_224_CTX, sha3_256 => SHA.SHA3_256_CTX, sha3_384 => SHA.SHA3_384_CTX, sha3_512 => SHA.SHA3_512_CTX)
 sha_funcs = [sha1,

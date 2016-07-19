@@ -102,7 +102,7 @@ blocklen(::Type{SHA3_512_CTX}) = UInt64(25*8 - 2*digestlen(SHA3_512_CTX))
 
 
 # short_blocklen is the size of a block minus the width of bytecount
-short_blocklen{T<:Union{SHA1_CTX,SHA2_CTX}}(::Type{T}) = blocklen(T) - 2*sizeof(state_type(T))
+short_blocklen{T<:@compat(Union{SHA1_CTX,SHA2_CTX})}(::Type{T}) = blocklen(T) - 2*sizeof(state_type(T))
 
 # Once the "blocklen" methods are defined, we can define our outer constructors for SHA types:
 SHA2_224_CTX() = SHA2_224_CTX(copy(SHA2_224_initial_hash_value), 0, zeros(UInt8, blocklen(SHA2_224_CTX)))
