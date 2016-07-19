@@ -63,7 +63,7 @@ function credentials_callback(cred::Ptr{Ptr{Void}}, url_ptr::Cstring,
     schema = schema === nothing ? "" : schema*"://"
 
     # get credentials object from payload pointer
-    creds = EmptyCredentials()
+    creds = nothing
     if payload_ptr != C_NULL
         tmpobj = unsafe_pointer_to_objref(payload_ptr)
         if isa(tmpobj, AbstractCredentials)
@@ -74,15 +74,11 @@ function credentials_callback(cred::Ptr{Ptr{Void}}, url_ptr::Cstring,
 
     # use ssh key or ssh-agent
     if isset(allowed_types, Cuint(Consts.CREDTYPE_SSH_KEY))
+        creds == nothing && (creds = SSHCredentials())
         credid = "ssh://$host"
 
-        # set ssh-agent trigger for first use
-        if creds[:usesshagent, credid] === nothing
-            creds[:usesshagent, credid] = "Y"
-        end
-
         # first try ssh-agent if credentials support its usage
-        if creds[:usesshagent, credid] == "Y"
+        if creds[:usesshagent, credid] === nothing || creds[:usesshagent, credid] == "Y"
             err = ccall((:git_cred_ssh_key_from_agent, :libgit2), Cint,
                          (Ptr{Ptr{Void}}, Cstring), cred, username_ptr)
             creds[:usesshagent, credid] = "U" # used ssh-agent only one time
@@ -163,6 +159,7 @@ function credentials_callback(cred::Ptr{Ptr{Void}}, url_ptr::Cstring,
     end
 
     if isset(allowed_types, Cuint(Consts.CREDTYPE_USERPASS_PLAINTEXT))
+        creds == nothing && (creds = UserPasswordCredentials())
         credid = "$schema$host"
         username = creds[:user, credid]
         if username === nothing || isusedcreds
