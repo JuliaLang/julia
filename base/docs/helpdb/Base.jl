@@ -2629,7 +2629,9 @@ find(f, A)
 """
     ctranspose(A)
 
-The conjugate transposition operator (`'`).
+
+The conjugate transposition operator (`'`). Operates recursively on arrays with vector or
+matrix element type (e.g., block matrices).
 """
 ctranspose
 
@@ -4726,7 +4728,9 @@ lock
 """
     transpose(A)
 
-The transposition operator (`.'`).
+The transposition operator (`.'`). Operates recursively on arrays with vector or matrix
+element type (e.g., block matrices). Non-recursive behavior may be obtained in such cases
+by calling `permutedims(A, [2,1])`.
 """
 transpose
 
