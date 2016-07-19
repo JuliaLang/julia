@@ -103,7 +103,8 @@ convert(::Type{RowVector{T,V}}, rowvec::RowVector) where {T,V<:AbstractVector} =
 """
     transpose(v::AbstractVector)
 
-The transposition operator (`.'`).
+The transposition operator (`.'`). Non-recursive behavior may be obtained in such cases
+ +by calling `reshape(x, (1, length(x)))`.
 
 # Examples
 ```jldoctest

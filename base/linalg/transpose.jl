@@ -9,7 +9,8 @@ transpose(a::AbstractArray) = error("transpose not defined for $(typeof(a)). Con
     transpose!(dest,src)
 
 Transpose array `src` and store the result in the preallocated array `dest`, which should
-have a size corresponding to `(size(src,2),size(src,1))`. No in-place transposition is
+have a size corresponding to `(size(src,2),size(src,1))`. Operates recursively on arrays
+with vector or matrix element type (e.g., block matrices). No in-place transposition is
 supported and unexpected results will happen if `src` and `dest` have overlapping memory
 regions.
 
@@ -44,7 +45,8 @@ transpose!(B::AbstractMatrix, A::AbstractMatrix) = transpose_f!(transpose, B, A)
     adjoint!(dest,src)
 
 Conjugate transpose array `src` and store the result in the preallocated array `dest`, which
-should have a size corresponding to `(size(src,2),size(src,1))`. No in-place transposition
+should have a size corresponding to `(size(src,2),size(src,1))`. Operates recursively on arrays
+with vector or matrix element type (e.g., block matrices). No in-place transposition
 is supported and unexpected results will happen if `src` and `dest` have overlapping memory
 regions.
 
@@ -147,7 +149,9 @@ end
 """
     transpose(A::AbstractMatrix)
 
-The transposition operator (`.'`).
+The transposition operator (`.'`). Operates recursively on arrays with vector or matrix element
+type (e.g., block matrices). Non-recursive behavior may be obtained in such cases by calling
+`permutedims(A, (2,1))`.
 
 # Examples
 ```jldoctest
