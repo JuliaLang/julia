@@ -1158,12 +1158,13 @@ function dump(io::IO, x::DataType, n::Int, indent)
         print(io, " <: ", supertype(x))
     end
     if !(x <: Tuple)
+        tvar_io = IOContext(io, :tvar_env => Any[x.parameters...])
         fields = fieldnames(x)
         if n > 0
             for idx in 1:length(fields)
                 println(io)
                 print(io, indent, "  ", fields[idx], "::")
-                print(io, fieldtype(x,idx))
+                print(tvar_io, fieldtype(x, idx))
             end
         end
     end
@@ -1171,49 +1172,48 @@ function dump(io::IO, x::DataType, n::Int, indent)
     nothing
 end
 
-# dumptype is for displaying abstract type hierarchies like Jameson
-# Nash's wiki page: https://github.com/JuliaLang/julia/wiki/Types-Hierarchy
-
+# dumptype is for displaying abstract type hierarchies,
+# based on Jameson Nash's examples/typetree.jl
 function dumptype(io::IO, x::ANY, n::Int, indent)
-    # based on Jameson Nash's examples/typetree.jl
     println(io, x)
-    if n == 0   # too deeply nested
-        return
-    end
-    typargs(t) = split(string(t), "{")[1]
-    # todo: include current module?
-    for m in (Core, Base)
-        for s in fieldnames(m)
-            if isdefined(m,s)
-                t = eval(m,s)
-                if isa(t, TypeConstructor)
-                    if string(x.name) == typargs(t) ||
-                        ("Union" == split(string(t), "(")[1] &&
-                         any(map(tt -> string(x.name) == typargs(tt), t.body.types)))
-                        targs = join(t.parameters, ",")
-                        println(io, indent, "  ", s,
-                                !isempty(t.parameters) ? "{$targs}" : "",
-                                " = ", t)
-                    end
-                elseif isa(t, Union)
-                    if any(tt -> string(x.name) == typargs(tt), t.types)
-                        println(io, indent, "  ", s, " = ", t)
-                    end
-                elseif isa(t, DataType) && supertype(t).name == x.name
-                    # type aliases
-                    if string(s) != string(t.name)
-                        println(io, indent, "  ", s, " = ", t.name)
-                    elseif t != Any
-                        print(io, indent, "  ")
-                        dump(io, t, n - 1, string(indent, "  "))
-                    end
+    n == 0 && return  # too deeply nested
+    isa(x, DataType) && x.abstract && dumpsubtypes(io, x, Main, n, indent)
+    nothing
+end
+
+directsubtype(a::DataType, b::DataType) = supertype(a).name === b.name
+directsubtype(a::TypeConstructor, b::DataType) = directsubtype(a.body, b)
+directsubtype(a::Union, b::DataType) = any(t->directsubtype(t, b), a.types)
+function dumpsubtypes(io::IO, x::DataType, m::Module, n::Int, indent)
+    for s in names(m, true)
+        if isdefined(m, s) && !isdeprecated(m, s)
+            t = getfield(m, s)
+            if t === x || t === m
+                continue
+            elseif isa(t, Module) && module_name(t) === s && module_parent(t) === m
+                # recurse into primary module bindings
+                dumpsubtypes(io, x, t, n, indent)
+            elseif isa(t, TypeConstructor) && directsubtype(t, x)
+                print(io, indent, "  ", m, ".", s)
+                isempty(t.parameters) || print(io, "{", join(t.parameters, ","), "}")
+                println(io, " = ", t)
+            elseif isa(t, Union) && directsubtype(t, x)
+                println(io, indent, "  ", m, ".", s, " = ", t)
+            elseif isa(t, DataType) && directsubtype(t, x)
+                if t.name.module !== m || t.name.name != s
+                    # aliases to types
+                    println(io, indent, "  ", m, ".", s, " = ", t)
+                else
+                    # primary type binding
+                    print(io, indent, "  ")
+                    dumptype(io, t, n - 1, string(indent, "  "))
                 end
             end
         end
     end
-    isempty(indent) && println(io)
     nothing
 end
+
 
 # For abstract types, use _dumptype only if it's a form that will be called
 # interactively.
