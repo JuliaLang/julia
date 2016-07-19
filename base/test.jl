@@ -992,8 +992,8 @@ function detect_ambiguities(mods...; imported::Bool=false)
                 continue
             end
             f = getfield(mod, n)
-            if isa(f, Function)
-                mt = methods(f)
+            if isa(f, DataType) && isdefined(f.name, :mt)
+                mt = Base.MethodList(f.name.mt)
                 for m in mt
                     if m.ambig !== nothing
                         for m2 in m.ambig
