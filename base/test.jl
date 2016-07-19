@@ -914,20 +914,24 @@ julia> @inferred max(1,2)
 """
 macro inferred(ex)
     Meta.isexpr(ex, :call)|| error("@inferred requires a call expression")
-    args = gensym()
-    kwargs = gensym()
-
-    # Need to only construct a call with a kwargs if there are actually kwargs, since
-    # the inferred type depends on the presence/absence of kwargs
-    if any(a->(Meta.isexpr(a, :kw) || Meta.isexpr(a, :parameters)), ex.args)
-        typecall = :($(ex.args[1])($(args)...; $(kwargs)...))
-    else
-        typecall = :($(ex.args[1])($(args)...))
-    end
 
     Base.remove_linenums!(quote
-        $(esc(args)), $(esc(kwargs)), result = $(esc(Expr(:call, _args_and_call, ex.args[2:end]..., ex.args[1])))
-        inftypes = $(Base.gen_call_with_extracted_types(Base.return_types, typecall))
+        $(if any(a->(Meta.isexpr(a, :kw) || Meta.isexpr(a, :parameters)), ex.args)
+            # Has keywords
+            args = gensym()
+            kwargs = gensym()
+            quote
+                $(esc(args)), $(esc(kwargs)), result = $(esc(Expr(:call, _args_and_call, ex.args[2:end]..., ex.args[1])))
+                inftypes = $(Base.gen_call_with_extracted_types(Base.return_types, :($(ex.args[1])($(args)...; $(kwargs)...))))
+            end
+        else
+            # No keywords
+            quote
+                args = ($([esc(ex.args[i]) for i = 2:length(ex.args)]...),)
+                result = $(esc(ex.args[1]))(args...)
+                inftypes = Base.return_types($(esc(ex.args[1])), Base.typesof(args...))
+            end
+        end)
         @assert length(inftypes) == 1
         rettype = isa(result, Type) ? Type{result} : typeof(result)
         rettype == inftypes[1] || error("return type $rettype does not match inferred return type $(inftypes[1])")
