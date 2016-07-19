@@ -289,6 +289,7 @@ byte_string_classify(s::String) = byte_string_classify(s.data)
     # 2: valid UTF-8
 
 isvalid(::Type{String}, s::Union{Vector{UInt8},String}) = byte_string_classify(s) != 0
+isvalid(s::String) = isvalid(String, s)
 
 ## uppercase and lowercase transformations ##
 uppercase(s::AbstractString) = map(uppercase, s)

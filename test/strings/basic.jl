@@ -287,11 +287,11 @@ for (val, pass) in (
         (b"\udc00\u0100", false),
         (b"\udc00\ud800", false)
         )
-    @test isvalid(String, val) == pass
+    @test isvalid(String, val) == pass == isvalid(String(val))
 end
 
 # Issue #11203
-@test isvalid(String, UInt8[]) == true
+@test isvalid(String, UInt8[]) == true == isvalid("")
 
 # Check UTF-8 characters
 # Check ASCII range (true),
