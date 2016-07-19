@@ -337,7 +337,7 @@
 
    .. Docstring generated from Julia source
 
-   Remove the last ``i`` characters from a string.
+   Remove the last ``i`` characters from a string. Will not handle multi-byte unicode correctly unless ``i`` is 1.
 
 .. function:: chomp(string)
 
