@@ -2476,14 +2476,34 @@ for x in [1.23, 7, e, 4//5] #[FP, Int, Irrational, Rat]
     @test isreal(x) == true
 end
 
-#eltype{T<:Number}(::Type{T}) = T
-for T in [subtypes(Complex); subtypes(Real)]
-    @test eltype(T) == T
+function allsubtypes!(m::Module, x::DataType, sts::Set)
+    for s in names(m, true)
+        if isdefined(m, s) && !Base.isdeprecated(m, s)
+            t = getfield(m, s)
+            if isa(t, Type) && t <: x
+                push!(sts, t)
+            elseif isa(t, Module) && t !== m && module_name(t) === s && module_parent(t) === m
+                allsubtypes!(t, x, sts)
+            end
+        end
+    end
 end
 
-#ndims{T<:Number}(::Type{T}) = 0
-for x in [subtypes(Complex); subtypes(Real)]
-    @test ndims(x) == 0
+let number_types = Set()
+    allsubtypes!(Base, Number, number_types)
+    allsubtypes!(Core, Number, number_types)
+
+    @test !isempty(number_types)
+
+    #eltype{T<:Number}(::Type{T}) = T
+    for T in number_types
+        @test eltype(T) == T
+    end
+
+    #ndims{T<:Number}(::Type{T}) = 0
+    for x in number_types
+        @test ndims(x) == 0
+    end
 end
 
 #getindex(x::Number) = x
