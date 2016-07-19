@@ -4,7 +4,7 @@ function transform!{T<:SHA3_CTX}(context::T)
     for idx in 1:div(blocklen(T),8)
         context.state[idx] $= buffer_as_uint64[idx]
     end
-    bc = Array{UInt64,1}(5)
+    bc = Array(UInt64, 5)
 
     # We always assume 24 rounds
     for round in 0:23
