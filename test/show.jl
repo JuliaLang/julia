@@ -501,10 +501,28 @@ let s  = IOBuffer(Array{UInt8}(0), true, true)
     @test String(resize!(s.data, s.size)) == " 1\n 2\n 3"
 end
 
-# The `dump` function should always have a trailing newline
-let io = IOBuffer()
-    dump(io, :(x = 1))
-    @test takebuf_string(io)[end] == '\n'
+let repr = sprint(dump, :(x = 1))
+    @test repr == "Expr\n  head: Symbol =\n  args: Array{Any}((2,))\n    1: Symbol x\n    2: $Int 1\n  typ: Any\n"
+end
+let repr = sprint(dump, Pair)
+    @test repr == "Pair{A,B} <: Any\n  first::A\n  second::B\n"
+end
+let repr = sprint(dump, Tuple)
+    @test repr == "Tuple <: Any\n"
+end
+let repr = sprint(dump, Int64)
+    @test repr == "Int64 <: Signed\n"
+end
+let repr = sprint(dump, Any)
+    @test length(repr) > 100000
+    @test startswith(repr, "Any\n  Base.")
+    @test endswith(repr, '\n')
+    @test contains(repr, "     Base.Vector{T} = Array{T,1}\n")
+    @test !contains(repr, "Core.Vector{T}")
+end
+let repr = sprint(dump, Integer)
+    @test contains(repr, "UInt128")
+    @test !contains(repr, "Any")
 end
 
 # issue #17338
