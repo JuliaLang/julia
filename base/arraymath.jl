@@ -252,19 +252,20 @@ end
 
 const transposebaselength=64
 function transpose_f!(f,B::AbstractMatrix,A::AbstractMatrix)
-    indices(B,1) == indices(A,2) && indices(B,2) == indices(A,1) || throw(DimensionMismatch(string(f)))
+    inds = indices(A)
+    indices(B,1) == inds[2] && indices(B,2) == inds[1] || throw(DimensionMismatch(string(f)))
 
-    m, n = size(A)
+    m, n = length(inds[1]), length(inds[2])
     if m*n<=4*transposebaselength
         @inbounds begin
-            for j = indices(A,2)
-                for i = indices(A,1)
+            for j = inds[2]
+                for i = inds[1]
                     B[j,i] = f(A[i,j])
                 end
             end
         end
     else
-        transposeblock!(f,B,A,m,n,first(indices(A,1))-1,first(indices(A,2))-1)
+        transposeblock!(f,B,A,m,n,first(inds[1])-1,first(inds[2])-1)
     end
     return B
 end

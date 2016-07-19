@@ -42,13 +42,14 @@ check_broadcast_shape((-1:1, 6:9), (1, 6:9))
 check_broadcast_shape((-1:1, 6:9), 1)
 
 ci(x) = CartesianIndex(x)
-@test @inferred(newindex(ci((2,2)), (true, true)))   == ci((2,2))
-@test @inferred(newindex(ci((2,2)), (true, false)))  == ci((2,1))
-@test @inferred(newindex(ci((2,2)), (false, true)))  == ci((1,2))
-@test @inferred(newindex(ci((2,2)), (false, false))) == ci((1,1))
-@test @inferred(newindex(ci((2,2)), (true,)))   == ci((2,))
-@test @inferred(newindex(ci((2,2)), (false,))) == ci((1,))
-@test @inferred(newindex(ci((2,2)), ())) == 1
+@test @inferred(newindex(ci((2,2)), (true, true), (-1,-1)))   == ci((2,2))
+@test @inferred(newindex(ci((2,2)), (true, false), (-1,-1)))  == ci((2,-1))
+@test @inferred(newindex(ci((2,2)), (false, true), (-1,-1)))  == ci((-1,2))
+@test @inferred(newindex(ci((2,2)), (false, false), (-1,-1))) == ci((-1,-1))
+@test @inferred(newindex(ci((2,2)), (true,), (-1,-1)))   == ci((2,))
+@test @inferred(newindex(ci((2,2)), (true,), (-1,)))   == ci((2,))
+@test @inferred(newindex(ci((2,2)), (false,), (-1,))) == ci((-1,))
+@test @inferred(newindex(ci((2,2)), (), ())) == ci(())
 
 end
 
