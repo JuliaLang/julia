@@ -752,15 +752,25 @@ function checkbounds{N,T}(::Type{Bool}, sz::NTuple{N,Integer}, I1::T, I...)
 end
 
 function first(::Colon)
-    depwarn("first(:) is no longer unambiguous, call Base._first(:, A, dim)", :first)
+    depwarn("first(:) is deprecated, see http://docs.julialang.org/en/latest/devdocs/offset-arrays/", :first)
     1
 end
+function _first(i, A, d)
+    depwarn("_first is deprecated, see http://docs.julialang.org/en/latest/devdocs/offset-arrays/", :_first)
+    __first(i, A, d)
+end
+__first(::Colon, P, ::Colon) = first(linearindices(P))
+__first(i, P, ::Colon) = first(i)
+__first(::Colon, P, d) = first(indices(P, d))
+__first(i, P, d) = first(i)
 
-# Not exported, but may be useful just in case
+# Not exported, but deprecation may be useful just in case
 function Broadcast.check_broadcast_shape(sz::Dims, As::Union{AbstractArray,Number}...)
     depwarn("check_broadcast_shape(size(A), B...) should be replaced with check_broadcast_shape(indices(A), B...)", :check_broadcast_shape)
     Broadcast.check_broadcast_shape(map(OneTo, sz), As...)
 end
+
+@deprecate trailingsize{n}(A::AbstractArray, ::Type{Val{n}}) trailingsize(A, n)
 
 @deprecate slice view
 @deprecate sub view

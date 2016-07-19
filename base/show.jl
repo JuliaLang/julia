@@ -1286,7 +1286,7 @@ function alignment(io::IO, X::AbstractVecOrMat,
             break
         end
     end
-    if 1 < length(a) < size(X,2)
+    if 1 < length(a) < length(indices(X,2))
         while sum(map(sum,a)) + sep*length(a) >= cols_otherwise
             pop!(a)
         end
@@ -1384,8 +1384,9 @@ function print_matrix(io::IO, X::AbstractVecOrMat,
     postsp = ""
     @assert strwidth(hdots) == strwidth(ddots)
     sepsize = length(sep)
-    m, n = size(X,1), size(X,2)
-    rowsA, colsA = collect(indices(X,1)), collect(indices(X,2))
+    inds1, inds2 = indices(X,1), indices(X,2)
+    m, n = length(inds1), length(inds2)
+    rowsA, colsA = collect(inds1), collect(inds2)
     # To figure out alignments, only need to look at as many rows as could
     # fit down screen. If screen has at least as many rows as A, look at A.
     # If not, then we only need to look at the first and last chunks of A,
@@ -1488,19 +1489,19 @@ function show_nd(io::IO, a::AbstractArray, print_matrix, label_slices)
     if isempty(a)
         return
     end
-    tail = indices(a)[3:end]
+    tailinds = tail(tail(indices(a)))
     nd = ndims(a)-2
-    for I in CartesianRange(tail)
+    for I in CartesianRange(tailinds)
         idxs = I.I
         if limit
             for i = 1:nd
                 ii = idxs[i]
-                ind = tail[i]
+                ind = tailinds[i]
                 if length(ind) > 10
-                    if ii == ind[4] && all(d->idxs[d]==first(tail[d]),1:i-1)
+                    if ii == ind[4] && all(d->idxs[d]==first(tailinds[d]),1:i-1)
                         for j=i+1:nd
                             szj = size(a,j+2)
-                            indj = tail[j]
+                            indj = tailinds[j]
                             if szj>10 && first(indj)+2 < idxs[j] <= last(indj)-3
                                 @goto skip
                             end
@@ -1522,7 +1523,7 @@ function show_nd(io::IO, a::AbstractArray, print_matrix, label_slices)
         end
         slice = view(a, indices(a,1), indices(a,2), idxs...)
         print_matrix(io, slice)
-        print(io, idxs == map(last,tail) ? "" : "\n\n")
+        print(io, idxs == map(last,tailinds) ? "" : "\n\n")
         @label skip
     end
 end
@@ -1536,10 +1537,11 @@ function print_matrix_repr(io, X::AbstractArray)
     if compact && !haskey(io, :compact)
         io = IOContext(io, :compact => compact)
     end
-    nr, nc = size(X,1), size(X,2)
+    indr, indc = indices(X,1), indices(X,2)
+    nr, nc = length(indr), length(indc)
     rdots, cdots = false, false
-    rr1, rr2 = indices(X,1), 1:0
-    cr1, cr2 = indices(X,2), 1:0
+    rr1, rr2 = UnitRange{Int}(indr), 1:0
+    cr1, cr2 = UnitRange{Int}(indc), 1:0
     if limit
         if nr > 4
             rr1, rr2 = rr1[1:2], rr1[nr-1:nr]
@@ -1563,8 +1565,8 @@ function print_matrix_repr(io, X::AbstractArray)
                         show(io, el)
                     end
                 end
-                if last(cr) == last(indices(X,2))
-                    i < last(indices(X,1)) && print(io, "; ")
+                if last(cr) == last(indc)
+                    i < last(indr) && print(io, "; ")
                 elseif cdots
                     print(io, " \u2026 ")
                 end

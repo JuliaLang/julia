@@ -3,7 +3,7 @@
 module Broadcast
 
 using Base.Cartesian
-using Base: promote_op, promote_eltype, promote_eltype_op, @get!, _msk_end, unsafe_bitgetindex, linearindices, to_shape, tail, dimlength, OneTo
+using Base: promote_op, promote_eltype, promote_eltype_op, @get!, _msk_end, unsafe_bitgetindex, linearindices, tail, OneTo, to_shape
 import Base: .+, .-, .*, ./, .\, .//, .==, .<, .!=, .<=, .÷, .%, .<<, .>>, .^
 export broadcast, broadcast!, bitbroadcast
 export broadcast_getindex, broadcast_setindex!
@@ -20,7 +20,7 @@ broadcast(f, x::Number...) = f(x...)
 broadcast_shape() = ()
 broadcast_shape(A) = indices(A)
 @inline broadcast_shape(A, B...) = broadcast_shape((), indices(A), map(indices, B)...)
-# shape inputs
+# shape (i.e., tuple-of-indices) inputs
 broadcast_shape(shape::Tuple) = shape
 @inline broadcast_shape(shape::Tuple, shape1::Tuple, shapes::Tuple...) = broadcast_shape(_bcs((), shape, shape1), shapes...)
 # _bcs consolidates two shapes into a single output shape
@@ -37,7 +37,7 @@ _bcs1(a::Integer, b) = a == 1 ? b : (first(b) == 1 && last(b) == a ? b : throw(D
 _bcs1(a, b::Integer) = _bcs1(b, a)
 _bcs1(a, b) = _bcsm(b, a) ? b : (_bcsm(a, b) ? a : throw(DimensionMismatch("arrays could not be broadcast to a common size")))
 # _bcsm tests whether the second index is consistent with the first
-_bcsm(a, b) = a == b || (dimlength(b) == 1 && first(b) == first(a))
+_bcsm(a, b) = a == b || length(b) == 1
 _bcsm(a, b::Number) = b == 1
 _bcsm(a::Number, b::Number) = a == b || b == 1
 
@@ -62,22 +62,37 @@ end
 end
 
 ## Indexing manipulations
-# newindex(I, rule) replaces a CartesianIndex with something that is
-# appropriate for a particular array/scalar. `rule` is a tuple that
-# describes the manipulations that should be made.
-@inline newindex(I::CartesianIndex, ::Tuple{}) = 1    # for scalars
-@inline newindex(I::CartesianIndex, indexmap) = CartesianIndex(_newindex((), I.I, indexmap...))
-@inline _newindex(out, I) = out  # can truncate if indexmap is shorter than I
-@inline _newindex(out, I, keep::Bool, indexmap...) = _newindex((out..., ifelse(keep, I[1], 1)), tail(I), indexmap...)
 
-newindexer(sz, x::Number) = ()
-@inline newindexer(sz, A) = _newindexer(sz, size(A))
-@inline _newindexer(sz, szA::Tuple{}) = ()
-@inline _newindexer(sz, szA) = (sz[1] == szA[1], _newindexer(tail(sz), tail(szA))...)
+# newindex(I, keep, Idefault) replaces a CartesianIndex `I` with something that
+# is appropriate for a particular broadcast array/scalar. `keep` is a
+# NTuple{N,Bool}, where keep[d] == true means that one should preserve
+# I[d]; if false, replace it with Idefault[d].
+@inline newindex(I::CartesianIndex, keep, Idefault) = CartesianIndex(_newindex(I.I, keep, Idefault))
+@inline _newindex(I, keep, Idefault) =
+    (ifelse(keep[1], I[1], Idefault[1]), _newindex(tail(I), tail(keep), tail(Idefault))...)
+@inline _newindex(I, keep::Tuple{}, Idefault) = ()  # truncate if keep is shorter than I
 
-# map(x->newindexer(sz, x), As), but see #15276
-map_newindexer(sz, ::Tuple{}) = ()
-@inline map_newindexer(sz, As) = (newindexer(sz, As[1]), map_newindexer(sz, tail(As))...)
+# newindexer(shape, A) generates `keep` and `Idefault` (for use by
+# `newindex` above) for a particular array `A`, given the
+# broadcast_shape `shape`
+# `keep` is equivalent to map(==, indices(A), shape) (but see #17126)
+newindexer(shape, x::Number) = (), ()
+@inline newindexer(shape, A) = newindexer(shape, indices(A))
+@inline newindexer(shape, indsA::Tuple{}) = (), ()
+@inline function newindexer(shape, indsA::Tuple)
+    ind1 = indsA[1]
+    keep, Idefault = newindexer(tail(shape), tail(indsA))
+    (shape[1] == ind1, keep...), (first(ind1), Idefault...)
+end
+
+# Equivalent to map(x->newindexer(shape, x), As) (but see #17126)
+map_newindexer(shape, ::Tuple{}) = (), ()
+@inline function map_newindexer(shape, As)
+    A1 = As[1]
+    keeps, Idefaults = map_newindexer(shape, tail(As))
+    keep, Idefault = newindexer(shape, A1)
+    (keep, keeps...), (Idefault, Idefaults...)
+end
 
 # For output BitArrays
 const bitcache_chunks = 64 # this can be changed
@@ -88,16 +103,17 @@ dumpbitcache(Bc::Vector{UInt64}, bind::Int, C::Vector{Bool}) =
 
 ## Broadcasting core
 # nargs encodes the number of As arguments (which matches the number
-# of indexmaps). The first two type parameters are to ensure specialization.
-@generated function _broadcast!{M,AT,nargs}(f, B::AbstractArray, indexmaps::M, As::AT, ::Type{Val{nargs}})
+# of keeps). The first two type parameters are to ensure specialization.
+@generated function _broadcast!{K,ID,AT,nargs}(f, B::AbstractArray, keeps::K, Idefaults::ID, As::AT, ::Type{Val{nargs}})
     quote
         $(Expr(:meta, :noinline))
-        # destructure the indexmaps and As tuples
+        # destructure the keeps and As tuples
         @nexprs $nargs i->(A_i = As[i])
-        @nexprs $nargs i->(imap_i = indexmaps[i])
+        @nexprs $nargs i->(keep_i = keeps[i])
+        @nexprs $nargs i->(Idefault_i = Idefaults[i])
         @simd for I in CartesianRange(indices(B))
             # reverse-broadcast the indices
-            @nexprs $nargs i->(I_i = newindex(I, imap_i))
+            @nexprs $nargs i->(I_i = newindex(I, keep_i, Idefault_i))
             # extract array values
             @nexprs $nargs i->(@inbounds val_i = A_i[I_i])
             # call the function and store the result
@@ -108,19 +124,20 @@ end
 
 # For BitArray outputs, we cache the result in a "small" Vector{Bool},
 # and then copy in chunks into the output
-@generated function _broadcast!{M,AT,nargs}(f, B::BitArray, indexmaps::M, As::AT, ::Type{Val{nargs}})
+@generated function _broadcast!{K,ID,AT,nargs}(f, B::BitArray, keeps::K, Idefaults::ID, As::AT, ::Type{Val{nargs}})
     quote
         $(Expr(:meta, :noinline))
-        # destructure the indexmaps and As tuples
+        # destructure the keeps and As tuples
         @nexprs $nargs i->(A_i = As[i])
-        @nexprs $nargs i->(imap_i = indexmaps[i])
+        @nexprs $nargs i->(keep_i = keeps[i])
+        @nexprs $nargs i->(Idefault_i = Idefaults[i])
         C = Vector{Bool}(bitcache_size)
         Bc = B.chunks
         ind = 1
         cind = 1
         @simd for I in CartesianRange(indices(B))
             # reverse-broadcast the indices
-            @nexprs $nargs i->(I_i = newindex(I, imap_i))
+            @nexprs $nargs i->(I_i = newindex(I, keep_i, Idefault_i))
             # extract array values
             @nexprs $nargs i->(@inbounds val_i = A_i[I_i])
             # call the function and store the result
@@ -140,25 +157,26 @@ end
 end
 
 @inline function broadcast!{nargs}(f, B::AbstractArray, As::Vararg{Any,nargs})
-    check_broadcast_shape(indices(B), As...)
-    sz = size(B)
-    mapindex = map(x->newindexer(sz, x), As)
-    _broadcast!(f, B, mapindex, As, Val{nargs})
+    shape = indices(B)
+    check_broadcast_shape(shape, As...)
+    keeps, Idefaults = map_newindexer(shape, As)
+    _broadcast!(f, B, keeps, Idefaults, As, Val{nargs})
     B
 end
 
 # broadcast with computed element type
 
-@generated function _broadcast!{M,AT,nargs}(f, B::AbstractArray, indexmaps::M, As::AT, ::Type{Val{nargs}}, iter, st, count)
+@generated function _broadcast!{K,ID,AT,nargs}(f, B::AbstractArray, keeps::K, Idefaults::ID, As::AT, ::Type{Val{nargs}}, iter, st, count)
     quote
         $(Expr(:meta, :noinline))
-        # destructure the indexmaps and As tuples
+        # destructure the keeps and As tuples
         @nexprs $nargs i->(A_i = As[i])
-        @nexprs $nargs i->(imap_i = indexmaps[i])
+        @nexprs $nargs i->(keep_i = keeps[i])
+        @nexprs $nargs i->(Idefault_i = Idefaults[i])
         while !done(iter, st)
             I, st = next(iter, st)
             # reverse-broadcast the indices
-            @nexprs $nargs i->(I_i = newindex(I, imap_i))
+            @nexprs $nargs i->(I_i = newindex(I, keep_i, Idefault_i))
             # extract array values
             @nexprs $nargs i->(@inbounds val_i = A_i[I_i])
             # call the function
@@ -174,7 +192,7 @@ end
                     new[II] = B[II]
                 end
                 new[I] = V
-                return _broadcast!(f, new, indexmaps, As, Val{nargs}, iter, st, count+1)
+                return _broadcast!(f, new, keeps, Idefaults, As, Val{nargs}, iter, st, count+1)
             end
             count += 1
         end
@@ -183,20 +201,19 @@ end
 end
 
 function broadcast_t(f, ::Type{Any}, As...)
-    shp = broadcast_shape(As...)
-    iter = CartesianRange(shp)
+    shape = broadcast_shape(As...)
+    iter = CartesianRange(shape)
     if isempty(iter)
-        return similar(Array{Union{}}, shp)
+        return similar(Array{Union{}}, shape)
     end
     nargs = length(As)
-    sz = size(iter)
-    indexmaps = map(x->newindexer(sz, x), As)
+    keeps, Idefaults = map_newindexer(shape, As)
     st = start(iter)
     I, st = next(iter, st)
-    val = f([ As[i][newindex(I, indexmaps[i])] for i=1:nargs ]...)
-    B = similar(Array{typeof(val)}, shp)
+    val = f([ As[i][newindex(I, keeps[i], Idefaults[i])] for i=1:nargs ]...)
+    B = similar(Array{typeof(val)}, shape)
     B[I] = val
-    return _broadcast!(f, B, indexmaps, As, Val{nargs}, iter, st, 1)
+    return _broadcast!(f, B, keeps, Idefaults, As, Val{nargs}, iter, st, 1)
 end
 
 @inline broadcast_t(f, T, As...) = broadcast!(f, similar(Array{T}, broadcast_shape(As...)), As...)
@@ -206,25 +223,24 @@ end
 # alternate, more compact implementation; unfortunately slower.
 # also the `collect` machinery doesn't yet support arbitrary index bases.
 #=
-@generated function _broadcast{nargs}(f, indexmaps, As, ::Type{Val{nargs}}, iter)
+@generated function _broadcast{nargs}(f, keeps, As, ::Type{Val{nargs}}, iter)
     quote
-        collect((@ncall $nargs f i->As[i][newindex(I, indexmaps[i])]) for I in iter)
+        collect((@ncall $nargs f i->As[i][newindex(I, keeps[i])]) for I in iter)
     end
 end
 
 function broadcast(f, As...)
-    shp = broadcast_shape(As...)
-    iter = CartesianRange(shp)
-    sz = size(iter)
-    indexmaps = map(x->newindexer(sz, x), As)
+    shape = broadcast_shape(As...)
+    iter = CartesianRange(shape)
+    keeps, Idefaults = map_newindexer(shape, As)
     naT = Val{nfields(As)}
-    _broadcast(f, indexmaps, As, naT, iter)
+    _broadcast(f, keeps, Idefaults, As, naT, iter)
 end
 =#
 
 @inline bitbroadcast(f, As...) = broadcast!(f, similar(BitArray, broadcast_shape(As...)), As...)
 
-broadcast_getindex(src::AbstractArray, I::AbstractArray...) = broadcast_getindex!(Array{eltype(src)}(to_shape(broadcast_shape(I...))), src, I...)
+broadcast_getindex(src::AbstractArray, I::AbstractArray...) = broadcast_getindex!(similar(Array{eltype(src)}, broadcast_shape(I...)), src, I...)
 @generated function broadcast_getindex!(dest::AbstractArray, src::AbstractArray, I::AbstractArray...)
     N = length(I)
     Isplat = Expr[:(I[$d]) for d = 1:N]
@@ -232,7 +248,8 @@ broadcast_getindex(src::AbstractArray, I::AbstractArray...) = broadcast_getindex
         @nexprs $N d->(I_d = I[d])
         check_broadcast_shape(indices(dest), $(Isplat...))  # unnecessary if this function is never called directly
         checkbounds(src, $(Isplat...))
-        @nloops $N i dest d->(@nexprs $N k->(j_d_k = size(I_k, d) == 1 ? 1 : i_d)) begin
+        @nexprs $N d->(@nexprs $N k->(Ibcast_d_k = indices(I_k, d) == OneTo(1)))
+        @nloops $N i dest d->(@nexprs $N k->(j_d_k = Ibcast_d_k ? 1 : i_d)) begin
             @nexprs $N k->(@inbounds J_k = @nref $N I_k d->j_d_k)
             @inbounds (@nref $N dest i) = (@nref $N src J)
         end
@@ -248,18 +265,19 @@ end
         checkbounds(A, $(Isplat...))
         shape = broadcast_shape($(Isplat...))
         @nextract $N shape d->(length(shape) < d ? OneTo(1) : shape[d])
+        @nexprs $N d->(@nexprs $N k->(Ibcast_d_k = indices(I_k, d) == 1:1))
         if !isa(x, AbstractArray)
             xA = convert(eltype(A), x)
-            @nloops $N i d->shape_d d->(@nexprs $N k->(j_d_k = size(I_k, d) == 1 ? 1 : i_d)) begin
+            @nloops $N i d->shape_d d->(@nexprs $N k->(j_d_k = Ibcast_d_k ? 1 : i_d)) begin
                 @nexprs $N k->(@inbounds J_k = @nref $N I_k d->j_d_k)
                 @inbounds (@nref $N A J) = xA
             end
         else
             X = x
-            @nexprs $N d->(shapelen_d = dimlength(shape_d))
+            @nexprs $N d->(shapelen_d = length(shape_d))
             @ncall $N Base.setindex_shape_check X shapelen
             Xstate = start(X)
-            @inbounds @nloops $N i d->shape_d d->(@nexprs $N k->(j_d_k = size(I_k, d) == 1 ? 1 : i_d)) begin
+            @inbounds @nloops $N i d->shape_d d->(@nexprs $N k->(j_d_k = Ibcast_d_k ? 1 : i_d)) begin
                 @nexprs $N k->(J_k = @nref $N I_k d->j_d_k)
                 x_el, Xstate = next(X, Xstate)
                 (@nref $N A J) = x_el
@@ -290,11 +308,11 @@ end
 function broadcast_bitarrays(scalarf, bitf, A::AbstractArray{Bool}, B::AbstractArray{Bool})
     local shape
     try
-        shape = promote_shape(size(A), size(B))
+        shape = promote_shape(indices(A), indices(B))
     catch
         return bitbroadcast(scalarf, A, B)
     end
-    F = BitArray(shape)
+    F = BitArray(to_shape(shape))
     Fc = F.chunks
     Ac = BitArray(A).chunks
     Bc = BitArray(B).chunks
@@ -381,11 +399,11 @@ end
 function (.^){T<:Integer}(A::BitArray, B::Array{T})
     local shape
     try
-        shape = promote_shape(size(A), size(B))
+        shape = promote_shape(indices(A), indices(B))
     catch
         return bitbroadcast(^, A, B)
     end
-    F = BitArray(shape)
+    F = BitArray(to_shape(shape))
     l = length(F)
     l == 0 && return F
     Ac = A.chunks

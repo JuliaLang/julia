@@ -93,7 +93,7 @@ foldr(op, itr) = mapfoldr(identity, op, itr)
 
 ## reduce & mapreduce
 
-function mapreduce_impl(f, op, A::AbstractArray, ifirst::Int, ilast::Int, blksize::Int=pairwise_blocksize(f, op))
+function mapreduce_impl(f, op, A::AbstractArray, ifirst::Integer, ilast::Integer, blksize::Int=pairwise_blocksize(f, op))
     if ifirst + blksize > ilast
         # sequential portion
         fx1 = r_promote(op, f(A[ifirst]))
@@ -141,23 +141,26 @@ mr_empty(f, op::typeof(|), T) = false
 _mapreduce(f, op, A::AbstractArray) = _mapreduce(f, op, linearindexing(A), A)
 
 function _mapreduce{T}(f, op, ::LinearFast, A::AbstractArray{T})
-    n = Int(length(A))
-    if n == 0
-        return mr_empty(f, op, T)
-    elseif n == 1
-        return r_promote(op, f(A[1]))
-    elseif n < 16
-        fx1 = r_promote(op, f(A[1]))
-        fx2 = r_promote(op, f(A[2]))
-        s = op(fx1, fx2)
-        i = 2
-        while i < n
-            @inbounds Ai = A[i+=1]
-            s = op(s, f(Ai))
+    inds = linearindices(A)
+    n = length(inds)
+    @inbounds begin
+        if n == 0
+            return mr_empty(f, op, T)
+        elseif n == 1
+            return r_promote(op, f(A[inds[1]]))
+        elseif n < 16
+            fx1 = r_promote(op, f(A[inds[1]]))
+            fx2 = r_promote(op, f(A[inds[2]]))
+            s = op(fx1, fx2)
+            i = inds[2]
+            while i < last(inds)
+                Ai = A[i+=1]
+                s = op(s, f(Ai))
+            end
+            return s
+        else
+            return mapreduce_impl(f, op, A, first(inds), last(inds))
         end
-        return s
-    else
-        return mapreduce_impl(f, op, A, 1, n)
     end
 end
 

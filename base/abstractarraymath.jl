@@ -11,7 +11,7 @@ transpose(a::AbstractArray) = error("transpose not implemented for $(typeof(a)).
 
 ## Constructors ##
 
-vec(a::AbstractArray) = reshape(a,length(a))
+vec(a::AbstractArray) = reshape(a,_length(a))
 vec(a::AbstractVector) = a
 
 _sub(::Tuple{}, ::Tuple{}) = ()
@@ -74,22 +74,23 @@ function flipdim(A::AbstractArray, d::Integer)
     if d > nd || isempty(A)
         return copy(A)
     end
+    inds = indices(A)
     B = similar(A)
     nnd = 0
     for i = 1:nd
-        nnd += Int(size(A,i)==1 || i==d)
+        nnd += Int(length(inds[i])==1 || i==d)
     end
-    inds = indices(A, d)
-    sd = first(inds)+last(inds)
+    indsd = inds[d]
+    sd = first(indsd)+last(indsd)
     if nnd==nd
         # flip along the only non-singleton dimension
-        for i in inds
+        for i in indsd
             B[i] = A[sd-i]
         end
         return B
     end
     alli = [ indices(B,n) for n in 1:nd ]
-    for i in inds
+    for i in indsd
         B[[ n==d ? sd-i : alli[n] for n in 1:nd ]...] = slicedim(A, d, i)
     end
     return B
