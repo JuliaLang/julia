@@ -916,7 +916,7 @@ randexp
 """
     chop(string, i = 1)
 
-Remove the last `i` characters from a string.
+Remove the last `i` characters from a string. Will not handle multi-byte unicode correctly unless ``i`` is 1.
 """
 chop
 
