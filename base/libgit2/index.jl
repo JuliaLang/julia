@@ -118,3 +118,13 @@ function Base.getindex(idx::GitIndex, i::Csize_t)
     return unsafe_load(convert(Ptr{IndexEntry}, ie_ptr), 1)
 end
 Base.getindex(idx::GitIndex, i::Int) = getindex(idx, Csize_t(i))
+
+function Base.find(path::String, idx::GitIndex)
+    pos_ref = Ref{Csize_t}(0)
+    ret = ccall((:git_index_find, :libgit2), Cint,
+                  (Ref{Csize_t}, Ptr{Void}, Cstring), pos_ref, idx.ptr, path)
+    ret == Error.ENOTFOUND && return Nullable{Csize_t}()
+    return Nullable(pos_ref[]+1)
+end
+
+stage(ie::IndexEntry) = ccall((:git_index_entry_stage, :libgit2), Cint, (Ptr{IndexEntry},), Ref(ie))

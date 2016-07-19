@@ -165,6 +165,7 @@ function checkout_head(repo::GitRepo; options::CheckoutOptions = CheckoutOptions
                  repo.ptr, Ref(options))
 end
 
+"""Updates some entries, determined by the `pathspecs`, in the index from the target commit tree."""
 function reset!{T<:AbstractString, S<:GitObject}(repo::GitRepo, obj::Nullable{S}, pathspecs::T...)
     with(StrArrayStruct(pathspecs...)) do sa
         @check ccall((:git_reset_default, :libgit2), Cint,
@@ -175,6 +176,7 @@ function reset!{T<:AbstractString, S<:GitObject}(repo::GitRepo, obj::Nullable{S}
     end
 end
 
+"""Sets the current head to the specified commit oid and optionally resets the index and working tree to match."""
 function reset!(repo::GitRepo, obj::GitObject, mode::Cint;
                checkout_opts::CheckoutOptions = CheckoutOptions())
     @check ccall((:git_reset, :libgit2), Cint,

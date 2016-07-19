@@ -468,6 +468,65 @@ mktempdir() do dir
         #end
     #end
 
+    #@testset "Modify and reset repository" begin
+        repo = LibGit2.GitRepo(test_repo)
+        try
+            # check index for file
+            LibGit2.with(LibGit2.GitIndex(repo)) do idx
+                i = find(test_file, idx)
+                @test !isnull(i)
+                @test idx[get(i)] !== nothing
+            end
+
+            # check non-existent file status
+            st = LibGit2.status(repo, "XYZ")
+            @test isnull(st)
+
+            # check file status
+            st = LibGit2.status(repo, test_file)
+            @test !isnull(st)
+            @test LibGit2.isset(get(st), LibGit2.Consts.STATUS_CURRENT)
+
+            # modify file
+            open(joinpath(test_repo, test_file), "a") do io
+                write(io, 0x41)
+            end
+
+            # file modified but not staged
+            st_mod = LibGit2.status(repo, test_file)
+            @test !LibGit2.isset(get(st_mod), LibGit2.Consts.STATUS_INDEX_MODIFIED)
+            @test LibGit2.isset(get(st_mod), LibGit2.Consts.STATUS_WT_MODIFIED)
+
+            # stage file
+            LibGit2.add!(repo, test_file)
+
+            # modified file staged
+            st_stg = LibGit2.status(repo, test_file)
+            @test LibGit2.isset(get(st_stg), LibGit2.Consts.STATUS_INDEX_MODIFIED)
+            @test !LibGit2.isset(get(st_stg), LibGit2.Consts.STATUS_WT_MODIFIED)
+
+            # try to unstage to unknown commit
+            LibGit2.reset!(repo, "XYZ", test_file)
+
+            # status should not change
+            st_new = LibGit2.status(repo, test_file)
+            @test get(st_new) == get(st_stg)
+
+            # try to unstage to HEAD
+            LibGit2.reset!(repo, LibGit2.Consts.HEAD_FILE, test_file)
+            st_uns = LibGit2.status(repo, test_file)
+            @test get(st_uns) == get(st_mod)
+
+            # reset repo
+            LibGit2.reset!(repo, LibGit2.head_oid(repo), LibGit2.Consts.RESET_HARD)
+            open(joinpath(test_repo, test_file), "r") do io
+                @test read(io)[end] != 0x41
+            end
+        finally
+            finalize(repo)
+        end
+    #end
+
     #@testset "Transact test repository" begin
         repo = LibGit2.GitRepo(test_repo)
         try
