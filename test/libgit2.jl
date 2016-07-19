@@ -506,7 +506,7 @@ mktempdir() do dir
             @test !LibGit2.isset(get(st_stg), LibGit2.Consts.STATUS_WT_MODIFIED)
 
             # try to unstage to unknown commit
-            LibGit2.reset!(repo, "XYZ", test_file)
+            @test_throws LibGit2.Error.GitError LibGit2.reset!(repo, "XYZ", test_file)    
 
             # status should not change
             st_new = LibGit2.status(repo, test_file)
@@ -518,6 +518,8 @@ mktempdir() do dir
             @test get(st_uns) == get(st_mod)
 
             # reset repo
+            @test_throws LibGit2.Error.GitError LibGit2.reset!(repo, LibGit2.Oid(), LibGit2.Consts.RESET_HARD)
+
             LibGit2.reset!(repo, LibGit2.head_oid(repo), LibGit2.Consts.RESET_HARD)
             open(joinpath(test_repo, test_file), "r") do io
                 @test read(io)[end] != 0x41
