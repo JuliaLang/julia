@@ -528,12 +528,6 @@ let
 end
 @test glob_x3 == 12
 
-# issue #7272
-@test expand(parse("let
-              global x = 2
-              local x = 1
-              end")) == Expr(:error, "variable \"x\" declared both local and global")
-
 # let - new variables, including undefinedness
 function let_undef()
     first = true
@@ -1755,26 +1749,6 @@ let
         func
     end
     @test Test()() === nothing
-end
-
-# make sure front end can correctly print values to error messages
-let ex = expand(parse("\"a\"=1"))
-    @test ex == Expr(:error, "invalid assignment location \"\"a\"\"")
-end
-
-# make sure that incomplete tags are detected correctly
-# (i.e. error messages in src/julia-parser.scm must be matched correctly
-# by the code in base/client.jl)
-for (str, tag) in Dict("" => :none, "\"" => :string, "#=" => :comment, "'" => :char,
-                       "`" => :cmd, "begin;" => :block, "quote;" => :block,
-                       "let;" => :block, "for i=1;" => :block, "function f();" => :block,
-                       "f() do x;" => :block, "module X;" => :block, "type X;" => :block,
-                       "immutable X;" => :block, "(" => :other, "[" => :other,
-                       "begin" => :other, "quote" => :other,
-                       "let" => :other, "for" => :other, "function" => :other,
-                       "f() do" => :other, "module" => :other, "type" => :other,
-                       "immutable" => :other)
-    @test Base.incomplete_tag(parse(str, raise=false)) == tag
 end
 
 # issue #6031
@@ -3347,9 +3321,6 @@ typealias PossiblyInvalidUnion{T} Union{T,Int}
 @test Symbol("x") === Symbol("x")
 @test split(string(gensym("abc")),'#')[3] == "abc"
 
-# meta nodes for optional positional arguments
-@test expand(:(@inline f(p::Int=2) = 3)).args[2].args[3].inlineable
-
 # issue #13007
 call13007{T,N}(::Type{Array{T,N}}) = 0
 call13007(::Type{Array}) = 1
@@ -4161,20 +4132,6 @@ function f16023()
 end
 @test_throws UndefVarError f16023()
 
-# issue #16096
-module M16096
-macro iter()
-    quote
-        @inline function foo(sub)
-            it = 1
-        end
-    end
-end
-end
-let ex = expand(:(@M16096.iter))
-    @test !(isa(ex,Expr) && ex.head === :error)
-end
-
 # issue #16158
 function f16158(x)
     bar(x) = length(x)==1 ? x : string(x, bar(x[1:end-1]))
@@ -4392,26 +4349,6 @@ function trigger14878()
     return w
 end
 @test_throws UndefVarError trigger14878()
-
-# issue #15838
-module A15838
-    macro f() end
-    const x = :a
-end
-module B15838
-    import A15838.@f
-    macro f(x); return :x; end
-    const x = :b
-end
-@test A15838.@f() === nothing
-@test A15838.@f(1) === :b
-let nometh = expand(:(A15838.@f(1, 2)))
-    @test (nometh::Expr).head === :error
-    @test length(nometh.args) == 1
-    e = nometh.args[1]::MethodError
-    @test e.f === getfield(A15838, Symbol("@f"))
-    @test e.args === (1,2)
-end
 
 # issue #1090
 function f1090(x)::Int
