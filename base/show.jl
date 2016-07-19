@@ -1072,7 +1072,6 @@ function dump(io::IO, x::SimpleVector, n::Int, indent)
             end
         end
     end
-    isempty(indent) && println(io)
     nothing
 end
 
@@ -1098,11 +1097,13 @@ function dump(io::IO, x::ANY, n::Int, indent)
     else
         !isa(x,Function) && print(io, " ", x)
     end
-    isempty(indent) && println(io)
     nothing
 end
 
 dump(io::IO, x::Module, n::Int, indent) = print(io, "Module ", x)
+dump(io::IO, x::String, n::Int, indent) = (print(io, "String "); show(io, x))
+dump(io::IO, x::Symbol, n::Int, indent) = print(io, typeof(x), " ", x)
+dump(io::IO, x::Union,  n::Int, indent) = print(io, x)
 
 function dump_elts(io::IO, x::Array, n::Int, indent, i0, i1)
     for i in i0:i1
@@ -1136,22 +1137,10 @@ function dump(io::IO, x::Array, n::Int, indent)
             end
         end
     end
-    isempty(indent) && println(io)
-    nothing
-end
-function dump(io::IO, x::Symbol, n::Int, indent)
-    print(io, typeof(x), " ", x)
-    isempty(indent) && println(io)
     nothing
 end
 
 # Types
-function dump(io::IO, x::Union, n::Int, indent)
-    print(io, x)
-    isempty(indent) && println(io)
-    nothing
-end
-
 function dump(io::IO, x::DataType, n::Int, indent)
     print(io, x)
     if x !== Any
@@ -1168,14 +1157,13 @@ function dump(io::IO, x::DataType, n::Int, indent)
             end
         end
     end
-    isempty(indent) && println(io)
     nothing
 end
 
 # dumptype is for displaying abstract type hierarchies,
 # based on Jameson Nash's examples/typetree.jl
 function dumptype(io::IO, x::ANY, n::Int, indent)
-    println(io, x)
+    print(io, x)
     n == 0 && return  # too deeply nested
     isa(x, DataType) && x.abstract && dumpsubtypes(io, x, Main, n, indent)
     nothing
@@ -1194,15 +1182,18 @@ function dumpsubtypes(io::IO, x::DataType, m::Module, n::Int, indent)
                 # recurse into primary module bindings
                 dumpsubtypes(io, x, t, n, indent)
             elseif isa(t, TypeConstructor) && directsubtype(t, x)
+                println(io)
                 print(io, indent, "  ", m, ".", s)
                 isempty(t.parameters) || print(io, "{", join(t.parameters, ","), "}")
-                println(io, " = ", t)
+                print(io, " = ", t)
             elseif isa(t, Union) && directsubtype(t, x)
-                println(io, indent, "  ", m, ".", s, " = ", t)
+                println(io)
+                print(io, indent, "  ", m, ".", s, " = ", t)
             elseif isa(t, DataType) && directsubtype(t, x)
+                println(io)
                 if t.name.module !== m || t.name.name != s
                     # aliases to types
-                    println(io, indent, "  ", m, ".", s, " = ", t)
+                    print(io, indent, "  ", m, ".", s, " = ", t)
                 else
                     # primary type binding
                     print(io, indent, "  ")
@@ -1217,12 +1208,10 @@ end
 
 # For abstract types, use _dumptype only if it's a form that will be called
 # interactively.
-dflt_io() = IOContext(STDOUT::IO, :limit => true)
-dump(io::IO, x::DataType; maxdepth=8) = (x.abstract ? dumptype : dump)(io, x, maxdepth, "")
-dump(x::DataType; maxdepth=8) = (x.abstract ? dumptype : dump)(dflt_io(), x, maxdepth, "")
+dump(io::IO, x::DataType; maxdepth=8) = ((x.abstract ? dumptype : dump)(io, x, maxdepth, ""); println(io))
 
-dump(io::IO, arg; maxdepth=8) = dump(io, arg, maxdepth, "")
-dump(arg; maxdepth=8) = dump(dflt_io(), arg, maxdepth, "")
+dump(io::IO, arg; maxdepth=8) = (dump(io, arg, maxdepth, ""); println(io))
+dump(arg; maxdepth=8) = dump(IOContext(STDOUT::IO, :limit => true), arg; maxdepth=maxdepth)
 
 
 """

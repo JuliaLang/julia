@@ -278,9 +278,6 @@ end
 let oldout = STDOUT, olderr = STDERR
     local rdout, wrout, rderr, wrerr, out, err, rd, wr
     try
-        rd, wr = redirect_stdout()
-        @test dump(STDERR) == nothing
-
         # pr 16917
         rdout, wrout = redirect_stdout()
         @test wrout === STDOUT
@@ -288,10 +285,12 @@ let oldout = STDOUT, olderr = STDERR
         rderr, wrerr = redirect_stderr()
         @test wrerr === STDERR
         err = @async readstring(rderr)
+        @test dump(Int64) == nothing
         if !is_windows()
             close(wrout)
             close(wrerr)
         end
+
         for io in (Core.STDOUT, Core.STDERR)
             Core.println(io, "TESTA")
             println(io, "TESTB")
@@ -308,7 +307,7 @@ let oldout = STDOUT, olderr = STDERR
         redirect_stderr(olderr)
         close(wrout)
         close(wrerr)
-        @test wait(out) == "TESTA\nTESTB\nΑ1Β2\"A\"\nA\n123\"C\"\n"
+        @test wait(out) == "Int64 <: Signed\nTESTA\nTESTB\nΑ1Β2\"A\"\nA\n123\"C\"\n"
         @test wait(err) == "TESTA\nTESTB\nΑ1Β2\"A\"\n"
     finally
         redirect_stdout(oldout)
@@ -496,7 +495,7 @@ end
 
 # PR 17117
 # test show array
-let s  = IOBuffer(Array{UInt8}(0), true, true)
+let s = IOBuffer(Array{UInt8}(0), true, true)
     Base.showarray(s, [1,2,3], false, header = false)
     @test String(resize!(s.data, s.size)) == " 1\n 2\n 3"
 end
@@ -523,6 +522,31 @@ end
 let repr = sprint(dump, Integer)
     @test contains(repr, "UInt128")
     @test !contains(repr, "Any")
+end
+let repr = sprint(dump, Union{Integer, Float32})
+    @test repr == "Union{Integer,Float32}\n" || repr == "Union{Float32,Integer}\n"
+end
+let repr = sprint(dump, Core.svec())
+    @test repr == "empty SimpleVector\n"
+end
+let sv = Core.svec(:a, :b, :c)
+    # unsafe replacement of :c with #undef to test handling of incomplete SimpleVectors
+    unsafe_store!(convert(Ptr{Ptr{Void}}, Base.data_pointer_from_objref(sv)) + 3 * sizeof(Ptr), C_NULL)
+    repr = sprint(dump, sv)
+    @test repr == "SimpleVector\n  1: Symbol a\n  2: Symbol b\n  3: #undef\n"
+end
+let repr = sprint(dump, sin)
+    @test repr == "sin (function of type Base.#sin)\n"
+end
+let repr = sprint(dump, Base.Test)
+    @test repr == "Module Base.Test\n"
+end
+let a = Array{Any}(10000)
+    a[2] = "elemA"
+    a[4] = "elemB"
+    a[11] = "elemC"
+    repr = sprint(0, dump, a; env= (:limit => true))
+    @test repr == "Array{Any}((10000,))\n  1: #undef\n  2: String \"elemA\"\n  3: #undef\n  4: String \"elemB\"\n  5: #undef\n  ...\n  9996: #undef\n  9997: #undef\n  9998: #undef\n  9999: #undef\n  10000: #undef\n"
 end
 
 # issue #17338
