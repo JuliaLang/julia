@@ -7,8 +7,8 @@ function update!{T<:@compat(Union{SHA1_CTX,SHA2_CTX,SHA3_CTX})}(context::T, data
     UIntXXX = typeof(context.bytecount)
 
     # Process as many complete blocks as possible
-    len = UIntXXX(length(data))
-    data_idx = UIntXXX(0)
+    len = convert(UIntXXX, length(data))
+    data_idx = convert(UIntXXX, 0)
     usedspace = context.bytecount % blocklen(T)
     while len - data_idx + usedspace >= blocklen(T)
         # Fill up as much of the buffer as we can with the data given us
@@ -19,7 +19,7 @@ function update!{T<:@compat(Union{SHA1_CTX,SHA2_CTX,SHA3_CTX})}(context::T, data
         transform!(context)
         context.bytecount += blocklen(T) - usedspace
         data_idx += blocklen(T) - usedspace
-        usedspace = UIntXXX(0)
+        usedspace = convert(UIntXXX, 0)
     end
 
     # There is less than a complete block left, but we need to save the leftovers into context.buffer:
