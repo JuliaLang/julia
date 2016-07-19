@@ -567,15 +567,29 @@ static void jl_serialize_datatype(ios_t *s, jl_datatype_t *dt)
             write_int32(s, dt->uid);
         }
     }
-    if (has_layout) {
-        size_t nf = dt->layout->nfields;
-        write_uint16(s, nf);
-        write_int8(s, dt->layout->fielddesc_type);
-        write_int32(s, dt->layout->alignment);
-        write_int8(s, dt->layout->haspadding);
-        write_int8(s, dt->layout->pointerfree);
-        size_t fieldsize = jl_fielddesc_size(dt->layout->fielddesc_type);
-        ios_write(s, (char*)(&dt->layout[1]), nf * fieldsize);
+
+     if (has_layout) {
+        uint8_t layout = 0;
+        if (dt->layout == jl_array_type->layout) {
+            layout = 1;
+        }
+        else if (dt->layout == jl_void_type->layout) {
+            layout = 2;
+        }
+        else if (dt->layout == jl_pointer_type->layout) {
+            layout = 3;
+        }
+        write_uint8(s, layout);
+        if (layout == 0) {
+            size_t nf = dt->layout->nfields;
+            write_uint16(s, nf);
+            write_int8(s, dt->layout->fielddesc_type);
+            write_int32(s, dt->layout->alignment);
+            write_int8(s, dt->layout->haspadding);
+            write_int8(s, dt->layout->pointerfree);
+            size_t fieldsize = jl_fielddesc_size(dt->layout->fielddesc_type);
+            ios_write(s, (char*)(&dt->layout[1]), nf * fieldsize);
+        }
     }
 
     if (has_instance)
@@ -1201,18 +1215,31 @@ static jl_value_t *jl_deserialize_datatype(ios_t *s, int pos, jl_value_t **loc)
     }
 
     if (has_layout) {
-        uint16_t nf = read_uint16(s);
-        uint8_t fielddesc_type = read_int8(s);
-        size_t fielddesc_size = nf > 0 ? jl_fielddesc_size(fielddesc_type) : 0;
-        jl_datatype_layout_t *layout = (jl_datatype_layout_t*)jl_gc_perm_alloc(
-                sizeof(jl_datatype_layout_t) + nf * fielddesc_size);
-        layout->nfields = nf;
-        layout->fielddesc_type = fielddesc_type;
-        layout->alignment = read_int32(s);
-        layout->haspadding = read_int8(s);
-        layout->pointerfree = read_int8(s);
-        ios_read(s, (char*)&layout[1], nf * fielddesc_size);
-        dt->layout = layout;
+        uint8_t layout = read_uint8(s);
+        if (layout == 1) {
+            dt->layout = jl_array_type->layout;
+        }
+        else if (layout == 2) {
+            dt->layout = jl_void_type->layout;
+        }
+        else if (layout == 3) {
+            dt->layout = jl_pointer_type->layout;
+        }
+        else {
+            assert(layout == 0);
+            uint16_t nf = read_uint16(s);
+            uint8_t fielddesc_type = read_int8(s);
+            size_t fielddesc_size = nf > 0 ? jl_fielddesc_size(fielddesc_type) : 0;
+            jl_datatype_layout_t *layout = (jl_datatype_layout_t*)jl_gc_perm_alloc(
+                    sizeof(jl_datatype_layout_t) + nf * fielddesc_size);
+            layout->nfields = nf;
+            layout->fielddesc_type = fielddesc_type;
+            layout->alignment = read_int32(s);
+            layout->haspadding = read_int8(s);
+            layout->pointerfree = read_int8(s);
+            ios_read(s, (char*)&layout[1], nf * fielddesc_size);
+            dt->layout = layout;
+        }
     }
 
     if (tag == 5) {
