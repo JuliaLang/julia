@@ -483,6 +483,10 @@ ifeq (exists, $(shell [ -e $(BUILDROOT)/Make.user ] && echo exists ))
 include $(BUILDROOT)/Make.user
 endif
 
+ifneq ($(CC_BASE)$(CXX_BASE),$(shell echo $(CC) | cut -d' ' -f1)$(shell echo $(CXX) | cut -d' ' -f1))
+    $(error Forgot override directive on CC or CXX in Make.user? Cowardly refusing to build)
+endif
+
 ifeq ($(SANITIZE),1)
 ifeq ($(SANITIZE_MEMORY),1)
 SANITIZE_OPTS := -fsanitize=memory -fsanitize-memory-track-origins -fno-omit-frame-pointer
