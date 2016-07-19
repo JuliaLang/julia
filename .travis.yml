@@ -95,7 +95,6 @@ before_install:
 script:
     - make -C moreutils mispipe
     - make $BUILDOPTS -C base version_git.jl.phony
-    - make $BUILDOPTS NO_GIT=1 -C deps distclean-libgit2 distclean-libssh2 distclean-mbedtls
     - moreutils/mispipe "make $BUILDOPTS NO_GIT=1 -C deps" bar > deps.log || cat deps.log
     - make $BUILDOPTS NO_GIT=1 prefix=/tmp/julia install | moreutils/ts -s "%.s"
     - make $BUILDOPTS NO_GIT=1 build-stats
