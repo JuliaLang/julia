@@ -555,3 +555,11 @@ end
 
 # error throwing branch from #10560
 @test_throws ArgumentError Base.tryparse_internal(Bool, "foo", 1, 2, 10, true)
+
+# PR #17393
+for op in (:.==, :.&, :.|, :.≤)
+    @test parse("a $op b") == Expr(:call, op, :a, :b)
+end
+for op in (:.=, :.+=)
+    @test parse("a $op b") == Expr(op, :a, :b)
+end
