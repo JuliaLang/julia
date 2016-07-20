@@ -194,13 +194,15 @@ static DenseMap<AttributeSet,
                 std::map<std::tuple<GlobalVariable*,FunctionType*,
                                     CallingConv::ID>,GlobalVariable*>> allPltMap;
 
-#ifdef LLVM37 // needed for musttail
 // Emit a "PLT" entry that will be lazily initialized
 // when being called the first time.
 static Value *emit_plt(FunctionType *functype, const AttributeSet &attrs,
                        CallingConv::ID cc, const char *f_lib, const char *f_name)
 {
     assert(imaging_mode);
+    // Don't do this for vararg functions so that the `musttail` is only
+    // an optimization and is not required to function correctly.
+    assert(!functype->isVarArg());
     GlobalVariable *libptrgv;
     GlobalVariable *llvmgv;
     void *symaddr;
@@ -261,7 +263,12 @@ static Value *emit_plt(FunctionType *functype, const AttributeSet &attrs,
             builder.CreateUnreachable();
         }
         else {
+            // musttail support is very bad on ARM, PPC, PPC64 (as of LLVM 3.9)
+            // Known failures includes vararg (not needed here) and sret.
+#if defined(LLVM37) && (defined(_CPU_X86_) || defined(_CPU_X86_64_) || \
+                        defined(_CPU_AARCH64_))
             ret->setTailCallKind(CallInst::TCK_MustTail);
+#endif
             if (functype->getReturnType() == T_void) {
                 builder.CreateRetVoid();
             }
@@ -287,7 +294,6 @@ static Value *emit_plt(FunctionType *functype, const AttributeSet &attrs,
     }
     return builder.CreateBitCast(builder.CreateLoad(got), funcptype);
 }
-#endif
 
 // --- ABI Implementations ---
 // Partially based on the LDC ABI implementations licensed under the BSD 3-clause license
@@ -1703,16 +1709,12 @@ static jl_cgval_t emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
 
         PointerType *funcptype = PointerType::get(functype,0);
         if (imaging_mode) {
-#ifdef LLVM37
-            // ARM, PPC, PPC64 (as of LLVM 3.9) don't support `musttail` for vararg functions.
-            // And musttail can't precede unreachable, but is required for vararg (https://llvm.org/bugs/show_bug.cgi?id=23766)
+            // vararg requires musttail,
+            // but musttail is incompatible with noreturn.
             if (functype->isVarArg())
                 llvmf = runtime_sym_lookup(funcptype, f_lib, f_name, ctx->f);
             else
                 llvmf = emit_plt(functype, attrs, cc, f_lib, f_name);
-#else
-            llvmf = runtime_sym_lookup(funcptype, f_lib, f_name, ctx->f);
-#endif
         }
         else {
             void *symaddr = jl_dlsym_e(jl_get_library(f_lib), f_name);
