@@ -3009,7 +3009,7 @@ static Value *emit_condition(const jl_cgval_t &condV, const std::string &msg,
     }
     emit_typecheck(condV, (jl_value_t*)jl_bool_type, msg, ctx);
     if (condV.isboxed) {
-        return builder.CreateICmpEQ(boxed(condV, ctx), tbaa_decorate(tbaa_const, builder.CreateLoad(prepare_global(jlfalse_var))));
+        return builder.CreateICmpEQ(boxed(condV, ctx), literal_pointer_val(jl_false));
     }
     // not a boolean
     return ConstantInt::get(T_int1,0); // TODO: replace with Undef
