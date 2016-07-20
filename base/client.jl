@@ -114,8 +114,8 @@ function eval_user_input(ast::ANY, show_value)
                 errcount, lasterr = 0, ()
             else
                 ast = expand(ast)
-                value = eval(Main,ast)
-                eval(Main, :(ans = $(Expr(:quote, value))))
+                value = eval(Main, ast)
+                eval(Main, Expr(:(=), :ans, Expr(:call, ()->value)))
                 if !is(value,nothing) && show_value
                     if have_color
                         print(answer_color())
