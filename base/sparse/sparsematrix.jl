@@ -253,39 +253,26 @@ similar(S::SparseMatrixCSC, Tv::Type=eltype(S)) = SparseMatrixCSC(S.m, S.n, copy
 similar{Tv,Ti,TvNew,TiNew}(S::SparseMatrixCSC{Tv,Ti}, ::Type{TvNew}, ::Type{TiNew}) = SparseMatrixCSC(S.m, S.n, convert(Array{TiNew},S.colptr), convert(Array{TiNew}, S.rowval), Array{TvNew}(length(S.nzval)))
 @inline similar{Tv}(S::SparseMatrixCSC, ::Type{Tv}, d::Dims) = spzeros(Tv, d...)
 
-function convert{Tv,Ti,TvS,TiS}(::Type{SparseMatrixCSC{Tv,Ti}}, S::SparseMatrixCSC{TvS,TiS})
-    if Tv == TvS && Ti == TiS
-        return S
-    else
-        return SparseMatrixCSC(S.m, S.n,
-                               convert(Vector{Ti},S.colptr),
-                               convert(Vector{Ti},S.rowval),
-                               convert(Vector{Tv},S.nzval))
-    end
+# convert'ing between SparseMatrixCSC types
+convert{Tv}(::Type{AbstractMatrix{Tv}}, A::SparseMatrixCSC) = convert(SparseMatrixCSC{Tv}, A)
+convert{Tv}(::Type{SparseMatrixCSC{Tv}}, S::SparseMatrixCSC) = convert(SparseMatrixCSC{Tv,eltype(S.colptr)}, S)
+convert{Tv,Ti}(::Type{SparseMatrixCSC{Tv,Ti}}, S::SparseMatrixCSC{Tv,Ti}) = S
+function convert{Tv,Ti}(::Type{SparseMatrixCSC{Tv,Ti}}, S::SparseMatrixCSC)
+    eltypeTicolptr = convert(Vector{Ti}, S.colptr)
+    eltypeTirowval = convert(Vector{Ti}, S.rowval)
+    eltypeTvnzval = convert(Vector{Tv}, S.nzval)
+    return SparseMatrixCSC(S.m, S.n, eltypeTicolptr, eltypeTirowval, eltypeTvnzval)
 end
-
-function convert{Tv,TvS,TiS}(::Type{SparseMatrixCSC{Tv}}, S::SparseMatrixCSC{TvS,TiS})
-    if Tv == TvS
-        return S
-    else
-        return SparseMatrixCSC(S.m, S.n,
-                               S.colptr,
-                               S.rowval,
-                               convert(Vector{Tv},S.nzval))
-    end
-end
-
-function convert{Tv,Ti}(::Type{SparseMatrixCSC{Tv,Ti}}, M::AbstractMatrix)
-    m, n = size(M)
-    (I, J, V) = findnz(M)
-    return sparse_IJ_sorted!(convert(Vector{Ti},I),
-                             convert(Vector{Ti},J),
-                             convert(Vector{Tv},V),
-                             m, n)
-end
-convert{T}(::Type{AbstractMatrix{T}}, A::SparseMatrixCSC) = convert(SparseMatrixCSC{T}, A)
+# convert'ing from other matrix types to SparseMatrixCSC (also see sparse())
 convert(::Type{SparseMatrixCSC}, M::Matrix) = sparse(M)
-
+function convert{Tv,Ti}(::Type{SparseMatrixCSC{Tv,Ti}}, M::AbstractMatrix)
+    (I, J, V) = findnz(M)
+    eltypeTiI = convert(Vector{Ti}, I)
+    eltypeTiJ = convert(Vector{Ti}, J)
+    eltypeTvV = convert(Vector{Tv}, V)
+    return sparse_IJ_sorted!(eltypeTiI, eltypeTiJ, eltypeTvV, size(M)...)
+end
+# convert'ing from SparseMatrixCSC to other matrix types
 function convert{Tv}(::Type{Matrix}, S::SparseMatrixCSC{Tv})
     # Handle cases where zero(Tv) is not defined but the array is dense.
     A = length(S) == nnz(S) ? Array{Tv}(S.m, S.n) : zeros(Tv, S.m, S.n)
