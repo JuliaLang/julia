@@ -325,6 +325,9 @@ uncompressed_ast(l::LambdaInfo) =
 # Printing code representations in IR and assembly
 function _dump_function(f, t::ANY, native, wrapper, strip_ir_metadata, dump_module)
     ccall(:jl_is_in_pure_context, Bool, ()) && error("native reflection cannot be used from generated functions")
+    if isa(f, Core.Builtin)
+        throw(ArgumentError("argument is not a generic function"))
+    end
     t = tt_cons(Core.Typeof(f), to_tuple_type(t))
     llvmf = ccall(:jl_get_llvmf, Ptr{Void}, (Any, Bool, Bool), t, wrapper, native)
 
@@ -363,6 +366,9 @@ end
 
 function code_typed(f::ANY, types::ANY=Tuple; optimize=true)
     ccall(:jl_is_in_pure_context, Bool, ()) && error("code reflection cannot be used from generated functions")
+    if isa(f, Core.Builtin)
+        throw(ArgumentError("argument is not a generic function"))
+    end
     types = to_tuple_type(types)
     asts = []
     for x in _methods(f,types,-1)
@@ -380,6 +386,9 @@ end
 
 function return_types(f::ANY, types::ANY=Tuple)
     ccall(:jl_is_in_pure_context, Bool, ()) && error("code reflection cannot be used from generated functions")
+    if isa(f, Core.Builtin)
+        throw(ArgumentError("argument is not a generic function"))
+    end
     types = to_tuple_type(types)
     rt = []
     for x in _methods(f,types,-1)

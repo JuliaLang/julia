@@ -1058,9 +1058,16 @@ void *jl_get_llvmf(jl_tupletype_t *tt, bool getwrapper, bool getdeclarations)
         }
     }
     if (linfo == NULL) {
+        // no function found for argument tuple type
         JL_GC_POP();
         return NULL;
     }
+    if (linfo->def->lambda_template->code == jl_nothing) {
+        // not a generic function
+        JL_GC_POP();
+        return NULL;
+    }
+
     // make sure to compile this normally first,
     // since `emit_function` doesn't handle recursive compilation correctly
     linfo = jl_compile_for_dispatch(linfo);
