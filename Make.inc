@@ -646,7 +646,7 @@ endif
 ifneq (,$(filter $(ARCH), powerpc64 ppc64le))
 JCFLAGS += -fsigned-char
 
-override LLVM_VER:=3.8.0
+override LLVM_VER:=3.8.1
 override OPENBLAS_DYNAMIC_ARCH:=0
 override OPENBLAS_TARGET_ARCH:=POWER8
 
