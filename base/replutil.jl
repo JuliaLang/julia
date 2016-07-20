@@ -406,11 +406,7 @@ function show_method_candidates(io::IO, ex::MethodError, kwargs::Vector=Any[])
     arg_types_param = Any[arg_types.parameters...]
     # Displays the closest candidates of the given function by looping over the
     # functions methods and counting the number of matching arguments.
-    if isa(ex.f, Tuple)
-        f = ex.f[1]
-    else
-        f = ex.f
-    end
+    f = ex.f
     ft = typeof(f)
     lines = []
     # These functions are special cased to only show if first argument is matched.

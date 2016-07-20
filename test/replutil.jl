@@ -34,6 +34,10 @@ test_have_color(buf,
 Base.show_method_candidates(buf, Base.MethodError(method_c1,(1, 1, 1)))
 test_have_color(buf, "", "")
 
+# matches the implicit constructor -> convert method
+Base.show_method_candidates(buf, Base.MethodError(Tuple{}, (1, 1, 1)))
+@test contains(takebuf_string(buf), "\nClosest candidates are:\n  Tuple{}{T}(")
+
 method_c2(x::Int32, args...) = true
 method_c2(x::Int32, y::Float64, args...) = true
 method_c2(x::Int32, y::Float64) = true
