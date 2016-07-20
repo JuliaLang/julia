@@ -645,7 +645,6 @@ endif
 # If we are running on powerpc64 or ppc64, set certain options automatically
 ifneq (,$(filter $(ARCH), powerpc64 ppc64le))
 JCFLAGS += -fsigned-char
-
 override LLVM_VER:=3.8.1
 override OPENBLAS_DYNAMIC_ARCH:=0
 override OPENBLAS_TARGET_ARCH:=POWER8
@@ -656,9 +655,7 @@ endif
 ifneq (,$(findstring arm,$(ARCH)))
 JCFLAGS += -fsigned-char
 
-LLVM_ASSERTIONS=1
-#LLVM_FLAGS+="--with-float=hard --with-abi=aapcs-vfp"
-
+override LLVM_VER:=3.8.1
 override USE_BLAS64:=0
 override OPENBLAS_DYNAMIC_ARCH:=0
 override OPENBLAS_TARGET_ARCH:=ARMV7
