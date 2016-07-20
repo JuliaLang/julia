@@ -514,7 +514,7 @@ let repr = sprint(dump, Int64)
 end
 let repr = sprint(dump, Any)
     @test length(repr) > 100000
-    @test startswith(repr, "Any\n  Base.")
+    @test startswith(repr, "Any\n  Main.") || startswith(repr, "Any\n  Base.")
     @test endswith(repr, '\n')
     @test contains(repr, "     Base.Vector{T} = Array{T,1}\n")
     @test !contains(repr, "Core.Vector{T}")
