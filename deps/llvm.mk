@@ -262,13 +262,14 @@ $(LLVM_SRC_DIR)/configure: $(LLVM_SRC_DIR)/tools/lldb
 endif
 
 # LLDB still relies on plenty of python 2.x infrastructure, without checking
+llvm_python_location=$(shell /usr/bin/env python2 -c 'import sys; print(sys.executable)')
 llvm_python_workaround=$(SRCDIR)/srccache/python2_path
 $(llvm_python_workaround):
 	mkdir -p $@
 	-python -c 'import sys; sys.exit(not sys.version_info > (3, 0))' && \
-	/usr/bin/python2 -c 'import sys; sys.exit(not sys.version_info < (3, 0))' && \
-	ln -sf /usr/bin/python2 "$@/python" && \
-	ln -sf /usr/bin/python2-config "$@/python-config"
+	/usr/bin/env python2 -c 'import sys; sys.exit(not sys.version_info < (3, 0))' && \
+	ln -sf $(llvm_python_location) "$@/python" && \
+	ln -sf $(llvm_python_location)-config "$@/python-config"
 LLVM_FLAGS += --with-python="$(shell $(SRCDIR)/tools/find_python2)"
 
 ifeq ($(BUILD_CUSTOM_LIBCXX),1)
