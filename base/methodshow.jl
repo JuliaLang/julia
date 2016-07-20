@@ -28,8 +28,6 @@ function argtype_decl(env, n, sig, i, nargs, isva) # -> (argname, argtype)
             end
         end
         return s, string_with_env(env, "Vararg{", tt, ",", tn, "}")
-    elseif t == String
-        return s, "String"
     end
     return s, string_with_env(env, t)
 end
@@ -43,7 +41,7 @@ function arg_decl_parts(m::Method)
     end
     li = m.lambda_template
     file, line = "", 0
-    if li !== nothing
+    if li !== nothing && isdefined(li, :slotnames)
         argnames = li.slotnames[1:li.nargs]
         decls = Any[argtype_decl(:tvar_env => tv, argnames[i], m.sig, i, li.nargs, li.isva)
                     for i = 1:li.nargs]
@@ -51,7 +49,7 @@ function arg_decl_parts(m::Method)
             file, line = li.def.file, li.def.line
         end
     else
-        decls = Any["" for i = 1:length(m.sig.parameters)]
+        decls = Any[("", "") for i = 1:length(m.sig.parameters)]
     end
     return tv, decls, file, line
 end
@@ -76,7 +74,10 @@ function show(io::IO, m::Method; kwtype::Nullable{DataType}=Nullable{DataType}()
     tv, decls, file, line = arg_decl_parts(m)
     ft = m.sig.parameters[1]
     d1 = decls[1]
-    if ft <: Function &&
+    if m.sig === Tuple
+        print(io, m.name)
+        decls = Any[(), ("...", "")]
+    elseif ft <: Function &&
             isdefined(ft.name.module, ft.name.mt.name) &&
             ft == typeof(getfield(ft.name.module, ft.name.mt.name))
         print(io, ft.name.mt.name)
