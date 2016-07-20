@@ -163,12 +163,19 @@ jl_value_t *jl_mk_builtin_func(const char *name, jl_fptr_t fptr)
     jl_value_t *f = jl_new_generic_function_with_supertype(sname, jl_core_module, jl_builtin_type, 0);
     jl_lambda_info_t *li = jl_new_lambda_info_uninit();
     li->fptr = fptr;
-    // TODO jb/functions: what should li->code be?
-    li->code = jl_nothing; jl_gc_wb(li, li->code);
+    li->code = jl_nothing;
+    li->slottypes = jl_nothing;
+    li->specTypes = jl_anytuple_type;
+    li->ssavaluetypes = jl_box_long(0);
+    jl_gc_wb(li, li->ssavaluetypes);
+
     li->def = jl_new_method_uninit();
     li->def->name = sname;
+    // li->def->module will be set to jl_core_module by init.c
     li->def->lambda_template = li;
-    li->def->ambig = jl_nothing;
+    li->def->sig = jl_anytuple_type;
+    li->def->tvars = jl_emptysvec;
+
     jl_methtable_t *mt = jl_gf_mtable(f);
     jl_typemap_insert(&mt->cache, (jl_value_t*)mt, jl_anytuple_type, jl_emptysvec, NULL, jl_emptysvec, (jl_value_t*)li, 0, &lambda_cache, NULL);
     return f;
