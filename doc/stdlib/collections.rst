@@ -108,6 +108,34 @@ type.
 
    An iterator that generates the value ``x`` forever. If ``n`` is specified, generates ``x`` that many times (equivalent to ``take(repeated(x), n)``\ ).
 
+.. function:: iteratorsize(itertype::Type) -> IteratorSize
+
+   .. Docstring generated from Julia source
+
+   Given the type of an iterator, returns one of the following values:
+
+   * ``SizeUnknown()`` if the length (number of elements) cannot be determined in advance.
+   * ``HasLength()`` if there is a fixed, finite length.
+   * ``HasShape()`` if there is a known length plus a notion of multidimensional shape (as for an array). In this case the ``size`` function is valid for the iterator.
+   * ``IsInfinite()`` if the iterator yields values forever.
+
+   The default value (for iterators that do not define this function) is ``HasLength()``\ . This means that most iterators are assumed to implement ``length``\ .
+
+   This trait is generally used to select between algorithms that pre-allocate space for their result, and algorithms that resize their result incrementally.
+
+.. function:: iteratoreltype(itertype::Type) -> IteratorEltype
+
+   .. Docstring generated from Julia source
+
+   Given the type of an iterator, returns one of the following values:
+
+   * ``EltypeUnknown()`` if the type of elements yielded by the iterator is not known in advance.
+   * ``HasEltype()`` if the element type is known, and ``eltype`` would return a meaningful value.
+
+   ``HasEltype()`` is the default, since iterators are assumed to implement ``eltype``\ .
+
+   This trait is generally used to select between algorithms that pre-allocate a specific type of result, and algorithms that pick a result type based on the types of yielded values.
+
 Fully implemented by:
 
 - :obj:`Range`

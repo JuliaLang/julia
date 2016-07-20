@@ -11,16 +11,18 @@ A lot of the power and extensibility in Julia comes from a collection of informa
 Iteration
 ---------
 
-================================= ======================== ===========================================
-Required methods                                           Brief description
-================================= ======================== ===========================================
-:func:`start(iter) <start>`                                Returns the initial iteration state
-:func:`next(iter, state) <next>`                           Returns the current item and the next state
-:func:`done(iter, state) <done>`                           Tests if there are any items remaining
-**Important optional methods**    **Default definition**   **Brief description**
-:func:`eltype(IterType) <eltype>` ``Any``                  The type the items returned by :func:`next`
-:func:`length(iter) <length>`     (*undefined*)            The number of items, if known
-================================= ======================== ===========================================
+================================================== ======================== ===========================================
+Required methods                                                            Brief description
+================================================== ======================== ===========================================
+:func:`start(iter) <start>`                                                 Returns the initial iteration state
+:func:`next(iter, state) <next>`                                            Returns the current item and the next state
+:func:`done(iter, state) <done>`                                            Tests if there are any items remaining
+**Important optional methods**                     **Default definition**   **Brief description**
+:func:`eltype(IterType) <eltype>`                  ``Any``                  The type the items returned by :func:`next`
+:func:`length(iter) <length>`                      (*undefined*)            The number of items, if known
+:func:`iteratorsize(IterType) <iteratorsize>`      ``HasLength()``
+:func:`iteratoreltype(IterType) <iteratoreltype>`  ``HasEltype()``
+================================================== ======================== ===========================================
 
 Sequential iteration is implemented by the methods :func:`start`, :func:`done`, and :func:`next`. Instead of mutating objects as they are iterated over, Julia provides these three methods to keep track of the iteration state externally from the object. The :func:`start(iter) <start>` method returns the initial state for the iterable object ``iter``. That state gets passed along to :func:`done(iter, state) <done>`, which tests if there are any elements remaining, and :func:`next(iter, state) <next>`, which returns a tuple containing the current element and an updated ``state``. The ``state`` object can be anything, and is generally considered to be an implementation detail private to the iterable object.
 
