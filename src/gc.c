@@ -1004,7 +1004,7 @@ static void gc_sweep_other(jl_ptls_t ptls, int sweep_full)
 
 static void gc_pool_sync_nfree(jl_gc_pagemeta_t *pg, jl_taggedvalue_t *last)
 {
-    assert(pg->fl_begin_offset != -1);
+    assert(pg->fl_begin_offset != (uint16_t)-1);
     char *cur_pg = gc_page_data(last);
     // Fast path for page that has no allocation
     jl_taggedvalue_t *fl_beg = (jl_taggedvalue_t*)(cur_pg + pg->fl_begin_offset);
