@@ -1,5 +1,7 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
+# tests for parser and syntax lowering
+
 function parseall(str)
     pos = start(str)
     exs = []
@@ -562,4 +564,82 @@ for op in (:.==, :.&, :.|, :.≤)
 end
 for op in (:.=, :.+=)
     @test parse("a $op b") == Expr(op, :a, :b)
+end
+
+# issue #17489
+let m_error, error_out, filename = Base.source_path()
+    m_error = try @eval method_c6(a::(:A)) = 1; catch e; e; end
+    error_out = sprint(showerror, m_error)
+    @test startswith(error_out, "ArgumentError: invalid type for argument a in method definition for method_c6 at $filename:")
+
+    m_error = try @eval method_c6(::(:A)) = 2; catch e; e; end
+    error_out = sprint(showerror, m_error)
+    @test startswith(error_out, "ArgumentError: invalid type for argument number 1 in method definition for method_c6 at $filename:")
+
+    m_error = try @eval method_c6(A; B) = 3; catch e; e; end
+    error_out = sprint(showerror, m_error)
+    @test error_out == "syntax: keyword argument \"B\" needs a default value"
+end
+
+# issue #7272
+@test expand(parse("let
+              global x = 2
+              local x = 1
+              end")) == Expr(:error, "variable \"x\" declared both local and global")
+
+# make sure front end can correctly print values to error messages
+let ex = expand(parse("\"a\"=1"))
+    @test ex == Expr(:error, "invalid assignment location \"\"a\"\"")
+end
+
+# make sure that incomplete tags are detected correctly
+# (i.e. error messages in src/julia-parser.scm must be matched correctly
+# by the code in base/client.jl)
+for (str, tag) in Dict("" => :none, "\"" => :string, "#=" => :comment, "'" => :char,
+                       "`" => :cmd, "begin;" => :block, "quote;" => :block,
+                       "let;" => :block, "for i=1;" => :block, "function f();" => :block,
+                       "f() do x;" => :block, "module X;" => :block, "type X;" => :block,
+                       "immutable X;" => :block, "(" => :other, "[" => :other,
+                       "begin" => :other, "quote" => :other,
+                       "let" => :other, "for" => :other, "function" => :other,
+                       "f() do" => :other, "module" => :other, "type" => :other,
+                       "immutable" => :other)
+    @test Base.incomplete_tag(parse(str, raise=false)) == tag
+end
+
+# meta nodes for optional positional arguments
+@test expand(:(@inline f(p::Int=2) = 3)).args[2].args[3].inlineable
+
+# issue #16096
+module M16096
+macro iter()
+    quote
+        @inline function foo(sub)
+            it = 1
+        end
+    end
+end
+end
+let ex = expand(:(@M16096.iter))
+    @test !(isa(ex,Expr) && ex.head === :error)
+end
+
+# issue #15838
+module A15838
+    macro f() end
+    const x = :a
+end
+module B15838
+    import A15838.@f
+    macro f(x); return :x; end
+    const x = :b
+end
+@test A15838.@f() === nothing
+@test A15838.@f(1) === :b
+let nometh = expand(:(A15838.@f(1, 2)))
+    @test (nometh::Expr).head === :error
+    @test length(nometh.args) == 1
+    e = nometh.args[1]::MethodError
+    @test e.f === getfield(A15838, Symbol("@f"))
+    @test e.args === (1,2)
 end

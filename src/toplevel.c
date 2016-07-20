@@ -766,15 +766,25 @@ JL_DLLEXPORT void jl_method_def(jl_svec_t *argdata, jl_lambda_info_t *f, jl_valu
     f = m->lambda_template; // because jl_new_method makes a copy
     jl_check_static_parameter_conflicts(m, tvars);
 
-    // TODO
-    size_t na = jl_nparams(argtypes);
-    for(size_t i=0; i < na; i++) {
-        jl_value_t *elt = jl_tparam(argtypes,i);
+    size_t i, na = jl_nparams(argtypes);
+    for (i = 0; i < na; i++) {
+        jl_value_t *elt = jl_tparam(argtypes, i);
         if (!jl_is_type(elt) && !jl_is_typevar(elt)) {
-            jl_exceptionf(jl_argumenterror_type, "invalid type for argument %s in method definition for %s at %s:%d",
-                          jl_symbol_name((jl_sym_t*)jl_array_ptr_ref(f->slotnames,i)),
-                          jl_symbol_name(name), jl_symbol_name(m->file),
-                          m->line);
+            jl_sym_t *argname = (jl_sym_t*)jl_array_ptr_ref(f->slotnames, i);
+            if (argname == unused_sym)
+                jl_exceptionf(jl_argumenterror_type,
+                              "invalid type for argument number %d in method definition for %s at %s:%d",
+                              i,
+                              jl_symbol_name(name),
+                              jl_symbol_name(m->file),
+                              m->line);
+            else
+                jl_exceptionf(jl_argumenterror_type,
+                              "invalid type for argument %s in method definition for %s at %s:%d",
+                              jl_symbol_name(argname),
+                              jl_symbol_name(name),
+                              jl_symbol_name(m->file),
+                              m->line);
         }
     }
 
