@@ -218,6 +218,10 @@ let
 end
 
 @test_throws ArgumentError which(is, Tuple{Int, Int})
+@test_throws ArgumentError code_typed(is, Tuple{Int, Int})
+@test_throws ArgumentError code_llvm(is, Tuple{Int, Int})
+@test_throws ArgumentError code_native(is, Tuple{Int, Int})
+@test_throws ArgumentError Base.return_types(is, Tuple{Int, Int})
 
 module TestingExported
 using Base.Test
