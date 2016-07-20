@@ -37,31 +37,32 @@ abstract AbstractREPL
 answer_color(::AbstractREPL) = ""
 
 type REPLBackend
+    "channel for AST"
     repl_channel::Channel
+    "channel for results: (value, nothing) or (error, backtrace)"
     response_channel::Channel
+    "flag indicating the state of this backend"
     in_eval::Bool
-    ans
+    "current backend task"
     backend_task::Task
-    REPLBackend(repl_channel, response_channel, in_eval, ans) =
-        new(repl_channel, response_channel, in_eval, ans)
+
+    REPLBackend(repl_channel, response_channel, in_eval) =
+        new(repl_channel, response_channel, in_eval)
 end
 
 function eval_user_input(ast::ANY, backend::REPLBackend)
-    iserr, lasterr, bt = false, (), nothing
+    iserr, lasterr = false, ((), nothing)
     while true
         try
             if iserr
-                put!(backend.response_channel, (lasterr, bt))
+                put!(backend.response_channel, lasterr)
                 iserr, lasterr = false, ()
             else
-                ans = backend.ans
-                # note: value wrapped in a non-syntax value to avoid evaluating
-                # possibly-invalid syntax (issue #6763).
-                eval(Main, :(ans = $(getindex)($(Any[ans]), 1)))
                 backend.in_eval = true
                 value = eval(Main, ast)
                 backend.in_eval = false
-                backend.ans = value
+                # note: value wrapped in a closure to ensure it doesn't get passed through expand
+                eval(Main, Expr(:(=), :ans, Expr(:call, ()->value)))
                 put!(backend.response_channel, (value, nothing))
             end
             break
@@ -70,14 +71,13 @@ function eval_user_input(ast::ANY, backend::REPLBackend)
                 println("SYSTEM ERROR: Failed to report error to REPL frontend")
                 println(err)
             end
-            iserr, lasterr = true, err
-            bt = catch_backtrace()
+            iserr, lasterr = true, (err, catch_backtrace())
         end
     end
 end
 
 function start_repl_backend(repl_channel::Channel, response_channel::Channel)
-    backend = REPLBackend(repl_channel, response_channel, false, nothing)
+    backend = REPLBackend(repl_channel, response_channel, false)
     backend.backend_task = @schedule begin
         # include looks at this to determine the relative include path
         # nothing means cwd
