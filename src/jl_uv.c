@@ -230,7 +230,7 @@ JL_DLLEXPORT void jl_close_uv(uv_handle_t *handle)
 
 JL_DLLEXPORT void jl_forceclose_uv(uv_handle_t *handle)
 {
-    uv_close(handle,&jl_uv_closeHandle);
+    uv_close(handle, &jl_uv_closeHandle);
 }
 
 JL_DLLEXPORT void jl_uv_associate_julia_struct(uv_handle_t *handle,

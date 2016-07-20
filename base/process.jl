@@ -336,7 +336,9 @@ function uv_return_spawn(p::Ptr{Void}, exit_status::Int64, termsignal::Int32)
     proc = unsafe_pointer_to_objref(data)::Process
     proc.exitcode = exit_status
     proc.termsignal = termsignal
-    if isa(proc.exitcb, Function) proc.exitcb(proc, exit_status, termsignal) end
+    if isa(proc.exitcb, Function)
+        proc.exitcb(proc, exit_status, termsignal)
+    end
     ccall(:jl_close_uv, Void, (Ptr{Void},), proc.handle)
     notify(proc.exitnotify)
     nothing
@@ -344,7 +346,9 @@ end
 
 function _uv_hook_close(proc::Process)
     proc.handle = C_NULL
-    if isa(proc.closecb, Function) proc.closecb(proc) end
+    if isa(proc.closecb, Function)
+        proc.closecb(proc)
+    end
     notify(proc.closenotify)
 end
 
