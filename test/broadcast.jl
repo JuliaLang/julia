@@ -248,6 +248,16 @@ let x = [1:4;]
     @test sin.(f17300kw.(x, y=1)) == sin.(f17300kw.(x; y=1)) == sin.(x .+ 1)
 end
 
+# PR #17510: Fused in-place assignment
+let x = [1:4;], y = x
+    y .= 2:5
+    @test y === x == [2:5;]
+    y .= factorial.(x)
+    @test y === x == [2,6,24,120]
+    y .= 7
+    @test y === x == [7,7,7,7]
+end
+
 # PR 16988
 @test Base.promote_op(+, Bool) === Int
 @test isa(broadcast(+, [true]), Array{Int,1})
