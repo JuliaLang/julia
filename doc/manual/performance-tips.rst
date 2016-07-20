@@ -944,7 +944,10 @@ above, we could have passed a :class:`SubArray` rather than an :class:`Array`,
 had we so desired.
 
 Taken to its extreme, pre-allocation can make your code uglier, so
-performance measurements and some judgment may be required.
+performance measurements and some judgment may be required.   However,
+for "vectorized" (element-wise) functions, the convenient syntax
+``x .= f.(y)`` can be used for in-place operations with fused loops
+and no temporary arrays (:ref:`dot-vectorizing`).
 
 
 Avoid string interpolation for I/O
