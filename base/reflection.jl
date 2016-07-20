@@ -27,15 +27,11 @@ function fullname(m::Module)
     return tuple(fullname(mp)..., mn)
 end
 
-names(m::Module, all::Bool, imported::Bool) = sort!(ccall(:jl_module_names, Array{Symbol,1}, (Any,Int32,Int32), m, all, imported))
-names(m::Module, all::Bool) = names(m, all, false)
-names(m::Module) = names(m, false, false)
+names(m::Module, all::Bool=false, imported::Bool=false) = sort!(ccall(:jl_module_names, Array{Symbol,1}, (Any,Int32,Int32), m, all, imported))
 
-isexported(m::Module, s::Symbol) = ccall(:jl_module_exports_p, Cint, (Any, Any), m, s)!=0
-
-function isbindingresolved(m::Module, var::Symbol)
-    ccall(:jl_binding_resolved_p, Cint, (Any, Any), m, var) != 0
-end
+isexported(m::Module, s::Symbol) = ccall(:jl_module_exports_p, Cint, (Any, Any), m, s) != 0
+isdeprecated(m::Module, s::Symbol) = ccall(:jl_is_binding_deprecated, Cint, (Any, Any), m, s) != 0
+isbindingresolved(m::Module, var::Symbol) = ccall(:jl_binding_resolved_p, Cint, (Any, Any), m, var) != 0
 
 binding_module(s::Symbol) = binding_module(current_module(), s)
 function binding_module(m::Module, s::Symbol)
@@ -158,8 +154,8 @@ function instances end
 # subtypes
 function _subtypes(m::Module, x::DataType, sts=Set(), visited=Set())
     push!(visited, m)
-    for s in names(m,true)
-        if isdefined(m,s)
+    for s in names(m, true)
+        if isdefined(m, s) && !isdeprecated(m, s)
             t = getfield(m, s)
             if isa(t, DataType) && t.name.name == s && supertype(t).name == x.name
                 ti = typeintersect(t, x)
@@ -169,7 +165,7 @@ function _subtypes(m::Module, x::DataType, sts=Set(), visited=Set())
             end
         end
     end
-    sts
+    return sts
 end
 subtypes(m::Module, x::DataType) = sort(collect(_subtypes(m, x)), by=string)
 subtypes(x::DataType) = subtypes(Main, x)

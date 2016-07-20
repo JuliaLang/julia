@@ -177,43 +177,44 @@ foo7648(x) = x
     a9475 = 5
     b9475 = 7
     let
-        @test Base.binding_module(:a9475)==current_module()
-        @test Base.binding_module(:c7648)==TestMod7648
-        @test Base.module_name(current_module())==:TestModSub9475
-        @test Base.fullname(current_module())==(:TestMod7648, :TestModSub9475)
-        @test Base.module_parent(current_module())==TestMod7648
+        @test Base.binding_module(:a9475) == current_module()
+        @test Base.binding_module(:c7648) == TestMod7648
+        @test Base.module_name(current_module()) == :TestModSub9475
+        @test Base.fullname(current_module()) == (:TestMod7648, :TestModSub9475)
+        @test Base.module_parent(current_module()) == TestMod7648
     end
     end # module TestModSub9475
 
 using .TestModSub9475
 
 let
-    @test Base.binding_module(:d7648)==current_module()
-    @test Base.binding_module(:a9475)==TestModSub9475
-    @test Base.module_name(current_module())==:TestMod7648
-    @test Base.module_parent(current_module())==Main
+    @test Base.binding_module(:d7648) == current_module()
+    @test Base.binding_module(:a9475) == TestModSub9475
+    @test Base.module_name(current_module()) == :TestMod7648
+    @test Base.module_parent(current_module()) == Main
 end
 end # module TestMod7648
 
 let
-    @test Base.binding_module(TestMod7648, :d7648)==TestMod7648
-    @test Base.binding_module(TestMod7648, :a9475)==TestMod7648.TestModSub9475
-    @test Base.binding_module(TestMod7648.TestModSub9475, :b9475)==TestMod7648.TestModSub9475
-    @test Set(names(TestMod7648))==Set([:TestMod7648, :a9475, :c7648, :foo7648])
+    @test Base.binding_module(TestMod7648, :d7648) == TestMod7648
+    @test Base.binding_module(TestMod7648, :a9475) == TestMod7648.TestModSub9475
+    @test Base.binding_module(TestMod7648.TestModSub9475, :b9475) == TestMod7648.TestModSub9475
+    @test Set(names(TestMod7648)) == Set([:TestMod7648, :a9475, :c7648, :foo7648])
+    @test Set(names(TestMod7648, true)) == Set([:TestMod7648, :TestModSub9475, :a9475, :c7648, :d7648, :f7648, :foo7648, Symbol("#foo7648"), :eval, Symbol("#eval")])
     @test isconst(TestMod7648, :c7648)
     @test !isconst(TestMod7648, :d7648)
 end
 
 let
     using TestMod7648
-    @test Base.binding_module(:a9475)==TestMod7648.TestModSub9475
-    @test Base.binding_module(:c7648)==TestMod7648
-    @test Base.function_name(foo7648)==:foo7648
-    @test Base.function_module(foo7648, (Any,))==TestMod7648
+    @test Base.binding_module(:a9475) == TestMod7648.TestModSub9475
+    @test Base.binding_module(:c7648) == TestMod7648
+    @test Base.function_name(foo7648) == :foo7648
+    @test Base.function_module(foo7648, (Any,)) == TestMod7648
     @test basename(functionloc(foo7648, (Any,))[1]) == "reflection.jl"
     @test first(methods(TestMod7648.TestModSub9475.foo7648)) == @which foo7648(5)
-    @test TestMod7648==@which foo7648
-    @test TestMod7648.TestModSub9475==@which a9475
+    @test TestMod7648 == @which foo7648
+    @test TestMod7648.TestModSub9475 == @which a9475
 end
 
 @test_throws ArgumentError which(is, Tuple{Int, Int})
@@ -471,6 +472,7 @@ end
 function has_backslashes(mod::Module)
     for n in names(mod, true, true)
         isdefined(mod, n) || continue
+        Base.isdeprecated(mod, n) && continue
         f = getfield(mod, n)
         if isa(f, Module) && module_depth(Main, f) <= module_depth(Main, mod)
             continue
