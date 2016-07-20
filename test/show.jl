@@ -80,6 +80,8 @@ end
 @test_repr "a & (b && c)"
 @test_repr "(a => b) in c"
 @test_repr "a => b in c"
+@test_repr "*(a..., b)"
+@test_repr "+(a, b, c...)"
 
 # precedence tie resolution
 @test_repr "(a * b) * (c * d)"
