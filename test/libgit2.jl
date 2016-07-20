@@ -506,7 +506,7 @@ mktempdir() do dir
             @test !LibGit2.isset(get(st_stg), LibGit2.Consts.STATUS_WT_MODIFIED)
 
             # try to unstage to unknown commit
-            @test_throws LibGit2.Error.GitError LibGit2.reset!(repo, "XYZ", test_file)    
+            @test_throws LibGit2.Error.GitError LibGit2.reset!(repo, "XYZ", test_file)
 
             # status should not change
             st_new = LibGit2.status(repo, test_file)
