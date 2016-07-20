@@ -395,7 +395,10 @@ static jl_value_t *eval(jl_value_t *e, interpreter_state *s)
             b->value = temp;
             jl_rethrow();
         }
-        jl_compute_field_offsets(dt);
+        if (dt->name->names == jl_emptysvec)
+            dt->layout = jl_void_type->layout; // reuse the same layout for all singletons
+        else if (jl_is_leaf_type((jl_value_t*)dt))
+            jl_compute_field_offsets(dt);
         if (para == (jl_value_t*)jl_emptysvec && jl_is_datatype_make_singleton(dt)) {
             dt->instance = jl_gc_alloc(ptls, 0, dt);
             jl_gc_wb(dt, dt->instance);

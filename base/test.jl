@@ -986,13 +986,14 @@ function detect_ambiguities(mods...; imported::Bool=false)
     ambs = Set{Tuple{Method,Method}}()
     for mod in mods
         for n in names(mod, true, imported)
+            Base.isdeprecated(mod, n) && continue
             if !isdefined(mod, n)
                 println("Skipping ", mod, '.', n)  # typically stale exports
                 continue
             end
             f = getfield(mod, n)
-            if isa(f, Function)
-                mt = methods(f)
+            if isa(f, DataType) && isdefined(f.name, :mt)
+                mt = Base.MethodList(f.name.mt)
                 for m in mt
                     if m.ambig !== nothing
                         for m2 in m.ambig
@@ -1005,7 +1006,7 @@ function detect_ambiguities(mods...; imported::Bool=false)
             end
         end
     end
-    collect(ambs)
+    return collect(ambs)
 end
 
 """

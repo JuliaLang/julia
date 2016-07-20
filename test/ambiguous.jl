@@ -178,4 +178,11 @@ end
 
 @test isempty(detect_ambiguities(Ambig6))
 
+module Ambig7
+immutable T end
+(::T)(x::Int8, y) = 1
+(::T)(x, y::Int8) = 2
+end
+@test length(detect_ambiguities(Ambig7)) == 1
+
 nothing

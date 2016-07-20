@@ -1072,7 +1072,6 @@ function dump(io::IO, x::SimpleVector, n::Int, indent)
             end
         end
     end
-    isempty(indent) && println(io)
     nothing
 end
 
@@ -1098,11 +1097,13 @@ function dump(io::IO, x::ANY, n::Int, indent)
     else
         !isa(x,Function) && print(io, " ", x)
     end
-    isempty(indent) && println(io)
     nothing
 end
 
 dump(io::IO, x::Module, n::Int, indent) = print(io, "Module ", x)
+dump(io::IO, x::String, n::Int, indent) = (print(io, "String "); show(io, x))
+dump(io::IO, x::Symbol, n::Int, indent) = print(io, typeof(x), " ", x)
+dump(io::IO, x::Union,  n::Int, indent) = print(io, x)
 
 function dump_elts(io::IO, x::Array, n::Int, indent, i0, i1)
     for i in i0:i1
@@ -1136,93 +1137,81 @@ function dump(io::IO, x::Array, n::Int, indent)
             end
         end
     end
-    isempty(indent) && println(io)
-    nothing
-end
-function dump(io::IO, x::Symbol, n::Int, indent)
-    print(io, typeof(x), " ", x)
-    isempty(indent) && println(io)
     nothing
 end
 
 # Types
-function dump(io::IO, x::Union, n::Int, indent)
-    print(io, x)
-    isempty(indent) && println(io)
-    nothing
-end
-
 function dump(io::IO, x::DataType, n::Int, indent)
     print(io, x)
     if x !== Any
         print(io, " <: ", supertype(x))
     end
     if !(x <: Tuple)
+        tvar_io = IOContext(io, :tvar_env => Any[x.parameters...])
         fields = fieldnames(x)
         if n > 0
             for idx in 1:length(fields)
                 println(io)
                 print(io, indent, "  ", fields[idx], "::")
-                print(io, fieldtype(x,idx))
+                print(tvar_io, fieldtype(x, idx))
             end
         end
     end
-    isempty(indent) && println(io)
     nothing
 end
 
-# dumptype is for displaying abstract type hierarchies like Jameson
-# Nash's wiki page: https://github.com/JuliaLang/julia/wiki/Types-Hierarchy
-
+# dumptype is for displaying abstract type hierarchies,
+# based on Jameson Nash's examples/typetree.jl
 function dumptype(io::IO, x::ANY, n::Int, indent)
-    # based on Jameson Nash's examples/typetree.jl
-    println(io, x)
-    if n == 0   # too deeply nested
-        return
-    end
-    typargs(t) = split(string(t), "{")[1]
-    # todo: include current module?
-    for m in (Core, Base)
-        for s in fieldnames(m)
-            if isdefined(m,s)
-                t = eval(m,s)
-                if isa(t, TypeConstructor)
-                    if string(x.name) == typargs(t) ||
-                        ("Union" == split(string(t), "(")[1] &&
-                         any(map(tt -> string(x.name) == typargs(tt), t.body.types)))
-                        targs = join(t.parameters, ",")
-                        println(io, indent, "  ", s,
-                                !isempty(t.parameters) ? "{$targs}" : "",
-                                " = ", t)
-                    end
-                elseif isa(t, Union)
-                    if any(tt -> string(x.name) == typargs(tt), t.types)
-                        println(io, indent, "  ", s, " = ", t)
-                    end
-                elseif isa(t, DataType) && supertype(t).name == x.name
-                    # type aliases
-                    if string(s) != string(t.name)
-                        println(io, indent, "  ", s, " = ", t.name)
-                    elseif t != Any
-                        print(io, indent, "  ")
-                        dump(io, t, n - 1, string(indent, "  "))
-                    end
+    print(io, x)
+    n == 0 && return  # too deeply nested
+    isa(x, DataType) && x.abstract && dumpsubtypes(io, x, Main, n, indent)
+    nothing
+end
+
+directsubtype(a::DataType, b::DataType) = supertype(a).name === b.name
+directsubtype(a::TypeConstructor, b::DataType) = directsubtype(a.body, b)
+directsubtype(a::Union, b::DataType) = any(t->directsubtype(t, b), a.types)
+function dumpsubtypes(io::IO, x::DataType, m::Module, n::Int, indent)
+    for s in names(m, true)
+        if isdefined(m, s) && !isdeprecated(m, s)
+            t = getfield(m, s)
+            if t === x || t === m
+                continue
+            elseif isa(t, Module) && module_name(t) === s && module_parent(t) === m
+                # recurse into primary module bindings
+                dumpsubtypes(io, x, t, n, indent)
+            elseif isa(t, TypeConstructor) && directsubtype(t, x)
+                println(io)
+                print(io, indent, "  ", m, ".", s)
+                isempty(t.parameters) || print(io, "{", join(t.parameters, ","), "}")
+                print(io, " = ", t)
+            elseif isa(t, Union) && directsubtype(t, x)
+                println(io)
+                print(io, indent, "  ", m, ".", s, " = ", t)
+            elseif isa(t, DataType) && directsubtype(t, x)
+                println(io)
+                if t.name.module !== m || t.name.name != s
+                    # aliases to types
+                    print(io, indent, "  ", m, ".", s, " = ", t)
+                else
+                    # primary type binding
+                    print(io, indent, "  ")
+                    dumptype(io, t, n - 1, string(indent, "  "))
                 end
             end
         end
     end
-    isempty(indent) && println(io)
     nothing
 end
 
+
 # For abstract types, use _dumptype only if it's a form that will be called
 # interactively.
-dflt_io() = IOContext(STDOUT::IO, :limit => true)
-dump(io::IO, x::DataType; maxdepth=8) = (x.abstract ? dumptype : dump)(io, x, maxdepth, "")
-dump(x::DataType; maxdepth=8) = (x.abstract ? dumptype : dump)(dflt_io(), x, maxdepth, "")
+dump(io::IO, x::DataType; maxdepth=8) = ((x.abstract ? dumptype : dump)(io, x, maxdepth, ""); println(io))
 
-dump(io::IO, arg; maxdepth=8) = dump(io, arg, maxdepth, "")
-dump(arg; maxdepth=8) = dump(dflt_io(), arg, maxdepth, "")
+dump(io::IO, arg; maxdepth=8) = (dump(io, arg, maxdepth, ""); println(io))
+dump(arg; maxdepth=8) = dump(IOContext(STDOUT::IO, :limit => true), arg; maxdepth=maxdepth)
 
 
 """

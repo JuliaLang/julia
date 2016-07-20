@@ -969,6 +969,10 @@ void jl_compute_field_offsets(jl_datatype_t *st)
     uint32_t nfields = jl_svec_len(st->types);
     jl_fielddesc32_t* desc = (jl_fielddesc32_t*) alloca(nfields * sizeof(jl_fielddesc32_t));
     int haspadding = 0;
+    assert(st->name == jl_tuple_typename ||
+           st == jl_sym_type ||
+           st == jl_simplevector_type ||
+           nfields != 0);
 
     for (size_t i = 0; i < nfields; i++) {
         jl_value_t *ty = jl_field_type(st, i);
@@ -1092,8 +1096,13 @@ JL_DLLEXPORT jl_datatype_t *jl_new_datatype(jl_sym_t *name, jl_datatype_t *super
     }
     else {
         t->uid = jl_assign_type_uid();
-        if (t->types != NULL && t->isleaftype)
-            jl_compute_field_offsets(t);
+        if (t->types != NULL && t->isleaftype) {
+            static const jl_datatype_layout_t singleton_layout = {0, 1, 0, 1, 0};
+            if (fnames == jl_emptysvec)
+                t->layout = &singleton_layout;
+            else
+                jl_compute_field_offsets(t);
+        }
     }
     JL_GC_POP();
     return t;
