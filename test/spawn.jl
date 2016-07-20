@@ -266,9 +266,9 @@ let bad = "bad\0name"
 end
 
 # issue #12829
-let out = Pipe(), echo = `$exename --startup-file=no -e 'print(STDOUT, " 1\t", readstring(STDIN))'`, ready = Condition()
+let out = Pipe(), echo = `$exename --startup-file=no -e 'print(STDOUT, " 1\t", readstring(STDIN))'`, ready = Condition(), t
     @test_throws ArgumentError write(out, "not open error")
-    @async begin # spawn writer task
+    t = @async begin # spawn writer task
         open(echo, "w", out) do in1
             open(echo, "w", out) do in2
                 notify(ready)
@@ -283,10 +283,13 @@ let out = Pipe(), echo = `$exename --startup-file=no -e 'print(STDOUT, " 1\t", r
         @test isreadable(out)
         @test iswritable(out)
         close(out.in)
+        @test !isopen(out.in)
+        is_windows() || @test !isopen(out.out) # it takes longer to propagate EOF through the Windows event system
         @test_throws ArgumentError write(out, "now closed error")
         @test isreadable(out)
         @test !iswritable(out)
-        @test isopen(out)
+        is_windows() && Base.process_events(false) # should be enough steps to fully propagate EOF now
+        @test !isopen(out)
     end
     wait(ready) # wait for writer task to be ready before using `out`
     @test nb_available(out) == 0
@@ -309,6 +312,7 @@ let out = Pipe(), echo = `$exename --startup-file=no -e 'print(STDOUT, " 1\t", r
     @test isempty(read(out))
     @test eof(out)
     @test desc == "Pipe(open => active, 0 bytes waiting)"
+    wait(t)
 end
 
 # issue #8529
