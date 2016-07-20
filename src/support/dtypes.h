@@ -147,6 +147,19 @@ typedef uint32_t uint_t;
 typedef int32_t int_t;
 #endif
 
+STATIC_INLINE unsigned int next_power_of_two(unsigned int val)
+{
+    /* this function taken from libuv src/unix/core.c */
+    val -= 1;
+    val |= val >> 1;
+    val |= val >> 2;
+    val |= val >> 4;
+    val |= val >> 8;
+    val |= val >> 16;
+    val += 1;
+    return val;
+}
+
 #define LLT_ALIGN(x, sz) (((x) + (sz)-1) & -(sz))
 
 // branch prediction annotations
