@@ -1114,7 +1114,9 @@ JL_DLLEXPORT jl_datatype_t *jl_new_bitstype(jl_value_t *name, jl_datatype_t *sup
     jl_datatype_t *bt = jl_new_datatype((jl_sym_t*)name, super, parameters,
                                         jl_emptysvec, jl_emptysvec, 0, 0, 0);
     uint32_t nbytes = (nbits + 7) / 8;
-    uint32_t alignm = nbytes > MAX_ALIGN ? MAX_ALIGN : nbytes;
+    uint32_t alignm = next_power_of_two(nbytes);
+    if (alignm > MAX_ALIGN)
+        alignm = MAX_ALIGN;
     bt->size = nbytes;
     bt->layout = jl_get_layout(0, alignm, 0, NULL);
     return bt;

@@ -264,19 +264,6 @@ union jl_typemap_t mtcache_hash_lookup(const struct jl_ordereddict_t *a, jl_valu
     return ml;
 }
 
-static inline unsigned int next_power_of_two(unsigned int val)
-{
-    /* this function taken from libuv src/unix/core.c */
-    val -= 1;
-    val |= val >> 1;
-    val |= val >> 2;
-    val |= val >> 4;
-    val |= val >> 8;
-    val |= val >> 16;
-    val += 1;
-    return val;
-}
-
 static void mtcache_rehash(struct jl_ordereddict_t *pa, size_t newlen, jl_value_t *parent, int8_t tparam, int8_t offs)
 {
     size_t i, nval = jl_array_len(pa->values);
