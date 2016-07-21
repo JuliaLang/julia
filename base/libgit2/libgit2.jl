@@ -310,19 +310,21 @@ end
 
 """ git reset [<committish>] [--] <pathspecs>... """
 function reset!(repo::GitRepo, committish::AbstractString, pathspecs::AbstractString...)
-    target_obj = isempty(committish) ? Nullable{GitAnyObject}() :
-                                       Nullable(revparse(repo, committish))
+    obj = revparse(repo, !isempty(committish) ? committish : Consts.HEAD_FILE)
+    # do not remove entries in the index matching the provided pathspecs with empty target commit tree
+    obj === nothing && throw(GitError(Error.Object, Error.ERROR, "`$committish` not found"))
     try
-        reset!(repo, target_obj, pathspecs...)
+        reset!(repo, Nullable(obj), pathspecs...)
     finally
-        !isnull(target_obj) && finalize(Base.get(target_obj))
+        finalize(obj)
     end
 end
 
 """ git reset [--soft | --mixed | --hard] <commit> """
 function reset!(repo::GitRepo, commit::Oid, mode::Cint = Consts.RESET_MIXED)
     obj = get(GitAnyObject, repo, commit)
-    obj === nothing && return
+    # object must exist for reset
+    obj === nothing && throw(GitError(Error.Object, Error.ERROR, "Commit `$(string(commit))` object not found"))
     try
         reset!(repo, obj, mode)
     finally
