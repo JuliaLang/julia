@@ -208,6 +208,7 @@ static Value *julia_gv(const char *prefix, jl_sym_t *name, jl_module_t *mod, voi
     return julia_gv(fullname, addr);
 }
 
+static GlobalVariable *julia_const_gv(jl_value_t *val);
 static Value *literal_pointer_val(jl_value_t *p)
 {
     // emit a pointer to any jl_value_t which will be valid across reloading code
@@ -216,24 +217,9 @@ static Value *literal_pointer_val(jl_value_t *p)
         return ConstantPointerNull::get((PointerType*)T_pjlvalue);
     if (!imaging_mode)
         return literal_static_pointer_val(p, T_pjlvalue);
-    // some common constant values
-    if (p == jl_false)
-        return tbaa_decorate(tbaa_const, builder.CreateLoad(prepare_global(jlfalse_var)));
-    if (p == jl_true)
-        return tbaa_decorate(tbaa_const, builder.CreateLoad(prepare_global(jltrue_var)));
-    if (p == (jl_value_t*)jl_emptysvec)
-        return tbaa_decorate(tbaa_const, builder.CreateLoad(prepare_global(jlemptysvec_var)));
-    // exceptions
-    if (p == (jl_value_t*)jl_diverror_exception)
-        return tbaa_decorate(tbaa_const, builder.CreateLoad(prepare_global(jldiverr_var)));
-    if (p == (jl_value_t*)jl_undefref_exception)
-        return tbaa_decorate(tbaa_const, builder.CreateLoad(prepare_global(jlundeferr_var)));
-    if (p == (jl_value_t*)jl_domain_exception)
-        return tbaa_decorate(tbaa_const, builder.CreateLoad(prepare_global(jldomerr_var)));
-    if (p == (jl_value_t*)jl_overflow_exception)
-        return tbaa_decorate(tbaa_const, builder.CreateLoad(prepare_global(jlovferr_var)));
-    if (p == (jl_value_t*)jl_inexact_exception)
-        return tbaa_decorate(tbaa_const, builder.CreateLoad(prepare_global(jlinexacterr_var)));
+    if (auto gv = julia_const_gv(p)) {
+        return tbaa_decorate(tbaa_const, builder.CreateLoad(prepare_global(gv)));
+    }
     if (jl_is_datatype(p)) {
         jl_datatype_t *addr = (jl_datatype_t*)p;
         // DataTypes are prefixed with a +
