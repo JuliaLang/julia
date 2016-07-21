@@ -1685,9 +1685,7 @@
             `(block
               ,.(map (lambda (x)
                        (if (and (decl? x) (length= (cdr x) 2) (symbol? (cadr x)))
-                           (let ((str-x (deparse x)))
-                                (syntax-deprecation #f str-x (string "local " str-x))
-                                `(decl ,@(map expand-forms (cdr x))))
+                           `(impl-decl ,@(map expand-forms (cdr x)))
                            (expand-forms x)))
                      (butlast (cdr e)))
               ,(expand-forms (last (cdr e)))))))
@@ -2423,7 +2421,7 @@
                (vinfo:set-called! vi #t))
            (for-each (lambda (x) (analyze-vars x env captvars sp))
                      (cdr e))))
-        ((decl)
+        ((decl impl-decl)
          ;; handle var::T declaration by storing the type in the var-info
          ;; record. for non-symbols or globals, emit a type assertion.
          (let ((vi (var-info-for (cadr e) env)))
@@ -2911,6 +2909,13 @@ f(x) = yt(x)
            (cl-convert `(call (core typeassert) ,@(cdr e)) fname lam namemap toplevel interp))
           ;; remaining `decl` expressions are only type assertions if the
           ;; argument is global or a non-symbol.
+          ((impl-decl)
+           (if (or (assq (cadr e) (car  (lam:vinfo lam)))
+                   (assq (cadr e) (cadr (lam:vinfo lam))))
+               (let ((str-e (deparse `(|::| ,@(cdr e)))))
+                    (syntax-deprecation #f str-e (string "local " str-e))
+                    '(null))
+               (cl-convert `(call (core typeassert) ,@(cdr e)) fname lam namemap toplevel interp)))
           ((decl)
            (cond ((not (symbol? (cadr e)))
                   (cl-convert `(call (core typeassert) ,@(cdr e)) fname lam namemap toplevel interp))
