@@ -21,7 +21,7 @@ Required methods                                                            Brie
 :func:`iteratoreltype(IterType) <iteratoreltype>`  ``HasEltype()``          Either `EltypeUnknown()` or `HasEltype()` as appropriate
 :func:`eltype(IterType) <eltype>`                  ``Any``                  The type the items returned by :func:`next`
 :func:`length(iter) <length>`                      (*undefined*)            The number of items, if known
-:func:`size(iter, [dim...]) <size>`                (*undefined*)            The number of items in each dimensions, if known
+:func:`size(iter, [dim...]) <size>`                (*undefined*)            The number of items in each dimension, if known
 ================================================== ======================== =====================================================================================
 
 ================================================================ ======================================================================
