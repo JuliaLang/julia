@@ -114,8 +114,8 @@ function credentials_callback(cred::Ptr{Ptr{Void}}, url_ptr::Cstring,
             if keydefpath !== nothing && !isusedcreds
                 keydefpath # use cached value
             else
-                keydefpath = if keydefpath === nothing
-                    joinpath(homedir(),".ssh","id_rsa")
+                if isempty(keydefpath) || keydefpath === nothing
+                    keydefpath = joinpath(homedir(),".ssh","id_rsa")
                 end
                 prompt("Private key location for '$schema$username@$host'", default=keydefpath)
             end
@@ -130,8 +130,8 @@ function credentials_callback(cred::Ptr{Ptr{Void}}, url_ptr::Cstring,
             if keydefpath !== nothing && !isusedcreds
                 keydefpath # use cached value
             else
-                keydefpath = if keydefpath === nothing
-                    privatekey*".pub"
+                if isempty(keydefpath) || keydefpath === nothing
+                    keydefpath = privatekey*".pub"
                 end
                 if isfile(keydefpath)
                     keydefpath
