@@ -148,7 +148,7 @@ function fetch{T<:AbstractString, P<:AbstractPayload}(repo::GitRepo;
                                   remote::AbstractString="origin",
                                   remoteurl::AbstractString="",
                                   refspecs::Vector{T}=AbstractString[],
-                                  payload::Nullable{P}=Nullable{AbstractPayload}())
+                                  payload::Nullable{P}=Nullable{AbstractPayload}(SSHCredentials()))
     rmt = if isempty(remoteurl)
         get(GitRemote, repo, remote)
     else
@@ -168,7 +168,7 @@ function push{T<:AbstractString, P<:AbstractPayload}(repo::GitRepo;
               remoteurl::AbstractString="",
               refspecs::Vector{T}=AbstractString[],
               force::Bool=false,
-              payload::Nullable{P}=Nullable{AbstractPayload}())
+              payload::Nullable{P}=Nullable{AbstractPayload}(SSHCredentials()))
     rmt = if isempty(remoteurl)
         get(GitRemote, repo, remote)
     else
@@ -295,7 +295,7 @@ function clone{P<:AbstractPayload}(repo_url::AbstractString, repo_path::Abstract
                branch::AbstractString="",
                isbare::Bool = false,
                remote_cb::Ptr{Void} = C_NULL,
-               payload::Nullable{P}=Nullable{AbstractPayload}())
+               payload::Nullable{P}=Nullable{AbstractPayload}(SSHCredentials()))
     # setup clone options
     lbranch = Base.cconvert(Cstring, branch)
     fetch_opts=FetchOptions(callbacks = RemoteCallbacks(credentials_cb(), payload))
