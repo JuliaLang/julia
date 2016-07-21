@@ -212,6 +212,19 @@ function test_touch(slval)
     @test ispath(tr[1]) && ispath(tr[2])
 end
 
+function test_watch_file_timeout(tval)
+    watch = @async watch_file(file, tval)
+    @test wait(watch) == Base.Filesystem.FileEvent(false, false, true)
+end
+
+function test_watch_file_change(tval)
+    watch = @async watch_file(file, tval)
+    sleep(tval/3)
+    open(file, "a") do f
+        write(f, "small change\n")
+    end
+    @test wait(watch) == Base.Filesystem.FileEvent(false, true, false)
+end
 
 function test_monitor_wait(tval)
     fm = FileMonitor(file)
@@ -247,6 +260,8 @@ test_monitor_wait(0.1)
 test_monitor_wait(0.1)
 test_monitor_wait_poll()
 test_monitor_wait_poll()
+test_watch_file_timeout(0.1)
+test_watch_file_change(6)
 
 @test_throws Base.UVError watch_file("nonexistantfile", 10)
 @test_throws Base.UVError poll_file("nonexistantfile", 2, 10)
