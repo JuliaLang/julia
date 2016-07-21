@@ -10,8 +10,11 @@ New language features
   * Generators and comprehensions support filtering using `if` ([#550]) and nested
     iteration using multiple `for` keywords ([#4867]).
 
-  * Broadcasting syntax: ``f.(args...)`` is equivalent to ``broadcast(f, args...)`` ([#15032]),
+  * Fused broadcasting syntax: ``f.(args...)`` is equivalent to ``broadcast(f, args...)`` ([#15032]),
     and nested `f.(g.(args...))` calls are fused into a single `broadcast` loop ([#17300]).
+    Similarly, the syntax `x .= ...` is equivalent to a `broadcast!(identity, x, ...)`
+    call and fuses with nested "dot" calls; also, `x .+= y` and similar is now
+    equivalent to `x .= x .+ y`, rather than `=` ([#17510]).
 
   * Macro expander functions are now generic, so macros can have multiple definitions
     (e.g. for different numbers of arguments, or optional arguments) ([#8846], [#9627]).
@@ -355,3 +358,4 @@ Deprecated or removed
 [#17393]: https://github.com/JuliaLang/julia/issues/17393
 [#17402]: https://github.com/JuliaLang/julia/issues/17402
 [#17404]: https://github.com/JuliaLang/julia/issues/17404
+[#17510]: https://github.com/JuliaLang/julia/issues/17510
