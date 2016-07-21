@@ -281,7 +281,7 @@ function TCPSocket()
         throw(UVError("failed to create tcp socket",err))
     end
     this.status = StatusInit
-    this
+    return this
 end
 
 type TCPServer <: LibuvServer
@@ -312,7 +312,7 @@ function TCPServer()
         throw(UVError("failed to create tcp server",err))
     end
     this.status = StatusInit
-    this
+    return this
 end
 
 isreadable(io::TCPSocket) = isopen(io) || nb_available(io) > 0

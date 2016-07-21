@@ -78,17 +78,17 @@ void jl_init_signal_async(void)
 }
 #endif
 
-static void jl_uv_call_close_callback(jl_value_t *val)
+void jl_uv_call_close_callback(jl_value_t *val)
 {
     jl_value_t *args[2];
     args[0] = jl_get_global(jl_base_relative_to(((jl_datatype_t*)jl_typeof(val))->name->module),
             jl_symbol("_uv_hook_close")); // topmod(typeof(val))._uv_hook_close
     args[1] = val;
     assert(args[0]);
-    jl_apply(args, 2);
+    jl_apply(args, 2); // TODO: wrap in try-catch?
 }
 
-JL_DLLEXPORT void jl_uv_closeHandle(uv_handle_t *handle)
+static void jl_uv_closeHandle(uv_handle_t *handle)
 {
     // if the user killed a stdio handle,
     // revert back to direct stdio FILE* writes
@@ -107,7 +107,7 @@ JL_DLLEXPORT void jl_uv_closeHandle(uv_handle_t *handle)
     free(handle);
 }
 
-JL_DLLEXPORT void jl_uv_shutdownCallback(uv_shutdown_t *req, int status)
+static void jl_uv_shutdownCallback(uv_shutdown_t *req, int status)
 {
     /*
      * This happens if the remote machine closes the connecition while we're
@@ -180,8 +180,21 @@ JL_DLLEXPORT int jl_init_pipe(uv_pipe_t *pipe, int writable, int readable,
      return err;
 }
 
+static void jl_proc_exit_cleanup(uv_process_t *process, int64_t exit_status, int term_signal)
+{
+    uv_close((uv_handle_t*)process, (uv_close_cb)&free);
+}
+
 JL_DLLEXPORT void jl_close_uv(uv_handle_t *handle)
 {
+    if (handle->type == UV_PROCESS && ((uv_process_t*)handle)->pid != 0) {
+        // take ownership of this handle,
+        // so we can waitpid for the resource to exit and avoid leaving zombies
+        assert(handle->data == NULL); // make sure Julia has forgotten about it already
+        ((uv_process_t*)handle)->exit_cb = jl_proc_exit_cleanup;
+        return;
+    }
+
     if (handle->type == UV_FILE) {
         uv_fs_t req;
         jl_uv_file_t *fd = (jl_uv_file_t*)handle;
