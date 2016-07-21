@@ -85,8 +85,7 @@
 #include <llvm/Support/PrettyStackTrace.h>
 #include <llvm/Support/CommandLine.h>
 
-#if defined(_CPU_ARM_) || defined(_CPU_AARCH64_) ||             \
-    (defined(LLVM37) && defined(JULIA_ENABLE_THREADING))
+#if defined(_CPU_ARM_) || defined(_CPU_AARCH64_)
 #  include <llvm/IR/InlineAsm.h>
 #endif
 #if defined(USE_POLLY)
@@ -241,7 +240,7 @@ static Type *T_pppint8;
 static Type *T_void;
 
 // type-based alias analysis nodes.  Indentation of comments indicates hierarchy.
-static MDNode *tbaa_gcframe;    // GC frame
+MDNode *tbaa_gcframe;           // GC frame
 // LLVM should have enough info for alias analysis of non-gcframe stack slot
 // this is mainly a place holder for `jl_cgval_t::tbaa`
 static MDNode *tbaa_stack;      // stack slot
@@ -257,7 +256,7 @@ static MDNode *tbaa_arrayptr;       // The pointer inside a jl_array_t
 static MDNode *tbaa_arraysize;      // A size in a jl_array_t
 static MDNode *tbaa_arraylen;       // The len in a jl_array_t
 static MDNode *tbaa_arrayflags;     // The flags in a jl_array_t
-static MDNode *tbaa_const;      // Memory that is immutable by the time LLVM can see it
+MDNode *tbaa_const;             // Memory that is immutable by the time LLVM can see it
 
 // Basic DITypes
 #ifdef LLVM37
@@ -388,7 +387,6 @@ static Function *jlarray_data_owner_func;
 
 // placeholder functions
 static Function *gcroot_func;
-static Function *gcstore_func;
 static Function *gckill_func;
 static Function *jlcall_frame_func;
 static Function *gcroot_flush_func;
@@ -555,7 +553,22 @@ static jl_cgval_t emit_checked_var(Value *bp, jl_sym_t *name, jl_codectx_t *ctx,
 static Value *emit_condition(jl_value_t *cond, const std::string &msg, jl_codectx_t *ctx);
 static void allocate_gc_frame(BasicBlock *b0, jl_codectx_t *ctx);
 static GlobalVariable *prepare_global(GlobalVariable *G, Module *M = jl_builderModule);
+static llvm::Value *prepare_call(llvm::Value *Callee);
 
+template<typename T> static void push_gc_use(T &&vec, const jl_cgval_t &v)
+{
+    if (v.gcroot) {
+        vec.push_back(v.gcroot);
+    }
+}
+
+template<typename T> static void mark_gc_uses(T &&vec)
+{
+    auto f = prepare_call(gckill_func);
+    for (auto &v: vec) {
+        builder.CreateCall(f, v);
+    }
+}
 
 // --- convenience functions for tagging llvm values with julia types ---
 
@@ -1082,7 +1095,6 @@ void *jl_get_llvmf(jl_tupletype_t *tt, bool getwrapper, bool getdeclarations)
         Function *f, *specf;
         jl_llvm_functions_t declarations;
         std::unique_ptr<Module> m = emit_function(temp ? temp : linfo, &declarations);
-        finalize_gc_frame(m.get());
         jl_globalPM->run(*m.get());
         f = (llvm::Function*)declarations.functionObject;
         specf = (llvm::Function*)declarations.specFunctionObject;
@@ -1800,6 +1812,9 @@ static Value *emit_local_root(jl_codectx_t *ctx, jl_varinfo_t *vi)
 
 
 // Marks a use (and thus a potential kill) of a gcroot
+// Note that if the operation that needs the root has terminating control flow
+// (e.g. `unreachable`, `noreturn` functions) the use needs to be marked before
+// the operation as well as after it.
 static void mark_gc_use(const jl_cgval_t &v)
 {
     if (v.gcroot)
@@ -2608,6 +2623,7 @@ static jl_cgval_t emit_call_function_object(jl_lambda_info_t *li, const jl_cgval
             argvals[idx] = result;
             idx++;
         }
+        SmallVector<Value*, 16> gc_uses;
         for(size_t i=0; i < nargs+1; i++) {
             jl_value_t *jt = jl_nth_slot_type(li->specTypes,i);
             bool isboxed;
@@ -2630,7 +2646,7 @@ static jl_cgval_t emit_call_function_object(jl_lambda_info_t *li, const jl_cgval
                 jl_cgval_t arg = i==0 ? theF : emit_expr(args[i], ctx);
                 assert(arg.ispointer());
                 argvals[idx] = data_pointer(arg, ctx, at);
-                mark_gc_use(arg); // TODO: must be after the jlcall
+                push_gc_use(gc_uses, arg);
             }
             else {
                 assert(at == et);
@@ -2642,8 +2658,10 @@ static jl_cgval_t emit_call_function_object(jl_lambda_info_t *li, const jl_cgval
             idx++;
         }
         assert(idx == nfargs);
+        mark_gc_uses(gc_uses);
         CallInst *call = builder.CreateCall(prepare_call(cf), ArrayRef<Value*>(&argvals[0], nfargs));
         call->setAttributes(cf->getAttributes());
+        mark_gc_uses(gc_uses);
         return sret ? mark_julia_slot(result, jlretty, tbaa_stack) : mark_julia_type(call, retboxed, jlretty, ctx);
     }
     return mark_julia_type(emit_jlcall(theFptr, boxed(theF,ctx), &args[1], nargs, ctx), true,
@@ -3376,89 +3394,6 @@ static void allocate_gc_frame(BasicBlock *b0, jl_codectx_t *ctx)
     int nthfield = offsetof(jl_tls_states_t, safepoint) / sizeof(void*);
     ctx->signalPage = emit_nthptr_recast(ctx->ptlsStates, nthfield, tbaa_const,
                                          PointerType::get(T_psize, 0));
-}
-
-void jl_codegen_finalize_temp_arg(CallInst *ptlsStates, Type *T_pjlvalue,
-                                  MDNode *tbaa_gcframe);
-static void finalize_gc_frame(Function *F)
-{
-    Module *M = F->getParent();
-    M->getOrInsertFunction(gcroot_func->getName(), gcroot_func->getFunctionType());
-    M->getOrInsertFunction(gckill_func->getName(), gckill_func->getFunctionType());
-    M->getOrInsertFunction(gcstore_func->getName(), gcstore_func->getFunctionType());
-    M->getOrInsertFunction(jlcall_frame_func->getName(), jlcall_frame_func->getFunctionType());
-    M->getOrInsertFunction(gcroot_flush_func->getName(), gcroot_flush_func->getFunctionType());
-    Function *jl_get_ptls_states = M->getFunction("jl_get_ptls_states");
-
-    CallInst *ptlsStates = NULL;
-    for (BasicBlock::iterator i = F->getEntryBlock().begin(), e = F->getEntryBlock().end(); i != e; ++i) {
-        if (CallInst *callInst = dyn_cast<CallInst>(&*i)) {
-            if (callInst->getCalledFunction() == jl_get_ptls_states) {
-                ptlsStates = callInst;
-                break;
-            }
-        }
-    }
-    if (!ptlsStates)
-        return;
-
-    jl_codegen_finalize_temp_arg(ptlsStates, T_pjlvalue, tbaa_gcframe);
-
-#ifdef JULIA_ENABLE_THREADING
-    if (imaging_mode) {
-        GlobalVariable *GV = prepare_global(jltls_states_func_ptr, M);
-        Value *getter = tbaa_decorate(tbaa_const,
-                                      new LoadInst(GV, "", ptlsStates));
-        ptlsStates->setCalledFunction(getter);
-        ptlsStates->setAttributes(jltls_states_func->getAttributes());
-    }
-    else if (jl_tls_offset != -1) {
-#ifdef LLVM37
-        // Replace the function call with inline assembly if we know
-        // how to generate it.
-        const char *asm_str = nullptr;
-#  if defined(_CPU_X86_64_)
-        asm_str = "movq %fs:0, $0";
-#  elif defined(_CPU_X86_)
-        asm_str = "movl %gs:0, $0";
-#  elif defined(_CPU_AARCH64_)
-        asm_str = "mrs $0, tpidr_el0";
-#  endif
-        assert(asm_str && "Cannot emit thread pointer for this architecture.");
-        static auto offset = ConstantInt::getSigned(T_size, jl_tls_offset);
-        static auto tp = InlineAsm::get(FunctionType::get(T_pint8, false),
-                                        asm_str, "=r", false);
-        Value *tls = CallInst::Create(tp, "thread_ptr", ptlsStates);
-        tls = GetElementPtrInst::Create(T_int8, tls, {offset},
-                                        "ptls_i8", ptlsStates);
-        tls = new BitCastInst(tls, PointerType::get(T_ppjlvalue, 0),
-                              "ptls", ptlsStates);
-        ptlsStates->replaceAllUsesWith(tls);
-        ptlsStates->eraseFromParent();
-#endif
-    }
-#else
-    ptlsStates->replaceAllUsesWith(prepare_global(jltls_states_var, M));
-    ptlsStates->eraseFromParent();
-#endif
-}
-
-void finalize_gc_frame(Module *m)
-{
-    for (Module::iterator I = m->begin(), E = m->end(); I != E; ++I) {
-        Function *F = &*I;
-        if (F->isDeclaration())
-            continue;
-        finalize_gc_frame(F);
-    }
-#ifndef JULIA_ENABLE_THREADING
-    m->getFunction("jl_get_ptls_states")->eraseFromParent();
-#endif
-    m->getFunction("julia.gc_root_decl")->eraseFromParent();
-    m->getFunction("julia.gc_root_kill")->eraseFromParent();
-    m->getFunction("julia.gc_store")->eraseFromParent();
-    m->getFunction("julia.jlcall_frame_decl")->eraseFromParent();
-    m->getFunction("julia.gcroot_flush")->eraseFromParent();
 }
 
 static Function *gen_cfun_wrapper(jl_function_t *ff, jl_value_t *jlrettype, jl_tupletype_t *argt,
@@ -5165,12 +5100,6 @@ static void init_julia_llvm_env(Module *m)
     jltls_states_func = Function::Create(FunctionType::get(PointerType::get(T_ppjlvalue, 0), false),
                                          Function::ExternalLinkage,
                                          "jl_get_ptls_states", m);
-    jltls_states_func->setAttributes(
-        jltls_states_func->getAttributes()
-        .addAttribute(jltls_states_func->getContext(),
-                      AttributeSet::FunctionIndex, Attribute::ReadNone)
-        .addAttribute(jltls_states_func->getContext(),
-                      AttributeSet::FunctionIndex, Attribute::NoUnwind));
     add_named_global(jltls_states_func, jl_get_ptls_states_getter());
     if (imaging_mode) {
         PointerType *pfunctype = jltls_states_func->getFunctionType()->getPointerTo();
@@ -5586,13 +5515,6 @@ static void init_julia_llvm_env(Module *m)
                      Function::ExternalLinkage,
                      "julia.gc_root_kill", m);
     add_named_global(gckill_func, (void*)NULL, /*dllimport*/false);
-
-    Type* gc_store_args[2] = { T_ppjlvalue, T_pjlvalue }; // [1] <= [2]
-    gcstore_func =
-        Function::Create(FunctionType::get(T_void, makeArrayRef(gc_store_args),  false),
-                     Function::ExternalLinkage,
-                     "julia.gc_store", m);
-    add_named_global(gcstore_func, (void*)NULL, /*dllimport*/false);
 
     jlcall_frame_func =
         Function::Create(FunctionType::get(T_ppjlvalue, ArrayRef<Type*>(T_int32), false),
