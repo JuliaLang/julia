@@ -10,6 +10,7 @@ A lot of the power and extensibility in Julia comes from a collection of informa
 
 Iteration
 ---------
+
 ================================================== ======================== =====================================================================================
 Required methods                                                            Brief description
 ================================================== ======================== =====================================================================================
@@ -39,6 +40,7 @@ Value returned by :func:`iteratoreltype(IterType) <iteratoreltype>`  Required Me
 `HasEltype()`                                                        :func:`eltype(IterType) <eltype>`
 `EltypeUnknown()`                                                    (*none*)
 ==================================================================== ==================================
+
 Sequential iteration is implemented by the methods :func:`start`, :func:`done`, and :func:`next`. Instead of mutating objects as they are iterated over, Julia provides these three methods to keep track of the iteration state externally from the object. The :func:`start(iter) <start>` method returns the initial state for the iterable object ``iter``. That state gets passed along to :func:`done(iter, state) <done>`, which tests if there are any elements remaining, and :func:`next(iter, state) <next>`, which returns a tuple containing the current element and an updated ``state``. The ``state`` object can be anything, and is generally considered to be an implementation detail private to the iterable object.
 
 Any object defines these three methods is iterable and can be used in the :ref:`many functions that rely upon iteration <stdlib-collections-iteration>`. It can also be used directly in a ``for`` loop since the syntax::
