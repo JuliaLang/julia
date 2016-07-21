@@ -3393,7 +3393,7 @@ static void finalize_gc_frame(Function *F)
     CallInst *ptlsStates = NULL;
     for (BasicBlock::iterator i = F->getEntryBlock().begin(), e = F->getEntryBlock().end(); i != e; ++i) {
         if (CallInst *callInst = dyn_cast<CallInst>(&*i)) {
-            if (callInst->getCalledFunction() == jl_get_ptls_states) {
+            if (callInst->getCalledValue() == jl_get_ptls_states) {
                 ptlsStates = callInst;
                 break;
             }
@@ -3452,7 +3452,8 @@ void finalize_gc_frame(Module *m)
         finalize_gc_frame(F);
     }
 #ifndef JULIA_ENABLE_THREADING
-    m->getFunction("jl_get_ptls_states")->eraseFromParent();
+    if (Function *f = m->getFunction("jl_get_ptls_states"))
+        f->eraseFromParent();
 #endif
     m->getFunction("julia.gc_root_decl")->eraseFromParent();
     m->getFunction("julia.gc_root_kill")->eraseFromParent();
