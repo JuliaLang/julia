@@ -451,11 +451,11 @@ function log1p{T}(z::Complex{T})
     end
 end
 
-function ^{T<:AbstractFloat}(z::Complex{T}, p::Complex{T})
-    if p==2 #square
+function ^{T<:AbstractFloat}(z::Complex{T}, p::Complex{T})::Complex{T}
+    if p == 2 #square
         zr, zi = reim(z)
         x = (zr-zi)*(zr+zi)
-        y = T(2*zr*zi)
+        y = 2*zr*zi
         if isnan(x)
             if isinf(y)
                 x = copysign(zero(T),zr)

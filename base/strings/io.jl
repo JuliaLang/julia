@@ -9,6 +9,7 @@ function print(io::IO, x)
     finally
         unlock(io)
     end
+    return nothing
 end
 
 function print(io::IO, xs...)
@@ -20,6 +21,7 @@ function print(io::IO, xs...)
     finally
         unlock(io)
     end
+    return nothing
 end
 
 println(io::IO, xs...) = print(io, xs..., '\n')
