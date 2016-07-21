@@ -25,13 +25,13 @@ CartesianIndex{N}(index::NTuple{N,Integer}) = CartesianIndex{N}(index)
 (::Type{CartesianIndex{N}}){N}() = CartesianIndex{N}(())
 # Un-nest passed CartesianIndexes
 CartesianIndex(index::Union{Integer, CartesianIndex}...) = CartesianIndex(flatten(index))
-Base.@pure flatten(I::Tuple{}) = I
-Base.@pure flatten(I::Tuple{Any}) = I
-Base.@pure flatten{N}(I::Tuple{CartesianIndex{N}}) = I[1].I
-Base.@pure flatten(I) = _flatten(I...)
-Base.@pure _flatten() = ()
-Base.@pure _flatten(i, I...)                 = (i, _flatten(I...)...)
-Base.@pure _flatten(i::CartesianIndex, I...) = (i.I..., _flatten(I...)...)
+flatten(I::Tuple{}) = I
+flatten(I::Tuple{Any}) = I
+flatten{N}(I::Tuple{CartesianIndex{N}}) = I[1].I
+@inline flatten(I) = _flatten(I...)
+@inline _flatten() = ()
+@inline _flatten(i, I...)                 = (i, _flatten(I...)...)
+@inline _flatten(i::CartesianIndex, I...) = (i.I..., _flatten(I...)...)
 CartesianIndex(index::Tuple{Vararg{Union{Integer, CartesianIndex}}}) = CartesianIndex(index...)
 
 # length
