@@ -392,13 +392,13 @@ function watch_file(s::AbstractString, timeout_s::Real=-1)
         if timeout_s >= 0
             result = fetimeout()
 
-            @schedule (try result = wait(fm); catch e; notify_error(wt, e); end; notify(wt))
+            @schedule (try _, result = wait(fm); catch e; notify_error(wt, e); end; notify(wt))
             @schedule (sleep(timeout_s); notify(wt))
 
             wait(wt)
             return result
         else
-            return wait(fm)
+            return wait(fm)[2]
         end
     finally
         close(fm)
