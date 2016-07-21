@@ -23,3 +23,12 @@ function Base.getindex(status::GitStatus, i::Csize_t)
     return unsafe_load(convert(Ptr{StatusEntry}, entry_ptr), 1)
 end
 Base.getindex(status::GitStatus, i::Int) = getindex(status, Csize_t(i))
+
+function status(repo::GitRepo, path::String)
+    status_ptr = Ref{Cuint}(0)
+    ret =  ccall((:git_status_file, :libgit2), Cint,
+                  (Ref{Cuint}, Ptr{Void}, Cstring),
+                  status_ptr, repo.ptr, path)
+    (ret == Cint(Error.ENOTFOUND) || ret == Cint(Error.EAMBIGUOUS)) && return Nullable{Cuint}()
+    return Nullable(status_ptr[])
+end
