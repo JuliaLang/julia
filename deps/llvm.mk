@@ -435,6 +435,9 @@ else ifeq ($(LLVM_VER_SHORT),3.8)
 ifeq ($(LLVM_VER),3.8.0)
 $(eval $(call LLVM_PATCH,llvm-D17326_unpack_load))
 endif
+ifeq ($(LLVM_VER),3.8.1)
+$(eval $(call LLVM_PATCH,llvm-3.8.1-version))
+endif
 $(eval $(call LLVM_PATCH,llvm-3.7.1_3)) # Remove for 3.9
 $(eval $(call LLVM_PATCH,llvm-D14260))
 $(eval $(call LLVM_PATCH,llvm-3.8.0_bindir)) # Remove for 3.9
