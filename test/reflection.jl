@@ -218,6 +218,10 @@ let
 end
 
 @test_throws ArgumentError which(is, Tuple{Int, Int})
+@test_throws ArgumentError code_typed(is, Tuple{Int, Int})
+@test_throws ArgumentError code_llvm(is, Tuple{Int, Int})
+@test_throws ArgumentError code_native(is, Tuple{Int, Int})
+@test_throws ArgumentError Base.return_types(is, Tuple{Int, Int})
 
 module TestingExported
 using Base.Test
@@ -371,8 +375,8 @@ function test_typed_ast_printing(f::ANY, types::ANY, must_used_vars)
     for name in must_used_vars
         @test name in slotnames
     end
-    for str in (sprint(io->code_warntype(io, f, types)),
-                sprint(io->show(io, li)))
+    for str in (sprint(code_warntype, f, types),
+                stringmime("text/plain", li))
         # Test to make sure the clearing of file path below works
         @test string(li.def.file) == @__FILE__
         for var in must_used_vars
@@ -397,7 +401,7 @@ function test_typed_ast_printing(f::ANY, types::ANY, must_used_vars)
         end
     end
     # Make sure printing an AST outside LambdaInfo still works.
-    str = sprint(io->show(io, Base.uncompressed_ast(li)))
+    str = sprint(show, Base.uncompressed_ast(li))
     # Check that we are printing the slot numbers when we don't have the context
     # Use the variable names that we know should be present in the optimized AST
     for i in 2:length(li.slotnames)
@@ -413,6 +417,16 @@ test_typed_ast_printing(g15714, Tuple{Vector{Float32}},
                         [:array_var15714, :index_var15714])
 @test used_dup_var_tested15714
 @test used_unique_var_tested15714
+
+let li = typeof(getfield).name.mt.cache.func::LambdaInfo,
+    lrepr = string(li),
+    mrepr = string(li.def),
+    lmime = stringmime("text/plain", li)
+
+    @test lrepr == "LambdaInfo template for getfield(...)"
+    @test mrepr == "getfield(...)"
+end
+
 
 # Linfo Tracing test
 tracefoo(x, y) = x+y

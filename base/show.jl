@@ -232,6 +232,7 @@ function show(io::IO, p::Pair)
     isa(p.second,Pair) && print(io, "(")
     show(io, p.second)
     isa(p.second,Pair) && print(io, ")")
+    nothing
 end
 
 function show(io::IO, m::Module)
@@ -259,30 +260,21 @@ function lambdainfo_slotnames(l::LambdaInfo)
         end
         printnames[i] = printname
     end
-    printnames
+    return printnames
 end
 
 function show(io::IO, l::LambdaInfo)
     if isdefined(l, :def)
-        if (l === l.def.lambda_template)
+        if l === l.def.lambda_template
             print(io, "LambdaInfo template for ")
             show(io, l.def)
-            println(io)
         else
             print(io, "LambdaInfo for ")
-            show_lambda_types(io, l.specTypes.parameters)
-            println(io)
+            show_lambda_types(io, l)
         end
     else
-        println(io, "Toplevel LambdaInfo thunk")
+        print(io, "Toplevel LambdaInfo thunk")
     end
-    # Fix slot names and types in function body
-    lambda_io = IOContext(IOContext(io, :LAMBDAINFO => l),
-                          :LAMBDA_SLOTNAMES => lambdainfo_slotnames(l))
-    body = Expr(:body)
-    body.args = uncompressed_ast(l)
-    body.typ = l.rettype
-    show(lambda_io, body)
 end
 
 function show_delim_array(io::IO, itr::Union{AbstractArray,SimpleVector}, op, delim, cl,
@@ -565,15 +557,6 @@ show_unquoted(io::IO, ex::LabelNode, ::Int, ::Int)      = print(io, ex.label, ":
 show_unquoted(io::IO, ex::GotoNode, ::Int, ::Int)       = print(io, "goto ", ex.label)
 show_unquoted(io::IO, ex::GlobalRef, ::Int, ::Int)      = print(io, ex.mod, '.', ex.name)
 
-function show_unquoted(io::IO, ex::LambdaInfo, ::Int, ::Int)
-    if isdefined(ex, :specTypes)
-        print(io, "LambdaInfo for ")
-        show_lambda_types(io, ex.specTypes.parameters)
-    else
-        show(io, ex)
-    end
-end
-
 function show_unquoted(io::IO, ex::Slot, ::Int, ::Int)
     typ = isa(ex,TypedSlot) ? ex.typ : Any
     slotid = ex.id
@@ -744,7 +727,7 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int)
         # binary operator (i.e. "x + y")
         elseif func_prec > 0 # is a binary operator
             na = length(func_args)
-            if na == 2 || (na > 2 && func in (:+, :++, :*))
+            if (na == 2 || (na > 2 && func in (:+, :++, :*))) && all(!isa(a, Expr) || a.head !== :... for a in func_args)
                 sep = " $func "
                 if func_prec <= prec
                     show_enclosed_list(io, '(', func_args, sep, ')', indent, func_prec, true)
@@ -983,11 +966,7 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int)
         show(io, ex.head)
         for arg in args
             print(io, ", ")
-            if isa(arg, LambdaInfo) && isdefined(arg, :specTypes)
-                show_lambda_types(io, arg.specTypes.parameters)
-            else
-                show(io, arg)
-            end
+            show(io, arg)
         end
         print(io, "))")
     end
@@ -995,8 +974,14 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int)
     nothing
 end
 
-function show_lambda_types(io::IO, sig::SimpleVector)
-    # print a method signature tuple
+function show_lambda_types(io::IO, li::LambdaInfo)
+    # print a method signature tuple for a lambda definition
+    if li.specTypes === Tuple
+        print(io, li.def.name, "(...)")
+        return
+    end
+
+    sig = li.specTypes.parameters
     ft = sig[1]
     if ft <: Function && isempty(ft.parameters) &&
             isdefined(ft.name.module, ft.name.mt.name) &&
