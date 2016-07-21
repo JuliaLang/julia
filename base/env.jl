@@ -86,10 +86,10 @@ if is_windows()
 start(hash::EnvHash) = (pos = ccall(:GetEnvironmentStringsW,stdcall,Ptr{UInt16},()); (pos,pos))
 function done(hash::EnvHash, block::Tuple{Ptr{UInt16},Ptr{UInt16}})
     if unsafe_load(block[1]) == 0
-        ccall(:FreeEnvironmentStringsW,stdcall,Int32,(Ptr{UInt16},),block[2])
+        ccall(:FreeEnvironmentStringsW, stdcall, Int32, (Ptr{UInt16},), block[2])
         return true
     end
-    false
+    return false
 end
 function next(hash::EnvHash, block::Tuple{Ptr{UInt16},Ptr{UInt16}})
     pos = block[1]
@@ -102,7 +102,7 @@ function next(hash::EnvHash, block::Tuple{Ptr{UInt16},Ptr{UInt16}})
     if m === nothing
         error("malformed environment entry: $env")
     end
-    (Pair{String,String}(m.captures[1], m.captures[2]), (pos+len*2, blk))
+    return (Pair{String,String}(m.captures[1], m.captures[2]), (pos+len*2, blk))
 end
 
 else # !windows
@@ -114,12 +114,12 @@ function next(::EnvHash, i)
     if env === nothing
         throw(BoundsError())
     end
-    env::String
+    env = env::String
     m = match(r"^(.*?)=(.*)$"s, env)
     if m === nothing
         error("malformed environment entry: $env")
     end
-    (Pair{String,String}(m.captures[1], m.captures[2]), i+1)
+    return (Pair{String,String}(m.captures[1], m.captures[2]), i+1)
 end
 
 end # os-test

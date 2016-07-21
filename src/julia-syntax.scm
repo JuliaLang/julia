@@ -1321,16 +1321,11 @@
 (define (remove-argument-side-effects e)
   (let ((a '()))
     (cond
-     ((and (decl? e) (symbol? (cadr e)))
-      (cons (cadr e) (list e)))
      ((not (pair? e))
       (cons e '()))
      (else
       (cons (map (lambda (x)
                    (cond
-                    ((and (decl? x) (symbol? (cadr x)))
-                     (set! a (cons x a))
-                     (cadr x))
                     ((not (effect-free? x))
                      (let ((g (make-ssavalue)))
                        (if (or (eq? (car x) '...) (eq? (car x) '&))
@@ -1699,8 +1694,8 @@
            (else
             `(block
               ,.(map (lambda (x)
-                       (if (decl? x)
-                           `(decl ,@(map expand-forms (cdr x)))
+                       (if (and (decl? x) (length= (cdr x) 2) (symbol? (cadr x)))
+                           `(impl-decl ,@(map expand-forms (cdr x)))
                            (expand-forms x)))
                      (butlast (cdr e)))
               ,(expand-forms (last (cdr e)))))))
@@ -1951,9 +1946,9 @@
 
    '|::|
    (lambda (e)
-     (if (length= e 2)
+     (if (not (length= e 3))
          (error "invalid \"::\" syntax"))
-     (if (and (length= e 3) (not (symbol-like? (cadr e))))
+     (if (not (symbol-like? (cadr e)))
          `(call (core typeassert)
                 ,(expand-forms (cadr e)) ,(expand-forms (caddr e)))
          (map expand-forms e)))
@@ -2439,7 +2434,7 @@
                (vinfo:set-called! vi #t))
            (for-each (lambda (x) (analyze-vars x env captvars sp))
                      (cdr e))))
-        ((decl)
+        ((decl impl-decl)
          ;; handle var::T declaration by storing the type in the var-info
          ;; record. for non-symbols or globals, emit a type assertion.
          (let ((vi (var-info-for (cadr e) env)))
@@ -2967,11 +2962,21 @@ f(x) = yt(x)
            (cl-convert `(call (core typeassert) ,@(cdr e)) fname lam namemap toplevel interp))
           ;; remaining `decl` expressions are only type assertions if the
           ;; argument is global or a non-symbol.
-          ((decl)
+          ((impl-decl)
            (if (or (assq (cadr e) (car  (lam:vinfo lam)))
                    (assq (cadr e) (cadr (lam:vinfo lam))))
-               '(null)
+               (let ((str-e (deparse `(|::| ,@(cdr e)))))
+                    (syntax-deprecation #f str-e (string "local " str-e))
+                    '(null))
                (cl-convert `(call (core typeassert) ,@(cdr e)) fname lam namemap toplevel interp)))
+          ((decl)
+           (cond ((not (symbol? (cadr e)))
+                  (cl-convert `(call (core typeassert) ,@(cdr e)) fname lam namemap toplevel interp))
+                 ((or (assq (cadr e) (car  (lam:vinfo lam)))
+                      (assq (cadr e) (cadr (lam:vinfo lam))))
+                  '(null))
+                 (else (syntax-deprecation #f (string "global " (deparse `(|::| ,@(cdr e)))) "typeassert")
+                       (cl-convert `(call (core typeassert) ,@(cdr e)) fname lam namemap toplevel interp))))
           ;; `with-static-parameters` expressions can be removed now; used only by analyze-vars
           ((with-static-parameters)
            (cl-convert (cadr e) fname lam namemap toplevel interp))
