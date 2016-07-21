@@ -398,28 +398,40 @@ General I/O
 
    Read all available data on the stream, blocking the task only if no data is available. The result is a ``Vector{UInt8,1}``\ .
 
-.. function:: IOContext{<:IO} <: IO
+.. type:: IOContext
 
    .. Docstring generated from Julia source
 
-   IOContext provides a mechanism for passing output-configuration keyword arguments through arbitrary show methods.
+   IOContext provides a mechanism for passing output configuration settings among ``show`` methods.
 
-   In short, it is an immutable Dictionary that is a subclass of IO.
+   In short, it is an immutable dictionary that is a subclass of IO. It supports standard dictionary operations such as ``getindex``\ , and can also be used as an I/O stream.
 
-   .. code-block:: julia
+.. function:: IOContext(io::IO, KV::Pair)
 
-       IOContext(io::IO, KV::Pair)
+   .. Docstring generated from Julia source
 
-   Create a new entry in the IO Dictionary for the key => value pair
+   Create an ``IOContext`` that wraps a given stream, adding the specified key=>value pair to the properties of that stream (note that ``io`` can itself be an ``IOContext``\ ).
 
    * use ``(key => value) in dict`` to see if this particular combination is in the properties set
    * use ``get(dict, key, default)`` to retrieve the most recent value for a particular key
 
-   .. code-block:: julia
+   The following properties are in common use:
 
-       IOContext(io::IO, context::IOContext)
+   * ``:compact``\ : Boolean specifying that small values should be printed more compactly, e.g. that numbers should be printed with fewer digits. This is set when printing array elements.
+   * ``:limit``\ : Boolean specifying that containers should be truncated, e.g. showing ``…`` in place of most elements.
+   * ``:displaysize``\ : A ``Tuple{Int,Int}`` giving the size in rows and columns to use for text output. This can be used to override the display size for called functions, but to get the size of the screen use the ``displaysize`` function.
 
-   Create a IOContext that wraps an alternate IO but inherits the keyword arguments from the context
+.. function:: IOContext(io::IO, context::IOContext)
+
+   .. Docstring generated from Julia source
+
+   Create a IOContext that wraps an alternate IO but inherits the properties of ``context``\ .
+
+.. function:: IOContext(io::IO; properties...)
+
+   .. Docstring generated from Julia source
+
+   The same as ``IOContext(io::IO, KV::Pair)``\ , but accepting properties as keyword arguments.
 
 Text I/O
 --------
@@ -716,6 +728,8 @@ Julia environments (such as the IPython-based IJulia notebook).
    The default MIME type is ``MIME"text/plain"``\ . There is a fallback definition for ``text/plain`` output that calls ``show`` with 2 arguments. Therefore, this case should be handled by defining a 2-argument ``show(stream::IO, x::MyType)`` method.
 
    Technically, the ``MIME"mime"`` macro defines a singleton type for the given ``mime`` string, which allows us to exploit Julia's dispatch mechanisms in determining how to display objects of any given type.
+
+   The first argument to ``show`` can be an ``IOContext`` specifying output format properties. See ``IOContext`` for details.
 
 .. function:: mimewritable(mime, x)
 

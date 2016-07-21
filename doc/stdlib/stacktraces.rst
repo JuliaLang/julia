@@ -17,7 +17,7 @@
    * ``func::Symbol``
 
      The name of the function containing the execution context.
-   * ``outer_linfo::Nullable{LambdaInfo}``
+   * ``linfo::Nullable{LambdaInfo}``
 
      The LambdaInfo containing the execution context (if it could be found).
    * ``file::Symbol``
@@ -26,15 +26,12 @@
    * ``line::Int``
 
      The line number in the file containing the execution context.
-   * ``inlined_file::Symbol``
-
-     The path to the file containing the context for inlined code.
-   * ``inlined_line::Int``
-
-     The line number in the file containing the context for inlined code.
    * ``from_c::Bool``
 
      True if the code is from C.
+   * ``inlined::Bool``
+
+     True if the code is from an inlined frame.
    * ``pointer::Int64``
 
      Representation of the pointer to the execution context as returned by ``backtrace``\ .
