@@ -56,23 +56,21 @@ abstract AbstractPayload
 "Abstract credentials payload"
 abstract AbstractCredentials <: AbstractPayload
 "Returns a credentials parameter"
-function Base.getindex(p::AbstractCredentials, keys...)
-    for k in keys
-        ks = Symbol(k)
-        isdefined(p, ks) && return getfield(p, ks)
-    end
+function Base.getindex(p::AbstractCredentials, key, _=nothing)
+    ks = Symbol(key)
+    isdefined(p, ks) && return getfield(p, ks)
     return nothing
 end
 "Sets credentials with `key` parameter to a value"
-function Base.setindex!(p::AbstractCredentials, val, keys...)
-    for k in keys
-        ks = Symbol(k)
-        isdefined(p, ks) && setfield!(p, ks, val)
-    end
+function Base.setindex!(p::AbstractCredentials, val, key, _=nothing)
+    ks = Symbol(key)
+    @assert isdefined(p, ks)
+    setfield!(p, ks, val)
     return p
 end
 "Checks if credentials were used"
 checkused!(p::AbstractCredentials) = true
+checkused!(p::Void) = false
 "Resets credentials for another use"
 reset!(p::AbstractCredentials, cnt::Int=3) = nothing
 
@@ -707,9 +705,6 @@ function getobjecttype(obj_type::Cint)
     end
 end
 
-"Empty credentials"
-type EmptyCredentials <: AbstractCredentials end
-
 "Credentials that support only `user` and `password` parameters"
 type UserPasswordCredentials <: AbstractCredentials
     user::AbstractString
@@ -768,7 +763,8 @@ function Base.setindex!(p::CachedCredentials, val, keys...)
         p.cred[host] = SSHCredentials()
     end
     creds = p.cred[host]
-    isdefined(creds,key) && setfield!(creds, key, val)
+    @assert isdefined(creds,key)
+    setfield!(creds, key, val)
     return p
 end
 "Checks if credentials were used or failed authentication, see `LibGit2.credentials_callback`"
