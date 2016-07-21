@@ -4441,7 +4441,7 @@ function sp_innersig{T}(x::T)
 end
 @test sp_innersig(2) == ((2, 1, :a), (2, UInt(1), :b))
 
-# TODO: broken - also with local variables
+# TODO: also allow local variables?
 #function local_innersig{T}(x::T)
 #   V = typeof(x)
 #   U = unsigned(T)
