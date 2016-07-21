@@ -661,8 +661,7 @@ static void jl_serialize_module(jl_serializer_state *s, jl_module_t *m)
 static int is_ast_node(jl_value_t *v)
 {
     return jl_is_symbol(v) || jl_is_slot(v) || jl_is_ssavalue(v) ||
-        jl_is_expr(v) || jl_is_newvarnode(v) || jl_is_svec(v) ||
-        jl_typeis(v, jl_array_any_type) || jl_is_tuple(v) ||
+        jl_is_expr(v) || jl_is_newvarnode(v) || jl_is_svec(v) || jl_is_tuple(v) ||
         jl_is_uniontype(v) || jl_is_int32(v) || jl_is_int64(v) ||
         jl_is_bool(v) || jl_is_quotenode(v) || jl_is_gotonode(v) ||
         jl_is_labelnode(v) || jl_is_linenode(v) || jl_is_globalref(v);
@@ -837,7 +836,7 @@ static void jl_serialize_value_(jl_serializer_state *s, jl_value_t *v)
         }
         jl_serialize_value(s, e->head);
         jl_serialize_value(s, e->etype);
-        for(i=0; i < l; i++) {
+        for (i = 0; i < l; i++) {
             jl_serialize_value(s, jl_exprarg(e, i));
         }
     }
@@ -2125,7 +2124,12 @@ JL_DLLEXPORT jl_array_t *jl_compress_ast(jl_lambda_info_t *li, jl_array_t *ast)
         &dest, MODE_AST,
         li->def->roots, li->def->module
     };
-    jl_serialize_value(&s, ast);
+    size_t i, nstmts = jl_array_len(ast);
+    assert(nstmts < INT32_MAX);
+    write_int32(&dest, nstmts);
+    for (i = 0; i < nstmts; i++) {
+        jl_serialize_value(&s, jl_array_ptr_ref(ast, i));
+    }
 
     //jl_printf(JL_STDERR, "%d bytes, %d values\n", dest.size, vals->length);
 
@@ -2157,12 +2161,16 @@ JL_DLLEXPORT jl_array_t *jl_uncompress_ast(jl_lambda_info_t *li, jl_array_t *dat
         li->def->roots, li->def->module
     };
 
-    jl_array_t *v = (jl_array_t*)jl_deserialize_value(&s, NULL);
-    JL_GC_PUSH1(&v);
+    size_t i, nstmts = read_int32(&src);
+    jl_array_t *ast = jl_alloc_vec_any(nstmts);
+    JL_GC_PUSH1(&ast);
+    for (i = 0; i < nstmts; i++) {
+        jl_array_ptr_set(ast, i, jl_deserialize_value(&s, NULL));
+    }
     jl_gc_enable(en);
     JL_UNLOCK(&li->def->writelock); // Might GC
     JL_GC_POP();
-    return v;
+    return ast;
 }
 
 JL_DLLEXPORT int jl_save_incremental(const char *fname, jl_array_t *worklist)
