@@ -4425,3 +4425,30 @@ function h17449(v)
     return r[]
 end
 @test h17449(true) === :k
+
+# make sure lowering agrees on sp order
+function captsp{T, S}(x::T, y::S)
+    subf(x2::Int) = T
+    subf(x2::UInt) = S
+    return subf(Int(1)), subf(UInt(1))
+end
+@test captsp(1, 2.0) == (Int, Float64)
+
+# issue #15068
+function sp_innersig{T}(x::T)
+   subf(x2::T) = (x, x2, :a)
+   subf(x2) = (x, x2, :b)
+   return (subf(one(T)), subf(unsigned(one(T))))
+end
+@test sp_innersig(2) == ((2, 1, :a), (2, UInt(1), :b))
+
+# TODO: also allow local variables?
+#function local_innersig{T}(x::T)
+#   V = typeof(x)
+#   U = unsigned(T)
+#   subf(x2::T, x3::Complex{V}) = (x, x2, x3)
+#   subf(x2::U) = (x, x2)
+#   return (subf(one(T), x * im), subf(unsigned(one(T))))
+#end
+#@test local_innersig(Int32(2)) == ((Int32(2), Int32(1), Int32(2)im), (Int32(2), UInt32(1)))
+#@test local_innersig(Int64(3)) == ((Int64(3), Int64(1), Int64(3)im), (Int64(3), UInt64(1)))

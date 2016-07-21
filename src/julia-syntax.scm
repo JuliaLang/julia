@@ -2486,24 +2486,21 @@ end
 f(x) = yt(x)
 |#
 
-;; template for generating a closure type with parameters
-(define (type-for-closure-parameterized name P fields types super)
-  (let ((n (length P)))
-    `(thunk
+(define (type-for-closure-parameterized name P names fields types super)
+   (let ((n (length P)))
+    `((thunk
       (lambda ()
-        ((,@(map (lambda (p) `(,p Any 18)) P))
-         () 0 ())
+        (() () 0 ())
         (body (global ,name) (const ,name)
-              ,@(map (lambda (p) `(= ,p (call (core TypeVar) ',p (core Any) false))) P)
+              ,@(map (lambda (p n) `(= ,p (call (core TypeVar) ',n (core Any) false))) P names)
               (composite_type ,name (call (core svec) ,@P)
                               (call (core svec) ,@(map (lambda (v) `',v) fields))
                               ,super
                               (call (core svec) ,@types) false ,(length fields))
-              (return (null)))))))
+              (return (null))))))))
 
-;; ... and without parameters
 (define (type-for-closure name fields super)
-  `(thunk (lambda ()
+  `((thunk (lambda ()
             (() () 0 ())
             (body (global ,name) (const ,name)
                   (composite_type ,name (call (core svec))
@@ -2511,7 +2508,33 @@ f(x) = yt(x)
                                   ,super
                                   (call (core svec) ,@(map (lambda (v) 'Any) fields))
                                   false ,(length fields))
-                  (return (null))))))
+                  (return (null)))))))
+
+
+;; better versions of above, but they gets handled wrong in many places
+;; need to fix that in order to handle #265 fully (and use the definitions)
+
+;; template for generating a closure type with parameters
+;(define (type-for-closure-parameterized name P names fields types super)
+;  (let ((n (length P)))
+;        `((global ,name)
+;          (const ,name)
+;          ,@(map (lambda (p n) `(= ,p (call (core TypeVar) ',n (core Any) false))) P names)
+;          (composite_type ,name (call (core svec) ,@P)
+;                          (call (core svec) ,@(map (lambda (v) `',v) fields))
+;                          ,super
+;                          (call (core svec) ,@types) false ,(length fields)))))
+
+;; ... and without parameters
+;(define (type-for-closure name fields super)
+;  `((global ,name)
+;    (const ,name)
+;    (composite_type ,name (call (core svec))
+;                    (call (core svec) ,@(map (lambda (v) `',v) fields))
+;                    ,super
+;                    (call (core svec) ,@(map (lambda (v) 'Any) fields))
+;                    false ,(length fields))))
+
 
 (define (vinfo:not-capt vi)
   (list (car vi) (cadr vi) (logand (caddr vi) (lognot 5))))
@@ -2781,9 +2804,10 @@ f(x) = yt(x)
                   (lam2  (if short #f (cadddr e)))
                   (vis   (if short '(() () ()) (lam:vinfo lam2)))
                   (cvs   (map car (cadr vis)))
-                  (local? (and lam (symbol? name)
-                               (or (assq name (car  (lam:vinfo lam)))
-                                   (assq name (cadr (lam:vinfo lam))))))
+                  (local? (lambda (s) (and (symbol? s)
+                               (or (assq s (car  (lam:vinfo lam)))
+                                   (assq s (cadr (lam:vinfo lam)))))))
+                  (local (and lam (local? name)))
                   (sig      (and (not short) (caddr e)))
                   (sp-inits (if (or short (not (eq? (car sig) 'block)))
                                 '()
@@ -2792,14 +2816,14 @@ f(x) = yt(x)
                   (sig      (and sig (if (eq? (car sig) 'block)
                                          (last sig)
                                          sig))))
-             (if local?
+             (if local
                  (begin (if (memq name (lam:args lam))
                             (error (string "cannot add method to function argument " name)))
                         (if (eqv? (string.char (string name) 0) #\@)
                             (error "macro definition not allowed inside a local scope"))))
              (if lam2
                  (lambda-optimize-vars! lam2))
-             (if (not local?) ;; not a local function; will not be closure converted to a new type
+             (if (not local) ;; not a local function; will not be closure converted to a new type
                  (cond (short e)
                        ((null? cvs)
                         `(block
@@ -2824,9 +2848,9 @@ f(x) = yt(x)
                                     ,(last e))))))
                  ;; local case - lift to a new type at top level
                  (let* ((exists (get namemap name #f))
-                        (tname  (or exists
-                                    (and name
-                                         (symbol (string "#" name "#" (current-julia-module-counter))))))
+                        (type-name  (or exists
+                                        (and name
+                                             (symbol (string "#" name "#" (current-julia-module-counter))))))
                         (alldefs (expr-find-all
                                   (lambda (ex) (and (eq? (car ex) 'method)
                                                     (not (eq? ex e))
@@ -2835,31 +2859,64 @@ f(x) = yt(x)
                                   (lam:body lam)
                                   identity
                                   (lambda (x) (and (pair? x) (not (eq? (car x) 'lambda))))))
-                        (cvs   (delete-duplicates
-                                (apply append  ;; merge captured vars from all definitions
-                                       cvs
-                                       (map (lambda (methdef)
-                                              (map car (cadr (lam:vinfo (cadddr methdef)))))
-                                            alldefs))))
-                        (sps   (delete-duplicates  ;; static params from all definitions
-                                (apply append
-                                       (if lam2 (lam:sp lam2) '())
-                                       (map (lambda (methdef) (lam:sp (cadddr methdef)))
-                                            alldefs))))
-                        (capt-sp (intersect cvs sps))
-                        (capt-vars (diff cvs capt-sp))
-                        (method-sp (map (lambda (s) (make-ssavalue)) capt-sp))
+                        (all-capt-vars   (delete-duplicates
+                                          (apply append  ;; merge captured vars from all definitions
+                                                 cvs
+                                                 (map (lambda (methdef)
+                                                        (map car (cadr (lam:vinfo (cadddr methdef)))))
+                                                      alldefs))))
+                        (all-sparams   (delete-duplicates  ;; static params from all definitions
+                                        (apply append
+                                               (if lam2 (lam:sp lam2) '())
+                                               (map (lambda (methdef) (lam:sp (cadddr methdef)))
+                                                    alldefs))))
+                        (capt-sp (simple-sort (intersect all-capt-vars all-sparams))) ; the intersection is the list of sparams that need to be captured
+                        (capt-vars (diff all-capt-vars capt-sp)) ; remove capt-sp from capt-vars
+                        (find-locals-in-method-sig (lambda (methdef)
+                                                     (expr-find-all
+                                                      (lambda (s) (and (not (eq? name s))
+                                                                       (not (memq s capt-sp))
+                                                                       (or ;(local? s) ; TODO: make this work for local variables too?
+                                                                         (memq s (lam:sp lam)))))
+                                                      (caddr methdef)
+                                                      identity)))
+                        (sig-locals (simple-sort
+                                     (delete-duplicates  ;; locals used in sig from all definitions
+                                      (apply append      ;; will convert these into sparams for dispatch
+                                             (if lam2 (find-locals-in-method-sig e) '())
+                                             (map find-locals-in-method-sig alldefs)))))
+                        (closure-param-names (append capt-sp sig-locals)) ; sparams for the closure method declaration
+                        (closure-param-syms (map (lambda (s) (make-ssavalue)) closure-param-names))
                         (typedef  ;; expression to define the type
                          (let* ((fieldtypes (map (lambda (v)
                                                    (if (is-var-boxed? v lam)
                                                        '(core Box)
-                                                       (gensy)))
-                                                 capt-vars))
-                                (para (append capt-sp
-                                              (filter (lambda (v) (symbol? v)) fieldtypes))))
+                                                       (make-ssavalue)))
+                                                  capt-vars))
+                                (para (append closure-param-syms
+                                              (filter (lambda (v) (ssavalue? v)) fieldtypes)))
+                                (fieldnames (append closure-param-names (filter (lambda (v) (not (is-var-boxed? v lam))) capt-vars))))
                            (if (null? para)
-                               (type-for-closure tname capt-vars '(core Function))
-                               (type-for-closure-parameterized tname para capt-vars fieldtypes '(core Function)))))
+                               (type-for-closure type-name capt-vars '(core Function))
+                               (type-for-closure-parameterized type-name para fieldnames capt-vars fieldtypes '(core Function)))))
+                        (mk-method ;; expression to make the method
+                          (if short '()
+                              (let* ((iskw ;; TODO jb/functions need more robust version of this
+                                      (contains (lambda (x) (eq? x 'kwftype)) sig))
+                                     (renamemap (map cons closure-param-names closure-param-syms))
+                                     (arg-defs (replace-vars
+                                                (fix-function-arg-type sig type-name iskw namemap closure-param-syms)
+                                                renamemap)))
+                                    (append (map (lambda (gs tvar)
+                                                   (make-assignment gs `(call (core TypeVar) ',tvar (core Any) true)))
+                                                  closure-param-syms closure-param-names)
+                                            `((method #f ,(cl-convert arg-defs fname lam namemap toplevel interp)
+                                                  ,(convert-lambda lam2
+                                                                   (if iskw
+                                                                       (caddr (lam:args lam2))
+                                                                       (car (lam:args lam2)))
+                                                                   #f closure-param-names)
+                                                  ,(last e)))))))
                         (mk-closure  ;; expression to make the closure
                          (let* ((var-exprs (map (lambda (v)
                                                   (let ((cv (assq v (cadr (lam:vinfo lam)))))
@@ -2870,40 +2927,23 @@ f(x) = yt(x)
                                                         v)))
                                                 capt-vars))
                                 (P (append
-                                    capt-sp
+                                    closure-param-names
                                     (filter identity (map (lambda (v ve)
                                                             (if (is-var-boxed? v lam)
                                                                 #f
                                                                 `(call (core typeof) ,ve)))
                                                           capt-vars var-exprs)))))
                            `(new ,(if (null? P)
-                                      tname
-                                      `(call (core apply_type) ,tname ,@P))
-                                 ,@var-exprs)))
-                        (iskw ;; TODO jb/functions need more robust version of this
-                         (contains (lambda (x) (eq? x 'kwftype)) sig)))
+                                      type-name
+                                      `(call (core apply_type) ,type-name ,@P))
+                                 ,@var-exprs))))
                    `(toplevel-butlast
                      ,@(if exists
                            '()
-                           (list
-                            (begin (and name (put! namemap name tname))
-                                   typedef)))
+                            (begin (and name (put! namemap name type-name))
+                                   typedef))
                      ,@sp-inits
-                     ,@(if short '()
-                           (map (lambda (gs tvar)
-                                  (make-assignment gs `(call (core TypeVar) ',tvar (core Any) true)))
-                                method-sp capt-sp))
-                     ,@(if short '()
-                           `((method #f
-                                     ,(cl-convert
-                                       (fix-function-arg-type sig tname iskw namemap method-sp)
-                                       fname lam namemap toplevel interp)
-                                     ,(convert-lambda lam2
-                                                      (if iskw
-                                                          (caddr (lam:args lam2))
-                                                          (car (lam:args lam2)))
-                                                      #f capt-sp)
-                                     ,(last e))))
+                     ,@mk-method
                      ,(if exists
                           '(null)
                           (convert-assignment name mk-closure fname lam interp)))))))
