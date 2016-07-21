@@ -289,15 +289,6 @@ static bool type_is_ghost(Type *ty)
 }
 
 // global vars
-static GlobalVariable *jltrue_var;
-static GlobalVariable *jlfalse_var;
-static GlobalVariable *jlemptysvec_var;
-static GlobalVariable *jlemptytuple_var;
-static GlobalVariable *jldiverr_var;
-static GlobalVariable *jlundeferr_var;
-static GlobalVariable *jldomerr_var;
-static GlobalVariable *jlovferr_var;
-static GlobalVariable *jlinexacterr_var;
 static GlobalVariable *jlRTLD_DEFAULT_var;
 #ifdef _OS_WINDOWS_
 static GlobalVariable *jlexe_var;
@@ -4865,6 +4856,21 @@ static GlobalVariable *global_to_llvm(const std::string &cname, void *addr, Modu
     add_named_global(gv, addr);
     return gv;
 }
+llvm::SmallVector<std::pair<jl_value_t**, GlobalVariable*>, 16> gv_for_global;
+static GlobalVariable *global_jlvalue_to_llvm(const std::string &cname, jl_value_t **addr, Module *m)
+{
+    GlobalVariable *gv = global_to_llvm(cname, (void*)addr, m);
+    gv_for_global.push_back(std::make_pair(addr, gv));
+    return gv;
+}
+static GlobalVariable *julia_const_gv(jl_value_t *val)
+{
+    for (auto& kv : gv_for_global) {
+        if (*kv.first == val)
+            return kv.second;
+    }
+    return nullptr;
+}
 
 static Function *jlcall_func_to_llvm(const std::string &cname, jl_fptr_t addr, Module *m)
 {
@@ -5106,20 +5112,15 @@ static void init_julia_llvm_env(Module *m)
     jl__stack_chk_fail->setDoesNotReturn();
     add_named_global(jl__stack_chk_fail, &__stack_chk_fail);
 
-    jltrue_var = global_to_llvm("jl_true", (void*)&jl_true, m);
-    jlfalse_var = global_to_llvm("jl_false", (void*)&jl_false, m);
-    jlemptysvec_var = global_to_llvm("jl_emptysvec", (void*)&jl_emptysvec, m);
-    jlemptytuple_var = global_to_llvm("jl_emptytuple", (void*)&jl_emptytuple, m);
-    jldiverr_var = global_to_llvm("jl_diverror_exception",
-                                  (void*)&jl_diverror_exception, m);
-    jlundeferr_var = global_to_llvm("jl_undefref_exception",
-                                    (void*)&jl_undefref_exception, m);
-    jldomerr_var = global_to_llvm("jl_domain_exception",
-                                  (void*)&jl_domain_exception, m);
-    jlovferr_var = global_to_llvm("jl_overflow_exception",
-                                  (void*)&jl_overflow_exception, m);
-    jlinexacterr_var = global_to_llvm("jl_inexact_exception",
-                                      (void*)&jl_inexact_exception, m);
+    global_jlvalue_to_llvm("jl_true", &jl_true, m);
+    global_jlvalue_to_llvm("jl_false", &jl_false, m);
+    global_jlvalue_to_llvm("jl_emptysvec", (jl_value_t**)&jl_emptysvec, m);
+    global_jlvalue_to_llvm("jl_emptytuple", &jl_emptytuple, m);
+    global_jlvalue_to_llvm("jl_diverror_exception", &jl_diverror_exception, m);
+    global_jlvalue_to_llvm("jl_undefref_exception", &jl_undefref_exception, m);
+    global_jlvalue_to_llvm("jl_domain_exception", &jl_domain_exception, m);
+    global_jlvalue_to_llvm("jl_overflow_exception", &jl_overflow_exception, m);
+    global_jlvalue_to_llvm("jl_inexact_exception", &jl_inexact_exception, m);
 
     jlRTLD_DEFAULT_var =
         new GlobalVariable(*m, T_pint8,
