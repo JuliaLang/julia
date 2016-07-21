@@ -94,6 +94,7 @@ hash(x::Irrational, h::UInt) = 3*object_id(x) - h
 for op in Symbol[:+, :-, :*, :/, :^]
     @eval $op(x::Irrational, y::Irrational) = $op(Float64(x),Float64(y))
 end
+*(x::Bool, y::Irrational) = ifelse(x, Float64(y), 0.0)
 
 macro irrational(sym, val, def)
     esym = esc(sym)

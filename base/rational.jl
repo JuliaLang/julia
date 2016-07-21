@@ -355,8 +355,8 @@ function ^(x::Rational, n::Integer)
 end
 
 ^(x::Number, y::Rational) = x^(y.num/y.den)
-^{T<:AbstractFloat}(x::T, y::Rational) = x^(convert(T,y.num)/y.den)
-^{T<:AbstractFloat}(x::Complex{T}, y::Rational) = x^(convert(T,y.num)/y.den)
+^{T<:AbstractFloat}(x::T, y::Rational) = x^(convert(T, y.num / y.den))
+^{T<:AbstractFloat}(x::Complex{T}, y::Rational) = x^(convert(T, y.num / y.den))
 
 ^{T<:Rational}(z::Complex{T}, n::Bool) = n ? z : one(z) # to resolve ambiguity
 function ^{T<:Rational}(z::Complex{T}, n::Integer)
