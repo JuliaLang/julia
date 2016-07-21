@@ -113,18 +113,6 @@ function show(io::IO, ::MIME"text/plain", f::Function)
     end
 end
 
-function show(io::IO, ::MIME"text/plain", r::LinSpace)
-    # show for linspace, e.g.
-    # linspace(1,3,7)
-    # 7-element LinSpace{Float64}:
-    #   1.0,1.33333,1.66667,2.0,2.33333,2.66667,3.0
-    print(io, summary(r))
-    if !isempty(r)
-        println(io, ":")
-        print_range(io, r)
-    end
-end
-
 function show(io::IO, ::MIME"text/plain", t::Task)
     show(io, t)
     if t.state == :failed
@@ -134,8 +122,8 @@ function show(io::IO, ::MIME"text/plain", t::Task)
 end
 
 show(io::IO, ::MIME"text/plain", X::AbstractArray) = showarray(io, X, false)
-show(io::IO, ::MIME"text/plain", r::Range) = show(io, r) # always use the compact form for printing ranges
-
+show(io::IO, ::MIME"text/plain", r::Range) = show(io, r) # use the compact form for printing ranges
+show(io::IO, ::MIME"text/plain", r::LinSpace) = showarray(io, r, false) # except for LinSpaces
 
 # showing exception objects as descriptive error messages
 
