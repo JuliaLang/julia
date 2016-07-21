@@ -76,10 +76,10 @@ let AA = randn(2, 2)
             else
                 T = LowerTriangular(view(randn(3,3), 1:3, 1:3))
             end
-            @test T + J == full(T) + J
-            @test J + T == J + full(T)
-            @test T - J == full(T) - J
-            @test J - T == J - full(T)
+            @test T + J == convert(Array, T) + J
+            @test J + T == J + convert(Array, T)
+            @test T - J == convert(Array, T) - J
+            @test J - T == J - convert(Array, T)
             @test T\I == inv(T)
 
             if atype == "Array"
@@ -87,10 +87,10 @@ let AA = randn(2, 2)
             else
                 T = LinAlg.UnitLowerTriangular(view(randn(3,3), 1:3, 1:3))
             end
-            @test T + J == full(T) + J
-            @test J + T == J + full(T)
-            @test T - J == full(T) - J
-            @test J - T == J - full(T)
+            @test T + J == convert(Array, T) + J
+            @test J + T == J + convert(Array, T)
+            @test T - J == convert(Array, T) - J
+            @test J - T == J - convert(Array, T)
             @test T\I == inv(T)
 
             if atype == "Array"
@@ -98,10 +98,10 @@ let AA = randn(2, 2)
             else
                 T = UpperTriangular(view(randn(3,3), 1:3, 1:3))
             end
-            @test T + J == full(T) + J
-            @test J + T == J + full(T)
-            @test T - J == full(T) - J
-            @test J - T == J - full(T)
+            @test T + J == convert(Array, T) + J
+            @test J + T == J + convert(Array, T)
+            @test T - J == convert(Array, T) - J
+            @test J - T == J - convert(Array, T)
             @test T\I == inv(T)
 
             if atype == "Array"
@@ -109,10 +109,10 @@ let AA = randn(2, 2)
             else
                 T = LinAlg.UnitUpperTriangular(view(randn(3,3), 1:3, 1:3))
             end
-            @test T + J == full(T) + J
-            @test J + T == J + full(T)
-            @test T - J == full(T) - J
-            @test J - T == J - full(T)
+            @test T + J == convert(Array, T) + J
+            @test J + T == J + convert(Array, T)
+            @test T - J == convert(Array, T) - J
+            @test J - T == J - convert(Array, T)
             @test T\I == inv(T)
 
             @test I\A == A

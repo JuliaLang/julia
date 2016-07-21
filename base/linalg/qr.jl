@@ -174,12 +174,13 @@ qr(A::Union{Number, AbstractMatrix}, pivot::Union{Type{Val{false}}, Type{Val{tru
     _qr(A, pivot, thin=thin)
 function _qr(A::Union{Number, AbstractMatrix}, ::Type{Val{false}}; thin::Bool=true)
     F = qrfact(A, Val{false})
-    full(getq(F), thin=thin), F[:R]::Matrix{eltype(F)}
+    (thin ? convert(Array, getq(F)) : thickQ(getq(F))), F[:R]::Matrix{eltype(F)}
 end
 function _qr(A::Union{Number, AbstractMatrix}, ::Type{Val{true}}; thin::Bool=true)
     F = qrfact(A, Val{true})
-    full(getq(F), thin=thin), F[:R]::Matrix{eltype(F)}, F[:p]::Vector{BlasInt}
+    (thin ? convert(Array, getq(F)) : thickQ(getq(F))), F[:R]::Matrix{eltype(F)}, F[:p]::Vector{BlasInt}
 end
+
 
 """
     qr(v::AbstractVector)
@@ -324,6 +325,8 @@ function full{T}(A::Union{QRPackedQ{T},QRCompactWYQ{T}}; thin::Bool = true)
         A_mul_B!(A, eye(T, size(A.factors, 1)))
     end
 end
+
+thickQ{T}(Q::Union{QRPackedQ{T},QRCompactWYQ{T}}) = A_mul_B!(Q, eye(T, size(Q.factors, 1)))
 
 size(A::Union{QR,QRCompactWY,QRPivoted}, dim::Integer) = size(A.factors, dim)
 size(A::Union{QR,QRCompactWY,QRPivoted}) = size(A.factors)
