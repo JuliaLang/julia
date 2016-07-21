@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://Julialang.org/license
+# This file is a part of Julia. License is MIT: http://julialang.org/license
 
 module DatesAdjustersTests
 using Base.Test
@@ -389,7 +389,7 @@ isthanksgiving(dt) = Dates.dayofweek(dt) == Dates.Thu &&
     Dates.month(dt) == Dates.Nov && Dates.dayofweekofmonth(dt) == 4
 
 function easter(y)
-    # Butcher's Algorithm: http://www.sMart.net/~mmontes/butcher.html
+    # Butcher's Algorithm: http://www.smart.net/~mmontes/butcher.html
     a=y%19
     b=div(y,100)
     c=y%100
