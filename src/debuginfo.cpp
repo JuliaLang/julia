@@ -1357,28 +1357,25 @@ extern "C" void __register_frame(void*);
 extern "C" void __deregister_frame(void*);
 
 template <typename callback>
-static const char *processFDE(const char *Entry, callback f)
-{
-    const char *P = Entry;
-    uint32_t Length = *((const uint32_t *)P);
-    P += 4;
-    uint32_t Offset = *((const uint32_t *)P);
-    // Offset == 0: CIE
-    // Length == 0: Terminator
-    if (Offset != 0 && Length != 0) {
-        f(Entry);
-    }
-    return P + Length;
-}
-
-template <typename callback>
 static void processFDEs(const char *EHFrameAddr, size_t EHFrameSize, callback f)
 {
-    const char *P = (const char*)EHFrameAddr;
+    const char *P = EHFrameAddr;
     const char *End = P + EHFrameSize;
-    do  {
-        P = processFDE(P, f);
-    } while(P != End);
+    do {
+        const char *Entry = P;
+        P += 4;
+        assert(P <= End);
+        uint32_t Length = *(const uint32_t*)Entry;
+        // Length == 0: Terminator
+        if (Length == 0)
+            break;
+        assert(P + Length <= End);
+        uint32_t Offset = *(const uint32_t*)P;
+        // Offset == 0: CIE
+        if (Offset != 0)
+            f(Entry);
+        P += Length;
+    } while (P != End);
 }
 #endif
 
