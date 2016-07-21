@@ -33,8 +33,12 @@ $(SRCDIR)/srccache/$(LIBGIT2_SRC_DIR)/libgit2-require-openssl.patch-applied: $(S
 	cd $(SRCDIR)/srccache/$(LIBGIT2_SRC_DIR) && patch -p1 -f < $(SRCDIR)/patches/libgit2-require-openssl.patch
 	echo 1 > $@
 
+$(SRCDIR)/srccache/$(LIBGIT2_SRC_DIR)/libgit2-openssl-hang.patch-applied: | $(SRCDIR)/srccache/$(LIBGIT2_SRC_DIR)/CMakeLists.txt
+	cd $(SRCDIR)/srccache/$(LIBGIT2_SRC_DIR) && patch -p1 -f < $(SRCDIR)/patches/libgit2-openssl-hang.patch
+	echo 1 > $@
+
 ifeq ($(OS),Linux)
-$(BUILDDIR)/$(LIBGIT2_SRC_DIR)/Makefile: $(SRCDIR)/srccache/$(LIBGIT2_SRC_DIR)/libgit2-require-openssl.patch-applied
+$(BUILDDIR)/$(LIBGIT2_SRC_DIR)/Makefile: $(SRCDIR)/srccache/$(LIBGIT2_SRC_DIR)/libgit2-require-openssl.patch-applied $(SRCDIR)/srccache/$(LIBGIT2_SRC_DIR)/libgit2-openssl-hang.patch-applied
 endif
 $(BUILDDIR)/$(LIBGIT2_SRC_DIR)/Makefile: $(SRCDIR)/srccache/$(LIBGIT2_SRC_DIR)/CMakeLists.txt $(SRCDIR)/srccache/$(LIBGIT2_SRC_DIR)/libgit2-ssh.patch-applied $(LIBSSH2_OBJ_TARGET)
 	mkdir -p $(dir $@)
