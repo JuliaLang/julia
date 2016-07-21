@@ -656,12 +656,6 @@ static void raise_exception(Value *exc, jl_codectx_t *ctx,
     builder.SetInsertPoint(contBB);
 }
 
-static void raise_exception(GlobalVariable *exc, jl_codectx_t *ctx)
-{
-    raise_exception((Value*)tbaa_decorate(tbaa_const,
-                                          builder.CreateLoad(exc)), ctx);
-}
-
 // DO NOT PASS IN A CONST CONDITION!
 static void raise_exception_unless(Value *cond, Value *exc, jl_codectx_t *ctx)
 {
@@ -673,23 +667,10 @@ static void raise_exception_unless(Value *cond, Value *exc, jl_codectx_t *ctx)
 }
 
 // DO NOT PASS IN A CONST CONDITION!
-static void raise_exception_unless(Value *cond, GlobalVariable *exc,
-                                   jl_codectx_t *ctx)
-{
-    raise_exception_unless(cond, (Value*)tbaa_decorate(tbaa_const,builder.CreateLoad(exc, false)), ctx);
-}
-
-// DO NOT PASS IN A CONST CONDITION!
 static void raise_exception_if(Value *cond, Value *exc, jl_codectx_t *ctx)
 {
     raise_exception_unless(builder.CreateXor(cond, ConstantInt::get(T_int1,-1)),
                            exc, ctx);
-}
-
-// DO NOT PASS IN A CONST CONDITION!
-static void raise_exception_if(Value *cond, GlobalVariable *exc, jl_codectx_t *ctx)
-{
-    raise_exception_if(cond, (Value*)tbaa_decorate(tbaa_const, builder.CreateLoad(exc, false)), ctx);
 }
 
 static void null_pointer_check(Value *v, jl_codectx_t *ctx)
