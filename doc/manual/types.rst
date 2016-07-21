@@ -87,7 +87,7 @@ do this:
 2. To provide extra type information to the compiler, which can then
    improve performance in some cases
 
-When appended to an expression computing a *value*, the ``::``
+When appended to an expression computing a value, the ``::``
 operator is read as "is an instance of". It can be used
 anywhere to assert that the value of the expression on the left is an
 instance of the type on the right. When the type on the right is
@@ -108,14 +108,11 @@ exception is thrown, otherwise, the left-hand value is returned:
     3
 
 This allows a type assertion to be attached to any expression
-in-place. The most common usage of ``::`` as an assertion is in
-function/methods signatures, such as ``f(x::Int8) = ...`` (see
-:ref:`man-methods`).
+in-place.
 
-
-When appended to a *variable* in a statement context, the ``::``
-operator means something a bit
-different: it declares the variable to always have the specified type,
+When appended to a variable on the left-hand side of an assignment,
+or as part of a ``local`` declaration, the ``::`` operator means something
+a bit different: it declares the variable to always have the specified type,
 like a type declaration in a statically-typed language such as C. Every
 value assigned to the variable will be converted to the declared type
 using :func:`convert`:
@@ -138,9 +135,8 @@ This feature is useful for avoiding performance "gotchas" that could
 occur if one of the assignments to a variable changed its type
 unexpectedly.
 
-The "declaration" behavior only occurs in specific contexts::
+This "declaration" behavior only occurs in specific contexts::
 
-    x::Int8        # a variable by itself
     local x::Int8  # in a local declaration
     x::Int8 = 10   # as the left-hand side of an assignment
 
