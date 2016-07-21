@@ -1174,6 +1174,8 @@ end
 directsubtype(a::DataType, b::DataType) = supertype(a).name === b.name
 directsubtype(a::TypeConstructor, b::DataType) = directsubtype(a.body, b)
 directsubtype(a::Union, b::DataType) = any(t->directsubtype(t, b), a.types)
+# Fallback to handle TypeVar's
+directsubtype(a, b::DataType) = false
 function dumpsubtypes(io::IO, x::DataType, m::Module, n::Int, indent)
     for s in names(m, true)
         if isdefined(m, s) && !isdeprecated(m, s)
@@ -1183,15 +1185,15 @@ function dumpsubtypes(io::IO, x::DataType, m::Module, n::Int, indent)
             elseif isa(t, Module) && module_name(t) === s && module_parent(t) === m
                 # recurse into primary module bindings
                 dumpsubtypes(io, x, t, n, indent)
-            elseif isa(t, TypeConstructor) && directsubtype(t, x)
+            elseif isa(t, TypeConstructor) && directsubtype(t::TypeConstructor, x)
                 println(io)
                 print(io, indent, "  ", m, ".", s)
                 isempty(t.parameters) || print(io, "{", join(t.parameters, ","), "}")
                 print(io, " = ", t)
-            elseif isa(t, Union) && directsubtype(t, x)
+            elseif isa(t, Union) && directsubtype(t::Union, x)
                 println(io)
                 print(io, indent, "  ", m, ".", s, " = ", t)
-            elseif isa(t, DataType) && directsubtype(t, x)
+            elseif isa(t, DataType) && directsubtype(t::DataType, x)
                 println(io)
                 if t.name.module !== m || t.name.name != s
                     # aliases to types
