@@ -42,7 +42,7 @@ for elty in (Float32, Float64, Complex64, Complex128, Int)
         F[i,i+1] = du[i]
         F[i+1,i] = dl[i]
     end
-    @test full(T) == F
+    @test convert(Array, T) == F
 
     # elementary operations on tridiagonals
     @test conj(T) == Tridiagonal(conj(dl), conj(d), conj(du))
@@ -62,7 +62,7 @@ for elty in (Float32, Float64, Complex64, Complex128, Int)
     @test Tridiagonal(dl, d, du) + Tridiagonal(du, d, dl) == SymTridiagonal(2d, dl+du)
     @test SymTridiagonal(d, dl) + Tridiagonal(dl, d, du) == Tridiagonal(dl + dl, d+d, dl+du)
     @test convert(SymTridiagonal,Tridiagonal(Ts)) == Ts
-    @test full(convert(SymTridiagonal{Complex64},Tridiagonal(Ts))) == convert(Matrix{Complex64},full(Ts))
+    @test convert(Array, convert(SymTridiagonal{Complex64},Tridiagonal(Ts))) == convert(Matrix{Complex64},convert(Array, Ts))
     if elty == Int
         vv = rand(1:100, n)
         BB = rand(1:100, n, 2)
@@ -101,7 +101,7 @@ for elty in (Float32, Float64, Complex64, Complex128, Int)
     # symmetric tridiagonal
     if elty <: Real
         Ts = SymTridiagonal(d, dl)
-        Fs = full(Ts)
+        Fs = convert(Array, Ts)
         Tldlt = factorize(Ts)
         @test_throws DimensionMismatch Tldlt\rand(elty,n+1)
         @test size(Tldlt) == size(Ts)
@@ -119,7 +119,7 @@ for elty in (Float32, Float64, Complex64, Complex128, Int)
             invFsv = Fs\vv
             x = Ts\vv
             @test x ≈ invFsv
-            @test full(full(Tldlt)) ≈ Fs
+            @test convert(Array, convert(Array, Tldlt)) ≈ Fs
         end
 
         # similar
@@ -237,7 +237,7 @@ let n = 12 #Size of matrix problem to test
         @test_throws ArgumentError SymTridiagonal(rand(n,n))
 
         A = SymTridiagonal(a, b)
-        fA = map(elty <: Complex ? Complex128 : Float64, full(A))
+        fA = map(elty <: Complex ? Complex128 : Float64, convert(Array, A))
 
         debug && println("getindex")
         @test_throws BoundsError A[n+1,1]
@@ -289,10 +289,10 @@ let n = 12 #Size of matrix problem to test
         @test B - A == A - B
 
         debug && println("Multiplication with strided vector")
-        @test A*ones(n) ≈ full(A)*ones(n)
+        @test A*ones(n) ≈ convert(Array, A)*ones(n)
 
         debug && println("Multiplication with strided matrix")
-        @test A*ones(n, 2) ≈ full(A)*ones(n, 2)
+        @test A*ones(n, 2) ≈ convert(Array, A)*ones(n, 2)
 
         debug && println("Eigensystems")
         if elty <: Real
@@ -312,13 +312,13 @@ let n = 12 #Size of matrix problem to test
 
             debug && println("stegr! call with index range")
             F = eigfact(SymTridiagonal(a, b),1:2)
-            fF = eigfact(Symmetric(full(SymTridiagonal(a, b))),1:2)
+            fF = eigfact(Symmetric(convert(Array, SymTridiagonal(a, b))),1:2)
             Test.test_approx_eq_modphase(F[:vectors], fF[:vectors])
             @test F[:values] ≈ fF[:values]
 
             debug && println("stegr! call with value range")
             F = eigfact(SymTridiagonal(a, b),0.0,1.0)
-            fF = eigfact(Symmetric(full(SymTridiagonal(a, b))),0.0,1.0)
+            fF = eigfact(Symmetric(convert(Array, SymTridiagonal(a, b))),0.0,1.0)
             Test.test_approx_eq_modphase(F[:vectors], fF[:vectors])
             @test F[:values] ≈ fF[:values]
         end
@@ -332,15 +332,15 @@ let n = 12 #Size of matrix problem to test
         end
 
         B = SymTridiagonal(a, b)
-        fB = map(elty <: Complex ? Complex128 : Float64, full(B))
+        fB = map(elty <: Complex ? Complex128 : Float64, convert(Array, B))
 
         for op in (+, -, *)
-            @test full(op(A, B)) ≈ op(fA, fB)
+            @test convert(Array, op(A, B)) ≈ op(fA, fB)
         end
         α = rand(elty)
-        @test full(α*A) ≈ α*full(A)
-        @test full(A*α) ≈ full(A)*α
-        @test full(A/α) ≈ full(A)/α
+        @test convert(Array, α*A) ≈ α*convert(Array, A)
+        @test convert(Array, A*α) ≈ convert(Array, A)*α
+        @test convert(Array, A/α) ≈ convert(Array, A)/α
 
         debug && println("A_mul_B!")
         @test_throws DimensionMismatch A_mul_B!(zeros(elty,n,n),B,ones(elty,n+1,n))
@@ -363,7 +363,7 @@ let n = 12 #Size of matrix problem to test
 
         @test_throws ArgumentError Tridiagonal(a,a,a)
         A = Tridiagonal(a, b, c)
-        fA = map(elty <: Complex ? Complex128 : Float64, full(A))
+        fA = map(elty <: Complex ? Complex128 : Float64, convert(Array, A))
 
         debug && println("Similar, size, and copy!")
         B = similar(A)
@@ -411,22 +411,21 @@ let n = 12 #Size of matrix problem to test
         end
 
         debug && println("Multiplication with strided vector")
-        @test A*ones(n) ≈ full(A)*ones(n)
+        @test A*ones(n) ≈ convert(Array, A)*ones(n)
 
         debug && println("Multiplication with strided matrix")
-        @test A*ones(n, 2) ≈ full(A)*ones(n, 2)
-
+        @test A*ones(n, 2) ≈ convert(Array, A)*ones(n, 2)
 
         B = Tridiagonal(a, b, c)
-        fB = map(elty <: Complex ? Complex128 : Float64, full(B))
+        fB = map(elty <: Complex ? Complex128 : Float64, convert(Array, B))
 
         for op in (+, -, *)
-            @test full(op(A, B)) ≈ op(fA, fB)
+            @test convert(Array, op(A, B)) ≈ op(fA, fB)
         end
         α = rand(elty)
-        @test full(α*A) ≈ α*full(A)
-        @test full(A*α) ≈ full(A)*α
-        @test full(A/α) ≈ full(A)/α
+        @test convert(Array, α*A) ≈ α*convert(Array, A)
+        @test convert(Array, A*α) ≈ convert(Array, A)*α
+        @test convert(Array, A/α) ≈ convert(Array, A)/α
 
         @test_throws ArgumentError convert(SymTridiagonal{elty},A)
 

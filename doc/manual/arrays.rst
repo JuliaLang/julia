@@ -829,7 +829,7 @@ reference.
 +----------------------------------------+----------------------------------+--------------------------------------------+
 | :func:`speye(n) <speye>`               | :func:`eye(n) <eye>`             | Creates a *n*-by-*n* identity matrix.      |
 +----------------------------------------+----------------------------------+--------------------------------------------+
-| :func:`full(S) <full>`                 | :func:`sparse(A) <sparse>`       | Interconverts between dense                |
+| :func:`convert(Array, S) <convert>`    | :func:`sparse(A) <sparse>`       | Interconverts between dense                |
 |                                        |                                  | and sparse formats.                        |
 +----------------------------------------+----------------------------------+--------------------------------------------+
 | :func:`sprand(m,n,d) <sprand>`         | :func:`rand(m,n) <rand>`         | Creates a *m*-by-*n* random matrix (of     |

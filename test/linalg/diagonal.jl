@@ -27,9 +27,9 @@ for relty in (Float32, Float64, BigFloat), elty in (relty, Complex{relty})
     @test typeof(convert(Diagonal{Complex64},D)) == Diagonal{Complex64}
     @test typeof(convert(AbstractMatrix{Complex64},D))   == Diagonal{Complex64}
 
-    @test full(real(D)) == real(DM)
-    @test full(abs(D)) == abs(DM)
-    @test full(imag(D)) == imag(DM)
+    @test convert(Array, real(D)) == real(DM)
+    @test convert(Array, abs(D)) == abs(DM)
+    @test convert(Array, imag(D)) == imag(DM)
 
     @test parent(D) == d
     @test diag(D) == d
@@ -79,12 +79,12 @@ for relty in (Float32, Float64, BigFloat), elty in (relty, Complex{relty})
                 @test_throws SingularException A_ldiv_B!(Diagonal(zeros(relty,n)),copy(v))
                 b = rand(elty,n,n)
                 b = sparse(b)
-                @test A_ldiv_B!(D,copy(b)) ≈ full(D)\full(b)
+                @test A_ldiv_B!(D,copy(b)) ≈ convert(Array, D)\convert(Array, b)
                 @test_throws SingularException A_ldiv_B!(Diagonal(zeros(elty,n)),copy(b))
                 b = view(rand(elty,n),collect(1:n))
                 b2 = copy(b)
                 c = A_ldiv_B!(D,b)
-                d = full(D)\b2
+                d = convert(Array, D)\b2
                 for i in 1:n
                     @test c[i] ≈ d[i]
                 end
@@ -101,23 +101,23 @@ for relty in (Float32, Float64, BigFloat), elty in (relty, Complex{relty})
             D2 = Diagonal(d)
             DM2= diagm(d)
             for op in (+, -, *)
-                @test full(op(D, D2)) ≈ op(DM, DM2)
+                @test convert(Array, op(D, D2)) ≈ op(DM, DM2)
             end
             # binary ops with plain numbers
             a = rand()
-            @test full(a*D) ≈ a*DM
-            @test full(D*a) ≈ DM*a
-            @test full(D/a) ≈ DM/a
+            @test convert(Array, a*D) ≈ a*DM
+            @test convert(Array, D*a) ≈ DM*a
+            @test convert(Array, D/a) ≈ DM/a
             if relty <: BlasFloat
                 b = rand(elty,n,n)
                 b = sparse(b)
-                @test A_mul_B!(copy(D), copy(b)) ≈ full(D)*full(b)
-                @test At_mul_B!(copy(D), copy(b)) ≈ full(D).'*full(b)
-                @test Ac_mul_B!(copy(D), copy(b)) ≈ full(D)'*full(b)
+                @test A_mul_B!(copy(D), copy(b)) ≈ convert(Array, D)*convert(Array, b)
+                @test At_mul_B!(copy(D), copy(b)) ≈ convert(Array, D).'*convert(Array, b)
+                @test Ac_mul_B!(copy(D), copy(b)) ≈ convert(Array, D)'*convert(Array, b)
             end
 
-            @test U.'*D ≈ U.'*full(D)
-            @test U'*D ≈ U'*full(D)
+            @test U.'*D ≈ U.'*convert(Array, D)
+            @test U'*D ≈ U'*convert(Array, D)
 
             #division of two Diagonals
             @test D/D2 ≈ Diagonal(D.diag./D2.diag)
@@ -155,7 +155,7 @@ for relty in (Float32, Float64, BigFloat), elty in (relty, Complex{relty})
             debug && println("conj and transpose")
             @test transpose(D) == D
             if elty <: BlasComplex
-                @test full(conj(D)) ≈ conj(DM)
+                @test convert(Array, conj(D)) ≈ conj(DM)
                 @test ctranspose(D) == conj(D)
             end
 
@@ -233,7 +233,7 @@ end
 # inv
 for d in (randn(n), [1, 2, 3], [1im, 2im, 3im])
     D = Diagonal(d)
-    @test inv(D) ≈ inv(full(D))
+    @test inv(D) ≈ inv(convert(Array, D))
 end
 @test_throws SingularException inv(Diagonal(zeros(n)))
 @test_throws SingularException inv(Diagonal([0, 1, 2]))

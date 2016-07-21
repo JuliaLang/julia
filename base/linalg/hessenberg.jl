@@ -23,7 +23,7 @@ end
 Compute the Hessenberg decomposition of `A` and return a `Hessenberg` object. If `F` is the
 factorization object, the unitary matrix can be accessed with `F[:Q]` and the Hessenberg
 matrix with `F[:H]`. When `Q` is extracted, the resulting type is the `HessenbergQ` object,
-and may be converted to a regular matrix with [`full`](:func:`full`).
+and may be converted to a regular matrix with [`convert(Array, _)`](:func:`convert`).
 """
 hessfact
 
@@ -56,7 +56,7 @@ end
 convert{T<:BlasFloat}(::Type{Matrix}, A::HessenbergQ{T}) = LAPACK.orghr!(1, size(A.factors, 1), copy(A.factors), A.τ)
 convert(::Type{Array}, A::HessenbergQ) = convert(Matrix, A)
 full(A::HessenbergQ) = convert(Array, A)
-convert(::Type{AbstractMatrix}, F::Hessenberg) = (fq = full(F[:Q]); (fq * F[:H]) * fq')
+convert(::Type{AbstractMatrix}, F::Hessenberg) = (fq = convert(Array, F[:Q]); (fq * F[:H]) * fq')
 convert(::Type{AbstractArray}, F::Hessenberg) = convert(AbstractMatrix, F)
 convert(::Type{Matrix}, F::Hessenberg) = convert(Array, convert(AbstractArray, F))
 convert(::Type{Array}, F::Hessenberg) = convert(Matrix, F)
