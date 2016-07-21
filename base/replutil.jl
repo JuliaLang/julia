@@ -113,6 +113,23 @@ function show(io::IO, ::MIME"text/plain", f::Function)
     end
 end
 
+function show(io::IO, ::MIME"text/plain", l::LambdaInfo)
+    show(io, l)
+    # Fix slot names and types in function body
+    ast = uncompressed_ast(l)
+    if ast !== nothing
+        println(io)
+        lambda_io = IOContext(io, :LAMBDAINFO => l)
+        if isdefined(l, :slotnames)
+            lambda_io = IOContext(lambda_io, :LAMBDA_SLOTNAMES => lambdainfo_slotnames(l))
+        end
+        body = Expr(:body)
+        body.args = ast
+        body.typ = l.rettype
+        show(lambda_io, body)
+    end
+end
+
 function show(io::IO, ::MIME"text/plain", r::LinSpace)
     # show for linspace, e.g.
     # linspace(1,3,7)
@@ -389,11 +406,7 @@ function show_method_candidates(io::IO, ex::MethodError, kwargs::Vector=Any[])
     arg_types_param = Any[arg_types.parameters...]
     # Displays the closest candidates of the given function by looping over the
     # functions methods and counting the number of matching arguments.
-    if isa(ex.f, Tuple)
-        f = ex.f[1]
-    else
-        f = ex.f
-    end
+    f = ex.f
     ft = typeof(f)
     lines = []
     # These functions are special cased to only show if first argument is matched.

@@ -3833,7 +3833,7 @@ void jl_init_types(void)
                                 jl_bool_type,
                                 jl_bool_type,
                                 jl_bool_type),
-                        0, 1, 8);
+                        0, 1, 9);
 
     jl_lambda_info_type =
         jl_new_datatype(jl_symbol("LambdaInfo"),
