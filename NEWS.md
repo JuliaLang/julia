@@ -39,7 +39,9 @@ New language features
   * Many more operators now support `.` prefixes (e.g. `.≤`) ([#17393]).  However,
     users are discouraged from overloading these, since they are mainly parsed
     in order to implement backwards compatibility with planned automatic
-    broadcasting of dot operators in Julia 0.6 ([#16285]).
+    broadcasting of dot operators in Julia 0.6 ([#16285]).  Explicitly qualified
+    operator names like `Base.≤` should now use `Base.:≤` (prefixed by `@compat`
+    if you need 0.4 compatibility via the `Compat` package).
 
 New architectures
 -----------------
