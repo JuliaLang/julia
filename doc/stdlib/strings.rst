@@ -333,11 +333,11 @@
 
    ``strings`` can be any iterable over elements ``x`` which are convertible to strings via ``print(io::IOBuffer, x)``\ .
 
-.. function:: chop(string, i = 1)
+.. function:: chop(string, n = 1)
 
    .. Docstring generated from Julia source
 
-   Remove the last ``i`` characters from a string. Will not handle multi-byte unicode correctly unless ``i`` is 1.
+   Remove the last ``n`` characters from a string.
 
 .. function:: chomp(string)
 
@@ -482,4 +482,3 @@
    .. Docstring generated from Julia source
 
    General unescaping of traditional C and Unicode escape sequences. Reverse of :func:`escape_string`\ . See also :func:`unescape_string`\ .
-

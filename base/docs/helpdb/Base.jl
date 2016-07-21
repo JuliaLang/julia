@@ -914,9 +914,9 @@ generate an array of such random numbers.
 randexp
 
 """
-    chop(string, i = 1)
+    chop(string, n = 1)
 
-Remove the last `i` characters from a string. Will not handle multi-byte unicode correctly unless `i` is 1.
+Remove the last `n` characters from a string.
 """
 chop
 
