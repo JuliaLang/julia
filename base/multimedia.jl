@@ -47,7 +47,7 @@ mimewritable(m::AbstractString, x) = mimewritable(MIME(m), x)
 # format and is returned unmodified.  This is useful so that raw data can be
 # passed to display(m::MIME, x).
 
-verbose_show(io, m, x) = show(IOContext(io,multiline=true,limit=false), m, x)
+verbose_show(io, m, x) = show(IOContext(io,limit=false), m, x)
 
 macro textmime(mime)
     quote

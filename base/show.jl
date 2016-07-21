@@ -2,6 +2,14 @@
 
 print(io::IO, s::Symbol) = (write(io,s); nothing)
 
+"""
+    IOContext
+
+IOContext provides a mechanism for passing output configuration settings among `show` methods.
+
+In short, it is an immutable dictionary that is a subclass of IO. It supports standard
+dictionary operations such as `getindex`, and can also be used as an I/O stream.
+"""
 immutable IOContext{IO_t <: IO} <: AbstractPipe
     io::IO_t
     dict::ImmutableDict{Symbol, Any}
@@ -12,27 +20,10 @@ immutable IOContext{IO_t <: IO} <: AbstractPipe
 end
 
 """
-    IOContext{<:IO} <: IO
+    IOContext(io::IO; properties...)
 
-IOContext provides a mechanism for passing output-configuration keyword arguments through arbitrary show methods.
-
-In short, it is an immutable Dictionary that is a subclass of IO.
-
-    IOContext(io::IO, KV::Pair)
-
-Create a new entry in the IO Dictionary for the key => value pair
-
- - use `(key => value) in dict` to see if this particular combination is in the properties set
- - use `get(dict, key, default)` to retrieve the most recent value for a particular key
-
-```
-IOContext(io::IO, context::IOContext)
-```
-
-Create a IOContext that wraps an alternate IO but inherits the keyword arguments from the context
+The same as `IOContext(io::IO, KV::Pair)`, but accepting properties as keyword arguments.
 """
-IOContext
-
 IOContext(io::IO; kws...) = IOContext(IOContext(io, ImmutableDict{Symbol,Any}()); kws...)
 function IOContext(io::IOContext; kws...)
     for (k, v) in kws
@@ -48,7 +39,34 @@ IOContext(io::IO, key, value) = IOContext(io, ImmutableDict{Symbol, Any}(key, va
 IOContext(io::IOContext, key, value) = IOContext(io, ImmutableDict{Symbol, Any}(io.dict, key, value))
 
 IOContext(io::IO, context::IO) = IOContext(io)
+
+"""
+    IOContext(io::IO, context::IOContext)
+
+Create a IOContext that wraps an alternate IO but inherits the properties of `context`.
+"""
 IOContext(io::IO, context::IOContext) = IOContext(io, context.dict)
+
+"""
+    IOContext(io::IO, KV::Pair)
+
+Create an `IOContext` that wraps a given stream, adding the specified key=>value pair to
+the properties of that stream (note that `io` can itself be an `IOContext`).
+
+ - use `(key => value) in dict` to see if this particular combination is in the properties set
+ - use `get(dict, key, default)` to retrieve the most recent value for a particular key
+
+The following properties are in common use:
+
+ - `:compact`: Boolean specifying that small values should be printed more compactly, e.g.
+   that numbers should be printed with fewer digits. This is set when printing array
+   elements.
+ - `:limit`: Boolean specifying that containers should be truncated, e.g. showing `…` in
+   place of most elements.
+ - `:displaysize`: A `Tuple{Int,Int}` giving the size in rows and columns to use for text
+   output. This can be used to override the display size for called functions, but to
+   get the size of the screen use the `displaysize` function.
+"""
 IOContext(io::IO, KV::Pair) = IOContext(io, KV[1], KV[2])
 
 show(io::IO, ctx::IOContext) = (print(io, "IOContext("); show(io, ctx.io); print(io, ")"))
@@ -1566,7 +1584,6 @@ function showarray(io::IO, X::AbstractArray, repr::Bool = true; header = true)
     if repr && ndims(X) == 1
         return show_vector(io, X, "[", "]")
     end
-    io = IOContext(io, multiline=false)
     if !haskey(io, :compact)
         io = IOContext(io, compact=true)
     end
