@@ -30,7 +30,9 @@
 extern "C" {
 #endif
 
-// manipulating mark bits
+#define GC_PAGE_LG2 14 // log2(size of a page)
+#define GC_PAGE_SZ (1 << GC_PAGE_LG2) // 16k
+#define GC_PAGE_OFFSET (JL_SMALL_BYTE_ALIGNMENT - (sizeof(jl_taggedvalue_t) % JL_SMALL_BYTE_ALIGNMENT))
 
 // 8G * 32768 = 2^48
 // It's really unlikely that we'll actually allocate that much though...
@@ -157,7 +159,8 @@ __attribute__((aligned(GC_PAGE_SZ)))
 
 typedef struct {
     // Page layout:
-    //  Padding: GC_PAGE_OFFSET
+    //  Newpage freelist: sizeof(void*)
+    //  Padding: GC_PAGE_OFFSET - sizeof(void*)
     //  Blocks: osize * n
     //    Tag: sizeof(jl_taggedvalue_t)
     //    Data: <= osize - sizeof(jl_taggedvalue_t)

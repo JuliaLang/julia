@@ -5428,7 +5428,6 @@ static void init_julia_llvm_env(Module *m)
     alloc_pool_args.push_back(T_pint8);
     alloc_pool_args.push_back(T_int32);
     alloc_pool_args.push_back(T_int32);
-    alloc_pool_args.push_back(T_int32);
     jlalloc_pool_func =
         Function::Create(FunctionType::get(T_pjlvalue, alloc_pool_args, false),
                          Function::ExternalLinkage,

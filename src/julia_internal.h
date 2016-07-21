@@ -43,9 +43,9 @@ JL_DLLEXPORT extern int jl_lineno;
 JL_DLLEXPORT extern const char *jl_filename;
 
 JL_DLLEXPORT jl_value_t *jl_gc_pool_alloc(jl_ptls_t ptls, int pool_offset,
-                                          int osize, int end_offset);
+                                          int osize);
 JL_DLLEXPORT jl_value_t *jl_gc_big_alloc(jl_ptls_t ptls, size_t allocsz);
-int jl_gc_classify_pools(size_t sz, int *osize, int *end_offset);
+int jl_gc_classify_pools(size_t sz, int *osize);
 extern jl_mutex_t gc_perm_lock;
 void *jl_gc_perm_alloc_nolock(size_t sz);
 void *jl_gc_perm_alloc(size_t sz);
@@ -108,10 +108,6 @@ STATIC_INLINE int JL_CONST_FUNC jl_gc_szclass(size_t sz)
 #endif
 #define JL_SMALL_BYTE_ALIGNMENT 16
 #define JL_CACHE_BYTE_ALIGNMENT 64
-#define GC_POOL_END_OFS(osize) ((((GC_PAGE_SZ - GC_PAGE_OFFSET)/(osize)) - 1)*(osize) + GC_PAGE_OFFSET)
-#define GC_PAGE_LG2 14 // log2(size of a page)
-#define GC_PAGE_SZ (1 << GC_PAGE_LG2) // 16k
-#define GC_PAGE_OFFSET (JL_SMALL_BYTE_ALIGNMENT - (sizeof(jl_taggedvalue_t) % JL_SMALL_BYTE_ALIGNMENT))
 #define GC_MAX_SZCLASS (2032-sizeof(void*))
 
 STATIC_INLINE jl_value_t *jl_gc_alloc_(jl_ptls_t ptls, size_t sz, void *ty)
@@ -124,16 +120,13 @@ STATIC_INLINE jl_value_t *jl_gc_alloc_(jl_ptls_t ptls, size_t sz, void *ty)
         int pool_id = jl_gc_szclass(allocsz);
         jl_gc_pool_t *p = &ptls->heap.norm_pools[pool_id];
         int osize;
-        int endoff;
         if (jl_is_constexpr(allocsz)) {
             osize = jl_gc_sizeclasses[pool_id];
-            endoff = GC_POOL_END_OFS(osize);
         }
         else {
             osize = p->osize;
-            endoff = p->end_offset;
         }
-        v = jl_gc_pool_alloc(ptls, (char*)p - (char*)ptls, osize, endoff);
+        v = jl_gc_pool_alloc(ptls, (char*)p - (char*)ptls, osize);
     }
     else {
         v = jl_gc_big_alloc(ptls, allocsz);

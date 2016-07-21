@@ -31,7 +31,6 @@
 typedef struct {
     jl_taggedvalue_t *freelist;   // root of list of free objects
     jl_taggedvalue_t *newpages;   // root of list of chunks of free objects
-    uint16_t end_offset; // stored to avoid computing it at each allocation
     uint16_t osize;      // size of objects in this pool
 } jl_gc_pool_t;
 
