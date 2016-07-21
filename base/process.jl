@@ -267,9 +267,7 @@ type Process <: AbstractPipe
     err::IO
     exitcode::Int64
     termsignal::Int32
-    exitcb::Callback
     exitnotify::Condition
-    closecb::Callback
     closenotify::Condition
     function Process(cmd::Cmd, handle::Ptr{Void},
                      in::Union{Redirectable, Ptr{Void}},
@@ -287,7 +285,7 @@ type Process <: AbstractPipe
         this = new(cmd, handle, in, out, err,
                    typemin(fieldtype(Process, :exitcode)),
                    typemin(fieldtype(Process, :termsignal)),
-                   false, Condition(), false, Condition())
+                   Condition(), Condition())
         finalizer(this, uvfinalize)
         return this
     end
@@ -339,9 +337,6 @@ function uv_return_spawn(p::Ptr{Void}, exit_status::Int64, termsignal::Int32)
     proc = unsafe_pointer_to_objref(data)::Process
     proc.exitcode = exit_status
     proc.termsignal = termsignal
-    if isa(proc.exitcb, Function)
-        proc.exitcb(proc, exit_status, termsignal)
-    end
     ccall(:jl_close_uv, Void, (Ptr{Void},), proc.handle)
     notify(proc.exitnotify)
     nothing
@@ -349,21 +344,18 @@ end
 
 function _uv_hook_close(proc::Process)
     proc.handle = C_NULL
-    if isa(proc.closecb, Function)
-        proc.closecb(proc)
-    end
     notify(proc.closenotify)
 end
 
-function spawn(redirect::CmdRedirect, stdios::StdIOSet, exitcb::Callback, closecb::Callback; chain::Nullable{ProcessChain}=Nullable{ProcessChain}())
+function spawn(redirect::CmdRedirect, stdios::StdIOSet; chain::Nullable{ProcessChain}=Nullable{ProcessChain}())
     spawn(redirect.cmd,
           (redirect.stream_no == STDIN_NO  ? redirect.handle : stdios[1],
            redirect.stream_no == STDOUT_NO ? redirect.handle : stdios[2],
            redirect.stream_no == STDERR_NO ? redirect.handle : stdios[3]),
-          exitcb, closecb, chain=chain)
+           chain=chain)
 end
 
-function spawn(cmds::OrCmds, stdios::StdIOSet, exitcb::Callback, closecb::Callback; chain::Nullable{ProcessChain}=Nullable{ProcessChain}())
+function spawn(cmds::OrCmds, stdios::StdIOSet; chain::Nullable{ProcessChain}=Nullable{ProcessChain}())
     out_pipe = Libc.malloc(_sizeof_uv_named_pipe)
     in_pipe = Libc.malloc(_sizeof_uv_named_pipe)
     link_pipe(in_pipe, false, out_pipe, false)
@@ -371,8 +363,8 @@ function spawn(cmds::OrCmds, stdios::StdIOSet, exitcb::Callback, closecb::Callba
         chain = Nullable(ProcessChain(stdios))
     end
     try
-        spawn(cmds.a, (stdios[1], out_pipe, stdios[3]), exitcb, closecb, chain=chain)
-        spawn(cmds.b, (in_pipe, stdios[2], stdios[3]), exitcb, closecb, chain=chain)
+        spawn(cmds.a, (stdios[1], out_pipe, stdios[3]), chain=chain)
+        spawn(cmds.b, (in_pipe, stdios[2], stdios[3]), chain=chain)
     finally
         close_pipe_sync(out_pipe)
         close_pipe_sync(in_pipe)
@@ -382,7 +374,7 @@ function spawn(cmds::OrCmds, stdios::StdIOSet, exitcb::Callback, closecb::Callba
     get(chain)
 end
 
-function spawn(cmds::ErrOrCmds, stdios::StdIOSet, exitcb::Callback, closecb::Callback; chain::Nullable{ProcessChain}=Nullable{ProcessChain}())
+function spawn(cmds::ErrOrCmds, stdios::StdIOSet; chain::Nullable{ProcessChain}=Nullable{ProcessChain}())
     out_pipe = Libc.malloc(_sizeof_uv_named_pipe)
     in_pipe = Libc.malloc(_sizeof_uv_named_pipe)
     link_pipe(in_pipe, false, out_pipe, false)
@@ -390,8 +382,8 @@ function spawn(cmds::ErrOrCmds, stdios::StdIOSet, exitcb::Callback, closecb::Cal
         chain = Nullable(ProcessChain(stdios))
     end
     try
-        spawn(cmds.a, (stdios[1], stdios[2], out_pipe), exitcb, closecb, chain=chain)
-        spawn(cmds.b, (in_pipe, stdios[2], stdios[3]), exitcb, closecb, chain=chain)
+        spawn(cmds.a, (stdios[1], stdios[2], out_pipe), chain=chain)
+        spawn(cmds.b, (in_pipe, stdios[2], stdios[3]), chain=chain)
     finally
         close_pipe_sync(out_pipe)
         close_pipe_sync(in_pipe)
@@ -469,11 +461,9 @@ function setup_stdio(anon::Function, stdio::StdIOSet)
     close_err && close_stdio(err)
 end
 
-function spawn(cmd::Cmd, stdios::StdIOSet, exitcb::Callback, closecb::Callback; chain::Nullable{ProcessChain}=Nullable{ProcessChain}())
+function spawn(cmd::Cmd, stdios::StdIOSet; chain::Nullable{ProcessChain}=Nullable{ProcessChain}())
     loop = eventloop()
     pp = Process(cmd, C_NULL, stdios[1], stdios[2], stdios[3])
-    pp.exitcb = exitcb
-    pp.closecb = closecb
     setup_stdio(stdios) do in, out, err
         pp.handle = _jl_spawn(cmd.exec[1], cmd.exec, loop, pp,
                               in, out, err)
@@ -484,39 +474,34 @@ function spawn(cmd::Cmd, stdios::StdIOSet, exitcb::Callback, closecb::Callback; 
     pp
 end
 
-function spawn(cmds::AndCmds, stdios::StdIOSet, exitcb::Callback, closecb::Callback; chain::Nullable{ProcessChain}=Nullable{ProcessChain}())
+function spawn(cmds::AndCmds, stdios::StdIOSet; chain::Nullable{ProcessChain}=Nullable{ProcessChain}())
     if isnull(chain)
         chain = Nullable(ProcessChain(stdios))
     end
     setup_stdio(stdios) do in, out, err
-        spawn(cmds.a, (in,out,err), exitcb, closecb, chain=chain)
-        spawn(cmds.b, (in,out,err), exitcb, closecb, chain=chain)
+        spawn(cmds.a, (in,out,err), chain=chain)
+        spawn(cmds.b, (in,out,err), chain=chain)
     end
     get(chain)
 end
 
 # INTERNAL
-# returns a tuple of function arguments to spawn:
-# (stdios, exitcb, closecb)
-# |       |        \ The function to be called once the uv handle is closed
-# |       \ The function to be called once the process exits
-# \ A set of up to 256 stdio instructions, where each entry can be either:
+# returns stdios:
+# A set of up to 256 stdio instructions, where each entry can be either:
 #   | - An IO to be passed to the child
 #   | - DevNull to pass /dev/null
 #   | - An Filesystem.File object to redirect the output to
 #   \ - A string specifying a filename to be opened
 
-spawn_opts_swallow(stdios::StdIOSet, exitcb::Callback=false, closecb::Callback=false) =
-    (stdios,exitcb,closecb)
+spawn_opts_swallow(stdios::StdIOSet) = (stdios,)
 spawn_opts_swallow(in::Redirectable=DevNull, out::Redirectable=DevNull, err::Redirectable=DevNull, args...) =
-    (tuple(in,out,err,args...),false,false)
-spawn_opts_inherit(stdios::StdIOSet, exitcb::Callback=false, closecb::Callback=false) =
-    (stdios,exitcb,closecb)
+    ((in, out, err), args...)
+spawn_opts_inherit(stdios::StdIOSet) = (stdios,)
 # pass original descriptors to child processes by default, because we might
 # have already exhausted and closed the libuv object for our standard streams.
 # this caused issue #8529.
 spawn_opts_inherit(in::Redirectable=RawFD(0), out::Redirectable=RawFD(1), err::Redirectable=RawFD(2), args...) =
-    (tuple(in,out,err,args...),false,false)
+    ((in, out, err), args...)
 
 spawn(cmds::AbstractCmd, args...; chain::Nullable{ProcessChain}=Nullable{ProcessChain}()) =
     spawn(cmds, spawn_opts_swallow(args...)...; chain=chain)
