@@ -652,9 +652,20 @@ the fusion stops as soon as a "non-dot" function is encountered; for example,
 in ``sin.(sort(cos.(X)))`` the ``sin`` and ``cos`` loops cannot be merged
 because of the intervening ``sort`` function.
 
+Finally, the maximum efficiency is typically achieved when the output
+array of a vectorized operation is *pre-allocated*, so that repeated
+calls do not allocate new arrays over and over again for the results
+(:ref:`man-preallocation`:).   A convenient syntax for this is
+``X .= ...``, which is equivalent to ``broadcast!(identity, X, ...)``
+except that, as above, the ``broadcast!`` loop is fused with any nested
+"dot" calls.  For example, ``X .= sin.(Y)`` is equivalent to
+``broadcast!(sin, X, Y)``, overwriting ``X`` with ``sin.(Y)`` in-place.
+
 (In future versions of Julia, operators like ``.*`` will also be handled with
 the same mechanism: they will be equivalent to ``broadcast`` calls and
-will be fused with other nested "dot" calls.)
+will be fused with other nested "dot" calls.  ``x .+= y`` is equivalent
+to ``x .= x .+ y`` and will eventually result in a fused in-place assignment.
+Similarly for ``.*=`` etcetera.)
 
 Further Reading
 ---------------
