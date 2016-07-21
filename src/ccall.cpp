@@ -184,7 +184,7 @@ static Value *runtime_sym_lookup(PointerType *funcptype, const char *f_lib,
                               runtime_lib);
 }
 
-// Map from distinct callee's to it's GOT entry.
+// Map from distinct callee's to its GOT entry.
 // In principle the attribute, function type and calling convention
 // don't need to be part of the key but it seems impossible to forward
 // all the arguments without writing assembly directly.
@@ -761,7 +761,7 @@ public:
     {
         Function *F = dyn_cast<Function>(V);
         if (F) {
-            if (F->isIntrinsic()) {
+            if (isIntrinsicFunction(F)) {
                 return destModule->getOrInsertFunction(F->getName(),F->getFunctionType());
             }
             if (F->isDeclaration() || F->getParent() != destModule) {
@@ -1019,15 +1019,20 @@ static jl_cgval_t emit_llvmcall(jl_value_t **args, size_t nargs, jl_codectx_t *c
 
     // the actual call
     builder.CreateCall(prepare_call(gcroot_flush_func));
+    SmallVector<Value*, 16> gc_uses;
+    for (size_t i = 0; i < nargt; ++i) {
+        const jl_cgval_t &arg = argv[i];
+        push_gc_use(gc_uses, arg);
+    }
+    // Mark GC use before **and** after the llvmcall to make sure the arguments
+    // are alive during the llvmcall even if the llvmcall has `unreachable`.
+    // If the llvmcall generates GC safepoint, it might need to emit its own
+    // gckill.
+    mark_gc_uses(gc_uses);
     CallInst *inst = builder.CreateCall(f, ArrayRef<Value*>(&argvals[0], nargt));
     if (isString)
         ctx->to_inline.push_back(inst);
-
-    // after the llvmcall mark fake uses of all of the arguments to ensure the were live
-    for (size_t i = 0; i < nargt; ++i) {
-        const jl_cgval_t &arg = argv[i];
-        mark_gc_use(arg);
-    }
+    mark_gc_uses(gc_uses);
 
     JL_GC_POP();
 
@@ -1757,6 +1762,21 @@ static jl_cgval_t emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
     //for (int i = 0; i < (nargs - 3) / 2 + sret; ++i)
     //    argvals[i]->dump();
 
+    // Mark GC use before **and** after the ccall to make sure the arguments
+    // are alive during the ccall even if the function called is `noreturn`.
+    SmallVector<Value*, 16> gc_uses;
+    for(i = 4; i < nargs + 1; i += 2) {
+        // Current C function parameter
+        size_t ai = (i - 4) / 2;
+        push_gc_use(gc_uses, argv[ai]);
+
+        // Julia (expression) value of current parameter gcroot
+        jl_value_t *argi = args[i + 1];
+        if (jl_is_long(argi)) continue;
+        jl_cgval_t arg = emit_expr(argi, ctx);
+        push_gc_use(gc_uses, arg);
+    }
+    mark_gc_uses(gc_uses);
     // the actual call
     Value *ret = builder.CreateCall(prepare_call(llvmf),
                                     ArrayRef<Value*>(&argvals[0], (nargs - 3) / 2 + sret));
@@ -1774,20 +1794,7 @@ static jl_cgval_t emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
         ctx->f->addFnAttr(Attribute::StackProtectReq);
     }
 
-    // after the ccall itself, mark fake uses of all of the arguments to ensure the were live,
-    // and run over the gcroot list and make give them a `mark_gc_use`
-    for(i = 4; i < nargs + 1; i += 2) {
-        // Current C function parameter
-        size_t ai = (i - 4) / 2;
-        mark_gc_use(argv[ai]);
-
-        // Julia (expression) value of current parameter gcroot
-        jl_value_t *argi = args[i + 1];
-        if (jl_is_long(argi)) continue;
-        jl_cgval_t arg = emit_expr(argi, ctx);
-        mark_gc_use(arg);
-    }
-
+    mark_gc_uses(gc_uses);
     JL_GC_POP();
     if (rt == jl_bottom_type) {
         // Do this after we marked all the GC uses.

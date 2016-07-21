@@ -64,7 +64,6 @@ GlobalVariable *jl_emit_sysimg_slot(Module *m, Type *typ, const char *name,
 void* jl_get_global(GlobalVariable *gv);
 GlobalVariable *jl_get_global_for(const char *cname, void *addr, Module *M);
 void jl_add_to_shadow(Module *m);
-void finalize_gc_frame(Module *m);
 void jl_finalize_function(Function *F, Module *collector = NULL);
 void jl_finalize_module(Module *m, bool shadow);
 
@@ -218,3 +217,14 @@ JL_DLLEXPORT extern LLVMContext jl_LLVMContext;
 #else
 JL_DLLEXPORT extern LLVMContext &jl_LLVMContext;
 #endif
+
+extern MDNode *tbaa_const;
+extern MDNode *tbaa_gcframe;
+
+Pass *createLowerPTLSPass(bool imaging_mode, MDNode *tbaa_const);
+Pass *createLowerGCFramePass(MDNode *tbaa_gcframe);
+// Whether the Function is an llvm or julia intrinsic.
+static inline bool isIntrinsicFunction(Function *F)
+{
+    return F->isIntrinsic() || F->getName().startswith("julia.");
+}
