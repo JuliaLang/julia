@@ -509,7 +509,7 @@ end
 
 module_uuid(m::Module) = ccall(:jl_module_uuid, UInt64, (Any,), m)
 
-isvalid_cache_header(f::IOStream) = 0 != ccall(:jl_deserialize_verify_header, Cint, (Ptr{Void},), f.ios)
+isvalid_cache_header(f::IOStream) = 0 != ccall(:jl_read_verify_header, Cint, (Ptr{Void},), f.ios)
 
 function cache_dependencies(f::IO)
     modules = Tuple{Symbol,UInt64}[]
