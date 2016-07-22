@@ -1290,7 +1290,7 @@ let
             @test norm(v) == 5.0
             w = normalize(v)
             @test norm(w - [0.6, 0.8], Inf) < eps(Tr)
-            @test norm(w) == 1.0
+            @test_approx_eq norm(w) 1.0
             @test norm(normalize!(copy(v)) - w, Inf) < eps(Tr)
             @test isempty(normalize!(T[]))
         end
