@@ -565,32 +565,20 @@ function show_trace_entry(io, frame, n)
     n > 1 && print(io, " (repeats ", n, " times)")
 end
 
-function show_backtrace(io::IO, t::Vector, set=1:typemax(Int))
-    # we may not declare :eval_user_input
-    # directly so that we get a compile error
-    # in case its name changes in the future
-    show_backtrace(io,
-                    try
-                        typeof(eval_user_input).name.mt.name
-                    catch
-                        :(:) #for when client.jl is not yet defined
-                    end, t, set)
-end
-
-function show_backtrace(io::IO, top_function::Symbol, t::Vector, set)
+function show_backtrace(io::IO, t::Vector)
     process_entry(last_frame, n) =
         show_trace_entry(io, last_frame, n)
-    process_backtrace(process_entry, top_function, t, set)
+    process_backtrace(process_entry, t)
 end
 
-function show_backtrace(io::IO, top_function::Symbol, t::Vector{Any}, set)
+function show_backtrace(io::IO, t::Vector{Any})
     for entry in t
         show_trace_entry(io, entry...)
     end
 end
 
-# process the backtrace, up to (but not including) top_function
-function process_backtrace(process_func::Function, top_function::Symbol, t::Vector, set; skipC = true)
+# call process_func on each frame in a backtrace
+function process_backtrace(process_func::Function, t::Vector, limit::Int=typemax(Int); skipC = true)
     n = 0
     last_frame = StackTraces.UNKNOWN
     count = 0
@@ -603,9 +591,8 @@ function process_backtrace(process_func::Function, top_function::Symbol, t::Vect
 
             if lkup.from_c && skipC; continue; end
             if i == 1 && lkup.func == :error; continue; end
-            if lkup.func == top_function; break; end
             count += 1
-            if !in(count, set); continue; end
+            if count > limit; break; end
 
             if lkup.file != last_frame.file || lkup.line != last_frame.line || lkup.func != last_frame.func
                 if n > 0
