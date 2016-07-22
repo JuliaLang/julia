@@ -202,7 +202,8 @@ promote_rule{T,n,S}(::Type{Array{T,n}}, ::Type{Array{S,n}}) = Array{promote_type
 """
     collect(element_type, collection)
 
-Return an array of type `Array{element_type,1}` of all items in a collection.
+Return an Array with the given element type of all items in a collection or iterable.
+The result has the same shape and number of dimensions as `collection`.
 """
 collect{T}(::Type{T}, itr) = _collect(T, itr, iteratorsize(itr))
 
@@ -225,7 +226,9 @@ _similar_for(c, T, itr, isz) = similar(c, T)
 """
     collect(collection)
 
-Return an array of all items in a collection. For associative collections, returns Pair{KeyType, ValType}.
+Return an Array of all items in a collection or iterator. For associative collections, returns
+Pair{KeyType, ValType}. If the argument is array-like or is an iterator with the `HasShape()`
+trait, the result will have the same shape and number of dimensions as the argument.
 """
 collect(itr) = _collect(1:1 #= Array =#, itr, iteratoreltype(itr), iteratorsize(itr))
 
