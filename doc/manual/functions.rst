@@ -660,6 +660,10 @@ calls do not allocate new arrays over and over again for the results
 except that, as above, the ``broadcast!`` loop is fused with any nested
 "dot" calls.  For example, ``X .= sin.(Y)`` is equivalent to
 ``broadcast!(sin, X, Y)``, overwriting ``X`` with ``sin.(Y)`` in-place.
+If the left-hand side is a ``getindex`` expression, e.g.
+``X[2:end] .= sin.(Y)``, then it translates to ``broadcast!`` on a ``view``,
+e.g. ``broadcast!(sin, view(X, 2:endof(X)), Y)``, so that the left-hand
+side is updated in-place.
 
 (In future versions of Julia, operators like ``.*`` will also be handled with
 the same mechanism: they will be equivalent to ``broadcast`` calls and
