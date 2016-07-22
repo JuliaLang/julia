@@ -114,15 +114,23 @@ function credentials_callback(cred::Ptr{Ptr{Void}}, url_ptr::Cstring,
                 ENV["SSH_KEY_PATH"]
             else
                 keydefpath = creds[:prvkey, credid] # check if credentials were already used
-                if keydefpath !== nothing && !isusedcreds
+                keydefpath === nothing && (keydefpath = "")
+                if !isempty(keydefpath) && !isusedcreds
                     keydefpath # use cached value
                 else
-                    if keydefpath === nothing || isempty(keydefpath)
-                        keydefpath = joinpath(homedir(),".ssh","id_rsa")
+                    defaultkeydefpath = joinpath(homedir(),".ssh","id_rsa")
+                    if isempty(keydefpath) && isfile(defaultkeydefpath)
+                        keydefpath = defaultkeydefpath
+                    else
+                        keydefpath =
+                            prompt("Private key location for '$schema$username@$host'", default=keydefpath)
                     end
-                    prompt("Private key location for '$schema$username@$host'", default=keydefpath)
                 end
             end
+
+            # If the private key changed, invalidate the cached public key
+            (privatekey != creds[:prvkey, credid]) &&
+                (creds[:pubkey, credid] = "")
             creds[:prvkey, credid] = privatekey # save credentials
 
             # For SSH we need a public key location, look for environment vars SSH_* as well
