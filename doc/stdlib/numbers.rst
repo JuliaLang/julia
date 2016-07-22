@@ -297,6 +297,12 @@ General Number Functions and Constants
 
    Test whether ``x`` or all its elements are numerically equal to some real number.
 
+.. function:: isimag(z) -> Bool
+
+   .. Docstring generated from Julia source
+
+   Test whether ``z`` is purely imaginary, i.e. has a real part equal to 0.
+
 .. function:: Float32(x [, mode::RoundingMode])
 
    .. Docstring generated from Julia source

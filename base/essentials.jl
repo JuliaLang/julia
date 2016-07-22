@@ -187,6 +187,14 @@ map(f, v::SimpleVector) = Any[ f(v[i]) for i = 1:length(v) ]
 
 getindex(v::SimpleVector, I::AbstractArray) = Core.svec(Any[ v[i] for i in I ]...)
 
+"""
+    isassigned(array, i) -> Bool
+
+Tests whether the given array has a value associated with index `i`. Returns `false`
+if the index is out of bounds, or has an undefined reference.
+"""
+function isassigned end
+
 function isassigned(v::SimpleVector, i::Int)
     1 <= i <= length(v) || return false
     x = unsafe_load(convert(Ptr{Ptr{Void}},data_pointer_from_objref(v)) + i*sizeof(Ptr))
