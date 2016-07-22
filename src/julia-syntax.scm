@@ -1667,14 +1667,14 @@
           (cf (cdadr f) args '() '() '() '() '()))
         e)) ; (not (fuse? e))
   (let ((e (compress-fuse (dot-to-fuse rhs))) ; an expression '(fuse func args) if expr is a dot call
-        (lhs_ (ref-to-view lhs))) ; x[...] expressions on lhs turn in to view(x, ...) to update x in-place
+        (lhs-view (ref-to-view lhs))) ; x[...] expressions on lhs turn in to view(x, ...) to update x in-place
     (if (fuse? e)
         (if (null? lhs)
             (expand-forms `(call (top broadcast) ,(from-lambda (cadr e)) ,@(caddr e)))
-            (expand-forms `(call (top broadcast!) ,(from-lambda (cadr e)) ,lhs_ ,@(caddr e))))
+            (expand-forms `(call (top broadcast!) ,(from-lambda (cadr e)) ,lhs-view ,@(caddr e))))
         (if (null? lhs)
             (expand-forms e)
-            (expand-forms `(call (top broadcast!) identity ,lhs_ ,e))))))
+            (expand-forms `(call (top broadcast!) identity ,lhs-view ,e))))))
 
 ;; table mapping expression head to a function expanding that form
 (define expand-table
