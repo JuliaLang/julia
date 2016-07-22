@@ -1542,6 +1542,15 @@
         (cadr expr)  ;; eta reduce `x->f(x)` => `f`
         `(-> ,argname (block ,@splat ,expr)))))
 
+(define (ref-to-view expr)
+  (if (and (pair? expr) (eq? (car expr) 'ref))
+      (let* ((ex (partially-expand-ref expr))
+             (stmts (butlast (cdr ex)))
+             (refex (last    (cdr ex)))
+             (nuref `(call (top view) ,(caddr refex) ,@(cdddr refex))))
+        `(block ,@stmts ,nuref))
+      expr))
+
 ; fuse nested calls to expr == f.(args...) into a single broadcast call,
 ; or a broadcast! call if lhs is non-null.
 (define (expand-fuse-broadcast lhs rhs)
@@ -1657,14 +1666,15 @@
                         (cons farg new-fargs) (cons arg new-args) renames varfarg vararg))))))
           (cf (cdadr f) args '() '() '() '() '()))
         e)) ; (not (fuse? e))
-  (let ((e (compress-fuse (dot-to-fuse rhs)))) ; an expression '(fuse func args) if expr is a dot call
+  (let ((e (compress-fuse (dot-to-fuse rhs))) ; an expression '(fuse func args) if expr is a dot call
+        (lhs-view (ref-to-view lhs))) ; x[...] expressions on lhs turn in to view(x, ...) to update x in-place
     (if (fuse? e)
         (if (null? lhs)
-            (expand-forms `(call broadcast ,(from-lambda (cadr e)) ,@(caddr e)))
-            (expand-forms `(call broadcast! ,(from-lambda (cadr e)) ,lhs ,@(caddr e))))
+            (expand-forms `(call (top broadcast) ,(from-lambda (cadr e)) ,@(caddr e)))
+            (expand-forms `(call (top broadcast!) ,(from-lambda (cadr e)) ,lhs-view ,@(caddr e))))
         (if (null? lhs)
             (expand-forms e)
-            (expand-forms `(call broadcast! identity ,lhs ,e))))))
+            (expand-forms `(call (top broadcast!) identity ,lhs-view ,e))))))
 
 ;; table mapping expression head to a function expanding that form
 (define expand-table
