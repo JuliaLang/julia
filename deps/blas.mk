@@ -209,6 +209,7 @@ $(SRCDIR)/srccache/lapack-$(LAPACK_VER).tgz: | $(SRCDIR)/srccache
 	$(JLDOWNLOAD) $@ http://www.netlib.org/lapack/$(notdir $@)
 $(BUILDDIR)/lapack-$(LAPACK_VER)/make.inc: $(SRCDIR)/srccache/lapack-$(LAPACK_VER).tgz
 	$(JLCHECKSUM) $<
+	mkdir -p $(BUILDDIR)
 	cd $(BUILDDIR) && $(TAR) zxf $<
 	cp $(dir $@)INSTALL/make.inc.gfortran $(dir $@)make.inc
 	touch -c $@
