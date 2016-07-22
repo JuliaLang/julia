@@ -59,6 +59,8 @@ function credentials_callback(cred::Ptr{Ptr{Void}}, url_ptr::Cstring,
     # parse url for schema and host
     urlparts = match(urlmatcher, url)
     schema = urlparts.captures[1]
+    urlusername = urlparts.captures[4]
+    urlusername = urlusername === nothing ? "" : String(urlusername)
     host = urlparts.captures[5]
     schema = schema === nothing ? "" : schema*"://"
 
@@ -200,13 +202,14 @@ function credentials_callback(cred::Ptr{Ptr{Void}}, url_ptr::Cstring,
             if is_windows()
                 if username === nothing || userpass === nothing || isusedcreds
                     res = Base.winprompt("Please enter your credentials for '$schema$host'", "Credentials required",
-                            username === nothing ? "" : username; prompt_username = true)
+                            username === nothing || isempty(username) ?
+                            urlusername : username; prompt_username = true)
                     isnull(res) && return Cint(Error.EAUTH)
                     username, userpass = Base.get(res)
                 end
             else
                 if username === nothing || isusedcreds
-                    username = prompt("Username for '$schema$host'")
+                    username = prompt("Username for '$schema$host'", default = urlusername)
                 end
 
                 if userpass === nothing || isusedcreds
