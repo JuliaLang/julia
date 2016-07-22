@@ -27,6 +27,15 @@ myio = IOBuffer()
 display(TextDisplay(myio), TestCustomShowType3())
 @test @compat String(myio) == "2-Argument-show"
 
+immutable ParameterizedShowType{T}
+    _::T
+end
+myio = IOBuffer()
+@compat show{T}(io::IO, ::MIME"text/html", ::ParameterizedShowType{T}) =
+    print(io, "<code>::", T, "</code>")
+@compat show(myio, MIME("text/html"), ParameterizedShowType(0.0))
+@test @compat String(myio) == "<code>::Float64</code>"
+
 d = Dict{Int,Int}()
 d[1] = 1
 @test Compat.@Dict(1 => 1) == d

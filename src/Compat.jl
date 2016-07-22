@@ -4,6 +4,9 @@ module Compat
 
 using Base.Meta
 
+"""Get just the function part of a function declaration."""
+withincurly(ex) = isexpr(ex, :curly) ? ex.args[1] : ex
+
 if VERSION < v"0.4.0-dev+1419"
     export UInt, UInt8, UInt16, UInt32, UInt64, UInt128
     const UInt = Uint
@@ -188,8 +191,13 @@ if VERSION < v"0.5.0-dev+961"
 end
 
 function rewrite_show(ex)
-    argtypes = ex.args[2:end]
-    Expr(:call, :(Base.writemime), argtypes...)
+    if isexpr(ex, :call)
+        Expr(:call, rewrite_show(ex.args[1]), ex.args[2:end]...)
+    elseif isexpr(ex, :curly)
+        Expr(:curly, rewrite_show(ex.args[1]), ex.args[2:end]...)
+    else
+        :(Base.writemime)
+    end
 end
 
 function rewrite_dict(ex)
@@ -460,7 +468,8 @@ function _compat(ex::Expr)
             rewrite_pairs_to_tuples!(ex)
         elseif VERSION < v"0.4.0-dev+1246" && f == :String
             ex = Expr(:call, :bytestring, ex.args[2:end]...)
-        elseif VERSION < v"0.5.0-dev+4340" && length(ex.args) > 3 && istopsymbol(ex.args[1], :Base, :show)
+        elseif VERSION < v"0.5.0-dev+4340" && length(ex.args) > 3 &&
+                istopsymbol(withincurly(ex.args[1]), :Base, :show)
             ex = rewrite_show(ex)
         end
         if VERSION < v"0.5.0-dev+4305"
