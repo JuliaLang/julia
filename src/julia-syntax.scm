@@ -424,7 +424,8 @@
             ,@lno
             ,@(if (not ordered-defaults)
                   '()
-                  (map make-assignment keynames vals))
+                  (append! (map (lambda (kwname) `(local ,kwname)) keynames)
+                           (map make-assignment keynames vals)))
             ;; call mangled(vals..., [rest_kw ,]pargs..., [vararg]...)
             (return (call ,mangled
                           ,@(if ordered-defaults keynames vals)
@@ -466,6 +467,7 @@
           `(block
             ;; initialize keyword args to their defaults, or set a flag telling
             ;; whether this keyword needs to be set.
+            ,@(map (lambda (kwname) `(local ,kwname)) keynames)
             ,@(map (lambda (name dflt flag)
                      (if (const-default? dflt)
                          `(= ,name ,dflt)
