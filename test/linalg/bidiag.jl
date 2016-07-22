@@ -62,12 +62,12 @@ for relty in (Int, Float32, Float64, BigFloat), elty in (relty, Complex{relty})
 
         @test size(T, 1) == size(T, 2) == n
         @test size(T) == (n, n)
-        @test convert(Array, T) == diagm(dv) + diagm(ev, isupper?1:-1)
-        @test Bidiagonal(convert(Array, T), isupper) == T
+        @test full(T) == diagm(dv) + diagm(ev, isupper?1:-1)
+        @test Bidiagonal(full(T), isupper) == T
         @test big(T) == T
-        @test convert(Array, abs(T)) == abs(diagm(dv)) + abs(diagm(ev, isupper?1:-1))
-        @test convert(Array, real(T)) == real(diagm(dv)) + real(diagm(ev, isupper?1:-1))
-        @test convert(Array, imag(T)) == imag(diagm(dv)) + imag(diagm(ev, isupper?1:-1))
+        @test full(abs(T)) == abs(diagm(dv)) + abs(diagm(ev, isupper?1:-1))
+        @test full(real(T)) == real(diagm(dv)) + real(diagm(ev, isupper?1:-1))
+        @test full(imag(T)) == imag(diagm(dv)) + imag(diagm(ev, isupper?1:-1))
         z = zeros(elty, n)
 
         debug && println("Idempotent tests")
@@ -113,7 +113,7 @@ for relty in (Int, Float32, Float64, BigFloat), elty in (relty, Complex{relty})
                 b += im*convert(Matrix{elty}, rand(1:10, n, 2))
             end
         end
-        Tfull = convert(Array, T)
+        Tfull = full(T)
         condT = cond(map(Complex128,Tfull))
         promty = typeof((zero(relty)*zero(relty) + zero(relty)*zero(relty))/one(relty))
         if relty != BigFloat
@@ -184,7 +184,7 @@ for relty in (Int, Float32, Float64, BigFloat), elty in (relty, Complex{relty})
 
         debug && println("Singular systems")
         if (elty <: BlasReal)
-            @test convert(Array, svdfact(T)) ≈ convert(Array, svdfact!(copy(Tfull)))
+            @test full(svdfact(T)) ≈ full(svdfact!(copy(Tfull)))
             @test svdvals(Tfull) ≈ svdvals(T)
             u1, d1, v1 = svd(Tfull)
             u2, d2, v2 = svd(T)
@@ -206,9 +206,9 @@ for relty in (Int, Float32, Float64, BigFloat), elty in (relty, Complex{relty})
             dv = convert(Vector{elty}, relty <: AbstractFloat ? randn(n) : rand(1:10, n))
             ev = convert(Vector{elty}, relty <: AbstractFloat ? randn(n-1) : rand(1:10, n-1))
             T2 = Bidiagonal(dv, ev, isupper2)
-            Tfull2 = convert(Array, T2)
+            Tfull2 = full(T2)
             for op in (+, -, *)
-                @test convert(Array, op(T, T2)) ≈ op(Tfull, Tfull2)
+                @test full(op(T, T2)) ≈ op(Tfull, Tfull2)
             end
         end
 
@@ -234,7 +234,7 @@ A = Bidiagonal(ones(Float32,10),ones(Float32,9),true)
 B = rand(Float64,10,10)
 C = Tridiagonal(rand(Float64,9),rand(Float64,10),rand(Float64,9))
 @test promote_rule(Matrix{Float64}, Bidiagonal{Float64}) == Matrix{Float64}
-@test promote(B,A) == (B,convert(Matrix{Float64},convert(Array, A)))
+@test promote(B,A) == (B,convert(Matrix{Float64},full(A)))
 @test promote(C,A) == (C,Tridiagonal(zeros(Float64,9),convert(Vector{Float64},A.dv),convert(Vector{Float64},A.ev)))
 
 import Base.LinAlg: fillslots!, UnitLowerTriangular
@@ -271,14 +271,14 @@ let #fill!
         b = Bidiagonal(randn(1,1), true)
         st = SymTridiagonal(randn(1,1))
         for x in (b, st)
-            @test convert(Array, fill!(x, val)) == fill!(convert(Array, x), val)
+            @test full(fill!(x, val)) == fill!(full(x), val)
         end
         b = Bidiagonal(randn(2,2), true)
         st = SymTridiagonal(randn(3), randn(2))
         t = Tridiagonal(randn(3,3))
         for x in (b, t, st)
             @test_throws ArgumentError fill!(x, val)
-            @test convert(Array, fill!(x, 0)) == fill!(convert(Array, x), 0)
+            @test full(fill!(x, 0)) == fill!(full(x), 0)
         end
     end
 end

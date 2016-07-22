@@ -46,7 +46,7 @@ let # gebrd, bdsqr & throw for bdsdc
         d, e = convert(Vector{elty}, randn(n)), convert(Vector{elty}, randn(n - 1))
         U, Vt, C = eye(elty, n), eye(elty, n), eye(elty, n)
         s, _ = LAPACK.bdsqr!('U', copy(d), copy(e), Vt, U, C)
-        @test convert(Array, Bidiagonal(d, e, true)) ≈ U*Diagonal(s)*Vt
+        @test full(Bidiagonal(d, e, true)) ≈ U*Diagonal(s)*Vt
 
         @test_throws ArgumentError LAPACK.bdsqr!('A', d, e, Vt, U, C)
         @test_throws DimensionMismatch LAPACK.bdsqr!('U', d, [e; 1], Vt, U, C)

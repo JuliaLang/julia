@@ -25,8 +25,8 @@ for eltyA in (Float64, Complex{Float64})
         end
 
         @inferred A\B
-        @test A\B[:,1] ≈ convert(Array, A)\B[:,1]
-        @test A\B ≈ convert(Array, A)\B
+        @test A\B[:,1] ≈ full(A)\B[:,1]
+        @test A\B ≈ full(A)\B
         @test_throws DimensionMismatch A\B[1:m-1,:]
         @test A[1:9,:]*(A[1:9,:]\ones(eltyB, 9)) ≈ ones(9) # Underdetermined system
 
