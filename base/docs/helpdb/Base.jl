@@ -86,19 +86,6 @@ false
 isinteger
 
 """
-    ./(x, y)
-
-Element-wise right division operator.
-
-```jldoctest
-julia> [1 2 3] ./ [1 2 3]
-1×3 Array{Float64,2}:
- 1.0  1.0  1.0
-```
-"""
-Base.:(./)
-
-"""
     prod!(r, A)
 
 Multiply elements of `A` over the singleton dimensions of `r`, and write results to `r`.
@@ -145,21 +132,6 @@ losslessly, some loss is tolerated; for example, `promote_type(Int64,Float64)` r
 `Float64` values.
 """
 promote_type
-
-"""
-```
-.*(x, y)
-```
-
-Element-wise multiplication operator.
-
-```jldoctest
-julia> [1 2 3] .* [1 2 3]
-1×3 Array{Int64,2}:
- 1  4  9
-```
-"""
-Base.:(.*)
 
 """
     backtrace()
@@ -311,19 +283,6 @@ that N is inbounds on either array. Incorrect usage may corrupt or segfault your
 the same manner as C.
 """
 unsafe_copy!(dest::Array, d, src::Array, so, N)
-
-"""
-    .^(x, y)
-
-Element-wise exponentiation operator.
-
-```jldoctest
-julia> [1 2 3] .^ [1 2 3]
-1×3 Array{Int64,2}:
- 1  4  27
-```
-"""
-Base.:(.^)
 
 """
     Float32(x [, mode::RoundingMode])
@@ -933,21 +892,6 @@ reverse
 In-place version of [`reverse`](@ref).
 """
 reverse!
-
-"""
-    .<(x, y)
-
-Element-wise less-than comparison operator.
-
-```jldoctest
-julia> [1; 2; 3] .< [2; 1; 4]
-3-element BitArray{1}:
-  true
- false
-  true
-```
-"""
-Base.:(.<)
 
 """
     UndefRefError()
@@ -2073,21 +2017,6 @@ Compute the minimum value of `A` over the singleton dimensions of `r`, and write
 minimum!
 
 """
-    .-(x, y)
-
-Element-wise subtraction operator.
-
-```jldoctest
-julia> [4; 5; 6] .- [1; 2; 4]
-3-element Array{Int64,1}:
- 3
- 3
- 2
-```
-"""
-Base.:(.-)
-
-"""
     unsafe_trunc(T, x)
 
 `unsafe_trunc(T, x)` returns the nearest integral value of type `T` whose absolute value is
@@ -2258,52 +2187,6 @@ Assign `x` to a named field in `value` of composite type. The syntax `a.b = c` c
 `setfield!(a, :b, c)`.
 """
 setfield!
-
-"""
-    .\\(x, y)
-
-Element-wise left division operator.
-
-```jldoctest
-julia> A = [1 2; 3 4]
-2×2 Array{Int64,2}:
- 1  2
- 3  4
-
-julia> A .\\ [1 2]
-2×2 Array{Float64,2}:
- 1.0       1.0
- 0.333333  0.5
-```
-
-```jldoctest
-julia> A = [1 0; 0 -1];
-
-julia> B = [0 1; 1 0];
-
-julia> C = [A, B]
-2-element Array{Array{Int64,2},1}:
- [1 0; 0 -1]
- [0 1; 1 0]
-
-julia> x = [1; 0];
-
-julia> y = [0; 1];
-
-julia> D = [x, y]
-2-element Array{Array{Int64,1},1}:
- [1,0]
- [0,1]
-
-julia> C .\\ D
-2-element Array{Array{Float64,1},1}:
- [1.0,-0.0]
- [1.0,0.0]
-```
-
-See also [`broadcast`](@ref).
-"""
-Base.:(.\)(x,y)
 
 """
 ```
@@ -2486,19 +2369,6 @@ issubnormal
 An attempted access to a [`Nullable`](@ref) with no defined value.
 """
 NullException
-
-"""
-    .==(x, y)
-
-Element-wise equality comparison operator.
-
-```jldoctest
-julia> [1 2 3] .== [1 2 4]
-1×3 BitArray{2}:
- true  true  false
-```
-"""
-Base.:(.==)
 
 """
     cfunction(function::Function, ReturnType::Type, (ArgumentTypes...))
@@ -2891,31 +2761,6 @@ Compute the midpoints of the bins with edges `e`. The result is a vector/range o
 `length(e) - 1`. Note: Julia does not ignore `NaN` values in the computation.
 """
 midpoints
-
-"""
-    .+(x, y)
-
-Element-wise addition operator.
-
-```jldoctest
-julia> A = [1 2; 3 4];
-
-julia> B = [5 6; 7 8];
-
-julia> C = [A, B]
-2-element Array{Array{Int64,2},1}:
- [1 2; 3 4]
- [5 6; 7 8]
-
-julia> C .+ [[1; 2] [3; 4]]
-2×2 Array{Array{Int64,2},2}:
- [2 3; 4 5]   [4 5; 6 7]
- [7 8; 9 10]  [9 10; 11 12]
-```
-
-See also [`broadcast`](@ref).
-"""
-Base.:(.+)
 
 """
     reverseind(v, i)

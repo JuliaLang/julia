@@ -1247,8 +1247,7 @@ end
             (@nref $N B i) = (AI, AI)
         end
         Bmax = sB
-        Istart = ones(Int,ndims(A))
-        Istart[([sB...].==1) & ([sA...].!=1)] = 2
+        Istart = Int[sB[i] == 1 != sA[i] ? 2 : 1 for i = 1:ndims(A)]
         @inbounds @nloops $N i d->(Istart[d]:size(A,d)) begin
             AI = @nref $N A i
             @nexprs $N d->(j_d = min(Bmax[d], i_{d}))

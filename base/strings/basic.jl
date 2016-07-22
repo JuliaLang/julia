@@ -105,8 +105,6 @@ julia> "Hello " * "world"
 ```
 """
 (*)(s1::AbstractString, ss::AbstractString...) = string(s1, ss...)
-(.*){T<:AbstractString}(v::Vector{T},s::AbstractString) = [i*s for i in v]
-(.*){T<:AbstractString}(s::AbstractString,v::Vector{T}) = [s*i for i in v]
 
 length(s::DirectIndexString) = endof(s)
 

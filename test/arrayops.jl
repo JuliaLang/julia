@@ -1533,7 +1533,7 @@ end
 
 module RetTypeDecl
     using Base.Test
-    import Base: +, *, .*, convert
+    import Base: +, *, broadcast, convert
 
     immutable MeterUnits{T,P} <: Number
         val::T
@@ -1546,15 +1546,15 @@ module RetTypeDecl
     (+){T,pow}(x::MeterUnits{T,pow}, y::MeterUnits{T,pow}) = MeterUnits{T,pow}(x.val+y.val)
     (*){T,pow}(x::Int, y::MeterUnits{T,pow}) = MeterUnits{typeof(x*one(T)),pow}(x*y.val)
     (*){T}(x::MeterUnits{T,1}, y::MeterUnits{T,1}) = MeterUnits{T,2}(x.val*y.val)
-    (.*){T}(x::MeterUnits{T,1}, y::MeterUnits{T,1}) = MeterUnits{T,2}(x.val*y.val)
+    broadcast{T}(::typeof(*), x::MeterUnits{T,1}, y::MeterUnits{T,1}) = MeterUnits{T,2}(x.val*y.val)
     convert{T,pow}(::Type{MeterUnits{T,pow}}, y::Real) = MeterUnits{T,pow}(convert(T,y))
 
     @test @inferred(m+[m,m]) == [m+m,m+m]
     @test @inferred([m,m]+m) == [m+m,m+m]
-    @test @inferred(m.*[m,m]) == [m2,m2]
-    @test @inferred([m,m].*m) == [m2,m2]
+    @test @inferred(broadcast(*,m,[m,m])) == [m2,m2]
+    @test @inferred(broadcast(*,[m,m],m)) == [m2,m2]
     @test @inferred([m 2m; m m]*[m,m]) == [3m2,2m2]
-    @test @inferred([m m].*[m,m]) == [m2 m2; m2 m2]
+    @test @inferred(broadcast(*,[m m],[m,m])) == [m2 m2; m2 m2]
 end
 
 # range, range ops
@@ -1926,3 +1926,11 @@ using TestHelpers.OAs
     @test accumulate(op, [10,20, 30]) == [10, op(10, 20), op(op(10, 20), 30)] == [10, 40, 110]
     @test accumulate(op, [10 20 30], 2) == [10 op(10, 20) op(op(10, 20), 30)] == [10 40 110]
 end
+
+# issue #11053
+type T11053
+    a::Float64
+end
+Base.:*(a::T11053, b::Real) = T11053(a.a*b)
+Base.:(==)(a::T11053, b::T11053) = a.a == b.a
+@test [T11053(1)] * 5 == [T11053(1)] .* 5 == [T11053(5.0)]

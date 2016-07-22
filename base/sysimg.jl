@@ -79,6 +79,13 @@ end
 # vararg Symbol constructor
 Symbol(x...) = Symbol(string(x...))
 
+# Define the broadcast function, which is mostly implemented in
+# broadcast.jl, so that we can overload broadcast methods for
+# specific array types etc.
+#  --Here, just define fallback routines for broadcasting with no arguments
+broadcast(f) = f()
+broadcast!(f, X::AbstractArray) = fill!(X, f())
+
 # array structures
 include("array.jl")
 include("abstractarray.jl")
@@ -165,6 +172,17 @@ include("parse.jl")
 include("shell.jl")
 include("regex.jl")
 include("show.jl")
+
+# multidimensional arrays
+include("cartesian.jl")
+using .Cartesian
+include("multidimensional.jl")
+include("permuteddimsarray.jl")
+using .PermutedDimsArrays
+include("broadcast.jl")
+importall .Broadcast
+
+# base64 conversions (need broadcast)
 include("base64.jl")
 importall .Base64
 
@@ -207,13 +225,6 @@ include("math.jl")
 importall .Math
 const (√)=sqrt
 const (∛)=cbrt
-
-# multidimensional arrays
-include("cartesian.jl")
-using .Cartesian
-include("multidimensional.jl")
-include("permuteddimsarray.jl")
-using .PermutedDimsArrays
 
 let SOURCE_PATH = ""
     global function _include(path)
@@ -307,9 +318,6 @@ include("client.jl")
 
 # misc useful functions & macros
 include("util.jl")
-
-include("broadcast.jl")
-importall .Broadcast
 
 # dense linear algebra
 include("linalg/linalg.jl")

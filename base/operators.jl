@@ -155,22 +155,6 @@ Greater-than-or-equals comparison operator.
 >=(x,y) = (y <= x)
 const ≥ = >=
 
-"""
-    .>(x, y)
-
-Element-wise greater-than comparison operator.
-"""
-.>(x,y) = y .< x
-
-"""
-    .>=(x, y)
-    .≥(x,y)
-
-Element-wise greater-than-or-equals comparison operator.
-"""
-.>=(x,y) = y .<= x
-const .≥ = .>=
-
 # this definition allows Number types to implement < instead of isless,
 # which is more idiomatic:
 isless(x::Real, y::Real) = x<y
@@ -300,38 +284,6 @@ Left division operator: multiplication of `y` by the inverse of `x` on the left.
 floating-point results for integer arguments.
 """
 \(x,y) = (y'/x')'
-
-# .<op> defaults to <op>
-./(x::Number,y::Number) = x/y
-.\(x::Number,y::Number) = y./x
-.*(x::Number,y::Number) = x*y
-.^(x::Number,y::Number) = x^y
-.+(x::Number,y::Number) = x+y
-.-(x::Number,y::Number) = x-y
-.<<(x::Integer,y::Integer) = x<<y
-.>>(x::Integer,y::Integer) = x>>y
-
-.==(x::Number,y::Number) = x == y
-
-"""
-    .!=(x, y)
-    .≠(x,y)
-
-Element-wise not-equals comparison operator.
-"""
-.!=(x::Number,y::Number) = x != y
-.<( x::Real,y::Real) = x < y
-
-"""
-    .<=(x, y)
-    .≤(x,y)
-
-Element-wise less-than-or-equals comparison operator.
-"""
-.<=(x::Real,y::Real) = x <= y
-
-const .≤ = .<=
-const .≠ = .!=
 
 # Core <<, >>, and >>> take either Int or UInt as second arg. Signed shift
 # counts can shift in either direction, and are translated here to unsigned
@@ -478,7 +430,6 @@ x == div(x,y)*y + rem(x,y)
 """
 rem
 const % = rem
-.%(x::Real, y::Real) = x%y
 
 """
     div(x, y)
@@ -488,8 +439,6 @@ The quotient from Euclidean division. Computes `x/y`, truncated to an integer.
 """
 div
 const ÷ = div
-.÷(x::Real, y::Real) = x÷y
-
 
 """
     mod1(x, y)
@@ -1000,25 +949,11 @@ export
     ===,
     xor,
     %,
-    .%,
     ÷,
-    .÷,
     &,
     *,
     +,
     -,
-    .!=,
-    .+,
-    .-,
-    .*,
-    ./,
-    .<,
-    .<=,
-    .==,
-    .>,
-    .>=,
-    .\,
-    .^,
     /,
     //,
     <,
@@ -1032,12 +967,7 @@ export
     ≥,
     ≤,
     ≠,
-    .≥,
-    .≤,
-    .≠,
     >>,
-    .>>,
-    .<<,
     >>>,
     \,
     ^,
@@ -1068,10 +998,10 @@ export
     transpose,
     ctranspose
 
-import ..this_module: !, !=, xor, %, .%, ÷, .÷, &, *, +, -, .!=, .+, .-, .*, ./, .<, .<=, .==, .>,
-    .>=, .\, .^, /, //, <, <:, <<, <=, ==, >, >=, >>, .>>, .<<, >>>,
+import ..this_module: !, !=, xor, %, ÷, &, *, +, -,
+    /, //, <, <:, <<, <=, ==, >, >=, >>, >>>,
     <|, |>, \, ^, |, ~, !==, ===, >:, colon, hcat, vcat, hvcat, getindex, setindex!,
     transpose, ctranspose,
-    ≥, ≤, ≠, .≥, .≤, .≠, ⋅, ×, ∈, ∉, ∋, ∌, ⊆, ⊈, ⊊, ∩, ∪, √, ∛, ⊻
+    ≥, ≤, ≠, ⋅, ×, ∈, ∉, ∋, ∌, ⊆, ⊈, ⊊, ∩, ∪, √, ∛, ⊻
 
 end

@@ -91,15 +91,6 @@ imag{T<:Real}(x::AbstractArray{T}) = zero(x)
 +{T<:Number}(x::AbstractArray{T}) = x
 *{T<:Number}(x::AbstractArray{T,2}) = x
 
-## Binary arithmetic operators ##
-
-*(A::Number, B::AbstractArray) = A .* B
-*(A::AbstractArray, B::Number) = A .* B
-
-/(A::AbstractArray, B::Number) = A ./ B
-
-\(A::Number, B::AbstractArray) = B ./ A
-
 # index A[:,:,...,i,:,:,...] where "i" is in dimension "d"
 
 """
