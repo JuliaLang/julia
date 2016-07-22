@@ -786,9 +786,13 @@ static NOINLINE jl_taggedvalue_t *add_page(jl_gc_pool_t *p)
 }
 
 // Size includes the tag and the tag is not cleared!!
-JL_DLLEXPORT jl_value_t *jl_gc_pool_alloc(jl_ptls_t ptls, jl_gc_pool_t *p,
+JL_DLLEXPORT jl_value_t *jl_gc_pool_alloc(jl_ptls_t ptls, int pool_offset,
                                           int osize, int end_offset)
 {
+    // Use the pool offset instead of the pool address as the argument
+    // to workaround a llvm bug.
+    // Ref https://llvm.org/bugs/show_bug.cgi?id=27190
+    jl_gc_pool_t *p = (jl_gc_pool_t*)((char*)ptls + pool_offset);
     assert(ptls->gc_state == 0);
 #ifdef MEMDEBUG
     return jl_gc_big_alloc(ptls, osize);

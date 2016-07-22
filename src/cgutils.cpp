@@ -1560,8 +1560,8 @@ static Value *emit_allocobj(jl_codectx_t *ctx, size_t static_size, Value *jt)
                                ArrayRef<Value*>(args, 2));
     }
     else {
-        Value *pool_ptr = builder.CreateConstGEP1_32(ptls_ptr, offset);
-        Value *args[] = {ptls_ptr, pool_ptr, ConstantInt::get(T_int32, osize),
+        Value *pool_offs = ConstantInt::get(T_int32, offset);
+        Value *args[] = {ptls_ptr, pool_offs, ConstantInt::get(T_int32, osize),
                          ConstantInt::get(T_int32, end_offset)};
         v = builder.CreateCall(prepare_call(jlalloc_pool_func),
                                ArrayRef<Value*>(args, 4));
