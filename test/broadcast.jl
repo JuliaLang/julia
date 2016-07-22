@@ -274,6 +274,16 @@ let x = [1:4;], y = x
     x[2:end] .= 1:3
     @test y === x == [0,1,2,3]
 end
+let a = [[4, 5], [6, 7]]
+    a[1] .= 3
+    @test a == [[3, 3], [6, 7]]
+end
+let d = Dict(:foo => [1,3,7], (3,4) => [5,9])
+    d[:foo] .+= 2
+    @test d[:foo] == [3,5,9]
+    d[3,4] .-= 1
+    @test d[3,4] == [4,8]
+end
 
 # PR 16988
 @test Base.promote_op(+, Bool) === Int
