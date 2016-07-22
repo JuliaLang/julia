@@ -211,7 +211,6 @@ convert(::Type{AbstractMatrix}, F::Schur) = (F.Z * F.T) * F.Z'
 convert(::Type{AbstractArray}, F::Schur) = convert(AbstractMatrix, F)
 convert(::Type{Matrix}, F::Schur) = convert(Array, convert(AbstractArray, F))
 convert(::Type{Array}, F::Schur) = convert(Matrix, F)
-full(F::Schur) = convert(Array, F)
 
 copy(F::Schur) = Schur(copy(F.T), copy(F.Z), copy(F.values))
 copy(F::GeneralizedSchur) = GeneralizedSchur(copy(F.S), copy(F.T), copy(F.alpha), copy(F.beta), copy(F.Q), copy(F.Z))

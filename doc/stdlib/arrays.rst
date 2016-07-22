@@ -934,12 +934,6 @@ dense counterparts. The following functions are specific to sparse arrays.
 
    Convert a vector ``A`` into a sparse vector of length ``m``\ .
 
-.. function:: full(S)
-
-   .. Docstring generated from Julia source
-
-   Convert a sparse matrix or vector ``S`` into a dense matrix or vector.
-
 .. function:: nnz(A)
 
    .. Docstring generated from Julia source

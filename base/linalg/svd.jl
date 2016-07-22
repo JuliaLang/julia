@@ -241,4 +241,3 @@ convert(::Type{AbstractMatrix}, F::SVD) = (F.U * Diagonal(F.S)) * F.Vt
 convert(::Type{AbstractArray}, F::SVD) = convert(AbstractMatrix, F)
 convert(::Type{Matrix}, F::SVD) = convert(Array, convert(AbstractArray, F))
 convert(::Type{Array}, F::SVD) = convert(Matrix, F)
-full(F::SVD) = convert(Array, F)
