@@ -89,7 +89,7 @@ end
 x = sprand(10, 10, 0.5)
 x[1] = 1
 x.nzval[1] = 0
-@test hash(x) == hash(convert(Array, x))
+@test hash(x) == hash(full(x))
 
 let a = QuoteNode(1), b = QuoteNode(1.0)
     @test (hash(a)==hash(b)) == (a==b)

@@ -56,8 +56,8 @@ let n=10
         @test isa(similar(Symmetric(asym), Int, (3,2)), Matrix{Int})
         @test isa(similar(Hermitian(asym), Int, (3,2)), Matrix{Int})
 
-        # convert(Array, _)
-        @test asym == convert(Array, Hermitian(asym))
+        # full
+        @test asym == full(Hermitian(asym))
 
         # parent
 
@@ -111,7 +111,7 @@ let n=10
         eig(Hermitian(asym), d[1] - 1, (d[2] + d[3])/2) # same result, but checks that method works
         @test eigvals(Hermitian(asym), 1:2) ≈ d[1:2]
         @test eigvals(Hermitian(asym), d[1] - 1, (d[2] + d[3])/2) ≈ d[1:2]
-        @test convert(Array, eigfact(asym)) ≈ asym
+        @test full(eigfact(asym)) ≈ asym
 
         # relation to svdvals
         @test sum(sort(abs(eigvals(Hermitian(asym))))) == sum(sort(svdvals(Hermitian(asym))))
@@ -213,7 +213,7 @@ end
 #Issue #7933
 let A7933 = [1 2; 3 4]
     B7933 = copy(A7933)
-    C7933 = convert(Array, Symmetric(A7933))
+    C7933 = full(Symmetric(A7933))
     @test A7933 == B7933
 end
 

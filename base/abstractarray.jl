@@ -890,7 +890,7 @@ function typed_vcat{T}(::Type{T}, V::AbstractVector...)
     for Vk in V
         n += length(Vk)
     end
-    a = similar(convert(Array, V[1]), T, n)
+    a = similar(full(V[1]), T, n)
     pos = 1
     for k=1:length(V)
         Vk = V[k]
@@ -918,7 +918,7 @@ function typed_hcat{T}(::Type{T}, A::AbstractVecOrMat...)
         nd = ndims(Aj)
         ncols += (nd==2 ? size(Aj,2) : 1)
     end
-    B = similar(convert(Array, A[1]), T, nrows, ncols)
+    B = similar(full(A[1]), T, nrows, ncols)
     pos = 1
     if dense
         for k=1:nargs
@@ -950,7 +950,7 @@ function typed_vcat{T}(::Type{T}, A::AbstractMatrix...)
             throw(ArgumentError("number of columns of each array must match (got $(map(x->size(x,2), A)))"))
         end
     end
-    B = similar(convert(Array, A[1]), T, nrows, ncols)
+    B = similar(full(A[1]), T, nrows, ncols)
     pos = 1
     for k=1:nargs
         Ak = A[k]
@@ -997,7 +997,7 @@ function cat_t(catdims, typeC::Type, X...)
         end
     end
 
-    C = similar(isa(X[1],AbstractArray) ? convert(Array, X[1]) : [X[1]], typeC, tuple(dimsC...))
+    C = similar(isa(X[1],AbstractArray) ? full(X[1]) : [X[1]], typeC, tuple(dimsC...))
     if length(catdims)>1
         fill!(C,0)
     end
@@ -1069,7 +1069,7 @@ function typed_hvcat{T}(::Type{T}, rows::Tuple{Vararg{Int}}, as::AbstractMatrix.
         a += rows[i]
     end
 
-    out = similar(convert(Array, as[1]), T, nr, nc)
+    out = similar(full(as[1]), T, nr, nc)
 
     a = 1
     r = 1

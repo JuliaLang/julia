@@ -23,7 +23,7 @@ for Tv in (Float64, Complex128)
         L,U,p,q,Rs = lua[:(:)]
         @test (Diagonal(Rs) * A)[p,q] ≈ L * U
 
-        det(lua) ≈ det(convert(Array, A))
+        det(lua) ≈ det(full(A))
 
         b = [8., 45., -3., 3., 19.]
         x = lua\b
