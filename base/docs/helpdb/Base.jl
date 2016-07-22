@@ -6280,6 +6280,9 @@ defining a 2-argument `show(stream::IO, x::MyType)` method.
 Technically, the `MIME"mime"` macro defines a singleton type for the given `mime` string,
 which allows us to exploit Julia's dispatch mechanisms in determining how to display objects
 of any given type.
+
+The first argument to `show` can be an `IOContext` specifying output format properties.
+See `IOContext` for details.
 """
 show(stream, mime, x)
 
