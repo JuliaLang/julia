@@ -198,3 +198,16 @@ end
 @test ((a=1,b=2)->(a,b))() == (1,2)
 @test ((a=1,b=2)->(a,b))(5) == (5,2)
 @test ((a=1,b=2)->(a,b))(5,6) == (5,6)
+
+# issue #9948
+f9948, getx9948 = let
+    x = 3
+    h(;x=x) = x
+    getx() = x
+    h, getx
+end
+@test_throws UndefVarError f9948()
+@test getx9948() == 3
+@test f9948(x=5) == 5
+@test_throws UndefVarError f9948()
+@test getx9948() == 3
