@@ -190,6 +190,15 @@ function _bessely(nu::Float64, z::Complex128, kode::Int32)
     end
 end
 
+"""
+    besselh(nu, [k=1,] x)
+
+Bessel function of the third kind of order `nu` (the Hankel function). `k` is either 1 or 2,
+selecting `hankelh1` or `hankelh2`, respectively.  `k` defaults to 1 if it is omitted.
+(See also [`besselhx`](:func:`besselhx`) for an exponentially scaled variant.)
+"""
+function besselh end
+
 function besselh(nu::Float64, k::Integer, z::Complex128)
     if nu < 0
         s = (k == 1) ? 1 : -1
@@ -197,6 +206,21 @@ function besselh(nu::Float64, k::Integer, z::Complex128)
     end
     return _besselh(nu,Int32(k),z,Int32(1))
 end
+
+"""
+    besselhx(nu, [k=1,] z)
+
+Compute the scaled Hankel function ``\\exp(∓iz) H_ν^{(k)}(z)``, where
+``k`` is 1 or 2, ``H_ν^{(k)}(z)`` is `besselh(nu, k, z)`, and ``∓`` is
+``-`` for ``k=1`` and ``+`` for ``k=2``.  `k` defaults to 1 if it is omitted.
+
+The reason for this function is that ``H_ν^{(k)}(z)`` is asymptotically
+proportional to ``\\exp(∓iz)/\\sqrt{z}`` for large ``|z|``, and so the
+[`besselh`](:func:`besselh`) function is susceptible to overflow or underflow
+when `z` has a large imaginary part.  The `besselhx` function cancels this
+exponential factor (analytically), so it avoids these problems.
+"""
+function besselhx end
 
 function besselhx(nu::Float64, k::Integer, z::Complex128)
     if nu < 0
