@@ -2,15 +2,15 @@
 
 #@testset "libgit2" begin
 
-const LIBGIT2_VER = v"0.24.0"
+const LIBGIT2_MIN_VER = v"0.23.0"
 
 #########
 # TESTS #
 #########
 
-#@testset "Check library verison" begin
+#@testset "Check library version" begin
     v = LibGit2.version()
-    @test  v.major == LIBGIT2_VER.major && v.minor >= LIBGIT2_VER.minor
+    @test  v.major == LIBGIT2_MIN_VER.major && v.minor >= LIBGIT2_MIN_VER.minor
 #end
 
 #@testset "Check library features" begin
