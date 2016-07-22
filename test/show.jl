@@ -565,3 +565,8 @@ end
 for op in (:(.=), :(.+=), :(.&=))
     @test repr(parse("x $op y")) == ":(x $op y)"
 end
+
+# pretty-printing of compact broadcast expressions (#17289)
+@test repr(:(f.(X,Y))) == ":(f.(X,Y))"
+@test repr(:(f.(X))) == ":(f.(X))"
+@test repr(:(f.())) == ":(f.())"

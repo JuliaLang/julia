@@ -407,7 +407,8 @@ const expr_infix_wide = Set{Symbol}([
 const expr_infix = Set{Symbol}([:(:), :(->), Symbol("::")])
 const expr_infix_any = union(expr_infix, expr_infix_wide)
 const all_ops = union(quoted_syms, uni_ops, expr_infix_any)
-const expr_calls  = Dict(:call =>('(',')'), :calldecl =>('(',')'), :ref =>('[',']'), :curly =>('{','}'))
+const expr_calls  = Dict(:call => ('(',')'), :calldecl => ('(',')'),
+                         :ref => ('[',']'), :curly => ('{','}'), :(.) => ('(',')'))
 const expr_parens = Dict(:tuple=>('(',')'), :vcat=>('[',']'),
                          :hcat =>('[',']'), :row =>('[',']'), :vect=>('[',']'))
 
@@ -538,6 +539,9 @@ function show_call(io::IO, head, func, func_args, indent)
         show_unquoted(io, func, indent)
         print(io, ')')
     end
+    if head == :(.)
+        print(io, '.')
+    end
     if !isempty(func_args) && isa(func_args[1], Expr) && func_args[1].head === :parameters
         print(io, op)
         show_list(io, func_args[2:end], ',', indent)
@@ -648,8 +652,8 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int)
     if !emphstate && ex.typ === Any
         show_type = false
     end
-    # dot (i.e. "x.y")
-    if is(head, :(.))
+    # dot (i.e. "x.y"), but not compact broadcast exps
+    if is(head, :(.)) && !is_expr(args[2], :tuple)
         show_unquoted(io, args[1], indent + indent_width)
         print(io, '.')
         if is_quoted(args[2])
@@ -750,9 +754,10 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int)
             show_call(io, head, func, func_args, indent)
         end
 
-    # other call-like expressions ("A[1,2]", "T{X,Y}")
-    elseif haskey(expr_calls, head) && nargs >= 1  # :ref/:curly/:calldecl
-        show_call(io, head, ex.args[1], ex.args[2:end], indent)
+    # other call-like expressions ("A[1,2]", "T{X,Y}", "f.(X,Y)")
+    elseif haskey(expr_calls, head) && nargs >= 1  # :ref/:curly/:calldecl/:(.)
+        funcargslike = head == :(.) ? ex.args[2].args : ex.args[2:end]
+        show_call(io, head, ex.args[1], funcargslike, indent)
 
     # comprehensions
     elseif (head === :typed_comprehension || head === :typed_dict_comprehension) && length(args) == 2
