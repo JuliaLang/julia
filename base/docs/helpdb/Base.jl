@@ -4794,14 +4794,6 @@ Airy function derivative ``\\operatorname{Ai}'(x)``.
 airyaiprime
 
 """
-    besselh(nu, k, x)
-
-Bessel function of the third kind of order `nu` (Hankel function). `k` is either 1 or 2,
-selecting `hankelh1` or `hankelh2`, respectively.
-"""
-besselh
-
-"""
     prepend!(collection, items) -> collection
 
 Insert the elements of `items` to the beginning of `collection`.

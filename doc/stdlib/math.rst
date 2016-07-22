@@ -1480,11 +1480,19 @@ Mathematical Functions
 
    Scaled Bessel function of the third kind of order ``nu``\ , :math:`H^{(2)}_\nu(x) e^{x i}`\ .
 
-.. function:: besselh(nu, k, x)
+.. function:: besselh(nu, [k=1,] x)
 
    .. Docstring generated from Julia source
 
-   Bessel function of the third kind of order ``nu`` (Hankel function). ``k`` is either 1 or 2, selecting ``hankelh1`` or ``hankelh2``\ , respectively.
+   Bessel function of the third kind of order ``nu`` (the Hankel function). ``k`` is either 1 or 2, selecting ``hankelh1`` or ``hankelh2``\ , respectively.  ``k`` defaults to 1 if it is omitted. (See also :func:`besselhx` for an exponentially scaled variant.)
+
+.. function:: besselhx(nu, [k=1,] z)
+
+   .. Docstring generated from Julia source
+
+   Compute the scaled Hankel function :math:`\exp(∓iz) H_ν^{(k)}(z)`\ , where :math:`k` is 1 or 2, :math:`H_ν^{(k)}(z)` is ``besselh(nu, k, z)``\ , and :math:`∓` is :math:`-` for :math:`k=1` and :math:`+` for :math:`k=2`\ .  ``k`` defaults to 1 if it is omitted.
+
+   The reason for this function is that :math:`H_ν^{(k)}(z)` is asymptotically proportional to :math:`\exp(∓iz)/\sqrt{z}` for large :math:`|z|`\ , and so the :func:`besselh` function is susceptible to overflow or underflow when ``z`` has a large imaginary part.  The ``besselhx`` function cancels this exponential factor (analytically), so it avoids these problems.
 
 .. function:: besseli(nu, x)
 
