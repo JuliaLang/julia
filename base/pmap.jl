@@ -70,10 +70,30 @@ The following are equivalent:
 * `pmap(f, c; retry_n=1)` and `asyncmap(retry(remote(f)),c)`
 * `pmap(f, c; retry_n=1, on_error=e->e)` and `asyncmap(x->try retry(remote(f))(x) catch e; e end, c)`
 """
-function pmap(p::AbstractWorkerPool, f, c;  distributed=true, batch_size=1, on_error=nothing,
-                                    retry_n=0,
-                                    retry_max_delay=DEFAULT_RETRY_MAX_DELAY,
-                                    retry_on=DEFAULT_RETRY_ON)
+function pmap(p::AbstractWorkerPool, f, c; distributed=true, batch_size=1, on_error=nothing,
+                                           retry_n=0,
+                                           retry_max_delay=DEFAULT_RETRY_MAX_DELAY,
+                                           retry_on=DEFAULT_RETRY_ON,
+                                           # deprecated keyword args:
+                                           err_retry=nothing, err_stop=nothing, pids=nothing)
+    #15409
+    if err_retry !== nothing
+        depwarn("err_retry is deprecated, use pmap(retry(f), c...).", :pmap)
+        if err_retry == true
+            f = retry(f)
+        end
+    end
+    if pids !== nothing
+        depwarn("pids is deprecated, use pmap(::WorkerPool, f, c...).", :pmap)
+        p = WorkerPool(pids)
+    end
+    if err_stop !== nothing
+        depwarn("err_stop is deprecated, use pmap(f, c...; on_error = error_handling_func).", :pmap)
+        if err_stop === false
+            on_error = e->e
+        end
+    end
+
     f_orig = f
     # Don't do remote calls if there are no workers.
     if (length(p) == 0) || (length(p) == 1 && fetch(p.channel) == myid())

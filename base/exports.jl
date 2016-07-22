@@ -1420,7 +1420,6 @@ export
     AbstractSparseVector,
     SparseMatrixCSC,
     SparseVector,
-    etree,
     issparse,
     sparse,
     sparsevec,

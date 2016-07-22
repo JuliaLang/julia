@@ -21,7 +21,7 @@ export isdeprecated, isdocumented, undefined_exports, undocumented, undocumented
 isdeprecated(m::Module, v) = try endswith(functionloc(eval(m, v))[1], "deprecated.jl") catch return false end
 isdeprecated(v)            = try endswith(functionloc(eval(v))[1], "deprecated.jl") catch return false end
 
-isdocumented(v) = (s=string(v); haskey(FUNCTION_DICT, s) || haskey(MODULE_DICT, s))
+isdocumented(v) = !contains(string(Base.doc(v)), "No documentation found")
 
 
 modfuncjoin(m::AbstractString, f::AbstractString) = startswith(f, '@') ? "@$m.$(f[2:end])" : "$m.$f"
@@ -34,10 +34,9 @@ undefined_exports() = undefined(Base)
 # Check for exported names that aren't documented,
 # and return a Dict with (fn::Symbol, fullname::AbstractString) pairs
 function undocumented(m::Module)
-    init_help()
     undoc = Dict{Symbol, Array}()
     for v in sort(names(m))
-        if isdefined(m,v) && !isdocumented(v) && !isdeprecated(m,v)
+        if isdefined(m,v) && !isdocumented(eval(m,v)) && !isdeprecated(m,v)
             ms = modfuncjoin(m,v)
             haskey(undoc, v) ? push!(undoc[v], ms) : (undoc[v] = [ms])
         end
@@ -49,7 +48,6 @@ undocumented() = undocumented(Base)
 # Check for exported names that aren't documented, and
 # return the file, function names, and line numbers, if available
 function undocumented_by_file(m::Module)
-    init_help()
     undocf = Dict{AbstractString, Dict}()
     for (f,_) in undocumented(m)
         s = string(f)
@@ -87,7 +85,6 @@ undocumented_by_file() = undocumented_by_file(Base)
 
 # Based on code by @jihao
 function _undocumented_rst()
-    init_help()
     depdoc = havecount = total = 0
     out = AbstractString["The following exports are not documented:"]
     undoc_exports = Set()
@@ -138,7 +135,6 @@ undocumented_rst() = println(_undocumented_rst()[1])
 
 function gen_undocumented_template(outfile = "$JULIA_HOME/../../doc/UNDOCUMENTED.rst")
     out = open(outfile, "w")
-    init_help()
     println(out, ".. currentmodule:: Base")
     println(out)
     exports=[strip(x) for x in split(replace(readstring("$JULIA_HOME/../../base/exports.jl"),",",""),"\n")]
@@ -168,7 +164,7 @@ function gen_undocumented_template(outfile = "$JULIA_HOME/../../doc/UNDOCUMENTED
                         li = m.func.code
                         e = uncompressed_ast(li)
                         argnames = e.args[1]
-                        decls = map(argtype_decl, argnames, {m.sig...})
+                        decls = map(argtype_decl, argnames, Any[m.sig...])
                         args = join(decls, ",")
                         line = line * "($args)"
                     else
