@@ -310,7 +310,7 @@ svdvals(D::Diagonal) = [svdvals(v) for v in D.diag]
 function svd{T<:Number}(D::Diagonal{T})
     S   = abs(D.diag)
     piv = sortperm(S, rev = true)
-    U   = convert(Array, Diagonal(D.diag ./ S))
+    U   = full(Diagonal(D.diag ./ S))
     Up  = hcat([U[:,i] for i = 1:length(D.diag)][piv]...)
     V   = eye(D)
     Vp  = hcat([V[:,i] for i = 1:length(D.diag)][piv]...)

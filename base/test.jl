@@ -817,7 +817,7 @@ end
 
 approx_full(x::AbstractArray) = x
 approx_full(x::Number) = x
-approx_full(x) = convert(Array, x)
+approx_full(x) = full(x)
 
 function test_approx_eq(va, vb, Eps, astr, bstr)
     va = approx_full(va)
