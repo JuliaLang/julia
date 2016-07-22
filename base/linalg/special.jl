@@ -6,21 +6,21 @@
 convert{T}(::Type{Bidiagonal}, A::Diagonal{T})=Bidiagonal(A.diag, zeros(T, size(A.diag,1)-1), true)
 convert{T}(::Type{SymTridiagonal}, A::Diagonal{T})=SymTridiagonal(A.diag, zeros(T, size(A.diag,1)-1))
 convert{T}(::Type{Tridiagonal}, A::Diagonal{T})=Tridiagonal(zeros(T, size(A.diag,1)-1), A.diag, zeros(T, size(A.diag,1)-1))
-convert(::Type{LowerTriangular}, A::Bidiagonal) = !A.isupper ? LowerTriangular(convert(Array, A)) : throw(ArgumentError("Bidiagonal matrix must have lower off diagonal to be converted to LowerTriangular"))
-convert(::Type{UpperTriangular}, A::Bidiagonal) = A.isupper ? UpperTriangular(convert(Array, A)) : throw(ArgumentError("Bidiagonal matrix must have upper off diagonal to be converted to UpperTriangular"))
+convert(::Type{LowerTriangular}, A::Bidiagonal) = !A.isupper ? LowerTriangular(full(A)) : throw(ArgumentError("Bidiagonal matrix must have lower off diagonal to be converted to LowerTriangular"))
+convert(::Type{UpperTriangular}, A::Bidiagonal) = A.isupper ? UpperTriangular(full(A)) : throw(ArgumentError("Bidiagonal matrix must have upper off diagonal to be converted to UpperTriangular"))
 
 function convert(::Type{UnitUpperTriangular}, A::Diagonal)
     if !all(A.diag .== one(eltype(A)))
         throw(ArgumentError("matrix cannot be represented as UnitUpperTriangular"))
     end
-    UnitUpperTriangular(convert(Array, A))
+    UnitUpperTriangular(full(A))
 end
 
 function convert(::Type{UnitLowerTriangular}, A::Diagonal)
     if !all(A.diag .== one(eltype(A)))
         throw(ArgumentError("matrix cannot be represented as UnitLowerTriangular"))
     end
-    UnitLowerTriangular(convert(Array, A))
+    UnitLowerTriangular(full(A))
 end
 
 function convert(::Type{Diagonal}, A::Union{Bidiagonal, SymTridiagonal})
@@ -72,14 +72,14 @@ function convert(::Type{Tridiagonal}, A::SymTridiagonal)
 end
 
 function convert(::Type{Diagonal}, A::AbstractTriangular)
-    if convert(Array, A) != diagm(diag(A))
+    if full(A) != diagm(diag(A))
         throw(ArgumentError("matrix cannot be represented as Diagonal"))
     end
     Diagonal(diag(A))
 end
 
 function convert(::Type{Bidiagonal}, A::AbstractTriangular)
-    fA = convert(Array, A)
+    fA = full(A)
     if fA == diagm(diag(A)) + diagm(diag(fA, 1), 1)
         return Bidiagonal(diag(A), diag(fA,1), true)
     elseif fA == diagm(diag(A)) + diagm(diag(fA, -1), -1)
@@ -92,7 +92,7 @@ end
 convert(::Type{SymTridiagonal}, A::AbstractTriangular) = convert(SymTridiagonal, convert(Tridiagonal, A))
 
 function convert(::Type{Tridiagonal}, A::AbstractTriangular)
-    fA = convert(Array, A)
+    fA = full(A)
     if fA == diagm(diag(A)) + diagm(diag(fA, 1), 1) + diagm(diag(fA, -1), -1)
         return Tridiagonal(diag(fA, -1), diag(A), diag(fA,1))
     else
@@ -154,12 +154,12 @@ for op in (:+, :-)
     end
     for matrixtype in (:SymTridiagonal,:Tridiagonal,:Bidiagonal,:Matrix)
         @eval begin
-            ($op)(A::AbstractTriangular, B::($matrixtype)) = ($op)(convert(Array, A), B)
-            ($op)(A::($matrixtype), B::AbstractTriangular) = ($op)(A, convert(Array, B))
+            ($op)(A::AbstractTriangular, B::($matrixtype)) = ($op)(full(A), B)
+            ($op)(A::($matrixtype), B::AbstractTriangular) = ($op)(A, full(B))
         end
     end
 end
 
 A_mul_Bc!(A::AbstractTriangular, B::QRCompactWYQ) = A_mul_Bc!(full!(A),B)
 A_mul_Bc!(A::AbstractTriangular, B::QRPackedQ) = A_mul_Bc!(full!(A),B)
-A_mul_Bc(A::AbstractTriangular, B::Union{QRCompactWYQ,QRPackedQ}) = A_mul_Bc(convert(Array, A), B)
+A_mul_Bc(A::AbstractTriangular, B::Union{QRCompactWYQ,QRPackedQ}) = A_mul_Bc(full(A), B)

@@ -38,7 +38,7 @@ for eltya in (Float32, Float64, Complex64, Complex128, Int)
         @test sort(real(f[:values])) ≈ sort(real(d))
         @test sort(imag(f[:values])) ≈ sort(imag(d))
         @test istriu(f[:Schur]) || eltype(a)<:Real
-        @test convert(Array, f) ≈ a
+        @test full(f) ≈ a
         @test_throws KeyError f[:A]
 
     debug && println("Reorder Schur")
