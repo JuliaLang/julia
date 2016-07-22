@@ -419,6 +419,12 @@ Indexing, Assignment, and Concatenation
 
    Broadcasts the ``X`` and ``inds`` arrays to a common size and stores the value from each position in ``X`` at the indices given by the same positions in ``inds``\ .
 
+.. function:: isassigned(array, i) -> Bool
+
+   .. Docstring generated from Julia source
+
+   Tests whether the given array has a value associated with index ``i``\ . Returns ``false`` if the index is out of bounds, or has an undefined reference.
+
 .. function:: cat(dims, A...)
 
    .. Docstring generated from Julia source
