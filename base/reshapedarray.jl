@@ -37,7 +37,7 @@ end
 length(R::ReshapedArrayIterator) = length(R.iter)
 
 reshape(parent::AbstractArray, shp::Tuple)        = _reshape(parent, to_shape(shp))
-reshape(parent::AbstractArray, dims::DimOrInd...) = reshape(parent, dims)
+reshape(parent::AbstractArray, dims::IntOrInd...) = reshape(parent, dims)
 
 reshape{T,N}(parent::AbstractArray{T,N}, ndims::Type{Val{N}}) = parent
 function reshape{T,AN,N}(parent::AbstractArray{T,AN}, ndims::Type{Val{N}})
