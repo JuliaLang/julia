@@ -108,6 +108,12 @@ Compiler/Runtime improvements
 Breaking changes
 ----------------
 
+  * The assignment operations `.+=`, `.*=` and so on now generate calls
+    to `broadcast!` on the left-hand side (or call to `view(a, ...)` on the left-hand side
+    if the latter is a `a[...]` expression.  This means that they will fail
+    if the left-hand side is immutable (or does not support `view`), and will
+    otherwise change the left-hand side in-place ([#17510], [#17546]).
+
   * Method ambiguities no longer generate warnings when files are
     loaded, nor do they dispatch to an arbitrarily-chosen method;
     instead, a call that cannot be resolved to a single method results
@@ -369,3 +375,4 @@ Deprecated or removed
 [#17402]: https://github.com/JuliaLang/julia/issues/17402
 [#17404]: https://github.com/JuliaLang/julia/issues/17404
 [#17510]: https://github.com/JuliaLang/julia/issues/17510
+[#17546]: https://github.com/JuliaLang/julia/issues/17546
