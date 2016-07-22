@@ -1558,8 +1558,7 @@ static void emit_cpointercheck(const jl_cgval_t &x, const std::string &msg, jl_c
 static Value *emit_allocobj(jl_codectx_t *ctx, size_t static_size, Value *jt)
 {
     int osize;
-    int end_offset;
-    int offset = jl_gc_classify_pools(static_size, &osize, &end_offset);
+    int offset = jl_gc_classify_pools(static_size, &osize);
     Value *ptls_ptr = emit_bitcast(ctx->ptlsStates, T_pint8);
     Value *v;
     if (offset < 0) {
@@ -1569,11 +1568,10 @@ static Value *emit_allocobj(jl_codectx_t *ctx, size_t static_size, Value *jt)
                                ArrayRef<Value*>(args, 2));
     }
     else {
-        Value *pool_ptr = builder.CreateConstGEP1_32(ptls_ptr, offset);
-        Value *args[] = {ptls_ptr, pool_ptr, ConstantInt::get(T_int32, osize),
-                         ConstantInt::get(T_int32, end_offset)};
+        Value *pool_offs = ConstantInt::get(T_int32, offset);
+        Value *args[] = {ptls_ptr, pool_offs, ConstantInt::get(T_int32, osize)};
         v = builder.CreateCall(prepare_call(jlalloc_pool_func),
-                               ArrayRef<Value*>(args, 4));
+                               ArrayRef<Value*>(args, 3));
     }
     tbaa_decorate(tbaa_tag, builder.CreateStore(jt, emit_typeptr_addr(v)));
     return v;
