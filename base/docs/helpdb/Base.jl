@@ -1927,10 +1927,13 @@ Kronecker tensor product of two vectors or two matrices.
 kron
 
 """
-    randn([rng], [dims...])
+    randn([rng], [T::Type{Complex128}], [dims...])
 
 Generate a normally-distributed random number with mean 0 and standard deviation 1.
-Optionally generate an array of normally-distributed random numbers.
+The random numbers in the output are of type `Float64` by default, but `Complex128` can be
+passed as `T` to output circularly-symmetric normally distributed random complex numbers.
+Optionally generate an array of normally-distributed random numbers when `dims` is
+specified.
 """
 randn
 
@@ -9030,10 +9033,11 @@ no effect outside of compilation.
 include_dependency
 
 """
-    randn!([rng], A::Array{Float64,N})
+    randn!([rng], A::Array{Union{Float64,Complex128},N})
 
 Fill the array `A` with normally-distributed (mean 0, standard deviation 1) random numbers.
-Also see the rand function.
+If `A` is of type `Array{Complex128,N}`, it will be filled with circularly-symmetric normally-distributed
+random complex numbers.
 """
 randn!
 

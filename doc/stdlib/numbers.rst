@@ -592,17 +592,17 @@ As ``BigInt`` represents unbounded integers, the interval must be specified (e.g
 
    Generate a ``BitArray`` of random boolean values.
 
-.. function:: randn([rng], [dims...])
+.. function:: randn([rng], [T::Type{Complex128}], [dims...])
 
    .. Docstring generated from Julia source
 
-   Generate a normally-distributed random number with mean 0 and standard deviation 1. Optionally generate an array of normally-distributed random numbers.
+   Generate a normally-distributed random number with mean 0 and standard deviation 1. The random numbers in the output are of type ``Float64`` by default, but ``Complex128`` can be passed as ``T`` to output circularly-symmetric normally distributed random complex numbers. Optionally generate an array of normally-distributed random numbers when ``dims`` is specified.
 
-.. function:: randn!([rng], A::Array{Float64,N})
+.. function:: randn!([rng], A::Array{Union{Float64,Complex128},N})
 
    .. Docstring generated from Julia source
 
-   Fill the array ``A`` with normally-distributed (mean 0, standard deviation 1) random numbers. Also see the rand function.
+   Fill the array ``A`` with normally-distributed (mean 0, standard deviation 1) random numbers. If ``A`` is of type ``Array{Complex128,N}``\ , it will be filled with circularly-symmetric normally-distributed random complex numbers.
 
 .. function:: randexp([rng], [dims...])
 
