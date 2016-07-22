@@ -35,7 +35,7 @@ Extended documentation for mathematical symbols & functions is [here](@ref math-
 | `''`        | delimit character literals                                                                  |
 | ``` ` ` ``` | delimit external process (command) specifications                                           |
 | `...`       | splice arguments into a function call or declare a varargs function or type                 |
-| `.`         | access named fields in objects or names inside modules, also prefixes elementwise operators |
+| `.`         | access named fields in objects/modules, also prefixes elementwise operator/function calls   |
 | `a:b`       | range a, a+1, a+2, ..., b                                                                   |
 | `a:s:b`     | range a, a+s, a+2s, ..., b                                                                  |
 | `:`         | index an entire dimension (1:end)                                                           |

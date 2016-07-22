@@ -7,7 +7,7 @@ New language features
 Language changes
 ----------------
 
-  * Multiline and singleline nonstandard command literals have been added. A
+  * Multi-line and single-line nonstandard command literals have been added. A
     nonstandard command literal is like a nonstandard string literal, but the
     syntax uses backquotes (``` ` ```) instead of double quotes, and the
     resulting macro called is suffixed with `_cmd`. For instance, the syntax
@@ -16,6 +16,11 @@ Language changes
   * Nonstandard string and command literals can now be qualified with their
     module. For instance, `Base.r"x"` is now parsed as `Base.@r_str "x"`.
     Previously, this syntax parsed as an implicit multiplication. ([#18690])
+
+  * For every binary operator `⨳`, `a .⨳ b` is now automatically equivalent to
+    the `broadcast` call `(⨳).(a, b)`.  Hence, one no longer defines methods
+    for `.*` etcetera.  This also means that "dot operations" automatically
+    fuse into a single loop, along with other dot calls `f.(x)`. ([#17623])
 
 Breaking changes
 ----------------
@@ -33,6 +38,14 @@ This section lists changes that do not have deprecation warnings.
 
   * `broadcast` now handles tuples, and treats any argument that is not a tuple
     or an array as a "scalar" ([#16986]).
+
+  * `broadcast` now produces a `BitArray` instead of `Array{Bool}` for
+    functions yielding a boolean result.  If you want `Array{Bool}`, use
+    `broadcast!` or `.=` ([#17623]).
+
+  * Operations like `.+` and `.*` on `Range` objects are now generic
+    `broadcast` calls (see above) and produce an `Array`.  If you want
+    a `Range` result, use `+` and `*`, etcetera ([#17623]).
 
 Library improvements
 --------------------

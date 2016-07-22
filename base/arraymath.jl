@@ -60,10 +60,10 @@ end
 promote_array_type(F, ::Type, ::Type, T::Type) = T
 promote_array_type{S<:Real, A<:AbstractFloat}(F, ::Type{S}, ::Type{A}, ::Type) = A
 promote_array_type{S<:Integer, A<:Integer}(F, ::Type{S}, ::Type{A}, ::Type) = A
-promote_array_type{S<:Integer, A<:Integer}(::typeof(./), ::Type{S}, ::Type{A}, T::Type) = T
-promote_array_type{S<:Integer, A<:Integer}(::typeof(.\), ::Type{S}, ::Type{A}, T::Type) = T
-promote_array_type{S<:Integer}(::typeof(./), ::Type{S}, ::Type{Bool}, T::Type) = T
-promote_array_type{S<:Integer}(::typeof(.\), ::Type{S}, ::Type{Bool}, T::Type) = T
+promote_array_type{S<:Integer, A<:Integer}(::typeof(/), ::Type{S}, ::Type{A}, T::Type) = T
+promote_array_type{S<:Integer, A<:Integer}(::typeof(\), ::Type{S}, ::Type{A}, T::Type) = T
+promote_array_type{S<:Integer}(::typeof(/), ::Type{S}, ::Type{Bool}, T::Type) = T
+promote_array_type{S<:Integer}(::typeof(\), ::Type{S}, ::Type{Bool}, T::Type) = T
 promote_array_type{S<:Integer}(F, ::Type{S}, ::Type{Bool}, T::Type) = T
 
 for f in (:+, :-, :div, :mod, :&, :|, :xor)
@@ -89,9 +89,9 @@ function _elementwise{T}(op, ::Type{T}, A::AbstractArray, B::AbstractArray)
     return F
 end
 
-for f in (:.+, :.-, :.*, :./, :.\, :.^, :.÷, :.%, :.<<, :.>>, :div, :mod, :rem, :&, :|, :xor)
-    @eval begin
-        function ($f){T}(A::Number, B::AbstractArray{T})
+for f in (:div, :mod, :rem, :&, :|, :xor, :/, :\, :*, :+, :-)
+    if f != :/
+        @eval function ($f){T}(A::Number, B::AbstractArray{T})
             R = promote_op($f, typeof(A), T)
             S = promote_array_type($f, typeof(A), T, R)
             S === Any && return [($f)(A, b) for b in B]
@@ -108,7 +108,9 @@ for f in (:.+, :.-, :.*, :./, :.\, :.^, :.÷, :.%, :.<<, :.>>, :div, :mod, :rem,
             end
             return F
         end
-        function ($f){T}(A::AbstractArray{T}, B::Number)
+    end
+    if f != :\
+        @eval function ($f){T}(A::AbstractArray{T}, B::Number)
             R = promote_op($f, T, typeof(B))
             S = promote_array_type($f, typeof(B), T, R)
             S === Any && return [($f)(a, B) for a in A]
@@ -127,16 +129,6 @@ for f in (:.+, :.-, :.*, :./, :.\, :.^, :.÷, :.%, :.<<, :.>>, :div, :mod, :rem,
         end
     end
 end
-
-# familiar aliases for broadcasting operations of array ± scalar (#7226):
-(+)(A::AbstractArray{Bool},x::Bool) = A .+ x
-(+)(x::Bool,A::AbstractArray{Bool}) = x .+ A
-(-)(A::AbstractArray{Bool},x::Bool) = A .- x
-(-)(x::Bool,A::AbstractArray{Bool}) = x .- A
-(+)(A::AbstractArray,x::Number) = A .+ x
-(+)(x::Number,A::AbstractArray) = x .+ A
-(-)(A::AbstractArray,x::Number) = A .- x
-(-)(x::Number,A::AbstractArray) = x .- A
 
 ## data movement ##
 

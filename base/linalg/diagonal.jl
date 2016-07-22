@@ -141,8 +141,8 @@ end
 *{T<:Number}(x::T, D::Diagonal) = Diagonal(x * D.diag)
 *{T<:Number}(D::Diagonal, x::T) = Diagonal(D.diag * x)
 /{T<:Number}(D::Diagonal, x::T) = Diagonal(D.diag / x)
-*(Da::Diagonal, Db::Diagonal) = Diagonal(Da.diag .* Db.diag)
-*(D::Diagonal, V::AbstractVector) = D.diag .* V
+*(Da::Diagonal, Db::Diagonal) = Diagonal(broadcast_elwise_op(*, Da.diag, Db.diag))
+*(D::Diagonal, V::AbstractVector) = broadcast_elwise_op(*, D.diag, V)
 
 (*)(A::AbstractTriangular, D::Diagonal) = A_mul_B!(copy(A), D)
 (*)(D::Diagonal, B::AbstractTriangular) = A_mul_B!(D, copy(B))
@@ -223,7 +223,7 @@ A_mul_B!(A::AbstractMatrix,B::Diagonal)  = scale!(A,B.diag)
 A_mul_Bt!(A::AbstractMatrix,B::Diagonal) = scale!(A,B.diag)
 A_mul_Bc!(A::AbstractMatrix,B::Diagonal) = scale!(A,conj(B.diag))
 
-/(Da::Diagonal, Db::Diagonal) = Diagonal(Da.diag ./ Db.diag )
+/(Da::Diagonal, Db::Diagonal) = Diagonal(broadcast_elwise_op(/, Da.diag, Db.diag))
 function A_ldiv_B!{T}(D::Diagonal{T}, v::AbstractVector{T})
     if length(v) != length(D.diag)
         throw(DimensionMismatch("diagonal matrix is $(length(D.diag)) by $(length(D.diag)) but right hand side has $(length(v)) rows"))
@@ -292,8 +292,8 @@ function A_ldiv_B!(D::Diagonal, B::StridedVecOrMat)
     return B
 end
 (\)(D::Diagonal, A::AbstractMatrix) = D.diag .\ A
-(\)(D::Diagonal, b::AbstractVector) = D.diag .\ b
-(\)(Da::Diagonal, Db::Diagonal) = Diagonal(Db.diag ./ Da.diag)
+(\)(D::Diagonal, b::AbstractVector) = broadcast_elwise_op(\, D.diag, b)
+(\)(Da::Diagonal, Db::Diagonal) = Diagonal(broadcast_elwise_op(\, Da.diag, Db.diag))
 
 function inv{T}(D::Diagonal{T})
     Di = similar(D.diag, typeof(inv(zero(T))))

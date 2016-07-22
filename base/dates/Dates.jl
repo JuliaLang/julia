@@ -3,6 +3,7 @@
 module Dates
 
 importall ..Base.Operators
+import ..Base.broadcast
 
 using Base.Iterators
 
