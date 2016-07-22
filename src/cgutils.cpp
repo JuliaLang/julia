@@ -208,21 +208,18 @@ static Value *julia_gv(const char *prefix, jl_sym_t *name, jl_module_t *mod, voi
     return julia_gv(fullname, addr);
 }
 
+static GlobalVariable *julia_const_gv(jl_value_t *val);
 static Value *literal_pointer_val(jl_value_t *p)
 {
     // emit a pointer to any jl_value_t which will be valid across reloading code
     // also, try to give it a nice name for gdb, for easy identification
     if (p == NULL)
         return ConstantPointerNull::get((PointerType*)T_pjlvalue);
-    // some common constant values
-    if (p == jl_false)
-        return tbaa_decorate(tbaa_const, builder.CreateLoad(prepare_global(jlfalse_var)));
-    if (p == jl_true)
-        return tbaa_decorate(tbaa_const, builder.CreateLoad(prepare_global(jltrue_var)));
-    if (p == (jl_value_t*)jl_emptysvec)
-        return tbaa_decorate(tbaa_const, builder.CreateLoad(prepare_global(jlemptysvec_var)));
     if (!imaging_mode)
         return literal_static_pointer_val(p, T_pjlvalue);
+    if (auto gv = julia_const_gv(p)) {
+        return tbaa_decorate(tbaa_const, builder.CreateLoad(prepare_global(gv)));
+    }
     if (jl_is_datatype(p)) {
         jl_datatype_t *addr = (jl_datatype_t*)p;
         // DataTypes are prefixed with a +
@@ -645,12 +642,6 @@ static void raise_exception(Value *exc, jl_codectx_t *ctx,
     builder.SetInsertPoint(contBB);
 }
 
-static void raise_exception(GlobalVariable *exc, jl_codectx_t *ctx)
-{
-    raise_exception((Value*)tbaa_decorate(tbaa_const,
-                                          builder.CreateLoad(exc)), ctx);
-}
-
 // DO NOT PASS IN A CONST CONDITION!
 static void raise_exception_unless(Value *cond, Value *exc, jl_codectx_t *ctx)
 {
@@ -662,29 +653,16 @@ static void raise_exception_unless(Value *cond, Value *exc, jl_codectx_t *ctx)
 }
 
 // DO NOT PASS IN A CONST CONDITION!
-static void raise_exception_unless(Value *cond, GlobalVariable *exc,
-                                   jl_codectx_t *ctx)
-{
-    raise_exception_unless(cond, (Value*)tbaa_decorate(tbaa_const,builder.CreateLoad(exc, false)), ctx);
-}
-
-// DO NOT PASS IN A CONST CONDITION!
 static void raise_exception_if(Value *cond, Value *exc, jl_codectx_t *ctx)
 {
     raise_exception_unless(builder.CreateXor(cond, ConstantInt::get(T_int1,-1)),
                            exc, ctx);
 }
 
-// DO NOT PASS IN A CONST CONDITION!
-static void raise_exception_if(Value *cond, GlobalVariable *exc, jl_codectx_t *ctx)
-{
-    raise_exception_if(cond, (Value*)tbaa_decorate(tbaa_const, builder.CreateLoad(exc, false)), ctx);
-}
-
 static void null_pointer_check(Value *v, jl_codectx_t *ctx)
 {
     raise_exception_unless(builder.CreateICmpNE(v,Constant::getNullValue(v->getType())),
-                           prepare_global(jlundeferr_var), ctx);
+                           literal_pointer_val(jl_undefref_exception), ctx);
 }
 
 static void emit_type_error(const jl_cgval_t &x, jl_value_t *type, const std::string &msg,
@@ -909,9 +887,8 @@ static void typed_store(Value *ptr, Value *idx_0based, const jl_cgval_t &rhs,
 
 static Value *julia_bool(Value *cond)
 {
-    return builder.CreateSelect(cond,
-                                tbaa_decorate(tbaa_const, builder.CreateLoad(prepare_global(jltrue_var))),
-                                tbaa_decorate(tbaa_const, builder.CreateLoad(prepare_global(jlfalse_var))));
+    return builder.CreateSelect(cond, literal_pointer_val(jl_true),
+                                      literal_pointer_val(jl_false));
 }
 
 // --- get the inferred type of an AST node ---
@@ -1069,7 +1046,7 @@ static jl_cgval_t emit_getfield_knownidx(const jl_cgval_t &strct, unsigned idx, 
     Type *elty = julia_type_to_llvm(jfty);
     assert(elty != NULL);
     if (jfty == jl_bottom_type) {
-        raise_exception(prepare_global(jlundeferr_var), ctx);
+        raise_exception(literal_pointer_val(jl_undefref_exception), ctx);
         return jl_cgval_t(); // unreachable
     }
     if (type_is_ghost(elty))

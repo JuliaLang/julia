@@ -627,7 +627,7 @@ static jl_cgval_t generic_trunc(jl_value_t *targ, jl_value_t *x, jl_codectx_t *c
         Value *back = signd ? builder.CreateSExt(ans, ix->getType()) :
             builder.CreateZExt(ans, ix->getType());
         raise_exception_unless(builder.CreateICmpEQ(back, ix),
-                               prepare_global(jlinexacterr_var), ctx);
+                               literal_pointer_val(jl_inexact_exception), ctx);
     }
     return mark_julia_type(ans, false, jlto, ctx);
 }
@@ -700,10 +700,10 @@ static jl_cgval_t emit_checked_fptosi(jl_value_t *targ, jl_value_t *x, jl_codect
         raise_exception_unless
             (builder.CreateFCmpOEQ(builder.CreateFPExt(fx, T_float64),
                                    builder.CreateSIToFP(ans, T_float64)),
-             prepare_global(jlinexacterr_var), ctx);
+             literal_pointer_val(jl_inexact_exception), ctx);
     }
     else {
-        raise_exception_unless(emit_eqfsi(fx, ans), prepare_global(jlinexacterr_var), ctx);
+        raise_exception_unless(emit_eqfsi(fx, ans), literal_pointer_val(jl_inexact_exception), ctx);
     }
     return mark_julia_type(ans, false, jlto, ctx);
 }
@@ -720,10 +720,10 @@ static jl_cgval_t emit_checked_fptoui(jl_value_t *targ, jl_value_t *x, jl_codect
         raise_exception_unless
             (builder.CreateFCmpOEQ(builder.CreateFPExt(fx, T_float64),
                                    builder.CreateUIToFP(ans, T_float64)),
-             prepare_global(jlinexacterr_var), ctx);
+             literal_pointer_val(jl_inexact_exception), ctx);
     }
     else {
-        raise_exception_unless(emit_eqfui(fx, ans), prepare_global(jlinexacterr_var), ctx);
+        raise_exception_unless(emit_eqfui(fx, ans), literal_pointer_val(jl_inexact_exception), ctx);
     }
     return mark_julia_type(ans, false, jlto, ctx);
 }
@@ -866,7 +866,7 @@ static Value *emit_checked_srem_int(Value *x, Value *den, jl_codectx_t *ctx)
 {
     Type *t = den->getType();
     raise_exception_unless(builder.CreateICmpNE(den, ConstantInt::get(t,0)),
-                           prepare_global(jldiverr_var), ctx);
+                           literal_pointer_val(jl_diverror_exception), ctx);
     BasicBlock *m1BB = BasicBlock::Create(jl_LLVMContext,"minus1",ctx->f);
     BasicBlock *okBB = BasicBlock::Create(jl_LLVMContext,"oksrem",ctx->f);
     BasicBlock *cont = BasicBlock::Create(jl_LLVMContext,"after_srem",ctx->f);
@@ -1263,7 +1263,7 @@ static Value *emit_untyped_intrinsic(intrinsic f, Value *x, Value *y, Value *z, 
         Value *res = builder.CreateCall2(intr, ix, iy);
 #endif
         Value *obit = builder.CreateExtractValue(res, ArrayRef<unsigned>(1));
-        raise_exception_if(obit, prepare_global(jlovferr_var), ctx);
+        raise_exception_if(obit, literal_pointer_val(jl_overflow_exception), ctx);
         return builder.CreateExtractValue(res, ArrayRef<unsigned>(0));
     }
 
@@ -1282,14 +1282,14 @@ static Value *emit_untyped_intrinsic(intrinsic f, Value *x, Value *y, Value *z, 
                                                   CreateICmpNE(den,
                                                                ConstantInt::get(t,-1,true)),
                                                   builder.CreateICmpNE(x, typemin))),
-                               prepare_global(jldiverr_var), ctx);
+                               literal_pointer_val(jl_diverror_exception), ctx);
 
         return builder.CreateSDiv(x, den);
     case checked_udiv_int:
         den = JL_INT(y);
         t = den->getType();
         raise_exception_unless(builder.CreateICmpNE(den, ConstantInt::get(t,0)),
-                               prepare_global(jldiverr_var), ctx);
+                               literal_pointer_val(jl_diverror_exception), ctx);
         return builder.CreateUDiv(JL_INT(x), den);
 
     case checked_srem_int:
@@ -1299,7 +1299,7 @@ static Value *emit_untyped_intrinsic(intrinsic f, Value *x, Value *y, Value *z, 
         den = JL_INT(y);
         t = den->getType();
         raise_exception_unless(builder.CreateICmpNE(den, ConstantInt::get(t,0)),
-                               prepare_global(jldiverr_var), ctx);
+                               literal_pointer_val(jl_diverror_exception), ctx);
         return builder.CreateURem(JL_INT(x), den);
 
     case check_top_bit:
@@ -1309,7 +1309,7 @@ static Value *emit_untyped_intrinsic(intrinsic f, Value *x, Value *y, Value *z, 
                            CreateTrunc(builder.
                                        CreateLShr(x, ConstantInt::get(t, t->getPrimitiveSizeInBits()-1)),
                                        T_int1),
-                           prepare_global(jlinexacterr_var), ctx);
+                           literal_pointer_val(jl_inexact_exception), ctx);
         return x;
 
     case eq_int:  *newtyp = jl_bool_type; return builder.CreateICmpEQ(JL_INT(x), JL_INT(y));
@@ -1510,7 +1510,7 @@ static Value *emit_untyped_intrinsic(intrinsic f, Value *x, Value *y, Value *z, 
     case sqrt_llvm: {
         x = FP(x);
         raise_exception_unless(builder.CreateFCmpUGE(x, ConstantFP::get(x->getType(),0.0)),
-                               prepare_global(jldomerr_var), ctx);
+                               literal_pointer_val(jl_domain_exception), ctx);
         return builder.CreateCall(Intrinsic::getDeclaration(jl_Module, Intrinsic::sqrt,
                                                             ArrayRef<Type*>(x->getType())),
                                   x);
