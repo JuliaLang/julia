@@ -292,36 +292,7 @@ export call
 
 #15409
 # Deprecated definition of pmap with keyword arguments.
-# When this is removed the following definition needs to be uncommented
-# and added to pmap.jl
-# pmap(f, c...) = pmap(default_worker_pool(), f, c...)
-
-function pmap(f, c...; err_retry=nothing, err_stop=nothing, pids=nothing, kwargs...)
-    kwargs = Dict{Symbol, Any}(kwargs)
-
-    if err_retry != nothing
-        depwarn("err_retry is deprecated, use pmap(retry(f), c...).", :pmap)
-        if err_retry == true
-            f = retry(f)
-        end
-    end
-
-    if pids == nothing
-        p = default_worker_pool()
-    else
-        depwarn("pids is deprecated, use pmap(::WorkerPool, f, c...).", :pmap)
-        p = WorkerPool(pids)
-    end
-
-    if err_stop != nothing
-        depwarn("err_stop is deprecated, use pmap(f, c...; on_error = error_handling_func).", :pmap)
-        if err_stop == false
-            kwargs[:on_error] = e->e
-        end
-    end
-
-    pmap(p, f, c...; kwargs...)
-end
+# deprecation warnings are in pmap.jl
 
 # 15692
 typealias Func{N} Function
@@ -780,6 +751,7 @@ function ereach{Tv,Ti}(A::SparseMatrixCSC{Tv,Ti}, k::Integer, parent::Vector{Ti}
     error(string("ereach(A, k, parent) now lives in package SuiteSparse.jl. Run",
         "Pkg.add(\"SuiteSparse\") to install SuiteSparse on Julia v0.5."))
 end
+export etree
 function etree{Tv,Ti}(A::SparseMatrixCSC{Tv,Ti}, postorder::Bool)
     error(string("etree(A[, post]) now lives in package SuiteSparse.jl. Run",
         "Pkg.add(\"SuiteSparse\") to install SuiteSparse on Julia v0.5."))

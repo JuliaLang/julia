@@ -47,6 +47,11 @@ complex{T<:Real}(::Type{Complex{T}}) = Complex{T}
 
 isreal(x::Real) = true
 isreal(z::Complex) = imag(z) == 0
+"""
+    isimag(z) -> Bool
+
+Test whether `z` is purely imaginary, i.e. has a real part equal to 0.
+"""
 isimag(z::Number) = real(z) == 0
 isinteger(z::Complex) = isreal(z) & isinteger(real(z))
 isfinite(z::Complex) = isfinite(real(z)) & isfinite(imag(z))
