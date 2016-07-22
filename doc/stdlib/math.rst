@@ -1012,6 +1012,12 @@ Mathematical Functions
 
    Return ``x`` if ``lo <= x <= hi``\ . If ``x < lo``\ , return ``lo``\ . If ``x > hi``\ , return ``hi``\ . Arguments are promoted to a common type. Operates elementwise over ``x`` if it is an array.
 
+.. function:: clamp!(array::AbstractArray, lo, hi)
+
+   .. Docstring generated from Julia source
+
+   Restrict values in ``array`` to the specified range, in-place.
+
 .. function:: abs(x)
 
    .. Docstring generated from Julia source
