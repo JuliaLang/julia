@@ -1547,7 +1547,7 @@
       (let* ((ex (partially-expand-ref expr))
              (stmts (butlast (cdr ex)))
              (refex (last    (cdr ex)))
-             (nuref `(call view ,(caddr refex) ,@(cdddr refex))))
+             (nuref `(call (top view) ,(caddr refex) ,@(cdddr refex))))
         `(block ,@stmts ,nuref))
       expr))
 
@@ -1670,11 +1670,11 @@
         (lhs_ (ref-to-view lhs))) ; x[...] expressions on lhs turn in to view(x, ...) to update x in-place
     (if (fuse? e)
         (if (null? lhs)
-            (expand-forms `(call broadcast ,(from-lambda (cadr e)) ,@(caddr e)))
-            (expand-forms `(call broadcast! ,(from-lambda (cadr e)) ,lhs_ ,@(caddr e))))
+            (expand-forms `(call (top broadcast) ,(from-lambda (cadr e)) ,@(caddr e)))
+            (expand-forms `(call (top broadcast!) ,(from-lambda (cadr e)) ,lhs_ ,@(caddr e))))
         (if (null? lhs)
             (expand-forms e)
-            (expand-forms `(call broadcast! identity ,lhs_ ,e))))))
+            (expand-forms `(call (top broadcast!) identity ,lhs_ ,e))))))
 
 ;; table mapping expression head to a function expanding that form
 (define expand-table
