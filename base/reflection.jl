@@ -194,6 +194,11 @@ end
 
 tt_cons(t::ANY, tup::ANY) = (@_pure_meta; Tuple{t, (isa(tup, Type) ? tup.parameters : tup)...})
 
+"""
+    code_lowered(f, types)
+
+Returns an array of lowered ASTs for the methods matching the given generic function and type signature.
+"""
 code_lowered(f, t::ANY=Tuple) = map(m -> (m::Method).lambda_template, methods(f, t))
 
 # low-level method lookup functions used by the compiler
@@ -350,11 +355,25 @@ function _dump_function(f, t::ANY, native, wrapper, strip_ir_metadata, dump_modu
     return str
 end
 
+"""
+    code_llvm([io], f, types)
+
+Prints the LLVM bitcodes generated for running the method matching the given generic
+function and type signature to `io` which defaults to `STDOUT`.
+
+All metadata and dbg.* calls are removed from the printed bitcode. Use code_llvm_raw for the full IR.
+"""
 code_llvm(io::IO, f::ANY, types::ANY=Tuple, strip_ir_metadata=true, dump_module=false) =
     print(io, _dump_function(f, types, false, false, strip_ir_metadata, dump_module))
 code_llvm(f::ANY, types::ANY=Tuple) = code_llvm(STDOUT, f, types)
 code_llvm_raw(f::ANY, types::ANY=Tuple) = code_llvm(STDOUT, f, types, false)
 
+"""
+    code_native([io], f, types)
+
+Prints the native assembly instructions generated for running the method matching the given
+generic function and type signature to `io` which defaults to `STDOUT`.
+"""
 code_native(io::IO, f::ANY, types::ANY=Tuple) =
     print(io, _dump_function(f, types, true, false, false, false))
 code_native(f::ANY, types::ANY=Tuple) = code_native(STDOUT, f, types)
@@ -368,6 +387,14 @@ function func_for_method_checked(m::Method, types)
     return m
 end
 
+
+"""
+    code_typed(f, types; optimize=true)
+
+Returns an array of lowered and type-inferred ASTs for the methods matching the given
+generic function and type signature. The keyword argument `optimize` controls whether
+additional optimizations, such as inlining, are also applied.
+"""
 function code_typed(f::ANY, types::ANY=Tuple; optimize=true)
     ccall(:jl_is_in_pure_context, Bool, ()) && error("code reflection cannot be used from generated functions")
     if isa(f, Core.Builtin)

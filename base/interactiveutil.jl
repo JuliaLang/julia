@@ -248,6 +248,17 @@ versioninfo(verbose::Bool) = versioninfo(STDOUT,verbose)
 
 # displaying type-ambiguity warnings
 
+
+"""
+    code_warntype([io], f, types)
+
+Prints lowered and type-inferred ASTs for the methods matching the given generic function
+and type signature to `io` which defaults to `STDOUT`. The ASTs are annotated in such a way
+as to cause "non-leaf" types to be emphasized (if color is available, displayed in red).
+This serves as a warning of potential type instability. Not all non-leaf types are particularly
+problematic for performance, so the results need to be used judiciously.
+See [Manual](:ref:`man-code-warntype`) for more information.
+"""
 function code_warntype(io::IO, f, t::ANY)
     emph_io = IOContext(io, :TYPEEMPHASIZE => true)
     for li in code_typed(f, t)
