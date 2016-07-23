@@ -321,12 +321,12 @@ Unlike `fill!(o,0)` and similar code, which might be optimized away by
 the compiler for objects about to be discarded, the `securezero!` function
 will always be called.
 """
-function securezero end
+function securezero! end
 @noinline securezero!{T<:Number}(a::AbstractArray{T}) = fill!(a, 0)
 securezero!(s::String) = securezero!(s.data)
-@noinline securezero!{T}(p::Ptr{T}, len::Integer=1) =
+@noinline unsafe_securezero!{T}(p::Ptr{T}, len::Integer=1) =
     ccall(:memset, Ptr{T}, (Ptr{T}, Cint, Csize_t), p, 0, len*sizeof(T))
-securezero!(p::Ptr{Void}, len=1) = securezero!(Ptr{UInt8}(p), len)
+unsafe_securezero!(p::Ptr{Void}, len=1) = securezero!(Ptr{UInt8}(p), len)
 
 if is_windows()
 function getpass(prompt::AbstractString)
@@ -433,7 +433,7 @@ if is_windows()
 
         # Step 4: Free the encrypted buffer
         # ccall(:SecureZeroMemory, Ptr{Void}, (Ptr{Void}, Csize_t), outbuf_data[], outbuf_size[]) - not an actual function
-        securezero!(outbuf_data[], outbuf_size[])
+        unsafe_securezero!(outbuf_data[], outbuf_size[])
         ccall((:CoTaskMemFree, "ole32.dll"), Void, (Ptr{Void},), outbuf_data[])
 
         # Done.  Fixme: for non-ascii passwords, transcode may leave
