@@ -7,6 +7,7 @@ typealias AbstractMatrix{T} AbstractArray{T,2}
 typealias AbstractVecOrMat{T} Union{AbstractVector{T}, AbstractMatrix{T}}
 typealias RangeIndex Union{Int, Range{Int}, AbstractUnitRange{Int}, Colon}
 typealias DimOrInd Union{Integer, AbstractUnitRange}
+typealias IntOrInd Union{Int, AbstractUnitRange}
 typealias DimsOrInds{N} NTuple{N,DimOrInd}
 
 macro _inline_pure_meta()
