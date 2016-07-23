@@ -119,7 +119,13 @@ static void run_finalizer(jl_ptls_t ptls, jl_value_t *o, jl_value_t *ff)
 static void finalize_object(arraylist_t *list, jl_value_t *o,
                             arraylist_t *copied_list, int need_sync)
 {
-    // The acquire load makes sure that the first `len` objects are valid
+    // The acquire load makes sure that the first `len` objects are valid.
+    // If `need_sync` is true, all mutations of the content should be limited
+    // to the first `oldlen` elements and no mutation is allowed after the
+    // new length is published with the `cmpxchg` at the end of the function.
+    // This way, the mutation should not conflict with the owning thread,
+    // which only writes to locations later than `len`
+    // and will not resize the buffer without acquiring the lock.
     size_t len = need_sync ? jl_atomic_load_acquire(&list->len) : list->len;
     size_t oldlen = len;
     void **items = list->items;
@@ -149,10 +155,12 @@ static void finalize_object(arraylist_t *list, jl_value_t *o,
     if (oldlen == len)
         return;
     if (need_sync) {
-        if (__unlikely(jl_atomic_compare_exchange(&list->len,
-                                                  oldlen, len) != oldlen)) {
-            memset(items[len], 0, (oldlen - len) * sizeof(void*));
-        }
+        // The memset needs to be unconditional since the thread might have
+        // already read the length.
+        // The `memset` (like any other content mutation) has to be done
+        // **before** the `cmpxchg` which publishes the length.
+        memset(&items[len], 0, (oldlen - len) * sizeof(void*));
+        jl_atomic_compare_exchange(&list->len, oldlen, len);
     }
     else {
         list->len = len;
@@ -246,9 +254,20 @@ static void gc_add_finalizer_(jl_ptls_t ptls, void *v, void *f)
 {
     int8_t gc_state = jl_gc_unsafe_enter(ptls);
     arraylist_t *a = &ptls->finalizers;
+    // This acquire load and the release store at the end are used to
+    // synchronize with `finalize_object` on another thread. Apart from the GC,
+    // which is blocked by entering a unsafe region, there might be only
+    // one other thread accessing our list in `finalize_object`
+    // (only one thread since it needs to acquire the finalizer lock).
+    // Similar to `finalize_object`, all content mutation has to be done
+    // between the acquire and the release of the length.
     size_t oldlen = jl_atomic_load_acquire(&a->len);
     if (__unlikely(oldlen + 2 > a->max)) {
         JL_LOCK_NOGC(&finalizers_lock);
+        // `a->len` might have been modified.
+        // Another possiblility is to always grow the array to `oldlen + 2` but
+        // it's simpler this way and uses slightly less memory =)
+        oldlen = a->len;
         arraylist_grow(a, 2);
         a->len = oldlen;
         JL_UNLOCK_NOGC(&finalizers_lock);
