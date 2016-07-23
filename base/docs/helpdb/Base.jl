@@ -878,15 +878,6 @@ Get the local machine's host name.
 gethostname
 
 """
-    code_typed(f, types; optimize=true)
-
-Returns an array of lowered and type-inferred ASTs for the methods matching the given
-generic function and type signature. The keyword argument `optimize` controls whether
-additional optimizations, such as inlining, are also applied.
-"""
-code_typed
-
-"""
     hankelh1x(nu, x)
 
 Scaled Bessel function of the third kind of order `nu`, ``H^{(1)}_\\nu(x) e^{-x i}``.
@@ -4916,13 +4907,6 @@ Send a printed form of `x` to the operating system clipboard ("copy").
 clipboard(x)
 
 """
-    code_lowered(f, types)
-
-Returns an array of lowered ASTs for the methods matching the given generic function and type signature.
-"""
-code_lowered
-
-"""
     values(collection)
 
 Return an iterator over all values in a collection. `collect(values(d))` returns an array of values.
@@ -5166,16 +5150,6 @@ Determine whether a stream is read-only.
 isreadonly
 
 """
-    code_llvm(f, types)
-
-Prints the LLVM bitcodes generated for running the method matching the given generic
-function and type signature to [`STDOUT`](:const:`STDOUT`).
-
-All metadata and dbg.* calls are removed from the printed bitcode. Use code_llvm_raw for the full IR.
-"""
-code_llvm
-
-"""
     notify(condition, val=nothing; all=true, error=false)
 
 Wake up tasks waiting for a condition, passing them `val`. If `all` is `true` (the default),
@@ -5331,18 +5305,6 @@ The largest power of two not greater than `n`. Returns 0 for `n==0`, and returns
 `-prevpow2(-n)` for negative arguments.
 """
 prevpow2
-
-"""
-    code_warntype(f, types)
-
-Displays lowered and type-inferred ASTs for the methods matching the given generic function
-and type signature. The ASTs are annotated in such a way as to cause "non-leaf" types to be
-emphasized (if color is available, displayed in red). This serves as a warning of potential
-type instability. Not all non-leaf types are particularly problematic for performance, so
-the results need to be used judiciously. See [Manual](:ref:`man-code-warntype`) for more
-information.
-"""
-code_warntype
 
 """
     Mmap.sync!(array)
@@ -5542,14 +5504,6 @@ total bytes allocated, garbage collection time, and an object with various memor
 counters.
 """
 :@timed
-
-"""
-    code_native(f, types)
-
-Prints the native assembly instructions generated for running the method matching the given
-generic function and type signature to `STDOUT`.
-"""
-code_native
 
 """
     symdiff(s1,s2...)
