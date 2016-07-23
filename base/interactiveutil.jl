@@ -257,7 +257,7 @@ and type signature to `io` which defaults to `STDOUT`. The ASTs are annotated in
 as to cause "non-leaf" types to be emphasized (if color is available, displayed in red).
 This serves as a warning of potential type instability. Not all non-leaf types are particularly
 problematic for performance, so the results need to be used judiciously.
-See [Manual](:ref:`man-code-warntype`) for more code information.
+See [Manual](:ref:`man-code-warntype`) for more information.
 """
 function code_warntype(io::IO, f, t::ANY)
     emph_io = IOContext(io, :TYPEEMPHASIZE => true)
