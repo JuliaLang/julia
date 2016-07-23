@@ -257,6 +257,22 @@ Library improvements
   * `Date` and `DateTime` values can now be rounded to a specified resolution (e.g., 1 month or
     15 minutes) with `floor`, `ceil`, and `round` ([#17037]).
 
+  * File handling:
+
+    * A new function `walkdir()` returns an iterator that walks the directory tree of a directory. ([#1765])
+
+       ```
+       for (root, dirs, files) in walkdir(expanduser("~/.julia/v0.5/Plots/src"))
+           println("$(length(files)) \t files in $root")
+       end
+       19    files in /Users/me/.julia/v0.5/Plots/src
+       15    files in /Users/me/.julia/v0.5/Plots/src/backends
+       4     files in /Users/me/.julia/v0.5/Plots/src/deprecated
+      ```
+
+    * A new function `chown()` changes the ownership of files. ([#15007])
+
+
 Deprecated or removed
 ---------------------
 
