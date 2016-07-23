@@ -642,7 +642,7 @@ function hist!{HT}(h::AbstractArray{HT}, v::AbstractVector, edg::AbstractVector;
     edg, h
 end
 
-hist(v::AbstractVector, edg::AbstractVector) = hist!(Array(Int, length(edg)-1), v, edg)
+hist(v::AbstractVector, edg::AbstractVector) = hist!(Array{Int}(length(edg)-1), v, edg)
 hist(v::AbstractVector, n::Integer) = hist(v,histrange(v,n))
 hist(v::AbstractVector) = hist(v,sturges(length(v)))
 
@@ -662,7 +662,7 @@ function hist!{HT}(H::AbstractArray{HT,2}, A::AbstractMatrix, edg::AbstractVecto
     edg, H
 end
 
-hist(A::AbstractMatrix, edg::AbstractVector) = hist!(Array(Int, length(edg)-1, size(A,2)), A, edg)
+hist(A::AbstractMatrix, edg::AbstractVector) = hist!(Array{Int}(length(edg)-1, size(A,2)), A, edg)
 hist(A::AbstractMatrix, n::Integer) = hist(A,histrange(A,n))
 hist(A::AbstractMatrix) = hist(A,sturges(size(A,1)))
 
@@ -690,7 +690,7 @@ function hist2d!{HT}(H::AbstractArray{HT,2}, v::AbstractMatrix,
 end
 
 hist2d(v::AbstractMatrix, edg1::AbstractVector, edg2::AbstractVector) =
-    hist2d!(Array(Int, length(edg1)-1, length(edg2)-1), v, edg1, edg2)
+    hist2d!(Array{Int}(length(edg1)-1, length(edg2)-1), v, edg1, edg2)
 
 hist2d(v::AbstractMatrix, edg::AbstractVector) = hist2d(v, edg, edg)
 

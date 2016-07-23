@@ -255,14 +255,14 @@ else
 end
 _default_eltype{I,T}(::Type{Generator{I,Type{T}}}) = T
 
-_array_for(T, itr, ::HasLength) = Array(T, Int(length(itr)::Integer))
-_array_for(T, itr, ::HasShape) = Array(T, convert(Dims,size(itr)))
+_array_for(T, itr, ::HasLength) = Array{T}(Int(length(itr)::Integer))
+_array_for(T, itr, ::HasShape) = Array{T}(convert(Dims,size(itr)))
 
 function collect(itr::Generator)
     isz = iteratorsize(itr.iter)
     et = _default_eltype(typeof(itr))
     if isa(isz, SizeUnknown)
-        return grow_to!(Array(et, 0), itr)
+        return grow_to!(Array{et}(0), itr)
     else
         st = start(itr)
         if done(itr,st)
