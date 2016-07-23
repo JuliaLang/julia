@@ -490,7 +490,7 @@ function median!{T}(v::AbstractVector{T})
     end
 end
 median!{T}(v::AbstractArray{T}) = median!(vec(v))
-median{T}(v::AbstractArray{T}) = median!(copy!(Array{T}(length(v)), v))
+median{T}(v::AbstractArray{T}) = median!(copy!(Array{T,1}(length(v)), v))
 
 median{T}(v::AbstractArray{T}, region) = mapslices(median!, v, region)
 

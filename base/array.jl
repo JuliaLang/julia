@@ -255,8 +255,8 @@ else
 end
 _default_eltype{I,T}(::Type{Generator{I,Type{T}}}) = T
 
-_array_for(T, itr, ::HasLength) = Array{T,1}(Int(length(itr)::Integer))
-_array_for(T, itr, ::HasShape) = Array{T,1}(convert(Dims,size(itr)))
+_array_for(T, itr, ::HasLength) = Array{T,ndims(iter)}(Int(length(itr)::Integer))
+_array_for(T, itr, ::HasShape) = Array{T,ndims(iter)}(convert(Dims,size(itr)))
 
 function collect(itr::Generator)
     isz = iteratorsize(itr.iter)
