@@ -713,7 +713,11 @@ type UserPasswordCredentials <: AbstractCredentials
     pass::AbstractString
     usesshagent::AbstractString  # used for ssh-agent authentication
     count::Int                   # authentication failure protection count
-    UserPasswordCredentials(u::AbstractString,p::AbstractString) = new(u,p,"Y",3)
+    function UserPasswordCredentials(u::AbstractString,p::AbstractString)
+        c = new(u,p,"Y",3)
+        finalizer(c, securezero!)
+        return c
+    end
 end
 "Checks if credentials were used or failed authentication, see `LibGit2.credentials_callback`"
 function checkused!(p::UserPasswordCredentials)
@@ -739,7 +743,11 @@ type SSHCredentials <: AbstractCredentials
     prvkey::AbstractString
     usesshagent::AbstractString  # used for ssh-agent authentication
 
-    SSHCredentials(u::AbstractString,p::AbstractString) = new(u,p,"","","Y")
+    function SSHCredentials(u::AbstractString,p::AbstractString)
+        c = new(u,p,"","","Y")
+        finalizer(c, securezero!)
+        return c
+    end
     SSHCredentials() = SSHCredentials("","")
 end
 function securezero!(cred::SSHCredentials)
