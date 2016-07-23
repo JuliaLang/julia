@@ -13,6 +13,10 @@ Power and using the provided binary is preferable. The next stable
 release of ATLAS (3.10.3) should fix all known issues, but it may be a
 while before an update is available on popular linux distros.
 
+Note that these are unofficial binaries and contributed strictly for
+convenience. They may or may not work for you, and have not gone
+through the same rigour as official binaries.
+
 # Building Julia on Power8
 
 Since OpenBLAS power support is still in the works, we use ATLAS as a
