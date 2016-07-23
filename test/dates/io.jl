@@ -366,3 +366,5 @@ end
 @test Dates.Date("Apr 01 2014", "uuu dd yyyy") == Dates.Date(2014,4,1)
 @test_throws ArgumentError Dates.Date("Apr 01 xx 2014", "uuu dd zz yyyy")
 @test_throws ArgumentError Dates.Date("Apr 01 xx 2014", "uuu dd    yyyy")
+
+end
