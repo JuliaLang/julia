@@ -326,7 +326,7 @@ typealias NTuple{N,T} Tuple{Vararg{T,N}}
 
 # TODO: possibly turn these into deprecations
 Array{T,N}(::Type{T}, d::NTuple{N,Int})   = Array{T,N}(d)
-Array{T}(::Type{T}, d::Int...)            = Array{T}(d)
+Array{T}(::Type{T}, d::Int...)            = Array{T,length(d)}(d)
 Array{T}(::Type{T}, m::Int)               = Array{T,1}(m)
 Array{T}(::Type{T}, m::Int,n::Int)        = Array{T,2}(m,n)
 Array{T}(::Type{T}, m::Int,n::Int,o::Int) = Array{T,3}(m,n,o)

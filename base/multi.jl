@@ -115,7 +115,7 @@ for (idx, tname) in enumerate(msgtypes)
         end
 
         function deserialize_msg(s::AbstractSerializer, ::Type{$tname})
-            data=Array{Any}($nflds)
+            data=Array{Any,1}($nflds)
             for i in 1:$nflds
                 data[i] = deserialize(s)
             end
@@ -306,7 +306,7 @@ function serialize_hdr_raw(io, hdr)
 end
 
 function deserialize_hdr_raw(io)
-    data = Array{Int}(4)
+    data = Array{Int,1}(4)
     read!(io, data)
     return MsgHeader(RRID(data[1], data[2]), RRID(data[3], data[4]))
 end
