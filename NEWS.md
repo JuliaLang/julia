@@ -1,6 +1,22 @@
 Julia v0.5.0 Release Notes
 ==========================
 
+Language tooling improvements
+-----------------------------
+
+   * The [Julia debugger](https://github.com/Keno/Gallium.jl) makes its debut
+     with this release. Install it with `Pkg.add("Gallium")`, and the
+     [documentation](https://github.com/Keno/Gallium.jl#gallium) should
+     get you going. The [JuliaCon
+     talk](https://www.youtube.com/watch?v=e6-hcOHO0tc&list=PLP8iPy9hna6SQPwZUDtAM59-wPzCPyD_S&index=5)
+     on Gallium shows off various features of the debugger.
+
+   * The [Juno IDE](http://junolab.org) has matured significantly, and now
+     also includes support for plotting and debugging.
+
+   * [Cxx.jl](https://github.com/Keno/Cxx.jl) provides a convenient FFI for
+     calling C++ code from Julia.
+
 New language features
 ---------------------
 
@@ -35,17 +51,25 @@ New language features
   * Function return type syntax `function f()::T` has been added ([#1090]). Values returned
     from a function with such a declaration will be converted to the specified type `T`.
 
-  * Experimental support for arrays with indexing starting at values
-    different from 1. The array types are expected to be defined in
-    packages, but now Julia provides an API for writing generic
-    algorithms for arbitrary indexing schemes ([#16260]).
-
   * Many more operators now support `.` prefixes (e.g. `.≤`) ([#17393]).  However,
     users are discouraged from overloading these, since they are mainly parsed
     in order to implement backwards compatibility with planned automatic
     broadcasting of dot operators in Julia 0.6 ([#16285]).  Explicitly qualified
     operator names like `Base.≤` should now use `Base.:≤` (prefixed by `@compat`
     if you need 0.4 compatibility via the `Compat` package).
+
+Experimental language features
+------------------------------
+
+  * Support for
+     [multi-threading](http://docs.julialang.org/en/latest/manual/parallel-computing/#multi-threading-experimental). Loops
+     with independent iterations can be easily parallelized with the
+     `Threads.@threads` macro.
+
+  * Support for arrays with indexing starting at values different from
+    1. The array types are expected to be defined in packages, but now
+    Julia provides an API for writing generic algorithms for arbitrary
+    indexing schemes ([#16260]).
 
 Language changes
 ----------------
@@ -87,6 +111,9 @@ Compiler/Runtime improvements
 -----------------------------
 
   * Machine SIMD types can be represented in Julia as a homogeneous tuple of `VecElement` ([#15244]).
+
+  * The performance of higher-order and anonymous functions has been greatly improved.
+    For example, `map(x->2x, A)` performs as well as `2.*A`([#13412]).
 
 New architectures
 -----------------
