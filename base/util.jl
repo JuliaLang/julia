@@ -436,8 +436,7 @@ if is_windows()
         unsafe_securezero!(outbuf_data[], outbuf_size[])
         ccall((:CoTaskMemFree, "ole32.dll"), Void, (Ptr{Void},), outbuf_data[])
 
-        # Done.  Fixme: for non-ascii passwords, transcode may leave
-        # an extra copy of the password in memory (due to resizing its buffer).
+        # Done.
         passbuf_ = passbuf[1:passlen[]-1]
         result = Nullable((String(transcode(UInt8, usernamebuf[1:usernamelen[]-1])),
             String(transcode(UInt8, passbuf_))))
