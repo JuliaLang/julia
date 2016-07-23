@@ -369,7 +369,7 @@ code_llvm_raw(f::ANY, types::ANY=Tuple) = code_llvm(STDOUT, f, types, false)
     code_native([io], f, types)
 
 Prints the native assembly instructions generated for running the method matching the given
-generic function to `io` which defaults to `STDOUT`.
+generic function and type signature to `io` which defaults to `STDOUT`.
 """
 code_native(io::IO, f::ANY, types::ANY=Tuple) =
     print(io, _dump_function(f, types, true, false, false, false))
