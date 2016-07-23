@@ -705,13 +705,19 @@ function getobjecttype(obj_type::Cint)
     end
 end
 
+import Base.securezero!
+
 "Credentials that support only `user` and `password` parameters"
 type UserPasswordCredentials <: AbstractCredentials
     user::String
     pass::String
     usesshagent::String  # used for ssh-agent authentication
     count::Int                   # authentication failure protection count
-    UserPasswordCredentials(u::AbstractString,p::AbstractString) = new(u,p,"Y",3)
+    function UserPasswordCredentials(u::AbstractString,p::AbstractString)
+        c = new(u,p,"Y",3)
+        finalizer(c, securezero!)
+        return c
+    end
 end
 "Checks if credentials were used or failed authentication, see `LibGit2.credentials_callback`"
 function checkused!(p::UserPasswordCredentials)
@@ -721,6 +727,13 @@ function checkused!(p::UserPasswordCredentials)
 end
 "Resets authentication failure protection count"
 reset!(p::UserPasswordCredentials, cnt::Int=3) = (p.count = cnt)
+function securezero!(cred::UserPasswordCredentials)
+    securezero!(cred.user)
+    securezero!(cred.pass)
+    securezero!(cred.usesshagent)
+    cred.count = 0
+    return cred
+end
 
 "SSH credentials type"
 type SSHCredentials <: AbstractCredentials
@@ -730,8 +743,20 @@ type SSHCredentials <: AbstractCredentials
     prvkey::String
     usesshagent::String  # used for ssh-agent authentication
 
-    SSHCredentials(u::AbstractString,p::AbstractString) = new(u,p,"","","Y")
+    function SSHCredentials(u::AbstractString,p::AbstractString)
+        c = new(u,p,"","","Y")
+        finalizer(c, securezero!)
+        return c
+    end
     SSHCredentials() = SSHCredentials("","")
+end
+function securezero!(cred::SSHCredentials)
+    securezero!(cred.user)
+    securezero!(cred.pass)
+    securezero!(cred.pubkey)
+    securezero!(cred.prvkey)
+    securezero!(cred.usesshagent)
+    return cred
 end
 
 "Credentials that support caching"
@@ -775,3 +800,7 @@ function checkused!(p::CachedCredentials)
 end
 "Resets authentication failure protection count"
 reset!(p::CachedCredentials, cnt::Int=3) = (p.count = cnt)
+function securezero!(p::CachedCredentials)
+    foreach(securezero!, values(p.cred))
+    return p
+end
