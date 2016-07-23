@@ -648,6 +648,24 @@ This experimental interface supports Julia's multi-threading
 capabilities. Types and function described here might (and likely
 will) change in the future.
 
+.. function:: Threads.threadid()
+
+   .. Docstring generated from Julia source
+
+   Get the ID number of the current thread of execution. The master thread has ID ``1``\ .
+
+.. function:: Threads.nthreads()
+
+   .. Docstring generated from Julia source
+
+   Get the number of threads available to the Julia process. This is the inclusive upper bound  on ``threadid()``\ .
+
+.. function:: Threads.@threads
+
+   .. Docstring generated from Julia source
+
+   A macro to parallelize a for-loop to run with multiple threads. This spawns ``nthreads()``  number of threads, splits the iteration space amongst them, and iterates in parallel.  A barrier is placed at the end of the loop which waits for all the threads to finish  execution, and the loop returns.
+
 .. function:: Threads.Atomic{T}
 
    .. Docstring generated from Julia source
