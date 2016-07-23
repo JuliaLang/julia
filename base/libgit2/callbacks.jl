@@ -64,143 +64,152 @@ function credentials_callback(cred::Ptr{Ptr{Void}}, url_ptr::Cstring,
 
     # get credentials object from payload pointer
     creds = nothing
+    creds_are_temp = true
     if payload_ptr != C_NULL
         tmpobj = unsafe_pointer_to_objref(payload_ptr)
         if isa(tmpobj, AbstractCredentials)
             creds = tmpobj
+            creds_are_temp = false
         end
     end
     isusedcreds = checkused!(creds)
 
-    # use ssh key or ssh-agent
-    if isset(allowed_types, Cuint(Consts.CREDTYPE_SSH_KEY))
-        creds == nothing && (creds = SSHCredentials())
-        credid = "ssh://$host"
+    try
+        # use ssh key or ssh-agent
+        if isset(allowed_types, Cuint(Consts.CREDTYPE_SSH_KEY))
+            creds == nothing && (creds = SSHCredentials())
+            credid = "ssh://$host"
 
-        # first try ssh-agent if credentials support its usage
-        if creds[:usesshagent, credid] === nothing || creds[:usesshagent, credid] == "Y"
-            err = ccall((:git_cred_ssh_key_from_agent, :libgit2), Cint,
-                         (Ptr{Ptr{Void}}, Cstring), cred, username_ptr)
-            creds[:usesshagent, credid] = "U" # used ssh-agent only one time
+            # first try ssh-agent if credentials support its usage
+            if creds[:usesshagent, credid] === nothing || creds[:usesshagent, credid] == "Y"
+                err = ccall((:git_cred_ssh_key_from_agent, :libgit2), Cint,
+                             (Ptr{Ptr{Void}}, Cstring), cred, username_ptr)
+                creds[:usesshagent, credid] = "U" # used ssh-agent only one time
+                err == 0 && return Cint(0)
+            end
+
+            errcls, errmsg = Error.last_error()
+            if errcls != Error.None
+                # Check if we used ssh-agent
+                if creds[:usesshagent, credid] == "U"
+                    println("ERROR: $errmsg ssh-agent")
+                    creds[:usesshagent, credid] = "E" # reported ssh-agent error
+                else
+                    println("ERROR: $errmsg")
+                end
+                flush(STDOUT)
+            end
+
+            # if username is not provided, then prompt for it
+            username = if username_ptr == Cstring(C_NULL)
+                uname = creds[:user, credid] # check if credentials were already used
+                uname !== nothing && !isusedcreds ? uname : prompt("Username for '$schema$host'")
+            else
+                unsafe_string(username_ptr)
+            end
+            creds[:user, credid] = username # save credentials
+
+            # For SSH we need a private key location
+            privatekey = if haskey(ENV,"SSH_KEY_PATH")
+                ENV["SSH_KEY_PATH"]
+            else
+                keydefpath = creds[:prvkey, credid] # check if credentials were already used
+                if keydefpath !== nothing && !isusedcreds
+                    keydefpath # use cached value
+                else
+                    if keydefpath === nothing || isempty(keydefpath)
+                        keydefpath = joinpath(homedir(),".ssh","id_rsa")
+                    end
+                    prompt("Private key location for '$schema$username@$host'", default=keydefpath)
+                end
+            end
+            creds[:prvkey, credid] = privatekey # save credentials
+
+            # For SSH we need a public key location, look for environment vars SSH_* as well
+            publickey = if haskey(ENV,"SSH_PUB_KEY_PATH")
+                ENV["SSH_PUB_KEY_PATH"]
+            else
+                keydefpath = creds[:pubkey, credid] # check if credentials were already used
+                if keydefpath !== nothing && !isusedcreds
+                    keydefpath # use cached value
+                else
+                    if keydefpath === nothing || isempty(keydefpath)
+                        keydefpath = privatekey*".pub"
+                    end
+                    if isfile(keydefpath)
+                        keydefpath
+                    else
+                        prompt("Public key location for '$schema$username@$host'", default=keydefpath)
+                    end
+                end
+            end
+            creds[:pubkey, credid] = publickey # save credentials
+
+            passphrase = if haskey(ENV,"SSH_KEY_PASS")
+                ENV["SSH_KEY_PASS"]
+            else
+                passdef = creds[:pass, credid] # check if credentials were already used
+                if passdef === nothing || isusedcreds
+                    if is_windows()
+                        passdef = Base.winprompt(
+                            "Your SSH Key requires a password, please enter it now:",
+                            "Passphrase required", privatekey; prompt_username = false)
+                        isnull(passdef) && return Cint(Error.EAUTH)
+                        passdef = Base.get(passdef)[2]
+                    else
+                        passdef = prompt("Passphrase for $privatekey", password=true)
+                    end
+                end
+            end
+            creds[:pass, credid] = passphrase # save credentials
+
+            isempty(username) && return Cint(Error.EAUTH)
+
+            err = ccall((:git_cred_ssh_key_new, :libgit2), Cint,
+                         (Ptr{Ptr{Void}}, Cstring, Cstring, Cstring, Cstring),
+                         cred, username, publickey, privatekey, passphrase)
             err == 0 && return Cint(0)
         end
 
-        errcls, errmsg = Error.last_error()
-        if errcls != Error.None
-            # Check if we used ssh-agent
-            if creds[:usesshagent, credid] == "U"
-                println("ERROR: $errmsg ssh-agent")
-                creds[:usesshagent, credid] = "E" # reported ssh-agent error
+        if isset(allowed_types, Cuint(Consts.CREDTYPE_USERPASS_PLAINTEXT))
+            creds == nothing && (creds = UserPasswordCredentials())
+            credid = "$schema$host"
+
+            username = creds[:user, credid]
+            userpass = creds[:pass, credid]
+            if is_windows()
+                if username === nothing || userpass === nothing || isusedcreds
+                    res = Base.winprompt("Please enter your credentials for '$schema$host'", "Credentials required",
+                            username === nothing ? "" : username; prompt_username = true)
+                    isnull(res) && return Cint(Error.EAUTH)
+                    username, userpass = Base.get(res)
+                end
             else
-                println("ERROR: $errmsg")
-            end
-            flush(STDOUT)
-        end
-
-        # if username is not provided, then prompt for it
-        username = if username_ptr == Cstring(C_NULL)
-            uname = creds[:user, credid] # check if credentials were already used
-            uname !== nothing && !isusedcreds ? uname : prompt("Username for '$schema$host'")
-        else
-            unsafe_string(username_ptr)
-        end
-        creds[:user, credid] = username # save credentials
-
-        # For SSH we need a private key location
-        privatekey = if haskey(ENV,"SSH_KEY_PATH")
-            ENV["SSH_KEY_PATH"]
-        else
-            keydefpath = creds[:prvkey, credid] # check if credentials were already used
-            if keydefpath !== nothing && !isusedcreds
-                keydefpath # use cached value
-            else
-                if keydefpath === nothing || isempty(keydefpath)
-                    keydefpath = joinpath(homedir(),".ssh","id_rsa")
+                if username === nothing || isusedcreds
+                    username = prompt("Username for '$schema$host'")
                 end
-                prompt("Private key location for '$schema$username@$host'", default=keydefpath)
-            end
-        end
-        creds[:prvkey, credid] = privatekey # save credentials
 
-        # For SSH we need a public key location, look for environment vars SSH_* as well
-        publickey = if haskey(ENV,"SSH_PUB_KEY_PATH")
-            ENV["SSH_PUB_KEY_PATH"]
-        else
-            keydefpath = creds[:pubkey, credid] # check if credentials were already used
-            if keydefpath !== nothing && !isusedcreds
-                keydefpath # use cached value
-            else
-                if keydefpath === nothing || isempty(keydefpath)
-                    keydefpath = privatekey*".pub"
-                end
-                if isfile(keydefpath)
-                    keydefpath
-                else
-                    prompt("Public key location for '$schema$username@$host'", default=keydefpath)
+                if userpass === nothing || isusedcreds
+                    userpass = prompt("Password for '$schema$username@$host'", password=true)
                 end
             end
+            creds[:user, credid] = username # save credentials
+            creds[:pass, credid] = userpass # save credentials
+
+            isempty(username) && isempty(userpass) && return Cint(Error.EAUTH)
+
+            err = ccall((:git_cred_userpass_plaintext_new, :libgit2), Cint,
+                         (Ptr{Ptr{Void}}, Cstring, Cstring),
+                         cred, username, userpass)
+            err == 0 && return Cint(0)
         end
-        creds[:pubkey, credid] = publickey # save credentials
-
-        passphrase = if haskey(ENV,"SSH_KEY_PASS")
-            ENV["SSH_KEY_PASS"]
-        else
-            passdef = creds[:pass, credid] # check if credentials were already used
-            if passdef === nothing || isusedcreds
-                if is_windows()
-                    passdef = Base.winprompt(
-                        "Your SSH Key requires a password, please enter it now:",
-                        "Passphrase required", privatekey; prompt_username = false)
-                    isnull(passdef) && return Cint(Error.EAUTH)
-                    passdef = Base.get(passdef)[2]
-                else
-                    passdef = prompt("Passphrase for $privatekey", password=true)
-                end
-            end
+    finally
+        # if credentials are not passed back to caller via payload,
+        # then zero any passwords immediately.
+        if creds_are_temp && creds !== nothing
+            securezero!(creds)
         end
-        creds[:pass, credid] = passphrase # save credentials
-
-        isempty(username) && return Cint(Error.EAUTH)
-
-        err = ccall((:git_cred_ssh_key_new, :libgit2), Cint,
-                     (Ptr{Ptr{Void}}, Cstring, Cstring, Cstring, Cstring),
-                     cred, username, publickey, privatekey, passphrase)
-        err == 0 && return Cint(0)
     end
-
-    if isset(allowed_types, Cuint(Consts.CREDTYPE_USERPASS_PLAINTEXT))
-        creds == nothing && (creds = UserPasswordCredentials())
-        credid = "$schema$host"
-
-        username = creds[:user, credid]
-        userpass = creds[:pass, credid]
-        if is_windows()
-            if username === nothing || userpass === nothing || isusedcreds
-                res = Base.winprompt("Please enter your credentials for '$schema$host'", "Credentials required",
-                        username === nothing ? "" : username; prompt_username = true)
-                isnull(res) && return Cint(Error.EAUTH)
-                username, userpass = Base.get(res)
-            end
-        else
-            if username === nothing || isusedcreds
-                username = prompt("Username for '$schema$host'")
-            end
-
-            if userpass === nothing || isusedcreds
-                userpass = prompt("Password for '$schema$username@$host'", password=true)
-            end
-        end
-        creds[:user, credid] = username # save credentials
-        creds[:pass, credid] = userpass # save credentials
-
-        isempty(username) && isempty(userpass) && return Cint(Error.EAUTH)
-
-        err = ccall((:git_cred_userpass_plaintext_new, :libgit2), Cint,
-                     (Ptr{Ptr{Void}}, Cstring, Cstring),
-                     cred, username, userpass)
-        err == 0 && return Cint(0)
-    end
-
     return Cint(err)
 end
 
