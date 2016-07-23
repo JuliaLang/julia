@@ -733,6 +733,14 @@ type SSHCredentials <: AbstractCredentials
     SSHCredentials(u::AbstractString,p::AbstractString) = new(u,p,"","","Y")
     SSHCredentials() = SSHCredentials("","")
 end
+function Base.securezero!(cred::SSHCredentials)
+    securezero!(cred.user)
+    securezero!(cred.pass)
+    securezero!(cred.pubkey)
+    securezero!(cred.prvkey)
+    securezero!(cred.usesshagent)
+    cred
+end
 
 "Credentials that support caching"
 type CachedCredentials <: AbstractCredentials
@@ -776,8 +784,6 @@ end
 "Resets authentication failure protection count"
 reset!(p::CachedCredentials, cnt::Int=3) = (p.count = cnt)
 function Base.securezero!(p::CachedCredentials)
-    for cred in values(p.cred)
-        securezero!(cred.pass)
-        securezero!(cred.prvkey)
-    end
+    foreach(Base.securezero!, values(p.cred))
+    p
 end
