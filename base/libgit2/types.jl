@@ -705,6 +705,8 @@ function getobjecttype(obj_type::Cint)
     end
 end
 
+import Base.securezero!
+
 "Credentials that support only `user` and `password` parameters"
 type UserPasswordCredentials <: AbstractCredentials
     user::AbstractString
@@ -721,6 +723,13 @@ function checkused!(p::UserPasswordCredentials)
 end
 "Resets authentication failure protection count"
 reset!(p::UserPasswordCredentials, cnt::Int=3) = (p.count = cnt)
+function securezero!(cred::UserPasswordCredentials)
+    securezero!(cred.user)
+    securezero!(cred.pass)
+    securezero!(cred.usesshagent)
+    cred.count = 0
+    return cred
+end
 
 "SSH credentials type"
 type SSHCredentials <: AbstractCredentials
@@ -733,13 +742,13 @@ type SSHCredentials <: AbstractCredentials
     SSHCredentials(u::AbstractString,p::AbstractString) = new(u,p,"","","Y")
     SSHCredentials() = SSHCredentials("","")
 end
-function Base.securezero!(cred::SSHCredentials)
+function securezero!(cred::SSHCredentials)
     securezero!(cred.user)
     securezero!(cred.pass)
     securezero!(cred.pubkey)
     securezero!(cred.prvkey)
     securezero!(cred.usesshagent)
-    cred
+    return cred
 end
 
 "Credentials that support caching"
@@ -783,7 +792,7 @@ function checkused!(p::CachedCredentials)
 end
 "Resets authentication failure protection count"
 reset!(p::CachedCredentials, cnt::Int=3) = (p.count = cnt)
-function Base.securezero!(p::CachedCredentials)
-    foreach(Base.securezero!, values(p.cred))
-    p
+function securezero!(p::CachedCredentials)
+    foreach(securezero!, values(p.cred))
+    return p
 end
