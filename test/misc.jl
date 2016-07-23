@@ -393,3 +393,20 @@ end
 optstring = sprint(show, Base.JLOptions())
 @test startswith(optstring, "JLOptions(")
 @test endswith(optstring, ")")
+
+# Base.securezero! functions (#17579)
+import Base: securezero!, unsafe_securezero!
+let a = [1,2,3]
+    @test securezero!(a) === a == [0,0,0]
+    a[:] = 1:3
+    @test unsafe_securezero!(pointer(a), length(a)) == pointer(a)
+    @test a == [0,0,0]
+    a[:] = 1:3
+    @test unsafe_securezero!(Ptr{Void}(pointer(a)), sizeof(a)) == Ptr{Void}(pointer(a))
+    @test a == [0,0,0]
+end
+let creds = Base.LibGit2.CachedCredentials()
+    creds[:pass, "foo"] = "bar"
+    securezero!(creds)
+    @test creds[:pass, "foo"] == "\0\0\0"
+end
