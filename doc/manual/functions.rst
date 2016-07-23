@@ -667,8 +667,8 @@ side is updated in-place.
 
 (In future versions of Julia, operators like ``.*`` will also be handled with
 the same mechanism: they will be equivalent to ``broadcast`` calls and
-will be fused with other nested "dot" calls.  ``x .+= y`` is equivalent
-to ``x .= x .+ y`` and will eventually result in a fused in-place assignment.
+will be fused with other nested "dot" calls.  ``X .+= Y`` is equivalent
+to ``X .= X .+ Y`` and will eventually result in a fused in-place assignment.
 Similarly for ``.*=`` etcetera.)
 
 Further Reading
