@@ -775,3 +775,9 @@ function checkused!(p::CachedCredentials)
 end
 "Resets authentication failure protection count"
 reset!(p::CachedCredentials, cnt::Int=3) = (p.count = cnt)
+function Base.securezero!(p::CachedCredentials)
+    for cred in values(p.cred)
+        securezero!(cred.pass)
+        securezero!(cred.prvkey)
+    end
+end

@@ -407,48 +407,52 @@ function update(branch::AbstractString, upkgs::Set{String})
         end
     end
     creds = LibGit2.CachedCredentials()
-    fixed = Read.fixed(avail,instd,dont_update)
-    stopupdate = false
-    for (pkg,ver) in fixed
-        ispath(pkg,".git") || continue
-        pkg in dont_update && continue
-        with(GitRepo, pkg) do repo
-            if LibGit2.isattached(repo)
-                if LibGit2.isdirty(repo)
-                    warn("Package $pkg: skipping update (dirty)...")
-                elseif Read.ispinned(repo)
-                    info("Package $pkg: skipping update (pinned)...")
-                else
-                    prev_sha = string(LibGit2.head_oid(repo))
-                    success = true
-                    try
-                        LibGit2.fetch(repo, payload = Nullable(creds))
-                        LibGit2.reset!(creds)
-                        LibGit2.merge!(repo, fastforward=true)
-                    catch err
-                        cex = CapturedException(err, catch_backtrace())
-                        push!(deferred_errors, PkgError("Package $pkg cannot be updated.", cex))
-                        success = false
-                        stopupdate = isa(err, InterruptException)
-                    end
-                    if success
-                        post_sha = string(LibGit2.head_oid(repo))
-                        branch = LibGit2.branch(repo)
-                        info("Updating $pkg $branch...",
-                            prev_sha != post_sha ? " $(prev_sha[1:8]) → $(post_sha[1:8])" : "")
+    try
+        fixed = Read.fixed(avail,instd,dont_update)
+        stopupdate = false
+        for (pkg,ver) in fixed
+            ispath(pkg,".git") || continue
+            pkg in dont_update && continue
+            with(GitRepo, pkg) do repo
+                if LibGit2.isattached(repo)
+                    if LibGit2.isdirty(repo)
+                        warn("Package $pkg: skipping update (dirty)...")
+                    elseif Read.ispinned(repo)
+                        info("Package $pkg: skipping update (pinned)...")
+                    else
+                        prev_sha = string(LibGit2.head_oid(repo))
+                        success = true
+                        try
+                            LibGit2.fetch(repo, payload = Nullable(creds))
+                            LibGit2.reset!(creds)
+                            LibGit2.merge!(repo, fastforward=true)
+                        catch err
+                            cex = CapturedException(err, catch_backtrace())
+                            push!(deferred_errors, PkgError("Package $pkg cannot be updated.", cex))
+                            success = false
+                            stopupdate = isa(err, InterruptException)
+                        end
+                        if success
+                            post_sha = string(LibGit2.head_oid(repo))
+                            branch = LibGit2.branch(repo)
+                            info("Updating $pkg $branch...",
+                                prev_sha != post_sha ? " $(prev_sha[1:8]) → $(post_sha[1:8])" : "")
+                        end
                     end
                 end
             end
-        end
-        stopupdate && break
-        if haskey(avail,pkg)
-            try
-                Cache.prefetch(pkg, Read.url(pkg), [a.sha1 for (v,a)=avail[pkg]])
-            catch err
-                cex = CapturedException(err, catch_backtrace())
-                push!(deferred_errors, PkgError("Package $pkg: unable to update cache.", cex))
+            stopupdate && break
+            if haskey(avail,pkg)
+                try
+                    Cache.prefetch(pkg, Read.url(pkg), [a.sha1 for (v,a)=avail[pkg]])
+                catch err
+                    cex = CapturedException(err, catch_backtrace())
+                    push!(deferred_errors, PkgError("Package $pkg: unable to update cache.", cex))
+                end
             end
         end
+    finally
+        securezero!(creds)
     end
     info("Computing changes...")
     resolve(reqs, avail, instd, fixed, free, upkgs)

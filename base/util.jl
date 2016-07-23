@@ -313,6 +313,21 @@ end
 
 julia_exename() = ccall(:jl_is_debugbuild,Cint,())==0 ? "julia" : "julia-debug"
 
+"""
+    securezero!(o)
+
+`securezero!` fills the memory associated with an object `o` with zeros.
+Unlike `fill!(o,0)` and similar code, which might be optimized away by
+the compiler for objects about to be discarded, the `securezero!` function
+will always be called.
+"""
+function securezero end
+@noinline securezero!{T<:Number}(a::AbstractArray{T}) = fill!(a, 0)
+securezero!(s::String) = securezero!(s.data)
+@noinline securezero!{T}(p::Ptr{T}, len::Integer=1) =
+    ccall(:memset, Ptr{T}, (Ptr{T}, Cint, Csize_t), p, 0, len*sizeof(T))
+securezero!(p::Ptr{Void}, len=1) = securezero!(Ptr{UInt8}(p), len)
+
 if is_windows()
 function getpass(prompt::AbstractString)
     print(prompt)
@@ -336,7 +351,7 @@ function getpass(prompt::AbstractString)
         return unsafe_string(pointer(p), plen) # use unsafe_string rather than String(p[1:plen])
                                                # to be absolutely certain we never make an extra copy
     finally
-        fill!(p, 0) # don't leave password in memory
+        securezero!(p)
     end
 
     return ""
@@ -418,11 +433,18 @@ if is_windows()
 
         # Step 4: Free the encrypted buffer
         # ccall(:SecureZeroMemory, Ptr{Void}, (Ptr{Void}, Csize_t), outbuf_data[], outbuf_size[]) - not an actual function
+        securezero!(outbuf_data[], outbuf_size[])
         ccall((:CoTaskMemFree, "ole32.dll"), Void, (Ptr{Void},), outbuf_data[])
 
-        # Done
-        Nullable((String(transcode(UInt8, usernamebuf[1:usernamelen[]-1])),
-            String(transcode(UInt8, passbuf[1:passlen[]-1]))))
+        # Done.  Fixme: for non-ascii passwords, transcode may leave
+        # an extra copy of the password in memory (due to resizing its buffer).
+        passbuf_ = passbuf[1:passlen[]-1]
+        result = Nullable((String(transcode(UInt8, usernamebuf[1:usernamelen[]-1])),
+            String(transcode(UInt8, passbuf_))))
+        securezero!(passbuf_)
+        securezero!(passbuf)
+
+        return result
     end
 
 end
