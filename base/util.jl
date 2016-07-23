@@ -326,7 +326,7 @@ function securezero! end
 securezero!(s::String) = securezero!(s.data)
 @noinline unsafe_securezero!{T}(p::Ptr{T}, len::Integer=1) =
     ccall(:memset, Ptr{T}, (Ptr{T}, Cint, Csize_t), p, 0, len*sizeof(T))
-unsafe_securezero!(p::Ptr{Void}, len=1) = securezero!(Ptr{UInt8}(p), len)
+unsafe_securezero!(p::Ptr{Void}, len=1) = Ptr{Void}(securezero!(Ptr{UInt8}(p), len))
 
 if is_windows()
 function getpass(prompt::AbstractString)
