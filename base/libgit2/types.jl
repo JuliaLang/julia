@@ -583,8 +583,8 @@ end
 StatusEntry() = StatusEntry(Cuint(0), C_NULL, C_NULL)
 
 immutable FetchHead
-    name::AbstractString
-    url::AbstractString
+    name::String
+    url::String
     oid::Oid
     ismerge::Bool
 end
@@ -645,8 +645,8 @@ end
 
 # Structure has the same layout as SignatureStruct
 type Signature
-    name::AbstractString
-    email::AbstractString
+    name::String
+    email::String
     time::Int64
     time_offset::Cint
 end
@@ -709,9 +709,9 @@ import Base.securezero!
 
 "Credentials that support only `user` and `password` parameters"
 type UserPasswordCredentials <: AbstractCredentials
-    user::AbstractString
-    pass::AbstractString
-    usesshagent::AbstractString  # used for ssh-agent authentication
+    user::String
+    pass::String
+    usesshagent::String  # used for ssh-agent authentication
     count::Int                   # authentication failure protection count
     function UserPasswordCredentials(u::AbstractString,p::AbstractString)
         c = new(u,p,"Y",3)
@@ -737,11 +737,11 @@ end
 
 "SSH credentials type"
 type SSHCredentials <: AbstractCredentials
-    user::AbstractString
-    pass::AbstractString
-    pubkey::AbstractString
-    prvkey::AbstractString
-    usesshagent::AbstractString  # used for ssh-agent authentication
+    user::String
+    pass::String
+    pubkey::String
+    prvkey::String
+    usesshagent::String  # used for ssh-agent authentication
 
     function SSHCredentials(u::AbstractString,p::AbstractString)
         c = new(u,p,"","","Y")
@@ -761,9 +761,9 @@ end
 
 "Credentials that support caching"
 type CachedCredentials <: AbstractCredentials
-    cred::Dict{AbstractString,SSHCredentials}
+    cred::Dict{String,SSHCredentials}
     count::Int            # authentication failure protection count
-    CachedCredentials() = new(Dict{AbstractString,SSHCredentials}(),3)
+    CachedCredentials() = new(Dict{String,SSHCredentials}(),3)
 end
 "Returns specific credential parameter value: first index is a credential
 parameter name, second index is a host name (with schema)"
