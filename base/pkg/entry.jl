@@ -406,9 +406,9 @@ function update(branch::AbstractString, upkgs::Set{String})
             push!(deferred_errors, PkgError("Package $pkg: unable to update cache.", cex))
         end
     end
+    fixed = Read.fixed(avail,instd,dont_update)
     creds = LibGit2.CachedCredentials()
     try
-        fixed = Read.fixed(avail,instd,dont_update)
         stopupdate = false
         for (pkg,ver) in fixed
             ispath(pkg,".git") || continue
