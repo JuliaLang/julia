@@ -7,6 +7,7 @@ $(SRCDIR)/srccache/objconv.zip: | $(SRCDIR)/srccache
 	$(JLDOWNLOAD) $@ http://www.agner.org/optimize/objconv.zip
 $(BUILDDIR)/objconv/config.status: $(SRCDIR)/srccache/objconv.zip
 	-rm -r $(dir $@)
+	mkdir -p $(BUILDDIR)
 	unzip -d $(dir $@) $<
 	cd $(dir $@) && unzip source.zip
 	echo 1 > $@
