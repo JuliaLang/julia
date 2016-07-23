@@ -228,7 +228,7 @@ and get a list of LaTeX matches as well::
     \hat              \heartsuit         \hksearow          \hookleftarrow     \hslash
     \hbar             \hermitconjmatrix  \hkswarow          \hookrightarrow    \hspace
 
-    julia> α="\alpha[TAB]"   # LaTeX complation do also work in strings
+    julia> α="\alpha[TAB]"   # LaTeX completion also works in strings
     julia> α="α"
 
 A full list of tab-completions can be found in the :ref:`man-unicode-input` section of the manual.
@@ -244,9 +244,9 @@ Completion of paths works for strings and julia's shell mode::
 
 Tab completion can help with investigation of the available methods matching the input arguments::
 
-    julia> max([TAB] # All methods is displayed, not display here due to size of the list
+    julia> max([TAB] # All methods are displayed, not shown here due to size of the list
 
-    julia> max([1,2],[TAB] # All methods where array is first argument
+    julia> max([1,2],[TAB] # All methods where `Vector{Int}` matches as first argument
     max{T1<:Real,T2<:Real}(x::AbstractArray{T1,N<:Any}, y::T2) at operators.jl:544
     max{Tx<:Real,Ty<:Real}(x::Union{Base.ReshapedArray{Tx,1,A<:DenseArray,MI<:Tuple{Vararg{Base.MultiplicativeInverses.SignedMultiplicativeInverse{Int64},N<:Any}}},DenseArray{Tx,1},SubArray{Tx,1,A<:Union{Base.ReshapedArray{T<:Any,N<:Any,A<:DenseArray,MI<:Tuple{Vararg{Base.MultiplicativeInverses.SignedMultiplicativeInverse{Int64},N<:Any}}},DenseArray},I<:Tuple{Vararg{Union{Base.AbstractCartesianIndex,Colon,Int64,Range{Int64}},N<:Any}},L<:Any}}, y::AbstractSparseArray{Ty,Ti<:Any,1}) at sparse\sparsevector.jl:1127
     max{T1<:Real,T2<:Real}(x::AbstractArray{T1,N<:Any}, y::AbstractArray{T2,N<:Any}) at operators.jl:548
@@ -258,11 +258,11 @@ Tab completion can help with investigation of the available methods matching the
     max(x, y) at operators.jl:78
     max(a, b, c, xs...) at operators.jl:119
 
-    julia> split("1 1 1", # Keywords are also displayed in the suggested methods after the `;`
+    julia> split("1 1 1", # Keywords are also displayed in the suggested methods, see second line after `;` where `limit` and `keep` are keyword arguments
     split(str::AbstractString) at strings/util.jl:151
     split{T<:AbstractString}(str::T, splitter; limit, keep) at strings/util.jl:127
 
-The completion of the methods uses type inference and can therefore see if the arguments match even if the arguments are output from functions. The function needs to be type stable for the completion to be able remove non-matching methods.
+The completion of the methods uses type inference and can therefore see if the arguments match even if the arguments are output from functions. The function needs to be type stable for the completion to be able to remove non-matching methods.
 
 Tab completion can also help completing fields::
 
@@ -274,7 +274,7 @@ Fields for output from functions can also be completed::
     julia> split("","")[1].[TAB]
     endof  offset  string
 
-The completion of fields for output from functions uses type inference and it can only suggest fields, if the function is type stable.
+The completion of fields for output from functions uses type inference, and it can only suggest fields if the function is type stable.
 
 Customizing Colors
 ------------------
