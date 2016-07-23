@@ -95,9 +95,24 @@ function start_repl_backend(repl_channel::Channel, response_channel::Channel)
     backend
 end
 
+function ip_matches_func(ip, func::Symbol)
+    for fr in StackTraces.lookup(ip)
+        if fr === StackTraces.UNKNOWN || fr.from_c
+            return false
+        end
+        fr.func === func && return true
+    end
+    return false
+end
+
 function display_error(io::IO, er, bt)
     Base.with_output_color(:red, io) do io
         print(io, "ERROR: ")
+        # remove REPL-related frames from interactive printing
+        eval_ind = findlast(addr->ip_matches_func(addr, :eval), bt)
+        if eval_ind != 0
+            bt = bt[1:eval_ind-1]
+        end
         Base.showerror(io, er, bt)
     end
 end

@@ -14,7 +14,7 @@ type CapturedException <: Exception
         # Process bt_raw so that it can be safely serialized
         bt_lines = Any[]
         process_func(args...) = push!(bt_lines, args)
-        process_backtrace(process_func, :(:), bt_raw, 1:100) # Limiting this to 100 lines.
+        process_backtrace(process_func, bt_raw, 100) # Limiting this to 100 lines.
 
         new(ex, bt_lines)
     end
