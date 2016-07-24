@@ -138,6 +138,8 @@ end
 # lock / unlock
 let l = ReentrantLock()
     lock(l)
+    @test trylock(l)
+    unlock(l)
     unlock(l)
     @test_throws ErrorException unlock(l)
 end
