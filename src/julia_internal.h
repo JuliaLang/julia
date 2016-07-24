@@ -54,6 +54,10 @@ void *jl_gc_perm_alloc(size_t sz);
 static const int jl_gc_sizeclasses[JL_GC_N_POOLS] = {
 #ifdef _P64
     8,
+#elif defined(_CPU_ARM_) || defined(_CPU_PPC_)
+    // ARM and PowerPC has max alignment of 8,
+    // make sure allocation of size 8 has that alignment.
+    4, 8,
 #else
     4, 8, 12,
 #endif
@@ -87,6 +91,10 @@ STATIC_INLINE int JL_CONST_FUNC jl_gc_szclass(size_t sz)
     if (sz <=    8)
         return 0;
     const int N = 0;
+#elif defined(_CPU_ARM_) || defined(_CPU_PPC_)
+    if (sz <=    8)
+        return (sz + 3) / 4 - 1;
+    const int N = 1;
 #else
     if (sz <=   12)
         return (sz + 3) / 4 - 1;
