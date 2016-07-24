@@ -362,6 +362,15 @@ let text =
     table = Markdown.parse(text)
     @test text == Markdown.plain(table)
 end
+let text =
+    """
+    | a        |   b |
+    |:-------- | ---:|
+    | `x \\| y` |   2 |
+    """,
+    table = Markdown.parse(text)
+    @test text == Markdown.plain(table)
+end
 
 # LaTeX extension
 
