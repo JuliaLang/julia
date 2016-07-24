@@ -1117,7 +1117,14 @@ const ziggurat_nor_r      = 3.6541528853610087963519472518
 const ziggurat_nor_inv_r  = inv(ziggurat_nor_r)
 const ziggurat_exp_r      = 7.6971174701310497140446280481
 
+"""
+    randn([rng], [T=Float64], [dims...])
 
+Generate a normally-distributed random number of type `T` with mean 0 and standard deviation 1.
+Optionally generate an array of normally-distributed random numbers.
+The `Base` module currently provides an implementation for the types
+`Float16`, `Float32`, and `Float64` (the default).
+"""
 @inline function randn(rng::AbstractRNG=GLOBAL_RNG)
     @inbounds begin
         r = rand_ui52(rng)
@@ -1144,19 +1151,14 @@ function randn_unlikely(rng, idx, rabs, x)
     end
 end
 
-function randn!(rng::AbstractRNG, A::AbstractArray{Float64})
-    for i in eachindex(A)
-        @inbounds A[i] = randn(rng)
-    end
-    A
-end
+"""
+    randexp([rng], [T=Float64], [dims...])
 
-randn!(A::AbstractArray{Float64}) = randn!(GLOBAL_RNG, A)
-randn(dims::Dims) = randn!(Array{Float64}(dims))
-randn(dims::Integer...) = randn!(Array{Float64}(dims...))
-randn(rng::AbstractRNG, dims::Dims) = randn!(rng, Array{Float64}(dims))
-randn(rng::AbstractRNG, dims::Integer...) = randn!(rng, Array{Float64}(dims...))
-
+Generate a random number of type `T` according to the exponential distribution with scale 1.
+Optionally generate an array of such random numbers.
+The `Base` module currently provides an implementation for the types
+`Float16`, `Float32`, and `Float64` (the default).
+"""
 @inline function randexp(rng::AbstractRNG=GLOBAL_RNG)
     @inbounds begin
         ri = rand_ui52(rng)
@@ -1177,18 +1179,51 @@ function randexp_unlikely(rng, idx, x)
     end
 end
 
-function randexp!(rng::AbstractRNG, A::Array{Float64})
-    for i in eachindex(A)
-        @inbounds A[i] = randexp(rng)
-    end
-    A
-end
+"""
+    randn!([rng], A::AbstractArray) -> A
 
-randexp!(A::Array{Float64}) = randexp!(GLOBAL_RNG, A)
-randexp(dims::Dims) = randexp!(Array{Float64}(dims))
-randexp(dims::Int...) = randexp!(Array{Float64}(dims))
-randexp(rng::AbstractRNG, dims::Dims) = randexp!(rng, Array{Float64}(dims))
-randexp(rng::AbstractRNG, dims::Int...) = randexp!(rng, Array{Float64}(dims))
+Fill the array `A` with normally-distributed (mean 0, standard deviation 1) random numbers.
+Also see the `rand` function.
+"""
+function randn! end
+
+"""
+    randexp!([rng], A::AbstractArray) -> A
+
+Fill the array `A` with random numbers following the exponential distribution (with scale 1).
+"""
+function randexp! end
+
+let Floats = Union{Float16,Float32,Float64}
+    for randfun in [:randn, :randexp]
+        randfun! = Symbol(randfun, :!)
+        @eval begin
+            # scalars
+            $randfun{T<:$Floats}(rng::AbstractRNG, ::Type{T}) = convert(T, $randfun(rng))
+            $randfun{T<:$Floats}(::Type{T}) = $randfun(GLOBAL_RNG, T)
+
+            # filling arrays
+            function $randfun!{T}(rng::AbstractRNG, A::AbstractArray{T})
+                for i in eachindex(A)
+                    @inbounds A[i] = $randfun(rng, T)
+                end
+                A
+            end
+
+            $randfun!(A::AbstractArray) = $randfun!(GLOBAL_RNG, A)
+
+            # generating arrays
+            $randfun{T}(rng::AbstractRNG, ::Type{T}, dims::Dims)       = $randfun!(rng, Array{T}(dims))
+            $randfun{T}(rng::AbstractRNG, ::Type{T}, dims::Integer...) = $randfun!(rng, Array{T}(dims...))
+            $randfun{T}(                  ::Type{T}, dims::Dims)       = $randfun(GLOBAL_RNG, T, dims)
+            $randfun{T}(                  ::Type{T}, dims::Integer...) = $randfun(GLOBAL_RNG, T, dims...)
+            $randfun(   rng::AbstractRNG,            dims::Dims)       = $randfun(rng, Float64, dims)
+            $randfun(   rng::AbstractRNG,            dims::Integer...) = $randfun(rng, Float64, dims...)
+            $randfun(                                dims::Dims)       = $randfun(GLOBAL_RNG, Float64, dims)
+            $randfun(                                dims::Integer...) = $randfun(GLOBAL_RNG, Float64, dims...)
+        end
+    end
+end
 
 ## random UUID generation
 
