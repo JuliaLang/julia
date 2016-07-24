@@ -228,11 +228,56 @@ and get a list of LaTeX matches as well::
     \hat              \heartsuit         \hksearow          \hookleftarrow     \hslash
     \hbar             \hermitconjmatrix  \hkswarow          \hookrightarrow    \hspace
 
+    julia> α="\alpha[TAB]"   # LaTeX completion also works in strings
+    julia> α="α"
+
 A full list of tab-completions can be found in the :ref:`man-unicode-input` section of the manual.
 
+Completion of paths works for strings and julia's shell mode::
+
+    julia> path="/[TAB]"
+    .dockerenv  .juliabox/   boot/        etc/         lib/         media/       opt/         root/        sbin/        sys/         usr/
+    .dockerinit bin/         dev/         home/        lib64/       mnt/         proc/        run/         srv/         tmp/         var/
+    shell> /[TAB]
+    .dockerenv  .juliabox/   boot/        etc/         lib/         media/       opt/         root/        sbin/        sys/         usr/
+    .dockerinit bin/         dev/         home/        lib64/       mnt/         proc/        run/         srv/         tmp/         var/
+
+Tab completion can help with investigation of the available methods matching the input arguments::
+
+    julia> max([TAB] # All methods are displayed, not shown here due to size of the list
+
+    julia> max([1,2],[TAB] # All methods where `Vector{Int}` matches as first argument
+    max{T1<:Real,T2<:Real}(x::AbstractArray{T1,N<:Any}, y::T2) at operators.jl:544
+    max{Tx<:Real,Ty<:Real}(x::Union{Base.ReshapedArray{Tx,1,A<:DenseArray,MI<:Tuple{Vararg{Base.MultiplicativeInverses.SignedMultiplicativeInverse{Int64},N<:Any}}},DenseArray{Tx,1},SubArray{Tx,1,A<:Union{Base.ReshapedArray{T<:Any,N<:Any,A<:DenseArray,MI<:Tuple{Vararg{Base.MultiplicativeInverses.SignedMultiplicativeInverse{Int64},N<:Any}}},DenseArray},I<:Tuple{Vararg{Union{Base.AbstractCartesianIndex,Colon,Int64,Range{Int64}},N<:Any}},L<:Any}}, y::AbstractSparseArray{Ty,Ti<:Any,1}) at sparse\sparsevector.jl:1127
+    max{T1<:Real,T2<:Real}(x::AbstractArray{T1,N<:Any}, y::AbstractArray{T2,N<:Any}) at operators.jl:548
+    max(x, y) at operators.jl:78
+    max(a, b, c, xs...) at operators.jl:119
+
+    julia> max([1,2], max(1,2),[TAB] # All methods matching the arguments.
+    max{T1<:Real,T2<:Real}(x::AbstractArray{T1,N<:Any}, y::T2) at operators.jl:544
+    max(x, y) at operators.jl:78
+    max(a, b, c, xs...) at operators.jl:119
+
+    julia> split("1 1 1", # Keywords are also displayed in the suggested methods, see second line after `;` where `limit` and `keep` are keyword arguments
+    split(str::AbstractString) at strings/util.jl:151
+    split{T<:AbstractString}(str::T, splitter; limit, keep) at strings/util.jl:127
+
+The completion of the methods uses type inference and can therefore see if the arguments match even if the arguments are output from functions. The function needs to be type stable for the completion to be able to remove non-matching methods.
+
+Tab completion can also help completing fields::
+
+    julia> Pkg.a
+    add       available
+
+Fields for output from functions can also be completed::
+
+    julia> split("","")[1].[TAB]
+    endof  offset  string
+
+The completion of fields for output from functions uses type inference, and it can only suggest fields if the function is type stable.
 
 Customizing Colors
-~~~~~~~~~~~~~~~~~~
+------------------
 
 The colors used by Julia and the REPL can be customized, as well. To change the color of the Julia
 prompt you can add something like the following to your ``juliarc.jl`` file::
