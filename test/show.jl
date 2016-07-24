@@ -9,7 +9,7 @@ replstr(x) = sprint((io,x) -> show(IOContext(io, limit=true), MIME("text/plain")
 immutable T5589
     names::Vector{String}
 end
-@test replstr(T5589(Array(String,100))) == "T5589(String[#undef,#undef,#undef,#undef,#undef,#undef,#undef,#undef,#undef,#undef  …  #undef,#undef,#undef,#undef,#undef,#undef,#undef,#undef,#undef,#undef])"
+@test replstr(T5589(Array{String,1}(100))) == "T5589(String[#undef,#undef,#undef,#undef,#undef,#undef,#undef,#undef,#undef,#undef  …  #undef,#undef,#undef,#undef,#undef,#undef,#undef,#undef,#undef,#undef])"
 
 @test replstr(parse("type X end")) == ":(type X # none, line 1:\n    end)"
 @test replstr(parse("immutable X end")) == ":(immutable X # none, line 1:\n    end)"
@@ -105,7 +105,7 @@ end
             n *= d
         end
         nc = num_bit_chunks(n)
-        chunks = Array(UInt64, nc)
+        chunks = Array{UInt64,1}(nc)
         if nc > 0
             chunks[end] = UInt64(0)
         end

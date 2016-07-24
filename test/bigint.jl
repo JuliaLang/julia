@@ -226,7 +226,7 @@ g = parse(BigInt,"-1")
 # from Bill Hart, https://groups.google.com/group/julia-dev/browse_frm/thread/798e2d1322daf633
 function mul(a::Vector{BigInt}, b::Vector{BigInt})
    x = a[2]*b[2]
-   c = Array(BigInt,3)
+   c = Array{BigInt,1}(3)
    c[1] = a[1]*b[1] + x
    c[2] = a[1]*b[2] + a[2]*b[3]
    c[3] = x + a[3]*b[3]
