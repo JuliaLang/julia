@@ -55,9 +55,11 @@ typedef struct {
 
     // variables for allocating objects from pools
 #ifdef _P64
-#define JL_GC_N_POOLS 41
+#  define JL_GC_N_POOLS 41
+#elif defined(_CPU_ARM_) || defined(_CPU_PPC_)
+#  define JL_GC_N_POOLS 42
 #else
-#define JL_GC_N_POOLS 43
+#  define JL_GC_N_POOLS 43
 #endif
     jl_gc_pool_t norm_pools[JL_GC_N_POOLS];
 } jl_thread_heap_t;
