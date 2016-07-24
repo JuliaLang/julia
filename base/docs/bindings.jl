@@ -31,7 +31,13 @@ macro var(x)
     esc(bindingexpr(x))
 end
 
-Base.show(io::IO, b::Binding) = b.mod === Main ? print(io, b.var) : print(io, b.mod, '.', b.var)
+function Base.show(io::IO, b::Binding)
+    if b.mod === Main
+        print(io, b.var)
+    else
+        print(io, b.mod, '.', Base.isoperator(b.var) ? ":" : "", b.var)
+    end
+end
 
 aliasof(b::Binding)     = defined(b) ? (a = aliasof(resolve(b), b); defined(a) ? a : b) : b
 aliasof(d::DataType, b) = Binding(d.name.module, d.name.name)
