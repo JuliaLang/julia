@@ -397,6 +397,64 @@ begin
     # Try entering search mode while in custom repl mode
     LineEdit.enter_search(s, custom_histp, true)
 end
+
+# Test removal of prompt in bracket pasting
+begin
+    stdin_write, stdout_read, stderr_read, repl = fake_repl()
+
+    repl.interface = REPL.setup_interface(repl)
+    repl_mode = repl.interface.modes[1]
+    shell_mode = repl.interface.modes[2]
+    help_mode = repl.interface.modes[3]
+
+    repltask = @async begin
+        Base.REPL.run_repl(repl)
+    end
+
+    c = Condition()
+
+    sendrepl2(cmd) = write(stdin_write,"$cmd\n notify(c)\n")
+
+    # Test single statement
+    sendrepl2("\e[200~julia> A = 2\e[201~\n")
+    wait(c)
+    @test A == 2
+
+    # Test multi statement
+    sendrepl2("""\e[200~
+            julia> type T17599; a::Int; end
+
+                function foo(julia)
+            julia> 3
+                end
+
+                    julia> A = 3\e[201~
+             """)
+    wait(c)
+    @test A == 3
+    @test foo(4)
+    @test T17599(3).a == 3
+    @test !foo(2)
+
+    # Test only works in bracket mode
+    sendrepl2("julia = 4\n julia> 3 && (A = 1)\n")
+    wait(c)
+    @test A == 1
+
+    # Test shell> mode
+    tmpdir = mktempdir()
+    curr_dir = pwd()
+    write(stdin_write, ";")
+    write(stdin_write, "\e[200~shell> cd $(escape_string(tmpdir))\e[201~\n")
+    sendrepl2("tmpdirnow = pwd()")
+    wait(c)
+    @test tmpdirnow == tmpdir
+    cd(curr_dir)
+
+    write(stdin_write, '\x04')
+    wait(repltask)
+end
+
 # Simple non-standard REPL tests
 if !is_windows() || Sys.windows_version() >= Sys.WINDOWS_VISTA_VER
     stdin_write, stdout_read, stdout_read, repl = fake_repl()

@@ -1302,9 +1302,14 @@ Must satisfy `0 < tabwidth <= 16`.
 """
 global tabwidth = 8
 
+const STANDARD_REPL_PROMPTS = ["julia> ", "help?> ", "shell> "]
+
 function bracketed_paste(s)
     ps = state(s, mode(s))
     input = readuntil(ps.terminal, "\e[201~")[1:(end-6)]
+    if ps.p.prompt in STANDARD_REPL_PROMPTS && startswith(input, ps.p.prompt)
+        input = input[sizeof(ps.p.prompt)+1:end]
+    end
     input = replace(input, '\r', '\n')
     if position(buffer(s)) == 0
         indent = Base.indentation(input; tabwidth=tabwidth)[1]

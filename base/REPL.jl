@@ -838,6 +838,18 @@ function setup_interface(repl::LineEditREPL; hascolor = repl.hascolor, extra_rep
             oldpos = start(input)
             firstline = true
             while !done(input, oldpos) # loop until all lines have been executed
+                # Check if the next statement starts with "julia> ", in that case
+                # skip it. But first skip whitespace
+                c = oldpos
+                while c <= sizeof(input) && (input[c] == '\n' || input[c] == ' ' || input[c] == '\t')
+                    c = nextind(input, c)
+                end
+                n_newlines = c - oldpos
+                # Skip over prompt prefix if statement starts with it
+                jl_prompt_len = 7
+                if c + jl_prompt_len <= sizeof(input) && input[c:c+jl_prompt_len-1] == "julia> "
+                    oldpos += jl_prompt_len + n_newlines
+                end
                 ast, pos = Base.syntax_deprecation_warnings(false) do
                     Base.parse(input, oldpos, raise=false)
                 end
