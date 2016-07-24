@@ -111,24 +111,6 @@ Tasks
 
    Block the current task for a specified number of seconds. The minimum sleep time is 1 millisecond or input of ``0.001``\ .
 
-.. function:: ReentrantLock()
-
-   .. Docstring generated from Julia source
-
-   Creates a reentrant lock. The same task can acquire the lock as many times as required. Each lock must be matched with an unlock.
-
-.. function:: lock(l::ReentrantLock)
-
-   .. Docstring generated from Julia source
-
-   Associates ``l`` with the current task. If ``l`` is already locked by a different task, waits for it to become available. The same task can acquire the lock multiple times. Each "lock" must be matched by an "unlock"
-
-.. function:: unlock(l::ReentrantLock)
-
-   .. Docstring generated from Julia source
-
-   Releases ownership of the lock by the current task. If the lock had been acquired before, it just decrements an internal counter and returns immediately.
-
 .. function:: Channel{T}(sz::Int)
 
    .. Docstring generated from Julia source
@@ -801,6 +783,105 @@ will) change in the future.
    This is likely a very expensive operation. Given that all other atomic operations in Julia already have acquire/release semantics, explicit fences should not be necessary in most cases.
 
    For further details, see LLVM's ``fence`` instruction.
+
+Synchronization Primitives
+--------------------------
+
+.. data:: AbstractLock
+
+   .. Docstring generated from Julia source
+
+   Abstract supertype describing types that implement the thread-safe synchronization primitives: ``lock``\ , ``trylock``\ , ``unlock``\ , and ``islocked``
+
+.. function:: lock(the_lock)
+
+   .. Docstring generated from Julia source
+
+   Acquires the lock when it becomes available. If the lock is already locked by a different task/thread, it waits for it to become available.
+
+   Each ``lock`` must be matched by an ``unlock``\ .
+
+.. function:: unlock(the_lock)
+
+   .. Docstring generated from Julia source
+
+   Releases ownership of the lock.
+
+   If this is a recursive lock which has been acquired before, it just decrements an internal counter and returns immediately.
+
+.. function:: trylock(the_lock) -> Success (Boolean)
+
+   .. Docstring generated from Julia source
+
+   Acquires the lock if it is available, returning ``true`` if successful. If the lock is already locked by a different task/thread, returns ``false``\ .
+
+   Each successful ``trylock`` must be matched by an ``unlock``\ .
+
+.. function:: islocked(the_lock) -> Status (Boolean)
+
+   .. Docstring generated from Julia source
+
+   Check whether the lock is held by any task/thread. This should not be used for synchronization (see instead ``trylock``\ ).
+
+.. function:: ReentrantLock()
+
+   .. Docstring generated from Julia source
+
+   Creates a reentrant lock for synchronizing Tasks. The same task can acquire the lock as many times as required. Each ``lock`` must be matched with an ``unlock``\ .
+
+   This lock is NOT threadsafe. See ``Threads.Mutex`` for a threadsafe lock.
+
+.. function:: Mutex()
+
+   .. Docstring generated from Julia source
+
+   These are standard system mutexes for locking critical sections of logic.
+
+   On Windows, this is a critical section object, on pthreads, this is a ``pthread_mutex_t``\ .
+
+   See also SpinLock for a lighter-weight lock.
+
+.. function:: SpinLock()
+
+   .. Docstring generated from Julia source
+
+   Creates a non-reentrant lock. Recursive use will result in a deadlock. Each ``lock`` must be matched with an ``unlock``\ .
+
+   Test-and-test-and-set spin locks are quickest up to about 30ish contending threads. If you have more contention than that, perhaps a lock is the wrong way to synchronize.
+
+   See also RecursiveSpinLock for a version that permits recursion.
+
+   See also Mutex for a more efficient version on one core or if the lock may be held for a considerable length of time.
+
+.. function:: RecursiveSpinLock()
+
+   .. Docstring generated from Julia source
+
+   Creates a reentrant lock. The same thread can acquire the lock as many times as required. Each ``lock`` must be matched with an ``unlock``\ .
+
+   See also SpinLock for a slightly faster version.
+
+   See also Mutex for a more efficient version on one core or if the lock may be held for a considerable length of time.
+
+.. function:: Semaphore(sem_size)
+
+   .. Docstring generated from Julia source
+
+   Creates a counting semaphore that allows at most ``sem_size`` acquires to be in use at any time. Each acquire must be mached with a release.
+
+   This construct is NOT threadsafe.
+
+.. function:: acquire(s::Semaphore)
+
+   .. Docstring generated from Julia source
+
+   Wait for one of the ``sem_size`` permits to be available, blocking until one can be acquired.
+
+.. function:: release(s::Semaphore)
+
+   .. Docstring generated from Julia source
+
+   Return one permit to the pool, possibly allowing another task to acquire it and resume execution.
 
 Cluster Manager Interface
 -------------------------
