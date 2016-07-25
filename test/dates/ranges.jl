@@ -14,7 +14,7 @@ function test_all_combos()
                 @test length(dr) == 0
                 @test isempty(dr)
                 @test first(dr) == f1
-                @test last(dr) == f1-one(l1 - f1)
+                @test last(dr) < f1
                 @test length([i for i in dr]) == 0
                 @test_throws ArgumentError minimum(dr)
                 @test_throws ArgumentError maximum(dr)
@@ -23,8 +23,8 @@ function test_all_combos()
                 @test [dr;] == T[]
                 @test isempty(reverse(dr))
                 @test length(reverse(dr)) == 0
-                @test first(reverse(dr)) == f1-one(l1 - f1)
-                @test last(reverse(dr)) == f1
+                @test first(reverse(dr)) < f1
+                @test last(reverse(dr)) >= f1
                 @test issorted(dr)
                 @test sortperm(dr) == 1:1:0
                 @test !(f1 in dr)
@@ -66,7 +66,7 @@ function test_all_combos()
                 @test length(dr) == 0
                 @test isempty(dr)
                 @test first(dr) == l1
-                @test last(dr) == l1+one(l1 - f1)
+                @test last(dr) > l1
                 @test length([i for i in dr]) == 0
                 @test_throws ArgumentError minimum(dr)
                 @test_throws ArgumentError maximum(dr)
@@ -75,8 +75,8 @@ function test_all_combos()
                 @test [dr;] == T[]
                 @test isempty(reverse(dr))
                 @test length(reverse(dr)) == 0
-                @test first(reverse(dr)) == l1+one(l1 - f1)
-                @test last(reverse(dr)) == l1
+                @test first(reverse(dr)) > l1
+                @test last(reverse(dr)) <= l1
                 @test !issorted(dr)
                 @test sortperm(dr) == 0:-1:1
                 @test !(l1 in dr)
@@ -119,7 +119,7 @@ function test_all_combos()
                     @test length(dr) == 0
                     @test isempty(dr)
                     @test first(dr) == f1
-                    @test last(dr) == f1-one(l1 - f1)
+                    @test last(dr) < f1
                     @test length([i for i in dr]) == 0
                     @test_throws ArgumentError minimum(dr)
                     @test_throws ArgumentError maximum(dr)
@@ -128,8 +128,8 @@ function test_all_combos()
                     @test [dr;] == T[]
                     @test isempty(reverse(dr))
                     @test length(reverse(dr)) == 0
-                    @test first(reverse(dr)) == f1-one(l1 - f1)
-                    @test last(reverse(dr)) == f1
+                    @test first(reverse(dr)) < f1
+                    @test last(reverse(dr)) >= f1
                     @test issorted(dr)
                     @test sortperm(dr) == 1:1:0
                     @test !(f1 in dr)
@@ -171,7 +171,7 @@ function test_all_combos()
                     @test length(dr) == 0
                     @test isempty(dr)
                     @test first(dr) == l1
-                    @test last(dr) == l1+one(l1 - f1)
+                    @test last(dr) > l1
                     @test length([i for i in dr]) == 0
                     @test_throws ArgumentError minimum(dr)
                     @test_throws ArgumentError maximum(dr)
@@ -180,7 +180,7 @@ function test_all_combos()
                     @test [dr;] == T[]
                     @test isempty(reverse(dr))
                     @test length(reverse(dr)) == 0
-                    @test first(reverse(dr)) == l1+one(l1 - f1)
+                    @test first(reverse(dr)) > l1
                     @test last(reverse(dr)) <= l1
                     @test !issorted(dr)
                     @test sortperm(dr) == 0:-1:1
