@@ -419,6 +419,7 @@ function serialize_typename_body(s::AbstractSerializer, t::TypeName)
     else
         writetag(s.io, UNDEFREF_TAG)
     end
+    nothing
 end
 
 # decide whether to send all data for a type (instead of just its name)
@@ -729,29 +730,32 @@ end
 
 
 function deserialize(s::AbstractSerializer, ::Type{TypeName})
+    # the deserialize_cycle call can be delayed, since neither
+    # Symbol nor Module will use the backref table
     number = read(s.io, UInt64)
-    name = deserialize(s)
-    mod = deserialize(s)
-    if haskey(known_object_data, number)
-        tn = known_object_data[number]::TypeName
-        name = tn.name
-        mod = tn.module
+    name = deserialize(s)::Symbol
+    mod = deserialize(s)::Module
+    tn = get(known_object_data, number, nothing)
+    if tn !== nothing
         makenew = false
-    elseif isdefined(mod, name)
+    elseif mod !== __deserialized_types__ && isdefined(mod, name)
         tn = getfield(mod, name).name
         # TODO: confirm somehow that the types match
-        name = tn.name
-        mod = tn.module
         makenew = false
+        known_object_data[number] = tn
     else
         name = gensym()
         mod = __deserialized_types__
         tn = ccall(:jl_new_typename_in, Ref{TypeName}, (Any, Any), name, mod)
         makenew = true
+        known_object_data[number] = tn
+    end
+    if !haskey(object_numbers, tn)
+        # setup up reverse mapping for serialize
+        object_numbers[tn] = number
     end
     deserialize_cycle(s, tn)
     deserialize_typename_body(s, tn, number, name, mod, makenew)
-    makenew && (known_object_data[number] = tn)
     return tn
 end
 
@@ -767,14 +771,18 @@ function deserialize_typename_body(s::AbstractSerializer, tn, number, name, mod,
 
     if makenew
         tn.names = names
+        # TODO: there's an unhanded cycle in the dependency graph at this point:
+        # while deserializing super and/or types, we may have encountered
+        # tn.primary and throw UndefRefException before we get to this point
         tn.primary = ccall(:jl_new_datatype, Any, (Any, Any, Any, Any, Any, Cint, Cint, Cint),
                            tn, super, parameters, names, types,
                            abstr, mutable, ninitialized)
         ty = tn.primary
         ccall(:jl_set_const, Void, (Any, Any, Any), mod, name, ty)
-        if !isdefined(ty,:instance)
+        if !isdefined(ty, :instance)
             if isempty(parameters) && !abstr && size == 0 && (!mutable || isempty(names))
-                setfield!(ty, :instance, ccall(:jl_new_struct, Any, (Any,Any...), ty))
+                # use setfield! directly to avoid `fieldtype` lowering expecting to see a Singleton object already on ty
+                Core.setfield!(ty, :instance, ccall(:jl_new_struct, Any, (Any, Any...), ty))
             end
         end
     end
