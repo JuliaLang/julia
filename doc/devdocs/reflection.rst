@@ -124,7 +124,7 @@ highlighting to the output of :func:`code_typed` (see :ref:`man-code-warntype`).
 
 Closer to the machine, the LLVM intermediate representation of a function may be printed using by
 :func:`code_llvm(f::Function, (Argtypes...)) <code_llvm>`, and finally the compiled machine code is
-available using :func:`code_native(f::Function, (Argtypes...) <code_native>` (this will trigger JIT
+available using :func:`code_native(f::Function, (Argtypes...)) <code_native>` (this will trigger JIT
 compilation/code generation for any function which has not previously been called).
 
 For convenience, there are macro versions of the above functions which take standard function calls
