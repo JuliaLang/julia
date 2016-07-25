@@ -311,6 +311,12 @@ Mathematical Operators
 
    Construct a range by length, given a starting value and optional step (defaults to 1).
 
+.. function:: Base.OneTo(n)
+
+   .. Docstring generated from Julia source
+
+   Define an ``AbstractUnitRange`` that behaves like ``1:n``\ , with the added distinction that the lower limit is guaranteed (by the type system) to be 1.
+
 .. _==:
 .. function:: ==(x, y)
 
