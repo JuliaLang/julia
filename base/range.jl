@@ -31,15 +31,7 @@ function steprange_last{T}(start::T, step, stop)
         last = stop
     else
         if (step > z) != (stop > start)
-            # empty range has a special representation where stop = start-1
-            # this is needed to avoid the wrap-around that can happen computing
-            # start - step, which leads to a range that looks very large instead
-            # of empty.
-            if step > z
-                last = start - one(stop-start)
-            else
-                last = start + one(stop-start)
-            end
+            last = steprange_last_empty(start, step, stop)
         else
             diff = stop - start
             if T<:Signed && (diff > zero(diff)) != (stop > start)
@@ -57,6 +49,21 @@ function steprange_last{T}(start::T, step, stop)
     end
     last
 end
+
+function steprange_last_empty{T<:Integer}(start::T, step, stop)
+    # empty range has a special representation where stop = start-1
+    # this is needed to avoid the wrap-around that can happen computing
+    # start - step, which leads to a range that looks very large instead
+    # of empty.
+    if step > zero(step)
+        last = start - one(stop-start)
+    else
+        last = start + one(stop-start)
+    end
+    last
+end
+# For types where x+one(x) may not be well-defined
+steprange_last_empty(start, step, stop) = start - step
 
 steprem(start,stop,step) = (stop-start) % step
 
