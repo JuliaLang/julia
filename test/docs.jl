@@ -867,6 +867,18 @@ let x = Binding(Main, :bindingdoesnotexist)
     @test @var(bindingdoesnotexist) == x
 end
 
+let x = Binding(Main, :+)
+    @test parse(string(x)) == :(Base.:+)
+end
+
+let x = Binding(Base, :parse)
+    @test parse(string(x)) == :(Base.parse)
+end
+
+let x = Binding(Main, :⊕)
+    @test parse(string(x)) == :(⊕)
+end
+
 # Docs.helpmode tests: we test whether the correct expressions are being generated here,
 # rather than complete integration with Julia's REPL mode system.
 for (line, expr) in Pair[

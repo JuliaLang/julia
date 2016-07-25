@@ -55,6 +55,11 @@ code_in_code = md"""
 @test code_in_code == MD(Code("```"))
 @test plain(code_in_code) == "````\n```\n````\n"
 
+let text = "Foo ```bar` ``baz`` ```\n",
+    md = Markdown.parse(text)
+    @test text == Markdown.plain(md)
+end
+
 @test md"A footnote [^foo]." == MD(Paragraph(["A footnote ", Footnote("foo", nothing), "."]))
 
 @test md"[^foo]: footnote" == MD(Paragraph([Footnote("foo", Any[" footnote"])]))
@@ -353,6 +358,15 @@ let text =
     |:-------- |:-----:| -----:|
     | foo      | `bar` | *baz* |
     | `bar`    |  baz  | *foo* |
+    """,
+    table = Markdown.parse(text)
+    @test text == Markdown.plain(table)
+end
+let text =
+    """
+    | a        |   b |
+    |:-------- | ---:|
+    | `x \\| y` |   2 |
     """,
     table = Markdown.parse(text)
     @test text == Markdown.plain(table)
