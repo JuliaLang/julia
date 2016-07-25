@@ -7127,7 +7127,9 @@ qr
 """
     invmod(x,m)
 
-Take the inverse of `x` modulo `m`: `y` such that ``xy = 1 \\pmod m``.
+Take the inverse of `x` modulo `m`: `y` such that ``x y = 1 \\pmod m``,
+with ``div(x,y) = 0``. This is undefined for ``m = 0``, or if
+``gcd(x,m) \\neq 1``.
 """
 invmod
 

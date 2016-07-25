@@ -2167,11 +2167,12 @@ for T in (Int32,Int64), ii = -20:20, jj = -20:20
     @test d == gcd(ib,jb)
     @test lcm(i,j) == lcm(ib,jb)
     @test gcdx(i,j) == gcdx(ib,jb)
-    if j == 0
-        @test_throws ErrorException invmod(i,j)
-        @test_throws ErrorException invmod(ib,jb)
-    elseif d == 1
+    if j == 0 || d != 1
+        @test_throws DomainError invmod(i,j)
+        @test_throws DomainError invmod(ib,jb)
+    else
         n = invmod(i,j)
+        @test div(n, j) == 0
         @test n == invmod(ib,jb)
         @test mod(n*i,j) == mod(1,j)
     end
