@@ -38,15 +38,11 @@ ishermitian(J::UniformScaling) = isreal(J.λ)
 (+){T}(B::BitArray{2},J::UniformScaling{T}) = Array(B) + J
 (+)(J::UniformScaling, B::BitArray{2})      = J + Array(B)
 (+)(J::UniformScaling, A::AbstractMatrix)   = A + J
-(+)(J::UniformScaling, x::Number)           = J.λ + x
-(+)(x::Number, J::UniformScaling)           = x + J.λ
 
 (-)(J::UniformScaling)                      = UniformScaling(-J.λ)
 (-)(J1::UniformScaling, J2::UniformScaling) = UniformScaling(J1.λ-J2.λ)
 (-)(B::BitArray{2}, J::UniformScaling)      = Array(B) - J
 (-)(J::UniformScaling, B::BitArray{2})      = J - Array(B)
-(-)(J::UniformScaling, x::Number)           = J.λ - x
-(-)(x::Number, J::UniformScaling)           = x - J.λ
 
 for (t1, t2) in ((:UnitUpperTriangular, :UpperTriangular),
                  (:UnitLowerTriangular, :LowerTriangular))
