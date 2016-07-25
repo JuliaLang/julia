@@ -331,38 +331,69 @@ function transcode(::Type{UInt16}, src::Vector{UInt8})
 end
 
 function transcode(::Type{UInt8}, src::Vector{UInt16})
-    dst = UInt8[]
-    i, n = 1, length(src)
-    n > 0 || return dst
-    sizehint!(dst, n)
+    n = length(src)
+    n == 0 && return UInt8[]
+
+    # Precompute m = sizeof(dst).   This involves annoying duplication
+    # of the loop over the src array.   However, this is not just an
+    # optimization: it is problematic for security reasons to grow
+    # dst dynamically, because Base.winprompt uses this function to
+    # convert passwords to UTF-8 and we don't want to make unintentional
+    # copies of the password data.
     a = src[1]
+    i, m = 1, 0
     while true
-        if a < 0x80 # ASCII
-            push!(dst, a % UInt8)
+        if a < 0x80
+            m += 1
         elseif a < 0x800 # 2-byte UTF-8
-            push!(dst, 0xc0 | ((a >> 6) % UInt8),
-                       0x80 | ((a % UInt8) & 0x3f))
-        elseif a & 0xfc00 == 0xd800 && i < n
+            m += 2
+        elseif a & 0xfc00 == 0xd800 && i < length(src)
             b = src[i += 1]
-            if (b & 0xfc00) == 0xdc00
-                # 2-unit UTF-16 sequence => 4-byte UTF-8
-                a += 0x2840
-                push!(dst, 0xf0 | ((a >> 8) % UInt8),
-                           0x80 | ((a % UInt8) >> 2),
-                           0xf0 $ ((((a % UInt8) << 4) & 0x3f) $ (b >> 6) % UInt8),
-                           0x80 | ((b % UInt8) & 0x3f))
+            if (b & 0xfc00) == 0xdc00 # 2-unit UTF-16 sequence => 4-byte UTF-8
+                m += 4
             else
-                push!(dst, 0xe0 | ((a >> 12) % UInt8),
-                           0x80 | (((a >> 6) % UInt8) & 0x3f),
-                           0x80 | ((a % UInt8) & 0x3f))
+                m += 3
                 a = b; continue
             end
         else
             # 1-unit high UTF-16 or unpaired high surrogate
             # either way, encode as 3-byte UTF-8 code point
-            push!(dst, 0xe0 | ((a >> 12) % UInt8),
-                       0x80 | (((a >> 6) % UInt8) & 0x3f),
-                       0x80 | ((a % UInt8) & 0x3f))
+            m += 3
+        end
+        i < n || break
+        a = src[i += 1]
+    end
+
+    dst = Array{UInt8}(m)
+    a = src[1]
+    i, j = 1, 0
+    while true
+        if a < 0x80 # ASCII
+            dst[j += 1] = a % UInt8
+        elseif a < 0x800 # 2-byte UTF-8
+            dst[j += 1] = 0xc0 | ((a >> 6) % UInt8)
+            dst[j += 1] = 0x80 | ((a % UInt8) & 0x3f)
+        elseif a & 0xfc00 == 0xd800 && i < n
+            b = src[i += 1]
+            if (b & 0xfc00) == 0xdc00
+                # 2-unit UTF-16 sequence => 4-byte UTF-8
+                a += 0x2840
+                dst[j += 1] = 0xf0 | ((a >> 8) % UInt8)
+                dst[j += 1] = 0x80 | ((a % UInt8) >> 2)
+                dst[j += 1] = 0xf0 $ ((((a % UInt8) << 4) & 0x3f) $ (b >> 6) % UInt8)
+                dst[j += 1] = 0x80 | ((b % UInt8) & 0x3f)
+            else
+                dst[j += 1] = 0xe0 | ((a >> 12) % UInt8)
+                dst[j += 1] = 0x80 | (((a >> 6) % UInt8) & 0x3f)
+                dst[j += 1] = 0x80 | ((a % UInt8) & 0x3f)
+                a = b; continue
+            end
+        else
+            # 1-unit high UTF-16 or unpaired high surrogate
+            # either way, encode as 3-byte UTF-8 code point
+            dst[j += 1] = 0xe0 | ((a >> 12) % UInt8)
+            dst[j += 1] = 0x80 | (((a >> 6) % UInt8) & 0x3f)
+            dst[j += 1] = 0x80 | ((a % UInt8) & 0x3f)
         end
         i < n || break
         a = src[i += 1]

@@ -583,8 +583,8 @@ end
 StatusEntry() = StatusEntry(Cuint(0), C_NULL, C_NULL)
 
 immutable FetchHead
-    name::AbstractString
-    url::AbstractString
+    name::String
+    url::String
     oid::Oid
     ismerge::Bool
 end
@@ -645,8 +645,8 @@ end
 
 # Structure has the same layout as SignatureStruct
 type Signature
-    name::AbstractString
-    email::AbstractString
+    name::String
+    email::String
     time::Int64
     time_offset::Cint
 end
@@ -705,13 +705,19 @@ function getobjecttype(obj_type::Cint)
     end
 end
 
+import Base.securezero!
+
 "Credentials that support only `user` and `password` parameters"
 type UserPasswordCredentials <: AbstractCredentials
-    user::AbstractString
-    pass::AbstractString
-    usesshagent::AbstractString  # used for ssh-agent authentication
+    user::String
+    pass::String
+    usesshagent::String  # used for ssh-agent authentication
     count::Int                   # authentication failure protection count
-    UserPasswordCredentials(u::AbstractString,p::AbstractString) = new(u,p,"Y",3)
+    function UserPasswordCredentials(u::AbstractString,p::AbstractString)
+        c = new(u,p,"Y",3)
+        finalizer(c, securezero!)
+        return c
+    end
 end
 "Checks if credentials were used or failed authentication, see `LibGit2.credentials_callback`"
 function checkused!(p::UserPasswordCredentials)
@@ -721,24 +727,43 @@ function checkused!(p::UserPasswordCredentials)
 end
 "Resets authentication failure protection count"
 reset!(p::UserPasswordCredentials, cnt::Int=3) = (p.count = cnt)
+function securezero!(cred::UserPasswordCredentials)
+    securezero!(cred.user)
+    securezero!(cred.pass)
+    securezero!(cred.usesshagent)
+    cred.count = 0
+    return cred
+end
 
 "SSH credentials type"
 type SSHCredentials <: AbstractCredentials
-    user::AbstractString
-    pass::AbstractString
-    pubkey::AbstractString
-    prvkey::AbstractString
-    usesshagent::AbstractString  # used for ssh-agent authentication
+    user::String
+    pass::String
+    pubkey::String
+    prvkey::String
+    usesshagent::String  # used for ssh-agent authentication
 
-    SSHCredentials(u::AbstractString,p::AbstractString) = new(u,p,"","","Y")
+    function SSHCredentials(u::AbstractString,p::AbstractString)
+        c = new(u,p,"","","Y")
+        finalizer(c, securezero!)
+        return c
+    end
     SSHCredentials() = SSHCredentials("","")
+end
+function securezero!(cred::SSHCredentials)
+    securezero!(cred.user)
+    securezero!(cred.pass)
+    securezero!(cred.pubkey)
+    securezero!(cred.prvkey)
+    securezero!(cred.usesshagent)
+    return cred
 end
 
 "Credentials that support caching"
 type CachedCredentials <: AbstractCredentials
-    cred::Dict{AbstractString,SSHCredentials}
+    cred::Dict{String,SSHCredentials}
     count::Int            # authentication failure protection count
-    CachedCredentials() = new(Dict{AbstractString,SSHCredentials}(),3)
+    CachedCredentials() = new(Dict{String,SSHCredentials}(),3)
 end
 "Returns specific credential parameter value: first index is a credential
 parameter name, second index is a host name (with schema)"
@@ -775,3 +800,7 @@ function checkused!(p::CachedCredentials)
 end
 "Resets authentication failure protection count"
 reset!(p::CachedCredentials, cnt::Int=3) = (p.count = cnt)
+function securezero!(p::CachedCredentials)
+    foreach(securezero!, values(p.cred))
+    return p
+end
