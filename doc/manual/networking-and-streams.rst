@@ -197,12 +197,12 @@ create various other kinds of servers::
     julia> listen(IPv6(0),2001) # Listens on port 2001 on all IPv6 interfaces
     TCPServer(active)
 
-    julia> listen("testsocket") # Listens on a domain socket/named pipe
+    julia> listen("testsocket") # Listens on a UNIX domain socket/named pipe
     PipeServer(active)
 
 Note that the return type of the last invocation is different. This is because
 this server does not listen on TCP, but rather on a named pipe (Windows)
-or domain socket (UNIX). The difference
+or UNIX domain socket (UNIX). The difference
 is subtle and has to do with the :func:`accept` and :func:`connect` methods. The :func:`accept`
 method retrieves a connection to the client that is connecting on the server we
 just created, while the :func:`connect` function connects to a server using the
