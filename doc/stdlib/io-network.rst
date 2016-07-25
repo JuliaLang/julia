@@ -886,7 +886,7 @@ Network I/O
 
    .. Docstring generated from Julia source
 
-   Connect to the Named Pipe / Domain Socket at ``path``\ .
+   Connect to the named pipe / UNIX domain socket at ``path``\ .
 
 .. function:: listen([addr,]port) -> TCPServer
 
@@ -898,7 +898,7 @@ Network I/O
 
    .. Docstring generated from Julia source
 
-   Create and listen on a Named Pipe / Domain Socket.
+   Create and listen on a named pipe / UNIX domain socket.
 
 .. function:: getaddrinfo(host)
 
