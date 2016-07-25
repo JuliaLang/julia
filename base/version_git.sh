@@ -26,7 +26,7 @@ if [  "$#" = "2"  -a "$2" = "NO_GIT" ]; then
     exit 0
 fi
 # Collect temporary variables
-origin=$(git config -l 2>/dev/null | grep 'remote\.\w*\.url.*JuliaLang/julia.git' | sed -n 's/remote\.\([a-zA-Z]*\)\..*/\1\//p')
+origin=$(git config -l 2>/dev/null | grep 'remote\.\w*\.url.*JuliaLang/julia' | sed -n 's/remote\.\([a-zA-Z]*\)\..*/\1\//p')
 if [ -z "$origin" ]; then
     origin="origin/"
 fi
