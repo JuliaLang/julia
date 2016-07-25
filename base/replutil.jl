@@ -433,6 +433,7 @@ function show_method_candidates(io::IO, ex::MethodError, kwargs::Vector=Any[])
                 # function itself doesn't match
                 return
             else
+                # TODO: use the methodshow logic here
                 use_constructor_syntax = isa(func, Type)
                 print(buf, use_constructor_syntax ? func : typeof(func).name.mt.name)
             end
@@ -520,6 +521,7 @@ function show_method_candidates(io::IO, ex::MethodError, kwargs::Vector=Any[])
                     length(kwords) > 0 && print(buf, "; ", join(kwords, ", "))
                 end
                 print(buf, ")")
+                print(buf, " at ", method.file, ":", method.line)
                 if !isempty(kwargs)
                     unexpected = Symbol[]
                     if isempty(kwords) || !(any(endswith(string(kword), "...") for kword in kwords))
