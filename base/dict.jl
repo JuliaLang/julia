@@ -309,16 +309,6 @@ get!(o::ObjectIdDict, key, default) = (o[key] = get(o, key, default))
 
 abstract AbstractSerializer
 
-# Serializer type needed as soon as ObjectIdDict is available
-type SerializationState{I<:IO} <: AbstractSerializer
-    io::I
-    counter::Int
-    table::ObjectIdDict
-    SerializationState(io::I) = new(io, 0, ObjectIdDict())
-end
-
-SerializationState(io::IO) = SerializationState{typeof(io)}(io)
-
 # dict
 
 # These can be changed, to trade off better performance for space

@@ -115,7 +115,6 @@ include("reshapedarray.jl")
 include("bitarray.jl")
 include("intset.jl")
 include("dict.jl")
-include("weakkeydict.jl")
 include("set.jl")
 include("iterator.jl")
 
@@ -173,6 +172,7 @@ include("event.jl")
 include("task.jl")
 include("lock.jl")
 include("threads.jl")
+include("weakkeydict.jl")
 
 # I/O
 include("stream.jl")
