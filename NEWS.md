@@ -4,8 +4,9 @@ Julia v0.5.0 Release Notes
 New language features
 ---------------------
 
-  * Generator expressions, e.g. `f(i) for i in 1:n` ([#4470]). This returns an iterator
-    that computes the specified values on demand.
+  * Generator expressions: `f(i) for i in 1:n` ([#4470]). This returns an iterator
+    that computes the specified values on demand. This is useful for computing, e.g.
+    `sum(f(i) for i in 1:n)` without creating an intermediate array of values.
 
   * Generators and comprehensions support filtering using `if` ([#550]) and nested
     iteration using multiple `for` keywords ([#4867]).
@@ -14,7 +15,7 @@ New language features
     and nested `f.(g.(args...))` calls are fused into a single `broadcast` loop ([#17300]).
     Similarly, the syntax `x .= ...` is equivalent to a `broadcast!(identity, x, ...)`
     call and fuses with nested "dot" calls; also, `x .+= y` and similar is now
-    equivalent to `x .= x .+ y`, rather than `=` ([#17510]).
+    equivalent to `x .= x .+ y`, rather than `x = x .+ y` ([#17510]).
 
   * Macro expander functions are now generic, so macros can have multiple definitions
     (e.g. for different numbers of arguments, or optional arguments) ([#8846], [#9627]).
@@ -27,7 +28,7 @@ New language features
   * `x ∈ X` is now a synonym for `x in X` in `for` loops and comprehensions,
     as it already was in comparisons ([#13824]).
 
-  * `PROGRAM_FILE` global is now available for determining the name of the running script ([#14114]).
+  * The `PROGRAM_FILE` global is now available for determining the name of the running script ([#14114]).
 
   * The syntax `x.:sym` (e.g. `Base.:+`) is now supported, and `x.(:sym)` is deprecated ([#15032]).
 
@@ -46,15 +47,6 @@ New language features
     operator names like `Base.≤` should now use `Base.:≤` (prefixed by `@compat`
     if you need 0.4 compatibility via the `Compat` package).
 
-New architectures
------------------
-
-  This release greatly improves support for ARM, and introduces support for Power.
-
-  * [ARM](https://github.com/JuliaLang/julia/issues?utf8=%E2%9C%93&q=label%3Aarm) ([#14194], [#14519], [#16645], [#16621])
-
-  * [Power](https://github.com/JuliaLang/julia/issues?utf8=%E2%9C%93&q=label%3Apower) ([#16455], [#16404])
-
 Language changes
 ----------------
 
@@ -68,7 +60,8 @@ Language changes
   * `using` and `import` are now case-sensitive even on case-insensitive filesystems
     (common on Mac and Windows) ([#13542]).
 
-  * Relational symbols are now allowed as infix operators ([#8036]).
+  * Relational algebra symbols are now allowed as infix operators ([#8036]):
+    `⨝`, `⟕`, `⟖`, `⟗` for joins and `▷` for anti-join.
 
   * A warning is always given when a method is overwritten (previously, this was done
     only when the new and old definitions were in separate modules) ([#14759]).
@@ -77,7 +70,8 @@ Language changes
     This also applies to the `>:` operator.
 
   * Simple 2-argument comparisons like `A < B` are parsed as calls instead of using the
-    `:comparison` expression type ([#15524]).
+    `:comparison` expression type ([#15524]). The `:comparison` expression type is still
+    produced in ASTs when comparisons are chained (e.g. `A < B ≤ C`).
 
   * The `if` keyword cannot be followed immediately by a line break ([#15763]).
 
@@ -105,19 +99,30 @@ Compiler/Runtime improvements
 
   * Machine SIMD types can be represented in Julia as a homogeneous tuple of `VecElement` ([#15244]).
 
+New architectures
+-----------------
+
+  This release greatly improves support for ARM, and introduces support for Power.
+
+  * [ARM](https://github.com/JuliaLang/julia/issues?utf8=%E2%9C%93&q=label%3Aarm):
+    [#14194], [#14519], [#16645], [#16621]
+
+  * [Power](https://github.com/JuliaLang/julia/issues?utf8=%E2%9C%93&q=label%3Apower):
+    [#16455], [#16404]
+
 Breaking changes
 ----------------
 
   * The assignment operations `.+=`, `.*=` and so on now generate calls
     to `broadcast!` on the left-hand side (or call to `view(a, ...)` on the left-hand side
-    if the latter is a `a[...]` expression.  This means that they will fail
-    if the left-hand side is immutable (or does not support `view`), and will
-    otherwise change the left-hand side in-place ([#17510], [#17546]).
+    if the latter is an indexing expression, (e.g. `a[...]`). This means that they will fail
+    if the left-hand side is immutable (or does not support `view`), and will otherwise
+    change the left-hand side in-place ([#17510], [#17546]).
 
-  * Method ambiguities no longer generate warnings when files are
-    loaded, nor do they dispatch to an arbitrarily-chosen method;
-    instead, a call that cannot be resolved to a single method results
-    in a `MethodError`. ([#6190])
+  * Method ambiguities no longer generate warnings when files are loaded,
+    nor do they dispatch to an arbitrarily-chosen method; instead, a call that
+    cannot be resolved to a single method results in a `MethodError` at run time,
+    rather than the previous definition-time warning. ([#6190])
 
   * `pmap` keyword arguments `err_retry=true` and `err_stop=false` are deprecated.
     Action to be taken on errors can be specified via the `on_error` keyword argument.
@@ -127,9 +132,10 @@ Breaking changes
     If a reshaped copy is needed, use `copy(reshape(a))` or `copy!` to a new array of
     the desired shape ([#4211]).
 
-  * `mapslices` now re-uses temporary storage. Recipient functions
-    that expect input slices to be persistent should copy data to
-    other storage ([#17266]).
+  * `mapslices` now re-uses temporary storage. Recipient functions that expect
+    input slices to be persistent should copy data to other storage ([#17266]).
+    All usages of `mapslices` should be carefully audited since this change can cause
+    silent, incorrect behavior, rather than failing noisily.
 
   * Local variables and arguments are represented in lowered code as numbered `Slot`
     objects instead of as symbols ([#15609]).
@@ -148,7 +154,19 @@ Library improvements
 
     * The `UTF8String` and `ASCIIString` types have been merged into a single
       `String` type ([#16058]).  Use `isascii(s)` to check whether
-      a string contains only ASCII characters.
+      a string contains only ASCII characters. The `ascii(s)` function now
+      converts `s` to `String`, raising an `ArgumentError` exception if `s` is
+      not pure ASCII.
+
+    * The `UTF16String` and `UTF32String` types and corresponding `utf16` and
+      `utf32` converter functions have been removed from the standard library.
+      If you need these types, they have been moved to the
+      [LegacyStrings](https://github.com/JuliaArchive/LegacyStrings.jl)
+      package. In the future, more robust Unicode string support will be provided
+      by the `StringEncodings` package. If you only need these types to call wide
+      string APIs (UTF-16 on Windows, UTF-32 on UNIX), consider using the new
+      `transcode` function (see below) or the `Cwstring` type as a `ccall` argument
+      type, which also ensures correct NUL termination of string data.
 
     * The basic string construction routines are now `string(args...)`,
       `String(s)`, `unsafe_string(ptr)` (formerly `bytestring(ptr)`), and
@@ -156,6 +174,14 @@ Library improvements
 
     * A `transcode(T, src)` function is now exported for converting data
       between UTF-xx Unicode encodings ([#17323]).
+
+    * Comparisons between `Char`s and `Integer`s are now deprecated ([#16024]):
+      `'x' == 120` now produces a warning but still evaluates to `true`. In the
+      future it may evalaute to `false` or the comparison may be an error. To
+      compare characters with integers you should either convert the integer to
+      a character value or conver the character the corresponding code point
+      first: e.g. `'x' == Char(120)` or `Int('x') == 120`. The former is usually
+      preferrable.
 
     * Support for Unicode 9 ([#17402]).
 
@@ -193,7 +219,9 @@ Library improvements
   * Arrays and linear algebra:
 
     * All dimensions indexed by scalars are now dropped, whereas previously only
-      trailing scalar dimensions would be omitted from the result ([#13612]).
+      trailing scalar dimensions would be omitted from the result ([#13612]). This
+      is a very major behavioral change, but should cause obvious failures. To retain
+      a dimension sliced with a scalar `i` slice with `i:i` instead.
 
     * Dimensions indexed by multidimensional arrays add dimensions. More generally, the
       dimensionality of the result is the sum of the dimensionalities of the indices ([#15431]).
@@ -201,7 +229,7 @@ Library improvements
     * New `normalize` and `normalize!` convenience functions for normalizing
       vectors ([#13681]).
 
-    * QR
+    * QR matrix factorization:
 
       * New method for generic QR with column pivoting ([#13480]).
 
@@ -223,7 +251,8 @@ Library improvements
       `Base.SparseArrays.dropstored!` ([#17404]).
 
   * New `foreach` function for calling a function on every element of a collection when
-    the results are not needed ([#13774]).
+    the results are not needed ([#13774]). As compared to `map(f, v)`, which allocates and
+    returns a result array, `foreach(f, v)` calls `f` on each element of `v`, returning nothing.
 
   * `Cmd(cmd; ...)` now accepts new Windows-specific options `windows_verbatim`
     (to alter Windows command-line generation) and `windows_hide` (to
@@ -248,7 +277,7 @@ Library improvements
     `OS_NAME` has been replaced by `Sys.KERNEL` and always reports the name of the
     kernel (as reported by `uname`). The `@windows_only` and `@osx` family of macros
     have been replaced with functions such as `is_windows()` and `is_apple()`.
-    There's now also an `@static` macro that will evaluate the condition of an
+    There is now also a `@static` macro that will evaluate the condition of an
     if-statement at compile time, for when a static branch is required ([#16219]).
 
   * Prime number related functions have been moved from `Base` to the
@@ -258,6 +287,8 @@ Library improvements
     15 minutes) with `floor`, `ceil`, and `round` ([#17037]).
 
   * File handling:
+
+    * The `open` function now respects `umask` on UNIX when creating files ([#16466], [#16502]).
 
     * A new function `walkdir()` returns an iterator that walks the directory tree of a directory. ([#1765])
 
