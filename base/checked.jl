@@ -5,7 +5,8 @@
 module Checked
 
 export checked_neg, checked_abs, checked_add, checked_sub, checked_mul,
-       checked_div, checked_rem, checked_fld, checked_mod, checked_cld
+       checked_div, checked_rem, checked_fld, checked_mod, checked_cld,
+       add_with_overflow, sub_with_overflow, mul_with_overflow
 
 import Core.Intrinsics: box, unbox,
        checked_sadd_int, checked_ssub_int, checked_smul_int, checked_sdiv_int,
@@ -26,7 +27,6 @@ checked_cld(x::Integer, y::Integer) = checked_cld(promote(x,y)...)
 
 # fallback catchall rules to prevent infinite recursion if promotion succeeds,
 # but no method exists to handle those types
-checked_neg{T<:Integer}(x::T) = no_op_err("checked_neg", T)
 checked_abs{T<:Integer}(x::T) = no_op_err("checked_abs", T)
 
 typealias SignedInt Union{Int8,Int16,Int32,Int64,Int128}
@@ -184,7 +184,7 @@ checked_add{T}(x1::T, x2::T, x3::T, x4::T, x5::T, x6::T, x7::T, x8::T) =
 
 
 """
-    Base.sub_with_overflow(x, y) -> (r,f)
+    Base.sub_with_overflow(x, y) -> (r, f)
 
 Calculates `r = x-y`, with the flag `f` indicating whether overflow has occurred.
 """
@@ -223,7 +223,7 @@ end
 
 
 """
-    Base.mul_with_overflow(x, y) -> (r,f)
+    Base.mul_with_overflow(x, y) -> (r, f)
 
 Calculates `r = x*y`, with the flag `f` indicating whether overflow has occurred.
 """
