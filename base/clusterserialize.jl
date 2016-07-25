@@ -9,45 +9,24 @@ type ClusterSerializer{I<:IO} <: AbstractSerializer
     counter::Int
     table::ObjectIdDict
 
-    sent_objects::Dict{UInt64, Bool} # used by serialize (track objects sent)
+    sent_objects::Set{UInt64} # used by serialize (track objects sent)
 
-    ClusterSerializer(io::I) = new(io, 0, ObjectIdDict(), Dict())
+    ClusterSerializer(io::I) = new(io, 0, ObjectIdDict(), Set{UInt64}())
 end
 ClusterSerializer(io::IO) = ClusterSerializer{typeof(io)}(io)
 
 function deserialize(s::ClusterSerializer, ::Type{TypeName})
-    number, full_body_sent = deserialize(s)
-    makenew = false
-    known = haskey(known_object_data, number)
+    full_body_sent = deserialize(s)
     if !full_body_sent
-        if !known
-            error("Expected object in cache. Not found.")
-        else
-            tn = known_object_data[number]::TypeName
+        number = read(s.io, UInt64)
+        tn = get(known_object_data, number, nothing)::TypeName
+        if !haskey(object_numbers, tn)
+            # setup reverse mapping for serialize
+            object_numbers[tn] = number
         end
+        deserialize_cycle(s, tn)
     else
-        name = deserialize(s)
-        mod = deserialize(s)
-        if known
-            tn = known_object_data[number]::TypeName
-        elseif mod !== __deserialized_types__ && isdefined(mod, name)
-            tn = getfield(mod, name).name
-            # TODO: confirm somehow that the types match
-            #warn(mod, ".", name, " isdefined, need not have been serialized")
-            name = tn.name
-            mod = tn.module
-        else
-            name = gensym()
-            mod = __deserialized_types__
-            tn = ccall(:jl_new_typename_in, Ref{TypeName}, (Any, Any), name, mod)
-            makenew = true
-        end
-    end
-    deserialize_cycle(s, tn)
-    full_body_sent && deserialize_typename_body(s, tn, number, name, mod, makenew)
-    !known && (known_object_data[number] = tn)
-    if !haskey(object_numbers, tn)
-        object_numbers[tn] = number
+        tn = invoke(deserialize, (AbstractSerializer, Type{TypeName}), s, TypeName)
     end
     return tn
 end
@@ -57,15 +36,18 @@ function serialize(s::ClusterSerializer, t::TypeName)
     writetag(s.io, TYPENAME_TAG)
 
     identifier = object_number(t)
-    if !haskey(s.sent_objects, identifier)
-        serialize(s, (identifier, true))
+    if !(identifier in s.sent_objects)
+        serialize(s, true)
+        write(s.io, identifier)
         serialize(s, t.name)
         serialize(s, t.module)
         serialize_typename_body(s, t)
-        s.sent_objects[identifier] = true
+        push!(s.sent_objects, identifier)
 #        println(t.module, ":", t.name, ", id:", identifier, " sent")
     else
-        serialize(s, (identifier, false))
+        serialize(s, false)
+        write(s.io, identifier)
 #        println(t.module, ":", t.name, ", id:", identifier, " NOT sent")
     end
+    nothing
 end
