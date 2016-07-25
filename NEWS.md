@@ -66,24 +66,13 @@ Language changes
   * A warning is always given when a method is overwritten (previously, this was done
     only when the new and old definitions were in separate modules) ([#14759]).
 
-  * `A <: B` is parsed as `Expr(:(<:), :A, :B)` in all cases ([#9503]).
-    This also applies to the `>:` operator.
-
-  * Simple 2-argument comparisons like `A < B` are parsed as calls instead of using the
-    `:comparison` expression type ([#15524]). The `:comparison` expression type is still
-    produced in ASTs when comparisons are chained (e.g. `A < B ≤ C`).
-
   * The `if` keyword cannot be followed immediately by a line break ([#15763]).
+
+  * Juxtaposition of numeric literals ending in `.` (e.g. `1.x`) is no longer
+    allowed ([#15731]).
 
   * The built-in `NTuple` type has been removed; `NTuple{N,T}` is now
     implemented internally as `Tuple{Vararg{T,N}}` ([#11242]).
-
-  * Array comprehensions preserve the dimensions of the input ranges. For example,
-    `[2x for x in A]` will have the same dimensions as `A` ([#16622]).
-
-  * The result type of an array comprehension depends only on the types of elements
-    computed, instead of using type inference ([#7258]). If the result is empty, then
-    type inference is still used to determine the element type.
 
   * Use of the syntax `x::T` to declare the type of a local variable is deprecated.
     In the future this will always mean type assertion, and declarations should use
@@ -113,6 +102,8 @@ New architectures
 Breaking changes
 ----------------
 
+This section lists changes that do not have deprecation warnings.
+
   * The assignment operations `.+=`, `.*=` and so on now generate calls
     to `broadcast!` on the left-hand side (or call to `view(a, ...)` on the left-hand side
     if the latter is an indexing expression, (e.g. `a[...]`). This means that they will fail
@@ -124,9 +115,12 @@ Breaking changes
     cannot be resolved to a single method results in a `MethodError` at run time,
     rather than the previous definition-time warning. ([#6190])
 
-  * `pmap` keyword arguments `err_retry=true` and `err_stop=false` are deprecated.
-    Action to be taken on errors can be specified via the `on_error` keyword argument.
-    Retry is specified via `retry_n`, `retry_on` and `retry_max_delay` ([#15409], [#15975], [#16663]).
+  * Array comprehensions preserve the dimensions of the input ranges. For example,
+    `[2x for x in A]` will have the same dimensions as `A` ([#16622]).
+
+  * The result type of an array comprehension depends only on the types of elements
+    computed, instead of using type inference ([#7258]). If the result is empty, then
+    type inference is still used to determine the element type.
 
   * `reshape` is now defined to always share data with the original array.
     If a reshaped copy is needed, use `copy(reshape(a))` or `copy!` to a new array of
@@ -144,8 +138,12 @@ Breaking changes
     is now divided among the fields `code`, `slotnames`, `slottypes`, `slotflags`,
     `gensymtypes`, `rettype`, `nargs`, and `isva` in the `LambdaInfo` type ([#15609]).
 
-  * Juxtaposition of numeric literals ending in `.` (e.g. `1.x`) is no longer
-    allowed ([#15731]).
+  * `A <: B` is parsed as `Expr(:(<:), :A, :B)` in all cases ([#9503]).
+    This also applies to the `>:` operator.
+
+  * Simple 2-argument comparisons like `A < B` are parsed as calls instead of using the
+    `:comparison` expression type ([#15524]). The `:comparison` expression type is still
+    produced in ASTs when comparisons are chained (e.g. `A < B ≤ C`).
 
 Library improvements
 --------------------
@@ -179,14 +177,11 @@ Library improvements
       `'x' == 120` now produces a warning but still evaluates to `true`. In the
       future it may evaluate to `false` or the comparison may be an error. To
       compare characters with integers you should either convert the integer to
-      a character value or convert the character the corresponding code point
+      a character value or convert the character to the corresponding code point
       first: e.g. `'x' == Char(120)` or `Int('x') == 120`. The former is usually
       preferrable.
 
     * Support for Unicode 9 ([#17402]).
-
-  * Most of the combinatorics functions have been moved from `Base`
-    to the [Combinatorics.jl package](https://github.com/JuliaLang/Combinatorics.jl) ([#13897]).
 
   * Packages:
 
@@ -210,6 +205,13 @@ Library improvements
     * The [BaseTestDeprecated](https://github.com/IainNZ/BaseTestDeprecated.jl)
       package provides the old-style `handler` functionality, for compatibility
       with code that needs to support both Julia v0.4 and v0.5.
+
+  * Most of the combinatorics functions have been moved from `Base`
+    to the [Combinatorics.jl package](https://github.com/JuliaLang/Combinatorics.jl) ([#13897]).
+
+  * `pmap` keyword arguments `err_retry=true` and `err_stop=false` are deprecated.
+    Action to be taken on errors can be specified via the `on_error` keyword argument.
+    Retry is specified via `retry_n`, `retry_on` and `retry_max_delay` ([#15409], [#15975], [#16663]).
 
   * The functions `remotecall`, `remotecall_fetch`, and `remotecall_wait` now have the
     function argument as the first argument to allow for do-block syntax ([#13338]).
@@ -302,7 +304,6 @@ Library improvements
       ```
 
     * A new function `chown()` changes the ownership of files. ([#15007])
-
 
 Deprecated or removed
 ---------------------
