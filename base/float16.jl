@@ -144,21 +144,12 @@ end
 for op in (:<,:<=,:isless)
     @eval ($op)(a::Float16, b::Float16) = ($op)(Float32(a), Float32(b))
 end
-for func in (:sin,:cos,:tan,:asin,:acos,:atan,:sinh,:cosh,:tanh,:asinh,:acosh,
-             :atanh,:exp,:log,:log2,:log10,:sqrt,:lgamma,:log1p,:erf,:erfc)
-    @eval begin
-        $func(a::Float16) = Float16($func(Float32(a)))
-        $func(a::Complex32) = Complex32($func(Complex64(a)))
-    end
-end
 
-for func in (:div,:fld,:cld,:rem,:mod,:atan2,:hypot)
+for func in (:div,:fld,:cld,:rem,:mod)
     @eval begin
         $func(a::Float16,b::Float16) = Float16($func(Float32(a),Float32(b)))
     end
 end
-
-ldexp(a::Float16, b::Integer) = Float16(ldexp(Float32(a), b))
 
 ^(x::Float16, y::Integer) = Float16(Float32(x)^y)
 

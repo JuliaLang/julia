@@ -101,6 +101,7 @@ include("multinverses.jl")
 using .MultiplicativeInverses
 include("abstractarraymath.jl")
 include("arraymath.jl")
+include("float16.jl")
 
 # SIMD loops
 include("simdloop.jl")
@@ -186,7 +187,6 @@ include("math.jl")
 importall .Math
 const (√)=sqrt
 const (∛)=cbrt
-include("float16.jl")
 
 # multidimensional arrays
 include("cartesian.jl")
