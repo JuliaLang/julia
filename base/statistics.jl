@@ -324,7 +324,7 @@ function cov2cor!{T}(C::AbstractMatrix{T}, xsd::AbstractArray)
         end
         C[j,j] = one(T)
         for i = j+1:nx
-            C[i,j] /= (xsd[i] * xsd[j])
+            C[i,j] = clamp(C[i,j] / (xsd[i] * xsd[j]), -1, 1)
         end
     end
     return C
@@ -334,7 +334,7 @@ function cov2cor!(C::AbstractMatrix, xsd::Number, ysd::AbstractArray)
     length(ysd) == ny || throw(DimensionMismatch("inconsistent dimensions"))
     for (j, y) in enumerate(ysd)   # fixme (iter): here and in all `cov2cor!` we assume that `C` is efficiently indexed by integers
         for i in 1:nx
-            C[i,j] /= (xsd * y)
+            C[i,j] = clamp(C[i, j] / (xsd * y), -1, 1)
         end
     end
     return C
@@ -344,7 +344,7 @@ function cov2cor!(C::AbstractMatrix, xsd::AbstractArray, ysd::Number)
     length(xsd) == nx || throw(DimensionMismatch("inconsistent dimensions"))
     for j in 1:ny
         for (i, x) in enumerate(xsd)
-            C[i,j] /= (x * ysd)
+            C[i,j] = clamp(C[i,j] / (x * ysd), -1, 1)
         end
     end
     return C
@@ -355,7 +355,7 @@ function cov2cor!(C::AbstractMatrix, xsd::AbstractArray, ysd::AbstractArray)
         throw(DimensionMismatch("inconsistent dimensions"))
     for (i, x) in enumerate(xsd)
         for (j, y) in enumerate(ysd)
-            C[i,j] /= x*y
+            C[i,j] = clamp(C[i,j] / (x * y), -1, 1)
         end
     end
     return C
