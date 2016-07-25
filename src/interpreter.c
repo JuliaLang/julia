@@ -94,20 +94,35 @@ extern int jl_boot_file_loaded;
 extern int inside_typedef;
 
 // this is a heuristic for allowing "redefining" a type to something identical
+static int equiv_svec_dt(jl_svec_t *sa, jl_svec_t *sb)
+{
+    size_t i, l = jl_svec_len(sa);
+    if (l != jl_svec_len(sb)) return 0;
+    for (i = 0; i < l; i++) {
+        jl_value_t *a = jl_svecref(sa, i);
+        jl_value_t *b = jl_svecref(sb, i);
+        if (jl_typeof(a) != jl_typeof(b))
+            return 0;
+        if (jl_is_typevar(a) && ((jl_tvar_t*)a)->name != ((jl_tvar_t*)b)->name)
+            return 0;
+        if (!jl_subtype(a, b, 0) || !jl_subtype(b, a, 0))
+            return 0;
+    }
+    return 1;
+}
 static int equiv_type(jl_datatype_t *dta, jl_datatype_t *dtb)
 {
     return (jl_typeof(dta) == jl_typeof(dtb) &&
-            // TODO: can't yet handle parametric types due to how constructors work
-            dta->parameters == jl_emptysvec &&
             dta->name->name == dtb->name->name &&
-            jl_egal((jl_value_t*)dta->types, (jl_value_t*)dtb->types) &&
             dta->abstract == dtb->abstract &&
             dta->mutabl == dtb->mutabl &&
             dta->size == dtb->size &&
             dta->ninitialized == dtb->ninitialized &&
-            jl_egal((jl_value_t*)dta->super, (jl_value_t*)dtb->super) &&
-            jl_egal((jl_value_t*)dta->name->names, (jl_value_t*)dtb->name->names) &&
-            jl_egal((jl_value_t*)dta->parameters, (jl_value_t*)dtb->parameters));
+            equiv_svec_dt(dta->parameters, dtb->parameters) &&
+            equiv_svec_dt(dta->types, dtb->types) &&
+            jl_subtype((jl_value_t*)dta->super, (jl_value_t*)dtb->super, 0) &&
+            jl_subtype((jl_value_t*)dtb->super, (jl_value_t*)dta->super, 0) &&
+            jl_egal((jl_value_t*)dta->name->names, (jl_value_t*)dtb->name->names));
 }
 
 static void check_can_assign_type(jl_binding_t *b)
@@ -297,7 +312,7 @@ static jl_value_t *eval(jl_value_t *e, interpreter_state *s)
             jl_rethrow();
         }
         b->value = temp;
-        if (temp==NULL || !equiv_type(dt, (jl_datatype_t*)temp)) {
+        if (temp == NULL || !equiv_type(dt, (jl_datatype_t*)temp)) {
             jl_checked_assignment(b, (jl_value_t*)dt);
         }
         JL_GC_POP();
@@ -339,7 +354,7 @@ static jl_value_t *eval(jl_value_t *e, interpreter_state *s)
             jl_rethrow();
         }
         b->value = temp;
-        if (temp==NULL || !equiv_type(dt, (jl_datatype_t*)temp)) {
+        if (temp == NULL || !equiv_type(dt, (jl_datatype_t*)temp)) {
             jl_checked_assignment(b, (jl_value_t*)dt);
         }
         JL_GC_POP();
@@ -405,11 +420,8 @@ static jl_value_t *eval(jl_value_t *e, interpreter_state *s)
         }
 
         b->value = temp;
-        if (temp==NULL || !equiv_type(dt, (jl_datatype_t*)temp)) {
+        if (temp == NULL || !equiv_type(dt, (jl_datatype_t*)temp)) {
             jl_checked_assignment(b, (jl_value_t*)dt);
-        }
-        else {
-            // TODO: remove all old ctors and set temp->name->ctor_factory = dt->name->ctor_factory
         }
 
         JL_GC_POP();
