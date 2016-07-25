@@ -174,11 +174,21 @@
              (scope-block
               ,(if (eq? rett 'Any)
                    body
-                   (insert-after-meta
-                    body
-                    (let ((R (make-ssavalue)))
-                      (list `(= ,R ,rett)
-                            `(meta ret-type ,R)))))))))
+                   (let ((meta (take-while (lambda (x) (and (pair? x)
+                                                            (memq (car x) '(line meta))))
+                                           (cdr body))))
+                     ;; wrap one-liners in `convert` instead of adding an ssavalue
+                     (if (length= (cdr body) (+ 1 (length meta)))
+                         (let ((val (last body)))
+                           `(,(car body) ,@meta
+                             ,(if (and (pair? val) (eq? (car val) 'return))
+                                  `(return (call (top convert) ,rett ,(cadr val)))
+                                  `(call (top convert) ,rett ,val))))
+                         (let ((R (make-ssavalue)))
+                           `(,(car body) ,@meta
+                             (= ,R ,rett)
+                             (meta ret-type ,R)
+                             ,@(list-tail body (+ 1 (length meta))))))))))))
 
 ;; convert list of names (sl) and list of upper bounds to expressions that
 ;; construct TypeVars
