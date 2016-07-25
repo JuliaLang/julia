@@ -89,20 +89,20 @@ state_type(::Type{SHA2_384_CTX}) = UInt64
 state_type(::Type{SHA2_512_CTX}) = UInt64
 
 # blocklen is the number of bytes of data processed by the transform!() function at once
-blocklen(::Type{SHA1_CTX}) = UInt64(64)
-blocklen(::Type{SHA2_224_CTX}) = UInt64(64)
-blocklen(::Type{SHA2_256_CTX}) = UInt64(64)
-blocklen(::Type{SHA2_384_CTX}) = UInt64(128)
-blocklen(::Type{SHA2_512_CTX}) = UInt64(128)
+blocklen(::Type{SHA1_CTX}) = @compat UInt64(64)
+blocklen(::Type{SHA2_224_CTX}) = @compat UInt64(64)
+blocklen(::Type{SHA2_256_CTX}) = @compat UInt64(64)
+blocklen(::Type{SHA2_384_CTX}) = @compat UInt64(128)
+blocklen(::Type{SHA2_512_CTX}) = @compat UInt64(128)
 
-blocklen(::Type{SHA3_224_CTX}) = UInt64(25*8 - 2*digestlen(SHA3_224_CTX))
-blocklen(::Type{SHA3_256_CTX}) = UInt64(25*8 - 2*digestlen(SHA3_256_CTX))
-blocklen(::Type{SHA3_384_CTX}) = UInt64(25*8 - 2*digestlen(SHA3_384_CTX))
-blocklen(::Type{SHA3_512_CTX}) = UInt64(25*8 - 2*digestlen(SHA3_512_CTX))
+blocklen(::Type{SHA3_224_CTX}) = @compat UInt64(25*8 - 2*digestlen(SHA3_224_CTX))
+blocklen(::Type{SHA3_256_CTX}) = @compat UInt64(25*8 - 2*digestlen(SHA3_256_CTX))
+blocklen(::Type{SHA3_384_CTX}) = @compat UInt64(25*8 - 2*digestlen(SHA3_384_CTX))
+blocklen(::Type{SHA3_512_CTX}) = @compat UInt64(25*8 - 2*digestlen(SHA3_512_CTX))
 
 
 # short_blocklen is the size of a block minus the width of bytecount
-short_blocklen{T<:Union{SHA1_CTX,SHA2_CTX}}(::Type{T}) = blocklen(T) - 2*sizeof(state_type(T))
+short_blocklen{T<:@compat(Union{SHA1_CTX,SHA2_CTX})}(::Type{T}) = blocklen(T) - 2*sizeof(state_type(T))
 
 # Once the "blocklen" methods are defined, we can define our outer constructors for SHA types:
 SHA2_224_CTX() = SHA2_224_CTX(copy(SHA2_224_initial_hash_value), 0, zeros(UInt8, blocklen(SHA2_224_CTX)))
