@@ -8,26 +8,28 @@ function test_have_color(buf, color, no_color)
     end
 end
 
+cfile = " at $(@__FILE__):"
+c1line = @__LINE__ + 1
 method_c1(x::Float64, s::AbstractString...) = true
 
 buf = IOBuffer()
 Base.show_method_candidates(buf, Base.MethodError(method_c1,(1, 1, "")))
-no_color = "\nClosest candidates are:\n  method_c1(!Matched::Float64, !Matched::AbstractString...)"
+no_color = "\nClosest candidates are:\n  method_c1(!Matched::Float64, !Matched::AbstractString...)$cfile$c1line"
 test_have_color(buf,
-                "\e[0m\nClosest candidates are:\n  method_c1(\e[1m\e[31m::Float64\e[0m, \e[1m\e[31m::AbstractString...\e[0m)\e[0m",
+                "\e[0m\nClosest candidates are:\n  method_c1(\e[1m\e[31m::Float64\e[0m, \e[1m\e[31m::AbstractString...\e[0m)$cfile$c1line\e[0m",
                 no_color)
 
-no_color = "\nClosest candidates are:\n  method_c1(!Matched::Float64, ::AbstractString...)"
+no_color = "\nClosest candidates are:\n  method_c1(!Matched::Float64, ::AbstractString...)$cfile$c1line"
 Base.show_method_candidates(buf, Base.MethodError(method_c1,(1, "", "")))
 test_have_color(buf,
-                "\e[0m\nClosest candidates are:\n  method_c1(\e[1m\e[31m::Float64\e[0m, ::AbstractString...)\e[0m",
+                "\e[0m\nClosest candidates are:\n  method_c1(\e[1m\e[31m::Float64\e[0m, ::AbstractString...)$cfile$c1line\e[0m",
                 no_color)
 
 # should match
-no_color = "\nClosest candidates are:\n  method_c1(::Float64, ::AbstractString...)"
+no_color = "\nClosest candidates are:\n  method_c1(::Float64, ::AbstractString...)$cfile$c1line"
 Base.show_method_candidates(buf, Base.MethodError(method_c1,(1., "", "")))
 test_have_color(buf,
-                "\e[0m\nClosest candidates are:\n  method_c1(::Float64, ::AbstractString...)\e[0m",
+                "\e[0m\nClosest candidates are:\n  method_c1(::Float64, ::AbstractString...)$cfile$c1line\e[0m",
                 no_color)
 
 # Have no matches so should return empty
@@ -36,8 +38,12 @@ test_have_color(buf, "", "")
 
 # matches the implicit constructor -> convert method
 Base.show_method_candidates(buf, Base.MethodError(Tuple{}, (1, 1, 1)))
-@test contains(takebuf_string(buf), "\nClosest candidates are:\n  Tuple{}{T}(")
+let mc = takebuf_string(buf)
+    @test contains(mc, "\nClosest candidates are:\n  Tuple{}{T}(")
+    @test !contains(mc, cfile)
+end
 
+c2line = @__LINE__
 method_c2(x::Int32, args...) = true
 method_c2(x::Int32, y::Float64, args...) = true
 method_c2(x::Int32, y::Float64) = true
@@ -45,30 +51,35 @@ method_c2(x::Int32, y::Int32, z::Int32) = true
 method_c2{T<:Real}(x::T, y::T, z::T) = true
 
 Base.show_method_candidates(buf, Base.MethodError(method_c2,(1., 1., 2)))
-color = "\e[0m\nClosest candidates are:\n  method_c2(\e[1m\e[31m::Int32\e[0m, ::Float64, ::Any...)\n  method_c2(\e[1m\e[31m::Int32\e[0m, ::Any...)\n  method_c2{T<:Real}(::T<:Real, ::T<:Real, \e[1m\e[31m::T<:Real\e[0m)\n  ...\e[0m"
-no_color = no_color = "\nClosest candidates are:\n  method_c2(!Matched::Int32, ::Float64, ::Any...)\n  method_c2(!Matched::Int32, ::Any...)\n  method_c2{T<:Real}(::T<:Real, ::T<:Real, !Matched::T<:Real)\n  ..."
+color = "\e[0m\nClosest candidates are:\n  method_c2(\e[1m\e[31m::Int32\e[0m, ::Float64, ::Any...)$cfile$(c2line+2)\n  method_c2(\e[1m\e[31m::Int32\e[0m, ::Any...)$cfile$(c2line+1)\n  method_c2{T<:Real}(::T<:Real, ::T<:Real, \e[1m\e[31m::T<:Real\e[0m)$cfile$(c2line+5)\n  ...\e[0m"
+no_color = no_color = "\nClosest candidates are:\n  method_c2(!Matched::Int32, ::Float64, ::Any...)$cfile$(c2line+2)\n  method_c2(!Matched::Int32, ::Any...)$cfile$(c2line+1)\n  method_c2{T<:Real}(::T<:Real, ::T<:Real, !Matched::T<:Real)$cfile$(c2line+5)\n  ..."
 test_have_color(buf, color, no_color)
 
+c3line = @__LINE__ + 1
 method_c3(x::Float64, y::Float64) = true
 Base.show_method_candidates(buf, Base.MethodError(method_c3,(1.,)))
-color = "\e[0m\nClosest candidates are:\n  method_c3(::Float64, \e[1m\e[31m::Float64\e[0m)\e[0m"
-no_color = no_color = "\nClosest candidates are:\n  method_c3(::Float64, !Matched::Float64)"
+color = "\e[0m\nClosest candidates are:\n  method_c3(::Float64, \e[1m\e[31m::Float64\e[0m)$cfile$c3line\e[0m"
+no_color = no_color = "\nClosest candidates are:\n  method_c3(::Float64, !Matched::Float64)$cfile$c3line"
 test_have_color(buf, color, no_color)
 
 # Test for the method error in issue #8651
+c4line = @__LINE__
 method_c4() = true
 method_c4(x::AbstractString) = false
 Base.show_method_candidates(buf, MethodError(method_c4,("",)))
-test_have_color(buf, "\e[0m\nClosest candidates are:\n  method_c4(::AbstractString)\n  method_c4()\e[0m", "\nClosest candidates are:\n  method_c4(::AbstractString)\n  method_c4()")
+test_have_color(buf,
+    "\e[0m\nClosest candidates are:\n  method_c4(::AbstractString)$cfile$(c4line+2)\n  method_c4()$cfile$(c4line+1)\e[0m",
+    "\nClosest candidates are:\n  method_c4(::AbstractString)$cfile$(c4line+2)\n  method_c4()$cfile$(c4line+1)")
 
+c5line = @__LINE__ + 1
 method_c5(::Type{Float64}) = true
 Base.show_method_candidates(buf, MethodError(method_c5,(Float64,)))
-test_have_color(buf, "\e[0m\nClosest candidates are:\n  method_c5(::Type{Float64})\e[0m",
-                "\nClosest candidates are:\n  method_c5(::Type{Float64})")
+test_have_color(buf, "\e[0m\nClosest candidates are:\n  method_c5(::Type{Float64})$cfile$c5line\e[0m",
+                "\nClosest candidates are:\n  method_c5(::Type{Float64})$cfile$c5line")
 
 Base.show_method_candidates(buf, MethodError(method_c5,(Int32,)))
-test_have_color(buf, "\e[0m\nClosest candidates are:\n  method_c5(\e[1m\e[31m::Type{Float64}\e[0m)\e[0m",
-                "\nClosest candidates are:\n  method_c5(!Matched::Type{Float64})")
+test_have_color(buf, "\e[0m\nClosest candidates are:\n  method_c5(\e[1m\e[31m::Type{Float64}\e[0m)$cfile$c5line\e[0m",
+                "\nClosest candidates are:\n  method_c5(!Matched::Type{Float64})$cfile$c5line")
 
 type Test_type end
 test_type = Test_type()
@@ -77,19 +88,23 @@ for f in [getindex, setindex!]
     test_have_color(buf, "", "")
 end
 
+PR16155line = @__LINE__ + 2
 type PR16155
     a::Int64
     b
 end
+PR16155line2 = @__LINE__ + 1
+(::Type{T}){T<:PR16155}(arg::Any) = "replace call-to-convert method from sysimg"
 
 Base.show_method_candidates(buf, MethodError(PR16155,(1.0, 2.0, Int64(3))))
-test_have_color(buf, "\e[0m\nClosest candidates are:\n  PR16155(::Any, ::Any)\n  PR16155(\e[1m\e[31m::Int64\e[0m, ::Any)\n  PR16155{T}(::Any)\e[0m",
-                     "\nClosest candidates are:\n  PR16155(::Any, ::Any)\n  PR16155(!Matched::Int64, ::Any)\n  PR16155{T}(::Any)")
+test_have_color(buf, "\e[0m\nClosest candidates are:\n  PR16155(::Any, ::Any)$cfile$PR16155line\n  PR16155(\e[1m\e[31m::Int64\e[0m, ::Any)$cfile$PR16155line\n  PR16155{T<:PR16155}(::Any)$cfile$PR16155line2\n  ...\e[0m",
+                     "\nClosest candidates are:\n  PR16155(::Any, ::Any)$cfile$PR16155line\n  PR16155(!Matched::Int64, ::Any)$cfile$PR16155line\n  PR16155{T<:PR16155}(::Any)$cfile$PR16155line2\n  ...")
 
 Base.show_method_candidates(buf, MethodError(PR16155,(Int64(3), 2.0, Int64(3))))
-test_have_color(buf, "\e[0m\nClosest candidates are:\n  PR16155(::Int64, ::Any)\n  PR16155(::Any, ::Any)\n  PR16155{T}(::Any)\e[0m",
-                     "\nClosest candidates are:\n  PR16155(::Int64, ::Any)\n  PR16155(::Any, ::Any)\n  PR16155{T}(::Any)")
+test_have_color(buf, "\e[0m\nClosest candidates are:\n  PR16155(::Int64, ::Any)$cfile$PR16155line\n  PR16155(::Any, ::Any)$cfile$PR16155line\n  PR16155{T<:PR16155}(::Any)$cfile$PR16155line2\n  ...\e[0m",
+                     "\nClosest candidates are:\n  PR16155(::Int64, ::Any)$cfile$PR16155line\n  PR16155(::Any, ::Any)$cfile$PR16155line\n  PR16155{T<:PR16155}(::Any)$cfile$PR16155line2\n  ...")
 
+c6line = @__LINE__
 method_c6(; x=1) = x
 method_c6(a; y=1) = y
 m_error = try method_c6(y=1) catch e; e; end
@@ -99,6 +114,7 @@ m_error = try method_c6(1, x=1) catch e; e; end
 showerror(buf, m_error)
 error_out1 = takebuf_string(buf)
 
+c6mline = @__LINE__
 module TestKWError
 method_c6_in_module(; x=1) = x
 method_c6_in_module(a; y=1) = y
@@ -111,36 +127,39 @@ showerror(buf, m_error)
 error_out3 = takebuf_string(buf)
 
 if Base.have_color
-    @test contains(error_out, "method_c6(; x)\e[1m\e[31m got an unsupported keyword argument \"y\"\e[0m")
-    @test contains(error_out, "method_c6(\e[1m\e[31m::Any\e[0m; y)")
-    @test contains(error_out1, "method_c6(::Any; y)\e[1m\e[31m got an unsupported keyword argument \"x\"\e[0m")
-    @test contains(error_out2, "method_c6_in_module(; x)\e[1m\e[31m got an unsupported keyword argument \"y\"\e[0m")
-    @test contains(error_out2, "method_c6_in_module(\e[1m\e[31m::Any\e[0m; y)")
-    @test contains(error_out3, "method_c6_in_module(::Any; y)\e[1m\e[31m got an unsupported keyword argument \"x\"\e[0m")
+    @test contains(error_out, "method_c6(; x)$cfile$(c6line + 1)\e[1m\e[31m got an unsupported keyword argument \"y\"\e[0m")
+    @test contains(error_out, "method_c6(\e[1m\e[31m::Any\e[0m; y)$cfile$(c6line + 2)")
+    @test contains(error_out1, "method_c6(::Any; y)$cfile$(c6line + 2)\e[1m\e[31m got an unsupported keyword argument \"x\"\e[0m")
+    @test contains(error_out2, "method_c6_in_module(; x)$cfile$(c6mline + 2)\e[1m\e[31m got an unsupported keyword argument \"y\"\e[0m")
+    @test contains(error_out2, "method_c6_in_module(\e[1m\e[31m::Any\e[0m; y)$cfile$(c6mline + 3)")
+    @test contains(error_out3, "method_c6_in_module(::Any; y)$cfile$(c6mline + 3)\e[1m\e[31m got an unsupported keyword argument \"x\"\e[0m")
 else
-    @test contains(error_out, "method_c6(; x) got an unsupported keyword argument \"y\"")
-    @test contains(error_out, "method_c6(!Matched::Any; y)")
-    @test contains(error_out1, "method_c6(::Any; y) got an unsupported keyword argument \"x\"")
-    @test contains(error_out2, "method_c6_in_module(; x) got an unsupported keyword argument \"y\"")
-    @test contains(error_out2, "method_c6_in_module(!Matched::Any; y)")
-    @test contains(error_out3, "method_c6_in_module(::Any; y) got an unsupported keyword argument \"x\"")
+    @test contains(error_out, "method_c6(; x)$cfile$(c6line + 1) got an unsupported keyword argument \"y\"")
+    @test contains(error_out, "method_c6(!Matched::Any; y)$cfile$(c6line + 2)")
+    @test contains(error_out1, "method_c6(::Any; y)$cfile$(c6line + 2) got an unsupported keyword argument \"x\"")
+    @test contains(error_out2, "method_c6_in_module(; x)$cfile$(c6mline + 2) got an unsupported keyword argument \"y\"")
+    @test contains(error_out2, "method_c6_in_module(!Matched::Any; y)$cfile$(c6mline + 3)")
+    @test contains(error_out3, "method_c6_in_module(::Any; y)$cfile$(c6mline + 3) got an unsupported keyword argument \"x\"")
 end
 
+c7line = @__LINE__ + 1
 method_c7(a, b; kargs...) = a
 Base.show_method_candidates(buf, MethodError(method_c7, (1, 1)), [(:x, 1), (:y, 2)])
-test_have_color(buf, "\e[0m\nClosest candidates are:\n  method_c7(::Any, ::Any; kargs...)\e[0m",
-                     "\nClosest candidates are:\n  method_c7(::Any, ::Any; kargs...)")
+test_have_color(buf, "\e[0m\nClosest candidates are:\n  method_c7(::Any, ::Any; kargs...)$cfile$c7line\e[0m",
+                     "\nClosest candidates are:\n  method_c7(::Any, ::Any; kargs...)$cfile$c7line")
+c8line = @__LINE__ + 1
 method_c8(a, b; y=1, w=1) = a
 Base.show_method_candidates(buf, MethodError(method_c8, (1, 1)), [(:x, 1), (:y, 2), (:z, 1), (:w, 1)])
-test_have_color(buf, "\e[0m\nClosest candidates are:\n  method_c8(::Any, ::Any; y, w)\e[1m\e[31m got an unsupported keyword argument \"x\", \"z\"\e[0m\e[0m",
-                     "\nClosest candidates are:\n  method_c8(::Any, ::Any; y, w) got an unsupported keyword argument \"x\", \"z\"")
+test_have_color(buf, "\e[0m\nClosest candidates are:\n  method_c8(::Any, ::Any; y, w)$cfile$c8line\e[1m\e[31m got an unsupported keyword argument \"x\", \"z\"\e[0m\e[0m",
+                     "\nClosest candidates are:\n  method_c8(::Any, ::Any; y, w)$cfile$c8line got an unsupported keyword argument \"x\", \"z\"")
 
+ac15639line = @__LINE__
 addConstraint_15639(c::Int32) = c
 addConstraint_15639(c::Int64; uncset=nothing) = addConstraint_15639(Int32(c), uncset=uncset)
 
 Base.show_method_candidates(buf, MethodError(addConstraint_15639, (Int32(1),)), [(:uncset, nothing)])
-test_have_color(buf, "\e[0m\nClosest candidates are:\n  addConstraint_15639(::Int32)\e[1m\e[31m got an unsupported keyword argument \"uncset\"\e[0m\n  addConstraint_15639(\e[1m\e[31m::Int64\e[0m; uncset)\e[0m",
-                     "\nClosest candidates are:\n  addConstraint_15639(::Int32) got an unsupported keyword argument \"uncset\"\n  addConstraint_15639(!Matched::Int64; uncset)")
+test_have_color(buf, "\e[0m\nClosest candidates are:\n  addConstraint_15639(::Int32)$cfile$(ac15639line + 1)\e[1m\e[31m got an unsupported keyword argument \"uncset\"\e[0m\n  addConstraint_15639(\e[1m\e[31m::Int64\e[0m; uncset)$cfile$(ac15639line + 2)\e[0m",
+                     "\nClosest candidates are:\n  addConstraint_15639(::Int32)$cfile$(ac15639line + 1) got an unsupported keyword argument \"uncset\"\n  addConstraint_15639(!Matched::Int64; uncset)$cfile$(ac15639line + 2)")
 
 macro except_str(expr, err_type)
     return quote
