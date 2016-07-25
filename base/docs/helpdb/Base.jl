@@ -1565,7 +1565,7 @@ connect(host=?, port)
 """
     connect(path) -> PipeEndpoint
 
-Connect to the Named Pipe / Domain Socket at `path`.
+Connect to the named pipe / UNIX domain socket at `path`.
 """
 connect(path)
 
@@ -7286,7 +7286,7 @@ listen(addr,port)
 """
     listen(path) -> PipeServer
 
-Create and listen on a Named Pipe / Domain Socket.
+Create and listen on a named pipe / UNIX domain socket.
 """
 listen(path)
 
