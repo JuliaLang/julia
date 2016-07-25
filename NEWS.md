@@ -177,9 +177,9 @@ Library improvements
 
     * Comparisons between `Char`s and `Integer`s are now deprecated ([#16024]):
       `'x' == 120` now produces a warning but still evaluates to `true`. In the
-      future it may evalaute to `false` or the comparison may be an error. To
+      future it may evaluate to `false` or the comparison may be an error. To
       compare characters with integers you should either convert the integer to
-      a character value or conver the character the corresponding code point
+      a character value or convert the character the corresponding code point
       first: e.g. `'x' == Char(120)` or `Int('x') == 120`. The former is usually
       preferrable.
 
