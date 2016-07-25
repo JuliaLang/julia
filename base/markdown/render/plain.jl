@@ -105,7 +105,16 @@ plaininline(io::IO, md::Bold) = plaininline(io, "**", md.text, "**")
 
 plaininline(io::IO, md::Italic) = plaininline(io, "*", md.text, "*")
 
-plaininline(io::IO, md::Code) = print(io, "`", md.code, "`")
+function plaininline(io::IO, md::Code)
+    if contains(md.code, "`")
+        n = maximum(length(m) for m in matchall(r"(`+)", md.code))
+        s = "`"^((iseven(n) ? 1 : 2) + n)
+        print(io, s, Base.startswith(md.code, "`") ? " " : "")
+        print(io, md.code, endswith(md.code, "`") ? " " : "", s)
+    else
+        print(io, "`", md.code, "`")
+    end
+end
 
 plaininline(io::IO, br::LineBreak) = println(io)
 
