@@ -18,7 +18,7 @@ x = ModInts.ModInt{256}(13)
 y = inv(x)
 @test y == ModInts.ModInt{256}(197)
 @test x*y == ModInts.ModInt{256}(1)
-@test_throws ErrorException inv(ModInts.ModInt{8}(4))
+@test_throws DomainError inv(ModInts.ModInt{8}(4))
 
 include(joinpath(dir, "ndgrid.jl"))
 r = repmat(1:10,1,10)

@@ -260,14 +260,21 @@ for (fJ, fC) in ((:+, :add), (:-,:sub), (:*, :mul),
 end
 
 function invmod(x::BigInt, y::BigInt)
-    z = BigInt()
-    y = abs(y)
-    if y == 1
-        return big(0)
+    z = zero(BigInt)
+    ya = abs(y)
+    if ya == 1
+        return z
     end
-    if (y==0 || ccall((:__gmpz_invert, :libgmp), Cint, (Ptr{BigInt}, Ptr{BigInt}, Ptr{BigInt}), &z, &x, &y) == 0)
-        error("no inverse exists")
+    if (y==0 || ccall((:__gmpz_invert, :libgmp), Cint, (Ptr{BigInt}, Ptr{BigInt}, Ptr{BigInt}), &z, &x, &ya) == 0)
+        throw(DomainError())
     end
+    # GMP always returns a positive inverse; we instead want to
+    # normalize such that div(z, y) == 0, i.e. we want a negative z
+    # when y is negative.
+    if y < 0
+        z = z + y
+    end
+    # The postcondition is: mod(z * x, y) == mod(big(1), m) && div(z, y) == 0
     return z
 end
 

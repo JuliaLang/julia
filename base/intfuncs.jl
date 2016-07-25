@@ -53,7 +53,7 @@ lcm{T<:Integer}(abc::AbstractArray{T}) = reduce(lcm,abc)
 
 Computes the greatest common (positive) divisor of `x` and `y` and their Bézout
 coefficients, i.e. the integer coefficients `u` and `v` that satisfy
-``ux+vy = d = gcd(x,y)``.
+``ux+vy = d = gcd(x,y)``. ``gcdx(x,y)`` returns ``(d,u,v)``.
 
 ```jldoctest
 julia> gcdx(12, 42)
@@ -67,15 +67,20 @@ julia> gcdx(240, 46)
 
 !!! note
     Bézout coefficients are *not* uniquely defined. `gcdx` returns the minimal
-    Bézout coefficients that are computed by the extended Euclid algorithm.
-    (Ref: D. Knuth, TAoCP, 2/e, p. 325, Algorithm X.) These coefficients `u`
-    and `v` are minimal in the sense that ``|u| < |\\frac y d|`` and ``|v| <
-    |\\frac x d|``. Furthermore, the signs of `u` and `v` are chosen so that `d`
-    is positive.
+    Bézout coefficients that are computed by the extended Euclidean algorithm.
+    (Ref: D. Knuth, TAoCP, 2/e, p. 325, Algorithm X.)
+    For signed integers, these coefficients `u` and `v` are minimal in
+    the sense that ``|u| < |y/d|`` and ``|v| < |x/d|``. Furthermore,
+    the signs of `u` and `v` are chosen so that `d` is positive.
+    For unsigned integers, the coefficients `u` and `v` might be near
+    their `typemax`, and the identity then holds only via the unsigned
+    integers' modulo arithmetic.
 """
 function gcdx{T<:Integer}(a::T, b::T)
+    # a0, b0 = a, b
     s0, s1 = one(T), zero(T)
     t0, t1 = s1, s0
+    # The loop invariant is: s0*a0 + t0*b0 == a
     while b != 0
         q = div(a, b)
         a, b = b, rem(a, b)
@@ -87,13 +92,16 @@ end
 gcdx(a::Integer, b::Integer) = gcdx(promote(a,b)...)
 
 # multiplicative inverse of n mod m, error if none
-function invmod(n, m)
+function invmod{T<:Integer}(n::T, m::T)
     g, x, y = gcdx(n, m)
-    if g != 1 || m == 0
-        error("no inverse exists")
-    end
-    x < 0 ? abs(m) + x : x
+    (g != 1 || m == 0) && throw(DomainError())
+    # Note that m might be negative here.
+    # For unsigned T, x might be close to typemax; add m to force a wrap-around.
+    r = mod(x + m, m)
+    # The postcondition is: mod(r * n, m) == mod(T(1), m) && div(r, m) == 0
+    r
 end
+invmod(n::Integer, m::Integer) = invmod(promote(n,m)...)
 
 # ^ for any x supporting *
 to_power_type(x::Number) = oftype(x*x, x)
