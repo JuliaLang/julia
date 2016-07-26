@@ -57,16 +57,20 @@ module CompletionFoo
 end
 test_repl_comp_dict = CompletionFoo.test_dict
 
-function temp_pkg_dir(fn::Function)
-    # Used in tests below to setup and teardown a sandboxed package directory
-    const tmpdir = ENV["JULIA_PKGDIR"] = joinpath(tempdir(),randstring())
-    @test !isdir(Pkg.dir())
-    try
-        mkpath(Pkg.dir())
-        @test isdir(Pkg.dir())
-        fn()
-    finally
-        rm(tmpdir, recursive=true)
+function temp_pkg_dir_noinit(fn::Function)
+    # Used in tests below to set up and tear down a sandboxed package directory
+    # Unlike the version in test/pkg.jl, this does not run Pkg.init so does not
+    # clone METADATA (only pkg and libgit2-online tests should need internet access)
+    const tmpdir = joinpath(tempdir(),randstring())
+    withenv("JULIA_PKGDIR" => tmpdir) do
+        @test !isdir(Pkg.dir())
+        try
+            mkpath(Pkg.dir())
+            @test isdir(Pkg.dir())
+            fn()
+        finally
+            rm(tmpdir, recursive=true)
+        end
     end
 end
 
@@ -382,7 +386,7 @@ c, r, res = test_complete(s)
 
 # Test completion of packages
 mkp(p) = ((@assert !isdir(p)); mkpath(p))
-temp_pkg_dir() do
+temp_pkg_dir_noinit() do
     # Complete <Mod>/src/<Mod>.jl and <Mod>.jl/src/<Mod>.jl
     # but not <Mod>/ if no corresponding .jl file is found
     pkg_dir = Pkg.dir("CompletionFooPackage", "src")
