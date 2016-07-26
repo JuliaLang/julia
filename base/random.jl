@@ -1213,14 +1213,14 @@ let Floats = Union{Float16,Float32,Float64}
             $randfun!(A::AbstractArray) = $randfun!(GLOBAL_RNG, A)
 
             # generating arrays
-            $randfun{T}(rng::AbstractRNG, ::Type{T}, dims::Dims)       = $randfun!(rng, Array{T}(dims))
-            $randfun{T}(rng::AbstractRNG, ::Type{T}, dims::Integer...) = $randfun!(rng, Array{T}(dims...))
-            $randfun{T}(                  ::Type{T}, dims::Dims)       = $randfun(GLOBAL_RNG, T, dims)
-            $randfun{T}(                  ::Type{T}, dims::Integer...) = $randfun(GLOBAL_RNG, T, dims...)
-            $randfun(   rng::AbstractRNG,            dims::Dims)       = $randfun(rng, Float64, dims)
-            $randfun(   rng::AbstractRNG,            dims::Integer...) = $randfun(rng, Float64, dims...)
-            $randfun(                                dims::Dims)       = $randfun(GLOBAL_RNG, Float64, dims)
-            $randfun(                                dims::Integer...) = $randfun(GLOBAL_RNG, Float64, dims...)
+            $randfun{T}(rng::AbstractRNG, ::Type{T}, dims::Dims                     ) = $randfun!(rng, Array{T}(dims))
+            $randfun{T}(rng::AbstractRNG, ::Type{T}, dim0::Integer, dims::Integer...) = $randfun!(rng, Array{T}(dim0, dims...))
+            $randfun{T}(                  ::Type{T}, dims::Dims                     ) = $randfun(GLOBAL_RNG, T, dims)
+            $randfun{T}(                  ::Type{T}, dim0::Integer, dims::Integer...) = $randfun(GLOBAL_RNG, T, dim0, dims...)
+            $randfun(   rng::AbstractRNG,            dims::Dims                     ) = $randfun(rng, Float64, dims)
+            $randfun(   rng::AbstractRNG,            dim0::Integer, dims::Integer...) = $randfun(rng, Float64, dim0, dims...)
+            $randfun(                                dims::Dims                     ) = $randfun(GLOBAL_RNG, Float64, dims)
+            $randfun(                                dim0::Integer, dims::Integer...) = $randfun(GLOBAL_RNG, Float64, dim0, dims...)
         end
     end
 end
