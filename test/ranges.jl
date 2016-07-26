@@ -116,6 +116,9 @@ end
 @test intersect(UnitRange(1,2),3) == UnitRange(3,2)
 @test intersect(UnitRange(1,2), UnitRange(1,5), UnitRange(3,7), UnitRange(4,6)) == UnitRange(4,3)
 
+@test intersect(1:3, 2) === intersect(2, 1:3) === 2:2
+@test intersect(1.0:3.0, 2) == intersect(2, 1.0:3.0) == [2.0]
+
 @test sort(UnitRange(1,2)) == UnitRange(1,2)
 @test sort!(UnitRange(1,2)) == UnitRange(1,2)
 @test sort(1:10, rev=true) == collect(10:-1:1)
