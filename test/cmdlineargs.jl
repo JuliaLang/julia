@@ -1,5 +1,13 @@
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
+catcmd = `cat`
+if is_windows()
+    try # use busybox-w32 on windows
+        success(`busybox`)
+        catcmd = `busybox cat`
+    end
+end
+
 let exename = `$(Base.julia_cmd()) --precompiled=yes`
     # --version
     let v = split(readstring(`$exename -v`), "julia version ")[end]
@@ -246,13 +254,6 @@ let exename = `$(Base.julia_cmd()) --precompiled=yes`
     @test readchomp(`$exename -e 'println(ARGS);' ''`) == "String[\"\"]"
 
     # issue #12679
-    catcmd = `cat`
-    if is_windows()
-        try # use busybox-w32 on windows
-            success(`busybox`)
-            catcmd = `busybox cat`
-        end
-    end
     @test readchomp(pipeline(ignorestatus(`$exename --startup-file=no --compile=yes -ioo`),stderr=catcmd)) == "ERROR: unknown option `-o`"
     @test readchomp(pipeline(ignorestatus(`$exename --startup-file=no -p`),stderr=catcmd)) == "ERROR: option `-p/--procs` is missing an argument"
     @test readchomp(pipeline(ignorestatus(`$exename --startup-file=no --inline`),stderr=catcmd)) == "ERROR: option `--inline` is missing an argument"
@@ -286,4 +287,20 @@ run(pipeline(DevNull, `$(joinpath(JULIA_HOME, Base.julia_exename())) --lisp`, De
 let exename = `$(Base.julia_cmd())`
     @test readchomp(`$exename --precompiled=yes -E "Bool(Base.JLOptions().use_precompiled)"`) == "true"
     @test readchomp(`$exename --precompiled=no -E "Bool(Base.JLOptions().use_precompiled)"`) == "false"
+end
+
+# backtrace contains type and line number info (esp. on windows #17179)
+for precomp in ("yes", "no")
+    bt = readstring(pipeline(ignorestatus(`$(Base.julia_cmd()) --precompiled=$precomp
+        -E 'include("____nonexistent_file")'`), stderr=catcmd))
+    @test contains(bt, "in include_from_node1")
+    if is_windows() && Sys.WORD_SIZE == 32 && precomp == "yes"
+        # fixme, issue #17251
+        @test_broken contains(bt, "in include_from_node1(::String) at $(joinpath(".","loading.jl"))")
+    else
+        @test contains(bt, "in include_from_node1(::String) at $(joinpath(".","loading.jl"))")
+    end
+    lno = match(r"at \.[/\\]loading.jl:(\d+)", bt)
+    @test length(lno.captures) == 1
+    @test parse(Int, lno.captures[1]) > 0
 end
