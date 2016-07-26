@@ -58,8 +58,8 @@ function github_paragraph(stream::IO, md::MD)
     return true
 end
 
-@flavor github [list, indentcode, blockquote, admonition, fencedcode, hashheader,
+@flavor github [list, indentcode, blockquote, admonition, footnote, fencedcode, hashheader,
                 github_table, github_paragraph,
 
                 linebreak, escapes, en_dash, inline_code, asterisk_bold,
-                asterisk_italic, image, footnote, link]
+                asterisk_italic, image, footnote_link, link]

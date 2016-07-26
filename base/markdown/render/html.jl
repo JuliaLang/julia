@@ -88,6 +88,15 @@ function html(io::IO, md::BlockQuote)
     end
 end
 
+function html(io::IO, f::Footnote)
+    withtag(io, :div, :class => "footnote", :id => "footnote-$(f.id)") do
+        withtag(io, :p, :class => "footnote-title") do
+            print(io, f.id)
+        end
+        html(io, f.text)
+    end
+end
+
 function html(io::IO, md::Admonition)
     withtag(io, :div, :class => "admonition $(md.category)") do
         withtag(io, :p, :class => "admonition-title") do
@@ -148,6 +157,13 @@ end
 
 function htmlinline(io::IO, md::Image)
     tag(io, :img, :src=>md.url, :alt=>md.alt)
+end
+
+
+function htmlinline(io::IO, f::Footnote)
+    withtag(io, :a, :href => "#footnote-$(f.id)", :class => "footnote") do
+        print(io, "[", f.id, "]")
+    end
 end
 
 function htmlinline(io::IO, link::Link)
