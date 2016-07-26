@@ -206,9 +206,18 @@ A `VersionNumber` object describing which version of Julia is in use. For detail
 [Version Number Literals](:ref:`man-version-number-literals`).
 """
 const VERSION = try
-    # Include build number if we've got at least some distance from a tag (e.g. a release)
-    build_number = GIT_VERSION_INFO.build_number != 0 ? "+$(GIT_VERSION_INFO.build_number)" : ""
-    convert(VersionNumber, "$(VERSION_STRING)$(build_number)")
+    ver = convert(VersionNumber, VERSION_STRING)
+    if !isempty(ver.prerelease)
+        build_number = GIT_VERSION_INFO.build_number
+        if ver == v"0.5.0-pre"
+            # due to change of reference for counting commits from last tag to last change of VERSION file
+            build_number += 5578
+        end
+        ver = VersionNumber(ver.major, ver.minor, ver.patch, ver.prerelease, (build_number,))
+    elseif GIT_VERSION_INFO.build_number != 0
+        println("WARNING: ignoring non-zero build number for VERSION")
+    end
+    ver
 catch e
     println("while creating Base.VERSION, ignoring error $e")
     VersionNumber(0)
