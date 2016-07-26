@@ -308,6 +308,16 @@ for vd in [1, 2], zm in [true, false]
     @inferred cor(X, Y, vd)
 end
 
+@test cor(repmat(1:17, 1, 17))[2] <= 1.0
+@test cor(1:17, 1:17) <= 1.0
+@test cor(1:17, 18:34) <= 1.0
+let tmp = linspace(1, 85, 100)
+    tmp2 = collect(tmp)
+    @test cor(tmp, tmp) <= 1.0
+    @test cor(tmp, tmp2) <= 1.0
+end
+
+
 @test midpoints(1.0:1.0:10.0) == 1.5:1.0:9.5
 @test midpoints(1:10) == 1.5:9.5
 @test midpoints(Float64[1.0:1.0:10.0;]) == Float64[1.5:1.0:9.5;]
