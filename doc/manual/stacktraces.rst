@@ -89,7 +89,7 @@ Each :obj:`StackFrame` contains the function name, file name, line number, lambd
     234
 
     julia> top_frame.linfo
-    Nullable{LambdaInfo}(LambdaInfo for eval(::Module, ::Any)
+    Nullable{LambdaInfo}(LambdaInfo for eval(::Module, ::Any))
     ...
 
     julia> top_frame.inlined
