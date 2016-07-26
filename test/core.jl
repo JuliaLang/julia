@@ -2310,7 +2310,7 @@ function test_wr()
     test_wr(ref, wref)
     pop!(ref)
     gc()
-    @test wref[1].value == nothing
+    @test wref[1].value === nothing
 end
 test_wr()
 
@@ -2955,7 +2955,7 @@ f10978(T::TupleType10978) = isa(T, TupleType10978)
 @test f10978(Tuple{Int})
 
 # issue #10995
-#typealias TupleType{T<:Tuple} Type{T};
+#typealias TupleType{T<:Tuple} Type{T}
 f10995(::Any) = (while false; end; nothing)
 f10995(T::TupleType10978) = (while false; end; @assert isa(T, TupleType10978))
 g10995(x) = f10995(typeof(x))
@@ -3130,13 +3130,13 @@ end
 
 # issue 11874
 immutable Foo11874
-   x::Int
+    x::Int
 end
 
 function bar11874(x)
-   local y::Foo11874
-   y = x
-   nothing
+    local y::Foo11874
+    y = x
+    nothing
 end
 
 Base.convert(::Type{Foo11874},x::Int) = float(x)
@@ -3376,9 +3376,9 @@ gg13183{X}(x::X...) = 1==0 ? gg13183(x, x) : 0
 
 # issue 8932 (llvm return type legalizer error)
 immutable Vec3_8932
-   x::Float32
-   y::Float32
-   z::Float32
+    x::Float32
+    y::Float32
+    z::Float32
 end
 f8932(a::Vec3_8932, b::Vec3_8932) = Vec3_8932(a.x % b.x, a.y % b.y, a.z % b.z)
 a8932 = Vec3_8932(1,1,1)
@@ -3416,9 +3416,9 @@ immutable X13647
     b::Bool
 end
 function f13647(x, y)
-   z = false
-   z = y
-   x === z
+    z = false
+    z = y
+    x === z
 end
 @test f13647(X13647(1, false), X13647(1, false))
 @test !f13647(X13647(1, false), X13647(1, true))

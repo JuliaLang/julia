@@ -2967,7 +2967,7 @@ function inlining_pass(e::Expr, sv, linfo)
     # by the interpreter and inlining might put in something it can't handle,
     # like another ccall (or try to move the variables out into the function)
     if is_known_call(e, Core.Intrinsics.ccall, sv)
-        # 4 is rewrite to 2 below to handle the callee.
+        # 4 is rewritten to 2 below to handle the callee.
         i0 = 4
         isccall = true
     elseif is_known_call(e, Core.Intrinsics.llvmcall, sv)

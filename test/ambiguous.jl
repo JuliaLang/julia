@@ -19,7 +19,7 @@ for m in mt
     ln = getline(m)
     atarget = ambigs[ln]
     if isempty(atarget)
-        @test m.ambig == nothing
+        @test m.ambig === nothing
     else
         aln = Int[getline(a) for a in m.ambig]
         @test sort(aln) == atarget

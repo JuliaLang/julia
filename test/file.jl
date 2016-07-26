@@ -179,7 +179,7 @@ if !is_windows()
     end
 else
     # test that chown doesn't cause any errors for Windows
-    @test chown(file, -2, -2) == nothing
+    @test chown(file, -2, -2) === nothing
 end
 
 #######################################################################

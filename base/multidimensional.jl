@@ -157,7 +157,7 @@ end  # IteratorsMD
 using .IteratorsMD
 
 ## Bounds-checking with CartesianIndex
-@inline checkbounds_indices(::Type{Bool}, ::Tuple{},   I::Tuple{CartesianIndex,Vararg{Any}}) =
+@inline checkbounds_indices(::Type{Bool}, ::Tuple{}, I::Tuple{CartesianIndex,Vararg{Any}}) =
     checkbounds_indices(Bool, (), (I[1].I..., tail(I)...))
 @inline checkbounds_indices(::Type{Bool}, IA::Tuple{Any}, I::Tuple{CartesianIndex,Vararg{Any}}) =
     checkbounds_indices(Bool, IA, (I[1].I..., tail(I)...))

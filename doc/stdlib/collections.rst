@@ -676,13 +676,13 @@ Iterable Collections
 
    .. Docstring generated from Julia source
 
-   Return an Array of all items in a collection or iterator. For associative collections, returns Pair{KeyType, ValType}. If the argument is array-like or is an iterator with the ``HasShape()`` trait, the result will have the same shape and number of dimensions as the argument.
+   Return an ``Array`` of all items in a collection or iterator. For associative collections, returns ``Pair{KeyType, ValType}``\ . If the argument is array-like or is an iterator with the ``HasShape()`` trait, the result will have the same shape and number of dimensions as the argument.
 
 .. function:: collect(element_type, collection)
 
    .. Docstring generated from Julia source
 
-   Return an Array with the given element type of all items in a collection or iterable. The result has the same shape and number of dimensions as ``collection``\ .
+   Return an ``Array`` with the given element type of all items in a collection or iterable. The result has the same shape and number of dimensions as ``collection``\ .
 
 .. function:: issubset(a, b)
               ⊆(a,b) -> Bool

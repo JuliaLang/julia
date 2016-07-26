@@ -106,7 +106,7 @@ This section lists changes that do not have deprecation warnings.
 
   * The assignment operations `.+=`, `.*=` and so on now generate calls
     to `broadcast!` on the left-hand side (or call to `view(a, ...)` on the left-hand side
-    if the latter is an indexing expression, (e.g. `a[...]`). This means that they will fail
+    if the latter is an indexing expression, e.g. `a[...]`). This means that they will fail
     if the left-hand side is immutable (or does not support `view`), and will otherwise
     change the left-hand side in-place ([#17510], [#17546]).
 
@@ -179,7 +179,7 @@ Library improvements
       compare characters with integers you should either convert the integer to
       a character value or convert the character to the corresponding code point
       first: e.g. `'x' == Char(120)` or `Int('x') == 120`. The former is usually
-      preferrable.
+      preferable.
 
     * Support for Unicode 9 ([#17402]).
 
@@ -342,6 +342,7 @@ Deprecated or removed
 [#550]: https://github.com/JuliaLang/julia/issues/550
 [#964]: https://github.com/JuliaLang/julia/issues/964
 [#1090]: https://github.com/JuliaLang/julia/issues/1090
+[#1765]: https://github.com/JuliaLang/julia/issues/1765
 [#4163]: https://github.com/JuliaLang/julia/issues/4163
 [#4211]: https://github.com/JuliaLang/julia/issues/4211
 [#4470]: https://github.com/JuliaLang/julia/issues/4470
@@ -381,6 +382,7 @@ Deprecated or removed
 [#14519]: https://github.com/JuliaLang/julia/issues/14519
 [#14759]: https://github.com/JuliaLang/julia/issues/14759
 [#14798]: https://github.com/JuliaLang/julia/issues/14798
+[#15007]: https://github.com/JuliaLang/julia/issues/15007
 [#15032]: https://github.com/JuliaLang/julia/issues/15032
 [#15172]: https://github.com/JuliaLang/julia/issues/15172
 [#15192]: https://github.com/JuliaLang/julia/issues/15192
@@ -395,6 +397,7 @@ Deprecated or removed
 [#15731]: https://github.com/JuliaLang/julia/issues/15731
 [#15763]: https://github.com/JuliaLang/julia/issues/15763
 [#15975]: https://github.com/JuliaLang/julia/issues/15975
+[#16024]: https://github.com/JuliaLang/julia/issues/16024
 [#16058]: https://github.com/JuliaLang/julia/issues/16058
 [#16071]: https://github.com/JuliaLang/julia/issues/16071
 [#16107]: https://github.com/JuliaLang/julia/issues/16107
@@ -405,7 +408,9 @@ Deprecated or removed
 [#16403]: https://github.com/JuliaLang/julia/issues/16403
 [#16404]: https://github.com/JuliaLang/julia/issues/16404
 [#16455]: https://github.com/JuliaLang/julia/issues/16455
+[#16466]: https://github.com/JuliaLang/julia/issues/16466
 [#16481]: https://github.com/JuliaLang/julia/issues/16481
+[#16502]: https://github.com/JuliaLang/julia/issues/16502
 [#16621]: https://github.com/JuliaLang/julia/issues/16621
 [#16622]: https://github.com/JuliaLang/julia/issues/16622
 [#16645]: https://github.com/JuliaLang/julia/issues/16645
