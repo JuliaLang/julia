@@ -2483,41 +2483,9 @@ function inlineable(f::ANY, ft::ANY, e::Expr, atypes::Vector{Any}, sv::Inference
     end
 
     methsig = method.sig
-    incompletematch = false
     if !(atype <: metharg)
-        incompletematch = true
-        if !inline_incompletematch_allowed || !isdefined(Main,:Base)
-            # provide global disable if this optimization is not desirable
-            # need Main.Base defined for MethodError
-            return invoke_NF()
-        end
+        return invoke_NF()
     end
-
-    ## This code tries to limit the argument list length only when it is
-    ## growing due to recursion.
-    ## It might be helpful for some things, but turns out not to be
-    ## necessary to get max performance from recursive varargs functions.
-    # if length(atypes) > MAX_TUPLETYPE_LEN
-    #     # check call stack to see if this argument list is growing
-    #     st = inference_stack
-    #     while !isa(st, EmptyCallStack)
-    #         if st.code === linfo.def.code && length(atypes) > length(st.types)
-    #             atypes = limit_tuple_type(atypes)
-    #             meth = _methods(f, atypes, 1)
-    #             if meth === false || length(meth) != 1
-    #                 return NF
-    #             end
-    #             meth = meth[1]::Tuple
-    #             linfo2 = meth[3].func.code
-    #             if linfo2 !== linfo
-    #                 return NF
-    #             end
-    #             linfo = linfo2
-    #             break
-    #         end
-    #         st = st.prev
-    #     end
-    # end
 
     (linfo, ty, inferred) = typeinf(method, metharg, methsp, false)
     if linfo === nothing || !inferred
@@ -2527,31 +2495,6 @@ function inlineable(f::ANY, ft::ANY, e::Expr, atypes::Vector{Any}, sv::Inference
         # in this case function can be inlined to a constant
         return inline_as_constant(linfo.constval, argexprs, sv)
     elseif linfo !== nothing && !linfo.inlineable
-        # TODO
-        #=
-        if incompletematch
-            # inline a typeassert-based call-site, rather than a
-            # full generic lookup, using the inliner to handle
-            # all the fiddly details
-            numarg = length(argexprs)
-            newnames = unique_names(ast,numarg)
-            spnames = []
-            spvals = []
-            locals = []
-            newcall = Expr(:call, e.args[1])
-            newcall.typ = ty
-            for i = 1:numarg
-                name = newnames[i]
-                argtype = exprtype(argexprs[i],sv)
-                push!(locals, Any[name,argtype,0])
-                push!(newcall.args, argtype===Any ? name : SymbolNode(name, argtype))
-            end
-            body.args = Any[Expr(:return, newcall)]
-            ast = Expr(:lambda, newnames, Any[[], locals, [], 0], body)
-        else
-            return invoke_NF()
-        end
-        =#
         return invoke_NF()
     elseif linfo === nothing || linfo.code === nothing
         (linfo, ty, inferred) = typeinf(method, metharg, methsp, true)
@@ -2613,101 +2556,27 @@ function inlineable(f::ANY, ft::ANY, e::Expr, atypes::Vector{Any}, sv::Inference
     prelude_stmts = Any[]
     stmts_free = true # true = all entries of stmts are effect_free
 
-    # when 1 method matches the inferred types, there is still a chance
-    # of a no-method error at run time, unless the inferred types are a
-    # subset of the method signature.
-    if incompletematch
-        t = Expr(:call) # tuple(args...)
-        t.typ = Tuple
-        argexprs2 = t.args
-        icall = LabelNode(label_counter(body.args)+1)
-        partmatch = Expr(:gotoifnot, false, icall.label)
-        thrw = Expr(:call, :throw, Expr(:call, GlobalRef(Main.Base,:MethodError), Expr(:call, top_tuple, e.args[1], QuoteNode(:inline)), t))
-        thrw.typ = Bottom
-    end
-
     for i=na:-1:1 # stmts_free needs to be calculated in reverse-argument order
         #args_i = args[i]
         aei = argexprs[i]
         aeitype = argtype = widenconst(exprtype(aei,sv))
-        needtypeassert = false
-        if incompletematch
-            if isva
-                if nm == 0
-                    methitype = Tuple{}
-                elseif i > nm
-                    methitype = methargs[end]
-                    if isvarargtype(methitype)
-                        methitype = Tuple{methitype}
-                    else
-                        methitype = Tuple{}
-                    end
-                else
-                    methitype = tupletype_tail(metharg,i)
-                end
-                isva = false
-            else
-                if i < nm
-                    methitype = methargs[i]
-                else
-                    methitype = methargs[end]
-                    if isvarargtype(methitype)
-                        methitype = methitype.parameters[1]
-                    else
-                        @assert i==nm
-                    end
-                end
-            end
-            if isa(methitype, TypeVar)
-                methitype = methitype.ub
-            end
-            if !(aeitype <: methitype)
-                #TODO: make Undef a faster special-case?
-                needtypeassert = true
-                aeitype = methitype
-            end
-        end
 
         # ok for argument to occur more than once if the actual argument
         # is a symbol or constant, or is not affected by previous statements
         # that will exist after the inlining pass finishes
-        if needtypeassert
-            vnew1 = unique_name(enclosing_ast, ast)
-            add_variable(enclosing_ast, vnew1, aeitype, true)
-            v1 = (aeitype===Any ? vnew1 : SymbolNode(vnew1,aeitype))
-            push!(spvals, v1)
-            vnew2 = unique_name(enclosing_ast, ast)
-            v2 = (argtype===Any ? vnew2 : SymbolNode(vnew2,argtype))
-            unshift!(body.args, Expr(:(=), args_i, v2))
-            args[i] = args_i = vnew2
-            aeitype = argtype
-            affect_free = stmts_free
-            occ = 3
-            # it's really late in codegen, so we expand the typeassert manually: cond = !isa(vnew2, methitype) | cond
-            cond = Expr(:call, Intrinsics.isa, v2, methitype)
-            cond.typ = Bool
-            cond = Expr(:call, Intrinsics.not_int, cond)
-            cond.typ = Bool
-            cond = Expr(:call, Intrinsics.or_int, cond, partmatch.args[1])
-            cond.typ = Bool
-            cond = Expr(:call, Intrinsics.box, Bool, cond)
-            cond.typ = Bool
-            partmatch.args[1] = cond
-        else
-            affect_free = stmts_free  # false = previous statements might affect the result of evaluating argument
-            occ = 0
-            for j = length(body.args):-1:1
-                b = body.args[j]
-                if occ < 6
-                    occ += occurs_more(b, x->(isa(x,Slot)&&x.id==i), 6)
-                end
-                # TODO: passing `sv` here is wrong since it refers to the enclosing function
-                if occ > 0 && affect_free && !effect_free(b, sv, true) #TODO: we could short-circuit this test better by memoizing effect_free(b) in the for loop over i
-                    affect_free = false
-                end
-                if occ > 5 && !affect_free
-                    break
-                end
+        affect_free = stmts_free  # false = previous statements might affect the result of evaluating argument
+        occ = 0
+        for j = length(body.args):-1:1
+            b = body.args[j]
+            if occ < 6
+                occ += occurs_more(b, x->(isa(x,Slot)&&x.id==i), 6)
+            end
+            # TODO: passing `sv` here is wrong since it refers to the enclosing function
+            if occ > 0 && affect_free && !effect_free(b, sv, true) #TODO: we could short-circuit this test better by memoizing effect_free(b) in the for loop over i
+                affect_free = false
+            end
+            if occ > 5 && !affect_free
+                break
             end
         end
         free = effect_free(aei,sv,true)
@@ -2723,15 +2592,6 @@ function inlineable(f::ANY, ft::ANY, e::Expr, atypes::Vector{Any}, sv::Inference
                 stmts_free = false
             end
         end
-        if incompletematch
-            unshift!(argexprs2, (argtype===Any ? args_i : SymbolNode(a,argtype)))
-        end
-    end
-    if incompletematch && partmatch.args[1] != false
-        unshift!(body.args, icall)
-        unshift!(body.args, thrw)
-        unshift!(body.args, partmatch)
-        unshift!(argexprs2, top_tuple)
     end
 
     # re-number the SSAValues and copy their type-info to the new ast
@@ -2868,9 +2728,6 @@ function inlineable(f::ANY, ft::ANY, e::Expr, atypes::Vector{Any}, sv::Inference
     end
     return (expr, stmts)
 end
-# The inlining incomplete matches optimization currently
-# doesn't work on Tuples of TypeVars
-const inline_incompletematch_allowed = false
 
 inline_worthy(body::ANY, cost::Integer) = true
 
