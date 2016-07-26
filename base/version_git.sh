@@ -30,7 +30,6 @@ origin=$(git config -l 2>/dev/null | grep 'remote\.\w*\.url.*JuliaLang/julia' | 
 if [ -z "$origin" ]; then
     origin="origin/"
 fi
-last_tag=$(git describe --tags --abbrev=0)
 git_time=$(git log -1 --pretty=format:%ct)
 
 #collect the contents
@@ -41,10 +40,15 @@ if [ -n "$(git status --porcelain)" ]; then
     commit_short="$commit_short"*
 fi
 branch=$(git branch | sed -n '/\* /s///p')
-# Some versions of wc (eg on OS X) add extra whitespace to their output.
-# The sed(1) call stops this from breaking the generated Julia's indentation by
-# stripping all non-digits.
-build_number=$(git rev-list HEAD ^$last_tag | wc -l | sed -e 's/[^[:digit:]]//g')
+
+topdir=$(git rev-parse --show-toplevel)
+verchanged=$(git blame -L ,1 -sl -- "$topdir/VERSION" | cut -f 1 -d " ")
+if [ $verchanged = 0000000000000000000000000000000000000000 ]; then
+    # uncommited change to VERSION
+    build_number=0
+else
+    build_number=$(git rev-list --count HEAD "^$verchanged")
+fi
 
 date_string=$git_time
 case $(uname) in
