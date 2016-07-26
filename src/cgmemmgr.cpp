@@ -290,7 +290,7 @@ static void write_self_mem(void *dest, void *ptr, size_t size)
             return;
         if (ret == -1 && (errno == EAGAIN || errno == EINTR))
             continue;
-        assert(ret < size);
+        assert((size_t)ret < size);
         size -= ret;
         ptr = (char*)ptr + ret;
         dest = (char*)dest + ret;

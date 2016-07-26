@@ -59,7 +59,6 @@ int ti_threadgroup_create(uint8_t num_sockets, uint8_t num_cores,
     return 0;
 }
 
-
 int ti_threadgroup_addthread(ti_threadgroup_t *tg, int16_t ext_tid,
                              int16_t *tgtid)
 {
@@ -75,7 +74,6 @@ int ti_threadgroup_addthread(ti_threadgroup_t *tg, int16_t ext_tid,
 
     return 0;
 }
-
 
 int ti_threadgroup_initthread(ti_threadgroup_t *tg, int16_t ext_tid)
 {
@@ -95,7 +93,6 @@ int ti_threadgroup_initthread(ti_threadgroup_t *tg, int16_t ext_tid)
     return 0;
 }
 
-
 int ti_threadgroup_member(ti_threadgroup_t *tg, int16_t ext_tid, int16_t *tgtid)
 {
     if (ext_tid < 0 || ext_tid >= tg->num_threads)
@@ -113,13 +110,11 @@ int ti_threadgroup_member(ti_threadgroup_t *tg, int16_t ext_tid, int16_t *tgtid)
     return 0;
 }
 
-
 int ti_threadgroup_size(ti_threadgroup_t *tg, int16_t *tgsize)
 {
     *tgsize = tg->num_threads;
     return 0;
 }
-
 
 int ti_threadgroup_fork(ti_threadgroup_t *tg, int16_t ext_tid, void **bcast_val)
 {
@@ -169,7 +164,6 @@ int ti_threadgroup_fork(ti_threadgroup_t *tg, int16_t ext_tid, void **bcast_val)
 
     return 0;
 }
-
 
 int ti_threadgroup_join(ti_threadgroup_t *tg, int16_t ext_tid)
 {

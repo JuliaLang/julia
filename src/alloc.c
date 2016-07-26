@@ -72,9 +72,8 @@ jl_value_t *jl_readonlymemory_exception;
 union jl_typemap_t jl_cfunction_list;
 
 jl_sym_t *call_sym;    jl_sym_t *invoke_sym;
-jl_sym_t *dots_sym;
+jl_sym_t *dots_sym;    jl_sym_t *empty_sym;
 jl_sym_t *module_sym;  jl_sym_t *slot_sym;
-jl_sym_t *empty_sym;
 jl_sym_t *export_sym;  jl_sym_t *import_sym;
 jl_sym_t *importall_sym; jl_sym_t *toplevel_sym;
 jl_sym_t *quote_sym;   jl_sym_t *amp_sym;
@@ -84,11 +83,10 @@ jl_sym_t *line_sym;    jl_sym_t *jl_incomplete_sym;
 jl_sym_t *goto_sym;    jl_sym_t *goto_ifnot_sym;
 jl_sym_t *label_sym;   jl_sym_t *return_sym;
 jl_sym_t *lambda_sym;  jl_sym_t *assign_sym;
-jl_sym_t *body_sym;
+jl_sym_t *body_sym;    jl_sym_t *globalref_sym;
 jl_sym_t *method_sym;  jl_sym_t *core_sym;
 jl_sym_t *enter_sym;   jl_sym_t *leave_sym;
 jl_sym_t *exc_sym;     jl_sym_t *error_sym;
-jl_sym_t *globalref_sym;
 jl_sym_t *new_sym;     jl_sym_t *using_sym;
 jl_sym_t *const_sym;   jl_sym_t *thunk_sym;
 jl_sym_t *anonymous_sym;  jl_sym_t *underscore_sym;
@@ -851,11 +849,10 @@ jl_datatype_t *jl_new_uninitialized_datatype(void)
     return t;
 }
 
-static jl_datatype_layout_t *jl_get_layout(
-        uint32_t nfields,
-        uint32_t alignment,
-        int haspadding,
-        jl_fielddesc32_t desc[])
+static jl_datatype_layout_t *jl_get_layout(uint32_t nfields,
+                                           uint32_t alignment,
+                                           int haspadding,
+                                           jl_fielddesc32_t desc[])
 {
     // compute the smallest fielddesc type that can hold the layout description
     int fielddesc_type = 0;
@@ -882,8 +879,8 @@ static jl_datatype_layout_t *jl_get_layout(
 
     // allocate a new descriptor
     uint32_t fielddesc_size = jl_fielddesc_size(fielddesc_type);
-    jl_datatype_layout_t *flddesc = (jl_datatype_layout_t*)jl_gc_perm_alloc(
-            sizeof(jl_datatype_layout_t) + nfields * fielddesc_size);
+    jl_datatype_layout_t *flddesc =
+        (jl_datatype_layout_t*)jl_gc_perm_alloc(sizeof(jl_datatype_layout_t) + nfields * fielddesc_size);
     flddesc->nfields = nfields;
     flddesc->alignment = alignment;
     flddesc->haspadding = haspadding;
@@ -923,7 +920,8 @@ static jl_datatype_layout_t *jl_get_layout(
 // A non-zero result *must* match the LLVM rules for a vector type <nfields x t>.
 // For sake of Ahead-Of-Time (AOT) compilation, this routine has to work
 // without LLVM being available.
-unsigned jl_special_vector_alignment(size_t nfields, jl_value_t *t) {
+unsigned jl_special_vector_alignment(size_t nfields, jl_value_t *t)
+{
     if (!jl_is_vecelement_type(t))
         return 0;
     // LLVM 3.7 and 3.8 either crash or generate wrong code for many

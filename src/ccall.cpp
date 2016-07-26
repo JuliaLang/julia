@@ -1270,21 +1270,21 @@ static jl_cgval_t emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
                 if (jl_is_expr(args[2])) {
                     jl_expr_t *rtexpr = (jl_expr_t*)args[2];
                     if (rtexpr->head == call_sym && jl_expr_nargs(rtexpr) == 4 &&
-                            static_eval(jl_exprarg(rtexpr, 0), ctx, true, false) == jl_builtin_apply_type &&
-                            static_eval(jl_exprarg(rtexpr, 1), ctx, true, false) == (jl_value_t*)jl_array_type) {
+                        static_eval(jl_exprarg(rtexpr, 0), ctx, true, false) == jl_builtin_apply_type &&
+                        static_eval(jl_exprarg(rtexpr, 1), ctx, true, false) == (jl_value_t*)jl_array_type) {
                         // `Array` used as return type just returns a julia object reference
                         rt = (jl_value_t*)jl_any_type;
                         static_rt = true;
                     }
                     else if (rtexpr->head == call_sym && jl_expr_nargs(rtexpr) == 3 &&
-                            static_eval(jl_exprarg(rtexpr, 0), ctx, true, false) == jl_builtin_apply_type &&
-                            static_eval(jl_exprarg(rtexpr, 1), ctx, true, false) == (jl_value_t*)jl_pointer_type) {
+                             static_eval(jl_exprarg(rtexpr, 0), ctx, true, false) == jl_builtin_apply_type &&
+                             static_eval(jl_exprarg(rtexpr, 1), ctx, true, false) == (jl_value_t*)jl_pointer_type) {
                         // substitute Ptr{Void} for statically-unknown pointer type
                         rt = (jl_value_t*)jl_voidpointer_type;
                     }
                     else if (rtexpr->head == call_sym && jl_expr_nargs(rtexpr) == 3 &&
-                            static_eval(jl_exprarg(rtexpr, 0), ctx, true, false) == jl_builtin_apply_type &&
-                            static_eval(jl_exprarg(rtexpr, 1), ctx, true, false) == (jl_value_t*)jl_ref_type) {
+                             static_eval(jl_exprarg(rtexpr, 0), ctx, true, false) == jl_builtin_apply_type &&
+                             static_eval(jl_exprarg(rtexpr, 1), ctx, true, false) == (jl_value_t*)jl_ref_type) {
                         // `Ref{T}` used as return type just returns T (from a jl_value_t*)
                         rt = (jl_value_t*)jl_any_type;
                         static_rt = true;

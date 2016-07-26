@@ -768,7 +768,7 @@ JL_DLLEXPORT void *(jl_symbol_name)(jl_sym_t *s)
     return jl_symbol_name(s);
 }
 
-//WARNING: THIS FUNCTION IS NEVER CALLED BUT INLINE BY CCALL
+// WARNING: THIS FUNCTION IS NEVER CALLED BUT INLINE BY CCALL
 JL_DLLEXPORT void *jl_array_ptr(jl_array_t *a)
 {
     return a->data;
