@@ -844,11 +844,11 @@ function setup_interface(repl::LineEditREPL; hascolor = repl.hascolor, extra_rep
                 while c <= sizeof(input) && (input[c] == '\n' || input[c] == ' ' || input[c] == '\t')
                     c = nextind(input, c)
                 end
-                n_newlines = c - oldpos
+                n_whitespace_chars = c - oldpos
                 # Skip over prompt prefix if statement starts with it
                 jl_prompt_len = 7
                 if c + jl_prompt_len <= sizeof(input) && input[c:c+jl_prompt_len-1] == "julia> "
-                    oldpos += jl_prompt_len + n_newlines
+                    oldpos += jl_prompt_len + n_whitespace_chars
                 end
                 ast, pos = Base.syntax_deprecation_warnings(false) do
                     Base.parse(input, oldpos, raise=false)

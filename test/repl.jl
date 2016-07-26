@@ -450,6 +450,7 @@ begin
     wait(c)
     @test tmpdirnow == tmpdir
     cd(curr_dir)
+    rm(tmpdir)
 
     write(stdin_write, '\x04')
     wait(repltask)
