@@ -300,7 +300,7 @@ typedef struct {
     jl_value_t *primary;
     jl_svec_t *cache;        // sorted array
     jl_svec_t *linearcache;  // unsorted array
-    intptr_t uid;
+    intptr_t hash;
     struct _jl_methtable_t *mt;
 } jl_typename_t;
 
