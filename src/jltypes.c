@@ -3524,7 +3524,7 @@ void jl_init_types(void)
     jl_typename_type->name->names = jl_svec(8, jl_symbol("name"), jl_symbol("module"),
                                             jl_symbol("names"), jl_symbol("primary"),
                                             jl_symbol("cache"), jl_symbol("linearcache"),
-                                            jl_symbol("uid"), jl_symbol("mt"));
+                                            jl_symbol("hash"), jl_symbol("mt"));
     jl_typename_type->types = jl_svec(8, jl_sym_type, jl_any_type, jl_simplevector_type,
                                       jl_type_type, jl_simplevector_type, jl_simplevector_type,
                                       jl_any_type, jl_any_type);

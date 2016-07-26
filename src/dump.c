@@ -1663,7 +1663,6 @@ static jl_value_t *jl_deserialize_value_(jl_serializer_state *s, jl_value_t *vta
             if ((s->mode == MODE_MODULE || s->mode == MODE_MODULE_POSTWORK)) {
                 if (dt == jl_typename_type) {
                     jl_typename_t *tn = (jl_typename_t*)v;
-                    tn->uid = jl_assign_type_uid(); // make sure this has a new uid
                     tn->cache = jl_emptysvec; // the cache is refilled later (tag 5)
                     tn->linearcache = jl_emptysvec; // the cache is refilled later (tag 5)
                 }
