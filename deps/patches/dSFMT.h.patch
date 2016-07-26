@@ -347,3 +347,16 @@
      dsfmt_gv_fill_array_close1_open2(array, size);
  }
  #endif /* DSFMT_DO_NOT_USE_OLD_NAMES */
+diff --git a/test.c b/test.c
+index 82d55db..d65db9a 100644
+--- a/test.c
++++ b/test.c
+@@ -4,7 +4,7 @@
+ #include <time.h>
+ #include <string.h>
+ #define DSFMT_DO_NOT_USE_OLD_NAMES
+-#include "dSFMT.h"
++#include "dSFMT.h.orig"
+ 
+ #define NUM_RANDS 50000
+ #define TIC_MAG 1
