@@ -318,7 +318,6 @@ JL_DLLEXPORT void jl_install_sigint_handler(void)
     SetConsoleCtrlHandler((PHANDLER_ROUTINE)sigint_handler,1);
 }
 
-
 volatile HANDLE hBtThread = 0;
 static DWORD WINAPI profile_bt( LPVOID lparam )
 {
@@ -365,6 +364,7 @@ static DWORD WINAPI profile_bt( LPVOID lparam )
     hBtThread = 0;
     return 0;
 }
+
 JL_DLLEXPORT int jl_profile_start_timer(void)
 {
     running = 1;

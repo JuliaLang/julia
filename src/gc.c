@@ -1103,7 +1103,6 @@ static jl_value_t **mark_stack_base = NULL;
 static size_t mark_stack_size = 0;
 static size_t mark_sp = 0;
 
-
 static void grow_mark_stack(void)
 {
     size_t newsz = mark_stack_size>0 ? mark_stack_size*2 : 32000;

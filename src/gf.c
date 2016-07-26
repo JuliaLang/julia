@@ -966,7 +966,8 @@ static jl_array_t *check_ambiguous_matches(union jl_typemap_t defs,
     return env.shadowed;
 }
 
-static void method_overwrite(jl_typemap_entry_t *newentry, jl_method_t *oldvalue) {
+static void method_overwrite(jl_typemap_entry_t *newentry, jl_method_t *oldvalue)
+{
     // method overwritten
     jl_method_t *method = (jl_method_t*)newentry->func.method;
     jl_module_t *newmod = method->module;
@@ -1783,7 +1784,7 @@ STATIC_INLINE uint32_t int32hash_fast(uint32_t a)
 //    a = (a+0xd3a2646c) ^ (a<<9);
 //    a = (a+0xfd7046c5) + (a<<3);
 //    a = (a^0xb55a4f09) ^ (a>>16);
-    return a;
+    return a;  // identity hashing seems to work well enough here
 }
 
 STATIC_INLINE int sig_match_fast(jl_value_t **args, jl_value_t **sig, size_t i, size_t n)
@@ -1802,35 +1803,6 @@ STATIC_INLINE int sig_match_fast(jl_value_t **args, jl_value_t **sig, size_t i, 
     }
     return 1;
 }
-
-//STATIC_INLINE jl_typemap_entry_t *sig2_match_fast(jl_value_t **args, jl_typemap_entry_t *entry1, jl_typemap_entry_t *entry2, size_t n)
-//{
-//    // NOTE: This function is a huge performance hot spot!!
-//    jl_value_t **sig1 = jl_svec_data(entry1->sig->parameters);
-//    jl_value_t **sig2 = jl_svec_data(entry2->sig->parameters);
-//    size_t i;
-//    for (i = 0; i < n; i++) {
-//        jl_value_t *decl1 = sig1[i];
-//        jl_value_t *decl2 = sig2[i];
-//        jl_value_t *a = args[i];
-//        jl_value_t *ta = jl_typeof(a);
-//        if (ta != decl1) {
-//            /*
-//              we are only matching concrete types here, and those types are
-//              hash-consed, so pointer comparison should work.
-//            */
-//            return sig_match_fast(args, sig2, i, n) ? entry2 : NULL;
-//        }
-//        if (ta != decl2) {
-//            /*
-//              we are only matching concrete types here, and those types are
-//              hash-consed, so pointer comparison should work.
-//            */
-//            return sig_match_fast(args, sig1, i, n) ? entry1 : NULL;
-//        }
-//    }
-//    return entry1;
-//}
 
 jl_typemap_entry_t *call_cache[N_CALL_CACHE];
 static uint8_t pick_which[N_CALL_CACHE];
@@ -1887,84 +1859,6 @@ JL_DLLEXPORT jl_value_t *jl_apply_generic(jl_value_t **args, uint32_t nargs)
       otherwise instantiate the generic method and use it
     */
     uint32_t callsite = int32hash_fast((uintptr_t)__builtin_return_address(0));
-    // implementation 1
-//    uint32_t cache_idx1 = (callsite) & (N_CALL_CACHE - 1);
-//    uint32_t cache_idx2 = (callsite >> 16) & (N_CALL_CACHE - 1);
-//    jl_typemap_entry_t *entry1 = call_cache[cache_idx1];
-//    jl_typemap_entry_t *entry2 = call_cache[cache_idx2];
-//    jl_methtable_t *mt = NULL;
-//    jl_typemap_entry_t *entry = NULL;
-//    if (entry1 && nargs == jl_svec_len(entry1->sig->parameters)) {
-//        if (entry2 && nargs == jl_svec_len(entry2->sig->parameters))
-//            entry = sig2_match_fast(args, entry1, entry2, nargs);
-//        else if (sig_match_fast(args, jl_svec_data(entry1->sig->parameters), 0, nargs))
-//            entry = entry1;
-//    }
-//    else if (entry2 && nargs == jl_svec_len(entry2->sig->parameters)) {
-//        if (sig_match_fast(args, jl_svec_data(entry2->sig->parameters), 0, nargs))
-//            entry = entry2;
-//    }
-//
-//    if (entry == NULL) {
-//        jl_value_t *F = args[0];
-//        mt = jl_gf_mtable(F);
-//        entry = jl_typemap_assoc_exact(mt->cache, args, nargs, jl_cachearg_offset(mt));
-//        if (entry && entry->isleafsig && entry->simplesig == (void*)jl_nothing && entry->guardsigs == jl_emptysvec) {
-//            switch (++pick_which[cache_idx1] & 1) {
-//            case 0:
-//                call_cache[cache_idx1] = entry;
-//                break;
-//            case 1:
-//                call_cache[cache_idx2] = entry;
-//                break;
-//            }
-//        }
-//    }
-
-    // implementation 2
-//    uint32_t cache_idx1 = (callsite) & (N_CALL_CACHE - 1);
-//    uint32_t cache_idx2 = (callsite >> 8) & (N_CALL_CACHE - 1);
-//    uint32_t cache_idx3 = (callsite >> 16) & (N_CALL_CACHE - 1);
-//    uint32_t cache_idx4 = (callsite >> 24) & (N_CALL_CACHE - 1);
-//    jl_typemap_entry_t *entry = call_cache[cache_idx1];
-//    jl_methtable_t *mt = NULL;
-//    if (!entry || nargs != jl_svec_len(entry->sig->parameters) ||
-//            !sig_match_fast(args, jl_svec_data(entry->sig->parameters), nargs)) {
-//        entry = call_cache[cache_idx2];
-//        if (!entry || nargs != jl_svec_len(entry->sig->parameters) ||
-//                !sig_match_fast(args, jl_svec_data(entry->sig->parameters), nargs)) {
-//            entry = call_cache[cache_idx3];
-//            if (!entry || nargs != jl_svec_len(entry->sig->parameters) ||
-//                    !sig_match_fast(args, jl_svec_data(entry->sig->parameters), nargs)) {
-//                entry = call_cache[cache_idx4];
-//                if (!entry || nargs != jl_svec_len(entry->sig->parameters) ||
-//                    !sig_match_fast(args, jl_svec_data(entry->sig->parameters), nargs)) {
-//
-//                    jl_value_t *F = args[0];
-//                    mt = jl_gf_mtable(F);
-//                    entry = jl_typemap_assoc_exact(mt->cache, args, nargs, jl_cachearg_offset(mt));
-//                    if (entry && entry->isleafsig && entry->simplesig == (void*)jl_nothing && entry->guardsigs == jl_emptysvec) {
-//                        switch (++pick_which[cache_idx1] & 3) {
-//                        case 0:
-//                            call_cache[cache_idx1] = entry;
-//                            break;
-//                        case 1:
-//                            call_cache[cache_idx2] = entry;
-//                            break;
-//                        case 2:
-//                            call_cache[cache_idx3] = entry;
-//                            break;
-//                        case 3:
-//                            call_cache[cache_idx4] = entry;
-//                            break;
-//                        }
-//                    }
-//                }
-//            }
-//        }
-//    }
-
-    // implementation 3
     // compute the entry hashes
     // use different parts of the value
     // so that a collision across all of

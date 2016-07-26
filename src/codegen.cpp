@@ -399,7 +399,6 @@ struct jl_cgval_t {
     jl_value_t *constant; // constant value (rooted in linfo.def.roots)
     Value *gcroot; // the gcroot associated with V (if it has one)
     jl_value_t *typ; // the original type of V, never NULL
-    //Type *T; // cached result of julia_type_to_llvm(typ)
     bool isboxed; // whether this value is a jl_value_t* allocated on the heap with the right type tag
     bool isghost; // whether this value is "ghost"
     bool isimmutable; // V points to something that is definitely immutable (e.g. single-assignment, but including memory)
@@ -413,7 +412,6 @@ struct jl_cgval_t {
         constant(NULL),
         gcroot(gcroot),
         typ(typ),
-        //T(julia_type_to_llvm(typ)),
         isboxed(isboxed),
         isghost(false),
         isimmutable(isboxed && jl_is_immutable_datatype(typ)),
@@ -427,7 +425,6 @@ struct jl_cgval_t {
         constant(((jl_datatype_t*)typ)->instance),
         gcroot(NULL),
         typ(typ),
-        //T(T_void),
         isboxed(false),
         isghost(true),
         isimmutable(true),
@@ -441,7 +438,6 @@ struct jl_cgval_t {
         constant(v.constant),
         gcroot(v.gcroot),
         typ(typ),
-        //T(V.T),
         isboxed(v.isboxed),
         isghost(v.isghost),
         isimmutable(v.isimmutable),
@@ -620,6 +616,7 @@ static inline jl_cgval_t mark_julia_type(Value *v, bool isboxed, jl_value_t *typ
     }
     return jl_cgval_t(v, froot, isboxed, typ);
 }
+
 static inline jl_cgval_t mark_julia_type(Value *v, bool isboxed, jl_datatype_t *typ, jl_codectx_t *ctx, bool needsroot = true)
 {
     return mark_julia_type(v, isboxed, (jl_value_t*)typ, ctx, needsroot);
@@ -633,6 +630,7 @@ static inline jl_cgval_t remark_julia_type(const jl_cgval_t &v, jl_value_t *typ)
     }
     return jl_cgval_t(v, typ);
 }
+
 static inline jl_cgval_t mark_julia_const(jl_value_t *jv)
 {
     jl_value_t *typ;
@@ -647,7 +645,6 @@ static inline jl_cgval_t mark_julia_const(jl_value_t *jv)
     constant.constant = jv;
     return constant;
 }
-
 
 // --- utilities ---
 
@@ -1365,7 +1362,8 @@ const int logdata_blocksize = 32; // target getting nearby lines in the same gen
 typedef uint64_t logdata_block[logdata_blocksize];
 typedef StringMap< std::vector<logdata_block*> > logdata_t;
 
-static void visitLine( std::vector<logdata_block*> &vec, int line, Value *addend, const char* name ) {
+static void visitLine(std::vector<logdata_block*> &vec, int line, Value *addend, const char* name)
+{
     unsigned block = line / logdata_blocksize;
     line = line % logdata_blocksize;
     if (vec.size() <= block)
@@ -1428,7 +1426,7 @@ extern "C" JL_DLLEXPORT void jl_clear_malloc_data(void)
         for (itb = bytes.begin(); itb != bytes.end(); itb++) {
             if (*itb) {
                 logdata_block &data = **itb;
-                for (size_t i = 0; i < logdata_blocksize; i++) {
+                for (int i = 0; i < logdata_blocksize; i++) {
                     if (data[i] > 0)
                         data[i] = 1;
                 }
@@ -1502,7 +1500,6 @@ extern "C" void jl_write_malloc_log(void)
 {
     write_log_data(mallocData, ".mem");
 }
-
 
 // --- code gen for intrinsic functions ---
 
@@ -3395,7 +3392,7 @@ static void allocate_gc_frame(BasicBlock *b0, jl_codectx_t *ctx)
 }
 
 static Function *gen_cfun_wrapper(jl_function_t *ff, jl_value_t *jlrettype, jl_tupletype_t *argt,
-       jl_typemap_entry_t *sf, jl_value_t *declrt, jl_tupletype_t *sigt)
+                                  jl_typemap_entry_t *sf, jl_value_t *declrt, jl_tupletype_t *sigt)
 {
     // Generate a c-callable wrapper
     bool toboxed;
@@ -5564,10 +5561,10 @@ static void init_julia_llvm_env(Module *m)
 // Helper to figure out what features to set for the LLVM target
 // If the user specifies native (or does not specify) we default
 // using the API provided by LLVM
-static inline SmallVector<std::string,10> getTargetFeatures() {
+static inline SmallVector<std::string,10> getTargetFeatures()
+{
     StringMap<bool> HostFeatures;
-    if (!strcmp(jl_options.cpu_target,"native"))
-    {
+    if (!strcmp(jl_options.cpu_target,"native")) {
         // On earlier versions of LLVM this is empty
         llvm::sys::getHostCPUFeatures(HostFeatures);
     }
@@ -5605,8 +5602,7 @@ static inline SmallVector<std::string,10> getTargetFeatures() {
     }
 
     SmallVector<std::string,10> attr;
-    for (StringMap<bool>::const_iterator it = HostFeatures.begin(); it != HostFeatures.end(); it++)
-    {
+    for (StringMap<bool>::const_iterator it = HostFeatures.begin(); it != HostFeatures.end(); it++) {
         std::string att = it->getValue() ? it->getKey().str() :
                           std::string("-") + it->getKey().str();
         attr.append(1, att);

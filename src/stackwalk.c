@@ -137,7 +137,6 @@ JL_DLLEXPORT jl_value_t *jl_get_backtrace(void)
 }
 
 
-
 #if defined(_OS_WINDOWS_)
 #ifdef _CPU_X86_64_
 static UNWIND_HISTORY_TABLE HistoryTable;
@@ -229,7 +228,8 @@ static int jl_unw_init(bt_cursor_t *cursor, bt_context_t *Context)
 #endif
 }
 
-static int readable_pointer(LPCVOID pointer) {
+static int readable_pointer(LPCVOID pointer)
+{
     // Check whether the pointer is valid and executable before dereferencing
     // to avoid segfault while recording. See #10638.
     MEMORY_BASIC_INFORMATION mInfo;
@@ -344,30 +344,6 @@ size_t rec_backtrace_ctx_dwarf(uintptr_t *data, size_t maxsize,
 }
 #endif
 #endif
-
-// Always Set *func_name and *file_name to malloc'd pointers (non-NULL)
-/*static int frame_info_from_ip(char **func_name,
-                              char **file_name, size_t *line_num,
-                              char **inlinedat_file, size_t *inlinedat_line,
-                              jl_lambda_info_t **outer_linfo,
-                              size_t ip, int skipC, int skipInline)
-{
-    // This function is not allowed to reference any TLS variables since
-    // it can be called from an unmanaged thread on OSX.
-    static const char *name_unknown = "???";
-    int fromC = 0;
-
-    jl_getFunctionInfo(func_name, file_name, line_num, inlinedat_file, inlinedat_line, outer_linfo,
-            ip, &fromC, skipC, skipInline);
-    if (!*func_name) {
-        *func_name = strdup(name_unknown);
-        *line_num = ip;
-    }
-    if (!*file_name) {
-        *file_name = strdup(name_unknown);
-    }
-    return fromC;
-    }*/
 
 JL_DLLEXPORT jl_value_t *jl_lookup_code_address(void *ip, int skipC)
 {
