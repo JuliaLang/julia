@@ -338,11 +338,23 @@ function gen_call_with_extracted_types(fcn, ex0)
     exret
 end
 
-for fname in [:which, :less, :edit, :functionloc, :code_typed, :code_warntype,
-              :code_lowered, :code_llvm, :code_llvm_raw, :code_native]
+for fname in [:which, :less, :edit, :functionloc, :code_warntype,
+              :code_llvm, :code_llvm_raw, :code_native]
     @eval begin
         macro ($fname)(ex0)
             gen_call_with_extracted_types($(Expr(:quote,fname)), ex0)
+        end
+    end
+end
+
+for fname in [:code_typed, :code_lowered]
+    @eval begin
+        macro ($fname)(ex0)
+            thecall = gen_call_with_extracted_types($(Expr(:quote,fname)), ex0)
+            quote
+                results = $thecall
+                length(results) == 1 ? results[1] : results
+            end
         end
     end
 end
