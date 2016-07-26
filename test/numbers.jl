@@ -2790,13 +2790,7 @@ let types = (Base.BitInteger_types..., BigInt, Bool,
              Complex{Int}, Complex{UInt}, Complex32, Complex64, Complex128)
     for S in types
         for op in (+, -)
-            if S === Float16
-                # broken, fixme then remove this branch
-                @test_throws ErrorException @inferred(Base.promote_op(op, S))
-                T = Base.promote_op(op, S)
-            else
-                T = @inferred Base.promote_op(op, S)
-            end
+            T = @inferred Base.promote_op(op, S)
             t = @inferred op(one(S))
             @test T === typeof(t)
         end
@@ -2806,13 +2800,7 @@ let types = (Base.BitInteger_types..., BigInt, Bool,
 
     for R in types, S in types
         for op in (+, -, *, /, ^)
-            if R === Float16 || S === Float16
-                # broken, fixme then remove this branch
-                @test_throws ErrorException @inferred(Base.promote_op(op, R, S))
-                T = Base.promote_op(op, R, S)
-            else
-                T = @inferred Base.promote_op(op, R, S)
-            end
+            T = @inferred Base.promote_op(op, R, S)
             t = @inferred op(one(R), one(S))
             @test T === typeof(t)
         end
@@ -2824,13 +2812,7 @@ let types = (Base.BitInteger_types..., BigInt, Bool,
              Float16, Float32, Float64, BigFloat)
     for S in types, T in types
         for op in (<, >, <=, >=, (==))
-            if S === Float16 || T === Float16
-                # broken, fixme then remove this branch
-                @test_throws ErrorException @inferred(Base.promote_op(op, S, T))
-                @test Base.promote_op(op, S, T) === Bool
-            else
-                @test @inferred(Base.promote_op(op, S, T)) === Bool
-            end
+            @test @inferred(Base.promote_op(op, S, T)) === Bool
         end
     end
 end
