@@ -550,7 +550,7 @@ intersect{T<:Integer}(i::Integer, r::AbstractUnitRange{T}) =
     i < first(r) ? (first(r):i) :
     i > last(r)  ? (i:last(r))  : (i:i)
 
-intersect{T<:Integer}(r::UnitRange{T}, i::Integer) = intersect(i, r)
+intersect{T<:Integer}(r::AbstractUnitRange{T}, i::Integer) = intersect(i, r)
 
 function intersect{T1<:Integer, T2<:Integer}(r::AbstractUnitRange{T1}, s::StepRange{T2})
     if isempty(s)
@@ -654,12 +654,12 @@ function _findin{T1<:Integer, T2<:Integer}(r::Range{T1}, span::AbstractUnitRange
     ifirst, ilast
 end
 
-function findin{T1<:Integer, T2<:Integer}(r::UnitRange{T1}, span::UnitRange{T2})
+function findin{T1<:Integer, T2<:Integer}(r::AbstractUnitRange{T1}, span::AbstractUnitRange{T2})
     ifirst, ilast = _findin(r, span)
     ifirst:ilast
 end
 
-function findin{T1<:Integer, T2<:Integer}(r::Range{T1}, span::UnitRange{T2})
+function findin{T1<:Integer, T2<:Integer}(r::Range{T1}, span::AbstractUnitRange{T2})
     ifirst, ilast = _findin(r, span)
     ifirst:1:ilast
 end
