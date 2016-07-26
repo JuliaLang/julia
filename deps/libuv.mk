@@ -39,6 +39,7 @@ $(BUILDDIR)/$(LIBUV_SRC_DIR)/build-compiled: $(BUILDDIR)/$(LIBUV_SRC_DIR)/build-
 
 $(BUILDDIR)/$(LIBUV_SRC_DIR)/build-checked: $(BUILDDIR)/$(LIBUV_SRC_DIR)/build-compiled
 ifeq ($(OS),$(BUILD_OS))
+# TODO: get these passing, remove the -
 	-$(MAKE) -C $(dir $@) check
 endif
 	echo 1 > $@

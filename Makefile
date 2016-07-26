@@ -452,6 +452,7 @@ endif
 ifneq ($(DESTDIR),)
 	$(error DESTDIR must not be set for make binary-dist)
 endif
+	@$(MAKE) -C $(BUILDROOT)/deps -f $(JULIAHOME)/deps/Makefile check
 	@$(MAKE) -C $(BUILDROOT) -f $(JULIAHOME)/Makefile install
 	cp $(JULIAHOME)/LICENSE.md $(BUILDROOT)/julia-$(JULIA_COMMIT)
 ifneq ($(OS), WINNT)

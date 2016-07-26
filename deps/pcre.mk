@@ -25,9 +25,7 @@ $(BUILDDIR)/pcre2-$(PCRE_VER)/build-compiled: $(BUILDDIR)/pcre2-$(PCRE_VER)/buil
 
 $(BUILDDIR)/pcre2-$(PCRE_VER)/checked: $(BUILDDIR)/pcre2-$(PCRE_VER)/build-compiled
 ifeq ($(OS),$(BUILD_OS))
-ifneq ($(OS),WINNT)
-	$(MAKE) -C $(dir $@) check -j1
-endif
+	$(MAKE) -C $(dir $@) check
 endif
 	echo 1 > $@
 

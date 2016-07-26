@@ -21,8 +21,7 @@ $(BUILDDIR)/patchelf-$(PATCHELF_VER)/build-compiled: $(BUILDDIR)/patchelf-$(PATC
 
 $(BUILDDIR)/patchelf-$(PATCHELF_VER)/build-checked: $(BUILDDIR)/patchelf-$(PATCHELF_VER)/build-compiled
 ifeq ($(OS),$(BUILD_OS))
-	# disabled due to bug in v0.6
-	#$(MAKE) -C $(dir $@) check
+	$(MAKE) -C $(dir $@) check
 endif
 	echo 1 > $@
 

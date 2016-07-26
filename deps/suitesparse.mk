@@ -47,7 +47,9 @@ $(BUILDDIR)/SuiteSparse-$(SUITESPARSE_VER)/build-compiled: $(BUILDDIR)/SuiteSpar
 	echo 1 > $@
 
 $(BUILDDIR)/SuiteSparse-$(SUITESPARSE_VER)/build-checked: $(BUILDDIR)/SuiteSparse-$(SUITESPARSE_VER)/build-compiled
+ifeq ($(OS),$(BUILD_OS))
 	$(MAKE) -C $(dir $@) default $(SUITESPARSE_MFLAGS)
+endif
 	echo 1 > $@
 
 $(build_prefix)/manifest/suitesparse: $(BUILDDIR)/SuiteSparse-$(SUITESPARSE_VER)/build-compiled | $(build_prefix)/manifest
