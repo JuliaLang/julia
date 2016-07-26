@@ -300,7 +300,7 @@ for precomp in ("yes", "no")
     else
         @test contains(bt, "in include_from_node1(::String) at $(joinpath(".","loading.jl"))")
     end
-    lno = match(r"at \.[/\\]loading.jl:(\d+)", bt)
+    lno = match(r"at \.[\/\\]loading\.jl:(\d+)", bt)
     @test length(lno.captures) == 1
     @test parse(Int, lno.captures[1]) > 0
 end
