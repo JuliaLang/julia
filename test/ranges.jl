@@ -756,6 +756,7 @@ r = Base.OneTo(3)
 @test_throws BoundsError r[0]
 @test r+1 === 2:4
 @test 2*r === 2:2:6
+@test r+r === 2:2:6
 k = 0
 for i in r
     @test i == (k+=1)
