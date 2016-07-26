@@ -13,7 +13,6 @@ TODO:
   . make code generation thread-safe and remove the lock
 */
 
-
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>

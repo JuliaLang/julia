@@ -556,7 +556,7 @@ extern JL_DLLEXPORT jl_value_t *jl_nothing;
 
 // some important symbols
 extern jl_sym_t *call_sym;    extern jl_sym_t *invoke_sym;
-extern jl_sym_t *empty_sym;
+extern jl_sym_t *empty_sym;   extern jl_sym_t *body_sym;
 extern jl_sym_t *dots_sym;    extern jl_sym_t *vararg_sym;
 extern jl_sym_t *quote_sym;   extern jl_sym_t *newvar_sym;
 extern jl_sym_t *top_sym;     extern jl_sym_t *dot_sym;
@@ -570,7 +570,6 @@ extern jl_sym_t *importall_sym; extern jl_sym_t *using_sym;
 extern jl_sym_t *goto_sym;    extern jl_sym_t *goto_ifnot_sym;
 extern jl_sym_t *label_sym;   extern jl_sym_t *return_sym;
 extern jl_sym_t *lambda_sym;  extern jl_sym_t *assign_sym;
-extern jl_sym_t *body_sym;
 extern jl_sym_t *method_sym;  extern jl_sym_t *slot_sym;
 extern jl_sym_t *enter_sym;   extern jl_sym_t *leave_sym;
 extern jl_sym_t *exc_sym;     extern jl_sym_t *new_sym;
@@ -1143,7 +1142,6 @@ JL_DLLEXPORT jl_value_t *jl_get_field(jl_value_t *o, const char *fld);
 JL_DLLEXPORT jl_value_t *jl_value_ptr(jl_value_t *a);
 
 // arrays
-
 JL_DLLEXPORT jl_array_t *jl_new_array(jl_value_t *atype, jl_value_t *dims);
 JL_DLLEXPORT jl_array_t *jl_reshape_array(jl_value_t *atype, jl_array_t *data,
                                           jl_value_t *dims);

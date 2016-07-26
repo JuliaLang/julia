@@ -2563,7 +2563,6 @@ void jl_reset_instantiate_inner_types(jl_datatype_t *t)
     partial_inst.len = 0;
 }
 
-
 // subtype comparison
 
 static int jl_subtype_le(jl_value_t *a, jl_value_t *b, int ta, int invariant);
