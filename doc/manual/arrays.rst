@@ -90,7 +90,7 @@ Function                                            Description
                                                     defaulting to the element type and dimensions of ``A`` if omitted.
 :func:`reinterpret(type, A) <reinterpret>`          an array with the same binary data as the given array, but with the
                                                     specified element type
-:func:`rand(dims) <rand>`                           :obj:`Array` of ``Float64``\ s with random, iid[#]_ and uniformly
+:func:`rand(dims) <rand>`                           :obj:`Array` of ``Float64``\ s with random, iid [#iid]_ and uniformly
                                                     distributed values in the half-open interval :math:`[0, 1)`
 :func:`randn(dims) <randn>`                         :obj:`Array` of ``Float64``\ s with random, iid and standard normally
                                                     distributed random values
@@ -101,7 +101,7 @@ Function                                            Description
 :func:`fill(x, dims) <fill>`                        create an array filled with the value ``x``
 =================================================== =====================================================================
 
-.. [#] *iid*, independently and identically distributed.
+.. [#iid] *iid*, independently and identically distributed.
 
 The syntax ``[A, B, C, ...]`` constructs a 1-d array (vector) of its arguments.
 
