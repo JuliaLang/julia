@@ -10,7 +10,7 @@
 function myunifskew(n)
     A = zeros(n, n)
 
-    #print("A[i,j] initialized with zeros \n");
+    #print("A[i,j] initialized with zeros \n")
 
     for i=1:n
         for j=1:i-1
@@ -20,12 +20,12 @@ function myunifskew(n)
                 temp = rand()
                 A[i,j]= temp
                 A[j,i]= -A[i,j]
-                #print("welcome");
+                #print("welcome")
             else
                 temp = rand()
                 A[j,i]= temp
                 A[i,j]= -A[j,i]
-                #print("welcome");
+                #print("welcome")
             end
 
         end

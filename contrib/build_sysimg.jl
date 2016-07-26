@@ -25,7 +25,7 @@ directives such as `using MyPackage` to include that package in the new system i
 system image will not replace an older image unless `force` is set to true.
 """
 function build_sysimg(sysimg_path=nothing, cpu_target="native", userimg_path=nothing; force=false, debug=false)
-    if sysimg_path == nothing
+    if sysimg_path === nothing
         sysimg_path = default_sysimg_path(debug)
     end
 
@@ -39,7 +39,7 @@ function build_sysimg(sysimg_path=nothing, cpu_target="native", userimg_path=not
     end
 
     # Canonicalize userimg_path before we enter the base_dir
-    if userimg_path != nothing
+    if userimg_path !== nothing
         userimg_path = abspath(userimg_path)
     end
 
@@ -59,7 +59,7 @@ function build_sysimg(sysimg_path=nothing, cpu_target="native", userimg_path=not
         end
 
         # Copy in userimg.jl if it exists
-        if userimg_path != nothing
+        if userimg_path !== nothing
             if !isfile(userimg_path)
                 error("$userimg_path is not found, ensure it is an absolute path!")
             end
@@ -86,7 +86,7 @@ function build_sysimg(sysimg_path=nothing, cpu_target="native", userimg_path=not
             println("$julia -C $cpu_target --output-ji $sysimg_path.ji --output-o $sysimg_path.o -J $inference_path.ji --startup-file=no sysimg.jl")
             run(`$julia -C $cpu_target --output-ji $sysimg_path.ji --output-o $sysimg_path.o -J $inference_path.ji --startup-file=no sysimg.jl`)
 
-            if cc != nothing
+            if cc !== nothing
                 link_sysimg(sysimg_path, cc, debug)
             else
                 info("System image successfully built at $sysimg_path.ji")
@@ -103,7 +103,7 @@ function build_sysimg(sysimg_path=nothing, cpu_target="native", userimg_path=not
             end
         finally
             # Cleanup userimg.jl
-            if userimg_path != nothing && isfile("userimg.jl")
+            if userimg_path !== nothing && isfile("userimg.jl")
                 rm("userimg.jl")
             end
         end
@@ -148,7 +148,7 @@ end
 
 # Link sys.o into sys.$(dlext)
 function link_sysimg(sysimg_path=nothing, cc=find_system_compiler(), debug=false)
-    if sysimg_path == nothing
+    if sysimg_path === nothing
         sysimg_path = default_sysimg_path(debug)
     end
     julia_libdir = dirname(Libdl.dlpath(debug ? "libjulia-debug" : "libjulia"))

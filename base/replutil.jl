@@ -241,7 +241,7 @@ function showerror(io::IO, ex::DomainError, bt; backtrace=true)
 end
 
 function showerror(io::IO, ex::SystemError)
-    if ex.extrainfo == nothing
+    if ex.extrainfo === nothing
         print(io, "SystemError: $(ex.prefix): $(Libc.strerror(ex.errnum))")
     else
         print(io, "SystemError (with $(ex.extrainfo)): $(ex.prefix): $(Libc.strerror(ex.errnum))")
@@ -297,7 +297,7 @@ function showerror(io::IO, ex::MethodError)
         f_is_function = true
         # See #13033
         T = striptype(ex.args[1])
-        if T == nothing
+        if T === nothing
             print(io, "First argument to `convert` must be a Type, got ", ex.args[1])
         else
             print(io, "Cannot `convert` an object of type ", arg_types_param[2], " to an object of type ", T)

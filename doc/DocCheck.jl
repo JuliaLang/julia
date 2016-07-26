@@ -36,7 +36,7 @@ undefined_exports() = undefined(Base)
 function undocumented(m::Module)
     undoc = Dict{Symbol, Array}()
     for v in sort(names(m))
-        if isdefined(m,v) && !isdocumented(eval(m,v)) && !isdeprecated(m,v)
+        if isdefined(m,v) && !isdocumented(getfield(m,v)) && !isdeprecated(m,v)
             ms = modfuncjoin(m,v)
             haskey(undoc, v) ? push!(undoc[v], ms) : (undoc[v] = [ms])
         end

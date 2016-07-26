@@ -287,7 +287,7 @@ let oldout = STDOUT, olderr = STDERR
         rderr, wrerr = redirect_stderr()
         @test wrerr === STDERR
         err = @async readstring(rderr)
-        @test dump(Int64) == nothing
+        @test dump(Int64) === nothing
         if !is_windows()
             close(wrout)
             close(wrerr)

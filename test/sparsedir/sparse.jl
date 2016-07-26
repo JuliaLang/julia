@@ -918,19 +918,19 @@ function test_getindex_algs{Tv,Ti}(A::SparseMatrixCSC{Tv,Ti}, I::AbstractVector,
 end
 
 let M=2^14, N=2^4
-    Irand = randperm(M);
-    Jrand = randperm(N);
-    SA = [sprand(M, N, d) for d in [1., 0.1, 0.01, 0.001, 0.0001, 0.]];
-    IA = [sort(Irand[1:round(Int,n)]) for n in [M, M*0.1, M*0.01, M*0.001, M*0.0001, 0.]];
+    Irand = randperm(M)
+    Jrand = randperm(N)
+    SA = [sprand(M, N, d) for d in [1., 0.1, 0.01, 0.001, 0.0001, 0.]]
+    IA = [sort(Irand[1:round(Int,n)]) for n in [M, M*0.1, M*0.01, M*0.001, M*0.0001, 0.]]
     debug = false
 
     if debug
-        println("row sizes: $([round(Int,nnz(S)/S.n) for S in SA])");
-        println("I sizes: $([length(I) for I in IA])");
+        println("row sizes: $([round(Int,nnz(S)/S.n) for S in SA])")
+        println("I sizes: $([length(I) for I in IA])")
         @printf("    S    |    I    | binary S | binary I |  linear  | best\n")
     end
 
-    J = Jrand;
+    J = Jrand
     for I in IA
         for S in SA
             res = Any[1,2,3]
@@ -967,7 +967,7 @@ let M = 2^8, N=2^3
     I = sort([Irand; Irand; Irand])
     J = [Jrand; Jrand]
 
-    SA = [sprand(M, N, d) for d in [1., 0.1, 0.01, 0.001, 0.0001, 0.]];
+    SA = [sprand(M, N, d) for d in [1., 0.1, 0.01, 0.001, 0.0001, 0.]]
     for S in SA
         res = Any[1,2,3]
         for searchtype in [0, 1, 2]
@@ -983,8 +983,8 @@ let M = 2^14, N=2^4
     J = randperm(N)
     Jsorted = sort(J)
 
-    SA = [sprand(M, N, d) for d in [1., 0.1, 0.01, 0.001, 0.0001, 0.]];
-    IA = [I[1:round(Int,n)] for n in [M, M*0.1, M*0.01, M*0.001, M*0.0001, 0.]];
+    SA = [sprand(M, N, d) for d in [1., 0.1, 0.01, 0.001, 0.0001, 0.]]
+    IA = [I[1:round(Int,n)] for n in [M, M*0.1, M*0.01, M*0.001, M*0.0001, 0.]]
     debug = false
     if debug
         @printf("         |         |         |        times        |        memory       |\n")

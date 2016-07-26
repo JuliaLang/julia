@@ -202,7 +202,7 @@ for (name, f) in l
         verbose && println("$name readbytes!...")
         l = length(text)
         for n = [1, 2, l-2, l-1, l, l+1, l+2]
-            a1 = Vector{UInt8}(n);
+            a1 = Vector{UInt8}(n)
             a2 = Vector{UInt8}(n)
             s1 = io()
             s2 = IOBuffer(text)
