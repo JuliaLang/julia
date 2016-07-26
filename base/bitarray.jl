@@ -1243,7 +1243,7 @@ end
 function slicedim(A::BitArray, d::Integer, i::Integer)
     d_in = size(A)
     leading = d_in[1:(d-1)]
-    d_out = tuple(leading..., 1, d_in[(d+1):end]...)
+    d_out = tuple(leading..., d_in[(d+1):end]...)
 
     M = prod(leading)
     N = length(A)

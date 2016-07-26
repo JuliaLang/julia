@@ -96,41 +96,6 @@ end
 
 ## data movement ##
 
-# TODO?: replace with slice?
-function slicedim(A::Array, d::Integer, i::Integer)
-    if d < 1
-        throw(ArgumentError("dimension must be ≥ 1"))
-    end
-    d_in = size(A)
-    leading = d_in[1:(d-1)]
-    d_out = tuple(leading..., 1, d_in[(d+1):end]...)
-
-    M = prod(leading)
-    N = length(A)
-    stride = M * d_in[d]
-
-    B = similar(A, d_out)
-    index_offset = 1 + (i-1)*M
-
-    l = 1
-
-    if M==1
-        for j=0:stride:(N-stride)
-            B[l] = A[j + index_offset]
-            l += 1
-        end
-    else
-        for j=0:stride:(N-stride)
-            offs = j + index_offset
-            for k=0:(M-1)
-                B[l] = A[offs + k]
-                l += 1
-            end
-        end
-    end
-    return B
-end
-
 function flipdim{T}(A::Array{T}, d::Integer)
     if d < 1
         throw(ArgumentError("dimension d must be ≥ 1"))
