@@ -415,12 +415,12 @@ begin
 
     sendrepl2(cmd) = write(stdin_write,"$cmd\n notify(c)\n")
 
-    # Test single statement
+    # Test removal of prefix in single statement paste
     sendrepl2("\e[200~julia> A = 2\e[201~\n")
     wait(c)
     @test A == 2
 
-    # Test multi statement
+    # Test removal of prefix in multiple statement paste
     sendrepl2("""\e[200~
             julia> type T17599; a::Int; end
 
@@ -436,22 +436,23 @@ begin
     @test T17599(3).a == 3
     @test !foo(2)
 
-    # Test only works in bracket mode
+    # Test prefix removal only active in bracket paste mode
     sendrepl2("julia = 4\n julia> 3 && (A = 1)\n")
     wait(c)
     @test A == 1
 
     # Test shell> mode
-    tmpdir = mktempdir()
-    curr_dir = pwd()
-    write(stdin_write, ";")
-    write(stdin_write, "\e[200~shell> cd $(escape_string(tmpdir))\e[201~\n")
-    sendrepl2("tmpdirnow = pwd()")
-    wait(c)
-    @test tmpdirnow == tmpdir
-    cd(curr_dir)
-    rm(tmpdir)
+    mktempdir() do tmpdir
+        curr_dir = pwd()
+        write(stdin_write, ";")
+        write(stdin_write, "\e[200~shell> cd $(escape_string(tmpdir))\e[201~\n")
+        sendrepl2("tmpdirnow = pwd()")
+        wait(c)
+        @test tmpdirnow == realpath(tmpdir)
+        cd(curr_dir)
+    end
 
+    # Close repl
     write(stdin_write, '\x04')
     wait(repltask)
 end
