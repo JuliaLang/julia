@@ -27,6 +27,11 @@ $(BUILDDIR)/dsfmt-$(DSFMT_VER)/config.status: $(SRCDIR)/srccache/dsfmt-$(DSFMT_V
 $(DSFMT_OBJ_SOURCE): $(BUILDDIR)/dsfmt-$(DSFMT_VER)/config.status
 	cd $(dir $<) && \
 	$(CC) $(CPPFLAGS) $(DSFMT_CFLAGS) $(LDFLAGS) dSFMT.c -o libdSFMT.$(SHLIB_EXT)
+$(BUILDDIR)/dsfmt-$(DSFMT_VER)/checked: $(DSFMT_OBJ_SOURCE)
+ifeq ($(OS),$(BUILD_OS))
+	$(MAKE) -C $(dir $@) std-check sse2-check
+endif
+	echo 1 > $@
 $(build_shlibdir)/libdSFMT%$(SHLIB_EXT) $(build_includedir)/dSFMT%h: $(DSFMT_OBJ_SOURCE) | $(build_includedir) $(build_shlibdir)
 	cp $(dir $<)/dSFMT.h $(build_includedir)
 	cp $< $(build_shlibdir)/libdSFMT.$(SHLIB_EXT) && \
@@ -40,5 +45,5 @@ distclean-dsfmt:
 get-dsfmt: $(SRCDIR)/srccache/dsfmt-$(DSFMT_VER).tar.gz
 configure-dsfmt: $(BUILDDIR)/dsfmt-$(DSFMT_VER)/config.status
 compile-dsfmt: $(DSFMT_OBJ_SOURCE)
-check-dsfmt: compile-dsfmt
+check-dsfmt: $(BUILDDIR)/dsfmt-$(DSFMT_VER)/checked
 install-dsfmt: $(DSFMT_OBJ_TARGET)
