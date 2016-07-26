@@ -629,14 +629,11 @@ Compare:
     Expr
       head: Symbol string
       args: Array{Any}((5,))
-        1: String
-          data: Array{UInt8}((3,)) UInt8[0x61,0x20,0x28]
+        1: String "a ("
         2: Symbol a
-        3: String
-          data: Array{UInt8}((18,)) UInt8[0x29,0x20,0x73,0x68,0x6f,0x75,0x6c,0x64,0x20,0x65,0x71,0x75,0x61,0x6c,0x20,0x62,0x20,0x28]
+        3: String ") should equal b ("
         4: Symbol b
-        5: String
-          data: Array{UInt8}((2,)) UInt8[0x29,0x21]
+        5: String ")!"
       typ: Any
 
 So now instead of getting a plain string in ``msg_body``, the macro is

@@ -245,11 +245,11 @@ bound :obj:`TypeVar` objects with a hash (``#T`` instead of ``T``):
 
 .. doctest::
 
-   julia> jl_(first(methods(candid)))
-   Method(sig=Tuple{Main.#candid, Array{#T<:Any, N<:Any}, #T<:Any}, va=false, isstaged=false, tvars=#T<:Any, func=Main.candid(?), invokes=nothing, next=nothing)
+   julia> jl_(first(methods(candid)).sig)
+   Tuple{Main.#candid, Array{#T<:Any, N<:Any}, #T<:Any}
 
-   julia> jl_(first(methods(sneaky)))
-   Method(sig=Tuple{Main.#sneaky, Array{#T<:Any, N<:Any}, T<:Any}, va=false, isstaged=false, tvars=#T<:Any, func=Main.sneaky(?), invokes=nothing, next=nothing)
+   julia> jl_(first(methods(sneaky)).sig)
+   Tuple{Main.#sneaky, Array{#T<:Any, N<:Any}, T<:Any}
 
 Even though both print as ``T``, in ``sneaky`` the second ``T`` is
 not bound, and hence it isn't constrained to be the same type as the
