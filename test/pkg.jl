@@ -3,16 +3,18 @@
 import Base.Pkg.PkgError
 
 function temp_pkg_dir(fn::Function, remove_tmp_dir::Bool=true)
-    # Used in tests below to setup and teardown a sandboxed package directory
-    const tmpdir = ENV["JULIA_PKGDIR"] = joinpath(tempdir(),randstring())
-    @test !isdir(Pkg.dir())
-    try
-        Pkg.init()
-        @test isdir(Pkg.dir())
-        Pkg.resolve()
-        fn()
-    finally
-        remove_tmp_dir && rm(tmpdir, recursive=true)
+    # Used in tests below to set up and tear down a sandboxed package directory
+    const tmpdir = joinpath(tempdir(),randstring())
+    withenv("JULIA_PKGDIR" => tmpdir) do
+        @test !isdir(Pkg.dir())
+        try
+            Pkg.init()
+            @test isdir(Pkg.dir())
+            Pkg.resolve()
+            fn()
+        finally
+            remove_tmp_dir && rm(tmpdir, recursive=true)
+        end
     end
 end
 

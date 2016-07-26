@@ -395,7 +395,6 @@ end
 
 # Issue #13032
 withenv("JULIA_EDITOR" => nothing, "VISUAL" => nothing, "EDITOR" => nothing) do
-
     # Make sure editor doesn't error when no ENV editor is set.
     @test isa(Base.editor(), Array)
 
