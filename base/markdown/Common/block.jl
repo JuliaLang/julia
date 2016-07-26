@@ -121,6 +121,41 @@ function indentcode(stream::IO, block::MD)
     end
 end
 
+# --------
+# Footnote
+# --------
+
+type Footnote
+    id::String
+    text
+end
+
+function footnote(stream::IO, block::MD)
+    withstream(stream) do
+        regex = r"^\[\^(\w+)\]:"
+        str = startswith(stream, regex)
+        if isempty(str)
+            return false
+        else
+            ref = match(regex, str).captures[1]
+            buffer = IOBuffer()
+            write(buffer, readline(stream))
+            while !eof(stream)
+                if startswith(stream, "    ")
+                    write(buffer, readline(stream))
+                elseif blankline(stream)
+                    write(buffer, '\n')
+                else
+                    break
+                end
+            end
+            content = parse(seekstart(buffer)).content
+            push!(block, Footnote(ref, content))
+            return true
+        end
+    end
+end
+
 # ––––––
 # Quotes
 # ––––––
