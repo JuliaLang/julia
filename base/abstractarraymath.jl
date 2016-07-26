@@ -59,9 +59,12 @@ imag{T<:Real}(x::AbstractArray{T}) = zero(x)
 \(A::Number, B::AbstractArray) = B ./ A
 
 # index A[:,:,...,i,:,:,...] where "i" is in dimension "d"
-# TODO: more optimized special cases
-slicedim(A::AbstractArray, d::Integer, i) =
-    A[[ n==d ? i : (indices(A,n)) for n in 1:ndims(A) ]...]
+function slicedim(A::AbstractArray, d::Integer, i)
+    d >= 1 || throw(ArgumentError("dimension must be ≥ 1"))
+    nd = ndims(A)
+    d > nd && (i == 1 || throw_boundserror(A, (ntuple(k->Colon(),nd)..., ntuple(k->1,d-1-nd)..., i)))
+    A[( n==d ? i : indices(A,n) for n in 1:nd )...]
+end
 
 function flipdim(A::AbstractVector, d::Integer)
     d > 0 || throw(ArgumentError("dimension to flip must be positive"))
