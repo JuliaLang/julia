@@ -766,6 +766,11 @@ for i in r
 end
 @test intersect(r, Base.OneTo(2)) == Base.OneTo(2)
 @test intersect(r, 0:5) == 1:3
+@test intersect(r, 2) === intersect(2, r) === 2:2
+@test findin(r, r) === findin(r, 1:length(r)) === findin(1:length(r), r) === 1:length(r)
+r2 = Base.OneTo(7)
+@test findin(r2, 2:length(r2)-1) === 2:length(r2)-1
+@test findin(2:length(r2)-1, r2) === 1:length(r2)-2
 io = IOBuffer()
 show(io, r)
 str = takebuf_string(io)
