@@ -76,6 +76,13 @@ unitrange_last{T}(start::T, stop::T) =
     ifelse(stop >= start, convert(T,start+floor(stop-start)),
                           convert(T,start-one(stop-start)))
 
+"""
+    Base.OneTo(n)
+
+Define an `AbstractUnitRange` that behaves like `1:n`, with the added
+distinction that the lower limit is guaranteed (by the type system) to
+be 1.
+"""
 immutable OneTo{T<:Integer} <: AbstractUnitRange{T}
     stop::T
     OneTo(stop) = new(max(zero(T), stop))
