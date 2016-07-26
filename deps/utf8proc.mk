@@ -13,7 +13,6 @@ UTF8PROC_MFLAGS     := CC="$(CC) $(DEPS_CFLAGS)" CFLAGS="$(CFLAGS) $(UTF8PROC_CF
 $(UTF8PROC_SRC_TARGET): $(BUILDDIR)/$(UTF8PROC_SRC_DIR)/Makefile
 	$(MAKE) -C $(dir $<) $(UTF8PROC_MFLAGS) libutf8proc.a
 	touch -c $@
-# make check doesn't actually compile (missing prototype / implementation for getline)
 $(BUILDDIR)/$(UTF8PROC_SRC_DIR)/checked: $(UTF8PROC_SRC_TARGET)
 ifeq ($(OS),$(BUILD_OS))
 	$(MAKE) -C $(dir $@) $(UTF8PROC_MFLAGS) check
