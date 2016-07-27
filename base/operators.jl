@@ -490,7 +490,7 @@ for f in (:+, :-)
             r1l = length(r1)
             (r1l == length(r2) ||
              throw(DimensionMismatch("argument dimensions must match")))
-            range($f(r1.start,r2.start), $f(step(r1),step(r2)), r1l)
+            range($f(first(r1),first(r2)), $f(step(r1),step(r2)), r1l)
         end
 
         function $f{T<:AbstractFloat}(r1::FloatRange{T}, r2::FloatRange{T})
