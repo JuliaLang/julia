@@ -77,9 +77,11 @@
 *                               Architecture                                   *
 *******************************************************************************/
 
-#if defined(__amd64__) || defined(__amd64) || defined(__x86_64__) || defined(__x86_64) || defined(_M_X64) || defined(_M_AMD64)
+#if defined(__amd64__) || defined(__amd64) || defined(__x86_64__) || defined(__x86_64) ||  \
+    defined(_M_X64) || defined(_M_AMD64)
 #define _CPU_X86_64_
-#elif defined(i386) || defined(__i386) || defined(__i386__) || defined(_M_IX86) || defined(_X86_)
+#elif defined(i386) || defined(__i386) || defined(__i386__) || defined(_M_IX86) ||         \
+    defined(_X86_)
 #define _CPU_X86_
 #elif defined(__aarch64__)
 #define _CPU_AARCH64_
@@ -92,22 +94,22 @@
 #endif
 
 #if defined(_CPU_X86_64_)
-#  define _P64
+#define _P64
 #elif defined(_CPU_X86_)
-#  define _P32
+#define _P32
 #elif defined(_OS_WINDOWS_)
 /* Not sure how to determine pointer size on Windows running ARM. */
-#  if _WIN64
-#    define _P64
-#  else
-#    define _P32
-#  endif
-#elif __SIZEOF_POINTER__ == 8
-#    define _P64
-#elif __SIZEOF_POINTER__ == 4
-#    define _P32
+#if _WIN64
+#define _P64
 #else
-#  error pointer size not known for your platform / compiler
+#define _P32
+#endif
+#elif __SIZEOF_POINTER__ == 8
+#define _P64
+#elif __SIZEOF_POINTER__ == 4
+#define _P32
+#else
+#error pointer size not known for your platform / compiler
 #endif
 
 #endif /* !PLATFORM_H */

@@ -22,9 +22,9 @@ JL_DLLEXPORT uint32_t memhash32(const char *buf, size_t n);
 JL_DLLEXPORT uint32_t memhash32_seed(const char *buf, size_t n, uint32_t seed);
 
 #ifdef _P64
-#define bitmix(a,b) int64hash((a)^bswap_64(b))
+#define bitmix(a, b) int64hash((a) ^ bswap_64(b))
 #else
-#define bitmix(a,b) int64to32hash((((uint64_t)a)<<32)|((uint64_t)b))
+#define bitmix(a, b) int64to32hash((((uint64_t)a) << 32) | ((uint64_t)b))
 #endif
 
 #ifdef __cplusplus
