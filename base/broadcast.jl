@@ -447,6 +447,7 @@ end
 
 dotview(args...) = getindex(args...)
 dotview(A::AbstractArray, args...) = view(A, args...)
+dotview{T<:AbstractArray}(A::AbstractArray{T}, args...) = getindex(A, args...)
 # avoid splatting penalty in common cases:
 for nargs = 0:5
     args = Symbol[Symbol("x",i) for i = 1:nargs]
