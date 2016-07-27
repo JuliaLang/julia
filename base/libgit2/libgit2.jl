@@ -211,21 +211,25 @@ function branch!(repo::GitRepo, branch_name::AbstractString,
                     end
                 end
             else
-                with(peel(GitCommit, branch_rmt_ref)) do hrc
+                tmpcmt = with(peel(GitCommit, branch_rmt_ref)) do hrc
                     Oid(hrc)
                 end
+                finalize(branch_rmt_ref)
+                tmpcmt
             end
         else
             Oid(commit)
         end
         iszero(commit_id) && return
         cmt =  get(GitCommit, repo, commit_id)
+        new_branch_ref = nothing
         try
-            branch_ref = create_branch(repo, branch_name, cmt, force=force)
+            new_branch_ref = create_branch(repo, branch_name, cmt, force=force)
         finally
             finalize(cmt)
+            new_branch_ref === nothing && throw(GitError(Error.Object, Error.ERROR, "cannot create branch `$branch_name` with `$commit_id`"))
+            branch_ref = new_branch_ref
         end
-        branch_rmt_ref !== nothing && finalize(branch_rmt_ref)
     end
     try
         #TODO: what if branch tracks other then "origin" remote
