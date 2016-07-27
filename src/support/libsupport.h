@@ -5,19 +5,19 @@
 
 #include "platform.h"
 
-#include <stdlib.h>
-#include <stdarg.h>
-#include <assert.h>
-#include "dtypes.h"
-#include "utils.h"
-#include "utf8.h"
-#include "ios.h"
-#include "timefuncs.h"
-#include "hashing.h"
-#include "ptrhash.h"
 #include "bitvector.h"
 #include "dirpath.h"
+#include "dtypes.h"
+#include "hashing.h"
+#include "ios.h"
+#include "ptrhash.h"
 #include "strtod.h"
+#include "timefuncs.h"
+#include "utf8.h"
+#include "utils.h"
+#include <assert.h>
+#include <stdarg.h>
+#include <stdlib.h>
 
 #ifdef __cplusplus
 extern "C" {

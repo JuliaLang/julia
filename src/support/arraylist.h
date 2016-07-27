@@ -13,7 +13,7 @@ typedef struct {
     size_t len;
     size_t max;
     void **items;
-    void *_space[AL_N_INLINE];
+    void * _space[AL_N_INLINE];
 } arraylist_t;
 
 arraylist_t *arraylist_new(arraylist_t *a, size_t size);

@@ -8,7 +8,7 @@ extern "C" {
 #endif
 
 /* is c the start of a utf8 sequence? */
-#define isutf(c) (((c)&0xC0)!=0x80)
+#define isutf(c) (((c)&0xC0) != 0x80)
 
 #define UEOF ((uint32_t)-1)
 

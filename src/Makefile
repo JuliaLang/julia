@@ -238,10 +238,17 @@ $(BUILDDIR)/libjulia.a: julia.expmap $(OBJS) $(BUILDDIR)/flisp/libflisp.a $(BUIL
 	@$(call PRINT_LINK, ar -rcs $@ $(OBJS))
 libjulia-release: $(build_shlibdir)/libjulia.$(JL_MAJOR_MINOR_SHLIB_EXT)
 
+NOFORMAT = support/END.h support/ENTRY.amd64.h support/ENTRY.i387.h
+format: $(addsuffix .fmt, $(filter-out $(NOFORMAT), $(wildcard $(SRCS:%=%.c) $(SRCS:%=%.cpp)) $(HEADERS:$(SRCDIR)/%=%)))
+%.fmt: % $(SRCDIR)/../.clang-format
+	-clang-format -i $* && :> $@
+.PHONY: format
+
 clean:
 	-rm -fr $(build_shlibdir)/libjulia* $(build_shlibdir)/libccalltest*
 	-rm -f $(BUILDDIR)/julia_flisp.boot $(BUILDDIR)/julia_flisp.boot.inc
 	-rm -f $(BUILDDIR)/*.dbg.obj $(BUILDDIR)/*.o $(BUILDDIR)/*.$(SHLIB_EXT) $(BUILDDIR)/*.a
+	-rm -f $(BUILDDIR)/*.fmt
 	-rm -f $(BUILDDIR)/julia_version.h
 
 clean-flisp:

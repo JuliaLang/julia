@@ -426,6 +426,10 @@ endif
 	mkdir -p $(DESTDIR)$(sysconfdir)
 	cp -R $(build_sysconfdir)/julia $(DESTDIR)$(sysconfdir)/
 
+format:
+	@$(MAKE) $(QUIET_MAKE) -C $(BUILDROOT)/src format
+.PHONY: format
+
 distclean dist-clean:
 	-rm -fr $(BUILDROOT)/julia-*.tar.gz $(BUILDROOT)/julia*.exe $(BUILDROOT)/julia-*.7z $(BUILDROOT)/julia-$(JULIA_COMMIT)
 
