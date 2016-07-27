@@ -419,3 +419,6 @@ foobaz(ch) = reinterpret(Char, typemax(UInt32))
 # issue #17271: endof() doesn't throw an error even with invalid strings
 @test endof(String(b"\x90")) == 0
 @test endof(String(b"\xce")) == 1
+
+# issue #17624, missing getindex method for String
+@test "abc"[:] == "abc"
