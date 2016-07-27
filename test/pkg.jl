@@ -141,9 +141,25 @@ temp_pkg_dir() do
     @test endswith(str, string(Pkg.installed("Example")))
     @test isempty(Pkg.dependents("Example"))
 
-    Pkg.checkout("Example", "test-branch") #17364
-    LibGit2.with(LibGit2.GitRepo, Pkg.dir("Example")) do repo
-        @test LibGit2.head_oid(repo) == LibGit2.Oid("ba3888212e30a7974ac6803a89e64c7098f4865e")
+
+    #-------
+    # 17364
+    #-------
+    let branch_name = "test-branch",
+        branch_commit = "ba3888212e30a7974ac6803a89e64c7098f4865e"
+
+        # create a branch in Example package
+        LibGit2.with(LibGit2.GitRepo, Pkg.dir("Example")) do repo
+            LibGit2.branch!(repo, branch_name, branch_commit, set_head=false)
+        end
+
+        Pkg.clone(Pkg.dir("Example"), Pkg.dir("Example2"))
+
+        Pkg.checkout("Example2", branch_name)
+
+        LibGit2.with(LibGit2.GitRepo, Pkg.dir("Example2")) do repo
+            @test LibGit2.head_oid(repo) == LibGit2.Oid(branch_commit)
+        end
     end
 
     # adding a package with unsatisfiable julia version requirements (REPL.jl) errors
