@@ -69,6 +69,7 @@ start(s::AbstractString) = 1
 done(s::AbstractString,i) = (i > endof(s))
 getindex(s::AbstractString, i::Int) = next(s,i)[1]
 getindex(s::AbstractString, i::Integer) = s[Int(i)]
+getindex(s::AbstractString, i::Colon) = s
 getindex{T<:Integer}(s::AbstractString, r::UnitRange{T}) = s[Int(first(r)):Int(last(r))]
 # TODO: handle other ranges with stride ±1 specially?
 getindex(s::AbstractString, v::AbstractVector) =
