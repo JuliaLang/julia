@@ -1,8 +1,8 @@
 #!/bin/sh
 # This file is a part of Julia. License is MIT: http://julialang.org/license
 
-# Need to be run from a julia repo clone
-# First argument (Optional) is a ref to the commit
+# Needs to be run from a julia repo clone
+# First argument (optional) is a ref to the commit
 
 gitref=${1:-HEAD}
 
