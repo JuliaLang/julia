@@ -182,7 +182,8 @@ restart_switch:
                     }
                 }
                 jl_errorf("unknown option `-%c`", optopt);
-            } else {
+            }
+            else {
                 jl_errorf("unknown option `%s`", argv[lastind]);
             }
             break;

@@ -23,14 +23,12 @@ enum {
     TI_THREAD_WORK
 };
 
-
 // passed to thread function
 typedef struct {
-    int16_t volatile    state;
-    int16_t             tid;
-    ti_threadgroup_t    *tg;
+    int16_t volatile state;
+    int16_t          tid;
+    ti_threadgroup_t *tg;
 } ti_threadarg_t;
-
 
 // commands to thread function
 enum {
@@ -38,16 +36,14 @@ enum {
     TI_THREADWORK_RUN
 };
 
-
 // work command to thread function
 typedef struct {
-    uint8_t             command;
-    jl_function_t       *fun;
-    jl_svec_t           *args;
-    jl_value_t          *ret;
-    jl_module_t         *current_module;
+    uint8_t       command;
+    jl_function_t *fun;
+    jl_svec_t     *args;
+    jl_value_t    *ret;
+    jl_module_t   *current_module;
 } ti_threadwork_t;
-
 
 // thread function
 void ti_threadfun(void *arg);

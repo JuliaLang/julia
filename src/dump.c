@@ -1783,7 +1783,8 @@ JL_DLLEXPORT int jl_read_verify_header(ios_t *s)
             readstr_verify(s, jl_git_commit()) && !read_uint8(s));
 }
 
-static void jl_finalize_serializer(jl_serializer_state *s) {
+static void jl_finalize_serializer(jl_serializer_state *s)
+{
     size_t i, l;
     // save module initialization order
     if (jl_module_init_order != NULL) {
@@ -2392,8 +2393,7 @@ static jl_array_t *_jl_restore_incremental(ios_t *f)
     return restored;
 }
 
-JL_DLLEXPORT jl_value_t *jl_restore_incremental_from_buf(const char *buf,
-                                                         size_t sz)
+JL_DLLEXPORT jl_value_t *jl_restore_incremental_from_buf(const char *buf, size_t sz)
 {
     ios_t f;
     jl_array_t *modules;

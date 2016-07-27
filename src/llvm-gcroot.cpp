@@ -88,17 +88,21 @@ static void tbaa_decorate_gcframe(Instruction *inst,
         Instruction *user = dyn_cast<Instruction>(*I);
         if (!user) {
             continue;
-        } else if (isa<GetElementPtrInst>(user)) {
+        }
+        else if (isa<GetElementPtrInst>(user)) {
             if (__likely(user->getOperand(0) == inst)) {
                 tbaa_decorate_gcframe(user, visited, tbaa_gcframe);
             }
-        } else if (isa<StoreInst>(user)) {
+        }
+        else if (isa<StoreInst>(user)) {
             if (user->getOperand(1) == inst) {
                 user->setMetadata(llvm::LLVMContext::MD_tbaa, tbaa_gcframe);
             }
-        } else if (isa<LoadInst>(user)) {
+        }
+        else if (isa<LoadInst>(user)) {
             user->setMetadata(llvm::LLVMContext::MD_tbaa, tbaa_gcframe);
-        } else if (isa<BitCastInst>(user)) {
+        }
+        else if (isa<BitCastInst>(user)) {
             tbaa_decorate_gcframe(user, visited, tbaa_gcframe);
         }
     }
@@ -174,11 +178,10 @@ public:
 Instruction *JuliaGCAllocator::get_pgcstack(Instruction *ptlsStates)
 {
     Constant *offset = ConstantInt::getSigned(T_int32, offsetof(jl_tls_states_t, pgcstack) / sizeof(void*));
-    return GetElementPtrInst::Create(
-            LLVM37_param(NULL)
-            ptlsStates,
-            ArrayRef<Value*>(offset),
-            "jl_pgcstack");
+    return GetElementPtrInst::Create(LLVM37_param(NULL)
+                                     ptlsStates,
+                                     ArrayRef<Value*>(offset),
+                                     "jl_pgcstack");
 }
 
 frame_register JuliaGCAllocator::get_gcroot(Value *ptr)
