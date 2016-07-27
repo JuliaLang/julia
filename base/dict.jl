@@ -247,7 +247,8 @@ push!(t::Associative, p::Pair, q::Pair, r::Pair...) = push!(push!(push!(t, p), q
 
 type ObjectIdDict <: Associative{Any,Any}
     ht::Vector{Any}
-    ObjectIdDict() = new(Vector{Any}(32))
+    ndel::Int
+    ObjectIdDict() = new(Vector{Any}(32), 0)
 
     function ObjectIdDict(itr)
         d = ObjectIdDict()
@@ -266,7 +267,16 @@ end
 
 similar(d::ObjectIdDict) = ObjectIdDict()
 
+function rehash!(t::ObjectIdDict, newsz = length(t.ht))
+    t.ht = ccall(:jl_idtable_rehash, Any, (Any, Csize_t), t.ht, newsz)
+    t
+end
+
 function setindex!(t::ObjectIdDict, v::ANY, k::ANY)
+    if t.ndel >= ((3*length(t.ht))>>2)
+        rehash!(t, max(length(t.ht)>>1, 32))
+        t.ndel = 0
+    end
     t.ht = ccall(:jl_eqtable_put, Array{Any,1}, (Any, Any, Any), t.ht, k, v)
     return t
 end
@@ -274,8 +284,12 @@ end
 get(t::ObjectIdDict, key::ANY, default::ANY) =
     ccall(:jl_eqtable_get, Any, (Any, Any, Any), t.ht, key, default)
 
-pop!(t::ObjectIdDict, key::ANY, default::ANY) =
-    ccall(:jl_eqtable_pop, Any, (Any, Any, Any), t.ht, key, default)
+function pop!(t::ObjectIdDict, key::ANY, default::ANY)
+    val = ccall(:jl_eqtable_pop, Any, (Any, Any, Any), t.ht, key, default)
+    # TODO: this can underestimate `ndel`
+    val === default || (t.ndel += 1)
+    return val
+end
 
 function pop!(t::ObjectIdDict, key::ANY)
     val = pop!(t, key, secret_table_token)
@@ -283,11 +297,11 @@ function pop!(t::ObjectIdDict, key::ANY)
 end
 
 function delete!(t::ObjectIdDict, key::ANY)
-    ccall(:jl_eqtable_pop, Any, (Any, Any), t.ht, key)
+    pop!(t, key, secret_table_token)
     t
 end
 
-empty!(t::ObjectIdDict) = (t.ht = Vector{Any}(length(t.ht)); t)
+empty!(t::ObjectIdDict) = (t.ht = Vector{Any}(length(t.ht)); t.ndel = 0; t)
 
 _oidd_nextind(a, i) = reinterpret(Int,ccall(:jl_eqtable_nextind, Csize_t, (Any, Csize_t), a, i))
 
