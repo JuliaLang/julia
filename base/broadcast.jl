@@ -443,25 +443,20 @@ end
 ############################################################
 
 # x[...] .= f.(y...) ---> broadcast!(f, dotview(x, ...), y...).
-# The dotview function defaults to view, but we override it in
+# The dotview function defaults to getindex, but we override it in
 # a few cases to get the expected in-place behavior without affecting
 # explicit calls to view.   (All of this can go away if slices
 # are changed to generate views by default.)
 
-dotview(args...) = view(args...)
+dotview(args...) = getindex(args...)
+dotview(A::AbstractArray, args...) = view(A, args...)
 # avoid splatting penalty in common cases:
 for nargs = 0:5
     args = Symbol[Symbol("x",i) for i = 1:nargs]
-    eval(Expr(:(=), Expr(:call, :dotview, args...), Expr(:call, :view, args...)))
+    eval(Expr(:(=), Expr(:call, :dotview, args...),
+                    Expr(:call, :getindex, args...)))
+    eval(Expr(:(=), Expr(:call, :dotview, :(A::AbstractArray), args...),
+                    Expr(:call, :view, :A, args...)))
 end
-
-# for a[i...] .= ... where a is an array-of-arrays, just pass a[i...] directly
-# to broadcast!
-dotview{T<:AbstractArray,N,I<:Integer}(a::AbstractArray{T,N}, i::Vararg{I,N}) =
-    a[i...]
-
-# dict[k] .= ... should work if dict[k] is an array
-dotview(a::Associative, k) = a[k]
-dotview(a::Associative, k1, k2, ks...) = a[tuple(k1,k2,ks...)]
 
 end # module
