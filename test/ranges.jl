@@ -116,6 +116,9 @@ end
 @test intersect(UnitRange(1,2),3) == UnitRange(3,2)
 @test intersect(UnitRange(1,2), UnitRange(1,5), UnitRange(3,7), UnitRange(4,6)) == UnitRange(4,3)
 
+@test intersect(1:3, 2) === intersect(2, 1:3) === 2:2
+@test intersect(1.0:3.0, 2) == intersect(2, 1.0:3.0) == [2.0]
+
 @test sort(UnitRange(1,2)) == UnitRange(1,2)
 @test sort!(UnitRange(1,2)) == UnitRange(1,2)
 @test sort(1:10, rev=true) == collect(10:-1:1)
@@ -756,12 +759,18 @@ r = Base.OneTo(3)
 @test_throws BoundsError r[0]
 @test r+1 === 2:4
 @test 2*r === 2:2:6
+@test r+r === 2:2:6
 k = 0
 for i in r
     @test i == (k+=1)
 end
 @test intersect(r, Base.OneTo(2)) == Base.OneTo(2)
 @test intersect(r, 0:5) == 1:3
+@test intersect(r, 2) === intersect(2, r) === 2:2
+@test findin(r, r) === findin(r, 1:length(r)) === findin(1:length(r), r) === 1:length(r)
+r2 = Base.OneTo(7)
+@test findin(r2, 2:length(r2)-1) === 2:length(r2)-1
+@test findin(2:length(r2)-1, r2) === 1:length(r2)-2
 io = IOBuffer()
 show(io, r)
 str = takebuf_string(io)

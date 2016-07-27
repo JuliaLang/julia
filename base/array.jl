@@ -938,7 +938,7 @@ end
 # These are moderately efficient, preserve order, and remove dupes.
 
 function intersect(v1, vs...)
-    ret = Array{eltype(v1)}(0)
+    ret = Array{promote_eltype(v1, vs...)}(0)
     for v_elem in v1
         inall = true
         for vsi in vs
