@@ -476,13 +476,13 @@ static char *abspath(const char *in)
 }
 
 static void jl_resolve_sysimg_location(JL_IMAGE_SEARCH rel)
-{ // this function resolves the paths in jl_options to absolute file locations as needed
-  // and it replaces the pointers to `julia_home`, `julia_bin`, `image_file`, and output file paths
-  // it may fail, print an error, and exit(1) if any of these paths are longer than PATH_MAX
-  //
-  // note: if you care about lost memory, you should call the appropriate `free()` function
-  // on the original pointer for each `char*` you've inserted into `jl_options`, after
-  // calling `julia_init()`
+{   // this function resolves the paths in jl_options to absolute file locations as needed
+    // and it replaces the pointers to `julia_home`, `julia_bin`, `image_file`, and output file paths
+    // it may fail, print an error, and exit(1) if any of these paths are longer than PATH_MAX
+    //
+    // note: if you care about lost memory, you should call the appropriate `free()` function
+    // on the original pointer for each `char*` you've inserted into `jl_options`, after
+    // calling `julia_init()`
     char *free_path = (char*)malloc(PATH_MAX);
     size_t path_size = PATH_MAX;
     if (uv_exepath(free_path, &path_size)) {

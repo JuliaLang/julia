@@ -86,9 +86,9 @@ static DIType julia_type_to_di(jl_value_t *jt, DIBuilder *dbuilder, bool isboxed
         return jl_pvalue_dillvmt;
     // always return the boxed representation for types with hidden content
     if (jl_is_abstracttype(jt) || !jl_is_datatype(jt) || jl_is_array_type(jt) ||
-            jt == (jl_value_t*)jl_sym_type || jt == (jl_value_t*)jl_module_type ||
-            jt == (jl_value_t*)jl_simplevector_type || jt == (jl_value_t*)jl_datatype_type ||
-            jt == (jl_value_t*)jl_lambda_info_type)
+        jt == (jl_value_t*)jl_sym_type || jt == (jl_value_t*)jl_module_type ||
+        jt == (jl_value_t*)jl_simplevector_type || jt == (jl_value_t*)jl_datatype_type ||
+        jt == (jl_value_t*)jl_lambda_info_type)
         return jl_pvalue_dillvmt;
     if (jl_is_typector(jt) || jl_is_typevar(jt))
         return jl_pvalue_dillvmt;
@@ -266,7 +266,8 @@ static Value *emit_bitcast(Value *v, Type *jl_value)
                 PointerType::get(cast<PointerType>(jl_value)->getElementType(),
                                  v->getType()->getPointerAddressSpace());
         return builder.CreateBitCast(v, jl_value_addr);
-    } else {
+    }
+    else {
         return builder.CreateBitCast(v, jl_value);
     }
 }
@@ -804,7 +805,8 @@ static Value *emit_bounds_check(const jl_cgval_t &ainfo, jl_value_t *ty, Value *
 //
 // Parameter ptr should be the pointer argument for the LoadInst or StoreInst.
 // It is currently unused, but might be used in the future for a more precise answer.
-static unsigned julia_alignment(Value* /*ptr*/, jl_value_t *jltype, unsigned alignment) {
+static unsigned julia_alignment(Value* /*ptr*/, jl_value_t *jltype, unsigned alignment)
+{
     if (!alignment && ((jl_datatype_t*)jltype)->layout->alignment > MAX_ALIGN) {
         // Type's natural alignment exceeds strictest alignment promised in heap, so return the heap alignment.
         return MAX_ALIGN;
@@ -1089,7 +1091,8 @@ static jl_cgval_t emit_getfield_knownidx(const jl_cgval_t &strct, unsigned idx, 
     else {
         if (strct.V->getType()->isVectorTy()) {
             fldv = builder.CreateExtractElement(strct.V, ConstantInt::get(T_int32, idx));
-        } else {
+        }
+        else {
             // VecElement types are unwrapped in LLVM.
             assert( strct.V->getType()->isSingleValueType() );
             fldv = strct.V;

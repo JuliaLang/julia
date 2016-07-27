@@ -129,9 +129,9 @@ static void *jl_load_dynamic_library_(const char *modname, unsigned flags, int t
     // file not found error due to the extra or missing extension name.
     int hasext = endswith_extension(modname);
 
-/*
-    this branch returns handle of libjulia
-*/
+    /*
+      this branch returns handle of libjulia
+    */
     if (modname == NULL) {
 #ifdef _OS_WINDOWS_
         if (!GetModuleHandleExW(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
@@ -144,9 +144,9 @@ static void *jl_load_dynamic_library_(const char *modname, unsigned flags, int t
 #endif
         goto done;
     }
-/*
-    this branch shortcuts absolute paths
-*/
+    /*
+      this branch shortcuts absolute paths
+    */
 #ifdef _OS_WINDOWS_
     else if (modname[1] == ':') {
 #else
@@ -159,10 +159,10 @@ static void *jl_load_dynamic_library_(const char *modname, unsigned flags, int t
         if (jl_stat(modname, (char*)&stbuf) == 0)
             goto notfound;
     }
-/*
-    this branch permutes all base paths in DL_LOAD_PATH with all extensions
-    note: skip when !jl_base_module to avoid UndefVarError(:DL_LOAD_PATH)
-*/
+    /*
+      this branch permutes all base paths in DL_LOAD_PATH with all extensions
+      note: skip when !jl_base_module to avoid UndefVarError(:DL_LOAD_PATH)
+    */
     else if (jl_base_module != NULL) {
         jl_array_t *DL_LOAD_PATH = (jl_array_t*)jl_get_global(jl_base_module, jl_symbol("DL_LOAD_PATH"));
         if (DL_LOAD_PATH != NULL) {

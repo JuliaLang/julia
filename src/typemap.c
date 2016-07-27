@@ -301,7 +301,8 @@ static void mtcache_rehash(struct jl_ordereddict_t *pa, size_t newlen, jl_value_
 
 // Recursively rehash a TypeMap (for example, after deserialization)
 void jl_typemap_rehash(union jl_typemap_t ml, int8_t offs);
-void jl_typemap_rehash_array(struct jl_ordereddict_t *pa, jl_value_t *parent, int8_t tparam, int8_t offs) {
+void jl_typemap_rehash_array(struct jl_ordereddict_t *pa, jl_value_t *parent, int8_t tparam, int8_t offs)
+{
     size_t i, len = jl_array_len(pa->values);
     for (i = 0; i < len; i++) {
         union jl_typemap_t ml;
@@ -368,11 +369,9 @@ static union jl_typemap_t *mtcache_hash_bp(struct jl_ordereddict_t *pa, jl_value
     return NULL;
 }
 
-
 // ----- Sorted Type Signature Lookup Matching ----- //
 
-jl_value_t *jl_lookup_match(jl_value_t *a, jl_value_t *b, jl_svec_t **penv,
-                            jl_svec_t *tvars)
+jl_value_t *jl_lookup_match(jl_value_t *a, jl_value_t *b, jl_svec_t **penv, jl_svec_t *tvars)
 {
     jl_value_t *ti = jl_type_intersection_matching(a, b, penv, tvars);
     if (ti == (jl_value_t*)jl_bottom_type)
@@ -449,7 +448,7 @@ int is_cache_leaf(jl_value_t *ty)
 }
 
 static int jl_typemap_intersection_array_visitor(struct jl_ordereddict_t *a, jl_value_t *ty, int tparam,
-        int offs, struct typemap_intersection_env *closure)
+                                                 int offs, struct typemap_intersection_env *closure)
 {
     size_t i, l = jl_array_len(a->values);
     union jl_typemap_t *data = (union jl_typemap_t*)jl_array_data(a->values);
@@ -518,7 +517,7 @@ static int jl_typemap_intersection_node_visitor(jl_typemap_entry_t *ml, struct t
 }
 
 int jl_typemap_intersection_visitor(union jl_typemap_t map, int offs,
-        struct typemap_intersection_env *closure)
+                                    struct typemap_intersection_env *closure)
 {
     if (jl_typeof(map.unknown) == (jl_value_t*)jl_typemap_level_type) {
         jl_typemap_level_t *cache = map.node;
@@ -698,7 +697,7 @@ static jl_typemap_entry_t *jl_typemap_lookup_by_type_(jl_typemap_entry_t *ml, jl
 // this is the general entry point for looking up a type in the cache
 // (as a subtype, or with typeseq)
 jl_typemap_entry_t *jl_typemap_assoc_by_type(union jl_typemap_t ml_or_cache, jl_tupletype_t *types, jl_svec_t **penv,
-        int8_t subtype_inexact__sigseq_useenv, int8_t subtype, int8_t offs)
+                                             int8_t subtype_inexact__sigseq_useenv, int8_t subtype, int8_t offs)
 {
     if (jl_typeof(ml_or_cache.unknown) == (jl_value_t*)jl_typemap_level_type) {
         jl_typemap_level_t *cache = ml_or_cache.node;
@@ -931,8 +930,8 @@ static void jl_typemap_list_insert_(jl_typemap_entry_t **pml, jl_value_t *parent
 }
 
 static void jl_typemap_insert_generic(union jl_typemap_t *pml, jl_value_t *parent,
-                                     jl_typemap_entry_t *newrec, jl_value_t *key, int8_t offs,
-                                     const struct jl_typemap_info *tparams)
+                                      jl_typemap_entry_t *newrec, jl_value_t *key, int8_t offs,
+                                      const struct jl_typemap_info *tparams)
 {
     if (jl_typeof(pml->unknown) == (jl_value_t*)jl_typemap_level_type) {
         jl_typemap_level_insert_(pml->node, newrec, offs, tparams);
@@ -961,7 +960,7 @@ static int jl_typemap_array_insert_(struct jl_ordereddict_t *cache, jl_value_t *
 }
 
 static void jl_typemap_level_insert_(jl_typemap_level_t *cache, jl_typemap_entry_t *newrec, int8_t offs,
-        const struct jl_typemap_info *tparams)
+                                     const struct jl_typemap_info *tparams)
 {
     size_t l = jl_field_count(newrec->sig);
     // compute the type at offset `offs` into `sig`, which may be a Vararg

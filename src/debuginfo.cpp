@@ -110,7 +110,8 @@ struct ObjectInfo {
 // so that when we see it get emitted, we can add a link back to the linfo
 // that it came from (providing name, type signature, file info, etc.)
 static StringMap<jl_lambda_info_t*> linfo_in_flight;
-static std::string mangle(const std::string &Name, const DataLayout &DL) {
+static std::string mangle(const std::string &Name, const DataLayout &DL)
+{
 #if defined(USE_MCJIT) || defined(USE_ORCJIT)
     std::string MangledName;
     {
@@ -129,7 +130,7 @@ void jl_add_linfo_in_flight(StringRef name, jl_lambda_info_t *linfo, const DataL
 
 #if defined(_OS_WINDOWS_)
 static void create_PRUNTIME_FUNCTION(uint8_t *Code, size_t Size, StringRef fnname,
-        uint8_t *Section, size_t Allocated, uint8_t *UnwindData)
+                                     uint8_t *Section, size_t Allocated, uint8_t *UnwindData)
 {
     // GC safe
     DWORD mod_size = 0;
@@ -1009,7 +1010,8 @@ bool jl_dylib_DI_for_fptr(size_t pointer, const llvm::object::ObjectFile **obj, 
 #endif
                     *slide = -(int64_t)fbase;
 #ifdef _OS_DARWIN_
-                } else {
+                }
+                else {
                     // If we're here the, the dsym does not match the dylib. Use the original
                     // object instead. For consistency (and to make sure we get a sensible size
                     // for the memory buffer), we also use a fresh copy mapped from
@@ -1214,7 +1216,8 @@ JL_DLLEXPORT uint64_t jl_get_section_start(uint64_t fptr)
     uint64_t ret = 0;
     if (fit != objmap.end() && fptr < fit->first + fit->second.SectionSize) {
         ret = fit->first;
-    } else {
+    }
+    else {
        obfiletype::iterator objit = objfilemap.lower_bound(fptr);
        // Ideally we'd have a containment check here, but we can't really
        // get the shared library size easily.
