@@ -4886,8 +4886,9 @@ extern "C" void jl_fptr_to_llvm(jl_fptr_t fptr, jl_lambda_info_t *lam, int specs
 #define V128_BUG
 #endif
 
-static void init_julia_llvm_env(Module *m)
+static void init_julia_llvm_meta(void)
 {
+    mbuilder = new MDBuilder(jl_LLVMContext);
     MDNode *tbaa_root = mbuilder->createTBAARoot("jtbaa");
     tbaa_gcframe = tbaa_make_child("jtbaa_gcframe", tbaa_root);
     tbaa_stack = tbaa_make_child("jtbaa_stack", tbaa_root);
@@ -4904,7 +4905,10 @@ static void init_julia_llvm_env(Module *m)
     tbaa_arraylen = tbaa_make_child("jtbaa_arraylen", tbaa_array);
     tbaa_arrayflags = tbaa_make_child("jtbaa_arrayflags", tbaa_array);
     tbaa_const = tbaa_make_child("jtbaa_const", tbaa_root, true);
+}
 
+static void init_julia_llvm_env(Module *m)
+{
     // every variable or function mapped in this function must be
     // exported from libjulia, to support static compilation
     T_int1  = Type::getInt1Ty(jl_LLVMContext);
@@ -5731,6 +5735,8 @@ extern "C" void jl_init_codegen(void)
         jl_TargetMachine->setFastISel(true);
 #endif
 
+    init_julia_llvm_meta();
+
 #ifdef USE_ORCJIT
     jl_ExecutionEngine = new JuliaOJIT(*jl_TargetMachine);
 #else
@@ -5746,8 +5752,6 @@ extern "C" void jl_init_codegen(void)
 #endif
     jl_ExecutionEngine->DisableLazyCompilation();
 #endif
-
-    mbuilder = new MDBuilder(jl_LLVMContext);
 
     // Now that the execution engine exists, initialize all modules
     jl_setup_module(engine_module);

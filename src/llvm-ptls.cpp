@@ -189,5 +189,6 @@ static RegisterPass<LowerPTLS> X("LowerPTLS", "LowerPTLS Pass",
 
 Pass *createLowerPTLSPass(bool imaging_mode, MDNode *tbaa_const)
 {
+    assert(tbaa_const);
     return new LowerPTLS(imaging_mode, tbaa_const);
 }

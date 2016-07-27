@@ -983,5 +983,6 @@ void jl_dump_bb_uses(std::map<BasicBlock*, std::map<frame_register, liveness::id
 
 Pass *createLowerGCFramePass(MDNode *tbaa_gcframe)
 {
+    assert(tbaa_gcframe);
     return new LowerGCFrame(tbaa_gcframe);
 }
