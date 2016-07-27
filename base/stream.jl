@@ -445,7 +445,7 @@ function notify_filled(stream::LibuvStream, nread::Int)
     more = true
     while more
         if isa(stream.readcb,Function)
-            nreadable = (stream.line_buffered ? Int(search(stream.buffer, '\n')) : nb_available(stream.buffer))
+            nreadable = (stream.line_buffered ? Int(search(stream.buffer, UInt8('\n'))) : nb_available(stream.buffer))
             if nreadable > 0
                 more = stream.readcb(stream, nreadable)
             else
@@ -674,7 +674,7 @@ function start_reading(stream::LibuvStream)
 end
 
 function start_reading(stream::LibuvStream, cb::Function)
-    failure = start_reading(stream)
+    failure_code = start_reading(stream)
     stream.readcb = cb
     nread = nb_available(stream.buffer)
     if nread > 0
