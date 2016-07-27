@@ -1559,7 +1559,7 @@
       (let* ((ex (partially-expand-ref expr))
              (stmts (butlast (cdr ex)))
              (refex (last    (cdr ex)))
-             (nuref `(call (top view) ,(caddr refex) ,@(cdddr refex))))
+             (nuref `(call (top dotview) ,(caddr refex) ,@(cdddr refex))))
         `(block ,@stmts ,nuref))
       expr))
 
