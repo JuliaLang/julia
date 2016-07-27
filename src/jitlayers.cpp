@@ -27,6 +27,7 @@
 #include <polly/CodeGen/CodegenCleanup.h>
 #endif
 
+#include <llvm/Transforms/IPO.h>
 #include <llvm/Transforms/Scalar.h>
 #include <llvm/Transforms/Utils/BasicBlockUtils.h>
 #include <llvm/Transforms/Instrumentation.h>
@@ -141,6 +142,7 @@ void addOptimizationPasses(PassManager *PM)
     // list of passes from vmkit
     PM->add(createCFGSimplificationPass()); // Clean up disgusting code
     PM->add(createPromoteMemoryToRegisterPass());// Kill useless allocas
+    PM->add(createAlwaysInlinerPass()); // Respect always_inline
 
 #ifndef INSTCOMBINE_BUG
     PM->add(createInstructionCombiningPass()); // Cleanup for scalarrepl.
