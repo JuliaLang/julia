@@ -99,6 +99,8 @@ zero{T<:Number}(::Type{T}) = convert(T,0)
 one(x::Number)  = oftype(x,1)
 one{T<:Number}(::Type{T}) = convert(T,1)
 
+_default_type(::Type{Number}) = Int
+
 """
     factorial(n)
 
