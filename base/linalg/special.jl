@@ -6,8 +6,38 @@
 convert{T}(::Type{Bidiagonal}, A::Diagonal{T})=Bidiagonal(A.diag, zeros(T, size(A.diag,1)-1), true)
 convert{T}(::Type{SymTridiagonal}, A::Diagonal{T})=SymTridiagonal(A.diag, zeros(T, size(A.diag,1)-1))
 convert{T}(::Type{Tridiagonal}, A::Diagonal{T})=Tridiagonal(zeros(T, size(A.diag,1)-1), A.diag, zeros(T, size(A.diag,1)-1))
-convert(::Type{LowerTriangular}, A::Bidiagonal) = !A.isupper ? LowerTriangular(full(A)) : throw(ArgumentError("Bidiagonal matrix must have lower off diagonal to be converted to LowerTriangular"))
-convert(::Type{UpperTriangular}, A::Bidiagonal) = A.isupper ? UpperTriangular(full(A)) : throw(ArgumentError("Bidiagonal matrix must have upper off diagonal to be converted to UpperTriangular"))
+
+# methods for conversion from Bidiagonal to [Unit](Upper|Lower)Triangular
+function convert(::Type{LowerTriangular}, A::Bidiagonal)
+    if A.isupper
+        throw(ArgumentError("upper Bidiagonal matrices cannot be converted to LowerTriangular"))
+    end
+    LowerTriangular(A)
+end
+function convert(::Type{UpperTriangular}, A::Bidiagonal)
+    if !A.isupper
+        throw(ArgumentError("lower Bidiagonal matrices cannot be converted to UpperTriangular"))
+    end
+    UpperTriangular(A)
+end
+function convert(::Type{UnitLowerTriangular}, A::Bidiagonal)
+    if A.isupper
+        throw(ArgumentError("upper Bidiagonal matrices cannot be converted to UnitLowerTriangular"))
+    elseif !all(A.dv .== one(eltype(A)))
+        throw(ArgumentError(string("Bidiagonal matrices with non-one entries on the ",
+            "diagonal cannot be converted to UnitLowerTriangular")))
+    end
+    UnitLowerTriangular(A)
+end
+function convert(::Type{UnitUpperTriangular}, A::Bidiagonal)
+    if !A.isupper
+        throw(ArgumentError("lower Bidiagonal matrices cannot be converted to UnitUpperTriangular"))
+    elseif !all(A.dv .== one(eltype(A)))
+        throw(ArgumentError(string("Bidiagonal matrices with non-one entries on the ",
+            "diagonal cannot be converted to UnitUpperTriangular")))
+    end
+    UnitUpperTriangular(A)
+end
 
 function convert(::Type{UnitUpperTriangular}, A::Diagonal)
     if !all(A.diag .== one(eltype(A)))
