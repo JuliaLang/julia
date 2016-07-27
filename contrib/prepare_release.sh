@@ -14,6 +14,8 @@ if [ -z "$tag" ]; then
 fi
 version=$(cat VERSION)
 majmin=$(cut -d. -f1-2 VERSION)
+# remove -rc# if present
+majminpatch=$(cut -d- -f1 VERSION)
 if [ "$tag" != "v$version" ]; then
   echo "error: tagged commit does not match content of VERSION file" >&2
   exit 1
@@ -33,20 +35,26 @@ rm -rf julia-$version
 # download and rename binaries, with -latest copies
 julianightlies="https://s3.amazonaws.com/julianightlies/bin"
 curl -L -o julia-$version-linux-x86_64.tar.gz \
-  $julianightlies/linux/x64/$majmin/julia-$version-$shashort-linux64.tar.gz
+  $julianightlies/linux/x64/$majmin/julia-$majminpatch-$shashort-linux64.tar.gz
 cp julia-$version-linux-x86_64.tar.gz julia-$majmin-latest-linux-x86_64.tar.gz
 curl -L -o julia-$version-linux-i686.tar.gz \
-  $julianightlies/linux/x86/$majmin/julia-$version-$shashort-linux32.tar.gz
+  $julianightlies/linux/x86/$majmin/julia-$majminpatch-$shashort-linux32.tar.gz
 cp julia-$version-linux-i686.tar.gz julia-$majmin-latest-linux-i686.tar.gz
+curl -L -o julia-$version-linux-arm.tar.gz \
+  $julianightlies/linux/arm/$majmin/julia-$majminpatch-$shashort-linuxarm.tar.gz
+cp julia-$version-linux-arm.tar.gz julia-$majmin-latest-linux-arm.tar.gz
 curl -L -o "julia-$version-osx10.7 .dmg" \
-  $julianightlies/osx/x64/$majmin/julia-$version-$shashort-osx.dmg
+  $julianightlies/osx/x64/$majmin/julia-$majminpatch-$shashort-osx.dmg
 cp "julia-$version-osx10.7 .dmg" "julia-$majmin-latest-osx10.7 .dmg"
 curl -L -o julia-$version-win64.exe \
-  $julianightlies/winnt/x64/$majmin/julia-$version-$shashort-win64.exe
+  $julianightlies/winnt/x64/$majmin/julia-$majminpatch-$shashort-win64.exe
 cp julia-$version-win64.exe julia-$majmin-latest-win64.exe
 curl -L -o julia-$version-win32.exe \
-  $julianightlies/winnt/x86/$majmin/julia-$version-$shashort-win32.exe
+  $julianightlies/winnt/x86/$majmin/julia-$majminpatch-$shashort-win32.exe
 cp julia-$version-win32.exe julia-$majmin-latest-win32.exe
+
+echo "Note: if windows code signing is not working on the buildbots, then the"
+echo "checksums need to be re-calculated after the binaries are manually signed!"
 
 shasum -a 256 julia-$version* | grep -v sha256 | grep -v md5 > julia-$version.sha256
 md5sum julia-$version* | grep -v sha256 | grep -v md5 > julia-$version.md5
