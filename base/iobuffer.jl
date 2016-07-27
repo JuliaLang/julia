@@ -18,6 +18,7 @@ type AbstractIOBuffer{T<:AbstractVector{UInt8}} <: IO
         new(data,readable,writable,seekable,append,length(data),maxsize,1,-1)
 end
 typealias IOBuffer AbstractIOBuffer{Vector{UInt8}}
+show(io::IO, ::Type{IOBuffer}) = print(io, "IOBuffer")
 
 AbstractIOBuffer{T<:AbstractVector{UInt8}}(data::T, readable::Bool, writable::Bool, seekable::Bool, append::Bool, maxsize::Int) =
     AbstractIOBuffer{T}(data, readable, writable, seekable, append, maxsize)

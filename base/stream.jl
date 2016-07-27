@@ -806,8 +806,8 @@ function uv_write(s::LibuvStream, p::Ptr{UInt8}, n::UInt)
         uv_error("write", err)
     end
     ct = current_task()
-    uv_req_set_data(uvw,ct)
-    stream_wait(ct)
+    uv_req_set_data(uvw, ct)
+    stream_wait(s)
     return Int(n)
 end
 
@@ -895,9 +895,9 @@ function accept(server::LibuvServer, client::LibuvStream)
         if err == 0
             return client
         elseif err != UV_EAGAIN
-            uv_error("accept",err)
+            uv_error("accept", err)
         end
-        stream_wait(server,server.connectnotify)
+        stream_wait(server, server.connectnotify)
     end
     uv_error("accept", UV_ECONNABORTED)
 end

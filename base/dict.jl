@@ -243,7 +243,7 @@ push!(t::Associative, p::Pair) = setindex!(t, p.second, p.first)
 push!(t::Associative, p::Pair, q::Pair) = push!(push!(t, p), q)
 push!(t::Associative, p::Pair, q::Pair, r::Pair...) = push!(push!(push!(t, p), q), r...)
 
-# hashing objects by identity
+# hashing objects by identity with deserialization support
 
 type ObjectIdDict <: Associative{Any,Any}
     ht::Vector{Any}
@@ -325,7 +325,7 @@ SerializationState(io::IO) = SerializationState{typeof(io)}(io)
 const global maxallowedprobe = 16
 const global maxprobeshift   = 6
 
-type Dict{K,V} <: Associative{K,V}
+type CmpDict{K,V,Cmp,Hash} <: Associative{K,V}
     slots::Array{UInt8,1}
     keys::Array{K,1}
     vals::Array{V,1}
@@ -334,63 +334,126 @@ type Dict{K,V} <: Associative{K,V}
     dirty::Bool
     idxfloor::Int  # an index <= the indexes of all used slots
     maxprobe::Int
+    isequal::Cmp
+    hash::Hash
 
-    function Dict()
+    function CmpDict(isequal::Cmp, hash::Hash)
         n = 16
-        new(zeros(UInt8,n), Array{K}(n), Array{V}(n), 0, 0, false, 1, 0)
+        return new(zeros(UInt8,n), Array{K}(n), Array{V}(n), 0,
+                   0, false, 1, 0, isequal, hash)
     end
-    function Dict(kv)
-        h = Dict{K,V}()
+    function CmpDict(isequal::Cmp, hash::Hash, kv)
+        h = CmpDict{K,V,Cmp,Hash}(isequal, hash)
         for (k,v) in kv
             h[k] = v
         end
         return h
     end
-    Dict(p::Pair) = setindex!(Dict{K,V}(), p.second, p.first)
-    function Dict(ps::Pair...)
-        h = Dict{K,V}()
+    CmpDict(isequal::Cmp, hash::Hash, p::Pair) =
+        setindex!(CmpDict{K,V,Cmp,Hash}(isequal, hash), p.second, p.first)
+    function CmpDict(isequal::Cmp, hash::Hash, ps::Pair...)
+        h = CmpDict{K,V,Cmp,Hash}(isequal, hash)
         sizehint!(h, length(ps))
         for p in ps
             h[p.first] = p.second
         end
         return h
     end
-    function Dict(d::Dict{K,V})
+    function CmpDict(d::CmpDict{K,V,Cmp,Hash})
         if d.ndel > 0
             rehash!(d)
         end
         @assert d.ndel == 0
-        new(copy(d.slots), copy(d.keys), copy(d.vals), 0, d.count, d.dirty, d.idxfloor,
-            d.maxprobe)
+        return new(copy(d.slots), copy(d.keys), copy(d.vals), 0,
+                   d.count, d.dirty, d.idxfloor, d.maxprobe, d.isequal, d.hash)
     end
 end
-Dict() = Dict{Any,Any}()
-Dict(kv::Tuple{}) = Dict()
-copy(d::Dict) = Dict(d)
+copy{K,V,Cmp,Hash}(d::CmpDict{K,V,Cmp,Hash}) = CmpDict{K,V,Cmp,Hash}(d)
 
-const AnyDict = Dict{Any,Any}
+# define Dict #
+let isequal = isequal, hash = hash
+    global Dict, show
+    typealias Dict{K,V} CmpDict{K,V,typeof(isequal),typeof(hash)}
+    show(io::IO, d::Type{Dict}) = print(io, "Dict{", d.parameters[1], ",", d.parameters[2], "}")
+    show{K,V}(io::IO, d::Type{Dict{K,V}}) = print(io, "Dict{", d.parameters[1], ",", d.parameters[2], "}")
 
-Dict{K,V}(ps::Pair{K,V}...)            = Dict{K,V}(ps)
-Dict{K  }(ps::Pair{K}...,)             = Dict{K,Any}(ps)
-Dict{V  }(ps::Pair{TypeVar(:K),V}...,) = Dict{Any,V}(ps)
-Dict(     ps::Pair...)                 = Dict{Any,Any}(ps)
+    (::Type{Dict{K,V}}){K,V}() = Dict{K,V}(isequal, hash)
+    (::Type{Dict{K,V}}){K,V}(kv) = Dict{K,V}(isequal, hash, kv)
+    (::Type{Dict{K,V}}){K,V}(kv::Dict{K,V}) = Dict{K,V}(isequal, hash, kv)
+    (::Type{Dict{K,V}}){K,V}(p::Pair) = Dict{K,V}(isequal, hash, p)
+    (::Type{Dict{K,V}}){K,V}(ps::Pair...) = Dict{K,V}(isequal, hash, ps...)
 
-function Dict(kv)
-    try
-        Base.dict_with_eltype(kv, eltype(kv))
-    catch e
-        if any(x->isempty(methods(x, (typeof(kv),))), [start, next, done]) ||
-            !all(x->isa(x,Union{Tuple,Pair}),kv)
-            throw(ArgumentError("Dict(kv): kv needs to be an iterator of tuples or pairs"))
-        else
-            rethrow(e)
+    Dict() = Dict{Any,Any}()
+    Dict(kv::Tuple{}) = Dict()
+
+    global const AnyDict = Dict{Any,Any}
+
+    Dict{K,V}(ps::Pair{K,V}...)            = Dict{K,V}(ps)
+    Dict{K  }(ps::Pair{K}...,)             = Dict{K,Any}(ps)
+    Dict{V  }(ps::Pair{TypeVar(:K),V}...,) = Dict{Any,V}(ps)
+    Dict(     ps::Pair...)                 = Dict{Any,Any}(ps)
+
+    function Dict(kv)
+        try
+            dict_with_eltype(kv, eltype(kv))
+        catch e
+            if false && any(x->isempty(methods(x, (typeof(kv),))), [start, next, done]) ||
+                !all(x->isa(x,Union{Tuple,Pair}),kv)
+                throw(ArgumentError("Dict(kv): kv needs to be an iterator of tuples or pairs"))
+            else
+                rethrow(e)
+            end
         end
     end
+
+    dict_with_eltype{K,V}(kv, ::Type{Tuple{K,V}}) = Dict{K,V}(kv)
+    dict_with_eltype{K,V}(kv, ::Type{Pair{K,V}}) = Dict{K,V}(kv)
+    dict_with_eltype(kv, t) = grow_to!(Dict{Union{},Union{}}(), kv)
 end
 
-dict_with_eltype{K,V}(kv, ::Type{Tuple{K,V}}) = Dict{K,V}(kv)
-dict_with_eltype{K,V}(kv, ::Type{Pair{K,V}}) = Dict{K,V}(kv)
-dict_with_eltype(kv, t) = grow_to!(Dict{Union{},Union{}}(), kv)
+# define IdDict #
+let isequal = is, hash = object_id
+    global IdDict, show
+    typealias IdDict{K,V} CmpDict{K,V,typeof(isequal),typeof(hash)}
+    show(io::IO, d::Type{IdDict}) = print(io, "IdDict{", d.parameters[1], ",", d.parameters[2], "}")
+    show{K,V}(io::IO, d::Type{IdDict{K,V}}) = print(io, "IdDict{", d.parameters[1], ",", d.parameters[2], "}")
+
+    (::Type{IdDict{K,V}}){K,V}() = IdDict{K,V}(isequal, hash)
+    (::Type{IdDict{K,V}}){K,V}(kv) = IdDict{K,V}(isequal, hash, kv)
+    (::Type{IdDict{K,V}}){K,V}(kv::Dict{K,V}) = IdDict{K,V}(isequal, hash, kv)
+    (::Type{IdDict{K,V}}){K,V}(p::Pair) = IdDict{K,V}(isequal, hash, p)
+    (::Type{IdDict{K,V}}){K,V}(ps::Pair...) = IdDict{K,V}(isequal, hash, ps...)
+
+    IdDict() = IdDict{Any,Any}()
+    IdDict(kv::Tuple{}) = IdDict()
+
+    global const AnyIdDict = IdDict{Any,Any}
+
+    IdDict{K,V}(ps::Pair{K,V}...)            = IdDict{K,V}(ps)
+    IdDict{K  }(ps::Pair{K}...,)             = IdDict{K,Any}(ps)
+    IdDict{V  }(ps::Pair{TypeVar(:K),V}...,) = IdDict{Any,V}(ps)
+    IdDict(     ps::Pair...)                 = IdDict{Any,Any}(ps)
+
+    function IdDict(kv)
+        try
+            iddict_with_eltype(kv, eltype(kv))
+        catch e
+            if any(x->isempty(methods(x, (typeof(kv),))), [start, next, done]) ||
+                !all(x->isa(x,Union{Tuple,Pair}),kv)
+                throw(ArgumentError("Dict(kv): kv needs to be an iterator of tuples or pairs"))
+            else
+                rethrow(e)
+            end
+        end
+    end
+
+    iddict_with_eltype{K,V}(kv, ::Type{Tuple{K,V}}) = IdDict{K,V}(kv)
+    iddict_with_eltype{K,V}(kv, ::Type{Pair{K,V}}) = IdDict{K,V}(kv)
+    iddict_with_eltype(kv, t) = grow_to!(IdDict{Union{},Union{}}(), kv)
+end
+
+# end def #
+
 
 # this is a special case due to (1) allowing both Pairs and Tuples as elements,
 # and (2) Pair being invariant. a bit annoying.
@@ -409,11 +472,12 @@ function grow_to!{K,V}(dest::Associative{K,V}, itr, st = start(itr))
     return dest
 end
 
-similar{K,V}(d::Dict{K,V}) = Dict{K,V}()
-similar{K,V}(d::Dict, ::Type{Pair{K,V}}) = Dict{K,V}()
+similar(d::CmpDict) = typeof(d)(d.isequal, d.hash)
+similar{K,V,KD,VD,Cmp,Hash}(d::CmpDict{KD,VD,Cmp,Hash}, ::Type{Pair{K,V}}) =
+    Dict{K,V,Cmp,Hash}(d.isequal, d.hash)
 
 # conversion between Dict types
-function convert{K,V}(::Type{Dict{K,V}},d::Associative)
+function convert{K,V}(::Type{Dict{K,V}}, d::Associative)
     h = Dict{K,V}()
     for (k,v) in d
         ck = convert(K,k)
@@ -425,15 +489,15 @@ function convert{K,V}(::Type{Dict{K,V}},d::Associative)
     end
     return h
 end
-convert{K,V}(::Type{Dict{K,V}},d::Dict{K,V}) = d
+convert{K,V}(::Type{Dict{K,V}}, d::Dict{K,V}) = d
 
-hashindex(key, sz) = ((hash(key)%Int) & (sz-1)) + 1
+hashindex(hash, sz) = ((hash % Int) & (sz - 1)) + 1
 
-isslotempty(h::Dict, i::Int) = h.slots[i] == 0x0
-isslotfilled(h::Dict, i::Int) = h.slots[i] == 0x1
-isslotmissing(h::Dict, i::Int) = h.slots[i] == 0x2
+isslotempty(h::CmpDict, i::Int) = h.slots[i] == 0x0
+isslotfilled(h::CmpDict, i::Int) = h.slots[i] == 0x1
+isslotmissing(h::CmpDict, i::Int) = h.slots[i] == 0x2
 
-function rehash!{K,V}(h::Dict{K,V}, newsz = length(h.keys))
+function rehash!{K,V}(h::CmpDict{K,V}, newsz = length(h.keys))
     olds = h.slots
     oldk = h.keys
     oldv = h.vals
@@ -461,7 +525,7 @@ function rehash!{K,V}(h::Dict{K,V}, newsz = length(h.keys))
         if olds[i] == 0x1
             k = oldk[i]
             v = oldv[i]
-            index0 = index = hashindex(k, newsz)
+            index0 = index = hashindex(h.hash(k), newsz)
             while slots[index] != 0
                 index = (index & (newsz-1)) + 1
             end
@@ -489,7 +553,7 @@ function rehash!{K,V}(h::Dict{K,V}, newsz = length(h.keys))
     return h
 end
 
-function sizehint!(d::Dict, newsz)
+function sizehint!(d::CmpDict, newsz)
     oldsz = length(d.slots)
     if newsz <= oldsz
         # todo: shrink
@@ -502,7 +566,7 @@ function sizehint!(d::Dict, newsz)
     rehash!(d, newsz)
 end
 
-function empty!{K,V}(h::Dict{K,V})
+function empty!{K,V}(h::CmpDict{K,V})
     fill!(h.slots, 0x0)
     sz = length(h.slots)
     empty!(h.keys)
@@ -517,18 +581,18 @@ function empty!{K,V}(h::Dict{K,V})
 end
 
 # get the index where a key is stored, or -1 if not present
-function ht_keyindex{K,V}(h::Dict{K,V}, key)
+function ht_keyindex{K,V}(h::CmpDict{K,V}, key)
     sz = length(h.keys)
     iter = 0
     maxprobe = h.maxprobe
-    index = hashindex(key, sz)
+    index = hashindex(h.hash(key), sz)
     keys = h.keys
 
     while true
         if isslotempty(h,index)
             break
         end
-        if !isslotmissing(h,index) && isequal(key,keys[index])
+        if !isslotmissing(h, index) && h.isequal(key, keys[index])
             return index
         end
 
@@ -542,11 +606,11 @@ end
 # get the index where a key is stored, or -pos if not present
 # and the key would be inserted at pos
 # This version is for use by setindex! and get!
-function ht_keyindex2{K,V}(h::Dict{K,V}, key)
+function ht_keyindex2{K,V}(h::CmpDict{K,V}, key)
     sz = length(h.keys)
     iter = 0
     maxprobe = h.maxprobe
-    index = hashindex(key, sz)
+    index = hashindex(h.hash(key), sz)
     avail = 0
     keys = h.keys
 
@@ -562,7 +626,7 @@ function ht_keyindex2{K,V}(h::Dict{K,V}, key)
                 # in case "key" already exists in a later collided slot.
                 avail = -index
             end
-        elseif isequal(key, keys[index])
+        elseif h.isequal(key, keys[index])
             return index
         end
 
@@ -589,7 +653,7 @@ function ht_keyindex2{K,V}(h::Dict{K,V}, key)
     return ht_keyindex2(h, key)
 end
 
-function _setindex!(h::Dict, v, key, index)
+function _setindex!(h::CmpDict, v, key, index)
     h.slots[index] = 0x1
     h.keys[index] = key
     h.vals[index] = v
@@ -607,15 +671,15 @@ function _setindex!(h::Dict, v, key, index)
     end
 end
 
-function setindex!{K,V}(h::Dict{K,V}, v0, key0)
+function setindex!{K,V}(h::CmpDict{K,V}, v0, key0)
     key = convert(K, key0)
-    if !isequal(key, key0)
+    if !h.isequal(key, key0)
         throw(ArgumentError("$key0 is not a valid key for type $K"))
     end
-    setindex!(h, v0, key)
+    return setindex!(h, v0, key)
 end
 
-function setindex!{K,V}(h::Dict{K,V}, v0, key::K)
+function setindex!{K,V}(h::CmpDict{K,V}, v0, key::K)
     v = convert(V, v0)
     index = ht_keyindex2(h, key)
 
@@ -629,15 +693,15 @@ function setindex!{K,V}(h::Dict{K,V}, v0, key::K)
     return h
 end
 
-function get!{K,V}(h::Dict{K,V}, key0, default)
+function get!{K,V}(h::CmpDict{K,V}, key0, default)
     key = convert(K,key0)
-    if !isequal(key,key0)
+    if !h.isequal(key,key0)
         throw(ArgumentError("$key0 is not a valid key for type $K"))
     end
-    get!(h, key, default)
+    return get!(h, key, default)
 end
 
-function get!{K, V}(h::Dict{K,V}, key::K, default)
+function get!{K, V}(h::CmpDict{K,V}, key::K, default)
     index = ht_keyindex2(h, key)
 
     index > 0 && return h.vals[index]
@@ -647,15 +711,15 @@ function get!{K, V}(h::Dict{K,V}, key::K, default)
     return v
 end
 
-function get!{K,V}(default::Callable, h::Dict{K,V}, key0)
+function get!{K,V}(default::Callable, h::CmpDict{K,V}, key0)
     key = convert(K,key0)
-    if !isequal(key,key0)
+    if !h.isequal(key,key0)
         throw(ArgumentError("$key0 is not a valid key for type $K"))
     end
-    get!(default, h, key)
+    return get!(default, h, key)
 end
 
-function get!{K,V}(default::Callable, h::Dict{K,V}, key::K)
+function get!{K,V}(default::Callable, h::CmpDict{K,V}, key::K)
     index = ht_keyindex2(h, key)
 
     index > 0 && return h.vals[index]
@@ -680,7 +744,7 @@ macro get!(h, key0, default)
     quote
         K, V = keytype($(esc(h))), valtype($(esc(h)))
         key = convert(K, $(esc(key0)))
-        if !isequal(key, $(esc(key0)))
+        if !h.isequal(key, $(esc(key0)))
             throw(ArgumentError(string($(esc(key0)), " is not a valid key for type ", K)))
         end
         idx = ht_keyindex2($(esc(h)), key)
@@ -696,46 +760,46 @@ macro get!(h, key0, default)
 end
 
 
-function getindex{K,V}(h::Dict{K,V}, key)
+function getindex{K,V}(h::CmpDict{K,V}, key)
     index = ht_keyindex(h, key)
     return (index<0) ? throw(KeyError(key)) : h.vals[index]::V
 end
 
-function get{K,V}(h::Dict{K,V}, key, default)
+function get{K,V}(h::CmpDict{K,V}, key, default)
     index = ht_keyindex(h, key)
     return (index<0) ? default : h.vals[index]::V
 end
 
-function get{K,V}(default::Callable, h::Dict{K,V}, key)
+function get{K,V}(default::Callable, h::CmpDict{K,V}, key)
     index = ht_keyindex(h, key)
     return (index<0) ? default() : h.vals[index]::V
 end
 
-haskey(h::Dict, key) = (ht_keyindex(h, key) >= 0)
-in{T<:Dict}(key, v::KeyIterator{T}) = (ht_keyindex(v.dict, key) >= 0)
+haskey(h::CmpDict, key) = (ht_keyindex(h, key) >= 0)
+in{T<:CmpDict}(key, v::KeyIterator{T}) = (ht_keyindex(v.dict, key) >= 0)
 
-function getkey{K,V}(h::Dict{K,V}, key, default)
+function getkey{K,V}(h::CmpDict{K,V}, key, default)
     index = ht_keyindex(h, key)
     return (index<0) ? default : h.keys[index]::K
 end
 
-function _pop!(h::Dict, index)
+function _pop!(h::CmpDict, index)
     val = h.vals[index]
     _delete!(h, index)
     return val
 end
 
-function pop!(h::Dict, key)
+function pop!(h::CmpDict, key)
     index = ht_keyindex(h, key)
     index > 0 ? _pop!(h, index) : throw(KeyError(key))
 end
 
-function pop!(h::Dict, key, default)
+function pop!(h::CmpDict, key, default)
     index = ht_keyindex(h, key)
     index > 0 ? _pop!(h, index) : default
 end
 
-function _delete!(h::Dict, index)
+function _delete!(h::CmpDict, index)
     h.slots[index] = 0x2
     ccall(:jl_arrayunset, Void, (Any, UInt), h.keys, index-1)
     ccall(:jl_arrayunset, Void, (Any, UInt), h.vals, index-1)
@@ -745,13 +809,13 @@ function _delete!(h::Dict, index)
     h
 end
 
-function delete!(h::Dict, key)
+function delete!(h::CmpDict, key)
     index = ht_keyindex(h, key)
     if index > 0; _delete!(h, index); end
     h
 end
 
-function skip_deleted(h::Dict, i)
+function skip_deleted(h::CmpDict, i)
     L = length(h.slots)
     while i<=L && !isslotfilled(h,i)
         i += 1
@@ -759,19 +823,19 @@ function skip_deleted(h::Dict, i)
     return i
 end
 
-function start(t::Dict)
+function start(t::CmpDict)
     i = skip_deleted(t, t.idxfloor)
     t.idxfloor = i
     return i
 end
-done(t::Dict, i) = i > length(t.vals)
-next{K,V}(t::Dict{K,V}, i) = (Pair{K,V}(t.keys[i],t.vals[i]), skip_deleted(t,i+1))
+done(t::CmpDict, i) = i > length(t.vals)
+next{K,V}(t::CmpDict{K,V}, i) = (Pair{K,V}(t.keys[i],t.vals[i]), skip_deleted(t,i+1))
 
-isempty(t::Dict) = (t.count == 0)
-length(t::Dict) = t.count
+isempty(t::CmpDict) = (t.count == 0)
+length(t::CmpDict) = t.count
 
-next{T<:Dict}(v::KeyIterator{T}, i) = (v.dict.keys[i], skip_deleted(v.dict,i+1))
-next{T<:Dict}(v::ValueIterator{T}, i) = (v.dict.vals[i], skip_deleted(v.dict,i+1))
+next{T<:CmpDict}(v::KeyIterator{T}, i) = (v.dict.keys[i], skip_deleted(v.dict,i+1))
+next{T<:CmpDict}(v::ValueIterator{T}, i) = (v.dict.vals[i], skip_deleted(v.dict,i+1))
 
 # weak key dictionaries
 
