@@ -263,8 +263,8 @@ test_monitor_wait_poll()
 test_watch_file_timeout(0.1)
 test_watch_file_change(6)
 
-@test_throws Base.UVError watch_file("nonexistantfile", 10)
-@test_throws Base.UVError poll_file("nonexistantfile", 2, 10)
+@test_throws Base.UVError watch_file("____nonexistent_file", 10)
+@test_throws Base.UVError poll_file("____nonexistent_file", 2, 10)
 
 ##############
 # mark/reset #
