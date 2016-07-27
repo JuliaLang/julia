@@ -176,14 +176,17 @@
                    body
                    (let ((meta (take-while (lambda (x) (and (pair? x)
                                                             (memq (car x) '(line meta))))
-                                           (cdr body))))
+                                           (cdr body)))
+                         (val (last body)))
                      ;; wrap one-liners in `convert` instead of adding an ssavalue
-                     (if (length= (cdr body) (+ 1 (length meta)))
-                         (let ((val (last body)))
-                           `(,(car body) ,@meta
-                             ,(if (and (pair? val) (eq? (car val) 'return))
-                                  `(return (call (top convert) ,rett ,(cadr val)))
-                                  `(call (top convert) ,rett ,val))))
+                     (if (and (length= (cdr body) (+ 1 (length meta)))
+                              (not (expr-contains-p return? (if (return? val)
+                                                                (cadr val)
+                                                                val))))
+                         `(,(car body) ,@meta
+                           ,(if (return? val)
+                                `(return (call (top convert) ,rett ,(cadr val)))
+                                `(call (top convert) ,rett ,val)))
                          (let ((R (make-ssavalue)))
                            `(,(car body) ,@meta
                              (= ,R ,rett)
