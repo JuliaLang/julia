@@ -262,3 +262,10 @@ typealias NInt{N} Tuple{Vararg{Int, N}}
 fNInt(x::NInt) = (x...)
 gNInt() = fNInt(x)
 @test Base.return_types(gNInt, ()) == Any[NInt]
+
+# issue #17572
+function f17572{A}(::Type{Val{A}})
+    return Tuple{Int}(Tuple{A}((1,)))
+end
+# test that inference doesn't error
+@test isa(code_typed(f17572, (Type{Val{0}},)), Array)

@@ -1231,6 +1231,8 @@ function ⊑(a::ANY, b::ANY)
         return isa(a.val, b)
     elseif isa(b,Const)
         return a === Bottom
+    elseif !(isa(a,Type) || isa(a,TypeVar)) || !(isa(b,Type) || isa(b,TypeVar))
+        return a === b
     else
         return a <: b
     end
@@ -1246,6 +1248,9 @@ function tmerge(typea::ANY, typeb::ANY)
     typeb ⊑ typea && return typea
     typea, typeb = widenconst(typea), widenconst(typeb)
     typea === typeb && return typea
+    if !(isa(typea,Type) || isa(typea,TypeVar)) || !(isa(typeb,Type) || isa(typeb,TypeVar))
+        return Any
+    end
     if (typea <: Tuple) && (typeb <: Tuple)
         if isa(typea, DataType) && isa(typeb, DataType) && length(typea.parameters) == length(typeb.parameters) && !isvatuple(typea) && !isvatuple(typeb)
             return typejoin(typea, typeb)
