@@ -5,7 +5,7 @@ module Broadcast
 using Base.Cartesian
 using Base: promote_op, promote_eltype, promote_eltype_op, @get!, _msk_end, unsafe_bitgetindex, linearindices, tail, OneTo, to_shape
 import Base: .+, .-, .*, ./, .\, .//, .==, .<, .!=, .<=, .÷, .%, .<<, .>>, .^
-export broadcast, broadcast!, bitbroadcast
+export broadcast, broadcast!, bitbroadcast, dotview
 export broadcast_getindex, broadcast_setindex!
 
 ## Broadcasting utilities ##
@@ -435,6 +435,26 @@ for (sigA, sigB) in ((BitArray, BitArray),
             return bitbroadcast(&, A, B)
         end
     end
+end
+
+############################################################
+
+# x[...] .= f.(y...) ---> broadcast!(f, dotview(x, ...), y...).
+# The dotview function defaults to getindex, but we override it in
+# a few cases to get the expected in-place behavior without affecting
+# explicit calls to view.   (All of this can go away if slices
+# are changed to generate views by default.)
+
+dotview(args...) = getindex(args...)
+dotview(A::AbstractArray, args...) = view(A, args...)
+dotview{T<:AbstractArray}(A::AbstractArray{T}, args...) = getindex(A, args...)
+# avoid splatting penalty in common cases:
+for nargs = 0:5
+    args = Symbol[Symbol("x",i) for i = 1:nargs]
+    eval(Expr(:(=), Expr(:call, :dotview, args...),
+                    Expr(:call, :getindex, args...)))
+    eval(Expr(:(=), Expr(:call, :dotview, :(A::AbstractArray), args...),
+                    Expr(:call, :view, :A, args...)))
 end
 
 end # module
