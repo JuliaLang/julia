@@ -243,82 +243,6 @@ push!(t::Associative, p::Pair) = setindex!(t, p.second, p.first)
 push!(t::Associative, p::Pair, q::Pair) = push!(push!(t, p), q)
 push!(t::Associative, p::Pair, q::Pair, r::Pair...) = push!(push!(push!(t, p), q), r...)
 
-# hashing objects by identity with deserialization support
-
-type ObjectIdDict <: Associative{Any,Any}
-    ht::Vector{Any}
-    ObjectIdDict() = new(Vector{Any}(32))
-
-    function ObjectIdDict(itr)
-        d = ObjectIdDict()
-        for (k,v) in itr; d[k] = v; end
-        d
-    end
-
-    function ObjectIdDict(pairs::Pair...)
-        d = ObjectIdDict()
-        for (k,v) in pairs; d[k] = v; end
-        d
-    end
-
-    ObjectIdDict(o::ObjectIdDict) = new(copy(o.ht))
-end
-
-similar(d::ObjectIdDict) = ObjectIdDict()
-
-function setindex!(t::ObjectIdDict, v::ANY, k::ANY)
-    t.ht = ccall(:jl_eqtable_put, Array{Any,1}, (Any, Any, Any), t.ht, k, v)
-    return t
-end
-
-get(t::ObjectIdDict, key::ANY, default::ANY) =
-    ccall(:jl_eqtable_get, Any, (Any, Any, Any), t.ht, key, default)
-
-pop!(t::ObjectIdDict, key::ANY, default::ANY) =
-    ccall(:jl_eqtable_pop, Any, (Any, Any, Any), t.ht, key, default)
-
-function pop!(t::ObjectIdDict, key::ANY)
-    val = pop!(t, key, secret_table_token)
-    !is(val,secret_table_token) ? val : throw(KeyError(key))
-end
-
-function delete!(t::ObjectIdDict, key::ANY)
-    ccall(:jl_eqtable_pop, Any, (Any, Any), t.ht, key)
-    t
-end
-
-empty!(t::ObjectIdDict) = (t.ht = Vector{Any}(length(t.ht)); t)
-
-_oidd_nextind(a, i) = reinterpret(Int,ccall(:jl_eqtable_nextind, Csize_t, (Any, Csize_t), a, i))
-
-start(t::ObjectIdDict) = _oidd_nextind(t.ht, 0)
-done(t::ObjectIdDict, i) = (i == -1)
-next(t::ObjectIdDict, i) = (Pair{Any,Any}(t.ht[i+1],t.ht[i+2]), _oidd_nextind(t.ht, i+2))
-
-function length(d::ObjectIdDict)
-    n = 0
-    for pair in d
-        n+=1
-    end
-    n
-end
-
-copy(o::ObjectIdDict) = ObjectIdDict(o)
-
-get!(o::ObjectIdDict, key, default) = (o[key] = get(o, key, default))
-
-abstract AbstractSerializer
-
-# Serializer type needed as soon as ObjectIdDict is available
-type SerializationState{I<:IO} <: AbstractSerializer
-    io::I
-    counter::Int
-    table::ObjectIdDict
-    SerializationState(io::I) = new(io, 0, ObjectIdDict())
-end
-
-SerializationState(io::IO) = SerializationState{typeof(io)}(io)
-
 # dict
 
 # These can be changed, to trade off better performance for space
@@ -451,9 +375,9 @@ let isequal = is, hash = object_id
     iddict_with_eltype{K,V}(kv, ::Type{Pair{K,V}}) = IdDict{K,V}(kv)
     iddict_with_eltype(kv, t) = grow_to!(IdDict{Union{},Union{}}(), kv)
 end
-
-# end def #
-
+# hashing objects by identity
+const ObjectIdDict = IdDict{Any,Any}
+abstract AbstractSerializer
 
 # this is a special case due to (1) allowing both Pairs and Tuples as elements,
 # and (2) Pair being invariant. a bit annoying.

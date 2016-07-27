@@ -10,7 +10,14 @@ export serialize, deserialize
 
 ## serializing values ##
 
-# types AbstractSerializer and Serializer  # defined in dict.jl
+# type AbstractSerializer defined in dict.jl
+type SerializationState{I<:IO} <: AbstractSerializer
+    io::I
+    counter::Int
+    table::ObjectIdDict
+    SerializationState(io::I) = new(io, 0, ObjectIdDict())
+end
+SerializationState(io::IO) = SerializationState{typeof(io)}(io)
 
 const TAGS = Any[
     Symbol, Int8, UInt8, Int16, UInt16, Int32, UInt32,

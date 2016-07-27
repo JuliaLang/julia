@@ -126,7 +126,6 @@ typedef struct {
     jl_module_t *tree_enclosing_module;
 } jl_serializer_state;
 
-static jl_value_t *jl_idtable_type = NULL;
 static arraylist_t builtin_types;
 
 #define write_uint8(s, n) ios_putc((n), (s))
@@ -724,11 +723,6 @@ static void jl_serialize_value_(jl_serializer_state *s, jl_value_t *v)
             return;
         }
         intptr_t pos = backref_table_numel++;
-        if (jl_typeof(v) == jl_idtable_type) {
-            // will need to rehash this, later (after types are fully constructed)
-            arraylist_push(&reinit_list, (void*)pos);
-            arraylist_push(&reinit_list, (void*)1);
-        }
         if (s->mode == MODE_MODULE && jl_is_module(v)) {
             jl_module_t *m = (jl_module_t*)v;
             if (module_in_worklist(m) && !module_in_worklist(m->parent)) {
@@ -1812,13 +1806,6 @@ static void jl_reinit_item(jl_value_t *v, int how, arraylist_t *tracee_list)
     jl_ptls_t ptls = jl_get_ptls_states();
     JL_TRY {
         switch (how) {
-            case 1: { // rehash ObjectIdDict
-                jl_array_t **a = (jl_array_t**)v;
-                // Assume *a don't need a write barrier
-                jl_idtable_rehash(a, jl_array_len(*a));
-                jl_gc_wb(v, *a);
-                break;
-            }
             case 2: { // reinsert module v into parent (const)
                 jl_module_t *mod = (jl_module_t*)v;
                 jl_binding_t *b = jl_get_binding_wr(mod->parent, mod->name);
@@ -1924,8 +1911,6 @@ static void jl_save_system_image_to_stream(ios_t *f)
             jl_array_del_end(args, jl_array_len(args));
         }
     }
-
-    jl_idtable_type = jl_base_module ? jl_get_global(jl_base_module, jl_symbol("ObjectIdDict")) : NULL;
 
     jl_serialize_value(&s, jl_main_module);
     jl_serialize_value(&s, jl_top_module);
@@ -2190,7 +2175,6 @@ JL_DLLEXPORT int jl_save_incremental(const char *fname, jl_array_t *worklist)
     htable_new(&backref_table, 5000);
     ptrhash_put(&backref_table, jl_main_module, (char*)HT_NOTFOUND + 1);
     backref_table_numel = 1;
-    jl_idtable_type = jl_base_module ? jl_get_global(jl_base_module, jl_symbol("ObjectIdDict")) : NULL;
 
     int en = jl_gc_enable(0);
     jl_serializer_state s = {
