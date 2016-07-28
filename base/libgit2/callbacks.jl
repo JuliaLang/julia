@@ -59,6 +59,8 @@ function credentials_callback(cred::Ptr{Ptr{Void}}, url_ptr::Cstring,
     # parse url for schema and host
     urlparts = match(urlmatcher, url)
     schema = urlparts.captures[1]
+    urlusername = urlparts.captures[4]
+    urlusername = urlusername === nothing ? "" : String(urlusername)
     host = urlparts.captures[5]
     schema = schema === nothing ? "" : schema*"://"
 
@@ -114,15 +116,23 @@ function credentials_callback(cred::Ptr{Ptr{Void}}, url_ptr::Cstring,
                 ENV["SSH_KEY_PATH"]
             else
                 keydefpath = creds[:prvkey, credid] # check if credentials were already used
-                if keydefpath !== nothing && !isusedcreds
+                keydefpath === nothing && (keydefpath = "")
+                if !isempty(keydefpath) && !isusedcreds
                     keydefpath # use cached value
                 else
-                    if keydefpath === nothing || isempty(keydefpath)
-                        keydefpath = joinpath(homedir(),".ssh","id_rsa")
+                    defaultkeydefpath = joinpath(homedir(),".ssh","id_rsa")
+                    if isempty(keydefpath) && isfile(defaultkeydefpath)
+                        keydefpath = defaultkeydefpath
+                    else
+                        keydefpath =
+                            prompt("Private key location for '$schema$username@$host'", default=keydefpath)
                     end
-                    prompt("Private key location for '$schema$username@$host'", default=keydefpath)
                 end
             end
+
+            # If the private key changed, invalidate the cached public key
+            (privatekey != creds[:prvkey, credid]) &&
+                (creds[:pubkey, credid] = "")
             creds[:prvkey, credid] = privatekey # save credentials
 
             # For SSH we need a public key location, look for environment vars SSH_* as well
@@ -145,11 +155,22 @@ function credentials_callback(cred::Ptr{Ptr{Void}}, url_ptr::Cstring,
             end
             creds[:pubkey, credid] = publickey # save credentials
 
-            passphrase = if haskey(ENV,"SSH_KEY_PASS")
-                ENV["SSH_KEY_PASS"]
+            passphrase_required = true
+            if !isfile(privatekey)
+                warn("Private key not found")
             else
+                # In encrypted private keys, the second line is "Proc-Type: 4,ENCRYPTED"
+                open(privatekey) do f
+                    passphrase_required = (readline(f); chomp(readline(f)) == "Proc-Type: 4,ENCRYPTED")
+                end
+           end
+
+           passphrase = if haskey(ENV,"SSH_KEY_PASS")
+               ENV["SSH_KEY_PASS"]
+           else
                 passdef = creds[:pass, credid] # check if credentials were already used
-                if passdef === nothing || isusedcreds
+                passdef === nothing && (passdef = "")
+                if passphrase_required && (isempty(passdef) || isusedcreds)
                     if is_windows()
                         passdef = Base.winprompt(
                             "Your SSH Key requires a password, please enter it now:",
@@ -160,8 +181,9 @@ function credentials_callback(cred::Ptr{Ptr{Void}}, url_ptr::Cstring,
                         passdef = prompt("Passphrase for $privatekey", password=true)
                     end
                 end
+                passdef
             end
-            creds[:pass, credid] = passphrase # save credentials
+            creds[:pass, credid] = passphrase
 
             isempty(username) && return Cint(Error.EAUTH)
 
@@ -180,13 +202,14 @@ function credentials_callback(cred::Ptr{Ptr{Void}}, url_ptr::Cstring,
             if is_windows()
                 if username === nothing || userpass === nothing || isusedcreds
                     res = Base.winprompt("Please enter your credentials for '$schema$host'", "Credentials required",
-                            username === nothing ? "" : username; prompt_username = true)
+                            username === nothing || isempty(username) ?
+                            urlusername : username; prompt_username = true)
                     isnull(res) && return Cint(Error.EAUTH)
                     username, userpass = Base.get(res)
                 end
             else
                 if username === nothing || isusedcreds
-                    username = prompt("Username for '$schema$host'")
+                    username = prompt("Username for '$schema$host'", default = urlusername)
                 end
 
                 if userpass === nothing || isusedcreds
