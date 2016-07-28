@@ -245,6 +245,16 @@ General Parallel Computing Support
 
    Get the id of the current process.
 
+.. function:: ProcessGroup(name::AbstractString, workers::Array{Any,1}, refs::Dict, topology::Symbol)
+
+   .. Docstring generated from Julia source
+
+   A group of ``workers`` with some ``topology``\ , named ``name``\ . The group may be assigned work to do using constructs like ``pmap``\ . There are three options for ``topology``\ :
+
+   * ``:all_to_all`` - all workers connect to all workers
+   * ``:master_slave`` - the head worker connects to all the others, but they do not connect to each other
+   * ``:custom`` - some custom ``topology`` which is specified using a :class:`ClusterManager`
+
 .. function:: asyncmap(f, c...) -> collection
 
    .. Docstring generated from Julia source

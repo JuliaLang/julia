@@ -393,6 +393,17 @@ let next_pid = 2    # 1 is reserved for the client (always)
     end
 end
 
+"""
+    ProcessGroup(name::AbstractString, workers::Array{Any,1}, refs::Dict, topology::Symbol)
+
+A group of `workers` with some `topology`, named `name`. The group may be assigned work
+to do using constructs like `pmap`. There are three options for `topology`:
+
+* `:all_to_all` - all workers connect to all workers
+* `:master_slave` - the head worker connects to all the others, but they do not connect to each other
+* `:custom` - some custom `topology` which is specified using a [`ClusterManager`](:class:`ClusterManager`)
+"""
+ProcessGroup(name::AbstractString, workers::Array{Any,1}, refs::Dict, topology::Symbol)
 type ProcessGroup
     name::AbstractString
     workers::Array{Any,1}
