@@ -278,6 +278,21 @@ create_serialization_stream() do s # Base generic function
     @test deserialize(s)() === 1
 end
 
+# Anonymous Functions
+create_serialization_stream() do s
+    local g() = :magic_token_anon_fun_test
+    serialize(s, g)
+    serialize(s, g)
+
+    seekstart(s)
+    local g2 = deserialize(s)
+    @test g2 !== g
+    @test g2() == :magic_token_anon_fun_test
+    @test g2() == :magic_token_anon_fun_test
+    @test deserialize(s) === g2
+end
+
+
 # Task
 create_serialization_stream() do s # user-defined type array
     f = () -> begin task_local_storage(:v, 2); return 1+1 end

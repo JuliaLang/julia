@@ -1023,6 +1023,34 @@ end
 # issue #15451
 @test remotecall_fetch(x->(y->2y)(x)+1, workers()[1], 3) == 7
 
+# issue #16091
+type T16091 end
+wid = workers()[1]
+@test try
+    remotecall_fetch(()->T16091, wid)
+    false
+catch ex
+    ((ex::RemoteException).captured::CapturedException).ex === UndefVarError(:T16091)
+end
+@test try
+    remotecall_fetch(identity, wid, T16091)
+    false
+catch ex
+    ((ex::RemoteException).captured::CapturedException).ex === UndefVarError(:T16091)
+end
+
+f16091a() = 1
+remotecall_fetch(()->eval(:(f16091a() = 2)), wid)
+@test remotecall_fetch(f16091a, wid) === 2
+@test remotecall_fetch((myid)->remotecall_fetch(f16091a, myid), wid, myid()) === 1
+
+# these will only heisen-fail, since it depends on the gensym counter collisions:
+f16091b = () -> 1
+remotecall_fetch(()->eval(:(f16091b = () -> 2)), wid)
+@test remotecall_fetch(f16091b, 2) === 1
+@test remotecall_fetch((myid)->remotecall_fetch(f16091b, myid), wid, myid()) === 2
+
+
 # issue #16451
 rng=RandomDevice()
 retval = @parallel (+) for _ in 1:10
