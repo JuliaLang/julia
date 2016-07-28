@@ -3468,7 +3468,7 @@ static Function *gen_cfun_wrapper(jl_function_t *ff, jl_value_t *jlrettype, jl_t
     DebugLoc noDbg;
     builder.SetCurrentDebugLocation(noDbg);
 
-    jl_codectx_t ctx;
+    jl_codectx_t ctx = {};
     ctx.f = cw;
     ctx.linfo = lam;
     ctx.sret = false;
@@ -3826,7 +3826,7 @@ static Function *gen_jlcall_wrapper(jl_lambda_info_t *lam, Function *f, bool sre
     DebugLoc noDbg;
     builder.SetCurrentDebugLocation(noDbg);
 
-    jl_codectx_t ctx;
+    jl_codectx_t ctx = {};
     ctx.f = w;
     ctx.linfo = lam;
     ctx.sret = false;
@@ -3895,7 +3895,7 @@ static std::unique_ptr<Module> emit_function(jl_lambda_info_t *lam, jl_llvm_func
     std::map<int, jl_arrayvar_t> arrayvars;
     std::map<int, BasicBlock*> labels;
     std::map<int, Value*> handlers;
-    jl_codectx_t ctx;
+    jl_codectx_t ctx = {};
     ctx.arrayvars = &arrayvars;
     ctx.labels = &labels;
     ctx.handlers = &handlers;
