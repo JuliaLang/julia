@@ -109,19 +109,20 @@ Library improvements
     * The `UTF16String` and `UTF32String` types and corresponding `utf16` and
       `utf32` converter functions have been removed from the standard library.
       If you need these types, they have been moved to the
-      [LegacyStrings](https://github.com/JuliaArchive/LegacyStrings.jl)
+      [`LegacyStrings`](https://github.com/JuliaArchive/LegacyStrings.jl)
       package. In the future, more robust Unicode string support will be provided
-      by the `StringEncodings` package. If you only need these types to call wide
-      string APIs (UTF-16 on Windows, UTF-32 on UNIX), consider using the new
-      `transcode` function (see below) or the `Cwstring` type as a `ccall` argument
-      type, which also ensures correct NUL termination of string data.
+      by the [`StringEncodings`](https://github.com/nalimilan/StringEncodings.jl)
+      package. If you only need these types to call wide string APIs (UTF-16 on
+      Windows, UTF-32 on UNIX), consider using the new `transcode` function (see
+      below) or the `Cwstring` type as a `ccall` argument type, which also ensures
+      correct NUL termination of string data.
+
+    * A `transcode(T, src)` function is now exported for converting data
+      between UTF-xx Unicode encodings ([#17323]).
 
     * The basic string construction routines are now `string(args...)`,
       `String(s)`, `unsafe_string(ptr)` (formerly `bytestring(ptr)`), and
       `unsafe_wrap(String, ptr)` (formerly `pointer_to_string`) ([#16731]).
-
-    * A `transcode(T, src)` function is now exported for converting data
-      between UTF-xx Unicode encodings ([#17323]).
 
     * Comparisons between `Char`s and `Integer`s are now deprecated ([#16024]):
       `'x' == 120` now produces a warning but still evaluates to `true`. In the
