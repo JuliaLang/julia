@@ -937,22 +937,25 @@ function vcat{T}(arrays::Vector{T}...)
     end
     arr = Array{T,1}(n)
     ptr = pointer(arr)
-    if isbits(T)
-        elsz = Core.sizeof(T)
-    else
-        elsz = Core.sizeof(Ptr{Void})
-    end
+    idx = 1
+    elsz = elsize(arr)
     for a in arrays
         na = length(a)
         nba = na * elsz
         if isbits(T)
             ccall(:memcpy, Ptr{Void}, (Ptr{Void}, Ptr{Void}, UInt),
                   ptr, a, nba)
-        else
+        elseif !is_stored_unboxed(T)
             ccall(:jl_array_ptr_copy, Void, (Any, Ptr{Void}, Any, Ptr{Void}, Int),
                   arr, ptr, a, pointer(a), na)
+        else
+            # TODO same as unsafe_copy!
+            for i = 1:na
+                arr[idx+i-1] = a[i]
+            end
         end
         ptr += nba
+        idx += na
     end
     return arr
 end

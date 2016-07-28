@@ -809,7 +809,7 @@ static inline int jl_field_isptr(jl_datatype_t *st, int i)
 
 static inline int jl_field_hasptr(jl_datatype_t *st, int i)
 {
-    const struct _jl_datatype_layout_t *ly = st->layout;
+    const jl_datatype_layout_t *ly = st->layout;
     assert(i >= 0 && (size_t)i < ly->nfields);
     return ((const jl_fielddesc8_t*)(jl_dt_layout_fields(ly) + (i << (ly->fielddesc_type + 1))))->hasptr;
 }
