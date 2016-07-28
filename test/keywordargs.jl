@@ -21,6 +21,13 @@ kwf2(x, rest...; y=1) = (x, y, rest)
 @test_throws MethodError kwf2(0, z=1)
 @test_throws MethodError kwf2(y=1)
 
+# Test for #13919
+test13919(x::Vararg{Int}; key=100) = (x, key)
+@test test13919(1, 1)[1] === (1, 1)
+@test test13919(1, 1)[2] === 100
+@test test13919(1, 1, key=10)[1] === (1, 1)
+@test test13919(1, 1, key=10)[2] === 10
+
 # keyword arg with declared type
 kwf3(x; y::Float64 = 1.0) = x + y
 @test kwf3(2) == 3.0
