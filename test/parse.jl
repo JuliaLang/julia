@@ -642,3 +642,9 @@ let nometh = expand(:(A15838.@f(1, 2)))
     @test e.f === getfield(A15838, Symbol("@f"))
     @test e.args === (1,2)
 end
+
+# issue 10046
+for op in ["+", "-", "\$", "|", ".+", ".-", "*", ".*"]
+    @test_throws ParseError parse("$op in [+, -]")
+end
+
