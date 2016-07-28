@@ -51,7 +51,7 @@ for (f, ctx) in [(:sha1, :SHA1_CTX),
         # open("test.txt") do f
         #     sha256(f)
         # done
-        $f(io::IO) = $f(readbytes(io))
+        $f(io::IO) = @compat $f(read(io))
     end
 end
 
