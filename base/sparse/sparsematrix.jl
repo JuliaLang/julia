@@ -3265,19 +3265,23 @@ function hcat(X::SparseMatrixCSC...)
 end
 
 
-# Sparse/dense concatenation
+# Sparse/special/dense concatenation
 
-function hcat(Xin::Union{Vector, Matrix, SparseMatrixCSC}...)
+# TODO: A similar definition also exists in base/linalg/bidiag.jl. These definitions should
+# be consolidated in a more appropriate location, for example base/linalg/special.jl.
+SpecialArrays = Union{Diagonal, Bidiagonal, Tridiagonal, SymTridiagonal}
+
+function hcat(Xin::Union{Vector, Matrix, SparseMatrixCSC, SpecialArrays}...)
     X = SparseMatrixCSC[issparse(x) ? x : sparse(x) for x in Xin]
     hcat(X...)
 end
 
-function vcat(Xin::Union{Vector, Matrix, SparseMatrixCSC}...)
+function vcat(Xin::Union{Vector, Matrix, SparseMatrixCSC, SpecialArrays}...)
     X = SparseMatrixCSC[issparse(x) ? x : sparse(x) for x in Xin]
     vcat(X...)
 end
 
-function hvcat(rows::Tuple{Vararg{Int}}, X::Union{Vector, Matrix, SparseMatrixCSC}...)
+function hvcat(rows::Tuple{Vararg{Int}}, X::Union{Vector, Matrix, SparseMatrixCSC, SpecialArrays}...)
     nbr = length(rows)  # number of block rows
 
     tmp_rows = Array{SparseMatrixCSC}(nbr)
@@ -3289,7 +3293,7 @@ function hvcat(rows::Tuple{Vararg{Int}}, X::Union{Vector, Matrix, SparseMatrixCS
     vcat(tmp_rows...)
 end
 
-function cat(catdims, Xin::Union{Vector, Matrix, SparseMatrixCSC}...)
+function cat(catdims, Xin::Union{Vector, Matrix, SparseMatrixCSC, SpecialArrays}...)
     X = SparseMatrixCSC[issparse(x) ? x : sparse(x) for x in Xin]
     T = promote_eltype(Xin...)
     Base.cat_t(catdims, T, X...)

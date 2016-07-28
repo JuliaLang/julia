@@ -128,3 +128,41 @@ for typ in [UpperTriangular,LowerTriangular,Base.LinAlg.UnitUpperTriangular,Base
     @test Base.LinAlg.A_mul_Bc(atri,qrb[:Q]) ≈ full(atri) * qrb[:Q]'
     @test Base.LinAlg.A_mul_Bc!(copy(atri),qrb[:Q]) ≈ full(atri) * qrb[:Q]'
 end
+
+# Test that concatenations of combinations of special and other matrix types yield sparse arrays
+let
+    N = 4
+    # Test concatenating pairwise combinations of special matrices
+    diagmat = Diagonal(ones(N))
+    bidiagmat = Bidiagonal(ones(N), ones(N-1), true)
+    tridiagmat = Tridiagonal(ones(N-1), ones(N), ones(N-1))
+    symtridiagmat = SymTridiagonal(ones(N), ones(N-1))
+    specialmats = (diagmat, bidiagmat, tridiagmat, symtridiagmat)
+    for specialmata in specialmats, specialmatb in specialmats
+        @test issparse(hcat(specialmata, specialmatb))
+        @test issparse(vcat(specialmata, specialmatb))
+        @test issparse(hvcat((1,1), specialmata, specialmatb))
+        @test issparse(cat((1,2), specialmata, specialmatb))
+    end
+    # Test concatenating pairwise combinations of special matrices with sparse matrices,
+    # dense matrices, or dense vectors
+    densevec = ones(N)
+    densemat = diagm(ones(N))
+    spmat = spdiagm(ones(N))
+    for specialmat in specialmats
+        # --> Tests applicable only to pairs of matrices
+        for othermat in (spmat, densemat)
+            @test issparse(vcat(specialmat, othermat))
+            @test issparse(vcat(othermat, specialmat))
+        end
+        # --> Tests applicable also to pairs including vectors
+        for specialmat in specialmats, othermatorvec in (spmat, densemat, densevec)
+            @test issparse(hcat(specialmat, othermatorvec))
+            @test issparse(hcat(othermatorvec, specialmat))
+            @test issparse(hvcat((2,), specialmat, othermatorvec))
+            @test issparse(hvcat((2,), othermatorvec, specialmat))
+            @test issparse(cat((1,2), specialmat, othermatorvec))
+            @test issparse(cat((1,2), othermatorvec, specialmat))
+        end
+    end
+end
