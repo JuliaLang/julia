@@ -998,7 +998,7 @@ function cat_t(catdims, typeC::Type, X...)
         end
     end
 
-    C = similar(isa(X[1],AbstractArray) ? full(X[1]) : [X[1]], typeC, tuple(dimsC...))
+    C = similar(isa(X[1],AbstractArray) ? X[1] : [X[1]], typeC, tuple(dimsC...))
     if length(catdims)>1
         fill!(C,0)
     end
