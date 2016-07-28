@@ -643,6 +643,26 @@ function reverse!(v::AbstractVector, s=1, n=length(v))
     return v
 end
 
+
+# concatenations of combinations (homogeneous, heterogeneous) of dense matrices/vectors #
+vcat{T}(A::Union{Vector{T},Matrix{T}}...) = typed_vcat(T, A...)
+vcat(A::Union{Vector,Matrix}...) = typed_vcat(promote_eltype(A...), A...)
+hcat{T}(A::Union{Vector{T},Matrix{T}}...) = typed_hcat(T, A...)
+hcat(A::Union{Vector,Matrix}...) = typed_hcat(promote_eltype(A...), A...)
+hvcat{T}(rows::Tuple{Vararg{Int}}, xs::Union{Vector{T},Matrix{T}}...) = typed_hvcat(T, rows, xs...)
+hvcat(rows::Tuple{Vararg{Int}}, xs::Union{Vector,Matrix}...) = typed_hvcat(promote_eltype(xs...), rows, xs...)
+cat{T}(catdims, xs::Union{Vector{T},Matrix{T}}...) = Base.cat_t(catdims, T, xs...)
+cat(catdims, xs::Union{Vector,Matrix}...) = Base.cat_t(catdims, promote_eltype(xs...), xs...)
+# concatenations of homogeneous combinations of vectors, horizontal and vertical
+function hcat{T}(V::Vector{T}...)
+    height = length(V[1])
+    for j = 2:length(V)
+        if length(V[j]) != height
+            throw(DimensionMismatch("vectors must have same lengths"))
+        end
+    end
+    return [ V[j][i]::T for i=1:length(V[1]), j=1:length(V) ]
+end
 function vcat{T}(arrays::Vector{T}...)
     n = 0
     for a in arrays
@@ -670,39 +690,6 @@ function vcat{T}(arrays::Vector{T}...)
     return arr
 end
 
-function hcat{T}(V::Vector{T}...)
-    height = length(V[1])
-    for j = 2:length(V)
-        if length(V[j]) != height
-            throw(DimensionMismatch("vectors must have same lengths"))
-        end
-    end
-    return [ V[j][i]::T for i=1:length(V[1]), j=1:length(V) ]
-end
-
-hcat(A::Matrix...) = typed_hcat(promote_eltype(A...), A...)
-hcat{T}(A::Matrix{T}...) = typed_hcat(T, A...)
-
-vcat(A::Matrix...) = typed_vcat(promote_eltype(A...), A...)
-vcat{T}(A::Matrix{T}...) = typed_vcat(T, A...)
-
-hcat(A::Union{Matrix, Vector}...) = typed_hcat(promote_eltype(A...), A...)
-hcat{T}(A::Union{Matrix{T}, Vector{T}}...) = typed_hcat(T, A...)
-
-vcat(A::Union{Matrix, Vector}...) = typed_vcat(promote_eltype(A...), A...)
-vcat{T}(A::Union{Matrix{T}, Vector{T}}...) = typed_vcat(T, A...)
-
-hvcat(rows::Tuple{Vararg{Int}}, xs::Vector...) = typed_hvcat(promote_eltype(xs...), rows, xs...)
-hvcat{T}(rows::Tuple{Vararg{Int}}, xs::Vector{T}...) = typed_hvcat(T, rows, xs...)
-
-hvcat(rows::Tuple{Vararg{Int}}, xs::Matrix...) = typed_hvcat(promote_eltype(xs...), rows, xs...)
-hvcat{T}(rows::Tuple{Vararg{Int}}, xs::Matrix{T}...) = typed_hvcat(T, rows, xs...)
-
-hvcat(rows::Tuple{Vararg{Int}}, xs::Union{Vector,Matrix}...) = typed_hvcat(promote_eltype(xs...), rows, xs...)
-hvcat{T}(rows::Tuple{Vararg{Int}}, xs::Union{Vector{T},Matrix{T}}...) = typed_hvcat(T, rows, xs...)
-
-cat(catdims, xs::Union{Vector,Matrix}...) = Base.cat_t(catdims, promote_eltype(xs...), xs...)
-cat{T}(catdims, xs::Union{Vector{T},Matrix{T}}...) = Base.cat_t(catdims, T, xs...)
 
 ## find ##
 
