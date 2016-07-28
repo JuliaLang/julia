@@ -21,6 +21,15 @@ end
 Channel(sz::Int = DEF_CHANNEL_SZ) = Channel{Any}(sz)
 
 closed_exception() = InvalidStateException("Channel is closed.", :closed)
+
+"""
+    close(c::Channel)
+
+Closes a channel. An exception is thrown by:
+
+* `put!` on a closed channel.
+* `take!` and `fetch` on an empty, closed channel.
+"""
 function close(c::Channel)
     c.state = :closed
     notify_error(c::Channel, closed_exception())
@@ -33,6 +42,11 @@ type InvalidStateException <: Exception
     state::Symbol
 end
 
+"""
+    put!(c::Channel, v)
+
+Appends an item `v` to the channel `c`. Blocks if the channel is full.
+"""
 function put!(c::Channel, v)
     !isopen(c) && throw(closed_exception())
     while length(c.data) == c.sz_max
@@ -50,6 +64,11 @@ function fetch(c::Channel)
     c.data[1]
 end
 
+"""
+    take!(c::Channel)
+
+Removes and returns a value from a `Channel`. Blocks till data is available.
+"""
 function take!(c::Channel)
     wait(c)
     v = shift!(c.data)
@@ -59,6 +78,12 @@ end
 
 shift!(c::Channel) = take!(c)
 
+"""
+    isready(c::Channel)
+
+Determine whether a `Channel` has a value stored to it.
+`isready` on `Channel`s is non-blocking.
+"""
 isready(c::Channel) = n_avail(c) > 0
 
 function wait(c::Channel)
