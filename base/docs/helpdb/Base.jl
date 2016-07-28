@@ -106,26 +106,6 @@ functionality instead.
 download
 
 """
-    @everywhere
-
-Execute an expression on all processes. Errors on any of the processes are collected into a
-`CompositeException` and thrown. For example :
-
-    @everywhere bar=1
-
-will define `bar` under module `Main` on all processes.
-
-Unlike `@spawn` and `@spawnat`, `@everywhere` does not capture any local variables. Prefixing
-`@everywhere` with `@eval` allows us to broadcast local variables using interpolation :
-
-    foo = 1
-    @eval @everywhere bar=\$foo
-
-
-"""
-:@everywhere
-
-"""
     lstrip(string, [chars])
 
 Return `string` with any leading whitespace removed. If `chars` (a character, or vector or
@@ -209,13 +189,6 @@ Returns the method table for `f`.
 If `types` is specified, returns an array of methods whose types match.
 """
 methods
-
-"""
-    workers()
-
-Returns a list of all worker process identifiers.
-"""
-workers
 
 """
     isinteger(x) -> Bool
@@ -380,45 +353,6 @@ Return a tuple `(I, J, V)` where `I` and `J` are the row and column indexes of t
 values in matrix `A`, and `V` is a vector of the non-zero values.
 """
 findnz
-
-"""
-    Future()
-
-Create a `Future` on the local machine.
-"""
-Future()
-
-"""
-    Future(n)
-
-Create a `Future` on process `n`.
-"""
-Future(::Integer)
-
-"""
-    RemoteChannel()
-
-Make an reference to a `Channel{Any}(1)` on the local machine.
-"""
-RemoteChannel()
-
-"""
-    RemoteChannel(n)
-
-Make an reference to a `Channel{Any}(1)` on process `n`.
-"""
-RemoteChannel(::Integer)
-
-"""
-    RemoteChannel(f::Function, pid)
-
-Create references to remote channels of a specific size and type. `f()` is a function that
-when executed on `pid` must return an implementation of an `AbstractChannel`.
-
-For example, `RemoteChannel(()->Channel{Int}(10), pid)`, will return a reference to a
-channel of type `Int` and size 10 on `pid`.
-"""
-RemoteChannel(f::Function, pid)
 
 """
     foldl(op, v0, itr)
@@ -707,14 +641,6 @@ assert
 Compute the hyperbolic secant of `x`
 """
 sech
-
-"""
-    nworkers()
-
-Get the number of available worker processes. This is one less than `nprocs()`. Equal to
-`nprocs()` if `nprocs() == 1`.
-"""
-nworkers
 
 """
     filemode(file)
@@ -1059,26 +985,11 @@ Scaled modified Bessel function of the second kind of order `nu`, ``K_\\nu(x) e^
 besselkx
 
 """
-    myid()
-
-Get the id of the current process.
-"""
-myid
-
-"""
     oct(n, [pad])
 
 Convert an integer to an octal string, optionally specifying a number of digits to pad to.
 """
 oct
-
-"""
-    timedwait(testcb::Function, secs::Float64; pollint::Float64=0.1)
-
-Waits till `testcb` returns `true` or for `secs` seconds, whichever is earlier. `testcb` is
-polled every `pollint` seconds.
-"""
-timedwait
 
 """
     sizeof(T)
@@ -1651,16 +1562,6 @@ sum!
 Close an I/O stream. Performs a `flush` first.
 """
 close(stream::IO)
-
-"""
-    close(Channel)
-
-Closes a channel. An exception is thrown by:
-
-* `put!` on a closed channel.
-* `take!` and `fetch` on an empty, closed channel.
-"""
-close(::Channel)
 
 """
     cospi(x)
@@ -2489,13 +2390,6 @@ Returns the index of the current worker into the `pids` vector, i.e., the list o
 mapping the SharedArray
 """
 indexpids
-
-"""
-    remotecall_wait(func, id, args...; kwargs...)
-
-Perform `wait(remotecall(...))` in one message. Keyword arguments, if any, are passed through to `func`.
-"""
-remotecall_wait
 
 """
     append!(collection, collection2) -> collection.
@@ -3750,20 +3644,6 @@ descriptive error string.
 DimensionMismatch
 
 """
-    take!(RemoteChannel)
-
-Fetch a value from a remote channel, also removing it in the process.
-"""
-take!(::RemoteChannel)
-
-"""
-    take!(Channel)
-
-Removes and returns a value from a `Channel`. Blocks till data is available.
-"""
-take!(::Channel)
-
-"""
     sort!(v, [alg=<algorithm>,] [by=<transform>,] [lt=<comparison>,] [rev=false])
 
 Sort the vector `v` in place. `QuickSort` is used by default for numeric arrays while
@@ -4400,14 +4280,6 @@ Delete the mapping for the given key in a collection, and return the collection.
 delete!
 
 """
-    interrupt([pids...])
-
-Interrupt the current executing task on the specified workers. This is equivalent to
-pressing Ctrl-C on the local machine. If no arguments are given, all workers are interrupted.
-"""
-interrupt
-
-"""
     std(v[, region])
 
 Compute the sample standard deviation of a vector or array `v`, optionally along dimensions
@@ -4746,14 +4618,6 @@ value is a range of indexes where the matching sequence is found, such that `s[s
 `search(string, 'c')` = `index` such that `string[index] == 'c'`, or `0` if unmatched.
 """
 search
-
-"""
-    remotecall_fetch(func, id, args...; kwargs...)
-
-Perform `fetch(remotecall(...))` in one message.  Keyword arguments, if any, are passed through to `func`.
-Any remote exceptions are captured in a `RemoteException` and thrown.
-"""
-remotecall_fetch
 
 """
     contains(haystack, needle)
@@ -5216,13 +5080,6 @@ julia> A
 shift!
 
 """
-    @fetch
-
-Equivalent to `fetch(@spawn expr)`.
-"""
-:@fetch
-
-"""
     spawn(command)
 
 Run a command object asynchronously, returning the resulting `Process` object.
@@ -5621,30 +5478,6 @@ sind
 Return the minimum of the arguments. Operates elementwise over arrays.
 """
 min
-
-"""
-    isready(r::RemoteChannel)
-
-Determine whether a `RemoteChannel` has a value stored to it. Note that this function can
-cause race conditions, since by the time you receive its result it may no longer be true.
-However, it can be safely used on a `Future` since they are assigned only once.
-"""
-isready
-
-"""
-    isready(r::Future)
-
-Determine whether a `Future` has a value stored to it.
-
-If the argument `Future` is owned by a different node, this call will block to wait for the
-answer. It is recommended to wait for `r` in a separate task instead, or to use a local
-`Channel` as a proxy:
-
-    c = Channel(1)
-    @async put!(c, remotecall_fetch(long_computation, p))
-    isready(c)  # will not block
-"""
-    isready(r::Future)
 
 """
     InexactError()
@@ -6343,13 +6176,6 @@ Test whether a number is infinite.
 isinf
 
 """
-    @fetchfrom
-
-Equivalent to `fetch(@spawnat p expr)`.
-"""
-:@fetchfrom
-
-"""
     secd(x)
 
 Compute the secant of `x`, where `x` is in degrees.
@@ -6696,30 +6522,6 @@ An iterator that cycles through `iter` forever.
 cycle
 
 """
-    put!(RemoteChannel, value)
-
-Store a value to the remote channel. If the channel is full, blocks until space is available.
-Returns its first argument.
-"""
-put!(::RemoteChannel, value)
-
-"""
-    put!(Future, value)
-
-Store a value to a future. Future's are write-once remote references. A `put!` on an already
-set `Future` throws an Exception. All asynchronous remote calls return `Future`s and set the
-value to the return value of the call upon completion.
-"""
-put!(::Future, value)
-
-"""
-    put!(Channel, value)
-
-Appends an item to the channel. Blocks if the channel is full.
-"""
-put!(::Channel, value)
-
-"""
     operm(file)
 
 Like uperm but gets the permissions for people who neither own the file nor are a member of
@@ -6735,13 +6537,6 @@ to use a preallocated output array, both for performance and to control the prec
 output (e.g. to avoid overflow).
 """
 cumsum
-
-"""
-    rmprocs(pids...)
-
-Removes the specified workers.
-"""
-rmprocs
 
 """
     rpad(string, n, p)
@@ -6837,13 +6632,6 @@ Base.:(*)(s::AbstractString, t::AbstractString)
 Get the system time in seconds since the epoch, with fairly high (typically, microsecond) resolution.
 """
 time()
-
-"""
-    procs()
-
-Returns a list of all process identifiers.
-"""
-procs
 
 """
     procs(S::SharedArray)
@@ -7502,13 +7290,6 @@ retrieved by accessing `m.match` and the captured sequences can be retrieved by 
 match
 
 """
-    nprocs()
-
-Get the number of available processes.
-"""
-nprocs
-
-"""
     Ac_mul_B(A, B)
 
 For matrices or vectors ``A`` and ``B``, calculates ``Aᴴ⋅B``.
@@ -7586,14 +7367,6 @@ result is a `Vector{UInt8,1}`.
 readavailable
 
 """
-    remotecall(func, id, args...; kwargs...)
-
-Call a function asynchronously on the given arguments on the specified process. Returns a `Future`.
-Keyword arguments, if any, are passed through to `func`.
-"""
-remotecall
-
-"""
     slicedim(A, d, i)
 
 Return all the data of `A` where the index for dimension `d` equals `i`. Equivalent to
@@ -7615,14 +7388,6 @@ isa
 Less-than-or-equals comparison operator.
 """
 Base.:(<=)
-
-"""
-    ProcessExitedException()
-
-After a client Julia process has exited, further attempts to reference the dead child will
-throw this exception.
-"""
-ProcessExitedException
 
 """
     unsafe_load(p::Ptr{T}, [i::Integer=1])
@@ -7989,20 +7754,6 @@ Find the next index >= `i` of an element of `A` equal to `v` (using `==`), or `0
 findnext(A,v,i)
 
 """
-    fetch(x)
-
-Waits and fetches a value from `x` depending on the type of `x`. Does not remove the item fetched:
-
-* `Future`: Wait for and get the value of a Future. The fetched value is cached locally.
-  Further calls to `fetch` on the same reference return the cached value. If the remote value
-  is an exception, throws a `RemoteException` which captures the remote exception and backtrace.
-* `RemoteChannel`: Wait for and get the value of a remote reference. Exceptions raised are
-  same as for a `Future` .
-* `Channel` : Wait for and get the first available item from the channel.
-"""
-fetch
-
-"""
     angle(z)
 
 Compute the phase angle in radians of a complex number `z`.
@@ -8186,29 +7937,6 @@ julia> map(+, [1, 2, 3], [10, 20, 30])
 ```
 """
 map
-
-"""
-    @parallel
-
-A parallel for loop of the form :
-
-    @parallel [reducer] for var = range
-        body
-    end
-
-The specified range is partitioned and locally executed across all workers. In case an
-optional reducer function is specified, `@parallel` performs local reductions on each worker
-with a final reduction on the calling process.
-
-Note that without a reducer function, `@parallel` executes asynchronously, i.e. it spawns
-independent tasks on all available workers and returns immediately without waiting for
-completion. To wait for completion, prefix the call with `@sync`, like :
-
-    @sync @parallel for var = range
-        body
-    end
-"""
-:@parallel
 
 """
     throw(e)
@@ -9281,36 +9009,3 @@ Base.:$(x, y)
 Get the IP address and the port that the given TCP socket is connected to (or bound to, in the case of TCPServer).
 """
 getsockname
-
-"""
-    Base.remoteref_id(r::AbstractRemoteRef) -> (whence, id)
-
-A low-level API which returns the unique identifying tuple for a remote reference. A
-reference id is a tuple of two elements - pid where the reference was created from and a
-one-up number from that node.
-"""
-Base.remoteref_id
-
-"""
-    Base.channel_from_id(refid) -> c
-
-A low-level API which returns the backing AbstractChannel for an id returned by
-`remoteref_id`. The call is valid only on the node where the backing channel exists.
-"""
-Base.channel_from_id
-
-"""
-    Base.worker_id_from_socket(s::IO) -> pid
-
-A low-level API which given a `IO` connection, returns the pid of the worker it is connected
-to. This is useful when writing custom `serialize` methods for a type, which optimizes the
-data written out depending on the receiving process id.
-"""
-Base.worker_id_from_socket
-
-"""
-    Base.cluster_cookie([cookie]) -> cookie
-
-Returns the cluster cookie. If a cookie is passed, also sets it as the cluster cookie.
-"""
-Base.cluster_cookie
