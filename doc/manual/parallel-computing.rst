@@ -492,6 +492,28 @@ and size 10. The channel exists on worker ``pid``\ .
 Methods ``put!``\ , ``take!``\ , ``fetch``\ , ``isready`` and ``wait`` on a ``RemoteChannel`` are proxied onto
 the backing store on the remote process.
 
+As an example, we can construct a ``RemoteChannel`` to a worker, ``put!`` an index inside, then ``take!`` it out:
+
+.. doctest::
+    addprocs(5)
+    worker_pool = Base.default_worker_pool()
+    channels    = [RemoteChannel() for i in 1:nworkers()] #every worker gets its own channel
+    for (i,c) in enumerate(channels)
+        put!(c, i)
+    end
+
+    for c in channels
+        @show take!(c)
+    end
+
+If we run this, we will see::
+
+    take!(c) = 1
+    take!(c) = 2
+    take!(c) = 3
+    take!(c) = 4
+    take!(c) = 5
+
 ``RemoteChannel`` can thus be used to refer to user implemented ``AbstractChannel`` objects. A simple
 example of this is provided in ``examples/dictchannel.jl`` which uses a dictionary as its remote store.
 
