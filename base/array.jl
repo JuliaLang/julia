@@ -699,6 +699,9 @@ hvcat{T}(rows::Tuple{Vararg{Int}}, xs::Vector{T}...) = typed_hvcat(T, rows, xs..
 hvcat(rows::Tuple{Vararg{Int}}, xs::Matrix...) = typed_hvcat(promote_eltype(xs...), rows, xs...)
 hvcat{T}(rows::Tuple{Vararg{Int}}, xs::Matrix{T}...) = typed_hvcat(T, rows, xs...)
 
+cat(catdims, xs::Union{Matrix,Vector}...) = Base.cat_t(catdims, promote_eltype(xs...), xs...)
+cat{T}(catdims, xs::Union{Matrix{T},Vector{T}}...) = Base.cat_t(catdims, T, xs...)
+
 ## find ##
 
 # returns the index of the next non-zero element, or 0 if all zeros
