@@ -1554,14 +1554,30 @@ end
 @inferred sprand(1, 1, 1.0, rand, Float64)
 @inferred sprand(1, 1, 1.0, x->round(Int,rand(x)*100))
 
-# dense sparse concatenation -> sparse return type
-@test issparse([sprand(10,10,.1) rand(10,10)])
-@test issparse([sprand(10,10,.1); rand(10,10)])
-@test issparse([sprand(10,10,.1) rand(10,10); rand(10,10) rand(10,10)])
-# ---
-@test !issparse([rand(10,10)  rand(10,10)])
-@test !issparse([rand(10,10); rand(10,10)])
-@test !issparse([rand(10,10)  rand(10,10); rand(10,10) rand(10,10)])
+# Test that concatenations of combinations of sparse matrices with sparse matrices or dense
+# matrices/vectors yield sparse arrays
+let
+    N = 4
+    densevec = ones(N)
+    densemat = diagm(ones(N))
+    spmat = spdiagm(ones(N))
+    # Test that concatenations of pairs of sparse matrices yield sparse arrays
+    @test issparse(vcat(spmat, spmat))
+    @test issparse(hcat(spmat, spmat))
+    @test issparse(hvcat((2,), spmat, spmat))
+    @test issparse(cat((1,2), spmat, spmat))
+    # Test that concatenations of a sparse matrice with a dense matrix/vector yield sparse arrays
+    @test issparse(vcat(spmat, densemat))
+    @test issparse(vcat(densemat, spmat))
+    for densearg in (densevec, densemat)
+        @test issparse(hcat(spmat, densearg))
+        @test issparse(hcat(densearg, spmat))
+        @test issparse(hvcat((2,), spmat, densearg))
+        @test issparse(hvcat((2,), densearg, spmat))
+        @test issparse(cat((1,2), spmat, densearg))
+        @test issparse(cat((1,2), densearg, spmat))
+    end
+end
 
 # issue #14816
 let m = 5
