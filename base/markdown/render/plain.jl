@@ -53,6 +53,23 @@ function plain(io::IO, q::BlockQuote)
     println(io)
 end
 
+function plain(io::IO, f::Footnote)
+    print(io, "[^", f.id, "]:")
+    s = sprint(io -> plain(io, f.text))
+    lines = split(rstrip(s), "\n")
+    # Single line footnotes are printed on the same line as their label
+    # rather than taking up an additional line.
+    if length(lines) == 1
+        println(io, " ", lines[1])
+    else
+        println(io)
+        for line in lines
+            println(io, isempty(line) ? "" : "    ", line)
+        end
+        println(io)
+    end
+end
+
 function plain(io::IO, md::Admonition)
     s = sprint(buf -> plain(buf, md.content))
     title = md.title == ucfirst(md.category) ? "" : " \"$(md.title)\""
@@ -90,12 +107,9 @@ end
 
 plaininline(io::IO, md::Vector) = !isempty(md) && plaininline(io, md...)
 
-plaininline(io::IO, link::Link) = plaininline(io, "[", link.text, "](", link.url, ")")
+plaininline(io::IO, f::Footnote) = print(io, "[^", f.id, "]")
 
-function plaininline(io::IO, md::Footnote)
-    print(io, "[^", md.id, "]")
-    md.text ≡ nothing || (print(io, ":"); plaininline(io, md.text))
-end
+plaininline(io::IO, link::Link) = plaininline(io, "[", link.text, "](", link.url, ")")
 
 plaininline(io::IO, md::Image) = plaininline(io, "![", md.alt, "](", md.url, ")")
 
