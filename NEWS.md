@@ -1,22 +1,6 @@
 Julia v0.5.0 Release Notes
 ==========================
 
-Language tooling improvements
------------------------------
-
-   * The [Julia debugger](https://github.com/Keno/Gallium.jl) makes its debut
-     with this release. Install it with `Pkg.add("Gallium")`, and the
-     [documentation](https://github.com/Keno/Gallium.jl#gallium) should
-     get you going. The [JuliaCon
-     talk](https://www.youtube.com/watch?v=e6-hcOHO0tc&list=PLP8iPy9hna6SQPwZUDtAM59-wPzCPyD_S&index=5)
-     on Gallium shows off various features of the debugger.
-
-   * The [Juno IDE](http://junolab.org) has matured significantly, and now
-     also includes support for plotting and debugging.
-
-   * [Cxx.jl](https://github.com/Keno/Cxx.jl) provides a convenient FFI for
-     calling C++ code from Julia.
-
 New language features
 ---------------------
 
@@ -341,6 +325,22 @@ Library improvements
 
   * Display properties can now be passed among output functions (e.g. `show`)
     using an `IOContext` object ([#13825]).
+
+Language tooling improvements
+-----------------------------
+
+   * The [Julia debugger](https://github.com/Keno/Gallium.jl) makes its debut
+     with this release. Install it with `Pkg.add("Gallium")`, and the
+     [documentation](https://github.com/Keno/Gallium.jl#gallium) should
+     get you going. The [JuliaCon
+     talk](https://www.youtube.com/watch?v=e6-hcOHO0tc&list=PLP8iPy9hna6SQPwZUDtAM59-wPzCPyD_S&index=5)
+     on Gallium shows off various features of the debugger.
+
+   * The [Juno IDE](http://junolab.org) has matured significantly, and now
+     also includes support for plotting and debugging.
+
+   * [Cxx.jl](https://github.com/Keno/Cxx.jl) provides a convenient FFI for
+     calling C++ code from Julia.
 
 Deprecated or removed
 ---------------------
