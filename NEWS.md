@@ -81,6 +81,10 @@ Language changes
     Instead of adding methods to `call`, methods are added by type using the syntax
     `(::ftype)(...) = ...`. `call` is deprecated ([#13412]).
 
+  * Square brackets and commas (e.g. `[x, y]`) no longer concatenate arrays, and always
+    simply construct a vector of the provided values. If `x` and `y` are arrays,
+    `[x, y]` will be an array of arrays ([#3737], [#2488], [#8599]).
+
   * `using` and `import` are now case-sensitive even on case-insensitive filesystems
     (common on Mac and Windows) ([#13542]).
 
@@ -382,6 +386,8 @@ Deprecated or removed
 [#964]: https://github.com/JuliaLang/julia/issues/964
 [#1090]: https://github.com/JuliaLang/julia/issues/1090
 [#1765]: https://github.com/JuliaLang/julia/issues/1765
+[#2488]: https://github.com/JuliaLang/julia/issues/2488
+[#3737]: https://github.com/JuliaLang/julia/issues/3737
 [#4163]: https://github.com/JuliaLang/julia/issues/4163
 [#4211]: https://github.com/JuliaLang/julia/issues/4211
 [#4470]: https://github.com/JuliaLang/julia/issues/4470
@@ -389,6 +395,7 @@ Deprecated or removed
 [#6190]: https://github.com/JuliaLang/julia/issues/6190
 [#7258]: https://github.com/JuliaLang/julia/issues/7258
 [#8036]: https://github.com/JuliaLang/julia/issues/8036
+[#8599]: https://github.com/JuliaLang/julia/issues/8599
 [#8846]: https://github.com/JuliaLang/julia/issues/8846
 [#9503]: https://github.com/JuliaLang/julia/issues/9503
 [#9627]: https://github.com/JuliaLang/julia/issues/9627
