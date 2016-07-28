@@ -53,13 +53,6 @@ JL_DLLEXPORT void jl_exit_on_sigint(int on)
     exit_on_sigint = on;
 }
 
-// what to do on SIGINT
-JL_DLLEXPORT void jl_sigint_action(void)
-{
-    if (exit_on_sigint) jl_exit(130); // 128+SIGINT
-    jl_throw(jl_interrupt_exception);
-}
-
 #if defined(_WIN32)
 #include "signals-win.c"
 #else
