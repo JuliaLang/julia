@@ -57,6 +57,23 @@ function rst(io::IO, q::BlockQuote)
     println(io)
 end
 
+function rst(io::IO, f::Footnote)
+    print(io, ".. [", f.id, "]")
+    s = sprint(io -> rst(io, f.text))
+    lines = split(rstrip(s), "\n")
+    # Single line footnotes are printed on the same line as their label
+    # rather than taking up an additional line.
+    if length(lines) == 1
+        println(io, " ", lines[1])
+    else
+        println(io)
+        for line in lines
+            println(io, isempty(line) ? "" : "   ", rstrip(line))
+        end
+        println(io)
+    end
+end
+
 function rst(io::IO, md::Admonition)
     s = sprint(buf -> rst(buf, md.content))
     title = md.title == ucfirst(md.category) ? "" : md.title
@@ -105,14 +122,7 @@ function rstinline(io::IO, md::Link)
     end
 end
 
-function rstinline(io::IO, md::Footnote)
-    if md.text ≡ nothing
-        print(io, "[", md.id, "]_")
-    else
-        print(io, ".. [", md.id, "]")
-        rstinline(io, md.text)
-    end
-end
+rstinline(io::IO, f::Footnote) = print(io, "[", f.id, "]_")
 
 rstescape(s) = replace(s, "\\", "\\\\")
 

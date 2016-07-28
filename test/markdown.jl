@@ -62,7 +62,93 @@ end
 
 @test md"A footnote [^foo]." == MD(Paragraph(["A footnote ", Footnote("foo", nothing), "."]))
 
-@test md"[^foo]: footnote" == MD(Paragraph([Footnote("foo", Any[" footnote"])]))
+@test md"[^foo]: footnote" == MD([Footnote("foo", Any[Paragraph(Any["footnote"])])])
+
+let text =
+    """
+    A paragraph with some footnotes,[^1] and another.[^note]
+
+    [^1]: Footnote text for the first.
+
+    [^note]: A longer footnote:
+
+        Indented paragraphs are part of the footnote.
+
+            some.code
+
+        And *another* paragraph.
+
+    This isn't part of the footnote.
+    """,
+    md = Markdown.parse(text)
+    @test length(md.content) == 4
+    @test isa(md.content[1], Markdown.Paragraph)
+    @test isa(md.content[2], Markdown.Footnote)
+    @test isa(md.content[3], Markdown.Footnote)
+    @test isa(md.content[4], Markdown.Paragraph)
+
+    @test md.content[2].id == "1"
+    @test md.content[3].id == "note"
+
+    @test length(md.content[3].text) == 4
+
+    let expected =
+            """
+            A paragraph with some footnotes,[^1] and another.[^note]
+
+            [^1]: Footnote text for the first.
+
+            [^note]:
+                A longer footnote:
+
+                Indented paragraphs are part of the footnote.
+
+                ```
+                some.code
+                ```
+
+                And *another* paragraph.
+
+
+            This isn't part of the footnote.
+            """
+        @test Markdown.plain(md) == expected
+    end
+    let expected =
+            """
+            A paragraph with some footnotes,[1]_ and another.[note]_
+
+            .. [1] Footnote text for the first.
+
+            .. [note]
+               A longer footnote:
+
+               Indented paragraphs are part of the footnote.
+
+               .. code-block:: julia
+
+                   some.code
+
+               And *another* paragraph.
+
+
+            This isn't part of the footnote.
+            """
+        @test Markdown.rst(md) == expected
+    end
+    let html = Markdown.html(md)
+        @test contains(html, ",<a href=\"#footnote-1\" class=\"footnote\">[1]</a>")
+        @test contains(html, ".<a href=\"#footnote-note\" class=\"footnote\">[note]</a>")
+        @test contains(html, "<div class=\"footnote\" id=\"footnote-1\"><p class=\"footnote-title\">1</p>")
+        @test contains(html, "<div class=\"footnote\" id=\"footnote-note\"><p class=\"footnote-title\">note</p>")
+    end
+    let latex = Markdown.latex(md)
+        @test contains(latex, ",\\footnotemark[1]")
+        @test contains(latex, ".\\footnotemark[note]")
+        @test contains(latex, "\n\\footnotetext[1]{Footnote text for")
+        @test contains(latex, "\n\\footnotetext[note]{A longer footnote:\n")
+    end
+end
 
 let doc = md"""
 * one

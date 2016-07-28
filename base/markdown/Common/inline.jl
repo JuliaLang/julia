@@ -92,18 +92,17 @@ function link(stream::IO, md::MD)
     end
 end
 
-type Footnote
-    id::String
-    text
-end
-
 @trigger '[' ->
-function footnote(stream::IO, md::MD)
+function footnote_link(stream::IO, md::MD)
     withstream(stream) do
-        startswith(stream, "[^") || return
-        id = readuntil(stream, ']', match = '[')
-        id ≡ nothing && return
-        Footnote(id, startswith(stream, ':') ? parseinline(stream, md) : nothing)
+        regex = r"^\[\^(\w+)\]"
+        str = startswith(stream, regex)
+        if isempty(str)
+            return
+        else
+            ref = match(regex, str).captures[1]
+            return Footnote(ref, nothing)
+        end
     end
 end
 
