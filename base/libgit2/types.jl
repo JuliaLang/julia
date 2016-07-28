@@ -730,7 +730,6 @@ reset!(p::UserPasswordCredentials, cnt::Int=3) = (p.count = cnt)
 function securezero!(cred::UserPasswordCredentials)
     securezero!(cred.user)
     securezero!(cred.pass)
-    securezero!(cred.usesshagent)
     cred.count = 0
     return cred
 end
@@ -755,7 +754,6 @@ function securezero!(cred::SSHCredentials)
     securezero!(cred.pass)
     securezero!(cred.pubkey)
     securezero!(cred.prvkey)
-    securezero!(cred.usesshagent)
     return cred
 end
 
