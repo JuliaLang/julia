@@ -45,18 +45,18 @@
 #include <llvm/MC/MCInstrAnalysis.h>
 #include <llvm/MC/MCSymbol.h>
 #ifdef LLVM35
-#  include <llvm/AsmParser/Parser.h>
-#  ifdef LLVM39
-#    include <llvm/MC/MCDisassembler/MCDisassembler.h>
-#    include <llvm/MC/MCDisassembler/MCExternalSymbolizer.h>
-#  else
-#    include <llvm/MC/MCExternalSymbolizer.h>
-#    include <llvm/MC/MCDisassembler.h>
-#  endif
+#include <llvm/AsmParser/Parser.h>
+#ifdef LLVM39
+#include <llvm/MC/MCDisassembler/MCDisassembler.h>
+#include <llvm/MC/MCDisassembler/MCExternalSymbolizer.h>
 #else
-#  include <llvm/Assembly/Parser.h>
-#  include <llvm/ADT/OwningPtr.h>
-#  include <llvm/MC/MCDisassembler.h>
+#include <llvm/MC/MCExternalSymbolizer.h>
+#include <llvm/MC/MCDisassembler.h>
+#endif
+#else
+#include <llvm/Assembly/Parser.h>
+#include <llvm/ADT/OwningPtr.h>
+#include <llvm/MC/MCDisassembler.h>
 #endif
 #include <llvm/ADT/Triple.h>
 #include <llvm/Support/MemoryBuffer.h>
@@ -95,13 +95,15 @@ namespace {
 #else
 class FuncMCView : public MemoryObject {
 private:
-    const char *Fptr;
+    const char * Fptr;
     const size_t Fsize;
+
 public:
-    FuncMCView(const void *fptr, size_t size) : Fptr((const char*)fptr), Fsize(size) {}
+    FuncMCView(const void *fptr, size_t size) : Fptr((const char *)fptr), Fsize(size) {}
     uint64_t getBase() const { return 0; }
     uint64_t getExtent() const { return Fsize; }
-    int readByte(uint64_t Addr, uint8_t *Byte) const {
+    int readByte(uint64_t Addr, uint8_t *Byte) const
+    {
         if (Addr >= getExtent())
             return -1;
         *Byte = Fptr[Addr];
@@ -109,10 +111,10 @@ public:
     }
 
     // ArrayRef-like accessors:
-    const char operator[] (const size_t idx) const { return Fptr[idx]; }
-    uint64_t size() const { return Fsize; }
-    const uint8_t *data() const { return (const uint8_t*)Fptr; }
-    FuncMCView slice(unsigned N) const { return FuncMCView(Fptr+N, Fsize-N); }
+    const char operator[](const size_t idx) const { return Fptr[idx]; }
+    uint64_t                           size() const { return Fsize; }
+    const uint8_t *                    data() const { return (const uint8_t *)Fptr; }
+    FuncMCView slice(unsigned N) const { return FuncMCView(Fptr + N, Fsize - N); }
 };
 #endif
 
@@ -122,24 +124,28 @@ public:
 // sequentially or encoding the line number, but that doesn't seem
 // necessary.
 class SymbolTable {
-    typedef std::map<uint64_t, MCSymbol*> TableType;
-    TableType Table;
-    std::string TempName;
-    MCContext& Ctx;
-    const FuncMCView &MemObj;
-    int Pass;
+    typedef std::map<uint64_t, MCSymbol *> TableType;
+    TableType                 Table;
+    std::string               TempName;
+    MCContext &               Ctx;
+    const FuncMCView &        MemObj;
+    int                       Pass;
     const object::ObjectFile *object;
-    uint64_t ip; // virtual instruction pointer of the current instruction
-    int64_t slide;
+    uint64_t                  ip; // virtual instruction pointer of the current instruction
+    int64_t                   slide;
+
 public:
-    SymbolTable(MCContext &Ctx, const object::ObjectFile *object, int64_t slide, const FuncMCView &MemObj):
-        Ctx(Ctx), MemObj(MemObj), object(object), ip(0), slide(slide) {}
+    SymbolTable(MCContext &Ctx, const object::ObjectFile *object, int64_t slide,
+                const FuncMCView &MemObj)
+        : Ctx(Ctx), MemObj(MemObj), object(object), ip(0), slide(slide)
+    {
+    }
     const FuncMCView &getMemoryObject() const { return MemObj; }
     void setPass(int Pass) { this->Pass = Pass; }
-    int getPass() const { return Pass; }
+    int              getPass() const { return Pass; }
     void insertAddress(uint64_t addr);
     // void createSymbol(const char *name, uint64_t addr);
-    void createSymbols();
+    void        createSymbols();
     const char *lookupSymbolName(uint64_t addr, bool LocalOnly);
     MCSymbol *lookupSymbol(uint64_t addr);
     StringRef getSymbolNameAt(uint64_t offset) const;
@@ -157,12 +163,12 @@ uint64_t SymbolTable::getIP() const
     return ip;
 }
 
-const char *SymbolTable::lookupLocalPC(size_t addr) {
+const char *SymbolTable::lookupLocalPC(size_t addr)
+{
     jl_frame_t *frame = NULL;
-    jl_getFunctionInfo(&frame,
-            addr,
-            /*skipC*/0,
-            /*noInline*/1/* the entry pointer shouldn't have inlining */);
+    jl_getFunctionInfo(&frame, addr,
+                       /*skipC*/ 0,
+                       /*noInline*/ 1 /* the entry pointer shouldn't have inlining */);
     char *name = frame->func_name; // TODO: free me
     free(frame->file_name);
     free(frame);
@@ -171,32 +177,37 @@ const char *SymbolTable::lookupLocalPC(size_t addr) {
 
 StringRef SymbolTable::getSymbolNameAt(uint64_t offset) const
 {
-    if (object == NULL) return StringRef();
+    if (object == NULL)
+        return StringRef();
 #ifdef LLVM37
     object::section_iterator ESection = object->section_end();
     for (const object::SymbolRef &Sym : object->symbols()) {
 #else
-    llvm::error_code err;
+    llvm::error_code         err;
     object::section_iterator ESection = object->end_sections();
     for (object::symbol_iterator I = object->begin_symbols(), E = object->end_symbols();
-            !err && I != E; I.increment(err)) {
+         !err && I != E; I.increment(err)) {
         object::SymbolRef Sym = *I;
 #endif
-        uint64_t Addr, SAddr;
+        uint64_t                 Addr, SAddr;
         object::section_iterator Sect = ESection;
 #ifdef LLVM38
         auto SectOrError = Sym.getSection();
         assert(SectOrError);
         Sect = SectOrError.get();
 #else
-        if (Sym.getSection(Sect)) continue;
+        if (Sym.getSection(Sect))
+            continue;
 #endif
-        if (Sect == ESection) continue;
+        if (Sect == ESection)
+            continue;
 #ifdef LLVM35
         SAddr = Sect->getAddress();
-        if (SAddr == 0) continue;
+        if (SAddr == 0)
+            continue;
 #else
-        if (Sym.getAddress(SAddr) || SAddr == 0) continue;
+        if (Sym.getAddress(SAddr) || SAddr == 0)
+            continue;
 #endif
 #ifdef LLVM37
         auto AddrOrError = Sym.getAddress();
@@ -208,7 +219,8 @@ StringRef SymbolTable::getSymbolNameAt(uint64_t offset) const
                 return sNameOrError.get();
         }
 #else
-        if (Sym.getAddress(Addr)) continue;
+        if (Sym.getAddress(Addr))
+            continue;
         if (Addr == offset) {
             StringRef Name;
             if (!Sym.getName(Name))
@@ -233,13 +245,13 @@ void SymbolTable::insertAddress(uint64_t addr)
 // Create symbols for all addresses
 void SymbolTable::createSymbols()
 {
-    uint64_t Fptr = (uint64_t)MemObj.data();
+    uint64_t Fptr  = (uint64_t)MemObj.data();
     uint64_t Fsize = MemObj.size();
-    for (TableType::iterator isymb = Table.begin(), esymb = Table.end();
-         isymb != esymb; ++isymb) {
+    for (TableType::iterator isymb = Table.begin(), esymb = Table.end(); isymb != esymb;
+         ++isymb) {
         std::ostringstream name;
-        uint64_t rel = isymb->first - ip;
-        uint64_t addr = isymb->first;
+        uint64_t           rel  = isymb->first - ip;
+        uint64_t           addr = isymb->first;
         if (Fptr <= addr && addr < Fptr + Fsize) {
             name << "L" << rel;
         }
@@ -263,7 +275,7 @@ void SymbolTable::createSymbols()
 
 const char *SymbolTable::lookupSymbolName(uint64_t addr, bool LocalOnly)
 {
-    TempName = std::string();
+    TempName                = std::string();
     TableType::iterator Sym = Table.find(addr);
     if (Sym != Table.end() && Sym->second) {
         TempName = Sym->second->getName().str();
@@ -276,14 +288,16 @@ const char *SymbolTable::lookupSymbolName(uint64_t addr, bool LocalOnly)
 
 MCSymbol *SymbolTable::lookupSymbol(uint64_t addr)
 {
-    if (!Table.count(addr)) return NULL;
+    if (!Table.count(addr))
+        return NULL;
     return Table[addr];
 }
 
-static const char *SymbolLookup(void *DisInfo, uint64_t ReferenceValue, uint64_t *ReferenceType,
-                                uint64_t ReferencePC, const char **ReferenceName)
+static const char *SymbolLookup(void *DisInfo, uint64_t ReferenceValue,
+                                uint64_t *ReferenceType, uint64_t ReferencePC,
+                                const char **ReferenceName)
 {
-    SymbolTable *SymTab = (SymbolTable*)DisInfo;
+    SymbolTable *SymTab = (SymbolTable *)DisInfo;
     if (SymTab->getPass() != 0) {
         uint64_t addr = ReferenceValue + SymTab->getIP();
         if (*ReferenceType == LLVMDisassembler_ReferenceType_In_Branch) {
@@ -314,43 +328,71 @@ static const char *SymbolLookup(void *DisInfo, uint64_t ReferenceValue, uint64_t
 static int OpInfoLookup(void *DisInfo, uint64_t PC, uint64_t Offset, uint64_t Size,
                         int TagType, void *TagBuf)
 {
-    SymbolTable *SymTab = (SymbolTable*)DisInfo;
-    PC += SymTab->getIP() - (uint64_t)(uintptr_t)SymTab->getMemoryObject().data(); // add offset from MemoryObject base
+    SymbolTable *SymTab = (SymbolTable *)DisInfo;
+    PC += SymTab->getIP() -
+          (uint64_t)(uintptr_t)SymTab->getMemoryObject()
+              .data(); // add offset from MemoryObject base
     if (TagType != 1)
-        return 0;               // Unknown data format
-    LLVMOpInfo1 *info = (LLVMOpInfo1*)TagBuf;
-    uint8_t *bytes = (uint8_t*) alloca(Size*sizeof(uint8_t));
-    if (PC+Offset+Size > SymTab->getMemoryObject().size())
-        return 0;              // Invalid memory location
-    for (uint64_t i=0; i<Size; ++i)
-        bytes[i] = SymTab->getMemoryObject()[PC+Offset+i];
+        return 0; // Unknown data format
+    LLVMOpInfo1 *info  = (LLVMOpInfo1 *)TagBuf;
+    uint8_t *    bytes = (uint8_t *)alloca(Size * sizeof(uint8_t));
+    if (PC + Offset + Size > SymTab->getMemoryObject().size())
+        return 0; // Invalid memory location
+    for (uint64_t i = 0; i < Size; ++i)
+        bytes[i]    = SymTab->getMemoryObject()[PC + Offset + i];
     size_t pointer;
     switch (Size) {
-    case 1: { uint8_t  val; std::memcpy(&val, bytes, 1); pointer = val; break; }
-    case 2: { uint16_t val; std::memcpy(&val, bytes, 2); pointer = val; break; }
-    case 4: { uint32_t val; std::memcpy(&val, bytes, 4); pointer = val; break; }
-    case 8: { uint64_t val; std::memcpy(&val, bytes, 8); pointer = val; break; }
-    default: return 0;          // Cannot handle input address size
+    case 1: {
+        uint8_t val;
+        std::memcpy(&val, bytes, 1);
+        pointer = val;
+        break;
+    }
+    case 2: {
+        uint16_t val;
+        std::memcpy(&val, bytes, 2);
+        pointer = val;
+        break;
+    }
+    case 4: {
+        uint32_t val;
+        std::memcpy(&val, bytes, 4);
+        pointer = val;
+        break;
+    }
+    case 8: {
+        uint64_t val;
+        std::memcpy(&val, bytes, 8);
+        pointer = val;
+        break;
+    }
+    default:
+        return 0; // Cannot handle input address size
     }
     const char *name = SymTab->lookupLocalPC(pointer);
     if (!name)
-        return 0;               // Did not find symbolic information
+        return 0; // Did not find symbolic information
     // Describe the symbol
     info->AddSymbol.Present = 1;
-    info->AddSymbol.Name = name;
-    info->AddSymbol.Value = pointer; // unused by LLVM
-    info->Value = 0;                 // offset
-    return 1;                        // Success
+    info->AddSymbol.Name    = name;
+    info->AddSymbol.Value   = pointer; // unused by LLVM
+    info->Value             = 0;       // offset
+    return 1;                          // Success
 }
 } // namespace
 
 extern "C" {
-JL_DLLEXPORT LLVMDisasmContextRef jl_LLVMCreateDisasm(const char *TripleName, void *DisInfo, int TagType, LLVMOpInfoCallback GetOpInfo, LLVMSymbolLookupCallback SymbolLookUp)
+JL_DLLEXPORT LLVMDisasmContextRef jl_LLVMCreateDisasm(const char *TripleName, void *DisInfo,
+                                                      int                      TagType,
+                                                      LLVMOpInfoCallback       GetOpInfo,
+                                                      LLVMSymbolLookupCallback SymbolLookUp)
 {
     return LLVMCreateDisasm(TripleName, DisInfo, TagType, GetOpInfo, SymbolLookUp);
 }
 
-JL_DLLEXPORT size_t jl_LLVMDisasmInstruction(LLVMDisasmContextRef DC, uint8_t *Bytes, uint64_t BytesSize, uint64_t PC, char *OutString, size_t OutStringSize)
+JL_DLLEXPORT size_t jl_LLVMDisasmInstruction(LLVMDisasmContextRef DC, uint8_t *Bytes,
+                                             uint64_t BytesSize, uint64_t PC,
+                                             char *OutString, size_t OutStringSize)
 {
     return LLVMDisasmInstruction(DC, Bytes, BytesSize, PC, OutString, OutStringSize);
 }
@@ -359,8 +401,7 @@ void jl_dump_asm_internal(uintptr_t Fptr, size_t Fsize, int64_t slide,
 #ifndef USE_MCJIT
                           std::vector<JITEvent_EmittedFunctionDetails::LineStart> lineinfo,
 #endif
-                          const object::ObjectFile *object,
-                          DIContext *di_ctx,
+                          const object::ObjectFile *object, DIContext *di_ctx,
 #ifdef LLVM37
                           raw_ostream &rstream
 #else
@@ -385,21 +426,23 @@ void jl_dump_asm_internal(uintptr_t Fptr, size_t Fsize, int64_t slide,
     SubtargetFeatures Features;
     Features.getDefaultSubtargetFeatures(TheTriple);
 
-    std::string err;
+    std::string   err;
     const Target *TheTarget = TargetRegistry::lookupTarget(TripleName, err);
 
-    // Set up required helpers and streamer
+// Set up required helpers and streamer
 #ifdef LLVM35
     std::unique_ptr<MCStreamer> Streamer;
 #else
-    OwningPtr<MCStreamer> Streamer;
+    OwningPtr<MCStreamer>                        Streamer;
 #endif
     SourceMgr SrcMgr;
 
 #ifdef LLVM35
-    std::unique_ptr<MCAsmInfo> MAI(TheTarget->createMCAsmInfo(*TheTarget->createMCRegInfo(TripleName),TripleName));
+    std::unique_ptr<MCAsmInfo> MAI(
+        TheTarget->createMCAsmInfo(*TheTarget->createMCRegInfo(TripleName), TripleName));
 #elif defined(LLVM34)
-    llvm::OwningPtr<MCAsmInfo> MAI(TheTarget->createMCAsmInfo(*TheTarget->createMCRegInfo(TripleName),TripleName));
+    llvm::OwningPtr<MCAsmInfo>                   MAI(
+        TheTarget->createMCAsmInfo(*TheTarget->createMCRegInfo(TripleName), TripleName));
 #else
     llvm::OwningPtr<MCAsmInfo> MAI(TheTarget->createMCAsmInfo(TripleName));
 #endif
@@ -415,65 +458,61 @@ void jl_dump_asm_internal(uintptr_t Fptr, size_t Fsize, int64_t slide,
 #ifdef LLVM35
     std::unique_ptr<MCObjectFileInfo> MOFI(new MCObjectFileInfo());
 #else
-    OwningPtr<MCObjectFileInfo> MOFI(new MCObjectFileInfo());
+    OwningPtr<MCObjectFileInfo>     MOFI(new MCObjectFileInfo());
 #endif
 #ifdef LLVM34
     MCContext Ctx(MAI.get(), MRI.get(), MOFI.get(), &SrcMgr);
 #else
-    MCContext Ctx(*MAI, *MRI, MOFI.get(), &SrcMgr);
+    MCContext                       Ctx(*MAI, *MRI, MOFI.get(), &SrcMgr);
 #endif
 #ifdef LLVM39
-    MOFI->InitMCObjectFileInfo(TheTriple, /* PIC */ false,
-                               CodeModel::Default, Ctx);
+    MOFI->InitMCObjectFileInfo(TheTriple, /* PIC */ false, CodeModel::Default, Ctx);
 #elif defined(LLVM37)
     MOFI->InitMCObjectFileInfo(TheTriple, Reloc::Default, CodeModel::Default, Ctx);
 #else
     MOFI->InitMCObjectFileInfo(TripleName, Reloc::Default, CodeModel::Default, Ctx);
 #endif
 
-    // Set up Subtarget and Disassembler
+// Set up Subtarget and Disassembler
 #ifdef LLVM35
-    std::unique_ptr<MCSubtargetInfo>
-        STI(TheTarget->createMCSubtargetInfo(TripleName, MCPU, Features.getString()));
+    std::unique_ptr<MCSubtargetInfo> STI(
+        TheTarget->createMCSubtargetInfo(TripleName, MCPU, Features.getString()));
     std::unique_ptr<MCDisassembler> DisAsm(TheTarget->createMCDisassembler(*STI, Ctx));
 #else
-    OwningPtr<MCSubtargetInfo>
-        STI(TheTarget->createMCSubtargetInfo(TripleName, MCPU, Features.getString()));
-    OwningPtr<MCDisassembler> DisAsm(TheTarget->createMCDisassembler(*STI));
+    OwningPtr<MCSubtargetInfo> STI(
+        TheTarget->createMCSubtargetInfo(TripleName, MCPU, Features.getString()));
+    OwningPtr<MCDisassembler>  DisAsm(TheTarget->createMCDisassembler(*STI));
 #endif
     if (!DisAsm) {
-        jl_printf(JL_STDERR, "ERROR: no disassembler for target %s\n",
-                  TripleName.c_str());
+        jl_printf(JL_STDERR, "ERROR: no disassembler for target %s\n", TripleName.c_str());
         return;
     }
 
     unsigned OutputAsmVariant = 0; // ATT or Intel-style assembly
-    bool ShowEncoding = false;
+    bool     ShowEncoding     = false;
 
 #ifdef LLVM35
-    std::unique_ptr<MCInstrInfo> MCII(TheTarget->createMCInstrInfo());
-    std::unique_ptr<MCInstrAnalysis>
-        MCIA(TheTarget->createMCInstrAnalysis(MCII.get()));
+    std::unique_ptr<MCInstrInfo>     MCII(TheTarget->createMCInstrInfo());
+    std::unique_ptr<MCInstrAnalysis> MCIA(TheTarget->createMCInstrAnalysis(MCII.get()));
 #else
-    OwningPtr<MCInstrInfo> MCII(TheTarget->createMCInstrInfo());
-    OwningPtr<MCInstrAnalysis>
-        MCIA(TheTarget->createMCInstrAnalysis(MCII.get()));
+    OwningPtr<MCInstrInfo>     MCII(TheTarget->createMCInstrInfo());
+    OwningPtr<MCInstrAnalysis> MCIA(TheTarget->createMCInstrAnalysis(MCII.get()));
 #endif
 #ifdef LLVM37
     MCInstPrinter *IP =
         TheTarget->createMCInstPrinter(TheTriple, OutputAsmVariant, *MAI, *MCII, *MRI);
 #else
-    MCInstPrinter *IP =
+    MCInstPrinter *            IP =
         TheTarget->createMCInstPrinter(OutputAsmVariant, *MAI, *MCII, *MRI, *STI);
 #endif
-    //IP->setPrintImmHex(true); // prefer hex or decimal immediates
-    MCCodeEmitter *CE = 0;
-    MCAsmBackend *MAB = 0;
+    // IP->setPrintImmHex(true); // prefer hex or decimal immediates
+    MCCodeEmitter *CE  = 0;
+    MCAsmBackend * MAB = 0;
     if (ShowEncoding) {
 #ifdef LLVM37
         CE = TheTarget->createMCCodeEmitter(*MCII, *MRI, Ctx);
 #else
-        CE = TheTarget->createMCCodeEmitter(*MCII, *MRI, *STI, Ctx);
+        CE  = TheTarget->createMCCodeEmitter(*MCII, *MRI, *STI, Ctx);
 #endif
 #ifdef LLVM34
         MAB = TheTarget->createMCAsmBackend(*MRI, TripleName, MCPU);
@@ -488,27 +527,28 @@ void jl_dump_asm_internal(uintptr_t Fptr, size_t Fsize, int64_t slide,
     // start out with a raw stream, and create formatted stream from it here.
     // LLVM will desctruct the formatted stream, and we keep the raw stream.
     auto ustream = llvm::make_unique<formatted_raw_ostream>(rstream);
-    Streamer.reset(TheTarget->createAsmStreamer(Ctx, std::move(ustream), /*asmverbose*/true,
+    Streamer.reset(TheTarget->createAsmStreamer(
+        Ctx, std::move(ustream), /*asmverbose*/ true,
 #else
-    Streamer.reset(TheTarget->createAsmStreamer(Ctx, stream, /*asmverbose*/true,
+    Streamer.reset(TheTarget->createAsmStreamer(
+        Ctx, stream, /*asmverbose*/ true,
 #endif
 #ifndef LLVM35
-                                                /*useLoc*/ true,
-                                                /*useCFI*/ true,
+        /*useLoc*/ true,
+        /*useCFI*/ true,
 #endif
-                                                /*useDwarfDirectory*/ true,
-                                                IP, CE, MAB, /*ShowInst*/ false));
+        /*useDwarfDirectory*/ true, IP, CE, MAB, /*ShowInst*/ false));
 #ifdef LLVM36
     Streamer->InitSections(true);
 #else
     Streamer->InitSections();
 #endif
 
-    // Make the MemoryObject wrapper
+// Make the MemoryObject wrapper
 #ifdef LLVM36
-    ArrayRef<uint8_t> memoryObject(const_cast<uint8_t*>((const uint8_t*)Fptr),Fsize);
+    ArrayRef<uint8_t> memoryObject(const_cast<uint8_t *>((const uint8_t *)Fptr), Fsize);
 #else
-    FuncMCView memoryObject((const uint8_t*)Fptr, Fsize);
+    FuncMCView                          memoryObject((const uint8_t *)Fptr, Fsize);
 #endif
     SymbolTable DisInfo(Ctx, object, slide, memoryObject);
 
@@ -518,27 +558,24 @@ void jl_dump_asm_internal(uintptr_t Fptr, size_t Fsize, int64_t slide,
 
     DILineInfoTable di_lineinfo;
     if (di_ctx)
-         di_lineinfo = di_ctx->getLineInfoForAddressRange(Fptr+slide, Fsize);
+        di_lineinfo = di_ctx->getLineInfoForAddressRange(Fptr + slide, Fsize);
 
     // Take two passes: In the first pass we record all branch labels,
     // in the second we actually perform the output
-    for (int pass = 0; pass < 2; ++ pass) {
+    for (int pass = 0; pass < 2; ++pass) {
         DisInfo.setPass(pass);
         if (pass != 0) {
-            // Switch to symbolic disassembly. We cannot do this
-            // before the first pass, because this changes branch
-            // targets from immediate values (constants) to
-            // expressions, which are not handled correctly by
-            // MCIA->evaluateBranch. (It should be possible to rewrite
-            // this routine to handle this case correctly as well.)
-            // Could add OpInfoLookup here
+// Switch to symbolic disassembly. We cannot do this
+// before the first pass, because this changes branch
+// targets from immediate values (constants) to
+// expressions, which are not handled correctly by
+// MCIA->evaluateBranch. (It should be possible to rewrite
+// this routine to handle this case correctly as well.)
+// Could add OpInfoLookup here
 #ifdef LLVM35
             DisAsm->setSymbolizer(std::unique_ptr<MCSymbolizer>(new MCExternalSymbolizer(
-                        Ctx,
-                        std::unique_ptr<MCRelocationInfo>(new MCRelocationInfo(Ctx)),
-                        OpInfoLookup,
-                        SymbolLookup,
-                        &DisInfo)));
+                Ctx, std::unique_ptr<MCRelocationInfo>(new MCRelocationInfo(Ctx)),
+                OpInfoLookup, SymbolLookup, &DisInfo)));
 #elif defined LLVM34
             OwningPtr<MCRelocationInfo> relinfo(new MCRelocationInfo(Ctx));
             DisAsm->setupForSymbolicDisassembly(OpInfoLookup, SymbolLookup, &DisInfo, &Ctx,
@@ -548,9 +585,9 @@ void jl_dump_asm_internal(uintptr_t Fptr, size_t Fsize, int64_t slide,
 #endif
         }
 
-        uint64_t nextLineAddr = -1;
-        DILineInfoTable::iterator di_lineIter = di_lineinfo.begin();
-        DILineInfoTable::iterator di_lineEnd = di_lineinfo.end();
+        uint64_t                  nextLineAddr = -1;
+        DILineInfoTable::iterator di_lineIter  = di_lineinfo.begin();
+        DILineInfoTable::iterator di_lineEnd   = di_lineinfo.end();
 #ifndef USE_MCJIT
         LInfoVec::iterator lineIter = lineinfo.begin();
         LInfoVec::iterator lineEnd  = lineinfo.end();
@@ -579,15 +616,15 @@ void jl_dump_asm_internal(uintptr_t Fptr, size_t Fsize, int64_t slide,
             }
 #ifndef USE_MCJIT
             else {
-            // Set up the line info
+                // Set up the line info
                 if (lineIter != lineEnd) {
-                    DebugLoc Loc = (*lineIter).Loc;
-                    MDNode *outer = Loc.getInlinedAt(jl_LLVMContext);
+                    DebugLoc Loc   = (*lineIter).Loc;
+                    MDNode * outer = Loc.getInlinedAt(jl_LLVMContext);
                     while (outer) {
-                        Loc = DebugLoc::getFromDILocation(outer);
+                        Loc   = DebugLoc::getFromDILocation(outer);
                         outer = Loc.getInlinedAt(jl_LLVMContext);
                     }
-                    StringRef FileName;
+                    StringRef    FileName;
                     DISubprogram debugscope = DISubprogram(Loc.getScope(jl_LLVMContext));
                     stream << "Filename: " << debugscope.getFilename() << "\n";
                     if (Loc.getLine() > 0)
@@ -600,7 +637,7 @@ void jl_dump_asm_internal(uintptr_t Fptr, size_t Fsize, int64_t slide,
 #endif
         }
 
-        uint64_t Index = 0;
+        uint64_t Index   = 0;
         uint64_t insSize = 0;
 
         // Do the disassembly
@@ -621,10 +658,10 @@ void jl_dump_asm_internal(uintptr_t Fptr, size_t Fsize, int64_t slide,
                 }
 #ifndef USE_MCJIT
                 else {
-                    DebugLoc Loc = (*lineIter).Loc;
-                    MDNode *outer = Loc.getInlinedAt(jl_LLVMContext);
+                    DebugLoc Loc   = (*lineIter).Loc;
+                    MDNode * outer = Loc.getInlinedAt(jl_LLVMContext);
                     while (outer) {
-                        Loc = DebugLoc::getFromDILocation(outer);
+                        Loc   = DebugLoc::getFromDILocation(outer);
                         outer = Loc.getInlinedAt(jl_LLVMContext);
                     }
                     stream << "Source line: " << Loc.getLine() << "\n";
@@ -633,15 +670,15 @@ void jl_dump_asm_internal(uintptr_t Fptr, size_t Fsize, int64_t slide,
 #endif
             }
 
-            DisInfo.setIP(Fptr+Index);
+            DisInfo.setIP(Fptr + Index);
             if (pass != 0) {
-                // Uncomment this to output addresses for all instructions
-                // stream << Index << ": ";
+// Uncomment this to output addresses for all instructions
+// stream << Index << ": ";
 #ifdef LLVM37
-                MCSymbol *symbol = DisInfo.lookupSymbol(Fptr+Index);
+                MCSymbol *symbol = DisInfo.lookupSymbol(Fptr + Index);
                 if (symbol)
                     Streamer->EmitLabel(symbol);
-                    // emitInstructionAnnot
+// emitInstructionAnnot
 #else
                 const char *symbolName = DisInfo.lookupSymbolName(Fptr + Index, true);
                 if (symbolName)
@@ -649,18 +686,20 @@ void jl_dump_asm_internal(uintptr_t Fptr, size_t Fsize, int64_t slide,
 #endif
             }
 
-            MCInst Inst;
+            MCInst                       Inst;
             MCDisassembler::DecodeStatus S;
-            FuncMCView view = memoryObject.slice(Index);
+            FuncMCView                   view = memoryObject.slice(Index);
             S = DisAsm->getInstruction(Inst, insSize, view, 0,
-                                      /*VStream*/ nulls(),
-                                      /*CStream*/ pass != 0 ? Streamer->GetCommentOS() : nulls());
+                                       /*VStream*/ nulls(),
+                                       /*CStream*/ pass != 0 ? Streamer->GetCommentOS()
+                                                             : nulls());
             if (pass != 0 && Streamer->GetCommentOS().tell() > 0)
                 Streamer->GetCommentOS() << '\n';
             switch (S) {
             case MCDisassembler::Fail:
                 if (insSize == 0) // skip illegible bytes
-#if defined(_CPU_PPC_) || defined(_CPU_PPC64_) || defined(_CPU_ARM_) || defined(_CPU_AARCH64_)
+#if defined(_CPU_PPC_) || defined(_CPU_PPC64_) || defined(_CPU_ARM_) ||                    \
+    defined(_CPU_AARCH64_)
                     insSize = 4; // instructions are always 4 bytes
 #else
                     insSize = 1; // attempt to slide 1 byte forward
@@ -668,22 +707,21 @@ void jl_dump_asm_internal(uintptr_t Fptr, size_t Fsize, int64_t slide,
                 if (pass != 0) {
                     std::ostringstream buf;
                     if (insSize == 4)
-                        buf << "\t.long\t0x" << std::hex
-                            << std::setfill('0') << std::setw(8)
-                            << *(uint32_t*)(Fptr+Index);
+                        buf << "\t.long\t0x" << std::hex << std::setfill('0')
+                            << std::setw(8) << *(uint32_t *)(Fptr + Index);
                     else
-                        for (uint64_t i=0; i<insSize; ++i)
-                            buf << "\t.byte\t0x" << std::hex
-                                << std::setfill('0') << std::setw(2)
-                                << (int)*(uint8_t*)(Fptr+Index+i);
+                        for (uint64_t i = 0; i < insSize; ++i)
+                            buf << "\t.byte\t0x" << std::hex << std::setfill('0')
+                                << std::setw(2) << (int)*(uint8_t *)(Fptr + Index + i);
                     Streamer->EmitRawText(StringRef(buf.str()));
                 }
                 break;
 
             case MCDisassembler::SoftFail:
                 if (pass != 0)
-                    Streamer->EmitRawText(StringRef("potentially undefined instruction encoding:"));
-                // Fall through
+                    Streamer->EmitRawText(
+                        StringRef("potentially undefined instruction encoding:"));
+            // Fall through
 
             case MCDisassembler::Success:
                 if (pass == 0) {
@@ -691,15 +729,16 @@ void jl_dump_asm_internal(uintptr_t Fptr, size_t Fsize, int64_t slide,
                     if (MCIA && (MCIA->isBranch(Inst) || MCIA->isCall(Inst))) {
                         uint64_t addr;
 #ifdef LLVM34
-                        if (MCIA->evaluateBranch(Inst, Fptr+Index, insSize, addr))
+                        if (MCIA->evaluateBranch(Inst, Fptr + Index, insSize, addr))
 #else
-                        if ((addr = MCIA->evaluateBranch(Inst, Fptr+Index, insSize)) != (uint64_t)-1)
+                        if ((addr = MCIA->evaluateBranch(Inst, Fptr + Index, insSize)) !=
+                            (uint64_t)-1)
 #endif
                             DisInfo.insertAddress(addr);
                     }
                 }
                 else {
-                    // Pass 1: Output instruction
+// Pass 1: Output instruction
 #ifdef LLVM35
                     Streamer->EmitInstruction(Inst, *STI);
 #else

@@ -17,9 +17,9 @@ extern "C" {
 // 0: no sigint is pending
 // 1: at least one sigint is pending, only the sigint page is enabled.
 // 2: at least one sigint is pending, both safepoint pages are enabled.
-JL_DLLEXPORT sig_atomic_t jl_signal_pending = 0;
-volatile uint32_t jl_gc_running = 0;
-char *jl_safepoint_pages = NULL;
+JL_DLLEXPORT sig_atomic_t jl_signal_pending  = 0;
+volatile uint32_t         jl_gc_running      = 0;
+char *                    jl_safepoint_pages = NULL;
 // The number of safepoints enabled on the three pages.
 // The first page, is the SIGINT page, only used by the master thread.
 // The second page, is the GC page for the master thread, this is where
@@ -90,10 +90,10 @@ void jl_safepoint_init(void)
     // jl_page_size isn't available yet.
     size_t pgsz = jl_getpagesize();
 #ifdef _OS_WINDOWS_
-    char *addr = (char*)VirtualAlloc(NULL, pgsz * 3, MEM_COMMIT, PAGE_READONLY);
+    char *addr = (char *)VirtualAlloc(NULL, pgsz * 3, MEM_COMMIT, PAGE_READONLY);
 #else
-    char *addr = (char*)mmap(0, pgsz * 3, PROT_READ,
-                             MAP_NORESERVE | MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+    char *addr = (char *)mmap(0, pgsz * 3, PROT_READ,
+                              MAP_NORESERVE | MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
     if (addr == MAP_FAILED)
         addr = NULL;
 #endif
@@ -146,10 +146,10 @@ void jl_safepoint_end_gc(void)
     jl_safepoint_disable(2);
     jl_safepoint_disable(1);
     jl_atomic_store_release(&jl_gc_running, 0);
-#  ifdef __APPLE__
+#ifdef __APPLE__
     // This wakes up other threads on mac.
     jl_mach_gc_end();
-#  endif
+#endif
     jl_mutex_unlock_nogc(&safepoint_lock);
 #else
     jl_gc_running = 0;
@@ -176,18 +176,16 @@ void jl_safepoint_enable_sigint(void)
     jl_mutex_lock_nogc(&safepoint_lock);
     // Make sure both safepoints are enabled exactly once for SIGINT.
     switch (jl_signal_pending) {
-    default:
-        assert(0 && "Shouldn't happen.");
+    default: assert(0 && "Shouldn't happen.");
     case 0:
         // Enable SIGINT page
         jl_safepoint_enable(0);
-        // fall through
+    // fall through
     case 1:
         // SIGINT page is enabled, enable GC page
         jl_safepoint_enable(1);
-        // fall through
-    case 2:
-        jl_signal_pending = 2;
+    // fall through
+    case 2: jl_signal_pending = 2;
     }
     jl_mutex_unlock_nogc(&safepoint_lock);
 }
@@ -209,19 +207,17 @@ int jl_safepoint_consume_sigint(void)
     jl_mutex_lock_nogc(&safepoint_lock);
     // Make sure both safepoints are disabled for SIGINT.
     switch (jl_signal_pending) {
-    default:
-        assert(0 && "Shouldn't happen.");
+    default: assert(0 && "Shouldn't happen.");
     case 2:
         // Disable gc page
         jl_safepoint_disable(1);
-        // fall through
+    // fall through
     case 1:
         // GC page is disabled, disable SIGINT page
         jl_safepoint_disable(0);
         has_signal = 1;
-        // fall through
-    case 0:
-        jl_signal_pending = 0;
+    // fall through
+    case 0: jl_signal_pending = 0;
     }
     jl_mutex_unlock_nogc(&safepoint_lock);
     return has_signal;

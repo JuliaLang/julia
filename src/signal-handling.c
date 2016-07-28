@@ -14,17 +14,17 @@ extern "C" {
 
 // Profiler control variables //
 static volatile intptr_t *bt_data_prof = NULL;
-static volatile size_t bt_size_max = 0;
-static volatile size_t bt_size_cur = 0;
-static volatile uint64_t nsecprof = 0;
-static volatile int running = 0;
-static const    uint64_t GIGA = 1000000000ULL;
+static volatile size_t    bt_size_max  = 0;
+static volatile size_t    bt_size_cur  = 0;
+static volatile uint64_t  nsecprof     = 0;
+static volatile int       running      = 0;
+static const uint64_t     GIGA         = 1000000000ULL;
 // Timers to take samples at intervals
 JL_DLLEXPORT void jl_profile_stop_timer(void);
-JL_DLLEXPORT int jl_profile_start_timer(void);
+JL_DLLEXPORT int  jl_profile_start_timer(void);
 
 static uint64_t jl_last_sigint_trigger = 0;
-static void jl_clear_force_sigint(void)
+static void     jl_clear_force_sigint(void)
 {
     jl_last_sigint_trigger = 0;
 }
@@ -32,10 +32,10 @@ static void jl_clear_force_sigint(void)
 static int jl_check_force_sigint(void)
 {
     static double accum_weight = 0;
-    uint64_t cur_time = uv_hrtime();
-    uint64_t dt = cur_time - jl_last_sigint_trigger;
-    uint64_t last_t = jl_last_sigint_trigger;
-    jl_last_sigint_trigger = cur_time;
+    uint64_t      cur_time     = uv_hrtime();
+    uint64_t      dt           = cur_time - jl_last_sigint_trigger;
+    uint64_t      last_t       = jl_last_sigint_trigger;
+    jl_last_sigint_trigger     = cur_time;
     if (last_t == 0) {
         accum_weight = 0;
         return 0;
@@ -43,11 +43,11 @@ static int jl_check_force_sigint(void)
     double new_weight = accum_weight * exp(-(dt / 1e9)) + 0.3;
     if (!isnormal(new_weight))
         new_weight = 0;
-    accum_weight = new_weight;
+    accum_weight   = new_weight;
     return new_weight > 1;
 }
 
-static int exit_on_sigint = 0;
+static int        exit_on_sigint = 0;
 JL_DLLEXPORT void jl_exit_on_sigint(int on)
 {
     exit_on_sigint = on;
@@ -56,7 +56,8 @@ JL_DLLEXPORT void jl_exit_on_sigint(int on)
 // what to do on SIGINT
 JL_DLLEXPORT void jl_sigint_action(void)
 {
-    if (exit_on_sigint) jl_exit(130); // 128+SIGINT
+    if (exit_on_sigint)
+        jl_exit(130); // 128+SIGINT
     jl_throw(jl_interrupt_exception);
 }
 
@@ -75,7 +76,8 @@ void jl_critical_error(int sig, bt_context_t *context, uintptr_t *bt_data, size_
     size_t i, n = *bt_size;
     if (sig)
         jl_safe_printf("\nsignal (%d): %s\n", sig, strsignal(sig));
-    jl_safe_printf("while loading %s, in expression starting on line %d\n", jl_filename, jl_lineno);
+    jl_safe_printf("while loading %s, in expression starting on line %d\n", jl_filename,
+                   jl_lineno);
     if (context)
         *bt_size = n = rec_backtrace_ctx(bt_data, JL_MAX_BT_SIZE, context);
     for (i = 0; i < n; i++)
@@ -90,10 +92,10 @@ void jl_critical_error(int sig, bt_context_t *context, uintptr_t *bt_data, size_
 JL_DLLEXPORT int jl_profile_init(size_t maxsize, uint64_t delay_nsec)
 {
     bt_size_max = maxsize;
-    nsecprof = delay_nsec;
+    nsecprof    = delay_nsec;
     if (bt_data_prof != NULL)
-        free((void*)bt_data_prof);
-    bt_data_prof = (intptr_t*) calloc(maxsize, sizeof(intptr_t));
+        free((void *)bt_data_prof);
+    bt_data_prof = (intptr_t *)calloc(maxsize, sizeof(intptr_t));
     if (bt_data_prof == NULL && maxsize > 0)
         return -1;
     bt_size_cur = 0;
@@ -102,7 +104,7 @@ JL_DLLEXPORT int jl_profile_init(size_t maxsize, uint64_t delay_nsec)
 
 JL_DLLEXPORT uint8_t *jl_profile_get_data(void)
 {
-    return (uint8_t*) bt_data_prof;
+    return (uint8_t *)bt_data_prof;
 }
 
 JL_DLLEXPORT size_t jl_profile_len_data(void)

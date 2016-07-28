@@ -19,37 +19,34 @@
 #include "julia_internal.h"
 
 #if defined(LLVM37) && defined(JULIA_ENABLE_THREADING)
-#  include <llvm/IR/InlineAsm.h>
+#include <llvm/IR/InlineAsm.h>
 #endif
 
 using namespace llvm;
 
 namespace {
 
-struct LowerPTLS: public ModulePass {
+struct LowerPTLS : public ModulePass {
     static char ID;
-    LowerPTLS(bool _imaging_mode=false, MDNode *_tbaa_const=nullptr)
-        : ModulePass(ID),
-          imaging_mode(_imaging_mode),
-          tbaa_const(_tbaa_const)
-    {}
+    LowerPTLS(bool _imaging_mode = false, MDNode *_tbaa_const = nullptr)
+        : ModulePass(ID), imaging_mode(_imaging_mode), tbaa_const(_tbaa_const)
+    {
+    }
 
 private:
-    bool imaging_mode;
+    bool    imaging_mode;
     MDNode *tbaa_const; // One `LLVMContext` only
     bool runOnModule(Module &M) override;
-    void runOnFunction(LLVMContext &ctx, Module &M, Function *F,
-                       Function *ptls_getter, Type *T_ppjlvalue);
+    void runOnFunction(LLVMContext &ctx, Module &M, Function *F, Function *ptls_getter,
+                       Type *T_ppjlvalue);
 };
 
-static void ensure_global(const char *name, Type *t, Module &M,
-                          bool dllimport=false)
+static void ensure_global(const char *name, Type *t, Module &M, bool dllimport = false)
 {
     if (M.getNamedValue(name))
         return;
-    GlobalVariable *proto = new GlobalVariable(M, t, false,
-                                               GlobalVariable::ExternalLinkage,
-                                               NULL, name);
+    GlobalVariable *proto =
+        new GlobalVariable(M, t, false, GlobalVariable::ExternalLinkage, NULL, name);
 #ifdef _OS_WINDOWS_
     // setting JL_DLLEXPORT correctly only matters when building a binary
     // (global_proto will strip this from the JIT)
@@ -61,7 +58,7 @@ static void ensure_global(const char *name, Type *t, Module &M,
         proto->setLinkage(GlobalValue::DLLImportLinkage);
 #endif
     }
-#else // _OS_WINDOWS_
+#else  // _OS_WINDOWS_
     (void)proto;
 #endif // _OS_WINDOWS_
 }
@@ -70,8 +67,7 @@ void LowerPTLS::runOnFunction(LLVMContext &ctx, Module &M, Function *F,
                               Function *ptls_getter, Type *T_ppjlvalue)
 {
     CallInst *ptlsStates = NULL;
-    for (auto I = F->getEntryBlock().begin(), E = F->getEntryBlock().end();
-         I != E; ++I) {
+    for (auto I = F->getEntryBlock().begin(), E = F->getEntryBlock().end(); I != E; ++I) {
         if (CallInst *callInst = dyn_cast<CallInst>(&*I)) {
             if (callInst->getCalledValue() == ptls_getter) {
                 ptlsStates = callInst;
@@ -89,50 +85,42 @@ void LowerPTLS::runOnFunction(LLVMContext &ctx, Module &M, Function *F,
 
 #ifdef JULIA_ENABLE_THREADING
     if (imaging_mode) {
-        GlobalVariable *GV = cast<GlobalVariable>(
-            M.getNamedValue("jl_get_ptls_states.ptr"));
+        GlobalVariable *GV =
+            cast<GlobalVariable>(M.getNamedValue("jl_get_ptls_states.ptr"));
         LoadInst *getter = new LoadInst(GV, "", ptlsStates);
         getter->setMetadata(llvm::LLVMContext::MD_tbaa, tbaa_const);
         ptlsStates->setCalledFunction(getter);
-        ptlsStates->addAttribute(AttributeSet::FunctionIndex,
-                                 Attribute::ReadNone);
-        ptlsStates->addAttribute(AttributeSet::FunctionIndex,
-                                 Attribute::NoUnwind);
+        ptlsStates->addAttribute(AttributeSet::FunctionIndex, Attribute::ReadNone);
+        ptlsStates->addAttribute(AttributeSet::FunctionIndex, Attribute::NoUnwind);
     }
     else if (jl_tls_offset != -1) {
 #ifdef LLVM37
-        auto T_int8 = Type::getInt8Ty(ctx);
+        auto T_int8  = Type::getInt8Ty(ctx);
         auto T_pint8 = PointerType::get(T_int8, 0);
-        auto T_size = (sizeof(size_t) == 8 ? Type::getInt64Ty(ctx) :
-                       Type::getInt32Ty(ctx));
+        auto T_size = (sizeof(size_t) == 8 ? Type::getInt64Ty(ctx) : Type::getInt32Ty(ctx));
         // Replace the function call with inline assembly if we know
         // how to generate it.
         const char *asm_str = nullptr;
-#  if defined(_CPU_X86_64_)
+#if defined(_CPU_X86_64_)
         asm_str = "movq %fs:0, $0";
-#  elif defined(_CPU_X86_)
+#elif defined(_CPU_X86_)
         asm_str = "movl %gs:0, $0";
-#  elif defined(_CPU_AARCH64_)
+#elif defined(_CPU_AARCH64_)
         asm_str = "mrs $0, tpidr_el0";
-#  endif
+#endif
         assert(asm_str && "Cannot emit thread pointer for this architecture.");
-        auto offset = ConstantInt::getSigned(T_size, jl_tls_offset);
-        auto tp = InlineAsm::get(FunctionType::get(T_pint8, false),
-                                 asm_str, "=r", false);
+        auto   offset = ConstantInt::getSigned(T_size, jl_tls_offset);
+        auto   tp = InlineAsm::get(FunctionType::get(T_pint8, false), asm_str, "=r", false);
         Value *tls = CallInst::Create(tp, "thread_ptr", ptlsStates);
-        tls = GetElementPtrInst::Create(T_int8, tls, {offset},
-                                        "ptls_i8", ptlsStates);
-        tls = new BitCastInst(tls, PointerType::get(T_ppjlvalue, 0),
-                              "ptls", ptlsStates);
+        tls = GetElementPtrInst::Create(T_int8, tls, {offset}, "ptls_i8", ptlsStates);
+        tls = new BitCastInst(tls, PointerType::get(T_ppjlvalue, 0), "ptls", ptlsStates);
         ptlsStates->replaceAllUsesWith(tls);
         ptlsStates->eraseFromParent();
 #endif
     }
     else {
-        ptlsStates->addAttribute(AttributeSet::FunctionIndex,
-                                 Attribute::ReadNone);
-        ptlsStates->addAttribute(AttributeSet::FunctionIndex,
-                                 Attribute::NoUnwind);
+        ptlsStates->addAttribute(AttributeSet::FunctionIndex, Attribute::ReadNone);
+        ptlsStates->addAttribute(AttributeSet::FunctionIndex, Attribute::NoUnwind);
     }
 #else
     ptlsStates->replaceAllUsesWith(M.getNamedValue("jl_tls_states"));
@@ -158,10 +146,9 @@ bool LowerPTLS::runOnModule(Module &M)
     Function *ptls_getter = M.getFunction("jl_get_ptls_states");
     if (!ptls_getter)
         return true;
-    LLVMContext &ctx = M.getContext();
+    LLVMContext & ctx      = M.getContext();
     FunctionType *functype = ptls_getter->getFunctionType();
-    auto T_ppjlvalue =
-        cast<PointerType>(functype->getReturnType())->getElementType();
+    auto T_ppjlvalue       = cast<PointerType>(functype->getReturnType())->getElementType();
 #ifdef JULIA_ENABLE_THREADING
     if (imaging_mode)
         ensure_global("jl_get_ptls_states.ptr", functype->getPointerTo(), M);
@@ -182,8 +169,7 @@ bool LowerPTLS::runOnModule(Module &M)
 char LowerPTLS::ID = 0;
 
 static RegisterPass<LowerPTLS> X("LowerPTLS", "LowerPTLS Pass",
-                                 false /* Only looks at CFG */,
-                                 false /* Analysis Pass */);
+                                 false /* Only looks at CFG */, false /* Analysis Pass */);
 
 } // anonymous namespace
 

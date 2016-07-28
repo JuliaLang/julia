@@ -8,8 +8,8 @@ extern "C" {
 #endif
 
 struct jl_timeval {
-    int64_t sec;    /* seconds */
-    int64_t usec;   /* microseconds */
+    int64_t sec;  /* seconds */
+    int64_t usec; /* microseconds */
 };
 
 JL_DLLEXPORT int jl_gettimeofday(struct jl_timeval *jtv);

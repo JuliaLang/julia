@@ -66,15 +66,24 @@ JL_DLLEXPORT char *dirname(char *);
 
 JL_DLLEXPORT uint32_t jl_getutf8(ios_t *s)
 {
-    uint32_t wc=0;
+    uint32_t wc = 0;
     ios_getutf8(s, &wc);
     return wc;
 }
 
-JL_DLLEXPORT int jl_sizeof_uv_mutex(void) { return sizeof(uv_mutex_t); }
-JL_DLLEXPORT int jl_sizeof_off_t(void) { return sizeof(off_t); }
+JL_DLLEXPORT int jl_sizeof_uv_mutex(void)
+{
+    return sizeof(uv_mutex_t);
+}
+JL_DLLEXPORT int jl_sizeof_off_t(void)
+{
+    return sizeof(off_t);
+}
 #ifndef _OS_WINDOWS_
-JL_DLLEXPORT int jl_sizeof_mode_t(void) { return sizeof(mode_t); }
+JL_DLLEXPORT int jl_sizeof_mode_t(void)
+{
+    return sizeof(mode_t);
+}
 JL_DLLEXPORT int jl_ftruncate(int fd, int64_t length)
 {
     return ftruncate(fd, (off_t)length);
@@ -87,8 +96,8 @@ JL_DLLEXPORT ssize_t jl_pwrite(int fd, const void *buf, size_t count, int64_t of
 {
     return pwrite(fd, buf, count, (off_t)offset);
 }
-JL_DLLEXPORT void *jl_mmap(void *addr, size_t length, int prot, int flags,
-                           int fd, int64_t offset)
+JL_DLLEXPORT void *jl_mmap(void *addr, size_t length, int prot, int flags, int fd,
+                           int64_t offset)
 {
     return mmap(addr, length, prot, flags, fd, (off_t)offset);
 }
@@ -98,9 +107,15 @@ JL_DLLEXPORT int64_t jl_lseek(int fd, int64_t offset, int whence)
     return _lseeki64(fd, offset, whence);
 }
 #endif
-JL_DLLEXPORT int jl_sizeof_ios_t(void) { return sizeof(ios_t); }
+JL_DLLEXPORT int jl_sizeof_ios_t(void)
+{
+    return sizeof(ios_t);
+}
 
-JL_DLLEXPORT long jl_ios_fd(ios_t *s) { return s->fd; }
+JL_DLLEXPORT long jl_ios_fd(ios_t *s)
+{
+    return s->fd;
+}
 
 JL_DLLEXPORT int32_t jl_nb_available(ios_t *s)
 {
@@ -109,18 +124,33 @@ JL_DLLEXPORT int32_t jl_nb_available(ios_t *s)
 
 // --- dir/file stuff ---
 
-JL_DLLEXPORT int jl_sizeof_uv_fs_t(void) { return sizeof(uv_fs_t); }
-JL_DLLEXPORT void jl_uv_fs_req_cleanup(uv_fs_t *req) { uv_fs_req_cleanup(req); }
-JL_DLLEXPORT char *jl_uv_fs_t_ptr(uv_fs_t *req) { return (char*)req->ptr; }
-JL_DLLEXPORT int jl_uv_fs_result(uv_fs_t *f) { return f->result; }
+JL_DLLEXPORT int jl_sizeof_uv_fs_t(void)
+{
+    return sizeof(uv_fs_t);
+}
+JL_DLLEXPORT void jl_uv_fs_req_cleanup(uv_fs_t *req)
+{
+    uv_fs_req_cleanup(req);
+}
+JL_DLLEXPORT char *jl_uv_fs_t_ptr(uv_fs_t *req)
+{
+    return (char *)req->ptr;
+}
+JL_DLLEXPORT int jl_uv_fs_result(uv_fs_t *f)
+{
+    return f->result;
+}
 
 // --- stat ---
-JL_DLLEXPORT int jl_sizeof_stat(void) { return sizeof(uv_stat_t); }
+JL_DLLEXPORT int jl_sizeof_stat(void)
+{
+    return sizeof(uv_stat_t);
+}
 
 JL_DLLEXPORT int32_t jl_stat(const char *path, char *statbuf)
 {
     uv_fs_t req;
-    int ret;
+    int     ret;
 
     // Ideally one would use the statbuf for the storage in req, but
     // it's not clear that this is possible using libuv
@@ -134,7 +164,7 @@ JL_DLLEXPORT int32_t jl_stat(const char *path, char *statbuf)
 JL_DLLEXPORT int32_t jl_lstat(const char *path, char *statbuf)
 {
     uv_fs_t req;
-    int ret;
+    int     ret;
 
     ret = uv_fs_lstat(uv_default_loop(), &req, path, NULL);
     if (ret == 0)
@@ -146,7 +176,7 @@ JL_DLLEXPORT int32_t jl_lstat(const char *path, char *statbuf)
 JL_DLLEXPORT int32_t jl_fstat(int fd, char *statbuf)
 {
     uv_fs_t req;
-    int ret;
+    int     ret;
 
     ret = uv_fs_fstat(uv_default_loop(), &req, fd, NULL);
     if (ret == 0)
@@ -157,52 +187,52 @@ JL_DLLEXPORT int32_t jl_fstat(int fd, char *statbuf)
 
 JL_DLLEXPORT unsigned int jl_stat_dev(char *statbuf)
 {
-    return ((uv_stat_t*)statbuf)->st_dev;
+    return ((uv_stat_t *)statbuf)->st_dev;
 }
 
 JL_DLLEXPORT unsigned int jl_stat_ino(char *statbuf)
 {
-    return ((uv_stat_t*)statbuf)->st_ino;
+    return ((uv_stat_t *)statbuf)->st_ino;
 }
 
 JL_DLLEXPORT unsigned int jl_stat_mode(char *statbuf)
 {
-    return ((uv_stat_t*)statbuf)->st_mode;
+    return ((uv_stat_t *)statbuf)->st_mode;
 }
 
 JL_DLLEXPORT unsigned int jl_stat_nlink(char *statbuf)
 {
-    return ((uv_stat_t*)statbuf)->st_nlink;
+    return ((uv_stat_t *)statbuf)->st_nlink;
 }
 
 JL_DLLEXPORT unsigned int jl_stat_uid(char *statbuf)
 {
-    return ((uv_stat_t*)statbuf)->st_uid;
+    return ((uv_stat_t *)statbuf)->st_uid;
 }
 
 JL_DLLEXPORT unsigned int jl_stat_gid(char *statbuf)
 {
-    return ((uv_stat_t*)statbuf)->st_gid;
+    return ((uv_stat_t *)statbuf)->st_gid;
 }
 
 JL_DLLEXPORT unsigned int jl_stat_rdev(char *statbuf)
 {
-    return ((uv_stat_t*)statbuf)->st_rdev;
+    return ((uv_stat_t *)statbuf)->st_rdev;
 }
 
 JL_DLLEXPORT uint64_t jl_stat_size(char *statbuf)
 {
-    return ((uv_stat_t*)statbuf)->st_size;
+    return ((uv_stat_t *)statbuf)->st_size;
 }
 
 JL_DLLEXPORT uint64_t jl_stat_blksize(char *statbuf)
 {
-    return ((uv_stat_t*)statbuf)->st_blksize;
+    return ((uv_stat_t *)statbuf)->st_blksize;
 }
 
 JL_DLLEXPORT uint64_t jl_stat_blocks(char *statbuf)
 {
-    return ((uv_stat_t*)statbuf)->st_blocks;
+    return ((uv_stat_t *)statbuf)->st_blocks;
 }
 
 /*
@@ -218,14 +248,14 @@ JL_DLLEXPORT double jl_stat_atime(char *statbuf)
 JL_DLLEXPORT double jl_stat_mtime(char *statbuf)
 {
     uv_stat_t *s;
-    s = (uv_stat_t*)statbuf;
+    s = (uv_stat_t *)statbuf;
     return (double)s->st_mtim.tv_sec + (double)s->st_mtim.tv_nsec * 1e-9;
 }
 
 JL_DLLEXPORT double jl_stat_ctime(char *statbuf)
 {
     uv_stat_t *s;
-    s = (uv_stat_t*)statbuf;
+    s = (uv_stat_t *)statbuf;
     return (double)s->st_ctim.tv_sec + (double)s->st_ctim.tv_nsec * 1e-9;
 }
 
@@ -233,7 +263,7 @@ JL_DLLEXPORT double jl_stat_ctime(char *statbuf)
 
 JL_DLLEXPORT jl_array_t *jl_takebuf_array(ios_t *s)
 {
-    size_t n;
+    size_t      n;
     jl_array_t *a;
     if (s->buf == &s->local[0]) {
         // small data case. copies, but this can be avoided using the
@@ -243,7 +273,7 @@ JL_DLLEXPORT jl_array_t *jl_takebuf_array(ios_t *s)
     }
     else {
         char *b = ios_takebuf(s, &n);
-        a = jl_ptr_to_array_1d(jl_array_uint8_type, b, n-1, 1);
+        a       = jl_ptr_to_array_1d(jl_array_uint8_type, b, n - 1, 1);
     }
     return a;
 }
@@ -262,7 +292,7 @@ JL_DLLEXPORT jl_value_t *jl_takebuf_string(ios_t *s)
 JL_DLLEXPORT void *jl_takebuf_raw(ios_t *s)
 {
     size_t sz;
-    void *buf = ios_takebuf(s, &sz);
+    void * buf = ios_takebuf(s, &sz);
     return buf;
 }
 
@@ -270,10 +300,10 @@ JL_DLLEXPORT jl_value_t *jl_readuntil(ios_t *s, uint8_t delim)
 {
     jl_array_t *a;
     // manually inlined common case
-    char *pd = (char*)memchr(s->buf+s->bpos, delim, (size_t)(s->size - s->bpos));
+    char *pd = (char *)memchr(s->buf + s->bpos, delim, (size_t)(s->size - s->bpos));
     if (pd) {
-        size_t n = pd-(s->buf+s->bpos)+1;
-        a = jl_alloc_array_1d(jl_array_uint8_type, n);
+        size_t n = pd - (s->buf + s->bpos) + 1;
+        a        = jl_alloc_array_1d(jl_array_uint8_type, n);
         memcpy(jl_array_data(a), s->buf + s->bpos, n);
         s->bpos += n;
     }
@@ -281,7 +311,7 @@ JL_DLLEXPORT jl_value_t *jl_readuntil(ios_t *s, uint8_t delim)
         a = jl_alloc_array_1d(jl_array_uint8_type, 80);
         ios_t dest;
         ios_mem(&dest, 0);
-        ios_setbuf(&dest, (char*)a->data, 80, 0);
+        ios_setbuf(&dest, (char *)a->data, 80, 0);
         size_t n = ios_copyuntil(&dest, s, delim);
         if (dest.buf != a->data) {
             a = jl_takebuf_array(&dest);
@@ -290,11 +320,11 @@ JL_DLLEXPORT jl_value_t *jl_readuntil(ios_t *s, uint8_t delim)
 #ifdef STORE_ARRAY_LEN
             a->length = n;
 #endif
-            a->nrows = n;
-            ((char*)a->data)[n] = '\0';
+            a->nrows             = n;
+            ((char *)a->data)[n] = '\0';
         }
     }
-    return (jl_value_t*)a;
+    return (jl_value_t *)a;
 }
 
 JL_DLLEXPORT uint64_t jl_ios_get_nbyte_int(ios_t *s, const size_t n)
@@ -303,12 +333,12 @@ JL_DLLEXPORT uint64_t jl_ios_get_nbyte_int(ios_t *s, const size_t n)
     size_t space, ret;
     do {
         space = (size_t)(s->size - s->bpos);
-        ret = ios_readprep(s, n);
+        ret   = ios_readprep(s, n);
         if (space == ret && ret < n)
             jl_eof_error();
-    } while(ret < n);
-    uint64_t x = 0;
-    uint8_t *buf = (uint8_t*)&s->buf[s->bpos];
+    } while (ret < n);
+    uint64_t x   = 0;
+    uint8_t *buf = (uint8_t *)&s->buf[s->bpos];
     if (n == 8) {
         // expecting loop unrolling optimization
         for (size_t i = 0; i < 8; i++)
@@ -331,13 +361,19 @@ JL_DLLEXPORT uint64_t jl_ios_get_nbyte_int(ios_t *s, const size_t n)
 
 // -- syscall utilities --
 
-JL_DLLEXPORT int jl_errno(void) { return errno; }
-JL_DLLEXPORT void jl_set_errno(int e) { errno = e; }
+JL_DLLEXPORT int jl_errno(void)
+{
+    return errno;
+}
+JL_DLLEXPORT void jl_set_errno(int e)
+{
+    errno = e;
+}
 
 // -- get the number of CPU cores --
 
 #ifdef _OS_WINDOWS_
-typedef DWORD (WINAPI *GAPC)(WORD);
+typedef DWORD(WINAPI *GAPC)(WORD);
 #ifndef ALL_PROCESSOR_GROUPS
 #define ALL_PROCESSOR_GROUPS 0xffff
 #endif
@@ -346,29 +382,28 @@ typedef DWORD (WINAPI *GAPC)(WORD);
 JL_DLLEXPORT int jl_cpu_cores(void)
 {
 #if defined(HW_AVAILCPU) && defined(HW_NCPU)
-    size_t len = 4;
+    size_t  len = 4;
     int32_t count;
-    int nm[2] = {CTL_HW, HW_AVAILCPU};
+    int     nm[2] = {CTL_HW, HW_AVAILCPU};
     sysctl(nm, 2, &count, &len, NULL, 0);
     if (count < 1) {
         nm[1] = HW_NCPU;
         sysctl(nm, 2, &count, &len, NULL, 0);
-        if (count < 1) { count = 1; }
+        if (count < 1) {
+            count = 1;
+        }
     }
     return count;
 #elif defined(_SC_NPROCESSORS_ONLN)
     return sysconf(_SC_NPROCESSORS_ONLN);
 #elif defined(_OS_WINDOWS_)
-    //Try to get WIN7 API method
-    GAPC gapc = (GAPC) jl_dlsym_e(
-        jl_kernel32_handle,
-        "GetActiveProcessorCount"
-    );
+    // Try to get WIN7 API method
+    GAPC gapc = (GAPC)jl_dlsym_e(jl_kernel32_handle, "GetActiveProcessorCount");
 
     if (gapc) {
         return gapc(ALL_PROCESSOR_GROUPS);
     }
-    else { //fall back on GetSystemInfo
+    else { // fall back on GetSystemInfo
         SYSTEM_INFO info;
         GetSystemInfo(&info);
         return info.dwNumberOfProcessors;
@@ -409,34 +444,61 @@ JL_DLLEXPORT jl_value_t *jl_environ(int i)
 #if defined _MSC_VER || defined _OS_WINDOWS_
 /* Native Woe32 API.  */
 #include <process.h>
-#define waitpid(pid,statusp,options) _cwait (statusp, pid, WAIT_CHILD)
+#define waitpid(pid, statusp, options) _cwait(statusp, pid, WAIT_CHILD)
 #define WAIT_T int
-#define WTERMSIG(x) ((x) & 0xff) /* or: SIGABRT ?? */
+#define WTERMSIG(x) ((x)&0xff) /* or: SIGABRT ?? */
 #define WCOREDUMP(x) 0
 #define WEXITSTATUS(x) (((x) >> 8) & 0xff) /* or: (x) ?? */
-#define WIFSIGNALED(x) (WTERMSIG (x) != 0) /* or: ((x) == 3) ?? */
-#define WIFEXITED(x) (WTERMSIG (x) == 0) /* or: ((x) != 3) ?? */
+#define WIFSIGNALED(x) (WTERMSIG(x) != 0)  /* or: ((x) == 3) ?? */
+#define WIFEXITED(x) (WTERMSIG(x) == 0)    /* or: ((x) != 3) ?? */
 #define WIFSTOPPED(x) 0
-#define WSTOPSIG(x) 0 //Is this correct?
+#define WSTOPSIG(x) 0 // Is this correct?
 #endif
 
-int jl_process_exited(int status)      { return WIFEXITED(status); }
-int jl_process_signaled(int status)    { return WIFSIGNALED(status); }
-int jl_process_stopped(int status)     { return WIFSTOPPED(status); }
+int jl_process_exited(int status)
+{
+    return WIFEXITED(status);
+}
+int jl_process_signaled(int status)
+{
+    return WIFSIGNALED(status);
+}
+int jl_process_stopped(int status)
+{
+    return WIFSTOPPED(status);
+}
 
-int jl_process_exit_status(int status) { return WEXITSTATUS(status); }
-int jl_process_term_signal(int status) { return WTERMSIG(status); }
-int jl_process_stop_signal(int status) { return WSTOPSIG(status); }
+int jl_process_exit_status(int status)
+{
+    return WEXITSTATUS(status);
+}
+int jl_process_term_signal(int status)
+{
+    return WTERMSIG(status);
+}
+int jl_process_stop_signal(int status)
+{
+    return WSTOPSIG(status);
+}
 
 // -- access to std filehandles --
 
-JL_STREAM *JL_STDIN  = (JL_STREAM*)STDIN_FILENO;
-JL_STREAM *JL_STDOUT = (JL_STREAM*)STDOUT_FILENO;
-JL_STREAM *JL_STDERR = (JL_STREAM*)STDERR_FILENO;
+JL_STREAM *JL_STDIN  = (JL_STREAM *)STDIN_FILENO;
+JL_STREAM *JL_STDOUT = (JL_STREAM *)STDOUT_FILENO;
+JL_STREAM *JL_STDERR = (JL_STREAM *)STDERR_FILENO;
 
-JL_DLLEXPORT JL_STREAM *jl_stdin_stream(void)  { return JL_STDIN; }
-JL_DLLEXPORT JL_STREAM *jl_stdout_stream(void) { return JL_STDOUT; }
-JL_DLLEXPORT JL_STREAM *jl_stderr_stream(void) { return JL_STDERR; }
+JL_DLLEXPORT JL_STREAM *jl_stdin_stream(void)
+{
+    return JL_STDIN;
+}
+JL_DLLEXPORT JL_STREAM *jl_stdout_stream(void)
+{
+    return JL_STDOUT;
+}
+JL_DLLEXPORT JL_STREAM *jl_stderr_stream(void)
+{
+    return JL_STDERR;
+}
 
 // CPUID
 
@@ -446,21 +508,18 @@ JL_DLLEXPORT void jl_cpuid(int32_t CPUInfo[4], int32_t InfoType)
 #if defined _MSC_VER
     __cpuid(CPUInfo, InfoType);
 #else
-    __asm__ __volatile__ (
-        #if defined(__i386__) && defined(__PIC__)
+    __asm__ __volatile__(
+#if defined(__i386__) && defined(__PIC__)
         "xchg %%ebx, %%esi;"
         "cpuid;"
-        "xchg %%esi, %%ebx;":
-        "=S" (CPUInfo[1]) ,
-        #else
-        "cpuid":
-        "=b" (CPUInfo[1]),
-        #endif
-        "=a" (CPUInfo[0]),
-        "=c" (CPUInfo[2]),
-        "=d" (CPUInfo[3]) :
-        "a" (InfoType)
-    );
+        "xchg %%esi, %%ebx;"
+        : "=S"(CPUInfo[1]),
+#else
+        "cpuid"
+        : "=b"(CPUInfo[1]),
+#endif
+          "=a"(CPUInfo[0]), "=c"(CPUInfo[2]), "=d"(CPUInfo[3])
+        : "a"(InfoType));
 #endif
 }
 #endif
@@ -540,13 +599,14 @@ JL_DLLEXPORT int32_t jl_set_zero_subnormals(int8_t isZero)
 
 // -- processor native alignment information --
 
-JL_DLLEXPORT void jl_native_alignment(uint_t *int8align, uint_t *int16align, uint_t *int32align,
-                                      uint_t *int64align, uint_t *float32align, uint_t *float64align)
+JL_DLLEXPORT void jl_native_alignment(uint_t *int8align, uint_t *int16align,
+                                      uint_t *int32align, uint_t *int64align,
+                                      uint_t *float32align, uint_t *float64align)
 {
-    *int8align = __alignof(uint8_t);
-    *int16align = __alignof(uint16_t);
-    *int32align = __alignof(uint32_t);
-    *int64align = __alignof(uint64_t);
+    *int8align    = __alignof(uint8_t);
+    *int16align   = __alignof(uint16_t);
+    *int32align   = __alignof(uint32_t);
+    *int64align   = __alignof(uint64_t);
     *float32align = __alignof(float);
     *float64align = __alignof(double);
 }
@@ -559,12 +619,12 @@ JL_DLLEXPORT jl_value_t *jl_is_char_signed(void)
 // -- misc sysconf info --
 
 #ifdef _OS_WINDOWS_
-static long cachedPagesize = 0;
+static long       cachedPagesize = 0;
 JL_DLLEXPORT long jl_getpagesize(void)
 {
     if (!cachedPagesize) {
         SYSTEM_INFO systemInfo;
-        GetSystemInfo (&systemInfo);
+        GetSystemInfo(&systemInfo);
         cachedPagesize = systemInfo.dwPageSize;
     }
     return cachedPagesize;
@@ -577,12 +637,12 @@ JL_DLLEXPORT long jl_getpagesize(void)
 #endif
 
 #ifdef _OS_WINDOWS_
-static long cachedAllocationGranularity = 0;
+static long       cachedAllocationGranularity = 0;
 JL_DLLEXPORT long jl_getallocationgranularity(void)
 {
     if (!cachedAllocationGranularity) {
         SYSTEM_INFO systemInfo;
-        GetSystemInfo (&systemInfo);
+        GetSystemInfo(&systemInfo);
         cachedAllocationGranularity = systemInfo.dwAllocationGranularity;
     }
     return cachedAllocationGranularity;
@@ -606,7 +666,7 @@ JL_DLLEXPORT long jl_SC_CLK_TCK(void)
 JL_DLLEXPORT size_t jl_get_field_offset(jl_datatype_t *ty, int field)
 {
     if (ty->layout == NULL || field > jl_datatype_nfields(ty) || field < 1)
-        jl_bounds_error_int((jl_value_t*)ty, field);
+        jl_bounds_error_int((jl_value_t *)ty, field);
     return jl_field_offset(ty, field - 1);
 }
 
@@ -617,7 +677,8 @@ JL_DLLEXPORT size_t jl_get_alignment(jl_datatype_t *ty)
     return ty->layout->alignment;
 }
 
-// Takes a handle (as returned from dlopen()) and returns the absolute path to the image loaded
+// Takes a handle (as returned from dlopen()) and returns the absolute path to the image
+// loaded
 JL_DLLEXPORT const char *jl_pathname_for_handle(void *handle)
 {
     if (!handle)
@@ -625,32 +686,33 @@ JL_DLLEXPORT const char *jl_pathname_for_handle(void *handle)
 
 #ifdef __APPLE__
     // Iterate through all images currently in memory
-    for (int32_t i = _dyld_image_count(); i >= 0 ; i--) {
+    for (int32_t i = _dyld_image_count(); i >= 0; i--) {
         // dlopen() each image, check handle
         const char *image_name = _dyld_get_image_name(i);
-        void *probe_lib = jl_load_dynamic_library(image_name, JL_RTLD_DEFAULT);
+        void *      probe_lib  = jl_load_dynamic_library(image_name, JL_RTLD_DEFAULT);
         jl_dlclose(probe_lib);
 
-        // If the handle is the same as what was passed in (modulo mode bits), return this image name
+        // If the handle is the same as what was passed in (modulo mode bits), return this
+        // image name
         if (((intptr_t)handle & (-4)) == ((intptr_t)probe_lib & (-4)))
             return image_name;
     }
 
 #elif defined(_OS_WINDOWS_)
 
-    wchar_t *pth16 = (wchar_t*)malloc(32768); // max long path length
-    DWORD n16 = GetModuleFileNameW((HMODULE)handle,pth16,32768);
+    wchar_t *pth16 = (wchar_t *)malloc(32768); // max long path length
+    DWORD    n16   = GetModuleFileNameW((HMODULE)handle, pth16, 32768);
     if (n16 <= 0) {
         free(pth16);
         return NULL;
     }
     pth16[n16] = L'\0';
-    DWORD n8 = WideCharToMultiByte(CP_UTF8, 0, pth16, -1, NULL, 0, NULL, NULL);
+    DWORD n8   = WideCharToMultiByte(CP_UTF8, 0, pth16, -1, NULL, 0, NULL, NULL);
     if (n8 == 0) {
         free(pth16);
         return NULL;
     }
-    char *filepath = (char*)malloc(++n8);
+    char *filepath = (char *)malloc(++n8);
     if (!WideCharToMultiByte(CP_UTF8, 0, pth16, -1, filepath, n8, NULL, NULL)) {
         free(pth16);
         free(filepath);
@@ -665,7 +727,7 @@ JL_DLLEXPORT const char *jl_pathname_for_handle(void *handle)
     dlinfo(handle, RTLD_DI_LINKMAP, &map);
 #ifdef __has_feature
 #if __has_feature(memory_sanitizer)
-    __msan_unpoison(&map,sizeof(struct link_map*));
+    __msan_unpoison(&map, sizeof(struct link_map *));
     if (map) {
         __msan_unpoison(map, sizeof(struct link_map));
         __msan_unpoison_string(map->l_name);
@@ -680,23 +742,23 @@ JL_DLLEXPORT const char *jl_pathname_for_handle(void *handle)
 }
 
 #ifdef _OS_WINDOWS_
-static BOOL CALLBACK jl_EnumerateLoadedModulesProc64(
-  _In_      PCTSTR ModuleName,
-  _In_      DWORD64 ModuleBase,
-  _In_      ULONG ModuleSize,
-  _In_opt_  PVOID a
-)
+static BOOL CALLBACK jl_EnumerateLoadedModulesProc64(_In_ PCTSTR ModuleName,
+                                                     _In_ DWORD64 ModuleBase,
+                                                     _In_ ULONG ModuleSize,
+                                                     _In_opt_ PVOID a)
 {
-    jl_array_grow_end((jl_array_t*)a, 1);
-    //XXX: change to jl_arrayset if array storage allocation for Array{String,1} changes:
+    jl_array_grow_end((jl_array_t *)a, 1);
+    // XXX: change to jl_arrayset if array storage allocation for Array{String,1} changes:
     jl_value_t *v = jl_cstr_to_string(ModuleName);
-    jl_array_ptr_set(a, jl_array_dim0(a)-1, v);
+    jl_array_ptr_set(a, jl_array_dim0(a) - 1, v);
     return TRUE;
 }
-// Takes a handle (as returned from dlopen()) and returns the absolute path to the image loaded
+// Takes a handle (as returned from dlopen()) and returns the absolute path to the image
+// loaded
 JL_DLLEXPORT int jl_dllist(jl_array_t *list)
 {
-    return EnumerateLoadedModules64(GetCurrentProcess(), jl_EnumerateLoadedModulesProc64, list);
+    return EnumerateLoadedModules64(GetCurrentProcess(), jl_EnumerateLoadedModulesProc64,
+                                    list);
 }
 #endif
 
@@ -724,12 +786,12 @@ JL_DLLEXPORT size_t jl_maxrss(void)
 {
 #if defined(_OS_WINDOWS_)
     PROCESS_MEMORY_COUNTERS counter;
-    GetProcessMemoryInfo( GetCurrentProcess( ), &counter, sizeof(counter) );
+    GetProcessMemoryInfo(GetCurrentProcess(), &counter, sizeof(counter));
     return (size_t)counter.PeakWorkingSetSize;
 
-#elif defined(_OS_LINUX_) || defined(_OS_DARWIN_) || defined (_OS_FREEBSD_)
+#elif defined(_OS_LINUX_) || defined(_OS_DARWIN_) || defined(_OS_FREEBSD_)
     struct rusage rusage;
-    getrusage( RUSAGE_SELF, &rusage );
+    getrusage(RUSAGE_SELF, &rusage);
 
 #if defined(_OS_LINUX_)
     return (size_t)(rusage.ru_maxrss * 1024);
