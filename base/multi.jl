@@ -1046,11 +1046,11 @@ function deliver_result(sock::IO, msg, oid, value)
 end
 
 ## message event handlers ##
-function process_messages(r_stream::TCPSocket, w_stream::TCPSocket, incoming=true)
+function process_messages(r_stream::TCPSocket, w_stream::TCPSocket, incoming::Bool=true)
     @schedule process_tcp_streams(r_stream, w_stream, incoming)
 end
 
-function process_tcp_streams(r_stream::TCPSocket, w_stream::TCPSocket, incoming)
+function process_tcp_streams(r_stream::TCPSocket, w_stream::TCPSocket, incoming::Bool)
     disable_nagle(r_stream)
     wait_connected(r_stream)
     if r_stream != w_stream
@@ -1060,7 +1060,13 @@ function process_tcp_streams(r_stream::TCPSocket, w_stream::TCPSocket, incoming)
     message_handler_loop(r_stream, w_stream, incoming)
 end
 
-function process_messages(r_stream::IO, w_stream::IO, incoming=true)
+"""
+    Base.process_messages(r_stream, w_stream, incoming::Bool=true)
+
+If `incoming` is `true`, schedules reads from `r_stream` and writes to `w_stream`.
+Otherwise, schedules in the reverse direction.
+"""
+function process_messages(r_stream::IO, w_stream::IO, incoming::Bool=true)
     @schedule message_handler_loop(r_stream, w_stream, incoming)
 end
 

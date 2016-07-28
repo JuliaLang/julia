@@ -285,6 +285,12 @@ General Parallel Computing Support
 
    Call a function asynchronously on the given arguments on the specified process. Returns a ``Future``\ . Keyword arguments, if any, are passed through to ``func``\ .
 
+.. function:: Base.process_messages(r_stream, w_stream, incoming::Bool=true)
+
+   .. Docstring generated from Julia source
+
+   If ``incoming`` is ``true``\ , schedules reads from ``r_stream`` and writes to ``w_stream``\ . Otherwise, schedules in the reverse direction.
+
 .. function:: Future()
 
    .. Docstring generated from Julia source

@@ -737,6 +737,7 @@ cluster is done via cluster managers. A :obj:`ClusterManager` is responsible for
 - optionally, a cluster manager can also provide data transport
 
 A Julia cluster has the following characteristics:
+
 - The initial Julia process, also called the ``master`` is special and has a id of 1.
 - Only the ``master`` process can add or remove worker processes.
 - All processes can directly communicate with each other.
@@ -849,24 +850,21 @@ object (with appropriate fields initialized) to ``launched`` ::
 Most of the fields in :class:`WorkerConfig` are used by the inbuilt managers.
 Custom cluster managers would typically specify only ``io`` or ``host`` / ``port``:
 
-If ``io`` is specified, it is used to read host/port information. A Julia
+- If ``io`` is specified, it is used to read host/port information. A Julia
 worker prints out its bind address and port at startup. This allows Julia
 workers to listen on any free port available instead of requiring worker ports
 to be configured manually.
-
-If ``io`` is not specified, ``host`` and ``port`` are used to connect.
-
-``count``, ``exename`` and ``exeflags`` are relevant for launching additional workers from a worker.
+- If ``io`` is not specified, ``host`` and ``port`` are used to connect.
+- ``count``, ``exename`` and ``exeflags`` are relevant for launching additional workers from a worker.
 For example, a cluster manager may launch a single worker per node, and use that to launch
-additional workers. ``count`` with an integer value ``n`` will launch a total of ``n`` workers,
-while a value of ``:auto`` will launch as many workers as cores on that machine.
-``exename`` is the name of the ``julia`` executable including the full path.
-``exeflags`` should be set to the required command line arguments for new workers.
-
-``tunnel``, ``bind_addr``, ``sshflags`` and ``max_parallel`` are used when a ssh tunnel is
+additional workers.
+    - ``count`` with an integer value ``n`` will launch a total of ``n`` workers.
+    - ``count`` with a value of ``:auto`` will launch as many workers as cores on that machine.
+    - ``exename`` is the name of the ``julia`` executable including the full path.
+    - ``exeflags`` should be set to the required command line arguments for new workers.
+- ``tunnel``, ``bind_addr``, ``sshflags`` and ``max_parallel`` are used when a ssh tunnel is
 required to connect to the workers from the master process.
-
-``userdata`` is provided for custom cluster managers to store their own worker specific information.
+- ``userdata`` is provided for custom cluster managers to store their own worker specific information.
 
 
 ``manage(manager::FooManager, id::Integer, config::WorkerConfig, op::Symbol)`` is called at different
@@ -889,7 +887,7 @@ Each Julia process has as many communication tasks as the workers it is connecte
 
 - Each Julia process thus has 31 communication tasks
 - Each task handles all incoming messages from a single remote worker in a message processing loop
-- The message processing loop waits on an ``AsyncStream`` object - for example, a TCP socket in the default implementation, reads an entire
+- The message processing loop waits on an ``AsyncStream`` object (for example, a ``TCPSocket`` in the default implementation), reads an entire
   message, processes it and waits for the next one
 - Sending messages to a process is done directly from any Julia task - not just communication tasks - again, via the appropriate
   ``AsyncStream`` object
@@ -904,7 +902,7 @@ The default implementation (which uses TCP/IP sockets) is implemented as ``conne
 
 ``connect`` should return a pair of ``AsyncStream`` objects, one for reading data sent from worker ``pid``,
 and the other to write data that needs to be sent to worker ``pid``. Custom cluster managers can use an in-memory ``BufferStream``
-as the plumbing to proxy data between the custom, possibly non-AsyncStream transport and Julia's in-built parallel infrastructure.
+as the plumbing to proxy data between the custom, possibly non-``AsyncStream`` transport and Julia's in-built parallel infrastructure.
 
 A ``BufferStream`` is an in-memory ``IOBuffer`` which behaves like an ``AsyncStream``.
 
@@ -976,9 +974,8 @@ All processes in a cluster share the same cookie which, by default, is a randoml
   ``Base.cluster_cookie()``. Cluster managers not using the default TCP/IP transport (and hence not specifying ``--worker``)
   must call ``init_worker(cookie, manager)`` with the same cookie as on the master.
 
-It is to be noted that environments requiring higher levels of security (for example, cookies can be pre-shared and hence not
-specified as a startup arg) can implement this via a custom ClusterManager.
-
+Note that environments requiring higher levels of security can implement this via a custom :class:`ClusterManager`.
+For example, cookies can be pre-shared and hence not specified as a startup argument.
 
 Specifying network topology (Experimental)
 -------------------------------------------
@@ -987,7 +984,7 @@ Keyword argument ``topology`` to ``addprocs`` is used to specify how the workers
 
 - ``:all_to_all`` : is the default, where all workers are connected to each other.
 
-- ``:master_slave`` : only the driver process, i.e. pid 1 has connections to the workers.
+- ``:master_slave`` : only the driver process, i.e. `pid` 1 has connections to the workers.
 
 - ``:custom`` : the ``launch`` method of the cluster manager specifes the connection topology.
   Fields ``ident`` and ``connect_idents`` in ``WorkerConfig`` are used to specify the  same.
