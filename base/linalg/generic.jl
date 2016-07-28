@@ -588,7 +588,12 @@ end
 # isapprox: approximate equality of arrays [like isapprox(Number,Number)]
 function isapprox{T<:Number,S<:Number}(x::AbstractArray{T}, y::AbstractArray{S}; rtol::Real=Base.rtoldefault(T,S), atol::Real=0, norm::Function=vecnorm)
     d = norm(x - y)
-    return isfinite(d) ? d <= atol + rtol*max(norm(x), norm(y)) : x == y
+    if isfinite(d)
+        return d <= atol + rtol*max(norm(x), norm(y))
+    else
+        # Fall back to a component-wise approximate comparison
+        return all(map((a, b) -> isapprox(a, b; rtol=rtol, atol=atol), x, y))
+    end
 end
 
 """
