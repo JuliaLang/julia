@@ -514,6 +514,24 @@ If we run this, we will see::
     take!(c) = 4
     take!(c) = 5
 
+Remote workers can also `take!` from a `Channel`::
+
+.. doctest::
+    addprocs(5)
+    channels = Dict(worker => RemoteChannel() for worker in workers())
+    @everywhere take_and_print!(c) = println(take!(c))
+    for worker in workers()
+        put!(channels[worker], worker)
+        remotecall_fetch(take_and_print!, worker, channels[worker])
+    end
+
+This should output::
+    From worker 2:  2
+    From worker 3:  3
+    From worker 4:  4
+    From worker 5:  5
+    From worker 6:  6
+
 ``RemoteChannel`` can thus be used to refer to user implemented ``AbstractChannel`` objects. A simple
 example of this is provided in ``examples/dictchannel.jl`` which uses a dictionary as its remote store.
 
