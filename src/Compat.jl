@@ -1297,6 +1297,11 @@ else
     end
 end
 
+if VERSION < v"0.5.0-dev+2285"
+    fieldoffset(T, i) = @compat UInt(fieldoffsets(T)[i])
+    export fieldoffset
+end
+
 if !isdefined(Base, :view)
     const view = slice
 end

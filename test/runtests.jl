@@ -267,6 +267,8 @@ if VERSION < v"0.4.0-dev+3609"
     end
 end
 
+@test fieldoffset(Complex{Float32}, 2) === @compat UInt(4)
+
 @test parse(Int8, '9') == convert(Int8, 9)
 @test parse(Int, 'a', 16) == 10
 @test parse(Int, "200") == 200

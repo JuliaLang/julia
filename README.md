@@ -199,6 +199,8 @@ Currently, the `@compat` macro supports the following syntaxes:
 
 * `slice` is now `view`[#16972](https://github.com/JuliaLang/julia/pull/16972) do `import Compat.view` and then use `view` normally without the `@compat` macro.
 
+* `fieldoffsets` has been deprecated in favor of `fieldoffset`[#14777](https://github.com/JuliaLang/julia/pull/14777).
+
 ## New macros
 
 * `@static` has been added [#16219](https://github.com/JuliaLang/julia/pull/16219).
