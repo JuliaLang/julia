@@ -376,7 +376,7 @@
          (ftype (decl-type (car pargl)))
          ;; 1-element list of vararg argument, or empty if none
          (vararg (let ((l (if (null? pargl) '() (last pargl))))
-                   (if (vararg? l)
+                   (if (or (vararg? l) (varargexpr? l))
                        (list l) '())))
          ;; positional args without vararg
          (pargl (if (null? vararg) pargl (butlast pargl)))
