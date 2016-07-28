@@ -322,6 +322,9 @@ let X = Float64[1 2 3; 4 5 6]
     end
 end
 
+# issue #17686
+@test isa(hvcat((2,), zeros(4), zeros(4, 4)), Matrix{Float64})
+
 # "end"
 X = [ i+2j for i=1:5, j=1:5 ]
 @test X[end,end] == 15

@@ -680,24 +680,14 @@ function hcat{T}(V::Vector{T}...)
     return [ V[j][i]::T for i=1:length(V[1]), j=1:length(V) ]
 end
 
-hcat(A::Matrix...) = typed_hcat(promote_eltype(A...), A...)
-hcat{T}(A::Matrix{T}...) = typed_hcat(T, A...)
-
-vcat(A::Matrix...) = typed_vcat(promote_eltype(A...), A...)
-vcat{T}(A::Matrix{T}...) = typed_vcat(T, A...)
-
 hcat(A::Union{Matrix, Vector}...) = typed_hcat(promote_eltype(A...), A...)
 hcat{T}(A::Union{Matrix{T}, Vector{T}}...) = typed_hcat(T, A...)
-
 
 vcat(A::Union{Matrix, Vector}...) = typed_vcat(promote_eltype(A...), A...)
 vcat{T}(A::Union{Matrix{T}, Vector{T}}...) = typed_vcat(T, A...)
 
-hvcat(rows::Tuple{Vararg{Int}}, xs::Vector...) = typed_hvcat(promote_eltype(xs...), rows, xs...)
-hvcat{T}(rows::Tuple{Vararg{Int}}, xs::Vector{T}...) = typed_hvcat(T, rows, xs...)
-
-hvcat(rows::Tuple{Vararg{Int}}, xs::Matrix...) = typed_hvcat(promote_eltype(xs...), rows, xs...)
-hvcat{T}(rows::Tuple{Vararg{Int}}, xs::Matrix{T}...) = typed_hvcat(T, rows, xs...)
+hvcat(rows::Tuple{Vararg{Int}}, xs::Union{Matrix, Vector}...) = typed_hvcat(promote_eltype(xs...), rows, xs...)
+hvcat{T}(rows::Tuple{Vararg{Int}}, xs::Union{Matrix{T}, Vector{T}}...) = typed_hvcat(T, rows, xs...)
 
 ## find ##
 
