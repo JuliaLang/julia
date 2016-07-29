@@ -343,6 +343,23 @@ for rng in ([], [MersenneTwister()], [RandomDevice()])
     bitrand(rng..., 2, 3)          ::BitArray{2}
     rand!(rng..., BitArray(5))     ::BitArray{1}
     rand!(rng..., BitArray(2, 3))  ::BitArray{2}
+
+    # Test that you cannot call randn or randexp with non-Float types.
+    for r in [randn, randexp, randn!, randexp!]
+        @test_throws MethodError r(Int)
+        @test_throws MethodError r(Int32)
+        @test_throws MethodError r(Bool)
+        @test_throws MethodError r(String)
+        @test_throws MethodError r(AbstractFloat)
+        # TODO(#17627): Consider adding support for randn(BigFloat) and removing this test.
+        @test_throws MethodError r(BigFloat)
+
+        @test_throws MethodError r(Int64, (2,3))
+        @test_throws MethodError r(String, 1)
+
+        @test_throws MethodError r(rng..., Number, (2,3))
+        @test_throws MethodError r(rng..., Any, 1)
+    end
 end
 
 function hist(X,n)

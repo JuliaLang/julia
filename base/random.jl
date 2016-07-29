@@ -1200,7 +1200,7 @@ let Floats = Union{Float16,Float32,Float64}
         @eval begin
             # scalars
             $randfun{T<:$Floats}(rng::AbstractRNG, ::Type{T}) = convert(T, $randfun(rng))
-            $randfun{T<:$Floats}(::Type{T}) = $randfun(GLOBAL_RNG, T)
+            $randfun{T}(::Type{T}) = $randfun(GLOBAL_RNG, T)
 
             # filling arrays
             function $randfun!{T}(rng::AbstractRNG, A::AbstractArray{T})
@@ -1213,14 +1213,15 @@ let Floats = Union{Float16,Float32,Float64}
             $randfun!(A::AbstractArray) = $randfun!(GLOBAL_RNG, A)
 
             # generating arrays
-            $randfun{T}(rng::AbstractRNG, ::Type{T}, dims::Dims)       = $randfun!(rng, Array{T}(dims))
-            $randfun{T}(rng::AbstractRNG, ::Type{T}, dims::Integer...) = $randfun!(rng, Array{T}(dims...))
-            $randfun{T}(                  ::Type{T}, dims::Dims)       = $randfun(GLOBAL_RNG, T, dims)
-            $randfun{T}(                  ::Type{T}, dims::Integer...) = $randfun(GLOBAL_RNG, T, dims...)
-            $randfun(   rng::AbstractRNG,            dims::Dims)       = $randfun(rng, Float64, dims)
-            $randfun(   rng::AbstractRNG,            dims::Integer...) = $randfun(rng, Float64, dims...)
-            $randfun(                                dims::Dims)       = $randfun(GLOBAL_RNG, Float64, dims)
-            $randfun(                                dims::Integer...) = $randfun(GLOBAL_RNG, Float64, dims...)
+            $randfun{T}(rng::AbstractRNG, ::Type{T}, dims::Dims                     ) = $randfun!(rng, Array{T}(dims))
+            # Note that this method explicitly does not define $randfun(rng, T), in order to prevent an infinite recursion.
+            $randfun{T}(rng::AbstractRNG, ::Type{T}, dim1::Integer, dims::Integer...) = $randfun!(rng, Array{T}(dim1, dims...))
+            $randfun{T}(                  ::Type{T}, dims::Dims                     ) = $randfun(GLOBAL_RNG, T, dims)
+            $randfun{T}(                  ::Type{T}, dims::Integer...               ) = $randfun(GLOBAL_RNG, T, dims...)
+            $randfun(   rng::AbstractRNG,            dims::Dims                     ) = $randfun(rng, Float64, dims)
+            $randfun(   rng::AbstractRNG,            dims::Integer...               ) = $randfun(rng, Float64, dims...)
+            $randfun(                                dims::Dims                     ) = $randfun(GLOBAL_RNG, Float64, dims)
+            $randfun(                                dims::Integer...               ) = $randfun(GLOBAL_RNG, Float64, dims...)
         end
     end
 end
