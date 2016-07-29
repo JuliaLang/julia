@@ -1068,8 +1068,9 @@ transport implementation receives the first message from a remote worker. The cu
 transport must manage a logical connection to the remote worker and provide two
 `IO` objects, one for incoming messages and the other for messages addressed to the
 remote worker.
-If `incoming` is `true`, schedules reads from `r_stream` and writes to `w_stream`.
-Otherwise, schedules in the reverse direction.
+If `incoming` is `true`, the remote peer initiated the connection.
+Whichever of the pair initiates the connection sends the cluster cookie and its
+Julia version number to perform the authentication handshake.
 """
 function process_messages(r_stream::IO, w_stream::IO, incoming::Bool=true)
     @schedule message_handler_loop(r_stream, w_stream, incoming)
@@ -1429,7 +1430,7 @@ const worker_lock = ReentrantLock()
 Launches worker processes via the specified cluster manager.
 
 For example Beowulf clusters are  supported via a custom cluster manager implemented in
-package `ClusterManagers`.
+package `ClusterManagers.jl`.
 
 The number of seconds a newly launched worker waits for connection establishment from the
 master can be specified via variable `JULIA_WORKER_TIMEOUT` in the worker process's

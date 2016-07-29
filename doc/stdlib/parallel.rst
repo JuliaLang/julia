@@ -174,7 +174,7 @@ General Parallel Computing Support
    Keyword arguments:
 
    * ``tunnel``\ : if ``true`` then SSH tunneling will be used to connect to the worker from the           master process. Default is ``false``\ .
-   * ``sshflags``\ : specifies additional ssh options, e.g.::   sshflags=``-i /home/foo/bar.pem``
+   * ``sshflags``\ : specifies additional ssh options, e.g. ``sshflags=`-i /home/foo/bar.pem```
    * ``max_parallel``\ : specifies the maximum number of workers connected to in parallel at a host.                 Defaults to 10.
    * ``dir``\ : specifies the working directory on the workers. Defaults to the host's current        directory (as found by ``pwd()``\ )
    * ``exename``\ : name of the ``julia`` executable. Defaults to ``"$JULIA_HOME/julia"`` or            ``"$JULIA_HOME/julia-debug"`` as the case may be.
@@ -187,7 +187,7 @@ General Parallel Computing Support
 
    Environment variables :
 
-   If the master process fails to establish a connection with a newly launched worker within 60.0 seconds, the worker treats it a fatal situation and terminates. This timeout can be controlled via environment variable ``JULIA_WORKER_TIMEOUT``\ . The value of ``JULIA_WORKER_TIMEOUT`` on the master process, specifies the number of seconds a newly launched worker waits for connection establishment.
+   If the master process fails to establish a connection with a newly launched worker within 60.0 seconds, the worker treats it as a fatal situation and terminates. This timeout can be controlled via environment variable ``JULIA_WORKER_TIMEOUT``\ . The value of JULIA_WORKER_TIMEOUT` on the master process specifies the number of seconds a newly launched worker waits for connection establishment.
 
 .. function:: addprocs(manager::ClusterManager; kwargs...) -> List of process identifiers
 
@@ -195,7 +195,7 @@ General Parallel Computing Support
 
    Launches worker processes via the specified cluster manager.
 
-   For example Beowulf clusters are  supported via a custom cluster manager implemented in package ``ClusterManagers``\ .
+   For example Beowulf clusters are  supported via a custom cluster manager implemented in package ``ClusterManagers.jl``\ .
 
    The number of seconds a newly launched worker waits for connection establishment from the master can be specified via variable ``JULIA_WORKER_TIMEOUT`` in the worker process's environment. Relevant only when using TCP/IP as transport.
 
@@ -285,7 +285,7 @@ General Parallel Computing Support
 
    .. Docstring generated from Julia source
 
-   Called by cluster managers using custom transports. It should be called when the custom transport implementation receives the first message from a remote worker. The custom transport must manage a logical connection to the remote worker and provide two ``IO`` objects, one for incoming messages and the other for messages addressed to the remote worker. If ``incoming`` is ``true``\ , schedules reads from ``r_stream`` and writes to ``w_stream``\ . Otherwise, schedules in the reverse direction.
+   Called by cluster managers using custom transports. It should be called when the custom transport implementation receives the first message from a remote worker. The custom transport must manage a logical connection to the remote worker and provide two ``IO`` objects, one for incoming messages and the other for messages addressed to the remote worker. If ``incoming`` is ``true``\ , the remote peer initiated the connection. Whichever of the pair initiates the connection sends the cluster cookie and its Julia version number to perform the authentication handshake.
 
 .. function:: Future()
 

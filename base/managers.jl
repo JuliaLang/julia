@@ -70,8 +70,8 @@ Keyword arguments:
 * `tunnel`: if `true` then SSH tunneling will be used to connect to the worker from the
             master process. Default is `false`.
 
-* `sshflags`: specifies additional ssh options, e.g.::
-    sshflags=`-i /home/foo/bar.pem`
+* `sshflags`: specifies additional ssh options, e.g.
+  ```sshflags=\`-i /home/foo/bar.pem\` ```
 
 * `max_parallel`: specifies the maximum number of workers connected to in parallel at a host.
                   Defaults to 10.
@@ -102,10 +102,10 @@ Keyword arguments:
 Environment variables :
 
 If the master process fails to establish a connection with a newly launched worker within
-60.0 seconds, the worker treats it a fatal situation and terminates. This timeout can be
-controlled via environment variable `JULIA_WORKER_TIMEOUT`. The value of
-`JULIA_WORKER_TIMEOUT` on the master process, specifies the number of seconds a newly
-launched worker waits for connection establishment.
+60.0 seconds, the worker treats it as a fatal situation and terminates.
+This timeout can be controlled via environment variable `JULIA_WORKER_TIMEOUT`.
+The value of JULIA_WORKER_TIMEOUT` on the master process specifies the number of seconds a
+newly launched worker waits for connection establishment.
 """
 function addprocs(machines::AbstractVector; tunnel=false, sshflags=``, max_parallel=10, kwargs...)
     check_addprocs_args(kwargs)
