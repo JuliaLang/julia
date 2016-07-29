@@ -1061,8 +1061,13 @@ function process_tcp_streams(r_stream::TCPSocket, w_stream::TCPSocket, incoming:
 end
 
 """
-    Base.process_messages(r_stream, w_stream, incoming::Bool=true)
+    Base.process_messages(r_stream::IO, w_stream::IO, incoming::Bool=true)
 
+Called by cluster managers using custom transports. It should be called when the custom
+transport implementation receives the first message from a remote worker. The custom
+transport must manage a logical connection to the remote worker and provide two
+`IO` objects, one for incoming messages and the other for messages addressed to the
+remote worker.
 If `incoming` is `true`, schedules reads from `r_stream` and writes to `w_stream`.
 Otherwise, schedules in the reverse direction.
 """
@@ -1380,6 +1385,14 @@ function parse_connection_info(str)
     end
 end
 
+"""
+    init_worker(cookie::AbstractString, manager::ClusterManager=DefaultClusterManager())
+
+Called by cluster managers implementing custom transports. It initializes a newly launched
+process as a worker. Command line argument `--worker` has the effect of initializing a
+process as a worker using TCP/IP sockets for transport.
+`cookie` is a [`cluster_cookie`](:func:`cluster_cookie`).
+"""
 function init_worker(cookie::AbstractString, manager::ClusterManager=DefaultClusterManager())
     # On workers, the default cluster manager connects via TCP sockets. Custom
     # transports will need to call this function with their own manager.
@@ -1409,6 +1422,19 @@ end
 # Only one addprocs can be in progress at any time
 #
 const worker_lock = ReentrantLock()
+
+"""
+    addprocs(manager::ClusterManager; kwargs...) -> List of process identifiers
+
+Launches worker processes via the specified cluster manager.
+
+For example Beowulf clusters are  supported via a custom cluster manager implemented in
+package `ClusterManagers`.
+
+The number of seconds a newly launched worker waits for connection establishment from the
+master can be specified via variable `JULIA_WORKER_TIMEOUT` in the worker process's
+environment. Relevant only when using TCP/IP as transport.
+"""
 function addprocs(manager::ClusterManager; kwargs...)
     lock(worker_lock)
     try

@@ -143,27 +143,27 @@ Tasks
 General Parallel Computing Support
 ----------------------------------
 
-.. function:: addprocs(n::Integer; exeflags=``) -> List of process identifiers
+.. function:: addprocs(np::Integer; restrict=true, kwargs...) -> List of process identifiers
 
    .. Docstring generated from Julia source
 
-   Launches workers using the in-built ``LocalManager`` which only launches workers on the local host. This can be used to take advantage of multiple cores. ``addprocs(4)`` will add 4 processes on the local machine.
+   Launches workers using the in-built ``LocalManager`` which only launches workers on the local host. This can be used to take advantage of multiple cores. ``addprocs(4)`` will add 4 processes on the local machine. If ``restrict`` is ``true``\ , binding is restricted to ``127.0.0.1``\ .
 
-.. function:: addprocs() -> List of process identifiers
+.. function:: addprocs(; kwargs...) -> List of process identifiers
 
    .. Docstring generated from Julia source
 
-   Equivalent to ``addprocs(Sys.CPU_CORES)``
+   Equivalent to ``addprocs(Sys.CPU_CORES; kwargs...)``
 
    Note that workers do not run a ``.juliarc.jl`` startup script, nor do they synchronize their global state (such as global variables, new method definitions, and loaded modules) with any of the other running processes.
 
-.. function:: addprocs(machines; keyword_args...) -> List of process identifiers
+.. function:: addprocs(machines; tunnel=false, sshflags=\`\`, max_parallel=10, kwargs...) -> List of process identifiers
 
    .. Docstring generated from Julia source
 
    Add processes on remote machines via SSH. Requires ``julia`` to be installed in the same location on each node, or to be available via a shared file system.
 
-   ``machines`` is a vector of machine specifications.  Worker are started for each specification.
+   ``machines`` is a vector of machine specifications. Workers are started for each specification.
 
    A machine specification is either a string ``machine_spec`` or a tuple - ``(machine_spec, count)``\ .
 
@@ -174,11 +174,7 @@ General Parallel Computing Support
    Keyword arguments:
 
    * ``tunnel``\ : if ``true`` then SSH tunneling will be used to connect to the worker from the           master process. Default is ``false``\ .
-   * ``sshflags``\ : specifies additional ssh options, e.g.
-
-     .. code-block:: julia
-
-         sshflags=`-i /home/foo/bar.pem`
+   * ``sshflags``\ : specifies additional ssh options, e.g.::   sshflags=``-i /home/foo/bar.pem``
    * ``max_parallel``\ : specifies the maximum number of workers connected to in parallel at a host.                 Defaults to 10.
    * ``dir``\ : specifies the working directory on the workers. Defaults to the host's current        directory (as found by ``pwd()``\ )
    * ``exename``\ : name of the ``julia`` executable. Defaults to ``"$JULIA_HOME/julia"`` or            ``"$JULIA_HOME/julia-debug"`` as the case may be.
@@ -285,11 +281,11 @@ General Parallel Computing Support
 
    Call a function asynchronously on the given arguments on the specified process. Returns a ``Future``\ . Keyword arguments, if any, are passed through to ``func``\ .
 
-.. function:: Base.process_messages(r_stream, w_stream, incoming::Bool=true)
+.. function:: Base.process_messages(r_stream::IO, w_stream::IO, incoming::Bool=true)
 
    .. Docstring generated from Julia source
 
-   If ``incoming`` is ``true``\ , schedules reads from ``r_stream`` and writes to ``w_stream``\ . Otherwise, schedules in the reverse direction.
+   Called by cluster managers using custom transports. It should be called when the custom transport implementation receives the first message from a remote worker. The custom transport must manage a logical connection to the remote worker and provide two ``IO`` objects, one for incoming messages and the other for messages addressed to the remote worker. If ``incoming`` is ``true``\ , schedules reads from ``r_stream`` and writes to ``w_stream``\ . Otherwise, schedules in the reverse direction.
 
 .. function:: Future()
 
@@ -814,13 +810,13 @@ LocalManager, for launching additional workers on the same host and SSHManager, 
 hosts via ssh are present in Base. TCP/IP sockets are used to connect and transport messages
 between processes. It is possible for Cluster Managers to provide a different transport.
 
-.. function:: launch(manager::FooManager, params::Dict, launched::Vector{WorkerConfig}, launch_ntfy::Condition)
+.. function:: launch(manager::ClusterManager, params::Dict, launched::Array, launch_ntfy::Condition)
 
    .. Docstring generated from Julia source
 
    Implemented by cluster managers. For every Julia worker launched by this function, it should append a ``WorkerConfig`` entry to ``launched`` and notify ``launch_ntfy``\ . The function MUST exit once all workers, requested by ``manager`` have been launched. ``params`` is a dictionary of all keyword arguments ``addprocs`` was called with.
 
-.. function:: manage(manager::FooManager, pid::Int, config::WorkerConfig. op::Symbol)
+.. function:: manage(manager::ClusterManager, id::Integer, config::WorkerConfig. op::Symbol)
 
    .. Docstring generated from Julia source
 
@@ -830,27 +826,21 @@ between processes. It is possible for Cluster Managers to provide a different tr
    * with ``:interrupt`` when ``interrupt(workers)`` is called. The :class:`ClusterManager` should signal the appropriate worker with an interrupt signal.
    * with ``:finalize`` for cleanup purposes.
 
-.. function:: kill(manager::FooManager, pid::Int, config::WorkerConfig)
+.. function:: kill(manager::ClusterManager, pid::Int, config::WorkerConfig)
 
    .. Docstring generated from Julia source
 
    Implemented by cluster managers. It is called on the master process, by ``rmprocs``\ . It should cause the remote worker specified by ``pid`` to exit. ``Base.kill(manager::ClusterManager.....)`` executes a remote ``exit()`` on ``pid``
 
-.. function:: init_worker(manager::FooManager)
+.. function:: init_worker(cookie::AbstractString, manager::ClusterManager=DefaultClusterManager())
 
    .. Docstring generated from Julia source
 
-   Called by cluster managers implementing custom transports. It initializes a newly launched process as a worker. Command line argument ``--worker`` has the effect of initializing a process as a worker using TCP/IP sockets for transport.
+   Called by cluster managers implementing custom transports. It initializes a newly launched process as a worker. Command line argument ``--worker`` has the effect of initializing a process as a worker using TCP/IP sockets for transport. ``cookie`` is a :func:`cluster_cookie`\ .
 
-.. function:: connect(manager::FooManager, pid::Int, config::WorkerConfig) -> (instrm::AsyncStream, outstrm::AsyncStream)
-
-   .. Docstring generated from Julia source
-
-   Implemented by cluster managers using custom transports. It should establish a logical connection to worker with id ``pid``\ , specified by ``config`` and return a pair of ``AsyncStream`` objects. Messages from ``pid`` to current process will be read off ``instrm``\ , while messages to be sent to ``pid`` will be written to ``outstrm``\ . The custom transport implementation must ensure that messages are delivered and received completely and in order. ``Base.connect(manager::ClusterManager.....)`` sets up TCP/IP socket connections in-between workers.
-
-.. function:: Base.process_messages(instrm::AsyncStream, outstrm::AsyncStream)
+.. function:: connect(manager::ClusterManager, pid::Int, config::WorkerConfig) -> (instrm::IO, outstrm::IO)
 
    .. Docstring generated from Julia source
 
-   Called by cluster managers using custom transports. It should be called when the custom transport implementation receives the first message from a remote worker. The custom transport must manage a logical connection to the remote worker and provide two ``AsyncStream`` objects, one for incoming messages and the other for messages addressed to the remote worker.
+   Implemented by cluster managers using custom transports. It should establish a logical connection to worker with id ``pid``\ , specified by ``config`` and return a pair of ``IO`` objects. Messages from ``pid`` to current process will be read off ``instrm``\ , while messages to be sent to ``pid`` will be written to ``outstrm``\ . The custom transport implementation must ensure that messages are delivered and received completely and in order. ``Base.connect(manager::ClusterManager.....)`` sets up TCP/IP socket connections in-between workers.
 

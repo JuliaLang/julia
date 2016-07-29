@@ -887,26 +887,26 @@ Each Julia process has as many communication tasks as the workers it is connecte
 
 - Each Julia process thus has 31 communication tasks
 - Each task handles all incoming messages from a single remote worker in a message processing loop
-- The message processing loop waits on an ``AsyncStream`` object (for example, a ``TCPSocket`` in the default implementation), reads an entire
+- The message processing loop waits on an ``IO`` object (for example, a ``TCPSocket`` in the default implementation), reads an entire
   message, processes it and waits for the next one
 - Sending messages to a process is done directly from any Julia task - not just communication tasks - again, via the appropriate
-  ``AsyncStream`` object
+  ``IO`` object
 
 Replacing the default transport involves the new implementation to setup connections to remote workers, and to provide appropriate
-``AsyncStream`` objects that the message processing loops can wait on. The manager specific callbacks to be implemented are::
+``IO`` objects that the message processing loops can wait on. The manager specific callbacks to be implemented are::
 
     connect(manager::FooManager, pid::Integer, config::WorkerConfig)
     kill(manager::FooManager, pid::Int, config::WorkerConfig)
 
 The default implementation (which uses TCP/IP sockets) is implemented as ``connect(manager::ClusterManager, pid::Integer, config::WorkerConfig)``.
 
-``connect`` should return a pair of ``AsyncStream`` objects, one for reading data sent from worker ``pid``,
+``connect`` should return a pair of ``IO`` objects, one for reading data sent from worker ``pid``,
 and the other to write data that needs to be sent to worker ``pid``. Custom cluster managers can use an in-memory ``BufferStream``
-as the plumbing to proxy data between the custom, possibly non-``AsyncStream`` transport and Julia's in-built parallel infrastructure.
+as the plumbing to proxy data between the custom, possibly non-``IO`` transport and Julia's in-built parallel infrastructure.
 
-A ``BufferStream`` is an in-memory ``IOBuffer`` which behaves like an ``AsyncStream``.
+A ``BufferStream`` is an in-memory ``IOBuffer`` which behaves like an ``IO`` - it is a stream which can be handled asynchronously.
 
-Folder ``examples/clustermanager/0mq`` is an example of using ZeroMQ is connect Julia workers in a star network with a 0MQ broker in the middle.
+Folder ``examples/clustermanager/0mq`` is an example of using ZeroMQ to connect Julia workers in a star topology with a 0MQ broker in the middle.
 Note: The Julia processes are still all *logically* connected to each other - any worker can message any other worker directly without any
 awareness of 0MQ being used as the transport layer.
 
@@ -914,18 +914,18 @@ When using custom transports:
 
 - Julia workers must NOT be started with ``--worker``. Starting with ``--worker`` will result in the newly launched
   workers defaulting to the TCP/IP socket transport implementation
-- For every incoming logical connection with a worker, ``Base.process_messages(rd::AsyncStream, wr::AsyncStream)`` must be called.
-  This launches a new task that handles reading and writing of messages from/to the worker represented by the ``AsyncStream`` objects
-- ``init_worker(cookie, manager::FooManager)`` MUST be called as part of worker process initializaton
+- For every incoming logical connection with a worker, :func:`Base.process_messages(rd::IO, wr::IO)` must be called.
+  This launches a new task that handles reading and writing of messages from/to the worker represented by the ``IO`` objects
+- ``init_worker(cookie, manager::FooManager)`` MUST be called as part of worker process initialization
 - Field ``connect_at::Any`` in :class:`WorkerConfig` can be set by the cluster manager when ``launch`` is called. The value of
   this field is passed in in all ``connect`` callbacks. Typically, it carries information on *how to connect* to a worker. For example,
   the TCP/IP socket transport uses this field to specify the ``(host, port)`` tuple at which to connect to a worker
 
 ``kill(manager, pid, config)`` is called to remove a worker from the cluster.
-On the master process, the corresponding ``AsyncStream`` objects must be closed by the implementation to ensure proper cleanup. The default
-implementation simply executes an ``exit()`` call on the specified remote worker.
+On the master process, the corresponding ``IO`` objects must be closed by the implementation to ensure proper cleanup.
+The default implementation simply executes an ``exit()`` call on the specified remote worker.
 
-``examples/clustermanager/simple`` is an example that shows a simple implementation using unix domain sockets for cluster setup
+``examples/clustermanager/simple`` is an example that shows a simple implementation using UNIX domain sockets for cluster setup.
 
 Network requirements for LocalManager and SSHManager
 ----------------------------------------------------
