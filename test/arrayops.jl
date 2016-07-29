@@ -1703,3 +1703,25 @@ for op in (:.+, :.*, :.÷, :.%, :.<<, :.>>, :.-, :./, :.\, :.//, :.^)
 end
 
 end
+
+# Test that concatenations of dense matrices/vectors yield dense matrices/vectors
+let
+    N = 4
+    densevec = ones(N)
+    densemat = diagm(ones(N))
+    # Test that concatenations of homogeneous pairs of either dense matrices or dense vectors
+    # (i.e., Matrix-Matrix concatenations, and Vector-Vector concatenations) yield dense arrays
+    for densearray in (densevec, densemat)
+        @test isa(vcat(densearray, densearray), Array)
+        @test isa(hcat(densearray, densearray), Array)
+        @test isa(hvcat((2,), densearray, densearray), Array)
+        @test isa(cat((1,2), densearray, densearray), Array)
+    end
+    # Test that concatenations of heterogeneous Matrix-Vector pairs yield dense matrices
+    @test isa(hcat(densemat, densevec), Array)
+    @test isa(hcat(densevec, densemat), Array)
+    @test isa(hvcat((2,), densemat, densevec), Array)
+    @test isa(hvcat((2,), densevec, densemat), Array)
+    @test isa(cat((1,2), densemat, densevec), Array)
+    @test isa(cat((1,2), densevec, densemat), Array)
+end

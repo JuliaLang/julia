@@ -3253,6 +3253,12 @@ function hvcat(rows::Tuple{Vararg{Int}}, X::Union{Vector, Matrix, SparseMatrixCS
     vcat(tmp_rows...)
 end
 
+function cat(catdims, Xin::Union{Vector, Matrix, SparseMatrixCSC}...)
+    X = SparseMatrixCSC[issparse(x) ? x : sparse(x) for x in Xin]
+    T = promote_eltype(Xin...)
+    Base.cat_t(catdims, T, X...)
+end
+
 """
     blkdiag(A...)
 
