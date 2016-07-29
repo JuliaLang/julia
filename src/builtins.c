@@ -1053,6 +1053,10 @@ static uintptr_t jl_object_id_(jl_value_t *tv, jl_value_t *v)
     jl_datatype_t *dt = (jl_datatype_t*)tv;
     if (dt == jl_datatype_type) {
         jl_datatype_t *dtv = (jl_datatype_t*)v;
+        // `name->primary` is cacheable even though it contains TypeVars
+        // that don't have stable IDs.
+        if (jl_egal(dtv->name->primary, v))
+            return bitmix(~dtv->name->hash, 0xaa5566aa);
         return bitmix(~dtv->name->hash, hash_svec(dtv->parameters));
     }
     if (dt == jl_typename_type)

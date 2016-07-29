@@ -50,95 +50,95 @@ As in the example above, we recommend following some simple conventions when wri
 documentation:
 
 1. Always show the signature of a function at the top of the documentation,
-with a four-space indent so that it is printed as Julia code.
+   with a four-space indent so that it is printed as Julia code.
 
-  This can be identical to the signature present in the Julia code
-  (like ``mean(x::AbstractArray)``), or a simplified form.
-  Optional arguments should be represented with their default values (i.e. ``f(x, y=1)``)
-  when possible, following the actual Julia syntax. Optional arguments which
-  do not have a default value should be put in brackets (i.e. ``f(x[, y])`` and
-  ``f(x[, y[, z]])``). An alternative solution is to use several lines: one without
-  optional arguments, the other(s) with them. This solution can also be used to document
-  several related methods of a given function. When a function accepts many keyword
-  arguments, only include a ``<keyword arguments>`` placeholder in the signature (i.e.
-  ``f(x; <keyword arguments>)``), and give the complete list under an ``# Arguments``
-  section (see point 4 below).
+   This can be identical to the signature present in the Julia code
+   (like ``mean(x::AbstractArray)``), or a simplified form.
+   Optional arguments should be represented with their default values (i.e. ``f(x, y=1)``)
+   when possible, following the actual Julia syntax. Optional arguments which
+   do not have a default value should be put in brackets (i.e. ``f(x[, y])`` and
+   ``f(x[, y[, z]])``). An alternative solution is to use several lines: one without
+   optional arguments, the other(s) with them. This solution can also be used to document
+   several related methods of a given function. When a function accepts many keyword
+   arguments, only include a ``<keyword arguments>`` placeholder in the signature (i.e.
+   ``f(x; <keyword arguments>)``), and give the complete list under an ``# Arguments``
+   section (see point 4 below).
 
 2. Include a single one-line sentence describing what the function does or what the
-object represents after the simplified signature block. If needed, provide more details
-in a second paragraph, after a blank line.
+   object represents after the simplified signature block. If needed, provide more details
+   in a second paragraph, after a blank line.
 
-  The one-line sentence should use the imperative form ("Do this", "Return that") instead
-  of the third person (do not write "Returns the length...") when documenting functions.
-  It should end with a period. If the meaning of a function cannot be summarized easily,
-  splitting it into separate composable parts could be beneficial (this should not be
-  taken as an absolute requirement for every single case though).
+   The one-line sentence should use the imperative form ("Do this", "Return that") instead
+   of the third person (do not write "Returns the length...") when documenting functions.
+   It should end with a period. If the meaning of a function cannot be summarized easily,
+   splitting it into separate composable parts could be beneficial (this should not be
+   taken as an absolute requirement for every single case though).
 
 3. Do not repeat yourself.
 
-  Since the function name is given by the signature, there is no need to
-  start the documentation with "The function ``bar``...": go straight to the point.
-  Similarly, if the signature specifies the types of the arguments, mentioning them
-  in the description is redundant.
+   Since the function name is given by the signature, there is no need to
+   start the documentation with "The function ``bar``...": go straight to the point.
+   Similarly, if the signature specifies the types of the arguments, mentioning them
+   in the description is redundant.
 
 4. Only provide an argument list when really necessary.
 
-  For simple functions, it is often clearer to mention the role of the arguments directly
-  in the description of the function's purpose. An argument list would only repeat
-  information already provided elsewhere. However, providing an argument list can be a good
-  idea for complex functions with many arguments (in particular keyword arguments).
-  In that case, insert it after the general description of the function, under
-  an ``# Arguments`` header, with one ``*`` bullet for each argument. The list should
-  mention the types and default values (if any) of the arguments::
+   For simple functions, it is often clearer to mention the role of the arguments directly
+   in the description of the function's purpose. An argument list would only repeat
+   information already provided elsewhere. However, providing an argument list can be a good
+   idea for complex functions with many arguments (in particular keyword arguments).
+   In that case, insert it after the general description of the function, under
+   an ``# Arguments`` header, with one ``*`` bullet for each argument. The list should
+   mention the types and default values (if any) of the arguments::
 
-    """
-    ...
-    # Arguments
-    * `n::Integer`: the number of elements to compute.
-    * `dim::Integer=1`: the dimensions along which to perform the computation.
-    ...
-    """
+       """
+       ...
+       # Arguments
+       * `n::Integer`: the number of elements to compute.
+       * `dim::Integer=1`: the dimensions along which to perform the computation.
+       ...
+       """
 
 5. Group examples under an ``# Examples`` section and use ````julia`` blocks instead of
-standard text.
+   standard text.
 
-  Examples should consist of verbatim copies of the Julia REPL, including the ``julia>``
-  prompt (see example above). This will be used in the future to allow running examples
-  automatically and checking that their actual output is consistent with that presented
-  in the documentation (a feature called *doctests*). This way, the code will be tested and
-  examples won't get out of date without notice.
+   Examples should consist of verbatim copies of the Julia REPL, including the ``julia>``
+   prompt (see example above). This will be used in the future to allow running examples
+   automatically and checking that their actual output is consistent with that presented
+   in the documentation (a feature called *doctests*). This way, the code will be tested and
+   examples won't get out of date without notice.
 
 6. Use backticks to identify code and equations.
 
-  Julia identifiers and code excerpts should always appear between backticks `````
-  to enable highlighting. Equations in the LaTeX syntax can be inserted between
-  double backticks ``````. Use Unicode characters rather than their LaTeX escape sequence,
-  i.e. ````α = 1```` rather than :samp:`\`\`\\\\alpha = 1\`\``.
+   Julia identifiers and code excerpts should always appear between backticks `````
+   to enable highlighting. Equations in the LaTeX syntax can be inserted between
+   double backticks ``````. Use Unicode characters rather than their LaTeX escape sequence,
+   i.e. ````α = 1```` rather than :samp:`\`\`\\\\alpha = 1\`\``.
 
 7. Place the starting and ending ``"""`` characters on lines by themselves.
 
-  That is, write::
+   That is, write::
 
-    """
-    ...
+       """
+       ...
 
-    ...
-    """
-    f(x, y) = ...
+       ...
+       """
+       f(x, y) = ...
 
-  rather than::
+   rather than::
 
-    """...
+       """...
 
-    ..."""
-    f(x, y) = ...
+       ..."""
+       f(x, y) = ...
 
-  This makes it more clear where docstrings start and end.
+   This makes it more clear where docstrings start and end.
 
 8. Respect the line length limit used in the surrounding code.
 
-  Docstrings are edited using the same tools as code. Therefore, the same conventions
-  should apply. It it advised to add line breaks after 92 characters.
+   Docstrings are edited using the same tools as code. Therefore, the same conventions
+   should apply. It it advised to add line breaks after 92 characters.
 
 Accessing Documentation
 -----------------------
@@ -494,15 +494,340 @@ Examining it's definition should serve as an example of how to use ``@__doc__`` 
 
    ``@__doc__`` has no effect when a macro that uses it is not documented.
 
-Markdown Syntax Notes
----------------------
+Markdown syntax
+---------------
 
-Julia's Markdown parser supports most of the basic Markdown elements,
-including paragraphs, code blocks, bulleted lists and basic links. It's
-also a work in progress, however, and support for more advanced things
-like tables is in the works.
+The following markdown syntax is supported in Julia.
 
-Markdown.jl supports interpolation in a very similar way to basic string
+Inline elements
+~~~~~~~~~~~~~~~
+
+Here "inline" refers to elements that can be found within blocks of text, i.e. paragraphs. These include the following elements.
+
+Bold
+^^^^
+
+Surround words with two asterisks, ``**``, to display the enclosed text in boldface.
+
+.. code-block:: text
+
+   A paragraph containing a **bold** word.
+
+Italics
+^^^^^^^
+
+Surround words with one asterisk, ``*``, to display the enclosed text in italics.
+
+.. code-block:: text
+
+   A paragraph containing an *emphasised* word.
+
+Literals
+^^^^^^^^
+
+Surround text that should be displayed exactly as written with single backticks, ````` .
+
+.. code-block:: text
+
+   A paragraph containing a `literal` word.
+
+Literals should be used when writing text that refers to names of variables, functions, or other parts of a Julia program.
+
+.. tip::
+
+    To include a backtick character within literal text use three backticks rather than one to enclose the text.
+
+    .. code-block:: text
+
+       A paragraph containing a ``` `backtick` character ```.
+
+    By extension any odd number of backticks may be used to enclose a lesser number of backticks.
+
+:math:`\LaTeX`
+^^^^^^^^^^^^^^
+
+Surround text that should be displayed as mathematics using :math:`\LaTeX` syntax with double backticks, `````` .
+
+.. code-block:: text
+
+   A paragraph containing some ``\LaTeX`` markup.
+
+.. tip::
+
+    As with literals in the previous section, if literal backticks need to be written within double backticks use an even number greater than two. Note that if a single literal backtick needs to be included within :math:`\LaTeX` markup then two enclosing backticks is sufficient.
+
+Links
+^^^^^
+
+Links to either external or internal addresses can be written using the following syntax, where the text enclosed in square brackets, ``[ ]``, is the name of the link and the text enclosed in parentheses, ``( )``, is the URL.
+
+.. code-block:: text
+
+   A paragraph containing a link to [Julia](http://www.julialang.org).
+
+Footnote references
+^^^^^^^^^^^^^^^^^^^
+
+Named and numbered footnote references can be written using the following syntax. A footnote name must be a single alphanumeric word containing no punctuation.
+
+.. code-block:: text
+
+   A paragraph containing a numbered footnote [^1] and a named one [^named].
+
+.. note::
+
+    The text associated with a footnote can be written anywhere within the same page as the footnote reference. The syntax used to define the footnote text is discussed in the `Footnotes`_ section below.
+
+Toplevel elements
+~~~~~~~~~~~~~~~~~
+
+The following elements can be written either at the "toplevel" of a document or within another "toplevel" element.
+
+Paragraphs
+^^^^^^^^^^
+
+A paragraph is a block of plain text, possibly containing any number of inline elements defined in the `Inline elements`_ section above, with one or more blank lines above and below it.
+
+.. code-block:: text
+
+   This is a paragraph.
+
+   And this is *another* one containing some emphasised text.
+   A new line, but still part of the same paragraph.
+
+Headers
+^^^^^^^
+
+A document can be split up into different sections using headers. Headers use the following syntax:
+
+.. code-block:: text
+
+   # Level One
+   ## Level Two
+   ### Level Three
+   #### Level Four
+   ##### Level Five
+   ###### Level Six
+
+A header line can contain any inline syntax in the same way as a paragraph can.
+
+.. tip::
+
+    Try to avoid using too many levels of header within a single document. A heavily nested document may be indicative of a need to restructure it or split it into several pages covering separate topics.
+
+Code blocks
+^^^^^^^^^^^
+
+Source code can be displayed as a literal block using an indent of four spaces as shown in the following example.
+
+.. code-block:: text
+
+   This is a paragraph.
+
+       function func(x)
+           # ...
+       end
+
+   Another paragraph.
+
+Additionally, code blocks can be enclosed using triple backticks with an optional "language" to specify how a block of code should be highlighted.
+
+.. code-block:: text
+
+   A code block without a "language":
+
+   ```
+   function func(x)
+       # ...
+   end
+   ```
+
+   and another one with the "language" specified as `julia`:
+
+   ```julia
+   function func(x)
+       # ...
+   end
+   ```
+
+.. note::
+
+    "Fenced" code blocks, as shown in the last example, should be prefered over indented code blocks since there is no way to specify what language an indented code block is written in.
+
+Block quotes
+^^^^^^^^^^^^
+
+Text from external sources, such as quotations from books or websites, can be quoted using ``>`` characters prepended to each line of the quote as follows.
+
+.. code-block:: text
+
+   Here's a quote:
+
+   > Julia is a high-level, high-performance dynamic programming language for
+   > technical computing, with syntax that is familiar to users of other
+   > technical computing environments.
+
+Note that a single space must appear after the ``>`` character on each line. Quoted blocks may themselves contain other toplevel or inline elements.
+
+Images
+^^^^^^
+
+The syntax for images is similar to the link syntax mentioned above. Prepending a ``!`` character to a link will display an image from the specified URL rather than a link to it.
+
+.. code-block:: text
+
+   ![alternative text](link/to/image.png)
+
+Lists
+^^^^^
+
+Unordered lists can be written by prepending each item in a list with either ``*``, ``+``, or ``-``.
+
+.. code-block:: text
+
+   A list of items:
+
+     * item one
+     * item two
+     * item three
+
+Note the two spaces before each ``*`` and the single space after each one.
+
+Lists can contain other nested toplevel elements such as lists, code blocks, or quoteblocks. A blank line should be left between each list item when including any toplevel elements within a list.
+
+.. code-block:: text
+
+   Another list:
+
+     * item one
+
+     * item two
+
+       ```
+       f(x) = x
+       ```
+
+     * And a sublist:
+
+         + sub-item one
+         + sub-item two
+
+.. note::
+
+    The contents of each item in the list must line up with the first line of the item. In the above example the fenced code block must be indented by four spaces to align with the ``i`` in ``item two``.
+
+Ordered lists are written by replacing the "bullet" character, either ``*``, ``+``, or ``-``, with a positive integer followed by either ``.`` or ``)``.
+
+.. code-block:: text
+
+   Two ordered lists:
+
+    1. item one
+    2. item two
+    3. item three
+
+
+    5) item five
+    6) item six
+    7) item seven
+
+An ordered list may start from a number other than one, as in the second list of the above example, where it is numbered from five. As with unordered lists, ordered lists can contain nested toplevel elements.
+
+Display equations
+^^^^^^^^^^^^^^^^^
+
+Large :math:`\LaTeX` equations that do not fit inline within a paragraph may be written as display equations using a fenced code block with the "language" ``math`` as in the example below.
+
+.. code-block:: text
+
+   ```math
+   f(a) = \frac{1}{2\pi}\int_{0}^{2\pi} (\alpha+R\cos(\theta))d\theta
+   ```
+
+Footnotes
+^^^^^^^^^
+
+This syntax is paired with the inline syntax for `Footnote references`_. Make sure to read that section as well.
+
+Footnote text is defined using the following syntax, which is similar to footnote reference syntax, aside from the ``:`` character that is appended to the footnote label.
+
+.. code-block:: text
+
+   [^1]: Numbered footnote text.
+
+   [^note]:
+
+       Named footnote text containing several toplevel elements.
+
+         * item one
+         * item two
+         * item three
+
+       ```julia
+       function func(x)
+           # ...
+       end
+       ```
+
+.. note::
+
+    No checks are done during parsing to make sure that all footnote references have matching footnotes.
+
+Horizontal rules
+^^^^^^^^^^^^^^^^
+
+The equivalent of an ``<hr>`` HTML tag can be written using the following syntax:
+
+.. code-block:: text
+
+   Text above the line.
+
+   ---
+
+   And text below the line.
+
+Tables
+^^^^^^
+
+Basic tables can be written using the syntax described below. Note that markdown tables have limited features and cannot contain nested toplevel elements unlike other elements discussed above -- only inline elements are allowed. Tables must always contain a header row with column names. Cells cannot span multiple rows or columns of the table.
+
+.. code-block:: text
+
+   | Column One | Column Two | Column Three |
+   |:---------- | ---------- |:------------:|
+   | Row `1`    | Column `2` |              |
+   | *Row* 2    | **Row** 2  | Column ``3`` |
+
+.. note::
+
+    As illustrated in the above example each column of ``|`` characters must be aligned vertically.
+
+    A ``:`` character on either end of a column's header separator (the row containing ``-`` characters) specifies whether the row is left-aligned, right-aligned, or (when ``:`` appears on both ends) center-aligned. Providing no ``:`` characters will default to right-aligning the column.
+
+Admonitions
+^^^^^^^^^^^
+
+Specially formatted blocks with titles such as "Notes", "Warning", or "Tips" are known as admonitions and are used when some part of a document needs special attention. They can be defined using the following ``!!!`` syntax:
+
+.. code-block:: text
+
+   !!! note
+
+       This is the content of the note.
+
+   !!! warning "Beware!"
+
+       And this is another one.
+
+       This warning admonition has a custom title: `"Beware!"`.
+
+Admonitions, like most other toplevel elements, can contain other toplevel elements. When no title text, specified after the admonition type in double quotes, is included then the title used will be the type of the block, i.e. ``"Note"`` in the case of the ``note`` admonition.
+
+
+Markdown Syntax Extensions
+--------------------------
+
+Julia's markdown supports interpolation in a very similar way to basic string
 literals, with the difference that it will store the object itself in
 the Markdown tree (as opposed to converting it to a string). When the
 Markdown content is rendered the usual ``show`` methods will be
@@ -513,3 +838,4 @@ references) without cluttering the basic syntax.
 In principle, the Markdown parser itself can also be arbitrarily
 extended by packages, or an entirely custom flavour of Markdown can be
 used, but this should generally be unnecessary.
+

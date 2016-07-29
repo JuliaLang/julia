@@ -58,6 +58,13 @@ function latex(io::IO, md::BlockQuote)
     end
 end
 
+
+function latex(io::IO, f::Footnote)
+    print(io, "\\footnotetext[", f.id, "]{")
+    latex(io, f.text)
+    println(io, "}")
+end
+
 function latex(io::IO, md::Admonition)
     wrapblock(io, "quote") do
         wrapinline(io, "textbf") do
@@ -133,6 +140,8 @@ function latexinline(io::IO, md::Image)
         println(io)
     end
 end
+
+latexinline(io::IO, f::Footnote) = print(io, "\\footnotemark[", f.id, "]")
 
 function latexinline(io::IO, md::Link)
     wrapinline(io, "href") do

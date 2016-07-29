@@ -4364,6 +4364,15 @@ g1090{T}(x::T)::T = x+1.0
 @test g1090(1) === 2
 @test g1090(Float32(3)) === Float32(4)
 
+function f17613_2(x)::Float64
+    try
+        return x
+    catch
+        return x+1
+    end
+end
+@test isa(f17613_2(1), Float64)
+
 # issue #16783
 function f16783()
     T = UInt32
