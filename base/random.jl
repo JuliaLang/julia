@@ -1214,13 +1214,13 @@ let Floats = Union{Float16,Float32,Float64}
 
             # generating arrays
             $randfun{T}(rng::AbstractRNG, ::Type{T}, dims::Dims                     ) = $randfun!(rng, Array{T}(dims))
-            $randfun{T}(rng::AbstractRNG, ::Type{T}, dim0::Integer, dims::Integer...) = $randfun!(rng, Array{T}(dim0, dims...))
+            $randfun{T}(rng::AbstractRNG, ::Type{T}, dim1::Integer, dims::Integer...) = $randfun!(rng, Array{T}(dim1, dims...))
             $randfun{T}(                  ::Type{T}, dims::Dims                     ) = $randfun(GLOBAL_RNG, T, dims)
-            $randfun{T}(                  ::Type{T}, dim0::Integer, dims::Integer...) = $randfun(GLOBAL_RNG, T, dim0, dims...)
+            $randfun{T}(                  ::Type{T}, dim1::Integer, dims::Integer...) = $randfun(GLOBAL_RNG, T, dim1, dims...)
             $randfun(   rng::AbstractRNG,            dims::Dims                     ) = $randfun(rng, Float64, dims)
-            $randfun(   rng::AbstractRNG,            dim0::Integer, dims::Integer...) = $randfun(rng, Float64, dim0, dims...)
+            $randfun(   rng::AbstractRNG,            dim1::Integer, dims::Integer...) = $randfun(rng, Float64, dim1, dims...)
             $randfun(                                dims::Dims                     ) = $randfun(GLOBAL_RNG, Float64, dims)
-            $randfun(                                dim0::Integer, dims::Integer...) = $randfun(GLOBAL_RNG, Float64, dim0, dims...)
+            $randfun(                                dim1::Integer, dims::Integer...) = $randfun(GLOBAL_RNG, Float64, dim1, dims...)
         end
     end
 end
