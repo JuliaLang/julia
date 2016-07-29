@@ -374,7 +374,7 @@ end
 function serialize(s::AbstractSerializer, g::GlobalRef)
     writetag(s.io, GLOBALREF_TAG)
     if g.mod === Main && isdefined(g.mod, g.name) && isconst(g.mod, g.name)
-        v = eval(g)
+        v = getfield(g.mod, g.name)
         if isa(v, DataType) && v === v.name.primary && should_send_whole_type(s, v)
             # handle references to types in Main by sending the whole type.
             # needed to be able to send nested functions (#15451).
@@ -393,17 +393,16 @@ function serialize(s::AbstractSerializer, t::TypeName)
     serialize_cycle(s, t) && return
     writetag(s.io, TYPENAME_TAG)
     write(s.io, object_number(t))
-    serialize(s, t.name)
-    serialize(s, t.module)
-    serialize_typename_body(s, t)
+    serialize_typename(s, t)
 end
 
-function serialize_typename_body(s::AbstractSerializer, t::TypeName)
+function serialize_typename(s::AbstractSerializer, t::TypeName)
+    serialize(s, t.name)
     serialize(s, t.names)
     serialize(s, t.primary.super)
     serialize(s, t.primary.parameters)
     serialize(s, t.primary.types)
-    serialize(s, t.primary.size)
+    serialize(s, isdefined(t.primary, :instance))
     serialize(s, t.primary.abstract)
     serialize(s, t.primary.mutable)
     serialize(s, t.primary.ninitialized)
@@ -419,27 +418,32 @@ function serialize_typename_body(s::AbstractSerializer, t::TypeName)
     else
         writetag(s.io, UNDEFREF_TAG)
     end
+    nothing
 end
 
 # decide whether to send all data for a type (instead of just its name)
-function should_send_whole_type(s, t::ANY)
+function should_send_whole_type(s, t::DataType)
     tn = t.name
     if isdefined(tn, :mt)
         # TODO improve somehow
         # send whole type for anonymous functions in Main
-        fname = tn.mt.name
+        name = tn.mt.name
         mod = tn.module
-        toplevel = isdefined(mod, fname) && isdefined(t, :instance) &&
-            getfield(mod, fname) === t.instance
-        ishidden = unsafe_load(unsafe_convert(Ptr{UInt8}, fname))==UInt8('#')
-        return mod === __deserialized_types__ || (mod === Main && (ishidden || !toplevel))
+        isanonfunction = mod === Main && # only Main
+            t.super === Function && # only Functions
+            unsafe_load(unsafe_convert(Ptr{UInt8}, tn.name)) == UInt8('#') && # hidden type
+            (!isdefined(mod, name) || t != typeof(getfield(mod, name))) # XXX: 95% accurate test for this being an inner function
+            # TODO: more accurate test? (tn.name !== "#" name)
+        #TODO: iskw = startswith(tn.name, "#kw#") && ???
+        #TODO: iskw && return send-as-kwftype
+        return mod === __deserialized_types__ || isanonfunction
     end
     return false
 end
 
 # `type_itself` means we are serializing a type object. when it's false, we are
 # sending the type tag part of some other object's representation.
-function serialize_type_data(s, t::ANY, type_itself::Bool)
+function serialize_type_data(s, t::DataType, type_itself::Bool)
     whole = should_send_whole_type(s, t)
     form = type_itself ? UInt8(0) : UInt8(1)
     if whole
@@ -724,58 +728,56 @@ function deserialize(s::AbstractSerializer, ::Type{Union})
     Union{types...}
 end
 
-module __deserialized_types__
-end
-
+module __deserialized_types__ end
 
 function deserialize(s::AbstractSerializer, ::Type{TypeName})
+    # the deserialize_cycle call can be delayed, since neither
+    # Symbol nor Module will use the backref table
     number = read(s.io, UInt64)
-    name = deserialize(s)
-    mod = deserialize(s)
-    if haskey(known_object_data, number)
-        tn = known_object_data[number]::TypeName
-        name = tn.name
-        mod = tn.module
-        makenew = false
-    elseif isdefined(mod, name)
-        tn = getfield(mod, name).name
-        # TODO: confirm somehow that the types match
-        name = tn.name
-        mod = tn.module
-        makenew = false
-    else
-        name = gensym()
-        mod = __deserialized_types__
-        tn = ccall(:jl_new_typename_in, Ref{TypeName}, (Any, Any), name, mod)
-        makenew = true
-    end
-    deserialize_cycle(s, tn)
-    deserialize_typename_body(s, tn, number, name, mod, makenew)
-    makenew && (known_object_data[number] = tn)
-    return tn
+    return deserialize_typename(s, number)
 end
 
-function deserialize_typename_body(s::AbstractSerializer, tn, number, name, mod, makenew)
-    names = deserialize(s)
-    super = deserialize(s)
-    parameters = deserialize(s)
-    types = deserialize(s)
-    size = deserialize(s)
-    abstr = deserialize(s)
-    mutable = deserialize(s)
-    ninitialized = deserialize(s)
+function deserialize_typename(s::AbstractSerializer, number)
+    name = deserialize(s)::Symbol
+    tn = get(known_object_data, number, nothing)
+    if tn !== nothing
+        makenew = false
+    else
+        # reuse the same name for the type, if possible, for nicer debugging
+        tn_name = isdefined(__deserialized_types__, name) ? gensym() : name
+        tn = ccall(:jl_new_typename_in, Ref{TypeName}, (Any, Any),
+                   tn_name, __deserialized_types__)
+        makenew = true
+        known_object_data[number] = tn
+    end
+    if !haskey(object_numbers, tn)
+        # setup up reverse mapping for serialize
+        object_numbers[tn] = number
+    end
+    deserialize_cycle(s, tn)
+
+    names = deserialize(s)::SimpleVector
+    super = deserialize(s)::Type
+    parameters = deserialize(s)::SimpleVector
+    types = deserialize(s)::SimpleVector
+    has_instance = deserialize(s)::Bool
+    abstr = deserialize(s)::Bool
+    mutable = deserialize(s)::Bool
+    ninitialized = deserialize(s)::Int32
 
     if makenew
         tn.names = names
+        # TODO: there's an unhanded cycle in the dependency graph at this point:
+        # while deserializing super and/or types, we may have encountered
+        # tn.primary and throw UndefRefException before we get to this point
         tn.primary = ccall(:jl_new_datatype, Any, (Any, Any, Any, Any, Any, Cint, Cint, Cint),
                            tn, super, parameters, names, types,
                            abstr, mutable, ninitialized)
         ty = tn.primary
-        ccall(:jl_set_const, Void, (Any, Any, Any), mod, name, ty)
-        if !isdefined(ty,:instance)
-            if isempty(parameters) && !abstr && size == 0 && (!mutable || isempty(names))
-                setfield!(ty, :instance, ccall(:jl_new_struct, Any, (Any,Any...), ty))
-            end
+        ccall(:jl_set_const, Void, (Any, Any, Any), tn.module, tn.name, ty)
+        if has_instance && !isdefined(ty, :instance)
+            # use setfield! directly to avoid `fieldtype` lowering expecting to see a Singleton object already on ty
+            Core.setfield!(ty, :instance, ccall(:jl_new_struct, Any, (Any, Any...), ty))
         end
     end
 
@@ -783,9 +785,9 @@ function deserialize_typename_body(s::AbstractSerializer, tn, number, name, mod,
     if tag != UNDEFREF_TAG
         mtname = handle_deserialize(s, tag)
         defs = deserialize(s)
-        maxa = deserialize(s)
+        maxa = deserialize(s)::Int
         if makenew
-            tn.mt = ccall(:jl_new_method_table, Any, (Any, Any), name, mod)
+            tn.mt = ccall(:jl_new_method_table, Any, (Any, Any), name, tn.module)
             tn.mt.name = mtname
             tn.mt.defs = defs
             tn.mt.max_args = maxa
@@ -798,6 +800,7 @@ function deserialize_typename_body(s::AbstractSerializer, tn, number, name, mod,
             end
         end
     end
+    return tn::TypeName
 end
 
 function deserialize_datatype(s::AbstractSerializer)
@@ -845,7 +848,8 @@ function deserialize(s::AbstractSerializer, t::DataType)
         return ccall(:jl_new_struct, Any, (Any,Any...), t)
     elseif isbits(t)
         if nf == 1
-            return ccall(:jl_new_struct, Any, (Any,Any...), t, deserialize(s))
+            f1 = deserialize(s)
+            return ccall(:jl_new_struct, Any, (Any,Any...), t, f1)
         elseif nf == 2
             f1 = deserialize(s)
             f2 = deserialize(s)
