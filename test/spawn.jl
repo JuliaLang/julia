@@ -330,7 +330,7 @@ let fname = tempname()
         run(cmd)
     end
     """
-    @test success(pipeline(`$catcmd $fname`, `$exename -e $code`))
+    @test success(pipeline(`$catcmd $fname`, `$exename --startup-file=no -e $code`))
     rm(fname)
 end
 
