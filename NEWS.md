@@ -108,9 +108,6 @@ Language changes
     When `x` is global, `x::T = ...` and `global x::T` used to mean type assertion,
     but this syntax is now reserved for type declaration ([#964]).
 
-Command-line option changes
----------------------------
-
 Compiler/Runtime improvements
 -----------------------------
 
