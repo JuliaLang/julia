@@ -258,7 +258,7 @@ $(LLVM_LLDB_TAR): | $(SRCDIR)/srccache
 endif
 ifeq ($(BUILD_LLDB),1)
 $(LLVM_SRC_DIR)/tools/lldb:
-$(LLVM_SRC_DIR)/CMakeLists.txt: $(LLVM_SRC_DIR)/tools/lldb
+$(LLVM_SRC_DIR).extracted: $(LLVM_SRC_DIR)/tools/lldb
 endif
 
 # LLDB still relies on plenty of python 2.x infrastructure, without checking
@@ -278,13 +278,13 @@ ifeq ($(USEICC),1)
 LIBCXX_EXTRA_FLAGS := -Bstatic -lirc -Bdynamic
 endif
 
-$(LLVM_SRC_DIR)/projects/libcxx: $(LLVM_LIBCXX_TAR) | $(LLVM_SRC_DIR)/CMakeLists.txt
+$(LLVM_SRC_DIR)/projects/libcxx: $(LLVM_LIBCXX_TAR) | $(LLVM_SRC_DIR).extracted
 	([ ! -d $@ ] && \
 	git clone $(LLVM_GIT_URL_LIBCXX) $@  ) || \
 	(cd $@  && \
 	git pull --ff-only)
 $(LLVM_SRC_DIR)/projects/libcxx/.git/HEAD: | $(LLVM_SRC_DIR)/projects/libcxx/.git/HEAD
-$(LLVM_SRC_DIR)/projects/libcxxabi: $(LLVM_LIBCXXABI_TAR) | $(LLVM_SRC_DIR)/CMakeLists.txt
+$(LLVM_SRC_DIR)/projects/libcxxabi: $(LLVM_LIBCXXABI_TAR) | $(LLVM_SRC_DIR).extracted
 	([ ! -d $@ ] && \
 	git clone $(LLVM_GIT_URL_LIBCXXABI) $@ ) || \
 	(cd $@ && \
@@ -320,7 +320,7 @@ LIBCXX_DEPENDENCY := $(build_libdir)/libc++abi.so.1.0 $(build_libdir)/libc++.so.
 get-llvm: get-libcxx get-libcxxabi
 endif
 
-$(LLVM_SRC_DIR)/CMakeLists.txt: $(LLVM_TAR) $(LLVM_CLANG_TAR) $(LLVM_COMPILER_RT_TAR) $(LLVM_LIBCXX_TAR) $(LLVM_LLDB_TAR)
+$(LLVM_SRC_DIR).extracted: | $(LLVM_TAR) $(LLVM_CLANG_TAR) $(LLVM_COMPILER_RT_TAR) $(LLVM_LIBCXX_TAR) $(LLVM_LLDB_TAR)
 ifneq ($(LLVM_CLANG_TAR),)
 	$(JLCHECKSUM) $(LLVM_CLANG_TAR)
 endif
@@ -336,6 +336,7 @@ endif
 ifneq ($(LLVM_LLDB_TAR),)
 	$(JLCHECKSUM) $(LLVM_LLDB_TAR)
 endif
+	-rm -rf $(LLVM_SRC_DIR)
 ifneq ($(LLVM_VER),svn)
 	mkdir -p $(LLVM_SRC_DIR)
 	$(TAR) -C $(LLVM_SRC_DIR) --strip-components 1 -xf $(LLVM_TAR)
@@ -401,13 +402,16 @@ ifneq ($(LLVM_GIT_VER_POLLY),)
 endif # LLVM_GIT_VER_POLLY
 endif # USE_POLLY
 endif # LLVM_VER
-	touch -c $@
+	# touch some extra files to ensure bisect works pretty well
+	touch -c $(LLVM_SRC_DIR)/configure
+	touch -c $(LLVM_SRC_DIR)/CMakeLists.txt
+	echo 1 > $@
 
 # Apply version-specific LLVM patches
 LLVM_PATCH_PREV:=
 LLVM_PATCH_LIST:=
 define LLVM_PATCH
-$$(LLVM_SRC_DIR)/$1.patch-applied: | $$(LLVM_SRC_DIR)/CMakeLists.txt $$(SRCDIR)/patches/$1.patch $$(LLVM_PATCH_PREV)
+$$(LLVM_SRC_DIR)/$1.patch-applied: | $$(LLVM_SRC_DIR).extracted $$(SRCDIR)/patches/$1.patch $$(LLVM_PATCH_PREV)
 	cd $$(LLVM_SRC_DIR) && patch -p1 < $$(SRCDIR)/patches/$1.patch
 	echo 1 > $$@
 LLVM_PATCH_PREV := $$(LLVM_SRC_DIR)/$1.patch-applied
@@ -468,7 +472,7 @@ endif
 
 ifeq ($(LLVM_USE_CMAKE),1)
 
-$(LLVM_BUILDDIR_withtype)/CMakeCache.txt: $(LLVM_SRC_DIR)/CMakeLists.txt $(LLVM_PATCH_LIST) | $(llvm_python_workaround) $(LIBCXX_DEPENDENCY)
+$(LLVM_BUILDDIR_withtype)/CMakeCache.txt: $(LLVM_SRC_DIR).extracted $(LLVM_PATCH_LIST) | $(llvm_python_workaround) $(LIBCXX_DEPENDENCY)
 	mkdir -p $(dir $@)
 	cd $(dir $@) && \
 		export PATH=$(llvm_python_workaround):$$PATH && \
@@ -485,7 +489,7 @@ $(LLVM_OBJ_SOURCE): $(LLVM_BUILDDIR_withtype)/CMakeCache.txt | $(llvm_python_wor
 
 else
 
-$(LLVM_BUILDDIR_withtype)/config.status: $(LLVM_SRC_DIR)/CMakeLists.txt $(LLVM_PATCH_LIST) | $(llvm_python_workaround) $(LIBCXX_DEPENDENCY)
+$(LLVM_BUILDDIR_withtype)/config.status: $(LLVM_SRC_DIR).extracted $(LLVM_PATCH_LIST) | $(llvm_python_workaround) $(LIBCXX_DEPENDENCY)
 	mkdir -p $(dir $@)
 	cd $(dir $@) && \
 		export PATH=$(llvm_python_workaround):$$PATH && \
@@ -535,7 +539,7 @@ distclean-llvm:
 ifneq ($(LLVM_VER),svn)
 get-llvm: $(LLVM_TAR) $(LLVM_CLANG_TAR) $(LLVM_COMPILER_RT_TAR) $(LLVM_LIBCXX_TAR) $(LLVM_LLDB_TAR)
 else
-get-llvm: $(LLVM_SRC_DIR)/CMakeLists.txt
+get-llvm: $(LLVM_SRC_DIR).extracted
 endif
 ifeq ($(LLVM_USE_CMAKE),1)
 configure-llvm: $(LLVM_BUILDDIR_withtype)/CMakeCache.txt
