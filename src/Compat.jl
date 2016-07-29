@@ -1442,4 +1442,14 @@ if VERSION < v"0.5.0-dev+4340"
     Base.show(io::IO, mime, x) = writemime(io, mime, x)
 end
 
+if VERSION >= v"0.5.0-dev+4338"
+    import Base.LinAlg.BLAS.@blasfunc
+elseif VERSION >= v"0.5.0-dev+1871"
+    import Base.@blasfunc
+else
+    macro blasfunc(x)
+        Expr(:quote, Base.blasfunc(x))
+    end
+end
+
 end # module

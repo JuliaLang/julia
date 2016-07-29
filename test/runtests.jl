@@ -1347,3 +1347,10 @@ end
 
 # three-argument show from JuliaLang/julia#16563
 @test sprint(show, "text/plain", 1) == stringmime("text/plain", 1)
+
+let n=5, a=rand(n), incx=1, b=rand(n), incy=1
+    ccall((Compat.@blasfunc(dcopy_), Base.LinAlg.BLAS.libblas), Void,
+          (Ptr{Base.LinAlg.BLAS.BlasInt}, Ptr{Float64}, Ptr{Base.LinAlg.BLAS.BlasInt}, Ptr{Float64}, Ptr{Base.LinAlg.BLAS.BlasInt}),
+          &n, a, &incx, b, &incy)
+    @test a == b
+end
