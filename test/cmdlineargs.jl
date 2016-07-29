@@ -8,7 +8,7 @@ if is_windows()
     end
 end
 
-let exename = `$(Base.julia_cmd()) --precompiled=yes`
+let exename = `$(Base.julia_cmd()) --precompiled=yes --startup-file=no`
     # --version
     let v = split(readstring(`$exename -v`), "julia version ")[end]
         @test Base.VERSION_STRING == chomp(v)
@@ -99,14 +99,6 @@ let exename = `$(Base.julia_cmd()) --precompiled=yes`
     @test readchomp(`$exename -E "Bool(Base.JLOptions().historyfile)" --history-file=yes`) == "true"
     @test readchomp(`$exename -E "Bool(Base.JLOptions().historyfile)" --history-file=no`) == "false"
     @test !success(`$exename --history-file=false`)
-
-    # --startup-file
-    let JL_OPTIONS_STARTUPFILE_ON = 1,
-        JL_OPTIONS_STARTUPFILE_OFF = 2
-        @test parse(Int,readchomp(`$exename -E "Base.JLOptions().startupfile" --startup-file=yes`)) == JL_OPTIONS_STARTUPFILE_ON
-        @test parse(Int,readchomp(`$exename -E "Base.JLOptions().startupfile" --startup-file=no`)) == JL_OPTIONS_STARTUPFILE_OFF
-    end
-    @test !success(`$exename --startup-file=false`)
 
     # --code-coverage
     @test readchomp(`$exename -E "Bool(Base.JLOptions().code_coverage)"`) == "false"
@@ -277,6 +269,17 @@ let exename = `$(Base.julia_cmd()) --precompiled=yes`
     end
 end
 
+let exename = `$(Base.julia_cmd()) --precompiled=yes`
+    # --startup-file
+    let JL_OPTIONS_STARTUPFILE_ON = 1,
+        JL_OPTIONS_STARTUPFILE_OFF = 2
+        # `HOME=/tmp` to avoid errors in the user .juliarc.jl, which hangs the tests.  Issue #17642
+        @test parse(Int,readchomp(setenv(`$exename -E "Base.JLOptions().startupfile" --startup-file=yes`, ["HOME=/tmp"]))) == JL_OPTIONS_STARTUPFILE_ON
+        @test parse(Int,readchomp(`$exename -E "Base.JLOptions().startupfile" --startup-file=no`)) == JL_OPTIONS_STARTUPFILE_OFF
+    end
+    @test !success(`$exename --startup-file=false`)
+end
+
 # Make sure `julia --lisp` doesn't break
 run(pipeline(DevNull, `$(joinpath(JULIA_HOME, Base.julia_exename())) --lisp`, DevNull))
 
@@ -284,14 +287,14 @@ run(pipeline(DevNull, `$(joinpath(JULIA_HOME, Base.julia_exename())) --lisp`, De
 @test_throws ErrorException run(pipeline(DevNull, pipeline(`$(joinpath(JULIA_HOME, Base.julia_exename())) -Cnative --lisp`, stderr=DevNull), DevNull))
 
 # --precompiled={yes|no}
-let exename = `$(Base.julia_cmd())`
+let exename = `$(Base.julia_cmd()) --startup-file=no`
     @test readchomp(`$exename --precompiled=yes -E "Bool(Base.JLOptions().use_precompiled)"`) == "true"
     @test readchomp(`$exename --precompiled=no -E "Bool(Base.JLOptions().use_precompiled)"`) == "false"
 end
 
 # backtrace contains type and line number info (esp. on windows #17179)
 for precomp in ("yes", "no")
-    bt = readstring(pipeline(ignorestatus(`$(Base.julia_cmd()) --precompiled=$precomp
+    bt = readstring(pipeline(ignorestatus(`$(Base.julia_cmd()) --startup-file=no --precompiled=$precomp
         -E 'include("____nonexistent_file")'`), stderr=catcmd))
     @test contains(bt, "in include_from_node1")
     if is_windows() && Sys.WORD_SIZE == 32 && precomp == "yes"
