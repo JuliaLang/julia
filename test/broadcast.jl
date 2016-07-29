@@ -328,3 +328,12 @@ end
 let A17984 = []
     @test isa(abs.(A17984), Array{Any,1})
 end
+
+# Issue #16966
+@test parse.(Int, "1") == 1
+@test parse.(Int, ["1", "2"]) == [1, 2]
+@test trunc.((Int,), [1.2, 3.4]) == [1, 3]
+@test abs.((1, -2)) == (1, 2)
+@test broadcast(+, 1.0, (0, -2.0)) == (1.0,-1.0)
+@test broadcast(+, 1.0, (0, -2.0), [1]) == [2.0, 0.0]
+@test broadcast(*, ["Hello"], ", ", ["World"], "!") == ["Hello, World!"]
