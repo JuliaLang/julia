@@ -3690,7 +3690,7 @@ a full channel block till an object is removed with `take!`.
 
 Other constructors:
 
-- `Channel()` - equivalent to `Channel{Any}(32)`
+- `Channel()` - equivalent to `Channel{Any}(typemax(Int))`
 - `Channel(sz::Int)` equivalent to `Channel{Any}(sz)`
 """
 Channel

@@ -137,7 +137,7 @@ Tasks
 
    Other constructors:
 
-   * ``Channel()`` - equivalent to ``Channel{Any}(32)``
+   * ``Channel()`` - equivalent to ``Channel{Any}(typemax(Int))``
    * ``Channel(sz::Int)`` equivalent to ``Channel{Any}(sz)``
 
 General Parallel Computing Support
