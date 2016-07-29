@@ -95,10 +95,10 @@ action:
      1  2  3
      4  5  6
 
-    julia> convert(Array{Int64}, a)
-    2x3 Array{Int64,2}:
-     1  2  3
-     4  5  6
+    julia> convert(Array{Float64}, a)
+    2x3 Array{Float64,2}:
+     1.0  2.0  3.0
+     4.0  5.0  6.0
 
 Conversion isn't always possible, in which case a no method error is
 thrown indicating that ``convert`` doesn't know how to perform the
