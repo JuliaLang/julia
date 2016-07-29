@@ -890,8 +890,7 @@ properties.
 
 Note: While :obj:`@simd` needs to be placed directly in front of a
 loop, both :obj:`@inbounds` and :obj:`@fastmath` can be applied to
-several statements at once, e.g. using ``begin`` ... ``end``, or even
-to a whole function.
+several statements at once, e.g. using ``begin`` ... ``end``.
 
 Here is an example with both :obj:`@inbounds` and :obj:`@simd` markup::
 
