@@ -987,7 +987,7 @@ definition is in front of a loop.
            end
 
     julia> f(x)
- 
+
     julia> @inbounds for i in 1:10
                x[2]
            end
