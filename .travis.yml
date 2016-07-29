@@ -111,6 +111,10 @@ script:
     - export JULIA_CPU_CORES=2 && export JULIA_TEST_MAXRSS_MB=600 && cd /tmp/julia/share/julia/test &&
         /tmp/julia/bin/julia --check-bounds=yes runtests.jl $TESTSTORUN &&
         /tmp/julia/bin/julia --check-bounds=yes runtests.jl libgit2-online pkg
-    - cd `dirname $TRAVIS_BUILD_DIR` && mv julia2 julia && rm -rf julia/deps/build/julia-env
+    - cd `dirname $TRAVIS_BUILD_DIR` && mv julia2 julia &&
+        rm -rf julia/deps/build/julia-env &&
+        rm -rf julia/deps/build/libssh2-*/CMakeFiles/Makefile2 &&
+        rm -rf julia/deps/build/curl-*/config.log &&
+        rm -rf julia/deps/build/curl-*/libtool
 # uncomment the following if failures are suspected to be due to the out-of-memory killer
 #    - dmesg
