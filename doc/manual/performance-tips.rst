@@ -928,10 +928,10 @@ On a computer with a 2.4GHz Intel Core i5 processor, this produces::
     GFlop (SIMD) = 17.578554163920018
 
 Certain preconditions need to be met before using some of these macros.
-Both :obj:`@simd` and :obj:`@inbounds` do a simple rewrite of the expression 
+Both :obj:`@simd` and :obj:`@inbounds` do a simple rewrite of the expression
 and delegate the optimizations to compiler, much like ``:meta`` expressions.
 This means they merely give the compiler license to optimize. Whether
-it actually does so depends on the compiler. How you write the expressions 
+it actually does so depends on the compiler. How you write the expressions
 will have a final say on the output.
 
 The range for a ``@simd for`` loop should be a one-dimensional range.
@@ -948,7 +948,7 @@ properties of the loop:
 A loop containing ``break``, ``continue``, or :obj:`@goto` will cause a
 compile-time error.
 
-To actually benefit from :obj:`@simd` current implementation, your loop 
+To actually benefit from :obj:`@simd` current implementation, your loop
 should have the following additional properties:
 
 -  The loop must be an innermost loop.
@@ -964,21 +964,21 @@ should have the following additional properties:
    LLVM auto-vectorization may kick in automatically, leading to no further
    speedup with :obj:`@simd`.
 
-While :obj:`@simd` needs to be placed in front of a loop, that is not the case 
-for :obj:`@inbounds`. It can be placed in front of any expression as long as it 
-is inside a function, the only place where it could be outside of a function 
+While :obj:`@simd` needs to be placed in front of a loop, that is not the case
+for :obj:`@inbounds`. It can be placed in front of any expression as long as it
+is inside a function, the only place where it could be outside of a function
 definition is in front of a loop.
-
+::
     julia> x = [1]
 
     julia> @inbounds if true
                x[2]
            end
     ERROR: BoundsError: attempt to access 1-element Array{Int64,1} at index [2]
-     in getindex(::Array{Int64,1}, ::Int64) at ./array.jl:309
-     in eval(::Module, ::Any) at ./boot.jl:225
-     in macro expansion at ./REPL.jl:92 [inlined]
-     in (::Base.REPL.##1#2{Base.REPL.REPLBackend})() at ./event.jl:46
+    in getindex(::Array{Int64,1}, ::Int64) at ./array.jl:309
+    in eval(::Module, ::Any) at ./boot.jl:225
+    in macro expansion at ./REPL.jl:92 [inlined]
+    in (::Base.REPL.##1#2{Base.REPL.REPLBackend})() at ./event.jl:46
 
     julia> function f(x)
                @inbounds if true
@@ -992,15 +992,15 @@ definition is in front of a loop.
                x[2]
            end
 
-Be aware that using it before a function declaration will have no effect. 
+Be aware that using it before a function declaration will have no effect.
 To use :obj:`@inbounds` on a block of code, put it before a ``begin ... end`` statement.
-
+::
     julia> @inbounds function g(x)  #Won't remove bound checks nor warn you
                for i in 1:10
                    x[i] = x[i]^2
                end
            end
- 
+
     julia> function g(x)
                @inbounds begin
                    for i in 1:10
@@ -1008,7 +1008,7 @@ To use :obj:`@inbounds` on a block of code, put it before a ``begin ... end`` st
                    end
                end
            end
- 
+
 :obj:`@simd` can be placed in front of any expression without problems.
 
 Here is an example with all three kinds of markup. This program first
