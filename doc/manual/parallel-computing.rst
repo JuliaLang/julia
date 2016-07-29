@@ -734,11 +734,11 @@ cluster is done via cluster managers. A :obj:`ClusterManager` is responsible for
 
 - launching worker processes in a cluster environment
 - managing events during the lifetime of each worker
-- optionally, a cluster manager can also provide data transport
+- optionally, providing data transport
 
 A Julia cluster has the following characteristics:
 
-- The initial Julia process, also called the ``master`` is special and has a id of 1.
+- The initial Julia process, also called the ``master``, is special and has an `id` of 1.
 - Only the ``master`` process can add or remove worker processes.
 - All processes can directly communicate with each other.
 
@@ -747,11 +747,11 @@ Connections between workers (using the in-built TCP/IP transport) is established
 - :func:`addprocs` is called on the master process with a :obj:`ClusterManager` object
 - :func:`addprocs` calls the appropriate :func:`launch` method which spawns
   required number of worker processes on appropriate machines
-- Each worker starts listening on a free port and writes out its host, port information to :const:`STDOUT`
-- The cluster manager captures the stdout's of each worker and makes it available to the master process
+- Each worker starts listening on a free port and writes out its host and port information to :const:`STDOUT`
+- The cluster manager captures the :const:`STDOUT` of each worker and makes it available to the master process
 - The master process parses this information and sets up TCP/IP connections to each worker
 - Every worker is also notified of other workers in the cluster
-- Each worker connects to all workers whose id is less than its own id
+- Each worker connects to all workers whose `id` is less than the worker's own `id`
 - In this way a mesh network is established, wherein every worker is directly connected with every other worker
 
 
@@ -770,7 +770,7 @@ Thus, a minimal cluster manager would need to:
 
 - be a subtype of the abstract :class:`ClusterManager`
 - implement :func:`launch`, a method responsible for launching new workers
-- implement :func:`manage`, which is called at various events during a worker's lifetime
+- implement :func:`manage`, which is called at various events during a worker's lifetime (for example, sending an interrupt signal)
 
 :func:`addprocs(manager::FooManager) <addprocs>` requires ``FooManager`` to implement::
 
@@ -809,13 +809,13 @@ signals that all requested workers have been launched. Hence the :func:`launch` 
 as all the requested workers have been launched.
 
 Newly launched workers are connected to each other, and the master process, in a all-to-all manner.
-Specifying command argument, ``--worker <cookie>`` results in the launched processes initializing themselves
-as workers and connections being setup via TCP/IP sockets. Optionally ``--bind-to bind_addr[:port]``
+Specifying the command argument ``--worker <cookie>`` results in the launched processes initializing themselves
+as workers and connections being setup via TCP/IP sockets. Optionally, ``--bind-to bind_addr[:port]``
 may also be specified to enable other workers to connect to it at the specified ``bind_addr`` and ``port``.
 This is useful for multi-homed hosts.
 
-For non-TCP/IP transports, for example, an implementation may choose to use MPI as the transport,
-``--worker`` must NOT be specified. Instead newly launched workers should call ``init_worker(cookie)``
+As an example of a non-TCP/IP transport, an implementation may choose to use MPI, in which case
+``--worker`` must NOT be specified. Instead, newly launched workers should call ``init_worker(cookie)``
 before using any of the parallel constructs.
 
 For every worker launched, the :func:`launch` method must add a :class:`WorkerConfig`
@@ -906,7 +906,7 @@ as the plumbing to proxy data between the custom, possibly non-``IO`` transport 
 
 A ``BufferStream`` is an in-memory ``IOBuffer`` which behaves like an ``IO`` - it is a stream which can be handled asynchronously.
 
-Folder ``examples/clustermanager/0mq`` is an example of using ZeroMQ to connect Julia workers in a star topology with a 0MQ broker in the middle.
+Folder ``examples/clustermanager/0mq`` contains an example of using ZeroMQ to connect Julia workers in a star topology with a 0MQ broker in the middle.
 Note: The Julia processes are still all *logically* connected to each other - any worker can message any other worker directly without any
 awareness of 0MQ being used as the transport layer.
 
@@ -929,13 +929,13 @@ The default implementation simply executes an ``exit()`` call on the specified r
 
 Network requirements for LocalManager and SSHManager
 ----------------------------------------------------
-Julia clusters are designed to be executed on already secured environments on infrastructure ranging from local laptops,
-to departmental clusters or even on the cloud. This section covers network security requirements for the inbuilt ``LocalManager``
+Julia clusters are designed to be executed on already secured environments on infrastructure such as local laptops,
+departmental clusters, or even on the cloud. This section covers network security requirements for the inbuilt ``LocalManager``
 and ``SSHManager``:
 
 - The master process does not listen on any port. It only connects out to the workers.
 
-- Each worker binds to only one of the local interfaces and listens on the first free port starting from 9009.
+- Each worker binds to only one of the local interfaces and listens on the first free port starting from ``9009``.
 
 - ``LocalManager``, i.e. ``addprocs(N)``, by default binds only to the loopback interface.
   This means that workers consequently started on remote hosts, or anyone with malicious intentions
@@ -991,12 +991,12 @@ Keyword argument ``topology`` to ``addprocs`` is used to specify how the workers
   ``connect_idents`` is a list of ``ClusterManager`` provided identifiers to workers that worker
   with identified by ``ident`` must connect to.
 
-Currently sending a message between unconnected workers results in an error. This behaviour, as also the
-functionality and interface should be considered experimental in nature and may change in future releases.
+Currently, sending a message between unconnected workers results in an error. This behaviour, as with the
+functionality and interface, should be considered experimental in nature and may change in future releases.
 
 Multi-threading (Experimental)
 -------------------------------
-In addition to tasks, remote calls and remote references, Julia from v0.5 will natively support
+In addition to tasks, remote calls, and remote references, Julia from ``v0.5`` will natively support
 multi-threading. Note that this section is experimental and the interfaces may change in the
 future.
 
