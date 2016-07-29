@@ -931,8 +931,8 @@ Certain preconditions need to be met before using some of these macros.
 Both :obj:`@simd` and :obj:`@inbounds` do a simple rewrite of the expression 
 and delegate the optimizations to compiler, much like ``:meta`` expressions.
 This means they merely give the compiler license to optimize. Whether
-it actually does so depends on the compiler. As consequence how you 
-write the expressions will have a final say on the output.
+it actually does so depends on the compiler. How you write the expressions 
+will have a final say on the output.
 
 The range for a ``@simd for`` loop should be a one-dimensional range.
 A variable used for accumulating, such as ``s`` in the example, is called
@@ -962,7 +962,7 @@ should have the following additional properties:
 -  The stride should be unit stride.
 -  In some simple cases, for example with 2-3 arrays accessed in a loop, the
    LLVM auto-vectorization may kick in automatically, leading to no further
-   speedup with :obj:`@simd``.
+   speedup with :obj:`@simd`.
 
 While :obj:`@simd` needs to be placed in front of a loop, that is not the case 
 for :obj:`@inbounds`. It can be placed in front of any expression as long as it 
@@ -992,9 +992,8 @@ definition is in front of a loop.
                x[2]
            end
 
-Beware using it before a function declaration will have no effect, the 
-correct way to encapsule a function or block of code is inside a 
-``begin`` ``end`` statement.
+Be aware that using it before a function declaration will have no effect. 
+To use :obj:`@inbounds` on a block of code, put it before a ``begin ... end`` statement.
 
     julia> @inbounds function g(x)  #Won't remove bound checks nor warn you
                for i in 1:10
