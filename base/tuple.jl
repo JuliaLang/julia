@@ -63,13 +63,16 @@ end
 ## mapping ##
 
 ntuple(f::Function, n::Integer) =
-    n<=0 ? () :
-    n==1 ? (f(1),) :
-    n==2 ? (f(1),f(2),) :
-    n==3 ? (f(1),f(2),f(3),) :
-    n==4 ? (f(1),f(2),f(3),f(4),) :
-    n==5 ? (f(1),f(2),f(3),f(4),f(5),) :
-    tuple(ntuple(f,n-5)..., f(n-4), f(n-3), f(n-2), f(n-1), f(n))
+    n <= 0 ? () :
+    n == 1 ? (f(1),) :
+    n == 2 ? (f(1),f(2),) :
+    n == 3 ? (f(1),f(2),f(3),) :
+    n == 4 ? (f(1),f(2),f(3),f(4),) :
+    n == 5 ? (f(1),f(2),f(3),f(4),f(5),) :
+    n < 16 ? (ntuple(f,n-5)..., f(n-4), f(n-3), f(n-2), f(n-1), f(n)) :
+    _ntuple(f, n)
+
+_ntuple(f::Function, n::Integer) = (@_noinline_meta; ((f(i) for i = 1:n)...))
 
 # inferrable ntuple
 function ntuple{F,N}(f::F, ::Type{Val{N}})
