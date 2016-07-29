@@ -162,3 +162,11 @@ end
 
 # issue #12854
 @test_throws TypeError ntuple(identity, Val{1:2})
+
+for n = 0:20
+    t = ntuple(identity, n)
+    @test length(t) == n
+    for i = 1:n
+        @test t[i] == i
+    end
+end
