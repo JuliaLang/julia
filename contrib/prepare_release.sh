@@ -63,6 +63,7 @@ gpg -u julia --armor --detach-sig julia-$version-full.tar.gz
 gpg -u julia --armor --detach-sig julia-$version.tar.gz
 gpg -u julia --armor --detach-sig julia-$version-linux-x86_64.tar.gz
 gpg -u julia --armor --detach-sig julia-$version-linux-i686.tar.gz
+gpg -u julia --armor --detach-sig julia-$version-linux-arm.tar.gz
 
 echo "All files prepared. Attach julia-$version.tar.gz and julia-$version-full.tar.gz"
 echo "to github releases, upload all binaries and checksums to julialang S3. Be sure"
