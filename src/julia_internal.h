@@ -49,9 +49,6 @@ void jl_call_tracer(tracer_cb callback, jl_value_t *tracee);
 
 extern size_t jl_page_size;
 extern jl_function_t *jl_typeinf_func;
-#if defined(JL_USE_INTEL_JITEVENTS)
-extern unsigned sig_stack_size;
-#endif
 
 JL_DLLEXPORT extern int jl_lineno;
 JL_DLLEXPORT extern const char *jl_filename;
