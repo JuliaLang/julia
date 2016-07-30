@@ -158,7 +158,7 @@ function launch_on_machine(manager::SSHManager, machine, cnt, params, launched, 
     machine_def = split(machine_bind[1], ':')
     # if this machine def has a port number, add the port information to the ssh flags
     if length(machine_def) > 2
-        throw(ArgumentError("invalid machine defintion format string: invalid port format \"$machine_def\""))
+        throw(ArgumentError("invalid machine definition format string: invalid port format \"$machine_def\""))
     end
     host = machine_def[1]
     portopt = ``
