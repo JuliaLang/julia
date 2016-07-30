@@ -471,8 +471,8 @@ procs() = Int[x.id for x in PGRP.workers]
 """
     procs(pid::Integer)
 
-Returns a list of all process identifiers visible to worker `pid`.
-The result depends on the topology of the workgroup.
+Returns a list of all process identifiers on the same physical node.
+Specifically all workers bound to the same ip-address as `pid` are returned.
 """
 function procs(pid::Integer)
     if myid() == 1
@@ -578,7 +578,7 @@ end
     Base.worker_id_from_socket(s) -> pid
 
 A low-level API which given a `IO` connection or a `Worker`,
-returns the pid of the worker it is connected to.
+returns the `pid` of the worker it is connected to.
 This is useful when writing custom `serialize` methods for a type,
 which optimizes the data written out depending on the receiving process id.
 """
@@ -980,10 +980,9 @@ end
 """
     RemoteException(captured)
 
-Contains the `CapturedException` `captured`, which was
-generated on a worker and can be passed back to the first
-process as a result of `pmap` or other calls to workers
-(e.g. `remotecall_fetch`).
+Exceptions  on remote computations are captured and rethrown locally.  A `RemoteException`
+wraps the pid of the worker and a captured exception. A `CapturedException` captures the
+remote exception and a serializable form of the call stack when the exception was raised.
 """
 RemoteException(captured) = RemoteException(myid(), captured)
 function showerror(io::IO, re::RemoteException)
