@@ -128,3 +128,13 @@ for typ in [UpperTriangular,LowerTriangular,Base.LinAlg.UnitUpperTriangular,Base
     @test Base.LinAlg.A_mul_Bc(atri,qrb[:Q]) ≈ full(atri) * qrb[:Q]'
     @test Base.LinAlg.A_mul_Bc!(copy(atri),qrb[:Q]) ≈ full(atri) * qrb[:Q]'
 end
+
+# Test conversion from Diagonal to <:AbstractTriangular
+let
+    unitdiagmat = Diagonal(ones(Int, 3))
+    # test that conversion from diagonal to triangular preserves diagonal storage structure
+    @test typeof(convert(LowerTriangular, unitdiagmat)) == LowerTriangular{Int,Diagonal{Int}}
+    @test typeof(convert(UpperTriangular, unitdiagmat)) == UpperTriangular{Int,Diagonal{Int}}
+    @test typeof(convert(Base.LinAlg.UnitLowerTriangular, unitdiagmat)) == Base.LinAlg.UnitLowerTriangular{Int,Diagonal{Int}}
+    @test typeof(convert(Base.LinAlg.UnitUpperTriangular, unitdiagmat)) == Base.LinAlg.UnitUpperTriangular{Int,Diagonal{Int}}
+end

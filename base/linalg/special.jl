@@ -11,16 +11,18 @@ convert(::Type{UpperTriangular}, A::Bidiagonal) = A.isupper ? UpperTriangular(fu
 
 function convert(::Type{UnitUpperTriangular}, A::Diagonal)
     if !all(A.diag .== one(eltype(A)))
-        throw(ArgumentError("matrix cannot be represented as UnitUpperTriangular"))
+        throw(ArgumentError(string("Diagonal matrices with non-one entries on the ",
+            "diagonal cannot be converted to UnitUpperTriangular")))
     end
-    UnitUpperTriangular(full(A))
+    UnitUpperTriangular(A)
 end
 
 function convert(::Type{UnitLowerTriangular}, A::Diagonal)
     if !all(A.diag .== one(eltype(A)))
-        throw(ArgumentError("matrix cannot be represented as UnitLowerTriangular"))
+        throw(ArgumentError(string("Diagonal matrices with non-one entries on the ",
+            "diagonal cannot be converted to UnitLowerTriangular")))
     end
-    UnitLowerTriangular(full(A))
+    UnitLowerTriangular(A)
 end
 
 function convert(::Type{Diagonal}, A::Union{Bidiagonal, SymTridiagonal})
