@@ -372,7 +372,7 @@ const HDR_COOKIE_LEN=16
 """
     Base.cluster_cookie() -> cookie
 
-Returns the cluster cookie, by default the `LocalProcess` cookie.
+Returns the cluster cookie.
 """
 cluster_cookie() = LPROC.cookie
 
@@ -720,18 +720,7 @@ function finalize_ref(r::AbstractRemoteRef)
     return r
 end
 
-"""
-    Future(w::LocalProcess)
-
-Create a `Future` on the local machine.
-"""
 Future(w::LocalProcess) = Future(w.id)
-
-"""
-    Future(w::Worker)
-
-Create a `Future` on the (possibly remote) worker `w`.
-"""
 Future(w::Worker) = Future(w.id)
 
 """
@@ -772,11 +761,25 @@ hash(r::AbstractRemoteRef, h::UInt) = hash(r.whence, hash(r.id, h))
 ==(r::AbstractRemoteRef, s::AbstractRemoteRef) = (r.whence==s.whence && r.id==s.id)
 
 """
-    Base.remoteref_id(r::AbstractRemoteRef) -> (whence, id)
+    Base.remoteref_id(r::AbstractRemoteRef) -> RRID
 
-A low-level API which returns the unique identifying tuple for a remote reference. A
-reference id is a tuple of two elements - `pid` where the reference was created from and a
-one-up number from that node.
+`Future`s and `RemoteChannel`s are identified by fields:
+
+`where` - refers to the node where the underlying object/storage
+referred to by the reference actually exists.
+
+`whence` - refers to the node the remote reference was created from.
+ Note that this is different from the node where the underlying object
+ referred to actually exists. For example calling `RemoteChannel(2)`
+ from the master process would result in a `where` value of 2 and
+ a `whence` value of 1.
+
+ `id` is unique across all references created from the worker specified by `whence`.
+
+ Taken together,  `whence` and `id` uniquely identify a reference across all workers.
+
+ `Base.remoteref_id` is a low-level API which returns a `Base.RRID`
+ object that wraps `whence` and `id` values of a remote reference.
 """
 remoteref_id(r::AbstractRemoteRef) = RRID(r.whence, r.id)
 
@@ -784,7 +787,8 @@ remoteref_id(r::AbstractRemoteRef) = RRID(r.whence, r.id)
     Base.channel_from_id(id) -> c
 
 A low-level API which returns the backing `AbstractChannel` for an `id` returned by
-`remoteref_id`. The call is valid only on the node where the backing channel exists.
+[`remoteref_id`](:func:`Base.remoteref_id`).
+The call is valid only on the node where the backing channel exists.
 """
 function channel_from_id(id)
     rv = get(PGRP.refs, id, false)
@@ -1020,29 +1024,14 @@ function local_remotecall_thunk(f, args, kwargs)
     return ()->f(args...; kwargs...)
 end
 
-"""
-    remotecall(f, w::LocalProcess, args...; kwargs...) -> Future
-
-Call a function `f` asynchronously on the given arguments on the specified `LocalProcess`.
-Returns a `Future`.
-Keyword arguments, if any, are passed through to `f`.
-"""
 function remotecall(f, w::LocalProcess, args...; kwargs...)
     rr = Future(w)
     schedule_call(remoteref_id(rr), local_remotecall_thunk(f, args, kwargs))
     rr
 end
 
-"""
-    remotecall(f, w::Worker, args...; kwargs...) -> Future
-
-Call a function `f` asynchronously on the given arguments on the specified `Worker`.
-Returns a `Future`.
-Keyword arguments, if any, are passed through to `f`.
-"""
 function remotecall(f, w::Worker, args...; kwargs...)
     rr = Future(w)
-    #println("$(myid()) asking for $rr")
     send_msg(w, MsgHeader(remoteref_id(rr)), CallMsg{:call}(f, args, kwargs))
     rr
 end
@@ -1056,25 +1045,11 @@ Keyword arguments, if any, are passed through to `f`.
 """
 remotecall(f, id::Integer, args...; kwargs...) = remotecall(f, worker_from_id(id), args...; kwargs...)
 
-"""
-    remotecall_fetch(f, w::LocalProcess, args...; kwargs...)
-
-Perform a faster `fetch(remotecall(...))` in one message.
-Keyword arguments, if any, are passed through to `f`.
-Any remote exceptions are captured in a `RemoteException` and thrown.
-"""
 function remotecall_fetch(f, w::LocalProcess, args...; kwargs...)
     v=run_work_thunk(local_remotecall_thunk(f,args, kwargs), false)
     isa(v, RemoteException) ? throw(v) : v
 end
 
-"""
-    remotecall_fetch(f, w::Worker, args...; kwargs...)
-
-Perform a faster `fetch(remotecall(...))` in one message.
-Keyword arguments, if any, are passed through to `f`.
-Any remote exceptions are captured in a `RemoteException` and thrown.
-"""
 function remotecall_fetch(f, w::Worker, args...; kwargs...)
     # can be weak, because the program will have no way to refer to the Ref
     # itself, it only gets the result.
@@ -1097,20 +1072,8 @@ Any remote exceptions are captured in a `RemoteException` and thrown.
 remotecall_fetch(f, id::Integer, args...; kwargs...) =
     remotecall_fetch(f, worker_from_id(id), args...; kwargs...)
 
-"""
-    remotecall_wait(f, w::LocalProcess, args...; kwargs...)
-
-Perform `wait(remotecall(...))` in one message on `LocalProcess` `w`.
-Keyword arguments, if any, are passed through to `f`.
-"""
 remotecall_wait(f, w::LocalProcess, args...; kwargs...) = wait(remotecall(f, w, args...; kwargs...))
 
-"""
-    remotecall_wait(f, w::Worker, args...; kwargs...)
-
-Perform a faster `wait(remotecall(...))` in one message on `Worker` `w`.
-Keyword arguments, if any, are passed through to `f`.
-"""
 function remotecall_wait(f, w::Worker, args...; kwargs...)
     prid = RRID()
     rv = lookup_ref(prid)
