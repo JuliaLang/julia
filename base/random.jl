@@ -1123,7 +1123,10 @@ const ziggurat_exp_r      = 7.6971174701310497140446280481
 Generate a normally-distributed random number of type `T` with mean 0 and standard deviation 1.
 Optionally generate an array of normally-distributed random numbers.
 The `Base` module currently provides an implementation for the types
-`Float16`, `Float32`, and `Float64` (the default).
+`Float16`, `Float32`, `Float64` (the default), `Complex32`, `Complex64`, and `Complex128`.
+When the type argument is complex, the values returned are drawn from the circularly symmetric
+complex normal distribution.
+.
 """
 @inline function randn(rng::AbstractRNG=GLOBAL_RNG)
     @inbounds begin
@@ -1222,6 +1225,14 @@ let Floats = Union{Float16,Float32,Float64}
             $randfun(   rng::AbstractRNG,            dims::Integer...               ) = $randfun(rng, Float64, dims...)
             $randfun(                                dims::Dims                     ) = $randfun(GLOBAL_RNG, Float64, dims)
             $randfun(                                dims::Integer...               ) = $randfun(GLOBAL_RNG, Float64, dims...)
+        end
+    end
+
+    for (T,SQRT_HALF) in ((Float64, 0.7071067811865475),
+                          (Float32, 0.70710677f0),
+                          (Float16, 0.70710677f0))
+        @inline function randn(rng::AbstractRNG, ::Type{Complex{T}})
+            Complex{T}(SQRT_HALF*randn(rng, T), SQRT_HALF*randn(rng, T))
         end
     end
 end

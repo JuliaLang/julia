@@ -602,7 +602,7 @@ As ``BigInt`` represents unbounded integers, the interval must be specified (e.g
 
    .. Docstring generated from Julia source
 
-   Generate a normally-distributed random number of type ``T`` with mean 0 and standard deviation 1. Optionally generate an array of normally-distributed random numbers. The ``Base`` module currently provides an implementation for the types ``Float16``\ , ``Float32``\ , and ``Float64`` (the default).
+   Generate a normally-distributed random number of type ``T`` with mean 0 and standard deviation 1. Optionally generate an array of normally-distributed random numbers. The ``Base`` module currently provides an implementation for the types ``Float16``\ , ``Float32``\ , ``Float64`` (the default), ``Complex32``\ , ``Complex64``\ , and ``Complex128``\ . When the type argument is complex, the values returned are drawn from the circularly symmetric complex normal distribution. .
 
 .. function:: randn!([rng], A::AbstractArray) -> A
 
