@@ -355,7 +355,7 @@ Deprecated or removed
     * `set_rounding`            -> `setrounding`
     * `with_rounding`           -> `setrounding`
 
-  * The method `A_ldiv_B!(SparseMatrixCSC, StrideVecOrMat)` has been deprecated
+  * The method `A_ldiv_B!(SparseMatrixCSC, StridedVecOrMat)` has been deprecated
     in favor of versions that require the matrix to be in factored form
     ([#13496]).
 
