@@ -590,7 +590,7 @@ finddoc(λ, def) = false
 
 const FUNC_HEADS    = [:function, :stagedfunction, :macro, :(=)]
 const BINDING_HEADS = [:typealias, :const, :global, :(=)]
-# For the special `:@mac` / `:(Base.@mac)` syntax for documenting a macro after defintion.
+# For the special `:@mac` / `:(Base.@mac)` syntax for documenting a macro after definition.
 isquotedmacrocall(x) =
     isexpr(x, :copyast, 1) &&
     isa(x.args[1], QuoteNode) &&

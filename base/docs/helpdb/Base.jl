@@ -3788,7 +3788,7 @@ DimensionMismatch
 """
     take!(RemoteChannel)
 
-Fetch a value from a remote channel, also removing it in the processs.
+Fetch a value from a remote channel, also removing it in the process.
 """
 take!(::RemoteChannel)
 
