@@ -297,6 +297,13 @@ end
 @test @inferred inferred_test_function()
 @test inferred_test_global == 1
 
+# Test that @inferred works with A[i] expressions
+@test @inferred((1:3)[2]) == 2
+immutable SillyArray <: AbstractArray{Float64,1} end
+Base.getindex(a::SillyArray, i) = rand() > 0.5 ? 0 : false
+test_result = @test_throws ErrorException @inferred(SillyArray()[2])
+@test contains(test_result.value.msg, "Bool")
+
 # Issue #14928
 # Make sure abstract error type works.
 @test_throws Exception error("")
