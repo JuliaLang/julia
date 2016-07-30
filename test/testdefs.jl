@@ -12,3 +12,4 @@ end
 
 # looking in . messes things up badly
 filter!(x->x!=".", LOAD_PATH)
+nothing
