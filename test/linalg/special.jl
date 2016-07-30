@@ -9,30 +9,30 @@ srand(1)
 debug && println("Test interconversion between special matrix types")
 let a=[1.0:n;]
    A=Diagonal(a)
-   for newtype in [Diagonal, Bidiagonal, SymTridiagonal, Tridiagonal, LowerTriangular, UpperTriangular, Matrix]
+   for newtype in [Diagonal, Bidiagonal, SymTridiagonal, Tridiagonal, Matrix]
        debug && println("newtype is $(newtype)")
        @test full(convert(newtype, A)) == full(A)
-   end
-   for newtype in [Base.LinAlg.UnitUpperTriangular, Base.LinAlg.UnitLowerTriangular]
-       @test_throws ArgumentError convert(newtype, A)
-       @test full(convert(newtype, Diagonal(ones(n)))) == eye(n)
    end
 
    for isupper in (true, false)
        debug && println("isupper is $(isupper)")
        A=Bidiagonal(a, [1.0:n-1;], isupper)
-       for newtype in [Bidiagonal, Tridiagonal, isupper ? UpperTriangular : LowerTriangular, Matrix]
+       for newtype in [Bidiagonal, Tridiagonal, Matrix]
            debug && println("newtype is $(newtype)")
            @test full(convert(newtype, A)) == full(A)
            @test full(newtype(A)) == full(A)
        end
        @test_throws ArgumentError convert(SymTridiagonal, A)
+       tritype = isupper ? UpperTriangular : LowerTriangular
+       @test full(tritype(A)) == full(A)
+
        A=Bidiagonal(a, zeros(n-1), isupper) #morally Diagonal
-       for newtype in [Diagonal, Bidiagonal, SymTridiagonal, Tridiagonal, isupper ? UpperTriangular : LowerTriangular, Matrix]
+       for newtype in [Diagonal, Bidiagonal, SymTridiagonal, Tridiagonal, Matrix]
            debug && println("newtype is $(newtype)")
            @test full(convert(newtype, A)) == full(A)
            @test full(newtype(A)) == full(A)
        end
+       @test full(tritype(A)) == full(A)
    end
 
    A = SymTridiagonal(a, [1.0:n-1;])
@@ -77,10 +77,6 @@ let a=[1.0:n;]
    A = UpperTriangular(triu(rand(n,n)))
    for newtype in [Diagonal, Bidiagonal, Tridiagonal, SymTridiagonal]
        @test_throws ArgumentError convert(newtype,A)
-   end
-   A = Diagonal(a)
-   for newtype in [UpperTriangular, LowerTriangular]
-       @test full(convert(newtype,A)) == full(A)
    end
 end
 
