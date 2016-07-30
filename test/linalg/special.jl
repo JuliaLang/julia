@@ -128,3 +128,28 @@ for typ in [UpperTriangular,LowerTriangular,Base.LinAlg.UnitUpperTriangular,Base
     @test Base.LinAlg.A_mul_Bc(atri,qrb[:Q]) ≈ full(atri) * qrb[:Q]'
     @test Base.LinAlg.A_mul_Bc!(copy(atri),qrb[:Q]) ≈ full(atri) * qrb[:Q]'
 end
+
+# Test conversion from Bidiagonal to <:AbstractTriangular
+let
+    lowerbidiagmat = Bidiagonal(rand(3), rand(2), false)
+    upperbidiagmat = Bidiagonal(rand(3), rand(2), true)
+    unitlowerbidiagmat = Bidiagonal(ones(3), rand(2), false)
+    unitupperbidiagmat = Bidiagonal(ones(3), rand(2), true)
+    # test that conversion from upper(lower) bidiagonal to lower(upper) [unit]triangular throws
+    @test_throws ArgumentError convert(UpperTriangular, unitlowerbidiagmat)
+    @test_throws ArgumentError convert(LowerTriangular, unitupperbidiagmat)
+    @test_throws ArgumentError convert(Base.LinAlg.UnitUpperTriangular, unitlowerbidiagmat)
+    @test_throws ArgumentError convert(Base.LinAlg.UnitLowerTriangular, unitupperbidiagmat)
+    # test that conversion from non-unit bidiag to unit triangular throws
+    @test_throws ArgumentError convert(Base.LinAlg.UnitUpperTriangular, upperbidiagmat)
+    @test_throws ArgumentError convert(Base.LinAlg.UnitLowerTriangular, lowerbidiagmat)
+    # test that conversion from bidiagonal to triangular preserves bidiagonal storage structure
+    @test typeof(convert(UpperTriangular, upperbidiagmat)) ==
+        UpperTriangular{eltype(upperbidiagmat),Bidiagonal{eltype(upperbidiagmat)}}
+    @test typeof(convert(LowerTriangular, lowerbidiagmat)) ==
+        LowerTriangular{eltype(lowerbidiagmat),Bidiagonal{eltype(lowerbidiagmat)}}
+    @test typeof(convert(Base.LinAlg.UnitUpperTriangular, unitupperbidiagmat)) ==
+        Base.LinAlg.UnitUpperTriangular{eltype(unitupperbidiagmat),Bidiagonal{eltype(unitupperbidiagmat)}}
+    @test typeof(convert(Base.LinAlg.UnitLowerTriangular, unitlowerbidiagmat)) ==
+        Base.LinAlg.UnitLowerTriangular{eltype(unitlowerbidiagmat),Bidiagonal{eltype(unitlowerbidiagmat)}}
+end
