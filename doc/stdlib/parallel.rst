@@ -199,6 +199,12 @@ General Parallel Computing Support
 
    Returns a list of all process identifiers.
 
+.. function:: procs(pid::Integer)
+
+   .. Docstring generated from Julia source
+
+   Returns a list of all process identifiers visible to worker ``pid``\ . The result depends on the topology of the workgroup.
+
 .. function:: workers()
 
    .. Docstring generated from Julia source
@@ -262,18 +268,6 @@ General Parallel Computing Support
    * ``pmap(f, c; distributed=false)`` and ``asyncmap(f,c)``
    * ``pmap(f, c; retry_n=1)`` and ``asyncmap(retry(remote(f)),c)``
    * ``pmap(f, c; retry_n=1, on_error=e->e)`` and ``asyncmap(x->try retry(remote(f))(x) catch e; e end, c)``
-
-.. function:: remotecall(f, w::LocalProcess, args...; kwargs...) -> Future
-
-   .. Docstring generated from Julia source
-
-   Call a function ``f`` asynchronously on the given arguments on the specified ``LocalProcess``\ . Returns a ``Future``\ . Keyword arguments, if any, are passed through to ``f``\ .
-
-.. function:: remotecall(f, w::Worker, args...; kwargs...) -> Future
-
-   .. Docstring generated from Julia source
-
-   Call a function ``f`` asynchronously on the given arguments on the specified ``Worker``\ . Returns a ``Future``\ . Keyword arguments, if any, are passed through to ``f``\ .
 
 .. function:: remotecall(f, id::Integer, args...; kwargs...) -> Future
 
@@ -345,35 +339,11 @@ General Parallel Computing Support
    * ``RemoteChannel``\ : Wait for and get the value of a remote reference. Exceptions raised are same as for a ``Future`` .
    * ``Channel`` : Wait for and get the first available item from the channel.
 
-.. function:: remotecall_wait(f, w::LocalProcess, args...; kwargs...)
-
-   .. Docstring generated from Julia source
-
-   Perform ``wait(remotecall(...))`` in one message on ``LocalProcess`` ``w``\ . Keyword arguments, if any, are passed through to ``f``\ .
-
-.. function:: remotecall_wait(f, w::Worker, args...; kwargs...)
-
-   .. Docstring generated from Julia source
-
-   Perform a faster ``wait(remotecall(...))`` in one message on ``Worker`` ``w``\ . Keyword arguments, if any, are passed through to ``f``\ .
-
 .. function:: remotecall_wait(f, id::Integer, args...; kwargs...)
 
    .. Docstring generated from Julia source
 
    Perform a faster ``wait(remotecall(...))`` in one message on the ``Worker`` specified by worker id ``id``\ . Keyword arguments, if any, are passed through to ``f``\ .
-
-.. function:: remotecall_fetch(f, w::LocalProcess, args...; kwargs...)
-
-   .. Docstring generated from Julia source
-
-   Perform a faster ``fetch(remotecall(...))`` in one message. Keyword arguments, if any, are passed through to ``f``\ . Any remote exceptions are captured in a ``RemoteException`` and thrown.
-
-.. function:: remotecall_fetch(f, w::Worker, args...; kwargs...)
-
-   .. Docstring generated from Julia source
-
-   Perform a faster ``fetch(remotecall(...))`` in one message. Keyword arguments, if any, are passed through to ``f``\ . Any remote exceptions are captured in a ``RemoteException`` and thrown.
 
 .. function:: remotecall_fetch(f, id::Integer, args...; kwargs...)
 
@@ -410,6 +380,12 @@ General Parallel Computing Support
    .. Docstring generated from Julia source
 
    Removes and returns a value from a ``Channel``\ . Blocks till data is available.
+
+.. function:: isready(c::Channel)
+
+   .. Docstring generated from Julia source
+
+   Determine whether a ``Channel`` has a value stored to it. ``isready`` on ``Channel``\ s is non-blocking.
 
 .. function:: isready(rr::RemoteChannel, args...)
 
@@ -597,7 +573,7 @@ General Parallel Computing Support
 
    .. Docstring generated from Julia source
 
-   A low-level API which returns the backing ``AbstractChannel`` for an ``id`` returned by ``remoteref_id``\ . The call is valid only on the node where the backing channel exists.
+   A low-level API which returns the backing ``AbstractChannel`` for an ``id`` returned by :func:`Base.remoteref_id`\ . The call is valid only on the node where the backing channel exists.
 
 .. function:: Base.worker_id_from_socket(s) -> pid
 
@@ -609,7 +585,7 @@ General Parallel Computing Support
 
    .. Docstring generated from Julia source
 
-   Returns the cluster cookie, by default the ``LocalProcess`` cookie.
+   Returns the cluster cookie.
 
 .. function:: Base.cluster_cookie(cookie) -> cookie
 
